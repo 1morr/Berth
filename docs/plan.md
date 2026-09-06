@@ -436,7 +436,7 @@ WebUI\ServerDomains=qbittorrent
 
 依 brief §20.7：`/Startup/*` 與 `/Library/VirtualFolders` 在精靈完成前不需憑證；插件與排程任務需要管理員 token。
 
-1. `GET /System/Info/Public` → 確認 `StartupWizardCompleted == false`；否則走 existing。
+1. `GET /System/Info/Public` → 確認 `StartupWizardCompleted == false`；否則視為既有服務（§9.5）。
 2. `POST /Startup/Configuration` `{ UICulture: "zh-TW", MetadataCountryCode: "TW", PreferredMetadataLanguage: "zh-TW" }`（精靈可改）。
 3. `POST /Startup/User` `{ Name, Password }` = Berth 管理員。
 4. 建立目錄後 `POST /Library/VirtualFolders?name=Movies&collectionType=movies&paths=/data/library/movies&refreshLibrary=false`，body `LibraryOptions`：`PathInfos`、`PreferredMetadataLanguage`、`MetadataCountryCode`、`EnableRealtimeMonitor=false`（Berth 主動通知）、`SeasonZeroDisplayName="Specials"`。同樣建立 `TV`（`tvshows`、`/data/library/tv`）與 `Anime`（`tvshows`、`/data/library/anime`）。
