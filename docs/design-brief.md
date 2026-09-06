@@ -519,8 +519,8 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 - 技術棧【決定】：後端 Python（FastAPI + 同一程序內的背景 worker + SQLite），前端 React（Vite），單一容器發佈。`/config` 存資料庫與設定，`/data` 掛媒體根。
 - **目標環境【決定】**：Linux（NAS 與伺服器）與 Windows（Docker Desktop，WSL2 後端）。兩種使用者：NAS 使用者已有目錄規劃、可能已有 Jellyfin；一般電腦使用者什麼都沒有，要能「下載一份 compose、跑起來、開瀏覽器」就完成。
 - 範例 `docker-compose.yml` 含 `berth`、qBittorrent、Jellyfin、Prowlarr，四者掛同一個 `/data`；權限採 TRaSH 的「單一使用者 + UMASK 022」簡化方案（§20.2），四個容器同 `PUID/PGID`。
-- `/data` 的來源分兩種【研究，§20.7】：Linux 用宿主目錄 bind mount；Windows 預設用 Docker named volume（存在 WSL2 的 ext4 內，硬鏈接可用），bind mount Windows 磁碟的硬鏈接行為待查證，不通則由健康檢查明確告知並提供替代方案。
-- README 明列：硬鏈接前提（單一掛載、不可 exFAT、不可跨 btrfs 子卷 / ZFS dataset / mergerfs branch）、只保證 Linux 宿主與 WSL2 原生檔案系統、qBittorrent 版本下限與必要設定（temp path、category autoTMM）、Jellyfin 側需安裝 MergeVersions 插件、TMDB 的歸屬聲明與 logo。
+- `/data` 一律用宿主目錄 bind mount（`DATA_ROOT`），Linux 與 Windows 相同：Windows Docker Desktop 的 NTFS bind mount 硬鏈接已實測可用（§20.7）。不支援 exFAT；健康檢查在建立 Route 時即驗證。
+- README 明列：硬鏈接前提（單一掛載、不可 exFAT、不可跨 btrfs 子卷 / ZFS dataset / mergerfs branch）、支援 Linux 宿主與 Windows Docker Desktop（NTFS）、qBittorrent 版本下限與必要設定（temp path、category autoTMM）、Jellyfin 側需安裝 MergeVersions 插件（套件模式自動安裝）、TMDB 的歸屬聲明與 logo。
 
 ### 16.2 跨切面需求
 
@@ -541,8 +541,8 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 | --- | --- | --- | --- |
 | qBittorrent | 設定檔預置 WebUI 對 compose 內網免密、temp path / save path / autoTMM 預設值 | 套用建議偏好、依 Route 建立 category、設定 WebUI 密碼 | 無 |
 | Jellyfin | 無 | 偵測「尚未完成初始精靈」→ 以 Berth 管理員帳密建立 Jellyfin 管理員 → 建立 Movies / TV / Anime 三個媒體庫（對應 `/data/library/{movies,tv,anime}`）→ 加入插件庫並安裝 MergeVersions → 重啟 → 自動建立三個 Route | 無 |
-| Prowlarr | 預置 API key | 加入預設索引站清單（Nyaa.si、dmhy、AniDex、Anime Tosho、1337x、YTS、EZTV 等公開站，可勾選） | 私有站的帳號 |
-| TMDB | Berth 內建專案級 API key（Seerr 的做法，§20.7 查證） | 無 | 可選：填自己的 key |
+| Prowlarr | 無；Berth 唯讀掛載其設定目錄讀取 API key | 加入預設索引站清單（Nyaa.si、dmhy、AniDex、Anime Tosho、ACG.RIP、Mikan、1337x、YTS、EZTV、The Pirate Bay，可勾選）、以 Berth 管理員帳密設定介面登入 | 私有站的帳號 |
+| TMDB | Berth 內建專案級 API key（Seerr 的做法，§20.7） | 無 | 可選：填自己的 key |
 | 索引站 / RSS | 無 | Mikan、Nyaa feed 由使用者貼 URL | 貼自己的 Mikan 訂閱 URL |
 
 - **兩種模式**：`bundle`（偵測到套件內服務且未設定 → 全自動）與 `existing`（使用者填既有服務的位址與憑證 → 只做檢查，「套用建議設定」「建立媒體庫」「安裝插件」各是一顆需確認的按鈕，不自動動既有媒體庫）。
@@ -680,7 +680,7 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 - 硬鏈接不能跨檔案系統、分割區、volume、**mount**；`link()` 即使同一個檔案系統掛兩次也會 `EXDEV`。Docker 把兩個 volume 當成兩個檔案系統，所以 `/downloads` + `/media` 分開掛一定失敗；解法是單一 `/data` 掛載。
 - exFAT 不支援硬鏈接；btrfs 子卷、ZFS dataset 各自是 mount 邊界，跨越即失敗；mergerfs 在 path-preserving 建立策略下跨 branch 回 `EXDEV`，其 FAQ 同樣要求單一掛載根（[mergerfs FAQ](https://trapexit.github.io/mergerfs/latest/faq/why_isnt_it_working/)）。
 - 權限：TRaSH 建議「每個 app 一個使用者 + 共用群組 + UMASK 002」（資料夾 775、檔案 664），或簡化為單一使用者 + UMASK 022。本系統與 qBittorrent 至少要同群組且對兩側目錄可寫。
-- Docker Desktop（Windows / macOS）：找不到主要來源證明 NTFS 經 9p bind mount 的硬鏈接一定失敗或一定成功；社群案例的失敗都是多掛載造成。→ README 寫「僅保證 Linux 宿主與 WSL2 原生檔案系統」，Windows bind mount 列入 §20.6 實測。
+- Docker Desktop（Windows）：文獻無定論，本機實測 NTFS bind mount 硬鏈接可用（§20.7）。macOS VirtioFS 未查到硬鏈接限制，也未實測。
 - `stat().st_dev` 相同是必要條件但不充分（同 FS 多次掛載仍失敗），所以 §4.4 的檢查一律真的做一次 `link()`。
 
 **Sonarr / Radarr 先例**（[sonarr/faq](https://wiki.servarr.com/sonarr/faq)、[radarr/settings](https://wiki.servarr.com/radarr/settings)、[quick-start](https://wiki.servarr.com/sonarr/quick-start-guide)）
@@ -792,13 +792,9 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 | Tally | **衝突** | TallyPrime 會計軟體與同名自託管記帳 App |
 | Stevedore | **衝突** | OpenStack stevedore（PyPI plugin 載入套件） |
 
-### 20.7 開箱即用所需的 API 與 Windows Docker 事實
-
-{{PENDING-ONECLICK}}
-
 ### 20.6 實作前必做的實驗【研究】
 
-- 在目標 NAS / 宿主上跑硬鏈接測試腳本（§4.4），確認 Docker 掛載方式可行；另外在 Windows Docker Desktop 的 NTFS bind mount 與 WSL2 原生檔案系統各測一次，決定 README 的支援聲明。
+- ~~在 Windows Docker Desktop 的 NTFS bind mount 測硬鏈接~~ **已完成（2026-09-07，§20.7）**：可用。剩下：在 Linux 宿主與至少一台 NAS（Synology / QNAP / TrueNAS 其一）跑同一腳本，腳本保留在 `scripts/experiments/`。
 - 對 qBittorrent 4.4 與 5.x 各跑一次 adapter 的參數相容測試（`paused`/`stopped`、`contentLayout`、`torrents/files.name` 的相對基準）。
 - 建立 20 筆真實 torrent fixture（動漫 8、美劇/韓劇 8、電影 4）作為 benchmark v0。
 - 用 dummy 檔案在 Jellyfin 10.10/10.11 實測 §7 的命名，逐項確認：
@@ -808,5 +804,45 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
   - `Season 00` 與 `extras/`（劇集層與季層）是否如文件所述。
   - 字幕 `….CHT.zh.ass` / `….CHS.zh.ass` 在播放器字幕選單的顯示文字。
 - 抓一份 Mikan（我的訂閱、單作品 + 字幕組）與 Nyaa（搜尋）的實際 RSS，確認擴充欄位名（infoHash、大小、做種數、enclosure、發佈時間），寫成 adapter 的 fixture。
+- qBittorrent 預置 `WebUI\ServerDomains=qbittorrent` 是否足以讓容器名呼叫通過 Host 檢查；Prowlarr `config/host` API 設定 Forms 帳密的欄位名。
+
+### 20.7 開箱即用所需的 API 與 Windows Docker 事實
+
+**Windows Docker Desktop 硬鏈接（本機實測，2026-09-07）**
+
+- 環境：Windows 11、Docker Desktop 29.6.2（WSL2 後端）、NTFS 系統碟。把同一個 Windows 目錄 bind mount 為 `/data`，容器內對 `/data/torrent/complete/a.bin` 做 `ln` 到 `/data/library/b.bin`：**成功**，兩者 `dev=70`、inode 相同、`nlink=2`；掛載型態為 `9p (aname=drvfs)`。宿主端 `fsutil hardlink list` 列出兩個路徑，證明是真正的 NTFS 硬鏈接。
+- 把 `torrent/` 與 `library/` 分開掛成兩個 bind mount：`ln: Cross-device link`，與 Linux 行為一致（單一掛載根的規則不變）。
+- Docker named volume（WSL2 內 ext4）：成功。
+- 結論：**Windows 使用者可以用一般的 bind mount**（`DATA_ROOT=D:\Berth\data`），不需要 named volume；exFAT 隨身碟不支援硬鏈接（[TRaSH](https://trash-guides.info/File-and-Folder-Structure/Hardlinks-and-Instant-Moves/)）。§4.4 的「不退回複製」維持。
+- 其他查證：named volume 可從 `\\wsl.localhost\docker-desktop\mnt\docker-desktop-disk\data\docker\volumes\` 瀏覽；WSL2 VHD 預設上限 1 TB（[Microsoft](https://learn.microsoft.com/en-us/windows/wsl/disk-space)）；搬移 VHD 的設定介面有多起失效回報（[docker/for-win#13269](https://github.com/docker/for-win/issues/13269)）→ 這些都是不用 named volume 的理由。bind mount 經 9p 的吞吐比 volume 低（[Docker blog](https://www.docker.com/blog/file-sharing-with-docker-desktop)），下載寫入會慢一些，硬鏈接本身是 metadata 操作不受影響。
+
+**Jellyfin 初始化與插件 API**（[OpenAPI](https://api.jellyfin.org/openapi/jellyfin-openapi-stable.json)、[FirstTimeSetupHandler.cs](https://github.com/jellyfin/jellyfin/blob/master/Jellyfin.Api/Auth/FirstTimeSetupPolicy/FirstTimeSetupHandler.cs)）
+
+- `GET /System/Info/Public` 無需憑證，回 `StartupWizardCompleted`。
+- `POST /Startup/Configuration`（`ServerName`、`UICulture`、`MetadataCountryCode`、`PreferredMetadataLanguage`）、`POST /Startup/User`（`Name`、`Password`）、`POST /Startup/RemoteAccess`（只有 `EnableRemoteAccess`，沒有 `EnableAutomaticPortMapping`）、`POST /Startup/Complete`，以及 **`GET/POST/DELETE /Library/VirtualFolders`**，都掛 `FirstTimeSetupOrElevated` 政策：精靈未完成時匿名可呼叫，完成後需管理員 token。
+- `POST /Library/VirtualFolders?name=&collectionType=&paths=&refreshLibrary=`，`collectionType` 可為 `movies` / `tvshows` / `music` / `musicvideos` / `homevideos` / `boxsets` / `books` / `mixed`；body `{LibraryOptions}` 含 `PathInfos`、`EnableRealtimeMonitor`、`PreferredMetadataLanguage`、`MetadataCountryCode`、`TypeOptions[]`、`SeasonZeroDisplayName`、`EnableAutomaticSeriesGrouping`、`EnableEmbeddedTitles`、`AutomaticRefreshIntervalDays`。
+- `GET/POST /Repositories`（`{Name, Url, Enabled}`）、`POST /Packages/Installed/{name}?assemblyGuid=&version=&repositoryUrl=`、`POST /System/Restart`、`GET /ScheduledTasks`、`POST /ScheduledTasks/Running/{taskId}` 都需管理員（`RequiresElevation`）。
+- MergeVersions：manifest `https://raw.githubusercontent.com/danieladov/JellyfinPluginManifest/master/manifest.json`，套件名 `Merge Versions`，GUID `f21bbed8-3a97-4d8b-88b2-48aaa65427cb`；排程任務 `Key` 為 `MergeMoviesTask` 與 `MergeEpisodesTask`（[RefreshLibraryTask.cs](https://github.com/danieladov/jellyfin-plugin-mergeversions/blob/master/Jellyfin.Plugin.MergeVersions/ScheduledTasks/RefreshLibraryTask.cs)），觸發時要用 `GET /ScheduledTasks` 回傳的 `Id`，不是 `Key`。
+
+**Prowlarr**（[OpenAPI](https://raw.githubusercontent.com/Prowlarr/Prowlarr/develop/src/Prowlarr.Api.V1/openapi.json)、[supported-indexers](https://wiki.servarr.com/prowlarr/supported-indexers)、[environment-variables](https://wiki.servarr.com/prowlarr/environment-variables)）
+
+- `GET /api/v1/indexer/schema`、`GET/POST /api/v1/indexer`、`POST /api/v1/indexer/test`；`GET /api/v1/search?query=&indexerIds=&categories=&type=` 回 `ReleaseResource`（`title`、`size`、`seeders`、`leechers`、`downloadUrl`、`magnetUrl`、`infoHash`、`indexer`、`categories`、`publishDate`、`guid`、`infoUrl`、`tmdbId` …）。Prowlarr 明言**不提供跨站聚合 Torznab**，單站 Torznab 為 `/{id}/api?t=search&apikey=`。
+- API key 在 `config.xml` 的 `<ApiKey>`，可用 `PROWLARR__AUTH__APIKEY` 預設。
+- 支援的公開索引站含：Nyaa.si、dmhy、AniDex、Anime Tosho、ACG.RIP、**Mikan**、1337x、YTS、EZTV、The Pirate Bay；TorrentGalaxy 目前不在清單。
+
+**Jackett**（[repo](https://github.com/Jackett/Jackett)）
+
+- API key 在 `ServerConfig.json` 的 `APIKey`；聚合 Torznab `/api/v2.0/indexers/all/results/torznab/api?t=search` 有文件（上限 1000 筆、站專屬分類不可用）；`GET/POST /api/v2.0/indexers/{id}/Config` 只是 UI 內部介面，無文件。有 `mikan.yml`、`dmhy.yml`、`nyaasi.yml`、`acgrip.yml` 定義。
+- 結論維持 §19：套件預設 Prowlarr，Jackett 以 Torznab 端點接入。
+
+**TMDB 專案級 key**
+
+- Jellyseerr / Seerr 在 `server/api/themoviedb/index.ts` 寫死一把專案 key，使用者無處填自己的 key（[overseerr#3887](https://github.com/sct/overseerr/issues/3887)）；Jellyfin 團隊也曾討論專案級 key（[jellyfin#36](https://github.com/jellyfin/jellyfin/issues/36)）。TMDB 條款只區分商業與非商業，未明文規範「一 app 一 key」；本系統沿用此慣例並允許覆寫。
+
+**qBittorrent 預置**（[sessionimpl.cpp](https://github.com/qbittorrent/qBittorrent/blob/master/src/base/bittorrent/sessionimpl.cpp)、[linuxserver/qbittorrent](https://docs.linuxserver.io/images/docker-qbittorrent)、[qbittorrent-nox](https://github.com/qbittorrent/docker-qbittorrent-nox)）
+
+- 4.6.1 起首次啟動用隨機臨時密碼印在 log；已知密碼要預置 `WebUI\Password_PBKDF2`（PBKDF2-HMAC-SHA512、100000 次）。官方 image 沒有密碼環境變數，也沒有 `PUID` / `PGID`；linuxserver image 有，且設定檔在 `/config/qBittorrent/qBittorrent.conf`。
+- `[Preferences]`：`WebUI\Port`、`WebUI\AuthSubnetWhitelistEnabled`、`WebUI\AuthSubnetWhitelist`、`WebUI\LocalHostAuth`、`WebUI\HostHeaderValidation`、`WebUI\CSRFProtection`；`[BitTorrent]`：`Session\DefaultSavePath`、`Session\TempPath`、`Session\TempPathEnabled`、`Session\DisableAutoTMMByDefault`（**預設 true，即 autoTMM 關閉**）、`Session\DisableAutoTMMTriggers\CategorySavePathChanged`、`Session\Port`。
+- Web API `app/setPreferences` 對應鍵：`temp_path_enabled`、`temp_path`、`save_path`、`auto_tmm_enabled`、`category_changed_tmm_enabled`、`bypass_auth_subnet_whitelist(_enabled)`、`bypass_local_auth`、`web_ui_password`（只寫）。
   - 深連結 `#!/details?id=` 在 10.9+ 是否仍可用。
 - 抽 10 部動漫比對 TMDB 季結構與字幕組編號，量化絕對編號換算的失敗率。
