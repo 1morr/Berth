@@ -47,6 +47,15 @@
 - 第一個 UI 任務開頭執行 `/impeccable hooks on`。
 - UI 改動用 playwright 實跑驗證，附截圖或文字結果。
 
+## Skills
+
+- `parser`、`naming`、`domain`、`services` 的新功能與修 bug：`mattpocock-skills:tdd`（紅 → 綠 → 重構，benchmark fixture 就是紅燈）。
+- 設計 adapter 介面、解析器階段、services 命令的邊界：`mattpocock-skills:codebase-design`。
+- 用實驗回答設計問題（T0.3 的 Jellyfin 命名實測這類）：`mattpocock-skills:prototype`，結論寫回 brief，原型不留。
+- 查證外部事實：`mattpocock-skills:research`，輸出放 `docs/research/`，結論摘進 brief §20 並連結。
+- 里程碑收尾：`mattpocock-skills:code-review`（對照 plan §11 驗收與本檔規範）；難 bug 或效能退化：`mattpocock-skills:diagnosing-bugs`。
+- 改本檔或 progress.md 的流程段：`mattpocock-skills:writing-for-agents`。
+
 ## 指令
 
 README 是指令的單一來源（T0.1 建立）。
