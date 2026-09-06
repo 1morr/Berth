@@ -6,8 +6,10 @@
 
 - `docs/design-brief.md`：需求、決定、查證過的事實（§20，附來源）。決定衝突時以它為準。
 - `docs/plan.md`：架構、資料模型、狀態機、解析器、API、里程碑任務與驗收（§11）。
-- `docs/progress.md`：任務狀態與 session 紀錄。每個 session 的起點與終點。
-- `PRODUCT.md`、`DESIGN.md`：impeccable 維護的產品與設計脈絡（第一個 UI 任務起）。
+- `docs/progress.md`：各里程碑的閱讀指引、session 紀錄、偏差與決定。每個 session 的起點與終點。
+- `.scratch/<里程碑>/issues/`：票，執行單位；狀態在票的 `Status:` 行。
+- `CONTEXT.md`：名詞表，唯一來源；命名一律用它的詞。
+- `PRODUCT.md`、`DESIGN.md`：impeccable 維護的產品與設計脈絡（第一個 UI 票起）。
 
 ## 每個 session 的流程
 
