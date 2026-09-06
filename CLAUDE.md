@@ -11,16 +11,15 @@
 
 ## 每個 session 的流程
 
-一個 session 只做一個任務。
+工作單位是**票**：`.scratch/<里程碑>/issues/NN-slug.md`，由 `/to-tickets docs/plan.md` 在每個里程碑開頭產生一次（使用者參與拆分）。一個 session 只做一張票。
 
-1. 讀 `docs/progress.md`，取第一個 `todo` 任務；只讀它列出的 plan / brief 章節，其他章節按需讀。
-2. 任務標「大」的先進 plan mode 拆成子任務寫回 progress.md，再做第一個子任務。
-3. 實作與測試同一輪；行為以 plan §11 該任務的驗收欄為準。
-4. 驗證：跑 lint、type、test；貼指令輸出。
-5. 實作若推翻 plan 或 brief，同一 commit 改文件，並在 progress.md「偏差與決定」記一行。
-6. 更新 progress.md（狀態、做了什麼、下一步），commit，結束並提醒使用者開新 session。
+1. 讀 `docs/progress.md` 的 session 紀錄與偏差，再讀票；只讀票列出的 plan / brief 章節，其他按需讀。
+2. `/implement <票路徑>`：tdd、定期 typecheck、結尾 `/code-review <開工時的 commit>`、commit。
+3. 驗證：跑 lint、type、test；貼指令輸出。
+4. 實作若推翻 plan 或 brief，同一 commit 改文件，並在 progress.md「偏差與決定」記一行。
+5. 票的 `Status:` 改為 `done`、勾掉驗收條件、code-review 未處理的發現記到票的 `## Comments`；progress.md 加一行 session 紀錄；commit；提醒使用者開新 session。
 
-完成標準：驗收達成、lint / type / test 綠燈、progress.md 已更新、已 commit。四項缺一就還沒完成。
+完成標準：票上每個驗收條件打勾、lint / type / test 綠燈、progress.md 已更新、已 commit。缺一就還沒完成。
 
 ## 事實與查證
 
@@ -49,11 +48,12 @@
 
 ## Skills
 
+- 里程碑開頭拆票：`/to-tickets docs/plan.md`，每張票寫明「讀：plan §x、brief §y」與驗收條件；每張票做一個 session：`/implement`。
 - `parser`、`naming`、`domain`、`services` 的新功能與修 bug：`mattpocock-skills:tdd`（紅 → 綠 → 重構，benchmark fixture 就是紅燈）。
 - 設計 adapter 介面、解析器階段、services 命令的邊界：`mattpocock-skills:codebase-design`。
 - 用實驗回答設計問題（T0.3 的 Jellyfin 命名實測這類）：`mattpocock-skills:prototype`，結論寫回 brief，原型不留。
 - 查證外部事實：`mattpocock-skills:research`，輸出放 `docs/research/`，結論摘進 brief §20 並連結。
-- 里程碑收尾：`mattpocock-skills:code-review`（對照 plan §11 驗收與本檔規範）；難 bug 或效能退化：`mattpocock-skills:diagnosing-bugs`。
+- 每張票收尾與里程碑收尾：`mattpocock-skills:code-review`（Spec 軸讀票，Standards 軸讀本檔）；難 bug 或效能退化：`mattpocock-skills:diagnosing-bugs`。
 - 改本檔或 progress.md 的流程段：`mattpocock-skills:writing-for-agents`。
 
 ## 指令

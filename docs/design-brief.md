@@ -62,23 +62,7 @@
 
 ## 2. 名詞表（Ubiquitous Language）
 
-實作、UI、文件與 API 一律使用這些詞，不另造同義詞。
-
-| 名詞 | 定義 |
-| --- | --- |
-| **Media** | TMDB 上的一部電影或一部劇集。主鍵 `tmdb:movie:<id>` / `tmdb:tv:<id>`。劇集底下有 Season 與 Episode（TMDB 的編號）。 |
-| **Tracked Media** | 本系統曾為其下載、訂閱或入庫過的 Media。媒體庫頁與 RSS 規則只針對 Tracked Media。 |
-| **Library Route**（UI 顯示「媒體庫」） | 一個入庫目的地：Jellyfin 媒體庫 + 一個寫入目標路徑 + 一個 qBittorrent category + 一個命名 profile（`standard` / `anime`）。 |
-| **Download Job** | 一個 torrent 在本系統中的生命週期紀錄，以 info hash 為鍵。 |
-| **Trigger** | Job 的來源：`manual`（使用者在詳情頁選擇）、`rss:<rule>`、`reimport`、未來 `ai`。 |
-| **Import Source** | 待入庫的檔案集合：通常是 Job 的內容目錄，也可以是 complete 目錄下的任意資料夾（重新入庫時）。 |
-| **Import Plan** | 對一個 Import Source 的每個檔案，決定「分類、對應 Media/季/集、目標路徑、tags、信心與理由」的可審核計劃。Plan 在被套用前不動任何檔案。 |
-| **Ledger Entry** | 一條「來源檔案 → 目標硬鏈接」的紀錄：torrent hash、來源相對路徑、目標路徑、inode、Media/季/集、tags、plan id、時間。 |
-| **Review Queue** | 低信心 Plan、未匹配檔案、重複版本、孤兒等待人工處理的清單。 |
-| **Unmatched** | 解析後無法對應到 TMDB 任何一集/一部的影片或字幕檔。 |
-| **Extras** | 可辨識但不屬於正片的內容：NCOP/NCED、PV、CM、Menu、預告、花絮、特典映像。 |
-| **Orphan / Issue** | 帳本、qBittorrent、complete 目錄、library 目錄四方不一致的項目，見 §9。 |
-| **Event** | Job 時間線上的一筆事件，含類型、時間、觸發者、細節 JSON。 |
+名詞表在 repo 根目錄的 `CONTEXT.md`（單一來源，含每個詞的定義與應避免的同義詞）。實作、UI、文件與 API 一律使用那裡的詞。本文件後續章節出現的 Media、Library Route、Download Job、Import Plan、Ledger Entry、Review Queue、Unmatched、Extras、Issue、Event 等，定義以 `CONTEXT.md` 為準。
 
 ---
 
