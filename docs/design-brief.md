@@ -131,9 +131,9 @@
 ### 4.4 硬鏈接能力驗證【決定】
 
 - 每個 Route 建立時與每次啟動時執行：在 `complete/<route-slug>` 建暫存檔 → 真的呼叫 `link()` 鏈接到目標路徑 → 比對 inode 與 device → 刪除。失敗即 Route 標記為不健康，拒絕送單。只比 `st_dev` 不夠（同一檔案系統掛兩次、btrfs 子卷、ZFS dataset、mergerfs 都會 `EXDEV`，§20.2），所以一定實際鏈接一次。
-- 也檢查：目標路徑對本系統可寫、qBittorrent 回報的 save path 在本系統看得到、temp path 已啟用、category 為 autoTMM 模式。
+- 也檢查：目標路徑對本系統可寫、qBittorrent 回報的 save path 在本系統看得到、Jellyfin 以 `Environment/ValidatePath` 確認看得到探測檔、category 為 autoTMM 模式；temp path 未啟用只警告。
 - **硬鏈接失敗不退回複製**（與 Sonarr 不同）：複製會讓刪除範圍與空間估算失真，違反「避免複製檔案」的需求。
-- Docker 部署要求三個容器（qBittorrent、Jellyfin、本系統）以**相同容器路徑**掛載同一個宿主目錄（TRaSH 的單一 `/data` 掛載慣例）。第一階段不做 remote path mapping，設定精靈直接驗證「你看到的路徑 qBittorrent 也看得到」。
+- Docker 部署要求三個容器（qBittorrent、Jellyfin、本系統）以**相同容器路徑**掛載同一個宿主父目錄（TRaSH 的單一掛載慣例）；路徑字串可以是 `/data` 以外的任何值，套件預設 `/data`，既有服務沿用它們原本的路徑（§16.4）。第一階段不做 remote path mapping，設定精靈直接驗證「你看到的路徑 qBittorrent 與 Jellyfin 也看得到」。
 - 已知限制要寫進 README：Docker Desktop（Windows/macOS）bind mount 的硬鏈接支援與 mergerfs / 跨 dataset 情境，見 §20 的查證結果。
 
 ### 4.5 檔名與目錄安全
@@ -539,15 +539,28 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 
 | 服務 | 預置（compose 範本） | Berth 一鍵設定（API） | 使用者仍需自己做 |
 | --- | --- | --- | --- |
-| qBittorrent | 設定檔預置 WebUI 對 compose 內網免密、temp path / save path / autoTMM 預設值 | 套用建議偏好、依 Route 建立 category、設定 WebUI 密碼 | 無 |
+| qBittorrent | **只預置「讓 Berth 進得去」**：compose 內網免密白名單與 Host 檢查網域名。原因是 4.6.1 起首次啟動的隨機密碼只印在容器 log，Berth 拿不到，沒有這一步按鈕就登不進去 | 套用建議偏好（temp path、save path、autoTMM）、依 Route 建立 category、設定 WebUI 密碼；按下前顯示差異 | 無 |
 | Jellyfin | 無 | 偵測「尚未完成初始精靈」→ 以 Berth 管理員帳密建立 Jellyfin 管理員 → 建立 Movies / TV / Anime 三個媒體庫（對應 `/data/library/{movies,tv,anime}`）→ 加入插件庫並安裝 MergeVersions → 重啟 → 自動建立三個 Route | 無 |
 | Prowlarr | 無；Berth 唯讀掛載其設定目錄讀取 API key | 加入預設索引站清單（Nyaa.si、dmhy、AniDex、Anime Tosho、ACG.RIP、Mikan、1337x、YTS、EZTV、The Pirate Bay，可勾選）、以 Berth 管理員帳密設定介面登入 | 私有站的帳號 |
 | TMDB | Berth 內建專案級 API key（Seerr 的做法，§20.7） | 無 | 可選：填自己的 key |
 | 索引站 / RSS | 無 | Mikan、Nyaa feed 由使用者貼 URL | 貼自己的 Mikan 訂閱 URL |
 
-- **兩種模式**：`bundle`（偵測到套件內服務且未設定 → 全自動）與 `existing`（使用者填既有服務的位址與憑證 → 只做檢查，「套用建議設定」「建立媒體庫」「安裝插件」各是一顆需確認的按鈕，不自動動既有媒體庫）。
+- **每個服務各自判斷來源，沒有全局模式**。精靈逐一探測 compose 主機名（`jellyfin`、`qbittorrent`、`prowlarr`）：探得到且尚未設定過（Jellyfin 的 `StartupWizardCompleted=false`、qBittorrent 免密可進、Prowlarr 無索引站）→ 視為**套件內服務**，全自動；否則顯示連線表單 → **既有服務**，只做檢查，「套用建議設定」「加入媒體庫路徑」「安裝插件」各是一顆需確認的按鈕。NAS 使用者常見的組合是既有 Jellyfin + 套件內 qBittorrent 與 Prowlarr。
+- compose 用 profiles：`.env` 的 `COMPOSE_PROFILES=jellyfin,qbittorrent,prowlarr` 預設全起；已有某服務的人把它從清單拿掉即可。
+- 預置只在設定檔不存在時寫入一次，之後使用者在各服務介面改什麼都行；健康檢查發現關鍵設定漂移時提供「還原建議設定」按鈕。精靈的 qBittorrent 步驟會列出「已預置的項目」。
 - 每顆按鈕都顯示「將會做什麼」與執行結果，失敗給出可複製的手動步驟。
 - 各服務 API 的可行性與細節見 §20.7。
+
+### 16.4 既有服務的接入規則【決定】
+
+允許接入既有服務；NAS 使用者是主要客群，Seerr 與 Sonarr 也都支援。問題只有一類：路徑與檔案系統邊界。
+
+- **唯一的硬規則**：Berth、qBittorrent、Jellyfin 三個容器把同一個宿主父目錄掛在**相同的容器路徑**，且下載目錄與媒體庫目錄都在它底下。路徑字串不必是 `/data`（`/volume1/media` 掛成 `/volume1/media` 也可以）；Berth 的 incomplete / complete 根目錄可設定，媒體庫路徑讀自 Jellyfin。
+- **既有 Jellyfin 不搬媒體庫**：Jellyfin 的項目 ID 由路徑算出，改路徑等於全部變成新項目、觀看紀錄歸零。做法是用 Jellyfin 的「一個媒體庫多個路徑」：Berth 按鈕以 `POST /Library/VirtualFolders/Paths` 為既有媒體庫**加**一個 Berth 用的路徑（§20.7），Route 指向新路徑；舊媒體原地不動，在 Berth 只是 unmanaged 檔案。
+- **既有 qBittorrent 不搬舊種**：使用者多加一個掛載，Berth 用自己的 `berth-*` category 與新的 save path；舊 torrent 留在原目錄，Berth 忽略非自己分類的 torrent。全域 autoTMM 關閉也無妨，Berth 送單時逐個 torrent 指定 `autoTMM=true`。temp path 未啟用只給警告，不阻擋。
+- **健康檢查會擋下的情況**：qBittorrent 回報的 save path 在 Berth 看不到；Jellyfin 的媒體庫路徑在 Berth 看不到；兩者在 Berth 內是不同掛載（`link()` 回 `EXDEV`）；qBittorrent 低於 4.4；媒體庫掛 TVDB 插件（警告）。每項附「哪個容器少了哪個掛載」的 compose 修正片段。
+- **跨主機驗證**：Berth 在 Route 目標寫一個探測檔，再以 `POST /Environment/ValidatePath` 請 Jellyfin 確認看得到同一路徑（§20.7）；Jellyfin 在別台機器而路徑不一致會立刻現形。
+- **不支援**：Berth 與 qBittorrent 不在存放媒體的同一台機器（硬鏈接做不到）；remote path mapping（第一階段不做，見 §18）。
 
 ---
 
@@ -557,7 +570,7 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 
 | 里程碑 | 內容 | 驗收 |
 | --- | --- | --- |
-| **M0 骨架** | §20.6 的實驗（結果可能改變命名決定，所以最先做）、compose 範本與預置設定、精靈（建立管理員、bundle 模式一鍵設定 Jellyfin / qBittorrent / Prowlarr、existing 模式連線）、Route 建立、健康檢查 | 實驗結論寫回本文件；在乾淨的 Linux 與 Windows Docker Desktop 上 `docker compose up` 後只操作 Berth 即完成設定，四項健康檢查綠燈 |
+| **M0 骨架** | §20.6 的實驗（結果可能改變命名決定，所以最先做）、compose 範本（profiles）與最小預置、精靈（建立管理員、逐服務判斷套件內或既有、套件內服務全自動設定、既有服務連線與確認按鈕）、Route 建立、健康檢查 | 實驗結論寫回本文件；在乾淨的 Linux 與 Windows Docker Desktop 上 `docker compose up` 後只操作 Berth 即完成設定，四項健康檢查綠燈；另以「既有 Jellyfin + 套件內其餘服務」的組合走一次 |
 | **M1 手動全流程** | 探索 → 詳情 → 索引站搜尋 → 送 qBittorrent → 輪詢 → 規則 planning → 硬鏈接 → 掃描 → 媒體庫頁顯示可播放 + 深連結；Job 時間線；benchmark v0 | 一部美劇一季、一部動漫一季、一部電影，三者不經人工入庫並在 Jellyfin 正確顯示 |
 | **M2 修正與對帳** | Review Queue、Unmatched 指派、rematch、Reconciler、刪除範圍、重新入庫 | 刪掉 library 後可一鍵重建；Issue 表對三種人為破壞都能偵測 |
 | **M3 RSS** | Mikan 與 Nyaa adapter、Rule、去重、一次性連結、dry-run | 一個動漫季度分別以 Mikan 與 Nyaa feed 全自動追完 |
@@ -820,6 +833,7 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 - `GET /System/Info/Public` 無需憑證，回 `StartupWizardCompleted`。
 - `POST /Startup/Configuration`（`ServerName`、`UICulture`、`MetadataCountryCode`、`PreferredMetadataLanguage`）、`POST /Startup/User`（`Name`、`Password`）、`POST /Startup/RemoteAccess`（只有 `EnableRemoteAccess`，沒有 `EnableAutomaticPortMapping`）、`POST /Startup/Complete`，以及 **`GET/POST/DELETE /Library/VirtualFolders`**，都掛 `FirstTimeSetupOrElevated` 政策：精靈未完成時匿名可呼叫，完成後需管理員 token。
 - `POST /Library/VirtualFolders?name=&collectionType=&paths=&refreshLibrary=`，`collectionType` 可為 `movies` / `tvshows` / `music` / `musicvideos` / `homevideos` / `boxsets` / `books` / `mixed`；body `{LibraryOptions}` 含 `PathInfos`、`EnableRealtimeMonitor`、`PreferredMetadataLanguage`、`MetadataCountryCode`、`TypeOptions[]`、`SeasonZeroDisplayName`、`EnableAutomaticSeriesGrouping`、`EnableEmbeddedTitles`、`AutomaticRefreshIntervalDays`。
+- 為既有媒體庫加路徑：`POST /Library/VirtualFolders/Paths?refreshLibrary=`，body `MediaPathDto {Name, Path, PathInfo{Path}}`；移除為 `DELETE /Library/VirtualFolders/Paths?name=&path=`。路徑驗證：`POST /Environment/ValidatePath`，body `{ValidateWritable, Path, IsFile}`；另有 `GET /Environment/DirectoryContents?path=`。兩組都是 `FirstTimeSetupOrElevated`（本機對 OpenAPI 直接查核，2026-09-07）。
 - `GET/POST /Repositories`（`{Name, Url, Enabled}`）、`POST /Packages/Installed/{name}?assemblyGuid=&version=&repositoryUrl=`、`POST /System/Restart`、`GET /ScheduledTasks`、`POST /ScheduledTasks/Running/{taskId}` 都需管理員（`RequiresElevation`）。
 - MergeVersions：manifest `https://raw.githubusercontent.com/danieladov/JellyfinPluginManifest/master/manifest.json`，套件名 `Merge Versions`，GUID `f21bbed8-3a97-4d8b-88b2-48aaa65427cb`；排程任務 `Key` 為 `MergeMoviesTask` 與 `MergeEpisodesTask`（[RefreshLibraryTask.cs](https://github.com/danieladov/jellyfin-plugin-mergeversions/blob/master/Jellyfin.Plugin.MergeVersions/ScheduledTasks/RefreshLibraryTask.cs)），觸發時要用 `GET /ScheduledTasks` 回傳的 `Id`，不是 `Key`。
 
