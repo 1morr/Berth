@@ -59,3 +59,17 @@
 ## 指令
 
 README 是指令的單一來源（T0.1 建立）。
+
+## Agent skills
+
+### Issue tracker
+
+Local markdown：票與 spec 以檔案存在 `.scratch/<feature-slug>/`。See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+五個預設角色標籤，字串與角色名相同。See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context：根目錄 `CONTEXT.md` + `docs/adr/`。See `docs/agents/domain.md`.
