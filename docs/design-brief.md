@@ -598,10 +598,9 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 | UI 語言 | 繁體中文優先，預留 i18n | §16.2 |
 | 授權 | MIT | §16.2 |
 | 目標環境 | Linux 與 Windows 的 Docker；NAS 與一般電腦使用者；套件內含 Jellyfin / qBittorrent / Prowlarr，開箱即用 | §16.1、§16.3 |
+| 索引站管理器 | 套件預設 Prowlarr（有文件化 REST API 可一鍵加索引站）；Jackett 以 Torznab 端點接入 | §3、§16.3、§20.7 |
 
-待 owner 確認（已按建議寫入，反對再改）：
-
-1. **套件預設的索引站管理器用 Prowlarr 而非 Jackett**：兩者都講 Torznab，Berth 的搜尋 adapter 不變；差別在 Prowlarr 有文件化的 REST API 可讓 Berth 一鍵加入索引站，Jackett 的設定 API 只是內部介面。已有 Jackett 的使用者仍可直接接入。
+目前沒有待決事項。
 
 ---
 
