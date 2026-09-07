@@ -2,3 +2,6 @@
 *.png binary
 *.jpg binary
 *.ico binary
+
+# Recorded service responses are byte-exact evidence: never normalise their endings.
+tests/fixtures/** -text

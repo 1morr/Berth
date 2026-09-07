@@ -1,5 +1,10 @@
 # Mirrors CI. Kept ASCII-only: pre-commit reads this file with the locale
 # encoding, so non-ASCII breaks it on Windows shells that are not UTF-8.
+# tests/fixtures/ holds responses recorded verbatim from real services. Reformatting
+# them (adding a trailing newline, rewriting CRLF) destroys the thing they are evidence
+# of, so the whitespace hooks skip that tree. See tests/fixtures/http/README.md.
+exclude: ^tests/fixtures/
+
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
