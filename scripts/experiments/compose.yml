@@ -1,0 +1,75 @@
+# M0 實驗環境（票 04 / brief §20.6）。與 deploy/docker-compose.yml 無關，
+# 只為了跑實驗：兩個版本的 Jellyfin、兩個版本的 qBittorrent、一個 Prowlarr。
+#
+#   指令見根目錄 README 的〈實驗腳本〉；每個腳本在回答什麼見 scripts/experiments/README.md。
+#
+# port 全部偏移，跟 deploy/ 的 8096 / 8080 / 9696 並存不衝突；
+# 子網也另開一段，避免撞到 deploy 的 172.28.0.0/16。
+name: berth-exp
+
+networks:
+  default:
+    name: berth-exp
+    ipam:
+      config:
+        - subnet: 172.29.0.0/16
+
+services:
+  # 兩個 Jellyfin 用官方 image：linuxserver 只保留最新版的 tag，
+  # 而本實驗的重點就是「10.10 與 10.11 的差異」，必須釘版本。
+  jellyfin-1010:
+    image: jellyfin/jellyfin:10.10.7
+    container_name: berth-exp-jellyfin-1010
+    volumes:
+      - ${EXP_ROOT:-../../.local/experiments}/jellyfin-1010:/config
+      - ${EXP_ROOT:-../../.local/experiments}/data:/data
+    ports:
+      - 18096:8096
+
+  jellyfin-1011:
+    image: jellyfin/jellyfin:10.11.11
+    container_name: berth-exp-jellyfin-1011
+    volumes:
+      - ${EXP_ROOT:-../../.local/experiments}/jellyfin-1011:/config
+      - ${EXP_ROOT:-../../.local/experiments}/data:/data
+    ports:
+      - 18196:8096
+
+  # 4.4.5 是 brief §20.2 訂的支援下限（Web API 2.8.4）。
+  qbittorrent-44:
+    image: lscr.io/linuxserver/qbittorrent:4.4.5
+    container_name: berth-exp-qbittorrent-44
+    environment:
+      PUID: ${PUID:-1000}
+      PGID: ${PGID:-1000}
+      WEBUI_PORT: 8080
+    volumes:
+      - ${EXP_ROOT:-../../.local/experiments}/qbittorrent-44:/config
+    ports:
+      - 18080:8080
+    networks:
+      default:
+        aliases: [qbittorrent]
+
+  qbittorrent-52:
+    image: lscr.io/linuxserver/qbittorrent:5.2.3
+    container_name: berth-exp-qbittorrent-52
+    environment:
+      PUID: ${PUID:-1000}
+      PGID: ${PGID:-1000}
+      WEBUI_PORT: 8080
+    volumes:
+      - ${EXP_ROOT:-../../.local/experiments}/qbittorrent-52:/config
+    ports:
+      - 18081:8080
+
+  prowlarr:
+    image: lscr.io/linuxserver/prowlarr:latest
+    container_name: berth-exp-prowlarr
+    environment:
+      PUID: ${PUID:-1000}
+      PGID: ${PGID:-1000}
+    volumes:
+      - ${EXP_ROOT:-../../.local/experiments}/prowlarr:/config
+    ports:
+      - 19696:9696

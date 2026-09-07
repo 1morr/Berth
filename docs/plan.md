@@ -270,7 +270,7 @@ fixture 一筆一個 JSON：
 | 作品資料夾 | `{title} ({year}) [tmdbid-{id}]` |
 | 季資料夾 | `Season {season:02d}` |
 | 劇集檔 | `{title} ({year}) - S{s:02d}E{e:02d}[-E{e2:02d}][ - {episode_title}][ {tags}].{ext}` |
-| 電影檔 | `{title} ({year}) [tmdbid-{id}][ - {tags}].{ext}`（無 tags 時檔名等於資料夾名） |
+| 電影檔 | `{title} ({year}) [tmdbid-{id}][ - {tags}].{ext}`（無 tags 時檔名等於資料夾名；` - ` 之前**必須**與資料夾名一字不差，否則 Jellyfin 會當成兩部片） |
 | 外掛字幕 | `{影片檔名主幹}.{SUBTOKEN}.{lang}[.default].{ext}` |
 | Extras | `{作品資料夾}/extras/{原檔名}` |
 
@@ -278,7 +278,7 @@ fixture 一筆一個 JSON：
 - `episode_title` 來自快照；缺、空、或符合 `^Episode \d+$` 即省略；長度上限 80 字元。
 - `sanitize`：移除 `/ \ : * ? " < > |` 與控制字元，連續空白合一，去尾端 `.` 與空白，整體 ≤ 200 bytes（UTF-8）。
 - `Tags.render()`：brief §6.8 的順序與 token；缺欄位直接省略；`subs` 依 `CHS < CHT < JP < EN` 排序後以 `+` 連接。
-- 這些模板在 M0 的實驗（brief §20.6）確認後才凍結；實驗若證明方括號有問題，只改 `naming/`，不影響其他模組。
+- **模板已凍結**（2026-09-07，M0 票 04 的實驗，brief §20.6 / §20.7）。實測確認：方括號與 `+` 不會滲進 Jellyfin 的 Series 或 Episode 名稱；電影檔名含 `[tmdbid-{id}]` 才會被當成同一部片的多版本（brief §7.2 的舊範例是錯的）；`{SUBTOKEN}.{lang}` 用 `CHT.zh` / `CHS.zh` 在 10.10 與 10.11 都分得出繁簡，`zh-Hant` 只有 10.11 認得所以不用。之後要改模板只改 `naming/`，不影響其他模組。
 
 ---
 
@@ -325,10 +325,10 @@ REST + JSON，前綴 `/api`。所有端點需登入，除了 `auth/login`、`set
 ### 8.1 qBittorrent adapter
 
 - 連線時讀 `app/webapiVersion` 與 `app/version`，低於 2.8.4 拒絕並提示升級。
-- 參數依版本：API ≥ 2.11 用 `stopped`，否則 `paused`；`contentLayout=Original`；`autoTMM=true`；`category=<route.category>`；`tags=berth`。
-- `ensure_category(name, save_path)`：`torrents/categories` 讀取（接受 `savePath` 與 `save_path` 兩種鍵），不存在才建，存在但 save path 不同 → 回報衝突不改（brief §20.2）。
+- 參數依版本：API ≥ 2.11 用 `stopped`，否則 `paused`；`contentLayout=Original`；`autoTMM=true`；`category=<route.category>`；`tags=berth`。**版本判斷是必要條件**：實測送錯的那個參數會被靜默忽略（`torrents/add` 照樣回 200），torrent 就這樣開始下載（brief §20.7）。
+- `ensure_category(name, save_path)`：`torrents/categories` 讀取（接受 `savePath` 與 `save_path` 兩種鍵；4.4.5 與 5.2.3 實測都是 `savePath`，`save_path` 只出現在 4.4.0–4.4.1，仍在支援範圍所以兩種都收），不存在才建，存在但 save path 不同 → 回報衝突不改（brief §20.2）。
 - `diff_recommended_preferences()` / `apply_recommended_preferences()`：建議值為 `temp_path_enabled=true`、`temp_path=<incomplete root>`、`save_path=<complete root>`、`auto_tmm_enabled=true`、`category_changed_tmm_enabled=true`；先回傳與現值的差異給精靈顯示，套用時只寫不同的鍵。既有服務的 temp path 未啟用只列為警告。
-- 完成判定與 `torrents/files` 路徑組合依 brief §20.2；`content_path` 是目錄或單檔，兩種都處理。
+- 完成判定依 brief §20.2。`torrents/files[].name` **相對 `save_path`**（多檔含 torrent 根目錄那一層），實測四種 `contentLayout` 組合都成立（brief §20.7）；組絕對路徑前先正規化 `save_path` 的尾斜線（4.4 有、5.x 沒有），組完仍 `stat` 驗證。`content_path` 是目錄或單檔，兩種都處理。
 - 登入：`auth/login` 拿 SID，請求帶 `Referer` = base URL；403 記錄並退避。
 - 錯誤映射：連線失敗 → `ServiceUnavailable`；403 → `AuthFailed`；409（category 不存在）→ `CategoryMissing`。
 
@@ -339,7 +339,7 @@ REST + JSON，前綴 `/api`。所有端點需登入，除了 `auth/login`、`set
 - `notify_paths(paths)`：`POST /Library/Media/Updated`，每路徑 `UpdateType=Created`。
 - `validate_path(path, is_file)`：`POST /Environment/ValidatePath`，跨服務可見性檢查用。
 - `add_library_path(library_name, path)`：`POST /Library/VirtualFolders/Paths?refreshLibrary=false`，既有媒體庫加 Berth 路徑用；對應的移除 `DELETE /Library/VirtualFolders/Paths` 只在使用者明確要求時呼叫。
-- `find_series(library_id, tmdb_id, folder_path)` 與 `find_episodes(series_id)`：brief §20.1 的兩段查詢，都帶 `fields=Path,ProviderIds`。
+- `find_series(library_id, tmdb_id, folder_path)` 與 `find_episodes(series_folder_path)`：都以 `parentId=<library>&recursive=true&fields=Path,ProviderIds` 查，再照 `Path` 前綴篩出該作品的集。**不要用 `parentId=<seriesId>` 或 `/Shows/{id}/Episodes`**：10.11 在第一次掃描後對已比對到 provider 的 Series 兩者都回 0，要再掃一次才正常（brief §20.7）。
 - `run_task(name)`：`GET /ScheduledTasks` 找名稱含 `Merge` 的任務 → `POST /ScheduledTasks/Running/{id}`；找不到只記 event。
 - 初始化與插件安裝：§9.4。
 - 絕不呼叫 `DELETE /Items/*`。
@@ -417,7 +417,8 @@ WebUI\AuthSubnetWhitelist=172.28.0.2/32
 - 為什麼非預置不可：4.6.1 起首次啟動的隨機密碼只印在容器 log，Berth 沒有 docker socket 讀不到；要使用者去 `docker logs` 抄密碼正是要避免的事。
 - 為什麼是「缺鍵才補」而不是「檔案不存在才寫」：linuxserver image 自己的 `init-qbittorrent-config` 排在 `init-custom-files` 之前，已經把 `/defaults/qBittorrent.conf` 複製進 `/config`，所以「不存在」永遠不成立；整份覆蓋會掉 `LegalNotice\Accepted=true` 這類讓 qbittorrent-nox 起得來的鍵（2026-09-07 實測，brief §20.7）。缺鍵才補同時滿足冪等：重建容器不會改動任何既有內容。
 - 白名單是 `/32` 不是整個網段，理由見 §9.1；`berth` 的 IP 由 compose 固定並用環境變數 `BERTH_IP` 傳給腳本，避免兩處寫死。
-- `WebUI\ServerDomains` **不預置**：linuxserver image 的預設值是 `*`，Host 檢查本來就過得了；寫成 `qbittorrent` 反而會讓使用者從 `localhost:8080` 進不了 WebUI。
+- `WebUI\ServerDomains` **不預置**：linuxserver image 的預設值是 `*`，Host 檢查本來就過得了；寫成 `qbittorrent` 確實讓 `http://qbittorrent:8080` 通過，但同時讓使用者從 `localhost:8080` 與 `127.0.0.1:8080` 都吃 401（2026-09-07 實測，brief §20.7）。也**不需要** `HostHeaderValidation=false`。
+- **qBittorrent 的發佈 port 不可以改號碼**：Host 檢查除了網域還比對 port，`*` 也不放過 port 不符。compose 固定 `8080:8080`；改成 `18080:8080` 之類的偏移，使用者開 `localhost:18080` 會直接吃 401，而原因只寫在容器 log 裡（brief §20.7）。README 的疑難排解有這一條。
 - temp path、save path、autoTMM（`DisableAutoTMMByDefault` 預設 `true`，即關閉）、密碼都**不預置**，由精靈第 4 步的按鈕以 API 套用（§8.1）；Berth 送單時逐個 torrent 帶 `autoTMM=true`，所以全域預設值不影響正確性。
 - 使用者在 qBittorrent 介面改任何東西都可以，健康檢查發現關鍵設定漂移時提供「還原建議設定」。
 
@@ -444,13 +445,13 @@ WebUI\AuthSubnetWhitelist=172.28.0.2/32
 
 1. `GET /System/Info/Public` → 確認 `StartupWizardCompleted == false`；否則視為既有服務（§9.5）。
 2. `POST /Startup/Configuration` `{ UICulture: "zh-TW", MetadataCountryCode: "TW", PreferredMetadataLanguage: "zh-TW" }`（精靈可改）。
-3. `POST /Startup/User` `{ Name, Password }` = Berth 管理員。
-4. 建立目錄後 `POST /Library/VirtualFolders?name=Movies&collectionType=movies&paths=/data/library/movies&refreshLibrary=false`，body `LibraryOptions`：`PathInfos`、`PreferredMetadataLanguage`、`MetadataCountryCode`、`EnableRealtimeMonitor=false`（Berth 主動通知）、`SeasonZeroDisplayName="Specials"`。同樣建立 `TV`（`tvshows`、`/data/library/tv`）與 `Anime`（`tvshows`、`/data/library/anime`）。
+3. **先 `GET /Startup/User`**（它會跑 `UserManager.InitializeAsync()` 建立預設使用者），再 `POST /Startup/User` `{ Name, Password }` = Berth 管理員。少了 GET，POST 會回 500（brief §20.7）。
+4. 建立目錄後 `POST /Library/VirtualFolders?name=Movies&collectionType=movies&paths=/data/library/movies&refreshLibrary=false`，body 是 `AddVirtualFolderDto`，也就是 **`{"LibraryOptions": { … }}`（要包一層）**：`PathInfos`、`PreferredMetadataLanguage`、`MetadataCountryCode`、`EnableRealtimeMonitor=false`（Berth 主動通知）、`SeasonZeroDisplayName="Specials"`。直接送 `LibraryOptions` 物件一樣回 204，但整份設定會被靜默丟掉（brief §20.7）。同樣建立 `TV`（`tvshows`、`/data/library/tv`）與 `Anime`（`tvshows`、`/data/library/anime`）。
 5. `POST /Startup/RemoteAccess` `{ EnableRemoteAccess: true }`。
 6. `POST /Startup/Complete`。
 7. `POST /Users/AuthenticateByName` 取 token → `POST /Auth/Keys?app=Berth` 建 API key 存入 `settings.services.jellyfin`。
-8. `GET /Repositories` 合併後 `POST /Repositories` 加入 `{ Name: "danieladov", Url: "https://raw.githubusercontent.com/danieladov/JellyfinPluginManifest/master/manifest.json", Enabled: true }` → `POST /Packages/Installed/Merge%20Versions?assemblyGuid=f21bbed8-3a97-4d8b-88b2-48aaa65427cb&repositoryUrl=…` → `POST /System/Restart` → 輪詢 `/System/Info/Public` 直到恢復。
-9. `GET /ScheduledTasks` 找 `Key` 為 `MergeMoviesTask` 與 `MergeEpisodesTask` 的 `Id` 存起來，入庫後用 `POST /ScheduledTasks/Running/{Id}` 觸發。
+8. `GET /Repositories` 合併後 `POST /Repositories` 加入 `{ Name: "danieladov", Url: "https://raw.githubusercontent.com/danieladov/JellyfinPluginManifest/master/manifest.json", Enabled: true }` → `POST /Packages/Installed/Merge%20Versions?assemblyGuid=f21bbed8-3a97-4d8b-88b2-48aaa65427cb&repositoryUrl=…` → `POST /System/Restart` → 輪詢**真正要用的管理員端點**（如 `/ScheduledTasks`）直到回 200。只等 `/System/Info/Public` 不夠：它在載入期間就回 200，管理員 API 這時回 503（brief §20.7）。這一整步（含插件下載）要能重試。
+9. `GET /ScheduledTasks` 找 `Key` 為 `MergeMoviesTask` 與 `MergeEpisodesTask` 的 `Id` 存起來，入庫後用 `POST /ScheduledTasks/Running/{Id}` 觸發。插件下載由 Jellyfin 自己連 GitHub，實測會偶發 TLS 中斷回 500，步驟 8 要能重試（brief §20.7）。
 
 ### 9.5 既有服務的接入（brief §16.4）
 

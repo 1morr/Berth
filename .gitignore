@@ -27,6 +27,9 @@ web/dist/
 /deploy/config/
 /deploy/data/
 
+# 工具產物
+.playwright-mcp/
+
 # 編輯器與作業系統
 .idea/
 .vscode/

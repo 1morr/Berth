@@ -25,3 +25,12 @@
   四個服務的 `docker-compose.yml`（profiles、固定子網、健康檢查）、qBittorrent 的
   preseed 腳本與部署用的 `.env.example`。
 - GHCR 發佈 workflow（`v*` tag）與 CI 的 image build job。
+- `scripts/experiments/`：對真實外部服務的可重跑驗證腳本（Jellyfin 10.10 / 10.11 命名、
+  qBittorrent 4.4 / 5.x 參數矩陣、Prowlarr `config/host`、硬鏈接），只用標準庫，
+  可搬到 NAS 上跑；結果寫在 `docs/research/m0-experiments.md`。
+
+### Changed
+
+- 依實測更正文件：brief §7.2（電影檔名必須含 `[tmdbid-<id>]` 才算多版本）、§7.7（劇集的版本
+  標籤是整個檔名而非 tags）、§20.1；plan §5 的命名模板**凍結**，§8.1、§8.2、§9.2、§9.4 依
+  實測修正。細節見 `docs/research/m0-experiments.md` 與 `docs/progress.md` 的「偏差與決定」。

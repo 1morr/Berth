@@ -315,11 +315,11 @@ Event 是 Job 頁時間線的資料來源，也是未來 AI 理解「發生了�
 
 ```
 /data/library/<lib>/<Title> (<Year>) [tmdbid-<id>]/
-  <Title> (<Year>) - [BD][2160p][CHT+JP][Group].mkv
-  <Title> (<Year>) - [WEB][1080p][CHS][Group2].mkv
+  <Title> (<Year>) [tmdbid-<id>] - [BD][2160p][CHT+JP][Group].mkv
+  <Title> (<Year>) [tmdbid-<id>] - [WEB][1080p][CHS][Group2].mkv
 ```
 
-同資料夾內以 ` - <版本標籤>` 區分多版本，這是 Jellyfin 原生支援的多版本方式，不需插件；檔名在 ` - ` 之前必須與資料夾名完全一致。Jellyfin 對結尾為 `p`/`i` 的標籤依解析度排序、其他字母排序（§20.1），標籤內可否含方括號列入 §20.6 實測；若不行，電影改用空白分隔、解析度置尾的標籤（`… - BD CHT+JP Group 2160p.mkv`）。
+同資料夾內以 ` - <版本標籤>` 區分多版本，這是 Jellyfin 原生支援的多版本方式，不需插件；檔名在 ` - ` 之前必須與資料夾名**完全一致，包含 `[tmdbid-<id>]`**。2026-09-07 實測（§20.6）：檔名少了 `[tmdbid-<id>]` 就不是多版本，而是兩部獨立的電影；本節原本的範例是錯的，已更正。標籤內含方括號與 `+` 沒有問題，版本選單顯示的就是 `[BD][2160p][CHT+JP][Group]`。Jellyfin 對結尾為 `p`/`i` 的標籤依解析度降冪排序、其他字母排序（§20.1，已實測）。
 
 ### 7.3 Extras【決定，取代原「unmatch 資料夾」的一部分】
 
@@ -345,8 +345,8 @@ NCOP/NCED、PV、CM、Menu、預告、花絮等**可辨識**的非正片內容�
 
 ### 7.7 多版本並存
 
-- 同一集不同 tags 的檔案並存在同一季資料夾。Jellyfin 原生的劇集多版本不可靠（會變成重複條目，§20.1），所以 **MergeVersions 插件是必要前提**，README 與設定精靈的健康檢查都要提示；本系統入庫後透過 Jellyfin 排程任務 API 觸發插件的合併任務（任務名需實測）。
-- 版本標籤即 tags 字串，使用者在 Jellyfin 版本選單看到的就是它，所以 tags 詞彙要短且可讀。
+- 同一集不同 tags 的檔案並存在同一季資料夾。Jellyfin 原生的劇集多版本不可靠（實測會變成**兩個重複的 Episode 條目**，§20.6），所以 **MergeVersions 插件是必要前提**，README 與設定精靈的健康檢查都要提示；本系統入庫後透過 Jellyfin 排程任務 API 觸發插件的合併任務（`MergeEpisodesTask` / `MergeMoviesTask`，§20.7）。
+- 版本標籤：**電影**是 tags 字串本身（` - ` 之後的部分），**劇集**經 MergeVersions 合併後顯示的是**整個檔名主幹**，不是只有 tags（2026-09-07 實測，§20.6）。tags 詞彙仍要短且可讀，但 UI 文案不能說「使用者看到的就是 tags」。劇集的版本先後順序不保證（10.10 與 10.11 實測結果相反）。
 - 命名唯一必須保證的事：同一集所有版本的檔名在 `S01E01` 之前的部分完全相同，且互相只差 tags。
 
 ### 7.8 重複版本
@@ -613,31 +613,31 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 
 - 劇集資料夾 `Series Name (2018) [tmdbid-12345]`，年份與 ID 皆可選但官方建議加；可疊多個 ID。季資料夾必須是 `Season NN`（不可 `S01`），Specials 放 `Season 00`。集檔名支援 `S01E01`、`S01E01-E02`、`S02E03 Part 1`。（[identifiers](https://jellyfin.org/docs/general/server/metadata/identifiers)、[shows](https://jellyfin.org/docs/general/server/media/shows)）
 - 純數字或數字開頭的劇名會讓 metadata 搜尋失敗（[#15860](https://github.com/jellyfin/jellyfin/issues/15860)）→ 用 `[tmdbid-…]` 鎖定可迴避。
-- 集號後面接方括號 tag 曾造成 AniDB 插件誤判（[anidb#11](https://github.com/jellyfin/jellyfin-plugin-anidb/issues/11)）；核心解析器行為未證實 → §20.6 實測。
-- 檔名中的 ` - ` 會觸發「多版本」regex：沒有 Season 資料夾時不同集會被誤併為版本（[#7855](https://github.com/jellyfin/jellyfin/issues/7855)）。本系統一律有 Season 資料夾，但仍需實測 §7.1 的格式。
+- 集號後面接方括號 tag 曾造成 AniDB 插件誤判（[anidb#11](https://github.com/jellyfin/jellyfin-plugin-anidb/issues/11)）；**核心解析器沒有這個問題**：方括號與 `+` 不會滲進 Series 或 Episode 名稱，Jellyfin 根本不從檔名取集標題（2026-09-07 實測，§20.6）。
+- 檔名中的 ` - ` 會觸發「多版本」regex：沒有 Season 資料夾時不同集會被誤併為版本（[#7855](https://github.com/jellyfin/jellyfin/issues/7855)）。本系統一律有 Season 資料夾，§7.1 的格式已實測無誤（§20.6）。
 - Extras 子資料夾名：`extras`、`behind the scenes`、`deleted scenes`、`interviews`、`scenes`、`samples`、`shorts`、`featurettes`、`clips`、`other`、`trailers`、`theme-music`、`backdrops`；**劇集層與季層都可放**。也支援 `-trailer`、`-short`、`-extra` 等檔名後綴。（[_video-external-extras.md](https://github.com/jellyfin/jellyfin.org/blob/master/docs/general/server/media/_video-external-extras.md)）
 - 空的 `.ignore` 檔會讓整個資料夾被掃描排除；10.11 起非空 `.ignore` 支援 gitignore 語法。（[excluding-directory](https://jellyfin.org/docs/general/server/media/excluding-directory)）
 
 **外掛字幕**
 
 - 格式 `<影片名>.{flags}.{language}.{ext}`，flags 有 `default`、`forced`、`sdh`/`cc`/`hi`，另可放自由文字標題，例如 `… S01E01 Title.commentary.ja.aac`。（[_video-external-streams.md](https://github.com/jellyfin/jellyfin.org/blob/master/docs/general/server/media/_video-external-streams.md)）
-- **中文語言碼是已知痛點**：`chi`/`zh`/`zho`/`zh-hk` 只被辨識為泛「中文」，`cht`/`zh-cn`/`zh-cht` 不被辨識（[#6302](https://github.com/jellyfin/jellyfin/issues/6302)）；`zh-Hant`/`zh-Hans` 是否可用未證實。
-- 沒有可靠的語言碼能區分繁簡。可行做法：語言用 `zh`，繁簡放在自由文字標題欄位，例如 `<stem>.CHT.zh.ass`、`<stem>.CHS.zh.ass` → §20.6 實測標題欄位的顯示方式。
+- **中文語言碼是已知痛點**：`chi`/`zh`/`zho`/`zh-hk` 只被辨識為泛「中文」，`cht`/`zh-cn`/`zh-cht` 不被辨識（[#6302](https://github.com/jellyfin/jellyfin/issues/6302)）。`zh-Hant`/`zh-Hans` **只有 10.11 認得**（顯示為 Chinese (Traditional) / (Simplified)），10.10 完全不認、退化成「未定義」（2026-09-07 實測，§20.6）。
+- 沒有可靠的語言碼能區分繁簡。**已實測採用**：語言用 `zh`，繁簡放自由文字標題欄位 —— `<stem>.CHT.zh.ass` 在 10.10 顯示為 `CHT - Chi - ASS - 外部`、在 10.11 顯示為 `CHT - Chinese - ASS - 外部`，自由文字排在最前面，兩個版本都分得出繁簡（§20.6）。
 
 **多版本**
 
-- 電影：同資料夾內 `Movie (2021) [tmdbid-…] - 1080p.mkv`，檔名必須與資料夾名完全一致直到 ` - `；` - ` 之後為版本標籤，結尾為 `p`/`i` 的標籤會依解析度排序，否則字母排序。（[_video-multiversion.md](https://github.com/jellyfin/jellyfin.org/blob/master/docs/general/server/media/_video-multiversion.md)）標籤內能否含方括號與中文未證實。
+- 電影：同資料夾內 `Movie (2021) [tmdbid-…] - 1080p.mkv`，檔名必須與資料夾名完全一致直到 ` - `；` - ` 之後為版本標籤，結尾為 `p`/`i` 的標籤會依解析度排序，否則字母排序。（[_video-multiversion.md](https://github.com/jellyfin/jellyfin.org/blob/master/docs/general/server/media/_video-multiversion.md)）標籤內含**方括號與 `+` 已實測可用**（§20.6）；**標籤內含中文仍未證實** —— 實驗用的 tag 全是 ASCII，而 §6.8 的 group token 保留字幕組原文，中文組名會落在這個未測範圍。
 - **劇集原生多版本不可靠**：10.8 起要求每集自己一個子資料夾才會視為版本，且社群回報同一集兩個檔案通常變成重複條目而非版本選單（[discussion#7900](https://github.com/orgs/jellyfin/discussions/7900)、[discussion#16063](https://github.com/orgs/jellyfin/discussions/16063)、[#13432](https://github.com/jellyfin/jellyfin/issues/13432)）。結論：**劇集多版本必須靠 MergeVersions 插件**，本系統命名只需保證同集檔名的 `S01E01` 部分一致。
-- MergeVersions 插件持續維護到 10.11 與 12.0，透過排程任務或設定頁手動觸發；沒有公開 API 可由外部呼叫，本系統可用 Jellyfin 的排程任務 API 觸發該任務（需實測任務名）。（[README](https://github.com/danieladov/jellyfin-plugin-mergeversions/blob/master/README.md)、[releases](https://github.com/danieladov/jellyfin-plugin-mergeversions/releases)）已知問題：偶發錯誤、無法停用、跨媒體庫合併。
+- MergeVersions 插件持續維護到 10.11 與 12.0，透過排程任務或設定頁手動觸發；沒有公開 API 可由外部呼叫，本系統用 Jellyfin 的排程任務 API 觸發（任務名已實測，§20.7）。（[README](https://github.com/danieladov/jellyfin-plugin-mergeversions/blob/master/README.md)、[releases](https://github.com/danieladov/jellyfin-plugin-mergeversions/releases)）已知問題：偶發錯誤、無法停用、跨媒體庫合併。
 
 **API**
 
 - `GET /Library/VirtualFolders` 回傳 `Name`、`Locations[]`、`CollectionType`（movies / tvshows / music / mixed …）、`ItemId`、`LibraryOptions`（含 `TypeOptions[].MetadataFetchers`，可用來偵測 TVDB 插件）。
 - 觸發掃描：`POST /Library/Media/Updated` 帶 `{Updates:[{Path, UpdateType: Created|Modified|Deleted}]}` 做路徑級通知；`POST /Library/Refresh` 是全庫掃描。沒有「掃描單一資料夾」的專用端點。
-- `GET /Items` **沒有 `path` 篩選**。反查方式：以 `parentId=<library>&includeItemTypes=Series&fields=ProviderIds,Path` 找 Series（比對 tmdb id 或路徑），再以 `parentId=<series>&recursive=true&includeItemTypes=Episode&fields=Path` 取集並用 `Path` 比對。（[ItemsController.cs](https://github.com/jellyfin/jellyfin/blob/master/Jellyfin.Api/Controllers/ItemsController.cs)）
+- `GET /Items` **沒有 `path` 篩選**。反查方式：以 `parentId=<library>&includeItemTypes=Series&fields=ProviderIds,Path` 找 Series（比對 tmdb id 或路徑），再取集並用 `Path` 比對。（[ItemsController.cs](https://github.com/jellyfin/jellyfin/blob/master/Jellyfin.Api/Controllers/ItemsController.cs)）**注意**：取集時不要用 `parentId=<series>` —— 10.11 在第一次掃描後對「已被 provider 認出來的」Series 會回 0 筆，`/Shows/{id}/Episodes` 同樣回 0，要再掃一次才正常；改用 `parentId=<library>&recursive=true` 再照 `Path` 前綴篩選，四種情況都對（2026-09-07 實測，§20.6）。
 - **`DELETE /Items/{id}` 會刪除磁碟檔案**（`DeleteFileLocation = true`），本系統絕不呼叫它。（[LibraryController.cs](https://github.com/jellyfin/jellyfin/blob/master/Jellyfin.Api/Controllers/LibraryController.cs)）
 - 登入 `POST /Users/AuthenticateByName` 回 `AccessToken`、`ServerId`、`User`；`POST /Auth/Keys` 建 API key。
-- 深連結：`{server}/web/index.html#!/details?id={itemId}&serverId={serverId}` 仍被官方 webhook 範本使用；10.9+ 是否改為 `#/details` 未證實 → 實測。沒有「直接開始播放」的穩定 URL。
+- 深連結：`{server}/web/index.html#!/details?id={itemId}&serverId={serverId}` 在 10.10.7 與 10.11.11 **都能開到詳細頁**，前端會正規化成 `#/details?id=…`；客戶端自己產生的連結一律不帶 `!`（2026-09-07 playwright 實測，§20.6）。沒有「直接開始播放」的穩定 URL。
 - Webhook 插件有 `ItemAdded` / `ItemDeleted`，但走排程批次且社群長期回報不可靠（[#252](https://github.com/jellyfin/jellyfin-plugin-webhook/issues/252)、[#367](https://github.com/jellyfin/jellyfin-plugin-webhook/issues/367)）→ 支持 §9 以排程對帳為主。
 
 **Provider**
@@ -790,17 +790,27 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 
 ### 20.6 實作前必做的實驗【研究】
 
-- ~~在 Windows Docker Desktop 的 NTFS bind mount 測硬鏈接~~ **已完成（2026-09-07，§20.7）**：可用。剩下：在 Linux 宿主與至少一台 NAS（Synology / QNAP / TrueNAS 其一）跑同一腳本，腳本保留在 `scripts/experiments/`。
-- 對 qBittorrent 4.4 與 5.x 各跑一次 adapter 的參數相容測試（`paused`/`stopped`、`contentLayout`、`torrents/files.name` 的相對基準）。
-- 建立 20 筆真實 torrent fixture（動漫 8、美劇/韓劇 8、電影 4）作為 benchmark v0。
-- 用 dummy 檔案在 Jellyfin 10.10/10.11 實測 §7 的命名，逐項確認：
-  - `<Title> (<Year>) - S01E01 - <Episode Title> [BD][1080p][CHT+JP][Group].mkv` 是否被正確辨識為 S01E01，方括號與 `+` 不會滲入劇名（對照 §20.1 的 anidb#11 與 #7855）。
-  - 同一集兩個版本放同一季資料夾 → 未裝插件時的表現、裝 MergeVersions 後排程任務的名稱與合併結果、版本選單顯示的標籤。
-  - 電影 ` - [BD][2160p][CHT+JP][Group]` 標籤是否被接受、版本排序如何。
-  - `Season 00` 與 `extras/`（劇集層與季層）是否如文件所述。
-  - 字幕 `….CHT.zh.ass` / `….CHS.zh.ass` 在播放器字幕選單的顯示文字。
-- 抓一份 Mikan（我的訂閱、單作品 + 字幕組）與 Nyaa（搜尋）的實際 RSS，確認擴充欄位名（infoHash、大小、做種數、enclosure、發佈時間），寫成 adapter 的 fixture。
-- qBittorrent 預置 `WebUI\ServerDomains=qbittorrent` 是否足以讓容器名呼叫通過 Host 檢查；Prowlarr `config/host` API 設定 Forms 帳密的欄位名。
+**已完成（2026-09-07，票 04）**。完整結果與量測方式在
+[`docs/research/m0-experiments.md`](research/m0-experiments.md)，腳本在 `scripts/experiments/`，
+可重跑。以下只留結論與尚未完成的項目。
+
+- ~~在 Windows Docker Desktop 的 NTFS bind mount 測硬鏈接~~、~~在 Linux 的 ext4 bind mount 跑同一腳本~~
+  **都通過**（`hardlink.sh`：NTFS 9p bind mount 與 ext4 bind mount 皆 nlink=2、inode 相同；
+  分成兩個 volume 則回 `Cross-device link` 並退出 1）。**但 ext4 那一輪跑的是 Docker Desktop
+  自己的 Linux VM（`docker-desktop` 發行版）**，是 daemon 端的檔案系統，不是另一台實體 Linux
+  宿主。**剩下：一台原生 Linux 宿主與至少一台 NAS**（Synology / QNAP / TrueNAS 其一），
+  `sh hardlink.sh /volume1/<share>` 即可。
+- **標籤內含中文**（中文字幕組名）未測：實驗用的 tag 全是 ASCII，見 §20.1「多版本」。
+- ~~qBittorrent 4.4 與 5.x 的參數相容測試~~ **完成**，見 §20.7「qBittorrent 版本矩陣」。
+- ~~Jellyfin 10.10/10.11 的命名實測~~ **完成**，見 §20.7「Jellyfin 命名實測」。§7.2 的電影範例與
+  §7.7 的版本標籤說法已據此更正；plan §5 的模板凍結。
+- ~~`WebUI\ServerDomains=qbittorrent` 是否足以通過 Host 檢查~~ **完成**：足夠，但代價是使用者從
+  `localhost:8080` 進不了 WebUI，所以維持不預置（§20.7、plan §9.2）。
+- ~~Prowlarr `config/host` 設定 Forms 帳密的欄位名~~ **完成**，見 §20.7「Prowlarr」。
+- 建立 20 筆真實 torrent fixture（動漫 8、美劇/韓劇 8、電影 4）作為 benchmark v0。→ M1 解析器票。
+- 抓一份 Mikan（我的訂閱、單作品 + 字幕組）與 Nyaa（搜尋）的實際 RSS，確認擴充欄位名
+  （infoHash、大小、做種數、enclosure、發佈時間），寫成 adapter 的 fixture。→ M3 RSS 票。
+- 抽 10 部動漫比對 TMDB 季結構與字幕組編號，量化絕對編號換算的失敗率。→ M1 解析器票。
 
 ### 20.7 開箱即用所需的 API 與 Windows Docker 事實
 
@@ -854,5 +864,38 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 - 4.6.1 起首次啟動用隨機臨時密碼印在 log；已知密碼要預置 `WebUI\Password_PBKDF2`（PBKDF2-HMAC-SHA512、100000 次）。官方 image 沒有密碼環境變數，也沒有 `PUID` / `PGID`；linuxserver image 有，且設定檔在 `/config/qBittorrent/qBittorrent.conf`。
 - `[Preferences]`：`WebUI\Port`、`WebUI\AuthSubnetWhitelistEnabled`、`WebUI\AuthSubnetWhitelist`、`WebUI\LocalHostAuth`、`WebUI\HostHeaderValidation`、`WebUI\CSRFProtection`；`[BitTorrent]`：`Session\DefaultSavePath`、`Session\TempPath`、`Session\TempPathEnabled`、`Session\DisableAutoTMMByDefault`（**預設 true，即 autoTMM 關閉**）、`Session\DisableAutoTMMTriggers\CategorySavePathChanged`、`Session\Port`。
 - Web API `app/setPreferences` 對應鍵：`temp_path_enabled`、`temp_path`、`save_path`、`auto_tmm_enabled`、`category_changed_tmm_enabled`、`bypass_auth_subnet_whitelist(_enabled)`、`bypass_local_auth`、`web_ui_password`（只寫）。
-  - 深連結 `#!/details?id=` 在 10.9+ 是否仍可用。
-- 抽 10 部動漫比對 TMDB 季結構與字幕組編號，量化絕對編號換算的失敗率。
+
+**Jellyfin 命名實測**（2026-09-07，票 04；`jellyfin/jellyfin:10.10.7` 與 `:10.11.11`，dummy 檔 + API 查驗，[完整結果](research/m0-experiments.md#1-jellyfin-命名10107-與101111)）
+
+- **`S01E01` 一律認得**，`S01E03-E04` 解析為 `IndexNumber=3` + `IndexNumberEnd=4`，`S00E01` 進 `Specials` 季。**方括號與 `+` 不會滲進 Series 或 Episode 名稱** —— Jellyfin 根本不從檔名取集標題（TMDB 對不上的作品，帶 tag 與不帶 tag 的兩集名稱完全相同）。
+- **電影多版本**：檔名在 ` - ` 之前必須與資料夾名一字不差（含 `[tmdbid-<id>]`），否則變成兩部獨立的電影。標籤含方括號沒問題，版本選單顯示的就是 `[BD][2160p][CHT+JP][Sakurato]`；結尾 `p`/`i` 的標籤依解析度降冪（`2160p` → `1080p` → `720p`），其餘字母序。§7.2 已據此更正。
+- **劇集多版本**：未裝插件 → 同一集的兩個檔案變成**兩個重複的 Episode 條目**。裝 MergeVersions 跑 `MergeEpisodesTask` → 合併成 1 個 Episode、2 個 MediaSource，但**版本標籤是整個檔名主幹**而非只有 tags，且順序不保證（10.10 與 10.11 相反）。§7.7 已據此更正。
+- **extras**：劇集層 `<作品>/extras/`、季層 `<作品>/Season 01/extras/`、電影層 `<電影>/extras/` 三者都成立，分別掛在 Series / Season / Movie 的 `SpecialFeatures`，不會被當成正片集數。
+- **外掛字幕**：`<stem>.CHT.zh.ass` 在 10.10 顯示 `CHT - Chi - ASS - 外部`、10.11 顯示 `CHT - Chinese - ASS - 外部`（`Title` 欄排最前面，繁簡分得出來）。`.default.` 旗標兩版都生效。`zh-Hant`/`zh-Hans` **只有 10.11 認得**，10.10 顯示「未定義」→ 不採用。
+- **深連結** `#!/details?id=…&serverId=…` 在兩個版本都開得到詳細頁（前端正規化成 `#/details?id=…`）。
+- **精靈**：`POST /Startup/User` 之前**必須先 `GET /Startup/User`**，否則回 500（`Sequence contains no elements`）—— GET 會先建立預設使用者。`POST /Library/VirtualFolders` 的 body 是 `AddVirtualFolderDto`，`LibraryOptions` **要包一層**（`{"LibraryOptions": {...}}`），直接送會靜默丟掉整份設定。
+- **MergeVersions**：`POST /Packages/Installed/Merge%20Versions?assemblyGuid=…` 不必指定版本，10.10.7 裝到 `10.10.0.5`、10.11.11 裝到 `10.11.0.1`；下載由 Jellyfin 連 GitHub，實測遇過 TLS 中斷回 500，要能重試。排程任務 `Key` 為 `MergeEpisodesTask` / `MergeMoviesTask`，`Name` 為 `Merge All Episodes` / `Merge All Movies`，`Category` 為 `Merge Versions`。
+- **重啟後不能只等 `/System/Info/Public`**：它在伺服器還在載入時就回 200，這時管理員 API（如 `/ScheduledTasks`）回 **503「Jellyfin 伺服器載入中」**。要輪詢真正要用的那個端點回 200 才算重啟完成（實測踩到過）。
+- **`find_episodes` 的陷阱**：10.11 在第一次掃描後，對已被 provider 認出來的 Series，`/Items?parentId=<seriesId>` 與 `/Shows/{id}/Episodes` **都回 0**，再掃一次才正常；10.10 沒有這個問題。改用 `parentId=<library>&recursive=true` 再照 `Path` 前綴篩選，四種情況都對。
+
+**qBittorrent 版本矩陣**（2026-09-07，票 04；`lscr.io/linuxserver/qbittorrent:4.4.5`（API 2.8.5）與 `:5.2.3`（API 2.15.1），[完整結果](research/m0-experiments.md#2-qbittorrent-445-與-523)）
+
+- **`paused` 與 `stopped` 各版本只認一個，送錯的那個會靜默地開始下載**：4.4.5 `paused=true` → `pausedDL`、`stopped=true` → `queuedDL`（沒暫停）；5.2.3 `paused=true` → `stalledDL`（沒暫停）、`stopped=true` → `stoppedDL`。`torrents/add` 一律回 200，不認得的參數不報錯。plan §8.1 的版本判斷是必要條件，不是最佳化。
+- **`torrents/files[].name` 相對 `save_path`**（多檔會含 torrent 根目錄那一層），四種 `contentLayout` 組合都成立；`content_path` = save_path + 根目錄，單檔時指向檔案、多檔時指向目錄。單檔 + `Subfolder` 的子資料夾名是去掉副檔名的 torrent 名。**`save_path` 的尾斜線兩版不同**（4.4.5 `/downloads/`、5.2.3 `/downloads`），組路徑前要正規化。
+- `torrents/files` 的鍵兩版相同：`index`、`name`、`size`、`progress`、`priority`、`is_seed`、`piece_range`、`availability`。
+- **`torrents/categories` 兩版都回 `savePath`**（駝峰），沒有出現 `save_path`；5.2.3 另有 `download_path`、`ratio_limit`、`seeding_time_limit`、`inactive_seeding_time_limit`、`share_limit_action`。
+- **Host 檢查除了網域還比對 port**：`ServerDomains=*` 也擋 port 不符的 Host（實測 `Host: localhost:18080` → 401，容器 log 寫 `Invalid Host header, port mismatch`）。設成 `qbittorrent` 之後 `localhost:8080` 與 `127.0.0.1:8080` 全被擋。沒有 port 的 Host 一律放行。偏好鍵是 `web_ui_host_header_validation_enabled`（兩版都有）。實驗改的是 Web API 的 runtime 偏好 `web_ui_domain_list`，它對應設定檔的 `WebUI\ServerDomains`（同一個設定的兩種寫法），沒有另外測「預置 ini 鍵」那條路徑。→ compose 的 qBittorrent **不可以把發佈 port 改成別的號碼**，否則使用者開不了 WebUI。
+- **CSRF**：送了 `Origin`/`Referer` 就必須與 Host 一致（不一致 → 401），完全不送則放行。兩版相同。
+
+**Prowlarr `config/host`**（2026-09-07，票 04；Prowlarr 2.5.2.5491）
+
+- `GET /api/v1/config/host` 回 39 個欄位；認證相關為 `authenticationMethod`（`none`/`basic`/`forms`/`external`）、`authenticationRequired`（`enabled`/`disabledForLocalAddresses`）、`username`、`password`、`passwordConfirmation`、`apiKey`。
+- 設 Forms 帳密：`PUT /api/v1/config/host/1`，body 是完整的 config/host 物件加上上述五個欄位（**少了 `passwordConfirmation` 會被拒**）→ 回 **202**，Prowlarr 隨即自行重啟，要等它回來才能繼續。
+- 設完之後：不帶 `X-Api-Key` 的 API 回 401，**`GET /ping` 仍然匿名 200**（所以健康檢查不會因為使用者加了密碼而變紅）。`password` 讀回來是雜湊。
+- API key 從 `config.xml` 的 `<ApiKey>` 讀得到（首次啟動即產生，32 字元），與 plan §9.2 的做法一致。
+
+**硬鏈接腳本**（`scripts/experiments/hardlink.sh`，2026-09-07）
+
+- Linux ext4 單一掛載根：PASS（nlink=2、inode 相同）。Windows NTFS bind mount（9p）：PASS（dev=70）。`torrent/` 與 `library/` 分成兩個 volume：`ln: Cross-device link`，退出碼 1。
+- ext4 那一輪的來源是 **Docker Desktop 自己的 Linux VM**（`/mnt/docker-desktop-disk/...`），daemon 端的檔案系統，與原生 Linux 宿主是同一條 `link()` 路徑，但**不是另一台實體 Linux**。
+- 腳本沒有相依，NAS 上 `sh hardlink.sh /volume1/<share>` 可直接跑；原生 Linux 宿主與 NAS 都尚未實測（§20.6）。

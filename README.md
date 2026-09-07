@@ -67,6 +67,12 @@ docker compose exec berth python -c \
   "import urllib.request; print(urllib.request.urlopen('http://qbittorrent:8080/api/v2/app/version').read())"
 ```
 
+**不要改 qBittorrent 的發佈 port 號碼。** qBittorrent 的 Host 檢查除了網域還會比對 port，
+而且 `WebUI\ServerDomains=*` 也不放過 port 不符的請求。把 compose 的 `8080:8080` 改成
+`18080:8080` 之類的偏移之後，瀏覽器開 `http://localhost:18080` 只會看到 `Unauthorized`，
+真正的原因（`Invalid Host header, port mismatch`）只寫在 `docker compose logs qbittorrent` 裡。
+要換 port 的話，`WEBUI_PORT` 與發佈 port 兩邊要一起改成同一個號碼。
+
 ## 環境需求
 
 | 工具 | 版本 | 用途 |
@@ -156,6 +162,56 @@ uv run pre-commit run --all-files
 
 CI（`.github/workflows/ci.yml`）在 push 到 `main` 與所有 PR 上跑同一組檢查。
 
+### 實驗腳本
+
+`scripts/experiments/` 是對真實外部服務做的驗證（Jellyfin 命名、qBittorrent 版本差異、
+Prowlarr 設定 API、硬鏈接），全部可重跑。每個腳本在回答什麼、有哪些坑，見
+[`scripts/experiments/README.md`](scripts/experiments/README.md)；結果寫在
+[`docs/research/m0-experiments.md`](docs/research/m0-experiments.md)。
+
+媒體樹與 qBittorrent 設定檔都要在容器啟動**之前**備好：
+
+```bash
+python scripts/experiments/make_media.py
+python scripts/experiments/prepare_qbittorrent.py     .local/experiments/qbittorrent-44 .local/experiments/qbittorrent-52
+docker compose -f scripts/experiments/compose.yml up -d      # port 與 deploy/ 錯開
+```
+
+跑實驗（各自獨立，順序無所謂）：
+
+```bash
+python scripts/experiments/jellyfin_naming.py --base-url http://localhost:18096 --label 10.10.7
+python scripts/experiments/jellyfin_naming.py --base-url http://localhost:18196 --label 10.11.11
+python scripts/experiments/qbittorrent_matrix.py --base-url http://localhost:18080 --label 4.4.5
+python scripts/experiments/qbittorrent_matrix.py --base-url http://localhost:18081 --label 5.2.3
+python scripts/experiments/prowlarr_host_config.py     --base-url http://localhost:19696 --config .local/experiments/prowlarr
+```
+
+`jellyfin_naming.py` 必須從乾淨的 `/config` 跑（Jellyfin 的 DB 會留住舊掃描結果，插件裝過
+就在了，量不到「未裝插件」的基準）：
+
+```bash
+docker compose -f scripts/experiments/compose.yml rm -sf jellyfin-1010 jellyfin-1011
+rm -rf .local/experiments/jellyfin-1010 .local/experiments/jellyfin-1011
+docker compose -f scripts/experiments/compose.yml up -d jellyfin-1010 jellyfin-1011
+```
+
+硬鏈接檢查（沒有相依，NAS 上 ssh 進去直接 `sh hardlink.sh /volume1/<share>` 也行）：
+
+```bash
+docker run --rm -v /srv/berth/data:/data -v "$PWD/scripts/experiments:/exp:ro"     alpine:3 sh /exp/hardlink.sh /data                        # 應該 PASS
+docker run --rm -v /srv/a:/data/torrent -v /srv/b:/data/library     -v "$PWD/scripts/experiments:/exp:ro" alpine:3 sh /exp/hardlink.sh /data   # 應該 EXDEV 並回 1
+```
+
+收工：
+
+```bash
+docker compose -f scripts/experiments/compose.yml down -v
+```
+
+Windows 的 Git Bash 要在 `docker run` 前加 `MSYS_NO_PATHCONV=1`，否則 `/data` 這種容器內路徑
+會被改寫成 `C:\Program Files\Git\data`。
+
 ## 目錄結構
 
 ```
@@ -175,8 +231,11 @@ berth/            後端套件
   services/       改變狀態的命令函式
 web/              前端（Vite + React + TypeScript）
 deploy/           部署套件：Dockerfile、compose、preseed、.env.example
+scripts/
+  experiments/    對真實外部服務的驗證腳本（可重跑，結果在 docs/research/）
 tests/            後端測試
 docs/             設計綱要、實作計劃、進度
+  research/       查證與實驗的完整結果
 .scratch/         各里程碑的票
 ```
 
