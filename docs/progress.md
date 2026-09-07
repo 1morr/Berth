@@ -26,6 +26,7 @@
 | 2026-09-07 | 01 / 03 收尾 | GitHub remote 建好（`1morr/Berth`，public，預設分支 `main`）。CI 原本一次都沒跑過：`ci.yml` 觸發條件寫 `main` 但分支是 `master`，且 `astral-sh/setup-uv` 沒有 `v10` major tag。兩者修好後 push 與 PR（#1）皆四個 job 全綠；`v0.1.0-rc1` 觸發 release workflow，image 推上 GHCR 且未動 `:latest`。票 01 與 03 皆為 done | `/implement .scratch/m0/issues/04-experiments.md` |
 | 2026-09-07 | 04 實驗 | `scripts/experiments/` 完成並全部實跑：Jellyfin 10.10.7 / 10.11.11 命名實測、qBittorrent 4.4.5 / 5.2.3 參數矩陣、Prowlarr `config/host`、硬鏈接三情境。結果寫進 `docs/research/m0-experiments.md`，摘要回 brief §20.6 / §20.7，plan §5 命名模板凍結，§8.1 / §8.2 / §9.2 / §9.4 依實測修正，brief §7.2 / §7.7 / §20.1 更正。lint / type / test 全綠 | `/implement .scratch/m0/issues/05-*.md`（第一張 UI 票，開頭跑 `/impeccable hooks on` 與 `init`） |
 | 2026-09-07 | 05 精靈第 1–2 步 | `/setup` 精靈骨架完成：`GET /api/setup/status`、`POST /api/setup/admin`、`POST /api/setup/detect`、`POST /api/setup/services/{kind}`；Jellyfin / qBittorrent / Prowlarr 三個 adapter 各有 `Protocol`、HTTP 實作與 `Fake`，契約測試跑對真服務錄下來的 `tests/fixtures/http/`。UI 依 direction contract「泊位調度板」重寫視覺系統（票 02 的佔位 token 全換），zh-Hant 與 en 並列。125 個後端測試 + 24 個前端測試綠燈；playwright 對 `scripts/fake_setup_server.py` 的三種情境實跑前兩步，深淺兩主題所有文字對比 ≥ 4.5:1 | `/implement .scratch/m0/issues/06-wizard-jellyfin.md` |
+| 2026-09-07 | 06 精靈第 3 步 Jellyfin | 套件內一鍵跑完 plan §9.4 的九步（建管理員、三個媒體庫、API key、裝 MergeVersions、重啟、記下兩個任務 `Id`），每一步冪等、失敗可重試；既有路徑登入取 key、列媒體庫與路徑、TVDB 警告、兩顆需二次確認的按鈕。**對真的 `jellyfin:10.11.11` 跑完全序列 69 秒，第二次 0.2 秒全 `skipped`**；fixture 從那一輪錄下。175 個後端測試 + 38 個前端測試綠燈；playwright 實跑三個情境，深淺兩主題所有文字對比 ≥ 4.5:1 | `/implement .scratch/m0/issues/07-auth.md` |
 
 ## 偏差與決定
 
@@ -87,3 +88,52 @@
 - 2026-09-07 票 05 code-review：**「測試連線」的判定改用與探測相同的規則**，不再一律判「既有」。原本的寫法會讓一台讀不到 API key 的**套件內** Prowlarr 在使用者貼上 key 之後永遠是既有，票 08 的十個預設索引站對它就不會跑。判定看的是服務自己報出來的事實，不是位址是誰填的。唯一的差別是「連不上」：探 compose 主機名時代表容器還在啟動（該等），使用者自己填的位址連不上就是連不上（不給倒數）。
 - 2026-09-07 票 05 code-review：信號色的規則收斂成「探測成功與否」而不是單一 reason。既有服務連得上是 `secured`（這一步的事做完了），連不上才是 `assigned`。同時把 `SIGNAL_FILL` 與 `Signal` 從 `setup/` 移到 `components/signal.ts`、控制項移到 `components/controls.tsx`——健康頁已經在用它們，共用元件不該住在精靈專屬資料夾。
 - 2026-09-07 票 05 code-review：`SetupStatus` 不再帶 `admin_password`。它只有測試讀得到，API 本來就刻意剝掉，票 06 / 08 直接讀 `settings.setup`。
+- 2026-09-07 票 06：**精靈第 2 步的完成條件從「有結論」改成「每個服務都連得上」**。判定多一個
+  `resolved` 旗標（`not_deployed` / `unreachable` / `auth_required` / `protocol_mismatch` /
+  `api_key_missing` 都算未解決），全部解決才離得開第 2 步。推翻 plan §9.3 第 2 步原本的措辭，已回寫。
+  理由：接上第 3 步之後才看見的破口——從 `COMPOSE_PROFILES` 拿掉的 Jellyfin 立刻就有結論（既有），
+  精靈於是跳到第 3 步，而使用者唯一能填位址的表單在第 2 步。前端的信號色改讀同一個旗標，不再自己
+  維護一份「哪些理由算沒解決」。
+- 2026-09-07 票 06：判定一出來伺服器就把步驟推到 3，但**畫面停在第 2 步**等使用者按「前往泊位 1」。
+  否則他看不到自己剛按下的那一輪靠泊序列——那是票 05 的署名互動。這是前端覆寫，不是後端游標。plan §9.3 已補。
+- 2026-09-07 票 06：`POST /Auth/Keys?app=` **回 204、不回傳 key、也不檢查重複**（按兩次就有兩把同名的）。
+  所以要先 `GET /Auth/Keys` 找、沒有才建、建完再列一次讀回來。plan §9.4 第 7 步與 brief §20.7 已改。
+- 2026-09-07 票 06：`POST /Library/VirtualFolders` **同名不會被拒**，會建出 `Movies2` 指向同一路徑。
+  冪等只能靠呼叫端先列。plan §9.4 第 4 步已補。
+- 2026-09-07 票 06：`LibraryOptions.TypeOptions[]` 只給 `MetadataFetchers` 而省略 `ImageFetchers`，
+  後者被存成**空陣列**，該類型從此不抓圖。所以只有 metadata fetcher 是設定值，image fetcher 取自
+  `GET /Libraries/AvailableOptions`（政策 `FirstTimeSetupOrDefault`，精靈期間匿名可讀）。
+  plan §9.4 第 4 步與 brief §20.7 已補。
+- 2026-09-07 票 06：`POST /Library/VirtualFolders/Paths` 目錄不存在回 **404**、同一條路徑送兩次會出現
+  重複的 location。所以先建目錄（新增 `adapters/fs.py` 與 `PathSettings.library_root`）、先看 `Locations`。
+  plan §9.5 已補。
+- 2026-09-07 票 06：初始精靈跑完之後 `/Library/VirtualFolders` 就要管理員憑證，所以**重按 bootstrap 時
+  要先登入再列媒體庫**。plan §9.4 第 4 步已補。
+- 2026-09-07 票 06：新增 `ServiceBusyError`（503）。Jellyfin 重啟後每一支端點都會有一段時間回 503，
+  「還在載入」與「壞了」必須分得開；重啟當下連線還會直接被切，兩種都要當成「繼續等」。plan §8.1 已補。
+- 2026-09-07 票 06：bootstrap 是一個可能跑好幾分鐘的請求。**進度不另開通道**：每一步在做之前把自己
+  寫成 `running` 並 commit，前端輪詢 `GET /api/setup/jellyfin`。plan §2.1、§6 已補。
+- 2026-09-07 票 06：plan §6 原本寫的 `POST /setup/jellyfin/install-mergeversions` 與
+  `/add-library-path` 改成 `/plugin` 與 `/libraries/paths`，另加 `POST /setup/jellyfin/connect` 與
+  `GET /setup/jellyfin`。已回寫 plan §6。
+- 2026-09-07 票 06：brief §20.7 原本寫「`POST /Startup/RemoteAccess` 只有 `EnableRemoteAccess`，
+  沒有 `EnableAutomaticPortMapping`」。10.11.11 的 schema 其實有後者（Berth 仍只送前者）。已更正。
+- 2026-09-07 票 06：CONTEXT.md 補上 **Jellyfin Library**、**Library root**、**Berth path**、
+  **Step status** 四條，並把 Library Route 的 `_Avoid_: library（程式碼中）` 說清楚——那條規則說的是
+  「不要用 `library` 指 Route」，而 `library` 正是 Jellyfin 那一端媒體庫的名字。
+- 2026-09-07 票 06 code-review：**`pnpm exec tsc --noEmit` 其實什麼都沒檢查**。根 `tsconfig.json` 是
+  `files: []` + project references，不帶 `-b` 就是空的 program。正確指令是 `pnpm typecheck`
+  （`tsc -b --noEmit`）。換成它之後立刻抓到一個真的型別錯誤（動態組出來的 i18n key）。
+- 2026-09-07 票 06 code-review：`i18next.d.ts` 補上 `strictKeyChecks: true`。沒有它，認不得的 key
+  只會在畫面上原樣印出來而編譯不吭聲——這一票就踩到（`en` 有而 `zh-Hant` 沒有的 key 一路過關）。
+  動態組 key 的地方改成 `satisfies Record<JellyfinStep, string>` 的查表。
+- 2026-09-07 票 06 code-review：**「加入 Berth 路徑」失敗變成一條 `failed` 的步驟，不是 HTTP 500**。
+  原本只 catch `StepFailedError`，`ensure_directory` 的 `OSError` 與 client 的 `ServiceError` 會冒成
+  500，畫面什麼都看不到——而「目錄建得出來但 Jellyfin 看不到」正是 brief §16.4 那句「哪個容器少了
+  哪個掛載」最典型的失敗。
+- 2026-09-07 票 06 code-review：`POST /System/Restart` 有時在回應送出去之前就把連線切了，那是重啟
+  開始了的樣子而不是失敗；`Fake` 補上這個行為並加測試。
+- 2026-09-07 票 06 code-review：套件內媒體庫的路徑與既有媒體庫的「Berth 路徑」原本是兩套算法，
+  只因 `Movies`→`movies` 巧合一致。改成同一支函式，並加測試釘住三個套件內媒體庫的 `has_berth_path`。
+- 2026-09-07 票 06 code-review：`_ACTIONS` 加上 import 時的完整性斷言——漏一步原本是使用者按下去
+  才炸的 `KeyError`。

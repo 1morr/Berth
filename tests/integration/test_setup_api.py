@@ -14,12 +14,14 @@ import pytest
 from fastapi.testclient import TestClient
 
 from berth.adapters.http import ServiceUnavailableError
+from berth.adapters.jellyfin import JellyfinLibrary, TypeOption
 from berth.adapters.jellyfin.fake import FakeJellyfinClient
 from berth.adapters.prowlarr.fake import FakeProwlarrClient
 from berth.adapters.qbittorrent.fake import FakeQbittorrentClient
-from berth.api.deps import get_setup_probes
+from berth.api.deps import get_client_factory, get_setup_probes
 from berth.config import Config
 from berth.main import create_app
+from berth.services import jellyfin as jellyfin_service
 from berth.services.setup import SetupProbes
 
 
@@ -200,3 +202,223 @@ def _complete_setup(client: TestClient) -> None:
             await session.commit()
 
     asyncio.run(mark())
+
+
+class TestJellyfin:
+    """第 3 步的四支端點（plan §9.4、§9.5、票 06）。判定與冪等本身在 `test_setup_jellyfin.py`。"""
+
+    @pytest.fixture(autouse=True)
+    def _fast_polling(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """插件與重啟的輪詢間隔在測試裡不必真的等。"""
+        monkeypatch.setattr(jellyfin_service, "POLL_SECONDS", 0.0)
+
+    @pytest.fixture
+    def jellyfin(self) -> FakeJellyfinClient:
+        return FakeJellyfinClient()
+
+    @pytest.fixture
+    def client(
+        self,
+        config: Config,
+        tmp_path: Path,
+        probes: SetupProbes,
+        jellyfin: FakeJellyfinClient,
+    ) -> Iterator[TestClient]:
+        """媒體庫路徑指到 tmp_path：bootstrap 會真的建目錄（plan §9.1）。"""
+        app = create_app(replace(config, web_root=tmp_path / "never-built"))
+
+        async def override_probes() -> AsyncIterator[SetupProbes]:
+            yield jellyfin_probes(probes, jellyfin)
+
+        app.dependency_overrides[get_setup_probes] = override_probes
+        app.dependency_overrides[get_client_factory] = lambda: OneJellyfin(jellyfin)
+        with TestClient(app) as running:
+            _set_library_root(running, tmp_path / "library")
+            yield running
+
+    def test_before_anything_the_step_list_is_empty(self, client: TestClient) -> None:
+        response = client.get("/api/setup/jellyfin")
+
+        assert response.status_code == 200
+        assert response.json() == {
+            "origin": "existing",
+            "base_url": "",
+            "api_key_present": False,
+            "steps": [],
+            "libraries": [],
+            "merge_versions_installed": False,
+            "merge_movies_task_id": "",
+            "merge_episodes_task_id": "",
+        }
+
+    def test_bootstrap_returns_every_step_with_its_measured_value(
+        self, client: TestClient, jellyfin: FakeJellyfinClient
+    ) -> None:
+        client.post("/api/setup/admin", json={"username": "skipper", "password": "harbour"})
+        client.post("/api/setup/detect", json={})
+
+        response = client.post("/api/setup/jellyfin/bootstrap")
+
+        assert response.status_code == 200
+        body = response.json()
+        assert [row["step"] for row in body["steps"]] == [
+            "public_info",
+            "configuration",
+            "admin_user",
+            "libraries",
+            "remote_access",
+            "complete",
+            "api_key",
+            "plugin",
+            "tasks",
+        ]
+        assert {row["status"] for row in body["steps"]} == {"ok"}
+        assert body["origin"] == "bundled"
+        assert body["api_key_present"] is True
+        assert body["merge_versions_installed"] is True
+        assert [row["name"] for row in body["libraries"]] == ["Movies", "TV", "Anime"]
+        assert jellyfin.admin == ("skipper", "harbour")
+
+    def test_the_status_endpoint_replays_the_last_run(self, client: TestClient) -> None:
+        client.post("/api/setup/admin", json={"username": "skipper", "password": "harbour"})
+        client.post("/api/setup/detect", json={})
+        client.post("/api/setup/jellyfin/bootstrap")
+
+        body = client.get("/api/setup/jellyfin").json()
+
+        assert {row["status"] for row in body["steps"]} == {"ok"}
+        assert body["merge_movies_task_id"] == "fd957c84b0cfc2380becf2893e4b76fc"
+
+    def test_a_failed_step_comes_back_with_its_error(
+        self, client: TestClient, jellyfin: FakeJellyfinClient
+    ) -> None:
+        client.post("/api/setup/admin", json={"username": "skipper", "password": "harbour"})
+        client.post("/api/setup/detect", json={})
+        jellyfin.install_failures = 99
+
+        body = client.post("/api/setup/jellyfin/bootstrap").json()
+
+        plugin = next(row for row in body["steps"] if row["step"] == "plugin")
+        assert plugin["status"] == "failed"
+        assert plugin["error"]
+        assert next(row for row in body["steps"] if row["step"] == "tasks")["status"] == "pending"
+
+    def test_connect_needs_credentials(self, client: TestClient) -> None:
+        assert client.post("/api/setup/jellyfin/connect", json={}).status_code == 422
+        assert (
+            client.post(
+                "/api/setup/jellyfin/connect", json={"username": "", "password": "x"}
+            ).status_code
+            == 422
+        )
+
+    def test_connecting_to_an_existing_server_lists_its_libraries(
+        self, client: TestClient, jellyfin: FakeJellyfinClient
+    ) -> None:
+        jellyfin.startup_wizard_completed = True
+        jellyfin.admin = ("owner", "s3cret")
+        jellyfin.libraries_ = [
+            JellyfinLibrary(
+                name="Films",
+                item_id="a1",
+                collection_type="movies",
+                locations=("/volume1/media/films",),
+                type_options=(
+                    TypeOption(
+                        type="Movie",
+                        metadata_fetchers=("TheTVDB",),
+                        image_fetchers=("TheTVDB",),
+                    ),
+                ),
+            )
+        ]
+
+        body = client.post(
+            "/api/setup/jellyfin/connect", json={"username": "owner", "password": "s3cret"}
+        ).json()
+
+        assert body["api_key_present"] is True
+        assert body["libraries"][0]["uses_tvdb"] is True
+        assert body["libraries"][0]["berth_path"].endswith("/films")
+        assert body["libraries"][0]["has_berth_path"] is False
+
+    def test_a_path_that_cannot_be_added_comes_back_as_a_failed_step(
+        self, client: TestClient, jellyfin: FakeJellyfinClient
+    ) -> None:
+        """不是 500 也不是 422：畫面要看得到原文才給得出手動步驟。"""
+        jellyfin.startup_wizard_completed = True
+        jellyfin.admin = ("owner", "s3cret")
+        client.post("/api/setup/jellyfin/connect", json={"username": "owner", "password": "s3cret"})
+
+        response = client.post("/api/setup/jellyfin/libraries/paths", json={"library": "Nope"})
+
+        assert response.status_code == 200
+        libraries = next(row for row in response.json()["steps"] if row["step"] == "libraries")
+        assert libraries["status"] == "failed"
+        assert "Nope" in libraries["error"]
+
+    def test_the_plugin_button_only_runs_the_last_two_steps(
+        self, client: TestClient, jellyfin: FakeJellyfinClient
+    ) -> None:
+        jellyfin.startup_wizard_completed = True
+        jellyfin.admin = ("owner", "s3cret")
+        client.post("/api/setup/jellyfin/connect", json={"username": "owner", "password": "s3cret"})
+
+        body = client.post("/api/setup/jellyfin/plugin").json()
+
+        assert body["merge_versions_installed"] is True
+        assert jellyfin.created == []
+        assert jellyfin.restarts == 1
+
+    def test_the_jellyfin_endpoints_close_after_setup(self, client: TestClient) -> None:
+        _complete_setup(client)
+
+        assert client.get("/api/setup/jellyfin").status_code == 401
+        assert client.post("/api/setup/jellyfin/bootstrap").status_code == 401
+        assert client.post("/api/setup/jellyfin/plugin").status_code == 401
+
+
+class OneJellyfin:
+    """同一台假 Jellyfin：序列跨好幾次呼叫，每次回新實例狀態就沒了。"""
+
+    def __init__(self, jellyfin: FakeJellyfinClient) -> None:
+        self._jellyfin = jellyfin
+
+    def jellyfin(self, base_url: str, token: str = "") -> FakeJellyfinClient:
+        self._jellyfin.base_url = base_url
+        if token:
+            self._jellyfin.use_token(token)
+        return self._jellyfin
+
+    def qbittorrent(self, base_url: str) -> FakeQbittorrentClient:
+        return FakeQbittorrentClient(base_url=base_url)
+
+    def prowlarr(self, base_url: str, api_key: str) -> FakeProwlarrClient:
+        return FakeProwlarrClient(base_url=base_url)
+
+
+def jellyfin_probes(probes: SetupProbes, jellyfin: FakeJellyfinClient) -> SetupProbes:
+    return SetupProbes(
+        jellyfin=jellyfin,
+        qbittorrent=probes.qbittorrent,
+        prowlarr=probes.prowlarr,
+        prowlarr_api_key=probes.prowlarr_api_key,
+    )
+
+
+def _set_library_root(client: TestClient, root: Path) -> None:
+    """測試不該對真的 `/data/library` 建目錄。"""
+    import asyncio
+
+    from berth.models import PathSettings
+    from berth.services.settings import read_settings, write_settings
+
+    async def write() -> None:
+        factory = client.app.state.session_factory  # type: ignore[attr-defined]
+        async with factory() as session:
+            paths = await read_settings(session, PathSettings)
+            paths.library_root = str(root)
+            await write_settings(session, paths)
+            await session.commit()
+
+    asyncio.run(write())

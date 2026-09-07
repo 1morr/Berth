@@ -10,7 +10,7 @@ from berth.adapters.http import (
     ServiceNotDeployedError,
     ServiceUnavailableError,
 )
-from berth.adapters.jellyfin import JellyfinClient, JellyfinPublicInfo
+from berth.adapters.jellyfin import JellyfinClient
 from berth.adapters.jellyfin.fake import FakeJellyfinClient
 from berth.adapters.prowlarr import ProwlarrClient, ProwlarrIndexer
 from berth.adapters.prowlarr.fake import FakeProwlarrClient
@@ -37,7 +37,7 @@ class FakeClientFactory:
         self._prowlarr = prowlarr or FakeProwlarrClient()
         self.asked: list[tuple[str, str]] = []
 
-    def jellyfin(self, base_url: str) -> JellyfinClient:
+    def jellyfin(self, base_url: str, token: str = "") -> JellyfinClient:
         self.asked.append(("jellyfin", base_url))
         return self._jellyfin
 
@@ -60,9 +60,9 @@ async def test_an_existing_jellyfin_reports_its_version(session: AsyncSession) -
     factory = FakeClientFactory(
         jellyfin=FakeJellyfinClient(
             base_url="http://nas:8096",
-            public_info=JellyfinPublicInfo(
-                server_name="nas", version="10.10.7", startup_wizard_completed=True
-            ),
+            server_name="nas",
+            version="10.10.7",
+            startup_wizard_completed=True,
         )
     )
 
@@ -241,9 +241,9 @@ async def test_a_connected_service_is_not_reprobed_by_the_polling_loop(
     nas = FakeClientFactory(
         jellyfin=FakeJellyfinClient(
             base_url="http://nas:8096",
-            public_info=JellyfinPublicInfo(
-                server_name="nas", version="10.10.7", startup_wizard_completed=True
-            ),
+            server_name="nas",
+            version="10.10.7",
+            startup_wizard_completed=True,
         )
     )
     await detect_services(session, absent)

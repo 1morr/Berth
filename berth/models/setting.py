@@ -12,7 +12,7 @@ from pydantic import BaseModel, ConfigDict
 from sqlalchemy import Text
 from sqlalchemy.orm import Mapped, mapped_column
 
-from berth.domain import DetectionReason, ServiceKind, ServiceOrigin
+from berth.domain import DetectionReason, ServiceKind, ServiceOrigin, StepStatus
 from berth.models.base import Base
 from berth.models.types import JsonText, UtcDateTime, utcnow
 
@@ -34,11 +34,33 @@ class SettingsGroup(BaseModel):
     KEY: ClassVar[str]
 
 
+#: 套件內三個媒體庫的 slug（plan §9.4 第 4 步）。也是 `metadata_fetchers` 與媒體庫路徑的鍵。
+MOVIES_SLUG = "movies"
+TV_SLUG = "tv"
+ANIME_SLUG = "anime"
+
+
 class JellyfinSettings(SettingsGroup):
     KEY = "services.jellyfin"
 
     base_url: str = ""
     api_key: str = ""
+
+    #: 建立媒體庫時寫進 `LibraryOptions.TypeOptions[].MetadataFetchers` 的名字（plan §9.4）。
+    #: 鍵是媒體庫 slug，順序即優先序；名字是 Jellyfin 自己報的 fetcher 名
+    #: （`GET /Libraries/AvailableOptions`）。**anime 單獨一列就是那個切換點**：brief §10 的
+    #: TVDB【研究】定案時改這裡的值，不改程式。`ImageFetchers` 不在這裡——它跟著伺服器
+    #: 自己的可用清單走，寫死會讓沒對到 TMDB 的作品連縮圖都沒有（實測，brief §20.7）。
+    metadata_fetchers: dict[str, list[str]] = {
+        MOVIES_SLUG: ["TheMovieDb"],
+        TV_SLUG: ["TheMovieDb"],
+        ANIME_SLUG: ["TheMovieDb"],
+    }
+
+    #: MergeVersions 兩個排程任務的 `Id`（**不是 `Key`**，觸發時要用 Id，brief §20.7）。
+    #: 入庫後由 pipeline 呼叫 `POST /ScheduledTasks/Running/{Id}`（M1）。
+    merge_movies_task_id: str = ""
+    merge_episodes_task_id: str = ""
 
 
 class QbittorrentSettings(SettingsGroup):
@@ -70,6 +92,10 @@ class PathSettings(SettingsGroup):
     #: qBittorrent 的全域 temp path 與 category save path 的根（brief §4.1）。
     incomplete_root: str = "/data/torrent/incomplete"
     complete_root: str = "/data/torrent/complete"
+    #: 套件內 Jellyfin 三個媒體庫的父目錄（plan §9.1）。既有 Jellyfin 的「加入 Berth 路徑」
+    #: 也落在它底下。Berth 與 Jellyfin 把同一個宿主目錄掛在同一個容器路徑，所以這一個字串
+    #: 對兩邊都成立（brief §16.4 的硬規則）。
+    library_root: str = "/data/library"
 
 
 class SetupAdmin(BaseModel):
@@ -104,6 +130,46 @@ class ServiceProbe(BaseModel):
     configured: bool = False
 
 
+class SetupStep(BaseModel):
+    """精靈裡一個步驟的最後結果（plan §9.4）。
+
+    `key` 是字串而不是列舉：這個型別給每個泊位共用，而各泊位的步驟集合各不相同；
+    存下來的舊值也不該因為某一步被改名就讓整份設定讀不回來。
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    key: str
+    status: StepStatus
+    #: 實測值：版本號、建了哪幾個媒體庫、任務 id。UI 直接顯示，不翻譯。
+    detail: str = ""
+    #: 失敗時服務回的原文（英文）。UI 貼在手動步驟旁邊。
+    error: str = ""
+
+
+class SetupLibrary(BaseModel):
+    """Jellyfin 回報的一個媒體庫（plan §8.2）。票 09 從這裡建 Route。"""
+
+    model_config = ConfigDict(extra="ignore")
+
+    name: str
+    collection_type: str = ""
+    locations: list[str] = []
+    #: 攤平後的 `LibraryOptions.TypeOptions[].MetadataFetchers`，用來偵測 TVDB 插件並警告。
+    metadata_fetchers: list[str] = []
+
+
+class SetupJellyfin(BaseModel):
+    """精靈第 3 步的狀態（plan §9.4、§9.5）。兩條路徑共用同一份形狀。"""
+
+    model_config = ConfigDict(extra="ignore")
+
+    steps: list[SetupStep] = []
+    libraries: list[SetupLibrary] = []
+    #: MergeVersions 是否已安裝。既有路徑的按鈕與套件內的第 8 步看同一個欄位。
+    merge_versions_installed: bool = False
+
+
 class SetupSettings(SettingsGroup):
     KEY = "setup"
 
@@ -113,6 +179,7 @@ class SetupSettings(SettingsGroup):
     services: dict[ServiceKind, ServiceProbe] = {}
     #: 本輪輪詢的起點，用來算 2 分鐘上限。全部服務都判定完就清掉。
     probe_started_at: datetime | None = None
+    jellyfin: SetupJellyfin = SetupJellyfin()
 
 
 #: 所有分組的清單，用來確認每一組都有預設值。

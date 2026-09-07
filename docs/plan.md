@@ -105,6 +105,9 @@ adapters ──► domain                  （不 import services、models；回
 - `users`：`id`、`jellyfin_user_id`（unique）、`name`、`role`（`admin` / `user`）、`created_at`、`last_login_at`
 - `sessions`：`id`、`user_id`、`token_hash`、`expires_at`、`created_at`
 - `settings`：`key`（unique）、`value_json`、`updated_at`。key 分組：`services.jellyfin`、`services.qbittorrent`、`services.indexer`、`services.tmdb`、`paths`、`parser`、`ai`、`rss`、`setup`。每組一個 pydantic model，`services.*` 含連線資訊與最後健康狀態。
+  - `services.jellyfin` 另含 `api_key`、`metadata_fetchers`（鍵是媒體庫 slug，值寫進 `LibraryOptions.TypeOptions[].MetadataFetchers`；brief §10 的 TVDB【研究】定案時改這裡而不是改程式）、`merge_movies_task_id` / `merge_episodes_task_id`（MergeVersions 排程任務的 `Id`）。
+  - `paths` 另含 `library_root`（套件內三個媒體庫與既有媒體庫「加入 Berth 路徑」的父目錄，預設 `/data/library`）。
+  - `setup.jellyfin`：第 3 步的狀態——九步各自的 `key` / `status` / `detail` / `error`、Jellyfin 回報的媒體庫與各自路徑、MergeVersions 是否已安裝。每一步在做**之前**就寫入 `running` 並 commit，前端才輪詢得到進度。
 
 ### 2.2 Route 與 Media
 
@@ -289,7 +292,7 @@ REST + JSON，前綴 `/api`。所有端點需登入，除了 `auth/login`、`set
 | 群組 | 端點 | 對應命令 |
 | --- | --- | --- |
 | auth | `POST /auth/login`（Jellyfin 帳密）、`POST /auth/logout`、`GET /auth/me` | — |
-| setup | `GET /setup/status`、`POST /setup/admin`、`POST /setup/detect`（回每個服務的來源：套件內 / 既有）、`POST /setup/services/{kind}`（既有服務的連線表單：存下位址與憑證並立刻測一次）、`POST /setup/jellyfin/bootstrap`、`POST /setup/jellyfin/install-mergeversions`、`POST /setup/jellyfin/add-library-path`、`GET /setup/qbittorrent/diff`、`POST /setup/qbittorrent/apply`、`POST /setup/indexer/apply`、`POST /setup/routes/from-libraries`、`POST /setup/complete` | `setup.*`（§9） |
+| setup | `GET /setup/status`、`POST /setup/admin`、`POST /setup/detect`（回每個服務的來源：套件內 / 既有）、`POST /setup/services/{kind}`（既有服務的連線表單：存下位址與憑證並立刻測一次）、`GET /setup/jellyfin`（不連線，回上一輪的九步狀態與媒體庫；bootstrap 進行中前端輪詢它看進度）、`POST /setup/jellyfin/bootstrap`、`POST /setup/jellyfin/connect`（既有：以管理員帳密換 API key）、`POST /setup/jellyfin/libraries/paths`、`POST /setup/jellyfin/plugin`、`GET /setup/qbittorrent/diff`、`POST /setup/qbittorrent/apply`、`POST /setup/indexer/apply`、`POST /setup/routes/from-libraries`、`POST /setup/complete` | `setup.*`（§9） |
 | settings | `GET /settings/{group}`、`PUT /settings/{group}`、`POST /settings/{service}/test` | `settings.update`、`health.test_service` |
 | routes | `GET/POST /routes`、`PUT/DELETE /routes/{id}`、`POST /routes/{id}/check`、`GET /jellyfin/libraries` | `routes.*` |
 | discover | `GET /discover/trending`、`GET /discover/popular`、`GET /discover/search?q=` | `discover.*` |
@@ -333,7 +336,7 @@ REST + JSON，前綴 `/api`。所有端點需登入，除了 `auth/login`、`set
 - `diff_recommended_preferences()` / `apply_recommended_preferences()`：建議值為 `temp_path_enabled=true`、`temp_path=<incomplete root>`、`save_path=<complete root>`、`auto_tmm_enabled=true`、`category_changed_tmm_enabled=true`；先回傳與現值的差異給精靈顯示，套用時只寫不同的鍵。既有服務的 temp path 未啟用只列為警告。
 - 完成判定依 brief §20.2。`torrents/files[].name` **相對 `save_path`**（多檔含 torrent 根目錄那一層），實測四種 `contentLayout` 組合都成立（brief §20.7）；組絕對路徑前先正規化 `save_path` 的尾斜線（4.4 有、5.x 沒有），組完仍 `stat` 驗證。`content_path` 是目錄或單檔，兩種都處理。
 - 登入：`auth/login` 拿 SID，請求帶 `Referer` = base URL；403 記錄並退避。
-- 錯誤映射（`adapters/http.py`，四個 adapter 共用）：主機名解不到 → `ServiceNotDeployedError`（服務不在 compose 裡，精靈立刻顯示既有服務表單）；連不上或逾時 → `ServiceUnavailableError`（容器還在啟動，繼續輪詢）；401 / 403 → `AuthFailedError`；回應不是預期的服務 → `ProtocolMismatchError`；409（category 不存在）→ `CategoryMissingError`。名稱一律以 `Error` 結尾（ruff N818）。
+- 錯誤映射（`adapters/http.py`，四個 adapter 共用）：主機名解不到 → `ServiceNotDeployedError`（服務不在 compose 裡，精靈立刻顯示既有服務表單）；連不上或逾時 → `ServiceUnavailableError`（容器還在啟動，繼續輪詢）；401 / 403 → `AuthFailedError`；回應不是預期的服務 → `ProtocolMismatchError`；409（category 不存在）→ `CategoryMissingError`；503 → `ServiceBusyError`（服務還在載入，與「壞了」分開——Jellyfin 重啟後每一支端點都會有一段時間回 503，brief §20.7）。名稱一律以 `Error` 結尾（ruff N818）。
 
 ### 8.2 Jellyfin adapter
 
@@ -436,7 +439,9 @@ WebUI\AuthSubnetWhitelist=172.28.0.2/32
 1. **建立管理員**：帳號與密碼。套件內 Jellyfin 會以這組帳密建立管理員；既有 Jellyfin 則要求以其管理員帳密登入。勾選「同一組帳密也套用到 qBittorrent 與 Prowlarr 介面」（預設勾）則一併設定套件內的那兩者。
 2. **偵測服務**：逐一探測 compose 主機名 `jellyfin:8096` `/System/Info/Public`、`qbittorrent:8080` `/api/v2/app/version`（免密）、`prowlarr:9696` `/ping`；Jellyfin 未完成初始精靈、qBittorrent 免密可進、Prowlarr 讀得到 API key 且無索引站 → 該服務標為**套件內**；探不到或已設定過 → 標為**既有**，顯示位址與憑證表單，每項有「測試連線」。服務未就緒時輪詢至多 2 分鐘。
    - **「探不到」要分兩種**：主機名解不到（`socket.gaierror`）代表這個服務不在 compose 裡（使用者從 `COMPOSE_PROFILES` 拿掉了）→ 立刻判既有，不必等；主機名解得到但連不上 → 容器還在啟動 → 判**探測中**，繼續輪詢到 2 分鐘上限，逾時轉**逾時**並提供重試。逾時與既有都會展開連線表單，所以 DNS 會劫持 NXDOMAIN 的環境仍然走得下去。
-   - **精靈的步驟由狀態導出，不存游標**：管理員未建立 → 第 1 步；有服務還在探測或逾時 → 第 2 步；否則進第 3 步。存「走到第幾步」的游標會在偵測結果變回等待時說謊。
+   - **精靈的步驟由狀態導出，不存游標**：管理員未建立 → 第 1 步；有服務**還沒連得上** → 第 2 步；否則進第 3 步。存「走到第幾步」的游標會在偵測結果變回等待時說謊。
+   - 「連得上」不等於「有結論」：從 `COMPOSE_PROFILES` 拿掉的服務立刻就有結論（既有），但 Berth 還不知道它在哪裡。判定帶一個 `resolved` 旗標（`not_deployed` / `unreachable` / `auth_required` / `protocol_mismatch` / `api_key_missing` 都是**未解決**），全部解決才離得開第 2 步——否則精靈會跳過那張使用者唯一能填位址的表單。前端的信號色讀同一個旗標，不另外維護一份理由清單。
+   - 判定一出來伺服器就把步驟推到 3，但**畫面停在第 2 步**等使用者按「前往泊位 1」：否則他看不到自己剛按下的那一輪靠泊序列。這是前端的覆寫，不是後端的游標。
    - 既有服務按「測試連線」時，連線資訊先存進它平常住的 `settings.services.*` 再測——測不過也存，使用者才能改一個欄位再按一次。
 3. **Jellyfin**：套件內 → §9.4 全自動；既有 → 登入、建立 API key、列出媒體庫與各自路徑，並提供「安裝 MergeVersions」按鈕（需確認，會重啟 Jellyfin）。
 4. **qBittorrent**：顯示建議偏好與現值的差異（§8.1），按「套用」；套件內另設密碼；既有服務的 temp path 未啟用只警告。
@@ -454,10 +459,12 @@ WebUI\AuthSubnetWhitelist=172.28.0.2/32
 1. `GET /System/Info/Public` → 確認 `StartupWizardCompleted == false`；否則視為既有服務（§9.5）。
 2. `POST /Startup/Configuration` `{ UICulture: "zh-TW", MetadataCountryCode: "TW", PreferredMetadataLanguage: "zh-TW" }`（精靈可改）。
 3. **先 `GET /Startup/User`**（它會跑 `UserManager.InitializeAsync()` 建立預設使用者），再 `POST /Startup/User` `{ Name, Password }` = Berth 管理員。少了 GET，POST 會回 500（brief §20.7）。
-4. 建立目錄後 `POST /Library/VirtualFolders?name=Movies&collectionType=movies&paths=/data/library/movies&refreshLibrary=false`，body 是 `AddVirtualFolderDto`，也就是 **`{"LibraryOptions": { … }}`（要包一層）**：`PathInfos`、`PreferredMetadataLanguage`、`MetadataCountryCode`、`EnableRealtimeMonitor=false`（Berth 主動通知）、`SeasonZeroDisplayName="Specials"`。直接送 `LibraryOptions` 物件一樣回 204，但整份設定會被靜默丟掉（brief §20.7）。同樣建立 `TV`（`tvshows`、`/data/library/tv`）與 `Anime`（`tvshows`、`/data/library/anime`）。
+4. **先 `GET /Library/VirtualFolders` 看有沒有同名的**：同名不會被拒，會建出 `Movies2` 指向同一個路徑（brief §20.7）。目錄由 Berth 建（`library_root` 之下的 `movies` / `tv` / `anime`），然後 `POST /Library/VirtualFolders?name=Movies&collectionType=movies&paths=<library_root>/movies&refreshLibrary=false`，body 是 `AddVirtualFolderDto`，也就是 **`{"LibraryOptions": { … }}`（要包一層）**：`PathInfos`、`PreferredMetadataLanguage`、`MetadataCountryCode`、`EnableRealtimeMonitor=false`（Berth 主動通知）、`SeasonZeroDisplayName="Specials"`、`TypeOptions[]`。直接送 `LibraryOptions` 物件一樣回 204，但整份設定會被靜默丟掉（brief §20.7）。同樣建立 `TV`（`tvshows`）與 `Anime`（`tvshows`）。
+   - `TypeOptions[]` 的 **`MetadataFetchers` 是設定值**（`services.jellyfin.metadata_fetchers`，預設 TMDB），**`ImageFetchers` 取自 `GET /Libraries/AvailableOptions?libraryContentType=`**。兩個都要給：只給 metadata 的話 image fetcher 會被存成空陣列，該類型從此不抓圖（實測，brief §20.7）。`AvailableOptions` 掛 `FirstTimeSetupOrDefault`，精靈期間匿名讀得到。
+   - **初始精靈跑完之後這一支要管理員憑證**，所以重按 bootstrap 時要先登入再列媒體庫。
 5. `POST /Startup/RemoteAccess` `{ EnableRemoteAccess: true }`。
 6. `POST /Startup/Complete`。
-7. `POST /Users/AuthenticateByName` 取 token → `POST /Auth/Keys?app=Berth` 建 API key 存入 `settings.services.jellyfin`。
+7. `POST /Users/AuthenticateByName` 取 token → **先 `GET /Auth/Keys` 找 `AppName == "Berth"`**，沒有才 `POST /Auth/Keys?app=Berth`，建完再列一次把 key 讀回來。那一支回 204 而且**不回傳 key**，也不檢查重複——按兩次就有兩把同名的（brief §20.7）。key 存入 `settings.services.jellyfin`，之後的請求改用它（與登入 token 同一個標頭形狀）。
 8. `GET /Repositories` 合併後 `POST /Repositories` 加入 `{ Name: "danieladov", Url: "https://raw.githubusercontent.com/danieladov/JellyfinPluginManifest/master/manifest.json", Enabled: true }` → `POST /Packages/Installed/Merge%20Versions?assemblyGuid=f21bbed8-3a97-4d8b-88b2-48aaa65427cb&repositoryUrl=…` → `POST /System/Restart` → 輪詢**真正要用的管理員端點**（如 `/ScheduledTasks`）直到回 200。只等 `/System/Info/Public` 不夠：它在載入期間就回 200，管理員 API 這時回 503（brief §20.7）。這一整步（含插件下載）要能重試。
 9. `GET /ScheduledTasks` 找 `Key` 為 `MergeMoviesTask` 與 `MergeEpisodesTask` 的 `Id` 存起來，入庫後用 `POST /ScheduledTasks/Running/{Id}` 觸發。插件下載由 Jellyfin 自己連 GitHub，實測會偶發 TLS 中斷回 500，步驟 8 要能重試（brief §20.7）。
 
@@ -468,7 +475,7 @@ WebUI\AuthSubnetWhitelist=172.28.0.2/32
 **既有 Jellyfin**
 
 - 不搬媒體庫：Jellyfin 的項目 ID 由路徑導出，改路徑等於觀看紀錄歸零。
-- 「加入 Berth 路徑」按鈕：對選定媒體庫呼叫 `POST /Library/VirtualFolders/Paths?refreshLibrary=false`，body `{Name: <library>, Path: <parent>/library/<slug>, PathInfo: {Path: …}}`；Route 指向這個新路徑，舊路徑只讀（辨識已存在媒體與 unmanaged 檔案）。
+- 「加入 Berth 路徑」按鈕：對選定媒體庫呼叫 `POST /Library/VirtualFolders/Paths?refreshLibrary=false`，body `{Name: <library>, Path: <library_root>/<slug>, PathInfo: {Path: …}}`；Route 指向這個新路徑，舊路徑只讀（辨識已存在媒體與 unmanaged 檔案）。**送出前兩件事要先擋掉**：目錄不存在會回 404（所以 Berth 先建），同一條路徑送兩次會讓媒體庫出現兩個一樣的 location（所以先看 `Locations`）。兩者都是 2026-09-07 實測（brief §20.7）。
 - 使用者也可以不加路徑，直接在既有路徑中選一個當寫入目標；兩種都跑同樣的檢查。
 - 「安裝 MergeVersions」按鈕：§9.4 第 8 步，需確認，因為會重啟 Jellyfin。
 - 絕不自動建立媒體庫、安裝插件或改既有媒體庫的 `LibraryOptions`。

@@ -1,0 +1,189 @@
+[
+ {
+  "name": "Merge Versions",
+  "description": "Jellyfin Merge Versions plugin is a plugin that automatically groups every repeated movie\n",
+  "overview": "Automatically merge repeated movies",
+  "owner": "danieladov",
+  "category": "General",
+  "guid": "f21bbed83a974d8b88b248aaa65427cb",
+  "versions": [
+   {
+    "version": "10.11.0.1",
+    "VersionNumber": "10.11.0.1",
+    "changelog": "Bump version",
+    "targetAbi": "10.11.0.0",
+    "sourceUrl": "https://github.com/danieladov/jellyfin-plugin-mergeversions/releases/download/10.11.0.1/Jellyfin.Plugin.MergeVersions.zip",
+    "checksum": "ea467eb9aabbdfc12fafe313c281f30e",
+    "timestamp": "2025-10-20T19:15:00",
+    "repositoryName": "danieladov",
+    "repositoryUrl": "https://raw.githubusercontent.com/danieladov/JellyfinPluginManifest/master/manifest.json"
+   },
+   {
+    "version": "10.10.0.5",
+    "VersionNumber": "10.10.0.5",
+    "changelog": "Bump version",
+    "targetAbi": "10.10.0.0",
+    "sourceUrl": "https://github.com/danieladov/jellyfin-plugin-mergeversions/releases/download/10.10.0.5/Jellyfin-Plugin-MergeVersions.zip",
+    "checksum": "e362123e52f31b116d9f859ffea60eca",
+    "timestamp": "2025-10-20T12:15:00",
+    "repositoryName": "danieladov",
+    "repositoryUrl": "https://raw.githubusercontent.com/danieladov/JellyfinPluginManifest/master/manifest.json"
+   },
+   {
+    "version": "10.10.0.4",
+    "VersionNumber": "10.10.0.4",
+    "changelog": "Bump version",
+    "targetAbi": "10.10.0.0",
+    "sourceUrl": "https://github.com/danieladov/jellyfin-plugin-mergeversions/releases/download/10.10.0.4/Jellyfin-Plugin-MergeVersions.zip",
+    "checksum": "295e06778bf7e0c96d0bf6faa7265e53",
+    "timestamp": "2025-08-06T17:15:00",
+    "repositoryName": "danieladov",
+    "repositoryUrl": "https://raw.githubusercontent.com/danieladov/JellyfinPluginManifest/master/manifest.json"
+   },
+   {
+    "version": "10.10.0.3",
+    "VersionNumber": "10.10.0.3",
+    "changelog": "Fix library merge issue for movies in subfolders",
+    "targetAbi": "10.10.0.0",
+    "sourceUrl": "https://github.com/danieladov/jellyfin-plugin-mergeversions/releases/download/10.10.0.3/Jellyfin-Plugin-MergeVersions.zip",
+    "checksum": "93cd064ffc0474e874b82a5fceefde35",
+    "timestamp": "2025-08-05T17:15:00",
+    "repositoryName": "danieladov",
+    "repositoryUrl": "https://raw.githubusercontent.com/danieladov/JellyfinPluginManifest/master/manifest.json"
+   },
+   {
+    "version": "10.10.0.2",
+    "VersionNumber": "10.10.0.2",
+    "changelog": "Merge only when new versions available",
+    "targetAbi": "10.10.0.0",
+    "sourceUrl": "https://github.com/danieladov/jellyfin-plugin-mergeversions/releases/download/10.10.0.2/Jellyfin-Plugin-MergeVersions.zip",
+    "checksum": "404c6a9757f7264d20ac9495993deb95",
+    "timestamp": "2025-06-06T16:15:00",
+    "repositoryName": "danieladov",
+    "repositoryUrl": "https://raw.githubusercontent.com/danieladov/JellyfinPluginManifest/master/manifest.json"
+   },
+   {
+    "version": "10.10.0.1",
+    "VersionNumber": "10.10.0.1",
+    "changelog": "Merge only when new versions available",
+    "targetAbi": "10.10.0.0",
+    "sourceUrl": "https://github.com/danieladov/jellyfin-plugin-mergeversions/releases/download/10.10.0.1/Jellyfin-Plugin-MergeVersions.zip",
+    "checksum": "5fbf126b93a2f8cf2dd817c0c60fa424",
+    "timestamp": "2025-01-05T20:15:00",
+    "repositoryName": "danieladov",
+    "repositoryUrl": "https://raw.githubusercontent.com/danieladov/JellyfinPluginManifest/master/manifest.json"
+   },
+   {
+    "version": "10.9.1.1",
+    "VersionNumber": "10.9.1.1",
+    "changelog": "Bug fixes",
+    "targetAbi": "10.9.0.0",
+    "sourceUrl": "https://github.com/danieladov/jellyfin-plugin-mergeversions/releases/download/10.9.1.1/Jellyfin-Plugin-MergeVersions.zip",
+    "checksum": "79f745e3e35370754f77df1a303e0344",
+    "timestamp": "2024-05-15T16:45:00",
+    "repositoryName": "danieladov",
+    "repositoryUrl": "https://raw.githubusercontent.com/danieladov/JellyfinPluginManifest/master/manifest.json"
+   },
+   {
+    "version": "10.9.1.0",
+    "VersionNumber": "10.9.1.0",
+    "changelog": "Add compatibility with 10.9.1",
+    "targetAbi": "10.9.0.0",
+    "sourceUrl": "https://github.com/danieladov/jellyfin-plugin-mergeversions/releases/download/10.9.1.0/Jellyfin-Plugin-MergeVersions.zip",
+    "checksum": "9d331c5f325b2300afb5bd95934cae0a",
+    "timestamp": "2024-05-14T16:30:00",
+    "repositoryName": "danieladov",
+    "repositoryUrl": "https://raw.githubusercontent.com/danieladov/JellyfinPluginManifest/master/manifest.json"
+   },
+   {
+    "version": "10.8.0.2",
+    "VersionNumber": "10.8.0.2",
+    "changelog": "Fix splitting not taking into account excluded libraries",
+    "targetAbi": "10.8.0.0",
+    "sourceUrl": "https://github.com/danieladov/jellyfin-plugin-mergeversions/releases/download/10.8.0.2/Jellyfin-Plugin-MergeVersions.zip",
+    "checksum": "a5f050230cce782a6be24e5b6f048593",
+    "timestamp": "2023-04-20T16:35:00",
+    "repositoryName": "danieladov",
+    "repositoryUrl": "https://raw.githubusercontent.com/danieladov/JellyfinPluginManifest/master/manifest.json"
+   },
+   {
+    "version": "10.8.0.1",
+    "VersionNumber": "10.8.0.1",
+    "changelog": "Update to Jellyfin 10.8.0-beta1\n",
+    "targetAbi": "10.8.0.0",
+    "sourceUrl": "https://github.com/danieladov/jellyfin-plugin-mergeversions/releases/download/10.8.0.1/Jellyfin-Plugin-MergeVersions.zip",
+    "checksum": "6aca911b69ab2f4a4e46331e53a48c81",
+    "timestamp": "2022-04-11T15:39:00",
+    "repositoryName": "danieladov",
+    "repositoryUrl": "https://raw.githubusercontent.com/danieladov/JellyfinPluginManifest/master/manifest.json"
+   },
+   {
+    "version": "10.8.0.0",
+    "VersionNumber": "10.8.0.0",
+    "changelog": "Update to Jellyfin 10.8.0\n",
+    "targetAbi": "10.8.0.0",
+    "sourceUrl": "https://github.com/danieladov/jellyfin-plugin-mergeversions/releases/download/10.8.0.0/Jellyfin-Plugin-MergeVersions.zip",
+    "checksum": "e279e18a0687d041a21ab7f3cfc7ec42",
+    "timestamp": "2022-01-27T22:34:50",
+    "repositoryName": "danieladov",
+    "repositoryUrl": "https://raw.githubusercontent.com/danieladov/JellyfinPluginManifest/master/manifest.json"
+   },
+   {
+    "version": "10.7.7.0",
+    "VersionNumber": "10.7.7.0",
+    "changelog": "Better detection and optimitation\n",
+    "targetAbi": "10.7.0.0",
+    "sourceUrl": "https://github.com/danieladov/jellyfin-plugin-mergeversions/releases/download/10.7.7.0/Jellyfin-Plugin-MergeVersions.zip",
+    "checksum": "00818cbc89b8d596cd5a3962c5a8a9b0",
+    "timestamp": "2021-12-02T23:35:50",
+    "repositoryName": "danieladov",
+    "repositoryUrl": "https://raw.githubusercontent.com/danieladov/JellyfinPluginManifest/master/manifest.json"
+   },
+   {
+    "version": "10.7.0.2",
+    "VersionNumber": "10.7.0.2",
+    "changelog": "Fix error where movies were merged only by year\n",
+    "targetAbi": "10.7.0.0",
+    "sourceUrl": "https://github.com/danieladov/jellyfin-plugin-mergeversions/releases/download/10.7.0.2/Jellyfin-Plugin-MergeVersions.zip",
+    "checksum": "9f94b5248e944bed2a965c251663ab97",
+    "timestamp": "2021-02-02T02:45:58",
+    "repositoryName": "danieladov",
+    "repositoryUrl": "https://raw.githubusercontent.com/danieladov/JellyfinPluginManifest/master/manifest.json"
+   },
+   {
+    "version": "10.7.0",
+    "VersionNumber": "10.7.0",
+    "changelog": "Update to 10.7.0\n",
+    "targetAbi": "10.7.0.0",
+    "sourceUrl": "https://github.com/danieladov/jellyfin-plugin-mergeversions/releases/download/10.7.0/Jellyfin-Plugin-MergeVersions.zip",
+    "checksum": "95e271b58302f4372dd4551c44da618b",
+    "timestamp": "2020-12-05T13:45:58",
+    "repositoryName": "danieladov",
+    "repositoryUrl": "https://raw.githubusercontent.com/danieladov/JellyfinPluginManifest/master/manifest.json"
+   },
+   {
+    "version": "1.4.0.0",
+    "VersionNumber": "1.4.0.0",
+    "changelog": "New option to exclude paths from being merge\n",
+    "targetAbi": "10.6.0.0",
+    "sourceUrl": "https://github.com/danieladov/jellyfin-plugin-mergeversions/releases/download/1.4.0/Jellyfin-Plugin-MergeVersions.zip",
+    "checksum": "2b2bb5d442d14ca61c571c7b638bd5e3",
+    "timestamp": "2020-10-30T21:45:58",
+    "repositoryName": "danieladov",
+    "repositoryUrl": "https://raw.githubusercontent.com/danieladov/JellyfinPluginManifest/master/manifest.json"
+   },
+   {
+    "version": "1.3.0.0",
+    "VersionNumber": "1.3.0.0",
+    "changelog": "changelog\n",
+    "targetAbi": "10.6.0.0",
+    "sourceUrl": "https://github.com/danieladov/jellyfin-plugin-mergeversions/releases/download/1.3.0/Jellyfin-Plugin-MergeVersions.zip",
+    "checksum": "4dd5f0b36f8236512af651df8ac8855f",
+    "timestamp": "2020-09-01T14:30:58",
+    "repositoryName": "danieladov",
+    "repositoryUrl": "https://raw.githubusercontent.com/danieladov/JellyfinPluginManifest/master/manifest.json"
+   }
+  ],
+  "imageUrl": "https://raw.githubusercontent.com/danieladov/JellyfinPluginManifest/master/resources/MergeVersions/thumb.png"
+ }
+]

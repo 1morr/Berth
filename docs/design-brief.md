@@ -834,6 +834,19 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 - `GET/POST /Repositories`（`{Name, Url, Enabled}`）、`POST /Packages/Installed/{name}?assemblyGuid=&version=&repositoryUrl=`、`POST /System/Restart`、`GET /ScheduledTasks`、`POST /ScheduledTasks/Running/{taskId}` 都需管理員（`RequiresElevation`）。
 - MergeVersions：manifest `https://raw.githubusercontent.com/danieladov/JellyfinPluginManifest/master/manifest.json`，套件名 `Merge Versions`，GUID `f21bbed8-3a97-4d8b-88b2-48aaa65427cb`；排程任務 `Key` 為 `MergeMoviesTask` 與 `MergeEpisodesTask`（[RefreshLibraryTask.cs](https://github.com/danieladov/jellyfin-plugin-mergeversions/blob/master/Jellyfin.Plugin.MergeVersions/ScheduledTasks/RefreshLibraryTask.cs)），觸發時要用 `GET /ScheduledTasks` 回傳的 `Id`，不是 `Key`。
 
+**Jellyfin 精靈序列實測**（2026-09-07，票 06；`jellyfin/jellyfin:10.11.11`，由 Berth 自己的 adapter 跑完 plan §9.4 全序列並錄下回應，fixture 在 `tests/fixtures/http/jellyfin/`）
+
+- **`POST /Auth/Keys?app=` 回 204 而且不回傳 key**，只能再 `GET /Auth/Keys` 從 `Items[].AppName` 找回來。它**不檢查重複**：同一個 `app` 按兩次就有兩把 `AppName="Berth"` 的 key。所以要先列再建、建完再列。
+- **`POST /Library/VirtualFolders` 同名不會被拒**：第二次一樣回 204，並建出名為 `Movies2` 的第二個媒體庫指向同一個路徑。冪等要靠呼叫端先 `GET /Library/VirtualFolders`。
+- **`POST /Library/VirtualFolders/Paths` 不去重**：同一條路徑送兩次，該媒體庫的 `Locations` 就有兩個一樣的字串。目錄不存在時回 **404**（`Error processing request.`），所以路徑要先由 Berth 建好——Berth 與 Jellyfin 掛同一個宿主目錄在同一個容器路徑（§16.4），建完 Jellyfin 立刻看得到。
+- **`LibraryOptions.TypeOptions[]` 省略 `ImageFetchers` 會被存成空陣列**（實測送 `{Type, MetadataFetchers, MetadataFetcherOrder}` 讀回來 `ImageFetchers: []`），該類型從此不抓圖。要嘛整個 `TypeOptions` 留空用 Jellyfin 的預設，要嘛兩種 fetcher 都給值。
+- **`GET /Libraries/AvailableOptions?libraryContentType=movies|tvshows`** 回這台伺服器實際裝了哪些 fetcher（`{Name, Type}` 物件陣列），政策是 `FirstTimeSetupOrDefault`，精靈期間匿名讀得到。乾淨的 10.11.11：Movie 的 metadata 是 `TheMovieDb` / `The Open Movie Database`，image 多了 `Embedded Image Extractor` / `Screen Grabber`；tvshows 分 Series / Season / Episode 三個型別。裝了官方 TVDB 插件之後每個型別各多一個 `TheTVDB`，Series 還多 `Missing Episode Fetcher` —— 這正是「image fetcher 不可以寫死」的證據。
+- **登入 token 與 API key 在標頭裡是同一個形狀**：`Authorization: MediaBrowser Client="…", Device="…", DeviceId="…", Version="…", Token="<token 或 key>"`，兩者都吃得下 `RequiresElevation` 的端點。
+- **重啟的三個階段**：`POST /System/Restart` 當下連線直接被切（httpx 的 `RemoteProtocolError`）→ 一段時間所有端點回 **503** → 才回 200。所以「還沒好」有兩種形狀（連不上與 503），輪詢兩種都要當成繼續等。
+- `StartupRemoteAccessDto` 在 10.11.11 的 schema **有** `EnableAutomaticPortMapping`（本節前面說「沒有」是過時的），但 Berth 只送 `EnableRemoteAccess`。
+- MergeVersions 的排程任務 `Id` 在這台是 `MergeMoviesTask=fd957c84b0cfc2380becf2893e4b76fc`、`MergeEpisodesTask=dcaf151dd1af25aefe775c58e214477e`。**不要假設它跨安裝相同**，一律從 `GET /ScheduledTasks` 讀。
+- 整段九步對真伺服器跑完 **69 秒**（大半花在插件下載與重啟）；第二次跑 **0.2 秒**，除了第 1 步之外全部是 `skipped`。
+
 **Prowlarr**（[OpenAPI](https://raw.githubusercontent.com/Prowlarr/Prowlarr/develop/src/Prowlarr.Api.V1/openapi.json)、[supported-indexers](https://wiki.servarr.com/prowlarr/supported-indexers)、[environment-variables](https://wiki.servarr.com/prowlarr/environment-variables)）
 
 - `GET /api/v1/indexer/schema`、`GET/POST /api/v1/indexer`、`POST /api/v1/indexer/test`；`GET /api/v1/search?query=&indexerIds=&categories=&type=` 回 `ReleaseResource`（`title`、`size`、`seeders`、`leechers`、`downloadUrl`、`magnetUrl`、`infoHash`、`indexer`、`categories`、`publishDate`、`guid`、`infoUrl`、`tmdbId` …）。Prowlarr 明言**不提供跨站聚合 Torznab**，單站 Torznab 為 `/{id}/api?t=search&apikey=`。

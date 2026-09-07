@@ -193,3 +193,55 @@ export function CopyLine({ command }: { command: string }) {
     </div>
   )
 }
+
+/**
+ * 需要二次確認的動作（plan §9.5 的兩顆按鈕）。確認就地展開，不跳離當前泊位
+ * （direction contract：失敗與確認都在原地）。`warning` 說清楚按下去會發生什麼。
+ */
+export function ConfirmAction({
+  label,
+  confirmLabel,
+  warning,
+  pending = false,
+  pendingLabel,
+  onConfirm,
+}: {
+  label: string
+  confirmLabel: string
+  warning: ReactNode
+  pending?: boolean
+  pendingLabel: string
+  onConfirm: () => void
+}) {
+  const { t } = useTranslation()
+  const [asked, setAsked] = useState(false)
+
+  if (!asked) {
+    return (
+      <GhostButton type="button" disabled={pending} onClick={() => setAsked(true)}>
+        {pending ? pendingLabel : label}
+      </GhostButton>
+    )
+  }
+
+  return (
+    <div className="grid gap-3 border-2 border-rule-strong bg-well px-3 py-3">
+      <p className="max-w-prose text-xs text-ink">{warning}</p>
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,14rem)_auto] sm:items-center">
+        <PrimaryButton
+          type="button"
+          disabled={pending}
+          onClick={() => {
+            setAsked(false)
+            onConfirm()
+          }}
+        >
+          {pending ? pendingLabel : confirmLabel}
+        </PrimaryButton>
+        <GhostButton type="button" onClick={() => setAsked(false)}>
+          {t('common.cancel')}
+        </GhostButton>
+      </div>
+    </div>
+  )
+}

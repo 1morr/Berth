@@ -22,7 +22,7 @@ from berth.adapters.http import (
 from berth.adapters.jellyfin import JellyfinClient
 from berth.adapters.prowlarr import ProwlarrClient
 from berth.adapters.qbittorrent import QbittorrentClient, QbittorrentVersion
-from berth.domain import DetectionReason, ServiceKind, ServiceOrigin
+from berth.domain import DetectionReason, JellyfinStep, ServiceKind, ServiceOrigin, StepStatus
 from berth.models import (
     IndexerSettings,
     JellyfinSettings,
@@ -40,6 +40,7 @@ DETECT_WINDOW = timedelta(minutes=2)
 STEP_ADMIN = 1
 STEP_DETECT = 2
 STEP_JELLYFIN = 3
+STEP_QBITTORRENT = 4
 
 
 @dataclass(frozen=True, slots=True)
@@ -63,9 +64,9 @@ class ServiceConnection:
 
 
 class ServiceClientFactory(Protocol):
-    """依使用者填的位址造 client。探測套件內服務用的是固定主機名，不走這裡。"""
+    """依位址造 client。探測套件內服務用的是固定主機名，不走這裡。"""
 
-    def jellyfin(self, base_url: str) -> JellyfinClient: ...
+    def jellyfin(self, base_url: str, token: str = "") -> JellyfinClient: ...
 
     def qbittorrent(self, base_url: str) -> QbittorrentClient: ...
 
@@ -82,6 +83,8 @@ class ServiceDetection:
     base_url: str
     #: 這個判定來自使用者填的連線表單，不是探測 compose 主機名的結果。
     configured: bool
+    #: 連線問題解掉了沒。沒解掉就要使用者補位址或憑證，第 2 步也還沒做完。
+    resolved: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -273,10 +276,37 @@ async def _connection_verdict(
 #: 還沒有結論的兩種狀態：容器啟動中，或已經等超過上限。
 _UNSETTLED = (ServiceOrigin.PENDING, ServiceOrigin.TIMEOUT)
 
+#: 這些理由代表「還要使用者補連線資訊」，其餘的都是服務自己報出來的事實（plan §9.3 第 2 步）。
+UNRESOLVED_REASONS = frozenset(
+    {
+        DetectionReason.NOT_DEPLOYED,
+        DetectionReason.UNREACHABLE,
+        DetectionReason.AUTH_REQUIRED,
+        DetectionReason.PROTOCOL_MISMATCH,
+        DetectionReason.API_KEY_MISSING,
+    }
+)
+
 
 def _still_waiting(setup: SetupSettings) -> bool:
     return not setup.services or any(
         probe.origin in _UNSETTLED for probe in setup.services.values()
+    )
+
+
+def _resolved(probe: ServiceProbe) -> bool:
+    """這個服務的連線問題解掉了沒。
+
+    「有結論」不等於「可以往下走」：從 `COMPOSE_PROFILES` 拿掉的服務立刻就有結論（既有），
+    但 Berth 還不知道它在哪裡。第 2 步要到每個服務都連得上才算做完，否則精靈會跳過那張
+    使用者唯一能填位址的表單。
+    """
+    return probe.origin not in _UNSETTLED and probe.reason not in UNRESOLVED_REASONS
+
+
+def _detect_done(setup: SetupSettings) -> bool:
+    return len(setup.services) == len(ServiceKind) and all(
+        _resolved(probe) for probe in setup.services.values()
     )
 
 
@@ -381,9 +411,26 @@ def _current_step(setup: SetupSettings) -> int:
     """
     if not setup.admin.username:
         return STEP_ADMIN
-    if _still_waiting(setup):
+    if not _detect_done(setup):
         return STEP_DETECT
-    return STEP_JELLYFIN
+    if not _jellyfin_secured(setup):
+        return STEP_JELLYFIN
+    return STEP_QBITTORRENT
+
+
+def _jellyfin_secured(setup: SetupSettings) -> bool:
+    """第 3 步做完了沒（票 06）。
+
+    套件內要 plan §9.4 的九步都有結論；既有只要拿得到 API key——建立媒體庫與安裝插件
+    在既有 Jellyfin 上是使用者按不按都可以的按鈕，不是這一步的完成條件（brief §16.4）。
+    """
+    done = {
+        row.key for row in setup.jellyfin.steps if row.status in (StepStatus.OK, StepStatus.SKIPPED)
+    }
+    probe = setup.services.get(ServiceKind.JELLYFIN)
+    if probe is not None and probe.origin is ServiceOrigin.BUNDLED:
+        return done >= {step.value for step in JellyfinStep}
+    return JellyfinStep.API_KEY.value in done
 
 
 def _status(setup: SetupSettings, *, now: datetime) -> SetupStatus:
@@ -402,6 +449,7 @@ def _status(setup: SetupSettings, *, now: datetime) -> SetupStatus:
                 detail=probe.detail,
                 base_url=probe.base_url,
                 configured=probe.configured,
+                resolved=_resolved(probe),
             )
             for kind in ServiceKind
             if (probe := setup.services.get(kind)) is not None

@@ -19,6 +19,20 @@ adapter 契約測試的輸入（plan §1.2、§10）。每個檔案都是**對�
 | `prowlarr/indexer.configured.json` | 由同一台的 `GET /api/v1/indexer/schema` 的 Nyaa.si 條目裁出常用欄位並補上 `id`。**不是**整包錄下來的：容器連不出去（TLS 被中斷），`POST /api/v1/indexer` 建不起來 |
 | `../prowlarr/config.xml` | 同一台的 `/config/config.xml`，`<ApiKey>` 換成同形狀的假值 |
 
+2026-09-07（票 06），對 `jellyfin/jellyfin:10.11.11` 錄的。這一組是 Berth 自己跑完
+plan §9.4 的九步之後那台伺服器的狀態，不是手排出來的場景：
+
+| 檔案 | 來源 |
+| --- | --- |
+| `jellyfin/library-virtualfolders.json` | `GET /Library/VirtualFolders`，bootstrap 建好 Movies / TV / Anime 之後。另外含一個**使用者自己的** `Films` 媒體庫：兩條路徑（Berth 加的 + 原本的）、metadata fetcher 掛了 `TheTVDB`，也就是 brief §16.4 那個警告的來源 |
+| `jellyfin/auth-keys.berth.json` | `GET /Auth/Keys`，`POST /Auth/Keys?app=Berth` 之後。`AccessToken` 換成同形狀的假值 |
+| `jellyfin/authenticate-by-name.json` | `POST /Users/AuthenticateByName`，`AccessToken` 換成同形狀的假值 |
+| `jellyfin/scheduledtasks.merge-versions.json` | `GET /ScheduledTasks`，MergeVersions 裝好並重啟之後。`MergeMoviesTask` / `MergeEpisodesTask` 的 `Id` 與 `Key` 不同，正是 brief §20.7 那一條 |
+| `jellyfin/plugins.merge-versions-installed.json` | `GET /Plugins`，同一台 |
+| `jellyfin/repositories.with-merge-versions.json` | `GET /Repositories`，Berth 加完 danieladov 之後（所以也證明「重按不會加第二次」認得出自己加的那筆） |
+| `jellyfin/packages.merge-versions.json` | `GET /Packages` 裡 `Merge Versions` 那一筆（整份太大，只留這個套件） |
+| `jellyfin/libraries-availableoptions.{movies,tvshows}.with-tvdb.json` | `GET /Libraries/AvailableOptions`，**額外裝了官方 TVDB 插件之後**。插件會替每個型別多掛 fetcher，這正是「圖片 fetcher 不可以寫死」的證據 |
+
 ## 規則
 
 - 檔案裡不放真的秘密。`config.xml` 的 API key 是拋棄式容器產的，仍然換成 `0000…0001`。

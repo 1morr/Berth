@@ -46,8 +46,8 @@ async def close_setup_probes(probes: SetupProbes) -> None:
 class HttpServiceClientFactory:
     """既有服務用：位址由使用者填，不是 compose 主機名。"""
 
-    def jellyfin(self, base_url: str) -> JellyfinClient:
-        return HttpJellyfinClient(base_url)
+    def jellyfin(self, base_url: str, token: str = "") -> JellyfinClient:
+        return HttpJellyfinClient(base_url, token=token)
 
     def qbittorrent(self, base_url: str) -> QbittorrentClient:
         return HttpQbittorrentClient(base_url)

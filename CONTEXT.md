@@ -16,7 +16,23 @@ _Avoid_: subscribed media, library item
 
 **Library Route**（UI 顯示「媒體庫」）:
 一個入庫目的地：Jellyfin 媒體庫、一個寫入目標路徑、一個 qBittorrent category、一個命名 profile（standard / anime）。
-_Avoid_: root folder, destination, library（程式碼中）
+_Avoid_: root folder, destination；程式碼中不要用 `library` 指 Route（`library` 一律指下一條的 Jellyfin Library）
+
+**Jellyfin Library**（UI 顯示「Jellyfin 媒體庫」）:
+Jellyfin 那一端的 virtual folder：一個名字、一個 collection type、**一到多條**路徑。Berth 不擁有它——
+套件內的 Jellyfin 由 Berth 建三個（Movies / TV / Anime），既有的一律只讀，最多加一條路徑。
+一個 Library Route 指向它的其中一條路徑。程式碼中的 `library` 指的就是這個。
+_Avoid_: virtual folder（對使用者時）, folder, collection
+
+**Library root**:
+媒體庫路徑的父目錄（設定值，預設 `/data/library`）。Berth 與 Jellyfin 把同一個宿主目錄掛在同一個
+容器路徑，所以這一個字串對兩邊都成立。
+_Avoid_: media root, library path（那是單一媒體庫的路徑）
+
+**Berth path**（UI 顯示「Berth 寫入」）:
+Library root 底下、Berth 寫入用的那一條路徑（`<library root>/<slug>`）。既有 Jellyfin 是**加**這一條，
+舊路徑原地不動。
+_Avoid_: target path（那是 Route 上的欄位）, new path
 
 **Profile**:
 Route 的命名與解析偏好，`standard` 或 `anime`。
@@ -45,6 +61,12 @@ _Avoid_: managed, built-in, ours
 **Existing service**（UI 顯示「既有」）:
 使用者自己的服務，或不在這套 compose 裡的服務。Berth 只做檢查，改動一律要按鈕確認。
 _Avoid_: external, remote, byo
+
+**Step status**（UI 顯示於每一條纜繩）:
+精靈裡一個步驟的結果，五種：`ok`（已完成，這一次真的做了）、`skipped`（已經是這樣，沒動它）、
+`running`（進行中，做之前就寫進設定所以輪詢看得到）、`failed`（失敗）、`pending`（尚未執行）。
+**`skipped` 不是「跳過不做」**，是「已經是想要的樣子」——重按精靈時大部分步驟都會是它。
+_Avoid_: success/error（那是 HTTP 的詞）, done（`ok` 與 `skipped` 都算做完）
 
 **Berth（泊位）**:
 設定精靈把八個步驟歸成的四格：Jellyfin、qBittorrent、來源（索引站與 RSS）、媒體庫路徑。

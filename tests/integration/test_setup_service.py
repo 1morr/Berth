@@ -13,7 +13,6 @@ from berth.adapters.http import (
     ServiceNotDeployedError,
     ServiceUnavailableError,
 )
-from berth.adapters.jellyfin import JellyfinPublicInfo
 from berth.adapters.jellyfin.fake import FakeJellyfinClient
 from berth.adapters.prowlarr import ProwlarrIndexer
 from berth.adapters.prowlarr.fake import FakeProwlarrClient
@@ -151,9 +150,7 @@ async def test_measured_values_are_carried_to_the_ui(session: AsyncSession) -> N
 @pytest.mark.asyncio
 async def test_jellyfin_that_finished_its_own_wizard_is_existing(session: AsyncSession) -> None:
     configured = FakeJellyfinClient(
-        public_info=JellyfinPublicInfo(
-            server_name="nas", version="10.10.7", startup_wizard_completed=True
-        )
+        server_name="nas", version="10.10.7", startup_wizard_completed=True
     )
 
     status = await detect_services(session, probes(jellyfin=configured), now=NOW)
@@ -225,7 +222,12 @@ async def test_a_service_removed_from_compose_profiles_is_existing(session: Asyn
     )
     assert verdict(status, ServiceKind.QBITTORRENT)[0] is ServiceOrigin.BUNDLED
     assert verdict(status, ServiceKind.PROWLARR)[0] is ServiceOrigin.BUNDLED
-    assert status.current_step == 3
+    # 有結論不等於可以往下走：Berth 還不知道那台 Jellyfin 在哪裡，所以精靈留在第 2 步，
+    # 使用者才填得到位址（票 06 修正）。
+    assert (
+        next(row for row in status.services if row.kind is ServiceKind.JELLYFIN).resolved is False
+    )
+    assert status.current_step == 2
 
 
 @pytest.mark.asyncio

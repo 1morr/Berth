@@ -4,18 +4,22 @@ from berth.domain.enums import (
     CollectionType,
     DetectionReason,
     HealthStatus,
+    JellyfinStep,
     Profile,
     Role,
     ServiceKind,
     ServiceOrigin,
+    StepStatus,
 )
 
 __all__ = [
     "CollectionType",
     "DetectionReason",
     "HealthStatus",
+    "JellyfinStep",
     "Profile",
     "Role",
     "ServiceKind",
     "ServiceOrigin",
+    "StepStatus",
 ]

@@ -55,6 +55,34 @@ class ServiceOrigin(StrEnum):
     TIMEOUT = "timeout"
 
 
+class StepStatus(StrEnum):
+    """精靈裡一個步驟的結果。逐條纜繩顯示，所以是封閉集合。"""
+
+    #: 這一次真的做了它。
+    OK = "ok"
+    #: 已經是想要的樣子，這一次沒動它。重按精靈時大部分步驟都會是這個。
+    SKIPPED = "skipped"
+    FAILED = "failed"
+    #: 正在做。每一步開始前就寫進設定，UI 靠輪詢看得到序列走到哪裡。
+    RUNNING = "running"
+    #: 前面的步驟失敗或還沒輪到，這一步沒跑到。
+    PENDING = "pending"
+
+
+class JellyfinStep(StrEnum):
+    """Jellyfin 自動初始化序列的九步（plan §9.4）。順序即宣告順序。"""
+
+    PUBLIC_INFO = "public_info"
+    CONFIGURATION = "configuration"
+    ADMIN_USER = "admin_user"
+    LIBRARIES = "libraries"
+    REMOTE_ACCESS = "remote_access"
+    COMPLETE = "complete"
+    API_KEY = "api_key"
+    PLUGIN = "plugin"
+    TASKS = "tasks"
+
+
 class DetectionReason(StrEnum):
     """判定的理由。UI 逐服務顯示，所以是封閉集合而不是自由文字。"""
 

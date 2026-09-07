@@ -64,7 +64,19 @@ React 19 + TS + Vite + Tailwind v4 + TanStack Router / Query + react-i18next。W
 - **shadcn/ui**：第 1–2 步沒有任何需要 Radix 行為的元件（無 dropdown / dialog / popover / tabs），
   原生 `input` / `checkbox` / `button` 的無障礙更好。等到真的需要行為基礎的那一步再引入。
 
+## Resolved during build (票 06)
+
+- **既有 Jellyfin 0 個媒體庫的空狀態**（原本掛在 Open）：不擋、不假裝有東西，直接說「這台
+  Jellyfin 一個媒體庫都沒有，先在 Jellyfin 建一個再回來，Berth 才有地方寫入」，配 `assigned`
+  色塊。Berth 不會替既有伺服器建媒體庫（brief §16.4 的紅線），所以這裡不能有動作按鈕。
+- **兩條路徑的剖面不同**：套件內的剖面列「將會做什麼」（九步各自打哪一支端點），既有的剖面
+  列「這台 Jellyfin 現在是什麼樣子」（位址、版本、API key、媒體庫數、MergeVersions）。同一個
+  `Cutaway` 元件，內容全部是實測值。
+- **二次確認就地展開**：「加入 Berth 路徑」與「安裝 MergeVersions」按下之後在原地換成一段
+  說明加兩顆按鈕，不開 dialog——沒有 Radix，也不跳離當前泊位。
+- **走過的步驟留一條線索**：步驟由狀態導出，所以「回去改帳密 / 重新探測」不能靠改後端狀態；
+  泊位板下方一條 trail 是唯一入口，同時也是證據（帳號是誰、判定了幾個服務）。
+
 ## Open
 
 - 泊位 3（來源）在既有 Prowlarr 與任意 Torznab 兩種接法下的剖面欄位，票 08 定。
-- 既有 Jellyfin 0 個媒體庫的空狀態文案，票 06 定。

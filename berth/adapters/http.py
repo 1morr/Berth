@@ -33,6 +33,14 @@ class AuthFailedError(ServiceError):
     """服務要求憑證（401 / 403）。"""
 
 
+class ServiceBusyError(ServiceError):
+    """連得上、也是對的服務，但它還在載入（503）。
+
+    Jellyfin 重啟後每一支端點都會有一段時間回 503「伺服器載入中」，所以「還沒好」必須與
+    「壞了」分得開：前者該繼續輪詢，後者該把手動步驟攤給使用者看（brief §20.7）。
+    """
+
+
 class ProtocolMismatchError(ServiceError):
     """連得上，但回的東西不是預期的那個服務。"""
 
@@ -71,6 +79,10 @@ class HttpSession:
     async def get(self, path: str) -> httpx.Response:
         return await self.request("GET", path)
 
+    def set_header(self, name: str, value: str) -> None:
+        """換掉一個標頭。憑證是可變的：Jellyfin 的初始精靈匿名開始，之後才有 token。"""
+        self._client.headers[name] = value
+
     async def request(self, method: str, path: str, **kwargs: Any) -> httpx.Response:
         try:
             response = await self._client.request(method, path, **kwargs)
@@ -83,6 +95,8 @@ class HttpSession:
 
         if response.status_code in (401, 403):
             raise AuthFailedError(f"{method} {path}: {response.status_code}")
+        if response.status_code == 503:
+            raise ServiceBusyError(f"{method} {path}: 503 still loading")
         if response.status_code >= 400:
             raise ProtocolMismatchError(f"{method} {path}: {response.status_code}")
         return response

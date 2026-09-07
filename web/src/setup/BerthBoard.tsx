@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next'
 
 import type { ServiceDetection, ServiceKind } from '../api/setup'
-import { SIGNAL_FILL } from '../components/signal'
+import { SIGNAL_FILL, type Signal } from '../components/signal'
 import { ORIGIN_LABEL, detailLabel, signalOf } from './signals'
 
 /**
@@ -29,7 +29,14 @@ const SLOTS: readonly BerthSlot[] = [
   { code: 'BTH 4', nameKey: 'board.library' },
 ]
 
-export function BerthBoard({ services }: { services: ServiceDetection[] }) {
+export function BerthBoard({
+  services,
+  signals = {},
+}: {
+  services: ServiceDetection[]
+  /** 泊位自己那一步的進度覆寫探測結果——探到了不等於那個泊位的事做完了。 */
+  signals?: Partial<Record<ServiceKind, Signal>>
+}) {
   const { t } = useTranslation()
   const byKind = new Map(services.map((row) => [row.kind, row]))
 
@@ -39,12 +46,15 @@ export function BerthBoard({ services }: { services: ServiceDetection[] }) {
       <ul className="flex snap-x gap-px overflow-x-auto bg-rule-strong sm:grid sm:grid-cols-4 sm:overflow-visible">
         {SLOTS.map((slot) => {
           const detection = slot.service ? byKind.get(slot.service) : undefined
+          const signal = (slot.service && signals[slot.service]) ?? signalOf(detection)
 
           return (
             <li
               key={slot.code}
               className={`min-w-52 flex-1 snap-start px-4 py-3 ${
-                detection ? SIGNAL_FILL[signalOf(detection)] : 'bg-well text-ink-dim'
+                detection || (slot.service && signals[slot.service])
+                  ? SIGNAL_FILL[signal]
+                  : 'bg-well text-ink-dim'
               }`}
             >
               <div className="flex items-baseline justify-between gap-2">

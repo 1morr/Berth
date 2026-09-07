@@ -59,7 +59,7 @@ export function MooringLine({
       </div>
 
       {!tying && detection && (
-        <dl className="grid gap-x-4 gap-y-1 border-t-2 border-rule px-4 py-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
+        <dl className="grid grid-cols-1 gap-x-4 gap-y-1 border-t-2 border-rule px-4 py-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
           <dt className="label self-center text-ink-dim">{t('detect.cutaway.verdict')}</dt>
           <dd className="text-sm text-ink">{t(REASON_LABEL[detection.reason])}</dd>
           {detection.detail && (
@@ -198,7 +198,7 @@ function ManualSteps({ kind, detection }: { kind: ServiceKind; detection: Servic
       <section className="mt-5 border-t-2 border-rule pt-4">
         <h5 className="label text-ink-dim">{t('connect.fix.title')}</h5>
         <p className="mt-2 max-w-prose text-xs text-ink-dim">{t('connect.fix.unreachable')}</p>
-        <div className="mt-2 grid gap-px">
+        <div className="mt-2 grid grid-cols-1 gap-px">
           <CopyLine command={`docker compose ps ${kind}`} />
           <CopyLine command={`docker compose logs --tail 50 ${kind}`} />
         </div>

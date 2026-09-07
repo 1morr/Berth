@@ -128,12 +128,14 @@ describe('第 2 步：偵測服務', () => {
     renderWithProviders(<SetupPage />)
     await user.click(await screen.findByRole('button', { name: '開始探測' }))
 
+    // 伺服器已經把步驟推到 3，但畫面停在這一輪的結果上等使用者按下前進。
     const sequence = await screen.findByTestId('mooring-sequence')
     await waitFor(() => {
       expect(within(sequence).getAllByText('套件內')).toHaveLength(3)
     })
     expect(within(sequence).getByText('10.11.11')).toBeInTheDocument()
     expect(within(sequence).getByText('v5.2.3 · Web API 2.15.1')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '前往泊位 1' })).toBeInTheDocument()
   })
 
   it('判定理由逐服務寫出來，不是「連線失敗」了事', async () => {
@@ -178,7 +180,7 @@ describe('第 2 步：偵測服務', () => {
 
   it('從 COMPOSE_PROFILES 拿掉的服務判為既有，並附可複製的手動步驟', async () => {
     const removed = [
-      detection({ origin: 'existing', reason: 'not_deployed', detail: '' }),
+      detection({ origin: 'existing', reason: 'not_deployed', detail: '', resolved: false }),
       ...ALL_BUNDLED.slice(1),
     ]
     stubApi({ [STATUS]: { body: setupStatus({ ...AT_STEP_TWO, services: removed }) } })
@@ -197,7 +199,13 @@ describe('第 2 步：偵測服務', () => {
       // 連得上：判定是服務自己報的事實（跑過初始精靈）。
       detection({ origin: 'existing', reason: 'setup_completed', detail: '10.10.7' }),
       // 連不上：要使用者補連線資訊。
-      detection({ kind: 'qbittorrent', origin: 'existing', reason: 'auth_required', detail: '' }),
+      detection({
+        kind: 'qbittorrent',
+        origin: 'existing',
+        reason: 'auth_required',
+        detail: '',
+        resolved: false,
+      }),
       ALL_BUNDLED[2],
     ]
     stubApi({ [STATUS]: { body: setupStatus({ ...AT_STEP_TWO, services }) } })
@@ -223,6 +231,7 @@ describe('第 2 步：偵測服務', () => {
         reason: 'api_key_missing',
         detail: '',
         base_url: 'http://prowlarr:9696',
+        resolved: false,
       }),
     ]
     const fetchStub = stubApi({
@@ -273,7 +282,13 @@ describe('第 2 步：偵測服務', () => {
   it('逾時之後給重試與可複製的診斷指令', async () => {
     const timedOut = [
       ALL_BUNDLED[0],
-      detection({ kind: 'qbittorrent', origin: 'timeout', reason: 'unreachable', detail: '' }),
+      detection({
+        kind: 'qbittorrent',
+        origin: 'timeout',
+        reason: 'unreachable',
+        detail: '',
+        resolved: false,
+      }),
       ALL_BUNDLED[2],
     ]
     const fetchStub = stubApi({

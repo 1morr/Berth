@@ -8,7 +8,10 @@ from berth.models.base import Base
 from berth.models.event import Event
 from berth.models.route import Route
 from berth.models.setting import (
+    ANIME_SLUG,
+    MOVIES_SLUG,
     SETTINGS_GROUPS,
+    TV_SLUG,
     IndexerSettings,
     JellyfinSettings,
     PathSettings,
@@ -17,12 +20,18 @@ from berth.models.setting import (
     Setting,
     SettingsGroup,
     SetupAdmin,
+    SetupJellyfin,
+    SetupLibrary,
     SetupSettings,
+    SetupStep,
     TmdbSettings,
 )
 
 __all__ = [
+    "ANIME_SLUG",
+    "MOVIES_SLUG",
     "SETTINGS_GROUPS",
+    "TV_SLUG",
     "Base",
     "Event",
     "IndexerSettings",
@@ -34,7 +43,10 @@ __all__ = [
     "Setting",
     "SettingsGroup",
     "SetupAdmin",
+    "SetupJellyfin",
+    "SetupLibrary",
     "SetupSettings",
+    "SetupStep",
     "TmdbSettings",
     "User",
     "UserSession",

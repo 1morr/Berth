@@ -1,19 +1,13 @@
 import type { DetectionReason, ServiceDetection, ServiceKind, ServiceOrigin } from '../api/setup'
 import type { Signal } from '../components/signal'
 
-/** 探測沒成功的理由。這些都要使用者補連線資訊，其餘的都是「服務自己報出來的事實」。 */
-const UNRESOLVED: ReadonlySet<DetectionReason> = new Set<DetectionReason>([
-  'not_deployed',
-  'unreachable',
-  'auth_required',
-  'protocol_mismatch',
-  'api_key_missing',
-])
-
 /**
  * 判定 → 信號。套件內是 `neutral`：Berth 會自己接手，不需要使用者做什麼，
  * 但也還沒完成，所以既不是黃的也不是綠的。既有服務連得上是 `secured`
  * （這一步的事做完了，那個泊位自己的工作在它的步驟）；連不上才是 `assigned`。
+ *
+ * 「連得上」是後端算的（`resolved`）：那條規則同時決定精靈能不能離開第 2 步，
+ * 兩邊各存一份遲早會不一致。
  */
 export function signalOf(detection: ServiceDetection | undefined): Signal {
   if (!detection) return 'neutral'
@@ -21,7 +15,7 @@ export function signalOf(detection: ServiceDetection | undefined): Signal {
     case 'bundled':
       return 'neutral'
     case 'existing':
-      return UNRESOLVED.has(detection.reason) ? 'assigned' : 'secured'
+      return detection.resolved ? 'secured' : 'assigned'
     case 'pending':
       return 'working'
     case 'timeout':
