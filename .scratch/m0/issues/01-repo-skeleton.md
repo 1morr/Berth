@@ -1,6 +1,6 @@
 # 01 — Repo 骨架、工具鏈與 CI
 
-**Status:** ready-for-human —— 實作與其餘驗收全數完成，只剩「CI 在 PR 上綠燈」需要有人先建 GitHub remote
+**Status:** done
 
 **Blocked by:** 無 —— 可立即開工
 
@@ -21,7 +21,7 @@
 - [x] `uv run lint-imports` 綠燈，契約檔編碼 plan §1.3 的依賴方向：`api → services`、`pipeline → services`、`parser` 與 `naming` 不 import `adapters` / `services` / `models`、`adapters` 不 import `services` / `models`
 - [x] `pnpm -C web build` 產出 `web/dist`
 - [x] `pnpm -C web lint` 與 `pnpm -C web test`（vitest smoke）綠燈
-- [ ] GitHub Actions 在 PR 上跑完上述全部並綠燈
+- [x] GitHub Actions 在 PR 上跑完上述全部並綠燈
 - [x] `pre-commit run --all-files` 綠燈
 - [x] LICENSE（MIT）與 CHANGELOG.md（Keep a Changelog 骨架）存在
 - [x] README 含專案一句話、環境需求、全部開發指令（後端 / 前端 / 測試 / lint）、目錄結構
