@@ -111,7 +111,7 @@ pnpm -C web dev                                     # 前端，開 Vite 印出�
 
 ### 環境變數
 
-`.env.example` 是完整清單；四個都有預設值，本機開發只需要覆寫前兩個。
+`.env.example` 是完整清單；每一個都有預設值，本機開發只需要覆寫前兩個。
 
 | 變數 | 預設 | 用途 |
 | --- | --- | --- |
@@ -119,6 +119,8 @@ pnpm -C web dev                                     # 前端，開 Vite 印出�
 | `DATA_ROOT` | `/data` | 媒體根：incomplete、complete 與媒體庫路徑都在它底下 |
 | `PORT` | `8383` | 對外的唯一 port |
 | `WEB_ROOT` | `<repo>/web/dist` | 前端 build 產物。找不到時只提供 API |
+| `EXT_ROOT` | `/ext` | 其他服務唯讀掛進來的設定目錄。目前只讀 `${EXT_ROOT}/prowlarr/config.xml` 的 `<ApiKey>` |
+| `PROWLARR__AUTH__APIKEY` | 無 | Prowlarr 的 API key。用這個環境變數部署 Prowlarr 的人把同一個值也給 Berth，就不必唯讀掛它的設定目錄；有值時蓋過 `config.xml` |
 
 ### 後端
 
@@ -161,6 +163,26 @@ uv run pre-commit run --all-files
 ```
 
 CI（`.github/workflows/ci.yml`）在 push 到 `main` 與所有 PR 上跑同一組檢查。
+
+### 設定精靈的 Fake 後端
+
+精靈的 UI 不必真的有四個容器也能實跑：`scripts/fake_setup_server.py` 起一台真的 Berth
+（真的 API、真的資料庫、真的前端 build），只把三個外部服務換成 `adapters/*/fake.py`。
+
+```bash
+pnpm -C web build                                          # 先有前端產物
+uv run python scripts/fake_setup_server.py                 # http://127.0.0.1:8484
+uv run python scripts/fake_setup_server.py --scenario mixed
+```
+
+| `--scenario` | 演的是什麼 |
+| --- | --- |
+| `bundled`（預設） | 乾淨的 compose：三個服務都判為套件內 |
+| `mixed` | NAS 的常見組合：Jellyfin 不在 `COMPOSE_PROFILES` 裡、qBittorrent 已設密碼、Prowlarr 已有索引站 |
+| `starting` | 容器還在啟動：qBittorrent 連不上，Prowlarr 讀不到 API key |
+
+每次啟動都用一個新的暫存 `CONFIG_ROOT`，所以永遠是乾淨環境；`--config-root` 可指定成固定目錄
+以便跨次保留進度。
 
 ### 實驗腳本
 
@@ -233,7 +255,9 @@ web/              前端（Vite + React + TypeScript）
 deploy/           部署套件：Dockerfile、compose、preseed、.env.example
 scripts/
   experiments/    對真實外部服務的驗證腳本（可重跑，結果在 docs/research/）
+  fake_setup_server.py  以 Fake adapter 起一台 Berth，用來實跑驗證設定精靈
 tests/            後端測試
+  fixtures/http/  對真服務錄下來的回應，adapter 契約測試的輸入
 docs/             設計綱要、實作計劃、進度
   research/       查證與實驗的完整結果
 .scratch/         各里程碑的票

@@ -1,0 +1,25 @@
+[
+  {
+    "name": "Nyaa.si",
+    "definitionName": "nyaasi",
+    "implementation": "Cardigann",
+    "configContract": "CardigannSettings",
+    "protocol": "torrent",
+    "privacy": "public",
+    "priority": 25,
+    "appProfileId": 1,
+    "enable": true,
+    "supportsRss": true,
+    "supportsSearch": true,
+    "indexerUrls": [
+      "https://nyaa.si/",
+      "https://nyaa.iss.ink/",
+      "https://nyaa.land/",
+      "https://nyaa.mom/",
+      "https://nyaa.media/"
+    ],
+    "tags": [],
+    "id": 1,
+    "added": "2026-09-07T00:00:00Z"
+  }
+]

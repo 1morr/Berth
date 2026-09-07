@@ -16,6 +16,8 @@ VERSION = version(PACKAGE_NAME)
 
 DEFAULT_CONFIG_ROOT = Path("/config")
 DEFAULT_DATA_ROOT = Path("/data")
+#: 其他服務唯讀掛進來的設定目錄；目前只有 `prowlarr/config.xml`（plan §9.1）。
+DEFAULT_EXT_ROOT = Path("/ext")
 DEFAULT_PORT = 8383
 
 #: repo 佈局下 `pnpm -C web build` 的產出；container 內由 `WEB_ROOT` 指向 image 的複製位置。
@@ -30,12 +32,17 @@ class Config:
 
     config_root: Path
     data_root: Path
+    ext_root: Path
     web_root: Path
     port: int
 
     @property
     def database_path(self) -> Path:
         return self.config_root / DATABASE_FILENAME
+
+    @property
+    def prowlarr_config_path(self) -> Path:
+        return self.ext_root / "prowlarr" / "config.xml"
 
 
 def load_config(environ: Mapping[str, str] | None = None) -> Config:
@@ -44,6 +51,7 @@ def load_config(environ: Mapping[str, str] | None = None) -> Config:
     return Config(
         config_root=_path(env, "CONFIG_ROOT", DEFAULT_CONFIG_ROOT),
         data_root=_path(env, "DATA_ROOT", DEFAULT_DATA_ROOT),
+        ext_root=_path(env, "EXT_ROOT", DEFAULT_EXT_ROOT),
         web_root=_path(env, "WEB_ROOT", DEFAULT_WEB_ROOT),
         port=_port(env),
     )

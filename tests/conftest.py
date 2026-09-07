@@ -45,3 +45,11 @@ async def engine(config: Config) -> AsyncIterator[AsyncEngine]:
 async def session(engine: AsyncEngine) -> AsyncIterator[AsyncSession]:
     async with create_session_factory(engine)() as session:
         yield session
+
+
+FIXTURES = Path(__file__).parent / "fixtures"
+
+
+def read_fixture(relative: str) -> str:
+    """`tests/fixtures/` 底下的錄製回應（plan §1.2）。"""
+    return (FIXTURES / relative).read_text(encoding="utf-8")

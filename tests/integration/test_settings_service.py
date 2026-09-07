@@ -28,9 +28,9 @@ async def test_a_written_group_reads_back(session: AsyncSession) -> None:
 
 
 async def test_writing_the_same_group_twice_updates_one_row(session: AsyncSession) -> None:
-    await write_settings(session, SetupSettings(current_step=2))
+    await write_settings(session, SetupSettings())
     await session.commit()
-    await write_settings(session, SetupSettings(current_step=5, completed=True))
+    await write_settings(session, SetupSettings(completed=True))
     await session.commit()
 
     rows = await session.scalar(
@@ -38,9 +38,7 @@ async def test_writing_the_same_group_twice_updates_one_row(session: AsyncSessio
     )
 
     assert rows == 1
-    assert await read_settings(session, SetupSettings) == SetupSettings(
-        current_step=5, completed=True
-    )
+    assert await read_settings(session, SetupSettings) == SetupSettings(completed=True)
 
 
 async def test_groups_do_not_overwrite_each_other(session: AsyncSession) -> None:

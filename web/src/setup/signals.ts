@@ -1,0 +1,82 @@
+import type { DetectionReason, ServiceDetection, ServiceKind, ServiceOrigin } from '../api/setup'
+import type { Signal } from '../components/signal'
+
+/** 探測沒成功的理由。這些都要使用者補連線資訊，其餘的都是「服務自己報出來的事實」。 */
+const UNRESOLVED: ReadonlySet<DetectionReason> = new Set<DetectionReason>([
+  'not_deployed',
+  'unreachable',
+  'auth_required',
+  'protocol_mismatch',
+  'api_key_missing',
+])
+
+/**
+ * 判定 → 信號。套件內是 `neutral`：Berth 會自己接手，不需要使用者做什麼，
+ * 但也還沒完成，所以既不是黃的也不是綠的。既有服務連得上是 `secured`
+ * （這一步的事做完了，那個泊位自己的工作在它的步驟）；連不上才是 `assigned`。
+ */
+export function signalOf(detection: ServiceDetection | undefined): Signal {
+  if (!detection) return 'neutral'
+  switch (detection.origin) {
+    case 'bundled':
+      return 'neutral'
+    case 'existing':
+      return UNRESOLVED.has(detection.reason) ? 'assigned' : 'secured'
+    case 'pending':
+      return 'working'
+    case 'timeout':
+      return 'blocked'
+  }
+}
+
+/** 既有與逾時都要能就地填連線資訊（票 05 驗收：拿掉 profile 後要出現表單）。 */
+export function needsConnectionForm(detection: ServiceDetection | undefined): boolean {
+  if (!detection) return false
+  return detection.origin === 'existing' || detection.origin === 'timeout'
+}
+
+/** 只有位址是每個服務都要填的；其餘欄位逐服務不同。 */
+export function connectFields(kind: ServiceKind): ReadonlyArray<'apiKey' | 'credentials'> {
+  if (kind === 'prowlarr') return ['apiKey']
+  if (kind === 'qbittorrent') return ['credentials']
+  return []
+}
+
+/** `detail` 的意思由服務決定：版本號或索引站數量。 */
+export function detailLabel(kind: ServiceKind): 'detail.version' | 'detail.indexers' {
+  return kind === 'prowlarr' ? 'detail.indexers' : 'detail.version'
+}
+
+/** 探測的端點，剖面裡逐條列出來（plan §9.3 第 2 步）。 */
+export const PROBE_ENDPOINT: Record<ServiceKind, string> = {
+  jellyfin: 'jellyfin:8096/System/Info/Public',
+  qbittorrent: 'qbittorrent:8080/api/v2/app/version',
+  prowlarr: 'prowlarr:9696/ping',
+}
+
+export const ORIGIN_LABEL = {
+  bundled: 'origin.bundled',
+  existing: 'origin.existing',
+  pending: 'origin.pending',
+  timeout: 'origin.timeout',
+} as const satisfies Record<ServiceOrigin, string>
+
+export const SERVICE_LABEL = {
+  jellyfin: 'service.jellyfin',
+  qbittorrent: 'service.qbittorrent',
+  prowlarr: 'service.prowlarr',
+} as const satisfies Record<ServiceKind, string>
+
+export const REASON_LABEL = {
+  setup_pending: 'reason.setup_pending',
+  setup_completed: 'reason.setup_completed',
+  anonymous_ok: 'reason.anonymous_ok',
+  auth_required: 'reason.auth_required',
+  no_indexers: 'reason.no_indexers',
+  has_indexers: 'reason.has_indexers',
+  api_key_missing: 'reason.api_key_missing',
+  not_deployed: 'reason.not_deployed',
+  unreachable: 'reason.unreachable',
+  protocol_mismatch: 'reason.protocol_mismatch',
+  connected: 'reason.connected',
+} as const satisfies Record<DetectionReason, string>

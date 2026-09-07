@@ -68,6 +68,12 @@ def test_load_config_reads_os_environ_by_default(
 
 
 def test_config_can_be_built_directly_without_the_environment(tmp_path: Path) -> None:
-    config = Config(config_root=tmp_path, data_root=tmp_path, web_root=tmp_path, port=DEFAULT_PORT)
+    config = Config(
+        config_root=tmp_path,
+        data_root=tmp_path,
+        ext_root=tmp_path,
+        web_root=tmp_path,
+        port=DEFAULT_PORT,
+    )
 
     assert config.database_path == tmp_path / "berth.db"

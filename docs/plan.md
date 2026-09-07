@@ -289,7 +289,7 @@ REST + JSON，前綴 `/api`。所有端點需登入，除了 `auth/login`、`set
 | 群組 | 端點 | 對應命令 |
 | --- | --- | --- |
 | auth | `POST /auth/login`（Jellyfin 帳密）、`POST /auth/logout`、`GET /auth/me` | — |
-| setup | `GET /setup/status`、`POST /setup/admin`、`POST /setup/detect`（回每個服務的來源：套件內 / 既有）、`POST /setup/jellyfin/bootstrap`、`POST /setup/jellyfin/install-mergeversions`、`POST /setup/jellyfin/add-library-path`、`GET /setup/qbittorrent/diff`、`POST /setup/qbittorrent/apply`、`POST /setup/indexer/apply`、`POST /setup/routes/from-libraries`、`POST /setup/complete` | `setup.*`（§9） |
+| setup | `GET /setup/status`、`POST /setup/admin`、`POST /setup/detect`（回每個服務的來源：套件內 / 既有）、`POST /setup/services/{kind}`（既有服務的連線表單：存下位址與憑證並立刻測一次）、`POST /setup/jellyfin/bootstrap`、`POST /setup/jellyfin/install-mergeversions`、`POST /setup/jellyfin/add-library-path`、`GET /setup/qbittorrent/diff`、`POST /setup/qbittorrent/apply`、`POST /setup/indexer/apply`、`POST /setup/routes/from-libraries`、`POST /setup/complete` | `setup.*`（§9） |
 | settings | `GET /settings/{group}`、`PUT /settings/{group}`、`POST /settings/{service}/test` | `settings.update`、`health.test_service` |
 | routes | `GET/POST /routes`、`PUT/DELETE /routes/{id}`、`POST /routes/{id}/check`、`GET /jellyfin/libraries` | `routes.*` |
 | discover | `GET /discover/trending`、`GET /discover/popular`、`GET /discover/search?q=` | `discover.*` |
@@ -333,7 +333,7 @@ REST + JSON，前綴 `/api`。所有端點需登入，除了 `auth/login`、`set
 - `diff_recommended_preferences()` / `apply_recommended_preferences()`：建議值為 `temp_path_enabled=true`、`temp_path=<incomplete root>`、`save_path=<complete root>`、`auto_tmm_enabled=true`、`category_changed_tmm_enabled=true`；先回傳與現值的差異給精靈顯示，套用時只寫不同的鍵。既有服務的 temp path 未啟用只列為警告。
 - 完成判定依 brief §20.2。`torrents/files[].name` **相對 `save_path`**（多檔含 torrent 根目錄那一層），實測四種 `contentLayout` 組合都成立（brief §20.7）；組絕對路徑前先正規化 `save_path` 的尾斜線（4.4 有、5.x 沒有），組完仍 `stat` 驗證。`content_path` 是目錄或單檔，兩種都處理。
 - 登入：`auth/login` 拿 SID，請求帶 `Referer` = base URL；403 記錄並退避。
-- 錯誤映射：連線失敗 → `ServiceUnavailable`；403 → `AuthFailed`；409（category 不存在）→ `CategoryMissing`。
+- 錯誤映射（`adapters/http.py`，四個 adapter 共用）：主機名解不到 → `ServiceNotDeployedError`（服務不在 compose 裡，精靈立刻顯示既有服務表單）；連不上或逾時 → `ServiceUnavailableError`（容器還在啟動，繼續輪詢）；401 / 403 → `AuthFailedError`；回應不是預期的服務 → `ProtocolMismatchError`；409（category 不存在）→ `CategoryMissingError`。名稱一律以 `Error` 結尾（ruff N818）。
 
 ### 8.2 Jellyfin adapter
 
@@ -435,6 +435,9 @@ WebUI\AuthSubnetWhitelist=172.28.0.2/32
 
 1. **建立管理員**：帳號與密碼。套件內 Jellyfin 會以這組帳密建立管理員；既有 Jellyfin 則要求以其管理員帳密登入。勾選「同一組帳密也套用到 qBittorrent 與 Prowlarr 介面」（預設勾）則一併設定套件內的那兩者。
 2. **偵測服務**：逐一探測 compose 主機名 `jellyfin:8096` `/System/Info/Public`、`qbittorrent:8080` `/api/v2/app/version`（免密）、`prowlarr:9696` `/ping`；Jellyfin 未完成初始精靈、qBittorrent 免密可進、Prowlarr 讀得到 API key 且無索引站 → 該服務標為**套件內**；探不到或已設定過 → 標為**既有**，顯示位址與憑證表單，每項有「測試連線」。服務未就緒時輪詢至多 2 分鐘。
+   - **「探不到」要分兩種**：主機名解不到（`socket.gaierror`）代表這個服務不在 compose 裡（使用者從 `COMPOSE_PROFILES` 拿掉了）→ 立刻判既有，不必等；主機名解得到但連不上 → 容器還在啟動 → 判**探測中**，繼續輪詢到 2 分鐘上限，逾時轉**逾時**並提供重試。逾時與既有都會展開連線表單，所以 DNS 會劫持 NXDOMAIN 的環境仍然走得下去。
+   - **精靈的步驟由狀態導出，不存游標**：管理員未建立 → 第 1 步；有服務還在探測或逾時 → 第 2 步；否則進第 3 步。存「走到第幾步」的游標會在偵測結果變回等待時說謊。
+   - 既有服務按「測試連線」時，連線資訊先存進它平常住的 `settings.services.*` 再測——測不過也存，使用者才能改一個欄位再按一次。
 3. **Jellyfin**：套件內 → §9.4 全自動；既有 → 登入、建立 API key、列出媒體庫與各自路徑，並提供「安裝 MergeVersions」按鈕（需確認，會重啟 Jellyfin）。
 4. **qBittorrent**：顯示建議偏好與現值的差異（§8.1），按「套用」；套件內另設密碼；既有服務的 temp path 未啟用只警告。
 5. **索引站**：套件內 → 勾選預設公開站清單（預設全勾）：Nyaa.si、dmhy、AniDex、Anime Tosho、ACG.RIP、Mikan、1337x、YTS、EZTV、The Pirate Bay；Berth 以 `indexer/schema` 取定義、`indexer` 新增、`indexer/test` 驗證。既有 → Prowlarr 位址 + API key，或任意 Torznab 端點 + key（Jackett）。

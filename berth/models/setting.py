@@ -12,6 +12,7 @@ from pydantic import BaseModel, ConfigDict
 from sqlalchemy import Text
 from sqlalchemy.orm import Mapped, mapped_column
 
+from berth.domain import DetectionReason, ServiceKind, ServiceOrigin
 from berth.models.base import Base
 from berth.models.types import JsonText, UtcDateTime, utcnow
 
@@ -71,12 +72,47 @@ class PathSettings(SettingsGroup):
     complete_root: str = "/data/torrent/complete"
 
 
+class SetupAdmin(BaseModel):
+    """精靈第 1 步建立的管理員（plan §9.3）。
+
+    密碼是明文的：第 3 步要拿它去建 Jellyfin 管理員，第 4 步要拿它設 qBittorrent 的 WebUI 密碼，
+    雜湊做不到這兩件事。Berth 自己從不驗證這組密碼——登入一律走 Jellyfin（brief §11）。
+    秘密只靠檔案權限保護，與其他 `settings.services.*` 的 key 與密碼一致（brief §16.2）。
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    username: str = ""
+    password: str = ""
+    #: 「同一組帳密也套用到 qBittorrent 與 Prowlarr 介面」，預設勾。
+    apply_to_services: bool = True
+
+
+class ServiceProbe(BaseModel):
+    """精靈第 2 步對單一服務的判定結果。"""
+
+    model_config = ConfigDict(extra="ignore")
+
+    origin: ServiceOrigin
+    reason: DetectionReason
+    #: 探測到的實測值：版本號或索引站數量。沒有就是空字串。
+    detail: str = ""
+    base_url: str = ""
+    checked_at: datetime
+    #: 這個判定來自使用者填的連線表單，不是探測 compose 主機名的結果。
+    #: 重探時要跳過它——它根本不在那個主機名上。
+    configured: bool = False
+
+
 class SetupSettings(SettingsGroup):
     KEY = "setup"
 
     completed: bool = False
-    #: 精靈的第幾步（plan §9.3 共八步）。
-    current_step: int = 1
+    admin: SetupAdmin = SetupAdmin()
+    #: 逐服務的判定；鍵是 `ServiceKind`。
+    services: dict[ServiceKind, ServiceProbe] = {}
+    #: 本輪輪詢的起點，用來算 2 分鐘上限。全部服務都判定完就清掉。
+    probe_started_at: datetime | None = None
 
 
 #: 所有分組的清單，用來確認每一組都有預設值。

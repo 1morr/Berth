@@ -1,37 +1,131 @@
 @import 'tailwindcss';
 
-/* 深色為預設（媒體應用慣例），亮色跟隨系統（plan §7）。
-   同一組 token 在兩個主題下換值，所以版面不需要任何 dark: / light: 變體。 */
+/* 泊位調度板（`.impeccable/surfaces/web-src-pages-setuppage-tsx.md` 的 direction contract）。
+   船期表 + ISO 6346 貨櫃標識：塗裝色塊、重橫線、嚴格欄格、等寬數字。無圓角、無漸層、無陰影。
+
+   深色為預設（媒體應用慣例，plan §7），亮色是同一塊板子印在紙上。
+   同一組 token 在兩個主題換值，所以版面不需要任何 dark: / light: 變體。 */
 @theme {
-  --color-canvas: oklch(0.17 0.015 265);
-  --color-surface: oklch(0.22 0.017 265);
-  --color-edge: oklch(0.32 0.02 265);
-  --color-ink: oklch(0.97 0.005 265);
-  --color-ink-muted: oklch(0.72 0.015 265);
-  --color-positive: oklch(0.78 0.15 155);
-  --color-negative: oklch(0.7 0.18 25);
+  /* 中性：鋼灰藍船體。刻意不是近黑——近黑加單一霓虹是模型的預設長相。 */
+  --color-hull: oklch(0.26 0.021 245);
+  --color-deck: oklch(0.31 0.022 245);
+  --color-well: oklch(0.21 0.019 245);
+  --color-rule: oklch(0.44 0.022 245);
+  --color-rule-strong: oklch(0.6 0.024 245);
+  --color-ink: oklch(0.97 0.005 245);
+  --color-ink-dim: oklch(0.78 0.012 245);
+
+  /* 四個信號色，每個只有一個意思。紅色永遠只代表阻擋。
+     assigned = 現在需要你；working = 進行中；secured = 已完成且驗過；blocked = 卡住了。
+
+     這四個色與 `on-signal` **兩個主題共用**：它們是塗上去的漆，不是隨底色變的字色。
+     真的調度板就是這樣——同一罐 hi-vis 黃，配黑字。白字配中明度色實測只有 3.6:1，過不了 AA。 */
+  --color-assigned: oklch(0.85 0.18 95);
+  --color-working: oklch(0.79 0.14 205);
+  --color-secured: oklch(0.76 0.16 150);
+  --color-blocked: oklch(0.7 0.2 27);
+  --color-on-signal: oklch(0.16 0.02 245);
+
+  /* 信號色當「字」用時是另一組值：塗裝色在亮色底上讀不出來。 */
+  --color-blocked-ink: oklch(0.7 0.2 27);
+  --color-secured-ink: oklch(0.76 0.16 150);
+
+  /* 標籤、代號、數值全部等寬——貨櫃編號的語域。散文才用系統字。 */
+  --font-mono:
+    ui-monospace, 'Cascadia Mono', 'Cascadia Code', 'SF Mono', Menlo, Consolas, 'DejaVu Sans Mono',
+    monospace;
+  --font-sans:
+    system-ui, -apple-system, 'Segoe UI', 'Noto Sans TC', 'PingFang TC', 'Microsoft JhengHei',
+    'Microsoft YaHei', sans-serif;
+
+  /* 這塊板子沒有圓角。 */
+  --radius-none: 0;
 }
 
 :root {
   color-scheme: dark;
 }
 
-/* 版面元素只佔 min-h-dvh，overscroll 露出的仍是 body，所以底色也要塗在這裡。 */
-body {
-  background-color: var(--color-canvas);
-  color: var(--color-ink);
-}
-
 @media (prefers-color-scheme: light) {
   :root {
     color-scheme: light;
 
-    --color-canvas: oklch(0.98 0.004 265);
-    --color-surface: oklch(1 0 0);
-    --color-edge: oklch(0.89 0.008 265);
-    --color-ink: oklch(0.24 0.015 265);
-    --color-ink-muted: oklch(0.52 0.015 265);
-    --color-positive: oklch(0.55 0.14 155);
-    --color-negative: oklch(0.53 0.19 25);
+    /* 冷調紙白，不是奶油色——奶油紙是模型對「溫暖」的預設反射。 */
+    --color-hull: oklch(0.95 0.004 245);
+    --color-deck: oklch(0.99 0.002 245);
+    --color-well: oklch(0.91 0.006 245);
+    --color-rule: oklch(0.74 0.012 245);
+    --color-rule-strong: oklch(0.45 0.016 245);
+    --color-ink: oklch(0.22 0.015 245);
+    --color-ink-dim: oklch(0.45 0.014 245);
+
+    /* 塗裝色不變（見上）；只有當字用的那兩個要壓深才在紙白上讀得出來。 */
+    --color-blocked-ink: oklch(0.45 0.2 27);
+    --color-secured-ink: oklch(0.42 0.13 150);
+  }
+}
+
+/* 版面元素只佔 min-h-dvh，overscroll 露出的仍是 body，所以底色也要塗在這裡。 */
+body {
+  background-color: var(--color-hull);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+}
+
+/* 模板字標籤。**中文沒有大小寫**，`uppercase` 對它無效，寬字距也讓中文更難讀，
+   所以同一個角色在兩個語言各自成立：拉丁走全大寫 + 寬字距，中文走原樣 + 窄字距 +
+   前置刻度符號。高度與色階兩者相同，版面不會因為換語言而跳動。 */
+.label {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  line-height: 1;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+}
+
+.label:lang(zh-Hant) {
+  font-family: var(--font-sans);
+  text-transform: none;
+  letter-spacing: 0.05em;
+}
+
+/* 刻度是塗上去的，不是一個字。用字元（`▸`）會被算進無障礙名稱，
+   螢幕閱讀器就會念成「三角形 帳號」。空的 content 不會。 */
+.label:lang(zh-Hant)::before {
+  content: '';
+  display: inline-block;
+  width: 2px;
+  height: 0.75em;
+  margin-right: 0.5em;
+  background-color: currentColor;
+  opacity: 0.45;
+  vertical-align: -0.05em;
+}
+
+/* 數值一律等寬且等寬數字，版本號與 inode 在表格裡才對得齊。 */
+.value {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 焦點永遠看得見（WCAG 2.2 AA，PRODUCT.md）。
+
+   雙環而不是單一顏色：焦點會落在四個塗裝色塊上（黃色按鈕、狀態色塊），
+   任何單色都會在其中一個底色上消失。內圈用底色、外圈用字色，兩個主題、
+   四個塗裝色上都至少有一圈是看得見的。 */
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--color-ink);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 2px var(--color-hull);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }

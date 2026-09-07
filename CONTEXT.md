@@ -26,6 +26,31 @@ _Avoid_: series type, mode
 qBittorrent 的完成與未完成下載根目錄；complete 是硬鏈接的來源。
 _Avoid_: download folder, save path（僅指 qBittorrent 的欄位時可用）
 
+### 設定
+
+**Service**:
+Berth 協調的三個外部服務之一：Jellyfin、qBittorrent、Prowlarr。字串同時是 compose 的服務名。
+_Avoid_: integration, provider（Provider 專指 metadata provider）
+
+**Service Origin**:
+精靈對單一服務的判定：`bundled`（套件內，Berth 全自動接手）或 `existing`（既有，使用者自己的那一台）。
+逐服務判斷，沒有全局模式；探測中與逾時是輪詢期間的暫時值。**與 Trigger 的「來源」無關**。
+_Avoid_: mode, service type
+
+**Bundled service**（UI 顯示「套件內」）:
+compose 起的、而且還沒被設定過的服務。判準逐服務不同：Jellyfin 的 `StartupWizardCompleted=false`、
+qBittorrent 免密進得去、Prowlarr 讀得到 API key 且無索引站。
+_Avoid_: managed, built-in, ours
+
+**Existing service**（UI 顯示「既有」）:
+使用者自己的服務，或不在這套 compose 裡的服務。Berth 只做檢查，改動一律要按鈕確認。
+_Avoid_: external, remote, byo
+
+**Berth（泊位）**:
+設定精靈把八個步驟歸成的四格：Jellyfin、qBittorrent、來源（索引站與 RSS）、媒體庫路徑。
+只在精靈與泊位板上用；與產品名 Berth 同字，指的是畫面上那一格。
+_Avoid_: stage, section, panel
+
 ### 取得
 
 **Download Job**（簡稱 Job）:

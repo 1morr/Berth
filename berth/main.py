@@ -15,7 +15,7 @@ from starlette.types import Lifespan, Scope
 
 from berth.api import router as api_router
 from berth.config import VERSION, Config, load_config
-from berth.db import create_engine, upgrade_to_head
+from berth.db import create_engine, create_session_factory, upgrade_to_head
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +54,7 @@ def create_app(config: Config | None = None) -> FastAPI:
     resolved = load_config() if config is None else config
 
     app = FastAPI(title="Berth", version=VERSION, lifespan=_lifespan(resolved))
+    app.state.config = resolved
     app.include_router(api_router, prefix=API_PREFIX)
     _mount_frontend(app, resolved.web_root)
     return app
@@ -61,10 +62,12 @@ def create_app(config: Config | None = None) -> FastAPI:
 
 def _lifespan(config: Config) -> Lifespan[FastAPI]:
     @asynccontextmanager
-    async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         config.config_root.mkdir(parents=True, exist_ok=True)
         engine = create_engine(config)
         await upgrade_to_head(engine)
+        # 相依（api/deps.py）從 app.state 取，這樣 router 不必知道 engine 是怎麼建的。
+        app.state.session_factory = create_session_factory(engine)
         try:
             yield
         finally:
