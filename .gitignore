@@ -35,3 +35,8 @@ web/dist/
 .vscode/
 .DS_Store
 Thumbs.db
+
+# impeccable：共享設定進版控，本機的同意紀錄與快取不進
+.impeccable/config.local.json
+.impeccable/hook.cache.json
+.impeccable/questions/

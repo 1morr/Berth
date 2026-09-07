@@ -1,4 +1,5 @@
-// UI 文案的唯一來源。zh-Hant 是唯一語言（plan §7）；檔名 token 與 log 保持英文。
+// UI 文案的唯一來源。檔名 token 與 log 保持英文。
+// plan §7 要求 zh-Hant 與 en 並列並跟隨瀏覽器；en 語言檔與偵測在票 05 補上。
 export const resources = {
   'zh-Hant': {
     translation: {

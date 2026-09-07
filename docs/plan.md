@@ -314,8 +314,11 @@ REST + JSON，前綴 `/api`。所有端點需登入，除了 `auth/login`、`set
 - 路由：`/setup`、`/login`、`/`（探索）、`/media/:id`、`/library/:routeSlug`、`/jobs`、`/jobs/:hash`、`/review`、`/rss`、`/issues`、`/settings/*`。
 - 資料：TanStack Query 管 API 快取；SSE 事件到達時使 job 相關 query 失效。
 - 元件：shadcn/ui 為基礎；媒體卡片、狀態徽章、時間線、Plan 表格（逐列可改季集與動作）、檔案樹是專案自有元件。
-- 文案：react-i18next，`zh-Hant` 為唯一語言檔；所有字串走 key，不硬編。
+- 文案：react-i18next，`zh-Hant` 與 `en` 兩個語言檔並列，預設跟隨瀏覽器；所有字串走 key，不硬編。
 - 主題：深色為預設（媒體應用慣例），亮色跟隨系統。
+- 版面：桌機為主，但每一頁都要有真正可用的窄版（審核、佇列、送單在手機上要做得完）。
+- 無障礙：WCAG 2.2 AA 是驗收條件——純鍵盤可完成、焦點可見、對比達標、狀態不只靠顏色。
+- 使用者輪廓、原則與無障礙細節見 `PRODUCT.md`；視覺系統見 `DESIGN.md`。
 - 每頁的核心任務與元素見 brief §13；設定精靈的步驟見 §9.3。
 
 ---
@@ -438,6 +441,8 @@ WebUI\AuthSubnetWhitelist=172.28.0.2/32
 6. **TMDB**：內建專案 key，可覆寫；按「測試」。
 7. **媒體庫與 Route**：套件內 Jellyfin → 自動由三個媒體庫建立三個 Route（`movies` / `tv` / `anime`，anime 用 `anime` profile）；既有 Jellyfin → 使用者勾選媒體庫，每個媒體庫可「加入 Berth 路徑」（§9.5）或在既有路徑中選寫入目標。每個 Route 立即建立 qBittorrent category 並跑硬鏈接與跨服務可見性測試。
 8. **完成**：寫 `settings.setup.completed`，進健康頁；四項綠燈即可用。
+
+**續行與跳過**：精靈狀態存在 `settings.setup`，關掉瀏覽器再回來回到原本那一步。第 5 步（索引站）與第 6 步（TMDB）可跳過，完成頁列出跳過了什麼與在哪裡補；第 3、4、7 步不可跳。八步的畫面結構與狀態見 `.scratch/m0/wizard-shape.md`。
 
 ### 9.4 Jellyfin 自動初始化序列
 

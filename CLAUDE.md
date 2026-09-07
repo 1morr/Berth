@@ -40,7 +40,7 @@
 - 依賴方向 `api → services → domain / parser / naming / adapters / models`；`pipeline → services`；`parser` 與 `naming` 是純函式；`adapters` 不 import `services`。import-linter 強制。
 - 改狀態的操作都是 `services` 內的命令函式；API 與 pipeline 只呼叫 services。
 - 解析器改動必跑 `berth bench`，`auto_wrong` 不得上升。
-- 檔名 token、log、識別符英文；UI 文案繁中，走 i18n key。
+- 檔名 token、log、識別符英文；UI 文案一律走 i18n key，zh-Hant 與 en 並列（plan §7、`PRODUCT.md`）。
 
 ## UI
 

@@ -515,7 +515,7 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 - **日誌**：結構化，每行帶 job id；Event 是使用者可見層，log 是維運層，兩者不互相取代。
 - **安全**：所有 API 需登入；未來 AI / MCP 用個人 API token；容器非 root；不開 CORS 萬用字元。
 - **測試**：解析 benchmark（純函式，CI 必跑）；管線整合測試用假的 qBittorrent / Jellyfin / TMDB adapter；docker compose 端到端至少覆蓋 M1 驗收流程。
-- **i18n**：UI 繁體中文優先，字串集中管理，不做英文版直到有需求；檔名 token 與 log 一律英文。
+- **i18n**：zh-Hant 與 en 並列，字串集中管理、一律走 key；檔名 token 與 log 一律英文。2026-09-07 改：原本是「UI 繁體中文優先，不做英文版直到有需求」，因確定面向英語自架者而推翻，見 `PRODUCT.md` 的 `## Users`。
 - **授權**：MIT（與 Seerr、AutoBangumi 相同）。TMDB 條款限非商業使用，README 註明。
 
 ### 16.3 開箱即用（一鍵設定）【決定】
@@ -593,7 +593,7 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 | 第一批 RSS 來源 | Mikan、Nyaa | §15、§17 M3 |
 | medium 信心 | 所有 Route 預設自動入庫，帶 audit 旗標 | §6.5、§13 |
 | 集標題 | 有正式標題才進檔名，不自動改名 | §7.1 |
-| UI 語言 | 繁體中文優先，預留 i18n | §16.2 |
+| UI 語言 | zh-Hant 與 en 並列，跟隨瀏覽器 | §16.2、`PRODUCT.md` |
 | 授權 | MIT | §16.2 |
 | 目標環境 | Linux 與 Windows 的 Docker；NAS 與一般電腦使用者；套件內含 Jellyfin / qBittorrent / Prowlarr，開箱即用 | §16.1、§16.3 |
 | 索引站管理器 | 套件預設 Prowlarr（有文件化 REST API 可一鍵加索引站）；Jackett 以 Torznab 端點接入 | §3、§16.3、§20.7 |
