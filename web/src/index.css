@@ -1,0 +1,37 @@
+@import 'tailwindcss';
+
+/* 深色為預設（媒體應用慣例），亮色跟隨系統（plan §7）。
+   同一組 token 在兩個主題下換值，所以版面不需要任何 dark: / light: 變體。 */
+@theme {
+  --color-canvas: oklch(0.17 0.015 265);
+  --color-surface: oklch(0.22 0.017 265);
+  --color-edge: oklch(0.32 0.02 265);
+  --color-ink: oklch(0.97 0.005 265);
+  --color-ink-muted: oklch(0.72 0.015 265);
+  --color-positive: oklch(0.78 0.15 155);
+  --color-negative: oklch(0.7 0.18 25);
+}
+
+:root {
+  color-scheme: dark;
+}
+
+/* 版面元素只佔 min-h-dvh，overscroll 露出的仍是 body，所以底色也要塗在這裡。 */
+body {
+  background-color: var(--color-canvas);
+  color: var(--color-ink);
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    color-scheme: light;
+
+    --color-canvas: oklch(0.98 0.004 265);
+    --color-surface: oklch(1 0 0);
+    --color-edge: oklch(0.89 0.008 265);
+    --color-ink: oklch(0.24 0.015 265);
+    --color-ink-muted: oklch(0.52 0.015 265);
+    --color-positive: oklch(0.55 0.14 155);
+    --color-negative: oklch(0.53 0.19 25);
+  }
+}

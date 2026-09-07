@@ -21,6 +21,8 @@ web/dist/
 .env
 /config/
 /data/
+# 本機開發的 CONFIG_ROOT / DATA_ROOT（.env.example 的預設值）
+/.local/
 
 # 編輯器與作業系統
 .idea/

@@ -23,18 +23,55 @@
 uv sync                     # 後端依賴與虛擬環境
 pnpm -C web install         # 前端依賴
 uv run pre-commit install   # 啟用 git hook（選用但建議）
+cp .env.example .env        # 本機的 CONFIG_ROOT / DATA_ROOT
 ```
+
+### 啟動
+
+```bash
+pnpm -C web build                                   # 前端產物（後端會提供它）
+uv run --env-file .env berth serve                  # http://localhost:8383
+```
+
+開發時前後端分開跑，Vite 代理 `/api` 到後端：
+
+```bash
+uv run --env-file .env berth serve --reload         # 後端，改 .py 自動重啟
+pnpm -C web dev                                     # 前端，開 Vite 印出的網址
+```
+
+### 環境變數
+
+`.env.example` 是完整清單；四個都有預設值，本機開發只需要覆寫前兩個。
+
+| 變數 | 預設 | 用途 |
+| --- | --- | --- |
+| `CONFIG_ROOT` | `/config` | `berth.db`、設定與 log。啟動時自動建立並套用 migration |
+| `DATA_ROOT` | `/data` | 媒體根：incomplete、complete 與媒體庫路徑都在它底下 |
+| `PORT` | `8383` | 對外的唯一 port |
+| `WEB_ROOT` | `<repo>/web/dist` | 前端 build 產物。找不到時只提供 API |
 
 ### 後端
 
 ```bash
 uv run berth --version      # CLI
+uv run berth serve          # 啟動程序（--reload 為開發模式）
 uv run pytest               # 測試
 uv run ruff check .         # lint
 uv run ruff format .        # 格式化（CI 用 --check）
 uv run mypy                 # 型別檢查（strict）
 uv run lint-imports         # 依賴方向契約（plan §1.3）
 ```
+
+資料庫 migration（Alembic）。程序啟動時會自動套用到最新版本，以下只在改 schema 時用：
+
+```bash
+uv run --env-file .env alembic current                          # 目前版本
+uv run --env-file .env alembic revision --autogenerate -m "…"   # 依 models/ 產生新版本
+uv run --env-file .env alembic upgrade head                     # 手動套用
+```
+
+改完 `berth/models/` 一定要產生 migration：schema 不是從 models 直接建的。
 
 ### 前端
 
@@ -60,11 +97,14 @@ CI（`.github/workflows/ci.yml`）在 push 到 `main` 與所有 PR 上跑同一�
 
 ```
 berth/            後端套件
-  cli.py          命令列進入點
+  cli.py          命令列進入點（berth serve）
+  config.py       環境變數與路徑常數
+  main.py         FastAPI app 組裝、lifespan
   adapters/       外部服務用戶端（qBittorrent、Jellyfin、TMDB…）
   api/            FastAPI routers
-  db/             engine、session factory、Alembic 環境
+  db/             engine、session factory、migration 進入點
   domain/         純資料型別與狀態機
+  migrations/     Alembic 環境與版本
   models/         SQLAlchemy ORM
   naming/         命名與路徑模板（純函式）
   parser/         解析階段（純函式）
