@@ -1,0 +1,50 @@
+# Mirrors CI. Kept ASCII-only: pre-commit reads this file with the locale
+# encoding, so non-ASCII breaks it on Windows shells that are not UTF-8.
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-merge-conflict
+      - id: check-yaml
+      - id: check-toml
+      - id: mixed-line-ending
+        args: [--fix=lf]
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.16.6
+    hooks:
+      - id: ruff-check
+        args: [--fix]
+      - id: ruff-format
+
+  - repo: local
+    hooks:
+      - id: mypy
+        name: mypy
+        entry: uv run mypy
+        language: system
+        pass_filenames: false
+        types_or: [python, pyi]
+
+      - id: lint-imports
+        name: import-linter
+        entry: uv run lint-imports
+        language: system
+        pass_filenames: false
+        types: [python]
+
+      - id: web-format
+        name: prettier (web)
+        entry: pnpm -C web run format:check
+        language: system
+        pass_filenames: false
+        files: ^web/
+
+      - id: web-lint
+        name: eslint (web)
+        entry: pnpm -C web run lint
+        language: system
+        pass_filenames: false
+        files: ^web/

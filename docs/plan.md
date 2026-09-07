@@ -37,8 +37,8 @@
 berth/
   main.py              FastAPI app 組裝；lifespan 啟動 migration 與背景迴圈
   config.py            環境變數、路徑常數、版本號
-  db/                  engine、session factory、Alembic 環境
-  migrations/          Alembic versions
+  db/                  engine、session factory
+  migrations/          Alembic 環境（`env.py`）與 versions
   models/              SQLAlchemy ORM（§2 的表）
   domain/              純資料型別與狀態機，無 IO：JobState、ReleaseInfo、Tags、Candidate、PlanItem、Confidence
   parser/              純函式：classify、cjk、release、structure、mapper、subtitles、planner、confidence
@@ -72,7 +72,8 @@ adapters ──► domain                  （不 import services、models；回
 ```
 
 - 所有會改變狀態的操作都是 `services` 內的命令函式，名稱即 brief §14 的命令名（`add_download`、`generate_plan`、`apply_plan`、`rematch_file`、`delete_job`…）。API 與 pipeline 只呼叫 services，兩者都不直接碰 adapters 或 models。
-- 用 `import-linter` 在 CI 強制上述方向。
+- `db`（engine、session factory）在 `models` 之下、`domain` 之上；`api`、`pipeline`、`parser`、`naming`、`adapters` 都不得 import 它。Alembic 的 `env.py` 需要 `models` 的 metadata，因此放在 `migrations/`（不納入層級契約）。
+- 用 `import-linter` 在 CI 強制上述方向，契約寫在 `pyproject.toml` 的 `[tool.importlinter]`。
 - 每個 adapter 有一個 `Protocol` 介面與一個 `Fake` 實作（放在 `adapters/<name>/fake.py`），整合測試與 e2e 用 Fake 取代真服務。
 
 ### 1.4 主要依賴【決定】
@@ -86,8 +87,10 @@ adapters ──► domain                  （不 import services、models；回
 | mediainfo | pymediainfo | manylinux wheel 內含 libmediainfo，不需系統套件 |
 | RSS | feedparser | 成熟、容忍壞 XML |
 | 排程 | 自寫 asyncio 迴圈 | 需求只是固定間隔與退避，不值得引入 APScheduler |
-| 套件管理與工具 | uv、ruff、mypy、pytest、pytest-asyncio、respx | — |
-| 前端 | React 18、TypeScript、Vite、TanStack Query、TanStack Router、Tailwind、shadcn/ui、react-i18next | 通用、可長期維護；shadcn 讓元件在 repo 內可改 |
+| 執行環境 | Python 3.13（`.python-version`）、Node 24 | 計劃內的依賴都有 cp313 wheel；`python:3.13-slim` 供 §9.1 的 image 使用 |
+| CLI | argparse（stdlib） | 只有數個子指令與旗標，不值得引入 typer / click |
+| 套件管理與工具 | uv、ruff、mypy、pytest、pytest-asyncio、respx、import-linter | — |
+| 前端 | React 19、TypeScript、Vite、TanStack Query、TanStack Router、Tailwind、shadcn/ui、react-i18next | 通用、可長期維護；shadcn 讓元件在 repo 內可改 |
 | 前端工具 | pnpm、eslint、prettier、vitest、playwright | — |
 
 ---

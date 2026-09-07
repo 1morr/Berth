@@ -25,3 +25,9 @@
 - [ ] README 補部署段：單一掛載根、不支援 exFAT、Windows 用一般 bind mount
 
 ## Comments
+
+- 票 01 建的 README 只涵蓋開發指令。brief §16.1 要求 README 另外明列：硬鏈接前提
+  （單一掛載、不可 exFAT、不可跨 btrfs 子卷 / ZFS dataset / mergerfs branch）、支援的宿主
+  平台、qBittorrent 版本下限與必要設定、Jellyfin 需 MergeVersions 插件、TMDB 歸屬聲明與
+  logo；brief §16.2 要求註明「API key 存在 DB，靠檔案權限保護，不做應用層加密」。
+  這些屬於部署脈絡，在本票補進 README。

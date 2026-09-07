@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+build/
+dist/
+*.egg-info/
+
+# 工具快取
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Node
+node_modules/
+web/dist/
+
+# 執行期資料與秘密
+.env
+/config/
+/data/
+
+# 編輯器與作業系統
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
