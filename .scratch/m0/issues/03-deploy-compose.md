@@ -1,6 +1,6 @@
 # 03 — deploy/：image 與 compose 套件
 
-**Status:** ready-for-human
+**Status:** done
 
 **Blocked by:** 02
 
@@ -21,7 +21,7 @@
 - [x] berth 容器以非 root 執行，寫入 `/config` 與 `/data` 的檔案擁有者符合 `PUID` / `PGID`
 - [x] image 壓縮後 < 400 MB
 - [x] `.env.example` 含 `DATA_ROOT`、`CONFIG_ROOT`、`PUID`、`PGID`、`UMASK`、`TZ`、`COMPOSE_PROFILES`，附 Linux 與 Windows 兩種路徑寫法的註解，沒有任何秘密欄位
-- [ ] GHCR workflow 在 tag 上 build 並推 image
+- [x] GHCR workflow 在 tag 上 build 並推 image
 - [x] README 補部署段：單一掛載根、不支援 exFAT、Windows 用一般 bind mount
 
 ## Comments
@@ -47,10 +47,10 @@
   不成立；整份覆蓋還會掉 `LegalNotice\Accepted=true`（qbittorrent-nox 會卡住）。
 - `WebUI\ServerDomains` 不預置：image 預設就是 `*`，Host 檢查本來就過得了，寫死成
   `qbittorrent` 反而讓使用者從 `localhost:8080` 進不了 WebUI。
-- 最後一條驗收（GHCR workflow 在 tag 上推 image）沒辦法在本機驗證：repo 仍然沒有 remote，
-  與票 01 的 CI 那條同樣狀況，所以 `Status` 停在 `ready-for-human`。compose 寫死的
-  `ghcr.io/1morr/berth:latest` 假設 GitHub owner 是 `1morr`（workflow 用
-  `github.repository_owner` 組同一個名字），建 remote 後要一起確認。
+- 最後一條驗收已於 2026-09-07 補驗：remote 建好（`1morr/Berth`，public）後推 `v0.1.0-rc1`，
+  release workflow 綠燈，`ghcr.io/1morr/berth` 匿名 `tags/list` 回 `["0.1.0-rc1"]`——
+  image 公開可拉，且預發佈 tag 依設計沒有動到 `:latest`（compose 範本 pin 的 `:latest`
+  仍是空的，要等第一個正式版本 tag）。owner 名稱 `1morr` 也一併確認正確。
 - code-review 的發現全部處理掉了，只有一項刻意不做：`BERTH_IP` 與 `BERTH_QBITTORRENT_CONF`
   沒有寫進 `deploy/.env.example`。前者由 compose 的錨點設定（使用者不該逐一改），後者只是
   測試用的 seam；`.env.example` 維持驗收列的那七個變數。
