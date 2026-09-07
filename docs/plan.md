@@ -393,7 +393,9 @@ REST + JSON，前綴 `/api`。所有端點需登入，除了 `auth/login`、`set
 | `prowlarr` | `lscr.io/linuxserver/prowlarr` | `${CONFIG_ROOT}/prowlarr:/config` | port `9696` |
 
 - 選 linuxserver 系列 image 的理由：四個容器都支援 `PUID` / `PGID` / `UMASK`，檔案擁有者一致；qBittorrent 官方 image 沒有這兩個變數（brief §20.7）。
-- compose network `berth` 指定固定子網 `172.28.0.0/16`，讓 qBittorrent 的免密白名單可以寫死。
+- compose network `berth` 指定固定子網 `172.28.0.0/16`，`berth` 容器再固定在 `172.28.0.2`（`ipv4_address`），qBittorrent 的免密白名單就寫這一個位址的 `/32`。**白名單不能放整個網段**：Docker Desktop 把發佈 port 進來的流量的來源位址改寫成閘道 `172.28.0.1`，而閘道也在網段內，開放整段等於 LAN 上任何人都能免密打 qBittorrent 的 API（2026-09-07 實測，見 brief §20.7）。動態配發用 `ip_range: 172.28.1.0/24` 隔開，`berth` 的固定 IP 才不會被先啟動的容器領走。
+- 三個外部服務在 compose 內各有 healthcheck（qBittorrent 打 WebUI 首頁、Jellyfin `/health`、Prowlarr `/ping`）；`berth` 的 healthcheck 在 image 的 `HEALTHCHECK` 裡，用 venv 的 python 打自己的 `/api/health`。
+- image 是多階段 build：`node:24-slim` 產出前端靜態檔 → `python:3.13-slim` 用 uv 把 venv 建在 `/app/.venv` → runtime 只複製 venv 與 `dist`。非 root 執行：入口腳本以 root 起，用 `usermod` / `groupmod` 把內建的 `berth` 使用者對到 `PUID` / `PGID`，遞迴 chown `/config`，再 `setpriv` 降權 exec。`/data` 只在它還是空目錄時接手擁有者（Docker 替 bind mount 新建的目錄是 `root:root`），已經有內容的媒體根一律不碰。
 - `.env.example`：`DATA_ROOT`、`CONFIG_ROOT`、`PUID=1000`、`PGID=1000`、`UMASK=022`、`TZ=Asia/Taipei`、`COMPOSE_PROFILES=jellyfin,qbittorrent,prowlarr`。沒有任何秘密要填。
 - `jellyfin`、`qbittorrent`、`prowlarr` 各掛在同名 profile 下，`berth` 永遠啟動；已有某服務的人把它從 `COMPOSE_PROFILES` 拿掉，精靈會改以既有服務表單接入（§9.3、§9.5）。
 - Windows：`DATA_ROOT=C:\Berth\data` 這種路徑可直接寫在 `.env`，Docker Desktop 會以 9p/drvfs 掛進容器；實測 NTFS bind mount 的硬鏈接可用（brief §20.7）。exFAT 隨身碟不支援硬鏈接，README 明說。`PUID` / `PGID` 在 Windows 掛載上沒有意義，保留預設即可。
@@ -405,19 +407,19 @@ REST + JSON，前綴 `/api`。所有端點需登入，除了 `auth/login`、`set
 
 預置的原則：**只放沒有它 Berth 就進不去的東西**，其餘一律由精靈按鈕經 API 完成、按前顯示差異、可重按。
 
-**qBittorrent**（`preseed/qbittorrent/10-berth.sh`，linuxserver 的 `custom-cont-init.d` 機制，在服務啟動前執行）：若 `/config/qBittorrent/qBittorrent.conf` 不存在則寫入：
+**qBittorrent**（`preseed/qbittorrent/10-berth.sh`，linuxserver 的 `custom-cont-init.d` 機制，在服務啟動前執行）：在 `/config/qBittorrent/qBittorrent.conf` 的 `[Preferences]` 補上這兩個鍵，**已經有值的鍵一律不動**：
 
 ```ini
-[Preferences]
 WebUI\AuthSubnetWhitelistEnabled=true
-WebUI\AuthSubnetWhitelist=172.28.0.0/16
-WebUI\ServerDomains=qbittorrent
+WebUI\AuthSubnetWhitelist=172.28.0.2/32
 ```
 
-- 為什麼非預置不可：4.6.1 起首次啟動的隨機密碼只印在容器 log，Berth 沒有 docker socket 讀不到；要使用者去 `docker logs` 抄密碼正是要避免的事。白名單只讓 compose 內網免密，LAN 使用者開 8080 仍要密碼。
-- `ServerDomains=qbittorrent` 讓 Berth 以容器名呼叫時通過 Host 檢查；T0.3 實測若仍被擋，改 `HostHeaderValidation=false` 並記錄。
+- 為什麼非預置不可：4.6.1 起首次啟動的隨機密碼只印在容器 log，Berth 沒有 docker socket 讀不到；要使用者去 `docker logs` 抄密碼正是要避免的事。
+- 為什麼是「缺鍵才補」而不是「檔案不存在才寫」：linuxserver image 自己的 `init-qbittorrent-config` 排在 `init-custom-files` 之前，已經把 `/defaults/qBittorrent.conf` 複製進 `/config`，所以「不存在」永遠不成立；整份覆蓋會掉 `LegalNotice\Accepted=true` 這類讓 qbittorrent-nox 起得來的鍵（2026-09-07 實測，brief §20.7）。缺鍵才補同時滿足冪等：重建容器不會改動任何既有內容。
+- 白名單是 `/32` 不是整個網段，理由見 §9.1；`berth` 的 IP 由 compose 固定並用環境變數 `BERTH_IP` 傳給腳本，避免兩處寫死。
+- `WebUI\ServerDomains` **不預置**：linuxserver image 的預設值是 `*`，Host 檢查本來就過得了；寫成 `qbittorrent` 反而會讓使用者從 `localhost:8080` 進不了 WebUI。
 - temp path、save path、autoTMM（`DisableAutoTMMByDefault` 預設 `true`，即關閉）、密碼都**不預置**，由精靈第 4 步的按鈕以 API 套用（§8.1）；Berth 送單時逐個 torrent 帶 `autoTMM=true`，所以全域預設值不影響正確性。
-- 已有設定檔就不碰：使用者升級或重建容器時不會被覆寫；之後使用者在 qBittorrent 介面改任何東西都可以，健康檢查發現關鍵設定漂移時提供「還原建議設定」。
+- 使用者在 qBittorrent 介面改任何東西都可以，健康檢查發現關鍵設定漂移時提供「還原建議設定」。
 
 **Prowlarr**：不預置。Berth 從唯讀掛載的 `/ext/prowlarr/config.xml` 讀 `<ApiKey>`（Prowlarr 首次啟動自動產生）；讀不到時精靈退回手動貼上。也支援 `PROWLARR__AUTH__APIKEY` 環境變數的部署方式。
 
@@ -515,7 +517,7 @@ WebUI\ServerDomains=qbittorrent
 | T0.4 ∥ | adapters 第一版：jellyfin（public info、auth、api key、virtual folders、startup、repositories、packages、restart）、qbittorrent（login、version、preferences、categories）、prowlarr（indexer schema / add / test）、tmdb（configuration、search）、fs；每個附 Fake 與契約測試 | 契約測試綠燈；對真服務的手動 smoke 通過 |
 | T0.5 | 認證：Jellyfin 登入 → session；角色由 Jellyfin `Policy.IsAdministrator` 決定；`auth/*` API；登入頁 | 非 admin 使用者無法進設定 |
 | T0.6 | 設定精靈（§9.3）：`setup/*` API 與 UI；逐服務來源偵測；套件內服務全自動設定；既有服務表單與確認按鈕（安裝插件、加媒體庫路徑、套用偏好差異）；從媒體庫建 Route；Route 的硬鏈接與跨服務可見性檢查（§9.5） | 在乾淨的 Linux 與 Windows Docker Desktop 上，`docker compose up` 後只操作 Berth 即完成設定；「既有 Jellyfin + 套件內其餘服務」的組合也走通 |
-| T0.7 ∥ | `deploy/`：Dockerfile（多階段：node build → python slim，非 root，`PUID/PGID` 入口腳本）、compose 範本（Linux 與 Windows 兩個 override）、preseed 檔、`.env.example`、image 發佈 workflow（GHCR） | `docker compose up` 四個服務健康；image 大小 < 400 MB |
+| T0.7 ∥ | `deploy/`：Dockerfile（多階段：node build → python slim，非 root，`PUID/PGID` 入口腳本）、一份 Linux 與 Windows 共用的 compose 範本（§9.1）、preseed 檔、`.env.example`、image 發佈 workflow（GHCR） | `docker compose up` 四個服務健康；image 大小 < 400 MB |
 | T0.8 | `health_checker` 迴圈與健康頁；服務設定頁（含「測試連線」「套用建議設定」按鈕） | 四項健康檢查綠燈；拔掉任一服務 5 分鐘內變紅並顯示原因 |
 
 ### 11.2 M1 手動全流程

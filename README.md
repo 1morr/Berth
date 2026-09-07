@@ -4,6 +4,69 @@
 
 目前處於 M0（骨架）階段，尚不可用。設計與決定見 `docs/design-brief.md`，架構與里程碑見 `docs/plan.md`，名詞表見 `CONTEXT.md`。
 
+## 部署
+
+`deploy/` 是完整的 compose 套件：Berth 加 qBittorrent、Jellyfin、Prowlarr，四個容器掛同一個媒體根。Linux 與 Windows 共用同一份 `docker-compose.yml`。
+
+```bash
+cd deploy
+cp .env.example .env        # 改 DATA_ROOT 與 CONFIG_ROOT
+docker compose up -d
+```
+
+開 <http://localhost:8383>，之後所有設定都在 Berth 的精靈裡完成，不需要分別打開另外三個服務的介面。
+
+> M0 階段 GHCR 上還沒有發佈過 image（第一個 `v*` tag 之前都沒有），現在要跑 compose 得先在 repo 根目錄自己 build 一份：見下面的〈自己 build image〉。
+
+| 服務 | Port | 備註 |
+| --- | --- | --- |
+| Berth | 8383 | 唯一需要開的介面 |
+| qBittorrent | 8080（WebUI）、6881（BT） | WebUI 要密碼，密碼在精靈裡設定 |
+| Jellyfin | 8096 | |
+| Prowlarr | 9696 | |
+
+已經有其中某個服務的人，把它從 `.env` 的 `COMPOSE_PROFILES` 拿掉，精靈會改用「既有服務」的表單接入；`berth` 沒有 profile，永遠會啟動。變數清單見 `deploy/.env.example`，裡面沒有任何秘密欄位。
+
+### 硬鏈接前提
+
+入庫是硬鏈接不是複製，所以：
+
+- **只掛一個媒體根**：下載目錄與媒體庫都要在 `DATA_ROOT` 底下。分成兩個 bind mount 會得到 `EXDEV`，建立 Route 時的檢查會直接擋下來。
+- **檔案系統要支援硬鏈接**：exFAT 不行；btrfs 子卷、ZFS dataset、mergerfs branch 之間也不行，它們在核心眼中是不同的裝置。
+- **同一台機器**：Berth 與 qBittorrent 要看得到同一份檔案，跨主機與 remote path mapping 不支援。
+
+### 支援的宿主平台
+
+- **Linux**（NAS 與伺服器）：`DATA_ROOT` 要能被 `PUID` / `PGID` 寫入，例如 `chown -R 1000:1000 /srv/berth/data`。Berth 只在媒體根還是空目錄時自動接手擁有者；已經有內容的目錄一律不碰。
+- **Windows**（Docker Desktop、WSL2 後端）：用一般的 bind mount 就好（`DATA_ROOT=C:\Berth\data`），不需要 named volume，NTFS 上的硬鏈接實測可用（brief §20.7）。`PUID` / `PGID` 在這種掛載上沒有意義，維持預設即可。
+
+### 外部服務的前提
+
+- **qBittorrent**：最低 4.4（Web API 2.8.4）。套件內的容器由 `deploy/preseed/qbittorrent/10-berth.sh` 在服務啟動前補上免密白名單，而且只放行 Berth 那一個固定 IP —— 4.6.1 起首次啟動的隨機密碼只印在容器 log，沒有這一步 Berth 進不去；WebUI 從宿主或 LAN 進來仍然要密碼。其餘偏好（temp path、save path、category 的 autoTMM）與 WebUI 密碼由精靈經 API 設定，按之前會顯示差異。腳本不覆蓋任何已經有值的設定。
+- **Jellyfin**：同一部片的多個版本要合併需要 [MergeVersions](https://github.com/danieladov/jellyfin-plugin-mergeversions) 插件。套件內的 Jellyfin 由精靈自動安裝並重啟；既有的 Jellyfin 是一顆要確認的按鈕。
+- **Prowlarr**：不預置任何東西，Berth 唯讀掛載它的設定目錄以讀取它自動產生的 API key。
+
+### 秘密與備份
+
+各服務的 API key 與密碼存在 `${CONFIG_ROOT}/berth/berth.db`，靠檔案權限保護，不做應用層加密（與 Seerr 相同）。備份 Berth 就是複製 `${CONFIG_ROOT}/berth`。
+
+### 自己 build image
+
+```bash
+docker build -f deploy/Dockerfile -t ghcr.io/1morr/berth:latest .
+```
+
+發佈由 `.github/workflows/release.yml` 在 `v*` tag 上推到 GHCR。
+
+### 部署疑難排解
+
+image 裡沒有 curl。要從 Berth 這一端測外部服務時：
+
+```bash
+docker compose exec berth python -c \
+  "import urllib.request; print(urllib.request.urlopen('http://qbittorrent:8080/api/v2/app/version').read())"
+```
+
 ## 環境需求
 
 | 工具 | 版本 | 用途 |
@@ -111,6 +174,7 @@ berth/            後端套件
   pipeline/       背景 asyncio 迴圈
   services/       改變狀態的命令函式
 web/              前端（Vite + React + TypeScript）
+deploy/           部署套件：Dockerfile、compose、preseed、.env.example
 tests/            後端測試
 docs/             設計綱要、實作計劃、進度
 .scratch/         各里程碑的票
@@ -127,6 +191,11 @@ docs/             設計綱要、實作計劃、進度
 
 - `uv sync` 出現 `failed to hardlink ... (os error 396)`：repo 放在雲端同步目錄（OneDrive 之類）時硬鏈接不可用，改用 `UV_LINK_MODE=copy uv sync`，或在使用者層級的 `uv.toml` 設 `link-mode = "copy"`。
 
-## 授權
+## 授權與歸屬
 
 MIT，見 [LICENSE](LICENSE)。
+
+<img src="docs/assets/tmdb.svg" alt="TMDB" height="28">
+
+This product uses the TMDB API but is not endorsed or certified by TMDB.
+（本產品使用 TMDB 的 API，但未經 TMDB 認可或認證。TMDB 的條款限非商業使用。）

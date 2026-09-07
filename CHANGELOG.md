@@ -21,3 +21,7 @@
 - 前端 shell：深色為預設、亮色跟隨系統的 Tailwind 主題，`zh-Hant` 語言檔，
   TanStack Router 與 Query，以及顯示健康狀態的佔位頁；build 產物由後端同一個程序提供。
 - 環境變數 `CONFIG_ROOT`、`DATA_ROOT`、`WEB_ROOT`、`PORT` 與 `.env.example`。
+- `deploy/`：多階段 Dockerfile（node build → python slim、非 root、`PUID` / `PGID` 入口腳本）、
+  四個服務的 `docker-compose.yml`（profiles、固定子網、健康檢查）、qBittorrent 的
+  preseed 腳本與部署用的 `.env.example`。
+- GHCR 發佈 workflow（`v*` tag）與 CI 的 image build job。

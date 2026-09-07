@@ -54,6 +54,23 @@ jobs:
       - run: pnpm test
       - run: pnpm build
 
+  image:
+    name: image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: docker/setup-buildx-action@v4
+
+      # 只 build 不推：發佈是 release.yml 的事，這裡顧的是 Dockerfile 不要壞掉。
+      - uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: deploy/Dockerfile
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
   hygiene:
     name: hygiene
     runs-on: ubuntu-latest

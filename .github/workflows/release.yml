@@ -1,0 +1,44 @@
+name: Release
+
+# 版本 tag 才發佈；日常的 image 是否 build 得起來由 CI 的 image job 顧。
+on:
+  push:
+    tags: ['v*']
+
+jobs:
+  image:
+    name: image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: docker/setup-buildx-action@v4
+
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/berth
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            # compose 範本 pin 的就是 :latest，預發佈 tag（v1.0.0-rc1）不能動到它。
+            type=raw,value=latest,enable=${{ !contains(github.ref, '-') }}
+
+      - uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: deploy/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

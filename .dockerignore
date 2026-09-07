@@ -1,0 +1,15 @@
+# build context 只需要 pyproject、uv.lock、berth/、web/、README、LICENSE 與入口腳本。
+*
+!pyproject.toml
+!uv.lock
+!README.md
+!LICENSE
+!berth/
+!web/
+!deploy/entrypoint.sh
+
+# 上面放行的目錄裡還是有不該進 image 的東西。
+**/node_modules/
+**/__pycache__/
+**/*.py[cod]
+web/dist/

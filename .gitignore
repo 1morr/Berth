@@ -23,6 +23,9 @@ web/dist/
 /data/
 # 本機開發的 CONFIG_ROOT / DATA_ROOT（.env.example 的預設值）
 /.local/
+# deploy/.env.example 的預設 CONFIG_ROOT / DATA_ROOT
+/deploy/config/
+/deploy/data/
 
 # 編輯器與作業系統
 .idea/

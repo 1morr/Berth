@@ -523,7 +523,7 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 
 | 服務 | 預置（compose 範本） | Berth 一鍵設定（API） | 使用者仍需自己做 |
 | --- | --- | --- | --- |
-| qBittorrent | **只預置「讓 Berth 進得去」**：compose 內網免密白名單與 Host 檢查網域名。原因是 4.6.1 起首次啟動的隨機密碼只印在容器 log，Berth 拿不到，沒有這一步按鈕就登不進去 | 套用建議偏好（temp path、save path、autoTMM）、依 Route 建立 category、設定 WebUI 密碼；按下前顯示差異 | 無 |
+| qBittorrent | **只預置「讓 Berth 進得去」**：只放行 Berth 容器固定 IP 的免密白名單（不是整個網段，理由見 §20.7）。原因是 4.6.1 起首次啟動的隨機密碼只印在容器 log，Berth 拿不到，沒有這一步按鈕就登不進去 | 套用建議偏好（temp path、save path、autoTMM）、依 Route 建立 category、設定 WebUI 密碼；按下前顯示差異 | 無 |
 | Jellyfin | 無 | 偵測「尚未完成初始精靈」→ 以 Berth 管理員帳密建立 Jellyfin 管理員 → 建立 Movies / TV / Anime 三個媒體庫（對應 `/data/library/{movies,tv,anime}`）→ 加入插件庫並安裝 MergeVersions → 重啟 → 自動建立三個 Route | 無 |
 | Prowlarr | 無；Berth 唯讀掛載其設定目錄讀取 API key | 加入預設索引站清單（Nyaa.si、dmhy、AniDex、Anime Tosho、ACG.RIP、Mikan、1337x、YTS、EZTV、The Pirate Bay，可勾選）、以 Berth 管理員帳密設定介面登入 | 私有站的帳號 |
 | TMDB | Berth 內建專案級 API key（Seerr 的做法，§20.7） | 無 | 可選：填自己的 key |
@@ -831,6 +831,19 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 
 - API key 在 `ServerConfig.json` 的 `APIKey`；聚合 Torznab `/api/v2.0/indexers/all/results/torznab/api?t=search` 有文件（上限 1000 筆、站專屬分類不可用）；`GET/POST /api/v2.0/indexers/{id}/Config` 只是 UI 內部介面，無文件。有 `mikan.yml`、`dmhy.yml`、`nyaasi.yml`、`acgrip.yml` 定義。
 - 結論維持 §19：套件預設 Prowlarr，Jackett 以 Torznab 端點接入。
+
+**compose 套件實測（2026-09-07，Windows 11 + Docker Desktop 29.6.2，票 03）**
+
+- **發佈 port 的來源位址**：Docker Desktop 把 `-p 8080:8080` 進來的流量 SNAT 成 bridge 閘道位址（`172.28.0.1`），而閘道本身就在 compose 網段內。所以 `WebUI\AuthSubnetWhitelist=172.28.0.0/16` 等於讓宿主與 LAN 上任何人免密打 qBittorrent 的 API —— 實測 `curl http://localhost:8080/api/v2/app/version` 直接回 `v5.2.3`。白名單縮成 Berth 容器固定 IP 的 `172.28.0.2/32` 之後：berth 容器回 200、宿主 403、同網段的其他容器 403。§16.3「LAN 使用者開 8080 仍要密碼」只有在白名單是單一位址時才成立。
+- Docker 的動態 IP 從網段開頭配發（實測 `172.28.0.2` 給了先啟動的 prowlarr），固定 IP 要靠 `ip_range` 把動態池隔到別的段，否則會撞。
+- **linuxserver/qbittorrent 的啟動順序**：`init-qbittorrent-config`（依賴 `init-config`）排在 `init-custom-files`（依賴 `init-mods-end`，而該鏈在 `init-config-end` → `init-qbittorrent-config` 之後）之前。custom-cont-init.d 的腳本跑到時 `/config/qBittorrent/qBittorrent.conf` **一定已經存在**，由 image 從 `/defaults/qBittorrent.conf` 複製。因此「檔案不存在才寫」的預置條件永遠不成立，改為「缺鍵才補」。
+- `/defaults/qBittorrent.conf` 的內容：`LegalNotice\Accepted=true`、`WebUI\Address=*`、`WebUI\ServerDomains=*`、`Downloads\SavePath=/downloads/`、`Downloads\TempPath=/downloads/incomplete/`、`Connection\UPnP=false`、`Connection\PortRangeMin=6881`。整份覆蓋會掉 `LegalNotice\Accepted`，qbittorrent-nox 會卡在法律聲明；而 `ServerDomains` 既然預設是 `*`，Host 檢查本來就過得了，寫死成 `qbittorrent` 反而讓使用者從 `localhost:8080` 進不去。
+- `init-custom-files` 只檢查 executable bit（不檢查擁有者），以 `/bin/bash <script>` 執行（[docker-baseimage-alpine](https://github.com/linuxserver/docker-baseimage-alpine/blob/master/root/etc/s6-overlay/s6-rc.d/init-custom-files/run)、[container-customization](https://docs.linuxserver.io/general/container-customization/)）。
+- `lscr.io/linuxserver/qbittorrent:latest` 目前是 qBittorrent v5.2.3。
+- Berth image（node:24-slim build → python:3.13-slim runtime）：281 MB 未壓縮、62.8 MB gzip，遠低於 400 MB 的上限。
+- `python:3.13-slim`（Debian 13 trixie）內建 `setpriv`、`usermod`、`groupmod`、`getent` 與 tzdata，`PUID` / `PGID` 降權不需要額外裝 gosu；但沒有 curl。
+- 空的 named volume 與 Docker 替 bind mount 新建的目錄都是 `root:root`，非 root 的容器寫不進去。入口腳本因此只在 `/data` 還是空目錄時接手擁有者，已經有內容的媒體根不碰（實測：空目錄 → 檔案為 `1500:1500`、`umask 002`；非空目錄 → 維持 `root:root`）。
+- compose 內再次確認 `/data` 的硬鏈接：`dev=70`、inode 相同、`nlink=2`（與 §20.7 開頭的 Windows 實測一致）。
 
 **TMDB 專案級 key**
 
