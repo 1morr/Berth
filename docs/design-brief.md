@@ -430,12 +430,13 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 
 - Jellyfin 內建的劇集 provider 預設是 TMDB，本系統的季/集編號必須與 Jellyfin 顯示一致，否則檔名 `S02E01` 在 Jellyfin 會對到別集；同源最安全。
 - Seerr 長期只用 TMDB，媒體牆體驗已被驗證（近期才加入實驗性 TVDB，目的只是配合 Sonarr）。
-- TVDB v4 的「user-supported」金鑰要求**每位使用者自付訂閱並輸入 PIN**（§20.3），對自託管產品不可行；且 TVDB 在動漫 split-cour 上與 TMDB 採同樣的合併政策，換 provider 解決不了編號問題。引入第二個 provider 的代價是每個 Media 多一層 ID 對應與衝突處理，第一階段不值得。
+- TVDB 在動漫 split-cour 上與 TMDB 採**同樣的合併政策**（§20.3），換 provider 不解決主要的編號錯誤來源；引入第二個 provider 的代價是每個 Media 多一層 ID 對應與衝突處理，第一階段不值得。（原本列的第三個理由「TVDB 要每位使用者付費並輸入 PIN」已於 2026-09-07 重查推翻，見 §20.3。）
 
 已知弱點與對策：
 
 - 動漫的季切分（split cour、長篇）TMDB 與字幕組編號常不一致 → 靠絕對編號換算 + review；第二階段【研究】接入 anime-lists 類的 AniList/MAL ↔ TMDB 對應。
 - 若使用者在 Jellyfin 該媒體庫改用 TVDB 插件 → 本系統讀取 `LibraryOptions` 偵測並警告「編號來源不一致」。
+- 【研究】**TVDB 作為 anime profile 的季集來源**（TMDB 仍是媒體牆、標題、海報與電影的唯一來源）。2026-09-07 重查推翻了「TVDB 要每位使用者付費」這條理由，且 Jellyfin 官方 TVDB 插件讓使用者零成本切換刮削來源（§20.3），剩下的唯一實質疑問是 split-cour。形態會是：Media 主鍵維持 `tv:<tmdb id>`，`media` 表加 `tvdb_id` 與 `episode_source`，只有 `anime` profile 的 Route 用 TVDB 編號並要求該媒體庫裝 TVDB 插件（上一條的偵測反過來用）。採用條件與定案時點見 §20.6 的動漫編號實驗：**必須在 M1 拆票前定案**，因為它改動 `media` 表與 mapper，M1 之後成本大增。
 
 ---
 
@@ -700,8 +701,10 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 
 **TheTVDB v4**
 
-- 存取模型：商業協議，或「user-supported」金鑰但**每位終端使用者需自付約 $12/年訂閱並輸入 PIN**。（[v4-api](https://github.com/thetvdb/v4-api)、[KB#62](https://support.thetvdb.com/kb/faq.php?id=62)）→ 對自託管產品極不友善，支持 §10 不採用。
-- 季類型：default(aired) / absolute / dvd / alternate / regional。Sonarr 只用 TVDB（經 Skyhook 代理），並靠 TheXEM 做 scene 編號對應（[xem-guide](https://wiki.servarr.com/sonarr/xem-guide)）。
+- 存取模型（2026-09-07 重查，**原記載過度，已更正**）：申請 v4 key **免費**，dashboard → API Keys → Create a v4 API Key；選 End-User Subscriptions 者「your key will be automatically approved and ready for use」（[KB#81](https://support.thetvdb.com/kb/faq.php?id=81)）。`/login` 的 `pin` 是**選填**，官方文檔原話「provide your API key as "apikey". If you have a user-supported key, **also** provide your subscriber PIN as "pin". Otherwise…」（[v4-api swagger](https://thetvdb.github.io/v4-api/)）；不帶 PIN 可取得 token 並讀資料（本機實測）。
+- 但**授權模型未變**：所有 key 必須「either a commercial license, or have subscriptions enabled for end users」（[KB#62](https://support.thetvdb.com/kb/faq.php?id=62)）；README 明說 user-supported 模式「requires that each of your users has a $12/year TheTVDB subscription」（[v4-api](https://github.com/thetvdb/v4-api)）；KB#81 另警告開發者自用 PIN「prohibited from sharing a PIN for multiple users… Your access may be shut off at any time, and/or legal action may be pursued」。→ **個人自用沒問題；Berth 內建一把 key 給所有使用者是靠執行寬鬆，隨時可能被關。** 若採用，走「使用者自己申請免費 key」而非內建。
+- Jellyfin 官方 TVDB 插件是同一個形狀：`PluginConfiguration.cs` 有唯讀的「tvdb api key **for project**」（插件內建）與選填的「tvdb api key for user, this is the **subscriber's pin**」（[jellyfin-plugin-tvdb](https://github.com/jellyfin/jellyfin-plugin-tvdb/blob/master/Jellyfin.Plugin.Tvdb/Configuration/PluginConfiguration.cs)）。→ 使用者把 Jellyfin 媒體庫切成 TVDB 刮削**不需付費**，§10 的「Jellyfin 同源」理由因此被削弱。
+- 季類型：default(aired) / absolute / dvd / alternate / regional，**每部劇都有**；對比 TMDB 的 Absolute episode group 只在有人替該劇手動建立時才存在。這是 TVDB 對動漫絕對編號換算的實質優勢。Sonarr 只用 TVDB（經 Skyhook 代理），並靠 TheXEM 做 scene 編號對應（[xem-guide](https://wiki.servarr.com/sonarr/xem-guide)）。
 
 **Sonarr 作為先例**
 
@@ -810,7 +813,7 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 - 建立 20 筆真實 torrent fixture（動漫 8、美劇/韓劇 8、電影 4）作為 benchmark v0。→ M1 解析器票。
 - 抓一份 Mikan（我的訂閱、單作品 + 字幕組）與 Nyaa（搜尋）的實際 RSS，確認擴充欄位名
   （infoHash、大小、做種數、enclosure、發佈時間），寫成 adapter 的 fixture。→ M3 RSS 票。
-- 抽 10 部動漫比對 TMDB 季結構與字幕組編號，量化絕對編號換算的失敗率。→ M1 解析器票。
+- 抽 10 部動漫，量化**字幕組編號**對三種來源的換算失敗率：TMDB 季集、TVDB default(aired) season、TVDB absolute。§10 的【研究】（TVDB 作為 anime 季集來源）以此定案，**須在 M1 拆票前完成**。→ M1 解析器票。
 
 ### 20.7 開箱即用所需的 API 與 Windows Docker 事實
 

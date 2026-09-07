@@ -15,6 +15,7 @@
 ## 驗收
 
 - [ ] `POST /api/setup/jellyfin/bootstrap` 跑完 §9.4 全序列，結束時 Jellyfin 有 Berth 管理員、Movies / TV / Anime 三個媒體庫（`EnableRealtimeMonitor=false`、`SeasonZeroDisplayName=Specials`、zh-TW metadata）、MergeVersions 已安裝
+- [ ] 建立媒體庫時的 `LibraryOptions.TypeOptions[].MetadataFetchers` 是設定值而非寫死（預設 TMDB），為 brief §10 的 TVDB【研究】（anime profile 改用 TVDB 季集來源）留一個切換點
 - [ ] API key 建立後存入 `settings.services.jellyfin`
 - [ ] 安裝插件後重啟 Jellyfin 並輪詢 `/System/Info/Public` 直到恢復；逾時給明確錯誤與可複製的手動步驟
 - [ ] `MergeMoviesTask` 與 `MergeEpisodesTask` 的 `Id`（不是 `Key`）存進 settings
