@@ -15,17 +15,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from berth.adapters.http import AuthFailedError, ServiceUnavailableError
 from berth.adapters.jellyfin import (
     JellyfinApiKey,
-    JellyfinClient,
     JellyfinLibrary,
     JellyfinPlugin,
     JellyfinTask,
     TypeOption,
 )
 from berth.adapters.jellyfin.fake import FakeJellyfinClient
-from berth.adapters.prowlarr import ProwlarrClient
-from berth.adapters.prowlarr.fake import FakeProwlarrClient
-from berth.adapters.qbittorrent import QbittorrentClient
-from berth.adapters.qbittorrent.fake import FakeQbittorrentClient
 from berth.domain import (
     DetectionReason,
     JellyfinStep,
@@ -44,29 +39,9 @@ from berth.services.jellyfin import (
 )
 from berth.services.settings import read_settings, write_settings
 from berth.services.setup import STEP_QBITTORRENT, create_admin, read_status
+from tests.integration.factories import FakeClientFactory
 
 NOW = datetime(2026, 9, 7, 12, 0, tzinfo=UTC)
-
-
-class FakeClientFactory:
-    """同一台假 Jellyfin 每次都回同一個實例——序列跨好幾次呼叫，狀態必須留著。"""
-
-    def __init__(self, jellyfin: FakeJellyfinClient) -> None:
-        self.jellyfin_ = jellyfin
-        self.tokens: list[str] = []
-
-    def jellyfin(self, base_url: str, token: str = "") -> JellyfinClient:
-        self.tokens.append(token)
-        self.jellyfin_.base_url = base_url
-        if token:
-            self.jellyfin_.use_token(token)
-        return self.jellyfin_
-
-    def qbittorrent(self, base_url: str) -> QbittorrentClient:
-        return FakeQbittorrentClient(base_url=base_url)
-
-    def prowlarr(self, base_url: str, api_key: str) -> ProwlarrClient:
-        return FakeProwlarrClient(base_url=base_url)
 
 
 async def never_sleep(_seconds: float) -> None:
@@ -133,7 +108,7 @@ def detail(status: JellyfinSetupStatus, which: JellyfinStep) -> str:
 async def test_bootstrap_runs_the_whole_sequence(session: AsyncSession, tmp_path: Path) -> None:
     await seed(session, library_root=str(tmp_path / "library"))
     jellyfin = FakeJellyfinClient()
-    factory = FakeClientFactory(jellyfin)
+    factory = FakeClientFactory(jellyfin=jellyfin)
 
     status = await bootstrap_jellyfin(session, factory, sleep=never_sleep)
 
@@ -167,7 +142,7 @@ async def test_bootstrap_writes_the_library_options_the_plan_asks_for(
     await seed(session, library_root=str(tmp_path / "library"))
     jellyfin = FakeJellyfinClient()
 
-    await bootstrap_jellyfin(session, FakeClientFactory(jellyfin), sleep=never_sleep)
+    await bootstrap_jellyfin(session, FakeClientFactory(jellyfin=jellyfin), sleep=never_sleep)
 
     for created in jellyfin.created:
         assert created.preferred_metadata_language == "zh-TW"
@@ -187,7 +162,7 @@ async def test_metadata_fetchers_come_from_settings_not_from_the_code(
     await session.commit()
     jellyfin = FakeJellyfinClient()
 
-    await bootstrap_jellyfin(session, FakeClientFactory(jellyfin), sleep=never_sleep)
+    await bootstrap_jellyfin(session, FakeClientFactory(jellyfin=jellyfin), sleep=never_sleep)
 
     by_name = {created.name: created for created in jellyfin.created}
     assert [option.metadata_fetchers for option in by_name["Anime"].type_options] == [
@@ -212,7 +187,9 @@ async def test_bootstrap_stores_the_api_key_and_the_task_ids(
     await seed(session, library_root=str(tmp_path / "library"))
     jellyfin = FakeJellyfinClient()
 
-    status = await bootstrap_jellyfin(session, FakeClientFactory(jellyfin), sleep=never_sleep)
+    status = await bootstrap_jellyfin(
+        session, FakeClientFactory(jellyfin=jellyfin), sleep=never_sleep
+    )
 
     stored = await read_settings(session, JellyfinSettings)
     assert stored.api_key == jellyfin.api_keys_[0].access_token
@@ -233,7 +210,7 @@ async def test_pressing_bootstrap_twice_changes_nothing(
     """票 06 驗收：重按不會重複建立媒體庫或重複安裝插件。"""
     await seed(session, library_root=str(tmp_path / "library"))
     jellyfin = FakeJellyfinClient()
-    factory = FakeClientFactory(jellyfin)
+    factory = FakeClientFactory(jellyfin=jellyfin)
     await bootstrap_jellyfin(session, factory, sleep=never_sleep)
 
     status = await bootstrap_jellyfin(session, factory, sleep=never_sleep)
@@ -254,7 +231,7 @@ async def test_the_second_run_still_reaches_the_libraries_after_the_wizard_close
     """初始精靈跑完之後 `/Library/VirtualFolders` 就要憑證，所以第二輪要先登入。"""
     await seed(session, library_root=str(tmp_path / "library"))
     jellyfin = FakeJellyfinClient()
-    factory = FakeClientFactory(jellyfin)
+    factory = FakeClientFactory(jellyfin=jellyfin)
     await bootstrap_jellyfin(session, factory, sleep=never_sleep)
     jellyfin.use_token("")
 
@@ -272,7 +249,9 @@ async def test_bootstrap_waits_for_jellyfin_to_finish_loading_after_the_restart(
     await seed(session, library_root=str(tmp_path / "library"))
     jellyfin = FakeJellyfinClient(busy_after_restart=3)
 
-    status = await bootstrap_jellyfin(session, FakeClientFactory(jellyfin), sleep=never_sleep)
+    status = await bootstrap_jellyfin(
+        session, FakeClientFactory(jellyfin=jellyfin), sleep=never_sleep
+    )
 
     assert step(status, JellyfinStep.PLUGIN) is StepStatus.OK
     assert step(status, JellyfinStep.TASKS) is StepStatus.OK
@@ -286,7 +265,9 @@ async def test_a_restart_that_drops_the_connection_is_not_a_failure(
     await seed(session, library_root=str(tmp_path / "library"))
     jellyfin = FakeJellyfinClient(drop_on_restart=True, busy_after_restart=2)
 
-    status = await bootstrap_jellyfin(session, FakeClientFactory(jellyfin), sleep=never_sleep)
+    status = await bootstrap_jellyfin(
+        session, FakeClientFactory(jellyfin=jellyfin), sleep=never_sleep
+    )
 
     assert step(status, JellyfinStep.PLUGIN) is StepStatus.OK
     assert step(status, JellyfinStep.TASKS) is StepStatus.OK
@@ -305,7 +286,9 @@ async def test_the_bundled_paths_match_what_the_berth_path_rule_computes(
     await seed(session, library_root=root)
     jellyfin = FakeJellyfinClient()
 
-    status = await bootstrap_jellyfin(session, FakeClientFactory(jellyfin), sleep=never_sleep)
+    status = await bootstrap_jellyfin(
+        session, FakeClientFactory(jellyfin=jellyfin), sleep=never_sleep
+    )
 
     assert [row.has_berth_path for row in status.libraries] == [True, True, True]
     assert [row.berth_path for row in status.libraries] == [
@@ -323,7 +306,9 @@ async def test_bootstrap_retries_a_plugin_download_that_drops(
     await seed(session, library_root=str(tmp_path / "library"))
     jellyfin = FakeJellyfinClient(install_failures=2)
 
-    status = await bootstrap_jellyfin(session, FakeClientFactory(jellyfin), sleep=never_sleep)
+    status = await bootstrap_jellyfin(
+        session, FakeClientFactory(jellyfin=jellyfin), sleep=never_sleep
+    )
 
     assert step(status, JellyfinStep.PLUGIN) is StepStatus.OK
     assert len(jellyfin.installs) == 3
@@ -338,7 +323,7 @@ async def test_a_failing_step_stops_the_sequence_and_keeps_what_worked(
 ) -> None:
     await seed(session, library_root=str(tmp_path / "library"))
     jellyfin = FakeJellyfinClient(install_failures=99)
-    factory = FakeClientFactory(jellyfin)
+    factory = FakeClientFactory(jellyfin=jellyfin)
 
     status = await bootstrap_jellyfin(session, factory, sleep=never_sleep)
 
@@ -358,7 +343,7 @@ async def test_retrying_after_a_failure_only_redoes_the_failed_step(
     """票 06 驗收：任一步失敗時該步可單獨重試。"""
     await seed(session, library_root=str(tmp_path / "library"))
     jellyfin = FakeJellyfinClient(install_failures=99)
-    factory = FakeClientFactory(jellyfin)
+    factory = FakeClientFactory(jellyfin=jellyfin)
     await bootstrap_jellyfin(session, factory, sleep=never_sleep)
     jellyfin.install_failures = 0
 
@@ -377,7 +362,9 @@ async def test_bootstrap_without_an_administrator_says_so(
     await seed(session, library_root=str(tmp_path / "library"), admin=None)
     jellyfin = FakeJellyfinClient()
 
-    status = await bootstrap_jellyfin(session, FakeClientFactory(jellyfin), sleep=never_sleep)
+    status = await bootstrap_jellyfin(
+        session, FakeClientFactory(jellyfin=jellyfin), sleep=never_sleep
+    )
 
     failure = next(row for row in status.steps if row.step == JellyfinStep.ADMIN_USER.value)
     assert failure.status is StepStatus.FAILED
@@ -392,7 +379,9 @@ async def test_a_jellyfin_that_is_not_reachable_fails_on_the_first_step(
     await seed(session, library_root=str(tmp_path / "library"))
     jellyfin = FakeJellyfinClient(error=ServiceUnavailableError("connection refused"))
 
-    status = await bootstrap_jellyfin(session, FakeClientFactory(jellyfin), sleep=never_sleep)
+    status = await bootstrap_jellyfin(
+        session, FakeClientFactory(jellyfin=jellyfin), sleep=never_sleep
+    )
 
     assert step(status, JellyfinStep.PUBLIC_INFO) is StepStatus.FAILED
     assert {row.status for row in status.steps[1:]} == {StepStatus.PENDING}
@@ -408,7 +397,9 @@ async def test_the_wizard_moves_past_jellyfin_once_the_sequence_is_done(
     await seed(session, library_root=str(tmp_path / "library"))
     assert (await read_status(session)).current_step == 3
 
-    await bootstrap_jellyfin(session, FakeClientFactory(FakeJellyfinClient()), sleep=never_sleep)
+    await bootstrap_jellyfin(
+        session, FakeClientFactory(jellyfin=FakeJellyfinClient()), sleep=never_sleep
+    )
 
     assert (await read_status(session)).current_step == STEP_QBITTORRENT
 
@@ -469,7 +460,7 @@ async def test_connecting_to_an_existing_jellyfin_lists_its_libraries(
     jellyfin = nas_jellyfin()
 
     status = await connect_jellyfin(
-        session, FakeClientFactory(jellyfin), username="owner", password="s3cret"
+        session, FakeClientFactory(jellyfin=jellyfin), username="owner", password="s3cret"
     )
 
     assert status.origin is ServiceOrigin.EXISTING
@@ -496,7 +487,7 @@ async def test_the_wrong_password_fails_the_api_key_step(
     )
 
     status = await connect_jellyfin(
-        session, FakeClientFactory(nas_jellyfin()), username="owner", password="wrong"
+        session, FakeClientFactory(jellyfin=nas_jellyfin()), username="owner", password="wrong"
     )
 
     failure = next(row for row in status.steps if row.step == JellyfinStep.API_KEY.value)
@@ -515,7 +506,7 @@ async def test_a_non_administrator_cannot_be_used(session: AsyncSession, tmp_pat
     jellyfin = nas_jellyfin(api_keys=(JellyfinApiKey(app_name="Kodi", access_token="other"),))
 
     status = await connect_jellyfin(
-        session, FakeClientFactory(jellyfin), username="owner", password="s3cret"
+        session, FakeClientFactory(jellyfin=jellyfin), username="owner", password="s3cret"
     )
 
     # 名字不是 Berth 的那把不會被拿來用。
@@ -536,7 +527,7 @@ async def test_adding_a_berth_path_leaves_the_old_paths_alone(
         library_root=library_root,
     )
     jellyfin = nas_jellyfin()
-    factory = FakeClientFactory(jellyfin)
+    factory = FakeClientFactory(jellyfin=jellyfin)
     await connect_jellyfin(session, factory, username="owner", password="s3cret")
 
     status = await add_berth_path(session, factory, library_name="電影")
@@ -559,7 +550,7 @@ async def test_adding_the_same_berth_path_twice_does_not_duplicate_it(
         library_root=str(tmp_path / "library"),
     )
     jellyfin = nas_jellyfin()
-    factory = FakeClientFactory(jellyfin)
+    factory = FakeClientFactory(jellyfin=jellyfin)
     await connect_jellyfin(session, factory, username="owner", password="s3cret")
     await add_berth_path(session, factory, library_name="電影")
 
@@ -581,7 +572,7 @@ async def test_adding_a_path_that_fails_becomes_a_step_not_an_exception(
         library_root=str(tmp_path / "library"),
     )
     jellyfin = nas_jellyfin()
-    factory = FakeClientFactory(jellyfin)
+    factory = FakeClientFactory(jellyfin=jellyfin)
     await connect_jellyfin(session, factory, username="owner", password="s3cret")
 
     status = await add_berth_path(session, factory, library_name="Nope")
@@ -604,7 +595,7 @@ async def test_a_jellyfin_that_stops_answering_while_adding_a_path_is_a_failed_s
         library_root=str(tmp_path / "library"),
     )
     jellyfin = nas_jellyfin()
-    factory = FakeClientFactory(jellyfin)
+    factory = FakeClientFactory(jellyfin=jellyfin)
     await connect_jellyfin(session, factory, username="owner", password="s3cret")
     jellyfin.error = ServiceUnavailableError("connection refused")
 
@@ -626,7 +617,7 @@ async def test_installing_merge_versions_on_an_existing_jellyfin(
         library_root=str(tmp_path / "library"),
     )
     jellyfin = nas_jellyfin()
-    factory = FakeClientFactory(jellyfin)
+    factory = FakeClientFactory(jellyfin=jellyfin)
     await connect_jellyfin(session, factory, username="owner", password="s3cret")
 
     status = await install_merge_versions(session, factory, sleep=never_sleep)
@@ -660,7 +651,7 @@ async def test_installing_merge_versions_twice_does_not_restart_again(
             JellyfinTask(id="e1", key="MergeEpisodesTask", name="Merge All Episodes"),
         ),
     )
-    factory = FakeClientFactory(jellyfin)
+    factory = FakeClientFactory(jellyfin=jellyfin)
     await connect_jellyfin(session, factory, username="owner", password="s3cret")
 
     status = await install_merge_versions(session, factory, sleep=never_sleep)
@@ -684,7 +675,7 @@ async def test_installing_without_credentials_fails_instead_of_guessing(
     )
 
     status = await install_merge_versions(
-        session, FakeClientFactory(nas_jellyfin()), sleep=never_sleep
+        session, FakeClientFactory(jellyfin=nas_jellyfin()), sleep=never_sleep
     )
 
     failure = next(row for row in status.steps if row.step == JellyfinStep.PLUGIN.value)
@@ -704,7 +695,9 @@ async def test_an_expired_api_key_surfaces_as_a_failed_step(
     )
     jellyfin = nas_jellyfin(error=AuthFailedError("401"))
 
-    status = await install_merge_versions(session, FakeClientFactory(jellyfin), sleep=never_sleep)
+    status = await install_merge_versions(
+        session, FakeClientFactory(jellyfin=jellyfin), sleep=never_sleep
+    )
 
     failure = next(row for row in status.steps if row.step == JellyfinStep.PLUGIN.value)
     assert failure.status is StepStatus.FAILED

@@ -17,13 +17,18 @@ from berth.adapters.http import ServiceUnavailableError
 from berth.adapters.jellyfin import JellyfinLibrary, TypeOption
 from berth.adapters.jellyfin.fake import FakeJellyfinClient
 from berth.adapters.prowlarr.fake import FakeProwlarrClient
+from berth.adapters.qbittorrent import QbittorrentVersion
 from berth.adapters.qbittorrent.fake import FakeQbittorrentClient
+from berth.adapters.tmdb import PROJECT_CREDENTIAL
+from berth.adapters.tmdb.fake import FakeTmdbClient
 from berth.api.deps import get_client_factory, get_setup_probes
 from berth.api.gate import CSRF_HEADER
 from berth.config import Config
 from berth.main import create_app
 from berth.services import jellyfin as jellyfin_service
 from berth.services.clients import SetupProbes
+from berth.services.indexer import DEFAULT_INDEXERS
+from tests.integration.factories import FakeClientFactory
 
 #: 前端每個非 GET 請求都帶這個標頭（`api/client.ts`）；缺了它的行為在 `test_auth_api.py`。
 BROWSER = {CSRF_HEADER: "XMLHttpRequest"}
@@ -426,3 +431,217 @@ def _set_library_root(client: TestClient, root: Path) -> None:
             await session.commit()
 
     asyncio.run(write())
+
+
+class TestQbittorrent:
+    """第 4 步的兩支端點（plan §9.3 第 4 步、票 08）。
+
+    差異的算法與冪等本身在 `test_setup_qbittorrent.py`。
+    """
+
+    @pytest.fixture
+    def qbittorrent(self) -> FakeQbittorrentClient:
+        return FakeQbittorrentClient()
+
+    @pytest.fixture
+    def client(
+        self,
+        config: Config,
+        tmp_path: Path,
+        probes: SetupProbes,
+        qbittorrent: FakeQbittorrentClient,
+    ) -> Iterator[TestClient]:
+        app = create_app(replace(config, web_root=tmp_path / "never-built"))
+
+        async def override_probes() -> AsyncIterator[SetupProbes]:
+            yield probes
+
+        app.dependency_overrides[get_setup_probes] = override_probes
+        app.dependency_overrides[get_client_factory] = lambda: FakeClientFactory(
+            qbittorrent=qbittorrent
+        )
+        with TestClient(app, headers=BROWSER) as running:
+            running.post("/api/setup/admin", json={"username": "skipper", "password": "harbour"})
+            running.post("/api/setup/detect")
+            yield running
+
+    def test_the_diff_lists_every_recommended_key(self, client: TestClient) -> None:
+        response = client.get("/api/setup/qbittorrent/diff")
+
+        assert response.status_code == 200
+        body = response.json()
+        assert [row["key"] for row in body["diffs"]] == [
+            "temp_path_enabled",
+            "temp_path",
+            "save_path",
+            "auto_tmm_enabled",
+            "category_changed_tmm_enabled",
+        ]
+        assert body["version"] == "v5.2.3"
+        assert body["webapi_version"] == "2.15.1"
+        assert body["supported"] is True
+        assert body["sets_password"] is True
+
+    def test_applying_writes_the_keys_and_leaves_no_difference(
+        self, client: TestClient, qbittorrent: FakeQbittorrentClient
+    ) -> None:
+        body = client.post("/api/setup/qbittorrent/apply").json()
+
+        assert [row["differs"] for row in body["diffs"]] == [False] * 5
+        assert [row["status"] for row in body["steps"]] == ["ok"] * 6
+        assert qbittorrent.writes[0].keys() == {
+            "temp_path_enabled",
+            "temp_path",
+            "save_path",
+            "auto_tmm_enabled",
+            "category_changed_tmm_enabled",
+        }
+
+    def test_an_old_web_api_is_refused_with_its_version_visible(
+        self, config: Config, tmp_path: Path, probes: SetupProbes
+    ) -> None:
+        app = create_app(replace(config, web_root=tmp_path / "never-built"))
+        old = FakeQbittorrentClient(version=QbittorrentVersion(app="v4.3.9", webapi="2.8.2"))
+
+        async def override_probes() -> AsyncIterator[SetupProbes]:
+            yield probes
+
+        app.dependency_overrides[get_setup_probes] = override_probes
+        app.dependency_overrides[get_client_factory] = lambda: FakeClientFactory(qbittorrent=old)
+        with TestClient(app, headers=BROWSER) as running:
+            body = running.get("/api/setup/qbittorrent/diff").json()
+
+        assert (body["supported"], body["blocked"]) == (False, True)
+        assert body["webapi_version"] == "2.8.2"
+        assert body["diffs"] == []
+
+    def test_an_unreachable_service_is_a_body_not_a_500(
+        self, config: Config, tmp_path: Path, probes: SetupProbes
+    ) -> None:
+        app = create_app(replace(config, web_root=tmp_path / "never-built"))
+        down = FakeQbittorrentClient(error=ServiceUnavailableError("connection refused"))
+
+        async def override_probes() -> AsyncIterator[SetupProbes]:
+            yield probes
+
+        app.dependency_overrides[get_setup_probes] = override_probes
+        app.dependency_overrides[get_client_factory] = lambda: FakeClientFactory(qbittorrent=down)
+        with TestClient(app, headers=BROWSER) as running:
+            response = running.get("/api/setup/qbittorrent/diff")
+
+        assert response.status_code == 200
+        assert response.json()["reachable"] is False
+        assert response.json()["error"] == "connection refused"
+
+
+class TestSource:
+    """第 5–6 步的端點（plan §9.3 第 5–6 步、票 08）。"""
+
+    @pytest.fixture
+    def prowlarr(self) -> FakeProwlarrClient:
+        return FakeProwlarrClient()
+
+    @pytest.fixture
+    def tmdb(self) -> FakeTmdbClient:
+        return FakeTmdbClient()
+
+    @pytest.fixture
+    def client(
+        self,
+        config: Config,
+        tmp_path: Path,
+        probes: SetupProbes,
+        prowlarr: FakeProwlarrClient,
+        tmdb: FakeTmdbClient,
+    ) -> Iterator[TestClient]:
+        app = create_app(replace(config, web_root=tmp_path / "never-built"))
+
+        async def override_probes() -> AsyncIterator[SetupProbes]:
+            yield probes
+
+        app.dependency_overrides[get_setup_probes] = override_probes
+        app.dependency_overrides[get_client_factory] = lambda: FakeClientFactory(
+            prowlarr=prowlarr, tmdb=tmdb
+        )
+        with TestClient(app, headers=BROWSER) as running:
+            running.post("/api/setup/admin", json={"username": "skipper", "password": "harbour"})
+            running.post("/api/setup/detect")
+            yield running
+
+    def test_the_ten_defaults_come_back_with_their_names(self, client: TestClient) -> None:
+        body = client.get("/api/setup/indexers").json()
+
+        assert [row["definition_name"] for row in body["options"]] == list(DEFAULT_INDEXERS)
+        assert body["kind"] == "prowlarr"
+        assert body["origin"] == "bundled"
+
+    def test_applying_adds_only_what_was_ticked(self, client: TestClient) -> None:
+        body = client.post(
+            "/api/setup/indexers/apply", json={"indexers": ["nyaasi", "mikan"]}
+        ).json()
+
+        assert [row["step"] for row in body["steps"] if row["step"] in DEFAULT_INDEXERS] == [
+            "nyaasi",
+            "mikan",
+        ]
+        assert [row["definition_name"] for row in body["options"] if row["present"]] == [
+            "nyaasi",
+            "mikan",
+        ]
+
+    def test_an_existing_torznab_endpoint_is_tested_and_remembered(
+        self, client: TestClient
+    ) -> None:
+        body = client.post(
+            "/api/setup/indexers/connect",
+            json={
+                "kind": "torznab",
+                "base_url": "http://jackett:9117/api/v2.0/indexers/all/results/torznab/api/",
+                "api_key": "the-key",
+            },
+        ).json()
+
+        assert body["kind"] == "torznab"
+        assert [(row["step"], row["status"]) for row in body["steps"]] == [("torznab", "ok")]
+        # 尾斜線在存下來之前就削掉，之後組網址才不會出現兩條斜線。
+        assert body["base_url"].endswith("/torznab/api")
+
+    def test_the_source_berth_can_be_skipped_and_unskipped(self, client: TestClient) -> None:
+        """跳過是可以反悔的。步驟怎麼跟著走在 `test_setup_source.py`。"""
+        assert client.post("/api/setup/indexers/skip", json={}).json()["skipped"] is True
+        assert client.get("/api/setup/indexers").json()["skipped"] is True
+        assert client.post("/api/setup/tmdb/skip", json={}).json()["skipped"] is True
+
+        assert (
+            client.post("/api/setup/indexers/skip", json={"skipped": False}).json()["skipped"]
+            is False
+        )
+
+    def test_tmdb_answers_with_the_built_in_credential(
+        self, client: TestClient, tmdb: FakeTmdbClient
+    ) -> None:
+        assert client.get("/api/setup/tmdb").json() == {
+            "using_project_credential": True,
+            "steps": [],
+            "skipped": False,
+        }
+
+        body = client.post("/api/setup/tmdb/test", json={}).json()
+
+        assert tmdb.credential == PROJECT_CREDENTIAL
+        assert [(row["step"], row["status"]) for row in body["steps"]] == [("configuration", "ok")]
+
+    def test_a_pasted_tmdb_key_is_used_instead(
+        self, client: TestClient, tmdb: FakeTmdbClient
+    ) -> None:
+        body = client.post("/api/setup/tmdb/test", json={"api_key": "the-users-key"}).json()
+
+        assert tmdb.credential == "the-users-key"
+        assert body["using_project_credential"] is False
+
+    def test_the_new_endpoints_close_after_setup(self, client: TestClient) -> None:
+        """門禁是 middleware，所以新掛的端點什麼都不做就已經在門後（票 07）。"""
+        _complete_setup(client)
+
+        for path in ("/api/setup/qbittorrent/diff", "/api/setup/indexers", "/api/setup/tmdb"):
+            assert client.get(path).status_code == 401, path

@@ -170,6 +170,37 @@ class SetupJellyfin(BaseModel):
     merge_versions_installed: bool = False
 
 
+class SetupQbittorrent(BaseModel):
+    """精靈第 4 步的狀態（plan §9.3 第 4 步、§8.1）。"""
+
+    model_config = ConfigDict(extra="ignore")
+
+    #: 逐鍵的套用結果；`key` 是 `QbittorrentStep`，也就是 `app/setPreferences` 的鍵名。
+    steps: list[SetupStep] = []
+
+
+class SetupIndexer(BaseModel):
+    """精靈第 5 步的狀態（plan §9.3 第 5 步、§8.4）。"""
+
+    model_config = ConfigDict(extra="ignore")
+
+    #: 逐站結果。套件內路徑的 `key` 是 Prowlarr 的 `definitionName`；既有路徑只有一條，
+    #: `key` 是 `IndexerKind`。兩條路徑共用同一份形狀，畫面也就是同一組纜繩。
+    steps: list[SetupStep] = []
+    #: 「之後再說」。這一步與 TMDB 可跳過，完成頁列出跳過了什麼（plan §9.3）。
+    skipped: bool = False
+
+
+class SetupTmdb(BaseModel):
+    """精靈第 6 步的狀態（plan §9.3 第 6 步、§8.3）。"""
+
+    model_config = ConfigDict(extra="ignore")
+
+    #: 只有一條纜繩（`configuration`），形狀與其他泊位一致。
+    steps: list[SetupStep] = []
+    skipped: bool = False
+
+
 class SetupSettings(SettingsGroup):
     KEY = "setup"
 
@@ -180,6 +211,9 @@ class SetupSettings(SettingsGroup):
     #: 本輪輪詢的起點，用來算 2 分鐘上限。全部服務都判定完就清掉。
     probe_started_at: datetime | None = None
     jellyfin: SetupJellyfin = SetupJellyfin()
+    qbittorrent: SetupQbittorrent = SetupQbittorrent()
+    indexer: SetupIndexer = SetupIndexer()
+    tmdb: SetupTmdb = SetupTmdb()
 
 
 #: 所有分組的清單，用來確認每一組都有預設值。

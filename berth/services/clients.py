@@ -18,6 +18,10 @@ from berth.adapters.prowlarr.client import HttpProwlarrClient
 from berth.adapters.prowlarr.config_file import read_api_key
 from berth.adapters.qbittorrent import QbittorrentClient
 from berth.adapters.qbittorrent.client import HttpQbittorrentClient
+from berth.adapters.tmdb import TmdbClient
+from berth.adapters.tmdb.client import HttpTmdbClient
+from berth.adapters.torznab import TorznabClient
+from berth.adapters.torznab.client import HttpTorznabClient
 from berth.config import Config
 
 
@@ -29,6 +33,14 @@ class ServiceClientFactory(Protocol):
     def qbittorrent(self, base_url: str) -> QbittorrentClient: ...
 
     def prowlarr(self, base_url: str, api_key: str) -> ProwlarrClient: ...
+
+    def tmdb(self, credential: str) -> TmdbClient:
+        """TMDB 只有一台，位址是寫死的；可變的是憑證（內建的或使用者填的）。"""
+        ...
+
+    def torznab(self, base_url: str, api_key: str) -> TorznabClient:
+        """位址是使用者貼的**整條** Torznab 網址，不是一個服務根。"""
+        ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -77,3 +89,9 @@ class HttpServiceClientFactory:
 
     def prowlarr(self, base_url: str, api_key: str) -> ProwlarrClient:
         return HttpProwlarrClient(base_url, api_key)
+
+    def tmdb(self, credential: str) -> TmdbClient:
+        return HttpTmdbClient(credential)
+
+    def torznab(self, base_url: str, api_key: str) -> TorznabClient:
+        return HttpTorznabClient(base_url, api_key)

@@ -1,0 +1,14 @@
+[
+  {
+    "propertyName": "Name",
+    "errorMessage": "Should be unique",
+    "attemptedValue": "dmhy",
+    "severity": "error",
+    "errorCode": "PredicateValidator",
+    "formattedMessageArguments": [],
+    "formattedMessagePlaceholderValues": {
+      "PropertyName": "Name",
+      "PropertyValue": "dmhy"
+    }
+  }
+]

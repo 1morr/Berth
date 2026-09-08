@@ -33,6 +33,24 @@ plan §9.4 的九步之後那台伺服器的狀態，不是手排出來的場景
 | `jellyfin/packages.merge-versions.json` | `GET /Packages` 裡 `Merge Versions` 那一筆（整份太大，只留這個套件） |
 | `jellyfin/libraries-availableoptions.{movies,tvshows}.with-tvdb.json` | `GET /Libraries/AvailableOptions`，**額外裝了官方 TVDB 插件之後**。插件會替每個型別多掛 fetcher，這正是「圖片 fetcher 不可以寫死」的證據 |
 
+2026-09-08（票 08）。qBittorrent 兩個版本各起一個容器錄同樣四支端點；Prowlarr 是同一台真的
+2.5.2.5491，索引站的成敗是它自己連出去的結果；TMDB 打的是真的 `api.themoviedb.org`：
+
+| 檔案 | 來源 |
+| --- | --- |
+| `qbittorrent/app-{version,webapiversion}.{4.4.5,5.2.3}.{txt}` | `lscr.io/linuxserver/qbittorrent:4.4.5` 與 `:5.2.3`，從白名單內的容器打 `GET /api/v2/app/version` 與 `/webapiVersion`。兩版差在 `2.8.5` 與 `2.15.1`，`paused` / `stopped` 的判斷就綁在這兩個字串上 |
+| `qbittorrent/app-preferences.{4.4.5,5.2.3}.json` | 同上，`GET /api/v2/app/preferences`。乾淨實例，所以精靈第 4 步的五個鍵全部與建議值不同；`save_path` 的尾斜線兩版不同 |
+| `qbittorrent/torrents-categories.{4.4.5,5.2.3}.json` | 同上，`GET /api/v2/torrents/categories`（票 04 的實驗留下的 `berth-exp` 分類）。兩版都是 `savePath` |
+| `prowlarr/indexer-schema.defaults.json` | `GET /api/v1/indexer/schema` 裡精靈預設勾的那十個站（整份 627 筆太大，只留這十筆，順序同 `DEFAULT_INDEXERS`） |
+| `prowlarr/indexer.created.dmhy.json` | `POST /api/v1/indexer` 加 dmhy 成功時的 201 回應 |
+| `prowlarr/indexer.rejected.nyaasi.json` | 同一支端點加 nyaa.si 失敗時的 400。**新增之前 Prowlarr 會先連一次那個站**，這份就是連不上的原文 |
+| `prowlarr/indexer.rejected.duplicate.json` | 同名再加一次的 400（`Should be unique`） |
+| `prowlarr/indexer.defaults-added.json` | `GET /api/v1/indexer`，加完那一輪之後。十個站裡加得起來的是這五個，另外五個從這台機器連不出去 |
+| `prowlarr/config-host.json` | `GET /api/v1/config/host`，`apiKey` 換成 `0000…0001`、密碼欄位清空 |
+| `torznab/caps.xml` | Prowlarr 的單站 Torznab 網址 `?t=caps`（Jackett 與單站的形狀相同） |
+| `tmdb/configuration.json` | `GET /3/configuration`，帶 v4 read access token |
+| `tmdb/configuration.unauthorized.json` | 同一支端點帶一把無效的 key，回 401 |
+
 ## 規則
 
 - 檔案裡不放真的秘密。`config.xml` 的 API key 是拋棄式容器產的，仍然換成 `0000…0001`。

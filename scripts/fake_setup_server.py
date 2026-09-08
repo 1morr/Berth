@@ -30,8 +30,12 @@ from berth.adapters.jellyfin import (
 from berth.adapters.jellyfin.fake import FakeJellyfinClient
 from berth.adapters.prowlarr import ProwlarrClient, ProwlarrIndexer
 from berth.adapters.prowlarr.fake import FakeProwlarrClient
-from berth.adapters.qbittorrent import QbittorrentClient
+from berth.adapters.qbittorrent import QbittorrentClient, QbittorrentVersion
 from berth.adapters.qbittorrent.fake import FakeQbittorrentClient
+from berth.adapters.tmdb import TmdbClient
+from berth.adapters.tmdb.fake import FakeTmdbClient
+from berth.adapters.torznab import TorznabClient
+from berth.adapters.torznab.fake import FakeTorznabClient
 from berth.api.deps import get_client_factory, get_setup_probes
 from berth.config import Config, load_config
 from berth.db import create_engine, create_session_factory, upgrade_to_head
@@ -40,6 +44,20 @@ from berth.models import JellyfinSettings, SetupSettings
 from berth.services.clients import SetupProbes
 from berth.services.jellyfin import MERGE_VERSIONS_GUID
 from berth.services.settings import read_settings, write_settings
+
+#: 這台假 Prowlarr 連不上的站。訊息是 2026-09-08 對真的 Prowlarr 錄到的原文（brief §20.7）——
+#: 十個公開站裡有幾個連不上是常態，畫面必須撐得住這個組合。
+BLOCKED_SITES = {
+    "nyaasi": (
+        "Query successful, but no results were returned from your indexer. "
+        "This may be an issue with the indexer, your indexer category settings, "
+        "or other indexer settings such as search freeleech only etc."
+    ),
+    "1337x": "Unable to access 1337x.to, blocked by CloudFlare Protection.",
+    "eztv": "Unable to access eztvx.to, blocked by CloudFlare Protection.",
+    "Anidex": "Unable to connect to indexer, indexer's server is unavailable.",
+    "animetosho-xyz": "Unable to connect to indexer, check the log above the ValidationFailure.",
+}
 
 #: 使用者自己那台 Jellyfin 的媒體庫。Anime 那個掛了 TVDB，用來看警告長什麼樣。
 NAS_LIBRARIES = (
@@ -94,6 +112,8 @@ class Scenario:
     connect_indexers: list[ProwlarrIndexer] = field(default_factory=list)
     #: 精靈已經跑完：整個 API 進門禁，畫面從登入頁開始（票 07）。
     setup_completed: bool = False
+    #: TMDB 只有一台，位址寫死，所以情境裡就一份。
+    tmdb: FakeTmdbClient = field(default_factory=FakeTmdbClient)
 
     def probes(self) -> SetupProbes:
         return SetupProbes(
@@ -109,9 +129,18 @@ def bundled() -> Scenario:
     return Scenario(
         jellyfin=FakeJellyfinClient(),
         qbittorrent=FakeQbittorrentClient(),
-        prowlarr=FakeProwlarrClient(),
+        prowlarr=FakeProwlarrClient(rejects=BLOCKED_SITES),
         prowlarr_api_key="00000000000000000000000000000001",
     )
+
+
+def outdated() -> Scenario:
+    """qBittorrent 太舊：Web API 低於 2.8.4，第 4 步拒絕接入並要求升級（brief §16.4）。"""
+    scenario = bundled()
+    scenario.qbittorrent = FakeQbittorrentClient(
+        version=QbittorrentVersion(app="v4.3.9", webapi="2.8.2")
+    )
+    return scenario
 
 
 def mixed() -> Scenario:
@@ -181,6 +210,7 @@ def failing() -> Scenario:
 
 SCENARIOS = {
     "bundled": bundled,
+    "outdated": outdated,
     "signed-out": signed_out,
     "failing": failing,
     "mixed": mixed,
@@ -210,10 +240,24 @@ class FakeClientFactory:
         return client
 
     def qbittorrent(self, base_url: str) -> QbittorrentClient:
-        return FakeQbittorrentClient(base_url=base_url)
+        if self._scenario.qbittorrent.error is not None:
+            # 要帳密的那一台，使用者填了之後就該連得上。
+            self._scenario.qbittorrent = FakeQbittorrentClient(base_url=base_url)
+        client = self._scenario.qbittorrent
+        client.base_url = base_url
+        return client
 
     def prowlarr(self, base_url: str, api_key: str) -> ProwlarrClient:
+        if base_url == self._scenario.prowlarr.base_url:
+            # 套件內的那一台要回同一份實例：索引站加進去之後再讀要看得到。
+            return self._scenario.prowlarr
         return FakeProwlarrClient(base_url=base_url, indexers=list(self._scenario.connect_indexers))
+
+    def tmdb(self, credential: str) -> TmdbClient:
+        return self._scenario.tmdb
+
+    def torznab(self, base_url: str, api_key: str) -> TorznabClient:
+        return FakeTorznabClient(base_url=base_url)
 
 
 def main(argv: list[str] | None = None) -> int:

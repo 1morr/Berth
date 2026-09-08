@@ -2,8 +2,18 @@
 
 from __future__ import annotations
 
-from berth.adapters.http import DEFAULT_TIMEOUT_SECONDS, AuthFailedError, HttpSession
-from berth.adapters.qbittorrent import QbittorrentVersion
+import json
+from collections.abc import Mapping
+from typing import Any
+
+from berth.adapters.http import (
+    DEFAULT_TIMEOUT_SECONDS,
+    AuthFailedError,
+    HttpSession,
+    ProtocolMismatchError,
+    json_body,
+)
+from berth.adapters.qbittorrent import QbittorrentCategory, QbittorrentVersion
 
 
 class HttpQbittorrentClient:
@@ -34,6 +44,34 @@ class HttpQbittorrentClient:
         app = await self._session.get("/api/v2/app/version")
         webapi = await self._session.get("/api/v2/app/webapiVersion")
         return QbittorrentVersion(app=app.text.strip(), webapi=webapi.text.strip())
+
+    async def preferences(self) -> Mapping[str, Any]:
+        payload = json_body(await self._session.get("/api/v2/app/preferences"))
+        if not isinstance(payload, dict):
+            raise ProtocolMismatchError("app/preferences: expected an object")
+        return payload
+
+    async def set_preferences(self, values: Mapping[str, Any]) -> None:
+        """收的是表單裡一個叫 `json` 的欄位，不是 JSON body。"""
+        await self._session.request(
+            "POST", "/api/v2/app/setPreferences", data={"json": json.dumps(dict(values))}
+        )
+
+    async def categories(self) -> tuple[QbittorrentCategory, ...]:
+        """鍵名兩種都收：4.4.5 與 5.2.3 實測都是 `savePath`，`save_path` 只出現在
+        4.4.0–4.4.1，而那兩版仍在支援範圍內（brief §20.7）。
+        """
+        payload = json_body(await self._session.get("/api/v2/torrents/categories"))
+        if not isinstance(payload, dict):
+            raise ProtocolMismatchError("torrents/categories: expected an object")
+        return tuple(
+            QbittorrentCategory(
+                name=str(row.get("name", name)),
+                save_path=str(row.get("savePath", row.get("save_path", ""))),
+            )
+            for name, row in payload.items()
+            if isinstance(row, dict)
+        )
 
     async def aclose(self) -> None:
         await self._session.aclose()

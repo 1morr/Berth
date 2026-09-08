@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import socket
+import urllib.parse
 
 import httpx
 import pytest
@@ -22,15 +23,28 @@ from berth.adapters.http import (
 )
 from berth.adapters.jellyfin import NewLibrary, TypeOption
 from berth.adapters.jellyfin.client import HttpJellyfinClient
+from berth.adapters.prowlarr import (
+    DEFAULT_APP_PROFILE_ID,
+    IndexerDefinition,
+    IndexerRejectedError,
+    ProwlarrIndexer,
+)
 from berth.adapters.prowlarr.client import HttpProwlarrClient
 from berth.adapters.qbittorrent.client import HttpQbittorrentClient
+from berth.adapters.tmdb import PROJECT_CREDENTIAL
+from berth.adapters.tmdb.client import HttpTmdbClient
+from berth.adapters.torznab.client import HttpTorznabClient
 from berth.domain import CollectionType
+from berth.services.indexer import DEFAULT_INDEXERS
 from berth.services.jellyfin import MERGE_VERSIONS_REPOSITORY
 from tests.conftest import read_fixture
 
 JELLYFIN_URL = "http://jellyfin:8096"
 QBITTORRENT_URL = "http://qbittorrent:8080"
 PROWLARR_URL = "http://prowlarr:9696"
+TORZNAB_URL = "http://jackett:9117/api/v2.0/indexers/all/results/torznab/api"
+#: 契約測試不打真的 TMDB；位址是真的那一個，回應是錄下來的那一份。
+TMDB_URL = "https://api.themoviedb.org/3"
 
 
 @respx.mock
@@ -77,15 +91,27 @@ async def test_jellyfin_rejects_a_payload_from_something_else() -> None:
     await client.aclose()
 
 
-@respx.mock
-@pytest.mark.asyncio
-async def test_qbittorrent_version_without_credentials() -> None:
+#: 兩組錄製回應：4.4.5（Web API 2.8.5，支援下限）與 5.2.3（2.15.1）。差異本身就是要守的東西。
+QBITTORRENT_RELEASES = ("4.4.5", "5.2.3")
+
+
+def mock_qbittorrent_version(release: str) -> None:
     respx.get(f"{QBITTORRENT_URL}/api/v2/app/version").respond(
-        200, text=read_fixture("http/qbittorrent/app-version.txt")
+        200, text=read_fixture(f"http/qbittorrent/app-version.{release}.txt")
     )
     respx.get(f"{QBITTORRENT_URL}/api/v2/app/webapiVersion").respond(
-        200, text=read_fixture("http/qbittorrent/app-webapiversion.txt")
+        200, text=read_fixture(f"http/qbittorrent/app-webapiversion.{release}.txt")
     )
+
+
+@respx.mock
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("release", "app", "webapi"),
+    [("4.4.5", "v4.4.5", "2.8.5"), ("5.2.3", "v5.2.3", "2.15.1")],
+)
+async def test_qbittorrent_version_without_credentials(release: str, app: str, webapi: str) -> None:
+    mock_qbittorrent_version(release)
 
     client = HttpQbittorrentClient(QBITTORRENT_URL)
     try:
@@ -93,8 +119,116 @@ async def test_qbittorrent_version_without_credentials() -> None:
     finally:
         await client.aclose()
 
-    assert version.app == "v5.2.3"
-    assert version.webapi == "2.15.1"
+    assert version.app == app
+    assert version.webapi == webapi
+
+
+@respx.mock
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("release", "parameter"), [("4.4.5", "paused"), ("5.2.3", "stopped")])
+async def test_qbittorrent_pause_parameter_follows_the_web_api_version(
+    release: str, parameter: str
+) -> None:
+    """送錯的那個參數會被靜默忽略，torrent 就這樣開始下載（brief §20.7）。
+
+    版本判斷因此是必要條件而不是最佳化，所以它綁在**錄下來的版本字串**上，不是手寫的常數。
+    """
+    mock_qbittorrent_version(release)
+
+    client = HttpQbittorrentClient(QBITTORRENT_URL)
+    try:
+        version = await client.version()
+    finally:
+        await client.aclose()
+
+    assert version.pause_parameter == parameter
+    assert version.supported is True
+
+
+@respx.mock
+@pytest.mark.asyncio
+@pytest.mark.parametrize("release", QBITTORRENT_RELEASES)
+async def test_qbittorrent_categories_accept_both_save_path_spellings(release: str) -> None:
+    """兩個版本錄到的都是 `savePath`。`save_path` 只出現在 4.4.0–4.4.1，
+    而那兩版仍在支援範圍內（plan §8.1）。
+    """
+    respx.get(f"{QBITTORRENT_URL}/api/v2/torrents/categories").respond(
+        200, text=read_fixture(f"http/qbittorrent/torrents-categories.{release}.json")
+    )
+
+    client = HttpQbittorrentClient(QBITTORRENT_URL)
+    try:
+        categories = await client.categories()
+    finally:
+        await client.aclose()
+
+    assert [(row.name, row.save_path) for row in categories] == [
+        ("berth-exp", "/downloads/berth-exp")
+    ]
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_qbittorrent_categories_read_the_snake_case_spelling() -> None:
+    """4.4.0–4.4.1 回的是 `save_path`。錄不到那兩版（image 只發到 4.4.5），所以這一條手寫。"""
+    respx.get(f"{QBITTORRENT_URL}/api/v2/torrents/categories").respond(
+        200, json={"berth-tv": {"name": "berth-tv", "save_path": "/data/torrent/complete/tv"}}
+    )
+
+    client = HttpQbittorrentClient(QBITTORRENT_URL)
+    try:
+        categories = await client.categories()
+    finally:
+        await client.aclose()
+
+    assert categories[0].save_path == "/data/torrent/complete/tv"
+
+
+@respx.mock
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("release", "save_path", "temp_path"),
+    [
+        ("4.4.5", "/downloads/", "/downloads/incomplete/"),
+        ("5.2.3", "/downloads", "/downloads/incomplete"),
+    ],
+)
+async def test_qbittorrent_preferences_keep_the_recorded_values(
+    release: str, save_path: str, temp_path: str
+) -> None:
+    """`save_path` 的尾斜線兩版不同（4.4 有、5.x 沒有）——組路徑前要正規化（brief §20.7）。"""
+    respx.get(f"{QBITTORRENT_URL}/api/v2/app/preferences").respond(
+        200, text=read_fixture(f"http/qbittorrent/app-preferences.{release}.json")
+    )
+
+    client = HttpQbittorrentClient(QBITTORRENT_URL)
+    try:
+        preferences = await client.preferences()
+    finally:
+        await client.aclose()
+
+    assert preferences["save_path"] == save_path
+    assert preferences["temp_path"] == temp_path
+    # 新裝的實例這三個都是 false，所以精靈第 4 步要套用的差異確實存在（brief §20.7）。
+    assert preferences["temp_path_enabled"] is False
+    assert preferences["auto_tmm_enabled"] is False
+    assert preferences["category_changed_tmm_enabled"] is False
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_qbittorrent_set_preferences_posts_one_json_form_field() -> None:
+    """`app/setPreferences` 收的是表單裡一個叫 `json` 的欄位，不是 JSON body。"""
+    route = respx.post(f"{QBITTORRENT_URL}/api/v2/app/setPreferences").respond(200, text="")
+
+    client = HttpQbittorrentClient(QBITTORRENT_URL)
+    try:
+        await client.set_preferences({"temp_path_enabled": True, "save_path": "/data"})
+    finally:
+        await client.aclose()
+
+    body = urllib.parse.parse_qs(route.calls.last.request.content.decode())
+    assert json.loads(body["json"][0]) == {"temp_path_enabled": True, "save_path": "/data"}
 
 
 @respx.mock
@@ -547,3 +681,279 @@ async def test_jellyfin_token_travels_in_the_mediabrowser_header() -> None:
     assert 'Token="' not in anonymous
     assert 'Client="Berth"' in anonymous
     assert 'Token="the-key"' in route.calls.last.request.headers["Authorization"]
+
+
+# --- 票 08：索引站與 TMDB（plan §8.3、§8.4）---------------------------------
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_prowlarr_schema_carries_the_ten_default_indexers() -> None:
+    """精靈第 5 步預設勾的十個公開站都要在這台 Prowlarr 的定義清單裡（plan §9.3 第 5 步）。
+
+    釘的是 `definitionName`——站名 Prowlarr 自己會改（`Anidex` 與文件寫的 `AniDex`），
+    機器名不會。
+    """
+    respx.get(f"{PROWLARR_URL}/api/v1/indexer/schema").respond(
+        200, text=read_fixture("http/prowlarr/indexer-schema.defaults.json")
+    )
+
+    client = HttpProwlarrClient(PROWLARR_URL, "key")
+    try:
+        definitions = await client.definitions()
+    finally:
+        await client.aclose()
+
+    assert [row.definition_name for row in definitions] == list(DEFAULT_INDEXERS)
+    by_name = {row.definition_name: row for row in definitions}
+    assert by_name["nyaasi"].name == "Nyaa.si"
+    assert by_name["nyaasi"].privacy == "public"
+    # Anime Tosho 是唯一不是 public 的那一個，勾選清單靠這個欄位標示出來。
+    assert by_name["animetosho-xyz"].privacy == "semiPrivate"
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_prowlarr_add_indexer_sends_the_definition_with_a_real_app_profile() -> None:
+    """schema 給的 `appProfileId` 是 0，原樣送回去會建不起來（2026-09-08 實測）。"""
+    respx.get(f"{PROWLARR_URL}/api/v1/indexer/schema").respond(
+        200, text=read_fixture("http/prowlarr/indexer-schema.defaults.json")
+    )
+    route = respx.post(f"{PROWLARR_URL}/api/v1/indexer").respond(
+        201, text=read_fixture("http/prowlarr/indexer.created.dmhy.json")
+    )
+
+    client = HttpProwlarrClient(PROWLARR_URL, "key")
+    try:
+        definition = next(
+            row for row in await client.definitions() if row.definition_name == "dmhy"
+        )
+        created = await client.add_indexer(definition)
+    finally:
+        await client.aclose()
+
+    sent = json.loads(route.calls.last.request.content)
+    assert sent["definitionName"] == "dmhy"
+    assert sent["appProfileId"] == DEFAULT_APP_PROFILE_ID
+    assert (created.id, created.name, created.enabled) == (6, "dmhy", True)
+    assert created.definition_name == "dmhy"
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_prowlarr_rejects_an_indexer_it_cannot_reach() -> None:
+    """**新增之前 Prowlarr 會先連一次那個站**，連不上就 400 而且什麼都不建立。
+
+    錄下來的這一份是 nyaa.si 從本機連出去的真實結果（2026-09-08）。
+    """
+    respx.post(f"{PROWLARR_URL}/api/v1/indexer").respond(
+        400, text=read_fixture("http/prowlarr/indexer.rejected.nyaasi.json")
+    )
+
+    client = HttpProwlarrClient(PROWLARR_URL, "key")
+    with pytest.raises(IndexerRejectedError) as failure:
+        await client.add_indexer(IndexerDefinition("nyaasi", "Nyaa.si", "public", {}))
+    await client.aclose()
+
+    assert failure.value.messages[0].startswith("Query successful, but no results were returned")
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_prowlarr_rejects_a_second_indexer_with_the_same_name() -> None:
+    """同名的第二個站被拒（`Should be unique`），所以冪等要靠呼叫端先列（實測）。"""
+    respx.post(f"{PROWLARR_URL}/api/v1/indexer").respond(
+        400, text=read_fixture("http/prowlarr/indexer.rejected.duplicate.json")
+    )
+
+    client = HttpProwlarrClient(PROWLARR_URL, "key")
+    with pytest.raises(IndexerRejectedError) as failure:
+        await client.add_indexer(IndexerDefinition("dmhy", "dmhy", "public", {}))
+    await client.aclose()
+
+    assert failure.value.messages == ("Should be unique",)
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_prowlarr_lists_the_indexers_that_were_added() -> None:
+    respx.get(f"{PROWLARR_URL}/api/v1/indexer").respond(
+        200, text=read_fixture("http/prowlarr/indexer.defaults-added.json")
+    )
+
+    client = HttpProwlarrClient(PROWLARR_URL, "key")
+    try:
+        indexers = await client.indexers()
+    finally:
+        await client.aclose()
+
+    assert {row.definition_name for row in indexers} == {
+        "acgrip",
+        "dmhy",
+        "mikan",
+        "thepiratebay",
+        "yts",
+    }
+    assert all(row.enabled for row in indexers)
+    # `payload` 留的是原文，因為 `indexer/test` 收的就是它。
+    assert indexers[0].payload["fields"]
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_prowlarr_host_config_round_trips_the_whole_object() -> None:
+    """設帳密要把整份 `config/host` 送回去，少了 `passwordConfirmation` 會被拒（brief §20.7）。"""
+    respx.get(f"{PROWLARR_URL}/api/v1/config/host").respond(
+        200, text=read_fixture("http/prowlarr/config-host.json")
+    )
+    route = respx.put(f"{PROWLARR_URL}/api/v1/config/host/1").respond(202, json={})
+
+    client = HttpProwlarrClient(PROWLARR_URL, "key")
+    try:
+        config = await client.host_config()
+        await client.set_host_config(
+            {
+                **config,
+                "authenticationMethod": "forms",
+                "username": "skipper",
+                "password": "harbour",
+                "passwordConfirmation": "harbour",
+            }
+        )
+    finally:
+        await client.aclose()
+
+    assert "passwordConfirmation" in config
+    sent = json.loads(route.calls.last.request.content)
+    assert sent["username"] == "skipper"
+    assert sent["passwordConfirmation"] == "harbour"
+    # 整份物件送回去：Prowlarr 用它覆寫，少送的欄位會被清掉。
+    assert len(sent) == len(config)
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_torznab_caps_prove_the_endpoint_answers_torznab() -> None:
+    """`t=caps` 一次證明位址對、key 對、而且那一端真的是 Torznab（錄自 Prowlarr 的單站網址）。"""
+    route = respx.get(TORZNAB_URL).respond(200, text=read_fixture("http/torznab/caps.xml"))
+
+    client = HttpTorznabClient(TORZNAB_URL, "the-key")
+    try:
+        caps = await client.caps()
+    finally:
+        await client.aclose()
+
+    assert caps.server_title == "Prowlarr"
+    assert caps.search_available is True
+    assert caps.categories == ("TV",)
+    assert dict(route.calls.last.request.url.params) == {"t": "caps", "apikey": "the-key"}
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_torznab_rejects_a_page_that_is_not_caps() -> None:
+    respx.get(TORZNAB_URL).respond(200, text="<html><body>Jackett</body></html>")
+
+    client = HttpTorznabClient(TORZNAB_URL, "the-key")
+    with pytest.raises(ProtocolMismatchError):
+        await client.caps()
+    await client.aclose()
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_tmdb_configuration_proves_the_credential_works() -> None:
+    respx.get(f"{TMDB_URL}/configuration").respond(
+        200, text=read_fixture("http/tmdb/configuration.json")
+    )
+
+    client = HttpTmdbClient(PROJECT_CREDENTIAL, base_url=TMDB_URL)
+    try:
+        configuration = await client.configuration()
+    finally:
+        await client.aclose()
+
+    assert configuration.image_base_url == "https://image.tmdb.org/t/p/"
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_tmdb_read_access_token_travels_as_a_bearer_header() -> None:
+    """v4 的 read access token 走標頭，不進網址——它不會落在任何一行 log 裡。"""
+    route = respx.get(f"{TMDB_URL}/configuration").respond(
+        200, text=read_fixture("http/tmdb/configuration.json")
+    )
+
+    client = HttpTmdbClient(PROJECT_CREDENTIAL, base_url=TMDB_URL)
+    try:
+        await client.configuration()
+    finally:
+        await client.aclose()
+
+    assert route.calls.last.request.headers["Authorization"] == f"Bearer {PROJECT_CREDENTIAL}"
+    assert "api_key" not in route.calls.last.request.url.params
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_tmdb_v3_api_key_travels_as_a_query_parameter() -> None:
+    """使用者貼的多半是帳號頁上那把 32 字元的 v3 key，兩種形狀都要成立（2026-09-08 實測）。"""
+    route = respx.get(f"{TMDB_URL}/configuration").respond(
+        200, text=read_fixture("http/tmdb/configuration.json")
+    )
+
+    client = HttpTmdbClient("dc332023c119334763ec3b21bcdd1834", base_url=TMDB_URL)
+    try:
+        await client.configuration()
+    finally:
+        await client.aclose()
+
+    assert "Authorization" not in route.calls.last.request.headers
+    assert route.calls.last.request.url.params["api_key"] == "dc332023c119334763ec3b21bcdd1834"
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_tmdb_rejects_an_invalid_key() -> None:
+    respx.get(f"{TMDB_URL}/configuration").respond(
+        401, text=read_fixture("http/tmdb/configuration.unauthorized.json")
+    )
+
+    client = HttpTmdbClient("0000000000000000000000000000dead", base_url=TMDB_URL)
+    with pytest.raises(AuthFailedError):
+        await client.configuration()
+    await client.aclose()
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_prowlarr_tests_an_indexer_that_is_already_there() -> None:
+    """`indexer/test` 是給**已經存在**的站用的：實測回 200 加一個空物件（2026-09-08）。
+
+    body 是整份資源原文，所以 adapter 把 `payload` 原樣留著。
+    """
+    route = respx.post(f"{PROWLARR_URL}/api/v1/indexer/test").respond(200, json={})
+    saved = json.loads(read_fixture("http/prowlarr/indexer.created.dmhy.json"))
+
+    client = HttpProwlarrClient(PROWLARR_URL, "key")
+    try:
+        await client.test_indexer(
+            ProwlarrIndexer(id=saved["id"], name=saved["name"], enabled=True, payload=saved)
+        )
+    finally:
+        await client.aclose()
+
+    assert json.loads(route.calls.last.request.content)["definitionName"] == "dmhy"
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_prowlarr_reports_a_site_that_stopped_working() -> None:
+    respx.post(f"{PROWLARR_URL}/api/v1/indexer/test").respond(
+        400, text=read_fixture("http/prowlarr/indexer.rejected.nyaasi.json")
+    )
+
+    client = HttpProwlarrClient(PROWLARR_URL, "key")
+    with pytest.raises(IndexerRejectedError):
+        await client.test_indexer(ProwlarrIndexer(id=1, name="Nyaa.si", enabled=True))
+    await client.aclose()

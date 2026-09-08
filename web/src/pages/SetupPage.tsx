@@ -4,34 +4,60 @@ import { useTranslation } from 'react-i18next'
 
 import {
   addLibraryPath,
+  applyIndexers,
+  applyQbittorrent,
   bootstrapJellyfin,
+  connectIndexer,
   connectJellyfin,
   connectService,
   createAdmin,
   detectServices,
+  indexerSetupQueryOptions,
   installMergeVersions,
   jellyfinSetupQueryOptions,
+  qbittorrentSetupQueryOptions,
   setupStatusQueryOptions,
+  skipIndexers,
+  skipTmdb,
+  testTmdb,
+  tmdbSetupQueryOptions,
   type AdminInput,
   type ConnectInput,
+  type IndexerSetup,
   type JellyfinSetup,
+  type QbittorrentSetup,
   type ServiceKind,
   type SetupStatus,
+  type TmdbSetup,
 } from '../api/setup'
 import { LanguageToggle } from '../components/LanguageToggle'
 import { AdminStep } from '../setup/AdminStep'
 import { BerthBoard } from '../setup/BerthBoard'
 import { DetectStep } from '../setup/DetectStep'
 import { JellyfinStep } from '../setup/JellyfinStep'
+import { QbittorrentStep } from '../setup/QbittorrentStep'
+import { SourceStep } from '../setup/SourceStep'
 import { GhostButton } from '../components/controls'
 import { SIGNAL_FILL, type Signal } from '../components/signal'
+import { isSettled } from '../setup/steps'
 import { signalOf } from '../setup/signals'
 
-/** plan §9.3 的八步。泊位 2–4 從票 08 起接手，所以畫面目前停在第 3 步。 */
+/** plan §9.3 的八步。泊位 4（媒體庫路徑）是票 09，所以畫面目前停在第 6 步。 */
 const TOTAL_STEPS = 8
 const STEP_DETECT = 2
 const STEP_JELLYFIN = 3
-const LAST_IMPLEMENTED_STEP = STEP_JELLYFIN
+const STEP_QBITTORRENT = 4
+const STEP_INDEXER = 5
+const STEP_TMDB = 6
+const LAST_IMPLEMENTED_STEP = STEP_TMDB
+
+/** 步驟 → 泊位碼。第 5、6 步是同一個泊位的兩條纜繩（shape brief §5）。 */
+const BERTH_CODE: Record<number, string> = {
+  [STEP_JELLYFIN]: 'BTH 1',
+  [STEP_QBITTORRENT]: 'BTH 2',
+  [STEP_INDEXER]: 'BTH 3',
+  [STEP_TMDB]: 'BTH 3',
+}
 
 /** 服務還在啟動時的重探間隔。上限由後端的輪詢窗口決定（`window_seconds`）。 */
 const POLL_INTERVAL_MS = 3000
@@ -58,8 +84,12 @@ export function SetupPage() {
   }
 
   function absorbJellyfin(next: JellyfinSetup) {
-    queryClient.setQueryData(jellyfinSetupQueryOptions.queryKey, next)
-    // 第 3 步做完精靈就前進，所以整份狀態要重讀。
+    absorbBerth(jellyfinSetupQueryOptions.queryKey, next)
+  }
+
+  /** 一個泊位的動作做完，精靈就可能前進，所以整份狀態要重讀（步驟是導出的，不是游標）。 */
+  function absorbBerth<T>(key: readonly unknown[], next: T) {
+    queryClient.setQueryData(key, next)
     void queryClient.invalidateQueries({ queryKey: setupStatusQueryOptions.queryKey })
   }
 
@@ -88,6 +118,30 @@ export function SetupPage() {
   const signIn = useMutation({ mutationFn: connectJellyfin, onSuccess: absorbJellyfin })
   const addPath = useMutation({ mutationFn: addLibraryPath, onSuccess: absorbJellyfin })
   const plugin = useMutation({ mutationFn: installMergeVersions, onSuccess: absorbJellyfin })
+  const applyPreferences = useMutation({
+    mutationFn: applyQbittorrent,
+    onSuccess: (next) => absorbBerth(qbittorrentSetupQueryOptions.queryKey, next),
+  })
+  const applySites = useMutation({
+    mutationFn: applyIndexers,
+    onSuccess: (next) => absorbBerth(indexerSetupQueryOptions.queryKey, next),
+  })
+  const connectSource = useMutation({
+    mutationFn: connectIndexer,
+    onSuccess: (next) => absorbBerth(indexerSetupQueryOptions.queryKey, next),
+  })
+  const skipSites = useMutation({
+    mutationFn: () => skipIndexers(true),
+    onSuccess: (next) => absorbBerth(indexerSetupQueryOptions.queryKey, next),
+  })
+  const tmdbTest = useMutation({
+    mutationFn: testTmdb,
+    onSuccess: (next) => absorbBerth(tmdbSetupQueryOptions.queryKey, next),
+  })
+  const skipTmdbStep = useMutation({
+    mutationFn: () => skipTmdb(true),
+    onSuccess: (next) => absorbBerth(tmdbSetupQueryOptions.queryKey, next),
+  })
 
   const current = status.data
   const waiting = current?.services.some((row) => row.origin === 'pending') ?? false
@@ -96,9 +150,16 @@ export function SetupPage() {
 
   const jellyfin = useQuery({
     ...jellyfinSetupQueryOptions,
-    enabled: step >= STEP_JELLYFIN,
+    enabled: step === STEP_JELLYFIN,
     refetchInterval: inFlight ? PROGRESS_INTERVAL_MS : false,
   })
+  // 第 4 步的差異是**現查的**：使用者可能在 qBittorrent 自己的介面上改過東西。
+  const qbittorrent = useQuery({
+    ...qbittorrentSetupQueryOptions,
+    enabled: step === STEP_QBITTORRENT,
+  })
+  const indexers = useQuery({ ...indexerSetupQueryOptions, enabled: step >= STEP_INDEXER })
+  const tmdb = useQuery({ ...tmdbSetupQueryOptions, enabled: step >= STEP_INDEXER })
 
   // 服務還在啟動就繼續探，直到有結論或後端判逾時（plan §9.3 第 2 步）。
   useEffect(() => {
@@ -122,6 +183,8 @@ export function SetupPage() {
     services: current.services,
     signals: {
       jellyfin: jellyfinSignal(current, jellyfin.data, inFlight),
+      qbittorrent: qbittorrentSignal(current, qbittorrent.data, applyPreferences.isPending),
+      prowlarr: sourceSignal(current, indexers.data, tmdb.data, applySites.isPending),
     } satisfies Partial<Record<ServiceKind, Signal>>,
   }
 
@@ -145,7 +208,7 @@ export function SetupPage() {
         step={step}
         onRevisit={(target) => setRevisit(target === step ? null : target)}
       />
-      {step === 2 ? (
+      {step === STEP_DETECT ? (
         <DetectStep
           status={current}
           probing={detect.isPending}
@@ -155,27 +218,60 @@ export function SetupPage() {
           onConnect={(kind, input) => connect.mutate({ kind, input })}
           onContinue={() => setRevisit(null)}
         />
-      ) : jellyfin.data ? (
-        <JellyfinStep
-          setup={jellyfin.data}
-          running={bootstrap.isPending}
-          bootstrapFailed={bootstrap.isError}
-          signInFailed={signIn.isError}
-          connecting={signIn.isPending}
-          addingPath={addPath.isPending ? addPath.variables : null}
-          installing={plugin.isPending}
-          onBootstrap={() => bootstrap.mutate()}
-          onConnect={(input) => signIn.mutate(input)}
-          onAddPath={(library) => addPath.mutate(library)}
-          onInstallPlugin={() => plugin.mutate()}
+      ) : step === STEP_JELLYFIN ? (
+        jellyfin.data ? (
+          <JellyfinStep
+            setup={jellyfin.data}
+            running={bootstrap.isPending}
+            bootstrapFailed={bootstrap.isError}
+            signInFailed={signIn.isError}
+            connecting={signIn.isPending}
+            addingPath={addPath.isPending ? addPath.variables : null}
+            installing={plugin.isPending}
+            onBootstrap={() => bootstrap.mutate()}
+            onConnect={(input) => signIn.mutate(input)}
+            onAddPath={(library) => addPath.mutate(library)}
+            onInstallPlugin={() => plugin.mutate()}
+          />
+        ) : (
+          <Waiting failed={jellyfin.isError} message={t('jellyfin.unreachable')} />
+        )
+      ) : step === STEP_QBITTORRENT ? (
+        qbittorrent.data ? (
+          <QbittorrentStep
+            setup={qbittorrent.data}
+            applying={applyPreferences.isPending}
+            requestFailed={applyPreferences.isError}
+            onApply={() => applyPreferences.mutate()}
+          />
+        ) : (
+          <Waiting failed={qbittorrent.isError} message={t('qbittorrent.unreachable')} />
+        )
+      ) : indexers.data && tmdb.data ? (
+        <SourceStep
+          indexers={indexers.data}
+          tmdb={tmdb.data}
+          applying={applySites.isPending}
+          connecting={connectSource.isPending}
+          testingTmdb={tmdbTest.isPending}
+          onApply={(selected) => applySites.mutate(selected)}
+          onConnect={(input) => connectSource.mutate(input)}
+          onSkipIndexers={() => skipSites.mutate()}
+          onTestTmdb={(apiKey) => tmdbTest.mutate(apiKey)}
+          onSkipTmdb={() => skipTmdbStep.mutate()}
         />
       ) : (
-        <p className="p-6 text-sm text-ink-dim">
-          {jellyfin.isError ? t('jellyfin.unreachable') : t('health.checking')}
-        </p>
+        <Waiting failed={indexers.isError || tmdb.isError} message={t('source.unreachable')} />
       )}
     </Shell>
   )
+}
+
+/** 還沒讀到那個泊位的狀態。讀不到與還在讀是兩件事，說法也不一樣。 */
+function Waiting({ failed, message }: { failed: boolean; message: string }) {
+  const { t } = useTranslation()
+
+  return <p className="p-6 text-sm text-ink-dim">{failed ? message : t('health.checking')}</p>
 }
 
 /**
@@ -191,6 +287,40 @@ function jellyfinSignal(
   if (inFlight || setup?.steps.some((row) => row.status === 'running')) return 'working'
   if (setup?.steps.some((row) => row.status === 'failed')) return 'blocked'
   if (status.current_step > STEP_JELLYFIN) return 'secured'
+  return signalOf(detection)
+}
+
+/** 泊位 2 的信號。版本太舊或連不上是阻擋——那一步在使用者升級之前做不下去。 */
+function qbittorrentSignal(
+  status: SetupStatus,
+  setup: QbittorrentSetup | undefined,
+  applying: boolean,
+): Signal {
+  const detection = status.services.find((row) => row.kind === 'qbittorrent')
+  if (applying) return 'working'
+  if (setup?.blocked || setup?.steps.some((row) => row.status === 'failed')) return 'blocked'
+  if (status.current_step > STEP_QBITTORRENT) return 'secured'
+  return signalOf(detection)
+}
+
+/**
+ * 泊位 3 的信號。索引站逐站失敗**不算阻擋**：十個公開站裡有幾個連不上是常態，
+ * 只要接上了一個就走得下去（後端的步驟判定用的是同一條規則）。
+ */
+function sourceSignal(
+  status: SetupStatus,
+  indexers: IndexerSetup | undefined,
+  tmdb: TmdbSetup | undefined,
+  applying: boolean,
+): Signal {
+  const detection = status.services.find((row) => row.kind === 'prowlarr')
+  if (applying) return 'working'
+  if (status.current_step > STEP_TMDB) return 'secured'
+  const settled =
+    (indexers?.skipped ?? false) || (indexers?.steps.some((row) => isSettled(row.status)) ?? false)
+  if (settled && (tmdb?.skipped || tmdb?.steps.some((row) => isSettled(row.status)))) {
+    return 'secured'
+  }
   return signalOf(detection)
 }
 
@@ -213,7 +343,9 @@ function Shell({
         <p className="value text-lg font-semibold tracking-tight">{t('app.name')}</p>
         <p className="label text-ink-dim">{t('setup.title')}</p>
         <p className="label ml-auto text-ink-dim">
-          {step < STEP_JELLYFIN ? t('setup.stage.pre') : t('setup.stage.berth', { code: 'BTH 1' })}{' '}
+          {step in BERTH_CODE
+            ? t('setup.stage.berth', { code: BERTH_CODE[step] })
+            : t('setup.stage.pre')}{' '}
           · {t('setup.step', { current: step, total: TOTAL_STEPS })}
         </p>
         <LanguageToggle />

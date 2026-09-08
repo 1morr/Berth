@@ -18,9 +18,9 @@ from berth.adapters.prowlarr import ProwlarrIndexer
 from berth.adapters.prowlarr.fake import FakeProwlarrClient
 from berth.adapters.qbittorrent.fake import FakeQbittorrentClient
 from berth.domain import DetectionReason, ServiceKind, ServiceOrigin
-from berth.models import SetupSettings
+from berth.models import IndexerSettings, SetupSettings
 from berth.services.clients import SetupProbes
-from berth.services.settings import read_settings
+from berth.services.settings import read_settings, write_settings
 from berth.services.setup import (
     DETECT_WINDOW,
     SetupStatus,
@@ -309,3 +309,28 @@ async def test_detection_is_rerunnable_and_can_change_its_mind(session: AsyncSes
 
     assert verdict(status, ServiceKind.QBITTORRENT)[0] is ServiceOrigin.BUNDLED
     assert len(status.services) == 3
+
+
+@pytest.mark.asyncio
+async def test_the_bundled_prowlarr_api_key_is_remembered_for_the_later_steps(
+    session: AsyncSession,
+) -> None:
+    """套件內 Prowlarr 的 key 只有探測讀得到（唯讀掛載），第 5 步與 M1 都要用它。"""
+    await detect_services(session, probes(prowlarr_api_key="0" * 31 + "1"))
+
+    indexer = await read_settings(session, IndexerSettings)
+    assert indexer.api_key == "0" * 31 + "1"
+    assert indexer.base_url == "http://prowlarr:9696"
+
+
+@pytest.mark.asyncio
+async def test_a_key_the_user_pasted_is_not_overwritten_by_the_mount(
+    session: AsyncSession,
+) -> None:
+    settings = await read_settings(session, IndexerSettings)
+    settings.api_key = "the-users-key"
+    await write_settings(session, settings)
+
+    await detect_services(session, probes(prowlarr_api_key="0" * 31 + "1"))
+
+    assert (await read_settings(session, IndexerSettings)).api_key == "the-users-key"

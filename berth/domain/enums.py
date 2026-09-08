@@ -83,6 +83,35 @@ class JellyfinStep(StrEnum):
     TASKS = "tasks"
 
 
+class QbittorrentStep(StrEnum):
+    """第 4 步逐鍵套用建議偏好（plan §9.3 第 4 步、§8.1）。
+
+    值就是 `app/setPreferences` 的鍵名——一條纜繩對一個鍵，畫面顯示的與送出去的是同一個字串。
+    """
+
+    TEMP_PATH_ENABLED = "temp_path_enabled"
+    TEMP_PATH = "temp_path"
+    SAVE_PATH = "save_path"
+    AUTO_TMM_ENABLED = "auto_tmm_enabled"
+    CATEGORY_CHANGED_TMM_ENABLED = "category_changed_tmm_enabled"
+    #: 「同一組帳密」勾了才會有這一條；`web_ui_password` 只寫不讀。
+    PASSWORD = "web_ui_password"
+
+
+#: 精靈第 5 步「替 Prowlarr 介面設登入」那一條纜繩的 key（plan §9.3 第 5 步）。
+#: **不與 `IndexerKind.PROWLARR` 同名**：那一條與站接不接得上無關，混在一起會讓「這一步
+#: 做完了沒」把一條永遠存在的憑證步驟當成「至少接上了一個站」。
+PROWLARR_LOGIN_STEP = "prowlarr_login"
+
+
+class IndexerKind(StrEnum):
+    """第 5 步接索引站的兩種方式（plan §8.4、§9.3 第 5 步）。"""
+
+    PROWLARR = "prowlarr"
+    #: 任意 Torznab 端點（Jackett 的聚合網址或單站）。
+    TORZNAB = "torznab"
+
+
 class DetectionReason(StrEnum):
     """判定的理由。UI 逐服務顯示，所以是封閉集合而不是自由文字。"""
 

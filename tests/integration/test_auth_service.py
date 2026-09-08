@@ -19,6 +19,8 @@ from berth.adapters.http import ServiceUnavailableError
 from berth.adapters.jellyfin.fake import FakeJellyfinClient
 from berth.adapters.prowlarr.fake import FakeProwlarrClient
 from berth.adapters.qbittorrent.fake import FakeQbittorrentClient
+from berth.adapters.tmdb.fake import FakeTmdbClient
+from berth.adapters.torznab.fake import FakeTorznabClient
 from berth.domain import Role
 from berth.models import JellyfinSettings, User, UserSession
 from berth.services.auth import (
@@ -54,6 +56,12 @@ class OneJellyfin:
 
     def prowlarr(self, base_url: str, api_key: str) -> FakeProwlarrClient:
         raise AssertionError("login never talks to Prowlarr")
+
+    def tmdb(self, credential: str) -> FakeTmdbClient:
+        raise AssertionError("login never talks to TMDB")
+
+    def torznab(self, base_url: str, api_key: str) -> FakeTorznabClient:
+        raise AssertionError("login never talks to a Torznab endpoint")
 
 
 @pytest.fixture

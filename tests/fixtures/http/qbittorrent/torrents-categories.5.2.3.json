@@ -1,0 +1,11 @@
+{
+  "berth-exp": {
+    "download_path": null,
+    "inactive_seeding_time_limit": -2,
+    "name": "berth-exp",
+    "ratio_limit": -2,
+    "savePath": "/downloads/berth-exp",
+    "seeding_time_limit": -2,
+    "share_limit_action": "Default"
+  }
+}

@@ -47,6 +47,7 @@ from berth.models import (
 )
 from berth.services.clients import ServiceClientFactory
 from berth.services.settings import read_settings, write_settings
+from berth.services.steps import StepView, step_views
 
 #: `POST /Auth/Keys?app=` 用的名字。也是重按時辨認「這把是我建的」的依據。
 API_KEY_APP = "Berth"
@@ -103,14 +104,6 @@ BUNDLED_LIBRARIES: tuple[BundledLibrary, ...] = (
 
 
 @dataclass(frozen=True, slots=True)
-class StepView:
-    step: str
-    status: StepStatus
-    detail: str
-    error: str
-
-
-@dataclass(frozen=True, slots=True)
 class LibraryView:
     name: str
     collection_type: str
@@ -147,10 +140,7 @@ async def read_jellyfin_status(session: AsyncSession) -> JellyfinSetupStatus:
         origin=origin,
         base_url=base_url,
         api_key_present=bool(jellyfin.api_key),
-        steps=tuple(
-            StepView(step=row.key, status=row.status, detail=row.detail, error=row.error)
-            for row in setup.jellyfin.steps
-        ),
+        steps=step_views(setup.jellyfin.steps),
         libraries=tuple(_library_view(row, paths.library_root) for row in setup.jellyfin.libraries),
         merge_versions_installed=setup.jellyfin.merge_versions_installed,
         merge_movies_task_id=jellyfin.merge_movies_task_id,

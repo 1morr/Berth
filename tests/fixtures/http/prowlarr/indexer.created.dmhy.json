@@ -1,0 +1,362 @@
+{
+  "indexerUrls": [
+    "https://share.dmhy.org/"
+  ],
+  "legacyUrls": [],
+  "definitionName": "dmhy",
+  "description": "dmhy is a TAIWANESE Public magnet tracker for ANIME",
+  "language": "zh-TW",
+  "encoding": "Unicode (UTF-8)",
+  "enable": true,
+  "redirect": false,
+  "supportsRss": true,
+  "supportsSearch": true,
+  "supportsRedirect": false,
+  "supportsPagination": false,
+  "appProfileId": 1,
+  "protocol": "torrent",
+  "privacy": "public",
+  "capabilities": {
+    "limitsMax": 100,
+    "limitsDefault": 100,
+    "categories": [
+      {
+        "id": 5000,
+        "name": "TV",
+        "subCategories": [
+          {
+            "id": 5070,
+            "name": "TV/Anime",
+            "subCategories": []
+          }
+        ]
+      },
+      {
+        "id": 100002,
+        "name": "動畫 (Anime)",
+        "subCategories": []
+      },
+      {
+        "id": 100031,
+        "name": "季度全集 (Quarterly Complete)",
+        "subCategories": []
+      },
+      {
+        "id": 7000,
+        "name": "Books",
+        "subCategories": [
+          {
+            "id": 7030,
+            "name": "Books/Comics",
+            "subCategories": []
+          }
+        ]
+      },
+      {
+        "id": 100003,
+        "name": "漫畫 (Manga)",
+        "subCategories": []
+      },
+      {
+        "id": 100041,
+        "name": "港台原版 (Hong Kong and Taiwan original)",
+        "subCategories": []
+      },
+      {
+        "id": 100042,
+        "name": "日文原版 (Japanese original)",
+        "subCategories": []
+      },
+      {
+        "id": 3000,
+        "name": "Audio",
+        "subCategories": []
+      },
+      {
+        "id": 100004,
+        "name": "音樂 (Music)",
+        "subCategories": []
+      },
+      {
+        "id": 100043,
+        "name": "動漫音樂 (Anime Music)",
+        "subCategories": []
+      },
+      {
+        "id": 100044,
+        "name": "同人音樂 (Fan Music)",
+        "subCategories": []
+      },
+      {
+        "id": 100015,
+        "name": "流行音樂 (Pop Music)",
+        "subCategories": []
+      },
+      {
+        "id": 100006,
+        "name": "日劇 (Japanese TV drama)",
+        "subCategories": []
+      },
+      {
+        "id": 100007,
+        "name": "RAW",
+        "subCategories": []
+      },
+      {
+        "id": 4000,
+        "name": "PC",
+        "subCategories": [
+          {
+            "id": 4050,
+            "name": "PC/Games",
+            "subCategories": []
+          }
+        ]
+      },
+      {
+        "id": 100009,
+        "name": "遊戲 (games)",
+        "subCategories": []
+      },
+      {
+        "id": 100017,
+        "name": "電腦遊戲 (computer games)",
+        "subCategories": []
+      },
+      {
+        "id": 1000,
+        "name": "Console",
+        "subCategories": []
+      },
+      {
+        "id": 100018,
+        "name": "電視遊戲 (video games)",
+        "subCategories": []
+      },
+      {
+        "id": 100019,
+        "name": "掌機遊戲 (console games)",
+        "subCategories": []
+      },
+      {
+        "id": 100020,
+        "name": "網絡遊戲 (online games)",
+        "subCategories": []
+      },
+      {
+        "id": 100021,
+        "name": "遊戲周邊 (game periphery)",
+        "subCategories": []
+      },
+      {
+        "id": 8000,
+        "name": "Other",
+        "subCategories": [
+          {
+            "id": 8010,
+            "name": "Other/Misc",
+            "subCategories": []
+          }
+        ]
+      },
+      {
+        "id": 100012,
+        "name": "特攝 (special photo)",
+        "subCategories": []
+      },
+      {
+        "id": 100001,
+        "name": "其他 (other)",
+        "subCategories": []
+      },
+      {
+        "id": 2000,
+        "name": "Movies",
+        "subCategories": [
+          {
+            "id": 2020,
+            "name": "Movies/Other",
+            "subCategories": []
+          }
+        ]
+      },
+      {
+        "id": 100002,
+        "name": "動畫 (Anime)",
+        "subCategories": []
+      },
+      {
+        "id": 100031,
+        "name": "季度全集 (Quarterly Complete)",
+        "subCategories": []
+      },
+      {
+        "id": 100007,
+        "name": "RAW",
+        "subCategories": []
+      }
+    ],
+    "supportsRawSearch": false,
+    "searchParams": [
+      "q",
+      "q"
+    ],
+    "tvSearchParams": [
+      "q",
+      "season",
+      "ep"
+    ],
+    "movieSearchParams": [
+      "q"
+    ],
+    "musicSearchParams": [
+      "q"
+    ],
+    "bookSearchParams": [
+      "q"
+    ]
+  },
+  "priority": 25,
+  "downloadClientId": 0,
+  "added": "2026-09-08T01:47:00Z",
+  "sortName": "dmhy",
+  "name": "dmhy",
+  "fields": [
+    {
+      "order": 0,
+      "name": "definitionFile",
+      "value": "dmhy",
+      "type": "textbox",
+      "advanced": false,
+      "hidden": "hidden",
+      "privacy": "normal",
+      "isFloat": false
+    },
+    {
+      "order": 1,
+      "name": "baseUrl",
+      "label": "Base Url",
+      "helpText": "Select which base url Prowlarr will use for requests to the site",
+      "type": "select",
+      "advanced": false,
+      "selectOptionsProviderAction": "getUrls",
+      "privacy": "normal",
+      "isFloat": false
+    },
+    {
+      "order": 2,
+      "name": "baseSettings.queryLimit",
+      "label": "Query Limit",
+      "helpText": "The number of max queries as specified by the respective unit that Prowlarr will allow to the site",
+      "type": "number",
+      "advanced": true,
+      "privacy": "normal",
+      "isFloat": false
+    },
+    {
+      "order": 3,
+      "name": "baseSettings.grabLimit",
+      "label": "Grab Limit",
+      "helpText": "The number of max grabs as specified by the respective unit that Prowlarr will allow to the site",
+      "type": "number",
+      "advanced": true,
+      "privacy": "normal",
+      "isFloat": false
+    },
+    {
+      "order": 4,
+      "name": "baseSettings.limitsUnit",
+      "label": "Limits Unit",
+      "helpText": "The unit of time for counting limits per indexer",
+      "value": 0,
+      "type": "select",
+      "advanced": true,
+      "selectOptions": [
+        {
+          "value": 0,
+          "name": "Day",
+          "order": 0,
+          "hint": "(0)"
+        },
+        {
+          "value": 1,
+          "name": "Hour",
+          "order": 1,
+          "hint": "(1)"
+        }
+      ],
+      "privacy": "normal",
+      "isFloat": false
+    },
+    {
+      "order": 5,
+      "name": "torrentBaseSettings.appMinimumSeeders",
+      "label": "Apps Minimum Seeders",
+      "helpText": "Minimum seeders required by the Applications for the indexer to grab, empty is Sync profile's default",
+      "type": "number",
+      "advanced": true,
+      "privacy": "normal",
+      "isFloat": false
+    },
+    {
+      "order": 6,
+      "name": "torrentBaseSettings.seedRatio",
+      "label": "Seed Ratio",
+      "helpText": "The ratio a torrent should reach before stopping, empty uses the download client's default. Ratio should be at least 1.0 and follow the indexers rules",
+      "type": "number",
+      "advanced": false,
+      "privacy": "normal",
+      "isFloat": true
+    },
+    {
+      "order": 7,
+      "name": "torrentBaseSettings.seedTime",
+      "label": "Seed Time",
+      "unit": "minutes",
+      "helpText": "The time a torrent should be seeded before stopping, empty uses the download client's default",
+      "type": "number",
+      "advanced": true,
+      "privacy": "normal",
+      "isFloat": false
+    },
+    {
+      "order": 8,
+      "name": "torrentBaseSettings.packSeedTime",
+      "label": "Pack Seed Time",
+      "unit": "minutes",
+      "helpText": "The time a pack (season or discography) torrent should be seeded before stopping, empty is app's default",
+      "type": "number",
+      "advanced": true,
+      "privacy": "normal",
+      "isFloat": false
+    },
+    {
+      "order": 9,
+      "name": "torrentBaseSettings.preferMagnetUrl",
+      "label": "Prefer Magnet URL",
+      "helpText": "When enabled, this indexer will prefer the use of magnet URLs for grabs with fallback to torrent links",
+      "value": false,
+      "type": "checkbox",
+      "advanced": true,
+      "privacy": "normal",
+      "isFloat": false
+    },
+    {
+      "order": 0,
+      "name": "info_flaresolverr",
+      "label": "FlareSolverr Info",
+      "helpLink": "https://wiki.servarr.com/prowlarr/faq#can-i-use-flaresolverr-indexers",
+      "value": "This site may use Cloudflare DDoS Protection, therefore Prowlarr requires <a href=\"https://wiki.servarr.com/prowlarr/faq#can-i-use-flaresolverr-indexers\" target=\"_blank\" rel=\"noreferrer\">FlareSolverr</a> to access it.",
+      "type": "info",
+      "advanced": false,
+      "privacy": "normal",
+      "isFloat": false
+    }
+  ],
+  "implementationName": "Cardigann",
+  "implementation": "Cardigann",
+  "configContract": "CardigannSettings",
+  "infoLink": "https://wiki.servarr.com/prowlarr/supported-indexers#dmhy",
+  "tags": [],
+  "id": 6
+}

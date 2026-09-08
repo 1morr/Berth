@@ -177,7 +177,8 @@ uv run python scripts/fake_setup_server.py --scenario mixed
 
 | `--scenario` | 演的是什麼 |
 | --- | --- |
-| `bundled`（預設） | 乾淨的 compose：三個服務都判為套件內，第 3 步可以跑完 Jellyfin 的九步 |
+| `bundled`（預設） | 乾淨的 compose：三個服務都判為套件內，泊位 1–3 全部走得完。十個預設索引站裡有五個連不上（訊息取自真的 Prowlarr 那一輪），逐站成敗看得到 |
+| `outdated` | qBittorrent 的 Web API 低於 2.8.4：第 4 步拒絕接入並給升級指令 |
 | `mixed` | NAS 的常見組合：既有 Jellyfin（跑過自己的精靈、兩個媒體庫，其中一個掛 TVDB）、qBittorrent 已設密碼、Prowlarr 已有索引站 |
 | `starting` | 容器還在啟動：qBittorrent 連不上，Prowlarr 讀不到 API key |
 | `absent` | Jellyfin 不在 `COMPOSE_PROFILES` 裡：探不到，要在第 2 步填自己那一台的位址 |

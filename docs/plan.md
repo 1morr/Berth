@@ -298,7 +298,7 @@ Session 以 httpOnly cookie（`berth_session`）承載，`SameSite=Strict`、`Pa
 | 群組 | 端點 | 對應命令 |
 | --- | --- | --- |
 | auth | `POST /auth/login`（Jellyfin 帳密 → 發 session；帳密錯與帳號不存在回同一個 401，Jellyfin 連不上回 503）、`POST /auth/logout`（204，一律成功）、`GET /auth/me`（`name`、`role`） | `auth.*` |
-| setup | `GET /setup/status`、`POST /setup/admin`、`POST /setup/detect`（回每個服務的來源：套件內 / 既有）、`POST /setup/services/{kind}`（既有服務的連線表單：存下位址與憑證並立刻測一次）、`GET /setup/jellyfin`（不連線，回上一輪的九步狀態與媒體庫；bootstrap 進行中前端輪詢它看進度）、`POST /setup/jellyfin/bootstrap`、`POST /setup/jellyfin/connect`（既有：以管理員帳密換 API key）、`POST /setup/jellyfin/libraries/paths`、`POST /setup/jellyfin/plugin`、`GET /setup/qbittorrent/diff`、`POST /setup/qbittorrent/apply`、`POST /setup/indexer/apply`、`POST /setup/routes/from-libraries`、`POST /setup/complete` | `setup.*`（§9） |
+| setup | `GET /setup/status`、`POST /setup/admin`、`POST /setup/detect`（回每個服務的來源：套件內 / 既有）、`POST /setup/services/{kind}`（既有服務的連線表單：存下位址與憑證並立刻測一次）、`GET /setup/jellyfin`（不連線，回上一輪的九步狀態與媒體庫；bootstrap 進行中前端輪詢它看進度）、`POST /setup/jellyfin/bootstrap`、`POST /setup/jellyfin/connect`（既有：以管理員帳密換 API key）、`POST /setup/jellyfin/libraries/paths`、`POST /setup/jellyfin/plugin`、`GET /setup/qbittorrent/diff`（現查，回逐鍵差異）、`POST /setup/qbittorrent/apply`、`GET /setup/indexers`（套件內：十個預設站與它們現在的狀態）、`POST /setup/indexers/apply`（勾起來的站逐個加）、`POST /setup/indexers/connect`（既有 Prowlarr 或任意 Torznab）、`POST /setup/indexers/skip`、`GET /setup/tmdb`、`POST /setup/tmdb/test`、`POST /setup/tmdb/skip`、`POST /setup/routes/from-libraries`、`POST /setup/complete` | `setup.*`（§9） |
 | settings | `GET /settings/{group}`、`PUT /settings/{group}`、`POST /settings/{service}/test` | `settings.update`、`health.test_service` |
 | routes | `GET/POST /routes`、`PUT/DELETE /routes/{id}`、`POST /routes/{id}/check`、`GET /jellyfin/libraries` | `routes.*` |
 | discover | `GET /discover/trending`、`GET /discover/popular`、`GET /discover/search?q=` | `discover.*` |
@@ -342,6 +342,7 @@ Session 以 httpOnly cookie（`berth_session`）承載，`SameSite=Strict`、`Pa
 - `ensure_category(name, save_path)`：`torrents/categories` 讀取（接受 `savePath` 與 `save_path` 兩種鍵；4.4.5 與 5.2.3 實測都是 `savePath`，`save_path` 只出現在 4.4.0–4.4.1，仍在支援範圍所以兩種都收），不存在才建，存在但 save path 不同 → 回報衝突不改（brief §20.2）。
 - `diff_recommended_preferences()` / `apply_recommended_preferences()`：建議值為 `temp_path_enabled=true`、`temp_path=<incomplete root>`、`save_path=<complete root>`、`auto_tmm_enabled=true`、`category_changed_tmm_enabled=true`；先回傳與現值的差異給精靈顯示，套用時只寫不同的鍵。既有服務的 temp path 未啟用只列為警告。
 - 完成判定依 brief §20.2。`torrents/files[].name` **相對 `save_path`**（多檔含 torrent 根目錄那一層），實測四種 `contentLayout` 組合都成立（brief §20.7）；組絕對路徑前先正規化 `save_path` 的尾斜線（4.4 有、5.x 沒有），組完仍 `stat` 驗證。`content_path` 是目錄或單檔，兩種都處理。
+- `preferences()` / `set_preferences(values)`：`app/preferences` 與 `app/setPreferences`。後者收的是**表單裡一個叫 `json` 的欄位**，不是 JSON body；`web_ui_password` 只寫不讀，所以「密碼設過了沒」只能比對 Berth 自己上一次寫下去的值（票 08）。
 - 登入：`auth/login` 拿 SID，請求帶 `Referer` = base URL；403 記錄並退避。
 - 錯誤映射（`adapters/http.py`，四個 adapter 共用）：主機名解不到 → `ServiceNotDeployedError`（服務不在 compose 裡，精靈立刻顯示既有服務表單）；連不上或逾時 → `ServiceUnavailableError`（容器還在啟動，繼續輪詢）；401 / 403 → `AuthFailedError`；回應不是預期的服務 → `ProtocolMismatchError`；409（category 不存在）→ `CategoryMissingError`；503 → `ServiceBusyError`（服務還在載入，與「壞了」分開——Jellyfin 重啟後每一支端點都會有一段時間回 503，brief §20.7）。名稱一律以 `Error` 結尾（ruff N818）。
 
@@ -363,7 +364,8 @@ Session 以 httpOnly cookie（`berth_session`）承載，`SameSite=Strict`、`Pa
 - 語言 `en-US` 取英文標題，`name` 空時退回 `original_name`；另以 `zh-TW` 取一次顯示用標題與簡介給 UI（brief §7.5 的檔名仍用英文）。
 - 快取：探索與搜尋 1 小時；Media 快照 24 小時，Job 送單與 planning 前若快照超過 6 小時則刷新（新播集數會變）。
 - 速率：全域 40 req/s 令牌桶，遠低於 TMDB 的上限。
-- API key：內建專案級 key，`settings.services.tmdb.api_key` 有值則覆寫（§9 查證後定案）。
+- API key：內建專案級憑證（`adapters/tmdb.PROJECT_CREDENTIAL`），`settings.services.tmdb.api_key` 有值則覆寫。**兩種形狀都收**：v4 的 read access token 是 JWT，走 `Authorization: Bearer`（官方建議做法，不進網址所以不落在 log 裡）；v3 的 API key 是 32 個十六進位字元，走 `?api_key=`。認的是形狀不是設定項，因為 TMDB 的帳號頁同時發兩種（2026-09-08 實測）。
+- 精靈第 6 步的「測試」打 `configuration`：那一支不需要任何參數，回得出來就證明憑證有效。
 
 ### 8.4 索引站 adapter
 
@@ -372,7 +374,7 @@ Session 以 httpOnly cookie（`berth_session`）承載，`SameSite=Strict`、`Pa
   - `TorznabSearch`：任意 Torznab 端點（Jackett 的 `indexers/all/results/torznab/api` 或單站）：`?t=caps`、`?t=search&q=&cat=`、`?t=tvsearch&tmdbid=`、`?t=movie&tmdbid=`（依 caps 決定是否可用 id 搜尋）；解析 XML 的 `item` 與 `torznab:attr`（seeders、peers、size、infohash、magneturl、category）。
 - 搜尋詞：Media 的英文標題、原文標題、各語言 alternative titles 各發一次，合併去重（以 infohash 或 link）；動漫 profile 另加 `第N季` / `Season N` 變體。
 - 結果附 `parse_release` 的 Tags 與 `map_episode` 的預估（用來在結果表顯示「S01 全季」「E05」「無法判斷」）。
-- `ProwlarrClient`（僅 setup 用）：§9.4。
+- `ProwlarrClient`（僅 setup 用）：`indexer/schema` 取定義、`indexer` 新增、`indexer/test` 驗證、`config/host` 設介面登入。**新增之前 Prowlarr 會先連一次那個站**，連不上就回 400 加一份逐條理由（`errorMessage`）而且什麼都不建立——逐站的成敗因此來自新增那一支，不是另一次 `indexer/test`；`?forceSave=true` 不會跳過這個檢查。同名的第二個站被拒（`Should be unique`），所以冪等靠先列（2026-09-08 實測，brief §20.7）。schema 給的 `appProfileId` 是 `0`，送回去之前要換成 `1`。
 
 ### 8.5 RSS adapter
 
@@ -452,7 +454,9 @@ WebUI\AuthSubnetWhitelist=172.28.0.2/32
    - 既有服務按「測試連線」時，連線資訊先存進它平常住的 `settings.services.*` 再測——測不過也存，使用者才能改一個欄位再按一次。
 3. **Jellyfin**：套件內 → §9.4 全自動；既有 → 登入、建立 API key、列出媒體庫與各自路徑，並提供「安裝 MergeVersions」按鈕（需確認，會重啟 Jellyfin）。
 4. **qBittorrent**：顯示建議偏好與現值的差異（§8.1），按「套用」；套件內另設密碼；既有服務的 temp path 未啟用只警告。
-5. **索引站**：套件內 → 勾選預設公開站清單（預設全勾）：Nyaa.si、dmhy、AniDex、Anime Tosho、ACG.RIP、Mikan、1337x、YTS、EZTV、The Pirate Bay；Berth 以 `indexer/schema` 取定義、`indexer` 新增、`indexer/test` 驗證。既有 → Prowlarr 位址 + API key，或任意 Torznab 端點 + key（Jackett）。
+5. **索引站**：套件內 → 勾選預設公開站清單（預設全勾）：Nyaa.si、dmhy、AniDex、Anime Tosho、ACG.RIP、Mikan、1337x、YTS、EZTV、The Pirate Bay；Berth 以 `indexer/schema` 取定義、`indexer` 新增（這一支就會連站，成敗即逐站結果）、已經加過的站改用 `indexer/test` 驗一次。**一站失敗不影響其他站**，十個公開站裡有幾個連不上是常態。勾了「同一組帳密」時另以 `config/host` 設 Prowlarr 介面的 Forms 登入（回 202 後它會自行重啟，要等 `/ping` 回來）。既有 → Prowlarr 位址 + API key，或任意 Torznab 端點 + key（Jackett）；後者以 `?t=caps` 驗證。
+   - 套件內 Prowlarr 的 API key 讀自唯讀掛載，**探測時就存進 `settings.services.indexer`**，第 5 步與 M1 的搜尋從同一個地方拿憑證。使用者貼過的值優先。
+   - qBittorrent 設過密碼、Prowlarr 加過索引站之後，那個服務的判定**釘住不再重探**（`ServiceProbe.configured`）：判定規則是「免密可進 / 一個索引站都沒有 → 套件內」，而這兩件事正是 Berth 自己剛做掉的，重探會說謊。
 6. **TMDB**：內建專案 key，可覆寫；按「測試」。
 7. **媒體庫與 Route**：套件內 Jellyfin → 自動由三個媒體庫建立三個 Route（`movies` / `tv` / `anime`，anime 用 `anime` profile）；既有 Jellyfin → 使用者勾選媒體庫，每個媒體庫可「加入 Berth 路徑」（§9.5）或在既有路徑中選寫入目標。每個 Route 立即建立 qBittorrent category 並跑硬鏈接與跨服務可見性測試。
 8. **完成**：寫 `settings.setup.completed`，進健康頁；四項綠燈即可用。

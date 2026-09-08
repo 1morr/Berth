@@ -1,5 +1,4 @@
-import { JELLYFIN_STEPS, type JellyfinStep, type StepStatus } from '../api/setup'
-import type { Signal } from '../components/signal'
+import { JELLYFIN_STEPS, type JellyfinStep } from '../api/setup'
 
 /**
  * plan §9.4 的九步。**每一步標的是它真的打的那支端點**，不是一句形容——剖面裡逐行列出來，
@@ -42,23 +41,6 @@ export const STEP_FIX = {
   tasks: 'jellyfin.fix.tasks',
 } as const satisfies Record<JellyfinStep, string>
 
-export const STATUS_LABEL = {
-  ok: 'status.ok',
-  skipped: 'status.skipped',
-  failed: 'status.failed',
-  running: 'status.running',
-  pending: 'status.pending',
-} as const satisfies Record<StepStatus, string>
-
-/** 步驟狀態 → 信號。`skipped` 與 `ok` 同色：兩者都代表「這一步的事完成了」。 */
-export const STATUS_SIGNAL = {
-  ok: 'secured',
-  skipped: 'secured',
-  failed: 'blocked',
-  running: 'working',
-  pending: 'neutral',
-} as const satisfies Record<StepStatus, Signal>
-
 /**
  * 失敗時可複製的手動步驟（PRODUCT.md 原則 4）。`base` 是那台 Jellyfin 的位址，
  * 因為每一條手動步驟都要在**他自己那台**上做。
@@ -86,11 +68,6 @@ export function manualSteps(step: string, base: string): readonly string[] {
     default:
       return []
   }
-}
-
-/** 這一步做完了沒。`skipped` 也算完成——它的意思是「已經是想要的樣子」。 */
-export function isSettled(status: StepStatus): boolean {
-  return status === 'ok' || status === 'skipped'
 }
 
 export function isJellyfinStep(step: string): step is JellyfinStep {

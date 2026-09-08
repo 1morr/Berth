@@ -28,6 +28,7 @@
 | 2026-09-07 | 05 精靈第 1–2 步 | `/setup` 精靈骨架完成：`GET /api/setup/status`、`POST /api/setup/admin`、`POST /api/setup/detect`、`POST /api/setup/services/{kind}`；Jellyfin / qBittorrent / Prowlarr 三個 adapter 各有 `Protocol`、HTTP 實作與 `Fake`，契約測試跑對真服務錄下來的 `tests/fixtures/http/`。UI 依 direction contract「泊位調度板」重寫視覺系統（票 02 的佔位 token 全換），zh-Hant 與 en 並列。125 個後端測試 + 24 個前端測試綠燈；playwright 對 `scripts/fake_setup_server.py` 的三種情境實跑前兩步，深淺兩主題所有文字對比 ≥ 4.5:1 | `/implement .scratch/m0/issues/06-wizard-jellyfin.md` |
 | 2026-09-07 | 06 精靈第 3 步 Jellyfin | 套件內一鍵跑完 plan §9.4 的九步（建管理員、三個媒體庫、API key、裝 MergeVersions、重啟、記下兩個任務 `Id`），每一步冪等、失敗可重試；既有路徑登入取 key、列媒體庫與路徑、TVDB 警告、兩顆需二次確認的按鈕。**對真的 `jellyfin:10.11.11` 跑完全序列 69 秒，第二次 0.2 秒全 `skipped`**；fixture 從那一輪錄下。175 個後端測試 + 38 個前端測試綠燈；playwright 實跑三個情境，深淺兩主題所有文字對比 ≥ 4.5:1 | `/implement .scratch/m0/issues/07-auth.md` |
 | 2026-09-08 | 07 認證 | Jellyfin 帳密登入換 Berth session（httpOnly + `SameSite=Strict`，30 天不續期）；門禁是 middleware，`/api` 預設拒絕；`setup/*` 完成後只放行 admin。登入頁走 `/impeccable shape`（單一登船口窗格，不畫泊位板）。229 個後端測試 + 54 個前端測試綠燈；playwright 對 `--scenario signed-out` 實跑登入 / 登出 / 非 admin 阻擋三條路徑，深淺兩主題文字對比最低 5.71:1 | `/implement .scratch/m0/issues/08-wizard-services.md` |
+| 2026-09-08 | 08 精靈第 4–6 步 | 泊位 2（qBittorrent 逐鍵差異與套用、版本閘門、密碼）與泊位 3（十個預設索引站逐站成敗、既有 Prowlarr / 任意 Torznab、TMDB 內建憑證可覆寫、兩步可跳過）完成。**對真服務錄了 14 份新 fixture**：qBittorrent 4.4.5 與 5.2.3 各一組、Prowlarr 的 schema 與三種新增結果、Torznab caps、TMDB configuration。十個站在本機五成五敗，逐站結果就是 UI 要撐住的東西。297 個後端測試 + 70 個前端測試綠燈；playwright 實跑 `bundled` 與 `outdated` 兩個情境，深淺兩主題文字對比最低 5.22:1 | `/implement .scratch/m0/issues/09-wizard-routes.md` |
 
 ## 偏差與決定
 
@@ -186,3 +187,29 @@
 - 2026-09-08 票 07 code-review：門禁從 `BaseHTTPMiddleware` 改寫成**純 ASGI middleware**。
   前者會把回應整個收進記憶體再送出去，plan §6 的 `GET /events/stream`（SSE，M1）在它底下就
   不是串流了。純 ASGI 沒有這個問題，程式碼也沒有比較長。
+- 2026-09-08 票 08：**`POST /api/v1/indexer` 在存之前會先連一次那個站**，連不上回 400 加逐條理由
+  而且什麼都不建立（`?forceSave=true` 也一樣）。所以「逐站驗證」不是 plan §9.3 原本寫的
+  「新增之後再 `indexer/test`」，而是新增那一支本身；`indexer/test` 留給已經存在的站（重按時用）。
+  plan §8.4、§9.3 第 5 步與 brief §20.7 已改。實測十個站五成五敗。
+- 2026-09-08 票 08：Prowlarr 的介面登入（brief §16.3）一起做了——票面沒有這一條，使用者決定納入。
+  它是自己一條纜繩 `prowlarr_login`，**不與既有路徑的 `prowlarr` 同名**：同名會讓「第 5 步做完了沒」
+  把一條永遠存在的憑證步驟當成「至少接上了一個站」，十站全失敗也放行。
+- 2026-09-08 票 08：**套件內 Prowlarr 的 API key 在第 2 步探測時就寫進 `settings.services.indexer`**。
+  它只有唯讀掛載讀得到，不存的話第 5 步會拿空字串去打真的 Prowlarr。使用者貼過的值優先。plan §9.3 已補。
+- 2026-09-08 票 08：qBittorrent 設過密碼、Prowlarr 加過索引站之後，那個服務的判定釘住不再重探
+  （`ServiceProbe.configured`）。判定規則是「免密可進 / 一個索引站都沒有 → 套件內」，而這兩件事
+  正是 Berth 自己剛做掉的。`configured` 的意思因此從「使用者填的」擴成「重探會說謊的」。
+- 2026-09-08 票 08：TMDB 的內建憑證用 v4 的 read access token（走標頭，不進網址也就不落在 log 裡），
+  但覆寫欄位**兩種形狀都收**——TMDB 的帳號頁同時發 v3 key 與 v4 token，認形狀比多一個設定項好。
+  plan §8.3 已改。
+- 2026-09-08 票 08：`app/setPreferences` 收的是表單裡一個叫 `json` 的欄位，不是 JSON body；
+  `web_ui_password` 只寫不讀，所以「密碼設過了沒」只能比對 Berth 自己上一次寫下去的值。plan §8.1 已補。
+- 2026-09-08 票 08 code-review：**路徑鍵的差異比對要正規化尾斜線**。4.4.5 把設進去的 `/data/x`
+  讀回來寫成 `/data/x/`，照字面比的話那兩個鍵在 4.4 上永遠「不同」，每次重按都重寫一次同樣的值，
+  「重按結果一致」就破了。
+- 2026-09-08 票 08 code-review：qBittorrent 的密碼與 Prowlarr 的登入都改成**就地攔下例外**。
+  原本它們的失敗會冒到整個命令的 except，把前面五個鍵 / 十個站的結果一起丟掉——而那些事已經做完了。
+- 2026-09-08 票 08 code-review：`POST /setup/indexers/apply` 對既有索引站回 422。UI 在那個狀態下
+  不給按鈕，但端點本身也要擋——brief §16.4 的紅線是「既有服務只做檢查」。
+- 2026-09-08 票 08 code-review：四個泊位各自複製一份 `StepView` 與 `_message`，收斂成
+  `services/steps.py`。形狀本來就是同一個：`SetupStep` 是它存下來的樣子，`StepView` 是讀出來的樣子。

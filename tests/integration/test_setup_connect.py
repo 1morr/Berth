@@ -16,6 +16,8 @@ from berth.adapters.prowlarr import ProwlarrClient, ProwlarrIndexer
 from berth.adapters.prowlarr.fake import FakeProwlarrClient
 from berth.adapters.qbittorrent import QbittorrentClient
 from berth.adapters.qbittorrent.fake import FakeQbittorrentClient
+from berth.adapters.tmdb import TmdbClient
+from berth.adapters.torznab import TorznabClient
 from berth.domain import DetectionReason, ServiceKind, ServiceOrigin
 from berth.models import IndexerSettings, JellyfinSettings, QbittorrentSettings
 from berth.services.settings import read_settings
@@ -48,6 +50,12 @@ class FakeClientFactory:
     def prowlarr(self, base_url: str, api_key: str) -> ProwlarrClient:
         self.asked.append(("prowlarr", base_url))
         return self._prowlarr
+
+    def tmdb(self, credential: str) -> TmdbClient:
+        raise AssertionError("the connection form never talks to TMDB")
+
+    def torznab(self, base_url: str, api_key: str) -> TorznabClient:
+        raise AssertionError("the connection form never talks to a Torznab endpoint")
 
 
 def verdict(status: object, kind: ServiceKind) -> tuple[ServiceOrigin, DetectionReason]:

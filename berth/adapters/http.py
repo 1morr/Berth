@@ -83,7 +83,14 @@ class HttpSession:
         """換掉一個標頭。憑證是可變的：Jellyfin 的初始精靈匿名開始，之後才有 token。"""
         self._client.headers[name] = value
 
-    async def request(self, method: str, path: str, **kwargs: Any) -> httpx.Response:
+    async def request(
+        self, method: str, path: str, *, tolerate: tuple[int, ...] = (), **kwargs: Any
+    ) -> httpx.Response:
+        """`tolerate` 裡的狀態碼原樣回傳，不翻成例外。
+
+        給「服務用 4xx 講一件有內容的事」那種端點用：Prowlarr 新增索引站失敗時回的是
+        400 加一份逐條理由，那份理由正是畫面要顯示的東西，翻成例外就丟掉了。
+        """
         try:
             response = await self._client.request(method, path, **kwargs)
         except httpx.ConnectError as exc:
@@ -93,6 +100,8 @@ class HttpSession:
         except httpx.HTTPError as exc:
             raise ServiceUnavailableError(f"{method} {path}: {type(exc).__name__}") from exc
 
+        if response.status_code in tolerate:
+            return response
         if response.status_code in (401, 403):
             raise AuthFailedError(f"{method} {path}: {response.status_code}")
         if response.status_code == 503:

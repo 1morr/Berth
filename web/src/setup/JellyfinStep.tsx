@@ -1,20 +1,12 @@
 import { useTranslation } from 'react-i18next'
 
-import { JELLYFIN_STEPS, type JellyfinSetup, type SetupStep, type StepStatus } from '../api/setup'
-import { STICKY_ACTION, CopyLine, GhostButton, Notice, PrimaryButton } from '../components/controls'
-import { SIGNAL_FILL } from '../components/signal'
+import { JELLYFIN_STEPS, type JellyfinSetup, type SetupStep } from '../api/setup'
+import { STICKY_ACTION, GhostButton, Notice, PrimaryButton } from '../components/controls'
 import { Cutaway, CutawayRow } from './Cutaway'
 import { JellyfinExisting } from './JellyfinExisting'
-import {
-  STATUS_LABEL,
-  STATUS_SIGNAL,
-  STEP_ENDPOINT,
-  STEP_FIX,
-  STEP_LABEL,
-  isJellyfinStep,
-  isSettled,
-  manualSteps,
-} from './jellyfinSteps'
+import { StepLine } from './StepLine'
+import { isSettled } from './steps'
+import { STEP_ENDPOINT, STEP_FIX, STEP_LABEL, isJellyfinStep, manualSteps } from './jellyfinSteps'
 
 /**
  * 泊位 1：Jellyfin（plan §9.3 第 3 步）。兩條路徑由第 2 步的判定決定，使用者不必自己選。
@@ -161,7 +153,7 @@ function BootstrapSequence({
     <>
       <ol aria-live="polite" aria-busy={running} className="mt-6 grid gap-3" data-testid="sequence">
         {JELLYFIN_STEPS.map((step) => (
-          <StepLine
+          <JellyfinLine
             key={step}
             step={step}
             row={byStep.get(step)}
@@ -204,8 +196,8 @@ function BootstrapSequence({
   )
 }
 
-/** 一條纜繩：一個步驟。失敗就地變紅並展開可複製的手動步驟，其餘已繫上的不動。 */
-function StepLine({
+/** 一條纜繩：plan §9.4 的一個步驟。手動步驟要在**他自己那台** Jellyfin 上做。 */
+function JellyfinLine({
   step,
   row,
   baseUrl,
@@ -217,42 +209,17 @@ function StepLine({
   running: boolean
 }) {
   const { t } = useTranslation()
-  const status: StepStatus = row?.status ?? 'pending'
   const known = isJellyfinStep(step)
-  const label = known ? t(STEP_LABEL[step]) : step
-  const endpoint = known ? STEP_ENDPOINT[step] : ''
-  const fix = known ? t(STEP_FIX[step]) : t('jellyfin.fix.generic')
 
   return (
-    <li
-      className={`min-w-0 border-2 bg-well ${
-        status === 'failed' ? 'border-rule-strong' : 'border-rule'
-      }`}
+    <StepLine
+      label={known ? t(STEP_LABEL[step]) : step}
+      endpoint={known ? STEP_ENDPOINT[step] : ''}
+      row={row}
+      fix={known ? t(STEP_FIX[step]) : t('jellyfin.fix.generic')}
+      commands={manualSteps(step, baseUrl)}
     >
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
-        <span className={`label px-2 py-1.5 ${SIGNAL_FILL[STATUS_SIGNAL[status]]}`}>
-          {t(STATUS_LABEL[status])}
-        </span>
-        <span className="value text-sm font-semibold text-ink">{label}</span>
-        {row?.detail && <span className="value text-xs text-ink">{row.detail}</span>}
-        <span className="value ml-auto min-w-0 truncate text-xs text-ink-dim">{endpoint}</span>
-      </div>
-
-      {status === 'failed' && row && (
-        <div className="border-t-2 border-rule bg-hull px-4 py-4">
-          <p role="alert" className="value max-w-prose break-words text-xs text-blocked-ink">
-            {row.error}
-          </p>
-          <h5 className="label mt-4 text-ink-dim">{t('connect.fix.title')}</h5>
-          <p className="mt-2 max-w-prose text-xs text-ink-dim">{fix}</p>
-          <div className="mt-2 grid grid-cols-1 gap-px">
-            {manualSteps(step, baseUrl).map((command) => (
-              <CopyLine key={command} command={command} />
-            ))}
-          </div>
-          {!running && <p className="mt-3 text-xs text-ink-dim">{t('jellyfin.fix.retryHint')}</p>}
-        </div>
-      )}
-    </li>
+      {!running && <p className="mt-3 text-xs text-ink-dim">{t('jellyfin.fix.retryHint')}</p>}
+    </StepLine>
   )
 }

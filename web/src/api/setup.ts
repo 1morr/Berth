@@ -148,3 +148,118 @@ export function addLibraryPath(library: string): Promise<JellyfinSetup> {
 export function installMergeVersions(): Promise<JellyfinSetup> {
   return apiPost<JellyfinSetup>('/setup/jellyfin/plugin')
 }
+
+/** --- 第 4 步：qBittorrent（plan §9.3 第 4 步、§8.1）--- */
+
+/** `QbittorrentStep`：一個鍵一條纜繩，值就是 `app/setPreferences` 的鍵名。 */
+export const QBITTORRENT_STEPS = [
+  'temp_path_enabled',
+  'temp_path',
+  'save_path',
+  'auto_tmm_enabled',
+  'category_changed_tmm_enabled',
+  'web_ui_password',
+] as const
+export type QbittorrentStep = (typeof QBITTORRENT_STEPS)[number]
+
+export interface PreferenceDiff {
+  key: string
+  current: string
+  recommended: string
+  differs: boolean
+}
+
+export interface QbittorrentSetup {
+  origin: ServiceOrigin
+  base_url: string
+  version: string
+  webapi_version: string
+  /** Web API ≥ 2.8.4。低於它 Berth 拒絕接入（brief §16.4）。 */
+  supported: boolean
+  blocked: boolean
+  reachable: boolean
+  diffs: PreferenceDiff[]
+  steps: SetupStep[]
+  /** 既有服務的 temp path 未啟用：警告，不阻擋。 */
+  temp_path_warning: boolean
+  sets_password: boolean
+  error: string
+}
+
+export const qbittorrentSetupQueryOptions = queryOptions({
+  queryKey: ['setup', 'qbittorrent'],
+  queryFn: () => apiGet<QbittorrentSetup>('/setup/qbittorrent/diff'),
+})
+
+export function applyQbittorrent(): Promise<QbittorrentSetup> {
+  return apiPost<QbittorrentSetup>('/setup/qbittorrent/apply')
+}
+
+/** --- 第 5–6 步：來源（plan §9.3 第 5–6 步、§8.3、§8.4）--- */
+
+/** `IndexerKind`：既有路徑的兩種接法。 */
+export type IndexerKind = 'prowlarr' | 'torznab'
+
+export interface IndexerOption {
+  /** Prowlarr 的 `definitionName`，也是這一條纜繩的 key。 */
+  definition_name: string
+  name: string
+  /** `public` / `semiPrivate` / `private`。 */
+  privacy: string
+  /** 這台 Prowlarr 上已經有這個站了。 */
+  present: boolean
+}
+
+export interface IndexerSetup {
+  origin: ServiceOrigin
+  kind: IndexerKind
+  base_url: string
+  api_key_present: boolean
+  reachable: boolean
+  options: IndexerOption[]
+  steps: SetupStep[]
+  skipped: boolean
+  sets_password: boolean
+  error: string
+}
+
+export interface TmdbSetup {
+  /** 用的是 Berth 內建的專案級憑證（使用者沒有覆寫）。 */
+  using_project_credential: boolean
+  steps: SetupStep[]
+  skipped: boolean
+}
+
+export const indexerSetupQueryOptions = queryOptions({
+  queryKey: ['setup', 'indexers'],
+  queryFn: () => apiGet<IndexerSetup>('/setup/indexers'),
+})
+
+export const tmdbSetupQueryOptions = queryOptions({
+  queryKey: ['setup', 'tmdb'],
+  queryFn: () => apiGet<TmdbSetup>('/setup/tmdb'),
+})
+
+export function applyIndexers(indexers: string[]): Promise<IndexerSetup> {
+  return apiPost<IndexerSetup>('/setup/indexers/apply', { indexers })
+}
+
+export function connectIndexer(body: {
+  kind: IndexerKind
+  base_url: string
+  api_key: string
+}): Promise<IndexerSetup> {
+  return apiPost<IndexerSetup>('/setup/indexers/connect', body)
+}
+
+export function skipIndexers(skipped: boolean): Promise<IndexerSetup> {
+  return apiPost<IndexerSetup>('/setup/indexers/skip', { skipped })
+}
+
+export function testTmdb(api_key: string): Promise<TmdbSetup> {
+  return apiPost<TmdbSetup>('/setup/tmdb/test', { api_key })
+}
+
+export function skipTmdb(skipped: boolean): Promise<TmdbSetup> {
+  return apiPost<TmdbSetup>('/setup/tmdb/skip', { skipped })
+}

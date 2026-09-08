@@ -853,6 +853,26 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 - API key 在 `config.xml` 的 `<ApiKey>`，可用 `PROWLARR__AUTH__APIKEY` 預設。
 - 支援的公開索引站含：Nyaa.si、dmhy、AniDex、Anime Tosho、ACG.RIP、**Mikan**、1337x、YTS、EZTV、The Pirate Bay；TorrentGalaxy 目前不在清單。
 
+**Prowlarr 索引站與 TMDB 憑證實測**（2026-09-08，票 08；Prowlarr 2.5.2.5491，fixture 在
+`tests/fixtures/http/prowlarr/` 與 `tests/fixtures/http/tmdb/`）
+
+- **`POST /api/v1/indexer` 會先連一次那個站再存**：成功回 201 與整份資源；連不上回 **400 加一個陣列**，
+  每列是 `{isWarning, propertyName, errorMessage, severity}`。站沒有被建立。所以「逐站成敗」來自新增
+  那一支，`indexer/test` 是給**已經存在**的站用的（回 200 空物件）。`?forceSave=true` **不會**跳過這個檢查。
+- **同名的第二個站被拒**：400 `{"propertyName": "Name", "errorMessage": "Should be unique"}`。冪等只能靠
+  呼叫端先 `GET /api/v1/indexer`。
+- schema 的 `appProfileId` 是 **0**，原樣送回去建不起來；要換成 `1`（Prowlarr 內建的同步設定檔）。
+- 十個預設站的 `definitionName` 實測為 `nyaasi`、`dmhy`、**`Anidex`**（不是文件寫的 `AniDex`）、
+  `animetosho-xyz`（唯一 `semiPrivate`）、`acgrip`、`mikan`、`1337x`、`yts`、`eztv`、`thepiratebay`。
+  站名 Prowlarr 自己會改，機器名不會，所以清單釘 `definitionName`。
+- 本機這一輪十個站有五個加得起來、五個失敗（`nyaasi` 查得到但沒有結果、`Anidex` 與
+  `animetosho-xyz` 連不上、`1337x` 與 `eztv` 被 CloudFlare 擋）。**幾個公開站連不上是常態**，UI 因此逐站顯示而不是整批成敗。
+  另外：容器預設的憑證驗證會擋下 TLS 被攔截的環境（`config/host.certificateValidation`），那是使用者
+  環境的事，Berth 不改它。
+- **TMDB 的兩種憑證都打得動 v3 端點**：v4 的 read access token 走 `Authorization: Bearer`（官方建議、
+  不進網址），v3 的 32 字元 API key 走 `?api_key=`；key 不對回 401。Berth 認憑證的**形狀**，
+  所以使用者貼哪一種都成立。
+
 **Jackett**（[repo](https://github.com/Jackett/Jackett)）
 
 - API key 在 `ServerConfig.json` 的 `APIKey`；聚合 Torznab `/api/v2.0/indexers/all/results/torznab/api?t=search` 有文件（上限 1000 筆、站專屬分類不可用）；`GET/POST /api/v2.0/indexers/{id}/Config` 只是 UI 內部介面，無文件。有 `mikan.yml`、`dmhy.yml`、`nyaasi.yml`、`acgrip.yml` 定義。
