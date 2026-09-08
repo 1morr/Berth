@@ -164,8 +164,16 @@ _Avoid_: foreign, external, legacy
 _Avoid_: purge level, cleanup mode
 
 **Health Check**:
-對服務連線、版本、Route 硬鏈接與跨服務可見性的檢查，結果顯示在健康頁。
+對服務連線、版本、Route 硬鏈接與跨服務可見性的檢查，結果顯示在健康頁。**四項**：Jellyfin、
+qBittorrent、索引站、Route；前三項對應精靈的前三個泊位，第四項是所有 Route 的總結。
+背景迴圈每 5 分鐘跑一次，也可以在畫面上按「立即重測」。
 _Avoid_: diagnostics, status check
+
+**Drift（設定漂移）**:
+Berth 建議的 qBittorrent 偏好被改成別的值。**不是紅燈**——那台服務還在動，只是下載路徑或
+自動管理一旦不對，入庫遲早會失敗；畫面用 `assigned`（需要你）而不是 `blocked`，
+並在服務設定頁給逐鍵差異與「還原建議設定」。
+_Avoid_: mismatch, out of sync, misconfiguration
 
 **Event**:
 Job 時間線上的一筆事件：型別、時間、actor、payload。

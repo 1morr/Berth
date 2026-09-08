@@ -12,7 +12,7 @@ import {
   library,
   setupStatus,
   step,
-} from '../test/setupStatus'
+} from '../test/fixtures'
 import { SetupPage } from './SetupPage'
 
 afterEach(() => {

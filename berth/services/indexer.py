@@ -177,7 +177,7 @@ async def connect_indexer(
     settings.api_key = api_key
     await write_settings(session, settings)
 
-    step = await _probe_endpoint(factory, kind, base_url, api_key)
+    step = await probe_indexer(factory, kind, base_url, api_key)
     setup.indexer.steps = [step]
     setup.indexer.skipped = False
     await write_settings(session, setup)
@@ -286,10 +286,14 @@ async def _wait_for_restart(client: ProwlarrClient, *, sleep: Sleeper) -> None:
     raise ServiceError("prowlarr did not come back after the credentials were set")
 
 
-async def _probe_endpoint(
+async def probe_indexer(
     factory: ServiceClientFactory, kind: IndexerKind, base_url: str, api_key: str
 ) -> SetupStep:
-    """既有路徑的一條纜繩：那個位址現在回得出什麼。"""
+    """那個索引站位址現在回得出什麼。
+
+    精靈第 5 步的既有路徑與健康檢查的第三項用的是同一支：兩者問的都是「這個端點還能不能
+    搜」，分成兩份實作只會讓其中一份先過期（票 10）。
+    """
     if kind is IndexerKind.TORZNAB:
         torznab = factory.torznab(base_url, api_key)
         try:

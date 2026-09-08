@@ -1,9 +1,9 @@
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import type { SetupStep, StepStatus } from '../api/setup'
-import { CopyLine } from '../components/controls'
-import { SIGNAL_FILL } from '../components/signal'
+import type { SetupStep, StepStatus } from '../api/schemas'
+import { CopyLine } from './controls'
+import { SIGNAL_FILL } from './signal'
 import { STATUS_LABEL, STATUS_SIGNAL } from './steps'
 
 /**

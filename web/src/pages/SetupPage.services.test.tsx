@@ -12,7 +12,7 @@ import {
   setupStatus,
   step,
   tmdbSetup,
-} from '../test/setupStatus'
+} from '../test/fixtures'
 import { SetupPage } from './SetupPage'
 
 afterEach(() => {

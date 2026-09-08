@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { HEALTHY, UNAUTHORIZED, UNCONFIGURED, session, stubApi } from './test/fetch'
 import { renderApp } from './test/render'
-import { setupStatus } from './test/setupStatus'
+import { healthDetail, setupStatus } from './test/fixtures'
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -20,6 +20,7 @@ const DONE = { body: HEALTHY }
 const PENDING = { body: UNCONFIGURED }
 const WIZARD = { body: setupStatus({ completed: true, current_step: 8 }) }
 const ADMIN = { body: { name: 'skipper', role: 'admin' } }
+const DETAIL = 'GET /api/health/detail'
 const USER = { body: { name: 'deckhand', role: 'user' } }
 
 describe('路由', () => {
@@ -32,13 +33,13 @@ describe('路由', () => {
     expect(await screen.findByText('設定精靈')).toBeInTheDocument()
   })
 
-  it('setup 完成且已登入時 / 就留在原地', async () => {
-    stubApi({ [HEALTH]: DONE, [ME]: ADMIN })
+  it('setup 完成且已登入時 / 落到健康頁', async () => {
+    stubApi({ [HEALTH]: DONE, [ME]: ADMIN, [DETAIL]: { body: healthDetail() } })
 
     const { router } = renderApp('/')
 
-    expect(await screen.findByText('正常')).toBeInTheDocument()
-    expect(router.state.location.pathname).toBe('/')
+    expect(await screen.findByRole('region', { name: '泊位板' })).toBeInTheDocument()
+    expect(router.state.location.pathname).toBe('/health')
   })
 
   it('後端連不上時不把人丟到精靈，讓目的地自己說發生什麼事', async () => {
@@ -47,7 +48,7 @@ describe('路由', () => {
     const { router } = renderApp('/')
 
     await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument())
-    expect(router.state.location.pathname).toBe('/')
+    expect(router.state.location.pathname).toBe('/health')
   })
 
   it('直接開 /setup 就是精靈', async () => {
@@ -67,7 +68,7 @@ describe('門禁', () => {
     const { router } = renderApp('/')
 
     await waitFor(() => expect(router.state.location.pathname).toBe('/login'))
-    expect(router.state.location.search).toEqual({ redirect: '/' })
+    expect(router.state.location.search).toEqual({ redirect: '/health' })
   })
 
   it('第一次被擋下來時不說「已過期」', async () => {
@@ -91,16 +92,16 @@ describe('門禁', () => {
     await router.navigate({ to: '/' })
 
     await waitFor(() => expect(router.state.location.pathname).toBe('/login'))
-    expect(router.state.location.search).toEqual({ redirect: '/', expired: true })
+    expect(router.state.location.search).toEqual({ redirect: '/health', expired: true })
     expect(await screen.findByText('工作階段已過期，請重新登入。')).toBeInTheDocument()
   })
 
   it('已經登入的人不必再看一次登入表單', async () => {
     stubApi({ [HEALTH]: DONE, [ME]: ADMIN })
 
-    const { router } = renderApp('/login?redirect=%2F')
+    const { router } = renderApp('/login?redirect=%2Fhealth')
 
-    await waitFor(() => expect(router.state.location.pathname).toBe('/'))
+    await waitFor(() => expect(router.state.location.pathname).toBe('/health'))
   })
 
   it('setup 跑完之後沒登入就開 /setup 也會被擋', async () => {
@@ -115,7 +116,7 @@ describe('門禁', () => {
 
 describe('角色', () => {
   it('管理員的頁首有設定入口', async () => {
-    stubApi({ [HEALTH]: DONE, [ME]: ADMIN, [STATUS]: WIZARD })
+    stubApi({ [HEALTH]: DONE, [ME]: ADMIN, [STATUS]: WIZARD, [DETAIL]: { body: healthDetail() } })
 
     renderApp('/')
 
@@ -125,7 +126,7 @@ describe('角色', () => {
   })
 
   it('非 admin 看不到設定入口，但看得到自己是什麼角色（票 07 驗收）', async () => {
-    stubApi({ [HEALTH]: DONE, [ME]: USER })
+    stubApi({ [HEALTH]: DONE, [ME]: USER, [DETAIL]: { body: healthDetail() } })
 
     renderApp('/')
 
@@ -134,17 +135,22 @@ describe('角色', () => {
     expect(screen.queryByRole('link', { name: '設定' })).not.toBeInTheDocument()
   })
 
-  it('非 admin 直接打 /setup 會被送回首頁', async () => {
-    stubApi({ [HEALTH]: DONE, [ME]: USER })
+  it('非 admin 直接打 /setup 會被送回健康頁', async () => {
+    stubApi({ [HEALTH]: DONE, [ME]: USER, [DETAIL]: { body: healthDetail() } })
 
     const { router } = renderApp('/setup')
 
-    await waitFor(() => expect(router.state.location.pathname).toBe('/'))
+    await waitFor(() => expect(router.state.location.pathname).toBe('/health'))
   })
 
   it('登出後回到登入頁', async () => {
     const backend = session({ name: 'skipper', role: 'admin' })
-    stubApi({ [HEALTH]: DONE, [ME]: () => backend.me(), [LOGOUT]: backend.signOut })
+    stubApi({
+      [HEALTH]: DONE,
+      [ME]: () => backend.me(),
+      [LOGOUT]: backend.signOut,
+      [DETAIL]: { body: healthDetail() },
+    })
     const { router } = renderApp('/')
 
     await userEvent.click(await screen.findByRole('button', { name: '登出' }))

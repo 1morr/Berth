@@ -40,8 +40,10 @@ class FakeProwlarrClient:
         self.base_url = base_url
         self._indexers = indexers or []
         self._definitions = definitions
-        self._ping_error = ping_error
-        self._indexers_error = indexers_error
+        #: 兩個旗標都是公開的：測試要在同一個實例上演「服務掛了」再「服務回來了」，
+        #: 而健康檢查的驗收正是那兩個轉換（票 10）。
+        self.ping_error = ping_error
+        self.indexers_error = indexers_error
         self._rejects = dict(rejects or {})
         self._host_config: dict[str, Any] = dict(
             host_config
@@ -59,12 +61,12 @@ class FakeProwlarrClient:
         self.restarts = 0
 
     async def ping(self) -> None:
-        if self._ping_error is not None:
-            raise self._ping_error
+        if self.ping_error is not None:
+            raise self.ping_error
 
     async def indexers(self) -> list[ProwlarrIndexer]:
-        if self._indexers_error is not None:
-            raise self._indexers_error
+        if self.indexers_error is not None:
+            raise self.indexers_error
         return list(self._indexers)
 
     async def definitions(self) -> tuple[IndexerDefinition, ...]:

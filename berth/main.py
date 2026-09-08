@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -19,10 +21,15 @@ from berth.api.errors import validation_error
 from berth.api.gate import ApiGate
 from berth.config import VERSION, Config, load_config
 from berth.db import create_engine, create_session_factory, upgrade_to_head
+from berth.pipeline import HealthChecker
+from berth.services.clients import HttpServiceClientFactory, ServiceClientFactory
 
 logger = logging.getLogger(__name__)
 
 API_PREFIX = "/api"
+
+#: 背景 task 的名字。關機時要找得到它，測試也靠它斷言「沒有留下 pending task」。
+HEALTH_CHECKER_TASK = "health_checker"
 
 #: mount 掛在 `/`，所以 StaticFiles 收到的 path 沒有開頭的斜線。
 _API_SEGMENT = API_PREFIX.lstrip("/")
@@ -53,11 +60,19 @@ def _is_api(path: str) -> bool:
     return bool(parts) and parts[0] == _API_SEGMENT
 
 
-def create_app(config: Config | None = None) -> FastAPI:
+def create_app(
+    config: Config | None = None, *, clients: ServiceClientFactory | None = None
+) -> FastAPI:
+    """`clients` 只給演練與測試用（`scripts/fake_setup_server.py`）。
+
+    背景迴圈不經過 FastAPI 的相依，所以 `dependency_overrides` 換不掉它要用的 client——
+    要換就得在這裡換。
+    """
     resolved = load_config() if config is None else config
 
     app = FastAPI(title="Berth", version=VERSION, lifespan=_lifespan(resolved))
     app.state.config = resolved
+    app.state.clients = clients or HttpServiceClientFactory()
     # 門禁包住整個 `/api`，所以它要在路由之外（票 07）。
     app.add_middleware(ApiGate, prefix=API_PREFIX)
     app.add_exception_handler(RequestValidationError, validation_error)
@@ -74,9 +89,16 @@ def _lifespan(config: Config) -> Lifespan[FastAPI]:
         await upgrade_to_head(engine)
         # 相依（api/deps.py）從 app.state 取，這樣 router 不必知道 engine 是怎麼建的。
         app.state.session_factory = create_session_factory(engine)
+        checker = HealthChecker(app.state.session_factory, app.state.clients)
+        # 背景迴圈（plan §3.2）。第一輪要等一個 tick，所以啟動本身不會慢。
+        task = asyncio.create_task(checker.run(), name=HEALTH_CHECKER_TASK)
         try:
             yield
         finally:
+            # 先收 task 再收 engine：反過來的話迴圈會拿著一個已經關掉的 engine 醒來。
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
             await engine.dispose()
 
     return lifespan

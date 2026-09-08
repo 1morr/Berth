@@ -460,6 +460,7 @@ const zhHant = {
     user: '使用者',
   },
   nav: {
+    health: '健康',
     settings: '設定',
     signOut: '登出',
     signingOut: '登出中…',
@@ -468,11 +469,60 @@ const zhHant = {
     title: '健康',
     checking: '檢查中…',
     unreachable: '連不上 Berth 後端。確認程序是否還在執行。',
-    backend: '後端',
-    version: '版本',
-    value: {
-      ok: '正常',
-      degraded: '降級',
+    interval: '每 {{minutes}} 分鐘自動檢查一次',
+    lastChecked: '上次檢查',
+    lastOk: '最後成功',
+    never: '沒有紀錄',
+    recheck: '立即重測',
+    rechecking: '重測中…',
+    recheckFailed: '重測沒有走完。Berth 後端可能沒在跑——確認容器狀態後再按一次。',
+    failures: '連續失敗 {{count}} 次',
+    state: {
+      ok: '已繫上',
+      drift: '設定被改過',
+      failed: '阻擋',
+      unknown: '尚未檢查',
+      unconfigured: '尚未接上',
+    },
+    routes: {
+      title: '媒體庫路徑',
+      count: '{{count}} 條 Route',
+      expand: '展開檢查',
+      collapse: '收起',
+      empty: '還沒有 Route。在設定精靈的最後一個泊位建立它們，Berth 才有地方寫入。',
+    },
+    fix: {
+      title: '修正',
+      bundled:
+        '這個服務是這套 compose 起的，所以先確認那個容器還在跑。三條指令的順序就是排查順序：還在嗎、把它起來、它自己說了什麼。',
+      existing:
+        '這是你自己的服務，Berth 只知道它現在回不出東西。位址或憑證變了的話回設定精靈重新填一次。',
+      unconfigured: '這個服務還沒接上。到設定精靈接它——沒接上的話它負責的那件事一律不會發生。',
+      drift:
+        'Berth 的建議設定被改掉了（{{keys}}）。服務本身還在動，但下載路徑或自動管理一旦不對，入庫遲早會失敗。',
+    },
+    toSetup: '到設定精靈',
+    toSettings: '到服務設定',
+  },
+  settings: {
+    title: '服務設定',
+    lede: '位址與憑證在設定精靈改。這一頁只有兩件事：重測連線，以及把被改掉的建議設定還原。',
+    test: '測試連線',
+    testing: '測試中…',
+    testFailed: '測試沒有走完。Berth 後端可能沒在跑——確認容器狀態後再按一次。',
+    editHint: '改位址或憑證',
+    drift: {
+      title: 'qBittorrent 建議設定',
+      clean: '五個建議鍵都還是建議值。',
+      changed: '{{count}} 個鍵與建議值不同。',
+      changedKey: '已改',
+      key: '鍵',
+      current: '現值',
+      recommended: '建議值',
+      restore: '還原建議設定',
+      restoring: '還原中…',
+      restoreFailed: '寫不進去。qBittorrent 可能不在了，或帳密變了——看上面那一項的原文。',
+      unreachable: '連不上 qBittorrent，讀不到它現在的偏好。',
     },
   },
   common: {
@@ -962,6 +1012,7 @@ const en: Translations<typeof zhHant> = {
     user: 'User',
   },
   nav: {
+    health: 'Health',
     settings: 'Settings',
     signOut: 'Sign out',
     signingOut: 'Signing out…',
@@ -970,11 +1021,65 @@ const en: Translations<typeof zhHant> = {
     title: 'Health',
     checking: 'Checking…',
     unreachable: 'Cannot reach the Berth backend. Check that the process is still running.',
-    backend: 'Backend',
-    version: 'Version',
-    value: {
-      ok: 'OK',
-      degraded: 'Degraded',
+    interval: 'Checked automatically every {{minutes}} min',
+    lastChecked: 'Last checked',
+    lastOk: 'Last success',
+    never: 'No record',
+    recheck: 'Check now',
+    rechecking: 'Checking…',
+    recheckFailed:
+      'The check did not go through. The Berth backend may be down — check the container, then try again.',
+    failures: '{{count}} consecutive failures',
+    state: {
+      ok: 'Moored',
+      drift: 'Settings changed',
+      failed: 'Blocked',
+      unknown: 'Not checked',
+      unconfigured: 'Not connected',
+    },
+    routes: {
+      title: 'Library paths',
+      count: '{{count}} routes',
+      expand: 'Show checks',
+      collapse: 'Hide',
+      empty:
+        'No routes yet. Create them in the last berth of the setup wizard — until then Berth has nowhere to write.',
+    },
+    fix: {
+      title: 'Fix',
+      bundled:
+        'This service comes from the bundled compose file, so start by checking that its container is still running. The three commands are in triage order: is it there, bring it up, what did it say.',
+      existing:
+        'This is your own service, and all Berth knows is that it stopped answering. If its address or credentials changed, fill them in again in the setup wizard.',
+      unconfigured:
+        'This service is not connected yet. Connect it in the setup wizard — until then, whatever it is responsible for simply will not happen.',
+      drift:
+        "Berth's recommended settings were changed ({{keys}}). The service itself is still running, but once the download paths or automatic management are wrong, imports will fail sooner or later.",
+    },
+    toSetup: 'Open the setup wizard',
+    toSettings: 'Open service settings',
+  },
+  settings: {
+    title: 'Service settings',
+    lede: 'Addresses and credentials are edited in the setup wizard. This page does two things: re-test a connection, and restore recommended settings that were changed.',
+    test: 'Test connection',
+    testing: 'Testing…',
+    testFailed:
+      'The test did not go through. The Berth backend may be down — check the container, then try again.',
+    editHint: 'Change address or credentials',
+    drift: {
+      title: 'qBittorrent recommended settings',
+      clean: 'All five recommended keys still hold their recommended values.',
+      changed: '{{count}} keys differ from the recommended values.',
+      changedKey: 'changed',
+      key: 'Key',
+      current: 'Current',
+      recommended: 'Recommended',
+      restore: 'Restore recommended settings',
+      restoring: 'Restoring…',
+      restoreFailed:
+        'Could not write them. qBittorrent may be gone, or its credentials changed — read the raw message on that check above.',
+      unreachable: 'Cannot reach qBittorrent, so its current preferences are unknown.',
     },
   },
   common: {

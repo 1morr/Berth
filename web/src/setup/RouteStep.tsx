@@ -1,19 +1,13 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import {
-  ROUTE_CHECKS,
-  type LibraryChoice,
-  type Profile,
-  type RouteSelectionInput,
-  type RouteSetup,
-  type RouteView,
-} from '../api/setup'
+import { type LibraryChoice, type RouteSelectionInput, type RouteSetup } from '../api/setup'
+import { type Profile, type RouteView } from '../api/schemas'
 import { STICKY_ACTION, Checkbox, GhostButton, Notice, PrimaryButton } from '../components/controls'
+import { ROUTE_HEALTH_LABEL, ROUTE_SIGNAL } from '../components/routeChecks'
+import { RouteCheckList } from '../components/RouteCheckList'
 import { SIGNAL_FILL } from '../components/signal'
 import { Cutaway, CutawayRow } from './Cutaway'
-import { CHECK_COMMANDS, CHECK_ENDPOINT, CHECK_FIX, CHECK_LABEL, ROUTE_SIGNAL } from './routeChecks'
-import { StepLine } from './StepLine'
 
 /**
  * 泊位 4：媒體庫路徑 → Library Route（plan §9.3 第 7 步、§9.5）。
@@ -389,13 +383,12 @@ function Profiles({
 /** 一個 Route 的靠泊序列：五條纜繩，失敗就地展開手動步驟與 compose 片段。 */
 function RouteSequence({ route, building }: { route: RouteView; building: boolean }) {
   const { t } = useTranslation()
-  const byCheck = new Map(route.checks.map((row) => [row.step, row]))
 
   return (
     <section className="mt-6">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <span className={`label px-2 py-1.5 ${SIGNAL_FILL[ROUTE_SIGNAL[route.health]]}`}>
-          {t(`routes.health.${route.health}`)}
+          {t(ROUTE_HEALTH_LABEL[route.health])}
         </span>
         <span className="value text-sm font-semibold text-ink">{route.name}</span>
         <span className="value text-xs text-ink-dim">{route.category}</span>
@@ -404,22 +397,9 @@ function RouteSequence({ route, building }: { route: RouteView; building: boolea
         </span>
       </div>
 
-      <ol aria-live="polite" aria-busy={building} className="mt-3 grid gap-3" data-testid="checks">
-        {ROUTE_CHECKS.map((check) => (
-          <StepLine
-            key={check}
-            label={t(CHECK_LABEL[check])}
-            endpoint={CHECK_ENDPOINT[check]}
-            row={byCheck.get(check)}
-            fix={t(CHECK_FIX[check])}
-            commands={CHECK_COMMANDS[check]}
-          >
-            {check === 'hardlink' && route.cross_device && (
-              <p className="mt-3 max-w-prose text-xs text-ink-dim">{t('routes.fix.crossDevice')}</p>
-            )}
-          </StepLine>
-        ))}
-      </ol>
+      <div className="mt-3">
+        <RouteCheckList route={route} busy={building} />
+      </div>
     </section>
   )
 }

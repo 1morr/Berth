@@ -14,7 +14,6 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from berth.config import Config
 from berth.services.clients import (
-    HttpServiceClientFactory,
     ServiceClientFactory,
     SetupProbes,
     build_setup_probes,
@@ -49,8 +48,10 @@ async def get_setup_probes(
         await close_setup_probes(probes)
 
 
-def get_client_factory() -> ServiceClientFactory:
-    return HttpServiceClientFactory()
+def get_client_factory(request: Request) -> ServiceClientFactory:
+    """端點與背景迴圈用同一份（`create_app` 放進 `app.state`）。"""
+    factory: ServiceClientFactory = request.app.state.clients
+    return factory
 
 
 SessionDep = Annotated[AsyncSession, Depends(get_session)]

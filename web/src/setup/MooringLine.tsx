@@ -1,16 +1,15 @@
 import { useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import type { ConnectInput, ServiceDetection, ServiceKind } from '../api/setup'
+import type { ConnectInput, ServiceDetection } from '../api/setup'
+import type { ServiceKind } from '../api/schemas'
 import { CopyLine, Field, GhostButton, PasswordField } from '../components/controls'
+import { ORIGIN_LABEL, SERVICE_LABEL, detailLabel } from '../components/services'
 import { SIGNAL_FILL } from '../components/signal'
 import {
-  ORIGIN_LABEL,
   PROBE_ENDPOINT,
   REASON_LABEL,
-  SERVICE_LABEL,
   connectFields,
-  detailLabel,
   needsConnectionForm,
   signalOf,
 } from './signals'

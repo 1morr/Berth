@@ -1,15 +1,11 @@
 import { useTranslation } from 'react-i18next'
 
-import {
-  QBITTORRENT_STEPS,
-  type QbittorrentSetup,
-  type QbittorrentStep as QbittorrentStepKey,
-  type SetupStep,
-} from '../api/setup'
+import { QBITTORRENT_STEPS, type QbittorrentStep as QbittorrentStepKey } from '../api/setup'
+import { type QbittorrentSetup, type SetupStep } from '../api/schemas'
 import { STICKY_ACTION, CopyLine, GhostButton, Notice, PrimaryButton } from '../components/controls'
 import { Cutaway, CutawayRow } from './Cutaway'
-import { StepLine } from './StepLine'
-import { isSettled } from './steps'
+import { StepLine } from '../components/StepLine'
+import { isSettled } from '../components/steps'
 import { STEP_FIX, STEP_LABEL } from './qbittorrentSteps'
 
 /**

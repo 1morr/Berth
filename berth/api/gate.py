@@ -48,6 +48,10 @@ ANONYMOUS_PATHS = frozenset(
 #: 設定精靈。它自己有一條隨時間關上的規則，見 `_setup_verdict`。
 SETUP_PREFIX = "/setup"
 
+#: 只有管理員進得來的路徑（brief §11）。規則放在門禁而不是 router 的相依，理由與 `setup/*`
+#: 一樣：底下新掛的端點什麼都不做就已經在同一道門後面。
+ADMIN_PREFIXES = ("/settings",)
+
 
 class ApiGate:
     """`/api` 底下的每個請求都先過這裡。前端靜態檔不受影響。"""
@@ -88,6 +92,8 @@ class ApiGate:
             return None
         if path == SETUP_PREFIX or path.startswith(SETUP_PREFIX + "/"):
             return await _setup_verdict(request, user)
+        if _under_any(path, ADMIN_PREFIXES):
+            return _admin_verdict(user)
         if user is None:
             # 未知路徑也走這裡：401 早於 404，才不會讓人靠回應碼列舉端點。
             return _refuse(status.HTTP_401_UNAUTHORIZED, "sign in to use this API")
@@ -125,6 +131,19 @@ async def _setup_verdict(request: Request, user: AuthenticatedUser | None) -> JS
     if user.role is not Role.ADMIN:
         return _refuse(status.HTTP_403_FORBIDDEN, "administrators only")
     return None
+
+
+def _admin_verdict(user: AuthenticatedUser | None) -> JSONResponse | None:
+    """改設定是管理員的事；一般使用者看得到健康頁，但按不了那幾顆按鈕（brief §11）。"""
+    if user is None:
+        return _refuse(status.HTTP_401_UNAUTHORIZED, "sign in to use this API")
+    if user.role is not Role.ADMIN:
+        return _refuse(status.HTTP_403_FORBIDDEN, "administrators only")
+    return None
+
+
+def _under_any(path: str, prefixes: tuple[str, ...]) -> bool:
+    return any(path == prefix or path.startswith(prefix + "/") for prefix in prefixes)
 
 
 def _sessions(request: Request) -> async_sessionmaker[AsyncSession]:

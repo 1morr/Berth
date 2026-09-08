@@ -29,13 +29,12 @@ import {
   type ConnectInput,
   type IndexerSetup,
   type JellyfinSetup,
-  type QbittorrentSetup,
   type RouteSelectionInput,
   type RouteSetup,
-  type ServiceKind,
   type SetupStatus,
   type TmdbSetup,
 } from '../api/setup'
+import { type QbittorrentSetup, type ServiceKind } from '../api/schemas'
 import { healthQueryOptions } from '../api/health'
 import { LanguageToggle } from '../components/LanguageToggle'
 import { AdminStep } from '../setup/AdminStep'
@@ -48,7 +47,7 @@ import { RouteStep } from '../setup/RouteStep'
 import { SourceStep } from '../setup/SourceStep'
 import { GhostButton } from '../components/controls'
 import { SIGNAL_FILL, type Signal } from '../components/signal'
-import { isSettled } from '../setup/steps'
+import { isSettled } from '../components/steps'
 import { signalOf } from '../setup/signals'
 
 /** plan §9.3 的八步。 */

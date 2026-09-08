@@ -13,7 +13,7 @@ import {
 } from '../components/controls'
 import { SIGNAL_FILL } from '../components/signal'
 import { Cutaway, CutawayRow } from './Cutaway'
-import { StepLine } from './StepLine'
+import { StepLine } from '../components/StepLine'
 
 /**
  * 泊位 3：來源（plan §9.3 第 5–6 步）。同一個泊位的兩條纜繩——索引站與 TMDB。

@@ -1,46 +1,247 @@
-import { screen, waitFor } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { HEALTHY, stubJsonResponse } from '../test/fetch'
-import { renderWithProviders } from '../test/render'
-import { HealthPage } from './HealthPage'
+import { HEALTHY, stubApi, type StubRoute } from '../test/fetch'
+import { healthDetail, routeView, step, withFailedService } from '../test/fixtures'
+import { renderApp } from '../test/render'
 
 afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-describe('HealthPage', () => {
-  it('shows the backend status once /api/health answers', async () => {
-    stubJsonResponse(HEALTHY)
+const DETAIL = 'GET /api/health/detail'
+const CHECK = 'POST /api/health/check'
 
-    renderWithProviders(<HealthPage />)
+/** 走真正的 route tree：這一頁掛在 `/health`，而修正步驟裡有一個站內連結。 */
+function render(detail: StubRoute, extra: Record<string, StubRoute | (() => StubRoute)> = {}) {
+  return stubApi({
+    'GET /api/health': { body: HEALTHY },
+    'GET /api/auth/me': { body: { name: 'skipper', role: 'admin' } },
+    [DETAIL]: detail,
+    ...extra,
+  })
+}
 
-    expect(await screen.findByText('正常')).toBeInTheDocument()
-    expect(screen.getByText('0.1.0')).toBeInTheDocument()
+/** 一個服務的區塊。板上那一格也會顯示同一個實測值，所以斷言要說清楚問的是哪裡。 */
+function card(name: string) {
+  return within(screen.getByRole('region', { name }))
+}
+
+describe('健康頁', () => {
+  it('四項全綠時泊位板四格都是已繫上（票 10 驗收）', async () => {
+    render({ body: healthDetail() })
+    renderApp('/health')
+
+    const board = await screen.findByRole('region', { name: '泊位板' })
+
+    expect(within(board).getAllByText('已繫上')).toHaveLength(4)
   })
 
-  it('calls the API under the /api prefix', async () => {
-    const fetchStub = stubJsonResponse(HEALTHY)
+  it('每一項顯示它量到的東西', async () => {
+    render({ body: healthDetail() })
+    renderApp('/health')
 
-    renderWithProviders(<HealthPage />)
+    await screen.findByRole('region', { name: 'Jellyfin' })
 
-    await screen.findByText('正常')
-    expect(fetchStub.mock.calls[0][0]).toBe('/api/health')
+    expect(card('Jellyfin').getByText('10.11.11 · 3 libraries')).toBeInTheDocument()
+    expect(card('qBittorrent').getByText('v5.2.3 · Web API 2.15.1')).toBeInTheDocument()
   })
 
-  it('reports a degraded backend rather than pretending it is fine', async () => {
-    stubJsonResponse({ status: 'degraded', version: '0.1.0' })
+  it('紅的那一項就地展開原文與修正步驟，其餘三項不動', async () => {
+    render({ body: withFailedService('prowlarr', 'GET /ping: connection refused') })
+    renderApp('/health')
 
-    renderWithProviders(<HealthPage />)
-
-    expect(await screen.findByText('降級')).toBeInTheDocument()
+    expect(await screen.findByText('GET /ping: connection refused')).toBeInTheDocument()
+    expect(screen.getByText('docker compose up -d prowlarr')).toBeInTheDocument()
+    // 另外兩個服務加上 Route 那一項仍然綠著。
+    const board = screen.getByRole('region', { name: '泊位板' })
+    expect(within(board).getAllByText('已繫上')).toHaveLength(3)
   })
 
-  it('surfaces an unreachable backend as an alert', async () => {
-    stubJsonResponse({ detail: 'Not Found' }, 500)
+  it('既有服務的修正是回精靈改連線，不是 docker 指令', async () => {
+    render({
+      body: withFailedService('jellyfin', 'GET /System/Info/Public: connection refused', {
+        origin: 'existing',
+      }),
+    })
+    renderApp('/health')
 
-    renderWithProviders(<HealthPage />)
+    expect(await screen.findByRole('link', { name: '到設定精靈' })).toBeInTheDocument()
+    expect(screen.queryByText('docker compose up -d jellyfin')).not.toBeInTheDocument()
+  })
+
+  it('連續失敗次數看得見——「剛剛壞的」與「壞了一整天」不是同一件事', async () => {
+    const base = withFailedService('prowlarr', 'refused')
+    render({
+      body: {
+        ...base,
+        services: base.services.map((row) =>
+          row.kind === 'prowlarr' ? { ...row, failures: 7 } : row,
+        ),
+      },
+    })
+    renderApp('/health')
+
+    expect(await screen.findByText('連續失敗 7 次')).toBeInTheDocument()
+  })
+
+  it('設定漂移是「需要你」而不是紅燈——服務還在動', async () => {
+    const base = healthDetail()
+    render({
+      body: {
+        ...base,
+        services: base.services.map((row) =>
+          row.kind === 'qbittorrent' ? { ...row, drift: ['auto_tmm_enabled'] } : row,
+        ),
+      },
+    })
+    renderApp('/health')
+
+    await screen.findByRole('region', { name: 'qBittorrent' })
+
+    expect(card('qBittorrent').getByText('設定被改過')).toBeInTheDocument()
+    expect(card('qBittorrent').getByText('auto_tmm_enabled')).toBeInTheDocument()
+    expect(card('qBittorrent').queryByText('阻擋')).not.toBeInTheDocument()
+    // 漂移是這一頁唯一有東西可以按的狀態，而按鈕住在設定頁。
+    expect(card('qBittorrent').getByRole('link', { name: '到服務設定' })).toBeInTheDocument()
+    expect(card('Jellyfin').queryByRole('link', { name: '到服務設定' })).not.toBeInTheDocument()
+  })
+
+  it('一般使用者看不到那條連結——設定頁只有 admin 進得去', async () => {
+    const base = healthDetail()
+    render(
+      {
+        body: {
+          ...base,
+          services: base.services.map((row) =>
+            row.kind === 'qbittorrent' ? { ...row, drift: ['auto_tmm_enabled'] } : row,
+          ),
+        },
+      },
+      { 'GET /api/auth/me': { body: { name: 'deckhand', role: 'user' } } },
+    )
+    renderApp('/health')
+
+    await screen.findByRole('region', { name: 'qBittorrent' })
+
+    expect(card('qBittorrent').getByText('設定被改過')).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: '到服務設定' })).not.toBeInTheDocument()
+  })
+
+  it('迴圈還沒跑第一輪時說「尚未檢查」，不是「尚未接上」', async () => {
+    // 精靈按完完成到第一個 tick 之間（最長 30 秒）：服務接好了，只是還沒被檢查過。
+    const base = healthDetail()
+    render({
+      body: {
+        ...base,
+        status: 'ok',
+        checked_at: null,
+        services: base.services.map((row) => ({
+          ...row,
+          status: 'unknown' as const,
+          detail: '',
+          checked_at: null,
+          last_ok_at: null,
+          configured: false,
+        })),
+        routes_status: 'unknown',
+      },
+    })
+    renderApp('/health')
+
+    await screen.findByRole('region', { name: 'Jellyfin' })
+
+    expect(card('Jellyfin').getByText('尚未檢查')).toBeInTheDocument()
+    expect(screen.queryByText('尚未接上')).not.toBeInTheDocument()
+  })
+
+  it('每條 Route 也有最後成功時間', async () => {
+    render({ body: healthDetail() })
+    const { container } = renderApp('/health')
+
+    await screen.findByRole('region', { name: 'Jellyfin' })
+    const rows = container.querySelectorAll<HTMLDetailsElement>('details')
+    rows[0].open = true
+
+    expect(within(rows[0]).getByText('最後成功')).toBeInTheDocument()
+  })
+
+  it('跳過索引站的人看到的是「尚未接上」，不是一盞永遠的紅燈', async () => {
+    const base = healthDetail()
+    render({
+      body: {
+        ...base,
+        services: base.services.map((row) =>
+          row.kind === 'prowlarr'
+            ? { ...row, status: 'unknown' as const, configured: false, detail: '', base_url: '' }
+            : row,
+        ),
+      },
+    })
+    renderApp('/health')
+
+    await screen.findByRole('region', { name: 'Prowlarr' })
+
+    expect(card('Prowlarr').getByText('尚未接上')).toBeInTheDocument()
+    expect(screen.queryByText('阻擋')).not.toBeInTheDocument()
+  })
+
+  it('綠燈的 Route 收起來，紅燈的就地展開五條纜繩', async () => {
+    render({
+      body: healthDetail({
+        routes_status: 'failed',
+        routes: [
+          routeView({ library: 'TV' }),
+          routeView({
+            library: 'Anime',
+            health: 'failed',
+            checks: [
+              step('category', 'ok'),
+              step('download_path', 'ok'),
+              step('library_path', 'ok'),
+              step('probe_visible', 'failed', '', 'Jellyfin cannot see /data/library/anime'),
+              step('hardlink', 'pending'),
+            ],
+          }),
+        ],
+      }),
+    })
+    const { container } = renderApp('/health')
+
+    await screen.findByRole('region', { name: 'Jellyfin' })
+    const rows = container.querySelectorAll<HTMLDetailsElement>('details')
+
+    expect(rows).toHaveLength(2)
+    expect(rows[0].open).toBe(false)
+    expect(rows[1].open).toBe(true)
+    expect(screen.getByText('Jellyfin cannot see /data/library/anime')).toBeInTheDocument()
+  })
+
+  it('「立即重測」真的重跑一輪，而且載入這一頁時不會自己跑', async () => {
+    const fresh = withFailedService('qbittorrent', 'connection refused')
+    const stub = render({ body: healthDetail() }, { [CHECK]: { body: fresh } })
+    renderApp('/health')
+
+    await screen.findByRole('region', { name: 'qBittorrent' })
+    expect(stub.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(0)
+
+    await userEvent.click(screen.getByRole('button', { name: '立即重測' }))
+
+    expect(await screen.findByText('connection refused')).toBeInTheDocument()
+  })
+
+  it('後端連不上時說得出來，而不是一片空白', async () => {
+    render({ status: 500, body: { detail: 'boom' } })
+    renderApp('/health')
 
     await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument())
+  })
+
+  it('還沒有 Route 時說明要去哪裡建，而不是報錯', async () => {
+    render({ body: healthDetail({ routes_status: 'unknown', routes: [] }) })
+    renderApp('/health')
+
+    expect(await screen.findByText(/還沒有 Route/)).toBeInTheDocument()
   })
 })

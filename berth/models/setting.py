@@ -12,7 +12,7 @@ from pydantic import BaseModel, ConfigDict
 from sqlalchemy import Text
 from sqlalchemy.orm import Mapped, mapped_column
 
-from berth.domain import DetectionReason, ServiceKind, ServiceOrigin, StepStatus
+from berth.domain import DetectionReason, HealthStatus, ServiceKind, ServiceOrigin, StepStatus
 from berth.models.base import Base
 from berth.models.types import JsonText, UtcDateTime, utcnow
 
@@ -204,6 +204,48 @@ class SetupTmdb(BaseModel):
     skipped: bool = False
 
 
+class ServiceHealth(BaseModel):
+    """一個服務最後一次健康檢查的結果（plan §3.2、票 10）。
+
+    `status` 是這一次的判定，`last_ok_at` 是**最後一次成功**的時間——兩者要並存，因為
+    「現在紅著，但十分鐘前還好好的」與「從來沒通過」對維運是完全不同的兩件事（brief §16.2）。
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    status: HealthStatus = HealthStatus.UNKNOWN
+    #: 實測值：版本號、索引站數量。UI 直接顯示，不翻譯。
+    detail: str = ""
+    #: 失敗時服務回的原文（英文）。
+    error: str = ""
+    checked_at: datetime | None = None
+    last_ok_at: datetime | None = None
+    #: 連續失敗次數（plan §3.2）。成功就歸零。
+    failures: int = 0
+    #: 這個服務有連線資訊可以拿去檢查。索引站那一步可跳過，所以它可能是 False。
+    configured: bool = False
+    #: qBittorrent 被改掉的建議偏好鍵（brief §16.3 的「關鍵設定漂移」）。其餘服務一律是空的。
+    drift: list[str] = []
+
+
+class HealthSettings(SettingsGroup):
+    """`health_checker` 上一輪的結果（plan §3.2）。
+
+    **不寫進各自的 `settings.services.*`**（plan §3.2 原本的說法）：那幾組是使用者設定的
+    連線資訊，整組覆寫是它們的常態（`write_settings`），把迴圈每 5 分鐘改一次的狀態混進去，
+    兩邊會互相蓋掉。分成自己一列之後，迴圈只寫這一列，設定頁只寫那幾列。
+    """
+
+    KEY = "health"
+
+    #: 逐服務的最後結果；鍵是 `ServiceKind`。
+    services: dict[ServiceKind, ServiceHealth] = {}
+    #: 每個 Route 都通過了它的五項檢查。逐 Route 的明細在 `routes.health_detail_json`，
+    #: 這裡只留總結——匿名的 `GET /api/health` 靠它答 ok / degraded，不必查 routes 表。
+    routes: HealthStatus = HealthStatus.UNKNOWN
+    checked_at: datetime | None = None
+
+
 class SetupSettings(SettingsGroup):
     KEY = "setup"
 
@@ -227,4 +269,5 @@ SETTINGS_GROUPS: tuple[type[SettingsGroup], ...] = (
     TmdbSettings,
     PathSettings,
     SetupSettings,
+    HealthSettings,
 )

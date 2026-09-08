@@ -1,5 +1,5 @@
-import type { RouteCheck, RouteHealthStatus } from '../api/setup'
-import type { Signal } from '../components/signal'
+import type { HealthStatus, RouteCheck } from '../api/schemas'
+import type { Signal } from './signal'
 
 /**
  * 泊位 4 的五條纜繩：標題、它打的端點、失敗時的說法（plan §9.5）。
@@ -14,7 +14,14 @@ export const ROUTE_SIGNAL = {
   unknown: 'neutral',
   ok: 'secured',
   failed: 'blocked',
-} as const satisfies Record<RouteHealthStatus, Signal>
+} as const satisfies Record<HealthStatus, Signal>
+
+/** 同一份判定的文案。查表而不是動態組 key——動態組過不了 `strictKeyChecks`（票 06）。 */
+export const ROUTE_HEALTH_LABEL = {
+  unknown: 'routes.health.unknown',
+  ok: 'routes.health.ok',
+  failed: 'routes.health.failed',
+} as const satisfies Record<HealthStatus, string>
 
 export const CHECK_LABEL = {
   category: 'routes.check.category',

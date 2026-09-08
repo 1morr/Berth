@@ -40,7 +40,7 @@ describe('登入頁', () => {
 
     await fillIn('skipper', 'harbour')
 
-    await waitFor(() => expect(router.state.location.pathname).toBe('/'))
+    await waitFor(() => expect(router.state.location.pathname).toBe('/health'))
     const login = stub.mock.calls.find((call) => call[1]?.method === 'POST')
     expect(bodyOf(login!)).toEqual({ username: 'skipper', password: 'harbour' })
   })
@@ -62,7 +62,7 @@ describe('登入頁', () => {
 
     await fillIn('skipper', 'harbour')
 
-    await waitFor(() => expect(router.state.location.pathname).toBe('/'))
+    await waitFor(() => expect(router.state.location.pathname).toBe('/health'))
   })
 
   it('帳密不對時說的是同一句話，不指名是哪一個錯了', async () => {

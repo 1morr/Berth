@@ -6,15 +6,13 @@ from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field
 
 from berth.api.deps import ClientFactoryDep, SessionDep, SetupProbesDep
+from berth.api.schemas import QbittorrentOut, RouteOut, StepOut
 from berth.domain import (
-    CollectionType,
     DetectionReason,
-    HealthStatus,
     IndexerKind,
     Profile,
     ServiceKind,
     ServiceOrigin,
-    StepStatus,
 )
 from berth.services.indexer import (
     apply_default_indexers,
@@ -155,17 +153,6 @@ def _out(result: SetupStatus) -> SetupStatusOut:
 # --- 第 3 步：Jellyfin（plan §9.4、§9.5）---
 
 
-class StepOut(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    step: str
-    status: StepStatus
-    #: 實測值：版本號、建了哪幾個媒體庫、任務 id。UI 直接顯示，不翻譯。
-    detail: str
-    #: 失敗時 Jellyfin 回的原文（英文）。
-    error: str
-
-
 class LibraryOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -249,47 +236,16 @@ async def post_jellyfin_plugin(session: SessionDep, factory: ClientFactoryDep) -
 # --- 第 4 步：qBittorrent（plan §9.3 第 4 步、§8.1）---
 
 
-class PreferenceDiffOut(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    #: `app/setPreferences` 的鍵名。畫面顯示的與送出去的是同一個字串。
-    key: str
-    current: str
-    recommended: str
-    differs: bool
-
-
-class QbittorrentSetupOut(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    origin: ServiceOrigin
-    base_url: str
-    version: str
-    webapi_version: str
-    supported: bool
-    blocked: bool
-    reachable: bool
-    diffs: list[PreferenceDiffOut]
-    steps: list[StepOut]
-    temp_path_warning: bool
-    sets_password: bool
-    error: str
-
-
 @router.get("/qbittorrent/diff")
-async def get_qbittorrent_diff(
-    session: SessionDep, factory: ClientFactoryDep
-) -> QbittorrentSetupOut:
+async def get_qbittorrent_diff(session: SessionDep, factory: ClientFactoryDep) -> QbittorrentOut:
     """現值與建議值的逐鍵差異。連得到才有內容，連不到就是 `reachable=false` 加原文。"""
-    return QbittorrentSetupOut.model_validate(await read_qbittorrent_diff(session, factory))
+    return QbittorrentOut.model_validate(await read_qbittorrent_diff(session, factory))
 
 
 @router.post("/qbittorrent/apply")
-async def post_qbittorrent_apply(
-    session: SessionDep, factory: ClientFactoryDep
-) -> QbittorrentSetupOut:
+async def post_qbittorrent_apply(session: SessionDep, factory: ClientFactoryDep) -> QbittorrentOut:
     """套用建議偏好。只寫有差異的鍵；勾了「同一組帳密」才順便設 WebUI 密碼。"""
-    return QbittorrentSetupOut.model_validate(await apply_qbittorrent(session, factory))
+    return QbittorrentOut.model_validate(await apply_qbittorrent(session, factory))
 
 
 # --- 第 5 步：索引站（plan §9.3 第 5 步、§8.4）---
@@ -417,27 +373,6 @@ async def post_tmdb_skip(session: SessionDep, body: SkipIn) -> TmdbSetupOut:
 
 
 # --- 第 7–8 步：媒體庫 → Route 與完成（plan §9.3 第 7–8 步、§9.5）---
-
-
-class RouteOut(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    slug: str
-    name: str
-    #: Jellyfin 媒體庫的名字。
-    library: str
-    collection_type: CollectionType
-    target_path: str
-    category: str
-    #: 這個 category 的 save path，也就是硬鏈接的來源目錄。
-    save_path: str
-    profile: Profile
-    enabled: bool
-    health: HealthStatus
-    #: 逐項檢查，`step` 是 `RouteCheck`。形狀與其他泊位的纜繩一樣。
-    checks: list[StepOut]
-    #: 硬鏈接回 `EXDEV`：兩個目錄在 Berth 內是不同掛載（brief §4.4）。
-    cross_device: bool
 
 
 class LibraryChoiceOut(BaseModel):

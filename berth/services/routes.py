@@ -22,6 +22,7 @@ import contextlib
 import errno
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 
 from sqlalchemy import select
@@ -57,6 +58,7 @@ from berth.models import (
     SetupSettings,
     SetupStep,
 )
+from berth.models.types import utcnow
 from berth.services.clients import BUNDLED_QBITTORRENT_URL, ServiceClientFactory
 from berth.services.jellyfin import BUNDLED_LIBRARIES, TVDB_MARKER, berth_path, library_slug
 from berth.services.settings import read_settings
@@ -98,6 +100,9 @@ class RouteView:
     checks: tuple[StepView, ...]
     #: 硬鏈接回 `EXDEV`：兩個目錄在 Berth 內是不同掛載（brief §4.4）。
     cross_device: bool
+    checked_at: datetime | None
+    #: 最後一次全綠的時間（brief §16.2）。
+    last_ok_at: datetime | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -154,6 +159,23 @@ async def read_route_status(session: AsyncSession) -> RouteSetupStatus:
     )
 
 
+async def routes_health(session: AsyncSession) -> HealthStatus:
+    """健康頁四項裡的第四項：所有 Route 的總結（票 10）。
+
+    一條都沒有是 `unknown` 而不是紅燈——那是「還沒建」，不是「壞了」。
+    """
+    routes = await _existing_routes(session)
+    if not routes:
+        return HealthStatus.UNKNOWN
+    health = [route.health_status for route in routes.values()]
+    if any(status is HealthStatus.FAILED for status in health):
+        return HealthStatus.FAILED
+    if all(status is HealthStatus.OK for status in health):
+        return HealthStatus.OK
+    # 有 Route 但還沒被檢查過（剛建好、Berth 才剛啟動）。
+    return HealthStatus.UNKNOWN
+
+
 async def routes_ready(session: AsyncSession) -> bool:
     """第 7 步做完了沒：至少一個 Route，而且每個都通過了檢查。
 
@@ -181,6 +203,51 @@ async def build_routes(
     routes = await _sync(session, planned)
     await session.commit()
 
+    await _run_checks(session, factory, planned, routes)
+    return await read_route_status(session)
+
+
+async def check_routes(
+    session: AsyncSession, factory: ServiceClientFactory
+) -> tuple[RouteView, ...]:
+    """重跑每個既有 Route 的五項檢查（票 10 的第四項健康檢查）。
+
+    與精靈第 7 步跑的是**同一組檢查、寫的是同一個欄位**（plan §9.5）：起點不同而已——那裡
+    的起點是使用者的勾選，這裡是 `routes` 表現有的列。所以「精靈當時是綠的、現在紅了」
+    在畫面上是同一種東西。
+    """
+    routes = list((await _existing_routes(session)).values())
+    if not routes:
+        return ()
+    paths = await read_settings(session, PathSettings)
+    planned = tuple(_planned_from(route, paths) for route in routes)
+
+    await _run_checks(session, factory, planned, routes)
+    return (await read_route_status(session)).routes
+
+
+def _planned_from(route: Route, paths: PathSettings) -> _Planned:
+    """已經存在的 Route → 檢查要用的計劃。save path 照 `_save_path` 算，不另存一份。"""
+    return _Planned(
+        slug=route.slug,
+        library_name=route.jellyfin_library_name,
+        library_item_id=route.jellyfin_library_id,
+        collection_type=route.collection_type,
+        target_path=route.target_path,
+        category=route.category,
+        save_path=_save_path(paths.complete_root, route.slug),
+        profile=route.profile,
+    )
+
+
+async def _run_checks(
+    session: AsyncSession,
+    factory: ServiceClientFactory,
+    planned: Sequence[_Planned],
+    routes: Sequence[Route],
+) -> None:
+    """逐個 Route 跑檢查並把結果寫回那一列。呼叫端負責它們的順序一致。"""
+    moment = utcnow()
     qbittorrent_settings = await read_settings(session, QbittorrentSettings)
     jellyfin_settings = await read_settings(session, JellyfinSettings)
     qbittorrent = factory.qbittorrent(qbittorrent_settings.base_url or BUNDLED_QBITTORRENT_URL)
@@ -188,20 +255,19 @@ async def build_routes(
     try:
         await _sign_in(qbittorrent, qbittorrent_settings)
         for plan_row, route in zip(planned, routes, strict=True):
+            previous = RouteHealth.model_validate(route.health_detail_json or {})
             health = await _check(plan_row, route, qbittorrent, jellyfin)
+            passed = all(row.status is not StepStatus.FAILED for row in health.checks)
+            health.checked_at = moment
+            # 沒過就留住上一次成功的時間，別讓它看起來從來沒通過（brief §16.2）。
+            health.last_ok_at = moment if passed else previous.last_ok_at
             route.health_detail_json = health.model_dump(mode="json")
-            route.health_status = (
-                HealthStatus.OK
-                if all(row.status is not StepStatus.FAILED for row in health.checks)
-                else HealthStatus.FAILED
-            )
+            route.health_status = HealthStatus.OK if passed else HealthStatus.FAILED
             # 逐個 commit：三個 Route 裡的第二個炸了，第一個的結果仍然留得下來。
             await session.commit()
     finally:
         await qbittorrent.aclose()
         await jellyfin.aclose()
-
-    return await read_route_status(session)
 
 
 # --- 選擇 → 計劃 -------------------------------------------------------
@@ -209,10 +275,15 @@ async def build_routes(
 
 @dataclass(frozen=True, slots=True)
 class _Planned:
-    """一個要建立的 Route，以及檢查要用到的那個媒體庫。"""
+    """一個要建立（或要重新檢查）的 Route。
+
+    帶的是媒體庫的名字與 id 而不是整份 `SetupLibrary`：健康頁重跑檢查時起點是 `routes`
+    那一列，它記的就是這兩個欄位（票 10）。
+    """
 
     slug: str
-    library: SetupLibrary
+    library_name: str
+    library_item_id: str
     collection_type: CollectionType
     target_path: str
     category: str
@@ -255,7 +326,8 @@ def _plan(
         planned.append(
             _Planned(
                 slug=slug,
-                library=library,
+                library_name=library.name,
+                library_item_id=library.item_id,
                 collection_type=collection_type,
                 target_path=selection.target_path,
                 category=f"{CATEGORY_PREFIX}{slug}",
@@ -318,9 +390,9 @@ async def _sync(session: AsyncSession, planned: Sequence[_Planned]) -> list[Rout
         if route is None:
             route = Route(slug=plan_row.slug)
             session.add(route)
-        route.name = plan_row.library.name
-        route.jellyfin_library_id = plan_row.library.item_id
-        route.jellyfin_library_name = plan_row.library.name
+        route.name = plan_row.library_name
+        route.jellyfin_library_id = plan_row.library_item_id
+        route.jellyfin_library_name = plan_row.library_name
         route.collection_type = plan_row.collection_type
         route.target_path = plan_row.target_path
         route.category = plan_row.category
@@ -426,10 +498,10 @@ class _Checker:
         要證明的正是「現在這台 Jellyfin 說的路徑，Berth 看得到」。
         """
         libraries = await self._jellyfin.libraries()
-        library = next((row for row in libraries if row.name == self._plan.library.name), None)
+        library = next((row for row in libraries if row.name == self._plan.library_name), None)
         if library is None:
             raise _CheckFailedError(
-                f"Jellyfin no longer has a library named {self._plan.library.name!r}"
+                f"Jellyfin no longer has a library named {self._plan.library_name!r}"
             )
         if not library.locations:
             raise _CheckFailedError(f"{library.name!r} has no path on Jellyfin")
@@ -540,6 +612,8 @@ def _route_view(route: Route, complete_root: str) -> RouteView:
         health=route.health_status,
         checks=step_views(health.checks),
         cross_device=health.cross_device,
+        checked_at=health.checked_at,
+        last_ok_at=health.last_ok_at,
     )
 
 

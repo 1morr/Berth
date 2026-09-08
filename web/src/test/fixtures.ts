@@ -4,15 +4,16 @@ import type {
   JellyfinLibrary,
   JellyfinSetup,
   LibraryChoice,
-  PreferenceDiff,
-  QbittorrentSetup,
   RouteSetup,
-  RouteView,
   ServiceDetection,
   SetupStatus,
-  SetupStep,
   TmdbSetup,
 } from '../api/setup'
+import type { PreferenceDiff, QbittorrentSetup, RouteView, SetupStep } from '../api/schemas'
+import type { HealthDetail, ServiceHealth } from '../api/health'
+
+/** 檢查與精靈都用這一個時間點，畫面上的「上次檢查」才是同一輪。 */
+const CHECKED_AT = '2026-09-08T12:00:00Z'
 
 /** 精靈狀態的測試建構子。預設是乾淨安裝的第 1 步。 */
 export function setupStatus(overrides: Partial<SetupStatus> = {}): SetupStatus {
@@ -230,6 +231,8 @@ export function routeView(overrides: Partial<RouteView> = {}): RouteView {
     health: 'ok',
     checks: CHECKS_PASSED,
     cross_device: false,
+    checked_at: CHECKED_AT,
+    last_ok_at: CHECKED_AT,
     ...overrides,
   }
 }
@@ -242,3 +245,65 @@ export const CHECKS_PASSED: SetupStep[] = [
   step('probe_visible', 'ok', '/data/library/tv'),
   step('hardlink', 'ok', 'dev=70 · inode=8162774324533690 · 137.4 GB free'),
 ]
+
+/** --- 健康檢查（票 10）--- */
+
+export function serviceHealth(overrides: Partial<ServiceHealth> = {}): ServiceHealth {
+  return {
+    kind: 'jellyfin',
+    origin: 'bundled',
+    base_url: 'http://jellyfin:8096',
+    status: 'ok',
+    detail: '10.11.11 · 3 libraries',
+    error: '',
+    checked_at: CHECKED_AT,
+    last_ok_at: CHECKED_AT,
+    failures: 0,
+    configured: true,
+    drift: [],
+    ...overrides,
+  }
+}
+
+/** 四項全綠的一輪。單一項要變紅時覆寫 `services` 裡的那一列。 */
+export function healthDetail(overrides: Partial<HealthDetail> = {}): HealthDetail {
+  return {
+    status: 'ok',
+    checked_at: CHECKED_AT,
+    interval_seconds: 300,
+    services: [
+      serviceHealth(),
+      serviceHealth({
+        kind: 'qbittorrent',
+        base_url: 'http://qbittorrent:8080',
+        detail: 'v5.2.3 · Web API 2.15.1',
+      }),
+      serviceHealth({
+        kind: 'prowlarr',
+        base_url: 'http://prowlarr:9696',
+        detail: '10',
+      }),
+    ],
+    routes_status: 'ok',
+    routes: [routeView()],
+    ...overrides,
+  }
+}
+
+/** 一項紅了的那一輪：其餘三項不受影響（票 10 驗收）。 */
+export function withFailedService(
+  kind: ServiceHealth['kind'],
+  error: string,
+  overrides: Partial<ServiceHealth> = {},
+): HealthDetail {
+  const base = healthDetail()
+  return {
+    ...base,
+    status: 'degraded',
+    services: base.services.map((row) =>
+      row.kind === kind
+        ? { ...row, status: 'failed', error, failures: 1, last_ok_at: CHECKED_AT, ...overrides }
+        : row,
+    ),
+  }
+}

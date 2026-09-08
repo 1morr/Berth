@@ -7,7 +7,12 @@ import { meQueryOptions, signOut } from './api/auth'
 import { GhostButton } from './components/controls'
 import { LanguageToggle } from './components/LanguageToggle'
 
-/** setup 完成之後的頁面共用的外框。導覽在有更多頁時才長出來（票 10 起）。 */
+/**
+ * setup 完成之後的頁面共用的外框。
+ *
+ * `main` 不設寬度上限：健康頁的泊位板是整寬的橫幅（direction contract 的 FIRST VIEWPORT），
+ * 每一頁自己決定內文那一欄有多寬。
+ */
 export function AppShell({ children }: { children: ReactNode }) {
   const { t } = useTranslation()
 
@@ -22,8 +27,21 @@ export function AppShell({ children }: { children: ReactNode }) {
           <Identity />
         </span>
       </header>
-      <main className="mx-auto max-w-3xl px-6 py-8">{children}</main>
+      <main>{children}</main>
     </div>
+  )
+}
+
+/** 導覽的一項。當前頁用重橫線標出來，不是靠顏色（狀態不只靠顏色，PRODUCT.md）。 */
+function NavLink({ to, children }: { to: '/health' | '/settings/services'; children: ReactNode }) {
+  return (
+    <Link
+      to={to}
+      className="label border-2 border-rule px-4 py-2.5 hover:border-rule-strong"
+      activeProps={{ className: 'label border-2 border-rule-strong bg-deck px-4 py-2.5' }}
+    >
+      {children}
+    </Link>
   )
 }
 
@@ -57,14 +75,8 @@ function Identity() {
         <span className="label bg-deck px-2 py-1.5 text-ink">{t(`role.${me.data.role}`)}</span>
         <span className="value text-sm text-ink">{me.data.name}</span>
       </span>
-      {me.data.role === 'admin' && (
-        <Link
-          to="/setup"
-          className="label border-2 border-rule px-4 py-2.5 hover:border-rule-strong"
-        >
-          {t('nav.settings')}
-        </Link>
-      )}
+      <NavLink to="/health">{t('nav.health')}</NavLink>
+      {me.data.role === 'admin' && <NavLink to="/settings/services">{t('nav.settings')}</NavLink>}
       <GhostButton type="button" disabled={leave.isPending} onClick={() => leave.mutate()}>
         {leave.isPending ? t('nav.signingOut') : t('nav.signOut')}
       </GhostButton>

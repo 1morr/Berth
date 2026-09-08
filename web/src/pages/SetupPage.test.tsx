@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { stubApi } from '../test/fetch'
 import { renderWithProviders } from '../test/render'
-import { ALL_BUNDLED, detection, setupStatus } from '../test/setupStatus'
+import { ALL_BUNDLED, detection, setupStatus } from '../test/fixtures'
 import { SetupPage } from './SetupPage'
 
 afterEach(() => {

@@ -29,6 +29,7 @@
 | 2026-09-07 | 06 精靈第 3 步 Jellyfin | 套件內一鍵跑完 plan §9.4 的九步（建管理員、三個媒體庫、API key、裝 MergeVersions、重啟、記下兩個任務 `Id`），每一步冪等、失敗可重試；既有路徑登入取 key、列媒體庫與路徑、TVDB 警告、兩顆需二次確認的按鈕。**對真的 `jellyfin:10.11.11` 跑完全序列 69 秒，第二次 0.2 秒全 `skipped`**；fixture 從那一輪錄下。175 個後端測試 + 38 個前端測試綠燈；playwright 實跑三個情境，深淺兩主題所有文字對比 ≥ 4.5:1 | `/implement .scratch/m0/issues/07-auth.md` |
 | 2026-09-08 | 07 認證 | Jellyfin 帳密登入換 Berth session（httpOnly + `SameSite=Strict`，30 天不續期）；門禁是 middleware，`/api` 預設拒絕；`setup/*` 完成後只放行 admin。登入頁走 `/impeccable shape`（單一登船口窗格，不畫泊位板）。229 個後端測試 + 54 個前端測試綠燈；playwright 對 `--scenario signed-out` 實跑登入 / 登出 / 非 admin 阻擋三條路徑，深淺兩主題文字對比最低 5.71:1 | `/implement .scratch/m0/issues/08-wizard-services.md` |
 | 2026-09-08 | 08 精靈第 4–6 步 | 泊位 2（qBittorrent 逐鍵差異與套用、版本閘門、密碼）與泊位 3（十個預設索引站逐站成敗、既有 Prowlarr / 任意 Torznab、TMDB 內建憑證可覆寫、兩步可跳過）完成。**對真服務錄了 14 份新 fixture**：qBittorrent 4.4.5 與 5.2.3 各一組、Prowlarr 的 schema 與三種新增結果、Torznab caps、TMDB configuration。十個站在本機五成五敗，逐站結果就是 UI 要撐住的東西。297 個後端測試 + 70 個前端測試綠燈；playwright 實跑 `bundled` 與 `outdated` 兩個情境，深淺兩主題文字對比最低 5.22:1 | `/implement .scratch/m0/issues/09-wizard-routes.md` |
+| 2026-09-08 | 10 健康檢查 | `health_checker` 由 lifespan 啟動（每 30 秒醒、上一輪滿 5 分鐘才跑、精靈跑完前不跑、關閉時不留 pending task）；四項檢查——Jellyfin、qBittorrent（含建議設定漂移）、索引站、每條 Route 的五條纜繩（與精靈第 7 步同一組、寫回同一個欄位並記下最後成功時間）。`GET /api/health` 的 `status` 改由紀錄導出，新增 `GET /api/health/detail`、`POST /api/health/check` 與 `/api/settings/*`（只有 admin）。健康頁 `/health` 與服務設定頁 `/settings/services` 走 `/impeccable shape`（`.scratch/m0/health-shape.md`），與精靈**同一塊泊位板**。416 個後端測試 + 103 個前端測試綠燈；三個新情境（`healthy` / `degraded` / `drifted`）實跑驗證，深淺兩主題最低對比 5.71:1 | `/implement .scratch/m0/issues/11-m0-acceptance.md` |
 | 2026-09-08 | 09 精靈第 7–8 步 | 泊位 4（媒體庫 → Library Route）與完成頁做完：套件內自動建三條 Route、既有由使用者勾選媒體庫與寫入目標（可就地加 Berth 路徑、劇集可挑 profile），每條 Route 建 `berth-*` category 並跑五項跨服務檢查（含**真的 `link()` 再比 inode**）；`POST /api/setup/complete` 全綠才寫 `settings.setup.completed`。fs adapter 帶進來（`link`、`stat`、`same_inode`、`link_test`、`probe_file`、`free_space`、`is_within`，寫入一律要允許的根）。356 個後端測試 + 84 個前端測試綠燈；playwright 對 `--scenario bundled` 走完八步（Windows NTFS 上真的建了硬鏈接：`dev=11550084160259632778 · inode=17451448556763814`），對新的 `--scenario unmounted` 看失敗樣子 | `/implement .scratch/m0/issues/10-health.md` |
 
 ## 偏差與決定
@@ -236,3 +237,61 @@
 - 2026-09-08 票 09 code-review：`_berth_path` 從 `services/jellyfin` 匯出成 `berth_path`，`services/routes` 不再自己算一次同樣的字串——這一票本來就是為了不讓 slug 算法分岔才把它抽出來的。前端的 `RouteHealth` 型別改名 `RouteHealthStatus`（與後端存檢查結果的 `RouteHealth` 撞名），`Pick` 改名 `LibraryPick`（撞 TS 內建型別）。
 - 2026-09-08 票 09 code-review：`PathFacts.is_dir` 拿掉（只有測試在讀）；`free=` 用 key=value 形狀而不是英文散文 `GB free`；`routes.build.bundled` 與 `.selected` 兩個一字不差的 key 收成一個；套件內剖面與按鈕的數字只算建得了 Route 的媒體庫（`supported`），不再把音樂之類的媒體庫算進去。
 - 2026-09-08 票 09 code-review：既有 Jellyfin 的勾選只送得出「目標真的是那個媒體庫的路徑之一」的選擇。伺服器本來就用同一條規則擋（422），但那時候畫面只說得出「請求沒走完」；最典型的觸發是「加入 Berth 路徑」失敗之後選了那條不存在的路徑。
+- 2026-09-08 票 10：健康狀態存進**新的 `settings.health` 分組**，不是 plan §3.2 原本寫的
+  `settings.services.*`。理由是那幾組是使用者設定的連線資訊、整組覆寫是它們的常態
+  （`write_settings`），把迴圈每 5 分鐘改一次的狀態混進去，兩邊會互相蓋掉。這同時結掉票 02
+  留下的「`services.*` 的最後健康狀態延到票 10 定形狀」。plan §2.1、§3.2 已改。
+- 2026-09-08 票 10：`health_checker` **沒有逐服務的間隔退避**，推翻票面「各服務獨立 try/except
+  與退避」的後半。理由是退避的目的是不要打爆服務，而 5 分鐘一次的檢查本來就打不爆任何東西；
+  退避只會延後「服務回來之後自動變綠」這條驗收。隔離靠的是逐項 try/except 加 adapter 的 5 秒
+  逾時，連續失敗次數仍然記錄並顯示。plan §3.2 已改。
+- 2026-09-08 票 10：迴圈**每 30 秒醒一次、上一輪滿 5 分鐘才真的跑**，而且精靈跑完之前什麼都
+  不做。兩層的理由是精靈剛按完「完成」的那一刻——如果醒來的間隔就是檢查的間隔，使用者會對著
+  一個空的健康頁等五分鐘。plan §3.2 已補。
+- 2026-09-08 票 10：plan §6 的 settings 群組改成 `GET /settings/services`、
+  `POST /settings/services/{kind}/test`、`GET|POST /settings/qbittorrent/diff|apply`，
+  **不做 `PUT /settings/{group}`**。理由是位址與憑證仍然在精靈裡改（精靈跑完之後它就是設定
+  入口，plan §6 本來就這麼寫），複製四份連線表單只會讓兩份規則分岔。plan §6 已改。
+- 2026-09-08 票 10：`/api/settings/*` 的 admin 門禁放在**門禁 middleware**（`ADMIN_PREFIXES`）
+  而不是 router 的相依，與票 07 把 `setup/*` 搬進門禁同一個理由：底下新掛的端點什麼都不做
+  就已經在同一道門後面。
+- 2026-09-08 票 10：新增 `/health` 路由（plan §7 的清單原本沒有它，只有 brief §13 的「健康與
+  問題」頁），`/` 在 M1 的探索頁之前先導向它。plan §7 已補。
+- 2026-09-08 票 10：`create_app(clients=...)` 與 `get_client_factory` 改從 `app.state` 取。
+  理由是背景迴圈不經過 FastAPI 的相依，`dependency_overrides` 換不掉它要用的 client——
+  演練用的 `scripts/fake_setup_server.py` 必須換得掉，否則那台假 Berth 的迴圈會去打真的主機名。
+- 2026-09-08 票 10：**Route 那一項與服務不獨立**。它的檢查要問 qBittorrent 與 Jellyfin，
+  所以那兩台掛掉時 Route 一起紅——那是事實不是連坐。票面「其餘三項不受影響」字面上只對索引站
+  成立（沒有人依賴它），所以 playwright 的紅燈情境用的就是索引站。
+- 2026-09-08 票 10：索引站沒接上時是 `unknown` 而不是紅燈——第 5 步可以跳過（plan §9.3），
+  跳過的人不該永遠看到一盞紅燈。`ServiceHealth.configured` 就是這件事。
+- 2026-09-08 票 10：qBittorrent 的**設定漂移用 `assigned`（需要你）而不是紅色**。那台服務
+  還在動，紅色只代表阻擋（direction contract 的法定色規則）。CONTEXT.md 新增 **Drift** 詞條。
+- 2026-09-08 票 10：前端共用件從 `setup/` 移到 `components/`（`StepLine`、`steps`、
+  `routeChecks`、泊位板的版面與 `BERTHS`），跨頁的 API 型別移到 `api/schemas.ts`（後端對應
+  新增 `api/schemas.py`）。理由是精靈、健康頁與設定頁講的是同一批東西；`RouteView` 從
+  `api/setup.ts` 匯出會讓「Route 是精靈的東西」這個誤解留在型別上。測試的共用安排同樣從
+  `test_setup_routes.py` 抽到 `tests/integration/arrange.py` 與 `conftest.py`，
+  `web/src/test/setupStatus.ts` 改名 `fixtures.ts`。
+- 2026-09-08 票 10：**開頁不自動重測**（使用者決定）。那一輪檢查會在 qBittorrent 建 category、
+  在媒體庫寫探測檔再刪掉，不該是「重整頁面」的副作用；要現在的答案就按「立即重測」。
+- 2026-09-08 票 10：`display: flex` 會吃掉 `<summary>` 的三角形，所以 Route 那一列的展開狀態
+  用模板字自己說（`展開檢查` / `收起`）。實測沒有這一句時收起來的列看不出它按得開。
+- 2026-09-08 票 10 code-review：**逐 Route 也要有最後成功時間**。票面寫的是「每個服務與每個
+  Route 的狀態、最後成功時間」，而 `RouteHealth` 原本只有逐項檢查結果。已補
+  `checked_at` / `last_ok_at`（失敗時留住上一次成功的時間），畫面在展開的 Route 裡顯示。
+- 2026-09-08 票 10 code-review：**迴圈跑第一輪之前，三個已接好的服務被說成「尚未接上」**。
+  `ServiceHealth.configured` 預設是 `False`，而前端先判它——精靈按完完成到第一個 tick 之間
+  （最長 30 秒）畫面會叫使用者「到設定精靈接它」。判定順序改成「沒有 `checked_at` → 尚未檢查」
+  優先。
+- 2026-09-08 票 10 code-review：**漂移的「到服務設定」連結對一般使用者是死路**（守衛會把他
+  彈回健康頁）。改成只給 `admin`，與頁首的設定入口同一條規則。
+- 2026-09-08 票 10 code-review：差異表的「這一鍵被改過」原本只靠紅字，違反 plan §7 與
+  PRODUCT.md 的「狀態不只靠顏色」。補上「已改」色塊。
+- 2026-09-08 票 10 code-review：`ROUTE_SIGNAL` 與 `ROUTES_SIGNAL` 逐字相同、`COMPOSE_SERVICE`
+  是恆等映射（CONTEXT.md 已定「服務名字串同時是 compose 服務名」）、四個泊位的號碼與名字兩份，
+  全部收成一份；動態組出來的 `routes.health.*` key 改成查表（與票 06 的決定一致）。
+  前端型別 `RouteHealthStatus` 改名 `HealthStatus`（與後端 enum 同名，它現在同時給服務用），
+  匿名端點那個 ok/degraded 改名 `OverallStatus`。
+- 2026-09-08 票 10 code-review：`Timestamp` 沒有值時說「沒有紀錄」而不是「尚未檢查」——後者
+  與那一項的狀態標籤同字，紅著的服務也可能從來沒成功過，兩件事不該共用一句話。

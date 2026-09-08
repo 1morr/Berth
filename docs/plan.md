@@ -104,7 +104,8 @@ adapters ──► domain                  （不 import services、models；回
 
 - `users`：`id`、`jellyfin_user_id`（unique）、`name`、`role`（`admin` / `user`）、`created_at`、`last_login_at`
 - `sessions`：`id`、`user_id`、`token_hash`、`expires_at`、`created_at`。token 是 256 bit 亂數，只存 SHA-256 雜湊；壽命 30 天且**不滑動續期**，過期的列在下一次被用到時就地刪掉。
-- `settings`：`key`（unique）、`value_json`、`updated_at`。key 分組：`services.jellyfin`、`services.qbittorrent`、`services.indexer`、`services.tmdb`、`paths`、`parser`、`ai`、`rss`、`setup`。每組一個 pydantic model，`services.*` 含連線資訊與最後健康狀態。
+- `settings`：`key`（unique）、`value_json`、`updated_at`。key 分組：`services.jellyfin`、`services.qbittorrent`、`services.indexer`、`services.tmdb`、`paths`、`parser`、`ai`、`rss`、`setup`、`health`。每組一個 pydantic model；`services.*` 只含**連線資訊**。
+  - `health`：`health_checker` 上一輪的結果——逐服務的 `status` / `detail` / `error` / `checked_at` / `last_ok_at` / `failures` / `configured` / `drift`（被改掉的 qBittorrent 建議鍵），加上所有 Route 的總結與這一輪的時間。**與 `services.*` 分開存**：那幾組是整組覆寫的使用者設定，把迴圈每 5 分鐘寫一次的狀態混進去，兩邊會互相蓋掉（票 10 改，原文是「`services.*` 含連線資訊與最後健康狀態」）。
   - `services.jellyfin` 另含 `api_key`、`metadata_fetchers`（鍵是媒體庫 slug，值寫進 `LibraryOptions.TypeOptions[].MetadataFetchers`；brief §10 的 TVDB【研究】定案時改這裡而不是改程式）、`merge_movies_task_id` / `merge_episodes_task_id`（MergeVersions 排程任務的 `Id`）。
   - `paths` 另含 `library_root`（套件內三個媒體庫與既有媒體庫「加入 Berth 路徑」的父目錄，預設 `/data/library`）。
   - `setup.jellyfin`：第 3 步的狀態——九步各自的 `key` / `status` / `detail` / `error`、Jellyfin 回報的媒體庫與各自路徑、MergeVersions 是否已安裝。每一步在做**之前**就寫入 `running` 並 commit，前端才輪詢得到進度。
@@ -175,9 +176,12 @@ adapters ──► domain                  （不 import services、models；回
 | `jellyfin_resolver` | 事件驅動，重試間隔 30s → 2m → 10m → 1h，共 6 次 | 為缺 `jellyfin_item_id` 的 ledger 找 item（brief §20.1 的兩段查詢）；耗盡即 issue `jellyfin_item_unresolved` |
 | `reconciler` | 每日 04:00 + 手動 | brief §9.1 全部檢查，寫 `issues`（冪等：同 type + path 只有一筆 open） |
 | `rss_poller` | 每個 feed 自己的 `interval_sec`，預設 15 分鐘 | 抓 feed → 解析 → 比對 rule → 去重 → `add_download` |
-| `health_checker` | 每 5 分鐘 + 手動 | 服務連線、版本、Route 硬鏈接測試、磁碟空間、qBittorrent 必要設定 |
+| `health_checker` | 每 30 秒醒來，上一輪滿 5 分鐘才真的跑；也可手動觸發（`POST /health/check`） | 四項：Jellyfin（連線 + API key 列得出媒體庫）、qBittorrent（連線 + Web API 版本 + 建議設定漂移）、索引站（Prowlarr 或 Torznab 端點）、Route（§9.5 的五條纜繩重跑一次） |
 
-- 每個迴圈是一個 `asyncio.Task`，例外只記 log 不讓迴圈死掉；連續失敗次數與最後錯誤寫入 `settings.services.*` 供健康頁顯示。
+- 每個迴圈是一個 `asyncio.Task`（`main.py` 的 lifespan 啟動，關閉時 cancel 並 await，不留 pending task）；例外只記 log 不讓迴圈死掉；連續失敗次數與最後錯誤寫入 `settings.health` 供健康頁顯示。
+- `health_checker` **醒得比檢查頻繁**：兩層的理由是精靈剛跑完的那一刻——迴圈在啟動時就在轉，那時候還沒有東西可檢查，如果醒來的間隔就是檢查的間隔，使用者按完「完成」會對著一個空的健康頁等五分鐘。精靈跑完之前它什麼都不做（那時候正在接的服務被打只會得到假的紅燈）。
+- `health_checker` 的**磁碟空間**目前只在 Route 的 `hardlink` 纜繩上以 `free=` 顯示實測值，沒有門檻判定（票 10 改）。門檻要變成一個 Issue 才有用，所以與 §11.3 的 Reconciler 一起做。
+- `health_checker` **沒有逐服務的間隔退避**（票 10 改）：每一項各自 try/except 加上 adapter 的 5 秒逾時就足夠隔離，而 5 分鐘一次的檢查本來就打不爆任何服務；退避只會延後「服務回來之後自動變綠」。連續失敗次數仍然記錄並顯示。
 - 迴圈之間用 in-process `asyncio.Queue` 傳「請處理 job X」的提示，DB 狀態才是真相；程序重啟後由定時掃描補上。
 
 ### 3.3 冪等與重入
@@ -299,7 +303,7 @@ Session 以 httpOnly cookie（`berth_session`）承載，`SameSite=Strict`、`Pa
 | --- | --- | --- |
 | auth | `POST /auth/login`（Jellyfin 帳密 → 發 session；帳密錯與帳號不存在回同一個 401，Jellyfin 連不上回 503）、`POST /auth/logout`（204，一律成功）、`GET /auth/me`（`name`、`role`） | `auth.*` |
 | setup | `GET /setup/status`、`POST /setup/admin`、`POST /setup/detect`（回每個服務的來源：套件內 / 既有）、`POST /setup/services/{kind}`（既有服務的連線表單：存下位址與憑證並立刻測一次）、`GET /setup/jellyfin`（不連線，回上一輪的九步狀態與媒體庫；bootstrap 進行中前端輪詢它看進度）、`POST /setup/jellyfin/bootstrap`、`POST /setup/jellyfin/connect`（既有：以管理員帳密換 API key）、`POST /setup/jellyfin/libraries/paths`、`POST /setup/jellyfin/plugin`、`GET /setup/qbittorrent/diff`（現查，回逐鍵差異）、`POST /setup/qbittorrent/apply`、`GET /setup/indexers`（套件內：十個預設站與它們現在的狀態）、`POST /setup/indexers/apply`（勾起來的站逐個加）、`POST /setup/indexers/connect`（既有 Prowlarr 或任意 Torznab）、`POST /setup/indexers/skip`、`GET /setup/tmdb`、`POST /setup/tmdb/test`、`POST /setup/tmdb/skip`、`GET /setup/routes`（媒體庫清單與已建的 Route，含上一輪逐項檢查）、`POST /setup/routes`（套件內導出三條；既有用勾選，目標必須是該媒體庫回報的路徑之一）、`POST /setup/complete`（每個 Route 都綠燈才寫得下 `settings.setup.completed`） | `setup.*`（§9） |
-| settings | `GET /settings/{group}`、`PUT /settings/{group}`、`POST /settings/{service}/test` | `settings.update`、`health.test_service` |
+| settings | `GET /settings/services`（三個服務的連線資訊與最後健康狀態，形狀與 `health/detail` 相同）、`POST /settings/services/{kind}/test`（只重測這一個服務）、`GET /settings/qbittorrent/diff`、`POST /settings/qbittorrent/apply`（「還原建議設定」，brief §16.3）。**整組只有 `role=admin` 進得來**（規則在門禁，不在 router 的相依）。位址與憑證仍然在精靈裡改——精靈跑完之後它就是設定入口，所以不做 `PUT /settings/{group}`（票 10 改） | `health.*`、`qbittorrent.apply` |
 | routes | `GET/POST /routes`、`PUT/DELETE /routes/{id}`、`POST /routes/{id}/check`、`GET /jellyfin/libraries` | `routes.*` |
 | discover | `GET /discover/trending`、`GET /discover/popular`、`GET /discover/search?q=` | `discover.*` |
 | media | `GET /media/{id}`（TMDB + 狀態 + 檔案 + Unmatched + 版本）、`POST /media/{id}/track`、`POST /media/{id}/refresh` | `media.*` |
@@ -310,7 +314,7 @@ Session 以 httpOnly cookie（`berth_session`）承載，`SameSite=Strict`、`Pa
 | files | `POST /files/rematch`（`{ledger_id \| job_file_id, action, season, episode_start, episode_end}`） | `rematch_file` |
 | rss | `GET/POST /rss/feeds`、`PUT/DELETE /rss/feeds/{id}`、`POST /rss/feeds/{id}/poll`、`GET /rss/items`、`GET/POST /rss/rules`、`PUT/DELETE /rss/rules/{id}`、`POST /rss/rules/preview`、`POST /rss/oneshot` | `rss.*` |
 | issues | `GET /issues`、`POST /issues/{id}/resolve`（`{action}`）、`POST /issues/{id}/ignore`、`POST /reconcile` | `reconcile`、`issues.resolve` |
-| health | `GET /health`（匿名：`status`、`version`、`setup_completed`）、`GET /health/detail` | `health.*` |
+| health | `GET /health`（匿名：`status`、`version`、`setup_completed`；`status` 只讀 `settings.health` 那一列，不連任何服務）、`GET /health/detail`（要登入，一般使用者也讀得到：逐服務與逐 Route 的明細、最後成功時間、檢查間隔）、`POST /health/check`（立刻重跑四項） | `health.*` |
 | events | `GET /events/stream`（SSE：job 狀態、進度、健康變化） | — |
 
 - OpenAPI 由 FastAPI 產生；前端用 `openapi-typescript` 產型別，CI 檢查型別檔是否過期。
@@ -320,8 +324,8 @@ Session 以 httpOnly cookie（`berth_session`）承載，`SameSite=Strict`、`Pa
 
 ## 7. 前端
 
-- 路由：`/setup`、`/login`、`/`（探索）、`/media/:id`、`/library/:routeSlug`、`/jobs`、`/jobs/:hash`、`/review`、`/rss`、`/issues`、`/settings/*`。
-- 守衛：精靈未完成 → 一律導向 `/setup`（讀 `GET /health` 的 `setup_completed`，那是匿名答得出來的唯一來源）；未登入 → 導向 `/login?redirect=<原路徑>`，`?redirect=` 只收站內路徑；`/setup` 在精靈完成後只放行 `admin`。頁首顯示角色與登出，`admin` 才看得到設定入口——前端隱藏不是安全機制，後端同時回 403。
+- 路由：`/setup`、`/login`、`/`（探索；M1 之前先導向 `/health`）、`/health`、`/media/:id`、`/library/:routeSlug`、`/jobs`、`/jobs/:hash`、`/review`、`/rss`、`/issues`、`/settings/services`、其餘 `/settings/*`。
+- 守衛：精靈未完成 → 一律導向 `/setup`（讀 `GET /health` 的 `setup_completed`，那是匿名答得出來的唯一來源）；未登入 → 導向 `/login?redirect=<原路徑>`，`?redirect=` 只收站內路徑；`/setup` 與 `/settings/*` 在精靈完成後只放行 `admin`。頁首顯示角色、導覽（健康 / 設定）與登出，`admin` 才看得到設定入口——前端隱藏不是安全機制，後端同時回 403。健康頁是唯讀診斷，一般使用者也進得去。
 - 資料：TanStack Query 管 API 快取；SSE 事件到達時使 job 相關 query 失效。
 - 元件：shadcn/ui 為基礎；媒體卡片、狀態徽章、時間線、Plan 表格（逐列可改季集與動作）、檔案樹是專案自有元件。
 - 文案：react-i18next，`zh-Hant` 與 `en` 兩個語言檔並列，預設跟隨瀏覽器；所有字串走 key，不硬編。

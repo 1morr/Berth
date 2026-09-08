@@ -1,5 +1,5 @@
-import type { StepStatus } from '../api/setup'
-import type { Signal } from '../components/signal'
+import type { StepStatus } from '../api/schemas'
+import type { Signal } from './signal'
 
 /** 一條纜繩的狀態怎麼讀。三個泊位共用，所以住在元件外面（plan §9.3）。 */
 

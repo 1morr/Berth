@@ -15,9 +15,11 @@ import sys
 import tempfile
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from pathlib import Path
 
 import uvicorn
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from berth.adapters.http import AuthFailedError, ServiceNotDeployedError, ServiceUnavailableError
 from berth.adapters.jellyfin import (
@@ -39,10 +41,22 @@ from berth.adapters.torznab.fake import FakeTorznabClient
 from berth.api.deps import get_client_factory, get_setup_probes
 from berth.config import Config, load_config
 from berth.db import create_engine, create_session_factory, upgrade_to_head
+from berth.domain import DetectionReason, ServiceKind, ServiceOrigin
 from berth.main import create_app
-from berth.models import JellyfinSettings, PathSettings, SetupSettings
+from berth.models import (
+    IndexerSettings,
+    JellyfinSettings,
+    PathSettings,
+    QbittorrentSettings,
+    ServiceProbe,
+    SetupAdmin,
+    SetupLibrary,
+    SetupSettings,
+)
 from berth.services.clients import SetupProbes
+from berth.services.health import check_health
 from berth.services.jellyfin import MERGE_VERSIONS_GUID
+from berth.services.routes import build_routes
 from berth.services.settings import read_settings, write_settings
 
 #: 這台假 Prowlarr 連不上的站。訊息是 2026-09-08 對真的 Prowlarr 錄到的原文（brief §20.7）——
@@ -112,6 +126,12 @@ class Scenario:
     connect_indexers: list[ProwlarrIndexer] = field(default_factory=list)
     #: 精靈已經跑完：整個 API 進門禁，畫面從登入頁開始（票 07）。
     setup_completed: bool = False
+    #: 連三條 Route 與第一輪健康檢查都跑過：健康頁與服務設定頁的起點（票 10）。
+    moored: bool = False
+    #: 第一輪檢查跑完之後才把索引站弄掉。這樣畫面上「最後成功」有值，看得出「剛剛還好好的」。
+    indexer_down: bool = False
+    #: 有人把 qBittorrent 的一個建議鍵改掉了（brief §16.3 的「關鍵設定漂移」）。
+    preference_drift: bool = False
     #: TMDB 只有一台，位址寫死，所以情境裡就一份。
     tmdb: FakeTmdbClient = field(default_factory=FakeTmdbClient)
 
@@ -219,8 +239,52 @@ def unmounted() -> Scenario:
     return scenario
 
 
+def healthy() -> Scenario:
+    """精靈跑完、三條 Route 綠燈、四項健康檢查全綠（票 10）。
+
+    `skipper` / `harbour` 是管理員，`deckhand` / `rope` 是普通使用者——後者看得到健康頁，
+    但看不到服務設定的入口，直接打 `/api/settings/*` 也會被回 403。
+    """
+    scenario = bundled()
+    scenario.jellyfin = FakeJellyfinClient(
+        startup_wizard_completed=True,
+        admin=("skipper", "harbour"),
+        users={"deckhand": "rope"},
+    )
+    scenario.prowlarr = FakeProwlarrClient(
+        indexers=[ProwlarrIndexer(id=1, name="Nyaa.si", enabled=True, definition_name="nyaasi")]
+    )
+    scenario.setup_completed = True
+    scenario.moored = True
+    return scenario
+
+
+def degraded() -> Scenario:
+    """索引站掛了：那一項紅、另外三項綠（票 10 驗收的第二種狀態）。
+
+    紅的是索引站而不是 Jellyfin 或 qBittorrent，因為 Route 的檢查要問那兩台——它們掛掉時
+    Route 一起紅是事實。索引站沒有人依賴它，所以它是「一項紅、其餘不受影響」最乾淨的樣子。
+    """
+    scenario = healthy()
+    scenario.indexer_down = True
+    return scenario
+
+
+def drifted() -> Scenario:
+    """有人把 qBittorrent 的建議設定改掉了：服務設定頁的差異表與「還原建議設定」。
+
+    這**不是紅燈**——那台服務好好的（brief §16.3）。
+    """
+    scenario = healthy()
+    scenario.preference_drift = True
+    return scenario
+
+
 SCENARIOS = {
     "bundled": bundled,
+    "healthy": healthy,
+    "degraded": degraded,
+    "drifted": drifted,
     "outdated": outdated,
     "signed-out": signed_out,
     "failing": failing,
@@ -286,16 +350,17 @@ def main(argv: list[str] | None = None) -> int:
 
     config_root = args.config_root or Path(tempfile.mkdtemp(prefix="berth-fake-"))
     config = load_config({"CONFIG_ROOT": str(config_root), "DATA_ROOT": str(config_root / "data")})
-    app = create_app(config)
 
     scenario = SCENARIOS[args.scenario]()
-    asyncio.run(_seed(config, completed=scenario.setup_completed))
+    factory = FakeClientFactory(scenario)
+    # 背景迴圈不經過 FastAPI 的相依，所以它要用的 client 從 `create_app` 換掉（票 10）。
+    app = create_app(config, clients=factory)
+    asyncio.run(_seed(config, scenario, factory))
     probes = scenario.probes()
 
     async def override_probes() -> AsyncIterator[SetupProbes]:
         yield probes
 
-    factory = FakeClientFactory(scenario)
     app.dependency_overrides[get_setup_probes] = override_probes
     app.dependency_overrides[get_client_factory] = lambda: factory
 
@@ -304,30 +369,32 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
-async def _seed(config: Config, *, completed: bool) -> None:
+async def _seed(config: Config, scenario: Scenario, factory: FakeClientFactory) -> None:
     """精靈第 7 步會**真的**建目錄、寫探測檔、呼叫 `link()`，所以三層路徑要落在這一輪的
     暫存 `DATA_ROOT` 底下，而不是容器裡的 `/data`（brief §4.1）。
 
     `completed=True` 的情境（`signed-out`）另外把精靈標成跑完：那條路徑要的是登入頁，
     不是再走一次八步，所以不經過 `POST /setup/complete`（它要每個 Route 都綠燈）。
+
+    `moored=True` 的情境（`healthy` / `degraded`）再往前推一步：把精靈跑完後的設定寫進去、
+    真的建三條 Route、真的跑一輪健康檢查。跑的是與正式環境同一組 services 命令，所以畫面上
+    的 inode、可用空間、版本號全都是這一輪量到的，不是寫死的假資料。
     """
     config.config_root.mkdir(parents=True, exist_ok=True)
     # 容器裡的路徑一律是 POSIX 形狀，畫面上顯示的也就是那個形狀。Windows 上開發時把
     # 反斜線換掉，看到的才與正式部署一致（`os` 兩種分隔符都吃）。
     data = str(config.data_root).replace("\\", "/").rstrip("/")
+    paths = PathSettings(
+        incomplete_root=f"{data}/torrent/incomplete",
+        complete_root=f"{data}/torrent/complete",
+        library_root=f"{data}/library",
+    )
     engine = create_engine(config)
     try:
         await upgrade_to_head(engine)
         async with create_session_factory(engine)() as session:
-            await write_settings(
-                session,
-                PathSettings(
-                    incomplete_root=f"{data}/torrent/incomplete",
-                    complete_root=f"{data}/torrent/complete",
-                    library_root=f"{data}/library",
-                ),
-            )
-            if completed:
+            await write_settings(session, paths)
+            if scenario.setup_completed:
                 setup = await read_settings(session, SetupSettings)
                 setup.completed = True
                 await write_settings(session, setup)
@@ -335,8 +402,86 @@ async def _seed(config: Config, *, completed: bool) -> None:
                     session, JellyfinSettings(base_url="http://jellyfin:8096", api_key="fake-key")
                 )
             await session.commit()
+            if scenario.moored:
+                await _moor(session, scenario, factory, paths)
     finally:
         await engine.dispose()
+
+
+async def _moor(
+    session: AsyncSession,
+    scenario: Scenario,
+    factory: FakeClientFactory,
+    paths: PathSettings,
+) -> None:
+    """把資料庫推到「精靈跑完的隔天」：三條 Route 都在，健康檢查跑過一輪。"""
+    for slug in ("movies", "tv", "anime"):
+        Path(f"{paths.library_root}/{slug}").mkdir(parents=True, exist_ok=True)
+    scenario.jellyfin.libraries_ = [
+        JellyfinLibrary(
+            name=name,
+            item_id=f"item-{slug}",
+            collection_type=collection_type,
+            locations=(f"{paths.library_root}/{slug}",),
+            type_options=(),
+        )
+        for slug, name, collection_type in (
+            ("movies", "Movies", "movies"),
+            ("tv", "TV", "tvshows"),
+            ("anime", "Anime", "tvshows"),
+        )
+    ]
+    await scenario.qbittorrent.set_preferences(
+        {
+            "save_path": paths.complete_root,
+            "temp_path": paths.incomplete_root,
+            "temp_path_enabled": True,
+            "auto_tmm_enabled": True,
+            "category_changed_tmm_enabled": True,
+        }
+    )
+
+    setup = await read_settings(session, SetupSettings)
+    setup.admin = SetupAdmin(username="skipper", password="harbour")
+    setup.services = {
+        kind: ServiceProbe(
+            origin=ServiceOrigin.BUNDLED,
+            reason=reason,
+            base_url=base_url,
+            checked_at=datetime.now(UTC),
+        )
+        for kind, reason, base_url in (
+            (ServiceKind.JELLYFIN, DetectionReason.SETUP_PENDING, "http://jellyfin:8096"),
+            (ServiceKind.QBITTORRENT, DetectionReason.ANONYMOUS_OK, "http://qbittorrent:8080"),
+            (ServiceKind.PROWLARR, DetectionReason.NO_INDEXERS, "http://prowlarr:9696"),
+        )
+    }
+    setup.jellyfin.libraries = [
+        SetupLibrary(
+            name=library.name,
+            item_id=library.item_id,
+            collection_type=library.collection_type,
+            locations=list(library.locations),
+        )
+        for library in scenario.jellyfin.libraries_
+    ]
+    await write_settings(session, setup)
+    await write_settings(
+        session,
+        IndexerSettings(kind="prowlarr", base_url="http://prowlarr:9696", api_key="fake-key"),
+    )
+    await write_settings(session, QbittorrentSettings(base_url="http://qbittorrent:8080"))
+    await session.commit()
+
+    await build_routes(session, factory, ())
+    if scenario.preference_drift:
+        # 檢查之前就改掉，第一輪就看得到漂移。
+        await scenario.qbittorrent.set_preferences({"auto_tmm_enabled": False})
+    await check_health(session, factory)
+    if scenario.indexer_down:
+        # 第一輪之後才掛掉，畫面上「最後成功」才有值——「剛剛還好好的」與「從來沒通過」
+        # 是兩件不同的事（brief §16.2）。
+        scenario.prowlarr.ping_error = ServiceUnavailableError("GET /ping: connection refused")
 
 
 if __name__ == "__main__":

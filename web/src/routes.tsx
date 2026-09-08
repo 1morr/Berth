@@ -15,6 +15,7 @@ import { destination } from './auth/destination'
 import { AppShell } from './AppShell'
 import { HealthPage } from './pages/HealthPage'
 import { LoginPage } from './pages/LoginPage'
+import { ServiceSettingsPage } from './pages/ServiceSettingsPage'
 import { SetupPage } from './pages/SetupPage'
 
 export interface RouterContext {
@@ -136,9 +137,22 @@ const loginRoute = createRoute({
   component: LoginPage,
 })
 
+/**
+ * 首頁在 M1 是探索頁（plan §7）。在那之前唯一有內容的頁面是健康頁，所以 `/` 先導到它——
+ * 兩個網址畫同一頁比一個轉址難解釋得多。
+ */
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/',
+  beforeLoad: () => {
+    throw redirect({ to: '/health' })
+  },
+})
+
+const healthRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/health',
+  /** 診斷是唯讀資訊，一般使用者也看得到（brief §11）。動作在 `/settings/services`。 */
   beforeLoad: async ({ context, location }) => {
     if (!(await isSetupComplete(context.queryClient))) throw redirect({ to: '/setup' })
     await requireSession(context.queryClient, location)
@@ -150,4 +164,26 @@ const indexRoute = createRoute({
   ),
 })
 
-export const routeTree = rootRoute.addChildren([indexRoute, loginRoute, setupRoute])
+const serviceSettingsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/settings/services',
+  /** 改設定是管理員的事（brief §11，後端同時回 403）。 */
+  beforeLoad: async ({ context, location }) => {
+    if (!(await isSetupComplete(context.queryClient))) throw redirect({ to: '/setup' })
+    const me = await requireSession(context.queryClient, location)
+    if (me !== null && me.role !== 'admin') throw redirect({ to: '/health' })
+  },
+  component: () => (
+    <AppShell>
+      <ServiceSettingsPage />
+    </AppShell>
+  ),
+})
+
+export const routeTree = rootRoute.addChildren([
+  indexRoute,
+  healthRoute,
+  loginRoute,
+  serviceSettingsRoute,
+  setupRoute,
+])

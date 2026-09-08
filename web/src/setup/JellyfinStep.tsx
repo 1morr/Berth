@@ -1,11 +1,12 @@
 import { useTranslation } from 'react-i18next'
 
-import { JELLYFIN_STEPS, type JellyfinSetup, type SetupStep } from '../api/setup'
+import { JELLYFIN_STEPS, type JellyfinSetup } from '../api/setup'
+import { type SetupStep } from '../api/schemas'
 import { STICKY_ACTION, GhostButton, Notice, PrimaryButton } from '../components/controls'
 import { Cutaway, CutawayRow } from './Cutaway'
 import { JellyfinExisting } from './JellyfinExisting'
-import { StepLine } from './StepLine'
-import { isSettled } from './steps'
+import { StepLine } from '../components/StepLine'
+import { isSettled } from '../components/steps'
 import { STEP_ENDPOINT, STEP_FIX, STEP_LABEL, isJellyfinStep, manualSteps } from './jellyfinSteps'
 
 /**

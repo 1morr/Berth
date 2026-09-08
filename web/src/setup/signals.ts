@@ -1,4 +1,5 @@
-import type { DetectionReason, ServiceDetection, ServiceKind, ServiceOrigin } from '../api/setup'
+import type { DetectionReason, ServiceDetection } from '../api/setup'
+import type { ServiceKind } from '../api/schemas'
 import type { Signal } from '../components/signal'
 
 /**
@@ -36,30 +37,12 @@ export function connectFields(kind: ServiceKind): ReadonlyArray<'apiKey' | 'cred
   return []
 }
 
-/** `detail` 的意思由服務決定：版本號或索引站數量。 */
-export function detailLabel(kind: ServiceKind): 'detail.version' | 'detail.indexers' {
-  return kind === 'prowlarr' ? 'detail.indexers' : 'detail.version'
-}
-
 /** 探測的端點，剖面裡逐條列出來（plan §9.3 第 2 步）。 */
 export const PROBE_ENDPOINT: Record<ServiceKind, string> = {
   jellyfin: 'jellyfin:8096/System/Info/Public',
   qbittorrent: 'qbittorrent:8080/api/v2/app/version',
   prowlarr: 'prowlarr:9696/ping',
 }
-
-export const ORIGIN_LABEL = {
-  bundled: 'origin.bundled',
-  existing: 'origin.existing',
-  pending: 'origin.pending',
-  timeout: 'origin.timeout',
-} as const satisfies Record<ServiceOrigin, string>
-
-export const SERVICE_LABEL = {
-  jellyfin: 'service.jellyfin',
-  qbittorrent: 'service.qbittorrent',
-  prowlarr: 'service.prowlarr',
-} as const satisfies Record<ServiceKind, string>
 
 export const REASON_LABEL = {
   setup_pending: 'reason.setup_pending',

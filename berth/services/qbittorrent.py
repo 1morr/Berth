@@ -12,6 +12,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
@@ -224,6 +225,15 @@ def _target(setup: SetupSettings, settings: QbittorrentSettings) -> tuple[Servic
         origin,
         settings.base_url or (probe.base_url if probe else "") or BUNDLED_QBITTORRENT_URL,
     )
+
+
+def drifted_keys(preferences: Mapping[str, Any], paths: PathSettings) -> tuple[str, ...]:
+    """現在與建議值不同的那幾個鍵（brief §16.3 的「關鍵設定漂移」）。
+
+    健康檢查與精靈第 4 步問的是同一個問題，所以用同一份比對——包含尾斜線正規化，否則
+    4.4 上每一輪健康檢查都會報一次假的漂移。
+    """
+    return tuple(row.key for row in _diffs(dict(preferences), paths) if row.differs)
 
 
 def _diffs(preferences: dict[str, Any], paths: PathSettings) -> tuple[PreferenceDiff, ...]:

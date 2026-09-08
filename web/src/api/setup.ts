@@ -1,13 +1,14 @@
 import { queryOptions } from '@tanstack/react-query'
 
 import { apiGet, apiPost } from './client'
-
-/** 與 `berth/domain/enums.py` 的 `ServiceKind` 對齊。 */
-export const SERVICE_KINDS = ['jellyfin', 'qbittorrent', 'prowlarr'] as const
-export type ServiceKind = (typeof SERVICE_KINDS)[number]
-
-/** `ServiceOrigin`：逐服務的判定。 */
-export type ServiceOrigin = 'bundled' | 'existing' | 'pending' | 'timeout'
+import type {
+  Profile,
+  QbittorrentSetup,
+  RouteView,
+  ServiceKind,
+  ServiceOrigin,
+  SetupStep,
+} from './schemas'
 
 /** `DetectionReason`：判定的理由，UI 逐服務顯示。 */
 export type DetectionReason =
@@ -75,9 +76,6 @@ export function connectService(kind: ServiceKind, body: ConnectInput): Promise<S
   return apiPost<SetupStatus>(`/setup/services/${kind}`, body)
 }
 
-/** `StepStatus`：精靈裡一個步驟的結果。 */
-export type StepStatus = 'ok' | 'skipped' | 'failed' | 'running' | 'pending'
-
 /** `JellyfinStep`：plan §9.4 的九步，順序即宣告順序。 */
 export const JELLYFIN_STEPS = [
   'public_info',
@@ -91,16 +89,6 @@ export const JELLYFIN_STEPS = [
   'tasks',
 ] as const
 export type JellyfinStep = (typeof JELLYFIN_STEPS)[number]
-
-export interface SetupStep {
-  /** `JellyfinStep` 之一。後端可能加新的步驟，所以型別放寬成 string。 */
-  step: string
-  status: StepStatus
-  /** 實測值：版本號、建了哪幾個媒體庫、任務 id。直接顯示，不翻譯。 */
-  detail: string
-  /** 失敗時 Jellyfin 回的原文（英文）。 */
-  error: string
-}
 
 export interface JellyfinLibrary {
   name: string
@@ -161,30 +149,6 @@ export const QBITTORRENT_STEPS = [
   'web_ui_password',
 ] as const
 export type QbittorrentStep = (typeof QBITTORRENT_STEPS)[number]
-
-export interface PreferenceDiff {
-  key: string
-  current: string
-  recommended: string
-  differs: boolean
-}
-
-export interface QbittorrentSetup {
-  origin: ServiceOrigin
-  base_url: string
-  version: string
-  webapi_version: string
-  /** Web API ≥ 2.8.4。低於它 Berth 拒絕接入（brief §16.4）。 */
-  supported: boolean
-  blocked: boolean
-  reachable: boolean
-  diffs: PreferenceDiff[]
-  steps: SetupStep[]
-  /** 既有服務的 temp path 未啟用：警告，不阻擋。 */
-  temp_path_warning: boolean
-  sets_password: boolean
-  error: string
-}
 
 export const qbittorrentSetupQueryOptions = queryOptions({
   queryKey: ['setup', 'qbittorrent'],
@@ -265,41 +229,6 @@ export function skipTmdb(skipped: boolean): Promise<TmdbSetup> {
 }
 
 /** --- 第 7–8 步：媒體庫 → Route（plan §9.3 第 7–8 步、§9.5）--- */
-
-/** `RouteCheck`：一個 Route 的五條纜繩，順序即檢查順序。 */
-export const ROUTE_CHECKS = [
-  'category',
-  'download_path',
-  'library_path',
-  'probe_visible',
-  'hardlink',
-] as const
-export type RouteCheck = (typeof ROUTE_CHECKS)[number]
-
-/** `Profile`：Route 的命名與解析偏好（CONTEXT.md）。 */
-export const PROFILES = ['standard', 'anime'] as const
-export type Profile = (typeof PROFILES)[number]
-
-/** Route 上一次檢查的結果（後端 `HealthStatus`）。 */
-export type RouteHealthStatus = 'unknown' | 'ok' | 'failed'
-
-export interface RouteView {
-  slug: string
-  name: string
-  /** Jellyfin 媒體庫的名字。 */
-  library: string
-  collection_type: 'movies' | 'tvshows'
-  target_path: string
-  category: string
-  /** 這個 category 的 save path，也就是硬鏈接的來源目錄。 */
-  save_path: string
-  profile: Profile
-  enabled: boolean
-  health: RouteHealthStatus
-  checks: SetupStep[]
-  /** 硬鏈接回 `EXDEV`：兩個目錄在 Berth 內是不同掛載（brief §4.4）。 */
-  cross_device: boolean
-}
 
 export interface LibraryChoice {
   name: string

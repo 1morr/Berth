@@ -1,7 +1,8 @@
 import { useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import type { JellyfinLibrary, JellyfinSetup, SetupStep } from '../api/setup'
+import type { JellyfinLibrary, JellyfinSetup } from '../api/setup'
+import type { SetupStep } from '../api/schemas'
 import {
   STICKY_ACTION,
   ConfirmAction,

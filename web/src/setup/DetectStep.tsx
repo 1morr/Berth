@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { SERVICE_KINDS, type ConnectInput, type ServiceKind, type SetupStatus } from '../api/setup'
+import { type ConnectInput, type SetupStatus } from '../api/setup'
+import { SERVICE_KINDS, type ServiceKind } from '../api/schemas'
 import { Cutaway, CutawayRow } from './Cutaway'
 import { MooringLine } from './MooringLine'
 import { STICKY_ACTION, GhostButton, Notice, PrimaryButton } from '../components/controls'

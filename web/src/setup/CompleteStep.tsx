@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import type { IndexerSetup, RouteSetup, TmdbSetup } from '../api/setup'
 import { STICKY_ACTION, GhostButton, Notice, PrimaryButton } from '../components/controls'
 import { SIGNAL_FILL } from '../components/signal'
-import { ROUTE_SIGNAL } from './routeChecks'
+import { ROUTE_SIGNAL } from '../components/routeChecks'
 import { Cutaway, CutawayRow } from './Cutaway'
 
 /**

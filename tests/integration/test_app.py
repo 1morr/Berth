@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from dataclasses import replace
 from pathlib import Path
@@ -10,7 +11,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from berth.config import Config
-from berth.main import create_app
+from berth.main import HEALTH_CHECKER_TASK, create_app
 
 
 @pytest.fixture
@@ -106,6 +107,31 @@ class TestFrontend:
 
         assert response.status_code == 401
         assert json.loads(response.text)["detail"]
+
+
+class TestBackgroundLoops:
+    """`health_checker` 由 lifespan 啟動與關閉（plan §3.2、票 10 驗收）。"""
+
+    @pytest.mark.asyncio
+    async def test_the_health_checker_runs_under_the_lifespan(self, config: Config) -> None:
+        app = create_app(config)
+
+        async with app.router.lifespan_context(app):
+            assert _running(HEALTH_CHECKER_TASK), "迴圈沒起來的話健康頁永遠是空的"
+
+    @pytest.mark.asyncio
+    async def test_shutting_down_leaves_no_pending_task(self, config: Config) -> None:
+        """關掉之後不留 pending task（票 10 驗收）。留著的話 uvicorn 會在收工時卡住。"""
+        app = create_app(config)
+
+        async with app.router.lifespan_context(app):
+            pass
+
+        assert not _running(HEALTH_CHECKER_TASK)
+
+
+def _running(name: str) -> list[asyncio.Task[None]]:
+    return [task for task in asyncio.all_tasks() if task.get_name() == name]
 
 
 class TestFrontendNotBuilt:
