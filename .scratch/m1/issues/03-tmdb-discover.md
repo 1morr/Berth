@@ -2,7 +2,7 @@
 
 **Status:** ready-for-agent
 
-**Blocked by:** 01（`media` 的欄位由它決定）、02（型別產生器先接上）
+**Blocked by:** ~~01（`media` 的欄位由它決定）~~ 已解除、02（型別產生器先接上）
 
 **讀:** plan §2.2、§6（discover 群組）、§7、§8.3、§11.2（T1.1）；brief §13（探索）
 
@@ -10,8 +10,7 @@
 
 打開 `/` 看得到趨勢與熱門作品、能搜尋、卡片顯示追蹤狀態。`/` 不再導向 `/health`。
 
-帶進來的東西：`media` 與 `tmdb_cache` 表與 migration（欄位依 plan §2.2，若票 01 決定採用 TVDB
-則含 `tvdb_id` / `episode_source`）；TMDB adapter 補 `trending/{tv,movie}/week`、`{tv,movie}/popular`、
+帶進來的東西：`media` 與 `tmdb_cache` 表與 migration（欄位依 plan §2.2）；TMDB adapter 補 `trending/{tv,movie}/week`、`{tv,movie}/popular`、
 `search/multi` 與 `configuration` 的圖片基底；`services/` 的探索命令、快取與速率限制。
 
 探索頁是 M1 的第一個新頁面，走 `/impeccable shape` 再實作。

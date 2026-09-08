@@ -14,8 +14,18 @@
 含資料夾結構提示、brief §6.4 的比對順序、三種絕對編號換算（episode group absolute、累計集數、
 air_date 虛擬季 offset）各自產一個 Candidate 並附理由，以及 brief §6.5 的信心定義與批次一致性檢查。
 
-若票 01 決定採用 TVDB 作為 anime profile 的季集來源，本票的 `ParseContext` / `MediaSnapshot` 依
-plan §4.3 修訂後的形狀實作。
+票 01 已定案**維持 TMDB**，`ParseContext` / `MediaSnapshot` 不變。但票 01 量到的兩件事要做進來，
+它們才是失敗率的主要槓桿（`docs/research/anime-episode-source.md` §7、plan §4.4）：
+
+- **篇章名 → 季號**：九成的換算失敗是檔名只有「柱訓練篇」「最終季」「死滅迴游」這種篇章名而
+  沒有季號。用 `MediaSnapshot` 的各季 `name`（TMDB 的 `season.name`）與 alternative titles 比對，
+  命中就等同季號提示，另產一個 `strategy = arc_name` 的 Candidate，confidence 至多 medium。
+- **「最終季 / Final Season」對到最後一季。**
+- **`第二部分` / `Part.2` 當成 cour 偏移**：唯一「檔名有季號卻還是三家一起錯」的一類
+  （`[星空字幕组][进击的巨人 第三季 第二部分 / Season 3 Part.2][01-10]`，正確答案是 S3E13–22）。
+  看到這個標記就把同一季前面幾個 cour 的長度加上去。
+
+plan §4.4 的虛擬季門檻維持 **180 天**（已被量測支持，調成 60 天會變差），不要順手改小。
 
 ## 驗收
 

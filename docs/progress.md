@@ -33,6 +33,7 @@
 | 2026-09-08 | 09 精靈第 7–8 步 | 泊位 4（媒體庫 → Library Route）與完成頁做完：套件內自動建三條 Route、既有由使用者勾選媒體庫與寫入目標（可就地加 Berth 路徑、劇集可挑 profile），每條 Route 建 `berth-*` category 並跑五項跨服務檢查（含**真的 `link()` 再比 inode**）；`POST /api/setup/complete` 全綠才寫 `settings.setup.completed`。fs adapter 帶進來（`link`、`stat`、`same_inode`、`link_test`、`probe_file`、`free_space`、`is_within`，寫入一律要允許的根）。356 個後端測試 + 84 個前端測試綠燈；playwright 對 `--scenario bundled` 走完八步（Windows NTFS 上真的建了硬鏈接：`dev=11550084160259632778 · inode=17451448556763814`），對新的 `--scenario unmounted` 看失敗樣子 | `/implement .scratch/m0/issues/10-health.md` |
 | 2026-09-08 | 11 M0 收尾 | 三輪驗收全過：乾淨 Linux（Docker Desktop VM 的 ext4）、乾淨 Windows（NTFS 9p bind mount）、以及「既有 Jellyfin + 套件內 qBittorrent 與 Prowlarr」，每一輪都是`docker compose up` → **只操作 Berth** → 四項綠燈；既有媒體庫是加路徑，項目 ID 與觀看紀錄五項全未變。**驗收本身抓到三個真缺陷並修掉**：入口腳本從來沒接手過 `/data`（乾淨 Linux 上精靈第 3 步必死）、qBittorrent 5.x 的登入被判成失敗（每一套預設部署健康檢查永遠紅）、Prowlarr 冷啟動`indexer/schema` 超過 5 秒逾時（實測 9.42 秒）。`/impeccable critique` 22/40、檢測器 0 findings，polish 修掉對比 3.56:1、英文大寫掉 API 端點、索引站跳過零回饋、`<summary>` 焦點環、觸控目標、窄版 carousel、精靈沒有出口；`DESIGN.md` 產生。README 與 CHANGELOG 定稿，票 01–10 的遺留逐條過完（延後的寫進 plan §11）。425 後端 + 104 前端測試綠燈 | M0 完成。`/to-tickets docs/plan.md` 拆 M1 |
 | 2026-09-08 | 拆票 | M1 拆成 15 張票寫入 `.scratch/m1/issues/`（使用者拍板四個顆粒度問題），四條偏差記於下方 | `/implement .scratch/m1/issues/01-anime-episode-source.md` |
+| 2026-09-09 | 01 動漫季集來源 | brief §10 的 TVDB【研究】結案：**維持 TMDB**。10 部動漫、7,833 筆真實字幕組釋出，TMDB 8.0% / TVDB aired 7.6% / TVDB absolute 7.6% —— 差 0.4 個百分點，而 TVDB 要付授權（ToS 禁止內建 key 轉讓）、Jellyfin 沒有絕對編號概念（要逐劇寫 `DisplayOrder`）、Skyhook 不能寫進產品三個代價。**真正的失敗主因與來源無關**：九成的失敗是檔名只有篇章名沒有季號（柱訓練篇、最終季、死滅迴游），已寫成 plan §4.4 的解析器需求並記進票 06。方法上換過三次錨點才穩：最後用 Mikan 的發佈時間把檔名數字釘到實際播出，再逐（輪次, 字幕組）校準偏移量。腳本 `scripts/experiments/anime_episode_source.py` 可重跑，研究文件 `docs/research/anime-episode-source.md` | `/implement .scratch/m1/issues/02-openapi-types.md` |
 
 ## 偏差與決定
 
@@ -380,3 +381,9 @@
   「Jellyfin 反查耗盡」（plan §3.2 `jellyfin_resolver`）先寫 event。推翻那兩處 plan 的字面。理由是
   Issue 這個載體要連同 Reconciler 與問題頁一起才有用（M0 票 10 已為「TVDB 插件警告」與「磁碟空間門檻」
   下過同樣的判斷），只為了兩個生產者先建表會讓 M2 再改一次形狀。
+- 2026-09-09 票 01：brief §10 的【研究】結案為**維持 TMDB**，`media` 不加 `tvdb_id` / `episode_source`，不做 TVDB adapter。這條研究改在 M1 票 01 做，而不是 brief §20.6 原本要求的「M1 拆票前」—— 拆票時就已把它排成 M1 第一張票並讓票 03 / 05 / 06 等它，效果相同而不必在拆票流程外再開一輪。
+- 2026-09-09 票 01：brief §10 的弱點對策改寫。原本寫「靠絕對編號換算 + review」，實測顯示絕對編號換算只影響 16% 的釋出、TMDB 在那一段只錯 4.4%；主要弱點是**檔名只有篇章名沒有季號**（佔失敗的九成）。plan §4.1 / §4.4 補上「篇章名 → 季號」與「最終季 → 最後一季」，plan §2.2 / §4.3 的快照補上各季 `name`。
+- 2026-09-09 票 01：brief §20.3 兩處更正。（一）TMDB 的合併政策比原記載激進得多 —— 不只 split-cour，**獨立的連續季也在併**（咒術 3 季→1 季 59 集、Re:Zero 4 季→1 季 85 集、芙莉蓮 2 季→1 季 38 集、柯南 34 季→1 季 1213 集）。（二）**TVDB 的 absolute 會把 OVA 與劇場版也編號**（SPY×FAMILY 的劇場版 CODE: White 佔掉 absolute 38），所以 absolute ≠ 正篇第幾集，而字幕組數的是正篇。
+- 2026-09-09 票 01：plan §4.4 的 180 天虛擬季門檻從「移植 AutoBangumi 的常數」升級為**有量測支持的決定**（180 天 8.0% vs 60 天 9.7%），並註明不要調小。
+- 2026-09-09 票 01：實驗用 Sonarr 的 Skyhook 當 TVDB 資料來源（免 key），並對 thetvdb.com 網頁逐部驗過 10/10 一致。**但它不能寫進產品**（封閉自營、無 SLA、servarr 官方不支援第三方直打），已記在 brief §20.3。
+- 2026-09-09 票 01：推翻票 01 自己的驗收條件「若維持 TMDB：票 03、05、06 不動」。實際改了三張票：03 與 05 解除 blocked-by（機械操作）；05 補「季號的全形羅馬數字」；06 補「篇章名 → 季號」「最終季 → 最後一季」「第二部分 / Part.2 當 cour 偏移」。理由是量測指出這三條合計佔失敗的九成，是比換 provider 大得多的槓桿，不寫進票就會連同這份研究一起被忘掉。票上保留原條文並註明偏離。

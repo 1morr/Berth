@@ -1,10 +1,11 @@
 # 實驗腳本
 
-M0 票 04（brief §20.6）的實驗。**指令在根目錄的 [README](../../README.md#實驗腳本)**（那份是本專案
+M0 票 04 與 M1 票 01（brief §20.6）的實驗。**指令在根目錄的 [README](../../README.md#實驗腳本)**（那份是本專案
 指令的單一來源）；這裡寫的是每個腳本在回答什麼、為什麼這樣寫、有哪些坑。
 
-結論在 [`docs/research/m0-experiments.md`](../../docs/research/m0-experiments.md)，摘要進
-brief §20.6 / §20.7。原始 JSON 落在 `.local/experiments/results/`（不進版控），stdout 是同一份
+結論在 [`docs/research/m0-experiments.md`](../../docs/research/m0-experiments.md) 與
+[`docs/research/anime-episode-source.md`](../../docs/research/anime-episode-source.md)，摘要進
+brief §10 / §20.3 / §20.6 / §20.7。原始 JSON 落在 `.local/experiments/results/`（不進版控），stdout 是同一份
 東西的人類版。
 
 腳本只用 Python 標準庫，不 import `berth`，也不需要專案的虛擬環境 —— 這樣才能原封不動搬到 NAS
@@ -22,6 +23,8 @@ ffmpeg 產種子檔），那只影響「造測試素材」這一步，不影響 
 | `qbittorrent_matrix.py` | `paused`/`stopped`、`contentLayout`、`torrents/files` 的相對基準、category 鍵名、Host 檢查、CSRF |
 | `prowlarr_host_config.py` | `config/host` 的欄位名與設 Forms 帳密的完整往返 |
 | `hardlink.sh` | 在單一掛載根底下真的做一次 `link()`（brief §4.4）。成功回 0，`EXDEV` 或 inode 不符回 1 |
+| `anime_episode_source.py` | M1 票 01：字幕組編號換算到 TMDB 季集 / TVDB aired / TVDB absolute 的失敗率 |
+| `anime_sample.json` | 上一支的樣本：10 部動漫、挑選理由、Mikan 的番組 id |
 | `lib.py` | 共用的 HTTP、輪詢、bencode、報告輸出 |
 
 ## 幾個不明顯的地方
@@ -39,3 +42,12 @@ ffmpeg 產種子檔），那只影響「造測試素材」這一步，不影響 
 - **深連結那一項是手動的**：`#!/details?id=…` 是前端路由，伺服器端測不到。`jellyfin_naming.py`
   會把兩種候選網址與可用的 item id 印出來並寫進報告的 `deep_link_candidates`，人開瀏覽器登入後
   貼上去看。實測結果記在 research 文件的 §1.8。
+- **`anime_episode_source.py` 不需要容器，也不需要任何 key。** TMDB 憑證從
+  `berth/adapters/tmdb/__init__.py` 直接讀（不另外複製一份），TVDB 資料走 Sonarr 的 Skyhook
+  代理，字幕組的實際釋出來自 Mikan 的 RSS。**Skyhook 只能這樣用在實驗裡**——它是 Sonarr 自營
+  的封閉服務，不是給第三方的公開 API，理由寫在 research 文件的 §5。
+- **它會把抓到的東西快取在 `.local/experiments/cache/`。** Mikan 的頁面動輒 500 KB 以上、
+  連線常常中途被掐掉，第一次跑要十來分鐘；重跑分析（例如換 `--gap-days`）則是秒級。要重新
+  抓一次就砍掉那個目錄。
+- **判斷「字幕組寫的 12 是哪一集」靠的是發佈時間，不是編號規則。** 為什麼要這樣做、三道校準
+  閘在擋什麼，見 research 文件的 §4.1。動過 `calibrate_offset` 就要重跑 `--self-test`。

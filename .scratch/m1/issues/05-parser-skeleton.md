@@ -2,7 +2,7 @@
 
 **Status:** ready-for-agent
 
-**Blocked by:** 01（季集來源決定 fixture 的 `expected` 與快照形狀）
+**Blocked by:** ~~01（季集來源決定 fixture 的 `expected` 與快照形狀）~~ 已解除
 
 **讀:** plan §4.1（classify / normalize_cjk / parse_release / structure_hints）、§4.2、§4.6、§10；
 brief §6.1、§6.2、§6.3、§6.8、§6.9、§20.4
@@ -14,6 +14,10 @@ CJK 正規化、發佈名解析與 Tags 渲染實作到位。
 
 順序照 `docs/progress.md` 的 M1 閱讀指引：**先寫 fixture 與 harness 再逐階段實作**。
 benchmark fixture 就是 TDD 的紅燈（`mattpocock-skills:tdd`）。
+
+票 01 量到一個 `normalize_cjk` 必須處理的寫法：**季號的全形羅馬數字**（`无职转生Ⅱ`、`Ⅲ`，
+U+2160 起）與**不以空白收邊的半形羅馬數字**（`Mushoku Tensei II]`）。漏掉這兩種會讓整輪播出
+被錯置成第一季（plan §4.1、`docs/research/anime-episode-source.md` §6.1）。
 
 語料來源見 brief §20.4 的樣本清單：動漫 8、美劇 / 韓劇 8、電影 4。這一票只要求分類與 ReleaseInfo
 正確，季集對應是票 06、目標路徑是票 07，所以此時 benchmark 大量落在 review / unmatched 是預期的。

@@ -1,0 +1,165 @@
+[
+ {
+  "key": "dandadan",
+  "tmdb_id": 240411,
+  "tvdb_id": 432832,
+  "shapes": [
+   "split-cour"
+  ],
+  "why": "TVDB 切成 S1/S2 各 12 集，TMDB 併成一季 24 集——brief §20.3 點名的合併政策本體",
+  "mikan_query": "胆大党",
+  "bangumi_ids": [
+   3436,
+   3665
+  ]
+ },
+ {
+  "key": "mushoku-tensei",
+  "tmdb_id": 94664,
+  "tvdb_id": 371310,
+  "shapes": [
+   "split-cour",
+   "連續兩季"
+  ],
+  "why": "S1 與 S2 都是分割兩 cour 播出（各隔半年以上），兩個 provider 都把兩 cour 併成一季",
+  "mikan_query": "无职转生",
+  "bangumi_ids": [
+   2353,
+   2549,
+   3060,
+   3344,
+   3995
+  ]
+ },
+ {
+  "key": "spy-family",
+  "tmdb_id": 120089,
+  "tvdb_id": 405920,
+  "shapes": [
+   "split-cour",
+   "劇場版接續正篇"
+  ],
+  "why": "行銷上的「第二季」是第三輪播出（前兩 cour 都算 S1），劇場版 CODE: White 接在中間",
+  "mikan_query": "间谍过家家",
+  "bangumi_ids": [
+   2709,
+   2823,
+   3207,
+   3754
+  ]
+ },
+ {
+  "key": "demon-slayer",
+  "tmdb_id": 85937,
+  "tvdb_id": 348545,
+  "shapes": [
+   "劇場版接續正篇",
+   "連續兩季"
+  ],
+  "why": "無限列車是先劇場版再剪成 TV 篇（Mikan 把兩者放在同一個番組 2467），之後每個 arc 各自成季；兩個 provider 這裡完全一致",
+  "mikan_query": "鬼灭之刃",
+  "bangumi_ids": [
+   1919,
+   2467,
+   2604,
+   2972,
+   3350
+  ]
+ },
+ {
+  "key": "jujutsu-kaisen",
+  "tmdb_id": 95479,
+  "tvdb_id": 377543,
+  "shapes": [
+   "連續兩季",
+   "劇場版接續正篇"
+  ],
+  "why": "TVDB 三季，TMDB 全部併成一季 59 集；另有前傳劇場版「0」",
+  "mikan_query": "咒术回战",
+  "bangumi_ids": [
+   2283,
+   3074,
+   3847
+  ]
+ },
+ {
+  "key": "attack-on-titan",
+  "tmdb_id": 1429,
+  "tvdb_id": 267440,
+  "shapes": [
+   "split-cour",
+   "連續兩季"
+  ],
+  "why": "最終季拆成四段跨三年播出，兩個 provider 對「最終季有幾集」還不一致（28 vs 30）",
+  "mikan_query": "进击的巨人",
+  "bangumi_ids": [
+   1259,
+   1693,
+   1948,
+   2335,
+   2727,
+   2954,
+   3215
+  ]
+ },
+ {
+  "key": "re-zero",
+  "tmdb_id": 65942,
+  "tvdb_id": 305089,
+  "shapes": [
+   "split-cour"
+  ],
+  "why": "S2 分割兩 cour，S4 也是；TVDB 四季，TMDB 全部併成一季 85 集",
+  "mikan_query": "从零开始的异世界生活",
+  "bangumi_ids": [
+   701,
+   2259,
+   2348,
+   3464,
+   3951,
+   4052
+  ]
+ },
+ {
+  "key": "one-piece",
+  "tmdb_id": 37854,
+  "tvdb_id": 81797,
+  "shapes": [
+   "長篇累計編號"
+  ],
+  "why": "字幕組一律用絕對編號（1100+）；TMDB 與 TVDB 都切了 23 季但切點完全不同",
+  "mikan_query": "航海王",
+  "bangumi_ids": [
+   228,
+   3977
+  ]
+ },
+ {
+  "key": "detective-conan",
+  "tmdb_id": 30983,
+  "tvdb_id": 72454,
+  "shapes": [
+   "長篇累計編號",
+   "劇場版接續正篇"
+  ],
+  "why": "TMDB 是一季 1213 集（等於絕對編號），TVDB 切成 34 個年度季；每年一部劇場版",
+  "mikan_query": "名侦探柯南",
+  "bangumi_ids": [
+   227
+  ]
+ },
+ {
+  "key": "frieren",
+  "tmdb_id": 209867,
+  "tvdb_id": 424536,
+  "shapes": [
+   "連續兩季"
+  ],
+  "why": "S1 是一次播完的雙 cour（28 集），S2 另起；TMDB 把兩季併成一季 38 集",
+  "mikan_query": "葬送的芙莉莲",
+  "bangumi_ids": [
+   3141,
+   3821
+  ]
+ }
+]

@@ -266,6 +266,19 @@ docker compose -f scripts/experiments/compose.yml down -v
 Windows 的 Git Bash 要在 `docker run` 前加 `MSYS_NO_PATHCONV=1`，否則 `/data` 這種容器內路徑
 會被改寫成 `C:\Program Files\Git\data`。
 
+動漫季集來源的量測（不需要任何容器，只打外部 API）：
+
+```bash
+python scripts/experiments/anime_episode_source.py --self-test       # 換算器的手算樣例
+python scripts/experiments/anime_episode_source.py                   # 完整量測（門檻 180 天，同 plan §4.4）
+python scripts/experiments/anime_episode_source.py --gap-days 60     # 虛擬季門檻的敏感度比較
+python scripts/experiments/anime_episode_source.py --discover        # 重新找 Mikan 的番組 id
+```
+
+第一次跑要抓好幾百個頁面（Mikan 的頁很大且常斷線），大約十來分鐘；抓過的東西會快取在
+`.local/experiments/cache/`，之後重跑分析是秒級。結果見
+[`docs/research/anime-episode-source.md`](docs/research/anime-episode-source.md)。
+
 ## 目錄結構
 
 ```

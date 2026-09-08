@@ -432,11 +432,15 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 - Seerr 長期只用 TMDB，媒體牆體驗已被驗證（近期才加入實驗性 TVDB，目的只是配合 Sonarr）。
 - TVDB 在動漫 split-cour 上與 TMDB 採**同樣的合併政策**（§20.3），換 provider 不解決主要的編號錯誤來源；引入第二個 provider 的代價是每個 Media 多一層 ID 對應與衝突處理，第一階段不值得。（原本列的第三個理由「TVDB 要每位使用者付費並輸入 PIN」已於 2026-09-07 重查推翻，見 §20.3。）
 
-已知弱點與對策：
+**TVDB 作為 anime profile 的季集來源已於 2026-09-09 定案：不採用【決定】。** M1 票 01 對 10 部動漫、7,833 筆真實字幕組釋出量化了三種來源的換算失敗率（[`docs/research/anime-episode-source.md`](research/anime-episode-source.md)）：TMDB 季集 **8.0%**、TVDB default(aired) **7.6%**、TVDB absolute **7.6%**。差距 0.4 個百分點，且方向兩邊都有（TVDB 在《航海王》贏 4.4 點、在《SPY×FAMILY》輸 3.9 點）。換不到的東西不值得付三個代價：TVDB 的 ToS 明訂 key「non-transferable、solely for the product for which you have been provided access」，內建一把 key 給所有使用者直接違約，官方對終端使用者直連只給「談約」或「每位使用者自付 $11.99/年」兩條路；Jellyfin 本體沒有絕對編號的概念，要走 absolute 得對**每一部劇**寫 `Series.DisplayOrder`；Sonarr 的 Skyhook（實驗用的 TVDB 替身）是封閉自營服務，不能寫進產品。因此 `media` 表不加 `tvdb_id` / `episode_source`，不做 TVDB adapter。
 
-- 動漫的季切分（split cour、長篇）TMDB 與字幕組編號常不一致 → 靠絕對編號換算 + review；第二階段【研究】接入 anime-lists 類的 AniList/MAL ↔ TMDB 對應。
+已知弱點與對策（**對策已依實測改寫**）：
+
+- **主要弱點不是編號來源，是檔名裡沒有季號。** 三種來源同時失敗的有 573 筆，佔 TMDB 全部失敗的 91%（573/627）。主要成因是「柱訓練篇」「最終季」「死滅迴游」這類**篇章名帶語意但沒有數字**，換 provider 一集都救不到；唯一「有季號還錯」的一類是「第三季 第二部分 / Season 3 Part.2」——缺的是 cour 偏移不是季號。對策：解析器用 `MediaSnapshot` 已有的各季 `name` 與 alternative titles 比對篇章名、把「最終季」對到最後一季、把「第二部分 / Part.2」當成 cour 偏移（plan §4.4、M1 票 06）。
+- 絕對編號換算只影響 16% 的釋出，TMDB 在那一段錯 4.4%（TMDB 沒有 absolute 欄位，只能數播出序位）→ 維持絕對編號換算 + review，但它不是主要槓桿。
+- 字幕組的編號習慣有四種且同一部作品會並存（每 cour 從 01、官方編號、正篇序位、季內連號），任何「假設編號一致」的設計都會踩到（§20.3）。
 - 若使用者在 Jellyfin 該媒體庫改用 TVDB 插件 → 本系統讀取 `LibraryOptions` 偵測並警告「編號來源不一致」。
-- 【研究】**TVDB 作為 anime profile 的季集來源**（TMDB 仍是媒體牆、標題、海報與電影的唯一來源）。2026-09-07 重查推翻了「TVDB 要每位使用者付費」這條理由，且 Jellyfin 官方 TVDB 插件讓使用者零成本切換刮削來源（§20.3），剩下的唯一實質疑問是 split-cour。形態會是：Media 主鍵維持 `tv:<tmdb id>`，`media` 表加 `tvdb_id` 與 `episode_source`，只有 `anime` profile 的 Route 用 TVDB 編號並要求該媒體庫裝 TVDB 插件（上一條的偵測反過來用）。採用條件與定案時點見 §20.6 的動漫編號實驗：**必須在 M1 拆票前定案**，因為它改動 `media` 表與 mapper，M1 之後成本大增。
+- 第二階段【研究】接入 anime-lists 類的 AniList/MAL ↔ TMDB 對應。
 
 ---
 
@@ -708,7 +712,8 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 - 標題：`name` 依 `language`（預設 `en-US`）回傳，翻譯缺時可能是空字串，**要自己 fallback 到 `original_name`**；`alternative_titles` 是各國別名，與 translations 無關，兩者都應納入標題比對。（[translations](https://developer.themoviedb.org/reference/tv-series-translations)、[alternative-titles](https://developer.themoviedb.org/reference/tv-series-alternative-titles)）
 - `find/{external_id}` 支援 `imdb_id`、`tvdb_id` 等反查。（[find-by-id](https://developer.themoviedb.org/reference/find-by-id)）
 - 速率：官方文件未列；TMDB 員工在論壇稱約 50 req/s、20 併發/IP。條款：非商業免費、需顯示 TMDB logo 與聲明「This product uses the TMDB API but is not endorsed or certified by TMDB.」（[faq](https://developer.themoviedb.org/docs/faq)）
-- **動漫 split-cour 正被 TMDB 與 TVDB 同步合併成單季連續編號**（例如 Dandadan S2 併入 S1），字幕組編號則多數按 cour 重新從 01 起算 → 這是動漫季/集對應的主要錯誤來源。（[TMDB talk](https://www.themoviedb.org/talk/697d0680d564e13094e4e270)、[TVDB KB](https://support.thetvdb.com/kb/faq.php?id=61)）
+- **動漫 split-cour 正被 TMDB 與 TVDB 同步合併成單季連續編號**（例如 Dandadan S2 併入 S1），字幕組編號則多數按 cour 重新從 01 起算。（[TMDB talk](https://www.themoviedb.org/talk/697d0680d564e13094e4e270)、[TVDB KB](https://support.thetvdb.com/kb/faq.php?id=61)）**2026-09-09 實測修正兩點**：（一）TMDB 的合併比這段原記載更激進，**連獨立的連續季也在併** —— 咒術迴戰 3 季併成 1 季 59 集、Re:Zero 4 季併成 1 季 85 集、芙莉蓮 2 季併成 1 季 38 集、柯南 34 季併成 1 季 1213 集；TVDB 這幾部都維持分季。（二）**這不是主要錯誤來源** —— 量化後合併只造成 0.4 個百分點的差距，真正的主要來源是檔名沒有季號（§10、`docs/research/anime-episode-source.md`）。
+- **字幕組的編號習慣有四種，同一部作品會並存**（2026-09-09 實測 7,833 筆）：每 cour 從 01 重新起算（68%）、官方編號（16%）、正篇序位（13%）、季內連號（分割兩 cour 的第二 cour 從 13 接下去，3%）。Dandadan 第二季同時存在 `S01 | 01-24`、`[13-24]`、`S2 - 10`、`S2 - 20`（季號 + 絕對編號）四種寫法。解析器不能假設編號一致。
 
 **TheTVDB v4**
 
@@ -716,6 +721,19 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 - 但**授權模型未變**：所有 key 必須「either a commercial license, or have subscriptions enabled for end users」（[KB#62](https://support.thetvdb.com/kb/faq.php?id=62)）；README 明說 user-supported 模式「requires that each of your users has a $12/year TheTVDB subscription」（[v4-api](https://github.com/thetvdb/v4-api)）；KB#81 另警告開發者自用 PIN「prohibited from sharing a PIN for multiple users… Your access may be shut off at any time, and/or legal action may be pursued」。→ **個人自用沒問題；Berth 內建一把 key 給所有使用者是靠執行寬鬆，隨時可能被關。** 若採用，走「使用者自己申請免費 key」而非內建。
 - Jellyfin 官方 TVDB 插件是同一個形狀：`PluginConfiguration.cs` 有唯讀的「tvdb api key **for project**」（插件內建）與選填的「tvdb api key for user, this is the **subscriber's pin**」（[jellyfin-plugin-tvdb](https://github.com/jellyfin/jellyfin-plugin-tvdb/blob/master/Jellyfin.Plugin.Tvdb/Configuration/PluginConfiguration.cs)）。→ 使用者把 Jellyfin 媒體庫切成 TVDB 刮削**不需付費**，§10 的「Jellyfin 同源」理由因此被削弱。
 - 季類型：default(aired) / absolute / dvd / alternate / regional，**每部劇都有**；對比 TMDB 的 Absolute episode group 只在有人替該劇手動建立時才存在。這是 TVDB 對動漫絕對編號換算的實質優勢。Sonarr 只用 TVDB（經 Skyhook 代理），並靠 TheXEM 做 scene 編號對應（[xem-guide](https://wiki.servarr.com/sonarr/xem-guide)）。
+- **`absolute` 會把 OVA 與劇場版也編進去**（2026-09-09 實測 10 部）：SPY×FAMILY 的劇場版 CODE: White 佔掉 absolute 38，正篇第 38 集的 absolute 是 39；無職轉生兩支 OVA 佔掉 17 與 25；航海王的跨作品特別篇佔掉 590。**absolute ≠ 正篇第幾集**，而字幕組「接著往下算」時數的是正篇。
+- 取資料要打兩次：`/series/{id}/extended` 只回 default order，絕對編號要另外打 `/series/{id}/episodes/absolute`（`page` 必填、每頁 100 筆），且 `absoluteNumber` 只在 `EpisodeBaseRecord`、`EpisodeExtendedRecord` 沒有。「一次拿多種排序」的 [issue #98](https://github.com/thetvdb/v4-api/issues/98) 開了五年未做。（2026-09-08 查 [v4-api swagger](https://thetvdb.github.io/v4-api/) 4.7.10）
+- **授權是硬牆**：ToS 第 2 節寫 key 為 "non-transferable"、"solely for the product or project for which you have been provided access"，並禁止 "transfer, assign"（[tos](https://www.thetvdb.com/tos)）。官方對「終端使用者直連」只給談約或 subscriber-supported key（每位使用者 $11.99/年）兩條路；「每人自己申請一把免費 key」官方從未表態，**未證實**。
+
+**Jellyfin 對絕對編號的支援（2026-09-08 讀原始碼）**
+
+- **Jellyfin 沒有「絕對編號」這個概念。** `Emby.Naming` 解析得出 `Show - 128.mkv` 的數字，但 `EpisodeInfo` 只有 `EpisodeNumber` / `SeasonNumber`；沒有季資料夾時 `EpisodeResolver` 直接把季號設成 1。
+- 要走 absolute 得把**整部劇**的 `Series.DisplayOrder` 設成 `absolute`（`tvshow.nfo` 的 `<displayorder>`，或 `POST /Items/{id}` 但會觸發整劇 FullRefresh + ReplaceAllMetadata）。jellyfin-plugin-tvdb 的 `PluginConfiguration.cs` 12 個欄位裡**沒有任何排序設定**，排序只來自 `Series.DisplayOrder`。
+- absolute + specials 目前是壞的：插件把 absolute 的特輯打回 `official` season 0 查詢，[issue #91](https://github.com/jellyfin/jellyfin-plugin-tvdb/issues/91) 從 2023 open 至今。
+
+**TMDB 的 Absolute episode group 不能當備援**（2026-09-08 實測 10 部）：只有 6 部有；有的部有多個互相衝突（進擊的巨人四個 Absolute group，集數 89/97/97/97），柯南的那個叫 "China Online Version"。而且 group 內的 `episode_number` 保持 aired order 原值，絕對編號要自己從 0-based 的 `order` 推。
+
+**Sonarr Skyhook 不能寫進產品**：`https://skyhook.sonarr.tv/v1/tvdb/shows/en/{tvdbId}` 免認證、有 `absoluteEpisodeNumber`，適合當量測替身（本專案的實驗就是這樣用的，10/10 與 thetvdb.com 網頁一致）；但它封閉源（Team Sonarr 官方論壇："It is not open source and we don't have plans to open source it."）、無文檔、無 SLA，servarr 對同類 metadata proxy 的政策是 "We do not support directly hitting any metadata service that isn't our own"。
 
 **Sonarr 作為先例**
 
@@ -824,7 +842,7 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 - 建立 20 筆真實 torrent fixture（動漫 8、美劇/韓劇 8、電影 4）作為 benchmark v0。→ M1 解析器票。
 - 抓一份 Mikan（我的訂閱、單作品 + 字幕組）與 Nyaa（搜尋）的實際 RSS，確認擴充欄位名
   （infoHash、大小、做種數、enclosure、發佈時間），寫成 adapter 的 fixture。→ M3 RSS 票。
-- 抽 10 部動漫，量化**字幕組編號**對三種來源的換算失敗率：TMDB 季集、TVDB default(aired) season、TVDB absolute。§10 的【研究】（TVDB 作為 anime 季集來源）以此定案，**須在 M1 拆票前完成**。→ M1 解析器票。
+- ~~抽 10 部動漫，量化**字幕組編號**對三種來源的換算失敗率：TMDB 季集、TVDB default(aired) season、TVDB absolute~~ **完成（2026-09-09，M1 票 01）**：7,833 筆真實釋出，TMDB 8.0% / TVDB aired 7.6% / TVDB absolute 7.6%。§10 的【研究】據此結案為**維持 TMDB**，完整結果與方法在 [`docs/research/anime-episode-source.md`](research/anime-episode-source.md)，腳本 `scripts/experiments/anime_episode_source.py` 可重跑。順帶推翻兩件事：§20.3 的合併政策比原記載更激進（TMDB 連**獨立的連續季**也在併，咒術 3 季→1 季、Re:Zero 4 季→1 季），以及 **TVDB 的 absolute 會把 OVA 與劇場版也編號**（SPY×FAMILY 的 CODE: White 佔掉 absolute 38），所以 absolute ≠ 正篇第幾集。
 
 ### 20.7 開箱即用所需的 API 與 Windows Docker 事實
 

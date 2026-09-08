@@ -113,7 +113,7 @@ adapters ──► domain                  （不 import services、models；回
 ### 2.2 Route 與 Media
 
 - `routes`：`id`、`slug`（unique）、`name`、`jellyfin_library_id`、`jellyfin_library_name`、`collection_type`（`movies` / `tvshows`）、`target_path`、`category`、`profile`（`standard` / `anime`）、`medium_auto_import`（預設 true）、`enabled`、`health_status`、`health_detail_json`、`created_at`。`health_detail_json` 是 `RouteHealth`：逐項檢查（形狀同精靈的步驟：`key` 是 `RouteCheck`、`status`、`detail`、`error`）與 `cross_device`。category 的 save path 不存欄位，它一律是 `<complete root>/<slug>`（brief §4.1）。
-- `media`：`id`（`tv:<tmdb>` / `movie:<tmdb>`）、`tmdb_id`、`kind`、`title_en`、`title_original`、`year`、`folder_name`（凍結）、`tracked`、`default_route_id`、`tmdb_snapshot_json`（含各季各集：number、name、air_date、runtime；episode groups 的 absolute 排序若存在）、`tmdb_fetched_at`
+- `media`：`id`（`tv:<tmdb>` / `movie:<tmdb>`）、`tmdb_id`、`kind`、`title_en`、`title_original`、`year`、`folder_name`（凍結）、`tracked`、`default_route_id`、`tmdb_snapshot_json`（含**各季的 `name`**——`Hashira Training Arc` 這種篇章名是 §4.4 的季號來源——與各季各集：number、name、air_date、runtime；episode groups 的 absolute 排序若存在）、`tmdb_fetched_at`
 - `tmdb_cache`：`key`、`value_json`、`fetched_at`（探索頁與搜尋結果的短期快取；Media 詳情走 `media` 表）
 
 ### 2.3 Job、檔案、計劃、帳本
@@ -212,10 +212,10 @@ files ─► classify ─► (video | subtitle | font | audio | image | archive 
 | 階段 | 輸入 → 輸出 | 要點 |
 | --- | --- | --- |
 | `classify` | `[FileEntry]` → 加 `kind` | brief §6.2 的表；`sample` 以「檔名含 sample 且大小 < 同目錄最大影片 10%」判定；`extra` 以關鍵字（NCOP/NCED/OP/ED 無集號、PV、CM、Menu、Preview、Trailer、Making、特典、映像特典）與資料夾（`SPs/` 內非 SP 編號、`Extras/`、`Bonus/`）判定；mediainfo 可把時長 < 5 分鐘的「正片」降為 `extra` |
-| `normalize_cjk` | 檔名 → 乾淨字串 + `CjkHints` | 從 AutoBangumi `classic.py` 與 Sonarr `Parser.cs` 移植：剝離 ★前綴、招募廣告、地區限制、【】括號正規化為 []、中文標題與英文標題並列時保留英文；抽出 `subs`（CHT/CHS/JP/EN 集合）、`hardsub`、`season_cn`（第N季/期）、`episode_cn`（第N話/集）、`collection`（合集/全集/全N話）、`special`（番外/特別篇/SP/OVA/OAD）、`movie`（劇場版/電影版）、`group_cn` |
+| `normalize_cjk` | 檔名 → 乾淨字串 + `CjkHints` | 從 AutoBangumi `classic.py` 與 Sonarr `Parser.cs` 移植：剝離 ★前綴、招募廣告、地區限制、【】括號正規化為 []、中文標題與英文標題並列時保留英文；抽出 `subs`（CHT/CHS/JP/EN 集合）、`hardsub`、`season_cn`（第N季/期）、`episode_cn`（第N話/集）、`collection`（合集/全集/全N話）、`special`（番外/特別篇/SP/OVA/OAD）、`movie`（劇場版/電影版）、`group_cn`。**季號要認全形羅馬數字**（`无职转生Ⅱ`、`Ⅲ`，U+2160 起）與**不以空白收邊的半形羅馬數字**（`Mushoku Tensei II]`）——實測這兩種寫法漏掉會造成整輪播出的錯置（M1 票 01） |
 | `parse_release` | 乾淨字串 → `ReleaseInfo` | guessit 打底；後處理動漫模式：`- 01`、`[01]`、`01v2`、`E01` 無季、`01-12` 區間、`S01 \| 01-28+SPx11`、`第01話`；`release_kind` 由集號區間與 `collection` 決定 |
 | `structure_hints` | 相對路徑 → hints | 資料夾名 `Season 2` / `S2` / `第二季` / `2nd Season` / `Part 2` / `Specials` / `SPs`；`Subs/` `字幕/` 與其下的語言子資料夾 |
-| `map_episode` | → `[Candidate]` | brief §6.4 的順序；絕對編號換算三法（episode group absolute、累計集數、air_date 虛擬季 offset）各自產 Candidate 並附理由；上下文 Media 缺時先做標題比對（正規化後與 `name` / `original_name` / alternative titles / translations 比對，年份加權） |
+| `map_episode` | → `[Candidate]` | brief §6.4 的順序；絕對編號換算三法（episode group absolute、累計集數、air_date 虛擬季 offset）各自產 Candidate 並附理由；**篇章名 → 季號**（§4.4，比對各季 `name`）也產一個 Candidate；上下文 Media 缺時先做標題比對（正規化後與 `name` / `original_name` / alternative titles / translations 比對，年份加權） |
 | `match_subtitle` | → 附掛 | brief §6.7 順序；語言由後綴（`.tc` `.cht` `.zh-Hant` `.sc` `.chs` `.jp` `.jpsc` `.jptc`）或資料夾決定，都缺時看 CjkHints |
 | `plan` | → `Plan` | 為每個影片選最佳 Candidate；產生目標路徑（§5）；衝突與重複偵測（brief §6.4 第 5 點、§7.8）；extras 與 unmatched 的處置 |
 | `score` | → confidence | brief §6.5 的三級定義；批次一致性檢查在此（同模式、連續集號、數量吻合） |
@@ -231,11 +231,19 @@ files ─► classify ─► (video | subtitle | font | audio | image | archive 
 
 ### 4.3 上下文與 TMDB 快照
 
-`ParseContext`：`media: MediaSnapshot | None`、`profile`、`season_hint`、`episode_offset`、`route_collection_type`。`MediaSnapshot` 是 `media.tmdb_snapshot_json` 的型別化版本，含各季集數、每集 `air_date` 與 `name`、absolute 排序（若有）、標題集合。解析器不知道 TMDB API 的存在。
+`ParseContext`：`media: MediaSnapshot | None`、`profile`、`season_hint`、`episode_offset`、`route_collection_type`。`MediaSnapshot` 是 `media.tmdb_snapshot_json` 的型別化版本，含各季集數、**各季的 `name`**（§4.4 的篇章名比對靠它）、每集 `air_date` 與 `name`、absolute 排序（若有）、標題集合。解析器不知道 TMDB API 的存在。
 
-### 4.4 Offset 偵測
+### 4.4 Offset 偵測與季號來源【決定】
 
 移植 AutoBangumi `offset_detector.py` 的想法：以季內各集 `air_date` 的間隔 > 180 天切出「虛擬季」，若檔名的季/集落在某個虛擬季內，換算為 TMDB 的實際季/集，Candidate 標 `strategy = air_date_offset`、confidence 至多 medium。RSS Rule 的 `episode_offset` 若有值則優先且信心可為 high。
+
+**180 天這個門檻已被量測支持，不要調小**（M1 票 01，7,833 筆真實釋出）：180 天時整體換算失敗率 8.0%，改成 60 天會惡化到 9.7%。原因是一季內分割兩 cour 的間隔常常不到 180 天，門檻調小會把一季切成兩個虛擬季，季號提示就對不上了（`docs/research/anime-episode-source.md` §6.4）。
+
+同一份量測指出，**換季集來源（TVDB aired 或 absolute）只能改善 0.4 個百分點**，brief §10 據此結案為維持 TMDB。真正的槓桿是下面兩條，兩條都不需要第二個 provider：
+
+- **篇章名 → 季號**：九成的失敗是檔名只有篇章名沒有季號（「柱訓練篇」「最終季」「死滅迴游」「無限列車篇」）。用 `MediaSnapshot` 已有的各季 `name`（TMDB 的 `season.name` 就是 `Hashira Training Arc`、`Entertainment District Arc`）與 alternative titles 比對檔名裡的篇章名，命中則等同季號提示，Candidate 標 `strategy = arc_name`、confidence 至多 medium。「最終季 / Final Season」對到最後一季。
+- **`第二部分` / `Part.2` 當 cour 偏移**：唯一「檔名有季號卻還是三家一起錯」的一類（`[星空字幕组][进击的巨人 第三季 第二部分 / Shingeki no Kyojin Season 3 Part.2][01-10]`）。看到這個標記就把同一季前面幾個 cour 的長度加上去。它與字幕組的「季內連號」（第二 cour 直接從 13 接下去）是同一件事的兩種寫法。
+- **絕對編號換算**：TMDB 沒有 absolute 欄位，只能數播出序位，而 TMDB 與 TVDB 收錄的集數不一定一致（航海王 1181 vs 1177）。這條只影響 16% 的釋出、失敗率 4.4%，維持現況即可，但要標 confidence 至多 medium。
 
 ### 4.5 AI fallback（M4）
 
