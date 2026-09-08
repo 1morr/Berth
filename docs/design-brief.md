@@ -432,7 +432,9 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 - Seerr 長期只用 TMDB，媒體牆體驗已被驗證（近期才加入實驗性 TVDB，目的只是配合 Sonarr）。
 - TVDB 在動漫 split-cour 上與 TMDB 採**同樣的合併政策**（§20.3），換 provider 不解決主要的編號錯誤來源；引入第二個 provider 的代價是每個 Media 多一層 ID 對應與衝突處理，第一階段不值得。（原本列的第三個理由「TVDB 要每位使用者付費並輸入 PIN」已於 2026-09-07 重查推翻，見 §20.3。）
 
-**TVDB 作為 anime profile 的季集來源已於 2026-09-09 定案：不採用【決定】。** M1 票 01 對 10 部動漫、7,833 筆真實字幕組釋出量化了三種來源的換算失敗率（[`docs/research/anime-episode-source.md`](research/anime-episode-source.md)）：TMDB 季集 **8.0%**、TVDB default(aired) **7.6%**、TVDB absolute **7.6%**。差距 0.4 個百分點，且方向兩邊都有（TVDB 在《航海王》贏 4.4 點、在《SPY×FAMILY》輸 3.9 點）。換不到的東西不值得付三個代價：TVDB 的 ToS 明訂 key「non-transferable、solely for the product for which you have been provided access」，內建一把 key 給所有使用者直接違約，官方對終端使用者直連只給「談約」或「每位使用者自付 $11.99/年」兩條路；Jellyfin 本體沒有絕對編號的概念，要走 absolute 得對**每一部劇**寫 `Series.DisplayOrder`；Sonarr 的 Skyhook（實驗用的 TVDB 替身）是封閉自營服務，不能寫進產品。因此 `media` 表不加 `tvdb_id` / `episode_source`，不做 TVDB adapter。
+**TVDB 作為 anime profile 的季集來源已於 2026-09-09 定案：不採用【決定】。** M1 票 01 對 10 部動漫、7,833 筆真實字幕組釋出量化了三種來源的換算失敗率（[`docs/research/anime-episode-source.md`](research/anime-episode-source.md)）：TMDB 季集 **8.0%**、TVDB default(aired) **7.6%**、TVDB absolute **7.6%**。差距 0.4 個百分點，且方向兩邊都有（TVDB 在《航海王》贏 4.4 點、在《SPY×FAMILY》輸 3.9 點）。換不到的東西不值得付三個代價：**引入第二個 provider** —— 每個 Media 多一組 `tvdb_id` 與對不上時的處理、快照抓兩次快取兩份、精靈與設定頁多一把使用者自備的 key；**Jellyfin 那一端必須跟著改** —— 媒體庫要改用 TVDB 插件刮，編號才對得上，而這是 Berth 保證不了的使用者設定；**走 absolute 還要再多一步** —— Jellyfin 本體沒有絕對編號的概念，得對每一部劇寫 `Series.DisplayOrder`（§20.3）。因此 `media` 表不加 `tvdb_id` / `episode_source`，不做 TVDB adapter。
+
+**授權不在上面那三條裡（2026-09-09 更正）。** 先前一版把它算成主要代價是錯的：§20.3 早已查證 v4 key 免費且自助申請、不帶 PIN 可讀，ToS 擋的是「內建一把 key 發給所有使用者」而不是「使用者自己申請一把填進 Berth」。後者與 TMDB 的做法對稱，兩個 provider 之間不構成差異。
 
 已知弱點與對策（**對策已依實測改寫**）：
 
@@ -447,7 +449,7 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 1. **Jellyfin 換掉預設的劇集 provider，或社群普遍改用 TVDB 插件刮。** 上面第一條理由（同源最安全）是整個決定的承重牆，它一旦反向，結論就跟著反向。
 2. **M1 票 06 的「篇章名 → 季號」做完之後，benchmark 的季集失敗仍集中在 provider 結構差異上。** 現在那一塊只剩 78 筆（只有 TMDB 錯 54、只有 TVDB 錯 24），佔樣本 1%；主因（573 筆）是解析器缺口。若補完解析器後比例翻轉，代價與收益就要重算。
 3. **美劇 / 韓劇出現同類問題。** 這次只量了 10 部動漫 —— 動漫是最難的形態（split-cour、字幕組四種編號習慣並存、劇場版插號），結論往簡單形態推是合理的，但**沒有量過**。M1 的 benchmark 語料含美劇 / 韓劇 8 筆（§20.4），那裡是第一個會看見的地方。
-4. **TVDB 的授權模式改變。** 現在 ToS 明文禁止 key 轉讓（§20.3），這是三道實作牆裡最硬的一道；若官方開放「每位使用者自帶免費 key」或給開源專案的授權，成本那一側就變了。
+4. ~~**TVDB 的授權模式改變。**~~ **這一條 2026-09-09 撤銷** —— 免費自助 key 現在就有，使用者自備 key 本來就可行，授權從一開始就不是差異（見上面的更正）。留著這行是為了不讓它被重新加回來。
 
 ---
 

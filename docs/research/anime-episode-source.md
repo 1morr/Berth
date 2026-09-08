@@ -17,8 +17,12 @@
 | TVDB absolute | 7.6% | 597 | 0 |
 
 差距是 **0.4 個百分點**，而且方向兩邊都有：TVDB 在《航海王》贏 4.4 個百分點，在
-《SPY×FAMILY》輸 3.9 個百分點。換來的代價是 TVDB 的授權條款、第二個 provider 的 ID 對應，
-以及每部劇還要多寫一次 Jellyfin 的 `DisplayOrder`（§5）。**不值得。**
+《SPY×FAMILY》輸 3.9 個百分點。換來的代價是第二個 provider 的 ID 對應與設定步驟、
+Jellyfin 那一端必須改用 TVDB 插件刮才對得上，以及走 absolute 的話每部劇都要多寫一次
+`Series.DisplayOrder`（§5）。**不值得。**
+
+（授權**不是**理由：TVDB 的 v4 key 免費自助申請，使用者自備 key 完全可行；
+不可行的只有「Berth 內建一把發給所有人」，而那條路 TMDB 這邊也不打算走 —— 見 §5 第 1 點。）
 
 更重要的是：**失敗的主因不是編號來源。** 三個來源同時失敗的有 **573 筆**，佔 TMDB 全部失敗的
 91%、TVDB 的 96%（另外只有 TMDB 錯 54 筆、只有 TVDB 錯 24 筆、沒有其他組合）。主要成因是
@@ -153,15 +157,19 @@ TMDB 那一欄的「正確答案」要靠播出日期把 TVDB 的第 N 集對到
 
 ## 5. 實作可行性（查證於 2026-09-08，一手來源）
 
-即使數字打平，實作面還有三件事把 TVDB 推得更遠：
+即使數字打平，實作面還有幾件事把 TVDB 推得更遠。第 1 點原本被我算成「代價」，2026-09-09
+重看後**不成立**，保留在這裡是為了不讓同一個錯誤再被寫一次：
 
-1. **授權**。TVDB 的 ToS 第 2 節明寫 key 是 "non-transferable"、"solely for the product or
-   project for which you have been provided access"，並禁止 "transfer, assign"
-   （[tos](https://www.thetvdb.com/tos)）。Berth 內建一把 key 發給所有使用者直接違約。官方對
-   「終端使用者直連」只給兩條路：談約，或用 subscriber-supported key 而**每位使用者自付
-   $11.99/年**（[v4-api README](https://github.com/thetvdb/v4-api)、
-   [KB#62](https://support.thetvdb.com/kb/faq.php?id=62)）。「每人自己申請一把免費 key」官方
-   從未表態，屬未證實。TMDB 沒有這一層。
+1. **授權：只擋「內建」，不擋 TVDB 本身 —— 所以它不是選 TMDB 的理由。**
+   ~~原本這裡寫成一道硬牆，是錯的~~（2026-09-09 修正）。事實是：申請 v4 key **免費且自助**，
+   選 End-User Subscriptions 會自動核准，`/login` 的 `pin` 選填、不帶 PIN 實測讀得到資料
+   （brief §20.3，2026-09-07 已查證）。ToS 第 2 節的 "non-transferable"、"solely for the
+   product or project for which you have been provided access"
+   （[tos](https://www.thetvdb.com/tos)）擋的是**Berth 內建一把 key 發給所有使用者**，不是
+   「使用者自己申請一把、填進 Berth」。而後者正是本專案對 TMDB 也要走的路（brief §16.3），
+   **兩邊對稱，這一項在兩個 provider 之間不構成差異**。
+   仍然成立的是：走使用者自備 key 就多一道設定步驟，而 TVDB 那一把是為了 TMDB 之外**再多**
+   一把 —— 成本算在下面第 4 點的「第二個 provider」，不算在授權。
 2. **Jellyfin 根本沒有「絕對編號」這個概念**。`Emby.Naming` 解析得出 `Show - 128.mkv` 的數字，
    但 `EpisodeInfo` 只有 `EpisodeNumber` / `SeasonNumber`，沒有 absolute 欄位；沒有季資料夾時
    `EpisodeResolver` 直接把季號設成 1。要讓 TVDB 插件走 absolute，得把**整部劇**的
@@ -169,7 +177,10 @@ TMDB 那一欄的「正確答案」要靠播出日期把 TVDB 的第 N 集對到
    `POST /Items/{id}` 但會觸發整劇 FullRefresh + ReplaceAllMetadata）。也就是說採用 TVDB
    absolute 不只是換編號，是多一個「每部劇都要寫一次、而且混排序無解」的寫入動作。
    插件本身沒有任何排序設定（`PluginConfiguration.cs` 全部 12 個欄位裡沒有）。
-3. **Skyhook 不能寫進正式實作**。它無認證、現在打得通，適合當實驗替身；但後端封閉源
+3. **要多一把使用者自備的 key，而它是為了 TMDB 之外再多一個 provider。** Media 主鍵仍是
+   `tv:<tmdb id>`，所以每個 Media 要多存一組 `tvdb_id` 並處理對不上的情況；快照要抓兩次、
+   快取兩份、失敗模式兩種；精靈與設定頁要多一步。這些成本換的是 §0 的 0.4 個百分點。
+4. **Skyhook 不能寫進正式實作**。它無認證、現在打得通，適合當實驗替身；但後端封閉源
    （Team Sonarr 在官方論壇明說 "It is not open source and we don't have plans to open source
    it."）、無文檔、無 SLA，servarr 官方對同類 metadata proxy 的政策是
    "We do not support directly hitting any metadata service that isn't our own"。
