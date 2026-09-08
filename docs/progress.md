@@ -7,7 +7,7 @@
 | 里程碑 | 票目錄 | 拆票前讀 | 備註 |
 | --- | --- | --- | --- |
 | M0 | `.scratch/m0/issues/` | plan §1、§2、§9、§11.1；brief §16、§20.6、§20.7 | 已拆成 11 張票（2026-09-07）。§20.6 的實驗是票 04，排在 compose（票 03）之後；票 05 是第一張 UI 票，開頭跑 `/impeccable hooks on` 與 `init` |
-| M1 | `.scratch/m1/issues/` | plan §3、§4、§5、§8、§11.2；brief §5、§6、§7、§20.1–§20.4 | 解析器先寫 fixture 與 harness 再逐階段實作 |
+| M1 | `.scratch/m1/issues/` | plan §3、§4、§5、§8、§11.2；brief §5、§6、§7、§20.1–§20.4 | 已拆成 15 張票（2026-09-08）。票 01 是 brief §10 的 TVDB 【研究】，它決定 `media` 的欄位所以排最前；票 02 是 openapi 型別產生器的 prefactor。解析器（票 05–07）先寫 fixture 與 harness 再逐階段實作，與 UI 那條線（票 03–04）並行，在票 08 匯流 |
 | M2 | `.scratch/m2/issues/` | plan §11.3；brief §9 | |
 | M3 | `.scratch/m3/issues/` | plan §11.4；brief §15 | 先抓 Mikan 與 Nyaa 的 RSS fixture |
 | M4 | `.scratch/m4/issues/` | plan §11.5；brief §6.10 | |
@@ -32,6 +32,7 @@
 | 2026-09-08 | 10 健康檢查 | `health_checker` 由 lifespan 啟動（每 30 秒醒、上一輪滿 5 分鐘才跑、精靈跑完前不跑、關閉時不留 pending task）；四項檢查——Jellyfin、qBittorrent（含建議設定漂移）、索引站、每條 Route 的五條纜繩（與精靈第 7 步同一組、寫回同一個欄位並記下最後成功時間）。`GET /api/health` 的 `status` 改由紀錄導出，新增 `GET /api/health/detail`、`POST /api/health/check` 與 `/api/settings/*`（只有 admin）。健康頁 `/health` 與服務設定頁 `/settings/services` 走 `/impeccable shape`（`.scratch/m0/health-shape.md`），與精靈**同一塊泊位板**。416 個後端測試 + 103 個前端測試綠燈；三個新情境（`healthy` / `degraded` / `drifted`）實跑驗證，深淺兩主題最低對比 5.71:1 | `/implement .scratch/m0/issues/11-m0-acceptance.md` |
 | 2026-09-08 | 09 精靈第 7–8 步 | 泊位 4（媒體庫 → Library Route）與完成頁做完：套件內自動建三條 Route、既有由使用者勾選媒體庫與寫入目標（可就地加 Berth 路徑、劇集可挑 profile），每條 Route 建 `berth-*` category 並跑五項跨服務檢查（含**真的 `link()` 再比 inode**）；`POST /api/setup/complete` 全綠才寫 `settings.setup.completed`。fs adapter 帶進來（`link`、`stat`、`same_inode`、`link_test`、`probe_file`、`free_space`、`is_within`，寫入一律要允許的根）。356 個後端測試 + 84 個前端測試綠燈；playwright 對 `--scenario bundled` 走完八步（Windows NTFS 上真的建了硬鏈接：`dev=11550084160259632778 · inode=17451448556763814`），對新的 `--scenario unmounted` 看失敗樣子 | `/implement .scratch/m0/issues/10-health.md` |
 | 2026-09-08 | 11 M0 收尾 | 三輪驗收全過：乾淨 Linux（Docker Desktop VM 的 ext4）、乾淨 Windows（NTFS 9p bind mount）、以及「既有 Jellyfin + 套件內 qBittorrent 與 Prowlarr」，每一輪都是`docker compose up` → **只操作 Berth** → 四項綠燈；既有媒體庫是加路徑，項目 ID 與觀看紀錄五項全未變。**驗收本身抓到三個真缺陷並修掉**：入口腳本從來沒接手過 `/data`（乾淨 Linux 上精靈第 3 步必死）、qBittorrent 5.x 的登入被判成失敗（每一套預設部署健康檢查永遠紅）、Prowlarr 冷啟動`indexer/schema` 超過 5 秒逾時（實測 9.42 秒）。`/impeccable critique` 22/40、檢測器 0 findings，polish 修掉對比 3.56:1、英文大寫掉 API 端點、索引站跳過零回饋、`<summary>` 焦點環、觸控目標、窄版 carousel、精靈沒有出口；`DESIGN.md` 產生。README 與 CHANGELOG 定稿，票 01–10 的遺留逐條過完（延後的寫進 plan §11）。425 後端 + 104 前端測試綠燈 | M0 完成。`/to-tickets docs/plan.md` 拆 M1 |
+| 2026-09-08 | 拆票 | M1 拆成 15 張票寫入 `.scratch/m1/issues/`（使用者拍板四個顆粒度問題），四條偏差記於下方 | `/implement .scratch/m1/issues/01-anime-episode-source.md` |
 
 ## 偏差與決定
 
@@ -362,3 +363,20 @@
 - 2026-09-08 票 11 code-review：plan 補三處與實作對不上的敘述——§8.4 沒寫 Prowlarr 的兩個逾時、
   §8.1 寫「403 記錄並退避」但實作沒有退避（4.4.x 封 IP 也回 403，會被顯示成「帳密不對」，
   已列進 T1.9）、§10 的測試層表沒有 `deploy/` 的 shell 腳本那一層（票 03 起就有兩支）。
+- 2026-09-08 拆票：brief §10 的【研究】「TVDB 作為 anime profile 的季集來源」**改在 M1 票 01 做，不是拆票前**。
+  推翻 brief §10 與 §20.6 的「必須在 M1 拆票前定案」。理由是那條實驗要打兩家 API、抽 10 部動漫量化
+  換算失敗率，是一個完整的 session，而它的結論只影響三張票（03 `media` 欄位、05 fixture 形狀、
+  06 `map_episode`）；把它排成有 blocking 邊的票 01，決定仍然在任何程式碼碰 `media` 之前落地。
+  代價是票 03 / 05 / 06 可能要依結論修訂一次，已寫進票 01 的驗收。
+- 2026-09-08 拆票：plan §11.2 的 T1.9（M0 帶過來的技術債）**拆散到四張票**而不是一張——openapi 型別
+  產生器成為票 02（prefactor，排在所有新端點之前，「make the change easy, then make the easy change」）、
+  結構化日誌帶 job id 進票 09（Job 在那裡誕生）、qBittorrent 的 403 分辨進票 10（poller 是會連續登入
+  的那一個）、Route 設定頁成為票 14。理由是那四條的前提各不相同，綁成一張票會讓三條等第四條。
+- 2026-09-08 拆票：T1.1 拆成票 03（探索頁）與票 04（Media 詳情），T1.5 拆成票 05–07（harness 與發佈名
+  解析 / 季集對應與信心 / 命名與 Plan），T1.6 拆成票 11（planner_runner）與票 12（importer + ledger），
+  T1.7 的 UI 拆散到票 04、08、10、13 各自的頁面。理由是 M0 的經驗——一張票碰兩個新頁面或兩個新模組
+  就會超出一個 session；每一段都有自己的驗收數字（benchmark 的 `auto_correct`、頁面的 playwright 實跑）。
+- 2026-09-08 拆票：`issues` 表與問題頁**留在 M2**，所以 M1 的「無主 torrent」（plan §3.2）與
+  「Jellyfin 反查耗盡」（plan §3.2 `jellyfin_resolver`）先寫 event。推翻那兩處 plan 的字面。理由是
+  Issue 這個載體要連同 Reconciler 與問題頁一起才有用（M0 票 10 已為「TVDB 插件警告」與「磁碟空間門檻」
+  下過同樣的判斷），只為了兩個生產者先建表會讓 M2 再改一次形狀。
