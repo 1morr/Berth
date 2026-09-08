@@ -42,6 +42,18 @@ class QbittorrentCategory:
     save_path: str
 
 
+@dataclass(frozen=True, slots=True)
+class CategoryOutcome:
+    """`ensure_category` 的結果。`save_path` 一律是**那台 qBittorrent 現在的值**。"""
+
+    name: str
+    save_path: str
+    #: 這一次建的。已經在那裡的話是 False，重跑精靈時大部分是這樣。
+    created: bool
+    #: 同名的 category 已存在，但指向別的 save path。Berth 不覆寫它。
+    conflict: bool
+
+
 class QbittorrentClient(Protocol):
     @property
     def base_url(self) -> str: ...
@@ -62,7 +74,38 @@ class QbittorrentClient(Protocol):
 
     async def categories(self) -> tuple[QbittorrentCategory, ...]: ...
 
+    async def create_category(self, name: str, save_path: str) -> None:
+        """`torrents/createCategory`。同名的已經存在時回 409（實測原始碼的
+        `Unable to create category`），所以呼叫端要先讀再建——`ensure_category` 做這件事。
+        """
+        ...
+
     async def aclose(self) -> None: ...
+
+
+async def ensure_category(client: QbittorrentClient, name: str, save_path: str) -> CategoryOutcome:
+    """一個 Route 的 category：不存在才建，存在但 save path 不同就回報衝突（plan §8.1）。
+
+    **衝突不覆寫**：autoTMM 開著時改 category 的 savePath 會自動搬走該分類的所有 torrent
+    （brief §20.2），那是使用者自己的資料。畫面把兩個路徑並排，讓他自己決定。
+
+    比對前正規化尾斜線：4.4 把設進去的 `/data/x` 讀回來寫成 `/data/x/`（brief §20.7），
+    照字面比會讓每次重跑都判成衝突。
+    """
+    existing = next((row for row in await client.categories() if row.name == name), None)
+    if existing is None:
+        await client.create_category(name, save_path)
+        return CategoryOutcome(name=name, save_path=save_path, created=True, conflict=False)
+    return CategoryOutcome(
+        name=name,
+        save_path=existing.save_path,
+        created=False,
+        conflict=_normalise(existing.save_path) != _normalise(save_path),
+    )
+
+
+def _normalise(path: str) -> str:
+    return path.rstrip("/") or "/"
 
 
 def _parse(version: str) -> tuple[int, ...]:
@@ -79,7 +122,9 @@ def _parse(version: str) -> tuple[int, ...]:
 __all__ = [
     "MIN_WEBAPI",
     "STOPPED_SINCE_WEBAPI",
+    "CategoryOutcome",
     "QbittorrentCategory",
     "QbittorrentClient",
     "QbittorrentVersion",
+    "ensure_category",
 ]

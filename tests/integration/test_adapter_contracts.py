@@ -233,6 +233,27 @@ async def test_qbittorrent_set_preferences_posts_one_json_form_field() -> None:
 
 @respx.mock
 @pytest.mark.asyncio
+async def test_qbittorrent_create_category_posts_the_camel_case_form() -> None:
+    """`torrents/createCategory` 收的是表單的 `category` 與 `savePath`（brief §20.2）。
+
+    per-category 的未完成路徑不送：Berth 只用全域的 temp path（plan §4.2）。
+    """
+    route = respx.post(f"{QBITTORRENT_URL}/api/v2/torrents/createCategory").respond(200, text="")
+
+    client = HttpQbittorrentClient(QBITTORRENT_URL)
+    try:
+        await client.create_category("berth-tv", "/data/torrent/complete/tv")
+    finally:
+        await client.aclose()
+
+    assert urllib.parse.parse_qs(route.calls.last.request.content.decode()) == {
+        "category": ["berth-tv"],
+        "savePath": ["/data/torrent/complete/tv"],
+    }
+
+
+@respx.mock
+@pytest.mark.asyncio
 async def test_qbittorrent_forbidden_maps_to_auth_failed() -> None:
     respx.get(f"{QBITTORRENT_URL}/api/v2/app/version").respond(
         403, text=read_fixture("http/qbittorrent/app-version.forbidden.txt")
@@ -514,6 +535,45 @@ async def test_jellyfin_add_library_path_never_refreshes() -> None:
         "Path": "/data/library/films",
         "PathInfo": {"Path": "/data/library/films"},
     }
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_jellyfin_validate_path_confirms_it_sees_the_probe() -> None:
+    """跨服務可見性：Jellyfin 看得到 Berth 剛寫的那個檔案（plan §9.5 檢查三）。
+
+    `POST /Environment/ValidatePath` 回 204 代表看得到（`EnvironmentController.ValidatePath`，
+    `IsFile=true` 時走 `File.Exists`）。
+    """
+    route = respx.post(f"{JELLYFIN_URL}/Environment/ValidatePath").respond(204)
+
+    client = jellyfin_client("key")
+    try:
+        seen = await client.validate_path("/data/library/tv/.berth-probe-1234abcd")
+    finally:
+        await client.aclose()
+
+    assert seen is True
+    assert json.loads(route.calls.last.request.content) == {
+        "Path": "/data/library/tv/.berth-probe-1234abcd",
+        "IsFile": True,
+        "ValidateWritable": False,
+    }
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_jellyfin_validate_path_answers_no_instead_of_failing() -> None:
+    """看不到那條路徑時回 **404**，而那是這一步的答案，不是連線壞了。"""
+    respx.post(f"{JELLYFIN_URL}/Environment/ValidatePath").respond(404, text="")
+
+    client = jellyfin_client("key")
+    try:
+        seen = await client.validate_path("/data/library/tv/.berth-probe-1234abcd")
+    finally:
+        await client.aclose()
+
+    assert seen is False
 
 
 @respx.mock

@@ -179,6 +179,18 @@ class HttpJellyfinClient:
             json={"Name": library_name, "Path": path, "PathInfo": {"Path": path}},
         )
 
+    async def validate_path(self, path: str, *, is_file: bool = True) -> bool:
+        """404 不是錯誤，是「看不到」。`ValidateWritable` 不送真：那會讓 Jellyfin 在
+        媒體庫目錄裡自己建一個暫存檔，而 Berth 問的只是「你看得到我寫的這一個嗎」。
+        """
+        response = await self._session.request(
+            "POST",
+            "/Environment/ValidatePath",
+            json={"Path": path, "IsFile": is_file, "ValidateWritable": False},
+            tolerate=(404,),
+        )
+        return response.status_code != 404
+
     # --- 插件與排程任務 ---
 
     async def repositories(self) -> tuple[JellyfinRepository, ...]:

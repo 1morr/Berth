@@ -73,5 +73,16 @@ class HttpQbittorrentClient:
             if isinstance(row, dict)
         )
 
+    async def create_category(self, name: str, save_path: str) -> None:
+        """表單欄位是 `category` 與 `savePath`（駝峰，與讀回來的鍵一致）。
+
+        per-category 的未完成路徑不送：Berth 只用全域的 `temp_path`（plan §4.2）。
+        """
+        await self._session.request(
+            "POST",
+            "/api/v2/torrents/createCategory",
+            data={"category": name, "savePath": save_path},
+        )
+
     async def aclose(self) -> None:
         await self._session.aclose()

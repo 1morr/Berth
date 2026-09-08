@@ -114,6 +114,8 @@ class FakeJellyfinClient:
         busy_after_restart: int = 0,
         #: `restart()` 在回應送出去之前就把連線切了（實測遇得到，brief §20.7）。
         drop_on_restart: bool = False,
+        #: 這台 Jellyfin 掛得到的路徑前綴。`None` = 與 Berth 看到的一樣（正常部署）。
+        visible_roots: tuple[str, ...] | None = None,
     ) -> None:
         self.base_url = base_url
         self.version = version
@@ -129,6 +131,7 @@ class FakeJellyfinClient:
         self.install_failures = install_failures
         self.busy_after_restart = busy_after_restart
         self.drop_on_restart = drop_on_restart
+        self.visible_roots = visible_roots
 
         self.repositories_ = [JELLYFIN_STABLE_REPOSITORY]
         #: 插件庫裡看得到的套件。加了 repository 才長出來。
@@ -245,6 +248,17 @@ class FakeJellyfinClient:
                 self.libraries_[index] = replace(existing, locations=(*existing.locations, path))
                 return
         raise ProtocolMismatchError(f"POST /Library/VirtualFolders/Paths: 404 {library_name}")
+
+    async def validate_path(self, path: str, *, is_file: bool = True) -> bool:
+        """`visible_roots` 是這台 Jellyfin 掛得到的容器路徑。
+
+        `None` 代表「與 Berth 掛同一個宿主目錄在同一個容器路徑」，也就是 brief §16.4 那條
+        硬規則成立的樣子；給了清單就是少了掛載的那一台，用來演練檢查三的失敗。
+        """
+        self._checkpoint()
+        if self.visible_roots is None:
+            return True
+        return any(path.startswith(root) for root in self.visible_roots)
 
     # --- 插件與排程任務 ---
 

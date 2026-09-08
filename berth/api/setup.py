@@ -7,8 +7,11 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from berth.api.deps import ClientFactoryDep, SessionDep, SetupProbesDep
 from berth.domain import (
+    CollectionType,
     DetectionReason,
+    HealthStatus,
     IndexerKind,
+    Profile,
     ServiceKind,
     ServiceOrigin,
     StepStatus,
@@ -27,9 +30,11 @@ from berth.services.jellyfin import (
     read_jellyfin_status,
 )
 from berth.services.qbittorrent import apply_qbittorrent, read_qbittorrent_diff
+from berth.services.routes import RouteSelection, build_routes, read_route_status
 from berth.services.setup import (
     ServiceConnection,
     SetupStatus,
+    complete_setup,
     connect_service,
     create_admin,
     detect_services,
@@ -409,3 +414,110 @@ async def post_tmdb_test(
 @router.post("/tmdb/skip")
 async def post_tmdb_skip(session: SessionDep, body: SkipIn) -> TmdbSetupOut:
     return TmdbSetupOut.model_validate(await skip_tmdb(session, skipped=body.skipped))
+
+
+# --- 第 7–8 步：媒體庫 → Route 與完成（plan §9.3 第 7–8 步、§9.5）---
+
+
+class RouteOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    slug: str
+    name: str
+    #: Jellyfin 媒體庫的名字。
+    library: str
+    collection_type: CollectionType
+    target_path: str
+    category: str
+    #: 這個 category 的 save path，也就是硬鏈接的來源目錄。
+    save_path: str
+    profile: Profile
+    enabled: bool
+    health: HealthStatus
+    #: 逐項檢查，`step` 是 `RouteCheck`。形狀與其他泊位的纜繩一樣。
+    checks: list[StepOut]
+    #: 硬鏈接回 `EXDEV`：兩個目錄在 Berth 內是不同掛載（brief §4.4）。
+    cross_device: bool
+
+
+class LibraryChoiceOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    name: str
+    collection_type: str
+    locations: list[str]
+    berth_path: str
+    has_berth_path: bool
+    uses_tvdb: bool
+    #: Berth 建得了 Route 的類型（movies / tvshows）。
+    supported: bool
+    selected: bool
+    target_path: str
+    profile: Profile
+
+
+class RouteSetupOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    origin: ServiceOrigin
+    library_root: str
+    complete_root: str
+    libraries: list[LibraryChoiceOut]
+    routes: list[RouteOut]
+    #: 至少一個 Route，而且每個都綠燈。完成鍵的前提。
+    ready: bool
+    completed: bool
+
+
+class RouteSelectionIn(BaseModel):
+    """既有 Jellyfin：勾起來的一個媒體庫與它的寫入目標。"""
+
+    library: str = Field(min_length=1)
+    #: 必須是那個媒體庫回報的路徑之一——路徑用選的，不用打的（brief §4.1）。
+    target_path: str = Field(min_length=1)
+    profile: Profile = Profile.STANDARD
+
+
+class RoutesIn(BaseModel):
+    #: 套件內 Jellyfin 忽略這個欄位：三個 Route 由它自己的三個媒體庫導出（plan §9.3 第 7 步）。
+    selections: list[RouteSelectionIn] = []
+
+
+@router.get("/routes")
+async def get_routes(session: SessionDep) -> RouteSetupOut:
+    """不連線，只回媒體庫清單與已經建好的 Route（含上一輪的檢查結果）。"""
+    return RouteSetupOut.model_validate(await read_route_status(session))
+
+
+@router.post("/routes")
+async def post_routes(
+    session: SessionDep, factory: ClientFactoryDep, body: RoutesIn | None = None
+) -> RouteSetupOut:
+    """建立 Route，並立刻建 category 與跑三項檢查（plan §9.5）。
+
+    檢查失敗**不是** 4xx：它是這一步的結果，逐項回在 `routes[].checks` 裡，畫面靠它顯示
+    原文與該補哪個掛載。4xx 只留給「這個選擇本身無效」（不存在的媒體庫、不是它的路徑）。
+    """
+    try:
+        result = await build_routes(
+            session,
+            factory,
+            [
+                RouteSelection(
+                    library=row.library, target_path=row.target_path, profile=row.profile
+                )
+                for row in (body or RoutesIn()).selections
+            ],
+        )
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
+    return RouteSetupOut.model_validate(result)
+
+
+@router.post("/complete")
+async def post_complete(session: SessionDep) -> SetupStatusOut:
+    """第 8 步：寫下 `settings.setup.completed`。**寫完這一支就要登入才進得來**（票 07）。"""
+    try:
+        return _out(await complete_setup(session))
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc

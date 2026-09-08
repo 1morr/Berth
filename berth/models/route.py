@@ -5,12 +5,28 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy import Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from berth.domain import CollectionType, HealthStatus, Profile
 from berth.models.base import Base
+from berth.models.setting import SetupStep
 from berth.models.types import JsonText, UtcDateTime, enum_column, utcnow
+
+
+class RouteHealth(BaseModel):
+    """`routes.health_detail_json`：上一次檢查逐項的結果（plan §9.5、brief §4.4）。
+
+    形狀與精靈其他泊位的纜繩完全一樣（`SetupStep`），所以畫面是同一個元件；`key` 是
+    `RouteCheck`。健康頁（票 10）重跑同一組檢查，寫回同一個欄位。
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    checks: list[SetupStep] = []
+    #: 硬鏈接回 `EXDEV`：兩個目錄在 Berth 內是不同掛載，訊息要另外說（brief §4.4）。
+    cross_device: bool = False
 
 
 class Route(Base):

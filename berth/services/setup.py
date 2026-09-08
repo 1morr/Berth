@@ -40,6 +40,7 @@ from berth.models import (
     SetupSettings,
 )
 from berth.services.clients import ServiceClientFactory, SetupProbes
+from berth.services.routes import routes_ready
 from berth.services.settings import read_settings, write_settings
 
 #: 服務未就緒時的輪詢上限（plan §9.3 第 2 步）。逾時後使用者可重試，不是永遠轉圈。
@@ -54,6 +55,7 @@ STEP_QBITTORRENT = 4
 STEP_INDEXER = 5
 STEP_TMDB = 6
 STEP_ROUTES = 7
+STEP_COMPLETE = 8
 
 
 @dataclass(frozen=True, slots=True)
@@ -104,7 +106,28 @@ async def is_setup_complete(session: AsyncSession) -> bool:
 
 async def read_status(session: AsyncSession) -> SetupStatus:
     """目前的步驟與上一次的逐服務判定。不做任何探測。"""
-    return _status(await read_settings(session, SetupSettings), now=_utcnow())
+    return await _read(session, now=_utcnow())
+
+
+async def complete_setup(session: AsyncSession) -> SetupStatus:
+    """第 8 步：寫下 `settings.setup.completed`，精靈結束（plan §9.3 第 8 步）。
+
+    **這個位元就是門禁的開關**：寫下去之後 `setup/*` 只有管理員進得來，`/` 也不再導向精靈
+    （票 07）。所以在寫之前要確定第 7 步真的做完了——第 3、4、7 步不可跳（plan §9.3）。
+    """
+    if not await routes_ready(session):
+        raise ValueError("finish step 7 first: every library route has to pass its checks")
+    setup = await read_settings(session, SetupSettings)
+    setup.completed = True
+    await write_settings(session, setup)
+    await session.commit()
+    return await _read(session, now=_utcnow())
+
+
+async def _read(session: AsyncSession, *, now: datetime) -> SetupStatus:
+    """整份狀態。步驟是導出的，而第 7 步的依據在 `routes` 表，所以要多讀一次它。"""
+    setup = await read_settings(session, SetupSettings)
+    return _status(setup, now=now, routes=await routes_ready(session))
 
 
 async def create_admin(
@@ -127,7 +150,7 @@ async def create_admin(
         apply_to_services=apply_to_services,
     )
     await write_settings(session, setup)
-    return _status(setup, now=_utcnow())
+    return await _read(session, now=_utcnow())
 
 
 async def detect_services(
@@ -173,7 +196,7 @@ async def detect_services(
 
     await _remember_bundled_indexer(session, probed, probes.prowlarr_api_key)
     await write_settings(session, setup)
-    return _status(setup, now=moment)
+    return await _read(session, now=moment)
 
 
 async def _remember_bundled_indexer(
@@ -231,7 +254,7 @@ async def connect_service(
     if not _still_waiting(setup):
         setup.probe_started_at = None
     await write_settings(session, setup)
-    return _status(setup, now=moment)
+    return await _read(session, now=moment)
 
 
 async def _remember_connection(
@@ -424,11 +447,11 @@ def _existing(reason: DetectionReason, detail: str, base_url: str) -> _Verdict:
     return (ServiceOrigin.EXISTING, reason, detail, base_url)
 
 
-def _current_step(setup: SetupSettings) -> int:
+def _current_step(setup: SetupSettings, *, routes: bool) -> int:
     """步驟由狀態導出，不存游標。
 
     精靈可以續行也可以重跑，存「走到第幾步」的游標會在偵測結果變回等待時說謊。
-    後面的步驟（票 06、08、09）依同樣的方式從自己的狀態導出。
+    第 7 步的依據不在設定裡而在 `routes` 表（`routes_ready`），所以它由參數帶進來。
     """
     if not setup.admin.username:
         return STEP_ADMIN
@@ -442,7 +465,9 @@ def _current_step(setup: SetupSettings) -> int:
         return STEP_INDEXER
     if not _tmdb_settled(setup):
         return STEP_TMDB
-    return STEP_ROUTES
+    if not routes:
+        return STEP_ROUTES
+    return STEP_COMPLETE
 
 
 def _jellyfin_secured(setup: SetupSettings) -> bool:
@@ -493,11 +518,11 @@ def _tmdb_settled(setup: SetupSettings) -> bool:
     )
 
 
-def _status(setup: SetupSettings, *, now: datetime) -> SetupStatus:
+def _status(setup: SetupSettings, *, now: datetime, routes: bool) -> SetupStatus:
     waited = now - setup.probe_started_at if setup.probe_started_at else timedelta()
     return SetupStatus(
         completed=setup.completed,
-        current_step=_current_step(setup),
+        current_step=_current_step(setup, routes=routes),
         admin_created=bool(setup.admin.username),
         admin_username=setup.admin.username,
         apply_to_services=setup.admin.apply_to_services,

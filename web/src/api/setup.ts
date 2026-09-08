@@ -263,3 +263,85 @@ export function testTmdb(api_key: string): Promise<TmdbSetup> {
 export function skipTmdb(skipped: boolean): Promise<TmdbSetup> {
   return apiPost<TmdbSetup>('/setup/tmdb/skip', { skipped })
 }
+
+/** --- 第 7–8 步：媒體庫 → Route（plan §9.3 第 7–8 步、§9.5）--- */
+
+/** `RouteCheck`：一個 Route 的五條纜繩，順序即檢查順序。 */
+export const ROUTE_CHECKS = [
+  'category',
+  'download_path',
+  'library_path',
+  'probe_visible',
+  'hardlink',
+] as const
+export type RouteCheck = (typeof ROUTE_CHECKS)[number]
+
+/** `Profile`：Route 的命名與解析偏好（CONTEXT.md）。 */
+export const PROFILES = ['standard', 'anime'] as const
+export type Profile = (typeof PROFILES)[number]
+
+/** Route 上一次檢查的結果（後端 `HealthStatus`）。 */
+export type RouteHealthStatus = 'unknown' | 'ok' | 'failed'
+
+export interface RouteView {
+  slug: string
+  name: string
+  /** Jellyfin 媒體庫的名字。 */
+  library: string
+  collection_type: 'movies' | 'tvshows'
+  target_path: string
+  category: string
+  /** 這個 category 的 save path，也就是硬鏈接的來源目錄。 */
+  save_path: string
+  profile: Profile
+  enabled: boolean
+  health: RouteHealthStatus
+  checks: SetupStep[]
+  /** 硬鏈接回 `EXDEV`：兩個目錄在 Berth 內是不同掛載（brief §4.4）。 */
+  cross_device: boolean
+}
+
+export interface LibraryChoice {
+  name: string
+  collection_type: string
+  locations: string[]
+  berth_path: string
+  has_berth_path: boolean
+  uses_tvdb: boolean
+  /** Berth 建得了 Route 的類型（movies / tvshows）。 */
+  supported: boolean
+  selected: boolean
+  target_path: string
+  profile: Profile
+}
+
+export interface RouteSetup {
+  origin: ServiceOrigin
+  library_root: string
+  complete_root: string
+  libraries: LibraryChoice[]
+  routes: RouteView[]
+  /** 至少一個 Route，而且每個都綠燈。完成鍵的前提。 */
+  ready: boolean
+  completed: boolean
+}
+
+export interface RouteSelectionInput {
+  library: string
+  target_path: string
+  profile: Profile
+}
+
+export const routeSetupQueryOptions = queryOptions({
+  queryKey: ['setup', 'routes'],
+  queryFn: () => apiGet<RouteSetup>('/setup/routes'),
+})
+
+export function buildRoutes(selections: RouteSelectionInput[]): Promise<RouteSetup> {
+  return apiPost<RouteSetup>('/setup/routes', { selections })
+}
+
+/** 寫下 `settings.setup.completed`。**之後 `setup/*` 就要登入了**（票 07）。 */
+export function completeSetup(): Promise<SetupStatus> {
+  return apiPost<SetupStatus>('/setup/complete')
+}

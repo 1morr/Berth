@@ -1,0 +1,425 @@
+import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
+
+import {
+  ROUTE_CHECKS,
+  type LibraryChoice,
+  type Profile,
+  type RouteSelectionInput,
+  type RouteSetup,
+  type RouteView,
+} from '../api/setup'
+import { STICKY_ACTION, Checkbox, GhostButton, Notice, PrimaryButton } from '../components/controls'
+import { SIGNAL_FILL } from '../components/signal'
+import { Cutaway, CutawayRow } from './Cutaway'
+import { CHECK_COMMANDS, CHECK_ENDPOINT, CHECK_FIX, CHECK_LABEL, ROUTE_SIGNAL } from './routeChecks'
+import { StepLine } from './StepLine'
+
+/**
+ * 泊位 4：媒體庫路徑 → Library Route（plan §9.3 第 7 步、§9.5）。
+ *
+ * 套件內 Jellyfin 的三個媒體庫直接導出三個 Route，沒有可選的東西——剖面列的就是將建立的
+ * 那三條。既有 Jellyfin 由使用者勾選媒體庫，並從**那個媒體庫自己回報的路徑**裡選寫入目標；
+ * 想要一條乾淨的 Berth 路徑就用「加入 Berth 路徑」（第 3 步的同一支端點，舊路徑原地不動）。
+ *
+ * 每個 Route 五條纜繩，最後一條真的鏈接一次檔案再比 inode（brief §4.4）。失敗就地展開
+ * 那個容器的 compose `volumes:` 片段——這是「哪個容器少了哪個掛載」唯一有用的回答。
+ */
+
+/** 使用者對一個媒體庫做的選擇。`Pick` 是 TS 內建型別的名字，所以不用它。 */
+interface LibraryPick {
+  selected: boolean
+  target: string
+  profile: Profile
+}
+
+export function RouteStep({
+  setup,
+  building,
+  addingPath,
+  requestFailed,
+  onBuild,
+  onAddPath,
+}: {
+  setup: RouteSetup
+  building: boolean
+  /** 正在為這個媒體庫加 Berth 路徑（第 3 步的端點）。 */
+  addingPath: string | null
+  /** 請求本身沒跑完。逐項檢查的失敗在 `routes[].checks` 裡，各自貼在它那一行。 */
+  requestFailed: boolean
+  onBuild: (selections: RouteSelectionInput[]) => void
+  onAddPath: (library: string) => void
+}) {
+  const { t } = useTranslation()
+  const bundled = setup.origin === 'bundled'
+  const [picks, setPicks] = useState<Record<string, LibraryPick>>({})
+  const routable = setup.libraries.filter((library) => library.supported)
+
+  function pickOf(library: LibraryChoice): LibraryPick {
+    return (
+      picks[library.name] ?? {
+        selected: library.selected,
+        target: library.target_path,
+        profile: library.profile,
+      }
+    )
+  }
+
+  function change(library: LibraryChoice, patch: Partial<LibraryPick>) {
+    setPicks((was) => ({ ...was, [library.name]: { ...pickOf(library), ...patch } }))
+  }
+
+  // 送得出去的只有「勾了、而且目標真的是這個媒體庫的路徑之一」的那幾個：伺服器用同一條
+  // 規則擋（回 422），但那時候畫面只說得出「請求沒走完」。最典型的情況是「加入 Berth 路徑」
+  // 失敗——那條路徑沒真的加上去，選它就會被退回來。
+  const selections = setup.libraries
+    .filter((library) => {
+      const pick = pickOf(library)
+      return library.supported && pick.selected && library.locations.includes(pick.target)
+    })
+    .map((library) => ({
+      library: library.name,
+      target_path: pickOf(library).target,
+      profile: pickOf(library).profile,
+    }))
+
+  return (
+    <div className="grid flex-1 gap-px bg-rule lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
+      <div className="min-w-0 bg-hull p-6">
+        <div className="lg:sticky lg:top-6">
+          <RouteCutaway setup={setup} planned={bundled ? undefined : selections} />
+        </div>
+      </div>
+
+      <div className="min-w-0 bg-hull p-6">
+        <h2 className="text-lg font-semibold text-ink">{t('routes.title')}</h2>
+        <p className="mt-2 max-w-prose text-sm text-ink-dim">
+          {t(bundled ? 'routes.lede.bundled' : 'routes.lede.existing')}
+        </p>
+
+        {!bundled &&
+          (setup.libraries.length === 0 ? (
+            <div className="mt-6">
+              {/* Berth 不替既有伺服器建媒體庫（brief §16.4 的紅線），所以這裡沒有動作。 */}
+              <Notice signal="assigned" label={t('common.warning')}>
+                {t('routes.empty')}
+              </Notice>
+            </div>
+          ) : (
+            <LibraryPicker
+              libraries={setup.libraries}
+              pickOf={pickOf}
+              addingPath={addingPath}
+              onChange={change}
+              onAddPath={(library) => {
+                // 按了就是要寫在那裡：路徑加完之後它就是這個媒體庫的寫入目標。
+                change(library, { selected: true, target: library.berth_path })
+                onAddPath(library.name)
+              }}
+            />
+          ))}
+
+        <div className={`mt-6 ${STICKY_ACTION}`}>
+          <PrimaryButton
+            type="button"
+            disabled={building || (!bundled && selections.length === 0)}
+            onClick={() => onBuild(bundled ? [] : selections)}
+          >
+            {t(building ? 'routes.building' : 'routes.build', {
+              count: bundled ? routable.length : selections.length,
+            })}
+          </PrimaryButton>
+        </div>
+
+        {requestFailed && (
+          <div className="mt-4">
+            <Notice signal="blocked" label={t('common.failed')}>
+              {t('routes.requestFailed')}
+            </Notice>
+          </div>
+        )}
+
+        {setup.routes.map((route) => (
+          <RouteSequence key={route.slug} route={route} building={building} />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+/** 剖面即預覽：按下去會建立哪幾條 Route，各自寫到哪裡、用哪個 category。 */
+function RouteCutaway({
+  setup,
+  planned,
+}: {
+  setup: RouteSetup
+  /** 既有路徑：使用者現在勾了什麼。套件內是 `undefined`（三條由伺服器導出）。 */
+  planned?: RouteSelectionInput[]
+}) {
+  const { t } = useTranslation()
+  // 套件內沒有可選的東西，剖面列的就是伺服器會建的那幾條——只有建得了 Route 的類型算數。
+  const rows =
+    planned ??
+    setup.libraries
+      .filter((library) => library.supported)
+      .map((library) => ({
+        library: library.name,
+        target_path: library.locations[0] ?? '',
+        profile: library.profile,
+      }))
+
+  return (
+    <div className="grid gap-6">
+      <Cutaway title={t('routes.cutaway.paths')}>
+        <CutawayRow term={t('routes.cutaway.libraryRoot')} value={setup.library_root} />
+        <CutawayRow term={t('routes.cutaway.completeRoot')} value={setup.complete_root} />
+        <CutawayRow term={t('routes.cutaway.count')} value={String(rows.length)} />
+      </Cutaway>
+
+      {rows.length > 0 && (
+        <section className="border-2 border-rule bg-well">
+          <h3 className="label border-b-2 border-rule bg-deck px-4 py-2.5 text-ink-dim">
+            {t('routes.cutaway.plan')}
+          </h3>
+          <table className="w-full table-fixed border-collapse text-left">
+            <thead>
+              <tr className="border-b-2 border-rule">
+                <th scope="col" className="label px-4 py-2 text-ink-dim">
+                  {t('routes.cutaway.library')}
+                </th>
+                <th scope="col" className="label px-4 py-2 text-ink-dim">
+                  {t('routes.cutaway.target')}
+                </th>
+                <th scope="col" className="label px-4 py-2 text-ink-dim">
+                  {t('routes.cutaway.category')}
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-rule">
+              {rows.map((row) => (
+                <tr key={row.library}>
+                  <th scope="row" className="value px-4 py-3 text-xs font-normal break-words">
+                    {row.library}
+                  </th>
+                  <td className="value px-4 py-3 text-xs break-all text-ink">
+                    {row.target_path || '—'}
+                  </td>
+                  <td className="value px-4 py-3 text-xs break-all text-ink-dim">
+                    {categoryOf(setup, row.library)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+      )}
+    </div>
+  )
+}
+
+/**
+ * category 名稱是伺服器算的（`berth-<slug>`）。已經建過的 Route 顯示它真的用的那一個，
+ * 還沒建的就先留白——這裡不重寫一份 slug 演算法，兩份遲早會分岔。
+ */
+function categoryOf(setup: RouteSetup, library: string): string {
+  return setup.routes.find((route) => route.library === library)?.category ?? '—'
+}
+
+/** 既有 Jellyfin：勾媒體庫、選寫入目標（brief §4.3）。路徑用選的，不用打的。 */
+function LibraryPicker({
+  libraries,
+  pickOf,
+  addingPath,
+  onChange,
+  onAddPath,
+}: {
+  libraries: LibraryChoice[]
+  pickOf: (library: LibraryChoice) => LibraryPick
+  addingPath: string | null
+  onChange: (library: LibraryChoice, patch: Partial<LibraryPick>) => void
+  onAddPath: (library: LibraryChoice) => void
+}) {
+  const { t } = useTranslation()
+
+  return (
+    <section className="mt-6">
+      <h3 className="label text-ink-dim">{t('routes.picker.title')}</h3>
+      <p className="mt-2 max-w-prose text-sm text-ink-dim">{t('routes.picker.lede')}</p>
+
+      <ul className="mt-4 grid gap-3">
+        {libraries.map((library) => {
+          const pick = pickOf(library)
+
+          return (
+            <li key={library.name} className="min-w-0 border-2 border-rule bg-well px-4 py-3">
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                {library.supported ? (
+                  <Checkbox
+                    label={library.name}
+                    checked={pick.selected}
+                    onChange={(selected) => onChange(library, { selected })}
+                  />
+                ) : (
+                  <span className="text-sm text-ink-dim">{library.name}</span>
+                )}
+                <span className="label ml-auto text-ink-dim">
+                  {library.collection_type || t('routes.picker.mixed')}
+                </span>
+              </div>
+
+              {!library.supported && (
+                <p className="mt-2 max-w-prose text-xs text-ink-dim">
+                  {t('routes.picker.unsupported')}
+                </p>
+              )}
+              {library.uses_tvdb && (
+                <p className="mt-2 max-w-prose text-xs text-ink-dim">{t('routes.picker.tvdb')}</p>
+              )}
+
+              {library.supported && pick.selected && (
+                <div className="mt-3 grid gap-3 border-t-2 border-rule pt-3">
+                  <Targets
+                    library={library}
+                    target={pick.target}
+                    onPick={(target) => onChange(library, { target })}
+                  />
+                  {!library.has_berth_path && (
+                    <div>
+                      <GhostButton
+                        type="button"
+                        disabled={addingPath !== null}
+                        onClick={() => onAddPath(library)}
+                      >
+                        {addingPath === library.name
+                          ? t('routes.picker.adding')
+                          : t('routes.picker.addBerthPath')}
+                      </GhostButton>
+                      <p className="mt-2 max-w-prose text-xs text-ink-dim">
+                        {t('routes.picker.addHint', { path: library.berth_path })}
+                      </p>
+                    </div>
+                  )}
+                  {library.collection_type === 'tvshows' && (
+                    <Profiles
+                      library={library.name}
+                      value={pick.profile}
+                      onPick={(profile) => onChange(library, { profile })}
+                    />
+                  )}
+                </div>
+              )}
+            </li>
+          )
+        })}
+      </ul>
+    </section>
+  )
+}
+
+/** 這個媒體庫回報的路徑，選一條當寫入目標。其他的仍然唯讀（brief §4.3）。 */
+function Targets({
+  library,
+  target,
+  onPick,
+}: {
+  library: LibraryChoice
+  target: string
+  onPick: (target: string) => void
+}) {
+  const { t } = useTranslation()
+
+  if (library.locations.length === 0) {
+    return <p className="text-xs text-ink-dim">{t('routes.picker.noPath')}</p>
+  }
+
+  return (
+    <fieldset className="grid gap-2">
+      <legend className="label text-ink-dim">{t('routes.picker.target')}</legend>
+      {library.locations.map((location) => (
+        <label key={location} className="flex items-start gap-3">
+          <input
+            type="radio"
+            name={`target-${library.name}`}
+            value={location}
+            checked={target === location}
+            onChange={() => onPick(location)}
+            className="mt-0.5 size-4 shrink-0 accent-[var(--color-assigned)]"
+          />
+          <span className="value min-w-0 text-xs break-all text-ink">{location}</span>
+        </label>
+      ))}
+    </fieldset>
+  )
+}
+
+/** 命名與解析偏好（CONTEXT.md）。劇集類型才問——電影沒有 anime 這條路徑。 */
+function Profiles({
+  library,
+  value,
+  onPick,
+}: {
+  library: string
+  value: Profile
+  onPick: (profile: Profile) => void
+}) {
+  const { t } = useTranslation()
+
+  return (
+    <fieldset className="grid gap-2">
+      <legend className="label text-ink-dim">{t('routes.picker.profile')}</legend>
+      <div className="flex flex-wrap gap-4">
+        {(['standard', 'anime'] as const).map((profile) => (
+          <label key={profile} className="flex items-center gap-2">
+            <input
+              type="radio"
+              name={`profile-${library}`}
+              value={profile}
+              checked={value === profile}
+              onChange={() => onPick(profile)}
+              className="size-4 shrink-0 accent-[var(--color-assigned)]"
+            />
+            <span className="text-sm text-ink">{t(`routes.profile.${profile}`)}</span>
+          </label>
+        ))}
+      </div>
+    </fieldset>
+  )
+}
+
+/** 一個 Route 的靠泊序列：五條纜繩，失敗就地展開手動步驟與 compose 片段。 */
+function RouteSequence({ route, building }: { route: RouteView; building: boolean }) {
+  const { t } = useTranslation()
+  const byCheck = new Map(route.checks.map((row) => [row.step, row]))
+
+  return (
+    <section className="mt-6">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <span className={`label px-2 py-1.5 ${SIGNAL_FILL[ROUTE_SIGNAL[route.health]]}`}>
+          {t(`routes.health.${route.health}`)}
+        </span>
+        <span className="value text-sm font-semibold text-ink">{route.name}</span>
+        <span className="value text-xs text-ink-dim">{route.category}</span>
+        <span className="value ml-auto min-w-0 truncate text-xs text-ink-dim">
+          {route.target_path}
+        </span>
+      </div>
+
+      <ol aria-live="polite" aria-busy={building} className="mt-3 grid gap-3" data-testid="checks">
+        {ROUTE_CHECKS.map((check) => (
+          <StepLine
+            key={check}
+            label={t(CHECK_LABEL[check])}
+            endpoint={CHECK_ENDPOINT[check]}
+            row={byCheck.get(check)}
+            fix={t(CHECK_FIX[check])}
+            commands={CHECK_COMMANDS[check]}
+          >
+            {check === 'hardlink' && route.cross_device && (
+              <p className="mt-3 max-w-prose text-xs text-ink-dim">{t('routes.fix.crossDevice')}</p>
+            )}
+          </StepLine>
+        ))}
+      </ol>
+    </section>
+  )
+}

@@ -148,11 +148,14 @@ class SetupStep(BaseModel):
 
 
 class SetupLibrary(BaseModel):
-    """Jellyfin 回報的一個媒體庫（plan §8.2）。票 09 從這裡建 Route。"""
+    """Jellyfin 回報的一個媒體庫（plan §8.2）。第 7 步從這裡建 Route。"""
 
     model_config = ConfigDict(extra="ignore")
 
     name: str
+    #: 這個 virtual folder 的 `ItemId`。Route 記它而不是只記名字——使用者在 Jellyfin 那邊
+    #: 改名之後，靠名字認的 Route 會變成另一個 Route。舊資料沒有這個欄位，所以是選填。
+    item_id: str = ""
     collection_type: str = ""
     locations: list[str] = []
     #: 攤平後的 `LibraryOptions.TypeOptions[].MetadataFetchers`，用來偵測 TVDB 插件並警告。

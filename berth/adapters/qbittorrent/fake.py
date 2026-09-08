@@ -36,7 +36,7 @@ class FakeQbittorrentClient:
         self.base_url = base_url
         self._version = version or QbittorrentVersion(app="v5.2.3", webapi="2.15.1")
         self._preferences: dict[str, Any] = {**DEFAULT_PREFERENCES, **(preferences or {})}
-        self._categories = categories
+        self._categories = list(categories)
         #: 探測要看得到這個旗標：情境切換時要分得出「這一台壞了」與「這一台好了」。
         self.error = error
         self._login_error = login_error
@@ -45,6 +45,8 @@ class FakeQbittorrentClient:
         self.logins: list[tuple[str, str]] = []
         #: 每一次 `set_preferences` 收到的鍵值，用來斷言「只寫有差異的鍵」。
         self.writes: list[dict[str, Any]] = []
+        #: 這一台上被建出來的 category，用來斷言「已經在那裡的不會再建一次」。
+        self.created_categories: list[QbittorrentCategory] = []
 
     async def login(self, username: str, password: str) -> None:
         self.logins.append((username, password))
@@ -71,7 +73,15 @@ class FakeQbittorrentClient:
     async def categories(self) -> tuple[QbittorrentCategory, ...]:
         if self.error is not None:
             raise self.error
-        return self._categories
+        return tuple(self._categories)
+
+    async def create_category(self, name: str, save_path: str) -> None:
+        """有狀態：建完再讀就看得到，重跑精靈才測得出「已經在那裡了」。"""
+        if self.error is not None:
+            raise self.error
+        category = QbittorrentCategory(name=name, save_path=save_path)
+        self.created_categories.append(category)
+        self._categories.append(category)
 
     async def aclose(self) -> None:
         return None

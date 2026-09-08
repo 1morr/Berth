@@ -185,12 +185,14 @@ uv run python scripts/fake_setup_server.py --scenario mixed
 | `failing` | 套件內 Jellyfin，但插件下載一直失敗：看第 8 步的失敗樣子與可複製的手動步驟 |
 | `installed` | 既有 Jellyfin 而且 MergeVersions 已裝好：兩顆按鈕的「已完成」樣子 |
 | `signed-out` | 精靈已跑完，畫面從登入頁開始。`skipper` / `harbour` 是管理員，`deckhand` / `rope` 是普通使用者（看不到設定入口） |
+| `unmounted` | Jellyfin 少了媒體庫目錄的掛載：泊位 4 的第四條纜繩失敗，看「哪個容器少了哪個掛載」與 compose 修正片段 |
 
 Fake 是**有狀態**的，每個情境只有一份，所以第 3 步真的會把那台假 Jellyfin 一步一步改掉，
 重按也真的會標成「已經是這樣」。
 
 每次啟動都用一個新的暫存 `CONFIG_ROOT`，所以永遠是乾淨環境；`--config-root` 可指定成固定目錄
-以便跨次保留進度。
+以便跨次保留進度。精靈第 7 步（媒體庫路徑）會**真的**建目錄、寫探測檔並呼叫 `link()`，所以三層
+路徑（`settings.paths`）由這支腳本指到該次的暫存 `DATA_ROOT` 底下，不會碰到容器裡的 `/data`。
 
 ### 實驗腳本
 

@@ -3,8 +3,11 @@ import type {
   IndexerSetup,
   JellyfinLibrary,
   JellyfinSetup,
+  LibraryChoice,
   PreferenceDiff,
   QbittorrentSetup,
+  RouteSetup,
+  RouteView,
   ServiceDetection,
   SetupStatus,
   SetupStep,
@@ -174,3 +177,68 @@ export function indexerSetup(overrides: Partial<IndexerSetup> = {}): IndexerSetu
 export function tmdbSetup(overrides: Partial<TmdbSetup> = {}): TmdbSetup {
   return { using_project_credential: true, steps: [], skipped: false, ...overrides }
 }
+
+/** 第 7 步狀態的測試建構子。預設是「套件內、三個媒體庫、還沒建 Route」。 */
+export function routeSetup(overrides: Partial<RouteSetup> = {}): RouteSetup {
+  return {
+    origin: 'bundled',
+    library_root: '/data/library',
+    complete_root: '/data/torrent/complete',
+    libraries: [
+      libraryChoice({ name: 'Movies', collection_type: 'movies' }),
+      libraryChoice({ name: 'TV' }),
+      libraryChoice({ name: 'Anime' }),
+    ],
+    routes: [],
+    ready: false,
+    completed: false,
+    ...overrides,
+  }
+}
+
+export function libraryChoice(overrides: Partial<LibraryChoice> = {}): LibraryChoice {
+  const name = overrides.name ?? 'TV'
+  const slug = name.toLowerCase()
+  return {
+    name,
+    collection_type: 'tvshows',
+    locations: [`/data/library/${slug}`],
+    berth_path: `/data/library/${slug}`,
+    has_berth_path: true,
+    uses_tvdb: false,
+    supported: true,
+    selected: false,
+    target_path: `/data/library/${slug}`,
+    profile: 'standard',
+    ...overrides,
+  }
+}
+
+export function routeView(overrides: Partial<RouteView> = {}): RouteView {
+  const library = overrides.library ?? 'TV'
+  const slug = overrides.slug ?? library.toLowerCase()
+  return {
+    slug,
+    name: library,
+    library,
+    collection_type: 'tvshows',
+    target_path: `/data/library/${slug}`,
+    category: `berth-${slug}`,
+    save_path: `/data/torrent/complete/${slug}`,
+    profile: 'standard',
+    enabled: true,
+    health: 'ok',
+    checks: CHECKS_PASSED,
+    cross_device: false,
+    ...overrides,
+  }
+}
+
+/** 五條纜繩全繫上的一輪，`detail` 是實測值的形狀（inode、可用空間）。 */
+export const CHECKS_PASSED: SetupStep[] = [
+  step('category', 'ok', 'berth-tv → /data/torrent/complete/tv'),
+  step('download_path', 'ok', '/data/torrent/complete · /data/torrent/complete/tv'),
+  step('library_path', 'ok', '/data/library/tv'),
+  step('probe_visible', 'ok', '/data/library/tv'),
+  step('hardlink', 'ok', 'dev=70 · inode=8162774324533690 · 137.4 GB free'),
+]

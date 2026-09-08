@@ -40,7 +40,7 @@ from berth.api.deps import get_client_factory, get_setup_probes
 from berth.config import Config, load_config
 from berth.db import create_engine, create_session_factory, upgrade_to_head
 from berth.main import create_app
-from berth.models import JellyfinSettings, SetupSettings
+from berth.models import JellyfinSettings, PathSettings, SetupSettings
 from berth.services.clients import SetupProbes
 from berth.services.jellyfin import MERGE_VERSIONS_GUID
 from berth.services.settings import read_settings, write_settings
@@ -208,6 +208,17 @@ def failing() -> Scenario:
     return scenario
 
 
+def unmounted() -> Scenario:
+    """Jellyfin 少了媒體庫目錄的掛載：泊位 4 的檢查三失敗（brief §16.4）。
+
+    這是「哪個容器少了哪個掛載」那條訊息唯一看得到的地方——`visible_roots` 指到一條
+    Berth 不會寫的路徑，所以 `Environment/ValidatePath` 對探測檔一律回看不到。
+    """
+    scenario = bundled()
+    scenario.jellyfin = FakeJellyfinClient(visible_roots=("/somewhere-else",))
+    return scenario
+
+
 SCENARIOS = {
     "bundled": bundled,
     "outdated": outdated,
@@ -217,6 +228,7 @@ SCENARIOS = {
     "starting": starting,
     "absent": absent,
     "installed": installed,
+    "unmounted": unmounted,
 }
 
 
@@ -277,8 +289,7 @@ def main(argv: list[str] | None = None) -> int:
     app = create_app(config)
 
     scenario = SCENARIOS[args.scenario]()
-    if scenario.setup_completed:
-        asyncio.run(_complete_setup(config))
+    asyncio.run(_seed(config, completed=scenario.setup_completed))
     probes = scenario.probes()
 
     async def override_probes() -> AsyncIterator[SetupProbes]:
@@ -293,19 +304,36 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
-async def _complete_setup(config: Config) -> None:
-    """把資料庫推到「精靈跑完」的狀態。票 09 的 `POST /setup/complete` 還沒有。"""
+async def _seed(config: Config, *, completed: bool) -> None:
+    """精靈第 7 步會**真的**建目錄、寫探測檔、呼叫 `link()`，所以三層路徑要落在這一輪的
+    暫存 `DATA_ROOT` 底下，而不是容器裡的 `/data`（brief §4.1）。
+
+    `completed=True` 的情境（`signed-out`）另外把精靈標成跑完：那條路徑要的是登入頁，
+    不是再走一次八步，所以不經過 `POST /setup/complete`（它要每個 Route 都綠燈）。
+    """
     config.config_root.mkdir(parents=True, exist_ok=True)
+    # 容器裡的路徑一律是 POSIX 形狀，畫面上顯示的也就是那個形狀。Windows 上開發時把
+    # 反斜線換掉，看到的才與正式部署一致（`os` 兩種分隔符都吃）。
+    data = str(config.data_root).replace("\\", "/").rstrip("/")
     engine = create_engine(config)
     try:
         await upgrade_to_head(engine)
         async with create_session_factory(engine)() as session:
-            setup = await read_settings(session, SetupSettings)
-            setup.completed = True
-            await write_settings(session, setup)
             await write_settings(
-                session, JellyfinSettings(base_url="http://jellyfin:8096", api_key="fake-key")
+                session,
+                PathSettings(
+                    incomplete_root=f"{data}/torrent/incomplete",
+                    complete_root=f"{data}/torrent/complete",
+                    library_root=f"{data}/library",
+                ),
             )
+            if completed:
+                setup = await read_settings(session, SetupSettings)
+                setup.completed = True
+                await write_settings(session, setup)
+                await write_settings(
+                    session, JellyfinSettings(base_url="http://jellyfin:8096", api_key="fake-key")
+                )
             await session.commit()
     finally:
         await engine.dispose()

@@ -182,6 +182,16 @@ class JellyfinClient(Protocol):
         """
         ...
 
+    async def validate_path(self, path: str, *, is_file: bool = True) -> bool:
+        """`POST /Environment/ValidatePath`：這台 Jellyfin 看得到這條路徑嗎（plan §9.5）。
+
+        跨主機驗證靠它：Berth 在 Route 目標寫一個探測檔，再問 Jellyfin 看不看得到同一條
+        路徑；Jellyfin 在別台機器或少了掛載就會立刻現形（brief §16.4）。看得到回 204、
+        看不到回 404，所以「看不到」是答案而不是失敗
+        （`EnvironmentController.ValidatePath`，2026-09-08 查核原始碼）。
+        """
+        ...
+
     # --- 插件與排程任務（plan §9.4 第 8、9 步）---
 
     async def repositories(self) -> tuple[JellyfinRepository, ...]: ...

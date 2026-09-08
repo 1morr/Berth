@@ -196,7 +196,11 @@ class TestGate:
 
 
 def _complete_setup(client: TestClient) -> None:
-    """票 09 的 `POST /setup/complete` 還沒有；直接寫 settings 造出「已完成」的狀態。"""
+    """直接寫 settings 造出「已完成」的狀態。
+
+    只給**不關心第 7 步**的測試用：`POST /setup/complete` 要每個 Route 都綠燈才寫得下去
+    （票 09），而這些測試連 Route 都還沒有。走那一支的路徑在 `TestRoutes`。
+    """
     import asyncio
 
     from berth.models import SetupSettings
@@ -242,7 +246,7 @@ class TestJellyfin:
         app.dependency_overrides[get_setup_probes] = override_probes
         app.dependency_overrides[get_client_factory] = lambda: OneJellyfin(jellyfin)
         with TestClient(app, headers=BROWSER) as running:
-            _set_library_root(running, tmp_path / "library")
+            _set_paths(running, tmp_path)
             yield running
 
     def test_before_anything_the_step_list_is_empty(self, client: TestClient) -> None:
@@ -415,19 +419,24 @@ def jellyfin_probes(probes: SetupProbes, jellyfin: FakeJellyfinClient) -> SetupP
     )
 
 
-def _set_library_root(client: TestClient, root: Path) -> None:
-    """測試不該對真的 `/data/library` 建目錄。"""
+def _set_paths(client: TestClient, data_root: Path) -> None:
+    """三層路徑指到 tmp_path：測試不該對真的 `/data` 建目錄、鏈接檔案（brief §4.1）。"""
     import asyncio
 
     from berth.models import PathSettings
-    from berth.services.settings import read_settings, write_settings
+    from berth.services.settings import write_settings
 
     async def write() -> None:
         factory = client.app.state.session_factory  # type: ignore[attr-defined]
         async with factory() as session:
-            paths = await read_settings(session, PathSettings)
-            paths.library_root = str(root)
-            await write_settings(session, paths)
+            await write_settings(
+                session,
+                PathSettings(
+                    library_root=str(data_root / "library"),
+                    complete_root=str(data_root / "torrent" / "complete"),
+                    incomplete_root=str(data_root / "torrent" / "incomplete"),
+                ),
+            )
             await session.commit()
 
     asyncio.run(write())
@@ -645,3 +654,144 @@ class TestSource:
 
         for path in ("/api/setup/qbittorrent/diff", "/api/setup/indexers", "/api/setup/tmdb"):
             assert client.get(path).status_code == 401, path
+
+
+class TestRoutes:
+    """第 7–8 步的三支端點（plan §9.3 第 7–8 步、§9.5、票 09）。
+
+    這一組是**整個精靈跑一遍**：管理員 → 偵測 → Jellyfin → qBittorrent → 跳過來源 →
+    建 Route → 完成。檔案系統是真的（`tmp_path`），所以硬鏈接檢查也是真的。
+    """
+
+    @pytest.fixture(autouse=True)
+    def _fast_polling(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(jellyfin_service, "POLL_SECONDS", 0.0)
+
+    @pytest.fixture
+    def jellyfin(self) -> FakeJellyfinClient:
+        return FakeJellyfinClient()
+
+    @pytest.fixture
+    def qbittorrent(self) -> FakeQbittorrentClient:
+        return FakeQbittorrentClient()
+
+    @pytest.fixture
+    def client(
+        self,
+        config: Config,
+        tmp_path: Path,
+        jellyfin: FakeJellyfinClient,
+        qbittorrent: FakeQbittorrentClient,
+    ) -> Iterator[TestClient]:
+        app = create_app(replace(config, web_root=tmp_path / "never-built"))
+        probes = fake_probes(jellyfin=jellyfin, qbittorrent=qbittorrent)
+
+        async def override_probes() -> AsyncIterator[SetupProbes]:
+            yield probes
+
+        app.dependency_overrides[get_setup_probes] = override_probes
+        app.dependency_overrides[get_client_factory] = lambda: FakeClientFactory(
+            jellyfin=jellyfin, qbittorrent=qbittorrent
+        )
+        with TestClient(app, headers=BROWSER) as running:
+            _set_paths(running, tmp_path)
+            running.post("/api/setup/admin", json={"username": "skipper", "password": "harbour"})
+            running.post("/api/setup/detect")
+            running.post("/api/setup/jellyfin/bootstrap")
+            running.post("/api/setup/qbittorrent/apply")
+            running.post("/api/setup/indexers/skip", json={})
+            running.post("/api/setup/tmdb/skip", json={})
+            yield running
+
+    def test_the_wizard_arrives_at_step_seven_with_three_libraries_to_route(
+        self, client: TestClient
+    ) -> None:
+        assert client.get("/api/setup/status").json()["current_step"] == 7
+
+        body = client.get("/api/setup/routes").json()
+
+        assert body["origin"] == "bundled"
+        assert [row["name"] for row in body["libraries"]] == ["Movies", "TV", "Anime"]
+        assert [row["selected"] for row in body["libraries"]] == [False, False, False]
+        assert body["routes"] == []
+        assert body["ready"] is False
+
+    def test_building_returns_three_green_routes_with_their_checks(
+        self, client: TestClient, tmp_path: Path
+    ) -> None:
+        response = client.post("/api/setup/routes", json={})
+
+        assert response.status_code == 200
+        body = response.json()
+        assert [(row["slug"], row["profile"], row["health"]) for row in body["routes"]] == [
+            ("movies", "standard", "ok"),
+            ("tv", "standard", "ok"),
+            ("anime", "anime", "ok"),
+        ]
+        assert [row["step"] for row in body["routes"][0]["checks"]] == [
+            "category",
+            "download_path",
+            "library_path",
+            "probe_visible",
+            "hardlink",
+        ]
+        assert body["ready"] is True
+        assert body["routes"][1]["category"] == "berth-tv"
+        # 目標路徑是 **Jellyfin 回報的** 那一條，不是 Berth 再算一次的（plan §9.3 第 7 步）。
+        assert body["routes"][1]["target_path"] == f"{tmp_path / 'library'}/tv"
+
+    def test_a_target_that_is_not_a_library_path_is_refused(self, client: TestClient) -> None:
+        """路徑用選的，不用打的（brief §4.1）。這是唯一會回 4xx 的情況。"""
+        client.post("/api/setup/routes", json={})
+        # 套件內會忽略 selections，所以先讓它變成既有 Jellyfin 的形狀。
+        _mark_jellyfin_existing(client)
+
+        response = client.post(
+            "/api/setup/routes",
+            json={"selections": [{"library": "TV", "target_path": "/mnt/elsewhere"}]},
+        )
+
+        assert response.status_code == 422
+        assert "not a path of" in response.json()["detail"]
+
+    def test_completing_needs_a_green_route_first(self, client: TestClient) -> None:
+        refused = client.post("/api/setup/complete")
+
+        assert refused.status_code == 422
+        assert client.get("/api/health").json()["setup_completed"] is False
+
+    def test_completing_closes_the_wizard_and_the_api(self, client: TestClient) -> None:
+        client.post("/api/setup/routes", json={})
+        assert client.get("/api/setup/status").json()["current_step"] == 8
+
+        body = client.post("/api/setup/complete").json()
+
+        assert body["completed"] is True
+        assert client.get("/api/health").json()["setup_completed"] is True
+        # 精靈跑完之後這一組就是設定入口，只有登入的管理員進得來（票 07）。
+        assert client.get("/api/setup/status").status_code == 401
+        assert client.get("/api/setup/routes").status_code == 401
+        assert client.post("/api/setup/complete").status_code == 401
+
+
+def _mark_jellyfin_existing(client: TestClient) -> None:
+    """把 Jellyfin 的判定改成既有——套件內不看使用者的勾選，那條路徑才驗得到。"""
+    import asyncio
+
+    from berth.domain import ServiceKind, ServiceOrigin
+    from berth.models import SetupSettings
+    from berth.services.settings import read_settings, write_settings
+
+    async def mark() -> None:
+        factory = client.app.state.session_factory  # type: ignore[attr-defined]
+        async with factory() as session:
+            setup = await read_settings(session, SetupSettings)
+            probe = setup.services[ServiceKind.JELLYFIN]
+            setup.services = {
+                **setup.services,
+                ServiceKind.JELLYFIN: probe.model_copy(update={"origin": ServiceOrigin.EXISTING}),
+            }
+            await write_settings(session, setup)
+            await session.commit()
+
+    asyncio.run(mark())

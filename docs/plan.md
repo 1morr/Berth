@@ -111,7 +111,7 @@ adapters ──► domain                  （不 import services、models；回
 
 ### 2.2 Route 與 Media
 
-- `routes`：`id`、`slug`（unique）、`name`、`jellyfin_library_id`、`jellyfin_library_name`、`collection_type`（`movies` / `tvshows`）、`target_path`、`category`、`profile`（`standard` / `anime`）、`medium_auto_import`（預設 true）、`enabled`、`health_status`、`health_detail_json`、`created_at`
+- `routes`：`id`、`slug`（unique）、`name`、`jellyfin_library_id`、`jellyfin_library_name`、`collection_type`（`movies` / `tvshows`）、`target_path`、`category`、`profile`（`standard` / `anime`）、`medium_auto_import`（預設 true）、`enabled`、`health_status`、`health_detail_json`、`created_at`。`health_detail_json` 是 `RouteHealth`：逐項檢查（形狀同精靈的步驟：`key` 是 `RouteCheck`、`status`、`detail`、`error`）與 `cross_device`。category 的 save path 不存欄位，它一律是 `<complete root>/<slug>`（brief §4.1）。
 - `media`：`id`（`tv:<tmdb>` / `movie:<tmdb>`）、`tmdb_id`、`kind`、`title_en`、`title_original`、`year`、`folder_name`（凍結）、`tracked`、`default_route_id`、`tmdb_snapshot_json`（含各季各集：number、name、air_date、runtime；episode groups 的 absolute 排序若存在）、`tmdb_fetched_at`
 - `tmdb_cache`：`key`、`value_json`、`fetched_at`（探索頁與搜尋結果的短期快取；Media 詳情走 `media` 表）
 
@@ -298,7 +298,7 @@ Session 以 httpOnly cookie（`berth_session`）承載，`SameSite=Strict`、`Pa
 | 群組 | 端點 | 對應命令 |
 | --- | --- | --- |
 | auth | `POST /auth/login`（Jellyfin 帳密 → 發 session；帳密錯與帳號不存在回同一個 401，Jellyfin 連不上回 503）、`POST /auth/logout`（204，一律成功）、`GET /auth/me`（`name`、`role`） | `auth.*` |
-| setup | `GET /setup/status`、`POST /setup/admin`、`POST /setup/detect`（回每個服務的來源：套件內 / 既有）、`POST /setup/services/{kind}`（既有服務的連線表單：存下位址與憑證並立刻測一次）、`GET /setup/jellyfin`（不連線，回上一輪的九步狀態與媒體庫；bootstrap 進行中前端輪詢它看進度）、`POST /setup/jellyfin/bootstrap`、`POST /setup/jellyfin/connect`（既有：以管理員帳密換 API key）、`POST /setup/jellyfin/libraries/paths`、`POST /setup/jellyfin/plugin`、`GET /setup/qbittorrent/diff`（現查，回逐鍵差異）、`POST /setup/qbittorrent/apply`、`GET /setup/indexers`（套件內：十個預設站與它們現在的狀態）、`POST /setup/indexers/apply`（勾起來的站逐個加）、`POST /setup/indexers/connect`（既有 Prowlarr 或任意 Torznab）、`POST /setup/indexers/skip`、`GET /setup/tmdb`、`POST /setup/tmdb/test`、`POST /setup/tmdb/skip`、`POST /setup/routes/from-libraries`、`POST /setup/complete` | `setup.*`（§9） |
+| setup | `GET /setup/status`、`POST /setup/admin`、`POST /setup/detect`（回每個服務的來源：套件內 / 既有）、`POST /setup/services/{kind}`（既有服務的連線表單：存下位址與憑證並立刻測一次）、`GET /setup/jellyfin`（不連線，回上一輪的九步狀態與媒體庫；bootstrap 進行中前端輪詢它看進度）、`POST /setup/jellyfin/bootstrap`、`POST /setup/jellyfin/connect`（既有：以管理員帳密換 API key）、`POST /setup/jellyfin/libraries/paths`、`POST /setup/jellyfin/plugin`、`GET /setup/qbittorrent/diff`（現查，回逐鍵差異）、`POST /setup/qbittorrent/apply`、`GET /setup/indexers`（套件內：十個預設站與它們現在的狀態）、`POST /setup/indexers/apply`（勾起來的站逐個加）、`POST /setup/indexers/connect`（既有 Prowlarr 或任意 Torznab）、`POST /setup/indexers/skip`、`GET /setup/tmdb`、`POST /setup/tmdb/test`、`POST /setup/tmdb/skip`、`GET /setup/routes`（媒體庫清單與已建的 Route，含上一輪逐項檢查）、`POST /setup/routes`（套件內導出三條；既有用勾選，目標必須是該媒體庫回報的路徑之一）、`POST /setup/complete`（每個 Route 都綠燈才寫得下 `settings.setup.completed`） | `setup.*`（§9） |
 | settings | `GET /settings/{group}`、`PUT /settings/{group}`、`POST /settings/{service}/test` | `settings.update`、`health.test_service` |
 | routes | `GET/POST /routes`、`PUT/DELETE /routes/{id}`、`POST /routes/{id}/check`、`GET /jellyfin/libraries` | `routes.*` |
 | discover | `GET /discover/trending`、`GET /discover/popular`、`GET /discover/search?q=` | `discover.*` |
@@ -384,8 +384,9 @@ Session 以 httpOnly cookie（`berth_session`）承載，`SameSite=Strict`、`Pa
 
 ### 8.6 fs adapter
 
-- `link(src, dst)`、`stat`、`same_inode`、`link_test(dir_a, dir_b)`（建暫存檔、鏈接、比對、清理）、`free_space(path)`、`is_within(path, root)`（防路徑逃逸）。
-- 所有寫入 library 的路徑必須在某個 Route 的 `target_path` 之下，否則拒絕；這是唯一會動 library 的模組。
+- `link(src, dst, roots)`、`stat`、`same_inode`、`link_test(source_dir, target_dir, roots)`（建暫存檔、鏈接、比對、清理）、`probe_file(dir, roots)`（context manager：放一個探測檔，離開就刪）、`free_space(path)`、`is_within(path, root)`（防路徑逃逸）、`ensure_directory(path)`。
+- 所有寫入 library 的路徑必須在某個 Route 的 `target_path` 之下，否則拒絕；這是唯一會動 library 的模組。**凡是把檔案放進去的函式都要 `roots`**（`link`、`probe_file`、`link_test` 的目標側），不在其中就丟 `PathEscapeError`。`ensure_directory` 不在此列：它建的是 Berth 自己的根目錄（媒體庫目錄、complete 子目錄），那些是設定值不是算出來的檔名。
+- `OSError` 一律往上丟（含 `errno`）：權限、掛載、`EXDEV` 的原文正是「哪個容器少了哪個掛載」唯一有用的證據。
 
 ### 8.7 mediainfo adapter
 
@@ -458,8 +459,8 @@ WebUI\AuthSubnetWhitelist=172.28.0.2/32
    - 套件內 Prowlarr 的 API key 讀自唯讀掛載，**探測時就存進 `settings.services.indexer`**，第 5 步與 M1 的搜尋從同一個地方拿憑證。使用者貼過的值優先。
    - qBittorrent 設過密碼、Prowlarr 加過索引站之後，那個服務的判定**釘住不再重探**（`ServiceProbe.configured`）：判定規則是「免密可進 / 一個索引站都沒有 → 套件內」，而這兩件事正是 Berth 自己剛做掉的，重探會說謊。
 6. **TMDB**：內建專案 key，可覆寫；按「測試」。
-7. **媒體庫與 Route**：套件內 Jellyfin → 自動由三個媒體庫建立三個 Route（`movies` / `tv` / `anime`，anime 用 `anime` profile）；既有 Jellyfin → 使用者勾選媒體庫，每個媒體庫可「加入 Berth 路徑」（§9.5）或在既有路徑中選寫入目標。每個 Route 立即建立 qBittorrent category 並跑硬鏈接與跨服務可見性測試。
-8. **完成**：寫 `settings.setup.completed`，進健康頁；四項綠燈即可用。
+7. **媒體庫與 Route**：套件內 Jellyfin → 自動由三個媒體庫建立三個 Route（`movies` / `tv` / `anime`，anime 用 `anime` profile），寫入目標取自 **Jellyfin 回報的** `locations`；既有 Jellyfin → 使用者勾選媒體庫，每個媒體庫可「加入 Berth 路徑」（§9.5）或在既有路徑中選寫入目標，劇集類型可挑 profile。目標只能從那個媒體庫回報的路徑裡選，送別的路徑回 422。每個 Route 立即建立 qBittorrent category 並跑 §9.5 的五項檢查；**每一條都綠燈**才走得到第 8 步——紅的那個 Route 送單一定失敗（brief §4.4）。重跑覆寫同一組列（slug 相同就是同一條），沒被勾到的 Route 刪掉。
+8. **完成**：`POST /setup/complete` 寫 `settings.setup.completed`（第 7 步沒全綠時回 422），列出跳過了什麼與在哪裡補，然後回首頁——那一刻起 `setup/*` 需登入、`/` 不再導向精靈，所以前端要就地把 `GET /health` 的那一個位元改掉再導航。
 
 **續行與跳過**：精靈狀態存在 `settings.setup`，關掉瀏覽器再回來回到原本那一步。第 5 步（索引站）與第 6 步（TMDB）可跳過，完成頁列出跳過了什麼與在哪裡補；第 3、4、7 步不可跳。八步的畫面結構與狀態見 `.scratch/m0/wizard-shape.md`。
 
@@ -498,12 +499,14 @@ WebUI\AuthSubnetWhitelist=172.28.0.2/32
 - 全域 autoTMM 關閉無妨，送單時逐個 torrent `autoTMM=true`；temp path 未啟用只警告。
 - 版本低於 4.4（API 2.8.4）拒絕接入並提示升級。
 
-**檢查與訊息**（精靈第 7 步與 `health_checker` 共用）
+**檢查與訊息**（精靈第 7 步與 `health_checker` 共用）。一個 Route 五條纜繩，前一條失敗就不跑下一條——後面的檢查測的會是錯的路徑。`RouteCheck` 是它們的封閉值集合，結果逐條存進 `routes.health_detail_json`。
 
-1. 向 qBittorrent 讀全域 `save_path` 與每個 `berth-*` category 的路徑，逐一 `stat` 確認 Berth 看得到。
-2. 向 Jellyfin 讀媒體庫路徑，逐一 `stat`。
-3. 在 Route 目標寫探測檔，`POST /Environment/ValidatePath` `{Path, IsFile: true}` 請 Jellyfin 確認看得到同一路徑；再從 complete 根目錄對探測檔做 `link()`，確認同 device、同 inode。
-4. 任一步失敗 → 健康頁指出「哪個容器少了哪個掛載」，附該容器的 compose `volumes:` 修正片段；`EXDEV` 另附「兩個目錄在 Berth 內是不同掛載」的說明。
+1. `category`：`torrents/createCategory` 建 `berth-<slug>`（save path 為 `<complete root>/<slug>`）。已存在且路徑相同就跳過；路徑不同 → 回報衝突且**不覆寫**（改 category 路徑會搬走該分類所有 torrent，brief §20.2）。
+2. `download_path`：向 qBittorrent 讀全域 `save_path`（`app/preferences`）與**它回報的**這個 category 的路徑（第 1 步的 `torrents/categories`），逐一 `stat` 確認 Berth 看得到。`stat` 的必須是服務報出來的字串——拿 Berth 自己算出來、而且剛剛才建好的目錄去 `stat` 一定會過，等於沒檢查。全域那一條在第 4 步就已經被設成 Berth 的 complete 根目錄。
+3. `library_path`：**向 Jellyfin 現查**這個 Route 的媒體庫，它回報的每一條路徑逐一 `stat`。不吃第 3 步存下來的快照——使用者可能在那之後改了路徑或刪了媒體庫。
+4. `probe_visible`：在 Route 目標寫探測檔，`POST /Environment/ValidatePath` `{Path, IsFile: true}` 請 Jellyfin 確認看得到同一條路徑（看得到 204、看不到 404），問完就刪。
+5. `hardlink`：在 `<complete root>/<slug>` 建暫存檔並 `link()` 到 Route 目標，確認同 device、同 inode，之後兩邊都清乾淨（`fs.link_test`）。
+6. 任一步失敗 → 精靈與健康頁指出「哪個容器少了哪個掛載」，附該容器的 compose `volumes:` 修正片段；`EXDEV` 另附「兩個目錄在 Berth 內是不同掛載」的說明。
 
 **不支援**：Berth 與 qBittorrent 不在存放媒體的同一台機器；remote path mapping。
 

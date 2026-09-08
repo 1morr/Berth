@@ -29,6 +29,7 @@
 | 2026-09-07 | 06 精靈第 3 步 Jellyfin | 套件內一鍵跑完 plan §9.4 的九步（建管理員、三個媒體庫、API key、裝 MergeVersions、重啟、記下兩個任務 `Id`），每一步冪等、失敗可重試；既有路徑登入取 key、列媒體庫與路徑、TVDB 警告、兩顆需二次確認的按鈕。**對真的 `jellyfin:10.11.11` 跑完全序列 69 秒，第二次 0.2 秒全 `skipped`**；fixture 從那一輪錄下。175 個後端測試 + 38 個前端測試綠燈；playwright 實跑三個情境，深淺兩主題所有文字對比 ≥ 4.5:1 | `/implement .scratch/m0/issues/07-auth.md` |
 | 2026-09-08 | 07 認證 | Jellyfin 帳密登入換 Berth session（httpOnly + `SameSite=Strict`，30 天不續期）；門禁是 middleware，`/api` 預設拒絕；`setup/*` 完成後只放行 admin。登入頁走 `/impeccable shape`（單一登船口窗格，不畫泊位板）。229 個後端測試 + 54 個前端測試綠燈；playwright 對 `--scenario signed-out` 實跑登入 / 登出 / 非 admin 阻擋三條路徑，深淺兩主題文字對比最低 5.71:1 | `/implement .scratch/m0/issues/08-wizard-services.md` |
 | 2026-09-08 | 08 精靈第 4–6 步 | 泊位 2（qBittorrent 逐鍵差異與套用、版本閘門、密碼）與泊位 3（十個預設索引站逐站成敗、既有 Prowlarr / 任意 Torznab、TMDB 內建憑證可覆寫、兩步可跳過）完成。**對真服務錄了 14 份新 fixture**：qBittorrent 4.4.5 與 5.2.3 各一組、Prowlarr 的 schema 與三種新增結果、Torznab caps、TMDB configuration。十個站在本機五成五敗，逐站結果就是 UI 要撐住的東西。297 個後端測試 + 70 個前端測試綠燈；playwright 實跑 `bundled` 與 `outdated` 兩個情境，深淺兩主題文字對比最低 5.22:1 | `/implement .scratch/m0/issues/09-wizard-routes.md` |
+| 2026-09-08 | 09 精靈第 7–8 步 | 泊位 4（媒體庫 → Library Route）與完成頁做完：套件內自動建三條 Route、既有由使用者勾選媒體庫與寫入目標（可就地加 Berth 路徑、劇集可挑 profile），每條 Route 建 `berth-*` category 並跑五項跨服務檢查（含**真的 `link()` 再比 inode**）；`POST /api/setup/complete` 全綠才寫 `settings.setup.completed`。fs adapter 帶進來（`link`、`stat`、`same_inode`、`link_test`、`probe_file`、`free_space`、`is_within`，寫入一律要允許的根）。356 個後端測試 + 84 個前端測試綠燈；playwright 對 `--scenario bundled` 走完八步（Windows NTFS 上真的建了硬鏈接：`dev=11550084160259632778 · inode=17451448556763814`），對新的 `--scenario unmounted` 看失敗樣子 | `/implement .scratch/m0/issues/10-health.md` |
 
 ## 偏差與決定
 
@@ -213,3 +214,25 @@
   不給按鈕，但端點本身也要擋——brief §16.4 的紅線是「既有服務只做檢查」。
 - 2026-09-08 票 08 code-review：四個泊位各自複製一份 `StepView` 與 `_message`，收斂成
   `services/steps.py`。形狀本來就是同一個：`SetupStep` 是它存下來的樣子，`StepView` 是讀出來的樣子。
+- 2026-09-08 票 09：`POST /setup/routes/from-libraries` 改成 `GET /setup/routes` + `POST /setup/routes` + `POST /setup/complete`。plan §6 已改。理由是這一步要先讓使用者看到媒體庫清單與上一輪的檢查結果，與其他泊位「GET 看現況、POST 做事」的形狀一致。
+- 2026-09-08 票 09：plan §9.5 的「檢查三」拆成兩條纜繩——`probe_visible`（Jellyfin `Environment/ValidatePath` 看得到探測檔）與 `hardlink`（`link()` + 同 inode），連同 `category`、`download_path`、`library_path` 共五條，前一條失敗就不跑下一條。理由是這兩件事的修正片段不同（jellyfin 少掛載 vs 兩個目錄是不同掛載），混成一條就說不出是哪一種。plan §9.5 已改寫成五項，`RouteCheck` 是它的封閉值集合。
+- 2026-09-08 票 09：**硬鏈接的方向照 brief §4.4**（在 `complete/<slug>` 建暫存檔 → `link()` 到 Route 目標），不是 plan §9.5 原本寫的「在 Route 目標寫探測檔再從 complete 鏈接」。理由是這個方向與 M1 入庫時真正要做的操作一模一樣，連 fs adapter 的路徑逃逸防線都一起測到了。
+- 2026-09-08 票 09：第 7 步要**每一條 Route 都綠燈**才走得到第 8 步（不是「至少一條」）。紅的那條 Route 送單一定失敗（brief §4.4），放行等於讓使用者帶著一個已知壞掉的目的地開始用。plan §9.3 第 7 步已補。
+- 2026-09-08 票 09：既有 Jellyfin 的劇集媒體庫可以挑 `standard` / `anime` profile（plan 只寫了套件內的 anime）。理由是 profile 決定 M1 的命名與解析，預設全部 standard 會讓動漫媒體庫一開始就是錯的；電影類型不問。
+- 2026-09-08 票 09：重跑第 7 步時**沒被勾到的 Route 會刪掉**——精靈裡的勾選就是「我要哪幾條 Route」。M0 沒有任何東西引用 route_id，M1 有了 Job 之後這條要改成軟處理，屆時在設定頁逐條管理。
+- 2026-09-08 票 09：`SetupLibrary` 新增 `item_id`（Jellyfin virtual folder 的 `ItemId`），Route 記它而不是只記名字。舊資料沒有這個欄位所以是選填。
+- 2026-09-08 票 09：fs adapter 的每個寫入函式都要 `roots` 參數，不在其中就丟 `PathEscapeError`——「寫進 library 的東西一定在某個 Route 的 target_path 底下」因此是型別上的事實而不是紀律。plan §8.6 已改。
+- 2026-09-08 票 09：`POST /Environment/ValidatePath` 看得到回 204、看不到回 **404**，所以 adapter 把 404 翻成 `False` 而不是例外（查核 Jellyfin master 的 `EnvironmentController.cs`）。`ValidateWritable` 不送真——那會讓 Jellyfin 自己在媒體庫目錄裡建暫存檔。已補進 brief §20.7。
+- 2026-09-08 票 09：`torrents/createCategory` 的表單鍵是 `category` / `savePath`，同名已存在時回 409（查核 qBittorrent master 的 `torrentscontroller.cpp`）。冪等靠呼叫端先讀 `torrents/categories`；已存在但 save path 不同時**回報衝突不覆寫**（改 category 路徑會搬走該分類所有 torrent）。已補進 brief §20.2。
+- 2026-09-08 票 09：檢查一同時 `stat` qBittorrent 的**全域** save path。那條路徑在第 4 步就被設成 Berth 的 complete 根目錄，所以它看不到等於掛載真的少了。
+- 2026-09-08 票 09：精靈完成後前端**就地改掉 `GET /health` 快取裡的 `setup_completed`** 再導航。守衛走的是 `ensureQueryData`（快取裡有值就不重抓，票 07 已記過一次），只作廢的話下一次導航仍拿到 `false`，人會被彈回一個已經回 401 的精靈頁。
+- 2026-09-08 票 09：`scripts/fake_setup_server.py` 把 `settings.paths` 指到該次的暫存 `DATA_ROOT`。第 7 步會真的建目錄、寫探測檔、呼叫 `link()`，指著容器裡的 `/data` 在本機跑不起來。另加 `--scenario unmounted` 演「Jellyfin 少了掛載」。
+- 2026-09-08 票 09 自審：qBittorrent 登入失敗改成落在每個 Route 的 `category` 纜繩上（原本會讓整支端點回 500，還漏掉一個沒關的 client）。帳密不對要看得出是哪個 Route 卡住、原文是什麼。
+- 2026-09-08 票 09 code-review：**檢查一原本等於沒檢查**——`category` 那一步先 `ensure_directory` 建好目錄，`download_path` 再 `stat` 同一個 Berth 自己算出來的字串，必過。改成 `stat` **qBittorrent 回報的**那條 category save path 與全域 `save_path`；後者讀不到（`app/preferences` 失敗或空值）也改成這一條紅燈，原本被吞掉之後這一步照樣變綠。
+- 2026-09-08 票 09 code-review：**檢查二改成向 Jellyfin 現查**媒體庫，不吃第 3 步存進 `settings.setup.jellyfin` 的快照。第 3 步與第 7 步之間使用者可能在 Jellyfin 那邊改了路徑或刪了媒體庫，而這一步要證明的正是「現在這台 Jellyfin 說的路徑，Berth 看得到」。plan §9.5 的措辭一併改回「向 Jellyfin 讀」（先前為了配合實作弱化過）。
+- 2026-09-08 票 09 code-review：plan §8.6 原本寫「每個會寫東西的函式都要 `roots`……是型別上的事實」——`ensure_directory` 就沒有，這句話對不上它文件的程式碼。改成「凡是把**檔案**放進去的函式都要」，並寫明 `ensure_directory` 建的是 Berth 自己的根目錄。
+- 2026-09-08 票 09 code-review：完成頁的 Route 狀態改讀 `route.health`，不再寫死綠色——那一頁目前只在全綠時出現，寫死等於把「這個假設哪天不成立」變成畫面說謊。健康 → 信號的對照表 `ROUTE_SIGNAL` 兩個元件共用。
+- 2026-09-08 票 09 code-review：profile 的 radio `name` 從 profile 值改成媒體庫名。原生 radio 群組靠 `name` 分組，兩個劇集媒體庫共用一個名字會讓方向鍵在它們之間跳，螢幕閱讀器也把兩組唸成同一組。
+- 2026-09-08 票 09 code-review：`_berth_path` 從 `services/jellyfin` 匯出成 `berth_path`，`services/routes` 不再自己算一次同樣的字串——這一票本來就是為了不讓 slug 算法分岔才把它抽出來的。前端的 `RouteHealth` 型別改名 `RouteHealthStatus`（與後端存檢查結果的 `RouteHealth` 撞名），`Pick` 改名 `LibraryPick`（撞 TS 內建型別）。
+- 2026-09-08 票 09 code-review：`PathFacts.is_dir` 拿掉（只有測試在讀）；`free=` 用 key=value 形狀而不是英文散文 `GB free`；`routes.build.bundled` 與 `.selected` 兩個一字不差的 key 收成一個；套件內剖面與按鈕的數字只算建得了 Route 的媒體庫（`supported`），不再把音樂之類的媒體庫算進去。
+- 2026-09-08 票 09 code-review：既有 Jellyfin 的勾選只送得出「目標真的是那個媒體庫的路徑之一」的選擇。伺服器本來就用同一條規則擋（422），但那時候畫面只說得出「請求沒走完」；最典型的觸發是「加入 Berth 路徑」失敗之後選了那條不存在的路徑。

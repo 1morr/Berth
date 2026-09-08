@@ -23,12 +23,14 @@ const zhHant = {
     source: '來源',
     library: '媒體庫路徑',
     unassigned: '未指派',
+    waiting: '待靠泊',
   },
   setup: {
     title: '設定精靈',
     stage: {
       pre: '前置',
       berth: '泊位 {{code}}',
+      final: '收尾',
     },
     step: '第 {{current}} 步，共 {{total}} 步',
     resumed: '進度已保留，關掉瀏覽器再回來會回到這一步。',
@@ -344,6 +346,97 @@ const zhHant = {
       ownKey: '之後所有 TMDB 請求都會用你這一把 key，不再用內建的。',
     },
   },
+  routes: {
+    title: '媒體庫路徑',
+    lede: {
+      bundled:
+        'Berth 替你建的三個媒體庫各成為一條 Route：下載完成後檔案硬鏈接到它的寫入目標。按下去會在 qBittorrent 建好分類，並實際鏈接一個檔案，確認三個容器看到的是同一個檔案系統。',
+      existing:
+        '勾選要交給 Berth 寫入的媒體庫，每個選一條寫入目標。舊路徑不會被動到——它們仍然唯讀，Berth 只往你選的那一條寫。',
+    },
+    empty:
+      '這台 Jellyfin 一個媒體庫都沒有。先在 Jellyfin 建一個再回來，Berth 才有地方寫入。Berth 不會替你的伺服器建媒體庫。',
+    unreachable: '讀不到媒體庫清單。Berth 後端可能沒在跑——確認容器狀態後重新整理。',
+    building: '建立中…',
+    build: '建立 {{count}} 條 Route 並檢查',
+    requestFailed: '請求沒有走完。Berth 後端可能沒在跑——確認容器狀態後再按一次。',
+    cutaway: {
+      paths: '路徑',
+      libraryRoot: '媒體庫根目錄',
+      completeRoot: 'complete 根目錄',
+      count: 'Route 數',
+      plan: '將建立',
+      library: '媒體庫',
+      target: '寫入目標',
+      category: 'category',
+    },
+    picker: {
+      title: '選擇媒體庫',
+      lede: '一個媒體庫一條 Route。路徑是 Jellyfin 回報的，所以這裡用選的，不用打的。',
+      target: '寫入目標',
+      profile: '命名 profile',
+      mixed: '混合',
+      unsupported: 'Berth 只寫入電影與劇集類型的媒體庫，這一個跳過。',
+      tvdb: '這個媒體庫掛了 TVDB 的 metadata fetcher。Berth 以 TMDB 為準，兩者的季集編號可能不同。',
+      noPath: '這個媒體庫在 Jellyfin 上沒有任何路徑。',
+      addBerthPath: '加入 Berth 路徑',
+      adding: '加入中…',
+      addHint: '在這個媒體庫加一條 {{path}}，舊路徑原地不動；加完就用它當寫入目標。',
+    },
+    profile: {
+      standard: '標準',
+      anime: '動漫',
+    },
+    health: {
+      unknown: '尚未檢查',
+      ok: '已繫上',
+      failed: '阻擋',
+    },
+    check: {
+      category: '建立 qBittorrent 分類',
+      downloadPath: 'qBittorrent 的路徑 Berth 看得到',
+      libraryPath: 'Jellyfin 的媒體庫路徑 Berth 看得到',
+      probeVisible: 'Jellyfin 看得到 Berth 寫的檔案',
+      hardlink: '硬鏈接與 inode 比對',
+    },
+    fix: {
+      category:
+        '同名的分類已經指到別的地方了。Berth 不會替你搬動它——開著 autoTMM 時改分類路徑會搬走該分類所有 torrent。到 qBittorrent 的分類設定改掉那條路徑，或先刪掉那個分類再重按。',
+      berthMount:
+        'berth 容器少了這條路徑的掛載：那個服務看得到，Berth 看不到。三個容器要把同一個宿主目錄掛在同一個容器路徑。改完 compose 之後跑 docker compose up -d：',
+      jellyfinMount:
+        'jellyfin 容器少了這條路徑的掛載：Berth 寫了一個檔案在那裡，Jellyfin 說它看不到。三個容器要把同一個宿主目錄掛在同一個容器路徑。改完 compose 之後跑 docker compose up -d：',
+      hardlink:
+        '鏈接不起來。complete 目錄與媒體庫目錄要在同一個檔案系統，容器裡的使用者也要寫得進去。',
+      crossDevice:
+        '這兩個目錄在 Berth 內是不同掛載（EXDEV）。硬鏈接跨不了掛載點——用一條掛載蓋住整個父目錄，不要 complete 與 library 各掛一條。網路磁碟、exFAT 隨身碟與 mergerfs 也做不到硬鏈接。',
+    },
+  },
+  complete: {
+    title: '完成設定',
+    lede: '四個泊位都繫上了。按下完成之後精靈就關閉，之後要用 Jellyfin 帳號登入才進得來設定。',
+    submit: '完成設定',
+    completing: '完成中…',
+    back: '回媒體庫路徑',
+    failed: '寫不進去。Berth 後端可能沒在跑——確認容器狀態後再按一次。',
+    signInHint: '完成後會回到首頁，那裡會請你用剛才建立的 Jellyfin 管理員帳號登入。',
+    savePath: 'complete 目錄',
+    skippedTitle: '跳過的步驟',
+    cutaway: {
+      title: '這一輪的結果',
+      routes: 'Route 數',
+      skipped: '跳過',
+      nothing: '沒有',
+    },
+    skipped: {
+      indexers: '索引站',
+      tmdb: 'TMDB',
+    },
+    where: {
+      indexers: '索引站還沒接。之後在「設定 → 來源」補上，補之前搜尋不到任何東西。',
+      tmdb: 'TMDB 還沒驗證。之後在「設定 → 來源」補上，補之前抓不到標題與季集資料。',
+    },
+  },
   login: {
     code: 'BTH 0',
     title: '登船口',
@@ -410,12 +503,14 @@ const en: Translations<typeof zhHant> = {
     source: 'Source',
     library: 'Library paths',
     unassigned: 'Unassigned',
+    waiting: 'Awaiting berth',
   },
   setup: {
     title: 'Setup wizard',
     stage: {
       pre: 'Pre-berth',
       berth: 'Berth {{code}}',
+      final: 'Cast off',
     },
     step: 'Step {{current}} of {{total}}',
     resumed: 'Progress is saved. Close the browser and you come back to this step.',
@@ -743,6 +838,102 @@ const en: Translations<typeof zhHant> = {
       overridden: 'Your own key',
       ownKeyLabel: 'Overridden',
       ownKey: 'Every TMDB request from now on uses your key instead of the built-in one.',
+    },
+  },
+  routes: {
+    title: 'Library paths',
+    lede: {
+      bundled:
+        'Each of the three libraries Berth created becomes a route: finished downloads are hard-linked into its write target. Pressing this creates the qBittorrent categories and links a real file, proving all three containers see one file system.',
+      existing:
+        'Tick the libraries Berth may write into and pick one write target for each. Your existing paths are left alone: they stay read-only, and Berth writes only to the path you pick.',
+    },
+    empty:
+      'This Jellyfin has no libraries. Create one in Jellyfin and come back, so Berth has somewhere to write. Berth does not create libraries on your server.',
+    unreachable:
+      'Could not read the library list. The Berth backend may be down — check the container, then reload.',
+    building: 'Building…',
+    build: 'Build {{count}} routes and check',
+    requestFailed:
+      'The request did not finish. The Berth backend may be down — check the container and press again.',
+    cutaway: {
+      paths: 'Paths',
+      libraryRoot: 'Library root',
+      completeRoot: 'Complete root',
+      count: 'Routes',
+      plan: 'Will create',
+      library: 'Library',
+      target: 'Write target',
+      category: 'Category',
+    },
+    picker: {
+      title: 'Pick the libraries',
+      lede: 'One route per library. The paths come from Jellyfin, so you pick one instead of typing it.',
+      target: 'Write target',
+      profile: 'Naming profile',
+      mixed: 'Mixed',
+      unsupported: 'Berth writes into movie and TV libraries only, so this one is skipped.',
+      tvdb: 'This library has a TVDB metadata fetcher. Berth follows TMDB, and the two number seasons and episodes differently.',
+      noPath: 'This library has no path on Jellyfin.',
+      addBerthPath: 'Add a Berth path',
+      adding: 'Adding…',
+      addHint:
+        'Adds {{path}} to this library. Your existing paths stay where they are, and the new one becomes the write target.',
+    },
+    profile: {
+      standard: 'Standard',
+      anime: 'Anime',
+    },
+    health: {
+      unknown: 'Not checked',
+      ok: 'Moored',
+      failed: 'Blocked',
+    },
+    check: {
+      category: 'Create the qBittorrent category',
+      downloadPath: 'Berth sees the qBittorrent paths',
+      libraryPath: 'Berth sees the Jellyfin library paths',
+      probeVisible: 'Jellyfin sees the file Berth wrote',
+      hardlink: 'Hard link and inode match',
+    },
+    fix: {
+      category:
+        'A category with that name already points somewhere else. Berth will not move it for you: with autoTMM on, changing a category path moves every torrent in it. Change the path in the qBittorrent category settings, or delete the category and press again.',
+      berthMount:
+        'The berth container is missing a mount for this path: the other service can see it and Berth cannot. All three containers must mount the same host directory at the same container path. After editing compose, run docker compose up -d:',
+      jellyfinMount:
+        'The jellyfin container is missing a mount for this path: Berth wrote a file there and Jellyfin says it cannot see it. All three containers must mount the same host directory at the same container path. After editing compose, run docker compose up -d:',
+      hardlink:
+        'The link failed. The complete directory and the library directory have to sit on one file system, and the container user has to be able to write there.',
+      crossDevice:
+        'Those two directories are separate mounts inside Berth (EXDEV). A hard link cannot cross a mount point: use one mount covering the whole parent directory instead of mounting complete and library separately. Network shares, exFAT drives and mergerfs cannot hard-link either.',
+    },
+  },
+  complete: {
+    title: 'Finish setup',
+    lede: 'All four berths are moored. Finishing closes the wizard; after that you sign in with a Jellyfin account to reach the settings.',
+    submit: 'Finish setup',
+    completing: 'Finishing…',
+    back: 'Back to library paths',
+    failed: 'Could not save. The Berth backend may be down — check the container and press again.',
+    signInHint:
+      'You land on the home page, which asks you to sign in with the Jellyfin administrator you just created.',
+    savePath: 'Complete directory',
+    skippedTitle: 'Skipped steps',
+    cutaway: {
+      title: 'What this run produced',
+      routes: 'Routes',
+      skipped: 'Skipped',
+      nothing: 'Nothing',
+    },
+    skipped: {
+      indexers: 'Indexers',
+      tmdb: 'TMDB',
+    },
+    where: {
+      indexers:
+        'No indexer yet. Add one under Settings → Source; until then searches return nothing.',
+      tmdb: 'TMDB is not verified yet. Add a key under Settings → Source; until then titles and episode data stay empty.',
     },
   },
   login: {

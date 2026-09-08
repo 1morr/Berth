@@ -207,7 +207,7 @@ async def add_berth_path(
         library = next((row for row in libraries if row.name == library_name), None)
         if library is None:
             raise StepFailedError(f"no library named {library_name!r} on this Jellyfin")
-        path = _berth_path(library_name, paths.library_root)
+        path = berth_path(library_name, paths.library_root)
         if path not in library.locations:
             ensure_directory(Path(path))
             await client.add_library_path(library_name, path)
@@ -312,6 +312,7 @@ async def _remember(
         setup.jellyfin.libraries = [
             SetupLibrary(
                 name=library.name,
+                item_id=library.item_id,
                 collection_type=library.collection_type,
                 locations=list(library.locations),
                 metadata_fetchers=sorted(
@@ -415,7 +416,7 @@ class _Runner:
         for bundled in BUNDLED_LIBRARIES:
             # 與既有媒體庫的 Berth 路徑同一支函式：兩套算法遲早會分岔，而分岔的症狀是
             # `has_berth_path` 對 Berth 自己建的路徑報 false（`test_bundled_paths_...` 釘住）。
-            path = _berth_path(bundled.name, self._paths.library_root)
+            path = berth_path(bundled.name, self._paths.library_root)
             # 媒體庫目錄由 Berth 建（plan §9.1）；兩邊掛同一個宿主目錄，所以建完 Jellyfin
             # 立刻看得到。
             ensure_directory(Path(path))
@@ -644,13 +645,26 @@ def _step(step: JellyfinStep, status: StepStatus) -> SetupStep:
 _UNSAFE_IN_PATH = re.compile(r'[<>:"/\\|?*\x00-\x1f]+')
 
 
-def _berth_path(library_name: str, library_root: str) -> str:
-    slug = _UNSAFE_IN_PATH.sub("-", library_name).strip(" .-").lower() or "berth"
-    return f"{library_root.rstrip('/')}/{slug}"
+def library_slug(library_name: str) -> str:
+    """媒體庫名 → 路徑與 category 用的 slug。中日文照留（brief §4.5）。
+
+    第 7 步的 Route 用同一支：Route 的 complete 子目錄、qBittorrent category 與這個媒體庫的
+    Berth 路徑要對得起來，兩套算法遲早會分岔。
+    """
+    return _UNSAFE_IN_PATH.sub("-", library_name).strip(" .-").lower() or "berth"
+
+
+def berth_path(library_name: str, library_root: str) -> str:
+    """「加入 Berth 路徑」加的那一條：`<library root>/<slug>`（CONTEXT.md）。
+
+    第 7 步的 Route 也用這一支決定「這個媒體庫的 Berth 路徑是哪一條」，兩邊算出來的字串
+    必須一模一樣，否則畫面會對 Berth 自己建的路徑說「還沒有 Berth 路徑」。
+    """
+    return f"{library_root.rstrip('/')}/{library_slug(library_name)}"
 
 
 def _library_view(library: SetupLibrary, library_root: str) -> LibraryView:
-    path = _berth_path(library.name, library_root)
+    path = berth_path(library.name, library_root)
     return LibraryView(
         name=library.name,
         collection_type=library.collection_type,

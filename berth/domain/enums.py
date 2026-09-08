@@ -83,6 +83,25 @@ class JellyfinStep(StrEnum):
     TASKS = "tasks"
 
 
+class RouteCheck(StrEnum):
+    """精靈第 7 步對一個 Route 跑的檢查（plan §9.5、brief §4.4）。順序即宣告順序，
+    前一條斷了就不跑下一條——後面的檢查測的會是錯的路徑。
+
+    健康頁的 Route 檢查用同一組（`health_checker`，票 10）。
+    """
+
+    #: qBittorrent 上這個 Route 的 category。已存在但 save path 不同 → 衝突，不覆寫。
+    CATEGORY = "category"
+    #: qBittorrent 報的全域 save path 與這個 category 的路徑，在 Berth 內 `stat` 得到。
+    DOWNLOAD_PATH = "download_path"
+    #: Jellyfin 報的媒體庫路徑，在 Berth 內 `stat` 得到。
+    LIBRARY_PATH = "library_path"
+    #: Berth 在 Route 目標寫的探測檔，Jellyfin 那台也看得到（`Environment/ValidatePath`）。
+    PROBE_VISIBLE = "probe_visible"
+    #: complete 目錄與 Route 目標之間真的鏈接得起來，而且是同一個 inode。
+    HARDLINK = "hardlink"
+
+
 class QbittorrentStep(StrEnum):
     """第 4 步逐鍵套用建議偏好（plan §9.3 第 4 步、§8.1）。
 

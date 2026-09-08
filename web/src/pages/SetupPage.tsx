@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useNavigate } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 
 import {
@@ -7,6 +8,8 @@ import {
   applyIndexers,
   applyQbittorrent,
   bootstrapJellyfin,
+  buildRoutes,
+  completeSetup,
   connectIndexer,
   connectJellyfin,
   connectService,
@@ -16,6 +19,7 @@ import {
   installMergeVersions,
   jellyfinSetupQueryOptions,
   qbittorrentSetupQueryOptions,
+  routeSetupQueryOptions,
   setupStatusQueryOptions,
   skipIndexers,
   skipTmdb,
@@ -26,30 +30,36 @@ import {
   type IndexerSetup,
   type JellyfinSetup,
   type QbittorrentSetup,
+  type RouteSelectionInput,
+  type RouteSetup,
   type ServiceKind,
   type SetupStatus,
   type TmdbSetup,
 } from '../api/setup'
+import { healthQueryOptions } from '../api/health'
 import { LanguageToggle } from '../components/LanguageToggle'
 import { AdminStep } from '../setup/AdminStep'
-import { BerthBoard } from '../setup/BerthBoard'
+import { BerthBoard, type BerthSignals } from '../setup/BerthBoard'
+import { CompleteStep } from '../setup/CompleteStep'
 import { DetectStep } from '../setup/DetectStep'
 import { JellyfinStep } from '../setup/JellyfinStep'
 import { QbittorrentStep } from '../setup/QbittorrentStep'
+import { RouteStep } from '../setup/RouteStep'
 import { SourceStep } from '../setup/SourceStep'
 import { GhostButton } from '../components/controls'
 import { SIGNAL_FILL, type Signal } from '../components/signal'
 import { isSettled } from '../setup/steps'
 import { signalOf } from '../setup/signals'
 
-/** plan §9.3 的八步。泊位 4（媒體庫路徑）是票 09，所以畫面目前停在第 6 步。 */
+/** plan §9.3 的八步。 */
 const TOTAL_STEPS = 8
 const STEP_DETECT = 2
 const STEP_JELLYFIN = 3
 const STEP_QBITTORRENT = 4
 const STEP_INDEXER = 5
 const STEP_TMDB = 6
-const LAST_IMPLEMENTED_STEP = STEP_TMDB
+const STEP_ROUTES = 7
+const STEP_COMPLETE = 8
 
 /** 步驟 → 泊位碼。第 5、6 步是同一個泊位的兩條纜繩（shape brief §5）。 */
 const BERTH_CODE: Record<number, string> = {
@@ -57,6 +67,7 @@ const BERTH_CODE: Record<number, string> = {
   [STEP_QBITTORRENT]: 'BTH 2',
   [STEP_INDEXER]: 'BTH 3',
   [STEP_TMDB]: 'BTH 3',
+  [STEP_ROUTES]: 'BTH 4',
 }
 
 /** 服務還在啟動時的重探間隔。上限由後端的輪詢窗口決定（`window_seconds`）。 */
@@ -75,6 +86,7 @@ const PROGRESS_INTERVAL_MS = 1500
 export function SetupPage() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
   const status = useQuery(setupStatusQueryOptions)
   // 步驟是由狀態導出的（plan §9.3），所以「回頭看前一步」要靠這個覆寫，不是靠改狀態。
   const [revisit, setRevisit] = useState<number | null>(null)
@@ -116,7 +128,14 @@ export function SetupPage() {
   })
   const bootstrap = useMutation({ mutationFn: bootstrapJellyfin, onSuccess: absorbJellyfin })
   const signIn = useMutation({ mutationFn: connectJellyfin, onSuccess: absorbJellyfin })
-  const addPath = useMutation({ mutationFn: addLibraryPath, onSuccess: absorbJellyfin })
+  const addPath = useMutation({
+    mutationFn: addLibraryPath,
+    onSuccess: (next) => {
+      absorbJellyfin(next)
+      // 泊位 4 的媒體庫清單裡多了一條路徑，那份也要重讀。
+      void queryClient.invalidateQueries({ queryKey: routeSetupQueryOptions.queryKey })
+    },
+  })
   const plugin = useMutation({ mutationFn: installMergeVersions, onSuccess: absorbJellyfin })
   const applyPreferences = useMutation({
     mutationFn: applyQbittorrent,
@@ -142,10 +161,27 @@ export function SetupPage() {
     mutationFn: () => skipTmdb(true),
     onSuccess: (next) => absorbBerth(tmdbSetupQueryOptions.queryKey, next),
   })
+  const build = useMutation({
+    mutationFn: (selections: RouteSelectionInput[]) => buildRoutes(selections),
+    onSuccess: (next) => absorbBerth(routeSetupQueryOptions.queryKey, next),
+  })
+  const finish = useMutation({
+    mutationFn: completeSetup,
+    onSuccess: (next) => {
+      absorb(next)
+      // 路由守衛讀的是 `GET /health` 的 `setup_completed`（票 07），而它走的是
+      // `ensureQueryData`——**快取裡有值就直接回，不會重抓**。所以這裡要就地把那一個位元
+      // 改掉；只作廢的話下一次導航仍然拿到 `false`，人就被彈回這一頁，而這一頁已經 401 了。
+      queryClient.setQueryData(healthQueryOptions.queryKey, (old) =>
+        old ? { ...old, setup_completed: true } : old,
+      )
+      void navigate({ to: '/' })
+    },
+  })
 
   const current = status.data
   const waiting = current?.services.some((row) => row.origin === 'pending') ?? false
-  const step = revisit ?? Math.min(current?.current_step ?? 1, LAST_IMPLEMENTED_STEP)
+  const step = revisit ?? current?.current_step ?? 1
   const inFlight = bootstrap.isPending || plugin.isPending
 
   const jellyfin = useQuery({
@@ -160,6 +196,7 @@ export function SetupPage() {
   })
   const indexers = useQuery({ ...indexerSetupQueryOptions, enabled: step >= STEP_INDEXER })
   const tmdb = useQuery({ ...tmdbSetupQueryOptions, enabled: step >= STEP_INDEXER })
+  const routes = useQuery({ ...routeSetupQueryOptions, enabled: step >= STEP_ROUTES })
 
   // 服務還在啟動就繼續探，直到有結論或後端判逾時（plan §9.3 第 2 步）。
   useEffect(() => {
@@ -185,7 +222,8 @@ export function SetupPage() {
       jellyfin: jellyfinSignal(current, jellyfin.data, inFlight),
       qbittorrent: qbittorrentSignal(current, qbittorrent.data, applyPreferences.isPending),
       prowlarr: sourceSignal(current, indexers.data, tmdb.data, applySites.isPending),
-    } satisfies Partial<Record<ServiceKind, Signal>>,
+      library: librarySignal(current, routes.data, build.isPending),
+    } satisfies BerthSignals,
   }
 
   if (step === 1) {
@@ -246,6 +284,33 @@ export function SetupPage() {
           />
         ) : (
           <Waiting failed={qbittorrent.isError} message={t('qbittorrent.unreachable')} />
+        )
+      ) : step === STEP_ROUTES ? (
+        routes.data ? (
+          <RouteStep
+            setup={routes.data}
+            building={build.isPending}
+            addingPath={addPath.isPending ? addPath.variables : null}
+            requestFailed={build.isError}
+            onBuild={(selections) => build.mutate(selections)}
+            onAddPath={(library) => addPath.mutate(library)}
+          />
+        ) : (
+          <Waiting failed={routes.isError} message={t('routes.unreachable')} />
+        )
+      ) : step === STEP_COMPLETE ? (
+        routes.data ? (
+          <CompleteStep
+            routes={routes.data}
+            indexers={indexers.data}
+            tmdb={tmdb.data}
+            completing={finish.isPending}
+            failed={finish.isError}
+            onComplete={() => finish.mutate()}
+            onRevisit={() => setRevisit(STEP_ROUTES)}
+          />
+        ) : (
+          <Waiting failed={routes.isError} message={t('routes.unreachable')} />
         )
       ) : indexers.data && tmdb.data ? (
         <SourceStep
@@ -324,6 +389,22 @@ function sourceSignal(
   return signalOf(detection)
 }
 
+/**
+ * 泊位 4 的信號。這一格沒有對應的服務判定，看的是 Route 自己的健康：有紅的就是阻擋，
+ * 全綠才是已繫上（`ready` 與後端「第 7 步做完了沒」是同一條規則）。
+ */
+function librarySignal(
+  status: SetupStatus,
+  routes: RouteSetup | undefined,
+  building: boolean,
+): Signal {
+  if (building) return 'working'
+  if (routes?.routes.some((route) => route.health === 'failed')) return 'blocked'
+  if (routes?.ready) return 'secured'
+  if (status.current_step >= STEP_ROUTES) return 'assigned'
+  return 'neutral'
+}
+
 function Shell({
   step,
   services = [],
@@ -332,7 +413,7 @@ function Shell({
 }: {
   step: number
   services?: SetupStatus['services']
-  signals?: Partial<Record<ServiceKind, Signal>>
+  signals?: BerthSignals
   children: ReactNode
 }) {
   const { t } = useTranslation()
@@ -345,7 +426,7 @@ function Shell({
         <p className="label ml-auto text-ink-dim">
           {step in BERTH_CODE
             ? t('setup.stage.berth', { code: BERTH_CODE[step] })
-            : t('setup.stage.pre')}{' '}
+            : t(step === STEP_COMPLETE ? 'setup.stage.final' : 'setup.stage.pre')}{' '}
           · {t('setup.step', { current: step, total: TOTAL_STEPS })}
         </p>
         <LanguageToggle />
