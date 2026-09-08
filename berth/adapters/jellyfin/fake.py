@@ -14,6 +14,7 @@
 
 from __future__ import annotations
 
+import hashlib
 from dataclasses import replace
 
 from berth.adapters.http import (
@@ -97,8 +98,10 @@ class FakeJellyfinClient:
         version: str = "10.11.11",
         server_name: str = "jellyfin",
         startup_wizard_completed: bool = False,
-        #: 已存在的管理員帳密。`authenticate` 只認這一組。
+        #: 已存在的管理員帳密。`authenticate` 給它 `IsAdministrator=true`。
         admin: tuple[str, str] | None = None,
+        #: 其餘使用者（帳號 → 密碼），一律非管理員。票 07 的角色判定靠它才測得出來。
+        users: dict[str, str] | None = None,
         libraries: tuple[JellyfinLibrary, ...] = (),
         api_keys: tuple[JellyfinApiKey, ...] = (),
         plugins: tuple[JellyfinPlugin, ...] = (),
@@ -117,6 +120,7 @@ class FakeJellyfinClient:
         self.server_name = server_name
         self.startup_wizard_completed = startup_wizard_completed
         self.admin = admin
+        self.users = dict(users or {})
         self.libraries_ = list(libraries)
         self.api_keys_ = list(api_keys)
         self.plugins_ = list(plugins)
@@ -183,14 +187,12 @@ class FakeJellyfinClient:
 
     async def authenticate(self, username: str, password: str) -> JellyfinAuth:
         self._checkpoint(elevated=False)
-        if self.admin is None or (username, password) != self.admin:
-            raise AuthFailedError("POST /Users/AuthenticateByName: 401")
-        return JellyfinAuth(
-            token=f"token-for-{username}",
-            user_id="b7634be11bd142339a50143287b68cae",
-            server_id="4e71f8d8bc324291b6e6c5a4f3fa8825",
-            is_administrator=True,
-        )
+        if self.admin is not None and (username, password) == self.admin:
+            return _auth(username, is_administrator=True)
+        if self.users.get(username) == password and password != "":
+            return _auth(username, is_administrator=False)
+        # 帳號不存在與密碼錯誤在真的 Jellyfin 也是同一個 401。
+        raise AuthFailedError("POST /Users/AuthenticateByName: 401")
 
     async def api_keys(self) -> tuple[JellyfinApiKey, ...]:
         self._checkpoint(always=True)
@@ -308,3 +310,15 @@ class FakeJellyfinClient:
             raise ServiceBusyError("503 still loading")
         if elevated and (always or self.startup_wizard_completed) and not self.token:
             raise AuthFailedError("401 requires elevation")
+
+
+def _auth(username: str, *, is_administrator: bool) -> JellyfinAuth:
+    """每個帳號一個穩定的假 id，兩個人登入才會是 `users` 表的兩列。"""
+    user_id = hashlib.sha256(username.encode()).hexdigest()[:32]
+    return JellyfinAuth(
+        token=f"token-for-{username}",
+        user_id=user_id,
+        name=username,
+        server_id="4e71f8d8bc324291b6e6c5a4f3fa8825",
+        is_administrator=is_administrator,
+    )

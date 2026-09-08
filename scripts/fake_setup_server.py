@@ -10,6 +10,7 @@ Fake 是**有狀態**的，而且每個情境只有一份，所以精靈的第 3
 from __future__ import annotations
 
 import argparse
+import asyncio
 import sys
 import tempfile
 from collections.abc import AsyncIterator
@@ -32,10 +33,13 @@ from berth.adapters.prowlarr.fake import FakeProwlarrClient
 from berth.adapters.qbittorrent import QbittorrentClient
 from berth.adapters.qbittorrent.fake import FakeQbittorrentClient
 from berth.api.deps import get_client_factory, get_setup_probes
-from berth.config import load_config
+from berth.config import Config, load_config
+from berth.db import create_engine, create_session_factory, upgrade_to_head
 from berth.main import create_app
+from berth.models import JellyfinSettings, SetupSettings
+from berth.services.clients import SetupProbes
 from berth.services.jellyfin import MERGE_VERSIONS_GUID
-from berth.services.setup import SetupProbes
+from berth.services.settings import read_settings, write_settings
 
 #: 使用者自己那台 Jellyfin 的媒體庫。Anime 那個掛了 TVDB，用來看警告長什麼樣。
 NAS_LIBRARIES = (
@@ -88,6 +92,8 @@ class Scenario:
     prowlarr_api_key: str
     #: 「測試連線」時 Prowlarr 要回報的索引站（貼上 key 之後判套件內還是既有）。
     connect_indexers: list[ProwlarrIndexer] = field(default_factory=list)
+    #: 精靈已經跑完：整個 API 進門禁，畫面從登入頁開始（票 07）。
+    setup_completed: bool = False
 
     def probes(self) -> SetupProbes:
         return SetupProbes(
@@ -154,6 +160,18 @@ def installed() -> Scenario:
     return scenario
 
 
+def signed_out() -> Scenario:
+    """精靈已經跑完，剩下登入（票 07）。
+
+    `skipper` / `harbour` 是管理員，`deckhand` / `rope` 是普通使用者——後者登入後
+    看不到設定入口，直接打 `/api/setup/*` 也會被回 403。
+    """
+    scenario = mixed()
+    scenario.jellyfin = nas_jellyfin(admin=("skipper", "harbour"), users={"deckhand": "rope"})
+    scenario.setup_completed = True
+    return scenario
+
+
 def failing() -> Scenario:
     """套件內 Jellyfin，但插件下載一直失敗——第 8 步的失敗樣子與可複製的手動步驟。"""
     scenario = bundled()
@@ -163,6 +181,7 @@ def failing() -> Scenario:
 
 SCENARIOS = {
     "bundled": bundled,
+    "signed-out": signed_out,
     "failing": failing,
     "mixed": mixed,
     "starting": starting,
@@ -214,6 +233,8 @@ def main(argv: list[str] | None = None) -> int:
     app = create_app(config)
 
     scenario = SCENARIOS[args.scenario]()
+    if scenario.setup_completed:
+        asyncio.run(_complete_setup(config))
     probes = scenario.probes()
 
     async def override_probes() -> AsyncIterator[SetupProbes]:
@@ -226,6 +247,24 @@ def main(argv: list[str] | None = None) -> int:
     print(f"scenario={args.scenario} config_root={config_root}", file=sys.stderr)
     uvicorn.run(app, host="127.0.0.1", port=args.port, log_level="warning")
     return 0
+
+
+async def _complete_setup(config: Config) -> None:
+    """把資料庫推到「精靈跑完」的狀態。票 09 的 `POST /setup/complete` 還沒有。"""
+    config.config_root.mkdir(parents=True, exist_ok=True)
+    engine = create_engine(config)
+    try:
+        await upgrade_to_head(engine)
+        async with create_session_factory(engine)() as session:
+            setup = await read_settings(session, SetupSettings)
+            setup.completed = True
+            await write_settings(session, setup)
+            await write_settings(
+                session, JellyfinSettings(base_url="http://jellyfin:8096", api_key="fake-key")
+            )
+            await session.commit()
+    finally:
+        await engine.dispose()
 
 
 if __name__ == "__main__":

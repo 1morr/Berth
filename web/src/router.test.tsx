@@ -1,7 +1,8 @@
 import { screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { HEALTHY, stubApi } from './test/fetch'
+import { HEALTHY, UNAUTHORIZED, UNCONFIGURED, session, stubApi } from './test/fetch'
 import { renderApp } from './test/render'
 import { setupStatus } from './test/setupStatus'
 
@@ -11,10 +12,19 @@ afterEach(() => {
 
 const STATUS = 'GET /api/setup/status'
 const HEALTH = 'GET /api/health'
+const ME = 'GET /api/auth/me'
+const LOGOUT = 'POST /api/auth/logout'
+
+/** 精靈跑完的一台：路由守衛讀 health，精靈頁自己才讀 setup/status。 */
+const DONE = { body: HEALTHY }
+const PENDING = { body: UNCONFIGURED }
+const WIZARD = { body: setupStatus({ completed: true, current_step: 8 }) }
+const ADMIN = { body: { name: 'skipper', role: 'admin' } }
+const USER = { body: { name: 'deckhand', role: 'user' } }
 
 describe('路由', () => {
   it('setup 未完成時開 / 會被導向精靈（票 05 驗收）', async () => {
-    stubApi({ [STATUS]: { body: setupStatus() }, [HEALTH]: { body: HEALTHY } })
+    stubApi({ [STATUS]: { body: setupStatus() }, [HEALTH]: PENDING })
 
     const { router } = renderApp('/')
 
@@ -22,11 +32,8 @@ describe('路由', () => {
     expect(await screen.findByText('設定精靈')).toBeInTheDocument()
   })
 
-  it('setup 完成後 / 就留在原地', async () => {
-    stubApi({
-      [STATUS]: { body: setupStatus({ completed: true, current_step: 8 }) },
-      [HEALTH]: { body: HEALTHY },
-    })
+  it('setup 完成且已登入時 / 就留在原地', async () => {
+    stubApi({ [HEALTH]: DONE, [ME]: ADMIN })
 
     const { router } = renderApp('/')
 
@@ -44,11 +51,104 @@ describe('路由', () => {
   })
 
   it('直接開 /setup 就是精靈', async () => {
-    stubApi({ [STATUS]: { body: setupStatus() } })
+    stubApi({ [HEALTH]: PENDING, [STATUS]: { body: setupStatus() } })
 
     renderApp('/setup')
 
     expect(await screen.findByRole('banner')).toHaveTextContent('Berth')
     expect(await screen.findByRole('region', { name: '泊位板' })).toBeInTheDocument()
+  })
+})
+
+describe('門禁', () => {
+  it('沒登入就開 / 會被導向登入頁，並記下原本要去的地方', async () => {
+    stubApi({ [HEALTH]: DONE, [ME]: UNAUTHORIZED })
+
+    const { router } = renderApp('/')
+
+    await waitFor(() => expect(router.state.location.pathname).toBe('/login'))
+    expect(router.state.location.search).toEqual({ redirect: '/' })
+  })
+
+  it('第一次被擋下來時不說「已過期」', async () => {
+    stubApi({ [HEALTH]: DONE, [ME]: UNAUTHORIZED })
+
+    renderApp('/')
+
+    expect(await screen.findByLabelText('帳號')).toBeInTheDocument()
+    expect(screen.queryByText('工作階段已過期，請重新登入。')).not.toBeInTheDocument()
+  })
+
+  it('session 在使用中失效之後，下一次導航就被送回登入頁並說明原因', async () => {
+    // 這一條釘住的是「門禁每次都真的問後端」。拿快取放行的話，session 死了以後
+    // 前端會若無其事地繼續走下去。
+    const backend = session({ name: 'skipper', role: 'admin' })
+    stubApi({ [HEALTH]: DONE, [ME]: () => backend.me(), [STATUS]: WIZARD })
+    const { router } = renderApp('/setup')
+    await waitFor(() => expect(router.state.location.pathname).toBe('/setup'))
+
+    backend.signOut()
+    await router.navigate({ to: '/' })
+
+    await waitFor(() => expect(router.state.location.pathname).toBe('/login'))
+    expect(router.state.location.search).toEqual({ redirect: '/', expired: true })
+    expect(await screen.findByText('工作階段已過期，請重新登入。')).toBeInTheDocument()
+  })
+
+  it('已經登入的人不必再看一次登入表單', async () => {
+    stubApi({ [HEALTH]: DONE, [ME]: ADMIN })
+
+    const { router } = renderApp('/login?redirect=%2F')
+
+    await waitFor(() => expect(router.state.location.pathname).toBe('/'))
+  })
+
+  it('setup 跑完之後沒登入就開 /setup 也會被擋', async () => {
+    stubApi({ [HEALTH]: DONE, [ME]: UNAUTHORIZED })
+
+    const { router } = renderApp('/setup')
+
+    await waitFor(() => expect(router.state.location.pathname).toBe('/login'))
+    expect(router.state.location.search).toEqual({ redirect: '/setup' })
+  })
+})
+
+describe('角色', () => {
+  it('管理員的頁首有設定入口', async () => {
+    stubApi({ [HEALTH]: DONE, [ME]: ADMIN, [STATUS]: WIZARD })
+
+    renderApp('/')
+
+    expect(await screen.findByRole('link', { name: '設定' })).toBeInTheDocument()
+    expect(screen.getByText('管理員')).toBeInTheDocument()
+    expect(screen.getByText('skipper')).toBeInTheDocument()
+  })
+
+  it('非 admin 看不到設定入口，但看得到自己是什麼角色（票 07 驗收）', async () => {
+    stubApi({ [HEALTH]: DONE, [ME]: USER })
+
+    renderApp('/')
+
+    expect(await screen.findByText('deckhand')).toBeInTheDocument()
+    expect(screen.getByText('使用者')).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: '設定' })).not.toBeInTheDocument()
+  })
+
+  it('非 admin 直接打 /setup 會被送回首頁', async () => {
+    stubApi({ [HEALTH]: DONE, [ME]: USER })
+
+    const { router } = renderApp('/setup')
+
+    await waitFor(() => expect(router.state.location.pathname).toBe('/'))
+  })
+
+  it('登出後回到登入頁', async () => {
+    const backend = session({ name: 'skipper', role: 'admin' })
+    stubApi({ [HEALTH]: DONE, [ME]: () => backend.me(), [LOGOUT]: backend.signOut })
+    const { router } = renderApp('/')
+
+    await userEvent.click(await screen.findByRole('button', { name: '登出' }))
+
+    await waitFor(() => expect(router.state.location.pathname).toBe('/login'))
   })
 })

@@ -19,10 +19,14 @@ from berth.adapters.jellyfin.fake import FakeJellyfinClient
 from berth.adapters.prowlarr.fake import FakeProwlarrClient
 from berth.adapters.qbittorrent.fake import FakeQbittorrentClient
 from berth.api.deps import get_client_factory, get_setup_probes
+from berth.api.gate import CSRF_HEADER
 from berth.config import Config
 from berth.main import create_app
 from berth.services import jellyfin as jellyfin_service
-from berth.services.setup import SetupProbes
+from berth.services.clients import SetupProbes
+
+#: 前端每個非 GET 請求都帶這個標頭（`api/client.ts`）；缺了它的行為在 `test_auth_api.py`。
+BROWSER = {CSRF_HEADER: "XMLHttpRequest"}
 
 
 def fake_probes(**overrides: object) -> SetupProbes:
@@ -49,7 +53,7 @@ def client(config: Config, tmp_path: Path, probes: SetupProbes) -> Iterator[Test
         yield probes
 
     app.dependency_overrides[get_setup_probes] = override
-    with TestClient(app) as running:
+    with TestClient(app, headers=BROWSER) as running:
         yield running
 
 
@@ -232,7 +236,7 @@ class TestJellyfin:
 
         app.dependency_overrides[get_setup_probes] = override_probes
         app.dependency_overrides[get_client_factory] = lambda: OneJellyfin(jellyfin)
-        with TestClient(app) as running:
+        with TestClient(app, headers=BROWSER) as running:
             _set_library_root(running, tmp_path / "library")
             yield running
 

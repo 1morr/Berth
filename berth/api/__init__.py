@@ -1,11 +1,15 @@
-"""FastAPI routers。只呼叫 `services`（plan §1.3）。"""
+"""FastAPI routers。只呼叫 `services`（plan §1.3）。
+
+門禁是 middleware（`api/gate.py`），不是逐個 router 的相依：新增端點預設就在門後。
+"""
 
 from fastapi import APIRouter
 
-from berth.api import health, setup
+from berth.api import auth, health, setup
 
 #: 掛在 `/api` 之下（plan §6）。
 router = APIRouter()
+router.include_router(auth.router)
 router.include_router(health.router)
 router.include_router(setup.router)
 

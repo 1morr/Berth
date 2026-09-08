@@ -60,6 +60,11 @@ class TestHealth:
         with client:
             assert client.get("/api/health").json()["version"] == VERSION
 
+    def test_health_says_whether_the_wizard_is_done(self, client: TestClient) -> None:
+        """前端要在還沒有人登入得了的時候就決定該畫精靈還是登入頁（票 07）。"""
+        with client:
+            assert client.get("/api/health").json()["setup_completed"] is False
+
 
 class TestFrontend:
     def test_the_root_serves_the_built_index(self, client: TestClient) -> None:
@@ -90,12 +95,16 @@ class TestFrontend:
         assert response.status_code == 200
         assert "<title>Berth</title>" in response.text
 
-    def test_unknown_api_paths_stay_json_404(self, client: TestClient) -> None:
-        """否則前端 fetch 會拿到 HTML 再在 JSON.parse 炸開，錯誤訊息毫無意義。"""
+    def test_unknown_api_paths_stay_json(self, client: TestClient) -> None:
+        """否則前端 fetch 會拿到 HTML 再在 JSON.parse 炸開，錯誤訊息毫無意義。
+
+        匿名時是 401 而不是 404：門禁在路由之前（票 07），登入後的 404 見
+        `test_auth_api.py`。
+        """
         with client:
             response = client.get("/api/nope")
 
-        assert response.status_code == 404
+        assert response.status_code == 401
         assert json.loads(response.text)["detail"]
 
 

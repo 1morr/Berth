@@ -17,7 +17,7 @@
 - M0 資料表：`users`、`sessions`、`settings`、`routes`、`events`（plan §2）。
 - `settings` 的分組模型：`services.jellyfin`、`services.qbittorrent`、`services.indexer`、
   `services.tmdb`、`paths`、`setup`，未設定時回預設值。
-- `GET /api/health`：匿名可呼叫，回總體狀態與版本。
+- `GET /api/health`：匿名可呼叫，回總體狀態、版本與精靈是否已完成。
 - 前端 shell：深色為預設、亮色跟隨系統的 Tailwind 主題，`zh-Hant` 語言檔，
   TanStack Router 與 Query，以及顯示健康狀態的佔位頁；build 產物由後端同一個程序提供。
 - 環境變數 `CONFIG_ROOT`、`DATA_ROOT`、`WEB_ROOT`、`PORT` 與 `.env.example`。
@@ -30,7 +30,7 @@
   可搬到 NAS 上跑；結果寫在 `docs/research/m0-experiments.md`。
 - 設定精靈的前兩步（plan §9.3）：`GET /api/setup/status`、`POST /api/setup/admin`、
   `POST /api/setup/detect`、`POST /api/setup/services/{kind}`。setup 未完成時匿名開放，
-  完成後需登入。
+  完成後只有 `admin` 進得來。
 - Jellyfin、qBittorrent、Prowlarr 三個 adapter 的第一版：各有 `Protocol` 介面、HTTP 實作與
   `Fake`，錯誤分成「服務不在 compose 裡」「還在啟動」「要憑證」「不是這個服務」四種；
   契約測試對 `tests/fixtures/http/` 的錄製回應執行。
@@ -38,6 +38,13 @@
   兩處都沒有時精靈退回手動貼上。新增環境變數 `EXT_ROOT`。
 - 設定精靈 UI（`/setup`）：常駐的四格泊位板、第 1 步建立管理員、第 2 步逐服務探測與
   就地展開的既有服務連線表單與可複製的手動步驟。setup 未完成時其他頁面導向 `/setup`。
+- 認證（plan §6、brief §11）：`POST /api/auth/login`（以 Jellyfin 帳密驗證，角色取自
+  `Policy.IsAdministrator`）、`POST /api/auth/logout`、`GET /api/auth/me`。session 以
+  httpOnly、`SameSite=Strict` 的 cookie 承載，壽命 30 天不續期，資料庫只存 token 的雜湊。
+- `/api` 的門禁 middleware：預設拒絕，白名單只有 `auth/login`、`auth/logout`、`health`；
+  非 GET 請求要求 `X-Requested-With` 標頭。精靈跑完之後 `setup/*` 只有 `admin` 進得來。
+- 登入頁 `/login`，以及登入後頁首的身分區（角色、設定入口、登出）。未登入時任何頁面
+  導向 `/login`，非 admin 看不到也進不了設定。
 - UI 語言 `zh-Hant` 與 `en` 並列，跟隨瀏覽器並可切換，選擇存在 localStorage。
 - `scripts/fake_setup_server.py`：以 Fake adapter 起一台真的 Berth，用來實跑驗證精靈。
 - 設定精靈第 3 步 Jellyfin（plan §9.4、§9.5）：`GET /api/setup/jellyfin`、

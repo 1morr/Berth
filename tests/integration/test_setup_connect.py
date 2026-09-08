@@ -230,7 +230,8 @@ async def test_a_connected_service_is_not_reprobed_by_the_polling_loop(
     session: AsyncSession,
 ) -> None:
     """前端每 3 秒自動重探。重探不可以把使用者剛填好的連線判回「探不到」。"""
-    from berth.services.setup import SetupProbes, detect_services
+    from berth.services.clients import SetupProbes
+    from berth.services.setup import detect_services
 
     absent = SetupProbes(
         jellyfin=FakeJellyfinClient(error=ServiceNotDeployedError("no such host")),
@@ -268,7 +269,8 @@ async def test_a_connected_service_is_not_reprobed_by_the_polling_loop(
 @pytest.mark.asyncio
 async def test_connecting_one_service_leaves_the_others_alone(session: AsyncSession) -> None:
     from berth.adapters.jellyfin.fake import FakeJellyfinClient as _Jellyfin
-    from berth.services.setup import SetupProbes, detect_services
+    from berth.services.clients import SetupProbes
+    from berth.services.setup import detect_services
 
     await detect_services(
         session,

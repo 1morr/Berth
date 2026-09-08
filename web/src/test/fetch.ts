@@ -1,5 +1,7 @@
 import { vi } from 'vitest'
 
+import type { Me } from '../api/auth'
+
 /** 把 fetch 換成固定回一份 JSON，回傳 mock 以便斷言呼叫到的網址。 */
 export function stubJsonResponse(body: unknown, status = 200) {
   // 標成 typeof fetch，mock.calls 才有 fetch 的參數型別可以斷言。
@@ -30,4 +32,32 @@ export function stubApi(routes: Record<string, StubRoute | (() => StubRoute)>) {
   return stub
 }
 
-export const HEALTHY = { status: 'ok', version: '0.1.0' }
+/** 精靈已經跑完的一台。路由守衛讀的是這一支（`setup_completed`）。 */
+export const HEALTHY = { status: 'ok', version: '0.1.0', setup_completed: true }
+
+/** 還沒設定過的一台：任何頁面都該被導向精靈。 */
+export const UNCONFIGURED = { ...HEALTHY, setup_completed: false }
+
+export const UNAUTHORIZED: StubRoute = { status: 401, body: { detail: 'sign in to use this API' } }
+
+/**
+ * 記得「現在有沒有人登入」的假後端。門禁每一次導航都真的去問 `GET /auth/me`
+ * （`routes.tsx` 的 `fetchQuery`），固定回應的替身會讓登入之後立刻又被踢回登入頁。
+ */
+export function session(initial: Me | null = null) {
+  let current = initial
+  return {
+    /** `GET /api/auth/me` */
+    me: (): StubRoute => (current === null ? UNAUTHORIZED : { body: current }),
+    /** `POST /api/auth/login` */
+    signIn: (me: Me) => (): StubRoute => {
+      current = me
+      return { body: me }
+    },
+    /** `POST /api/auth/logout` */
+    signOut: (): StubRoute => {
+      current = null
+      return { status: 204, body: null }
+    },
+  }
+}

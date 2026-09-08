@@ -45,8 +45,8 @@ from berth.models import (
     SetupSettings,
     SetupStep,
 )
+from berth.services.clients import ServiceClientFactory
 from berth.services.settings import read_settings, write_settings
-from berth.services.setup import ServiceClientFactory
 
 #: `POST /Auth/Keys?app=` 用的名字。也是重按時辨認「這把是我建的」的依據。
 API_KEY_APP = "Berth"

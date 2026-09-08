@@ -103,7 +103,7 @@ adapters ──► domain                  （不 import services、models；回
 ### 2.1 使用者與設定
 
 - `users`：`id`、`jellyfin_user_id`（unique）、`name`、`role`（`admin` / `user`）、`created_at`、`last_login_at`
-- `sessions`：`id`、`user_id`、`token_hash`、`expires_at`、`created_at`
+- `sessions`：`id`、`user_id`、`token_hash`、`expires_at`、`created_at`。token 是 256 bit 亂數，只存 SHA-256 雜湊；壽命 30 天且**不滑動續期**，過期的列在下一次被用到時就地刪掉。
 - `settings`：`key`（unique）、`value_json`、`updated_at`。key 分組：`services.jellyfin`、`services.qbittorrent`、`services.indexer`、`services.tmdb`、`paths`、`parser`、`ai`、`rss`、`setup`。每組一個 pydantic model，`services.*` 含連線資訊與最後健康狀態。
   - `services.jellyfin` 另含 `api_key`、`metadata_fetchers`（鍵是媒體庫 slug，值寫進 `LibraryOptions.TypeOptions[].MetadataFetchers`；brief §10 的 TVDB【研究】定案時改這裡而不是改程式）、`merge_movies_task_id` / `merge_episodes_task_id`（MergeVersions 排程任務的 `Id`）。
   - `paths` 另含 `library_root`（套件內三個媒體庫與既有媒體庫「加入 Berth 路徑」的父目錄，預設 `/data/library`）。
@@ -287,11 +287,17 @@ fixture 一筆一個 JSON：
 
 ## 6. API 面
 
-REST + JSON，前綴 `/api`。所有端點需登入，除了 `auth/login`、`setup/*`（僅在 setup 未完成時開放）、`health`（可匿名，只回 ok / degraded）。Session 以 httpOnly cookie 承載，`SameSite=Strict`；非 GET 請求要求 `X-Requested-With` 標頭作 CSRF 防線。
+REST + JSON，前綴 `/api`。門禁是 middleware（`api/gate.py`）而不是逐個 router 的相依，所以**預設拒絕**：新增端點什麼都不做就已經在門後。白名單只有三條——`auth/login`、`auth/logout`（一律成功，順便清 cookie）、`health`。未知路徑也走同一道門，匿名時回 401 而不是 404。
+
+`setup/*` 由它自己的相依決定：精靈未完成時整組匿名開放（那時候還沒有人登入得了），完成之後它就是設定入口，只有 `role=admin` 進得來（非 admin 回 403）。
+
+`health` 匿名可讀，回 `status`（ok / degraded）、`version` 與 `setup_completed`。**最後那一個位元掛在這裡而不是 `setup/status`**：前端要在還沒有人登入時就決定該畫精靈還是登入頁，而精靈未完成時本來就整組匿名開放，所以它不多洩漏任何東西。
+
+Session 以 httpOnly cookie（`berth_session`）承載，`SameSite=Strict`、`Path=/`；刻意不設 `Secure`，自架幾乎都是區網的純 HTTP 位址，HTTPS 交給前置代理。非 GET 請求要求 `X-Requested-With` 標頭作 CSRF 防線（跨站表單送得出 POST，送不出自訂標頭）。
 
 | 群組 | 端點 | 對應命令 |
 | --- | --- | --- |
-| auth | `POST /auth/login`（Jellyfin 帳密）、`POST /auth/logout`、`GET /auth/me` | — |
+| auth | `POST /auth/login`（Jellyfin 帳密 → 發 session；帳密錯與帳號不存在回同一個 401，Jellyfin 連不上回 503）、`POST /auth/logout`（204，一律成功）、`GET /auth/me`（`name`、`role`） | `auth.*` |
 | setup | `GET /setup/status`、`POST /setup/admin`、`POST /setup/detect`（回每個服務的來源：套件內 / 既有）、`POST /setup/services/{kind}`（既有服務的連線表單：存下位址與憑證並立刻測一次）、`GET /setup/jellyfin`（不連線，回上一輪的九步狀態與媒體庫；bootstrap 進行中前端輪詢它看進度）、`POST /setup/jellyfin/bootstrap`、`POST /setup/jellyfin/connect`（既有：以管理員帳密換 API key）、`POST /setup/jellyfin/libraries/paths`、`POST /setup/jellyfin/plugin`、`GET /setup/qbittorrent/diff`、`POST /setup/qbittorrent/apply`、`POST /setup/indexer/apply`、`POST /setup/routes/from-libraries`、`POST /setup/complete` | `setup.*`（§9） |
 | settings | `GET /settings/{group}`、`PUT /settings/{group}`、`POST /settings/{service}/test` | `settings.update`、`health.test_service` |
 | routes | `GET/POST /routes`、`PUT/DELETE /routes/{id}`、`POST /routes/{id}/check`、`GET /jellyfin/libraries` | `routes.*` |
@@ -304,7 +310,7 @@ REST + JSON，前綴 `/api`。所有端點需登入，除了 `auth/login`、`set
 | files | `POST /files/rematch`（`{ledger_id \| job_file_id, action, season, episode_start, episode_end}`） | `rematch_file` |
 | rss | `GET/POST /rss/feeds`、`PUT/DELETE /rss/feeds/{id}`、`POST /rss/feeds/{id}/poll`、`GET /rss/items`、`GET/POST /rss/rules`、`PUT/DELETE /rss/rules/{id}`、`POST /rss/rules/preview`、`POST /rss/oneshot` | `rss.*` |
 | issues | `GET /issues`、`POST /issues/{id}/resolve`（`{action}`）、`POST /issues/{id}/ignore`、`POST /reconcile` | `reconcile`、`issues.resolve` |
-| health | `GET /health`、`GET /health/detail` | `health.*` |
+| health | `GET /health`（匿名：`status`、`version`、`setup_completed`）、`GET /health/detail` | `health.*` |
 | events | `GET /events/stream`（SSE：job 狀態、進度、健康變化） | — |
 
 - OpenAPI 由 FastAPI 產生；前端用 `openapi-typescript` 產型別，CI 檢查型別檔是否過期。
@@ -315,6 +321,7 @@ REST + JSON，前綴 `/api`。所有端點需登入，除了 `auth/login`、`set
 ## 7. 前端
 
 - 路由：`/setup`、`/login`、`/`（探索）、`/media/:id`、`/library/:routeSlug`、`/jobs`、`/jobs/:hash`、`/review`、`/rss`、`/issues`、`/settings/*`。
+- 守衛：精靈未完成 → 一律導向 `/setup`（讀 `GET /health` 的 `setup_completed`，那是匿名答得出來的唯一來源）；未登入 → 導向 `/login?redirect=<原路徑>`，`?redirect=` 只收站內路徑；`/setup` 在精靈完成後只放行 `admin`。頁首顯示角色與登出，`admin` 才看得到設定入口——前端隱藏不是安全機制，後端同時回 403。
 - 資料：TanStack Query 管 API 快取；SSE 事件到達時使 job 相關 query 失效。
 - 元件：shadcn/ui 為基礎；媒體卡片、狀態徽章、時間線、Plan 表格（逐列可改季集與動作）、檔案樹是專案自有元件。
 - 文案：react-i18next，`zh-Hant` 與 `en` 兩個語言檔並列，預設跟隨瀏覽器；所有字串走 key，不硬編。

@@ -1,11 +1,8 @@
-"""設定精靈的端點（plan §6 setup 群組、§9.3）。
-
-`setup/*` **只在 setup 未完成時匿名開放**；完成之後要登入（plan §6）。
-"""
+"""設定精靈的端點（plan §6 setup 群組、§9.3）。"""
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field
 
 from berth.api.deps import ClientFactoryDep, SessionDep, SetupProbesDep
@@ -26,21 +23,9 @@ from berth.services.setup import (
     read_status,
 )
 
-
-async def require_setup_open(session: SessionDep) -> None:
-    """setup 未完成時整個群組匿名開放；完成之後要登入（plan §6）。
-
-    登入本身在票 07。在它落地之前「要登入」等於「還沒有人登入得了」，所以完成後一律 401；
-    票 07 只需要把這裡換成真的 session 檢查。
-    """
-    if (await read_status(session)).completed:
-        raise HTTPException(
-            status.HTTP_401_UNAUTHORIZED,
-            "setup is complete; sign in to change these settings",
-        )
-
-
-router = APIRouter(prefix="/setup", tags=["setup"], dependencies=[Depends(require_setup_open)])
+#: 誰進得來這一組由門禁決定（`api/gate.py`）：精靈跑完之前匿名開放，跑完之後只有管理員。
+#: 規則放在那裡而不是這裡的相依，是為了「忘記掛相依」不會變成一個沒人守的洞。
+router = APIRouter(prefix="/setup", tags=["setup"])
 
 
 class ServiceDetectionOut(BaseModel):

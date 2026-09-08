@@ -19,10 +19,10 @@ from berth.adapters.prowlarr.fake import FakeProwlarrClient
 from berth.adapters.qbittorrent.fake import FakeQbittorrentClient
 from berth.domain import DetectionReason, ServiceKind, ServiceOrigin
 from berth.models import SetupSettings
+from berth.services.clients import SetupProbes
 from berth.services.settings import read_settings
 from berth.services.setup import (
     DETECT_WINDOW,
-    SetupProbes,
     SetupStatus,
     create_admin,
     detect_services,

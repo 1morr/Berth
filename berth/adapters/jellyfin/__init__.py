@@ -28,6 +28,8 @@ class JellyfinAuth:
 
     token: str
     user_id: str
+    #: `User.Name`。Jellyfin 才知道正規的大小寫，顯示名一律照它回的（票 07）。
+    name: str
     server_id: str
     #: `User.Policy.IsAdministrator`。票 07 的角色判定用同一個欄位（plan §11.1 T0.5）。
     is_administrator: bool

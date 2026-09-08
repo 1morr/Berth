@@ -232,6 +232,33 @@ const zhHant = {
       retryHint: '手動做完之後按下面的按鈕，Berth 只會重跑還沒完成的步驟。',
     },
   },
+  login: {
+    code: 'BTH 0',
+    title: '登船口',
+    field: {
+      username: '帳號',
+      password: '密碼',
+    },
+    submit: '登入',
+    submitting: '登入中…',
+    source: 'Berth 沒有自己的密碼。登入用的是你的 Jellyfin 帳號，角色也由 Jellyfin 決定。',
+    expiredChip: '已過期',
+    expired: '工作階段已過期，請重新登入。',
+    error: {
+      refused: '帳號或密碼不對。',
+      unavailable: '連不上 Jellyfin。Berth 的帳號來自它，它沒起來就沒有人登得進來。',
+      unexpected: '登入沒有走完（HTTP {{status}}）。密碼不一定有錯——先看 Berth 自己的紀錄。',
+    },
+  },
+  role: {
+    admin: '管理員',
+    user: '使用者',
+  },
+  nav: {
+    settings: '設定',
+    signOut: '登出',
+    signingOut: '登出中…',
+  },
   health: {
     title: '健康',
     checking: '檢查中…',
@@ -486,6 +513,36 @@ const en: Translations<typeof zhHant> = {
       retryHint:
         'Once you have done it by hand, press the button below — Berth only reruns the steps that are not finished.',
     },
+  },
+  login: {
+    code: 'BTH 0',
+    title: 'Gangway',
+    field: {
+      username: 'Username',
+      password: 'Password',
+    },
+    submit: 'Sign in',
+    submitting: 'Signing in…',
+    source:
+      'Berth has no passwords of its own. You sign in with your Jellyfin account, and Jellyfin decides your role.',
+    expiredChip: 'Expired',
+    expired: 'Your session expired. Sign in again.',
+    error: {
+      refused: 'That username and password do not match.',
+      unavailable:
+        'Cannot reach Jellyfin. Berth gets its accounts from it, so nobody can sign in until it is up.',
+      unexpected:
+        'Sign-in did not go through (HTTP {{status}}). Your password may well be fine — check the Berth log first.',
+    },
+  },
+  role: {
+    admin: 'Admin',
+    user: 'User',
+  },
+  nav: {
+    settings: 'Settings',
+    signOut: 'Sign out',
+    signingOut: 'Signing out…',
   },
   health: {
     title: 'Health',

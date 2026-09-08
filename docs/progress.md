@@ -27,6 +27,7 @@
 | 2026-09-07 | 04 實驗 | `scripts/experiments/` 完成並全部實跑：Jellyfin 10.10.7 / 10.11.11 命名實測、qBittorrent 4.4.5 / 5.2.3 參數矩陣、Prowlarr `config/host`、硬鏈接三情境。結果寫進 `docs/research/m0-experiments.md`，摘要回 brief §20.6 / §20.7，plan §5 命名模板凍結，§8.1 / §8.2 / §9.2 / §9.4 依實測修正，brief §7.2 / §7.7 / §20.1 更正。lint / type / test 全綠 | `/implement .scratch/m0/issues/05-*.md`（第一張 UI 票，開頭跑 `/impeccable hooks on` 與 `init`） |
 | 2026-09-07 | 05 精靈第 1–2 步 | `/setup` 精靈骨架完成：`GET /api/setup/status`、`POST /api/setup/admin`、`POST /api/setup/detect`、`POST /api/setup/services/{kind}`；Jellyfin / qBittorrent / Prowlarr 三個 adapter 各有 `Protocol`、HTTP 實作與 `Fake`，契約測試跑對真服務錄下來的 `tests/fixtures/http/`。UI 依 direction contract「泊位調度板」重寫視覺系統（票 02 的佔位 token 全換），zh-Hant 與 en 並列。125 個後端測試 + 24 個前端測試綠燈；playwright 對 `scripts/fake_setup_server.py` 的三種情境實跑前兩步，深淺兩主題所有文字對比 ≥ 4.5:1 | `/implement .scratch/m0/issues/06-wizard-jellyfin.md` |
 | 2026-09-07 | 06 精靈第 3 步 Jellyfin | 套件內一鍵跑完 plan §9.4 的九步（建管理員、三個媒體庫、API key、裝 MergeVersions、重啟、記下兩個任務 `Id`），每一步冪等、失敗可重試；既有路徑登入取 key、列媒體庫與路徑、TVDB 警告、兩顆需二次確認的按鈕。**對真的 `jellyfin:10.11.11` 跑完全序列 69 秒，第二次 0.2 秒全 `skipped`**；fixture 從那一輪錄下。175 個後端測試 + 38 個前端測試綠燈；playwright 實跑三個情境，深淺兩主題所有文字對比 ≥ 4.5:1 | `/implement .scratch/m0/issues/07-auth.md` |
+| 2026-09-08 | 07 認證 | Jellyfin 帳密登入換 Berth session（httpOnly + `SameSite=Strict`，30 天不續期）；門禁是 middleware，`/api` 預設拒絕；`setup/*` 完成後只放行 admin。登入頁走 `/impeccable shape`（單一登船口窗格，不畫泊位板）。229 個後端測試 + 54 個前端測試綠燈；playwright 對 `--scenario signed-out` 實跑登入 / 登出 / 非 admin 阻擋三條路徑，深淺兩主題文字對比最低 5.71:1 | `/implement .scratch/m0/issues/08-wizard-services.md` |
 
 ## 偏差與決定
 
@@ -137,3 +138,51 @@
   只因 `Movies`→`movies` 巧合一致。改成同一支函式，並加測試釘住三個套件內媒體庫的 `has_berth_path`。
 - 2026-09-07 票 06 code-review：`_ACTIONS` 加上 import 時的完整性斷言——漏一步原本是使用者按下去
   才炸的 `KeyError`。
+- 2026-09-08 票 07：**`setup_completed` 這個位元搬到 `GET /health`**。精靈跑完之後 `setup/*` 只有
+  管理員讀得到，而「該畫精靈還是登入頁」必須在**還沒有人登入得了**的時候就決定得出來；不搬的話
+  匿名開任何一頁都得先吃兩個 401 再靠錯誤路徑猜答案（playwright 實跑時看到的）。精靈未完成時
+  `setup/*` 本來就整組匿名開放，所以這一個位元不多洩漏任何東西。plan §6、§7 已補。
+- 2026-09-08 票 07：門禁做成 **middleware**（`api/gate.py`）而不是逐 router 的相依，理由是預設拒絕——
+  新增端點什麼都不做就已經在門後。代價是**未知 `/api` 路徑匿名時回 401 而不是 404**，推翻票 02 的
+  `test_unknown_api_paths_stay_json_404`（該測試已改；登入後仍是 404）。回應碼因此也不能拿來列舉端點。
+- 2026-09-08 票 07：`setup/*` 在精靈完成後從「一律 401」改成「未登入 401、非 admin 403」。plan §6 已改。
+- 2026-09-08 票 07：`ServiceClientFactory` 與 `SetupProbes` 從 `services/setup.py` 移到
+  `services/clients.py`。理由是 `services/auth.py` 只為了一個 Protocol 去 import 精靈模組是錯的耦合；
+  `clients.py` 本來就是「要連哪一台、用什麼憑證」的家。沒有留相容匯出。
+- 2026-09-08 票 07：`JellyfinAuth` 新增 `name`（`User.Name`）。顯示名取自 Jellyfin 而不是使用者打進
+  表單的字串——大小寫以伺服器那一端為準。plan §8.2 未提及此欄位，屬新增而非推翻。
+- 2026-09-08 票 07：session 壽命 30 天、**絕對到期不滑動續期**，token 存 SHA-256 雜湊（token 本身是
+  256 bit 亂數，沒有字典可查，用慢雜湊只會讓每個請求變慢），過期的列在下一次被用到時就地刪掉，
+  不等背景工作。brief 與 plan 原本都沒寫壽命，已補進 plan §2.1。
+- 2026-09-08 票 07：cookie **刻意不設 `Secure`**。自架幾乎都是區網的純 HTTP 位址，設了 cookie 根本
+  存不下來；防線是 httpOnly + `SameSite=Strict` + CSRF 標頭，HTTPS 交給前置代理。plan §6 已寫。
+- 2026-09-08 票 07：**TanStack Router 的 `validateSearch` 刪不掉父路由沒宣告的 search 參數**
+  （實測 1.171）——根路由沒有宣告任何 search，所以原始的 `?redirect=https://evil.example` 會越過子
+  路由的驗證直接到達頁面。open redirect 的清洗因此做在**用它的地方**（`LoginPage.destination()`），
+  不是 `validateSearch`。這是前端測試抓到的，不是推理出來的。
+- 2026-09-08 票 07 `/impeccable shape 登入頁`：**不畫泊位板**——泊位板講的是精靈那四個泊位，登入時
+  一個都還沒開始，搬過來只是把同一組色塊當壁紙。改成單一「登船口」窗格（`BTH 0`），
+  `my-auto` 置中而不是 `items-center`（矮螢幕上 flex 置中會把上緣切掉且捲不回去）。
+  shape brief 在 `.scratch/m0/login-shape.md`。
+- 2026-09-08 票 07 `/impeccable shape 登入頁`：**不顯示 Jellyfin 的位址與版本**（使用者決定）。
+  這一頁匿名可達，內部主機名不該送給沒登入的人；畫面上只留一句「Berth 沒有自己的密碼」，
+  它一次解釋了帳密從哪裡來、為什麼沒有註冊、以及為什麼 Jellyfin 掛掉時誰都進不來。
+- 2026-09-08 票 07：頁首的角色用**中性色塊**（`bg-deck`）而不是四個信號色之一。角色不是狀態，
+  借用信號色會讓「每個顏色只有一個意思」這條規則破掉。角色要看得見，`user` 才知道自己為什麼
+  沒有「設定」那顆按鈕，而不是以為壞了。
+- 2026-09-08 票 07：「工作階段已過期」只在**這一輪之前畫面上就有人**時才說（前端快取裡有 `me`）。
+  一個 401 分不出「過期」與「從來沒登入過」，對第一次來的人說「已過期」是騙他。
+- 2026-09-08 票 07 code-review：**TanStack Query 的 `ensureQueryData` 只要快取裡有值就直接回，
+  不會重抓**（實測 query-core 5.102，`staleTime: 0` 也不管用）。門禁用它的話，session 在使用中
+  失效之後每一次前端導航都拿舊的 `me` 放行，永遠導不到 `/login`。改用 `fetchQuery`；回歸測試
+  先驗過在舊寫法下是紅的。
+- 2026-09-08 票 07 code-review：**FastAPI 的 422 會把收到的值原樣回傳**——`POST /auth/login`
+  少一個欄位時，pydantic 的 `input` 放的是**整份 body**，密碼就這樣回到回應裡。新增
+  `api/errors.py` 把 `input` / `ctx` 從 422 剝掉（掛在 app 上，下一個收密碼或 API key 的端點
+  不必記得這件事），`LoginIn` 的欄位改成有預設值，缺欄位走 401 而不是 422。
+- 2026-09-08 票 07 code-review：`setup/*` 的規則原本一半在門禁的白名單、一半在 router 的相依，
+  於是 `/api/setup` 底下**新掛的 router 預設是匿名的**。整條規則搬進門禁，`require_setup_open`
+  刪除。plan §6 的措辭已經是搬完之後的樣子。
+- 2026-09-08 票 07 code-review：門禁從 `BaseHTTPMiddleware` 改寫成**純 ASGI middleware**。
+  前者會把回應整個收進記憶體再送出去，plan §6 的 `GET /events/stream`（SSE，M1）在它底下就
+  不是串流了。純 ASGI 沒有這個問題，程式碼也沒有比較長。

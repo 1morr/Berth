@@ -8,12 +8,15 @@ from contextlib import asynccontextmanager
 from pathlib import Path, PurePath
 
 from fastapi import FastAPI
+from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException
 from starlette.responses import Response
 from starlette.staticfiles import StaticFiles
 from starlette.types import Lifespan, Scope
 
 from berth.api import router as api_router
+from berth.api.errors import validation_error
+from berth.api.gate import ApiGate
 from berth.config import VERSION, Config, load_config
 from berth.db import create_engine, create_session_factory, upgrade_to_head
 
@@ -55,6 +58,9 @@ def create_app(config: Config | None = None) -> FastAPI:
 
     app = FastAPI(title="Berth", version=VERSION, lifespan=_lifespan(resolved))
     app.state.config = resolved
+    # 門禁包住整個 `/api`，所以它要在路由之外（票 07）。
+    app.add_middleware(ApiGate, prefix=API_PREFIX)
+    app.add_exception_handler(RequestValidationError, validation_error)
     app.include_router(api_router, prefix=API_PREFIX)
     _mount_frontend(app, resolved.web_root)
     return app

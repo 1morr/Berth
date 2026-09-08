@@ -183,6 +183,7 @@ uv run python scripts/fake_setup_server.py --scenario mixed
 | `absent` | Jellyfin 不在 `COMPOSE_PROFILES` 裡：探不到，要在第 2 步填自己那一台的位址 |
 | `failing` | 套件內 Jellyfin，但插件下載一直失敗：看第 8 步的失敗樣子與可複製的手動步驟 |
 | `installed` | 既有 Jellyfin 而且 MergeVersions 已裝好：兩顆按鈕的「已完成」樣子 |
+| `signed-out` | 精靈已跑完，畫面從登入頁開始。`skipper` / `harbour` 是管理員，`deckhand` / `rope` 是普通使用者（看不到設定入口） |
 
 Fake 是**有狀態**的，每個情境只有一份，所以第 3 步真的會把那台假 Jellyfin 一步一步改掉，
 重按也真的會標成「已經是這樣」。

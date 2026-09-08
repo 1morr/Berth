@@ -1,4 +1,4 @@
-import { useId, useState, type InputHTMLAttributes, type ReactNode } from 'react'
+import { useId, useState, type ComponentPropsWithRef, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { SIGNAL_FILL, type Signal } from './signal'
@@ -16,7 +16,9 @@ import { SIGNAL_FILL, type Signal } from './signal'
 export const STICKY_ACTION =
   'sticky bottom-0 -mx-6 border-t-2 border-rule bg-hull px-6 pb-[max(1rem,env(safe-area-inset-bottom))] pt-4 lg:static lg:mx-0 lg:border-0 lg:bg-transparent lg:p-0'
 
-type FieldProps = InputHTMLAttributes<HTMLInputElement> & {
+// `ComponentPropsWithRef` 而不是 `InputHTMLAttributes`：登入失敗後要把焦點送回密碼欄，
+// 呼叫端得拿得到那個 input（React 19 的 `ref` 就是一個一般的 prop）。
+type FieldProps = ComponentPropsWithRef<'input'> & {
   label: string
   hint?: ReactNode
   error?: string
@@ -38,7 +40,7 @@ export function Field({ label, hint, error, ...input }: FieldProps) {
         id={id}
         aria-invalid={error ? true : undefined}
         aria-describedby={described || undefined}
-        className={`value w-full border-2 bg-hull px-3 py-2.5 text-sm text-ink placeholder:text-ink-dim ${
+        className={`value w-full border-2 bg-hull px-3 py-2.5 text-sm text-ink placeholder:text-ink-dim disabled:bg-well disabled:text-ink-dim ${
           error ? 'border-blocked' : 'border-rule focus:border-rule-strong'
         }`}
       />
@@ -113,7 +115,7 @@ export function Checkbox({
 export function PrimaryButton({
   children,
   ...button
-}: InputHTMLAttributes<HTMLButtonElement> & { children: ReactNode; type?: 'button' | 'submit' }) {
+}: ComponentPropsWithRef<'button'> & { children: ReactNode; type?: 'button' | 'submit' }) {
   return (
     <button
       {...button}
@@ -128,7 +130,7 @@ export function PrimaryButton({
 export function GhostButton({
   children,
   ...button
-}: InputHTMLAttributes<HTMLButtonElement> & { children: ReactNode; type?: 'button' | 'submit' }) {
+}: ComponentPropsWithRef<'button'> & { children: ReactNode; type?: 'button' | 'submit' }) {
   return (
     <button
       {...button}

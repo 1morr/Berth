@@ -39,5 +39,8 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
     throw new ApiError(response.status, `${method} ${path} failed with ${response.status}`)
   }
 
+  // 204 沒有 body（登出就是），硬 parse 會炸在 JSON.parse 上而不是回傳 void。
+  if (response.status === 204) return undefined as T
+
   return (await response.json()) as T
 }

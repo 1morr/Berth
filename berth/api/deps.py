@@ -15,10 +15,11 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from berth.config import Config
 from berth.services.clients import (
     HttpServiceClientFactory,
+    ServiceClientFactory,
+    SetupProbes,
     build_setup_probes,
     close_setup_probes,
 )
-from berth.services.setup import ServiceClientFactory, SetupProbes
 
 
 def get_config(request: Request) -> Config:

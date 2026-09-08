@@ -9,7 +9,6 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import Protocol
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -31,6 +30,7 @@ from berth.models import (
     SetupAdmin,
     SetupSettings,
 )
+from berth.services.clients import ServiceClientFactory, SetupProbes
 from berth.services.settings import read_settings, write_settings
 
 #: 服務未就緒時的輪詢上限（plan §9.3 第 2 步）。逾時後使用者可重試，不是永遠轉圈。
@@ -44,16 +44,6 @@ STEP_QBITTORRENT = 4
 
 
 @dataclass(frozen=True, slots=True)
-class SetupProbes:
-    """第 2 步要探的三個 client，加上唯讀掛載讀到的 Prowlarr API key。"""
-
-    jellyfin: JellyfinClient
-    qbittorrent: QbittorrentClient
-    prowlarr: ProwlarrClient
-    prowlarr_api_key: str
-
-
-@dataclass(frozen=True, slots=True)
 class ServiceConnection:
     """使用者為既有服務填的連線資訊（plan §9.3 第 2 步）。"""
 
@@ -61,16 +51,6 @@ class ServiceConnection:
     api_key: str = ""
     username: str = ""
     password: str = ""
-
-
-class ServiceClientFactory(Protocol):
-    """依位址造 client。探測套件內服務用的是固定主機名，不走這裡。"""
-
-    def jellyfin(self, base_url: str, token: str = "") -> JellyfinClient: ...
-
-    def qbittorrent(self, base_url: str) -> QbittorrentClient: ...
-
-    def prowlarr(self, base_url: str, api_key: str) -> ProwlarrClient: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -100,6 +80,13 @@ class SetupStatus:
     #: 本輪已等待的秒數與上限，UI 用來顯示等待狀態與逾時。
     waited_seconds: int
     window_seconds: int
+
+
+async def is_setup_complete(session: AsyncSession) -> bool:
+    """精靈跑完了沒。這一個位元是匿名可讀的（`GET /api/health`）：前端要在**還沒有人
+    登入得了**的時候就決定該畫精靈還是登入頁，而精靈未完成時本來就整組匿名開放。
+    """
+    return (await read_settings(session, SetupSettings)).completed
 
 
 async def read_status(session: AsyncSession) -> SetupStatus:

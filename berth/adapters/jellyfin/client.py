@@ -114,6 +114,7 @@ class HttpJellyfinClient:
         return JellyfinAuth(
             token=str(payload["AccessToken"]),
             user_id=str(user.get("Id", "")),
+            name=str(user.get("Name", "")),
             server_id=str(payload.get("ServerId", "")),
             is_administrator=bool(policy.get("IsAdministrator", False)),
         )
