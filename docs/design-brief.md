@@ -672,6 +672,16 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 - 其他端點：`setLocation`、`rename`、`renameFile` / `renameFolder`（API 2.8.0）、`delete(deleteFiles)`、`setCategory`（category 不存在回 409）、`addTags`、`recheck`。
 - **沒有 webhook**；`sync/maindata` 以 `rid` 做增量輪詢。`autorun_enabled` / `autorun_program`（完成時執行外部程式，可帶 `%f` `%n`）可作為「喚醒輪詢」的加速手段，非必要。
 - 登入 `auth/login` 回 `SID` cookie，且 **`Referer` / `Origin` 必須與 `Host` 一致**；可設 `bypass_local_auth` 與子網白名單。
+- **`auth/login` 的成敗形狀跨大版本不同**（2026-09-08 對 `lscr.io/linuxserver/qbittorrent` 的 4.4.5 與 5.2.3 各實測一輪，票 11）：
+
+  | 版本 | 成功 | 帳密錯 |
+  | --- | --- | --- |
+  | 4.4.5 | `200` + body `Ok.` + `Set-Cookie: SID=…` | `200` + body `Fails.`（**狀態碼不變**） |
+  | 5.2.3 | `204` + 空 body + `Set-Cookie: QBT_SID_<port>=…` | `401` + body `Unauthorized` |
+
+  所以判定只能認 4.x 那個「200 卻是失敗」的 `Fails.`，不能認「成功等於 `Ok.`」。另外，來源 IP 在
+  `WebUI\AuthSubnetWhitelist` 上時 5.x **一律回 204，連錯的帳密也是**——免密白名單本來就繞過驗證，
+  而那正是套件內 Berth 的處境（§16.3、§20.7）。
 
 **硬鏈接與 Docker**（[TRaSH Hardlinks](https://trash-guides.info/File-and-Folder-Structure/Hardlinks-and-Instant-Moves/)、[Servarr docker-guide](https://wiki.servarr.com/docker-guide)、[link(2)](https://man7.org/linux/man-pages/man2/link.2.html)）
 
@@ -852,6 +862,7 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 **Prowlarr**（[OpenAPI](https://raw.githubusercontent.com/Prowlarr/Prowlarr/develop/src/Prowlarr.Api.V1/openapi.json)、[supported-indexers](https://wiki.servarr.com/prowlarr/supported-indexers)、[environment-variables](https://wiki.servarr.com/prowlarr/environment-variables)）
 
 - `GET /api/v1/indexer/schema`、`GET/POST /api/v1/indexer`、`POST /api/v1/indexer/test`；`GET /api/v1/search?query=&indexerIds=&categories=&type=` 回 `ReleaseResource`（`title`、`size`、`seeders`、`leechers`、`downloadUrl`、`magnetUrl`、`infoHash`、`indexer`、`categories`、`publishDate`、`guid`、`infoUrl`、`tmdbId` …）。Prowlarr 明言**不提供跨站聚合 Torznab**，單站 Torznab 為 `/{id}/api?t=search&apikey=`。
+- **`indexer/schema` 的第一次呼叫很慢**（2026-09-08 票 11 M0 驗收實測）：容器剛起來時它要把 627 份 Cardigann 定義從 `/config` 讀進來再組出 **5.6 MB** 的回應，Windows Docker Desktop 的 9p bind mount 上量到 **9.42 秒**；同一支端點第二次 0.34 秒。慢的儲存（NAS）只會更久，所以這一支必須有自己的逾時，不能沿用探測用的 5 秒。**未量測**：成因是冷容器從 `/config` 讀那 627 份定義，不是回應大小，所以同一時刻的 `config/host` 理論上也慢；它目前仍用 5 秒，沒有數據支持那樣安全。
 - API key 在 `config.xml` 的 `<ApiKey>`，可用 `PROWLARR__AUTH__APIKEY` 預設。
 - 支援的公開索引站含：Nyaa.si、dmhy、AniDex、Anime Tosho、ACG.RIP、**Mikan**、1337x、YTS、EZTV、The Pirate Bay；TorrentGalaxy 目前不在清單。
 

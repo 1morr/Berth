@@ -53,6 +53,7 @@ export function DetectStep({
             {SERVICE_KINDS.map((kind) => (
               <CutawayRow
                 key={kind}
+                code
                 term={PROBE_ENDPOINT[kind]}
                 value={t(`detect.cutaway.${kind}`)}
               />

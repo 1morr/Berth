@@ -33,12 +33,25 @@ class HttpQbittorrentClient:
         return self._base_url
 
     async def login(self, username: str, password: str) -> None:
-        """`auth/login` 成功回 `Ok.`，帳密錯回 200 + `Fails.`——不是 401（brief §20.2）。"""
+        """成功與失敗的形狀隨版本不同（brief §20.2，2026-09-08 對兩個版本實測）：
+
+        - 4.4.5：成功 `200` + `Ok.`，帳密錯也是 `200`，body 才是 `Fails.`。
+        - 5.2.3：成功 `204` 空 body，帳密錯 `401`（`HttpSession` 已翻成 `AuthFailedError`）。
+
+        免密白名單上的 client 一律回 204（帳密錯也是），那也是成功——套件內的 Berth 本來就
+        不需要帳密進得去。
+
+        成功只有那兩種形狀，所以其餘的 2xx 判為連到了別的東西：位址填錯打到反向代理時，
+        那一台很可能回 `200` 加一頁 HTML 登入表單，當成登入成功會一路錯到後面才爆。
+        """
         response = await self._session.request(
             "POST", "/api/v2/auth/login", data={"username": username, "password": password}
         )
-        if response.text.strip() != "Ok.":
+        body = response.text.strip()
+        if body == "Fails.":
             raise AuthFailedError("auth/login: rejected")
+        if body not in ("", "Ok."):
+            raise ProtocolMismatchError("auth/login: not a qBittorrent reply")
 
     async def version(self) -> QbittorrentVersion:
         app = await self._session.get("/api/v2/app/version")

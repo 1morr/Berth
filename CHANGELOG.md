@@ -6,6 +6,12 @@
 
 ## [Unreleased]
 
+**M0（骨架）在 2026-09-08 通過驗收**（brief §17、`.scratch/m0/issues/11-m0-acceptance.md`）：在乾淨的
+Windows Docker Desktop（NTFS bind mount）與 Linux（ext4）上各跑一次 `docker compose up` → 只操作 Berth
+→ 四項健康檢查綠燈，全程沒有打開 qBittorrent / Jellyfin / Prowlarr 的介面；另以「既有 Jellyfin +
+套件內 qBittorrent 與 Prowlarr」的組合走一次，既有媒體庫是**加**一條路徑而不是搬路徑，項目 ID 與
+觀看紀錄都沒有變。M0 建的東西全部列在下面，還沒有發佈過正式版本。
+
 ### Added
 
 - Repo 骨架：uv 後端專案與 `berth` CLI（`--version`）、pnpm + Vite + React + TypeScript 前端。
@@ -112,3 +118,44 @@
 - 前端共用件從 `setup/` 移到 `components/`（纜繩、狀態對照、Route 檢查的文案與 compose 片段），
   跨頁共用的 API 型別移到 `api/schemas.ts`（後端對應 `api/schemas.py`）——精靈、健康頁與設定頁
   講的是同一批東西。
+- 前端 eslint 開啟 `@typescript-eslint/no-floating-promises` 與 `no-misused-promises`（需要型別資訊）。
+  這是票 01 把型別感知規則延後時寫下的理由——TanStack Query 進來之後忘了 `await` 才變成真風險。
+  只開這兩條而不是整包 `recommendedTypeChecked`：整包在這個 repo 上抓到的 36 條全是框架慣用法
+  （TanStack Router 的 `throw redirect(...)`）與測試裡的型別噪音，沒有一條是真的缺陷。
+- 英文的精靈階段字串從 `Berth {{code}}` 改成 `{{code}}`——`code` 本身就是 `BTH 1`，原本讀起來是 `BERTH BTH 1`。中文維持「泊位 BTH 1」：`泊位` 與 `BTH` 不同字集，而且它替第一次看到這個代號的人解釋了它是什麼。
+- `routes.tsx` 的「精靈沒跑完就去跑、跑完了就要有 session」收斂成 `requireSignedInPage`
+  （票 07 留的「頁面變多時再收」）。精靈那一頁仍然自己寫——它在同一個條件下是留下來而不是導走。
+
+### Fixed
+
+- **泊位板的實測值標籤對比只有 3.56:1**（WCAG 2.2 AA 的驗收條件，PRODUCT.md）。`opacity-70` 疊在
+  信號色塊上，正好把 `index.css` 註釋裡「白字配中明度色只有 3.6:1，過不了 AA」那個數字加了回來。
+  拿掉 opacity 之後同一批標籤實測 **9.63:1**，精靈與健康頁兩塊板都適用。
+- **英文版把大小寫敏感的 API 端點大寫掉**：剖面欄的 term 走 `.label`（拉丁文 `uppercase`），
+  於是左欄印 `POST /LIBRARY/VIRTUALFOLDERS`、右欄印正確的 `POST /Library/VirtualFolders`，
+  同一畫面兩種大小寫而其中一種不是真的端點。中文版因為 `text-transform: none` 沒有這個問題，
+  所以一直沒被看到。`CutawayRow` 新增 `code` 變體給機器字串用。
+- **索引站的「之後再說」按下去畫面毫無變化**：狀態存下去了，但只有 TMDB 那一節畫得出徽章。
+  兩個審查代理與驗收本人都以為按鈕壞了而重複按。徽章同時改用新的 `source.deferred`
+  （「之後再說」/「Deferred」）——原本借用的 `status.skipped` 是「已經是這樣」，那是冪等步驟的字。
+- **`<summary>` 落回 Chrome 預設的 0.67px 焦點環**：`:focus-visible` 的選擇器漏了它。
+- **「顯示」密碼按鈕 38.6 × 15px**，間距例外也不成立（距密碼框 11.5px < 12），不符 WCAG 2.2 AA 2.5.8。
+- **窄版泊位板是 carousel**，BTH 3 與 BTH 4 整個在畫面外，而「一眼看出哪一格紅了」正是這塊板的
+  用途；捲動容器還會變成一個沒有名字的 Tab 停留點。改回 shape brief 寫的 2×2。
+- **精靈沒有出口**：設定跑完之後它就是設定入口（plan §6），但整頁沒有任何連結回得去，而設定頁
+  三張服務卡片的「改位址或憑證」又全部連到裸 `/setup`（於是不管按哪一張都落在第 3 步
+  「接手這台 Jellyfin」）。精靈新增 `?berth=1..4` 深連結、返回鍵，以及一句「不會重跑一次靠泊」。
+
+- **入口腳本從來沒有接手過媒體根的擁有者**（`deploy/entrypoint.sh`）。`take_ownership` 的參數順序
+  寫反，`/data` 那一次呼叫展開成 `chown /data berth:berth berth:berth`，一律失敗。Windows 上看不
+  出來（那裡 `chown` 本來就會失敗且不影響寫入），但乾淨的 Linux 宿主上 Docker 新建的 `/data` 是
+  `root:root`，Berth 連 `/data/library` 都建不出來，精靈第 3 步當場死。順帶讓腳本改讀
+  `CONFIG_ROOT` / `DATA_ROOT`——它本來寫死路徑，與 Berth 自己讀的變數對不上。
+- **qBittorrent 5.x 的登入被判成失敗**（`berth/adapters/qbittorrent/client.py`）。`auth/login` 成功時
+  4.4.5 回 `200` + `Ok.`、5.2.3 回 `204` 空 body；失敗時 4.4.5 回 `200` + `Fails.`、5.2.3 回 `401`。
+  原本的判定是「不是 `Ok.` 就是失敗」，所以**每一套用預設 image 的部署，qBittorrent 那一項健康檢查
+  都永遠紅著**。判定改成只認 4.x 的 `Fails.`，兩個版本的實測回應都錄成 fixture。
+- **Prowlarr 冷啟動時索引站清單超過探測逾時**（`berth/adapters/prowlarr/client.py`）。容器剛起來的
+  第一次 `indexer/schema` 要讀進 627 份定義再組出 5.6 MB 回應，Windows 的 9p bind mount 上實測
+  9.42 秒（第二次 0.34 秒），5 秒的探測逾時讓精靈第 5 步在乾淨部署上直接失敗。這一支端點改用自己的
+  逾時。

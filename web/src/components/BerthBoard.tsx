@@ -26,18 +26,33 @@ export interface BoardSlot {
   filled?: boolean
 }
 
-export function BerthBoard({ label, slots }: { label: string; slots: readonly BoardSlot[] }) {
+export function BerthBoard({
+  label,
+  slots,
+  current,
+}: {
+  label: string
+  slots: readonly BoardSlot[]
+  /** 現在停在哪一格的 `code`。精靈才有；健康頁四格同時成立，沒有「目前」。 */
+  current?: string
+}) {
   return (
     <section aria-label={label} className="border-b-2 border-rule-strong bg-hull">
-      {/* 手機收成水平捲動的四格；桌機一列四格等寬（direction contract）。
-          欄數寫死成四：泊位就是那四個（Jellyfin / qBittorrent / 來源 / 媒體庫路徑），
-          而且 Tailwind 看不見組出來的類名。 */}
-      <ul className="flex snap-x gap-px overflow-x-auto bg-rule-strong sm:grid sm:grid-cols-4 sm:overflow-visible">
+      {/* 窄版 2×2、桌機一列四格等寬（shape brief）。
+          **不是** carousel：四格橫向捲動時 BTH 3 與 BTH 4 整個在畫面外，而「一眼看出哪一格
+          紅了」正是這塊板存在的理由；捲動容器還會變成一個沒有名字的 Tab 停留點。
+          欄數寫死：泊位就是那四個，而且 Tailwind 看不見組出來的類名。 */}
+      <ul className="grid grid-cols-2 gap-px bg-rule-strong sm:grid-cols-4">
         {slots.map((slot) => (
           <li
             key={slot.code}
-            className={`min-w-52 flex-1 snap-start px-4 py-3 ${
+            aria-current={slot.code === current ? 'step' : undefined}
+            className={`px-4 py-3 ${
               slot.filled === false ? 'bg-well text-ink-dim' : SIGNAL_FILL[slot.signal]
+            } ${
+              // 目前這一格的底線。用 currentColor 而不是第五個顏色——四個塗裝色上的
+              // 字色本來就是為了在那塊漆上讀得出來而選的。inset 陰影不佔版面，格子不會跳。
+              slot.code === current ? 'shadow-[inset_0_-3px_0_0_currentColor]' : ''
             }`}
           >
             <div className="flex items-baseline justify-between gap-2">

@@ -34,6 +34,9 @@ const zhHant = {
     },
     step: '第 {{current}} 步，共 {{total}} 步',
     resumed: '進度已保留，關掉瀏覽器再回來會回到這一步。',
+    exit: '回到 Berth',
+    revisited:
+      'Berth 已經設定好了。這裡改的是連線設定，不會重跑一次靠泊；每一步都可以只做你要改的那一個。',
   },
   admin: {
     title: '建立 Berth 管理員',
@@ -290,6 +293,7 @@ const zhHant = {
     title: '接上抓取來源',
     lede: '索引站決定 Berth 找得到什麼，TMDB 決定它認得出什麼。兩個都可以之後再說。',
     skip: '之後再說',
+    deferred: '之後再說',
     unreachable: '連不上套件內的 Prowlarr。可以先填自己的位址，或跳過這一步之後再補。',
     cutaway: {
       indexers: '索引站',
@@ -559,11 +563,14 @@ const en: Translations<typeof zhHant> = {
     title: 'Setup wizard',
     stage: {
       pre: 'Pre-berth',
-      berth: 'Berth {{code}}',
+      berth: '{{code}}',
       final: 'Cast off',
     },
     step: 'Step {{current}} of {{total}}',
     resumed: 'Progress is saved. Close the browser and you come back to this step.',
+    exit: 'Back to Berth',
+    revisited:
+      'Berth is already set up. This changes connection settings; it does not moor everything again, and each step does only what you ask it to.',
   },
   admin: {
     title: 'Create the Berth administrator',
@@ -831,6 +838,7 @@ const en: Translations<typeof zhHant> = {
     title: 'Connect a source',
     lede: 'Indexers decide what Berth can find; TMDB decides what it can recognise. Both can wait.',
     skip: 'Do this later',
+    deferred: 'Deferred',
     unreachable:
       'Cannot reach the bundled Prowlarr. Point Berth at your own instead, or skip this step and come back.',
     cutaway: {

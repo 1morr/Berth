@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useNavigate } from '@tanstack/react-router'
+import { Link, useNavigate } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 
 import {
@@ -45,7 +45,7 @@ import { JellyfinStep } from '../setup/JellyfinStep'
 import { QbittorrentStep } from '../setup/QbittorrentStep'
 import { RouteStep } from '../setup/RouteStep'
 import { SourceStep } from '../setup/SourceStep'
-import { GhostButton } from '../components/controls'
+import { GhostButton, Notice } from '../components/controls'
 import { SIGNAL_FILL, type Signal } from '../components/signal'
 import { isSettled } from '../components/steps'
 import { signalOf } from '../setup/signals'
@@ -69,6 +69,14 @@ const BERTH_CODE: Record<number, string> = {
   [STEP_ROUTES]: 'BTH 4',
 }
 
+/** 泊位號 → 那個泊位的第一步。`BERTH_CODE` 的反向，深連結 `?berth=N` 用它。 */
+const BERTH_STEP: Record<number, number> = {
+  1: STEP_JELLYFIN,
+  2: STEP_QBITTORRENT,
+  3: STEP_INDEXER,
+  4: STEP_ROUTES,
+}
+
 /** 服務還在啟動時的重探間隔。上限由後端的輪詢窗口決定（`window_seconds`）。 */
 const POLL_INTERVAL_MS = 3000
 
@@ -82,13 +90,24 @@ const PROGRESS_INTERVAL_MS = 1500
  * 設定精靈。方向見 `.impeccable/surfaces/web-src-pages-setuppage-tsx.md`：
  * 四個泊位常駐在頂端，工作面在下；不是八張「下一步」的表單。
  */
-export function SetupPage() {
+export function SetupPage({
+  berth,
+}: {
+  /**
+   * 直接停在哪一個泊位（1–4）。從網址來，但由路由讀了再傳進來——這個元件的測試刻意
+   * 不掛 router（`test/render.tsx` 的 `renderWithProviders`），而路由的知識本來就該
+   * 留在 `routes.tsx`。
+   */
+  berth?: number
+}) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const status = useQuery(setupStatusQueryOptions)
   // 步驟是由狀態導出的（plan §9.3），所以「回頭看前一步」要靠這個覆寫，不是靠改狀態。
-  const [revisit, setRevisit] = useState<number | null>(null)
+  const [revisit, setRevisit] = useState<number | null>(berth ? BERTH_STEP[berth] : null)
+  // 精靈跑完之後再進來的人：他是來改一個設定的，不是來重跑一次的。
+  const revisited = useQuery(healthQueryOptions).data?.setup_completed ?? false
 
   function absorb(next: SetupStatus) {
     queryClient.setQueryData(setupStatusQueryOptions.queryKey, next)
@@ -216,6 +235,7 @@ export function SetupPage() {
 
   const board = {
     step,
+    revisited,
     services: current.services,
     signals: {
       jellyfin: jellyfinSignal(current, jellyfin.data, inFlight),
@@ -408,11 +428,17 @@ function Shell({
   step,
   services = [],
   signals,
+  revisited = false,
   children,
 }: {
   step: number
   services?: SetupStatus['services']
   signals?: BerthSignals
+  /**
+   * 精靈已經跑完過。這時候它是設定入口而不是 onboarding，所以要有出口——
+   * 否則從設定頁點「改位址或憑證」進來的人，只剩瀏覽器的上一頁可按。
+   */
+  revisited?: boolean
   children: ReactNode
 }) {
   const { t } = useTranslation()
@@ -428,10 +454,23 @@ function Shell({
             : t(step === STEP_COMPLETE ? 'setup.stage.final' : 'setup.stage.pre')}{' '}
           · {t('setup.step', { current: step, total: TOTAL_STEPS })}
         </p>
+        {revisited && (
+          <Link to="/health" className="label text-ink-dim underline hover:text-ink">
+            {t('setup.exit')}
+          </Link>
+        )}
         <LanguageToggle />
       </header>
 
-      <BerthBoard services={services} signals={signals} />
+      <BerthBoard services={services} signals={signals} current={BERTH_CODE[step]} />
+
+      {revisited && (
+        <div className="border-b-2 border-rule px-6 py-3">
+          <Notice signal="assigned" label={t('status.ok')}>
+            {t('setup.revisited')}
+          </Notice>
+        </div>
+      )}
 
       <main className="flex flex-1 flex-col">{children}</main>
 

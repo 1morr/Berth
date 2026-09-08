@@ -31,6 +31,7 @@
 | 2026-09-08 | 08 精靈第 4–6 步 | 泊位 2（qBittorrent 逐鍵差異與套用、版本閘門、密碼）與泊位 3（十個預設索引站逐站成敗、既有 Prowlarr / 任意 Torznab、TMDB 內建憑證可覆寫、兩步可跳過）完成。**對真服務錄了 14 份新 fixture**：qBittorrent 4.4.5 與 5.2.3 各一組、Prowlarr 的 schema 與三種新增結果、Torznab caps、TMDB configuration。十個站在本機五成五敗，逐站結果就是 UI 要撐住的東西。297 個後端測試 + 70 個前端測試綠燈；playwright 實跑 `bundled` 與 `outdated` 兩個情境，深淺兩主題文字對比最低 5.22:1 | `/implement .scratch/m0/issues/09-wizard-routes.md` |
 | 2026-09-08 | 10 健康檢查 | `health_checker` 由 lifespan 啟動（每 30 秒醒、上一輪滿 5 分鐘才跑、精靈跑完前不跑、關閉時不留 pending task）；四項檢查——Jellyfin、qBittorrent（含建議設定漂移）、索引站、每條 Route 的五條纜繩（與精靈第 7 步同一組、寫回同一個欄位並記下最後成功時間）。`GET /api/health` 的 `status` 改由紀錄導出，新增 `GET /api/health/detail`、`POST /api/health/check` 與 `/api/settings/*`（只有 admin）。健康頁 `/health` 與服務設定頁 `/settings/services` 走 `/impeccable shape`（`.scratch/m0/health-shape.md`），與精靈**同一塊泊位板**。416 個後端測試 + 103 個前端測試綠燈；三個新情境（`healthy` / `degraded` / `drifted`）實跑驗證，深淺兩主題最低對比 5.71:1 | `/implement .scratch/m0/issues/11-m0-acceptance.md` |
 | 2026-09-08 | 09 精靈第 7–8 步 | 泊位 4（媒體庫 → Library Route）與完成頁做完：套件內自動建三條 Route、既有由使用者勾選媒體庫與寫入目標（可就地加 Berth 路徑、劇集可挑 profile），每條 Route 建 `berth-*` category 並跑五項跨服務檢查（含**真的 `link()` 再比 inode**）；`POST /api/setup/complete` 全綠才寫 `settings.setup.completed`。fs adapter 帶進來（`link`、`stat`、`same_inode`、`link_test`、`probe_file`、`free_space`、`is_within`，寫入一律要允許的根）。356 個後端測試 + 84 個前端測試綠燈；playwright 對 `--scenario bundled` 走完八步（Windows NTFS 上真的建了硬鏈接：`dev=11550084160259632778 · inode=17451448556763814`），對新的 `--scenario unmounted` 看失敗樣子 | `/implement .scratch/m0/issues/10-health.md` |
+| 2026-09-08 | 11 M0 收尾 | 三輪驗收全過：乾淨 Linux（Docker Desktop VM 的 ext4）、乾淨 Windows（NTFS 9p bind mount）、以及「既有 Jellyfin + 套件內 qBittorrent 與 Prowlarr」，每一輪都是`docker compose up` → **只操作 Berth** → 四項綠燈；既有媒體庫是加路徑，項目 ID 與觀看紀錄五項全未變。**驗收本身抓到三個真缺陷並修掉**：入口腳本從來沒接手過 `/data`（乾淨 Linux 上精靈第 3 步必死）、qBittorrent 5.x 的登入被判成失敗（每一套預設部署健康檢查永遠紅）、Prowlarr 冷啟動`indexer/schema` 超過 5 秒逾時（實測 9.42 秒）。`/impeccable critique` 22/40、檢測器 0 findings，polish 修掉對比 3.56:1、英文大寫掉 API 端點、索引站跳過零回饋、`<summary>` 焦點環、觸控目標、窄版 carousel、精靈沒有出口；`DESIGN.md` 產生。README 與 CHANGELOG 定稿，票 01–10 的遺留逐條過完（延後的寫進 plan §11）。425 後端 + 104 前端測試綠燈 | M0 完成。`/to-tickets docs/plan.md` 拆 M1 |
 
 ## 偏差與決定
 
@@ -295,3 +296,69 @@
   匿名端點那個 ok/degraded 改名 `OverallStatus`。
 - 2026-09-08 票 10 code-review：`Timestamp` 沒有值時說「沒有紀錄」而不是「尚未檢查」——後者
   與那一項的狀態標籤同字，紅著的服務也可能從來沒成功過，兩件事不該共用一句話。
+- 2026-09-08 票 11 驗收：**`deploy/entrypoint.sh` 的 `take_ownership` 參數順序寫反**，`/data` 那一次
+  展開成 `chown /data berth:berth berth:berth`，所以「空的媒體根接手擁有者」（plan §9.1、票 03 的決定）
+  從來沒有真的執行過。Windows 上量不到——那裡 `chown` 本來就會失敗且不影響寫入；乾淨的 Linux 宿主上
+  Docker 新建的 `/data` 是 `root:root`，Berth 連 `/data/library` 都建不出來。同一輪讓腳本改讀
+  `CONFIG_ROOT` / `DATA_ROOT`（它本來寫死，與 Berth 自己讀的變數對不上），回歸測試
+  `tests/unit/test_entrypoint.py` 用替身 `chown` 記錄參數。
+- 2026-09-08 票 11 驗收：**qBittorrent `auth/login` 的成敗形狀跨大版本不同**，brief §20.2 原本只寫了
+  4.x 的那一種。實測 4.4.5 成功 `200` + `Ok.` / 失敗 `200` + `Fails.`；5.2.3 成功 `204` 空 body /
+  失敗 `401`。原本「不是 `Ok.` 就是失敗」的判定讓**每一套用預設 image 的部署**，qBittorrent 那一項
+  健康檢查永遠紅著——而且只有在精靈第 4 步設過密碼之後才看得到（在那之前健康檢查不呼叫 `login`）。
+  判定改成只認 `Fails.`；免密白名單上的來源在 5.x 一律回 204，那是成功。brief §20.2、plan §8.1 已改，
+  兩個版本的回應錄成 fixture。
+- 2026-09-08 票 11 驗收：**Prowlarr 的 `indexer/schema` 不能用探測的 5 秒逾時**。容器剛起來的第一次
+  呼叫要讀進 627 份 Cardigann 定義再組出 5.6 MB 回應，Windows 的 9p bind mount 上實測 **9.42 秒**
+  （第二次 0.34 秒），精靈第 5 步因此在乾淨部署上直接失敗、退回「接入你自己的索引站」表單。
+  這一支改用自己的 `SCHEMA_TIMEOUT_SECONDS = 60`。brief §20.7 已補。慢的儲存（NAS）只會更久。
+- 2026-09-08 票 11：**「乾淨 Linux 宿主」用的是 Docker Desktop Linux VM 上的 ext4 持久磁碟**
+  （`/mnt/docker-desktop-disk`），不是另一台實體 Linux，也不是 NAS。與票 04 同一個限制，brief §20.6
+  的兩條仍然保留。WSL 的 Ubuntu 沒有開 Docker Desktop 整合，開它要動使用者的 Docker Desktop 設定，
+  沒有為了這件事去改。
+- 2026-09-08 票 11：票 01 延後的「型別感知 eslint 規則」只開 `no-floating-promises` 與
+  `no-misused-promises` 兩條，不開整包 `recommendedTypeChecked`。整包在這個 repo 上抓到 36 條，
+  全部是 TanStack Router 的 `throw redirect(...)`（框架慣用法）與測試裡 `RequestInit.body` /
+  `JSON.parse` 的型別噪音，沒有一條是真的缺陷；而那兩條正是票 01 寫下的延後理由，開了之後抓到兩個
+  真的漏 await（兩個健康頁的 `invalidateQueries`，已標成刻意的 `void`）。
+- 2026-09-08 票 11：票 01–10 的 Comments 裡剩下的「留給後續」逐條過完，該延後的寫進 plan §11 而不是
+  另開票——plan §11 本來就是 `/to-tickets` 的輸入，M1 開頭拆票時自然會被拆到。新增 T1.9（openapi
+  型別產生器與 CI 過期檢查、帶 job id 的結構化日誌、Route 設定頁的「一個媒體庫多條 Route」與明確刪除），
+  §11.3 補兩條（TVDB 插件警告成為 Issue、磁碟空間門檻）。
+- 2026-09-08 票 11 `/impeccable critique`：兩個隔離的子代理（設計審查 + 檢測器與瀏覽器實測）。
+  機械檢測器 31 個元件 0 findings；Nielsen 十項 22/40，最強是「診斷與復原」4 分（紅燈頁給的是
+  排查順序而不只是錯誤），最弱是「使用者控制與自由」1 分（精靈沒有出口）。設計專屬性判定為
+  「為這個產品寫的」。報告存在 `.impeccable/critique/2026-09-08-m0-ui.md`。
+- 2026-09-08 票 11 polish：**`.label` 不可以套在機器字串上**。它對拉丁文 `uppercase`，套在 API
+  端點上會印出 `POST /LIBRARY/VIRTUALFOLDERS`——而同一畫面右欄印的是正確的那一個。中文版
+  `text-transform: none` 所以看不到，這是「英文是一等公民」在實作上第一次被證偽。`CutawayRow`
+  新增 `code` 變體，DESIGN.md 記下這條規則。
+- 2026-09-08 票 11 polish：泊位板窄版從 carousel 改回 shape brief 寫的 **2×2**。carousel 讓
+  BTH 3 與 BTH 4 完全在畫面外，而這塊板的用途就是「一眼看出哪一格紅了」；捲動容器同時是一個
+  沒有名字的 Tab 停留點。目前泊位另加 `aria-current="step"` 與 inset 底線（用 currentColor，
+  不引入第五個顏色）。
+- 2026-09-08 票 11 polish：**精靈跑完之後它就是設定入口**（plan §6 本來就這麼寫），所以它需要
+  出口。新增 `?berth=1..4` 深連結（設定頁三張卡片各連自己那一格，原本三條都連裸 `/setup`）、
+  頁首的返回鍵、以及一句「不會重跑一次靠泊」。`berth` 由 `routes.tsx` 讀了再當 prop 傳給
+  `SetupPage`——那個元件的測試刻意不掛 router。
+- 2026-09-08 票 11 polish：`status.skipped`（「已經是這樣」）是**冪等步驟**的字，被借去當「你選擇
+  之後再做」的徽章會說謊。新增 `source.deferred`。索引站那一節原本連徽章都沒有，按下「之後再說」
+  畫面毫無變化——兩個審查代理與驗收本人都以為按鈕壞了。原本的測試只驗「請求送出去了」，
+  已改成同時驗畫面。
+- 2026-09-08 票 11：M0 UI 的 `critique` / `audit` / `polish` 收尾之後由 impeccable 產生 `DESIGN.md`
+  （票 05 就記過它要在這一票才寫，因為它依實際做出來的東西寫，不是依打算做的東西）。
+- 2026-09-08 票 11 code-review：**`entrypoint.sh` 不可以讀 `CONFIG_ROOT` / `DATA_ROOT`**。
+  同名兩義——那兩個名字在 `deploy/.env.example` 裡是**宿主**路徑（`./config`、`./data`），在
+  image 的 ENV 裡才是容器路徑。compose 目前不注入它們所以安全，但誰用 `--env-file .env` 起容器，
+  接手就會靜默指到錯的目錄。改成只有測試會覆寫的 `BERTH_CONFIG_DIR` / `BERTH_DATA_DIR`
+  （同票 03 `BERTH_QBITTORRENT_CONF` 的先例）。
+- 2026-09-08 票 11 code-review：`login()` 改成只認 `Fails.` 之後，順帶失去了「連到的不是
+  qBittorrent」那道防線——位址填錯打到反向代理時它很可能回 `200` 加一頁 HTML。成功只有兩種
+  形狀（空 body 或 `Ok.`），其餘 2xx 判 `ProtocolMismatchError`，補了測試。
+- 2026-09-08 票 11 code-review：泊位順序一度散在四個檔案（`BERTHS`、`BERTH_CODE`、`BERTH_STEP`、
+  `SERVICE_BERTH`），而 `berths.ts` 的檔頭正好寫著「各寫一份遲早會分岔」。「哪一格是哪個服務」
+  收回 `BERTHS.slot`，`SLOT_SERVICE` 與 `SERVICE_BERTH` 刪除，改由 `berthNumberOf()` 導出；
+  步驟號是精靈才有的事，留在 `SetupPage`。
+- 2026-09-08 票 11 code-review：plan 補三處與實作對不上的敘述——§8.4 沒寫 Prowlarr 的兩個逾時、
+  §8.1 寫「403 記錄並退避」但實作沒有退避（4.4.x 封 IP 也回 403，會被顯示成「帳密不對」，
+  已列進 T1.9）、§10 的測試層表沒有 `deploy/` 的 shell 腳本那一層（票 03 起就有兩支）。

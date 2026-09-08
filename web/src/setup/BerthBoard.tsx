@@ -31,31 +31,22 @@ const SIGNAL_LABEL = {
   blocked: 'status.failed',
 } as const satisfies Record<Signal, string>
 
-/**
- * 哪一格對到哪個服務。泊位的號碼與名字在 `components/BerthBoard.tsx` 的 `BERTHS`
- * （健康頁用同一份）；這裡只多一件精靈才有的事——第 4 格沒有服務判定，它的狀態來自
- * Route 自己的檢查。
- */
-const SLOT_SERVICE: readonly (ServiceKind | 'library')[] = [
-  'jellyfin',
-  'qbittorrent',
-  'prowlarr',
-  'library',
-]
-
 export function BerthBoard({
   services,
   signals = {},
+  current,
 }: {
   services: ServiceDetection[]
   /** 泊位自己那一步的進度覆寫探測結果——探到了不等於那個泊位的事做完了。 */
   signals?: BerthSignals
+  /** 現在這一步屬於哪一格（`BERTHS` 的 `code`）。前置的兩步不屬於任何泊位。 */
+  current?: string
 }) {
   const { t } = useTranslation()
   const byKind = new Map(services.map((row) => [row.kind, row]))
 
-  const slots: BoardSlot[] = BERTHS.map((berth, index) => {
-    const key = SLOT_SERVICE[index]
+  const slots: BoardSlot[] = BERTHS.map((berth) => {
+    const key = berth.slot
     const service = key === 'library' ? undefined : key
     const detection = service ? byKind.get(service) : undefined
     const own = signals[key]
@@ -67,7 +58,7 @@ export function BerthBoard({
       detail:
         detection?.detail && service ? (
           <>
-            <span className="label opacity-70">{t(detailLabel(service))}</span> {detection.detail}
+            <span className="label">{t(detailLabel(service))}</span> {detection.detail}
           </>
         ) : null,
       signal: own ?? signalOf(detection),
@@ -75,5 +66,5 @@ export function BerthBoard({
     }
   })
 
-  return <Board label={t('board.title')} slots={slots} />
+  return <Board label={t('board.title')} slots={slots} current={current} />
 }

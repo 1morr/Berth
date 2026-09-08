@@ -6,6 +6,11 @@ set -eu
 
 PUID="${PUID:-1000}"
 PGID="${PGID:-1000}"
+# 容器內的兩個掛載點。**不是** `CONFIG_ROOT` / `DATA_ROOT`——那兩個名字在 deploy/.env.example
+# 裡是**宿主**路徑（`./config`、`./data`），在 image 的 ENV 裡才是容器路徑。同名兩義，誰用
+# `--env-file .env` 起容器就會讓這裡靜默接手錯的目錄。這兩個變數只有測試會覆寫。
+CONFIG_DIR="${BERTH_CONFIG_DIR:-/config}"
+DATA_DIR="${BERTH_DATA_DIR:-/data}"
 
 umask "${UMASK:-022}"
 
@@ -34,13 +39,13 @@ take_ownership() {
 }
 
 # /config 全是 Berth 自己的檔案（資料庫、log），換過 PUID 也要跟著換，所以遞迴。
-take_ownership /config -R
+take_ownership "${CONFIG_DIR}" -R
 
 # /data 是使用者的媒體根，原則上不碰：可能是 NAS 上別的帳號擁有的共用目錄，改擁有者是
 # 沒人要的意外。空目錄是唯一的例外 —— 那代表 Docker 剛替 bind mount 建好目錄（Linux 上
 # 是 root:root），不接手的話 Berth 連第一層目錄都建不出來。
-if [ -z "$(ls -A /data 2>/dev/null)" ]; then
-    take_ownership berth:berth /data
+if [ -z "$(ls -A "${DATA_DIR}" 2>/dev/null)" ]; then
+    take_ownership "${DATA_DIR}"
 fi
 
 exec setpriv --reuid "${PUID}" --regid "${PGID}" --init-groups "$@"

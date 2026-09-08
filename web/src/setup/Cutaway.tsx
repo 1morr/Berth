@@ -17,14 +17,30 @@ export function CutawayRow({
   term,
   value,
   muted = false,
+  code = false,
 }: {
   term: string
   value: ReactNode
   muted?: boolean
+  /**
+   * term 是機器字串（API 端點、設定鍵）而不是角色名。
+   *
+   * `.label` 對拉丁文會 `text-transform: uppercase`，套在端點上就會把
+   * `POST /Library/VirtualFolders` 印成 `POST /LIBRARY/VIRTUALFOLDERS`——右欄的纜繩列
+   * 同一畫面印的是正確的那一個，於是同九個端點兩種大小寫，其中一種不是真的端點。
+   * 中文版沒事（`text-transform: none`），所以這個 bug 只有英文使用者看得到。
+   */
+  code?: boolean
 }) {
   return (
     <div className="grid grid-cols-1 gap-1 px-4 py-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] sm:gap-4">
-      <dt className="label min-w-0 self-center break-all text-ink-dim">{term}</dt>
+      <dt
+        className={`min-w-0 self-center leading-[1.4] text-ink-dim ${
+          code ? 'value text-xs' : 'label'
+        }`}
+      >
+        {term}
+      </dt>
       <dd className={`value min-w-0 break-words text-sm ${muted ? 'text-ink-dim' : 'text-ink'}`}>
         {value}
       </dd>

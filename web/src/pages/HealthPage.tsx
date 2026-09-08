@@ -35,7 +35,8 @@ export function HealthPage() {
     onSuccess: (fresh) => {
       queryClient.setQueryData(healthDetailQueryOptions.queryKey, fresh)
       // 匿名的 `GET /health` 是路由守衛與 compose 健康檢查看的那一支，它也該跟著更新。
-      queryClient.invalidateQueries({ queryKey: healthQueryOptions.queryKey, exact: true })
+      // `void`：那一支重抓完之前按鈕不必一直轉，回傳的 promise 是刻意不等的。
+      void queryClient.invalidateQueries({ queryKey: healthQueryOptions.queryKey, exact: true })
     },
   })
 

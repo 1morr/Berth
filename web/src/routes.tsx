@@ -16,7 +16,7 @@ import { AppShell } from './AppShell'
 import { HealthPage } from './pages/HealthPage'
 import { LoginPage } from './pages/LoginPage'
 import { ServiceSettingsPage } from './pages/ServiceSettingsPage'
-import { SetupPage } from './pages/SetupPage'
+import { SetupRoute } from './pages/SetupRoute'
 
 export interface RouterContext {
   queryClient: QueryClient
@@ -95,6 +95,19 @@ async function requireSession(
   return me
 }
 
+/**
+ * 精靈跑完之後的每一頁共用的門禁：沒跑完就先去跑，跑完了就要有 session。
+ *
+ * 精靈那一頁不用它——它在「沒跑完」時是留下來而不是導走，那是相反的分支。
+ */
+async function requireSignedInPage(
+  queryClient: QueryClient,
+  location: ParsedLocation,
+): Promise<Me | null> {
+  if (!(await isSetupComplete(queryClient))) throw redirect({ to: '/setup' })
+  return await requireSession(queryClient, location)
+}
+
 /** 現在有人登入嗎。問不到後端時當成沒有——那時該讓他看得到登入表單。 */
 async function signedIn(queryClient: QueryClient): Promise<boolean> {
   try {
@@ -104,9 +117,21 @@ async function signedIn(queryClient: QueryClient): Promise<boolean> {
   }
 }
 
+interface SetupSearch {
+  /**
+   * 直接跳到某一個泊位（1–4）。設定跑完之後精靈就是設定入口（plan §6），
+   * 而「我的 qBittorrent 密碼改了」的人要的是泊位 2，不是從第 1 步重走。
+   */
+  berth?: number
+}
+
 const setupRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/setup',
+  validateSearch: (search: Record<string, unknown>): SetupSearch => {
+    const berth = Number(search.berth)
+    return Number.isInteger(berth) && berth >= 1 && berth <= 4 ? { berth } : {}
+  },
   /**
    * 精靈跑完之前匿名開放——那時候還沒有人登入得了。跑完之後它就是設定入口，
    * 只有管理員進得來（票 07，後端同時回 403）。
@@ -116,7 +141,7 @@ const setupRoute = createRoute({
     const me = await requireSession(context.queryClient, location)
     if (me !== null && me.role !== 'admin') throw redirect({ to: '/' })
   },
-  component: SetupPage,
+  component: SetupRoute,
 })
 
 const loginRoute = createRoute({
@@ -154,8 +179,7 @@ const healthRoute = createRoute({
   path: '/health',
   /** 診斷是唯讀資訊，一般使用者也看得到（brief §11）。動作在 `/settings/services`。 */
   beforeLoad: async ({ context, location }) => {
-    if (!(await isSetupComplete(context.queryClient))) throw redirect({ to: '/setup' })
-    await requireSession(context.queryClient, location)
+    await requireSignedInPage(context.queryClient, location)
   },
   component: () => (
     <AppShell>
@@ -169,8 +193,7 @@ const serviceSettingsRoute = createRoute({
   path: '/settings/services',
   /** 改設定是管理員的事（brief §11，後端同時回 403）。 */
   beforeLoad: async ({ context, location }) => {
-    if (!(await isSetupComplete(context.queryClient))) throw redirect({ to: '/setup' })
-    const me = await requireSession(context.queryClient, location)
+    const me = await requireSignedInPage(context.queryClient, location)
     if (me !== null && me.role !== 'admin') throw redirect({ to: '/health' })
   },
   component: () => (

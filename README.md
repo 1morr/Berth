@@ -2,7 +2,7 @@
 
 自託管的媒體取得與入庫協調器：把索引站或 RSS 命中的 torrent 送到 qBittorrent，下載完成後解析、比對 TMDB，以硬鏈接入庫到 Jellyfin，並維護可修復的帳本。
 
-目前處於 M0（骨架）階段，尚不可用。設計與決定見 `docs/design-brief.md`，架構與里程碑見 `docs/plan.md`，名詞表見 `CONTEXT.md`。
+**M0（骨架）已完成，但整套流程要到 M1 才跑得通**：現在裝起來能做的是把四個服務接起來並看它們的健康狀態，還不能搜尋、下載或入庫。設計與決定見 `docs/design-brief.md`，架構與里程碑見 `docs/plan.md`，名詞表見 `CONTEXT.md`。
 
 ## 部署
 
@@ -16,7 +16,21 @@ docker compose up -d
 
 開 <http://localhost:8383>，之後所有設定都在 Berth 的精靈裡完成，不需要分別打開另外三個服務的介面。
 
-> M0 階段 GHCR 上還沒有發佈過 image（第一個 `v*` tag 之前都沒有），現在要跑 compose 得先在 repo 根目錄自己 build 一份：見下面的〈自己 build image〉。
+精靈是八個步驟、四個泊位：
+
+| 泊位 | 步驟 | 套件內的服務 | 你自己的服務 |
+| --- | --- | --- | --- |
+| — | 1–2 建立 Berth 管理員、逐服務探測 | 探到 compose 主機名就是套件內 | 探不到就填位址，就地測連線 |
+| BTH 1 | 3 Jellyfin | 建管理員、Movies / TV / Anime 三個媒體庫、API key、裝 MergeVersions、重啟 | 只做檢查；「加入 Berth 路徑」與「安裝 MergeVersions」各是一顆要確認的按鈕 |
+| BTH 2 | 4 qBittorrent | 套用五個建議鍵、設 WebUI 密碼 | 先顯示逐鍵差異再問要不要套用 |
+| BTH 3 | 5–6 索引站與 TMDB | 加十個預設公開站、內建 TMDB 憑證 | 填既有 Prowlarr 或任一 Torznab 網址；兩步都可以跳過 |
+| BTH 4 | 7–8 媒體庫路徑 | 自動建三條 Route | 勾選媒體庫與寫入目標 |
+
+每條 Route 建立時都會**真的建一個硬鏈接再比對 inode**，三個容器看到的不是同一個檔案系統就當場失敗，並指出是哪個容器少了哪個掛載。全部綠燈才走得到最後一步。
+
+設定完成後精靈關閉，之後用 Jellyfin 的帳號登入；健康頁 `/health` 每 5 分鐘重跑同一組檢查。
+
+> **compose 範本 pin 的 `ghcr.io/1morr/berth:latest` 還是空的。** GHCR 上目前只有預發佈的 `0.1.0-rc1`（`:latest` 要等第一個正式版本 tag），所以現在要跑 compose 得先在 repo 根目錄自己 build 一份：見下面的〈自己 build image〉。
 
 | 服務 | Port | 備註 |
 | --- | --- | --- |
@@ -39,6 +53,8 @@ docker compose up -d
 
 - **Linux**（NAS 與伺服器）：`DATA_ROOT` 要能被 `PUID` / `PGID` 寫入，例如 `chown -R 1000:1000 /srv/berth/data`。Berth 只在媒體根還是空目錄時自動接手擁有者；已經有內容的目錄一律不碰。
 - **Windows**（Docker Desktop、WSL2 後端）：用一般的 bind mount 就好（`DATA_ROOT=C:\Berth\data`），不需要 named volume，NTFS 上的硬鏈接實測可用（brief §20.7）。`PUID` / `PGID` 在這種掛載上沒有意義，維持預設即可。
+
+實際跑過整套流程的環境（2026-09-08 的 M0 驗收）：Windows Docker Desktop 的 NTFS bind mount，以及 Docker Desktop 那個 Linux VM 上的 ext4。**原生 Linux 宿主與 NAS 還沒有人跑過**——理論上同一條路徑，但沒有實測就不當成驗過。
 
 ### 外部服務的前提
 

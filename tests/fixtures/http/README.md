@@ -51,6 +51,18 @@ plan §9.4 的九步之後那台伺服器的狀態，不是手排出來的場景
 | `tmdb/configuration.json` | `GET /3/configuration`，帶 v4 read access token |
 | `tmdb/configuration.unauthorized.json` | 同一支端點帶一把無效的 key，回 401 |
 
+2026-09-08（票 11），M0 驗收時對同樣那兩個版本的 `POST /api/v2/auth/login` 錄的。這一組存在的
+理由是**成敗的形狀跨大版本不同**，而原本的實作只認 4.x 的成功樣子（brief §20.2）：
+
+| 檔案 | 來源 |
+| --- | --- |
+| `qbittorrent/auth-login.ok.4.4.5.txt` | `:4.4.5`，正確的 `admin` / `adminadmin`，`200` + `Ok.` |
+| `qbittorrent/auth-login.fails.4.4.5.txt` | 同一台，錯的密碼。**仍然是 `200`**，只有 body 說得出失敗 |
+| `qbittorrent/auth-login.unauthorized.5.2.3.txt` | `:5.2.3`，錯的密碼，`401` + `Unauthorized` |
+
+5.2.3 **成功**沒有對應的檔案：它回的是 `204` 空 body（契約測試直接 `respond(204)`）。免密白名單上的
+來源在 5.x 一律拿到這個 204，錯的帳密也一樣——那正是套件內 Berth 的處境。
+
 ## 規則
 
 - 檔案裡不放真的秘密。`config.xml` 的 API key 是拋棄式容器產的，仍然換成 `0000…0001`。

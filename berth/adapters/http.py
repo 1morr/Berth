@@ -76,8 +76,11 @@ class HttpSession:
     async def aclose(self) -> None:
         await self._client.aclose()
 
-    async def get(self, path: str) -> httpx.Response:
-        return await self.request("GET", path)
+    async def get(self, path: str, *, timeout: float | None = None) -> httpx.Response:
+        """`timeout` 只給少數「冷啟動時很慢」的端點覆寫（Prowlarr 的 `indexer/schema`）。"""
+        if timeout is None:
+            return await self.request("GET", path)
+        return await self.request("GET", path, timeout=timeout)
 
     def set_header(self, name: str, value: str) -> None:
         """換掉一個標頭。憑證是可變的：Jellyfin 的初始精靈匿名開始，之後才有 token。"""

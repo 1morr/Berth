@@ -347,7 +347,7 @@ Session 以 httpOnly cookie（`berth_session`）承載，`SameSite=Strict`、`Pa
 - `diff_recommended_preferences()` / `apply_recommended_preferences()`：建議值為 `temp_path_enabled=true`、`temp_path=<incomplete root>`、`save_path=<complete root>`、`auto_tmm_enabled=true`、`category_changed_tmm_enabled=true`；先回傳與現值的差異給精靈顯示，套用時只寫不同的鍵。既有服務的 temp path 未啟用只列為警告。
 - 完成判定依 brief §20.2。`torrents/files[].name` **相對 `save_path`**（多檔含 torrent 根目錄那一層），實測四種 `contentLayout` 組合都成立（brief §20.7）；組絕對路徑前先正規化 `save_path` 的尾斜線（4.4 有、5.x 沒有），組完仍 `stat` 驗證。`content_path` 是目錄或單檔，兩種都處理。
 - `preferences()` / `set_preferences(values)`：`app/preferences` 與 `app/setPreferences`。後者收的是**表單裡一個叫 `json` 的欄位**，不是 JSON body；`web_ui_password` 只寫不讀，所以「密碼設過了沒」只能比對 Berth 自己上一次寫下去的值（票 08）。
-- 登入：`auth/login` 拿 SID，請求帶 `Referer` = base URL；403 記錄並退避。
+- 登入：`auth/login` 拿 SID，請求帶 `Referer` = base URL。403 由共用的錯誤映射翻成 `AuthFailedError`，**沒有退避**——4.4.x 連續登入失敗會封 IP 且同樣回 403，所以被封的 Berth 現在顯示成「帳密不對」。要分得開得看回應內容，留給 M1（T1.9）。**失敗判定只認 4.x 的 `200` + `Fails.`**，不認「成功等於 `Ok.`」——5.x 成功回的是 `204` 空 body，失敗才是 `401`（走共用的錯誤映射）。免密白名單上的來源在 5.x 一律回 204，那是成功：套件內的 Berth 本來就繞過驗證（brief §20.2）。
 - 錯誤映射（`adapters/http.py`，四個 adapter 共用）：主機名解不到 → `ServiceNotDeployedError`（服務不在 compose 裡，精靈立刻顯示既有服務表單）；連不上或逾時 → `ServiceUnavailableError`（容器還在啟動，繼續輪詢）；401 / 403 → `AuthFailedError`；回應不是預期的服務 → `ProtocolMismatchError`；409（category 不存在）→ `CategoryMissingError`；503 → `ServiceBusyError`（服務還在載入，與「壞了」分開——Jellyfin 重啟後每一支端點都會有一段時間回 503，brief §20.7）。名稱一律以 `Error` 結尾（ruff N818）。
 
 ### 8.2 Jellyfin adapter
@@ -380,6 +380,7 @@ Session 以 httpOnly cookie（`berth_session`）承載，`SameSite=Strict`、`Pa
 - 結果附 `parse_release` 的 Tags 與 `map_episode` 的預估（用來在結果表顯示「S01 全季」「E05」「無法判斷」）。
 - `ProwlarrClient`（僅 setup 用）：`indexer/schema` 取定義、`indexer` 新增、`indexer/test` 驗證、`config/host` 設介面登入。**新增之前 Prowlarr 會先連一次那個站**，連不上就回 400 加一份逐條理由（`errorMessage`）而且什麼都不建立——逐站的成敗因此來自新增那一支，不是另一次 `indexer/test`；`?forceSave=true` 不會跳過這個檢查。同名的第二個站被拒（`Should be unique`），所以冪等靠先列（2026-09-08 實測，brief §20.7）。schema 給的 `appProfileId` 是 `0`，送回去之前要換成 `1`。
 
+- 逾時：新增與驗證索引站要真的連上那個站，用 120 秒；`indexer/schema` 用 60 秒——容器剛起來的第一次呼叫要讀進 627 份定義再組出 5.6 MB 回應，實測 9.42 秒（brief §20.7）。其餘端點用共用的 5 秒探測逾時。
 ### 8.5 RSS adapter
 
 - `feedparser` 解析；每種來源一個小型 mapper 產 `FeedItem{guid, title, link, torrent_url, magnet, info_hash, size, published_at}`。
@@ -530,6 +531,7 @@ WebUI\AuthSubnetWhitelist=172.28.0.2/32
 | 整合 | pytest + Fake adapters + 暫存 SQLite | services 與 pipeline：送單 → 完成 → planning → importing → ledger；重入與冪等；刪除範圍；reconciler 對三種人為破壞的偵測 |
 | 前端 | vitest、playwright | 元件與關鍵頁面；playwright 對 Fake 後端跑精靈與 M1 流程 |
 | e2e | docker compose（GitHub Actions） | 真 qBittorrent + 真 Jellyfin + Berth：用本地產生的 .torrent 與檔案，以 `seedMode`（`skip_checking` 的替代）讓 torrent 立即完成，跑通 M1 驗收；驗證硬鏈接 inode 與 Jellyfin 反查 |
+| 部署腳本 | pytest + bash 替身 | `deploy/` 的 shell：preseed 的「缺鍵才補」規則、entrypoint 的擁有者接手。真的跑腳本，把 `chown` / `setpriv` 換成會記錄參數的替身；路徑用 `BERTH_*` 的測試 seam 覆寫 |
 | 實驗 | `scripts/experiments/` | brief §20.6，一次性但保留腳本，結果寫回 brief |
 
 - CI（GitHub Actions）：lint、type、unit + integration、benchmark 門檻、前端 build、image build；e2e 在 nightly 與 release 跑。
@@ -566,11 +568,14 @@ WebUI\AuthSubnetWhitelist=172.28.0.2/32
 | T1.6 | `planner_runner` + `importer` + `jellyfin_resolver`：pre-plan、planning、Plan 持久化、自動 / review 判定、硬鏈接、ledger、Jellyfin 通知與反查、MergeVersions 任務觸發 | 三種類型各一部不經人工入庫並在 Jellyfin 正確顯示 |
 | T1.7 | UI：Media 詳情（搜尋 → 選 torrent → 選 Route → 送單；檔案與版本清單）、Job 詳情時間線、媒體庫頁（Route 分頁、卡片、狀態、深連結） | brief §17 M1 驗收 |
 | T1.8 | e2e：compose 環境下的 M1 流程自動化（§10） | nightly 綠燈 |
+| T1.9 | **M0 帶過來的技術債**（票 11 收尾時逐條過完、確認要在 M1 做的）：`openapi-typescript` 從 OpenAPI 產前端型別並在 CI 檢查是否過期（§6；同時解掉「同一份形狀寫了四層」的第四層）、結構化日誌每行帶 job id（brief §16.2，M1 才有 Job）、Route 設定頁支援「同一個媒體庫多條 Route」與明確的刪除動作（brief §4.3；M0 的精靈第 7 步是以媒體庫名建索引且重跑會刪掉沒勾的 Route）、qBittorrent 的 403 要分得出「帳密不對」與「IP 被封」（4.4.x 連續失敗封 IP 也是 403，§8.1） | 前端沒有手寫的 API 型別，型別檔過期時 CI 紅燈；Job 的每一行 log 都查得到 job id；一個媒體庫建得出第二條 Route，且沒有東西被隱式刪除 |
 
 ### 11.3 M2 修正與對帳
 
 範圍：Review Queue（Plan 逐列編輯、批次核准、audit 確認 / 撤銷）、Unmatched 指派、`rematch_file`、`reconciler` 與 issues 頁、刪除範圍（四旗標與空間估算）、`reimport`（以目錄為 Import Source）、`berth rebuild-ledger`。
 驗收：刪掉 library 後一鍵重建；對「Jellyfin 內刪除」「complete 目錄手動刪檔」「用複製取代硬鏈接」三種破壞都能偵測並修復；medium 自動入庫的檔案可在佇列中一鍵撤銷。
+
+M0 帶過來的兩條（票 10 判定要等 Issue 這個載體才做得對，票 11 收尾時確認）：媒體庫掛 TVDB 插件的警告要成為一則 Issue（brief §16.4，目前只出現在精靈的媒體庫清單裡，健康頁沒有對應動作）；磁碟空間要有門檻判定（plan §3.2，目前只在 Route 的 `hardlink` 纜繩上顯示 `free=` 實測值）。
 
 ### 11.4 M3 RSS
 

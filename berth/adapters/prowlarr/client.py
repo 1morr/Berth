@@ -21,6 +21,11 @@ from berth.adapters.prowlarr import (
 #: 新增與驗證索引站要真的連上那個站，比一般 API 慢得多（實測單站 5–40 秒）。
 INDEXER_TIMEOUT_SECONDS = 120.0
 
+#: 容器剛起來的第一次 `indexer/schema`：Prowlarr 要讀進 627 份定義再組出 5.6 MB 的回應。
+#: Windows 的 9p bind mount 上實測 9.42 秒（第二次 0.34 秒），慢的儲存只會更久，所以
+#: 這一支不能用探測的 5 秒逾時（brief §20.7）。
+SCHEMA_TIMEOUT_SECONDS = 60.0
+
 
 class HttpProwlarrClient:
     def __init__(
@@ -51,7 +56,9 @@ class HttpProwlarrClient:
         return [_indexer(row) for row in payload if isinstance(row, dict) and "id" in row]
 
     async def definitions(self) -> tuple[IndexerDefinition, ...]:
-        payload = json_body(await self._session.get("/api/v1/indexer/schema"))
+        payload = json_body(
+            await self._session.get("/api/v1/indexer/schema", timeout=SCHEMA_TIMEOUT_SECONDS)
+        )
         if not isinstance(payload, list):
             raise ProtocolMismatchError("/api/v1/indexer/schema: expected a list")
         return tuple(

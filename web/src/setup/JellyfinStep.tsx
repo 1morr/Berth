@@ -91,7 +91,7 @@ function SequenceCutaway() {
   return (
     <Cutaway title={t('jellyfin.cutaway.sequence')}>
       {JELLYFIN_STEPS.map((step) => (
-        <CutawayRow key={step} term={STEP_ENDPOINT[step]} value={t(STEP_LABEL[step])} />
+        <CutawayRow key={step} code term={STEP_ENDPOINT[step]} value={t(STEP_LABEL[step])} />
       ))}
     </Cutaway>
   )

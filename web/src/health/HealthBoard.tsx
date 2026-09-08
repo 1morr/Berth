@@ -29,7 +29,7 @@ export function HealthBoard({ report }: { report: HealthDetail }) {
       status: t(STATE_LABEL[state]),
       detail: row?.detail ? (
         <>
-          <span className="label opacity-70">{t(detailLabel(kind))}</span> {row.detail}
+          <span className="label">{t(detailLabel(kind))}</span> {row.detail}
         </>
       ) : null,
       signal: STATE_SIGNAL[state],

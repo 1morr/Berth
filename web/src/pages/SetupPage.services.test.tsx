@@ -151,6 +151,27 @@ describe('泊位 2：qBittorrent', () => {
   })
 })
 
+describe('設定跑完之後再進來', () => {
+  it('深連結 ?berth=2 直接停在 qBittorrent 那一步，而不是從第 1 步重走', async () => {
+    // 設定頁的「改位址或憑證」以前三張卡片都連到裸 `/setup`，於是不管按哪一張都落在
+    // 第 3 步「接手這台 Jellyfin」（票 11 的 critique，P0）。
+    stubApi({
+      [STATUS]: {
+        body: setupStatus({ current_step: 8, admin_created: true, services: ALL_BUNDLED }),
+      },
+      [DIFF]: { body: qbittorrentSetup() },
+      [INDEXERS]: { body: indexerSetup() },
+      [TMDB]: { body: tmdbSetup() },
+    })
+
+    renderWithProviders(<SetupPage berth={2} />)
+
+    expect(
+      await screen.findByRole('heading', { name: '套用建議的 qBittorrent 設定' }),
+    ).toBeVisible()
+  })
+})
+
 describe('泊位 3：來源', () => {
   it('十個預設站預設全勾，按鈕說得出會加幾個', async () => {
     stubApi({
@@ -262,7 +283,9 @@ describe('泊位 3：來源', () => {
     expect(await screen.findByText('Jackett · TV')).toBeInTheDocument()
   })
 
-  it('索引站與 TMDB 都可以之後再說', async () => {
+  it('索引站與 TMDB 都可以之後再說，而且跳過之後畫面上看得出來', async () => {
+    // 這一條原本只驗「請求送出去了」，於是「送出去了但畫面沒變」一直沒被抓到：
+    // TMDB 那一節有 `已跳過` 徽章，索引站那一節沒有，按了像壞掉（票 11 的 critique）。
     const fetchStub = stubApi({
       [STATUS]: { body: AT_BERTH_THREE },
       [INDEXERS]: { body: indexerSetup() },
@@ -272,6 +295,8 @@ describe('泊位 3：來源', () => {
     const user = userEvent.setup()
 
     renderWithProviders(<SetupPage />)
+    expect(screen.queryByTestId('indexers-deferred')).not.toBeInTheDocument()
+
     const [skipIndexers] = await screen.findAllByRole('button', { name: '之後再說' })
     await user.click(skipIndexers)
 
@@ -280,6 +305,7 @@ describe('泊位 3：來源', () => {
         true,
       )
     })
+    expect(await screen.findByTestId('indexers-deferred')).toBeInTheDocument()
   })
 
   it('TMDB 什麼都不填也測得了，測完留下 TMDB 自己報的值', async () => {

@@ -15,6 +15,7 @@ import pytest
 import respx
 
 from berth.adapters.http import (
+    DEFAULT_TIMEOUT_SECONDS,
     AuthFailedError,
     ProtocolMismatchError,
     ServiceBusyError,
@@ -29,7 +30,7 @@ from berth.adapters.prowlarr import (
     IndexerRejectedError,
     ProwlarrIndexer,
 )
-from berth.adapters.prowlarr.client import HttpProwlarrClient
+from berth.adapters.prowlarr.client import SCHEMA_TIMEOUT_SECONDS, HttpProwlarrClient
 from berth.adapters.qbittorrent.client import HttpQbittorrentClient
 from berth.adapters.tmdb import PROJECT_CREDENTIAL
 from berth.adapters.tmdb.client import HttpTmdbClient
@@ -262,6 +263,82 @@ async def test_qbittorrent_forbidden_maps_to_auth_failed() -> None:
     client = HttpQbittorrentClient(QBITTORRENT_URL)
     with pytest.raises(AuthFailedError):
         await client.version()
+    await client.aclose()
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_qbittorrent_44_login_succeeds_with_the_ok_body() -> None:
+    respx.post(f"{QBITTORRENT_URL}/api/v2/auth/login").respond(
+        200, text=read_fixture("http/qbittorrent/auth-login.ok.4.4.5.txt")
+    )
+
+    client = HttpQbittorrentClient(QBITTORRENT_URL)
+    try:
+        await client.login("admin", "adminadmin")
+    finally:
+        await client.aclose()
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_qbittorrent_44_reports_wrong_credentials_as_a_200() -> None:
+    """4.4 的失敗是 `200` + `Fails.`——狀態碼騙人，只有 body 說得出真話。"""
+    respx.post(f"{QBITTORRENT_URL}/api/v2/auth/login").respond(
+        200, text=read_fixture("http/qbittorrent/auth-login.fails.4.4.5.txt")
+    )
+
+    client = HttpQbittorrentClient(QBITTORRENT_URL)
+    with pytest.raises(AuthFailedError):
+        await client.login("admin", "wrongwrong")
+    await client.aclose()
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_qbittorrent_5x_login_succeeds_with_an_empty_204() -> None:
+    """5.x 成功回 `204` 空 body，不是 4.4 的 `Ok.`（2026-09-08 對 5.2.3 實測）。
+
+    免密白名單上的 client 也走這一條：那正是套件內的 Berth，它不需要帳密就進得去。
+    把「不是 Ok.」當成失敗會讓每一套預設部署的健康檢查永遠紅著。
+    """
+    respx.post(f"{QBITTORRENT_URL}/api/v2/auth/login").respond(204)
+
+    client = HttpQbittorrentClient(QBITTORRENT_URL)
+    try:
+        await client.login("skipper", "harbour")
+    finally:
+        await client.aclose()
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_qbittorrent_5x_reports_wrong_credentials_as_a_401() -> None:
+    respx.post(f"{QBITTORRENT_URL}/api/v2/auth/login").respond(
+        401, text=read_fixture("http/qbittorrent/auth-login.unauthorized.5.2.3.txt")
+    )
+
+    client = HttpQbittorrentClient(QBITTORRENT_URL)
+    with pytest.raises(AuthFailedError):
+        await client.login("skipper", "wrongwrong")
+    await client.aclose()
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_qbittorrent_login_rejects_a_reply_from_something_else() -> None:
+    """「不是 `Fails.` 就是成功」會把反向代理的登入頁當成登入成功。
+
+    位址填錯打到別的服務時，那一台很可能回 `200` 加一頁 HTML。空 body（5.x）與 `Ok.`（4.4）
+    是**僅有**的兩種成功形狀，其餘的 2xx 是連到了別的東西。
+    """
+    respx.post(f"{QBITTORRENT_URL}/api/v2/auth/login").respond(
+        200, text="<!doctype html><title>Sign in</title>"
+    )
+
+    client = HttpQbittorrentClient(QBITTORRENT_URL)
+    with pytest.raises(ProtocolMismatchError):
+        await client.login("skipper", "harbour")
     await client.aclose()
 
 
@@ -770,6 +847,30 @@ async def test_prowlarr_schema_carries_the_ten_default_indexers() -> None:
     assert by_name["nyaasi"].privacy == "public"
     # Anime Tosho 是唯一不是 public 的那一個，勾選清單靠這個欄位標示出來。
     assert by_name["animetosho-xyz"].privacy == "semiPrivate"
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_prowlarr_schema_outlasts_a_cold_prowlarr() -> None:
+    """定義清單不能用探測的 5 秒逾時（2026-09-08 票 11 的 M0 驗收實測）。
+
+    容器剛起來的第一次呼叫，Prowlarr 要把 627 份 Cardigann 定義從 `/config` 讀進來再組出
+    5.6 MB 的回應：Windows 的 9p bind mount 上量到 **9.42 秒**，同一支端點第二次只要 0.34 秒。
+    5 秒的探測逾時因此讓精靈第 5 步在乾淨的部署上直接失敗，而慢的儲存（NAS）只會更糟。
+    """
+    route = respx.get(f"{PROWLARR_URL}/api/v1/indexer/schema").respond(
+        200, text=read_fixture("http/prowlarr/indexer-schema.defaults.json")
+    )
+
+    client = HttpProwlarrClient(PROWLARR_URL, "key")
+    try:
+        await client.definitions()
+    finally:
+        await client.aclose()
+
+    timeout = route.calls.last.request.extensions["timeout"]
+    assert timeout["read"] == SCHEMA_TIMEOUT_SECONDS
+    assert SCHEMA_TIMEOUT_SECONDS > DEFAULT_TIMEOUT_SECONDS
 
 
 @respx.mock

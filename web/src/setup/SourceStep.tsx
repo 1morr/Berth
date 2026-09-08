@@ -166,7 +166,17 @@ function DefaultIndexers({
 
   return (
     <section className="mt-6">
-      <h3 className="label text-ink-dim">{t('source.indexers.title')}</h3>
+      <div className="flex flex-wrap items-center gap-3">
+        <h3 className="label text-ink-dim">{t('source.indexers.title')}</h3>
+        {indexers.skipped && (
+          <span
+            data-testid="indexers-deferred"
+            className={`label px-2 py-1.5 ${SIGNAL_FILL.neutral}`}
+          >
+            {t('source.deferred')}
+          </span>
+        )}
+      </div>
       <p className="mt-2 max-w-prose text-sm text-ink-dim">{t('source.indexers.lede')}</p>
 
       <fieldset className="mt-4 border-2 border-rule bg-well px-4 py-4">
@@ -348,7 +358,7 @@ function Tmdb({
       <div className="flex flex-wrap items-center gap-3">
         <h3 className="label text-ink-dim">{t('source.tmdb.title')}</h3>
         {tmdb.skipped && (
-          <span className={`label px-2 py-1.5 ${SIGNAL_FILL.neutral}`}>{t('status.skipped')}</span>
+          <span className={`label px-2 py-1.5 ${SIGNAL_FILL.neutral}`}>{t('source.deferred')}</span>
         )}
       </div>
       <p className="mt-2 max-w-prose text-sm text-ink-dim">{t('source.tmdb.lede')}</p>

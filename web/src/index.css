@@ -114,7 +114,7 @@ body {
    雙環而不是單一顏色：焦點會落在四個塗裝色塊上（黃色按鈕、狀態色塊），
    任何單色都會在其中一個底色上消失。內圈用底色、外圈用字色，兩個主題、
    四個塗裝色上都至少有一圈是看得見的。 */
-:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+:where(a, button, summary, input, select, textarea, [tabindex]):focus-visible {
   outline: 2px solid var(--color-ink);
   outline-offset: 2px;
   box-shadow: 0 0 0 2px var(--color-hull);

@@ -1,0 +1,472 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-08T00:00:00Z",
+  "title": "Design System: Berth",
+  "extensions": {
+    "colorMeta": {
+      "hull": {
+        "role": "neutral",
+        "displayName": "鋼灰藍船體 Hull",
+        "canonical": "oklch(0.26 0.021 245)",
+        "lightValue": "oklch(0.95 0.004 245)",
+        "note": "整頁底色，也塗在 body 上（overscroll 露出的是 body）。刻意不是近黑——近黑加單一霓虹是模型的預設長相。",
+        "tonalRamp": [
+          "oklch(0.15 0.021 245)",
+          "oklch(0.21 0.021 245)",
+          "oklch(0.26 0.021 245)",
+          "oklch(0.37 0.021 245)",
+          "oklch(0.49 0.021 245)",
+          "oklch(0.61 0.021 245)",
+          "oklch(0.78 0.021 245)",
+          "oklch(0.95 0.021 245)"
+        ]
+      },
+      "deck": {
+        "role": "neutral",
+        "displayName": "甲板 Deck",
+        "canonical": "oklch(0.31 0.022 245)",
+        "lightValue": "oklch(0.99 0.002 245)",
+        "note": "抬起一階的中性面：面板抬頭列、中性色塊、複製鍵、當前導覽項。",
+        "tonalRamp": [
+          "oklch(0.15 0.022 245)",
+          "oklch(0.22 0.022 245)",
+          "oklch(0.31 0.022 245)",
+          "oklch(0.42 0.022 245)",
+          "oklch(0.53 0.022 245)",
+          "oklch(0.65 0.022 245)",
+          "oklch(0.8 0.022 245)",
+          "oklch(0.95 0.022 245)"
+        ]
+      },
+      "well": {
+        "role": "neutral",
+        "displayName": "艙井 Well",
+        "canonical": "oklch(0.21 0.019 245)",
+        "lightValue": "oklch(0.91 0.006 245)",
+        "note": "下沉一階的中性面：所有面板、卡片、纜繩列、訊息塊的內部底色。",
+        "tonalRamp": [
+          "oklch(0.15 0.019 245)",
+          "oklch(0.21 0.019 245)",
+          "oklch(0.28 0.019 245)",
+          "oklch(0.38 0.019 245)",
+          "oklch(0.5 0.019 245)",
+          "oklch(0.63 0.019 245)",
+          "oklch(0.79 0.019 245)",
+          "oklch(0.95 0.019 245)"
+        ]
+      },
+      "rule": {
+        "role": "neutral",
+        "displayName": "橫線 Rule",
+        "canonical": "oklch(0.44 0.022 245)",
+        "lightValue": "oklch(0.74 0.012 245)",
+        "note": "一般分隔線與靜態邊框（border-2）。1px gap-px 的縫隙也用它當底透出來。",
+        "tonalRamp": [
+          "oklch(0.15 0.022 245)",
+          "oklch(0.24 0.022 245)",
+          "oklch(0.33 0.022 245)",
+          "oklch(0.44 0.022 245)",
+          "oklch(0.55 0.022 245)",
+          "oklch(0.66 0.022 245)",
+          "oklch(0.81 0.022 245)",
+          "oklch(0.95 0.022 245)"
+        ]
+      },
+      "rule-strong": {
+        "role": "neutral",
+        "displayName": "重橫線 Rule Strong",
+        "canonical": "oklch(0.6 0.024 245)",
+        "lightValue": "oklch(0.45 0.016 245)",
+        "note": "分區重線、失敗時的邊框、主要按鈕輪廓。對兩個主題底色都有 6.4:1，滿足 WCAG 2.2 非文字對比 3:1。",
+        "tonalRamp": [
+          "oklch(0.15 0.024 245)",
+          "oklch(0.26 0.024 245)",
+          "oklch(0.37 0.024 245)",
+          "oklch(0.48 0.024 245)",
+          "oklch(0.6 0.024 245)",
+          "oklch(0.71 0.024 245)",
+          "oklch(0.83 0.024 245)",
+          "oklch(0.95 0.024 245)"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "字 Ink",
+        "canonical": "oklch(0.97 0.005 245)",
+        "lightValue": "oklch(0.22 0.015 245)",
+        "note": "主要文字。也是焦點環的外圈顏色。",
+        "tonalRamp": [
+          "oklch(0.15 0.005 245)",
+          "oklch(0.26 0.005 245)",
+          "oklch(0.37 0.005 245)",
+          "oklch(0.49 0.005 245)",
+          "oklch(0.61 0.005 245)",
+          "oklch(0.73 0.005 245)",
+          "oklch(0.85 0.005 245)",
+          "oklch(0.97 0.005 245)"
+        ]
+      },
+      "ink-dim": {
+        "role": "neutral",
+        "displayName": "弱字 Ink Dim",
+        "canonical": "oklch(0.78 0.012 245)",
+        "lightValue": "oklch(0.45 0.014 245)",
+        "note": "標籤、端點、提示。不用在必須讀清楚的值上。",
+        "tonalRamp": [
+          "oklch(0.15 0.012 245)",
+          "oklch(0.26 0.012 245)",
+          "oklch(0.37 0.012 245)",
+          "oklch(0.48 0.012 245)",
+          "oklch(0.59 0.012 245)",
+          "oklch(0.7 0.012 245)",
+          "oklch(0.78 0.012 245)",
+          "oklch(0.93 0.012 245)"
+        ]
+      },
+      "assigned": {
+        "role": "primary",
+        "displayName": "hi-vis 調度黃 Assigned",
+        "canonical": "oklch(0.85 0.18 95)",
+        "lightValue": "oklch(0.85 0.18 95)",
+        "note": "「現在需要你」。所有主要動作按鈕、選中的語言鍵、設定漂移。兩個主題共用同一罐漆。",
+        "tonalRamp": [
+          "oklch(0.25 0.18 95)",
+          "oklch(0.35 0.18 95)",
+          "oklch(0.45 0.18 95)",
+          "oklch(0.55 0.18 95)",
+          "oklch(0.65 0.18 95)",
+          "oklch(0.75 0.18 95)",
+          "oklch(0.85 0.18 95)",
+          "oklch(0.95 0.12 95)"
+        ]
+      },
+      "working": {
+        "role": "secondary",
+        "displayName": "航道藍 Working",
+        "canonical": "oklch(0.79 0.14 205)",
+        "lightValue": "oklch(0.79 0.14 205)",
+        "note": "「進行中」。正在繫的纜繩、正在探測的泊位格。只表示還沒有結論，不表示成功。",
+        "tonalRamp": [
+          "oklch(0.25 0.14 205)",
+          "oklch(0.34 0.14 205)",
+          "oklch(0.43 0.14 205)",
+          "oklch(0.52 0.14 205)",
+          "oklch(0.61 0.14 205)",
+          "oklch(0.7 0.14 205)",
+          "oklch(0.79 0.14 205)",
+          "oklch(0.93 0.08 205)"
+        ]
+      },
+      "secured": {
+        "role": "secondary",
+        "displayName": "繫纜綠 Secured",
+        "canonical": "oklch(0.76 0.16 150)",
+        "lightValue": "oklch(0.76 0.16 150)",
+        "note": "「已完成且驗過」。綠燈泊位格、通過的檢查列。",
+        "tonalRamp": [
+          "oklch(0.25 0.16 150)",
+          "oklch(0.34 0.16 150)",
+          "oklch(0.42 0.16 150)",
+          "oklch(0.51 0.16 150)",
+          "oklch(0.59 0.16 150)",
+          "oklch(0.68 0.16 150)",
+          "oklch(0.76 0.16 150)",
+          "oklch(0.92 0.09 150)"
+        ]
+      },
+      "blocked": {
+        "role": "tertiary",
+        "displayName": "阻擋紅 Blocked",
+        "canonical": "oklch(0.7 0.2 27)",
+        "lightValue": "oklch(0.7 0.2 27)",
+        "note": "「卡住了，在你動手之前走不下去」。紅色沒有第二個用途：不是警告、不是危險動作、不是刪除。",
+        "tonalRamp": [
+          "oklch(0.25 0.2 27)",
+          "oklch(0.33 0.2 27)",
+          "oklch(0.41 0.2 27)",
+          "oklch(0.49 0.2 27)",
+          "oklch(0.57 0.2 27)",
+          "oklch(0.65 0.2 27)",
+          "oklch(0.7 0.2 27)",
+          "oklch(0.9 0.1 27)"
+        ]
+      },
+      "on-signal": {
+        "role": "tertiary",
+        "displayName": "信號油墨 On-Signal",
+        "canonical": "oklch(0.16 0.02 245)",
+        "lightValue": "oklch(0.16 0.02 245)",
+        "note": "四塊漆上的唯一字色，兩個主題共用。白字配中明度信號色實測只有 3.6:1，過不了 AA。",
+        "tonalRamp": [
+          "oklch(0.16 0.02 245)",
+          "oklch(0.27 0.02 245)",
+          "oklch(0.38 0.02 245)",
+          "oklch(0.49 0.02 245)",
+          "oklch(0.6 0.02 245)",
+          "oklch(0.71 0.02 245)",
+          "oklch(0.83 0.02 245)",
+          "oklch(0.95 0.02 245)"
+        ]
+      },
+      "blocked-ink": {
+        "role": "tertiary",
+        "displayName": "阻擋紅（當字用）Blocked Ink",
+        "canonical": "oklch(0.7 0.2 27)",
+        "lightValue": "oklch(0.45 0.2 27)",
+        "note": "信號色當文字用時的值。塗裝色在紙白底上讀不出來，所以只有這個與 secured-ink 在亮色主題壓深。",
+        "tonalRamp": [
+          "oklch(0.25 0.2 27)",
+          "oklch(0.33 0.2 27)",
+          "oklch(0.41 0.2 27)",
+          "oklch(0.45 0.2 27)",
+          "oklch(0.55 0.2 27)",
+          "oklch(0.63 0.2 27)",
+          "oklch(0.7 0.2 27)",
+          "oklch(0.9 0.1 27)"
+        ]
+      },
+      "secured-ink": {
+        "role": "tertiary",
+        "displayName": "繫纜綠（當字用）Secured Ink",
+        "canonical": "oklch(0.76 0.16 150)",
+        "lightValue": "oklch(0.42 0.13 150)",
+        "note": "同上，綠色的文字版本。",
+        "tonalRamp": [
+          "oklch(0.25 0.13 150)",
+          "oklch(0.33 0.13 150)",
+          "oklch(0.42 0.13 150)",
+          "oklch(0.51 0.14 150)",
+          "oklch(0.59 0.15 150)",
+          "oklch(0.68 0.16 150)",
+          "oklch(0.76 0.16 150)",
+          "oklch(0.92 0.09 150)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "app-name": { "displayName": "App Name", "purpose": "頁首的 Berth，每一頁只有一個。系統裡最大的字。" },
+      "berth-name": { "displayName": "Berth Name", "purpose": "泊位格裡的服務名，板上唯一比內文大的字。" },
+      "label": { "displayName": "Label（Latin）", "purpose": "模板噴字：狀態標籤、欄位名、面板抬頭、按鈕、導覽項。全大寫 + 0.18em 字距。" },
+      "label-zh-hant": { "displayName": "Label（zh-Hant）", "purpose": "同一角色的中文版：不轉大小寫、0.05em、以 ::before 的 2px 塗刻度代替大寫訊號。高度與色階與 Latin 版相同。" },
+      "value": { "displayName": "Value", "purpose": "實測值、服務名、檢查項名稱。等寬 + tabular-nums。" },
+      "value-small": { "displayName": "Value Small", "purpose": "端點、路徑、位址、錯誤原文、指令列。機器字串一律走這裡，永不走 label。" },
+      "body": { "displayName": "Body", "purpose": "說明與修正步驟的散文，max-w-prose。" },
+      "body-small": { "displayName": "Body Small", "purpose": "提示、次要說明。" }
+    },
+    "shadows": [
+      {
+        "name": "focus-ring",
+        "value": "outline: 2px solid var(--color-ink); outline-offset: 2px; box-shadow: 0 0 0 2px var(--color-hull);",
+        "purpose": "唯一的焦點樣式，全域套在 a / button / summary / input / select / textarea / [tabindex]。雙環是刻意的：焦點會落在四塊漆上，任何單色都會在其中一塊上消失；內圈用底色、外圈用字色。"
+      },
+      {
+        "name": "board-current-underline",
+        "value": "box-shadow: inset 0 -3px 0 0 currentColor;",
+        "purpose": "泊位板目前那一格的底線。不是深度：inset 讓它畫在格子裡、不佔版面，用 currentColor 而不是第五個顏色。"
+      }
+    ],
+    "motion": [
+      {
+        "name": "none",
+        "value": "no transition or animation utilities in the shipped components",
+        "purpose": "署名互動（靠泊序列 / 複驗序列）是逐條纜繩換狀態並留下實測值，不是 spinner 也不是動畫。"
+      },
+      {
+        "name": "reduced-motion-guard",
+        "value": "@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; } }",
+        "purpose": "全域防護欄，不是效果開關。"
+      }
+    ],
+    "breakpoints": [
+      { "name": "sm", "value": "640px", "purpose": "泊位板由 2×2 轉為一列四格；剖面由單欄轉為兩欄。" },
+      { "name": "lg", "value": "1024px", "purpose": "精靈工作面轉為 5fr / 7fr 兩欄；主要動作由貼底改回行內。" }
+    ],
+    "themes": {
+      "default": "dark",
+      "switch": "none（跟隨 prefers-color-scheme，沒有應用內切換鍵）",
+      "swaps": "只有中性色與 blocked-ink / secured-ink 換值；四個信號色與 on-signal 兩個主題共用。",
+      "contrastFloor": "WCAG 2.2 AA 是驗收條件。現況實測：泊位板標籤 6.67–9.63:1、登入頁 5.71:1（亮色）/ 6.53:1（深色）、rule-strong 對兩個底色 6.4:1。"
+    }
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "唯一的主要動作外觀：hi-vis 黃漆填滿、深墨字、重橫線邊框。這塊板子沒有藍色 primary。",
+      "html": "<button class=\"ds-btn-primary\">靠泊</button>",
+      "css": ".ds-btn-primary { display: block; width: 100%; background: var(--color-assigned, oklch(0.85 0.18 95)); color: var(--color-on-signal, oklch(0.16 0.02 245)); border: 2px solid var(--color-rule-strong, oklch(0.6 0.024 245)); border-radius: 0; padding: 0.875rem 1rem; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 0.6875rem; font-weight: 600; line-height: 1; letter-spacing: 0.18em; text-transform: uppercase; cursor: pointer; } .ds-btn-primary:disabled { background: var(--color-deck, oklch(0.31 0.022 245)); color: var(--color-ink-dim, oklch(0.78 0.012 245)); cursor: not-allowed; } .ds-btn-primary:focus-visible { outline: 2px solid var(--color-ink, oklch(0.97 0.005 245)); outline-offset: 2px; box-shadow: 0 0 0 2px var(--color-hull, oklch(0.26 0.021 245)); }"
+    },
+    {
+      "name": "Ghost Button",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "次要動作：只有外框與字，hover 時線變重而不是顏色變亮。",
+      "html": "<button class=\"ds-btn-ghost\">之後再說</button>",
+      "css": ".ds-btn-ghost { background: transparent; color: var(--color-ink, oklch(0.97 0.005 245)); border: 2px solid var(--color-rule, oklch(0.44 0.022 245)); border-radius: 0; padding: 0.625rem 1rem; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 0.6875rem; font-weight: 600; line-height: 1; letter-spacing: 0.18em; text-transform: uppercase; cursor: pointer; } .ds-btn-ghost:hover { border-color: var(--color-rule-strong, oklch(0.6 0.024 245)); } .ds-btn-ghost:disabled { color: var(--color-ink-dim, oklch(0.78 0.012 245)); cursor: not-allowed; } .ds-btn-ghost:focus-visible { outline: 2px solid var(--color-ink, oklch(0.97 0.005 245)); outline-offset: 2px; box-shadow: 0 0 0 2px var(--color-hull, oklch(0.26 0.021 245)); }"
+    },
+    {
+      "name": "Field",
+      "kind": "input",
+      "refersTo": "input-field",
+      "description": "標籤在上、等寬字輸入框。錯誤時邊框換 blocked，訊息以 role=\"alert\" 掛在下方。",
+      "html": "<p class=\"ds-field\"><label class=\"ds-field-label\" for=\"ds-field-1\">位址</label><input class=\"ds-field-input\" id=\"ds-field-1\" value=\"http://qbittorrent:8080\"></p>",
+      "css": ".ds-field { display: grid; gap: 0.5rem; margin: 0; } .ds-field-label { font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 0.6875rem; font-weight: 600; line-height: 1; letter-spacing: 0.18em; text-transform: uppercase; color: var(--color-ink-dim, oklch(0.78 0.012 245)); } .ds-field-input { width: 100%; background: var(--color-hull, oklch(0.26 0.021 245)); color: var(--color-ink, oklch(0.97 0.005 245)); border: 2px solid var(--color-rule, oklch(0.44 0.022 245)); border-radius: 0; padding: 0.625rem 0.75rem; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 0.875rem; font-variant-numeric: tabular-nums; } .ds-field-input:focus { border-color: var(--color-rule-strong, oklch(0.6 0.024 245)); } .ds-field-input:focus-visible { outline: 2px solid var(--color-ink, oklch(0.97 0.005 245)); outline-offset: 2px; box-shadow: 0 0 0 2px var(--color-hull, oklch(0.26 0.021 245)); } .ds-field-input[aria-invalid='true'] { border-color: var(--color-blocked, oklch(0.7 0.2 27)); }"
+    },
+    {
+      "name": "Signal Chip",
+      "kind": "chip",
+      "refersTo": "chip-secured",
+      "description": "狀態色塊：塗滿的矩形 + 深墨模板字。四個信號色各一個變體，中性色塊給角色與分類。色塊上的字永遠不加 opacity。",
+      "html": "<span class=\"ds-chip ds-chip-assigned\">ASSIGNED</span><span class=\"ds-chip ds-chip-working\">WORKING</span><span class=\"ds-chip ds-chip-secured\">SECURED</span><span class=\"ds-chip ds-chip-blocked\">BLOCKED</span><span class=\"ds-chip ds-chip-neutral\">ADMIN</span>",
+      "css": ".ds-chip { display: inline-block; margin-right: 0.5rem; border-radius: 0; padding: 0.375rem 0.5rem; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 0.6875rem; font-weight: 600; line-height: 1; letter-spacing: 0.18em; text-transform: uppercase; color: var(--color-on-signal, oklch(0.16 0.02 245)); } .ds-chip-assigned { background: var(--color-assigned, oklch(0.85 0.18 95)); } .ds-chip-working { background: var(--color-working, oklch(0.79 0.14 205)); } .ds-chip-secured { background: var(--color-secured, oklch(0.76 0.16 150)); } .ds-chip-blocked { background: var(--color-blocked, oklch(0.7 0.2 27)); } .ds-chip-neutral { background: var(--color-deck, oklch(0.31 0.022 245)); color: var(--color-ink, oklch(0.97 0.005 245)); }"
+    },
+    {
+      "name": "Berth Board",
+      "kind": "custom",
+      "refersTo": "board-cell",
+      "description": "署名元件。四格等寬的整寬橫幅，精靈與健康頁共用。狀態三重編碼：色塊 + 模板字標籤 + 泊位號。窄版 2×2，sm 以上一列四格，永不橫向捲動。",
+      "html": "<section class=\"ds-board\"><ul class=\"ds-board-grid\"><li class=\"ds-board-cell ds-board-secured\"><div class=\"ds-board-top\"><span class=\"ds-board-code\">BTH 1</span><span class=\"ds-board-status\">SECURED</span></div><p class=\"ds-board-name\">Jellyfin</p><p class=\"ds-board-detail\">10.10.7 · 4 libraries</p></li><li class=\"ds-board-cell ds-board-assigned ds-board-current\"><div class=\"ds-board-top\"><span class=\"ds-board-code\">BTH 2</span><span class=\"ds-board-status\">ASSIGNED</span></div><p class=\"ds-board-name\">qBittorrent</p><p class=\"ds-board-detail\">5.2.0 · API 2.11.2</p></li><li class=\"ds-board-cell ds-board-blocked\"><div class=\"ds-board-top\"><span class=\"ds-board-code\">BTH 3</span><span class=\"ds-board-status\">BLOCKED</span></div><p class=\"ds-board-name\">來源</p><p class=\"ds-board-detail\">connection refused</p></li><li class=\"ds-board-cell ds-board-empty\"><div class=\"ds-board-top\"><span class=\"ds-board-code\">BTH 4</span><span class=\"ds-board-status\">PENDING</span></div><p class=\"ds-board-name\">媒體庫路徑</p><p class=\"ds-board-detail\">—</p></li></ul></section>",
+      "css": ".ds-board { border-bottom: 2px solid var(--color-rule-strong, oklch(0.6 0.024 245)); background: var(--color-hull, oklch(0.26 0.021 245)); } .ds-board-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; background: var(--color-rule-strong, oklch(0.6 0.024 245)); list-style: none; margin: 0; padding: 0; } @media (min-width: 640px) { .ds-board-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } } .ds-board-cell { padding: 0.75rem 1rem; color: var(--color-on-signal, oklch(0.16 0.02 245)); } .ds-board-current { box-shadow: inset 0 -3px 0 0 currentColor; } .ds-board-assigned { background: var(--color-assigned, oklch(0.85 0.18 95)); } .ds-board-secured { background: var(--color-secured, oklch(0.76 0.16 150)); } .ds-board-blocked { background: var(--color-blocked, oklch(0.7 0.2 27)); } .ds-board-empty { background: var(--color-well, oklch(0.21 0.019 245)); color: var(--color-ink-dim, oklch(0.78 0.012 245)); } .ds-board-top { display: flex; align-items: baseline; justify-content: space-between; gap: 0.5rem; } .ds-board-code { font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 0.75rem; font-weight: 600; font-variant-numeric: tabular-nums; } .ds-board-status { font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 0.6875rem; font-weight: 600; line-height: 1; letter-spacing: 0.18em; text-transform: uppercase; opacity: 0.8; } .ds-board-name { margin: 0.5rem 0 0; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 1rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .ds-board-detail { margin: 0.25rem 0 0; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 0.75rem; font-variant-numeric: tabular-nums; opacity: 0.8; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }"
+    },
+    {
+      "name": "Step Line",
+      "kind": "custom",
+      "refersTo": "panel",
+      "description": "署名元件。一條纜繩：狀態色塊 + 名稱 + 實測值 + 它打的端點；失敗就地展開服務原文與可複製指令，其餘纜繩不動。精靈第 7 步與健康頁用同一個元件。",
+      "html": "<ol class=\"ds-steps\"><li class=\"ds-step\"><div class=\"ds-step-row\"><span class=\"ds-chip ds-chip-secured\">SECURED</span><span class=\"ds-step-label\">硬鏈接測試</span><span class=\"ds-step-detail\">dev=0x801 · inode=41236</span><span class=\"ds-step-endpoint\">link()</span></div></li><li class=\"ds-step ds-step-failed\"><div class=\"ds-step-row\"><span class=\"ds-chip ds-chip-blocked\">BLOCKED</span><span class=\"ds-step-label\">Jellyfin 可見性</span><span class=\"ds-step-endpoint\">GET /Items</span></div><div class=\"ds-step-fix\"><p class=\"ds-step-error\">Jellyfin 看不到 /data/library/movies</p></div></li></ol>",
+      "css": ".ds-steps { display: grid; gap: 0.75rem; list-style: none; margin: 0; padding: 0; } .ds-step { min-width: 0; border: 2px solid var(--color-rule, oklch(0.44 0.022 245)); border-radius: 0; background: var(--color-well, oklch(0.21 0.019 245)); } .ds-step-failed { border-color: var(--color-rule-strong, oklch(0.6 0.024 245)); } .ds-step-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 1rem; padding: 0.75rem 1rem; } .ds-step-label { font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 0.875rem; font-weight: 600; color: var(--color-ink, oklch(0.97 0.005 245)); } .ds-step-detail { font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 0.75rem; font-variant-numeric: tabular-nums; color: var(--color-ink, oklch(0.97 0.005 245)); } .ds-step-endpoint { margin-left: auto; min-width: 0; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 0.75rem; color: var(--color-ink-dim, oklch(0.78 0.012 245)); } .ds-step-fix { border-top: 2px solid var(--color-rule, oklch(0.44 0.022 245)); background: var(--color-hull, oklch(0.26 0.021 245)); padding: 1rem; } .ds-step-error { margin: 0; max-width: 65ch; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 0.75rem; overflow-wrap: break-word; color: var(--color-blocked-ink, oklch(0.7 0.2 27)); }"
+    },
+    {
+      "name": "Cutaway",
+      "kind": "card",
+      "refersTo": "panel",
+      "description": "剖面即預覽：把「將會做什麼」切開露出來，套用前後看同一個剖面。dt / dd 的兩欄表，值貼在它那一行。term 是機器字串時必須用 code 變體。",
+      "html": "<section class=\"ds-cutaway\"><h3 class=\"ds-cutaway-head\">將會寫入</h3><dl class=\"ds-cutaway-body\"><div class=\"ds-cutaway-row\"><dt class=\"ds-cutaway-term\">媒體庫路徑</dt><dd class=\"ds-cutaway-value\">/data/library/movies</dd></div><div class=\"ds-cutaway-row\"><dt class=\"ds-cutaway-term ds-cutaway-term-code\">POST /Library/VirtualFolders</dt><dd class=\"ds-cutaway-value\">建立 Berth 媒體庫</dd></div></dl></section>",
+      "css": ".ds-cutaway { border: 2px solid var(--color-rule, oklch(0.44 0.022 245)); border-radius: 0; background: var(--color-well, oklch(0.21 0.019 245)); } .ds-cutaway-head { margin: 0; border-bottom: 2px solid var(--color-rule, oklch(0.44 0.022 245)); background: var(--color-deck, oklch(0.31 0.022 245)); padding: 0.625rem 1rem; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 0.6875rem; font-weight: 600; line-height: 1; letter-spacing: 0.18em; text-transform: uppercase; color: var(--color-ink-dim, oklch(0.78 0.012 245)); } .ds-cutaway-body { margin: 0; } .ds-cutaway-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1rem; padding: 0.75rem 1rem; border-top: 1px solid var(--color-rule, oklch(0.44 0.022 245)); } .ds-cutaway-row:first-child { border-top: 0; } .ds-cutaway-term { align-self: center; min-width: 0; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 0.6875rem; font-weight: 600; line-height: 1.4; letter-spacing: 0.18em; text-transform: uppercase; color: var(--color-ink-dim, oklch(0.78 0.012 245)); } .ds-cutaway-term-code { font-size: 0.75rem; font-weight: 400; letter-spacing: normal; text-transform: none; font-variant-numeric: tabular-nums; } .ds-cutaway-value { margin: 0; min-width: 0; overflow-wrap: break-word; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 0.875rem; font-variant-numeric: tabular-nums; color: var(--color-ink, oklch(0.97 0.005 245)); }"
+    },
+    {
+      "name": "Notice",
+      "kind": "custom",
+      "refersTo": "notice",
+      "description": "帶狀態的訊息塊。標記是塗上去的色塊加模板字，不是左緣的粗色條。blocked 時帶 role=\"alert\"。",
+      "html": "<div class=\"ds-notice\"><span class=\"ds-chip ds-chip-blocked\">FAILED</span><span class=\"ds-notice-body\">Jellyfin 拒絕了這組帳密（HTTP 401）。</span></div>",
+      "css": ".ds-notice { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 0.5rem 0.75rem; border: 2px solid var(--color-rule, oklch(0.44 0.022 245)); border-radius: 0; background: var(--color-well, oklch(0.21 0.019 245)); padding: 0.625rem 0.75rem; } .ds-notice-body { align-self: center; flex: 1; min-width: 0; font-family: system-ui, -apple-system, 'Segoe UI', 'Noto Sans TC', 'PingFang TC', sans-serif; font-size: 0.875rem; line-height: 1.5; color: var(--color-ink, oklch(0.97 0.005 245)); }"
+    },
+    {
+      "name": "Copy Line",
+      "kind": "custom",
+      "refersTo": "panel",
+      "description": "可複製的手動步驟。每個失敗都要給得出可複製的下一步。指令列本身可橫向捲動，右側是 deck 底的複製鍵，中間一條 1px 縫。",
+      "html": "<div class=\"ds-copyline\"><code class=\"ds-copyline-code\">docker compose logs --tail 50 berth</code><button class=\"ds-copyline-btn\" type=\"button\">複製</button></div>",
+      "css": ".ds-copyline { display: flex; align-items: stretch; gap: 1px; background: var(--color-rule, oklch(0.44 0.022 245)); } .ds-copyline-code { flex: 1; min-width: 0; overflow-x: auto; white-space: pre; background: var(--color-hull, oklch(0.26 0.021 245)); padding: 0.5rem 0.75rem; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 0.75rem; color: var(--color-ink, oklch(0.97 0.005 245)); } .ds-copyline-btn { flex-shrink: 0; border: 0; border-radius: 0; background: var(--color-deck, oklch(0.31 0.022 245)); padding: 0 0.75rem; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 0.6875rem; font-weight: 600; letter-spacing: 0.18em; text-transform: uppercase; color: var(--color-ink-dim, oklch(0.78 0.012 245)); cursor: pointer; } .ds-copyline-btn:hover { color: var(--color-ink, oklch(0.97 0.005 245)); } .ds-copyline-btn:focus-visible { outline: 2px solid var(--color-ink, oklch(0.97 0.005 245)); outline-offset: 2px; box-shadow: 0 0 0 2px var(--color-hull, oklch(0.26 0.021 245)); }"
+    },
+    {
+      "name": "Nav Link",
+      "kind": "nav",
+      "refersTo": "button-ghost",
+      "description": "頁首導覽。當前頁用重橫線加 deck 底標出，不靠顏色——狀態不只靠顏色是產品層級的無障礙底線。",
+      "html": "<nav class=\"ds-nav\"><a class=\"ds-nav-link ds-nav-current\" href=\"#\">健康</a><a class=\"ds-nav-link\" href=\"#\">設定</a></nav>",
+      "css": ".ds-nav { display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; } .ds-nav-link { border: 2px solid var(--color-rule, oklch(0.44 0.022 245)); border-radius: 0; padding: 0.625rem 1rem; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 0.6875rem; font-weight: 600; line-height: 1; letter-spacing: 0.18em; text-transform: uppercase; color: var(--color-ink, oklch(0.97 0.005 245)); text-decoration: none; } .ds-nav-link:hover { border-color: var(--color-rule-strong, oklch(0.6 0.024 245)); } .ds-nav-current { border-color: var(--color-rule-strong, oklch(0.6 0.024 245)); background: var(--color-deck, oklch(0.31 0.022 245)); } .ds-nav-link:focus-visible { outline: 2px solid var(--color-ink, oklch(0.97 0.005 245)); outline-offset: 2px; box-shadow: 0 0 0 2px var(--color-hull, oklch(0.26 0.021 245)); }"
+    }
+  ],
+  "narrative": {
+    "northStar": "泊位調度板（The Berth Dispatch Board）",
+    "overview": "Berth 的介面是一塊船席調度板，不是儀表板也不是表單流程。碼頭的調度板用最少的材料回答一個問題——哪一格出事了——靠的是塗滿整格的漆、壓過整幅的重橫線、對得齊的等寬編號，以及 ISO 6346 貨櫃標識那種模板噴字。Berth 的四個泊位（Jellyfin / qBittorrent / 來源 / 媒體庫路徑）在精靈與健康頁上是同一塊板：精靈問「接上了沒」，健康頁問「還繫著嗎」，位置與意義完全不變。\n\n底色是鋼灰藍船體而不是近黑：--color-hull 的註釋寫明這是刻意迴避「近黑加單一霓虹」那種類別預設。深色是預設，亮色跟隨系統偏好，是同一塊板子印在紙上——只有中性色換值，四個信號色與 on-signal 兩個主題共用。整個系統沒有引入任何 webfont：自架應用不該對 Google Fonts 發請求，離線也要成立，所以「模板噴字」的語彙由處理方式承載（等寬系統堆疊 + 重字距 + 重橫線 + 色塊），不由字體檔承載。\n\n密度高、留白少、每一格裡的每個字都是實測值。已確認拒絕的類別預設：左側垂直步驟條加深色卡片加藍色 primary、uptime 儀表板的折線圖與綠色勾勾牆、訊息塊左緣的粗色條、發光、漸層、圓角卡片、把泊位板做成橫向捲動的 carousel。",
+    "keyCharacteristics": [
+      "四個信號色，每個只有一個意思；紅色永遠只代表阻擋。",
+      "狀態三重編碼：塗裝色塊 + 模板字標籤 + 泊位號，不看顏色也讀得出來。",
+      "零圓角（--radius-none: 0），全站無例外。",
+      "分層靠重橫線與色階，不靠陰影。",
+      "標籤與數值全部等寬 + 等寬數字；散文才用系統無襯線。",
+      "深淺兩主題都是 WCAG 2.2 AA 的驗收條件，不是加分項。"
+    ],
+    "rules": [
+      {
+        "name": "The One Meaning Rule（一色一義）",
+        "body": "全站只有四個信號色，每個顏色只有一個意思：assigned 需要你、working 進行中、secured 已繫上、blocked 阻擋。新的語意要嘛映射到這四個之一，要嘛用中性色。紅色永遠只代表阻擋。",
+        "section": "colors"
+      },
+      {
+        "name": "The Triple Encoding Rule（三重編碼）",
+        "body": "任何狀態都同時由色塊、模板字標籤與位置（泊位號 BTH 1–BTH 4）表達。審計測試：把畫面轉成灰階，狀態仍然讀得出來，否則這個狀態沒做完。",
+        "section": "colors"
+      },
+      {
+        "name": "The Paint Doesn't Swap Rule（漆不換色）",
+        "body": "四個信號色與 on-signal 在深淺兩主題共用同一組值：它們是塗上去的漆，不是隨底色變的字色。換主題時只換中性色與 blocked-ink / secured-ink。任何 dark: / light: 變體都是這條規則出錯的徵兆——版面不需要它們。",
+        "section": "colors"
+      },
+      {
+        "name": "The Role Is Not A State Rule（角色不借信號色）",
+        "body": "使用者角色、語言、分類這種「不是狀態」的東西一律用中性色塊（deck 底 + ink 字）。信號色借出去一次，一色一義就沒了。",
+        "section": "colors"
+      },
+      {
+        "name": "The Two Alphabets Rule（標籤依語言分岔）",
+        "body": "中文沒有大小寫，text-transform: uppercase 對它無效，寬字距也讓中文更難讀。所以 .label 在 :lang(zh-Hant) 下換成無襯線、原樣大小寫、0.05em，並用一個 ::before 的 2px 塗刻度代替大寫帶來的「這是標籤」訊號。刻度用空 content 畫出來而不是用 ▸ 這種字元——字元會被算進無障礙名稱，螢幕閱讀器會念成「三角形 帳號」。兩個語言的標籤高度與色階相同，換語言時版面不跳動。",
+        "section": "typography"
+      },
+      {
+        "name": "The Machine String Rule（機器字串走 .value）",
+        "body": "API 端點、設定鍵、檔案路徑、inode、版本號、容器名一律用 .value，永遠不用 .label。理由是實際發生過的缺陷：CutawayRow 的 term 走 .label，英文版把 POST /Library/VirtualFolders 印成 POST /LIBRARY/VIRTUALFOLDERS，同一個畫面上出現九個端點的兩種大小寫，其中一種不是真的端點。CutawayRow 因此有 code 變體。審計測試：畫面上任何一個字串，如果使用者可能把它複製貼到別的介面或指令列，它就不能被大寫掉。",
+        "section": "typography"
+      },
+      {
+        "name": "The Tabular Rule（值一律等寬數字）",
+        "body": "任何會出現在同一欄的數字（版本、inode、可用空間、計數）都走 .value，font-variant-numeric: tabular-nums。維運頁面掃視靠的是對齊。",
+        "section": "typography"
+      },
+      {
+        "name": "The Board Never Scrolls Rule（板不捲動）",
+        "body": "泊位板永遠四格全在畫面內：窄版 2×2，桌機一列四格。不做橫向捲動的 carousel——BTH 3 與 BTH 4 捲到畫面外時，「一眼看出哪一格紅了」這塊板存在的理由就沒了，而且捲動容器會變成一個沒有名字的 Tab 停留點。",
+        "section": "layout"
+      },
+      {
+        "name": "The Values Sit On Their Line Rule（值貼在它那一行）",
+        "body": "實測值、端點、鍵名貼在它所屬的那一列，不進散文。剖面（Cutaway）是 dt / dd 的兩欄表，不是段落。",
+        "section": "layout"
+      },
+      {
+        "name": "The Failure Expands In Place Rule（失敗就地展開）",
+        "body": "任何失敗都在它自己那一列的下方就地展開（服務回的原文 + 修正說明 + 可複製指令），其他列不動、不跳頁、不開 dialog。二次確認同樣就地展開成一段說明加兩顆按鈕。",
+        "section": "layout"
+      },
+      {
+        "name": "The Rule-Line Rule（以線分層）",
+        "body": "分層一律用線與色階，不用陰影。需要「抬起」時換 deck，需要「下沉」時換 well，需要「這是另一個區塊」時加 border-2 border-rule，需要「這是分區」時加 border-b-2 border-rule-strong。box-shadow 只允許出現在焦點環，以及當成畫在元素內部的線。",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do 讓每個狀態同時有色塊、模板字標籤與位置（The Triple Encoding Rule）。灰階測試要能通過。",
+      "Do 把 API 端點、設定鍵、路徑、inode、版本號一律放進 .value；CutawayRow 用 code 變體（The Machine String Rule）。",
+      "Do 讓四個信號色與 on-signal 在兩個主題共用同一組值，只換中性色與 blocked-ink / secured-ink。",
+      "Do 用色階與線分層：well / hull / deck 三階加 border-2 border-rule 與 border-b-2 border-rule-strong（The Rule-Line Rule）。",
+      "Do 讓失敗在它自己那一列就地展開服務回的原文、修正說明與可複製指令。",
+      "Do 讓新增的互動元件被全域 :focus-visible 選擇器涵蓋（含 summary），並保持 24px 的命中/間距底線。",
+      "Do 在窄版把泊位板排成 2×2，讓四格同時在畫面內（The Board Never Scrolls Rule）。",
+      "Do 讓長路徑換行（break-words），不橫向捲動、不截斷。",
+      "Do 用中性色塊表達角色、語言、分類這類非狀態的東西（The Role Is Not A State Rule）。",
+      "Do 用原生 input / button / details，直到某一步真的需要行為基礎的元件為止。"
+    ],
+    "donts": [
+      "Don't 給任何顏色第二個意思，尤其不要讓紅色代表阻擋以外的事（警告、危險動作、刪除都不是阻擋）。",
+      "Don't 在信號色塊上的文字加 opacity；opacity-70 疊在信號色上實測 3.56:1，過不了 AA。",
+      "Don't 用 .label 包任何使用者可能複製出去的機器字串——它會被 uppercase 成一個不存在的端點。",
+      "Don't 加圓角。--radius-none: 0 沒有例外。",
+      "Don't 用陰影、發光、漸層或 backdrop-filter 表達深度；box-shadow 只用於焦點環與畫在元素內部的線。",
+      "Don't 用藍色 primary 按鈕，或任何 assigned 以外的主要動作顏色。",
+      "Don't 在訊息塊左緣加粗色條。",
+      "Don't 把泊位板做成橫向捲動的 carousel。",
+      "Don't 寫 dark: / light: 變體——token 在兩個主題換值，版面不該知道現在是哪個主題。",
+      "Don't 加應用內的主題切換鍵：深色是預設，亮色跟隨 prefers-color-scheme。",
+      "Don't 用字元當裝飾標記（▸、•、emoji）——它們會被算進無障礙名稱。要標記就用 CSS 畫。",
+      "Don't 引入 webfont 或對外部字型服務發請求；離線可用是自架應用的底線。",
+      "Don't 用 break-all：它會在英文詞中間斷行（(S / TEP 4)）。"
+    ],
+    "knownContradictions": [
+      "兩份 surface brief（setuppage 票 05 的 Resolved 段、healthpage）都寫亮色主題「同樣四個信號色，降明度提彩度以達 AA」；web/src/index.css 沒有這樣做——亮色只換中性色與 blocked-ink / secured-ink，四個信號色與 on-signal 兩主題共用。以 build 為準，brief 那句話已過時。"
+    ]
+  }
+}

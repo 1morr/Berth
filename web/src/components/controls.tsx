@@ -68,7 +68,7 @@ export function PasswordField({ label, ...input }: FieldProps) {
       <button
         type="button"
         onClick={() => setShown((was) => !was)}
-        className="label absolute right-0 top-0 px-1 py-0.5 text-ink-dim hover:text-ink"
+        className="label absolute right-0 top-0 flex min-h-6 min-w-6 items-center justify-center px-1 text-ink-dim hover:text-ink"
       >
         {shown ? t('common.hide') : t('common.show')}
       </button>

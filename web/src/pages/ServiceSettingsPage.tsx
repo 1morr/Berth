@@ -10,6 +10,7 @@ import {
   servicesQueryOptions,
   testService,
 } from '../api/settings'
+import { berthNumberOf } from '../components/berths'
 import { GhostButton, Notice, PrimaryButton } from '../components/controls'
 import { SIGNAL_FILL } from '../components/signal'
 import { ServiceCard } from '../health/ServiceCard'
@@ -33,7 +34,8 @@ export function ServiceSettingsPage() {
   function remember(fresh: HealthDetail) {
     queryClient.setQueryData(servicesQueryOptions.queryKey, fresh)
     queryClient.setQueryData(healthDetailQueryOptions.queryKey, fresh)
-    queryClient.invalidateQueries({ queryKey: healthQueryOptions.queryKey, exact: true })
+    // `void`：匿名的那一支重抓完之前按鈕不必一直轉，回傳的 promise 是刻意不等的。
+    void queryClient.invalidateQueries({ queryKey: healthQueryOptions.queryKey, exact: true })
   }
 
   const test = useMutation({
@@ -87,6 +89,7 @@ export function ServiceSettingsPage() {
                 </GhostButton>
                 <Link
                   to="/setup"
+                  search={{ berth: berthNumberOf(row.kind) }}
                   className="label self-center text-ink-dim underline hover:text-ink"
                 >
                   {t('settings.editHint')}
