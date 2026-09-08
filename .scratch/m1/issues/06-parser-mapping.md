@@ -27,6 +27,9 @@ air_date 虛擬季 offset）各自產一個 Candidate 並附理由，以及 brie
 
 plan §4.4 的虛擬季門檻維持 **180 天**（已被量測支持，調成 60 天會變差），不要順手改小。
 
+做完這三條之後，順手看一下 benchmark 的季集失敗還剩什麼形狀：brief §10 的「什麼情況該回頭重看」
+第 2 條就是拿這個當觸發條件（現在 provider 結構差異只佔 1%，主因是上面這些解析器缺口）。
+
 ## 驗收
 
 - [ ] `structure_hints` 認得 `Season 2` / `S2` / `第二季` / `2nd Season` / `Part 2` / `Specials` /
