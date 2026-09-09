@@ -33,10 +33,18 @@ export function AppShell({ children }: { children: ReactNode }) {
 }
 
 /** 導覽的一項。當前頁用重橫線標出來，不是靠顏色（狀態不只靠顏色，PRODUCT.md）。 */
-function NavLink({ to, children }: { to: '/health' | '/settings/services'; children: ReactNode }) {
+function NavLink({
+  to,
+  children,
+}: {
+  to: '/' | '/health' | '/settings/services'
+  children: ReactNode
+}) {
   return (
     <Link
       to={to}
+      // `/` 是每一條路徑的前綴，預設的模糊比對會讓探索永遠是「當前頁」。
+      activeOptions={{ exact: to === '/' }}
       className="label border-2 border-rule px-4 py-2.5 hover:border-rule-strong"
       activeProps={{ className: 'label border-2 border-rule-strong bg-deck px-4 py-2.5' }}
     >
@@ -75,6 +83,7 @@ function Identity() {
         <span className="label bg-deck px-2 py-1.5 text-ink">{t(`role.${me.data.role}`)}</span>
         <span className="value text-sm text-ink">{me.data.name}</span>
       </span>
+      <NavLink to="/">{t('nav.discover')}</NavLink>
       <NavLink to="/health">{t('nav.health')}</NavLink>
       {me.data.role === 'admin' && <NavLink to="/settings/services">{t('nav.settings')}</NavLink>}
       <GhostButton type="button" disabled={leave.isPending} onClick={() => leave.mutate()}>

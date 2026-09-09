@@ -32,9 +32,10 @@ from berth.adapters.prowlarr import (
 )
 from berth.adapters.prowlarr.client import SCHEMA_TIMEOUT_SECONDS, HttpProwlarrClient
 from berth.adapters.qbittorrent.client import HttpQbittorrentClient
+from berth.adapters.tmdb import TmdbEntry
 from berth.adapters.tmdb.client import HttpTmdbClient
 from berth.adapters.torznab.client import HttpTorznabClient
-from berth.domain import CollectionType
+from berth.domain import CollectionType, MediaKind
 from berth.services.indexer import DEFAULT_INDEXERS
 from berth.services.jellyfin import MERGE_VERSIONS_REPOSITORY
 from tests.conftest import read_fixture
@@ -1076,6 +1077,137 @@ async def test_tmdb_v3_api_key_travels_as_a_query_parameter() -> None:
 
     assert "Authorization" not in route.calls.last.request.headers
     assert route.calls.last.request.url.params["api_key"] == V3_API_KEY
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_tmdb_trending_tv_reads_the_series_fields() -> None:
+    """劇集用 `name` / `first_air_date`，電影用 `title` / `release_date`——同一支端點兩種形狀。"""
+    respx.get(f"{TMDB_URL}/trending/tv/week").respond(
+        200, text=read_fixture("http/tmdb/trending-tv-week.en.json")
+    )
+
+    client = HttpTmdbClient(V4_READ_TOKEN, base_url=TMDB_URL)
+    try:
+        entries = await client.trending(MediaKind.TV, language="en-US")
+    finally:
+        await client.aclose()
+
+    assert entries[0] == TmdbEntry(
+        tmdb_id=95350,
+        kind=MediaKind.TV,
+        title="Lanterns",
+        original_title="Lanterns",
+        year=2026,
+        poster_path="/gpC7h43xPMEV3goYMQShfJbTtLq.jpg",
+    )
+    assert [entry.kind for entry in entries] == [MediaKind.TV] * 6
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_tmdb_trending_movie_reads_the_movie_fields() -> None:
+    respx.get(f"{TMDB_URL}/trending/movie/week").respond(
+        200, text=read_fixture("http/tmdb/trending-movie-week.en.json")
+    )
+
+    client = HttpTmdbClient(V4_READ_TOKEN, base_url=TMDB_URL)
+    try:
+        entries = await client.trending(MediaKind.MOVIE, language="en-US")
+    finally:
+        await client.aclose()
+
+    assert entries[0] == TmdbEntry(
+        tmdb_id=1108427,
+        kind=MediaKind.MOVIE,
+        title="Moana",
+        original_title="Moana",
+        year=2026,
+        poster_path="/gaet1xQ2nxrG0V1Ep9T20ZMNEIC.jpg",
+    )
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_tmdb_popular_carries_no_media_type_so_the_caller_supplies_it() -> None:
+    """`{tv,movie}/popular` 的每一筆**沒有** `media_type`（trending 與 search 才有）。"""
+    respx.get(f"{TMDB_URL}/tv/popular").respond(
+        200, text=read_fixture("http/tmdb/tv-popular.en.json")
+    )
+    respx.get(f"{TMDB_URL}/movie/popular").respond(
+        200, text=read_fixture("http/tmdb/movie-popular.en.json")
+    )
+
+    client = HttpTmdbClient(V4_READ_TOKEN, base_url=TMDB_URL)
+    try:
+        series = await client.popular(MediaKind.TV, language="en-US")
+        movies = await client.popular(MediaKind.MOVIE, language="en-US")
+    finally:
+        await client.aclose()
+
+    assert (series[0].tmdb_id, series[0].kind, series[0].title) == (108978, MediaKind.TV, "Reacher")
+    assert (movies[0].tmdb_id, movies[0].kind) == (969681, MediaKind.MOVIE)
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_tmdb_search_multi_drops_people() -> None:
+    """`search/multi` 也回人物。`miyazaki` 這一查 20 筆裡 16 筆是人（2026-09-09 實測）。"""
+    respx.get(f"{TMDB_URL}/search/multi").respond(
+        200, text=read_fixture("http/tmdb/search-multi.miyazaki.en.json")
+    )
+
+    client = HttpTmdbClient(V4_READ_TOKEN, base_url=TMDB_URL)
+    try:
+        entries = await client.search("miyazaki", language="en-US")
+    finally:
+        await client.aclose()
+
+    assert [(entry.kind, entry.tmdb_id) for entry in entries] == [
+        (MediaKind.MOVIE, 1427106),
+        (MediaKind.TV, 89764),
+        (MediaKind.TV, 109113),
+    ]
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_tmdb_search_multi_keeps_the_original_title_next_to_the_translation() -> None:
+    """顯示用標題來自 `zh-TW` 那一輪，原文標題仍然是原文（brief §7.5 的檔名用英文）。"""
+    respx.get(f"{TMDB_URL}/search/multi").respond(
+        200, text=read_fixture("http/tmdb/search-multi.spy-x-family.zh.json")
+    )
+
+    client = HttpTmdbClient(V4_READ_TOKEN, base_url=TMDB_URL)
+    try:
+        entries = await client.search("spy x family", language="zh-TW")
+    finally:
+        await client.aclose()
+
+    assert [(entry.title, entry.original_title) for entry in entries] == [
+        ("SPY×FAMILY 間諜家家酒", "SPY×FAMILY"),
+        ("SPY×FAMILY 間諜家家酒 CODE：White", "劇場版 SPY×FAMILY CODE: White"),
+    ]
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_tmdb_sends_the_language_and_the_search_query() -> None:
+    route = respx.get(f"{TMDB_URL}/search/multi").respond(
+        200, text=read_fixture("http/tmdb/search-multi.spy-x-family.en.json")
+    )
+
+    client = HttpTmdbClient(V4_READ_TOKEN, base_url=TMDB_URL)
+    try:
+        await client.search("spy x family", language="zh-TW")
+    finally:
+        await client.aclose()
+
+    params = route.calls.last.request.url.params
+    assert params["query"] == "spy x family"
+    assert params["language"] == "zh-TW"
+    #: 探索頁不該回成人內容，而 TMDB 的預設就是不回；明確送出去才不必依賴那個預設。
+    assert params["include_adult"] == "false"
 
 
 @respx.mock

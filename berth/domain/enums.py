@@ -12,6 +12,33 @@ class Role(StrEnum):
     USER = "user"
 
 
+class MediaKind(StrEnum):
+    """一個作品是劇集還是電影（plan §2.2）。
+
+    字串同時是三個東西：`media.id` 的前綴（`tv:1234`）、TMDB `search/multi` 回的
+    `media_type`，以及 TMDB 那兩組端點的路徑段（`trending/tv/week`、`movie/popular`）。
+    三者一致不是巧合——沿用 provider 的字串就不必維護一張對照表。
+    """
+
+    TV = "tv"
+    MOVIE = "movie"
+
+
+class DiscoverProblem(StrEnum):
+    """探索頁拿不到 TMDB 的三種樣子（票 03）。
+
+    分成三種而不是一句錯誤訊息，是因為**下一步不同**：前兩種要使用者去精靈第 6 步處理憑證，
+    第三種只能等或查網路。封閉集合讓 UI 說得出那一步，而不是丟一個空畫面。
+    """
+
+    #: `settings.services.tmdb.api_key` 是空的。連線都不必發（brief §16.3）。
+    CREDENTIAL_MISSING = "credential_missing"
+    #: TMDB 回 401 / 403：key 有值但它不接受。
+    CREDENTIAL_REJECTED = "credential_rejected"
+    #: 連不上、逾時，或回的東西不是 TMDB。
+    UNREACHABLE = "unreachable"
+
+
 class CollectionType(StrEnum):
     """Jellyfin 媒體庫的類型；沿用 Jellyfin 的字串（brief §4.3）。"""
 

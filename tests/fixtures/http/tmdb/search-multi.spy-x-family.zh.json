@@ -1,0 +1,54 @@
+{
+  "page": 1,
+  "results": [
+    {
+      "adult": false,
+      "backdrop_path": "/lysUnU6V0VfcthDbviuVlIqgHOR.jpg",
+      "first_air_date": "2022-04-09",
+      "genre_ids": [
+        16,
+        10759,
+        35
+      ],
+      "id": 120089,
+      "media_type": "tv",
+      "name": "SPY×FAMILY 間諜家家酒",
+      "origin_country": [
+        "JP"
+      ],
+      "original_language": "ja",
+      "original_name": "SPY×FAMILY",
+      "overview": "每一個人，都有不能展現給任何人看的一面──這是個世界各國都在檯面下進行激烈情報戰的時代。東國與西國，兩國之間已持續冷戰了十多年。隸屬於西國情報局對東課〈WISE〉的幹練間諜〈黃昏〉，被指派一項極機密任務，奉命接近威脅東西和平的危險人物，要刺探出東國國家統一黨黨魁──唐納文‧戴斯蒙德的戰爭計畫。其任務名為──行動代號〈梟〉。任務內容是：「在一週內組好家庭，並潛入戴斯蒙德兒子所就讀的名校。」於是〈黃昏〉扮起精神科醫生──洛伊德‧佛傑，開始組織家庭。然而，他找到的女兒‧安妮亞是會讀心的超能力者，妻子‧約兒則是位暗殺者！由於利害一致，三人便互相隱瞞真實身分，並展開共同生活。世界的和平，就這樣被託付給狀況百出的臨時家庭──",
+      "popularity": 55.5577,
+      "poster_path": "/mvolqXssikgLeUomc59cB2RkH1k.jpg",
+      "softcore": false,
+      "vote_average": 8.507,
+      "vote_count": 2342
+    },
+    {
+      "adult": false,
+      "backdrop_path": "/zVDJ4cRgSpHlILSm7kGiklHQ6O7.jpg",
+      "genre_ids": [
+        16,
+        35,
+        12,
+        28
+      ],
+      "id": 1062807,
+      "media_type": "movie",
+      "original_language": "ja",
+      "original_title": "劇場版 SPY×FAMILY CODE: White",
+      "overview": "西國情報局對東課〈WISE〉的幹練特務〈黃昏〉──洛伊德‧佛傑在一如既往地執行任務時，接到了上頭指示，要更換進行中的作戰──行動代號〈梟〉的負責人。與此同時，伊甸學園將舉行料理實習課程，傳聞中冠軍將會被授予〈星星〉，為了展現行動代號〈梟〉的進展，向〈WISE〉交涉繼續執行任務，為了進一步守護世界和平，洛伊德向安妮亞提議，製作擔任審查委員長的校長愛吃的食物，「弗利吉斯地區 」傳統點心──「梅勒梅勒 」。為了確認道地的味道，佛傑一家便決定前往弗利吉斯家族旅遊，就在前往家族旅遊的途中，安妮亞在列車內發現了詭異的行李箱，而裡面不知為何裝有巧克力……正當她覺得奇怪時，行李箱的主人返回原位，讓安妮亞嚇了一跳，不小心誤食了巧克力。殊不知，那巧克力當中隱藏著會動搖世界和平的重大秘密──！？",
+      "popularity": 8.0066,
+      "poster_path": "/fXl067NmMxL6Mk2HNmoeNEXGj02.jpg",
+      "release_date": "2023-12-22",
+      "softcore": false,
+      "title": "SPY×FAMILY 間諜家家酒 CODE：White",
+      "video": false,
+      "vote_average": 7.209,
+      "vote_count": 677
+    }
+  ],
+  "total_pages": 1,
+  "total_results": 2
+}

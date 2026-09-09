@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import os
 import sys
 import tempfile
 from collections.abc import AsyncIterator
@@ -35,6 +36,7 @@ from berth.adapters.prowlarr.fake import FakeProwlarrClient
 from berth.adapters.qbittorrent import QbittorrentClient, QbittorrentVersion
 from berth.adapters.qbittorrent.fake import FakeQbittorrentClient
 from berth.adapters.tmdb import TmdbClient
+from berth.adapters.tmdb.client import HttpTmdbClient
 from berth.adapters.tmdb.fake import FakeTmdbClient
 from berth.adapters.torznab import TorznabClient
 from berth.adapters.torznab.fake import FakeTorznabClient
@@ -52,6 +54,7 @@ from berth.models import (
     SetupAdmin,
     SetupLibrary,
     SetupSettings,
+    TmdbSettings,
 )
 from berth.services.clients import SetupProbes
 from berth.services.health import check_health
@@ -134,6 +137,11 @@ class Scenario:
     preference_drift: bool = False
     #: TMDB 只有一台，位址寫死，所以情境裡就一份。
     tmdb: FakeTmdbClient = field(default_factory=FakeTmdbClient)
+    #: 存進 `settings.services.tmdb` 的憑證。空的話探索頁走「憑證缺失」那條路。
+    tmdb_credential: str = ""
+    #: 打**真的** `api.themoviedb.org`。探索頁的驗收要看真的海報與真的 zh-TW 標題，
+    #: 而那是替身演不出來的東西——它沒有 20 部作品的封面。
+    real_tmdb: bool = False
 
     def probes(self) -> SetupProbes:
         return SetupProbes(
@@ -280,8 +288,32 @@ def drifted() -> Scenario:
     return scenario
 
 
+def discover() -> Scenario:
+    """探索頁的正常樣子：打**真的** TMDB。
+
+    憑證從環境變數 `BERTH_TMDB_KEY` 讀（v3 key 或 v4 read access token 都行）。沒設就退回
+    「憑證缺失」那條路徑——那本身也是要驗的畫面之一，所以不必特別處理。
+    """
+    scenario = healthy()
+    scenario.tmdb_credential = os.environ.get("BERTH_TMDB_KEY", "")
+    scenario.real_tmdb = bool(scenario.tmdb_credential)
+    return scenario
+
+
+def tmdb_down() -> Scenario:
+    """憑證有、TMDB 連不上：探索頁要給原文與重試，而不是一片空白。"""
+    scenario = healthy()
+    scenario.tmdb_credential = "00000000000000000000000000000003"
+    scenario.tmdb = FakeTmdbClient(
+        error=ServiceUnavailableError("GET /trending/tv/week: connection refused")
+    )
+    return scenario
+
+
 SCENARIOS = {
     "bundled": bundled,
+    "discover": discover,
+    "tmdb-down": tmdb_down,
     "healthy": healthy,
     "degraded": degraded,
     "drifted": drifted,
@@ -330,6 +362,8 @@ class FakeClientFactory:
         return FakeProwlarrClient(base_url=base_url, indexers=list(self._scenario.connect_indexers))
 
     def tmdb(self, credential: str) -> TmdbClient:
+        if self._scenario.real_tmdb:
+            return HttpTmdbClient(credential)
         return self._scenario.tmdb
 
     def torznab(self, base_url: str, api_key: str) -> TorznabClient:
@@ -401,6 +435,8 @@ async def _seed(config: Config, scenario: Scenario, factory: FakeClientFactory) 
                 await write_settings(
                     session, JellyfinSettings(base_url="http://jellyfin:8096", api_key="fake-key")
                 )
+            if scenario.tmdb_credential:
+                await write_settings(session, TmdbSettings(api_key=scenario.tmdb_credential))
             await session.commit()
             if scenario.moored:
                 await _moor(session, scenario, factory, paths)

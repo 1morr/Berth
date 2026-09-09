@@ -13,6 +13,7 @@ import { ApiError } from './api/client'
 import { healthQueryOptions } from './api/health'
 import { destination } from './auth/destination'
 import { AppShell } from './AppShell'
+import { DiscoverPage } from './pages/DiscoverPage'
 import { HealthPage } from './pages/HealthPage'
 import { LoginPage } from './pages/LoginPage'
 import { ServiceSettingsPage } from './pages/ServiceSettingsPage'
@@ -163,15 +164,20 @@ const loginRoute = createRoute({
 })
 
 /**
- * 首頁在 M1 是探索頁（plan §7）。在那之前唯一有內容的頁面是健康頁，所以 `/` 先導到它——
- * 兩個網址畫同一頁比一個轉址難解釋得多。
+ * 首頁是探索頁（plan §7、票 03）。票 10 的「先導向 `/health`」到此為止——Berth 平常
+ * 是找東西的地方，不是看它有沒有壞的地方。
  */
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/',
-  beforeLoad: () => {
-    throw redirect({ to: '/health' })
+  beforeLoad: async ({ context, location }) => {
+    await requireSignedInPage(context.queryClient, location)
   },
+  component: () => (
+    <AppShell>
+      <DiscoverPage />
+    </AppShell>
+  ),
 })
 
 const healthRoute = createRoute({

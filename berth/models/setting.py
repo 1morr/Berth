@@ -84,6 +84,9 @@ class TmdbSettings(SettingsGroup):
     KEY = "services.tmdb"
 
     api_key: str = ""
+    #: `configuration` 回的圖片基底（`https://image.tmdb.org/t/p/`）。對同一把憑證是常數，
+    #: 所以驗憑證那一次就順手存下來，探索頁組海報網址時不必再問一次（plan §8.3、票 03）。
+    image_base_url: str = ""
 
 
 class PathSettings(SettingsGroup):

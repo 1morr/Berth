@@ -10,7 +10,9 @@ import type {
   TmdbSetup,
 } from '../api/setup'
 import type { PreferenceDiff, QbittorrentSetup, RouteView, SetupStep } from '../api/schemas'
+import type { Discover, DiscoverItem } from '../api/discover'
 import type { HealthDetail, ServiceHealth } from '../api/health'
+import type { StubRoute } from './fetch'
 
 /** 檢查與精靈都用這一個時間點，畫面上的「上次檢查」才是同一輪。 */
 const CHECKED_AT = '2026-09-08T12:00:00Z'
@@ -308,4 +310,9 @@ export function withFailedService(
         : row,
     ),
   }
+}
+
+/** 探索頁一個 feed 的回應。路過這一頁的測試給空牆就夠了。 */
+export function discoverWall(items: DiscoverItem[] = []): StubRoute {
+  return { body: { items, problem: null, detail: '' } satisfies Discover }
 }

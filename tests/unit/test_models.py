@@ -79,9 +79,20 @@ class TestJsonText:
         assert JsonText().process_result_value(None, DIALECT) is None
 
 
-def test_metadata_holds_exactly_the_m0_tables() -> None:
-    """M0 只建這五張表；其餘在需要它們的里程碑用 Alembic 增量加（progress.md 偏差）。"""
-    assert set(Base.metadata.tables) == {"users", "sessions", "settings", "routes", "events"}
+def test_metadata_holds_exactly_the_tables_built_so_far() -> None:
+    """表是**按里程碑增量加**的（progress.md 偏差與決定）：M0 五張，票 03 加了兩張。
+
+    這條斷言是刻意寫死的——多一張表就是多一個 migration，不該由一次 import 順手帶進來。
+    """
+    assert set(Base.metadata.tables) == {
+        "users",
+        "sessions",
+        "settings",
+        "routes",
+        "events",
+        "media",
+        "tmdb_cache",
+    }
 
 
 def test_constraints_are_named_so_sqlite_batch_migrations_can_drop_them() -> None:

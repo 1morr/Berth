@@ -1,0 +1,138 @@
+{
+  "page": 1,
+  "results": [
+    {
+      "adult": false,
+      "backdrop_path": "/76WFQTmh4gsqYpWTejxuEu5Iu69.jpg",
+      "genre_ids": [
+        10751,
+        14,
+        35,
+        12
+      ],
+      "id": 1108427,
+      "media_type": "movie",
+      "original_language": "en",
+      "original_title": "Moana",
+      "overview": "《海洋奇緣》真人版，由艾美獎及東尼獎雙項贏家熱門音樂劇《漢米爾頓》導演湯瑪斯凱爾執導，電影敘述海洋公主莫娜遠渡重洋、與莫逆之交毛伊攜手拯救族人，除了巨石強森以真面目再度飾演廣受喜愛的毛伊，在前導預告中光以背面現身即令影迷興奮不已，莫娜則由萬中選一的耀眼新星凱薩琳拉加阿雅（Catherine Lagaʻaia）初登大銀幕、一展驚豔歌喉！",
+      "popularity": 260.8674,
+      "poster_path": "/tAjwKOQHHRgtMpt1sR28sIFWrO5.jpg",
+      "release_date": "2026-07-08",
+      "softcore": false,
+      "title": "海洋奇緣",
+      "video": false,
+      "vote_average": 6.765,
+      "vote_count": 379
+    },
+    {
+      "adult": false,
+      "backdrop_path": "/ziXF8wIBguHNCeplNthUlDTCZP8.jpg",
+      "genre_ids": [
+        53,
+        28
+      ],
+      "id": 1386315,
+      "media_type": "movie",
+      "original_language": "en",
+      "original_title": "The Runner",
+      "overview": "在心理驚悚片《生死奔救》中，優秀的倫敦律師麥雅馬丁在晨跑時接到一通電話，平靜的生活瞬間崩毀。她的兒子被人綁架了。為了救回孩子，她只能不停奔跑，服從每一道冷酷無情的命令，也不能相信任何人。每分每秒都考驗著一位母親，究竟願意為了拯救孩子付出多少代價。",
+      "popularity": 284.4272,
+      "poster_path": "/5zJO7iYlKH2PlF6fy2CQYNLimCO.jpg",
+      "release_date": "2026-09-03",
+      "softcore": false,
+      "title": "生死奔救",
+      "video": false,
+      "vote_average": 6.731,
+      "vote_count": 342
+    },
+    {
+      "adult": false,
+      "backdrop_path": "/l9mFW9HQnAZ4r1ChZJHoOT3jaal.jpg",
+      "genre_ids": [
+        35,
+        12,
+        10751
+      ],
+      "id": 1204680,
+      "media_type": "movie",
+      "original_language": "en",
+      "original_title": "Coyote vs. Acme",
+      "overview": "《威利狼大戰阿卡米公司》的故事圍繞著威利狼展開，他長期因自家品牌 Acme 生產的各種瑕疵產品害得遍體鱗傷，終於忍無可忍，決定在亞利桑那州對 Acme 公司提起訴訟。電影延續這個設定，由威爾佛提（Will Forte）飾演一位專打「冷門案件」的律師，而約翰希南（John Cena）則化身這家冷酷企業的法律代表，雙方正面交鋒！",
+      "popularity": 643.9483,
+      "poster_path": "/xONOMna5Z102bw0jMPBM4H73B9m.jpg",
+      "release_date": "2026-08-20",
+      "softcore": false,
+      "title": "威利狼大戰阿卡米公司",
+      "video": false,
+      "vote_average": 7.674,
+      "vote_count": 244
+    },
+    {
+      "adult": false,
+      "backdrop_path": "/RMXG8myu1aGlNUsRjtxzmpdMK0.jpg",
+      "genre_ids": [
+        12,
+        28,
+        14
+      ],
+      "id": 1368337,
+      "media_type": "movie",
+      "original_language": "en",
+      "original_title": "The Odyssey",
+      "overview": "講述奧德修斯在特洛伊戰爭後歷經艱險返鄉，途中遭遇獨眼巨人、女妖與女巫，最終與妻子重逢的傳奇旅程。",
+      "popularity": 437.8516,
+      "poster_path": "/d7MiRRamaAe58DacYEo2ZgziBBv.jpg",
+      "release_date": "2026-07-15",
+      "softcore": false,
+      "title": "奧德賽",
+      "video": false,
+      "vote_average": 8.0,
+      "vote_count": 3555
+    },
+    {
+      "adult": false,
+      "backdrop_path": "/qeQJx07rK2xm8SD2sJxFKhE7gs0.jpg",
+      "genre_ids": [
+        878,
+        28,
+        12
+      ],
+      "id": 969681,
+      "media_type": "movie",
+      "original_language": "en",
+      "original_title": "Spider-Man: Brand New Day",
+      "overview": "彼得帕克努力專注於大學生活，把蜘蛛人拋在腦後。然而，當新的威脅危及到他的朋友時，他不得不違背諾言，再次穿上戰衣，與一位意想不到的盟友聯手，保護他所愛的人。",
+      "popularity": 839.8698,
+      "poster_path": "/2zO573CUiqm4QDuIPycE1d1GUYc.jpg",
+      "release_date": "2026-07-29",
+      "softcore": false,
+      "title": "蜘蛛人：重生日",
+      "video": false,
+      "vote_average": 7.864,
+      "vote_count": 2526
+    },
+    {
+      "adult": false,
+      "backdrop_path": "/mfgNUnFB25BNIwe9iPJ17cUN64S.jpg",
+      "genre_ids": [
+        35,
+        10749
+      ],
+      "id": 1433367,
+      "media_type": "movie",
+      "original_language": "en",
+      "original_title": "One Night Only",
+      "overview": "剛被女友狠甩的歐文和滿懷浪漫情懷和希望的艾莉或許是這座城市裡唯二只想要尋找真愛的單身人士，而不只是想找一個一夜情的性伴侶。他們相遇時都感到彼此之間擦出火花，但是一連串的意外和其他的冒險卻讓他們的夜晚變得很複雜，結果被迫分開。當他們在城市中奔向彼此又在無意間遠離彼此的時候，也許他們會發現，他們最渴望的東西其實近在咫尺。",
+      "popularity": 71.2824,
+      "poster_path": "/uhropHIrmO583I4izEJru849Gpi.jpg",
+      "release_date": "2026-07-28",
+      "softcore": false,
+      "title": "一夜限定",
+      "video": false,
+      "vote_average": 7.0,
+      "vote_count": 77
+    }
+  ],
+  "total_pages": 500,
+  "total_results": 10000
+}

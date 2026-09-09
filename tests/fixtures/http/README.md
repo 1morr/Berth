@@ -63,6 +63,25 @@ plan §9.4 的九步之後那台伺服器的狀態，不是手排出來的場景
 5.2.3 **成功**沒有對應的檔案：它回的是 `204` 空 body（契約測試直接 `respond(204)`）。免密白名單上的
 來源在 5.x 一律拿到這個 204，錯的帳密也一樣——那正是套件內 Berth 的處境。
 
+2026-09-09（票 03），對真的 `api.themoviedb.org` 錄的，用一把使用者自備的 v4 read access token。
+每支端點各錄 `en-US` 與 `zh-TW` 兩輪——**兩輪的成員與順序會不同**，那正是要守住的行為：
+
+| 檔案 | 來源 |
+| --- | --- |
+| `tmdb/trending-{tv,movie}-week.{en,zh}.json` | `GET /3/trending/{tv,movie}/week?language={en-US,zh-TW}`。整份 20 筆太長，`results` 只留前 6 筆（其餘欄位原樣）。`trending-tv-week` 這一對是「`language` 換掉成員」的證據：`en` 的 `258230` 與 `97546` 不在 `zh` 那一輪裡 |
+| `tmdb/{tv,movie}-popular.{en,zh}.json` | `GET /3/{tv,movie}/popular?language=…`，同樣只留前 6 筆。這兩支的每一筆**沒有** `media_type` |
+| `tmdb/search-multi.spy-x-family.{en,zh}.json` | `GET /3/search/multi?query=spy%20x%20family&include_adult=false&language=…`。整份就是 2 筆（一劇一影），未裁剪；`zh` 那一輪是顯示用標題的證據 |
+| `tmdb/search-multi.miyazaki.en.json` | 同一支端點，`?query=miyazaki`。20 筆裡 16 筆是 `person`，只留前 8 筆——人物要被丟掉這件事靠它釘住 |
+
+重錄的指令（`$TOKEN` 是自己的 v4 read access token 或 v3 key）：
+
+```bash
+curl -s -H "Authorization: Bearer $TOKEN"   "https://api.themoviedb.org/3/trending/tv/week?language=en-US"
+```
+
+裁剪只砍 `results` 的尾巴，不改任何一筆的內容；重新輸出時用 `json.dumps(payload, indent=2,
+ensure_ascii=False, sort_keys=True)`，與 `configuration.json` 那一份同一個格式。
+
 ## 規則
 
 - 檔案裡不放真的秘密，**測試檔裡也不放**。同形狀的假值一律是 `0000…000n`，每個服務一個號碼：

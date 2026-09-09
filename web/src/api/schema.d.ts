@@ -61,6 +61,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/discover/trending": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Trending */
+        get: operations["get_trending_api_discover_trending_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/discover/popular": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Popular */
+        get: operations["get_popular_api_discover_popular_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/discover/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Search */
+        get: operations["get_search_api_discover_search_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/health": {
         parameters: {
             query?: never;
@@ -632,6 +683,51 @@ export interface components {
          * @enum {string}
          */
         DetectionReason: "setup_pending" | "setup_completed" | "anonymous_ok" | "auth_required" | "no_indexers" | "has_indexers" | "api_key_missing" | "not_deployed" | "unreachable" | "protocol_mismatch" | "connected";
+        /**
+         * DiscoverItemOut
+         * @description 牆上的一格。
+         */
+        DiscoverItemOut: {
+            /** Id */
+            id: string;
+            /** Tmdb Id */
+            tmdb_id: number;
+            kind: components["schemas"]["MediaKind"];
+            /** Title */
+            title: string;
+            /** Title En */
+            title_en: string;
+            /** Year */
+            year: number | null;
+            /** Poster Url */
+            poster_url: string;
+            /** Tracked */
+            tracked: boolean;
+        };
+        /**
+         * DiscoverOut
+         * @description 一個 feed 的回應。
+         *
+         *     **失敗也是 200**：一頁上有三個 feed，其中一個拿不到 TMDB 時另外兩個照樣畫得出來，
+         *     而畫面要說得出下一步。把它做成 HTTP 錯誤的話，前端只剩一個狀態碼，分不出
+         *     「還沒填憑證」與「TMDB 連不上」——那兩件事的修法完全不同（票 03 驗收）。
+         */
+        DiscoverOut: {
+            /** Items */
+            items: components["schemas"]["DiscoverItemOut"][];
+            problem: components["schemas"]["DiscoverProblem"] | null;
+            /** Detail */
+            detail: string;
+        };
+        /**
+         * DiscoverProblem
+         * @description 探索頁拿不到 TMDB 的三種樣子（票 03）。
+         *
+         *     分成三種而不是一句錯誤訊息，是因為**下一步不同**：前兩種要使用者去精靈第 6 步處理憑證，
+         *     第三種只能等或查網路。封閉集合讓 UI 說得出那一步，而不是丟一個空畫面。
+         * @enum {string}
+         */
+        DiscoverProblem: "credential_missing" | "credential_rejected" | "unreachable";
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -835,6 +931,16 @@ export interface components {
             name: string;
             role: components["schemas"]["Role"];
         };
+        /**
+         * MediaKind
+         * @description 一個作品是劇集還是電影（plan §2.2）。
+         *
+         *     字串同時是三個東西：`media.id` 的前綴（`tv:1234`）、TMDB `search/multi` 回的
+         *     `media_type`，以及 TMDB 那兩組端點的路徑段（`trending/tv/week`、`movie/popular`）。
+         *     三者一致不是巧合——沿用 provider 的字串就不必維護一張對照表。
+         * @enum {string}
+         */
+        MediaKind: "tv" | "movie";
         /** PreferenceDiffOut */
         PreferenceDiffOut: {
             /** Key */
@@ -1151,6 +1257,78 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MeOut"];
+                };
+            };
+        };
+    };
+    get_trending_api_discover_trending_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiscoverOut"];
+                };
+            };
+        };
+    };
+    get_popular_api_discover_popular_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiscoverOut"];
+                };
+            };
+        };
+    };
+    get_search_api_discover_search_get: {
+        parameters: {
+            query: {
+                /** @description 搜尋詞。空白的查詢回空清單而不是錯誤。 */
+                q: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiscoverOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

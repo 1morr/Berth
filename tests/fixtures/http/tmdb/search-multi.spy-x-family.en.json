@@ -1,0 +1,54 @@
+{
+  "page": 1,
+  "results": [
+    {
+      "adult": false,
+      "backdrop_path": "/lysUnU6V0VfcthDbviuVlIqgHOR.jpg",
+      "first_air_date": "2022-04-09",
+      "genre_ids": [
+        16,
+        10759,
+        35
+      ],
+      "id": 120089,
+      "media_type": "tv",
+      "name": "SPY x FAMILY",
+      "origin_country": [
+        "JP"
+      ],
+      "original_language": "ja",
+      "original_name": "SPY×FAMILY",
+      "overview": "A spy, an assassin and a telepath come together to pose as a family, each for their own reasons, while hiding their true identities from each other.",
+      "popularity": 55.5577,
+      "poster_path": "/7NAvPYPAu7MeHwP8E9sn81PqsRh.jpg",
+      "softcore": false,
+      "vote_average": 8.507,
+      "vote_count": 2342
+    },
+    {
+      "adult": false,
+      "backdrop_path": "/zVDJ4cRgSpHlILSm7kGiklHQ6O7.jpg",
+      "genre_ids": [
+        16,
+        35,
+        12,
+        28
+      ],
+      "id": 1062807,
+      "media_type": "movie",
+      "original_language": "ja",
+      "original_title": "劇場版 SPY×FAMILY CODE: White",
+      "overview": "While under the guise of taking his family on a weekend winter getaway, Loid's attempt to make progress on his current mission Operation Strix proves difficult when Anya mistakenly gets involved and triggers events that threaten world peace.",
+      "popularity": 8.0066,
+      "poster_path": "/xlIQf4y9eB14iYzNN142tROIWON.jpg",
+      "release_date": "2023-12-22",
+      "softcore": false,
+      "title": "SPY x FAMILY CODE: White",
+      "video": false,
+      "vote_average": 7.209,
+      "vote_count": 677
+    }
+  ],
+  "total_pages": 1,
+  "total_results": 2
+}

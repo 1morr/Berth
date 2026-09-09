@@ -1,0 +1,131 @@
+{
+  "page": 1,
+  "results": [
+    {
+      "adult": false,
+      "backdrop_path": "/qeQJx07rK2xm8SD2sJxFKhE7gs0.jpg",
+      "genre_ids": [
+        878,
+        28,
+        12
+      ],
+      "id": 969681,
+      "original_language": "en",
+      "original_title": "Spider-Man: Brand New Day",
+      "overview": "Fighting crime full-time as Spider-Man in a world that doesn't remember him—and the pressure of seeing his old friends move on without him—sparks a change in Peter Parker he may not have the power to control. But that transformation might also be the only thing that can stop a shocking new threat to the city and those he loves - a powerful villain no one can even see.",
+      "popularity": 839.8385,
+      "poster_path": "/bjiS5ipwxb9JFy3XRRN4OAilSeX.jpg",
+      "release_date": "2026-07-29",
+      "softcore": false,
+      "title": "Spider-Man: Brand New Day",
+      "video": false,
+      "vote_average": 7.9,
+      "vote_count": 2521
+    },
+    {
+      "adult": false,
+      "backdrop_path": "/l9mFW9HQnAZ4r1ChZJHoOT3jaal.jpg",
+      "genre_ids": [
+        35,
+        12,
+        10751
+      ],
+      "id": 1204680,
+      "original_language": "en",
+      "original_title": "Coyote vs. Acme",
+      "overview": "After Acme products fail him one too many times in his dogged pursuit of the Roadrunner, Wile E. Coyote decides to hire a billboard lawyer to sue the Acme Corporation.",
+      "popularity": 654.7252,
+      "poster_path": "/orkLtdgMGiO9rTVMqJ1kKwrnup1.jpg",
+      "release_date": "2026-08-20",
+      "softcore": false,
+      "title": "Coyote vs. Acme",
+      "video": false,
+      "vote_average": 7.65,
+      "vote_count": 234
+    },
+    {
+      "adult": false,
+      "backdrop_path": "/RMXG8myu1aGlNUsRjtxzmpdMK0.jpg",
+      "genre_ids": [
+        12,
+        28,
+        14
+      ],
+      "id": 1368337,
+      "original_language": "en",
+      "original_title": "The Odyssey",
+      "overview": "Odysseus, the legendary King of Ithaca, embarks on a long and perilous journey home following the Trojan War. Throughout his voyage, he is forced to confront the whims of gods, mythological monsters, and trials that stretch both his cunning and his humanity to the breaking point.",
+      "popularity": 464.1594,
+      "poster_path": "/5rhTDKUhPYvpdQIijFIs5VoWsON.jpg",
+      "release_date": "2026-07-15",
+      "softcore": false,
+      "title": "The Odyssey",
+      "video": false,
+      "vote_average": 7.999,
+      "vote_count": 3553
+    },
+    {
+      "adult": false,
+      "backdrop_path": "/qDa0fqDqIBCovRp975RvtGPcuN3.jpg",
+      "genre_ids": [
+        28,
+        53
+      ],
+      "id": 1288445,
+      "original_language": "en",
+      "original_title": "Mutiny",
+      "overview": "After witnessing his billionaire boss' murder and being framed for the crime, Cole Reed boards a cargo ship on a one-man crusade to avenge his boss' death only to discover an international conspiracy.",
+      "popularity": 408.1873,
+      "poster_path": "/pu2VxGlpGwffOx292w18b1tv96j.jpg",
+      "release_date": "2026-08-19",
+      "softcore": false,
+      "title": "Mutiny",
+      "video": false,
+      "vote_average": 6.4,
+      "vote_count": 324
+    },
+    {
+      "adult": false,
+      "backdrop_path": "/hpBGCnzOvdtQoMyE48gvwp2y5yx.jpg",
+      "genre_ids": [
+        28,
+        27,
+        878
+      ],
+      "id": 1375646,
+      "original_language": "ko",
+      "original_title": "군체",
+      "overview": "Professor Se-jeong is thrust into a bloody nightmare when a rapidly mutating virus is released during a biotech conference causing authorities to seal the facility. Trapped inside with no escape, Se-jeong along with a small group of survivors must fight to stay alive while the infected undergo horrific transformations.",
+      "popularity": 318.9049,
+      "poster_path": "/tN799oUR0f1gUKDYdMNrDaY7I51.jpg",
+      "release_date": "2026-05-21",
+      "softcore": false,
+      "title": "Colony",
+      "video": false,
+      "vote_average": 8.105,
+      "vote_count": 721
+    },
+    {
+      "adult": false,
+      "backdrop_path": "/ziXF8wIBguHNCeplNthUlDTCZP8.jpg",
+      "genre_ids": [
+        53,
+        28
+      ],
+      "id": 1386315,
+      "original_language": "en",
+      "original_title": "The Runner",
+      "overview": "Maia Marten, a brilliant London lawyer, has her life shattered by a single call on her morning run: her son has been taken. To get him back, she must keep running, obey every ruthless command, and trust no one-each second a test of how far a mother will go to save her child.",
+      "popularity": 312.0164,
+      "poster_path": "/uxCaBoYXsDC4A0SqTm3SISj0OwK.jpg",
+      "release_date": "2026-09-03",
+      "softcore": false,
+      "title": "The Runner",
+      "video": false,
+      "vote_average": 6.691,
+      "vote_count": 335
+    }
+  ],
+  "total_pages": 58819,
+  "total_results": 1176380
+}

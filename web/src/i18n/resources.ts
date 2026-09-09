@@ -466,10 +466,38 @@ const zhHant = {
     user: '使用者',
   },
   nav: {
+    discover: '探索',
     health: '健康',
     settings: '設定',
     signOut: '登出',
     signingOut: '登出中…',
+  },
+  discover: {
+    trending: '本週趨勢',
+    popular: '熱門',
+    results: '「{{query}}」的結果',
+    tracked: '已追蹤',
+    noArt: '無海報',
+    empty: 'TMDB 這一輪什麼都沒回。過一小時快取到期後會再問一次。',
+    off: '讀不到 Berth 後端。確認程序是否還在執行。',
+    search: {
+      label: '搜尋作品',
+      placeholder: '劇名、片名，中文或英文',
+      tooShort: '再打 {{count}} 個字以上就開始搜尋。',
+      searching: '搜尋中…',
+      count: '{{count}} 部作品',
+      none: '沒有作品叫「{{query}}」。換個寫法，或試試原文標題。',
+    },
+    problem: {
+      credential_missing:
+        'Berth 還沒有 TMDB 憑證。它不內建任何一把，要你自己去 themoviedb.org 申請並填進設定精靈。',
+      credential_rejected: 'TMDB 不接受這把憑證。它可能被撤銷了，或貼進來時少了幾個字。',
+      unreachable: '連不上 TMDB。可能是這台機器沒有對外網路，或 TMDB 正在維護。',
+      toSetup: '前往設定精靈',
+      askAdmin: '請管理員到設定精靈補上 TMDB 憑證。',
+      retry: '重試',
+    },
+    attribution: '本產品使用 TMDB 的 API，但未經 TMDB 認可或認證。',
   },
   health: {
     title: '健康',
@@ -1025,10 +1053,40 @@ const en: Translations<typeof zhHant> = {
     user: 'User',
   },
   nav: {
+    discover: 'Discover',
     health: 'Health',
     settings: 'Settings',
     signOut: 'Sign out',
     signingOut: 'Signing out…',
+  },
+  discover: {
+    trending: 'Trending this week',
+    popular: 'Popular',
+    results: 'Results for “{{query}}”',
+    tracked: 'Tracked',
+    noArt: 'NO ART',
+    empty: 'TMDB returned nothing this round. Berth asks again once the hour-long cache expires.',
+    off: 'Cannot reach the Berth backend. Check that the process is still running.',
+    search: {
+      label: 'Search titles',
+      placeholder: 'A series or film, in any language',
+      tooShort: 'Type {{count}} or more characters to search.',
+      searching: 'Searching…',
+      count: '{{count}} titles',
+      none: 'Nothing here is called “{{query}}”. Try another spelling, or the original title.',
+    },
+    problem: {
+      credential_missing:
+        'Berth has no TMDB credential. It ships without one: get your own key at themoviedb.org and paste it into the setup wizard.',
+      credential_rejected:
+        'TMDB rejected this credential. It may have been revoked, or lost a few characters on the way in.',
+      unreachable:
+        'Cannot reach TMDB. Either this machine has no outbound network, or TMDB is down.',
+      toSetup: 'Open the setup wizard',
+      askAdmin: 'Ask an administrator to add the TMDB credential in the setup wizard.',
+      retry: 'Retry',
+    },
+    attribution: 'This product uses the TMDB API but is not endorsed or certified by TMDB.',
   },
   health: {
     title: 'Health',

@@ -1,0 +1,149 @@
+{
+  "page": 1,
+  "results": [
+    {
+      "adult": false,
+      "backdrop_path": "/6gqezQJ2mkm4jreWwLyOZy2Vf6i.jpg",
+      "first_air_date": "2026-08-16",
+      "genre_ids": [
+        18,
+        9648,
+        10765
+      ],
+      "id": 95350,
+      "media_type": "tv",
+      "name": "Lanterns",
+      "origin_country": [
+        "US"
+      ],
+      "original_language": "en",
+      "original_name": "Lanterns",
+      "overview": "Two intergalactic cops, new recruit John Stewart and Lantern legend Hal Jordan, are drawn into a dark, Earth-based mystery as they investigate a murder in the American heartland.",
+      "popularity": 253.5113,
+      "poster_path": "/gpC7h43xPMEV3goYMQShfJbTtLq.jpg",
+      "softcore": false,
+      "vote_average": 8.3,
+      "vote_count": 292
+    },
+    {
+      "adult": false,
+      "backdrop_path": "/uTWhbLc7Bj4qNSdW3ZvZKL8cOHv.jpg",
+      "first_air_date": "2023-05-04",
+      "genre_ids": [
+        10765,
+        18
+      ],
+      "id": 125988,
+      "media_type": "tv",
+      "name": "Silo",
+      "origin_country": [
+        "US"
+      ],
+      "original_language": "en",
+      "original_name": "Silo",
+      "overview": "In a ruined and toxic future, thousands live in a giant silo deep underground. After its sheriff breaks a cardinal rule and residents die mysteriously, engineer Juliette starts to uncover shocking secrets and the truth about the silo.",
+      "popularity": 334.8337,
+      "poster_path": "/gMYZZvnkVNTqSVnVCphWbPXwWwb.jpg",
+      "softcore": false,
+      "vote_average": 8.2,
+      "vote_count": 2614
+    },
+    {
+      "adult": false,
+      "backdrop_path": "/hB7FJU3A0bY6mFrfF3CZOFZTWcI.jpg",
+      "first_air_date": "2026-09-09",
+      "genre_ids": [
+        80,
+        18,
+        9648
+      ],
+      "id": 258230,
+      "media_type": "tv",
+      "name": "Last Seen",
+      "origin_country": [
+        "AU",
+        "GB"
+      ],
+      "original_language": "en",
+      "original_name": "Last Seen",
+      "overview": "When emergency dispatcher Ian Ridley receives a frantic call from a teenager he believes could be his long-missing daughter, he stops at nothing to find her.",
+      "popularity": 10.3056,
+      "poster_path": "/vozJZjHv0Yyv4PjoOxF5tVMUGFI.jpg",
+      "softcore": false,
+      "vote_average": 8.0,
+      "vote_count": 1
+    },
+    {
+      "adult": false,
+      "backdrop_path": "/yG1wltFmkX5c5ocACKfpX0tp3SY.jpg",
+      "first_air_date": "2024-03-07",
+      "genre_ids": [
+        35,
+        18,
+        80
+      ],
+      "id": 236235,
+      "media_type": "tv",
+      "name": "The Gentlemen",
+      "origin_country": [
+        "GB"
+      ],
+      "original_language": "en",
+      "original_name": "The Gentlemen",
+      "overview": "When aristocratic Eddie inherits the family estate, he discovers that it's home to an enormous weed empire — and its proprietors aren't going anywhere.",
+      "popularity": 245.1087,
+      "poster_path": "/tw3tzfXaSpmUZIB8ZNqNEGzMBCy.jpg",
+      "softcore": false,
+      "vote_average": 7.837,
+      "vote_count": 885
+    },
+    {
+      "adult": false,
+      "backdrop_path": "/pF0qkRsrHkdYadPWY9AMeFZfcwk.jpg",
+      "first_air_date": "2022-02-03",
+      "genre_ids": [
+        10759,
+        80
+      ],
+      "id": 108978,
+      "media_type": "tv",
+      "name": "Reacher",
+      "origin_country": [
+        "US"
+      ],
+      "original_language": "en",
+      "original_name": "Reacher",
+      "overview": "Jack Reacher, a veteran military police investigator, has just recently entered civilian life. Reacher is a drifter, carrying no phone and the barest of essentials as he travels the country and explores the nation he once served.",
+      "popularity": 583.5827,
+      "poster_path": "/f1VCQIG2iCyOookdgOzwtUpwWC0.jpg",
+      "softcore": false,
+      "vote_average": 8.111,
+      "vote_count": 3248
+    },
+    {
+      "adult": false,
+      "backdrop_path": "/4bG49jVR7NrCNQjahDUsDqvIwle.jpg",
+      "first_air_date": "2020-08-14",
+      "genre_ids": [
+        18,
+        35
+      ],
+      "id": 97546,
+      "media_type": "tv",
+      "name": "Ted Lasso",
+      "origin_country": [
+        "US"
+      ],
+      "original_language": "en",
+      "original_name": "Ted Lasso",
+      "overview": "Ted Lasso, an American football coach, moves to England when he's hired to manage a soccer team—despite having no experience. With cynical players and a doubtful town, will he get them to see the Ted Lasso Way?",
+      "popularity": 228.4412,
+      "poster_path": "/uRHsiw1wLxPHFXkkv4Ix1s0O6f4.jpg",
+      "softcore": false,
+      "vote_average": 8.373,
+      "vote_count": 2632
+    }
+  ],
+  "total_pages": 500,
+  "total_results": 10000
+}

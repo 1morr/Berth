@@ -114,7 +114,7 @@ adapters ──► domain                  （不 import services、models；回
 
 - `routes`：`id`、`slug`（unique）、`name`、`jellyfin_library_id`、`jellyfin_library_name`、`collection_type`（`movies` / `tvshows`）、`target_path`、`category`、`profile`（`standard` / `anime`）、`medium_auto_import`（預設 true）、`enabled`、`health_status`、`health_detail_json`、`created_at`。`health_detail_json` 是 `RouteHealth`：逐項檢查（形狀同精靈的步驟：`key` 是 `RouteCheck`、`status`、`detail`、`error`）與 `cross_device`。category 的 save path 不存欄位，它一律是 `<complete root>/<slug>`（brief §4.1）。
 - `media`：`id`（`tv:<tmdb>` / `movie:<tmdb>`）、`tmdb_id`、`kind`、`title_en`、`title_original`、`year`、`folder_name`（凍結）、`tracked`、`default_route_id`、`tmdb_snapshot_json`（含**各季的 `name`**——`Hashira Training Arc` 這種篇章名是 §4.4 的季號來源——與各季各集：number、name、air_date、runtime；episode groups 的 absolute 排序若存在）、`tmdb_fetched_at`
-- `tmdb_cache`：`key`、`value_json`、`fetched_at`（探索頁與搜尋結果的短期快取；Media 詳情走 `media` 表）
+- `tmdb_cache`：`key`（`discover:trending` / `discover:popular` / `search:<正規化查詢>`）、`value_json`（已經合併好的卡片陣列：tmdb id、kind、顯示用標題、英文標題、年份、完整海報網址）、`fetched_at`。探索頁與搜尋結果的短期快取，一小時；Media 詳情走 `media` 表
 
 ### 2.3 Job、檔案、計劃、帳本
 
@@ -313,7 +313,7 @@ Session 以 httpOnly cookie（`berth_session`）承載，`SameSite=Strict`、`Pa
 | setup | `GET /setup/status`、`POST /setup/admin`、`POST /setup/detect`（回每個服務的來源：套件內 / 既有）、`POST /setup/services/{kind}`（既有服務的連線表單：存下位址與憑證並立刻測一次）、`GET /setup/jellyfin`（不連線，回上一輪的九步狀態與媒體庫；bootstrap 進行中前端輪詢它看進度）、`POST /setup/jellyfin/bootstrap`、`POST /setup/jellyfin/connect`（既有：以管理員帳密換 API key）、`POST /setup/jellyfin/libraries/paths`、`POST /setup/jellyfin/plugin`、`GET /setup/qbittorrent/diff`（現查，回逐鍵差異）、`POST /setup/qbittorrent/apply`、`GET /setup/indexers`（套件內：十個預設站與它們現在的狀態）、`POST /setup/indexers/apply`（勾起來的站逐個加）、`POST /setup/indexers/connect`（既有 Prowlarr 或任意 Torznab）、`POST /setup/indexers/skip`、`GET /setup/tmdb`、`POST /setup/tmdb/test`（憑證使用者自備、必填，所以**沒有 skip**）、`GET /setup/routes`（媒體庫清單與已建的 Route，含上一輪逐項檢查）、`POST /setup/routes`（套件內導出三條；既有用勾選，目標必須是該媒體庫回報的路徑之一）、`POST /setup/complete`（TMDB 綠燈且每個 Route 都綠燈才寫得下 `settings.setup.completed`） | `setup.*`（§9） |
 | settings | `GET /settings/services`（三個服務的連線資訊與最後健康狀態，形狀與 `health/detail` 相同）、`POST /settings/services/{kind}/test`（只重測這一個服務）、`GET /settings/qbittorrent/diff`、`POST /settings/qbittorrent/apply`（「還原建議設定」，brief §16.3）。**整組只有 `role=admin` 進得來**（規則在門禁，不在 router 的相依）。位址與憑證仍然在精靈裡改——精靈跑完之後它就是設定入口，所以不做 `PUT /settings/{group}`（票 10 改） | `health.*`、`qbittorrent.apply` |
 | routes | `GET/POST /routes`、`PUT/DELETE /routes/{id}`、`POST /routes/{id}/check`、`GET /jellyfin/libraries` | `routes.*` |
-| discover | `GET /discover/trending`、`GET /discover/popular`、`GET /discover/search?q=` | `discover.*` |
+| discover | `GET /discover/trending`、`GET /discover/popular`、`GET /discover/search?q=`（三支回同一個形狀：`items` + `problem` + `detail`）。**拿不到 TMDB 時仍是 200**，理由寫在 `problem`（`credential_missing` / `credential_rejected` / `unreachable`）——一頁上有三個 feed，一個垮掉時另外兩個要照樣畫得出來，而畫面要說得出下一步（票 03） | `discover.*` |
 | media | `GET /media/{id}`（TMDB + 狀態 + 檔案 + Unmatched + 版本）、`POST /media/{id}/track`、`POST /media/{id}/refresh` | `media.*` |
 | search | `GET /search?media=&q=&route=`（索引站搜尋，結果附解析出的 Tags 與預估季集） | `search_torrents` |
 | jobs | `POST /jobs`（`{source, media, route}`）、`GET /jobs`、`GET /jobs/{hash}`、`GET /jobs/{hash}/events`、`POST /jobs/{hash}/replan`、`POST /jobs/{hash}/reimport`、`POST /jobs/{hash}/retry`、`DELETE /jobs/{hash}?unlink=&remove_torrent=&delete_files=&purge=` | `add_download`、`generate_plan`、`reimport`、`delete_job` |
@@ -332,7 +332,7 @@ Session 以 httpOnly cookie（`berth_session`）承載，`SameSite=Strict`、`Pa
 
 ## 7. 前端
 
-- 路由：`/setup`、`/login`、`/`（探索；M1 之前先導向 `/health`）、`/health`、`/media/:id`、`/library/:routeSlug`、`/jobs`、`/jobs/:hash`、`/review`、`/rss`、`/issues`、`/settings/services`、其餘 `/settings/*`。
+- 路由：`/setup`、`/login`、`/`（探索，票 03 起是真的探索頁，不再導向 `/health`）、`/health`、`/media/:id`、`/library/:routeSlug`、`/jobs`、`/jobs/:hash`、`/review`、`/rss`、`/issues`、`/settings/services`、其餘 `/settings/*`。
 - 守衛：精靈未完成 → 一律導向 `/setup`（讀 `GET /health` 的 `setup_completed`，那是匿名答得出來的唯一來源）；未登入 → 導向 `/login?redirect=<原路徑>`，`?redirect=` 只收站內路徑；`/setup` 與 `/settings/*` 在精靈完成後只放行 `admin`。頁首顯示角色、導覽（健康 / 設定）與登出，`admin` 才看得到設定入口——前端隱藏不是安全機制，後端同時回 403。健康頁是唯讀診斷，一般使用者也進得去。
 - 資料：TanStack Query 管 API 快取；SSE 事件到達時使 job 相關 query 失效。
 - 元件：shadcn/ui 為基礎；媒體卡片、狀態徽章、時間線、Plan 表格（逐列可改季集與動作）、檔案樹是專案自有元件。
@@ -373,8 +373,10 @@ Session 以 httpOnly cookie（`berth_session`）承載，`SameSite=Strict`、`Pa
 ### 8.3 TMDB adapter
 
 - 端點：`configuration`、`trending/{tv,movie}/week`、`{tv,movie}/popular`、`search/multi`、`tv/{id}`（`append_to_response=alternative_titles,translations,episode_groups,external_ids`）、`tv/{id}/season/{n}`、`tv/episode_group/{id}`、`movie/{id}`（`append_to_response=alternative_titles,translations,release_dates`）。
-- 語言 `en-US` 取英文標題，`name` 空時退回 `original_name`；另以 `zh-TW` 取一次顯示用標題與簡介給 UI（brief §7.5 的檔名仍用英文）。
-- 快取：探索與搜尋 1 小時；Media 快照 24 小時，Job 送單與 planning 前若快照超過 6 小時則刷新（新播集數會變）。
+- 語言 `en-US` 取英文標題，`name` 空時退回 `original_name`；另以 `zh-TW` 取一次顯示用標題與簡介給 UI（brief §7.5 的檔名仍用英文）。**清單本身一律以 `en-US` 那一輪為準，`zh-TW` 只是一張「這一部叫什麼、海報是哪張」的查表**：`language` 會換掉 trending 回的**成員與順序**而不只是文字（2026-09-09 實測 `trending/tv/week`，兩輪 20 筆差 3 筆），照 `zh-TW` 當清單會讓作品憑空消失（票 03）。
+- 快取：探索與搜尋 1 小時（`tmdb_cache`，一個 feed 一列，存的是已經合併好的卡片而不是 TMDB 原始 payload）；Media 快照 24 小時，Job 送單與 planning 前若快照超過 6 小時則刷新（新播集數會變）。**追蹤狀態不進快取**：它是本地事實而且使用者會當場改掉。
+- 順序：`trending` 與 `popular` 回的順序**就是**那個 feed 的排名，不要重排——回應裡的 `popularity` 欄位與清單順序不一致（2026-09-09 實測，兩者都是亂序的）。劇集與電影兩份清單合成一面牆時用交錯（票 03）。
+- 圖片基底：`configuration` 的 `secure_base_url` 對同一把憑證是常數，精靈第 6 步驗憑證時就寫進 `settings.services.tmdb.image_base_url`，探索頁直接讀它。海報尺寸 `w342`。
 - 速率：全域 40 req/s 令牌桶，遠低於 TMDB 的上限。
 - API key：**使用者自備，唯一來源是 `settings.services.tmdb.api_key`**（brief §16.3、§20.7；Berth 不內建任何 provider 的 key）。取用它的只有 `services.tmdb.credential()`，沒有 fallback。**兩種形狀都收**：v4 的 read access token 是 JWT，走 `Authorization: Bearer`（官方建議做法，不進網址所以不落在 log 裡）；v3 的 API key 是 32 個十六進位字元，走 `?api_key=`。認的是形狀不是設定項，因為 TMDB 的帳號頁同時發兩種（2026-09-08 實測）。
 - 精靈第 6 步的「測試」打 `configuration`：那一支不需要任何參數，回得出來就證明憑證有效。空白的送出不打網路，直接是一條紅線（說的是「必填」不是「401」）。

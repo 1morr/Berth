@@ -33,14 +33,14 @@ async function fillIn(username: string, password: string) {
 }
 
 describe('登入頁', () => {
-  it('打完帳密送出後落到首頁', async () => {
+  it('打完帳密送出後落到首頁（票 03 起是探索頁）', async () => {
     const { backend, routes } = signedOut()
     const stub = stubApi({ ...routes, [LOGIN]: backend.signIn(ADMIN) })
     const { router } = renderApp('/login')
 
     await fillIn('skipper', 'harbour')
 
-    await waitFor(() => expect(router.state.location.pathname).toBe('/health'))
+    await waitFor(() => expect(router.state.location.pathname).toBe('/'))
     const login = stub.mock.calls.find((call) => call[1]?.method === 'POST')
     expect(bodyOf(login!)).toEqual({ username: 'skipper', password: 'harbour' })
   })
@@ -62,7 +62,7 @@ describe('登入頁', () => {
 
     await fillIn('skipper', 'harbour')
 
-    await waitFor(() => expect(router.state.location.pathname).toBe('/health'))
+    await waitFor(() => expect(router.state.location.pathname).toBe('/'))
   })
 
   it('帳密不對時說的是同一句話，不指名是哪一個錯了', async () => {

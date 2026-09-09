@@ -6,6 +6,7 @@ M0 只建這五張表；其餘在需要它們的里程碑用 Alembic 增量加�
 from berth.models.auth import User, UserSession
 from berth.models.base import Base
 from berth.models.event import Event
+from berth.models.media import Media, MediaCard, TmdbCache, dump_cards, load_cards, media_id
 from berth.models.route import Route, RouteHealth
 from berth.models.setting import (
     ANIME_SLUG,
@@ -42,6 +43,8 @@ __all__ = [
     "HealthSettings",
     "IndexerSettings",
     "JellyfinSettings",
+    "Media",
+    "MediaCard",
     "PathSettings",
     "QbittorrentSettings",
     "Route",
@@ -58,7 +61,11 @@ __all__ = [
     "SetupSettings",
     "SetupStep",
     "SetupTmdb",
+    "TmdbCache",
     "TmdbSettings",
     "User",
     "UserSession",
+    "dump_cards",
+    "load_cards",
+    "media_id",
 ]

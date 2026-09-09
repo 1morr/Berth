@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from berth.adapters.jellyfin import JellyfinLibrary
 from berth.adapters.jellyfin.fake import FakeJellyfinClient
 from berth.adapters.qbittorrent.fake import FakeQbittorrentClient
+from berth.adapters.tmdb.fake import FakeTmdbClient
 from berth.domain import (
     DetectionReason,
     JellyfinStep,
@@ -192,8 +193,10 @@ def factory_for(
     libraries: tuple[SetupLibrary, ...] | None = None,
     qbittorrent: FakeQbittorrentClient | None = None,
     jellyfin: FakeJellyfinClient | None = None,
+    tmdb: FakeTmdbClient | None = None,
 ) -> FakeClientFactory:
     return FakeClientFactory(
         jellyfin=jellyfin or fake_jellyfin(libraries or bundled_libraries(roots["library"])),
         qbittorrent=qbittorrent or applied_qbittorrent(roots),
+        tmdb=tmdb or FakeTmdbClient(),
     )

@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { HEALTHY, UNAUTHORIZED, UNCONFIGURED, session, stubApi } from './test/fetch'
 import { renderApp } from './test/render'
-import { healthDetail, setupStatus } from './test/fixtures'
+import { discoverWall, setupStatus } from './test/fixtures'
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -20,8 +20,12 @@ const DONE = { body: HEALTHY }
 const PENDING = { body: UNCONFIGURED }
 const WIZARD = { body: setupStatus({ completed: true, current_step: 8 }) }
 const ADMIN = { body: { name: 'skipper', role: 'admin' } }
-const DETAIL = 'GET /api/health/detail'
 const USER = { body: { name: 'deckhand', role: 'user' } }
+/** 探索頁是 `/`（票 03）。路由測試只是路過它，所以兩個 feed 都給空牆。 */
+const DISCOVER = {
+  'GET /api/discover/trending': discoverWall(),
+  'GET /api/discover/popular': discoverWall(),
+}
 
 describe('路由', () => {
   it('setup 未完成時開 / 會被導向精靈（票 05 驗收）', async () => {
@@ -33,13 +37,13 @@ describe('路由', () => {
     expect(await screen.findByText('設定精靈')).toBeInTheDocument()
   })
 
-  it('setup 完成且已登入時 / 落到健康頁', async () => {
-    stubApi({ [HEALTH]: DONE, [ME]: ADMIN, [DETAIL]: { body: healthDetail() } })
+  it('setup 完成且已登入時 / 是探索頁（票 03：不再導向 /health）', async () => {
+    stubApi({ [HEALTH]: DONE, [ME]: ADMIN, ...DISCOVER })
 
     const { router } = renderApp('/')
 
-    expect(await screen.findByRole('region', { name: '泊位板' })).toBeInTheDocument()
-    expect(router.state.location.pathname).toBe('/health')
+    expect(await screen.findByRole('region', { name: '本週趨勢' })).toBeInTheDocument()
+    expect(router.state.location.pathname).toBe('/')
   })
 
   it('後端連不上時不把人丟到精靈，讓目的地自己說發生什麼事', async () => {
@@ -47,8 +51,8 @@ describe('路由', () => {
 
     const { router } = renderApp('/')
 
-    await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument())
-    expect(router.state.location.pathname).toBe('/health')
+    expect(await screen.findAllByText(/讀不到 Berth 後端/)).not.toHaveLength(0)
+    expect(router.state.location.pathname).toBe('/')
   })
 
   it('直接開 /setup 就是精靈', async () => {
@@ -68,7 +72,7 @@ describe('門禁', () => {
     const { router } = renderApp('/')
 
     await waitFor(() => expect(router.state.location.pathname).toBe('/login'))
-    expect(router.state.location.search).toEqual({ redirect: '/health' })
+    expect(router.state.location.search).toEqual({ redirect: '/' })
   })
 
   it('第一次被擋下來時不說「已過期」', async () => {
@@ -92,7 +96,7 @@ describe('門禁', () => {
     await router.navigate({ to: '/' })
 
     await waitFor(() => expect(router.state.location.pathname).toBe('/login'))
-    expect(router.state.location.search).toEqual({ redirect: '/health', expired: true })
+    expect(router.state.location.search).toEqual({ redirect: '/', expired: true })
     expect(await screen.findByText('工作階段已過期，請重新登入。')).toBeInTheDocument()
   })
 
@@ -116,7 +120,7 @@ describe('門禁', () => {
 
 describe('角色', () => {
   it('管理員的頁首有設定入口', async () => {
-    stubApi({ [HEALTH]: DONE, [ME]: ADMIN, [STATUS]: WIZARD, [DETAIL]: { body: healthDetail() } })
+    stubApi({ [HEALTH]: DONE, [ME]: ADMIN, [STATUS]: WIZARD, ...DISCOVER })
 
     renderApp('/')
 
@@ -126,7 +130,7 @@ describe('角色', () => {
   })
 
   it('非 admin 看不到設定入口，但看得到自己是什麼角色（票 07 驗收）', async () => {
-    stubApi({ [HEALTH]: DONE, [ME]: USER, [DETAIL]: { body: healthDetail() } })
+    stubApi({ [HEALTH]: DONE, [ME]: USER, ...DISCOVER })
 
     renderApp('/')
 
@@ -135,12 +139,12 @@ describe('角色', () => {
     expect(screen.queryByRole('link', { name: '設定' })).not.toBeInTheDocument()
   })
 
-  it('非 admin 直接打 /setup 會被送回健康頁', async () => {
-    stubApi({ [HEALTH]: DONE, [ME]: USER, [DETAIL]: { body: healthDetail() } })
+  it('非 admin 直接打 /setup 會被送回首頁', async () => {
+    stubApi({ [HEALTH]: DONE, [ME]: USER, ...DISCOVER })
 
     const { router } = renderApp('/setup')
 
-    await waitFor(() => expect(router.state.location.pathname).toBe('/health'))
+    await waitFor(() => expect(router.state.location.pathname).toBe('/'))
   })
 
   it('登出後回到登入頁', async () => {
@@ -149,7 +153,7 @@ describe('角色', () => {
       [HEALTH]: DONE,
       [ME]: () => backend.me(),
       [LOGOUT]: backend.signOut,
-      [DETAIL]: { body: healthDetail() },
+      ...DISCOVER,
     })
     const { router } = renderApp('/')
 

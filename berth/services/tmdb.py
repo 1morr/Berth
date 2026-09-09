@@ -53,9 +53,12 @@ async def verify_tmdb(
     setup = await read_settings(session, SetupSettings)
     settings = await read_settings(session, TmdbSettings)
     settings.api_key = api_key.strip()
+    #: 先存：測不過也要存得下來，使用者才能改一個字再按一次（與其他連線表單同一個規矩）。
     await write_settings(session, settings)
 
     setup.tmdb.steps = [await _test(factory, settings)]
+    # `_test` 綠燈時會把圖片基底寫進 `settings`，所以測完再存一次。
+    await write_settings(session, settings)
     await write_settings(session, setup)
     await session.commit()
     return _view(setup, settings)
@@ -71,6 +74,8 @@ async def _test(factory: ServiceClientFactory, settings: TmdbSettings) -> SetupS
     except ServiceError as exc:
         return SetupStep(key=TMDB_STEP, status=StepStatus.FAILED, error=message(exc))
     else:
+        # 圖片基底順手存下來：它對同一把憑證是常數，而探索頁（票 03）每一張卡都要它。
+        settings.image_base_url = configuration.image_base_url
         return SetupStep(key=TMDB_STEP, status=StepStatus.OK, detail=configuration.image_base_url)
     finally:
         await client.aclose()

@@ -1,0 +1,131 @@
+{
+  "page": 1,
+  "results": [
+    {
+      "adult": false,
+      "backdrop_path": "/qeQJx07rK2xm8SD2sJxFKhE7gs0.jpg",
+      "genre_ids": [
+        878,
+        28,
+        12
+      ],
+      "id": 969681,
+      "original_language": "en",
+      "original_title": "Spider-Man: Brand New Day",
+      "overview": "彼得帕克努力專注於大學生活，把蜘蛛人拋在腦後。然而，當新的威脅危及到他的朋友時，他不得不違背諾言，再次穿上戰衣，與一位意想不到的盟友聯手，保護他所愛的人。",
+      "popularity": 839.8698,
+      "poster_path": "/2zO573CUiqm4QDuIPycE1d1GUYc.jpg",
+      "release_date": "2026-07-29",
+      "softcore": false,
+      "title": "蜘蛛人：重生日",
+      "video": false,
+      "vote_average": 7.865,
+      "vote_count": 2522
+    },
+    {
+      "adult": false,
+      "backdrop_path": "/l9mFW9HQnAZ4r1ChZJHoOT3jaal.jpg",
+      "genre_ids": [
+        35,
+        12,
+        10751
+      ],
+      "id": 1204680,
+      "original_language": "en",
+      "original_title": "Coyote vs. Acme",
+      "overview": "《威利狼大戰阿卡米公司》的故事圍繞著威利狼展開，他長期因自家品牌 Acme 生產的各種瑕疵產品害得遍體鱗傷，終於忍無可忍，決定在亞利桑那州對 Acme 公司提起訴訟。電影延續這個設定，由威爾佛提（Will Forte）飾演一位專打「冷門案件」的律師，而約翰希南（John Cena）則化身這家冷酷企業的法律代表，雙方正面交鋒！",
+      "popularity": 643.9483,
+      "poster_path": "/xONOMna5Z102bw0jMPBM4H73B9m.jpg",
+      "release_date": "2026-08-20",
+      "softcore": false,
+      "title": "威利狼大戰阿卡米公司",
+      "video": false,
+      "vote_average": 7.7,
+      "vote_count": 239
+    },
+    {
+      "adult": false,
+      "backdrop_path": "/RMXG8myu1aGlNUsRjtxzmpdMK0.jpg",
+      "genre_ids": [
+        12,
+        28,
+        14
+      ],
+      "id": 1368337,
+      "original_language": "en",
+      "original_title": "The Odyssey",
+      "overview": "講述奧德修斯在特洛伊戰爭後歷經艱險返鄉，途中遭遇獨眼巨人、女妖與女巫，最終與妻子重逢的傳奇旅程。",
+      "popularity": 437.8516,
+      "poster_path": "/d7MiRRamaAe58DacYEo2ZgziBBv.jpg",
+      "release_date": "2026-07-15",
+      "softcore": false,
+      "title": "奧德賽",
+      "video": false,
+      "vote_average": 8.0,
+      "vote_count": 3553
+    },
+    {
+      "adult": false,
+      "backdrop_path": "/qDa0fqDqIBCovRp975RvtGPcuN3.jpg",
+      "genre_ids": [
+        28,
+        53
+      ],
+      "id": 1288445,
+      "original_language": "en",
+      "original_title": "Mutiny",
+      "overview": "目睹億萬富翁企業家老闆在面前遭到殺害後，柯爾李德被誣陷為兇手，他被迫展開逃亡，同時要在過程中設法揭發一樁國際陰謀。",
+      "popularity": 394.5615,
+      "poster_path": "/9UmRLdkctpIwvUkmPFvyz67Psu8.jpg",
+      "release_date": "2026-08-19",
+      "softcore": false,
+      "title": "玩命航線",
+      "video": false,
+      "vote_average": 6.394,
+      "vote_count": 325
+    },
+    {
+      "adult": false,
+      "backdrop_path": "/hpBGCnzOvdtQoMyE48gvwp2y5yx.jpg",
+      "genre_ids": [
+        28,
+        27,
+        878
+      ],
+      "id": 1375646,
+      "original_language": "ko",
+      "original_title": "군체",
+      "overview": "首爾市中心一棟摩天大樓發生原因不明的集體感染事件，起初如野獸般爬行的感染者逐漸進化，開始以雙腳步行並能分辨人類，進而成群結隊地攻擊倖存者。生物工程師權世貞和倖存者們，尋找聲稱已在自己體內注射疫苗的徐英哲，並前往救難隊所在的頂樓。然而愈往上走，情況愈難以預測，徐英哲竟利用感染者阻擋倖存者們的去路……",
+      "popularity": 315.0795,
+      "poster_path": "/9XHBlpDp9c60uNlhMyjMOymsCAn.jpg",
+      "release_date": "2026-05-21",
+      "softcore": false,
+      "title": "屍速禁區",
+      "video": false,
+      "vote_average": 8.108,
+      "vote_count": 722
+    },
+    {
+      "adult": false,
+      "backdrop_path": "/ziXF8wIBguHNCeplNthUlDTCZP8.jpg",
+      "genre_ids": [
+        53,
+        28
+      ],
+      "id": 1386315,
+      "original_language": "en",
+      "original_title": "The Runner",
+      "overview": "在心理驚悚片《生死奔救》中，優秀的倫敦律師麥雅馬丁在晨跑時接到一通電話，平靜的生活瞬間崩毀。她的兒子被人綁架了。為了救回孩子，她只能不停奔跑，服從每一道冷酷無情的命令，也不能相信任何人。每分每秒都考驗著一位母親，究竟願意為了拯救孩子付出多少代價。",
+      "popularity": 284.4272,
+      "poster_path": "/5zJO7iYlKH2PlF6fy2CQYNLimCO.jpg",
+      "release_date": "2026-09-03",
+      "softcore": false,
+      "title": "生死奔救",
+      "video": false,
+      "vote_average": 6.721,
+      "vote_count": 341
+    }
+  ],
+  "total_pages": 58821,
+  "total_results": 1176418
+}

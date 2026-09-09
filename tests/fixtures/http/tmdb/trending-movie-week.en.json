@@ -1,0 +1,138 @@
+{
+  "page": 1,
+  "results": [
+    {
+      "adult": false,
+      "backdrop_path": "/76WFQTmh4gsqYpWTejxuEu5Iu69.jpg",
+      "genre_ids": [
+        10751,
+        14,
+        35,
+        12
+      ],
+      "id": 1108427,
+      "media_type": "movie",
+      "original_language": "en",
+      "original_title": "Moana",
+      "overview": "Teenage Moana answers the Ocean's call and, for the first time, voyages beyond the reef of her island of Motunui with infamous demigod Maui on an unforgettable journey to restore prosperity to her people.",
+      "popularity": 260.8674,
+      "poster_path": "/gaet1xQ2nxrG0V1Ep9T20ZMNEIC.jpg",
+      "release_date": "2026-07-08",
+      "softcore": false,
+      "title": "Moana",
+      "video": false,
+      "vote_average": 6.762,
+      "vote_count": 378
+    },
+    {
+      "adult": false,
+      "backdrop_path": "/ziXF8wIBguHNCeplNthUlDTCZP8.jpg",
+      "genre_ids": [
+        53,
+        28
+      ],
+      "id": 1386315,
+      "media_type": "movie",
+      "original_language": "en",
+      "original_title": "The Runner",
+      "overview": "Maia Marten, a brilliant London lawyer, has her life shattered by a single call on her morning run: her son has been taken. To get him back, she must keep running, obey every ruthless command, and trust no one-each second a test of how far a mother will go to save her child.",
+      "popularity": 284.4272,
+      "poster_path": "/uxCaBoYXsDC4A0SqTm3SISj0OwK.jpg",
+      "release_date": "2026-09-03",
+      "softcore": false,
+      "title": "The Runner",
+      "video": false,
+      "vote_average": 6.731,
+      "vote_count": 342
+    },
+    {
+      "adult": false,
+      "backdrop_path": "/RMXG8myu1aGlNUsRjtxzmpdMK0.jpg",
+      "genre_ids": [
+        12,
+        28,
+        14
+      ],
+      "id": 1368337,
+      "media_type": "movie",
+      "original_language": "en",
+      "original_title": "The Odyssey",
+      "overview": "Odysseus, the legendary King of Ithaca, embarks on a long and perilous journey home following the Trojan War. Throughout his voyage, he is forced to confront the whims of gods, mythological monsters, and trials that stretch both his cunning and his humanity to the breaking point.",
+      "popularity": 437.8516,
+      "poster_path": "/5rhTDKUhPYvpdQIijFIs5VoWsON.jpg",
+      "release_date": "2026-07-15",
+      "softcore": false,
+      "title": "The Odyssey",
+      "video": false,
+      "vote_average": 7.999,
+      "vote_count": 3555
+    },
+    {
+      "adult": false,
+      "backdrop_path": "/l9mFW9HQnAZ4r1ChZJHoOT3jaal.jpg",
+      "genre_ids": [
+        35,
+        12,
+        10751
+      ],
+      "id": 1204680,
+      "media_type": "movie",
+      "original_language": "en",
+      "original_title": "Coyote vs. Acme",
+      "overview": "After Acme products fail him one too many times in his dogged pursuit of the Roadrunner, Wile E. Coyote decides to hire a billboard lawyer to sue the Acme Corporation.",
+      "popularity": 643.9483,
+      "poster_path": "/orkLtdgMGiO9rTVMqJ1kKwrnup1.jpg",
+      "release_date": "2026-08-20",
+      "softcore": false,
+      "title": "Coyote vs. Acme",
+      "video": false,
+      "vote_average": 7.674,
+      "vote_count": 244
+    },
+    {
+      "adult": false,
+      "backdrop_path": "/qeQJx07rK2xm8SD2sJxFKhE7gs0.jpg",
+      "genre_ids": [
+        878,
+        28,
+        12
+      ],
+      "id": 969681,
+      "media_type": "movie",
+      "original_language": "en",
+      "original_title": "Spider-Man: Brand New Day",
+      "overview": "Fighting crime full-time as Spider-Man in a world that doesn't remember him—and the pressure of seeing his old friends move on without him—sparks a change in Peter Parker he may not have the power to control. But that transformation might also be the only thing that can stop a shocking new threat to the city and those he loves - a powerful villain no one can even see.",
+      "popularity": 839.8698,
+      "poster_path": "/bjiS5ipwxb9JFy3XRRN4OAilSeX.jpg",
+      "release_date": "2026-07-29",
+      "softcore": false,
+      "title": "Spider-Man: Brand New Day",
+      "video": false,
+      "vote_average": 7.864,
+      "vote_count": 2526
+    },
+    {
+      "adult": false,
+      "backdrop_path": "/mfgNUnFB25BNIwe9iPJ17cUN64S.jpg",
+      "genre_ids": [
+        35,
+        10749
+      ],
+      "id": 1433367,
+      "media_type": "movie",
+      "original_language": "en",
+      "original_title": "One Night Only",
+      "overview": "Two love-starved strangers crash into each other on the one night of the year when single people are allowed to have sex.",
+      "popularity": 71.2824,
+      "poster_path": "/9LGEqZvzI7Tsosf8srwEY48rZsD.jpg",
+      "release_date": "2026-07-28",
+      "softcore": false,
+      "title": "One Night Only",
+      "video": false,
+      "vote_average": 7.0,
+      "vote_count": 77
+    }
+  ],
+  "total_pages": 500,
+  "total_results": 10000
+}
