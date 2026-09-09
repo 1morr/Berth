@@ -29,17 +29,7 @@ export function mediaQueryOptions(id: string) {
   })
 }
 
-/**
- * 追蹤這部作品並指定預設 Route。**`folder_name` 在這一刻凍結**（plan §5）。
- *
- * 重按只是改 Route——後端那一支是同一個命令，Route 不在凍結之列。
- */
-export async function track(id: string, routeId: number | null) {
-  const body = { route_id: routeId } satisfies Schemas['TrackIn']
-  return apiPost<Media>(`/media/${encodeURIComponent(id)}/track`, body)
-}
-
-/** 立刻重抓快照。凍結過的資料夾名不會被動到。 */
+/** 立刻重抓快照。TMDB 改了標題，「將會是」的那一串字就跟著改（票 04b）。 */
 export async function refresh(id: string) {
   return apiPost<Media>(`/media/${encodeURIComponent(id)}/refresh`)
 }

@@ -11,14 +11,15 @@ import { Timestamp } from '../components/Timestamp'
 import { TmdbNotice } from '../components/TmdbNotice'
 import { Poster } from '../media/Poster'
 import { SeasonList } from '../media/SeasonList'
-import { TrackAction } from '../media/TrackAction'
+import { RoutePicker } from '../media/RoutePicker'
 import tmdbLogo from '../assets/tmdb.svg'
 
 /**
- * Media 詳情頁 `/media/:id`（票 04、`.scratch/m1/media-detail-shape.md`）。
+ * Media 詳情頁 `/media/:id`（票 04、04b、`.scratch/m1/media-detail-shape.md`）。
  *
  * 這一頁是**決策中心**（brief §13）：使用者剛在探索牆上認出一部作品，來這裡決定
- * 「這是不是我要的那部、要不要交給 Berth 管、入庫到哪裡」。
+ * 「這是不是我要的那部、要不要下載、入庫到哪裡」。**在票 08 的搜尋之前它是唯讀的瀏覽頁**——
+ * 這一頁上第一個真的做得了的動作是「搜尋 torrent」。
  *
  * 版面是一張貨櫃提單——上方身分帶（海報 + 識別欄位 + 那一行要簽的動作），下方整寬堆疊。
  * **後兩票往中間插，不重排前面**：票 08 的搜尋結果表插在季集之後，票 13 的檔案與版本清單
@@ -62,7 +63,11 @@ export function MediaDetailPage({ id }: { id: string }) {
           <IdentityBand
             media={found}
             freshness={
-              <Freshness media={found} pending={reload.isPending} onRefresh={() => reload.mutate()} />
+              <Freshness
+                media={found}
+                pending={reload.isPending}
+                onRefresh={() => reload.mutate()}
+              />
             }
           />
 
@@ -82,7 +87,6 @@ export function MediaDetailPage({ id }: { id: string }) {
               <p className="max-w-prose text-sm text-ink-dim">{t('media.season.none')}</p>
             )}
           </section>
-
         </>
       )}
 
@@ -118,10 +122,9 @@ function IdentityBand({ media, freshness }: { media: Media; freshness: ReactNode
             {media.title_en !== media.title && (
               <p className="value text-sm text-ink-dim">{media.title_en}</p>
             )}
-            {media.title_original !== media.title_en &&
-              media.title_original !== media.title && (
-                <p className="value text-sm text-ink-dim">{media.title_original}</p>
-              )}
+            {media.title_original !== media.title_en && media.title_original !== media.title && (
+              <p className="value text-sm text-ink-dim">{media.title_original}</p>
+            )}
           </div>
           {media.overview && (
             <p className="max-w-prose text-sm leading-relaxed text-ink-dim">{media.overview}</p>
@@ -129,37 +132,38 @@ function IdentityBand({ media, freshness }: { media: Media; freshness: ReactNode
         </div>
       </div>
 
-      <Cutaway title={t('media.identity')}>
-        {/* `TV` / `MOVIE` 與 `tmdbid-…` 是機器字串，走 `.value`（The Machine String Rule）。 */}
-        <CutawayRow term={t('media.kind')} value={KIND_CODE[media.kind]} />
-        <CutawayRow term="tmdb_id" value={media.tmdb_id} code />
-        {/* 標籤說的是「首播 / 上映」，所以值就要是那個日期。TMDB 未定檔時只有年份、
-            連年份都沒有時是 `—`——欄位不省略，省略會讓整份剖面的基線錯開。 */}
-        <CutawayRow term={t('media.year')} value={media.first_air_date ?? media.year ?? '—'} />
-        {media.kind === 'movie' ? (
-          <CutawayRow
-            term={t('media.runtime')}
-            value={media.runtime === null ? '—' : t('media.minutes', { count: media.runtime })}
-          />
-        ) : (
-          <CutawayRow
-            term={t('media.counts')}
-            value={`${t('media.season.count', { count: seasons.length })} · ${t(
-              'media.episode.count',
-              { count: seasons.reduce((total, row) => total + row.episode_count, 0) },
-            )}`}
-          />
-        )}
-        {/* 這一串字是這一頁的署名事實：追蹤之後它會真的出現在檔案系統上、而且改不掉。
+      <div className="grid gap-2">
+        <Cutaway title={t('media.identity')}>
+          {/* `TV` / `MOVIE` 與 `tmdbid-…` 是機器字串，走 `.value`（The Machine String Rule）。 */}
+          <CutawayRow term={t('media.kind')} value={KIND_CODE[media.kind]} />
+          <CutawayRow term="tmdb_id" value={media.tmdb_id} code />
+          {/* 標籤說的是「首播 / 上映」，所以值就要是那個日期。TMDB 未定檔時只有年份、
+              連年份都沒有時是 `—`——欄位不省略，省略會讓整份剖面的基線錯開。 */}
+          <CutawayRow term={t('media.year')} value={media.first_air_date ?? media.year ?? '—'} />
+          {media.kind === 'movie' ? (
+            <CutawayRow
+              term={t('media.runtime')}
+              value={media.runtime === null ? '—' : t('media.minutes', { count: media.runtime })}
+            />
+          ) : (
+            <CutawayRow
+              term={t('media.counts')}
+              value={`${t('media.season.count', { count: seasons.length })} · ${t(
+                'media.episode.count',
+                { count: seasons.reduce((total, row) => total + row.episode_count, 0) },
+              )}`}
+            />
+          )}
+          {/* 這一串字是這一頁的署名事實：送單成功那一刻它會真的出現在檔案系統上、而且改不掉。
             term 走 `.label` 而不是 `code`——`code` 是給**term 本身就是機器字串**的那種列
             （上面的 `tmdb_id`）。這一列的機器字串在 dd，而 dd 本來就是 `.value`。 */}
-        <CutawayRow
-          term={t(media.tracked ? 'media.folder' : 'media.folderPreview')}
-          value={media.folder_name}
-        />
-      </Cutaway>
+          <CutawayRow term={t('media.folderPreview')} value={media.folder_name} />
+        </Cutaway>
+        {/* 整頁唯一一個定了就改不掉的東西，所以它自己說一句什麼時候定下來（票 04b）。 */}
+        <p className="max-w-prose text-xs text-ink-dim">{t('media.folderNote')}</p>
+      </div>
 
-      <TrackAction media={media} />
+      <RoutePicker media={media} />
       {freshness}
     </section>
   )
@@ -196,9 +200,7 @@ function Freshness({
           <Notice signal="assigned" label={t('media.stale')}>
             {t(`tmdb.problem.${media.problem}`)}
           </Notice>
-          {media.detail && (
-            <p className="value text-xs break-words text-ink-dim">{media.detail}</p>
-          )}
+          {media.detail && <p className="value text-xs break-words text-ink-dim">{media.detail}</p>}
         </>
       )}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">

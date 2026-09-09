@@ -1,8 +1,9 @@
 """Media 與 TMDB 快取（plan §2.2）。
 
-兩張表的分工：`media` 是**被追蹤的作品**——它的資料夾名一凍結就進了檔案系統與帳本，
-所以那一列要活得跟檔案一樣久；`tmdb_cache` 是**探索與搜尋的短期快取**，一小時就過期，
-整列丟掉不會失去任何東西（plan §8.3）。混成一張表會讓「刪得掉的」與「刪不得的」同住。
+兩張表的分工：`media` 是**Berth 手上的一部作品**——它的資料夾名一凍結（票 09 的送單）就進了
+檔案系統與帳本，所以那一列要活得跟檔案一樣久；`tmdb_cache` 是**探索與搜尋的短期快取**，
+一小時就過期，整列丟掉不會失去任何東西（plan §8.3）。混成一張表會讓「刪得掉的」與
+「刪不得的」同住。
 """
 
 from __future__ import annotations
@@ -38,7 +39,7 @@ def parse_media_id(value: str) -> tuple[MediaKind, int] | None:
 
 
 class MediaCard(BaseModel):
-    """一張作品卡：探索、搜尋與（票 04 起）媒體庫牆上的一格。
+    """一張作品卡：探索、搜尋與（票 13 起）媒體庫牆上的一格。
 
     也是 `tmdb_cache.value_json` 存的形狀——快取存的就是畫面要的那份東西，
     存 TMDB 的原始 payload 只會讓「解析」發生兩次而且兩次可能不一樣。
@@ -75,9 +76,9 @@ def load_cards(value: Any) -> tuple[MediaCard, ...]:
 
 
 class Media(Base):
-    """一部被追蹤的作品（plan §2.2）。
+    """Berth 手上的一部作品（plan §2.2）。
 
-    只有 track 過的作品才有這一列——探索頁上的其他幾百部只是 `tmdb_cache` 裡的一格。
+    點進詳情頁就會寫下一列——快照要有地方放。探索頁上的其他幾百部只是 `tmdb_cache` 裡的一格。
     """
 
     __tablename__ = "media"
@@ -89,10 +90,12 @@ class Media(Base):
     title_en: Mapped[str] = mapped_column(Text)
     title_original: Mapped[str] = mapped_column(Text)
     year: Mapped[int | None] = mapped_column(default=None)
-    #: 第一次 track 時決定並**凍結**：TMDB 之後改名不會動它，改名是顯式動作（brief §4.5）。
+    #: 作品資料夾名。現在跟著標題走（畫面上是「將會是」的預覽），**第一次送單成功那一刻凍結**
+    #: ——那是第一次真的通向磁碟（票 09）。凍結之後 TMDB 改名不會動它，改名是顯式動作
+    #: （plan §5、brief §4.5）。
     folder_name: Mapped[str] = mapped_column(Text)
-    tracked: Mapped[bool] = mapped_column(default=False)
-    #: 送單時預選的 Route。Route 被刪掉時只是回到「沒有預選」，不該連 Media 一起帶走。
+    #: 上一次送單用的 Route，下一次的預選值（票 09 寫）。Route 被刪掉時只是回到「沒有預選」，
+    #: 不該連 Media 一起帶走。
     default_route_id: Mapped[int | None] = mapped_column(
         ForeignKey("routes.id", ondelete="SET NULL"), default=None
     )

@@ -1,6 +1,6 @@
 # 04b — 追蹤語意：凍結時機移到送單
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Blocked by:** 04
 
@@ -40,29 +40,48 @@ M3 才有真的訂閱（Rule），到時候這一頁會同時有兩個東西宣�
 
 ## 驗收
 
-- [ ] `media.tracked` 欄位與 `POST /api/media/{id}/track` 移除，含 Alembic migration；
+- [x] `media.tracked` 欄位與 `POST /api/media/{id}/track` 移除，含 Alembic migration；
       `media.default_route_id` 與 `media.folder_name` 兩個欄位**留著**（票 09 要寫它們）
-- [ ] `folder_name` 一律跟著標題走（仍然 `sanitize`）：票 04 釘住「refresh 不改 `folder_name`」的
+- [x] `folder_name` 一律跟著標題走（仍然 `sanitize`）：票 04 釘住「refresh 不改 `folder_name`」的
       那條測試反過來，改為釘住「TMDB 改標題後 refresh 會跟著改」
-- [ ] Route 下拉留在原位，語意改為「入庫到哪裡」的偏好：**不落地、不新增端點**（見 Comments），
+- [x] Route 下拉留在原位，語意改為「入庫到哪裡」的偏好：**不落地、不新增端點**（見 Comments），
       只有一條 `collection_type` 相符的 Route 時自動選它；仍然只列相符的 Route
-- [ ] 詳情頁不再出現「已追蹤」與「追蹤」按鈕；資料夾名那一列一律是「將會是」，
+- [x] 詳情頁不再出現「已追蹤」與「追蹤」按鈕；資料夾名那一列一律是「將會是」，
       並說明它會在送單時定下來
-- [ ] 探索牆的卡片不再顯示「已追蹤」（`DiscoverItem.tracked` 一併移除；狀態要等票 09 有 Job
+- [x] 探索牆的卡片不再顯示「已追蹤」（`DiscoverItem.tracked` 一併移除；狀態要等票 09 有 Job
       才推導得出來）
-- [ ] `TrackAction.tsx` 依實際職責改名，i18n 的 `media.tracked` / `isTracked` / `untracked` /
+- [x] `TrackAction.tsx` 依實際職責改名，i18n 的 `media.tracked` / `isTracked` / `untracked` /
       `retrack` / `trackFailed` 一組清掉，zh-Hant 與 en 並列
-- [ ] `openapi-typescript` 重產 `web/src/api/schema.d.ts`，CI 不紅
-- [ ] plan §2.2 刪掉「**`tracked` 是一個欄位而不是有沒有這一列**」那段並改寫 `folder_name` 的規則；
+- [x] `openapi-typescript` 重產 `web/src/api/schema.d.ts`，CI 不紅
+- [x] plan §2.2 刪掉「**`tracked` 是一個欄位而不是有沒有這一列**」那段並改寫 `folder_name` 的規則；
       brief §13 的探索卡片狀態註明為推導；`CONTEXT.md` **不改**（它的定義本來就對）
-- [ ] 票 08 的驗收補一條「`route` 參數是搜尋用的偏好，不是承諾」；票 09 補兩條「送單確認要印出
+- [x] 票 08 的驗收補一條「`route` 參數是搜尋用的偏好，不是承諾」；票 09 補兩條「送單確認要印出
       資料夾名，成功時凍結」與「`tracked` 以 `EXISTS(jobs)` 推導」
-- [ ] 票 04 的 `## Comments` 加一行說明第 2、5、7 條驗收被本票取代（不改它的勾選歷史）
-- [ ] `docs/progress.md`「偏差與決定」記一行
-- [ ] lint / type / test 全綠並貼指令輸出
+- [x] 票 04 的 `## Comments` 加一行說明第 2、5、7 條驗收被本票取代（不改它的勾選歷史）
+- [x] `docs/progress.md`「偏差與決定」記一行
+- [x] lint / type / test 全綠並貼指令輸出
 
 ## Comments
 
+- **code-review（兩軸）修掉五條**：plan §8.3 與 `services/discover.py` 的模組 docstring 還在說
+  「追蹤狀態不進快取」、brief §4.5 還在說「第一次被 track 時決定」（那正是被推翻的那一句）、
+  `test_media_api.py` 的 fixture 註釋還在說「牆與詳情頁共用的那一個事實」、`_decorate` 已經不
+  decorate 任何東西（改名 `_wall`）、`RoutePicker` 外層剩一個子節點的 `grid gap-3` 空殼。
+  另外票 04 的驗收**第 3 條**（「refresh 不改 `folder_name`」）也被本票取代，本票的驗收漏列了它，
+  已補進票 04 的 Comments。
+- **code-review 抓到的兩個真缺陷**（都不在驗收上，但都會咬人）：migration 的 `downgrade` 補回
+  `tracked` 時留下了 `server_default`，降版後的 schema 與 `e13597cc3295` 建的那一份不同——
+  既有的兩條 migration 測試都測不到（一條降到 base、一條降完再升回 head，兩條都會把差異蓋掉），
+  補了 `test_downgrading_the_last_revision_lands_on_the_previous_schema`（拿掉修正會紅）。
+  另一個是探索頁「防抖」那條測試的偽陰性：等的 `Moana` 在熱門那面牆上本來就有，機器一忙就
+  在搜尋送出前先綠了（實測 3/6 紅），改成等一個只有搜尋結果才有的標題。
+- **實作偏離：動作列這一票不黏底。** `RoutePicker` 留在動作列的位置上，但拿掉了 `STICKY_ACTION`
+  ——390×844 實跑量到那條 bar 永遠佔著 ~80px，而裡面沒有任何東西按得下去（同「按鈕永遠按得下去」
+  與「點下去沒反應的格子比不能點的格子更糟」的家族）。票 08 的搜尋鍵回到這一行時它跟著回來，
+  已寫進元件的 docstring。
+- **實作偏離：`default_route_id` 一併退出 `MediaOut`。** 欄位留在資料表（票 09 要寫），但這一票
+  之後沒有任何東西寫得了它，回應裡它會永遠是 `null`——與「留著只會是一個永遠是 false 的死欄位」
+  同一個判斷。票 09 寫得下它的時候再放回回應。下拉的初值改由「只有一條相符的 Route 就選它」決定。
 - **Route 的選擇不落地，也不新增端點。** 票 04 用 `POST /track` 順便存了 `default_route_id`；
   拿掉 track 之後要保住「記得上次選的」就得補一支 `PUT /media/{id}/route`——為了一個下拉的初值
   加一個對外介面不划算。改成：頁面狀態，票 08 的搜尋當查詢參數送、票 09 的送單當 body 送，

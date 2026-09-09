@@ -122,7 +122,7 @@
 
 ### 4.5 檔名與目錄安全
 
-- Media 資料夾名在 Media 第一次被 track 時決定並寫入 DB，之後 TMDB 改名不自動改資料夾（避免 Jellyfin 重掃與帳本漂移）；提供「重新命名」的顯式動作。
+- Media 資料夾名在**第一次真的通向磁碟那一刻**決定並寫入 DB——手動送單成功時，或建 RSS Rule 時（M1 票 04b）。兩者都有人在場、都要一次明確確認；不拖到入庫，那時是背景迴圈在跑，沒有人看著。在那之前它跟著 TMDB 的標題走，畫面上是「將會是」的預覽。凍結之後 TMDB 改名不自動改資料夾（避免 Jellyfin 重掃與帳本漂移）；提供「重新命名」的顯式動作。
 - 去除 `/ \ : * ? " < > |` 與控制字元，尾端不留 `.` 與空白（相容 SMB/Windows 掛載）；長度上限 200 bytes。
 
 ---
@@ -370,7 +370,7 @@ NCOP/NCED、PV、CM、Menu、預告、花絮等**可辨識**的非正片內容�
 - `users`：Jellyfin user id、顯示名、角色（admin / user）、偏好。
 - `services`：qBittorrent / Jellyfin / 索引站 / TMDB 的連線設定與最後健康狀態。
 - `routes`：Jellyfin library id、目標路徑、category、profile、啟用狀態、健康狀態。
-- `media`：tmdb id、類型、標題（英文/原文）、年份、凍結的資料夾名、tracked、TMDB 快取（含季集結構、更新時間）。
+- `media`：tmdb id、類型、標題（英文/原文）、年份、資料夾名（送單那一刻凍結，§4.5）、TMDB 快取（含季集結構、更新時間）。「追蹤過」不是欄位而是從 Job / 帳本 / Rule 推導。
 - `jobs`：hash、名稱、trigger、user、media、route、狀態、qBittorrent 的 save/content path、時間戳。
 - `job_files`：hash + 相對路徑、大小、分類、ReleaseInfo、mediainfo 摘要。
 - `plans` / `plan_items`：job 或 import source、引擎（rules/ai/user）、版本、每檔決策、confidence、reasons、審核狀態與審核者。
@@ -476,7 +476,7 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 | 頁面 | 目的 | 關鍵內容 |
 | --- | --- | --- |
 | 設定精靈 | 首次啟動 | 建立管理員 → 偵測套件內的 Jellyfin / qBittorrent / Prowlarr 並一鍵設定，或連接既有服務 → 路徑 → 建立 Route → 健康檢查（§16.3） |
-| 探索 | 找東西 | 趨勢 / 熱門 / 搜尋；卡片顯示狀態（未追蹤 / 部分 / 完整 / 下載中） |
+| 探索 | 找東西 | 趨勢 / 熱門 / 搜尋；卡片顯示狀態（未追蹤 / 部分 / 完整 / 下載中，**四種都由 Job 與帳本推導**，所以卡片上的狀態要等 M1 票 09 才畫得出來） |
 | Media 詳情 | 決策中心 | TMDB 資訊、各季各集狀態、**搜尋 torrent**（結果表：大小、做種、來源、解析出的 tags、預估匹配）、選 Route 送單、RSS 訂閱、檔案清單（含 Unmatched 與 rematch）、版本並存清單 |
 | 媒體庫 | 瀏覽與修正 | 依 Route 分頁；卡片牆；篩選：有 Issue / 有 Unmatched / 有待審 |
 | 下載與活動 | 全域狀態 | 所有 Job 列表：狀態、進度、Route、trigger；點入 Job 頁 |

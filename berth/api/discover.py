@@ -34,7 +34,6 @@ class DiscoverItemOut(BaseModel):
     year: int | None
     #: 完整的海報網址；沒有海報時是空字串，卡片自己畫沒有海報的樣子。
     poster_url: str
-    tracked: bool
 
 
 class DiscoverOut(BaseModel):

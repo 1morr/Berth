@@ -107,26 +107,28 @@ Windows Docker Desktop（NTFS bind mount）與 Linux（ext4）上各跑一次 `d
 - `pnpm -C web gen:api`：從上一條產出前端的 API 型別 `web/src/api/schema.d.ts`（openapi-typescript）。
   CI 多一個 `api-types` job，型別檔過期時紅燈。
 
-- M1 資料表：`media`（被追蹤的作品，資料夾名一凍結就進了檔案系統）與 `tmdb_cache`（探索與搜尋的
+- M1 資料表：`media`（Berth 手上的作品，資料夾名一凍結就進了檔案系統）與 `tmdb_cache`（探索與搜尋的
   一小時快取，整列丟掉不會失去任何東西）。
 - TMDB adapter 補上 `trending/{tv,movie}/week`、`{tv,movie}/popular` 與 `search/multi`，以及
   **全域 40 req/s 的令牌桶**——上限是每個 IP 的，所以桶是程序層級的一個，不是每個 client 一個。
 - `GET /api/discover/trending`、`/api/discover/popular`、`/api/discover/search?q=`：回作品卡片
-  （tmdb id、類型、顯示用標題、英文標題、年份、完整海報網址、追蹤狀態）。**拿不到 TMDB 時仍是
+  （tmdb id、類型、顯示用標題、英文標題、年份、完整海報網址）。**拿不到 TMDB 時仍是
   200**，理由放在 `problem`——一頁上有三個 feed，一個垮掉時另外兩個要照樣畫得出來。
 - 探索頁 `/`：趨勢與熱門兩面海報牆（劇集與電影交錯）、鍵入即搜的搜尋（500 ms 防抖、2 字起跳、
-  結果接管整面牆）、卡片顯示追蹤狀態，以及 TMDB 條款要求的歸屬聲明與標誌。
+  結果接管整面牆），以及 TMDB 條款要求的歸屬聲明與標誌。**卡片上還沒有狀態**——「已追蹤 /
+  部分 / 完整 / 下載中」要等 Job 與帳本才推導得出來。
 - `scripts/fake_setup_server.py` 新增 `discover` 與 `tmdb-down` 兩個情境；前者打**真的** TMDB
   （憑證由環境變數 `TMDB_API_KEY` 帶入，與實驗腳本同一個名字；根目錄的 `.env.example` 有欄位）。
   **Berth 本身不讀那個變數**——產品的唯一來源仍是精靈寫進資料庫的 `settings.services.tmdb.api_key`。
 - TMDB adapter 再補上詳情那四支：`tv/{id}`、`movie/{id}`（各自帶它需要的 append）、
   `tv/{id}/season/{n}` 與 `tv/episode_group/{id}`。**絕對編號從 0-based 的 `order` 推**，
   不是 group 裡的 `episode_number`——後者保留播出序原值，照它讀會把第二季算成第 1 集起。
-- `GET /api/media/{id}`、`POST /api/media/{id}/track`、`POST /api/media/{id}/refresh`：TMDB 詳情與
-  各季各集的快照（24 小時，過期自動重抓）、追蹤、預設 Route。**拿不到 TMDB 時仍是 200**，
+- `GET /api/media/{id}`、`POST /api/media/{id}/refresh`：TMDB 詳情與各季各集的快照
+  （24 小時，過期自動重抓），以及收得下這部作品的 Route 清單。**拿不到 TMDB 時仍是 200**，
   存過的快照照樣回，只是掛一條「這是舊的」。
 - Media 詳情頁 `/media/:id`：海報與三個標題（顯示用、英文、原文）、識別欄位、簡介、各季可展開的
-  集表（集號、標題、絕對編號、片長、播出日）、選 Route 與追蹤。**電影沒有季集區塊**，改列片長。
+  集表（集號、標題、絕對編號、片長、播出日），以及「入庫到哪裡」的 Route 下拉。**電影沒有季集
+  區塊**，改列片長。搜尋 torrent 與送單在 M1 後段接上去之前，這一頁是唯讀的瀏覽頁。
 - 探索牆的每一格現在是連到詳情頁的連結（票 03 刻意留下的那條線）。
 - `domain/media.py` 的 `MediaSnapshot` / `SeasonSnapshot` / `EpisodeSnapshot`：`media.tmdb_snapshot_json`
   的型別化版本，也是 `naming` 與（M1 後段的）`parser` 的輸入。
@@ -142,8 +144,10 @@ Windows Docker Desktop（NTFS bind mount）與 Linux（ext4）上各跑一次 `d
   `{tv,movie}/popular` 的每一筆沒有 `media_type`。
 - `settings.services.tmdb` 新增 `image_base_url`，精靈第 6 步驗憑證時順手寫下——`configuration`
   對同一把憑證是常數，每次探索都問一次是白花一個請求。
-- **作品資料夾名在「追蹤」那一刻凍結**（plan §5、brief §4.5）。還沒追蹤時它是畫面上的預覽、跟著
-  TMDB 的標題走；追蹤之後 TMDB 改標題也不動它——已入庫的檔案不該因為別人改了條目就對不上。
+- **作品資料夾名在第一次送單成功那一刻凍結**（plan §5、brief §4.5）：那是它第一次真的通向磁碟，
+  而且有人在場確認。在那之前它跟著 TMDB 的標題走，畫面上是「將會是」的預覽；凍結之後 TMDB
+  改標題也不動它——已入庫的檔案不該因為別人改了條目就對不上。**「追蹤」不是一個按鈕**，它是
+  「Berth 曾為這部作品下載、訂閱或入庫過」的推導結果（`CONTEXT.md`）。
 - `DiscoverProblem` 更名為 `TmdbProblem` 並新增 `not_found`：探索頁與 Media 詳情頁問的是同一台
   服務、四種理由的下一步也一樣，各寫一份遲早會走樣。訊息塊因此收成共用的 `TmdbNotice`。
 - TMDB 詳情的 `append_to_response` 拿掉 `external_ids` 與 `release_dates`：快照裡沒有欄位讀它們，

@@ -1,6 +1,6 @@
-"""Media 詳情、追蹤與快照刷新（plan §2.2、§5、§8.3、brief §7.5、§13、票 04）。
+"""Media 詳情與快照刷新（plan §2.2、§5、§8.3、brief §7.5、§13、票 04、04b）。
 
-這一支管的是**一部作品的本地事實**：它的 TMDB 快照、追不追蹤、資料夾名、預設 Route。
+這一支管的是**一部作品的本地事實**：它的 TMDB 快照、資料夾名、可以入庫到哪幾條 Route。
 探索頁那邊的 `services/discover.py` 管的是「牆上有哪些作品」，兩者的快取規則刻意不同——
 牆是一小時就整批丟掉的短期快取，這裡的一列要活得跟檔案系統上的資料夾一樣久。
 
@@ -9,8 +9,8 @@
 - **英文那一輪是結構本身**，`zh-TW` 只補顯示用標題與簡介（plan §8.3、票 03 的同一個理由）。
   季名、集名都留英文——它們會進檔名（plan §5），而且季名是 §4.4 篇章名比對的來源。
 - **快照 24 小時**（plan §8.3）。過期就重抓，使用者不必按任何東西。
-- **`folder_name` 在追蹤那一刻凍結**（plan §5、brief §4.5）。還沒追蹤的那一列上它是預覽，
-  跟著 TMDB 的標題走；`tracked` 一旦是 true 就再也不動它。
+- **`folder_name` 跟著標題走**（plan §5、brief §4.5）。它在畫面上是「將會是」的預覽，
+  凍結發生在第一次真的通向磁碟那一刻——手動送單成功時（票 09）。這一支沒有凍結的權力。
 """
 
 from __future__ import annotations
@@ -82,10 +82,8 @@ class MediaView:
     poster_url: str
     #: 電影片長（分鐘）。劇集是 `None`。
     runtime: int | None
-    #: 追蹤後凍結；還沒追蹤時是「將會是」的預覽。
+    #: 畫面上的「將會是」。凍結在第一次送單成功那一刻（票 09），在那之前跟著標題走。
     folder_name: str
-    tracked: bool
-    default_route_id: int | None
     seasons: tuple[SeasonSnapshot, ...]
     #: 這份快照什麼時候抓的。畫面用它說「這是 N 前的快照」。
     fetched_at: datetime | None
@@ -105,59 +103,8 @@ async def read_media(
 async def refresh_media(
     session: AsyncSession, factory: ServiceClientFactory, media_id: str
 ) -> MediaView:
-    """不管幾歲都重抓一次。**不動已經凍結的 `folder_name`**（票 04 驗收）。"""
+    """不管幾歲都重抓一次。TMDB 改了標題，`folder_name` 就跟著改（票 04b 驗收）。"""
     return await _load(session, factory, media_id, force=True)
-
-
-async def track_media(
-    session: AsyncSession,
-    factory: ServiceClientFactory,
-    media_id: str,
-    *,
-    route_id: int | None,
-) -> MediaView:
-    """把這部作品交給 Berth 管，並指定它的預設 Route。
-
-    **這一刻凍結 `folder_name`**：它從此是檔案系統上的事實，TMDB 之後改標題也不動它
-    （plan §5、brief §4.5）。Route 不在凍結之列——媒體庫會搬，資料夾名不會，
-    所以重按這一支只是改 Route。
-
-    追蹤前要先有快照：沒有標題就算不出資料夾名。TMDB 那時拿不到的話這一支就失敗，
-    而不是凍結一個猜出來的名字。
-    """
-    view = await _load(session, factory, media_id, force=False)
-    if view.problem is not None and view.fetched_at is None:
-        return view
-
-    row = await session.get(Media, view.id)
-    if row is None:  # pragma: no cover - `_load` 成功時一定寫得出這一列
-        raise ValueError(f"{media_id}: no snapshot to track")
-    route = await _route_for(session, row.kind, route_id)
-
-    row.tracked = True
-    row.default_route_id = route.id if route is not None else None
-    await session.commit()
-    return await _view(session, row)
-
-
-async def _route_for(session: AsyncSession, kind: MediaKind, route_id: int | None) -> Route | None:
-    """選的 Route 必須存在、啟用中，而且收得下這種作品。
-
-    型別不符要擋在這裡而不是送單時：劇集進了 movies 媒體庫，命名模板與 Jellyfin 的掃描
-    兩邊都會錯（plan §5、brief §4.3）。
-    """
-    if route_id is None:
-        return None
-    route = await session.get(Route, route_id)
-    if route is None or not route.enabled:
-        raise ValueError(f"route {route_id}: no such route")
-    wanted = collection_type_for(kind)
-    if route.collection_type is not wanted:
-        raise ValueError(
-            f"route {route_id}: collection type is {route.collection_type.value}, "
-            f"and {kind.value} needs {wanted.value}"
-        )
-    return route
 
 
 async def _load(
@@ -277,8 +224,8 @@ def _fresh(row: Media) -> bool:
 async def _store(session: AsyncSession, row: Media | None, snapshot: MediaSnapshot) -> Media:
     """寫下快照。
 
-    `folder_name` 只在**還沒追蹤**時跟著標題走：那時候它是畫面上的預覽。追蹤之後它是
-    檔案系統上的事實，TMDB 改標題也不動它（plan §5、brief §4.5）。
+    `folder_name` 跟著標題走：這一列上還沒有任何檔案依賴它，而畫面要說的是「**現在**送單
+    的話會是這串字」。凍結在票 09 的送單那一刻，那時它才是檔案系統上的事實（brief §4.5）。
     """
     if row is None:
         row = Media(
@@ -295,8 +242,7 @@ async def _store(session: AsyncSession, row: Media | None, snapshot: MediaSnapsh
         row.title_en = snapshot.title_en
         row.title_original = snapshot.title_original
         row.year = snapshot.year
-        if not row.tracked:
-            row.folder_name = folder_name(snapshot)
+        row.folder_name = folder_name(snapshot)
     row.tmdb_snapshot_json = snapshot.model_dump(mode="json")
     row.tmdb_fetched_at = datetime.now(UTC)
     await session.commit()
@@ -331,8 +277,6 @@ async def _problem(
         poster_url="",
         runtime=None,
         folder_name="",
-        tracked=False,
-        default_route_id=None,
         seasons=(),
         fetched_at=None,
         routes=await _routes(session, kind),
@@ -356,8 +300,6 @@ def _missing(media_id: str) -> MediaView:
         poster_url="",
         runtime=None,
         folder_name="",
-        tracked=False,
-        default_route_id=None,
         seasons=(),
         fetched_at=None,
         routes=(),
@@ -387,8 +329,6 @@ async def _view(
         poster_url=snapshot.poster_url,
         runtime=snapshot.runtime,
         folder_name=row.folder_name,
-        tracked=row.tracked,
-        default_route_id=row.default_route_id,
         seasons=snapshot.seasons,
         fetched_at=row.tmdb_fetched_at,
         routes=await _routes(session, row.kind),

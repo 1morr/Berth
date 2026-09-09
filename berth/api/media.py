@@ -1,19 +1,22 @@
-"""Media 詳情、追蹤與刷新的端點（plan §6 media 群組、票 04）。
+"""Media 詳情與刷新的端點（plan §6 media 群組、票 04、04b）。
 
 誰進得來由門禁決定（`api/gate.py`）：`/api/media/*` 不在白名單上，所以未登入一律 401。
-追蹤與選 Route **不是管理動作**——送單本來就是一般使用者做的事（brief §11）。
+瀏覽詳情**不是管理動作**——送單本來就是一般使用者做的事（brief §11）。
+
+**這一頁沒有「追蹤」這個動作**（票 04b）：`tracked` 是推導出來的（票 09 起是 `EXISTS(jobs)`），
+入庫到哪一條 Route 是搜尋與送單時才帶上的偏好，不落地成一個端點。
 """
 
 from __future__ import annotations
 
 from datetime import date, datetime
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter
 from pydantic import BaseModel, ConfigDict
 
 from berth.api.deps import ClientFactoryDep, SessionDep
 from berth.domain import CollectionType, MediaKind, TmdbProblem
-from berth.services.media import read_media, refresh_media, track_media
+from berth.services.media import read_media, refresh_media
 
 router = APIRouter(prefix="/media", tags=["media"])
 
@@ -48,7 +51,11 @@ class SeasonOut(BaseModel):
 
 
 class RouteChoiceOut(BaseModel):
-    """下拉裡的一條 Route。只會出現 `collection_type` 與這部作品相符的。"""
+    """下拉裡的一條 Route。只會出現 `collection_type` 與這部作品相符的。
+
+    「劇集只進得了 tvshows 媒體庫」是領域規則（`domain.collection_type_for`），所以過濾在
+    後端做，前端拿到的就是選得下去的那幾條——放前端會變成第二份實作。
+    """
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -83,10 +90,8 @@ class MediaOut(BaseModel):
     poster_url: str
     #: 電影片長（分鐘）；劇集是 `None`，它的片長在每一集上。
     runtime: int | None
-    #: 追蹤後**凍結**的作品資料夾名；還沒追蹤時是「將會是」的預覽（plan §5）。
+    #: 作品資料夾名。畫面上是「將會是」的預覽——凍結在第一次送單成功那一刻（plan §5、票 09）。
     folder_name: str
-    tracked: bool
-    default_route_id: int | None
     seasons: list[SeasonOut]
     #: 這份快照什麼時候抓的。畫面用它說「這是 N 前的快照」。
     fetched_at: datetime | None
@@ -96,37 +101,13 @@ class MediaOut(BaseModel):
     detail: str
 
 
-class TrackIn(BaseModel):
-    """追蹤時要指定的預設 Route。
-
-    一條相符的 Route 都還沒有的人也追蹤得了（`None`），送單時再回來補（票 09）。
-    """
-
-    route_id: int | None = None
-
-
 @router.get("/{media_id}")
 async def get_media(session: SessionDep, factory: ClientFactoryDep, media_id: str) -> MediaOut:
     """快照超過 24 小時就順手重抓（plan §8.3）。使用者不必按任何東西。"""
     return MediaOut.model_validate(await read_media(session, factory, media_id))
 
 
-@router.post("/{media_id}/track")
-async def post_track(
-    session: SessionDep, factory: ClientFactoryDep, media_id: str, body: TrackIn
-) -> MediaOut:
-    """把作品交給 Berth 管並選定 Route。**`folder_name` 在這一刻凍結**（plan §5）。
-
-    重按只是改 Route：Route 不在凍結之列，媒體庫會搬，資料夾名不會。
-    """
-    try:
-        view = await track_media(session, factory, media_id, route_id=body.route_id)
-    except ValueError as exc:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
-    return MediaOut.model_validate(view)
-
-
 @router.post("/{media_id}/refresh")
 async def post_refresh(session: SessionDep, factory: ClientFactoryDep, media_id: str) -> MediaOut:
-    """不管幾歲都重抓一次。**不動已經凍結的 `folder_name`**（票 04 驗收）。"""
+    """不管幾歲都重抓一次。TMDB 改了標題，`folder_name` 就跟著改（票 04b 驗收）。"""
     return MediaOut.model_validate(await refresh_media(session, factory, media_id))

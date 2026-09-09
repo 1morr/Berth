@@ -42,20 +42,12 @@ export function MediaTile({ item }: { item: DiscoverItem }) {
         )}
       </div>
       <div className="grid content-start gap-1 px-3 py-2.5">
-        <p className="flex min-h-6 items-center justify-between gap-2">
-          <span className="value text-xs text-ink-dim">
-            {KIND_CODE[item.kind]} · {item.year ?? '—'}
-          </span>
-          {item.tracked && (
-            // 中性色塊：追蹤是一段關係，不是健康狀態（The Role Is Not A State Rule）。
-            // M2 有了「部分 / 完整 / 下載中」時，四個信號色才有東西可用。
-            //
-            // **貼在標識帶上而不是壓在海報上**：色塊疊在圖像上時，它讀不讀得出來取決於那張
-            // 海報那一角剛好是什麼顏色。實跑量到的就是這件事——`deck` 在亮色主題是近白，
-            // 壓在深色海報上很清楚；深色主題它是中灰，壓在深色海報上幾乎消失。
-            // 標識帶的底是 `well`，兩個主題都是設計系統保證得了的一組值（11.95:1 / 12.4:1）。
-            <span className="label bg-deck px-2 py-1 text-ink">{t('discover.tracked')}</span>
-          )}
+        {/* **這一格上沒有狀態**（票 04b）：「已追蹤 / 部分 / 完整 / 下載中」要等 Job 與帳本
+            才推導得出來（票 09 起，brief §13）。在那之前每一格都會是同一個字，等於沒說。
+            色塊回來時它貼在這條標識帶上、不壓在海報上（DESIGN.md 的 The Paint Needs A
+            Painted Ground Rule）。 */}
+        <p className="value text-xs text-ink-dim">
+          {KIND_CODE[item.kind]} · {item.year ?? '—'}
         </p>
         <p className="value line-clamp-2 min-h-10 text-sm leading-snug text-ink">{item.title}</p>
         {item.title_en !== item.title && (

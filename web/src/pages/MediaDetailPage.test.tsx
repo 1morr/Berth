@@ -11,7 +11,6 @@ afterEach(() => {
 })
 
 const SPY_PATH = 'GET /api/media/tv%3A120089'
-const TRACK_PATH = 'POST /api/media/tv%3A120089/track'
 
 function media(overrides: Partial<Media> = {}): Media {
   return {
@@ -27,8 +26,6 @@ function media(overrides: Partial<Media> = {}): Media {
     poster_url: 'https://image.tmdb.org/t/p/w342/spy.jpg',
     runtime: null,
     folder_name: 'SPY x FAMILY (2022) [tmdbid-120089]',
-    tracked: false,
-    default_route_id: null,
     fetched_at: '2026-09-09T12:00:00Z',
     problem: null,
     detail: '',
@@ -101,7 +98,6 @@ describe('Media 詳情頁', () => {
               title_en: 'SPY x FAMILY',
               year: 2022,
               poster_url: '',
-              tracked: false,
             },
           ],
           problem: null,
@@ -129,12 +125,23 @@ describe('Media 詳情頁', () => {
     expect(screen.getByText('SPY×FAMILY')).toBeVisible()
   })
 
-  it('資料夾名在按下追蹤之前就看得到（PRODUCT.md 原則 2：動手前先給看）', async () => {
+  it('資料夾名在送單之前就看得到，而且說得出它什麼時候定下來（票 04b）', async () => {
     render()
     renderApp('/media/tv:120089')
 
     expect(await screen.findByText('資料夾將會是')).toBeVisible()
     expect(screen.getByText('SPY x FAMILY (2022) [tmdbid-120089]')).toBeVisible()
+    expect(screen.getByText(/第一次送單成功那一刻這串字就定下來/)).toBeVisible()
+  })
+
+  it('這一頁沒有「追蹤」這個動作（票 04b）', async () => {
+    render()
+    renderApp('/media/tv:120089')
+
+    await screen.findByRole('heading', { name: 'SPY×FAMILY 間諜家家酒' })
+
+    expect(screen.queryByRole('button', { name: '追蹤' })).not.toBeInTheDocument()
+    expect(screen.queryByText('已追蹤')).not.toBeInTheDocument()
   })
 
   it('季預設全收，展開才列出那一季的集（使用者拍板）', async () => {
@@ -179,17 +186,22 @@ describe('Media 詳情頁', () => {
     expect(screen.queryByRole('columnheader', { name: '絕對' })).not.toBeInTheDocument()
   })
 
-  it('只列得出相符的 Route，選了之後一次寫進去', async () => {
-    const tracked = media({ tracked: true, default_route_id: 2 })
-    const stub = render({ [TRACK_PATH]: { body: tracked } })
+  it('後端只回相符的 Route，下拉就只列得出那幾條', async () => {
+    render()
+    renderApp('/media/tv:120089')
+
+    const select = await screen.findByLabelText<HTMLSelectElement>('入庫到')
+
+    expect([...select.options].map((option) => option.text)).toEqual(['尚未指定', 'TV', 'Anime'])
+  })
+
+  it('選了 Route 不會送出任何請求——它是偏好，不是承諾（票 04b）', async () => {
+    const stub = render()
     renderApp('/media/tv:120089')
 
     await userEvent.selectOptions(await screen.findByLabelText('入庫到'), 'Anime')
-    await userEvent.click(screen.getByRole('button', { name: '追蹤' }))
 
-    await waitFor(() => expect(screen.getByText('已追蹤')).toBeVisible())
-    const call = stub.mock.calls.find(([, init]) => init?.method === 'POST')
-    expect(JSON.parse(String(call?.[1]?.body))).toEqual({ route_id: 2 })
+    expect(stub.mock.calls.filter(([, init]) => init?.method === 'POST')).toEqual([])
   })
 
   it('季數與集數不把 Specials 算進去', async () => {
@@ -226,18 +238,32 @@ describe('Media 詳情頁', () => {
     expect(within(row!).getByText('2022-04-09')).toBeVisible()
   })
 
-  it('Route 下拉跟著資料走，不會停在剛進頁面那一輪的值', async () => {
-    // 追蹤成功後後端回的 `default_route_id` 是 2；下拉必須跟著換過去。
-    const stub = render({ [TRACK_PATH]: { body: media({ tracked: true, default_route_id: 2 }) } })
+  it('只有一條相符的 Route 時自動選它（票 04b）', async () => {
+    render({
+      [SPY_PATH]: {
+        body: media({
+          routes: [{ id: 2, name: 'Anime', slug: 'anime', collection_type: 'tvshows' }],
+        }),
+      },
+    })
+    renderApp('/media/tv:120089')
+
+    const select = await screen.findByLabelText<HTMLSelectElement>('入庫到')
+
+    expect(select.value).toBe('2')
+  })
+
+  it('兩條以上時不替使用者選，而清掉選擇之後也不會被選回去', async () => {
+    render()
     renderApp('/media/tv:120089')
 
     const select = await screen.findByLabelText<HTMLSelectElement>('入庫到')
     expect(select.value).toBe('')
 
-    await userEvent.click(screen.getByRole('button', { name: '追蹤' }))
+    await userEvent.selectOptions(select, 'Anime')
+    await userEvent.selectOptions(select, '尚未指定')
 
-    await waitFor(() => expect(select.value).toBe('2'))
-    expect(stub).toHaveBeenCalled()
+    expect(select.value).toBe('')
   })
 
   it('快照過期不是紅燈——頁面照樣畫得出來（The One Meaning Rule）', async () => {

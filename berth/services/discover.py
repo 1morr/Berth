@@ -1,12 +1,13 @@
-"""探索與搜尋（plan §6 discover 群組、§8.3、brief §13、票 03）。
+"""探索與搜尋（plan §6 discover 群組、§8.3、brief §13、票 03、04b）。
 
 三個 feed 都是同一條路：**英文那一輪是清單本身**（順序、成員、檔名用的標題都以它為準），
 `zh-TW` 那一輪只是一張「這一部的顯示用標題與海報」的查表。方向不能反過來——`language`
 會換掉 TMDB 回的**成員與順序**而不只是文字（2026-09-09 實測 `trending/tv/week`，20 筆
 差 3 筆），照 `zh-TW` 那一輪當清單會讓作品憑空消失。
 
-快取一小時（plan §8.3）。**追蹤狀態不進快取**：它是本地事實而且會被使用者當場改掉，
-按下追蹤之後那張卡不該等一小時才更新。
+快取一小時（plan §8.3）。快取存的就是卡片本身——**卡片上還沒有任何本地狀態**（票 04b）：
+「已追蹤 / 部分 / 完整 / 下載中」要等 Job 與帳本才推導得出來（票 09 起）。那些狀態回來時
+不能塞進這份快取，它們是本地事實、會當場改掉，不該等一小時。
 """
 
 from __future__ import annotations
@@ -17,7 +18,6 @@ from datetime import UTC, datetime, timedelta
 from itertools import zip_longest
 from typing import Protocol
 
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from berth.adapters.http import AuthFailedError, ServiceError
@@ -28,7 +28,7 @@ from berth.adapters.tmdb import (
     TmdbEntry,
 )
 from berth.domain import MediaKind, TmdbProblem
-from berth.models import Media, MediaCard, TmdbCache, TmdbSettings, dump_cards, load_cards
+from berth.models import MediaCard, TmdbCache, TmdbSettings, dump_cards, load_cards
 from berth.services.clients import ServiceClientFactory
 from berth.services.settings import read_settings, write_settings
 from berth.services.steps import message
@@ -60,12 +60,10 @@ class DiscoverItem:
     title_en: str
     year: int | None
     poster_url: str
-    #: M1 只有兩種狀態（票 03）；部分 / 完整 / 下載中要等 Job 與帳本（brief §13）。
-    tracked: bool
 
     @classmethod
-    def from_card(cls, card: MediaCard, *, tracked: bool) -> DiscoverItem:
-        return cls(id=card.id, tracked=tracked, **card.model_dump())
+    def from_card(cls, card: MediaCard) -> DiscoverItem:
+        return cls(id=card.id, **card.model_dump())
 
 
 @dataclass(frozen=True, slots=True)
@@ -141,7 +139,7 @@ async def _feed(
 ) -> DiscoverResult:
     cached = await _read_cache(session, key)
     if cached is not None:
-        return await _decorate(session, cached)
+        return _wall(cached)
 
     settings = await read_settings(session, TmdbSettings)
     key_in_hand = credential(settings)
@@ -160,7 +158,7 @@ async def _feed(
         await client.aclose()
 
     await _write_cache(session, key, cards)
-    return await _decorate(session, cards)
+    return _wall(cards)
 
 
 async def _both_kinds(feed: _KindFeed, base: str) -> tuple[MediaCard, ...]:
@@ -241,17 +239,11 @@ async def _write_cache(session: AsyncSession, key: str, cards: tuple[MediaCard, 
     )
 
 
-async def _decorate(session: AsyncSession, cards: tuple[MediaCard, ...]) -> DiscoverResult:
-    tracked = await _tracked_ids(session, cards)
-    return DiscoverResult(
-        tuple(DiscoverItem.from_card(card, tracked=card.id in tracked) for card in cards)
-    )
+def _wall(cards: tuple[MediaCard, ...]) -> DiscoverResult:
+    """卡片變成牆上的那幾格。
 
-
-async def _tracked_ids(session: AsyncSession, cards: tuple[MediaCard, ...]) -> set[str]:
-    if not cards:
-        return set()
-    rows = await session.scalars(
-        select(Media.id).where(Media.id.in_([card.id for card in cards]), Media.tracked.is_(True))
-    )
-    return set(rows)
+    **格子上沒有本地狀態**（票 04b）：「已追蹤 / 部分 / 完整 / 下載中」要等 Job 與帳本才推導
+    得出來（票 09 起，brief §13）。在那之前每一格都會是同一個字，等於沒說——所以這一支現在
+    只把快取的形狀翻成畫面的形狀。狀態回來時它就是加上去的地方。
+    """
+    return DiscoverResult(tuple(DiscoverItem.from_card(card) for card in cards))

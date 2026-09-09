@@ -1,7 +1,7 @@
-"""Media 端點（plan §6 media 群組、票 04 驗收）。
+"""Media 端點（plan §6 media 群組、票 04 與 04b 驗收）。
 
 命令本身在 `test_media.py`；這裡驗的是形狀與「誰進得來」——`/api/media/*` 沒有在門禁的
-白名單上，所以匿名一律 401，而追蹤**不是**管理動作，一般使用者也做得了（brief §11）。
+白名單上，所以匿名一律 401，而詳情**不是**管理動作，一般使用者也看得了（brief §11）。
 """
 
 from __future__ import annotations
@@ -36,7 +36,7 @@ BROWSER = {CSRF_HEADER: "XMLHttpRequest"}
 ADMIN = {"username": "skipper", "password": "harbour"}
 CREW = {"username": "deckhand", "password": "rope"}
 
-#: 探索牆上的同一部作品。追蹤狀態是**牆與詳情頁共用的那一個事實**，所以兩邊要對得上。
+#: 探索牆上的同一部作品：搜尋回它，卡片上的 `id` 就是詳情頁那一頁的網址（票 04）。
 SPY_ON_THE_WALL = TmdbEntry(
     tmdb_id=SPY.tmdb_id,
     kind=SPY.kind,
@@ -105,19 +105,21 @@ def sign_in(client: TestClient, who: dict[str, str] = ADMIN) -> httpx.Response:
 class TestGate:
     def test_media_needs_a_session(self, client: TestClient) -> None:
         assert client.get(f"/api/media/{SPY_ID}").status_code == 401
-        assert client.post(f"/api/media/{SPY_ID}/track", json={}, headers=BROWSER).status_code == (
-            401
-        )
         assert client.post(f"/api/media/{SPY_ID}/refresh", headers=BROWSER).status_code == 401
 
-    def test_an_ordinary_user_may_track(self, client: TestClient) -> None:
-        """送單是一般使用者的動作（brief §11），追蹤是它的前一步。"""
+    def test_an_ordinary_user_may_browse_a_title(self, client: TestClient) -> None:
+        """送單是一般使用者的動作（brief §11），瀏覽詳情是它的前一步。"""
         sign_in(client, CREW)
 
-        response = client.post(f"/api/media/{SPY_ID}/track", json={}, headers=BROWSER)
+        assert client.get(f"/api/media/{SPY_ID}").status_code == 200
 
-        assert response.status_code == 200
-        assert response.json()["tracked"] is True
+    def test_there_is_no_track_endpoint(self, client: TestClient) -> None:
+        """「追蹤」不是一個動作（票 04b）：`tracked` 是推導出來的（票 09 起以 Job 推）。"""
+        sign_in(client)
+
+        assert client.post(f"/api/media/{SPY_ID}/track", json={}, headers=BROWSER).status_code == (
+            404
+        )
 
 
 class TestDetail:
@@ -129,7 +131,6 @@ class TestDetail:
         assert (body["id"], body["kind"], body["tmdb_id"]) == (SPY_ID, "tv", 120089)
         assert (body["title"], body["title_en"]) == ("SPY×FAMILY 間諜家家酒", "SPY x FAMILY")
         assert body["folder_name"] == "SPY x FAMILY (2022) [tmdbid-120089]"
-        assert body["tracked"] is False
         assert body["problem"] is None
         assert [row["season_number"] for row in body["seasons"]] == [0, 1, 2]
         assert body["seasons"][1]["episodes"][0] == {
@@ -167,54 +168,19 @@ class TestDetail:
         assert body["problem"] == "not_found"
 
 
-class TestTrack:
-    def test_it_freezes_the_folder_name_and_keeps_the_route(self, client: TestClient) -> None:
-        sign_in(client)
-        route = next(
-            row for row in client.get(f"/api/media/{SPY_ID}").json()["routes"] if row["slug"]
-        )
-
-        body = client.post(
-            f"/api/media/{SPY_ID}/track", json={"route_id": route["id"]}, headers=BROWSER
-        ).json()
-
-        assert (body["tracked"], body["default_route_id"]) == (True, route["id"])
-        assert body["folder_name"] == "SPY x FAMILY (2022) [tmdbid-120089]"
-        # 重讀一次也是同一份事實，不是回應裡才有的。
-        assert client.get(f"/api/media/{SPY_ID}").json()["tracked"] is True
-
-    def test_a_route_of_the_wrong_type_is_refused(self, client: TestClient) -> None:
-        """劇集送不進 movies 媒體庫（brief §4.3）。擋在這裡，不是等送單才發現。"""
-        sign_in(client)
-        films = next(row for row in client.get(f"/api/media/{MOANA_ID}").json()["routes"])
-
-        response = client.post(
-            f"/api/media/{SPY_ID}/track", json={"route_id": films["id"]}, headers=BROWSER
-        )
-
-        assert response.status_code == 422
-        assert "collection type" in response.json()["detail"]
-
-    def test_tracking_shows_up_on_the_discover_wall(self, client: TestClient) -> None:
-        """追蹤過的作品回到探索頁時卡片狀態是「已追蹤」（票 04 驗收）。"""
-        sign_in(client)
-        client.post(f"/api/media/{SPY_ID}/track", json={}, headers=BROWSER)
-
-        wall = client.get("/api/discover/search", params={"q": "spy x family"}).json()
-
-        assert [(row["id"], row["tracked"]) for row in wall["items"]] == [(SPY_ID, True)]
-
-
 class TestRefresh:
-    def test_it_leaves_a_frozen_folder_name_alone(
+    def test_the_folder_name_follows_the_title(
         self, client: TestClient, factory: FakeClientFactory
     ) -> None:
-        """TMDB 改了標題也不動已經凍結的資料夾名（票 04 驗收，有測試釘住）。"""
+        """TMDB 改了標題，「將會是」的那一串字就跟著改（票 04b 驗收）。
+
+        凍結在第一次送單成功那一刻（票 09），不在這裡。
+        """
         sign_in(client)
-        client.post(f"/api/media/{SPY_ID}/track", json={}, headers=BROWSER)
+        client.get(f"/api/media/{SPY_ID}")
         factory.tmdb_.details[(MediaKind.TV, 120089)] = replace(SPY, title="Renamed On TMDB")
 
         body = client.post(f"/api/media/{SPY_ID}/refresh", headers=BROWSER).json()
 
         assert body["title_en"] == "Renamed On TMDB"
-        assert body["folder_name"] == "SPY x FAMILY (2022) [tmdbid-120089]"
+        assert body["folder_name"] == "Renamed On TMDB (2022) [tmdbid-120089]"

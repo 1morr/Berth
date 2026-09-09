@@ -16,7 +16,7 @@ from berth.adapters.http import AuthFailedError, ServiceUnavailableError
 from berth.adapters.tmdb import TmdbConfiguration, TmdbEntry
 from berth.adapters.tmdb.fake import FakeTmdbClient
 from berth.domain import MediaKind, TmdbProblem
-from berth.models import Media, TmdbCache, TmdbSettings, media_id
+from berth.models import TmdbCache, TmdbSettings
 from berth.services.discover import (
     CACHE_TTL,
     read_popular,
@@ -138,75 +138,6 @@ class TestTrending:
         result = await read_trending(session, await credentialled(session, client))
 
         assert result.items[0].poster_url == ""
-
-
-class TestTracked:
-    async def test_a_tracked_work_is_marked_on_the_card(self, session: AsyncSession) -> None:
-        session.add(
-            Media(
-                id=media_id(MediaKind.TV, 95350),
-                tmdb_id=95350,
-                kind=MediaKind.TV,
-                title_en="Lanterns",
-                title_original="Lanterns",
-                year=2026,
-                folder_name="Lanterns (2026) [tmdbid-95350]",
-                tracked=True,
-            )
-        )
-        await session.commit()
-
-        result = await read_trending(session, await credentialled(session, tmdb()))
-
-        marked = {item.id: item.tracked for item in result.items}
-        assert marked["tv:95350"] is True
-        assert marked["tv:125988"] is False
-
-    async def test_a_media_row_that_is_not_tracked_is_not_marked(
-        self, session: AsyncSession
-    ) -> None:
-        """有列不等於追蹤中：票 04 的詳情頁看過就會建列（`tracked=False`）。"""
-        session.add(
-            Media(
-                id=media_id(MediaKind.TV, 95350),
-                tmdb_id=95350,
-                kind=MediaKind.TV,
-                title_en="Lanterns",
-                title_original="Lanterns",
-                year=2026,
-                folder_name="Lanterns (2026) [tmdbid-95350]",
-                tracked=False,
-            )
-        )
-        await session.commit()
-
-        result = await read_trending(session, await credentialled(session, tmdb()))
-
-        assert result.items[0].tracked is False
-
-    async def test_the_flag_is_read_fresh_even_when_the_cards_come_from_cache(
-        self, session: AsyncSession
-    ) -> None:
-        """追蹤狀態不進快取——按下追蹤之後那張卡不該等一小時才改。"""
-        factory = await credentialled(session, tmdb())
-        await read_trending(session, factory)
-
-        session.add(
-            Media(
-                id=media_id(MediaKind.TV, 95350),
-                tmdb_id=95350,
-                kind=MediaKind.TV,
-                title_en="Lanterns",
-                title_original="Lanterns",
-                year=2026,
-                folder_name="Lanterns (2026) [tmdbid-95350]",
-                tracked=True,
-            )
-        )
-        await session.commit()
-        result = await read_trending(session, factory)
-
-        assert result.items[0].tracked is True
 
 
 class TestCache:

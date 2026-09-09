@@ -1,7 +1,8 @@
-"""Media 詳情、追蹤與快照刷新的命令（plan §2.2、§5、§8.3、brief §7.5、票 04）。
+"""Media 詳情與快照刷新的命令（plan §2.2、§5、§8.3、brief §7.5、票 04、04b）。
 
 這裡驗的是四件事：**快照怎麼組**（英文那一輪是結構本身，`zh-TW` 只補顯示用標題與簡介）、
-**24 小時的快照規則**、**`folder_name` 什麼時候凍結**，以及**拿不到 TMDB 時還剩下什麼**。
+**24 小時的快照規則**、**`folder_name` 跟著標題走**（凍結在票 09 的送單那一刻），
+以及**拿不到 TMDB 時還剩下什麼**。
 """
 
 from __future__ import annotations
@@ -17,7 +18,7 @@ from berth.adapters.tmdb import TmdbDetail, TmdbEpisode, TmdbSeason, TmdbSeasonE
 from berth.adapters.tmdb.fake import FakeTmdbClient
 from berth.domain import CollectionType, MediaKind, Profile, TmdbProblem
 from berth.models import Media, Route, TmdbSettings
-from berth.services.media import SNAPSHOT_TTL, read_media, refresh_media, track_media
+from berth.services.media import SNAPSHOT_TTL, read_media, refresh_media
 from berth.services.settings import write_settings
 from tests.conftest import TMDB_API_KEY
 from tests.integration.factories import FakeClientFactory
@@ -244,84 +245,33 @@ class TestCache:
         assert [name for name, _ in client.requests if name.startswith("detail/")]
 
 
-class TestTrack:
-    async def test_it_freezes_the_folder_name(self, session: AsyncSession) -> None:
-        """追蹤那一刻把 plan §5 的模板算出來寫進去，之後只從那裡讀。"""
-        factory = await credentialled(session, tmdb())
-        route = await add_route(session)
+class TestFolderName:
+    async def test_it_follows_the_title(self, session: AsyncSession) -> None:
+        """**TMDB 改了標題，資料夾名就跟著改**（票 04b）。
 
-        view = await track_media(session, factory, SPY_ID, route_id=route.id)
-
-        assert view.tracked is True
-        assert view.default_route_id == route.id
-        assert view.folder_name == "SPY x FAMILY (2022) [tmdbid-120089]"
-        row = await session.get(Media, SPY_ID)
-        assert row is not None
-        assert (row.tracked, row.folder_name) == (True, "SPY x FAMILY (2022) [tmdbid-120089]")
-
-    async def test_refreshing_a_tracked_media_leaves_the_folder_name_alone(
-        self, session: AsyncSession
-    ) -> None:
-        """**TMDB 改了標題也不動已經凍結的資料夾名**（plan §5、brief §4.5、票 04 驗收）。
-
-        改名是顯式動作；靜默改掉的話已入庫的檔案就對不上它的作品資料夾了。
-        """
-        client = tmdb()
-        factory = await credentialled(session, client)
-        route = await add_route(session)
-        await track_media(session, factory, SPY_ID, route_id=route.id)
-
-        client.details[(MediaKind.TV, 120089)] = replace(SPY, title="Spy Family Renamed", year=2099)
-        view = await refresh_media(session, factory, SPY_ID)
-
-        assert view.title_en == "Spy Family Renamed"
-        assert view.folder_name == "SPY x FAMILY (2022) [tmdbid-120089]"
-
-    async def test_an_untracked_media_still_previews_the_current_name(
-        self, session: AsyncSession
-    ) -> None:
-        """還沒追蹤的那一列上，資料夾名是**預覽**：TMDB 改了標題就跟著改。
-
-        凍結發生在追蹤那一刻，不是第一次點進詳情頁那一刻——詳情頁只是看看。
+        凍結要等到第一次真的通向磁碟的那一刻——手動送單成功時（票 09）。在那之前這一列上的
+        資料夾名只是畫面上的「將會是」，沒有任何檔案依賴它，而跟著標題走的那一份比較新。
         """
         client = tmdb()
         factory = await credentialled(session, client)
         await read_media(session, factory, SPY_ID)
 
-        client.details[(MediaKind.TV, 120089)] = replace(SPY, title="Spy Family Renamed")
+        client.details[(MediaKind.TV, 120089)] = replace(SPY, title="Spy Family Renamed", year=2099)
         view = await refresh_media(session, factory, SPY_ID)
 
-        assert view.folder_name == "Spy Family Renamed (2022) [tmdbid-120089]"
+        assert view.folder_name == "Spy Family Renamed (2099) [tmdbid-120089]"
+        row = await session.get(Media, SPY_ID)
+        assert row is not None
+        assert row.folder_name == "Spy Family Renamed (2099) [tmdbid-120089]"
 
-    async def test_tracking_again_moves_the_route_without_thawing_the_name(
-        self, session: AsyncSession
-    ) -> None:
-        """改預設 Route 走同一支命令。Route 不是凍結的東西——媒體庫會搬，資料夾名不會。"""
-        factory = await credentialled(session, tmdb())
-        first = await add_route(session)
-        second = await add_route(session, slug="anime", name="Anime")
+    async def test_it_is_sanitised(self, session: AsyncSession) -> None:
+        """非法字元擋在寫進資料庫之前（plan §5）。"""
+        client = tmdb(details=[replace(SPY, title="Mission: Impossible"), MOANA])
+        factory = await credentialled(session, client)
 
-        await track_media(session, factory, SPY_ID, route_id=first.id)
-        view = await track_media(session, factory, SPY_ID, route_id=second.id)
+        view = await read_media(session, factory, SPY_ID)
 
-        assert view.default_route_id == second.id
-        assert view.folder_name == "SPY x FAMILY (2022) [tmdbid-120089]"
-
-    async def test_a_film_cannot_be_routed_to_a_series_library(self, session: AsyncSession) -> None:
-        """Route 的 `collection_type` 要與作品相符，否則命名與 Jellyfin 都會錯（brief §4.3）。"""
-        factory = await credentialled(session, tmdb())
-        series = await add_route(session)
-
-        with pytest.raises(ValueError, match="collection type"):
-            await track_media(session, factory, MOANA_ID, route_id=series.id)
-
-    async def test_tracking_without_a_route_is_allowed(self, session: AsyncSession) -> None:
-        """一條相符的 Route 都還沒有的人也追蹤得了；送單時再回來補（票 09）。"""
-        factory = await credentialled(session, tmdb())
-
-        view = await track_media(session, factory, SPY_ID, route_id=None)
-
-        assert (view.tracked, view.default_route_id) == (True, None)
+        assert view.folder_name == "Mission Impossible (2022) [tmdbid-120089]"
 
 
 class TestRouteChoices:

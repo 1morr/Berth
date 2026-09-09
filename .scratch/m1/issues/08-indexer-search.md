@@ -22,6 +22,8 @@
 - [ ] 搜尋詞由英文標題、原文標題與各語言 alternative titles 各發一次，合併去重（infohash 或 link）；
       anime profile 另加 `第N季` / `Season N` 變體
 - [ ] `GET /api/search?media=&q=&route=` 回結果清單，每筆附 Tags 與預估季集
+- [ ] `route` 參數是**搜尋用的偏好，不是承諾**（票 04b）：它只影響這一輪搜尋（profile 決定
+      anime 的查詢變體），不寫進 `media`，也不代表之後一定送到那條 Route
 - [ ] 結果表顯示大小、做種、來源、Tags、預估，可依做種與大小排序
 - [ ] 動漫、美劇、電影三種類型都搜得到並正確顯示 Tags（plan T1.2 驗收）
 - [ ] 索引站未設定（第 5 步跳過）或不可達時，結果表顯示可行動的說明而不是空清單

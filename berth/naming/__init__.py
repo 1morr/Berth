@@ -33,9 +33,11 @@ MAX_BYTES = 200
 
 
 def folder_name(media: MediaSnapshot) -> str:
-    """作品資料夾名。**一旦寫進 `media.folder_name` 就只從那裡讀**（plan §5）。
+    """作品資料夾名。**一旦凍結進 `media.folder_name` 就只從那裡讀**（plan §5）。
 
-    TMDB 之後改了標題也不會讓已經入庫的資料夾對不上——改名是顯式動作（brief §4.5）。
+    凍結發生在第一次送單成功那一刻（票 09）——第一次真的通向磁碟。在那之前每次刷新快照都
+    重算一次，畫面上它是「將會是」的預覽；之後 TMDB 改了標題也不會讓已經入庫的資料夾對不上，
+    改名是顯式動作（brief §4.5）。
     """
     template = FOLDER_TEMPLATE if media.year is not None else FOLDER_TEMPLATE_UNDATED
     return sanitize(template.format(title=title_of(media), year=media.year, tmdb_id=media.tmdb_id))
@@ -49,8 +51,8 @@ def title_of(media: MediaSnapshot) -> str:
 def sanitize(name: str) -> str:
     """檔案系統與 Jellyfin 都吞得下的名字（plan §5）。
 
-    **這一票就要它**：`folder_name` 在追蹤那一刻凍結進資料庫，`Mission: Impossible` 這種
-    標題如果現在被寫成非法路徑，票 07 補規則時那幾列已經改不掉了。
+    **票 04 就要它**：`folder_name` 每次寫快照都會寫進資料庫，`Mission: Impossible` 這種
+    標題如果被寫成非法路徑，凍結（票 09）之後那幾列就改不掉了。
 
     票 07 接手其餘五種模板（季資料夾、劇集檔、電影檔、外掛字幕、extras），共用這一支。
     """

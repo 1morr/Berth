@@ -24,7 +24,6 @@ function item(overrides: Partial<DiscoverItem> = {}): DiscoverItem {
     title_en: 'Lanterns',
     year: 2026,
     poster_url: 'https://image.tmdb.org/t/p/w342/lanterns.jpg',
-    tracked: false,
     ...overrides,
   }
 }
@@ -84,15 +83,6 @@ describe('探索頁', () => {
     await screen.findByText('Moana')
 
     expect(section('本週趨勢').getAllByText('Moana')).toHaveLength(1)
-  })
-
-  it('追蹤狀態畫在卡片上（M1 只有未追蹤 / 已追蹤）', async () => {
-    render({ [TRENDING]: wall([item({ tracked: true }), MOANA]) })
-    renderApp('/')
-
-    await screen.findByText('已追蹤')
-
-    expect(section('本週趨勢').getAllByText('已追蹤')).toHaveLength(1)
   })
 
   it('沒有海報的作品畫一格空位，不是破圖', async () => {
@@ -167,13 +157,17 @@ describe('探索頁的搜尋', () => {
 
   it('防抖：連打一個詞不會每個按鍵都送一次', async () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
-    const fetchStub = render({ 'GET /api/discover/search?q=moana': wall([MOANA]) })
+    // 結果那一筆的標題**不能與牆上任何一格相同**：`MOANA` 也在熱門那面牆上，等它出現等到的
+    // 會是還沒搜尋前就在畫面上的那一格，於是這條測試在機器忙的時候會偽陰性（實測 3/6 紅）。
+    const fetchStub = render({
+      'GET /api/discover/search?q=moana': wall([item({ title: '海洋奇緣2', title_en: 'Moana 2' })]),
+    })
     renderApp('/')
     await screen.findByRole('region', { name: '本週趨勢' })
 
     await user.type(screen.getByLabelText('搜尋作品'), 'moana')
     await vi.advanceTimersByTimeAsync(500)
-    await screen.findByText('Moana')
+    await screen.findByText('海洋奇緣2')
 
     expect(fetchStub.mock.calls.filter(([url]) => String(url).includes('/search'))).toHaveLength(1)
   })

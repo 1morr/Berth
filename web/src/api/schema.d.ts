@@ -189,28 +189,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/media/{media_id}/track": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Post Track
-         * @description 把作品交給 Berth 管並選定 Route。**`folder_name` 在這一刻凍結**（plan §5）。
-         *
-         *     重按只是改 Route：Route 不在凍結之列，媒體庫會搬，資料夾名不會。
-         */
-        post: operations["post_track_api_media__media_id__track_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/media/{media_id}/refresh": {
         parameters: {
             query?: never;
@@ -222,7 +200,7 @@ export interface paths {
         put?: never;
         /**
          * Post Refresh
-         * @description 不管幾歲都重抓一次。**不動已經凍結的 `folder_name`**（票 04 驗收）。
+         * @description 不管幾歲都重抓一次。TMDB 改了標題，`folder_name` 就跟著改（票 04b 驗收）。
          */
         post: operations["post_refresh_api_media__media_id__refresh_post"];
         delete?: never;
@@ -763,8 +741,6 @@ export interface components {
             year: number | null;
             /** Poster Url */
             poster_url: string;
-            /** Tracked */
-            tracked: boolean;
         };
         /**
          * DiscoverOut
@@ -1041,10 +1017,6 @@ export interface components {
             runtime: number | null;
             /** Folder Name */
             folder_name: string;
-            /** Tracked */
-            tracked: boolean;
-            /** Default Route Id */
-            default_route_id: number | null;
             /** Seasons */
             seasons: components["schemas"]["SeasonOut"][];
             /** Fetched At */
@@ -1110,6 +1082,9 @@ export interface components {
         /**
          * RouteChoiceOut
          * @description 下拉裡的一條 Route。只會出現 `collection_type` 與這部作品相符的。
+         *
+         *     「劇集只進得了 tvshows 媒體庫」是領域規則（`domain.collection_type_for`），所以過濾在
+         *     後端做，前端拿到的就是選得下去的那幾條——放前端會變成第二份實作。
          */
         RouteChoiceOut: {
             /** Id */
@@ -1323,16 +1298,6 @@ export interface components {
         TmdbTestIn: {
             /** Api Key */
             api_key: string;
-        };
-        /**
-         * TrackIn
-         * @description 追蹤時要指定的預設 Route。
-         *
-         *     一條相符的 Route 都還沒有的人也追蹤得了（`None`），送單時再回來補（票 09）。
-         */
-        TrackIn: {
-            /** Route Id */
-            route_id?: number | null;
         };
         /** ValidationError */
         ValidationError: {
@@ -1569,41 +1534,6 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MediaOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    post_track_api_media__media_id__track_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                media_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["TrackIn"];
-            };
-        };
         responses: {
             /** @description Successful Response */
             200: {

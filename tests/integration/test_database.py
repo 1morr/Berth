@@ -13,6 +13,7 @@ from pathlib import Path
 
 import pytest
 from alembic import command
+from alembic.script import ScriptDirectory
 from sqlalchemy import text
 from sqlalchemy.engine import Connection
 
@@ -86,6 +87,31 @@ async def test_downgrading_then_upgrading_lands_on_the_same_schema(config: Confi
     assert _schema_of(config.database_path) == before
 
 
+async def test_downgrading_the_last_revision_lands_on_the_previous_schema(
+    config: Config,
+) -> None:
+    """**降一版**要回到那一版原本的 schema，不是一個長得像它的東西。
+
+    降到 base 那條測不出這件事：整張表都沒了，欄位差在哪就看不出來；升回 head 也測不出來，
+    降版時多出來的東西會被下一次升版蓋掉。實際踩過的坑是 SQLite 補一個 NOT NULL 欄位得先給
+    `server_default` 填舊列，填完沒拿掉的話降版後那一欄就多了一個當初沒有的預設值（票 04b）。
+    """
+    await migrate(config)
+
+    engine = create_engine(config)
+    try:
+        async with engine.begin() as connection:
+            await connection.run_sync(_downgrade_one)
+        rolled_back = _columns_of(config.database_path)
+        async with engine.begin() as connection:
+            await connection.run_sync(_downgrade)
+            await connection.run_sync(_upgrade_to_previous)
+    finally:
+        await engine.dispose()
+
+    assert _columns_of(config.database_path) == rolled_back
+
+
 async def test_alembic_records_the_head_revision(config: Config) -> None:
     await migrate(config)
 
@@ -142,6 +168,45 @@ def _downgrade(connection: Connection) -> None:
     config = alembic_config()
     config.attributes["connection"] = connection
     command.downgrade(config, "base")
+
+
+def _downgrade_one(connection: Connection) -> None:
+    config = alembic_config()
+    config.attributes["connection"] = connection
+    command.downgrade(config, "-1")
+
+
+def _upgrade_to_previous(connection: Connection) -> None:
+    """從空的資料庫升到**倒數第二版**：head 的 `down_revision`，不寫死任何 id。"""
+    config = alembic_config()
+    config.attributes["connection"] = connection
+    scripts = ScriptDirectory.from_config(config)
+    head = scripts.get_current_head()
+    assert head is not None
+    previous = scripts.get_revision(head).down_revision
+    assert isinstance(previous, str)
+    command.upgrade(config, previous)
+
+
+def _columns_of(database_path: Path) -> dict[str, dict[str, tuple[str, int, str | None]]]:
+    """每張表的欄位：名字 → (型別, NOT NULL, 預設值)。
+
+    比 `sqlite_master.sql` 原文適合比較兩條不同路徑走出來的同一份 schema：SQLite 的 batch
+    migration 是「建新表再搬」，走過它的表名會多一組引號、欄位順序也會變——那兩件事不是差異，
+    而預設值是。
+    """
+    with _sqlite(database_path) as connection:
+        tables = {
+            name
+            for (name,) in connection.execute("SELECT name FROM sqlite_master WHERE type = 'table'")
+        }
+        return {
+            table: {
+                row[1]: (row[2], row[3], row[4])
+                for row in connection.execute(f'PRAGMA table_info("{table}")')
+            }
+            for table in tables
+        }
 
 
 def _schema_of(database_path: Path) -> set[str]:

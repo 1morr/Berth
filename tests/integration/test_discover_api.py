@@ -119,7 +119,6 @@ class TestTrending:
                 "title_en": "Lanterns",
                 "year": 2026,
                 "poster_url": ("https://image.tmdb.org/t/p/w342/gpC7h43xPMEV3goYMQShfJbTtLq.jpg"),
-                "tracked": False,
             },
             {
                 "id": "movie:1108427",
@@ -129,7 +128,6 @@ class TestTrending:
                 "title_en": "Moana",
                 "year": 2026,
                 "poster_url": ("https://image.tmdb.org/t/p/w342/gaet1xQ2nxrG0V1Ep9T20ZMNEIC.jpg"),
-                "tracked": False,
             },
         ]
         assert body["problem"] is None
