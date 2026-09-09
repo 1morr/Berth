@@ -409,3 +409,4 @@
 - 2026-09-09 票 03 code-review：**憑證缺失時同一段話與同一條精靈連結出現兩次**（趨勢一次、熱門一次）。後端維持逐 feed 各回自己的 `problem`（「一個垮掉不影響另一個」要的就是這個），去重放在頁面那一層：兩個 feed 的理由相同時整頁只說一次。
 - 2026-09-09 票 03 code-review：**令牌桶「全域」那一半沒被測到**——原本只測 `TokenBucket` 自己。補了「四支端點各真的呼叫一次 `acquire()`」與「兩個 client 拿到同一個 `_BUCKET`」兩條契約測試。
 - 2026-09-09 票 03 code-review：`services/tmdb.py::_test` 原本偷偷改 `settings.image_base_url`，逼得 `verify_tmdb` 寫兩次設定；改成回 `(step, image_base_url)` 由呼叫端寫回。另外 `_decorate` 的逐欄手抄收成 `DiscoverItem.from_card()`、假憑證字串收進 `tests/conftest.TMDB_API_KEY`、前端測試改用共用的 `discoverWall()`。
+- 2026-09-09 票 03 收尾：演練情境的 TMDB 憑證環境變數從 `BERTH_TMDB_KEY` 改名 `TMDB_API_KEY`，與票 02b 給實驗腳本定的名字合併——同一把 key 兩個名字是本票引入的不一致。根目錄 `.env.example` 補上該欄位並寫明**產品不讀它**（Berth 的唯一來源仍是精靈寫進資料庫的 `settings.services.tmdb.api_key`），跑法沿用專案既有的 `uv run --env-file .env`。

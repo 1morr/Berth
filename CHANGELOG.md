@@ -117,7 +117,8 @@ Windows Docker Desktop（NTFS bind mount）與 Linux（ext4）上各跑一次 `d
 - 探索頁 `/`：趨勢與熱門兩面海報牆（劇集與電影交錯）、鍵入即搜的搜尋（500 ms 防抖、2 字起跳、
   結果接管整面牆）、卡片顯示追蹤狀態，以及 TMDB 條款要求的歸屬聲明與標誌。
 - `scripts/fake_setup_server.py` 新增 `discover` 與 `tmdb-down` 兩個情境；前者打**真的** TMDB
-  （憑證由環境變數 `BERTH_TMDB_KEY` 帶入）。
+  （憑證由環境變數 `TMDB_API_KEY` 帶入，與實驗腳本同一個名字；根目錄的 `.env.example` 有欄位）。
+  **Berth 本身不讀那個變數**——產品的唯一來源仍是精靈寫進資料庫的 `settings.services.tmdb.api_key`。
 
 ### Changed
 

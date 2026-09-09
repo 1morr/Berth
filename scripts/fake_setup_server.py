@@ -291,11 +291,15 @@ def drifted() -> Scenario:
 def discover() -> Scenario:
     """探索頁的正常樣子：打**真的** TMDB。
 
-    憑證從環境變數 `BERTH_TMDB_KEY` 讀（v3 key 或 v4 read access token 都行）。沒設就退回
-    「憑證缺失」那條路徑——那本身也是要驗的畫面之一，所以不必特別處理。
+    憑證從環境變數 `TMDB_API_KEY` 讀（v3 key 或 v4 read access token 都行），與實驗腳本
+    同一個名字——它們要的是同一把 key。沒設就退回「憑證缺失」那條路徑，那本身也是要驗的
+    畫面之一，所以不必特別處理。
+
+    **這不是產品拿憑證的方式**：Berth 自己只從 `settings.services.tmdb.api_key` 讀，
+    由精靈第 6 步寫入（票 02b）。這個環境變數只是替演練情境省下手動跑一次精靈。
     """
     scenario = healthy()
-    scenario.tmdb_credential = os.environ.get("BERTH_TMDB_KEY", "")
+    scenario.tmdb_credential = os.environ.get("TMDB_API_KEY", "")
     scenario.real_tmdb = bool(scenario.tmdb_credential)
     return scenario
 

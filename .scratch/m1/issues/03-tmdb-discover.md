@@ -34,7 +34,7 @@
 ## 實跑結果
 
 `scripts/fake_setup_server.py --scenario discover`（三個服務是替身，TMDB 打**真的**
-`api.themoviedb.org`，憑證由 `BERTH_TMDB_KEY` 帶進去）：
+`api.themoviedb.org`，憑證由 `TMDB_API_KEY` 帶進去）：
 
 | 量的東西 | 結果 |
 | --- | --- |
