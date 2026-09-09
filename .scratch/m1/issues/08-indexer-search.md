@@ -2,7 +2,7 @@
 
 **Status:** ready-for-agent
 
-**Blocked by:** 04（Media 詳情頁的版面）、06（Tags 與預估季集）
+**Blocked by:** 04b（Media 詳情頁的版面與 Route 語意）、06（Tags 與預估季集）
 
 **讀:** plan §6（search 群組）、§8.4、§11.2（T1.2）；brief §13（Media 詳情）
 
