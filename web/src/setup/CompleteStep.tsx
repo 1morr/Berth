@@ -4,7 +4,7 @@ import type { IndexerSetup, RouteSetup } from '../api/setup'
 import { STICKY_ACTION, GhostButton, Notice, PrimaryButton } from '../components/controls'
 import { SIGNAL_FILL } from '../components/signal'
 import { ROUTE_SIGNAL } from '../components/routeChecks'
-import { Cutaway, CutawayRow } from './Cutaway'
+import { Cutaway, CutawayRow } from '../components/Cutaway'
 
 /**
  * 第 8 步：完成（plan §9.3 第 8 步）。

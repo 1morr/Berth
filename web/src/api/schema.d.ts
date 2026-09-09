@@ -169,6 +169,68 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/media/{media_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Media
+         * @description 快照超過 24 小時就順手重抓（plan §8.3）。使用者不必按任何東西。
+         */
+        get: operations["get_media_api_media__media_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/media/{media_id}/track": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Track
+         * @description 把作品交給 Berth 管並選定 Route。**`folder_name` 在這一刻凍結**（plan §5）。
+         *
+         *     重按只是改 Route：Route 不在凍結之列，媒體庫會搬，資料夾名不會。
+         */
+        post: operations["post_track_api_media__media_id__track_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/media/{media_id}/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Refresh
+         * @description 不管幾歲都重抓一次。**不動已經凍結的 `folder_name`**（票 04 驗收）。
+         */
+        post: operations["post_refresh_api_media__media_id__refresh_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/settings/services": {
         parameters: {
             query?: never;
@@ -715,19 +777,26 @@ export interface components {
         DiscoverOut: {
             /** Items */
             items: components["schemas"]["DiscoverItemOut"][];
-            problem: components["schemas"]["DiscoverProblem"] | null;
+            problem: components["schemas"]["TmdbProblem"] | null;
             /** Detail */
             detail: string;
         };
         /**
-         * DiscoverProblem
-         * @description 探索頁拿不到 TMDB 的三種樣子（票 03）。
-         *
-         *     分成三種而不是一句錯誤訊息，是因為**下一步不同**：前兩種要使用者去精靈第 6 步處理憑證，
-         *     第三種只能等或查網路。封閉集合讓 UI 說得出那一步，而不是丟一個空畫面。
-         * @enum {string}
+         * EpisodeOut
+         * @description 一集。
          */
-        DiscoverProblem: "credential_missing" | "credential_rejected" | "unreachable";
+        EpisodeOut: {
+            /** Episode Number */
+            episode_number: number;
+            /** Name */
+            name: string;
+            /** Air Date */
+            air_date: string | null;
+            /** Runtime */
+            runtime: number | null;
+            /** Absolute Number */
+            absolute_number: number | null;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -941,6 +1010,51 @@ export interface components {
          * @enum {string}
          */
         MediaKind: "tv" | "movie";
+        /**
+         * MediaOut
+         * @description 詳情頁的一整份。
+         *
+         *     **拿不到 TMDB 時仍然是 200**，理由放在 `problem`（與探索頁同一個 enum）：存下來的
+         *     快照過期了但仍然是真的季集，畫得出來就該畫出來，只是要說一句「這是舊的」（票 04）。
+         */
+        MediaOut: {
+            /** Id */
+            id: string;
+            /** Tmdb Id */
+            tmdb_id: number;
+            kind: components["schemas"]["MediaKind"];
+            /** Title */
+            title: string;
+            /** Title En */
+            title_en: string;
+            /** Title Original */
+            title_original: string;
+            /** Year */
+            year: number | null;
+            /** First Air Date */
+            first_air_date: string | null;
+            /** Overview */
+            overview: string;
+            /** Poster Url */
+            poster_url: string;
+            /** Runtime */
+            runtime: number | null;
+            /** Folder Name */
+            folder_name: string;
+            /** Tracked */
+            tracked: boolean;
+            /** Default Route Id */
+            default_route_id: number | null;
+            /** Seasons */
+            seasons: components["schemas"]["SeasonOut"][];
+            /** Fetched At */
+            fetched_at: string | null;
+            /** Routes */
+            routes: components["schemas"]["RouteChoiceOut"][];
+            problem: components["schemas"]["TmdbProblem"] | null;
+            /** Detail */
+            detail: string;
+        };
         /** PreferenceDiffOut */
         PreferenceDiffOut: {
             /** Key */
@@ -993,6 +1107,19 @@ export interface components {
          * @enum {string}
          */
         Role: "admin" | "user";
+        /**
+         * RouteChoiceOut
+         * @description 下拉裡的一條 Route。只會出現 `collection_type` 與這部作品相符的。
+         */
+        RouteChoiceOut: {
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /** Slug */
+            slug: string;
+            collection_type: components["schemas"]["CollectionType"];
+        };
         /** RouteOut */
         RouteOut: {
             /** Slug */
@@ -1056,6 +1183,22 @@ export interface components {
              * @default []
              */
             selections?: components["schemas"]["RouteSelectionIn"][];
+        };
+        /**
+         * SeasonOut
+         * @description 一季。`season_number: 0` 是 Specials。
+         */
+        SeasonOut: {
+            /** Season Number */
+            season_number: number;
+            /** Name */
+            name: string;
+            /** Episode Count */
+            episode_count: number;
+            /** Air Date */
+            air_date: string | null;
+            /** Episodes */
+            episodes: components["schemas"]["EpisodeOut"][];
         };
         /** ServiceDetectionOut */
         ServiceDetectionOut: {
@@ -1154,6 +1297,19 @@ export interface components {
          * @enum {string}
          */
         StepStatus: "ok" | "skipped" | "failed" | "running" | "pending";
+        /**
+         * TmdbProblem
+         * @description 向 TMDB 要東西沒要到的四種樣子（票 03 的探索頁、票 04 的 Media 詳情）。
+         *
+         *     分成四種而不是一句錯誤訊息，是因為**下一步不同**：前兩種要使用者去精靈第 6 步處理憑證，
+         *     `unreachable` 只能等或查網路，`not_found` 則是那個 id 本身不存在——重試一百次也一樣。
+         *     封閉集合讓 UI 說得出那一步，而不是丟一個空畫面。
+         *
+         *     一個 enum 而不是每頁一個：兩頁問的是同一台服務，理由與下一步都一樣，
+         *     各寫一份的話「憑證缺失要連到泊位 3」這條規則遲早會在其中一份裡走樣。
+         * @enum {string}
+         */
+        TmdbProblem: "credential_missing" | "credential_rejected" | "unreachable" | "not_found";
         /** TmdbSetupOut */
         TmdbSetupOut: {
             /** Api Key Present */
@@ -1167,6 +1323,16 @@ export interface components {
         TmdbTestIn: {
             /** Api Key */
             api_key: string;
+        };
+        /**
+         * TrackIn
+         * @description 追蹤時要指定的預設 Route。
+         *
+         *     一條相符的 Route 都還沒有的人也追蹤得了（`None`），送單時再回來補（票 09）。
+         */
+        TrackIn: {
+            /** Route Id */
+            route_id?: number | null;
         };
         /** ValidationError */
         ValidationError: {
@@ -1389,6 +1555,103 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HealthDetailOut"];
+                };
+            };
+        };
+    };
+    get_media_api_media__media_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                media_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MediaOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_track_api_media__media_id__track_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                media_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TrackIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MediaOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_refresh_api_media__media_id__refresh_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                media_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MediaOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

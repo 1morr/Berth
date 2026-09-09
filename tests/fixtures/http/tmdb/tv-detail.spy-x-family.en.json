@@ -1,0 +1,468 @@
+{
+  "adult": false,
+  "alternative_titles": {
+    "results": [
+      {
+        "iso_3166_1": "AZ",
+        "title": "Agent x Ailə",
+        "type": ""
+      },
+      {
+        "iso_3166_1": "CN",
+        "title": "间谍家家酒",
+        "type": ""
+      },
+      {
+        "iso_3166_1": "CN",
+        "title": "间谍过家家",
+        "type": ""
+      },
+      {
+        "iso_3166_1": "FR",
+        "title": "Spy X Family",
+        "type": ""
+      },
+      {
+        "iso_3166_1": "HK",
+        "title": "SPYxFAMILY間諜家家酒Season2",
+        "type": ""
+      },
+      {
+        "iso_3166_1": "HK",
+        "title": "SPYFAMILY間諜家家酒Season2",
+        "type": ""
+      },
+      {
+        "iso_3166_1": "HK",
+        "title": "SPY x FAMILY 間諜家家酒 Season 2",
+        "type": ""
+      },
+      {
+        "iso_3166_1": "HK",
+        "title": "SPY FAMILY 間諜家家酒 Season 2",
+        "type": ""
+      },
+      {
+        "iso_3166_1": "IL",
+        "title": "מרגל × משפחה",
+        "type": ""
+      },
+      {
+        "iso_3166_1": "IN",
+        "title": "स्पाई x फैमिली",
+        "type": "देवनागरी"
+      },
+      {
+        "iso_3166_1": "JP",
+        "title": "Spy X Family",
+        "type": "alternative spelling"
+      },
+      {
+        "iso_3166_1": "JP",
+        "title": "スパイファミリー",
+        "type": "katakana"
+      },
+      {
+        "iso_3166_1": "JP",
+        "title": "Spy Family",
+        "type": ""
+      },
+      {
+        "iso_3166_1": "JP",
+        "title": "Spy x Family 2nd",
+        "type": ""
+      },
+      {
+        "iso_3166_1": "JP",
+        "title": "SPY×FAMILY：2022",
+        "type": ""
+      },
+      {
+        "iso_3166_1": "KR",
+        "title": "간첩 가족",
+        "type": ""
+      },
+      {
+        "iso_3166_1": "KR",
+        "title": "스파이×패밀리",
+        "type": ""
+      },
+      {
+        "iso_3166_1": "KR",
+        "title": "스파이 패밀리",
+        "type": ""
+      },
+      {
+        "iso_3166_1": "LY",
+        "title": "عائلة × جاسوس",
+        "type": ""
+      },
+      {
+        "iso_3166_1": "TH",
+        "title": "สปายแฟมิลี่",
+        "type": ""
+      },
+      {
+        "iso_3166_1": "TW",
+        "title": "SPY X FAMILY 間諜家家酒",
+        "type": ""
+      },
+      {
+        "iso_3166_1": "TW",
+        "title": "間諜家家酒",
+        "type": ""
+      },
+      {
+        "iso_3166_1": "TW",
+        "title": "SPY×FAMILY 間諜家家酒 Season 3",
+        "type": ""
+      },
+      {
+        "iso_3166_1": "UA",
+        "title": "Шпигун × Сім’я",
+        "type": "Unofficial Title"
+      },
+      {
+        "iso_3166_1": "UA",
+        "title": "Сім’я шпигуна",
+        "type": "Unofficial Title"
+      },
+      {
+        "iso_3166_1": "UA",
+        "title": "Шпигун × Родина",
+        "type": "Unofficial Title"
+      },
+      {
+        "iso_3166_1": "UA",
+        "title": "Сім'я × Шпигуна",
+        "type": "Manga Title"
+      },
+      {
+        "iso_3166_1": "UA",
+        "title": "Шпигун та сім'я",
+        "type": "Unofficial Title"
+      },
+      {
+        "iso_3166_1": "VN",
+        "title": "Gia Đình Điệp Viên",
+        "type": ""
+      }
+    ]
+  },
+  "backdrop_path": "/lysUnU6V0VfcthDbviuVlIqgHOR.jpg",
+  "created_by": [],
+  "episode_groups": {
+    "results": [
+      {
+        "description": "",
+        "episode_count": 50,
+        "group_count": 4,
+        "id": "63384c066728a8007a216dc4",
+        "name": "Cours",
+        "network": null,
+        "type": 1
+      },
+      {
+        "description": "为了潜入名校，西国能力最强的间谍“黄昏”被下令组建家庭.但是，他的“女儿”居然是能够读取他人内心的超能力者！“妻子”是暗杀者？互相隐藏了真实身份的新家庭，面临考验与世界危机的痛快家庭喜剧就此展开！！",
+        "episode_count": 0,
+        "group_count": 1,
+        "id": "6a10cb0cb8cfc3c3d0a72149",
+        "name": "间谍过家家第1季",
+        "network": null,
+        "type": 1
+      },
+      {
+        "description": "This group will not include special episodes.",
+        "episode_count": 50,
+        "group_count": 1,
+        "id": "689a2aec017d0bc9ecc6fac8",
+        "name": "Absolute Numbering",
+        "network": null,
+        "type": 2
+      },
+      {
+        "description": "",
+        "episode_count": 25,
+        "group_count": 6,
+        "id": "62afe8477f1d83050edf13db",
+        "name": "Blu-ray / DVD",
+        "network": null,
+        "type": 3
+      },
+      {
+        "description": "",
+        "episode_count": 45,
+        "group_count": 19,
+        "id": "6905057fc9e03067f746343e",
+        "name": "Story Arcs",
+        "network": null,
+        "type": 5
+      }
+    ]
+  },
+  "episode_run_time": [
+    24
+  ],
+  "first_air_date": "2022-04-09",
+  "genres": [
+    {
+      "id": 16,
+      "name": "Animation"
+    },
+    {
+      "id": 10759,
+      "name": "Action & Adventure"
+    },
+    {
+      "id": 35,
+      "name": "Comedy"
+    }
+  ],
+  "homepage": "https://spy-family.net/tvseries",
+  "id": 120089,
+  "in_production": false,
+  "languages": [
+    "ja"
+  ],
+  "last_air_date": "2025-12-27",
+  "last_episode_to_air": {
+    "air_date": "2025-12-27",
+    "episode_number": 13,
+    "episode_type": "finale",
+    "id": 6576525,
+    "name": "A World Where We Cannot Survive",
+    "overview": "The battle in the sewers reaches its conclusion and Loid tries to remedy his relationship with Yor.",
+    "production_code": "",
+    "runtime": 24,
+    "season_number": 3,
+    "show_id": 120089,
+    "still_path": "/1cvQvY5xhTP25KTEVFXVa53VsBT.jpg",
+    "vote_average": 7.9,
+    "vote_count": 7
+  },
+  "name": "SPY x FAMILY",
+  "networks": [
+    {
+      "id": 98,
+      "logo_path": "/jnuO8pZNEBLEq5YaOP1f5OkmG91.png",
+      "name": "TV Tokyo",
+      "origin_country": "JP"
+    },
+    {
+      "id": 252,
+      "logo_path": "/zFZ5KCuvx7K0vP9XgGcidfXjuUd.png",
+      "name": "TV Aichi",
+      "origin_country": "JP"
+    },
+    {
+      "id": 822,
+      "logo_path": "/gOlBe3BMo5WJHeUlWBBfKawgdiO.png",
+      "name": "TVQ",
+      "origin_country": "JP"
+    },
+    {
+      "id": 824,
+      "logo_path": "/6foQmoPac7WCDnDuDbuCZklmDuA.png",
+      "name": "TV Osaka",
+      "origin_country": "JP"
+    },
+    {
+      "id": 938,
+      "logo_path": "/f12LLqBVFnDVIY8HidhWEitI77c.png",
+      "name": "TVh",
+      "origin_country": "JP"
+    },
+    {
+      "id": 2064,
+      "logo_path": "/qi4L1ffRabF5LJqVimCaaUYpeSj.png",
+      "name": "TSC",
+      "origin_country": "JP"
+    }
+  ],
+  "next_episode_to_air": null,
+  "number_of_episodes": 50,
+  "number_of_seasons": 3,
+  "origin_country": [
+    "JP"
+  ],
+  "original_language": "ja",
+  "original_name": "SPY×FAMILY",
+  "overview": "A spy, an assassin and a telepath come together to pose as a family, each for their own reasons, while hiding their true identities from each other.",
+  "popularity": 55.5577,
+  "poster_path": "/7NAvPYPAu7MeHwP8E9sn81PqsRh.jpg",
+  "production_companies": [
+    {
+      "id": 31058,
+      "logo_path": "/1vwZPG0zMVRvThCY8Lljh0ppxQo.png",
+      "name": "WIT STUDIO",
+      "origin_country": "JP"
+    },
+    {
+      "id": 121589,
+      "logo_path": "/kZvTniBgpTzAThHCa0OZ1FJtRjy.png",
+      "name": "CloverWorks",
+      "origin_country": "JP"
+    },
+    {
+      "id": 12655,
+      "logo_path": "/dfGqf2NoMVPrDywDL90D5HAhBlW.png",
+      "name": "Shogakukan-Shueisha Productions",
+      "origin_country": "JP"
+    },
+    {
+      "id": 3034,
+      "logo_path": "/jnuO8pZNEBLEq5YaOP1f5OkmG91.png",
+      "name": "TV Tokyo",
+      "origin_country": "JP"
+    },
+    {
+      "id": 2918,
+      "logo_path": "/gyEWUBWwqrm3H5T2hkERD9LxpOq.png",
+      "name": "Shueisha",
+      "origin_country": "JP"
+    },
+    {
+      "id": 882,
+      "logo_path": "/fRSWWjquvzcHjACbtF53utZFIll.png",
+      "name": "TOHO",
+      "origin_country": "JP"
+    }
+  ],
+  "production_countries": [
+    {
+      "iso_3166_1": "JP",
+      "name": "Japan"
+    }
+  ],
+  "seasons": [
+    {
+      "air_date": "2023-07-28",
+      "episode_count": 3,
+      "id": 371564,
+      "name": "Specials",
+      "overview": "",
+      "poster_path": "/goSNF7W8pJI3RlHk1CSMv0YZvwL.jpg",
+      "season_number": 0,
+      "vote_average": 0.0
+    },
+    {
+      "air_date": "2022-04-09",
+      "episode_count": 25,
+      "id": 184428,
+      "name": "Season 1",
+      "overview": "A spy, an assassin and a telepath come together to pose as a family, each for their own reasons, while hiding their true identities from each other.",
+      "poster_path": "/l5YWziTwsLMkpSyWGx149uidb8m.jpg",
+      "season_number": 1,
+      "vote_average": 7.8
+    },
+    {
+      "air_date": "2023-10-07",
+      "episode_count": 12,
+      "id": 342836,
+      "name": "Season 2",
+      "overview": "Yor and Loid may be keeping their true identities from each other, but telepathic Anya knows everything. Now, as they set sail on a luxury cruise, Yor must stop a group of assassins from reaching their target—while Loid struggles with a different mission altogether: figuring out what a good father is supposed to do on vacation.",
+      "poster_path": "/4zWbXIrCMMnXHktdHtrNkOV1eYH.jpg",
+      "season_number": 2,
+      "vote_average": 7.6
+    },
+    {
+      "air_date": "2025-10-04",
+      "episode_count": 13,
+      "id": 397697,
+      "name": "Season 3",
+      "overview": "The cold war between Ostania and Westalis continues with a terrible strawberry shortage. Fiona Frost, AKA Nightfall, tries to solve the crisis before it becomes too much. Perhaps, the bigger question is whether or not the entire Forger family can thwart an enraged construction worker from going on a rampage without letting each other in on their secrets.",
+      "poster_path": "/dAJMMOtzTDw8sObrvY26JLMTMRU.jpg",
+      "season_number": 3,
+      "vote_average": 7.7
+    }
+  ],
+  "softcore": false,
+  "spoken_languages": [
+    {
+      "english_name": "Japanese",
+      "iso_639_1": "ja",
+      "name": "日本語"
+    }
+  ],
+  "status": "Ended",
+  "tagline": "The father... a spy. The mother... an assassin. The daughter... a telepath.",
+  "translations": {
+    "translations": [
+      {
+        "data": {
+          "homepage": "",
+          "name": "SPY x FAMILY",
+          "overview": "El espía \"Twilight\" recibe la misión de infiltrarse en la familia de un líder político. Para ello, crea una falsa familia con una hija que lee mentes y una esposa asesina, mientras ocultan sus secretos y viven juntos en una aventura peligrosa para mantener la paz mundial.",
+          "tagline": "El padre... un espía. La madre... una asesina. La hija... una telépata."
+        },
+        "english_name": "Spanish",
+        "iso_3166_1": "ES",
+        "iso_639_1": "es",
+        "name": "Español"
+      },
+      {
+        "data": {
+          "homepage": "",
+          "name": "SPY x FAMILY",
+          "overview": "A spy, an assassin and a telepath come together to pose as a family, each for their own reasons, while hiding their true identities from each other.",
+          "tagline": "The father... a spy. The mother... an assassin. The daughter... a telepath."
+        },
+        "english_name": "English",
+        "iso_3166_1": "US",
+        "iso_639_1": "en",
+        "name": "English"
+      },
+      {
+        "data": {
+          "homepage": "",
+          "name": "",
+          "overview": "人はみな　誰にも見せぬ自分を　持っている――世界各国が水面下で熾烈な情報戦を繰り広げていた時代。東国(オスタニア)と西国(ウェスタリス)は、十数年間にわたる冷戦状態にあった。西国の情報局対東課〈WISE〉所属である凄腕スパイの〈黄昏〉は、東西平和を脅かす危険人物、東国の国家統一党総裁ドノバン・デズモンドの動向を探るため、ある極秘任務を課せられる。その名も、オペレーション〈梟〉。内容は、“一週間以内に家族を作り、デズモンドの息子が通う名門校の懇親会に潜入せよ”。〈黄昏〉は、精神科医ロイド・フォージャーに扮し、家族を作ることに。だが、彼が出会った娘・アーニャは心を読むことができる超能力者、妻・ヨルは殺し屋だった！3人の利害が一致したことで、お互いの正体を隠しながら共に暮らすこととなる。ハプニング連続の仮初めの家族に、世界の平和は託された――。",
+          "tagline": "秘密だらけの家族に世界の命運は託された⁉"
+        },
+        "english_name": "Japanese",
+        "iso_3166_1": "JP",
+        "iso_639_1": "ja",
+        "name": "日本語"
+      },
+      {
+        "data": {
+          "homepage": "",
+          "name": "스파이 패밀리",
+          "overview": "사람은 누구나 아무에게도 보여줄 수 없는 자신을 갖고 있다. 세계 각국이 물밑에서 치열하게 정보전을 펼치는 시대. 오스타니아와 웨스탈리스는 십수 년간에 걸쳐 냉전 상태에 있었다. 웨스탈리스의 정보국 대동과 'WISE' 소속의 수완가 스파이인 '황혼' 은 동서 평화를 위협하는 위험인물, 오스타니아의 국가통일당 총재 도노반 데스몬드의 동향을 살피기 위해 어떤 극비 임무를 수행하게 된다. 그 이름은 오퍼레이션 '올빼미'. 임무 내용은 \"일주일 이내에 가족을 만들어, 데스몬드의 아들이 다니는 명문 학교의 친목회에 잠입하라\". '황혼' 은 정신과 의사 로이드 포저로 위장하고 가족을 만들게 된다. 하지만, 그가 만난 딸 아냐는 마음을 읽을 수 있는 초능력자, 아내 요르는 암살자였다! 3명의 이해가 일치하여 서로 정체를 숨기면서 함께 생활하게 되는데. 해프닝 연속인 임시 가족에게, 세계의 평화는 맡겨졌다.",
+          "tagline": "스파이, 암살자 그리고 초능력자. 각자 다른 사정이 있는 세 사람이 서로에게 정체를 숨기고 가상 가족을 결성한다."
+        },
+        "english_name": "Korean",
+        "iso_3166_1": "KR",
+        "iso_639_1": "ko",
+        "name": "한국어/조선말"
+      },
+      {
+        "data": {
+          "homepage": "",
+          "name": "SPY x FAMILY",
+          "overview": "Zur Zeit eines Kalten Kriegs kann jeder noch so kleine Konflikt zu einem destruktiven Pulverfass werden – und niemand weiß das besser als der Geheimagent Twilight. Viele Male hat er verhindert, dass die bereits angespannte Beziehung seiner Heimat Westalis mit seinem Nachbarn Ostania eskaliert. Doch sein neuster Auftrag hat es in sich: Er muss kompromittierendes Material über einen ostanischen Politiker erlangen. Doch leider lebt dieser sehr zurückgezogen und so bleibt Twilight nichts anderes übrig, als über seinen Sohn und dessen Privatschule an ihn heranzukommen. Und als wäre es für den gesellschaftlich wenig bewanderten Agenten nicht schon schwer genug, den Anschein einer elitären Familie zu wahren, wählt er unwissentlich eine professionelle Auftragskillerin als Ehefrau aus, gepaart mit einer telepathisch begabten Adoptivtochter. Können die drei ihr Leben als Scheinfamilie bewältigen, ohne sich gegenseitig auf die Schliche zu kommen oder gar einen Weltkrieg auszulösen?",
+          "tagline": ""
+        },
+        "english_name": "German",
+        "iso_3166_1": "DE",
+        "iso_639_1": "de",
+        "name": "Deutsch"
+      },
+      {
+        "data": {
+          "homepage": "",
+          "name": "间谍过家家",
+          "overview": "为了潜入名校，西国能力最强的间谍“黄昏”被下令组建家庭。但是，他的“女儿”居然是能够读取他人内心的超能力者！“妻子”是暗杀者？互相隐藏了真实身份的新家庭，面临考验与世界危机的痛快家庭喜剧就此展开！",
+          "tagline": ""
+        },
+        "english_name": "Mandarin",
+        "iso_3166_1": "CN",
+        "iso_639_1": "zh",
+        "name": "普通话"
+      }
+    ]
+  },
+  "type": "Scripted",
+  "vote_average": 8.507,
+  "vote_count": 2342
+}

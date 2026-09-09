@@ -1,6 +1,8 @@
+import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 
 import type { DiscoverItem } from '../api/discover'
+import { KIND_CODE } from '../components/kind'
 
 /**
  * 牆上的一格（`.scratch/m1/discover-shape.md` §3）。
@@ -9,14 +11,19 @@ import type { DiscoverItem } from '../api/discover'
  * 所以帶子上沒有散文：類型代號、年份、標題、原文標題，全部貼在自己那一行（The Values Sit On
  * Their Line Rule）。
  *
- * **這一票裡它不是連結**：`/media/:id` 要到票 04 才存在，而一個點下去沒反應的格子比一個不能點的
- * 格子更糟。票 04 把整格包成連結時，hover / focus 的處理是邊框由 `rule` 換 `rule-strong`。
+ * **整格是一個連結**（票 04 接手了票 03 留下的那條線）：hover / focus 時邊框由 `rule` 換
+ * `rule-strong`——線變重，不是變色，與 GhostButton 同一條規則。整格可點是因為手指點得到的
+ * 目標要夠大，而不是只有標題那一行。
  */
 export function MediaTile({ item }: { item: DiscoverItem }) {
   const { t } = useTranslation()
 
   return (
-    <article className="grid grid-rows-[auto_1fr] border-2 border-rule bg-well">
+    <Link
+      to="/media/$mediaId"
+      params={{ mediaId: item.id }}
+      className="grid grid-rows-[auto_1fr] border-2 border-rule bg-well hover:border-rule-strong"
+    >
       <div className="relative aspect-[2/3] bg-hull">
         {item.poster_url ? (
           // 標題就在下面那一行，所以海報是裝飾性的——給它 alt 只會讓螢幕閱讀器把同一個名字唸兩次。
@@ -55,19 +62,9 @@ export function MediaTile({ item }: { item: DiscoverItem }) {
           <p className="value line-clamp-1 text-xs text-ink-dim">{item.title_en}</p>
         )}
       </div>
-    </article>
+    </Link>
   )
 }
-
-/**
- * 類型代號不走 i18n：它與 `BTH 1` 同一個語域——分類代號在哪個語言都是同一串字母
- * （`.scratch/m1/discover-shape.md` §8）。走 `.value` 而不是 `.label`，因為 `.label` 會把
- * 拉丁字母大寫掉，而這兩個字串本來就是大寫的代號，套上去只是多一層會說謊的處理。
- */
-const KIND_CODE = { tv: 'TV', movie: 'MOVIE' } as const satisfies Record<
-  DiscoverItem['kind'],
-  string
->
 
 /** 讀取中的格子：海報位留一個空位，標識帶留兩條線。**不會動**——這個世界沒有骨架屏動畫。 */
 export function TilePlaceholder() {

@@ -24,11 +24,15 @@ class MediaKind(StrEnum):
     MOVIE = "movie"
 
 
-class DiscoverProblem(StrEnum):
-    """探索頁拿不到 TMDB 的三種樣子（票 03）。
+class TmdbProblem(StrEnum):
+    """向 TMDB 要東西沒要到的四種樣子（票 03 的探索頁、票 04 的 Media 詳情）。
 
-    分成三種而不是一句錯誤訊息，是因為**下一步不同**：前兩種要使用者去精靈第 6 步處理憑證，
-    第三種只能等或查網路。封閉集合讓 UI 說得出那一步，而不是丟一個空畫面。
+    分成四種而不是一句錯誤訊息，是因為**下一步不同**：前兩種要使用者去精靈第 6 步處理憑證，
+    `unreachable` 只能等或查網路，`not_found` 則是那個 id 本身不存在——重試一百次也一樣。
+    封閉集合讓 UI 說得出那一步，而不是丟一個空畫面。
+
+    一個 enum 而不是每頁一個：兩頁問的是同一台服務，理由與下一步都一樣，
+    各寫一份的話「憑證缺失要連到泊位 3」這條規則遲早會在其中一份裡走樣。
     """
 
     #: `settings.services.tmdb.api_key` 是空的。連線都不必發（brief §16.3）。
@@ -37,6 +41,8 @@ class DiscoverProblem(StrEnum):
     CREDENTIAL_REJECTED = "credential_rejected"
     #: 連不上、逾時，或回的東西不是 TMDB。
     UNREACHABLE = "unreachable"
+    #: TMDB 回 404：這個 id 上面沒有作品。只有詳情頁到得了這一種（票 04）。
+    NOT_FOUND = "not_found"
 
 
 class CollectionType(StrEnum):
@@ -44,6 +50,15 @@ class CollectionType(StrEnum):
 
     MOVIES = "movies"
     TVSHOWS = "tvshows"
+
+
+def collection_type_for(kind: MediaKind) -> CollectionType:
+    """一部作品進得了哪一種媒體庫。
+
+    劇集不能送進 movies 媒體庫：命名模板不同（plan §5），而 Jellyfin 會把它掃成一堆電影。
+    這是規則不是巧合，所以住在 `domain/` 而不是兩個呼叫端各判一次。
+    """
+    return CollectionType.TVSHOWS if kind is MediaKind.TV else CollectionType.MOVIES
 
 
 class Profile(StrEnum):

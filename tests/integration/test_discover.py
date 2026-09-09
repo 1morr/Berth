@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from berth.adapters.http import AuthFailedError, ServiceUnavailableError
 from berth.adapters.tmdb import TmdbConfiguration, TmdbEntry
 from berth.adapters.tmdb.fake import FakeTmdbClient
-from berth.domain import DiscoverProblem, MediaKind
+from berth.domain import MediaKind, TmdbProblem
 from berth.models import Media, TmdbCache, TmdbSettings, media_id
 from berth.services.discover import (
     CACHE_TTL,
@@ -298,7 +298,7 @@ class TestProblems:
         client = tmdb()
         result = await read_trending(session, FakeClientFactory(tmdb=client))
 
-        assert result.problem is DiscoverProblem.CREDENTIAL_MISSING
+        assert result.problem is TmdbProblem.CREDENTIAL_MISSING
         assert client.requests == []
 
     async def test_a_rejected_credential_is_told_apart_from_a_missing_one(
@@ -308,7 +308,7 @@ class TestProblems:
         client.error = AuthFailedError("GET /trending/tv/week: 401")
         result = await read_trending(session, await credentialled(session, client))
 
-        assert result.problem is DiscoverProblem.CREDENTIAL_REJECTED
+        assert result.problem is TmdbProblem.CREDENTIAL_REJECTED
         assert result.detail == "GET /trending/tv/week: 401"
 
     async def test_an_unreachable_tmdb_is_its_own_problem(self, session: AsyncSession) -> None:
@@ -317,7 +317,7 @@ class TestProblems:
         client.error = ServiceUnavailableError("GET /trending/tv/week: connection refused")
         result = await read_trending(session, await credentialled(session, client))
 
-        assert result.problem is DiscoverProblem.UNREACHABLE
+        assert result.problem is TmdbProblem.UNREACHABLE
         assert result.items == ()
 
     async def test_a_failed_fetch_leaves_no_cache_row(self, session: AsyncSession) -> None:

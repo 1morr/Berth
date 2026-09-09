@@ -70,7 +70,7 @@ describe('探索頁', () => {
     renderApp('/')
     await screen.findByText('綠燈軍團')
 
-    const card = section('本週趨勢').getByRole('article')
+    const card = section('本週趨勢').getByRole('link')
 
     expect(within(card).getByText('綠燈軍團')).toBeInTheDocument()
     expect(within(card).getByText('Lanterns')).toBeInTheDocument()
@@ -109,10 +109,20 @@ describe('探索頁', () => {
     renderApp('/')
     await screen.findByText('綠燈軍團')
 
-    const card = section('本週趨勢').getByRole('article')
+    const card = section('本週趨勢').getByRole('link')
 
     expect(within(card).getByRole('presentation')).toHaveAttribute('alt', '')
     expect(within(card).queryByRole('img')).not.toBeInTheDocument()
+  })
+
+  it('**整格是一個連結**，連到那部作品的詳情頁（票 04 接手票 03 留下的那條線）', async () => {
+    render()
+    renderApp('/')
+    await screen.findByText('綠燈軍團')
+
+    const card = section('本週趨勢').getByRole('link')
+
+    expect(card).toHaveAttribute('href', '/media/tv%3A95350')
   })
 
   it('TMDB 的歸屬聲明與標誌永遠在頁面上（brief §20.3 的條款要求）', async () => {

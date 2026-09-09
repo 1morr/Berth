@@ -2,7 +2,7 @@ import { useId, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import type { Discover } from '../api/discover'
-import { DiscoverNotice } from './DiscoverNotice'
+import { TmdbNotice } from '../components/TmdbNotice'
 import { MediaTile, TilePlaceholder } from './MediaTile'
 
 /** 讀取中先畫幾格空位。夠填滿桌機第一屏，版面才不會在圖到齊時整個往下跳。 */
@@ -59,7 +59,7 @@ export function MediaWall({
           ))}
         </Grid>
       ) : result?.problem ? (
-        <DiscoverNotice problem={result.problem} detail={result.detail} onRetry={onRetry} />
+        <TmdbNotice problem={result.problem} detail={result.detail} onRetry={onRetry} />
       ) : result && result.items.length > 0 ? (
         <Grid>
           {result.items.map((item) => (

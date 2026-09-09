@@ -2,7 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import type { AdminInput, SetupStatus } from '../api/setup'
-import { Cutaway, CutawayRow } from './Cutaway'
+import { Cutaway, CutawayRow } from '../components/Cutaway'
 import {
   STICKY_ACTION,
   Checkbox,

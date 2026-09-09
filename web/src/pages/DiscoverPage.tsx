@@ -9,7 +9,7 @@ import {
   trendingQueryOptions,
 } from '../api/discover'
 import { Field, GhostButton } from '../components/controls'
-import { DiscoverNotice } from '../discover/DiscoverNotice'
+import { TmdbNotice } from '../components/TmdbNotice'
 import { MediaWall } from '../discover/MediaWall'
 import tmdbLogo from '../assets/tmdb.svg'
 
@@ -79,7 +79,7 @@ export function DiscoverPage() {
           onRetry={retry}
         />
       ) : shared ? (
-        <DiscoverNotice problem={shared.problem} detail={shared.detail} onRetry={retry} />
+        <TmdbNotice problem={shared.problem} detail={shared.detail} onRetry={retry} />
       ) : (
         <>
           <MediaWall

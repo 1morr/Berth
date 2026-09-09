@@ -73,14 +73,28 @@ plan §9.4 的九步之後那台伺服器的狀態，不是手排出來的場景
 | `tmdb/search-multi.spy-x-family.{en,zh}.json` | `GET /3/search/multi?query=spy%20x%20family&include_adult=false&language=…`。整份就是 2 筆（一劇一影），未裁剪；`zh` 那一輪是顯示用標題的證據 |
 | `tmdb/search-multi.miyazaki.en.json` | 同一支端點，`?query=miyazaki`。20 筆裡 16 筆是 `person`，只留前 8 筆——人物要被丟掉這件事靠它釘住 |
 
+2026-09-09（票 04），對真的 `api.themoviedb.org` 錄的，同一把使用者自備的憑證。這一組是 Media 詳情
+用的四支端點，作品選 SPY×FAMILY（有 Absolute group）與海洋奇緣 2（電影）：
+
+| 檔案 | 來源 |
+| --- | --- |
+| `tmdb/tv-detail.spy-x-family.{en,zh}.json` | `GET /3/tv/120089?language={en-US,zh-TW}`，英文那一份帶 `append_to_response=alternative_titles,translations,episode_groups`。`translations.translations` 裁到前 6 筆。它同時是「一部作品可以有五個 episode group」的證據——只有 `type: 2` 那一個是絕對編號 |
+| `tmdb/tv-season.spy-x-family.s02.json` | `GET /3/tv/120089/season/2?language=en-US`。12 集全留，但每一集的 `crew` 與 `guest_stars` 拿掉了（整份 260 KB，adapter 一個欄位都不讀） |
+| `tmdb/tv-season.spy-x-family.s00.json` | 同上，`season/0`。`season_number: 0` 是 Specials，它是一季不是特例 |
+| `tmdb/tv-episode-group.spy-x-family.absolute.json` | `GET /3/tv/episode_group/689a2aec017d0bc9ecc6fac8`。`groups[0].episodes` 裁到前 30 筆——第 25 筆（`order: 24`）是 S01E25、第 26 筆（`order: 25`）是 S02E01，跨季那一步正是絕對編號要守的行為 |
+| `tmdb/movie-detail.moana-2.{en,zh}.json` | `GET /3/movie/1241982?language=…`，英文那一份帶 `append_to_response=alternative_titles,translations`（同樣裁到前 6 筆翻譯）。電影有 `runtime`、沒有 `seasons` |
+| `tmdb/tv-detail.not-found.json` | `GET /3/tv/99999999`，回 404 與 `status_code: 34`。「這個 id 不存在」與「TMDB 壞了」的下一步不同，所以它有自己的一份 |
+
 重錄的指令（`$TOKEN` 是自己的 v4 read access token 或 v3 key）：
 
 ```bash
 curl -s -H "Authorization: Bearer $TOKEN"   "https://api.themoviedb.org/3/trending/tv/week?language=en-US"
 ```
 
-裁剪只砍 `results` 的尾巴，不改任何一筆的內容；重新輸出時用 `json.dumps(payload, indent=2,
-ensure_ascii=False, sort_keys=True)`，與 `configuration.json` 那一份同一個格式。
+裁剪只砍陣列的尾巴（`results`、`episodes`、`translations`），不改任何一筆的內容；重新輸出時用
+`json.dumps(payload, indent=2, ensure_ascii=False, sort_keys=True)`，與 `configuration.json` 那一份
+同一個格式。**唯一的例外**是季那兩份：每一集的 `crew` 與 `guest_stars` 整欄拿掉，因為它們佔掉整份
+檔案的 96%（260 KB → 9 KB）而 adapter 一個欄位都不讀；留下來的欄位仍然多過它讀的那五個。
 
 ## 規則
 

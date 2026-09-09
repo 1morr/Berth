@@ -1,0 +1,231 @@
+{
+  "adult": false,
+  "alternative_titles": {
+    "titles": [
+      {
+        "iso_3166_1": "BR",
+        "title": "Moana: Um Mar de Aventuras 2",
+        "type": ""
+      },
+      {
+        "iso_3166_1": "BY",
+        "title": "Маана 2",
+        "type": ""
+      },
+      {
+        "iso_3166_1": "JP",
+        "title": "モアナ２",
+        "type": "working title"
+      },
+      {
+        "iso_3166_1": "CN",
+        "title": "莫阿娜2",
+        "type": ""
+      },
+      {
+        "iso_3166_1": "TW",
+        "title": "海洋奇緣2",
+        "type": ""
+      },
+      {
+        "iso_3166_1": "AM",
+        "title": "Մոանա 2",
+        "type": ""
+      },
+      {
+        "iso_3166_1": "CN",
+        "title": "海洋奇缘2",
+        "type": ""
+      },
+      {
+        "iso_3166_1": "SA",
+        "title": "موانا ٢",
+        "type": ""
+      },
+      {
+        "iso_3166_1": "UY",
+        "title": "Moana 2",
+        "type": ""
+      },
+      {
+        "iso_3166_1": "FR",
+        "title": "Vaiana 2",
+        "type": ""
+      },
+      {
+        "iso_3166_1": "RS",
+        "title": "Vajana 2",
+        "type": ""
+      },
+      {
+        "iso_3166_1": "CL",
+        "title": "Moana 2",
+        "type": ""
+      }
+    ]
+  },
+  "backdrop_path": "/vYqt6kb4lcF8wwqsMMaULkP9OEn.jpg",
+  "belongs_to_collection": {
+    "backdrop_path": "/4OgaftFNqtE1UvfDDb2Eov7A5Rz.jpg",
+    "id": 1241984,
+    "name": "Moana Collection",
+    "poster_path": "/jjlmK4jA7XCFztNlmYkO4u0Mqv4.jpg"
+  },
+  "budget": 150000000,
+  "genres": [
+    {
+      "id": 12,
+      "name": "Adventure"
+    },
+    {
+      "id": 16,
+      "name": "Animation"
+    },
+    {
+      "id": 35,
+      "name": "Comedy"
+    },
+    {
+      "id": 10751,
+      "name": "Family"
+    },
+    {
+      "id": 14,
+      "name": "Fantasy"
+    }
+  ],
+  "homepage": "https://movies.disney.com/moana-2",
+  "id": 1241982,
+  "imdb_id": "tt13622970",
+  "origin_country": [
+    "US"
+  ],
+  "original_language": "en",
+  "original_title": "Moana 2",
+  "overview": "After receiving an unexpected call from her wayfinding ancestors, Moana journeys alongside Maui and a new crew to the far seas of Oceania and into dangerous, long-lost waters for an adventure unlike anything she's ever faced.",
+  "popularity": 30.0087,
+  "poster_path": "/aLVkiINlIeCkcZIzb7XHzPYgO6L.jpg",
+  "production_companies": [
+    {
+      "id": 6125,
+      "logo_path": "/8bH86UPmMP8hlITzXV3XgV9eaAc.png",
+      "name": "Walt Disney Animation Studios",
+      "origin_country": "US"
+    },
+    {
+      "id": 158526,
+      "logo_path": "/tzsMJBJZINu7GHzrpYzpReWhh66.png",
+      "name": "Walt Disney Animation Studios",
+      "origin_country": "CA"
+    }
+  ],
+  "production_countries": [
+    {
+      "iso_3166_1": "CA",
+      "name": "Canada"
+    },
+    {
+      "iso_3166_1": "US",
+      "name": "United States of America"
+    }
+  ],
+  "release_date": "2024-11-21",
+  "revenue": 1059242164,
+  "runtime": 100,
+  "softcore": false,
+  "spoken_languages": [
+    {
+      "english_name": "English",
+      "iso_639_1": "en",
+      "name": "English"
+    }
+  ],
+  "status": "Released",
+  "tagline": "The ocean is calling them back.",
+  "title": "Moana 2",
+  "translations": {
+    "translations": [
+      {
+        "data": {
+          "homepage": "https://movies.disney.com/moana-2",
+          "overview": "After receiving an unexpected call from her wayfinding ancestors, Moana journeys alongside Maui and a new crew to the far seas of Oceania and into dangerous, long-lost waters for an adventure unlike anything she's ever faced.",
+          "runtime": 100,
+          "tagline": "The ocean is calling them back.",
+          "title": ""
+        },
+        "english_name": "English",
+        "iso_3166_1": "US",
+        "iso_639_1": "en",
+        "name": "English"
+      },
+      {
+        "data": {
+          "homepage": "",
+          "overview": "Vaiana, která zcela neočekávané obdrží žádost o pomoc od svých odvážných předků, se společně s Mauim a zcela novou posádkou vydává na pouť po mořských dálavách Oceánie do nebezpečných a dávno zapomenutých vod, kde na ni čeká dobrodružství plné nástrah, s jakými se dosud nikdy nesetkala.",
+          "runtime": 0,
+          "tagline": "",
+          "title": "Odvážná Vaiana 2"
+        },
+        "english_name": "Czech",
+        "iso_3166_1": "CZ",
+        "iso_639_1": "cs",
+        "name": "Český"
+      },
+      {
+        "data": {
+          "homepage": "",
+          "overview": "A tre anni dal suo primo viaggio, Vaiana è impegnata in un lungo viaggio alla ricerca di persone oltre le coste di Motunui. Assieme a Maui e a un nuovissimo equipaggio di improbabili marittimi, Vaiana si imbarca alla volta dei lontani mari dell'Oceania in acque pericolose per un'avventura diversa da qualsiasi cosa abbia mai affrontato.",
+          "runtime": 100,
+          "tagline": "L'oceano li sta richiamando.",
+          "title": "Oceania 2"
+        },
+        "english_name": "Italian",
+        "iso_3166_1": "IT",
+        "iso_639_1": "it",
+        "name": "Italiano"
+      },
+      {
+        "data": {
+          "homepage": "https://tickets.disney.com.br/moana-2",
+          "overview": "Depois de receber um chamado inesperado de seus ancestrais navegadores, Moana vai viajar para mares distantes da Oceania, em águas perdidas em uma aventura perigosa.",
+          "runtime": 100,
+          "tagline": "Encontre o seu caminho. Encontre a sua força. Encontre a sua vocação.",
+          "title": ""
+        },
+        "english_name": "Portuguese",
+        "iso_3166_1": "BR",
+        "iso_639_1": "pt",
+        "name": "Português"
+      },
+      {
+        "data": {
+          "homepage": "",
+          "overview": "Después de recibir una llamada inesperada de sus antepasados ​​navegantes, Moana viajará a los lejanos mares de Oceanía, donde vivirá una peligrosa aventura con su nueva tripulación.",
+          "runtime": 0,
+          "tagline": "El océano los está llamando.",
+          "title": ""
+        },
+        "english_name": "Spanish",
+        "iso_3166_1": "MX",
+        "iso_639_1": "es",
+        "name": "Español"
+      },
+      {
+        "data": {
+          "homepage": "",
+          "overview": "바다를 누볐던 선조들에게서 예기치 못한 부름을 받은 모아나가 마우이와 다시 만나 새로운 선원들과 함께 오랫동안 잊혀진 멀고 위험한 바다 너머로 떠나는 특별한 모험을 담은 이야기",
+          "runtime": 0,
+          "tagline": "바다 저 너머 새로운 항해가 시작된다!",
+          "title": "모아나 2"
+        },
+        "english_name": "Korean",
+        "iso_3166_1": "KR",
+        "iso_639_1": "ko",
+        "name": "한국어/조선말"
+      }
+    ]
+  },
+  "video": false,
+  "vote_average": 6.991,
+  "vote_count": 3269
+}

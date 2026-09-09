@@ -7,7 +7,7 @@ import { STICKY_ACTION, Checkbox, GhostButton, Notice, PrimaryButton } from '../
 import { ROUTE_HEALTH_LABEL, ROUTE_SIGNAL } from '../components/routeChecks'
 import { RouteCheckList } from '../components/RouteCheckList'
 import { SIGNAL_FILL } from '../components/signal'
-import { Cutaway, CutawayRow } from './Cutaway'
+import { Cutaway, CutawayRow } from '../components/Cutaway'
 
 /**
  * 泊位 4：媒體庫路徑 → Library Route（plan §9.3 第 7 步、§9.5）。

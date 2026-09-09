@@ -4,7 +4,6 @@ from berth.domain.enums import (
     PROWLARR_LOGIN_STEP,
     CollectionType,
     DetectionReason,
-    DiscoverProblem,
     HealthStatus,
     IndexerKind,
     JellyfinStep,
@@ -16,22 +15,29 @@ from berth.domain.enums import (
     ServiceKind,
     ServiceOrigin,
     StepStatus,
+    TmdbProblem,
+    collection_type_for,
 )
+from berth.domain.media import EpisodeSnapshot, MediaSnapshot, SeasonSnapshot
 
 __all__ = [
     "PROWLARR_LOGIN_STEP",
     "CollectionType",
     "DetectionReason",
-    "DiscoverProblem",
+    "EpisodeSnapshot",
     "HealthStatus",
     "IndexerKind",
     "JellyfinStep",
     "MediaKind",
+    "MediaSnapshot",
     "Profile",
     "QbittorrentStep",
     "Role",
     "RouteCheck",
+    "SeasonSnapshot",
     "ServiceKind",
     "ServiceOrigin",
     "StepStatus",
+    "TmdbProblem",
+    "collection_type_for",
 ]

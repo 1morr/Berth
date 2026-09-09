@@ -12,7 +12,7 @@ import {
   PrimaryButton,
 } from '../components/controls'
 import { SIGNAL_FILL } from '../components/signal'
-import { Cutaway, CutawayRow } from './Cutaway'
+import { Cutaway, CutawayRow } from '../components/Cutaway'
 import { StepLine } from '../components/StepLine'
 
 /** 使用者去申請 key 的那一頁。連結與可複製的網址用的是同一個字串。 */

@@ -10,6 +10,7 @@ import json
 import socket
 import urllib.parse
 from collections.abc import Awaitable, Callable
+from datetime import date
 
 import httpx
 import pytest
@@ -18,6 +19,7 @@ import respx
 from berth.adapters.http import (
     DEFAULT_TIMEOUT_SECONDS,
     AuthFailedError,
+    NotFoundError,
     ProtocolMismatchError,
     ServiceBusyError,
     ServiceNotDeployedError,
@@ -34,7 +36,7 @@ from berth.adapters.prowlarr import (
 from berth.adapters.prowlarr.client import SCHEMA_TIMEOUT_SECONDS, HttpProwlarrClient
 from berth.adapters.qbittorrent.client import HttpQbittorrentClient
 from berth.adapters.rate import TokenBucket
-from berth.adapters.tmdb import TmdbEntry
+from berth.adapters.tmdb import TmdbEntry, parse_absolute_ordering
 from berth.adapters.tmdb.client import RATE_PER_SECOND, HttpTmdbClient
 from berth.adapters.torznab.client import HttpTorznabClient
 from berth.domain import CollectionType, MediaKind
@@ -1348,3 +1350,212 @@ async def test_prowlarr_reports_a_site_that_stopped_working() -> None:
     with pytest.raises(IndexerRejectedError):
         await client.test_indexer(ProwlarrIndexer(id=1, name="Nyaa.si", enabled=True))
     await client.aclose()
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_tmdb_tv_detail_reads_the_season_list_and_the_absolute_group() -> None:
+    """劇集詳情要回三件東西：識別欄位、季清單，以及 Absolute group 的 id（若有人建過）。
+
+    季名原樣留著：`Specials` 與 `Hashira Training Arc` 這種篇章名是 plan §4.4 的季號來源，
+    正規化成 `Season N` 就把它丟掉了。
+    """
+    respx.get(f"{TMDB_URL}/tv/120089").respond(
+        200, text=read_fixture("http/tmdb/tv-detail.spy-x-family.en.json")
+    )
+
+    client = HttpTmdbClient(V4_READ_TOKEN, base_url=TMDB_URL)
+    try:
+        detail = await client.detail(MediaKind.TV, 120089, language="en-US")
+    finally:
+        await client.aclose()
+
+    assert (detail.tmdb_id, detail.kind) == (120089, MediaKind.TV)
+    assert (detail.title, detail.original_title) == ("SPY x FAMILY", "SPY×FAMILY")
+    assert (detail.year, detail.first_air_date) == (2022, date(2022, 4, 9))
+    # 劇集的片長在每一集上，不在作品上。
+    assert detail.runtime is None
+    assert [(row.season_number, row.name, row.episode_count) for row in detail.seasons] == [
+        (0, "Specials", 3),
+        (1, "Season 1", 25),
+        (2, "Season 2", 12),
+        (3, "Season 3", 13),
+    ]
+    assert detail.seasons[1].air_date == date(2022, 4, 9)
+    # 五個 group 裡挑得出 `type == 2` 的那一個（brief §20.3 的 Absolute）。
+    assert detail.absolute_group_id == "689a2aec017d0bc9ecc6fac8"
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_tmdb_tv_detail_collects_every_title_it_can_match_against() -> None:
+    """比對用的標題集合＝英文 + 原文 + 各國別名 + 各語言翻譯，去重（plan §4.3、brief §20.3）。
+
+    票 08 拿它逐個發搜尋，票 06 拿它認檔名裡的作品名——所以中文別名必須在裡面。
+    """
+    respx.get(f"{TMDB_URL}/tv/120089").respond(
+        200, text=read_fixture("http/tmdb/tv-detail.spy-x-family.en.json")
+    )
+
+    client = HttpTmdbClient(V4_READ_TOKEN, base_url=TMDB_URL)
+    try:
+        detail = await client.detail(MediaKind.TV, 120089, language="en-US")
+    finally:
+        await client.aclose()
+
+    assert detail.titles[:2] == ("SPY x FAMILY", "SPY×FAMILY")
+    assert "间谍过家家" in detail.titles
+    assert "스파이 패밀리" in detail.titles
+    # 去重：`SPY x FAMILY` 同時是 `name`、好幾個別名與好幾份翻譯。
+    assert len(detail.titles) == len(set(detail.titles))
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_tmdb_movie_detail_reads_the_film_fields() -> None:
+    """電影用 `title` / `release_date` / `runtime`，而且沒有季。"""
+    respx.get(f"{TMDB_URL}/movie/1241982").respond(
+        200, text=read_fixture("http/tmdb/movie-detail.moana-2.en.json")
+    )
+
+    client = HttpTmdbClient(V4_READ_TOKEN, base_url=TMDB_URL)
+    try:
+        detail = await client.detail(MediaKind.MOVIE, 1241982, language="en-US")
+    finally:
+        await client.aclose()
+
+    assert (detail.tmdb_id, detail.kind, detail.title) == (1241982, MediaKind.MOVIE, "Moana 2")
+    assert (detail.year, detail.first_air_date) == (2024, date(2024, 11, 21))
+    assert detail.runtime == 100
+    assert detail.seasons == ()
+    assert detail.absolute_group_id == ""
+    assert detail.overview.startswith("After receiving an unexpected call")
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_tmdb_detail_sends_the_appends_each_kind_needs() -> None:
+    """兩種作品的 append 不同：只有劇集有 episode groups，而兩種都要標題集合。"""
+    series = respx.get(f"{TMDB_URL}/tv/120089").respond(
+        200, text=read_fixture("http/tmdb/tv-detail.spy-x-family.en.json")
+    )
+    film = respx.get(f"{TMDB_URL}/movie/1241982").respond(
+        200, text=read_fixture("http/tmdb/movie-detail.moana-2.en.json")
+    )
+
+    client = HttpTmdbClient(V4_READ_TOKEN, base_url=TMDB_URL)
+    try:
+        await client.detail(MediaKind.TV, 120089, language="zh-TW")
+        await client.detail(MediaKind.MOVIE, 1241982, language="en-US")
+    finally:
+        await client.aclose()
+
+    assert series.calls.last.request.url.params["language"] == "zh-TW"
+    assert series.calls.last.request.url.params["append_to_response"] == (
+        "alternative_titles,translations,episode_groups"
+    )
+    assert film.calls.last.request.url.params["append_to_response"] == (
+        "alternative_titles,translations"
+    )
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_tmdb_season_reads_every_episode() -> None:
+    """一季的每一集：集號、集名、播出日、片長（plan §2.2 的快照欄位）。"""
+    respx.get(f"{TMDB_URL}/tv/120089/season/2").respond(
+        200, text=read_fixture("http/tmdb/tv-season.spy-x-family.s02.json")
+    )
+
+    client = HttpTmdbClient(V4_READ_TOKEN, base_url=TMDB_URL)
+    try:
+        season = await client.season(120089, 2, language="en-US")
+    finally:
+        await client.aclose()
+
+    assert (season.season_number, season.name) == (2, "Season 2")
+    assert len(season.episodes) == 12
+    first = season.episodes[0]
+    assert (first.episode_number, first.season_number) == (1, 2)
+    assert (first.name, first.runtime) == ("FOLLOW MAMA AND PAPA", 24)
+    assert first.air_date == date(2023, 10, 7)
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_tmdb_season_zero_is_the_specials() -> None:
+    """`season_number: 0` 是 Specials（brief §20.3）。它是一季，不是一個特例分支。"""
+    respx.get(f"{TMDB_URL}/tv/120089/season/0").respond(
+        200, text=read_fixture("http/tmdb/tv-season.spy-x-family.s00.json")
+    )
+
+    client = HttpTmdbClient(V4_READ_TOKEN, base_url=TMDB_URL)
+    try:
+        season = await client.season(120089, 0, language="en-US")
+    finally:
+        await client.aclose()
+
+    assert (season.season_number, season.name) == (0, "Specials")
+    assert [row.episode_number for row in season.episodes] == [1, 2, 3]
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_tmdb_absolute_numbers_come_from_the_order_not_the_episode_number() -> None:
+    """group 裡的 `episode_number` 保留播出序的原值，絕對編號要從 0-based 的 `order` 推
+    （brief §20.3，2026-09-08 實測 10 部）。
+
+    照著 `episode_number` 讀的話 S02E01 會變成絕對第 1 集，而它其實是第 26 集。
+    """
+    respx.get(f"{TMDB_URL}/tv/episode_group/689a2aec017d0bc9ecc6fac8").respond(
+        200, text=read_fixture("http/tmdb/tv-episode-group.spy-x-family.absolute.json")
+    )
+
+    client = HttpTmdbClient(V4_READ_TOKEN, base_url=TMDB_URL)
+    try:
+        ordering = await client.absolute_ordering("689a2aec017d0bc9ecc6fac8")
+    finally:
+        await client.aclose()
+
+    assert ordering[(1, 1)] == 1
+    assert ordering[(1, 25)] == 25
+    # 第二季第一集接在第一季二十五集後面。
+    assert ordering[(2, 1)] == 26
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_tmdb_detail_says_when_the_id_does_not_exist() -> None:
+    """404 與「TMDB 壞了」是兩件事：前者重試一百次也一樣，畫面要說得出差別（票 04）。"""
+    respx.get(f"{TMDB_URL}/tv/99999999").respond(
+        404, text=read_fixture("http/tmdb/tv-detail.not-found.json")
+    )
+
+    client = HttpTmdbClient(V4_READ_TOKEN, base_url=TMDB_URL)
+    with pytest.raises(NotFoundError):
+        await client.detail(MediaKind.TV, 99999999, language="en-US")
+    await client.aclose()
+
+
+def test_tmdb_absolute_numbers_follow_the_order_field_even_with_gaps() -> None:
+    """絕對編號是 `order + 1`，**不是這一筆在清單裡的位置**（plan §8.3、brief §20.3）。
+
+    單一連續的 group 兩種算法看不出差別，所以這裡刻意給一份有缺號、而且沒有照順序排的
+    group：照位置數會把第三筆算成 3，而它的 `order` 是 5，也就是絕對第 6 集。
+    """
+    ordering = parse_absolute_ordering(
+        {
+            "groups": [
+                {
+                    "order": 1,
+                    "episodes": [
+                        {"order": 2, "season_number": 1, "episode_number": 3},
+                        {"order": 0, "season_number": 1, "episode_number": 1},
+                        {"order": 5, "season_number": 2, "episode_number": 1},
+                    ],
+                }
+            ]
+        }
+    )
+
+    assert ordering == {(1, 1): 1, (1, 3): 3, (2, 1): 6}

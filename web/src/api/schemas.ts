@@ -27,6 +27,15 @@ export type StepStatus = Schemas['StepStatus']
 /** 精靈的一步，或一個 Route 的一項檢查。 */
 export type SetupStep = Schemas['StepOut']
 
+/** `MediaKind`：一部作品是劇集還是電影（`berth/domain/enums.py`）。 */
+export type MediaKind = Schemas['MediaKind']
+
+/**
+ * `TmdbProblem`：向 TMDB 要東西沒要到的四種樣子。探索頁與 Media 詳情頁共用
+ * （`berth/domain/enums.py`）——兩頁問的是同一台服務，四種理由的下一步也一樣。
+ */
+export type TmdbProblem = NonNullable<Schemas['TmdbProblem']>
+
 /** `Profile`：Route 的命名與解析偏好（CONTEXT.md）。 */
 export type Profile = Schemas['Profile']
 

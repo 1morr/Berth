@@ -1,0 +1,194 @@
+{
+  "adult": false,
+  "backdrop_path": "/lysUnU6V0VfcthDbviuVlIqgHOR.jpg",
+  "created_by": [],
+  "episode_run_time": [
+    24
+  ],
+  "first_air_date": "2022-04-09",
+  "genres": [
+    {
+      "id": 16,
+      "name": "动画"
+    },
+    {
+      "id": 10759,
+      "name": "动作冒险"
+    },
+    {
+      "id": 35,
+      "name": "喜剧"
+    }
+  ],
+  "homepage": "https://spy-family.net/tvseries",
+  "id": 120089,
+  "in_production": false,
+  "languages": [
+    "ja"
+  ],
+  "last_air_date": "2025-12-27",
+  "last_episode_to_air": {
+    "air_date": "2025-12-27",
+    "episode_number": 13,
+    "episode_type": "finale",
+    "id": 6576525,
+    "name": "無法生存下來的世界",
+    "overview": "費歐娜在下水道與惠勒正面相遇。她立刻拔槍與之對峙，但卻被對方拿瀕死的洛伊德作為人質威脅，不得已只好拋下了槍。但沒想到，受到激將而勃然大怒的費歐娜解最終卻除了自身的限制，向惠勒發起突襲……。",
+    "production_code": "",
+    "runtime": 24,
+    "season_number": 3,
+    "show_id": 120089,
+    "still_path": "/1cvQvY5xhTP25KTEVFXVa53VsBT.jpg",
+    "vote_average": 7.9,
+    "vote_count": 7
+  },
+  "name": "SPY×FAMILY 間諜家家酒",
+  "networks": [
+    {
+      "id": 98,
+      "logo_path": "/jnuO8pZNEBLEq5YaOP1f5OkmG91.png",
+      "name": "TV Tokyo",
+      "origin_country": "JP"
+    },
+    {
+      "id": 252,
+      "logo_path": "/zFZ5KCuvx7K0vP9XgGcidfXjuUd.png",
+      "name": "TV Aichi",
+      "origin_country": "JP"
+    },
+    {
+      "id": 822,
+      "logo_path": "/gOlBe3BMo5WJHeUlWBBfKawgdiO.png",
+      "name": "TVQ",
+      "origin_country": "JP"
+    },
+    {
+      "id": 824,
+      "logo_path": "/6foQmoPac7WCDnDuDbuCZklmDuA.png",
+      "name": "TV Osaka",
+      "origin_country": "JP"
+    },
+    {
+      "id": 938,
+      "logo_path": "/f12LLqBVFnDVIY8HidhWEitI77c.png",
+      "name": "TVh",
+      "origin_country": "JP"
+    },
+    {
+      "id": 2064,
+      "logo_path": "/qi4L1ffRabF5LJqVimCaaUYpeSj.png",
+      "name": "TSC",
+      "origin_country": "JP"
+    }
+  ],
+  "next_episode_to_air": null,
+  "number_of_episodes": 50,
+  "number_of_seasons": 3,
+  "origin_country": [
+    "JP"
+  ],
+  "original_language": "ja",
+  "original_name": "SPY×FAMILY",
+  "overview": "每一個人，都有不能展現給任何人看的一面──這是個世界各國都在檯面下進行激烈情報戰的時代。東國與西國，兩國之間已持續冷戰了十多年。隸屬於西國情報局對東課〈WISE〉的幹練間諜〈黃昏〉，被指派一項極機密任務，奉命接近威脅東西和平的危險人物，要刺探出東國國家統一黨黨魁──唐納文‧戴斯蒙德的戰爭計畫。其任務名為──行動代號〈梟〉。任務內容是：「在一週內組好家庭，並潛入戴斯蒙德兒子所就讀的名校。」於是〈黃昏〉扮起精神科醫生──洛伊德‧佛傑，開始組織家庭。然而，他找到的女兒‧安妮亞是會讀心的超能力者，妻子‧約兒則是位暗殺者！由於利害一致，三人便互相隱瞞真實身分，並展開共同生活。世界的和平，就這樣被託付給狀況百出的臨時家庭──",
+  "popularity": 55.5577,
+  "poster_path": "/mvolqXssikgLeUomc59cB2RkH1k.jpg",
+  "production_companies": [
+    {
+      "id": 31058,
+      "logo_path": "/1vwZPG0zMVRvThCY8Lljh0ppxQo.png",
+      "name": "WIT STUDIO",
+      "origin_country": "JP"
+    },
+    {
+      "id": 121589,
+      "logo_path": "/kZvTniBgpTzAThHCa0OZ1FJtRjy.png",
+      "name": "CloverWorks",
+      "origin_country": "JP"
+    },
+    {
+      "id": 12655,
+      "logo_path": "/dfGqf2NoMVPrDywDL90D5HAhBlW.png",
+      "name": "Shogakukan-Shueisha Productions",
+      "origin_country": "JP"
+    },
+    {
+      "id": 3034,
+      "logo_path": "/jnuO8pZNEBLEq5YaOP1f5OkmG91.png",
+      "name": "TV Tokyo",
+      "origin_country": "JP"
+    },
+    {
+      "id": 2918,
+      "logo_path": "/gyEWUBWwqrm3H5T2hkERD9LxpOq.png",
+      "name": "Shueisha",
+      "origin_country": "JP"
+    },
+    {
+      "id": 882,
+      "logo_path": "/fRSWWjquvzcHjACbtF53utZFIll.png",
+      "name": "TOHO",
+      "origin_country": "JP"
+    }
+  ],
+  "production_countries": [
+    {
+      "iso_3166_1": "JP",
+      "name": "Japan"
+    }
+  ],
+  "seasons": [
+    {
+      "air_date": "2023-07-28",
+      "episode_count": 3,
+      "id": 371564,
+      "name": "特別篇",
+      "overview": "",
+      "poster_path": "/zL8XCKIVdmXq5u8iJU5n1z28NTE.jpg",
+      "season_number": 0,
+      "vote_average": 0.0
+    },
+    {
+      "air_date": "2022-04-09",
+      "episode_count": 25,
+      "id": 184428,
+      "name": "第 1 季",
+      "overview": "每一個人，都有不能展現給任何人看的一面──這是個世界各國都在檯面下進行激烈情報戰的時代。東國與西國，兩國之間已持續冷戰了十多年。隸屬於西國情報局對東課〈WISE〉的幹練間諜〈黃昏〉，被指派一項極機密任務，奉命接近威脅東西和平的危險人物，要刺探出東國國家統一黨黨魁──唐納文‧戴斯蒙德的戰爭計畫。其任務名為──行動代號〈梟〉。任務內容是：「在一週內組好家庭，並潛入戴斯蒙德兒子所就讀的名校。」於是〈黃昏〉扮起精神科醫生──洛伊德‧佛傑，開始組織家庭。然而，他找到的女兒‧安妮亞是會讀心的超能力者，妻子‧約兒則是位暗殺者！由於利害一致，三人便互相隱瞞真實身分，並展開共同生活。世界的和平，就這樣被託付給狀況百出的臨時家庭──",
+      "poster_path": "/mvolqXssikgLeUomc59cB2RkH1k.jpg",
+      "season_number": 1,
+      "vote_average": 7.8
+    },
+    {
+      "air_date": "2023-10-07",
+      "episode_count": 12,
+      "id": 342836,
+      "name": "第 2 季",
+      "overview": "每一個人，都有不能展現給任何人看的一面──這是個世界各國都在檯面下進行激烈情報戰的時代。東國與西國，兩國之間已持續冷戰了十多年。隸屬於西國情報局對東課〈WISE〉的幹練間諜〈黃昏〉，被指派一項極機密任務，奉命接近威脅東西和平的危險人物，要刺探出東國國家統一黨黨魁──唐納文‧戴斯蒙德的戰爭計畫。其任務名為──行動代號〈梟〉。任務內容是：「在一週內組好家庭，並潛入戴斯蒙德兒子所就讀的名校。」於是〈黃昏〉扮起精神科醫生──洛伊德‧佛傑，開始組織家庭。然而，他找到的女兒‧安妮亞是會讀心的超能力者，妻子‧約兒則是位暗殺者！由於利害一致，三人便互相隱瞞真實身分，並展開共同生活。世界的和平，就這樣被託付給狀況百出的臨時家庭──",
+      "poster_path": "/73G0MVRhNNNYAhLgM6CBpWmnGvE.jpg",
+      "season_number": 2,
+      "vote_average": 7.6
+    },
+    {
+      "air_date": "2025-10-04",
+      "episode_count": 13,
+      "id": 397697,
+      "name": "第 3 季",
+      "overview": "每一個人，都有不能展現給任何人看的一面──這是個世界各國都在檯面下進行激烈情報戰的時代。東國與西國，兩國之間已持續冷戰了十多年。隸屬於西國情報局對東課〈WISE〉的幹練間諜〈黃昏〉，被指派一項極機密任務，奉命接近威脅東西和平的危險人物，要刺探出東國國家統一黨黨魁──唐納文‧戴斯蒙德的戰爭計畫。其任務名為──行動代號〈梟〉。任務內容是：「在一週內組好家庭，並潛入戴斯蒙德兒子所就讀的名校。」於是〈黃昏〉扮起精神科醫生──洛伊德‧佛傑，開始組織家庭。然而，他找到的女兒‧安妮亞是會讀心的超能力者，妻子‧約兒則是位暗殺者！由於利害一致，三人便互相隱瞞真實身分，並展開共同生活。世界的和平，就這樣被託付給狀況百出的臨時家庭──",
+      "poster_path": "/49ropepRJzrP9fZROtyM82wO7E3.jpg",
+      "season_number": 3,
+      "vote_average": 7.7
+    }
+  ],
+  "softcore": false,
+  "spoken_languages": [
+    {
+      "english_name": "Japanese",
+      "iso_639_1": "ja",
+      "name": "日本語"
+    }
+  ],
+  "status": "Ended",
+  "tagline": "父親是間諜，母親是殺手，而安妮亞則是超能力者！？",
+  "type": "Scripted",
+  "vote_average": 8.507,
+  "vote_count": 2342
+}

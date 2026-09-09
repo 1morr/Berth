@@ -16,6 +16,7 @@ import { AppShell } from './AppShell'
 import { DiscoverPage } from './pages/DiscoverPage'
 import { HealthPage } from './pages/HealthPage'
 import { LoginPage } from './pages/LoginPage'
+import { MediaRoute } from './pages/MediaRoute'
 import { ServiceSettingsPage } from './pages/ServiceSettingsPage'
 import { SetupRoute } from './pages/SetupRoute'
 
@@ -180,6 +181,22 @@ const indexRoute = createRoute({
   ),
 })
 
+/**
+ * Media 詳情 `/media/:id`（票 04）。探索牆的每一格連到這裡。
+ *
+ * `mediaId` 是 `tv:120089` / `movie:1241982`——冒號在路徑段裡是合法字元，而認不得的字串
+ * 由後端回一個 `not_found` 的理由，不是 404 頁：使用者手打錯網址時該看到「TMDB 上沒有
+ * 這部作品」加一條回探索頁的路，而不是一片空白。
+ */
+const mediaRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/media/$mediaId',
+  beforeLoad: async ({ context, location }) => {
+    await requireSignedInPage(context.queryClient, location)
+  },
+  component: MediaRoute,
+})
+
 const healthRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/health',
@@ -213,6 +230,7 @@ export const routeTree = rootRoute.addChildren([
   indexRoute,
   healthRoute,
   loginRoute,
+  mediaRoute,
   serviceSettingsRoute,
   setupRoute,
 ])

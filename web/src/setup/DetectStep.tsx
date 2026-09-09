@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 
 import { type ConnectInput, type SetupStatus } from '../api/setup'
 import { SERVICE_KINDS, type ServiceKind } from '../api/schemas'
-import { Cutaway, CutawayRow } from './Cutaway'
+import { Cutaway, CutawayRow } from '../components/Cutaway'
 import { MooringLine } from './MooringLine'
 import { STICKY_ACTION, GhostButton, Notice, PrimaryButton } from '../components/controls'
 import { PROBE_ENDPOINT } from './signals'

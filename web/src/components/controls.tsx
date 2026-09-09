@@ -142,6 +142,16 @@ export function GhostButton({
 }
 
 /**
+ * 次要動作，但它其實是一條連結（導到別頁，不是在這一頁做一件事）。
+ *
+ * 與 `GhostButton` 一模一樣的外觀。這一份存在是因為那串類名一度被逐字抄了三遍
+ * （票 04 的 code review）——外觀的單一來源是元件，不是一段字串。
+ * `children` 之外的 prop 交給呼叫端的 `Link`，所以路由型別檢查仍然成立。
+ */
+export const GHOST_LINK =
+  'label justify-self-start border-2 border-rule px-4 py-2.5 text-ink hover:border-rule-strong'
+
+/**
  * 帶狀態的訊息塊。標記是**塗上去的色塊 + 模板字**，不是左側的粗色條——
  * 那條粗色條是 AI 介面最好認的胎記，也不是這塊板子的語彙。
  */

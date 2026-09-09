@@ -5,7 +5,14 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import replace
 
-from berth.adapters.tmdb import BASE_LANGUAGE, TmdbConfiguration, TmdbEntry
+from berth.adapters.http import NotFoundError
+from berth.adapters.tmdb import (
+    BASE_LANGUAGE,
+    TmdbConfiguration,
+    TmdbDetail,
+    TmdbEntry,
+    TmdbSeason,
+)
 from berth.domain import MediaKind
 
 
@@ -27,6 +34,9 @@ class FakeTmdbClient:
         search: Mapping[str, Sequence[TmdbEntry]] | None = None,
         translations: Mapping[int, str] | None = None,
         display_absent: Iterable[int] = (),
+        details: Sequence[TmdbDetail] = (),
+        seasons: Mapping[int, Sequence[TmdbSeason]] | None = None,
+        ordering: Mapping[str, Mapping[tuple[int, int], int]] | None = None,
     ) -> None:
         self._configuration = configuration or TmdbConfiguration(
             image_base_url="https://image.tmdb.org/t/p/"
@@ -42,6 +52,14 @@ class FakeTmdbClient:
         self._display_absent = frozenset(display_absent)
         #: 逐支端點的呼叫次數。快取生效與否就看這裡。
         self.requests: list[tuple[str, str]] = []
+        #: `(kind, id) → 詳情`。公開的，測試要演「TMDB 改了標題」就改這裡。
+        self.details = {(row.kind, row.tmdb_id): row for row in details}
+        self._seasons = {
+            (tmdb_id, season.season_number): season
+            for tmdb_id, rows in (seasons or {}).items()
+            for season in rows
+        }
+        self._ordering = {key: dict(value) for key, value in (ordering or {}).items()}
 
     async def configuration(self) -> TmdbConfiguration:
         self.calls += 1
@@ -62,6 +80,29 @@ class FakeTmdbClient:
         self.requests.append((f"search/{query}", language))
         self._raise()
         return self._localised(self._search.get(query, ()), language)
+
+    async def detail(self, kind: MediaKind, tmdb_id: int, *, language: str) -> TmdbDetail:
+        self.requests.append((f"detail/{kind.value}/{tmdb_id}", language))
+        self._raise()
+        found = self.details.get((kind, tmdb_id))
+        if found is None:
+            raise NotFoundError(f"{kind.value}/{tmdb_id}: no such title on TMDB")
+        if language == BASE_LANGUAGE:
+            return found
+        return replace(found, title=self._translations.get(tmdb_id, found.title))
+
+    async def season(self, tmdb_id: int, season_number: int, *, language: str) -> TmdbSeason:
+        self.requests.append((f"season/{tmdb_id}/{season_number}", language))
+        self._raise()
+        found = self._seasons.get((tmdb_id, season_number))
+        if found is None:
+            raise NotFoundError(f"tv/{tmdb_id}/season/{season_number}: no such season")
+        return found
+
+    async def absolute_ordering(self, group_id: str) -> dict[tuple[int, int], int]:
+        self.requests.append((f"episode_group/{group_id}", ""))
+        self._raise()
+        return dict(self._ordering.get(group_id, {}))
 
     async def aclose(self) -> None:
         return None

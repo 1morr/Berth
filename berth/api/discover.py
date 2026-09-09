@@ -12,7 +12,7 @@ from fastapi import APIRouter, Query
 from pydantic import BaseModel, ConfigDict
 
 from berth.api.deps import ClientFactoryDep, SessionDep
-from berth.domain import DiscoverProblem, MediaKind
+from berth.domain import MediaKind, TmdbProblem
 from berth.services.discover import DiscoverResult, read_popular, read_trending, search_media
 
 router = APIRouter(prefix="/discover", tags=["discover"])
@@ -47,7 +47,7 @@ class DiscoverOut(BaseModel):
 
     items: list[DiscoverItemOut]
     #: 拿不到東西的理由。正常時是 `None`。
-    problem: DiscoverProblem | None
+    problem: TmdbProblem | None
     #: 失敗時服務回的原文（英文），與精靈的纜繩同一個規矩。
     detail: str
 

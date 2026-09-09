@@ -1,0 +1,58 @@
+{
+  "_id": "658aaf334da3d463a1436a4a",
+  "air_date": "2023-07-28",
+  "episodes": [
+    {
+      "air_date": "2023-07-28",
+      "episode_number": 1,
+      "episode_type": "standard",
+      "id": 5103569,
+      "name": "Spy x Family Movie: Code: White Manner Movie",
+      "overview": "Wit Studio and Cloverworks released a new short film using Spy x Family to remind the general public of basic movie theater etiquette. You’ll be able to watch it from all Toho cinemas in Japan. All members of the immediate Forger family are present. It focuses on Loid and Yor teaching Anya how to behave when in a movie theater.",
+      "production_code": "",
+      "runtime": 1,
+      "season_number": 0,
+      "show_id": 120089,
+      "still_path": "/ciRZl4yEtQlDNJQF321bgPHezHd.jpg",
+      "vote_average": 0.0,
+      "vote_count": 0
+    },
+    {
+      "air_date": "2023-12-04",
+      "episode_number": 2,
+      "episode_type": "standard",
+      "id": 5025944,
+      "name": "Street Fighter 6 x Spy x Family Movie: Code: White",
+      "overview": "A short animated collaboration promoting Spy x Family Movie: Code: White and the video game Street Fighter 6.",
+      "production_code": "",
+      "runtime": 1,
+      "season_number": 0,
+      "show_id": 120089,
+      "still_path": "/2nYTiLLOoaPeh3dNozgXntxbVSI.jpg",
+      "vote_average": 0.0,
+      "vote_count": 0
+    },
+    {
+      "air_date": "2024-01-29",
+      "episode_number": 3,
+      "episode_type": "standard",
+      "id": 5132056,
+      "name": "Ayataka Spy x Family Movie Campaign Ayataka de Hotto Hitoiki",
+      "overview": "A commercial between Spy x Family Movie: Code: White and Ayataka featuring the Forger family having a picnic under the cherry blossoms while drinking Ayataka tea.",
+      "production_code": "",
+      "runtime": 1,
+      "season_number": 0,
+      "show_id": 120089,
+      "still_path": "/m5GU2ufStZXFXTHHmeihgCNATPX.jpg",
+      "vote_average": 0.0,
+      "vote_count": 0
+    }
+  ],
+  "id": 371564,
+  "name": "Specials",
+  "networks": [],
+  "overview": "",
+  "poster_path": "/goSNF7W8pJI3RlHk1CSMv0YZvwL.jpg",
+  "season_number": 0,
+  "vote_average": 0.0
+}

@@ -27,7 +27,7 @@ from berth.adapters.tmdb import (
     TmdbClient,
     TmdbEntry,
 )
-from berth.domain import DiscoverProblem, MediaKind
+from berth.domain import MediaKind, TmdbProblem
 from berth.models import Media, MediaCard, TmdbCache, TmdbSettings, dump_cards, load_cards
 from berth.services.clients import ServiceClientFactory
 from berth.services.settings import read_settings, write_settings
@@ -77,7 +77,7 @@ class DiscoverResult:
     """
 
     items: tuple[DiscoverItem, ...]
-    problem: DiscoverProblem | None = None
+    problem: TmdbProblem | None = None
     #: 失敗時服務回的原文（英文）。與精靈的纜繩同一個規矩：原文不翻譯。
     detail: str = ""
 
@@ -91,8 +91,8 @@ class _KindFeed(Protocol):
 async def read_trending(session: AsyncSession, factory: ServiceClientFactory) -> DiscoverResult:
     """本週趨勢，劇集與電影交錯。"""
 
-    async def fetch(client: TmdbClient, image_base: str) -> tuple[MediaCard, ...]:
-        return await _both_kinds(client.trending, image_base)
+    async def fetch(client: TmdbClient, base: str) -> tuple[MediaCard, ...]:
+        return await _both_kinds(client.trending, base)
 
     return await _feed(session, factory, TRENDING_KEY, fetch)
 
@@ -100,8 +100,8 @@ async def read_trending(session: AsyncSession, factory: ServiceClientFactory) ->
 async def read_popular(session: AsyncSession, factory: ServiceClientFactory) -> DiscoverResult:
     """熱門，同樣兩種作品交錯。"""
 
-    async def fetch(client: TmdbClient, image_base: str) -> tuple[MediaCard, ...]:
-        return await _both_kinds(client.popular, image_base)
+    async def fetch(client: TmdbClient, base: str) -> tuple[MediaCard, ...]:
+        return await _both_kinds(client.popular, base)
 
     return await _feed(session, factory, POPULAR_KEY, fetch)
 
@@ -115,10 +115,10 @@ async def search_media(
         # 空的查詢不必問 TMDB 才知道沒有結果。
         return DiscoverResult(())
 
-    async def fetch(client: TmdbClient, image_base: str) -> tuple[MediaCard, ...]:
-        base = await client.search(normalised, language=BASE_LANGUAGE)
+    async def fetch(client: TmdbClient, base: str) -> tuple[MediaCard, ...]:
+        listing = await client.search(normalised, language=BASE_LANGUAGE)
         display = _by_key(await client.search(normalised, language=DISPLAY_LANGUAGE))
-        return tuple(_card(entry, display, image_base) for entry in base)
+        return tuple(_card(entry, display, base) for entry in listing)
 
     return await _feed(session, factory, search_key(normalised), fetch)
 
@@ -133,7 +133,7 @@ def search_key(normalised: str) -> str:
 
 
 class _Fetch(Protocol):
-    async def __call__(self, client: TmdbClient, image_base: str) -> tuple[MediaCard, ...]: ...
+    async def __call__(self, client: TmdbClient, base: str) -> tuple[MediaCard, ...]: ...
 
 
 async def _feed(
@@ -147,15 +147,15 @@ async def _feed(
     key_in_hand = credential(settings)
     if not key_in_hand:
         # 憑證是精靈第 6 步的必填閘門（票 02b），所以「沒有 key」有一句自己的話。
-        return DiscoverResult((), DiscoverProblem.CREDENTIAL_MISSING, MISSING_CREDENTIAL)
+        return DiscoverResult((), TmdbProblem.CREDENTIAL_MISSING, MISSING_CREDENTIAL)
 
     client = factory.tmdb(key_in_hand)
     try:
-        cards = await fetch(client, await _image_base(session, settings, client))
+        cards = await fetch(client, await image_base(session, client))
     except AuthFailedError as exc:
-        return DiscoverResult((), DiscoverProblem.CREDENTIAL_REJECTED, message(exc))
+        return DiscoverResult((), TmdbProblem.CREDENTIAL_REJECTED, message(exc))
     except ServiceError as exc:
-        return DiscoverResult((), DiscoverProblem.UNREACHABLE, message(exc))
+        return DiscoverResult((), TmdbProblem.UNREACHABLE, message(exc))
     finally:
         await client.aclose()
 
@@ -163,18 +163,18 @@ async def _feed(
     return await _decorate(session, cards)
 
 
-async def _both_kinds(feed: _KindFeed, image_base: str) -> tuple[MediaCard, ...]:
+async def _both_kinds(feed: _KindFeed, base: str) -> tuple[MediaCard, ...]:
     """兩種作品各取一份，交錯成一面牆。
 
     交錯而不是重排：TMDB 給的順序就是那個 feed 的排名，而 `popularity` 欄位**不是**它
     （2026-09-09 實測，回應裡的 `popularity` 是亂序的），拿來排只會得到一份第三種順序。
     """
-    base = {kind: await feed(kind, language=BASE_LANGUAGE) for kind in MediaKind}
+    listing = {kind: await feed(kind, language=BASE_LANGUAGE) for kind in MediaKind}
     display: dict[tuple[MediaKind, int], TmdbEntry] = {}
     for kind in MediaKind:
         display |= _by_key(await feed(kind, language=DISPLAY_LANGUAGE))
     return _interleave(
-        *(tuple(_card(entry, display, image_base) for entry in base[kind]) for kind in MediaKind)
+        *(tuple(_card(entry, display, base) for entry in listing[kind]) for kind in MediaKind)
     )
 
 
@@ -184,7 +184,7 @@ def _by_key(entries: Iterable[TmdbEntry]) -> dict[tuple[MediaKind, int], TmdbEnt
 
 
 def _card(
-    entry: TmdbEntry, display: dict[tuple[MediaKind, int], TmdbEntry], image_base: str
+    entry: TmdbEntry, display: dict[tuple[MediaKind, int], TmdbEntry], base: str
 ) -> MediaCard:
     """一筆英文結果 + 顯示用那一輪的同一部作品（可能沒有）→ 一張卡。
 
@@ -198,25 +198,29 @@ def _card(
         title=shown.title or entry.title,
         title_en=entry.title,
         year=entry.year,
-        poster_url=_poster(shown.poster_path or entry.poster_path, image_base),
+        poster_url=_poster(shown.poster_path or entry.poster_path, base),
     )
 
 
-def _poster(path: str, image_base: str) -> str:
+def _poster(path: str, base: str) -> str:
     """沒有海報路徑或沒有圖片基底時是空字串——半條網址只會變成一個破圖。"""
-    return f"{image_base}{POSTER_SIZE}{path}" if path and image_base else ""
+    return f"{base}{POSTER_SIZE}{path}" if path and base else ""
 
 
 def _interleave(*lists: tuple[MediaCard, ...]) -> tuple[MediaCard, ...]:
     return tuple(card for row in zip_longest(*lists) for card in row if card is not None)
 
 
-async def _image_base(session: AsyncSession, settings: TmdbSettings, client: TmdbClient) -> str:
+async def image_base(session: AsyncSession, client: TmdbClient) -> str:
     """圖片基底對同一把憑證是常數，所以存起來，只在還沒有的時候問。
 
     精靈第 6 步驗憑證時就會寫下它；這裡的 fallback 是給**在這個欄位存在之前就跑完精靈**
     的資料庫用的——那些人不會再跑一次精靈。
+
+    探索牆與 Media 詳情（票 04）共用這一支：兩邊組的是同一種海報網址，
+    而「還沒有就問一次並寫回去」那半條規則各寫一份的話會問兩次。
     """
+    settings = await read_settings(session, TmdbSettings)
     if settings.image_base_url:
         return settings.image_base_url
     settings.image_base_url = (await client.configuration()).image_base_url

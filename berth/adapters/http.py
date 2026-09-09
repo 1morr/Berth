@@ -41,6 +41,15 @@ class ServiceBusyError(ServiceError):
     """
 
 
+class NotFoundError(ServiceError):
+    """服務答得出來，而它的答案是「沒有這個東西」（404）。
+
+    與 `ProtocolMismatchError` 分開的理由是**下一步不同**：協定不符要人去查是不是接到了別的
+    服務，而「這個 id 上面沒有作品」重試一百次也一樣（票 04 的 Media 詳情）。
+    只有明確要求 `tolerate=(404,)` 的端點會拿到它——404 對其他端點仍然是「不像那個服務」。
+    """
+
+
 class ProtocolMismatchError(ServiceError):
     """連得上，但回的東西不是預期的那個服務。"""
 

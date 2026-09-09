@@ -28,6 +28,15 @@ def media_id(kind: MediaKind, tmdb_id: int) -> str:
     return f"{kind.value}:{tmdb_id}"
 
 
+def parse_media_id(value: str) -> tuple[MediaKind, int] | None:
+    """`media_id()` 的反向。認不得就回 `None`——網址是使用者打得出來的東西。"""
+    kind, _, tmdb_id = value.partition(":")
+    try:
+        return (MediaKind(kind), int(tmdb_id))
+    except ValueError:
+        return None
+
+
 class MediaCard(BaseModel):
     """一張作品卡：探索、搜尋與（票 04 起）媒體庫牆上的一格。
 

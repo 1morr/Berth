@@ -119,6 +119,18 @@ Windows Docker Desktop（NTFS bind mount）與 Linux（ext4）上各跑一次 `d
 - `scripts/fake_setup_server.py` 新增 `discover` 與 `tmdb-down` 兩個情境；前者打**真的** TMDB
   （憑證由環境變數 `TMDB_API_KEY` 帶入，與實驗腳本同一個名字；根目錄的 `.env.example` 有欄位）。
   **Berth 本身不讀那個變數**——產品的唯一來源仍是精靈寫進資料庫的 `settings.services.tmdb.api_key`。
+- TMDB adapter 再補上詳情那四支：`tv/{id}`、`movie/{id}`（各自帶它需要的 append）、
+  `tv/{id}/season/{n}` 與 `tv/episode_group/{id}`。**絕對編號從 0-based 的 `order` 推**，
+  不是 group 裡的 `episode_number`——後者保留播出序原值，照它讀會把第二季算成第 1 集起。
+- `GET /api/media/{id}`、`POST /api/media/{id}/track`、`POST /api/media/{id}/refresh`：TMDB 詳情與
+  各季各集的快照（24 小時，過期自動重抓）、追蹤、預設 Route。**拿不到 TMDB 時仍是 200**，
+  存過的快照照樣回，只是掛一條「這是舊的」。
+- Media 詳情頁 `/media/:id`：海報與三個標題（顯示用、英文、原文）、識別欄位、簡介、各季可展開的
+  集表（集號、標題、絕對編號、片長、播出日）、選 Route 與追蹤。**電影沒有季集區塊**，改列片長。
+- 探索牆的每一格現在是連到詳情頁的連結（票 03 刻意留下的那條線）。
+- `domain/media.py` 的 `MediaSnapshot` / `SeasonSnapshot` / `EpisodeSnapshot`：`media.tmdb_snapshot_json`
+  的型別化版本，也是 `naming` 與（M1 後段的）`parser` 的輸入。
+- `naming.folder_name()`：plan §5 凍結模板的第一格——`{title} ({year}) [tmdbid-{id}]`。
 
 ### Changed
 
@@ -130,6 +142,12 @@ Windows Docker Desktop（NTFS bind mount）與 Linux（ext4）上各跑一次 `d
   `{tv,movie}/popular` 的每一筆沒有 `media_type`。
 - `settings.services.tmdb` 新增 `image_base_url`，精靈第 6 步驗憑證時順手寫下——`configuration`
   對同一把憑證是常數，每次探索都問一次是白花一個請求。
+- **作品資料夾名在「追蹤」那一刻凍結**（plan §5、brief §4.5）。還沒追蹤時它是畫面上的預覽、跟著
+  TMDB 的標題走；追蹤之後 TMDB 改標題也不動它——已入庫的檔案不該因為別人改了條目就對不上。
+- `DiscoverProblem` 更名為 `TmdbProblem` 並新增 `not_found`：探索頁與 Media 詳情頁問的是同一台
+  服務、四種理由的下一步也一樣，各寫一份遲早會走樣。訊息塊因此收成共用的 `TmdbNotice`。
+- TMDB 詳情的 `append_to_response` 拿掉 `external_ids` 與 `release_dates`：快照裡沒有欄位讀它們，
+  而後者每部電影是一百多筆各國上映日（實測 138 筆）。plan §8.3 已同步。
 - 依實測更正文件：brief §7.2（電影檔名必須含 `[tmdbid-<id>]` 才算多版本）、§7.7（劇集的版本
   標籤是整個檔名而非 tags）、§20.1；plan §5 的命名模板**凍結**，§8.1、§8.2、§9.2、§9.4 依
   實測修正。細節見 `docs/research/m0-experiments.md` 與 `docs/progress.md` 的「偏差與決定」。
