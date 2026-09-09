@@ -7,7 +7,8 @@
   C. TVDB absolute
 
 只用標準庫，不 import `berth`，跟 `scripts/experiments/` 其他腳本一樣可以搬到別台機器跑。
-TMDB 憑證從 `berth/adapters/tmdb/__init__.py` 讀（那是專案內建的 read access token），
+TMDB 憑證讀環境變數 `TMDB_API_KEY`（v3 API key 或 v4 read access token 都可以，與 Berth 收的
+兩種形狀一致）——Berth 不內建任何 provider 的 key，腳本也一樣（票 02b）。
 TVDB 資料走 Sonarr 的 Skyhook 代理（免 key，見 research 文件的「資料來源」一節）。
 """
 
@@ -19,6 +20,7 @@ import html as html_mod
 import http.client
 import itertools
 import json
+import os
 import re
 import sys
 import time
@@ -38,12 +40,13 @@ RESULTS_DIR = REPO_ROOT / ".local" / "experiments" / "results"
 
 
 def tmdb_token() -> str:
-    """從 adapter 原始碼取內建憑證，不另外複製一份到腳本裡。"""
-    src = (REPO_ROOT / "berth" / "adapters" / "tmdb" / "__init__.py").read_text(encoding="utf-8")
-    block = re.search(r"PROJECT_CREDENTIAL = \(\n(.*?)\n\)", src, re.S)
-    if block is None:  # pragma: no cover - 只有 adapter 被改壞才會走到
-        raise SystemExit("找不到 PROJECT_CREDENTIAL")
-    return "".join(re.findall(r'"([^"]*)"', block.group(1)))
+    """使用者自備的憑證，從環境變數讀（票 02b）。"""
+    token = os.environ.get("TMDB_API_KEY", "").strip()
+    if not token:
+        raise SystemExit(
+            "請先設好 TMDB_API_KEY（themoviedb.org → 設定 → API 申請，v3 key 或 v4 token 都可以）"
+        )
+    return token
 
 
 #: 抓過的東西留在磁碟上。Mikan 的搜尋頁一次要一分半，重跑分析不該再等一次。

@@ -291,7 +291,7 @@ const zhHant = {
   },
   source: {
     title: '接上抓取來源',
-    lede: '索引站決定 Berth 找得到什麼，TMDB 決定它認得出什麼。兩個都可以之後再說。',
+    lede: '索引站決定 Berth 找得到什麼，TMDB 決定它認得出什麼。索引站可以之後再說，TMDB 不行。',
     skip: '之後再說',
     deferred: '之後再說',
     unreachable: '連不上套件內的 Prowlarr。可以先填自己的位址，或跳過這一步之後再補。',
@@ -336,18 +336,22 @@ const zhHant = {
     },
     tmdb: {
       title: 'TMDB',
-      lede: 'Berth 內建一把專案級憑證，什麼都不填也用得了。要用自己的就填在這裡，它會蓋過內建的那一把。',
-      field: '你自己的 TMDB API key（選填）',
-      placeholder: '留空就用內建的',
-      hint: 'v3 的 API key 或 v4 的 read access token 都可以。',
+      lede: 'Berth 不內建任何一把 API key，TMDB 的憑證要你自己申請。這一步是必填的：沒有它就沒有標題、季集與封面，探索、命名與入庫全部停擺。',
+      required: '必填',
+      held: '已取得',
+      absent: '還沒填',
+      whereLabel: '去哪裡拿',
+      where:
+        '在 themoviedb.org 註冊一個免費帳號，開「設定 → API」申請，用途選 Personal / Education，申請表要填一個網址與用途摘要。核發是即時的，不必等審核。現在就去申請也沒關係——精靈的進度已經存下來了，回來時還在這一步。',
+      open: '開啟 TMDB 的 API 設定',
+      blank: '這一步要一把 key 才走得下去。貼上你在 themoviedb.org 拿到的那一把再按一次。',
+      field: '你的 TMDB API key',
+      placeholder: '貼上 API key 或 read access token',
+      hint: 'v3 的 API key（32 個十六進位字元）或 v4 的 read access token（很長的一串）都可以，貼哪一種都成立。',
       test: '測試 TMDB',
       testing: '測試中…',
       line: '驗證憑證',
       fix: '確認 key 沒有打錯，也確認這台機器連得到 api.themoviedb.org：',
-      builtIn: 'Berth 內建的專案級憑證',
-      overridden: '你自己填的 key',
-      ownKeyLabel: '已覆寫',
-      ownKey: '之後所有 TMDB 請求都會用你這一把 key，不再用內建的。',
     },
   },
   routes: {
@@ -434,11 +438,9 @@ const zhHant = {
     },
     skipped: {
       indexers: '索引站',
-      tmdb: 'TMDB',
     },
     where: {
       indexers: '索引站還沒接。之後在「設定 → 來源」補上，補之前搜尋不到任何東西。',
-      tmdb: 'TMDB 還沒驗證。之後在「設定 → 來源」補上，補之前抓不到標題與季集資料。',
     },
   },
   login: {
@@ -836,7 +838,7 @@ const en: Translations<typeof zhHant> = {
   },
   source: {
     title: 'Connect a source',
-    lede: 'Indexers decide what Berth can find; TMDB decides what it can recognise. Both can wait.',
+    lede: 'Indexers decide what Berth can find; TMDB decides what it can recognise. The indexer can wait; TMDB cannot.',
     skip: 'Do this later',
     deferred: 'Deferred',
     unreachable:
@@ -884,18 +886,23 @@ const en: Translations<typeof zhHant> = {
     },
     tmdb: {
       title: 'TMDB',
-      lede: 'Berth ships a project credential, so this works with nothing filled in. Paste your own to override it.',
-      field: 'Your own TMDB API key (optional)',
-      placeholder: 'Leave empty to use the built-in one',
-      hint: 'Either a v3 API key or a v4 read access token works.',
+      lede: 'Berth ships no API key of its own, so this credential has to be yours. It is required: without it there are no titles, seasons or artwork, and browsing, naming and importing all stop.',
+      required: 'Required',
+      held: 'Held',
+      absent: 'Not set yet',
+      whereLabel: 'Where to get one',
+      where:
+        'Sign up for a free account on themoviedb.org, then open Settings → API and request a key for Personal / Education use; the form asks for a URL and a short summary of what you are building. The key is issued immediately, with no review to wait for. Going to get one now is fine — the wizard keeps its progress and comes back to this step.',
+      open: "Open TMDB's API settings",
+      blank:
+        'This step needs a key to go on. Paste the one you got from themoviedb.org and press again.',
+      field: 'Your TMDB API key',
+      placeholder: 'Paste an API key or a read access token',
+      hint: 'Either a v3 API key (32 hex characters) or a v4 read access token (a long string) works — paste whichever you have.',
       test: 'Test TMDB',
       testing: 'Testing…',
       line: 'Verify the credential',
       fix: 'Check the key for typos, and check that this machine can reach api.themoviedb.org:',
-      builtIn: "Berth's built-in project credential",
-      overridden: 'Your own key',
-      ownKeyLabel: 'Overridden',
-      ownKey: 'Every TMDB request from now on uses your key instead of the built-in one.',
     },
   },
   routes: {
@@ -986,12 +993,10 @@ const en: Translations<typeof zhHant> = {
     },
     skipped: {
       indexers: 'Indexers',
-      tmdb: 'TMDB',
     },
     where: {
       indexers:
         'No indexer yet. Add one under Settings → Source; until then searches return nothing.',
-      tmdb: 'TMDB is not verified yet. Add a key under Settings → Source; until then titles and episode data stay empty.',
     },
   },
   login: {

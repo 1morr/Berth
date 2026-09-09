@@ -32,7 +32,6 @@ from berth.adapters.prowlarr import (
 )
 from berth.adapters.prowlarr.client import SCHEMA_TIMEOUT_SECONDS, HttpProwlarrClient
 from berth.adapters.qbittorrent.client import HttpQbittorrentClient
-from berth.adapters.tmdb import PROJECT_CREDENTIAL
 from berth.adapters.tmdb.client import HttpTmdbClient
 from berth.adapters.torznab.client import HttpTorznabClient
 from berth.domain import CollectionType
@@ -46,6 +45,8 @@ PROWLARR_URL = "http://prowlarr:9696"
 TORZNAB_URL = "http://jackett:9117/api/v2.0/indexers/all/results/torznab/api"
 #: 契約測試不打真的 TMDB；位址是真的那一個，回應是錄下來的那一份。
 TMDB_URL = "https://api.themoviedb.org/3"
+#: v4 read access token 的**形狀**（三段 JWT）。憑證由使用者自備（票 02b），repo 裡不留真的那一把。
+V4_READ_TOKEN = "eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiJiZXJ0aC10ZXN0Iiwic2NvcGVzIjpbXX0.not-a-signature"
 
 
 @respx.mock
@@ -1028,7 +1029,7 @@ async def test_tmdb_configuration_proves_the_credential_works() -> None:
         200, text=read_fixture("http/tmdb/configuration.json")
     )
 
-    client = HttpTmdbClient(PROJECT_CREDENTIAL, base_url=TMDB_URL)
+    client = HttpTmdbClient(V4_READ_TOKEN, base_url=TMDB_URL)
     try:
         configuration = await client.configuration()
     finally:
@@ -1045,13 +1046,13 @@ async def test_tmdb_read_access_token_travels_as_a_bearer_header() -> None:
         200, text=read_fixture("http/tmdb/configuration.json")
     )
 
-    client = HttpTmdbClient(PROJECT_CREDENTIAL, base_url=TMDB_URL)
+    client = HttpTmdbClient(V4_READ_TOKEN, base_url=TMDB_URL)
     try:
         await client.configuration()
     finally:
         await client.aclose()
 
-    assert route.calls.last.request.headers["Authorization"] == f"Bearer {PROJECT_CREDENTIAL}"
+    assert route.calls.last.request.headers["Authorization"] == f"Bearer {V4_READ_TOKEN}"
     assert "api_key" not in route.calls.last.request.url.params
 
 

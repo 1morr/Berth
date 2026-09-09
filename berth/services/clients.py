@@ -35,7 +35,7 @@ class ServiceClientFactory(Protocol):
     def prowlarr(self, base_url: str, api_key: str) -> ProwlarrClient: ...
 
     def tmdb(self, credential: str) -> TmdbClient:
-        """TMDB 只有一台，位址是寫死的；可變的是憑證（內建的或使用者填的）。"""
+        """TMDB 只有一台，位址是寫死的；可變的是憑證（使用者自備，票 02b）。"""
         ...
 
     def torznab(self, base_url: str, api_key: str) -> TorznabClient:

@@ -16,7 +16,7 @@ class FakeTmdbClient:
             image_base_url="https://image.tmdb.org/t/p/"
         )
         self.error = error
-        #: 最後一次拿到的憑證，用來斷言「用的是內建的還是使用者填的」。
+        #: 最後一次拿到的憑證，用來斷言「用的是存下來的那一把」。
         self.credential = ""
         self.calls = 0
 

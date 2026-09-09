@@ -283,9 +283,9 @@ describe('泊位 3：來源', () => {
     expect(await screen.findByText('Jackett · TV')).toBeInTheDocument()
   })
 
-  it('索引站與 TMDB 都可以之後再說，而且跳過之後畫面上看得出來', async () => {
+  it('索引站可以之後再說，而且跳過之後畫面上看得出來', async () => {
     // 這一條原本只驗「請求送出去了」，於是「送出去了但畫面沒變」一直沒被抓到：
-    // TMDB 那一節有 `已跳過` 徽章，索引站那一節沒有，按了像壞掉（票 11 的 critique）。
+    // TMDB 那一節有徽章，索引站那一節沒有，按了像壞掉（票 11 的 critique）。
     const fetchStub = stubApi({
       [STATUS]: { body: AT_BERTH_THREE },
       [INDEXERS]: { body: indexerSetup() },
@@ -297,8 +297,10 @@ describe('泊位 3：來源', () => {
     renderWithProviders(<SetupPage />)
     expect(screen.queryByTestId('indexers-deferred')).not.toBeInTheDocument()
 
-    const [skipIndexers] = await screen.findAllByRole('button', { name: '之後再說' })
-    await user.click(skipIndexers)
+    // TMDB 那一節沒有「之後再說」——第 6 步是閘門（票 02b），所以這顆按鈕只有一個。
+    const skipButtons = await screen.findAllByRole('button', { name: '之後再說' })
+    expect(skipButtons).toHaveLength(1)
+    await user.click(skipButtons[0])
 
     await waitFor(() => {
       expect(fetchStub.mock.calls.some(([url]) => String(url).endsWith('/indexers/skip'))).toBe(
@@ -308,34 +310,83 @@ describe('泊位 3：來源', () => {
     expect(await screen.findByTestId('indexers-deferred')).toBeInTheDocument()
   })
 
-  it('TMDB 什麼都不填也測得了，測完留下 TMDB 自己報的值', async () => {
+  it('沒填 key 就按下去會被欄位擋住，畫面說得出去哪裡拿一把', async () => {
+    // 第 6 步是閘門（票 02b）：第一次來的人手上還沒有 key，所以畫面要先說去哪裡申請。
+    // 按鈕**不停用**——票 11 的 critique 抓過「按不動的控制項讀起來像壞掉」。
+    const fetchStub = stubApi({
+      [STATUS]: { body: AT_BERTH_THREE },
+      [INDEXERS]: { body: indexerSetup() },
+      [TMDB]: { body: tmdbSetup() },
+    })
+    const user = userEvent.setup()
+
+    renderWithProviders(<SetupPage />)
+
+    expect(await screen.findByText(/設定 → API/)).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '開啟 TMDB 的 API 設定' })).toHaveAttribute(
+      'href',
+      'https://www.themoviedb.org/settings/api',
+    )
+    expect(screen.getByTestId('tmdb-required')).toHaveTextContent('必填')
+
+    await user.click(await screen.findByRole('button', { name: '測試 TMDB' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/要一把 key/)
+    expect(fetchStub.mock.calls.some(([url]) => String(url).endsWith('/tmdb/test'))).toBe(false)
+  })
+
+  it('憑證測不過時，就地給得出兩條跑得動的下一步', async () => {
+    // 「key 打錯了」與「連不到 api.themoviedb.org」是兩件事，畫面要兩條都給
+    // （PRODUCT.md 原則 4；image 裡沒有 curl，所以連線那條走 python）。
+    stubApi({
+      [STATUS]: { body: AT_BERTH_THREE },
+      [INDEXERS]: { body: indexerSetup() },
+      [TMDB]: {
+        body: tmdbSetup({
+          api_key_present: true,
+          steps: [step('configuration', 'failed', '', 'GET /configuration: 401')],
+        }),
+      },
+    })
+
+    renderWithProviders(<SetupPage />)
+
+    expect(await screen.findByText('GET /configuration: 401')).toBeInTheDocument()
+    expect(screen.getAllByText('https://www.themoviedb.org/settings/api')).toHaveLength(2)
+    expect(
+      screen.getByText(/socket\.create_connection\(\('api\.themoviedb\.org', 443\)/),
+    ).toBeInTheDocument()
+  })
+
+  it('貼上自己的 key 測過之後，留下 TMDB 自己報的值', async () => {
     const fetchStub = stubApi({
       [STATUS]: { body: AT_BERTH_THREE },
       [INDEXERS]: { body: indexerSetup() },
       [TMDB]: { body: tmdbSetup() },
       [TEST_TMDB]: {
-        body: tmdbSetup({ steps: [step('configuration', 'ok', 'https://image.tmdb.org/t/p/')] }),
+        body: tmdbSetup({
+          api_key_present: true,
+          verified: true,
+          steps: [step('configuration', 'ok', 'https://image.tmdb.org/t/p/')],
+        }),
       },
     })
     const user = userEvent.setup()
 
     renderWithProviders(<SetupPage />)
-    await user.click(await screen.findByRole('button', { name: '測試 TMDB' }))
+    await user.type(
+      await screen.findByLabelText('你的 TMDB API key'),
+      ' dc332023c119334763ec3b21bcdd1834 ',
+    )
+    await user.click(screen.getByRole('button', { name: '測試 TMDB' }))
 
     expect(await screen.findByText('https://image.tmdb.org/t/p/')).toBeInTheDocument()
     const call = fetchStub.mock.calls.find(([url]) => String(url).endsWith('/tmdb/test'))!
-    expect(JSON.parse(String(call[1]?.body))).toEqual({ api_key: '' })
-  })
-
-  it('填了自己的 key 之後畫面說清楚內建的那把不再被用', async () => {
-    stubApi({
-      [STATUS]: { body: AT_BERTH_THREE },
-      [INDEXERS]: { body: indexerSetup() },
-      [TMDB]: { body: tmdbSetup({ using_project_credential: false }) },
+    expect(JSON.parse(String(call[1]?.body))).toEqual({
+      api_key: 'dc332023c119334763ec3b21bcdd1834',
     })
-
-    renderWithProviders(<SetupPage />)
-
-    expect(await screen.findByText(/不再用內建的/)).toBeInTheDocument()
+    // 綠燈之後那塊「去哪裡拿」就收起來，剖面改說憑證已經在手上。
+    expect(screen.queryByText(/設定 → API/)).not.toBeInTheDocument()
+    expect(screen.getByTestId('tmdb-required')).toHaveTextContent('已完成')
   })
 })

@@ -141,12 +141,9 @@ export function skipIndexers(skipped: boolean): Promise<IndexerSetup> {
   return apiPost<IndexerSetup>('/setup/indexers/skip', { skipped } satisfies Schemas['SkipIn'])
 }
 
+/** 第 6 步沒有 `skip`：憑證是使用者自備的必填項，測得過才走得到第 7 步（票 02b）。 */
 export function testTmdb(api_key: string): Promise<TmdbSetup> {
   return apiPost<TmdbSetup>('/setup/tmdb/test', { api_key } satisfies Schemas['TmdbTestIn'])
-}
-
-export function skipTmdb(skipped: boolean): Promise<TmdbSetup> {
-  return apiPost<TmdbSetup>('/setup/tmdb/skip', { skipped } satisfies Schemas['SkipIn'])
 }
 
 /** --- 第 7–8 步：媒體庫 → Route（plan §9.3 第 7–8 步、§9.5）--- */

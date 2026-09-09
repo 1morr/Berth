@@ -190,18 +190,20 @@ class SetupIndexer(BaseModel):
     #: 逐站結果。套件內路徑的 `key` 是 Prowlarr 的 `definitionName`；既有路徑只有一條，
     #: `key` 是 `IndexerKind`。兩條路徑共用同一份形狀，畫面也就是同一組纜繩。
     steps: list[SetupStep] = []
-    #: 「之後再說」。這一步與 TMDB 可跳過，完成頁列出跳過了什麼（plan §9.3）。
+    #: 「之後再說」。可跳過的只有這一步，完成頁列出跳過了什麼（plan §9.3、票 02b）。
     skipped: bool = False
 
 
 class SetupTmdb(BaseModel):
-    """精靈第 6 步的狀態（plan §9.3 第 6 步、§8.3）。"""
+    """精靈第 6 步的狀態（plan §9.3 第 6 步、§8.3）。
+
+    **沒有 `skipped`**：憑證由使用者自備而且必填，這一步是閘門不是「之後再說」（票 02b）。
+    """
 
     model_config = ConfigDict(extra="ignore")
 
     #: 只有一條纜繩（`configuration`），形狀與其他泊位一致。
     steps: list[SetupStep] = []
-    skipped: bool = False
 
 
 class ServiceHealth(BaseModel):

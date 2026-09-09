@@ -518,7 +518,7 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 - **目標環境【決定】**：Linux（NAS 與伺服器）與 Windows（Docker Desktop，WSL2 後端）。兩種使用者：NAS 使用者已有目錄規劃、可能已有 Jellyfin；一般電腦使用者什麼都沒有，要能「下載一份 compose、跑起來、開瀏覽器」就完成。
 - 範例 `docker-compose.yml` 含 `berth`、qBittorrent、Jellyfin、Prowlarr，四者掛同一個 `/data`；權限採 TRaSH 的「單一使用者 + UMASK 022」簡化方案（§20.2），四個容器同 `PUID/PGID`。
 - `/data` 一律用宿主目錄 bind mount（`DATA_ROOT`），Linux 與 Windows 相同：Windows Docker Desktop 的 NTFS bind mount 硬鏈接已實測可用（§20.7）。不支援 exFAT；健康檢查在建立 Route 時即驗證。
-- README 明列：硬鏈接前提（單一掛載、不可 exFAT、不可跨 btrfs 子卷 / ZFS dataset / mergerfs branch）、支援 Linux 宿主與 Windows Docker Desktop（NTFS）、qBittorrent 版本下限與必要設定（temp path、category autoTMM）、Jellyfin 側需安裝 MergeVersions 插件（套件模式自動安裝）、TMDB 的歸屬聲明與 logo。
+- README 明列：硬鏈接前提（單一掛載、不可 exFAT、不可跨 btrfs 子卷 / ZFS dataset / mergerfs branch）、支援 Linux 宿主與 Windows Docker Desktop（NTFS）、qBittorrent 版本下限與必要設定（temp path、category autoTMM）、Jellyfin 側需安裝 MergeVersions 插件（套件模式自動安裝）、**使用者要自備 TMDB API key 與取得步驟**（§16.3）、TMDB 的歸屬聲明與 logo。
 
 ### 16.2 跨切面需求
 
@@ -535,12 +535,14 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 
 目標：新手使用者下載 compose 範本、`docker compose up`、開瀏覽器，之後所有設定都在 Berth 的精靈裡完成，不需要分別打開 qBittorrent、Jellyfin、Prowlarr 的介面。做法是「預置設定檔 + Berth 透過各服務 API 代為設定」，兩者都冪等，可重複按。
 
+**唯一要離開 Berth 的一步是 TMDB 憑證**【決定 2026-09-09】：使用者得先去 themoviedb.org 註冊、在「設定 → API」申請一把 key，貼進精靈第 6 步。Berth **不內建任何 provider 的 API key** —— 不替所有使用者背一把共用憑證（原本沿用 Seerr 的內建 key，§20.7）。代價是「開箱即用」缺了這一角，這是知情且接受的；相對地兩個 metadata provider（TMDB 與 §10 評估過的 TVDB）在「使用者自備 key」這件事上是對稱的。
+
 | 服務 | 預置（compose 範本） | Berth 一鍵設定（API） | 使用者仍需自己做 |
 | --- | --- | --- | --- |
 | qBittorrent | **只預置「讓 Berth 進得去」**：只放行 Berth 容器固定 IP 的免密白名單（不是整個網段，理由見 §20.7）。原因是 4.6.1 起首次啟動的隨機密碼只印在容器 log，Berth 拿不到，沒有這一步按鈕就登不進去 | 套用建議偏好（temp path、save path、autoTMM）、依 Route 建立 category、設定 WebUI 密碼；按下前顯示差異 | 無 |
 | Jellyfin | 無 | 偵測「尚未完成初始精靈」→ 以 Berth 管理員帳密建立 Jellyfin 管理員 → 建立 Movies / TV / Anime 三個媒體庫（對應 `/data/library/{movies,tv,anime}`）→ 加入插件庫並安裝 MergeVersions → 重啟 → 自動建立三個 Route | 無 |
 | Prowlarr | 無；Berth 唯讀掛載其設定目錄讀取 API key | 加入預設索引站清單（Nyaa.si、dmhy、AniDex、Anime Tosho、ACG.RIP、Mikan、1337x、YTS、EZTV、The Pirate Bay，可勾選）、以 Berth 管理員帳密設定介面登入 | 私有站的帳號 |
-| TMDB | Berth 內建專案級 API key（Seerr 的做法，§20.7） | 無 | 可選：填自己的 key |
+| TMDB | 無 —— **Berth 不內建任何 provider 的 key**【決定 2026-09-09】 | 無 | **必要**：自己申請一把 API key 貼進精靈第 6 步（§20.7） |
 | 索引站 / RSS | 無 | Mikan、Nyaa feed 由使用者貼 URL | 貼自己的 Mikan 訂閱 URL |
 
 - **每個服務各自判斷來源，沒有全局模式**。精靈逐一探測 compose 主機名（`jellyfin`、`qbittorrent`、`prowlarr`）：探得到且尚未設定過（Jellyfin 的 `StartupWizardCompleted=false`、qBittorrent 免密可進、Prowlarr 無索引站）→ 視為**套件內服務**，全自動；否則顯示連線表單 → **既有服務**，只做檢查，「套用建議設定」「加入媒體庫路徑」「安裝插件」各是一顆需確認的按鈕。NAS 使用者常見的組合是既有 Jellyfin + 套件內 qBittorrent 與 Prowlarr。
@@ -931,9 +933,11 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 - 空的 named volume 與 Docker 替 bind mount 新建的目錄都是 `root:root`，非 root 的容器寫不進去。入口腳本因此只在 `/data` 還是空目錄時接手擁有者，已經有內容的媒體根不碰（實測：空目錄 → 檔案為 `1500:1500`、`umask 002`；非空目錄 → 維持 `root:root`）。
 - compose 內再次確認 `/data` 的硬鏈接：`dev=70`、inode 相同、`nlink=2`（與 §20.7 開頭的 Windows 實測一致）。
 
-**TMDB 專案級 key**
+**TMDB 憑證由使用者自備**（2026-09-09 決定，推翻本節原本的「沿用 Seerr 的專案級 key」）
 
-- Jellyseerr / Seerr 在 `server/api/themoviedb/index.ts` 寫死一把專案 key，使用者無處填自己的 key（[overseerr#3887](https://github.com/sct/overseerr/issues/3887)）；Jellyfin 團隊也曾討論專案級 key（[jellyfin#36](https://github.com/jellyfin/jellyfin/issues/36)）。TMDB 條款只區分商業與非商業，未明文規範「一 app 一 key」；本系統沿用此慣例並允許覆寫。
+- Jellyseerr / Seerr 在 `server/api/themoviedb/index.ts` 寫死一把專案 key，使用者無處填自己的 key（[overseerr#3887](https://github.com/sct/overseerr/issues/3887)）；Jellyfin 團隊也曾討論專案級 key（[jellyfin#36](https://github.com/jellyfin/jellyfin/issues/36)）。TMDB 條款只區分商業與非商業，未明文規範「一 app 一 key」，所以那條路是走得通的。
+- **本系統仍然不走**：一把發給所有使用者的共用憑證由專案背著它的用量與行為，而 TVDB 的 ToS 明文擋的也正是這件事（§20.3）。兩個 provider 在「使用者自己申請一把」上對稱，於是這裡也對稱處理。憑證的唯一來源是 `settings.services.tmdb.api_key`，精靈第 6 步是**必填的閘門**（plan §9.3）。
+- 申請路徑：themoviedb.org 免費帳號 → 設定 → API → 用途選 Personal / Education，即時核發。同一頁同時給 v3 API key 與 v4 read access token，兩種形狀 Berth 都收（plan §8.3，2026-09-08 實測）。
 
 **qBittorrent 預置**（[sessionimpl.cpp](https://github.com/qbittorrent/qBittorrent/blob/master/src/base/bittorrent/sessionimpl.cpp)、[linuxserver/qbittorrent](https://docs.linuxserver.io/images/docker-qbittorrent)、[qbittorrent-nox](https://github.com/qbittorrent/docker-qbittorrent-nox)）
 

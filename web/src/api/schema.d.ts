@@ -516,25 +516,10 @@ export interface paths {
         /**
          * Post Tmdb Test
          * @description 先存再測。`configuration` 回得出來就證明這把憑證有效。
+         *
+         *     **沒有 `/tmdb/skip`**：這一步是閘門，測不過就走不到第 7 步（票 02b）。
          */
         post: operations["post_tmdb_test_api_setup_tmdb_test_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/setup/tmdb/skip": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Post Tmdb Skip */
-        post: operations["post_tmdb_skip_api_setup_tmdb_skip_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1065,20 +1050,17 @@ export interface components {
         StepStatus: "ok" | "skipped" | "failed" | "running" | "pending";
         /** TmdbSetupOut */
         TmdbSetupOut: {
-            /** Using Project Credential */
-            using_project_credential: boolean;
+            /** Api Key Present */
+            api_key_present: boolean;
+            /** Verified */
+            verified: boolean;
             /** Steps */
             steps: components["schemas"]["StepOut"][];
-            /** Skipped */
-            skipped: boolean;
         };
         /** TmdbTestIn */
         TmdbTestIn: {
-            /**
-             * Api Key
-             * @default
-             */
-            api_key?: string;
+            /** Api Key */
+            api_key: string;
         };
         /** ValidationError */
         ValidationError: {
@@ -1760,39 +1742,6 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["TmdbTestIn"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TmdbSetupOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    post_tmdb_skip_api_setup_tmdb_skip_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SkipIn"];
             };
         };
         responses: {

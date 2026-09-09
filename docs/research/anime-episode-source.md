@@ -82,7 +82,7 @@ Jellyfin 那一端必須改用 TVDB 插件刮才對得上，以及走 absolute �
 
 | 東西 | 來源 | 備註 |
 | --- | --- | --- |
-| TMDB 季集 | TMDB API `tv/{id}`、`tv/{id}/season/{n}` | 用 `berth/adapters/tmdb` 的內建憑證，腳本直接從原始碼讀，不另外複製一份 |
+| TMDB 季集 | TMDB API `tv/{id}`、`tv/{id}/season/{n}` | 憑證讀環境變數 `TMDB_API_KEY`（使用者自備，票 02b；2026-09-09 之前是讀 adapter 裡的內建憑證） |
 | TVDB aired + absolute | Sonarr 的 Skyhook `https://skyhook.sonarr.tv/v1/tvdb/shows/en/{tvdbId}` | 免 key。**只用於本實驗**，理由見 §5 |
 | 字幕組實際釋出 | Mikan Project `RSS/Bangumi?bangumiId=`（標題 + 發佈時間）與逐季番組清單 | Mikan 的「番組」就是一輪播出（cour），這是輪次邊界的來源 |
 

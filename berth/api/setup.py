@@ -38,7 +38,7 @@ from berth.services.setup import (
     detect_services,
     read_status,
 )
-from berth.services.tmdb import read_tmdb_status, skip_tmdb, verify_tmdb
+from berth.services.tmdb import read_tmdb_status, verify_tmdb
 
 #: 誰進得來這一組由門禁決定（`api/gate.py`）：精靈跑完之前匿名開放，跑完之後只有管理員。
 #: 規則放在那裡而不是這裡的相依，是為了「忘記掛相依」不會變成一個沒人守的洞。
@@ -289,7 +289,7 @@ class IndexerConnectIn(BaseModel):
 
 
 class SkipIn(BaseModel):
-    #: 第 5、6 步可跳過，也可以再取消跳過（plan §9.3）。
+    #: 第 5 步可跳過，也可以再取消跳過（plan §9.3）。第 6 步不行（票 02b）。
     skipped: bool = True
 
 
@@ -338,20 +338,20 @@ async def post_indexers_skip(
     )
 
 
-# --- 第 6 步：TMDB（plan §9.3 第 6 步、§8.3）---
+# --- 第 6 步：TMDB（plan §9.3 第 6 步、§8.3）。憑證使用者自備、必填（票 02b）---
 
 
 class TmdbSetupOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    using_project_credential: bool
+    api_key_present: bool
+    verified: bool
     steps: list[StepOut]
-    skipped: bool
 
 
 class TmdbTestIn(BaseModel):
-    #: 空字串代表用回內建的專案級憑證。
-    api_key: str = ""
+    #: 使用者自己申請的 v3 API key 或 v4 read access token（票 02b）。空字串就是一條紅線。
+    api_key: str
 
 
 @router.get("/tmdb")
@@ -363,13 +363,11 @@ async def get_tmdb(session: SessionDep) -> TmdbSetupOut:
 async def post_tmdb_test(
     session: SessionDep, factory: ClientFactoryDep, body: TmdbTestIn
 ) -> TmdbSetupOut:
-    """先存再測。`configuration` 回得出來就證明這把憑證有效。"""
+    """先存再測。`configuration` 回得出來就證明這把憑證有效。
+
+    **沒有 `/tmdb/skip`**：這一步是閘門，測不過就走不到第 7 步（票 02b）。
+    """
     return TmdbSetupOut.model_validate(await verify_tmdb(session, factory, api_key=body.api_key))
-
-
-@router.post("/tmdb/skip")
-async def post_tmdb_skip(session: SessionDep, body: SkipIn) -> TmdbSetupOut:
-    return TmdbSetupOut.model_validate(await skip_tmdb(session, skipped=body.skipped))
 
 
 # --- 第 7–8 步：媒體庫 → Route 與完成（plan §9.3 第 7–8 步、§9.5）---

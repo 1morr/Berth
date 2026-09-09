@@ -42,9 +42,10 @@ ffmpeg 產種子檔），那只影響「造測試素材」這一步，不影響 
 - **深連結那一項是手動的**：`#!/details?id=…` 是前端路由，伺服器端測不到。`jellyfin_naming.py`
   會把兩種候選網址與可用的 item id 印出來並寫進報告的 `deep_link_candidates`，人開瀏覽器登入後
   貼上去看。實測結果記在 research 文件的 §1.8。
-- **`anime_episode_source.py` 不需要容器，也不需要任何 key。** TMDB 憑證從
-  `berth/adapters/tmdb/__init__.py` 直接讀（不另外複製一份），TVDB 資料走 Sonarr 的 Skyhook
-  代理，字幕組的實際釋出來自 Mikan 的 RSS。**Skyhook 只能這樣用在實驗裡**——它是 Sonarr 自營
+- **`anime_episode_source.py` 不需要容器，但需要一把 TMDB 憑證。** 跑之前設好環境變數
+  `TMDB_API_KEY`（v3 API key 或 v4 read access token 都可以，themoviedb.org 的「設定 → API」
+  申請）——Berth 不內建任何 provider 的 key，腳本也不留一把（票 02b）。TVDB 資料走 Sonarr 的
+  Skyhook 代理，字幕組的實際釋出來自 Mikan 的 RSS。**Skyhook 只能這樣用在實驗裡**——它是 Sonarr 自營
   的封閉服務，不是給第三方的公開 API，理由寫在 research 文件的 §5。
 - **它會把抓到的東西快取在 `.local/experiments/cache/`。** Mikan 的頁面動輒 500 KB 以上、
   連線常常中途被掐掉，第一次跑要十來分鐘；重跑分析（例如換 `--gap-days`）則是秒級。要重新

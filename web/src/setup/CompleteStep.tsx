@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next'
 
-import type { IndexerSetup, RouteSetup, TmdbSetup } from '../api/setup'
+import type { IndexerSetup, RouteSetup } from '../api/setup'
 import { STICKY_ACTION, GhostButton, Notice, PrimaryButton } from '../components/controls'
 import { SIGNAL_FILL } from '../components/signal'
 import { ROUTE_SIGNAL } from '../components/routeChecks'
@@ -9,8 +9,8 @@ import { Cutaway, CutawayRow } from './Cutaway'
 /**
  * 第 8 步：完成（plan §9.3 第 8 步）。
  *
- * 兩件事：把跑出來的結果攤出來（幾條 Route、各自寫到哪裡），以及**列出跳過了什麼與在哪裡補**
- * ——第 5、6 步可以「之後再說」，完成頁是他最後一次看到那件事的地方。
+ * 兩件事：把跑出來的結果攤出來（幾條 Route、各自寫到哪裡），以及**說出跳過了什麼與在哪裡補**
+ * ——可以「之後再說」的只有第 5 步（票 02b），完成頁是他最後一次看到那件事的地方。
  *
  * 按下去之後 `settings.setup.completed` 就寫下去了，`setup/*` 從此要登入（票 07），
  * 所以按鈕文案講的是「完成設定」而不是「下一步」。
@@ -18,7 +18,6 @@ import { Cutaway, CutawayRow } from './Cutaway'
 export function CompleteStep({
   routes,
   indexers,
-  tmdb,
   completing,
   failed,
   onComplete,
@@ -26,16 +25,13 @@ export function CompleteStep({
 }: {
   routes: RouteSetup
   indexers: IndexerSetup | undefined
-  tmdb: TmdbSetup | undefined
   completing: boolean
   failed: boolean
   onComplete: () => void
   onRevisit: () => void
 }) {
   const { t } = useTranslation()
-  const skipped = [indexers?.skipped ? 'indexers' : null, tmdb?.skipped ? 'tmdb' : null].filter(
-    (row): row is 'indexers' | 'tmdb' => row !== null,
-  )
+  const skippedIndexers = indexers?.skipped ?? false
 
   return (
     <div className="grid flex-1 gap-px bg-rule lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
@@ -47,12 +43,8 @@ export function CompleteStep({
             <CutawayRow term={t('complete.cutaway.routes')} value={String(routes.routes.length)} />
             <CutawayRow
               term={t('complete.cutaway.skipped')}
-              value={
-                skipped.length === 0
-                  ? t('complete.cutaway.nothing')
-                  : skipped.map((row) => t(`complete.skipped.${row}`)).join(' · ')
-              }
-              muted={skipped.length === 0}
+              value={t(skippedIndexers ? 'complete.skipped.indexers' : 'complete.cutaway.nothing')}
+              muted={!skippedIndexers}
             />
           </Cutaway>
         </div>
@@ -83,14 +75,12 @@ export function CompleteStep({
           ))}
         </ul>
 
-        {skipped.length > 0 && (
+        {skippedIndexers && (
           <section className="mt-6 grid gap-3">
             <h3 className="label text-ink-dim">{t('complete.skippedTitle')}</h3>
-            {skipped.map((row) => (
-              <Notice key={row} signal="assigned" label={t('source.skip')}>
-                {t(`complete.where.${row}`)}
-              </Notice>
-            ))}
+            <Notice signal="assigned" label={t('source.skip')}>
+              {t('complete.where.indexers')}
+            </Notice>
           </section>
         )}
 

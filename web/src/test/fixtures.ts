@@ -176,9 +176,9 @@ export function indexerSetup(overrides: Partial<IndexerSetup> = {}): IndexerSetu
   }
 }
 
-/** 第 6 步狀態的測試建構子。預設是「用內建憑證、還沒測過」。 */
+/** 第 6 步狀態的測試建構子。預設是「還沒填 key、還沒測過」。 */
 export function tmdbSetup(overrides: Partial<TmdbSetup> = {}): TmdbSetup {
-  return { using_project_credential: true, steps: [], skipped: false, ...overrides }
+  return { api_key_present: false, verified: false, steps: [], ...overrides }
 }
 
 /** 第 7 步狀態的測試建構子。預設是「套件內、三個媒體庫、還沒建 Route」。 */

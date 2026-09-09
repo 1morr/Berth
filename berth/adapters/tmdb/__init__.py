@@ -1,4 +1,8 @@
-"""TMDB adapter（plan §8.3）。M0 只用得到 `configuration`：那是「這把憑證有效」的證明。"""
+"""TMDB adapter（plan §8.3）。M0 只用得到 `configuration`：那是「這把憑證有效」的證明。
+
+**憑證由使用者自備**：Berth 不內建任何 provider 的 API key（brief §16.3、§20.7），唯一的來源是
+`settings.services.tmdb.api_key`，取用它的地方只有 `services.tmdb.credential()`。
+"""
 
 from __future__ import annotations
 
@@ -6,17 +10,6 @@ from dataclasses import dataclass
 from typing import Protocol
 
 BASE_URL = "https://api.themoviedb.org/3"
-
-#: 內建的專案級憑證（brief §16.3、§20.7；Jellyseerr / Seerr 的做法）。使用者不必自己申請，
-#: 但 `settings.services.tmdb.api_key` 有值就蓋過它。這是 v4 的 read access token——
-#: TMDB 官方文件把它列為建議做法，而且走標頭不進網址，不會落在任何一行 log 裡
-#: （context7，2026-09-08）。
-PROJECT_CREDENTIAL = (
-    "eyJhbGciOiJIUzI1NiJ9."
-    "eyJhdWQiOiJkYzMzMjAyM2MxMTkzMzQ3NjNlYzNiMjFiY2RkMTgzNCIsIm5iZiI6MTczNzM5MTAwNC41ODYsInN1YiI6"
-    "IjY3OGU3YjljNDJmMjdjNzU0YzY1NTNlMCIsInNjb3BlcyI6WyJhcGlfcmVhZCJdLCJ2ZXJzaW9uIjoxfQ."
-    "xTxqFkJOJ0H7zFLQlxyvj5lubQX9ltaRVCLcZR_t7QY"
-)
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,4 +42,4 @@ def credential_auth(credential: str) -> tuple[dict[str, str], dict[str, str]]:
     return ({}, {"api_key": value})
 
 
-__all__ = ["BASE_URL", "PROJECT_CREDENTIAL", "TmdbClient", "TmdbConfiguration", "credential_auth"]
+__all__ = ["BASE_URL", "TmdbClient", "TmdbConfiguration", "credential_auth"]

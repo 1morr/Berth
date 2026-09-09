@@ -15,6 +15,12 @@ import { SIGNAL_FILL } from '../components/signal'
 import { Cutaway, CutawayRow } from './Cutaway'
 import { StepLine } from '../components/StepLine'
 
+/** 使用者去申請 key 的那一頁。連結與可複製的網址用的是同一個字串。 */
+const TMDB_API_SETTINGS = 'https://www.themoviedb.org/settings/api'
+
+/** 「key 沒打錯，那是連不出去嗎」——image 裡沒有 curl（README 的疑難排解），所以用 python。 */
+const REACHABILITY_PROBE = `docker compose exec berth python -c "import socket; socket.create_connection(('api.themoviedb.org', 443), 5); print('reachable')"`
+
 /**
  * 泊位 3：來源（plan §9.3 第 5–6 步）。同一個泊位的兩條纜繩——索引站與 TMDB。
  *
@@ -32,7 +38,6 @@ export function SourceStep({
   onConnect,
   onSkipIndexers,
   onTestTmdb,
-  onSkipTmdb,
 }: {
   indexers: IndexerSetup
   tmdb: TmdbSetup
@@ -43,7 +48,6 @@ export function SourceStep({
   onConnect: (input: IndexerConnectInput) => void
   onSkipIndexers: () => void
   onTestTmdb: (apiKey: string) => void
-  onSkipTmdb: () => void
 }) {
   const { t } = useTranslation()
   const bundled = indexers.origin === 'bundled' && indexers.reachable
@@ -80,7 +84,7 @@ export function SourceStep({
           </>
         )}
 
-        <Tmdb tmdb={tmdb} testing={testingTmdb} onTest={onTestTmdb} onSkip={onSkipTmdb} />
+        <Tmdb tmdb={tmdb} testing={testingTmdb} onTest={onTestTmdb} />
       </div>
     </div>
   )
@@ -124,9 +128,8 @@ function SourceCutaway({
       <Cutaway title={t('source.cutaway.tmdb')}>
         <CutawayRow
           term={t('source.cutaway.credential')}
-          value={t(
-            tmdb.using_project_credential ? 'source.tmdb.builtIn' : 'source.tmdb.overridden',
-          )}
+          value={t(tmdb.api_key_present ? 'source.tmdb.held' : 'source.tmdb.absent')}
+          muted={!tmdb.api_key_present}
         />
         <CutawayRow term={t('source.cutaway.endpoint')} value="GET /3/configuration" />
       </Cutaway>
@@ -337,36 +340,71 @@ function ExistingIndexer({
   )
 }
 
-/** 第 6 步：內建專案級憑證，可覆寫，一顆「測試」（plan §9.3 第 6 步）。 */
+/**
+ * 第 6 步：使用者自備的 TMDB 憑證，必填（plan §9.3 第 6 步、票 02b）。
+ *
+ * **這一步是閘門**，所以沒有「之後再說」：測得過才走得到泊位 4。第一次來的人手上還沒有
+ * key，畫面因此要先說去哪裡拿，而不是只說「必填」。
+ */
 function Tmdb({
   tmdb,
   testing,
   onTest,
-  onSkip,
 }: {
   tmdb: TmdbSetup
   testing: boolean
   onTest: (apiKey: string) => void
-  onSkip: () => void
 }) {
   const { t } = useTranslation()
   const [apiKey, setApiKey] = useState('')
+  const [blank, setBlank] = useState(false)
   const row = tmdb.steps.find((step) => step.step === 'configuration')
 
   return (
     <section className="mt-10 border-t-2 border-rule pt-6">
       <div className="flex flex-wrap items-center gap-3">
         <h3 className="label text-ink-dim">{t('source.tmdb.title')}</h3>
-        {tmdb.skipped && (
-          <span className={`label px-2 py-1.5 ${SIGNAL_FILL.neutral}`}>{t('source.deferred')}</span>
-        )}
+        <span
+          data-testid="tmdb-required"
+          className={`label px-2 py-1.5 ${tmdb.verified ? SIGNAL_FILL.secured : SIGNAL_FILL.assigned}`}
+        >
+          {t(tmdb.verified ? 'status.ok' : 'source.tmdb.required')}
+        </span>
       </div>
       <p className="mt-2 max-w-prose text-sm text-ink-dim">{t('source.tmdb.lede')}</p>
+
+      {/* 還沒有 key 的人要先離開 Berth 一趟，所以連結與可複製的網址並存：NAS 使用者的
+          瀏覽器多半不在那台機器上，只給連結等於沒給。 */}
+      {!tmdb.verified && (
+        <div className="mt-4 grid gap-3">
+          <Notice signal="assigned" label={t('source.tmdb.whereLabel')}>
+            {t('source.tmdb.where')}
+          </Notice>
+          <div className="grid gap-3 sm:grid-cols-[auto_minmax(0,1fr)] sm:items-center">
+            {/* 外框方塊的形狀出自 DESIGN.md 的 Navigation（`.label` + `border-2 border-rule`），
+                不是新的元件；只有這一處用得到，所以不搬進 `components/controls.tsx`。 */}
+            <a
+              href={TMDB_API_SETTINGS}
+              target="_blank"
+              rel="noreferrer noopener"
+              className="label border-2 border-rule px-4 py-2.5 text-center text-ink hover:border-rule-strong"
+            >
+              {t('source.tmdb.open')}
+            </a>
+            <CopyLine command={TMDB_API_SETTINGS} />
+          </div>
+        </div>
+      )}
 
       <form
         onSubmit={(event) => {
           event.preventDefault()
-          onTest(apiKey)
+          // 停用的按鈕讀起來像壞掉（票 11 的 critique），所以按得下去，說不行的是欄位自己。
+          if (!apiKey.trim()) {
+            setBlank(true)
+            return
+          }
+          onTest(apiKey.trim())
         }}
         noValidate
         className="mt-4 grid gap-4"
@@ -375,38 +413,32 @@ function Tmdb({
           label={t('source.tmdb.field')}
           value={apiKey}
           autoComplete="off"
+          required
           placeholder={t('source.tmdb.placeholder')}
           hint={t('source.tmdb.hint')}
-          onChange={(event) => setApiKey(event.target.value)}
+          error={blank ? t('source.tmdb.blank') : undefined}
+          onChange={(event) => {
+            setApiKey(event.target.value)
+            setBlank(false)
+          }}
         />
-        <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
+        <div className={`grid gap-3 ${STICKY_ACTION}`}>
           <PrimaryButton type="submit" disabled={testing}>
             {testing ? t('source.tmdb.testing') : t('source.tmdb.test')}
           </PrimaryButton>
-          <GhostButton type="button" disabled={testing} onClick={onSkip}>
-            {t('source.skip')}
-          </GhostButton>
         </div>
       </form>
 
       {row && (
-        <ol className="mt-4 grid gap-3" data-testid="tmdb">
+        <ol aria-live="polite" aria-busy={testing} className="mt-4 grid gap-3" data-testid="tmdb">
           <StepLine
             label={t('source.tmdb.line')}
             endpoint="GET /3/configuration"
             row={row}
             fix={t('source.tmdb.fix')}
-            commands={['https://www.themoviedb.org/settings/api']}
+            commands={[TMDB_API_SETTINGS, REACHABILITY_PROBE]}
           />
         </ol>
-      )}
-
-      {!tmdb.using_project_credential && (
-        <div className="mt-4">
-          <Notice signal="secured" label={t('source.tmdb.ownKeyLabel')}>
-            {t('source.tmdb.ownKey')}
-          </Notice>
-        </div>
       )}
     </section>
   )

@@ -19,7 +19,6 @@ from berth.adapters.jellyfin.fake import FakeJellyfinClient
 from berth.adapters.prowlarr.fake import FakeProwlarrClient
 from berth.adapters.qbittorrent import QbittorrentVersion
 from berth.adapters.qbittorrent.fake import FakeQbittorrentClient
-from berth.adapters.tmdb import PROJECT_CREDENTIAL
 from berth.adapters.tmdb.fake import FakeTmdbClient
 from berth.api.deps import get_client_factory, get_setup_probes
 from berth.api.gate import CSRF_HEADER
@@ -615,38 +614,33 @@ class TestSource:
         # 尾斜線在存下來之前就削掉，之後組網址才不會出現兩條斜線。
         assert body["base_url"].endswith("/torznab/api")
 
-    def test_the_source_berth_can_be_skipped_and_unskipped(self, client: TestClient) -> None:
-        """跳過是可以反悔的。步驟怎麼跟著走在 `test_setup_source.py`。"""
+    def test_only_the_indexer_half_can_be_skipped_and_unskipped(self, client: TestClient) -> None:
+        """跳過是可以反悔的。TMDB 那一半根本沒有這一支（票 02b）。"""
         assert client.post("/api/setup/indexers/skip", json={}).json()["skipped"] is True
         assert client.get("/api/setup/indexers").json()["skipped"] is True
-        assert client.post("/api/setup/tmdb/skip", json={}).json()["skipped"] is True
 
         assert (
             client.post("/api/setup/indexers/skip", json={"skipped": False}).json()["skipped"]
             is False
         )
+        # 這一支不存在了。這裡的 app 沒有掛前端所以是 404；掛了前端的正式程序由 `SpaFiles`
+        # 的 mount 接手，POST 會拿到 405（它只收 GET / HEAD）——兩者都是「沒有這支端點」。
+        assert client.post("/api/setup/tmdb/skip", json={}).status_code == 404
 
-    def test_tmdb_answers_with_the_built_in_credential(
+    def test_tmdb_starts_empty_and_takes_the_key_the_user_pastes(
         self, client: TestClient, tmdb: FakeTmdbClient
     ) -> None:
         assert client.get("/api/setup/tmdb").json() == {
-            "using_project_credential": True,
+            "api_key_present": False,
+            "verified": False,
             "steps": [],
-            "skipped": False,
         }
 
-        body = client.post("/api/setup/tmdb/test", json={}).json()
-
-        assert tmdb.credential == PROJECT_CREDENTIAL
-        assert [(row["step"], row["status"]) for row in body["steps"]] == [("configuration", "ok")]
-
-    def test_a_pasted_tmdb_key_is_used_instead(
-        self, client: TestClient, tmdb: FakeTmdbClient
-    ) -> None:
         body = client.post("/api/setup/tmdb/test", json={"api_key": "the-users-key"}).json()
 
         assert tmdb.credential == "the-users-key"
-        assert body["using_project_credential"] is False
+        assert [(row["step"], row["status"]) for row in body["steps"]] == [("configuration", "ok")]
+        assert (body["api_key_present"], body["verified"]) == (True, True)
 
     def test_the_new_endpoints_close_after_setup(self, client: TestClient) -> None:
         """門禁是 middleware，所以新掛的端點什麼都不做就已經在門後（票 07）。"""
@@ -700,7 +694,7 @@ class TestRoutes:
             running.post("/api/setup/jellyfin/bootstrap")
             running.post("/api/setup/qbittorrent/apply")
             running.post("/api/setup/indexers/skip", json={})
-            running.post("/api/setup/tmdb/skip", json={})
+            running.post("/api/setup/tmdb/test", json={"api_key": "the-users-key"})
             yield running
 
     def test_the_wizard_arrives_at_step_seven_with_three_libraries_to_route(
@@ -758,6 +752,17 @@ class TestRoutes:
         refused = client.post("/api/setup/complete")
 
         assert refused.status_code == 422
+        assert client.get("/api/health").json()["setup_completed"] is False
+
+    def test_completing_needs_a_tmdb_credential_first(self, client: TestClient) -> None:
+        """第 6 步是閘門，第 8 步也擋一次（票 02b）：使用者可以回頭把 key 清掉。"""
+        client.post("/api/setup/routes", json={})
+        client.post("/api/setup/tmdb/test", json={"api_key": ""})
+
+        refused = client.post("/api/setup/complete")
+
+        assert refused.status_code == 422
+        assert "tmdb" in refused.json()["detail"].lower()
         assert client.get("/api/health").json()["setup_completed"] is False
 
     def test_completing_closes_the_wizard_and_the_api(self, client: TestClient) -> None:

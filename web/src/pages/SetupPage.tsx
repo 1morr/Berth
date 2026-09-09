@@ -22,7 +22,6 @@ import {
   routeSetupQueryOptions,
   setupStatusQueryOptions,
   skipIndexers,
-  skipTmdb,
   testTmdb,
   tmdbSetupQueryOptions,
   type AdminInput,
@@ -175,10 +174,6 @@ export function SetupPage({
     mutationFn: testTmdb,
     onSuccess: (next) => absorbBerth(tmdbSetupQueryOptions.queryKey, next),
   })
-  const skipTmdbStep = useMutation({
-    mutationFn: () => skipTmdb(true),
-    onSuccess: (next) => absorbBerth(tmdbSetupQueryOptions.queryKey, next),
-  })
   const build = useMutation({
     mutationFn: (selections: RouteSelectionInput[]) => buildRoutes(selections),
     onSuccess: (next) => absorbBerth(routeSetupQueryOptions.queryKey, next),
@@ -322,7 +317,6 @@ export function SetupPage({
           <CompleteStep
             routes={routes.data}
             indexers={indexers.data}
-            tmdb={tmdb.data}
             completing={finish.isPending}
             failed={finish.isError}
             onComplete={() => finish.mutate()}
@@ -342,7 +336,6 @@ export function SetupPage({
           onConnect={(input) => connectSource.mutate(input)}
           onSkipIndexers={() => skipSites.mutate()}
           onTestTmdb={(apiKey) => tmdbTest.mutate(apiKey)}
-          onSkipTmdb={() => skipTmdbStep.mutate()}
         />
       ) : (
         <Waiting failed={indexers.isError || tmdb.isError} message={t('source.unreachable')} />
@@ -389,7 +382,8 @@ function qbittorrentSignal(
 
 /**
  * 泊位 3 的信號。索引站逐站失敗**不算阻擋**：十個公開站裡有幾個連不上是常態，
- * 只要接上了一個就走得下去（後端的步驟判定用的是同一條規則）。
+ * 只要接上了一個就走得下去（後端的步驟判定用的是同一條規則）。TMDB 那一半沒有這個寬容——
+ * 它是閘門，綠燈由後端的 `verified` 說了算（票 02b）。
  */
 function sourceSignal(
   status: SetupStatus,
@@ -402,9 +396,7 @@ function sourceSignal(
   if (status.current_step > STEP_TMDB) return 'secured'
   const settled =
     (indexers?.skipped ?? false) || (indexers?.steps.some((row) => isSettled(row.status)) ?? false)
-  if (settled && (tmdb?.skipped || tmdb?.steps.some((row) => isSettled(row.status)))) {
-    return 'secured'
-  }
+  if (settled && tmdb?.verified) return 'secured'
   return signalOf(detection)
 }
 

@@ -1,7 +1,7 @@
 """精靈第 5–6 步的 services 命令（plan §9.3 第 5–6 步、§8.3、§8.4、票 08）。
 
 驗的是票 08 的驗收條件：十個預設站逐站顯示成敗、重按不會重複新增、既有 Prowlarr 與任意
-Torznab 各有測試、TMDB 用內建憑證可覆寫、兩步都可跳過。
+Torznab 各有測試；TMDB 那一半改由票 02b 定義——憑證使用者自備、必填，測得過才走得下去。
 """
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from berth.adapters.http import AuthFailedError, ServiceUnavailableError
 from berth.adapters.prowlarr import ProwlarrIndexer
 from berth.adapters.prowlarr.fake import FakeProwlarrClient
-from berth.adapters.tmdb import PROJECT_CREDENTIAL, TmdbConfiguration
+from berth.adapters.tmdb import TmdbConfiguration
 from berth.adapters.tmdb.fake import FakeTmdbClient
 from berth.adapters.torznab import TorznabCaps
 from berth.adapters.torznab.fake import FakeTorznabClient
@@ -38,7 +38,7 @@ from berth.services.indexer import (
 )
 from berth.services.settings import read_settings, write_settings
 from berth.services.setup import STEP_INDEXER, STEP_ROUTES, STEP_TMDB, create_admin, read_status
-from berth.services.tmdb import read_tmdb_status, skip_tmdb, verify_tmdb
+from berth.services.tmdb import read_tmdb_status, verify_tmdb
 from tests.integration.factories import FakeClientFactory
 
 NOW = datetime(2026, 9, 8, 12, 0, tzinfo=UTC)
@@ -294,52 +294,75 @@ async def test_a_failing_endpoint_is_saved_anyway_so_one_field_can_be_fixed(
 
 
 @pytest.mark.asyncio
-async def test_the_source_berth_can_be_skipped(session: AsyncSession) -> None:
-    """第 5 步與第 6 步可跳過；第 3、4、7 步不可（plan §9.3）。"""
+async def test_only_the_indexer_half_of_the_source_berth_can_be_skipped(
+    session: AsyncSession,
+) -> None:
+    """第 5 步可跳過，第 6 步不行（票 02b）。
+
+    沒有索引站只是搜尋不到東西，Berth 其餘功能還在；沒有 TMDB 則探索、季集快照、命名
+    全部停擺，所以第 6 步是閘門而不是「之後再說」。
+    """
     await arrange(session)
     assert (await read_status(session)).current_step == STEP_INDEXER
 
     await skip_indexers(session, FakeClientFactory())
     assert (await read_status(session)).current_step == STEP_TMDB
 
-    await skip_tmdb(session)
+    await verify_tmdb(session, FakeClientFactory(), api_key="dc332023c119334763ec3b21bcdd1834")
     assert (await read_status(session)).current_step == STEP_ROUTES
 
 
 @pytest.mark.asyncio
-async def test_tmdb_uses_the_built_in_credential_until_someone_overrides_it(
+async def test_a_rejected_credential_leaves_the_wizard_on_step_six(session: AsyncSession) -> None:
+    """測失敗與沒測過一樣走不下去——閘門看的是綠燈，不是「按過了」。"""
+    await arrange(session)
+    await skip_indexers(session, FakeClientFactory())
+    factory = FakeClientFactory(
+        tmdb=FakeTmdbClient(error=AuthFailedError("GET /configuration: 401"))
+    )
+
+    await verify_tmdb(session, factory, api_key="0000000000000000000000000000dead")
+
+    assert (await read_status(session)).current_step == STEP_TMDB
+
+
+@pytest.mark.asyncio
+async def test_the_pasted_key_is_the_only_source_of_the_credential(
     session: AsyncSession,
 ) -> None:
+    """Berth 不內建任何 provider 的 key（票 02b），所以測之前這裡是空的。"""
     await arrange(session)
     client = FakeTmdbClient(
         configuration=TmdbConfiguration(image_base_url="https://image.tmdb.org/t/p/")
     )
     factory = FakeClientFactory(tmdb=client)
 
-    assert (await read_tmdb_status(session)).using_project_credential is True
-
-    status = await verify_tmdb(session, factory, api_key="")
-
-    assert client.credential == PROJECT_CREDENTIAL
-    assert [(row.step, row.status, row.detail) for row in status.steps] == [
-        ("configuration", StepStatus.OK, "https://image.tmdb.org/t/p/")
-    ]
-    assert status.using_project_credential is True
-
-
-@pytest.mark.asyncio
-async def test_a_pasted_tmdb_key_overrides_the_built_in_one(session: AsyncSession) -> None:
-    await arrange(session)
-    client = FakeTmdbClient()
-    factory = FakeClientFactory(tmdb=client)
+    before = await read_tmdb_status(session)
+    assert (before.api_key_present, before.verified) == (False, False)
 
     status = await verify_tmdb(session, factory, api_key="  dc332023c119334763ec3b21bcdd1834 ")
 
     assert client.credential == "dc332023c119334763ec3b21bcdd1834"
-    assert status.using_project_credential is False
+    assert [(row.step, row.status, row.detail) for row in status.steps] == [
+        ("configuration", StepStatus.OK, "https://image.tmdb.org/t/p/")
+    ]
+    assert (status.api_key_present, status.verified) == (True, True)
     assert (
         await read_settings(session, TmdbSettings)
     ).api_key == "dc332023c119334763ec3b21bcdd1834"
+
+
+@pytest.mark.asyncio
+async def test_a_blank_credential_is_a_red_line_not_a_request(session: AsyncSession) -> None:
+    """空白不必打去 TMDB 才知道不行，而它說的話要是「必填」不是「401」。"""
+    await arrange(session)
+    client = FakeTmdbClient()
+
+    status = await verify_tmdb(session, FakeClientFactory(tmdb=client), api_key="   ")
+
+    assert client.calls == 0
+    assert status.steps[0].status is StepStatus.FAILED
+    assert (status.api_key_present, status.verified) == (False, False)
 
 
 @pytest.mark.asyncio

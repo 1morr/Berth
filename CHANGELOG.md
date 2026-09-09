@@ -134,6 +134,15 @@ Windows Docker Desktop（NTFS bind mount）與 Linux（ext4）上各跑一次 `d
   名字（`RouteView`），欄位與可選性全部來自產出的型別。M0 票 10 記的「同一份形狀寫了四層」的第四層
   就此消失。換過來的第一天就抓到一個漂移：`ServiceDetection` 少了後端已經在回的 `configured`。
 
+- **Berth 不再內建 TMDB 的專案級憑證，改由使用者自備**（推翻上面 M0 那一條，也削掉 brief §16
+  「開箱即用」的一角）。不替所有使用者背一把共用憑證；而兩個 metadata provider 在「使用者自己
+  申請一把」上本來就對稱（brief §10、§20.7）。憑證的唯一來源是 `settings.services.tmdb.api_key`，
+  精靈第 6 步從「可跳過的覆寫」變成**必填的閘門**：`POST /api/setup/tmdb/skip` 移除，測不過就
+  停在第 6 步，`POST /api/setup/complete` 在沒有一把綠燈憑證時回 422。v3 key 與 v4 read access
+  token 兩種形狀仍然都收。取得步驟寫在 README 的〈先申請一把 TMDB API key〉。
+- `scripts/experiments/anime_episode_source.py` 的 TMDB 憑證改從環境變數 `TMDB_API_KEY` 讀
+  （原本是從 adapter 原始碼刮那把內建的）。
+
 ### Fixed
 
 - **泊位板的實測值標籤對比只有 3.56:1**（WCAG 2.2 AA 的驗收條件，PRODUCT.md）。`opacity-70` 疊在

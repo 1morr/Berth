@@ -42,6 +42,7 @@ from berth.models import (
 from berth.services.clients import ServiceClientFactory, SetupProbes
 from berth.services.routes import routes_ready
 from berth.services.settings import read_settings, write_settings
+from berth.services.tmdb import tmdb_verified
 
 #: 服務未就緒時的輪詢上限（plan §9.3 第 2 步）。逾時後使用者可重試，不是永遠轉圈。
 DETECT_WINDOW = timedelta(minutes=2)
@@ -113,11 +114,14 @@ async def complete_setup(session: AsyncSession) -> SetupStatus:
     """第 8 步：寫下 `settings.setup.completed`，精靈結束（plan §9.3 第 8 步）。
 
     **這個位元就是門禁的開關**：寫下去之後 `setup/*` 只有管理員進得來，`/` 也不再導向精靈
-    （票 07）。所以在寫之前要確定第 7 步真的做完了——第 3、4、7 步不可跳（plan §9.3）。
+    （票 07）。所以在寫之前要確定不可跳的那幾步真的做完了——第 3、4、6、7 步不可跳
+    （plan §9.3、票 02b）。第 6 步在這裡再擋一次，因為使用者回得去把 key 清掉。
     """
+    setup = await read_settings(session, SetupSettings)
+    if not tmdb_verified(setup):
+        raise ValueError("finish step 6 first: TMDB needs a credential that passes its test")
     if not await routes_ready(session):
         raise ValueError("finish step 7 first: every library route has to pass its checks")
-    setup = await read_settings(session, SetupSettings)
     setup.completed = True
     await write_settings(session, setup)
     await session.commit()
@@ -463,7 +467,7 @@ def _current_step(setup: SetupSettings, *, routes: bool) -> int:
         return STEP_QBITTORRENT
     if not _indexer_settled(setup):
         return STEP_INDEXER
-    if not _tmdb_settled(setup):
+    if not tmdb_verified(setup):
         return STEP_TMDB
     if not routes:
         return STEP_ROUTES
@@ -509,12 +513,6 @@ def _indexer_settled(setup: SetupSettings) -> bool:
         row.status in (StepStatus.OK, StepStatus.SKIPPED)
         for row in setup.indexer.steps
         if row.key != PROWLARR_LOGIN_STEP
-    )
-
-
-def _tmdb_settled(setup: SetupSettings) -> bool:
-    return setup.tmdb.skipped or any(
-        row.status in (StepStatus.OK, StepStatus.SKIPPED) for row in setup.tmdb.steps
     )
 
 

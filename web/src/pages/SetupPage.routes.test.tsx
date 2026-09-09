@@ -336,7 +336,7 @@ describe('泊位 4：媒體庫路徑（既有 Jellyfin）', () => {
 })
 
 describe('第 8 步：完成', () => {
-  it('列出跑出來的 Route 與跳過了什麼、在哪裡補', async () => {
+  it('列出跑出來的 Route 與跳過的索引站、在哪裡補', async () => {
     stubApi({
       [STATUS]: { body: AT_THE_END },
       [ROUTES]: { body: BUILT },
@@ -349,7 +349,6 @@ describe('第 8 步：完成', () => {
     expect(await screen.findByRole('button', { name: '完成設定' })).toBeInTheDocument()
     expect(screen.getByText('/data/torrent/complete/tv')).toBeInTheDocument()
     expect(screen.getByText(/索引站還沒接/)).toBeInTheDocument()
-    expect(screen.queryByText(/TMDB 還沒驗證/)).not.toBeInTheDocument()
   })
 
   it('按下完成之後精靈關閉，回首頁時不再被導回精靈', async () => {

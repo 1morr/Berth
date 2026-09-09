@@ -15,6 +15,7 @@ docker compose up -d
 ```
 
 開 <http://localhost:8383>，之後所有設定都在 Berth 的精靈裡完成，不需要分別打開另外三個服務的介面。
+**唯一要離開 Berth 的一步是 TMDB 的 API key**，見下面的〈先申請一把 TMDB API key〉。
 
 精靈是八個步驟、四個泊位：
 
@@ -23,8 +24,10 @@ docker compose up -d
 | — | 1–2 建立 Berth 管理員、逐服務探測 | 探到 compose 主機名就是套件內 | 探不到就填位址，就地測連線 |
 | BTH 1 | 3 Jellyfin | 建管理員、Movies / TV / Anime 三個媒體庫、API key、裝 MergeVersions、重啟 | 只做檢查；「加入 Berth 路徑」與「安裝 MergeVersions」各是一顆要確認的按鈕 |
 | BTH 2 | 4 qBittorrent | 套用五個建議鍵、設 WebUI 密碼 | 先顯示逐鍵差異再問要不要套用 |
-| BTH 3 | 5–6 索引站與 TMDB | 加十個預設公開站、內建 TMDB 憑證 | 填既有 Prowlarr 或任一 Torznab 網址；兩步都可以跳過 |
+| BTH 3 | 5–6 索引站與 TMDB | 加十個預設公開站 | 填既有 Prowlarr 或任一 Torznab 網址 |
 | BTH 4 | 7–8 媒體庫路徑 | 自動建三條 Route | 勾選媒體庫與寫入目標 |
+
+索引站那一步可以按「之後再說」（沒接只是搜尋不到東西）；**TMDB 那一步不行** —— 沒有一把測得過的憑證就沒有標題、季集與封面，精靈停在第 6 步。
 
 每條 Route 建立時都會**真的建一個硬鏈接再比對 inode**，三個容器看到的不是同一個檔案系統就當場失敗，並指出是哪個容器少了哪個掛載。全部綠燈才走得到最後一步。
 
@@ -40,6 +43,22 @@ docker compose up -d
 | Prowlarr | 9696 | |
 
 已經有其中某個服務的人，把它從 `.env` 的 `COMPOSE_PROFILES` 拿掉，精靈會改用「既有服務」的表單接入；`berth` 沒有 profile，永遠會啟動。變數清單見 `deploy/.env.example`，裡面沒有任何秘密欄位。
+
+### 先申請一把 TMDB API key
+
+Berth **不內建任何 provider 的 API key**，TMDB 的憑證要你自己申請 —— 專案不替所有使用者背一把
+共用憑證。它是必要的：作品標題、季集結構與封面全部來自 TMDB，沒有它精靈走不完。
+
+1. 在 <https://www.themoviedb.org/signup> 註冊一個免費帳號（要收驗證信）。
+2. 開 <https://www.themoviedb.org/settings/api>，申請 API key，用途（Type of Use）選
+   **Personal / Education**；應用資訊隨便填得過去即可。核發是即時的，不必等審核。
+3. 那一頁同時給兩把東西：**API Key (v3 auth)** 是 32 個十六進位字元，**API Read Access Token
+   (v4 auth)** 是很長的一串 JWT。**兩種 Berth 都收**，貼哪一把都成立（v4 走標頭，不會落在
+   任何一行 log 裡）。
+4. 精靈第 6 步貼上去按「測試 TMDB」，綠燈才走得到下一個泊位。之後要換一把就在
+   「設定 → 來源」重貼。
+
+TMDB 的條款限非商業使用；歸屬聲明見〈[授權與歸屬](#授權與歸屬)〉。
 
 ### 硬鏈接前提
 
@@ -61,6 +80,8 @@ docker compose up -d
 - **qBittorrent**：最低 4.4（Web API 2.8.4）。套件內的容器由 `deploy/preseed/qbittorrent/10-berth.sh` 在服務啟動前補上免密白名單，而且只放行 Berth 那一個固定 IP —— 4.6.1 起首次啟動的隨機密碼只印在容器 log，沒有這一步 Berth 進不去；WebUI 從宿主或 LAN 進來仍然要密碼。其餘偏好（temp path、save path、category 的 autoTMM）與 WebUI 密碼由精靈經 API 設定，按之前會顯示差異。腳本不覆蓋任何已經有值的設定。
 - **Jellyfin**：同一部片的多個版本要合併需要 [MergeVersions](https://github.com/danieladov/jellyfin-plugin-mergeversions) 插件。套件內的 Jellyfin 由精靈自動安裝並重啟；既有的 Jellyfin 是一顆要確認的按鈕。
 - **Prowlarr**：不預置任何東西，Berth 唯讀掛載它的設定目錄以讀取它自動產生的 API key。
+- **TMDB**：要你自己申請一把 API key（上面那一節），Berth 不內建。憑證存在 Berth 自己的資料庫裡，
+  精靈第 6 步或「設定 → 來源」都改得了。
 
 ### 秘密與備份
 
@@ -286,9 +307,11 @@ docker compose -f scripts/experiments/compose.yml down -v
 Windows 的 Git Bash 要在 `docker run` 前加 `MSYS_NO_PATHCONV=1`，否則 `/data` 這種容器內路徑
 會被改寫成 `C:\Program Files\Git\data`。
 
-動漫季集來源的量測（不需要任何容器，只打外部 API）：
+動漫季集來源的量測（不需要任何容器，只打外部 API）。除了 `--self-test` 以外都要一把 TMDB 憑證，
+從環境變數 `TMDB_API_KEY` 讀（v3 key 或 v4 token 都可以，取得步驟見〈先申請一把 TMDB API key〉）：
 
 ```bash
+export TMDB_API_KEY=...                                              # Windows PowerShell 是 $env:TMDB_API_KEY
 python scripts/experiments/anime_episode_source.py --self-test       # 換算器的手算樣例
 python scripts/experiments/anime_episode_source.py                   # 完整量測（門檻 180 天，同 plan §4.4）
 python scripts/experiments/anime_episode_source.py --gap-days 60     # 虛擬季門檻的敏感度比較
