@@ -226,15 +226,19 @@ files ─► classify ─► (video | subtitle | font | audio | image | archive 
 
 - `FileEntry`：`rel_path`（相對於 torrent 內容根）、`size`、`kind`、`priority`
 - `CjkHints`：`subs: frozenset[Lang]`、`hardsub: bool | None`、`subtitle_kind`、`season: int | None`、`episode: int | None`、`episode_end`、`collection`、`special: SpecialKind | None`、`movie: bool`、`group: str`、`matched: tuple[str, ...]`（認出來的原文，往上併進 `ReleaseInfo.matched_tokens`）
-- `ReleaseInfo`：brief §6.3 欄位 + `raw_title`、`matched_tokens`。`season_hint_from_folder` **不在這裡**——資料夾提示是 `structure_hints` 的輸出，兩個階段的產物不混進同一個型別
+- `ReleaseInfo`：brief §6.3 欄位 + `raw_title`、`matched_tokens`、`part`（`Part.2` / `第二部分` 的 cour 序號，§4.4）。`season_hint_from_folder` **不在這裡**——資料夾提示是 `structure_hints` 的輸出，兩個階段的產物不混進同一個型別
 - `Tags`：`source`、`resolution`、`subs: tuple[Lang, ...]`、`hardsub`、`group`、`version`、`edition`；`render()` 依 brief §6.8
+- `StructureHints`（`parser/structure.py`）：`season`、`part`、`special`、`subtitle_folder`、`subtitle_lang`、`matched`。只讀資料夾，不讀檔名
 - `Candidate`：`season`、`episode_start`、`episode_end`、`strategy`、`confidence`、`reasons: list[str]`
+- `Decision`（`parser/score.py`）：`item: PlanItem` + `strategy`。批次一致性要比的是策略，而 `PlanItem` 沒有這個欄位，所以逐檔的結果先攤成它再進 `score`
 - `PlanItem`：`rel_path`、`kind`、`action`、`season`、`episode_start`、`episode_end`、`tags`、`confidence`、`reasons`。`media_id` 由 `map_episode` 補、`target_path` 由命名引擎補——欄位在有東西可以放進去的那一票才加，§2.3 是它最終的樣子
-- 封閉集合一律 `StrEnum`：`FileKind`、`Lang`、`Source`、`SubtitleKind`、`SpecialKind`（SP/OVA/OAD/Movie/NC）、`ReleaseKind`、`Confidence`、`PlanAction`
+- 封閉集合一律 `StrEnum`：`FileKind`、`Lang`、`Source`、`SubtitleKind`、`SpecialKind`（SP/OVA/OAD/Movie/NC）、`ReleaseKind`、`Confidence`、`PlanAction`、`MappingStrategy`（explicit / folder / context / arc_name / single_season / absolute_group / absolute_cumulative / air_date_offset / cour_offset / movie）
 
 ### 4.3 上下文與 TMDB 快照
 
-`ParseContext`：`media: MediaSnapshot | None`、`profile`、`season_hint`、`episode_offset`、`route_collection_type`。`MediaSnapshot` 是 `media.tmdb_snapshot_json` 的型別化版本，含各季集數、**各季的 `name`**（§4.4 的篇章名比對靠它）、每集 `air_date` 與 `name`、absolute 排序（若有）、標題集合。解析器不知道 TMDB API 的存在。
+`ParseContext`：`media: MediaSnapshot | None`、`candidates: tuple[MediaSnapshot, ...]`、`profile`、`season_hint`、`episode_offset`、`route_collection_type`。`candidates` 是 `media` 缺席時可以比對的作品（brief §6.4 第 2 點的 RSS 與重新入庫）——解析器沒有 IO，認得出作品的前提是呼叫端先把候選搜好遞進來；認出來時信心上限是 medium，「標題 **+ 年份**精確命中」才配得上 high（brief §6.5）。`MediaSnapshot` 是 `media.tmdb_snapshot_json` 的型別化版本，含各季集數、**各季的 `names`**（§4.4 的篇章名比對靠它）、每集 `air_date` 與 `name`、absolute 排序（若有）、標題集合。解析器不知道 TMDB API 的存在。
+
+`SeasonSnapshot.name` 是英文季名（會進畫面），`names` 是**同一季在三輪語言下的名字**（`en-US` / `zh-TW` / `zh-CN`，去重）。要三套是因為篇章名比對的對手是真實發佈寫的那一種字：`Hashira Training Arc` / `柱訓練篇` / `柱训练篇` 指的是同一季，而簡體字幕組佔了失敗案例的多數（M1 票 06，§4.4）。多打的那一輪是 `tv/{id}` 的 `zh-CN`，只取季名，電影不打。
 
 ### 4.4 Offset 偵測與季號來源【決定】
 
@@ -244,9 +248,16 @@ files ─► classify ─► (video | subtitle | font | audio | image | archive 
 
 同一份量測指出，**換季集來源（TVDB aired 或 absolute）只能改善 0.4 個百分點**，brief §10 據此結案為維持 TMDB。真正的槓桿是下面兩條，兩條都不需要第二個 provider：
 
-- **篇章名 → 季號**：九成的失敗是檔名只有篇章名沒有季號（「柱訓練篇」「最終季」「死滅迴游」「無限列車篇」）。用 `MediaSnapshot` 已有的各季 `name`（TMDB 的 `season.name` 就是 `Hashira Training Arc`、`Entertainment District Arc`）與 alternative titles 比對檔名裡的篇章名，命中則等同季號提示，Candidate 標 `strategy = arc_name`、confidence 至多 medium。「最終季 / Final Season」對到最後一季。
-- **`第二部分` / `Part.2` 當 cour 偏移**：唯一「檔名有季號卻還是三家一起錯」的一類（`[星空字幕组][进击的巨人 第三季 第二部分 / Shingeki no Kyojin Season 3 Part.2][01-10]`）。看到這個標記就把同一季前面幾個 cour 的長度加上去。它與字幕組的「季內連號」（第二 cour 直接從 13 接下去）是同一件事的兩種寫法。
-- **絕對編號換算**：TMDB 沒有 absolute 欄位，只能數播出序位，而 TMDB 與 TVDB 收錄的集數不一定一致（航海王 1181 vs 1177）。這條只影響 16% 的釋出、失敗率 4.4%，維持現況即可，但要標 confidence 至多 medium。
+- **篇章名 → 季號**：九成的失敗是檔名只有篇章名沒有季號（「柱訓練篇」「最終季」「死滅迴游」「無限列車篇」）。用 `MediaSnapshot` 各季的 `names` 比對**發佈名與檔名的原文**，命中則等同季號提示，Candidate 標 `strategy = arc_name`、confidence 至多 medium。「最終季 / Final Season」對到最後一季。三條實作規則（M1 票 06）：
+  - **季名要三輪語言**（§4.3）。只留英文的話，真實發佈裡最常見的簡體篇章名一個都對不到。
+  - **只是季號翻譯的季名不算篇章名**（`Season 1`、`第 1 季`），**與作品標題相同的季名也不算**（Overlord 的第一季就叫 `Overlord`，每一個發佈的名字裡都有它）——兩種都不帶新資訊，卻會到處命中。
+  - 多個季名同時命中時取**最長的那一個**：`Overlord II` 比 `Overlord` 說得更多。
+- **`第二部分` / `Part.2` 當 cour 偏移**：唯一「檔名有季號卻還是三家一起錯」的一類（`[星空字幕组][进击的巨人 第三季 第二部分 / Shingeki no Kyojin Season 3 Part.2][01-10]`）。看到這個標記就把同一季前面幾個 cour 的長度加上去。它與字幕組的「季內連號」（第二 cour 直接從 13 接下去）是同一件事的兩種寫法，所以（M1 票 06）：
+  - cour 怎麼切**與虛擬季同一條規則**（間隔 > 180 天）——它們本來就是同一件事：一季裡的兩輪播出。進擊的巨人第三季實測 12 + 10 集，中間隔 196 天。
+  - 加上偏移之後超出該季時**回頭照字面讀**：那表示這一組其實是季內連號。所以「季內連號」與「每 cour 重數」兩種寫法用同一條規則就都對了。
+  - 看到 cour 標記時，**照字面讀的那個候選不再產生**——不是排序問題，兩種讀法在 TMDB 裡都存在。
+- **絕對編號換算**：TMDB 沒有 absolute 欄位，只能數播出序位，而 TMDB 與 TVDB 收錄的集數不一定一致（航海王 1181 vs 1177）。這條只影響 16% 的釋出、失敗率 4.4%，維持現況即可，但要標 confidence 至多 medium。**三種換算不在同一個分支**（M1 票 06）：`absolute_group` 與 `absolute_cumulative` 是「只有集號」時的兩條路，而虛擬季換算要有一個季號才索引得到那一輪播出（`第二季` 對不到任何一季時才輪到它）。brief §6.4 另外提的「以**發佈時間**推測虛擬季」需要索引站給的發佈時間，解析器在 M1 拿不到（票 08 起才有 `published_at`），沒有它就只是換一種猜法，所以沒有做。
+- **數量明顯不符就交給人**（brief §6.5 的 low，M1 票 06）：一季十二集卻對出二十個檔案時，是哪一個檔案讀錯了看不出來，所以整季一起進 review 而不是挑一個代罪的。
 
 ### 4.5 AI fallback（M4）
 
@@ -276,9 +287,9 @@ fixture 一筆一個 JSON：
 - `torrent_name` 是**索引站上的發佈標題**（Berth 從搜尋結果拿到的那一個），`files[].path` 是**相對於 torrent 內容根**的路徑。兩者各知道一半：CJK 的字幕語言與季號幾乎只寫在前者，集號只寫在後者（M1 票 05 實測）。
 - `expected` 逐檔一筆，含 `kind`（brief §6.2 的分類）——分類是第一層，錯在這裡後面每一層都白算。`tags` 缺席表示這一筆不比對 tag。`min_confidence` **不參與比對**：信心低於期望不是做錯事，那件事由 `review` 與 high / medium 誤判率回答。
 - `tests/fixtures/tmdb/<id>.json` 是 TMDB 快照，錄一次即凍結（`scripts/record_tmdb_snapshots.py`）。
-- `berth bench` 輸出：整體與分類別（anime / tv / movie）的 `auto_correct`、`auto_wrong`（自動處置但錯，最嚴重）、`review`、`unmatched_correct`、`extra_correct`，加上 `missed`（該入庫的被丟成 unmatched / skip）與 `skipped`（雙方都同意可忽略）；**七個桶互斥且窮盡，加起來等於檔案數**——加不起來的報表會讓沒被數到的檔案看起來不存在。另列分類正確率與 tag 正確率，以及 high 與 medium 的錯誤率（brief §6.5）。
+- `berth bench` 輸出：整體與分類別（anime / tv / movie）的 `auto_correct`、`auto_wrong`（自動處置但錯，最嚴重）、`review`、`unmatched_correct`、`extra_correct`，加上 `missed`（該入庫的被丟成 unmatched / skip）與 `skipped`（雙方都同意可忽略）；**七個桶互斥且窮盡，加起來等於檔案數**——加不起來的報表會讓沒被數到的檔案看起來不存在。另列分類正確率、tag 正確率與**信心達標率**（語料寫的 `min_confidence` 有沒有達到；不達標不是做錯事，但它說得出「本來該自動入庫的少了幾個」），以及 high 與 medium 的錯誤率（brief §6.5）。
 - CI 規則：`auto_wrong` 不得高於 `tests/fixtures/parser/baseline.json`，`auto_correct` 不得低於 baseline 減 1 筆；改善時更新 baseline 並在 PR 說明。門檻與報表是同一支（`services/bench.py`），單元測試與 `berth bench` 共用，所以 CI 不另開 job。
-- v0 語料：20 筆，來源 brief §20.4 的樣本清單（動漫 8、非動漫劇集 8、電影 4），逐步擴到 100+。出處與涵蓋範圍逐筆記在 `tests/fixtures/parser/README.md`。
+- v0 語料：20 筆，來源 brief §20.4 的樣本清單（動漫 8、非動漫劇集 8、電影 4）；票 06 補三筆動漫（篇章名、cour 偏移、單檔多集），共 23 筆，逐步擴到 100+。出處與涵蓋範圍逐筆記在 `tests/fixtures/parser/README.md`。
 
 ---
 
@@ -379,7 +390,7 @@ Session 以 httpOnly cookie（`berth_session`）承載，`SameSite=Strict`、`Pa
 ### 8.3 TMDB adapter
 
 - 端點：`configuration`、`trending/{tv,movie}/week`、`{tv,movie}/popular`、`search/multi`、`tv/{id}`（`append_to_response=alternative_titles,translations,episode_groups`）、`tv/{id}/season/{n}`、`tv/episode_group/{id}`、`movie/{id}`（`append_to_response=alternative_titles,translations`）。**兩個 append 拿掉了**（票 04）：`external_ids` 與 `release_dates` 在快照裡沒有任何欄位讀它們，而後者每部電影是一百多筆各國上映日（2026-09-09 實測 138 筆）。要用時再加回來。
-- **Media 詳情打兩輪 + 每季一次**：`tv/{id}` 的 `en-US` 那一輪決定結構與所有會進檔名的字串（季名、集名、英文標題），`zh-TW` 那一輪只補顯示用標題與簡介；季集**只取 `en-US`**——集名會進檔名（§5 的 `{episode_title}`），中文集名放進去等於讓磁碟上的檔名跟著 UI 的語言跑。一部四季的作品因此是 2 + 4 + 1 = 7 個請求，24 小時一次（票 04）。
+- **Media 詳情打三輪 + 每季一次**：`tv/{id}` 的 `en-US` 那一輪決定結構與所有會進檔名的字串（季名、集名、英文標題），`zh-TW` 那一輪只補顯示用標題與簡介，`zh-CN` 那一輪**只取季名**（§4.3 的篇章名比對，票 06；電影不打這一輪）；季集**只取 `en-US`**——集名會進檔名（§5 的 `{episode_title}`），中文集名放進去等於讓磁碟上的檔名跟著 UI 的語言跑。一部四季的作品因此是 3 + 4 + 1 = 8 個請求，24 小時一次（票 04、06）。
 - **絕對編號要從 0-based 的 `order` 推**，不是 group 裡的 `episode_number`——那一欄保留播出序的原值，所以 SPY×FAMILY 的 S02E01 在 group 裡仍然是 `episode_number: 1`，而它是絕對第 26 集（2026-09-09 對真 API 實測，brief §20.3）。一部作品可能有好幾個 episode group（實測五個），只有 `type: 2` 是絕對編號，取第一個。
 - 語言 `en-US` 取英文標題，`name` 空時退回 `original_name`；另以 `zh-TW` 取一次顯示用標題與簡介給 UI（brief §7.5 的檔名仍用英文）。**清單本身一律以 `en-US` 那一輪為準，`zh-TW` 只是一張「這一部叫什麼、海報是哪張」的查表**：`language` 會換掉 trending 回的**成員與順序**而不只是文字（2026-09-09 實測 `trending/tv/week`，兩輪 20 筆差 3 筆），照 `zh-TW` 當清單會讓作品憑空消失（票 03）。
 - 快取：探索與搜尋 1 小時（`tmdb_cache`，一個 feed 一列，存的是已經合併好的卡片而不是 TMDB 原始 payload）；Media 快照 24 小時，Job 送單與 planning 前若快照超過 6 小時則刷新（新播集數會變）。**卡片上的本地狀態不進快取**：它是本地事實而且會當場改掉（M1 票 04b 之後卡片上沒有狀態，票 09 起以 Job 推導）。

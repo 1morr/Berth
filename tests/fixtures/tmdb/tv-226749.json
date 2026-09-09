@@ -95,6 +95,10 @@
     }
    ],
    "name": "Season 1",
+   "names": [
+    "Season 1",
+    "第 1 季"
+   ],
    "season_number": 1
   },
   {
@@ -187,6 +191,10 @@
     }
    ],
    "name": "Season 2",
+   "names": [
+    "Season 2",
+    "第 2 季"
+   ],
    "season_number": 2
   }
  ],

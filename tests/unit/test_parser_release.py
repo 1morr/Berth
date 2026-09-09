@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import pytest
 
-from berth.domain import Lang, ReleaseKind, Source, SubtitleKind, Tags
+from berth.domain import Lang, ReleaseKind, Source, SpecialKind, SubtitleKind, Tags
 from berth.parser import merge_release, parse_release, tags_of
 
 
@@ -50,6 +50,31 @@ class TestAnimeEpisodePatterns:
         info = parse_release("True.Beauty.2020.EP07.HD1080P.X264.AAC.Korean.CHS.mp4")
 
         assert (info.season, info.episode) == (None, 7)
+
+    def test_a_bracket_glued_to_the_word_season_is_an_episode(self) -> None:
+        """`The_Final_Season[28]`：guessit 把那個 28 讀成季號，但它是集號（研究 §6.1）。
+
+        中間有空白時（`Season 3 [04]`）guessit 自己就分得開，黏在一起才會誤讀。
+        """
+        info = parse_release("[NaN-Raws]进击的巨人_The_Final_Season[28][1080P].mp4")
+
+        assert (info.season, info.episode) == (None, 28)
+
+    def test_a_cour_marker_is_read_next_to_the_season(self) -> None:
+        """`Season 3 Part 2 - 01`：季號 3、cour 2、集號 1，三個數字互不覆蓋（plan §4.4）。"""
+        info = parse_release(
+            "[Erai-raws] Shingeki no Kyojin Season 3 Part 2 - 01 [1080p][Multiple Subtitle].mkv"
+        )
+
+        assert (info.season, info.part, info.episode) == (3, 2, 1)
+
+    def test_a_chinese_cour_marker_says_the_same_thing(self) -> None:
+        info = parse_release("[星空字幕组][进击的巨人 第三季 第二部分][01-10 Fin][合集]")
+
+        assert (info.season, info.part, info.episode, info.episode_end) == (3, 2, 1, 10)
+
+    def test_a_release_without_a_cour_marker_says_nothing(self) -> None:
+        assert parse_release("The.Bear.S03E01.1080p.WEB.H264-SuccessfulCrab.mkv").part is None
 
     def test_a_year_is_not_a_season(self) -> None:
         """guessit 對 `GTO.2026.EP08` 同時回 year 與 season 2026。"""
@@ -187,6 +212,16 @@ class TestMerge:
         merged = merge_release(file, torrent)
 
         assert (merged.season, merged.episode, merged.episode_end) == (1, 5, None)
+
+    def test_a_pack_that_contains_specials_does_not_make_every_file_one(self) -> None:
+        """`[01-13TV全集+SP]` 說的是這一包裡有特典，不是這個檔案是特典（真實語料）。"""
+        torrent = parse_release(
+            "[DBD-Raws][不死者之王 第二季/Overlord Ⅱ][01-13TV全集+SP][1080P][BDRip][简繁外挂]"
+        )
+        file = parse_release("[DBD-Raws][不死者之王 第二季][01][1080P][BDRip][FLAC].mkv")
+
+        assert torrent.special_kind is SpecialKind.SP
+        assert merge_release(file, torrent).special_kind is None
 
     def test_it_keeps_the_file_as_the_raw_title(self) -> None:
         torrent = parse_release("[7³ACG] Sousou no Frieren S01 | 01-28 [简繁字幕] BDrip 1080p")

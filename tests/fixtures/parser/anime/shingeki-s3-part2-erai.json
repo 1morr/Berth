@@ -1,0 +1,206 @@
+{
+  "id": "anime/shingeki-s3-part2-erai",
+  "source_url": "https://nyaa.si/view/1812165",
+  "torrent_name": "[Erai-raws] Shingeki no Kyojin Season 3 Part 2 - 01 ~ 10 [1080p][BATCH][Multiple Subtitle] [ENG][POR-BR][SPA-LA][SPA][ARA][FRE][GER][ITA][RUS]",
+  "tmdb": "tv-1429",
+  "context": {
+    "media": "tv:1429",
+    "profile": "anime",
+    "season_hint": null,
+    "episode_offset": null
+  },
+  "files": [
+    {
+      "path": "[Erai-raws] Shingeki no Kyojin Season 3 Part 2 - 01 [1080p][Multiple Subtitle][CA362962].mkv",
+      "size": 1469057638
+    },
+    {
+      "path": "[Erai-raws] Shingeki no Kyojin Season 3 Part 2 - 02 [1080p][Multiple Subtitle][0F0E25CE].mkv",
+      "size": 1465243992
+    },
+    {
+      "path": "[Erai-raws] Shingeki no Kyojin Season 3 Part 2 - 03 [1080p][Multiple Subtitle][C0FEB0EC].mkv",
+      "size": 1469608096
+    },
+    {
+      "path": "[Erai-raws] Shingeki no Kyojin Season 3 Part 2 - 04 [1080p][Multiple Subtitle][11006212].mkv",
+      "size": 1469350826
+    },
+    {
+      "path": "[Erai-raws] Shingeki no Kyojin Season 3 Part 2 - 05 [1080p][Multiple Subtitle][00988E96].mkv",
+      "size": 1467938447
+    },
+    {
+      "path": "[Erai-raws] Shingeki no Kyojin Season 3 Part 2 - 06 [1080p][Multiple Subtitle][3268A6AE].mkv",
+      "size": 1466833196
+    },
+    {
+      "path": "[Erai-raws] Shingeki no Kyojin Season 3 Part 2 - 07 [1080p][Multiple Subtitle][8A4BB730].mkv",
+      "size": 1467274353
+    },
+    {
+      "path": "[Erai-raws] Shingeki no Kyojin Season 3 Part 2 - 08 [1080p][Multiple Subtitle][B0956FF1].mkv",
+      "size": 1466120792
+    },
+    {
+      "path": "[Erai-raws] Shingeki no Kyojin Season 3 Part 2 - 09 [1080p][Multiple Subtitle][5BCDD804].mkv",
+      "size": 1466143913
+    },
+    {
+      "path": "[Erai-raws] Shingeki no Kyojin Season 3 Part 2 - 10 [1080p][Multiple Subtitle][885D8B62].mkv",
+      "size": 1454730035
+    }
+  ],
+  "expected": [
+    {
+      "path": "[Erai-raws] Shingeki no Kyojin Season 3 Part 2 - 01 [1080p][Multiple Subtitle][CA362962].mkv",
+      "kind": "video",
+      "action": "import",
+      "season": 3,
+      "episode": 13,
+      "tags": {
+        "resolution": "1080p",
+        "subs": [
+          "EN"
+        ],
+        "group": "Erai-raws"
+      },
+      "min_confidence": "medium"
+    },
+    {
+      "path": "[Erai-raws] Shingeki no Kyojin Season 3 Part 2 - 02 [1080p][Multiple Subtitle][0F0E25CE].mkv",
+      "kind": "video",
+      "action": "import",
+      "season": 3,
+      "episode": 14,
+      "tags": {
+        "resolution": "1080p",
+        "subs": [
+          "EN"
+        ],
+        "group": "Erai-raws"
+      },
+      "min_confidence": "medium"
+    },
+    {
+      "path": "[Erai-raws] Shingeki no Kyojin Season 3 Part 2 - 03 [1080p][Multiple Subtitle][C0FEB0EC].mkv",
+      "kind": "video",
+      "action": "import",
+      "season": 3,
+      "episode": 15,
+      "tags": {
+        "resolution": "1080p",
+        "subs": [
+          "EN"
+        ],
+        "group": "Erai-raws"
+      },
+      "min_confidence": "medium"
+    },
+    {
+      "path": "[Erai-raws] Shingeki no Kyojin Season 3 Part 2 - 04 [1080p][Multiple Subtitle][11006212].mkv",
+      "kind": "video",
+      "action": "import",
+      "season": 3,
+      "episode": 16,
+      "tags": {
+        "resolution": "1080p",
+        "subs": [
+          "EN"
+        ],
+        "group": "Erai-raws"
+      },
+      "min_confidence": "medium"
+    },
+    {
+      "path": "[Erai-raws] Shingeki no Kyojin Season 3 Part 2 - 05 [1080p][Multiple Subtitle][00988E96].mkv",
+      "kind": "video",
+      "action": "import",
+      "season": 3,
+      "episode": 17,
+      "tags": {
+        "resolution": "1080p",
+        "subs": [
+          "EN"
+        ],
+        "group": "Erai-raws"
+      },
+      "min_confidence": "medium"
+    },
+    {
+      "path": "[Erai-raws] Shingeki no Kyojin Season 3 Part 2 - 06 [1080p][Multiple Subtitle][3268A6AE].mkv",
+      "kind": "video",
+      "action": "import",
+      "season": 3,
+      "episode": 18,
+      "tags": {
+        "resolution": "1080p",
+        "subs": [
+          "EN"
+        ],
+        "group": "Erai-raws"
+      },
+      "min_confidence": "medium"
+    },
+    {
+      "path": "[Erai-raws] Shingeki no Kyojin Season 3 Part 2 - 07 [1080p][Multiple Subtitle][8A4BB730].mkv",
+      "kind": "video",
+      "action": "import",
+      "season": 3,
+      "episode": 19,
+      "tags": {
+        "resolution": "1080p",
+        "subs": [
+          "EN"
+        ],
+        "group": "Erai-raws"
+      },
+      "min_confidence": "medium"
+    },
+    {
+      "path": "[Erai-raws] Shingeki no Kyojin Season 3 Part 2 - 08 [1080p][Multiple Subtitle][B0956FF1].mkv",
+      "kind": "video",
+      "action": "import",
+      "season": 3,
+      "episode": 20,
+      "tags": {
+        "resolution": "1080p",
+        "subs": [
+          "EN"
+        ],
+        "group": "Erai-raws"
+      },
+      "min_confidence": "medium"
+    },
+    {
+      "path": "[Erai-raws] Shingeki no Kyojin Season 3 Part 2 - 09 [1080p][Multiple Subtitle][5BCDD804].mkv",
+      "kind": "video",
+      "action": "import",
+      "season": 3,
+      "episode": 21,
+      "tags": {
+        "resolution": "1080p",
+        "subs": [
+          "EN"
+        ],
+        "group": "Erai-raws"
+      },
+      "min_confidence": "medium"
+    },
+    {
+      "path": "[Erai-raws] Shingeki no Kyojin Season 3 Part 2 - 10 [1080p][Multiple Subtitle][885D8B62].mkv",
+      "kind": "video",
+      "action": "import",
+      "season": 3,
+      "episode": 22,
+      "tags": {
+        "resolution": "1080p",
+        "subs": [
+          "EN"
+        ],
+        "group": "Erai-raws"
+      },
+      "min_confidence": "medium"
+    }
+  ]
+}

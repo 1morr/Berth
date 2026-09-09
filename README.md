@@ -195,7 +195,8 @@ uv run berth bench --update-baseline   # 改善之後更新門檻（理由寫進
 
 報表逐分類（anime / tv / movie）與整體列出七個互斥的桶——`auto_correct`、`auto_wrong`、
 `review`、`missed`、`unmatched_correct`、`extra_correct`、`skipped`，加起來就是檔案數——
-再加上分類正確率、tag 正確率與 high / medium 的誤判率。**最重要的是 `auto_wrong`**：
+再加上分類正確率、tag 正確率、信心達標率（語料寫的 `min_confidence` 有沒有達到）與
+high / medium 的誤判率。**最重要的是 `auto_wrong`**：
 自動處置但處置錯，門檻是「不得高於 `tests/fixtures/parser/baseline.json`」；`auto_correct`
 則允許比 baseline 少一筆（語料會長大）。
 

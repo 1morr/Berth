@@ -45,6 +45,12 @@ class SeasonSnapshot(BaseModel):
 
     season_number: int
     name: str = ""
+    #: 這一季**已知的所有名字**（英文、繁體、簡體），去重。`name` 也在裡面。
+    #:
+    #: 比對用，不顯示：篇章名比對的對手是「柱训练篇」這種簡體字幕組寫法，而 `name` 是
+    #: 英文的 `Hashira Training Arc`——只留一個語言的季名，plan §4.4 那條規則對九成的
+    #: 真實發佈都不會命中（`docs/research/anime-episode-source.md` §6.1）。
+    names: tuple[str, ...] = ()
     #: TMDB 自己報的集數。與 `episodes` 的長度可能不同（未播的集數 TMDB 已經先列進來）。
     episode_count: int = 0
     air_date: date | None = None

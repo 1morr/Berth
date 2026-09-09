@@ -270,6 +270,11 @@
     }
    ],
    "name": "Specials",
+   "names": [
+    "Specials",
+    "特別篇",
+    "特别篇"
+   ],
    "season_number": 0
   },
   {
@@ -628,6 +633,10 @@
     }
    ],
    "name": "Season 1",
+   "names": [
+    "Season 1",
+    "第 1 季"
+   ],
    "season_number": 1
   }
  ],

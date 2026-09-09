@@ -17,23 +17,24 @@ from pathlib import Path
 from typing import Any
 
 from berth.domain import (
+    AUTO_APPLIED,
     Confidence,
     FileEntry,
     FileKind,
     Lang,
     MediaSnapshot,
+    ParseContext,
     PlanAction,
     PlanItem,
+    Profile,
     Source,
     Tags,
+    at_least,
 )
 from berth.parser import plan
 
 #: 語料的分類。id 的前綴就是它（`anime/frieren-…`），所以不另外存一個欄位。
 CATEGORIES: tuple[str, ...] = ("anime", "tv", "movie")
-
-#: high 與 medium 都自動入庫（brief §6.5）。
-AUTO: frozenset[Confidence] = frozenset({Confidence.HIGH, Confidence.MEDIUM})
 
 
 class Bucket(StrEnum):
@@ -59,12 +60,7 @@ class Bucket(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class Expected:
-    """語料裡對一個檔案的期望（plan §4.6）。
-
-    語料另外寫了 `min_confidence`（期望的信心下限）與 `context.profile`，這一層**還沒有讀**：
-    前者不參與比對（見 `_matches`），後者要到季集對應才用得上。票 06 接手時再讀進來——
-    現在讀進來只會是兩個沒有人看的欄位。
-    """
+    """語料裡對一個檔案的期望（plan §4.6）。"""
 
     path: str
     kind: FileKind
@@ -74,6 +70,9 @@ class Expected:
     episode_end: int | None
     #: `None` = 這一筆不檢查 tag（字幕與 extras 不帶 tag）。
     tags: Tags | None
+    #: 期望的信心下限。**不參與比對**（見 `_matches`）：信心低於期望不是做錯事。
+    #: 它自己一欄，讓「哪些檔案本來該自動入庫卻沒有」看得見（brief §6.5 的取捨）。
+    min_confidence: Confidence | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -83,10 +82,22 @@ class Fixture:
     torrent_name: str
     tmdb: str
     #: 上下文（brief §6.1 的第一個訊號）：Job 是從哪個 Media 送出的。
-    #: 季集對應（票 06）吃它；現在用它確認語料與它指到的快照說的是同一部作品。
     context_media: str
+    #: Route 的解析偏好。動漫的絕對編號是慣例，其他 Route 上它是可疑的（brief §6.4）。
+    profile: Profile
+    season_hint: int | None
+    episode_offset: int | None
     files: tuple[FileEntry, ...]
     expected: tuple[Expected, ...]
+
+    def context(self, snapshot: MediaSnapshot) -> ParseContext:
+        """解析器看得到的東西。快照是凍結的那一份，所以 benchmark 不連線。"""
+        return ParseContext(
+            media=snapshot,
+            profile=self.profile,
+            season_hint=self.season_hint,
+            episode_offset=self.episode_offset,
+        )
 
     @property
     def category(self) -> str:
@@ -103,6 +114,10 @@ class Counts:
     #: 與桶是**另一個軸**：季集還沒接上的時候，tag 對不對是唯一量得到的東西。
     tags_checked: int = 0
     tags_correct: int = 0
+    #: 語料寫了 `min_confidence` 的檔案數，以及其中真的到了那個下限的。
+    #: 也是另一個軸：低於下限不是做錯事，但它說得出「本來該自動入庫的少了幾個」。
+    confidence_checked: int = 0
+    confidence_met: int = 0
     #: 以下七格與 `Bucket` 同名同義。
     auto_correct: int = 0
     auto_wrong: int = 0
@@ -163,8 +178,9 @@ def run(corpus_root: Path, snapshot_root: Path) -> Report:
     overall = Counts()
     by_category = dict.fromkeys(CATEGORIES, Counts())
     for fixture in fixtures:
-        _check_pairing(fixture, load_snapshot(snapshot_root, fixture.tmdb))
-        counts = score(fixture)
+        snapshot = load_snapshot(snapshot_root, fixture.tmdb)
+        _check_pairing(fixture, snapshot)
+        counts = score(fixture, snapshot)
         overall = _add(overall, counts)
         by_category[fixture.category] = _add(by_category[fixture.category], counts)
     return Report(fixtures=len(fixtures), overall=overall, by_category=by_category)
@@ -181,18 +197,29 @@ def _check_pairing(fixture: Fixture, snapshot: MediaSnapshot) -> None:
         raise ValueError(f"{fixture.id}: {fixture.tmdb} is {media_id}, not {fixture.context_media}")
 
 
-def score(fixture: Fixture) -> Counts:
+def score(fixture: Fixture, snapshot: MediaSnapshot) -> Counts:
     """跑解析器，逐檔歸桶。"""
-    produced = {item.rel_path: item for item in plan(fixture.torrent_name, fixture.files)}
+    produced = {
+        item.rel_path: item
+        for item in plan(fixture.torrent_name, fixture.files, fixture.context(snapshot))
+    }
     counts = Counts()
     for expected in fixture.expected:
         item = produced[expected.path]
         counts = counts.plus(files=1, kind_correct=int(item.kind is expected.kind))
         if expected.tags is not None:
             counts = counts.plus(tags_checked=1, tags_correct=int(item.tags == expected.tags))
+        if expected.min_confidence is not None:
+            counts = counts.plus(confidence_checked=1, confidence_met=int(_meets(expected, item)))
         counts = counts.plus(**{bucket(expected, item).value: 1})
         counts = _add_confidence(counts, expected, item)
     return counts
+
+
+def _meets(expected: Expected, item: PlanItem) -> bool:
+    """信心有沒有到語料寫的下限。**不是對錯**，是「有沒有像預期那樣自動化」。"""
+    assert expected.min_confidence is not None
+    return at_least(item.confidence, expected.min_confidence)
 
 
 def bucket(expected: Expected, item: PlanItem) -> Bucket:
@@ -201,7 +228,7 @@ def bucket(expected: Expected, item: PlanItem) -> Bucket:
     `auto_wrong` 收的不只是「入錯集數」，還有「把正片當成 extra 自動搬走」——
     自動做了而且做錯，嚴重度是一樣的（brief §6.9）。
     """
-    if item.action is PlanAction.IMPORT and item.confidence in AUTO:
+    if item.action is PlanAction.IMPORT and item.confidence in AUTO_APPLIED:
         return Bucket.AUTO_CORRECT if _matches(expected, item) else Bucket.AUTO_WRONG
     if item.action is PlanAction.EXTRA:
         return Bucket.EXTRA_CORRECT if expected.action is PlanAction.EXTRA else Bucket.AUTO_WRONG
@@ -216,7 +243,7 @@ def bucket(expected: Expected, item: PlanItem) -> Bucket:
 
 def _add_confidence(counts: Counts, expected: Expected, item: PlanItem) -> Counts:
     """high 與 medium 的誤判率分開報（brief §6.5 的取捨要靠這兩個數字回答）。"""
-    if item.action is not PlanAction.IMPORT or item.confidence not in AUTO:
+    if item.action is not PlanAction.IMPORT or item.confidence not in AUTO_APPLIED:
         return counts
     wrong = int(not _matches(expected, item))
     if item.confidence is Confidence.HIGH:
@@ -246,12 +273,16 @@ def _add(left: Counts, right: Counts) -> Counts:
 
 
 def _fixture(raw: dict[str, Any]) -> Fixture:
+    context = raw["context"]
     return Fixture(
         id=raw["id"],
         source_url=raw["source_url"],
         torrent_name=raw["torrent_name"],
         tmdb=raw["tmdb"],
-        context_media=raw["context"]["media"],
+        context_media=context["media"],
+        profile=Profile(context["profile"]),
+        season_hint=context.get("season_hint"),
+        episode_offset=context.get("episode_offset"),
         files=tuple(FileEntry(rel_path=row["path"], size=row["size"]) for row in raw["files"]),
         expected=tuple(_expected(row) for row in raw["expected"]),
     )
@@ -266,6 +297,7 @@ def _expected(raw: dict[str, Any]) -> Expected:
         episode=raw.get("episode"),
         episode_end=raw.get("episode_end"),
         tags=_tags(raw.get("tags")),
+        min_confidence=Confidence(raw["min_confidence"]) if raw.get("min_confidence") else None,
     )
 
 
@@ -331,6 +363,7 @@ _COLUMNS: tuple[tuple[str, str], ...] = (
     ("files", "files"),
     ("kind_correct", "classify"),
     ("tags_correct", "tags"),
+    ("confidence_met", "confidence"),
     *((field.value, field.value) for field in Bucket),
 )
 
@@ -366,6 +399,8 @@ def _row(name: str, counts: Counts) -> list[str]:
             cells.append(f"{value}/{counts.files}")
         elif field == "tags_correct":
             cells.append(f"{value}/{counts.tags_checked}")
+        elif field == "confidence_met":
+            cells.append(f"{value}/{counts.confidence_checked}")
         else:
             cells.append(str(value))
     return cells

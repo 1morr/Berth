@@ -1,0 +1,732 @@
+{
+ "first_air_date": "2019-04-06",
+ "kind": "tv",
+ "overview": "時代背景為日本大正時期，賣炭維生的善良少年炭治郎，某天家人慘遭鬼殺害。而唯一倖存的妹妹禰豆子卻變化成鬼。遭到絕望現實打擊的炭治郎，為了讓妹妹恢復回人類，為了被殺害的家人向鬼報仇，決定踏上「獵鬼」之路。人鬼交織的悲憤兄妹故事現在開始了。",
+ "poster_url": "https://image.tmdb.org/t/p/w342/8yL6oB8eGvnbJr4W1fTdHrI103R.jpg",
+ "runtime": null,
+ "seasons": [
+  {
+   "air_date": "2020-08-26",
+   "episode_count": 18,
+   "episodes": [
+    {
+     "absolute_number": null,
+     "air_date": "2020-08-26",
+     "episode_number": 1,
+     "name": "Kimetsu Academy: Special Edition #1 Introductions",
+     "runtime": 1
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2020-08-26",
+     "episode_number": 2,
+     "name": "Kimetsu Academy: Special Edition #2 PE",
+     "runtime": 2
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2020-08-26",
+     "episode_number": 3,
+     "name": "Kimetsu Academy: Special Edition #3 One Morning",
+     "runtime": 2
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-02-14",
+     "episode_number": 4,
+     "name": "Junior High and High School!! Kimetsu Academy Story: Valentine Edition #1",
+     "runtime": 2
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-02-14",
+     "episode_number": 5,
+     "name": "Junior High and High School!! Kimetsu Academy Story: Valentine Edition #2",
+     "runtime": 2
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-02-14",
+     "episode_number": 6,
+     "name": "Junior High and High School!! Kimetsu Academy Story: Valentine Edition #3",
+     "runtime": 2
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-02-14",
+     "episode_number": 7,
+     "name": "Junior High and High School!! Kimetsu Academy Story: Valentine Edition #4",
+     "runtime": 2
+    },
+    {
+     "absolute_number": null,
+     "air_date": null,
+     "episode_number": 8,
+     "name": "Zenitsu's Sugoroku (1)",
+     "runtime": 1
+    },
+    {
+     "absolute_number": null,
+     "air_date": null,
+     "episode_number": 9,
+     "name": "Zenitsu's Sugoroku (2)",
+     "runtime": 1
+    },
+    {
+     "absolute_number": null,
+     "air_date": null,
+     "episode_number": 10,
+     "name": "Zenitsu's Sugoroku (3)",
+     "runtime": 1
+    },
+    {
+     "absolute_number": null,
+     "air_date": null,
+     "episode_number": 11,
+     "name": "Zenitsu's Sugoroku (4)",
+     "runtime": 1
+    },
+    {
+     "absolute_number": null,
+     "air_date": null,
+     "episode_number": 12,
+     "name": "Zenitsu's Sugoroku (5)",
+     "runtime": 1
+    },
+    {
+     "absolute_number": null,
+     "air_date": null,
+     "episode_number": 13,
+     "name": "Zenitsu's Sugoroku (6)",
+     "runtime": 1
+    },
+    {
+     "absolute_number": null,
+     "air_date": null,
+     "episode_number": 14,
+     "name": "Zenitsu's Sugoroku (7)",
+     "runtime": 116
+    },
+    {
+     "absolute_number": null,
+     "air_date": null,
+     "episode_number": 15,
+     "name": "Zenitsu's Sugoroku (8)",
+     "runtime": 103
+    },
+    {
+     "absolute_number": null,
+     "air_date": null,
+     "episode_number": 16,
+     "name": "Zenitsu's Sugoroku (9)",
+     "runtime": 1
+    },
+    {
+     "absolute_number": null,
+     "air_date": null,
+     "episode_number": 17,
+     "name": "Zenitsu's Sugoroku (10)",
+     "runtime": 1
+    },
+    {
+     "absolute_number": null,
+     "air_date": null,
+     "episode_number": 18,
+     "name": "Zenitsu's Sugoroku (11)",
+     "runtime": 3
+    }
+   ],
+   "name": "Specials",
+   "names": [
+    "Specials",
+    "特別篇",
+    "特别篇"
+   ],
+   "season_number": 0
+  },
+  {
+   "air_date": "2019-04-06",
+   "episode_count": 26,
+   "episodes": [
+    {
+     "absolute_number": 1,
+     "air_date": "2019-04-06",
+     "episode_number": 1,
+     "name": "Cruelty",
+     "runtime": 23
+    },
+    {
+     "absolute_number": 2,
+     "air_date": "2019-04-13",
+     "episode_number": 2,
+     "name": "Trainer Sakonji Urokodaki",
+     "runtime": 23
+    },
+    {
+     "absolute_number": 3,
+     "air_date": "2019-04-20",
+     "episode_number": 3,
+     "name": "Sabito and Makomo",
+     "runtime": 23
+    },
+    {
+     "absolute_number": 4,
+     "air_date": "2019-04-27",
+     "episode_number": 4,
+     "name": "Final Selection",
+     "runtime": 23
+    },
+    {
+     "absolute_number": 5,
+     "air_date": "2019-05-04",
+     "episode_number": 5,
+     "name": "My Own Steel",
+     "runtime": 23
+    },
+    {
+     "absolute_number": 6,
+     "air_date": "2019-05-11",
+     "episode_number": 6,
+     "name": "Swordsman Accompanying a Demon",
+     "runtime": 23
+    },
+    {
+     "absolute_number": 7,
+     "air_date": "2019-05-18",
+     "episode_number": 7,
+     "name": "Muzan Kibutsuji",
+     "runtime": 23
+    },
+    {
+     "absolute_number": 8,
+     "air_date": "2019-05-25",
+     "episode_number": 8,
+     "name": "The Smell of Enchanting Blood",
+     "runtime": 23
+    },
+    {
+     "absolute_number": 9,
+     "air_date": "2019-06-01",
+     "episode_number": 9,
+     "name": "Temari Demon and Arrow Demon",
+     "runtime": 23
+    },
+    {
+     "absolute_number": 10,
+     "air_date": "2019-06-08",
+     "episode_number": 10,
+     "name": "Together Forever",
+     "runtime": 23
+    },
+    {
+     "absolute_number": 11,
+     "air_date": "2019-06-15",
+     "episode_number": 11,
+     "name": "Tsuzumi Mansion",
+     "runtime": 23
+    },
+    {
+     "absolute_number": 12,
+     "air_date": "2019-06-22",
+     "episode_number": 12,
+     "name": "The Boar Bares Its Fangs, Zenitsu Sleeps",
+     "runtime": 23
+    },
+    {
+     "absolute_number": 13,
+     "air_date": "2019-06-29",
+     "episode_number": 13,
+     "name": "Something More Important Than Life",
+     "runtime": 23
+    },
+    {
+     "absolute_number": 14,
+     "air_date": "2019-07-06",
+     "episode_number": 14,
+     "name": "The House With the Wisteria Family Crest",
+     "runtime": 23
+    },
+    {
+     "absolute_number": 15,
+     "air_date": "2019-07-13",
+     "episode_number": 15,
+     "name": "Mount Natagumo",
+     "runtime": 23
+    },
+    {
+     "absolute_number": 16,
+     "air_date": "2019-07-20",
+     "episode_number": 16,
+     "name": "Letting Someone Else Go First",
+     "runtime": 23
+    },
+    {
+     "absolute_number": 17,
+     "air_date": "2019-07-27",
+     "episode_number": 17,
+     "name": "You Must Master a Single Thing",
+     "runtime": 23
+    },
+    {
+     "absolute_number": 18,
+     "air_date": "2019-08-03",
+     "episode_number": 18,
+     "name": "A Forged Bond",
+     "runtime": 23
+    },
+    {
+     "absolute_number": 19,
+     "air_date": "2019-08-10",
+     "episode_number": 19,
+     "name": "Hinokami",
+     "runtime": 23
+    },
+    {
+     "absolute_number": 20,
+     "air_date": "2019-08-17",
+     "episode_number": 20,
+     "name": "Pretend Family",
+     "runtime": 23
+    },
+    {
+     "absolute_number": 21,
+     "air_date": "2019-08-24",
+     "episode_number": 21,
+     "name": "Against Corps Rules",
+     "runtime": 23
+    },
+    {
+     "absolute_number": 22,
+     "air_date": "2019-08-31",
+     "episode_number": 22,
+     "name": "Master of the Mansion",
+     "runtime": 23
+    },
+    {
+     "absolute_number": 23,
+     "air_date": "2019-09-07",
+     "episode_number": 23,
+     "name": "Hashira Meeting",
+     "runtime": 23
+    },
+    {
+     "absolute_number": 24,
+     "air_date": "2019-09-14",
+     "episode_number": 24,
+     "name": "Rehabilitation Training",
+     "runtime": 23
+    },
+    {
+     "absolute_number": 25,
+     "air_date": "2019-09-21",
+     "episode_number": 25,
+     "name": "Tsuguko, Kanao Tsuyuri",
+     "runtime": 23
+    },
+    {
+     "absolute_number": 26,
+     "air_date": "2019-09-28",
+     "episode_number": 26,
+     "name": "New Mission",
+     "runtime": 23
+    }
+   ],
+   "name": "Unwavering Resolve Arc",
+   "names": [
+    "Unwavering Resolve Arc",
+    "竈門炭治郎 立志篇",
+    "立志篇"
+   ],
+   "season_number": 1
+  },
+  {
+   "air_date": "2021-10-10",
+   "episode_count": 7,
+   "episodes": [
+    {
+     "absolute_number": 27,
+     "air_date": "2021-10-10",
+     "episode_number": 1,
+     "name": "Flame Hashira: Kyojuro Rengoku",
+     "runtime": 26
+    },
+    {
+     "absolute_number": 28,
+     "air_date": "2021-10-17",
+     "episode_number": 2,
+     "name": "Deep Sleep",
+     "runtime": 23
+    },
+    {
+     "absolute_number": 29,
+     "air_date": "2021-10-24",
+     "episode_number": 3,
+     "name": "Should Have Been",
+     "runtime": 25
+    },
+    {
+     "absolute_number": 30,
+     "air_date": "2021-11-07",
+     "episode_number": 4,
+     "name": "Insult",
+     "runtime": 23
+    },
+    {
+     "absolute_number": 31,
+     "air_date": "2021-11-14",
+     "episode_number": 5,
+     "name": "Move Forward!",
+     "runtime": 21
+    },
+    {
+     "absolute_number": 32,
+     "air_date": "2021-11-21",
+     "episode_number": 6,
+     "name": "Akaza",
+     "runtime": 23
+    },
+    {
+     "absolute_number": 33,
+     "air_date": "2021-11-28",
+     "episode_number": 7,
+     "name": "Set Your Heart Ablaze",
+     "runtime": 26
+    }
+   ],
+   "name": "Mugen Train Arc",
+   "names": [
+    "Mugen Train Arc",
+    "無限列車篇",
+    "无限列车篇"
+   ],
+   "season_number": 2
+  },
+  {
+   "air_date": "2021-12-05",
+   "episode_count": 11,
+   "episodes": [
+    {
+     "absolute_number": 34,
+     "air_date": "2021-12-05",
+     "episode_number": 1,
+     "name": "Sound Hashira: Tengen Uzui",
+     "runtime": 47
+    },
+    {
+     "absolute_number": 35,
+     "air_date": "2021-12-12",
+     "episode_number": 2,
+     "name": "Infiltrating the Entertainment District",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 36,
+     "air_date": "2021-12-19",
+     "episode_number": 3,
+     "name": "What Are You?",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 37,
+     "air_date": "2021-12-26",
+     "episode_number": 4,
+     "name": "Tonight",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 38,
+     "air_date": "2022-01-02",
+     "episode_number": 5,
+     "name": "Things Are Gonna Get Real Flashy!!",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 39,
+     "air_date": "2022-01-09",
+     "episode_number": 6,
+     "name": "Layered Memories",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 40,
+     "air_date": "2022-01-16",
+     "episode_number": 7,
+     "name": "Transformation",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 41,
+     "air_date": "2022-01-23",
+     "episode_number": 8,
+     "name": "Gathering",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 42,
+     "air_date": "2022-01-30",
+     "episode_number": 9,
+     "name": "Defeating an Upper Rank Demon",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 43,
+     "air_date": "2022-02-06",
+     "episode_number": 10,
+     "name": "Never Give Up",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 44,
+     "air_date": "2022-02-13",
+     "episode_number": 11,
+     "name": "No Matter How Many Lives",
+     "runtime": 32
+    }
+   ],
+   "name": "Entertainment District Arc",
+   "names": [
+    "Entertainment District Arc",
+    "遊郭篇",
+    "游郭篇"
+   ],
+   "season_number": 3
+  },
+  {
+   "air_date": "2023-04-09",
+   "episode_count": 11,
+   "episodes": [
+    {
+     "absolute_number": 45,
+     "air_date": "2023-04-09",
+     "episode_number": 1,
+     "name": "Someone's Dream",
+     "runtime": 49
+    },
+    {
+     "absolute_number": 46,
+     "air_date": "2023-04-16",
+     "episode_number": 2,
+     "name": "Yoriichi Type Zero",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 47,
+     "air_date": "2023-04-23",
+     "episode_number": 3,
+     "name": "A Sword From Over 300 Years Ago",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 48,
+     "air_date": "2023-04-30",
+     "episode_number": 4,
+     "name": "Thank You, Tokito",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 49,
+     "air_date": "2023-05-07",
+     "episode_number": 5,
+     "name": "Bright Red Sword",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 50,
+     "air_date": "2023-05-14",
+     "episode_number": 6,
+     "name": "Aren't You Going to Become a Hashira?",
+     "runtime": 23
+    },
+    {
+     "absolute_number": 51,
+     "air_date": "2023-05-21",
+     "episode_number": 7,
+     "name": "Awful Villain",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 52,
+     "air_date": "2023-05-28",
+     "episode_number": 8,
+     "name": "The Mu in Muichiro",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 53,
+     "air_date": "2023-06-04",
+     "episode_number": 9,
+     "name": "Mist Hashira: Muichiro Tokito",
+     "runtime": 23
+    },
+    {
+     "absolute_number": 54,
+     "air_date": "2023-06-11",
+     "episode_number": 10,
+     "name": "Love Hashira: Mitsuri Kanroji",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 55,
+     "air_date": "2023-06-18",
+     "episode_number": 11,
+     "name": "A Connected Bond: Daybreak and First Light",
+     "runtime": 52
+    }
+   ],
+   "name": "Swordsmith Village Arc",
+   "names": [
+    "Swordsmith Village Arc",
+    "刀匠村篇"
+   ],
+   "season_number": 4
+  },
+  {
+   "air_date": "2024-05-12",
+   "episode_count": 8,
+   "episodes": [
+    {
+     "absolute_number": 56,
+     "air_date": "2024-05-12",
+     "episode_number": 1,
+     "name": "To Defeat Muzan Kibutsuji",
+     "runtime": 49
+    },
+    {
+     "absolute_number": 57,
+     "air_date": "2024-05-19",
+     "episode_number": 2,
+     "name": "Water Hashira Giyu Tomioka's Pain",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 58,
+     "air_date": "2024-05-26",
+     "episode_number": 3,
+     "name": "Fully Recovered Tanjiro Joins the Hashira Training!!",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 59,
+     "air_date": "2024-06-02",
+     "episode_number": 4,
+     "name": "To Bring a Smile to One's Face",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 60,
+     "air_date": "2024-06-09",
+     "episode_number": 5,
+     "name": "I Even Ate Demons…",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 61,
+     "air_date": "2024-06-16",
+     "episode_number": 6,
+     "name": "The Strongest of the Demon Slayer Corps",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 62,
+     "air_date": "2024-06-23",
+     "episode_number": 7,
+     "name": "Stone Hashira: Gyōmei Himejima",
+     "runtime": 32
+    },
+    {
+     "absolute_number": 63,
+     "air_date": "2024-06-30",
+     "episode_number": 8,
+     "name": "The Hashira Unite",
+     "runtime": 41
+    }
+   ],
+   "name": "Hashira Training Arc",
+   "names": [
+    "Hashira Training Arc",
+    "柱訓練篇",
+    "柱训练篇"
+   ],
+   "season_number": 5
+  }
+ ],
+ "title": "鬼滅之刃",
+ "title_en": "Demon Slayer: Kimetsu no Yaiba",
+ "title_original": "鬼滅の刃",
+ "titles": [
+  "Demon Slayer: Kimetsu no Yaiba",
+  "鬼滅の刃",
+  "鬼灭之刃",
+  "鬼灭之刃 锻刀村篇",
+  "鬼灭之刃 游郭篇",
+  "Guardianes de la noche: Kimetsu no Yaiba",
+  "Guardianes de la noche",
+  "Demon Slayer - Kimetsu no Yaiba",
+  "Demon Slayer, Kimetsu no Yaiba",
+  "Demon Slayer Kimetsu no Yaiba",
+  "Demon Slayer",
+  "鬼滅之刃",
+  "קימטסו נו יאיבה: דימון סלייר",
+  "הלהב קוטל השדים",
+  "קוטל השדים: קימטסו נו יאיבה",
+  "דימון סלייר",
+  "קוטל השדים",
+  "दानव वधकर्ता: किमेट्सु नो याइबा",
+  "鬼滅の刃 無限列車編",
+  "鬼滅の刃 遊郭編",
+  "鬼滅の刃 刀鍛冶の里編",
+  "鬼滅の刃 竈門炭治郎 立志編",
+  "Kimetsu no Yaiba",
+  "Kimetsu no Yaiba: Mugen Ressha-hen",
+  "Kimetsu no Yaiba: Yuukaku-hen",
+  "Kimetsu no Yaiba: Katanakaji no Sato-hen",
+  "Kimetsu no Yaiba: Hashira Geiko-hen",
+  "鬼滅の刃 柱稽古編",
+  "Kimetsu no Yaiba Katanakaji no Sato Hen",
+  "귀멸의 칼날 : 무한 열차 편 (TV판)",
+  "귀멸의 칼날 : 환락의 거리 편",
+  "귀멸의 칼날",
+  "귀멸의 칼날 유곽 편",
+  "귀멸의 칼날 유곽편",
+  "귀멸의 칼날 : 도공 마을편",
+  "귀멸의 칼날 합동 강화 훈련편",
+  "Клинок, рассекающий демонов",
+  "قاتل الشياطين",
+  "มัธยมรวม! เรื่องราวโรงเรียนพิฆาตอสูร",
+  "โรงเรียนพิฆาตอสูร",
+  "鬼滅之刃 竈門炭治郎 立志篇",
+  "鬼滅之刃 遊郭篇",
+  "鬼滅之刃 無限列車篇",
+  "鬼滅之刃 刀匠村篇",
+  "鬼滅之刃 柱訓練篇",
+  "Вбивця Демонів",
+  "Blade of Demon Destruction",
+  "Junior High and High School!! Kimetsu Academy Story: Valentine Edition",
+  "Demon Slayer: Kimetsu no Yaiba Mugen Train Arc",
+  "Demon Slayer: Kimetsu no Yaiba Entertainment District Arc",
+  "Demon Slayer: Kimetsu no Yaiba Swordsmith Village Arc",
+  "Demon Slayer: Kimetsu no Yaiba Hashira Training Arc",
+  "Thanh gươm diệt quỷ",
+  "Kimetsu no Yaiba: Guardianes de la Noche",
+  "Demon Slayer : Kimetsu no Yaiba",
+  "Истребитель демонов",
+  "İblis Keser",
+  "Острието на разрушителя",
+  "Κυνηγός Δαιμόνων",
+  "Клинок, який знищує демонів",
+  "ดาบพิฆาตอสูร",
+  "Miecz zabójcy demonów – Kimetsu no Yaiba",
+  "Kimecu no jaiba",
+  "Thanh Gươm Diệt Quỷ",
+  "Kimetsu No Yaiba",
+  "Kimetsu no yaiba",
+  "Убица демона",
+  "شیطان کش : کیمتسو نو یایبا",
+  "Guardians de la nit: Kimetsu no Yaiba",
+  "Ucigașul de demoni",
+  "Demonų žudikas",
+  "დემონების მკვეთი ხმალი"
+ ],
+ "tmdb_id": 85937,
+ "year": 2019
+}

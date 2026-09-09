@@ -13,6 +13,9 @@ from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict
 
+from berth.domain.enums import CollectionType, Profile
+from berth.domain.media import MediaSnapshot
+
 
 class FileKind(StrEnum):
     """檔案分類（brief §6.2）。第一層，決定這個檔案還要不要往下走。"""
@@ -109,6 +112,24 @@ class Confidence(StrEnum):
     LOW = "low"
 
 
+#: 由低到高。信心要比大小，而 `Confidence` 是字串 enum——順序只能寫在一個地方，
+#: 不然「至多 medium」與「至少 medium」會在不同模組裡長出相反的表（票 06 code-review）。
+CONFIDENCE_ORDER: tuple[Confidence, ...] = (Confidence.LOW, Confidence.MEDIUM, Confidence.HIGH)
+
+#: high 與 medium 都自動入庫（brief §6.5）。
+AUTO_APPLIED: frozenset[Confidence] = frozenset({Confidence.HIGH, Confidence.MEDIUM})
+
+
+def at_most(confidence: Confidence, ceiling: Confidence) -> Confidence:
+    """封頂：不超過 `ceiling`。"""
+    return min(confidence, ceiling, key=CONFIDENCE_ORDER.index)
+
+
+def at_least(confidence: Confidence, floor: Confidence) -> bool:
+    """有沒有到 `floor`。語料的 `min_confidence` 比的就是它。"""
+    return CONFIDENCE_ORDER.index(confidence) >= CONFIDENCE_ORDER.index(floor)
+
+
 class PlanAction(StrEnum):
     """一個檔案的處置（plan §2.3 的 `plan_items.action`）。"""
 
@@ -164,6 +185,8 @@ class CjkHints(BaseModel):
     #: `第N话` / `第N集`。
     episode: int | None = None
     episode_end: int | None = None
+    #: `第N部分`（split-cour 的第幾個 cour）。季號說的是第幾季，這個說的是那一季的第幾段。
+    part: int | None = None
     #: `合集` / `全集` / `全N话` / `總集篇`。
     collection: bool = False
     special: SpecialKind | None = None
@@ -231,6 +254,8 @@ class ReleaseInfo(BaseModel):
     title_candidates: tuple[str, ...] = ()
     #: 顯式季號（`S02`、`第二季`、`Season 3`）。
     season: int | None = None
+    #: `Part.2` / `第二部分`：同一季的第幾個 cour。集號從 01 重數的那一種寫法（plan §4.4）。
+    part: int | None = None
     episode: int | None = None
     episode_end: int | None = None
     #: 只有集號而且看起來超過單季範圍時的那個數字。換算是票 06 的事。
@@ -250,6 +275,76 @@ class ReleaseInfo(BaseModel):
     release_kind: ReleaseKind = ReleaseKind.SINGLE
     #: 解析時真的認出來的片段，原文照抄。
     matched_tokens: tuple[str, ...] = ()
+
+
+class MappingStrategy(StrEnum):
+    """季集是**怎麼**決定的（plan §4.2 的 `Candidate.strategy`）。
+
+    這個欄位不是註解：`review` 佇列靠它分組，benchmark 靠它回答「哪一條規則在賺錢、
+    哪一條在賠錢」，而信心的上限也是逐條策略定的（brief §6.5）。
+    """
+
+    #: 檔名寫了 `SxxEyy` / `第二季` / `Season 3`——明說的。
+    EXPLICIT = "explicit"
+    #: 資料夾說的（`Season 2/`、`Specials/`）。
+    FOLDER = "folder"
+    #: Job 或 RSS Rule 帶進來的季號（brief §6.4 第 1 點）。
+    CONTEXT = "context"
+    #: 篇章名對到某一季的季名（plan §4.4，九成失敗的那一條）。
+    ARC_NAME = "arc_name"
+    #: 只有集號，而作品只有一季——韓劇的 `E01` 與單季動漫（brief §6.4）。
+    SINGLE_SEASON = "single_season"
+    #: TMDB Absolute episode group 的絕對編號。
+    ABSOLUTE_GROUP = "absolute_group"
+    #: 各季集數累加換算的絕對編號。
+    ABSOLUTE_CUMULATIVE = "absolute_cumulative"
+    #: 季內 `air_date` 間隔切出的虛擬季（plan §4.4 的 180 天）。
+    AIR_DATE_OFFSET = "air_date_offset"
+    #: `Part.2` / `第二部分`：同季前面幾個 cour 的長度加上去（plan §4.4）。
+    COUR_OFFSET = "cour_offset"
+    #: 電影沒有季集。有這個值是為了讓「為什麼沒有季集」也說得出口。
+    MOVIE = "movie"
+
+
+class Candidate(BaseModel):
+    """一個「這個檔案是第幾季第幾集」的提案（plan §4.2）。
+
+    `map_episode` 可以一次產好幾個（brief §6.4 的絕對編號三法各一個），排序即優先序：
+    第一個就是目前最好的答案。每一個都帶得走自己的理由，review 佇列因此說得出
+    「它是這樣算出來的」而不只是一個數字。
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    season: int | None = None
+    episode_start: int | None = None
+    episode_end: int | None = None
+    strategy: MappingStrategy
+    confidence: Confidence
+    reasons: tuple[str, ...] = ()
+
+
+class ParseContext(BaseModel):
+    """解析器看得到的上下文（plan §4.3）。
+
+    `media` 是**已經抓好的快照**而不是一個 TMDB client：解析器沒有 IO，所以它要的事實
+    由呼叫端先取好放進來（plan §4）。快照缺席時季集對應只能做標題比對（brief §6.4 第 2 點）。
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    #: Job 帶的 Media（brief §6.4 第 1 點）。`None` = RSS 或重新入庫，要自己認作品。
+    media: MediaSnapshot | None = None
+    #: `media` 缺席時可以比對的作品（brief §6.4 第 2 點）。呼叫端先搜好放進來——
+    #: 解析器沒有 IO，認得出作品的前提是有人把候選遞給它。
+    candidates: tuple[MediaSnapshot, ...] = ()
+    profile: Profile = Profile.STANDARD
+    #: RSS Rule 或使用者指定的季號。有值時勝過檔名（brief §6.4）。
+    season_hint: int | None = None
+    #: RSS Rule 的手動偏移量。有值時**優先且信心可為 high**（plan §4.4）。
+    episode_offset: int | None = None
+    #: 這個 Job 要進哪一種媒體庫。劇集不能進 movies（`domain.collection_type_for`）。
+    route_collection_type: CollectionType | None = None
 
 
 class PlanItem(BaseModel):

@@ -136,6 +136,32 @@ class TestSeason:
         assert normalize_cjk("[Airota][Show][01][1080p AVC AAC][CHT].mp4")[1].season is None
 
 
+class TestPart:
+    """`第二部分` 是 cour，不是季（plan §4.4）。
+
+    這是量測裡**唯一「檔名有季號卻還是三家一起錯」**的一類
+    （`docs/research/anime-episode-source.md` §6.1.1）。
+    """
+
+    @pytest.mark.parametrize(
+        ("name", "part"),
+        [
+            ("[星空字幕组][进击的巨人 第三季 第二部分][01-10 Fin][合集]", 2),
+            ("[Group] 某作品 第2部分 [01]", 2),
+        ],
+    )
+    def test_chinese_part_markers(self, name: str, part: int) -> None:
+        assert normalize_cjk(name)[1].part == part
+
+    def test_a_season_and_a_part_are_two_different_numbers(self) -> None:
+        hints = normalize_cjk("[星空字幕组][进击的巨人 第三季 第二部分][01-10 Fin]")[1]
+
+        assert (hints.season, hints.part) == (3, 2)
+
+    def test_a_release_without_a_part_says_nothing(self) -> None:
+        assert normalize_cjk("[DBD-Raws][不死者之王 第二季][01][1080P]")[1].part is None
+
+
 class TestEpisode:
     @pytest.mark.parametrize(
         ("name", "episode", "end"),

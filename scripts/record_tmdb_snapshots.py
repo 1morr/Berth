@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import io
 import json
 import os
 import sys
@@ -87,6 +88,10 @@ async def record(credential: str, *, force: bool) -> int:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    # 作品標題有 `Pokémon` 也有中文，而 Windows 主控台的預設編碼是 cp950：
+    # 不換掉的話這支腳本會在 print 一個標題時炸掉（實測）。
+    if isinstance(sys.stdout, io.TextIOWrapper):
+        sys.stdout.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--force", action="store_true", help="Re-record snapshots that exist.")
     args = parser.parse_args(argv)

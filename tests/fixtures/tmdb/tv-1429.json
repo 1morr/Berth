@@ -1,0 +1,1014 @@
+{
+ "first_air_date": "2013-04-07",
+ "kind": "tv",
+ "overview": "107年前（743年），世界上突然出現了以捕食人類為唯一行為的「巨人」。巨人力量強大且有再生能力，人類無法與之抗衡，面臨滅種之災。面臨著生存危機而殘存下來的人類逃到了一個地方，蓋起了三道巨大的城牆包圍此地，令牆外巨人無法入侵。人們在這隔絕的環境裡享受了一百多年的和平。直到主角艾連．葉卡十歲那年，60公尺高的「超大型巨人」突然出現，以壓倒性的力量破壞最外圍的「瑪利亞之牆」，其後瞬間消失；牆外的巨人們在破壞的城牆缺口成群的衝進牆內捕食人類，人類只好退到第二道城牆之內。\n\n艾連在親眼看著人們以及自己的母親被巨人吞食後，僥倖逃入第二道城牆「羅塞之牆」內。懷著對巨人無法形容的憎恨，艾連誓言一匹不留殺死所有巨人。瑪利亞城牆崩壞的兩年後，艾連加入104期訓練兵團學習和巨人戰鬥的技術。在訓練兵團的三年，艾連在同期訓練兵裡有著其他人無法比擬的強悍精神力。就在訓練兵團結訓之前，超大型巨人再次出現並衝毀羅塞之牆，艾連隨訓練兵團一同與巨人作戰……",
+ "poster_url": "https://image.tmdb.org/t/p/w342/by4f66EHK82OZNyEuYbOW5RxFBa.jpg",
+ "runtime": null,
+ "seasons": [
+  {
+   "air_date": "2013-07-07",
+   "episode_count": 37,
+   "episodes": [
+    {
+     "absolute_number": null,
+     "air_date": "2013-07-07",
+     "episode_number": 1,
+     "name": "Since That Day",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2013-07-17",
+     "episode_number": 2,
+     "name": "Chibi Theater: Fly, Cadets, Fly!: Day 1 / Day 2",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2013-08-21",
+     "episode_number": 3,
+     "name": "Chibi Theater: Fly, Cadets, Fly!: Day 3 / Day 4",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2013-09-18",
+     "episode_number": 4,
+     "name": "Chibi Theater: Fly, Cadets, Fly!: Day 5 / Day 6 / Day 7",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2013-10-16",
+     "episode_number": 5,
+     "name": "Chibi Theater: Fly, Cadets, Fly!: Day 8 / Day 9 / Day 10",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2013-11-20",
+     "episode_number": 6,
+     "name": "Chibi Theater: Fly, Cadets, Fly!: Day 11 / Day 12 / Day 13",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2013-12-09",
+     "episode_number": 7,
+     "name": "Ilse's Notebook: Memoirs of a Recon Corps Member",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2013-12-18",
+     "episode_number": 8,
+     "name": "Chibi Theater: Fly, Cadets, Fly!: Day 14 / Day 15 / Day 16",
+     "runtime": 13
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2014-01-15",
+     "episode_number": 9,
+     "name": "Chibi Theater: Fly, Cadets, Fly!: Day 17 / Day 18 / Day 19",
+     "runtime": 14
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2014-02-19",
+     "episode_number": 10,
+     "name": "Chibi Theater: Fly, Cadets, Fly!: Day 20 / Day 21 / Day 22",
+     "runtime": 10
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2014-03-19",
+     "episode_number": 11,
+     "name": "Reading & Live Event",
+     "runtime": 118
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2014-03-19",
+     "episode_number": 12,
+     "name": "Chibi Theater: Fly, Cadets, Fly!: Day 23 / Day 24 / Day 25",
+     "runtime": 10
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2014-04-09",
+     "episode_number": 13,
+     "name": "The Sudden Visitor: The Torturous Curse of Youth",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2014-08-08",
+     "episode_number": 14,
+     "name": "Distress",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2014-12-09",
+     "episode_number": 15,
+     "name": "A Choice with No Regrets (1)",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2015-04-09",
+     "episode_number": 16,
+     "name": "A Choice with No Regrets (2)",
+     "runtime": 30
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2017-12-08",
+     "episode_number": 17,
+     "name": "Lost Girls: Wall Sina, Goodbye (1)",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-04-09",
+     "episode_number": 18,
+     "name": "Lost Girls: Wall Sina, Goodbye (2)",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-08-09",
+     "episode_number": 19,
+     "name": "Lost Girls: Lost in the Cruel World",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-10-17",
+     "episode_number": 20,
+     "name": "Chibi Theater: Fly, New Levi Squad, Fly!: Day 38 / Day 39 / Day 40",
+     "runtime": 2
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-12-05",
+     "episode_number": 21,
+     "name": "Chibi Theater: Fly, New Levi Squad, Fly!: Day 41 / Day 42 / Day 43",
+     "runtime": 2
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2019-01-09",
+     "episode_number": 22,
+     "name": "Chibi Theater: Fly, New Levi Squad, Fly!: Day 44 / Day 45 / Day 46",
+     "runtime": 3
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2019-02-06",
+     "episode_number": 23,
+     "name": "Chibi Theater: Fly, New Levi Squad, Fly!: Day 47 / Day 48 / Day 49",
+     "runtime": 2
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2019-07-24",
+     "episode_number": 24,
+     "name": "Chibi Theater: Fly, New Levi Squad, Fly!: Day 50 / Day 51/ Day 52",
+     "runtime": 2
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2019-08-21",
+     "episode_number": 25,
+     "name": "Chibi Theater: Fly, New Levi Squad, Fly!: Day 53 / Day 54 / Day 55",
+     "runtime": 2
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2019-09-18",
+     "episode_number": 26,
+     "name": "Chibi Theater: Fly, New Levi Squad, Fly!: Day 56 / Day 57 / Day 58 / Day 59",
+     "runtime": 3
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-10-25",
+     "episode_number": 27,
+     "name": "―Special Omnibus― 1st Night ～The Battle Between Humanity and Titans～",
+     "runtime": 50
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-11-08",
+     "episode_number": 28,
+     "name": "―Special Omnibus― 2nd Night ～The Emergence of The Intelligent Titans～",
+     "runtime": 50
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-11-14",
+     "episode_number": 29,
+     "name": "―Special Omnibus― 3rd Night ～The Uprising of the Scout Regiment and the True Ruler～",
+     "runtime": 50
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-11-21",
+     "episode_number": 30,
+     "name": "―Special Omnibus― 4th Night ～The Truth of the Titans and the Secret of the Walls～",
+     "runtime": 50
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-12-06",
+     "episode_number": 31,
+     "name": "―Special Omnibus― 5th Night ～Marley's Warriors and the Island's Devils～",
+     "runtime": 50
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-12-13",
+     "episode_number": 32,
+     "name": "―Special Omnibus― 6th Night ～Decisions of Future～",
+     "runtime": 50
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-12-15",
+     "episode_number": 33,
+     "name": "Chibi Theater: Survey Cops: Day 60 / Day 61 / Day 62 / Day 63 / Day 64 / Day 65 / Day 66 / Day 67",
+     "runtime": 6
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-12-20",
+     "episode_number": 34,
+     "name": "Chibi Theater: Survey Cops: Day 68 / Day 69 / Day 70 / Day 71 / Day 72 / Day 73 / Day 74 / Day 75",
+     "runtime": 5
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-02-28",
+     "episode_number": 35,
+     "name": "―Special Omnibus― 7th Night ～Footsteps of the End～",
+     "runtime": 50
+    },
+    {
+     "absolute_number": 88,
+     "air_date": "2023-03-04",
+     "episode_number": 36,
+     "name": "The Final Chapters Special (1)",
+     "runtime": 61
+    },
+    {
+     "absolute_number": 89,
+     "air_date": "2023-11-05",
+     "episode_number": 37,
+     "name": "The Final Chapters Special (2)",
+     "runtime": 85
+    }
+   ],
+   "name": "Specials",
+   "names": [
+    "Specials",
+    "特別篇",
+    "特别篇"
+   ],
+   "season_number": 0
+  },
+  {
+   "air_date": "2013-04-07",
+   "episode_count": 25,
+   "episodes": [
+    {
+     "absolute_number": 1,
+     "air_date": "2013-04-07",
+     "episode_number": 1,
+     "name": "To You, in 2000 Years: The Fall of Shiganshina (1)",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 2,
+     "air_date": "2013-04-14",
+     "episode_number": 2,
+     "name": "That Day: The Fall of Shiganshina (2)",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 3,
+     "air_date": "2013-04-21",
+     "episode_number": 3,
+     "name": "A Dim Light Amid Despair: Humanity's Comeback (1)",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 4,
+     "air_date": "2013-04-28",
+     "episode_number": 4,
+     "name": "The Night of the Closing Ceremony: Humanity's Comeback (2)",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 5,
+     "air_date": "2013-05-05",
+     "episode_number": 5,
+     "name": "First Battle: The Struggle for Trost (1)",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 6,
+     "air_date": "2013-05-12",
+     "episode_number": 6,
+     "name": "The World the Girl Saw: The Struggle for Trost (2)",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 7,
+     "air_date": "2013-05-19",
+     "episode_number": 7,
+     "name": "Small Blade: The Struggle for Trost (3)",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 8,
+     "air_date": "2013-05-26",
+     "episode_number": 8,
+     "name": "I Can Hear His Heartbeat: The Struggle for Trost (4)",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 9,
+     "air_date": "2013-06-02",
+     "episode_number": 9,
+     "name": "Whereabouts of His Left Arm: The Struggle for Trost (5)",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 10,
+     "air_date": "2013-06-09",
+     "episode_number": 10,
+     "name": "Response: The Struggle for Trost (6)",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 11,
+     "air_date": "2013-06-16",
+     "episode_number": 11,
+     "name": "Idol: The Struggle for Trost (7)",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 12,
+     "air_date": "2013-06-23",
+     "episode_number": 12,
+     "name": "Wound: The Struggle for Trost (8)",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 13,
+     "air_date": "2013-06-30",
+     "episode_number": 13,
+     "name": "Primal Desire: The Struggle for Trost (9)",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 14,
+     "air_date": "2013-07-14",
+     "episode_number": 14,
+     "name": "Can't Look into His Eyes Yet: Eve of the Counterattack (1)",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 15,
+     "air_date": "2013-07-21",
+     "episode_number": 15,
+     "name": "Special Operations Squad: Eve of the Counterattack (2)",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 16,
+     "air_date": "2013-07-28",
+     "episode_number": 16,
+     "name": "What Needs to Be Done Now: Eve of the Counterattack (3)",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 17,
+     "air_date": "2013-08-04",
+     "episode_number": 17,
+     "name": "Female Titan: The 57th Exterior Scouting Mission (1)",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 18,
+     "air_date": "2013-08-11",
+     "episode_number": 18,
+     "name": "Forest of Giant Trees: The 57th Exterior Scouting Mission (2)",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 19,
+     "air_date": "2013-08-18",
+     "episode_number": 19,
+     "name": "Bite: The 57th Exterior Scouting Mission (3)",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 20,
+     "air_date": "2013-08-25",
+     "episode_number": 20,
+     "name": "Erwin Smith: The 57th Exterior Scouting Mission (4)",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 21,
+     "air_date": "2013-09-01",
+     "episode_number": 21,
+     "name": "Crushing Blow: The 57th Exterior Scouting Mission (5)",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 22,
+     "air_date": "2013-09-08",
+     "episode_number": 22,
+     "name": "The Defeated: The 57th Exterior Scouting Mission (6)",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 23,
+     "air_date": "2013-09-15",
+     "episode_number": 23,
+     "name": "Smile: Assault on Stohess (1)",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 24,
+     "air_date": "2013-09-22",
+     "episode_number": 24,
+     "name": "Mercy: Assault on Stohess (2)",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 25,
+     "air_date": "2013-09-29",
+     "episode_number": 25,
+     "name": "Wall: Assault on Stohess (3)",
+     "runtime": 24
+    }
+   ],
+   "name": "Season 1",
+   "names": [
+    "Season 1",
+    "第1季",
+    "第 1 季"
+   ],
+   "season_number": 1
+  },
+  {
+   "air_date": "2017-04-01",
+   "episode_count": 12,
+   "episodes": [
+    {
+     "absolute_number": 26,
+     "air_date": "2017-04-01",
+     "episode_number": 1,
+     "name": "Beast Titan",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 27,
+     "air_date": "2017-04-08",
+     "episode_number": 2,
+     "name": "I'm Home",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 28,
+     "air_date": "2017-04-15",
+     "episode_number": 3,
+     "name": "Southwestward",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 29,
+     "air_date": "2017-04-22",
+     "episode_number": 4,
+     "name": "Soldier",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 30,
+     "air_date": "2017-04-29",
+     "episode_number": 5,
+     "name": "Historia",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 31,
+     "air_date": "2017-05-06",
+     "episode_number": 6,
+     "name": "Warrior",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 32,
+     "air_date": "2017-05-13",
+     "episode_number": 7,
+     "name": "Close Combat",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 33,
+     "air_date": "2017-05-20",
+     "episode_number": 8,
+     "name": "The Hunters",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 34,
+     "air_date": "2017-05-27",
+     "episode_number": 9,
+     "name": "Opening",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 35,
+     "air_date": "2017-06-03",
+     "episode_number": 10,
+     "name": "Children",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 36,
+     "air_date": "2017-06-10",
+     "episode_number": 11,
+     "name": "Charge",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 37,
+     "air_date": "2017-06-17",
+     "episode_number": 12,
+     "name": "Scream",
+     "runtime": 24
+    }
+   ],
+   "name": "Season 2",
+   "names": [
+    "Season 2",
+    "第2季",
+    "第 2 季"
+   ],
+   "season_number": 2
+  },
+  {
+   "air_date": "2018-07-23",
+   "episode_count": 22,
+   "episodes": [
+    {
+     "absolute_number": 38,
+     "air_date": "2018-07-23",
+     "episode_number": 1,
+     "name": "Smoke Signal",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 39,
+     "air_date": "2018-07-30",
+     "episode_number": 2,
+     "name": "Pain",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 40,
+     "air_date": "2018-08-06",
+     "episode_number": 3,
+     "name": "Old Story",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 41,
+     "air_date": "2018-08-13",
+     "episode_number": 4,
+     "name": "Trust",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 42,
+     "air_date": "2018-08-20",
+     "episode_number": 5,
+     "name": "Reply",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 43,
+     "air_date": "2018-08-27",
+     "episode_number": 6,
+     "name": "Sin",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 44,
+     "air_date": "2018-09-03",
+     "episode_number": 7,
+     "name": "Wish",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 45,
+     "air_date": "2018-09-10",
+     "episode_number": 8,
+     "name": "Outside the Walls of Orvud District",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 46,
+     "air_date": "2018-09-17",
+     "episode_number": 9,
+     "name": "Ruler of the Walls",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 47,
+     "air_date": "2018-09-24",
+     "episode_number": 10,
+     "name": "Friends",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 48,
+     "air_date": "2018-10-08",
+     "episode_number": 11,
+     "name": "Bystander",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 49,
+     "air_date": "2018-10-15",
+     "episode_number": 12,
+     "name": "Night of the Battle to Retake the Wall",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 50,
+     "air_date": "2019-04-29",
+     "episode_number": 13,
+     "name": "The Town Where Everything Began",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 51,
+     "air_date": "2019-05-06",
+     "episode_number": 14,
+     "name": "Thunder Spears",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 52,
+     "air_date": "2019-05-13",
+     "episode_number": 15,
+     "name": "Descent",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 53,
+     "air_date": "2019-05-20",
+     "episode_number": 16,
+     "name": "Perfect Game",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 54,
+     "air_date": "2019-05-27",
+     "episode_number": 17,
+     "name": "Hero",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 55,
+     "air_date": "2019-06-03",
+     "episode_number": 18,
+     "name": "Midnight Sun",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 56,
+     "air_date": "2019-06-10",
+     "episode_number": 19,
+     "name": "The Basement",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 57,
+     "air_date": "2019-06-17",
+     "episode_number": 20,
+     "name": "That Day",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 58,
+     "air_date": "2019-06-24",
+     "episode_number": 21,
+     "name": "The Attack Titan",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 59,
+     "air_date": "2019-07-01",
+     "episode_number": 22,
+     "name": "The Other Side of the Wall",
+     "runtime": 24
+    }
+   ],
+   "name": "Season 3",
+   "names": [
+    "Season 3",
+    "第3季",
+    "第 3 季"
+   ],
+   "season_number": 3
+  },
+  {
+   "air_date": "2020-12-07",
+   "episode_count": 28,
+   "episodes": [
+    {
+     "absolute_number": 60,
+     "air_date": "2020-12-07",
+     "episode_number": 1,
+     "name": "The Other Side of the Sea",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 61,
+     "air_date": "2020-12-14",
+     "episode_number": 2,
+     "name": "Midnight Train",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 62,
+     "air_date": "2020-12-21",
+     "episode_number": 3,
+     "name": "The Door of Hope",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 63,
+     "air_date": "2020-12-28",
+     "episode_number": 4,
+     "name": "From One Hand to Another",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 64,
+     "air_date": "2021-01-11",
+     "episode_number": 5,
+     "name": "Declaration of War",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 65,
+     "air_date": "2021-01-18",
+     "episode_number": 6,
+     "name": "The War Hammer Titan",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 66,
+     "air_date": "2021-01-25",
+     "episode_number": 7,
+     "name": "Assault",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 67,
+     "air_date": "2021-02-01",
+     "episode_number": 8,
+     "name": "Assassin's Bullet",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 68,
+     "air_date": "2021-02-08",
+     "episode_number": 9,
+     "name": "Brave Volunteers",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 69,
+     "air_date": "2021-02-15",
+     "episode_number": 10,
+     "name": "A Sound Argument",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 70,
+     "air_date": "2021-02-22",
+     "episode_number": 11,
+     "name": "Deceiver",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 71,
+     "air_date": "2021-03-01",
+     "episode_number": 12,
+     "name": "Guides",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 72,
+     "air_date": "2021-03-08",
+     "episode_number": 13,
+     "name": "Children of the Forest",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 73,
+     "air_date": "2021-03-22",
+     "episode_number": 14,
+     "name": "Savagery",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 74,
+     "air_date": "2021-03-22",
+     "episode_number": 15,
+     "name": "Sole Salvation",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 75,
+     "air_date": "2021-03-29",
+     "episode_number": 16,
+     "name": "Above and Below",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 76,
+     "air_date": "2022-01-10",
+     "episode_number": 17,
+     "name": "Judgment",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 77,
+     "air_date": "2022-01-17",
+     "episode_number": 18,
+     "name": "Sneak Attack",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 78,
+     "air_date": "2022-01-24",
+     "episode_number": 19,
+     "name": "Two Brothers",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 79,
+     "air_date": "2022-01-31",
+     "episode_number": 20,
+     "name": "Memories of the Future",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 80,
+     "air_date": "2022-02-07",
+     "episode_number": 21,
+     "name": "From You, 2,000 Years Ago",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 81,
+     "air_date": "2022-02-14",
+     "episode_number": 22,
+     "name": "Thaw",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 82,
+     "air_date": "2022-02-21",
+     "episode_number": 23,
+     "name": "Sunset",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 83,
+     "air_date": "2022-02-27",
+     "episode_number": 24,
+     "name": "Pride",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 84,
+     "air_date": "2022-03-07",
+     "episode_number": 25,
+     "name": "Night of the End",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 85,
+     "air_date": "2022-03-14",
+     "episode_number": 26,
+     "name": "Traitor",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 86,
+     "air_date": "2022-03-21",
+     "episode_number": 27,
+     "name": "Retrospective",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 87,
+     "air_date": "2022-04-04",
+     "episode_number": 28,
+     "name": "The Dawn of Humanity",
+     "runtime": 23
+    }
+   ],
+   "name": "The Final Season",
+   "names": [
+    "The Final Season",
+    "第4季",
+    "最终季"
+   ],
+   "season_number": 4
+  }
+ ],
+ "title": "進擊的巨人",
+ "title_en": "Attack on Titan",
+ "title_original": "進撃の巨人",
+ "titles": [
+  "Attack on Titan",
+  "進撃の巨人",
+  "দানবের উপর আক্রমণ",
+  "Атаката на Титаните",
+  "Атака титанов: Финал",
+  "Атака титанов",
+  "Ataque dos Titãs",
+  "自由之翼",
+  "进击的巨人-TV动画",
+  "进击的巨人 最终季",
+  "进击的巨人OAD",
+  "进击的巨人 最终季 完结篇",
+  "Útok Titánů",
+  "Angriff auf Titan",
+  "هجوم العمالقة",
+  "Ataque a los titanes",
+  "מתקפת הטיטאנים",
+  "התקפה על הטיטאן",
+  "מתקפה על הטיטאן",
+  "התקפת הטיטאנים",
+  "אטאק און טיטאן",
+  "אוט",
+  "दानव पर हमला",
+  "अटैक ओन टाईटन",
+  "L'attacco dei giganti",
+  "进撃の巨人",
+  "Shingeki no Kyojin",
+  "SNK",
+  "Shingeki no Kyojin The Final Season",
+  "進撃の巨人 悔いなき選択",
+  "Shingeki no Kyojin: Kuinaki Sentaku",
+  "進撃の巨人 LOST GIRLS",
+  "Shingeki no Kyojin Lost Girls",
+  "진격의 거인 OAD",
+  "진격의 거인 The Final Season",
+  "Атака на титана",
+  "Атакуючий титан",
+  "Attack on Titan: Shingeki no Kyojin",
+  "Attack on Titan: No Regrets",
+  "Attack on Titan: Lost Girls",
+  "Attack on Titan: The Final Season",
+  "Attack on Titan: The Final Season THE FINAL CHAPTERS",
+  "Attack on Titan: The Final Season - The Final Chapters Special Part 1",
+  "Attack on Titan: The Final Season - The Final Chapters Special Part 2",
+  "AOT",
+  "L'Attaque des Titans",
+  "Ataque a los Titanes",
+  "حمله به تایتان‌ها",
+  "Šingeki no kjodžin",
+  "Атака титанів",
+  "进击的巨人",
+  "진격의 거인",
+  "進擊的巨人",
+  "Η Επίθεση των Τιτάνων",
+  "Titaanien sota – Attack on Titan",
+  "Нападението на титаните",
+  "ผ่าพิภพไททัน",
+  "Atak Tytanów",
+  "Titanų medžioklė",
+  "Đại Chiến Người Khổng Lồ",
+  "L'attaque des titans",
+  "Atacul titanilor",
+  "Напад на Титане",
+  "ტიტანებთან შერკინება",
+  "اٹیک آن ٹائٹن"
+ ],
+ "tmdb_id": 1429,
+ "year": 2013
+}

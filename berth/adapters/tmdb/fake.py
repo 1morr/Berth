@@ -12,6 +12,7 @@ from berth.adapters.tmdb import (
     TmdbDetail,
     TmdbEntry,
     TmdbSeason,
+    TmdbSeasonEntry,
 )
 from berth.domain import MediaKind
 
@@ -33,6 +34,7 @@ class FakeTmdbClient:
         popular: Mapping[MediaKind, Sequence[TmdbEntry]] | None = None,
         search: Mapping[str, Sequence[TmdbEntry]] | None = None,
         translations: Mapping[int, str] | None = None,
+        season_names: Mapping[str, Mapping[int, str]] | None = None,
         display_absent: Iterable[int] = (),
         details: Sequence[TmdbDetail] = (),
         seasons: Mapping[int, Sequence[TmdbSeason]] | None = None,
@@ -49,6 +51,11 @@ class FakeTmdbClient:
         self._popular = dict(popular or {})
         self._search = dict(search or {})
         self._translations = dict(translations or {})
+        #: `語言 → {季號: 季名}`。真的 TMDB 每一輪回的季名都是那個語言的
+        #: （`Hashira Training Arc` / `柱訓練篇` / `柱训练篇`），篇章名比對靠這件事。
+        self._season_names = {
+            language: dict(rows) for language, rows in (season_names or {}).items()
+        }
         self._display_absent = frozenset(display_absent)
         #: 逐支端點的呼叫次數。快取生效與否就看這裡。
         self.requests: list[tuple[str, str]] = []
@@ -89,7 +96,11 @@ class FakeTmdbClient:
             raise NotFoundError(f"{kind.value}/{tmdb_id}: no such title on TMDB")
         if language == BASE_LANGUAGE:
             return found
-        return replace(found, title=self._translations.get(tmdb_id, found.title))
+        return replace(
+            found,
+            title=self._translations.get(tmdb_id, found.title),
+            seasons=self._localised_seasons(found.seasons, language),
+        )
 
     async def season(self, tmdb_id: int, season_number: int, *, language: str) -> TmdbSeason:
         self.requests.append((f"season/{tmdb_id}/{season_number}", language))
@@ -110,6 +121,14 @@ class FakeTmdbClient:
     def _raise(self) -> None:
         if self.error is not None:
             raise self.error
+
+    def _localised_seasons(
+        self, seasons: Sequence[TmdbSeasonEntry], language: str
+    ) -> tuple[TmdbSeasonEntry, ...]:
+        names = self._season_names.get(language, {})
+        return tuple(
+            replace(entry, name=names.get(entry.season_number, entry.name)) for entry in seasons
+        )
 
     def _localised(self, entries: Sequence[TmdbEntry], language: str) -> tuple[TmdbEntry, ...]:
         if language == BASE_LANGUAGE:

@@ -32,6 +32,11 @@
     }
    ],
    "name": "Specials",
+   "names": [
+    "Specials",
+    "特別篇",
+    "特别篇"
+   ],
    "season_number": 0
   },
   {
@@ -201,6 +206,10 @@
     }
    ],
    "name": "Season 1",
+   "names": [
+    "Season 1",
+    "第 1 季"
+   ],
    "season_number": 1
   },
   {
@@ -377,6 +386,10 @@
     }
    ],
    "name": "Season 2",
+   "names": [
+    "Season 2",
+    "第 2 季"
+   ],
    "season_number": 2
   },
   {
@@ -483,6 +496,10 @@
     }
    ],
    "name": "Season 3",
+   "names": [
+    "Season 3",
+    "第 3 季"
+   ],
    "season_number": 3
   }
  ],
@@ -497,9 +514,9 @@
   "无职转生2",
   "无职转生～到了异世界就拿出真本事",
   "Mushoku Tensei: Nezaměstnaný dostává druhou šanci",
-  "Mushoku Tensei, Jobless Reincarnation",
-  "Mushoku Tensei Jobless Reincarnation",
   "Mushoku Tensei - Jobless Reincarnation",
+  "Mushoku Tensei Jobless Reincarnation",
+  "Mushoku Tensei, Jobless Reincarnation",
   "Mushoku Tensei: Isekai Ittara Honki Dasu",
   "Mushoku Tensei: Isekai Ittara Honki Dasu 2nd Season",
   "無職転生Ⅱ ～異世界行ったら本気だす～",
@@ -512,8 +529,8 @@
   "Mushoku Tensei III",
   "무직 전생 ~이세계에 갔으면 최선을 다한다~",
   "무직전생 Ⅲ ~이세계에 갔으면 최선을 다한다~",
-  "Mushoku Tensei: Jobless Reincarnation Parte 2",
   "Reencarnación sin trabajo: lo intentaré seriamente si voy a otro mundo",
+  "Mushoku Tensei: Jobless Reincarnation Parte 2",
   "Реинкарнация безработного",
   "Mushoku Tensei: Перерождение безработного",
   "Перерождение безработного",

@@ -174,6 +174,38 @@ class TestSnapshot:
         assert view.title_en == "SPY x FAMILY"
         assert view.title_original == "SPY×FAMILY"
 
+    async def test_every_season_keeps_the_names_the_other_rounds_gave_it(
+        self, session: AsyncSession
+    ) -> None:
+        """篇章名比對的對手是「柱训练篇」這種簡體寫法，而 `name` 是英文（plan §4.4）。
+
+        所以季名要三套都留下來：英文那一輪進檔名，另外兩輪只給解析器比對用。
+        """
+        client = tmdb(
+            season_names={
+                "zh-TW": {1: "第一季", 2: "柱訓練篇"},
+                "zh-CN": {1: "第一季", 2: "柱训练篇"},
+            }
+        )
+        factory = await credentialled(session, client)
+
+        view = await read_media(session, factory, SPY_ID)
+
+        assert view.seasons[2].name == "Season 2"
+        assert view.seasons[2].names == ("Season 2", "柱訓練篇", "柱训练篇")
+
+    async def test_a_movie_does_not_pay_for_the_third_round(self, session: AsyncSession) -> None:
+        """第三輪只為了季名，而電影沒有季（plan §4.4）。"""
+        client = tmdb()
+        factory = await credentialled(session, client)
+
+        await read_media(session, factory, MOANA_ID)
+
+        rounds = [
+            language for endpoint, language in client.requests if endpoint.startswith("detail/")
+        ]
+        assert rounds == ["en-US", "zh-TW"]
+
     async def test_absolute_numbers_land_on_the_episodes(self, session: AsyncSession) -> None:
         """有 Absolute group 的作品，每一集帶得出絕對編號（票 04 驗收）。"""
         factory = await credentialled(session, tmdb())

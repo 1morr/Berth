@@ -39,6 +39,11 @@
     }
    ],
    "name": "Specials",
+   "names": [
+    "Specials",
+    "特別篇",
+    "特别篇"
+   ],
    "season_number": 0
   },
   {
@@ -1097,6 +1102,10 @@
     }
    ],
    "name": "Series 1",
+   "names": [
+    "Series 1",
+    "第 1 季"
+   ],
    "season_number": 1
   }
  ],
@@ -1110,17 +1119,17 @@
   "Pokémon: Horizontes - Temporada 2 - A Busca por Laqua",
   "Pokémon: Horizontes - Temporada 3 - Altas Esperanças",
   "宝可梦 地平线 莉可与罗伊的启程",
+  "宝可梦 地平线 太乐巴戈斯的光辉",
   "宠物小精灵 地平线 太乐巴戈斯的光辉",
   "精灵宝可梦 地平线",
-  "宝可梦 地平线 太乐巴戈斯的光辉",
   "宝可梦 地平线",
   "宠物小精灵 地平线",
   "La série : Pokémon, les horizons",
   "Pokémon : Les horizons : La série",
   "Pokémon les horizons: La série",
   "Pocket Monsters: Terastal Debut",
-  "Pocket Monsters: The Sparkling of Terapagos",
   "Pocket Monsters: Liko & Roy Set Off",
+  "Pocket Monsters: The Sparkling of Terapagos",
   "Pocket Monsters: Rayquaza Rising",
   "Pokémon Horizons: Season 2 - The Search for Laqua",
   "Pokémon Horizons: The Series",
@@ -1129,8 +1138,8 @@
   "Pocket Monsters: Rising Again",
   "Pokémon Horizons: Season 3 - Rising Hope",
   "Pocket Monsters: Wonder Voyage",
-  "寶可夢：地平線",
   "精靈寶可夢：地平線",
+  "寶可夢：地平線",
   "Pokémon Orizzonti: La serie",
   "Pocket Monsters (2023)",
   "ポケットモンスター リコとロイの旅立ち",

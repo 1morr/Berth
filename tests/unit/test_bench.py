@@ -32,8 +32,9 @@ from berth.services.bench import (
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CORPUS_ROOT, SNAPSHOT_ROOT, BASELINE_PATH = paths(REPO_ROOT)
 
-#: v0 語料的組成（plan §4.6、brief §20.4 的樣本清單）。
-CORPUS_SHAPE = {"anime": 8, "tv": 8, "movie": 4}
+#: 語料的組成（plan §4.6、brief §20.4 的樣本清單）。v0 是 20 筆（動漫 8 / 劇集 8 / 電影 4），
+#: 票 06 補了三筆動漫：篇章名、cour 偏移與單檔多集（brief §6.6）。
+CORPUS_SHAPE = {"anime": 11, "tv": 8, "movie": 4}
 
 
 @pytest.fixture(scope="module")
@@ -47,7 +48,7 @@ class TestCorpus:
         counted = {name: sum(f.category == name for f in fixtures) for name in CATEGORIES}
 
         assert counted == CORPUS_SHAPE
-        assert len(fixtures) == 20
+        assert len(fixtures) == sum(CORPUS_SHAPE.values())
 
     def test_every_fixture_cites_its_source(self) -> None:
         """語料是真實 torrent 的檔案清單（brief §6.9）；沒有出處的一筆無法回頭查證。"""

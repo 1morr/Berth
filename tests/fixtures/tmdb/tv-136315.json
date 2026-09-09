@@ -67,6 +67,10 @@
     }
    ],
    "name": "Season 1",
+   "names": [
+    "Season 1",
+    "第 1 季"
+   ],
    "season_number": 1
   },
   {
@@ -145,6 +149,10 @@
     }
    ],
    "name": "Season 2",
+   "names": [
+    "Season 2",
+    "第 2 季"
+   ],
    "season_number": 2
   },
   {
@@ -223,6 +231,10 @@
     }
    ],
    "name": "Season 3",
+   "names": [
+    "Season 3",
+    "第 3 季"
+   ],
    "season_number": 3
   },
   {
@@ -301,6 +313,10 @@
     }
    ],
    "name": "Season 4",
+   "names": [
+    "Season 4",
+    "第 4 季"
+   ],
    "season_number": 4
   },
   {
@@ -365,6 +381,10 @@
     }
    ],
    "name": "Season 5",
+   "names": [
+    "Season 5",
+    "第 5 季"
+   ],
    "season_number": 5
   }
  ],

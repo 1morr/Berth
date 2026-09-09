@@ -73,6 +73,8 @@ def parse_release(name: str) -> ReleaseInfo:
         raw_title=name,
         title_candidates=_titles(guess),
         season=season,
+        # cour 標記兩邊都可能寫：`Part.2` guessit 讀得出來，`第二部分` 只有詞典認得。
+        part=hints.part or _int(guess.get("part")),
         episode=episode,
         episode_end=episode_end,
         absolute_number=_int(guess.get("absolute_episode")),
@@ -101,7 +103,9 @@ def merge_release(primary: ReleaseInfo, fallback: ReleaseInfo) -> ReleaseInfo:
     """
     filled = primary.model_dump()
     for field, value in fallback.model_dump().items():
-        if field in ("raw_title", "matched_tokens"):
+        if field in ("raw_title", "matched_tokens", "special_kind"):
+            # `special_kind` 不補：`[01-13TV全集+SP]` 說的是「這一包裡有特典」，
+            # 不是「這個檔案是特典」。整包 13 集正片會因此全部被當成 SP（真實語料）。
             continue
         # `episode_end` 跟著 `episode` 走：檔名說了第 5 集，torrent 名的 `01-28`
         # 不會讓它變成第 5 到 28 集。
@@ -150,6 +154,13 @@ def _numbers(
     if season is None and isinstance(raw_season, int):
         # `GTO.2026.EP08` → guessit 同時給 `year` 與 `season` 2026。年份不是季號。
         season = None if raw_season == guess.get("year") else raw_season
+
+    if season is not None and hints.season is None and raw_episode is None:
+        # `The_Final_Season[28]`：`Season` 黏著方括號時 guessit 把集號讀成季號，而且
+        # 不再回集號——同一個數字被 claim 兩次時，方括號裡的那個是集號（真實語料）。
+        bracketed, _ = _episode_from_brackets(cleaned)
+        if bracketed == season:
+            season = None
 
     # 方括號裡的區間先問：`[135-136]` guessit 只回最後一個數字，區間比單一個數字更具體。
     if episode is None:

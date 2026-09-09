@@ -144,13 +144,37 @@ Windows Docker Desktop（NTFS bind mount）與 Linux（ext4）上各跑一次 `d
     幾條（多方括號裡的集號、`Season 3 [04]` 被讀成兩個季號、年份被當成季號、`HD1080P`、
     結尾 `-[Group]`、把字幕 token 當組名）。檔名說了算，torrent 名補空缺。
   - `domain.Tags.render()`：brief §6.8 的順序與 token，`subs` 依 `CHS < CHT < JP < EN` 以 `+` 連接。
-- `berth bench`：解析基準測試（plan §4.6、brief §6.9）。**離線跑**——20 筆真實 torrent 的
-  檔案清單（`tests/fixtures/parser/`）與 18 份凍結的 TMDB 快照（`tests/fixtures/tmdb/`）都在
+- `berth bench`：解析基準測試（plan §4.6、brief §6.9）。**離線跑**——真實 torrent 的
+  檔案清單（`tests/fixtures/parser/`）與凍結的 TMDB 快照（`tests/fixtures/tmdb/`）都在
   repo 裡。報表逐分類列出 `auto_correct` / `auto_wrong` / `review` / `missed` /
   `unmatched_correct` / `extra_correct` / `skipped`（七個桶加起來等於檔案數）、分類與 tag
   的正確率，以及 high / medium 誤判率；門檻在
   `tests/fixtures/parser/baseline.json`，同一支邏輯就是 `tests/unit/test_bench.py`，所以 CI
   不另開 job。
+- 解析器的第四層：季集對應與信心（plan §4.1、§4.4、brief §6.4、§6.5、§6.6）。
+  - `parser.structure_hints`：只讀資料夾——`Season 2` / `S2` / `第二季` / `2nd Season` /
+    `Part 2` / `Specials` / `SPs`，以及 `Subs/` `字幕/` 與其下的語言子資料夾。
+  - `parser.map_episode`：brief §6.4 的優先序（上下文季號 → 檔名的顯式季號 → 資料夾 → 篇章名
+    → 只有集號），每一個答案都是一個帶理由的 `Candidate`。**三條規則來自 M1 票 01 的量測**：
+    **篇章名 → 季號**（佔失敗的九成；比對各季在三輪語言下的名字，`最終季` 對到最後一季）、
+    **`第二部分` / `Part.2` 當 cour 偏移**（唯一「有季號還是錯」的一類），以及 **180 天的虛擬季
+    門檻**（TMDB 把好幾輪播出併成一季時的換算）。絕對編號三法（episode group、各季累加、
+    虛擬季）各產一個 Candidate。
+  - `parser.match_media`：正規化後比 `name` / `original_name` / 別名 / 翻譯，年份加權。上下文
+    有 Media 時它是覆核（對不上就壓低信心）；`ParseContext.candidates` 有東西時（RSS 與
+    重新入庫）它就是認作品的那條路，而「標題 + 年份精確命中」才配得上 high 信心。
+  - `parser.score`：批次一致性（同模式、連續集號、數量與 TMDB 吻合）。兩個檔案宣稱同一集、
+    或一季十二集卻對出二十個檔案時，**那一季都不自動入庫**——是哪一個讀錯了看不出來；
+    整包用同一種模式讀而只有一個例外時，那一個降到 medium。
+  - 特典的處置（brief §7.6）：發佈明說 `S00Exx` 就照它走但信心至多 medium，只寫 `[SP][01]`
+    這種自己的序號則是 `unmatched`，等人工指派。
+- `MediaSnapshot` 的各季多一個 `names`：同一季在 `en-US` / `zh-TW` / `zh-CN` 三輪的名字。
+  篇章名比對的對手是真實發佈寫的那一種字（`柱训练篇`），只留英文季名的話那條規則不會命中。
+  代價是 `tv/{id}` 多打一輪 `zh-CN`（只取季名，電影不打）。
+- 語料補三筆真實發佈（動漫 11 / 劇集 8 / 電影 4，共 23 筆 333 個檔案）：篇章名（鬼滅之刃
+  柱訓練篇）、cour 偏移（進擊的巨人 Season 3 Part 2）與單檔多集（`- 01-02` 的 `.ts`）。
+- `berth bench` 的報表多一欄**信心達標率**：語料寫的 `min_confidence` 有沒有達到。不達標不是
+  做錯事，但它說得出「本來該自動入庫的少了幾個」。
 - `scripts/record_tmdb_snapshots.py`：用產品自己的路徑（暫時的資料庫 + `refresh_media`）錄
   `tests/fixtures/tmdb/`，語料加了新作品時跑。
 - `import-linter` 契約「parser and naming do no IO」：`berth.parser` 與 `berth.naming` 不得

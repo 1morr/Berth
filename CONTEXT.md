@@ -105,6 +105,24 @@ _Avoid_: quality, flags, labels
 對一個影片檔的一種季集對應，附策略、信心與理由。
 _Avoid_: match, guess
 
+**Mapping Strategy**（簡稱 Strategy）:
+Candidate 的季集是怎麼決定的：explicit / folder / context / arc_name / single_season /
+absolute_group / absolute_cumulative / air_date_offset / cour_offset / movie。
+_Avoid_: method, rule, source
+
+**Arc name**（篇章名）:
+一輪播出的名字而不是季號（`柱訓練篇`、`Hashira Training Arc`、`最終季`）。對到 TMDB 的季名就
+等同季號提示。
+_Avoid_: subtitle, part name
+
+**Cour**:
+同一季裡的一輪播出（`第二部分` / `Part.2`）。字幕組可能每個 cour 從 01 重數，也可能季內連號。
+_Avoid_: part（`Part 2` 是檔名裡的寫法，不是這個概念的名字）, half
+
+**Virtual season**（虛擬季）:
+TMDB 把好幾輪播出併成一季時，用季內 `air_date` 間隔（> 180 天）切回來的那一輪。
+_Avoid_: split season, sub-season
+
 **Import Plan**（簡稱 Plan）:
 對一個 Import Source 逐檔決定分類、對應 Media / 季 / 集、目標路徑、Tags、信心與理由的可審核計劃；套用前不動任何檔案。
 _Avoid_: mapping, import job, rename plan

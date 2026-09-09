@@ -40,6 +40,7 @@
 | 2026-09-09 | 04 Media 詳情 | `GET /api/media/{id}` + `track` + `refresh`：TMDB 詳情與各季各集快照（24 小時，過期自動重抓）、追蹤、預設 Route。**`folder_name` 在追蹤那一刻凍結**，之後 TMDB 改標題也不動它（兩個方向各有測試；拿掉守衛時凍結那條會紅）。TMDB adapter 補詳情四支端點，**7 份 fixture 對真 API 錄**；`NotFoundError` 讓「這個 id 不存在」與「TMDB 壞了」分得開。`/media/:id` 走 `/impeccable shape`（`.scratch/m1/media-detail-shape.md`，使用者拍板三個問題），探索牆的每一格終於是連結。順手收掉兩處共用：`DiscoverProblem` → `TmdbProblem` + `TmdbNotice`、`Cutaway` 移進 `components/`。520 個後端測試 + 138 個前端測試綠燈；**對真的 `api.themoviedb.org` 實跑**：SPY×FAMILY 4 季 53 集、S02E01 的絕對編號是 #26，深淺兩主題 336 個文字元素最低 5.71:1，390px 無橫向捲動。實跑當場抓到兩個缺陷（集表撐寬整頁、資料夾名那一列的 term 用錯變體）並修掉 | `/implement .scratch/m1/issues/05-parser-skeleton.md` |
 | 2026-09-09 | 04b 追蹤語意 | **「追蹤」不再是一個動作**：`media.tracked` 欄位（含 migration `5225422c03ef`，升得上去也降得回來）、`POST /api/media/{id}/track`、`DiscoverItem.tracked` 與 `TrackAction` 全部移除；`folder_name` 改成一律跟著 TMDB 的標題走（票 04 釘住「refresh 不改它」的那條測試反過來），凍結移到票 09 的送單成功那一刻——那是它第一次真的通向磁碟，而且有人在場。Route 下拉原地留下、語意換成「入庫到哪裡」的偏好：不落地、不新增端點，只有一條相符時自動選它。plan §2.2 / §6 / T1.1、brief §9 / §13、CHANGELOG、shape brief 與票 04 / 08 / 09 同輪改完。520 個後端測試 + 144 個前端測試綠燈；playwright 對 `--scenario discover`（真 TMDB）實跑詳情頁：劇集兩條相符的 Route 不預選、電影只有一條時自動選 Movies、資料夾名那一列說得出它什麼時候定下來 | `/implement .scratch/m1/issues/05-parser-skeleton.md` |
 | 2026-09-10 | 05 解析器骨架 | `berth bench` 跑得起來：**20 筆真實 torrent 的檔案清單**（動漫 8 / 非動漫劇集 8 / 電影 4，共 321 個檔案，逐筆附 `source_url`）與 **18 份凍結的 TMDB 快照**（`scripts/record_tmdb_snapshots.py` 走產品自己的路徑錄）就位；分類、CJK 正規化、發佈名解析與 `Tags.render()` 完成。**分類 321/321、語料寫下的 tag 128/128、`auto_wrong` = 0**，其餘 268 筆落在 review（季集對應是票 06，目標路徑是票 07，這是預期的）。票 01 量到的兩個羅馬數字寫法都有真實語料與單元測試釘住。import-linter 多一條「parser / naming 不得 import 會做 IO 的模組」，並實測拿掉守衛會紅。680 個後端測試綠燈 | `/implement .scratch/m1/issues/06-parser-mapping.md` |
+| 2026-09-10 | 06 季集對應 | `map_episode` / `structure_hints` / `match_media` / `score` 完成：**benchmark 的季集第一次真的動起來**——`auto_correct` 0 → **140**（語料寫下的 128 個 import 全對），`auto_wrong` **0**、`missed` **0**、信心達標 140/140。票 01 量到的三條槓桿都做進去了：**篇章名 → 季號**（佔失敗九成；為此 `SeasonSnapshot` 多一個 `names`，季名改取 `en-US` / `zh-TW` / `zh-CN` 三輪——真實發佈寫的是「柱训练篇」而英文季名是 `Hashira Training Arc`，只留一套字這條規則一次都不會命中）、**`第二部分` / `Part.2` 的 cour 偏移**（與虛擬季同一條 180 天規則；加上偏移超出該季就回頭照字面讀，於是「季內連號」與「每 cour 重數」兩種寫法用同一條規則都對）、**180 天虛擬季**。語料補三筆真實發佈（鬼滅柱訓練篇、進擊的巨人 S3 Part 2、單檔多集的 `Mizuiro Jidai - 01-02`），共 23 筆 333 個檔案。過程中抓到兩個票 05 的解析器缺口：`[01-13TV全集+SP]` 讓整包 13 集正片被當成特典（`merge_release` 不再補 `special_kind`）、`The_Final_Season[28]` 的 28 被 guessit 讀成季號。812 個後端測試綠燈 | `/implement .scratch/m1/issues/07-naming-plan.md` |
 
 ## 偏差與決定
 
@@ -446,3 +447,27 @@
 - 2026-09-10 票 05：`disc` 是**整包**的判定而不是逐檔——`BDMV/` 與 `CERTIFICATE/` 是同一張碟的兩半，只標其中一半沒有意義。plan §4.1 已同步。
 - 2026-09-10 票 05：`CjkHints.special` 用 `SpecialKind` enum 而不是 plan §4.2 原本寫的 `str`（`SP` 可能對得到 TMDB season 0，`NC` 一律進 extras，下一步不同）；`CjkHints` 另加 `matched`（認出來的原文，往上併進 `ReleaseInfo.matched_tokens`）。`ReleaseInfo` 不含 `season_hint_from_folder`——資料夾提示是 `structure_hints` 的輸出（票 06），兩個階段的產物不混進同一個型別。plan §4.2 已同步。
 - 2026-09-10 票 05 查證：brief §20.4 標「未證實」的 **VCB-Studio 類 BD 包資料夾名**已用兩份真實 torrent metadata 確認，社群轉述的 `SPs/ CDs/ Scans/ Fonts/ Menu/` 只對了一半：VCB-Studio 有 `SPs/` `CDs/` `Scans/` 但**沒有** `Fonts/` 與 `Menu/`；DBD-Raws 是 `SP/` `PV/` `NCOP&NCED/` `menu/`（小寫）`Fonts/Fonts.zip`。兩份都成了語料。brief §20.4 已同步。
+- 2026-09-10 票 06：**`SeasonSnapshot` 多一個 `names`（各季在 `en-US` / `zh-TW` / `zh-CN` 三輪的名字）**，
+  `services/media.py` 對劇集多打一輪 `zh-CN` 詳情（只取季名，電影不打）。plan §4.3 / §4.4 / §8.3 已補，
+  實測記在 brief §20.3。理由：plan §4.4 的「篇章名 → 季號」是 M1 票 01 量到的最大槓桿（佔失敗九成），
+  而真實發佈寫的是簡體篇章名（`鬼灭之刃 柱训练篇`），TMDB 的英文季名是 `Hashira Training Arc`——
+  只留英文的話那條規則對它一個都不會命中。18 份凍結快照因此重錄。
+- 2026-09-10 票 06：**絕對編號的三種換算不在同一個分支**，推翻 plan §4.1「三法各產一個 Candidate」
+  的字面讀法（plan §4.4 已補）。`absolute_group` 與 `absolute_cumulative` 是「只有集號」時的兩條路；
+  虛擬季換算要有一個季號才索引得到那一輪播出。brief §6.4 另外提的「以**發佈時間**推測」需要索引站給的
+  發佈時間，M1 的解析器拿不到（票 08 起才有 `published_at`），沒有它就只是換一種猜法，**刻意沒做**。
+- 2026-09-10 票 06：**特典不靠集名或片長比對**（票 05 留下的決定）。檔名裡沒有集名、片長要 mediainfo，
+  加了只是換一種猜法。規則維持：明說 `S00Exx` 照它走但信心至多 medium（字幕組的特典編號與 TMDB 的
+  S0 編號不保證一致），只寫 `[SP][01]` 這種自己的序號則是 `unmatched`。寫進 `tests/fixtures/parser/README.md`。
+- 2026-09-10 票 06：`ParseContext` 多一個 `candidates`（`media` 缺席時可以比對的作品）。plan §4.3 已補。
+  理由是票的驗收要求「上下文缺 Media 時做標題比對」，而解析器沒有 IO——候選只能由呼叫端遞進來。
+  M1 沒有人填它（Job 一律帶 Media），真正的使用者是 M3 的 RSS。
+- 2026-09-10 票 06：`merge_release` **不再從 torrent 名補 `special_kind`**。`[01-13TV全集+SP]` 說的是
+  「這一包裡有特典」而不是「這個檔案是特典」，原本會讓整包 13 集正片被判成 unmatched（語料實測）。
+- 2026-09-10 票 06 code-review：信心的順序與封頂散在四個模組（`mapping` / `score` / `planner` /
+  `bench`），其中 `bench` 那一份的順序還是反的。收進 `domain`（`CONFIDENCE_ORDER`、`AUTO_APPLIED`、
+  `at_most`、`at_least`），四處各一份的狀況結束。
+- 2026-09-10 票 06 code-review：**區間的尾巴算不出來時降到 low**。原本 cour / 虛擬季 / 絕對編號三條路
+  在「檔名說 01-02 但換算後的 02 落在別季」時會靜默把多集檔變成單集檔——少入一集與入錯一集一樣看不見。
+- 2026-09-10 票 06 code-review：補上 brief §6.5 的「影片數量與 TMDB 集數明顯不符 → low」。一季十二集卻
+  對出二十個檔案時，是哪一個檔案讀錯了看不出來，所以整季一起進 review。

@@ -410,6 +410,11 @@
     }
    ],
    "name": "Specials",
+   "names": [
+    "Specials",
+    "特別篇",
+    "特别篇"
+   ],
    "season_number": 0
   },
   {
@@ -509,6 +514,10 @@
     }
    ],
    "name": "Overlord",
+   "names": [
+    "Overlord",
+    "第 1 季"
+   ],
    "season_number": 1
   },
   {
@@ -608,6 +617,10 @@
     }
    ],
    "name": "Overlord II",
+   "names": [
+    "Overlord II",
+    "第 2 季"
+   ],
    "season_number": 2
   },
   {
@@ -707,6 +720,10 @@
     }
    ],
    "name": "Overlord III",
+   "names": [
+    "Overlord III",
+    "第 3 季"
+   ],
    "season_number": 3
   },
   {
@@ -806,6 +823,10 @@
     }
    ],
    "name": "Overlord IV",
+   "names": [
+    "Overlord IV",
+    "第 4 季"
+   ],
    "season_number": 4
   }
  ],
@@ -820,32 +841,32 @@
   "Ōbārōdo",
   "オーバーロードⅢ",
   "オーバーロードⅡ",
-  "オーバーロード2",
   "オーバーロード3",
-  "Overlord Ple Ple Pleiades",
+  "オーバーロード2",
   "Soushuuhen Overlord",
+  "Overlord Ple Ple Pleiades",
   "オーバーロードⅣ",
   "ПОВЕЛИТЕЛЬ",
   "Властелин",
-  "Владыка",
+  "Повелитель 2",
+  "Повелитель 3",
   "Повелитель 1",
   "Повелитель 4",
-  "Повелитель 3",
-  "Повелитель 2",
+  "Владыка",
   "โอเวอร์ลอร์ด",
-  "Оверлорд 3",
   "Оверлорд Ⅲ",
   "Оверлорд 2",
-  "Оверлорд Ⅱ",
+  "Оверлорд 3",
   "Оверлорд II",
   "Оверлорд III",
+  "Оверлорд Ⅱ",
   "Оверлорд",
   "Overlord 3",
   "Overlord Ⅱ",
-  "Overlord II",
-  "Overlord III",
   "Overlord Ⅲ",
   "Overlord 2",
+  "Overlord II",
+  "Overlord III",
   "Overlord IV",
   "Lạc Vào Thế Giới Game",
   "Повелитель",

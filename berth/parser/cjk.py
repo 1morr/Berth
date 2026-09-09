@@ -19,7 +19,8 @@ from berth.domain import CjkHints, Lang, SpecialKind, SubtitleKind
 _BRACKETS = str.maketrans({"【": "[", "】": "]", "［": "[", "］": "]", "（": "(", "）": ")"})
 
 #: 中文數字。只到十二——季號不會更大，而更長的表會開始誤吃標題裡的字。
-_CN_DIGITS = {
+#: 公開的：`structure` 讀資料夾名時要的是同一張表（`第二季/` 與 `第二季` 是同一件事）。
+CN_DIGITS = {
     "一": 1, "二": 2, "三": 3, "四": 4, "五": 5, "六": 6,
     "七": 7, "八": 8, "九": 9, "十": 10, "十一": 11, "十二": 12,
 }  # fmt: skip
@@ -43,8 +44,15 @@ _ROMAN_HALFWIDTH_RE = re.compile(
 
 _ROMAN_FULLWIDTH_RE = re.compile("[" + "".join(_ROMAN_FULLWIDTH) + "]")
 
-#: `第N季` / `第N期`，中文或阿拉伯數字。
-_SEASON_CN = re.compile(r"第\s*([0-9]+|[一二三四五六七八九十]{1,3})\s*[季期]")
+#: `第N季` / `第N期`，中文或阿拉伯數字。**字串是公開的**：`structure` 讀資料夾名時要的是
+#: 同一種寫法，只差它要求整個資料夾名就是它（各寫一份的話兩邊遲早分岔）。
+SEASON_CN = r"第\s*([0-9]+|[一二三四五六七八九十]{1,3})\s*[季期]"
+_SEASON_CN = re.compile(SEASON_CN)
+
+#: `第N部分`：同一季的第幾個 cour（plan §4.4）。與 `_SEASON_CN` 分開一條，因為它們
+#: 在同一個名字裡會同時出現（`第三季 第二部分`），共用一條規則會互相吃掉。
+PART_CN = r"第\s*([0-9]+|[一二三四五六七八九十]{1,3})\s*部分"
+_PART_CN = re.compile(PART_CN)
 
 #: `第N话` / `第N集`，可帶結尾標記。區間寫法 `第01-12話` 也在這裡。
 _EPISODE_CN = re.compile(
@@ -143,6 +151,7 @@ def normalize_cjk(name: str) -> tuple[str, CjkHints]:
     subs = _take_subs(text, matched)
     hardsub, subtitle_kind = _take_subtitle_kind(text, matched)
     season, text = _take_season(text, matched)
+    part = _take_part(text, matched)
     episode, episode_end = _take_episode(text, matched)
     collection = _take(text, _COLLECTION, matched)
     special = _take_special(text, matched)
@@ -154,6 +163,7 @@ def normalize_cjk(name: str) -> tuple[str, CjkHints]:
         hardsub=hardsub,
         subtitle_kind=subtitle_kind,
         season=season,
+        part=part,
         episode=episode,
         episode_end=episode_end,
         collection=collection,
@@ -200,6 +210,15 @@ def _not_a_group(inner: str) -> bool:
     return bool(_COLLECTION.search(inner))
 
 
+def langs_in(text: str) -> frozenset[Lang]:
+    """這一段字說了哪幾種字幕語言（brief §6.8）。
+
+    公開的：`structure` 讀語言資料夾名（`繁體/`、`简体/`）用的是同一張表——各寫一份的話
+    詞彙遲早會分岔成兩套。
+    """
+    return _take_subs(text, [])
+
+
 def _take_subs(text: str, matched: list[str]) -> frozenset[Lang]:
     langs: set[Lang] = set()
     for pattern, add in _SUB_TOKENS:
@@ -237,7 +256,7 @@ def _take_season(text: str, matched: list[str]) -> tuple[int | None, str]:
     if found is not None:
         matched.append(found.group(0))
         raw = found.group(1)
-        season = int(raw) if raw.isdigit() else _CN_DIGITS.get(raw)
+        season = int(raw) if raw.isdigit() else CN_DIGITS.get(raw)
 
     full = _ROMAN_FULLWIDTH_RE.search(text)
     if full is not None:
@@ -252,6 +271,15 @@ def _take_season(text: str, matched: list[str]) -> tuple[int | None, str]:
         text = _ROMAN_HALFWIDTH_RE.sub(" ", text)
 
     return season, text
+
+
+def _take_part(text: str, matched: list[str]) -> int | None:
+    found = _PART_CN.search(text)
+    if found is None:
+        return None
+    matched.append(found.group(0))
+    raw = found.group(1)
+    return int(raw) if raw.isdigit() else CN_DIGITS.get(raw)
 
 
 def _take_episode(text: str, matched: list[str]) -> tuple[int | None, int | None]:

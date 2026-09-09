@@ -1,0 +1,367 @@
+{
+ "first_air_date": "1996-04-04",
+ "kind": "tv",
+ "overview": "12歲，即不是大人也不是小孩，但說青春還太早，正確而言應該是，從純白的孩童時代，稍微的，染上了一點青春的藍，而這個過度期的顏色，正是...水色，就讓我們一起來看看這個屬於我們的水色時代的故事吧。",
+ "poster_url": "https://image.tmdb.org/t/p/w342/6PS9X46kdDvvITcwK2UPSEzVtEF.jpg",
+ "runtime": null,
+ "seasons": [
+  {
+   "air_date": "1996-04-04",
+   "episode_count": 47,
+   "episodes": [
+    {
+     "absolute_number": null,
+     "air_date": "1996-04-04",
+     "episode_number": 1,
+     "name": "New School Term!",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "1996-04-11",
+     "episode_number": 2,
+     "name": "Friendship",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "1996-04-18",
+     "episode_number": 3,
+     "name": "Outdoor School",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "1996-04-25",
+     "episode_number": 4,
+     "name": "Softball Tournament",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "1996-05-02",
+     "episode_number": 5,
+     "name": "Chance Encounter",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "1996-05-09",
+     "episode_number": 6,
+     "name": "Big Sister",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "1996-05-16",
+     "episode_number": 7,
+     "name": "Christmas Party",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "1996-05-23",
+     "episode_number": 8,
+     "name": "Valentine’s Day",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "1996-05-30",
+     "episode_number": 9,
+     "name": "The Final Exam",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "1996-06-06",
+     "episode_number": 10,
+     "name": "New Classes",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "1996-06-13",
+     "episode_number": 11,
+     "name": "Takako’s Sweetheart",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "1996-06-20",
+     "episode_number": 12,
+     "name": "Pulling Rank",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "1996-06-27",
+     "episode_number": 13,
+     "name": "Jealousy",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "1996-07-04",
+     "episode_number": 14,
+     "name": "Diet",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "1996-07-11",
+     "episode_number": 15,
+     "name": "Summer Vacation",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "1996-07-18",
+     "episode_number": 16,
+     "name": "Stormy Season",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "1996-07-25",
+     "episode_number": 17,
+     "name": "Ordinary",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "1996-08-01",
+     "episode_number": 18,
+     "name": "Triangle Relationship",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "1996-08-08",
+     "episode_number": 19,
+     "name": "Love and Friendship",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "1996-08-15",
+     "episode_number": 20,
+     "name": "Daybreak",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "1996-08-22",
+     "episode_number": 21,
+     "name": "Cushion",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "1996-08-29",
+     "episode_number": 22,
+     "name": "Love Comrades",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "1996-09-05",
+     "episode_number": 23,
+     "name": "Friends",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "1996-09-12",
+     "episode_number": 24,
+     "name": "Trip",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "1996-09-19",
+     "episode_number": 25,
+     "name": "Oitekebori",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "1996-09-26",
+     "episode_number": 26,
+     "name": "Yamada-kun",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "1996-10-03",
+     "episode_number": 27,
+     "name": "Yamada-kun",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "1996-10-10",
+     "episode_number": 28,
+     "name": "Do not Laugh",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "1996-10-17",
+     "episode_number": 29,
+     "name": "Love Letter",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "1996-10-24",
+     "episode_number": 30,
+     "name": "Fantasy and Reality",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "1996-10-31",
+     "episode_number": 31,
+     "name": "Hiroshi's Summer",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "1996-11-07",
+     "episode_number": 32,
+     "name": "The Night before the Culture Event",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "1996-11-14",
+     "episode_number": 33,
+     "name": "Best Stars",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "1996-11-21",
+     "episode_number": 34,
+     "name": "Problem of going to School",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "1996-11-28",
+     "episode_number": 35,
+     "name": "Present",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "1996-12-05",
+     "episode_number": 36,
+     "name": "Graduation",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "1996-12-12",
+     "episode_number": 37,
+     "name": "The Day of the Journey",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "1996-12-19",
+     "episode_number": 38,
+     "name": "Just like that Time",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "1996-12-26",
+     "episode_number": 39,
+     "name": "Season of the Water Coloured Ages",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "1997-01-02",
+     "episode_number": 40,
+     "name": "Album of Memories 1 Unrequited Love",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "1997-01-09",
+     "episode_number": 41,
+     "name": "Album of Memories 2 Growing Up",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "1997-01-16",
+     "episode_number": 42,
+     "name": "Album of Memories 3 Miyao's Love",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "1997-01-23",
+     "episode_number": 43,
+     "name": "Album of Memories 4 First Friendship",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "1997-01-30",
+     "episode_number": 44,
+     "name": "Album of Memories 5 Mother's Lover",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "1997-02-06",
+     "episode_number": 45,
+     "name": "Album of Memories 6 The Summer Story Secret",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "1997-02-13",
+     "episode_number": 46,
+     "name": "Album of Memories 7 Guys' School Excursion",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "1997-02-27",
+     "episode_number": 47,
+     "name": "Album of Memories 8 From the Angels, For You",
+     "runtime": 25
+    }
+   ],
+   "name": "Season 1",
+   "names": [
+    "Season 1",
+    "第 1 季"
+   ],
+   "season_number": 1
+  }
+ ],
+ "title": "水色時代",
+ "title_en": "Aqua Age",
+ "title_original": "水色時代",
+ "titles": [
+  "Aqua Age",
+  "水色時代",
+  "Temi d'amore",
+  "Mizuiro Jidai",
+  "The Blue-Green Years",
+  "The Water Colored Age",
+  "Молодо-зелено",
+  "Temi d'amore fra i banchi di scuola",
+  "水色时代",
+  "수색시대"
+ ],
+ "tmdb_id": 46373,
+ "year": 1996
+}

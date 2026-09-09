@@ -25,6 +25,7 @@ from berth.adapters.http import AuthFailedError, NotFoundError, ServiceError
 from berth.adapters.tmdb import (
     BASE_LANGUAGE,
     DISPLAY_LANGUAGE,
+    SIMPLIFIED_LANGUAGE,
     TmdbClient,
     TmdbDetail,
     unique_titles,
@@ -147,19 +148,28 @@ async def _load(
 async def _fetch(
     session: AsyncSession, client: TmdbClient, kind: MediaKind, tmdb_id: int
 ) -> MediaSnapshot:
-    """兩輪詳情 + 每季一次 + Absolute group（有的話），收斂成一份快照。
+    """三輪詳情 + 每季一次 + Absolute group（有的話），收斂成一份快照。
 
     英文那一輪決定結構與所有會進檔名的字串；`zh-TW` 那一輪只回答「這一部叫什麼、簡介怎麼寫」。
     季集只取英文那一輪：集名會進檔名（plan §5 的 `{episode_title}`），中文集名放進去
     等於讓磁碟上的檔名跟著 UI 的語言跑。
+
+    第三輪（`zh-CN`）只為了**季名**（plan §4.4）：真實發佈裡的篇章名是「柱训练篇」，
+    TMDB 的 `zh-TW` 給「柱訓練篇」、`en-US` 給「Hashira Training Arc」——三套字，
+    少一套就有一整類發佈比對不到。劇集才多這一次請求，電影沒有季。
     """
     base = await client.detail(kind, tmdb_id, language=BASE_LANGUAGE)
     display = await client.detail(kind, tmdb_id, language=DISPLAY_LANGUAGE)
+    # 第三輪只為了季名，所以只有劇集打得到它。
+    localised = [display]
+    if kind is MediaKind.TV:
+        localised.append(await client.detail(kind, tmdb_id, language=SIMPLIFIED_LANGUAGE))
 
     ordering: dict[tuple[int, int], int] = {}
     if base.absolute_group_id:
         ordering = dict(await client.absolute_ordering(base.absolute_group_id))
 
+    season_names = _season_names(*localised)
     seasons = []
     for entry in base.seasons:
         season = await client.season(tmdb_id, entry.season_number, language=BASE_LANGUAGE)
@@ -169,6 +179,7 @@ async def _fetch(
                 # 季名取詳情那一份：`tv/{id}/season/{n}` 也回一個，但清單那一份才是
                 # 使用者在 TMDB 網站上看到的那個（篇章名就掛在那裡）。
                 name=entry.name,
+                names=unique_titles([entry.name, *season_names.get(entry.season_number, ())]),
                 episode_count=entry.episode_count,
                 air_date=entry.air_date,
                 episodes=tuple(
@@ -198,6 +209,19 @@ async def _fetch(
         titles=_titles(base, display),
         seasons=tuple(seasons),
     )
+
+
+def _season_names(*rounds: TmdbDetail) -> dict[int, tuple[str, ...]]:
+    """各季在其他語言下的名字：`{季號: (名字, …)}`（plan §4.4 的篇章名比對）。
+
+    比對是逐字比的，所以這裡收的是**原樣**的季名。`第 1 季` 這種只是季號的翻譯也收——
+    它比對不到任何東西，但也不會錯，而挑掉它需要一張「哪些字算季號」的表。
+    """
+    names: dict[int, list[str]] = {}
+    for detail in rounds:
+        for entry in detail.seasons:
+            names.setdefault(entry.season_number, []).append(entry.name)
+    return {number: tuple(values) for number, values in names.items()}
 
 
 def _titles(base: TmdbDetail, display: TmdbDetail) -> tuple[str, ...]:

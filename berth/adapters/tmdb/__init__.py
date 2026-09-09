@@ -23,6 +23,9 @@ BASE_URL = "https://api.themoviedb.org/3"
 BASE_LANGUAGE = "en-US"
 #: 顯示用標題另外取的那一輪（plan §8.3）。
 DISPLAY_LANGUAGE = "zh-TW"
+#: 只為了**季名**多取的那一輪（plan §4.4）。簡體字幕組寫的是「柱训练篇」，
+#: 而 `zh-TW` 給的是「柱訓練篇」——同一個篇章名，兩套字，比對時一個字都不重疊。
+SIMPLIFIED_LANGUAGE = "zh-CN"
 
 
 @dataclass(frozen=True, slots=True)
@@ -391,6 +394,7 @@ __all__ = [
     "BASE_URL",
     "DETAIL_APPENDS",
     "DISPLAY_LANGUAGE",
+    "SIMPLIFIED_LANGUAGE",
     "TmdbClient",
     "TmdbConfiguration",
     "TmdbDetail",
