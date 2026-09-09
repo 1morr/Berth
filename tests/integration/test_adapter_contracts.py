@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import socket
 import urllib.parse
+from collections.abc import Awaitable, Callable
 
 import httpx
 import pytest
@@ -1209,6 +1210,44 @@ async def test_tmdb_sends_the_language_and_the_search_query() -> None:
     assert params["language"] == "zh-TW"
     #: 探索頁不該回成人內容，而 TMDB 的預設就是不回；明確送出去才不必依賴那個預設。
     assert params["include_adult"] == "false"
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_both_credential_shapes_reach_every_tmdb_endpoint() -> None:
+    """憑證的兩種形狀在**每一支**端點都送得出去，不是只有精靈打的那一支。
+
+    `HttpTmdbClient._get` 把 `self._params` 併進每一次請求，所以這件事是結構性的——
+    但「結構性」正是最容易在某一支端點手寫參數時被繞過的東西（探索頁的 `search` 就多帶了
+    `query` 與 `include_adult`）。
+    """
+    calls: tuple[tuple[str, Callable[[HttpTmdbClient], Awaitable[object]]], ...] = (
+        ("/configuration", lambda c: c.configuration()),
+        ("/trending/tv/week", lambda c: c.trending(MediaKind.TV, language="en-US")),
+        ("/movie/popular", lambda c: c.popular(MediaKind.MOVIE, language="en-US")),
+        ("/search/multi", lambda c: c.search("x", language="en-US")),
+    )
+    for path, call in calls:
+        respx.get(f"{TMDB_URL}{path}").respond(200, json={"images": {}, "results": []})
+
+        v3 = HttpTmdbClient(V3_API_KEY, base_url=TMDB_URL)
+        try:
+            await call(v3)
+        finally:
+            await v3.aclose()
+        request = respx.calls.last.request
+        assert request.url.params["api_key"] == V3_API_KEY, path
+        assert "Authorization" not in request.headers, path
+
+        v4 = HttpTmdbClient(V4_READ_TOKEN, base_url=TMDB_URL)
+        try:
+            await call(v4)
+        finally:
+            await v4.aclose()
+        request = respx.calls.last.request
+        assert request.headers["Authorization"] == f"Bearer {V4_READ_TOKEN}", path
+        # v4 走標頭，所以憑證不會落在網址上——也就不會落在任何一行 log 或反向代理紀錄裡。
+        assert "api_key" not in request.url.params, path
 
 
 @respx.mock
