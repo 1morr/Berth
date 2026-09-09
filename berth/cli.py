@@ -7,8 +7,10 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from collections.abc import Callable, Sequence
+from pathlib import Path
 
 import uvicorn
 
@@ -40,6 +42,17 @@ def build_parser() -> argparse.ArgumentParser:
     )
     serve.set_defaults(handler=_serve)
 
+    openapi = subcommands.add_parser(
+        "openapi",
+        help="Print the OpenAPI document. Input to the frontend type generator.",
+    )
+    openapi.add_argument(
+        "--output",
+        type=Path,
+        help="Write to this file instead of stdout.",
+    )
+    openapi.set_defaults(handler=_openapi)
+
     return parser
 
 
@@ -54,6 +67,27 @@ def main(argv: Sequence[str] | None = None) -> int:
     parsed = parser.parse_args(args)
     handler: Callable[[argparse.Namespace], int] = parsed.handler
     return handler(parsed)
+
+
+def _openapi(args: argparse.Namespace) -> int:
+    """產生 OpenAPI 文件（plan §6）。**不跑起服務**：`create_app` 只組裝路由，
+    lifespan 沒有執行，所以沒有資料庫、沒有連線，CI 與離線開發都產得出來。
+
+    一律寫 UTF-8 位元組而不是交給文字串流：描述來自繁體中文 docstring，
+    Windows 主控台的預設編碼（cp950）寫到一半就會炸。
+    """
+    # 在指令裡才 import：`berth.main` 要 686 ms，`--version` 與 `serve` 的參數解析不該付這筆。
+    from berth.main import create_app
+
+    document = create_app().openapi()
+    # 尾端換行讓它是一個正常的文字檔；`ensure_ascii=False` 讓中文描述維持可讀。
+    payload = (json.dumps(document, indent=2, ensure_ascii=False) + "\n").encode("utf-8")
+
+    if args.output is None:
+        sys.stdout.buffer.write(payload)
+    else:
+        args.output.write_bytes(payload)
+    return 0
 
 
 def _serve(args: argparse.Namespace) -> int:

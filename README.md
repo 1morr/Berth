@@ -143,6 +143,7 @@ pnpm -C web dev                                     # 前端，開 Vite 印出�
 ```bash
 uv run berth --version      # CLI
 uv run berth serve          # 啟動程序（--reload 為開發模式）
+uv run berth openapi        # 印出 OpenAPI 文件（--output 寫檔）；前端型別的上游
 uv run pytest               # 測試
 uv run ruff check .         # lint
 uv run ruff format .        # 格式化（CI 用 --check）
@@ -170,7 +171,26 @@ pnpm -C web test            # vitest（test:watch 為 watch 模式）
 pnpm -C web lint            # eslint
 pnpm -C web format          # prettier（CI 用 format:check）
 pnpm -C web typecheck       # tsc（strict）；build 已含，這是單獨跑的快捷
+pnpm -C web gen:api         # 重新產生 API 型別（見下）
 ```
+
+### API 型別
+
+前端不手寫 API 的形狀：`web/src/api/schema.d.ts` 由後端的 OpenAPI 產生，`web/src/api/*.ts`
+只把後端的類別名（`RouteOut`）換成前端在講的名字（`RouteView`）。
+
+```bash
+pnpm -C web gen:api         # berth openapi → web/openapi.json → src/api/schema.d.ts
+```
+
+- **改了任何 pydantic 的 request / response model 就重跑它**，產出的 `schema.d.ts` 與後端的
+  改動放同一個 commit。CI 的 `api-types` job 跑同一個指令再比對，型別檔過期時紅燈。
+- 產出的型別檔進版控，中間產物 `web/openapi.json` 不進（`.gitignore`）。型別檔進版控，
+  `pnpm install` 之後沒有 Python 環境也能 typecheck 與跑測試；`openapi.json` 則會因為
+  `info.version` 每次發版都變而製造沒有意義的 diff。
+- 指令裡的 `--default-non-nullable false` 讓有預設值的請求欄位維持選填，與 OpenAPI 的
+  `required` 一致（回應的欄位全部是必填，不受影響）。
+- 產生器不需要跑起服務：`berth openapi` 只組裝路由，沒有 lifespan、不碰資料庫。
 
 ### 全部檢查
 
@@ -283,7 +303,7 @@ python scripts/experiments/anime_episode_source.py --discover        # 重新找
 
 ```
 berth/            後端套件
-  cli.py          命令列進入點（berth serve）
+  cli.py          命令列進入點（berth serve、berth openapi）
   config.py       環境變數與路徑常數
   main.py         FastAPI app 組裝、lifespan
   adapters/       外部服務用戶端（qBittorrent、Jellyfin、TMDB…）

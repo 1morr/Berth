@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import json
 import shutil
 import subprocess
 from importlib.metadata import version
+from pathlib import Path
 
 import pytest
 
@@ -63,3 +65,54 @@ class TestServe:
 
         assert uvicorn_run[0]["reload"] is False
         assert uvicorn_run[1]["reload"] is True
+
+
+class TestOpenapi:
+    """`berth openapi`：型別產生器的上游（票 02）。**不跑起服務**——沒有 lifespan、
+    沒有資料庫、不連任何東西，所以 CI 與離線開發都產得出來。
+    """
+
+    def test_writes_the_document_to_the_given_path(self, tmp_path: Path) -> None:
+        target = tmp_path / "openapi.json"
+
+        assert main(["openapi", "--output", str(target)]) == 0
+
+        document = json.loads(target.read_text(encoding="utf-8"))
+        assert document["openapi"].startswith("3.")
+        assert "/api/health" in document["paths"]
+        assert "HealthDetailOut" in document["components"]["schemas"]
+
+    def test_writes_utf8_regardless_of_the_console_encoding(self, tmp_path: Path) -> None:
+        """docstring 是繁體中文，Windows 的預設編碼寫不出來（cp950）。"""
+        target = tmp_path / "openapi.json"
+
+        main(["openapi", "--output", str(target)])
+
+        assert "精靈" in target.read_text(encoding="utf-8")
+
+    def test_leaves_no_database_behind(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        config_root = tmp_path / "config"
+        monkeypatch.setenv("CONFIG_ROOT", str(config_root))
+
+        assert main(["openapi", "--output", str(tmp_path / "openapi.json")]) == 0
+        assert not config_root.exists()
+
+    def test_is_byte_for_byte_reproducible(self, tmp_path: Path) -> None:
+        """CI 的過期檢查是 `git diff --exit-code`，所以同一份程式碼要產出同一串位元組。"""
+        first = tmp_path / "first.json"
+        second = tmp_path / "second.json"
+
+        main(["openapi", "--output", str(first)])
+        main(["openapi", "--output", str(second)])
+
+        assert first.read_bytes() == second.read_bytes()
+
+    def test_prints_to_stdout_without_an_output_path(
+        self, capsysbinary: pytest.CaptureFixture[bytes]
+    ) -> None:
+        assert main(["openapi"]) == 0
+
+        document = json.loads(capsysbinary.readouterr().out.decode("utf-8"))
+        assert "/api/health" in document["paths"]

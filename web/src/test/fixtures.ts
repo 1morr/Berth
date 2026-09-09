@@ -37,6 +37,8 @@ export function detection(overrides: Partial<ServiceDetection> = {}): ServiceDet
     reason: 'setup_pending',
     detail: '10.11.11',
     base_url: 'http://jellyfin:8096',
+    // 探測 compose 主機名的結果，不是使用者填的連線表單。
+    configured: false,
     resolved: true,
     ...overrides,
   }

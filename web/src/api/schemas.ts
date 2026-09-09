@@ -1,29 +1,56 @@
 /**
- * 跨頁面共用的 API 形狀，對應後端的 `berth/api/schemas.py`。
+ * 跨頁面共用的 API 形狀。**沒有一個是手寫的**：全部指向 `schema.d.ts`，
+ * 那份由 `pnpm gen:api` 從後端的 OpenAPI 產生（plan §6）。
  *
- * 一條纜繩、一個 Route、一個 qBittorrent 偏好差異這三種東西同時出現在精靈、健康頁與設定頁。
- * 形狀寫兩份的話，改了一邊另一邊會悄悄少一個欄位，而型別只會擋住其中一個。
+ * 這一層只做一件事——把後端的類別名（`RouteOut`、`StepOut`）換成前端在講的名字。
+ * 欄位增減、可選性、封閉集合的成員都由產出的型別決定，後端改了這裡不必跟著改，
+ * 但用錯欄位的地方會在 `tsc` 就紅。
+ *
+ * **`./schema` 只由這個檔案 import**：產出的型別從這一個門進來，`api/*.ts` 要哪一個形狀就
+ * 從這裡取 `Schemas['...']`。產生器換掉或它的輸出換形狀時，要改的地方只有一個。
  */
 
-/** 與 `berth/domain/enums.py` 的 `ServiceKind` 對齊。 */
-export const SERVICE_KINDS = ['jellyfin', 'qbittorrent', 'prowlarr'] as const
-export type ServiceKind = (typeof SERVICE_KINDS)[number]
+import type { components } from './schema'
+
+/** 產出的 `components['schemas']`。只有 `api/*.ts` 該用它，UI 用下面命好名的那些。 */
+export type Schemas = components['schemas']
+
+/** `berth/domain/enums.py` 的 `ServiceKind`。 */
+export type ServiceKind = Schemas['ServiceKind']
 
 /** `ServiceOrigin`：逐服務的判定。 */
-export type ServiceOrigin = 'bundled' | 'existing' | 'pending' | 'timeout'
+export type ServiceOrigin = Schemas['ServiceOrigin']
 
 /** `StepStatus`：一條纜繩的結果。 */
-export type StepStatus = 'ok' | 'skipped' | 'failed' | 'running' | 'pending'
+export type StepStatus = Schemas['StepStatus']
 
-export interface SetupStep {
-  /** 精靈的步驟名或 `RouteCheck`。後端可能加新的，所以型別放寬成 string。 */
-  step: string
-  status: StepStatus
-  /** 實測值：版本號、路徑、inode。直接顯示，不翻譯。 */
-  detail: string
-  /** 失敗時服務回的原文（英文）。 */
-  error: string
-}
+/** 精靈的一步，或一個 Route 的一項檢查。 */
+export type SetupStep = Schemas['StepOut']
+
+/** `Profile`：Route 的命名與解析偏好（CONTEXT.md）。 */
+export type Profile = Schemas['Profile']
+
+/** 一個 Route 或一個服務上一次檢查的結果。 */
+export type HealthStatus = Schemas['HealthStatus']
+
+export type RouteView = Schemas['RouteOut']
+
+export type PreferenceDiff = Schemas['PreferenceDiffOut']
+
+/** 精靈第 4 步與設定頁的漂移還原共用（brief §16.3）。 */
+export type QbittorrentSetup = Schemas['QbittorrentOut']
+
+/**
+ * 三個服務的顯示順序，泊位板逐格照它畫。
+ *
+ * 後端把 `StepOut.step` 宣告成 `str`，所以下面這些集合在 OpenAPI 裡不存在——
+ * 它們是 UI 的順序，不是 API 的形狀。`satisfies` 讓成員本身仍然受產出型別檢查。
+ */
+export const SERVICE_KINDS = [
+  'jellyfin',
+  'qbittorrent',
+  'prowlarr',
+] as const satisfies readonly ServiceKind[]
 
 /** `RouteCheck`：一個 Route 的五條纜繩，順序即檢查順序。 */
 export const ROUTE_CHECKS = [
@@ -34,56 +61,3 @@ export const ROUTE_CHECKS = [
   'hardlink',
 ] as const
 export type RouteCheck = (typeof ROUTE_CHECKS)[number]
-
-/** `Profile`：Route 的命名與解析偏好（CONTEXT.md）。 */
-export const PROFILES = ['standard', 'anime'] as const
-export type Profile = (typeof PROFILES)[number]
-
-/** 一個 Route 或一個服務上一次檢查的結果（後端 `domain.HealthStatus`）。 */
-export type HealthStatus = 'unknown' | 'ok' | 'failed'
-
-export interface RouteView {
-  slug: string
-  name: string
-  /** Jellyfin 媒體庫的名字。 */
-  library: string
-  collection_type: 'movies' | 'tvshows'
-  target_path: string
-  category: string
-  /** 這個 category 的 save path，也就是硬鏈接的來源目錄。 */
-  save_path: string
-  profile: Profile
-  enabled: boolean
-  health: HealthStatus
-  checks: SetupStep[]
-  /** 硬鏈接回 `EXDEV`：兩個目錄在 Berth 內是不同掛載（brief §4.4）。 */
-  cross_device: boolean
-  checked_at: string | null
-  /** 最後一次五條纜繩全綠的時間（brief §16.2）。 */
-  last_ok_at: string | null
-}
-
-export interface PreferenceDiff {
-  /** `app/setPreferences` 的鍵名。畫面顯示的與送出去的是同一個字串。 */
-  key: string
-  current: string
-  recommended: string
-  differs: boolean
-}
-
-/** 精靈第 4 步與設定頁的漂移還原共用（brief §16.3）。 */
-export interface QbittorrentSetup {
-  origin: ServiceOrigin
-  base_url: string
-  version: string
-  webapi_version: string
-  supported: boolean
-  /** 這一步做不下去：版本太舊或連不上。 */
-  blocked: boolean
-  reachable: boolean
-  diffs: PreferenceDiff[]
-  steps: SetupStep[]
-  temp_path_warning: boolean
-  sets_password: boolean
-  error: string
-}

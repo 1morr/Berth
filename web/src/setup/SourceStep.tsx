@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import type { IndexerKind, IndexerSetup, TmdbSetup } from '../api/setup'
+import type { IndexerConnectInput, IndexerKind, IndexerSetup, TmdbSetup } from '../api/setup'
 import {
   STICKY_ACTION,
   Checkbox,
@@ -40,7 +40,7 @@ export function SourceStep({
   connecting: boolean
   testingTmdb: boolean
   onApply: (selected: string[]) => void
-  onConnect: (input: { kind: IndexerKind; base_url: string; api_key: string }) => void
+  onConnect: (input: IndexerConnectInput) => void
   onSkipIndexers: () => void
   onTestTmdb: (apiKey: string) => void
   onSkipTmdb: () => void
@@ -254,7 +254,7 @@ function ExistingIndexer({
 }: {
   indexers: IndexerSetup
   connecting: boolean
-  onConnect: (input: { kind: IndexerKind; base_url: string; api_key: string }) => void
+  onConnect: (input: IndexerConnectInput) => void
   onSkip: () => void
 }) {
   const { t } = useTranslation()

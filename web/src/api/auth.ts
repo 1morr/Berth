@@ -1,19 +1,14 @@
 import { queryOptions } from '@tanstack/react-query'
 
 import { apiGet, apiPost } from './client'
+import type { Schemas } from './schemas'
 
-/** 與 `berth/domain/enums.py` 的 `Role` 對齊。由 Jellyfin 的 `Policy.IsAdministrator` 決定。 */
-export type Role = 'admin' | 'user'
+/** 由 Jellyfin 的 `Policy.IsAdministrator` 決定。 */
+export type Role = Schemas['Role']
 
-export interface Me {
-  name: string
-  role: Role
-}
+export type Me = Schemas['MeOut']
 
-export interface Credentials {
-  username: string
-  password: string
-}
+export type Credentials = Schemas['LoginIn']
 
 /**
  * session cookie 是 httpOnly 的，JavaScript 讀不到它——「有沒有登入」只能問後端。

@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import type { JellyfinLibrary, JellyfinSetup } from '../api/setup'
+import type { JellyfinConnectInput, JellyfinLibrary, JellyfinSetup } from '../api/setup'
 import type { SetupStep } from '../api/schemas'
 import {
   STICKY_ACTION,
@@ -33,7 +33,7 @@ export function JellyfinExisting({
   connecting: boolean
   addingPath: string | null
   installing: boolean
-  onConnect: (input: { username: string; password: string }) => void
+  onConnect: (input: JellyfinConnectInput) => void
   onAddPath: (library: string) => void
   onInstallPlugin: () => void
 }) {
@@ -117,7 +117,7 @@ function SignInForm({
   connecting: boolean
   failed: boolean
   signedIn: boolean
-  onConnect: (input: { username: string; password: string }) => void
+  onConnect: (input: JellyfinConnectInput) => void
 }) {
   const { t } = useTranslation()
   const [username, setUsername] = useState('')

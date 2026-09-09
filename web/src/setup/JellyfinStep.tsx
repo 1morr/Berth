@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next'
 
-import { JELLYFIN_STEPS, type JellyfinSetup } from '../api/setup'
+import { JELLYFIN_STEPS, type JellyfinConnectInput, type JellyfinSetup } from '../api/setup'
 import { type SetupStep } from '../api/schemas'
 import { STICKY_ACTION, GhostButton, Notice, PrimaryButton } from '../components/controls'
 import { Cutaway, CutawayRow } from './Cutaway'
@@ -34,7 +34,7 @@ export function JellyfinStep({
   bootstrapFailed: boolean
   signInFailed: boolean
   onBootstrap: () => void
-  onConnect: (input: { username: string; password: string }) => void
+  onConnect: (input: JellyfinConnectInput) => void
   onAddPath: (library: string) => void
   onInstallPlugin: () => void
   connecting: boolean

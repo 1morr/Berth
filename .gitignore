@@ -29,6 +29,8 @@ web/dist/
 
 # 工具產物
 .playwright-mcp/
+# `pnpm gen:api` 的中間產物；進版控的是它產出的 web/src/api/schema.d.ts（票 02）
+web/openapi.json
 
 # 編輯器與作業系統
 .idea/

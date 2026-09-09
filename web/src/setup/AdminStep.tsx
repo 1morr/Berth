@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import type { SetupStatus } from '../api/setup'
+import type { AdminInput, SetupStatus } from '../api/setup'
 import { Cutaway, CutawayRow } from './Cutaway'
 import {
   STICKY_ACTION,
@@ -26,7 +26,7 @@ export function AdminStep({
   status: SetupStatus
   pending: boolean
   failed: boolean
-  onSubmit: (input: { username: string; password: string; apply_to_services: boolean }) => void
+  onSubmit: (input: AdminInput) => void
 }) {
   const { t } = useTranslation()
   const [username, setUsername] = useState(status.admin_username)

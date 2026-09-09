@@ -1,2 +1,6 @@
 dist
 pnpm-lock.yaml
+
+# 產出的檔案（pnpm gen:api）
+openapi.json
+src/api/schema.d.ts

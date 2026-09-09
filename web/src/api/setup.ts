@@ -1,63 +1,19 @@
 import { queryOptions } from '@tanstack/react-query'
 
 import { apiGet, apiPost } from './client'
-import type {
-  Profile,
-  QbittorrentSetup,
-  RouteView,
-  ServiceKind,
-  ServiceOrigin,
-  SetupStep,
-} from './schemas'
+import type { QbittorrentSetup, Schemas, ServiceKind } from './schemas'
 
 /** `DetectionReason`：判定的理由，UI 逐服務顯示。 */
-export type DetectionReason =
-  | 'setup_pending'
-  | 'setup_completed'
-  | 'anonymous_ok'
-  | 'auth_required'
-  | 'no_indexers'
-  | 'has_indexers'
-  | 'api_key_missing'
-  | 'not_deployed'
-  | 'unreachable'
-  | 'protocol_mismatch'
-  | 'connected'
+export type DetectionReason = Schemas['DetectionReason']
 
-export interface ServiceDetection {
-  kind: ServiceKind
-  origin: ServiceOrigin
-  reason: DetectionReason
-  /** 探測到的實測值：版本號或索引站數量。空字串代表沒有。 */
-  detail: string
-  base_url: string
-  /** 連線問題解掉了沒。沒解掉就要使用者補位址或憑證，第 2 步也還沒做完。 */
-  resolved: boolean
-}
+export type ServiceDetection = Schemas['ServiceDetectionOut']
 
-export interface SetupStatus {
-  completed: boolean
-  current_step: number
-  admin_created: boolean
-  admin_username: string
-  apply_to_services: boolean
-  services: ServiceDetection[]
-  waited_seconds: number
-  window_seconds: number
-}
+export type SetupStatus = Schemas['SetupStatusOut']
 
-export interface AdminInput {
-  username: string
-  password: string
-  apply_to_services: boolean
-}
+export type AdminInput = Schemas['AdminIn']
 
-export interface ConnectInput {
-  base_url: string
-  api_key?: string
-  username?: string
-  password?: string
-}
+/** 既有服務的連線表單。每個服務只用得到其中幾個欄位。 */
+export type ConnectInput = Schemas['ConnectIn']
 
 export const setupStatusQueryOptions = queryOptions({
   queryKey: ['setup', 'status'],
@@ -69,14 +25,19 @@ export function createAdmin(body: AdminInput): Promise<SetupStatus> {
 }
 
 export function detectServices(restart = false): Promise<SetupStatus> {
-  return apiPost<SetupStatus>('/setup/detect', { restart })
+  return apiPost<SetupStatus>('/setup/detect', { restart } satisfies Schemas['DetectIn'])
 }
 
 export function connectService(kind: ServiceKind, body: ConnectInput): Promise<SetupStatus> {
   return apiPost<SetupStatus>(`/setup/services/${kind}`, body)
 }
 
-/** `JellyfinStep`：plan §9.4 的九步，順序即宣告順序。 */
+/**
+ * `JellyfinStep`：plan §9.4 的九步，順序即宣告順序。
+ *
+ * 後端把 `StepOut.step` 宣告成 `str`，所以這個集合在 OpenAPI 裡不存在——它是 UI 的
+ * 顯示順序，不是 API 的形狀（`QBITTORRENT_STEPS` 同理）。
+ */
 export const JELLYFIN_STEPS = [
   'public_info',
   'configuration',
@@ -90,28 +51,12 @@ export const JELLYFIN_STEPS = [
 ] as const
 export type JellyfinStep = (typeof JELLYFIN_STEPS)[number]
 
-export interface JellyfinLibrary {
-  name: string
-  collection_type: string
-  locations: string[]
-  metadata_fetchers: string[]
-  /** 掛了 TVDB 的 metadata fetcher：警告，不阻擋（brief §16.4）。 */
-  uses_tvdb: boolean
-  /** 「加入 Berth 路徑」會加的那一條。按之前就顯示它。 */
-  berth_path: string
-  has_berth_path: boolean
-}
+export type JellyfinLibrary = Schemas['LibraryOut']
 
-export interface JellyfinSetup {
-  origin: ServiceOrigin
-  base_url: string
-  api_key_present: boolean
-  steps: SetupStep[]
-  libraries: JellyfinLibrary[]
-  merge_versions_installed: boolean
-  merge_movies_task_id: string
-  merge_episodes_task_id: string
-}
+export type JellyfinSetup = Schemas['JellyfinSetupOut']
+
+/** 既有 Jellyfin：以管理員帳密換 API key。 */
+export type JellyfinConnectInput = Schemas['JellyfinConnectIn']
 
 export const jellyfinSetupQueryOptions = queryOptions({
   queryKey: ['setup', 'jellyfin'],
@@ -122,15 +67,14 @@ export function bootstrapJellyfin(): Promise<JellyfinSetup> {
   return apiPost<JellyfinSetup>('/setup/jellyfin/bootstrap')
 }
 
-export function connectJellyfin(body: {
-  username: string
-  password: string
-}): Promise<JellyfinSetup> {
+export function connectJellyfin(body: JellyfinConnectInput): Promise<JellyfinSetup> {
   return apiPost<JellyfinSetup>('/setup/jellyfin/connect', body)
 }
 
 export function addLibraryPath(library: string): Promise<JellyfinSetup> {
-  return apiPost<JellyfinSetup>('/setup/jellyfin/libraries/paths', { library })
+  return apiPost<JellyfinSetup>('/setup/jellyfin/libraries/paths', {
+    library,
+  } satisfies Schemas['LibraryPathIn'])
 }
 
 export function installMergeVersions(): Promise<JellyfinSetup> {
@@ -162,37 +106,16 @@ export function applyQbittorrent(): Promise<QbittorrentSetup> {
 /** --- 第 5–6 步：來源（plan §9.3 第 5–6 步、§8.3、§8.4）--- */
 
 /** `IndexerKind`：既有路徑的兩種接法。 */
-export type IndexerKind = 'prowlarr' | 'torznab'
+export type IndexerKind = Schemas['IndexerKind']
 
-export interface IndexerOption {
-  /** Prowlarr 的 `definitionName`，也是這一條纜繩的 key。 */
-  definition_name: string
-  name: string
-  /** `public` / `semiPrivate` / `private`。 */
-  privacy: string
-  /** 這台 Prowlarr 上已經有這個站了。 */
-  present: boolean
-}
+export type IndexerOption = Schemas['IndexerOptionOut']
 
-export interface IndexerSetup {
-  origin: ServiceOrigin
-  kind: IndexerKind
-  base_url: string
-  api_key_present: boolean
-  reachable: boolean
-  options: IndexerOption[]
-  steps: SetupStep[]
-  skipped: boolean
-  sets_password: boolean
-  error: string
-}
+export type IndexerSetup = Schemas['IndexerSetupOut']
 
-export interface TmdbSetup {
-  /** 用的是 Berth 內建的專案級憑證（使用者沒有覆寫）。 */
-  using_project_credential: boolean
-  steps: SetupStep[]
-  skipped: boolean
-}
+/** 既有 Prowlarr 或任意 Torznab 的連線表單。 */
+export type IndexerConnectInput = Schemas['IndexerConnectIn']
+
+export type TmdbSetup = Schemas['TmdbSetupOut']
 
 export const indexerSetupQueryOptions = queryOptions({
   queryKey: ['setup', 'indexers'],
@@ -205,61 +128,34 @@ export const tmdbSetupQueryOptions = queryOptions({
 })
 
 export function applyIndexers(indexers: string[]): Promise<IndexerSetup> {
-  return apiPost<IndexerSetup>('/setup/indexers/apply', { indexers })
+  return apiPost<IndexerSetup>('/setup/indexers/apply', {
+    indexers,
+  } satisfies Schemas['IndexerApplyIn'])
 }
 
-export function connectIndexer(body: {
-  kind: IndexerKind
-  base_url: string
-  api_key: string
-}): Promise<IndexerSetup> {
+export function connectIndexer(body: IndexerConnectInput): Promise<IndexerSetup> {
   return apiPost<IndexerSetup>('/setup/indexers/connect', body)
 }
 
 export function skipIndexers(skipped: boolean): Promise<IndexerSetup> {
-  return apiPost<IndexerSetup>('/setup/indexers/skip', { skipped })
+  return apiPost<IndexerSetup>('/setup/indexers/skip', { skipped } satisfies Schemas['SkipIn'])
 }
 
 export function testTmdb(api_key: string): Promise<TmdbSetup> {
-  return apiPost<TmdbSetup>('/setup/tmdb/test', { api_key })
+  return apiPost<TmdbSetup>('/setup/tmdb/test', { api_key } satisfies Schemas['TmdbTestIn'])
 }
 
 export function skipTmdb(skipped: boolean): Promise<TmdbSetup> {
-  return apiPost<TmdbSetup>('/setup/tmdb/skip', { skipped })
+  return apiPost<TmdbSetup>('/setup/tmdb/skip', { skipped } satisfies Schemas['SkipIn'])
 }
 
 /** --- 第 7–8 步：媒體庫 → Route（plan §9.3 第 7–8 步、§9.5）--- */
 
-export interface LibraryChoice {
-  name: string
-  collection_type: string
-  locations: string[]
-  berth_path: string
-  has_berth_path: boolean
-  uses_tvdb: boolean
-  /** Berth 建得了 Route 的類型（movies / tvshows）。 */
-  supported: boolean
-  selected: boolean
-  target_path: string
-  profile: Profile
-}
+export type LibraryChoice = Schemas['LibraryChoiceOut']
 
-export interface RouteSetup {
-  origin: ServiceOrigin
-  library_root: string
-  complete_root: string
-  libraries: LibraryChoice[]
-  routes: RouteView[]
-  /** 至少一個 Route，而且每個都綠燈。完成鍵的前提。 */
-  ready: boolean
-  completed: boolean
-}
+export type RouteSetup = Schemas['RouteSetupOut']
 
-export interface RouteSelectionInput {
-  library: string
-  target_path: string
-  profile: Profile
-}
+export type RouteSelectionInput = Schemas['RouteSelectionIn']
 
 export const routeSetupQueryOptions = queryOptions({
   queryKey: ['setup', 'routes'],
@@ -267,7 +163,7 @@ export const routeSetupQueryOptions = queryOptions({
 })
 
 export function buildRoutes(selections: RouteSelectionInput[]): Promise<RouteSetup> {
-  return apiPost<RouteSetup>('/setup/routes', { selections })
+  return apiPost<RouteSetup>('/setup/routes', { selections } satisfies Schemas['RoutesIn'])
 }
 
 /** 寫下 `settings.setup.completed`。**之後 `setup/*` 就要登入了**（票 07）。 */

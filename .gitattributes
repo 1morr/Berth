@@ -5,3 +5,6 @@
 
 # Recorded service responses are byte-exact evidence: never normalise their endings.
 tests/fixtures/** -text
+
+# 產出的型別檔（pnpm gen:api）：進版控，但 PR 上預設收起來。
+web/src/api/schema.d.ts linguist-generated=true

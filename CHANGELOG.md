@@ -10,7 +10,7 @@
 Windows Docker Desktop（NTFS bind mount）與 Linux（ext4）上各跑一次 `docker compose up` → 只操作 Berth
 → 四項健康檢查綠燈，全程沒有打開 qBittorrent / Jellyfin / Prowlarr 的介面；另以「既有 Jellyfin +
 套件內 qBittorrent 與 Prowlarr」的組合走一次，既有媒體庫是**加**一條路徑而不是搬路徑，項目 ID 與
-觀看紀錄都沒有變。M0 建的東西全部列在下面，還沒有發佈過正式版本。
+觀看紀錄都沒有變。M0 建的東西全部列在下面，M1 之後的變更接在同一份清單後面；還沒有發佈過正式版本。
 
 ### Added
 
@@ -103,6 +103,10 @@ Windows Docker Desktop（NTFS bind mount）與 Linux（ext4）上各跑一次 `d
   精靈），Route 綠燈收起、紅燈展開五條纜繩；qBittorrent 設定漂移顯示逐鍵差異與還原按鈕。
   頁首長出導覽，`/` 在 M1 的探索頁之前先導向 `/health`。
 
+- `berth openapi`：印出 OpenAPI 文件（`--output` 寫檔）。只組裝路由，不跑 lifespan、不碰資料庫。
+- `pnpm -C web gen:api`：從上一條產出前端的 API 型別 `web/src/api/schema.d.ts`（openapi-typescript）。
+  CI 多一個 `api-types` job，型別檔過期時紅燈。
+
 ### Changed
 
 - 依實測更正文件：brief §7.2（電影檔名必須含 `[tmdbid-<id>]` 才算多版本）、§7.7（劇集的版本
@@ -125,6 +129,10 @@ Windows Docker Desktop（NTFS bind mount）與 Linux（ext4）上各跑一次 `d
 - 英文的精靈階段字串從 `Berth {{code}}` 改成 `{{code}}`——`code` 本身就是 `BTH 1`，原本讀起來是 `BERTH BTH 1`。中文維持「泊位 BTH 1」：`泊位` 與 `BTH` 不同字集，而且它替第一次看到這個代號的人解釋了它是什麼。
 - `routes.tsx` 的「精靈沒跑完就去跑、跑完了就要有 session」收斂成 `requireSignedInPage`
   （票 07 留的「頁面變多時再收」）。精靈那一頁仍然自己寫——它在同一個條件下是留下來而不是導走。
+
+- 前端不再手寫任何 API 的形狀：`web/src/api/*.ts` 只把後端的類別名（`RouteOut`）換成前端在講的
+  名字（`RouteView`），欄位與可選性全部來自產出的型別。M0 票 10 記的「同一份形狀寫了四層」的第四層
+  就此消失。換過來的第一天就抓到一個漂移：`ServiceDetection` 少了後端已經在回的 `configured`。
 
 ### Fixed
 

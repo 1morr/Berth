@@ -54,6 +54,37 @@ jobs:
       - run: pnpm test
       - run: pnpm build
 
+  api-types:
+    name: api-types
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v10.0.1
+        with:
+          enable-cache: true
+
+      - uses: pnpm/action-setup@v6
+        with:
+          package_json_file: web/package.json
+          cache: true
+          cache_dependency_path: web/pnpm-lock.yaml
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - run: uv sync --locked
+      - run: pnpm install --frozen-lockfile
+        working-directory: web
+
+      # 前端的 API 型別是產出的（README「API 型別」）。後端改了 pydantic model 卻沒有
+      # 重跑產生器時，重產之後這個檔案就會有 diff——那正是要紅燈的情況。
+      - run: pnpm gen:api
+        working-directory: web
+      - run: git diff --exit-code -- src/api/schema.d.ts
+        working-directory: web
+
   image:
     name: image
     runs-on: ubuntu-latest

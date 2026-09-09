@@ -13,7 +13,11 @@ export class ApiError extends Error {
 }
 
 /**
- * 回傳值目前是手寫型別。API 面長出來之後改用 openapi-typescript 從 OpenAPI 產（plan §6）。
+ * `T` 一律是 `pnpm gen:api` 從 OpenAPI 產出的型別（plan §6）；`api/*.ts` 那一層只是
+ * 把後端的類別名換成前端在講的名字，沒有一個形狀是手寫的。
+ *
+ * 這裡不做 path → 型別的推導：回應型別由呼叫端指定 `T`，請求的 body 則在呼叫端以
+ * `satisfies Schemas['...']` 檢查（`body` 在這一層是 `unknown`）。
  */
 export async function apiGet<T>(path: string): Promise<T> {
   return request<T>('GET', path)
