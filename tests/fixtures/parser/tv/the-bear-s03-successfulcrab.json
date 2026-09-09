@@ -1,0 +1,35 @@
+{
+  "id": "tv/the-bear-s03-successfulcrab",
+  "source_url": "https://thepiratebay.org/description.php?id=75768469",
+  "torrent_name": "The.Bear.S03.COMPLETE.1080p.HULU.WEB.H264-SuccessfulCrab[TGx]",
+  "tmdb": "tv-136315",
+  "context": {"media": "tv:136315", "profile": "standard", "season_hint": null, "episode_offset": null},
+  "files": [
+    {"path": "NEW upcoming releases by Xclusive.txt", "size": 71},
+    {"path": "The.Bear.S03E01.1080p.WEB.H264-SuccessfulCrab.mkv", "size": 1613669893},
+    {"path": "The.Bear.S03E02.1080p.WEB.H264-SuccessfulCrab.mkv", "size": 1226608113},
+    {"path": "The.Bear.S03E03.1080p.WEB.H264-SuccessfulCrab.mkv", "size": 1299793053},
+    {"path": "The.Bear.S03E04.1080p.WEB.H264-SuccessfulCrab.mkv", "size": 1329442849},
+    {"path": "The.Bear.S03E05.1080p.WEB.H264-SuccessfulCrab.mkv", "size": 1508987914},
+    {"path": "The.Bear.S03E06.1080p.WEB.H264-SuccessfulCrab.mkv", "size": 1435504799},
+    {"path": "The.Bear.S03E07.1080p.WEB.H264-SuccessfulCrab.mkv", "size": 1249840833},
+    {"path": "The.Bear.S03E08.1080p.WEB.H264-SuccessfulCrab.mkv", "size": 1785762183},
+    {"path": "The.Bear.S03E09.1080p.WEB.H264-SuccessfulCrab.mkv", "size": 1921881356},
+    {"path": "The.Bear.S03E10.1080p.WEB.H264-SuccessfulCrab.mkv", "size": 1835551959},
+    {"path": "[TGx]Downloaded from torrentgalaxy.to .txt", "size": 479}
+  ],
+  "expected": [
+    {"path": "NEW upcoming releases by Xclusive.txt", "kind": "other", "action": "skip"},
+    {"path": "The.Bear.S03E01.1080p.WEB.H264-SuccessfulCrab.mkv", "kind": "video", "action": "import", "season": 3, "episode": 1, "tags": {"source": "WEB", "resolution": "1080p", "group": "SuccessfulCrab"}, "min_confidence": "high"},
+    {"path": "The.Bear.S03E02.1080p.WEB.H264-SuccessfulCrab.mkv", "kind": "video", "action": "import", "season": 3, "episode": 2, "tags": {"source": "WEB", "resolution": "1080p", "group": "SuccessfulCrab"}, "min_confidence": "high"},
+    {"path": "The.Bear.S03E03.1080p.WEB.H264-SuccessfulCrab.mkv", "kind": "video", "action": "import", "season": 3, "episode": 3, "tags": {"source": "WEB", "resolution": "1080p", "group": "SuccessfulCrab"}, "min_confidence": "high"},
+    {"path": "The.Bear.S03E04.1080p.WEB.H264-SuccessfulCrab.mkv", "kind": "video", "action": "import", "season": 3, "episode": 4, "tags": {"source": "WEB", "resolution": "1080p", "group": "SuccessfulCrab"}, "min_confidence": "high"},
+    {"path": "The.Bear.S03E05.1080p.WEB.H264-SuccessfulCrab.mkv", "kind": "video", "action": "import", "season": 3, "episode": 5, "tags": {"source": "WEB", "resolution": "1080p", "group": "SuccessfulCrab"}, "min_confidence": "high"},
+    {"path": "The.Bear.S03E06.1080p.WEB.H264-SuccessfulCrab.mkv", "kind": "video", "action": "import", "season": 3, "episode": 6, "tags": {"source": "WEB", "resolution": "1080p", "group": "SuccessfulCrab"}, "min_confidence": "high"},
+    {"path": "The.Bear.S03E07.1080p.WEB.H264-SuccessfulCrab.mkv", "kind": "video", "action": "import", "season": 3, "episode": 7, "tags": {"source": "WEB", "resolution": "1080p", "group": "SuccessfulCrab"}, "min_confidence": "high"},
+    {"path": "The.Bear.S03E08.1080p.WEB.H264-SuccessfulCrab.mkv", "kind": "video", "action": "import", "season": 3, "episode": 8, "tags": {"source": "WEB", "resolution": "1080p", "group": "SuccessfulCrab"}, "min_confidence": "high"},
+    {"path": "The.Bear.S03E09.1080p.WEB.H264-SuccessfulCrab.mkv", "kind": "video", "action": "import", "season": 3, "episode": 9, "tags": {"source": "WEB", "resolution": "1080p", "group": "SuccessfulCrab"}, "min_confidence": "high"},
+    {"path": "The.Bear.S03E10.1080p.WEB.H264-SuccessfulCrab.mkv", "kind": "video", "action": "import", "season": 3, "episode": 10, "tags": {"source": "WEB", "resolution": "1080p", "group": "SuccessfulCrab"}, "min_confidence": "high"},
+    {"path": "[TGx]Downloaded from torrentgalaxy.to .txt", "kind": "other", "action": "skip"}
+  ]
+}

@@ -133,6 +133,29 @@ Windows Docker Desktop（NTFS bind mount）與 Linux（ext4）上各跑一次 `d
 - `domain/media.py` 的 `MediaSnapshot` / `SeasonSnapshot` / `EpisodeSnapshot`：`media.tmdb_snapshot_json`
   的型別化版本，也是 `naming` 與（M1 後段的）`parser` 的輸入。
 - `naming.folder_name()`：plan §5 凍結模板的第一格——`{title} ({year}) [tmdbid-{id}]`。
+- 解析器的前三層（plan §4.1、brief §6.2、§6.3、§6.8）：
+  - `parser.classify`：依副檔名、關鍵字與資料夾判 `kind`。`sample` 要**同時**滿足「檔名含
+    sample」與「遠小於正片」；`disc` 是整包的判定（有 `BDMV/` 或 `VIDEO_TS/` 就整包需人工）。
+  - `parser.normalize_cjk`：中文字幕組命名的詞典。抽出字幕語言、內嵌 / 內封 / 外掛、季號、
+    集號、合集、特典、劇場版與組名，並剝掉 `★` 前綴、招募廣告、地區限制與 CJK 標題，
+    剩下的拉丁字母那一半才交給 guessit。**季號認全形羅馬數字（`无职转生Ⅲ`）與不以空白收邊的
+    半形羅馬數字（`Mushoku Tensei III:`）**——M1 票 01 量到漏掉這兩種會把整輪播出錯置成第一季。
+  - `parser.parse_release` / `merge_release`：guessit 打底，補上它在字幕組格式下會漏或會錯的
+    幾條（多方括號裡的集號、`Season 3 [04]` 被讀成兩個季號、年份被當成季號、`HD1080P`、
+    結尾 `-[Group]`、把字幕 token 當組名）。檔名說了算，torrent 名補空缺。
+  - `domain.Tags.render()`：brief §6.8 的順序與 token，`subs` 依 `CHS < CHT < JP < EN` 以 `+` 連接。
+- `berth bench`：解析基準測試（plan §4.6、brief §6.9）。**離線跑**——20 筆真實 torrent 的
+  檔案清單（`tests/fixtures/parser/`）與 18 份凍結的 TMDB 快照（`tests/fixtures/tmdb/`）都在
+  repo 裡。報表逐分類列出 `auto_correct` / `auto_wrong` / `review` / `missed` /
+  `unmatched_correct` / `extra_correct` / `skipped`（七個桶加起來等於檔案數）、分類與 tag
+  的正確率，以及 high / medium 誤判率；門檻在
+  `tests/fixtures/parser/baseline.json`，同一支邏輯就是 `tests/unit/test_bench.py`，所以 CI
+  不另開 job。
+- `scripts/record_tmdb_snapshots.py`：用產品自己的路徑（暫時的資料庫 + `refresh_media`）錄
+  `tests/fixtures/tmdb/`，語料加了新作品時跑。
+- `import-linter` 契約「parser and naming do no IO」：`berth.parser` 與 `berth.naming` 不得
+  import `os` / `pathlib` / `httpx` / `sqlalchemy` 這一類會做 IO 的模組——benchmark 能離線跑
+  靠的就是這條。
 
 ### Changed
 

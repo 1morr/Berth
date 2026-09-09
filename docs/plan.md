@@ -213,7 +213,7 @@ files ─► classify ─► (video | subtitle | font | audio | image | archive 
 
 | 階段 | 輸入 → 輸出 | 要點 |
 | --- | --- | --- |
-| `classify` | `[FileEntry]` → 加 `kind` | brief §6.2 的表；`sample` 以「檔名含 sample 且大小 < 同目錄最大影片 10%」判定；`extra` 以關鍵字（NCOP/NCED/OP/ED 無集號、PV、CM、Menu、Preview、Trailer、Making、特典、映像特典）與資料夾（`SPs/` 內非 SP 編號、`Extras/`、`Bonus/`）判定；mediainfo 可把時長 < 5 分鐘的「正片」降為 `extra` |
+| `classify` | `[FileEntry]` → 加 `kind` | brief §6.2 的表；`sample` 以「檔名含 sample 且大小 < 最大影片 10%」判定——比的是**同目錄**最大的影片，同目錄只有它自己時退回整包最大的那一個——sample 幾乎都獨立放在自己的 `Sample/` 資料夾裡，只比同目錄的話這條規則永遠不成立（M1 票 05 補的推論；那一輪掃過的真實 torrent **一個 sample 都沒有**，所以規則只有單元測試守著，沒有語料）；`extra` 以關鍵字（NCOP/NCED/OP/ED 無集號、PV、CM、Menu、Preview、Trailer、Making、Interview、特典、映像特典）與資料夾（`SPs/` 內非 SP 編號，加上 Jellyfin 認得的那一串 extras 資料夾名——`Extras/`、`Bonus/`、`Featurettes/`、`Behind the Scenes/`…，brief §20.1）判定；`disc` 是**整包**的判定：任何一個檔案落在 `BDMV/` 或 `VIDEO_TS/` 底下，整個 torrent 都是 disc；mediainfo 可把時長 < 5 分鐘的「正片」降為 `extra` |
 | `normalize_cjk` | 檔名 → 乾淨字串 + `CjkHints` | 從 AutoBangumi `classic.py` 與 Sonarr `Parser.cs` 移植：剝離 ★前綴、招募廣告、地區限制、【】括號正規化為 []、中文標題與英文標題並列時保留英文；抽出 `subs`（CHT/CHS/JP/EN 集合）、`hardsub`、`season_cn`（第N季/期）、`episode_cn`（第N話/集）、`collection`（合集/全集/全N話）、`special`（番外/特別篇/SP/OVA/OAD）、`movie`（劇場版/電影版）、`group_cn`。**季號要認全形羅馬數字**（`无职转生Ⅱ`、`Ⅲ`，U+2160 起）與**不以空白收邊的半形羅馬數字**（`Mushoku Tensei II]`）——實測這兩種寫法漏掉會造成整輪播出的錯置（M1 票 01） |
 | `parse_release` | 乾淨字串 → `ReleaseInfo` | guessit 打底；後處理動漫模式：`- 01`、`[01]`、`01v2`、`E01` 無季、`01-12` 區間、`S01 \| 01-28+SPx11`、`第01話`；`release_kind` 由集號區間與 `collection` 決定 |
 | `structure_hints` | 相對路徑 → hints | 資料夾名 `Season 2` / `S2` / `第二季` / `2nd Season` / `Part 2` / `Specials` / `SPs`；`Subs/` `字幕/` 與其下的語言子資料夾 |
@@ -224,12 +224,13 @@ files ─► classify ─► (video | subtitle | font | audio | image | archive 
 
 ### 4.2 核心型別（`domain/`）
 
-- `FileEntry`：`rel_path`、`size`、`kind`、`priority`
-- `CjkHints`：`subs: set[Lang]`、`hardsub: bool | None`、`season: int | None`、`episode: int | None`、`episode_end`、`collection`、`special: str | None`、`movie: bool`、`group: str | None`
-- `ReleaseInfo`：brief §6.3 欄位 + `raw_title`、`matched_tokens`
+- `FileEntry`：`rel_path`（相對於 torrent 內容根）、`size`、`kind`、`priority`
+- `CjkHints`：`subs: frozenset[Lang]`、`hardsub: bool | None`、`subtitle_kind`、`season: int | None`、`episode: int | None`、`episode_end`、`collection`、`special: SpecialKind | None`、`movie: bool`、`group: str`、`matched: tuple[str, ...]`（認出來的原文，往上併進 `ReleaseInfo.matched_tokens`）
+- `ReleaseInfo`：brief §6.3 欄位 + `raw_title`、`matched_tokens`。`season_hint_from_folder` **不在這裡**——資料夾提示是 `structure_hints` 的輸出，兩個階段的產物不混進同一個型別
 - `Tags`：`source`、`resolution`、`subs: tuple[Lang, ...]`、`hardsub`、`group`、`version`、`edition`；`render()` 依 brief §6.8
 - `Candidate`：`season`、`episode_start`、`episode_end`、`strategy`、`confidence`、`reasons: list[str]`
-- `PlanItem` / `Plan`：對應 §2.3
+- `PlanItem`：`rel_path`、`kind`、`action`、`season`、`episode_start`、`episode_end`、`tags`、`confidence`、`reasons`。`media_id` 由 `map_episode` 補、`target_path` 由命名引擎補——欄位在有東西可以放進去的那一票才加，§2.3 是它最終的樣子
+- 封閉集合一律 `StrEnum`：`FileKind`、`Lang`、`Source`、`SubtitleKind`、`SpecialKind`（SP/OVA/OAD/Movie/NC）、`ReleaseKind`、`Confidence`、`PlanAction`
 
 ### 4.3 上下文與 TMDB 快照
 
@@ -260,21 +261,24 @@ fixture 一筆一個 JSON：
   "id": "anime/frieren-7acg-bd-batch",
   "source_url": "https://share.dmhy.org/topics/view/...",
   "torrent_name": "[7³ACG] 葬送的芙莉莲/Sousou no Frieren S01 | 01-28+SPx11 [简繁字幕] BDrip 1080p x265 OPUS 2.0",
-  "files": [{ "path": "…/Sousou no Frieren - 01.mkv", "size": 1234567890 }],
+  "files": [{ "path": "Sousou no Frieren 2023 S01E01-[1080p][BDRIP][x265.OPUS].mkv", "size": 1234567890 }],
   "context": { "media": "tv:209867", "profile": "anime", "season_hint": null, "episode_offset": null },
   "tmdb": "tv-209867",
   "expected": [
-    { "path": "…/Sousou no Frieren - 01.mkv", "action": "import", "season": 1, "episode": 1,
+    { "path": "Sousou no Frieren 2023 S01E01-[1080p][BDRIP][x265.OPUS].mkv",
+      "kind": "video", "action": "import", "season": 1, "episode": 1,
       "tags": { "source": "BD", "resolution": "1080p", "subs": ["CHS", "CHT"], "group": "7³ACG" },
       "min_confidence": "high" }
   ]
 }
 ```
 
-- `tests/fixtures/tmdb/<id>.json` 是 TMDB 快照，錄一次即凍結。
-- `berth bench` 輸出：整體與分類別（anime / tv / movie）的 `auto_correct`、`auto_wrong`（high 或 medium 自動入庫但錯，最嚴重）、`review`、`unmatched_correct`、`extra_correct`；分別列 high 與 medium 的錯誤率（brief §6.5）。
-- CI 規則：`auto_wrong` 不得高於 `tests/fixtures/parser/baseline.json`，`auto_correct` 不得低於 baseline 減 1 筆；改善時更新 baseline 並在 PR 說明。
-- v0 語料：20 筆，來源 brief §20.4 的樣本清單（動漫 8、美劇 / 韓劇 8、電影 4），逐步擴到 100+。
+- `torrent_name` 是**索引站上的發佈標題**（Berth 從搜尋結果拿到的那一個），`files[].path` 是**相對於 torrent 內容根**的路徑。兩者各知道一半：CJK 的字幕語言與季號幾乎只寫在前者，集號只寫在後者（M1 票 05 實測）。
+- `expected` 逐檔一筆，含 `kind`（brief §6.2 的分類）——分類是第一層，錯在這裡後面每一層都白算。`tags` 缺席表示這一筆不比對 tag。`min_confidence` **不參與比對**：信心低於期望不是做錯事，那件事由 `review` 與 high / medium 誤判率回答。
+- `tests/fixtures/tmdb/<id>.json` 是 TMDB 快照，錄一次即凍結（`scripts/record_tmdb_snapshots.py`）。
+- `berth bench` 輸出：整體與分類別（anime / tv / movie）的 `auto_correct`、`auto_wrong`（自動處置但錯，最嚴重）、`review`、`unmatched_correct`、`extra_correct`，加上 `missed`（該入庫的被丟成 unmatched / skip）與 `skipped`（雙方都同意可忽略）；**七個桶互斥且窮盡，加起來等於檔案數**——加不起來的報表會讓沒被數到的檔案看起來不存在。另列分類正確率與 tag 正確率，以及 high 與 medium 的錯誤率（brief §6.5）。
+- CI 規則：`auto_wrong` 不得高於 `tests/fixtures/parser/baseline.json`，`auto_correct` 不得低於 baseline 減 1 筆；改善時更新 baseline 並在 PR 說明。門檻與報表是同一支（`services/bench.py`），單元測試與 `berth bench` 共用，所以 CI 不另開 job。
+- v0 語料：20 筆，來源 brief §20.4 的樣本清單（動漫 8、非動漫劇集 8、電影 4），逐步擴到 100+。出處與涵蓋範圍逐筆記在 `tests/fixtures/parser/README.md`。
 
 ---
 

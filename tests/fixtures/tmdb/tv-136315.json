@@ -1,0 +1,412 @@
+{
+ "first_air_date": "2022-06-23",
+ "kind": "tv",
+ "overview": "曾獲詹姆士比爾德獎的名廚卡米回到老家芝加哥，接手經營由剛剛自殺身亡的哥哥麥可一手建立的義式牛肉三明治店。他雖然聘請了年輕且有熱誠的辛妮為主廚，但遇上債務危機、以經理里奇為首的老員工的對抗、餐廳設備過份殘舊等問題",
+ "poster_url": "https://image.tmdb.org/t/p/w342/p3af2hq94mBavcJi2buRDzZEmhr.jpg",
+ "runtime": null,
+ "seasons": [
+  {
+   "air_date": "2022-06-23",
+   "episode_count": 8,
+   "episodes": [
+    {
+     "absolute_number": null,
+     "air_date": "2022-06-23",
+     "episode_number": 1,
+     "name": "System",
+     "runtime": 28
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2022-06-23",
+     "episode_number": 2,
+     "name": "Hands",
+     "runtime": 32
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2022-06-23",
+     "episode_number": 3,
+     "name": "Brigade",
+     "runtime": 30
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2022-06-23",
+     "episode_number": 4,
+     "name": "Dogs",
+     "runtime": 31
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2022-06-23",
+     "episode_number": 5,
+     "name": "Sheridan",
+     "runtime": 26
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2022-06-23",
+     "episode_number": 6,
+     "name": "Ceres",
+     "runtime": 31
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2022-06-23",
+     "episode_number": 7,
+     "name": "Review",
+     "runtime": 21
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2022-06-23",
+     "episode_number": 8,
+     "name": "Braciole",
+     "runtime": 48
+    }
+   ],
+   "name": "Season 1",
+   "season_number": 1
+  },
+  {
+   "air_date": "2023-06-22",
+   "episode_count": 10,
+   "episodes": [
+    {
+     "absolute_number": null,
+     "air_date": "2023-06-22",
+     "episode_number": 1,
+     "name": "Beef",
+     "runtime": 30
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-06-22",
+     "episode_number": 2,
+     "name": "Pasta",
+     "runtime": 31
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-06-22",
+     "episode_number": 3,
+     "name": "Sundae",
+     "runtime": 27
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-06-22",
+     "episode_number": 4,
+     "name": "Honeydew",
+     "runtime": 30
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-06-22",
+     "episode_number": 5,
+     "name": "Pop",
+     "runtime": 34
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-06-22",
+     "episode_number": 6,
+     "name": "Fishes",
+     "runtime": 67
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-06-22",
+     "episode_number": 7,
+     "name": "Forks",
+     "runtime": 36
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-06-22",
+     "episode_number": 8,
+     "name": "Bolognese",
+     "runtime": 33
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-06-22",
+     "episode_number": 9,
+     "name": "Omelette",
+     "runtime": 40
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-06-22",
+     "episode_number": 10,
+     "name": "The Bear",
+     "runtime": 41
+    }
+   ],
+   "name": "Season 2",
+   "season_number": 2
+  },
+  {
+   "air_date": "2024-06-26",
+   "episode_count": 10,
+   "episodes": [
+    {
+     "absolute_number": null,
+     "air_date": "2024-06-26",
+     "episode_number": 1,
+     "name": "Tomorrow",
+     "runtime": 37
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-06-26",
+     "episode_number": 2,
+     "name": "Next",
+     "runtime": 28
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-06-26",
+     "episode_number": 3,
+     "name": "Doors",
+     "runtime": 30
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-06-26",
+     "episode_number": 4,
+     "name": "Violet",
+     "runtime": 34
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-06-26",
+     "episode_number": 5,
+     "name": "Children",
+     "runtime": 35
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-06-26",
+     "episode_number": 6,
+     "name": "Napkins",
+     "runtime": 34
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-06-26",
+     "episode_number": 7,
+     "name": "Legacy",
+     "runtime": 29
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-06-26",
+     "episode_number": 8,
+     "name": "Ice Chips",
+     "runtime": 40
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-06-26",
+     "episode_number": 9,
+     "name": "Apologies",
+     "runtime": 44
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-06-26",
+     "episode_number": 10,
+     "name": "Forever",
+     "runtime": 44
+    }
+   ],
+   "name": "Season 3",
+   "season_number": 3
+  },
+  {
+   "air_date": "2025-06-25",
+   "episode_count": 10,
+   "episodes": [
+    {
+     "absolute_number": null,
+     "air_date": "2025-06-25",
+     "episode_number": 1,
+     "name": "Groundhogs",
+     "runtime": 32
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-06-25",
+     "episode_number": 2,
+     "name": "Soubise",
+     "runtime": 32
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-06-25",
+     "episode_number": 3,
+     "name": "Scallop",
+     "runtime": 38
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-06-25",
+     "episode_number": 4,
+     "name": "Worms",
+     "runtime": 32
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-06-25",
+     "episode_number": 5,
+     "name": "Replicants",
+     "runtime": 34
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-06-25",
+     "episode_number": 6,
+     "name": "Sophie",
+     "runtime": 30
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-06-25",
+     "episode_number": 7,
+     "name": "Bears",
+     "runtime": 70
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-06-25",
+     "episode_number": 8,
+     "name": "Green",
+     "runtime": 37
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-06-25",
+     "episode_number": 9,
+     "name": "Tonnato",
+     "runtime": 39
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-06-25",
+     "episode_number": 10,
+     "name": "Goodbye",
+     "runtime": 34
+    }
+   ],
+   "name": "Season 4",
+   "season_number": 4
+  },
+  {
+   "air_date": "2026-06-25",
+   "episode_count": 8,
+   "episodes": [
+    {
+     "absolute_number": null,
+     "air_date": "2026-06-25",
+     "episode_number": 1,
+     "name": "Soda",
+     "runtime": 22
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-06-25",
+     "episode_number": 2,
+     "name": "Lamb",
+     "runtime": 26
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-06-25",
+     "episode_number": 3,
+     "name": "Mint",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-06-25",
+     "episode_number": 4,
+     "name": "Ribs",
+     "runtime": 39
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-06-25",
+     "episode_number": 5,
+     "name": "Raspberries",
+     "runtime": 29
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-06-25",
+     "episode_number": 6,
+     "name": "Focaccia",
+     "runtime": 29
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-06-25",
+     "episode_number": 7,
+     "name": "Caramel",
+     "runtime": 53
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-06-25",
+     "episode_number": 8,
+     "name": "The Original Beef of Chicagoland",
+     "runtime": 62
+    }
+   ],
+   "name": "Season 5",
+   "season_number": 5
+  }
+ ],
+ "title": "大熊餐廳",
+ "title_en": "The Bear",
+ "title_original": "The Bear",
+ "titles": [
+  "The Bear",
+  "熊家餐馆",
+  "Medvěd",
+  "The Bear : Sur place ou à emporter",
+  "El Oso (The Bear)",
+  "Misiek",
+  "Medveď",
+  "大熊餐館",
+  "Bear",
+  "FX's The Bear",
+  "Kubelik",
+  "Windy City Law",
+  "O Urso",
+  "Ведмідь",
+  "더 베어",
+  "大熊餐廳",
+  "ذا بير",
+  "Медведь",
+  "A mackó",
+  "הדוב",
+  "The Bear: King of the Kitchen",
+  "El Oso",
+  "Meškinas",
+  "一流シェフのファミリーレストラン",
+  "Мечката",
+  "Ursul",
+  "大熊餐厅",
+  "خرس",
+  "Karu",
+  "Мядзведзь",
+  "ورچەکە",
+  "ദി ബിയർ (ടിവി സീരീസ്)",
+  "دی بیئر",
+  "Lācis"
+ ],
+ "tmdb_id": 136315,
+ "year": 2022
+}

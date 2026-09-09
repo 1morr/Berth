@@ -1,0 +1,13 @@
+{
+  "id": "anime/dragon-ball-daima-ktxp",
+  "source_url": "https://share.dmhy.org/topics/view/680811_10_Dragon_Ball_Daima_01_GB_1080P_MP4.html",
+  "torrent_name": "【极影字幕社】★10月新番 龙珠大魔/Dragon Ball Daima 第01话 GB 1080P MP4（字幕社招人内详）",
+  "tmdb": "tv-236994",
+  "context": {"media": "tv:236994", "profile": "anime", "season_hint": null, "episode_offset": null},
+  "files": [
+    {"path": "[KTXP][Dragon Ball Daima][01][GB][1080p].mp4", "size": 578955391}
+  ],
+  "expected": [
+    {"path": "[KTXP][Dragon Ball Daima][01][GB][1080p].mp4", "kind": "video", "action": "import", "season": 1, "episode": 1, "tags": {"resolution": "1080p", "subs": ["CHS"], "group": "KTXP"}, "min_confidence": "medium"}
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "id": "anime/pokemon-horizons-fysub",
+  "source_url": "https://share.dmhy.org/topics/view/719389_135-136_1080P_MP4.html",
+  "torrent_name": "【楓葉字幕組】[寵物小精靈 / 寶可夢 地平線 再度飛升][135-136][繁體][1080P][MP4]",
+  "tmdb": "tv-220150",
+  "context": {"media": "tv:220150", "profile": "anime", "season_hint": null, "episode_offset": null},
+  "files": [
+    {"path": "[FYSub][Pocket_Monsters_Horizontes][135][1080P][BIG5].mp4", "size": 700256960},
+    {"path": "[FYSub][Pocket_Monsters_Horizontes][136][1080P][BIG5].mp4", "size": 585631319}
+  ],
+  "expected": [
+    {"path": "[FYSub][Pocket_Monsters_Horizontes][135][1080P][BIG5].mp4", "kind": "video", "action": "import", "season": 1, "episode": 135, "tags": {"resolution": "1080p", "subs": ["CHT"], "group": "FYSub"}, "min_confidence": "medium"},
+    {"path": "[FYSub][Pocket_Monsters_Horizontes][136][1080P][BIG5].mp4", "kind": "video", "action": "import", "season": 1, "episode": 136, "tags": {"resolution": "1080p", "subs": ["CHT"], "group": "FYSub"}, "min_confidence": "medium"}
+  ]
+}

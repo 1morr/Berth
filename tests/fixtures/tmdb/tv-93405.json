@@ -1,0 +1,233 @@
+{
+ "first_air_date": "2021-09-17",
+ "kind": "tv",
+ "overview": "數百名阮囊羞澀的玩家接受一個奇怪的邀請，要在一連串兒童遊戲中相互競爭。等待著他們的不只是誘人的獎項，還有致命的危險。",
+ "poster_url": "https://image.tmdb.org/t/p/w342/3tiDiuo4goEdYmDiCHPu5YGuWIN.jpg",
+ "runtime": null,
+ "seasons": [
+  {
+   "air_date": "2021-09-17",
+   "episode_count": 9,
+   "episodes": [
+    {
+     "absolute_number": null,
+     "air_date": "2021-09-17",
+     "episode_number": 1,
+     "name": "Red Light, Green Light",
+     "runtime": 61
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-09-17",
+     "episode_number": 2,
+     "name": "Hell",
+     "runtime": 63
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-09-17",
+     "episode_number": 3,
+     "name": "The Man with the Umbrella",
+     "runtime": 55
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-09-17",
+     "episode_number": 4,
+     "name": "Stick to the Team",
+     "runtime": 55
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-09-17",
+     "episode_number": 5,
+     "name": "A Fair World",
+     "runtime": 52
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-09-17",
+     "episode_number": 6,
+     "name": "Gganbu",
+     "runtime": 62
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-09-17",
+     "episode_number": 7,
+     "name": "VIPS",
+     "runtime": 58
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-09-17",
+     "episode_number": 8,
+     "name": "Front Man",
+     "runtime": 33
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-09-17",
+     "episode_number": 9,
+     "name": "One Lucky Day",
+     "runtime": 56
+    }
+   ],
+   "name": "Season 1",
+   "season_number": 1
+  },
+  {
+   "air_date": "2024-12-26",
+   "episode_count": 7,
+   "episodes": [
+    {
+     "absolute_number": null,
+     "air_date": "2024-12-26",
+     "episode_number": 1,
+     "name": "Bread and Lottery",
+     "runtime": 66
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-12-26",
+     "episode_number": 2,
+     "name": "Halloween Party",
+     "runtime": 52
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-12-26",
+     "episode_number": 3,
+     "name": "001",
+     "runtime": 62
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-12-26",
+     "episode_number": 4,
+     "name": "Six Legs",
+     "runtime": 63
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-12-26",
+     "episode_number": 5,
+     "name": "One More Game",
+     "runtime": 77
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-12-26",
+     "episode_number": 6,
+     "name": "O ﻿ X",
+     "runtime": 53
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-12-26",
+     "episode_number": 7,
+     "name": "Friend or Foe",
+     "runtime": 61
+    }
+   ],
+   "name": "Season 2",
+   "season_number": 2
+  },
+  {
+   "air_date": "2025-06-27",
+   "episode_count": 6,
+   "episodes": [
+    {
+     "absolute_number": null,
+     "air_date": "2025-06-27",
+     "episode_number": 1,
+     "name": "Keys and Knives",
+     "runtime": 58
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-06-27",
+     "episode_number": 2,
+     "name": "The Starry Night",
+     "runtime": 60
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-06-27",
+     "episode_number": 3,
+     "name": "It's Not Your Fault",
+     "runtime": 66
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-06-27",
+     "episode_number": 4,
+     "name": "222",
+     "runtime": 66
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-06-27",
+     "episode_number": 5,
+     "name": "○△□",
+     "runtime": 63
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-06-27",
+     "episode_number": 6,
+     "name": "Humans Are...",
+     "runtime": 56
+    }
+   ],
+   "name": "Season 3",
+   "season_number": 3
+  }
+ ],
+ "title": "魷魚遊戲",
+ "title_en": "Squid Game",
+ "title_original": "오징어 게임",
+ "titles": [
+  "Squid Game",
+  "오징어 게임",
+  "משחקי הדיונון",
+  "स्क्विड गेम",
+  "بازی مرکب",
+  "بازی ماهی مرکب",
+  "イカゲーム",
+  "Ojingeo Game",
+  "Ojingeo Geim",
+  "오징어게임",
+  "Ojing-eo geim",
+  "Kalamar Oyunu",
+  "魷魚遊戲",
+  "Гра у кальмара",
+  "Игра в кальмара",
+  "Round 6",
+  "El juego del calamar",
+  "Hra na oliheň",
+  "鱿鱼游戏",
+  "Trò chơi con mực",
+  "Nyerd meg az életed",
+  "Гра в кальмара",
+  "משחק הדיונון",
+  "สควิดเกม เล่นลุ้นตาย",
+  "კალმარის თამაში",
+  "Jocul calamarului",
+  "Игра лигње",
+  "Igra lignje",
+  "لعبة الحبّار",
+  "Το Παιχνίδι του Καλαμαριού",
+  "Kalmaro žaidimas",
+  "Игра на калмари",
+  "Le Jeu du calmar",
+  "Ciyaarta Sanaaniga",
+  "Kalmaari mängud",
+  "Кальмар ойыны",
+  "El joc del calamar",
+  "Kalmar o‘yini",
+  "سکویڈ گیم"
+ ],
+ "tmdb_id": 93405,
+ "year": 2021
+}

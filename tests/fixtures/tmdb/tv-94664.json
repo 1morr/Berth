@@ -1,0 +1,542 @@
+{
+ "first_air_date": "2021-01-11",
+ "kind": "tv",
+ "overview": "34歲、處男、無職的家裡蹲尼特男。他在雙親葬禮當天被趕出家門的瞬間，就因為遭卡車碾過而喪命。等他重新醒來，發現自己在劍與魔法的異世界轉生成了小嬰兒！曾活得跟垃圾一樣的男人，發誓要做為少年魯迪烏斯在異世界認真過活！等待著魯迪烏斯的，是與蘿莉魔術師、有著妖精耳朵卻使用男性化自稱的美少女、兇暴傲嬌大小姐，以及其他各式各樣人物的相遇，以及殘酷的冒險與戰鬥。全新的人生就此展開！「人生重來」奇幻故事現在開幕！",
+ "poster_url": "https://image.tmdb.org/t/p/w342/aWUXopLwAypXTsHO8HYmsMazpVI.jpg",
+ "runtime": null,
+ "seasons": [
+  {
+   "air_date": "2022-03-16",
+   "episode_count": 3,
+   "episodes": [
+    {
+     "absolute_number": null,
+     "air_date": "2022-03-16",
+     "episode_number": 1,
+     "name": "Eris the Goblin Slayer",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-07-03",
+     "episode_number": 2,
+     "name": "Guardian Fitz",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-05-20",
+     "episode_number": 3,
+     "name": "Ten'i Meikyuu Hen: Housou Chokuzen Special",
+     "runtime": 24
+    }
+   ],
+   "name": "Specials",
+   "season_number": 0
+  },
+  {
+   "air_date": "2021-01-11",
+   "episode_count": 23,
+   "episodes": [
+    {
+     "absolute_number": null,
+     "air_date": "2021-01-11",
+     "episode_number": 1,
+     "name": "Jobless Reincarnation",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-01-18",
+     "episode_number": 2,
+     "name": "Master",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-01-25",
+     "episode_number": 3,
+     "name": "A Friend",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-02-01",
+     "episode_number": 4,
+     "name": "Emergency Family Meeting",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-02-08",
+     "episode_number": 5,
+     "name": "A Young Lady and Violence",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-02-15",
+     "episode_number": 6,
+     "name": "A Day Off in Roa",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-02-22",
+     "episode_number": 7,
+     "name": "What Lies Beyond Effort",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-03-01",
+     "episode_number": 8,
+     "name": "Turning Point 1",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-03-08",
+     "episode_number": 9,
+     "name": "A Chance Encounter",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-03-15",
+     "episode_number": 10,
+     "name": "The Value of a Life and the First Job",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-03-22",
+     "episode_number": 11,
+     "name": "Children and Warriors",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-10-04",
+     "episode_number": 12,
+     "name": "The Woman with the Demon Eyes",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-10-11",
+     "episode_number": 13,
+     "name": "Missed Connections",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-10-18",
+     "episode_number": 14,
+     "name": "No Such Thing as a Free Lunch",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-10-25",
+     "episode_number": 15,
+     "name": "Slow Life in the Doldia Village",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-11-01",
+     "episode_number": 16,
+     "name": "Family Squabble",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-11-08",
+     "episode_number": 17,
+     "name": "Reunion",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-11-15",
+     "episode_number": 18,
+     "name": "Separate Journeys",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-11-22",
+     "episode_number": 19,
+     "name": "Route Selection",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-11-29",
+     "episode_number": 20,
+     "name": "The Birth of My Little Sister, the Maid",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-12-06",
+     "episode_number": 21,
+     "name": "Turning Point 2",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-12-13",
+     "episode_number": 22,
+     "name": "Dreams and Reality",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-12-20",
+     "episode_number": 23,
+     "name": "Wake Up and Take a Step",
+     "runtime": 24
+    }
+   ],
+   "name": "Season 1",
+   "season_number": 1
+  },
+  {
+   "air_date": "2023-07-10",
+   "episode_count": 24,
+   "episodes": [
+    {
+     "absolute_number": null,
+     "air_date": "2023-07-10",
+     "episode_number": 1,
+     "name": "The Brokenhearted Mage",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-07-17",
+     "episode_number": 2,
+     "name": "The Forest in the Dead of Night",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-07-24",
+     "episode_number": 3,
+     "name": "Abrupt Approach",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-07-31",
+     "episode_number": 4,
+     "name": "Letter of Invitation",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-08-07",
+     "episode_number": 5,
+     "name": "Ranoa University of Magic",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-08-14",
+     "episode_number": 6,
+     "name": "I Don't Want To Die",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-08-21",
+     "episode_number": 7,
+     "name": "The Kidnapping and Confinement of Beast Girls",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-08-28",
+     "episode_number": 8,
+     "name": "The Fiancé of Despair",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-09-04",
+     "episode_number": 9,
+     "name": "The White Mask",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-09-11",
+     "episode_number": 10,
+     "name": "These Feelings",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-09-18",
+     "episode_number": 11,
+     "name": "To You",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-09-25",
+     "episode_number": 12,
+     "name": "I Want to Tell You",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-04-08",
+     "episode_number": 13,
+     "name": "My Dream Home",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-04-15",
+     "episode_number": 14,
+     "name": "Wedding Reception",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-04-22",
+     "episode_number": 15,
+     "name": "Afar",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-04-29",
+     "episode_number": 16,
+     "name": "Norn and Aisha",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-05-06",
+     "episode_number": 17,
+     "name": "My Older Brother's Feelings",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-05-13",
+     "episode_number": 18,
+     "name": "Turning Point 3",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-05-27",
+     "episode_number": 19,
+     "name": "Desert Journey",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-06-03",
+     "episode_number": 20,
+     "name": "Into the Labyrinth",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-06-10",
+     "episode_number": 21,
+     "name": "Magic Circle to the Sixth Stratum",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-06-17",
+     "episode_number": 22,
+     "name": "Parents",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-06-24",
+     "episode_number": 23,
+     "name": "Let's Go Home",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-07-01",
+     "episode_number": 24,
+     "name": "Succession",
+     "runtime": 24
+    }
+   ],
+   "name": "Season 2",
+   "season_number": 2
+  },
+  {
+   "air_date": "2026-07-04",
+   "episode_count": 14,
+   "episodes": [
+    {
+     "absolute_number": null,
+     "air_date": "2026-07-04",
+     "episode_number": 1,
+     "name": "Burn Bright, Mad Dog",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-07-04",
+     "episode_number": 2,
+     "name": "Howl, Mad Dog",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-07-13",
+     "episode_number": 3,
+     "name": "Life Back at Home",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-07-20",
+     "episode_number": 4,
+     "name": "A King-Class Water Mage",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-07-27",
+     "episode_number": 5,
+     "name": "Celebrations",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-08-03",
+     "episode_number": 6,
+     "name": "Another Domestic Disaster?",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-08-10",
+     "episode_number": 7,
+     "name": "Phase Four",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-08-17",
+     "episode_number": 8,
+     "name": "The Flying Fortress",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-08-24",
+     "episode_number": 9,
+     "name": "Lament",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-08-31",
+     "episode_number": 10,
+     "name": "An Audience with an Immortal Demon King",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-09-07",
+     "episode_number": 11,
+     "name": "Turning Point 4",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-09-14",
+     "episode_number": 12,
+     "name": "An End and a Beginning",
+     "runtime": null
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-09-21",
+     "episode_number": 13,
+     "name": "Episode 13",
+     "runtime": null
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-09-28",
+     "episode_number": 14,
+     "name": "Episode 14",
+     "runtime": null
+    }
+   ],
+   "name": "Season 3",
+   "season_number": 3
+  }
+ ],
+ "title": "無職轉生～到了異世界就拿出真本事～",
+ "title_en": "Mushoku Tensei: Jobless Reincarnation",
+ "title_original": "無職転生 ～異世界行ったら本気だす～",
+ "titles": [
+  "Mushoku Tensei: Jobless Reincarnation",
+  "無職転生 ～異世界行ったら本気だす～",
+  "无职转生～在异世界认真地活下去～",
+  "无职转生",
+  "无职转生2",
+  "无职转生～到了异世界就拿出真本事",
+  "Mushoku Tensei: Nezaměstnaný dostává druhou šanci",
+  "Mushoku Tensei, Jobless Reincarnation",
+  "Mushoku Tensei Jobless Reincarnation",
+  "Mushoku Tensei - Jobless Reincarnation",
+  "Mushoku Tensei: Isekai Ittara Honki Dasu",
+  "Mushoku Tensei: Isekai Ittara Honki Dasu 2nd Season",
+  "無職転生Ⅱ ～異世界行ったら本気だす～",
+  "Mushoku Tensei II: Isekai Ittara Honki Dasu",
+  "Mushoku Tensei Isekai Ittara Honki Dasu",
+  "Mushoku Tensei: Isekai Ittara Honki Dasu - Eris no Goblin Toubatsu",
+  "Mushoku Tensei II: Isekai Ittara Honki Dasu - Shugo Jutsushi Fitz",
+  "Mushoku Tensei S3",
+  "Mushoku Tensei",
+  "Mushoku Tensei III",
+  "무직 전생 ~이세계에 갔으면 최선을 다한다~",
+  "무직전생 Ⅲ ~이세계에 갔으면 최선을 다한다~",
+  "Mushoku Tensei: Jobless Reincarnation Parte 2",
+  "Reencarnación sin trabajo: lo intentaré seriamente si voy a otro mundo",
+  "Реинкарнация безработного",
+  "Mushoku Tensei: Перерождение безработного",
+  "Перерождение безработного",
+  "Реинкарнация безработного: История о приключениях в другом мире",
+  "無職轉生",
+  "無職轉生～到了異世界就拿出真本事",
+  "Реінкарнація безробітного: Історія про пригоди в іншому світі",
+  "Jobless Reincarnation: I Will Seriously Try If I Go to Another World",
+  "Mushoku Tensei: Jobless Reincarnation Part 2",
+  "Jobless Reincarnation",
+  "Mushoku Tensei: Jobless Reincarnation - Eris the Goblin Slayer",
+  "Mushoku Tensei: Jobless Reincarnation Season 2 - Guardian Fitz",
+  "无职转生～到了异世界就拿出真本事～",
+  "무직전생 ~이세계에 갔으면 최선을 다한다~",
+  "無職轉生～到了異世界就拿出真本事～",
+  "Реінкарнація безробітного: В інший світ на повному серйозі",
+  "Mushoku Tensei: Převtělený povaleč",
+  "เกิดชาตินี้พี่ต้องเทพ",
+  "Thất nghiệp chuyển sinh",
+  "موشوكو تينسي",
+  "תחייה מובטלת: אם הייתי בעולם אחר הייתי רציני!",
+  "მუშოკუ ტესეი: უმუშევრის რეინკარნაცია"
+ ],
+ "tmdb_id": 94664,
+ "year": 2021
+}

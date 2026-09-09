@@ -1,0 +1,655 @@
+{
+ "first_air_date": "2025-09-07",
+ "kind": "tv",
+ "overview": "Baku Yorozu is an an ordinary young man living an uneventful life. But with the power of lucid dreaming, he turns into an unstoppable secret agent. In the dream world, there appears the Nightmare, a monstrous figure bent on bringing bad dreams into the real world. While the line between dream and reality breaks, Baku acquires a mysterious belt, transforming himself into Kamen Rider ZEZTZ! Make your dream come true. Good luck!",
+ "poster_url": "https://image.tmdb.org/t/p/w342/jipbLRgG3mc1s9UIpnNLixbUDZV.jpg",
+ "runtime": null,
+ "seasons": [
+  {
+   "air_date": "2025-11-02",
+   "episode_count": 37,
+   "episodes": [
+    {
+     "absolute_number": null,
+     "air_date": "2025-11-02",
+     "episode_number": 1,
+     "name": "Kamen Rider Zeztz: Transformation Classroom",
+     "runtime": null
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-11-09",
+     "episode_number": 2,
+     "name": "Episode 2",
+     "runtime": null
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-12-28",
+     "episode_number": 3,
+     "name": "Episode 3",
+     "runtime": null
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-04-05",
+     "episode_number": 4,
+     "name": "Episode 4",
+     "runtime": null
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-04-07",
+     "episode_number": 5,
+     "name": "Episode 5",
+     "runtime": null
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-09-28",
+     "episode_number": 6,
+     "name": "Episode 6",
+     "runtime": 3
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-10-05",
+     "episode_number": 7,
+     "name": "Episode 7",
+     "runtime": 3
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-10-12",
+     "episode_number": 8,
+     "name": "Episode 8",
+     "runtime": 3
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-10-19",
+     "episode_number": 9,
+     "name": "Episode 9",
+     "runtime": 3
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-10-26",
+     "episode_number": 10,
+     "name": "Episode 10",
+     "runtime": 3
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-11-02",
+     "episode_number": 11,
+     "name": "Episode 11",
+     "runtime": 3
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-11-09",
+     "episode_number": 12,
+     "name": "Episode 12",
+     "runtime": 3
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-11-16",
+     "episode_number": 13,
+     "name": "Episode 13",
+     "runtime": 3
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-11-23",
+     "episode_number": 14,
+     "name": "Episode 14",
+     "runtime": 3
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-11-30",
+     "episode_number": 15,
+     "name": "Episode 15",
+     "runtime": 3
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-12-07",
+     "episode_number": 16,
+     "name": "Episode 16",
+     "runtime": 3
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-12-14",
+     "episode_number": 17,
+     "name": "Episode 17",
+     "runtime": 3
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-12-21",
+     "episode_number": 18,
+     "name": "Episode 18",
+     "runtime": 3
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-12-28",
+     "episode_number": 19,
+     "name": "Episode 19",
+     "runtime": 3
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-01-04",
+     "episode_number": 20,
+     "name": "Episode 20",
+     "runtime": 3
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-01-11",
+     "episode_number": 21,
+     "name": "Episode 21",
+     "runtime": 3
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-01-18",
+     "episode_number": 22,
+     "name": "Episode 22",
+     "runtime": 3
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-01-25",
+     "episode_number": 23,
+     "name": "Episode 23",
+     "runtime": 3
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-02-01",
+     "episode_number": 24,
+     "name": "Episode 24",
+     "runtime": 3
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-02-08",
+     "episode_number": 25,
+     "name": "Episode 25",
+     "runtime": 3
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-02-15",
+     "episode_number": 26,
+     "name": "Episode 26",
+     "runtime": 3
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-02-22",
+     "episode_number": 27,
+     "name": "Episode 27",
+     "runtime": 3
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-03-01",
+     "episode_number": 28,
+     "name": "Episode 28",
+     "runtime": 3
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-03-08",
+     "episode_number": 29,
+     "name": "Episode 29",
+     "runtime": 3
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-03-15",
+     "episode_number": 30,
+     "name": "Episode 30",
+     "runtime": 3
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-03-22",
+     "episode_number": 31,
+     "name": "Episode 31",
+     "runtime": 3
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-03-29",
+     "episode_number": 32,
+     "name": "Episode 32",
+     "runtime": 3
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-04-05",
+     "episode_number": 33,
+     "name": "Episode 33",
+     "runtime": 3
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-04-12",
+     "episode_number": 34,
+     "name": "Episode 34",
+     "runtime": 3
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-04-19",
+     "episode_number": 35,
+     "name": "Episode 35",
+     "runtime": 3
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-04-26",
+     "episode_number": 36,
+     "name": "Episode 36",
+     "runtime": 3
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-05-03",
+     "episode_number": 37,
+     "name": "Episode 37",
+     "runtime": 3
+    }
+   ],
+   "name": "Specials",
+   "season_number": 0
+  },
+  {
+   "air_date": "2025-09-07",
+   "episode_count": 50,
+   "episodes": [
+    {
+     "absolute_number": null,
+     "air_date": "2025-09-07",
+     "episode_number": 1,
+     "name": "Start",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-09-14",
+     "episode_number": 2,
+     "name": "Explode",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-09-21",
+     "episode_number": 3,
+     "name": "Erode",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-09-28",
+     "episode_number": 4,
+     "name": "Rob",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-10-05",
+     "episode_number": 5,
+     "name": "Crash",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-10-12",
+     "episode_number": 6,
+     "name": "Imprison",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-10-19",
+     "episode_number": 7,
+     "name": "Punish",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-10-26",
+     "episode_number": 8,
+     "name": "Serve",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-11-09",
+     "episode_number": 9,
+     "name": "Poison",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-11-16",
+     "episode_number": 10,
+     "name": "Vanish",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-11-23",
+     "episode_number": 11,
+     "name": "Rot",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-11-30",
+     "episode_number": 12,
+     "name": "Impact",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-12-07",
+     "episode_number": 13,
+     "name": "Extinguish",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-12-14",
+     "episode_number": 14,
+     "name": "Thunder",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-12-21",
+     "episode_number": 15,
+     "name": "Lighten",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-01-04",
+     "episode_number": 16,
+     "name": "Escape",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-01-11",
+     "episode_number": 17,
+     "name": "Pursue",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-01-18",
+     "episode_number": 18,
+     "name": "Shoot",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-01-25",
+     "episode_number": 19,
+     "name": "Decide",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-02-01",
+     "episode_number": 20,
+     "name": "Presage",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-02-08",
+     "episode_number": 21,
+     "name": "Burst",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-02-15",
+     "episode_number": 22,
+     "name": "Revenge",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-02-22",
+     "episode_number": 23,
+     "name": "Destroy",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-03-01",
+     "episode_number": 24,
+     "name": "Break",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-03-08",
+     "episode_number": 25,
+     "name": "Get Started",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-03-15",
+     "episode_number": 26,
+     "name": "Gather",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-03-22",
+     "episode_number": 27,
+     "name": "Play",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-03-29",
+     "episode_number": 28,
+     "name": "Rage",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-04-05",
+     "episode_number": 29,
+     "name": "Trick",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-04-12",
+     "episode_number": 30,
+     "name": "Order",
+     "runtime": 23
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-04-19",
+     "episode_number": 31,
+     "name": "Afflict",
+     "runtime": 23
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-04-26",
+     "episode_number": 32,
+     "name": "Overcome",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-05-03",
+     "episode_number": 33,
+     "name": "Realize",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-05-10",
+     "episode_number": 34,
+     "name": "Infiltrate",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-05-17",
+     "episode_number": 35,
+     "name": "Connect",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-05-24",
+     "episode_number": 36,
+     "name": "Unite",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-05-31",
+     "episode_number": 37,
+     "name": "Manipulate",
+     "runtime": 23
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-06-07",
+     "episode_number": 38,
+     "name": "Reform",
+     "runtime": 23
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-06-14",
+     "episode_number": 39,
+     "name": "Judge",
+     "runtime": 23
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-06-21",
+     "episode_number": 40,
+     "name": "Case40: Generate",
+     "runtime": 23
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-06-28",
+     "episode_number": 41,
+     "name": "Case41: Arise",
+     "runtime": 23
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-07-05",
+     "episode_number": 42,
+     "name": "Case42: Devour",
+     "runtime": 23
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-07-12",
+     "episode_number": 43,
+     "name": "Case43: Split",
+     "runtime": 23
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-07-19",
+     "episode_number": 44,
+     "name": "Case44: Efface",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-07-26",
+     "episode_number": 45,
+     "name": "Case45: Hallucinate",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-08-02",
+     "episode_number": 46,
+     "name": "Case46: Resurrect",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-08-09",
+     "episode_number": 47,
+     "name": "Case47: Save",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-08-16",
+     "episode_number": 48,
+     "name": "Case48: Rest",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-08-23",
+     "episode_number": 49,
+     "name": "Case49: Remember",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-08-30",
+     "episode_number": 50,
+     "name": "Last Case: Imagine",
+     "runtime": 24
+    }
+   ],
+   "name": "Season 1",
+   "season_number": 1
+  }
+ ],
+ "title": "假面騎士 Zeztz",
+ "title_en": "Kamen Rider ZEZTZ",
+ "title_original": "仮面ライダーゼッツ",
+ "titles": [
+  "Kamen Rider ZEZTZ",
+  "仮面ライダーゼッツ",
+  "假面骑士 ZEZTZ",
+  "Masked Rider Zeztz",
+  "幪面超人 ZEZTZ",
+  "假面騎士 Zeztz",
+  "HSMN ZEZTZ",
+  "ZEZTZ",
+  "假面骑士ZZZ",
+  "Hiệp Sĩ Mặt Nạ ZEZTZ",
+  "가면라이더 젯츠",
+  "الدراج المقنع 2025",
+  "มาสค์ไรเดอร์ เซทซ์",
+  "Kamen Rider Zeztz"
+ ],
+ "tmdb_id": 295434,
+ "year": 2025
+}

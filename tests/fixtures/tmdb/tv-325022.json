@@ -1,0 +1,109 @@
+{
+ "first_air_date": "2026-07-20",
+ "kind": "tv",
+ "overview": "暴走族出身的傳奇教師鬼塚英吉（反町隆史 飾）因過往經歷，輾轉各校任教卻接連被開除，遲遲找不到肯聘用他的學校。幸好在昔日學生的引薦下，鬼塚終於重返教壇，怎知迎來的卻是沉迷平板的Z世代學生，以及會隨時讓他捲舖蓋走人、由學生主導的「教師評鑑制度」。面對冷漠的學生與新校園體制，不按牌理出牌的鬼塚將再次大膽出招，展開破天荒的麻辣授課！",
+ "poster_url": "https://image.tmdb.org/t/p/w342/fOOZOcjDSB0qtxHAGU39KcibBaT.jpg",
+ "runtime": null,
+ "seasons": [
+  {
+   "air_date": "2026-07-20",
+   "episode_count": 11,
+   "episodes": [
+    {
+     "absolute_number": null,
+     "air_date": "2026-07-20",
+     "episode_number": 1,
+     "name": "Episode 1",
+     "runtime": 56
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-07-27",
+     "episode_number": 2,
+     "name": "Episode 2",
+     "runtime": 45
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-08-03",
+     "episode_number": 3,
+     "name": "Episode 3",
+     "runtime": 45
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-08-10",
+     "episode_number": 4,
+     "name": "Episode 4",
+     "runtime": 45
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-08-17",
+     "episode_number": 5,
+     "name": "Episode 5",
+     "runtime": 45
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-08-17",
+     "episode_number": 6,
+     "name": "Episode 6",
+     "runtime": 45
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-08-24",
+     "episode_number": 7,
+     "name": "Episode 7",
+     "runtime": 45
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-08-31",
+     "episode_number": 8,
+     "name": "Episode 8",
+     "runtime": null
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-09-07",
+     "episode_number": 9,
+     "name": "Episode 9",
+     "runtime": null
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-09-14",
+     "episode_number": 10,
+     "name": "Episode 10",
+     "runtime": null
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-09-21",
+     "episode_number": 11,
+     "name": "Episode 11",
+     "runtime": null
+    }
+   ],
+   "name": "Season 1",
+   "season_number": 1
+  }
+ ],
+ "title": "麻辣教師GTO 2026",
+ "title_en": "GTO (2026)",
+ "title_original": "GTO",
+ "titles": [
+  "GTO (2026)",
+  "GTO",
+  "GTO: Great Teacher Onizuka (2026)",
+  "GTO Great Teacher Onizuka",
+  "麻辣教師 GTO",
+  "GTO คุณครูพันธุ์หายาก",
+  "麻辣教师",
+  "麻辣教師GTO 2026"
+ ],
+ "tmdb_id": 325022,
+ "year": 2026
+}

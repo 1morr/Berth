@@ -1,0 +1,138 @@
+{
+ "first_air_date": "2016-07-21",
+ "kind": "tv",
+ "overview": "根據菲比沃勒布里奇（Phoebe Waller-Bridge）得獎同名舞台劇改編，講述一位剛遭遇不幸的少女，試圖在倫敦重新開始自己的生活。\n\n這部劇的女主角可以說是劣跡斑斑，她愛勾搭男人上床，毒舌隨時線上能噴得身邊所有人體無完膚，當然自黑起來也是非常溜，還有隨手順東西的壞習慣…但是當她面對著鏡頭說她其實並不是喜歡做愛，只是覺得自己的身體被人需要時才會感到安心的瞬間，竟有一種黑到深處的心酸湧來。",
+ "poster_url": "https://image.tmdb.org/t/p/w342/nWsI7cPDqLQKw0kErgLCZDpEeEh.jpg",
+ "runtime": null,
+ "seasons": [
+  {
+   "air_date": "2016-07-21",
+   "episode_count": 6,
+   "episodes": [
+    {
+     "absolute_number": null,
+     "air_date": "2016-07-21",
+     "episode_number": 1,
+     "name": "Episode 1",
+     "runtime": 27
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-07-28",
+     "episode_number": 2,
+     "name": "Episode 2",
+     "runtime": 28
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-08-04",
+     "episode_number": 3,
+     "name": "Episode 3",
+     "runtime": 27
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-08-11",
+     "episode_number": 4,
+     "name": "Episode 4",
+     "runtime": 28
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-08-18",
+     "episode_number": 5,
+     "name": "Episode 5",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-08-25",
+     "episode_number": 6,
+     "name": "Episode 6",
+     "runtime": 27
+    }
+   ],
+   "name": "Series 1",
+   "season_number": 1
+  },
+  {
+   "air_date": "2019-03-04",
+   "episode_count": 6,
+   "episodes": [
+    {
+     "absolute_number": null,
+     "air_date": "2019-03-04",
+     "episode_number": 1,
+     "name": "Episode 1",
+     "runtime": 26
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2019-03-11",
+     "episode_number": 2,
+     "name": "Episode 2",
+     "runtime": 26
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2019-03-18",
+     "episode_number": 3,
+     "name": "Episode 3",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2019-03-25",
+     "episode_number": 4,
+     "name": "Episode 4",
+     "runtime": 28
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2019-04-01",
+     "episode_number": 5,
+     "name": "Episode 5",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2019-04-08",
+     "episode_number": 6,
+     "name": "Episode 6",
+     "runtime": 27
+    }
+   ],
+   "name": "Series 2",
+   "season_number": 2
+  }
+ ],
+ "title": "邋遢女郎",
+ "title_en": "Fleabag",
+ "title_original": "Fleabag",
+ "titles": [
+  "Fleabag",
+  "睡袋",
+  "Fleabag フリーバッグ",
+  "Дрянь",
+  "ฟลีแบ็ก",
+  "Flea Bag",
+  "플리백",
+  "Potvora",
+  "邋遢女郎",
+  "伦敦生活",
+  "Bolhafészek",
+  "פליבאג",
+  "Współczesna dziewczyna",
+  "Погань",
+  "Nepritampanti",
+  "იაფფასიანი ძუკნა",
+  "フリーバッグ",
+  "Bolhača",
+  "Бувара",
+  "Бълха",
+  "Asprātīgā sieviete",
+  "فليباغ"
+ ],
+ "tmdb_id": 67070,
+ "year": 2016
+}

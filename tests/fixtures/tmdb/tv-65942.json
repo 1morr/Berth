@@ -1,0 +1,1255 @@
+{
+ "first_air_date": "2016-04-04",
+ "kind": "tv",
+ "overview": "普通的高中生菜月昴從便利商店回家的路上，突然被召喚到異世界，遭遇強盜面臨性命危機，這時遇到了一位銀髮少女拯救了他，以報恩為名義，昴自告奮勇要幫助少女找東西。好不容易才掌握到線索，昴和少女卻被不明人士攻擊而死亡，但回過神來，昴卻發現自己置身在第一次被召喚到異世界時的所在位置，這是昴得到的能力 ──「死亡回歸」，死後時間會倒轉回到一開始。昴必須要跨越無數絕望，從死亡的命運中拯救少女！",
+ "poster_url": "https://image.tmdb.org/t/p/w342/pyjIFQAJpkEBWWQlExTllZKoaJk.jpg",
+ "runtime": null,
+ "seasons": [
+  {
+   "air_date": "2016-04-05",
+   "episode_count": 82,
+   "episodes": [
+    {
+     "absolute_number": null,
+     "air_date": "2016-04-05",
+     "episode_number": 1,
+     "name": "Re:ZERO ~Starting Break Time From Zero~ World 1-1",
+     "runtime": 2
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-04-12",
+     "episode_number": 2,
+     "name": "Re:ZERO ~Starting Break Time From Zero~ World 1-4, Side A",
+     "runtime": 2
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-04-19",
+     "episode_number": 3,
+     "name": "Re:ZERO ~Starting Break Time From Zero~ World 1-4, Epilogue",
+     "runtime": 2
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-04-26",
+     "episode_number": 4,
+     "name": "Re:ZERO ~Starting Break Time From Zero~ World 2-1",
+     "runtime": 2
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-05-03",
+     "episode_number": 5,
+     "name": "Re:ZERO ~Starting Break Time From Zero~ World 2-2",
+     "runtime": 2
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-05-10",
+     "episode_number": 6,
+     "name": "Re:ZERO ~Starting Break Time From Zero~ World 2-3",
+     "runtime": 2
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-05-17",
+     "episode_number": 7,
+     "name": "Re:ZERO ~Starting Break Time From Zero~ World 2-4",
+     "runtime": 2
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-05-24",
+     "episode_number": 8,
+     "name": "Re:ZERO ~Starting Break Time From Zero~ World 2-5, Side A",
+     "runtime": 2
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-05-31",
+     "episode_number": 9,
+     "name": "Re:ZERO ~Starting Break Time From Zero~ World 2-5, Side B",
+     "runtime": 2
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-06-07",
+     "episode_number": 10,
+     "name": "Re:ZERO ~Starting Break Time From Zero~ World 2-5-3, Side C",
+     "runtime": 2
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-06-14",
+     "episode_number": 11,
+     "name": "Re:ZERO ~Starting Break Time From Zero~ World 2-5, Epilogue",
+     "runtime": 2
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-06-21",
+     "episode_number": 12,
+     "name": "Re:PETIT ~Starting Life in Another World From PETIT~ 1: Return to School",
+     "runtime": 2
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-06-28",
+     "episode_number": 13,
+     "name": "Re:PETIT ~Starting Life in Another World From PETIT~ 2: Beatrice, Self-Proclaimed Teacher",
+     "runtime": 2
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-07-05",
+     "episode_number": 14,
+     "name": "Re:PETIT ~Starting Life in Another World From PETIT~ 3: The Master and His Maids",
+     "runtime": 2
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-07-12",
+     "episode_number": 15,
+     "name": "Re:PETIT ~Starting Life in Another World From PETIT~ 4: That Menu Item Is…",
+     "runtime": 2
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-07-19",
+     "episode_number": 16,
+     "name": "Re:PETIT ~Starting Life in Another World From PETIT~ 5: Ditz",
+     "runtime": 2
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-07-26",
+     "episode_number": 17,
+     "name": "Re:PETIT ~Starting Life in Another World From PETIT~ 6: Greed That Isn’t a Pig’s",
+     "runtime": 2
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-08-02",
+     "episode_number": 18,
+     "name": "Re:PETIT ~Starting Life in Another World From PETIT~ 7: From Zero",
+     "runtime": 2
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-08-09",
+     "episode_number": 19,
+     "name": "Re:PETIT ~Starting Life in Another World From PETIT~ 8: The Day of the Battle",
+     "runtime": 2
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-08-16",
+     "episode_number": 20,
+     "name": "Re:PETIT ~Starting Life in Another World From PETIT~ 9: Conquering the Watermelon",
+     "runtime": 2
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-08-23",
+     "episode_number": 21,
+     "name": "Re:PETIT ~Starting Life in Another World From PETIT~ 10: Just Resisting Desires of the Flesh",
+     "runtime": 2
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-08-30",
+     "episode_number": 22,
+     "name": "Re:PETIT ~Starting Life in Another World From PETIT~ 11: That and That and (Omitted) at Checkout",
+     "runtime": 2
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-09-06",
+     "episode_number": 23,
+     "name": "Re:PETIT ~Starting Life in Another World From PETIT~ 12: Buy It",
+     "runtime": 2
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-09-13",
+     "episode_number": 24,
+     "name": "Re:PETIT ~Starting Life in Another World From PETIT~ 13: The Book the Lion King Saw",
+     "runtime": 2
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-09-20",
+     "episode_number": 25,
+     "name": "Re:PETIT ~Starting Life in Another World From PETIT~ 14: That’s All This Promotion Is About",
+     "runtime": 2
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2020-07-09",
+     "episode_number": 26,
+     "name": "Re:ZERO - Starting Break Time From Zero 2: Otto's Diary 1",
+     "runtime": 3
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2020-07-16",
+     "episode_number": 27,
+     "name": "Re:ZERO - Starting Break Time From Zero 2: Otto's Diary 2",
+     "runtime": 3
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2020-07-23",
+     "episode_number": 28,
+     "name": "Re:ZERO - Starting Break Time From Zero 2: Otto's Diary 3",
+     "runtime": 3
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2020-07-30",
+     "episode_number": 29,
+     "name": "Re:ZERO - Starting Break Time From Zero 2: The Diary of Petra's Struggles",
+     "runtime": 3
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2020-08-06",
+     "episode_number": 30,
+     "name": "Re:ZERO - Starting Break Time From Zero 2: Otto's Diary 4",
+     "runtime": 3
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2020-08-13",
+     "episode_number": 31,
+     "name": "Re:ZERO - Starting Break Time From Zero 2: Otto's Diary 5",
+     "runtime": 3
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2020-08-20",
+     "episode_number": 32,
+     "name": "Re:ZERO - Starting Break Time From Zero 2: Otto's Diary 6",
+     "runtime": 3
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2020-08-27",
+     "episode_number": 33,
+     "name": "Re:ZERO - Starting Break Time From Zero 2: Maid's Days 1",
+     "runtime": 3
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2020-09-03",
+     "episode_number": 34,
+     "name": "Re:ZERO - Starting Break Time From Zero 2: Fang of Iron Report 1",
+     "runtime": 3
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2020-09-10",
+     "episode_number": 35,
+     "name": "Re:ZERO - Starting Break Time From Zero 2: Maid's Days 2",
+     "runtime": 3
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2020-09-17",
+     "episode_number": 36,
+     "name": "Re:ZERO - Starting Break Time From Zero 2: Diary of the Dark Work Sisters 1",
+     "runtime": 3
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2020-09-24",
+     "episode_number": 37,
+     "name": "Re:ZERO - Starting Break Time From Zero 2: Maid's Days 3",
+     "runtime": 3
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2020-10-01",
+     "episode_number": 38,
+     "name": "Re:ZERO - Starting Break Time From Zero 2: Otto's Diary 7",
+     "runtime": 3
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-01-07",
+     "episode_number": 39,
+     "name": "Re:ZERO - Starting Break Time From Zero 2: Otto and Subaru's Resolve",
+     "runtime": 3
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-01-14",
+     "episode_number": 40,
+     "name": "Re:ZERO - Starting Break Time From Zero 2: Fang of Iron Report 2",
+     "runtime": 3
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-01-21",
+     "episode_number": 41,
+     "name": "Re:ZERO - Starting Break Time From Zero 2: Otto's Diary 8",
+     "runtime": 3
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-01-28",
+     "episode_number": 42,
+     "name": "Re:ZERO - Starting Break Time From Zero 2: Witch's Tea Confectionery",
+     "runtime": 3
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-02-04",
+     "episode_number": 43,
+     "name": "Re:ZERO - Starting Break Time From Zero 2: Days Waiting for the Gospel",
+     "runtime": 3
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-02-11",
+     "episode_number": 44,
+     "name": "Re:ZERO - Starting Break Time From Zero 2: Otto's Diary 9",
+     "runtime": 3
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-02-18",
+     "episode_number": 45,
+     "name": "Re:ZERO - Starting Break Time From Zero 2: Diary of the Dark Work Sisters 2",
+     "runtime": 3
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-02-25",
+     "episode_number": 46,
+     "name": "Re:ZERO - Starting Break Time From Zero 2: Otto's Diary 10",
+     "runtime": 3
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-03-04",
+     "episode_number": 47,
+     "name": "Re:ZERO - Starting Break Time From Zero 2: The Stone of the Miracle, the Path to the Miracle.",
+     "runtime": 3
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-03-11",
+     "episode_number": 48,
+     "name": "Re:ZERO - Starting Break Time From Zero 2: Tea Party of Witches",
+     "runtime": 3
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-03-18",
+     "episode_number": 49,
+     "name": "Re:ZERO - Starting Break Time From Zero 2: Meili's Diary",
+     "runtime": 3
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-03-25",
+     "episode_number": 50,
+     "name": "Re:ZERO - Starting Break Time From Zero 2: Otto's Diary 11",
+     "runtime": 3
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-10-03",
+     "episode_number": 51,
+     "name": "Re:Zero - Starting Break Time from Zero: Night Tales of the Sleeping Oni",
+     "runtime": 3
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-10-10",
+     "episode_number": 52,
+     "name": "Re:Zero - Starting Break Time from Zero: Emilia Party Struggles - 1",
+     "runtime": 3
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-10-17",
+     "episode_number": 53,
+     "name": "Re:Zero - Starting Break Time from Zero: CHOMP of LOVE and PASSION",
+     "runtime": 3
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-10-24",
+     "episode_number": 54,
+     "name": "Re:Zero - Starting Break Time from Zero: Doki-Doki Royal Selection Social Gathering - 1",
+     "runtime": 3
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-10-31",
+     "episode_number": 55,
+     "name": "Re:Zero - Starting Break Time from Zero: Great Waterfalls Followers - 1",
+     "runtime": 3
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-11-07",
+     "episode_number": 56,
+     "name": "Re:Zero - Starting Break Time from Zero: Great Waterfalls Followers - 2",
+     "runtime": 3
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-11-14",
+     "episode_number": 57,
+     "name": "Re:Zero - Starting Break Time from Zero: Doki-Doki Royal Selection Social Gathering - 2",
+     "runtime": 3
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-11-21",
+     "episode_number": 58,
+     "name": "Re:Zero - Starting Break Time from Zero: Doki-Doki Royal Selection Social Gathering - 3",
+     "runtime": 3
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-02-05",
+     "episode_number": 59,
+     "name": "Re:Zero - Starting Break Time from Zero: Emilia Party Struggles - 2",
+     "runtime": 3
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-02-12",
+     "episode_number": 60,
+     "name": "Re:Zero - Starting Break Time from Zero: Pre-Theater Malice",
+     "runtime": 3
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-02-19",
+     "episode_number": 61,
+     "name": "Re:Zero - Starting Break Time from Zero: Scarlet Romantic Tales",
+     "runtime": 3
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-02-26",
+     "episode_number": 62,
+     "name": "Re:Zero - Starting Break Time from Zero: Emilia Party Struggles - 3",
+     "runtime": 3
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-03-05",
+     "episode_number": 63,
+     "name": "Re:Zero - Starting Break Time from Zero: Emilia Party Struggles - 4",
+     "runtime": 3
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-03-12",
+     "episode_number": 64,
+     "name": "Re:Zero - Starting Break Time from Zero: Emilia Party Struggles - 5",
+     "runtime": 3
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-03-19",
+     "episode_number": 65,
+     "name": "Re:Zero - Starting Break Time from Zero: Emilia Party Struggles - 6",
+     "runtime": 3
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-03-26",
+     "episode_number": 66,
+     "name": "Re:Zero - Starting Break Time from Zero: Emilia Party Struggles - 7",
+     "runtime": 3
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-04-08",
+     "episode_number": 67,
+     "name": "Re:Zero - Starting Break Time from Zero: Emilia Party Struggles - 8",
+     "runtime": 2
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-04-15",
+     "episode_number": 68,
+     "name": "Re:Zero - Starting Break Time from Zero: Emilia Party Struggles - 9",
+     "runtime": 2
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-04-22",
+     "episode_number": 69,
+     "name": "Re:Zero - Starting Break Time from Zero: Everyone Is Quite a Handful, I Suppose 1",
+     "runtime": 2
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-04-29",
+     "episode_number": 70,
+     "name": "Re:Zero - Starting Break Time from Zero: Everyone Is Quite a Handful, I Suppose 2",
+     "runtime": 2
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-05-06",
+     "episode_number": 71,
+     "name": "Re:Zero - Starting Break Time from Zero: Promise Keeping Notebook 1",
+     "runtime": 2
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-05-13",
+     "episode_number": 72,
+     "name": "Re:Zero - Starting Break Time from Zero: Promise Keeping Notebook 2",
+     "runtime": 2
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-05-20",
+     "episode_number": 73,
+     "name": "Re:Zero - Starting Break Time from Zero: Promise Keeping Notebook 3",
+     "runtime": 3
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-05-27",
+     "episode_number": 74,
+     "name": "Re:Zero - Starting Break Time from Zero: The Wiry-Armed Success in Kararagi",
+     "runtime": 2
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-06-03",
+     "episode_number": 75,
+     "name": "Re:Zero - Starting Break Time from Zero: Emilia Party Struggles - 10",
+     "runtime": 2
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-06-10",
+     "episode_number": 76,
+     "name": "Re:Zero - Starting Break Time from Zero: Emilia Party Struggles - 11",
+     "runtime": 2
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-06-17",
+     "episode_number": 77,
+     "name": "Re:Zero - Starting Break Time from Zero: The Golden Lion and the Sword Saint 1",
+     "runtime": 2
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-08-12",
+     "episode_number": 78,
+     "name": "Re:Zero - Starting Break Time from Zero: Diary of the Dark Work Sisters",
+     "runtime": 2
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-08-19",
+     "episode_number": 79,
+     "name": "Re:Zero - Starting Break Time from Zero: The Golden Lion and the Sword Saint 2",
+     "runtime": 2
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-08-26",
+     "episode_number": 80,
+     "name": "Re:Zero - Starting Break Time from Zero: The Golden Lion and the Sword Saint 3",
+     "runtime": 3
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-09-02",
+     "episode_number": 81,
+     "name": "Cheers for Me",
+     "runtime": 2
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-09-09",
+     "episode_number": 82,
+     "name": "Episode 82",
+     "runtime": 2
+    }
+   ],
+   "name": "Specials",
+   "season_number": 0
+  },
+  {
+   "air_date": "2016-04-04",
+   "episode_count": 85,
+   "episodes": [
+    {
+     "absolute_number": null,
+     "air_date": "2016-04-04",
+     "episode_number": 1,
+     "name": "The End of the Beginning and the Beginning of the End",
+     "runtime": 50
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-04-11",
+     "episode_number": 2,
+     "name": "Reunion with the Witch",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-04-18",
+     "episode_number": 3,
+     "name": "Starting Life from Zero in Another World",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-04-25",
+     "episode_number": 4,
+     "name": "The Happy Roswaal Mansion Family",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-05-02",
+     "episode_number": 5,
+     "name": "The Morning of Our Promise Is Still Distant",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-05-09",
+     "episode_number": 6,
+     "name": "The Sound of Chains",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-05-16",
+     "episode_number": 7,
+     "name": "Natsuki Subaru’s Restart",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-05-23",
+     "episode_number": 8,
+     "name": "I Cried, Cried My Lungs Out, and Stopped Crying",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-05-30",
+     "episode_number": 9,
+     "name": "The Meaning of Courage",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-06-06",
+     "episode_number": 10,
+     "name": "Demonically Inspired Methods",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-06-13",
+     "episode_number": 11,
+     "name": "Rem",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-06-20",
+     "episode_number": 12,
+     "name": "Return to the Capital",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-06-27",
+     "episode_number": 13,
+     "name": "Self-Proclaimed Knight Natsuki Subaru",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-07-04",
+     "episode_number": 14,
+     "name": "The Sickness Called Despair",
+     "runtime": 26
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-07-11",
+     "episode_number": 15,
+     "name": "The Outside of Madness",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-07-18",
+     "episode_number": 16,
+     "name": "A Pig's Greed",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-07-25",
+     "episode_number": 17,
+     "name": "Disgrace in the Extreme",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-08-01",
+     "episode_number": 18,
+     "name": "From Zero",
+     "runtime": 26
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-08-08",
+     "episode_number": 19,
+     "name": "Battle Against the White Whale",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-08-15",
+     "episode_number": 20,
+     "name": "Wilhelm van Astrea",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-08-22",
+     "episode_number": 21,
+     "name": "A Wager That Defies Despair",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-08-29",
+     "episode_number": 22,
+     "name": "A Flash of Sloth",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-09-05",
+     "episode_number": 23,
+     "name": "Nefarious Sloth",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-09-12",
+     "episode_number": 24,
+     "name": "The Self-Proclaimed Knight and the Greatest of Knights",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-09-19",
+     "episode_number": 25,
+     "name": "That’s All This Story Is About",
+     "runtime": 27
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2020-07-08",
+     "episode_number": 26,
+     "name": "Each One's Promise",
+     "runtime": 29
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2020-07-15",
+     "episode_number": 27,
+     "name": "The Next Location",
+     "runtime": 26
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2020-07-22",
+     "episode_number": 28,
+     "name": "The Long-Awaited Reunion",
+     "runtime": 26
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2020-07-29",
+     "episode_number": 29,
+     "name": "Parent and Child",
+     "runtime": 30
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2020-08-05",
+     "episode_number": 30,
+     "name": "A Step Forward",
+     "runtime": 26
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2020-08-12",
+     "episode_number": 31,
+     "name": "The Maiden's Gospel",
+     "runtime": 26
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2020-08-19",
+     "episode_number": 32,
+     "name": "Friend",
+     "runtime": 27
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2020-08-26",
+     "episode_number": 33,
+     "name": "The Value of Life",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2020-09-02",
+     "episode_number": 34,
+     "name": "Love Love Love Love Love Love You",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2020-09-09",
+     "episode_number": 35,
+     "name": "I Know Hell",
+     "runtime": 27
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2020-09-16",
+     "episode_number": 36,
+     "name": "The Taste of Death",
+     "runtime": 26
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2020-09-23",
+     "episode_number": 37,
+     "name": "The Witches’ Tea Party",
+     "runtime": 27
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2020-09-30",
+     "episode_number": 38,
+     "name": "The Sounds That Make You Want to Cry",
+     "runtime": 27
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-01-06",
+     "episode_number": 39,
+     "name": "Straight Bet",
+     "runtime": 28
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-01-13",
+     "episode_number": 40,
+     "name": "Otto Suwen / A Reason to Believe",
+     "runtime": 28
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-01-20",
+     "episode_number": 41,
+     "name": "Nobody Can Lift a Quain Stone Alone",
+     "runtime": 30
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-01-27",
+     "episode_number": 42,
+     "name": "A Journey Through Memories",
+     "runtime": 30
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-02-03",
+     "episode_number": 43,
+     "name": "The Day Betelgeuse Laughed",
+     "runtime": 30
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-02-10",
+     "episode_number": 44,
+     "name": "The Permafrost of Elior Forest",
+     "runtime": 30
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-02-17",
+     "episode_number": 45,
+     "name": "The Beginning of the Sanctuary and the Beginning of the End",
+     "runtime": 30
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-02-24",
+     "episode_number": 46,
+     "name": "Reunion of Roars",
+     "runtime": 30
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-03-03",
+     "episode_number": 47,
+     "name": "Happiness Reflected on the Water's Surface",
+     "runtime": 29
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-03-10",
+     "episode_number": 48,
+     "name": "Love Me Down to My Blood and Guts",
+     "runtime": 30
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-03-17",
+     "episode_number": 49,
+     "name": "Choose Me",
+     "runtime": 30
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-03-24",
+     "episode_number": 50,
+     "name": "Offbeat Steps Under the Moonlight",
+     "runtime": 30
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-10-02",
+     "episode_number": 51,
+     "name": "Theatrical Malice",
+     "runtime": 91
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-10-09",
+     "episode_number": 52,
+     "name": "A Showdown of Fire and Ice",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-10-16",
+     "episode_number": 53,
+     "name": "Gorgeous Tiger",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-10-23",
+     "episode_number": 54,
+     "name": "Operation: Take Back the Government Office",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-10-30",
+     "episode_number": 55,
+     "name": "A Dark Torrent",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-11-06",
+     "episode_number": 56,
+     "name": "Conditions of the Knight",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-11-13",
+     "episode_number": 57,
+     "name": "The Newest of Heroes and the Most Ancient of Heroes",
+     "runtime": 30
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-11-20",
+     "episode_number": 58,
+     "name": "The One I'll Love Someday",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-02-05",
+     "episode_number": 59,
+     "name": "City Scramble",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-02-12",
+     "episode_number": 60,
+     "name": "The Plan to Conquer Greed",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-02-19",
+     "episode_number": 61,
+     "name": "Liliana Masquerade",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-02-26",
+     "episode_number": 62,
+     "name": "Regulus Corneas",
+     "runtime": 28
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-03-05",
+     "episode_number": 63,
+     "name": "The Warrior's Commendation",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-03-12",
+     "episode_number": 64,
+     "name": "Theresia van Astrea",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-03-19",
+     "episode_number": 65,
+     "name": "A Hideous Dinner Party",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-03-26",
+     "episode_number": 66,
+     "name": "The Result of the Battle for Priestella",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-04-08",
+     "episode_number": 67,
+     "name": "The Reason I'm Taking You with Me / Gorgeous Tiger Reloaded",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-04-15",
+     "episode_number": 68,
+     "name": "Overcome Sand Time",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-04-22",
+     "episode_number": 69,
+     "name": "The Keeper of the Watchtower",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-04-29",
+     "episode_number": 70,
+     "name": "A White Sky Asterism",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-05-06",
+     "episode_number": 71,
+     "name": "Stick Swinger",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-05-13",
+     "episode_number": 72,
+     "name": "Julius Juukulius",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-05-20",
+     "episode_number": 73,
+     "name": "Walking Out of the Convenience Store and into a Wondrous World",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-05-27",
+     "episode_number": 74,
+     "name": "Who Are You?",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-06-03",
+     "episode_number": 75,
+     "name": "Empty Shell",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-06-10",
+     "episode_number": 76,
+     "name": "Murder Is a Habit",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-06-17",
+     "episode_number": 77,
+     "name": "Re:ZERO -Starting Life in Another World-",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-08-12",
+     "episode_number": 78,
+     "name": "From Now On",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-08-19",
+     "episode_number": 79,
+     "name": "Stand Up",
+     "runtime": 29
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-08-26",
+     "episode_number": 80,
+     "name": "Five Obstacles",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-09-02",
+     "episode_number": 81,
+     "name": "A Single-Minded Star",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-09-09",
+     "episode_number": 82,
+     "name": "Episode 82",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-09-16",
+     "episode_number": 83,
+     "name": "Episode 83",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-09-23",
+     "episode_number": 84,
+     "name": "Episode 84",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-09-30",
+     "episode_number": 85,
+     "name": "Episode 85",
+     "runtime": 24
+    }
+   ],
+   "name": "Season 1",
+   "season_number": 1
+  }
+ ],
+ "title": "Re：從零開始的異世界生活",
+ "title_en": "Re:ZERO -Starting Life in Another World-",
+ "title_original": "Re:ゼロから始める異世界生活",
+ "titles": [
+  "Re:ZERO -Starting Life in Another World-",
+  "Re:ゼロから始める異世界生活",
+  "Re:ZERO -Começando uma Vida em Outro Mundo-",
+  "从零开始的异世界生活",
+  "Each One's Promise",
+  "Re Zero Empezar de cero en un mundo diferente",
+  "RE:ZERO - Re:vivre dans un autre monde à partir de zéro",
+  "ReZERO - Starting Life in Another World",
+  "Re ZERO - Starting Life in Another World",
+  "Re Zero Starting Life in Another World",
+  "विषय: शून्य - एक दूसरी दुनिया में जीवन की शुरुआत",
+  "دوباره: هیچ، شروع زندگی در دنیایی دیگر",
+  "دوباره: صفر، شروع زندگی در دنیایی دیگر",
+  "Re zero Ricominciare in un altro mondo",
+  "Re:Zero kara Hajimeru Isekai Seikatsu",
+  "ReZero kara Hajimeru Isekai Seikatsu",
+  "Re:ゼロから始める異世界生活 2nd season",
+  "Re:ゼロから始める異世界生活 新編集版",
+  "Re:ゼロから始める異世界生活 3rd season 襲撃編",
+  "Re:ゼロから始める異世界生活 3rd season 反撃編",
+  "リゼロ",
+  "Re：ゼロから始める異世界生活 4th season",
+  "리제로",
+  "ReZero",
+  "Re Zero Empezar de cero en un mundo diferente Temporada 2",
+  "Re:Zero",
+  "Re Zero",
+  "Re: Жизнь в другом мире с нуля",
+  "Re: Жизнь в альтернативном мире с нуля",
+  "Re:Zero — жизнь с нуля в другом мире",
+  "Re:Zero. Жизнь с нуля в альтернативном мире",
+  "С нуля: Жизнь с нуля в альтернативном мире",
+  "Жизнь с нуля в альтернативном мире",
+  "Жизнь в альтернативном мире с нуля",
+  "Re:Zero.  Жизнь в aльтepнaтивнoм мире c нyля",
+  "Жизнь в другом мире с нуля",
+  "Ре Зеро Жизнь с нуля в альтернативном мире",
+  "Re：從零開始的異世界生活",
+  "Re:0",
+  "Re: Life in a Different World From Zero",
+  "Re:ZERO -Starting Life in Another World- Director's Cut",
+  "Re:ZERO – Жизнь с нуля в альтернативном мире",
+  "Re：从零开始的异世界生活",
+  "Re: 제로부터 시작하는 이세계 생활",
+  "Re:Zero - Empezar de cero en un mundo diferente",
+  "Re:ZERO - Starting Life in Another World",
+  "Переродження: Життя з нуля в іншому світі",
+  "الحياة في عالم مختلف من الصفر",
+  "רי:זירו - מתחיל מאפס בעולם אחר-",
+  "Re: Zero – Życie w innym świecie od zera",
+  "Re: Zero - Život od nuly",
+  "Re:Zero − Bắt Đầu Ở Thế Giới Khác",
+  "รีเซทชีวิต ฝ่าวิกฤตต่างโลก",
+  "Re: ZERO Живот в друг свят"
+ ],
+ "tmdb_id": 65942,
+ "year": 2016
+}

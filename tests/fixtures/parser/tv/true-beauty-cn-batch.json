@@ -1,0 +1,43 @@
+{
+  "id": "tv/true-beauty-cn-batch",
+  "source_url": "https://share.dmhy.org/topics/view/683467_01-16.html",
+  "torrent_name": "【合集】女神降临True Beauty真人版韩剧01-16[韩语简体中字]",
+  "tmdb": "tv-112888",
+  "context": {"media": "tv:112888", "profile": "standard", "season_hint": null, "episode_offset": null},
+  "files": [
+    {"path": "True.Beauty.2020.EP14.HD1080P.X264.AAC.Korean.CHS.mp4", "size": 3589736640},
+    {"path": "True.Beauty.2020.EP12.HD1080P.X264.AAC.Korean.CHS.mp4", "size": 3291510660},
+    {"path": "True.Beauty.2020.EP08.HD1080P.X264.AAC.Korean.CHS.mp4", "size": 3464619233},
+    {"path": "True.Beauty.2020.EP06.HD1080P.X264.AAC.Korean.CHS.mp4", "size": 3313284446},
+    {"path": "True.Beauty.2020.EP05.HD1080P.X264.AAC.Korean.CHS.mp4", "size": 3345895066},
+    {"path": "True.Beauty.2020.EP03.HD1080P.X264.AAC.Korean.CHS.mp4", "size": 3499599833},
+    {"path": "True.Beauty.2020.EP11.HD1080P.X264.AAC.Korean.CHS.mp4", "size": 3097466739},
+    {"path": "True.Beauty.2020.EP10.HD1080P.X264.AAC.Korean.CHS.mp4", "size": 3345538985},
+    {"path": "True.Beauty.2020.EP02.HD1080P.X264.AAC.Korean.CHS.mp4", "size": 3359203525},
+    {"path": "True.Beauty.2020.EP15.HD1080P.X264.AAC.Korean.CHS.mp4", "size": 3465172477},
+    {"path": "True.Beauty.2020.EP07.HD1080P.X264.AAC.Korean.CHS.mp4", "size": 3264221708},
+    {"path": "True.Beauty.2020.EP13.HD1080P.X264.AAC.Korean.CHS.mp4", "size": 3519973624},
+    {"path": "True.Beauty.2020.EP01.HD1080P.X264.AAC.Korean.CHS.mp4", "size": 3496994912},
+    {"path": "True.Beauty.2020.EP16.HD1080P.X264.AAC.Korean.CHS.mp4", "size": 3338786163},
+    {"path": "True.Beauty.2020.EP04.HD1080P.X264.AAC.Korean.CHS.mp4", "size": 3513924331},
+    {"path": "True.Beauty.2020.EP09.HD1080P.X264.AAC.Korean.CHS.mp4", "size": 3372242112}
+  ],
+  "expected": [
+    {"path": "True.Beauty.2020.EP14.HD1080P.X264.AAC.Korean.CHS.mp4", "kind": "video", "action": "import", "season": 1, "episode": 14, "tags": {"resolution": "1080p", "subs": ["CHS"]}, "min_confidence": "medium"},
+    {"path": "True.Beauty.2020.EP12.HD1080P.X264.AAC.Korean.CHS.mp4", "kind": "video", "action": "import", "season": 1, "episode": 12, "tags": {"resolution": "1080p", "subs": ["CHS"]}, "min_confidence": "medium"},
+    {"path": "True.Beauty.2020.EP08.HD1080P.X264.AAC.Korean.CHS.mp4", "kind": "video", "action": "import", "season": 1, "episode": 8, "tags": {"resolution": "1080p", "subs": ["CHS"]}, "min_confidence": "medium"},
+    {"path": "True.Beauty.2020.EP06.HD1080P.X264.AAC.Korean.CHS.mp4", "kind": "video", "action": "import", "season": 1, "episode": 6, "tags": {"resolution": "1080p", "subs": ["CHS"]}, "min_confidence": "medium"},
+    {"path": "True.Beauty.2020.EP05.HD1080P.X264.AAC.Korean.CHS.mp4", "kind": "video", "action": "import", "season": 1, "episode": 5, "tags": {"resolution": "1080p", "subs": ["CHS"]}, "min_confidence": "medium"},
+    {"path": "True.Beauty.2020.EP03.HD1080P.X264.AAC.Korean.CHS.mp4", "kind": "video", "action": "import", "season": 1, "episode": 3, "tags": {"resolution": "1080p", "subs": ["CHS"]}, "min_confidence": "medium"},
+    {"path": "True.Beauty.2020.EP11.HD1080P.X264.AAC.Korean.CHS.mp4", "kind": "video", "action": "import", "season": 1, "episode": 11, "tags": {"resolution": "1080p", "subs": ["CHS"]}, "min_confidence": "medium"},
+    {"path": "True.Beauty.2020.EP10.HD1080P.X264.AAC.Korean.CHS.mp4", "kind": "video", "action": "import", "season": 1, "episode": 10, "tags": {"resolution": "1080p", "subs": ["CHS"]}, "min_confidence": "medium"},
+    {"path": "True.Beauty.2020.EP02.HD1080P.X264.AAC.Korean.CHS.mp4", "kind": "video", "action": "import", "season": 1, "episode": 2, "tags": {"resolution": "1080p", "subs": ["CHS"]}, "min_confidence": "medium"},
+    {"path": "True.Beauty.2020.EP15.HD1080P.X264.AAC.Korean.CHS.mp4", "kind": "video", "action": "import", "season": 1, "episode": 15, "tags": {"resolution": "1080p", "subs": ["CHS"]}, "min_confidence": "medium"},
+    {"path": "True.Beauty.2020.EP07.HD1080P.X264.AAC.Korean.CHS.mp4", "kind": "video", "action": "import", "season": 1, "episode": 7, "tags": {"resolution": "1080p", "subs": ["CHS"]}, "min_confidence": "medium"},
+    {"path": "True.Beauty.2020.EP13.HD1080P.X264.AAC.Korean.CHS.mp4", "kind": "video", "action": "import", "season": 1, "episode": 13, "tags": {"resolution": "1080p", "subs": ["CHS"]}, "min_confidence": "medium"},
+    {"path": "True.Beauty.2020.EP01.HD1080P.X264.AAC.Korean.CHS.mp4", "kind": "video", "action": "import", "season": 1, "episode": 1, "tags": {"resolution": "1080p", "subs": ["CHS"]}, "min_confidence": "medium"},
+    {"path": "True.Beauty.2020.EP16.HD1080P.X264.AAC.Korean.CHS.mp4", "kind": "video", "action": "import", "season": 1, "episode": 16, "tags": {"resolution": "1080p", "subs": ["CHS"]}, "min_confidence": "medium"},
+    {"path": "True.Beauty.2020.EP04.HD1080P.X264.AAC.Korean.CHS.mp4", "kind": "video", "action": "import", "season": 1, "episode": 4, "tags": {"resolution": "1080p", "subs": ["CHS"]}, "min_confidence": "medium"},
+    {"path": "True.Beauty.2020.EP09.HD1080P.X264.AAC.Korean.CHS.mp4", "kind": "video", "action": "import", "season": 1, "episode": 9, "tags": {"resolution": "1080p", "subs": ["CHS"]}, "min_confidence": "medium"}
+  ]
+}

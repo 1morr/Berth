@@ -10,6 +10,7 @@ dependencies = [
     "aiosqlite>=0.22.1",
     "alembic>=1.19.2",
     "fastapi>=0.141.1",
+    "guessit>=4.4.0",
     "httpx>=0.28.1",
     "pydantic>=2.13.5",
     "sqlalchemy[asyncio]>=2.0.52",
@@ -73,6 +74,8 @@ filterwarnings = [
 
 [tool.importlinter]
 root_package = "berth"
+# `parser and naming do no IO` 要禁的是 stdlib 與第三方模組，那需要把它們畫進圖裡。
+include_external_packages = true
 
 [[tool.importlinter.contracts]]
 name = "Dependencies point downwards (plan 1.3)"
@@ -112,6 +115,27 @@ forbidden_modules = [
     "berth.models",
     "berth.pipeline",
     "berth.services",
+]
+
+[[tool.importlinter.contracts]]
+# parser 與 naming 是純函式（plan §4、§5）：TMDB 資料以快照物件傳入，檔案清單由呼叫端給。
+# 沒有 IO 才有辦法離線跑 benchmark（plan §4.6），也才有辦法在單元測試裡逐條釘規則。
+name = "parser and naming do no IO"
+type = "forbidden"
+source_modules = ["berth.parser", "berth.naming"]
+forbidden_modules = [
+    "asyncio",
+    "http",
+    "httpx",
+    "io",
+    "os",
+    "pathlib",
+    "shutil",
+    "socket",
+    "sqlalchemy",
+    "sqlite3",
+    "subprocess",
+    "urllib",
 ]
 
 [[tool.importlinter.contracts]]

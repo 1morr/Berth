@@ -1,0 +1,13 @@
+{
+  "id": "movie/shingeki-last-attack-7acg",
+  "source_url": "https://share.dmhy.org/topics/view/724610_7_ACG_THE_LAST_ATTACK_Shingeki_no_Kyojin_Movie_The_Last_Attack_2024_BDrip_1080p_x265_OPUS_2_0.html",
+  "torrent_name": "[7³ACG] 剧场版「进击的巨人」完结篇THE LAST ATTACK/Shingeki no Kyojin Movie: The Last Attack 2024 [简繁字幕] BDrip 1080p x265 OPUS 2.0",
+  "tmdb": "movie-1333100",
+  "context": {"media": "movie:1333100", "profile": "anime", "season_hint": null, "episode_offset": null},
+  "files": [
+    {"path": "Shingeki no Kyojin Movie The Last Attack 2024-[1080p][BDRIP][x265.OPUS].mkv", "size": 6464612096}
+  ],
+  "expected": [
+    {"path": "Shingeki no Kyojin Movie The Last Attack 2024-[1080p][BDRIP][x265.OPUS].mkv", "kind": "video", "action": "import", "season": null, "episode": null, "tags": {"source": "BD", "resolution": "1080p", "subs": ["CHS", "CHT"], "group": "7³ACG"}, "min_confidence": "high"}
+  ]
+}

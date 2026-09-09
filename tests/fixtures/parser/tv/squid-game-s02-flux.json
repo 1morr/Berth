@@ -1,0 +1,27 @@
+{
+  "id": "tv/squid-game-s02-flux",
+  "source_url": "https://thepiratebay.org/description.php?id=77656296",
+  "torrent_name": "Squid.Game.S02.1080p.NF.WEB-DL.DUAL.DDP5.1.Atmos.H.264-FLUX",
+  "tmdb": "tv-93405",
+  "context": {"media": "tv:93405", "profile": "standard", "season_hint": null, "episode_offset": null},
+  "files": [
+    {"path": "HDRush.cc.txt", "size": 31},
+    {"path": "Squid.Game.S02E01.Bread.and.Lottery.1080p.NF.WEB-DL.DUAL.DDP5.1.Atmos.H.264-FLUX.mkv", "size": 3061933209},
+    {"path": "Squid.Game.S02E02.Halloween.Party.1080p.NF.WEB-DL.DUAL.DDP5.1.Atmos.H.264-FLUX.mkv", "size": 2656786933},
+    {"path": "Squid.Game.S02E03.001.1080p.NF.WEB-DL.DUAL.DDP5.1.Atmos.H.264-FLUX.mkv", "size": 2906162067},
+    {"path": "Squid.Game.S02E04.Six.Legs.1080p.NF.WEB-DL.DUAL.DDP5.1.Atmos.H.264-FLUX.mkv", "size": 2898273462},
+    {"path": "Squid.Game.S02E05.One.More.Game.1080p.NF.WEB-DL.DUAL.DDP5.1.Atmos.H.264-FLUX.mkv", "size": 3599684055},
+    {"path": "Squid.Game.S02E06.O.X.1080p.NF.WEB-DL.DUAL.DDP5.1.Atmos.H.264-FLUX.mkv", "size": 2435926865},
+    {"path": "Squid.Game.S02E07.Friend.or.Foe.1080p.NF.WEB-DL.DUAL.DDP5.1.Atmos.H.264-FLUX.mkv", "size": 2823075790}
+  ],
+  "expected": [
+    {"path": "HDRush.cc.txt", "kind": "other", "action": "skip"},
+    {"path": "Squid.Game.S02E01.Bread.and.Lottery.1080p.NF.WEB-DL.DUAL.DDP5.1.Atmos.H.264-FLUX.mkv", "kind": "video", "action": "import", "season": 2, "episode": 1, "tags": {"source": "WEB", "resolution": "1080p", "group": "FLUX"}, "min_confidence": "high"},
+    {"path": "Squid.Game.S02E02.Halloween.Party.1080p.NF.WEB-DL.DUAL.DDP5.1.Atmos.H.264-FLUX.mkv", "kind": "video", "action": "import", "season": 2, "episode": 2, "tags": {"source": "WEB", "resolution": "1080p", "group": "FLUX"}, "min_confidence": "high"},
+    {"path": "Squid.Game.S02E03.001.1080p.NF.WEB-DL.DUAL.DDP5.1.Atmos.H.264-FLUX.mkv", "kind": "video", "action": "import", "season": 2, "episode": 3, "tags": {"source": "WEB", "resolution": "1080p", "group": "FLUX"}, "min_confidence": "high"},
+    {"path": "Squid.Game.S02E04.Six.Legs.1080p.NF.WEB-DL.DUAL.DDP5.1.Atmos.H.264-FLUX.mkv", "kind": "video", "action": "import", "season": 2, "episode": 4, "tags": {"source": "WEB", "resolution": "1080p", "group": "FLUX"}, "min_confidence": "high"},
+    {"path": "Squid.Game.S02E05.One.More.Game.1080p.NF.WEB-DL.DUAL.DDP5.1.Atmos.H.264-FLUX.mkv", "kind": "video", "action": "import", "season": 2, "episode": 5, "tags": {"source": "WEB", "resolution": "1080p", "group": "FLUX"}, "min_confidence": "high"},
+    {"path": "Squid.Game.S02E06.O.X.1080p.NF.WEB-DL.DUAL.DDP5.1.Atmos.H.264-FLUX.mkv", "kind": "video", "action": "import", "season": 2, "episode": 6, "tags": {"source": "WEB", "resolution": "1080p", "group": "FLUX"}, "min_confidence": "high"},
+    {"path": "Squid.Game.S02E07.Friend.or.Foe.1080p.NF.WEB-DL.DUAL.DDP5.1.Atmos.H.264-FLUX.mkv", "kind": "video", "action": "import", "season": 2, "episode": 7, "tags": {"source": "WEB", "resolution": "1080p", "group": "FLUX"}, "min_confidence": "high"}
+  ]
+}

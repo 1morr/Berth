@@ -165,6 +165,7 @@ pnpm -C web dev                                     # 前端，開 Vite 印出�
 uv run berth --version      # CLI
 uv run berth serve          # 啟動程序（--reload 為開發模式）
 uv run berth openapi        # 印出 OpenAPI 文件（--output 寫檔）；前端型別的上游
+uv run berth bench          # 解析基準測試（見下）；離線跑，離開碼是 CI 的門檻
 uv run pytest               # 測試
 uv run ruff check .         # lint
 uv run ruff format .        # 格式化（CI 用 --check）
@@ -181,6 +182,26 @@ uv run --env-file .env alembic upgrade head                     # 手動套用
 ```
 
 改完 `berth/models/` 一定要產生 migration：schema 不是從 models 直接建的。
+
+### 解析基準測試
+
+解析器的正確率量在一組凍結的語料上（plan §4.6、brief §6.9）。**離線跑**：語料與 TMDB
+快照都在 repo 裡，不打外部服務。
+
+```bash
+uv run berth bench                     # 跑一遍並印出報表；有問題時離開碼 1
+uv run berth bench --update-baseline   # 改善之後更新門檻（理由寫進 commit message）
+```
+
+報表逐分類（anime / tv / movie）與整體列出七個互斥的桶——`auto_correct`、`auto_wrong`、
+`review`、`missed`、`unmatched_correct`、`extra_correct`、`skipped`，加起來就是檔案數——
+再加上分類正確率、tag 正確率與 high / medium 的誤判率。**最重要的是 `auto_wrong`**：
+自動處置但處置錯，門檻是「不得高於 `tests/fixtures/parser/baseline.json`」；`auto_correct`
+則允許比 baseline 少一筆（語料會長大）。
+
+同一支邏輯也是 `tests/unit/test_bench.py`，所以 CI 不另外開 job——`uv run pytest` 綠燈就
+代表 benchmark 沒掉。語料怎麼來、怎麼加一筆，見
+[`tests/fixtures/parser/README.md`](tests/fixtures/parser/README.md)。
 
 ### 前端
 
@@ -340,7 +361,7 @@ python scripts/experiments/anime_episode_source.py --discover        # 重新找
 
 ```
 berth/            後端套件
-  cli.py          命令列進入點（berth serve、berth openapi）
+  cli.py          命令列進入點（berth serve、berth openapi、berth bench）
   config.py       環境變數與路徑常數
   main.py         FastAPI app 組裝、lifespan
   adapters/       外部服務用戶端（qBittorrent、Jellyfin、TMDB…）
@@ -358,8 +379,11 @@ deploy/           部署套件：Dockerfile、compose、preseed、.env.example
 scripts/
   experiments/    對真實外部服務的驗證腳本（可重跑，結果在 docs/research/）
   fake_setup_server.py  以 Fake adapter 起一台 Berth，用來實跑驗證設定精靈
+  record_tmdb_snapshots.py  錄 tests/fixtures/tmdb/ 的快照（語料加了新作品時跑）
 tests/            後端測試
-  fixtures/http/  對真服務錄下來的回應，adapter 契約測試的輸入
+  fixtures/http/    對真服務錄下來的回應，adapter 契約測試的輸入
+  fixtures/parser/  解析基準測試的語料（真實 torrent 的檔案清單）
+  fixtures/tmdb/    語料用到的 TMDB 快照，錄一次即凍結
 docs/             設計綱要、實作計劃、進度
   research/       查證與實驗的完整結果
 .scratch/         各里程碑的票

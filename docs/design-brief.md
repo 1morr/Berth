@@ -188,7 +188,7 @@ Event 是 Job 頁時間線的資料來源，也是未來 AI 理解「發生了�
 | `archive` | zip/rar/7z | 忽略但記錄；常見內容是字幕或字型（未來：解壓字幕） |
 | `sample` | 檔名含 `sample` 且大小遠小於同目錄影片 | 忽略 |
 | `disc` | `BDMV/`、`VIDEO_TS/` 結構 | 整體標記為需人工 |
-| `extra` | NCOP/NCED/OP/ED（無集號）、PV、CM、Menu、Preview、Trailer、Making、Interview、`特典`、`映像特典`、`SPs/` 中非 SP 編號者 | 進入 extras 路徑（§7.3） |
+| `extra` | NCOP/NCED/OP/ED（無集號）、PV、CM、Menu、Preview、Trailer、Making、Interview、`特典`、`映像特典`、`SPs/` 中非 SP 編號者，以及 §20.1 那一串 Jellyfin 認得的 extras 資料夾名（`Extras/`、`Bonus/`、`Featurettes/`、`Behind the Scenes/`、`Deleted Scenes/`、`Interviews/`、`Trailers/`…） | 進入 extras 路徑（§7.3） |
 | `other` | nfo/txt/url 等 | 忽略 |
 
 分類器要能被 mediainfo 修正：例如檔名像正片但時長 90 秒 → 降為 `extra`。
@@ -808,7 +808,10 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 - 西方劇集：RARBG 季包 `Show/Subs/Episode 1/2_English.srt, 3_English.srt, 2_French.srt`（[renamer README](https://github.com/img02/Rarbg-Subtitle-Renamer)）；Sonarr Daily 型 `Some.Daily.Show.2021.03.04.1080p.HDTV.x264-GROUP`；`S01E01E02` 多集檔。
 - 電影：`Oppenheimer (2023) [1080p] [BluRay] [5.1] [YTS.MX]/Oppenheimer.2023.1080p.BluRay.x264.AAC5.1-[YTS.MX].mp4` + `www.YTS.MX.jpg` + `YTSProxies.com.txt`；Jellyfin 官方多片段 `Movie Name-cd1.mkv`（parttype：cd/dvd/part/pt/disc/disk）。
 - 韓劇：`Show.E01.YYMMDD.1080p…-NEXT` 無季編號（Sonarr 特別處理），`E01-16 COMPLETE (HDTV NEXT)` 全季字幕包。
-- 未證實：VCB-Studio 類 BD 包內 `SPs/ CDs/ Scans/ Fonts/ Menu/` 的精確資料夾名只有社群轉述（[r/jellyfin](https://www.reddit.com/r/jellyfin/comments/pkrz4h/extra_folders_for_anime)），需抓一份真實檔案清單確認。
+- **已證實（2026-09-10，M1 票 05，抓真實 torrent metadata）**：BD 包的附屬資料夾名兩家不同，社群轉述的那一串只對了一半。
+  - [VCB-Studio 魔王2099](https://share.dmhy.org/topics/view/726629_VCB-Studio_2099_Demon_Lord_2099_10-bit_1080p_HEVC_BDRip_Fin.html)（223 個檔案）：`SPs/`、`CDs/`（每張碟一個子資料夾，內含 flac 與 webp）、`CDs/…/Scans/`、`Scans/`（`BDBOX`、`Vol.1`…）。**沒有** `Fonts/` 與 `Menu/`。
+  - [DBD-Raws 不死者之王 第二季](https://share.dmhy.org/topics/view/668157_DBD-Raws_Overlord_Overlord_S2_01-13TV_SP_1080P_BDRip_HEVC-10bit_FLAC_MKV.html)（106 個檔案）：`SP/`（帶 SP 編號，每個配 `.sc.ass` / `.tc.ass`）、`PV/`、`NCOP&NCED/`、`menu/`（小寫）、`Fonts/Fonts.zip`（字型是壓縮檔不是散檔）。
+  - 兩份都成了 §6.9 的語料（`tests/fixtures/parser/`），分類規則因此有真實輸入可以釘。
 
 **Jellyfin 動漫命名的社群痛點**
 

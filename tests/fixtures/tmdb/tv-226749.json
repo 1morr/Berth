@@ -1,0 +1,215 @@
+{
+ "first_air_date": "2025-05-25",
+ "kind": "tv",
+ "overview": "《探險奇兵：冒險新章》是原創劇集《探險奇兵》的衍生作品，原系列講述一群保衛者的冒險故事，他們負責守護一座神秘圖書館，裡面收藏著全世界最強大且危險的超自然神器。新劇集的主角是一位來自過去的圖書館員，他穿越時空來到現代，卻發現自己無法回到過去。當他返回自己的城堡時，發現那裡已經成為博物館，他無意間釋放出魔法，蔓延整個大陸。他必須帶領一支全新的隊伍一同收拾殘局，組成新的圖書館員陣容。",
+ "poster_url": "https://image.tmdb.org/t/p/w342/w2PhnfYgY1yjxnUc1M4Jp5CjXvD.jpg",
+ "runtime": null,
+ "seasons": [
+  {
+   "air_date": "2025-05-25",
+   "episode_count": 12,
+   "episodes": [
+    {
+     "absolute_number": null,
+     "air_date": "2025-05-25",
+     "episode_number": 1,
+     "name": "And the Deadly Drekavac",
+     "runtime": 50
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-05-26",
+     "episode_number": 2,
+     "name": "And the Dance of Doom",
+     "runtime": 44
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-06-02",
+     "episode_number": 3,
+     "name": "And the Ghost Train",
+     "runtime": 45
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-06-09",
+     "episode_number": 4,
+     "name": "And the Thief of Love",
+     "runtime": 45
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-06-16",
+     "episode_number": 5,
+     "name": "And the Memory Crystal",
+     "runtime": 42
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-06-23",
+     "episode_number": 6,
+     "name": "And the House of Cards",
+     "runtime": 42
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-06-30",
+     "episode_number": 7,
+     "name": "And the Con-Con",
+     "runtime": 43
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-07-07",
+     "episode_number": 8,
+     "name": "And the Hangover from Hell",
+     "runtime": 43
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-07-14",
+     "episode_number": 9,
+     "name": "And the Feast of the Vampir",
+     "runtime": 43
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-07-21",
+     "episode_number": 10,
+     "name": "And Going Medieval",
+     "runtime": 42
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-07-28",
+     "episode_number": 11,
+     "name": "And the Graffiti of the Gods",
+     "runtime": 42
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-08-04",
+     "episode_number": 12,
+     "name": "And the Unfinished Business",
+     "runtime": 42
+    }
+   ],
+   "name": "Season 1",
+   "season_number": 1
+  },
+  {
+   "air_date": "2026-08-02",
+   "episode_count": 12,
+   "episodes": [
+    {
+     "absolute_number": null,
+     "air_date": "2026-08-02",
+     "episode_number": 1,
+     "name": "And the Burning Heart",
+     "runtime": 43
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-08-03",
+     "episode_number": 2,
+     "name": "And the Tethered Wish",
+     "runtime": 43
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-08-09",
+     "episode_number": 3,
+     "name": "And the Vanishing Bankers",
+     "runtime": 43
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-08-10",
+     "episode_number": 4,
+     "name": "And the Recipe for Disaster",
+     "runtime": 43
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-08-16",
+     "episode_number": 5,
+     "name": "And the Red Rock",
+     "runtime": 42
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-08-17",
+     "episode_number": 6,
+     "name": "And Descartes' Dilemma",
+     "runtime": 43
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-08-23",
+     "episode_number": 7,
+     "name": "And the Monkey's Paw",
+     "runtime": 42
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-08-24",
+     "episode_number": 8,
+     "name": "And the Last Resort",
+     "runtime": 41
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-08-30",
+     "episode_number": 9,
+     "name": "And the Toy Phone",
+     "runtime": 42
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-08-31",
+     "episode_number": 10,
+     "name": "And the Heart of a Librarian",
+     "runtime": 42
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-09-06",
+     "episode_number": 11,
+     "name": "And What Dreams May Come",
+     "runtime": 42
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-09-07",
+     "episode_number": 12,
+     "name": "And the Camelot Conundrum",
+     "runtime": null
+    }
+   ],
+   "name": "Season 2",
+   "season_number": 2
+  }
+ ],
+ "title": "探險奇兵：冒險新章",
+ "title_en": "The Librarians: The Next Chapter",
+ "title_original": "The Librarians: The Next Chapter",
+ "titles": [
+  "The Librarians: The Next Chapter",
+  "图书馆员：下一章",
+  "Библиотекари: Следующая глава",
+  "The Librarians : L’héritage de Flynn Carson",
+  "Бібліотекарі: Новий розділ",
+  "探險奇兵：冒險新章",
+  "探險奇兵：新篇章",
+  "Hội Thủ Thư: Chương Kế Tiếp",
+  "Библиотекарите: Следващата глава",
+  "Bibliotekarze: Nowy rozdział",
+  "שומרי האוצרות: הדור הבא",
+  "The Librarians: El próximo capítulo",
+  "라이브러리언: 넥스트 챕터",
+  "Bibliotekāri: Nākamā nodaļa",
+  "The Librarians: O Próximo Capítulo"
+ ],
+ "tmdb_id": 226749,
+ "year": 2025
+}

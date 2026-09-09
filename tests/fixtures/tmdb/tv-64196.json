@@ -1,0 +1,861 @@
+{
+ "first_air_date": "2015-07-07",
+ "kind": "tv",
+ "overview": "一款席捲遊戲界的網路遊戲「YGGDRASIL（世界樹）」，在營運十二年後停止一切服務，一名喜歡該遊戲的普通上班族「飛鼠」，在營運的最後一刻來到遊戲中曾名噪一時、由其擔任會長的強大公會—「安茲·烏爾·恭」的根據地納薩力克大墳墓進行最後巡禮，等待營運的結束。營運時間結束，玩家角色卻無法登出遊戲。而公會內的NPC也開始擁有自己的思想、如活人般地活動起來。在原本的遊戲中擁有骷髏魔法師外表的飛鼠，就這樣與他率領的公會展開前所未有的奇幻傳奇冒險。",
+ "poster_url": "https://image.tmdb.org/t/p/w342/7kOBPcfhmmfJxIXwJXSeuKM9BID.jpg",
+ "runtime": null,
+ "seasons": [
+  {
+   "air_date": "2015-08-04",
+   "episode_count": 57,
+   "episodes": [
+    {
+     "absolute_number": null,
+     "air_date": "2015-08-04",
+     "episode_number": 1,
+     "name": "Play Play Pleiades - Play 1: End and Beginning",
+     "runtime": 3
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2015-08-11",
+     "episode_number": 2,
+     "name": "Play Play Pleiades - Play 2: Combat Maids",
+     "runtime": 3
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2015-08-18",
+     "episode_number": 3,
+     "name": "Play Play Pleiades - Play 3: Fists That Cut Through Lies",
+     "runtime": 3
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2015-08-25",
+     "episode_number": 4,
+     "name": "Play Play Pleiades - Play 4: Two Victims",
+     "runtime": 3
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2015-09-01",
+     "episode_number": 5,
+     "name": "Play Play Pleiades - Play 5: Heart of a Predator",
+     "runtime": 3
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2015-09-08",
+     "episode_number": 6,
+     "name": "Play Play Pleiades - Play 6: Battle Outside Carne Village",
+     "runtime": 3
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2015-09-15",
+     "episode_number": 7,
+     "name": "Play Play Pleiades - Play 7: Before the Artillery",
+     "runtime": 3
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2015-09-22",
+     "episode_number": 8,
+     "name": "Play Play Pleiades - Play 8: Control and Chaos",
+     "runtime": 3
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-09-30",
+     "episode_number": 9,
+     "name": "Pure Pure Pleiades -  Nazarick’s Greatest Crisis",
+     "runtime": 30
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2017-09-13",
+     "episode_number": 10,
+     "name": "Pure Pure Pleiades - A Magical Beast’s Love",
+     "runtime": 13
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2017-09-13",
+     "episode_number": 11,
+     "name": "Pure Pure Pleiades - The Automation and The Cat",
+     "runtime": 13
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2017-09-13",
+     "episode_number": 12,
+     "name": "The Undead King - Theater Manners",
+     "runtime": 2
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2017-09-13",
+     "episode_number": 13,
+     "name": "The Dark Hero - Theater Manners",
+     "runtime": 2
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-01-09",
+     "episode_number": 14,
+     "name": "Play Play Pleiades 2 - Play 1: Curtain Rise of Confusion",
+     "runtime": 2
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-01-16",
+     "episode_number": 15,
+     "name": "Play Play Pleiades 2 - Play 2: Secretaries of the Company President",
+     "runtime": 2
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-01-23",
+     "episode_number": 16,
+     "name": "Play Play Pleiades 2 - Play 3: Gather, Executives",
+     "runtime": 2
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-01-30",
+     "episode_number": 17,
+     "name": "Play Play Pleiades 2 - Play 4: Amazing Loyalty",
+     "runtime": 2
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-02-06",
+     "episode_number": 18,
+     "name": "Play Play Pleiades 2 - Play 5: Director of Judgement",
+     "runtime": 2
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-02-13",
+     "episode_number": 19,
+     "name": "Play Play Pleiades 2 - Play 6: The Gatherers",
+     "runtime": 2
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-02-20",
+     "episode_number": 20,
+     "name": "Play Play Pleiades 2 - Play 7: Bits and Pieces",
+     "runtime": 2
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-02-27",
+     "episode_number": 21,
+     "name": "Play Play Pleiades 2 - Play 8: Feelings of the Customer",
+     "runtime": 2
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-03-06",
+     "episode_number": 22,
+     "name": "Play Play Pleiades 2 - Play 9: Ballistic People",
+     "runtime": 2
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-03-13",
+     "episode_number": 23,
+     "name": "Play Play Pleiades 2 - Play 10: Oh, I Wonder",
+     "runtime": 2
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-03-20",
+     "episode_number": 24,
+     "name": "Play Play Pleiades 2 - Play 11: A Dangerous One",
+     "runtime": 2
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-03-27",
+     "episode_number": 25,
+     "name": "Play Play Pleiades 2 - Play 12: Prelude to Industrial Upheaval",
+     "runtime": 2
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-04-03",
+     "episode_number": 26,
+     "name": "Play Play Pleiades 2 - Play 13: Curtain Rise to Despair",
+     "runtime": 2
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-07-10",
+     "episode_number": 27,
+     "name": "Play Play Pleiades 3 - Play 1: A Ruler’s New Melancholy",
+     "runtime": 2
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-07-17",
+     "episode_number": 28,
+     "name": "Play Play Pleiades 3 - Play 2: Shaltear Once More",
+     "runtime": 2
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-07-24",
+     "episode_number": 29,
+     "name": "Play Play Pleiades 3 - Play 3: The Far-Removed and Subtly Troubling Situation",
+     "runtime": 2
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-07-31",
+     "episode_number": 30,
+     "name": "Play Play Pleiades 3 - Play 4: Overseer of Guardians, in Short",
+     "runtime": 2
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-08-07",
+     "episode_number": 31,
+     "name": "Play Play Pleiades 3 - Play 5: One of Two Trendsetters",
+     "runtime": 2
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-08-14",
+     "episode_number": 32,
+     "name": "Play Play Pleiades 3 - Play 6: Invitation to Liberation",
+     "runtime": 2
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-08-21",
+     "episode_number": 33,
+     "name": "Play Play Pleiades 3 - Play 7: An Otoko no Ko Entangled In a Trend",
+     "runtime": 2
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-08-28",
+     "episode_number": 34,
+     "name": "Play Play Pleiades 3 - Play 8: A Handful of Moe Factor",
+     "runtime": 2
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-09-04",
+     "episode_number": 35,
+     "name": "Play Play Pleiades 3 - Play 9: Peerless",
+     "runtime": 2
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-09-11",
+     "episode_number": 36,
+     "name": "Play Play Pleiades 3 - Play 10: Preparation for Resolution",
+     "runtime": 2
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-09-18",
+     "episode_number": 37,
+     "name": "Play Play Pleiades 3 - Play 11: Another Truth",
+     "runtime": 2
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-09-25",
+     "episode_number": 38,
+     "name": "Play Play Pleiades 3 - Play 12: Great Anarchy",
+     "runtime": 2
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-10-02",
+     "episode_number": 39,
+     "name": "Play Play Pleiades 3 - Play 13: MVP",
+     "runtime": 2
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-11-23",
+     "episode_number": 40,
+     "name": "Pure Pure Pleiades - Clementine Fugitive Version Episode 1",
+     "runtime": 10
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-11-24",
+     "episode_number": 41,
+     "name": "Pure Pure Pleiades - Clementine Fugitive Version Episode 2",
+     "runtime": 10
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-11-27",
+     "episode_number": 42,
+     "name": "Pure Pure Pleiades - Clementine Fugitive Version Episode 3",
+     "runtime": 10
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2022-07-05",
+     "episode_number": 43,
+     "name": "Play Play Pleiades 4 - Play 1: Spumoni",
+     "runtime": 2
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2022-07-12",
+     "episode_number": 44,
+     "name": "Play Play Pleiades 4 - Play 2: Martini",
+     "runtime": 2
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2022-07-19",
+     "episode_number": 45,
+     "name": "Play Play Pleiades 4 - Play 3: Silver Bullet",
+     "runtime": 2
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2022-07-26",
+     "episode_number": 46,
+     "name": "Play Play Pleiades 4 - Play 4: Pink Lady",
+     "runtime": 2
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2022-08-02",
+     "episode_number": 47,
+     "name": "Play Play Pleiades 4 - Play 5: Ilampol Pescatore",
+     "runtime": 2
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2022-08-09",
+     "episode_number": 48,
+     "name": "Play Play Pleiades 4 - Play 6: Alexander",
+     "runtime": 2
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2022-08-16",
+     "episode_number": 49,
+     "name": "Play Play Pleiades 4 - Play 7: Flat Vamp Air, Flight Frodr 05",
+     "runtime": 2
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2022-08-23",
+     "episode_number": 50,
+     "name": "Play Play Pleiades 4 - Play 8: Yukiguni",
+     "runtime": 2
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2022-08-30",
+     "episode_number": 51,
+     "name": "Play Play Pleiades 4 - Play 9: Blue Moon",
+     "runtime": 2
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2022-09-06",
+     "episode_number": 52,
+     "name": "Play Play Pleiades 4 - Play 10: Sazerac",
+     "runtime": 2
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2022-09-13",
+     "episode_number": 53,
+     "name": "Play Play Pleiades 4 - Play 11: Stinger",
+     "runtime": 2
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2022-09-20",
+     "episode_number": 54,
+     "name": "Play Play Pleiades 4 - Play 12: Tuarabas",
+     "runtime": 2
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2022-09-27",
+     "episode_number": 55,
+     "name": "Play Play Pleiades 4 - Play 13: The Supreme Being",
+     "runtime": 2
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-10-31",
+     "episode_number": 56,
+     "name": "Play Play Pleiades x Em-Shade!",
+     "runtime": 11
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-09-20",
+     "episode_number": 57,
+     "name": "The Sacred Kingdom - Manner Movie",
+     "runtime": 2
+    }
+   ],
+   "name": "Specials",
+   "season_number": 0
+  },
+  {
+   "air_date": "2015-07-07",
+   "episode_count": 13,
+   "episodes": [
+    {
+     "absolute_number": null,
+     "air_date": "2015-07-07",
+     "episode_number": 1,
+     "name": "End and Beginning",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2015-07-14",
+     "episode_number": 2,
+     "name": "Floor Guardians",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2015-07-21",
+     "episode_number": 3,
+     "name": "The Battle of Carne Village",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2015-07-28",
+     "episode_number": 4,
+     "name": "Ruler of Death",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2015-08-04",
+     "episode_number": 5,
+     "name": "Two Adventurers",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2015-08-11",
+     "episode_number": 6,
+     "name": "Journey",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2015-08-18",
+     "episode_number": 7,
+     "name": "Wise King of Forest",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2015-08-25",
+     "episode_number": 8,
+     "name": "Twin Swords of Slashing Death",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2015-09-01",
+     "episode_number": 9,
+     "name": "The Dark Warrior",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2015-09-08",
+     "episode_number": 10,
+     "name": "True Vampire",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2015-09-15",
+     "episode_number": 11,
+     "name": "Confusion and Understanding",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2015-09-22",
+     "episode_number": 12,
+     "name": "The Bloody Valkyrie",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2015-09-29",
+     "episode_number": 13,
+     "name": "Player VS Non Player Character",
+     "runtime": 24
+    }
+   ],
+   "name": "Overlord",
+   "season_number": 1
+  },
+  {
+   "air_date": "2018-01-09",
+   "episode_count": 13,
+   "episodes": [
+    {
+     "absolute_number": null,
+     "air_date": "2018-01-09",
+     "episode_number": 1,
+     "name": "The Dawn of Despair",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-01-16",
+     "episode_number": 2,
+     "name": "Departure",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-01-23",
+     "episode_number": 3,
+     "name": "Lizard Men, Gathering",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-01-30",
+     "episode_number": 4,
+     "name": "Army of Death",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-02-06",
+     "episode_number": 5,
+     "name": "The Freezing God",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-02-13",
+     "episode_number": 6,
+     "name": "Those Who Pick Up, Those Who Are Picked Up",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-02-20",
+     "episode_number": 7,
+     "name": "Blue Roses",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-02-27",
+     "episode_number": 8,
+     "name": "A Boy’s Feeling",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-03-06",
+     "episode_number": 9,
+     "name": "Soaring Sparks of Fire",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-03-13",
+     "episode_number": 10,
+     "name": "Disturbance Begins in the Royal Capital",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-03-20",
+     "episode_number": 11,
+     "name": "Jaldabaoth",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-03-27",
+     "episode_number": 12,
+     "name": "The Final Battle of the Disturbance",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-04-03",
+     "episode_number": 13,
+     "name": "The Ultimate Trump Card",
+     "runtime": 24
+    }
+   ],
+   "name": "Overlord II",
+   "season_number": 2
+  },
+  {
+   "air_date": "2018-07-10",
+   "episode_count": 13,
+   "episodes": [
+    {
+     "absolute_number": null,
+     "air_date": "2018-07-10",
+     "episode_number": 1,
+     "name": "A Ruler’s Melancholy",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-07-17",
+     "episode_number": 2,
+     "name": "Carne Village Once More",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-07-24",
+     "episode_number": 3,
+     "name": "Enri’s Upheaval and Hectic Days",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-07-31",
+     "episode_number": 4,
+     "name": "Giant of the East, Demon Snake of the West",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-08-07",
+     "episode_number": 5,
+     "name": "Two Leaders",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-08-14",
+     "episode_number": 6,
+     "name": "Invitation to Death",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-08-21",
+     "episode_number": 7,
+     "name": "Butterfly Entangled in a Spider’s Web",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-08-28",
+     "episode_number": 8,
+     "name": "A Handful of Hope",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-09-04",
+     "episode_number": 9,
+     "name": "War of Words",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-09-11",
+     "episode_number": 10,
+     "name": "Preparation for War",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-09-18",
+     "episode_number": 11,
+     "name": "Another Battle",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-09-25",
+     "episode_number": 12,
+     "name": "Massacre",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-10-02",
+     "episode_number": 13,
+     "name": "Player vs Player",
+     "runtime": 24
+    }
+   ],
+   "name": "Overlord III",
+   "season_number": 3
+  },
+  {
+   "air_date": "2022-07-05",
+   "episode_count": 13,
+   "episodes": [
+    {
+     "absolute_number": null,
+     "air_date": "2022-07-05",
+     "episode_number": 1,
+     "name": "Ains Ooal Gown Nation of Leading Darkness",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2022-07-12",
+     "episode_number": 2,
+     "name": "Re-Estize Kingdom",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2022-07-19",
+     "episode_number": 3,
+     "name": "Baharuth Empire",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2022-07-26",
+     "episode_number": 4,
+     "name": "The Ruler of Conspiracy",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2022-08-02",
+     "episode_number": 5,
+     "name": "In Pursuit of the Land of Dwarves",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2022-08-09",
+     "episode_number": 6,
+     "name": "The Impending Crisis",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2022-08-16",
+     "episode_number": 7,
+     "name": "Frost Dragon Lord",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2022-08-23",
+     "episode_number": 8,
+     "name": "An Unexpected Move",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2022-08-30",
+     "episode_number": 9,
+     "name": "Countdown to Extinction",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2022-09-06",
+     "episode_number": 10,
+     "name": "The Last King",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2022-09-13",
+     "episode_number": 11,
+     "name": "Well-prepared Traps",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2022-09-20",
+     "episode_number": 12,
+     "name": "Invasion of the Royal Capital",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2022-09-27",
+     "episode_number": 13,
+     "name": "The Witch of the Falling Kingdom",
+     "runtime": 24
+    }
+   ],
+   "name": "Overlord IV",
+   "season_number": 4
+  }
+ ],
+ "title": "OVERLORD",
+ "title_en": "Overlord",
+ "title_original": "オーバーロード",
+ "titles": [
+  "Overlord",
+  "オーバーロード",
+  "不死者之王",
+  "OVERLORD",
+  "Ōbārōdo",
+  "オーバーロードⅢ",
+  "オーバーロードⅡ",
+  "オーバーロード2",
+  "オーバーロード3",
+  "Overlord Ple Ple Pleiades",
+  "Soushuuhen Overlord",
+  "オーバーロードⅣ",
+  "ПОВЕЛИТЕЛЬ",
+  "Властелин",
+  "Владыка",
+  "Повелитель 1",
+  "Повелитель 4",
+  "Повелитель 3",
+  "Повелитель 2",
+  "โอเวอร์ลอร์ด",
+  "Оверлорд 3",
+  "Оверлорд Ⅲ",
+  "Оверлорд 2",
+  "Оверлорд Ⅱ",
+  "Оверлорд II",
+  "Оверлорд III",
+  "Оверлорд",
+  "Overlord 3",
+  "Overlord Ⅱ",
+  "Overlord II",
+  "Overlord III",
+  "Overlord Ⅲ",
+  "Overlord 2",
+  "Overlord IV",
+  "Lạc Vào Thế Giới Game",
+  "Повелитель",
+  "오버로드",
+  "โอเวอร์ ลอร์ด จอมมารพิชิตโลก",
+  "שליט עליון",
+  "Владетелят",
+  "السيد الأعلى",
+  "Aukščiausiasis valdovas"
+ ],
+ "tmdb_id": 64196,
+ "year": 2015
+}

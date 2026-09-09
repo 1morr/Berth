@@ -1,0 +1,1187 @@
+{
+ "first_air_date": "2023-04-14",
+ "kind": "tv",
+ "overview": "「精靈寶可夢」簡稱「寶可夢」，是種神秘又不可思議的生物。既有與人類和睦共處的寶可夢，也有棲息於草叢、洞窟和海洋等地方的野生寶可夢。關於牠們的生態，至今仍然存在著許多未解的謎團。\n\n持有不可思議吊墜，來自帕底亞的少女「莉可」。持有神秘精靈球，來自關都的少年「羅伊」。以廣闊的寶可夢世界為舞台，莉可和羅伊的新冒險即將展開！即將迎來未知邂逅的兩人，命運將會是⋯！？\n\n這是關於在探險中「尋找」重要事物的故事。",
+ "poster_url": "https://image.tmdb.org/t/p/w342/uUPVx2fzCmJTWjWywX3JFRBRHLO.jpg",
+ "runtime": null,
+ "seasons": [
+  {
+   "air_date": "2023-12-30",
+   "episode_count": 4,
+   "episodes": [
+    {
+     "absolute_number": null,
+     "air_date": "2024-01-05",
+     "episode_number": 1,
+     "name": "Pocket Monsters New Year Special",
+     "runtime": 26
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-03-13",
+     "episode_number": 2,
+     "name": "Pokemon Get & Big Frolic in the Hot Spring Town! A Special Full of Heart and Body Power!",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-05-15",
+     "episode_number": 3,
+     "name": "Pokémon Music Fest",
+     "runtime": 50
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-06-26",
+     "episode_number": 4,
+     "name": "Special Party! Full of Pokémon!!",
+     "runtime": null
+    }
+   ],
+   "name": "Specials",
+   "season_number": 0
+  },
+  {
+   "air_date": "2023-04-14",
+   "episode_count": 150,
+   "episodes": [
+    {
+     "absolute_number": null,
+     "air_date": "2023-04-14",
+     "episode_number": 1,
+     "name": "The Pendant That Starts It All (1)",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-04-14",
+     "episode_number": 2,
+     "name": "The Pendant That Starts It All (2)",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-04-21",
+     "episode_number": 3,
+     "name": "For Sure! 'Cause Sprigatito's with Me!",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-04-28",
+     "episode_number": 4,
+     "name": "The Treasure After the Storm!",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-05-05",
+     "episode_number": 5,
+     "name": "Found You, Fuecoco!",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-05-12",
+     "episode_number": 6,
+     "name": "The Ancient Poké Ball!",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-05-19",
+     "episode_number": 7,
+     "name": "Special Training with Cap!",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-05-26",
+     "episode_number": 8,
+     "name": "The Door That Never Opens",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-06-02",
+     "episode_number": 9,
+     "name": "Welcome to Paldea!",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-06-09",
+     "episode_number": 10,
+     "name": "Nemona and Brassius and...",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-06-16",
+     "episode_number": 11,
+     "name": "Arboliva's Forest",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-06-23",
+     "episode_number": 12,
+     "name": "The Future I Choose",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-07-14",
+     "episode_number": 13,
+     "name": "An Unexpected Picnic!",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-07-21",
+     "episode_number": 14,
+     "name": "Fly! Wattrel!!",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-07-28",
+     "episode_number": 15,
+     "name": "Someone We Can't See! Whosawhatsit?!",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-08-04",
+     "episode_number": 16,
+     "name": "Quaxly, We Can Do It",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-08-11",
+     "episode_number": 17,
+     "name": "Special Training Time!",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-08-18",
+     "episode_number": 18,
+     "name": "Flying Pikachu, Rising Higher and Higher!",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-08-25",
+     "episode_number": 19,
+     "name": "The Bittersweet Truth",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-09-01",
+     "episode_number": 20,
+     "name": "Kabu's Battle Training!",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-09-08",
+     "episode_number": 21,
+     "name": "The Lonely Hatenna",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-09-15",
+     "episode_number": 22,
+     "name": "Charge! Galar Mine!",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-09-22",
+     "episode_number": 23,
+     "name": "Fiery Galarian Moltres",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-10-13",
+     "episode_number": 24,
+     "name": "Reunion at the Ancient Castle!",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-10-20",
+     "episode_number": 25,
+     "name": "Rivals in the Dark of Night!",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-10-27",
+     "episode_number": 26,
+     "name": "Terapagos's Adventure!",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-11-03",
+     "episode_number": 27,
+     "name": "As Long As I'm with My Friends",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-11-10",
+     "episode_number": 28,
+     "name": "The Stolen Treasure",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-11-17",
+     "episode_number": 29,
+     "name": "Orla and the Poké Ball Smith",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-11-24",
+     "episode_number": 30,
+     "name": "Slip and Crash! A Mystery Pokémon?!",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-12-01",
+     "episode_number": 31,
+     "name": "Song Within the Mist",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-12-08",
+     "episode_number": 32,
+     "name": "Lapras's Feelings for Its Friends",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-12-15",
+     "episode_number": 33,
+     "name": "Roar of the Black Rayquaza",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-12-22",
+     "episode_number": 34,
+     "name": "Respective Departures",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-01-12",
+     "episode_number": 35,
+     "name": "The Wild Pair, Friede and Cap!",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-01-19",
+     "episode_number": 36,
+     "name": "Mission: Find Oinkologne's Partner!",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-01-26",
+     "episode_number": 37,
+     "name": "Fuecoco... Becomes a Crook?!",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-02-02",
+     "episode_number": 38,
+     "name": "The SOS Is from Tandemaus?",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-02-09",
+     "episode_number": 39,
+     "name": "Tinkatink's Ideal Hammer",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-02-16",
+     "episode_number": 40,
+     "name": "Farewell, Sprigatito?",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-03-01",
+     "episode_number": 41,
+     "name": "A Wild Mom Appears!",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-03-08",
+     "episode_number": 42,
+     "name": "Transform! Hero of the Seas, Palafin",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-03-15",
+     "episode_number": 43,
+     "name": "A Challenge from the Explorers",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-03-22",
+     "episode_number": 44,
+     "name": "The Plan to Capture Rayquaza (1)",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-03-29",
+     "episode_number": 45,
+     "name": "From So Far Away (2)",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-04-12",
+     "episode_number": 46,
+     "name": "Welcome to Naranja Academy!",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-04-19",
+     "episode_number": 47,
+     "name": "Put Your Heart into It!",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-05-03",
+     "episode_number": 48,
+     "name": "Sparkle! The Glow of Flame and Art",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-05-10",
+     "episode_number": 49,
+     "name": "Dot and Nidothing",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-05-17",
+     "episode_number": 50,
+     "name": "Trending Terastallisation! Dance, Dance, Quaxly!",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-05-24",
+     "episode_number": 51,
+     "name": "The Flower Tower",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-05-31",
+     "episode_number": 52,
+     "name": "Wattrel's High Wind Warning!",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-06-07",
+     "episode_number": 53,
+     "name": "Hatenna and the Otherworldly",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-06-14",
+     "episode_number": 54,
+     "name": "The Treasure of Eternity",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-06-21",
+     "episode_number": 55,
+     "name": "Showdown! The Paldea Elite Four (1)",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-06-28",
+     "episode_number": 56,
+     "name": "Liko vs. Rika! Toward the Battle's End (2)",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-07-05",
+     "episode_number": 57,
+     "name": "The Terapagos I Don't Know",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-07-12",
+     "episode_number": 58,
+     "name": "Food Fit for a Kingambit!",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-07-26",
+     "episode_number": 59,
+     "name": "Dance, Quaxly! The Blue Medali Step!",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-08-09",
+     "episode_number": 60,
+     "name": "Roy and Fuecoco's First Snow!",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-08-16",
+     "episode_number": 61,
+     "name": "Resonating Spirits in a Challenge to Ryme!",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-08-23",
+     "episode_number": 62,
+     "name": "A New Song for Fuecoco",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-08-30",
+     "episode_number": 63,
+     "name": "Ice Battle! Cold-Eyed Grusha",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-09-06",
+     "episode_number": 64,
+     "name": "The Approaching Shadow!",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-09-13",
+     "episode_number": 65,
+     "name": "Liko and Amethio",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-09-20",
+     "episode_number": 66,
+     "name": "Infiltrating the System! Naranja Academy in Danger!",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-09-27",
+     "episode_number": 67,
+     "name": "Shine On, Terastallization! Liko vs. Roy!",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-10-11",
+     "episode_number": 68,
+     "name": "Into a New Sky! The Brave Olivine!",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-10-18",
+     "episode_number": 69,
+     "name": "Roy Is Crocalor, and Crocalor Is Roy!",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-10-25",
+     "episode_number": 70,
+     "name": "Tinkatink's Hammer Wasn't Made in a Day",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-11-01",
+     "episode_number": 71,
+     "name": "Encounters at the Crystal Pool",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-11-08",
+     "episode_number": 72,
+     "name": "The Search for Kleavor!",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-11-15",
+     "episode_number": 73,
+     "name": "Kleavor the Solitary Warrior",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-11-22",
+     "episode_number": 74,
+     "name": "The Three Explorers",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-11-29",
+     "episode_number": 75,
+     "name": "The Wonders of the World!",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-12-06",
+     "episode_number": 76,
+     "name": "Wynaut? Wy-Yes!",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-12-13",
+     "episode_number": 77,
+     "name": "Ludlow's Homecoming!",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-12-20",
+     "episode_number": 78,
+     "name": "Entei's Fierce Battle Cry!",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-01-10",
+     "episode_number": 79,
+     "name": "Over the Top!",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-01-17",
+     "episode_number": 80,
+     "name": "Total-lie Awesome Pokémon in Area Zero?!",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-01-24",
+     "episode_number": 81,
+     "name": "The Pillar of Fire",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-01-31",
+     "episode_number": 82,
+     "name": "Beyond the Shining Rainbow",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-02-07",
+     "episode_number": 83,
+     "name": "The Truth Revealed!",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-02-14",
+     "episode_number": 84,
+     "name": "Where the Land Meets the Sky",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-02-21",
+     "episode_number": 85,
+     "name": "The Pokémon Paradise of Laqua!",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-02-28",
+     "episode_number": 86,
+     "name": "The Rising Volt Tacklers vs. the Explorers!",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-03-07",
+     "episode_number": 87,
+     "name": "Guided by the Black Rayquaza!",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-03-14",
+     "episode_number": 88,
+     "name": "The Earthshaking White Zygarde",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-03-21",
+     "episode_number": 89,
+     "name": "Where the Adventure Leads",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-04-11",
+     "episode_number": 90,
+     "name": "Eyes to the Skies Once Again (1)",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-04-11",
+     "episode_number": 91,
+     "name": "Eyes to the Skies Once Again (2)",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-04-18",
+     "episode_number": 92,
+     "name": "Following Traces of Laquium",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-04-25",
+     "episode_number": 93,
+     "name": "Clash of the Nidothing Fans!",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-05-02",
+     "episode_number": 94,
+     "name": "The Pokémon Center Lady",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-05-09",
+     "episode_number": 95,
+     "name": "The Strong Sphere",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-05-16",
+     "episode_number": 96,
+     "name": "Crash! Team Dragon Rampage!",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-05-30",
+     "episode_number": 97,
+     "name": "The Prankster",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-06-06",
+     "episode_number": 98,
+     "name": "Reunion in Cortondo",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-06-13",
+     "episode_number": 99,
+     "name": "Orla, Grounded",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-06-20",
+     "episode_number": 100,
+     "name": "We Are the Rising Volt Tacklers!",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-06-27",
+     "episode_number": 101,
+     "name": "Terastallization vs. Mega Evolution!",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-07-04",
+     "episode_number": 102,
+     "name": "The Knight in the Ruins",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-07-18",
+     "episode_number": 103,
+     "name": "Nidothing Love!",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-08-01",
+     "episode_number": 104,
+     "name": "Charcadet's Wish!",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-08-08",
+     "episode_number": 105,
+     "name": "Riding the Waves",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-08-15",
+     "episode_number": 106,
+     "name": "The Dusk Ball That Wouldn't Open",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-08-22",
+     "episode_number": 107,
+     "name": "Friends as Two, Me and You",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-08-29",
+     "episode_number": 108,
+     "name": "Taking the Next Steps",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-09-05",
+     "episode_number": 109,
+     "name": "Tinkatuff's Hammer Wasn't Made in a Year!",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-09-12",
+     "episode_number": 110,
+     "name": "The Six Heroes Unleashed!",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-09-19",
+     "episode_number": 111,
+     "name": "Better, Farther, Stronger!",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-10-10",
+     "episode_number": 112,
+     "name": "Mega Evolution - Roy",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-10-17",
+     "episode_number": 113,
+     "name": "Mega Evolution - Ult",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-10-24",
+     "episode_number": 114,
+     "name": "Mega Evolution - Bonds",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-10-31",
+     "episode_number": 115,
+     "name": "Welcome to Blueberry Academy!",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-11-07",
+     "episode_number": 116,
+     "name": "Terarium Training!",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-11-14",
+     "episode_number": 117,
+     "name": "Ult-imate Training",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-11-21",
+     "episode_number": 118,
+     "name": "Liko and Hattrem, Bonded by Happiness!",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-11-28",
+     "episode_number": 119,
+     "name": "Don't Give Up, Crocalor!",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-12-05",
+     "episode_number": 120,
+     "name": "Dot and Penny's Top-Secret Mission!",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-12-12",
+     "episode_number": 121,
+     "name": "The Catcher in the Sky",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-12-19",
+     "episode_number": 122,
+     "name": "Roy vs. Friede: Wings of Fire!",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-01-09",
+     "episode_number": 123,
+     "name": "Mochi Mayhem!",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-01-23",
+     "episode_number": 124,
+     "name": "Operation Infiltration!",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-01-30",
+     "episode_number": 125,
+     "name": "Battle for the Six Heroes!",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-02-06",
+     "episode_number": 126,
+     "name": "Strong Bonds, Can't Lose!",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-02-13",
+     "episode_number": 127,
+     "name": "The Training Royale!",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-02-20",
+     "episode_number": 128,
+     "name": "Dot and Quaxwell Step It Up!",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-02-27",
+     "episode_number": 129,
+     "name": "Destiny of the Black Rayquaza",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-03-06",
+     "episode_number": 130,
+     "name": "Hamber's Moonlight Battle",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-03-13",
+     "episode_number": 131,
+     "name": "A Surprise Reunion",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-03-20",
+     "episode_number": 132,
+     "name": "Lucario's Challenge!",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-04-10",
+     "episode_number": 133,
+     "name": "The Final Battle Is Near",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-04-17",
+     "episode_number": 134,
+     "name": "One Step Closer",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-04-24",
+     "episode_number": 135,
+     "name": "The Core Awakens",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-05-01",
+     "episode_number": 136,
+     "name": "Stellar Finale",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-05-22",
+     "episode_number": 137,
+     "name": "Reboot! Off to the World of Adventure!!",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-05-29",
+     "episode_number": 138,
+     "name": "Enter the Fake Rising Volteccers!?",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-06-05",
+     "episode_number": 139,
+     "name": "The Secret Metamon Rhapsody",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-06-12",
+     "episode_number": 140,
+     "name": "Clap Clap Clap! Mini Gurumin!!",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-06-19",
+     "episode_number": 141,
+     "name": "READY GO! Unite Battle!!",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-07-03",
+     "episode_number": 142,
+     "name": "Miare City! New Encounters",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-07-17",
+     "episode_number": 143,
+     "name": "A Dream Ball for You!",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-07-31",
+     "episode_number": 144,
+     "name": "Navi's Little Big Adventure!",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-08-14",
+     "episode_number": 145,
+     "name": "Shocking! Mega Rayquaza and the Mysterious Land!?",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-08-21",
+     "episode_number": 146,
+     "name": "Wanival and Dekanuchan's Great Sleep Operation!",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-08-28",
+     "episode_number": 147,
+     "name": "Crazy Feels! This Is a Pokémon Contest, Dearie!!",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-09-04",
+     "episode_number": 148,
+     "name": "Koraidon & Miraidon! The Great Paldea Race!!",
+     "runtime": 25
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-09-11",
+     "episode_number": 149,
+     "name": "A Squishy Pokemon! If You Squish It and It Squishes, It's Squishy Time",
+     "runtime": null
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-09-18",
+     "episode_number": 150,
+     "name": "The Expanding World, GO with You!",
+     "runtime": null
+    }
+   ],
+   "name": "Series 1",
+   "season_number": 1
+  }
+ ],
+ "title": "寶可夢地平線",
+ "title_en": "Pokémon Horizons",
+ "title_original": "ポケットモンスター",
+ "titles": [
+  "Pokémon Horizons",
+  "ポケットモンスター",
+  "Pokémon: Horizontes - A Série",
+  "Pokémon: Horizontes - Temporada 2 - A Busca por Laqua",
+  "Pokémon: Horizontes - Temporada 3 - Altas Esperanças",
+  "宝可梦 地平线 莉可与罗伊的启程",
+  "宠物小精灵 地平线 太乐巴戈斯的光辉",
+  "精灵宝可梦 地平线",
+  "宝可梦 地平线 太乐巴戈斯的光辉",
+  "宝可梦 地平线",
+  "宠物小精灵 地平线",
+  "La série : Pokémon, les horizons",
+  "Pokémon : Les horizons : La série",
+  "Pokémon les horizons: La série",
+  "Pocket Monsters: Terastal Debut",
+  "Pocket Monsters: The Sparkling of Terapagos",
+  "Pocket Monsters: Liko & Roy Set Off",
+  "Pocket Monsters: Rayquaza Rising",
+  "Pokémon Horizons: Season 2 - The Search for Laqua",
+  "Pokémon Horizons: The Series",
+  "Pocket Monsters: Mega Voltage",
+  "Pocket Monsters Episode: Mega Evolution",
+  "Pocket Monsters: Rising Again",
+  "Pokémon Horizons: Season 3 - Rising Hope",
+  "Pocket Monsters: Wonder Voyage",
+  "寶可夢：地平線",
+  "精靈寶可夢：地平線",
+  "Pokémon Orizzonti: La serie",
+  "Pocket Monsters (2023)",
+  "ポケットモンスター リコとロイの旅立ち",
+  "ポケットモンスター リコロイ",
+  "ポケットモンスター テラパゴスのかがやき",
+  "ポケットモンスター テラスタルデビュー",
+  "ポケットモンスター レックウザ ライジング",
+  "ポケットモンスター(2023)",
+  "ポケットモンスター メガボルテージ",
+  "ポケットモンスター エピソード：メガシンカ",
+  "ポケットモンスター ライジングアゲイン",
+  "ポケットモンスター ワンダーボヤージュ",
+  "포켓몬스터 (2023)",
+  "포켓몬스터: 리코와 로드의 모험",
+  "포켓몬스터: 리코와 로드의 모험 PART2",
+  "포켓몬스터: 테라파고스의 빛",
+  "포켓몬스터: 리코와 로이의 여행",
+  "포켓몬스터: 테라스탈 데뷔",
+  "포켓몬스터 레쿠쟈 라이징",
+  "포켓몬스터: 에피소드 메가진화",
+  "포켓몬스터: 메가볼티지",
+  "포켓몬스터: 라이징 어게인",
+  "포켓몬스터: 원더보야지",
+  "Покемон: Горизонты",
+  "โปเกมอน สุดขอบฟ้า",
+  "寶可夢(2023)",
+  "Нові горизонти Покемонів",
+  "Pokémon : Les horizons",
+  "Horizontes Pokémon",
+  "Pokémon Horizonte: Die Serie",
+  "Orizzonti Pokémon: La Serie",
+  "A Série Pokémon: Horizontes",
+  "Horizontes Pokémon: La serie",
+  "寵物小精靈地平線",
+  "寶可夢地平線",
+  "포켓몬스터",
+  "Покемон: Отправление Лико и Роя",
+  "Pokémon Yeni Ufuklar: Dizi",
+  "Pokémon Horizons: Serialul",
+  "โปเกมอน สุดขอบฟ้า : เดอะ ซีรีย์",
+  "Pokémon Horyzonty: Seria",
+  "Pokémon: Taivaanranta – Sarja",
+  "Pokémon: Horizonty – seriál",
+  "Pokémon - Horisonter: Serien",
+  "Горизонти Покемонів: Дебют Ліко та Роя",
+  "פוקימון אופקים",
+  "افق های پوکمون",
+  "آفاق البوكيمون",
+  "Покемон Хоризонти",
+  "Pokémon: Új kalandok - 2. évad: Laqua nyomában"
+ ],
+ "tmdb_id": 220150,
+ "year": 2023
+}

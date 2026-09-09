@@ -24,6 +24,11 @@ HOST = "0.0.0.0"
 #: uvicorn 以 import string + factory 載入 app，`--reload` 才能重建它。
 APP_FACTORY = "berth.main:create_app"
 
+#: 語料與 baseline 在 repo 裡，不在安裝後的 wheel 裡——`berth bench` 是開發指令。
+REPO_ROOT = Path(__file__).resolve().parent.parent
+
+BASELINE_NOTE = "Written by `berth bench --update-baseline`. Raising it needs a reason in the PR."
+
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
@@ -52,6 +57,17 @@ def build_parser() -> argparse.ArgumentParser:
         help="Write to this file instead of stdout.",
     )
     openapi.set_defaults(handler=_openapi)
+
+    bench = subcommands.add_parser(
+        "bench",
+        help="Run the parser benchmark over the frozen corpus (plan 4.6).",
+    )
+    bench.add_argument(
+        "--update-baseline",
+        action="store_true",
+        help="Write the current numbers to the baseline. Say why in the commit message.",
+    )
+    bench.set_defaults(handler=_bench)
 
     return parser
 
@@ -88,6 +104,35 @@ def _openapi(args: argparse.Namespace) -> int:
     else:
         args.output.write_bytes(payload)
     return 0
+
+
+def _bench(args: argparse.Namespace) -> int:
+    """解析基準測試（plan §4.6、brief §6.9）。**不連線**：語料與 TMDB 快照都在 repo 裡。
+
+    離開碼是 CI 的門檻：分類錯、自動入錯，或掉到 baseline 以下就是 1。
+    """
+    from berth.services.bench import (
+        dump_baseline,
+        load_baseline,
+        paths,
+        regressions,
+        render,
+        run,
+    )
+
+    corpus_root, snapshot_root, baseline_path = paths(REPO_ROOT)
+    report = run(corpus_root, snapshot_root)
+    # 報表含中文以外的欄位也可能超出 cp950，一律以 UTF-8 位元組寫出（與 `openapi` 同理）。
+    sys.stdout.buffer.write((render(report) + "\n").encode("utf-8"))
+
+    if args.update_baseline:
+        dump_baseline(baseline_path, report, note=BASELINE_NOTE)
+        return 0
+
+    problems = [*report.failures, *regressions(report, load_baseline(baseline_path))]
+    for problem in problems:
+        print(f"bench: {problem}", file=sys.stderr)
+    return 1 if problems else 0
 
 
 def _serve(args: argparse.Namespace) -> int:

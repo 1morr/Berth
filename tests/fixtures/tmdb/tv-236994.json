@@ -1,0 +1,186 @@
+{
+ "first_air_date": "2024-10-11",
+ "kind": "tv",
+ "overview": "故事描述悟空一行人捲入某個陰謀事件，全員因此回歸小時候的身軀。為了解決這件事，及彌補自己嬌小的體型，所以悟空重拾過去的如意棒，在未知而神秘的世界中展開一場的盛大冒險。",
+ "poster_url": "https://image.tmdb.org/t/p/w342/l9ddO7KNAICvYYSTuwV3RI3m8VP.jpg",
+ "runtime": null,
+ "seasons": [
+  {
+   "air_date": "2024-10-11",
+   "episode_count": 20,
+   "episodes": [
+    {
+     "absolute_number": null,
+     "air_date": "2024-10-11",
+     "episode_number": 1,
+     "name": "Conspiracy",
+     "runtime": 33
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-10-18",
+     "episode_number": 2,
+     "name": "Glorio",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-10-25",
+     "episode_number": 3,
+     "name": "Daima",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-11-01",
+     "episode_number": 4,
+     "name": "Chatty",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-11-08",
+     "episode_number": 5,
+     "name": "Panzy",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-11-15",
+     "episode_number": 6,
+     "name": "Lightning",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-11-22",
+     "episode_number": 7,
+     "name": "Collar",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-11-29",
+     "episode_number": 8,
+     "name": "Tamagami",
+     "runtime": 23
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-12-06",
+     "episode_number": 9,
+     "name": "Thieves",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-12-13",
+     "episode_number": 10,
+     "name": "Ocean",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-12-20",
+     "episode_number": 11,
+     "name": "Legend",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-12-27",
+     "episode_number": 12,
+     "name": "True Strength",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-01-10",
+     "episode_number": 13,
+     "name": "Surprise",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-01-17",
+     "episode_number": 14,
+     "name": "Taboo",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-01-24",
+     "episode_number": 15,
+     "name": "Third Eye",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-01-31",
+     "episode_number": 16,
+     "name": "Degesu",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-02-07",
+     "episode_number": 17,
+     "name": "Gomah",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-02-14",
+     "episode_number": 18,
+     "name": "Awakening",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-02-21",
+     "episode_number": 19,
+     "name": "Betrayal",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-02-28",
+     "episode_number": 20,
+     "name": "Maximum",
+     "runtime": 24
+    }
+   ],
+   "name": "Season 1",
+   "season_number": 1
+  }
+ ],
+ "title": "七龍珠大魔",
+ "title_en": "Dragon Ball DAIMA",
+ "title_original": "ドラゴンボールDAIMA",
+ "titles": [
+  "Dragon Ball DAIMA",
+  "ドラゴンボールDAIMA",
+  "Дракон Топка Дайма",
+  "七龙珠DAIMA",
+  "龙珠DAIMA",
+  "龙珠 大魔",
+  "Doragon Bôru Daima",
+  "Перлини дракона Дайма",
+  "Яйця Дракона: Дайма",
+  "Dragon Ball Daima",
+  "龙珠大魔",
+  "드래곤볼 다이마",
+  "ดราก้อนบอล ไดมะ",
+  "Драконий жемчуг Дайма",
+  "七龍珠大魔",
+  "ურჩხულ დაიმას მარგალიტი",
+  "Drakonų kova Daima",
+  "龍珠大魔",
+  "דרגון בול דאימה",
+  "Драґон Бол Дайма",
+  "Bola de drac DAIMA",
+  "Драгълбол: Дайма"
+ ],
+ "tmdb_id": 236994,
+ "year": 2024
+}

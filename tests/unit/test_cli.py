@@ -116,3 +116,77 @@ class TestOpenapi:
 
         document = json.loads(capsysbinary.readouterr().out.decode("utf-8"))
         assert "/api/health" in document["paths"]
+
+
+class TestBench:
+    """`berth bench` 的離開碼就是 CI 的門檻（plan §4.6），所以連 CLI 這一層一起測。
+
+    語料換成一個最小的假 repo：真的那一份由 `tests/unit/test_bench.py` 守著，
+    這裡量的是「報表說有問題時，指令有沒有真的失敗」。
+    """
+
+    @pytest.fixture
+    def repo(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+        corpus = tmp_path / "tests" / "fixtures" / "parser" / "anime"
+        corpus.mkdir(parents=True)
+        snapshots = tmp_path / "tests" / "fixtures" / "tmdb"
+        snapshots.mkdir(parents=True)
+        (snapshots / "tv-1.json").write_text(
+            json.dumps(
+                {"tmdb_id": 1, "kind": "tv", "title": "S", "title_en": "S", "title_original": "S"}
+            ),
+            encoding="utf-8",
+        )
+        monkeypatch.setattr("berth.cli.REPO_ROOT", tmp_path)
+        return tmp_path
+
+    def write_fixture(self, repo: Path, *, kind: str) -> None:
+        payload = {
+            "id": "anime/stub",
+            "source_url": "https://example.invalid/stub",
+            "torrent_name": "[Group] Show - 02 [1080p]",
+            "tmdb": "tv-1",
+            "context": {"media": "tv:1", "profile": "anime"},
+            "files": [{"path": "Show - 02.mkv", "size": 1000}],
+            "expected": [{"path": "Show - 02.mkv", "kind": kind, "action": "review"}],
+        }
+        path = repo / "tests" / "fixtures" / "parser" / "anime" / "stub.json"
+        path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+
+    def write_baseline(self, repo: Path, *, auto_correct: int, auto_wrong: int) -> None:
+        (repo / "tests" / "fixtures" / "parser" / "baseline.json").write_text(
+            json.dumps({"auto_correct": auto_correct, "auto_wrong": auto_wrong}), encoding="utf-8"
+        )
+
+    def test_a_clean_run_succeeds_and_prints_the_report(
+        self, repo: Path, capsysbinary: pytest.CaptureFixture[bytes]
+    ) -> None:
+        self.write_fixture(repo, kind="video")
+        self.write_baseline(repo, auto_correct=0, auto_wrong=0)
+
+        assert main(["bench"]) == 0
+        assert "auto_wrong" in capsysbinary.readouterr().out.decode("utf-8")
+
+    def test_a_misclassified_file_fails(self, repo: Path) -> None:
+        self.write_fixture(repo, kind="extra")
+        self.write_baseline(repo, auto_correct=0, auto_wrong=0)
+
+        assert main(["bench"]) == 1
+
+    def test_falling_below_the_baseline_fails(self, repo: Path) -> None:
+        self.write_fixture(repo, kind="video")
+        self.write_baseline(repo, auto_correct=9, auto_wrong=0)
+
+        assert main(["bench"]) == 1
+
+    def test_update_baseline_writes_the_current_numbers(self, repo: Path) -> None:
+        self.write_fixture(repo, kind="video")
+        self.write_baseline(repo, auto_correct=9, auto_wrong=9)
+
+        assert main(["bench", "--update-baseline"]) == 0
+
+        written = json.loads(
+            (repo / "tests" / "fixtures" / "parser" / "baseline.json").read_text(encoding="utf-8")
+        )
+        assert (written["auto_correct"], written["auto_wrong"]) == (0, 0)
+        assert main(["bench"]) == 0

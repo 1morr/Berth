@@ -1,0 +1,21 @@
+{
+  "id": "tv/gto-2026-magicstar",
+  "source_url": "https://share.dmhy.org/topics/view/726599_2026_MagicStar_GTO_2026_EP08_WEBDL_1080p_Netflix.html",
+  "torrent_name": "【2026夏季日剧】[MagicStar] GTO 2026 EP08 [WEBDL] [1080p] [Netflix]【生】【附官方日英简繁中字幕】",
+  "tmdb": "tv-325022",
+  "context": {"media": "tv:325022", "profile": "standard", "season_hint": null, "episode_offset": null},
+  "files": [
+    {"path": "GTO.2026.EP08.1080p.NF.WEB-DL.AAC2.0.H.264-MagicStar.mkv", "size": 1747359396},
+    {"path": "GTO.2026.EP08.1080p.NF.WEB-DL.AAC2.0.H.264-MagicStar.Cht.srt", "size": 49878},
+    {"path": "GTO.2026.EP08.1080p.NF.WEB-DL.AAC2.0.H.264-MagicStar.Eng.srt", "size": 51937},
+    {"path": "GTO.2026.EP08.1080p.NF.WEB-DL.AAC2.0.H.264-MagicStar.Jpn.srt", "size": 61732},
+    {"path": "GTO.2026.EP08.1080p.NF.WEB-DL.AAC2.0.H.264-MagicStar.Chs.srt", "size": 49354}
+  ],
+  "expected": [
+    {"path": "GTO.2026.EP08.1080p.NF.WEB-DL.AAC2.0.H.264-MagicStar.mkv", "kind": "video", "action": "import", "season": 1, "episode": 8, "tags": {"source": "WEB", "resolution": "1080p", "subs": ["CHS", "CHT", "JP", "EN"], "group": "MagicStar"}, "min_confidence": "medium"},
+    {"path": "GTO.2026.EP08.1080p.NF.WEB-DL.AAC2.0.H.264-MagicStar.Cht.srt", "kind": "subtitle", "action": "subtitle", "season": 1, "episode": 8},
+    {"path": "GTO.2026.EP08.1080p.NF.WEB-DL.AAC2.0.H.264-MagicStar.Eng.srt", "kind": "subtitle", "action": "subtitle", "season": 1, "episode": 8},
+    {"path": "GTO.2026.EP08.1080p.NF.WEB-DL.AAC2.0.H.264-MagicStar.Jpn.srt", "kind": "subtitle", "action": "subtitle", "season": 1, "episode": 8},
+    {"path": "GTO.2026.EP08.1080p.NF.WEB-DL.AAC2.0.H.264-MagicStar.Chs.srt", "kind": "subtitle", "action": "subtitle", "season": 1, "episode": 8}
+  ]
+}

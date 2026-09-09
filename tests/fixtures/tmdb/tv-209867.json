@@ -1,0 +1,515 @@
+{
+ "first_air_date": "2023-09-29",
+ "kind": "tv",
+ "overview": "魔法使芙莉蓮與勇者欣梅爾等人一同經歷了10年的冒險，最終打倒魔王，替世界帶來了和平。芙莉蓮身為活了千年以上的精靈，她與欣梅爾等人約好再次相會後，便獨自踏上旅程。在那之後過了50年，芙莉蓮造訪欣梅爾的所在地，但她與50年前長得一模一樣，相較之下欣梅爾已經老去，早已時日無多。之後，芙莉蓮親眼見到過世的欣梅爾，深深體悟自己至今都沒有去「了解他人」，對此感到懊悔的她，決定「為了了解他人」而踏上旅程。與各種人的邂逅，以及各式各樣的遭遇，正在這趟旅程的前方等著她。",
+ "poster_url": "https://image.tmdb.org/t/p/w342/pi4Lb0nRcGiVelbSXa5uvwoOltF.jpg",
+ "runtime": null,
+ "seasons": [
+  {
+   "air_date": "2023-10-11",
+   "episode_count": 26,
+   "episodes": [
+    {
+     "absolute_number": 1,
+     "air_date": "2023-10-11",
+     "episode_number": 1,
+     "name": "OO Magic Episode 1: The Magic of Saying What You Are Thinking",
+     "runtime": 2
+    },
+    {
+     "absolute_number": 2,
+     "air_date": "2023-10-25",
+     "episode_number": 2,
+     "name": "OO Magic Episode 2: The Magic of Removing Only Alcohol From Alcoholic Beverages",
+     "runtime": 2
+    },
+    {
+     "absolute_number": 3,
+     "air_date": "2023-11-15",
+     "episode_number": 3,
+     "name": "OO Magic Episode 3: The Magic of Waking Up at a Certain Time in the Morning",
+     "runtime": 1
+    },
+    {
+     "absolute_number": 4,
+     "air_date": "2023-11-29",
+     "episode_number": 4,
+     "name": "OO Magic Episode 4: The Magic That Makes Your Body Smell Good",
+     "runtime": 1
+    },
+    {
+     "absolute_number": 5,
+     "air_date": "2023-12-14",
+     "episode_number": 5,
+     "name": "OO Magic Special Episode: The Magic of Happiness at the Table",
+     "runtime": 2
+    },
+    {
+     "absolute_number": 6,
+     "air_date": "2023-12-27",
+     "episode_number": 6,
+     "name": "OO Magic Episode 5: The Magic That Brings Good Luck",
+     "runtime": 1
+    },
+    {
+     "absolute_number": 7,
+     "air_date": "2024-01-10",
+     "episode_number": 7,
+     "name": "OO Magic Episode 6: The Magic That Removes Persistent Oil Stains",
+     "runtime": 1
+    },
+    {
+     "absolute_number": 8,
+     "air_date": "2024-01-24",
+     "episode_number": 8,
+     "name": "OO Magic Episode 7: The Magic of Being Able to Speak Extremely Fast and Without Hestitation",
+     "runtime": 1
+    },
+    {
+     "absolute_number": 9,
+     "air_date": "2024-02-07",
+     "episode_number": 9,
+     "name": "OO Magic Episode 8: The Magic to Understand a Fish's Feelings",
+     "runtime": 1
+    },
+    {
+     "absolute_number": 10,
+     "air_date": "2024-02-19",
+     "episode_number": 10,
+     "name": "OO Magic Episode 9: The Magic That Brings Good Luck - Part 2",
+     "runtime": 1
+    },
+    {
+     "absolute_number": 11,
+     "air_date": "2024-03-11",
+     "episode_number": 11,
+     "name": "OO Magic Episode 10: The Magic of Ending One's Sentences in a Weird Way",
+     "runtime": 1
+    },
+    {
+     "absolute_number": 24,
+     "air_date": "2024-03-23",
+     "episode_number": 12,
+     "name": "Frieren: Journey's Memory Special Video",
+     "runtime": 2
+    },
+    {
+     "absolute_number": 12,
+     "air_date": "2024-03-24",
+     "episode_number": 13,
+     "name": "OO Magic Episode 11: The Magic That Makes Clothes Clean and Spotless",
+     "runtime": 1
+    },
+    {
+     "absolute_number": 25,
+     "air_date": "2024-03-29",
+     "episode_number": 14,
+     "name": "Great Thanksgiving - The Path to Understand People's Hearts",
+     "runtime": 25
+    },
+    {
+     "absolute_number": 13,
+     "air_date": "2025-04-02",
+     "episode_number": 15,
+     "name": "OO Magic Episode 12: Magic to Increase Height",
+     "runtime": 2
+    },
+    {
+     "absolute_number": 14,
+     "air_date": "2025-05-07",
+     "episode_number": 16,
+     "name": "OO Magic Episode 13: The Magic to Have a Full Stomach",
+     "runtime": 2
+    },
+    {
+     "absolute_number": 15,
+     "air_date": "2025-06-04",
+     "episode_number": 17,
+     "name": "OO Magic Episode 14: The Magic That Can Cut Almost Anything",
+     "runtime": 2
+    },
+    {
+     "absolute_number": 16,
+     "air_date": "2025-07-02",
+     "episode_number": 18,
+     "name": "OO Magic Episode 15: The Magic to Move at High Speeds",
+     "runtime": 2
+    },
+    {
+     "absolute_number": 17,
+     "air_date": "2025-08-06",
+     "episode_number": 19,
+     "name": "OO Magic Episode 16: The Magic to Make Your Surroundings Cool",
+     "runtime": 2
+    },
+    {
+     "absolute_number": 18,
+     "air_date": "2025-09-03",
+     "episode_number": 20,
+     "name": "OO Magic Episode 17: The Magic to Seal Special Techniques",
+     "runtime": 2
+    },
+    {
+     "absolute_number": 19,
+     "air_date": "2026-01-19",
+     "episode_number": 21,
+     "name": "OO Magic Episode 18: The Magic to Restrain Those in View",
+     "runtime": 2
+    },
+    {
+     "absolute_number": 20,
+     "air_date": "2026-02-02",
+     "episode_number": 22,
+     "name": "OO Magic Episode 19: The Magic to Return to Childhood",
+     "runtime": 2
+    },
+    {
+     "absolute_number": 21,
+     "air_date": "2026-02-17",
+     "episode_number": 23,
+     "name": "OO Magic Episode 20: The Magic to Swaps the Mind and Body",
+     "runtime": 2
+    },
+    {
+     "absolute_number": 22,
+     "air_date": "2026-03-02",
+     "episode_number": 24,
+     "name": "OO Magic Episode 21: The Magic of Laundry",
+     "runtime": 2
+    },
+    {
+     "absolute_number": 23,
+     "air_date": "2026-03-16",
+     "episode_number": 25,
+     "name": "OO Magic Episode 22: The Magic of Saying What You Are Thinking - Part 2",
+     "runtime": 2
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-05-22",
+     "episode_number": 26,
+     "name": "OO Magic Episode USJ Special Edition: The Magic to Admiration",
+     "runtime": 2
+    }
+   ],
+   "name": "Specials",
+   "season_number": 0
+  },
+  {
+   "air_date": "2023-09-29",
+   "episode_count": 38,
+   "episodes": [
+    {
+     "absolute_number": 1,
+     "air_date": "2023-09-29",
+     "episode_number": 1,
+     "name": "The Journey's End",
+     "runtime": 26
+    },
+    {
+     "absolute_number": 2,
+     "air_date": "2023-09-29",
+     "episode_number": 2,
+     "name": "It Didn't Have to Be Magic...",
+     "runtime": 26
+    },
+    {
+     "absolute_number": 3,
+     "air_date": "2023-09-29",
+     "episode_number": 3,
+     "name": "Killing Magic",
+     "runtime": 25
+    },
+    {
+     "absolute_number": 4,
+     "air_date": "2023-09-29",
+     "episode_number": 4,
+     "name": "The Land Where Souls Rest",
+     "runtime": 26
+    },
+    {
+     "absolute_number": 5,
+     "air_date": "2023-10-06",
+     "episode_number": 5,
+     "name": "Phantoms of the Dead",
+     "runtime": 25
+    },
+    {
+     "absolute_number": 6,
+     "air_date": "2023-10-13",
+     "episode_number": 6,
+     "name": "The Hero of the Village",
+     "runtime": 25
+    },
+    {
+     "absolute_number": 7,
+     "air_date": "2023-10-20",
+     "episode_number": 7,
+     "name": "Like a Fairy Tale",
+     "runtime": 25
+    },
+    {
+     "absolute_number": 8,
+     "air_date": "2023-10-27",
+     "episode_number": 8,
+     "name": "Frieren the Slayer",
+     "runtime": 25
+    },
+    {
+     "absolute_number": 9,
+     "air_date": "2023-11-03",
+     "episode_number": 9,
+     "name": "Aura the Guillotine",
+     "runtime": 25
+    },
+    {
+     "absolute_number": 10,
+     "air_date": "2023-11-10",
+     "episode_number": 10,
+     "name": "A Powerful Mage",
+     "runtime": 25
+    },
+    {
+     "absolute_number": 11,
+     "air_date": "2023-11-17",
+     "episode_number": 11,
+     "name": "Winter in the Northern Lands",
+     "runtime": 25
+    },
+    {
+     "absolute_number": 12,
+     "air_date": "2023-11-24",
+     "episode_number": 12,
+     "name": "A Real Hero",
+     "runtime": 25
+    },
+    {
+     "absolute_number": 13,
+     "air_date": "2023-12-01",
+     "episode_number": 13,
+     "name": "Aversion to One's Own Kind",
+     "runtime": 25
+    },
+    {
+     "absolute_number": 14,
+     "air_date": "2023-12-08",
+     "episode_number": 14,
+     "name": "Privilege of the Young",
+     "runtime": 25
+    },
+    {
+     "absolute_number": 15,
+     "air_date": "2023-12-15",
+     "episode_number": 15,
+     "name": "Smells Like Trouble",
+     "runtime": 25
+    },
+    {
+     "absolute_number": 16,
+     "air_date": "2023-12-22",
+     "episode_number": 16,
+     "name": "Long-Lived Friends",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 17,
+     "air_date": "2024-01-05",
+     "episode_number": 17,
+     "name": "Take Care",
+     "runtime": 25
+    },
+    {
+     "absolute_number": 18,
+     "air_date": "2024-01-12",
+     "episode_number": 18,
+     "name": "First-Class Mage Exam",
+     "runtime": 25
+    },
+    {
+     "absolute_number": 19,
+     "air_date": "2024-01-19",
+     "episode_number": 19,
+     "name": "Well-Laid Plans",
+     "runtime": 25
+    },
+    {
+     "absolute_number": 20,
+     "air_date": "2024-01-26",
+     "episode_number": 20,
+     "name": "Necessary Killing",
+     "runtime": 25
+    },
+    {
+     "absolute_number": 21,
+     "air_date": "2024-02-02",
+     "episode_number": 21,
+     "name": "The World of Magic",
+     "runtime": 25
+    },
+    {
+     "absolute_number": 22,
+     "air_date": "2024-02-09",
+     "episode_number": 22,
+     "name": "Future Enemies",
+     "runtime": 25
+    },
+    {
+     "absolute_number": 23,
+     "air_date": "2024-02-16",
+     "episode_number": 23,
+     "name": "Conquering the Labyrinth",
+     "runtime": 25
+    },
+    {
+     "absolute_number": 24,
+     "air_date": "2024-02-23",
+     "episode_number": 24,
+     "name": "Perfect Replicas",
+     "runtime": 25
+    },
+    {
+     "absolute_number": 25,
+     "air_date": "2024-03-01",
+     "episode_number": 25,
+     "name": "A Fatal Vulnerability",
+     "runtime": 25
+    },
+    {
+     "absolute_number": 26,
+     "air_date": "2024-03-08",
+     "episode_number": 26,
+     "name": "The Height of Magic",
+     "runtime": 25
+    },
+    {
+     "absolute_number": 27,
+     "air_date": "2024-03-15",
+     "episode_number": 27,
+     "name": "An Era of Humans",
+     "runtime": 25
+    },
+    {
+     "absolute_number": 28,
+     "air_date": "2024-03-22",
+     "episode_number": 28,
+     "name": "It Would Be Embarrassing When We Met Again",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 1,
+     "air_date": "2026-01-16",
+     "episode_number": 29,
+     "name": "Shall We Go, Then?",
+     "runtime": 23
+    },
+    {
+     "absolute_number": 2,
+     "air_date": "2026-01-23",
+     "episode_number": 30,
+     "name": "The Hero of the South",
+     "runtime": 23
+    },
+    {
+     "absolute_number": 3,
+     "air_date": "2026-01-30",
+     "episode_number": 31,
+     "name": "Somewhere She'd Like",
+     "runtime": 23
+    },
+    {
+     "absolute_number": 4,
+     "air_date": "2026-02-06",
+     "episode_number": 32,
+     "name": "Other People's Homes",
+     "runtime": 23
+    },
+    {
+     "absolute_number": 5,
+     "air_date": "2026-02-13",
+     "episode_number": 33,
+     "name": "Logistics in the Northern Plateau",
+     "runtime": 23
+    },
+    {
+     "absolute_number": 6,
+     "air_date": "2026-02-27",
+     "episode_number": 34,
+     "name": "A Demon-Slaying Request",
+     "runtime": 23
+    },
+    {
+     "absolute_number": 7,
+     "air_date": "2026-03-06",
+     "episode_number": 35,
+     "name": "The Divine Revolte",
+     "runtime": 23
+    },
+    {
+     "absolute_number": 8,
+     "air_date": "2026-03-13",
+     "episode_number": 36,
+     "name": "A Magnificent End",
+     "runtime": 23
+    },
+    {
+     "absolute_number": 9,
+     "air_date": "2026-03-20",
+     "episode_number": 37,
+     "name": "Himmel's Memoirs",
+     "runtime": 23
+    },
+    {
+     "absolute_number": 10,
+     "air_date": "2026-03-27",
+     "episode_number": 38,
+     "name": "A Beautiful Sight",
+     "runtime": 23
+    }
+   ],
+   "name": "Season 1",
+   "season_number": 1
+  }
+ ],
+ "title": "葬送的芙莉蓮",
+ "title_en": "Frieren: Beyond Journey's End",
+ "title_original": "葬送のフリーレン",
+ "titles": [
+  "Frieren: Beyond Journey's End",
+  "葬送のフリーレン",
+  "葬送的芙莉莲",
+  "Sósó no Frieren",
+  "葬送的芙莉蓮",
+  "פרירן: מעבר לסוף המסע",
+  "फ्रायरन : यात्रा के अंत से परे",
+  "そうそうのフリーレン",
+  "Sōsō no Furīren",
+  "Sousou no Frieren",
+  "فريرِن: ما وراء نهاية الرّحلة",
+  "Фрирен, провожающая в последний путь",
+  "Провожающая в последний путь Фрирен",
+  "فريرن: ما وراء نهاية الرحلة",
+  "Фрірен після кінця пригоди",
+  "Frieren of the Funeral",
+  "Frieren Beyond Journeys End",
+  "Frieren: Tras finalizar el viaje",
+  "Frieren: Más allá del final del viaje",
+  "Frieren - Nach dem Ende der Reise",
+  "Frieren e a Jornada para o Além",
+  "Frieren",
+  "Frieren - Oltre la Fine del Viaggio",
+  "Frieren: Pháp Sư Tiễn Táng",
+  "장송의 프리렌",
+  "Frieren: Beyond Journey’s End",
+  "Frieren: Když jedna cesta končí",
+  "Фрірен: після кінця пригоди",
+  "Frieren. U kresu drogi",
+  "คำอธิษฐานในวันที่จากลา",
+  "Фриерен: Након краја путовања",
+  "Frieren: Po kelionės pabaigos",
+  "Frieren: Més enllà de la fi del viatge",
+  "Frieren: Az utazás végén túl",
+  "Фриерен: Отвъд края на пътуването"
+ ],
+ "tmdb_id": 209867,
+ "year": 2023
+}
