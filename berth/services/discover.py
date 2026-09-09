@@ -47,7 +47,11 @@ POPULAR_KEY = "discover:popular"
 
 @dataclass(frozen=True, slots=True)
 class DiscoverItem:
-    """牆上的一格：一張卡加上「我追了沒」。"""
+    """牆上的一格：一張 `MediaCard` 加上「我追了沒」。
+
+    欄位與 `MediaCard` 一致（`from_card()` 直接展開它），不是各寫一份——`api` 不可以 import
+    `models`（plan §1.3），所以命令回的東西必須是 services 自己的型別。
+    """
 
     id: str
     tmdb_id: int
@@ -58,6 +62,10 @@ class DiscoverItem:
     poster_url: str
     #: M1 只有兩種狀態（票 03）；部分 / 完整 / 下載中要等 Job 與帳本（brief §13）。
     tracked: bool
+
+    @classmethod
+    def from_card(cls, card: MediaCard, *, tracked: bool) -> DiscoverItem:
+        return cls(id=card.id, tracked=tracked, **card.model_dump())
 
 
 @dataclass(frozen=True, slots=True)
@@ -136,11 +144,12 @@ async def _feed(
         return await _decorate(session, cached)
 
     settings = await read_settings(session, TmdbSettings)
-    if not credential(settings):
+    key_in_hand = credential(settings)
+    if not key_in_hand:
         # 憑證是精靈第 6 步的必填閘門（票 02b），所以「沒有 key」有一句自己的話。
         return DiscoverResult((), DiscoverProblem.CREDENTIAL_MISSING, MISSING_CREDENTIAL)
 
-    client = factory.tmdb(credential(settings))
+    client = factory.tmdb(key_in_hand)
     try:
         cards = await fetch(client, await _image_base(session, settings, client))
     except AuthFailedError as exc:
@@ -231,19 +240,7 @@ async def _write_cache(session: AsyncSession, key: str, cards: tuple[MediaCard, 
 async def _decorate(session: AsyncSession, cards: tuple[MediaCard, ...]) -> DiscoverResult:
     tracked = await _tracked_ids(session, cards)
     return DiscoverResult(
-        tuple(
-            DiscoverItem(
-                id=card.id,
-                tmdb_id=card.tmdb_id,
-                kind=card.kind,
-                title=card.title,
-                title_en=card.title_en,
-                year=card.year,
-                poster_url=card.poster_url,
-                tracked=card.id in tracked,
-            )
-            for card in cards
-        )
+        tuple(DiscoverItem.from_card(card, tracked=card.id in tracked) for card in cards)
     )
 
 

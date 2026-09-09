@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { Discover, DiscoverItem } from '../api/discover'
 import { HEALTHY, stubApi, type StubRoute } from '../test/fetch'
+import { discoverWall as wall } from '../test/fixtures'
 import { renderApp } from '../test/render'
 
 afterEach(() => {
@@ -28,10 +29,6 @@ function item(overrides: Partial<DiscoverItem> = {}): DiscoverItem {
   }
 }
 
-function wall(...items: DiscoverItem[]): StubRoute {
-  return { body: { items, problem: null, detail: '' } satisfies Discover }
-}
-
 const MOANA = item({
   id: 'movie:1108427',
   tmdb_id: 1108427,
@@ -49,8 +46,8 @@ function render(
   return stubApi({
     'GET /api/health': { body: HEALTHY },
     'GET /api/auth/me': { body: { name: 'skipper', role } },
-    [TRENDING]: wall(item()),
-    [POPULAR]: wall(MOANA),
+    [TRENDING]: wall([item()]),
+    [POPULAR]: wall([MOANA]),
     ...routes,
   })
 }
@@ -81,7 +78,7 @@ describe('探索頁', () => {
   })
 
   it('顯示用標題與英文標題相同時不重複印一次', async () => {
-    render({ [TRENDING]: wall(MOANA), [POPULAR]: wall() })
+    render({ [TRENDING]: wall([MOANA]), [POPULAR]: wall() })
     renderApp('/')
 
     await screen.findByText('Moana')
@@ -90,7 +87,7 @@ describe('探索頁', () => {
   })
 
   it('追蹤狀態畫在卡片上（M1 只有未追蹤 / 已追蹤）', async () => {
-    render({ [TRENDING]: wall(item({ tracked: true }), MOANA) })
+    render({ [TRENDING]: wall([item({ tracked: true }), MOANA]) })
     renderApp('/')
 
     await screen.findByText('已追蹤')
@@ -99,7 +96,7 @@ describe('探索頁', () => {
   })
 
   it('沒有海報的作品畫一格空位，不是破圖', async () => {
-    render({ [TRENDING]: wall(item({ poster_url: '' })) })
+    render({ [TRENDING]: wall([item({ poster_url: '' })]) })
     renderApp('/')
 
     await screen.findByText('無海報')
@@ -134,7 +131,7 @@ describe('探索頁的搜尋', () => {
 
   it('鍵入即搜，結果接管整面牆', async () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
-    render({ 'GET /api/discover/search?q=moana': wall(MOANA) })
+    render({ 'GET /api/discover/search?q=moana': wall([MOANA]) })
     renderApp('/')
     await screen.findByRole('region', { name: '本週趨勢' })
 
@@ -160,7 +157,7 @@ describe('探索頁的搜尋', () => {
 
   it('防抖：連打一個詞不會每個按鍵都送一次', async () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
-    const fetchStub = render({ 'GET /api/discover/search?q=moana': wall(MOANA) })
+    const fetchStub = render({ 'GET /api/discover/search?q=moana': wall([MOANA]) })
     renderApp('/')
     await screen.findByRole('region', { name: '本週趨勢' })
 
@@ -173,7 +170,7 @@ describe('探索頁的搜尋', () => {
 
   it('清空搜尋框回到趨勢與熱門', async () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
-    render({ 'GET /api/discover/search?q=moana': wall(MOANA) })
+    render({ 'GET /api/discover/search?q=moana': wall([MOANA]) })
     renderApp('/')
     await screen.findByRole('region', { name: '本週趨勢' })
 
@@ -186,7 +183,7 @@ describe('探索頁的搜尋', () => {
     expect(await screen.findByRole('region', { name: '本週趨勢' })).toBeInTheDocument()
   })
 
-  it('搜不到時說得出查的是什麼', async () => {
+  it('搜不到時說得出查的是什麼，並給得出下一步', async () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
     render({ 'GET /api/discover/search?q=zzzz': wall() })
     renderApp('/')
@@ -196,6 +193,29 @@ describe('探索頁的搜尋', () => {
     await vi.advanceTimersByTimeAsync(500)
 
     expect(await screen.findByText(/沒有作品叫「zzzz」/)).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '回到趨勢' }))
+    await vi.advanceTimersByTimeAsync(500)
+    expect(await screen.findByRole('region', { name: '本週趨勢' })).toBeInTheDocument()
+  })
+
+  it('換一個詞的時候不把上一輪結果換成一整片空格', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    render({
+      'GET /api/discover/search?q=moana': wall([MOANA]),
+      'GET /api/discover/search?q=moanaa': wall([MOANA]),
+    })
+    renderApp('/')
+    await screen.findByRole('region', { name: '本週趨勢' })
+    await user.type(screen.getByLabelText('搜尋作品'), 'moana')
+    await vi.advanceTimersByTimeAsync(500)
+    await screen.findByText('Moana')
+
+    await user.type(screen.getByLabelText('搜尋作品'), 'a')
+    await vi.advanceTimersByTimeAsync(500)
+
+    // 上一輪的卡片還在，而標題說的仍然是它屬於的那個詞。
+    expect(screen.getByText('Moana')).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: /「moana」?的結果/ })).toBeInTheDocument()
   })
 })
 
@@ -239,6 +259,14 @@ describe('探索頁拿不到 TMDB 時', () => {
     expect(screen.getByText('GET /trending/tv/week: connection refused')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '重試' })).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: '前往設定精靈' })).not.toBeInTheDocument()
+  })
+
+  it('兩個 feed 同一個理由時整頁只說一次，不是逐個 feed 各說一次', async () => {
+    render({ [TRENDING]: missing, [POPULAR]: missing })
+    renderApp('/')
+
+    expect(await screen.findAllByText(/Berth 還沒有 TMDB 憑證/)).toHaveLength(1)
+    expect(screen.queryByRole('region', { name: '本週趨勢' })).not.toBeInTheDocument()
   })
 
   it('一個 feed 壞掉時另一個照樣畫得出來', async () => {

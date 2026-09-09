@@ -1,4 +1,4 @@
-import { useId } from 'react'
+import { useId, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import type { Discover } from '../api/discover'
@@ -19,6 +19,7 @@ export function MediaWall({
   result,
   pending,
   empty,
+  emptyAction,
   onRetry,
 }: {
   title: string
@@ -26,6 +27,8 @@ export function MediaWall({
   pending: boolean
   /** 沒有結果時說什麼。搜尋與趨勢的空手而歸不是同一句話。 */
   empty: string
+  /** 空手而歸時的下一步。搜尋有（回到趨勢），趨勢自己沒有。 */
+  emptyAction?: ReactNode
   onRetry: () => void
 }) {
   const { t } = useTranslation()
@@ -39,7 +42,13 @@ export function MediaWall({
           {title}
         </h2>
         {result && result.items.length > 0 && (
-          <p className="value text-xs text-ink-dim">{result.items.length}</p>
+          // 光一個「40」唸出來是沒有意義的，所以數字本身帶一個說得出單位的名稱。
+          <p
+            aria-label={t('discover.search.count', { count: result.items.length })}
+            className="value text-xs text-ink-dim"
+          >
+            {result.items.length}
+          </p>
         )}
       </div>
 
@@ -58,9 +67,10 @@ export function MediaWall({
           ))}
         </Grid>
       ) : (
-        <p className="max-w-prose py-2 text-sm text-ink-dim">
-          {result ? empty : t('discover.off')}
-        </p>
+        <div className="grid justify-items-start gap-3 py-2">
+          <p className="max-w-prose text-sm text-ink-dim">{result ? empty : t('discover.off')}</p>
+          {result && emptyAction}
+        </div>
       )}
     </section>
   )

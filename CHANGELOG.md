@@ -107,8 +107,28 @@ Windows Docker Desktop（NTFS bind mount）與 Linux（ext4）上各跑一次 `d
 - `pnpm -C web gen:api`：從上一條產出前端的 API 型別 `web/src/api/schema.d.ts`（openapi-typescript）。
   CI 多一個 `api-types` job，型別檔過期時紅燈。
 
+- M1 資料表：`media`（被追蹤的作品，資料夾名一凍結就進了檔案系統）與 `tmdb_cache`（探索與搜尋的
+  一小時快取，整列丟掉不會失去任何東西）。
+- TMDB adapter 補上 `trending/{tv,movie}/week`、`{tv,movie}/popular` 與 `search/multi`，以及
+  **全域 40 req/s 的令牌桶**——上限是每個 IP 的，所以桶是程序層級的一個，不是每個 client 一個。
+- `GET /api/discover/trending`、`/api/discover/popular`、`/api/discover/search?q=`：回作品卡片
+  （tmdb id、類型、顯示用標題、英文標題、年份、完整海報網址、追蹤狀態）。**拿不到 TMDB 時仍是
+  200**，理由放在 `problem`——一頁上有三個 feed，一個垮掉時另外兩個要照樣畫得出來。
+- 探索頁 `/`：趨勢與熱門兩面海報牆（劇集與電影交錯）、鍵入即搜的搜尋（500 ms 防抖、2 字起跳、
+  結果接管整面牆）、卡片顯示追蹤狀態，以及 TMDB 條款要求的歸屬聲明與標誌。
+- `scripts/fake_setup_server.py` 新增 `discover` 與 `tmdb-down` 兩個情境；前者打**真的** TMDB
+  （憑證由環境變數 `BERTH_TMDB_KEY` 帶入）。
+
 ### Changed
 
+- **`/` 不再導向 `/health`**，它就是探索頁（plan §7）。登入之後落到的第一個畫面因此從「看它有沒有
+  壞」變成「找東西」；健康頁留在導覽列上。
+- 依實測更正 TMDB 的三件事（brief §20.3、plan §8.3）：`language` 會換掉 `trending` 回的**成員與
+  順序**而不只是文字（兩輪 20 筆差 3 筆），所以清單以 `en-US` 那一輪為準、`zh-TW` 只當查表；
+  回應裡的 `popularity` **不是**清單的排序依據，所以兩種作品合成一面牆時用交錯而不是重排；
+  `{tv,movie}/popular` 的每一筆沒有 `media_type`。
+- `settings.services.tmdb` 新增 `image_base_url`，精靈第 6 步驗憑證時順手寫下——`configuration`
+  對同一把憑證是常數，每次探索都問一次是白花一個請求。
 - 依實測更正文件：brief §7.2（電影檔名必須含 `[tmdbid-<id>]` 才算多版本）、§7.7（劇集的版本
   標籤是整個檔名而非 tags）、§20.1；plan §5 的命名模板**凍結**，§8.1、§8.2、§9.2、§9.4 依
   實測修正。細節見 `docs/research/m0-experiments.md` 與 `docs/progress.md` 的「偏差與決定」。
@@ -145,6 +165,11 @@ Windows Docker Desktop（NTFS bind mount）與 Linux（ext4）上各跑一次 `d
 
 ### Fixed
 
+- **英文的「{{count}} titles」在只有一筆時說「1 titles」**（探索頁的搜尋計數）。i18next 傳 `count`
+  時查的是 `_one` / `_other`，兩個都沒有就退回原鍵。其他頁面既有的同類鍵尚未處理，留給 M1 的 UI 收尾。
+- **一把真的 TMDB v3 API key 被當成「同形狀的假值」寫進測試**（票 08）。它從未被推送——帶著它的
+  兩個 commit 都還在本地 `main` 上——但憑證仍已換掉，字串換成 `0000…0003`。假值的號碼表寫進
+  `tests/fixtures/http/README.md`，那條規則現在管的不只是 fixture 檔，也管任何寫得出憑證形狀的測試。
 - **泊位板的實測值標籤對比只有 3.56:1**（WCAG 2.2 AA 的驗收條件，PRODUCT.md）。`opacity-70` 疊在
   信號色塊上，正好把 `index.css` 註釋裡「白字配中明度色只有 3.6:1，過不了 AA」那個數字加了回來。
   拿掉 opacity 之後同一批標籤實測 **9.63:1**，精靈與健康頁兩塊板都適用。

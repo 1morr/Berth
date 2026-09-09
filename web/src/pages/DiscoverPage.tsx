@@ -8,7 +8,8 @@ import {
   searchQueryOptions,
   trendingQueryOptions,
 } from '../api/discover'
-import { Field } from '../components/controls'
+import { Field, GhostButton } from '../components/controls'
+import { DiscoverNotice } from '../discover/DiscoverNotice'
 import { MediaWall } from '../discover/MediaWall'
 import tmdbLogo from '../assets/tmdb.svg'
 
@@ -34,6 +35,14 @@ export function DiscoverPage() {
   const trending = useQuery(trendingQueryOptions)
   const popular = useQuery(popularQueryOptions)
   const results = useQuery(searchQueryOptions(debounced))
+  // 上一輪的結果留在畫面上時，`results.data.query` 還是上一輪那個詞。
+  const shown = results.data?.query ?? debounced
+  // 兩個 feed 拿不到 TMDB 的理由通常是同一個（沒憑證、連不上），那時整頁說一次就好——
+  // 逐個 feed 各畫一塊，同一段話與同一條精靈連結會出現兩次。
+  const shared =
+    trending.data?.problem && trending.data.problem === popular.data?.problem
+      ? { problem: trending.data.problem, detail: trending.data.detail }
+      : null
 
   const retry = () => void queryClient.invalidateQueries({ queryKey: ['discover'] })
 
@@ -57,12 +66,20 @@ export function DiscoverPage() {
 
       {searching ? (
         <MediaWall
-          title={t('discover.results', { query: debounced })}
+          // 標題說的是**畫面上那批卡片**屬於哪個查詢，不是輸入框裡現在打到哪。
+          title={t('discover.results', { query: shown })}
           result={results.data}
-          pending={results.isPending || results.isFetching}
-          empty={t('discover.search.none', { query: debounced })}
+          pending={results.isPending}
+          empty={t('discover.search.none', { query: shown })}
+          emptyAction={
+            <GhostButton type="button" onClick={() => setQuery('')}>
+              {t('discover.search.back')}
+            </GhostButton>
+          }
           onRetry={retry}
         />
+      ) : shared ? (
+        <DiscoverNotice problem={shared.problem} detail={shared.detail} onRetry={retry} />
       ) : (
         <>
           <MediaWall
@@ -92,7 +109,7 @@ export function DiscoverPage() {
 
   function searchStatus() {
     if (query.trim().length > 0 && query.trim().length < MIN_QUERY_LENGTH) {
-      return t('discover.search.tooShort', { count: MIN_QUERY_LENGTH })
+      return t('discover.search.tooShort', { min: MIN_QUERY_LENGTH })
     }
     if (!searching) return ''
     if (results.isFetching) return t('discover.search.searching')

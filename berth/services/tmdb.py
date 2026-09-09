@@ -53,30 +53,34 @@ async def verify_tmdb(
     setup = await read_settings(session, SetupSettings)
     settings = await read_settings(session, TmdbSettings)
     settings.api_key = api_key.strip()
-    #: 先存：測不過也要存得下來，使用者才能改一個字再按一次（與其他連線表單同一個規矩）。
-    await write_settings(session, settings)
 
-    setup.tmdb.steps = [await _test(factory, settings)]
-    # `_test` 綠燈時會把圖片基底寫進 `settings`，所以測完再存一次。
+    step, image_base_url = await _test(factory, settings)
+    # 圖片基底順手存下來：它對同一把憑證是常數，而探索頁（票 03）每一張卡都要它。
+    settings.image_base_url = image_base_url or settings.image_base_url
+    setup.tmdb.steps = [step]
+    # 測不過也存，使用者才能改一個字再按一次（與其他連線表單同一個規矩）。
     await write_settings(session, settings)
     await write_settings(session, setup)
     await session.commit()
     return _view(setup, settings)
 
 
-async def _test(factory: ServiceClientFactory, settings: TmdbSettings) -> SetupStep:
+async def _test(factory: ServiceClientFactory, settings: TmdbSettings) -> tuple[SetupStep, str]:
+    """回這一步的結果，以及 `configuration` 給的圖片基底（失敗時是空字串）。
+
+    基底由呼叫端寫回設定，不在這裡偷偷改 `settings`——那會讓「這支只是測一下」變成假的。
+    """
     if not credential(settings):
-        return SetupStep(key=TMDB_STEP, status=StepStatus.FAILED, error=MISSING_CREDENTIAL)
+        return (SetupStep(key=TMDB_STEP, status=StepStatus.FAILED, error=MISSING_CREDENTIAL), "")
 
     client = factory.tmdb(credential(settings))
     try:
         configuration = await client.configuration()
     except ServiceError as exc:
-        return SetupStep(key=TMDB_STEP, status=StepStatus.FAILED, error=message(exc))
+        return (SetupStep(key=TMDB_STEP, status=StepStatus.FAILED, error=message(exc)), "")
     else:
-        # 圖片基底順手存下來：它對同一把憑證是常數，而探索頁（票 03）每一張卡都要它。
-        settings.image_base_url = configuration.image_base_url
-        return SetupStep(key=TMDB_STEP, status=StepStatus.OK, detail=configuration.image_base_url)
+        base = configuration.image_base_url
+        return (SetupStep(key=TMDB_STEP, status=StepStatus.OK, detail=base), base)
     finally:
         await client.aclose()
 

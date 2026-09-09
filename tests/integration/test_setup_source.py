@@ -39,6 +39,7 @@ from berth.services.indexer import (
 from berth.services.settings import read_settings, write_settings
 from berth.services.setup import STEP_INDEXER, STEP_ROUTES, STEP_TMDB, create_admin, read_status
 from berth.services.tmdb import read_tmdb_status, verify_tmdb
+from tests.conftest import TMDB_API_KEY
 from tests.integration.factories import FakeClientFactory
 
 NOW = datetime(2026, 9, 8, 12, 0, tzinfo=UTC)
@@ -308,7 +309,7 @@ async def test_only_the_indexer_half_of_the_source_berth_can_be_skipped(
     await skip_indexers(session, FakeClientFactory())
     assert (await read_status(session)).current_step == STEP_TMDB
 
-    await verify_tmdb(session, FakeClientFactory(), api_key="00000000000000000000000000000003")
+    await verify_tmdb(session, FakeClientFactory(), api_key=TMDB_API_KEY)
     assert (await read_status(session)).current_step == STEP_ROUTES
 
 
@@ -340,16 +341,14 @@ async def test_the_pasted_key_is_the_only_source_of_the_credential(
     before = await read_tmdb_status(session)
     assert (before.api_key_present, before.verified) == (False, False)
 
-    status = await verify_tmdb(session, factory, api_key="  00000000000000000000000000000003 ")
+    status = await verify_tmdb(session, factory, api_key=f"  {TMDB_API_KEY} ")
 
-    assert client.credential == "00000000000000000000000000000003"
+    assert client.credential == TMDB_API_KEY
     assert [(row.step, row.status, row.detail) for row in status.steps] == [
         ("configuration", StepStatus.OK, "https://image.tmdb.org/t/p/")
     ]
     assert (status.api_key_present, status.verified) == (True, True)
-    assert (
-        await read_settings(session, TmdbSettings)
-    ).api_key == "00000000000000000000000000000003"
+    assert (await read_settings(session, TmdbSettings)).api_key == TMDB_API_KEY
 
 
 @pytest.mark.asyncio

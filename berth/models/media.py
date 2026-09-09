@@ -100,7 +100,8 @@ class TmdbCache(Base):
 
     __tablename__ = "tmdb_cache"
 
-    #: 查詢的完整識別，見 `services/discover.py` 的 `cache_key()`。
+    #: 查詢的完整識別：`discover:trending`、`discover:popular`，或 `search:<正規化查詢>`
+    #: （`services/discover.py` 的 `TRENDING_KEY` / `POPULAR_KEY` / `search_key()`）。
     key: Mapped[str] = mapped_column(Text, primary_key=True)
     value_json: Mapped[Any] = mapped_column(JsonText)
     fetched_at: Mapped[datetime] = mapped_column(UtcDateTime, default=utcnow)

@@ -49,6 +49,10 @@ async def session(engine: AsyncEngine) -> AsyncIterator[AsyncSession]:
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
+#: TMDB v3 API key 的**形狀**（32 個十六進位字元），不是一把真的 key。
+#: 每個服務一個號碼，號碼表在 `tests/fixtures/http/README.md`；票 08 曾經在這裡寫了一把真的。
+TMDB_API_KEY = "00000000000000000000000000000003"
+
 
 def read_fixture(relative: str) -> str:
     """`tests/fixtures/` 底下的錄製回應（plan §1.2）。"""

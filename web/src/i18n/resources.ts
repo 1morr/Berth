@@ -483,10 +483,14 @@ const zhHant = {
     search: {
       label: '搜尋作品',
       placeholder: '劇名、片名，中文或英文',
-      tooShort: '再打 {{count}} 個字以上就開始搜尋。',
+      tooShort: '再打 {{min}} 個字以上就開始搜尋。',
       searching: '搜尋中…',
-      count: '{{count}} 部作品',
+      // 中文沒有單複數，兩個變體同字；`count_one` 存在只是為了讓兩個語言的鍵樹一致
+      // （`Translations<typeof zhHant>` 要求形狀相同），實際永遠選不到它。
+      count_one: '{{count}} 部作品',
+      count_other: '{{count}} 部作品',
       none: '沒有作品叫「{{query}}」。換個寫法，或試試原文標題。',
+      back: '回到趨勢',
     },
     problem: {
       credential_missing:
@@ -1070,10 +1074,12 @@ const en: Translations<typeof zhHant> = {
     search: {
       label: 'Search titles',
       placeholder: 'A series or film, in any language',
-      tooShort: 'Type {{count}} or more characters to search.',
+      tooShort: 'Type {{min}} or more characters to search.',
       searching: 'Searching…',
-      count: '{{count}} titles',
+      count_one: '{{count}} title',
+      count_other: '{{count}} titles',
       none: 'Nothing here is called “{{query}}”. Try another spelling, or the original title.',
+      back: 'Back to trending',
     },
     problem: {
       credential_missing:

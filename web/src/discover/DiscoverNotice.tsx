@@ -38,6 +38,8 @@ export function DiscoverNotice({
         me.data?.role === 'admin' ? (
           <Link
             to="/setup"
+            // 泊位 3 是**來源**（索引站 + TMDB 兩步），`BERTHS` 的 slot 沿用 `prowlarr`
+            // 只是因為那一格的服務判定來自 Prowlarr；TMDB 的第 6 步也在同一格。
             search={{ berth: berthNumberOf('prowlarr') }}
             className="label justify-self-start border-2 border-rule px-4 py-2.5 text-ink hover:border-rule-strong"
           >

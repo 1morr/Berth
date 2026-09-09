@@ -1,4 +1,4 @@
-import { queryOptions } from '@tanstack/react-query'
+import { keepPreviousData, queryOptions } from '@tanstack/react-query'
 
 import { apiGet } from './client'
 import type { Schemas } from './schemas'
@@ -33,12 +33,22 @@ export const popularQueryOptions = queryOptions({
   staleTime: STALE_TIME,
 })
 
-/** 查詢字串是 query key 的一部分，所以每一輪搜尋各自快取，回頭再打同一個詞是即時的。 */
+/**
+ * 查詢字串是 query key 的一部分，所以每一輪搜尋各自快取，回頭再打同一個詞是即時的。
+ *
+ * `keepPreviousData`：鍵入即搜的話每停一次就是一輪新查詢，沒有它畫面會在「上一輪結果」與
+ * 「一整片讀取中的空格」之間跳，而一輪冷查詢要一秒以上。所以**回應帶著它自己的查詢字串**——
+ * 留在畫面上的是上一輪的卡片，標題就必須跟著說上一輪的詞，否則那面牆會掛著新的標題演舊的結果。
+ */
 export function searchQueryOptions(query: string) {
   return queryOptions({
     queryKey: ['discover', 'search', query],
-    queryFn: () => apiGet<Discover>(`/discover/search?q=${encodeURIComponent(query)}`),
+    queryFn: async () => ({
+      query,
+      ...(await apiGet<Discover>(`/discover/search?q=${encodeURIComponent(query)}`)),
+    }),
     enabled: query.length >= MIN_QUERY_LENGTH,
     staleTime: STALE_TIME,
+    placeholderData: keepPreviousData,
   })
 }

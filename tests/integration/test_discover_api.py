@@ -27,12 +27,12 @@ from berth.models import TmdbSettings
 from berth.services.routes import build_routes
 from berth.services.settings import write_settings
 from berth.services.setup import complete_setup
+from tests.conftest import TMDB_API_KEY
 from tests.integration.arrange import arrange, bundled_libraries, factory_for, fake_jellyfin
 from tests.integration.factories import FakeClientFactory
 
 BROWSER = {CSRF_HEADER: "XMLHttpRequest"}
 ADMIN = {"username": "skipper", "password": "harbour"}
-CREDENTIAL = "00000000000000000000000000000003"
 
 LANTERNS = TmdbEntry(
     tmdb_id=95350,
@@ -188,12 +188,13 @@ def _seed(client: TestClient, roots: dict[str, Path], factory: FakeClientFactory
     """精靈跑完（含第 6 步的憑證）、三條 Route 都在。"""
 
     async def run() -> None:
+        # `TestClient.app` 是 Starlette 的 `ASGIApp`，型別上沒有 `state`（實際是 FastAPI）。
         sessions = client.app.state.session_factory  # type: ignore[attr-defined]
         async with sessions() as session:
             await arrange(session, roots)
             await write_settings(
                 session,
-                TmdbSettings(api_key=CREDENTIAL, image_base_url="https://image.tmdb.org/t/p/"),
+                TmdbSettings(api_key=TMDB_API_KEY, image_base_url="https://image.tmdb.org/t/p/"),
             )
             await session.commit()
             await build_routes(session, factory, ())
@@ -206,6 +207,7 @@ def _forget_credential(client: TestClient) -> None:
     """使用者回精靈把 key 清掉了。第 6 步是閘門，但清空之後探索頁得說得出話。"""
 
     async def run() -> None:
+        # `TestClient.app` 是 Starlette 的 `ASGIApp`，型別上沒有 `state`（實際是 FastAPI）。
         sessions = client.app.state.session_factory  # type: ignore[attr-defined]
         async with sessions() as session:
             await write_settings(session, TmdbSettings())

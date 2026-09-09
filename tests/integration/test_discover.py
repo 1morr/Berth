@@ -24,11 +24,10 @@ from berth.services.discover import (
     search_media,
 )
 from berth.services.settings import read_settings, write_settings
+from tests.conftest import TMDB_API_KEY
 from tests.integration.factories import FakeClientFactory
 
 pytestmark = pytest.mark.asyncio
-
-CREDENTIAL = "00000000000000000000000000000003"
 
 
 def entry(
@@ -64,12 +63,14 @@ def tmdb(**kwargs: object) -> FakeTmdbClient:
         "popular": {MediaKind.TV: [SILO], MediaKind.MOVIE: [MOANA]},
         "search": {"spy x family": [SPY_FAMILY]},
     }
+    # `**kwargs` 是 `object`，而 FakeTmdbClient 的每個參數各有自己的型別；這裡刻意用一個
+    # 寬鬆的入口讓每個測試只覆寫它在乎的那一個（`fake_jellyfin` 同一個寫法）。
     return FakeTmdbClient(**{**defaults, **kwargs})  # type: ignore[arg-type]
 
 
 async def credentialled(session: AsyncSession, client: FakeTmdbClient) -> FakeClientFactory:
     """精靈第 6 步做完的樣子：憑證存下來了（票 02b 之後它是必填閘門）。"""
-    await write_settings(session, TmdbSettings(api_key=CREDENTIAL))
+    await write_settings(session, TmdbSettings(api_key=TMDB_API_KEY))
     await session.commit()
     return FakeClientFactory(tmdb=client)
 

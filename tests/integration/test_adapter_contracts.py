@@ -32,8 +32,9 @@ from berth.adapters.prowlarr import (
 )
 from berth.adapters.prowlarr.client import SCHEMA_TIMEOUT_SECONDS, HttpProwlarrClient
 from berth.adapters.qbittorrent.client import HttpQbittorrentClient
+from berth.adapters.rate import TokenBucket
 from berth.adapters.tmdb import TmdbEntry
-from berth.adapters.tmdb.client import HttpTmdbClient
+from berth.adapters.tmdb.client import RATE_PER_SECOND, HttpTmdbClient
 from berth.adapters.torznab.client import HttpTorznabClient
 from berth.domain import CollectionType, MediaKind
 from berth.services.indexer import DEFAULT_INDEXERS
@@ -1208,6 +1209,59 @@ async def test_tmdb_sends_the_language_and_the_search_query() -> None:
     assert params["language"] == "zh-TW"
     #: 探索頁不該回成人內容，而 TMDB 的預設就是不回；明確送出去才不必依賴那個預設。
     assert params["include_adult"] == "false"
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_every_tmdb_request_goes_through_the_token_bucket() -> None:
+    """速率上限在 client 裡，不是呼叫端的紀律——漏掉一支端點就等於沒有上限。"""
+    respx.get(f"{TMDB_URL}/configuration").respond(
+        200, text=read_fixture("http/tmdb/configuration.json")
+    )
+    respx.get(f"{TMDB_URL}/trending/tv/week").respond(
+        200, text=read_fixture("http/tmdb/trending-tv-week.en.json")
+    )
+    respx.get(f"{TMDB_URL}/tv/popular").respond(
+        200, text=read_fixture("http/tmdb/tv-popular.en.json")
+    )
+    respx.get(f"{TMDB_URL}/search/multi").respond(
+        200, text=read_fixture("http/tmdb/search-multi.spy-x-family.en.json")
+    )
+    bucket = CountingBucket()
+
+    client = HttpTmdbClient(V4_READ_TOKEN, base_url=TMDB_URL, bucket=bucket)
+    try:
+        await client.configuration()
+        await client.trending(MediaKind.TV, language="en-US")
+        await client.popular(MediaKind.TV, language="en-US")
+        await client.search("spy x family", language="en-US")
+    finally:
+        await client.aclose()
+
+    assert bucket.acquired == 4
+
+
+def test_the_tmdb_bucket_is_one_per_process_not_one_per_client() -> None:
+    """TMDB 的上限是每個 IP 的。探索頁一次開三個 feed、每個 feed 兩種語言，各配一個桶
+    就等於根本沒有上限（`adapters/tmdb/client.py` 的 `_BUCKET`）。
+    """
+    first = HttpTmdbClient(V4_READ_TOKEN, base_url=TMDB_URL)
+    second = HttpTmdbClient(V4_READ_TOKEN, base_url=TMDB_URL)
+
+    assert first._bucket is second._bucket
+    assert RATE_PER_SECOND == 40.0
+
+
+class CountingBucket(TokenBucket):
+    """真的桶，外加一個計數器。用替身的話就測不到 client 呼叫的是不是 `acquire()`。"""
+
+    def __init__(self) -> None:
+        super().__init__(rate=RATE_PER_SECOND, capacity=int(RATE_PER_SECOND))
+        self.acquired = 0
+
+    async def acquire(self) -> None:
+        self.acquired += 1
+        await super().acquire()
 
 
 @respx.mock
