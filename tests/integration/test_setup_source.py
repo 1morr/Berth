@@ -308,7 +308,7 @@ async def test_only_the_indexer_half_of_the_source_berth_can_be_skipped(
     await skip_indexers(session, FakeClientFactory())
     assert (await read_status(session)).current_step == STEP_TMDB
 
-    await verify_tmdb(session, FakeClientFactory(), api_key="dc332023c119334763ec3b21bcdd1834")
+    await verify_tmdb(session, FakeClientFactory(), api_key="00000000000000000000000000000003")
     assert (await read_status(session)).current_step == STEP_ROUTES
 
 
@@ -340,16 +340,16 @@ async def test_the_pasted_key_is_the_only_source_of_the_credential(
     before = await read_tmdb_status(session)
     assert (before.api_key_present, before.verified) == (False, False)
 
-    status = await verify_tmdb(session, factory, api_key="  dc332023c119334763ec3b21bcdd1834 ")
+    status = await verify_tmdb(session, factory, api_key="  00000000000000000000000000000003 ")
 
-    assert client.credential == "dc332023c119334763ec3b21bcdd1834"
+    assert client.credential == "00000000000000000000000000000003"
     assert [(row.step, row.status, row.detail) for row in status.steps] == [
         ("configuration", StepStatus.OK, "https://image.tmdb.org/t/p/")
     ]
     assert (status.api_key_present, status.verified) == (True, True)
     assert (
         await read_settings(session, TmdbSettings)
-    ).api_key == "dc332023c119334763ec3b21bcdd1834"
+    ).api_key == "00000000000000000000000000000003"
 
 
 @pytest.mark.asyncio

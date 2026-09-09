@@ -47,6 +47,10 @@ TORZNAB_URL = "http://jackett:9117/api/v2.0/indexers/all/results/torznab/api"
 TMDB_URL = "https://api.themoviedb.org/3"
 #: v4 read access token 的**形狀**（三段 JWT）。憑證由使用者自備（票 02b），repo 裡不留真的那一把。
 V4_READ_TOKEN = "eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiJiZXJ0aC10ZXN0Iiwic2NvcGVzIjpbXX0.not-a-signature"
+#: v3 API key 的形狀（32 個十六進位字元）。**這一行曾經是一把真的 key**——票 08 把它當成
+#: 「同形狀的假值」寫進來，而 repo 是公開的（票 03 收尾轉 public），所以它從那天起就對外可讀。
+#: 秘密一律用 `0000…000n` 這種同形狀的假值，每個服務一個號碼（`tests/fixtures/http/README.md`）。
+V3_API_KEY = "00000000000000000000000000000003"
 
 
 @respx.mock
@@ -1064,14 +1068,14 @@ async def test_tmdb_v3_api_key_travels_as_a_query_parameter() -> None:
         200, text=read_fixture("http/tmdb/configuration.json")
     )
 
-    client = HttpTmdbClient("dc332023c119334763ec3b21bcdd1834", base_url=TMDB_URL)
+    client = HttpTmdbClient(V3_API_KEY, base_url=TMDB_URL)
     try:
         await client.configuration()
     finally:
         await client.aclose()
 
     assert "Authorization" not in route.calls.last.request.headers
-    assert route.calls.last.request.url.params["api_key"] == "dc332023c119334763ec3b21bcdd1834"
+    assert route.calls.last.request.url.params["api_key"] == V3_API_KEY
 
 
 @respx.mock

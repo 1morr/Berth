@@ -376,14 +376,14 @@ describe('泊位 3：來源', () => {
     renderWithProviders(<SetupPage />)
     await user.type(
       await screen.findByLabelText('你的 TMDB API key'),
-      ' dc332023c119334763ec3b21bcdd1834 ',
+      ' 00000000000000000000000000000003 ',
     )
     await user.click(screen.getByRole('button', { name: '測試 TMDB' }))
 
     expect(await screen.findByText('https://image.tmdb.org/t/p/')).toBeInTheDocument()
     const call = fetchStub.mock.calls.find(([url]) => String(url).endsWith('/tmdb/test'))!
     expect(JSON.parse(String(call[1]?.body))).toEqual({
-      api_key: 'dc332023c119334763ec3b21bcdd1834',
+      api_key: '00000000000000000000000000000003',
     })
     // 綠燈之後那塊「去哪裡拿」就收起來，剖面改說憑證已經在手上。
     expect(screen.queryByText(/設定 → API/)).not.toBeInTheDocument()
