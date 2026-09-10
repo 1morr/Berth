@@ -5,7 +5,13 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from berth.adapters.qbittorrent import QbittorrentCategory, QbittorrentVersion, TorrentAdd
+from berth.adapters.qbittorrent import (
+    QbittorrentCategory,
+    QbittorrentVersion,
+    TorrentAdd,
+    TorrentFile,
+    TorrentStatus,
+)
 
 #: 乾淨實例的偏好值，取自 `tests/fixtures/http/qbittorrent/app-preferences.*.json` 的同名鍵。
 #: 五個建議鍵全部與建議值不同，所以精靈第 4 步真的有差異可套（brief §20.7）。
@@ -33,6 +39,9 @@ class FakeQbittorrentClient:
         login_error: Exception | None = None,
         set_preferences_error: Exception | None = None,
         add_error: Exception | None = None,
+        torrents: tuple[TorrentStatus, ...] = (),
+        files: Mapping[str, tuple[TorrentFile, ...]] | None = None,
+        sync_error: Exception | None = None,
     ) -> None:
         self.base_url = base_url
         self._version = version or QbittorrentVersion(app="v5.2.3", webapi="2.15.1")
@@ -53,6 +62,13 @@ class FakeQbittorrentClient:
         #: 收下的每一筆 `torrents/add`。送單測試斷言的就是它——category、tag 與
         #: 交出去的到底是磁力連結還是一份 `.torrent`。
         self.added: list[TorrentAdd] = []
+        #: 客戶端當下有哪些 torrent。**是公開的可變欄位**：poller 的測試要在兩輪之間
+        #: 換掉它（下載完成、torrent 被使用者刪掉），那正是狀態機的輸入。
+        self.torrents: tuple[TorrentStatus, ...] = torrents
+        self.files_by_hash: dict[str, tuple[TorrentFile, ...]] = dict(files or {})
+        self.sync_error = sync_error
+        #: `sync()` 被呼叫過幾次。「一輪只問一次」由它守著。
+        self.syncs = 0
 
     async def login(self, username: str, password: str) -> None:
         self.logins.append((username, password))
@@ -94,6 +110,20 @@ class FakeQbittorrentClient:
         if self.add_error is not None:
             raise self.add_error
         self.added.append(request)
+
+    async def sync(self) -> tuple[TorrentStatus, ...]:
+        """替身直接回「現在有哪些」——合併本來就發生在真 client 的 `MaindataCursor` 裡，
+        而那一段由契約測試對錄下來的兩輪回應驗（`tests/integration/test_adapter_contracts.py`）。
+        """
+        self.syncs += 1
+        if self.sync_error is not None:
+            raise self.sync_error
+        return self.torrents
+
+    async def files(self, info_hash: str) -> tuple[TorrentFile, ...]:
+        if self.error is not None:
+            raise self.error
+        return self.files_by_hash.get(info_hash, ())
 
     async def aclose(self) -> None:
         return None

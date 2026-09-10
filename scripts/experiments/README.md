@@ -25,6 +25,7 @@ ffmpeg 產種子檔），那只影響「造測試素材」這一步，不影響 
 | `hardlink.sh` | 在單一掛載根底下真的做一次 `link()`（brief §4.4）。成功回 0，`EXDEV` 或 inode 不符回 1 |
 | `anime_episode_source.py` | M1 票 01：字幕組編號換算到 TMDB 季集 / TVDB aired / TVDB absolute 的失敗率 |
 | `anime_sample.json` | 上一支的樣本：10 部動漫、挑選理由、Mikan 的番組 id |
+| `qbittorrent_poller.py` | M1 票 10：`sync/maindata` 的 rid 增量形狀、`torrents/files` 的相對基準（多檔）、三種處境下的 `state` / `progress` / `completion_on`，以及**連續登入失敗之後的 403 與帳密錯差在哪裡**。最後一項會封住來源 IP，所以它一定跑在最後 |
 | `lib.py` | 共用的 HTTP、輪詢、bencode、報告輸出 |
 
 ## 幾個不明顯的地方

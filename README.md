@@ -276,6 +276,7 @@ uv run python scripts/fake_setup_server.py --scenario mixed
 | `search` | Media 詳情頁的搜尋結果表：TMDB 與**索引站都打真的**。索引站位址從 `BERTH_INDEXER_URL` / `BERTH_INDEXER_KEY` 讀，沒設就退回替身（結果表是空的，那本身也是要驗的畫面）。一次搜尋 35–85 秒 |
 | `submit` | 送單與下載列表 `/jobs`：TMDB 打真的，索引站給三筆磁力連結的替身結果（形狀取自真的那一輪）。送單、解析、Job 與時間線走的都是產品自己的程式碼，只有 qBittorrent 是替身 |
 | `submit-failing` | 同上，但 qBittorrent 收不下：送單失敗那一列、服務回的原文，以及「重新送單」 |
+| `poll` | 送單到完成的狀態**自己走完**（票 10）：qBittorrent 打**真的**那一台，所以 `sync/maindata` 會真的換 state、poller 會真的驅動 §3.1 的轉換、SSE 會真的把那一列推著動。位址從 `BERTH_QBITTORRENT_URL` 讀，準備步驟見下方 |
 
 `healthy` 沒有 TMDB 憑證，所以它同時是探索頁「還沒填憑證」的樣子——那一步是精靈的必填閘門
 （見〈先申請一把 TMDB API key〉），畫面要指得出下一步。
@@ -292,6 +293,42 @@ uv run --env-file .env python scripts/fake_setup_server.py --scenario discover
 # $KEY 是那台 Prowlarr 的 API key（`config.xml` 的 <ApiKey>）。
 BERTH_INDEXER_URL=http://127.0.0.1:19696 BERTH_INDEXER_KEY=$KEY   uv run --env-file .env python scripts/fake_setup_server.py --scenario search
 ```
+
+下載列表要看它**自己動**——狀態與進度不重整就一路走到「下載完成」——那需要一台真的 qBittorrent，
+因為替身收下 `torrents/add` 之後什麼都不會發生：
+
+```bash
+# 1. 一台乾淨的 qBittorrent。**發佈 port 必須是 8080**：它的 Host 檢查連 port 都比對，
+#    偏移的 port 會讓每一個請求回 401（brief §20.7）。
+docker run -d --name berth-poll-demo -p 8080:8080 \
+  -e PUID=1000 -e PGID=1000 -e WEBUI_PORT=8080 \
+  -v "$PWD/.local/experiments/poll-demo:/config" lscr.io/linuxserver/qbittorrent:5.2.3
+
+# 2. 把那一份 torrent 的資料先放進 category 的 save path，qBittorrent 校驗完就是「完成」。
+#    `demo_torrent()` 用的是 `scripts/experiments/lib.py` 的 `make_torrent`，pieces 是真的 SHA-1。
+python - <<'EOF'
+import subprocess, sys, tempfile
+from pathlib import Path
+sys.path[:0] = ["scripts", "scripts/experiments"]
+from fake_setup_server import POLL_FILES, POLL_RELEASE
+with tempfile.TemporaryDirectory() as tmp:
+    root = Path(tmp) / POLL_RELEASE
+    for rel, size in POLL_FILES:
+        (root / rel).parent.mkdir(parents=True, exist_ok=True)
+        (root / rel).write_bytes(bytes((i % 251) for i in range(size)))
+    subprocess.run(["docker", "exec", "berth-poll-demo", "mkdir", "-p", "/downloads/complete/anime"], check=True)
+    subprocess.run(["docker", "cp", str(root), "berth-poll-demo:/downloads/complete/anime/"], check=True)
+EOF
+
+# 3. 起 Berth，開 http://127.0.0.1:8484/jobs（skipper / harbour），在 Media 詳情頁
+#    用關鍵字 `Berth.Poller.Demo` 搜、選 Anime、送單。那一列會自己走完。
+BERTH_QBITTORRENT_URL=http://127.0.0.1:8080   uv run --env-file .env python scripts/fake_setup_server.py --scenario poll
+```
+
+這個情境的三層路徑用的是**容器裡的**那一組（`/downloads/complete`），因為真的 qBittorrent 只用得了
+它自己看得到的路徑。**Windows 上的副作用**：`Path("/downloads")` 在那裡是「目前磁碟機的根目錄底下」，
+所以建 Route 那一步會在 `C:\downloads` 留下幾個空目錄——跑完刪掉它，否則
+`tests/integration/test_setup_routes.py` 裡「Berth 看不到那條 save path」的兩條會誤判成通過。
 
 這些環境變數**只給開發時的演練與 `scripts/experiments/*` 用**。Berth 自己不讀它們：產品的
 唯一來源是 `settings.services.tmdb.api_key` 與 `settings.services.indexer`，由精靈寫進資料庫。
@@ -328,6 +365,11 @@ python scripts/experiments/jellyfin_naming.py --base-url http://localhost:18096 
 python scripts/experiments/jellyfin_naming.py --base-url http://localhost:18196 --label 10.11.11
 python scripts/experiments/qbittorrent_matrix.py --base-url http://localhost:18080 --label 4.4.5
 python scripts/experiments/qbittorrent_matrix.py --base-url http://localhost:18081 --label 5.2.3
+
+# 票 10 的 poller 端點（`sync/maindata` 的增量、`torrents/files`、IP 封鎖的 403）。
+# 最後一項會封住來源 IP，所以錄完那一輪要重建容器才能再跑一次。
+python scripts/experiments/qbittorrent_poller.py --base-url http://localhost:18080 --label 4.4.5 --container berth-exp-qbittorrent-44
+python scripts/experiments/qbittorrent_poller.py --base-url http://localhost:18081 --label 5.2.3 --container berth-exp-qbittorrent-52
 python scripts/experiments/prowlarr_host_config.py     --base-url http://localhost:19696 --config .local/experiments/prowlarr
 ```
 

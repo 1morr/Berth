@@ -17,9 +17,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from berth.adapters.http import AuthFailedError, ServiceUnavailableError
-from berth.adapters.qbittorrent import QbittorrentVersion
+from berth.adapters.qbittorrent import IpBannedError, QbittorrentVersion
+from berth.adapters.qbittorrent.fake import FakeQbittorrentClient
 from berth.domain import HealthStatus, QbittorrentStep, ServiceKind, ServiceOrigin
-from berth.models import HealthSettings, IndexerSettings, Route
+from berth.models import HealthSettings, IndexerSettings, QbittorrentSettings, Route
 from berth.services.health import (
     CHECK_INTERVAL,
     HealthReport,
@@ -398,3 +399,57 @@ class TestStoredSnapshot:
     async def test_an_empty_snapshot_answers_ok(self, session: AsyncSession) -> None:
         """還沒檢查過不是「降級」——降級的意思是有東西**已知**壞了。"""
         assert await overall_status(session) == "ok"
+
+
+class TestIpBan:
+    """被封了與帳密不對的**下一步不同**（plan §8.1、brief §20.2、票 10）。
+
+    qBittorrent 連續 5 次登入失敗會封住來源 IP 並回 `403`；帳密不對在 4.4.5 是 `200` + `Fails.`、
+    在 5.2.3 是 `401`。這一票之前兩者都變成一句「要帳密」，於是使用者去改一組本來就對的密碼，
+    再失敗五次，把封鎖時間重新算一輪。
+    """
+
+    async def test_a_banned_client_says_so_instead_of_asking_for_credentials(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        await arrange(session, roots)
+        factory = factory_for(roots)
+        factory.qbittorrent_ = FakeQbittorrentClient(
+            login_error=IpBannedError(
+                "auth/login: Your IP address has been banned after too many failed "
+                "authentication attempts."
+            )
+        )
+        credentials = await read_settings(session, QbittorrentSettings)
+        credentials.username = "admin"
+        credentials.password = "adminadmin"
+        await write_settings(session, credentials)
+        await session.commit()
+
+        report = await check_health(session, factory)
+
+        qbittorrent = next(row for row in report.services if row.kind is ServiceKind.QBITTORRENT)
+        assert qbittorrent.status is HealthStatus.FAILED
+        assert qbittorrent.banned is True
+        # 原文照舊：它自己就說了發生什麼事，而理由的翻譯是畫面的事。
+        assert "banned" in qbittorrent.error
+
+    async def test_wrong_credentials_are_still_just_wrong_credentials(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        await arrange(session, roots)
+        factory = factory_for(roots)
+        factory.qbittorrent_ = FakeQbittorrentClient(
+            login_error=AuthFailedError("auth/login: rejected")
+        )
+        credentials = await read_settings(session, QbittorrentSettings)
+        credentials.username = "admin"
+        credentials.password = "wrongwrong"
+        await write_settings(session, credentials)
+        await session.commit()
+
+        report = await check_health(session, factory)
+
+        qbittorrent = next(row for row in report.services if row.kind is ServiceKind.QBITTORRENT)
+        assert qbittorrent.status is HealthStatus.FAILED
+        assert qbittorrent.banned is False

@@ -11,6 +11,7 @@ import { RouteCheckList } from '../components/RouteCheckList'
 import { SIGNAL_FILL } from '../components/signal'
 import { Timestamp } from '../components/Timestamp'
 import { HealthBoard } from '../health/HealthBoard'
+import { PollerCard } from '../health/PollerCard'
 import { ServiceCard } from '../health/ServiceCard'
 
 /**
@@ -107,6 +108,12 @@ export function HealthPage() {
               }
             />
           ))}
+        </div>
+
+        {/* 下載迴圈排在四項服務之後、Route 之前：它問的是「Berth 自己的迴圈還在跑嗎」，
+            比 Route 的五條纜繩上游（`.scratch/m1/live-jobs-shape.md` §6）。 */}
+        <div className="mt-8">
+          <PollerCard poller={report.poller} />
         </div>
 
         <section className="mt-8" aria-labelledby="health-routes">

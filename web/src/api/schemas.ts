@@ -44,6 +44,9 @@ export type HealthStatus = Schemas['HealthStatus']
 
 export type RouteView = Schemas['RouteOut']
 
+/** `qbit_poller` 上一輪的結果（plan §3.2、票 10）。健康頁的「下載迴圈」區塊讀它。 */
+export type PollerView = Schemas['PollerOut']
+
 export type PreferenceDiff = Schemas['PreferenceDiffOut']
 
 /** 精靈第 4 步與設定頁的漂移還原共用（brief §16.3）。 */

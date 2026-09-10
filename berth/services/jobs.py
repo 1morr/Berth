@@ -24,7 +24,11 @@ log 的每一行帶 job id（brief §16.2、plan T1.9）：`job_context` 一包�
 
 from __future__ import annotations
 
+import asyncio
 import logging
+from collections import Counter
+from collections.abc import AsyncIterator
+from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
@@ -57,6 +61,54 @@ logger = logging.getLogger(__name__)
 #: `submit_failed` 是唯一重試得了的狀態（plan §3.1）。已經在下載的 torrent 再送一次
 #: 只是多一次無謂的請求，而 `imported` 再送一次是另一件事（M2 的重新入庫）。
 RETRYABLE = frozenset({JobState.SUBMIT_FAILED})
+
+
+class _JobLocks:
+    """一個 job 一把程序內的鎖（plan §3.1、brief §5.3「同一時間一個 Job 只有一個 worker」）。
+
+    compare-and-set 保證的是「不會寫壞」，鎖保證的是「不會做兩次」：poller 正在為某一筆
+    建 `job_files` 時，使用者按下的重試如果同時跑，兩邊會各打一次 qBittorrent。
+
+    **用完就丟**：長期執行的 Berth 會經手幾千筆 Job，一個永遠長大的字典是個慢性漏洞。
+    等待中的呼叫端自己記在 `_waiting` 上，歸零才把鎖拿掉——查 `asyncio.Lock` 的私有
+    `_waiters` 也做得到，但那是別人的內部欄位。
+    """
+
+    def __init__(self) -> None:
+        self._locks: dict[str, asyncio.Lock] = {}
+        self._waiting: Counter[str] = Counter()
+
+    @property
+    def held(self) -> int:
+        """現在字典裡有幾把。「用完就丟」沒有別的觀測點。"""
+        return len(self._locks)
+
+    @asynccontextmanager
+    async def hold(self, job_hash: str) -> AsyncIterator[None]:
+        self._waiting[job_hash] += 1
+        lock = self._locks.setdefault(job_hash, asyncio.Lock())
+        try:
+            async with lock:
+                yield
+        finally:
+            self._waiting[job_hash] -= 1
+            if not self._waiting[job_hash]:
+                del self._waiting[job_hash]
+                self._locks.pop(job_hash, None)
+
+
+_locks = _JobLocks()
+
+
+def job_lock(job_hash: str) -> AbstractAsyncContextManager[None]:
+    """握住這一筆 Job 的鎖。**不可重入**，所以只掛在對外的入口上，不掛在內部步驟裡。"""
+    return _locks.hold(job_hash)
+
+
+def held_locks() -> int:
+    """現在還留著幾把鎖。**只給測試**——「用完就丟」沒有別的觀測點，而那是這個字典
+    不會無限長大的唯一保證。"""
+    return _locks.held
 
 
 @dataclass(frozen=True, slots=True)
@@ -181,11 +233,11 @@ async def add_download(
             state=JobState.REQUESTED,
         )
         session.add(job)
-        await _record(
+        await record_event(
             session,
             job,
             EventType.CREATED,
-            actor=_actor(user_id),
+            actor=actor_of(user_id),
             payload={
                 "trigger": trigger.value,
                 "media": media.id,
@@ -206,7 +258,9 @@ async def add_download(
                 raise
             return AddDownloadOutcome(job=await _view(session, duplicate), created=False)
         logger.info("job created", extra={"state": job.state.value, "route": route.slug})
-        await _finish(session, factory, job, route, torrent, media, actor=_actor(user_id))
+        # 從這裡開始 poller 也看得到這一列（它已經 commit 了），所以送單與迴圈要排隊。
+        async with job_lock(job.hash):
+            await _finish(session, factory, job, route, torrent, media, actor=actor_of(user_id))
         return AddDownloadOutcome(job=await _view(session, job), created=True)
 
 
@@ -230,19 +284,32 @@ async def retry_job(session: AsyncSession, factory: ServiceClientFactory, job_ha
     _check_route(route, subject)
 
     with job_context(job.hash):
-        if not await _to_state(session, job, JobState.REQUESTED, expected=JobState.SUBMIT_FAILED):
-            # 有別人（或另一個分頁）先動過它。放棄本次操作，不覆寫他的結果（plan §3.1）。
-            raise JobRejectedError("not_retryable", job.state.value)
-        await _record(session, job, EventType.RETRIED, actor="user", payload={})
-        logger.info("job retried", extra={"state": job.state.value})
-        try:
-            torrent = await _resolve(factory, job.source_url)
-        except JobRejectedError as failure:
-            await _fail(session, job, failure.detail or failure.reason, actor="user")
-            await session.commit()
-            return await _view(session, job)
-        await _finish(session, factory, job, route, torrent, subject, actor="user")
+        # poller 也會寫這一列（票 10），所以重試與迴圈排隊——CAS 保證不寫壞，鎖保證不做兩次。
+        async with job_lock(job.hash):
+            return await _resubmit(session, factory, job, route, subject)
+
+
+async def _resubmit(
+    session: AsyncSession,
+    factory: ServiceClientFactory,
+    job: Job,
+    route: Route,
+    subject: Media | None,
+) -> JobView:
+    """重試的那幾步。抽出來是為了讓 `job_lock` 包得住整段而不必再縮排一層。"""
+    if not await transition(session, job, JobState.REQUESTED, expected=JobState.SUBMIT_FAILED):
+        # 有別人（或另一個分頁）先動過它。放棄本次操作，不覆寫他的結果（plan §3.1）。
+        raise JobRejectedError("not_retryable", job.state.value)
+    await record_event(session, job, EventType.RETRIED, actor="user", payload={})
+    logger.info("job retried", extra={"state": job.state.value})
+    try:
+        torrent = await _resolve(factory, job.source_url)
+    except JobRejectedError as failure:
+        await _fail(session, job, failure.detail or failure.reason, actor="user")
+        await session.commit()
         return await _view(session, job)
+    await _finish(session, factory, job, route, torrent, subject, actor="user")
+    return await _view(session, job)
 
 
 async def list_jobs(session: AsyncSession) -> tuple[JobView, ...]:
@@ -387,11 +454,11 @@ async def _submit(
     finally:
         await client.aclose()
 
-    if not await _to_state(session, job, JobState.SUBMITTED, expected=JobState.REQUESTED):
+    if not await transition(session, job, JobState.SUBMITTED, expected=JobState.REQUESTED):
         # 有別人先動過它（票 10 起的迴圈也會寫同一列）。放棄本次操作，不覆寫他的結果。
         logger.warning("job moved on before it could be marked submitted")
         return
-    await _record(
+    await record_event(
         session,
         job,
         EventType.SUBMITTED,
@@ -409,12 +476,14 @@ async def _submit(
 
 
 async def _fail(session: AsyncSession, job: Job, detail: str, *, actor: str) -> None:
-    if not await _to_state(
+    if not await transition(
         session, job, JobState.SUBMIT_FAILED, expected=JobState.REQUESTED, error=detail
     ):
         logger.warning("job moved on before it could be marked failed", extra={"error": detail})
         return
-    await _record(session, job, EventType.SUBMIT_FAILED, actor=actor, payload={"error": detail})
+    await record_event(
+        session, job, EventType.SUBMIT_FAILED, actor=actor, payload={"error": detail}
+    )
     logger.warning("job submission failed", extra={"state": job.state.value, "error": detail})
 
 
@@ -428,7 +497,7 @@ def _freeze(media: Media, route: Route) -> None:
     media.default_route_id = route.id
 
 
-async def _to_state(
+async def transition(
     session: AsyncSession,
     job: Job,
     state: JobState,
@@ -453,7 +522,7 @@ async def _to_state(
     return changed
 
 
-async def _record(
+async def record_event(
     session: AsyncSession,
     job: Job,
     event: EventType,
@@ -475,7 +544,7 @@ async def _record(
     await session.flush()
 
 
-def _actor(user_id: int | None) -> str:
+def actor_of(user_id: int | None) -> str:
     """`events.actor`：user id、`system`、`rss:<rule>` 或 `ai`（plan §2.3）。"""
     return str(user_id) if user_id is not None else "system"
 

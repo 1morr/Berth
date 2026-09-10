@@ -143,3 +143,24 @@ curl -s -H "Authorization: Bearer $TOKEN"   "https://api.themoviedb.org/3/trendi
 | `qbittorrent/torrents-add.conflict.5.2.3.txt` | 5.2.3，同一個磁力連結送第二次 → `409` + `Conflict`（4.4.5 沒有這個行為，它回 `Ok.`） |
 | `qbittorrent/torrents-add.pending.5.2.3.json` | 5.2.3，`urls=http://indexer.invalid/x.torrent` → `202` + `pending_count: 1`（背景抓，失敗永遠不會回來） |
 | `qbittorrent/torrents-add.invalid.5.2.3.txt` | 5.2.3，multipart 上傳一段 HTML 當 `.torrent` → `415` + 檔名與原因 |
+
+2026-09-10（票 10），對 `lscr.io/linuxserver/qbittorrent:4.4.5` 與 `:5.2.3` 兩台乾淨的容器錄的
+（`scripts/experiments/qbittorrent_poller.py`）。三個 torrent 分別演三種處境：隨機 hash 的磁力連結
+（永遠拿不到 metadata）、合法但磁碟上沒有資料的 `.torrent`、以及**資料先寫進 save path** 的那一個
+（qBittorrent 自己校驗完就是完成，所以「完成」是它算出來的，不是腳本擺出來的）：
+
+| 檔案 | 來源 |
+| --- | --- |
+| `qbittorrent/sync-maindata.full.{4.4.5,5.2.3}.json` | `GET /api/v2/sync/maindata?rid=0`。`full_update: true` 加三個 torrent。**未完成時的 `completion_on` 兩版不同**——4.4.5 是 `0`、5.2.3 是 `-1`，所以完成判定只能寫 `> 0`。5.2.3 的欄位多了 `has_metadata`、`private`、`popularity` 等 20 幾個，4.4.5 沒有 |
+| `qbittorrent/sync-maindata.partial.{4.4.5,5.2.3}.json` | 同一條連線的下一輪（`?rid=1`），中間又加了一個磁力連結。**增量只帶變動的欄位**：既有的那幾筆有的只剩 `{"num_leechs", "time_active"}`，新加的那一筆才是完整的。不合併就會得到一份沒有 category、沒有 state 的空殼 |
+| `qbittorrent/sync-maindata.removed.{4.4.5,5.2.3}.json` | 再下一輪（`?rid=2`），中間刪掉剛才那一筆。`torrents_removed` 是一個 hash 陣列 |
+| `qbittorrent/torrents-files.multi.{4.4.5,5.2.3}.json` | `GET /api/v2/torrents/files?hash=…`，完成的那一包（兩個檔案，其中一個在子資料夾）。`name` **含 torrent 自己的根目錄那一層且相對 `save_path`**，兩版一致（再驗一次 brief §20.7）。第二筆**沒有** `is_seed` 這個鍵——欄位是逐筆的，不是逐回應的 |
+| `qbittorrent/auth-login.banned.{4.4.5,5.2.3}.txt` | 連續 5 次帳密錯之後第 6 次的 `POST /api/v2/auth/login`：`403` + `Your IP address has been banned after too many failed authentication attempts.`。**兩版同一句話**，而帳密錯本身不是 403（4.4.5 是 `200` + `Fails.`，5.2.3 是 `401`） |
+| `qbittorrent/app-version.banned.{4.4.5,5.2.3}.txt` | 被封之後的 `GET /api/v2/app/version`：`403` + `Forbidden`——與「沒有登入」一模一樣。所以「被封了」這個判定只有登入那一支做得到 |
+
+`metaDL` 期間的 `torrents/files` 回的是 `200` + `[]`（兩版皆然），與「這個 torrent 不存在」同形，
+所以契約測試直接 `respond(200, text="[]")`，不另存一個空陣列的檔案。
+
+**`sync/maindata` 的 rid 增量掛在 session 上**（同一輪實測）：不帶 cookie 的話每一次請求都是新
+session，`rid` 永遠回不到增量（每一輪都 `full_update: true`）。錄製腳本因此裝了 cookie jar，
+而產品這一側靠的是 httpx client 自己的 cookie——所以 `Downloader` 把 client 握著不放。

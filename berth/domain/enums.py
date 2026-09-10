@@ -103,6 +103,36 @@ class EventType(StrEnum):
     SUBMIT_FAILED = "submit_failed"
     #: 使用者按了重試，回到 `requested`。
     RETRIED = "retried"
+    #: 檔案清單到手（file_count、total_size）。票 10 的 poller 寫。
+    METADATA_RECEIVED = "metadata_received"
+    #: 進度。**每跨 25% 一筆**，不是每一輪一筆（plan §3.1）。
+    PROGRESS = "progress"
+    #: 沒有資料在動超過一段時間（client_state、idle_minutes）。恢復時寫一筆 `progress`。
+    STALLED = "stalled"
+    #: 下載完成（brief §5.1 的四條判定全部成立）。
+    COMPLETED = "completed"
+    #: 出了一件需要人處理的事（brief §5.2 的 `issue_detected(type)`）。
+    #: **`issues` 表要到 M2 才有**（plan §11.3），所以 M1 的載體就是這一筆事件；
+    #: `type` 是 `IssueType`，不是自由文字。
+    ISSUE_DETECTED = "issue_detected"
+
+
+class IssueType(StrEnum):
+    """`issue_detected` 事件 payload 裡的 `type`（brief §5.2、plan §3.1）。
+
+    M2 建 `issues` 表時它就是那張表的 `type` 欄——現在先把封閉集合定下來，因為畫面已經
+    要逐種說一句話，而自由文字的「理由」翻譯不了也查詢不了。
+    """
+
+    #: 客戶端說檔案不見了（`missingFiles`）。
+    MISSING_FILES = "missing_files"
+    #: 客戶端自己報錯（state `error`）。
+    CLIENT_ERROR = "client_error"
+    #: torrent 從客戶端消失了。complete 檔案可能還在，M2 的 `reimport` 撿得回來。
+    CLIENT_REMOVED = "client_removed"
+    #: qBittorrent 上有一個掛著 Berth category 或 tag、但 Berth 沒有 Job 的 torrent
+    #: （plan §3.2 的 `unknown_torrent`）。
+    UNKNOWN_TORRENT = "unknown_torrent"
 
 
 class CollectionType(StrEnum):
@@ -262,8 +292,12 @@ class DetectionReason(StrEnum):
     SETUP_COMPLETED = "setup_completed"
     #: qBittorrent 免密進得去 API。
     ANONYMOUS_OK = "anonymous_ok"
-    #: 需要憑證：qBittorrent 回 403，或 Prowlarr 的 API key 不被接受。
+    #: 需要憑證：Prowlarr 的 API key 不被接受，或 qBittorrent 要帳密。
     AUTH_REQUIRED = "auth_required"
+    #: qBittorrent 把 Berth 這台的 IP 封了（連續 5 次登入失敗，brief §20.2、票 10）。
+    #: 與 `AUTH_REQUIRED` 分開的理由是**下一步不同**：帳密不對要去改設定，被封要等封鎖過期
+    #: 或去 qBittorrent 的介面解除——改帳密只會再失敗五次，把封鎖時間重新算一輪。
+    IP_BANNED = "ip_banned"
     #: Prowlarr 讀得到 API key 而且一個索引站都沒有。
     NO_INDEXERS = "no_indexers"
     #: Prowlarr 已經有索引站，視為使用者自己在用的那一套。

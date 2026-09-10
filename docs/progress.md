@@ -45,6 +45,7 @@
 | 2026-09-10 | 07 命名與 Plan | `naming/` 的六種凍結模板、`match_subtitle`、目標路徑與衝突偵測完成：**Plan 第一次說得出「這個檔案會被寫到哪裡」**。benchmark 連目標路徑一起比對，`auto_wrong` 仍是 **0**、`auto_correct` **140** 不變，外掛字幕 37 筆全部掛對（新的 `subtitle_correct` 桶），review 從 98 掉到 61（剩下的全是 `your-name-bdmv` 的 61 個光碟檔）。`naming` 移到 `parser` 之下（衝突偵測比的就是目標路徑）；「兩個檔案同一集」不再一律進 review，改比檔名——简繁分軌與 1080p / 720p 同包本來就該並存（brief §7.7）。`AiPlanner` 介面與 `NullAiPlanner` 一併定好（plan §4.5）。869 個後端測試綠燈 | `/implement .scratch/m1/issues/08-indexer-search.md` |
 | 2026-09-10 | 08 索引站搜尋 | `IndexerSearch` 介面加 `ProwlarrSearch` / `TorznabSearch` 兩個實作、`services/search.py`、`GET /api/search` 與 `GET /api/search/queries`、Media 詳情頁的搜尋區塊與結果表。fixture 對真的 Prowlarr 2.5.2.5491 + 五個公開站錄製。實跑（`--scenario search`，TMDB 與索引站都是真的）驗過動漫 / 美劇 / 電影三種類型：SPY×FAMILY 1726 筆去重後逐站各取 25 筆，98/100 筆有正確的季集預估與 Tags；深淺兩主題各 894 個文字節點對比全過（最差 5.71:1），390px 無頁面層級橫向捲動。920 個後端測試 + 162 個前端測試綠燈 | `/implement .scratch/m1/issues/09-add-download.md` |
 | 2026-09-10 | 09 送單與下載列表 | `jobs` / `job_files` 兩張表、`add_download`、`POST /api/jobs` 與 jobs 的三支讀取端點、下載列表頁 `/jobs`（`.scratch/m1/jobs-shape.md`，使用者拍板三件事：時間線就地展開、進度欄現在就畫、純粹最新在前）。**送單前 Berth 自己把 torrent 抓下來**（新的 `adapters/torrent.py`：磁力連結就地解析，`.torrent` 逐位元組取 `info` 再 SHA-1）——`jobs.hash` 是主鍵而索引站不一定報 hash，而且交網址給 qBittorrent 是背景抓取、失敗永遠沒有下文。資料夾名在**送單成功那一刻凍結**（`media.folder_frozen`），`tracked` 改由 `EXISTS(jobs)` 推導（`services/tracking.py`，詳情頁與探索牆同一份）。plan T1.9 的結構化日誌一併做掉：一行一筆 JSON、job id 由 `ContextVar` 在 record 建立那一刻蓋上，「每一行都帶」有測試守著。**對真的 qBittorrent 5.2.3 與 4.4.5 各驗一輪，當場抓到一個實跑才看得見的缺陷**：5.2.3 的 `torrents/add` 成功回的是 JSON 摘要不是 `Ok.`，只認 `Ok.` 的話 5.x 上每一次成功送單都會被判成失敗（brief §20.2 / §20.7 與研究文件已更正，五份 fixture 已錄）；兩台上 category、save path、`berth` tag 與版本對的開始參數都落對了。1006 個後端測試 + 180 個前端測試綠燈，`berth bench` 的 `auto_wrong` 仍是 0 / `auto_correct` 140。playwright 對 `--scenario submit` 與 `submit-failing` 實跑：真 TMDB 的詳情頁 → 搜尋 → 送單確認印出資料夾名 → 送出 → 下載列表看得到 → 展開時間線 → 重試；深淺兩主題 × 桌機與 390px 四輪對比全過（最差 5.71:1），390px 無頁面層級橫向捲動 | `/implement .scratch/m1/issues/10-qbit-poller.md` |
+| 2026-09-10 | 10 poller | `qbit_poller`（maindata 增量、plan §3.1 由客戶端狀態觸發的七個轉換、進度事件每跨 25% 一筆）、`GET /api/events/stream`（SSE）讓下載列表不重整就自己動、`job_files`、時間線五種新事件、健康頁的「下載迴圈」區塊與無主 torrent、`IpBannedError`（解掉 T1.9 第四條）。對真的 4.4.5 與 5.2.3 各錄一輪 fixture（maindata 全量 / 增量 / 移除、`torrents/files`、封鎖的 403）。實跑：真的 qBittorrent + 真的 poller，送單 7 秒內走到「下載完成」且全程 0 次頁面載入；重啟 Berth 後狀態與時間線都在。1062 個後端測試 + 198 個前端測試綠燈 | `/implement .scratch/m1/issues/11-planner-runner.md` |
 
 ## 偏差與決定
 
@@ -553,3 +554,62 @@
 - 2026-09-10 票 09 code-review：`TorrentRejectedError` 的 docstring 原本寫「實測 `415` + body `Fails.`」，那是**抄錯的**——`Fails.` 是 4.x 登入失敗的 body。改成這一輪真的量到的兩種（`409 Conflict` 與 `415` + 檔名與原因）。
 - 2026-09-10 票 09 code-review：沒選 Route 時**前端不打 API**。原本送 `route: 0` 出去，換回一句「那條 Route 不在了」——而使用者根本還沒選過（PRODUCT 原則 4）。
 - 2026-09-10 票 09 code-review：`Dot` 收成 `components/Dot.tsx`（票 08 的結果表與這一票的下載列表各寫了一份）。它是一個字元，而 DESIGN.md 的 Don't 寫著「不用字元當裝飾標記」——那條規則說的是會進無障礙名稱的那種，而 `Dot` 掛 `aria-hidden`；CSS 畫的刻度跟不上一行會換行、寬度由內容決定的值列表。已寫進 DESIGN.md 的 Known contradictions。
+- 2026-09-10 票 10：**無主 torrent 在 M1 的載體是一筆 `issue_detected` 事件加健康頁的一份清單**，
+  不是 plan §3.2 字面的 `issue`（`issues` 表在 M2，票上已預告）。事件**一個 hash 只寫一次**——
+  迴圈每 5 秒跑一輪，每輪一筆的話一天一萬七千筆；「現在還在不在」由 `settings.poller` 那份
+  每輪重寫的清單回答。`IssueType` 四個值先定下來，M2 建表時它就是那張表的同一欄。
+- 2026-09-10 票 10：**`settings.poller` 自己一列**，plan §3.2 原文寫的是「連續失敗次數與最後錯誤
+  寫入 `settings.health`」。理由與當初把健康結果從 `settings.services.*` 分出來時一樣：`write_settings`
+  是整組覆寫，而兩個迴圈一個 5 分鐘一個 5 秒，共用一列會互相蓋掉。plan §3.2 已同步。
+- 2026-09-10 票 10：**輪詢間隔每次醒來重算**（迴圈每 5 秒醒一次，滿了間隔才真的問），
+  與 `health_checker`「醒得比檢查頻繁」同一個形狀。沿用上一輪算出來的 30 秒的話，使用者按下送單
+  那一刻多半落在間隔中間，他要對著那一列等最多半分鐘才看到第一個變化——而那正是這一票要拿掉的
+  體驗。代價是一次帶索引的 `SELECT ... LIMIT 1`。plan §3.2 已補。
+- 2026-09-10 票 10：**一輪可以走好幾步**。已經做完種的 torrent 加進來時，同一輪裡它走完
+  `submitted → metadata_ready → downloading → completed`。plan §3.1 的表是逐狀態寫的，照字面
+  一輪一步的話輪詢間隔會決定使用者看到幾個階段，而時間線仍然說得出它經過了哪些站。plan §3.1 已補。
+- 2026-09-10 票 10：**`metadata_ready` 只做前半**（建 `job_files` + `metadata_received`），
+  plan §3.1 的另一半 pre-plan 留給票 11——`plans` 表到那一票才建。plan §3.1 已註明。
+- 2026-09-10 票 10：**完成判定的第四條（`stat` 每個檔案）只在 Berth 解析得了那條路徑、而且真的
+  看得到它的時候才算數**。看不到就視為通過：那不是這一筆 torrent 的問題，而是掛載對不上，
+  而那件事有專門的檢查在報（Route 的 `download_path` 纜繩）；在這裡翻成 `missing_files` 會讓每一筆
+  Job 都紅著，而紅的理由指向錯的地方（PRODUCT 原則 4）。看得到卻少檔案才是 `missing_files`。
+  「解析得了」是 `Path(save_path).is_absolute()` ——**Windows 上實跑當場踩到**：qBittorrent 報的
+  `/downloads/complete/anime` 在那裡是「目前磁碟機的根目錄底下」，而那台機器上剛好有一個同名目錄，
+  於是完成的 torrent 被判成 `missing_files`。plan §8.1 已補。
+- 2026-09-10 票 10：**`stalled` 的門檻量 qBittorrent 自己的 `last_activity`（10 分鐘）**，不是 Berth
+  另存一個「什麼時候變成 `stalledDL` 的」——客戶端本來就在量同一件事，少一個欄位就少一個會與它
+  不一致的東西。10 分鐘偏長是刻意的：門檻太短會讓一列在 `downloading` 與 `stalled` 之間跳來跳去。
+- 2026-09-10 票 10：**無主 torrent 的篩子是「category 或 `berth` tag」的聯集**，plan §3.2 只寫了
+  category。只認 category 的話，Route 被刪掉之後它送出去的那些 torrent 就再也沒有人認領。plan §3.2 已改。
+- 2026-09-10 票 10：**SSE 只推 job，不推健康變化**（plan §6 的 events 群組寫的是「job 狀態、進度、
+  健康變化」）。健康檢查五分鐘一輪，值不到一條長連線；那一頁本來就有一顆「立即重測」。plan §6 已註明。
+- 2026-09-10 票 10：**推播在 commit 之後**（實跑抓到的缺陷）。原本 `_advance` 走完就 publish，而那時
+  `poll_downloads` 的交易還沒 commit——前端收到「這一筆完成了」立刻重問一次，讀到的是舊狀態，
+  於是每一筆事件都把畫面推到**上一個**狀態，永遠慢一步。改成把訊號收進一份清單，commit 之後才發。
+- 2026-09-10 票 10：**`/api` 底下的每一個回應都帶 `Cache-Control: no-store`**（門禁補的）。這不是
+  最佳化：Berth 原本一個快取 header 都不送，瀏覽器就對 `200` 套用它自己的啟發式快取——實跑抓到
+  SSE 推來的重問拿回一份幾秒前的快取，畫面停在錯的狀態。plan §6 已補。
+- 2026-09-10 票 10：**SSE 連上的那一刻先重問一次**。這條連線沒有補送，而「訂閱之前」包含那一頁
+  自己載入的那幾百毫秒——實跑踩到：送單後那一筆在頁面還在連線時就完成了，畫面因此停在
+  「已取得檔案清單」再也不動。同一行也涵蓋每一次重連。
+- 2026-09-10 票 10：**SSE 端點不自己查斷線**。原本每秒 `request.is_disconnected()` 一次，而
+  `EventSourceResponse` 已經有一個 task 在讀同一條 ASGI `receive` 通道——兩個讀者會互相把訊息搶走。
+  等待也從「每秒醒一次」改成「佇列或關機，誰先來」：取消一個正在被喚醒的 `asyncio.Queue` getter
+  是最細的那一段語意，而一條開著幾小時的連線會做上萬次那個動作。
+- 2026-09-10 票 10：**IP 封鎖與帳密不對分得開了**（解掉 plan T1.9 的第四條）。2026-09-10 對 4.4.5 與
+  5.2.3 各實測一輪：連續 5 次帳密錯之後第 6 次回 `403` + `Your IP address has been banned...`，
+  **兩版一字不差**；而帳密錯本身在兩版都不是 403（4.4.5 是 `200` + `Fails.`、5.2.3 是 `401`）。
+  所以登入端點上的 403 只有一個意思。被封之後其他端點回的是 `403 Forbidden`，與「沒有登入」同形，
+  所以這個判定只放在登入那一支。brief §20.2 與 plan §8.1、T1.9 已同步。
+- 2026-09-10 票 10：**`sync/maindata` 的 `rid` 掛在 session（SID cookie）上**（實測：不帶 cookie 每一輪
+  都回 `full_update`）。所以 `Downloader` 把 HTTP client 握著不放，失敗那一輪才丟掉重造——重造就是
+  重新開始，而重新開始本來就會拿到一次全量，兩邊自然對齊。增量那一輪的 `torrents[hash]` 只帶變動
+  欄位（實測有的只剩 `{num_leechs, time_active}`），合併因此在 adapter 的 `MaindataCursor` 裡。
+  brief §20.2 已同步。
+- 2026-09-10 票 10：**未完成時的 `completion_on` 4.4.5 是 `0`、5.2.3 是 `-1`**。完成判定寫 `> 0`
+  對兩版都成立，寫 `!= 0` 會讓 5.x 上每一個剛加入的 torrent 都被當成已完成。brief §20.2 已補。
+- 2026-09-10 票 10：**下載列表不做「即時」指示器**，無主 torrent 畫在**健康頁**的「下載迴圈」區塊
+  而不是下載列表（兩件都是使用者拍板）。DESIGN.md 的這塊板沒有動畫也沒有 spinner，值自己換就是
+  訊號本身；而下載列表的每一列都該是使用者自己送的，無主 torrent 問的是「整條線還動得了嗎」。
+  記在 `.scratch/m1/live-jobs-shape.md`。

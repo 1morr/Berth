@@ -19,6 +19,7 @@ from berth.services.clients import (
     build_setup_probes,
     close_setup_probes,
 )
+from berth.services.events import EventHub
 
 
 def get_config(request: Request) -> Config:
@@ -48,6 +49,15 @@ async def get_setup_probes(
         await close_setup_probes(probes)
 
 
+def get_event_hub(request: Request) -> EventHub:
+    """SSE 端點與背景迴圈用同一個 hub（`create_app` 放進 `app.state`）。
+
+    一個程序一個：訂閱者是這個程序裡的連線，而發佈者是這個程序裡的迴圈。
+    """
+    hub: EventHub = request.app.state.events
+    return hub
+
+
 def get_client_factory(request: Request) -> ServiceClientFactory:
     """端點與背景迴圈用同一份（`create_app` 放進 `app.state`）。"""
     factory: ServiceClientFactory = request.app.state.clients
@@ -56,5 +66,6 @@ def get_client_factory(request: Request) -> ServiceClientFactory:
 
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
 ClientFactoryDep = Annotated[ServiceClientFactory, Depends(get_client_factory)]
+EventHubDep = Annotated[EventHub, Depends(get_event_hub)]
 ConfigDep = Annotated[Config, Depends(get_config)]
 SetupProbesDep = Annotated[SetupProbes, Depends(get_setup_probes)]

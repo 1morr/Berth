@@ -40,14 +40,20 @@ export const JOB_SIGNAL: Record<JobState, Signal> = {
 }
 
 /**
- * 進度那一格。**這一票永遠是 `—`**：`progress` 要等票 10 的 poller 才會動
- * （shape brief §5）。欄位現在就在，值回來時同一個位置開始跳數字，版面不重排。
+ * 進度那一格。票 10 起它是真的值——poller 每一輪把 qBittorrent 報的 `progress` 寫回來，
+ * SSE 讓這一列自己重問（`api/events.ts`）。
+ *
+ * **0 仍然是 `—` 而不是 `0%`**：送單到拿到第一批資料之間那一段，qBittorrent 還沒有話說，
+ * 而 `0%` 讀起來像「量過了，是零」（票 09 的同一條：沒有值就說沒有值）。
  */
 export function formatProgress(job: Job, locale: string): string {
   if (job.progress <= 0) return '—'
-  return new Intl.NumberFormat(locale, { style: 'percent', maximumFractionDigits: 0 }).format(
-    job.progress,
-  )
+  return formatPercent(job.progress, locale)
+}
+
+/** 0.0–1.0 → `42%`。列上與時間線用同一支——同一個數字不該有兩種樣子。 */
+export function formatPercent(value: number, locale: string): string {
+  return new Intl.NumberFormat(locale, { style: 'percent', maximumFractionDigits: 0 }).format(value)
 }
 
 /**

@@ -153,7 +153,7 @@ adapters ──► domain                  （不 import services、models；回
 | — | `add_download` | `requested` | 建 job、event `created` |
 | `requested` | qBittorrent 接受 | `submitted` | event `submitted`（category、save_path） |
 | `requested` | qBittorrent 拒絕 / 不可達 | `submit_failed` | event；可手動重試回 `requested` |
-| `submitted` | `torrents/files` 非空且 state 不是 `metaDL` | `metadata_ready` | 建 `job_files`、跑 pre-plan（`plans.status = preplan`）、event `metadata_received` + `preplan` |
+| `submitted` | `torrents/files` 非空且 state 不是 `metaDL` | `metadata_ready` | 建 `job_files`、跑 pre-plan（`plans.status = preplan`）、event `metadata_received` + `preplan`。**pre-plan 在票 11**：`plans` 表到那一票才建，票 10 只做前半 |
 | `metadata_ready` | 有進度 | `downloading` | event `progress`（每跨 25% 一筆） |
 | `downloading` | `stalledDL` 超過 N 分鐘 | `stalled` | event；恢復進度即回 `downloading` |
 | `downloading` / `stalled` | client state `missingFiles` / `error` | `missing_files` / `client_error` | issue |
@@ -170,12 +170,15 @@ adapters ──► domain                  （不 import services、models；回
 
 - 轉換一律 compare-and-set：`UPDATE jobs SET state=:to WHERE hash=:h AND state=:from`，影響 0 列即放棄本次操作。
 - 每個 job 在程序內另有 `asyncio.Lock`，避免 poller 與 importer 同時處理。
+- **一輪可以走好幾步**（票 10）：已經做完種的 torrent 加進來時，同一輪裡它會走完 `submitted → metadata_ready → downloading → completed`。輪詢的間隔不該決定使用者看到幾個階段，而時間線仍然說得出它經過了哪些站。
+- **壞掉優先**：`missingFiles` / `error` 的 torrent 也可能報 `progress == 1`，先問完成的話它會被當成下載好了，而磁碟上根本沒有那些檔案。
+- `stalled` 的「超過 N 分鐘」量的是 qBittorrent 自己的 `last_activity`（**10 分鐘**），不是 Berth 另存一個「什麼時候變成 `stalledDL` 的」——客戶端本來就在量同一件事。
 
 ### 3.2 背景迴圈
 
 | 迴圈 | 間隔 | 工作 |
 | --- | --- | --- |
-| `qbit_poller` | 有活躍 job 時 5s，否則 30s；連續失敗退避到 5 分鐘 | `sync/maindata`（帶 rid）；只看本系統 category 的 torrent；更新進度與 client state；驅動 §3.1 中由客戶端狀態觸發的轉換；發現無 job 的 torrent → issue `unknown_torrent` |
+| `qbit_poller` | 有活躍 job 時 5s，否則 30s；連續失敗退避到 5 分鐘 | `sync/maindata`（帶 rid）；只看本系統 category **或 `berth` tag** 的 torrent（兩道篩子的聯集：Route 被刪掉之後它送出去的那些 torrent 仍然認得出來）；更新進度與 client state；驅動 §3.1 中由客戶端狀態觸發的轉換；發現無 job 的 torrent → issue `unknown_torrent`（**M1 先寫一筆 `issue_detected` 事件並列在健康頁的「下載迴圈」區塊**，`issues` 表在 M2，票 10） |
 | `planner_runner` | 事件驅動（queue）+ 每 60s 掃 `completed` | 讀 mediainfo → 解析（§4）→ 建 Plan → 決定 auto / review |
 | `importer` | 事件驅動 + 每 60s 掃 `importing` | 逐 item：建目錄 → `link()` → 寫 ledger → event；完成後 `POST /Library/Media/Updated`；一次只處理一個 job |
 | `jellyfin_resolver` | 事件驅動，重試間隔 30s → 2m → 10m → 1h，共 6 次 | 為缺 `jellyfin_item_id` 的 ledger 找 item（brief §20.1 的兩段查詢）；耗盡即 issue `jellyfin_item_unresolved` |
@@ -183,7 +186,10 @@ adapters ──► domain                  （不 import services、models；回
 | `rss_poller` | 每個 feed 自己的 `interval_sec`，預設 15 分鐘 | 抓 feed → 解析 → 比對 rule → 去重 → `add_download` |
 | `health_checker` | 每 30 秒醒來，上一輪滿 5 分鐘才真的跑；也可手動觸發（`POST /health/check`） | 四項：Jellyfin（連線 + API key 列得出媒體庫）、qBittorrent（連線 + Web API 版本 + 建議設定漂移）、索引站（Prowlarr 或 Torznab 端點）、Route（§9.5 的五條纜繩重跑一次） |
 
-- 每個迴圈是一個 `asyncio.Task`（`main.py` 的 lifespan 啟動，關閉時 cancel 並 await，不留 pending task）；例外只記 log 不讓迴圈死掉；連續失敗次數與最後錯誤寫入 `settings.health` 供健康頁顯示。
+- 每個迴圈是一個 `asyncio.Task`（`main.py` 的 lifespan 啟動，關閉時 cancel 並 await，不留 pending task）；例外只記 log 不讓迴圈死掉；連續失敗次數與最後錯誤寫入**自己那一列設定**供健康頁顯示（`settings.health` / `settings.poller`）。原文寫的是「寫入 `settings.health`」，但那一列每 5 分鐘被 `health_checker` 整組覆寫一次，而 poller 每 5 秒寫一次——兩個迴圈共用一列會互相蓋掉（票 10；理由與當初把健康結果從 `settings.services.*` 分出來時一樣）。
+- `qbit_poller` **醒得比問頻繁**（與 `health_checker` 同一個形狀，票 10）：每 5 秒醒一次，但只有距離上一輪滿了它該等的間隔才真的問，而那個間隔**每次醒來重算**。沿用上一輪算出來的答案的話，使用者按下送單的那一刻多半落在一個 30 秒的閒置間隔中間，他要對著那一列等最多半分鐘才看到第一個變化。
+- `qbit_poller` **把 qBittorrent 的 HTTP client 握著不放**：`sync/maindata` 的 `rid` 增量掛在那條連線的 session 上（brief §20.2 實測），每輪重造一個 client 等於每輪都要一份全量。失敗那一輪才丟掉重造——重造就是重新開始，而重新開始本來就會拿到一次全量，兩邊自然對齊。
+- `qbit_poller` 的**推播在 commit 之後**（票 10 實跑抓到）：反過來的話前端收到「這一筆完成了」就立刻重問一次，而那一次讀到的是還沒 commit 的舊狀態，畫面因此永遠慢一步。
 - `health_checker` **醒得比檢查頻繁**：兩層的理由是精靈剛跑完的那一刻——迴圈在啟動時就在轉，那時候還沒有東西可檢查，如果醒來的間隔就是檢查的間隔，使用者按完「完成」會對著一個空的健康頁等五分鐘。精靈跑完之前它什麼都不做（那時候正在接的服務被打只會得到假的紅燈）。
 - `health_checker` 的**磁碟空間**目前只在 Route 的 `hardlink` 纜繩上以 `free=` 顯示實測值，沒有門檻判定（票 10 改）。門檻要變成一個 Issue 才有用，所以與 §11.3 的 Reconciler 一起做。
 - `health_checker` **沒有逐服務的間隔退避**（票 10 改）：每一項各自 try/except 加上 adapter 的 5 秒逾時就足夠隔離，而 5 分鐘一次的檢查本來就打不爆任何服務；退避只會延後「服務回來之後自動變綠」。連續失敗次數仍然記錄並顯示。
@@ -345,8 +351,9 @@ Session 以 httpOnly cookie（`berth_session`）承載，`SameSite=Strict`、`Pa
 | rss | `GET/POST /rss/feeds`、`PUT/DELETE /rss/feeds/{id}`、`POST /rss/feeds/{id}/poll`、`GET /rss/items`、`GET/POST /rss/rules`、`PUT/DELETE /rss/rules/{id}`、`POST /rss/rules/preview`、`POST /rss/oneshot` | `rss.*` |
 | issues | `GET /issues`、`POST /issues/{id}/resolve`（`{action}`）、`POST /issues/{id}/ignore`、`POST /reconcile` | `reconcile`、`issues.resolve` |
 | health | `GET /health`（匿名：`status`、`version`、`setup_completed`；`status` 只讀 `settings.health` 那一列，不連任何服務）、`GET /health/detail`（要登入，一般使用者也讀得到：逐服務與逐 Route 的明細、最後成功時間、檢查間隔）、`POST /health/check`（立刻重跑四項） | `health.*` |
-| events | `GET /events/stream`（SSE：job 狀態、進度、健康變化） | — |
+| events | `GET /events/stream`（SSE：job 狀態與進度。**M1 只有 job**——健康變化每 5 分鐘一次，值不到一條長連線）。推的是**提示不是真相**：`{hash, state, progress}`，前端據此讓 `['jobs']` 失效再問一次，所以漏掉一筆的後果是慢一點而不是畫面說謊。連上的那一刻也重問一次（訂閱建立之前推出去的那幾筆誰都收不到，票 10） | — |
 
+- **`/api` 底下的每一個回應都帶 `Cache-Control: no-store`**（門禁補的，票 10）。這不是最佳化：一個 header 都不送的話瀏覽器會對 `200` 套用它自己的啟發式快取，而這裡的每一支回的都是「現在的狀態」——實跑抓到 SSE 推來的重問拿回一份幾秒前的快取，畫面因此停在錯的狀態。
 - OpenAPI 由 FastAPI 產生；前端用 `openapi-typescript` 產型別，CI 檢查型別檔是否過期。
 - 未來 MCP server 只需把 `services` 的命令包成 tool，schema 直接沿用 pydantic model。
 
@@ -378,8 +385,10 @@ Session 以 httpOnly cookie（`berth_session`）承載，`SameSite=Strict`、`Pa
 - `ensure_category(name, save_path)`：`torrents/categories` 讀取（接受 `savePath` 與 `save_path` 兩種鍵；4.4.5 與 5.2.3 實測都是 `savePath`，`save_path` 只出現在 4.4.0–4.4.1，仍在支援範圍所以兩種都收），不存在才建，存在但 save path 不同 → 回報衝突不改（brief §20.2）。
 - `diff_recommended_preferences()` / `apply_recommended_preferences()`：建議值為 `temp_path_enabled=true`、`temp_path=<incomplete root>`、`save_path=<complete root>`、`auto_tmm_enabled=true`、`category_changed_tmm_enabled=true`；先回傳與現值的差異給精靈顯示，套用時只寫不同的鍵。既有服務的 temp path 未啟用只列為警告。
 - 完成判定依 brief §20.2。`torrents/files[].name` **相對 `save_path`**（多檔含 torrent 根目錄那一層），實測四種 `contentLayout` 組合都成立（brief §20.7）；組絕對路徑前先正規化 `save_path` 的尾斜線（4.4 有、5.x 沒有），組完仍 `stat` 驗證。`content_path` 是目錄或單檔，兩種都處理。
+- **`stat` 驗證只在 Berth 解析得了那條路徑、而且真的看得到它的時候才算數**（票 10）：看不到那個 save path 時視為通過，因為那不是這一筆 torrent 的問題，而是掛載對不上——而那件事有專門的檢查在報（Route 的 `download_path` 纜繩，§9.5）。在這裡把它翻成 `missing_files` 會讓每一筆 Job 都紅著，而紅的理由指向錯的地方。「解析得了」的判定是 `Path(save_path).is_absolute()`：qBittorrent 報的一律是容器裡的 POSIX 路徑，而 Windows 上它少了磁碟機代號，`Path` 會把它當成「目前磁碟機的根目錄底下」（實跑當場踩到）。看得到卻少檔案則是 `missing_files`——客戶端說做完了而檔案不在，那正是 `missingFiles` 說的那件事。
+- **IP 封鎖分得出來了**（票 10，解掉 T1.9 的第四條）：`auth/login` 上的 `403` 只有「被封了」一個意思，body 帶明說的那一句（brief §20.2 的表）。翻成 `IpBannedError`（`AuthFailedError` 的子類，因為「還連不連得上」的答案一樣），下一步不同才是分開的理由。其他端點上的 403 與「沒有登入」同形，所以這個判定只放在登入那一支。
 - `preferences()` / `set_preferences(values)`：`app/preferences` 與 `app/setPreferences`。後者收的是**表單裡一個叫 `json` 的欄位**，不是 JSON body；`web_ui_password` 只寫不讀，所以「密碼設過了沒」只能比對 Berth 自己上一次寫下去的值（票 08）。
-- 登入：`auth/login` 拿 SID，請求帶 `Referer` = base URL。403 由共用的錯誤映射翻成 `AuthFailedError`，**沒有退避**——4.4.x 連續登入失敗會封 IP 且同樣回 403，所以被封的 Berth 現在顯示成「帳密不對」。要分得開得看回應內容，留給 M1（T1.9）。**失敗判定只認 4.x 的 `200` + `Fails.`**，不認「成功等於 `Ok.`」——5.x 成功回的是 `204` 空 body，失敗才是 `401`（走共用的錯誤映射）。免密白名單上的來源在 5.x 一律回 204，那是成功：套件內的 Berth 本來就繞過驗證（brief §20.2）。
+- 登入：`auth/login` 拿 SID，請求帶 `Referer` = base URL。**沒有退避**——連續登入失敗會封 IP（brief §20.2），而被封那一次回的是 `403` 加一句明說的話，票 10 起翻成 `IpBannedError`；帳密不對在兩版都不是 403，所以登入端點上的 403 只有這一個意思。**失敗判定只認 4.x 的 `200` + `Fails.`**，不認「成功等於 `Ok.`」——5.x 成功回的是 `204` 空 body，失敗才是 `401`（走共用的錯誤映射）。免密白名單上的來源在 5.x 一律回 204，那是成功：套件內的 Berth 本來就繞過驗證（brief §20.2）。
 - 錯誤映射（`adapters/http.py`，四個 adapter 共用）：主機名解不到 → `ServiceNotDeployedError`（服務不在 compose 裡，精靈立刻顯示既有服務表單）；連不上或逾時 → `ServiceUnavailableError`（容器還在啟動，繼續輪詢）；401 / 403 → `AuthFailedError`；回應不是預期的服務 → `ProtocolMismatchError`；409（category 不存在）→ `CategoryMissingError`；503 → `ServiceBusyError`（服務還在載入，與「壞了」分開——Jellyfin 重啟後每一支端點都會有一段時間回 503，brief §20.7）。名稱一律以 `Error` 結尾（ruff N818）。
 
 ### 8.2 Jellyfin adapter
@@ -622,7 +631,7 @@ WebUI\AuthSubnetWhitelist=172.28.0.2/32
 | T1.6 | `planner_runner` + `importer` + `jellyfin_resolver`：pre-plan、planning、Plan 持久化、自動 / review 判定、硬鏈接、ledger、Jellyfin 通知與反查、MergeVersions 任務觸發 | 三種類型各一部不經人工入庫並在 Jellyfin 正確顯示 |
 | T1.7 | UI：Media 詳情（搜尋 → 選 torrent → 選 Route → 送單；檔案與版本清單）、Job 詳情時間線、媒體庫頁（Route 分頁、卡片、狀態、深連結） | brief §17 M1 驗收 |
 | T1.8 | e2e：compose 環境下的 M1 流程自動化（§10） | nightly 綠燈 |
-| T1.9 | **M0 帶過來的技術債**（票 11 收尾時逐條過完、確認要在 M1 做的）：`openapi-typescript` 從 OpenAPI 產前端型別並在 CI 檢查是否過期（§6；同時解掉「同一份形狀寫了四層」的第四層）、結構化日誌每行帶 job id（brief §16.2，M1 才有 Job）、Route 設定頁支援「同一個媒體庫多條 Route」與明確的刪除動作（brief §4.3；M0 的精靈第 7 步是以媒體庫名建索引且重跑會刪掉沒勾的 Route）、qBittorrent 的 403 要分得出「帳密不對」與「IP 被封」（4.4.x 連續失敗封 IP 也是 403，§8.1） | 前端沒有手寫的 API 型別，型別檔過期時 CI 紅燈；Job 的每一行 log 都查得到 job id；一個媒體庫建得出第二條 Route，且沒有東西被隱式刪除 |
+| T1.9 | **M0 帶過來的技術債**（票 11 收尾時逐條過完、確認要在 M1 做的）：`openapi-typescript` 從 OpenAPI 產前端型別並在 CI 檢查是否過期（§6；同時解掉「同一份形狀寫了四層」的第四層）、結構化日誌每行帶 job id（brief §16.2，M1 才有 Job）、Route 設定頁支援「同一個媒體庫多條 Route」與明確的刪除動作（brief §4.3；M0 的精靈第 7 步是以媒體庫名建索引且重跑會刪掉沒勾的 Route）、~~qBittorrent 的 403 要分得出「帳密不對」與「IP 被封」~~（**票 10 做完**：`IpBannedError`，§8.1、brief §20.2） | 前端沒有手寫的 API 型別，型別檔過期時 CI 紅燈；Job 的每一行 log 都查得到 job id；一個媒體庫建得出第二條 Route，且沒有東西被隱式刪除 |
 
 ### 11.3 M2 修正與對帳
 

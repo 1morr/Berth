@@ -231,12 +231,37 @@ Windows Docker Desktop（NTFS bind mount）與 Linux（ext4）上各跑一次 `d
 - **結構化日誌**（`berth/logs.py`，brief §16.2、plan T1.9）：一行一筆 JSON，job 上下文裡的
   每一行都帶 job id。id 由 `ContextVar` 帶著、在 record 建立那一刻蓋上，不靠呼叫端記得傳。
 - `--scenario submit` / `--scenario submit-failing`：送單與下載列表的演練情境。
+- **`qbit_poller`**（`berth/pipeline/downloads.py`、`berth/services/downloads.py`、plan §3.1、§3.2、
+  票 10）：`sync/maindata` 帶 `rid` 做增量，驅動 plan §3.1 中由客戶端狀態觸發的每一個轉換
+  （`metadata_ready`、`downloading`、`stalled`、`missing_files`、`client_error`、`client_removed`、
+  `completed`）。轉換一律 compare-and-set，每個 job 另有程序內的 `asyncio.Lock`。間隔有活躍 job 時
+  5 秒、否則 30 秒、連續失敗退避到 5 分鐘，而且**每次醒來重算**——送單那一刻多半落在一個閒置間隔
+  中間，沿用上一輪的答案會讓使用者等最多半分鐘才看到第一個變化。
+- **`GET /api/events/stream`（SSE）**（`berth/api/events.py`、`berth/services/events.py`、plan §6）：
+  推 `{hash, state, progress}`，前端據此讓 `['jobs']` 失效再問一次。下載列表因此**不用重整就自己動**
+  ——沒有「即時」指示器、沒有輪詢（`.scratch/m1/live-jobs-shape.md`，使用者拍板）。
+- **`job_files`**：`metadata_ready` 那一刻由 `torrents/files` 建起來，`rel_path` 是它回的 `name` 原樣
+  （相對 `save_path`、含 torrent 自己的根目錄那一層，brief §20.7 再驗一次）。
+- **時間線多五種事件**（brief §5.2）：`metadata_received`（檔案數與總大小）、`progress`（**每跨 25%
+  一筆**，不是每一輪一筆）、`stalled`、`completed`、`issue_detected`（`IssueType` 四種）。
+- **健康頁的「下載迴圈」區塊**：上次輪詢、輪詢間隔、連續失敗與服務回的原文，以及**無主 torrent**
+  的清單（qBittorrent 上掛著 Berth 記號、Berth 卻沒有 Job 的那些）。`issues` 表在 M2，所以 M1 的
+  載體是一筆 `issue_detected` 事件加這一份「現在還在不在」的清單。
+- **`IpBannedError`**（plan §8.1、brief §20.2、解掉 plan T1.9 的第四條）：qBittorrent 連續 5 次登入
+  失敗會封住來源 IP 並回 `403`，而帳密不對在 4.4.5 是 `200` + `Fails.`、5.2.3 是 `401`——所以登入
+  端點上的 403 只有「被封了」一個意思。兩種都有可行動的訊息：一個要去改設定，一個要等封鎖過期。
+- `--scenario poll`：qBittorrent 打**真的**那一台，送單到完成的狀態自己走完（見 README）。
+- `sse-starlette` 相依。
 - `AiPlanner` 介面與 `NullAiPlanner`（`berth/adapters/ai.py`，plan §4.5、brief §6.10）：
   `propose(context, files, rules_plan) -> Plan | None`。M4 才有實作，介面先定是因為它約束的是
   規則層——AI 只能提出規則層表達得出來的處置，碰不到檔案。
 
 ### Changed
 
+- **`/api` 底下的每一個回應都帶 `Cache-Control: no-store`**（`berth/api/gate.py`、plan §6、票 10）。
+  這不是最佳化：Berth 原本一個快取 header 都不送，於是瀏覽器對 `200` 套用它自己的啟發式快取——
+  實跑抓到 SSE 推來「這一筆完成了」之後前端重問一次，拿回來的卻是幾秒前那份說「已送出」的快取，
+  畫面因此永遠停在錯的狀態。這裡的每一支回的都是「現在的狀態」，沒有一支的答案在下一秒還算數。
 - **`torrents/add` 的成功形狀依版本判定**（brief §20.2、§20.7、plan §8.1）：2026-09-10 對真的
   qBittorrent 5.2.3 與 4.4.5 各錄一輪，發現 5.2.3 成功回的是一份 JSON 摘要而不是 `Ok.`——
   brief 原本記的「一律回 200 `Ok.`」只對 4.4.x 成立，只認 `Ok.` 的話 5.x 上每一次成功的送單

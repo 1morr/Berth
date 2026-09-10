@@ -687,6 +687,10 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 - `torrents/files` 回傳 `index`、`name`（含相對路徑）、`size`、`progress`、`priority`（0 = 不下載）、`availability`。`name` 相對於 `save_path` 還是 `content_path` 文件未明 → adapter 以 `stat` 驗證組出的絕對路徑，兩種都試。`priority == 0` 的檔案要從 Plan 排除。
 - 其他端點：`setLocation`、`rename`、`renameFile` / `renameFolder`（API 2.8.0）、`delete(deleteFiles)`、`setCategory`（category 不存在回 409）、`addTags`、`recheck`。
 - **沒有 webhook**；`sync/maindata` 以 `rid` 做增量輪詢。`autorun_enabled` / `autorun_program`（完成時執行外部程式，可帶 `%f` `%n`）可作為「喚醒輪詢」的加速手段，非必要。
+- **`rid` 的狀態掛在 session（SID cookie）上**（2026-09-10 票 10 對 4.4.5 與 5.2.3 實測）：不帶 cookie 的話每一次請求都是新 session，回的永遠是 `full_update: true`。所以輪詢那一側必須把 HTTP client 握著不放（Berth 的 `Downloader`）。
+- **增量那一輪的 `torrents[hash]` 只帶變動的欄位**（實測有的只剩 `{"num_leechs", "time_active"}`），所以呼叫端一定要把它併回上一份完整快照再讀——照字面讀會得到一個沒有 category、沒有 state 的空殼。被刪掉的 torrent 在 `torrents_removed`（hash 陣列）。
+- **未完成時的 `completion_on` 兩版不同**：4.4.5 是 `0`、5.2.3 是 `-1`。完成判定寫 `> 0` 對兩版都成立，寫 `!= 0` 會讓 5.x 上每一個剛加入的 torrent 都被當成已完成。`total_size` 在 metadata 到手之前同樣是 `-1` / `0`。
+- **`metaDL` 期間 `torrents/files` 回 `200` + `[]`**（兩版皆然），與「這個 torrent 不存在」同形——所以 `metadata_ready` 的判定要 state 與清單兩個條件都成立。
 - 登入 `auth/login` 回 `SID` cookie，且 **`Referer` / `Origin` 必須與 `Host` 一致**；可設 `bypass_local_auth` 與子網白名單。
 - **`auth/login` 的成敗形狀跨大版本不同**（2026-09-08 對 `lscr.io/linuxserver/qbittorrent` 的 4.4.5 與 5.2.3 各實測一輪，票 11）：
 
@@ -698,6 +702,23 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
   所以判定只能認 4.x 那個「200 卻是失敗」的 `Fails.`，不能認「成功等於 `Ok.`」。另外，來源 IP 在
   `WebUI\AuthSubnetWhitelist` 上時 5.x **一律回 204，連錯的帳密也是**——免密白名單本來就繞過驗證，
   而那正是套件內 Berth 的處境（§16.3、§20.7）。
+
+- **IP 封鎖與帳密不對是兩件事**（2026-09-10 票 10 對兩版各實測一輪，解掉 plan T1.9 的第四條）：
+
+  | 情況 | 4.4.5 | 5.2.3 |
+  | --- | --- | --- |
+  | 帳密錯（第 1–5 次） | `200` + `Fails.` | `401` + `Unauthorized` |
+  | 第 6 次（IP 被封） | `403` + `Your IP address has been banned after too many failed authentication attempts.` | 同左，**一字不差** |
+  | 被封之後的其他端點 | `403` + `Forbidden` | 同左 |
+
+  也就是說：**`auth/login` 上的 403 只有一個意思**（被封），因為帳密錯在兩版都不是 403；
+  而其他端點上的 403 與「沒有登入」完全同形，分不出來。門檻是連續 5 次
+  （`WebUI\MaxAuthenticationFailCount`），封鎖時間預設 3600 秒（`WebUI\BanDuration`），
+  兩者都存在記憶體裡，重啟容器就清掉。下一步不同是分開的理由：帳密不對要去改設定，
+  被封要等過期或去 qBittorrent 的介面解除——改帳密只會再失敗五次，把封鎖時間重新算一輪。
+
+- **`auth/login` 在 session 還活著時直接回成功，連密碼都不看**（同一輪實測：帶著 SID 打八次錯的
+  密碼全部是 `200` + `Ok.`）。所以「驗一次帳密對不對」必須從沒有 cookie 的狀態發起。
 
 **硬鏈接與 Docker**（[TRaSH Hardlinks](https://trash-guides.info/File-and-Folder-Structure/Hardlinks-and-Instant-Moves/)、[Servarr docker-guide](https://wiki.servarr.com/docker-guide)、[link(2)](https://man7.org/linux/man-pages/man2/link.2.html)）
 

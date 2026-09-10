@@ -27,18 +27,20 @@ from typing import Literal
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from berth.adapters.http import ServiceError
-from berth.adapters.qbittorrent import MIN_WEBAPI
+from berth.adapters.qbittorrent import MIN_WEBAPI, IpBannedError
 from berth.domain import HealthStatus, IndexerKind, ServiceKind, ServiceOrigin, StepStatus
 from berth.models import (
     HealthSettings,
     IndexerSettings,
     JellyfinSettings,
     PathSettings,
+    PollerSettings,
     QbittorrentSettings,
     ServiceHealth,
     SetupSettings,
 )
 from berth.services.clients import ServiceClientFactory
+from berth.services.downloads import ACTIVE_INTERVAL
 from berth.services.indexer import probe_indexer
 from berth.services.qbittorrent import drifted_keys
 from berth.services.routes import RouteView, check_routes, read_route_status, routes_health
@@ -74,11 +76,43 @@ class ServiceHealthView:
     configured: bool
     #: 被改掉的建議偏好鍵（qBittorrent 專有）。有值就顯示「還原建議設定」。
     drift: tuple[str, ...]
+    #: qBittorrent 把這台的 IP 封了（brief §20.2）。畫面照它說出下一步——改帳密沒有用。
+    banned: bool
+
+
+@dataclass(frozen=True, slots=True)
+class UnknownTorrentView:
+    """qBittorrent 上一個掛著 Berth 記號、而 Berth 沒有 Job 的 torrent（plan §3.2、票 10）。"""
+
+    hash: str
+    name: str
+    category: str
+    #: qBittorrent 自己的狀態字串，原樣（The Machine String Rule）。
+    state: str
+
+
+@dataclass(frozen=True, slots=True)
+class PollerView:
+    """`qbit_poller` 上一輪的結果（plan §3.2）。
+
+    健康頁上它與四項檢查並排，因為它回答的是同一種問題：**現在還動得了嗎**。
+    一個永遠連不上 qBittorrent 的迴圈不會讓任何一項變紅（那四項各自量的是別的東西），
+    但下載列表會整片停住——而那正是使用者會來健康頁問的事。
+    """
+
+    checked_at: datetime | None
+    #: 連續失敗次數。0 表示上一輪成功。
+    failures: int
+    #: 最後一次失敗時服務回的原文（英文）。
+    error: str
+    #: 有活躍 job 時 5 秒、否則 30 秒（plan §3.2）。畫面用它說「多久問一次」。
+    interval_seconds: int
+    unknown_torrents: tuple[UnknownTorrentView, ...]
 
 
 @dataclass(frozen=True, slots=True)
 class HealthReport:
-    """`GET /api/health/detail` 的整份形狀：三個服務加上所有 Route。"""
+    """`GET /api/health/detail` 的整份形狀：三個服務、所有 Route，加上下載迴圈。"""
 
     degraded: bool
     checked_at: datetime | None
@@ -86,6 +120,7 @@ class HealthReport:
     routes: tuple[RouteView, ...]
     #: 第四項：所有 Route 的總結。一條都沒有是 `unknown`。
     routes_status: HealthStatus
+    poller: PollerView
 
 
 async def read_health(session: AsyncSession) -> HealthReport:
@@ -108,6 +143,23 @@ async def read_health(session: AsyncSession) -> HealthReport:
         ),
         routes=(await read_route_status(session)).routes,
         routes_status=health.routes,
+        poller=await _poller(session),
+    )
+
+
+async def _poller(session: AsyncSession) -> PollerView:
+    """下載迴圈上一輪的結果（`settings.poller`）。**不是**這四項檢查的一部分：
+    它不連任何服務，只把迴圈自己記下來的東西讀出來。"""
+    poller = await read_settings(session, PollerSettings)
+    return PollerView(
+        checked_at=poller.checked_at,
+        failures=poller.failures,
+        error=poller.error,
+        interval_seconds=int(ACTIVE_INTERVAL.total_seconds()),
+        unknown_torrents=tuple(
+            UnknownTorrentView(hash=row.hash, name=row.name, category=row.category, state=row.state)
+            for row in poller.unknown_torrents
+        ),
     )
 
 
@@ -175,6 +227,9 @@ class _Outcome:
     error: str = ""
     configured: bool = True
     drift: tuple[str, ...] = ()
+    #: qBittorrent 把這台的 IP 封了。**旗標而不是一句話**：原文由 `error` 帶著（服務說的），
+    #: 而畫面要照這個事實挑一句 Berth 自己的下一步（PRODUCT 原則 4）。
+    banned: bool = False
 
 
 async def _record(
@@ -205,6 +260,7 @@ async def _record(
             ),
             configured=outcome.configured,
             drift=list(outcome.drift),
+            banned=outcome.banned,
         ),
     }
     await write_settings(session, health)
@@ -277,6 +333,11 @@ async def _check_qbittorrent(session: AsyncSession, factory: ServiceClientFactor
                 error=f"Web API {version.webapi} is older than {floor}",
             )
         preferences = await client.preferences()
+    except IpBannedError as banned:
+        # 原文照舊（它自己就說了發生什麼事），另外掛一個旗標讓畫面說得出下一步——
+        # 改帳密沒有用，那是這一種與「帳密不對」唯一的差別（PRODUCT 原則 4）。
+        # **一定要排在 `ServiceError` 前面**：它是 `AuthFailedError` 的子類。
+        return _Outcome(HealthStatus.FAILED, error=message(banned), banned=True)
     except ServiceError as exc:
         return _Outcome(HealthStatus.FAILED, error=message(exc))
     finally:
@@ -335,6 +396,7 @@ def _view(
         failures=health.failures,
         configured=health.configured,
         drift=tuple(health.drift),
+        banned=health.banned,
     )
 
 

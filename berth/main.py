@@ -22,8 +22,9 @@ from berth.api.gate import ApiGate
 from berth.config import VERSION, Config, load_config
 from berth.db import create_engine, create_session_factory, upgrade_to_head
 from berth.logs import configure_logging
-from berth.pipeline import HealthChecker
+from berth.pipeline import HealthChecker, QbitPoller
 from berth.services.clients import HttpServiceClientFactory, ServiceClientFactory
+from berth.services.events import EventHub
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +32,7 @@ API_PREFIX = "/api"
 
 #: 背景 task 的名字。關機時要找得到它，測試也靠它斷言「沒有留下 pending task」。
 HEALTH_CHECKER_TASK = "health_checker"
+QBIT_POLLER_TASK = "qbit_poller"
 
 #: mount 掛在 `/`，所以 StaticFiles 收到的 path 沒有開頭的斜線。
 _API_SEGMENT = API_PREFIX.lstrip("/")
@@ -77,6 +79,8 @@ def create_app(
     app = FastAPI(title="Berth", version=VERSION, lifespan=_lifespan(resolved))
     app.state.config = resolved
     app.state.clients = clients or HttpServiceClientFactory()
+    # 一個程序一個 hub：發佈的是背景迴圈，訂閱的是這個程序裡開著的 SSE 連線（票 10）。
+    app.state.events = EventHub()
     # 門禁包住整個 `/api`，所以它要在路由之外（票 07）。
     app.add_middleware(ApiGate, prefix=API_PREFIX)
     app.add_exception_handler(RequestValidationError, validation_error)
@@ -94,15 +98,24 @@ def _lifespan(config: Config) -> Lifespan[FastAPI]:
         # 相依（api/deps.py）從 app.state 取，這樣 router 不必知道 engine 是怎麼建的。
         app.state.session_factory = create_session_factory(engine)
         checker = HealthChecker(app.state.session_factory, app.state.clients)
-        # 背景迴圈（plan §3.2）。第一輪要等一個 tick，所以啟動本身不會慢。
-        task = asyncio.create_task(checker.run(), name=HEALTH_CHECKER_TASK)
+        poller = QbitPoller(app.state.session_factory, app.state.clients, app.state.events)
+        # 背景迴圈（plan §3.2）。兩個都先睡一個間隔，所以啟動本身不會慢。
+        tasks = [
+            asyncio.create_task(checker.run(), name=HEALTH_CHECKER_TASK),
+            asyncio.create_task(poller.run(), name=QBIT_POLLER_TASK),
+        ]
         try:
             yield
         finally:
             # 先收 task 再收 engine：反過來的話迴圈會拿著一個已經關掉的 engine 醒來。
-            task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await task
+            for task in tasks:
+                task.cancel()
+            for task in tasks:
+                with contextlib.suppress(asyncio.CancelledError):
+                    await task
+            # poller 握著一條 qBittorrent 連線（rid 綁在它的 session 上），cancel 之後
+            # 要自己還回去——沒還的話關機會留下一個沒關的 httpx client。
+            await poller.aclose()
             await engine.dispose()
 
     return lifespan

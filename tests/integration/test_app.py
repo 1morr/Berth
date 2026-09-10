@@ -11,7 +11,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from berth.config import Config
-from berth.main import HEALTH_CHECKER_TASK, create_app
+from berth.main import HEALTH_CHECKER_TASK, QBIT_POLLER_TASK, create_app
 
 
 @pytest.fixture
@@ -109,15 +109,42 @@ class TestFrontend:
         assert json.loads(response.text)["detail"]
 
 
+class TestApiCaching:
+    """`/api` 底下的回應一律 `no-store`（票 10）。
+
+    **這不是最佳化，是正確性。** Berth 原本一個快取 header 都不送，於是瀏覽器對 `200`
+    套用它自己的啟發式快取——2026-09-10 實跑當場抓到：SSE 推來「這一筆完成了」之後前端
+    重問一次，拿回來的卻是幾秒前那份說「已送出」的快取，畫面因此永遠停在錯的狀態。
+    """
+
+    def test_api_responses_are_never_cached(self, client: TestClient) -> None:
+        with client:
+            assert client.get("/api/health").headers["cache-control"] == "no-store"
+
+    def test_a_refusal_is_not_cached_either(self, client: TestClient) -> None:
+        """401 被快取的話，登入之後那一頁還是進不去。"""
+        with client:
+            response = client.get("/api/jobs")
+
+        assert response.status_code == 401
+        assert response.headers["cache-control"] == "no-store"
+
+    def test_the_frontend_is_left_alone(self, client: TestClient) -> None:
+        """靜態檔有自己的快取規則（檔名帶內容雜湊），門禁不碰它。"""
+        with client:
+            assert "cache-control" not in client.get("/index.html").headers
+
+
 class TestBackgroundLoops:
-    """`health_checker` 由 lifespan 啟動與關閉（plan §3.2、票 10 驗收）。"""
+    """兩個背景迴圈由 lifespan 啟動與關閉（plan §3.2、票 10 驗收）。"""
 
     @pytest.mark.asyncio
-    async def test_the_health_checker_runs_under_the_lifespan(self, config: Config) -> None:
+    async def test_both_loops_run_under_the_lifespan(self, config: Config) -> None:
         app = create_app(config)
 
         async with app.router.lifespan_context(app):
             assert _running(HEALTH_CHECKER_TASK), "迴圈沒起來的話健康頁永遠是空的"
+            assert _running(QBIT_POLLER_TASK), "迴圈沒起來的話下載列表永遠停在送單那一刻"
 
     @pytest.mark.asyncio
     async def test_shutting_down_leaves_no_pending_task(self, config: Config) -> None:
@@ -128,6 +155,7 @@ class TestBackgroundLoops:
             pass
 
         assert not _running(HEALTH_CHECKER_TASK)
+        assert not _running(QBIT_POLLER_TASK)
 
 
 def _running(name: str) -> list[asyncio.Task[None]]:

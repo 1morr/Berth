@@ -9,7 +9,13 @@ import type {
   SetupStatus,
   TmdbSetup,
 } from '../api/setup'
-import type { PreferenceDiff, QbittorrentSetup, RouteView, SetupStep } from '../api/schemas'
+import type {
+  PollerView,
+  PreferenceDiff,
+  QbittorrentSetup,
+  RouteView,
+  SetupStep,
+} from '../api/schemas'
 import type { Discover, DiscoverItem } from '../api/discover'
 import type { HealthDetail, ServiceHealth } from '../api/health'
 import type { StubRoute } from './fetch'
@@ -265,6 +271,7 @@ export function serviceHealth(overrides: Partial<ServiceHealth> = {}): ServiceHe
     failures: 0,
     configured: true,
     drift: [],
+    banned: false,
     ...overrides,
   }
 }
@@ -290,6 +297,19 @@ export function healthDetail(overrides: Partial<HealthDetail> = {}): HealthDetai
     ],
     routes_status: 'ok',
     routes: [routeView()],
+    poller: pollerView(),
+    ...overrides,
+  }
+}
+
+/** 上一輪成功、沒有無主 torrent 的下載迴圈（票 10）。失敗那一種由呼叫端覆寫。 */
+export function pollerView(overrides: Partial<PollerView> = {}): PollerView {
+  return {
+    checked_at: CHECKED_AT,
+    failures: 0,
+    error: '',
+    interval_seconds: 5,
+    unknown_torrents: [],
     ...overrides,
   }
 }

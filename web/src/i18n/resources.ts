@@ -110,6 +110,7 @@ const zhHant = {
     setup_completed: '已經跑過自己的初始精靈',
     anonymous_ok: '免密進得去 Web API',
     auth_required: '要求帳密',
+    ip_banned: '把 Berth 這台的 IP 封了（連續登入失敗）',
     no_indexers: '讀得到 API key 且一個索引站都沒有',
     has_indexers: '已經設定過索引站',
     api_key_missing: '唯讀掛載與環境變數都讀不到 API key',
@@ -666,12 +667,30 @@ const zhHant = {
       submitted: '已送出',
       submit_failed: '送單失敗',
       retried: '重試',
+      metadata_received: '檔案清單',
+      progress: '進度',
+      stalled: '停住',
+      completed: '下載完成',
+      issue_detected: '需要處理',
     },
     timeline: {
       loading: '讀取時間線…',
       empty: '這一筆還沒有任何事件。',
       off: '讀不到時間線。',
       retried: '狀態退回「已建立」，接著再送一次。',
+      files_one: '{{count}} 個檔案 · {{size}}',
+      files_other: '{{count}} 個檔案 · {{size}}',
+      resumed: '又動起來了',
+      idle_one: '{{count}} 分鐘沒有動靜',
+      idle_other: '{{count}} 分鐘沒有動靜',
+      // 理由翻譯，原文不翻譯：後面接的 `client_state` 是 qBittorrent 的機器字串。
+      issue: {
+        missing_files: 'qBittorrent 說檔案不見了。到它的介面上重新檢查那一筆。',
+        client_error: 'qBittorrent 自己報錯。看它的介面或 log 才知道是哪一種。',
+        client_removed: 'torrent 從 qBittorrent 上消失了。下載好的檔案可能還在原位。',
+        unknown_torrent:
+          '這個 torrent 出現在 qBittorrent 上時，Berth 還沒有對應的下載紀錄。多半是有人直接在那邊加的，或這裡的資料庫被還原過。',
+      },
     },
     // 八種被擋下來的理由，八種下一步（PRODUCT 原則 4）。
     refusal: {
@@ -733,6 +752,19 @@ const zhHant = {
       unknown: '尚未檢查',
       unconfigured: '尚未接上',
     },
+    poller: {
+      title: '下載迴圈',
+      lastRound: '上次輪詢',
+      every: '有下載時每 {{seconds}} 秒',
+      failures: '連續失敗',
+      error: '最後的錯誤',
+      unknown: {
+        title: '無主 torrent',
+        count_one: '{{count}} 筆',
+        count_other: '{{count}} 筆',
+        help: 'qBittorrent 上掛著 Berth 記號、而 Berth 沒有對應下載紀錄的 torrent。多半是有人直接在 qBittorrent 那邊加的，或這裡的資料庫被還原過。Berth 不會動它們。',
+      },
+    },
     routes: {
       title: '媒體庫路徑',
       count: '{{count}} 條 Route',
@@ -742,6 +774,8 @@ const zhHant = {
     },
     fix: {
       title: '修正',
+      banned:
+        'qBittorrent 因為連續登入失敗把 Berth 這台的 IP 封了。**改帳密沒有用**——那只會再失敗幾次，把封鎖時間重新算一輪。等封鎖過期（qBittorrent 預設 1 小時），或到它的介面上把封鎖清掉；重啟 qBittorrent 容器也會清掉，因為封鎖只存在記憶體裡。確定帳密沒問題之後 Berth 下一輪就會自己變綠。',
       bundled:
         '這個服務是這套 compose 起的，所以先確認那個容器還在跑。三條指令的順序就是排查順序：還在嗎、把它起來、它自己說了什麼。',
       existing:
@@ -890,6 +924,7 @@ const en: Translations<typeof zhHant> = {
     setup_completed: 'Already ran its own startup wizard',
     anonymous_ok: 'Web API answers without credentials',
     auth_required: 'Asks for credentials',
+    ip_banned: 'Has banned this machine (too many failed logins)',
     no_indexers: 'API key readable and no indexer configured',
     has_indexers: 'Indexers are already configured',
     api_key_missing: 'No API key in the read-only mount or the environment',
@@ -1453,6 +1488,11 @@ const en: Translations<typeof zhHant> = {
       created: 'Created',
       submitted: 'Sent',
       submit_failed: 'Send failed',
+      metadata_received: 'File list',
+      progress: 'Progress',
+      stalled: 'Stalled',
+      completed: 'Downloaded',
+      issue_detected: 'Needs you',
       retried: 'Retried',
     },
     timeline: {
@@ -1460,6 +1500,19 @@ const en: Translations<typeof zhHant> = {
       empty: 'Nothing has happened to this job yet.',
       off: 'Could not read the timeline.',
       retried: 'Back to created, then sent again.',
+      files_one: '{{count}} file · {{size}}',
+      files_other: '{{count}} files · {{size}}',
+      resumed: 'moving again',
+      idle_one: 'idle for {{count}} minute',
+      idle_other: 'idle for {{count}} minutes',
+      issue: {
+        missing_files: 'qBittorrent says the files are gone. Force a recheck in its own UI.',
+        client_error: 'qBittorrent reported an error of its own. Its UI or log says which one.',
+        client_removed:
+          'The torrent left qBittorrent. The downloaded files may still be where it left them.',
+        unknown_torrent:
+          'When this torrent turned up in qBittorrent, Berth had no download for it — added straight in qBittorrent, or left over from a restored database.',
+      },
     },
     refusal: {
       media_missing: 'Berth does not hold this title. Open its detail page again.',
@@ -1526,6 +1579,19 @@ const en: Translations<typeof zhHant> = {
       unknown: 'Not checked',
       unconfigured: 'Not connected',
     },
+    poller: {
+      title: 'Download loop',
+      lastRound: 'Last poll',
+      every: 'every {{seconds}}s while downloading',
+      failures: 'Consecutive failures',
+      error: 'Last error',
+      unknown: {
+        title: 'Unclaimed torrents',
+        count_one: '{{count}} torrent',
+        count_other: '{{count}} torrents',
+        help: 'Torrents that carry a Berth category or tag but have no download here. Usually added straight in qBittorrent, or left over from a restored database. Berth leaves them alone.',
+      },
+    },
     routes: {
       title: 'Library paths',
       count: '{{count}} routes',
@@ -1536,6 +1602,8 @@ const en: Translations<typeof zhHant> = {
     },
     fix: {
       title: 'Fix',
+      banned:
+        'qBittorrent has banned this machine after repeated failed logins. **Changing the password will not help** — it only fails a few more times and restarts the ban. Wait for it to expire (1 hour by default), clear the ban in qBittorrent, or restart its container: the ban lives in memory only. Once the credentials are right, Berth turns green again on its next round.',
       bundled:
         'This service comes from the bundled compose file, so start by checking that its container is still running. The three commands are in triage order: is it there, bring it up, what did it say.',
       existing:

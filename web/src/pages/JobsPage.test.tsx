@@ -92,7 +92,7 @@ describe('下載列表頁', () => {
     expect(list.getByText('手動')).toBeInTheDocument()
   })
 
-  it('進度還沒有值時那一格是 `—` 而不是 0%（票 10 才會動它）', async () => {
+  it('進度還沒有值時那一格是 `—` 而不是 0%', async () => {
     render()
     renderApp('/jobs')
     await screen.findByText(/SPY×FAMILY - 13/)
@@ -100,6 +100,15 @@ describe('下載列表頁', () => {
     expect(screen.getByText('進度 —')).toBeInTheDocument()
     // 大小同理：這一列沒有欄頭，光一條破折號說不出自己少了什麼。
     expect(screen.getByText('大小 —')).toBeInTheDocument()
+  })
+
+  it('poller 報回進度之後那一格就是百分比（票 10）', async () => {
+    render({ [JOBS]: { body: [job({ state: 'downloading', progress: 0.42, total_size: 1400 })] } })
+    renderApp('/jobs')
+    await screen.findByText(/SPY×FAMILY - 13/)
+
+    expect(screen.getByText('進度 42%')).toBeInTheDocument()
+    expect(screen.getByText('下載中')).toBeInTheDocument()
   })
 
   it('最新的在前面', async () => {

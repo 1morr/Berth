@@ -26,6 +26,7 @@ from berth.models.setting import (
     IndexerSettings,
     JellyfinSettings,
     PathSettings,
+    PollerSettings,
     QbittorrentSettings,
     ServiceHealth,
     ServiceProbe,
@@ -40,6 +41,7 @@ from berth.models.setting import (
     SetupStep,
     SetupTmdb,
     TmdbSettings,
+    UnknownTorrent,
 )
 
 __all__ = [
@@ -57,6 +59,7 @@ __all__ = [
     "Media",
     "MediaCard",
     "PathSettings",
+    "PollerSettings",
     "QbittorrentSettings",
     "Route",
     "RouteHealth",
@@ -74,6 +77,7 @@ __all__ = [
     "SetupTmdb",
     "TmdbCache",
     "TmdbSettings",
+    "UnknownTorrent",
     "User",
     "UserSession",
     "dump_cards",

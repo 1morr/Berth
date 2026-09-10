@@ -20,7 +20,7 @@ from berth.adapters.http import (
 )
 from berth.adapters.jellyfin import JellyfinClient
 from berth.adapters.prowlarr import ProwlarrClient
-from berth.adapters.qbittorrent import QbittorrentClient, QbittorrentVersion
+from berth.adapters.qbittorrent import IpBannedError, QbittorrentClient, QbittorrentVersion
 from berth.domain import (
     PROWLARR_LOGIN_STEP,
     DetectionReason,
@@ -441,6 +441,10 @@ async def _classified(probe: Callable[[], Awaitable[_Verdict]], base_url: str) -
         return _existing(DetectionReason.NOT_DEPLOYED, "", base_url)
     except ServiceUnavailableError:
         return (ServiceOrigin.PENDING, DetectionReason.UNREACHABLE, "", base_url)
+    except IpBannedError:
+        # `AuthFailedError` 的子類，所以**一定要排在它前面**——被封的那一台會照樣回 403，
+        # 而「要帳密」與「被封了」的下一步完全不同（票 10、plan T1.9 第四條）。
+        return _existing(DetectionReason.IP_BANNED, "", base_url)
     except AuthFailedError:
         return _existing(DetectionReason.AUTH_REQUIRED, "", base_url)
     except ProtocolMismatchError:

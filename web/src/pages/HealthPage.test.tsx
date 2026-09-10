@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { HEALTHY, stubApi, type StubRoute } from '../test/fetch'
-import { healthDetail, routeView, step, withFailedService } from '../test/fixtures'
+import { healthDetail, pollerView, routeView, step, withFailedService } from '../test/fixtures'
 import { renderApp } from '../test/render'
 
 afterEach(() => {
@@ -229,6 +229,66 @@ describe('健康頁', () => {
     await userEvent.click(screen.getByRole('button', { name: '立即重測' }))
 
     expect(await screen.findByText('connection refused')).toBeInTheDocument()
+  })
+
+  describe('下載迴圈（票 10）', () => {
+    it('上一輪何時跑的與輪詢間隔並排——三個服務都綠著也可能整片停住', async () => {
+      render({ body: healthDetail() })
+      renderApp('/health')
+
+      const loop = within(await screen.findByRole('region', { name: '下載迴圈' }))
+      expect(loop.getByText('上次輪詢')).toBeInTheDocument()
+      expect(loop.getByText(/有下載時每 5 秒/)).toBeInTheDocument()
+    })
+
+    it('連續失敗時把服務回的原文原樣貼出來，不翻譯', async () => {
+      render({
+        body: healthDetail({
+          poller: pollerView({
+            failures: 4,
+            error: 'GET /api/v2/sync/maindata: connection refused',
+          }),
+        }),
+      })
+      renderApp('/health')
+
+      const loop = within(await screen.findByRole('region', { name: '下載迴圈' }))
+      expect(loop.getByText('4')).toBeInTheDocument()
+      expect(loop.getByText('GET /api/v2/sync/maindata: connection refused')).toBeInTheDocument()
+    })
+
+    it('沒有無主 torrent 時整份清單不畫——0 是正常，不是一個要人看的數字', async () => {
+      render({ body: healthDetail() })
+      renderApp('/health')
+
+      const loop = within(await screen.findByRole('region', { name: '下載迴圈' }))
+      expect(loop.queryByText('無主 torrent')).not.toBeInTheDocument()
+    })
+
+    it('無主 torrent 逐筆列出 client state、發佈名、category 與短 hash', async () => {
+      render({
+        body: healthDetail({
+          poller: pollerView({
+            unknown_torrents: [
+              {
+                hash: '3f9a2c1b00000000000000000000000000000000',
+                name: 'Some.Release.2160p.WEB-DL',
+                category: 'berth-tv',
+                state: 'stalledUP',
+              },
+            ],
+          }),
+        }),
+      })
+      renderApp('/health')
+
+      const loop = within(await screen.findByRole('region', { name: '下載迴圈' }))
+      // `client_state` 是 qBittorrent 的機器字串，不翻譯（The Machine String Rule）。
+      expect(loop.getByText('stalledUP')).toBeInTheDocument()
+      expect(loop.getByText('Some.Release.2160p.WEB-DL')).toBeInTheDocument()
+      expect(loop.getByText('berth-tv')).toBeInTheDocument()
+      expect(loop.getByText('3f9a2c1b0000')).toBeInTheDocument()
+    })
   })
 
   it('後端連不上時說得出來，而不是一片空白', async () => {

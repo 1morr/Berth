@@ -20,7 +20,10 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import uvicorn
+from fastapi import FastAPI, Request, Response
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.routing import Route as StarletteRoute
 
 from berth.adapters.http import AuthFailedError, ServiceNotDeployedError, ServiceUnavailableError
 from berth.adapters.indexer import IndexerResult, IndexerSearch
@@ -37,6 +40,7 @@ from berth.adapters.jellyfin.fake import FakeJellyfinClient
 from berth.adapters.prowlarr import ProwlarrClient, ProwlarrIndexer
 from berth.adapters.prowlarr.fake import FakeProwlarrClient
 from berth.adapters.qbittorrent import QbittorrentClient, QbittorrentVersion
+from berth.adapters.qbittorrent.client import HttpQbittorrentClient
 from berth.adapters.qbittorrent.fake import FakeQbittorrentClient
 from berth.adapters.tmdb import TmdbClient
 from berth.adapters.tmdb.client import HttpTmdbClient
@@ -47,13 +51,20 @@ from berth.adapters.torznab.fake import FakeTorznabClient
 from berth.api.deps import get_client_factory, get_setup_probes
 from berth.config import Config, load_config
 from berth.db import create_engine, create_session_factory, upgrade_to_head
-from berth.domain import DetectionReason, IndexerKind, ServiceKind, ServiceOrigin
+from berth.domain import (
+    DetectionReason,
+    HealthStatus,
+    IndexerKind,
+    ServiceKind,
+    ServiceOrigin,
+)
 from berth.main import create_app
 from berth.models import (
     IndexerSettings,
     JellyfinSettings,
     PathSettings,
     QbittorrentSettings,
+    Route,
     ServiceProbe,
     SetupAdmin,
     SetupLibrary,
@@ -65,6 +76,11 @@ from berth.services.health import check_health
 from berth.services.jellyfin import MERGE_VERSIONS_GUID
 from berth.services.routes import build_routes
 from berth.services.settings import read_settings, write_settings
+
+# `poll` 情境要現生一份 `.torrent`。bencode 與 pieces 的計算已經在實驗腳本的共用工具裡，
+# 而它只用標準庫——為了一個演練情境在產品程式碼裡加一個編碼器不值得。
+sys.path.insert(0, str(Path(__file__).parent / "experiments"))
+from lib import Torrent, make_torrent
 
 #: 這台假 Prowlarr 連不上的站。訊息是 2026-09-08 對真的 Prowlarr 錄到的原文（brief §20.7）——
 #: 十個公開站裡有幾個連不上是常態，畫面必須撐得住這個組合。
@@ -152,6 +168,21 @@ class Scenario:
     indexer_key: str = ""
     #: 替身索引站要回的那幾筆。真的那一台沒接上時走這裡（票 09 的送單演練）。
     indexer_results: tuple[IndexerResult, ...] = ()
+    #: 打**真的** qBittorrent（票 10 的 poller 演練）。空字串時走替身。
+    #: 狀態機的驗收是「送單到完成的狀態自己走完」，而替身不會下載、不會做種、
+    #: 也不會在 `sync/maindata` 上換 state——那正是這一票要驗的東西。
+    qbittorrent_url: str = ""
+    #: 三層路徑改用**容器裡的**那一組（`/downloads/...`）。真的 qBittorrent 只用得了它
+    #: 自己看得到的路徑，而 category 的 save path 是送單當下算出來的。
+    container_paths: bool = False
+    #: 直接把 Route 標成綠燈，不跑第 7 步那五條纜繩。
+    #: **只有 `poll` 用它**：Berth 在 Windows 上看不到容器的 `/downloads`，所以
+    #: `download_path` 與 `hardlink` 兩條一定紅——而紅的 Route 會擋下送單（brief §4.4），
+    #: 於是這一票要驗的東西一步都跑不到。那兩條纜繩本來就有自己的驗收（票 10 的健康頁）。
+    assume_routes_healthy: bool = False
+    #: 這個情境要送的那一份 torrent 的發佈名。demo server 自己生一份 `.torrent`
+    #: 掛在 `/demo/torrent`，索引站的那一筆就指向它。
+    release: str = ""
 
     def probes(self) -> SetupProbes:
         return SetupProbes(
@@ -391,6 +422,48 @@ def submit_failing() -> Scenario:
     return scenario
 
 
+#: `poll` 情境送的那一包。檔名照真實發佈的樣子，因為 `job_files.rel_path` 存的就是這一串。
+POLL_RELEASE = "Berth.Poller.Demo.S01.1080p.WEB-DL"
+POLL_FILES: tuple[tuple[str, int], ...] = (
+    (f"{POLL_RELEASE}.E01.mkv", 40000),
+    (f"Subs/{POLL_RELEASE}.E01.zh-Hant.srt", 120),
+)
+
+#: 容器裡的三層路徑（brief §4.1）。真的 qBittorrent 只用得了它自己看得到的路徑。
+POLL_COMPLETE_ROOT = "/downloads/complete"
+POLL_INCOMPLETE_ROOT = "/downloads/incomplete"
+
+
+def poll() -> Scenario:
+    """**真的** qBittorrent + 真的 poller：送單到完成的狀態自己走完（票 10）。
+
+    與 `submit` 的差別只有一個，而那個差別就是這一票：qBittorrent 不是替身。替身收下
+    `torrents/add` 之後什麼都不會發生，而這裡那一份 torrent 的資料已經先放進容器的
+    save path，所以 qBittorrent 校驗完就是完成——`sync/maindata` 會真的換 state，
+    poller 會真的走完 `submitted → metadata_ready → downloading → completed`。
+
+    位址從 `BERTH_QBITTORRENT_URL` 讀。準備步驟（起容器、把資料放進去）見 README。
+    """
+    scenario = discover()
+    scenario.qbittorrent_url = os.environ.get("BERTH_QBITTORRENT_URL", "http://127.0.0.1:18081")
+    scenario.container_paths = True
+    scenario.assume_routes_healthy = True
+    scenario.release = POLL_RELEASE
+    scenario.indexer_results = (
+        IndexerResult(
+            title=POLL_RELEASE,
+            indexer="berth-demo",
+            size=sum(size for _, size in POLL_FILES),
+            seeders=1,
+            # demo server 自己掛的那一支。送單走的是真的 `adapters/torrent.py`：
+            # 它抓下來、算 info hash、把位元組交給 qBittorrent（票 09）。
+            download_url="http://127.0.0.1:8484/demo/torrent",
+            info_hash="",
+        ),
+    )
+    return scenario
+
+
 def tmdb_down() -> Scenario:
     """憑證有、TMDB 連不上：探索頁要給原文與重試，而不是一片空白。"""
     scenario = healthy()
@@ -405,6 +478,7 @@ SCENARIOS = {
     "bundled": bundled,
     "discover": discover,
     "search": search,
+    "poll": poll,
     "submit": submit,
     "submit-failing": submit_failing,
     "tmdb-down": tmdb_down,
@@ -442,6 +516,10 @@ class FakeClientFactory:
         return client
 
     def qbittorrent(self, base_url: str) -> QbittorrentClient:
+        if self._scenario.qbittorrent_url:
+            # **每次造一個新的**：`sync/maindata` 的 rid 掛在那條連線的 session 上，而
+            # `Downloader` 自己會把它握著（票 10）。共用一份反而會讓兩個呼叫端搶同一個 rid。
+            return HttpQbittorrentClient(self._scenario.qbittorrent_url)
         if self._scenario.qbittorrent.error is not None:
             # 要帳密的那一台，使用者填了之後就該連得上。
             self._scenario.qbittorrent = FakeQbittorrentClient(base_url=base_url)
@@ -504,10 +582,36 @@ def main(argv: list[str] | None = None) -> int:
 
     app.dependency_overrides[get_setup_probes] = override_probes
     app.dependency_overrides[get_client_factory] = lambda: factory
+    if scenario.release:
+        _mount_demo_torrent(app, scenario.release)
 
     print(f"scenario={args.scenario} config_root={config_root}", file=sys.stderr)
     uvicorn.run(app, host="127.0.0.1", port=args.port, log_level="warning")
     return 0
+
+
+def _mount_demo_torrent(app: FastAPI, release: str) -> None:
+    """把這個情境要送的那一份 `.torrent` 掛出來（`poll` 用）。
+
+    送單走的是真的那條路徑（`adapters/torrent.py` 抓下來、算 hash、交位元組給
+    qBittorrent），所以它需要一條真的 URL。**磁力連結不行**：那條路徑要 qBittorrent
+    自己去 DHT 要 metadata，而演練環境裡沒有任何一個 peer。
+    """
+    payload = demo_torrent(release)
+
+    async def endpoint(_: Request) -> Response:
+        return Response(payload.raw, media_type="application/x-bittorrent")
+
+    # **插在最前面**：`create_app` 已經把 SPA 掛在 `/` 上，而那個 mount 會接住所有
+    # 沒被更早的路由比對到的路徑——照順序 `app.get(...)` 加進去的話，這一支永遠拿到
+    # `index.html`（實測：`adapters/torrent.py` 收到一頁 HTML 並正確地說「這不是 torrent」）。
+    app.router.routes.insert(0, StarletteRoute("/demo/torrent", endpoint, methods=["GET"]))
+
+
+def demo_torrent(release: str) -> Torrent:
+    """`poll` 情境那一份 torrent。pieces 是對確定的位元組算的真 SHA-1，所以
+    只要把同一份位元組放進 save path，qBittorrent 校驗完就是完成。"""
+    return make_torrent(release, [(path, size) for path, size in POLL_FILES])
 
 
 async def _seed(config: Config, scenario: Scenario, factory: FakeClientFactory) -> None:
@@ -526,8 +630,15 @@ async def _seed(config: Config, scenario: Scenario, factory: FakeClientFactory) 
     # 反斜線換掉，看到的才與正式部署一致（`os` 兩種分隔符都吃）。
     data = str(config.data_root).replace("\\", "/").rstrip("/")
     paths = PathSettings(
-        incomplete_root=f"{data}/torrent/incomplete",
-        complete_root=f"{data}/torrent/complete",
+        # `poll` 用容器裡的那一組：真的 qBittorrent 只用得了它自己看得到的路徑，而
+        # category 的 save path 是送單當下由 `complete_root` 算出來的。library 仍然落在
+        # 這一輪的暫存目錄——那一半是 Berth 自己寫的。
+        incomplete_root=(
+            POLL_INCOMPLETE_ROOT if scenario.container_paths else f"{data}/torrent/incomplete"
+        ),
+        complete_root=(
+            POLL_COMPLETE_ROOT if scenario.container_paths else f"{data}/torrent/complete"
+        ),
         library_root=f"{data}/library",
     )
     engine = create_engine(config)
@@ -574,15 +685,19 @@ async def _moor(
             ("anime", "Anime", "tvshows"),
         )
     ]
-    await scenario.qbittorrent.set_preferences(
-        {
-            "save_path": paths.complete_root,
-            "temp_path": paths.incomplete_root,
-            "temp_path_enabled": True,
-            "auto_tmm_enabled": True,
-            "category_changed_tmm_enabled": True,
-        }
-    )
+    if scenario.qbittorrent_url:
+        # 真的那一台：偏好由使用者的容器自己決定，演練不去改它。
+        pass
+    else:
+        await scenario.qbittorrent.set_preferences(
+            {
+                "save_path": paths.complete_root,
+                "temp_path": paths.incomplete_root,
+                "temp_path_enabled": True,
+                "auto_tmm_enabled": True,
+                "category_changed_tmm_enabled": True,
+            }
+        )
 
     setup = await read_settings(session, SetupSettings)
     setup.admin = SetupAdmin(username="skipper", password="harbour")
@@ -617,10 +732,19 @@ async def _moor(
             api_key=scenario.indexer_key or "fake-key",
         ),
     )
-    await write_settings(session, QbittorrentSettings(base_url="http://qbittorrent:8080"))
+    await write_settings(
+        session,
+        QbittorrentSettings(base_url=scenario.qbittorrent_url or "http://qbittorrent:8080"),
+    )
     await session.commit()
 
     await build_routes(session, factory, ())
+    if scenario.assume_routes_healthy:
+        # 理由見 `Scenario.assume_routes_healthy`：Windows 上的 Berth 看不到容器的
+        # `/downloads`，而紅的 Route 會擋下送單。
+        for route in await session.scalars(select(Route)):
+            route.health_status = HealthStatus.OK
+        await session.commit()
     if scenario.preference_drift:
         # 檢查之前就改掉，第一輪就看得到漂移。
         await scenario.qbittorrent.set_preferences({"auto_tmm_enabled": False})

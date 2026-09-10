@@ -16,15 +16,24 @@ from berth.adapters.http import (
     json_body,
 )
 from berth.adapters.qbittorrent import (
+    BAN_MARKER,
+    IpBannedError,
+    MaindataCursor,
     QbittorrentCategory,
     QbittorrentVersion,
     TorrentAdd,
+    TorrentFile,
     TorrentRejectedError,
+    TorrentStatus,
     add_form,
 )
 
 #: `torrents/add` 對「不收這一個」用的狀態碼。實測兩種成因（見 `_reason`）。
 CONFLICT = 409
+
+#: 登入端點上「被封了」的狀態碼。**帳密錯不是這一個**（4.4.5 是 200 + `Fails.`，
+#: 5.2.3 是 401），所以這裡的 403 只有一個意思。
+FORBIDDEN = 403
 
 
 class HttpQbittorrentClient:
@@ -38,6 +47,9 @@ class HttpQbittorrentClient:
         self._base_url = base_url
         # Host 檢查除了網域還比對 port，所以 base URL 必須就是使用者實際連的那一個（brief §20.7）。
         self._session = HttpSession(base_url, headers={"Referer": base_url}, timeout=timeout)
+        # rid 的狀態與這條連線同生死：qBittorrent 把它掛在 SID 上（2026-09-10 實測，
+        # 不帶 cookie 的話每一輪都是 `full_update`），而 httpx 的 client 會自己帶 cookie。
+        self._cursor = MaindataCursor()
 
     @property
     def base_url(self) -> str:
@@ -56,9 +68,17 @@ class HttpQbittorrentClient:
         那一台很可能回 `200` 加一頁 HTML 登入表單，當成登入成功會一路錯到後面才爆。
         """
         response = await self._session.request(
-            "POST", "/api/v2/auth/login", data={"username": username, "password": password}
+            "POST",
+            "/api/v2/auth/login",
+            data={"username": username, "password": password},
+            # 403 要看得到 body 才分得出「被封了」與「帳密不對」（`IpBannedError`）。
+            tolerate=(FORBIDDEN,),
         )
         body = response.text.strip()
+        if response.status_code == FORBIDDEN:
+            if BAN_MARKER in body.lower():
+                raise IpBannedError(f"auth/login: {body}")
+            raise AuthFailedError(f"auth/login: 403 {body}")
         if body == "Fails.":
             raise AuthFailedError("auth/login: rejected")
         if body not in ("", "Ok."):
@@ -140,6 +160,35 @@ class HttpQbittorrentClient:
         if response.status_code == 200 and _accepted(response):
             return
         raise TorrentRejectedError(f"torrents/add: {response.status_code} {_reason(response)}")
+
+    async def sync(self) -> tuple[TorrentStatus, ...]:
+        """`sync/maindata?rid=N`。合併由 `MaindataCursor` 做，這裡只負責問與檢查形狀。"""
+        path = f"/api/v2/sync/maindata?rid={self._cursor.rid}"
+        payload = json_body(await self._session.get(path))
+        if not isinstance(payload, dict):
+            raise ProtocolMismatchError("sync/maindata: expected an object")
+        return self._cursor.apply(payload)
+
+    async def files(self, info_hash: str) -> tuple[TorrentFile, ...]:
+        """`torrents/files?hash=…`。
+
+        metadata 還沒到時它回 `200` + `[]`（實測 4.4.5 與 5.2.3 皆然），所以「空的」與
+        「這個 torrent 不存在」在這一支上分不出來——呼叫端要先看 state（plan §3.1）。
+        """
+        payload = json_body(await self._session.get(f"/api/v2/torrents/files?hash={info_hash}"))
+        if not isinstance(payload, list):
+            raise ProtocolMismatchError("torrents/files: expected an array")
+        return tuple(
+            TorrentFile(
+                index=int(row.get("index", position)),
+                name=str(row.get("name", "")),
+                size=int(row.get("size", 0) or 0),
+                priority=int(row.get("priority", 1)),
+                progress=float(row.get("progress", 0.0) or 0.0),
+            )
+            for position, row in enumerate(payload)
+            if isinstance(row, dict)
+        )
 
     async def aclose(self) -> None:
         await self._session.aclose()

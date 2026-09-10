@@ -112,6 +112,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/events/stream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Stream
+         * @description 一條 SSE 連線。斷線或關機時一定收掉訂閱。
+         */
+        get: operations["stream_api_events_stream_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/health": {
         parameters: {
             query?: never;
@@ -843,7 +863,7 @@ export interface components {
          * @description 判定的理由。UI 逐服務顯示，所以是封閉集合而不是自由文字。
          * @enum {string}
          */
-        DetectionReason: "setup_pending" | "setup_completed" | "anonymous_ok" | "auth_required" | "no_indexers" | "has_indexers" | "api_key_missing" | "not_deployed" | "unreachable" | "protocol_mismatch" | "connected";
+        DetectionReason: "setup_pending" | "setup_completed" | "anonymous_ok" | "auth_required" | "ip_banned" | "no_indexers" | "has_indexers" | "api_key_missing" | "not_deployed" | "unreachable" | "protocol_mismatch" | "connected";
         /**
          * DiscoverItemOut
          * @description 牆上的一格。
@@ -932,6 +952,7 @@ export interface components {
             routes_status: components["schemas"]["HealthStatus"];
             /** Routes */
             routes: components["schemas"]["RouteOut"][];
+            poller: components["schemas"]["PollerOut"];
         };
         /**
          * HealthStatus
@@ -1306,6 +1327,22 @@ export interface components {
             /** Detail */
             detail: string;
         };
+        /**
+         * PollerOut
+         * @description 下載迴圈上一輪的結果（plan §3.2）。
+         */
+        PollerOut: {
+            /** Checked At */
+            checked_at: string | null;
+            /** Failures */
+            failures: number;
+            /** Error */
+            error: string;
+            /** Interval Seconds */
+            interval_seconds: number;
+            /** Unknown Torrents */
+            unknown_torrents: components["schemas"]["UnknownTorrentOut"][];
+        };
         /** PreferenceDiffOut */
         PreferenceDiffOut: {
             /** Key */
@@ -1552,6 +1589,8 @@ export interface components {
             configured: boolean;
             /** Drift */
             drift: string[];
+            /** Banned */
+            banned: boolean;
         };
         /**
          * ServiceKind
@@ -1665,6 +1704,20 @@ export interface components {
         TmdbTestIn: {
             /** Api Key */
             api_key: string;
+        };
+        /**
+         * UnknownTorrentOut
+         * @description qBittorrent 上一個 Berth 沒有 Job 的 torrent（plan §3.2、票 10）。
+         */
+        UnknownTorrentOut: {
+            /** Hash */
+            hash: string;
+            /** Name */
+            name: string;
+            /** Category */
+            category: string;
+            /** State */
+            state: string;
         };
         /** ValidationError */
         ValidationError: {
@@ -1827,6 +1880,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    stream_api_events_stream_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
         };

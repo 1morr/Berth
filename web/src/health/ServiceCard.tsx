@@ -66,7 +66,14 @@ export function ServiceCard({ row, actions }: { row: ServiceHealth; actions?: Re
           <p role="alert" className="value max-w-prose break-words text-xs text-blocked-ink">
             {row.error}
           </p>
-          <Fix row={row} />
+          {/* 被封了與帳密不對在原文上分得出來，但**下一步不同**才是重點：改帳密只會再
+              失敗五次，把封鎖時間重新算一輪（brief §20.2、PRODUCT 原則 4）。所以這一句
+              取代平常那段修正說明，而不是接在它後面。 */}
+          {row.banned ? (
+            <p className="mt-3 max-w-prose text-xs text-ink">{t('health.fix.banned')}</p>
+          ) : (
+            <Fix row={row} />
+          )}
         </div>
       )}
 

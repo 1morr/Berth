@@ -20,9 +20,10 @@ from __future__ import annotations
 
 from fastapi import status
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from starlette.datastructures import MutableHeaders
 from starlette.requests import Request
 from starlette.responses import JSONResponse
-from starlette.types import ASGIApp, Receive, Scope, Send
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from berth.domain import Role
 from berth.services.auth import AuthenticatedUser, read_session
@@ -52,6 +53,16 @@ SETUP_PREFIX = "/setup"
 #: 一樣：底下新掛的端點什麼都不做就已經在同一道門後面。
 ADMIN_PREFIXES = ("/settings",)
 
+#: `/api` 底下的每一個回應都帶它。
+#:
+#: **這不是最佳化，是正確性**（票 10 實跑當場抓到）：Berth 一個 header 都不送，於是瀏覽器
+#: 對 `200` 套用它自己的啟發式快取——SSE 推來「這一筆完成了」之後前端重問一次，拿回來的
+#: 卻是幾秒前那份說「已送出」的快取，畫面因此永遠停在錯的狀態。這裡的每一支回的都是
+#: 「現在的狀態」，沒有一支的答案在下一秒還算數。
+#:
+#: 放在門禁而不是逐個端點：新增端點什麼都不做就已經帶著它，與「預設拒絕」同一個道理。
+NO_STORE = "no-store"
+
 
 class ApiGate:
     """`/api` 底下的每個請求都先過這裡。前端靜態檔不受影響。"""
@@ -71,12 +82,14 @@ class ApiGate:
             await self._app(scope, receive, send)
             return
 
+        # 擋下來的那一個也要 `no-store`：401 被快取的話，登入之後那一頁還是進不去。
+        fresh = _no_store(send)
         refusal = await self._verdict(request, path)
         if refusal is not None:
-            await refusal(scope, receive, send)
+            await refusal(scope, receive, fresh)
             return
 
-        await self._app(scope, receive, send)
+        await self._app(scope, receive, fresh)
 
     async def _verdict(self, request: Request, path: str) -> JSONResponse | None:
         """放行回 `None`，擋下來回一個回應。"""
@@ -159,6 +172,23 @@ def current_user(request: Request) -> AuthenticatedUser | None:
     """這個請求背後的使用者。門禁跑過之後才有值。"""
     user: AuthenticatedUser | None = getattr(request.state, "user", None)
     return user
+
+
+def _no_store(send: Send) -> Send:
+    """包一層 `send`，替回應補上 `Cache-Control: no-store`。
+
+    端點自己設過就不動它（SSE 那一支有自己的值）。純 ASGI 的包法，不用
+    `BaseHTTPMiddleware`——它會把回應整個收進記憶體，`GET /events/stream` 在它底下
+    就不是串流了。
+    """
+
+    async def wrapped(message: Message) -> None:
+        if message["type"] == "http.response.start":
+            headers = MutableHeaders(raw=message["headers"])
+            headers.setdefault("cache-control", NO_STORE)
+        await send(message)
+
+    return wrapped
 
 
 def _under(path: str, prefix: str) -> str | None:

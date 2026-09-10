@@ -49,6 +49,7 @@ export const REASON_LABEL = {
   setup_completed: 'reason.setup_completed',
   anonymous_ok: 'reason.anonymous_ok',
   auth_required: 'reason.auth_required',
+  ip_banned: 'reason.ip_banned',
   no_indexers: 'reason.no_indexers',
   has_indexers: 'reason.has_indexers',
   api_key_missing: 'reason.api_key_missing',

@@ -115,6 +115,8 @@ def test_every_settings_group_has_a_distinct_key() -> None:
     assert sorted(keys) == [
         "health",
         "paths",
+        # 兩個背景迴圈各寫自己那一列：整組覆寫是 `write_settings` 的常態，共用一列會互相蓋掉。
+        "poller",
         "services.indexer",
         "services.jellyfin",
         "services.qbittorrent",

@@ -109,6 +109,36 @@ class ServiceHealthOut(BaseModel):
     configured: bool
     #: 被改掉的建議偏好鍵（qBittorrent 專有，brief §16.3）。
     drift: list[str]
+    #: qBittorrent 把這台的 IP 封了（brief §20.2）。畫面照它說出下一步——改帳密沒有用。
+    banned: bool
+
+
+class UnknownTorrentOut(BaseModel):
+    """qBittorrent 上一個 Berth 沒有 Job 的 torrent（plan §3.2、票 10）。"""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    hash: str
+    #: 發佈名，原樣（機器字串，不翻譯）。
+    name: str
+    category: str
+    #: qBittorrent 自己的狀態字串。使用者拿它去 qBittorrent 的介面上對照。
+    state: str
+
+
+class PollerOut(BaseModel):
+    """下載迴圈上一輪的結果（plan §3.2）。"""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    checked_at: datetime | None
+    #: 連續失敗次數。0 表示上一輪成功。
+    failures: int
+    #: 最後一次失敗時服務回的原文（英文）。
+    error: str
+    #: 有活躍 job 時的輪詢間隔（秒）。
+    interval_seconds: int
+    unknown_torrents: list[UnknownTorrentOut]
 
 
 class HealthDetailOut(BaseModel):
@@ -125,6 +155,10 @@ class HealthDetailOut(BaseModel):
     #: 第四項：所有 Route 的總結。
     routes_status: HealthStatus
     routes: list[RouteOut]
+    #: 下載迴圈。**不算在 `status` 裡**：那四項量的是外部服務，而這一個量的是 Berth
+    #: 自己的迴圈——把它混進 ok / degraded 會讓 compose 的健康檢查在 qBittorrent
+    #: 重啟的那三十秒把整個容器判成不健康。
+    poller: PollerOut
 
 
 def health_detail(report: HealthReport) -> HealthDetailOut:
@@ -135,4 +169,5 @@ def health_detail(report: HealthReport) -> HealthDetailOut:
         services=[ServiceHealthOut.model_validate(row) for row in report.services],
         routes_status=report.routes_status,
         routes=[RouteOut.model_validate(row) for row in report.routes],
+        poller=PollerOut.model_validate(report.poller),
     )

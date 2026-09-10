@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 
+import { useJobStream } from '../api/events'
 import { jobsQueryOptions } from '../api/jobs'
 import { GHOST_LINK } from '../components/controls'
 import { JobRow } from '../jobs/JobRow'
@@ -13,9 +14,10 @@ import { JobRow } from '../jobs/JobRow'
  * Jellyfin」。兩個時刻要的都是**逐筆的狀態與理由**——所以這一頁沒有統計數字、沒有圖表，
  * 只有一份船期表。
  *
- * **這一票是靜態的**：重新整理才會變。真的會自己跑的進度要等票 10 的 `qbit_poller`
- * 與 SSE（plan §3.2、§6 events 群組）；在那之前每 N 秒重問一次只是替後端加負擔，
- * 而 M1 票 09 的三個狀態本來就只在使用者按下按鈕時才動。
+ * **這一頁自己會動**（票 10）：`qbit_poller` 每動一筆就往 SSE 丟一個提示，這裡收到就讓
+ * `['jobs']` 失效再問一次。沒有「即時」指示器、沒有脈動點——DESIGN.md 的這塊板沒有動畫，
+ * 而值自己換就是訊號本身（`.scratch/m1/live-jobs-shape.md` §3，使用者拍板）。
+ * 斷線由瀏覽器的 `EventSource` 自己重連，重連那一次的重問會把中間錯過的全部補上。
  *
  * 排序純粹最新在前（使用者 2026-09-10 拍板）：把失敗置頂的話，同一筆 Job 會在重試成功
  * 之後跳位置——而使用者剛剛才在那個位置按過按鈕。
@@ -23,6 +25,9 @@ import { JobRow } from '../jobs/JobRow'
 export function JobsPage() {
   const { t } = useTranslation()
   const jobs = useQuery(jobsQueryOptions())
+  // 掛在這一頁而不是 AppShell：探索頁與設定頁不在乎 job 動了沒，而一條永遠開著的連線
+  // 在後端就是一個永遠開著的訂閱。
+  useJobStream()
 
   return (
     <div className="mx-auto grid w-full max-w-[80rem] gap-4 px-6 py-8">

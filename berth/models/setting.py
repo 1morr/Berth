@@ -231,6 +231,9 @@ class ServiceHealth(BaseModel):
     configured: bool = False
     #: qBittorrent 被改掉的建議偏好鍵（brief §16.3 的「關鍵設定漂移」）。其餘服務一律是空的。
     drift: list[str] = []
+    #: qBittorrent 把 Berth 這台的 IP 封了（brief §20.2、票 10）。與「帳密不對」分開存，
+    #: 因為畫面上的下一步不同——改帳密只會再失敗五次，把封鎖時間重新算一輪。
+    banned: bool = False
 
 
 class HealthSettings(SettingsGroup):
@@ -249,6 +252,44 @@ class HealthSettings(SettingsGroup):
     #: 這裡只留總結——匿名的 `GET /api/health` 靠它答 ok / degraded，不必查 routes 表。
     routes: HealthStatus = HealthStatus.UNKNOWN
     checked_at: datetime | None = None
+
+
+class UnknownTorrent(BaseModel):
+    """qBittorrent 上一個掛著 Berth 記號、但 Berth 沒有 Job 的 torrent（plan §3.2）。
+
+    使用者自己在 qBittorrent 介面上把 torrent 丟進 Berth 的 category，或 Berth 的資料庫
+    被還原到某個 torrent 送出去之前，都會長出這種東西。它不是錯誤，是一個**要人決定**
+    的狀況——所以畫面上要看得見，而不是只躺在 log 裡。
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    hash: str = ""
+    name: str = ""
+    category: str = ""
+    state: str = ""
+
+
+class PollerSettings(SettingsGroup):
+    """`qbit_poller` 上一輪的結果（plan §3.2、票 10）。
+
+    **自己一列，不寫進 `settings.health`**（plan §3.2 原文寫的是後者）：`HealthSettings`
+    每 5 分鐘被 `health_checker` 整組覆寫一次，而 poller 每 5 秒寫一次——兩個迴圈寫同一列
+    會互相蓋掉。理由與當初把健康結果從 `settings.services.*` 分出來時一模一樣。
+
+    `unknown_torrents` 是**這一輪的完整清單**而不是累積：使用者在 qBittorrent 上把那一筆
+    清掉之後，下一輪它就從畫面上消失了。M2 的 `issues` 表有 open / resolved 才做得到
+    「留著直到有人處理」，在那之前「現在還在不在」比「曾經看過」有用。
+    """
+
+    KEY = "poller"
+
+    checked_at: datetime | None = None
+    #: 連續失敗次數（plan §3.2）。成功就歸零，退避的長度由它決定。
+    failures: int = 0
+    #: 最後一次失敗時服務回的原文（英文）。成功就清空。
+    error: str = ""
+    unknown_torrents: list[UnknownTorrent] = []
 
 
 class SetupSettings(SettingsGroup):
@@ -275,4 +316,5 @@ SETTINGS_GROUPS: tuple[type[SettingsGroup], ...] = (
     PathSettings,
     SetupSettings,
     HealthSettings,
+    PollerSettings,
 )

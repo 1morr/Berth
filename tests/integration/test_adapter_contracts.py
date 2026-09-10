@@ -35,7 +35,12 @@ from berth.adapters.prowlarr import (
     ProwlarrIndexer,
 )
 from berth.adapters.prowlarr.client import SCHEMA_TIMEOUT_SECONDS, HttpProwlarrClient
-from berth.adapters.qbittorrent import BERTH_TAG, TorrentAdd, TorrentRejectedError
+from berth.adapters.qbittorrent import (
+    BERTH_TAG,
+    IpBannedError,
+    TorrentAdd,
+    TorrentRejectedError,
+)
 from berth.adapters.qbittorrent.client import HttpQbittorrentClient
 from berth.adapters.rate import TokenBucket
 from berth.adapters.tmdb import TmdbEntry, parse_absolute_ordering
@@ -492,6 +497,187 @@ async def test_qbittorrent_sends_referer_matching_the_base_url() -> None:
         await client.aclose()
 
     assert route.calls.last.request.headers["Referer"] == QBITTORRENT_URL
+
+
+@pytest.mark.parametrize("release", ["4.4.5", "5.2.3"])
+@respx.mock
+@pytest.mark.asyncio
+async def test_qbittorrent_maindata_reads_the_recorded_snapshot(release: str) -> None:
+    """`sync/maindata?rid=0` 的整份：三個 torrent，三種處境（2026-09-10 對兩版各錄一輪）。
+
+    釘的是**完成判定**（brief §5.1、§20.2）：只有做種中的那一個是完成的，`metaDL` 與
+    `stalledDL` 都不是。兩版都測是因為它們對「還沒完成」的 `completion_on` 講法不同——
+    4.4.5 寫 `0`、5.2.3 寫 `-1`，寫成 `!= 0` 的判定會讓 5.x 上每一個剛加入的 torrent
+    都被當成已完成。
+    """
+    respx.get(f"{QBITTORRENT_URL}/api/v2/sync/maindata", params={"rid": "0"}).respond(
+        200, text=read_fixture(f"http/qbittorrent/sync-maindata.full.{release}.json")
+    )
+
+    client = HttpQbittorrentClient(QBITTORRENT_URL)
+    try:
+        rows = await client.sync()
+    finally:
+        await client.aclose()
+
+    assert len(rows) == 3
+    complete = [row for row in rows if row.complete]
+    assert [row.state for row in complete] == ["stalledUP"]
+    assert complete[0].save_path == "/downloads/berth-exp"
+    assert complete[0].content_path.endswith("/Berth.Poller.Test.S01.1080p.WEB-DL")
+    assert complete[0].category == "berth-exp"
+    assert complete[0].tags == (BERTH_TAG,)
+    assert complete[0].total_size == 40120
+    # 還沒完成的那幾筆 `completion_on` 兩版寫法不同（0 與 -1），但 `> 0` 對兩邊都成立。
+    assert all(row.completion_on <= 0 for row in rows if not row.complete)
+
+
+@pytest.mark.parametrize("release", ["4.4.5", "5.2.3"])
+@respx.mock
+@pytest.mark.asyncio
+async def test_qbittorrent_maindata_merges_the_incremental_round(release: str) -> None:
+    """增量那一輪**只帶變動的欄位**——不合併的話整份清單會塌成一堆空殼。
+
+    實測 5.2.3 的一輪裡某個 torrent 只有 `{"num_leechs", "time_active"}`：沒有 state、
+    沒有 category、沒有 name。照字面讀它會讓那一筆的 category 變成空字串，於是 poller
+    當場把使用者自己的 torrent 與 Berth 的混在一起（或反過來，把自己的判成無主）。
+    """
+    respx.get(f"{QBITTORRENT_URL}/api/v2/sync/maindata", params={"rid": "0"}).respond(
+        200, text=read_fixture(f"http/qbittorrent/sync-maindata.full.{release}.json")
+    )
+    respx.get(f"{QBITTORRENT_URL}/api/v2/sync/maindata", params={"rid": "1"}).respond(
+        200, text=read_fixture(f"http/qbittorrent/sync-maindata.partial.{release}.json")
+    )
+
+    client = HttpQbittorrentClient(QBITTORRENT_URL)
+    try:
+        first = await client.sync()
+        second = await client.sync()
+    finally:
+        await client.aclose()
+
+    # 增量那一輪多了一筆（腳本在兩輪之間又加了一個磁力連結）。
+    assert len(second) == len(first) + 1
+    assert all(row.category == "berth-exp" for row in second)
+    assert all(row.state for row in second)
+    # 原本就在的那幾筆保留了整份欄位，只有變動的被蓋掉。
+    before = {row.hash: row for row in first}
+    kept = [row for row in second if row.hash in before]
+    assert kept and all(row.name == before[row.hash].name for row in kept)
+
+
+@pytest.mark.parametrize("release", ["4.4.5", "5.2.3"])
+@respx.mock
+@pytest.mark.asyncio
+async def test_qbittorrent_maindata_drops_what_the_client_removed(release: str) -> None:
+    """`torrents_removed` 之後那一筆就不在清單裡了——`client_removed` 讀的就是這件事。"""
+    for rid, name in ((0, "full"), (1, "partial"), (2, "removed")):
+        respx.get(f"{QBITTORRENT_URL}/api/v2/sync/maindata", params={"rid": str(rid)}).respond(
+            200, text=read_fixture(f"http/qbittorrent/sync-maindata.{name}.{release}.json")
+        )
+
+    client = HttpQbittorrentClient(QBITTORRENT_URL)
+    try:
+        await client.sync()
+        after_add = {row.hash for row in await client.sync()}
+        after_remove = {row.hash for row in await client.sync()}
+    finally:
+        await client.aclose()
+
+    assert len(after_add - after_remove) == 1
+    assert len(after_remove) == 3
+
+
+@pytest.mark.parametrize("release", ["4.4.5", "5.2.3"])
+@respx.mock
+@pytest.mark.asyncio
+async def test_qbittorrent_files_are_relative_to_the_save_path(release: str) -> None:
+    """`torrents/files[].name` 含 torrent 自己的根目錄，且相對 `save_path`（brief §20.7）。
+
+    `job_files.rel_path` 存的就是這一串，而 importer 之後拿 `save_path` 接回絕對路徑。
+    """
+    info_hash = "476f86e6c64ce252c09c4da40bcfee609ea827c7"
+    respx.get(f"{QBITTORRENT_URL}/api/v2/torrents/files", params={"hash": info_hash}).respond(
+        200, text=read_fixture(f"http/qbittorrent/torrents-files.multi.{release}.json")
+    )
+
+    client = HttpQbittorrentClient(QBITTORRENT_URL)
+    try:
+        rows = await client.files(info_hash)
+    finally:
+        await client.aclose()
+
+    assert [row.name for row in rows] == [
+        "Berth.Poller.Test.S01.1080p.WEB-DL/Berth.Poller.Test.S01E01.1080p.WEB-DL.mkv",
+        "Berth.Poller.Test.S01.1080p.WEB-DL/Subs/Berth.Poller.Test.S01E01.zh-Hant.srt",
+    ]
+    assert [row.size for row in rows] == [40000, 120]
+    assert all(row.wanted for row in rows)
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_qbittorrent_files_are_empty_while_metadata_is_pending() -> None:
+    """`metaDL` 期間它回 `200` + `[]`，不是錯誤（實測兩版皆然）。"""
+    respx.get(f"{QBITTORRENT_URL}/api/v2/torrents/files", params={"hash": "abc"}).respond(
+        200, text="[]"
+    )
+
+    client = HttpQbittorrentClient(QBITTORRENT_URL)
+    try:
+        assert await client.files("abc") == ()
+    finally:
+        await client.aclose()
+
+
+@pytest.mark.parametrize("release", ["4.4.5", "5.2.3"])
+@respx.mock
+@pytest.mark.asyncio
+async def test_qbittorrent_tells_an_ip_ban_apart_from_wrong_credentials(release: str) -> None:
+    """被封的 403 與帳密不對是兩件事（plan §8.1、T1.9 第四條）。
+
+    2026-09-10 對兩版各實測一輪：連續 5 次帳密錯之後第 6 次回 `403` + 一句明說被封的話。
+    帳密錯本身**不是** 403（4.4.5 是 200 + `Fails.`，5.2.3 是 401），所以登入端點上的
+    403 只有這一個意思——而在這一票之前它被顯示成「帳密不對」，使用者會去改一組本來
+    就對的密碼，再失敗五次，把封鎖時間重新算一輪。
+    """
+    respx.post(f"{QBITTORRENT_URL}/api/v2/auth/login").respond(
+        403, text=read_fixture(f"http/qbittorrent/auth-login.banned.{release}.txt")
+    )
+
+    client = HttpQbittorrentClient(QBITTORRENT_URL)
+    try:
+        with pytest.raises(IpBannedError) as banned:
+            await client.login("admin", "adminadmin")
+    finally:
+        await client.aclose()
+
+    # 原文照抄進訊息：使用者要看得出「這不是我打錯密碼」。
+    assert "banned" in str(banned.value)
+    # 仍然是 `AuthFailedError`：對「現在連不連得上」這個問題兩者的答案一樣。
+    assert isinstance(banned.value, AuthFailedError)
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_qbittorrent_ban_is_indistinguishable_on_other_endpoints() -> None:
+    """被封之後 `app/version` 回的是 `403 Forbidden`——與「沒登入」一模一樣（實測）。
+
+    所以判定只放在登入那一支。這一條釘的是**不要在別的端點上猜**：把每個 403 都說成
+    「被封了」會讓真的沒登入的人收到一句與他無關的話。
+    """
+    respx.get(f"{QBITTORRENT_URL}/api/v2/app/version").respond(
+        403, text=read_fixture("http/qbittorrent/app-version.banned.4.4.5.txt")
+    )
+
+    client = HttpQbittorrentClient(QBITTORRENT_URL)
+    try:
+        with pytest.raises(AuthFailedError) as failure:
+            await client.version()
+    finally:
+        await client.aclose()
+
+    assert not isinstance(failure.value, IpBannedError)
 
 
 @respx.mock
