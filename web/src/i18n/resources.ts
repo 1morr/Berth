@@ -541,6 +541,77 @@ const zhHant = {
       },
     },
   },
+  // 索引站搜尋與結果表（票 08）。發佈名、站名與 Tags token 不是文案——它們來自索引站
+  // 與 brief §6.8 的詞彙表，原樣顯示。
+  search: {
+    title: '搜尋 torrent',
+    keyword: '關鍵字',
+    keywordPlaceholder: '留空就用這部作品的各個名字',
+    submit: '搜尋',
+    submitting: '搜尋中…',
+    willAsk: 'Berth 會拿這幾個名字各問一次：',
+    willAskTyped: 'Berth 只會問這一個：',
+    slow: '索引站要現場去連它認得的每一個追蹤站，這通常要一分鐘左右。',
+    count_one: '共 {{count}} 筆',
+    count_other: '共 {{count}} 筆',
+    countCapped: '共 {{total}} 筆 · 逐站取了 {{shown}} 筆',
+    empty:
+      '這幾個關鍵字在你的索引站上沒有東西。換個寫法自己打一次，或改天再搜——公開站的片源是會變的。',
+    // 索引站對搜不到的關鍵字常常回它自己的熱門清單（實測 The Pirate Bay），所以
+    // 「什麼都沒回」與「回了一堆但沒有一筆是這部作品」是兩件事，下一步也不同。
+    onlyOthers_one:
+      '索引站回了 {{count}} 筆，但沒有一筆對得上這部作品的名字。自己打一個關鍵字試試。',
+    onlyOthers_other:
+      '索引站回了 {{count}} 筆，但沒有一筆對得上這部作品的名字。自己打一個關鍵字試試。',
+    discarded_one: '另有 {{count}} 筆名字對不上這部作品，已經略過。',
+    discarded_other: '另有 {{count}} 筆名字對不上這部作品，已經略過。',
+    off: '搜尋沒有送出去。Berth 自己的 API 沒有回應，先確認它還活著。',
+    announce_one: '找到 {{count}} 筆，{{failed}} 個關鍵字沒問到。',
+    announce_other: '找到 {{count}} 筆，{{failed}} 個關鍵字沒問到。',
+    column: {
+      title: '發佈名',
+      size: '大小',
+      seeders: '做種',
+      indexer: '來源',
+      estimate: '預估',
+    },
+    // 窄版把另外四欄收成一行，做種要自己帶標籤才知道那個數字是什麼。
+    seedersInline_one: '做種 {{value}}',
+    seedersInline_other: '做種 {{value}}',
+    sort: {
+      label: '排序',
+    },
+    estimate: {
+      wholeSeason: '全季',
+      unknown: '判斷不出來',
+      movie: '電影',
+    },
+    // 五種樣子，五種下一步。索引站是精靈裡唯一可以跳過的一步，所以「沒接」不是失敗。
+    problem: {
+      not_configured: {
+        label: '還沒接',
+        body: '設定精靈的第 5 步跳過了索引站，所以 Berth 沒有地方可以搜。接上 Prowlarr 或任意 Torznab 端點之後這一區塊就會動。',
+      },
+      no_query: {
+        label: '無法搜尋',
+        body: 'Berth 還沒有這部作品的 TMDB 快照，所以不知道要拿什麼名字去問。到上面按「立即重抓」，或自己打一個關鍵字。',
+      },
+      no_search: {
+        label: '不提供搜尋',
+        body: '這個 Torznab 端點回報它不提供搜尋。位址與 key 都對，但它做不了這件事——換一個端點。',
+      },
+      credential_rejected: {
+        label: '憑證被拒',
+        body: '索引站不接受這把 API key。它可能被換掉了，或貼進來時少了幾個字。',
+      },
+      unreachable: {
+        label: '連不上',
+        body: '連不上索引站。可能是那個容器沒起來，或位址填錯了。',
+      },
+      toSetup: '前往設定精靈',
+      askAdmin: '請管理員到設定精靈接上索引站。',
+    },
+  },
   // 向 TMDB 要東西沒要到的四種樣子。探索頁與 Media 詳情頁共用同一塊 `TmdbNotice`，
   // 所以文案也在同一個地方——各寫一份的話兩頁遲早會對同一件事說不同的下一步。
   tmdb: {
@@ -1178,6 +1249,71 @@ const en: Translations<typeof zhHant> = {
         tv: 'No route accepts series yet. Without one a finished download has nowhere to land.',
         movie: 'No route accepts films yet. Without one a finished download has nowhere to land.',
       },
+    },
+  },
+  search: {
+    title: 'Search torrents',
+    keyword: 'Keyword',
+    keywordPlaceholder: "Leave empty to use the title's own names",
+    submit: 'Search',
+    submitting: 'Searching…',
+    willAsk: 'Berth will ask for each of these names:',
+    willAskTyped: 'Berth will ask for this only:',
+    slow: 'The indexer contacts every tracker it knows, which usually takes about a minute.',
+    count_one: '{{count}} result',
+    count_other: '{{count}} results',
+    countCapped: '{{total}} results · {{shown}} taken across the sites',
+    empty:
+      'None of those keywords turned up anything on your indexer. Try wording it yourself, or search again later — what public sites carry changes.',
+    onlyOthers_one:
+      "The indexer returned {{count}} release, but none of them carries this title's name. Try typing a keyword yourself.",
+    onlyOthers_other:
+      "The indexer returned {{count}} releases, but none of them carries this title's name. Try typing a keyword yourself.",
+    discarded_one: "{{count}} more release did not carry this title's name and was skipped.",
+    discarded_other: "{{count}} more releases did not carry this title's name and were skipped.",
+    off: "The search never went out. Berth's own API did not answer; check that it is still running.",
+    announce_one: 'Found {{count}} result; {{failed}} keywords went unanswered.',
+    announce_other: 'Found {{count}} results; {{failed}} keywords went unanswered.',
+    column: {
+      title: 'Release',
+      size: 'Size',
+      seeders: 'Seeders',
+      indexer: 'Source',
+      estimate: 'Estimate',
+    },
+    seedersInline_one: '{{value}} seeder',
+    seedersInline_other: '{{value}} seeders',
+    sort: {
+      label: 'Sort by',
+    },
+    estimate: {
+      wholeSeason: 'Full season',
+      unknown: 'Cannot tell',
+      movie: 'Film',
+    },
+    problem: {
+      not_configured: {
+        label: 'Not connected',
+        body: 'Step 5 of the setup wizard skipped the indexer, so Berth has nowhere to search. Connect Prowlarr or any Torznab endpoint and this section comes alive.',
+      },
+      no_query: {
+        label: 'Nothing to ask',
+        body: 'Berth has no TMDB snapshot for this title yet, so it does not know what names to ask for. Hit Refresh now above, or type a keyword yourself.',
+      },
+      no_search: {
+        label: 'No search offered',
+        body: 'This Torznab endpoint reports that it does not offer search. The address and key are fine; it simply cannot do this. Use another endpoint.',
+      },
+      credential_rejected: {
+        label: 'Credential rejected',
+        body: 'The indexer rejected this API key. It may have been rotated, or lost a few characters on the way in.',
+      },
+      unreachable: {
+        label: 'Unreachable',
+        body: 'Cannot reach the indexer. Either its container is not running, or the address is wrong.',
+      },
+      toSetup: 'Open the setup wizard',
+      askAdmin: 'Ask an administrator to connect an indexer in the setup wizard.',
     },
   },
   tmdb: {

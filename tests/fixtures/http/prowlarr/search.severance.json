@@ -1,0 +1,117 @@
+[
+  {
+    "age": 2760,
+    "ageHours": 66254.69434590972,
+    "ageMinutes": 3975281.660754585,
+    "categories": [
+      {
+        "id": 2040,
+        "name": "Movies/HD",
+        "subCategories": []
+      },
+      {
+        "id": 100045,
+        "subCategories": []
+      }
+    ],
+    "downloadUrl": "http://localhost:19696/4/download?apikey=00000000000000000000000000000001&link=UmxyWktTREJHK1E2QzFsMUVwOHhoOXBWTEs4T3oxNFdveExmRDkrUkJibHh0VEUvcEE0ME9CQitjb0dlSTM5V2lZeHJIc1NWSkFuUGI1UzVJemxzTHVmNU56dmZ4SHYzemdhZjN6S3Z4NnJHeEkzRnBLbjMzL2oyUksrT3E1UmU&file=Severance+(2006)+720p+BRRip+x264+-YTS",
+    "fileName": "Severance (2006) 720p BRRip x264 -YTS.torrent",
+    "guid": "https://yts.gg/torrent/download/F74E542F0E2283D6827F59728D152959C73A6FD4",
+    "imdbId": 464196,
+    "indexer": "YTS",
+    "indexerFlags": [
+      "freeleech"
+    ],
+    "indexerId": 4,
+    "infoHash": "F74E542F0E2283D6827F59728D152959C73A6FD4",
+    "infoUrl": "https://yts.gg/movies/severance-2006",
+    "leechers": 5,
+    "magnetUrl": "http://localhost:19696/4/download?apikey=00000000000000000000000000000001&link=Y2JmTlNBMXYrUC9hTURrdnZmckhzeDlJVTJjWXprQVgvOEEvWEw1cXpuMzAyRm0rbDhERy9IQjMyRDg5cHVZcDUvc2JPakVsOCtxMko3SGwyMC8xaHNMUXRaWjFLS0FncDc0MUJidVZhcnhCUVNRNGNlcW1CdS9qV3VXUWkxYXhtSWpVWS92dXFPbWZ5Q21tMFVpanVueC9QREI1ZHN0bkJSa1o0T2J2NXR5M3ZYSlpERHAvc1hnLytyc0crMXVqRnEzY21CbVFKOW5RWm5yODh1TjBoUEx6SWxvUVdWWHR0NUN5elIwc1F5eHJicVNJRE1ndHd2dnArY1N2WmZXR1RMa3QwU0QyYzdsUHhYcHFweGxOcmR2Q01KU3JOTEtKbzQ4akY3UGc4alFQbERuUEZSOTduejNYUG11dWNDZnFycVZDZWxpc0RXQmpjd1lDREh3M3pURTdmZFZPY0duZGV3Z1U1ZVlxNTZyZmovZzJDYTM2aTJaYzl5NUdyRW12eDd2cWlIWTNvUnFPb0xCdmhYZy9CYTNoK0xTSm1UN3gyYWdPcW4yZnVJOEk2NVdHTytyRGJzT0ZsNGg4bzZQZkVxZkk4VFBacllMQkV6dU0yelpJayswbGJtV3gyZGJzdlpQQmtWbWQ5SC9ROEJ0dGhTUElTOEF2S3ZUV1R6blhlWWw5aEtlbHdid2xrNzBkNXBkU01XY1lSSUpUNFd2emI3Z1c3ek9paHc4N2dHQVFER2FEVEdySjlMbzFsR2lsTkxXUVBLcnZPeHl6a0NuL1RyVEVhUndPYytNaHdwNHV0U21RQXRETXU0Q0ZlcHdMR0dkUVFpOWdwb1R6Y2RVV1FXL3hidW9adGJjdFg4MmxQMjZ6WDRGdkFCaVE4U3RWeDYxMHdrdTlSUElyZVYrdHIxcmJhWVRnMzd4WHRJNEdXaWljQWsyWm10ZUxvcWRxT1d4VE0zcThYR3htUk5HbVlDL3VKNTE4MlVoMXFmZGxoUEZBazcxZE9HQWM3WWpEeExVc25MOFdoaDlSVnhwbHo0WEtUWVBGUUVkNTFST2xyQU52bDdabVI5MnQ4ckRoWFZkZmRnbENRTmdieXZHYzFVckltOEN2TGtDdDl6YkhhaFp6QUFKYTQ0UEdyZWNHRHBlamFFOHExTm5xQTF0NmV1K1V1cWNLVkQ5SFpybUJ0WUxiWkhHcDdNQmtvRU1IZFhZM2R0OVJjNGd1RXhMdEI2Z2cxV3k0aWxIeFR4MWJHOTBQa211d0dpbUg0bDcwWVA2UDVUekp3cCtSSDlKZGMvOUxyQTcxaHlUTk4xSElzaUNkREZqMHNWOFpReWZZcFZOWnVIVVZzM1luNVFpNDRKcVZNRS9FUjNqNVo5Y3R2MmEzU1RGSVZIdHMrSHVCc2ZDVnVEZk9lME51Kzlxd2YraTVrY3lGUGZGaWF4TzlMMHlkWWJJWWlPbnFocUtIbW4wcXRUOUZVQWpDUjZLY0FpNlpndlhweHR1a1ROR2VpLzdQYnR3L1RzNHROV2JweTdPRmhJVWRBS1NteHRlRUlCWTl2dit0ZmkzemExUjd4ZmNmZXA2OGpQZlEraU5tMUtabFJBcmZyM281ZXVUQ2ZnYURlMEFKVVNHdCtmM1A1aU5LMC9DZXF4KzRydnhTcUZmSUo4dlJIVUZmMHdqeE5HNFp4a3JXTkY0UzlQQ0dGcXJxY2lCb28wWnpPbHR0c2YwZmpFTVhnNlQ4SWFkTmlJYlByK0JDY0VQRnFRN2VuKzRwRjJ5TXFnbk1BUW5pWTdsNmtBZUcwWkgvMnJ1U1pkbC91V1ZCL0lNaS9Cc3hscnowcXBZRFZMZjcrZk9yZkVDSXpUVWpERzdQSVdaSUhoZittQVdGb3JyTjd4LzVCZGF6aTJkMGE5R01tR3dLNnFGQnVoZE5iTEJnOFo0dlVOUG1vWG5nTGx6NG1SUzJhRVQxclBibUJ6Y2pQd0NlRlphOGN1QzNzNU10QzdYSFBPRFdoMDZ1UnpWc2FnWXVZYTkxQkZnVnhnV2dodi9KcDA5OGVsQnhtUVRwNGlsWEhQZSs1QkoxTzBTcmZBVTlObUpEaTdGSnM4TT0&file=Severance+(2006)+720p+BRRip+x264+-YTS",
+    "posterUrl": "https://yts.gg/assets/images/movies/severance_2006/large-cover.jpg",
+    "protocol": "torrent",
+    "publishDate": "2019-02-18T12:46:00Z",
+    "seeders": 6,
+    "size": 864624312,
+    "sortTitle": "severance 2006 720p brrip x264 yts",
+    "title": "Severance (2006) 720p BRRip x264 -YTS",
+    "tmdbId": 0,
+    "tvMazeId": 0,
+    "tvdbId": 0
+  },
+  {
+    "age": 1615,
+    "ageHours": 38779.83240149058,
+    "ageMinutes": 2326789.9440894364,
+    "categories": [
+      {
+        "id": 5040,
+        "name": "TV/HD",
+        "subCategories": []
+      },
+      {
+        "id": 100208,
+        "subCategories": []
+      }
+    ],
+    "fileName": "Severance - S01 - Mp4 x264 AC3 1080p.torrent",
+    "files": 10,
+    "guid": "magnet:?xt=urn:btih:34FF1FAE9661D72152FB1FC31E27C15297072654&dn=Severance+-+S01+-+Mp4+x264+AC3+1080p&tr=http%3a%2f%2ftracker.opentrackr.org%3a1337%2fannounce&tr=udp%3a%2f%2ftracker.auctor.tv%3a6969%2fannounce&tr=udp%3a%2f%2fopentracker.i2p.rocks%3a6969%2fannounce&tr=https%3a%2f%2fopentracker.i2p.rocks%3a443%2fannounce&tr=udp%3a%2f%2fopen.demonii.com%3a1337%2fannounce&tr=udp%3a%2f%2ftracker.openbittorrent.com%3a6969%2fannounce&tr=http%3a%2f%2ftracker.openbittorrent.com%3a80%2fannounce&tr=udp%3a%2f%2fopen.stealth.si%3a80%2fannounce&tr=udp%3a%2f%2ftracker.torrent.eu.org%3a451%2fannounce&tr=udp%3a%2f%2ftracker.moeking.me%3a6969%2fannounce&tr=udp%3a%2f%2fexplodie.org%3a6969%2fannounce&tr=udp%3a%2f%2fexodus.desync.com%3a6969%2fannounce&tr=udp%3a%2f%2fuploads.gamecoast.net%3a6969%2fannounce&tr=udp%3a%2f%2ftracker1.bt.moack.co.kr%3a80%2fannounce&tr=udp%3a%2f%2ftracker.tiny-vps.com%3a6969%2fannounce&tr=udp%3a%2f%2ftracker.theoks.net%3a6969%2fannounce&tr=udp%3a%2f%2ftracker.skyts.net%3a6969%2fannounce&tr=udp%3a%2f%2ftracker-udp.gbitt.info%3a80%2fannounce&tr=udp%3a%2f%2fopen.tracker.ink%3a6969%2fannounce&tr=udp%3a%2f%2fmovies.zsw.ca%3a6969%2fannounce",
+    "imdbId": 11280740,
+    "indexer": "The Pirate Bay",
+    "indexerFlags": [
+      "freeleech"
+    ],
+    "indexerId": 5,
+    "infoHash": "34FF1FAE9661D72152FB1FC31E27C15297072654",
+    "infoUrl": "https://thepiratebay.org/description.php?id=58056782",
+    "leechers": 593,
+    "magnetUrl": "http://localhost:19696/5/download?apikey=00000000000000000000000000000001&link=Vm1VV1JlcC9KdzRQUFNIZkRSbEZvV1BSYk9DamR6Q3hWb00wNkFtelFkZEJKdVJkV0NUa0QzRURMSE00NzNVTXlIUERSSnJuL3JMT2hBNEdsUUp0c0wwNXJNK2p6WXZLVEpraTkzVEZ6UU5Fc0t0RUpkaytZWGp4dDVzcTh3QnE4cEtLeGdiM0k3L256aXE0Tnk1NGxHUGlFMFFMc3ZuU29IZ0NWb2RLMm9GOUplYXgwbFN1MVJqTGhDMHV1YkYvQ29yNi9RZnlCTVovNmtOOUVuUjBNUkVlSkdjL1lPN3I1blZaWGhVWW5CanRjM2JHejVyWDlHazZGNEhRR3VzNXZqbmV4OFBQdFJYNS92c3VJZjM5eStOdm5EZ2hPSDFQdERueFBJU3Avc2FCZFR2Z0phbFRwNXZockxnZW9naEJXR0VHejJDTEVFYWhRYThrRGk0MTJJWThSVkV3NDZnMUZWV004ZW5WbnV5QWlUMSt5NzdudVRCNjRQcTZVb2VmV3lSbmord1QwUWpCYVEzY2c4Sk56YVo3c1g1RGQwUzZraThKOE1CcjEyVjlxTnpEUGFpckVRc1VCZjNBaHZtT3JlMHlwaktMdi9ITy85ZFJWM09NL2oyR0thdW9pMzduSE16NWRiQmlxTFkwZ20rTGZCZm5GMVNBeituSEV1WXJuVEdXNmp5aGlheVVtSEpLZmZxeGlSREUzSmNSZDV1TVYxaFpjMjhtWE9UYUVXZVY0a1J6OTdidjVMWUVDZnA2VFdVRkdoZjBXUXVneTZjQzgxZnFyT3hhbWwrNlFoUTlkY1ZzWEh1aFUxZ0ZFSTk3M3R3a3NQY1pKYUY2QVBtcTQwYThGVkIwM3U4Wnc1ejFzaDkrcVdZdEZUcVlrVGxaNy9XMzZlS1h6VG80V3VSQ01kbHZuWVdBOHIrMnU1dlhIaTRkcHVFdXBQaXJIbHNELzZOSUhCM2NYTzA3UTZQRVQrVUxpRWxUSFkyei9IT2J6ZmI0WnBZd3RRQm5rc2tBQS94bFZhMDNtaThwaGQ4M2o1dTVMTWxSK1Yrb2ZGMTV6eUVZcW95MUhXTzcyNFE5UmVKQnB6NW5HamIzZURxTTJUdVZmWUpiV21ORnlXSkVjY0FJc0RrVlEyUGRTS0ZqMGxMbHZlZ1NMQ2VoUHltZTcwbkVYR2oxaysxNVIvaTdwVFBjejlVMnY5NUtDMWtYRmdnU2V2VDV5ZVVBMjh2NFkvNDBoTERsckNkRDJMamd1eVViRmJVSVA4M3BEaDMzbWZudUVDalF2SFg1dUUwa2xKM3Iybmdhemg1MXhrSXZ1elBVSDlwZW9oZmREaERDaGJHTWwvUVNFOER1TGRTZHJ4Zmd5K1JFRzVYcHZPT0FwdU9wUnNaRU1adEduekszNkRTcWJ3S0VEMXRmUURGcDN4cjVTd2xxZUZnT0dmUHUrUW8wWmMrNmFOLzBRWW5uWHJuUlRkbWhsdm5VNkYyNDJaLzU0TjByY1A0NnF0Wlc1RGJSVTV4MXVUK2pYOVFKcGdybU51dlFhNVp1RGNPZWNrME9Bdm55ZEQrUGdPSUs3bXg2N1BqL0ordU5iMTdhSmh2WHFJaWlnUXByL1VoeThoSUk4WGpHMnpoNEFOWEtQMkxSeEZ5TE5nVllrYWFLdUF1ZnZnS3gycGJOY2FyLytTYnM4WTVuNXh0Ny92Y3VKUFZvSVVldHR0K3JLeFBiQnRtOWcxS3Z3cVhCTkg5UVlFZGNXemwrQVVjQWRzcEZVTzdaM3Jjcm5iVFY0ZzlpQUc4ejlIZjVyQWlRZlBFMGxKejRvWElDSmlZZytQdGVCcDRpUFUvVm0xNHorOW5ERnZwTUpuK1VjMFl4UEJ6dkUrYXE2S0R1RGRYMkFOblZMSCtiNU1ybGZwbmlBY0g1bXMwSDBXbEtFUE9hYWlpSXBaN1V1NURaWk5sSHZ3SE8xZlpiZE1IazRzZzJGZnpoWk8xN0h5NUpKYVlaTGJETDJZNDFQSklsWk1DZ1ZhRjNSQVdCTmVNTkVVVitRK2dET29PUmsvUmJkbUFmN2V5UzV4bk4zQnBsOWFHOHBjZFdqWDJkVFU0NDI4ST0&file=Severance+-+S01+-+Mp4+x264+AC3+1080p",
+    "protocol": "torrent",
+    "publishDate": "2022-04-08T07:37:43Z",
+    "seeders": 754,
+    "size": 10575330041,
+    "sortTitle": "severance s01 mp4 x264 ac3 1080p",
+    "title": "Severance - S01 - Mp4 x264 AC3 1080p",
+    "tmdbId": 0,
+    "tvMazeId": 0,
+    "tvdbId": 0
+  },
+  {
+    "age": 537,
+    "ageHours": 12911.819068165667,
+    "ageMinutes": 774709.1440899416,
+    "categories": [
+      {
+        "id": 5040,
+        "name": "TV/HD",
+        "subCategories": []
+      },
+      {
+        "id": 100208,
+        "subCategories": []
+      }
+    ],
+    "fileName": "Severance - S02 - Mp4 x264 AC3 1080p.torrent",
+    "files": 11,
+    "guid": "magnet:?xt=urn:btih:959ED8BE27CFFCB61603EFF33D393C94DF2BE2D7&dn=Severance+-+S02+-+Mp4+x264+AC3+1080p&tr=http%3a%2f%2ftracker.opentrackr.org%3a1337%2fannounce&tr=udp%3a%2f%2ftracker.auctor.tv%3a6969%2fannounce&tr=udp%3a%2f%2fopentracker.i2p.rocks%3a6969%2fannounce&tr=https%3a%2f%2fopentracker.i2p.rocks%3a443%2fannounce&tr=udp%3a%2f%2fopen.demonii.com%3a1337%2fannounce&tr=udp%3a%2f%2ftracker.openbittorrent.com%3a6969%2fannounce&tr=http%3a%2f%2ftracker.openbittorrent.com%3a80%2fannounce&tr=udp%3a%2f%2fopen.stealth.si%3a80%2fannounce&tr=udp%3a%2f%2ftracker.torrent.eu.org%3a451%2fannounce&tr=udp%3a%2f%2ftracker.moeking.me%3a6969%2fannounce&tr=udp%3a%2f%2fexplodie.org%3a6969%2fannounce&tr=udp%3a%2f%2fexodus.desync.com%3a6969%2fannounce&tr=udp%3a%2f%2fuploads.gamecoast.net%3a6969%2fannounce&tr=udp%3a%2f%2ftracker1.bt.moack.co.kr%3a80%2fannounce&tr=udp%3a%2f%2ftracker.tiny-vps.com%3a6969%2fannounce&tr=udp%3a%2f%2ftracker.theoks.net%3a6969%2fannounce&tr=udp%3a%2f%2ftracker.skyts.net%3a6969%2fannounce&tr=udp%3a%2f%2ftracker-udp.gbitt.info%3a80%2fannounce&tr=udp%3a%2f%2fopen.tracker.ink%3a6969%2fannounce&tr=udp%3a%2f%2fmovies.zsw.ca%3a6969%2fannounce",
+    "imdbId": 11280740,
+    "indexer": "The Pirate Bay",
+    "indexerFlags": [
+      "freeleech"
+    ],
+    "indexerId": 5,
+    "infoHash": "959ED8BE27CFFCB61603EFF33D393C94DF2BE2D7",
+    "infoUrl": "https://thepiratebay.org/description.php?id=78546087",
+    "leechers": 399,
+    "magnetUrl": "http://localhost:19696/5/download?apikey=00000000000000000000000000000001&link=VDJSRzM1cjBkNGlEVVR6Z1R6eGh1MzdBKzJFYitFQmNXUUVucEVpbTJKdFhSNkgxYnV2MXdPcUxGMnh2KzRUdVphT09LRzlDdUFOWFNKK3pqWkQwU3pxL0o1ZlZzYm9veDlTNWM4elM3WmN6MkdVNnRFekk4YktsbzZGeG1CSHhWUEp2NnpITlVVVUNVc0dMeGpRWExpR0tISFhKWitzRmFzVkdWMWpvaGN0VGJsZFgxRnpTcm1CZGpIVm40QjhDT0tEanM2MlJ6M3BjWnJLOUJCdko4L2Y2a21GaDVxUUJzcm1qMWlkT1RGT1EyV0QxdzU4VTVJZEJoSnB3NHY0dTcyZkFxTEpZa0ZMUTl0ZWRrTmN6NVdyeHVqdXU4Ymc5OXRBNUpzWVUrUFdSTG1HZ3lOeHA4OGxRNHQ0RVp3OHRid3hSVSswTWY1TzV2NFJzWCtGUlIyQWhJd29hSXN0NW1wNGNZVnkwSXArMFhDUGtKVnNhRUVOc1lsTFozS3h0ZHZKeFpKMVUxbGNpMjhSMDVTSml3RmtzOEpiUldYakxzUEF4V3A0Q29McE9MRk1iaHQzQ0JiL2t5MzZnQnpKZTdrUi80STlsaDNERlJiTWp0bGNOdjZtRkJFWE9rbVJmSUZoeVdjL0l5bkE0U3MyOXVLRUdGQ3lZei9KYVFrL2M3SDA1ZEVjZy9yay9XbFlReHhhc0lXR0hsU0R6QVcyTHJMUUVidlVGekhteitldVVYUENoRE9oSWZCSFc5RWsvazlwRldSbFBQdTZaWFVyZGJMMHkrUU1ncVdXdXlBa0ljVFNRQk9nNnRrTHdGeFdHVDdQSDBHU1A2SnYxUmNsbGNLYU5YMU94NndOekp2RS9FbGNCamlzZ09ocTJUK1VjM05EK0hydzkwQktzajlMMFN2cm5RZkFzVzdXZHBhTTl6SW5qMHNrUnd2eVpRTWlxaDEzRk93OEJkV3hTQzlIRjd6UjVkUWQ0bGR5Um1YMmM2bWM1TWRiRjJOMC9YTEI5SnZaUGx5eTBGNlZVaHVGczV4RExtOU1kakZRNXYrelE4UGdBUUhsVVpoSVFpdnlKbDZlYVhWVk5UNzY2VVZIeEJ0ZG9IM1MrU21jSmtsREt6Ym5Qems2YWlrWVJBcnZNWENqTXFuQStQY054aDl1aGF4ZWFFZ0I2blgwRGE3NE5ncTBiNUVOTDdHOWE5NXpVd0k1S2lvNFlvTW4xZVBKOXFmTTJjL2lWeUJ6OEVGZ0VrUzdPQWlLUFhXTk1NODIzb3BHUG8xaEN2cDhkd01EUm16TmttMUhuOXJqeC9hWXFiTGV3RG5yVVhQa3grcUNkUUtJTUZhbGZQQzVoVkV2VkhPTjZmZGZKOVM3b014TXdFMS9HTmxzYS9lSW54ekI2cldJWnd1ODVTTWJUaVprakVaVjZQa2tQaVd4QUhYOUF5R01PckJYbFR3V0VWYk9VNXZyK0N6cXQrZU5rUjRHRGJxQzRSOG5jUTJkYy9pbzlQSXN3czB1UVFaYStGazBtMGtIUjNoOUhZVFg4QW5mOW1wU0FXaXZ3T0hCYVJYN1VBalJ2R2NtUGtWTURMWHlFS0FzQWZza0RScnk2aWRRWE1MT3dVckd2R3pZMElJRFpmOUpCRTBPRHhQaWs0RXJuZit5RDd6U0pyOXdaUFZVVFlIY245eTRwdFJIWG1tQUZ0SjhVK2lXa0NvTlExOFFTQ2ViZjQ1NHpOYzY0WlBMQ2NvU0NMS29KYldPeG1NeTNnb1FLWjZFRkNBZDNlK2lIZzJJRm9CbWY3Q0hJbFlUdFc2SW1PRUhPM1ZyLzRDOGFJSmI0UmtmaUR1eVQ2dnZmWmZjSlBRcW5NalE1WEc4YStocTBCdTlvWXp2WkNIWXMzSGZtdm5BaUtTVktodVB1aC9ITXorZDY3WTBzZlFQNVlLNVBQcFZuTGE3MWRCeDhIM1l4RWo1alRQa1QyYjdtbEptK2hEaHFvakRHbXdCSm5LRk5sdEVvNzhTSlFhRlpoNjExaTlhMlI2Nmw5U3pJcE92eC9FUUQzQTJLaVVlSkpKZG5ZcWRzNHVoaUErclBLV1lpSGZNTksrVT0&file=Severance+-+S02+-+Mp4+x264+AC3+1080p",
+    "protocol": "torrent",
+    "publishDate": "2025-03-21T03:38:31Z",
+    "seeders": 588,
+    "size": 12246342176,
+    "sortTitle": "severance s02 mp4 x264 ac3 1080p",
+    "title": "Severance - S02 - Mp4 x264 AC3 1080p",
+    "tmdbId": 0,
+    "tvMazeId": 0,
+    "tvdbId": 0
+  }
+]

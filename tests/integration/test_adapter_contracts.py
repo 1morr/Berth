@@ -1015,7 +1015,10 @@ async def test_torznab_caps_prove_the_endpoint_answers_torznab() -> None:
         await client.aclose()
 
     assert caps.server_title == "Prowlarr"
-    assert caps.search_available is True
+    assert caps.search.available is True
+    assert caps.search.params == frozenset({"q"})
+    # 公開站的 `tv-search` 只認關鍵字與季集，沒有 tmdbid（票 08 實測十個站都沒有）。
+    assert caps.tv.params == frozenset({"q", "season", "ep"})
     assert caps.categories == ("TV",)
     assert dict(route.calls.last.request.url.params) == {"t": "caps", "apikey": "the-key"}
 

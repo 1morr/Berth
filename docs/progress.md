@@ -43,6 +43,7 @@
 | 2026-09-10 | 06 季集對應 | `map_episode` / `structure_hints` / `match_media` / `score` 完成：**benchmark 的季集第一次真的動起來**——`auto_correct` 0 → **140**（語料寫下的 128 個 import 全對），`auto_wrong` **0**、`missed` **0**、信心達標 140/140。票 01 量到的三條槓桿都做進去了：**篇章名 → 季號**（佔失敗九成；為此 `SeasonSnapshot` 多一個 `names`，季名改取 `en-US` / `zh-TW` / `zh-CN` 三輪——真實發佈寫的是「柱训练篇」而英文季名是 `Hashira Training Arc`，只留一套字這條規則一次都不會命中）、**`第二部分` / `Part.2` 的 cour 偏移**（與虛擬季同一條 180 天規則；加上偏移超出該季就回頭照字面讀，於是「季內連號」與「每 cour 重數」兩種寫法用同一條規則都對）、**180 天虛擬季**。語料補三筆真實發佈（鬼滅柱訓練篇、進擊的巨人 S3 Part 2、單檔多集的 `Mizuiro Jidai - 01-02`），共 23 筆 333 個檔案。過程中抓到兩個票 05 的解析器缺口：`[01-13TV全集+SP]` 讓整包 13 集正片被當成特典（`merge_release` 不再補 `special_kind`）、`The_Final_Season[28]` 的 28 被 guessit 讀成季號。812 個後端測試綠燈 | `/implement .scratch/m1/issues/07-naming-plan.md` |
 
 | 2026-09-10 | 07 命名與 Plan | `naming/` 的六種凍結模板、`match_subtitle`、目標路徑與衝突偵測完成：**Plan 第一次說得出「這個檔案會被寫到哪裡」**。benchmark 連目標路徑一起比對，`auto_wrong` 仍是 **0**、`auto_correct` **140** 不變，外掛字幕 37 筆全部掛對（新的 `subtitle_correct` 桶），review 從 98 掉到 61（剩下的全是 `your-name-bdmv` 的 61 個光碟檔）。`naming` 移到 `parser` 之下（衝突偵測比的就是目標路徑）；「兩個檔案同一集」不再一律進 review，改比檔名——简繁分軌與 1080p / 720p 同包本來就該並存（brief §7.7）。`AiPlanner` 介面與 `NullAiPlanner` 一併定好（plan §4.5）。869 個後端測試綠燈 | `/implement .scratch/m1/issues/08-indexer-search.md` |
+| 2026-09-10 | 08 索引站搜尋 | `IndexerSearch` 介面加 `ProwlarrSearch` / `TorznabSearch` 兩個實作、`services/search.py`、`GET /api/search` 與 `GET /api/search/queries`、Media 詳情頁的搜尋區塊與結果表。fixture 對真的 Prowlarr 2.5.2.5491 + 五個公開站錄製。實跑（`--scenario search`，TMDB 與索引站都是真的）驗過動漫 / 美劇 / 電影三種類型：SPY×FAMILY 1726 筆去重後逐站各取 25 筆，98/100 筆有正確的季集預估與 Tags；深淺兩主題各 894 個文字節點對比全過（最差 5.71:1），390px 無頁面層級橫向捲動。920 個後端測試 + 162 個前端測試綠燈 | `/implement .scratch/m1/issues/09-add-download.md` |
 
 ## 偏差與決定
 
@@ -516,3 +517,16 @@
 - 2026-09-10 票 07 code-review：側掛字幕**刻意超出 200 位元組**的例外寫進 plan §5；
   brief §6.7 補上 `.default` 的位置與「M1 先不產生」；plan §4.1 補上「brief §7.8 的帳本重複不在
   解析器」的理由——原本只是把「重複」兩個字刪掉，那是把決定藏起來。
+- 2026-09-10 票 08：`IndexerSearch` 改成**一次呼叫一個查詢**（`search(query)` + `capabilities()`），推翻 plan §8.4 的 `search(queries, categories)`。多標題展開、併發、合併去重與逐查詢逾時要看 `MediaSnapshot` 與 Route 的 profile 才決定得了，留在 adapter 等於兩個實作各抄一份。已改 plan §8.4。使用者拍板。
+- 2026-09-10 票 08：**分類碼不送給索引站**（plan §8.4 原本寫 `search(queries, categories)`）。實測 dmhy 對 `cat=5000`、`cat=5070` 與不帶 `cat` 都回同樣 80 筆，而它一筆帶 5070 / 100002 / 2020 卻沒有 5000——分類在這一層不是可靠的篩子。分類仍然收進 `SearchResult` 當顯示資料。已改 plan §8.4、brief §20.7。
+- 2026-09-10 票 08：結果表只送**前 100 筆**（`RESULT_LIMIT`），而且是**逐站輪流取**不是取做種前 100 筆。plan / brief 都沒寫上限。理由是實測一次搜尋去重後 1726–1854 筆（1–2 MB JSON），而純做種排序會讓 100 筆全部來自 The Pirate Bay——公開中文站的做種數是個位數，TPB 的 scene 發佈是 28–86。使用者拍板 100 筆。已改 plan §8.4、brief §20.7。
+- 2026-09-10 票 08：搜尋結果**先用標題粗篩**，名字對不上這部作品的丟掉並回報 `discarded`。plan / brief 都沒寫這一步。理由是實跑發現 **The Pirate Bay 對搜不到的關鍵字會回它自己的熱門清單**（搜 SPY×FAMILY 時前六筆是 Spider-Man、Ted Lasso、Reacher，做種四千到六千）。使用者自己打關鍵字時不篩——那時他要的是那一串字，不是這部作品。粗篩用新的 `parser.title.mentions`（純字串），因為 `parse_release` 實測每筆 14 毫秒，一兩千筆會把事件迴圈卡住半分鐘。已改 plan §6、§8.4、brief §20.7。
+- 2026-09-10 票 08：新增 `GET /api/search/queries?media=&route=`，plan §6 的 search 群組原本只有一支。理由是「按下搜尋之前先給看會問哪幾個名字」（PRODUCT 原則 2）需要 `search_titles` 的答案，而那條規則要看快照與 Route profile——前端重算一份遲早會與後端分岔。順帶讓 `route` 這個參數看得見自己做了什麼。已改 plan §6。
+- 2026-09-10 票 08：`search_titles` 把**顯示用標題明確排第三**（英文、原文之後），不跟著 `snapshot.titles` 走。實跑發現 TMDB 的 `alternative_titles` 沒有順序可言，它把 `Agent x Ailə`（亞塞拜然語，實搜 0 筆）排到中文標題前面，而中文標題是使用者索引站上最值錢的那一個。已改 plan §8.4。
+- 2026-09-10 票 08：Route 下拉從身分帶**搬進搜尋區塊**，推翻 `.scratch/m1/media-detail-shape.md` §3 的「後兩票不動身分帶」。理由是它到票 08 才真的驅動一件事（anime profile 的查詢變體），留在身分帶等於一個按了沒反應的控制項。區塊序列不變。已改該 shape brief。使用者拍板。
+- 2026-09-10 票 08：修了票 05 的解析器缺陷 `[01-13Fin]` 被讀成「第 1 集」（`_BRACKET_EPISODE` 不認得黏在集號後的 `Fin` / `END`）。跨票修是因為它讓這一票交付的結果表對一整類中文季包顯示錯的預估，而修法是一個正則 token；`berth bench` 的 `auto_wrong` 仍是 0。
+- 2026-09-10 票 08：`TorznabCaps.search_available: bool` 換成 `search: TorznabSearchMode`，並多了 `tv` / `movie` 兩個同型別欄位。理由是 `t=caps` 的 `supportedParams` 決定得了能不能用 tmdbid 搜，而精靈與搜尋讀的是同一份 XML——解析寫兩份其中一份會先過期。內部型別，直接改掉舊形狀不留相容層。
+- 2026-09-10 票 08 code-review：`_season_variants` 只對**季數 ≥2 的最新一季**產生 `第N季` / `Season N`，plan §8.4 只寫「anime profile 另加變體」。單季動漫零變體是刻意的——第一季的發佈幾乎不寫季號，而每多一個變體就是每個追蹤站再被問一次。已補進 plan §8.4。
+- 2026-09-10 票 08 code-review：`SearchResult` 這個名字原本給了 adapter 那一層的原始列，但 `CONTEXT.md` 的 Search Result 指的是「**附解析出的 Tags 與預估季集**」那一筆。已對調：adapter 那一層改叫 `IndexerResult`（新詞，已進 CONTEXT.md），services / API / 前端的那一筆才是 `SearchResult`。
+- 2026-09-10 票 08 code-review：`SearchResult` 拿掉畫面不畫的四欄（`leechers`、`published_at`、`confidence`、`release_kind`）。它們是替票 09 先鋪的，違反「不為想像中的未來需求加東西」。索引站真的回的那兩個（`leechers`、`published_at`）留在 adapter 的 `IndexerResult` 上——那一層的職責是忠實翻譯協定，而契約測試釘的就是它們。
+- 2026-09-10 票 08 code-review：發佈名**不截斷**，推翻自己的 shape brief §6「最多兩行後省略」。它是這一列的證據——解析器讀的就是同一串字，截掉之後使用者看不出「為什麼判成 S03E13」。已記進 `.scratch/m1/search-results-shape.md` §8。

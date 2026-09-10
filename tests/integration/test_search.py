@@ -1,0 +1,476 @@
+"""索引站搜尋這一支命令（票 08、plan §6 search 群組）。
+
+驗的是**領域決策**：哪幾個關鍵字問出去、結果怎麼合併去重、一個查詢垮掉時剩下的還在不在、
+每一列的 Tags 與預估季集是什麼。協定本身（Prowlarr 的 REST 與 Torznab 的 XML）由
+`test_indexer_search.py` 對錄製回應守著，所以這裡一律用 `FakeIndexerSearch`。
+"""
+
+from __future__ import annotations
+
+from datetime import UTC, datetime
+from typing import Any
+
+import pytest
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from berth.adapters.http import AuthFailedError, ServiceUnavailableError
+from berth.adapters.indexer import IndexerResult
+from berth.adapters.indexer.fake import FakeIndexerSearch
+from berth.domain import (
+    CollectionType,
+    IndexerProblem,
+    MediaKind,
+    Profile,
+    Source,
+    StepStatus,
+)
+from berth.models import IndexerSettings, Media, Route
+from berth.models import media_id as build_media_id
+from berth.services.search import RESULT_LIMIT, search_torrents
+from berth.services.settings import write_settings
+from tests.integration.factories import FakeClientFactory
+
+SPY = build_media_id(MediaKind.TV, 120089)
+
+
+def result(title: str, **kwargs: Any) -> IndexerResult:
+    return IndexerResult(title=title, **kwargs)
+
+
+async def arrange_media(session: AsyncSession) -> None:
+    """一列已經有快照的 Media。搜尋不必再打 TMDB（plan §8.3 的 24 小時還沒到）。"""
+    snapshot = {
+        "tmdb_id": 120089,
+        "kind": "tv",
+        "title": "間諜家家酒",
+        "title_en": "SPY x FAMILY",
+        "title_original": "SPY×FAMILY",
+        "year": 2022,
+        "titles": ["SPY x FAMILY", "SPY×FAMILY", "間諜家家酒", "间谍过家家"],
+        "seasons": [
+            {
+                "season_number": 1,
+                "name": "Season 1",
+                "episode_count": 12,
+                "episodes": [{"episode_number": n, "name": f"E{n}"} for n in range(1, 13)],
+            },
+            {
+                "season_number": 3,
+                "name": "Season 3",
+                "episode_count": 13,
+                "episodes": [{"episode_number": n, "name": f"E{n}"} for n in range(1, 14)],
+            },
+        ],
+    }
+    session.add(
+        Media(
+            id=SPY,
+            tmdb_id=120089,
+            kind=MediaKind.TV,
+            title_en="SPY x FAMILY",
+            title_original="SPY×FAMILY",
+            year=2022,
+            folder_name="SPY x FAMILY (2022) [tmdbid-120089]",
+            tmdb_snapshot_json=snapshot,
+            tmdb_fetched_at=datetime.now(UTC),
+        )
+    )
+    await session.commit()
+
+
+async def arrange_indexer(session: AsyncSession) -> None:
+    """精靈第 5 步接好的樣子：有位址、有 key。"""
+    await write_settings(
+        session, IndexerSettings(kind="prowlarr", base_url="http://prowlarr:9696", api_key="k")
+    )
+    await session.commit()
+
+
+async def arrange_route(session: AsyncSession, profile: Profile) -> Route:
+    route = Route(
+        slug="anime",
+        name="動畫",
+        jellyfin_library_id="lib-anime",
+        jellyfin_library_name="Anime",
+        collection_type=CollectionType.TVSHOWS,
+        target_path="/data/library/anime",
+        category="berth-anime",
+        profile=profile,
+    )
+    session.add(route)
+    await session.commit()
+    return route
+
+
+@pytest.mark.asyncio
+async def test_every_known_title_gets_its_own_query_and_the_results_merge(
+    session: AsyncSession,
+) -> None:
+    """英文、原文與各語言別名各發一次：實測三個標題的聯集比任何一個都大得多（票 08）。"""
+    await arrange_media(session)
+    await arrange_indexer(session)
+    indexer = FakeIndexerSearch(
+        by_query={
+            "SPY x FAMILY": (result("SPY x FAMILY S03E01 1080p WEB", info_hash="a" * 40),),
+            "SPY×FAMILY": (result("SPY×FAMILY 03", info_hash="b" * 40),),
+            "間諜家家酒": (result("間諜家家酒 03", info_hash="c" * 40),),
+            "间谍过家家": (result("间谍过家家 03", info_hash="d" * 40),),
+        }
+    )
+    factory = FakeClientFactory(indexer_search=indexer)
+
+    view = await search_torrents(session, factory, media_id=SPY)
+
+    assert sorted(query.text for query in indexer.queries) == sorted(
+        ["SPY x FAMILY", "SPY×FAMILY", "間諜家家酒", "间谍过家家"]
+    )
+    assert view.total == 4
+    assert view.problem is None
+
+
+@pytest.mark.asyncio
+async def test_the_same_torrent_from_two_sites_is_one_row(session: AsyncSession) -> None:
+    """去重的鑰匙是 info hash，寫法不同也算同一個（實測 dmhy 是 base32、Mikan 是十六進位）。"""
+    await arrange_media(session)
+    await arrange_indexer(session)
+    hex_hash = "4bd0f6ef8a1a55b38b7a4d4f7b10458cfa8b8d3f"
+    indexer = FakeIndexerSearch(
+        results=(
+            result("[LoliHouse] Spy x Family [38-50]", indexer="Mikan", info_hash=hex_hash),
+            result("[LoliHouse] Spy x Family [38-50]", indexer="dmhy", info_hash=hex_hash),
+            result(
+                "[ANi] SPY x FAMILY - 26 [1080P]",
+                indexer="ACG.RIP",
+                guid="https://acg.rip/t/1.torrent",
+            ),
+        )
+    )
+    factory = FakeClientFactory(indexer_search=indexer)
+
+    view = await search_torrents(session, factory, media_id=SPY)
+
+    assert view.total == 2
+    assert sorted(row.indexer for row in view.rows) == ["ACG.RIP", "Mikan"]
+
+
+@pytest.mark.asyncio
+async def test_rows_come_back_seeded_first_and_capped(session: AsyncSession) -> None:
+    """一次搜尋可以回一千多筆（實測 1854）。畫面拿到的是做種最多的前 100 筆與總數。"""
+    await arrange_media(session)
+    await arrange_indexer(session)
+    indexer = FakeIndexerSearch(
+        results=tuple(
+            result(f"SPY x FAMILY S03E{n:02d}", info_hash=f"{n:040x}", seeders=n)
+            for n in range(1, RESULT_LIMIT + 21)
+        )
+    )
+    factory = FakeClientFactory(indexer_search=indexer)
+
+    view = await search_torrents(session, factory, media_id=SPY)
+
+    assert view.total == RESULT_LIMIT + 20
+    assert len(view.rows) == RESULT_LIMIT
+    assert [row.seeders for row in view.rows[:3]] == [
+        RESULT_LIMIT + 20,
+        RESULT_LIMIT + 19,
+        RESULT_LIMIT + 18,
+    ]
+
+
+@pytest.mark.asyncio
+async def test_every_site_gets_a_seat_at_the_table(session: AsyncSession) -> None:
+    """上限內逐站輪流取，不是純粹取做種前 N 筆。
+
+    2026-09-10 實跑：The Pirate Bay 的 scene 發佈有 28–86 個做種，Mikan 那一千多筆多半是
+    個位數，於是做種前 100 筆**全部**來自同一個站——中文字幕組的版本一筆都看不到。
+    """
+    await arrange_media(session)
+    await arrange_indexer(session)
+    indexer = FakeIndexerSearch(
+        results=(
+            *(
+                result(
+                    f"SPY x FAMILY S02E{n:02d} 1080p WEB",
+                    indexer="The Pirate Bay",
+                    info_hash=f"{n:040x}",
+                    seeders=80,
+                )
+                for n in range(1, RESULT_LIMIT + 21)
+            ),
+            result(
+                "[桜都字幕组] 间谍过家家 [01][1080p]",
+                indexer="Mikan",
+                info_hash="f" * 40,
+                seeders=2,
+            ),
+        )
+    )
+    factory = FakeClientFactory(indexer_search=indexer)
+
+    view = await search_torrents(session, factory, media_id=SPY)
+
+    assert len(view.rows) == RESULT_LIMIT
+    assert sorted({row.indexer for row in view.rows}) == ["Mikan", "The Pirate Bay"]
+
+
+@pytest.mark.asyncio
+async def test_one_failing_query_does_not_sink_the_others(session: AsyncSession) -> None:
+    """一個標題查不動時剩下的照樣回得來，而畫面說得出是哪一個垮了（票 08 驗收）。"""
+    await arrange_media(session)
+    await arrange_indexer(session)
+    indexer = FakeIndexerSearch(
+        by_query={"SPY x FAMILY": (result("SPY x FAMILY S03E01", info_hash="a" * 40),)},
+        errors={"SPY×FAMILY": ServiceUnavailableError("GET /api/v1/search: ReadTimeout")},
+    )
+    factory = FakeClientFactory(indexer_search=indexer)
+
+    view = await search_torrents(session, factory, media_id=SPY)
+
+    assert view.problem is None
+    assert view.total == 1
+    failed = [attempt for attempt in view.attempts if attempt.status is StepStatus.FAILED]
+    assert [attempt.step for attempt in failed] == ["SPY×FAMILY"]
+    assert failed[0].error == "GET /api/v1/search: ReadTimeout"
+
+
+@pytest.mark.asyncio
+async def test_an_indexer_that_was_never_set_up_says_so(session: AsyncSession) -> None:
+    """精靈第 5 步是唯一可以跳過的一步，所以「沒接」不是失敗，是還沒接（票 08 驗收）。"""
+    await arrange_media(session)
+    factory = FakeClientFactory(indexer_search=FakeIndexerSearch())
+
+    view = await search_torrents(session, factory, media_id=SPY)
+
+    assert view.problem is IndexerProblem.NOT_CONFIGURED
+    assert view.rows == ()
+
+
+@pytest.mark.asyncio
+async def test_an_unreachable_indexer_says_which_way_it_failed(session: AsyncSession) -> None:
+    """憑證被拒與連不上的下一步不同，所以它們不是同一個 problem。"""
+    await arrange_media(session)
+    await arrange_indexer(session)
+    factory = FakeClientFactory(
+        indexer_search=FakeIndexerSearch(error=AuthFailedError("GET /api/v1/search: 401"))
+    )
+
+    view = await search_torrents(session, factory, media_id=SPY)
+
+    assert view.problem is IndexerProblem.CREDENTIAL_REJECTED
+    assert view.detail == "GET /api/v1/search: 401"
+
+
+@pytest.mark.asyncio
+async def test_each_row_carries_the_parser_verdict(session: AsyncSession) -> None:
+    """這是使用者第一次看見解析器的判斷：Tags 與預估季集（票 08）。"""
+    await arrange_media(session)
+    await arrange_indexer(session)
+    indexer = FakeIndexerSearch(
+        results=(
+            result(
+                "[桜都字幕组] 间谍过家家 第三季 / Spy x Family (2025) [05][1080p][简繁内封]",
+                info_hash="e" * 40,
+            ),
+        )
+    )
+    factory = FakeClientFactory(indexer_search=indexer)
+
+    view = await search_torrents(session, factory, media_id=SPY)
+
+    row = view.rows[0]
+    assert row.tags.resolution == "1080p"
+    assert row.tags.group == "桜都字幕组"
+    assert (row.season, row.episode_start, row.episode_end) == (3, 5, 5)
+    assert row.whole_season is False
+
+
+@pytest.mark.asyncio
+async def test_a_season_pack_reads_as_the_whole_season(session: AsyncSession) -> None:
+    """`S03 全季` 與 `E05` 是兩種不同的話，畫面要說得出是哪一種。"""
+    await arrange_media(session)
+    await arrange_indexer(session)
+    indexer = FakeIndexerSearch(
+        results=(
+            result(
+                "[桜都字幕组] 间谍过家家 第三季 / Spy x Family (2025) [01-13Fin][1080p][简繁内封]",
+                info_hash="f" * 40,
+            ),
+        )
+    )
+    factory = FakeClientFactory(indexer_search=indexer)
+
+    view = await search_torrents(session, factory, media_id=SPY)
+
+    row = view.rows[0]
+    assert (row.season, row.episode_start, row.episode_end) == (3, 1, 13)
+    assert row.whole_season is True
+
+
+@pytest.mark.asyncio
+async def test_a_release_the_parser_cannot_place_says_nothing_rather_than_guessing(
+    session: AsyncSession,
+) -> None:
+    """判斷不出來就是判斷不出來——結果表的第三種說法（票 08）。
+
+    名字對得上（所以它進得了結果表），但沒有一個數字說得出是第幾集：特典合輯就長這樣。
+    """
+    await arrange_media(session)
+    await arrange_indexer(session)
+    indexer = FakeIndexerSearch(
+        results=(result("SPY x FAMILY 幕後花絮 2160p", info_hash="1" * 40),)
+    )
+    factory = FakeClientFactory(indexer_search=indexer)
+
+    view = await search_torrents(session, factory, media_id=SPY)
+
+    row = view.rows[0]
+    assert (row.season, row.episode_start) == (None, None)
+    assert row.tags.resolution == "2160p"
+
+
+@pytest.mark.asyncio
+async def test_releases_that_are_not_this_work_do_not_reach_the_table(
+    session: AsyncSession,
+) -> None:
+    """**索引站對搜不到的關鍵字會回它自己的熱門清單**（2026-09-10 實跑 The Pirate Bay）。
+
+    那些東西動輒五六千個做種，依做種排序時會把真正的結果整批擠出前 100 筆。丟掉，
+    但把丟掉幾筆說出來——「索引站什麼都沒回」與「回了一堆但沒有一筆是這部作品」
+    的下一步不同。
+    """
+    await arrange_media(session)
+    await arrange_indexer(session)
+    indexer = FakeIndexerSearch(
+        results=(
+            result("SPY x FAMILY S02E01 1080p WEB", info_hash="a" * 40, seeders=9),
+            result("Spider-Man: Brand New Day 2026.1080p", info_hash="b" * 40, seeders=6055),
+        )
+    )
+    factory = FakeClientFactory(indexer_search=indexer)
+
+    view = await search_torrents(session, factory, media_id=SPY)
+
+    assert [row.title for row in view.rows] == ["SPY x FAMILY S02E01 1080p WEB"]
+    assert (view.total, view.discarded) == (1, 1)
+
+
+@pytest.mark.asyncio
+async def test_a_typed_keyword_turns_the_filter_off(session: AsyncSession) -> None:
+    """自己打字時他要的就是那一串字，不是這部作品——那時 Berth 沒有資格篩。"""
+    await arrange_media(session)
+    await arrange_indexer(session)
+    indexer = FakeIndexerSearch(
+        results=(result("Spider-Man: Brand New Day 2026.1080p", info_hash="b" * 40),)
+    )
+    factory = FakeClientFactory(indexer_search=indexer)
+
+    view = await search_torrents(session, factory, media_id=SPY, query="Spider-Man")
+
+    assert len(view.rows) == 1
+    assert view.discarded == 0
+
+
+@pytest.mark.asyncio
+async def test_an_anime_route_adds_the_season_variants(session: AsyncSession) -> None:
+    """動漫的發佈名常常只寫得出 `第3季` / `Season 3`，光靠作品名搜不到那一季（plan §8.4）。"""
+    await arrange_media(session)
+    await arrange_indexer(session)
+    route = await arrange_route(session, Profile.ANIME)
+    indexer = FakeIndexerSearch()
+    factory = FakeClientFactory(indexer_search=indexer)
+
+    await search_torrents(session, factory, media_id=SPY, route_id=route.id)
+
+    texts = [query.text for query in indexer.queries]
+    assert "SPY x FAMILY Season 3" in texts
+    assert "間諜家家酒 第3季" in texts
+
+
+@pytest.mark.asyncio
+async def test_the_display_title_beats_a_random_alias(session: AsyncSession) -> None:
+    """TMDB 的別名沒有順序可言，所以顯示用標題明確排第三——不然由 TMDB 決定誰進前五名。
+
+    實跑抓到的樣子：`Agent x Ailə`（亞塞拜然語）排在中文標題前面，而使用者的索引站上
+    是中文字幕組（票 08）。
+    """
+    await arrange_media(session)
+    await arrange_indexer(session)
+    row = await session.get(Media, SPY)
+    assert row is not None
+    row.tmdb_snapshot_json = {
+        **(row.tmdb_snapshot_json or {}),
+        "titles": ["SPY x FAMILY", "Agent x Ailə", "Spy Familie", "間諜家家酒", "间谍过家家"],
+    }
+    await session.commit()
+    indexer = FakeIndexerSearch()
+    factory = FakeClientFactory(indexer_search=indexer)
+
+    await search_torrents(session, factory, media_id=SPY)
+
+    texts = [query.text for query in indexer.queries]
+    assert texts[:3] == ["SPY x FAMILY", "SPY×FAMILY", "間諜家家酒"]
+
+
+@pytest.mark.asyncio
+async def test_a_standard_route_does_not_add_them(session: AsyncSession) -> None:
+    """美劇的發佈名寫 `S03E01`，不寫 `第3季`——多問兩次只是替每個站多添兩趟。"""
+    await arrange_media(session)
+    await arrange_indexer(session)
+    route = await arrange_route(session, Profile.STANDARD)
+    indexer = FakeIndexerSearch()
+    factory = FakeClientFactory(indexer_search=indexer)
+
+    await search_torrents(session, factory, media_id=SPY, route_id=route.id)
+
+    assert not [query.text for query in indexer.queries if "Season" in query.text]
+
+
+@pytest.mark.asyncio
+async def test_a_typed_query_replaces_the_titles(session: AsyncSession) -> None:
+    """使用者自己打字時就只問那一個——他比 TMDB 更知道自己在找什麼。"""
+    await arrange_media(session)
+    await arrange_indexer(session)
+    indexer = FakeIndexerSearch()
+    factory = FakeClientFactory(indexer_search=indexer)
+
+    await search_torrents(session, factory, media_id=SPY, query="Spy Family BDRip")
+
+    assert [query.text for query in indexer.queries] == ["Spy Family BDRip"]
+
+
+@pytest.mark.asyncio
+async def test_the_route_is_a_preference_for_this_search_only(session: AsyncSession) -> None:
+    """`route` 只影響這一輪的查詢變體，不落地（票 04b、票 08 驗收）。"""
+    await arrange_media(session)
+    await arrange_indexer(session)
+    route = await arrange_route(session, Profile.ANIME)
+    factory = FakeClientFactory(indexer_search=FakeIndexerSearch())
+
+    await search_torrents(session, factory, media_id=SPY, route_id=route.id)
+
+    row = await session.get(Media, SPY)
+    assert row is not None
+    # `media.default_route_id` 是**送單成功**才寫的「上次用的」（票 09）。搜尋碰不得它——
+    # 搜過一次不代表之後一定送到那條 Route。
+    assert row.default_route_id is None
+
+
+@pytest.mark.asyncio
+async def test_tags_render_the_way_the_file_name_will(session: AsyncSession) -> None:
+    """結果表的 Tags 欄與之後檔名裡的那一串是同一份資料（brief §6.8）。"""
+    await arrange_media(session)
+    await arrange_indexer(session)
+    indexer = FakeIndexerSearch(
+        results=(
+            result(
+                "[ANi] SPY x FAMILY - 50 [1080P][Baha][WEB-DL][AAC AVC][CHT][MP4]",
+                info_hash="2" * 40,
+            ),
+        )
+    )
+    factory = FakeClientFactory(indexer_search=indexer)
+
+    view = await search_torrents(session, factory, media_id=SPY)
+
+    assert view.rows[0].tags.source is Source.WEB
+    assert view.rows[0].tags.render().startswith("[WEB][1080p]")

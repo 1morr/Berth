@@ -273,6 +273,7 @@ uv run python scripts/fake_setup_server.py --scenario mixed
 | `drifted` | 同上，但有人把 qBittorrent 的 `auto_tmm_enabled` 改掉了：看設定頁的逐鍵差異表與「還原建議設定」 |
 | `discover` | 探索頁 `/`：三個外部服務仍是替身，但 TMDB 打**真的** `api.themoviedb.org`。憑證從環境變數 `TMDB_API_KEY` 讀（v3 key 或 v4 read access token 都收），沒設就變成「憑證缺失」那個畫面 |
 | `tmdb-down` | 憑證有、TMDB 連不上：探索頁的每個 feed 各自顯示服務回的原文與「重試」，而不是一片空白 |
+| `search` | Media 詳情頁的搜尋結果表：TMDB 與**索引站都打真的**。索引站位址從 `BERTH_INDEXER_URL` / `BERTH_INDEXER_KEY` 讀，沒設就退回替身（結果表是空的，那本身也是要驗的畫面）。一次搜尋 35–85 秒 |
 
 `healthy` 沒有 TMDB 憑證，所以它同時是探索頁「還沒填憑證」的樣子——那一步是精靈的必填閘門
 （見〈先申請一把 TMDB API key〉），畫面要指得出下一步。
@@ -283,8 +284,15 @@ uv run python scripts/fake_setup_server.py --scenario mixed
 uv run --env-file .env python scripts/fake_setup_server.py --scenario discover
 ```
 
-這個環境變數**只給開發時的演練與 `scripts/experiments/*` 用**。Berth 自己不讀它：產品的
-唯一憑證來源是 `settings.services.tmdb.api_key`，由精靈第 6 步寫進資料庫。
+搜尋結果表要看真的發佈名——中日英混排、100 字以上、每個字幕組各寫各的，那是替身演不出來的：
+
+```bash
+# $KEY 是那台 Prowlarr 的 API key（`config.xml` 的 <ApiKey>）。
+BERTH_INDEXER_URL=http://127.0.0.1:19696 BERTH_INDEXER_KEY=$KEY   uv run --env-file .env python scripts/fake_setup_server.py --scenario search
+```
+
+這些環境變數**只給開發時的演練與 `scripts/experiments/*` 用**。Berth 自己不讀它們：產品的
+唯一來源是 `settings.services.tmdb.api_key` 與 `settings.services.indexer`，由精靈寫進資料庫。
 
 Fake 是**有狀態**的，每個情境只有一份，所以第 3 步真的會把那台假 Jellyfin 一步一步改掉，
 重按也真的會標成「已經是這樣」。

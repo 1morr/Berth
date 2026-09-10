@@ -335,7 +335,7 @@ Session 以 httpOnly cookie（`berth_session`）承載，`SameSite=Strict`、`Pa
 | routes | `GET/POST /routes`、`PUT/DELETE /routes/{id}`、`POST /routes/{id}/check`、`GET /jellyfin/libraries` | `routes.*` |
 | discover | `GET /discover/trending`、`GET /discover/popular`、`GET /discover/search?q=`（三支回同一個形狀：`items` + `problem` + `detail`）。**拿不到 TMDB 時仍是 200**，理由寫在 `problem`（`credential_missing` / `credential_rejected` / `unreachable`）——一頁上有三個 feed，一個垮掉時另外兩個要照樣畫得出來，而畫面要說得出下一步（票 03） | `discover.*` |
 | media | `GET /media/{id}`（TMDB + 收得下它的 Route + 狀態 + 檔案 + Unmatched + 版本）、`POST /media/{id}/refresh`。**沒有 track 那一支**（票 04b）：入庫到哪一條 Route 是搜尋與送單時才帶上的偏好，不為一個下拉的初值多一個對外介面 | `media.*` |
-| search | `GET /search?media=&q=&route=`（索引站搜尋，結果附解析出的 Tags 與預估季集） | `search_torrents` |
+| search | `GET /search?media=&q=&route=`（索引站搜尋，結果附解析出的 Tags 與預估季集；**只回名字對得上這部作品的那些**，被丟掉的筆數另報 `discarded`——實測 The Pirate Bay 對搜不到的關鍵字會回它自己的熱門清單）、`GET /search/queries?media=&route=`（按下搜尋之前先給看：會拿哪幾個名字去問。不打索引站，只讀快照，所以改 Route 時可以隨手重問；規則只能有一份實作，前端不重算） | `search_torrents`、`plan_queries` |
 | jobs | `POST /jobs`（`{source, media, route}`）、`GET /jobs`、`GET /jobs/{hash}`、`GET /jobs/{hash}/events`、`POST /jobs/{hash}/replan`、`POST /jobs/{hash}/reimport`、`POST /jobs/{hash}/retry`、`DELETE /jobs/{hash}?unlink=&remove_torrent=&delete_files=&purge=` | `add_download`、`generate_plan`、`reimport`、`delete_job` |
 | plans | `GET /plans/{id}`、`PUT /plans/{id}/items`、`POST /plans/{id}/approve`、`POST /plans/{id}/reject` | `review.*`、`apply_plan` |
 | review | `GET /review`（低信心、audit、Unmatched、重複、Issue 的統一佇列）、`POST /review/audit/{ledger_id}/confirm`、`POST /review/audit/{ledger_id}/undo` | `review.*` |
@@ -405,14 +405,32 @@ Session 以 httpOnly cookie（`berth_session`）承載，`SameSite=Strict`、`Pa
 
 ### 8.4 索引站 adapter
 
-- 介面 `IndexerSearch.search(queries, categories) -> [SearchResult]`，兩個實作：
+- 介面 `IndexerSearch.search(query) -> [SearchResult]` 加 `capabilities() -> SearchCapability`，兩個實作。
+  **一次呼叫一個查詢**（票 08 推翻原本的 `search(queries, categories)`）：多標題展開、合併去重、逐查詢
+  逾時全部要看 `MediaSnapshot` 與 Route 的 profile 才決定得了，而 adapter 不認得那兩個東西——留在這一層
+  的話兩個實作各要抄一份同樣的邏輯。那些搬進 `services/search.py`。**分類碼不送**：各站的映射自訂，
+  2026-09-10 實測 dmhy 對 `cat=5000`、`cat=5070` 與不帶 `cat` 都回同樣 80 筆，它不是可靠的篩子。
   - `ProwlarrSearch`：`GET /api/v1/search?query=&categories=&type=search`，回傳 `ReleaseResource`（`title`、`size`、`seeders`、`leechers`、`downloadUrl`、`magnetUrl`、`infoHash`、`indexer`、`categories`、`publishDate`、`guid`、`infoUrl`）。Prowlarr 刻意不提供跨站聚合 Torznab，所以走 REST（brief §20.7）。
   - `TorznabSearch`：任意 Torznab 端點（Jackett 的 `indexers/all/results/torznab/api` 或單站）：`?t=caps`、`?t=search&q=&cat=`、`?t=tvsearch&tmdbid=`、`?t=movie&tmdbid=`（依 caps 決定是否可用 id 搜尋）；解析 XML 的 `item` 與 `torznab:attr`（seeders、peers、size、infohash、magneturl、category）。
-- 搜尋詞：Media 的英文標題、原文標題、各語言 alternative titles 各發一次，合併去重（以 infohash 或 link）；動漫 profile 另加 `第N季` / `Season N` 變體。
+- 搜尋詞：Media 的英文標題、原文標題、**顯示用標題**，然後才是各語言 alternative titles，各發一次，
+  併發，最多五個（`MAX_QUERIES`）；動漫 profile 另加 `第N季` / `Season N` 變體，佔掉排最後的別名。
+  變體只對**季數 ≥2 的最新一季**做——第一季的發佈幾乎不寫季號，而每多一個變體就是每個追蹤站
+  再被問一次；要找舊季自己打字那條路一直都在。
+  顯示用標題明確排第三是因為 TMDB 的 `alternative_titles` 沒有順序可言——實測它把 `Agent x Ailə`
+  排到中文標題前面（票 08）。合併去重以 infohash（**正規化成小寫十六進位**：同一個發佈在 Mikan 是
+  40 字十六進位、在 dmhy 是 32 字 base32）或 `guid`；**`downloadUrl` 不能當身分**，它每次請求都不一樣
+  （實測 1021 筆只有 1 筆重疊）。
 - 結果附 `parse_release` 的 Tags 與 `map_episode` 的預估（用來在結果表顯示「S01 全季」「E05」「無法判斷」）。
+  **解析只跑在篩完、取完的那一百筆上**：`parse_release` 實測每筆 14 毫秒（1200 筆 17.4 秒），
+  一次搜尋回一兩千筆，全部解析會把事件迴圈卡住半分鐘。粗篩用 `parser.title.mentions`（純字串）。
+- 上限內**逐站輪流取**（`RESULT_LIMIT = 100`），不是取做種前 100 筆：The Pirate Bay 的 scene 發佈有
+  28–86 個做種，Mikan 那一千多筆多半是個位數，純做種排序會讓一百筆全部來自同一個站（票 08 實測）。
 - `ProwlarrClient`（僅 setup 用）：`indexer/schema` 取定義、`indexer` 新增、`indexer/test` 驗證、`config/host` 設介面登入。**新增之前 Prowlarr 會先連一次那個站**，連不上就回 400 加一份逐條理由（`errorMessage`）而且什麼都不建立——逐站的成敗因此來自新增那一支，不是另一次 `indexer/test`；`?forceSave=true` 不會跳過這個檢查。同名的第二個站被拒（`Should be unique`），所以冪等靠先列（2026-09-08 實測，brief §20.7）。schema 給的 `appProfileId` 是 `0`，送回去之前要換成 `1`。
 
-- 逾時：新增與驗證索引站要真的連上那個站，用 120 秒；`indexer/schema` 用 60 秒——容器剛起來的第一次呼叫要讀進 627 份定義再組出 5.6 MB 回應，實測 9.42 秒（brief §20.7）。其餘端點用共用的 5 秒探測逾時。
+- 逾時：**搜尋**用 120 秒（Prowlarr 的 REST）/ 60 秒（單站 Torznab）——`GET /api/v1/search` 要現場去連
+  五個追蹤站，2026-09-10 實測單次冷查詢 60–85 秒，三個查詢併發共 35 秒（所以併發是對的，短逾時不是）；
+  單站 Torznab 只問一個站，實測 1.2 秒。`services` 另有 150 秒的逐查詢上限，換 adapter 也保證得了畫面
+  等多久。新增與驗證索引站要真的連上那個站，用 120 秒；`indexer/schema` 用 60 秒——容器剛起來的第一次呼叫要讀進 627 份定義再組出 5.6 MB 回應，實測 9.42 秒（brief §20.7）。其餘端點用共用的 5 秒探測逾時。
 ### 8.5 RSS adapter
 
 - `feedparser` 解析；每種來源一個小型 mapper 產 `FeedItem{guid, title, link, torrent_url, magnet, info_hash, size, published_at}`。

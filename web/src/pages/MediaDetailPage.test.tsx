@@ -78,6 +78,8 @@ function render(
     'GET /api/health': { body: HEALTHY },
     'GET /api/auth/me': { body: { name: 'skipper', role } },
     [SPY_PATH]: { body: media() },
+    // 票 08 的搜尋區塊待命時就會問一次「會用哪幾個關鍵字」（不打索引站，只讀快照）。
+    'GET /api/search/queries?media=tv%3A120089': { body: { queries: ['SPY x FAMILY'] } },
     ...routes,
   })
 }

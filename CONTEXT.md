@@ -83,8 +83,12 @@ _Avoid_: torrent（指 Job 時）, download, task
 Job 的來源：`manual`、`rss:<rule>`、`reimport`。
 _Avoid_: source, origin
 
+**Indexer Result**:
+索引站的協定回的原始一列：發佈名、大小、做種、來源站、下載連結、info hash。**還沒經過解析器**。
+_Avoid_: hit, item, row
+
 **Search Result**:
-索引站回傳的一筆候選 torrent，附解析出的 Tags 與預估季集。
+索引站回傳的一筆候選 torrent，附解析出的 Tags 與預估季集。也就是 Indexer Result 過了解析器之後的樣子。
 _Avoid_: release（僅指發佈名解析時可用）
 
 ### 入庫

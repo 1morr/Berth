@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from berth.adapters.torznab import TorznabCaps
+from berth.adapters.torznab import TorznabCaps, TorznabSearchMode
 
 
 class FakeTorznabClient:
@@ -15,7 +15,9 @@ class FakeTorznabClient:
     ) -> None:
         self.base_url = base_url
         self._caps = caps or TorznabCaps(
-            server_title="Jackett", search_available=True, categories=("TV", "Movies")
+            server_title="Jackett",
+            search=TorznabSearchMode(available=True, params=frozenset({"q"})),
+            categories=("TV", "Movies"),
         )
         self.error = error
 

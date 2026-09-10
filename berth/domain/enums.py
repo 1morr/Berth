@@ -61,6 +61,26 @@ def collection_type_for(kind: MediaKind) -> CollectionType:
     return CollectionType.TVSHOWS if kind is MediaKind.TV else CollectionType.MOVIES
 
 
+class IndexerProblem(StrEnum):
+    """索引站那邊沒搜到東西的五種樣子（票 08 的結果表）。
+
+    與 `TmdbProblem` 同一個道理：分成五種而不是一句錯誤訊息，是因為**下一步不同**。
+    索引站是精靈裡唯一可以跳過的一步，所以 `not_configured` 不是失敗而是「還沒接」——
+    畫面要把人送回泊位 5，不是叫他重試。
+    """
+
+    #: 精靈第 5 步跳過了，或連線資訊是空的。一個請求都不必發（plan §9.3 第 5 步）。
+    NOT_CONFIGURED = "not_configured"
+    #: 有位址，但這部作品連一個查得出去的關鍵字都沒有（快照還沒抓到，使用者也沒自己打）。
+    NO_QUERY = "no_query"
+    #: `t=caps` 說這個端點不提供搜尋。位址對、key 也對，但它做不了這件事。
+    NO_SEARCH = "no_search"
+    #: API key 被拒（401 / 403）。
+    CREDENTIAL_REJECTED = "credential_rejected"
+    #: 連不上、逾時，或回的東西不像索引站。
+    UNREACHABLE = "unreachable"
+
+
 class Profile(StrEnum):
     """Route 的命名與解析偏好（CONTEXT.md）。"""
 

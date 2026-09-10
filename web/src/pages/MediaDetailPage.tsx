@@ -10,8 +10,8 @@ import { KIND_CODE } from '../components/kind'
 import { Timestamp } from '../components/Timestamp'
 import { TmdbNotice } from '../components/TmdbNotice'
 import { Poster } from '../media/Poster'
+import { SearchPanel } from '../media/SearchPanel'
 import { SeasonList } from '../media/SeasonList'
-import { RoutePicker } from '../media/RoutePicker'
 import tmdbLogo from '../assets/tmdb.svg'
 
 /**
@@ -21,10 +21,12 @@ import tmdbLogo from '../assets/tmdb.svg'
  * 「這是不是我要的那部、要不要下載、入庫到哪裡」。**在票 08 的搜尋之前它是唯讀的瀏覽頁**——
  * 這一頁上第一個真的做得了的動作是「搜尋 torrent」。
  *
- * 版面是一張貨櫃提單——上方身分帶（海報 + 識別欄位 + 那一行要簽的動作），下方整寬堆疊。
- * **後兩票往中間插，不重排前面**：票 08 的搜尋結果表插在季集之後，票 13 的檔案與版本清單
- * 再插在它之後（shape brief §3 的區塊序列）。整寬是為了它們——五欄的結果表在一個
- * 5:7 的右欄裡讀不完。
+ * 版面是一張貨櫃提單——上方身分帶（海報 + 識別欄位 + 簡介），下方整寬堆疊。
+ * **後一票往中間插，不重排前面**：票 13 的檔案與版本清單插在搜尋結果表之後
+ * （shape brief §3 的區塊序列）。整寬是為了它們——五欄的結果表在一個 5:7 的右欄裡讀不完。
+ *
+ * 票 08 把 Route 下拉從身分帶搬進了搜尋區塊（使用者 2026-09-10 拍板）：它現在真的驅動
+ * 一件事（anime profile 的查詢變體），留在身分帶等於一個按了沒反應的控制項。
  */
 export function MediaDetailPage({ id }: { id: string }) {
   const { t } = useTranslation()
@@ -87,6 +89,8 @@ export function MediaDetailPage({ id }: { id: string }) {
               <p className="max-w-prose text-sm text-ink-dim">{t('media.season.none')}</p>
             )}
           </section>
+
+          <SearchPanel media={found} />
         </>
       )}
 
@@ -163,7 +167,6 @@ function IdentityBand({ media, freshness }: { media: Media; freshness: ReactNode
         <p className="max-w-prose text-xs text-ink-dim">{t('media.folderNote')}</p>
       </div>
 
-      <RoutePicker media={media} />
       {freshness}
     </section>
   )

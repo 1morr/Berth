@@ -11,6 +11,9 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Protocol
 
+from berth.adapters.indexer import IndexerSearch
+from berth.adapters.indexer.prowlarr import ProwlarrSearch
+from berth.adapters.indexer.torznab import TorznabSearch
 from berth.adapters.jellyfin import JellyfinClient
 from berth.adapters.jellyfin.client import HttpJellyfinClient
 from berth.adapters.prowlarr import ProwlarrClient
@@ -23,6 +26,7 @@ from berth.adapters.tmdb.client import HttpTmdbClient
 from berth.adapters.torznab import TorznabClient
 from berth.adapters.torznab.client import HttpTorznabClient
 from berth.config import Config
+from berth.domain import IndexerKind
 
 
 class ServiceClientFactory(Protocol):
@@ -40,6 +44,15 @@ class ServiceClientFactory(Protocol):
 
     def torznab(self, base_url: str, api_key: str) -> TorznabClient:
         """位址是使用者貼的**整條** Torznab 網址，不是一個服務根。"""
+        ...
+
+    def indexer_search(self, kind: IndexerKind, base_url: str, api_key: str) -> IndexerSearch:
+        """搜尋用的索引站 client（票 08）。
+
+        與上面兩支的分工是**問題不同**：`prowlarr()` 與 `torznab()` 回答「這個端點還通不通」
+        （精靈與健康檢查），這一支回答「這部作品有哪些發佈」。挑哪一種實作由 `kind` 決定，
+        而 `kind` 是精靈第 5 步存下來的——呼叫端不必認得兩個類別。
+        """
         ...
 
 
@@ -95,3 +108,8 @@ class HttpServiceClientFactory:
 
     def torznab(self, base_url: str, api_key: str) -> TorznabClient:
         return HttpTorznabClient(base_url, api_key)
+
+    def indexer_search(self, kind: IndexerKind, base_url: str, api_key: str) -> IndexerSearch:
+        if kind is IndexerKind.TORZNAB:
+            return TorznabSearch(base_url, api_key)
+        return ProwlarrSearch(base_url, api_key)

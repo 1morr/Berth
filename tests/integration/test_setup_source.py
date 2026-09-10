@@ -16,7 +16,7 @@ from berth.adapters.prowlarr import ProwlarrIndexer
 from berth.adapters.prowlarr.fake import FakeProwlarrClient
 from berth.adapters.tmdb import TmdbConfiguration
 from berth.adapters.tmdb.fake import FakeTmdbClient
-from berth.adapters.torznab import TorznabCaps
+from berth.adapters.torznab import TorznabCaps, TorznabSearchMode
 from berth.adapters.torznab.fake import FakeTorznabClient
 from berth.domain import (
     PROWLARR_LOGIN_STEP,
@@ -258,7 +258,11 @@ async def test_any_torznab_endpoint_works_too(session: AsyncSession) -> None:
     await arrange(session, origin=ServiceOrigin.EXISTING)
     factory = FakeClientFactory(
         torznab=FakeTorznabClient(
-            caps=TorznabCaps(server_title="Jackett", search_available=True, categories=("TV",))
+            caps=TorznabCaps(
+                server_title="Jackett",
+                search=TorznabSearchMode(available=True),
+                categories=("TV",),
+            )
         )
     )
 

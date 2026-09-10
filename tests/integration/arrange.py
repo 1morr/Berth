@@ -12,6 +12,7 @@ from pathlib import Path
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from berth.adapters.indexer.fake import FakeIndexerSearch
 from berth.adapters.jellyfin import JellyfinLibrary
 from berth.adapters.jellyfin.fake import FakeJellyfinClient
 from berth.adapters.qbittorrent.fake import FakeQbittorrentClient
@@ -194,9 +195,11 @@ def factory_for(
     qbittorrent: FakeQbittorrentClient | None = None,
     jellyfin: FakeJellyfinClient | None = None,
     tmdb: FakeTmdbClient | None = None,
+    indexer_search: FakeIndexerSearch | None = None,
 ) -> FakeClientFactory:
     return FakeClientFactory(
         jellyfin=jellyfin or fake_jellyfin(libraries or bundled_libraries(roots["library"])),
         qbittorrent=qbittorrent or applied_qbittorrent(roots),
         tmdb=tmdb or FakeTmdbClient(),
+        indexer_search=indexer_search or FakeIndexerSearch(),
     )

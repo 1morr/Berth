@@ -23,6 +23,9 @@ import uvicorn
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from berth.adapters.http import AuthFailedError, ServiceNotDeployedError, ServiceUnavailableError
+from berth.adapters.indexer import IndexerSearch
+from berth.adapters.indexer.fake import FakeIndexerSearch
+from berth.adapters.indexer.prowlarr import ProwlarrSearch
 from berth.adapters.jellyfin import (
     JellyfinClient,
     JellyfinLibrary,
@@ -43,7 +46,7 @@ from berth.adapters.torznab.fake import FakeTorznabClient
 from berth.api.deps import get_client_factory, get_setup_probes
 from berth.config import Config, load_config
 from berth.db import create_engine, create_session_factory, upgrade_to_head
-from berth.domain import DetectionReason, ServiceKind, ServiceOrigin
+from berth.domain import DetectionReason, IndexerKind, ServiceKind, ServiceOrigin
 from berth.main import create_app
 from berth.models import (
     IndexerSettings,
@@ -142,6 +145,10 @@ class Scenario:
     #: 打**真的** `api.themoviedb.org`。探索頁的驗收要看真的海報與真的 zh-TW 標題，
     #: 而那是替身演不出來的東西——它沒有 20 部作品的封面。
     real_tmdb: bool = False
+    #: 打**真的**索引站。空字串時搜尋走替身（一筆結果都沒有）。與 TMDB 同一個道理：
+    #: 結果表的驗收要看真的發佈名——中日英混排、100 字以上、字幕組各寫各的（票 08）。
+    indexer_url: str = ""
+    indexer_key: str = ""
 
     def probes(self) -> SetupProbes:
         return SetupProbes(
@@ -304,6 +311,21 @@ def discover() -> Scenario:
     return scenario
 
 
+def search() -> Scenario:
+    """Media 詳情頁的搜尋區塊：真的 TMDB + 真的索引站（票 08）。
+
+    索引站位址從 `BERTH_INDEXER_URL` / `BERTH_INDEXER_KEY` 讀。沒設就退回替身，那時結果表
+    是空的——那本身也是要驗的畫面之一。
+
+    **這不是產品拿連線資訊的方式**：Berth 自己只從 `settings.services.indexer` 讀，
+    由精靈第 5 步寫入。這兩個環境變數只是替演練情境省下手動跑一次精靈。
+    """
+    scenario = discover()
+    scenario.indexer_url = os.environ.get("BERTH_INDEXER_URL", "")
+    scenario.indexer_key = os.environ.get("BERTH_INDEXER_KEY", "")
+    return scenario
+
+
 def tmdb_down() -> Scenario:
     """憑證有、TMDB 連不上：探索頁要給原文與重試，而不是一片空白。"""
     scenario = healthy()
@@ -317,6 +339,7 @@ def tmdb_down() -> Scenario:
 SCENARIOS = {
     "bundled": bundled,
     "discover": discover,
+    "search": search,
     "tmdb-down": tmdb_down,
     "healthy": healthy,
     "degraded": degraded,
@@ -372,6 +395,11 @@ class FakeClientFactory:
 
     def torznab(self, base_url: str, api_key: str) -> TorznabClient:
         return FakeTorznabClient(base_url=base_url)
+
+    def indexer_search(self, kind: IndexerKind, base_url: str, api_key: str) -> IndexerSearch:
+        if self._scenario.indexer_url:
+            return ProwlarrSearch(self._scenario.indexer_url, self._scenario.indexer_key)
+        return FakeIndexerSearch(base_url=base_url)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -508,7 +536,11 @@ async def _moor(
     await write_settings(session, setup)
     await write_settings(
         session,
-        IndexerSettings(kind="prowlarr", base_url="http://prowlarr:9696", api_key="fake-key"),
+        IndexerSettings(
+            kind="prowlarr",
+            base_url=scenario.indexer_url or "http://prowlarr:9696",
+            api_key=scenario.indexer_key or "fake-key",
+        ),
     )
     await write_settings(session, QbittorrentSettings(base_url="http://qbittorrent:8080"))
     await session.commit()

@@ -927,6 +927,33 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
   不進網址），v3 的 32 字元 API key 走 `?api_key=`；key 不對回 401。Berth 認憑證的**形狀**，
   所以使用者貼哪一種都成立。
 
+**索引站搜尋實測**（2026-09-10，票 08；Prowlarr 2.5.2.5491 + 五個公開站 acgrip / dmhy / mikan /
+thepiratebay / yts，fixture 在 `tests/fixtures/http/prowlarr/search.*.json` 與
+`tests/fixtures/http/torznab/`）
+
+- **`GET /api/v1/search` 很慢而且不吃 `limit`**：單次冷查詢 60–85 秒（Prowlarr 現場去連五個站），
+  `limit=20` 仍然回 1200 筆。**三個查詢併發共 35 秒**，所以逐標題併發是對的，逾時要給到 120 秒。
+- **`downloadUrl` / `magnetUrl` 每次請求都不一樣**：`link=` 的密文帶 nonce，同一個查詢連跑兩次
+  1021 筆只有 1 筆重疊。`guid` 穩定（1200/1200）。所以身分是 infohash 或 `guid`，不是下載網址。
+  兩者都是 Prowlarr **自己的代理網址**（主機來自它的 `config/host`，不是 Berth 打過去的位址），
+  磁力站（TPB、dmhy）沒有 `downloadUrl`，只有被包成代理網址的 `magnetUrl`。
+- **info hash 有兩種寫法**：同一個發佈在 Mikan 是 40 字十六進位、在 dmhy 是 32 字 base32，
+  base32 解碼後位元組相同。不正規化的話單次查詢的 1200 筆裡有 47 筆會重複顯示。
+- **多標題是真的多一批東西**：`Spy x Family` / `SPY×FAMILY` / `间谍过家家` 各搜出 1200 / 908 / 1210 筆，
+  聯集 1854 筆，各自帶來 391 / 196 / 169 筆另外兩個問不到的結果。
+- **tmdbid 是私站的功能**：627 份 Cardigann 定義裡 93 份的 `tvSearchParams` / `movieSearchParams`
+  含 `tmdbId`，**全部是 private 或 semiPrivate**；十個預設公開站一個都沒有（YTS 只有 `imdbid`）。
+  所以 `t=caps` 決定用哪一種問法時，`q=` 那條退路才是常態。
+- **分類碼不是可靠的篩子**：dmhy 對 `cat=5000`、`cat=5070` 與不帶 `cat` 都回同樣 80 筆；
+  它一筆帶 5070 / 100002 / 2020 而沒有 5000。Berth 因此不送 `categories`，只把分類當顯示資料。
+- **The Pirate Bay 對搜不到的關鍵字會回它自己的熱門清單**：搜 SPY×FAMILY 時前六筆是 Spider-Man、
+  Lanterns、Ted Lasso、Reacher，做種四千到六千。純做種排序時它們會把真正的結果整批擠出前 100 筆，
+  所以 Berth 先用標題粗篩再逐站輪流取。
+- **公開中文站的做種數是個位數**：Mikan / ACG.RIP / dmhy 的發佈多半 0–2 個做種，TPB 的 scene 發佈
+  28–86 個。取「做種前 100 筆」等於把中文字幕組整批刪掉。
+- **`parse_release` 每筆 14 毫秒**（1200 筆 17.4 秒，含 guessit）。一兩千筆全解析會把事件迴圈卡住
+  半分鐘，所以粗篩要用純字串比對，解析只跑在留下來的那一百筆上。
+
 **Jackett**（[repo](https://github.com/Jackett/Jackett)）
 
 - API key 在 `ServerConfig.json` 的 `APIKey`；聚合 Torznab `/api/v2.0/indexers/all/results/torznab/api?t=search` 有文件（上限 1000 筆、站專屬分類不可用）；`GET/POST /api/v2.0/indexers/{id}/Config` 只是 UI 內部介面，無文件。有 `mikan.yml`、`dmhy.yml`、`nyaasi.yml`、`acgrip.yml` 定義。

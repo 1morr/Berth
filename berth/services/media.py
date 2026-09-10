@@ -101,6 +101,25 @@ async def read_media(
     return await _load(session, factory, media_id, force=False)
 
 
+async def read_snapshot(
+    session: AsyncSession, factory: ServiceClientFactory, media_id: str
+) -> MediaSnapshot | None:
+    """搜尋要的是快照**本身**——標題集合與季集，不是詳情頁那一份視圖（票 08）。
+
+    先走一次 `read_media` 是為了同一條 24 小時規則：搜尋常常是使用者在詳情頁待了一會兒
+    之後才按的，那時快照可能剛好過期，而用過期的標題去搜等於搜錯名字。拿不到 TMDB 時
+    存下來的那一份仍然回得出來——舊的標題仍然是真的標題。
+    """
+    await read_media(session, factory, media_id)
+    parsed = parse_media_id(media_id)
+    if parsed is None:
+        return None
+    row = await session.get(Media, build_media_id(*parsed))
+    if row is None or row.tmdb_snapshot_json is None:
+        return None
+    return MediaSnapshot.model_validate(row.tmdb_snapshot_json)
+
+
 async def refresh_media(
     session: AsyncSession, factory: ServiceClientFactory, media_id: str
 ) -> MediaView:

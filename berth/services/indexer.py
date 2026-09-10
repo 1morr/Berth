@@ -302,7 +302,7 @@ async def probe_indexer(
             return SetupStep(key=kind.value, status=StepStatus.FAILED, error=message(exc))
         finally:
             await torznab.aclose()
-        if not caps.search_available:
+        if not caps.search.available:
             return SetupStep(
                 key=kind.value,
                 status=StepStatus.FAILED,

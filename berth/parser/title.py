@@ -83,6 +83,25 @@ def matches(info: ReleaseInfo, media: MediaSnapshot) -> MediaMatch | None:
     return found if found.score >= THRESHOLD else None
 
 
+def mentions(release_name: str, media: MediaSnapshot) -> bool:
+    """這串發佈名裡出現得了這部作品的名字嗎——**不跑 guessit** 的粗篩（票 08）。
+
+    `matches()` 是精確的那一支，但它要一份 `ReleaseInfo`，而 `parse_release` 實測每筆
+    14 毫秒（2026-09-10，1200 筆 17.4 秒）。一次索引站搜尋回一兩千筆，全部解析會把事件
+    迴圈卡住半分鐘，所以粗篩只做字串包含，解析留給篩完的那一百筆。
+
+    判準與 `_compare` 的 `_CONTAINED` 那一條相同：正規化之後 TMDB 的某個名字整串出現在
+    發佈名裡。太短的名字不算——`Up` 出現在半數發佈名裡。
+    """
+    haystack = normalize_title(release_name)
+    if not haystack:
+        return False
+    return any(
+        len(target) >= _MIN_CONTAINED and target in haystack
+        for target in (normalize_title(known) for known in _known_titles(media))
+    )
+
+
 def _score(info: ReleaseInfo, media: MediaSnapshot) -> MediaMatch:
     reasons: list[str] = []
     score = 0.0

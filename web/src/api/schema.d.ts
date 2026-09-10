@@ -209,6 +209,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/search/queries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Queries
+         * @description 不打索引站，只讀快照——所以改 Route 時可以隨手重問。
+         */
+        get: operations["get_queries_api_search_queries_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Search */
+        get: operations["get_search_api_search_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/settings/services": {
         parameters: {
             query?: never;
@@ -855,6 +892,16 @@ export interface components {
             /** Present */
             present: boolean;
         };
+        /**
+         * IndexerProblem
+         * @description 索引站那邊沒搜到東西的五種樣子（票 08 的結果表）。
+         *
+         *     與 `TmdbProblem` 同一個道理：分成五種而不是一句錯誤訊息，是因為**下一步不同**。
+         *     索引站是精靈裡唯一可以跳過的一步，所以 `not_configured` 不是失敗而是「還沒接」——
+         *     畫面要把人送回泊位 5，不是叫他重試。
+         * @enum {string}
+         */
+        IndexerProblem: "not_configured" | "no_query" | "no_search" | "credential_rejected" | "unreachable";
         /** IndexerSetupOut */
         IndexerSetupOut: {
             origin: components["schemas"]["ServiceOrigin"];
@@ -967,6 +1014,15 @@ export interface components {
              */
             password?: string;
         };
+        /**
+         * MappingStrategy
+         * @description 季集是**怎麼**決定的（plan §4.2 的 `Candidate.strategy`）。
+         *
+         *     這個欄位不是註解：`review` 佇列靠它分組，benchmark 靠它回答「哪一條規則在賺錢、
+         *     哪一條在賠錢」，而信心的上限也是逐條策略定的（brief §6.5）。
+         * @enum {string}
+         */
+        MappingStrategy: "explicit" | "folder" | "context" | "arc_name" | "single_season" | "absolute_group" | "absolute_cumulative" | "air_date_offset" | "cour_offset" | "movie";
         /**
          * MeOut
          * @description 使用者可見的身分。id 與 Jellyfin user id 都不外流——UI 用不到。
@@ -1160,6 +1216,64 @@ export interface components {
             selections?: components["schemas"]["RouteSelectionIn"][];
         };
         /**
+         * SearchOut
+         * @description 一次搜尋的回應。
+         *
+         *     **拿不到索引站時仍然是 200**（與探索頁同一個道理，票 03）：「還沒接」「連不上」
+         *     「憑證被拒」的下一步完全不同，做成 HTTP 錯誤的話前端只剩一個狀態碼分不出來。
+         */
+        SearchOut: {
+            /** Rows */
+            rows: components["schemas"]["SearchResultOut"][];
+            /** Total */
+            total: number;
+            /** Discarded */
+            discarded: number;
+            /** Attempts */
+            attempts: components["schemas"]["StepOut"][];
+            problem: components["schemas"]["IndexerProblem"] | null;
+            /** Detail */
+            detail: string;
+        };
+        /**
+         * SearchQueriesOut
+         * @description 搜尋**之前**畫面要說的那句話：Berth 會拿這幾個名字去問。
+         */
+        SearchQueriesOut: {
+            /** Queries */
+            queries: string[];
+        };
+        /**
+         * SearchResultOut
+         * @description 結果表的一列（brief §13）。
+         */
+        SearchResultOut: {
+            /** Title */
+            title: string;
+            /** Indexer */
+            indexer: string;
+            /** Size */
+            size: number;
+            /** Seeders */
+            seeders: number | null;
+            /** Info Url */
+            info_url: string;
+            /** Download Url */
+            download_url: string;
+            /** Key */
+            key: string;
+            tags: components["schemas"]["TagsOut"];
+            /** Season */
+            season: number | null;
+            /** Episode Start */
+            episode_start: number | null;
+            /** Episode End */
+            episode_end: number | null;
+            /** Whole Season */
+            whole_season: boolean;
+            strategy: components["schemas"]["MappingStrategy"] | null;
+        };
+        /**
          * SeasonOut
          * @description 一季。`season_number: 0` 是 Specials。
          */
@@ -1254,6 +1368,12 @@ export interface components {
             skipped?: boolean;
         };
         /**
+         * Source
+         * @description 來源 token（brief §6.8）。BDRip / BluRay → `BD`，WEB-DL / WebRip → `WEB`。
+         * @enum {string}
+         */
+        Source: "BD" | "WEB" | "DVD" | "HDTV" | "REMUX";
+        /**
          * StepOut
          * @description 一條纜繩：精靈的一步，或一個 Route 的一項檢查。
          */
@@ -1272,6 +1392,28 @@ export interface components {
          * @enum {string}
          */
         StepStatus: "ok" | "skipped" | "failed" | "running" | "pending";
+        /**
+         * TagsOut
+         * @description 會進檔名的那幾格（brief §6.8）。
+         *
+         *     送結構化欄位而不是 `render()` 的那一串字：結果表要逐格顯示（來源一欄、解析度一欄），
+         *     而字串只能整條印出來。畫面要那一串字時自己拼——拼法在 `Tags.render()`，不在這裡。
+         */
+        TagsOut: {
+            source: components["schemas"]["Source"] | null;
+            /** Resolution */
+            resolution: string;
+            /** Subs */
+            subs: string[];
+            /** Hardsub */
+            hardsub: boolean;
+            /** Group */
+            group: string;
+            /** Version */
+            version: string;
+            /** Edition */
+            edition: string;
+        };
         /**
          * TmdbProblem
          * @description 向 TMDB 要東西沒要到的四種樣子（票 03 的探索頁、票 04 的 Media 詳情）。
@@ -1573,6 +1715,76 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MediaOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_queries_api_search_queries_get: {
+        parameters: {
+            query: {
+                /** @description `tv:<tmdb>` / `movie:<tmdb>`。 */
+                media: string;
+                /** @description 換這條 Route 的 profile 算一次（anime 多兩個季號變體）。 */
+                route?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SearchQueriesOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_search_api_search_get: {
+        parameters: {
+            query: {
+                /** @description `tv:<tmdb>` / `movie:<tmdb>`。 */
+                media: string;
+                /** @description 自己打的關鍵字。有值時取代作品的各個標題，只問這一個。 */
+                q?: string;
+                /** @description **這一輪搜尋的偏好，不是承諾**（票 04b）：只用來決定 anime profile 要不要加季號變體，不寫進 `media`，也不代表之後一定送到那條 Route。 */
+                route?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SearchOut"];
                 };
             };
             /** @description Validation Error */

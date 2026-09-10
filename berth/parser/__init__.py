@@ -10,7 +10,7 @@ from berth.parser.planner import plan
 from berth.parser.release import merge_release, parse_release, tags_of
 from berth.parser.structure import StructureHints, structure_hints
 from berth.parser.subtitles import SubtitleMatch, match_subtitle
-from berth.parser.title import MediaMatch, match_media, matches, normalize_title
+from berth.parser.title import MediaMatch, match_media, matches, mentions, normalize_title
 
 __all__ = [
     "SAMPLE_RATIO",
@@ -24,6 +24,7 @@ __all__ = [
     "match_media",
     "match_subtitle",
     "matches",
+    "mentions",
     "merge_release",
     "normalize_cjk",
     "normalize_title",

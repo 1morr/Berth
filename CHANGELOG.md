@@ -191,6 +191,19 @@ Windows Docker Desktop（NTFS bind mount）與 Linux（ext4）上各跑一次 `d
   兩個檔案指到同一條路徑就是衝突，兩個都進 review（brief §6.4 第 5 點）。
 - `berth bench` 的比對**含目標路徑**，報表多一個 `subtitle_correct` 桶（八個桶），
   baseline 多守 `extra_correct` 與 `subtitle_correct` 兩格。
+- **索引站搜尋**（`berth/adapters/indexer/`、`berth/services/search.py`，plan §6、§8.4）：
+  `IndexerSearch` 介面加兩個實作——`ProwlarrSearch`（REST `/api/v1/search`，Prowlarr 刻意不提供
+  跨站聚合 Torznab）與 `TorznabSearch`（任意 Torznab 端點，`t=caps` 決定能不能用 tmdbid 搜，
+  不支援時退回 `q=`）。介面**一次一個查詢**；多標題展開、併發、合併去重與逐查詢逾時在 services。
+- `GET /api/search?media=&q=&route=`：結果附解析出的 Tags 與預估季集。`route` 是**這一輪搜尋的
+  偏好，不是承諾**（票 04b）——它只決定 anime profile 要不要加 `第N季` / `Season N` 變體。
+- `GET /api/search/queries?media=&route=`：按下搜尋之前先給看會拿哪幾個名字去問（PRODUCT 原則 2）。
+  不打索引站，只讀快照，所以改 Route 時可以隨手重問；規則只有一份實作，前端不重算。
+- **Media 詳情頁的搜尋區塊與結果表**（`.scratch/m1/search-results-shape.md`）：待命 → 按了才搜
+  （一次搜尋實測 35–85 秒），逐條纜繩顯示每個關鍵字問到幾筆，五欄結果表（發佈名 + Tags / 大小 /
+  做種 / 來源 / 預估），可依做種與大小排序，390px 上塌成堆疊列。Route 下拉從身分帶搬進這一區塊
+  ——它現在真的驅動一件事。
+- `--scenario search`：TMDB 與索引站都打真的那一台的演練情境。
 - `AiPlanner` 介面與 `NullAiPlanner`（`berth/adapters/ai.py`，plan §4.5、brief §6.10）：
   `propose(context, files, rules_plan) -> Plan | None`。M4 才有實作，介面先定是因為它約束的是
   規則層——AI 只能提出規則層表達得出來的處置，碰不到檔案。
@@ -254,6 +267,11 @@ Windows Docker Desktop（NTFS bind mount）與 Linux（ext4）上各跑一次 `d
   （原本是從 adapter 原始碼刮那把內建的）。
 
 ### Fixed
+
+- **`[01-13Fin]` 被讀成「第 1 集」**（`berth/parser/release.py`）：`Fin` / `END` 黏在集號後面是中文
+  字幕組的季末寫法，而方括號的集號規則不認得它們，於是一整類季包的預估季集是錯的。`完` / `完結`
+  沒事——`normalize_cjk` 已經把它們吃掉了。票 08 在真的索引站回應裡抓到，`berth bench` 的
+  `auto_wrong` 仍是 0。
 
 - **英文的「{{count}} titles」在只有一筆時說「1 titles」**（探索頁的搜尋計數）。i18next 傳 `count`
   時查的是 `_one` / `_other`，兩個都沒有就退回原鍵。其他頁面既有的同類鍵尚未處理，留給 M1 的 UI 收尾。

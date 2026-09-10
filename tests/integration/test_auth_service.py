@@ -16,12 +16,13 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from berth.adapters.http import ServiceUnavailableError
+from berth.adapters.indexer import IndexerSearch
 from berth.adapters.jellyfin.fake import FakeJellyfinClient
 from berth.adapters.prowlarr.fake import FakeProwlarrClient
 from berth.adapters.qbittorrent.fake import FakeQbittorrentClient
 from berth.adapters.tmdb.fake import FakeTmdbClient
 from berth.adapters.torznab.fake import FakeTorznabClient
-from berth.domain import Role
+from berth.domain import IndexerKind, Role
 from berth.models import JellyfinSettings, User, UserSession
 from berth.services.auth import (
     SESSION_TTL,
@@ -62,6 +63,9 @@ class OneJellyfin:
 
     def torznab(self, base_url: str, api_key: str) -> FakeTorznabClient:
         raise AssertionError("login never talks to a Torznab endpoint")
+
+    def indexer_search(self, kind: IndexerKind, base_url: str, api_key: str) -> IndexerSearch:
+        raise AssertionError("login never searches an indexer")
 
 
 @pytest.fixture

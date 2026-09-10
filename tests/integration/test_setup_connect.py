@@ -10,6 +10,7 @@ from berth.adapters.http import (
     ServiceNotDeployedError,
     ServiceUnavailableError,
 )
+from berth.adapters.indexer import IndexerSearch
 from berth.adapters.jellyfin import JellyfinClient
 from berth.adapters.jellyfin.fake import FakeJellyfinClient
 from berth.adapters.prowlarr import ProwlarrClient, ProwlarrIndexer
@@ -18,7 +19,7 @@ from berth.adapters.qbittorrent import QbittorrentClient
 from berth.adapters.qbittorrent.fake import FakeQbittorrentClient
 from berth.adapters.tmdb import TmdbClient
 from berth.adapters.torznab import TorznabClient
-from berth.domain import DetectionReason, ServiceKind, ServiceOrigin
+from berth.domain import DetectionReason, IndexerKind, ServiceKind, ServiceOrigin
 from berth.models import IndexerSettings, JellyfinSettings, QbittorrentSettings
 from berth.services.settings import read_settings
 from berth.services.setup import ServiceConnection, connect_service, read_status
@@ -56,6 +57,9 @@ class FakeClientFactory:
 
     def torznab(self, base_url: str, api_key: str) -> TorznabClient:
         raise AssertionError("the connection form never talks to a Torznab endpoint")
+
+    def indexer_search(self, kind: IndexerKind, base_url: str, api_key: str) -> IndexerSearch:
+        raise AssertionError("the connection form never searches for releases")
 
 
 def verdict(status: object, kind: ServiceKind) -> tuple[ServiceOrigin, DetectionReason]:

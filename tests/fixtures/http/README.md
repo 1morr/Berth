@@ -85,6 +85,31 @@ plan §9.4 的九步之後那台伺服器的狀態，不是手排出來的場景
 | `tmdb/movie-detail.moana-2.{en,zh}.json` | `GET /3/movie/1241982?language=…`，英文那一份帶 `append_to_response=alternative_titles,translations`（同樣裁到前 6 筆翻譯）。電影有 `runtime`、沒有 `seasons` |
 | `tmdb/tv-detail.not-found.json` | `GET /3/tv/99999999`，回 404 與 `status_code: 34`。「這個 id 不存在」與「TMDB 壞了」的下一步不同，所以它有自己的一份 |
 
+2026-09-10（M1 票 08），對真的 Prowlarr 2.5.2.5491 錄的。那台上有五個加得起來的公開站
+（acgrip / dmhy / mikan / thepiratebay / yts），所以每一筆的成敗都是它自己連出去的結果：
+
+| 檔案 | 來源 |
+| --- | --- |
+| `prowlarr/search.spy-x-family.json` | `GET /api/v1/search?query=SPY%20x%20FAMILY&type=search`。整份 1200 筆，只留能證明形狀差異的 8 筆：ACG.RIP（**沒有** `infoHash` 也沒有 `magnetUrl`）、Mikan（40 字十六進位 hash）、dmhy（**32 字 base32** hash，而且沒有 `downloadUrl`）、The Pirate Bay（`guid` 就是磁力連結）、YTS（電影，有 `posterUrl` 與 `imdbId`）。Mikan 與 dmhy 那兩筆是**同一個發佈**，base32 解碼後與十六進位那一個位元組相同 |
+| `prowlarr/search.severance.json` | 同一支端點，`?query=Severance`。美劇的命名風格，另含兩筆同名的 2006 電影 |
+| `prowlarr/search.moana-2.json` | 同上，`?query=Moana%202` |
+| `prowlarr/search.no-results.json` | 同上，一個查不到的關鍵字。**空陣列加 200**，搜不到不是錯誤 |
+| `torznab/search.acgrip.xml` | Prowlarr 的單站 Torznab 網址 `/2/api?t=search&q=`。前 2 筆。`torznab:attr` 有 `seeders` 與 `peers`（**沒有** `leechers`），這一站不報 `infohash` |
+| `torznab/search.dmhy.xml` | 同上，`/6/api`。前 2 筆。`infohash` 是 base32，`guid` 是磁力連結，一筆帶三個 `category` |
+| `torznab/caps.yts.xml` | `/4/api?t=caps`。`movie-search` 的 `supportedParams` 是 `q,imdbid`——`supportedParams` 是逗號清單，而**公開站沒有 tmdbid** |
+
+這一組的 `apikey` 一律換成 `0000…0001`（Prowlarr 的號碼）。下載網址裡的 `link=` 密文原樣留著：
+它每次請求都不一樣（實測 1021 筆只有 1 筆重疊），所以它不是秘密，而它的形狀正是「不能拿它當身分」
+的證據。**沒有** tmdbid 版本的 caps：627 份定義裡支援 tmdbid 的 93 份全部是私站，錄不到；
+那條分支由 `capability_of()` 的純函式單元測試守著，不偽造一份「錄製回應」。
+
+重錄的指令（`$KEY` 是那台 Prowlarr 的 API key）：
+
+```bash
+curl -s -H "X-Api-Key: $KEY" "http://localhost:19696/api/v1/search?query=SPY%20x%20FAMILY&type=search"
+curl -s "http://localhost:19696/2/api?t=search&apikey=$KEY&q=SPY%20x%20FAMILY"
+```
+
 重錄的指令（`$TOKEN` 是自己的 v4 read access token 或 v3 key）：
 
 ```bash
