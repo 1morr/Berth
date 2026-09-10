@@ -131,6 +131,14 @@ _Avoid_: split season, sub-season
 對一個 Import Source 逐檔決定分類、對應 Media / 季 / 集、目標路徑、Tags、信心與理由的可審核計劃；套用前不動任何檔案。
 _Avoid_: mapping, import job, rename plan
 
+**Pre-plan**（預先計劃）:
+`metadata_ready` 之後、下載完成之前先算的那一份 Plan（`plans.status = preplan`）：不讀檔案、不動狀態，只回答「這一包對不對、還來得及取消嗎」。
+_Avoid_: draft plan, preview
+
+**Review Reason**（停下來的理由）:
+一份 Plan 停在 review 的三種理由：`low_confidence`、`medium_not_allowed`、`nothing_to_import`。三種的下一步不同，所以是封閉集合而不是一句話。
+_Avoid_: error, message
+
 **Plan Item**:
 Plan 中一個檔案的決定，`action` 為 import / extra / subtitle / skip / unmatched / review。
 _Avoid_: entry, row

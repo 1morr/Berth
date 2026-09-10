@@ -1,4 +1,5 @@
 import type { Job, JobState } from '../api/jobs'
+import type { PlanItem } from '../api/plans'
 import type { Signal } from '../components/signal'
 
 /**
@@ -64,4 +65,21 @@ export function formatPercent(value: number, locale: string): string {
  */
 export function shortHash(hash: string): string {
   return hash.slice(0, 12)
+}
+
+/**
+ * `S01E01` / `S01E01-E02`（Jellyfin 認得的寫法，brief §6.6）。
+ *
+ * **不是 i18n 字串**：它與檔名裡的那一段是同一個東西，翻譯它等於讓畫面上的季集與磁碟上的
+ * 檔名對不起來（The Machine String Rule 的同一個道理）。電影沒有季集，回空字串。
+ */
+export function formatEpisode(item: PlanItem): string {
+  if (item.season === null || item.episode_start === null) return ''
+  const season = String(item.season).padStart(2, '0')
+  const start = String(item.episode_start).padStart(2, '0')
+  const end =
+    item.episode_end && item.episode_end !== item.episode_start
+      ? `-E${String(item.episode_end).padStart(2, '0')}`
+      : ''
+  return `S${season}E${start}${end}`
 }

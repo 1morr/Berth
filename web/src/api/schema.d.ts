@@ -253,6 +253,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/jobs/{job_hash}/replan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Replan
+         * @description 重新算一份 Plan（plan §6 jobs 群組、票 11）。
+         *
+         *     使用者按它的時刻是：Plan 停在 review 而他剛改了 Route 的設定，或 TMDB 那邊補上了正確的
+         *     季集。回的是**那一筆 Job**（新的狀態與 `plan_id`）而不是 Plan 本身——按下去之後畫面上
+         *     要重畫的是那一列。
+         */
+        post: operations["post_replan_api_jobs__job_hash__replan_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/jobs/{job_hash}/retry": {
         parameters: {
             query?: never;
@@ -307,6 +331,23 @@ export interface paths {
          * @description 不管幾歲都重抓一次。TMDB 改了標題，`folder_name` 就跟著改（票 04b 驗收）。
          */
         post: operations["post_refresh_api_media__media_id__refresh_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/plans/{plan_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Plan */
+        get: operations["get_plan_api_plans__plan_id__get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -828,6 +869,12 @@ export interface components {
          */
         CollectionType: "movies" | "tvshows";
         /**
+         * Confidence
+         * @description brief §6.5 的三級。`HIGH` 與 `MEDIUM` 都自動入庫，`LOW` 進 review。
+         * @enum {string}
+         */
+        Confidence: "high" | "medium" | "low";
+        /**
          * ConnectIn
          * @description 既有服務的連線表單。每個服務只用得到其中幾個欄位。
          */
@@ -1149,6 +1196,10 @@ export interface components {
             imported_at: string | null;
             /** Retryable */
             retryable: boolean;
+            /** Replannable */
+            replannable: boolean;
+            /** Plan Id */
+            plan_id: number | null;
         };
         /**
          * JobSourceIn
@@ -1328,6 +1379,119 @@ export interface components {
             detail: string;
         };
         /**
+         * PlanAction
+         * @description 一個檔案的處置（plan §2.3 的 `plan_items.action`）。
+         * @enum {string}
+         */
+        PlanAction: "import" | "extra" | "subtitle" | "skip" | "unmatched" | "review";
+        /**
+         * PlanEngine
+         * @description 這一份 Plan 是誰算的（plan §2.3 的 `plans.engine`、brief §5.2）。
+         * @enum {string}
+         */
+        PlanEngine: "rules" | "ai" | "user";
+        /**
+         * PlanItemOut
+         * @description Plan 表格上的一列（brief §6.5：決定、信心與理由）。
+         */
+        PlanItemOut: {
+            /** Id */
+            id: number;
+            /** Rel Path */
+            rel_path: string;
+            action: components["schemas"]["PlanAction"];
+            /** Media Id */
+            media_id: string | null;
+            /** Season */
+            season: number | null;
+            /** Episode Start */
+            episode_start: number | null;
+            /** Episode End */
+            episode_end: number | null;
+            /** Target Path */
+            target_path: string;
+            confidence: components["schemas"]["Confidence"];
+            /** Reasons */
+            reasons: string[];
+            /** Audit */
+            audit: boolean;
+            /** Error */
+            error: string;
+        };
+        /**
+         * PlanOut
+         * @description 一份 Plan。
+         */
+        PlanOut: {
+            /** Id */
+            id: number;
+            /** Job Hash */
+            job_hash: string | null;
+            status: components["schemas"]["PlanStatus"];
+            engine: components["schemas"]["PlanEngine"];
+            /** Engine Version */
+            engine_version: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            summary: components["schemas"]["PlanSummary"];
+            /** Items */
+            items: components["schemas"]["PlanItemOut"][];
+        };
+        /**
+         * PlanStatus
+         * @description 一份 Import Plan 現在的位置（plan §2.3 的 `plans.status`）。
+         *
+         *     **它與 Job 狀態回答的是不同的問題**：Job 說的是那個 torrent 走到哪一站，Plan 說的是
+         *     「這一份決定被採信到什麼程度」。一筆 `review` 的 Job 一定有一份 `pending_review` 的
+         *     Plan，但一份 `preplan` 的 Plan 底下的 Job 可能還在下載。
+         * @enum {string}
+         */
+        PlanStatus: "preplan" | "auto" | "pending_review" | "approved" | "rejected" | "applied" | "failed";
+        /**
+         * PlanSummary
+         * @description 一份 Plan 的一句話（`plans.summary_json`，plan §2.3、票 11）。
+         *
+         *     存下來而不是每次數一遍：下載列表上一列 Job 只想說「12 個檔案要入庫、2 個等人看」，
+         *     而那句話不該讓每一列都去掃一次 `plan_items`。
+         *
+         *     住在 `domain/` 的理由與 `MediaSnapshot` 一樣（plan §2.2 的同一條偏差）：`models` 拿它
+         *     當一個 `*_json` 欄位的型別，`services` 算它，而 `api` 直接把它送出去——三層都要它，
+         *     而 `api` 依契約不 import `models`（plan §1.3）。
+         */
+        PlanSummary: {
+            /**
+             * Files
+             * @default 0
+             */
+            files?: number;
+            /**
+             * High
+             * @default 0
+             */
+            high?: number;
+            /**
+             * Medium
+             * @default 0
+             */
+            medium?: number;
+            /**
+             * Low
+             * @default 0
+             */
+            low?: number;
+            /**
+             * Actions
+             * @default {}
+             */
+            actions?: {
+                [key: string]: number;
+            };
+            review_reason?: components["schemas"]["ReviewReason"] | null;
+        };
+        /**
          * PollerOut
          * @description 下載迴圈上一輪的結果（plan §3.2）。
          */
@@ -1389,6 +1553,16 @@ export interface components {
             /** Error */
             error: string;
         };
+        /**
+         * ReviewReason
+         * @description 為什麼這一份 Plan 停下來等人（brief §5.2 的 `review_required(reason)`）。
+         *
+         *     封閉集合而不是一句話：畫面要照理由說出**下一步**（PRODUCT 原則 4），而三種理由的
+         *     下一步不一樣——低信心要人指定季集，被 Route 擋下的 medium 只要人點頭，
+         *     而「這一包沒有東西可以入庫」多半表示送錯了 torrent。
+         * @enum {string}
+         */
+        ReviewReason: "low_confidence" | "medium_not_allowed" | "nothing_to_import";
         /**
          * Role
          * @description 使用者角色。由 Jellyfin 的 `Policy.IsAdministrator` 決定（plan §11.1 T0.5）。
@@ -2079,6 +2253,37 @@ export interface operations {
             };
         };
     };
+    post_replan_api_jobs__job_hash__replan_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_hash: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     post_retry_api_jobs__job_hash__retry_post: {
         parameters: {
             query?: never;
@@ -2159,6 +2364,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MediaOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_plan_api_plans__plan_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanOut"];
                 };
             };
             /** @description Validation Error */

@@ -44,6 +44,7 @@ from berth.services.downloads import (
     record_poll_failure,
 )
 from berth.services.events import EventHub, JobSignal
+from berth.services.hints import JobHints
 from berth.services.jobs import held_locks, job_lock, transition
 from berth.services.settings import read_settings, write_settings
 from tests.integration.arrange import arrange, factory_for
@@ -143,8 +144,9 @@ async def run(
     *,
     now: datetime = NOW,
     hub: EventHub | None = None,
+    hints: JobHints | None = None,
 ) -> None:
-    await poll_downloads(session, client, hub or EventHub(), now=now)
+    await poll_downloads(session, client, hub or EventHub(), hints or JobHints(), now=now)
 
 
 async def events_of(session: AsyncSession, job_hash: str = HASH) -> list[Event]:
@@ -597,7 +599,7 @@ class TestIntervalsAndBackoff:
         await setup_job(session, roots, state=JobState.DOWNLOADING)
         client = FakeQbittorrentClient(torrents=(status(progress=0.2),))
 
-        outcome = await poll_downloads(session, client, EventHub(), now=NOW)
+        outcome = await poll_downloads(session, client, EventHub(), JobHints(), now=NOW)
 
         assert outcome.active is True
         assert await next_interval(session) == ACTIVE_INTERVAL
@@ -608,7 +610,7 @@ class TestIntervalsAndBackoff:
         await setup_job(session, roots, state=JobState.IMPORTED)
         client = FakeQbittorrentClient(torrents=())
 
-        outcome = await poll_downloads(session, client, EventHub(), now=NOW)
+        outcome = await poll_downloads(session, client, EventHub(), JobHints(), now=NOW)
 
         assert outcome.active is False
         assert await next_interval(session) == IDLE_INTERVAL
@@ -817,9 +819,35 @@ class TestWholeJourney:
                 seen.append((signal.state, session.in_transaction()))
 
         client = FakeQbittorrentClient(torrents=(status(),), files={HASH: FILES})
-        await poll_downloads(session, client, Spy(), now=NOW)
+        await poll_downloads(session, client, Spy(), JobHints(), now=NOW)
 
         assert seen == [(JobState.METADATA_READY.value, False)]
+
+
+class TestHints:
+    async def test_a_round_that_moved_something_wakes_the_planner(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """下載完成到「規劃中」之間不必等 `planner_runner` 的一分鐘（plan §3.2、票 11）。"""
+        await setup_job(session, roots)
+        hints = JobHints()
+        client = FakeQbittorrentClient(torrents=(status(),), files={HASH: FILES})
+
+        await run(session, client, hints=hints)
+
+        assert await hints.wait(0.05) is True
+
+    async def test_a_round_that_changed_nothing_lets_it_sleep(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """5 秒一輪的迴圈每輪叫醒它一次的話，那 60 秒的間隔就形同虛設。"""
+        await setup_job(session, roots, state=JobState.DOWNLOADING)
+        hints = JobHints()
+        client = FakeQbittorrentClient(torrents=(status(progress=0.2),))
+
+        await run(session, client, hints=hints)
+
+        assert await hints.wait(0.05) is False
 
 
 class TestDownloader:
@@ -830,7 +858,7 @@ class TestDownloader:
         await setup_job(session, roots, state=JobState.DOWNLOADING)
         factory = factory_for(roots)
         factory.qbittorrent_.torrents = (status(progress=0.2),)
-        downloader = Downloader(factory, EventHub())
+        downloader = Downloader(factory, EventHub(), JobHints())
 
         await downloader.poll(session, now=NOW)
         await downloader.poll(session, now=NOW)
@@ -844,7 +872,7 @@ class TestDownloader:
         await setup_job(session, roots, state=JobState.DOWNLOADING)
         factory = factory_for(roots)
         factory.qbittorrent_.sync_error = AuthFailedError("app/version: 403")
-        downloader = Downloader(factory, EventHub())
+        downloader = Downloader(factory, EventHub(), JobHints())
 
         with pytest.raises(AuthFailedError):
             await downloader.poll(session, now=NOW)
@@ -871,11 +899,11 @@ class TestDownloader:
 
         spy = Spy()
         client = FakeQbittorrentClient(torrents=(status(progress=0.2),))
-        await poll_downloads(session, client, spy, now=NOW)
+        await poll_downloads(session, client, spy, JobHints(), now=NOW)
         assert len(pushed) == 1
 
         # 第二輪 qBittorrent 說的一模一樣：沒有東西動，所以沒有東西要推。
-        await poll_downloads(session, client, spy, now=NOW)
+        await poll_downloads(session, client, spy, JobHints(), now=NOW)
 
         assert len(pushed) == 1
 
@@ -900,7 +928,7 @@ class TestDownloader:
         credentials.password = "adminadmin"
         await write_settings(session, credentials)
         await session.commit()
-        downloader = Downloader(factory, EventHub())
+        downloader = Downloader(factory, EventHub(), JobHints())
 
         with pytest.raises(IpBannedError) as banned:
             await downloader.poll(session, now=NOW)

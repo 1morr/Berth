@@ -22,9 +22,10 @@ from berth.api.gate import ApiGate
 from berth.config import VERSION, Config, load_config
 from berth.db import create_engine, create_session_factory, upgrade_to_head
 from berth.logs import configure_logging
-from berth.pipeline import HealthChecker, QbitPoller
+from berth.pipeline import HealthChecker, PlannerRunner, QbitPoller
 from berth.services.clients import HttpServiceClientFactory, ServiceClientFactory
 from berth.services.events import EventHub
+from berth.services.hints import JobHints
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +34,7 @@ API_PREFIX = "/api"
 #: 背景 task 的名字。關機時要找得到它，測試也靠它斷言「沒有留下 pending task」。
 HEALTH_CHECKER_TASK = "health_checker"
 QBIT_POLLER_TASK = "qbit_poller"
+PLANNER_RUNNER_TASK = "planner_runner"
 
 #: mount 掛在 `/`，所以 StaticFiles 收到的 path 沒有開頭的斜線。
 _API_SEGMENT = API_PREFIX.lstrip("/")
@@ -97,12 +99,21 @@ def _lifespan(config: Config) -> Lifespan[FastAPI]:
         await upgrade_to_head(engine)
         # 相依（api/deps.py）從 app.state 取，這樣 router 不必知道 engine 是怎麼建的。
         app.state.session_factory = create_session_factory(engine)
+        # 迴圈之間的提示（票 11）：poller 動了什麼就叫醒 `planner_runner`。**在這裡建而不是
+        # 在 `create_app`**：它裡面是一個 `asyncio.Event`，而 Event 認第一次 await 它的那個
+        # 事件迴圈——同一個 app 起兩次（測試就是這樣跑的）會拿到「bound to a different
+        # event loop」。迴圈與它同生同滅，所以它本來就屬於這一段。
+        hints = JobHints()
         checker = HealthChecker(app.state.session_factory, app.state.clients)
-        poller = QbitPoller(app.state.session_factory, app.state.clients, app.state.events)
+        poller = QbitPoller(app.state.session_factory, app.state.clients, app.state.events, hints)
+        planner = PlannerRunner(
+            app.state.session_factory, app.state.clients, app.state.events, hints
+        )
         # 背景迴圈（plan §3.2）。兩個都先睡一個間隔，所以啟動本身不會慢。
         tasks = [
             asyncio.create_task(checker.run(), name=HEALTH_CHECKER_TASK),
             asyncio.create_task(poller.run(), name=QBIT_POLLER_TASK),
+            asyncio.create_task(planner.run(), name=PLANNER_RUNNER_TASK),
         ]
         try:
             yield

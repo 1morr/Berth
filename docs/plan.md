@@ -125,7 +125,8 @@ adapters ──► domain                  （不 import services、models；回
 - `jobs`：`hash`（pk，info hash）、`name`、`source_url`、`trigger`（`manual` / `rss` / `reimport`）、`trigger_ref`（rule id 或 import source 路徑）、`user_id`、`media_id`、`route_id`、`state`（§3.1）、`error`、`save_path`、`content_path`、`total_size`、`progress`、`client_state`、`added_at`、`completed_at`、`imported_at`、`last_seen_in_client_at`。
   `source_url` 是索引站上那一條下載連結，**存著是為了重試**（§3.1 的 `submit_failed` → `requested`）：送單失敗之後畫面上那一輪搜尋早就不在了，而 Prowlarr 的代理連結每次搜尋都不一樣（brief §20.7），重新搜一次不會給出同一條（票 09）。
 - `job_files`：`id`、`job_hash`、`rel_path`（與 hash 合併 unique）、`size`、`priority`、`kind`（§4.1）、`release_info_json`、`mediainfo_json`、`updated_at`
-- `plans`：`id`、`job_hash`（nullable）、`source_path`（重新入庫時的目錄）、`engine`（`rules` / `ai` / `user`）、`engine_version`、`status`（`preplan` / `auto` / `pending_review` / `approved` / `rejected` / `applied` / `failed`）、`summary_json`（各信心等級數量、原因摘要）、`created_at`、`decided_by`、`decided_at`
+- `plans`：`id`、`job_hash`（nullable、**unique**）、`source_path`（重新入庫時的目錄）、`engine`（`rules` / `ai` / `user`）、`engine_version`、`status`（`preplan` / `auto` / `pending_review` / `approved` / `rejected` / `applied` / `failed`）、`summary_json`（各信心等級數量、原因摘要、`review_reason`）、`created_at`、`decided_by`、`decided_at`。
+  **一個 Job 只有一份「現在的計劃」**（票 11）：`job_hash` 上是 unique index，重跑 planning 把它整份改寫而不是再長一列。兩個理由：`GET /api/plans/{id}` 不必先回答「哪一個 id 才是現在那一份」，而 `plan_items` 不會在每次重跑之後多一份重複的決定（§3.3 的重入）。上一份計劃留在時間線上（`events`）。`created_at` 因此是**算出這一份的時間**，跟著重跑換。`job_hash` 仍可為 NULL——M2 的重新入庫以目錄為 Import Source，而 SQLite 的 unique 容得下多個 NULL。
 - `plan_items`：`id`、`plan_id`、`job_file_id`（nullable）、`rel_path`、`action`（`import` / `extra` / `subtitle` / `skip` / `unmatched` / `review`）、`media_id`、`season`、`episode_start`、`episode_end`、`tags_json`、`target_path`、`confidence`（`high` / `medium` / `low`）、`reasons_json`、`audit`（medium 自動入庫為 true）、`applied_at`、`error`
 - `ledger`：`id`、`job_hash`（nullable）、`source_rel_path`、`source_abs_path`、`source_inode`、`source_dev`、`target_path`（unique）、`target_inode`、`media_id`、`season`、`episode_start`、`episode_end`、`tags_json`、`plan_item_id`、`jellyfin_item_id`、`link_mode`（`hardlink`）、`status`（`ok` / `target_missing` / `source_missing` / `inode_mismatch`）、`audit`、`created_at`、`checked_at`
 - `events`：`id`、`job_hash`（nullable）、`media_id`（nullable）、`type`、`actor`（user id / `system` / `rss:<rule>` / `ai`）、`payload_json`、`created_at`。索引 `(job_hash, created_at)`。
@@ -153,15 +154,15 @@ adapters ──► domain                  （不 import services、models；回
 | — | `add_download` | `requested` | 建 job、event `created` |
 | `requested` | qBittorrent 接受 | `submitted` | event `submitted`（category、save_path） |
 | `requested` | qBittorrent 拒絕 / 不可達 | `submit_failed` | event；可手動重試回 `requested` |
-| `submitted` | `torrents/files` 非空且 state 不是 `metaDL` | `metadata_ready` | 建 `job_files`、跑 pre-plan（`plans.status = preplan`）、event `metadata_received` + `preplan`。**pre-plan 在票 11**：`plans` 表到那一票才建，票 10 只做前半 |
+| `submitted` | `torrents/files` 非空且 state 不是 `metaDL` | `metadata_ready` | 建 `job_files` + event `metadata_received`（票 10）；pre-plan 由 `planner_runner` 在下一輪補上（`plans.status = preplan` + event `preplan`，票 11）——poller 那一輪不算 Plan，兩件事的失敗理由不該綁在一起 |
 | `metadata_ready` | 有進度 | `downloading` | event `progress`（每跨 25% 一筆） |
 | `downloading` | `stalledDL` 超過 N 分鐘 | `stalled` | event；恢復進度即回 `downloading` |
 | `downloading` / `stalled` | client state `missingFiles` / `error` | `missing_files` / `client_error` | issue |
 | 任何活躍狀態 | torrent 從客戶端消失 | `client_removed` | issue `unknown_removed`；可 `reimport` 若 complete 檔案仍在 |
 | `downloading` | 完成條件（brief §5.1） | `completed` | event `completed` |
-| `completed` | planner_runner 取得 | `planning` | 讀 mediainfo、更新 `job_files` |
-| `planning` | Plan 全 high/medium 且 Route 允許 | `importing` | `plans.status = auto`、event `plan_generated` |
-| `planning` | 否則 | `review` | `plans.status = pending_review`、event `review_required` |
+| `completed` | planner_runner 取得 | `planning` | 讀 mediainfo、更新 `job_files`（`kind` 與 `mediainfo_json`）。**進了 `planning` 就先 commit**，畫面才說得出它正在做什麼；算到一半被關掉的那一列停在這裡，下一輪掃到它會從頭再算一次（票 11） |
+| `planning` | Plan 全 high/medium 且 Route 允許 | `importing` | `plans.status = auto`、event `plan_generated`；medium 的 item 掛 `audit`。**`unmatched` 不算在「全 high/medium」裡**（票 11）：它一律是 low，但那不是低信心而是一個**已經做完的決定**——「這是一個節目，但它不是 TMDB 上的任何一集」（brief §7.6），檔案留在 complete 原位由 Unmatched 清單處理。動漫批次幾乎每一包都夾著一兩個這種 SP，擋下去等於 §11.2 T1.6 的「不經人工入庫」永遠達不到；它仍然數進 `summary.low`，畫面上看得見 |
+| `planning` | 否則 | `review` | `plans.status = pending_review`、event `review_required(reason)`。理由是封閉集合（`ReviewReason`）：`low_confidence` / `medium_not_allowed` / `nothing_to_import`——三種的下一步不同（票 11）。**不另外寫 `plan_generated`**：一個轉換一筆事件，兩筆說的是同一件事 |
 | `review` | 使用者核准 | `importing` | `plans.status = approved`、event `review_decided` |
 | `review` | 使用者拒絕 | `completed` | 可重新 planning |
 | `importing` | 全部 item 套用完 | `imported` | 通知 Jellyfin、event `linked` ×N、`jellyfin_scan_requested` |
@@ -179,7 +180,7 @@ adapters ──► domain                  （不 import services、models；回
 | 迴圈 | 間隔 | 工作 |
 | --- | --- | --- |
 | `qbit_poller` | 有活躍 job 時 5s，否則 30s；連續失敗退避到 5 分鐘 | `sync/maindata`（帶 rid）；只看本系統 category **或 `berth` tag** 的 torrent（兩道篩子的聯集：Route 被刪掉之後它送出去的那些 torrent 仍然認得出來）；更新進度與 client state；驅動 §3.1 中由客戶端狀態觸發的轉換；發現無 job 的 torrent → issue `unknown_torrent`（**M1 先寫一筆 `issue_detected` 事件並列在健康頁的「下載迴圈」區塊**，`issues` 表在 M2，票 10） |
-| `planner_runner` | 事件驅動（queue）+ 每 60s 掃 `completed` | 讀 mediainfo → 解析（§4）→ 建 Plan → 決定 auto / review |
+| `planner_runner` | 事件驅動（提示）+ 每 60s 掃 `completed` **與 `planning`** | 讀 mediainfo → 解析（§4）→ 建 Plan → 決定 auto / review；順手替下載中、還沒有 Plan 的 job 算 pre-plan |
 | `importer` | 事件驅動 + 每 60s 掃 `importing` | 逐 item：建目錄 → `link()` → 寫 ledger → event；完成後 `POST /Library/Media/Updated`；一次只處理一個 job |
 | `jellyfin_resolver` | 事件驅動，重試間隔 30s → 2m → 10m → 1h，共 6 次 | 為缺 `jellyfin_item_id` 的 ledger 找 item（brief §20.1 的兩段查詢）；耗盡即 issue `jellyfin_item_unresolved` |
 | `reconciler` | 每日 04:00 + 手動 | brief §9.1 全部檢查，寫 `issues`（冪等：同 type + path 只有一筆 open） |
@@ -193,7 +194,7 @@ adapters ──► domain                  （不 import services、models；回
 - `health_checker` **醒得比檢查頻繁**：兩層的理由是精靈剛跑完的那一刻——迴圈在啟動時就在轉，那時候還沒有東西可檢查，如果醒來的間隔就是檢查的間隔，使用者按完「完成」會對著一個空的健康頁等五分鐘。精靈跑完之前它什麼都不做（那時候正在接的服務被打只會得到假的紅燈）。
 - `health_checker` 的**磁碟空間**目前只在 Route 的 `hardlink` 纜繩上以 `free=` 顯示實測值，沒有門檻判定（票 10 改）。門檻要變成一個 Issue 才有用，所以與 §11.3 的 Reconciler 一起做。
 - `health_checker` **沒有逐服務的間隔退避**（票 10 改）：每一項各自 try/except 加上 adapter 的 5 秒逾時就足夠隔離，而 5 分鐘一次的檢查本來就打不爆任何服務；退避只會延後「服務回來之後自動變綠」。連續失敗次數仍然記錄並顯示。
-- 迴圈之間用 in-process `asyncio.Queue` 傳「請處理 job X」的提示，DB 狀態才是真相；程序重啟後由定時掃描補上。
+- 迴圈之間用一個 in-process 的**喚醒訊號**傳「有東西動了，去看看」（`services/hints.py`，票 11）。plan 原文寫的是一條裝著「請處理 job X」的 `asyncio.Queue`，但同一段的下半句是「DB 狀態才是真相；程序重啟後由定時掃描補上」——而一旦掃描本來就找得到同一批 job，佇列裡那個 hash 就不帶任何資訊，只留下三個要回答的問題（重複的 hash 去不去重、滿了丟哪一筆、重啟之後裡面那幾筆誰來補）。訊號會自己合併：poller 一輪動了 40 筆也只是「去看看」一次。
 
 ### 3.3 冪等與重入
 
@@ -233,7 +234,7 @@ files ─► classify ─► (video | subtitle | font | audio | image | archive 
 
 ### 4.2 核心型別（`domain/`）
 
-- `FileEntry`：`rel_path`（相對於 torrent 內容根）、`size`、`kind`、`priority`
+- `FileEntry`：`rel_path`（相對於 torrent 內容根）、`size`、`kind`、`priority`、`duration_s`（mediainfo 量到的秒數，票 11）。`duration_s` **`None` 是「還沒量」不是 0**：pre-plan 那一輪檔案還在下載，一個訊號都沒有，而分類器拿它把短的正片降為 extra（§4.1、brief §6.2）。解析器仍然沒有 IO——量的人是 `services/plan.py`，這裡收的是它量到的結果
 - `CjkHints`：`subs: frozenset[Lang]`、`hardsub: bool | None`、`subtitle_kind`、`season: int | None`、`episode: int | None`、`episode_end`、`collection`、`special: SpecialKind | None`、`movie: bool`、`group: str`、`matched: tuple[str, ...]`（認出來的原文，往上併進 `ReleaseInfo.matched_tokens`）
 - `ReleaseInfo`：brief §6.3 欄位 + `raw_title`、`matched_tokens`、`part`（`Part.2` / `第二部分` 的 cour 序號，§4.4）。`season_hint_from_folder` **不在這裡**——資料夾提示是 `structure_hints` 的輸出，兩個階段的產物不混進同一個型別
 - `Tags`：`source`、`resolution`、`subs: tuple[Lang, ...]`、`hardsub`、`group`、`version`、`edition`；`render()` 依 brief §6.8
@@ -241,7 +242,8 @@ files ─► classify ─► (video | subtitle | font | audio | image | archive 
 - `Candidate`：`season`、`episode_start`、`episode_end`、`strategy`、`confidence`、`reasons: list[str]`
 - `Decision`（`parser/score.py`）：`item: PlanItem` + `strategy`。批次一致性要比的是策略，而 `PlanItem` 沒有這個欄位，所以逐檔的結果先攤成它再進 `score`
 - `PlanItem`：`rel_path`、`kind`、`action`、`season`、`episode_start`、`episode_end`、`tags`、`target_path`、`confidence`、`reasons`。`target_path` **只有真的會被寫出去的檔案有值**（`import` / `extra` / `subtitle`）——unmatched 留在 complete 原位（brief §7.4），review 還沒有決定，兩者都是空字串。`media_id` 還不在這裡：Job 一路都帶著同一個 Media，等 Plan 存進資料庫（§11.2 票 11）才有第二個來源需要它；§2.3 是它最終的樣子
-- 封閉集合一律 `StrEnum`：`FileKind`、`Lang`、`Source`、`SubtitleKind`、`SpecialKind`（SP/OVA/OAD/Movie/NC）、`ReleaseKind`、`Confidence`、`PlanAction`、`MappingStrategy`（explicit / folder / context / arc_name / single_season / absolute_group / absolute_cumulative / air_date_offset / cour_offset / movie）
+- `PlanSummary`（`domain/parser.py`，票 11）：一份 Plan 的一句話（`plans.summary_json`）——會被寫進媒體庫的檔案數、逐信心的計數、逐 `PlanAction` 的計數、`review_reason`。住在 `domain/` 的理由與 `MediaSnapshot` 一樣（§2.2 的同一條偏差）：`models` 拿它當一個 `*_json` 欄位的型別、`services` 算它、`api` 直接把它送出去，而 `api` 依契約不 import `models`（§1.3）。信心只數**不是 `skip` 的那些**：字型與海報雙方都同意可以忽略，算進 high 會稀釋「這一包有多可信」
+- 封閉集合一律 `StrEnum`：`FileKind`、`Lang`、`Source`、`SubtitleKind`、`SpecialKind`（SP/OVA/OAD/Movie/NC）、`ReleaseKind`、`Confidence`、`PlanAction`、`MappingStrategy`、`PlanStatus`、`PlanEngine`、`ReviewReason`（票 11）（explicit / folder / context / arc_name / single_season / absolute_group / absolute_cumulative / air_date_offset / cour_offset / movie）
 
 ### 4.3 上下文與 TMDB 快照
 
@@ -345,7 +347,7 @@ Session 以 httpOnly cookie（`berth_session`）承載，`SameSite=Strict`、`Pa
 | media | `GET /media/{id}`（TMDB + 收得下它的 Route + 狀態 + 檔案 + Unmatched + 版本）、`POST /media/{id}/refresh`。**沒有 track 那一支**（票 04b）：入庫到哪一條 Route 是搜尋與送單時才帶上的偏好，不為一個下拉的初值多一個對外介面 | `media.*` |
 | search | `GET /search?media=&q=&route=`（索引站搜尋，結果附解析出的 Tags 與預估季集；**只回名字對得上這部作品的那些**，被丟掉的筆數另報 `discarded`——實測 The Pirate Bay 對搜不到的關鍵字會回它自己的熱門清單）、`GET /search/queries?media=&route=`（按下搜尋之前先給看：會拿哪幾個名字去問。不打索引站，只讀快照，所以改 Route 時可以隨手重問；規則只能有一份實作，前端不重算） | `search_torrents`、`plan_queries` |
 | jobs | `POST /jobs`（`{source, media, route}`）、`GET /jobs`、`GET /jobs/{hash}`、`GET /jobs/{hash}/events`、`POST /jobs/{hash}/replan`、`POST /jobs/{hash}/reimport`、`POST /jobs/{hash}/retry`、`DELETE /jobs/{hash}?unlink=&remove_torrent=&delete_files=&purge=` | `add_download`、`generate_plan`、`reimport`、`delete_job` |
-| plans | `GET /plans/{id}`、`PUT /plans/{id}/items`、`POST /plans/{id}/approve`、`POST /plans/{id}/reject` | `review.*`、`apply_plan` |
+| plans | `GET /plans/{id}`、`PUT /plans/{id}/items`、`POST /plans/{id}/approve`、`POST /plans/{id}/reject`。**M1 只有 `GET`**（票 11）：逐列編輯與核准是 M2 的 Review Queue（§11.3），而 M1 停在 `review` 的 Job 就是停在那裡——那一份唯讀的答案是使用者看得到的全部 | `review.*`、`apply_plan` |
 | review | `GET /review`（低信心、audit、Unmatched、重複、Issue 的統一佇列）、`POST /review/audit/{ledger_id}/confirm`、`POST /review/audit/{ledger_id}/undo` | `review.*` |
 | files | `POST /files/rematch`（`{ledger_id \| job_file_id, action, season, episode_start, episode_end}`） | `rematch_file` |
 | rss | `GET/POST /rss/feeds`、`PUT/DELETE /rss/feeds/{id}`、`POST /rss/feeds/{id}/poll`、`GET /rss/items`、`GET/POST /rss/rules`、`PUT/DELETE /rss/rules/{id}`、`POST /rss/rules/preview`、`POST /rss/oneshot` | `rss.*` |
@@ -364,7 +366,7 @@ Session 以 httpOnly cookie（`berth_session`）承載，`SameSite=Strict`、`Pa
 - 路由：`/setup`、`/login`、`/`（探索，票 03 起是真的探索頁，不再導向 `/health`）、`/health`、`/media/:id`、`/library/:routeSlug`、`/jobs`、`/jobs/:hash`、`/review`、`/rss`、`/issues`、`/settings/services`、其餘 `/settings/*`。
 - 守衛：精靈未完成 → 一律導向 `/setup`（讀 `GET /health` 的 `setup_completed`，那是匿名答得出來的唯一來源）；未登入 → 導向 `/login?redirect=<原路徑>`，`?redirect=` 只收站內路徑；`/setup` 與 `/settings/*` 在精靈完成後只放行 `admin`。頁首顯示角色、導覽（健康 / 設定）與登出，`admin` 才看得到設定入口——前端隱藏不是安全機制，後端同時回 403。健康頁是唯讀診斷，一般使用者也進得去。
 - 資料：TanStack Query 管 API 快取；SSE 事件到達時使 job 相關 query 失效。
-- 元件：shadcn/ui 為基礎；媒體卡片、狀態徽章、時間線、Plan 表格（逐列可改季集與動作）、檔案樹是專案自有元件。
+- 元件：shadcn/ui 為基礎；媒體卡片、狀態徽章、時間線、Plan 表格（逐列可改季集與動作）、檔案樹是專案自有元件。**M1 的 Plan 畫在 `/jobs` 的就地展開區**（票 11），不是 `/jobs/:hash`：票 09 拍板不另建那一頁，而 `/jobs/:hash` 仍然保留給 T1.7 的完整 Job 詳情。M1 的那一塊是唯讀的——逐列可改要等 M2 的 Review Queue。
 - 文案：react-i18next，`zh-Hant` 與 `en` 兩個語言檔並列，預設跟隨瀏覽器；所有字串走 key，不硬編。
 - 主題：深色為預設（媒體應用慣例），亮色跟隨系統。
 - 版面：桌機為主，但每一頁都要有真正可用的窄版（審核、佇列、送單在手機上要做得完）。
@@ -631,7 +633,7 @@ WebUI\AuthSubnetWhitelist=172.28.0.2/32
 | T1.6 | `planner_runner` + `importer` + `jellyfin_resolver`：pre-plan、planning、Plan 持久化、自動 / review 判定、硬鏈接、ledger、Jellyfin 通知與反查、MergeVersions 任務觸發 | 三種類型各一部不經人工入庫並在 Jellyfin 正確顯示 |
 | T1.7 | UI：Media 詳情（搜尋 → 選 torrent → 選 Route → 送單；檔案與版本清單）、Job 詳情時間線、媒體庫頁（Route 分頁、卡片、狀態、深連結） | brief §17 M1 驗收 |
 | T1.8 | e2e：compose 環境下的 M1 流程自動化（§10） | nightly 綠燈 |
-| T1.9 | **M0 帶過來的技術債**（票 11 收尾時逐條過完、確認要在 M1 做的）：`openapi-typescript` 從 OpenAPI 產前端型別並在 CI 檢查是否過期（§6；同時解掉「同一份形狀寫了四層」的第四層）、結構化日誌每行帶 job id（brief §16.2，M1 才有 Job）、Route 設定頁支援「同一個媒體庫多條 Route」與明確的刪除動作（brief §4.3；M0 的精靈第 7 步是以媒體庫名建索引且重跑會刪掉沒勾的 Route）、~~qBittorrent 的 403 要分得出「帳密不對」與「IP 被封」~~（**票 10 做完**：`IpBannedError`，§8.1、brief §20.2） | 前端沒有手寫的 API 型別，型別檔過期時 CI 紅燈；Job 的每一行 log 都查得到 job id；一個媒體庫建得出第二條 Route，且沒有東西被隱式刪除 |
+| T1.9 | **M0 帶過來的技術債**（票 11 收尾時逐條過完，2026-09-11）：~~`openapi-typescript` 從 OpenAPI 產前端型別並在 CI 檢查是否過期~~（**票 02 做完**：`pnpm gen:api` + CI 的 `git diff --exit-code -- src/api/schema.d.ts`）、~~結構化日誌每行帶 job id~~（**票 09 做完**：`berth/logs.py` 的 `ContextVar`）、Route 設定頁支援「同一個媒體庫多條 Route」與明確的刪除動作（brief §4.3；**留在票 14**——票 09 之後 Job 引用了 `route_id`，所以精靈第 7 步的隱式刪除必須先改成軟處理）、~~qBittorrent 的 403 要分得出「帳密不對」與「IP 被封」~~（**票 10 做完**：`IpBannedError`，§8.1、brief §20.2） | 前端沒有手寫的 API 型別，型別檔過期時 CI 紅燈；Job 的每一行 log 都查得到 job id；一個媒體庫建得出第二條 Route，且沒有東西被隱式刪除 |
 
 ### 11.3 M2 修正與對帳
 

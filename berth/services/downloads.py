@@ -52,6 +52,7 @@ from berth.models import (
 from berth.models.types import utcnow
 from berth.services.clients import ServiceClientFactory
 from berth.services.events import EventHub, JobSignal
+from berth.services.hints import JobHints
 from berth.services.jobs import job_lock, record_event, transition
 from berth.services.settings import read_settings, write_settings
 
@@ -155,6 +156,7 @@ async def poll_downloads(
     session: AsyncSession,
     client: QbittorrentClient,
     hub: EventHub,
+    hints: JobHints,
     *,
     now: datetime | None = None,
 ) -> PollOutcome:
@@ -188,6 +190,12 @@ async def poll_downloads(
     for signal in signals:
         hub.publish(signal)
 
+    # 這一輪動了東西就叫醒 `planner_runner`（plan §3.2）。**不挑哪一種轉換**：它自己那兩句
+    # 查詢才決定要處理誰，而多醒一次的代價是兩次帶索引的 `SELECT`——少醒一次的代價是
+    # 使用者對著「下載完成」等最多一分鐘。
+    if moved:
+        hints.nudge()
+
     return PollOutcome(active=await _has_active(session), moved=moved, unknown=len(unknown))
 
 
@@ -207,16 +215,17 @@ class Downloader:
     位址被改掉時同理（使用者在精靈裡換了一台 qBittorrent）。
     """
 
-    def __init__(self, clients: ServiceClientFactory, hub: EventHub) -> None:
+    def __init__(self, clients: ServiceClientFactory, hub: EventHub, hints: JobHints) -> None:
         self._clients = clients
         self._hub = hub
+        self._hints = hints
         self._client: QbittorrentClient | None = None
         self._base_url = ""
 
     async def poll(self, session: AsyncSession, *, now: datetime | None = None) -> PollOutcome:
         client = await self._connect(session)
         try:
-            return await poll_downloads(session, client, self._hub, now=now)
+            return await poll_downloads(session, client, self._hub, self._hints, now=now)
         except Exception:
             # 這一輪的失敗可能是 session 過期（403）或連線斷了。下一輪重新開始，
             # 而重新開始的第一件事就是拿一份全量。

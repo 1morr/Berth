@@ -3,8 +3,9 @@
 輸入是**整包**檔案而不是一個路徑，因為三條規則裡有兩條要看鄰居：`sample` 比的是同目錄
 最大的影片，`disc` 看的是整包有沒有 `BDMV/` 結構。逐檔的簽名做不到這兩件事。
 
-第一階段沒有 mediainfo，所以「檔名像正片但時長 90 秒 → 降為 extra」那條（brief §6.2）
-不在這裡；分類器留著可以被修正的形狀（回傳新的 `FileEntry`，不改輸入）。
+「檔名像正片但時長 90 秒 → 降為 extra」那條（brief §6.2）在這裡，但它只在
+`FileEntry.duration_s` 有值時成立——量到的人是 `services/plan.py`（票 11），
+這一層仍然沒有 IO。
 """
 
 from __future__ import annotations
@@ -72,6 +73,12 @@ _SP_NUMBERED = re.compile(r"(?<![A-Za-z0-9])SP\s*[\[\]._-]*\s*[0-9]{1,2}(?![0-9]
 
 _SAMPLE = re.compile(r"(?<![A-Za-z0-9])sample(?![A-Za-z0-9])", re.IGNORECASE)
 
+#: 時長短於這個秒數的「正片」是 extra（plan §4.1、brief §6.2）。五分鐘是刻意寬的：
+#: 真的有五分鐘的短篇動畫（`Aggretsuko`、每集三分鐘的四格改編），而它們的**每一集**都
+#: 短——那種作品的 TMDB 集數對得起來，所以下一層的批次一致性會把它救回來（票 11 的取捨：
+#: 這條規則只該抓「一包正片裡混進來的一個 90 秒預告」）。
+SHORT_FEATURE = 300
+
 #: sample 的大小門檻：同目錄最大影片的一成（brief §6.2、plan §4.1）。
 SAMPLE_RATIO = 0.1
 
@@ -114,9 +121,18 @@ def _kind_of(entry: FileEntry, reference_video: int) -> FileKind:
         return kind
     if _is_sample(entry, reference_video):
         return FileKind.SAMPLE
-    if _is_extra(entry):
+    if _is_extra(entry) or _is_short(entry):
         return FileKind.EXTRA
     return FileKind.VIDEO
+
+
+def _is_short(entry: FileEntry) -> bool:
+    """mediainfo 說它只有幾分鐘（brief §6.2）。**單向**：長度只降級，不會把 extras
+    資料夾裡的一小時特典拉回正片——那個資料夾是發佈者自己說的話，比時長明確。
+
+    `None` 是「還沒量」（pre-plan 那一輪檔案還在下載），`0` 是「量不出來」，兩者都不算。
+    """
+    return entry.duration_s is not None and 0 < entry.duration_s < SHORT_FEATURE
 
 
 def _is_sample(entry: FileEntry, reference_video: int) -> bool:

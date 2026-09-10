@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 
 import type { JobEvent } from '../api/jobs'
 import { Timestamp } from '../components/Timestamp'
+import type { ReviewReason } from '../api/plans'
 import { formatSize } from '../media/searchResult'
 import { formatPercent } from './jobState'
 
@@ -55,6 +56,9 @@ const EVENT_TYPES = [
   'stalled',
   'completed',
   'issue_detected',
+  'preplan',
+  'plan_generated',
+  'review_required',
 ] as const
 
 type KnownEvent = (typeof EVENT_TYPES)[number]
@@ -127,6 +131,43 @@ const FACTS: Record<KnownEvent, (facing: Facing) => ReactNode> = {
       </p>
     )
   },
+  // 計劃那三筆共用同一組計數：它們說的是同一件事（這一份計劃長什麼樣），差別在
+  // 它是預估、是結論、還是停下來等人。逐檔的決定在展開區的計劃那一塊，不在時間線上。
+  preplan: ({ t, payload }) => <Row>{planned(t, payload)}</Row>,
+  plan_generated: ({ t, payload }) => <Row>{planned(t, payload)}</Row>,
+  // **理由翻譯**（封閉集合 `domain.ReviewReason`），而且是**短的那一種**：時間線說的是
+  // 「當時為什麼停下來」，該怎麼辦那一句在計劃那一塊。同一句話說兩次的話，重跑過一次
+  // 之後畫面上會有兩個互相矛盾的理由。
+  review_required: ({ t, payload }) => {
+    const reason = REVIEW_REASONS.find((known) => known === payload.reason)
+    return (
+      <Row>{join([planned(t, payload), reason ? t(`jobs.timeline.review.${reason}`) : ''])}</Row>
+    )
+  },
+}
+
+/** `domain.ReviewReason` 的三種。認不得的不畫——它可能是後端加的，而前端還沒有那句話。 */
+const REVIEW_REASONS: readonly ReviewReason[] = [
+  'low_confidence',
+  'medium_not_allowed',
+  'nothing_to_import',
+]
+
+/**
+ * 計劃那三筆共用的一行：幾個檔案要入庫，逐信心幾個。
+ *
+ * 用的是**計劃那一塊的那兩把鍵**（`jobs.plan.*`）：時間線上那一行與展開區的抬頭說的是
+ * 同一件事，兩份字面一樣的翻譯遲早會有一份被改掉。
+ */
+function planned(t: Translate, payload: JobEvent['payload']): string {
+  return join([
+    t('jobs.plan.planned', { count: number(payload.files) }),
+    t('jobs.plan.levels', {
+      high: number(payload.high),
+      medium: number(payload.medium),
+      low: number(payload.low),
+    }),
+  ])
 }
 
 function Facts({ event }: { event: JobEvent }) {

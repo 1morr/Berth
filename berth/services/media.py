@@ -53,6 +53,11 @@ from berth.services.tracking import is_tracked
 #: Media 快照的壽命（plan §8.3）。探索牆另有一小時的規則，不走這裡。
 SNAPSHOT_TTL = timedelta(hours=24)
 
+#: planning 之前收緊成 6 小時（plan §8.3、票 11）。**不是「每次都重抓」**：一部正在播的
+#: 作品每週多一集，而一份六小時前的季集表算得出同一份 Plan；每次都抓只會讓每一筆完成的
+#: 下載都排隊等 TMDB。也**不是** 24 小時——新播的那一集正是使用者現在在下載的那一集。
+PLANNING_TTL = timedelta(hours=6)
+
 
 @dataclass(frozen=True, slots=True)
 class RouteChoice:
@@ -123,6 +128,27 @@ async def read_snapshot(
     if parsed is None:
         return None
     row = await session.get(Media, build_media_id(*parsed))
+    if row is None or row.tmdb_snapshot_json is None:
+        return None
+    return MediaSnapshot.model_validate(row.tmdb_snapshot_json)
+
+
+async def snapshot_for_planning(
+    session: AsyncSession, factory: ServiceClientFactory, media_id: str
+) -> MediaSnapshot | None:
+    """planning 要的那一份：超過 6 小時就先刷新（plan §8.3、票 11）。
+
+    **失敗不擋**（與送單前那一步同一個規矩，票 09）：TMDB 連不上時存下來的季集仍然是真的
+    季集，而 Plan 少一個訊號也還是算得出來。`_load` 本來就把服務錯誤變成回傳值而不是例外，
+    所以這裡不必接——它回來之後那一列上有什麼，這一支就回什麼。
+    """
+    parsed = parse_media_id(media_id)
+    if parsed is None:
+        return None
+    row = await session.get(Media, build_media_id(*parsed))
+    if row is None or not _fresh(row, PLANNING_TTL):
+        await _load(session, factory, media_id, force=True)
+        row = await session.get(Media, build_media_id(*parsed))
     if row is None or row.tmdb_snapshot_json is None:
         return None
     return MediaSnapshot.model_validate(row.tmdb_snapshot_json)
@@ -264,11 +290,13 @@ async def _poster(session: AsyncSession, client: TmdbClient, path: str) -> str:
     return f"{base}{POSTER_SIZE}{path}" if base else ""
 
 
-def _fresh(row: Media) -> bool:
+def _fresh(row: Media, ttl: timedelta = SNAPSHOT_TTL) -> bool:
+    """這份快照還夠新嗎。`ttl` 是參數而不是常數：同一列在兩個問題下有兩個答案——
+    畫面上 24 小時的舊季集只是舊，planning 拿它算出來的卻是磁碟上的檔名（plan §8.3）。"""
     return (
         row.tmdb_snapshot_json is not None
         and row.tmdb_fetched_at is not None
-        and datetime.now(UTC) - row.tmdb_fetched_at < SNAPSHOT_TTL
+        and datetime.now(UTC) - row.tmdb_fetched_at < ttl
     )
 
 

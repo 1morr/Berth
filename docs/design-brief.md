@@ -844,6 +844,14 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 - Split-cour 被 Jellyfin 併成一季的抱怨很多（[r/jellyfin](https://www.reddit.com/r/jellyfin/comments/1r5sk02/any_way_to_have_anime_seasons_shown_in_parts_like)）；本系統不對抗 provider，只做正確對應。
 - Sonarr FAQ 也承認 Bleach TYBW 這類新 arc 只有在編號與 TVDB 對上時才會自動匹配；絕對編號缺失時需等 TVDB 更新。
 
+**mediainfo（pymediainfo 7.0.1，2026-09-11 對真檔案實測）**
+
+- `pip install pymediainfo` 的 wheel **內含 libmediainfo**，不需要系統套件（[README](https://github.com/sbraz/pymediainfo)）；在這台 Windows 上 `MediaInfo.can_parse()` 直接回 `True`。
+- `MediaInfo.parse(path)` 回一份 track 清單，`track.to_data()` 是那一條的所有欄位。**同一個 `duration` 在不同 track 上型別不同**：General 上是整數毫秒（`2023`），Video 上是字串（`"2000.000000"`）——照抄任一邊的型別去讀另一邊都會拿到錯的值。
+- 布林是字串 `"Yes"` / `"No"`（`forced`、`default`）；語言是兩碼（`ja` / `en` / `zh`），`other_language` 另有一組別名。繁簡分不出來，所以字幕軌的繁簡只寫在 `title` 裡（與 §20.1 的 Jellyfin 同一個限制）。
+- 讀得完但不是媒體的檔案（例如一個 `.txt`）**不會丟例外**，回的是一份只有 General 的清單——所以「有沒有影像軌」才是「這是不是一個影片」的判準，而不是例外。
+- 證據：`tests/fixtures/mediainfo/two-second-episode.mkv`（ffmpeg 造的 17 KB Matroska：10 bit AVC + 兩條標了語言的音軌 + 兩條標了 forced / default 的字幕軌）與 `tests/unit/test_mediainfo.py`。
+
 ### 20.5 名稱衝突檢查
 
 以 tavily basic 搜尋 GitHub / npm / PyPI / Docker Hub / App Store，非窮盡商標檢索。

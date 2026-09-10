@@ -115,6 +115,13 @@ class EventType(StrEnum):
     #: **`issues` 表要到 M2 才有**（plan §11.3），所以 M1 的載體就是這一筆事件；
     #: `type` 是 `IssueType`，不是自由文字。
     ISSUE_DETECTED = "issue_detected"
+    #: 檔案清單一到手就先算一份預估的 Plan（brief §5.1）。**不動檔案**，也不改 Job 的狀態
+    #: ——它回答的是「還來得及取消嗎」。
+    PREPLAN = "preplan"
+    #: 下載完成之後算出來的正式 Plan（engine、逐信心的檔案數）。
+    PLAN_GENERATED = "plan_generated"
+    #: 這一份 Plan 要人看過才動（`reason` 是 `ReviewReason`）。
+    REVIEW_REQUIRED = "review_required"
 
 
 class IssueType(StrEnum):
@@ -312,3 +319,50 @@ class DetectionReason(StrEnum):
     PROTOCOL_MISMATCH = "protocol_mismatch"
     #: 使用者填的既有服務連線資訊測試通過。
     CONNECTED = "connected"
+
+
+class PlanStatus(StrEnum):
+    """一份 Import Plan 現在的位置（plan §2.3 的 `plans.status`）。
+
+    **它與 Job 狀態回答的是不同的問題**：Job 說的是那個 torrent 走到哪一站，Plan 說的是
+    「這一份決定被採信到什麼程度」。一筆 `review` 的 Job 一定有一份 `pending_review` 的
+    Plan，但一份 `preplan` 的 Plan 底下的 Job 可能還在下載。
+    """
+
+    #: `metadata_ready` 時算的預估（brief §5.1）。沒有 mediainfo，也還沒有人採信它。
+    PREPLAN = "preplan"
+    #: 全部 high / medium 而且 Route 允許：不必問人（brief §6.5）。
+    AUTO = "auto"
+    PENDING_REVIEW = "pending_review"
+    #: 使用者在 Review Queue 按了核准（M2）。
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    #: importer 已經逐檔套用完（票 12）。
+    APPLIED = "applied"
+    FAILED = "failed"
+
+
+class PlanEngine(StrEnum):
+    """這一份 Plan 是誰算的（plan §2.3 的 `plans.engine`、brief §5.2）。"""
+
+    RULES = "rules"
+    #: AI fallback（M4；介面在 plan §4.5，M1 的實作永遠沒有意見）。
+    AI = "ai"
+    #: 使用者在 Review Queue 逐列改過（M2）。
+    USER = "user"
+
+
+class ReviewReason(StrEnum):
+    """為什麼這一份 Plan 停下來等人（brief §5.2 的 `review_required(reason)`）。
+
+    封閉集合而不是一句話：畫面要照理由說出**下一步**（PRODUCT 原則 4），而三種理由的
+    下一步不一樣——低信心要人指定季集，被 Route 擋下的 medium 只要人點頭，
+    而「這一包沒有東西可以入庫」多半表示送錯了 torrent。
+    """
+
+    #: 有檔案落在 low：季集推不出來、有衝突，或數量與 TMDB 對不上（brief §6.5）。
+    LOW_CONFIDENCE = "low_confidence"
+    #: 這條 Route 關掉了 medium 自動入庫（`routes.medium_auto_import`，brief §6.5）。
+    MEDIUM_NOT_ALLOWED = "medium_not_allowed"
+    #: 一個會被寫進媒體庫的檔案都沒有（整包 OST、整包光碟結構、整包對不到）。
+    NOTHING_TO_IMPORT = "nothing_to_import"

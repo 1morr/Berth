@@ -18,6 +18,7 @@ from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
+from urllib.parse import quote
 
 import uvicorn
 from fastapi import FastAPI, Request, Response
@@ -39,7 +40,13 @@ from berth.adapters.jellyfin import (
 from berth.adapters.jellyfin.fake import FakeJellyfinClient
 from berth.adapters.prowlarr import ProwlarrClient, ProwlarrIndexer
 from berth.adapters.prowlarr.fake import FakeProwlarrClient
-from berth.adapters.qbittorrent import QbittorrentClient, QbittorrentVersion
+from berth.adapters.qbittorrent import (
+    QbittorrentClient,
+    QbittorrentVersion,
+    TorrentAdd,
+    TorrentFile,
+    TorrentStatus,
+)
 from berth.adapters.qbittorrent.client import HttpQbittorrentClient
 from berth.adapters.qbittorrent.fake import FakeQbittorrentClient
 from berth.adapters.tmdb import TmdbClient
@@ -180,9 +187,9 @@ class Scenario:
     #: `download_path` 與 `hardlink` 兩條一定紅——而紅的 Route 會擋下送單（brief §4.4），
     #: 於是這一票要驗的東西一步都跑不到。那兩條纜繩本來就有自己的驗收（票 10 的健康頁）。
     assume_routes_healthy: bool = False
-    #: 這個情境要送的那一份 torrent 的發佈名。demo server 自己生一份 `.torrent`
-    #: 掛在 `/demo/torrent`，索引站的那一筆就指向它。
-    release: str = ""
+    #: 這個情境要送的那幾份 torrent 的發佈名。demo server 自己生 `.torrent` 掛在
+    #: `/demo/torrent?release=<發佈名>`（沒帶查詢字串就是第一份），索引站的那幾筆指向它。
+    demo_releases: tuple[str, ...] = ()
 
     def probes(self) -> SetupProbes:
         return SetupProbes(
@@ -429,9 +436,16 @@ POLL_FILES: tuple[tuple[str, int], ...] = (
     (f"Subs/{POLL_RELEASE}.E01.zh-Hant.srt", 120),
 )
 
+#: `發佈名 → 檔案清單`。`demo_torrent()` 與 `PlanningQbittorrent` 讀同一張表——那份
+#: `.torrent` 裡寫的檔案與「下載完成之後磁碟上有什麼」必須是同一件事。
+DEMO_PACKS: dict[str, tuple[tuple[str, int], ...]] = {}
+
 #: 容器裡的三層路徑（brief §4.1）。真的 qBittorrent 只用得了它自己看得到的路徑。
 POLL_COMPLETE_ROOT = "/downloads/complete"
 POLL_INCOMPLETE_ROOT = "/downloads/incomplete"
+
+
+DEMO_PACKS[POLL_RELEASE] = POLL_FILES
 
 
 def poll() -> Scenario:
@@ -448,7 +462,7 @@ def poll() -> Scenario:
     scenario.qbittorrent_url = os.environ.get("BERTH_QBITTORRENT_URL", "http://127.0.0.1:18081")
     scenario.container_paths = True
     scenario.assume_routes_healthy = True
-    scenario.release = POLL_RELEASE
+    scenario.demo_releases = (POLL_RELEASE,)
     scenario.indexer_results = (
         IndexerResult(
             title=POLL_RELEASE,
@@ -460,6 +474,129 @@ def poll() -> Scenario:
             download_url="http://127.0.0.1:8484/demo/torrent",
             info_hash="",
         ),
+    )
+    return scenario
+
+
+#: `plan` 情境送的那一包：三集正片 + 一個 NCOP + 一條外掛字幕 + 一個沒人要的 readme。
+#: 形狀取自真實的字幕組批次發佈（`tests/fixtures/parser/anime/`），因為 Plan 的每一列
+#: 說的就是「這個檔名被讀成什麼」。
+PLAN_RELEASE = "[Berth-Demo] SPY×FAMILY S01 [01-03][1080p][CHT]"
+PLAN_FILES: tuple[tuple[str, int], ...] = (
+    (f"{PLAN_RELEASE}/[Berth-Demo] SPY×FAMILY S01E01 [1080p][CHT].mkv", 40000),
+    (f"{PLAN_RELEASE}/[Berth-Demo] SPY×FAMILY S01E02 [1080p][CHT].mkv", 40000),
+    (f"{PLAN_RELEASE}/[Berth-Demo] SPY×FAMILY S01E03 [1080p][CHT].mkv", 40000),
+    (f"{PLAN_RELEASE}/[Berth-Demo] SPY×FAMILY NCOP [1080p].mkv", 8000),
+    (f"{PLAN_RELEASE}/Subs/[Berth-Demo] SPY×FAMILY S01E01 [1080p].cht.ass", 400),
+    (f"{PLAN_RELEASE}/readme.txt", 120),
+)
+
+#: 停在 review 的那一包：對不到任何一集，所以整份 Plan 等人（brief §6.5 的 low）。
+STRAY_RELEASE = "SPY×FAMILY OST Collection [FLAC]"
+STRAY_FILES: tuple[tuple[str, int], ...] = (
+    (f"{STRAY_RELEASE}/Disc 1/theme.mkv", 20000),
+    (f"{STRAY_RELEASE}/cover.jpg", 300),
+)
+
+
+DEMO_PACKS.update({PLAN_RELEASE: PLAN_FILES, STRAY_RELEASE: STRAY_FILES})
+
+
+class PlanningQbittorrent(FakeQbittorrentClient):
+    """收下的 torrent **當場就是完成的**（`plan` 情境，票 11）。
+
+    這一票要驗的是完成之後那一段，而替身不會下載、不會做種。所以它做兩件真的事：把那幾個
+    檔案照 category 的 save path 寫出來（完成判定的第四條要 `stat` 得到它們，brief §5.1），
+    再把自己報成一筆 100% 的 torrent。poller 因此在同一輪裡走完
+    `submitted → metadata_ready → downloading → completed`（plan §3.1 的「一輪可以走好幾步」），
+    `planner_runner` 接著算出一份真的 Plan——解析器、命名、mediainfo 全是產品自己的程式碼。
+    """
+
+    def __init__(
+        self,
+        packs: dict[str, tuple[tuple[str, int], ...]],
+        *,
+        version: QbittorrentVersion | None = None,
+    ) -> None:
+        super().__init__(version=version)
+        #: **以那一份 torrent 的位元組認包**，不猜檔名：送單交給 `torrents/add` 的就是
+        #: `adapters/torrent.py` 剛剛抓下來的那一份原文（票 09），而檔名是 HTTP 那一層
+        #: 的產物，不同來源寫法不同。
+        self._packs = {
+            demo_torrent(release).raw: (release, files) for release, files in packs.items()
+        }
+
+    async def add_torrent(self, request: TorrentAdd) -> None:
+        await super().add_torrent(request)
+        found = self._packs.get(request.content)
+        if found is None:
+            return
+        release, files = found
+        info_hash = demo_torrent(release).info_hash
+        save_path = next(
+            (row.save_path for row in await self.categories() if row.name == request.category), ""
+        )
+        _write_pack(Path(save_path), files)
+        now = int(datetime.now(UTC).timestamp())
+        self.torrents = (
+            *self.torrents,
+            TorrentStatus(
+                hash=info_hash,
+                name=release,
+                state="stalledUP",
+                category=request.category,
+                tags=("berth",),
+                progress=1.0,
+                completion_on=now,
+                last_activity=now,
+                added_on=now,
+                save_path=save_path,
+                content_path=f"{save_path}/{release}",
+                total_size=sum(size for _, size in files),
+            ),
+        )
+        self.files_by_hash[info_hash] = tuple(
+            TorrentFile(index=index, name=path, size=size, priority=1, progress=1.0)
+            for index, (path, size) in enumerate(files)
+        )
+
+
+def _write_pack(save_path: Path, files: tuple[tuple[str, int], ...]) -> None:
+    """把那幾個檔案真的寫出來。內容是確定的位元組（與 `make_torrent` 算 pieces 的同一份）。
+
+    **真的寫**而不是假裝：完成判定的第四條會逐個 `stat`（brief §5.1），而 planning 會逐個
+    問 mediainfo——兩件事都要那條路徑上真的有東西。這幾個檔案不是影片，所以 mediainfo 會
+    誠實地回「沒有答案」，Plan 只少一個訊號（plan §8.7）。
+    """
+    for path, size in files:
+        target = save_path / path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(bytes((i % 251) for i in range(size)))
+
+
+def plan_scenario() -> Scenario:
+    """下載完成 → Import Plan（票 11）：qBittorrent 是替身，其餘全是真的。
+
+    索引站給兩筆：一包對得上的批次（自動入庫），與一包對不到任何一集的 OST（停在待審核）。
+    兩條路徑都要看得到——M1 沒有審核佇列，所以「為什麼停在這裡」只有 Plan 那一塊說得出口。
+    """
+    scenario = discover()
+    scenario.qbittorrent = PlanningQbittorrent(
+        {PLAN_RELEASE: PLAN_FILES, STRAY_RELEASE: STRAY_FILES},
+        version=QbittorrentVersion(app="v5.2.3", webapi="2.15.1"),
+    )
+    scenario.demo_releases = (PLAN_RELEASE, STRAY_RELEASE)
+    scenario.indexer_results = tuple(
+        IndexerResult(
+            title=release,
+            indexer="berth-demo",
+            size=sum(size for _, size in files),
+            seeders=1,
+            # 送單走的是真的那條路徑：抓下來、算 info hash、把位元組交給 qBittorrent（票 09）。
+            download_url=f"http://127.0.0.1:8484/demo/torrent?release={quote(release)}",
+            info_hash="",
+        )
+        for release, files in ((PLAN_RELEASE, PLAN_FILES), (STRAY_RELEASE, STRAY_FILES))
     )
     return scenario
 
@@ -478,6 +615,7 @@ SCENARIOS = {
     "bundled": bundled,
     "discover": discover,
     "search": search,
+    "plan": plan_scenario,
     "poll": poll,
     "submit": submit,
     "submit-failing": submit_failing,
@@ -582,25 +720,31 @@ def main(argv: list[str] | None = None) -> int:
 
     app.dependency_overrides[get_setup_probes] = override_probes
     app.dependency_overrides[get_client_factory] = lambda: factory
-    if scenario.release:
-        _mount_demo_torrent(app, scenario.release)
+    if scenario.demo_releases:
+        _mount_demo_torrent(app, scenario.demo_releases)
 
     print(f"scenario={args.scenario} config_root={config_root}", file=sys.stderr)
     uvicorn.run(app, host="127.0.0.1", port=args.port, log_level="warning")
     return 0
 
 
-def _mount_demo_torrent(app: FastAPI, release: str) -> None:
-    """把這個情境要送的那一份 `.torrent` 掛出來（`poll` 用）。
+def _mount_demo_torrent(app: FastAPI, releases: tuple[str, ...]) -> None:
+    """把這個情境要送的那幾份 `.torrent` 掛出來（`poll` 與 `plan` 用）。
 
     送單走的是真的那條路徑（`adapters/torrent.py` 抓下來、算 hash、交位元組給
     qBittorrent），所以它需要一條真的 URL。**磁力連結不行**：那條路徑要 qBittorrent
     自己去 DHT 要 metadata，而演練環境裡沒有任何一個 peer。
-    """
-    payload = demo_torrent(release)
 
-    async def endpoint(_: Request) -> Response:
-        return Response(payload.raw, media_type="application/x-bittorrent")
+    `?release=` 挑哪一份；沒帶就是第一份（`poll` 的那一條網址沒有查詢字串）。
+    """
+    payloads = {release: demo_torrent(release).raw for release in releases}
+
+    async def endpoint(request: Request) -> Response:
+        wanted = request.query_params.get("release", releases[0])
+        payload = payloads.get(wanted)
+        if payload is None:
+            return Response(status_code=404)
+        return Response(payload, media_type="application/x-bittorrent")
 
     # **插在最前面**：`create_app` 已經把 SPA 掛在 `/` 上，而那個 mount 會接住所有
     # 沒被更早的路由比對到的路徑——照順序 `app.get(...)` 加進去的話，這一支永遠拿到
@@ -609,9 +753,16 @@ def _mount_demo_torrent(app: FastAPI, release: str) -> None:
 
 
 def demo_torrent(release: str) -> Torrent:
-    """`poll` 情境那一份 torrent。pieces 是對確定的位元組算的真 SHA-1，所以
-    只要把同一份位元組放進 save path，qBittorrent 校驗完就是完成。"""
-    return make_torrent(release, [(path, size) for path, size in POLL_FILES])
+    """一份情境用的 torrent。pieces 是對確定的位元組算的真 SHA-1，所以只要把同一份位元組
+    放進 save path，qBittorrent 校驗完就是完成。
+
+    檔案清單照發佈名挑：`plan` 的兩包各有自己的結構，而 `job_files.rel_path` 存的就是
+    這一份裡寫的那些路徑。
+    """
+    files = DEMO_PACKS[release]
+    # torrent 裡的路徑相對**內容根**，而 `PLAN_FILES` 寫的是 qBittorrent 報回來的樣子
+    # （含根目錄那一層，brief §20.7）。多帶一層的話這一份 torrent 自己就說了謊。
+    return make_torrent(release, [(path.removeprefix(f"{release}/"), size) for path, size in files])
 
 
 async def _seed(config: Config, scenario: Scenario, factory: FakeClientFactory) -> None:

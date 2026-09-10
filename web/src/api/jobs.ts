@@ -30,6 +30,7 @@ export type JobRefusal =
   | 'source_unavailable'
   | 'job_missing'
   | 'not_retryable'
+  | 'not_replannable'
 
 /** 拒絕的完整形狀：一個封閉集合的理由，加上服務回的原文。 */
 export interface JobRefusalDetail {
@@ -46,6 +47,7 @@ const REASONS: readonly JobRefusal[] = [
   'source_unavailable',
   'job_missing',
   'not_retryable',
+  'not_replannable',
 ]
 
 /**

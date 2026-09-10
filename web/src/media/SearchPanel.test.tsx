@@ -98,6 +98,8 @@ function job(): Job {
     completed_at: null,
     imported_at: null,
     retryable: false,
+    replannable: false,
+    plan_id: null,
   }
 }
 

@@ -80,7 +80,7 @@ class TestJsonText:
 
 
 def test_metadata_holds_exactly_the_tables_built_so_far() -> None:
-    """表是**按里程碑增量加**的（progress.md 偏差與決定）：M0 五張，票 03 加兩張，票 09 加兩張。
+    """表是**按里程碑增量加**的（progress.md 偏差與決定）：M0 五張，票 03、09、11 各加兩張。
 
     這條斷言是刻意寫死的——多一張表就是多一個 migration，不該由一次 import 順手帶進來。
     """
@@ -94,6 +94,8 @@ def test_metadata_holds_exactly_the_tables_built_so_far() -> None:
         "tmdb_cache",
         "jobs",
         "job_files",
+        "plans",
+        "plan_items",
     }
 
 

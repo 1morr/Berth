@@ -24,7 +24,7 @@ import uuid
 from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 #: 探測檔的檔名前綴。點開頭，Jellyfin 不會把它當成媒體。
 PROBE_PREFIX = ".berth-probe-"
@@ -139,3 +139,13 @@ def _guard(path: Path, roots: Sequence[Path]) -> None:
 def _normalised(path: Path) -> Path:
     """解掉 `.` 與 `..`，並在 Windows 上統一大小寫。不碰檔案系統。"""
     return Path(os.path.normcase(os.path.normpath(path)))
+
+
+def under(root: str, rel_path: str) -> Path:
+    """`<save path>/<相對路徑>`，兩邊都是**容器裡的 POSIX 路徑**（brief §20.7）。
+
+    在 Windows 上用 `Path` 直接接會把分隔符換成反斜線，接出來的字串就不是那一條了；
+    先用 `PurePosixPath` 接成一整條再交給 `Path`，兩種平台上得到的都是同一個位置。
+    qBittorrent 報的 `save_path` 與 `torrents/files[].name` 都是這種路徑。
+    """
+    return Path(str(PurePosixPath(root) / rel_path))

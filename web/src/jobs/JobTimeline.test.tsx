@@ -87,9 +87,35 @@ describe('Job 時間線', () => {
     expect(line.queryByText(/jobs\.timeline\.issue/)).not.toBeInTheDocument()
   })
 
-  it('認不得的事件型別原樣顯示——它仍然是一件真的發生過的事', () => {
-    const line = render([event({ type: 'plan_generated' })])
+  it('計劃那一筆說得出幾個檔案要入庫、逐信心幾個', () => {
+    const line = render([
+      event({ type: 'plan_generated', payload: { engine: 'rules', files: 5, high: 5 } }),
+    ])
 
-    expect(line.getByText('plan_generated')).toBeInTheDocument()
+    expect(line.getByText('計劃')).toBeInTheDocument()
+    expect(line.getByText(/5 個檔案要入庫/)).toBeInTheDocument()
+    expect(line.getByText(/high 5/)).toBeInTheDocument()
+  })
+
+  it('停下來那一筆說得出當時為什麼停', () => {
+    const line = render([
+      event({ type: 'review_required', payload: { reason: 'low_confidence', files: 0, low: 1 } }),
+    ])
+
+    expect(line.getByText('待審核')).toBeInTheDocument()
+    expect(line.getByText(/有檔案的季集推不出來/)).toBeInTheDocument()
+  })
+
+  it('認不得的停下來理由不畫，也不印出一條 i18n key', () => {
+    const line = render([event({ type: 'review_required', payload: { reason: 'from_m2' } })])
+
+    expect(line.queryByText(/jobs\.timeline\.review/)).not.toBeInTheDocument()
+  })
+
+  it('認不得的事件型別原樣顯示——它仍然是一件真的發生過的事', () => {
+    // `linked` 是票 12 的 importer 才會寫的那一種（brief §5.2）。
+    const line = render([event({ type: 'linked' })])
+
+    expect(line.getByText('linked')).toBeInTheDocument()
   })
 })

@@ -25,8 +25,8 @@ from tests.conftest import migrate
 pytestmark = pytest.mark.asyncio
 
 M0_TABLES = {"users", "sessions", "settings", "routes", "events"}
-#: 票 03 加的兩張（plan §2.2）與票 09 加的兩張（plan §2.3）。
-M1_TABLES = {"media", "tmdb_cache", "jobs", "job_files"}
+#: 票 03 加的兩張（plan §2.2）、票 09 加的兩張與票 11 加的兩張（plan §2.3）。
+M1_TABLES = {"media", "tmdb_cache", "jobs", "job_files", "plans", "plan_items"}
 EXPECTED_TABLES = M0_TABLES | M1_TABLES
 
 
@@ -128,6 +128,9 @@ async def test_indexes_from_the_plan_are_present(config: Config) -> None:
 
     assert "ix_events_job_hash_created_at" in indexes
     assert "ix_job_files_job_hash" in indexes
+    assert "ix_plan_items_plan_id" in indexes
+    # 一個 Job 一份「現在的計劃」：unique 而不只是 index（`models/plan.py`）。
+    assert "ix_plans_job_hash" in indexes
 
 
 async def test_migrating_twice_is_a_no_op(config: Config) -> None:

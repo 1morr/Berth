@@ -13,7 +13,7 @@ from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict
 
-from berth.domain.enums import CollectionType, Profile
+from berth.domain.enums import CollectionType, Profile, ReviewReason
 from berth.domain.media import MediaSnapshot
 
 
@@ -155,6 +155,10 @@ class FileEntry(BaseModel):
     kind: FileKind = FileKind.OTHER
     #: qBittorrent 的下載優先序（0 = 不下載）。分類階段用不到，跟著檔案一路帶下去。
     priority: int = 0
+    #: mediainfo 量到的秒數（票 11）。**`None` 是「還沒量」，不是 0**：pre-plan 那一輪
+    #: 檔案還在下載，一個訊號都沒有，而分類器拿它把短的正片降為 extra（brief §6.2）。
+    #: 解析器仍然沒有 IO——量的人是 `services/plan.py`，這裡收的是它量到的結果。
+    duration_s: int | None = None
 
     @property
     def name(self) -> str:
@@ -275,6 +279,30 @@ class ReleaseInfo(BaseModel):
     release_kind: ReleaseKind = ReleaseKind.SINGLE
     #: 解析時真的認出來的片段，原文照抄。
     matched_tokens: tuple[str, ...] = ()
+
+
+class PlanSummary(BaseModel):
+    """一份 Plan 的一句話（`plans.summary_json`，plan §2.3、票 11）。
+
+    存下來而不是每次數一遍：下載列表上一列 Job 只想說「12 個檔案要入庫、2 個等人看」，
+    而那句話不該讓每一列都去掃一次 `plan_items`。
+
+    住在 `domain/` 的理由與 `MediaSnapshot` 一樣（plan §2.2 的同一條偏差）：`models` 拿它
+    當一個 `*_json` 欄位的型別，`services` 算它，而 `api` 直接把它送出去——三層都要它，
+    而 `api` 依契約不 import `models`（plan §1.3）。
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    #: 會被寫進媒體庫的檔案數（import + extra + subtitle）。
+    files: int = 0
+    high: int = 0
+    medium: int = 0
+    low: int = 0
+    #: 逐個 `PlanAction` 的檔案數。鍵是 action 的值，畫面照它畫那一列的摘要。
+    actions: dict[str, int] = {}
+    #: 為什麼停下來等人。`auto` 的 Plan 沒有理由。
+    review_reason: ReviewReason | None = None
 
 
 class MappingStrategy(StrEnum):

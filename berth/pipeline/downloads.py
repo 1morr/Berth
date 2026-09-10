@@ -34,6 +34,7 @@ from berth.services.downloads import (
     record_poll_failure,
 )
 from berth.services.events import EventHub
+from berth.services.hints import JobHints
 from berth.services.setup import is_setup_complete
 from berth.services.steps import message
 
@@ -55,12 +56,13 @@ class QbitPoller:
         sessions: async_sessionmaker[AsyncSession],
         clients: ServiceClientFactory,
         hub: EventHub,
+        hints: JobHints,
         *,
         sleep: Sleeper = asyncio.sleep,
         now: Clock = lambda: datetime.now(UTC),
     ) -> None:
         self._sessions = sessions
-        self._downloader = Downloader(clients, hub)
+        self._downloader = Downloader(clients, hub, hints)
         self._sleep = sleep
         self._now = now
         self._last: datetime | None = None

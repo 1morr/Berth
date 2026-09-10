@@ -170,3 +170,35 @@ class TestPurity:
         classify(given)
 
         assert given[0].kind is FileKind.OTHER
+
+
+class TestDuration:
+    """時長 < 5 分鐘的「正片」降為 extra（plan §4.1、brief §6.2、票 11）。
+
+    第一階段的分類器只看得到檔名與大小，所以一個 90 秒的預告只要沒寫 `PV` 就會被當成正片。
+    下載完成之後 mediainfo 說得出它多長，而那句話比檔名可信。
+    """
+
+    def measured(self, name: str, size: int, duration: int | None) -> FileKind:
+        entry = FileEntry(rel_path=name, size=size, duration_s=duration)
+        return classify((entry,))[0].kind
+
+    def test_a_short_video_becomes_an_extra(self) -> None:
+        assert self.measured("[Group] Show - 01 [1080p].mkv", 90_000_000, 88) is FileKind.EXTRA
+
+    def test_a_real_episode_stays_a_video(self) -> None:
+        assert self.measured("[Group] Show - 01 [1080p].mkv", GIGABYTE, 1_421) is FileKind.VIDEO
+
+    def test_an_unmeasured_file_is_left_alone(self) -> None:
+        """**沒量到不是量到 0**：pre-plan 那一輪檔案還沒下載完，一個訊號都沒有。
+
+        分不開的話，下載中的每一個檔案都會在預估的 Plan 裡變成 extra。
+        """
+        assert self.measured("[Group] Show - 01 [1080p].mkv", GIGABYTE, None) is FileKind.VIDEO
+
+    def test_a_measurement_of_zero_is_not_a_reason_either(self) -> None:
+        assert self.measured("[Group] Show - 01 [1080p].mkv", GIGABYTE, 0) is FileKind.VIDEO
+
+    def test_it_does_not_promote_anything(self) -> None:
+        """一條**單向**的規則：長度只降級，不會把 `Extras/` 裡的一小時特典拉回正片。"""
+        assert self.measured("Extras/making-of.mkv", 900_000_000, 3_600) is FileKind.EXTRA

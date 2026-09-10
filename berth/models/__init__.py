@@ -16,6 +16,7 @@ from berth.models.media import (
     media_id,
     parse_media_id,
 )
+from berth.models.plan import Plan, PlanItem
 from berth.models.route import Route, RouteHealth
 from berth.models.setting import (
     ANIME_SLUG,
@@ -59,6 +60,8 @@ __all__ = [
     "Media",
     "MediaCard",
     "PathSettings",
+    "Plan",
+    "PlanItem",
     "PollerSettings",
     "QbittorrentSettings",
     "Route",

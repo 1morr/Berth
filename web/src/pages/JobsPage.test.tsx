@@ -1,4 +1,4 @@
-import { screen, within } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -38,6 +38,8 @@ function job(overrides: Partial<Job> = {}): Job {
     completed_at: null,
     imported_at: null,
     retryable: false,
+    replannable: false,
+    plan_id: null,
     ...overrides,
   }
 }
@@ -189,6 +191,119 @@ describe('下載列表頁', () => {
       await userEvent.click(screen.getByRole('button', { name: '重新送單' }))
 
       expect(await screen.findByRole('alert')).toHaveTextContent(/那條 Route 現在是紅的/)
+    })
+  })
+
+  describe('匯入計劃（票 11）', () => {
+    const PLANNED = job({ state: 'review', replannable: true, plan_id: 7 })
+    const PLAN = 'GET /api/plans/7'
+
+    function plan() {
+      return {
+        body: {
+          id: 7,
+          job_hash: HASH,
+          status: 'pending_review',
+          engine: 'rules',
+          engine_version: '0.1.0',
+          created_at: '2026-09-11T12:00:00Z',
+          summary: {
+            files: 0,
+            high: 0,
+            medium: 0,
+            low: 1,
+            actions: { review: 1 },
+            review_reason: 'low_confidence',
+          },
+          items: [
+            {
+              id: 1,
+              rel_path: 'Disc 1/theme.mkv',
+              action: 'review',
+              media_id: 'tv:120089',
+              season: null,
+              episode_start: null,
+              episode_end: null,
+              target_path: '',
+              confidence: 'low',
+              reasons: ['no season and episode could be worked out'],
+              audit: false,
+              error: '',
+            },
+          ],
+        },
+      }
+    }
+
+    it('展開才去問那一份計劃——與時間線同一條規則', async () => {
+      const stub = render({ [JOBS]: { body: [PLANNED] }, [PLAN]: plan() })
+      renderApp('/jobs')
+      await screen.findByText(/SPY×FAMILY - 13/)
+
+      expect(stub.mock.calls.some(([url]) => String(url).includes('/plans/'))).toBe(false)
+
+      await userEvent.click(screen.getByText(/SPY×FAMILY - 13/))
+
+      expect(await screen.findByText('Disc 1/theme.mkv')).toBeInTheDocument()
+      expect(screen.getByText('no season and episode could be worked out')).toBeInTheDocument()
+      expect(screen.getByText(/M1 還沒有審核佇列/)).toBeInTheDocument()
+    })
+
+    it('還沒算過的那一筆連問都不問——`plan_id` 是空的就是答案', async () => {
+      const stub = render()
+      renderApp('/jobs')
+      await userEvent.click(await screen.findByText(/SPY×FAMILY - 13/))
+      // 時間線問到了（空的），所以展開真的發生過——計劃那一支仍然一個請求都沒發。
+      await screen.findByText('這一筆還沒有任何事件。')
+
+      expect(stub.mock.calls.some(([url]) => String(url).includes('/plans/'))).toBe(false)
+      expect(screen.queryByText('匯入計劃')).not.toBeInTheDocument()
+    })
+
+    it('停在待審核的那一筆按得了重新規劃', async () => {
+      const stub = render({
+        [JOBS]: { body: [PLANNED] },
+        [PLAN]: plan(),
+        [`POST /api/jobs/${HASH}/replan`]: { body: { ...PLANNED, state: 'importing' } },
+      })
+      renderApp('/jobs')
+      await userEvent.click(await screen.findByText(/SPY×FAMILY - 13/))
+
+      await userEvent.click(await screen.findByRole('button', { name: '重新規劃' }))
+
+      // 按下去之後那一列自己重問一次（`['jobs']` 失效），所以清單**至少**被要了兩次。
+      // 比「剛好兩次」的話，任何一次額外的失效（視窗重新聚焦…）都會讓這條測試變成擲骰子。
+      await waitFor(() => {
+        expect(
+          stub.mock.calls.filter(([url]) => String(url) === '/api/jobs').length,
+        ).toBeGreaterThanOrEqual(2)
+      })
+      expect(stub.mock.calls.some(([url]) => String(url).endsWith('/replan'))).toBe(true)
+    })
+
+    it('重新規劃被擋下來時說的是那個理由', async () => {
+      render({
+        [JOBS]: { body: [PLANNED] },
+        [PLAN]: plan(),
+        [`POST /api/jobs/${HASH}/replan`]: {
+          status: 409,
+          body: { detail: { reason: 'not_replannable', detail: 'importing' } },
+        },
+      })
+      renderApp('/jobs')
+      await userEvent.click(await screen.findByText(/SPY×FAMILY - 13/))
+
+      await userEvent.click(await screen.findByRole('button', { name: '重新規劃' }))
+
+      expect(await screen.findByRole('alert')).toHaveTextContent(/不能重新規劃/)
+    })
+
+    it('已經在入庫的那一筆沒有那顆按鈕——規則在後端算', async () => {
+      render({ [JOBS]: { body: [job({ state: 'importing', plan_id: 7 })] }, [PLAN]: plan() })
+      renderApp('/jobs')
+      await userEvent.click(await screen.findByText(/SPY×FAMILY - 13/))
+
+      expect(screen.queryByRole('button', { name: '重新規劃' })).not.toBeInTheDocument()
     })
   })
 })

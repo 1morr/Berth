@@ -4,7 +4,7 @@
 """
 
 from berth.parser.cjk import langs_in, normalize_cjk
-from berth.parser.classify import SAMPLE_RATIO, classify
+from berth.parser.classify import SAMPLE_RATIO, SHORT_FEATURE, classify
 from berth.parser.mapping import VIRTUAL_SEASON_GAP, map_episode
 from berth.parser.planner import plan
 from berth.parser.release import merge_release, parse_release, tags_of
@@ -14,6 +14,7 @@ from berth.parser.title import MediaMatch, match_media, matches, mentions, norma
 
 __all__ = [
     "SAMPLE_RATIO",
+    "SHORT_FEATURE",
     "VIRTUAL_SEASON_GAP",
     "MediaMatch",
     "StructureHints",

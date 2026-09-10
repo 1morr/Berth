@@ -48,7 +48,16 @@ from berth.domain import (
     collection_type_for,
 )
 from berth.logs import job_context
-from berth.models import Event, Job, Media, PathSettings, QbittorrentSettings, Route, User
+from berth.models import (
+    Event,
+    Job,
+    Media,
+    PathSettings,
+    Plan,
+    QbittorrentSettings,
+    Route,
+    User,
+)
 from berth.models.types import utcnow
 from berth.services.clients import ServiceClientFactory
 from berth.services.qbittorrent import sign_in
@@ -61,6 +70,14 @@ logger = logging.getLogger(__name__)
 #: `submit_failed` 是唯一重試得了的狀態（plan §3.1）。已經在下載的 torrent 再送一次
 #: 只是多一次無謂的請求，而 `imported` 再送一次是另一件事（M2 的重新入庫）。
 RETRYABLE = frozenset({JobState.SUBMIT_FAILED})
+
+#: 手動重跑得了 Plan 的狀態（票 11）。`review` 也在裡面：plan §3.1 的「使用者拒絕 →
+#: `completed`」就是為了讓它重新 planning，而 M1 沒有審核 UI，重跑是唯一按得到的那一步。
+#: `importing` 不在裡面——那一份計劃已經被採信，而 importer 正照著它動檔案（票 12）。
+#:
+#: **與 `RETRYABLE` 放在一起**：兩個都在回答「這一筆現在按得了什麼」，而畫面上那兩顆按鈕
+#: 就在同一塊展開區裡。規則分兩個模組寫的話，其中一份遲早會漏掉一個狀態。
+REPLANNABLE = frozenset({JobState.COMPLETED, JobState.PLANNING, JobState.REVIEW})
 
 
 class _JobLocks:
@@ -171,6 +188,13 @@ class JobView:
     #: 這一筆現在按得了「重試」嗎（plan §3.1 的 `submit_failed` → `requested`）。
     #: 規則在後端算好：前端重算一份的話，票 10 加進來的其他可重試狀態會漏掉一邊。
     retryable: bool
+    #: 這一筆現在按得了「重新規劃」嗎（票 11）。與 `retryable` 同一個道理：規則在後端算。
+    replannable: bool
+    #: 這一筆現在那一份 Import Plan 的 id（票 11），沒算過就是 `None`。
+    #:
+    #: **是 id 而不是整份 Plan**：下載列表一次畫幾十列，而逐檔的決定只有展開那一列時才要
+    #: （`GET /api/plans/{id}`）。有沒有值本身就是畫面要的答案——要不要畫那一區。
+    plan_id: int | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -579,4 +603,9 @@ async def _view(session: AsyncSession, job: Job) -> JobView:
         completed_at=job.completed_at,
         imported_at=job.imported_at,
         retryable=job.state in RETRYABLE,
+        replannable=job.state in REPLANNABLE,
+        # 這一句與 `services/plan.plan_id_of` 是同一個查詢。**故意各寫一次**：
+        # `services/plan` 已經 import 這一支（`transition`、`job_lock`），反過來 import
+        # 就是一個循環，而這裡要的只是「有沒有」那一格。
+        plan_id=await session.scalar(select(Plan.id).where(Plan.job_hash == job.hash)),
     )

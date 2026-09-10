@@ -672,6 +672,9 @@ const zhHant = {
       stalled: '停住',
       completed: '下載完成',
       issue_detected: '需要處理',
+      preplan: '預估計劃',
+      plan_generated: '計劃',
+      review_required: '待審核',
     },
     timeline: {
       loading: '讀取時間線…',
@@ -683,6 +686,12 @@ const zhHant = {
       resumed: '又動起來了',
       idle_one: '{{count}} 分鐘沒有動靜',
       idle_other: '{{count}} 分鐘沒有動靜',
+      // 停下來的理由，**短的那一種**：時間線說的是當時為什麼停，該怎麼辦在計劃那一塊。
+      review: {
+        low_confidence: '有檔案的季集推不出來',
+        medium_not_allowed: '這條 Route 不自動入庫 medium',
+        nothing_to_import: '沒有東西會進媒體庫',
+      },
       // 理由翻譯，原文不翻譯：後面接的 `client_state` 是 qBittorrent 的機器字串。
       issue: {
         missing_files: 'qBittorrent 說檔案不見了。到它的介面上重新檢查那一筆。',
@@ -691,6 +700,55 @@ const zhHant = {
         unknown_torrent:
           '這個 torrent 出現在 qBittorrent 上時，Berth 還沒有對應的下載紀錄。多半是有人直接在那邊加的，或這裡的資料庫被還原過。',
       },
+    },
+    // 匯入計劃：逐檔的決定、信心與理由（brief §6.5、票 11）。M1 唯讀——逐列編輯與核准
+    // 是 M2 的 Review Queue。
+    plan: {
+      title: '匯入計劃',
+      loading: '讀取計劃…',
+      off: '讀不到這一份計劃。',
+      planned_one: '{{count}} 個檔案要入庫',
+      planned_other: '{{count}} 個檔案要入庫',
+      levels: '信心 high {{high}} / medium {{medium}} / low {{low}}',
+      estimate: '這是下載中的預估，沒有讀過檔案本身；下載完成之後會重算一份。',
+      status: {
+        preplan: '預估',
+        auto: '自動入庫',
+        pending_review: '待審核',
+        approved: '已核准',
+        rejected: '已拒絕',
+        applied: '已套用',
+        failed: '失敗',
+      },
+      // 三種理由、三種下一步（PRODUCT 原則 4）。M1 沒有審核 UI，所以這裡要說得出
+      // 使用者現在真的做得到的那一步。
+      reason: {
+        low_confidence:
+          '有檔案的季集推不出來，或這一包的數量與 TMDB 對不上。M1 還沒有審核佇列——改好 Route 或等 TMDB 補上季集之後按「重新規劃」。',
+        medium_not_allowed:
+          '這條 Route 關掉了「medium 信心自動入庫」。到設定裡打開它，再按「重新規劃」。',
+        nothing_to_import: '這一包裡沒有任何一個檔案會進媒體庫。多半是送錯了 torrent。',
+      },
+      action: {
+        import: '入庫',
+        extra: '特典',
+        subtitle: '字幕',
+        skip: '略過',
+        unmatched: '對不到',
+        review: '待審核',
+      },
+      confidence: {
+        high: '高信心',
+        medium: '中信心',
+        low: '低信心',
+      },
+      // 逐檔那一列的標籤。目標路徑相對 Route 的媒體庫目錄。
+      target: '目標',
+      audit: '已入庫待確認',
+      replan: '重新規劃',
+      replanning: '規劃中…',
+      replanOff: '重新規劃沒有送出去。Berth 自己的 API 沒有回應，先確認它還活著。',
+      replanned: '已重新規劃，現在是{{state}}。',
     },
     // 八種被擋下來的理由，八種下一步（PRODUCT 原則 4）。
     refusal: {
@@ -703,6 +761,8 @@ const zhHant = {
       source_unavailable: '索引站給不出這一份 torrent。可能是連結過期了——重新搜一次再送。',
       job_missing: '這一筆下載不在了。',
       not_retryable: '這一筆現在不能重試——只有送單失敗的那些可以。重新整理看看它現在的狀態。',
+      not_replannable:
+        '這一筆現在不能重新規劃——已經在入庫的那一份計劃正被照著動檔案。重新整理看看它現在的狀態。',
     },
   },
   // 送單（票 09）。資料夾名在這裡定下來，所以按下去之前它要出現在畫面上。
@@ -1494,6 +1554,9 @@ const en: Translations<typeof zhHant> = {
       completed: 'Downloaded',
       issue_detected: 'Needs you',
       retried: 'Retried',
+      preplan: 'Estimate',
+      plan_generated: 'Plan',
+      review_required: 'Needs review',
     },
     timeline: {
       loading: 'Reading the timeline…',
@@ -1505,6 +1568,11 @@ const en: Translations<typeof zhHant> = {
       resumed: 'moving again',
       idle_one: 'idle for {{count}} minute',
       idle_other: 'idle for {{count}} minutes',
+      review: {
+        low_confidence: 'some files could not be placed',
+        medium_not_allowed: 'this route does not auto-import medium',
+        nothing_to_import: 'nothing would reach the library',
+      },
       issue: {
         missing_files: 'qBittorrent says the files are gone. Force a recheck in its own UI.',
         client_error: 'qBittorrent reported an error of its own. Its UI or log says which one.',
@@ -1513,6 +1581,53 @@ const en: Translations<typeof zhHant> = {
         unknown_torrent:
           'When this torrent turned up in qBittorrent, Berth had no download for it — added straight in qBittorrent, or left over from a restored database.',
       },
+    },
+    plan: {
+      title: 'Import plan',
+      loading: 'Reading the plan…',
+      off: 'Could not read this plan.',
+      planned_one: '{{count}} file will be imported',
+      planned_other: '{{count}} files will be imported',
+      levels: 'confidence high {{high}} / medium {{medium}} / low {{low}}',
+      estimate:
+        'An estimate made while the download runs — nothing has read the files themselves yet. Berth works it out again once the download finishes.',
+      status: {
+        preplan: 'Estimate',
+        auto: 'Importing by itself',
+        pending_review: 'Needs review',
+        approved: 'Approved',
+        rejected: 'Rejected',
+        applied: 'Applied',
+        failed: 'Failed',
+      },
+      reason: {
+        low_confidence:
+          'Some files could not be placed in a season and episode, or the count does not match TMDB. There is no review queue yet in M1 — fix the route or wait for TMDB, then press replan.',
+        medium_not_allowed:
+          'This library route has medium-confidence auto-import turned off. Turn it back on in settings, then press replan.',
+        nothing_to_import:
+          'Nothing in this torrent would reach the library. Most likely the wrong torrent was sent.',
+      },
+      action: {
+        import: 'Import',
+        extra: 'Extra',
+        subtitle: 'Subtitle',
+        skip: 'Skip',
+        unmatched: 'Unmatched',
+        review: 'Review',
+      },
+      confidence: {
+        high: 'High',
+        medium: 'Medium',
+        low: 'Low',
+      },
+      target: 'Target',
+      audit: 'imported, awaiting confirmation',
+      replan: 'Plan it again',
+      replanning: 'Planning…',
+      replanOff:
+        'The replan was not sent. Berth’s own API did not answer — check that it is still running.',
+      replanned: 'Planned again; it is now {{state}}.',
     },
     refusal: {
       media_missing: 'Berth does not hold this title. Open its detail page again.',
@@ -1528,6 +1643,8 @@ const en: Translations<typeof zhHant> = {
       job_missing: 'That download is gone.',
       not_retryable:
         'This one cannot be retried — only the ones that failed to send can. Reload to see where it stands now.',
+      not_replannable:
+        'This one cannot be planned again — the plan it is importing is already being applied to files. Reload to see where it stands now.',
     },
   },
   submit: {

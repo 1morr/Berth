@@ -16,7 +16,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel, ConfigDict, Field
 
-from berth.api.deps import ClientFactoryDep, SessionDep
+from berth.api.deps import ClientFactoryDep, EventHubDep, SessionDep
 from berth.api.gate import current_user
 from berth.domain import JobState, JobTrigger
 from berth.services.jobs import (
@@ -28,6 +28,7 @@ from berth.services.jobs import (
     read_job_events,
     retry_job,
 )
+from berth.services.plan import replan_job
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 
@@ -42,6 +43,8 @@ _STATUS = {
     "source_unavailable": status.HTTP_502_BAD_GATEWAY,
     "job_missing": status.HTTP_404_NOT_FOUND,
     "not_retryable": status.HTTP_409_CONFLICT,
+    # 已經在入庫的那一份計劃正被 importer 照著動檔案（票 12），重算會讓兩邊指向不同的地方。
+    "not_replannable": status.HTTP_409_CONFLICT,
 }
 
 
@@ -108,6 +111,11 @@ class JobOut(BaseModel):
     imported_at: datetime | None
     #: 這一筆現在按得了重試嗎（plan §3.1）。規則在後端算，前端不重算一份。
     retryable: bool
+    #: 這一筆現在按得了重新規劃嗎（票 11）。規則在後端算，前端不重算一份。
+    replannable: bool
+    #: 這一筆現在那一份 Import Plan 的 id（票 11）。還沒算過就是 `null`——畫面照它決定
+    #: 要不要去要那一份逐檔的決定，而不是先打一次 404。
+    plan_id: int | None
 
 
 class JobCreatedOut(BaseModel):
@@ -182,6 +190,26 @@ async def get_job(session: SessionDep, job_hash: str) -> JobOut:
 async def get_job_events(session: SessionDep, job_hash: str) -> list[JobEventOut]:
     """時間線，最舊的在前面——讀的方向就是事情發生的方向。"""
     return [JobEventOut.model_validate(row) for row in await read_job_events(session, job_hash)]
+
+
+@router.post("/{job_hash}/replan")
+async def post_replan(
+    session: SessionDep, factory: ClientFactoryDep, hub: EventHubDep, job_hash: str
+) -> JobOut:
+    """重新算一份 Plan（plan §6 jobs 群組、票 11）。
+
+    使用者按它的時刻是：Plan 停在 review 而他剛改了 Route 的設定，或 TMDB 那邊補上了正確的
+    季集。回的是**那一筆 Job**（新的狀態與 `plan_id`）而不是 Plan 本身——按下去之後畫面上
+    要重畫的是那一列。
+    """
+    try:
+        await replan_job(session, factory, hub, job_hash)
+    except JobRejectedError as refusal:
+        raise _refuse(refusal) from refusal
+    job = await read_job(session, job_hash)
+    if job is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="no such job")
+    return JobOut.model_validate(job)
 
 
 @router.post("/{job_hash}/retry")

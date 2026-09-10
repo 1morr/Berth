@@ -252,6 +252,30 @@ Windows Docker Desktop（NTFS bind mount）與 Linux（ext4）上各跑一次 `d
   端點上的 403 只有「被封了」一個意思。兩種都有可行動的訊息：一個要去改設定，一個要等封鎖過期。
 - `--scenario poll`：qBittorrent 打**真的**那一台，送單到完成的狀態自己走完（見 README）。
 - `sse-starlette` 相依。
+- **`planner_runner`**（`berth/pipeline/planning.py`、`berth/services/plan.py`、plan §3.1、§3.2、
+  票 11）：下載完成之後**沒有人在場**的那一段——讀 mediainfo → 解析（plan §4）→ 建 Import Plan →
+  照信心決定自動入庫還是停下來問人。事件驅動（poller 動了什麼就叫醒它）加每 60 秒掃一次
+  `completed` 與 `planning`；例外只記 log，迴圈不死。
+- **`plans` 與 `plan_items` 兩張表**（plan §2.3）：一個 Job **一份「現在的計劃」**（`job_hash`
+  unique），重跑改寫同一列而不是再長一份——不然 `GET /api/plans/{id}` 要先回答「哪一個 id 才是
+  現在那一份」。上一份留在時間線上。
+- **pre-plan**（brief §5.1）：檔案清單一到手就先算一份預估（`plans.status = preplan`），不碰網路、
+  不碰磁碟、不動 Job 的狀態。它回答的是「這一包對不對、還來得及取消嗎」。
+- **mediainfo adapter**（`berth/adapters/mediainfo.py`、plan §8.7）：`probe(path)` 回時長、寬高、
+  codec、bit depth、音軌語言與逐條內封字幕軌。**失敗不阻擋**（讀不到、讀不懂、函式庫自己爆掉都回
+  `None`），Plan 只少一個訊號。`pymediainfo` 相依（wheel 內含 libmediainfo，不需系統套件）。
+- **時長 < 5 分鐘的「正片」降為 extra**（`berth/parser/classify.py`、brief §6.2）：檔名像第一集而
+  mediainfo 說它 88 秒時，檔名輸。**沒量到不是量到 0**：pre-plan 那一輪一個訊號都沒有，
+  而那時候每個檔案都還在下載。
+- **`GET /api/plans/{id}`** 與 **`POST /api/jobs/{hash}/replan`**（plan §6）：一份 Plan 的逐檔決定、
+  信心與理由；重跑限 `completed` / `planning` / `review`——`importing` 的那一份已經被採信，
+  而 importer 正照著它動檔案（票 12）。
+- **下載列表的展開區多一塊「匯入計劃」**（`web/src/jobs/JobPlan.tsx`）：一個檔案一列（包含略過的
+  那些），逐列說得出處置、信心、季集、**它會被寫到哪一條路徑**與理由。停下來時說得出三種理由
+  中的哪一種與下一步。M1 唯讀——逐列編輯與核准是 M2 的 Review Queue。
+- **時間線多三種事件**（brief §5.2）：`preplan`、`plan_generated`、`review_required`。
+- `--scenario plan`：下載完成 → Import Plan 的演練情境（見 README）。
+- `pymediainfo` 相依。
 - `AiPlanner` 介面與 `NullAiPlanner`（`berth/adapters/ai.py`，plan §4.5、brief §6.10）：
   `propose(context, files, rules_plan) -> Plan | None`。M4 才有實作，介面先定是因為它約束的是
   規則層——AI 只能提出規則層表達得出來的處置，碰不到檔案。
