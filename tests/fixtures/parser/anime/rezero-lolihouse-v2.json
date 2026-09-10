@@ -8,6 +8,6 @@
     {"path": "[hyakuhuyu&LoliHouse] Re Zero kara Hajimeru Isekai Seikatsu - 81 v2 [WebRip 1080p HEVC-10bit AAC ASSx2].mkv", "size": 442366835}
   ],
   "expected": [
-    {"path": "[hyakuhuyu&LoliHouse] Re Zero kara Hajimeru Isekai Seikatsu - 81 v2 [WebRip 1080p HEVC-10bit AAC ASSx2].mkv", "kind": "video", "action": "import", "season": 1, "episode": 81, "tags": {"source": "WEB", "resolution": "1080p", "subs": ["CHS", "CHT"], "group": "hyakuhuyu&LoliHouse", "version": "v2"}, "min_confidence": "medium"}
+    {"path": "[hyakuhuyu&LoliHouse] Re Zero kara Hajimeru Isekai Seikatsu - 81 v2 [WebRip 1080p HEVC-10bit AAC ASSx2].mkv", "kind": "video", "action": "import", "season": 1, "episode": 81, "tags": {"source": "WEB", "resolution": "1080p", "subs": ["CHS", "CHT"], "group": "hyakuhuyu&LoliHouse", "version": "v2"}, "target": "ReZERO -Starting Life in Another World- (2016) [tmdbid-65942]/Season 01/ReZERO -Starting Life in Another World- (2016) - S01E81 - A Single-Minded Star [WEB][1080p][CHS+CHT][hyakuhuyu&LoliHouse][v2].mkv", "min_confidence": "medium"}
   ]
 }

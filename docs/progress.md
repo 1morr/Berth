@@ -42,6 +42,8 @@
 | 2026-09-10 | 05 解析器骨架 | `berth bench` 跑得起來：**20 筆真實 torrent 的檔案清單**（動漫 8 / 非動漫劇集 8 / 電影 4，共 321 個檔案，逐筆附 `source_url`）與 **18 份凍結的 TMDB 快照**（`scripts/record_tmdb_snapshots.py` 走產品自己的路徑錄）就位；分類、CJK 正規化、發佈名解析與 `Tags.render()` 完成。**分類 321/321、語料寫下的 tag 128/128、`auto_wrong` = 0**，其餘 268 筆落在 review（季集對應是票 06，目標路徑是票 07，這是預期的）。票 01 量到的兩個羅馬數字寫法都有真實語料與單元測試釘住。import-linter 多一條「parser / naming 不得 import 會做 IO 的模組」，並實測拿掉守衛會紅。680 個後端測試綠燈 | `/implement .scratch/m1/issues/06-parser-mapping.md` |
 | 2026-09-10 | 06 季集對應 | `map_episode` / `structure_hints` / `match_media` / `score` 完成：**benchmark 的季集第一次真的動起來**——`auto_correct` 0 → **140**（語料寫下的 128 個 import 全對），`auto_wrong` **0**、`missed` **0**、信心達標 140/140。票 01 量到的三條槓桿都做進去了：**篇章名 → 季號**（佔失敗九成；為此 `SeasonSnapshot` 多一個 `names`，季名改取 `en-US` / `zh-TW` / `zh-CN` 三輪——真實發佈寫的是「柱训练篇」而英文季名是 `Hashira Training Arc`，只留一套字這條規則一次都不會命中）、**`第二部分` / `Part.2` 的 cour 偏移**（與虛擬季同一條 180 天規則；加上偏移超出該季就回頭照字面讀，於是「季內連號」與「每 cour 重數」兩種寫法用同一條規則都對）、**180 天虛擬季**。語料補三筆真實發佈（鬼滅柱訓練篇、進擊的巨人 S3 Part 2、單檔多集的 `Mizuiro Jidai - 01-02`），共 23 筆 333 個檔案。過程中抓到兩個票 05 的解析器缺口：`[01-13TV全集+SP]` 讓整包 13 集正片被當成特典（`merge_release` 不再補 `special_kind`）、`The_Final_Season[28]` 的 28 被 guessit 讀成季號。812 個後端測試綠燈 | `/implement .scratch/m1/issues/07-naming-plan.md` |
 
+| 2026-09-10 | 07 命名與 Plan | `naming/` 的六種凍結模板、`match_subtitle`、目標路徑與衝突偵測完成：**Plan 第一次說得出「這個檔案會被寫到哪裡」**。benchmark 連目標路徑一起比對，`auto_wrong` 仍是 **0**、`auto_correct` **140** 不變，外掛字幕 37 筆全部掛對（新的 `subtitle_correct` 桶），review 從 98 掉到 61（剩下的全是 `your-name-bdmv` 的 61 個光碟檔）。`naming` 移到 `parser` 之下（衝突偵測比的就是目標路徑）；「兩個檔案同一集」不再一律進 review，改比檔名——简繁分軌與 1080p / 720p 同包本來就該並存（brief §7.7）。`AiPlanner` 介面與 `NullAiPlanner` 一併定好（plan §4.5）。869 個後端測試綠燈 | `/implement .scratch/m1/issues/08-indexer-search.md` |
+
 ## 偏差與決定
 
 實作中推翻 plan / brief 的事，一行一條，附 commit hash 與改動的章節。
@@ -471,3 +473,46 @@
   在「檔名說 01-02 但換算後的 02 落在別季」時會靜默把多集檔變成單集檔——少入一集與入錯一集一樣看不見。
 - 2026-09-10 票 06 code-review：補上 brief §6.5 的「影片數量與 TMDB 集數明顯不符 → low」。一季十二集卻
   對出二十個檔案時，是哪一個檔案讀錯了看不出來，所以整季一起進 review。
+- 2026-09-10 票 07：**`naming` 移到 `parser` 之下**（plan §1.3 原本把兩者並排，import-linter 因此
+  禁止 `parser -> naming`）。理由是 plan §4.1 的 `plan` 階段本來就要產出目標路徑，而**衝突偵測比的
+  就是那條路徑**——那個判斷跑在 `score` 之後、離不開命名。反向不成立，另加一條契約守著。
+- 2026-09-10 票 07：**「兩個檔案對應到同一集」不再一律進 review**（票 06 的 `score._duplicated` 刪掉）。
+  brief §6.4 第 5 點說的是同一（季, 集, **tags**），而 §7.7 說同一集不同 tags 本來就該並存——简繁分軌
+  與 1080p / 720p 同包都是常態。改比**目標路徑**：那正是「會不會蓋掉對方」的定義，而 tags 已經在檔名裡。
+  brief §6.4 第 5 點已同步。
+- 2026-09-10 票 07：**字幕的第二條規則接受語言資料夾**（`繁體/`），不只 brief §6.7 寫的 `Subs/` `字幕/`；
+  語言後綴另外收 ISO 639-2 式的 `.Cht` `.Chs` `.Jpn` `.Eng`（真實語料 `tv/gto-2026-magicstar` 寫的就是
+  這一種）。同一集對到兩個以上的影片時**不選**——多版本並存時這一份字幕是誰旁邊的那一個，路徑沒有說。
+  brief §6.7 已同步。
+- 2026-09-10 票 07：**字幕的語言不看 torrent 名**。`附官方日英简繁中字幕` 說的是這一包有四種字幕，
+  不是這一個檔案有四種——照 `merge_release` 的結果命名的話，四個 `.srt` 會全部變成 `.CHS+CHT+JP+EN.zh`。
+  影片的 tags 仍然照舊用 torrent 名補（那一欄問的正是「這個發佈帶了哪幾種字幕」）。
+- 2026-09-10 票 07：**`.default` 旗標在語言碼之前，而且 M1 不產生它**。plan §5 原本寫
+  `{SUBTOKEN}.{lang}[.default]`，但 M0 票 04 實測的是 `.CHT.default.zh.ass`，brief §20.1 抄的官方格式
+  也是 `<flags>.<language>`——原文的順序是抄錯的。至於產不產生：M1 沒有任何東西決定得了哪一軌是預設
+  （沒有字幕語言偏好設定），寫死一個只是猜。plan §5 已同步。
+- 2026-09-10 票 07：**標題自己帶著同一個年份時不再接一次**。TMDB 上真的有 `GTO (2026)` 這種標題
+  （語料 `tv/gto-2026-magicstar`），照字面套模板會產出 `GTO (2026) (2026) [tmdbid-325022]`。只有**同一個**
+  年份才算重複——`Show (1999)` 的 2020 重製版那兩個數字說的是兩件事。plan §5 已同步。
+- 2026-09-10 票 07：benchmark 多一個 **`subtitle_correct`** 桶（七格 → 八格），baseline 多守
+  `extra_correct` 與 `subtitle_correct` 兩格。理由是**字幕或 extras 整批掉出來時 `auto_wrong` 一格都
+  不會動**，只守兩個數字的話那種退步在 CI 上看不見。plan §4.6 已同步。
+- 2026-09-10 票 07：語料的 `expected` 多一個 **`target`** 欄位，`import` / `extra` / `subtitle` 必填、
+  其餘必空，兩種都比。它是拿語料**自己寫的期望**（action / 季集 / tags）套凍結模板算出來的，
+  不是抄解析器的輸出——抄輸出的話語料只會證明解析器與自己一致。plan §4.6 與語料 README 已同步。
+- 2026-09-10 票 07：brief §7.8 的「與帳本既有版本同 tags → `duplicate`」**沒有做**，也做不了：帳本
+  在票 12 才存在，而解析器沒有 IO。這一票做完的是同一包裡的衝突（brief §6.4 第 5 點）。記在票的 Comments。
+- 2026-09-10 票 07 code-review：**長集名會把 tags 從尾巴截掉**。200 位元組上限原本只保護副檔名，
+  於是同一集的兩個版本（只差 group）被截成**同一個檔名**——而 tags 正是它們唯一的差別（brief §7.7），
+  結果兩個都被判衝突、一個都進不去。改成三段式：`SxxExx` 與 tags 一個字都不能少，可以捨的只有集名。
+- 2026-09-10 票 07 code-review：**長標題的電影檔名不再以資料夾名開頭**。`folder_name` 與檔名各自
+  截在不同的位置（一個扣副檔名一個不扣），於是 ` - ` 之前差了幾個字——那正是 Jellyfin 判「同一部片
+  的多版本」的依據（brief §7.2）。電影檔名改成**不截**：前綴少一個字就不是同一部片，寧可超出上限
+  （與側掛字幕同一個例外，兩者都仍低於 ext4 的 255）。
+- 2026-09-10 票 07 code-review：**`sanitize` 的「去尾端 `.`」不該套在後面還要接東西的片段上**。
+  `It Didn't Have to Be Magic...` 是 TMDB 的集名原文（語料 `anime/frieren-7acg-bd-batch`），
+  而 `Foo..mkv` 的結尾是 `v`——Windows 擋的是**檔名**以 `.` 結尾，不是名字中間有點。
+  清理與去尾端因此拆成兩支，資料夾名走去尾端那一支。
+- 2026-09-10 票 07 code-review：側掛字幕**刻意超出 200 位元組**的例外寫進 plan §5；
+  brief §6.7 補上 `.default` 的位置與「M1 先不產生」；plan §4.1 補上「brief §7.8 的帳本重複不在
+  解析器」的理由——原本只是把「重複」兩個字刪掉，那是把決定藏起來。

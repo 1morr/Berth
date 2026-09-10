@@ -8,6 +8,6 @@
     {"path": "Shingeki no Kyojin Movie The Last Attack 2024-[1080p][BDRIP][x265.OPUS].mkv", "size": 6464612096}
   ],
   "expected": [
-    {"path": "Shingeki no Kyojin Movie The Last Attack 2024-[1080p][BDRIP][x265.OPUS].mkv", "kind": "video", "action": "import", "season": null, "episode": null, "tags": {"source": "BD", "resolution": "1080p", "subs": ["CHS", "CHT"], "group": "7³ACG"}, "min_confidence": "high"}
+    {"path": "Shingeki no Kyojin Movie The Last Attack 2024-[1080p][BDRIP][x265.OPUS].mkv", "kind": "video", "action": "import", "season": null, "episode": null, "tags": {"source": "BD", "resolution": "1080p", "subs": ["CHS", "CHT"], "group": "7³ACG"}, "target": "Attack on Titan THE LAST ATTACK (2024) [tmdbid-1333100]/Attack on Titan THE LAST ATTACK (2024) [tmdbid-1333100] - [BD][1080p][CHS+CHT][7³ACG].mkv", "min_confidence": "high"}
   ]
 }

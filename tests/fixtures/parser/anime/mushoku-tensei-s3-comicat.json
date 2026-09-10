@@ -8,6 +8,6 @@
     {"path": "[Comicat][Mushoku Tensei S3][10][1080P][BIG5][MP4].mp4", "size": 412828228}
   ],
   "expected": [
-    {"path": "[Comicat][Mushoku Tensei S3][10][1080P][BIG5][MP4].mp4", "kind": "video", "action": "import", "season": 3, "episode": 10, "tags": {"resolution": "1080p", "subs": ["CHT"], "group": "Comicat"}, "min_confidence": "high"}
+    {"path": "[Comicat][Mushoku Tensei S3][10][1080P][BIG5][MP4].mp4", "kind": "video", "action": "import", "season": 3, "episode": 10, "tags": {"resolution": "1080p", "subs": ["CHT"], "group": "Comicat"}, "target": "Mushoku Tensei Jobless Reincarnation (2021) [tmdbid-94664]/Season 03/Mushoku Tensei Jobless Reincarnation (2021) - S03E10 - An Audience with an Immortal Demon King [1080p][CHT][Comicat].mp4", "min_confidence": "high"}
   ]
 }

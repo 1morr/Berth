@@ -51,21 +51,13 @@ def _counts(row: Decision) -> bool:
 
 
 def _contradicted(rows: Sequence[Decision], context: ParseContext) -> dict[str, str]:
-    """互相矛盾、因此誰都不該自動入庫的檔案 → 說得出口的理由（brief §6.4 第 4 點、§6.5）。"""
-    return {**_duplicated(rows), **_overrun(rows, context)}
+    """互相矛盾、因此誰都不該自動入庫的檔案 → 說得出口的理由（brief §6.4 第 4 點、§6.5）。
 
-
-def _duplicated(rows: Sequence[Decision]) -> dict[str, str]:
-    """兩個檔案宣稱同一集。
-
-    誰對誰錯檔名裡沒有答案——多版本並存是 brief §7.8 的事，這裡只負責不要自動入庫。
+    **「兩個檔案同一集」不在這裡**（票 07）：同一集的兩個版本本來就該並存（brief §7.7），
+    分辨得出來的是 tags，而 tags 進了檔名才看得出兩者會不會蓋掉對方。那個判斷因此在
+    目標路徑算完之後做（`planner._resolve`）。
     """
-    seen = Counter((row.item.season, row.item.episode_start) for row in rows)
-    return {
-        row.item.rel_path: "another file in this torrent claims the same episode"
-        for row in rows
-        if seen[(row.item.season, row.item.episode_start)] > 1
-    }
+    return _overrun(rows, context)
 
 
 def _overrun(rows: Sequence[Decision], context: ParseContext) -> dict[str, str]:

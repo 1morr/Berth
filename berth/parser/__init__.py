@@ -9,6 +9,7 @@ from berth.parser.mapping import VIRTUAL_SEASON_GAP, map_episode
 from berth.parser.planner import plan
 from berth.parser.release import merge_release, parse_release, tags_of
 from berth.parser.structure import StructureHints, structure_hints
+from berth.parser.subtitles import SubtitleMatch, match_subtitle
 from berth.parser.title import MediaMatch, match_media, matches, normalize_title
 
 __all__ = [
@@ -16,10 +17,12 @@ __all__ = [
     "VIRTUAL_SEASON_GAP",
     "MediaMatch",
     "StructureHints",
+    "SubtitleMatch",
     "classify",
     "langs_in",
     "map_episode",
     "match_media",
+    "match_subtitle",
     "matches",
     "merge_release",
     "normalize_cjk",

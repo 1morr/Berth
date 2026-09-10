@@ -3,33 +3,11 @@
   "source_url": "https://share.dmhy.org/topics/view/674125_Kimetsu_no_Yaiba_-_Hashira_Geiko-hen_07_x264_1080p_CHT.html",
   "torrent_name": "【悠哈璃羽字幕社】[鬼灭之刃 柱训练篇 / Kimetsu no Yaiba - Hashira Geiko-hen][07][x264 1080p][CHT]",
   "tmdb": "tv-85937",
-  "context": {
-    "media": "tv:85937",
-    "profile": "anime",
-    "season_hint": null,
-    "episode_offset": null
-  },
+  "context": {"media": "tv:85937", "profile": "anime", "season_hint": null, "episode_offset": null},
   "files": [
-    {
-      "path": "[UHA-WINGS] Kimetsu no Yaiba - Hashira Geiko-hen [07][x264 1080p][CHT].mp4",
-      "size": 563416122
-    }
+    {"path": "[UHA-WINGS] Kimetsu no Yaiba - Hashira Geiko-hen [07][x264 1080p][CHT].mp4", "size": 563416122}
   ],
   "expected": [
-    {
-      "path": "[UHA-WINGS] Kimetsu no Yaiba - Hashira Geiko-hen [07][x264 1080p][CHT].mp4",
-      "kind": "video",
-      "action": "import",
-      "season": 5,
-      "episode": 7,
-      "tags": {
-        "resolution": "1080p",
-        "subs": [
-          "CHT"
-        ],
-        "group": "UHA-WINGS"
-      },
-      "min_confidence": "medium"
-    }
+    {"path": "[UHA-WINGS] Kimetsu no Yaiba - Hashira Geiko-hen [07][x264 1080p][CHT].mp4", "kind": "video", "action": "import", "season": 5, "episode": 7, "tags": {"resolution": "1080p", "subs": ["CHT"], "group": "UHA-WINGS"}, "target": "Demon Slayer Kimetsu no Yaiba (2019) [tmdbid-85937]/Season 05/Demon Slayer Kimetsu no Yaiba (2019) - S05E07 - Stone Hashira Gyōmei Himejima [1080p][CHT][UHA-WINGS].mp4", "min_confidence": "medium"}
   ]
 }

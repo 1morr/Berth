@@ -8,6 +8,6 @@
     {"path": "[KitaujiSub] Mushoku Tensei Season 3 [04][WebRip][HEVC_AAC][CHS&CHT].mkv", "size": 584148652}
   ],
   "expected": [
-    {"path": "[KitaujiSub] Mushoku Tensei Season 3 [04][WebRip][HEVC_AAC][CHS&CHT].mkv", "kind": "video", "action": "import", "season": 3, "episode": 4, "tags": {"source": "WEB", "subs": ["CHS", "CHT"], "group": "KitaujiSub"}, "min_confidence": "high"}
+    {"path": "[KitaujiSub] Mushoku Tensei Season 3 [04][WebRip][HEVC_AAC][CHS&CHT].mkv", "kind": "video", "action": "import", "season": 3, "episode": 4, "tags": {"source": "WEB", "subs": ["CHS", "CHT"], "group": "KitaujiSub"}, "target": "Mushoku Tensei Jobless Reincarnation (2021) [tmdbid-94664]/Season 03/Mushoku Tensei Jobless Reincarnation (2021) - S03E04 - A King-Class Water Mage [WEB][CHS+CHT][KitaujiSub].mkv", "min_confidence": "high"}
   ]
 }

@@ -3,31 +3,11 @@
   "source_url": "https://nyaa.si/view/2157786",
   "torrent_name": "[shincaps] Mizuiro Jidai - 01-02 (AT-X 1440x1080 MPEG2 AAC).ts",
   "tmdb": "tv-46373",
-  "context": {
-    "media": "tv:46373",
-    "profile": "anime",
-    "season_hint": null,
-    "episode_offset": null
-  },
+  "context": {"media": "tv:46373", "profile": "anime", "season_hint": null, "episode_offset": null},
   "files": [
-    {
-      "path": "[shincaps] Mizuiro Jidai - 01-02 (AT-X 1440x1080 MPEG2 AAC).ts",
-      "size": 3999001016
-    }
+    {"path": "[shincaps] Mizuiro Jidai - 01-02 (AT-X 1440x1080 MPEG2 AAC).ts", "size": 3999001016}
   ],
   "expected": [
-    {
-      "path": "[shincaps] Mizuiro Jidai - 01-02 (AT-X 1440x1080 MPEG2 AAC).ts",
-      "kind": "video",
-      "action": "import",
-      "season": 1,
-      "episode": 1,
-      "episode_end": 2,
-      "tags": {
-        "resolution": "1080p",
-        "group": "shincaps"
-      },
-      "min_confidence": "medium"
-    }
+    {"path": "[shincaps] Mizuiro Jidai - 01-02 (AT-X 1440x1080 MPEG2 AAC).ts", "kind": "video", "action": "import", "season": 1, "episode": 1, "episode_end": 2, "tags": {"resolution": "1080p", "group": "shincaps"}, "target": "Aqua Age (1996) [tmdbid-46373]/Season 01/Aqua Age (1996) - S01E01-E02 - New School Term! [1080p][shincaps].ts", "min_confidence": "medium"}
   ]
 }

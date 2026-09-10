@@ -350,8 +350,9 @@ class ParseContext(BaseModel):
 class PlanItem(BaseModel):
     """一個檔案的處置決定（plan §4.2、§2.3 的 `plan_items`）。
 
-    `media_id` 與 `target_path` 還不在這裡：前者由季集對應填（票 06），後者由命名引擎填
-    （票 07）。欄位在有東西可以放進去的那一票才出現——空著的欄位會被當成「已經算過但沒結果」。
+    `media_id` 還不在這裡：Job 一路都帶著同一個 Media，所以要等到 Plan 存進資料庫
+    （票 11）才有第二個來源需要它。欄位在有東西可以放進去的那一票才出現——
+    空著的欄位會被當成「已經算過但沒結果」。
     """
 
     model_config = ConfigDict(frozen=True)
@@ -364,5 +365,13 @@ class PlanItem(BaseModel):
     episode_end: int | None = None
     tags: Tags = Tags()
     confidence: Confidence = Confidence.LOW
+    #: 相對於 Route 目標路徑的位置（plan §5）。**只有真的會被寫出去的檔案有值**：
+    #: unmatched 留在 complete 原位（brief §7.4），review 還沒有決定，兩者都是空字串。
+    target_path: str = ""
     #: 為什麼是這個決定。UI 逐條顯示，review 時看得到（brief §6.5）。
     reasons: tuple[str, ...] = ()
+
+    @property
+    def name(self) -> str:
+        """檔名。字幕比對主幹、extras 保住原檔名，兩邊要的都是它而不是整條相對路徑。"""
+        return self.rel_path.rpartition("/")[2]

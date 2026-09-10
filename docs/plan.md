@@ -68,11 +68,12 @@ scripts/experiments/   brief §20.6 的實驗腳本
 ```
 api ──► services ──► domain / parser / naming / adapters / models
 pipeline ──► services
-parser, naming ──► domain            （純函式；TMDB 資料以快照物件傳入，不呼叫網路）
+parser ──► naming ──► domain         （純函式；TMDB 資料以快照物件傳入，不呼叫網路）
 adapters ──► domain                  （不 import services、models；回傳 domain 型別或簡單 dataclass）
 ```
 
 - 所有會改變狀態的操作都是 `services` 內的命令函式，名稱即 brief §14 的命令名（`add_download`、`generate_plan`、`apply_plan`、`rematch_file`、`delete_job`…）。API 與 pipeline 只呼叫 services，兩者都不直接碰 adapters 或 models。
+- **`naming` 在 `parser` 之下**（M1 票 07）：`plan` 階段要產出目標路徑（§4.1），而衝突偵測比的就是那條路徑——兩個檔案指到同一個檔名時誰都不能自動入庫。反向不成立，`naming` 只認 `domain` 的快照與 `Tags`，`import-linter` 另有一條契約守著。
 - `db`（engine、session factory）在 `models` 之下、`domain` 之上；`api`、`pipeline`、`parser`、`naming`、`adapters` 都不得 import 它。Alembic 的 `env.py` 需要 `models` 的 metadata，因此放在 `migrations/`（不納入層級契約）。
 - 用 `import-linter` 在 CI 強制上述方向，契約寫在 `pyproject.toml` 的 `[tool.importlinter]`。
 - 每個 adapter 有一個 `Protocol` 介面與一個 `Fake` 實作（放在 `adapters/<name>/fake.py`），整合測試與 e2e 用 Fake 取代真服務。
@@ -218,8 +219,8 @@ files ─► classify ─► (video | subtitle | font | audio | image | archive 
 | `parse_release` | 乾淨字串 → `ReleaseInfo` | guessit 打底；後處理動漫模式：`- 01`、`[01]`、`01v2`、`E01` 無季、`01-12` 區間、`S01 \| 01-28+SPx11`、`第01話`；`release_kind` 由集號區間與 `collection` 決定 |
 | `structure_hints` | 相對路徑 → hints | 資料夾名 `Season 2` / `S2` / `第二季` / `2nd Season` / `Part 2` / `Specials` / `SPs`；`Subs/` `字幕/` 與其下的語言子資料夾 |
 | `map_episode` | → `[Candidate]` | brief §6.4 的順序；絕對編號換算三法（episode group absolute、累計集數、air_date 虛擬季 offset）各自產 Candidate 並附理由；**篇章名 → 季號**（§4.4，比對各季 `name`）也產一個 Candidate；上下文 Media 缺時先做標題比對（正規化後與 `name` / `original_name` / alternative titles / translations 比對，年份加權） |
-| `match_subtitle` | → 附掛 | brief §6.7 順序；語言由後綴（`.tc` `.cht` `.zh-Hant` `.sc` `.chs` `.jp` `.jpsc` `.jptc`）或資料夾決定，都缺時看 CjkHints |
-| `plan` | → `Plan` | 為每個影片選最佳 Candidate；產生目標路徑（§5）；衝突與重複偵測（brief §6.4 第 5 點、§7.8）；extras 與 unmatched 的處置 |
+| `match_subtitle` | → 附掛 | brief §6.7 順序；語言由後綴（`.tc` `.cht` `.zh-Hant` `.sc` `.chs` `.jp` `.jpsc` `.jptc`，加上真實語料寫的 ISO 639-2 式 `.Cht` `.Chs` `.Jpn` `.Eng`）或資料夾決定，都缺時看 CjkHints。**不看 torrent 名**——`附官方日英简繁中字幕` 說的是這一包有四種字幕，不是這一個檔案有四種（M1 票 07 實測）。第二條規則（資料夾裡的集號）也接受**語言資料夾**（`繁體/`）：它一樣說了「這一格底下的東西是側掛字幕」 |
+| `plan` | → `Plan` | 為每個影片選最佳 Candidate；產生目標路徑（§5）；衝突偵測（brief §6.4 第 5 點）；extras 與 unmatched 的處置。**brief §7.8 的「與帳本既有版本重複」不在這裡**：帳本要到 §11.2 票 12 才存在，而解析器沒有 IO，看不到既有 Entry——那個判斷屬於 importer。**字幕排在影片之後**：字幕自己說不出它是第幾集，配到影片就繼承它的答案，影片沒入庫字幕就跟著 unmatched / review |
 | `score` | → confidence | brief §6.5 的三級定義；批次一致性檢查在此（同模式、連續集號、數量吻合） |
 
 ### 4.2 核心型別（`domain/`）
@@ -231,7 +232,7 @@ files ─► classify ─► (video | subtitle | font | audio | image | archive 
 - `StructureHints`（`parser/structure.py`）：`season`、`part`、`special`、`subtitle_folder`、`subtitle_lang`、`matched`。只讀資料夾，不讀檔名
 - `Candidate`：`season`、`episode_start`、`episode_end`、`strategy`、`confidence`、`reasons: list[str]`
 - `Decision`（`parser/score.py`）：`item: PlanItem` + `strategy`。批次一致性要比的是策略，而 `PlanItem` 沒有這個欄位，所以逐檔的結果先攤成它再進 `score`
-- `PlanItem`：`rel_path`、`kind`、`action`、`season`、`episode_start`、`episode_end`、`tags`、`confidence`、`reasons`。`media_id` 由 `map_episode` 補、`target_path` 由命名引擎補——欄位在有東西可以放進去的那一票才加，§2.3 是它最終的樣子
+- `PlanItem`：`rel_path`、`kind`、`action`、`season`、`episode_start`、`episode_end`、`tags`、`target_path`、`confidence`、`reasons`。`target_path` **只有真的會被寫出去的檔案有值**（`import` / `extra` / `subtitle`）——unmatched 留在 complete 原位（brief §7.4），review 還沒有決定，兩者都是空字串。`media_id` 還不在這裡：Job 一路都帶著同一個 Media，等 Plan 存進資料庫（§11.2 票 11）才有第二個來源需要它；§2.3 是它最終的樣子
 - 封閉集合一律 `StrEnum`：`FileKind`、`Lang`、`Source`、`SubtitleKind`、`SpecialKind`（SP/OVA/OAD/Movie/NC）、`ReleaseKind`、`Confidence`、`PlanAction`、`MappingStrategy`（explicit / folder / context / arc_name / single_season / absolute_group / absolute_cumulative / air_date_offset / cour_offset / movie）
 
 ### 4.3 上下文與 TMDB 快照
@@ -285,10 +286,10 @@ fixture 一筆一個 JSON：
 ```
 
 - `torrent_name` 是**索引站上的發佈標題**（Berth 從搜尋結果拿到的那一個），`files[].path` 是**相對於 torrent 內容根**的路徑。兩者各知道一半：CJK 的字幕語言與季號幾乎只寫在前者，集號只寫在後者（M1 票 05 實測）。
-- `expected` 逐檔一筆，含 `kind`（brief §6.2 的分類）——分類是第一層，錯在這裡後面每一層都白算。`tags` 缺席表示這一筆不比對 tag。`min_confidence` **不參與比對**：信心低於期望不是做錯事，那件事由 `review` 與 high / medium 誤判率回答。
+- `expected` 逐檔一筆，含 `kind`（brief §6.2 的分類）——分類是第一層，錯在這裡後面每一層都白算。`tags` 缺席表示這一筆不比對 tag。`target` 是相對於 Route 目標的目標路徑（§5）：`import` / `extra` / `subtitle` 三種處置**一定要寫**，其餘一定是空的，兩種都比（M1 票 07）——季集對了但檔名錯了，Jellyfin 那一端還是入錯，而多版本的判定、繁簡的分辨與多集檔的表示法全都只寫在檔名裡。`min_confidence` **不參與比對**：信心低於期望不是做錯事，那件事由 `review` 與 high / medium 誤判率回答。
 - `tests/fixtures/tmdb/<id>.json` 是 TMDB 快照，錄一次即凍結（`scripts/record_tmdb_snapshots.py`）。
-- `berth bench` 輸出：整體與分類別（anime / tv / movie）的 `auto_correct`、`auto_wrong`（自動處置但錯，最嚴重）、`review`、`unmatched_correct`、`extra_correct`，加上 `missed`（該入庫的被丟成 unmatched / skip）與 `skipped`（雙方都同意可忽略）；**七個桶互斥且窮盡，加起來等於檔案數**——加不起來的報表會讓沒被數到的檔案看起來不存在。另列分類正確率、tag 正確率與**信心達標率**（語料寫的 `min_confidence` 有沒有達到；不達標不是做錯事，但它說得出「本來該自動入庫的少了幾個」），以及 high 與 medium 的錯誤率（brief §6.5）。
-- CI 規則：`auto_wrong` 不得高於 `tests/fixtures/parser/baseline.json`，`auto_correct` 不得低於 baseline 減 1 筆；改善時更新 baseline 並在 PR 說明。門檻與報表是同一支（`services/bench.py`），單元測試與 `berth bench` 共用，所以 CI 不另開 job。
+- `berth bench` 輸出：整體與分類別（anime / tv / movie）的 `auto_correct`、`auto_wrong`（自動處置但錯，最嚴重）、`review`、`unmatched_correct`、`extra_correct`、`subtitle_correct`，加上 `missed`（該入庫的被丟成 unmatched / skip）與 `skipped`（雙方都同意可忽略）；**八個桶互斥且窮盡，加起來等於檔案數**——加不起來的報表會讓沒被數到的檔案看起來不存在。`subtitle_correct` 與 `extra_correct` 同一個道理（M1 票 07）：外掛字幕也是自動搬進媒體庫的檔案，混進 `auto_correct` 會讓「入對幾集」這個數字說不清楚。另列分類正確率、tag 正確率與**信心達標率**（語料寫的 `min_confidence` 有沒有達到；不達標不是做錯事，但它說得出「本來該自動入庫的少了幾個」），以及 high 與 medium 的錯誤率（brief §6.5）。
+- CI 規則：`auto_wrong` 不得高於 `tests/fixtures/parser/baseline.json`，`auto_correct`、`extra_correct`、`subtitle_correct` 三格都不得低於 baseline 減 1 筆；改善時更新 baseline 並在 PR 說明。三格都要守是因為**字幕或 extras 整批掉出來時 `auto_wrong` 一格都不會動**（M1 票 07），只守兩個數字的話那種退步在 CI 上看不見。門檻與報表是同一支（`services/bench.py`），單元測試與 `berth bench` 共用，所以 CI 不另開 job。
 - v0 語料：20 筆，來源 brief §20.4 的樣本清單（動漫 8、非動漫劇集 8、電影 4）；票 06 補三筆動漫（篇章名、cour 偏移、單檔多集），共 23 筆，逐步擴到 100+。出處與涵蓋範圍逐筆記在 `tests/fixtures/parser/README.md`。
 
 ---
@@ -303,12 +304,14 @@ fixture 一筆一個 JSON：
 | 季資料夾 | `Season {season:02d}` |
 | 劇集檔 | `{title} ({year}) - S{s:02d}E{e:02d}[-E{e2:02d}][ - {episode_title}][ {tags}].{ext}` |
 | 電影檔 | `{title} ({year}) [tmdbid-{id}][ - {tags}].{ext}`（無 tags 時檔名等於資料夾名；` - ` 之前**必須**與資料夾名一字不差，否則 Jellyfin 會當成兩部片） |
-| 外掛字幕 | `{影片檔名主幹}.{SUBTOKEN}.{lang}[.default].{ext}` |
+| 外掛字幕 | `{影片檔名主幹}.{SUBTOKEN}[.default].{lang}.{ext}`（旗標在語言碼**之前**：實測的是 `.CHT.default.zh.ass`，brief §20.1 的官方格式也是 `<flags>.<language>`。M1 沒有人決定得了哪一軌是預設，所以那一段不產生——等有字幕語言偏好設定的那一票再加） |
 | Extras | `{作品資料夾}/extras/{原檔名}` |
 
-- `title` 依 brief §7.5；`folder_name` 一旦寫進 `media` 就只從那裡讀。
+- `title` 依 brief §7.5；`folder_name` 一旦寫進 `media` 就只從那裡讀。**標題自己帶著同一個年份時不再接一次**（`GTO (2026)` 不寫成 `GTO (2026) (2026)`，語料 `tv/gto-2026-magicstar`）；年份不同的兩個數字說的是兩件事（`Show (1999)` 的 2020 重製版），照樣兩個都留。
+- 側掛字幕是**唯一可以超過 200 位元組**的檔名：它靠影片的完整主幹配對，截短它換來的是一個掛不上去的字幕；多出來的語言段最多 22 位元組，仍遠低於 ext4 的 255。
+- `SUBTOKEN` 只在中文才出現：Jellyfin 沒有一個分得出繁簡而且 10.10 與 10.11 都認得的語言碼（§20.6），所以中文一律 `zh` 加自由文字 `CHT` / `CHS`，日文與英文直接用 `ja` / `en`。語言說不出來時整段省略，字幕仍然掛在影片旁邊。
 - `episode_title` 來自快照；缺、空、或符合 `^Episode \d+$` 即省略；長度上限 80 字元。
-- `sanitize`：移除 `/ \ : * ? " < > |` 與控制字元，連續空白合一，去尾端 `.` 與空白，整體 ≤ 200 bytes（UTF-8）。
+- `sanitize`：移除 `/ \ : * ? " < > |` 與控制字元，連續空白合一，去尾端 `.` 與空白，整體 ≤ 200 bytes（UTF-8）。**逐段套用**（資料夾、季資料夾、檔名各一次），而且檔名的上限先扣掉副檔名——截到一半的 `.mk` 不是影片檔，Jellyfin 連掃都不會掃它。
 - `Tags.render()`：brief §6.8 的順序與 token；缺欄位直接省略；`subs` 依 `CHS < CHT < JP < EN` 排序後以 `+` 連接。
 - **模板已凍結**（2026-09-07，M0 票 04 的實驗，brief §20.6 / §20.7）。實測確認：方括號與 `+` 不會滲進 Jellyfin 的 Series 或 Episode 名稱；電影檔名含 `[tmdbid-{id}]` 才會被當成同一部片的多版本（brief §7.2 的舊範例是錯的）；`{SUBTOKEN}.{lang}` 用 `CHT.zh` / `CHS.zh` 在 10.10 與 10.11 都分得出繁簡，`zh-Hant` 只有 10.11 認得所以不用。之後要改模板只改 `naming/`，不影響其他模組。
 

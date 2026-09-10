@@ -27,8 +27,12 @@
   內部的根資料夾名。CJK 的資訊（字幕語言、季號、合集標記）幾乎都寫在這裡。
 - `files[].path` 是**相對於 torrent 內容根**的路徑：多檔 torrent 不含最外層資料夾，
   單檔 torrent 就是檔名。大小是 torrent metadata 裡的位元組數，沒有四捨五入。
-- `expected` 逐檔一筆，順序與 `files` 相同，是**做完票 07 之後的正確答案**，不是目前的行為。
-  `tags` 缺席表示這一筆不比對 tag（字幕、extras、可忽略的附屬檔）。
+- `expected` 逐檔一筆，順序與 `files` 相同。`tags` 缺席表示這一筆不比對 tag（字幕、extras、
+  可忽略的附屬檔）。
+- `target` 是相對於 Route 目標路徑的目標路徑（plan §5）。`import` / `extra` / `subtitle`
+  三種處置**一定要寫**，其餘一定沒有——季集對了但檔名錯了，Jellyfin 那一端還是入錯，
+  而多版本的判定、繁簡的分辨與多集檔的表示法全都只寫在檔名裡。同一筆語料裡兩個檔案
+  不可以指到同一條路徑：那是衝突（brief §6.4 第 5 點），不是正確答案。
 - `min_confidence` 是期望的信心下限。**不參與比對**：信心低於期望不是做錯事，那件事由報表的
   `review` 與 high / medium 誤判率各自回答。
 
@@ -74,8 +78,8 @@ metadata 解出來的（dmhy 與 AnimeTosho）或索引站 API 給的（apibay �
 而凍結快照 `tests/fixtures/tmdb/tv-209867.json` 的 S0 裡，同一串「○○の魔法」佔的是
 **1,2,3,4,6,7,8,9,10,11,13**（#5 是 Special Episode、#12 是另一支特典）。檔名裡沒有任何東西
 能分辨這件事，而 plan / brief 也沒有一條規則做得到——所以這 11 筆的 `min_confidence` 是
-**medium 而不是 high**。要做對得靠集名或片長比對，那是解析器目前沒有的能力（記在票 05 的
-Comments，票 06 / 07 決定要不要做）。
+**medium 而不是 high**。要做對得靠集名或片長比對，那是解析器目前沒有的能力（票 06 決定
+不做，理由在下面「特典怎麼算」）。
 
 **`subs` 是「這個發佈帶了哪幾種字幕」**，不是「影片內封了哪幾種」。外掛字幕也算：
 `overlord-s2-dbd-raws`（`简繁外挂` + `.sc.ass` / `.tc.ass`）、`gto-2026-magicstar`
@@ -98,10 +102,22 @@ v0 涵蓋不到、由單元測試補的一件事：
 | `anime/shingeki-s3-part2-erai` | **cour 偏移**：`Season 3 Part 2 - 01 ~ 10`，集號從 01 重數，正確答案是 S03E13–22。研究 §6.1.1 裡唯一「有季號還是三家一起錯」的那一類 |
 | `anime/mizuiro-jidai-shincaps` | **單檔多集**（brief §6.6）：一個 `.ts` 檔涵蓋 01 與 02 兩集，正確答案是 `S01E01-E02`。找了很多輪——nyaa 上掛 `S01E01-E02` 標題的幾乎都是兩個獨立檔案 |
 
+## 外掛字幕怎麼算（票 07 的決定）
+
+字幕檔的 `target` 是**它那個影片的目標路徑**換上字幕的副檔名與語言段（plan §5）。所以：
+
+- 一集兩個語言的側掛字幕（`.sc.ass` / `.tc.ass`）產出兩條不同的路徑（`.CHS.zh.ass` /
+  `.CHT.zh.ass`），不是衝突。
+- 語言由**字幕自己**的後綴、資料夾、檔名決定，不看 torrent 名：`gto-2026-magicstar` 的影片
+  帶 `CHS+CHT+JP+EN` 四種，四個 `.srt` 各只有一種。
+- 影片是 `unmatched` / `review` 時字幕跟著它，沒有 `target`（`overlord-s2-dbd-raws` 的
+  `SP/` 底下 28 個字幕都是 `unmatched`）。
+
 ## 加一筆
 
 1. 找一個真實發佈，把 torrent metadata 的檔案清單抄下來（路徑與位元組數原樣，去掉個資）。
-2. 寫 `expected`：正確答案，不是目前的行為。`kind` 照 brief §6.2 的表。
+2. 寫 `expected`：正確答案，不是目前的行為。`kind` 照 brief §6.2 的表，`target` 照 plan §5
+   的模板。
 3. 補快照：`uv run --env-file .env python scripts/record_tmdb_snapshots.py`。
 4. `uv run berth bench`。數字變好就 `--update-baseline` 並在 commit message 說明；
    變差就是解析器有洞，先修再更新。

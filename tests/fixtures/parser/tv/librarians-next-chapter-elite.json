@@ -17,7 +17,7 @@
     {"path": "Screens/The.Librarians.The.Next.Chapter.S02E05.1080p.x265-ELiTE.Screen0002.png", "kind": "image", "action": "skip"},
     {"path": "Screens/The.Librarians.The.Next.Chapter.S02E05.1080p.x265-ELiTE.Screen0003.png", "kind": "image", "action": "skip"},
     {"path": "Screens/The.Librarians.The.Next.Chapter.S02E05.1080p.x265-ELiTE.Screen0004.png", "kind": "image", "action": "skip"},
-    {"path": "The.Librarians.The.Next.Chapter.S02E05.1080p.x265-ELiTE.mkv", "kind": "video", "action": "import", "season": 2, "episode": 5, "tags": {"resolution": "1080p", "group": "ELiTE"}, "min_confidence": "high"},
+    {"path": "The.Librarians.The.Next.Chapter.S02E05.1080p.x265-ELiTE.mkv", "kind": "video", "action": "import", "season": 2, "episode": 5, "tags": {"resolution": "1080p", "group": "ELiTE"}, "target": "The Librarians The Next Chapter (2025) [tmdbid-226749]/Season 02/The Librarians The Next Chapter (2025) - S02E05 - And the Red Rock [1080p][ELiTE].mkv", "min_confidence": "high"},
     {"path": "The.Librarians.The.Next.Chapter.S02E05.1080p.x265-ELiTE.nfo", "kind": "other", "action": "skip"}
   ]
 }

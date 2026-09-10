@@ -155,7 +155,15 @@ class TestBench:
 
     def write_baseline(self, repo: Path, *, auto_correct: int, auto_wrong: int) -> None:
         (repo / "tests" / "fixtures" / "parser" / "baseline.json").write_text(
-            json.dumps({"auto_correct": auto_correct, "auto_wrong": auto_wrong}), encoding="utf-8"
+            json.dumps(
+                {
+                    "auto_correct": auto_correct,
+                    "auto_wrong": auto_wrong,
+                    "extra_correct": 0,
+                    "subtitle_correct": 0,
+                }
+            ),
+            encoding="utf-8",
         )
 
     def test_a_clean_run_succeeds_and_prints_the_report(

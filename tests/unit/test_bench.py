@@ -14,6 +14,7 @@ import pytest
 from berth.domain import Confidence, FileKind, PlanAction, PlanItem, Tags
 from berth.services.bench import (
     CATEGORIES,
+    GUARDED,
     Baseline,
     Bucket,
     Counts,
@@ -31,6 +32,11 @@ from berth.services.bench import (
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CORPUS_ROOT, SNAPSHOT_ROOT, BASELINE_PATH = paths(REPO_ROOT)
+
+#: 會被寫進媒體庫的三種處置。它們一定有目標路徑，其餘一定沒有（plan §5）。
+_WRITTEN = frozenset({PlanAction.IMPORT, PlanAction.EXTRA, PlanAction.SUBTITLE})
+
+TARGET = "Show (2020) [tmdbid-1]/Season 01/Show (2020) - S01E02.mkv"
 
 #: 語料的組成（plan §4.6、brief §20.4 的樣本清單）。v0 是 20 筆（動漫 8 / 劇集 8 / 電影 4），
 #: 票 06 補了三筆動漫：篇章名、cour 偏移與單檔多集（brief §6.6）。
@@ -59,6 +65,25 @@ class TestCorpus:
         for fixture in load_corpus(CORPUS_ROOT):
             assert [e.path for e in fixture.expected] == [f.rel_path for f in fixture.files]
 
+    def test_every_file_that_gets_written_says_where(self) -> None:
+        """import / extra / subtitle 一定有目標路徑，其餘一定沒有（plan §5、brief §7.4）。
+
+        少寫一條的話那一筆就變成「不比對路徑」，而路徑正是票 07 加進來要守的東西。
+        """
+        for fixture in load_corpus(CORPUS_ROOT):
+            for expected in fixture.expected:
+                assert bool(expected.target) is (expected.action in _WRITTEN), (
+                    fixture.id,
+                    expected.path,
+                )
+
+    def test_no_two_files_in_one_fixture_share_a_target(self) -> None:
+        """同一包裡兩個檔案指到同一條路徑是衝突（brief §6.4 第 5 點），不是正確答案。"""
+        for fixture in load_corpus(CORPUS_ROOT):
+            targets = [e.target for e in fixture.expected if e.target]
+
+            assert len(targets) == len(set(targets)), fixture.id
+
     def test_every_fixture_has_a_frozen_tmdb_snapshot(self) -> None:
         """`tests/fixtures/tmdb/` 錄一次即凍結，測試不打外部（plan §4.6、§10）。
 
@@ -70,10 +95,17 @@ class TestCorpus:
 
 class TestReport:
     def test_the_buckets_add_up_to_the_file_count(self, report: Report) -> None:
-        """七個桶互斥且窮盡——加不起來的報表會讓沒被數到的檔案看起來不存在。"""
+        """八個桶互斥且窮盡——加不起來的報表會讓沒被數到的檔案看起來不存在。"""
         counts = report.overall
 
         assert sum(getattr(counts, field.value) for field in Bucket) == counts.files
+
+    def test_every_guarded_number_names_a_counter_and_a_baseline_field(self) -> None:
+        """`GUARDED` 是字串加 `getattr`，型別檢查看不到它——錯字只會在 CI 跑 bench 時
+        以「找不到欄位」炸掉，所以在這裡先炸。
+        """
+        assert set(GUARDED) <= {f.name for f in fields(Counts)}
+        assert set(GUARDED) <= {f.name for f in fields(Baseline)}
 
     def test_every_bucket_names_a_counter(self) -> None:
         """`Bucket` 的值直接當 `Counts` 的欄位名用，錯字只會在執行期炸——所以在這裡先炸。"""
@@ -120,18 +152,31 @@ class TestRegressions:
     def test_more_wrong_imports_is_a_regression(self) -> None:
         report = _report(Counts(files=1, auto_wrong=1))
 
-        assert regressions(report, Baseline(auto_correct=0, auto_wrong=0))
+        assert regressions(report, _baseline(auto_wrong=0))
 
     def test_one_lost_auto_import_is_forgiven(self) -> None:
         """語料會長大：新加一筆難的不該擋住 PR。"""
         report = _report(Counts(files=10, auto_correct=9))
 
-        assert regressions(report, Baseline(auto_correct=10, auto_wrong=0)) == ()
+        assert regressions(report, _baseline(auto_correct=10)) == ()
 
     def test_two_lost_auto_imports_are_not(self) -> None:
         report = _report(Counts(files=10, auto_correct=8))
 
-        assert regressions(report, Baseline(auto_correct=10, auto_wrong=0))
+        assert regressions(report, _baseline(auto_correct=10))
+
+    def test_subtitles_that_stop_matching_are_a_regression_too(self) -> None:
+        """字幕與 extras 也是自動搬進媒體庫的檔案（票 07）。它們掉光了不會讓
+        `auto_wrong` 動一格——沒有這一條，那種退步在 CI 上是看不見的。
+        """
+        report = _report(Counts(files=10, subtitle_correct=5))
+
+        assert regressions(report, _baseline(subtitle_correct=10))
+
+    def test_extras_that_stop_matching_are_a_regression_too(self) -> None:
+        report = _report(Counts(files=10, extra_correct=5))
+
+        assert regressions(report, _baseline(extra_correct=10))
 
 
 class TestScoring:
@@ -198,12 +243,40 @@ class TestScoring:
 
         assert bucket(expected, item) is Bucket.AUTO_WRONG
 
+    def test_the_same_episode_written_to_the_wrong_path_is_auto_wrong(self) -> None:
+        """季集對了但檔名錯了，Jellyfin 那一端還是入錯（票 07）。"""
+        item = _item(PlanAction.IMPORT, 1, 2, target=TARGET.replace("S01E02", "S01E02 - Wrong"))
+
+        assert bucket(_expected(PlanAction.IMPORT, 1, 2), item) is Bucket.AUTO_WRONG
+
+    def test_a_subtitle_the_corpus_agrees_with(self) -> None:
+        assert (
+            bucket(_expected(PlanAction.SUBTITLE, 1, 2), _item(PlanAction.SUBTITLE, 1, 2))
+            is Bucket.SUBTITLE_CORRECT
+        )
+
+    def test_a_subtitle_hung_on_the_wrong_episode_is_auto_wrong(self) -> None:
+        """字幕也是自動搬進媒體庫的檔案，掛錯與入錯集數一樣嚴重。"""
+        item = _item(PlanAction.SUBTITLE, 1, 99, target=TARGET.replace("E02", "E99"))
+
+        assert bucket(_expected(PlanAction.SUBTITLE, 1, 2), item) is Bucket.AUTO_WRONG
+
+    def test_an_extra_written_somewhere_else_is_auto_wrong(self) -> None:
+        item = _item(PlanAction.EXTRA, target="Other Show [tmdbid-2]/extras/a.mkv")
+
+        assert bucket(_expected(PlanAction.EXTRA), item) is Bucket.AUTO_WRONG
+
     def test_a_confidence_below_the_expectation_is_not_an_error(self) -> None:
         """`min_confidence` 不參與比對：少自動化一點不等於做錯事。"""
         expected = _expected(PlanAction.IMPORT, 1, 2)
         item = _item(PlanAction.IMPORT, 1, 2, confidence=Confidence.MEDIUM)
 
         assert bucket(expected, item) is Bucket.AUTO_CORRECT
+
+
+def _baseline(**overrides: int) -> Baseline:
+    fields_ = {"auto_correct": 0, "auto_wrong": 0, "extra_correct": 0, "subtitle_correct": 0}
+    return Baseline(**{**fields_, **overrides})
 
 
 def _report(counts: Counts) -> Report:
@@ -216,6 +289,7 @@ def _expected(
     episode: int | None = None,
     *,
     tags: Tags | None = None,
+    target: str = TARGET,
 ) -> Expected:
     return Expected(
         path="Show - 02.mkv",
@@ -225,6 +299,7 @@ def _expected(
         episode=episode,
         episode_end=None,
         tags=tags,
+        target=target if action in _WRITTEN else "",
     )
 
 
@@ -235,6 +310,7 @@ def _item(
     *,
     tags: Tags | None = None,
     confidence: Confidence = Confidence.HIGH,
+    target: str = TARGET,
 ) -> PlanItem:
     return PlanItem(
         rel_path="Show - 02.mkv",
@@ -244,4 +320,5 @@ def _item(
         episode_start=episode,
         tags=tags or Tags(),
         confidence=confidence,
+        target_path=target if action in _WRITTEN else "",
     )

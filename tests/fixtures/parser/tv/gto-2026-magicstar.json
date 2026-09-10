@@ -12,10 +12,10 @@
     {"path": "GTO.2026.EP08.1080p.NF.WEB-DL.AAC2.0.H.264-MagicStar.Chs.srt", "size": 49354}
   ],
   "expected": [
-    {"path": "GTO.2026.EP08.1080p.NF.WEB-DL.AAC2.0.H.264-MagicStar.mkv", "kind": "video", "action": "import", "season": 1, "episode": 8, "tags": {"source": "WEB", "resolution": "1080p", "subs": ["CHS", "CHT", "JP", "EN"], "group": "MagicStar"}, "min_confidence": "medium"},
-    {"path": "GTO.2026.EP08.1080p.NF.WEB-DL.AAC2.0.H.264-MagicStar.Cht.srt", "kind": "subtitle", "action": "subtitle", "season": 1, "episode": 8},
-    {"path": "GTO.2026.EP08.1080p.NF.WEB-DL.AAC2.0.H.264-MagicStar.Eng.srt", "kind": "subtitle", "action": "subtitle", "season": 1, "episode": 8},
-    {"path": "GTO.2026.EP08.1080p.NF.WEB-DL.AAC2.0.H.264-MagicStar.Jpn.srt", "kind": "subtitle", "action": "subtitle", "season": 1, "episode": 8},
-    {"path": "GTO.2026.EP08.1080p.NF.WEB-DL.AAC2.0.H.264-MagicStar.Chs.srt", "kind": "subtitle", "action": "subtitle", "season": 1, "episode": 8}
+    {"path": "GTO.2026.EP08.1080p.NF.WEB-DL.AAC2.0.H.264-MagicStar.mkv", "kind": "video", "action": "import", "season": 1, "episode": 8, "tags": {"source": "WEB", "resolution": "1080p", "subs": ["CHS", "CHT", "JP", "EN"], "group": "MagicStar"}, "target": "GTO (2026) [tmdbid-325022]/Season 01/GTO (2026) - S01E08 [WEB][1080p][CHS+CHT+JP+EN][MagicStar].mkv", "min_confidence": "medium"},
+    {"path": "GTO.2026.EP08.1080p.NF.WEB-DL.AAC2.0.H.264-MagicStar.Cht.srt", "kind": "subtitle", "action": "subtitle", "season": 1, "episode": 8, "target": "GTO (2026) [tmdbid-325022]/Season 01/GTO (2026) - S01E08 [WEB][1080p][CHS+CHT+JP+EN][MagicStar].CHT.zh.srt"},
+    {"path": "GTO.2026.EP08.1080p.NF.WEB-DL.AAC2.0.H.264-MagicStar.Eng.srt", "kind": "subtitle", "action": "subtitle", "season": 1, "episode": 8, "target": "GTO (2026) [tmdbid-325022]/Season 01/GTO (2026) - S01E08 [WEB][1080p][CHS+CHT+JP+EN][MagicStar].en.srt"},
+    {"path": "GTO.2026.EP08.1080p.NF.WEB-DL.AAC2.0.H.264-MagicStar.Jpn.srt", "kind": "subtitle", "action": "subtitle", "season": 1, "episode": 8, "target": "GTO (2026) [tmdbid-325022]/Season 01/GTO (2026) - S01E08 [WEB][1080p][CHS+CHT+JP+EN][MagicStar].ja.srt"},
+    {"path": "GTO.2026.EP08.1080p.NF.WEB-DL.AAC2.0.H.264-MagicStar.Chs.srt", "kind": "subtitle", "action": "subtitle", "season": 1, "episode": 8, "target": "GTO (2026) [tmdbid-325022]/Season 01/GTO (2026) - S01E08 [WEB][1080p][CHS+CHT+JP+EN][MagicStar].CHS.zh.srt"}
   ]
 }

@@ -40,8 +40,10 @@ CATEGORIES: tuple[str, ...] = ("anime", "tv", "movie")
 class Bucket(StrEnum):
     """一個檔案落在哪一格。**值就是 `Counts` 的欄位名**，歸桶與計數之間不必再多一張對照表。
 
-    七格互斥且窮盡：加起來就是檔案數。plan §4.6 只點名了前五格，`MISSED` 與 `SKIPPED` 是補
-    上去的——少了它們，報表的欄位加不到總數，那種報表會讓沒被數到的檔案看起來不存在。
+    八格互斥且窮盡：加起來就是檔案數。plan §4.6 只點名了前五格，`MISSED` 與 `SKIPPED` 是
+    票 05 補的——少了它們，報表的欄位加不到總數，那種報表會讓沒被數到的檔案看起來不存在；
+    `SUBTITLE_CORRECT` 是票 07 補的，與 `EXTRA_CORRECT` 同一個道理：外掛字幕也是自動搬進
+    媒體庫的檔案，混進 `AUTO_CORRECT` 會讓「入對幾集」這個數字說不清楚。
     """
 
     #: 自動入庫而且對（brief §6.9）。
@@ -54,6 +56,8 @@ class Bucket(StrEnum):
     MISSED = "missed"
     UNMATCHED_CORRECT = "unmatched_correct"
     EXTRA_CORRECT = "extra_correct"
+    #: 外掛字幕掛對了影片而且掛在對的檔名上（brief §6.7）。
+    SUBTITLE_CORRECT = "subtitle_correct"
     #: 雙方都同意可以忽略（字型、海報、nfo）。
     SKIPPED = "skipped"
 
@@ -70,6 +74,9 @@ class Expected:
     episode_end: int | None
     #: `None` = 這一筆不檢查 tag（字幕與 extras 不帶 tag）。
     tags: Tags | None
+    #: 相對於 Route 目標的目標路徑（plan §5）。會被寫出去的檔案（import / extra / subtitle）
+    #: 一定要有，其餘一定是空字串——`_matches` 兩種都比。
+    target: str
     #: 期望的信心下限。**不參與比對**（見 `_matches`）：信心低於期望不是做錯事。
     #: 它自己一欄，讓「哪些檔案本來該自動入庫卻沒有」看得見（brief §6.5 的取捨）。
     min_confidence: Confidence | None = None
@@ -106,7 +113,7 @@ class Fixture:
 
 @dataclass(frozen=True, slots=True)
 class Counts:
-    """一個分類（或整體）的計數。七個桶的定義見 `Bucket`。"""
+    """一個分類（或整體）的計數。八個桶的定義見 `Bucket`。"""
 
     files: int = 0
     kind_correct: int = 0
@@ -118,13 +125,14 @@ class Counts:
     #: 也是另一個軸：低於下限不是做錯事，但它說得出「本來該自動入庫的少了幾個」。
     confidence_checked: int = 0
     confidence_met: int = 0
-    #: 以下七格與 `Bucket` 同名同義。
+    #: 以下八格與 `Bucket` 同名同義。
     auto_correct: int = 0
     auto_wrong: int = 0
     review: int = 0
     missed: int = 0
     unmatched_correct: int = 0
     extra_correct: int = 0
+    subtitle_correct: int = 0
     skipped: int = 0
     high_total: int = 0
     high_wrong: int = 0
@@ -231,7 +239,9 @@ def bucket(expected: Expected, item: PlanItem) -> Bucket:
     if item.action is PlanAction.IMPORT and item.confidence in AUTO_APPLIED:
         return Bucket.AUTO_CORRECT if _matches(expected, item) else Bucket.AUTO_WRONG
     if item.action is PlanAction.EXTRA:
-        return Bucket.EXTRA_CORRECT if expected.action is PlanAction.EXTRA else Bucket.AUTO_WRONG
+        return Bucket.EXTRA_CORRECT if _matches(expected, item) else Bucket.AUTO_WRONG
+    if item.action is PlanAction.SUBTITLE:
+        return Bucket.SUBTITLE_CORRECT if _matches(expected, item) else Bucket.AUTO_WRONG
     if item.action is PlanAction.SKIP:
         return Bucket.SKIPPED if expected.action is PlanAction.SKIP else Bucket.MISSED
     if item.action is PlanAction.UNMATCHED:
@@ -252,12 +262,17 @@ def _add_confidence(counts: Counts, expected: Expected, item: PlanItem) -> Count
 
 
 def _matches(expected: Expected, item: PlanItem) -> bool:
-    """處置、季、集、集尾都一樣，而且語料有寫 tag 時 tag 也一樣。
+    """處置、季、集、集尾、**目標路徑**都一樣，而且語料有寫 tag 時 tag 也一樣。
+
+    目標路徑一起比是票 07 的事：季集對了但檔名錯了，Jellyfin 那一端就是入錯——
+    多版本的判定、繁簡的分辨、多集檔的表示法全都只寫在檔名裡（brief §7.1、§7.2、§6.7）。
 
     `min_confidence` **不參與**：信心低於期望不是「做錯了」，只是少自動化了一點，
     那件事由 `review` 與 high / medium 的誤判率各自回答。
     """
     if item.action is not expected.action:
+        return False
+    if item.target_path != expected.target:
         return False
     if (item.season, item.episode_start, item.episode_end) != (
         expected.season,
@@ -297,6 +312,7 @@ def _expected(raw: dict[str, Any]) -> Expected:
         episode=raw.get("episode"),
         episode_end=raw.get("episode_end"),
         tags=_tags(raw.get("tags")),
+        target=raw.get("target", ""),
         min_confidence=Confidence(raw["min_confidence"]) if raw.get("min_confidence") else None,
     )
 
@@ -318,41 +334,54 @@ def _tags(raw: dict[str, Any] | None) -> Tags | None:
 # --- baseline（plan §4.6 的 CI 規則） --------------------------------------------------
 
 
+#: 自動搬進媒體庫而且**對**的那三格（`Bucket`）。三格都要守：字幕或 extras 整批掉出來時
+#: `auto_wrong` 一格都不會動，少了這張表那種退步在 CI 上是看不見的（票 07）。
+GUARDED: tuple[str, ...] = ("auto_correct", "extra_correct", "subtitle_correct")
+
+
 @dataclass(frozen=True, slots=True)
 class Baseline:
     auto_correct: int
     auto_wrong: int
+    extra_correct: int
+    subtitle_correct: int
 
 
 def load_baseline(path: Path) -> Baseline:
     raw = json.loads(path.read_text(encoding="utf-8"))
-    return Baseline(auto_correct=raw["auto_correct"], auto_wrong=raw["auto_wrong"])
+    return Baseline(
+        auto_correct=raw["auto_correct"],
+        auto_wrong=raw["auto_wrong"],
+        extra_correct=raw["extra_correct"],
+        subtitle_correct=raw["subtitle_correct"],
+    )
 
 
 def dump_baseline(path: Path, report: Report, note: str) -> None:
     payload = {
         "note": note,
-        "auto_correct": report.overall.auto_correct,
         "auto_wrong": report.overall.auto_wrong,
+        **{name: getattr(report.overall, name) for name in GUARDED},
     }
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
 def regressions(report: Report, baseline: Baseline) -> tuple[str, ...]:
-    """plan §4.6 的門檻：`auto_wrong` 不得高於 baseline，`auto_correct` 不得低於 baseline 減 1。
+    """plan §4.6 的門檻：`auto_wrong` 不得高於 baseline，`GUARDED` 三格不得低於 baseline 減 1。
 
-    留一格給 `auto_correct` 是因為語料會長大：新加一筆難的語料而讓一個檔案掉出自動入庫，
-    不該擋住 PR。`auto_wrong` 沒有這一格——入錯一個就是入錯。
+    留一格是因為語料會長大：新加一筆難的語料而讓一個檔案掉出自動入庫，不該擋住 PR。
+    `auto_wrong` 沒有這一格——入錯一個就是入錯。
     """
     problems: list[str] = []
     if report.overall.auto_wrong > baseline.auto_wrong:
         problems.append(
             f"auto_wrong rose from {baseline.auto_wrong} to {report.overall.auto_wrong}"
         )
-    if report.overall.auto_correct < baseline.auto_correct - 1:
-        problems.append(
-            f"auto_correct fell from {baseline.auto_correct} to {report.overall.auto_correct}"
-        )
+    problems.extend(
+        f"{name} fell from {getattr(baseline, name)} to {getattr(report.overall, name)}"
+        for name in GUARDED
+        if getattr(report.overall, name) < getattr(baseline, name) - 1
+    )
     return tuple(problems)
 
 

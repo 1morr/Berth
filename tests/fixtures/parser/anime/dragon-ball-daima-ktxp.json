@@ -8,6 +8,6 @@
     {"path": "[KTXP][Dragon Ball Daima][01][GB][1080p].mp4", "size": 578955391}
   ],
   "expected": [
-    {"path": "[KTXP][Dragon Ball Daima][01][GB][1080p].mp4", "kind": "video", "action": "import", "season": 1, "episode": 1, "tags": {"resolution": "1080p", "subs": ["CHS"], "group": "KTXP"}, "min_confidence": "medium"}
+    {"path": "[KTXP][Dragon Ball Daima][01][GB][1080p].mp4", "kind": "video", "action": "import", "season": 1, "episode": 1, "tags": {"resolution": "1080p", "subs": ["CHS"], "group": "KTXP"}, "target": "Dragon Ball DAIMA (2024) [tmdbid-236994]/Season 01/Dragon Ball DAIMA (2024) - S01E01 - Conspiracy [1080p][CHS][KTXP].mp4", "min_confidence": "medium"}
   ]
 }

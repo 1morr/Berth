@@ -58,28 +58,6 @@ def imported(
     )
 
 
-class TestDuplicates:
-    def test_two_files_claiming_one_episode_both_go_to_review(self) -> None:
-        """誰對誰錯檔名裡沒有答案，所以兩個都不自動入庫（brief §6.4 第 4 點）。"""
-        rows = [imported(3, path="a.mkv"), imported(3, path="b.mkv"), imported(4)]
-
-        items = {item.rel_path: item for item in score(rows, context())}
-
-        assert items["a.mkv"].action is PlanAction.REVIEW
-        assert items["b.mkv"].action is PlanAction.REVIEW
-        assert items["Show - 04.mkv"].action is PlanAction.IMPORT
-
-    def test_it_says_why(self) -> None:
-        items = score([imported(3, path="a.mkv"), imported(3, path="b.mkv")], context())
-
-        assert any("same episode" in reason for reason in items[0].reasons)
-
-    def test_the_same_episode_in_two_seasons_is_not_a_duplicate(self) -> None:
-        rows = [imported(1, path="s1.mkv", season=1), imported(1, path="s2.mkv", season=2)]
-
-        assert all(item.action is PlanAction.IMPORT for item in score(rows, context()))
-
-
 class TestTooManyFiles:
     """brief §6.5 的 low：影片數量與 TMDB 集數明顯不符。"""
 
@@ -165,7 +143,8 @@ class TestCompleteSeason:
 class TestThroughThePlanner:
     """`plan()` 走完整條路的樣子。這幾條是 benchmark 之外的最小回歸。"""
 
-    def test_a_batch_of_two_versions_of_the_same_episode_goes_to_review(self) -> None:
+    def test_two_versions_of_the_same_episode_both_get_imported(self) -> None:
+        """不同 tags 就是不同版本，並存在同一季資料夾（brief §7.7）；衝突比的是檔名。"""
         files = [
             FileEntry(rel_path="Show.S01E01.1080p.WEB.mkv", size=2_000_000_000),
             FileEntry(rel_path="Show.S01E01.720p.WEB.mkv", size=1_000_000_000),
@@ -173,4 +152,5 @@ class TestThroughThePlanner:
 
         items = plan("Show.S01.1080p.WEB", files, context())
 
-        assert all(item.action is PlanAction.REVIEW for item in items)
+        assert all(item.action is PlanAction.IMPORT for item in items)
+        assert len({item.target_path for item in items}) == 2

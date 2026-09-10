@@ -193,12 +193,15 @@ uv run berth bench                     # 跑一遍並印出報表；有問題時
 uv run berth bench --update-baseline   # 改善之後更新門檻（理由寫進 commit message）
 ```
 
-報表逐分類（anime / tv / movie）與整體列出七個互斥的桶——`auto_correct`、`auto_wrong`、
-`review`、`missed`、`unmatched_correct`、`extra_correct`、`skipped`，加起來就是檔案數——
-再加上分類正確率、tag 正確率、信心達標率（語料寫的 `min_confidence` 有沒有達到）與
-high / medium 的誤判率。**最重要的是 `auto_wrong`**：
-自動處置但處置錯，門檻是「不得高於 `tests/fixtures/parser/baseline.json`」；`auto_correct`
-則允許比 baseline 少一筆（語料會長大）。
+報表逐分類（anime / tv / movie）與整體列出八個互斥的桶——`auto_correct`、`auto_wrong`、
+`review`、`missed`、`unmatched_correct`、`extra_correct`、`subtitle_correct`、`skipped`，
+加起來就是檔案數——再加上分類正確率、tag 正確率、信心達標率（語料寫的 `min_confidence`
+有沒有達到）與 high / medium 的誤判率。**最重要的是 `auto_wrong`**：自動處置但處置錯，
+門檻是「不得高於 `tests/fixtures/parser/baseline.json`」；`auto_correct`、`extra_correct`、
+`subtitle_correct` 三格則各允許比 baseline 少一筆（語料會長大）。
+
+比對包含**目標路徑**：季集對了但檔名錯了，Jellyfin 那一端還是入錯（多版本的判定、繁簡的
+分辨與多集檔的表示法全都只寫在檔名裡）。
 
 同一支邏輯也是 `tests/unit/test_bench.py`，所以 CI 不另外開 job——`uv run pytest` 綠燈就
 代表 benchmark 沒掉。語料怎麼來、怎麼加一筆，見

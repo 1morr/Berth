@@ -8,6 +8,6 @@
     {"path": "[jibaketa]Kamen Rider Zeztz - 50 END (WEB 1920x1080 AVC AACx2 SRT+PGS ViuTV CHT).mkv", "size": 1290563508}
   ],
   "expected": [
-    {"path": "[jibaketa]Kamen Rider Zeztz - 50 END (WEB 1920x1080 AVC AACx2 SRT+PGS ViuTV CHT).mkv", "kind": "video", "action": "import", "season": 1, "episode": 50, "tags": {"source": "WEB", "resolution": "1080p", "subs": ["CHT"], "group": "jibaketa"}, "min_confidence": "medium"}
+    {"path": "[jibaketa]Kamen Rider Zeztz - 50 END (WEB 1920x1080 AVC AACx2 SRT+PGS ViuTV CHT).mkv", "kind": "video", "action": "import", "season": 1, "episode": 50, "tags": {"source": "WEB", "resolution": "1080p", "subs": ["CHT"], "group": "jibaketa"}, "target": "Kamen Rider ZEZTZ (2025) [tmdbid-295434]/Season 01/Kamen Rider ZEZTZ (2025) - S01E50 - Last Case Imagine [WEB][1080p][CHT][jibaketa].mkv", "min_confidence": "medium"}
   ]
 }

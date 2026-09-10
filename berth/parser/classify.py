@@ -13,6 +13,7 @@ import re
 from collections.abc import Sequence
 
 from berth.domain import FileEntry, FileKind
+from berth.naming import extension
 
 _BY_EXTENSION: dict[str, FileKind] = {
     **dict.fromkeys(
@@ -108,7 +109,7 @@ def _is_disc(files: Sequence[FileEntry]) -> bool:
 
 
 def _kind_of(entry: FileEntry, reference_video: int) -> FileKind:
-    kind = _BY_EXTENSION.get(_extension(entry.name), FileKind.OTHER)
+    kind = _BY_EXTENSION.get(extension(entry.name), FileKind.OTHER)
     if kind is not FileKind.VIDEO:
         return kind
     if _is_sample(entry, reference_video):
@@ -143,12 +144,7 @@ def _is_extra(entry: FileEntry) -> bool:
 def _biggest_video_per_directory(files: Sequence[FileEntry]) -> dict[str, int]:
     biggest: dict[str, int] = {}
     for entry in files:
-        if _BY_EXTENSION.get(_extension(entry.name)) is not FileKind.VIDEO:
+        if _BY_EXTENSION.get(extension(entry.name)) is not FileKind.VIDEO:
             continue
         biggest[entry.directory] = max(biggest.get(entry.directory, 0), entry.size)
     return biggest
-
-
-def _extension(name: str) -> str:
-    _, dot, suffix = name.rpartition(".")
-    return f".{suffix.lower()}" if dot else ""

@@ -81,10 +81,14 @@ include_external_packages = true
 name = "Dependencies point downwards (plan 1.3)"
 type = "layers"
 containers = ["berth"]
+# `naming` 在 `parser` 底下而不是與它並排（M1 票 07）：`plan` 階段要產出目標路徑
+# （plan §4.1），而衝突偵測比的就是那條路徑——兩個檔案指到同一個檔名時誰都不能自動入庫。
+# 反向不成立：`naming` 只認 `domain` 的快照與 `Tags`。
 layers = [
     "api | pipeline",
     "services",
-    "adapters | models | parser | naming",
+    "adapters | models | parser",
+    "naming",
     "db",
     "domain",
 ]
@@ -116,6 +120,12 @@ forbidden_modules = [
     "berth.pipeline",
     "berth.services",
 ]
+
+[[tool.importlinter.contracts]]
+name = "naming does not depend on parser"
+type = "forbidden"
+source_modules = ["berth.naming"]
+forbidden_modules = ["berth.parser"]
 
 [[tool.importlinter.contracts]]
 # parser 與 naming 是純函式（plan §4、§5）：TMDB 資料以快照物件傳入，檔案清單由呼叫端給。

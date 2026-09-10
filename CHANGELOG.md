@@ -180,6 +180,20 @@ Windows Docker Desktop（NTFS bind mount）與 Linux（ext4）上各跑一次 `d
 - `import-linter` 契約「parser and naming do no IO」：`berth.parser` 與 `berth.naming` 不得
   import `os` / `pathlib` / `httpx` / `sqlalchemy` 這一類會做 IO 的模組——benchmark 能離線跑
   靠的就是這條。
+- **命名引擎**（`berth/naming/`，plan §5）：作品資料夾、季資料夾、劇集檔、電影檔、外掛字幕、
+  extras 六種凍結模板，輸出相對於 Route 目標的路徑。集名來自快照（缺、空、或 `Episode 5`
+  這種佔位就省略，上限 80 字元）；`sanitize` 逐段套用，檔名的 200 位元組上限先扣掉副檔名。
+- **外掛字幕附掛**（`berth/parser/subtitles.py`，brief §6.7）：主幹相同（去掉語言後綴）或
+  字幕資料夾裡的集號 → 那個影片；語言由字幕自己的後綴、資料夾、檔名決定。檔名走
+  `{影片主幹}.{CHT|CHS}.zh.{ext}`，日文與英文只用 `ja` / `en`——`zh-Hant` 只有 Jellyfin 10.11
+  認得（brief §20.6 實測）。
+- **Plan 產出目標路徑**：`PlanItem.target_path`，只有真的會被寫出去的檔案有值。
+  兩個檔案指到同一條路徑就是衝突，兩個都進 review（brief §6.4 第 5 點）。
+- `berth bench` 的比對**含目標路徑**，報表多一個 `subtitle_correct` 桶（八個桶），
+  baseline 多守 `extra_correct` 與 `subtitle_correct` 兩格。
+- `AiPlanner` 介面與 `NullAiPlanner`（`berth/adapters/ai.py`，plan §4.5、brief §6.10）：
+  `propose(context, files, rules_plan) -> Plan | None`。M4 才有實作，介面先定是因為它約束的是
+  規則層——AI 只能提出規則層表達得出來的處置，碰不到檔案。
 
 ### Changed
 
@@ -191,6 +205,12 @@ Windows Docker Desktop（NTFS bind mount）與 Linux（ext4）上各跑一次 `d
   `{tv,movie}/popular` 的每一筆沒有 `media_type`。
 - `settings.services.tmdb` 新增 `image_base_url`，精靈第 6 步驗憑證時順手寫下——`configuration`
   對同一把憑證是常數，每次探索都問一次是白花一個請求。
+- **`naming` 移到 `parser` 之下**（plan §1.3 的依賴圖與 import-linter 契約）：`plan` 階段要
+  產出目標路徑，而衝突偵測比的就是那條路徑。反向不成立，另有一條契約守著。
+- **「兩個檔案同一集」不再一律進 review**：同一集不同 tags 的檔案本來就該並存（brief §7.7），
+  简繁分軌與 1080p / 720p 同包都是常態。衝突改比**目標路徑**——那正是「會不會蓋掉對方」的定義。
+- **標題自己帶著同一個年份時不再接一次**：TMDB 上真的有 `GTO (2026)` 這種標題，照字面套模板
+  會寫成 `GTO (2026) (2026)`。年份不同的兩個數字說的是兩件事，照樣兩個都留。
 - **作品資料夾名在第一次送單成功那一刻凍結**（plan §5、brief §4.5）：那是它第一次真的通向磁碟，
   而且有人在場確認。在那之前它跟著 TMDB 的標題走，畫面上是「將會是」的預覽；凍結之後 TMDB
   改標題也不動它——已入庫的檔案不該因為別人改了條目就對不上。**「追蹤」不是一個按鈕**，它是
