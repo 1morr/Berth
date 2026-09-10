@@ -18,7 +18,6 @@
 
 from __future__ import annotations
 
-import contextlib
 import errno
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
@@ -61,6 +60,7 @@ from berth.models import (
 from berth.models.types import utcnow
 from berth.services.clients import BUNDLED_QBITTORRENT_URL, ServiceClientFactory
 from berth.services.jellyfin import BUNDLED_LIBRARIES, TVDB_MARKER, berth_path, library_slug
+from berth.services.qbittorrent import sign_in
 from berth.services.settings import read_settings
 from berth.services.steps import StepView, message, step_views
 
@@ -227,7 +227,7 @@ async def check_routes(
 
 
 def _planned_from(route: Route, paths: PathSettings) -> _Planned:
-    """已經存在的 Route → 檢查要用的計劃。save path 照 `_save_path` 算，不另存一份。"""
+    """已經存在的 Route → 檢查要用的計劃。save path 照 `save_path_of` 算，不另存一份。"""
     return _Planned(
         slug=route.slug,
         library_name=route.jellyfin_library_name,
@@ -235,7 +235,7 @@ def _planned_from(route: Route, paths: PathSettings) -> _Planned:
         collection_type=route.collection_type,
         target_path=route.target_path,
         category=route.category,
-        save_path=_save_path(paths.complete_root, route.slug),
+        save_path=save_path_of(paths.complete_root, route.slug),
         profile=route.profile,
     )
 
@@ -253,7 +253,7 @@ async def _run_checks(
     qbittorrent = factory.qbittorrent(qbittorrent_settings.base_url or BUNDLED_QBITTORRENT_URL)
     jellyfin = factory.jellyfin(jellyfin_settings.base_url, token=jellyfin_settings.api_key)
     try:
-        await _sign_in(qbittorrent, qbittorrent_settings)
+        await sign_in(qbittorrent, qbittorrent_settings)
         for plan_row, route in zip(planned, routes, strict=True):
             previous = RouteHealth.model_validate(route.health_detail_json or {})
             health = await _check(plan_row, route, qbittorrent, jellyfin)
@@ -331,7 +331,7 @@ def _plan(
                 collection_type=collection_type,
                 target_path=selection.target_path,
                 category=f"{CATEGORY_PREFIX}{slug}",
-                save_path=_save_path(paths.complete_root, slug),
+                save_path=save_path_of(paths.complete_root, slug),
                 profile=selection.profile,
             )
         )
@@ -464,8 +464,11 @@ class _Checker:
         """category 不存在才建；存在但 save path 不同就回報衝突且**不覆寫**（plan §8.1）。"""
         # 硬鏈接的來源目錄。qBittorrent 完成時才會自己建，但檢查現在就要用到它。
         ensure_directory(self._save_path)
+        # 送給 qBittorrent 的是**計劃裡那一串字**，不是 `Path` 走一趟回來的樣子：
+        # 容器路徑一律是 POSIX，而 `str(Path(...))` 在 Windows 上會換成反斜線。送單
+        # （票 09）比對的是同一支 `save_path_of` 的輸出，兩邊差一種分隔符就會判成衝突。
         outcome = await ensure_category(
-            self._qbittorrent, self._plan.category, str(self._save_path)
+            self._qbittorrent, self._plan.category, self._plan.save_path
         )
         self._reported_save_path = outcome.save_path
         detail = f"{outcome.name} → {outcome.save_path}"
@@ -576,19 +579,6 @@ assert set(_CHECKS) == set(RouteCheck), "every RouteCheck needs a check"
 # --- 服務 ---------------------------------------------------------------
 
 
-async def _sign_in(client: QbittorrentClient, settings: QbittorrentSettings) -> None:
-    """既有服務要先登入；套件內的那一台在免密白名單上（plan §9.2）。
-
-    **登入失敗不在這裡爆掉**：帳密不對要變成每個 Route 的 `category` 那一條紅燈（接下來的
-    呼叫會丟同一個 `AuthFailedError`，原文就落在那一行），而不是一個把整頁換成 500、
-    連哪個 Route 卡住都看不出來的例外。
-    """
-    if not settings.username:
-        return
-    with contextlib.suppress(ServiceError):
-        await client.login(settings.username, settings.password)
-
-
 # --- 攤平 ---------------------------------------------------------------
 
 
@@ -606,7 +596,7 @@ def _route_view(route: Route, complete_root: str) -> RouteView:
         collection_type=route.collection_type,
         target_path=route.target_path,
         category=route.category,
-        save_path=_save_path(complete_root, route.slug),
+        save_path=save_path_of(complete_root, route.slug),
         profile=route.profile,
         enabled=route.enabled,
         health=route.health_status,
@@ -617,8 +607,9 @@ def _route_view(route: Route, complete_root: str) -> RouteView:
     )
 
 
-def _save_path(complete_root: str, slug: str) -> str:
-    """Route 的 complete 子目錄（brief §4.1）。**一個地方算，兩個地方用**——計劃與畫面。"""
+def save_path_of(complete_root: str, slug: str) -> str:
+    """Route 的 complete 子目錄（brief §4.1）。**一個地方算，到處用**——精靈的檢查、
+    健康頁、畫面上那一行，以及票 09 的送單（category 的 save path 就是它）。"""
     return f"{complete_root.rstrip('/')}/{slug}"
 
 

@@ -122,6 +122,13 @@ function IdentityBand({ media, freshness }: { media: Media; freshness: ReactNode
         <Poster url={media.poster_url} />
         <div className="grid content-start gap-4">
           <div className="grid gap-1">
+            {/* 中性色塊：「Berth 為它做過事」是一個事實，不是四個信號色裡的任何一個狀態
+                （The Role Is Not A State Rule）。推導出來的，不是一顆按鈕（票 04b）。 */}
+            {media.tracked && (
+              <p>
+                <span className="label bg-deck px-2 py-1.5 text-ink">{t('media.tracked')}</span>
+              </p>
+            )}
             <h1 className="text-xl leading-snug font-semibold text-ink">{media.title}</h1>
             {media.title_en !== media.title && (
               <p className="value text-sm text-ink-dim">{media.title_en}</p>
@@ -160,11 +167,17 @@ function IdentityBand({ media, freshness }: { media: Media; freshness: ReactNode
           )}
           {/* 這一串字是這一頁的署名事實：送單成功那一刻它會真的出現在檔案系統上、而且改不掉。
             term 走 `.label` 而不是 `code`——`code` 是給**term 本身就是機器字串**的那種列
-            （上面的 `tmdb_id`）。這一列的機器字串在 dd，而 dd 本來就是 `.value`。 */}
-          <CutawayRow term={t('media.folderPreview')} value={media.folder_name} />
+            （上面的 `tmdb_id`）。這一列的機器字串在 dd，而 dd 本來就是 `.value`。
+            凍結之後 term 換掉：「將會是」與「就是」是兩件事（票 09）。 */}
+          <CutawayRow
+            term={media.folder_frozen ? t('media.folderFrozen') : t('media.folderPreview')}
+            value={media.folder_name}
+          />
         </Cutaway>
-        {/* 整頁唯一一個定了就改不掉的東西，所以它自己說一句什麼時候定下來（票 04b）。 */}
-        <p className="max-w-prose text-xs text-ink-dim">{t('media.folderNote')}</p>
+        {/* 整頁唯一一個定了就改不掉的東西，所以它自己說一句什麼時候定下來（票 04b、09）。 */}
+        <p className="max-w-prose text-xs text-ink-dim">
+          {media.folder_frozen ? t('media.folderFrozenNote') : t('media.folderNote')}
+        </p>
       </div>
 
       {freshness}

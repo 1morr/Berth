@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from berth.adapters.qbittorrent import QbittorrentCategory, QbittorrentVersion
+from berth.adapters.qbittorrent import QbittorrentCategory, QbittorrentVersion, TorrentAdd
 
 #: 乾淨實例的偏好值，取自 `tests/fixtures/http/qbittorrent/app-preferences.*.json` 的同名鍵。
 #: 五個建議鍵全部與建議值不同，所以精靈第 4 步真的有差異可套（brief §20.7）。
@@ -32,6 +32,7 @@ class FakeQbittorrentClient:
         error: Exception | None = None,
         login_error: Exception | None = None,
         set_preferences_error: Exception | None = None,
+        add_error: Exception | None = None,
     ) -> None:
         self.base_url = base_url
         self._version = version or QbittorrentVersion(app="v5.2.3", webapi="2.15.1")
@@ -41,12 +42,17 @@ class FakeQbittorrentClient:
         self.error = error
         self._login_error = login_error
         self._set_preferences_error = set_preferences_error
+        #: 與 `error` 一樣是公開的：測試要能在中途把服務修好，重試那條路徑才驗得了。
+        self.add_error = add_error
         self.calls = 0
         self.logins: list[tuple[str, str]] = []
         #: 每一次 `set_preferences` 收到的鍵值，用來斷言「只寫有差異的鍵」。
         self.writes: list[dict[str, Any]] = []
         #: 這一台上被建出來的 category，用來斷言「已經在那裡的不會再建一次」。
         self.created_categories: list[QbittorrentCategory] = []
+        #: 收下的每一筆 `torrents/add`。送單測試斷言的就是它——category、tag 與
+        #: 交出去的到底是磁力連結還是一份 `.torrent`。
+        self.added: list[TorrentAdd] = []
 
     async def login(self, username: str, password: str) -> None:
         self.logins.append((username, password))
@@ -82,6 +88,12 @@ class FakeQbittorrentClient:
         category = QbittorrentCategory(name=name, save_path=save_path)
         self.created_categories.append(category)
         self._categories.append(category)
+
+    async def add_torrent(self, request: TorrentAdd) -> None:
+        """有狀態：收下的留著，測試才驗得出「重複送單沒有再送一次」。"""
+        if self.add_error is not None:
+            raise self.add_error
+        self.added.append(request)
 
     async def aclose(self) -> None:
         return None

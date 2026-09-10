@@ -41,6 +41,7 @@ from berth.services.routes import (
     build_routes,
     read_route_status,
     routes_ready,
+    save_path_of,
 )
 from berth.services.settings import read_settings, write_settings
 from berth.services.setup import (
@@ -133,10 +134,12 @@ class TestBundled:
 
         await build_routes(session, factory_for(roots, qbittorrent=qbittorrent), ())
 
+        # 送給 qBittorrent 的是 `save_path_of` 算出來的那一串字（容器路徑一律 POSIX），
+        # 不是 `Path` 在這台機器上的寫法——票 09 的送單比對的是同一支函式的輸出。
         assert [(row.name, row.save_path) for row in qbittorrent.created_categories] == [
-            ("berth-movies", str(roots["complete"] / "movies")),
-            ("berth-tv", str(roots["complete"] / "tv")),
-            ("berth-anime", str(roots["complete"] / "anime")),
+            ("berth-movies", save_path_of(str(roots["complete"]), "movies")),
+            ("berth-tv", save_path_of(str(roots["complete"]), "tv")),
+            ("berth-anime", save_path_of(str(roots["complete"]), "anime")),
         ]
 
     @pytest.mark.asyncio
@@ -485,8 +488,9 @@ class TestChecksReadTheServices:
         `stat` 的必須是 qBittorrent 回報的那個字串——拿 Berth 剛建好的目錄去 stat 一定會過。
         """
         await arrange(session, roots)
-        # 尾斜線是 4.4 的行為（brief §20.7）；路徑本身用 `Path` 組，Windows 上才與服務端一致。
-        reported = f"{roots['complete'] / 'tv'}/"
+        # 尾斜線是 4.4 的行為（brief §20.7）。路徑本身走 `save_path_of`：Berth 送出去的
+        # 就是那一串字，而這個情境問的正是「服務把它原樣回報回來時 Berth 怎麼判」。
+        reported = f"{save_path_of(str(roots['complete']), 'tv')}/"
         qbittorrent = applied_qbittorrent(
             roots, categories=(QbittorrentCategory(name="berth-tv", save_path=reported),)
         )

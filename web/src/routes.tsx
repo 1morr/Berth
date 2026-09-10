@@ -15,6 +15,7 @@ import { destination } from './auth/destination'
 import { AppShell } from './AppShell'
 import { DiscoverPage } from './pages/DiscoverPage'
 import { HealthPage } from './pages/HealthPage'
+import { JobsPage } from './pages/JobsPage'
 import { LoginPage } from './pages/LoginPage'
 import { MediaRoute } from './pages/MediaRoute'
 import { ServiceSettingsPage } from './pages/ServiceSettingsPage'
@@ -197,6 +198,24 @@ const mediaRoute = createRoute({
   component: MediaRoute,
 })
 
+/**
+ * 下載列表 `/jobs`（票 09）。送單之後去的地方。
+ *
+ * 一般使用者也進得來：送單本來就是他做的事（brief §11），而這一頁是它的結果。
+ */
+const jobsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/jobs',
+  beforeLoad: async ({ context, location }) => {
+    await requireSignedInPage(context.queryClient, location)
+  },
+  component: () => (
+    <AppShell>
+      <JobsPage />
+    </AppShell>
+  ),
+})
+
 const healthRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/health',
@@ -229,6 +248,7 @@ const serviceSettingsRoute = createRoute({
 export const routeTree = rootRoute.addChildren([
   indexRoute,
   healthRoute,
+  jobsRoute,
   loginRoute,
   mediaRoute,
   serviceSettingsRoute,

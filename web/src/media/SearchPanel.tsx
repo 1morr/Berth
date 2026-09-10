@@ -33,7 +33,7 @@ export function SearchPanel({ media }: { media: Media }) {
 
   // `undefined` 是「這一輪還沒動過」，與刻意選「尚未指定」（`null`）不是同一件事。
   const [route, setRoute] = useState<number | null | undefined>(undefined)
-  const chosen = route === undefined ? onlyChoice(media.routes) : route
+  const chosen = route === undefined ? preselected(media) : route
   const [keyword, setKeyword] = useState('')
   const [sort, setSort] = useState<SortKey>('seeders')
 
@@ -144,7 +144,7 @@ export function SearchPanel({ media }: { media: Media }) {
               <option value="size">{t('search.column.size')}</option>
             </select>
           </p>
-          <SearchResults rows={rows} sort={sort} onSort={setSort} />
+          <SearchResults rows={rows} sort={sort} onSort={setSort} media={media} route={chosen} />
         </>
       )}
 
@@ -193,8 +193,18 @@ function pending(keyword: string, planned: string[] | undefined): SetupStep[] {
   return steps.map((step) => ({ step, status: 'running', detail: '', error: '' }))
 }
 
-/** 只有一條收得下這部作品的 Route 時就是它——沒有第二個選項的選擇不該讓使用者做。 */
-function onlyChoice(routes: Media['routes']): number | null {
+/**
+ * 這一輪的預選 Route。
+ *
+ * **上次送單用的那一條優先**（`default_route_id`，票 09 寫）：入庫到哪裡是一個會重複的
+ * 決定，同一部作品的第二季幾乎一定進同一條 Route。它已經不在（被刪掉了）時落回下一條規則。
+ *
+ * 其次是「只有一條收得下這部作品」——沒有第二個選項的選擇不該讓使用者做。
+ */
+function preselected(media: Media): number | null {
+  const routes = media.routes
+  const last = routes.find((route) => route.id === media.default_route_id)
+  if (last) return last.id
   return routes.length === 1 ? routes[0].id : null
 }
 

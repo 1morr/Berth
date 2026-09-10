@@ -4,7 +4,7 @@
 瀏覽詳情**不是管理動作**——送單本來就是一般使用者做的事（brief §11）。
 
 **這一頁沒有「追蹤」這個動作**（票 04b）：`tracked` 是推導出來的（票 09 起是 `EXISTS(jobs)`），
-入庫到哪一條 Route 是搜尋與送單時才帶上的偏好，不落地成一個端點。
+而「入庫到哪一條 Route」由送單那一刻寫成 `default_route_id`，不另外開一支端點。
 """
 
 from __future__ import annotations
@@ -90,8 +90,15 @@ class MediaOut(BaseModel):
     poster_url: str
     #: 電影片長（分鐘）；劇集是 `None`，它的片長在每一集上。
     runtime: int | None
-    #: 作品資料夾名。畫面上是「將會是」的預覽——凍結在第一次送單成功那一刻（plan §5、票 09）。
+    #: 作品資料夾名。凍結之前是「將會是」的預覽（plan §5、票 09）。
     folder_name: str
+    #: 那串字已經定死了：第一次送單成功那一刻起磁碟上真的有一個那樣的資料夾（brief §4.5）。
+    folder_frozen: bool
+    #: Berth 已經為這部作品做過事（`CONTEXT.md` 的 Tracked Media）。**推導出來的**，
+    #: 不是欄位——票 09 起是 `EXISTS(jobs)`，票 12 加帳本，M3 加 Rule（票 04b）。
+    tracked: bool
+    #: 上次送單用的 Route。下拉的預選值——「入庫到哪裡」是一個會重複的決定（plan §2.2）。
+    default_route_id: int | None
     seasons: list[SeasonOut]
     #: 這份快照什麼時候抓的。畫面用它說「這是 N 前的快照」。
     fetched_at: datetime | None

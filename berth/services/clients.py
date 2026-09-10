@@ -23,6 +23,7 @@ from berth.adapters.qbittorrent import QbittorrentClient
 from berth.adapters.qbittorrent.client import HttpQbittorrentClient
 from berth.adapters.tmdb import TmdbClient
 from berth.adapters.tmdb.client import HttpTmdbClient
+from berth.adapters.torrent import HttpTorrentFetcher, TorrentFetcher
 from berth.adapters.torznab import TorznabClient
 from berth.adapters.torznab.client import HttpTorznabClient
 from berth.config import Config
@@ -44,6 +45,14 @@ class ServiceClientFactory(Protocol):
 
     def torznab(self, base_url: str, api_key: str) -> TorznabClient:
         """位址是使用者貼的**整條** Torznab 網址，不是一個服務根。"""
+        ...
+
+    def torrent(self) -> TorrentFetcher:
+        """送單前把索引站的下載連結換成「一個 info hash + 一份交得出去的東西」（票 09）。
+
+        沒有位址參數：那條網址是搜尋結果自己帶的，而且**每次請求都不一樣**
+        （Prowlarr 的代理連結帶 nonce，brief §20.7），所以它是呼叫時才有的東西。
+        """
         ...
 
     def indexer_search(self, kind: IndexerKind, base_url: str, api_key: str) -> IndexerSearch:
@@ -108,6 +117,9 @@ class HttpServiceClientFactory:
 
     def torznab(self, base_url: str, api_key: str) -> TorznabClient:
         return HttpTorznabClient(base_url, api_key)
+
+    def torrent(self) -> TorrentFetcher:
+        return HttpTorrentFetcher()
 
     def indexer_search(self, kind: IndexerKind, base_url: str, api_key: str) -> IndexerSearch:
         if kind is IndexerKind.TORZNAB:

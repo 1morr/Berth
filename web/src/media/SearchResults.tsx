@@ -1,7 +1,10 @@
 import { useTranslation } from 'react-i18next'
 
+import { Dot } from '../components/Dot'
+import type { Media } from '../api/media'
 import type { SearchResult } from '../api/search'
 import { estimate, formatCount, formatSize, tagTokens, type SortKey } from './searchResult'
+import { SubmitAction } from './SubmitAction'
 
 /**
  * 一張裝船清單（`.scratch/m1/search-results-shape.md` §3）。
@@ -17,10 +20,15 @@ export function SearchResults({
   rows,
   sort,
   onSort,
+  media,
+  route,
 }: {
   rows: readonly SearchResult[]
   sort: SortKey
   onSort: (key: SortKey) => void
+  media: Media
+  /** 這一輪選的 Route。送單時它從偏好變成承諾（票 04b、09）。 */
+  route: number | null
 }) {
   const { t } = useTranslation()
 
@@ -48,7 +56,7 @@ export function SearchResults({
       </thead>
       <tbody className="divide-y divide-rule">
         {rows.map((row) => (
-          <ResultRow key={row.key} row={row} />
+          <ResultRow key={row.key} row={row} media={media} route={route} />
         ))}
       </tbody>
     </table>
@@ -91,7 +99,15 @@ function SortableHeader({
   )
 }
 
-function ResultRow({ row }: { row: SearchResult }) {
+function ResultRow({
+  row,
+  media,
+  route,
+}: {
+  row: SearchResult
+  media: Media
+  route: number | null
+}) {
   const { t, i18n } = useTranslation()
   const size = formatSize(row.size, i18n.language)
   const seeders = formatCount(row.seeders, i18n.language)
@@ -116,6 +132,11 @@ function ResultRow({ row }: { row: SearchResult }) {
           <Dot />
           <Estimate row={row} />
         </p>
+        {/* 送單住在發佈名那一格：它的確認要就地展開，而那一段裡印著資料夾名——
+            靠右那幾格窄到放不下一句話（The Failure Expands In Place Rule）。 */}
+        <div className="mt-3">
+          <SubmitAction media={media} row={row} route={route} />
+        </div>
       </td>
       <td className="value hidden px-4 py-3 text-right align-top text-xs whitespace-nowrap text-ink sm:table-cell">
         {size}
@@ -190,14 +211,5 @@ function IndexerLink({ row }: { row: SearchResult }) {
     >
       {row.indexer}
     </a>
-  )
-}
-
-/** 中點分隔。`aria-hidden`：它是排版，不是內容，不該被逐個念出來。 */
-function Dot() {
-  return (
-    <span aria-hidden="true" className="text-ink-dim">
-      ·
-    </span>
   )
 }

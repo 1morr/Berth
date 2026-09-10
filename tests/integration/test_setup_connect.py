@@ -18,6 +18,7 @@ from berth.adapters.prowlarr.fake import FakeProwlarrClient
 from berth.adapters.qbittorrent import QbittorrentClient
 from berth.adapters.qbittorrent.fake import FakeQbittorrentClient
 from berth.adapters.tmdb import TmdbClient
+from berth.adapters.torrent import TorrentFetcher
 from berth.adapters.torznab import TorznabClient
 from berth.domain import DetectionReason, IndexerKind, ServiceKind, ServiceOrigin
 from berth.models import IndexerSettings, JellyfinSettings, QbittorrentSettings
@@ -54,6 +55,9 @@ class FakeClientFactory:
 
     def tmdb(self, credential: str) -> TmdbClient:
         raise AssertionError("the connection form never talks to TMDB")
+
+    def torrent(self) -> TorrentFetcher:
+        raise AssertionError("the connection form never fetches a torrent")
 
     def torznab(self, base_url: str, api_key: str) -> TorznabClient:
         raise AssertionError("the connection form never talks to a Torznab endpoint")

@@ -94,6 +94,10 @@ class Media(Base):
     #: ——那是第一次真的通向磁碟（票 09）。凍結之後 TMDB 改名不會動它，改名是顯式動作
     #: （plan §5、brief §4.5）。
     folder_name: Mapped[str] = mapped_column(Text)
+    #: `folder_name` 已經定死了。plan §2.2 只說「第一次真的通向磁碟那一刻凍結」，這是它的
+    #: 開關——**推導不出來**：送單失敗的 Job 也是一列 `jobs`，而那一刻磁碟上什麼都沒發生
+    #: （票 09）。刪掉那筆 Job 也不該讓資料夾名重新開始跟著 TMDB 跑。
+    folder_frozen: Mapped[bool] = mapped_column(default=False)
     #: 上一次送單用的 Route，下一次的預選值（票 09 寫）。Route 被刪掉時只是回到「沒有預選」，
     #: 不該連 Media 一起帶走。
     default_route_id: Mapped[int | None] = mapped_column(

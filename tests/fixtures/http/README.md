@@ -131,3 +131,15 @@ curl -s -H "Authorization: Bearer $TOKEN"   "https://api.themoviedb.org/3/trendi
 - 要重錄就重跑一次上面的來源，不要手改內容——改過的 fixture 就不再是證據。
 - 新增服務或版本時開新檔案，不要覆寫既有的：舊版本的行為差異正是契約測試要守的東西
   （qBittorrent 4.4 與 5.x 的差異在票 08）。
+
+2026-09-10（票 09），對 `lscr.io/linuxserver/qbittorrent:5.2.3`（API 2.15.1）與 `:4.4.5`
+（API 2.8.5）兩台乾淨的容器錄的。**`torrents/add` 的成功形狀兩版不同**，而 brief §20.2
+原本記的「一律回 200 `Ok.`」只對舊的那一版成立：
+
+| 檔案 | 來源 |
+| --- | --- |
+| `qbittorrent/torrents-add.accepted.4.4.5.txt` | 4.4.5，Berth 的那一份表單（`paused=false`）加一個新的磁力連結 → `200` + `Ok.` |
+| `qbittorrent/torrents-add.accepted.5.2.3.json` | 5.2.3，同一份表單（`stopped=false`）→ `200` + 一份 JSON 摘要 |
+| `qbittorrent/torrents-add.conflict.5.2.3.txt` | 5.2.3，同一個磁力連結送第二次 → `409` + `Conflict`（4.4.5 沒有這個行為，它回 `Ok.`） |
+| `qbittorrent/torrents-add.pending.5.2.3.json` | 5.2.3，`urls=http://indexer.invalid/x.torrent` → `202` + `pending_count: 1`（背景抓，失敗永遠不會回來） |
+| `qbittorrent/torrents-add.invalid.5.2.3.txt` | 5.2.3，multipart 上傳一段 HTML 當 `.torrent` → `415` + 檔名與原因 |

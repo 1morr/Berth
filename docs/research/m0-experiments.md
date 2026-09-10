@@ -193,7 +193,9 @@ MergeVersions：
 | 兩個都不送 | `queuedDL` | `stalledDL` |
 | `paused=true` + `stopped=true` | `pausedDL` | `stoppedDL` |
 
-`torrents/add` 一律回 200 `Ok.`，不認得的參數不會報錯。所以 plan §8.1 的「API ≥ 2.11 用
+`torrents/add` 不認得的參數不會報錯。（**這一輪記的「一律回 200 `Ok.`」只對 4.4.5 成立**：
+2026-09-10 票 09 重測發現 5.2.3 成功回的是一份 JSON 摘要，`409` / `415` / `202` 也各有意義，
+更正見 brief §20.7。）所以 plan §8.1 的「API ≥ 2.11 用
 `stopped`，否則 `paused`」不是最佳化而是**必要條件**：判斷錯了就是在使用者沒同意的情況下開始下載。
 
 兩個都送也是安全的（各版本只認得自己那個），但 adapter 仍照版本送單一參數，理由是「靜默忽略」

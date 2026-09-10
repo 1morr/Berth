@@ -1,14 +1,23 @@
 // 後端與前端由同一個程序提供，所以一律走相對路徑；開發時 Vite 代理 /api（vite.config.ts）。
 const API_PREFIX = '/api'
 
-/** 後端回的錯誤。`status` 讓呼叫端分得出「還沒設定好」與「真的壞了」。 */
+/**
+ * 後端回的錯誤。`status` 讓呼叫端分得出「還沒設定好」與「真的壞了」。
+ *
+ * `detail` 是後端 `HTTPException` 的那一格，原樣帶著（可能是一句話、一串驗證錯誤，
+ * 或票 09 送單那種 `{reason, detail}`）。**帶著它而不是只留一個狀態碼**：拒絕的理由
+ * 是封閉集合，而畫面要照理由說出下一步（PRODUCT 原則 4）——只有狀態碼的話
+ * 「這條 Route 是紅的」與「這條 Route 停用了」在畫面上是同一句話。
+ */
 export class ApiError extends Error {
   readonly status: number
+  readonly detail: unknown
 
-  constructor(status: number, message: string) {
+  constructor(status: number, message: string, detail: unknown = undefined) {
     super(message)
     this.name = 'ApiError'
     this.status = status
+    this.detail = detail
   }
 }
 
@@ -40,11 +49,24 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   })
 
   if (!response.ok) {
-    throw new ApiError(response.status, `${method} ${path} failed with ${response.status}`)
+    throw new ApiError(
+      response.status,
+      `${method} ${path} failed with ${response.status}`,
+      await detailOf(response),
+    )
   }
 
   // 204 沒有 body（登出就是），硬 parse 會炸在 JSON.parse 上而不是回傳 void。
   if (response.status === 204) return undefined as T
 
   return (await response.json()) as T
+}
+
+/** 錯誤回應的 `detail`。不是 JSON（前置代理回一頁 HTML）時就是 `undefined`。 */
+async function detailOf(response: Response): Promise<unknown> {
+  try {
+    return ((await response.json()) as { detail?: unknown }).detail
+  } catch {
+    return undefined
+  }
 }

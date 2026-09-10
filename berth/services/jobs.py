@@ -1,0 +1,513 @@
+"""送單與 Job 的讀取端（plan §3.1、§3.3、§6 jobs 群組、brief §5.1、票 09）。
+
+**這是產品第一次真的動到 Berth 以外的東西。** 在它之前每個命令都只讀；從這裡開始 Berth 會
+在使用者的 qBittorrent 上放一個 torrent，並且把一串字寫死進 `media.folder_name`——那是整個
+系統唯一一個定了就改不掉的東西（brief §4.5）。所以這一支的形狀主要是關於**什麼時候不做事**。
+
+一次送單的順序不能換：
+
+1. **驗前提**（作品、Route、Route 的健康）。不成立就一個 Job 都不建——紅的 Route 送單一定
+   失敗（brief §4.4），而一列註定失敗的 Job 只是下載列表上要人去清掉的垃圾。
+2. **拿到 torrent 本身**（`adapters/torrent.py`）。`jobs.hash` 是主鍵，所以在知道是哪一個
+   torrent 之前沒有 Job 可建。索引站報得出 hash 時先查一次重複，那一步連請求都不必發。
+3. **建 Job（`requested`）+ event**。從這裡開始失敗都記在 Job 上，因為現在有地方記了。
+4. **ensure_category → `torrents/add`**。成功是 `submitted`，失敗是 `submit_failed` 加原文，
+   而 `submit_failed` 可以手動重試回 `requested`（plan §3.1）。
+5. **成功之後才凍結資料夾名、寫下「上次用的 Route」**。順序是刻意的：磁碟上沒發生任何事的
+   那一次不該讓那串字定下來。**送單這一步不刷新快照**（plan §8.3 的六小時規則留給票 11 的
+   planning）：凍下去的必須就是使用者剛剛在確認畫面上看到的那一串字，而刷新會在他按下去
+   與那串字落地之間把它換掉（brief §4.5「有人在場、有一次明確確認」）。
+
+log 的每一行帶 job id（brief §16.2、plan T1.9）：`job_context` 一包住，這一段裡任何模組
+發出的任何一行都帶著它，不必逐個呼叫端記得傳。
+"""
+
+from __future__ import annotations
+
+import logging
+from dataclasses import dataclass
+from datetime import datetime
+from typing import Any
+
+from sqlalchemy import select, update
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from berth.adapters.http import ServiceError
+from berth.adapters.qbittorrent import TorrentAdd, ensure_category
+from berth.adapters.torrent import TorrentSource
+from berth.domain import (
+    EventType,
+    HealthStatus,
+    JobState,
+    JobTrigger,
+    collection_type_for,
+)
+from berth.logs import job_context
+from berth.models import Event, Job, Media, PathSettings, QbittorrentSettings, Route, User
+from berth.models.types import utcnow
+from berth.services.clients import ServiceClientFactory
+from berth.services.qbittorrent import sign_in
+from berth.services.routes import save_path_of
+from berth.services.settings import read_settings
+from berth.services.steps import message
+
+logger = logging.getLogger(__name__)
+
+#: `submit_failed` 是唯一重試得了的狀態（plan §3.1）。已經在下載的 torrent 再送一次
+#: 只是多一次無謂的請求，而 `imported` 再送一次是另一件事（M2 的重新入庫）。
+RETRYABLE = frozenset({JobState.SUBMIT_FAILED})
+
+
+@dataclass(frozen=True, slots=True)
+class JobSource:
+    """結果表的一列帶過來的東西：要下載哪一個 torrent。
+
+    `info_hash` 是**索引站說的**，可能沒有（實測 ACG.RIP 不報，brief §20.7）。有的話它值得
+    一次短路：同一筆重複送單時連 torrent 都不必去要，而 Prowlarr 的每一次代理下載都是它
+    再去連一次追蹤站。沒有的話由 `adapters/torrent.py` 從那份 torrent 自己算出來。
+    """
+
+    url: str
+    #: 發佈名。`jobs.name`——使用者在下載列表上認得出這一列的東西。
+    title: str
+    info_hash: str = ""
+
+
+class JobRejectedError(Exception):
+    """這一次送單在建 Job 之前就停下來了。
+
+    `reason` 是封閉集合（UI 逐種說一句話、給一條下一步），`detail` 是服務回的原文或
+    Berth 自己算出來的實測值——與精靈的纜繩同一個規矩：理由翻譯，原文不翻譯。
+    """
+
+    def __init__(self, reason: str, detail: str = "") -> None:
+        super().__init__(f"{reason}: {detail}" if detail else reason)
+        self.reason = reason
+        self.detail = detail
+
+
+@dataclass(frozen=True, slots=True)
+class JobView:
+    """下載列表與 Job 詳情上的一筆。
+
+    `media_title` 與 `route_name` 是**攤平進來的**而不是巢狀物件：這一列上要顯示的就是
+    那兩個字串，而列表一次畫幾十筆——巢狀會讓前端為了一個名字帶著整份 Media。
+    """
+
+    hash: str
+    name: str
+    state: JobState
+    trigger: JobTrigger
+    trigger_ref: str
+    error: str
+    media_id: str | None
+    media_title: str
+    route_id: int | None
+    route_name: str
+    route_slug: str
+    user_id: int | None
+    user_name: str
+    save_path: str
+    content_path: str
+    total_size: int
+    progress: float
+    client_state: str
+    added_at: datetime
+    completed_at: datetime | None
+    imported_at: datetime | None
+    #: 這一筆現在按得了「重試」嗎（plan §3.1 的 `submit_failed` → `requested`）。
+    #: 規則在後端算好：前端重算一份的話，票 10 加進來的其他可重試狀態會漏掉一邊。
+    retryable: bool
+
+
+@dataclass(frozen=True, slots=True)
+class JobEventView:
+    """時間線上的一筆（brief §5.2）。"""
+
+    id: int
+    type: str
+    actor: str
+    payload: dict[str, Any]
+    created_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class AddDownloadOutcome:
+    """一次送單的結果。
+
+    `created` 分得出「送出去了」與「這一個本來就在了」（plan §3.3）。兩者都是成功——
+    使用者按第二次時要看到的是那一筆既有的 Job，不是一則錯誤。
+    """
+
+    job: JobView
+    created: bool
+
+
+async def add_download(
+    session: AsyncSession,
+    factory: ServiceClientFactory,
+    *,
+    source: JobSource,
+    media_id: str,
+    route_id: int,
+    user_id: int | None,
+    trigger: JobTrigger = JobTrigger.MANUAL,
+    trigger_ref: str = "",
+) -> AddDownloadOutcome:
+    """把一個 torrent 送進 qBittorrent，並替它建一筆 Job（plan §3.1）。"""
+    media, route = await _preconditions(session, media_id, route_id)
+
+    if source.info_hash:
+        existing = await session.get(Job, source.info_hash)
+        if existing is not None:
+            return AddDownloadOutcome(job=await _view(session, existing), created=False)
+
+    torrent = await _resolve(factory, source.url)
+    existing = await session.get(Job, torrent.info_hash)
+    if existing is not None:
+        return AddDownloadOutcome(job=await _view(session, existing), created=False)
+
+    with job_context(torrent.info_hash):
+        job = Job(
+            hash=torrent.info_hash,
+            name=source.title,
+            source_url=source.url,
+            trigger=trigger,
+            trigger_ref=trigger_ref,
+            user_id=user_id,
+            media_id=media.id,
+            route_id=route.id,
+            state=JobState.REQUESTED,
+        )
+        session.add(job)
+        await _record(
+            session,
+            job,
+            EventType.CREATED,
+            actor=_actor(user_id),
+            payload={
+                "trigger": trigger.value,
+                "media": media.id,
+                "route": route.slug,
+                "name": source.title,
+            },
+        )
+        # **打 qBittorrent 之前就 commit**（與精靈每一步「做之前先寫 `running`」同一個道理，
+        # plan §2.1）：在那之後任何一個沒接住的例外或斷線都會 rollback，而 torrent 可能
+        # 已經進了下載器——那就成了一個沒有 Job 的孤兒（plan §3.2 的 `unknown_torrent`）。
+        try:
+            await session.commit()
+        except IntegrityError:
+            # 兩個分頁同時送同一筆：主鍵擋下第二個。回既有的那一列，不是 500（plan §3.3）。
+            await session.rollback()
+            duplicate = await session.get(Job, torrent.info_hash)
+            if duplicate is None:
+                raise
+            return AddDownloadOutcome(job=await _view(session, duplicate), created=False)
+        logger.info("job created", extra={"state": job.state.value, "route": route.slug})
+        await _finish(session, factory, job, route, torrent, media, actor=_actor(user_id))
+        return AddDownloadOutcome(job=await _view(session, job), created=True)
+
+
+async def retry_job(session: AsyncSession, factory: ServiceClientFactory, job_hash: str) -> JobView:
+    """`submit_failed` → `requested` → 再送一次（plan §3.1）。
+
+    重試走**存下來的下載連結**：畫面上那一輪搜尋早就不在了，而 Prowlarr 的代理連結每次
+    搜尋都不一樣（brief §20.7），重新搜一次不會給出同一條。
+    """
+    job = await session.get(Job, job_hash)
+    if job is None:
+        raise JobRejectedError("job_missing", job_hash)
+    if job.state not in RETRYABLE:
+        raise JobRejectedError("not_retryable", job.state.value)
+    route = await session.get(Route, job.route_id) if job.route_id is not None else None
+    if route is None:
+        raise JobRejectedError("route_missing", str(job.route_id))
+    # **與第一次送單同一組前提**：那條 Route 可能在中間被停用、被改成收別種作品，或紅了。
+    # 只檢查健康的話「第一次送不出去、重試卻送得出去」——同一個決定兩種答案。
+    subject = await session.get(Media, job.media_id) if job.media_id is not None else None
+    _check_route(route, subject)
+
+    with job_context(job.hash):
+        if not await _to_state(session, job, JobState.REQUESTED, expected=JobState.SUBMIT_FAILED):
+            # 有別人（或另一個分頁）先動過它。放棄本次操作，不覆寫他的結果（plan §3.1）。
+            raise JobRejectedError("not_retryable", job.state.value)
+        await _record(session, job, EventType.RETRIED, actor="user", payload={})
+        logger.info("job retried", extra={"state": job.state.value})
+        try:
+            torrent = await _resolve(factory, job.source_url)
+        except JobRejectedError as failure:
+            await _fail(session, job, failure.detail or failure.reason, actor="user")
+            await session.commit()
+            return await _view(session, job)
+        await _finish(session, factory, job, route, torrent, subject, actor="user")
+        return await _view(session, job)
+
+
+async def list_jobs(session: AsyncSession) -> tuple[JobView, ...]:
+    """下載列表頁的一整份，最新的在前面（brief §13）。"""
+    rows = await session.scalars(select(Job).order_by(Job.added_at.desc(), Job.hash))
+    return tuple([await _view(session, row) for row in rows])
+
+
+async def read_job(session: AsyncSession, job_hash: str) -> JobView | None:
+    job = await session.get(Job, job_hash)
+    return None if job is None else await _view(session, job)
+
+
+async def read_job_events(session: AsyncSession, job_hash: str) -> tuple[JobEventView, ...]:
+    """時間線，最舊的在前面——它是一份紀錄，讀的方向是事情發生的方向（brief §5.2）。"""
+    rows = await session.scalars(
+        select(Event).where(Event.job_hash == job_hash).order_by(Event.created_at, Event.id)
+    )
+    return tuple(
+        JobEventView(
+            id=row.id,
+            type=row.type,
+            actor=row.actor,
+            payload=row.payload_json or {},
+            created_at=row.created_at,
+        )
+        for row in rows
+    )
+
+
+# --- 送單 ---------------------------------------------------------------
+
+
+async def _preconditions(
+    session: AsyncSession, media_id: str, route_id: int
+) -> tuple[Media, Route]:
+    """四個前提，逐個各有自己的理由——「送不出去」是一句沒有下一步的話。"""
+    media = await session.get(Media, media_id)
+    if media is None:
+        raise JobRejectedError("media_missing", media_id)
+    route = await session.get(Route, route_id)
+    if route is None:
+        raise JobRejectedError("route_missing", str(route_id))
+    _check_route(route, media)
+    return media, route
+
+
+def _check_route(route: Route, media: Media | None) -> None:
+    """這條 Route 現在收得下這一次送單嗎。**第一次送單與重試走同一支。**
+
+    紅的 Route 送單一定失敗（brief §4.4）——硬鏈接或路徑有一條斷了，檔案下載完也進不了庫。
+    `unknown` 放行：那是「還沒檢查」而不是「壞了」（`HealthStatus` 的三個值）。健康迴圈
+    五分鐘才跑一輪（plan §3.2），拿它擋人等於精靈剛跑完的那五分鐘裡誰都送不了單。
+    """
+    if not route.enabled:
+        raise JobRejectedError("route_disabled", route.slug)
+    if media is not None and route.collection_type is not collection_type_for(media.kind):
+        raise JobRejectedError(
+            "route_kind_mismatch", f"{route.slug} holds {route.collection_type.value}"
+        )
+    if route.health_status is HealthStatus.FAILED:
+        raise JobRejectedError("route_unhealthy", route.slug)
+
+
+async def _resolve(factory: ServiceClientFactory, url: str) -> TorrentSource:
+    """索引站的下載連結 → info hash + 要交出去的那一份。
+
+    失敗**不建 Job**：`jobs.hash` 是主鍵，而 Job 記的正是「一個 torrent 的生命週期」
+    （`CONTEXT.md`）——連是哪一個 torrent 都還不知道時，沒有東西可以記。
+    """
+    fetcher = factory.torrent()
+    try:
+        return await fetcher.fetch(url)
+    except ServiceError as exc:
+        raise JobRejectedError("source_unavailable", message(exc)) from exc
+    finally:
+        await fetcher.aclose()
+
+
+async def _finish(
+    session: AsyncSession,
+    factory: ServiceClientFactory,
+    job: Job,
+    route: Route,
+    torrent: TorrentSource,
+    media: Media | None,
+    *,
+    actor: str,
+) -> None:
+    """送出去，然後照結果收尾。**第一次送單與重試走同一支**——兩邊的收尾差一步就會分岔。
+
+    凍結在成功之後（plan §2.2、brief §4.5）：磁碟上什麼都沒發生的那一次不該讓那串字定下來。
+    """
+    await _submit(session, factory, job, route, torrent, actor=actor)
+    if job.state is JobState.SUBMITTED and media is not None:
+        _freeze(media, route)
+    await session.commit()
+
+
+async def _submit(
+    session: AsyncSession,
+    factory: ServiceClientFactory,
+    job: Job,
+    route: Route,
+    torrent: TorrentSource,
+    *,
+    actor: str,
+) -> None:
+    """`requested` → `submitted` / `submit_failed`（plan §3.1）。
+
+    先 `ensure_category`：category 決定 save path（`autoTMM=true`），所以它就是「這個
+    torrent 會下載到哪裡」。同名但指向別處的 category **不覆寫**——那會搬走使用者
+    自己那一整個分類的 torrent（brief §20.2）。
+    """
+    settings = await read_settings(session, QbittorrentSettings)
+    paths = await read_settings(session, PathSettings)
+    save_path = save_path_of(paths.complete_root, route.slug)
+    client = factory.qbittorrent(settings.base_url)
+    try:
+        await sign_in(client, settings)
+        outcome = await ensure_category(client, route.category, save_path)
+        if outcome.conflict:
+            await _fail(
+                session,
+                job,
+                f"category {outcome.name!r} already points at {outcome.save_path!r}; "
+                f"Berth wants {save_path!r} and will not move an existing category",
+                actor=actor,
+            )
+            return
+        await client.add_torrent(
+            TorrentAdd(
+                category=route.category,
+                magnet=torrent.magnet,
+                content=torrent.content,
+                filename=torrent.filename,
+            )
+        )
+    except ServiceError as exc:
+        await _fail(session, job, message(exc), actor=actor)
+        return
+    finally:
+        await client.aclose()
+
+    if not await _to_state(session, job, JobState.SUBMITTED, expected=JobState.REQUESTED):
+        # 有別人先動過它（票 10 起的迴圈也會寫同一列）。放棄本次操作，不覆寫他的結果。
+        logger.warning("job moved on before it could be marked submitted")
+        return
+    await _record(
+        session,
+        job,
+        EventType.SUBMITTED,
+        actor=actor,
+        payload={
+            "client": settings.base_url,
+            "category": route.category,
+            "save_path": save_path,
+        },
+    )
+    logger.info(
+        "job submitted",
+        extra={"state": job.state.value, "category": route.category, "save_path": save_path},
+    )
+
+
+async def _fail(session: AsyncSession, job: Job, detail: str, *, actor: str) -> None:
+    if not await _to_state(
+        session, job, JobState.SUBMIT_FAILED, expected=JobState.REQUESTED, error=detail
+    ):
+        logger.warning("job moved on before it could be marked failed", extra={"error": detail})
+        return
+    await _record(session, job, EventType.SUBMIT_FAILED, actor=actor, payload={"error": detail})
+    logger.warning("job submission failed", extra={"state": job.state.value, "error": detail})
+
+
+def _freeze(media: Media, route: Route) -> None:
+    """送單成功那一刻：資料夾名定死，Route 成為「上次用的」（plan §2.2、brief §4.5）。
+
+    **已經凍結過的不重凍**：第二次送單時 TMDB 可能已經改了標題，而磁碟上的資料夾還是
+    第一次那一個。`folder_name` 本身這時候不重算——`services/media` 在凍結之後也不再動它。
+    """
+    media.folder_frozen = True
+    media.default_route_id = route.id
+
+
+async def _to_state(
+    session: AsyncSession,
+    job: Job,
+    state: JobState,
+    *,
+    expected: JobState,
+    error: str = "",
+) -> bool:
+    """compare-and-set（plan §3.1：**轉換一律** compare-and-set）：影響 0 列就放棄本次操作。
+
+    寫同一列的不只一個人：使用者有兩個分頁，而票 10 起的背景迴圈也會動這一列。
+    `error` 與狀態同一句 UPDATE——分兩次寫的話，中間那一瞬間的狀態與理由對不起來。
+    """
+    result = await session.execute(
+        update(Job)
+        .where(Job.hash == job.hash, Job.state == expected)
+        .values(state=state, error=error)
+        .execution_options(synchronize_session="fetch")
+    )
+    # `CursorResult` 才有 `rowcount`；`execute(update(...))` 的靜態型別是 `Result`。
+    changed = getattr(result, "rowcount", 0) == 1
+    await session.refresh(job)
+    return changed
+
+
+async def _record(
+    session: AsyncSession,
+    job: Job,
+    event: EventType,
+    *,
+    actor: str,
+    payload: dict[str, Any],
+) -> None:
+    """一筆事件（brief §5.2）。`flush` 而不是 `commit`：整次送單是一個工作單元。"""
+    session.add(
+        Event(
+            job_hash=job.hash,
+            media_id=job.media_id,
+            type=event.value,
+            actor=actor,
+            payload_json=payload,
+            created_at=utcnow(),
+        )
+    )
+    await session.flush()
+
+
+def _actor(user_id: int | None) -> str:
+    """`events.actor`：user id、`system`、`rss:<rule>` 或 `ai`（plan §2.3）。"""
+    return str(user_id) if user_id is not None else "system"
+
+
+# --- 攤平 ---------------------------------------------------------------
+
+
+async def _view(session: AsyncSession, job: Job) -> JobView:
+    route = await session.get(Route, job.route_id) if job.route_id is not None else None
+    media = await session.get(Media, job.media_id) if job.media_id is not None else None
+    user = await session.get(User, job.user_id) if job.user_id is not None else None
+    return JobView(
+        hash=job.hash,
+        name=job.name,
+        state=job.state,
+        trigger=job.trigger,
+        trigger_ref=job.trigger_ref,
+        error=job.error,
+        media_id=job.media_id,
+        media_title=media.title_en if media is not None else "",
+        route_id=job.route_id,
+        route_name=route.name if route is not None else "",
+        route_slug=route.slug if route is not None else "",
+        user_id=job.user_id,
+        user_name=user.name if user is not None else "",
+        save_path=job.save_path,
+        content_path=job.content_path,
+        total_size=job.total_size,
+        progress=job.progress,
+        client_state=job.client_state,
+        added_at=job.added_at,
+        completed_at=job.completed_at,
+        imported_at=job.imported_at,
+        retryable=job.state in RETRYABLE,
+    )

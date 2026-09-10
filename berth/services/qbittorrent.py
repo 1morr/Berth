@@ -12,6 +12,7 @@
 
 from __future__ import annotations
 
+import contextlib
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
@@ -39,6 +40,22 @@ RECOMMENDED_STEPS: tuple[QbittorrentStep, ...] = (
 #: WebUI 帳號的偏好鍵。`web_ui_password` 只寫不讀，讀回來的偏好裡根本沒有它（brief §20.7）。
 WEB_UI_USERNAME_KEY = "web_ui_username"
 WEB_UI_PASSWORD_KEY = "web_ui_password"
+
+
+async def sign_in(client: QbittorrentClient, settings: QbittorrentSettings) -> None:
+    """既有服務要先登入；套件內的那一台在免密白名單上（plan §9.2）。
+
+    住在這裡而不是 `services/routes`：它問的是 qBittorrent 的事，而 Route 檢查（票 09 起
+    還有送單）只是兩個呼叫端。
+
+    **登入失敗不在這裡爆掉**：帳密不對要變成每個 Route 的 `category` 那一條紅燈（接下來的
+    呼叫會丟同一個 `AuthFailedError`，原文就落在那一行），而不是一個把整頁換成 500、
+    連哪個 Route 卡住都看不出來的例外。
+    """
+    if not settings.username:
+        return
+    with contextlib.suppress(ServiceError):
+        await client.login(settings.username, settings.password)
 
 
 @dataclass(frozen=True, slots=True)

@@ -45,6 +45,66 @@ class TmdbProblem(StrEnum):
     NOT_FOUND = "not_found"
 
 
+class JobState(StrEnum):
+    """一個 Job 的生命週期位置（plan §3.1、brief §5.1）。
+
+    宣告順序就是狀態機的主幹，分支緊接在它離開的那一站之後。**這一票只走得到前三個**：
+    `requested` 是 `add_download` 建出來的，qBittorrent 收下就是 `submitted`，收不下是
+    `submit_failed`。其餘由票 10 起的迴圈驅動——先一次定義完是因為它們是同一個封閉集合，
+    分兩批加的話畫面上的狀態字典會有兩份，而其中一份遲早會漏掉一個狀態。
+    """
+
+    #: 已經建了 job，但 qBittorrent 還沒收下。
+    REQUESTED = "requested"
+    #: qBittorrent 收下了。
+    SUBMITTED = "submitted"
+    #: qBittorrent 拒絕，或根本連不上。可手動重試回 `requested`。
+    SUBMIT_FAILED = "submit_failed"
+    METADATA_READY = "metadata_ready"
+    DOWNLOADING = "downloading"
+    STALLED = "stalled"
+    MISSING_FILES = "missing_files"
+    CLIENT_ERROR = "client_error"
+    CLIENT_REMOVED = "client_removed"
+    COMPLETED = "completed"
+    PLANNING = "planning"
+    REVIEW = "review"
+    IMPORTING = "importing"
+    IMPORTED = "imported"
+    IMPORT_FAILED = "import_failed"
+    REMOVED = "removed"
+
+
+class JobTrigger(StrEnum):
+    """這個 Job 是誰要的（`CONTEXT.md`、plan §2.3）。
+
+    規則 id 與重新入庫的來源目錄放在 `jobs.trigger_ref`，不編進這個字串——畫面要拿它
+    分組，而 `rss:12` 那種寫法會讓每一條規則各自成為一種 trigger。
+    """
+
+    MANUAL = "manual"
+    RSS = "rss"
+    REIMPORT = "reimport"
+
+
+class EventType(StrEnum):
+    """Job 時間線上一筆事件的型別（brief §5.2）。
+
+    只列**已經有東西會寫它**的那幾種。brief §5.2 那一串是整個管線寫完之後的樣子，
+    照抄進來會讓時間線的字典裡有一半是永遠不會出現的詞，而 i18n 要為每一個備一句話。
+    每個轉換落地時把自己那一個加進來。
+    """
+
+    #: `add_download` 建了 job（trigger、user、media、route）。
+    CREATED = "created"
+    #: qBittorrent 收下了（client、category、save_path）。
+    SUBMITTED = "submitted"
+    #: 送單失敗，payload 帶服務回的原文。
+    SUBMIT_FAILED = "submit_failed"
+    #: 使用者按了重試，回到 `requested`。
+    RETRIED = "retried"
+
+
 class CollectionType(StrEnum):
     """Jellyfin 媒體庫的類型；沿用 Jellyfin 的字串（brief §4.3）。"""
 

@@ -57,8 +57,10 @@ class SearchResultOut(BaseModel):
     info_url: str
     #: 票 09 送單時交給 qBittorrent 的那一條。
     download_url: str
-    #: 這一列的身分（info hash 或 guid）。
+    #: 這一列的身分（info hash 或 guid）。畫列表用。
     key: str
+    #: 索引站報的 info hash，**只有真的是 hash 時才有值**。送單拿它短路重複檢查（票 09）。
+    info_hash: str
     tags: TagsOut
     #: 預估季集。`season` 與 `episode_start` 都是 `null` = 判斷不出來（結果表的第三種說法）。
     season: int | None

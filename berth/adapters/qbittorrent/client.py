@@ -6,6 +6,8 @@ import json
 from collections.abc import Mapping
 from typing import Any
 
+import httpx
+
 from berth.adapters.http import (
     DEFAULT_TIMEOUT_SECONDS,
     AuthFailedError,
@@ -13,7 +15,16 @@ from berth.adapters.http import (
     ProtocolMismatchError,
     json_body,
 )
-from berth.adapters.qbittorrent import QbittorrentCategory, QbittorrentVersion
+from berth.adapters.qbittorrent import (
+    QbittorrentCategory,
+    QbittorrentVersion,
+    TorrentAdd,
+    TorrentRejectedError,
+    add_form,
+)
+
+#: `torrents/add` 對「不收這一個」用的狀態碼。實測兩種成因（見 `_reason`）。
+CONFLICT = 409
 
 
 class HttpQbittorrentClient:
@@ -97,5 +108,71 @@ class HttpQbittorrentClient:
             data={"category": name, "savePath": save_path},
         )
 
+    async def add_torrent(self, request: TorrentAdd) -> None:
+        """`torrents/add`。**成功的形狀隨版本不同**（2026-09-10 對 5.2.3 實測）：
+
+        - 4.4.x：`200` + body `Ok.`。
+        - 5.2.3（API 2.15.1）：`200` + 一份 JSON 摘要
+          （`{"added_torrent_ids": […], "failure_count": 0, "success_count": 1}`）。
+
+        失敗也說得出話——這正是 Berth 自己先把 torrent 抓下來的回報（`adapters/torrent.py`）：
+        交出去的是磁力連結或位元組時 qBittorrent **當場**答得出收不收，而交一條 http 網址
+        時它回 `202` + `pending_count: 1` 然後在背景抓，抓失敗就再也沒有下文。
+
+        - `409 Conflict`：不收。實測兩種成因——**它已經有同一個 hash 的 torrent**，
+          以及 category 的 save path 當下用不了。訊息兩種都說出來，因為 body 只有一個
+          `Conflict`，光靠它使用者查不出是哪一種。
+        - `415`：那份 `.torrent` 不是有效的 torrent（body 帶檔名與原因）。
+        """
+        version = await self.version()
+        files = (
+            {"torrents": (request.filename, request.content, "application/x-bittorrent")}
+            if request.content
+            else None
+        )
+        response = await self._session.request(
+            "POST",
+            "/api/v2/torrents/add",
+            data=add_form(request, version),
+            files=files,
+            tolerate=(409, 415),
+        )
+        if response.status_code == 200 and _accepted(response):
+            return
+        raise TorrentRejectedError(f"torrents/add: {response.status_code} {_reason(response)}")
+
     async def aclose(self) -> None:
         await self._session.aclose()
+
+
+def _accepted(response: httpx.Response) -> bool:
+    """這一次 `torrents/add` 真的被收下了嗎。
+
+    **不是「2xx 就算成功」**：`202` 是「網址收下了，之後再去抓」（`pending_count`），
+    而那條路徑的失敗永遠不會回來（brief §20.7）。Berth 只交磁力連結或位元組，所以
+    收下就是 `200`，而 `200` 有兩種 body。
+    """
+    body = response.text.strip()
+    if body == "Ok.":
+        return True
+    try:
+        summary = response.json()
+    except ValueError:
+        return False
+    if not isinstance(summary, dict):
+        return False
+    return summary.get("failure_count") == 0 and summary.get("success_count", 0) > 0
+
+
+def _reason(response: httpx.Response) -> str:
+    """被拒的原文，加上一句「這個狀態碼在這支端點上是什麼意思」。
+
+    body 常常只有一個 `Conflict`——那串字對使用者說不出下一步（PRODUCT 原則 4）。
+    """
+    body = " ".join(response.text.split())[:120]
+    if response.status_code == CONFLICT:
+        return (
+            f"{body} (qBittorrent already has this torrent, "
+            "or the category's save path is unusable)"
+        )
+    return body

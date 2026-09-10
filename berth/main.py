@@ -21,6 +21,7 @@ from berth.api.errors import validation_error
 from berth.api.gate import ApiGate
 from berth.config import VERSION, Config, load_config
 from berth.db import create_engine, create_session_factory, upgrade_to_head
+from berth.logs import configure_logging
 from berth.pipeline import HealthChecker
 from berth.services.clients import HttpServiceClientFactory, ServiceClientFactory
 
@@ -69,6 +70,9 @@ def create_app(
     要換就得在這裡換。
     """
     resolved = load_config() if config is None else config
+    # 一行一筆 JSON，job 上下文裡的每一行帶 job id（brief §16.2、plan T1.9）。冪等，
+    # 而且要在任何 logger 拿到第一筆之前——record factory 只蓋得到它裝好之後的那些。
+    configure_logging()
 
     app = FastAPI(title="Berth", version=VERSION, lifespan=_lifespan(resolved))
     app.state.config = resolved

@@ -328,3 +328,29 @@ def _skip_indexer(client: TestClient) -> None:
             await session.commit()
 
     asyncio.run(run())
+
+
+class TestInfoHash:
+    def test_a_row_carries_the_indexers_info_hash_separately_from_its_key(
+        self, client: TestClient
+    ) -> None:
+        """`key` 是「這一列的身分」（info hash **或** guid），而送單要的是真的 hash——
+        兩者放同一格的話，不報 hash 的站（實測 ACG.RIP）會把一條 guid 當成 hash 送出去。"""
+        sign_in(client)
+
+        rows = client.get(f"/api/search?media={SPY_ID}").json()["rows"]
+
+        row = next(row for row in rows if row["indexer"] == "ACG.RIP")
+        assert row["info_hash"] == "a" * 40
+        assert row["key"] == row["info_hash"]
+
+    def test_a_site_that_reports_no_hash_leaves_the_field_empty(
+        self, client: TestClient, indexer: FakeIndexerSearch
+    ) -> None:
+        indexer._results = (replace(ANIME, info_hash="", guid="https://acg.rip/t/344604"),)
+        sign_in(client)
+
+        rows = client.get(f"/api/search?media={SPY_ID}").json()["rows"]
+
+        assert rows[0]["info_hash"] == ""
+        assert rows[0]["key"] == "https://acg.rip/t/344604"

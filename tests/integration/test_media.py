@@ -1,7 +1,7 @@
 """Media 詳情與快照刷新的命令（plan §2.2、§5、§8.3、brief §7.5、票 04、04b）。
 
 這裡驗的是四件事：**快照怎麼組**（英文那一輪是結構本身，`zh-TW` 只補顯示用標題與簡介）、
-**24 小時的快照規則**、**`folder_name` 跟著標題走**（凍結在票 09 的送單那一刻），
+**24 小時的快照規則**、**`folder_name` 跟著標題走**（凍結在票 09 的送單那一刻，之後不動），
 以及**拿不到 TMDB 時還剩下什麼**。
 """
 
@@ -295,6 +295,29 @@ class TestFolderName:
         row = await session.get(Media, SPY_ID)
         assert row is not None
         assert row.folder_name == "Spy Family Renamed (2099) [tmdbid-120089]"
+
+    async def test_a_frozen_name_survives_a_tmdb_rename(self, session: AsyncSession) -> None:
+        """**凍結之後刷新一律不動它**（plan §2.2、brief §4.5、票 09）。
+
+        凍結發生在送單成功那一刻（`services/jobs`），而那一刻起磁碟上真的有一個那樣的
+        資料夾、帳本上也有指向它的路徑。TMDB 之後改標題不該讓 Berth 的檔案跟著改名——
+        改名是顯式動作。拿掉 `_store` 那個 `if not row.folder_frozen:` 守衛時這一條會紅。
+        """
+        client = tmdb()
+        factory = await credentialled(session, client)
+        await read_media(session, factory, SPY_ID)
+        row = await session.get(Media, SPY_ID)
+        assert row is not None
+        row.folder_frozen = True
+        await session.commit()
+
+        client.details[(MediaKind.TV, 120089)] = replace(SPY, title="Spy Family Renamed", year=2099)
+        view = await refresh_media(session, factory, SPY_ID)
+
+        assert view.folder_name == "SPY x FAMILY (2022) [tmdbid-120089]"
+        assert view.folder_frozen is True
+        # 標題本身仍然跟著 TMDB 走——凍住的只有那一串會落到磁碟上的字。
+        assert view.title_en == "Spy Family Renamed"
 
     async def test_it_is_sanitised(self, session: AsyncSession) -> None:
         """非法字元擋在寫進資料庫之前（plan §5）。"""

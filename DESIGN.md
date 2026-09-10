@@ -472,6 +472,12 @@ ISO 6346 標識在哪個語言都是同一串字母數字）、狀態標籤（`.
 
 ## Known contradictions
 
+- **值與值之間的中點分隔（`components/Dot.tsx`）是一個字元**，而 Don't 那一條寫著
+  「不用字元當裝飾標記」。那條規則說的是**會進無障礙名稱**的標記（`▸`、`•`、emoji）——
+  螢幕閱讀器會把它們念出來。`Dot` 掛 `aria-hidden`，所以它從無障礙樹上消失了；
+  而它必須是行內字元：CSS 畫的刻度要靠一個固定的盒子定位，跟不上一行會換行、寬度
+  由內容決定的值列表（票 08 的結果表與票 09 的下載列表都是這種）。
+
 - `.impeccable/surfaces/web-src-pages-setuppage-tsx.md`（票 05 的 Resolved 段）與
   `.impeccable/surfaces/web-src-pages-healthpage-tsx.md` 都描述亮色主題「同樣四個信號色，
   降明度提彩度以達 AA」。**程式碼沒有這樣做**：`web/src/index.css` 的亮色區塊只換中性色與

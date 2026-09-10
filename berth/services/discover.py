@@ -33,6 +33,7 @@ from berth.services.clients import ServiceClientFactory
 from berth.services.settings import read_settings, write_settings
 from berth.services.steps import message
 from berth.services.tmdb import MISSING_CREDENTIAL, credential
+from berth.services.tracking import tracked_media
 
 #: 探索與搜尋的快取壽命（plan §8.3）。Media 快照另有 24 小時的規則，不走這裡。
 CACHE_TTL = timedelta(hours=1)
@@ -60,10 +61,13 @@ class DiscoverItem:
     title_en: str
     year: int | None
     poster_url: str
+    #: Berth 已經為這部作品做過事（`CONTEXT.md` 的 Tracked Media）。**不進 `tmdb_cache`**：
+    #: 它是本地事實而且會當場改掉，而那份快取一小時才換一次（plan §8.3）。
+    tracked: bool = False
 
     @classmethod
-    def from_card(cls, card: MediaCard) -> DiscoverItem:
-        return cls(id=card.id, **card.model_dump())
+    def from_card(cls, card: MediaCard, *, tracked: bool = False) -> DiscoverItem:
+        return cls(id=card.id, tracked=tracked, **card.model_dump())
 
 
 @dataclass(frozen=True, slots=True)
@@ -139,7 +143,7 @@ async def _feed(
 ) -> DiscoverResult:
     cached = await _read_cache(session, key)
     if cached is not None:
-        return _wall(cached)
+        return await _wall(session, cached)
 
     settings = await read_settings(session, TmdbSettings)
     key_in_hand = credential(settings)
@@ -158,7 +162,7 @@ async def _feed(
         await client.aclose()
 
     await _write_cache(session, key, cards)
-    return _wall(cards)
+    return await _wall(session, cards)
 
 
 async def _both_kinds(feed: _KindFeed, base: str) -> tuple[MediaCard, ...]:
@@ -239,11 +243,14 @@ async def _write_cache(session: AsyncSession, key: str, cards: tuple[MediaCard, 
     )
 
 
-def _wall(cards: tuple[MediaCard, ...]) -> DiscoverResult:
-    """卡片變成牆上的那幾格。
+async def _wall(session: AsyncSession, cards: tuple[MediaCard, ...]) -> DiscoverResult:
+    """卡片變成牆上的那幾格，順手問一次「哪幾部 Berth 已經做過事」。
 
-    **格子上沒有本地狀態**（票 04b）：「已追蹤 / 部分 / 完整 / 下載中」要等 Job 與帳本才推導
-    得出來（票 09 起，brief §13）。在那之前每一格都會是同一個字，等於沒說——所以這一支現在
-    只把快取的形狀翻成畫面的形狀。狀態回來時它就是加上去的地方。
+    **一次問一整面牆**（`services/tracking`），不是逐格一句 `EXISTS`——一面牆 40 格。
+    「部分 / 完整 / 下載中」還沒有：那要等帳本（票 12）才推導得出來，而現在每一格都會是
+    同一個字（brief §13）。
     """
-    return DiscoverResult(tuple(DiscoverItem.from_card(card) for card in cards))
+    tracked = await tracked_media(session, [card.id for card in cards])
+    return DiscoverResult(
+        tuple(DiscoverItem.from_card(card, tracked=card.id in tracked) for card in cards)
+    )

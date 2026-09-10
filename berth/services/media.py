@@ -10,7 +10,8 @@
   季名、集名都留英文——它們會進檔名（plan §5），而且季名是 §4.4 篇章名比對的來源。
 - **快照 24 小時**（plan §8.3）。過期就重抓，使用者不必按任何東西。
 - **`folder_name` 跟著標題走**（plan §5、brief §4.5）。它在畫面上是「將會是」的預覽，
-  凍結發生在第一次真的通向磁碟那一刻——手動送單成功時（票 09）。這一支沒有凍結的權力。
+  凍結發生在第一次真的通向磁碟那一刻——手動送單成功時（`services/jobs`，票 09）。
+  這一支沒有凍結的權力，只有**遵守**它的義務：`folder_frozen` 之後刷新不再動那串字。
 """
 
 from __future__ import annotations
@@ -47,6 +48,7 @@ from berth.services.discover import POSTER_SIZE, image_base
 from berth.services.settings import read_settings
 from berth.services.steps import message
 from berth.services.tmdb import MISSING_CREDENTIAL, credential
+from berth.services.tracking import is_tracked
 
 #: Media 快照的壽命（plan §8.3）。探索牆另有一小時的規則，不走這裡。
 SNAPSHOT_TTL = timedelta(hours=24)
@@ -85,6 +87,12 @@ class MediaView:
     runtime: int | None
     #: 畫面上的「將會是」。凍結在第一次送單成功那一刻（票 09），在那之前跟著標題走。
     folder_name: str
+    #: 那串字已經定死了。畫面照它換掉整句說明——「將會是」與「就是」是兩件事。
+    folder_frozen: bool
+    #: Berth 已經為這部作品做過事（`CONTEXT.md` 的 Tracked Media，票 09 起是 `EXISTS(jobs)`）。
+    tracked: bool
+    #: 上次送單用的 Route，下拉的預選值（plan §2.2）。還沒送過單時是 `None`。
+    default_route_id: int | None
     seasons: tuple[SeasonSnapshot, ...]
     #: 這份快照什麼時候抓的。畫面用它說「這是 N 前的快照」。
     fetched_at: datetime | None
@@ -268,7 +276,8 @@ async def _store(session: AsyncSession, row: Media | None, snapshot: MediaSnapsh
     """寫下快照。
 
     `folder_name` 跟著標題走：這一列上還沒有任何檔案依賴它，而畫面要說的是「**現在**送單
-    的話會是這串字」。凍結在票 09 的送單那一刻，那時它才是檔案系統上的事實（brief §4.5）。
+    的話會是這串字」。**送單成功之後就不動了**（`folder_frozen`，票 09）——那一刻起磁碟上
+    真的有一個那樣的資料夾，而 TMDB 改標題不該讓 Berth 的檔案跟著改名（brief §4.5）。
     """
     if row is None:
         row = Media(
@@ -285,7 +294,8 @@ async def _store(session: AsyncSession, row: Media | None, snapshot: MediaSnapsh
         row.title_en = snapshot.title_en
         row.title_original = snapshot.title_original
         row.year = snapshot.year
-        row.folder_name = folder_name(snapshot)
+        if not row.folder_frozen:
+            row.folder_name = folder_name(snapshot)
     row.tmdb_snapshot_json = snapshot.model_dump(mode="json")
     row.tmdb_fetched_at = datetime.now(UTC)
     await session.commit()
@@ -320,6 +330,9 @@ async def _problem(
         poster_url="",
         runtime=None,
         folder_name="",
+        folder_frozen=False,
+        tracked=False,
+        default_route_id=None,
         seasons=(),
         fetched_at=None,
         routes=await _routes(session, kind),
@@ -343,6 +356,9 @@ def _missing(media_id: str) -> MediaView:
         poster_url="",
         runtime=None,
         folder_name="",
+        folder_frozen=False,
+        tracked=False,
+        default_route_id=None,
         seasons=(),
         fetched_at=None,
         routes=(),
@@ -358,7 +374,13 @@ async def _view(
     problem: TmdbProblem | None = None,
     detail: str = "",
 ) -> MediaView:
-    snapshot = MediaSnapshot.model_validate(row.tmdb_snapshot_json or {})
+    # 快照可能不在：TMDB 從第一次開啟這一頁起就連不上時，這一列上只有 `_store` 之外的
+    # 途徑寫下的那幾欄。那時仍然畫得出識別欄位與資料夾名，季集是空的。
+    snapshot = (
+        MediaSnapshot.model_validate(row.tmdb_snapshot_json)
+        if row.tmdb_snapshot_json
+        else _bare(row)
+    )
     return MediaView(
         id=row.id,
         tmdb_id=row.tmdb_id,
@@ -372,11 +394,26 @@ async def _view(
         poster_url=snapshot.poster_url,
         runtime=snapshot.runtime,
         folder_name=row.folder_name,
+        folder_frozen=row.folder_frozen,
+        tracked=await is_tracked(session, row.id),
+        default_route_id=row.default_route_id,
         seasons=snapshot.seasons,
         fetched_at=row.tmdb_fetched_at,
         routes=await _routes(session, row.kind),
         problem=problem,
         detail=detail,
+    )
+
+
+def _bare(row: Media) -> MediaSnapshot:
+    """沒有快照時，這一列自己知道的那幾格。"""
+    return MediaSnapshot(
+        tmdb_id=row.tmdb_id,
+        kind=row.kind,
+        title=row.title_en,
+        title_en=row.title_en,
+        title_original=row.title_original,
+        year=row.year,
     )
 
 

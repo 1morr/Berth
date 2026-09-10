@@ -169,6 +169,90 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/jobs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Jobs
+         * @description 下載列表，最新的在前面。
+         */
+        get: operations["get_jobs_api_jobs_get"];
+        put?: never;
+        /**
+         * Post Job
+         * @description 送一個 torrent 進 qBittorrent（plan §3.1、§3.3）。
+         *
+         *     **qBittorrent 收不下不是這一支的錯誤**：那時 Job 已經存在了，狀態是 `submit_failed`
+         *     加上原文，而畫面上那一列有一顆重試（plan §3.1）。200 回的就是那一筆。
+         */
+        post: operations["post_job_api_jobs_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/jobs/{job_hash}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Job */
+        get: operations["get_job_api_jobs__job_hash__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/jobs/{job_hash}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Job Events
+         * @description 時間線，最舊的在前面——讀的方向就是事情發生的方向。
+         */
+        get: operations["get_job_events_api_jobs__job_hash__events_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/jobs/{job_hash}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Retry
+         * @description `submit_failed` → `requested` → 再送一次（plan §3.1）。
+         */
+        post: operations["post_retry_api_jobs__job_hash__retry_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/media/{media_id}": {
         parameters: {
             query?: never;
@@ -778,6 +862,8 @@ export interface components {
             year: number | null;
             /** Poster Url */
             poster_url: string;
+            /** Tracked */
+            tracked: boolean;
         };
         /**
          * DiscoverOut
@@ -951,6 +1037,137 @@ export interface components {
             /** Merge Episodes Task Id */
             merge_episodes_task_id: string;
         };
+        /** JobCreateIn */
+        JobCreateIn: {
+            source: components["schemas"]["JobSourceIn"];
+            /** Media */
+            media: string;
+            /** Route */
+            route: number;
+        };
+        /**
+         * JobCreatedOut
+         * @description 送單的結果。
+         *
+         *     `created` 分得出「送出去了」與「這一個本來就在了」（plan §3.3）。兩者都是 200——
+         *     使用者按第二次時要看到的是那一筆既有的 Job，不是一則錯誤。
+         */
+        JobCreatedOut: {
+            job: components["schemas"]["JobOut"];
+            /** Created */
+            created: boolean;
+        };
+        /**
+         * JobEventOut
+         * @description 時間線上的一筆（brief §5.2）。
+         */
+        JobEventOut: {
+            /** Id */
+            id: number;
+            /** Type */
+            type: string;
+            /** Actor */
+            actor: string;
+            /** Payload */
+            payload: {
+                [key: string]: unknown;
+            };
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /**
+         * JobOut
+         * @description 下載列表與 Job 詳情上的一筆。
+         */
+        JobOut: {
+            /** Hash */
+            hash: string;
+            /** Name */
+            name: string;
+            state: components["schemas"]["JobState"];
+            trigger: components["schemas"]["JobTrigger"];
+            /** Trigger Ref */
+            trigger_ref: string;
+            /** Error */
+            error: string;
+            /** Media Id */
+            media_id: string | null;
+            /** Media Title */
+            media_title: string;
+            /** Route Id */
+            route_id: number | null;
+            /** Route Name */
+            route_name: string;
+            /** Route Slug */
+            route_slug: string;
+            /** User Id */
+            user_id: number | null;
+            /** User Name */
+            user_name: string;
+            /** Save Path */
+            save_path: string;
+            /** Content Path */
+            content_path: string;
+            /** Total Size */
+            total_size: number;
+            /** Progress */
+            progress: number;
+            /** Client State */
+            client_state: string;
+            /**
+             * Added At
+             * Format: date-time
+             */
+            added_at: string;
+            /** Completed At */
+            completed_at: string | null;
+            /** Imported At */
+            imported_at: string | null;
+            /** Retryable */
+            retryable: boolean;
+        };
+        /**
+         * JobSourceIn
+         * @description 結果表那一列帶過來的東西。
+         *
+         *     **不是一個結果 id**：搜尋結果不落地（票 08），所以送單時前端要把那一列本身送回來。
+         *     `url` 尤其如此——Prowlarr 的代理連結每次搜尋都不一樣（brief §20.7），只有使用者
+         *     眼前那一輪的那一條是有效的。
+         */
+        JobSourceIn: {
+            /** Url */
+            url: string;
+            /** Title */
+            title: string;
+            /**
+             * Info Hash
+             * @default
+             */
+            info_hash?: string;
+        };
+        /**
+         * JobState
+         * @description 一個 Job 的生命週期位置（plan §3.1、brief §5.1）。
+         *
+         *     宣告順序就是狀態機的主幹，分支緊接在它離開的那一站之後。**這一票只走得到前三個**：
+         *     `requested` 是 `add_download` 建出來的，qBittorrent 收下就是 `submitted`，收不下是
+         *     `submit_failed`。其餘由票 10 起的迴圈驅動——先一次定義完是因為它們是同一個封閉集合，
+         *     分兩批加的話畫面上的狀態字典會有兩份，而其中一份遲早會漏掉一個狀態。
+         * @enum {string}
+         */
+        JobState: "requested" | "submitted" | "submit_failed" | "metadata_ready" | "downloading" | "stalled" | "missing_files" | "client_error" | "client_removed" | "completed" | "planning" | "review" | "importing" | "imported" | "import_failed" | "removed";
+        /**
+         * JobTrigger
+         * @description 這個 Job 是誰要的（`CONTEXT.md`、plan §2.3）。
+         *
+         *     規則 id 與重新入庫的來源目錄放在 `jobs.trigger_ref`，不編進這個字串——畫面要拿它
+         *     分組，而 `rss:12` 那種寫法會讓每一條規則各自成為一種 trigger。
+         * @enum {string}
+         */
+        JobTrigger: "manual" | "rss" | "reimport";
         /** LibraryChoiceOut */
         LibraryChoiceOut: {
             /** Name */
@@ -1073,6 +1290,12 @@ export interface components {
             runtime: number | null;
             /** Folder Name */
             folder_name: string;
+            /** Folder Frozen */
+            folder_frozen: boolean;
+            /** Tracked */
+            tracked: boolean;
+            /** Default Route Id */
+            default_route_id: number | null;
             /** Seasons */
             seasons: components["schemas"]["SeasonOut"][];
             /** Fetched At */
@@ -1262,6 +1485,8 @@ export interface components {
             download_url: string;
             /** Key */
             key: string;
+            /** Info Hash */
+            info_hash: string;
             tags: components["schemas"]["TagsOut"];
             /** Season */
             season: number | null;
@@ -1662,6 +1887,152 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HealthDetailOut"];
+                };
+            };
+        };
+    };
+    get_jobs_api_jobs_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobOut"][];
+                };
+            };
+        };
+    };
+    post_job_api_jobs_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["JobCreateIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobCreatedOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_job_api_jobs__job_hash__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_hash: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_job_events_api_jobs__job_hash__events_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_hash: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobEventOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_retry_api_jobs__job_hash__retry_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_hash: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

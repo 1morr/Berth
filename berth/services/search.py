@@ -78,8 +78,11 @@ class SearchResult:
     info_url: str
     #: 送單時要交給 qBittorrent 的那一條（票 09）。
     download_url: str
-    #: 這一列的身分（info hash 或 guid）。前端的 key 與票 09 的送單都用它。
+    #: 這一列的身分（info hash 或 guid）。前端畫列表用它。
     key: str
+    #: 索引站報的 info hash，**只有真的是 hash 時才有值**。送單拿它短路重複檢查（票 09）——
+    #: `key` 不行：不報 hash 的站（實測 ACG.RIP）那一格是 guid，拿去當 hash 是在說謊。
+    info_hash: str
     #: `parse_release` 認出來、之後會進檔名的那幾格（brief §6.8）。
     tags: Tags
     #: 預估季集。三者皆 `None` = 判斷不出來，畫面就說判斷不出來，不猜。
@@ -373,6 +376,7 @@ def _row(
         info_url=result.info_url,
         download_url=result.download_url,
         key=result.key,
+        info_hash=result.info_hash,
         tags=tags_of(info),
         season=season,
         episode_start=start,

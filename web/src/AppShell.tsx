@@ -37,7 +37,7 @@ function NavLink({
   to,
   children,
 }: {
-  to: '/' | '/health' | '/settings/services'
+  to: '/' | '/jobs' | '/health' | '/settings/services'
   children: ReactNode
 }) {
   return (
@@ -84,6 +84,7 @@ function Identity() {
         <span className="value text-sm text-ink">{me.data.name}</span>
       </span>
       <NavLink to="/">{t('nav.discover')}</NavLink>
+      <NavLink to="/jobs">{t('nav.jobs')}</NavLink>
       <NavLink to="/health">{t('nav.health')}</NavLink>
       {me.data.role === 'admin' && <NavLink to="/settings/services">{t('nav.settings')}</NavLink>}
       <GhostButton type="button" disabled={leave.isPending} onClick={() => leave.mutate()}>

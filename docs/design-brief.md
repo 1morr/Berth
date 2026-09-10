@@ -669,6 +669,7 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 
 - `urls` / `torrents`、`savepath`、`downloadPath` + `useDownloadPath`、`category`、`tags`、`rename`、`autoTMM`、`contentLayout`（`Original` / `Subfolder` / `NoSubfolder`，API 2.7 / qB 4.3.2 起，取代 `root_folder`）、`stopped`（API 2.11.0 起取代 `paused`）、`stopCondition`、`seedMode`（API 2.16.0 起，同時移除 `skip_checking`）、`filePriorities`、`ratioLimit` / `seedingTimeLimit`（API 2.8.1）。
 - master 已不讀 `paused` / `root_folder`。adapter 必須先讀 `app/webapiVersion`，依版本送 `paused` 或 `stopped`；`torrents/pause|resume` 在 5.0 改名 `stop|start`。
+- **回應形狀兩版不同**（2026-09-10 票 09 實測，見 §20.7）：4.4.5 回 `200` + `Ok.`，5.2.3 回 `200` 加一份 JSON 摘要。只認 `Ok.` 的用戶端會把 5.x 上每一次成功的送單都判成失敗。
 - 【決定】支援下限 qBittorrent 4.4（API 2.8.4，2022）；以 5.x 為主要測試目標。
 
 **分類與路徑**
@@ -999,6 +1000,8 @@ thepiratebay / yts，fixture 在 `tests/fixtures/http/prowlarr/search.*.json` �
 
 **qBittorrent 版本矩陣**（2026-09-07，票 04；`lscr.io/linuxserver/qbittorrent:4.4.5`（API 2.8.5）與 `:5.2.3`（API 2.15.1），[完整結果](research/m0-experiments.md#2-qbittorrent-445-與-523)）
 
+- **`torrents/add` 的回應形狀兩版不同**（2026-09-10 票 09 對 5.2.3 / 4.4.5 兩台乾淨容器實測，fixture 在 `tests/fixtures/http/qbittorrent/torrents-add.*`）：4.4.5 成功回 `200` + `Ok.`；**5.2.3 成功回 `200` 加一份 JSON 摘要**（`{"added_torrent_ids": […], "failure_count": 0, "pending_count": 0, "success_count": 1}`）。**這推翻本節原本記的「一律回 200 `Ok.`」**——那句話只對 4.4.x 成立。失敗也說得出話：同一個磁力連結送第二次在 5.2.3 是 `409 Conflict`（4.4.5 照樣回 `Ok.`），category 的 save path 當下用不了也是 `409`；multipart 上傳一份不是 torrent 的東西是 `415` 加檔名與原因。
+- **交一條 http 網址給 `torrents/add` 是背景抓取**：5.2.3 回 `202` + `pending_count: 1`，抓失敗之後**永遠沒有下文**——torrent 不會出現，而用戶端已經回過 2xx 了。所以 Berth 自己先把 torrent 抓下來（`adapters/torrent.py`），交出去的一律是磁力連結或位元組，這樣「收不收」當場就有答案（票 09）。
 - **`paused` 與 `stopped` 各版本只認一個，送錯的那個會靜默地開始下載**：4.4.5 `paused=true` → `pausedDL`、`stopped=true` → `queuedDL`（沒暫停）；5.2.3 `paused=true` → `stalledDL`（沒暫停）、`stopped=true` → `stoppedDL`。`torrents/add` 一律回 200，不認得的參數不報錯。plan §8.1 的版本判斷是必要條件，不是最佳化。
 - **`torrents/files[].name` 相對 `save_path`**（多檔會含 torrent 根目錄那一層），四種 `contentLayout` 組合都成立；`content_path` = save_path + 根目錄，單檔時指向檔案、多檔時指向目錄。單檔 + `Subfolder` 的子資料夾名是去掉副檔名的 torrent 名。**`save_path` 的尾斜線兩版不同**（4.4.5 `/downloads/`、5.2.3 `/downloads`），組路徑前要正規化。
 - `torrents/files` 的鍵兩版相同：`index`、`name`、`size`、`progress`、`priority`、`is_seed`、`piece_range`、`availability`。

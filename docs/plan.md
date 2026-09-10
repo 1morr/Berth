@@ -114,14 +114,16 @@ adapters ──► domain                  （不 import services、models；回
 ### 2.2 Route 與 Media
 
 - `routes`：`id`、`slug`（unique）、`name`、`jellyfin_library_id`、`jellyfin_library_name`、`collection_type`（`movies` / `tvshows`）、`target_path`、`category`、`profile`（`standard` / `anime`）、`medium_auto_import`（預設 true）、`enabled`、`health_status`、`health_detail_json`、`created_at`。`health_detail_json` 是 `RouteHealth`：逐項檢查（形狀同精靈的步驟：`key` 是 `RouteCheck`、`status`、`detail`、`error`）與 `cross_device`。category 的 save path 不存欄位，它一律是 `<complete root>/<slug>`（brief §4.1）。
-- `media`：`id`（`tv:<tmdb>` / `movie:<tmdb>`）、`tmdb_id`、`kind`、`title_en`、`title_original`、`year`、`folder_name`、`default_route_id`、`tmdb_snapshot_json`（含**各季的 `name`**——`Hashira Training Arc` 這種篇章名是 §4.4 的季號來源——與各季各集：number、name、air_date、runtime；episode groups 的 absolute 排序若存在）、`tmdb_fetched_at`。`tmdb_snapshot_json` 的型別化版本是 `domain/media.py` 的 `MediaSnapshot`（§4.3）——它住在 `domain/` 是因為 `naming` 與 `parser` 都要它，而那兩個依契約只 import `domain`（§1.3）。
+- `media`：`id`（`tv:<tmdb>` / `movie:<tmdb>`）、`tmdb_id`、`kind`、`title_en`、`title_original`、`year`、`folder_name`、`folder_frozen`、`default_route_id`、`tmdb_snapshot_json`（含**各季的 `name`**——`Hashira Training Arc` 這種篇章名是 §4.4 的季號來源——與各季各集：number、name、air_date、runtime；episode groups 的 absolute 排序若存在）、`tmdb_fetched_at`。`tmdb_snapshot_json` 的型別化版本是 `domain/media.py` 的 `MediaSnapshot`（§4.3）——它住在 `domain/` 是因為 `naming` 與 `parser` 都要它，而那兩個依契約只 import `domain`（§1.3）。
   **點進詳情頁就會寫下一列**（快照要有地方放），所以有這一列不代表 Berth 為它做過任何事。「追蹤過」是**推導**出來的（`CONTEXT.md`）：票 09 起是 `EXISTS(jobs)`，票 12 加帳本，M3 加 Rule——不存成欄位。
   `folder_name` 因此**跟著標題走**（畫面上它是「將會是」的預覽），每次刷新快照都重算；**第一次真的通向磁碟那一刻凍結**：手動送單成功時（票 09）或建 RSS Rule 時（M3），兩個都有人在場、都要一次明確確認。凍結之後 refresh 一律不動它（§5、brief §4.5、票 04b）。不拖到入庫才凍——importer 是背景迴圈，那時候沒有人看著。
+  開關是 `folder_frozen`（票 09），**推導不出來**：送單失敗的 Job 也是一列 `jobs`，而那一刻磁碟上什麼都沒發生；刪掉那筆 Job 也不該讓資料夾名重新開始跟著 TMDB 跑。**送單那一步不刷新快照**（§8.3 的六小時規則留給 planning）：凍下去的必須就是使用者剛剛在確認畫面上看到的那一串字。
 - `tmdb_cache`：`key`（`discover:trending` / `discover:popular` / `search:<正規化查詢>`）、`value_json`（已經合併好的卡片陣列：tmdb id、kind、顯示用標題、英文標題、年份、完整海報網址）、`fetched_at`。探索頁與搜尋結果的短期快取，一小時；Media 詳情走 `media` 表
 
 ### 2.3 Job、檔案、計劃、帳本
 
-- `jobs`：`hash`（pk）、`name`、`trigger`（`manual` / `rss` / `reimport`）、`trigger_ref`（rule id 或 import source 路徑）、`user_id`、`media_id`、`route_id`、`state`（§3.1）、`error`、`save_path`、`content_path`、`total_size`、`progress`、`client_state`、`added_at`、`completed_at`、`imported_at`、`last_seen_in_client_at`
+- `jobs`：`hash`（pk，info hash）、`name`、`source_url`、`trigger`（`manual` / `rss` / `reimport`）、`trigger_ref`（rule id 或 import source 路徑）、`user_id`、`media_id`、`route_id`、`state`（§3.1）、`error`、`save_path`、`content_path`、`total_size`、`progress`、`client_state`、`added_at`、`completed_at`、`imported_at`、`last_seen_in_client_at`。
+  `source_url` 是索引站上那一條下載連結，**存著是為了重試**（§3.1 的 `submit_failed` → `requested`）：送單失敗之後畫面上那一輪搜尋早就不在了，而 Prowlarr 的代理連結每次搜尋都不一樣（brief §20.7），重新搜一次不會給出同一條（票 09）。
 - `job_files`：`id`、`job_hash`、`rel_path`（與 hash 合併 unique）、`size`、`priority`、`kind`（§4.1）、`release_info_json`、`mediainfo_json`、`updated_at`
 - `plans`：`id`、`job_hash`（nullable）、`source_path`（重新入庫時的目錄）、`engine`（`rules` / `ai` / `user`）、`engine_version`、`status`（`preplan` / `auto` / `pending_review` / `approved` / `rejected` / `applied` / `failed`）、`summary_json`（各信心等級數量、原因摘要）、`created_at`、`decided_by`、`decided_at`
 - `plan_items`：`id`、`plan_id`、`job_file_id`（nullable）、`rel_path`、`action`（`import` / `extra` / `subtitle` / `skip` / `unmatched` / `review`）、`media_id`、`season`、`episode_start`、`episode_end`、`tags_json`、`target_path`、`confidence`（`high` / `medium` / `low`）、`reasons_json`、`audit`（medium 自動入庫為 true）、`applied_at`、`error`
@@ -370,7 +372,9 @@ Session 以 httpOnly cookie（`berth_session`）承載，`SameSite=Strict`、`Pa
 ### 8.1 qBittorrent adapter
 
 - 連線時讀 `app/webapiVersion` 與 `app/version`，低於 2.8.4 拒絕並提示升級。
-- 參數依版本：API ≥ 2.11 用 `stopped`，否則 `paused`；`contentLayout=Original`；`autoTMM=true`；`category=<route.category>`；`tags=berth`。**版本判斷是必要條件**：實測送錯的那個參數會被靜默忽略（`torrents/add` 照樣回 200），torrent 就這樣開始下載（brief §20.7）。
+- 參數依版本：API ≥ 2.11 用 `stopped`，否則 `paused`；`contentLayout=Original`；`autoTMM=true`；`category=<route.category>`；`tags=berth`。**版本判斷是必要條件**：實測送錯的那個參數會被靜默忽略（`torrents/add` 照樣回 200），torrent 就這樣開始下載（brief §20.7）。值是 `false`（**只送版本對的那一個鍵**）——qBittorrent 有一個「加入後不自動開始」的全域偏好，而 §3.1 的狀態機假設送出去的 torrent 會自己走到 `metadata_ready`；不明講的話，開著那個偏好的使用者身上每一筆 Job 都會永遠停在 `submitted`（票 09）。`savepath` **不送**：`autoTMM=true` 時路徑由 category 決定，兩個來源會讓「存到哪裡」有兩個答案。
+- **成功的形狀依版本判定**（2026-09-10 實測）：4.4.5 是 `200` + `Ok.`，5.2.3 是 `200` 加一份 JSON 摘要（`failure_count == 0` 且 `success_count > 0`）。`409` 是「不收」（已經有同一個 hash，或 category 的 save path 用不了），`415` 是那份 `.torrent` 無效，`202` 是「網址收下了、之後再去抓」而**那條路徑的失敗永遠不會回來**——所以它也不算成功（brief §20.7）。
+- **送單前 Berth 自己把 torrent 抓下來**（`adapters/torrent.py`，票 09）：索引站的下載連結 → info hash + 磁力連結或 `.torrent` 位元組。兩個理由——`jobs.hash` 是主鍵而索引站不一定報 hash（實測 ACG.RIP 不報），以及交網址給 qBittorrent 是背景抓取，失敗時 §3.1 的 `submit_failed` 永遠觸發不到。
 - `ensure_category(name, save_path)`：`torrents/categories` 讀取（接受 `savePath` 與 `save_path` 兩種鍵；4.4.5 與 5.2.3 實測都是 `savePath`，`save_path` 只出現在 4.4.0–4.4.1，仍在支援範圍所以兩種都收），不存在才建，存在但 save path 不同 → 回報衝突不改（brief §20.2）。
 - `diff_recommended_preferences()` / `apply_recommended_preferences()`：建議值為 `temp_path_enabled=true`、`temp_path=<incomplete root>`、`save_path=<complete root>`、`auto_tmm_enabled=true`、`category_changed_tmm_enabled=true`；先回傳與現值的差異給精靈顯示，套用時只寫不同的鍵。既有服務的 temp path 未啟用只列為警告。
 - 完成判定依 brief §20.2。`torrents/files[].name` **相對 `save_path`**（多檔含 torrent 根目錄那一層），實測四種 `contentLayout` 組合都成立（brief §20.7）；組絕對路徑前先正規化 `save_path` 的尾斜線（4.4 有、5.x 沒有），組完仍 `stat` 驗證。`content_path` 是目錄或單檔，兩種都處理。
@@ -396,7 +400,7 @@ Session 以 httpOnly cookie（`berth_session`）承載，`SameSite=Strict`、`Pa
 - **Media 詳情打三輪 + 每季一次**：`tv/{id}` 的 `en-US` 那一輪決定結構與所有會進檔名的字串（季名、集名、英文標題），`zh-TW` 那一輪只補顯示用標題與簡介，`zh-CN` 那一輪**只取季名**（§4.3 的篇章名比對，票 06；電影不打這一輪）；季集**只取 `en-US`**——集名會進檔名（§5 的 `{episode_title}`），中文集名放進去等於讓磁碟上的檔名跟著 UI 的語言跑。一部四季的作品因此是 3 + 4 + 1 = 8 個請求，24 小時一次（票 04、06）。
 - **絕對編號要從 0-based 的 `order` 推**，不是 group 裡的 `episode_number`——那一欄保留播出序的原值，所以 SPY×FAMILY 的 S02E01 在 group 裡仍然是 `episode_number: 1`，而它是絕對第 26 集（2026-09-09 對真 API 實測，brief §20.3）。一部作品可能有好幾個 episode group（實測五個），只有 `type: 2` 是絕對編號，取第一個。
 - 語言 `en-US` 取英文標題，`name` 空時退回 `original_name`；另以 `zh-TW` 取一次顯示用標題與簡介給 UI（brief §7.5 的檔名仍用英文）。**清單本身一律以 `en-US` 那一輪為準，`zh-TW` 只是一張「這一部叫什麼、海報是哪張」的查表**：`language` 會換掉 trending 回的**成員與順序**而不只是文字（2026-09-09 實測 `trending/tv/week`，兩輪 20 筆差 3 筆），照 `zh-TW` 當清單會讓作品憑空消失（票 03）。
-- 快取：探索與搜尋 1 小時（`tmdb_cache`，一個 feed 一列，存的是已經合併好的卡片而不是 TMDB 原始 payload）；Media 快照 24 小時，Job 送單與 planning 前若快照超過 6 小時則刷新（新播集數會變）。**卡片上的本地狀態不進快取**：它是本地事實而且會當場改掉（M1 票 04b 之後卡片上沒有狀態，票 09 起以 Job 推導）。
+- 快取：探索與搜尋 1 小時（`tmdb_cache`，一個 feed 一列，存的是已經合併好的卡片而不是 TMDB 原始 payload）；Media 快照 24 小時，**planning** 前若快照超過 6 小時則刷新（新播集數會變）。**送單那一步不刷新**（票 09）：它會凍結 `folder_name`，而凍下去的必須就是使用者剛剛在確認畫面上看到的那一串字（§2.2、brief §4.5）——刷新會在他按下去與那串字落地之間把它換掉。**卡片上的本地狀態不進快取**：它是本地事實而且會當場改掉（M1 票 04b 之後卡片上沒有狀態，票 09 起以 Job 推導）。
 - 順序：`trending` 與 `popular` 回的順序**就是**那個 feed 的排名，不要重排——回應裡的 `popularity` 欄位與清單順序不一致（2026-09-09 實測，兩者都是亂序的）。劇集與電影兩份清單合成一面牆時用交錯（票 03）。
 - 圖片基底：`configuration` 的 `secure_base_url` 對同一把憑證是常數，精靈第 6 步驗憑證時就寫進 `settings.services.tmdb.image_base_url`，探索頁直接讀它。海報尺寸 `w342`。
 - 速率：全域 40 req/s 令牌桶，遠低於 TMDB 的上限。

@@ -204,12 +204,43 @@ Windows Docker Desktop（NTFS bind mount）與 Linux（ext4）上各跑一次 `d
   做種 / 來源 / 預估），可依做種與大小排序，390px 上塌成堆疊列。Route 下拉從身分帶搬進這一區塊
   ——它現在真的驅動一件事。
 - `--scenario search`：TMDB 與索引站都打真的那一台的演練情境。
+- **送單**（`berth/services/jobs.py`、`berth/api/jobs.py`，plan §3.1、§3.3、§6 jobs 群組）：
+  `POST /api/jobs`（`{source, media, route}`）建一筆 Job（`requested`）→ qBittorrent 收下
+  → `submitted`，兩個轉換各寫一筆 event。同 hash 重複送單回傳既有 Job，不重複送單。
+  qBittorrent 拒絕或不可達 → `submit_failed` 加服務回的原文，`POST /api/jobs/{hash}/retry`
+  可以退回 `requested` 再送一次。
+- `jobs` 與 `job_files` 兩張表與 migration（plan §2.3）。**主鍵是 info hash**，所以
+  「同一個 torrent 送兩次」在資料庫層就是同一列。`job_files` 這一票只建表。
+- `GET /api/jobs`、`GET /api/jobs/{hash}`、`GET /api/jobs/{hash}/events`。
+- **送單前 Berth 自己把 torrent 抓下來**（`berth/adapters/torrent.py`）：索引站的下載連結 →
+  info hash（磁力連結就地解析，`.torrent` 逐位元組取 `info` 再 SHA-1）+ 要交給 qBittorrent 的
+  那一份。兩個理由——`jobs.hash` 是主鍵而索引站不一定報 hash（實測 ACG.RIP 不報），以及交一條
+  網址給 `torrents/add` 是**背景抓取**，抓失敗永遠沒有下文（`202` + `pending_count`），
+  那樣 `submit_failed` 這個狀態永遠觸發不到。
+- `torrents/add`（`berth/adapters/qbittorrent/`）：`category` + `tags=berth` +
+  `contentLayout=Original` + `autoTMM=true` + 版本對的那個開始參數（API ≥ 2.11 是 `stopped`，
+  否則 `paused`，值都是 `false`）。`savepath` 不送——`autoTMM` 開著時路徑由 category 決定。
+- **`media.folder_frozen`**：資料夾名在**第一次送單成功那一刻**定死（plan §2.2、brief §4.5、
+  票 04b）。送單確認裡印著那一串字，按下去之前就看得到；已經凍結過的第二次送單不重凍。
+  `media.default_route_id` 同時寫成「上次用的」，下一次進詳情頁時下拉停在它。
+- **Tracked Media 以 `EXISTS(jobs)` 推導**（`berth/services/tracking.py`、`CONTEXT.md`、票 04b）：
+  詳情頁與探索牆的卡片讀同一份推導，不是欄位。票 12 的帳本與 M3 的 Rule 之後加進同一支函式。
+- **下載列表頁 `/jobs`**（`.scratch/m1/jobs-shape.md`）：一份船期表，逐列狀態色塊 + 作品 +
+  Route + trigger + 大小 + 進度 + 時間；點一列**就地展開**時間線、info hash 與重試，
+  其他列不動、不跳頁（The Failure Expands In Place Rule）。最新的在前面。
+- **結構化日誌**（`berth/logs.py`，brief §16.2、plan T1.9）：一行一筆 JSON，job 上下文裡的
+  每一行都帶 job id。id 由 `ContextVar` 帶著、在 record 建立那一刻蓋上，不靠呼叫端記得傳。
+- `--scenario submit` / `--scenario submit-failing`：送單與下載列表的演練情境。
 - `AiPlanner` 介面與 `NullAiPlanner`（`berth/adapters/ai.py`，plan §4.5、brief §6.10）：
   `propose(context, files, rules_plan) -> Plan | None`。M4 才有實作，介面先定是因為它約束的是
   規則層——AI 只能提出規則層表達得出來的處置，碰不到檔案。
 
 ### Changed
 
+- **`torrents/add` 的成功形狀依版本判定**（brief §20.2、§20.7、plan §8.1）：2026-09-10 對真的
+  qBittorrent 5.2.3 與 4.4.5 各錄一輪，發現 5.2.3 成功回的是一份 JSON 摘要而不是 `Ok.`——
+  brief 原本記的「一律回 200 `Ok.`」只對 4.4.x 成立，只認 `Ok.` 的話 5.x 上每一次成功的送單
+  都會被判成失敗。`409` / `415` / `202` 的意義一併記進 brief §20.7 與 fixture。
 - **`/` 不再導向 `/health`**，它就是探索頁（plan §7）。登入之後落到的第一個畫面因此從「看它有沒有
   壞」變成「找東西」；健康頁留在導覽列上。
 - 依實測更正 TMDB 的三件事（brief §20.3、plan §8.3）：`language` 會換掉 `trending` 回的**成員與

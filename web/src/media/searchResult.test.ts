@@ -12,6 +12,7 @@ function row(overrides: Partial<SearchResult> = {}): SearchResult {
     info_url: '',
     download_url: '',
     key: 'k',
+    info_hash: '',
     tags: {
       source: null,
       resolution: '',

@@ -2,6 +2,7 @@ import { screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import type { Job } from '../api/jobs'
 import type { Media } from '../api/media'
 import type { SearchResults, SearchResult } from '../api/search'
 import { HEALTHY, stubApi, type StubRoute } from '../test/fetch'
@@ -29,6 +30,9 @@ function media(overrides: Partial<Media> = {}): Media {
     poster_url: '',
     runtime: null,
     folder_name: 'SPY x FAMILY (2022) [tmdbid-120089]',
+    folder_frozen: false,
+    tracked: false,
+    default_route_id: null,
     fetched_at: '2026-09-09T12:00:00Z',
     problem: null,
     detail: '',
@@ -50,6 +54,7 @@ function row(overrides: Partial<SearchResult> = {}): SearchResult {
     info_url: 'https://acg.rip/t/344604',
     download_url: 'http://prowlarr:9696/2/download?apikey=k',
     key: 'a'.repeat(40),
+    info_hash: 'a'.repeat(40),
     tags: {
       source: 'WEB',
       resolution: '1080p',
@@ -65,6 +70,34 @@ function row(overrides: Partial<SearchResult> = {}): SearchResult {
     whole_season: false,
     strategy: 'explicit',
     ...overrides,
+  }
+}
+
+/** 送單成功時後端回的那一筆。只有畫面讀得到的那幾格才有意義。 */
+function job(): Job {
+  return {
+    hash: 'a'.repeat(40),
+    name: '[ANi] SPY x FAMILY - 50 [1080P][Baha][WEB-DL][AAC AVC][CHT][MP4]',
+    state: 'submitted',
+    trigger: 'manual',
+    trigger_ref: '',
+    error: '',
+    media_id: 'tv:120089',
+    media_title: 'SPY x FAMILY',
+    route_id: 1,
+    route_name: 'TV',
+    route_slug: 'tv',
+    user_id: 1,
+    user_name: 'skipper',
+    save_path: '',
+    content_path: '',
+    total_size: 0,
+    progress: 0,
+    client_state: '',
+    added_at: '2026-09-10T12:00:00Z',
+    completed_at: null,
+    imported_at: null,
+    retryable: false,
   }
 }
 
@@ -363,5 +396,112 @@ describe('搜尋 torrent 與結果表', () => {
     expect(await screen.findByText(/SPY x FAMILY Season 3/)).toBeVisible()
     // 偏好不落地：整輪下來一個非 GET 都沒送出去。
     expect(stub.mock.calls.filter(([, init]) => init?.method === 'POST')).toEqual([])
+  })
+
+  describe('送單（票 09）', () => {
+    /** 搜一次，回一列結果。送單那顆鍵掛在那一列上。 */
+    async function searched(routes: Record<string, StubRoute | (() => StubRoute)> = {}) {
+      const stub = render({ [`${SEARCH_PATH}&route=1`]: { body: results() }, ...routes })
+      renderApp('/media/tv:120089')
+      await userEvent.selectOptions(await screen.findByLabelText('入庫到'), 'TV')
+      await userEvent.click(screen.getByRole('button', { name: '搜尋' }))
+      await within(panel()).findByRole('table')
+      return stub
+    }
+
+    it('確認裡印著資料夾名，而且說清楚這一按就定了（票 04b、brief §4.5）', async () => {
+      await searched()
+
+      await userEvent.click(screen.getByRole('button', { name: '送單' }))
+
+      // 身分帶上也有同一串字（那是「將會是」的預覽），所以只看確認區塊裡的那一份。
+      const confirm = within(panel())
+      expect(confirm.getByText('SPY x FAMILY (2022) [tmdbid-120089]')).toBeVisible()
+      expect(confirm.getByText(/送單成功那一刻這串字就定下來/)).toBeVisible()
+    })
+
+    it('已經凍結過的作品說的是「不會再動它」', async () => {
+      await searched({ [MEDIA_PATH]: { body: media({ folder_frozen: true }) } })
+
+      await userEvent.click(screen.getByRole('button', { name: '送單' }))
+
+      expect(screen.getByText(/這串字已經定下來了/)).toBeVisible()
+    })
+
+    it('確認之後才真的送出去，body 帶著那一列與選的 Route', async () => {
+      const stub = await searched({
+        'POST /api/jobs': { body: { job: job(), created: true } },
+      })
+
+      await userEvent.click(screen.getByRole('button', { name: '送單' }))
+      await userEvent.click(screen.getByRole('button', { name: '確認送單' }))
+
+      expect(await screen.findByText('已送出')).toBeVisible()
+      const sent = stub.mock.calls.find(([, init]) => init?.method === 'POST')
+      expect(JSON.parse(String(sent?.[1]?.body))).toEqual({
+        source: {
+          url: 'http://prowlarr:9696/2/download?apikey=k',
+          title: '[ANi] SPY x FAMILY - 50 [1080P][Baha][WEB-DL][AAC AVC][CHT][MP4]',
+          // 索引站報的那一個，不是 `key`——不報 hash 的站那一格是一條 guid。
+          info_hash: 'a'.repeat(40),
+        },
+        media: 'tv:120089',
+        route: 1,
+      })
+    })
+
+    it('同一筆再送一次時說的是「這一個已經在了」，不是一則錯誤（plan §3.3）', async () => {
+      await searched({ 'POST /api/jobs': { body: { job: job(), created: false } } })
+
+      await userEvent.click(screen.getByRole('button', { name: '送單' }))
+      await userEvent.click(screen.getByRole('button', { name: '確認送單' }))
+
+      expect(await screen.findByText('這一個已經在了')).toBeVisible()
+    })
+
+    it('紅的 Route 被擋下來時說的是那個理由與下一步（brief §4.4）', async () => {
+      await searched({
+        'POST /api/jobs': {
+          status: 409,
+          body: { detail: { reason: 'route_unhealthy', detail: 'tv' } },
+        },
+      })
+
+      await userEvent.click(screen.getByRole('button', { name: '送單' }))
+      await userEvent.click(screen.getByRole('button', { name: '確認送單' }))
+
+      const alert = await screen.findByRole('alert')
+      expect(alert).toHaveTextContent(/那條 Route 現在是紅的/)
+      // 服務回的原文貼在旁邊，不翻譯（與精靈的纜繩同一個規矩）。
+      expect(alert).toHaveTextContent('tv')
+    })
+
+    it('還沒選 Route 時按鈕照樣按得下去，說不行的是那句話（票 02b）', async () => {
+      // 兩條 Route 都收得下這部作品，所以下拉不會自動選一條。
+      const stub = render({ [`${SEARCH_PATH}`]: { body: results() } })
+      renderApp('/media/tv:120089')
+      await userEvent.click(await screen.findByRole('button', { name: '搜尋' }))
+      await within(panel()).findByRole('table')
+
+      await userEvent.click(screen.getByRole('button', { name: '送單' }))
+
+      expect(screen.getByText(/先在上面選一條/)).toBeVisible()
+      expect(screen.getByRole('button', { name: '確認送單' })).toBeEnabled()
+      expect(stub.mock.calls.filter(([, init]) => init?.method === 'POST')).toEqual([])
+
+      // 按下去也**不打 API**：送一個假的 route id 出去會換回一句「那條 Route 不在了」，
+      // 而使用者根本還沒選過（PRODUCT 原則 4：說得出下一步的那一句才算數）。
+      await userEvent.click(screen.getByRole('button', { name: '確認送單' }))
+
+      expect(await screen.findByRole('alert')).toHaveTextContent(/先在上面選一條/)
+      expect(stub.mock.calls.filter(([, init]) => init?.method === 'POST')).toEqual([])
+    })
+
+    it('上次送單用的那條 Route 是下一次的預選值（plan §2.2）', async () => {
+      render({ [MEDIA_PATH]: { body: media({ default_route_id: 2 }) } })
+      renderApp('/media/tv:120089')
+
+      expect(await screen.findByLabelText('入庫到')).toHaveValue('2')
+    })
   })
 })

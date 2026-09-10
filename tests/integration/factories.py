@@ -15,6 +15,8 @@ from berth.adapters.qbittorrent import QbittorrentClient
 from berth.adapters.qbittorrent.fake import FakeQbittorrentClient
 from berth.adapters.tmdb import TmdbClient
 from berth.adapters.tmdb.fake import FakeTmdbClient
+from berth.adapters.torrent import TorrentFetcher
+from berth.adapters.torrent_fake import FakeTorrentFetcher
 from berth.adapters.torznab import TorznabClient
 from berth.adapters.torznab.fake import FakeTorznabClient
 from berth.domain import IndexerKind
@@ -30,6 +32,7 @@ class FakeClientFactory:
         tmdb: FakeTmdbClient | None = None,
         torznab: FakeTorznabClient | None = None,
         indexer_search: FakeIndexerSearch | None = None,
+        torrent: FakeTorrentFetcher | None = None,
     ) -> None:
         self.jellyfin_ = jellyfin or FakeJellyfinClient()
         self.qbittorrent_ = qbittorrent or FakeQbittorrentClient()
@@ -37,6 +40,7 @@ class FakeClientFactory:
         self.tmdb_ = tmdb or FakeTmdbClient()
         self.torznab_ = torznab or FakeTorznabClient()
         self.indexer_search_ = indexer_search or FakeIndexerSearch()
+        self.torrent_ = torrent or FakeTorrentFetcher()
         #: 每次拿 client 時收到的憑證，用來斷言「用的是存下來的那一把」。
         self.tokens: list[str] = []
         self.api_keys: list[str] = []
@@ -66,6 +70,9 @@ class FakeClientFactory:
         self.api_keys.append(api_key)
         self.torznab_.base_url = base_url
         return self.torznab_
+
+    def torrent(self) -> TorrentFetcher:
+        return self.torrent_
 
     def indexer_search(self, kind: IndexerKind, base_url: str, api_key: str) -> IndexerSearch:
         self.api_keys.append(api_key)

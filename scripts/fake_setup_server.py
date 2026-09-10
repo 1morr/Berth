@@ -23,7 +23,7 @@ import uvicorn
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from berth.adapters.http import AuthFailedError, ServiceNotDeployedError, ServiceUnavailableError
-from berth.adapters.indexer import IndexerSearch
+from berth.adapters.indexer import IndexerResult, IndexerSearch
 from berth.adapters.indexer.fake import FakeIndexerSearch
 from berth.adapters.indexer.prowlarr import ProwlarrSearch
 from berth.adapters.jellyfin import (
@@ -41,6 +41,7 @@ from berth.adapters.qbittorrent.fake import FakeQbittorrentClient
 from berth.adapters.tmdb import TmdbClient
 from berth.adapters.tmdb.client import HttpTmdbClient
 from berth.adapters.tmdb.fake import FakeTmdbClient
+from berth.adapters.torrent import HttpTorrentFetcher, TorrentFetcher
 from berth.adapters.torznab import TorznabClient
 from berth.adapters.torznab.fake import FakeTorznabClient
 from berth.api.deps import get_client_factory, get_setup_probes
@@ -149,6 +150,8 @@ class Scenario:
     #: 結果表的驗收要看真的發佈名——中日英混排、100 字以上、字幕組各寫各的（票 08）。
     indexer_url: str = ""
     indexer_key: str = ""
+    #: 替身索引站要回的那幾筆。真的那一台沒接上時走這裡（票 09 的送單演練）。
+    indexer_results: tuple[IndexerResult, ...] = ()
 
     def probes(self) -> SetupProbes:
         return SetupProbes(
@@ -326,6 +329,68 @@ def search() -> Scenario:
     return scenario
 
 
+#: 送單演練用的三筆結果。發佈名與磁力連結的形狀取自 2026-09-10 對真索引站錄下來的回應
+#: （`tests/fixtures/http/prowlarr/search.spy-x-family.json`）；hash 是形狀對的假值。
+#:
+#: **download_url 是磁力連結**，因為公開中文站（dmhy、TPB）給的就是它（brief §20.7）。
+#: 那條路徑在 `adapters/torrent.py` 裡連請求都不必發——hash 就寫在連結裡——所以這個情境
+#: 走的是真的產品程式碼，只是沒有網路。
+SUBMIT_RESULTS = (
+    IndexerResult(
+        title="[ANi] SPY×FAMILY 間諜家家酒 - 26 [1080P][Baha][WEB-DL][AAC AVC][CHT][MP4]",
+        indexer="ACG.RIP",
+        size=524_288_000,
+        seeders=42,
+        leechers=3,
+        info_url="https://acg.rip/t/344604",
+        download_url="magnet:?xt=urn:btih:4bd0f6ef1d3b1e3cbb1e1b6b6c2a9c7d8e5f0a1b&dn=ANi.SPY",
+        info_hash="4bd0f6ef1d3b1e3cbb1e1b6b6c2a9c7d8e5f0a1b",
+    ),
+    IndexerResult(
+        title="SPY X FAMILY S02E01 1080p WEB H264-SKYANiME",
+        indexer="The Pirate Bay",
+        size=1_073_741_824,
+        seeders=9,
+        leechers=1,
+        download_url="magnet:?xt=urn:btih:aa11bb22cc33dd44ee55ff66aa77bb88cc99dd00&dn=SKYANiME",
+        info_hash="aa11bb22cc33dd44ee55ff66aa77bb88cc99dd00",
+    ),
+    IndexerResult(
+        title="[Lilith-Raws] SPY x FAMILY - 25 [Baha][WEB-DL][1080p][AVC AAC][CHT][MKV]",
+        indexer="dmhy",
+        size=612_368_384,
+        seeders=None,
+        download_url="magnet:?xt=urn:btih:JPIPN3Y5HMPDZOY6DNVWYKU4PWHF6CQ4&dn=Lilith",
+        info_hash="JPIPN3Y5HMPDZOY6DNVWYKU4PWHF6CQ4",
+    ),
+)
+
+
+def submit() -> Scenario:
+    """送單與下載列表（票 09）：真的 TMDB + 一組替身的搜尋結果。
+
+    索引站走替身而不是真的那一台，是因為這個情境要驗的是**送單之後**的事，而真的搜尋
+    要 35–85 秒、每次回來的發佈也不一樣——那會讓「按這一列」變成一個不可重現的步驟。
+    結果本身仍然是真的形狀（見 `SUBMIT_RESULTS`），而解析、送單、Job 與時間線全部是產品
+    自己的程式碼。
+
+    qBittorrent 是替身：它會照實收下 `torrents/add` 並記住 category 與 tag。
+    真的那一台由 `scripts/experiments/` 那條路驗（M0 票 04 的參數矩陣）。
+    """
+    scenario = discover()
+    scenario.indexer_results = SUBMIT_RESULTS
+    return scenario
+
+
+def submit_failing() -> Scenario:
+    """qBittorrent 收不下：送單失敗那一列與它的重試（plan §3.1）。"""
+    scenario = submit()
+    scenario.qbittorrent.add_error = ServiceUnavailableError(
+        "POST /api/v2/torrents/add: connection refused"
+    )
+    return scenario
+
+
 def tmdb_down() -> Scenario:
     """憑證有、TMDB 連不上：探索頁要給原文與重試，而不是一片空白。"""
     scenario = healthy()
@@ -340,6 +405,8 @@ SCENARIOS = {
     "bundled": bundled,
     "discover": discover,
     "search": search,
+    "submit": submit,
+    "submit-failing": submit_failing,
     "tmdb-down": tmdb_down,
     "healthy": healthy,
     "degraded": degraded,
@@ -399,7 +466,15 @@ class FakeClientFactory:
     def indexer_search(self, kind: IndexerKind, base_url: str, api_key: str) -> IndexerSearch:
         if self._scenario.indexer_url:
             return ProwlarrSearch(self._scenario.indexer_url, self._scenario.indexer_key)
-        return FakeIndexerSearch(base_url=base_url)
+        return FakeIndexerSearch(base_url=base_url, results=self._scenario.indexer_results)
+
+    def torrent(self) -> TorrentFetcher:
+        """送單前把下載連結換成 info hash 與要交出去的那一份（票 09）。
+
+        **走真的那一支**：演練用的結果給的是磁力連結，而磁力那條路徑連請求都不必發
+        （hash 就寫在連結裡）。所以這裡跑的是產品自己的程式碼，只是沒有網路。
+        """
+        return HttpTorrentFetcher()
 
 
 def main(argv: list[str] | None = None) -> int:

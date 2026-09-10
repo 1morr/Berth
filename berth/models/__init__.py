@@ -6,6 +6,7 @@ M0 只建這五張表；其餘在需要它們的里程碑用 Alembic 增量加�
 from berth.models.auth import User, UserSession
 from berth.models.base import Base
 from berth.models.event import Event
+from berth.models.job import Job, JobFile
 from berth.models.media import (
     Media,
     MediaCard,
@@ -51,6 +52,8 @@ __all__ = [
     "HealthSettings",
     "IndexerSettings",
     "JellyfinSettings",
+    "Job",
+    "JobFile",
     "Media",
     "MediaCard",
     "PathSettings",

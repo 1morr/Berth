@@ -11,6 +11,7 @@ import socket
 import urllib.parse
 from collections.abc import Awaitable, Callable
 from datetime import date
+from urllib.parse import parse_qsl
 
 import httpx
 import pytest
@@ -34,6 +35,7 @@ from berth.adapters.prowlarr import (
     ProwlarrIndexer,
 )
 from berth.adapters.prowlarr.client import SCHEMA_TIMEOUT_SECONDS, HttpProwlarrClient
+from berth.adapters.qbittorrent import BERTH_TAG, TorrentAdd, TorrentRejectedError
 from berth.adapters.qbittorrent.client import HttpQbittorrentClient
 from berth.adapters.rate import TokenBucket
 from berth.adapters.tmdb import TmdbEntry, parse_absolute_ordering
@@ -56,6 +58,8 @@ V4_READ_TOKEN = "eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiJiZXJ0aC10ZXN0Iiwic2NvcGVzIjpbXX
 #: 「同形狀的假值」寫進來，而 repo 是公開的（票 03 收尾轉 public），所以它從那天起就對外可讀。
 #: 秘密一律用 `0000…000n` 這種同形狀的假值，每個服務一個號碼（`tests/fixtures/http/README.md`）。
 V3_API_KEY = "00000000000000000000000000000003"
+#: 送單演練用的磁力連結。hash 是形狀對的假值（40 個十六進位字元）。
+MAGNET = "magnet:?xt=urn:btih:4bd0f6ef1d3b1e3cbb1e1b6b6c2a9c7d8e5f0a1b&dn=Berth.Test"
 
 
 @respx.mock
@@ -176,6 +180,128 @@ async def test_qbittorrent_categories_accept_both_save_path_spellings(release: s
     assert [(row.name, row.save_path) for row in categories] == [
         ("berth-exp", "/downloads/berth-exp")
     ]
+
+
+@respx.mock
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("release", "fixture"),
+    [
+        ("4.4.5", "torrents-add.accepted.4.4.5.txt"),
+        ("5.2.3", "torrents-add.accepted.5.2.3.json"),
+    ],
+)
+async def test_qbittorrent_accepts_a_torrent_in_both_response_shapes(
+    release: str, fixture: str
+) -> None:
+    """**成功的形狀隨版本不同**（2026-09-10 對真的 5.2.3 實測）：4.4.x 回 `Ok.`，
+    5.2.3 回一份 JSON 摘要。只認 `Ok.` 的話每一次送單在 5.x 上都會被判成失敗。
+    """
+    mock_qbittorrent_version(release)
+    route = respx.post(f"{QBITTORRENT_URL}/api/v2/torrents/add").respond(
+        200, text=read_fixture(f"http/qbittorrent/{fixture}")
+    )
+
+    client = HttpQbittorrentClient(QBITTORRENT_URL)
+    try:
+        await client.add_torrent(TorrentAdd(category="berth-anime", magnet=MAGNET))
+    finally:
+        await client.aclose()
+
+    sent = dict(parse_qsl(route.calls.last.request.content.decode()))
+    assert sent["category"] == "berth-anime"
+    assert sent["tags"] == BERTH_TAG
+    assert sent["contentLayout"] == "Original"
+    assert sent["autoTMM"] == "true"
+    assert sent["urls"] == MAGNET
+    # 版本閘門：4.4.x 只認得 `paused`，5.x 只認得 `stopped`（brief §20.7）。
+    assert sent["paused" if release == "4.4.5" else "stopped"] == "false"
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_qbittorrent_pending_url_fetch_is_not_success() -> None:
+    """`202` + `pending_count: 1` 是「網址收下了，之後再去抓」——而那條路徑的失敗
+    永遠不會回來（brief §20.7）。Berth 自己先抓 torrent 就是為了不走它，所以真的收到
+    這個形狀時要當成失敗，而不是默默把 Job 標成已送出。
+    """
+    mock_qbittorrent_version("5.2.3")
+    respx.post(f"{QBITTORRENT_URL}/api/v2/torrents/add").respond(
+        202, text=read_fixture("http/qbittorrent/torrents-add.pending.5.2.3.json")
+    )
+
+    client = HttpQbittorrentClient(QBITTORRENT_URL)
+    try:
+        with pytest.raises(TorrentRejectedError, match="202"):
+            await client.add_torrent(TorrentAdd(category="berth-anime", magnet=MAGNET))
+    finally:
+        await client.aclose()
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_qbittorrent_conflict_says_what_the_status_code_means() -> None:
+    """body 只有一個 `Conflict`，而它有兩種成因（2026-09-10 實測：已經有同一個 hash，
+    或 category 的 save path 用不了）。畫面上那一行要說得出下一步（PRODUCT 原則 4）。
+    """
+    mock_qbittorrent_version("5.2.3")
+    respx.post(f"{QBITTORRENT_URL}/api/v2/torrents/add").respond(
+        409, text=read_fixture("http/qbittorrent/torrents-add.conflict.5.2.3.txt")
+    )
+
+    client = HttpQbittorrentClient(QBITTORRENT_URL)
+    try:
+        with pytest.raises(TorrentRejectedError) as refusal:
+            await client.add_torrent(TorrentAdd(category="berth-anime", magnet=MAGNET))
+    finally:
+        await client.aclose()
+
+    assert "409" in str(refusal.value)
+    assert "already has this torrent" in str(refusal.value)
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_qbittorrent_rejecting_an_invalid_torrent_file_keeps_its_own_words() -> None:
+    mock_qbittorrent_version("5.2.3")
+    respx.post(f"{QBITTORRENT_URL}/api/v2/torrents/add").respond(
+        415, text=read_fixture("http/qbittorrent/torrents-add.invalid.5.2.3.txt")
+    )
+
+    client = HttpQbittorrentClient(QBITTORRENT_URL)
+    try:
+        with pytest.raises(TorrentRejectedError, match="not a valid torrent file"):
+            await client.add_torrent(
+                TorrentAdd(category="berth-anime", content=b"<!doctype html>", filename="x.torrent")
+            )
+    finally:
+        await client.aclose()
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_qbittorrent_uploads_a_torrent_file_as_multipart() -> None:
+    """`.torrent` 走 multipart 的 `torrents` 欄位，磁力連結走表單的 `urls`——
+    兩種在 `torrents/add` 上不是同一個東西。"""
+    mock_qbittorrent_version("5.2.3")
+    route = respx.post(f"{QBITTORRENT_URL}/api/v2/torrents/add").respond(
+        200, text=read_fixture("http/qbittorrent/torrents-add.accepted.5.2.3.json")
+    )
+
+    client = HttpQbittorrentClient(QBITTORRENT_URL)
+    try:
+        await client.add_torrent(
+            TorrentAdd(
+                category="berth-tv", content=b"d4:infod4:name5:berthee", filename="a.torrent"
+            )
+        )
+    finally:
+        await client.aclose()
+
+    body = route.calls.last.request.content
+    assert b'name="torrents"; filename="a.torrent"' in body
+    assert b"d4:infod4:name5:berthee" in body
+    assert b'name="urls"' not in body
 
 
 @respx.mock

@@ -191,7 +191,10 @@ export function CopyLine({ command }: { command: string }) {
   }
 
   return (
-    <div className="flex items-stretch gap-px bg-rule">
+    // `min-w-0`：這一塊常常是 grid 項目，而 grid 項目的 `min-width` 預設是 `auto`——
+    // 底下的 `<code>` 是 `whitespace-pre`，所以它的 min-content 是那一整串不斷行的字，
+    // 於是整欄被撐寬、`overflow-x-auto` 永遠沒事做（票 04 的集表踩過同一個坑）。
+    <div className="flex min-w-0 items-stretch gap-px bg-rule">
       <code className="value min-w-0 flex-1 overflow-x-auto whitespace-pre bg-hull px-3 py-2 text-xs text-ink">
         {command}
       </code>

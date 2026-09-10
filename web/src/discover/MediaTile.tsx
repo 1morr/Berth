@@ -42,12 +42,19 @@ export function MediaTile({ item }: { item: DiscoverItem }) {
         )}
       </div>
       <div className="grid content-start gap-1 px-3 py-2.5">
-        {/* **這一格上沒有狀態**（票 04b）：「已追蹤 / 部分 / 完整 / 下載中」要等 Job 與帳本
-            才推導得出來（票 09 起，brief §13）。在那之前每一格都會是同一個字，等於沒說。
-            色塊回來時它貼在這條標識帶上、不壓在海報上（DESIGN.md 的 The Paint Needs A
-            Painted Ground Rule）。 */}
-        <p className="value text-xs text-ink-dim">
-          {KIND_CODE[item.kind]} · {item.year ?? '—'}
+        {/* 狀態貼在**這條標識帶**上，不壓在海報上：`deck` 在深色主題是中灰，壓在同樣
+            深色的海報上幾乎消失（票 03 實測；DESIGN.md 的 The Paint Needs A Painted
+            Ground Rule）。這裡的底是 `well`，量得出對比。
+            「部分 / 完整 / 下載中」還沒有——那要等帳本（票 12）才推導得出來。 */}
+        <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <span className="value text-xs text-ink-dim">
+            {KIND_CODE[item.kind]} · {item.year ?? '—'}
+          </span>
+          {item.tracked && (
+            // 中性色塊：「Berth 為它做過事」是一個事實，不是四個信號色裡的任何一個狀態
+            // （The Role Is Not A State Rule）。
+            <span className="label bg-deck px-1.5 py-0.5 text-ink">{t('discover.tracked')}</span>
+          )}
         </p>
         <p className="value line-clamp-2 min-h-10 text-sm leading-snug text-ink">{item.title}</p>
         {item.title_en !== item.title && (

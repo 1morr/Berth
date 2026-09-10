@@ -24,6 +24,7 @@ function item(overrides: Partial<DiscoverItem> = {}): DiscoverItem {
     title_en: 'Lanterns',
     year: 2026,
     poster_url: 'https://image.tmdb.org/t/p/w342/lanterns.jpg',
+    tracked: false,
     ...overrides,
   }
 }

@@ -25,8 +25,8 @@ from tests.conftest import migrate
 pytestmark = pytest.mark.asyncio
 
 M0_TABLES = {"users", "sessions", "settings", "routes", "events"}
-#: 票 03 加的兩張（plan §2.2）。
-M1_TABLES = {"media", "tmdb_cache"}
+#: 票 03 加的兩張（plan §2.2）與票 09 加的兩張（plan §2.3）。
+M1_TABLES = {"media", "tmdb_cache", "jobs", "job_files"}
 EXPECTED_TABLES = M0_TABLES | M1_TABLES
 
 
@@ -124,7 +124,10 @@ async def test_alembic_records_the_head_revision(config: Config) -> None:
 async def test_indexes_from_the_plan_are_present(config: Config) -> None:
     await migrate(config)
 
-    assert "ix_events_job_hash_created_at" in _names_of(config.database_path, "index")
+    indexes = _names_of(config.database_path, "index")
+
+    assert "ix_events_job_hash_created_at" in indexes
+    assert "ix_job_files_job_hash" in indexes
 
 
 async def test_migrating_twice_is_a_no_op(config: Config) -> None:

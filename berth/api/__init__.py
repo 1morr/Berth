@@ -5,13 +5,14 @@
 
 from fastapi import APIRouter
 
-from berth.api import auth, discover, health, media, search, settings, setup
+from berth.api import auth, discover, health, jobs, media, search, settings, setup
 
 #: 掛在 `/api` 之下（plan §6）。
 router = APIRouter()
 router.include_router(auth.router)
 router.include_router(discover.router)
 router.include_router(health.router)
+router.include_router(jobs.router)
 router.include_router(media.router)
 router.include_router(search.router)
 router.include_router(settings.router)

@@ -21,6 +21,7 @@ from berth.adapters.jellyfin.fake import FakeJellyfinClient
 from berth.adapters.prowlarr.fake import FakeProwlarrClient
 from berth.adapters.qbittorrent.fake import FakeQbittorrentClient
 from berth.adapters.tmdb.fake import FakeTmdbClient
+from berth.adapters.torrent import TorrentFetcher
 from berth.adapters.torznab.fake import FakeTorznabClient
 from berth.domain import IndexerKind, Role
 from berth.models import JellyfinSettings, User, UserSession
@@ -60,6 +61,9 @@ class OneJellyfin:
 
     def tmdb(self, credential: str) -> FakeTmdbClient:
         raise AssertionError("login never talks to TMDB")
+
+    def torrent(self) -> TorrentFetcher:
+        raise AssertionError("login never fetches a torrent")
 
     def torznab(self, base_url: str, api_key: str) -> FakeTorznabClient:
         raise AssertionError("login never talks to a Torznab endpoint")

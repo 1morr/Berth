@@ -467,6 +467,7 @@ const zhHant = {
   },
   nav: {
     discover: '探索',
+    jobs: '下載',
     health: '健康',
     settings: '設定',
     signOut: '登出',
@@ -477,6 +478,8 @@ const zhHant = {
     popular: '熱門',
     results: '「{{query}}」的結果',
     noArt: '無海報',
+    // Berth 曾為這部作品下載、訂閱或入庫過（`CONTEXT.md` 的 Tracked Media）。
+    tracked: '已下載過',
     empty: 'TMDB 這一輪什麼都沒回。過一小時快取到期後會再問一次。',
     off: '讀不到 Berth 後端。確認程序是否還在執行。',
     search: {
@@ -502,6 +505,10 @@ const zhHant = {
     // 現在它跟著 TMDB 的標題走，所以說的是「將會是」；定下來是送單那一刻的事。
     folderPreview: '資料夾將會是',
     folderNote: '第一次送單成功那一刻這串字就定下來，之後 TMDB 改標題也不會動它。',
+    // 定下來之後說的是「就是」，不是「將會是」（票 09）。
+    folderFrozen: '資料夾是',
+    folderFrozenNote: '這串字在第一次送單成功時定下來了，TMDB 改標題也不會動它。',
+    tracked: '已下載過',
     seasons: '季集',
     backToDiscover: '回探索頁',
     stale: '快照是舊的',
@@ -611,6 +618,87 @@ const zhHant = {
       toSetup: '前往設定精靈',
       askAdmin: '請管理員到設定精靈接上索引站。',
     },
+  },
+  // 下載列表頁與送單（票 09、`.scratch/m1/jobs-shape.md`）。發佈名、hash、路徑、category
+  // 與 `client_state` 不是文案——它們是機器字串，原樣顯示（The Machine String Rule）。
+  jobs: {
+    title: '下載',
+    count_one: '{{count}} 筆',
+    count_other: '{{count}} 筆',
+    empty: '還沒有送過任何下載。到探索頁找一部作品，在它的頁面上搜 torrent 再送單。',
+    toDiscover: '回探索頁',
+    off: '讀不到下載列表。Berth 自己的 API 沒有回應，先確認它還活著。',
+    hash: 'info hash',
+    // 這一列沒有欄頭，所以每一格自己帶標籤。大小與進度都要等票 10 的客戶端輪詢才有值。
+    sizeInline: '大小 {{value}}',
+    progressInline: '進度 {{value}}',
+    retry: '重新送單',
+    retrying: '送單中…',
+    retried: '已重試，現在是{{state}}。',
+    retryOff: '重試沒有送出去。Berth 自己的 API 沒有回應，先確認它還活著。',
+    // 十六個狀態一次定義完（`domain.JobState`）：M1 票 09 只走得到前三個，
+    // 其餘由票 10 起的迴圈驅動，而它們是同一個封閉集合。
+    state: {
+      requested: '已建立',
+      submitted: '已送出',
+      submit_failed: '送單失敗',
+      metadata_ready: '已取得檔案清單',
+      downloading: '下載中',
+      stalled: '停滯',
+      missing_files: '檔案不見了',
+      client_error: '客戶端錯誤',
+      client_removed: '已從客戶端移除',
+      completed: '下載完成',
+      planning: '規劃中',
+      review: '待審核',
+      importing: '入庫中',
+      imported: '已入庫',
+      import_failed: '入庫失敗',
+      removed: '已刪除',
+    },
+    trigger: {
+      manual: '手動',
+      rss: 'RSS',
+      reimport: '重新入庫',
+    },
+    event: {
+      created: '已建立',
+      submitted: '已送出',
+      submit_failed: '送單失敗',
+      retried: '重試',
+    },
+    timeline: {
+      loading: '讀取時間線…',
+      empty: '這一筆還沒有任何事件。',
+      off: '讀不到時間線。',
+      retried: '狀態退回「已建立」，接著再送一次。',
+    },
+    // 八種被擋下來的理由，八種下一步（PRODUCT 原則 4）。
+    refusal: {
+      media_missing: 'Berth 手上沒有這部作品。回到它的詳情頁重新開一次。',
+      route_missing: '那條 Route 不在了。重新選一條。',
+      route_kind_mismatch:
+        '那條 Route 收不下這種作品——劇集只進得了 tvshows 媒體庫，電影只進得了 movies。',
+      route_disabled: '那條 Route 停用了。到設定裡把它打開，或改選另一條。',
+      route_unhealthy: '那條 Route 現在是紅的，送出去也一定進不了庫。到健康頁看是哪一條纜繩斷了。',
+      source_unavailable: '索引站給不出這一份 torrent。可能是連結過期了——重新搜一次再送。',
+      job_missing: '這一筆下載不在了。',
+      not_retryable: '這一筆現在不能重試——只有送單失敗的那些可以。重新整理看看它現在的狀態。',
+    },
+  },
+  // 送單（票 09）。資料夾名在這裡定下來，所以按下去之前它要出現在畫面上。
+  submit: {
+    start: '送單',
+    submit: '確認送單',
+    submitting: '送單中…',
+    confirm: '送出去之後，這部作品在媒體庫裡的資料夾會是：',
+    needRoute: '先在上面選一條「入庫到」的 Route。這一串字會是它在媒體庫裡的資料夾名：',
+    willFreeze: '送單成功那一刻這串字就定下來，之後 TMDB 改標題也不會動它。',
+    alreadyFrozen: '這串字已經定下來了，這一次不會再動它。',
+    done: '已送出',
+    already: '這一個已經在了',
+    toJobs: '看下載列表',
+    off: '送單沒有送出去。Berth 自己的 API 沒有回應，先確認它還活著。',
   },
   // 向 TMDB 要東西沒要到的四種樣子。探索頁與 Media 詳情頁共用同一塊 `TmdbNotice`，
   // 所以文案也在同一個地方——各寫一份的話兩頁遲早會對同一件事說不同的下一步。
@@ -1181,6 +1269,7 @@ const en: Translations<typeof zhHant> = {
   },
   nav: {
     discover: 'Discover',
+    jobs: 'Downloads',
     health: 'Health',
     settings: 'Settings',
     signOut: 'Sign out',
@@ -1191,6 +1280,7 @@ const en: Translations<typeof zhHant> = {
     popular: 'Popular',
     results: 'Results for “{{query}}”',
     noArt: 'NO ART',
+    tracked: 'Downloaded before',
     empty: 'TMDB returned nothing this round. Berth asks again once the hour-long cache expires.',
     off: 'Cannot reach the Berth backend. Check that the process is still running.',
     search: {
@@ -1214,6 +1304,10 @@ const en: Translations<typeof zhHant> = {
     folderPreview: 'Folder will be',
     folderNote:
       'This name is fixed the moment a download goes through; a later TMDB rename will not move it.',
+    folderFrozen: 'Folder',
+    folderFrozenNote:
+      'This name was fixed when the first download went through; a later TMDB rename will not move it.',
+    tracked: 'Downloaded before',
     seasons: 'Seasons',
     backToDiscover: 'Back to Discover',
     stale: 'Stale snapshot',
@@ -1315,6 +1409,87 @@ const en: Translations<typeof zhHant> = {
       toSetup: 'Open the setup wizard',
       askAdmin: 'Ask an administrator to connect an indexer in the setup wizard.',
     },
+  },
+  jobs: {
+    title: 'Downloads',
+    count_one: '{{count}} job',
+    count_other: '{{count}} jobs',
+    empty:
+      'Nothing has been sent to download yet. Find a title on the discover page, search it for torrents, and send one.',
+    toDiscover: 'Back to discover',
+    off: 'Could not read the download list. Berth’s own API did not answer — check that it is still running.',
+    hash: 'info hash',
+    sizeInline: 'Size {{value}}',
+    progressInline: 'Progress {{value}}',
+    retry: 'Send again',
+    retrying: 'Sending…',
+    retried: 'Retried; it is now {{state}}.',
+    retryOff:
+      'The retry was not sent. Berth’s own API did not answer — check that it is still running.',
+    state: {
+      requested: 'Created',
+      submitted: 'Sent',
+      submit_failed: 'Send failed',
+      metadata_ready: 'File list in',
+      downloading: 'Downloading',
+      stalled: 'Stalled',
+      missing_files: 'Files missing',
+      client_error: 'Client error',
+      client_removed: 'Gone from client',
+      completed: 'Download done',
+      planning: 'Planning',
+      review: 'Needs review',
+      importing: 'Importing',
+      imported: 'Imported',
+      import_failed: 'Import failed',
+      removed: 'Removed',
+    },
+    trigger: {
+      manual: 'Manual',
+      rss: 'RSS',
+      reimport: 'Reimport',
+    },
+    event: {
+      created: 'Created',
+      submitted: 'Sent',
+      submit_failed: 'Send failed',
+      retried: 'Retried',
+    },
+    timeline: {
+      loading: 'Reading the timeline…',
+      empty: 'Nothing has happened to this job yet.',
+      off: 'Could not read the timeline.',
+      retried: 'Back to created, then sent again.',
+    },
+    refusal: {
+      media_missing: 'Berth does not hold this title. Open its detail page again.',
+      route_missing: 'That library route is gone. Pick another one.',
+      route_kind_mismatch:
+        'That library route cannot hold this kind — shows only go to a tvshows library, films only to a movies one.',
+      route_disabled:
+        'That library route is disabled. Turn it back on in settings, or pick another one.',
+      route_unhealthy:
+        'That library route is red right now, so nothing sent to it would reach the library. The health page says which line came loose.',
+      source_unavailable:
+        'The indexer would not hand over this torrent. The link may have expired — search again and send the fresh one.',
+      job_missing: 'That download is gone.',
+      not_retryable:
+        'This one cannot be retried — only the ones that failed to send can. Reload to see where it stands now.',
+    },
+  },
+  submit: {
+    start: 'Send',
+    submit: 'Confirm and send',
+    submitting: 'Sending…',
+    confirm: 'Once this is sent, the folder for this title in your library will be:',
+    needRoute: 'Pick a library route above first. This is the folder name it would get:',
+    willFreeze:
+      'The moment a send succeeds this string is fixed; a later TMDB title change will not move it.',
+    alreadyFrozen: 'This string is already fixed; this send will not change it.',
+    done: 'Sent',
+    already: 'Already here',
+    toJobs: 'See downloads',
+    off: 'The submission was not sent. Berth’s own API did not answer — check that it is still running.',
   },
   tmdb: {
     problem: {

@@ -34,6 +34,9 @@ class DiscoverItemOut(BaseModel):
     year: int | None
     #: 完整的海報網址；沒有海報時是空字串，卡片自己畫沒有海報的樣子。
     poster_url: str
+    #: Berth 已經為這部作品做過事（`CONTEXT.md` 的 Tracked Media，票 09 起是 `EXISTS(jobs)`）。
+    #: **不進 `tmdb_cache`**：它是本地事實而且會當場改掉，那份快取一小時才換一次。
+    tracked: bool
 
 
 class DiscoverOut(BaseModel):
