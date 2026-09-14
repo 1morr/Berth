@@ -16,7 +16,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel, ConfigDict, Field
 
-from berth.api.deps import ClientFactoryDep, EventHubDep, SessionDep
+from berth.api.deps import ClientFactoryDep, EventHubDep, ImportHintsDep, SessionDep
 from berth.api.gate import current_user
 from berth.domain import JobState, JobTrigger
 from berth.services.jobs import (
@@ -213,12 +213,18 @@ async def post_replan(
 
 
 @router.post("/{job_hash}/retry")
-async def post_retry(session: SessionDep, factory: ClientFactoryDep, job_hash: str) -> JobOut:
-    """`submit_failed` → `requested` → 再送一次（plan §3.1）。"""
+async def post_retry(
+    session: SessionDep, factory: ClientFactoryDep, imports: ImportHintsDep, job_hash: str
+) -> JobOut:
+    """`submit_failed` → `requested` → 再送一次；`import_failed` → `importing`（plan §3.1）。"""
     try:
-        return JobOut.model_validate(await retry_job(session, factory, job_hash))
+        job = await retry_job(session, factory, job_hash)
     except JobRejectedError as refusal:
         raise _refuse(refusal) from refusal
+    if job.state is JobState.IMPORTING:
+        # importer 平常 60 秒才醒一次，而按下重試的人要的是現在。
+        imports.nudge()
+    return JobOut.model_validate(job)
 
 
 def _refuse(refusal: JobRejectedError) -> HTTPException:

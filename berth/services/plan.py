@@ -21,11 +21,10 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections import Counter
-from collections.abc import Coroutine, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any
 
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -60,6 +59,7 @@ from berth.services.jobs import (
     REPLANNABLE,
     JobRejectedError,
     actor_of,
+    guarded,
     job_lock,
     record_event,
     transition,
@@ -170,28 +170,16 @@ async def sweep_plans(
     moment = now or utcnow()
     planned = 0
     for job_hash in await _plannable(session):
-        planned += await _guarded(session, job_hash, _plan(session, factory, hub, job_hash, moment))
+        # 一筆解析不了的 torrent 會停在 `planning`，而它排在最前面——`guarded` 讓它不擋後面的人。
+        planned += await guarded(
+            session, job_hash, _plan(session, factory, hub, job_hash, moment), fallback=0
+        )
     preplanned = 0
     for job_hash in await _estimable(session):
-        preplanned += await _guarded(session, job_hash, _preplan(session, hub, job_hash, moment))
+        preplanned += await guarded(
+            session, job_hash, _preplan(session, hub, job_hash, moment), fallback=0
+        )
     return PlanOutcome(planned=planned, preplanned=preplanned)
-
-
-async def _guarded(session: AsyncSession, job_hash: str, work: Coroutine[Any, Any, int]) -> int:
-    """一筆 Job 的一輪。**它爆掉不會拖累同一輪的其他人。**
-
-    迴圈那一層已經接了例外（`pipeline/planning.py`），但那個接法會讓這一輪剩下的 job 全部
-    跳過——而掃描是照 `added_at` 排的，所以一筆解析不了的 torrent 會停在 `planning` 並在
-    每一輪都排在最前面，後面那幾筆因此永遠等不到自己的計劃。
-    """
-    with job_context(job_hash):
-        async with job_lock(job_hash):
-            try:
-                return await work
-            except Exception:
-                await session.rollback()
-                logger.exception("planning this job failed; the rest of the round goes on")
-                return 0
 
 
 async def replan_job(
@@ -363,7 +351,7 @@ async def _preplan(session: AsyncSession, hub: EventHub, job_hash: str, now: dat
         job,
         EventType.PREPLAN,
         actor=actor_of(None),
-        payload=_counts(row) | {"plan": row.id},
+        payload=plan_counts(row) | {"plan": row.id},
     )
     await session.commit()
     hub.publish(JobSignal(hash=job.hash, state=job.state.value, progress=job.progress))
@@ -383,7 +371,7 @@ async def _announce(
     `review` 那一條**不另外寫 `plan_generated`**：兩筆說的是同一件事，而時間線上一件事
     只該有一行。停下來的那一筆自己帶著同樣的計數，加上一個說得出下一步的理由。
     """
-    counts = _counts(row) | {"plan": row.id}
+    counts = plan_counts(row) | {"plan": row.id}
     if status is PlanStatus.AUTO:
         await record_event(
             session,
@@ -402,7 +390,8 @@ async def _announce(
     )
 
 
-def _counts(row: Plan) -> dict[str, object]:
+def plan_counts(row: Plan) -> dict[str, object]:
+    """計劃那幾筆事件共用的計數。importer 停下來時寫的 `review_required` 也帶同一組。"""
     summary = PlanSummary.model_validate(row.summary_json or {})
     return {
         "files": summary.files,

@@ -22,7 +22,7 @@ from berth.api.gate import ApiGate
 from berth.config import VERSION, Config, load_config
 from berth.db import create_engine, create_session_factory, upgrade_to_head
 from berth.logs import configure_logging
-from berth.pipeline import HealthChecker, PlannerRunner, QbitPoller
+from berth.pipeline import HealthChecker, Importer, JellyfinResolver, PlannerRunner, QbitPoller
 from berth.services.clients import HttpServiceClientFactory, ServiceClientFactory
 from berth.services.events import EventHub
 from berth.services.hints import JobHints
@@ -35,6 +35,8 @@ API_PREFIX = "/api"
 HEALTH_CHECKER_TASK = "health_checker"
 QBIT_POLLER_TASK = "qbit_poller"
 PLANNER_RUNNER_TASK = "planner_runner"
+IMPORTER_TASK = "importer"
+JELLYFIN_RESOLVER_TASK = "jellyfin_resolver"
 
 #: mount 掛在 `/`，所以 StaticFiles 收到的 path 沒有開頭的斜線。
 _API_SEGMENT = API_PREFIX.lstrip("/")
@@ -103,17 +105,27 @@ def _lifespan(config: Config) -> Lifespan[FastAPI]:
         # 在 `create_app`**：它裡面是一個 `asyncio.Event`，而 Event 認第一次 await 它的那個
         # 事件迴圈——同一個 app 起兩次（測試就是這樣跑的）會拿到「bound to a different
         # event loop」。迴圈與它同生同滅，所以它本來就屬於這一段。
-        hints = JobHints()
-        checker = HealthChecker(app.state.session_factory, app.state.clients)
-        poller = QbitPoller(app.state.session_factory, app.state.clients, app.state.events, hints)
-        planner = PlannerRunner(
-            app.state.session_factory, app.state.clients, app.state.events, hints
-        )
-        # 背景迴圈（plan §3.2）。兩個都先睡一個間隔，所以啟動本身不會慢。
+        #
+        # **一個接收者一份**：poller 叫醒 planner、planner 叫醒 importer。共用一份的話，
+        # 正在忙的那一個清掉訊號時，另一個就漏掉了它（`asyncio.Event` 是大家一起清的）。
+        plans = JobHints()
+        imports = JobHints()
+        # 入庫重試的端點也要叫醒 importer（`api/deps.py`）。
+        app.state.import_hints = imports
+        sessions = app.state.session_factory
+        clients = app.state.clients
+        checker = HealthChecker(sessions, clients)
+        poller = QbitPoller(sessions, clients, app.state.events, plans)
+        planner = PlannerRunner(sessions, clients, app.state.events, plans, import_hints=imports)
+        importer = Importer(sessions, clients, app.state.events, imports)
+        resolver = JellyfinResolver(sessions, clients)
+        # 背景迴圈（plan §3.2）。每一個都先睡一個間隔，所以啟動本身不會慢。
         tasks = [
             asyncio.create_task(checker.run(), name=HEALTH_CHECKER_TASK),
             asyncio.create_task(poller.run(), name=QBIT_POLLER_TASK),
             asyncio.create_task(planner.run(), name=PLANNER_RUNNER_TASK),
+            asyncio.create_task(importer.run(), name=IMPORTER_TASK),
+            asyncio.create_task(resolver.run(), name=JELLYFIN_RESOLVER_TASK),
         ]
         try:
             yield

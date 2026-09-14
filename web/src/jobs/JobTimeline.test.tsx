@@ -113,9 +113,88 @@ describe('Job 時間線', () => {
   })
 
   it('認不得的事件型別原樣顯示——它仍然是一件真的發生過的事', () => {
-    // `linked` 是票 12 的 importer 才會寫的那一種（brief §5.2）。
-    const line = render([event({ type: 'linked' })])
+    // `deleted` 是 M2 的刪除才會寫的那一種（brief §5.2）。
+    const line = render([event({ type: 'deleted' })])
 
-    expect(line.getByText('linked')).toBeInTheDocument()
+    expect(line.getByText('deleted')).toBeInTheDocument()
+  })
+
+  it('鏈接那一筆說得出檔案進了媒體庫的哪裡', () => {
+    const target = '/data/library/anime/SPY x FAMILY (2022) [tmdbid-120089]/Season 01/E01.mkv'
+    const line = render([event({ type: 'linked', payload: { file: 'E01.mkv', target } })])
+
+    expect(line.getByText('已鏈接')).toBeInTheDocument()
+    expect(line.getByText(target)).toBeInTheDocument()
+  })
+
+  it('鏈接失敗那一筆帶著原文——它是「哪個掛載少了」的證據', () => {
+    const error = 'Invalid cross-device link: the source is on the mount at /downloads'
+    const line = render([
+      event({ type: 'link_failed', payload: { target: '/data/library/x.mkv', errno: 18, error } }),
+    ])
+
+    expect(line.getByText('鏈接失敗')).toBeInTheDocument()
+    expect(line.getByText(error)).toBeInTheDocument()
+  })
+
+  it('擋住入庫的鏈接失敗才是紅字——一條字幕沒鏈上不是阻擋', () => {
+    const line = render([
+      event({
+        id: 1,
+        type: 'link_failed',
+        payload: { target: 'E01.mkv', blocking: true, error: 'Invalid cross-device link' },
+      }),
+      event({
+        id: 2,
+        type: 'link_failed',
+        payload: { target: 'E01.ass', blocking: false, error: 'Permission denied' },
+      }),
+    ])
+
+    expect(line.getByText('Invalid cross-device link')).toHaveClass('text-blocked-ink')
+    expect(line.getByText('Permission denied')).toHaveClass('text-ink-dim')
+  })
+
+  it('通知與反查那兩筆說得出幾個檔案', () => {
+    const line = render([
+      event({ id: 1, type: 'jellyfin_scan_requested', payload: { count: 5, paths: [] } }),
+      event({ id: 2, type: 'jellyfin_item_resolved', payload: { count: 3 } }),
+    ])
+
+    expect(line.getByText('通知了 5 個檔案的路徑')).toBeInTheDocument()
+    expect(line.getByText('3 個檔案在 Jellyfin 裡找到了')).toBeInTheDocument()
+  })
+
+  it('Jellyfin 的請求沒成時說下一步會怎樣，並接上原文', () => {
+    const line = render([
+      event({
+        type: 'jellyfin_request_failed',
+        payload: { request: 'merge', error: 'POST /ScheduledTasks/Running/x: 404' },
+      }),
+    ])
+
+    expect(line.getByText(/MergeVersions 沒有觸發/)).toBeInTheDocument()
+    expect(line.getByText(/404/)).toBeInTheDocument()
+  })
+
+  it('入庫的重試與送單的重試說的是不同的站', () => {
+    const line = render([event({ type: 'retried', payload: { state: 'importing' } })])
+
+    expect(line.getByText(/退回「入庫中」/)).toBeInTheDocument()
+    expect(line.queryByText(/退回「已建立」/)).not.toBeInTheDocument()
+  })
+
+  it('目標上有別人的檔案時，停下來那一筆說得出來', () => {
+    const line = render([event({ type: 'review_required', payload: { reason: 'target_exists' } })])
+
+    expect(line.getByText(/目標位置上已經有別的檔案/)).toBeInTheDocument()
+  })
+
+  it('Jellyfin 一直沒列出檔案時，需要處理那一筆說得出下一步', () => {
+    const line = render([
+      event({ type: 'issue_detected', payload: { type: 'jellyfin_item_unresolved', count: 3 } }),
+    ])
+
+    expect(line.getByText(/Jellyfin 一直沒有列出/)).toBeInTheDocument()
   })
 })

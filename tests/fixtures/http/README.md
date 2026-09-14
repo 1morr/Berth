@@ -164,3 +164,13 @@ curl -s -H "Authorization: Bearer $TOKEN"   "https://api.themoviedb.org/3/trendi
 **`sync/maindata` 的 rid 增量掛在 session 上**（同一輪實測）：不帶 cookie 的話每一次請求都是新
 session，`rid` 永遠回不到增量（每一輪都 `full_update: true`）。錄製腳本因此裝了 cookie jar，
 而產品這一側靠的是 httpx client 自己的 cookie——所以 `Downloader` 把 client 握著不放。
+
+2026-09-15（票 12），對 `lscr.io/linuxserver/jellyfin:latest`（**12.0.0**）錄的。那一台是 M1 驗收時
+Berth 自己入庫三部作品（The Bear S03、Frieren S01、Oppenheimer）、Jellyfin 掃完之後的狀態，憑證是
+Berth 在精靈第 3 步建的 API key，**不帶 `userId`**：
+
+| 檔案 | 來源 |
+| --- | --- |
+| `jellyfin/items.tv.series.json` | `GET /Items?parentId=<TV 媒體庫>&recursive=true&includeItemTypes=Series&fields=Path,ProviderIds,MediaSources`。`Path` 是作品資料夾，`ProviderIds.Tmdb` 是字串；Series 沒有檔案，所以沒有來源路徑 |
+| `jellyfin/items.tv.episodes.json` | 同一支端點，`includeItemTypes=Episode`。10 筆只留前 2 筆。單一版本時 `MediaSources[0].Path` 就是自己的 `Path` |
+| `jellyfin/items.movies.movie.json` | Movies 媒體庫，`includeItemTypes=Movie`。電影的檔案就是 item 自己 |

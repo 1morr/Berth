@@ -288,7 +288,7 @@ export interface paths {
         put?: never;
         /**
          * Post Retry
-         * @description `submit_failed` → `requested` → 再送一次（plan §3.1）。
+         * @description `submit_failed` → `requested` → 再送一次；`import_failed` → `importing`（plan §3.1）。
          */
         post: operations["post_retry_api_jobs__job_hash__retry_post"];
         delete?: never;
@@ -1562,7 +1562,7 @@ export interface components {
          *     而「這一包沒有東西可以入庫」多半表示送錯了 torrent。
          * @enum {string}
          */
-        ReviewReason: "low_confidence" | "medium_not_allowed" | "nothing_to_import";
+        ReviewReason: "low_confidence" | "medium_not_allowed" | "nothing_to_import" | "target_exists";
         /**
          * Role
          * @description 使用者角色。由 Jellyfin 的 `Policy.IsAdministrator` 決定（plan §11.1 T0.5）。

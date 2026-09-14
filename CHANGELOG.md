@@ -279,9 +279,38 @@ Windows Docker Desktop（NTFS bind mount）與 Linux（ext4）上各跑一次 `d
 - `AiPlanner` 介面與 `NullAiPlanner`（`berth/adapters/ai.py`，plan §4.5、brief §6.10）：
   `propose(context, files, rules_plan) -> Plan | None`。M4 才有實作，介面先定是因為它約束的是
   規則層——AI 只能提出規則層表達得出來的處置，碰不到檔案。
+- **`importer`**（`berth/pipeline/importing.py`、`berth/services/importer.py`、plan §3.1、§3.2、§3.3、
+  票 12）：Import Plan 真的落到媒體庫——逐檔建目錄 → 硬鏈接 → 寫帳本 → 事件，**一個檔案 commit
+  一次**。目標已經存在時比 inode：同一個就是「上次做到了」，補上帳本；不同就是別人的檔案，整筆
+  停在 review 而且不覆寫它。正片鏈接不成是 `import_failed`（重試從沒做完的接著做），字幕與特典
+  鏈接不成只記在那一列上。全部落地之後才通知 Jellyfin（`POST /Library/Media/Updated`），失敗
+  只記事件、不擋 `imported`。planner 算完就叫醒它，另外每 60 秒掃一次 `importing`。
+- **`ledger` 表**（plan §2.3）：一條「來源檔案 → 目標硬鏈接」一列，`target_path` unique。它自己
+  站得住——`job_hash` 是弱引用、處置與季集抄一份進來（重新規劃會換掉 plan items）；inode 與
+  device 存 TEXT（Windows 的 `st_dev` 超過 SQLite 的有號 64 位元）。
+- **`jellyfin_resolver`**（`berth/pipeline/resolving.py`、`berth/services/resolver.py`）：入庫的
+  正片在 Jellyfin 裡是哪一個 item。每筆帳本自己的排程 30 秒 → 2 分 → 10 分 → 1 小時 ×3，共 6 次，
+  存在帳本上所以重啟不會忘；兩段查詢都以媒體庫為 parent（brief §20.1），也比 `MediaSources` 的
+  路徑（第二個版本不是 item 自己的 `Path`）。找到之後觸發 MergeVersions；耗盡寫一筆
+  `issue_detected(jellyfin_item_unresolved)`。沒找到兩次以上改跑 Jellyfin 的「重新掃描媒體庫」排程
+  任務——**路徑通知對從沒掃到過內容的媒體庫無效**（Jellyfin 12.0.0 實測，brief §20.1），而套件內的
+  媒體庫一開始一定是空的。
+- Jellyfin adapter 多三支：`notify_paths`、`items`、`run_task`（plan §8.2）。
+- **時間線多六種事件**（brief §5.2）：`linked`、`link_failed`（帶 `errno` 與原文）、
+  `jellyfin_scan_requested`、`jellyfin_item_resolved`、`merge_versions_requested`、
+  `jellyfin_request_failed`；停下來的理由多一種 `target_exists`，需要處理的事多一種
+  `jellyfin_item_unresolved`。
+- 下載列表上入庫失敗的那一筆有一顆「再試一次入庫」（與「重新送單」同一個端點，回到的是另一站；
+  不叫「重新入庫」——那是 M2 的 Reimport）。鏈接失敗只有擋住入庫時才是紅字。
 
 ### Changed
 
+- **事件一分鐘內不重複**（`record_event`、plan §3.3、票 12）：`(job_hash, type, payload)` 相同就跳過，使用者按下的重試是界線。
+  迴圈的一輪可能在寫完事件之後、下一步落地之前被關掉，重啟後的第一輪會把同一件事再做一次。
+- **`POST /api/jobs/{hash}/retry` 也收 `import_failed`**（回 `importing`），`retried` 事件的
+  `state` 分得出是哪一種重試。
+- **fs adapter 的 `link()` 會建好目標那幾層資料夾**（守衛之後才建），`EXDEV` 另外說出來源與目標
+  各自落在哪一個掛載上（仍是同一個 `errno` 的 `OSError`，plan §8.6）。
 - **`/api` 底下的每一個回應都帶 `Cache-Control: no-store`**（`berth/api/gate.py`、plan §6、票 10）。
   這不是最佳化：Berth 原本一個快取 header 都不送，於是瀏覽器對 `200` 套用它自己的啟發式快取——
   實跑抓到 SSE 推來「這一筆完成了」之後前端重問一次，拿回來的卻是幾秒前那份說「已送出」的快取，

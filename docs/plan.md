@@ -128,7 +128,8 @@ adapters ──► domain                  （不 import services、models；回
 - `plans`：`id`、`job_hash`（nullable、**unique**）、`source_path`（重新入庫時的目錄）、`engine`（`rules` / `ai` / `user`）、`engine_version`、`status`（`preplan` / `auto` / `pending_review` / `approved` / `rejected` / `applied` / `failed`）、`summary_json`（各信心等級數量、原因摘要、`review_reason`）、`created_at`、`decided_by`、`decided_at`。
   **一個 Job 只有一份「現在的計劃」**（票 11）：`job_hash` 上是 unique index，重跑 planning 把它整份改寫而不是再長一列。兩個理由：`GET /api/plans/{id}` 不必先回答「哪一個 id 才是現在那一份」，而 `plan_items` 不會在每次重跑之後多一份重複的決定（§3.3 的重入）。上一份計劃留在時間線上（`events`）。`created_at` 因此是**算出這一份的時間**，跟著重跑換。`job_hash` 仍可為 NULL——M2 的重新入庫以目錄為 Import Source，而 SQLite 的 unique 容得下多個 NULL。
 - `plan_items`：`id`、`plan_id`、`job_file_id`（nullable）、`rel_path`、`action`（`import` / `extra` / `subtitle` / `skip` / `unmatched` / `review`）、`media_id`、`season`、`episode_start`、`episode_end`、`tags_json`、`target_path`、`confidence`（`high` / `medium` / `low`）、`reasons_json`、`audit`（medium 自動入庫為 true）、`applied_at`、`error`
-- `ledger`：`id`、`job_hash`（nullable）、`source_rel_path`、`source_abs_path`、`source_inode`、`source_dev`、`target_path`（unique）、`target_inode`、`media_id`、`season`、`episode_start`、`episode_end`、`tags_json`、`plan_item_id`、`jellyfin_item_id`、`link_mode`（`hardlink`）、`status`（`ok` / `target_missing` / `source_missing` / `inode_mismatch`）、`audit`、`created_at`、`checked_at`
+- `ledger`：`id`、`job_hash`（nullable）、`source_rel_path`、`source_abs_path`、`source_inode`、`source_dev`、`target_path`（unique）、`target_inode`、`media_id`、`season`、`episode_start`、`episode_end`、`tags_json`、`plan_item_id`、`action`、`jellyfin_item_id`、`resolve_attempts`、`resolve_after`、`link_mode`（`hardlink`）、`status`（`ok` / `target_missing` / `source_missing` / `inode_mismatch`）、`audit`、`created_at`、`checked_at`。
+  **帳本自己站得住**（票 12）：`job_hash` 是弱引用（刪 Job 與清帳本是刪除範圍裡兩個獨立的旗標）；`action`、季集與 Tags 抄一份進來，因為 review 之後重新規劃會把 `plan_items` 整份換掉，`plan_item_id` 因此是 `SET NULL`。`resolve_attempts` / `resolve_after` 是 `jellyfin_resolver` 的排程（§3.2），要活過重啟所以落在這一列；`None` 代表沒有要反查的事（找到了、用完了，或本來就不是一個 item——字幕與特典）。**inode 與 device 存 TEXT**：Windows 的 `st_dev` 實測 `11550084160259632778`，超過 SQLite INTEGER 的有號上限，而這兩欄只比相等。`target_path` 是容器裡的 POSIX 路徑，也就是 Jellyfin 回報 `Path` 的形狀。
 - `events`：`id`、`job_hash`（nullable）、`media_id`（nullable）、`type`、`actor`（user id / `system` / `rss:<rule>` / `ai`）、`payload_json`、`created_at`。索引 `(job_hash, created_at)`。
 
 ### 2.4 RSS 與問題
@@ -165,8 +166,9 @@ adapters ──► domain                  （不 import services、models；回
 | `planning` | 否則 | `review` | `plans.status = pending_review`、event `review_required(reason)`。理由是封閉集合（`ReviewReason`）：`low_confidence` / `medium_not_allowed` / `nothing_to_import`——三種的下一步不同（票 11）。**不另外寫 `plan_generated`**：一個轉換一筆事件，兩筆說的是同一件事 |
 | `review` | 使用者核准 | `importing` | `plans.status = approved`、event `review_decided` |
 | `review` | 使用者拒絕 | `completed` | 可重新 planning |
-| `importing` | 全部 item 套用完 | `imported` | 通知 Jellyfin、event `linked` ×N、`jellyfin_scan_requested` |
-| `importing` | 任一 item 失敗且不可跳過 | `import_failed` | event `link_failed`；重試回 `importing`，已完成的 item 跳過 |
+| `importing` | 全部 item 套用完 | `imported` | event `linked` ×N（一個檔案一筆，鏈接當下寫）；**狀態落地之後**才通知 Jellyfin：`jellyfin_scan_requested`，失敗是 `jellyfin_request_failed(request=scan)` 且不擋（§3.3）。反查與 MergeVersions 在 `jellyfin_resolver`（§3.2） |
+| `importing` | 任一 item 失敗且不可跳過 | `import_failed` | event `link_failed`（逐檔，帶 `errno` 與原文）；重試回 `importing`，已完成的 item 跳過。**「不可跳過」是正片**（`import`）：字幕與特典鏈接不成只記在那一列上、不擋整筆——那一集仍然看得了（票 12） |
+| `importing` | 目標已存在且 inode 不同 | `review` | item 標 `target_unmanaged`、`plans.status = pending_review`、event `review_required(target_exists)`。其餘不衝突的檔案照樣鏈接；人決定之後重來一次它們會被跳過（§3.3，票 12） |
 | 任何狀態 | `delete_job` | `removed` | 依範圍刪除；event `deleted` |
 
 - 轉換一律 compare-and-set：`UPDATE jobs SET state=:to WHERE hash=:h AND state=:from`，影響 0 列即放棄本次操作。
@@ -181,8 +183,8 @@ adapters ──► domain                  （不 import services、models；回
 | --- | --- | --- |
 | `qbit_poller` | 有活躍 job 時 5s，否則 30s；連續失敗退避到 5 分鐘 | `sync/maindata`（帶 rid）；只看本系統 category **或 `berth` tag** 的 torrent（兩道篩子的聯集：Route 被刪掉之後它送出去的那些 torrent 仍然認得出來）；更新進度與 client state；驅動 §3.1 中由客戶端狀態觸發的轉換；發現無 job 的 torrent → issue `unknown_torrent`（**M1 先寫一筆 `issue_detected` 事件並列在健康頁的「下載迴圈」區塊**，`issues` 表在 M2，票 10） |
 | `planner_runner` | 事件驅動（提示）+ 每 60s 掃 `completed` **與 `planning`** | 讀 mediainfo → 解析（§4）→ 建 Plan → 決定 auto / review；順手替下載中、還沒有 Plan 的 job 算 pre-plan |
-| `importer` | 事件驅動 + 每 60s 掃 `importing` | 逐 item：建目錄 → `link()` → 寫 ledger → event；完成後 `POST /Library/Media/Updated`；一次只處理一個 job |
-| `jellyfin_resolver` | 事件驅動，重試間隔 30s → 2m → 10m → 1h，共 6 次 | 為缺 `jellyfin_item_id` 的 ledger 找 item（brief §20.1 的兩段查詢）；耗盡即 issue `jellyfin_item_unresolved` |
+| `importer` | 事件驅動（planner 算完、使用者按入庫重試）+ 每 60s 掃 `importing` | 逐 item：建目錄 → `link()` → 寫 ledger → event，**一個檔案 commit 一次**；完成後 `POST /Library/Media/Updated`；一次只處理一個 job（依序：同一個作品資料夾可能同時是兩筆 Job 的目標） |
+| `jellyfin_resolver` | 每 15s 醒一次；每筆帳本自己的排程 30s → 2m → 10m → 1h → 1h → 1h，共 6 次（`ledger.resolve_after`） | 為到時間的 ledger 找 item（brief §20.1 的兩段查詢，也比 `MediaSources[].Path`——第二個版本不是 item 自己的 `Path`）；找到之後觸發 MergeVersions；**沒找到的那幾條每一輪再通知一次**（入庫當下那一次可能沒送到）；**沒找到兩次以上改跑 Jellyfin 的「重新掃描媒體庫」排程任務（`RefreshLibrary`），之後最晚 10 分鐘再看**——路徑通知對從沒掃到過內容的媒體庫無效，而套件內的媒體庫一開始一定是空的（brief §20.1，票 12 實跑抓到）；耗盡寫 `issue_detected(jellyfin_item_unresolved)`（`issues` 表在 M2）。**不是事件驅動**（票 12）：第一次反查本來就排在入庫 30 秒後，importer 那一刻叫醒它也只會看到「還沒到」 |
 | `reconciler` | 每日 04:00 + 手動 | brief §9.1 全部檢查，寫 `issues`（冪等：同 type + path 只有一筆 open） |
 | `rss_poller` | 每個 feed 自己的 `interval_sec`，預設 15 分鐘 | 抓 feed → 解析 → 比對 rule → 去重 → `add_download` |
 | `health_checker` | 每 30 秒醒來，上一輪滿 5 分鐘才真的跑；也可手動觸發（`POST /health/check`） | 四項：Jellyfin（連線 + API key 列得出媒體庫）、qBittorrent（連線 + Web API 版本 + 建議設定漂移）、索引站（Prowlarr 或 Torznab 端點）、Route（§9.5 的五條纜繩重跑一次） |
@@ -199,8 +201,8 @@ adapters ──► domain                  （不 import services、models；回
 ### 3.3 冪等與重入
 
 - `add_download`：同 hash 已存在 → 回傳既有 job，不重複送單。
-- importer：目標已存在且 inode 等於來源 → 視為已完成，補 ledger 若缺；目標存在但 inode 不同 → item 標 `error: target_exists_foreign`，進 review。
-- ledger 的 `target_path` unique；event 寫入用 `(job_hash, type, payload hash)` 在同一分鐘內去重，避免重啟後重複「completed」事件。
+- importer：目標已存在且 inode 等於來源 → 視為已完成，補 ledger 若缺；目標存在但 inode 不同 → item 標 `error: target_unmanaged`（原文 `target_exists_foreign`；票 12 依 CONTEXT.md 的 Unmanaged 改名），進 review。
+- ledger 的 `target_path` unique；event 寫入用 `(job_hash, type, payload hash)` 在同一分鐘內去重，避免重啟後重複「completed」事件。**使用者按下的重試是界線**：之後發生的事就算與之前一模一樣也照寫（票 12）。
 - Jellyfin 通知失敗只記 event，不阻擋 `imported`；resolver 之後會再嘗試。
 
 ---
@@ -397,11 +399,11 @@ Session 以 httpOnly cookie（`berth_session`）承載，`SameSite=Strict`、`Pa
 
 - 兩種憑證：使用者登入用 `Users/AuthenticateByName`（只在登入時），伺服器操作用 API key（`Auth/Keys` 建立，存 `settings.services.jellyfin`）。
 - `list_libraries()`：`GET /Library/VirtualFolders` → `Name`、`ItemId`、`CollectionType`、`Locations`、`LibraryOptions.TypeOptions[].MetadataFetchers`（偵測 TVDB 插件並警告）。
-- `notify_paths(paths)`：`POST /Library/Media/Updated`，每路徑 `UpdateType=Created`。
+- `notify_paths(paths)`：`POST /Library/Media/Updated`，每路徑 `UpdateType=Created`。**對從沒掃到過內容的媒體庫無效**（204 但什麼都不做，brief §20.1），所以 `jellyfin_resolver` 有後備（§3.2）。
 - `validate_path(path, is_file)`：`POST /Environment/ValidatePath`，跨服務可見性檢查用。
 - `add_library_path(library_name, path)`：`POST /Library/VirtualFolders/Paths?refreshLibrary=false`，既有媒體庫加 Berth 路徑用；對應的移除 `DELETE /Library/VirtualFolders/Paths` 只在使用者明確要求時呼叫。
-- `find_series(library_id, tmdb_id, folder_path)` 與 `find_episodes(series_folder_path)`：都以 `parentId=<library>&recursive=true&fields=Path,ProviderIds` 查，再照 `Path` 前綴篩出該作品的集。**不要用 `parentId=<seriesId>` 或 `/Shows/{id}/Episodes`**：10.11 在第一次掃描後對已比對到 provider 的 Series 兩者都回 0，要再掃一次才正常（brief §20.7）。
-- `run_task(name)`：`GET /ScheduledTasks` 找名稱含 `Merge` 的任務 → `POST /ScheduledTasks/Running/{id}`；找不到只記 event。
+- `items(library_id, item_types)`：`GET /Items?parentId=<library>&recursive=true&includeItemTypes=…&fields=Path,ProviderIds,MediaSources`。**只有這一支**（票 12 推翻原本的 `find_series` / `find_episodes`）：adapter 忠實翻譯協定，兩段查詢的比對（作品資料夾是不是已經是一個 Series、集的 `Path` 或 `MediaSources[].Path` 對不對得上帳本）住在 `services/resolver.py`——那要看 Route 與帳本，adapter 不認得它們。**不要用 `parentId=<seriesId>` 或 `/Shows/{id}/Episodes`**：10.11 在第一次掃描後對已比對到 provider 的 Series 兩者都回 0，要再掃一次才正常（brief §20.7）。
+- `run_task(task_id)`：`POST /ScheduledTasks/Running/{id}`，id 是精靈第 3 步（§9.4 的第 9 步）存下的 `merge_movies_task_id` / `merge_episodes_task_id`（**不再每次搜任務名**，票 12）。沒存或 Jellyfin 回錯只記 event `jellyfin_request_failed(request=merge)`。
 - 初始化與插件安裝：§9.4。
 - 絕不呼叫 `DELETE /Items/*`。
 
@@ -456,7 +458,8 @@ Session 以 httpOnly cookie（`berth_session`）承載，`SameSite=Strict`、`Pa
 
 - `link(src, dst, roots)`、`stat`、`same_inode`、`link_test(source_dir, target_dir, roots)`（建暫存檔、鏈接、比對、清理）、`probe_file(dir, roots)`（context manager：放一個探測檔，離開就刪）、`free_space(path)`、`is_within(path, root)`（防路徑逃逸）、`ensure_directory(path)`。
 - 所有寫入 library 的路徑必須在某個 Route 的 `target_path` 之下，否則拒絕；這是唯一會動 library 的模組。**凡是把檔案放進去的函式都要 `roots`**（`link`、`probe_file`、`link_test` 的目標側），不在其中就丟 `PathEscapeError`。`ensure_directory` 不在此列：它建的是 Berth 自己的根目錄（媒體庫目錄、complete 子目錄），那些是設定值不是算出來的檔名。
-- `OSError` 一律往上丟（含 `errno`）：權限、掛載、`EXDEV` 的原文正是「哪個容器少了哪個掛載」唯一有用的證據。
+- `OSError` 一律往上丟（含 `errno`）：權限、掛載、`EXDEV` 的原文正是「哪個容器少了哪個掛載」唯一有用的證據。**`EXDEV` 另外說出兩邊各落在哪個掛載上**（仍是同一個 `errno` 的 `OSError`，只是訊息多一段；`mount_point()` 對還不存在的目標也答得出來），系統原文只說「跨裝置」（票 12）。
+- `link()` 順手建好目標那幾層資料夾（`<作品>/Season 01/` 第一次一定不存在），**守衛在建資料夾之前**：被擋下來的那一次不在媒體庫外留下空目錄。目標已存在時丟 `FileExistsError`，由 importer 比 inode 決定是「上次做到了」還是「別人的檔案」——不先 `exists()` 再鏈接，否則守衛會被繞過（票 12）。
 
 ### 8.7 mediainfo adapter
 

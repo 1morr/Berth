@@ -25,15 +25,16 @@ log 的每一行帶 job id（brief §16.2、plan T1.9）：`job_context` 一包�
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 from collections import Counter
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Coroutine
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -67,9 +68,10 @@ from berth.services.steps import message
 
 logger = logging.getLogger(__name__)
 
-#: `submit_failed` 是唯一重試得了的狀態（plan §3.1）。已經在下載的 torrent 再送一次
-#: 只是多一次無謂的請求，而 `imported` 再送一次是另一件事（M2 的重新入庫）。
-RETRYABLE = frozenset({JobState.SUBMIT_FAILED})
+#: 重試得了的兩個狀態（plan §3.1）：送單失敗回 `requested` 再送一次，入庫失敗回 `importing`
+#: 從沒做完的那幾個接著做。已經在下載的 torrent 再送一次只是多一次無謂的請求，而 `imported`
+#: 再來一次是另一件事（M2 的重新入庫）。
+RETRYABLE = frozenset({JobState.SUBMIT_FAILED, JobState.IMPORT_FAILED})
 
 #: 手動重跑得了 Plan 的狀態（票 11）。`review` 也在裡面：plan §3.1 的「使用者拒絕 →
 #: `completed`」就是為了讓它重新 planning，而 M1 沒有審核 UI，重跑是唯一按得到的那一步。
@@ -299,6 +301,10 @@ async def retry_job(session: AsyncSession, factory: ServiceClientFactory, job_ha
         raise JobRejectedError("job_missing", job_hash)
     if job.state not in RETRYABLE:
         raise JobRejectedError("not_retryable", job.state.value)
+    if job.state is JobState.IMPORT_FAILED:
+        with job_context(job.hash):
+            async with job_lock(job.hash):
+                return await _resume_import(session, job)
     route = await session.get(Route, job.route_id) if job.route_id is not None else None
     if route is None:
         raise JobRejectedError("route_missing", str(job.route_id))
@@ -334,6 +340,42 @@ async def _resubmit(
         return await _view(session, job)
     await _finish(session, factory, job, route, torrent, subject, actor="user")
     return await _view(session, job)
+
+
+async def _resume_import(session: AsyncSession, job: Job) -> JobView:
+    """`import_failed` → `importing`（plan §3.1）。
+
+    這一支只把那一列放回去：importer 下一輪從 `applied_at` 還空著的那幾個接著做，已經鏈接好的
+    跳過（`services/importer.py`）。事件的 `state` 讓時間線分得出這是哪一種重試——送單的重試
+    說的是「再送一次」，這一個說的是「再入庫一次」。
+    """
+    if not await transition(session, job, JobState.IMPORTING, expected=JobState.IMPORT_FAILED):
+        raise JobRejectedError("not_retryable", job.state.value)
+    await record_event(
+        session, job, EventType.RETRIED, actor="user", payload={"state": JobState.IMPORTING.value}
+    )
+    await session.commit()
+    logger.info("job import retried", extra={"state": job.state.value})
+    return await _view(session, job)
+
+
+async def guarded[T](
+    session: AsyncSession, job_hash: str, work: Coroutine[Any, Any, T], *, fallback: T
+) -> T:
+    """一筆 Job 的一輪（planner 與 importer 共用）。**它爆掉不會拖累同一輪的其他人。**
+
+    迴圈那一層已經接了例外（`pipeline/`），但那個接法會讓這一輪剩下的 job 全部跳過——而掃描
+    是照 `added_at` 排的，所以一筆壞掉的 Job 會在每一輪都排在最前面，後面那幾筆因此永遠
+    輪不到。鎖與 log 上下文也在這裡包好：一輪裡的每一行 log 都帶那一筆的 job id。
+    """
+    with job_context(job_hash):
+        async with job_lock(job_hash):
+            try:
+                return await work
+            except Exception:
+                await session.rollback()
+                logger.exception("this job's round failed; the rest of the round goes on")
+                return fallback
 
 
 async def list_jobs(session: AsyncSession) -> tuple[JobView, ...]:
@@ -554,7 +596,35 @@ async def record_event(
     actor: str,
     payload: dict[str, Any],
 ) -> None:
-    """一筆事件（brief §5.2）。`flush` 而不是 `commit`：整次送單是一個工作單元。"""
+    """一筆事件（brief §5.2）。`flush` 而不是 `commit`：整次送單是一個工作單元。
+
+    **同一件事一分鐘內只寫一次**（plan §3.3）：`(job_hash, type, payload)` 相同就跳過。
+    理由是重啟——迴圈的一輪可能在寫完事件之後、在下一步落地之前被關掉，而重啟後的第一輪
+    會把同一件事再做一次；時間線上同一件事出現兩次，讀起來就是發生了兩次。比的是 payload
+    的**內容**（鍵排序後的 JSON），不是 dict 恰好的鍵順序。
+
+    **使用者按下的重試是界線**：它是一次新的嘗試，之後發生的事就算與之前一模一樣，也是真的
+    又發生了一次。不設界線的話，重試之後又同樣失敗的那一筆會被吞掉，時間線停在「重試」而
+    狀態是失敗（code-review 抓到）。
+    """
+    now = utcnow()
+    fingerprint = _fingerprint(payload)
+    last_retry = await session.scalar(
+        select(func.max(Event.id)).where(
+            Event.job_hash == job.hash, Event.type == EventType.RETRIED.value
+        )
+    )
+    recent = await session.scalars(
+        select(Event.payload_json).where(
+            Event.job_hash == job.hash,
+            Event.type == event.value,
+            Event.created_at >= now - EVENT_DEDUP_WINDOW,
+            Event.id > (last_retry or 0),
+        )
+    )
+    if any(_fingerprint(row or {}) == fingerprint for row in recent):
+        logger.debug("duplicate event dropped", extra={"event": event.value})
+        return
     session.add(
         Event(
             job_hash=job.hash,
@@ -562,10 +632,18 @@ async def record_event(
             type=event.value,
             actor=actor,
             payload_json=payload,
-            created_at=utcnow(),
+            created_at=now,
         )
     )
     await session.flush()
+
+
+#: 事件去重的窗口（plan §3.3）。
+EVENT_DEDUP_WINDOW = timedelta(minutes=1)
+
+
+def _fingerprint(payload: dict[str, Any]) -> str:
+    return json.dumps(payload, sort_keys=True, ensure_ascii=False, default=str)
 
 
 def actor_of(user_id: int | None) -> str:

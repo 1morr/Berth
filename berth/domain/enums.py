@@ -122,6 +122,32 @@ class EventType(StrEnum):
     PLAN_GENERATED = "plan_generated"
     #: 這一份 Plan 要人看過才動（`reason` 是 `ReviewReason`）。
     REVIEW_REQUIRED = "review_required"
+    #: 一個檔案硬鏈接進媒體庫了（file、target）。**一個檔案一筆**（brief §5.2、plan §3.1 的 ×N）。
+    LINKED = "linked"
+    #: 一個檔案沒鏈接成（file、target、errno、error）。原文不翻譯：它是「哪個掛載少了」的證據。
+    LINK_FAILED = "link_failed"
+    #: 入庫完成後通知了 Jellyfin（count、paths）。**請求送到了**，不代表它掃完了。
+    JELLYFIN_SCAN_REQUESTED = "jellyfin_scan_requested"
+    #: 反查到這一筆 Job 入庫的檔案在 Jellyfin 裡的 item（count）。
+    JELLYFIN_ITEM_RESOLVED = "jellyfin_item_resolved"
+    #: 觸發了 MergeVersions 的排程任務（task）。
+    MERGE_VERSIONS_REQUESTED = "merge_versions_requested"
+    #: 對 Jellyfin 的一次請求沒成（request 是 `JellyfinRequest`、error）。**只記不擋**：
+    #: 檔案已經在媒體庫裡了，Jellyfin 自己的排程掃描遲早會看到它們（plan §3.3）。
+    JELLYFIN_REQUEST_FAILED = "jellyfin_request_failed"
+
+
+class JellyfinRequest(StrEnum):
+    """`jellyfin_request_failed` 事件 payload 裡的 `request`：沒成的是哪一次請求。
+
+    封閉集合，因為兩種的下一步不同：通知沒送到，Jellyfin 的排程掃描遲早會補上；
+    MergeVersions 沒觸發，同一集的兩個版本會一直是兩個條目，直到有人去按那個任務。
+    """
+
+    #: `POST /Library/Media/Updated`（plan §8.2 的 `notify_paths`）。
+    SCAN = "scan"
+    #: `POST /ScheduledTasks/Running/{id}`，或根本沒有存下任務 id（brief §7.7）。
+    MERGE = "merge"
 
 
 class IssueType(StrEnum):
@@ -140,6 +166,21 @@ class IssueType(StrEnum):
     #: qBittorrent 上有一個掛著 Berth category 或 tag、但 Berth 沒有 Job 的 torrent
     #: （plan §3.2 的 `unknown_torrent`）。
     UNKNOWN_TORRENT = "unknown_torrent"
+    #: 入庫的檔案重試到最後仍然在 Jellyfin 裡找不到對應的 item（plan §3.2 的
+    #: `jellyfin_resolver`）。多半是 Jellyfin 看不到那條路徑，或它把資料夾認成了別的作品。
+    JELLYFIN_ITEM_UNRESOLVED = "jellyfin_item_unresolved"
+
+
+class LedgerStatus(StrEnum):
+    """一筆帳本現在與磁碟對不對得起來（plan §2.3 的 `ledger.status`、brief §9.1）。
+
+    importer 寫下的一律是 `ok`；其餘三種是 M2 的 Reconciler 比對之後寫的。
+    """
+
+    OK = "ok"
+    TARGET_MISSING = "target_missing"
+    SOURCE_MISSING = "source_missing"
+    INODE_MISMATCH = "inode_mismatch"
 
 
 class CollectionType(StrEnum):
@@ -366,3 +407,6 @@ class ReviewReason(StrEnum):
     MEDIUM_NOT_ALLOWED = "medium_not_allowed"
     #: 一個會被寫進媒體庫的檔案都沒有（整包 OST、整包光碟結構、整包對不到）。
     NOTHING_TO_IMPORT = "nothing_to_import"
+    #: 目標路徑上已經有一個**別的**檔案（inode 不同，plan §3.3）。Berth 不覆寫媒體庫裡
+    #: 不是它鏈接的東西（brief §5.3），所以停下來等人決定。
+    TARGET_EXISTS = "target_exists"

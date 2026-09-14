@@ -20,6 +20,7 @@ from berth.services.clients import (
     close_setup_probes,
 )
 from berth.services.events import EventHub
+from berth.services.hints import JobHints
 
 
 def get_config(request: Request) -> Config:
@@ -58,6 +59,12 @@ def get_event_hub(request: Request) -> EventHub:
     return hub
 
 
+def get_import_hints(request: Request) -> JobHints:
+    """importer 的喚醒訊號（`main.py` 的 lifespan 放進 `app.state`）。入庫重試按下去就叫醒它。"""
+    hints: JobHints = request.app.state.import_hints
+    return hints
+
+
 def get_client_factory(request: Request) -> ServiceClientFactory:
     """端點與背景迴圈用同一份（`create_app` 放進 `app.state`）。"""
     factory: ServiceClientFactory = request.app.state.clients
@@ -67,5 +74,6 @@ def get_client_factory(request: Request) -> ServiceClientFactory:
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
 ClientFactoryDep = Annotated[ServiceClientFactory, Depends(get_client_factory)]
 EventHubDep = Annotated[EventHub, Depends(get_event_hub)]
+ImportHintsDep = Annotated[JobHints, Depends(get_import_hints)]
 ConfigDep = Annotated[Config, Depends(get_config)]
 SetupProbesDep = Annotated[SetupProbes, Depends(get_setup_probes)]

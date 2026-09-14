@@ -155,16 +155,17 @@ async def _route(
     return row
 
 
-async def _ready(
+async def ready(
     session: AsyncSession, roots: dict[str, Path], **route_kwargs: bool
 ) -> tuple[Media, Route, FakeClientFactory]:
+    """精靈跑完、有一部作品與一條 anime Route。`test_importer.py` 從同一個起點接下去。"""
     await arrange(session, roots)
     media = await _media(session)
     route = await _route(session, roots, **route_kwargs)
     return media, route, factory_for(roots)
 
 
-async def _job(
+async def downloaded_job(
     session: AsyncSession,
     media: Media,
     route: Route,
@@ -232,8 +233,8 @@ class TestPlanning:
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
         """全 high 而且 Route 允許 → 不必問人（plan §3.1、brief §6.5）。"""
-        media, route, factory = await _ready(session, roots)
-        job = await _job(session, media, route, roots)
+        media, route, factory = await ready(session, roots)
+        job = await downloaded_job(session, media, route, roots)
 
         await run(session, factory)
 
@@ -248,8 +249,8 @@ class TestPlanning:
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
         """**一個檔案一列**，包含跳過的那一個：畫面要說得出「這一包裡有什麼」。"""
-        media, route, factory = await _ready(session, roots)
-        await _job(session, media, route, roots)
+        media, route, factory = await ready(session, roots)
+        await downloaded_job(session, media, route, roots)
 
         await run(session, factory)
 
@@ -279,8 +280,8 @@ class TestPlanning:
         照抄進解析器的話，每一個檔案都會多一層資料夾提示——而那一層是發佈名，
         它已經另外傳給解析器了。
         """
-        media, route, factory = await _ready(session, roots)
-        await _job(session, media, route, roots)
+        media, route, factory = await ready(session, roots)
+        await downloaded_job(session, media, route, roots)
 
         await run(session, factory)
 
@@ -292,8 +293,8 @@ class TestPlanning:
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
         """importer 要從決定走回那個檔案（票 12），所以兩張表在這裡就接起來。"""
-        media, route, factory = await _ready(session, roots)
-        await _job(session, media, route, roots)
+        media, route, factory = await ready(session, roots)
+        await downloaded_job(session, media, route, roots)
 
         await run(session, factory)
 
@@ -308,8 +309,8 @@ class TestPlanning:
     async def test_the_event_says_what_it_planned(
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
-        media, route, factory = await _ready(session, roots)
-        await _job(session, media, route, roots)
+        media, route, factory = await ready(session, roots)
+        await downloaded_job(session, media, route, roots)
 
         await run(session, factory)
 
@@ -324,8 +325,8 @@ class TestPlanning:
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
         """推播是「該去問了」的提示，而那件事只有在真相寫下去之後才成立（票 10 的同一條）。"""
-        media, route, factory = await _ready(session, roots)
-        await _job(session, media, route, roots)
+        media, route, factory = await ready(session, roots)
+        await downloaded_job(session, media, route, roots)
         seen: list[tuple[str, bool]] = []
 
         class Spy(EventHub):
@@ -339,8 +340,8 @@ class TestPlanning:
     async def test_a_job_that_is_not_completed_is_left_alone(
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
-        media, route, factory = await _ready(session, roots)
-        job = await _job(session, media, route, roots, state=JobState.DOWNLOADING)
+        media, route, factory = await ready(session, roots)
+        job = await downloaded_job(session, media, route, roots, state=JobState.DOWNLOADING)
 
         await run(session, factory)
 
@@ -353,8 +354,8 @@ class TestPlanning:
     ) -> None:
         """Berth 在算到一半時被關掉：那一列會停在 `planning`，而只掃 `completed` 的話
         它永遠不會再被碰。掃 `planning` 是這一步唯一的復原路徑（plan §3.3 的重入）。"""
-        media, route, factory = await _ready(session, roots)
-        job = await _job(session, media, route, roots, state=JobState.PLANNING)
+        media, route, factory = await ready(session, roots)
+        job = await downloaded_job(session, media, route, roots, state=JobState.PLANNING)
 
         await run(session, factory)
 
@@ -366,8 +367,8 @@ class TestReview:
     async def test_a_file_it_cannot_place_stops_the_whole_job(
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
-        media, route, factory = await _ready(session, roots)
-        job = await _job(session, media, route, roots, name=STRAY, files=STRAY_FILES)
+        media, route, factory = await ready(session, roots)
+        job = await downloaded_job(session, media, route, roots, name=STRAY, files=STRAY_FILES)
 
         await run(session, factory)
 
@@ -381,8 +382,8 @@ class TestReview:
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
         """M1 沒有審核 UI，所以「為什麼停在這裡」只有時間線說得出口（票 11 的範圍）。"""
-        media, route, factory = await _ready(session, roots)
-        await _job(session, media, route, roots, name=STRAY, files=STRAY_FILES)
+        media, route, factory = await ready(session, roots)
+        await downloaded_job(session, media, route, roots, name=STRAY, files=STRAY_FILES)
 
         await run(session, factory)
 
@@ -396,8 +397,8 @@ class TestReview:
     ) -> None:
         """medium 自動入庫，但掛 `audit`——撤銷幾乎零成本，那是敢自動入庫的前提
         （brief §6.5、CONTEXT.md 的 Audit）。"""
-        media, route, factory = await _ready(session, roots)
-        job = await _job(session, media, route, roots, name=SINGLE, files=SINGLE_FILES)
+        media, route, factory = await ready(session, roots)
+        job = await downloaded_job(session, media, route, roots, name=SINGLE, files=SINGLE_FILES)
 
         await run(session, factory)
 
@@ -412,8 +413,8 @@ class TestReview:
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
         """`medium_auto_import = false` 時 medium 進 review（票 11 驗收、brief §6.5）。"""
-        media, route, factory = await _ready(session, roots, medium_auto_import=False)
-        job = await _job(session, media, route, roots, name=SINGLE, files=SINGLE_FILES)
+        media, route, factory = await ready(session, roots, medium_auto_import=False)
+        job = await downloaded_job(session, media, route, roots, name=SINGLE, files=SINGLE_FILES)
 
         await run(session, factory)
 
@@ -429,8 +430,8 @@ class TestReview:
     async def test_high_is_not_touched_by_that_setting(
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
-        media, route, factory = await _ready(session, roots, medium_auto_import=False)
-        job = await _job(session, media, route, roots)
+        media, route, factory = await ready(session, roots, medium_auto_import=False)
+        job = await downloaded_job(session, media, route, roots)
 
         await run(session, factory)
 
@@ -446,9 +447,11 @@ class TestReview:
         另一套號碼，所以它對不到任何一集。擋下去的話整包 12 集都要人按一次，而 M1 沒有
         審核佇列，那等於誰都入不了庫。
         """
-        media, route, factory = await _ready(session, roots)
+        media, route, factory = await ready(session, roots)
         special = f"{BATCH}/[Group] SPY×FAMILY [SP][03][1080p].mkv"
-        job = await _job(session, media, route, roots, files=(*BATCH_FILES, (special, 900_000_000)))
+        job = await downloaded_job(
+            session, media, route, roots, files=(*BATCH_FILES, (special, 900_000_000))
+        )
 
         await run(session, factory)
 
@@ -471,8 +474,8 @@ class TestReview:
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
         """整包都是「不用管」的檔案：那不是低信心，是**送錯了 torrent**（brief §5.1）。"""
-        media, route, factory = await _ready(session, roots)
-        job = await _job(
+        media, route, factory = await ready(session, roots)
+        job = await downloaded_job(
             session,
             media,
             route,
@@ -494,8 +497,8 @@ class TestPreplan:
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
         """一拿到檔案清單就先算一份（brief §5.1）：下載中就看得出「這根本不是那一季」。"""
-        media, route, factory = await _ready(session, roots)
-        job = await _job(session, media, route, roots, state=JobState.METADATA_READY)
+        media, route, factory = await ready(session, roots)
+        job = await downloaded_job(session, media, route, roots, state=JobState.METADATA_READY)
 
         await run(session, factory)
 
@@ -508,8 +511,8 @@ class TestPreplan:
     async def test_it_writes_one_event_and_not_one_per_round(
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
-        media, route, factory = await _ready(session, roots)
-        await _job(session, media, route, roots, state=JobState.DOWNLOADING)
+        media, route, factory = await ready(session, roots)
+        await downloaded_job(session, media, route, roots, state=JobState.DOWNLOADING)
 
         await run(session, factory)
         await run(session, factory)
@@ -520,8 +523,8 @@ class TestPreplan:
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
         """一個 Job 一份「現在的計劃」：重算換的是內容，不是 id（票 11 的重入驗收）。"""
-        media, route, factory = await _ready(session, roots)
-        job = await _job(session, media, route, roots, state=JobState.DOWNLOADING)
+        media, route, factory = await ready(session, roots)
+        job = await downloaded_job(session, media, route, roots, state=JobState.DOWNLOADING)
         await run(session, factory)
         estimate = (await plan_of(session)).id
 
@@ -538,8 +541,8 @@ class TestPreplan:
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
         """`submitted` 的那一刻 qBittorrent 還沒交出清單——空的 Plan 說不出任何事。"""
-        media, route, factory = await _ready(session, roots)
-        await _job(session, media, route, roots, state=JobState.SUBMITTED, files=())
+        media, route, factory = await ready(session, roots)
+        await downloaded_job(session, media, route, roots, state=JobState.SUBMITTED, files=())
 
         await run(session, factory)
 
@@ -557,8 +560,8 @@ class TestMediaInfo:
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
         """檔名說它是第一集，mediainfo 說它 2 秒（plan §4.1、brief §6.2）。"""
-        media, route, factory = await _ready(session, roots)
-        await _job(session, media, route, roots)
+        media, route, factory = await ready(session, roots)
+        await downloaded_job(session, media, route, roots)
         await self._downloaded(roots, BATCH_FILES[0][0])
 
         await run(session, factory)
@@ -570,8 +573,8 @@ class TestMediaInfo:
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
         """`completed` → `planning` 的副作用就是這件事（plan §3.1）。"""
-        media, route, factory = await _ready(session, roots)
-        await _job(session, media, route, roots)
+        media, route, factory = await ready(session, roots)
+        await downloaded_job(session, media, route, roots)
         await self._downloaded(roots, BATCH_FILES[0][0])
 
         await run(session, factory)
@@ -586,8 +589,8 @@ class TestMediaInfo:
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
         """檔案不在 Berth 看得到的位置上（掛載對不上）時，Plan 照樣算得出來。"""
-        media, route, factory = await _ready(session, roots)
-        job = await _job(session, media, route, roots)
+        media, route, factory = await ready(session, roots)
+        job = await downloaded_job(session, media, route, roots)
 
         await run(session, factory)
 
@@ -600,8 +603,8 @@ class TestMediaInfo:
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
         """pre-plan 那一輪檔案還在下載：量到的一定是半份，而半份比沒有更糟。"""
-        media, route, factory = await _ready(session, roots)
-        await _job(session, media, route, roots, state=JobState.DOWNLOADING)
+        media, route, factory = await ready(session, roots)
+        await downloaded_job(session, media, route, roots, state=JobState.DOWNLOADING)
         await self._downloaded(roots, BATCH_FILES[0][0])
 
         await run(session, factory)
@@ -620,7 +623,7 @@ class TestSnapshot:
         route = await _route(session, roots)
         client = tmdb(details=[SPY], seasons=SEASONS, ordering=ORDERING)
         factory = await credentialled(session, client)
-        await _job(session, media, route, roots)
+        await downloaded_job(session, media, route, roots)
 
         await run(session, factory)
 
@@ -635,7 +638,7 @@ class TestSnapshot:
         route = await _route(session, roots)
         client = tmdb(details=[SPY], seasons=SEASONS, ordering=ORDERING)
         factory = await credentialled(session, client)
-        await _job(session, media, route, roots)
+        await downloaded_job(session, media, route, roots)
 
         await run(session, factory)
 
@@ -652,7 +655,7 @@ class TestSnapshot:
         route = await _route(session, roots)
         client = tmdb(error=ServiceUnavailableError("tmdb: connection refused"))
         factory = await credentialled(session, client)
-        job = await _job(session, media, route, roots)
+        job = await downloaded_job(session, media, route, roots)
 
         await run(session, factory)
 
@@ -666,8 +669,8 @@ class TestReplan:
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
         """重跑不產生重複的 plan item（票 11 驗收）。"""
-        media, route, factory = await _ready(session, roots)
-        await _job(session, media, route, roots, name=STRAY, files=STRAY_FILES)
+        media, route, factory = await ready(session, roots)
+        await downloaded_job(session, media, route, roots, name=STRAY, files=STRAY_FILES)
         await run(session, factory)
         first = await plan_of(session)
 
@@ -680,8 +683,8 @@ class TestReplan:
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
         """**重入**（plan §3.3）：算到一半被關掉的那一列會被掃第二次，而它已經有一份決定了。"""
-        media, route, factory = await _ready(session, roots)
-        job = await _job(session, media, route, roots, state=JobState.PLANNING)
+        media, route, factory = await ready(session, roots)
+        job = await downloaded_job(session, media, route, roots, state=JobState.PLANNING)
         await run(session, factory)
 
         job.state = JobState.PLANNING
@@ -700,8 +703,8 @@ class TestReplan:
         """
         from berth.services.jobs import JobRejectedError
 
-        media, route, factory = await _ready(session, roots)
-        await _job(session, media, route, roots)
+        media, route, factory = await ready(session, roots)
+        await downloaded_job(session, media, route, roots)
         await run(session, factory)
 
         with pytest.raises(JobRejectedError) as refusal:
@@ -713,8 +716,8 @@ class TestReplan:
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
         """`review` 的下一步之一就是「再算一次」（plan §3.1 的 review → completed）。"""
-        media, route, factory = await _ready(session, roots)
-        job = await _job(session, media, route, roots, name=STRAY, files=STRAY_FILES)
+        media, route, factory = await ready(session, roots)
+        job = await downloaded_job(session, media, route, roots, name=STRAY, files=STRAY_FILES)
         await run(session, factory)
         assert job.state is JobState.REVIEW
 
@@ -729,8 +732,8 @@ class TestReplan:
     ) -> None:
         from berth.services.jobs import JobRejectedError
 
-        media, route, factory = await _ready(session, roots)
-        await _job(session, media, route, roots, state=JobState.DOWNLOADING)
+        media, route, factory = await ready(session, roots)
+        await downloaded_job(session, media, route, roots, state=JobState.DOWNLOADING)
 
         with pytest.raises(JobRejectedError) as refusal:
             await replan_job(session, factory, EventHub(), HASH)
@@ -742,8 +745,8 @@ class TestReading:
     async def test_the_view_carries_the_decision_the_confidence_and_the_reasons(
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
-        media, route, factory = await _ready(session, roots)
-        await _job(session, media, route, roots)
+        media, route, factory = await ready(session, roots)
+        await downloaded_job(session, media, route, roots)
         await run(session, factory)
 
         view = await read_plan(session, await plan_id_of(session, HASH) or 0)
@@ -761,8 +764,8 @@ class TestReading:
     async def test_a_job_without_a_plan_has_no_id(
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
-        media, route, _ = await _ready(session, roots)
-        await _job(session, media, route, roots)
+        media, route, _ = await ready(session, roots)
+        await downloaded_job(session, media, route, roots)
 
         assert await plan_id_of(session, HASH) is None
 
@@ -775,8 +778,8 @@ class TestEvents:
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
         """下載中先看到預估，完成之後才是那一份真的計劃。"""
-        media, route, factory = await _ready(session, roots)
-        job = await _job(session, media, route, roots, state=JobState.DOWNLOADING)
+        media, route, factory = await ready(session, roots)
+        job = await downloaded_job(session, media, route, roots, state=JobState.DOWNLOADING)
         await run(session, factory)
 
         job.state = JobState.COMPLETED
@@ -796,20 +799,24 @@ class TestRunner:
         self, session: AsyncSession, roots: dict[str, Path], engine: AsyncEngine
     ) -> None:
         """精靈跑完之前一條 Route 都還沒有，而 Plan 的目標路徑正是 Route 給的。"""
-        media, route, factory = await _ready(session, roots)
-        await _job(session, media, route, roots)
-        runner = PlannerRunner(create_session_factory(engine), factory, EventHub(), JobHints())
+        media, route, factory = await ready(session, roots)
+        await downloaded_job(session, media, route, roots)
+        runner = PlannerRunner(
+            create_session_factory(engine), factory, EventHub(), JobHints(), import_hints=JobHints()
+        )
 
         assert await runner.tick() is None
 
     async def test_one_tick_plans_what_is_due(
         self, session: AsyncSession, roots: dict[str, Path], engine: AsyncEngine
     ) -> None:
-        media, route, factory = await _ready(session, roots)
-        job = await _job(session, media, route, roots)
+        media, route, factory = await ready(session, roots)
+        job = await downloaded_job(session, media, route, roots)
         await complete_setup(session)
         await session.commit()
-        runner = PlannerRunner(create_session_factory(engine), factory, EventHub(), JobHints())
+        runner = PlannerRunner(
+            create_session_factory(engine), factory, EventHub(), JobHints(), import_hints=JobHints()
+        )
 
         outcome = await runner.tick()
 
@@ -836,8 +843,8 @@ class TestRoundIsolation:
     ) -> None:
         """掃描照 `added_at` 排，所以一筆解析不了的 torrent 會**每一輪都排在最前面**——
         整輪一起放棄的話，它後面那幾筆永遠等不到自己的計劃。"""
-        media, route, factory = await _ready(session, roots)
-        broken = await _job(session, media, route, roots, name=STRAY, files=STRAY_FILES)
+        media, route, factory = await ready(session, roots)
+        broken = await downloaded_job(session, media, route, roots, name=STRAY, files=STRAY_FILES)
         good = Job(
             hash="b" * 40,
             name=BATCH,

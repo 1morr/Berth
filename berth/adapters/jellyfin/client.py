@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Any
 
 from berth.adapters.http import (
@@ -12,6 +13,7 @@ from berth.adapters.http import (
 from berth.adapters.jellyfin import (
     JellyfinApiKey,
     JellyfinAuth,
+    JellyfinItem,
     JellyfinLibrary,
     JellyfinPlugin,
     JellyfinPublicInfo,
@@ -257,6 +259,33 @@ class HttpJellyfinClient:
             for row in rows
         )
 
+    async def run_task(self, task_id: str) -> None:
+        await self._session.request("POST", f"/ScheduledTasks/Running/{task_id}")
+
+    # --- 入庫之後 ---
+
+    async def notify_paths(self, paths: Sequence[str]) -> None:
+        await self._session.request(
+            "POST",
+            "/Library/Media/Updated",
+            json={"Updates": [{"Path": path, "UpdateType": "Created"} for path in paths]},
+        )
+
+    async def items(self, library_id: str, item_types: Sequence[str]) -> tuple[JellyfinItem, ...]:
+        payload = await self._get(
+            "/Items",
+            params={
+                "parentId": library_id,
+                "recursive": "true",
+                "includeItemTypes": ",".join(item_types),
+                "fields": "Path,ProviderIds,MediaSources",
+            },
+        )
+        rows = payload.get("Items") if isinstance(payload, dict) else None
+        if not isinstance(rows, list):
+            raise ProtocolMismatchError("/Items: no Items array in the response")
+        return tuple(_item(row) for row in rows if isinstance(row, dict))
+
     async def aclose(self) -> None:
         await self._session.aclose()
 
@@ -275,6 +304,22 @@ def _authorization(token: str) -> str:
     if token:
         parts.append(f'Token="{token}"')
     return "MediaBrowser " + ", ".join(parts)
+
+
+def _item(row: dict[str, Any]) -> JellyfinItem:
+    providers = row.get("ProviderIds") or {}
+    return JellyfinItem(
+        id=str(row.get("Id", "")),
+        type=str(row.get("Type", "")),
+        name=str(row.get("Name", "")),
+        path=str(row.get("Path") or ""),
+        tmdb_id=str(providers.get("Tmdb") or ""),
+        source_paths=tuple(
+            str(source["Path"])
+            for source in row.get("MediaSources") or ()
+            if isinstance(source, dict) and source.get("Path")
+        ),
+    )
 
 
 def _library(row: dict[str, Any]) -> JellyfinLibrary:

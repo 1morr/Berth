@@ -1,0 +1,260 @@
+{
+  "Items": [
+    {
+      "BackdropImageTags": [],
+      "ChannelId": null,
+      "CommunityRating": 7.606,
+      "Container": "mkv",
+      "Id": "0ee15e70738cc8dbf131ee7acd6e09ac",
+      "ImageBlurHashes": {
+        "Backdrop": {
+          "4ac6869f106adac2614ee8469068a362": "WSM*Hx-;yD?wIU%2-=ofx]t8RjoLx]bIRPjEj[f+_4j]jFt7WXay"
+        },
+        "Logo": {
+          "6a5d7233bdaf38d3b3181660eb3563d0": "HATS4%xtfRxtfQxtfQxtf7~oj[fQj[fjj[fQj[a|"
+        },
+        "Primary": {
+          "77224e0481fd27c6acb7a58b49ecc782": "WbENI%_MxuRPxCxv?w%MWEf+t7tRR+RPj]s:ofWXtSt6RjjYjYof",
+          "901ff50244ad5a14bd82e55551f64f6c": "dHD[|P^%0gNy%Lj=M|NIE4RkM}Irsr%1ozI@9aW;-.j?",
+          "9758acd1f0b67918983ee1ffaaa7b8d6": "dNHpI-_NbxyEv|nhoyRPD%IAj?RPn#ogx]xu8_ogt7t7"
+        },
+        "Thumb": {
+          "d0bd3f98c51fc612d550be832df7d950": "WICZ67xZ0MtRxZxD-=aeM|bwjrs80NR*t8IrxVxYj0xZNaD+xs%1"
+        }
+      },
+      "ImageTags": {
+        "Primary": "77224e0481fd27c6acb7a58b49ecc782"
+      },
+      "IndexNumber": 1,
+      "IsFolder": false,
+      "LocationType": "FileSystem",
+      "MediaSources": [
+        {
+          "Bitrate": 248,
+          "Container": "mkv",
+          "ETag": "16eb65a0b9dcb5c54ec439a36acd361c",
+          "Formats": [],
+          "GenPtsInput": false,
+          "HasSegments": false,
+          "Id": "0ee15e70738cc8dbf131ee7acd6e09ac",
+          "IgnoreDts": false,
+          "IgnoreIndex": false,
+          "IsInfiniteStream": false,
+          "IsRemote": false,
+          "MediaAttachments": [],
+          "MediaStreams": [
+            {
+              "AspectRatio": "16:9",
+              "AudioSpatialFormat": "None",
+              "AverageFrameRate": 1,
+              "BitDepth": 8,
+              "BitRate": 248,
+              "Codec": "h264",
+              "DisplayTitle": "240p H264 SDR",
+              "Height": 180,
+              "Index": 0,
+              "IsAVC": true,
+              "IsAnamorphic": false,
+              "IsDefault": false,
+              "IsExternal": false,
+              "IsForced": false,
+              "IsHearingImpaired": false,
+              "IsInterlaced": false,
+              "IsOriginal": false,
+              "IsTextSubtitleStream": false,
+              "Level": 12,
+              "NalLengthSize": "4",
+              "PixelFormat": "yuv420p",
+              "Profile": "High",
+              "RealFrameRate": 1,
+              "RefFrames": 1,
+              "ReferenceFrameRate": 1,
+              "SupportsExternalStream": false,
+              "TimeBase": "1/1000",
+              "Type": "Video",
+              "VideoRange": "SDR",
+              "VideoRangeType": "SDR",
+              "Width": 320
+            }
+          ],
+          "Name": "The Bear (2022) - S03E01 - Tomorrow [WEB][1080p][SuccessfulCrab]",
+          "Path": "/data/library/tv/The Bear (2022) [tmdbid-136315]/Season 03/The Bear (2022) - S03E01 - Tomorrow [WEB][1080p][SuccessfulCrab].mkv",
+          "Protocol": "File",
+          "ReadAtNativeFramerate": false,
+          "RequiredHttpHeaders": {},
+          "RequiresClosing": false,
+          "RequiresLooping": false,
+          "RequiresOpening": false,
+          "RunTimeTicks": 3300000000,
+          "Size": 10248,
+          "SupportsDirectPlay": true,
+          "SupportsDirectStream": true,
+          "SupportsProbing": true,
+          "SupportsTranscoding": true,
+          "TranscodingSubProtocol": "http",
+          "Type": "Default",
+          "UseMostCompatibleTranscodingProfile": false,
+          "VideoType": "VideoFile"
+        }
+      ],
+      "MediaType": "Video",
+      "Name": "翌日",
+      "ParentBackdropImageTags": [
+        "4ac6869f106adac2614ee8469068a362"
+      ],
+      "ParentBackdropItemId": "b26853ef1000814d9563768d24869a99",
+      "ParentIndexNumber": 3,
+      "ParentLogoImageTag": "6a5d7233bdaf38d3b3181660eb3563d0",
+      "ParentLogoItemId": "b26853ef1000814d9563768d24869a99",
+      "ParentPrimaryImageItemId": "7c4d18af5a8ff69b6fd2401e5cc41e32",
+      "ParentPrimaryImageTag": "9758acd1f0b67918983ee1ffaaa7b8d6",
+      "ParentThumbImageTag": "d0bd3f98c51fc612d550be832df7d950",
+      "ParentThumbItemId": "b26853ef1000814d9563768d24869a99",
+      "Path": "/data/library/tv/The Bear (2022) [tmdbid-136315]/Season 03/The Bear (2022) - S03E01 - Tomorrow [WEB][1080p][SuccessfulCrab].mkv",
+      "PremiereDate": "2024-06-26T00:00:00.0000000Z",
+      "ProductionYear": 2024,
+      "ProviderIds": {
+        "Imdb": "tt29808372",
+        "Tvdb": "10488232"
+      },
+      "RunTimeTicks": 3300000000,
+      "SeasonId": "7c4d18af5a8ff69b6fd2401e5cc41e32",
+      "SeasonName": "第 3 季",
+      "SeriesId": "b26853ef1000814d9563768d24869a99",
+      "SeriesName": "大熊餐廳",
+      "SeriesPrimaryImageTag": "901ff50244ad5a14bd82e55551f64f6c",
+      "ServerId": "80cc4bc5df99404abaa92136c29967ed",
+      "Type": "Episode",
+      "VideoType": "VideoFile"
+    },
+    {
+      "BackdropImageTags": [],
+      "ChannelId": null,
+      "CommunityRating": 7.17,
+      "Container": "mkv",
+      "Id": "342c2abbd3289294448021f9b2e2db7a",
+      "ImageBlurHashes": {
+        "Backdrop": {
+          "4ac6869f106adac2614ee8469068a362": "WSM*Hx-;yD?wIU%2-=ofx]t8RjoLx]bIRPjEj[f+_4j]jFt7WXay"
+        },
+        "Logo": {
+          "6a5d7233bdaf38d3b3181660eb3563d0": "HATS4%xtfRxtfQxtfQxtf7~oj[fQj[fjj[fQj[a|"
+        },
+        "Primary": {
+          "901ff50244ad5a14bd82e55551f64f6c": "dHD[|P^%0gNy%Lj=M|NIE4RkM}Irsr%1ozI@9aW;-.j?",
+          "9758acd1f0b67918983ee1ffaaa7b8d6": "dNHpI-_NbxyEv|nhoyRPD%IAj?RPn#ogx]xu8_ogt7t7",
+          "c2501a9f9b71527bbf69b2bdea207279": "WXFQ8zM|WAtR9Ft8~qM{t7s:IUozx]WARjV[ozkBD*V@RPR*t7j?"
+        },
+        "Thumb": {
+          "d0bd3f98c51fc612d550be832df7d950": "WICZ67xZ0MtRxZxD-=aeM|bwjrs80NR*t8IrxVxYj0xZNaD+xs%1"
+        }
+      },
+      "ImageTags": {
+        "Primary": "c2501a9f9b71527bbf69b2bdea207279"
+      },
+      "IndexNumber": 2,
+      "IsFolder": false,
+      "LocationType": "FileSystem",
+      "MediaSources": [
+        {
+          "Bitrate": 248,
+          "Container": "mkv",
+          "ETag": "aaaba30157d66b9cd40672694b30de39",
+          "Formats": [],
+          "GenPtsInput": false,
+          "HasSegments": false,
+          "Id": "342c2abbd3289294448021f9b2e2db7a",
+          "IgnoreDts": false,
+          "IgnoreIndex": false,
+          "IsInfiniteStream": false,
+          "IsRemote": false,
+          "MediaAttachments": [],
+          "MediaStreams": [
+            {
+              "AspectRatio": "16:9",
+              "AudioSpatialFormat": "None",
+              "AverageFrameRate": 1,
+              "BitDepth": 8,
+              "BitRate": 248,
+              "Codec": "h264",
+              "DisplayTitle": "240p H264 SDR",
+              "Height": 180,
+              "Index": 0,
+              "IsAVC": true,
+              "IsAnamorphic": false,
+              "IsDefault": false,
+              "IsExternal": false,
+              "IsForced": false,
+              "IsHearingImpaired": false,
+              "IsInterlaced": false,
+              "IsOriginal": false,
+              "IsTextSubtitleStream": false,
+              "Level": 12,
+              "NalLengthSize": "4",
+              "PixelFormat": "yuv420p",
+              "Profile": "High",
+              "RealFrameRate": 1,
+              "RefFrames": 1,
+              "ReferenceFrameRate": 1,
+              "SupportsExternalStream": false,
+              "TimeBase": "1/1000",
+              "Type": "Video",
+              "VideoRange": "SDR",
+              "VideoRangeType": "SDR",
+              "Width": 320
+            }
+          ],
+          "Name": "The Bear (2022) - S03E02 - Next [WEB][1080p][SuccessfulCrab]",
+          "Path": "/data/library/tv/The Bear (2022) [tmdbid-136315]/Season 03/The Bear (2022) - S03E02 - Next [WEB][1080p][SuccessfulCrab].mkv",
+          "Protocol": "File",
+          "ReadAtNativeFramerate": false,
+          "RequiredHttpHeaders": {},
+          "RequiresClosing": false,
+          "RequiresLooping": false,
+          "RequiresOpening": false,
+          "RunTimeTicks": 3300000000,
+          "Size": 10248,
+          "SupportsDirectPlay": true,
+          "SupportsDirectStream": true,
+          "SupportsProbing": true,
+          "SupportsTranscoding": true,
+          "TranscodingSubProtocol": "http",
+          "Type": "Default",
+          "UseMostCompatibleTranscodingProfile": false,
+          "VideoType": "VideoFile"
+        }
+      ],
+      "MediaType": "Video",
+      "Name": "下一步",
+      "ParentBackdropImageTags": [
+        "4ac6869f106adac2614ee8469068a362"
+      ],
+      "ParentBackdropItemId": "b26853ef1000814d9563768d24869a99",
+      "ParentIndexNumber": 3,
+      "ParentLogoImageTag": "6a5d7233bdaf38d3b3181660eb3563d0",
+      "ParentLogoItemId": "b26853ef1000814d9563768d24869a99",
+      "ParentPrimaryImageItemId": "7c4d18af5a8ff69b6fd2401e5cc41e32",
+      "ParentPrimaryImageTag": "9758acd1f0b67918983ee1ffaaa7b8d6",
+      "ParentThumbImageTag": "d0bd3f98c51fc612d550be832df7d950",
+      "ParentThumbItemId": "b26853ef1000814d9563768d24869a99",
+      "Path": "/data/library/tv/The Bear (2022) [tmdbid-136315]/Season 03/The Bear (2022) - S03E02 - Next [WEB][1080p][SuccessfulCrab].mkv",
+      "PremiereDate": "2024-06-26T00:00:00.0000000Z",
+      "ProductionYear": 2024,
+      "ProviderIds": {
+        "Imdb": "tt32330860",
+        "Tvdb": "10488501"
+      },
+      "RunTimeTicks": 3300000000,
+      "SeasonId": "7c4d18af5a8ff69b6fd2401e5cc41e32",
+      "SeasonName": "第 3 季",
+      "SeriesId": "b26853ef1000814d9563768d24869a99",
+      "SeriesName": "大熊餐廳",
+      "SeriesPrimaryImageTag": "901ff50244ad5a14bd82e55551f64f6c",
+      "ServerId": "80cc4bc5df99404abaa92136c29967ed",
+      "Type": "Episode",
+      "VideoType": "VideoFile"
+    }
+  ],
+  "StartIndex": 0,
+  "TotalRecordCount": 10
+}

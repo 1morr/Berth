@@ -20,6 +20,7 @@ from berth.adapters.fs import (
     is_within,
     link,
     link_test,
+    mount_point,
     probe_file,
     same_inode,
     stat,
@@ -129,6 +130,118 @@ class TestLink:
 
         with pytest.raises(FileExistsError):
             link(source, target, roots=[tmp_path])
+
+    def test_creates_the_folders_the_target_needs(self, tmp_path: Path) -> None:
+        """入庫的目標是算出來的檔名（`<作品>/Season 01/…`），那幾層資料夾第一次一定不存在。"""
+        library = tmp_path / "library"
+        ensure_directory(library)
+        source = tmp_path / "a.mkv"
+        source.write_bytes(b"berth")
+        target = library / "Show (2022) [tmdbid-1]" / "Season 01" / "Show S01E01.mkv"
+
+        link(source, target, roots=[library])
+
+        assert same_inode(source, target) is True
+
+    def test_an_escaping_target_creates_no_folders_on_the_way(self, tmp_path: Path) -> None:
+        """守衛在建資料夾**之前**：擋下來的那一次不該在媒體庫外面留下空目錄。"""
+        library = tmp_path / "library"
+        ensure_directory(library)
+        source = tmp_path / "a.mkv"
+        source.write_bytes(b"berth")
+
+        with pytest.raises(PathEscapeError):
+            link(source, library / ".." / "elsewhere" / "a.mkv", roots=[library])
+
+        assert not (tmp_path / "elsewhere").exists()
+
+    def test_a_cross_device_link_keeps_its_errno_and_names_both_mounts(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """`EXDEV` 的原文只說「跨裝置」，而使用者要知道的是**哪兩個掛載**（brief §4.4）。"""
+        library = tmp_path / "library"
+        ensure_directory(library)
+        source = tmp_path / "a.mkv"
+        source.write_bytes(b"berth")
+
+        def cross_device(source: object, target: object) -> None:
+            raise OSError(errno.EXDEV, "Invalid cross-device link")
+
+        monkeypatch.setattr(os, "link", cross_device)
+
+        with pytest.raises(OSError) as caught:
+            link(source, library / "a.mkv", roots=[library])
+
+        assert caught.value.errno == errno.EXDEV
+        message = str(caught.value)
+        assert "Invalid cross-device link" in message
+        assert str(mount_point(source)) in message
+        assert str(mount_point(library / "a.mkv")) in message
+
+    def test_two_separate_mounts_are_told_to_share_one_parent(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """最常見的那一種：`/downloads` 與 `/media` 分開掛（brief §20.2）。"""
+        library = tmp_path / "library"
+        ensure_directory(library)
+        source = tmp_path / "a.mkv"
+        source.write_bytes(b"berth")
+
+        def cross_device(source: object, target: object) -> None:
+            raise OSError(errno.EXDEV, "Invalid cross-device link")
+
+        def mounts(path: Path) -> Path:
+            return Path("/media") if "library" in str(path) else Path("/downloads")
+
+        monkeypatch.setattr(os, "link", cross_device)
+        monkeypatch.setattr("berth.adapters.fs.mount_point", mounts)
+
+        with pytest.raises(OSError) as caught:
+            link(source, library / "a.mkv", roots=[library])
+
+        message = str(caught.value)
+        assert str(Path("/downloads")) in message
+        assert str(Path("/media")) in message
+        assert "mount one common parent folder" in message
+
+    def test_one_mount_that_still_crosses_devices_is_not_told_to_share_a_parent(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """mergerfs 分支、btrfs 子卷：他已經只掛一個父目錄了，那句建議會把人帶錯方向。"""
+        library = tmp_path / "library"
+        ensure_directory(library)
+        source = tmp_path / "a.mkv"
+        source.write_bytes(b"berth")
+
+        def cross_device(source: object, target: object) -> None:
+            raise OSError(errno.EXDEV, "Invalid cross-device link")
+
+        monkeypatch.setattr(os, "link", cross_device)
+
+        with pytest.raises(OSError) as caught:
+            link(source, library / "a.mkv", roots=[library])
+
+        message = str(caught.value)
+        assert "mount one common parent folder" not in message
+        assert "same underlying file system" in message
+
+    def test_other_os_errors_pass_through_untouched(self, tmp_path: Path) -> None:
+        library = tmp_path / "library"
+        ensure_directory(library)
+
+        with pytest.raises(FileNotFoundError):
+            link(tmp_path / "missing.mkv", library / "a.mkv", roots=[library])
+
+
+class TestMountPoint:
+    def test_a_path_that_does_not_exist_yet_reports_the_mount_it_would_land_on(
+        self, tmp_path: Path
+    ) -> None:
+        """入庫目標在鏈接之前不存在，但它會落在哪一個掛載上是已經決定了的。"""
+        assert mount_point(tmp_path / "not" / "yet.mkv") == mount_point(tmp_path)
+
+    def test_the_answer_is_a_mount(self, tmp_path: Path) -> None:
+        assert os.path.ismount(mount_point(tmp_path))
 
 
 class TestLinkTest:

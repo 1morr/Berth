@@ -336,6 +336,27 @@ class TestCompleted:
         assert job.completed_at == NOW
         assert [row.type for row in await events_of(session)][-1] == "completed"
 
+    async def test_a_restart_that_replays_the_completing_round_writes_completed_once(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """重啟後的第一輪會把同一件事再做一次（plan §3.3、票 12）。
+
+        擺法：完成的那一輪落地之後，把狀態退回 `downloading`——那是「事件寫下去了、Berth 在
+        下一步落地之前被關掉」的樣子——再用一個**新的** client（重啟之後 rid 從零開始，拿到
+        的是全量）重跑一輪。時間線上的「下載完成」仍然只能有一筆。
+        """
+        job = await setup_job(session, roots, state=JobState.DOWNLOADING)
+        done = status(state="stalledUP", progress=1.0, completion_on=int(NOW.timestamp()))
+        await run(session, FakeQbittorrentClient(torrents=(done,)))
+        job.state = JobState.DOWNLOADING
+        await session.commit()
+
+        await run(session, FakeQbittorrentClient(torrents=(done,)), now=NOW + timedelta(seconds=5))
+
+        await session.refresh(job)
+        assert job.state is JobState.COMPLETED
+        assert [row.type for row in await events_of(session)].count("completed") == 1
+
     async def test_moving_is_not_completed_even_at_a_hundred_percent(
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:

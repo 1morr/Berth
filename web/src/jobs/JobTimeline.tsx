@@ -59,6 +59,12 @@ const EVENT_TYPES = [
   'preplan',
   'plan_generated',
   'review_required',
+  'linked',
+  'link_failed',
+  'jellyfin_scan_requested',
+  'jellyfin_item_resolved',
+  'merge_versions_requested',
+  'jellyfin_request_failed',
 ] as const
 
 type KnownEvent = (typeof EVENT_TYPES)[number]
@@ -90,8 +96,12 @@ const FACTS: Record<KnownEvent, (facing: Facing) => ReactNode> = {
   submit_failed: ({ payload }) => (
     <p className="value text-xs break-words text-blocked-ink">{text(payload.error)}</p>
   ),
-  retried: ({ t }) => (
-    <p className="max-w-prose text-xs text-ink-dim">{t('jobs.timeline.retried')}</p>
+  // 兩種重試回到的站不同：送單的重試退回「已建立」再送一次，入庫的重試退回「入庫中」
+  // 從沒鏈接的檔案接著做（票 12）。`state` 是後端寫的，不是前端猜的。
+  retried: ({ t, payload }) => (
+    <p className="max-w-prose text-xs text-ink-dim">
+      {payload.state === 'importing' ? t('jobs.timeline.retriedImport') : t('jobs.timeline.retried')}
+    </p>
   ),
   metadata_received: ({ t, locale, payload }) => (
     <Row>
@@ -144,13 +154,51 @@ const FACTS: Record<KnownEvent, (facing: Facing) => ReactNode> = {
       <Row>{join([planned(t, payload), reason ? t(`jobs.timeline.review.${reason}`) : ''])}</Row>
     )
   },
+  // 入庫那幾筆（票 12）。一個檔案一筆 `linked`，所以它只帶**目標**——來源檔名在計劃那一塊，
+  // 同一行印兩條長路徑會讓一季的時間線寬到讀不動。
+  linked: ({ payload }) => <Row>{text(payload.target)}</Row>,
+  // **擋住入庫的才是紅字**（The One Meaning Rule）：正片進不了庫是阻擋，一條字幕或一個特典
+  // 沒鏈上不是（票 12）。擋不擋由後端判定（`blocking`），前端不重算一份規則。
+  link_failed: ({ payload }) => (
+    <>
+      <Row>{text(payload.target)}</Row>
+      <p
+        className={`value text-xs break-words ${payload.blocking === true ? 'text-blocked-ink' : 'text-ink-dim'}`}
+      >
+        {text(payload.error)}
+      </p>
+    </>
+  ),
+  jellyfin_scan_requested: ({ t, payload }) => (
+    <Row>{t('jobs.timeline.scanRequested', { count: number(payload.count) })}</Row>
+  ),
+  jellyfin_item_resolved: ({ t, payload }) => (
+    <Row>{t('jobs.timeline.resolved', { count: number(payload.count) })}</Row>
+  ),
+  merge_versions_requested: ({ t }) => (
+    <p className="max-w-prose text-xs text-ink-dim">{t('jobs.timeline.merged')}</p>
+  ),
+  // **不是紅字**：這兩種失敗都不擋入庫（檔案已經在媒體庫裡了），紅色只代表阻擋
+  // （The One Meaning Rule）。理由翻譯、原文接在後面，與 `issue_detected` 同一個規矩。
+  jellyfin_request_failed: ({ t, payload }) => {
+    const request = JELLYFIN_REQUESTS.find((known) => known === payload.request)
+    return (
+      <p className="max-w-prose text-xs break-words text-ink-dim">
+        {join([request ? t(`jobs.timeline.jellyfin.${request}`) : '', text(payload.error)])}
+      </p>
+    )
+  },
 }
+
+/** `domain.JellyfinRequest` 的兩種。認不得的只印原文——它可能是後端加的，而前端還沒有那句話。 */
+const JELLYFIN_REQUESTS = ['scan', 'merge'] as const
 
 /** `domain.ReviewReason` 的三種。認不得的不畫——它可能是後端加的，而前端還沒有那句話。 */
 const REVIEW_REASONS: readonly ReviewReason[] = [
   'low_confidence',
   'medium_not_allowed',
   'nothing_to_import',
+  'target_exists',
 ]
 
 /**
@@ -178,12 +226,18 @@ function Facts({ event }: { event: JobEvent }) {
 }
 
 /**
- * `domain.IssueType` 的四種。認不得的不畫——它可能是後端加的，而前端還沒有那句話。
+ * `domain.IssueType` 的五種。認不得的不畫——它可能是後端加的，而前端還沒有那句話。
  *
  * `as const` 不是形式：i18n 的 key 是型別化的，少寫一句話會在 `tsc` 就紅，
  * 不會變成畫面上一條 `jobs.timeline.issue.xxx`。
  */
-const ISSUES = ['missing_files', 'client_error', 'client_removed', 'unknown_torrent'] as const
+const ISSUES = [
+  'missing_files',
+  'client_error',
+  'client_removed',
+  'unknown_torrent',
+  'jellyfin_item_unresolved',
+] as const
 
 function Row({ children }: { children: string }) {
   if (!children) return null

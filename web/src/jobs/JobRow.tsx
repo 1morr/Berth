@@ -53,6 +53,9 @@ export function JobRow({ job }: { job: Job }) {
   })
 
   const failed = JOB_SIGNAL[job.state] === 'blocked'
+  // 同一個端點、兩種重試（plan §3.1）：送單失敗是「再送一次」，入庫失敗是「從沒鏈接的那幾個
+  // 接著做」。按鈕上的字要說得出是哪一種，按下去之前才知道會發生什麼。
+  const importRetry = job.state === 'import_failed'
 
   return (
     <details
@@ -111,8 +114,8 @@ export function JobRow({ job }: { job: Job }) {
         {job.retryable && (
           <Action
             run={retry}
-            idle={t('jobs.retry')}
-            busy={t('jobs.retrying')}
+            idle={importRetry ? t('jobs.retryImport') : t('jobs.retry')}
+            busy={importRetry ? t('jobs.retryingImport') : t('jobs.retrying')}
             off={t('jobs.retryOff')}
           />
         )}

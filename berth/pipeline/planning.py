@@ -43,12 +43,15 @@ class PlannerRunner:
         hub: EventHub,
         hints: JobHints,
         *,
+        import_hints: JobHints,
         tick: timedelta = TICK,
     ) -> None:
         self._sessions = sessions
         self._clients = clients
         self._hub = hub
         self._hints = hints
+        #: importer 的喚醒訊號：算完的那幾筆多半正走進 `importing`（票 12）。
+        self._import_hints = import_hints
         self._tick = tick
 
     @property
@@ -76,6 +79,9 @@ class PlannerRunner:
             if not await is_setup_complete(session):
                 return None
             outcome = await sweep_plans(session, self._clients, self._hub)
+            if outcome.planned:
+                # 叫醒 importer，不讓自動入庫的那幾筆對著「入庫中」等它自己的 60 秒。
+                self._import_hints.nudge()
             if outcome.planned or outcome.preplanned:
                 logger.debug(
                     "planner runner round",

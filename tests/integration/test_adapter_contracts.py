@@ -26,7 +26,7 @@ from berth.adapters.http import (
     ServiceNotDeployedError,
     ServiceUnavailableError,
 )
-from berth.adapters.jellyfin import NewLibrary, TypeOption
+from berth.adapters.jellyfin import LIBRARY_SCAN_TASK_KEY, NewLibrary, TypeOption
 from berth.adapters.jellyfin.client import HttpJellyfinClient
 from berth.adapters.prowlarr import (
     DEFAULT_APP_PROFILE_ID,
@@ -1038,6 +1038,140 @@ async def test_jellyfin_merge_tasks_are_found_by_key_and_used_by_id() -> None:
     assert by_key["MergeMoviesTask"].id == "fd957c84b0cfc2380becf2893e4b76fc"
     assert by_key["MergeEpisodesTask"].id == "dcaf151dd1af25aefe775c58e214477e"
     assert by_key["MergeMoviesTask"].name == "Merge All Movies"
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_jellyfin_runs_a_task_by_its_id() -> None:
+    """MergeVersions 用精靈第 3 步存下的 `Id` 觸發（票 12），不是 `Key`。"""
+    route = respx.post(
+        f"{JELLYFIN_URL}/ScheduledTasks/Running/dcaf151dd1af25aefe775c58e214477e"
+    ).respond(204)
+
+    client = jellyfin_client("key")
+    try:
+        await client.run_task("dcaf151dd1af25aefe775c58e214477e")
+    finally:
+        await client.aclose()
+
+    assert route.called
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_jellyfin_items_are_asked_of_the_library_with_the_three_fields() -> None:
+    """反查的兩段查詢都以媒體庫為 parent（brief §20.1）；fixture 是 12.0.0 入庫之後的原文。"""
+    route = respx.get(f"{JELLYFIN_URL}/Items").respond(
+        200, text=read_fixture("http/jellyfin/items.tv.episodes.json")
+    )
+
+    client = jellyfin_client("key")
+    try:
+        episodes = await client.items("4514ec850e5ad0c47b58444e17b6346c", ("Episode",))
+    finally:
+        await client.aclose()
+
+    params = route.calls.last.request.url.params
+    assert params["parentId"] == "4514ec850e5ad0c47b58444e17b6346c"
+    assert params["recursive"] == "true"
+    assert params["includeItemTypes"] == "Episode"
+    assert set(params["fields"].split(",")) == {"Path", "ProviderIds", "MediaSources"}
+    first = episodes[0]
+    assert first.type == "Episode"
+    assert first.path.endswith(
+        "Season 03/The Bear (2022) - S03E01 - Tomorrow [WEB][1080p][SuccessfulCrab].mkv"
+    )
+    # 單一版本時，唯一的那個來源就是自己的 `Path`；多版本合併之後才會多出別的（brief §7.7）。
+    assert first.source_paths == (first.path,)
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_jellyfin_series_are_folders_with_a_tmdb_id_and_no_sources() -> None:
+    respx.get(f"{JELLYFIN_URL}/Items").respond(
+        200, text=read_fixture("http/jellyfin/items.tv.series.json")
+    )
+
+    client = jellyfin_client("key")
+    try:
+        (series,) = await client.items("4514ec850e5ad0c47b58444e17b6346c", ("Series",))
+    finally:
+        await client.aclose()
+
+    assert series.type == "Series"
+    assert series.path == "/data/library/tv/The Bear (2022) [tmdbid-136315]"
+    assert series.tmdb_id == "136315"
+    assert series.source_paths == ()
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_jellyfin_a_movie_is_its_own_file() -> None:
+    """電影一段查詢就夠：它的檔案就是 item 自己（`services/resolver.py`）。"""
+    respx.get(f"{JELLYFIN_URL}/Items").respond(
+        200, text=read_fixture("http/jellyfin/items.movies.movie.json")
+    )
+
+    client = jellyfin_client("key")
+    try:
+        (movie,) = await client.items("f137a2dd21bbc1b99aa5c0f6bf02a805", ("Movie",))
+    finally:
+        await client.aclose()
+
+    assert movie.tmdb_id == "872585"
+    assert movie.path.endswith("Oppenheimer (2023) [tmdbid-872585] - [BD][1080p][YTS.MX].mp4")
+    assert movie.path in movie.source_paths
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_jellyfin_items_without_an_items_array_is_not_jellyfin() -> None:
+    respx.get(f"{JELLYFIN_URL}/Items").respond(200, json=[])
+
+    client = jellyfin_client("key")
+    try:
+        with pytest.raises(ProtocolMismatchError):
+            await client.items("library", ("Series",))
+    finally:
+        await client.aclose()
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_jellyfin_lists_its_own_library_scan_task() -> None:
+    """「重新掃描媒體庫」是內建任務，`Key` 是 `RefreshLibrary`（反查的後備，brief §20.1）。"""
+    respx.get(f"{JELLYFIN_URL}/ScheduledTasks").respond(
+        200, text=read_fixture("http/jellyfin/scheduledtasks.merge-versions.json")
+    )
+
+    client = jellyfin_client("key")
+    try:
+        tasks = await client.scheduled_tasks()
+    finally:
+        await client.aclose()
+
+    assert LIBRARY_SCAN_TASK_KEY in {task.key for task in tasks}
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_jellyfin_is_told_about_each_new_path_not_asked_to_rescan_everything() -> None:
+    """路徑級的通知（brief §20.1）：一條路徑一個 `Created`，不是 `POST /Library/Refresh`。"""
+    route = respx.post(f"{JELLYFIN_URL}/Library/Media/Updated").respond(204)
+    episode = "/data/library/tv/Show (2024) [tmdbid-1]/Season 01/Show (2024) S01E0{}.mkv"
+
+    client = jellyfin_client("key")
+    try:
+        await client.notify_paths([episode.format(1), episode.format(2)])
+    finally:
+        await client.aclose()
+
+    assert json.loads(route.calls.last.request.content) == {
+        "Updates": [
+            {"Path": episode.format(1), "UpdateType": "Created"},
+            {"Path": episode.format(2), "UpdateType": "Created"},
+        ]
+    }
 
 
 @respx.mock

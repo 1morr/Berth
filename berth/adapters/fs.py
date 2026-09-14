@@ -18,6 +18,7 @@
 from __future__ import annotations
 
 import contextlib
+import errno
 import os
 import shutil
 import uuid
@@ -84,10 +85,53 @@ def free_space(path: Path) -> int:
 def link(source: Path, target: Path, *, roots: Sequence[Path]) -> None:
     """把 `source` 硬鏈接到 `target`。`target` 不在 `roots` 底下就拒絕。
 
+    目標那幾層資料夾順手建好：入庫的目標是算出來的檔名（`<作品>/Season 01/…`，plan §5），
+    第一次一定不存在。**守衛在建資料夾之前**，所以被擋下來的那一次不會在媒體庫外面留下
+    空目錄——建資料夾也是一次寫入。
+
     **失敗不退回複製**（brief §4.4）：複製會讓刪除範圍與空間估算失真。
     """
     _guard(target, roots)
-    os.link(source, target)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        os.link(source, target)
+    except OSError as exc:
+        if exc.errno != errno.EXDEV:
+            raise
+        # 仍是同一個 `errno` 的 `OSError`，只多說一件事：兩邊各自落在哪一個掛載上。系統原文只說
+        # 「跨裝置」，而使用者要改的是 compose 裡的哪兩行 volume（brief §16.4）。
+        reason = exc.strerror or "Invalid cross-device link"
+        source_mount, target_mount = mount_point(source), mount_point(target)
+        if source_mount != target_mount:
+            where = (
+                f"the source is on the mount at {source_mount} and the target is on the mount "
+                f"at {target_mount}; a hard link cannot cross mounts, so mount one common "
+                "parent folder into Berth, qBittorrent and Jellyfin at the same path instead of "
+                "separate download and library folders"
+            )
+        else:
+            # 同一個掛載底下仍然 `EXDEV`：mergerfs 的分支、btrfs 子卷、ZFS dataset 都會這樣
+            # （brief §4.4、§20.2）。這時候叫人「掛同一個父目錄」是錯的建議——他已經這樣掛了。
+            where = (
+                f"both paths are under the mount at {source_mount}, but the file system behind "
+                "it splits them (mergerfs branches, btrfs subvolumes and ZFS datasets do this); "
+                "put the download and library folders on the same underlying file system"
+            )
+        raise OSError(errno.EXDEV, f"{reason}: {where}", str(source), None, str(target)) from exc
+
+
+def mount_point(path: Path) -> Path:
+    """這條路徑落在哪一個掛載上。
+
+    **還不存在的路徑也答得出來**：入庫目標在鏈接之前一定不存在，但它會落在哪個掛載上，
+    由它最近那個存在的祖先決定。不解 symlink，理由與 `is_within` 相同。
+    """
+    current = path.absolute()
+    while not current.exists() and current != current.parent:
+        current = current.parent
+    while not os.path.ismount(current) and current != current.parent:
+        current = current.parent
+    return current
 
 
 @contextmanager

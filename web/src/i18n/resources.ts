@@ -635,6 +635,9 @@ const zhHant = {
     progressInline: '進度 {{value}}',
     retry: '重新送單',
     retrying: '送單中…',
+    // 不叫「重新入庫」：那是 CONTEXT.md 的 Reimport（M2，以 complete 下的目錄為來源）。
+    retryImport: '再試一次入庫',
+    retryingImport: '入庫中…',
     retried: '已重試，現在是{{state}}。',
     retryOff: '重試沒有送出去。Berth 自己的 API 沒有回應，先確認它還活著。',
     // 十六個狀態一次定義完（`domain.JobState`）：M1 票 09 只走得到前三個，
@@ -675,12 +678,29 @@ const zhHant = {
       preplan: '預估計劃',
       plan_generated: '計劃',
       review_required: '待審核',
+      linked: '已鏈接',
+      link_failed: '鏈接失敗',
+      jellyfin_scan_requested: '已通知 Jellyfin',
+      jellyfin_item_resolved: 'Jellyfin 已收錄',
+      merge_versions_requested: '要求合併版本',
+      jellyfin_request_failed: 'Jellyfin 請求沒成',
     },
     timeline: {
       loading: '讀取時間線…',
       empty: '這一筆還沒有任何事件。',
       off: '讀不到時間線。',
       retried: '狀態退回「已建立」，接著再送一次。',
+      retriedImport: '狀態退回「入庫中」，從還沒鏈接的檔案接著做。',
+      scanRequested_one: '通知了 {{count}} 個檔案的路徑',
+      scanRequested_other: '通知了 {{count}} 個檔案的路徑',
+      resolved_one: '{{count}} 個檔案在 Jellyfin 裡找到了',
+      resolved_other: '{{count}} 個檔案在 Jellyfin 裡找到了',
+      merged: 'MergeVersions 會把同一集的不同版本併成一個條目。',
+      // 不擋入庫的兩種失敗，各自說下一步會怎樣（理由翻譯，原文接在後面）。
+      jellyfin: {
+        scan: '通知沒送到。Jellyfin 自己的排程掃描會補上。',
+        merge: 'MergeVersions 沒有觸發，同一集的兩個版本暫時會是兩個條目。',
+      },
       files_one: '{{count}} 個檔案 · {{size}}',
       files_other: '{{count}} 個檔案 · {{size}}',
       resumed: '又動起來了',
@@ -691,6 +711,7 @@ const zhHant = {
         low_confidence: '有檔案的季集推不出來',
         medium_not_allowed: '這條 Route 不自動入庫 medium',
         nothing_to_import: '沒有東西會進媒體庫',
+        target_exists: '目標位置上已經有別的檔案',
       },
       // 理由翻譯，原文不翻譯：後面接的 `client_state` 是 qBittorrent 的機器字串。
       issue: {
@@ -699,6 +720,8 @@ const zhHant = {
         client_removed: 'torrent 從 qBittorrent 上消失了。下載好的檔案可能還在原位。',
         unknown_torrent:
           '這個 torrent 出現在 qBittorrent 上時，Berth 還沒有對應的下載紀錄。多半是有人直接在那邊加的，或這裡的資料庫被還原過。',
+        jellyfin_item_unresolved:
+          'Jellyfin 一直沒有列出這幾個入庫的檔案。多半是它看不到這條路徑，或把資料夾認成了別的作品——到 Jellyfin 的媒體庫裡找找看。',
       },
     },
     // 匯入計劃：逐檔的決定、信心與理由（brief §6.5、票 11）。M1 唯讀——逐列編輯與核准
@@ -728,6 +751,8 @@ const zhHant = {
         medium_not_allowed:
           '這條 Route 關掉了「medium 信心自動入庫」。到設定裡打開它，再按「重新規劃」。',
         nothing_to_import: '這一包裡沒有任何一個檔案會進媒體庫。多半是送錯了 torrent。',
+        target_exists:
+          '媒體庫裡這個位置已經有一個不是 Berth 鏈接的檔案，Berth 不會覆寫它；其餘檔案已經入庫了。M1 還沒有審核佇列——把那個檔案移走之後按「重新規劃」。',
       },
       action: {
         import: '入庫',
@@ -760,7 +785,8 @@ const zhHant = {
       route_unhealthy: '那條 Route 現在是紅的，送出去也一定進不了庫。到健康頁看是哪一條纜繩斷了。',
       source_unavailable: '索引站給不出這一份 torrent。可能是連結過期了——重新搜一次再送。',
       job_missing: '這一筆下載不在了。',
-      not_retryable: '這一筆現在不能重試——只有送單失敗的那些可以。重新整理看看它現在的狀態。',
+      not_retryable:
+        '這一筆現在不能重試——只有送單失敗或入庫失敗的那些可以。重新整理看看它現在的狀態。',
       not_replannable:
         '這一筆現在不能重新規劃——已經在入庫的那一份計劃正被照著動檔案。重新整理看看它現在的狀態。',
     },
@@ -1518,6 +1544,8 @@ const en: Translations<typeof zhHant> = {
     progressInline: 'Progress {{value}}',
     retry: 'Send again',
     retrying: 'Sending…',
+    retryImport: 'Retry the import',
+    retryingImport: 'Importing…',
     retried: 'Retried; it is now {{state}}.',
     retryOff:
       'The retry was not sent. Berth’s own API did not answer — check that it is still running.',
@@ -1557,12 +1585,28 @@ const en: Translations<typeof zhHant> = {
       preplan: 'Estimate',
       plan_generated: 'Plan',
       review_required: 'Needs review',
+      linked: 'Linked',
+      link_failed: 'Link failed',
+      jellyfin_scan_requested: 'Jellyfin told',
+      jellyfin_item_resolved: 'In Jellyfin',
+      merge_versions_requested: 'Merge requested',
+      jellyfin_request_failed: 'Jellyfin request failed',
     },
     timeline: {
       loading: 'Reading the timeline…',
       empty: 'Nothing has happened to this job yet.',
       off: 'Could not read the timeline.',
       retried: 'Back to created, then sent again.',
+      retriedImport: 'Back to importing; it picks up from the files not linked yet.',
+      scanRequested_one: 'told about {{count}} file path',
+      scanRequested_other: 'told about {{count}} file paths',
+      resolved_one: 'found {{count}} file in Jellyfin',
+      resolved_other: 'found {{count}} files in Jellyfin',
+      merged: 'MergeVersions will fold the versions of one episode into a single entry.',
+      jellyfin: {
+        scan: 'The notice did not get through. Jellyfin’s own scheduled scan will catch up.',
+        merge: 'MergeVersions did not run, so two versions of one episode stay two entries for now.',
+      },
       files_one: '{{count}} file · {{size}}',
       files_other: '{{count}} files · {{size}}',
       resumed: 'moving again',
@@ -1572,6 +1616,7 @@ const en: Translations<typeof zhHant> = {
         low_confidence: 'some files could not be placed',
         medium_not_allowed: 'this route does not auto-import medium',
         nothing_to_import: 'nothing would reach the library',
+        target_exists: 'another file already sits at the target',
       },
       issue: {
         missing_files: 'qBittorrent says the files are gone. Force a recheck in its own UI.',
@@ -1580,6 +1625,8 @@ const en: Translations<typeof zhHant> = {
           'The torrent left qBittorrent. The downloaded files may still be where it left them.',
         unknown_torrent:
           'When this torrent turned up in qBittorrent, Berth had no download for it — added straight in qBittorrent, or left over from a restored database.',
+        jellyfin_item_unresolved:
+          'Jellyfin never listed these imported files. Most likely it cannot see this path, or it matched the folder to a different title — look for them in the Jellyfin library.',
       },
     },
     plan: {
@@ -1607,6 +1654,8 @@ const en: Translations<typeof zhHant> = {
           'This library route has medium-confidence auto-import turned off. Turn it back on in settings, then press replan.',
         nothing_to_import:
           'Nothing in this torrent would reach the library. Most likely the wrong torrent was sent.',
+        target_exists:
+          'A file Berth did not link already sits at this spot in the library, and Berth will not overwrite it; the other files are already in. There is no review queue yet in M1 — move that file away, then press replan.',
       },
       action: {
         import: 'Import',
@@ -1642,7 +1691,7 @@ const en: Translations<typeof zhHant> = {
         'The indexer would not hand over this torrent. The link may have expired — search again and send the fresh one.',
       job_missing: 'That download is gone.',
       not_retryable:
-        'This one cannot be retried — only the ones that failed to send can. Reload to see where it stands now.',
+        'This one cannot be retried — only the ones that failed to send or to import can. Reload to see where it stands now.',
       not_replannable:
         'This one cannot be planned again — the plan it is importing is already being applied to files. Reload to see where it stands now.',
     },

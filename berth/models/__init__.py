@@ -7,6 +7,7 @@ from berth.models.auth import User, UserSession
 from berth.models.base import Base
 from berth.models.event import Event
 from berth.models.job import Job, JobFile
+from berth.models.ledger import HARDLINK, LedgerEntry
 from berth.models.media import (
     Media,
     MediaCard,
@@ -47,6 +48,7 @@ from berth.models.setting import (
 
 __all__ = [
     "ANIME_SLUG",
+    "HARDLINK",
     "MOVIES_SLUG",
     "SETTINGS_GROUPS",
     "TV_SLUG",
@@ -57,6 +59,7 @@ __all__ = [
     "JellyfinSettings",
     "Job",
     "JobFile",
+    "LedgerEntry",
     "Media",
     "MediaCard",
     "PathSettings",

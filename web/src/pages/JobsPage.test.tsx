@@ -168,6 +168,20 @@ describe('下載列表頁', () => {
       expect(screen.getByRole('button', { name: '重新送單' })).toBeInTheDocument()
     })
 
+    it('入庫失敗那一筆的重試說的是「再試一次入庫」——同一個端點，回到的是另一站（票 12）', async () => {
+      const importFailed = job({
+        state: 'import_failed',
+        error: '[Errno 18] Invalid cross-device link',
+        retryable: true,
+      })
+      render({ [JOBS]: { body: [importFailed] } })
+      renderApp('/jobs')
+      await userEvent.click(await screen.findByText(/SPY×FAMILY - 13/))
+
+      expect(screen.getByRole('button', { name: '再試一次入庫' })).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: '重新送單' })).not.toBeInTheDocument()
+    })
+
     it('沒有失敗的那一筆沒有重試鍵——重試是那一條轉換，不是「再送一次」', async () => {
       render()
       renderApp('/jobs')

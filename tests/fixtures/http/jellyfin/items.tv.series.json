@@ -1,0 +1,53 @@
+{
+  "Items": [
+    {
+      "AirDays": [],
+      "BackdropImageTags": [
+        "4ac6869f106adac2614ee8469068a362"
+      ],
+      "ChannelId": null,
+      "CommunityRating": 8.1,
+      "EndDate": "2026-06-25T00:00:00.0000000Z",
+      "Id": "b26853ef1000814d9563768d24869a99",
+      "ImageBlurHashes": {
+        "Backdrop": {
+          "4ac6869f106adac2614ee8469068a362": "WSM*Hx-;yD?wIU%2-=ofx]t8RjoLx]bIRPjEj[f+_4j]jFt7WXay"
+        },
+        "Logo": {
+          "6a5d7233bdaf38d3b3181660eb3563d0": "HATS4%xtfRxtfQxtfQxtf7~oj[fQj[fjj[fQj[a|"
+        },
+        "Primary": {
+          "901ff50244ad5a14bd82e55551f64f6c": "dHD[|P^%0gNy%Lj=M|NIE4RkM}Irsr%1ozI@9aW;-.j?"
+        },
+        "Thumb": {
+          "d0bd3f98c51fc612d550be832df7d950": "WICZ67xZ0MtRxZxD-=aeM|bwjrs80NR*t8IrxVxYj0xZNaD+xs%1"
+        }
+      },
+      "ImageTags": {
+        "Logo": "6a5d7233bdaf38d3b3181660eb3563d0",
+        "Primary": "901ff50244ad5a14bd82e55551f64f6c",
+        "Thumb": "d0bd3f98c51fc612d550be832df7d950"
+      },
+      "IsFolder": true,
+      "LocationType": "FileSystem",
+      "MediaType": "Unknown",
+      "Name": "大熊餐廳",
+      "OfficialRating": "TW-15+",
+      "OriginalLanguage": "en",
+      "Path": "/data/library/tv/The Bear (2022) [tmdbid-136315]",
+      "PremiereDate": "2022-06-23T00:00:00.0000000Z",
+      "ProductionYear": 2022,
+      "ProviderIds": {
+        "Imdb": "tt14452776",
+        "Tmdb": "136315",
+        "Tvdb": "403294"
+      },
+      "RunTimeTicks": 0,
+      "ServerId": "80cc4bc5df99404abaa92136c29967ed",
+      "Status": "Ended",
+      "Type": "Series"
+    }
+  ],
+  "StartIndex": 0,
+  "TotalRecordCount": 1
+}

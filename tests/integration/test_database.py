@@ -25,8 +25,8 @@ from tests.conftest import migrate
 pytestmark = pytest.mark.asyncio
 
 M0_TABLES = {"users", "sessions", "settings", "routes", "events"}
-#: 票 03 加的兩張（plan §2.2）、票 09 加的兩張與票 11 加的兩張（plan §2.3）。
-M1_TABLES = {"media", "tmdb_cache", "jobs", "job_files", "plans", "plan_items"}
+#: 票 03 加的兩張（plan §2.2）、票 09 加的兩張、票 11 加的兩張與票 12 的帳本（plan §2.3）。
+M1_TABLES = {"media", "tmdb_cache", "jobs", "job_files", "plans", "plan_items", "ledger"}
 EXPECTED_TABLES = M0_TABLES | M1_TABLES
 
 
@@ -131,6 +131,22 @@ async def test_indexes_from_the_plan_are_present(config: Config) -> None:
     assert "ix_plan_items_plan_id" in indexes
     # 一個 Job 一份「現在的計劃」：unique 而不只是 index（`models/plan.py`）。
     assert "ix_plans_job_hash" in indexes
+    assert "ix_ledger_job_hash" in indexes
+    assert "ix_ledger_resolve_after" in indexes
+
+
+async def test_a_library_path_has_at_most_one_ledger_entry(config: Config) -> None:
+    """`ledger.target_path` 是 unique（plan §2.3、§3.3）：同一個目標寫第二筆就是冪等出了錯，
+    要在資料庫這一層就擋下來，而不是靠 importer 記得先查。"""
+    await migrate(config)
+
+    with _sqlite(config.database_path) as connection:
+        unique = {
+            name: bool(is_unique)
+            for _, name, is_unique, *_ in connection.execute("PRAGMA index_list('ledger')")
+        }
+
+    assert unique["ix_ledger_target_path"] is True
 
 
 async def test_migrating_twice_is_a_no_op(config: Config) -> None:

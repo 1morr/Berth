@@ -10,11 +10,13 @@
 - `POST /Startup/User` 之前沒有 `GET /Startup/User` 會失敗。
 - 初始精靈完成之後，管理員端點沒有 token 就是 401。
 - 重啟後有一段時間所有端點回 503。
+- `GET /Items` 沒有路徑篩選：`parentId=<library>&recursive=true` 回的是那個媒體庫路徑底下的全部。
 """
 
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Sequence
 from dataclasses import replace
 
 from berth.adapters.http import (
@@ -26,6 +28,7 @@ from berth.adapters.http import (
 from berth.adapters.jellyfin import (
     JellyfinApiKey,
     JellyfinAuth,
+    JellyfinItem,
     JellyfinLibrary,
     JellyfinPlugin,
     JellyfinPublicInfo,
@@ -89,6 +92,11 @@ MERGE_VERSIONS_TASKS = (
     ),
 )
 
+#: 內建的「重新掃描媒體庫」（實測 12.0.0 的 id 與 key，brief §20.1）。
+LIBRARY_SCAN_TASK = JellyfinTask(
+    id="7738148ffcd07979c7ceb148e06b3aed", key="RefreshLibrary", name="Scan Media Library"
+)
+
 
 class FakeJellyfinClient:
     def __init__(
@@ -116,6 +124,10 @@ class FakeJellyfinClient:
         drop_on_restart: bool = False,
         #: 這台 Jellyfin 掛得到的路徑前綴。`None` = 與 Berth 看到的一樣（正常部署）。
         visible_roots: tuple[str, ...] | None = None,
+        #: 掃描過的媒體樹（`GET /Items`）。測試擺出「Jellyfin 已經掃到了什麼」。
+        items: tuple[JellyfinItem, ...] = (),
+        #: 只有 `POST /Library/Media/Updated` 丟這個例外。「通知失敗不擋入庫」要它才測得出來。
+        notify_error: Exception | None = None,
     ) -> None:
         self.base_url = base_url
         self.version = version
@@ -132,7 +144,15 @@ class FakeJellyfinClient:
         self.busy_after_restart = busy_after_restart
         self.drop_on_restart = drop_on_restart
         self.visible_roots = visible_roots
+        self.items_ = list(items)
+        self.notify_error = notify_error
 
+        #: 每一次 `notify_paths` 收到的路徑，攤平。
+        self.notified: list[str] = []
+        #: 每一次 `items` 問的是哪個媒體庫、哪幾種型別。「還沒到時間就不問」靠它斷言。
+        self.item_queries: list[tuple[str, tuple[str, ...]]] = []
+        #: 每一次 `run_task` 觸發的任務 id。
+        self.tasks_run: list[str] = []
         self.repositories_ = [JELLYFIN_STABLE_REPOSITORY]
         #: 插件庫裡看得到的套件。加了 repository 才長出來。
         self.packages_: dict[str, tuple[str, ...]] = {}
@@ -307,6 +327,34 @@ class FakeJellyfinClient:
     async def scheduled_tasks(self) -> tuple[JellyfinTask, ...]:
         self._checkpoint(always=True)
         return tuple(self.tasks_)
+
+    async def run_task(self, task_id: str) -> None:
+        self._checkpoint(always=True)
+        if task_id not in {task.id for task in self.tasks_}:
+            raise ProtocolMismatchError(f"POST /ScheduledTasks/Running/{task_id}: 404")
+        self.tasks_run.append(task_id)
+
+    # --- 入庫之後 ---
+
+    async def notify_paths(self, paths: Sequence[str]) -> None:
+        self._checkpoint(always=True)
+        if self.notify_error is not None:
+            raise self.notify_error
+        self.notified.extend(paths)
+
+    async def items(self, library_id: str, item_types: Sequence[str]) -> tuple[JellyfinItem, ...]:
+        """照媒體庫的路徑篩——`parentId=<library>&recursive=true` 在真的 Jellyfin 就是這個意思。"""
+        self._checkpoint()
+        self.item_queries.append((library_id, tuple(item_types)))
+        library = next((row for row in self.libraries_ if row.item_id == library_id), None)
+        if library is None:
+            return ()
+        return tuple(
+            item
+            for item in self.items_
+            if item.type in item_types
+            and any(item.path.startswith(f"{location}/") for location in library.locations)
+        )
 
     async def aclose(self) -> None:
         return None

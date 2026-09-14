@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -112,6 +113,33 @@ class JellyfinTask:
     name: str
 
 
+#: `GET /Items` 的 `includeItemTypes`：Jellyfin 自己的型別名。入庫之後的反查只問這三種。
+ITEM_SERIES = "Series"
+ITEM_EPISODE = "Episode"
+ITEM_MOVIE = "Movie"
+
+#: 內建「重新掃描媒體庫」排程任務的 `Key`（`GET /ScheduledTasks`，2026-09-15 對 12.0.0 實測）。
+#: 路徑通知對從沒掃到過內容的媒體庫無效時，反查靠它（brief §20.1）。
+LIBRARY_SCAN_TASK_KEY = "RefreshLibrary"
+
+
+@dataclass(frozen=True, slots=True)
+class JellyfinItem:
+    """`GET /Items` 的一項（入庫之後的反查，brief §20.1、plan §8.2）。"""
+
+    id: str
+    #: Jellyfin 自己的型別名：`Series`、`Episode`、`Movie`。
+    type: str
+    name: str
+    #: Jellyfin 看到的路徑。Series 是作品資料夾，Episode 與 Movie 是檔案。
+    path: str
+    #: `ProviderIds.Tmdb`，沒有就是空字串。
+    tmdb_id: str
+    #: `MediaSources[].Path`：這個 item 底下每一個版本的檔案。電影的多版本與 MergeVersions
+    #: 合併過的劇集，第二個版本的檔案**不是** item 自己的 `Path`，只出現在這裡（brief §7.7）。
+    source_paths: tuple[str, ...]
+
+
 class JellyfinClient(Protocol):
     """一台 Jellyfin。憑證是可變狀態：初始精靈期間匿名，之後帶 token 或 API key。"""
 
@@ -214,13 +242,40 @@ class JellyfinClient(Protocol):
 
     async def scheduled_tasks(self) -> tuple[JellyfinTask, ...]: ...
 
+    async def run_task(self, task_id: str) -> None:
+        """`POST /ScheduledTasks/Running/{id}`。用 `Id` 不是 `Key`（brief §20.7）。"""
+        ...
+
+    # --- 入庫之後（plan §8.2、票 12）---
+
+    async def notify_paths(self, paths: Sequence[str]) -> None:
+        """`POST /Library/Media/Updated`，每條路徑 `UpdateType=Created`（brief §20.1）。
+
+        路徑級的通知，不是全庫掃描：Jellyfin 收下之後自己排程去掃，所以回來了不代表掃完了。
+        """
+        ...
+
+    async def items(self, library_id: str, item_types: Sequence[str]) -> tuple[JellyfinItem, ...]:
+        """一個媒體庫底下某幾種型別的 item（`parentId=<library>&recursive=true`）。
+
+        **只以媒體庫為 parent**：10.11 在第一次掃描後對已被 provider 認出來的 Series，
+        `parentId=<seriesId>` 與 `/Shows/{id}/Episodes` 都回 0（brief §20.1、plan §8.2）。
+        `GET /Items` 沒有路徑篩選，所以對路徑是呼叫端的事。
+        """
+        ...
+
     async def aclose(self) -> None: ...
 
 
 __all__ = [
+    "ITEM_EPISODE",
+    "ITEM_MOVIE",
+    "ITEM_SERIES",
+    "LIBRARY_SCAN_TASK_KEY",
     "JellyfinApiKey",
     "JellyfinAuth",
     "JellyfinClient",
+    "JellyfinItem",
     "JellyfinLibrary",
     "JellyfinPlugin",
     "JellyfinPublicInfo",

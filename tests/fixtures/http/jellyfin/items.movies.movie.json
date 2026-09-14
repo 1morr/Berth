@@ -1,0 +1,121 @@
+{
+  "Items": [
+    {
+      "BackdropImageTags": [
+        "90cbd22142ad585485499e7de3749098"
+      ],
+      "ChannelId": null,
+      "CommunityRating": 8.022,
+      "Container": "mov,mp4,m4a,3gp,3g2,mj2",
+      "Id": "662076cd30fb5b73989bcd7fb95753db",
+      "ImageBlurHashes": {
+        "Backdrop": {
+          "90cbd22142ad585485499e7de3749098": "WVDaMXjFNaofEhWU-Aj?I=Wqs-o010baNdRk-9s.Ega#$%nia#kC"
+        },
+        "Logo": {
+          "ef075f3f34384dae80a05aff3f9dc46f": "HTF:6~S2,?xF,?WW^4so1JxFazoLazoLazsojtS2"
+        },
+        "Primary": {
+          "7ca5c2623b6bea39425ad64e288ece07": "dcEdIj$%R+r?}qxYWWaf-Ts.R+WBxES3NbaybFWCNIa|"
+        },
+        "Thumb": {
+          "96cc85abffa8ec0e8e2f5869a63d35d9": "WYHv93owxX$#s-xX^3jtEiR,nkbG0*ag9{I?oKNcNJoKbZso$}s-"
+        }
+      },
+      "ImageTags": {
+        "Logo": "ef075f3f34384dae80a05aff3f9dc46f",
+        "Primary": "7ca5c2623b6bea39425ad64e288ece07",
+        "Thumb": "96cc85abffa8ec0e8e2f5869a63d35d9"
+      },
+      "IsFolder": false,
+      "LocationType": "FileSystem",
+      "MediaSources": [
+        {
+          "Bitrate": 285,
+          "Container": "mp4",
+          "ETag": "73c20aac6a24a493af199e1f2d69ad6c",
+          "Formats": [],
+          "GenPtsInput": false,
+          "HasSegments": false,
+          "Id": "662076cd30fb5b73989bcd7fb95753db",
+          "IgnoreDts": false,
+          "IgnoreIndex": false,
+          "IsInfiniteStream": false,
+          "IsRemote": false,
+          "MediaAttachments": [],
+          "MediaStreams": [
+            {
+              "AspectRatio": "16:9",
+              "AudioSpatialFormat": "None",
+              "AverageFrameRate": 1,
+              "BitDepth": 8,
+              "BitRate": 166,
+              "Codec": "h264",
+              "DisplayTitle": "240p H264 SDR",
+              "Height": 180,
+              "Index": 0,
+              "IsAVC": true,
+              "IsAnamorphic": false,
+              "IsDefault": true,
+              "IsExternal": false,
+              "IsForced": false,
+              "IsHearingImpaired": false,
+              "IsInterlaced": false,
+              "IsOriginal": false,
+              "IsTextSubtitleStream": false,
+              "Language": "und",
+              "Level": 12,
+              "NalLengthSize": "4",
+              "PixelFormat": "yuv420p",
+              "Profile": "High",
+              "RealFrameRate": 1,
+              "RefFrames": 1,
+              "ReferenceFrameRate": 1,
+              "SupportsExternalStream": false,
+              "TimeBase": "1/16384",
+              "Type": "Video",
+              "VideoRange": "SDR",
+              "VideoRangeType": "SDR",
+              "Width": 320
+            }
+          ],
+          "Name": "Oppenheimer (2023) [tmdbid-872585] - [BD][1080p][YTS.MX]",
+          "Path": "/data/library/movies/Oppenheimer (2023) [tmdbid-872585]/Oppenheimer (2023) [tmdbid-872585] - [BD][1080p][YTS.MX].mp4",
+          "Protocol": "File",
+          "ReadAtNativeFramerate": false,
+          "RequiredHttpHeaders": {},
+          "RequiresClosing": false,
+          "RequiresLooping": false,
+          "RequiresOpening": false,
+          "RunTimeTicks": 3300000000,
+          "Size": 11758,
+          "SupportsDirectPlay": true,
+          "SupportsDirectStream": true,
+          "SupportsProbing": true,
+          "SupportsTranscoding": true,
+          "TranscodingSubProtocol": "http",
+          "Type": "Default",
+          "UseMostCompatibleTranscodingProfile": false,
+          "VideoType": "VideoFile"
+        }
+      ],
+      "MediaType": "Video",
+      "Name": "奧本海默",
+      "OfficialRating": "TW-15+",
+      "OriginalLanguage": "en",
+      "Path": "/data/library/movies/Oppenheimer (2023) [tmdbid-872585]/Oppenheimer (2023) [tmdbid-872585] - [BD][1080p][YTS.MX].mp4",
+      "PremiereDate": "2023-07-19T00:00:00.0000000Z",
+      "ProductionYear": 2023,
+      "ProviderIds": {
+        "Imdb": "tt15398776",
+        "Tmdb": "872585"
+      },
+      "RunTimeTicks": 3300000000,
+      "ServerId": "80cc4bc5df99404abaa92136c29967ed",
+      "Type": "Movie",
+      "VideoType": "VideoFile"
+    }
+  ],
+  "StartIndex": 0,
+  "TotalRecordCount": 1
+}
