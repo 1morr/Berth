@@ -38,6 +38,18 @@ function render(routes: Record<string, StubRoute | (() => StubRoute)>) {
 }
 
 describe('服務設定頁', () => {
+  it('子分頁列連到 Route 設定頁，當前頁是「服務」（票 14）', async () => {
+    render({})
+    renderApp('/settings/services')
+
+    const tabs = within(await screen.findByRole('navigation', { name: '設定' }))
+    expect(tabs.getByRole('link', { name: '服務' })).toHaveAttribute('aria-current', 'page')
+    expect(tabs.getByRole('link', { name: '媒體庫路徑' })).toHaveAttribute(
+      'href',
+      '/settings/routes',
+    )
+  })
+
   it('每個服務都有一顆「測試連線」，結果立刻顯示（票 10 驗收）', async () => {
     render({ [TEST_QBIT]: { body: withFailedService('qbittorrent', 'connection refused') } })
     renderApp('/settings/services')

@@ -391,6 +391,95 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/routes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Routes
+         * @description 全部 Route 與它們的引用數。不連線。
+         */
+        get: operations["get_routes_api_routes_get"];
+        put?: never;
+        /**
+         * Post Route
+         * @description 新增，並立刻跑五條纜繩。**檢查紅燈不是 4xx**：Route 照樣建立、維持停用，紅的那一條
+         *     回在 `checks` 裡——與精靈第 7 步同一個規矩。
+         */
+        post: operations["post_route_api_routes_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/routes/{route_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Put Route
+         * @description 修改並重跑檢查。從停用到啟用而檢查是紅的：409 `route_unhealthy`，名稱與 profile 照樣存下。
+         */
+        put: operations["put_route_api_routes__route_id__put"];
+        post?: never;
+        /**
+         * Delete Route Endpoint
+         * @description 明確的刪除（二次確認在前端）。被 Job 或帳本引用：409 `route_in_use`，出路是停用。
+         */
+        delete: operations["delete_route_endpoint_api_routes__route_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/routes/{route_id}/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Route Check
+         * @description 重新檢查這一條。只是診斷，不動 `enabled`。
+         */
+        post: operations["post_route_check_api_routes__route_id__check_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/jellyfin/libraries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Jellyfin Libraries
+         * @description Jellyfin 現在的媒體庫與路徑，標出哪些路徑已經有 Route（plan §6 routes 群組）。
+         */
+        get: operations["get_jellyfin_libraries_api_jellyfin_libraries_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/search/queries": {
         parameters: {
             query?: never;
@@ -1455,11 +1544,31 @@ export interface components {
             uses_tvdb: boolean;
             /** Supported */
             supported: boolean;
-            /** Selected */
-            selected: boolean;
+            /** Has Route */
+            has_route: boolean;
             /** Target Path */
             target_path: string;
             profile: components["schemas"]["Profile"];
+        };
+        /**
+         * LibraryOptionOut
+         * @description 新增 Route 時可選的一個 Jellyfin 媒體庫（現查）。
+         */
+        LibraryOptionOut: {
+            /** Item Id */
+            item_id: string;
+            /** Name */
+            name: string;
+            /** Collection Type */
+            collection_type: string;
+            /** Locations */
+            locations: string[];
+            /** Taken */
+            taken: string[];
+            /** Supported */
+            supported: boolean;
+            /** Uses Tvdb */
+            uses_tvdb: boolean;
         };
         /** LibraryOut */
         LibraryOut: {
@@ -1501,6 +1610,19 @@ export interface components {
              * @default
              */
             password?: string;
+        };
+        /**
+         * ManagedRouteOut
+         * @description 設定頁上的一列：Route 本身，加上有多少東西指著它——刪不得的時候，按下去之前就說得出為什麼。
+         */
+        ManagedRouteOut: {
+            route: components["schemas"]["RouteOut"];
+            /** Jobs */
+            jobs: number;
+            /** Ledger Entries */
+            ledger_entries: number;
+            /** In Use */
+            in_use: boolean;
         };
         /**
          * MappingStrategy
@@ -1790,8 +1912,35 @@ export interface components {
             slug: string;
             collection_type: components["schemas"]["CollectionType"];
         };
+        /**
+         * RouteEditIn
+         * @description 修改一條 Route。slug 與目標路徑建立之後不能改（使用者拍板，理由在 `update_route`）。
+         */
+        RouteEditIn: {
+            /** Name */
+            name: string;
+            profile: components["schemas"]["Profile"];
+            /** Enabled */
+            enabled: boolean;
+        };
+        /**
+         * RouteIn
+         * @description 新增一條 Route。目標必須是那個媒體庫回報的路徑之一（brief §4.1）。
+         */
+        RouteIn: {
+            /** Library Id */
+            library_id: string;
+            /** Target Path */
+            target_path: string;
+            /** Name */
+            name: string;
+            /** @default standard */
+            profile?: components["schemas"]["Profile"];
+        };
         /** RouteOut */
         RouteOut: {
+            /** Id */
+            id: number;
             /** Slug */
             slug: string;
             /** Name */
@@ -2690,6 +2839,174 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_routes_api_routes_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManagedRouteOut"][];
+                };
+            };
+        };
+    };
+    post_route_api_routes_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RouteIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RouteOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_route_api_routes__route_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                route_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RouteEditIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RouteOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_route_endpoint_api_routes__route_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                route_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_route_check_api_routes__route_id__check_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                route_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RouteOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_jellyfin_libraries_api_jellyfin_libraries_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LibraryOptionOut"][];
                 };
             };
         };

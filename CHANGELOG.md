@@ -319,9 +319,27 @@ Windows Docker Desktop（NTFS bind mount）與 Linux（ext4）上各跑一次 `d
   而不是某一集。
 - 演練情境 `inventory`（`scripts/fake_setup_server.py`）：替身 Jellyfin 會「掃到」入庫的檔案，媒體庫
   的卡片看得到從「還在掃描」換成「在 Jellyfin 開啟」。
+- **Route 設定頁 `/settings/routes`**（票 14、`.scratch/m1/route-settings-shape.md`，只有 admin）：與服務設定頁
+  共用一條子分頁列。每條 Route 一列，綠燈收起、紅燈或停用就地展開；展開區改名稱、profile、啟用，
+  重新檢查五條纜繩，以及刪除（二次確認）。**同一個 Jellyfin 媒體庫可以建第二條 Route**（brief §4.3）：
+  清單下方的「新增 Route」按下去才向 Jellyfin 現查媒體庫與路徑，已經有 Route 的路徑選不了。新建或
+  重新啟用時檢查紅燈就維持停用；被下載或入庫檔案指著的 Route 不給刪除鍵，說出原因與出路（停用）。
+  `GET|POST /api/routes`、`PUT|DELETE /api/routes/{id}`、`POST /api/routes/{id}/check`、
+  `GET /api/jellyfin/libraries`。健康頁的 Route 區塊對 admin 多一條「到 Route 設定」。
+- 演練情境 `routes`（`scripts/fake_setup_server.py`）：TV 媒體庫在 Jellyfin 上多掛一顆碟、Movies 多一條
+  沒掛進來的路徑、TV 那條 Route 有一筆下載——第二條 Route、紅燈建立與「刪不得」三種樣子都看得到。
 
 ### Changed
 
+- **精靈第 7 步只新增、不改不刪**（票 14）：重跑不再隱式刪掉沒勾的 Route，也不再改寫已經有 Route
+  的媒體庫；那些媒體庫在勾選表上鎖住，重跑的意思是「補上新勾的、全部重驗」。每條 Route 底下有
+  明確的刪除（被引用時拒絕）。
+- **停用的 Route 不算進健康總結與精靈第 7 步的完成條件**（票 14）：停用是「刪不得」時的出路，
+  它紅著不再讓整台 Berth 顯示 degraded。
+- `/api/routes` 與 `/api/jellyfin/libraries` 跟著 `/api/setup` 的門禁規則：精靈跑完之前匿名開放，之後只有 admin。
+- **Route 檢查與精靈認 Jellyfin 媒體庫改用 `ItemId`**（票 14）：在 Jellyfin 改了名字或有兩個同名的媒體庫時，
+  Route 不再驗到別的媒體庫。精靈跑完之後重跑第 7 步新建的 Route 紅燈就維持停用；電影媒體庫的 Route 不收
+  anime profile。精靈的 `GET /api/setup/routes` 裡 `libraries[].selected` 改名 `has_route`。
 - **事件一分鐘內不重複**（`record_event`、plan §3.3、票 12）：`(job_hash, type, payload)` 相同就跳過，使用者按下的重試是界線。
   迴圈的一輪可能在寫完事件之後、下一步落地之前被關掉，重啟後的第一輪會把同一件事再做一次。
 - **`POST /api/jobs/{hash}/retry` 也收 `import_failed`**（回 `importing`），`retried` 事件的

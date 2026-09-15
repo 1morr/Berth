@@ -39,6 +39,7 @@ from berth.services.routes import (
     RouteSelection,
     RouteSetupStatus,
     build_routes,
+    delete_route,
     read_route_status,
     routes_ready,
     save_path_of,
@@ -205,9 +206,11 @@ class TestExisting:
         assert status.ready is False
 
     @pytest.mark.asyncio
-    async def test_dropping_a_library_on_a_rerun_removes_its_route(
+    async def test_leaving_a_library_unticked_on_a_rerun_keeps_its_route(
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
+        """重跑第 7 步**不再隱式刪掉**沒勾的 Route（票 14）：Job 與帳本從票 09 起就引用它。
+        刪除是 Route 設定頁上一個明確、要二次確認的動作。"""
         await arrange(session, roots, origin=ServiceOrigin.EXISTING)
         factory = factory_for(roots)
         picked = tuple(
@@ -218,7 +221,33 @@ class TestExisting:
 
         status = await build_routes(session, factory, picked[:1])
 
-        assert [row.slug for row in status.routes] == ["movies"]
+        assert [row.slug for row in status.routes] == ["movies", "tv", "anime"]
+        assert len((await session.scalars(select(Route))).all()) == 3
+
+    @pytest.mark.asyncio
+    async def test_a_rerun_leaves_a_library_that_already_has_a_route_as_it_is(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """精靈只新增不改（票 14，使用者拍板）：換寫入目標會讓帳本對不上它的 Route，
+        要換就在 Route 設定頁新增一條、刪掉舊的。"""
+        old = roots["library"] / "old-tv"
+        old.mkdir()
+        berth = berth_path(roots, "影集")
+        Path(berth).mkdir()
+        libraries = (existing_library(old, berth),)
+        await arrange(session, roots, origin=ServiceOrigin.EXISTING, libraries=libraries)
+        factory = factory_for(roots, libraries=libraries)
+        await build_routes(session, factory, (RouteSelection(library="影集", target_path=berth),))
+
+        status = await build_routes(
+            session,
+            factory,
+            (RouteSelection(library="影集", target_path=str(old), profile=Profile.ANIME),),
+        )
+
+        assert [(row.target_path, row.profile) for row in status.routes] == [
+            (berth, Profile.STANDARD)
+        ]
 
     @pytest.mark.asyncio
     async def test_refuses_a_target_that_is_not_one_of_the_library_paths(
@@ -414,6 +443,33 @@ class TestCompletion:
         assert (await read_status(session)).current_step == STEP_ROUTES
 
     @pytest.mark.asyncio
+    async def test_after_setup_a_rerun_keeps_a_new_red_route_disabled(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """精靈跑完之後重跑第 7 步，已經沒有完成條件擋著，所以與設定頁同一條規則：紅的不給啟用。
+
+        跑完之前建的 Route 仍然直接啟用——它紅著就擋完成
+        （`test_a_broken_route_holds_the_wizard_back`）。
+        """
+        await arrange(session, roots)
+        await build_routes(session, factory_for(roots), ())
+        await complete_setup(session)
+        # 管理員在 Route 設定頁刪掉了 anime，之後回精靈重跑；這一次 Jellyfin 看不到那個目錄。
+        anime = next(
+            row for row in (await read_route_status(session)).routes if row.slug == "anime"
+        )
+        await delete_route(session, anime.id)
+        blind = fake_jellyfin(
+            bundled_libraries(roots["library"]),
+            visible_roots=(str(roots["library"] / "movies"), str(roots["library"] / "tv")),
+        )
+
+        status = await build_routes(session, factory_for(roots, jellyfin=blind), ())
+
+        rebuilt = next(row for row in status.routes if row.slug == "anime")
+        assert (rebuilt.health, rebuilt.enabled) == (HealthStatus.FAILED, False)
+
+    @pytest.mark.asyncio
     async def test_completing_writes_the_bit_the_gate_reads(
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
@@ -472,7 +528,7 @@ class TestStatus:
 
         status = await read_route_status(session)
 
-        chosen = {row.name: (row.selected, row.target_path) for row in status.libraries}
+        chosen = {row.name: (row.has_route, row.target_path) for row in status.libraries}
         assert chosen["TV"] == (True, str(roots["library"] / "tv"))
 
 

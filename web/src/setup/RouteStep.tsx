@@ -8,6 +8,8 @@ import { ROUTE_HEALTH_LABEL, ROUTE_SIGNAL } from '../components/routeChecks'
 import { RouteCheckList } from '../components/RouteCheckList'
 import { SIGNAL_FILL } from '../components/signal'
 import { Cutaway, CutawayRow } from '../components/Cutaway'
+import { ProfilePicker } from '../components/ProfilePicker'
+import { RouteDelete } from '../components/RouteDelete'
 
 /**
  * 泊位 4：媒體庫路徑 → Library Route（plan §9.3 第 7 步、§9.5）。
@@ -34,6 +36,7 @@ export function RouteStep({
   requestFailed,
   onBuild,
   onAddPath,
+  onRouteDeleted,
 }: {
   setup: RouteSetup
   building: boolean
@@ -43,6 +46,8 @@ export function RouteStep({
   requestFailed: boolean
   onBuild: (selections: RouteSelectionInput[]) => void
   onAddPath: (library: string) => void
+  /** 一條 Route 被明確地刪掉了（票 14）：這一步的清單要重讀。 */
+  onRouteDeleted: () => void
 }) {
   const { t } = useTranslation()
   const bundled = setup.origin === 'bundled'
@@ -52,7 +57,7 @@ export function RouteStep({
   function pickOf(library: LibraryChoice): LibraryPick {
     return (
       picks[library.name] ?? {
-        selected: library.selected,
+        selected: library.has_route,
         target: library.target_path,
         profile: library.profile,
       }
@@ -69,13 +74,23 @@ export function RouteStep({
   const selections = setup.libraries
     .filter((library) => {
       const pick = pickOf(library)
-      return library.supported && pick.selected && library.locations.includes(pick.target)
+      // 已經有 Route 的媒體庫不送：精靈只新增，不改也不刪（票 14，使用者拍板）。
+      return (
+        library.supported &&
+        !library.has_route &&
+        pick.selected &&
+        library.locations.includes(pick.target)
+      )
     })
     .map((library) => ({
       library: library.name,
       target_path: pickOf(library).target,
       profile: pickOf(library).profile,
     }))
+  // 按下去會新建幾條。沒有新的時候這一顆就是「全部重驗」——重跑第 7 步只剩這個意思。
+  const fresh = bundled
+    ? routable.filter((library) => !library.has_route).length
+    : selections.length
 
   return (
     <div className="grid flex-1 gap-px bg-rule lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
@@ -116,12 +131,14 @@ export function RouteStep({
         <div className={`mt-6 ${STICKY_ACTION}`}>
           <PrimaryButton
             type="button"
-            disabled={building || (!bundled && selections.length === 0)}
+            disabled={building || (fresh === 0 && setup.routes.length === 0)}
             onClick={() => onBuild(bundled ? [] : selections)}
           >
-            {t(building ? 'routes.building' : 'routes.build', {
-              count: bundled ? routable.length : selections.length,
-            })}
+            {building
+              ? t('routes.building')
+              : fresh > 0 || setup.routes.length === 0
+                ? t('routes.build', { count: fresh })
+                : t('routes.recheck', { count: setup.routes.length })}
           </PrimaryButton>
         </div>
 
@@ -134,7 +151,12 @@ export function RouteStep({
         )}
 
         {setup.routes.map((route) => (
-          <RouteSequence key={route.slug} route={route} building={building} />
+          <RouteSequence
+            key={route.slug}
+            route={route}
+            building={building}
+            onDeleted={onRouteDeleted}
+          />
         ))}
       </div>
     </div>
@@ -250,13 +272,15 @@ function LibraryPicker({
                 {library.supported ? (
                   <Checkbox
                     label={library.name}
-                    checked={pick.selected}
+                    checked={library.has_route || pick.selected}
+                    disabled={library.has_route}
                     onChange={(selected) => onChange(library, { selected })}
                   />
                 ) : (
                   <span className="text-sm text-ink-dim">{library.name}</span>
                 )}
-                <span className="label ml-auto text-ink-dim">
+                {/* 機器字串（Jellyfin 的 collection type）走 `.value`：`.label` 會把它大寫掉。 */}
+                <span className="value ml-auto text-xs text-ink-dim">
                   {library.collection_type || t('routes.picker.mixed')}
                 </span>
               </div>
@@ -270,7 +294,10 @@ function LibraryPicker({
                 <p className="mt-2 max-w-prose text-xs text-ink-dim">{t('routes.picker.tvdb')}</p>
               )}
 
-              {library.supported && pick.selected && (
+              {library.has_route && (
+                <p className="mt-2 max-w-prose text-xs text-ink-dim">{t('routes.picker.routed')}</p>
+              )}
+              {library.supported && !library.has_route && pick.selected && (
                 <div className="mt-3 grid gap-3 border-t-2 border-rule pt-3">
                   <Targets
                     library={library}
@@ -294,8 +321,8 @@ function LibraryPicker({
                     </div>
                   )}
                   {library.collection_type === 'tvshows' && (
-                    <Profiles
-                      library={library.name}
+                    <ProfilePicker
+                      group={`profile-${library.name}`}
                       value={pick.profile}
                       onPick={(profile) => onChange(library, { profile })}
                     />
@@ -346,42 +373,16 @@ function Targets({
   )
 }
 
-/** 命名與解析偏好（CONTEXT.md）。劇集類型才問——電影沒有 anime 這條路徑。 */
-function Profiles({
-  library,
-  value,
-  onPick,
-}: {
-  library: string
-  value: Profile
-  onPick: (profile: Profile) => void
-}) {
-  const { t } = useTranslation()
-
-  return (
-    <fieldset className="grid gap-2">
-      <legend className="label text-ink-dim">{t('routes.picker.profile')}</legend>
-      <div className="flex flex-wrap gap-4">
-        {(['standard', 'anime'] as const).map((profile) => (
-          <label key={profile} className="flex items-center gap-2">
-            <input
-              type="radio"
-              name={`profile-${library}`}
-              value={profile}
-              checked={value === profile}
-              onChange={() => onPick(profile)}
-              className="size-4 shrink-0 accent-[var(--color-assigned)]"
-            />
-            <span className="text-sm text-ink">{t(`routes.profile.${profile}`)}</span>
-          </label>
-        ))}
-      </div>
-    </fieldset>
-  )
-}
-
 /** 一個 Route 的靠泊序列：五條纜繩，失敗就地展開手動步驟與 compose 片段。 */
-function RouteSequence({ route, building }: { route: RouteView; building: boolean }) {
+function RouteSequence({
+  route,
+  building,
+  onDeleted,
+}: {
+  route: RouteView
+  building: boolean
+  onDeleted: () => void
+}) {
   const { t } = useTranslation()
 
   return (
@@ -399,6 +400,10 @@ function RouteSequence({ route, building }: { route: RouteView; building: boolea
 
       <div className="mt-3">
         <RouteCheckList route={route} busy={building} />
+      </div>
+      {/* 精靈只新增不改不刪；選錯了、紅燈卡住時的出路是明確地刪掉這一條（票 14）。 */}
+      <div className="mt-3">
+        <RouteDelete route={route} onDeleted={onDeleted} />
       </div>
     </section>
   )

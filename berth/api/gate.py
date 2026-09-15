@@ -49,6 +49,12 @@ ANONYMOUS_PATHS = frozenset(
 #: 設定精靈。它自己有一條隨時間關上的規則，見 `_setup_verdict`。
 SETUP_PREFIX = "/setup"
 
+#: 跟著精靈那條規則走的路徑：精靈跑完之前匿名開放，跑完之後只有管理員。
+#: Route 管理（票 14）在精靈第 7 步就用得到——那一步的「刪除」與 Route 設定頁打的是同一組
+#: 端點，而精靈跑完之前還沒有人登入得了。`/jellyfin` 只開到媒體庫清單那一支：之後掛在它
+#: 底下的端點不該因為前綴相同就在精靈跑完之前匿名開放。
+OPEN_UNTIL_SETUP_PREFIXES = (SETUP_PREFIX, "/routes", "/jellyfin/libraries")
+
 #: 只有管理員進得來的路徑（brief §11）。規則放在門禁而不是 router 的相依，理由與 `setup/*`
 #: 一樣：底下新掛的端點什麼都不做就已經在同一道門後面。
 ADMIN_PREFIXES = ("/settings",)
@@ -103,7 +109,7 @@ class ApiGate:
 
         if path in ANONYMOUS_PATHS:
             return None
-        if path == SETUP_PREFIX or path.startswith(SETUP_PREFIX + "/"):
+        if _under_any(path, OPEN_UNTIL_SETUP_PREFIXES):
             return await _setup_verdict(request, user)
         if _under_any(path, ADMIN_PREFIXES):
             return _admin_verdict(user)

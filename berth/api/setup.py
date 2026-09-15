@@ -384,7 +384,8 @@ class LibraryChoiceOut(BaseModel):
     uses_tvdb: bool
     #: Berth 建得了 Route 的類型（movies / tvshows）。
     supported: bool
-    selected: bool
+    #: 已經有 Route 了：精靈只新增，這個媒體庫在勾選表上鎖住（票 14）。
+    has_route: bool
     target_path: str
     profile: Profile
 

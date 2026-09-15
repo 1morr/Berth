@@ -16,6 +16,7 @@ import type {
   RouteView,
   SetupStep,
 } from '../api/schemas'
+import type { LibraryOption, ManagedRoute } from '../api/routes'
 import type { Discover, DiscoverItem } from '../api/discover'
 import type { HealthDetail, ServiceHealth } from '../api/health'
 import type { StubRoute } from './fetch'
@@ -218,7 +219,7 @@ export function libraryChoice(overrides: Partial<LibraryChoice> = {}): LibraryCh
     has_berth_path: true,
     uses_tvdb: false,
     supported: true,
-    selected: false,
+    has_route: false,
     target_path: `/data/library/${slug}`,
     profile: 'standard',
     ...overrides,
@@ -229,6 +230,7 @@ export function routeView(overrides: Partial<RouteView> = {}): RouteView {
   const library = overrides.library ?? 'TV'
   const slug = overrides.slug ?? library.toLowerCase()
   return {
+    id: 2,
     slug,
     name: library,
     library,
@@ -243,6 +245,27 @@ export function routeView(overrides: Partial<RouteView> = {}): RouteView {
     cross_device: false,
     checked_at: CHECKED_AT,
     last_ok_at: CHECKED_AT,
+    ...overrides,
+  }
+}
+
+/** --- Route 設定頁（票 14）--- */
+
+/** 設定頁上的一列：Route 本身與有多少東西指著它。預設沒有人用，刪得掉。 */
+export function managedRoute(overrides: Partial<ManagedRoute> = {}): ManagedRoute {
+  return { route: routeView(), jobs: 0, ledger_entries: 0, in_use: false, ...overrides }
+}
+
+/** Jellyfin 現查回來的一個媒體庫。預設是掛了兩顆碟、第一顆已經是 TV 的那一個。 */
+export function libraryOption(overrides: Partial<LibraryOption> = {}): LibraryOption {
+  return {
+    item_id: 'item-1',
+    name: 'TV',
+    collection_type: 'tvshows',
+    locations: ['/data/library/tv', '/mnt/disk2/tv'],
+    taken: ['/data/library/tv'],
+    supported: true,
+    uses_tvdb: false,
     ...overrides,
   }
 }

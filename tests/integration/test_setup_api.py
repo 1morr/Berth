@@ -706,7 +706,7 @@ class TestRoutes:
 
         assert body["origin"] == "bundled"
         assert [row["name"] for row in body["libraries"]] == ["Movies", "TV", "Anime"]
-        assert [row["selected"] for row in body["libraries"]] == [False, False, False]
+        assert [row["has_route"] for row in body["libraries"]] == [False, False, False]
         assert body["routes"] == []
         assert body["ready"] is False
 
@@ -735,8 +735,10 @@ class TestRoutes:
         assert body["routes"][1]["target_path"] == f"{tmp_path / 'library'}/tv"
 
     def test_a_target_that_is_not_a_library_path_is_refused(self, client: TestClient) -> None:
-        """路徑用選的，不用打的（brief §4.1）。這是唯一會回 4xx 的情況。"""
-        client.post("/api/setup/routes", json={})
+        """路徑用選的，不用打的（brief §4.1）。這是唯一會回 4xx 的情況。
+
+        TV 還沒有 Route：已經有 Route 的媒體庫的選擇會被略過（票 14，精靈只新增）。
+        """
         # 套件內會忽略 selections，所以先讓它變成既有 Jellyfin 的形狀。
         _mark_jellyfin_existing(client)
 

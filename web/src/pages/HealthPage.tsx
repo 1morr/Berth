@@ -8,6 +8,7 @@ import type { RouteView } from '../api/schemas'
 import { GhostButton, Notice } from '../components/controls'
 import { ROUTE_HEALTH_LABEL, ROUTE_SIGNAL } from '../components/routeChecks'
 import { RouteCheckList } from '../components/RouteCheckList'
+import { RouteIdentity } from '../components/RouteIdentity'
 import { SIGNAL_FILL } from '../components/signal'
 import { Timestamp } from '../components/Timestamp'
 import { HealthBoard } from '../health/HealthBoard'
@@ -129,6 +130,15 @@ export function HealthPage() {
             <span className="value text-xs text-ink-dim">
               {t('health.routes.count', { count: report.routes.length })}
             </span>
+            {/* 指路是頁面的事（票 10 的決定）：健康頁只診斷，改 Route 在設定頁，而那一頁只有 admin 進得去。 */}
+            {me.data?.role === 'admin' && (
+              <Link
+                to="/settings/routes"
+                className="label ml-auto border-2 border-rule px-4 py-2.5 hover:border-rule-strong"
+              >
+                {t('routeSettings.link')}
+              </Link>
+            )}
           </div>
 
           {report.routes.length === 0 ? (
@@ -165,11 +175,7 @@ function RouteRow({ route }: { route: RouteView }) {
       {/* `display: flex` 會吃掉 `<summary>` 的三角形，所以展開與否要自己說出來——
           否則收起來的那一列看不出它是按得開的。 */}
       <summary className="flex cursor-pointer flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3">
-        <span className={`label px-2 py-1.5 ${SIGNAL_FILL[ROUTE_SIGNAL[route.health]]}`}>
-          {t(ROUTE_HEALTH_LABEL[route.health])}
-        </span>
-        <span className="value text-sm font-semibold text-ink">{route.name}</span>
-        <span className="value text-xs text-ink-dim">{route.category}</span>
+        <RouteIdentity route={route} />
         <span className="value min-w-0 grow truncate text-xs text-ink-dim">
           {route.target_path}
         </span>

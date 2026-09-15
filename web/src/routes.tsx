@@ -21,6 +21,7 @@ import { InventoryPage, type InventoryFilter } from './pages/InventoryPage'
 import { InventoryPageRoute } from './pages/InventoryPageRoute'
 import { LoginPage } from './pages/LoginPage'
 import { MediaRoute } from './pages/MediaRoute'
+import { RouteSettingsPage } from './pages/RouteSettingsPage'
 import { ServiceSettingsPage } from './pages/ServiceSettingsPage'
 import { SetupRoute } from './pages/SetupRoute'
 
@@ -291,6 +292,24 @@ const serviceSettingsRoute = createRoute({
   ),
 })
 
+/**
+ * Route 設定頁（票 14）。改 Route 是管理員的事（brief §11）；後端的規則在門禁，
+ * 這裡的導向只是讓一般使用者不必看到一頁 403。
+ */
+const routeSettingsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/settings/routes',
+  beforeLoad: async ({ context, location }) => {
+    const me = await requireSignedInPage(context.queryClient, location)
+    if (me !== null && me.role !== 'admin') throw redirect({ to: '/health' })
+  },
+  component: () => (
+    <AppShell>
+      <RouteSettingsPage />
+    </AppShell>
+  ),
+})
+
 export const routeTree = rootRoute.addChildren([
   indexRoute,
   healthRoute,
@@ -299,6 +318,7 @@ export const routeTree = rootRoute.addChildren([
   inventoryRoute,
   loginRoute,
   mediaRoute,
+  routeSettingsRoute,
   serviceSettingsRoute,
   setupRoute,
 ])

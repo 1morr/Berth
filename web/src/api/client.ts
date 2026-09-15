@@ -36,6 +36,15 @@ export async function apiPost<T>(path: string, body?: unknown): Promise<T> {
   return request<T>('POST', path, body)
 }
 
+export async function apiPut<T>(path: string, body?: unknown): Promise<T> {
+  return request<T>('PUT', path, body)
+}
+
+/** 成功是 204，沒有 body（`request` 對 204 回 `undefined`）。 */
+export async function apiDelete(path: string): Promise<void> {
+  return request<void>('DELETE', path)
+}
+
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
   const response = await fetch(`${API_PREFIX}${path}`, {
     method,

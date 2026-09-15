@@ -308,6 +308,9 @@ export function SetupPage({
             requestFailed={build.isError}
             onBuild={(selections) => build.mutate(selections)}
             onAddPath={(library) => addPath.mutate(library)}
+            onRouteDeleted={() =>
+              void queryClient.invalidateQueries({ queryKey: routeSetupQueryOptions.queryKey })
+            }
           />
         ) : (
           <Waiting failed={routes.isError} message={t('routes.unreachable')} />
@@ -410,7 +413,8 @@ function librarySignal(
   building: boolean,
 ): Signal {
   if (building) return 'working'
-  if (routes?.routes.some((route) => route.health === 'failed')) return 'blocked'
+  // 停用的 Route 不是目的地，完成條件也不算它（票 14，後端 `routes_ready` 同一條規則）。
+  if (routes?.routes.some((route) => route.enabled && route.health === 'failed')) return 'blocked'
   if (routes?.ready) return 'secured'
   if (status.current_step >= STEP_ROUTES) return 'assigned'
   return 'neutral'

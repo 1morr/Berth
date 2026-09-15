@@ -129,6 +129,40 @@ describe('健康頁', () => {
     expect(screen.queryByRole('link', { name: '到服務設定' })).not.toBeInTheDocument()
   })
 
+  it('Route 區塊給 admin 一條到 Route 設定的連結，一般使用者沒有（票 14）', async () => {
+    render({ body: healthDetail() })
+    renderApp('/health')
+
+    const link = await screen.findByRole('link', { name: '到 Route 設定' })
+    expect(link).toHaveAttribute('href', '/settings/routes')
+  })
+
+  it('停用的 Route 在它那一列說出來：總結不算它，畫面要說得出為什麼（票 14）', async () => {
+    render({
+      body: healthDetail({
+        routes: [
+          routeView(),
+          routeView({ id: 4, slug: 'tv-2', name: 'TV 2', enabled: false, health: 'failed' }),
+        ],
+      }),
+    })
+    renderApp('/health')
+
+    const summary = (await screen.findByText('TV 2', { selector: 'summary *' })).closest('summary')!
+    expect(within(summary).getByText('停用')).toBeInTheDocument()
+  })
+
+  it('一般使用者看不到 Route 設定的連結', async () => {
+    render(
+      { body: healthDetail() },
+      { 'GET /api/auth/me': { body: { name: 'deckhand', role: 'user' } } },
+    )
+    renderApp('/health')
+
+    await screen.findByRole('region', { name: 'qBittorrent' })
+    expect(screen.queryByRole('link', { name: '到 Route 設定' })).not.toBeInTheDocument()
+  })
+
   it('迴圈還沒跑第一輪時說「尚未檢查」，不是「尚未接上」', async () => {
     // 精靈按完完成到第一個 tick 之間（最長 30 秒）：服務接好了，只是還沒被檢查過。
     const base = healthDetail()

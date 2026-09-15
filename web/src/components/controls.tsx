@@ -80,11 +80,14 @@ export function Checkbox({
   label,
   hint,
   checked,
+  disabled = false,
   onChange,
 }: {
   label: string
   hint?: string
   checked: boolean
+  /** 鎖住但照樣顯示（票 14：精靈泊位 4 上已經有 Route 的媒體庫）。 */
+  disabled?: boolean
   onChange: (checked: boolean) => void
 }) {
   const id = useId()
@@ -96,8 +99,9 @@ export function Checkbox({
           id={id}
           type="checkbox"
           checked={checked}
+          disabled={disabled}
           onChange={(event) => onChange(event.target.checked)}
-          className="mt-0.5 size-4 shrink-0 accent-[var(--color-assigned)]"
+          className="mt-0.5 size-4 shrink-0 accent-[var(--color-assigned)] disabled:cursor-not-allowed"
         />
         <label htmlFor={id} className="text-sm leading-snug text-ink">
           {label}

@@ -37,6 +37,8 @@ class StepOut(BaseModel):
 class RouteOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
+    #: `PUT` / `DELETE /routes/{id}` 認它（票 14）。slug 是網址與 category 用的名字。
+    id: int
     slug: str
     name: str
     #: Jellyfin 媒體庫的名字。

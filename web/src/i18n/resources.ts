@@ -368,6 +368,8 @@ const zhHant = {
     unreachable: '讀不到媒體庫清單。Berth 後端可能沒在跑——確認容器狀態後重新整理。',
     building: '建立中…',
     build: '建立 {{count}} 條 Route 並檢查',
+    recheck_one: '重新檢查 {{count}} 條 Route',
+    recheck_other: '重新檢查 {{count}} 條 Route',
     requestFailed: '請求沒有走完。Berth 後端可能沒在跑——確認容器狀態後再按一次。',
     cutaway: {
       paths: '路徑',
@@ -388,6 +390,8 @@ const zhHant = {
       unsupported: 'Berth 只寫入電影與劇集類型的媒體庫，這一個跳過。',
       tvdb: '這個媒體庫掛了 TVDB 的 metadata fetcher。Berth 以 TMDB 為準，兩者的季集編號可能不同。',
       noPath: '這個媒體庫在 Jellyfin 上沒有任何路徑。',
+      routed:
+        '已經有 Route 了：精靈只新增，不改也不刪它。選錯了就用下面那一條的刪除；精靈跑完之後在「設定 → 媒體庫路徑」管理。',
       addBerthPath: '加入 Berth 路徑',
       adding: '加入中…',
       addHint: '在這個媒體庫加一條 {{path}}，舊路徑原地不動；加完就用它當寫入目標。',
@@ -983,6 +987,11 @@ const zhHant = {
     testing: '測試中…',
     testFailed: '測試沒有走完。Berth 後端可能沒在跑——確認容器狀態後再按一次。',
     editHint: '改位址或憑證',
+    tabs: {
+      label: '設定',
+      services: '服務',
+      routes: '媒體庫路徑',
+    },
     // 深連結的主機（票 13）。它不是連線資訊，所以住在這裡而不是精靈。
     jellyfin: {
       title: 'Jellyfin 對外網址',
@@ -1012,6 +1021,80 @@ const zhHant = {
       restoring: '還原中…',
       restoreFailed: '寫不進去。qBittorrent 可能不在了，或帳密變了——看上面那一項的原文。',
       unreachable: '連不上 qBittorrent，讀不到它現在的偏好。',
+    },
+  },
+  // Route 設定頁（票 14）。「Route」保留原文：它是 CONTEXT.md 的名詞，精靈與健康頁也這樣寫。
+  routeSettings: {
+    title: '媒體庫路徑',
+    lede: '每條 Route 是一個 Jellyfin 媒體庫加上一條寫入目標；同一個媒體庫可以有好幾條，例如兩顆碟各一條。停用的 Route 不收新的送單；還有下載或入庫檔案指著它時，它刪不得。',
+    empty: '還沒有 Route。在設定精靈的最後一個泊位建立它們，Berth 才有地方寫入。',
+    disabled: '停用',
+    manage: '管理',
+    collapse: '收起',
+    link: '到 Route 設定',
+    usage: {
+      jobs_one: '{{count}} 筆下載',
+      jobs_other: '{{count}} 筆下載',
+      files_one: '{{count}} 個入庫檔案',
+      files_other: '{{count}} 個入庫檔案',
+    },
+    edit: {
+      name: '名稱',
+      enabled: '啟用',
+      enabledHint:
+        '停用的 Route 不收新的送單，已經在路上的下載照常入庫。啟用時會先把五條纜繩重跑一次。',
+      identity:
+        'slug 與寫入目標建立之後就不能改：分類、complete 子目錄與帳本都認它們。要換目標就新增一條、刪掉這一條。',
+      save: '儲存',
+      saving: '儲存並檢查中…',
+      saved: '已儲存。',
+      unhealthy: '五條纜繩沒有全綠，這條 Route 維持停用。修好下面紅的那一條，再按一次儲存。',
+      failed: '沒有存進去。Berth 後端可能沒在跑——確認容器狀態後再按一次。',
+      nameRequired: '名稱不能空白：媒體庫頁的切換列與送單時的 Route 下拉都顯示它。',
+    },
+    recheck: '重新檢查',
+    rechecking: '檢查中…',
+    recheckFailed: '檢查沒有走完。Berth 後端可能沒在跑——確認容器狀態後再按一次。',
+    delete: {
+      label: '刪除這條 Route',
+      confirm: '確定刪除',
+      pending: '刪除中…',
+      warning:
+        '刪除之後這條 Route 的設定就不在了。qBittorrent 的分類與 complete 子目錄留著不動；之後用同一個名字重建時，分類檢查認得它們。',
+      inUse:
+        '{{jobs}}、{{files}}指著這條 Route，所以它刪不得。停用它（取消上面的「啟用」再儲存），新的送單就不會再選到它。',
+      refused:
+        '刪的那一刻發現還有下載或入庫檔案指著這條 Route，所以它刪不得。停用它，新的送單就不會再選到它。',
+      failed: '沒有刪掉。Berth 後端可能沒在跑——確認容器狀態後再按一次。',
+    },
+    add: {
+      open: '新增 Route',
+      title: '新增 Route',
+      lede: '同一個 Jellyfin 媒體庫可以有好幾條 Route，每條寫到它自己的一條路徑。路徑是 Jellyfin 回報的，所以這裡用選的；Jellyfin 還沒有那條路徑的話，先在 Jellyfin 替媒體庫加上。',
+      loading: '向 Jellyfin 問媒體庫清單…',
+      library: '媒體庫',
+      target: '寫入目標',
+      taken: '已是「{{name}}」',
+      takenUnnamed: '已經有 Route',
+      noneFree: '這個媒體庫回報的路徑都已經有 Route 了。先在 Jellyfin 替它加一條路徑，再回來新增。',
+      pickFirst: '先選一個媒體庫，與一條還沒有 Route 的寫入目標。',
+      submit: '建立並檢查',
+      submitting: '建立並檢查中…',
+      createdOk: '已建立「{{name}}」：五條纜繩全綠，已經啟用。',
+      createdRed:
+        '已建立「{{name}}」，但五條纜繩沒有全綠，所以維持停用。修好掛載之後在它那一列重新檢查，再勾啟用。',
+      unreachable: '問不到 Jellyfin 的媒體庫清單，而新增 Route 要用它回報的路徑。原文：',
+      failed: '沒有建立。Berth 後端可能沒在跑——確認容器狀態後再按一次。',
+      refusal: {
+        library_missing:
+          'Jellyfin 上已經沒有這個媒體庫了。取消後重新打開這個區塊，清單會再問一次。',
+        library_unsupported: 'Berth 只寫入電影與劇集類型的媒體庫。',
+        target_not_in_library:
+          '這條路徑已經不是這個媒體庫的了——Jellyfin 那邊剛改過。取消後重新打開這個區塊再選一次。',
+        target_taken: '這條路徑剛被另一條 Route 用走了。每條 Route 要有自己的寫入目標。',
+        jellyfin_unreachable: '建立的那一刻問不到 Jellyfin。確認它還在跑，再按一次。',
+        profile_unsupported: '動漫 profile 只給劇集媒體庫：電影沒有季與集。',
+      },
     },
   },
   common: {
@@ -1403,6 +1486,8 @@ const en: Translations<typeof zhHant> = {
       'Could not read the library list. The Berth backend may be down — check the container, then reload.',
     building: 'Building…',
     build: 'Build {{count}} routes and check',
+    recheck_one: 'Check {{count}} route again',
+    recheck_other: 'Check {{count}} routes again',
     requestFailed:
       'The request did not finish. The Berth backend may be down — check the container and press again.',
     cutaway: {
@@ -1424,6 +1509,8 @@ const en: Translations<typeof zhHant> = {
       unsupported: 'Berth writes into movie and TV libraries only, so this one is skipped.',
       tvdb: 'This library has a TVDB metadata fetcher. Berth follows TMDB, and the two number seasons and episodes differently.',
       noPath: 'This library has no path on Jellyfin.',
+      routed:
+        'Already has a route: the wizard only adds, it never changes or deletes one. If it was a mistake, use the delete under that route below; once setup is done, manage routes under Settings → Library paths.',
       addBerthPath: 'Add a Berth path',
       adding: 'Adding…',
       addHint:
@@ -2008,6 +2095,11 @@ const en: Translations<typeof zhHant> = {
     testFailed:
       'The test did not go through. The Berth backend may be down — check the container, then try again.',
     editHint: 'Change address or credentials',
+    tabs: {
+      label: 'Settings',
+      services: 'Services',
+      routes: 'Library paths',
+    },
     jellyfin: {
       title: 'Jellyfin public address',
       lede: 'The address behind “Open in Jellyfin” on the library page — not the one Berth itself connects to. Fill it in only when Jellyfin sits behind a reverse proxy or on another domain.',
@@ -2036,6 +2128,91 @@ const en: Translations<typeof zhHant> = {
       restoreFailed:
         'Could not write them. qBittorrent may be gone, or its credentials changed — read the raw message on that check above.',
       unreachable: 'Cannot reach qBittorrent, so its current preferences are unknown.',
+    },
+  },
+  routeSettings: {
+    title: 'Library paths',
+    lede: 'Each route is one Jellyfin library plus one write target, and a library can have several — one per disk, say. A disabled route takes no new downloads; a route that downloads or imported files still point at cannot be deleted.',
+    empty:
+      'No routes yet. Create them in the last berth of the setup wizard, so Berth has somewhere to write.',
+    disabled: 'Disabled',
+    manage: 'Manage',
+    collapse: 'Collapse',
+    link: 'Go to route settings',
+    usage: {
+      jobs_one: '{{count}} download',
+      jobs_other: '{{count}} downloads',
+      files_one: '{{count}} imported file',
+      files_other: '{{count}} imported files',
+    },
+    edit: {
+      name: 'Name',
+      enabled: 'Enabled',
+      enabledHint:
+        'A disabled route takes no new downloads; the ones already on their way still import. Enabling it runs the five checks again first.',
+      identity:
+        'The slug and the write target cannot change once the route exists: the category, the complete subdirectory and the ledger all go by them. To use another target, add a route and delete this one.',
+      save: 'Save',
+      saving: 'Saving and checking…',
+      saved: 'Saved.',
+      unhealthy:
+        'Not all five checks passed, so this route stays disabled. Fix the red one below and press Save again.',
+      failed:
+        'It was not saved. The Berth backend may be down — check the container and press again.',
+      nameRequired:
+        'The name cannot be blank: the library page’s route bar and the route picker when sending a download both show it.',
+    },
+    recheck: 'Check again',
+    rechecking: 'Checking…',
+    recheckFailed:
+      'The check did not finish. The Berth backend may be down — check the container and press again.',
+    delete: {
+      label: 'Delete this route',
+      confirm: 'Delete it',
+      pending: 'Deleting…',
+      warning:
+        'Deleting removes this route from Berth. The qBittorrent category and the complete subdirectory stay where they are; rebuilding a route with the same name picks them up again.',
+      inUse:
+        '{{jobs}} and {{files}} point at this route, so it cannot be deleted. Disable it instead (untick Enabled above and save) and new downloads will no longer pick it.',
+      refused:
+        'Downloads or imported files turned out to point at this route when it was deleted, so it cannot be. Disable it instead and new downloads will no longer pick it.',
+      failed:
+        'It was not deleted. The Berth backend may be down — check the container and press again.',
+    },
+    add: {
+      open: 'Add a route',
+      title: 'Add a route',
+      lede: 'One Jellyfin library can have several routes, each writing to a path of its own. Jellyfin reports the paths, so you pick one here; if Jellyfin does not have the path yet, add it to the library in Jellyfin first.',
+      loading: 'Asking Jellyfin for its libraries…',
+      library: 'Library',
+      target: 'Write target',
+      taken: 'Already “{{name}}”',
+      takenUnnamed: 'Already has a route',
+      noneFree:
+        'Every path this library reports already has a route. Add another path to it in Jellyfin, then come back.',
+      pickFirst: 'Pick a library and a write target that has no route yet.',
+      submit: 'Create and check',
+      submitting: 'Creating and checking…',
+      createdOk: 'Created “{{name}}”: all five checks passed and it is enabled.',
+      createdRed:
+        'Created “{{name}}”, but not all five checks passed, so it stays disabled. Fix the mount, check it again in its row, then tick Enabled.',
+      unreachable:
+        'Could not get the library list from Jellyfin, and a new route needs the paths it reports. Raw message:',
+      failed:
+        'It was not created. The Berth backend may be down — check the container and press again.',
+      refusal: {
+        library_missing:
+          'Jellyfin no longer has this library. Cancel and open this section again to ask for the list afresh.',
+        library_unsupported: 'Berth writes into movie and TV libraries only.',
+        target_not_in_library:
+          'This path no longer belongs to the library — it just changed in Jellyfin. Cancel, reopen this section and pick again.',
+        target_taken:
+          'Another route just took this path. Each route needs a write target of its own.',
+        jellyfin_unreachable:
+          'Jellyfin did not answer when the route was being created. Check that it is running and press again.',
+        profile_unsupported:
+          'The anime profile is for TV libraries only: movies have no seasons or episodes.',
+      },
     },
   },
   common: {

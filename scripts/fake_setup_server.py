@@ -17,7 +17,7 @@ import re
 import sys
 import tempfile
 from collections.abc import AsyncIterator, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 from urllib.parse import quote
@@ -68,6 +68,8 @@ from berth.domain import (
     DetectionReason,
     HealthStatus,
     IndexerKind,
+    JobState,
+    JobTrigger,
     ServiceKind,
     ServiceOrigin,
 )
@@ -75,6 +77,7 @@ from berth.main import create_app
 from berth.models import (
     IndexerSettings,
     JellyfinSettings,
+    Job,
     PathSettings,
     QbittorrentSettings,
     Route,
@@ -196,6 +199,8 @@ class Scenario:
     #: 這個情境要送的那幾份 torrent 的發佈名。demo server 自己生 `.torrent` 掛在
     #: `/demo/torrent?release=<發佈名>`（沒帶查詢字串就是第一份），索引站的那幾筆指向它。
     demo_releases: tuple[str, ...] = ()
+    #: Route 設定頁的三種樣子（票 14）：一庫多條、紅燈建立、刪不得。見 `_seed_route_settings`。
+    route_settings_demo: bool = False
 
     def probes(self) -> SetupProbes:
         return SetupProbes(
@@ -318,6 +323,16 @@ def healthy() -> Scenario:
     )
     scenario.setup_completed = True
     scenario.moored = True
+    return scenario
+
+
+def routes_scenario() -> Scenario:
+    """Route 設定頁 `/settings/routes`（票 14）。
+
+    同 `healthy`，加上 `_seed_route_settings` 的三種樣子：一庫多條、紅燈建立、刪不得。
+    """
+    scenario = healthy()
+    scenario.route_settings_demo = True
     return scenario
 
 
@@ -714,6 +729,7 @@ SCENARIOS = {
     "submit-failing": submit_failing,
     "tmdb-down": tmdb_down,
     "healthy": healthy,
+    "routes": routes_scenario,
     "degraded": degraded,
     "drifted": drifted,
     "outdated": outdated,
@@ -997,6 +1013,45 @@ async def _moor(
         # 第一輪之後才掛掉，畫面上「最後成功」才有值——「剛剛還好好的」與「從來沒通過」
         # 是兩件不同的事（brief §16.2）。
         scenario.prowlarr.ping_error = ServiceUnavailableError("GET /ping: connection refused")
+    if scenario.route_settings_demo:
+        await _seed_route_settings(session, scenario, paths)
+
+
+async def _seed_route_settings(
+    session: AsyncSession, scenario: Scenario, paths: PathSettings
+) -> None:
+    """Route 設定頁的三種樣子（票 14）。第一輪健康檢查之後才改，精靈那三條 Route 維持綠燈。
+
+    - TV 在 Jellyfin 上多掛一顆碟，目錄真的在、與 library 同一個檔案系統：新增第二條 Route 會全綠。
+    - Movies 多一條沒掛進 Berth 的路徑（目錄不存在）：在那裡建 Route，`library_path` 會紅、
+      維持停用。Movies 那條既有 Route 下一次重新檢查也會紅——那是事實：Jellyfin 回報的路徑
+      Berth 看不到。
+    - TV 那條 Route 有一筆已經入庫的下載：刪除鍵換成「刪不得」與出路。
+    """
+    disk = f"{paths.library_root}-disk2/tv"
+    Path(disk).mkdir(parents=True, exist_ok=True)
+    unmounted = f"{paths.library_root}-unmounted/movies"
+    extra = {"TV": disk, "Movies": unmounted}
+    scenario.jellyfin.libraries_ = [
+        replace(library, locations=(*library.locations, extra[library.name]))
+        if library.name in extra
+        else library
+        for library in scenario.jellyfin.libraries_
+    ]
+    tv = await session.scalar(select(Route).where(Route.slug == "tv"))
+    if tv is None:
+        raise RuntimeError("the moored scenario should have built a tv route")
+    # 已經入庫：poller 不會去碰一筆終態的 Job，畫面上只剩「有東西指著這條 Route」這件事。
+    session.add(
+        Job(
+            hash="5" * 40,
+            name="The.Bear.S03.1080p.WEB-DL",
+            trigger=JobTrigger.MANUAL,
+            route_id=tv.id,
+            state=JobState.IMPORTED,
+        )
+    )
+    await session.commit()
 
 
 if __name__ == "__main__":

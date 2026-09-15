@@ -48,7 +48,7 @@ const BUILT = routeSetup({
     routeView({ library: 'TV', slug: 'tv' }),
     routeView({ library: 'Anime', slug: 'anime', profile: 'anime' }),
   ],
-  libraries: routeSetup().libraries.map((row) => ({ ...row, selected: true })),
+  libraries: routeSetup().libraries.map((row) => ({ ...row, has_route: true })),
   ready: true,
 })
 
@@ -113,6 +113,53 @@ describe('泊位 4：媒體庫路徑（套件內）', () => {
 
     const call = fetch.mock.calls.find(([, init]) => init?.method === 'POST')!
     expect(JSON.parse(String(call[1]?.body))).toEqual({ selections: [] })
+  })
+
+  it('三條都建好之後再按一次是全部重驗，不會多建（票 14：精靈只新增）', async () => {
+    stubApi({ [STATUS]: { body: AT_BERTH_FOUR }, [ROUTES]: { body: BUILT } })
+
+    renderWithProviders(<SetupPage />)
+
+    expect(await screen.findByRole('button', { name: '重新檢查 3 條 Route' })).toBeEnabled()
+  })
+
+  it('每條 Route 底下都有刪除：二次確認之後才打與設定頁同一支 DELETE（票 14）', async () => {
+    const fetch = stubApi({
+      [STATUS]: { body: AT_BERTH_FOUR },
+      [ROUTES]: { body: BUILT },
+      'DELETE /api/routes/2': { status: 204, body: null },
+    })
+
+    renderWithProviders(<SetupPage />)
+    const [first] = await screen.findAllByRole('button', { name: '刪除這條 Route' })
+    await userEvent.click(first)
+    await userEvent.click(screen.getByRole('button', { name: '確定刪除' }))
+
+    await waitFor(() =>
+      expect(
+        fetch.mock.calls.some(
+          ([input, init]) => init?.method === 'DELETE' && String(input) === '/api/routes/2',
+        ),
+      ).toBe(true),
+    )
+  })
+
+  it('停用中的紅燈 Route 不讓第四格變紅：它不是目的地，完成條件也不算它（票 14）', async () => {
+    const withDisabledRed = routeSetup({
+      ...BUILT,
+      routes: [
+        ...BUILT.routes,
+        routeView({ id: 9, library: 'TV', slug: 'tv-2', enabled: false, health: 'failed' }),
+      ],
+    })
+    stubApi({ [STATUS]: { body: AT_BERTH_FOUR }, [ROUTES]: { body: withDisabledRed } })
+
+    renderWithProviders(<SetupPage />)
+    const board = await screen.findByRole('region', { name: '泊位板' })
+
+    await waitFor(() =>
+      expect(within(board).getByText('BTH 4').closest('li')).toHaveTextContent('已完成'),
+    )
   })
 
   it('泊位板的第四格全綠之後標成已繫上', async () => {
@@ -313,6 +360,26 @@ describe('泊位 4：媒體庫路徑（既有 Jellyfin）', () => {
       expect(call).toBeDefined()
       expect(JSON.parse(String(call![1]?.body))).toEqual({ library: '影集' })
     })
+  })
+
+  it('已經有 Route 的媒體庫在勾選表上鎖住：重跑不改也不刪它（票 14）', async () => {
+    const routed = routeSetup({
+      origin: 'existing',
+      libraries: [
+        libraryChoice({ name: '影集', has_route: true, target_path: '/data/library/影集' }),
+      ],
+      routes: [routeView({ library: '影集', slug: '影集', target_path: '/data/library/影集' })],
+    })
+    stubApi({ [STATUS]: { body: AT_BERTH_FOUR }, [ROUTES]: { body: routed } })
+
+    renderWithProviders(<SetupPage />)
+
+    const box = await screen.findByRole('checkbox', { name: '影集' })
+    expect(box).toBeChecked()
+    expect(box).toBeDisabled()
+    expect(screen.getByText(/精靈只新增/)).toBeInTheDocument()
+    // 沒有新勾的東西時，這一顆是「全部重驗」而不是一顆按不下去的建立鍵。
+    expect(screen.getByRole('button', { name: '重新檢查 1 條 Route' })).toBeEnabled()
   })
 
   it('劇集媒體庫可以挑動漫 profile', async () => {

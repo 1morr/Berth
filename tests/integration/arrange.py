@@ -132,6 +132,22 @@ def bundled_libraries(library_root: Path) -> tuple[SetupLibrary, ...]:
     return tuple(rows)
 
 
+def with_second_disk(roots: dict[str, Path]) -> tuple[tuple[SetupLibrary, ...], Path]:
+    """TV 媒體庫在 Jellyfin 上多掛了一條路徑（brief §4.3 的「兩顆碟各一個 Route」，票 14）。
+
+    第二條 Route 的前提：同一個媒體庫、不同的寫入目標。目錄真的建出來，檢查才問得到它。
+    """
+    disk = roots["library"] / "tv-disk2"
+    disk.mkdir(exist_ok=True)
+    libraries = tuple(
+        row.model_copy(update={"locations": [*row.locations, str(disk)]})
+        if row.name == "TV"
+        else row
+        for row in bundled_libraries(roots["library"])
+    )
+    return libraries, disk
+
+
 def berth_path(roots: dict[str, Path], name: str) -> str:
     """「加入 Berth 路徑」會加的那一條：`<library root>/<slug>`（CONTEXT.md）。
 
