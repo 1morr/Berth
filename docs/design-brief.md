@@ -39,7 +39,7 @@
 | 下載協定、做種、限速、分享率、種子清理 | qBittorrent | 做種策略用 qBittorrent 的分類設定，本系統只處理「種子被移除後」的善後 |
 | 索引站接入 | Prowlarr 或 Jackett（Torznab） | 只依賴 Torznab 協定。開箱即用套件預設打包 Prowlarr（§16.3），已有 Jackett 的使用者直接填 Torznab 端點 |
 | Metadata | TMDB | 第一階段唯一的 provider，見 §10 |
-| 同一集多版本的合併顯示 | Jellyfin + MergeVersions 插件 | 本系統只保證命名讓插件能合併 |
+| 同一集多版本的合併顯示 | Jellyfin（12.x 原生；10.10 / 10.11 要 MergeVersions 插件） | 本系統只保證命名讓 Jellyfin 能合併；只在 10.x 安裝並觸發插件（§7.7、§19） |
 
 刻意不做的事（第一階段）：品質檔案自動升級替換（Sonarr 的 quality profile upgrade）、內嵌播放器、多人審批、非影片媒體、AI 側面板。見 §18。
 
@@ -345,13 +345,15 @@ NCOP/NCED、PV、CM、Menu、預告、花絮等**可辨識**的非正片內容�
 
 ### 7.7 多版本並存
 
-- 同一集不同 tags 的檔案並存在同一季資料夾。Jellyfin 原生的劇集多版本不可靠（實測會變成**兩個重複的 Episode 條目**，§20.6），所以 **MergeVersions 插件是必要前提**，README 與設定精靈的健康檢查都要提示；本系統入庫後透過 Jellyfin 排程任務 API 觸發插件的合併任務（`MergeEpisodesTask` / `MergeMoviesTask`，§20.7）。
-- 版本標籤：**電影**是 tags 字串本身（` - ` 之後的部分），**劇集**經 MergeVersions 合併後顯示的是**整個檔名主幹**，不是只有 tags（2026-09-07 實測，§20.6）。tags 詞彙仍要短且可讀，但 UI 文案不能說「使用者看到的就是 tags」。劇集的版本先後順序不保證（10.10 與 10.11 實測結果相反）。
+- 同一集不同 tags 的檔案並存在同一季資料夾。**Jellyfin 12.0 起原生合併**：同一個季資料夾裡解析出同一個 `S/E` 的檔案就是同一集的版本，本系統現行命名不裝插件就合併成 1 個 Episode、多個 MediaSource（2026-09-15 對 12.0.0 / 12.1.0 實測，§20.9）。**10.10 / 10.11 原生不可靠**（實測會變成**兩個重複的 Episode 條目**，§20.6），在那兩版上 **MergeVersions 插件仍是必要前提**，README 與設定精靈要提示；本系統入庫後透過 Jellyfin 排程任務 API 觸發插件的合併任務（`MergeEpisodesTask` / `MergeMoviesTask`，§20.7）。**12.x 上不裝插件**：它對本系統的樹是空跑，卻要多一次 Jellyfin 重啟、依賴 GitHub 下載，還會跨媒體庫誤併。10.x 的支援何時拿掉見 §19。
+- 版本標籤：**電影**是 tags 字串本身（` - ` 之後的部分）。**劇集**依 Jellyfin 版本而異：12.x 是「去掉各版本檔名的共同前綴」剩下的部分（有集名時是 `集名 + tags`，沒有集名時是 `S01E01 + tags`；算法跟標點有關，12.0 與 12.1 也不同），10.x 經 MergeVersions 合併後是**整個檔名主幹**（2026-09-07 實測，§20.6）。所以 UI 不自己重算劇集的版本名，Jellyfin 收錄之後讀它回的 `MediaSources[].Name`（M1 票 14b）。tags 詞彙仍要短且可讀，但 UI 文案不能說「使用者看到的就是 tags」。版本先後：12.x 依解析度降冪再依檔名；10.x 不保證（10.10 與 10.11 實測結果相反）。
 - 命名唯一必須保證的事：同一集所有版本的檔名在 `S01E01` 之前的部分完全相同，且互相只差 tags。
 
 ### 7.8 重複版本
 
 新 Plan item 與帳本既有 Entry 的（Media, 季, 集, tags）完全相同 → `duplicate`。自動模式預設 **跳過並記事件**；review 提供「取代舊版」「保留兩者（加 `[v2]` 類 tag 者本來就不同）」「跳過」。
+
+**多集檔與同起始集的單集**（2026-09-15 使用者拍板）：新 Plan item 的正片與同一季的帳本既有 Entry、或同一份 Plan 的其他正片**起始集相同、結束集不同**（`S01E03-E04` 對 `S01E03`）→ 送 review，不自動入庫，理由要說出後果。Jellyfin 12 的版本分組鍵只有季號與集號，會把它們併成同一集的兩個版本，後面那一集從集列表消失（§20.9）。規則不分 Jellyfin 版本：同一集有兩份涵蓋範圍不同的正片，本來就該由人決定留哪一份。
 
 ### 7.9 是否必須在資料庫記錄檔案？
 
@@ -520,7 +522,7 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 - **目標環境【決定】**：Linux（NAS 與伺服器）與 Windows（Docker Desktop，WSL2 後端）。兩種使用者：NAS 使用者已有目錄規劃、可能已有 Jellyfin；一般電腦使用者什麼都沒有，要能「下載一份 compose、跑起來、開瀏覽器」就完成。
 - 範例 `docker-compose.yml` 含 `berth`、qBittorrent、Jellyfin、Prowlarr，四者掛同一個 `/data`；權限採 TRaSH 的「單一使用者 + UMASK 022」簡化方案（§20.2），四個容器同 `PUID/PGID`。
 - `/data` 一律用宿主目錄 bind mount（`DATA_ROOT`），Linux 與 Windows 相同：Windows Docker Desktop 的 NTFS bind mount 硬鏈接已實測可用（§20.7）。不支援 exFAT；健康檢查在建立 Route 時即驗證。
-- README 明列：硬鏈接前提（單一掛載、不可 exFAT、不可跨 btrfs 子卷 / ZFS dataset / mergerfs branch）、支援 Linux 宿主與 Windows Docker Desktop（NTFS）、qBittorrent 版本下限與必要設定（temp path、category autoTMM）、Jellyfin 側需安裝 MergeVersions 插件（套件模式自動安裝）、**使用者要自備 TMDB API key 與取得步驟**（§16.3）、TMDB 的歸屬聲明與 logo。
+- README 明列：硬鏈接前提（單一掛載、不可 exFAT、不可跨 btrfs 子卷 / ZFS dataset / mergerfs branch）、支援 Linux 宿主與 Windows Docker Desktop（NTFS）、qBittorrent 版本下限與必要設定（temp path、category autoTMM）、支援的 Jellyfin 版本（12.x 與 10.10 / 10.11）與 10.x 需安裝 MergeVersions 插件（既有服務是一顆確認按鈕；套件內釘在 12.1，不裝）、**使用者要自備 TMDB API key 與取得步驟**（§16.3）、TMDB 的歸屬聲明與 logo。
 
 ### 16.2 跨切面需求
 
@@ -542,7 +544,7 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 | 服務 | 預置（compose 範本） | Berth 一鍵設定（API） | 使用者仍需自己做 |
 | --- | --- | --- | --- |
 | qBittorrent | **只預置「讓 Berth 進得去」**：只放行 Berth 容器固定 IP 的免密白名單（不是整個網段，理由見 §20.7）。原因是 4.6.1 起首次啟動的隨機密碼只印在容器 log，Berth 拿不到，沒有這一步按鈕就登不進去 | 套用建議偏好（temp path、save path、autoTMM）、依 Route 建立 category、設定 WebUI 密碼；按下前顯示差異 | 無 |
-| Jellyfin | 無 | 偵測「尚未完成初始精靈」→ 以 Berth 管理員帳密建立 Jellyfin 管理員 → 建立 Movies / TV / Anime 三個媒體庫（對應 `/data/library/{movies,tv,anime}`）→ 加入插件庫並安裝 MergeVersions → 重啟 → 自動建立三個 Route | 無 |
+| Jellyfin | 無 | 偵測「尚未完成初始精靈」→ 以 Berth 管理員帳密建立 Jellyfin 管理員 → 建立 Movies / TV / Anime 三個媒體庫（對應 `/data/library/{movies,tv,anime}`）→ 加入插件庫並安裝 MergeVersions → 重啟（只在 Jellyfin 10.x；套件內釘在 12.1，原生合併多版本，跳過這兩步，§7.7）→ 自動建立三個 Route | 無 |
 | Prowlarr | 無；Berth 唯讀掛載其設定目錄讀取 API key | 加入預設索引站清單（Nyaa.si、dmhy、AniDex、Anime Tosho、ACG.RIP、Mikan、1337x、YTS、EZTV、The Pirate Bay，可勾選）、以 Berth 管理員帳密設定介面登入 | 私有站的帳號 |
 | TMDB | 無 —— **Berth 不內建任何 provider 的 key**【決定 2026-09-09】 | 無 | **必要**：自己申請一把 API key 貼進精靈第 6 步（§20.7） |
 | 索引站 / RSS | 無 | Mikan、Nyaa feed 由使用者貼 URL | 貼自己的 Mikan 訂閱 URL |
@@ -590,7 +592,7 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 | library 內的 `unmatch` 資料夾 | 不做，改為 UI 列表 | §7.4 |
 | 內嵌播放器 | 延後（M1.5 的媒體庫瀏覽照樣跳到 Jellyfin 播放） | §12 |
 | AI 解析 | M4 | 先有 benchmark 才能評估 |
-| 品質升級自動替換 | 不做 | 版本並存 + MergeVersions 已滿足；升級邏輯是 Sonarr 最複雜的部分 |
+| 品質升級自動替換 | 不做 | 版本並存（Jellyfin 12.x 原生合併，10.x 靠 MergeVersions）已滿足；升級邏輯是 Sonarr 最複雜的部分 |
 | remote path mapping | 不做 | 強制同路徑掛載更簡單、更不易錯 |
 | 多 provider（TVDB / AniList） | 延後 | §10 |
 | 字型安裝、字幕解壓、OST 入音樂庫 | 延後 | 非核心流程 |
@@ -616,6 +618,9 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 | 目標環境 | Linux 與 Windows 的 Docker；NAS 與一般電腦使用者；套件內含 Jellyfin / qBittorrent / Prowlarr，開箱即用 | §16.1、§16.3 |
 | 索引站管理器 | 套件預設 Prowlarr（有文件化 REST API 可一鍵加索引站）；Jackett 以 Torznab 端點接入 | §3、§16.3、§20.7 |
 | 媒體庫的角色（2026-09-15） | 像 Jellyfin 那樣瀏覽，播放跳 Jellyfin；牆上是整個 Jellyfin 媒體庫疊上 Berth 狀態；已看 / 未看可切換並寫回 Jellyfin；探索與媒體庫共用同一個 Media 詳情頁，作品在 Jellyfin 裡時觀看區在最上；排在 M1 驗收後、M2 之前（M1.5） | §1.1、§1.2、§12、§13、§17、plan §11.2b |
+| Jellyfin 支援版本（2026-09-15） | 12.x 與 10.10 / 10.11 都支援，依伺服器版號判斷：12 以上不裝、不觸發 MergeVersions。**10.x 的支援在 Jellyfin 13.0 正式發佈時拿掉**（那時 10.x 已落後兩個大版本），一併刪掉 MergeVersions 的精靈步驟、任務 id、resolver 的合併觸發與相關測試 | §7.7、§20.9、M1 票 14b |
+| 套件內 Jellyfin image（2026-09-15） | 釘在 12.1 這條線（linuxserver `version-12.1ubu2604`）：跟得上 12.1 的修正與重建，但 pull 時不會默默跨到下一版；本系統實測過新版才調高，README 寫升級步驟（先備份 Jellyfin 的 `/config`、升級後完整掃描） | §16.3、§20.9、plan §9.1、M1 票 14b |
+| 多集檔與同起始集的單集（2026-09-15） | 同一季已有、或同一批要入的正片裡，有同起始集而結束集不同的，送審核不自動入庫；理由要說出 Jellyfin 12 會把它們併成一集、藏掉後面的集 | §7.8、§20.9、M1 票 14b |
 
 【待決】M1.5 拆票前定（每條附推薦）：
 
@@ -652,8 +657,8 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 **多版本**
 
 - 電影：同資料夾內 `Movie (2021) [tmdbid-…] - 1080p.mkv`，檔名必須與資料夾名完全一致直到 ` - `；` - ` 之後為版本標籤，結尾為 `p`/`i` 的標籤會依解析度排序，否則字母排序。（[_video-multiversion.md](https://github.com/jellyfin/jellyfin.org/blob/master/docs/general/server/media/_video-multiversion.md)）標籤內含**方括號與 `+` 已實測可用**（§20.6）；**標籤內含中文仍未證實** —— 實驗用的 tag 全是 ASCII，而 §6.8 的 group token 保留字幕組原文，中文組名會落在這個未測範圍。
-- **劇集原生多版本不可靠**：10.8 起要求每集自己一個子資料夾才會視為版本，且社群回報同一集兩個檔案通常變成重複條目而非版本選單（[discussion#7900](https://github.com/orgs/jellyfin/discussions/7900)、[discussion#16063](https://github.com/orgs/jellyfin/discussions/16063)、[#13432](https://github.com/jellyfin/jellyfin/issues/13432)）。結論：**劇集多版本必須靠 MergeVersions 插件**，本系統命名只需保證同集檔名的 `S01E01` 部分一致。
-- MergeVersions 插件持續維護到 10.11 與 12.0，透過排程任務或設定頁手動觸發；沒有公開 API 可由外部呼叫，本系統用 Jellyfin 的排程任務 API 觸發（任務名已實測，§20.7）。（[README](https://github.com/danieladov/jellyfin-plugin-mergeversions/blob/master/README.md)、[releases](https://github.com/danieladov/jellyfin-plugin-mergeversions/releases)）已知問題：偶發錯誤、無法停用、跨媒體庫合併。
+- **劇集原生多版本在 10.x 不可靠**（12.0 起原生支援，§20.9）：10.8 起要求每集自己一個子資料夾才會視為版本，且社群回報同一集兩個檔案通常變成重複條目而非版本選單（[discussion#7900](https://github.com/orgs/jellyfin/discussions/7900)、[discussion#16063](https://github.com/orgs/jellyfin/discussions/16063)、[#13432](https://github.com/jellyfin/jellyfin/issues/13432)）。結論（10.x）：**劇集多版本必須靠 MergeVersions 插件**，本系統命名只需保證同集檔名的 `S01E01` 部分一致。
+- MergeVersions 插件持續維護到 10.11 與 12.0（12.0.0 版 `targetAbi 12.0`；12.x 上對本系統的樹是空跑、不裝，§20.9），透過排程任務或設定頁手動觸發；沒有公開 API 可由外部呼叫，本系統用 Jellyfin 的排程任務 API 觸發（任務名已實測，§20.7）。（[README](https://github.com/danieladov/jellyfin-plugin-mergeversions/blob/master/README.md)、[releases](https://github.com/danieladov/jellyfin-plugin-mergeversions/releases)）已知問題：偶發錯誤、無法停用、跨媒體庫合併。
 
 **API**
 
@@ -1031,12 +1036,12 @@ thepiratebay / yts，fixture 在 `tests/fixtures/http/prowlarr/search.*.json` �
 
 - **`S01E01` 一律認得**，`S01E03-E04` 解析為 `IndexNumber=3` + `IndexNumberEnd=4`，`S00E01` 進 `Specials` 季。**方括號與 `+` 不會滲進 Series 或 Episode 名稱** —— Jellyfin 根本不從檔名取集標題（TMDB 對不上的作品，帶 tag 與不帶 tag 的兩集名稱完全相同）。
 - **電影多版本**：檔名在 ` - ` 之前必須與資料夾名一字不差（含 `[tmdbid-<id>]`），否則變成兩部獨立的電影。標籤含方括號沒問題，版本選單顯示的就是 `[BD][2160p][CHT+JP][Sakurato]`；結尾 `p`/`i` 的標籤依解析度降冪（`2160p` → `1080p` → `720p`），其餘字母序。§7.2 已據此更正。
-- **劇集多版本**：未裝插件 → 同一集的兩個檔案變成**兩個重複的 Episode 條目**。裝 MergeVersions 跑 `MergeEpisodesTask` → 合併成 1 個 Episode、2 個 MediaSource，但**版本標籤是整個檔名主幹**而非只有 tags，且順序不保證（10.10 與 10.11 相反）。§7.7 已據此更正。
+- **劇集多版本**：未裝插件 → 同一集的兩個檔案變成**兩個重複的 Episode 條目**。裝 MergeVersions 跑 `MergeEpisodesTask` → 合併成 1 個 Episode、2 個 MediaSource，但**版本標籤是整個檔名主幹**而非只有 tags，且順序不保證（10.10 與 10.11 相反）。§7.7 已據此更正。12.x 不裝插件就原生合併，見 §20.9。
 - **extras**：劇集層 `<作品>/extras/`、季層 `<作品>/Season 01/extras/`、電影層 `<電影>/extras/` 三者都成立，分別掛在 Series / Season / Movie 的 `SpecialFeatures`，不會被當成正片集數。
 - **外掛字幕**：`<stem>.CHT.zh.ass` 在 10.10 顯示 `CHT - Chi - ASS - 外部`、10.11 顯示 `CHT - Chinese - ASS - 外部`（`Title` 欄排最前面，繁簡分得出來）。`.default.` 旗標兩版都生效。`zh-Hant`/`zh-Hans` **只有 10.11 認得**，10.10 顯示「未定義」→ 不採用。
 - **深連結** `#!/details?id=…&serverId=…` 在兩個版本都開得到詳細頁（前端正規化成 `#/details?id=…`）。
 - **精靈**：`POST /Startup/User` 之前**必須先 `GET /Startup/User`**，否則回 500（`Sequence contains no elements`）—— GET 會先建立預設使用者。`POST /Library/VirtualFolders` 的 body 是 `AddVirtualFolderDto`，`LibraryOptions` **要包一層**（`{"LibraryOptions": {...}}`），直接送會靜默丟掉整份設定。
-- **MergeVersions**：`POST /Packages/Installed/Merge%20Versions?assemblyGuid=…` 不必指定版本，10.10.7 裝到 `10.10.0.5`、10.11.11 裝到 `10.11.0.1`；下載由 Jellyfin 連 GitHub，實測遇過 TLS 中斷回 500，要能重試。排程任務 `Key` 為 `MergeEpisodesTask` / `MergeMoviesTask`，`Name` 為 `Merge All Episodes` / `Merge All Movies`，`Category` 為 `Merge Versions`。
+- **MergeVersions**：`POST /Packages/Installed/Merge%20Versions?assemblyGuid=…` 不必指定版本，10.10.7 裝到 `10.10.0.5`、10.11.11 裝到 `10.11.0.1`；下載由 Jellyfin 連 GitHub，實測遇過 TLS 中斷回 500，要能重試。12.x 上不指定版本會裝到 `12.0.0`（`targetAbi 12.0`），但 12.x 不裝（§7.7、§20.9）。排程任務 `Key` 為 `MergeEpisodesTask` / `MergeMoviesTask`，`Name` 為 `Merge All Episodes` / `Merge All Movies`，`Category` 為 `Merge Versions`。
 - **重啟後不能只等 `/System/Info/Public`**：它在伺服器還在載入時就回 200，這時管理員 API（如 `/ScheduledTasks`）回 **503「Jellyfin 伺服器載入中」**。要輪詢真正要用的那個端點回 200 才算重啟完成（實測踩到過）。
 - **`find_episodes` 的陷阱**：10.11 在第一次掃描後，對已被 provider 認出來的 Series，`/Items?parentId=<seriesId>` 與 `/Shows/{id}/Episodes` **都回 0**，再掃一次才正常；10.10 沒有這個問題，12.0.0 也沒有重現（§20.8）。改用 `parentId=<library>&recursive=true` 再照 `Path` 前綴篩選，四種情況都對。
 
@@ -1077,3 +1082,29 @@ thepiratebay / yts，fixture 在 `tests/fixtures/http/prowlarr/search.*.json` �
 - **標為未看會清掉 `PlayCount` 與 `LastPlayedDate`**，復原不了原本的次數與時間。
 - **沒有直接開始播放的網址**（§12 維持）：三版的 `#/video` 都不吃 item id，「播放某一集」只能深連結到那一集的 `#/details?id=`。
 - **帳號狀態**：API key 代讀的路徑上沒看到檢查 `Policy.IsDisabled`（原始碼推論，未實測）——被 Jellyfin 停用的人，在 Berth 的 session 過期前可能照樣讀得到（§19 待決）。
+
+### 20.9 Jellyfin 12（2026-09-15 查證）
+
+全文、原始碼行號與實測紀錄見 [`docs/research/jellyfin-12.md`](research/jellyfin-12.md)。實測對象是一次性的 linuxserver `12.0ubu2604-ls48`（12.0.0）與 `12.1ubu2604-ls49`（12.1.0），跑完即刪；10.x 的對照引 §20.6 與 `m0-experiments.md`。
+
+- **版號**：12.0 就是原本的 10.12，只拿掉永遠不變的 `10`（2026-09-08 發佈；12.1 在 2026-09-15 發佈）。【文件】
+- **升級是單向的**：10.10.7 或任何 10.11.x 可直接升；資料庫改動讓降級只能靠備份還原。第三方插件要對 .NET 10 重建，10.11 的插件在 12 載入不了。升級後要完整掃描一次，自動分組的版本才會回來。升級會不會讓帳本的 `jellyfin_item_id` 失效【未查】。【文件 + 原始碼】
+- **劇集原生多版本**（[PR #16828](https://github.com/jellyfin/jellyfin/pull/16828)、官方文件 [`_video-multiversion.md`](https://github.com/jellyfin/jellyfin.org/blob/187351cd69c532a833c9ed57de036297012f5e9e/docs/general/server/media/_video-multiversion.md)）：同一個季資料夾裡解析出同一個 `S/E` 的檔案，併成同一集的多個 MediaSource。
+  - **分組鍵只有季號與集號，不含集名與結束集**：`S01E03-E04` 與 `S01E03` 同季時被當成同一集的兩個版本，第 4 集從集列表消失（實測；本系統的處理見 §7.8）。
+  - 12.1 起季號與集號都要解析得出才分組（[PR #17890](https://github.com/jellyfin/jellyfin/pull/17890)）。
+  - 本系統的命名在 12.0.0 與 12.1.0 不裝插件就合併，新版本在路徑通知後 100 秒內併入，外掛字幕掛在對的版本上。
+  - 版本名是去掉各版本檔名共同前綴後剩下的部分；順序依解析度降冪，再依檔名。
+  - 電影規則不變：檔名仍要以資料夾名開頭，分隔符多接受 `_`、`.`、`[`。中文組名的標籤是純 tag。
+  - 【實測 + 原始碼 + 文件】
+- **MergeVersions**：manifest 有 `12.0.0`（`targetAbi 12.0`），不指定版本的安裝在 12.x 會挑到它。但它在 12.x 上對本系統的樹是空跑：log 是 `Found 5 episodes and 0 duplicate episode groups`，合併前後來源數與名稱不變。原因是原生分組的次要版本帶 `PrimaryVersionId`，一般查詢會濾掉它們，插件湊不成一組。它的分組鍵不看資料夾與媒體庫，會跨媒體庫合併【原始碼推論】。【實測 + 原始碼】
+- **本系統用到的 24 支端點**在 12.0 / 12.1 都在、授權政策相同，以本系統的 adapter 跑完 plan §9.4 整段。例外兩條：
+  - `POST /Startup/User` 在第一個使用者已有密碼時回 **403**（[PR #17369](https://github.com/jellyfin/jellyfin/pull/17369)）。精靈第 3 步做完、後面某步失敗、Jellyfin 沒重啟時按重試，會一直卡在這裡（M1 票 14b）。【原始碼 + 部分實測：精靈未完成時匿名送的那條只讀了原始碼】
+  - `POST /Startup/Configuration`、`GET /Startup/User`、`POST /Startup/RemoteAccess` 在 12.x 的 OpenAPI 標 deprecated，現在還能用。Jellyfin 的政策是至少標滿一個大版本週期才移除，所以 13.0 發佈前要換成設定端點（替代端點的欄位【未查】）。【實測 + 文件】
+- **舊式驗證預設關閉**，連既有安裝也由遷移關掉：`X-Emby-Token`、`X-Emby-Authorization`、`?api_key=` 回 401。本系統用的 `Authorization: MediaBrowser …, Token="…"` 不受影響。【實測 + 原始碼】
+- `GET /Items` 帶 `includeItemTypes` 而沒指定 `recursive` 時預設遞迴，本系統一律明確帶 `recursive=true`。`POST /Library/Media/Updated` 背後的 `FileRefresher` 一行沒改，所以「空的媒體庫收到路徑通知無效」（§20.1）仍成立。【原始碼】
+- **linuxserver image**：
+  - tag 變成 `12.0ubu2604-ls48`、`12.1ubu2604-ls49` 這種形式。
+  - `latest` 已是 12.1。
+  - 舊 tag 會保留，另有跟著同一版號重建的 `version-12.1ubu2604`。所以 `m0-experiments.md` 當時寫的「只保留最新 tag，釘不了版本」不成立。
+  - Dockerfile、`/config`、8096、`PUID` / `PGID` 都不變。
+  - 【實測 + 原始碼】

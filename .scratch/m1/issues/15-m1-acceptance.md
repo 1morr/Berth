@@ -2,7 +2,7 @@
 
 **Status:** ready-for-agent
 
-**Blocked by:** 13、14
+**Blocked by:** 13、14、14b
 
 **讀:** plan §10、§11.2（T1.8）；brief §17（M1 那一列）
 

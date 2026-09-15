@@ -9,7 +9,7 @@
 | 項目 | 版本 |
 | --- | --- |
 | 宿主 | Windows 11 Pro for Workstations 26200、Docker Desktop 29.6.2（WSL2） |
-| Jellyfin | `jellyfin/jellyfin:10.10.7` 與 `jellyfin/jellyfin:10.11.11`（官方 image：linuxserver 只保留最新 tag，釘不了版本） |
+| Jellyfin | `jellyfin/jellyfin:10.10.7` 與 `jellyfin/jellyfin:10.11.11`（官方 image：當時以為 linuxserver 只保留最新 tag、釘不了版本——2026-09-15 更正：舊 tag 會保留，見 [jellyfin-12.md](jellyfin-12.md) §1.7） |
 | qBittorrent | `lscr.io/linuxserver/qbittorrent:4.4.5`（Web API 2.8.5）與 `:5.2.3`（Web API 2.15.1） |
 | Prowlarr | `lscr.io/linuxserver/prowlarr:latest` → 2.5.2.5491 |
 
