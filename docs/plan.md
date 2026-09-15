@@ -646,7 +646,7 @@ WebUI\AuthSubnetWhitelist=172.28.0.2/32
 2026-09-15 使用者在票 13 之後拍板加入（brief §12、§13、§19），排在 M1 驗收之後、M2 之前。播放仍然深連結到 Jellyfin，不做內嵌播放器。
 
 範圍：媒體庫頁改成瀏覽**整個 Jellyfin 媒體庫**（不只 Berth 經手的），Berth 經手的作品疊上票 13 的入庫狀態，還沒進 Jellyfin 的（下載中、待審）仍在牆上；繼續觀看、下一集；卡片與各集顯示已看 / 看到一半 / 剩幾集沒看，可切換並寫回 Jellyfin 該使用者的紀錄；依類型、年份排序與篩選；Jellyfin 的圖（海報、劇照）。Media 詳情在作品已在 Jellyfin 時把**觀看區**（繼續看、選季選集、各集已看）放最上，搜尋 torrent 與檔案版本收到下面——探索與媒體庫共用 `/media/:id`，不另建媒體庫詳情頁。
-前置：Jellyfin API 已查證（brief §20.8、`docs/research/library-browsing.md`）——功能都做得到，但伺服器 API key 代讀時 Jellyfin 只套用一部分媒體庫權限，所以**權限檢查集中在 services 的一處**：`userId` 一律取自 session、絕不收前端傳入；媒體庫 id 對 `GET /UserViews?userId=` 的允許清單驗證；單一作品與集走會檢查可見性的端點（`/Items/{id}?userId=`、`/Shows/{id}/Seasons|Episodes?userId=`），不用 `/Items?ids=`。越權請求被拒寫成整合測試，並在一次性 Jellyfin 上用只開放單一媒體庫的使用者實測 research 第 2 節那張表。adapter 的每個過濾參數都要測「伺服器真的有過濾」（`/Items` 靜默忽略不存在的參數）。brief §19 的待決在拆票前定案。
+前置：Jellyfin API 已查證（brief §20.8、`docs/research/library-browsing.md`）——功能都做得到，但伺服器 API key 代讀時 Jellyfin 只套用一部分媒體庫權限，所以**權限檢查集中在 services 的一處**：`userId` 一律取自 session、絕不收前端傳入；媒體庫 id 對 `GET /UserViews?userId=` 的允許清單驗證；單一作品與集走會檢查可見性的端點（`/Items/{id}?userId=`、`/Shows/{id}/Seasons|Episodes?userId=`），不用 `/Items?ids=`。越權請求被拒寫成整合測試，並在一次性 Jellyfin 上用只開放單一媒體庫的使用者實測 research 第 2 節那張表。adapter 的每個過濾參數都要測「伺服器真的有過濾」（`/Items` 靜默忽略不存在的參數）。brief §19 的四條待決已定（2026-09-15）：媒體庫頁一個 Jellyfin 媒體庫一頁（取代票 13 的一條 Route 一頁，`/library/:routeSlug` 跟著改）；首頁上方放繼續觀看與下一集，下面維持探索；瀏覽時取 `UserViews` 允許清單一併讀帳號 `Policy`（同一份短時間快取），停用就結束 session；Jellyfin 圖片由 Berth 代理，快取鍵用 `tag`。
 驗收：以一般使用者（`user` 角色）登入，不開 Jellyfin Web 就能從媒體庫找到要看的那一集、看到自己的觀看進度並標記已看，按播放落在 Jellyfin 的那一集；該使用者在 Jellyfin 沒有權限的媒體庫在 Berth 也看不到；既有媒體庫裡不是 Berth 入庫的作品照樣瀏覽得到。
 
 ### 11.3 M2 修正與對帳
