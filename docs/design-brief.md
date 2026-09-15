@@ -28,14 +28,14 @@
 - **取得**：把 torrent 送進 qBittorrent、追蹤下載狀態。
 - **入庫**：解析 torrent 內容 → 比對 metadata → 產生入庫計劃 → 硬鏈接 → 觸發 Jellyfin 掃描。
 - **帳本與修復**：記錄每個入庫檔案的來源，偵測孤兒與斷鏈，支援重新入庫、重新匹配與分範圍刪除。
-- **媒體庫檢視**：以 Jellyfin 資料加上本系統狀態呈現，作為人工修正與未來 AI 功能的入口。
+- **媒體庫檢視**：像 Jellyfin 那樣瀏覽整個 Jellyfin 媒體庫（繼續觀看、下一集、已看 / 未看、依類型或年份排序、選季選集），疊上本系統的入庫狀態；同時是人工修正與未來 AI 功能的入口。播放跳到 Jellyfin（§12）。
 - **可觀測性**：每個 torrent 有完整時間線（誰觸發、何時下載、怎麼解析、何時入庫、出了什麼錯）。
 
 ### 1.2 本系統不負責（交給外部服務）
 
 | 職責 | 交給 | 說明 |
 | --- | --- | --- |
-| 播放、轉碼、觀看紀錄、刮削圖片與簡介 | Jellyfin | 本系統只讀取 Jellyfin 的媒體庫與項目狀態 |
+| 播放、轉碼、觀看紀錄的儲存、刮削圖片與簡介 | Jellyfin | 本系統讀取 Jellyfin 的媒體庫、項目、圖片與每位使用者的觀看紀錄來呈現媒體庫（§12）；唯一寫回的是已看 / 未看標記。播放一律深連結到 Jellyfin |
 | 下載協定、做種、限速、分享率、種子清理 | qBittorrent | 做種策略用 qBittorrent 的分類設定，本系統只處理「種子被移除後」的善後 |
 | 索引站接入 | Prowlarr 或 Jackett（Torznab） | 只依賴 Torznab 協定。開箱即用套件預設打包 Prowlarr（§16.3），已有 Jackett 的使用者直接填 Torznab 端點 |
 | Metadata | TMDB | 第一階段唯一的 provider，見 §10 |
@@ -467,7 +467,9 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 
 ## 12. 播放【決定】
 
-第一階段 **深連結到 Jellyfin** 該項目的詳情頁（帳本存有 Jellyfin item id；劇集連 Series，電影連 Movie）。格式原本沿用 Seerr 來源碼的 `{externalUrl}/web/index.html#!/details?id={itemId}&serverId={serverId}`；**實作用 `{對外網址}/web/#/details?id={itemId}`**——客戶端自己的 `#/` 形式（M0 票 04 實測），不帶 `serverId`（2026-09-15 對 12.0.0 實測開到同一頁，§20.1）。主機是選填的「Jellyfin 對外網址」，沒填時推導（票 13，Seerr 的 `externalHostname` 慣例）。Jellyfin 沒有「直接開始播放」的穩定 URL。不做內嵌播放器：播放器牽涉轉碼協商、字幕、播放進度回報，是最大工作量且與本系統核心無關。媒體庫頁的價值在「狀態與修正」，不在「取代 Jellyfin 播放」。
+第一階段 **深連結到 Jellyfin** 該項目的詳情頁（帳本存有 Jellyfin item id；劇集連 Series，電影連 Movie）。格式原本沿用 Seerr 來源碼的 `{externalUrl}/web/index.html#!/details?id={itemId}&serverId={serverId}`；**實作用 `{對外網址}/web/#/details?id={itemId}`**——客戶端自己的 `#/` 形式（M0 票 04 實測），不帶 `serverId`（2026-09-15 對 12.0.0 實測開到同一頁，§20.1）。主機是選填的「Jellyfin 對外網址」，沒填時推導（票 13，Seerr 的 `externalHostname` 慣例）。Jellyfin 沒有「直接開始播放」的穩定 URL。不做內嵌播放器：播放器牽涉轉碼協商、字幕（動漫的 ASS 與字型）、播放進度回報，是最大工作量且與本系統核心無關；而且多數人在電視與手機上用 Jellyfin 的 app 看，網頁播放器取代不了它們。
+
+**瀏覽由 Berth 取代**（2026-09-15 使用者拍板，推翻原本的「媒體庫頁的價值在『狀態與修正』，不在『取代 Jellyfin 播放』」；M1.5）：媒體庫頁與 Media 詳情像 Jellyfin 那樣呈現整個 Jellyfin 媒體庫——繼續觀看、下一集、已看 / 未看（可切換，寫回 Jellyfin 該使用者的紀錄）、依類型或年份排序、Jellyfin 的圖、選季選集——並疊上本系統的入庫狀態。按下播放或某一集時才深連結到 Jellyfin 的那一項（Jellyfin 沒有直接開始播放的網址，使用者在那一集的詳細頁再按一次播放）。可行性已查（§20.8）：伺服器 API key 可以代讀代寫每位使用者的觀看資料，但 Jellyfin 這時只套用一部分媒體庫權限，**媒體庫存取權限要由 Berth 自己擋**——`userId` 一律取自 session，媒體庫對 Jellyfin 的 `UserViews` 允許清單驗證。
 
 ---
 
@@ -477,8 +479,8 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 | --- | --- | --- |
 | 設定精靈 | 首次啟動 | 建立管理員 → 偵測套件內的 Jellyfin / qBittorrent / Prowlarr 並一鍵設定，或連接既有服務 → 路徑 → 建立 Route → 健康檢查（§16.3） |
 | 探索 | 找東西 | 趨勢 / 熱門 / 搜尋；卡片顯示狀態（未追蹤 / 部分 / 完整 / 下載中，**四種都由 Job 與帳本推導**，所以卡片上的狀態要等 M1 票 09 才畫得出來） |
-| Media 詳情 | 決策中心 | TMDB 資訊、各季各集狀態、**搜尋 torrent**（結果表：大小、做種、來源、解析出的 tags、預估匹配）、選 Route 送單、RSS 訂閱、檔案清單（含 Unmatched 與 rematch）、版本並存清單 |
-| 媒體庫 | 瀏覽與修正 | 依 Route 分頁；卡片牆；篩選：有 Issue / 有 Unmatched / 有待審 |
+| Media 詳情 | 決策中心與觀看入口 | 探索與媒體庫點進的是**同一頁**（2026-09-15 使用者拍板，不另建媒體庫詳情頁）。作品已在 Jellyfin 裡時最上面是**觀看區**（M1.5）：繼續看 / 下一集的深連結、選季選集、各集劇照與已看標記。其下：TMDB 資訊、各季各集入庫狀態、**搜尋 torrent**（結果表：大小、做種、來源、解析出的 tags、預估匹配；作品已入庫時收合）、選 Route 送單、RSS 訂閱、檔案清單（含 Unmatched 與 rematch）、版本並存清單 |
+| 媒體庫 | 瀏覽與修正 | 像 Jellyfin 那樣瀏覽**整個 Jellyfin 媒體庫**（M1.5，不只 Berth 經手的）：繼續觀看、下一集、卡片牆附已看 / 未看、依類型或年份排序；Berth 經手的作品疊上入庫狀態，還沒進 Jellyfin 的（下載中、待審）也在牆上；篩選：有 Issue / 有 Unmatched / 有待審。M1（票 13）是依 Route 分頁、只列 Berth 經手的作品＋深連結 |
 | 下載與活動 | 全域狀態 | 所有 Job 列表：狀態、進度、Route、trigger；點入 Job 頁 |
 | Job 詳情 | 可觀測性 | **時間線**（§5.2）、檔案清單與各檔決策、Plan 歷史、動作（重新解析、重新入庫、刪除範圍） |
 | 審核佇列 | 人工介入 | 低信心 Plan（逐檔可改）、已入庫待確認（medium 自動入庫的 audit 清單，可一鍵撤銷）、Unmatched、重複版本、Issue；批次核准 |
@@ -572,6 +574,7 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 | --- | --- | --- |
 | **M0 骨架** | §20.6 的實驗（結果可能改變命名決定，所以最先做）、compose 範本（profiles）與最小預置、精靈（建立管理員、逐服務判斷套件內或既有、套件內服務全自動設定、既有服務連線與確認按鈕）、Route 建立、健康檢查 | 實驗結論寫回本文件；在乾淨的 Linux 與 Windows Docker Desktop 上 `docker compose up` 後只操作 Berth 即完成設定，四項健康檢查綠燈；另以「既有 Jellyfin + 套件內其餘服務」的組合走一次 |
 | **M1 手動全流程** | 探索 → 詳情 → 索引站搜尋 → 送 qBittorrent → 輪詢 → 規則 planning → 硬鏈接 → 掃描 → 媒體庫頁顯示可播放 + 深連結；Job 時間線；benchmark v0 | 一部美劇一季、一部動漫一季、一部電影，三者不經人工入庫並在 Jellyfin 正確顯示 |
+| **M1.5 媒體庫瀏覽** | 媒體庫與 Media 詳情像 Jellyfin 那樣瀏覽（§12、§13）：整個 Jellyfin 媒體庫疊上 Berth 狀態、繼續觀看、下一集、已看 / 未看與切換、類型與年份排序、Jellyfin 的圖、選季選集；播放深連結到 Jellyfin | 以一般使用者登入，不開 Jellyfin Web 就能找到要看的那一集、看到自己的進度並標記已看，按播放落在 Jellyfin 的那一集；Jellyfin 不讓這位使用者看的媒體庫，在 Berth 也看不到 |
 | **M2 修正與對帳** | Review Queue、Unmatched 指派、rematch、Reconciler、刪除範圍、重新入庫 | 刪掉 library 後可一鍵重建；Issue 表對三種人為破壞都能偵測 |
 | **M3 RSS** | Mikan 與 Nyaa adapter、Rule、去重、一次性連結、dry-run | 一個動漫季度分別以 Mikan 與 Nyaa feed 全自動追完 |
 | **M4 AI fallback** | AI Plan、驗證、快取、預算、Event 記帳 | benchmark 上 review 比例下降且誤入庫率不升 |
@@ -585,7 +588,7 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 | --- | --- | --- |
 | complete / incomplete 鏡像 library 結構 | 不做 | §4.2 |
 | library 內的 `unmatch` 資料夾 | 不做，改為 UI 列表 | §7.4 |
-| 內嵌播放器 | 延後 | §12 |
+| 內嵌播放器 | 延後（M1.5 的媒體庫瀏覽照樣跳到 Jellyfin 播放） | §12 |
 | AI 解析 | M4 | 先有 benchmark 才能評估 |
 | 品質升級自動替換 | 不做 | 版本並存 + MergeVersions 已滿足；升級邏輯是 Sonarr 最複雜的部分 |
 | remote path mapping | 不做 | 強制同路徑掛載更簡單、更不易錯 |
@@ -598,7 +601,7 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 
 ## 19. 決策紀錄與待決問題
 
-已由 owner 拍板（2026-09-07）：
+已由 owner 拍板（2026-09-07 起，之後的決定在項目欄註明日期）：
 
 | 項目 | 決定 | 落點 |
 | --- | --- | --- |
@@ -612,8 +615,14 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 | 授權 | MIT | §16.2 |
 | 目標環境 | Linux 與 Windows 的 Docker；NAS 與一般電腦使用者；套件內含 Jellyfin / qBittorrent / Prowlarr，開箱即用 | §16.1、§16.3 |
 | 索引站管理器 | 套件預設 Prowlarr（有文件化 REST API 可一鍵加索引站）；Jackett 以 Torznab 端點接入 | §3、§16.3、§20.7 |
+| 媒體庫的角色（2026-09-15） | 像 Jellyfin 那樣瀏覽，播放跳 Jellyfin；牆上是整個 Jellyfin 媒體庫疊上 Berth 狀態；已看 / 未看可切換並寫回 Jellyfin；探索與媒體庫共用同一個 Media 詳情頁，作品在 Jellyfin 裡時觀看區在最上；排在 M1 驗收後、M2 之前（M1.5） | §1.1、§1.2、§12、§13、§17、plan §11.2b |
 
-目前沒有待決事項。
+【待決】M1.5 拆票前定（每條附推薦）：
+
+- **媒體庫頁的分頁單位**：票 13 是一條 Route 一頁，但牆上改成整個 Jellyfin 媒體庫之後，一個 Jellyfin 媒體庫可以有多條 Route（§4.3、M1 票 14），也可以有 Berth 路徑以外的舊路徑——照 Route 分頁會讓同一批作品出現在兩頁。**推薦**：一個 Jellyfin 媒體庫一頁（Jellyfin 自己的慣例），並且只列這位使用者 `UserViews` 裡有的；Route 退成卡片上入庫狀態的來源。
+- **首頁 `/`**：現在是探索頁；Jellyfin 的首頁是繼續觀看與下一集。**推薦**：首頁上方放繼續觀看與下一集兩列（沒有內容就不出現），下面維持探索——找片與接著看是同一位使用者最常做的兩件事。
+- **帳號狀態跟不上**：Berth 的 session 活 30 天、只在登入時向 Jellyfin 驗證，而 API key 代讀的路徑上沒看到檢查帳號是否被停用（§20.8，原始碼推論）。**推薦**：瀏覽請求取 `UserViews` 允許清單時，一起讀 `GET /Users/{id}` 的 `Policy`，兩者同一份短時間快取；帳號被停用就結束 Berth 的 session。不縮短 session，因為管理類頁面（下載、設定）也會一起被迫重新登入。
+- **圖片怎麼到瀏覽器**：瀏覽器直連 Jellyfin（最簡單，但瀏覽器要連得到它，HTTPS 的 Berth 配 HTTP 的 Jellyfin 是 mixed content），還是由 Berth 代理（頻寬與快取自己處理）。**推薦**：Berth 代理，快取鍵用 `tag`。瀏覽器只要連得到 Berth，不依賴深連結的主機推導、也沒有 mixed content；縮圖後一張約 45 KB（§20.8 實測），代價可接受。
 
 ---
 
@@ -652,7 +661,7 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 - 觸發掃描：`POST /Library/Media/Updated` 帶 `{Updates:[{Path, UpdateType: Created|Modified|Deleted}]}` 做路徑級通知；`POST /Library/Refresh` 是全庫掃描。沒有「掃描單一資料夾」的專用端點。
 - **路徑通知對「從來沒掃到過內容」的媒體庫無效**（2026-09-15 對 `lscr.io/linuxserver/jellyfin:latest` = **12.0.0** 實測，並查核 master 的 [`FileRefresher.GetAffectedBaseItem`](https://github.com/jellyfin/jellyfin/blob/master/Emby.Server.Implementations/IO/FileRefresher.cs)）：等 `LibraryMonitorDelay`（預設 60 秒）之後，它從通知的路徑往上找第一個已存在的 item；初次掃描時是空的媒體庫資料夾不會成為 item（log：`Library folder "/data/library/tv" is inaccessible or empty, skipping`），於是找不到、**不做事也不寫 log**，而 `POST` 照樣回 204。套件內的媒體庫一開始一定是空的，所以**第一次入庫一定踩到**。實測三個媒體庫送了三輪通知，四分鐘後仍是 0 個 item。這條與 `EnableRealtimeMonitor` 無關——`ReportFileSystemChanged` 不看它（同日查核 [`LibraryMonitor`](https://github.com/jellyfin/jellyfin/blob/master/Emby.Server.Implementations/IO/LibraryMonitor.cs)）。
 - `POST /Items/{id}/Refresh` 在 master 上**沒有 `Recursive` 參數**（[`ItemRefreshController`](https://github.com/jellyfin/jellyfin/blob/master/Jellyfin.Api/Controllers/ItemRefreshController.cs)），對媒體庫 id 呼叫只刷新那一個 item 的中繼資料、不找新的子資料夾（實測 204，兩分鐘後仍是 0 個 item）。`POST /Library/Refresh` 在請求裡**等整次掃描做完**（[`LibraryController.RefreshLibrary`](https://github.com/jellyfin/jellyfin/blob/master/Jellyfin.Api/Controllers/LibraryController.cs) `await ValidateMediaLibrary`）。要「現在掃」又不把呼叫端卡住，用內建排程任務 **`RefreshLibrary`**（「Scan Media Library」／「重新掃描媒體庫」）：`POST /ScheduledTasks/Running/{id}` 收下就回；id 從 `GET /ScheduledTasks` 以 `Key` 找（12.0.0 實測 `7738148ffcd07979c7ceb148e06b3aed`）。
-- `GET /Items` **沒有 `path` 篩選**。反查方式：以 `parentId=<library>&includeItemTypes=Series&fields=ProviderIds,Path` 找 Series（比對 tmdb id 或路徑），再取集並用 `Path` 比對。（[ItemsController.cs](https://github.com/jellyfin/jellyfin/blob/master/Jellyfin.Api/Controllers/ItemsController.cs)）**注意**：取集時不要用 `parentId=<series>` —— 10.11 在第一次掃描後對「已被 provider 認出來的」Series 會回 0 筆，`/Shows/{id}/Episodes` 同樣回 0，要再掃一次才正常；改用 `parentId=<library>&recursive=true` 再照 `Path` 前綴篩選，四種情況都對（2026-09-07 實測，§20.6）。
+- `GET /Items` **沒有 `path` 篩選**。反查方式：以 `parentId=<library>&includeItemTypes=Series&fields=ProviderIds,Path` 找 Series（比對 tmdb id 或路徑），再取集並用 `Path` 比對。（[ItemsController.cs](https://github.com/jellyfin/jellyfin/blob/master/Jellyfin.Api/Controllers/ItemsController.cs)）**注意**：取集時不要用 `parentId=<series>` —— 10.11 在第一次掃描後對「已被 provider 認出來的」Series 會回 0 筆，`/Shows/{id}/Episodes` 同樣回 0，要再掃一次才正常；改用 `parentId=<library>&recursive=true` 再照 `Path` 前綴篩選，四種情況都對（2026-09-07 實測，§20.6）。12.0.0 沒有重現（2026-09-15，§20.8）。
 - **`DELETE /Items/{id}` 會刪除磁碟檔案**（`DeleteFileLocation = true`），本系統絕不呼叫它。（[LibraryController.cs](https://github.com/jellyfin/jellyfin/blob/master/Jellyfin.Api/Controllers/LibraryController.cs)）
 - 登入 `POST /Users/AuthenticateByName` 回 `AccessToken`、`ServerId`、`User`；`POST /Auth/Keys` 建 API key。
 - 深連結：`{server}/web/index.html#!/details?id={itemId}&serverId={serverId}` 在 10.10.7 與 10.11.11 **都能開到詳細頁**，前端會正規化成 `#/details?id=…`；客戶端自己產生的連結一律不帶 `!`（2026-09-07 playwright 實測，§20.6）。沒有「直接開始播放」的穩定 URL。
@@ -1029,7 +1038,7 @@ thepiratebay / yts，fixture 在 `tests/fixtures/http/prowlarr/search.*.json` �
 - **精靈**：`POST /Startup/User` 之前**必須先 `GET /Startup/User`**，否則回 500（`Sequence contains no elements`）—— GET 會先建立預設使用者。`POST /Library/VirtualFolders` 的 body 是 `AddVirtualFolderDto`，`LibraryOptions` **要包一層**（`{"LibraryOptions": {...}}`），直接送會靜默丟掉整份設定。
 - **MergeVersions**：`POST /Packages/Installed/Merge%20Versions?assemblyGuid=…` 不必指定版本，10.10.7 裝到 `10.10.0.5`、10.11.11 裝到 `10.11.0.1`；下載由 Jellyfin 連 GitHub，實測遇過 TLS 中斷回 500，要能重試。排程任務 `Key` 為 `MergeEpisodesTask` / `MergeMoviesTask`，`Name` 為 `Merge All Episodes` / `Merge All Movies`，`Category` 為 `Merge Versions`。
 - **重啟後不能只等 `/System/Info/Public`**：它在伺服器還在載入時就回 200，這時管理員 API（如 `/ScheduledTasks`）回 **503「Jellyfin 伺服器載入中」**。要輪詢真正要用的那個端點回 200 才算重啟完成（實測踩到過）。
-- **`find_episodes` 的陷阱**：10.11 在第一次掃描後，對已被 provider 認出來的 Series，`/Items?parentId=<seriesId>` 與 `/Shows/{id}/Episodes` **都回 0**，再掃一次才正常；10.10 沒有這個問題。改用 `parentId=<library>&recursive=true` 再照 `Path` 前綴篩選，四種情況都對。
+- **`find_episodes` 的陷阱**：10.11 在第一次掃描後，對已被 provider 認出來的 Series，`/Items?parentId=<seriesId>` 與 `/Shows/{id}/Episodes` **都回 0**，再掃一次才正常；10.10 沒有這個問題，12.0.0 也沒有重現（§20.8）。改用 `parentId=<library>&recursive=true` 再照 `Path` 前綴篩選，四種情況都對。
 
 **qBittorrent 版本矩陣**（2026-09-07，票 04；`lscr.io/linuxserver/qbittorrent:4.4.5`（API 2.8.5）與 `:5.2.3`（API 2.15.1），[完整結果](research/m0-experiments.md#2-qbittorrent-445-與-523)）
 
@@ -1054,3 +1063,17 @@ thepiratebay / yts，fixture 在 `tests/fixtures/http/prowlarr/search.*.json` �
 - Linux ext4 單一掛載根：PASS（nlink=2、inode 相同）。Windows NTFS bind mount（9p）：PASS（dev=70）。`torrent/` 與 `library/` 分成兩個 volume：`ln: Cross-device link`，退出碼 1。
 - ext4 那一輪的來源是 **Docker Desktop 自己的 Linux VM**（`/mnt/docker-desktop-disk/...`），daemon 端的檔案系統，與原生 Linux 宿主是同一條 `link()` 路徑，但**不是另一台實體 Linux**。
 - 腳本沒有相依，NAS 上 `sh hardlink.sh /volume1/<share>` 可直接跑；原生 Linux 宿主與 NAS 都尚未實測（§20.6）。
+
+### 20.8 媒體庫瀏覽用的 Jellyfin API（M1.5 前置）
+
+2026-09-15 查證；全文、端點範例與原始碼連結見 [`docs/research/library-browsing.md`](research/library-browsing.md)。只有 **12.0.0 實測**，10.10 / 10.11 讀原始碼（tag `v10.10.7`、`v10.11.11`、`v12.0`）。
+
+- **伺服器 API key 可以代讀代寫任何使用者**：API key 在驗證層一律算 Administrator，帶哪個 `userId` 就是誰（三版一致）。繼續觀看 `GET /UserItems/Resume?userId=&mediaTypes=Video`（不帶 `mediaTypes` 會混進 Season 與 Series）、下一集 `GET /Shows/NextUp?userId=`、附 `UserData` 的項目 `GET /Items?userId=`、已看 / 未看 `POST|DELETE /UserPlayedItems/{id}?userId=`。不帶 `userId` 時 Resume、NextUp、PlayedItems 回 400，`/Items` 回整台伺服器且沒有 `UserData`。舊路徑 `/Users/{userId}/...` 還能用但已不在 12.0.0 的 OpenAPI；NextUp 的 `disableFirstEpisode` 在 12.0 移除。【實測 12.0.0 + 原始碼】
+- **媒體庫存取權限只有一部分會套用**（家長分級只要帶 `userId` 就套）：`/UserViews?userId=`、不帶 `parentId` / `ids` 的 `/Items`、不帶 `parentId` 的 Resume 與 NextUp、`/Items/{id}?userId=`、`/Shows/{id}/Seasons|Episodes?userId=`、`/UserPlayedItems` 會照使用者的權限（無權時不列或 404）；**帶 `parentId` / `ids` / `seriesId` 的查詢，以及 `/Genres`、`/Years`、`/Items/Filters`、`/Items/Filters2` 不會**。所以權限要由 Berth 自己擋（§12、plan §11.2b）。【只讀原始碼：伺服器上沒有受限使用者，M1.5 拆票時要逐列實測】
+- **`/Items` 靜默忽略不存在的參數**：實測帶 `seriesId` 或 `ancestorIds` 都回整台伺服器的集。每個過濾參數都要測「伺服器真的有過濾」。
+- **排序與篩選**：`sortBy`（逗號、多鍵）加 `sortOrder`；`genres` 以 `|` 分隔、`years` 以逗號。類型與年份清單用 `GET /Items/Filters?userId=&parentId=&includeItemTypes=Series|Movie`（三版形狀一致，jellyfin-web 的篩選面板用這支；`Filters2` 沒有年份；`/Years` 不帶 `includeItemTypes` 會混進集的播出年）。劇集的「新集加入」排序是 `DateLastContentAdded`、「最近看過」是 `SeriesDatePlayed`。
+- **選季選集**：`/Shows/{id}/Seasons?userId=` 與 `/Shows/{id}/Episodes?userId=&seasonId=`（jellyfin-web 詳細頁的查法，會套權限）。§20.1 的「10.11 第一次掃描後回 0」**在 12.0.0 沒有重現**（一次性容器：掃完當下、兩分鐘後、第二次掃描後都對）；10.11 沒有重測，那一條仍成立，後備是媒體庫遞迴查詢照 `Path` 分群（三版都驗過）。
+- **圖片不需要驗證**：`GET /Items/{id}/Images/{Primary|Backdrop|Thumb}` 匿名 200、帶 `Access-Control-Allow-Origin: *`；縮放用 `fillWidth` / `fillHeight` / `quality` / `format=Webp`。`tag` 只是快取鍵（錯的也回圖），URL 要帶 DTO 的 `ImageTags` 才會在換圖時失效。瀏覽器直連的前提是連得到 Jellyfin（與深連結同一個主機），HTTPS 的 Berth 配 HTTP 的 Jellyfin 是 mixed content（§19 待決）。
+- **標為未看會清掉 `PlayCount` 與 `LastPlayedDate`**，復原不了原本的次數與時間。
+- **沒有直接開始播放的網址**（§12 維持）：三版的 `#/video` 都不吃 item id，「播放某一集」只能深連結到那一集的 `#/details?id=`。
+- **帳號狀態**：API key 代讀的路徑上沒看到檢查 `Policy.IsDisabled`（原始碼推論，未實測）——被 Jellyfin 停用的人，在 Berth 的 session 過期前可能照樣讀得到（§19 待決）。
