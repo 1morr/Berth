@@ -639,7 +639,7 @@ WebUI\AuthSubnetWhitelist=172.28.0.2/32
 | T1.7 | UI：Media 詳情（搜尋 → 選 torrent → 選 Route → 送單；檔案與版本清單）、Job 詳情時間線、媒體庫頁（Route 分頁、卡片、狀態、深連結） | brief §17 M1 驗收 |
 | T1.8 | e2e：compose 環境下的 M1 流程自動化（§10） | nightly 綠燈 |
 | T1.9 | **M0 帶過來的技術債**（票 11 收尾時逐條過完，2026-09-11）：~~`openapi-typescript` 從 OpenAPI 產前端型別並在 CI 檢查是否過期~~（**票 02 做完**：`pnpm gen:api` + CI 的 `git diff --exit-code -- src/api/schema.d.ts`）、~~結構化日誌每行帶 job id~~（**票 09 做完**：`berth/logs.py` 的 `ContextVar`）、Route 設定頁支援「同一個媒體庫多條 Route」與明確的刪除動作（brief §4.3；**留在票 14**——票 09 之後 Job 引用了 `route_id`，所以精靈第 7 步的隱式刪除必須先改成軟處理）、~~qBittorrent 的 403 要分得出「帳密不對」與「IP 被封」~~（**票 10 做完**：`IpBannedError`，§8.1、brief §20.2） | 前端沒有手寫的 API 型別，型別檔過期時 CI 紅燈；Job 的每一行 log 都查得到 job id；一個媒體庫建得出第二條 Route，且沒有東西被隱式刪除 |
-| T1.10 | **Jellyfin 12**（2026-09-15 插入，票 14b；brief §19、§20.9）：MergeVersions 依伺服器版號安裝與觸發（12 以上不裝）、精靈第 3 步重試遇到的 403、劇集版本名改讀 Jellyfin 的 `MediaSources[].Name`、多集檔與同起始集的單集送 review、compose 釘 `version-12.1ubu2604` | 12.1 的真環境裡，同一集兩個版本入庫後在 Jellyfin 是一集兩個來源，Berth 顯示 Jellyfin 的版本名；10.x 的插件流程測試仍綠；精靈中途失敗後重試走得完 |
+| T1.10 | **Jellyfin 12**（2026-09-15 插入，票 14b；brief §19、§20.9）：**只支援 Jellyfin 12 以上**：移除 MergeVersions（精靈步驟、既有服務按鈕、resolver 的合併觸發、任務 id）、低於 12 時精靈與健康檢查紅燈並說明升級；精靈第 3 步重試遇到的 403、劇集版本名改讀 Jellyfin 的 `MediaSources[].Name`、多集檔與同起始集的單集送 review、compose 釘 `version-12.1ubu2604` | 12.1 的真環境裡，同一集兩個版本入庫後在 Jellyfin 是一集兩個來源，Berth 顯示 Jellyfin 的版本名；連 10.11 的 Jellyfin 時精靈停下並說得出要升級；精靈中途失敗後重試走得完 |
 
 ### 11.2b M1.5 媒體庫瀏覽
 

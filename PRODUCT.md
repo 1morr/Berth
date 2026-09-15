@@ -46,7 +46,7 @@ Jellyfin 正確顯示」。長期指標是解析 benchmark 的**誤自動入庫�
 
 **Berth 只做協調**（brief §1.1、§1.2）。它負責探索與決策、取得、入庫、帳本與修復、媒體庫檢視、可觀測性；
 播放與轉碼交 Jellyfin，下載協定與做種交 qBittorrent，索引站接入交 Prowlarr / Jackett，metadata 交 TMDB，
-多版本合併顯示交 Jellyfin（12.x 原生；10.10 / 10.11 靠 MergeVersions 插件）。
+多版本合併顯示交 Jellyfin（12 起原生合併；Berth 只支援 Jellyfin 12 以上）。
 
 跟 \*arr 生態的差別（brief §1.3、§4.4、§6.5、§7.4、§20.2、§20.4）：
 
@@ -96,7 +96,7 @@ complete/incomplete 鏡像 library 結構、remote path mapping、TVDB / AniList
 - Berth 與 qBittorrent 必須在同一台機器，不支援 remote path mapping（brief §16.4）。
 - qBittorrent 版本下限 4.4；4.x 與 5.x 的 API 欄位有差異，一律依 `docs/research/m0-experiments.md` 的實測實作。
 - Jellyfin 的語言碼分不出中文繁簡，只能用 `zh` 加自由文字標題變通（brief §6.7、§20.1）。
-- Jellyfin 10.10 / 10.11 的劇集原生多版本不可靠，必須靠 MergeVersions 插件；12.0 起原生合併，不裝插件，而多集檔與同起始集的單集會被併成一集（brief §7.7、§7.8、§20.9）。
+- **Berth 只支援 Jellyfin 12 以上**。10.10 / 10.11 的劇集原生多版本不可靠、要靠 MergeVersions 插件，12.0 起原生合併；還在 10.x 的使用者要先升級，而升級不可逆（brief §19、§20.9）。12.x 會把多集檔與同起始集的單集併成一集（brief §7.7、§7.8、§20.9）。
 - 秘密（API key、密碼）存在 SQLite，只靠檔案權限保護，不做應用層加密（brief §16.2）。
 
 **前端既定技術**（plan §1.4、§7，已實作到 repo）：React 19、TypeScript、Vite、Tailwind v4、
@@ -127,7 +127,7 @@ TMDB 仍是媒體牆、標題、海報與電影的唯一來源，這一條不變
   certified by TMDB.」TMDB 條款限非商業使用（brief §20.3）。任何介面上出現 TMDB 資料的地方都要帶這個歸屬。
 - `LICENSE` —— MIT（brief §16.2、§19）。
 - `docs/research/m0-experiments.md` —— 對真實 Jellyfin 10.10 / 10.11 與 qBittorrent 4.4 / 5.2 的實測結果，
-  命名模板與 API 行為以它為準。
+  命名模板與 API 行為以它為準；Jellyfin 12（Berth 支援的唯一版本線）與它不同的地方，以 `docs/research/jellyfin-12.md` 為準。
 
 **目前沒有、不可捏造**：使用者見證、使用者數、效能數據、任何「已有 N 人在用」的說法。Berth 處於 M0，
 產品尚不可用，README 明說這件事。
