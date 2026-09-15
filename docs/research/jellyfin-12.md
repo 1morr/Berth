@@ -1,7 +1,7 @@
 # Jellyfin 12 查證：版本差異、劇集原生多版本、MergeVersions 的去留
 
 2026-09-15。回答三件事：12.0 與 10.10 / 10.11 差在哪（只看與 Berth 有關的）、劇集原生多版本之後
-MergeVersions 還要不要裝、Berth 要改哪裡。結論摘要在第 5 節。
+MergeVersions 還要不要裝、Berth 要改哪裡。結論摘要在第 6 節。
 
 ## 0. 環境、方法與寫入紀錄
 
@@ -318,12 +318,277 @@ movies/Berth Movie Plan (2019) [tmdbid-27205]/
 - 結論：**12.x 上不需要 MergeVersions，也不建議裝**——它對 Berth 的樹沒有增益，卻帶來一次 Jellyfin 重啟、對第三方 GitHub 下載的依賴（brief §20.7 記過 TLS 中斷）、跨媒體庫誤併，以及 §3.1 那幾個 open issue 的風險。
   **10.10 / 10.11 上仍然需要**（m0 §1.3：沒有它同一集是兩個重複條目）。
 
-## 4. 對 Berth 的影響
+## 4. 從 10.11 升級到 12 的阻力（2026-09-15 補查）
+
+回答：既有 10.11 使用者升到 12 會碰到哪些 breaking change 或阻力，哪些會讓人不方便或不敢升。§1 只挑了和 Berth 有關的，本節看一般使用者。
+
+### 4.0 方法與來源
+
+- **這一輪沒有起任何容器、沒有碰本機服務**，只讀文件、release notes、原始碼與官方 issue。標記沿用 §0，另加：
+  【未查到】= 找過但沒有一手來源；【未查證】= 只有非一手（社群討論、摘要）來源。
+- 伺服器原始碼：`v10.11.11`（`1fbd8739`）、`v12.1`（`ee91c75e`）shallow clone 後以 `git grep` / `git show` 讀；`v12.0` 的個別檔案以 GitHub API 讀。
+  客戶端讀各 repo 2026-09-15 的 default branch，或註明的 tag。
+- 文件：[v12.0 release notes](https://github.com/jellyfin/jellyfin/releases/tag/v12.0)、[v12.1 release notes](https://github.com/jellyfin/jellyfin/releases/tag/v12.1)、
+  官方部落格原檔 `jellyfin.org/blog/2026/09-07-jellyfin-release-12.0/index.mdx`（下稱「部落格 TL;DR 第 n 點」）。
+- issue、release 與發佈管道都是 **2026-09-15 08:50Z 前後的快照**。
+- 第三方客戶端 / 整合與 NAS 發佈管道由兩個子代理查（表中標「子代理查」）；其中 Home Assistant 釘版、Ombi、Sonarr、Radarr、Seerr PR、
+  SynoCommunity、TrueNAS、binhex、apt 的 armhf 與 `build.yaml` 另外親自重打過一次。
+
+### 4.1 12.0 / 12.1 的升級注意與行為變更【文件】
+
+「一般使用者」欄：**是** = 一般管理者升級就會碰到或要動手；看情況 = 只影響有特定設定或內容的人；否 = 開發者或無感。
+
+**Notes on Updating 與部落格 TL;DR**
+
+| # | 內容 | 來源 | 一般使用者 |
+| --- | --- | --- | --- |
+| 1 | 升級前**停掉 Jellyfin，完整手動備份資料與設定目錄**；資料庫變更讓「沒有完整還原就回不去」 | Notes 第 1 段；TL;DR 開頭 info 框（「a backup is the only way back」）與第 1 點 | **是** |
+| 2 | 10.10.7 或任何 10.11.x 可直升；更舊的先升 10.10.7 | Notes 第 2 段；TL;DR 第 2 點 | 看情況（10.11 使用者不用中繼） |
+| 3 | **遷移前移除所有第三方（repository）插件**，等作者出新版再裝回 | Notes 第 3 段；TL;DR 第 7 點「Plugins built for 10.11 will not load on 12.0」 | **是**（有第三方插件的人） |
+| 4 | 插件庫若改成 unstable，改回 `https://repo.jellyfin.org/files/plugin/manifest.json` | Notes 第 4 段 | 看情況 |
+| 5 | **升級後必須完整掃描媒體庫**，否則自動分組的版本看起來像不見；首次掃描比平常久很多，部分電影會顯示為新加入 | Notes「After migrating」；Server「Performance PR implications」（[PR #16062](https://github.com/jellyfin/jellyfin/pull/16062)）；TL;DR 第 4、5 點 | **是** |
+| 6 | **先檢查使用者名稱**：只差大小寫的兩個帳號會讓資料庫遷移失敗 | Breaking 最後一條（[PR #17229](https://github.com/jellyfin/jellyfin/pull/17229)）；TL;DR 第 3 點 | 看情況，但**命中就是遷移失敗** |
+| 7 | **遷移進行中不要停伺服器**；可以用 `--mode MigrateSystem` 先跑完遷移、不啟動伺服器 | TL;DR 第 5 點；Operations 第 1 條；部落格「What runs on first boot」 | **是**（大媒體庫遷移可能很久，§4.4） |
+| 8 | 升級後瀏覽器強制重新整理或清快取 | TL;DR 第 6 點 | 是（無害） |
+| 9 | **很舊的第三方客戶端會停止運作**：`/emby/`、`/mediabrowser/` 位址移除，舊式登入方式停用（含既有伺服器） | TL;DR 第 8 點；Breaking 第 1、2 條 | **是**（§4.2） |
+| 10 | 含安全修正，建議準備好就升 | TL;DR 第 9 點 | — |
+| 11 | 回報問題的標題加 `[12.0]` | Notes 最後；TL;DR 第 10 點 | 否 |
+
+**Packaging、Breaking and behavior changes 與其他使用者看得到的變更**
+
+| 內容 | 來源 | 一般使用者 |
+| --- | --- | --- |
+| Debian Bullseye、Ubuntu Focal 不再建置套件 | Packaging | 看情況：這兩個發行版的 apt 使用者要先升 OS（§4.3、§4.6） |
+| 移除 `/emby/*`、`/mediabrowser/*` 路由前綴（[PR #15669](https://github.com/jellyfin/jellyfin/pull/15669)） | Breaking 第 1 條 | **是**（依客戶端，§4.2） |
+| 舊式驗證預設關閉，遷移把既有安裝也關掉（[PR #15559](https://github.com/jellyfin/jellyfin/pull/15559)） | Breaking 第 2 條 | **是**（依客戶端，§4.2） |
+| 移除 obsolete 路由：`POST /Users/{userId}/EasyPassword`、`GET /Items/{itemId}/CriticReviews`、`GET /Environment/NetworkShares`、`POST /System/MediaEncoder/Path`、`GET /LiveTv/Recordings/Groups/{groupId}`、`GET /QuickConnect/Initiate` | Breaking 第 3 條；部落格說前五個原本就是回 403 / 404 / 空結果的 no-op，只有 `GET /QuickConnect/Initiate` 真的能用，要改用 POST | 看情況（用 GET 發起 Quick Connect 的舊客戶端） |
+| 全域字幕設定移除，改在各媒體庫設定（[PR #14957](https://github.com/jellyfin/jellyfin/pull/14957)） | Breaking 第 4 條；部落格「Changes you may notice after upgrading」 | **是**：要到每個媒體庫重看字幕設定。10.11.11 的 `MediaBrowser.Model/Providers/SubtitleOptions.cs` 在 12.1 已不存在，12.1 裡 `git grep SubtitleOptions` 只剩 `EmbeddedSubtitleOptions`，**舊的全域值會不會帶進媒體庫【原始碼推論：找不到搬移程式碼；實際結果未查】** |
+| `.ogg` 改當音訊、`.aifc` 當音訊、`.aiff` 不再當圖片 | Breaking 第 5 條 | 看情況（有 `.ogg` 影片的人，下次掃描會被重新歸類） |
+| symlink 只在播放時解析（[PR #16965](https://github.com/jellyfin/jellyfin/pull/16965)） | Breaking 第 6 條 | 看情況（用 symlink 組媒體庫的人） |
+| 名稱排序改用 `SortName` / `CleanName`，順序可能與 10.11 不同（[PR #16804](https://github.com/jellyfin/jellyfin/pull/16804)、[#17402](https://github.com/jellyfin/jellyfin/pull/17402)） | Breaking 第 7 條 | 是（外觀） |
+| 圖片端點不再放大超過原始解析度（[PR #17569](https://github.com/jellyfin/jellyfin/pull/17569)） | Breaking 第 8 條 | 是（外觀，低解析度海報變小） |
+| 首次啟動清理資料：合併重複的音樂藝人與人物、移除孤立 extras 與外部資料、修正 owner 關係、重算 clean name / forced sort name / series presentation key | Database and performance 第 3 條 | **是**（耗時；§4.4 的遷移失敗多半出在這些遷移） |
+| 已停用的插件重啟後不再被自動啟用 | Operations | 是（正面） |
+| Web：Modern 版面成為預設，舊版改叫 Legacy；所有主題改從共用 base theme 衍生，**自訂主題可能要調** | Web；部落格「The Modern layout is now the default」 | 是（有自訂主題 / CSS 的人） |
+| 內建 TLS 的移除**延後**到未來版本 | TLS Configuration；部落格最後一節 | 否（12.x 仍可用） |
+| .NET 10、插件介面變更、Swashbuckle v10、`GetItems` 的遞迴行為 | Developers（API Changes / Platform / Plugin changes） | 否（開發者；使用者端的後果就是第 3 點「插件要等作者更新」） |
+
+**12.1**：release notes 沒有 Breaking 或 Notes on Updating 段，只有 47 條 changelog，開頭照例「please ensure you take a full backup before upgrading」。和升級直接相關的修正：
+[#17835](https://github.com/jellyfin/jellyfin/pull/17835) Clean up invalid data before running migrations、
+[#17836](https://github.com/jellyfin/jellyfin/pull/17836) Fix database optimization memory use and pre-migration backup integrity、
+[#17873](https://github.com/jellyfin/jellyfin/pull/17873) Delete the full ownership closure when deleting items、
+[#18030](https://github.com/jellyfin/jellyfin/pull/18030) Stop wrong-type alternate version cleanup from recursing、
+[#17842](https://github.com/jellyfin/jellyfin/pull/17842)（版本列表與手動合併）、
+[#18044](https://github.com/jellyfin/jellyfin/pull/18044) Fix nested unnumbered season folders collapsing onto the first one、
+[#18007](https://github.com/jellyfin/jellyfin/pull/18007) Preserve library items when directory enumeration fails、
+[#17881](https://github.com/jellyfin/jellyfin/pull/17881) Fix /UserViews exhausting memory。
+**10.11 使用者直接升 12.1，就避開了 §4.4 第一張表那批已修的問題。**
+
+### 4.2 客戶端相容性
+
+#### 4.2.1 官方說法與開關【文件 + 原始碼】
+
+- **官方沒有逐一列出客戶端的相容性表**【未查到】。release notes 與部落格只有 TL;DR 第 8 點「Clients that have not seen an update in years are the ones at risk here」。
+  最接近清單的是 PR #15559 的留言：
+  - 維護者 nielsvanvelzen（2025-11-30）：「It is expected that some clients will break as they're not using our best practices.」
+  - 團隊成員 oddstr13（[2026-01-19](https://github.com/jellyfin/jellyfin/pull/15559#issuecomment-3768297081)）列了**當時仍用 `api_key` 的不完整清單**：Jellyfin for Kodi、Mopidy、JellyCon、
+    Python apiclient 與所有用它的東西、Chromecast、MPV Shim、Vue、Roku、iOS、數個官方插件。同一則留言指出 `ApiKey` 拼法從 10.8.0 就有。
+    這是 2026-01 的狀態，§4.2.2 / §4.2.3 逐一對到已修版本。
+- **使用者可以自己把舊式驗證打開**：
+  - 開關是 `ServerConfiguration.EnableLegacyAuthorization`（[v12.0 L287-290](https://github.com/jellyfin/jellyfin/blob/v12.0/MediaBrowser.Model/Configuration/ServerConfiguration.cs#L287-L290)，沒有初始值，所以是 `false`），
+    存在設定目錄的 `system.xml`（[`BaseApplicationPaths.cs` v12.1 L70](https://github.com/jellyfin/jellyfin/blob/v12.1/Emby.Server.Implementations/AppBase/BaseApplicationPaths.cs#L70)）。
+    遷移 `DisableLegacyAuthorization` 在升級時跑一次、設成 `false`（§1.5），之後手動改回 `true` 並重啟即可【原始碼推論，未實測】。
+  - **後台沒有這個開關**：jellyfin-web v12.1 的 `src/strings/en-us.json` 沒有任何 legacy authorization 字串，只能改 `system.xml`，或以管理員身分透過 `POST /System/Configuration` 改【原始碼推論】。
+  - **官方怎麼說**：PR #15559 說明「allowing a user to (temporarily) keep using the legacy method if they use an client that is not updated yet」，
+    以及「We'll remove this configuration option (and the authorization methods) in a future release, likely 10.13」。依新版號，10.13 就是 13.0【推論】。
+    官方文件站沒有提到這個設定【未查到：jellyfin org 內 code search `EnableLegacyAuthorization` 只命中 server 原始碼、各 SDK 的生成模型、jellyfin-mpv-shim 與 jellyfin-apiclient-python】。
+- 被擋的寫法見 §1.5（`X-Emby-Token`、`X-MediaBrowser-Token`、`?api_key=`、`X-Emby-Authorization`、`Emby` scheme）；`Authorization: MediaBrowser …` 與 `?ApiKey=` 不受影響。
+
+#### 4.2.2 官方客戶端
+
+| 客戶端 | 12.x | 最低版本與依據 |
+| --- | --- | --- |
+| Jellyfin Web | 伺服器內建，跟著伺服器升 | v12.0（2026-09-08）、v12.1（2026-09-15）與伺服器同日發佈。web 從 **10.11.0** 起把 `api_key` 改成 `ApiKey`（[jellyfin-web PR #7014](https://github.com/jellyfin/jellyfin-web/pull/7014)，列在 v10.11.0 release notes）【文件】 |
+| Android（jellyfin-android） | 可用 | 用官方 Kotlin SDK，SDK 以 `AuthorizationHeaderBuilder` 組 `Authorization` 標頭（sdk-kotlin master `jellyfin-api/src/commonMain/kotlin/org/jellyfin/sdk/api/client/util/AuthorizationHeaderBuilder.kt`；app v2.3.0 release notes 已用它）。最新 v2.7.3（2026-09-14），12.0 之後的 issue 沒有登入或驗證類回報【原始碼 + 文件；沒有找到明文的最低版本】。v2.7 是最後支援 Android 5 / 5.1 的版本（部落格 `2026/08-02-android-2-7`） |
+| Android TV（jellyfin-androidtv） | 可用 | 穩定版 v0.19.10（2026-08-16）；[#5807](https://github.com/jellyfin/jellyfin-androidtv/issues/5807) 是「Server 12.0 + Android TV v0.19.10」的 Dolby Vision 播放問題，代表連得上、播得動。v0.19.10 release notes：0.20 將要求伺服器 10.11 以上；v0.20.0-beta.2（2026-09-14）【文件 + 官方 issue】 |
+| iOS（jellyfin-expo / jellyfin-ios） | 可用 | v1.8.0.5（2026-08-14）release notes：「Fix server version display for 12.0」「Fix background audio playback pre-12.0」。在 oddstr13 2026-01 的清單上，**修掉 `api_key` 的是哪一版【未查】**；master 已找不到 `X-Emby` / `api_key=` 字串【原始碼】 |
+| Swiftfin（iOS / tvOS） | 可用 | [Swiftfin#1859](https://github.com/jellyfin/Swiftfin/issues/1859)（「[10.12] Login not possible as LegacyAuthentication is disabled by default」）維護者回覆：jellyfin-sdk-swift 0.5.3（2025-09-22）已修，**Swiftfin 1.4（2025-12-12）起**實測可用。1.6（2026-08-12）升到 SDK 3.0.0（12.0）；[#2260](https://github.com/jellyfin/Swiftfin/issues/2260) 維護者說 1.6 仍可連 10.11.x【官方 issue】 |
+| Jellyfin Media Player（jellyfin-media-player / jellyfin-desktop） | 可用【原始碼推論】 | **1.11.0（2024-06-06）起介面改用伺服器提供的 jellyfin-web**（v1.12.0 tag 的 `debian/changelog`），驗證跟著伺服器的 web 走；原生程式碼只在 `src/utils/Log.cpp` 遮蔽 log 裡的 `api_key` / `X-MediaBrowser-Token`，沒有拿它們發請求。最新穩定版仍是 v1.12.0（2025-03-20），v2.0.0 是 prerelease；沒有找到 12.0 的實測紀錄 |
+| Jellyfin for Kodi（jellyfin-kodi） | **需 v2.0.0 以上** | [PR #1097 Migrate to current auth methods](https://github.com/jellyfin/jellyfin-kodi/pull/1097)（`api_key` → `ApiKey`、舊多標頭 → `Authorization`，merged 2026-02-11）；GitHub compare 顯示它在 **v2.0.0（2026-03-07）** 裡、不在 v1.1.1。[#1212 Jellyfin 12 Support](https://github.com/jellyfin/jellyfin-kodi/issues/1212)（closed）：維護者在 12.0 測試機上可用，但**同步（sync queue / websocket）有問題**，暫時解法是 Add-ons → Jellyfin → Manage libraries → Repair libraries；伺服器端的同步插件也要是 12.0 版【官方 issue】 |
+| JellyCon（Kodi） | 需 v1.0.0 以上 | [jellycon PR #407](https://github.com/jellyfin/jellycon/pull/407)「Stop using deprecated auth methods」merged 2026-03-01，第一個含它的版本 v1.0.0（2026-06-13）【子代理查】 |
+| Roku（jellyfin-roku） | 可用 | master 用 `Authorization` 標頭（`source/api/baserequest.bs` L238-244），trickplay 用 `?ApiKey=`（`components/video/PreloadTrickplayImagesTask.bs` L13）；3.1.8（2026-04-08）「Change trickplay code to be Jellyfin 12.0.0 compatible」（[PR #815](https://github.com/jellyfin/jellyfin-roku/pull/815)），最新 3.2.3（2026-08-03）。**哪一版開始完全不用 `api_key`【未查】**；12.0 相關 issue 只有相簿幻燈片（[#1079](https://github.com/jellyfin/jellyfin-roku/issues/1079)，closed） |
+| webOS（jellyfin-webos） | 跟著伺服器 | README L3：「a small wrapper around the web interface provided by the server」，驗證跟伺服器的 web 走【原始碼】；12.0 回報遙控器暫停鍵失效 [#360](https://github.com/jellyfin/jellyfin-webos/issues/360)（open，標題寫 Regression） |
+| Tizen（jellyfin-tizen） | **看打包進去的 web 版本** | 沒有 GitHub release；README 要使用者自己 clone jellyfin-web 打包，寫「It is recommended that the web version match the server version」，範例分支還是 `release-10.10.z`。用 10.10 以前的 web 打包，會帶 `api_key`（web 10.11.0 才改）【推論】。12.0 回報：[#432](https://github.com/jellyfin/jellyfin-tizen/issues/432) 照片全螢幕顯示破圖（open，另有留言說海報不顯示）【成因未查】 |
+| MPV Shim（jellyfin-mpv-shim） | 需 v3.0.0 | v3.0.0（2026-09-08）release notes：「Jellyfin v12 is supported and all auth goes through the `Authorization` header」；3.0.0pre11 起「gaining Jellyfin v12 compatability without enabling legacy auth」【文件】 |
+
+另外：Kotlin SDK v1.9.0（2026-09-08）release notes「Increase minimum supported server version to 12.0」。Android 與 Android TV 換上它的 PR（[jellyfin-android #2198](https://github.com/jellyfin/jellyfin-android/pull/2198)、[jellyfin-androidtv #5804](https://github.com/jellyfin/jellyfin-androidtv/pull/5804)）仍 open；
+合併發佈之後，這兩個 app 的新版**會反過來要求伺服器是 12**【推論：app 是否另做相容層未查】。
+
+#### 4.2.3 第三方客戶端與整合
+
+| 名稱 | 12.x | 依據 |
+| --- | --- | --- |
+| Infuse | 已修於 8.3.6 | Firecore 官方社群公告 [Infuse 8.3.6](https://community.firecore.com/t/infuse-8-3-6-now-available/58792)（2025-12）：「Fixed authorization for Jellyfin 10.12」【子代理查】 |
+| Findroid | 【未查到】直接紀錄 | 依賴官方 Kotlin SDK 1.8.12（`gradle/libs.versions.toml`），SDK 走 `Authorization` 標頭，推論不受驗證變更影響；沒有 12.0 相關 issue【子代理查，原始碼推論】 |
+| Streamyfin | 不受影響 | `utils/jellyfin/jellyfin.ts` 用 `Authorization: MediaBrowser …`，依賴 `@jellyfin/sdk ^0.13.0`；沒有 12.0 相關 issue【子代理查，原始碼】 |
+| Jellyseerr / Seerr | 已修於 Seerr v3.0.0（2026-02-14） | [seerr-team/seerr#2211](https://github.com/seerr-team/seerr/pull/2211)「fix(jellyfin-api): use standard Authorization header」merged 2025-12-08，取代 `X-Emby-Authorization`；[#2249](https://github.com/seerr-team/seerr/issues/2249) closed【PR 親查；版本號子代理查】。更名前的 Jellyseerr 舊版會壞【推論】 |
+| Sonarr（Jellyfin / Emby 通知） | 已修於 4.0.19.2997（2026-08-04） | [Sonarr#8842](https://github.com/Sonarr/Sonarr/issues/8842)「Import Notification queue on Jellyfin 12+ produces 401 Unauthorized」closed 2026-08-04（PR #8845）；前一次修正 #8805（4.0.19.2995）不完整【issue 親查；版本號子代理查】 |
+| Radarr（Jellyfin / Emby 通知） | 已修於 v6.4.3.10645（2026-08-31） | release notes「Fixed: Connecting to Jellyfin 12+ (#11663)」【文件】 |
+| Home Assistant（Jellyfin 整合） | **可能仍會壞**【推論】 | 底層 [jellyfin-apiclient-python](https://github.com/jellyfin/jellyfin-apiclient-python) v1.18.0 已改用 `ApiKey`（`http.py` 註解寫明 v12 關閉 `api_key`），但 `home-assistant/core` 的 `homeassistant/components/jellyfin/manifest.json` 仍是 `jellyfin-apiclient-python==1.16.0`。整合實際哪些功能壞【未查；沒有找到 HA 的 12.0 issue】 |
+| Jellystat | 不受影響 | `backend/classes/jellyfin-api.js` 用 `Authorization: MediaBrowser Token=…`；沒有 12.0 相關 issue【子代理查，原始碼】 |
+| Jellyfin Vue | **目前會壞（播放）** | [jellyfin-vue#2693](https://github.com/jellyfin/jellyfin-vue/issues/2693)「Video playback does not work in Jellyfin Vue, but works in classic Jellyfin web」open；2026-07-25 的留言在 Server `12.0-rc3` + `ghcr.io/jellyfin/jellyfin-vue:unstable` 重現，主控台顯示 WebSocket 連 `ws://…/socket?api_key=…`（小寫，被舊式驗證開關擋掉的寫法）失敗、播放卡在載入。GitHub release 停在 0.3.1（2023），改以 `unstable` image 滾動發佈；也在 oddstr13 2026-01 的 `api_key` 清單上。正式 12.0 / 12.1 上是否相同【未查】 |
+| Ombi | **目前會壞** | [Ombi#5478](https://github.com/Ombi-app/Ombi/issues/5478)「Jellyfin 12.0 - Unable to log in」，open，2026-09-15 建立 |
+| Homepage（dashboard widget） | 改設定 `version: 2` | widget `version: 1` 走舊的 `/emby/` 路由會壞，`version: 2` 用 `Authorization` 標頭（gethomepage/homepage Discussion #7132）【未查證：Discussion 不是官方文件】 |
+
+### 4.3 發佈管道：能不能「一鍵」拿到 12
+
+| 管道 | 12.x | 版本 / 日期 | 來源 |
+| --- | --- | --- | --- |
+| 官方 Docker `jellyfin/jellyfin` | 有 | `latest` / `12` / `12.1`（2026-09-15 01:21Z）、`12.0`；**只有 amd64、arm64** | Docker Hub tags API（親查） |
+| linuxserver `lscr.io/linuxserver/jellyfin` | 有 | `latest` = `12.1ubu2604-ls49`（§1.7）；amd64、arm64 | Docker Hub tags API（親查） |
+| Debian apt（`repo.jellyfin.org/debian`） | bookworm、trixie 有 | `jellyfin-server` `12.1+deb12` / `12.1+deb13`（amd64、arm64） | `dists/<codename>/main/binary-<arch>/Packages`（親查） |
+| Debian bullseye | **沒有** | 停在 10.11.11 | 同上（子代理查）；`jellyfin-packaging` `build.yaml` [v10.11.11 L29](https://github.com/jellyfin/jellyfin-packaging/blob/v10.11.11-202606061137/build.yaml#L27-L31) 有 bullseye，[v12.0 L27-30](https://github.com/jellyfin/jellyfin-packaging/blob/v12.0-202609072105/build.yaml#L27-L30) 沒有 |
+| Ubuntu apt | jammy、noble、resolute 有 | `12.1+ubu2404` 等 | 同上（noble 親查） |
+| Ubuntu focal | **沒有** | 停在 10.11.11 | 同上；`build.yaml` v10.11.11 L48 有 focal，v12.0 L44-48 沒有；移除的 commit `b19fe643`（2026-09-04，jellyfin-packaging #143，子代理查） |
+| Windows installer | 有 | 12.1（exe / zip，2026-09-15） | `repo.jellyfin.org/files/server/windows/latest-stable/amd64/`（子代理查） |
+| macOS | 有 | 12.1（dmg / tar.xz，2026-09-15） | `repo.jellyfin.org/files/server/macos/latest-stable/amd64/`（子代理查；arm64 目錄【未查】） |
+| Synology（SynoCommunity） | 有，**但是 12.0，還沒 12.1** | `cross/jellyfin/Makefile` `PKG_VERS = 12.0`；`spk/jellyfin/Makefile` `REQUIRED_MIN_DSM = 7.2`、`UNSUPPORTED_ARCHS = $(32bit_ARCHS)`（L11-15） | [SynoCommunity/spksrc](https://github.com/SynoCommunity/spksrc) master（親查） |
+| unRAID Community Apps 官方模板 | 【未查到】 | 模板原始檔沒找到；若模板指向 `jellyfin/jellyfin:latest` 就已經是 12.1【推論】 | — |
+| unRAID binhex `arch-jellyfin` | **沒有** | 最新 `10.11.11-1-02`（2026-08-12） | [binhex/arch-jellyfin releases](https://github.com/binhex/arch-jellyfin/releases)（親查） |
+| unRAID hotio | 有 | `release-12.1` | hotio.dev 容器頁（子代理以 WebFetch 讀）【未查證】 |
+| TrueNAS apps | 有，**但是 12.0，還沒 12.1**；community train | `ix-dev/community/jellyfin/app.yaml`：`app_version: '12.0'`、`version: 1.3.14`、`train: community`；更新 commit `1b8c4452`（2026-09-08，子代理查） | [truenas/apps](https://github.com/truenas/apps) master（親查） |
+| QNAP | **沒有官方套件** | 社群 myqnap.org「Jellyfin QMultimedia」10.11.11（2026-06-07） | myqnap.org 產品頁（子代理查）；官方 App Center 套件【未查到】 |
+| Proxmox community-scripts | 跟著官方 apt | `ct/jellyfin.sh` 接官方 apt repo，不鎖版本 | [community-scripts/ProxmoxVE](https://github.com/community-scripts/ProxmoxVE)（子代理查） |
+
+- Docker `latest`、官方 apt、Windows / macOS installer 的使用者**已經能一鍵拿到 12.1**；反過來說，`latest` 與 apt 的使用者下一次 pull / upgrade 就會直接跨過去，不需要主動選擇。
+- SynoCommunity、TrueNAS 目前給的是 12.0（沒有 §4.1 列的 12.1 遷移修正）；binhex 與 QNAP 社群套件還停在 10.11.11，用它們的人**現在沒辦法一鍵升**。
+
+### 4.4 升級失敗與回報【官方 issue】
+
+範圍：`jellyfin/jellyfin` 在 2026-09-07 之後建立的 issue，挑出和升級、資料庫遷移、啟動失敗、媒體庫變空、觀看狀態有關的。
+**沒有任何一條標 `regression` 標籤**（只有 #17942 標 `confirmed`）；「維護者回應」指 MEMBER / COLLABORATOR 的留言。
+
+**12.1 已修**（維護者留言「Fixed by #… in 12.1」或「Should be fixed in 12.1」，issue 已 closed）
+
+| issue | 標題（節錄） | 修正 |
+| --- | --- | --- |
+| [#17874](https://github.com/jellyfin/jellyfin/issues/17874) | Upgrade from 10.11.11 fails during ConsolidateLocalizedUserViews migration with FOREIGN KEY constraint failed | #17835 |
+| [#17875](https://github.com/jellyfin/jellyfin/issues/17875) | Startup blocked: ConsolidateLocalizedUserViews fails … when AncestorIds contains orphaned rows | #17835 |
+| [#17863](https://github.com/jellyfin/jellyfin/issues/17863) | Error during database migration: SQLite Error 19: 'FOREIGN KEY constraint failed' | #17835 |
+| [#17830](https://github.com/jellyfin/jellyfin/issues/17830) | Migration RemoveOrphanedUserPermissionsAndPreferences fails with FOREIGN KEY constraint on 10.x → 12.0.0 upgrade | #17835 |
+| [#17870](https://github.com/jellyfin/jellyfin/issues/17870) | FixIncorrectOwnerIdRelationships migration fails with FOREIGN KEY constraint failed | #17873 |
+| [#17831](https://github.com/jellyfin/jellyfin/issues/17831) | Jellyfin 12.0 Docker Restart results in SQLite errors（重複的 [#17843](https://github.com/jellyfin/jellyfin/issues/17843) 維護者回覆：「If you have a broken db you need to restore from a backup」） | #17836 |
+| [#18024](https://github.com/jellyfin/jellyfin/issues/18024) | Jellyfin v12.0 migration stuck in infinite loop deleting duplicate media | #18030 |
+| [#18043](https://github.com/jellyfin/jellyfin/issues/18043) | Upgrade does not handle nested folders as Jellyfin previously did | #18044 |
+| [#17942](https://github.com/jellyfin/jellyfin/issues/17942) | Library Scan splits manually merged Versions | #17842 |
+| [#17918](https://github.com/jellyfin/jellyfin/issues/17918) | Login crashes the docker container after the upgrade | 未指明 PR |
+| [#17871](https://github.com/jellyfin/jellyfin/issues/17871) | a single `GET /UserViews` request allocates 25 GB of heap and OOM-kills the server on a large library | 未指明 PR（應是 #17881） |
+| [#17934](https://github.com/jellyfin/jellyfin/issues/17934) | Jellyfin 12.0 leaks native memory until OOM killed | 未指明 PR |
+
+**仍 open**
+
+| issue | 標題（節錄） | 維護者回應 |
+| --- | --- | --- |
+| [#17849](https://github.com/jellyfin/jellyfin/issues/17849) | [12.0]: Jellyfin migration broken after upgrade（13 則留言） | 無 |
+| [#17840](https://github.com/jellyfin/jellyfin/issues/17840) | Upgrade to 12.0 stuck for more than 2 hours | 有（要 debug log，懷疑 VACUUM） |
+| [#17936](https://github.com/jellyfin/jellyfin/issues/17936) | Upgrading from 10.11.11 to 12.0 Migration RefreshCleanNamesAndValues failed | 無 |
+| [#17907](https://github.com/jellyfin/jellyfin/issues/17907) | ChangeOwnerIdToGuid migration fails with "FOREIGN KEY constraint failed" | 無 |
+| [#18032](https://github.com/jellyfin/jellyfin/issues/18032) | Migration ConsolidateLocalizedUserViews fails with FOREIGN KEY constraint on 10.11.8 to 12.0.0 upgrade | 無（和已修的 #17874 同一個遷移，是否同因【未查】） |
+| [#18050](https://github.com/jellyfin/jellyfin/issues/18050) | Migration "20260508130000_MergeDuplicatePeople" failed | 有（要完整 log） |
+| [#17862](https://github.com/jellyfin/jellyfin/issues/17862) | **[12.1]** Jellyfin doesn't startup after upgrade | 無 |
+| [#17868](https://github.com/jellyfin/jellyfin/issues/17868) | [12.0] cant start server even after cleaning /var/lib/jellyfin | 無 |
+| [#17919](https://github.com/jellyfin/jellyfin/issues/17919) | Upgrading from 10.11.11 to 12.0 (Docker) fails | 無 |
+| [#17900](https://github.com/jellyfin/jellyfin/issues/17900) | … post-upgrade scan wiped both my libraries to 0 | 無 |
+| [#18023](https://github.com/jellyfin/jellyfin/issues/18023) | [12.0] library scan removed seasons | 無 |
+| [#17877](https://github.com/jellyfin/jellyfin/issues/17877) | [12.0] Random shows locked on "watched" status | 有（詢問資料夾結構與媒體庫設定） |
+
+其他值得記的（closed，但原因不是伺服器 bug）：
+
+- [#17921](https://github.com/jellyfin/jellyfin/issues/17921)：Docker 升級後 `CultureNotFoundException` 崩潰。維護者：拿掉 compose 裡的 `DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1`，「an old config that is no longer needed」。
+- [#17916](https://github.com/jellyfin/jellyfin/issues/17916)：升 12.0 後伺服器隨機關閉。維護者：「TMDb Box Sets: the old plugin will 100% crash your system」，要跑插件更新任務再重啟。
+- 標題直接是「觀看紀錄遺失」的官方 issue【未查到】；相近的是 #17877（觀看狀態卡住）與 #17900（媒體庫變 0）。
+
+**遷移前的自動備份**【原始碼】：`JellyfinMigrationService.PrepareSystemForMigration`（[v12.1 L361-438](https://github.com/jellyfin/jellyfin/blob/v12.1/Jellyfin.Server/Migrations/JellyfinMigrationService.cs#L361-L438)）在有待跑的 EF 遷移時，
+先把 `jellyfin.db` 複製到資料目錄下的備份資料夾（[`SqliteDatabaseProvider.MigrationBackupFast` L233-258](https://github.com/jellyfin/jellyfin/blob/v12.1/src/Jellyfin.Database/Jellyfin.Database.Providers.Sqlite/SqliteDatabaseProvider.cs#L233-L258)）；
+遷移丟例外時嘗試還原（L258-298，`RestoreBackupFast`），全部成功後刪掉備份（`CleanupSystemAfterMigration` L316 起）。
+它只保護資料庫，還原之後執行檔仍是 12，要回 10.11 還是得換回舊 image 或套件【推論】；12.0 的這份備份本身有完整性問題（#17831 → #17836，12.1 修）。**不能取代 TL;DR 第 1 點的手動完整備份。**
+
+### 4.5 資料是否保留【原始碼】
+
+| 資料 | 結論 | 依據 |
+| --- | --- | --- |
+| 使用者帳號 | 保留；新增 `NormalizedUsername`（`Username.ToUpperInvariant()`）與 unique index。**只差大小寫的帳號會讓遷移失敗**，不會被合併或刪除 | EF 遷移 `20260522092303_AddNormalizedUsername`、`20260524120336_AddUniqueNormalizedUsernameIndex`；routine `20260522092304_UpdateNormalizedUsername.cs`（v12.1）；TL;DR 第 3 點 |
+| 使用者權限與偏好 | 刪掉孤立的列 | EF 遷移 `20260815063607_RemoveOrphanedUserPermissionsAndPreferences`（只看到檔名，內容因 Windows 路徑長度沒讀到【未查】）；相關失敗 #17830 |
+| API key | 保留：12.0 / 12.1 新增的 routine 與 EF 遷移沒有任何一支碰 `ApiKeys`。**但是 key 的送法會影響能不能用**：用 `?api_key=` 或 `X-Emby-Token` 送 key 的腳本與工具升級後會 401（§1.5） | `git grep` v12.1 `Jellyfin.Server/Migrations/Routines/2026*`；EF 遷移清單（v10.11.11 → v12.1 新增 17 支，沒有 ApiKeys 相關） |
+| 觀看紀錄（UserData） | 保留。刪除 item 時 UserData 不跟著刪，而是改掛到 placeholder item（`00000000-0000-0000-0000-000000000001`）並設 `RetentionDate`；item 再出現時由 `ReattachUserDataAsync` 接回。所以下方 item id 段落裡「被刪後重建」的 item，觀看紀錄有機會接回【接回的比對鍵與保留期限未查】 | 10.11.11 `BaseItemRepository.cs` L61、L132-139、L773-794；12.1 `BaseItemRepository.cs` L35、`ItemPersistenceService.cs` L126-132、L221-242 |
+| 人物與音樂藝人 | 重複的會合併；`MergeDuplicatePeople`、`MergeDuplicateMusicArtists` 內有處理 UserData（檔內 6 / 4 處引用），收藏等是否完整轉移【未查】 | v12.1 routines `20260508130000_MergeDuplicatePeople.cs`、`20260508120000_MergeDuplicateMusicArtists.cs` |
+| 媒體庫設定 | 大致保留；全域字幕設定移除且找不到搬移程式碼（§4.1）。另有 `FixLibrarySubtitleDownloadLanguages`（修正媒體庫字幕語言值）、`EnableLocalSimilarityProviders`（新選項） | v12.1 routines |
+| 使用者檢視（UserView） | **id 可能改變**：`ConsolidateLocalizedUserViews` 把「id 由在地化名稱算出」的整類檢視（例如 Live TV）搬到與名稱無關的 canonical id；子項目的 `ParentId` / `TopParentId`、ancestor 與使用者設定改掛新 id，舊 id 的列刪除。媒體庫本身（CollectionFolder）不在範圍內 | [`20260825200000_ConsolidateLocalizedUserViews.cs` v12.1 L58-173](https://github.com/jellyfin/jellyfin/blob/v12.1/Jellyfin.Server/Migrations/Routines/20260825200000_ConsolidateLocalizedUserViews.cs#L58-L173) |
+| 第三方插件的設定 | 插件要先移除（§4.1），設定檔會不會留著【未查】 | — |
+
+**item id（Berth 帳本的 `jellyfin_item_id`）**
+
+- **算法沒變**：`LibraryManager.GetNewItemIdInternal` 在 [10.11.11 L636-658](https://github.com/jellyfin/jellyfin/blob/v10.11.11/Emby.Server.Implementations/Library/LibraryManager.cs#L636-L658)
+  與 [12.1 L797-819](https://github.com/jellyfin/jellyfin/blob/v12.1/Emby.Server.Implementations/Library/LibraryManager.cs#L797-L819) 逐字相同：`MD5(type.FullName + path)`，
+  `EnableCaseSensitiveItemIds` 預設 `true`（`ServerConfiguration.cs` L89，兩版相同）時不轉小寫。**同一路徑、同一型別的 item，升級前後 id 相同**。
+- **會變或會消失的**（`MigrateLinkedChildren`，[v12.1](https://github.com/jellyfin/jellyfin/blob/v12.1/Jellyfin.Server/Migrations/Routines/20260113120000_MigrateLinkedChildren.cs)）：
+  1. **型別錯的自動分組次要版本**被刪（`CleanupWrongTypeAlternateVersions` L285-321，例如主版本是 `Movie`、次要版本是泛用 `Video`）。註解明寫「Since IDs are computed from type + path, just updating the Type column would break ID lookups」，
+     下次掃描以正確型別重建，**重建後 id 不同**【原始碼推論：型別換了，雜湊就換了】。帳本若記的是次要版本自己的 item id 會失效，記主版本的不受影響。
+  2. 有 `OwnerId`、不是 extra、又沒有 LinkedChild 指向的孤立版本被刪（L323-348）。
+  3. `TopParentId` 指向已不存在媒體庫的 item 被刪（L350-373）。
+  4. **檔案已不存在的 item 被刪**（`CleanupStaleFileEntries` L375-495）。根目錄不存在或是空的就跳過該路徑下的檢查（L386-402）；任一根目錄不可讀時，不刪「不在任何媒體庫路徑下」的 item（L415-418、L462-470）。
+     根目錄存在且非空、但底下部分檔案暫時讀不到（例如只掛上一部分）時仍會刪【原始碼推論】。
+- 其他型別變動也會換 id：`.ogg` 影片改當音訊；部落格 TL;DR 第 5 點「some movies may appear as newly added」與 release notes「due to type issues that got fixed on-scan」指的就是型別被修正的條目以新 item 出現【文件 + 原始碼推論】。
+- 結論：**一般 Movie / Episode 主條目的 id 升級後不變**；會變的是型別被修正的條目（包括自動分組的次要版本），以及被清掉的孤立或缺檔條目。
+  沒有做「同一個 10.11 媒體庫升級前後逐筆比對 id」的實測【未查】。
+
+### 4.6 系統需求變動
+
+| 項目 | 10.11.11 | 12.0 / 12.1 | 來源 |
+| --- | --- | --- | --- |
+| .NET | `net9.0` | **`net10.0`** | 兩個 tag 的 `Jellyfin.Server/Jellyfin.Server.csproj`【原始碼】；release notes Platform |
+| 官方建置的 CPU 架構 | amd64、arm64（Linux 另有 musl 版）；**armhf 已在 10.11 分支移除** | 相同 | `jellyfin-packaging` `build.yaml` v10.11.11 與 v12.0 的 `archmaps` 都只有 amd64 / arm64（親查）；移除 armhf 的 commit `499fddfa`（2025-06-07「Remove deprecated armhf builds for 10.11.x」，子代理查）；apt 的 armhf `jellyfin-server` 最高 **10.10.7**（bookworm、noble），trixie 沒有 armhf 套件（親查） |
+| Debian / Ubuntu | bullseye、bookworm、trixie；focal、jammy、noble、resolute | **bookworm、trixie；jammy、noble、resolute** | `build.yaml` v10.11.11 L27-51 → v12.0 L27-48（親查） |
+| Docker image | amd64、arm64 | amd64、arm64 | Docker Hub tags API（親查 12.x） |
+| Synology | — | DSM ≥ 7.2，x64 / armv8，排除 32 位元 | SynoCommunity `spk/jellyfin/Makefile` L11-15（親查） |
+| FFmpeg | 【未查確切版本】 | **jellyfin-ffmpeg 8.1**，套件名改成 `jellyfin-ffmpeg8`，目前 v8.1.2-5 | release notes Transcoder「New upstream version of FFmpeg 8.1」；[jellyfin-ffmpeg v8.1.1-1](https://github.com/jellyfin/jellyfin-ffmpeg/releases/tag/v8.1.1-1)（自述 targets 12.0，子代理查） |
+| 硬體轉碼驅動 | — | 官方文件沒有為 12.x 改門檻：NVIDIA 頁仍寫「Jellyfin 10.11」時的 522.25 / 520.56.06；Intel、AMD 的 12.x 專屬門檻【未查到】 | jellyfin.org `docs/general/post-install/transcoding/hardware-acceleration/nvidia.md`（子代理查） |
+| 最低 Windows / macOS 版本 | — | 【未查】（.NET 10 自身的支援範圍沒查） | — |
+
+- 對舊 NAS 的實際影響：32 位元 ARM 在 10.11 就已經沒有官方建置，**從 10.11 升 12 不會新增 CPU 架構門檻**；
+  新增的是 **Debian 11 / Ubuntu 20.04 的 apt 使用者要先升級 OS**，以及 FFmpeg 8.1 換版（驅動門檻未見調整）。
+
+### 4.7 對「只支援 12 以上」的判斷依據
+
+**會讓使用者不方便或不敢升級的**
+
+1. **不可逆，而且遷移失敗仍有 open issue**：回不去只能靠完整備份（§1.2、§4.1）。12.0 發佈一週內，§4.4 的 open 表有 12 條遷移、啟動、媒體庫變空的回報，多數沒有維護者回應，其中 #17862 是 12.1。
+   內建的遷移前備份只保護資料庫，且 12.0 的這份備份有完整性 bug（12.1 修）。
+2. **舊客戶端與整合會壞，官方又沒有相容性表**（§4.2.1）。要升級才能用的：Jellyfin for Kodi（v2.0.0+，同步仍有問題）、JellyCon（v1.0.0+）、MPV Shim（v3.0.0）、
+   Seerr（v3.0.0；更名前的 Jellyseerr）、Sonarr（4.0.19.2997+）、Radarr（6.4.3.10645+）、Infuse（8.3.6+）。**目前還沒修的**：Ombi（open）、Jellyfin Vue 的播放（open，RC 上重現），Home Assistant 整合（依賴仍釘 1.16.0，推論）。
+   Tizen 要看自己打包的 web 版本。可以打開 `EnableLegacyAuthorization` 暫時繞過，但後台沒有開關、要手改 `system.xml`，官方也預告下一個大版本移除（§4.2.1）。
+3. **第三方插件要先移除，等作者出 12.0 版**（§4.1）；舊插件可能讓 12.0 當機（#17916 的 TMDb Box Sets）。
+4. **部分一鍵管道還沒有 12.1，或根本沒有 12**：binhex（unRAID）與 QNAP 社群套件停在 10.11.11；SynoCommunity、TrueNAS 是 12.0，沒有 12.1 的遷移修正；
+   Debian 11 / Ubuntu 20.04 的 apt 使用者要先升 OS（§4.3、§4.6）。
+5. **升級當下與升級後的工作**：只差大小寫的使用者名稱要先處理，否則遷移失敗；遷移期間不能停；之後要完整掃描（大媒體庫很久），再到每個媒體庫重看字幕設定（§4.1）。
+
+**只是要注意的**
+
+1. 10.11.x 可直升，不需要中繼版本；直接升 12.1 就避開了一批已修的遷移 bug（§4.1、§4.4）。
+2. 主要官方客戶端（Web、Android、Android TV、iOS、Swiftfin、Roku、webOS、JMP）在 12.x 可用，或跟著伺服器的 web 走（§4.2.2）。
+   反過來，Kotlin SDK 1.9.0 已把最低伺服器版本拉到 12.0，Android / Android TV 換上新 SDK 之後，新版 app 可能反而要求伺服器是 12（§4.2.2 末段，推論）。
+3. 帳號、API key、觀看紀錄、一般媒體條目的 item id 原則上保留；會變的是型別被修正的條目、自動分組的次要版本、UserView（§4.5）。API key 本身在，但用舊寫法送 key 的工具會 401。
+4. 外觀與行為變更：排序、圖片不再放大、Modern 版面成為預設、自訂主題、`.ogg`、symlink（§4.1）。
+5. 系統需求：armhf 在 10.11 就沒有官方建置，12 沒有新增 CPU 架構門檻；FFmpeg 換成 8.1，官方文件沒有為 12.x 提高驅動門檻（§4.6）。
+6. Docker 的舊環境變數 `DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1` 會讓 12 啟動崩潰，要拿掉（#17921）。
+7. 內建 TLS 的移除延後，12.x 仍可用（§4.1）。
+
+## 5. 對 Berth 的影響
 
 先要做的決定：**Berth 支援哪些 Jellyfin 版本。** 套件內的 `lscr.io/linuxserver/jellyfin:latest` 已經是 12.1，所以「套件內 = 12.x」是現實；
 「既有 Jellyfin」可能還是 10.10 / 10.11。下面的「必改」不論怎麼決定都成立；標「依版本決定」的，做法取決於要不要繼續支援 10.x。
 
-### 4.1 必改
+### 5.1 必改
 
 1. **文件裡「劇集多版本必須靠 MergeVersions」對 12.x 是錯的**，而那是套件內現在裝的版本：
    - brief §1.2 表格「同一集多版本的合併顯示 → Jellyfin + MergeVersions 插件」、§7.7 第一、二點、§20.1「多版本」段的「劇集原生多版本不可靠」與「結論：劇集多版本必須靠 MergeVersions 插件」。
@@ -340,7 +605,7 @@ movies/Berth Movie Plan (2019) [tmdbid-27205]/
    要改的：`_admin_user` 把這個 403 當成「已經設過」繼續往下（之後的登入會驗證密碼對不對）、`berth/adapters/jellyfin/fake.py` 模擬這個行為、補測試、brief §20.7 記一條。
    【原始碼 + 部分實測：403 是在精靈完成後帶 API key 量到的，精靈未完成時匿名送的那條路徑只讀了原始碼】
 
-### 4.2 建議
+### 5.2 建議
 
 1. **MergeVersions 依版本安裝（依版本決定）**。只支援 12.x 就整段拿掉；同時支援 10.x 就以 `public_info.version` 的主版號判斷，`>= 12` 時不裝、不觸發：
    - `berth/services/jellyfin.py`：`_plugin` / `_tasks` 兩步（L461-497）與 `install_merge_versions()`（L158-165），以及 `MERGE_VERSIONS_*` 常數（L63-71）。
@@ -365,17 +630,17 @@ movies/Berth Movie Plan (2019) [tmdbid-27205]/
 7. **更正研究紀錄**：`m0-experiments.md` §0「linuxserver 只保留最新 tag，釘不了版本」不成立（§1.7）；brief §20.1「MergeVersions 持續維護到 10.11 與 12.0」可補上 12.0.0 的 `targetAbi` 與 csproj 事實。
    依 CLAUDE.md，推翻 brief 的那一輪要在 `docs/progress.md`「偏差與決定」記一行。
 
-### 4.3 不用改
+### 5.3 不用改
 
 - **驗證標頭**：`Authorization: MediaBrowser Client=…, Token="…"` 在 12.0 / 12.1 照常可用，被關掉的是舊式寫法（§1.5）。
 - **Berth 用到的端點**：24 支在 12.0 / 12.1 都在、授權政策相同，Berth 的 adapter 整段跑通（§1.4）；plan §9.4 既有的四個細節（先 `GET /Startup/User`、`LibraryOptions` 包一層、`/Auth/Keys` 不回 key 也不去重、重啟後輪詢管理員端點）在 12.x 依然成立。
 - **命名模板**：`berth/naming/__init__.py` 的劇集、電影、字幕模板在 12.x 不用改就能正確合併，外掛字幕掛在正確的版本上（§2.3）。
 - **入庫後的反查**：`items()` 以媒體庫為 parent 並比對 `MediaSources[].Path`，在原生多版本下拿得到每個版本（§2.3）。
 - **路徑通知**：已有內容的媒體庫，新版本在 100 秒內出現；「空的媒體庫通知無效」的後備（`SCAN_AFTER_MISSES`）仍然需要，`FileRefresher` 沒改（§1.3）。
-- **MergeVersions 的安裝序列本身**（如果依 §4.2 第 1 點保留給 10.x）：不指定版本會自動挑對 `targetAbi` 的版本，任務 `Key` 不變（§1.6、§3.3）。
+- **MergeVersions 的安裝序列本身**（如果依 §5.2 第 1 點保留給 10.x）：不指定版本會自動挑對 `targetAbi` 的版本，任務 `Key` 不變（§1.6、§3.3）。
 - 深連結、圖片、`/Items` 會靜默忽略未知參數等 M1.5 的結論：本輪沒有碰，`library-browsing.md` 已是對 12.0.0 查的。
 
-## 5. 摘要
+## 6. 摘要
 
 - **12.0 就是本來的 10.12**：拿掉版號前的 `10`；可從 10.10.7 / 10.11.x 直接升，降不回去；第三方插件要重建（.NET 10）；舊式驗證預設關閉。【文件 + 原始碼】
 - **劇集原生多版本**：12.0 起，同一季資料夾裡解析出同一個 `S/E` 的檔案就是同一集的版本，不需要 ` - ` 後綴或子資料夾；鍵不含集名與結束集。

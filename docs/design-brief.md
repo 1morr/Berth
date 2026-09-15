@@ -618,7 +618,7 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 | 目標環境 | Linux 與 Windows 的 Docker；NAS 與一般電腦使用者；套件內含 Jellyfin / qBittorrent / Prowlarr，開箱即用 | §16.1、§16.3 |
 | 索引站管理器 | 套件預設 Prowlarr（有文件化 REST API 可一鍵加索引站）；Jackett 以 Torznab 端點接入 | §3、§16.3、§20.7 |
 | 媒體庫的角色（2026-09-15） | 像 Jellyfin 那樣瀏覽，播放跳 Jellyfin；牆上是整個 Jellyfin 媒體庫疊上 Berth 狀態；已看 / 未看可切換並寫回 Jellyfin；探索與媒體庫共用同一個 Media 詳情頁，作品在 Jellyfin 裡時觀看區在最上；排在 M1 驗收後、M2 之前（M1.5） | §1.1、§1.2、§12、§13、§17、plan §11.2b |
-| Jellyfin 支援版本（2026-09-15） | 12.x 與 10.10 / 10.11 都支援，依伺服器版號判斷：12 以上不裝、不觸發 MergeVersions。**10.x 的支援在 Jellyfin 13.0 正式發佈時拿掉**（那時 10.x 已落後兩個大版本），一併刪掉 MergeVersions 的精靈步驟、任務 id、resolver 的合併觸發與相關測試 | §7.7、§20.9、M1 票 14b |
+| Jellyfin 支援版本（2026-09-15） | 12.x 與 10.10 / 10.11 都支援（從 10.11 升到 12 仍有不小阻力：遷移失敗的 open issue、舊客戶端要升級、部分 NAS 套件還沒有 12，§20.9），依伺服器版號判斷：12 以上不裝、不觸發 MergeVersions。**10.x 的支援在 Jellyfin 13.0 正式發佈時拿掉**（那時 10.x 已落後兩個大版本），一併刪掉 MergeVersions 的精靈步驟、任務 id、resolver 的合併觸發與相關測試 | §7.7、§20.9、M1 票 14b |
 | 套件內 Jellyfin image（2026-09-15） | 釘在 12.1 這條線（linuxserver `version-12.1ubu2604`）：跟得上 12.1 的修正與重建，但 pull 時不會默默跨到下一版；本系統實測過新版才調高，README 寫升級步驟（先備份 Jellyfin 的 `/config`、升級後完整掃描） | §16.3、§20.9、plan §9.1、M1 票 14b |
 | 多集檔與同起始集的單集（2026-09-15） | 同一季已有、或同一批要入的正片裡，有同起始集而結束集不同的，送審核不自動入庫；理由要說出 Jellyfin 12 會把它們併成一集、藏掉後面的集 | §7.8、§20.9、M1 票 14b |
 | M1.5 拆票前的四條（2026-09-15） | 媒體庫頁一個 Jellyfin 媒體庫一頁，只列這位使用者 `UserViews` 裡有的，Route 退成卡片上入庫狀態的來源；首頁上方放這位使用者的繼續觀看與下一集（沒有內容就不出現），下面維持探索；瀏覽時取允許清單一併讀 Jellyfin 帳號的 `Policy`（同一份短時間快取），帳號被停用就結束 Berth 的 session，不縮短 session 效期；Jellyfin 的圖片由 Berth 代理，快取鍵用 `tag` | §12、§13、§20.8、plan §11.2b |
@@ -1089,7 +1089,15 @@ thepiratebay / yts，fixture 在 `tests/fixtures/http/prowlarr/search.*.json` �
 全文、原始碼行號與實測紀錄見 [`docs/research/jellyfin-12.md`](research/jellyfin-12.md)。實測對象是一次性的 linuxserver `12.0ubu2604-ls48`（12.0.0）與 `12.1ubu2604-ls49`（12.1.0），跑完即刪；10.x 的對照引 §20.6 與 `m0-experiments.md`。
 
 - **版號**：12.0 就是原本的 10.12，只拿掉永遠不變的 `10`（2026-09-08 發佈；12.1 在 2026-09-15 發佈）。【文件】
-- **升級是單向的**：10.10.7 或任何 10.11.x 可直接升；資料庫改動讓降級只能靠備份還原。第三方插件要對 .NET 10 重建，10.11 的插件在 12 載入不了。升級後要完整掃描一次，自動分組的版本才會回來。升級會不會讓帳本的 `jellyfin_item_id` 失效【未查】。【文件 + 原始碼】
+- **升級是單向的**：10.10.7 或任何 10.11.x 可直接升；資料庫改動讓降級只能靠備份還原。第三方插件要對 .NET 10 重建，10.11 的插件在 12 載入不了。升級後要完整掃描一次，自動分組的版本才會回來。item id 的算法（`MD5(型別全名 + 路徑)`）在 10.11.11 與 12.1 逐字相同，所以一般 Movie / Episode 主條目升級後 id 不變；型別被修正的條目（含自動分組的次要版本）會換 id，缺檔與孤立的條目會被刪。沒有做升級前後逐筆比對的實測。【文件 + 原始碼】
+- **從 10.11 升級的阻力**（2026-09-15 補查，`jellyfin-12.md` §4）：
+  - **遷移會失敗**：12.0 發佈一週內仍有 12 條遷移、啟動、媒體庫變空的 open issue，多數沒有維護者回應，其中 #17862 是 12.1 啟動不了。內建的遷移前備份只保護資料庫。
+  - **舊客戶端與整合要升級才能用**：舊式驗證關閉之後，Jellyfin for Kodi 要 v2.0.0 以上、Seerr 要 v3.0.0，Sonarr / Radarr 要最近的版本。Ombi 與 Jellyfin Vue 的播放仍然壞著。暫時打開舊式驗證要手改 `system.xml` 的 `EnableLegacyAuthorization`，後台沒有開關，官方也預告下一個大版本移除。
+  - **升級前後要做的事**：第三方插件要先移除；只差大小寫的兩個使用者名稱會讓遷移失敗；全域字幕設定改到各媒體庫。
+  - **一鍵管道沒到齊**：binhex（unRAID）與 QNAP 社群套件還停在 10.11.11；SynoCommunity、TrueNAS 是 12.0；Debian 11 / Ubuntu 20.04 的 apt 已經沒有 12。Docker `latest`、官方 apt、Windows / macOS installer 已是 12.1。
+  - **保留的資料**：帳號、API key、觀看紀錄保留；armhf 在 10.11 就沒有官方建置，12 沒有新增 CPU 架構門檻。
+  - **反向推力**：Kotlin SDK 1.9.0 已把最低伺服器版本拉到 12，Android 與 Android TV 換上它之後，新版 app 可能反過來要求伺服器是 12【推論】。
+  - 【文件 + 原始碼 + 官方 issue】
 - **劇集原生多版本**（[PR #16828](https://github.com/jellyfin/jellyfin/pull/16828)、官方文件 [`_video-multiversion.md`](https://github.com/jellyfin/jellyfin.org/blob/187351cd69c532a833c9ed57de036297012f5e9e/docs/general/server/media/_video-multiversion.md)）：同一個季資料夾裡解析出同一個 `S/E` 的檔案，併成同一集的多個 MediaSource。
   - **分組鍵只有季號與集號，不含集名與結束集**：`S01E03-E04` 與 `S01E03` 同季時被當成同一集的兩個版本，第 4 集從集列表消失（實測；本系統的處理見 §7.8）。
   - 12.1 起季號與集號都要解析得出才分組（[PR #17890](https://github.com/jellyfin/jellyfin/pull/17890)）。
