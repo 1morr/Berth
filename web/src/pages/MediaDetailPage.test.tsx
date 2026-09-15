@@ -42,6 +42,8 @@ function media(overrides: Partial<Media> = {}): Media {
         name: 'Season 1',
         episode_count: 25,
         air_date: '2022-04-09',
+        imported: 1,
+        aired: 1,
         episodes: [
           {
             episode_number: 1,
@@ -49,6 +51,7 @@ function media(overrides: Partial<Media> = {}): Media {
             air_date: '2022-04-09',
             runtime: 25,
             absolute_number: 1,
+            status: 'imported',
           },
         ],
       },
@@ -57,6 +60,8 @@ function media(overrides: Partial<Media> = {}): Media {
         name: 'Season 2',
         episode_count: 12,
         air_date: '2023-10-07',
+        imported: 0,
+        aired: 1,
         episodes: [
           {
             episode_number: 1,
@@ -64,10 +69,35 @@ function media(overrides: Partial<Media> = {}): Media {
             air_date: '2023-10-07',
             runtime: 24,
             absolute_number: 26,
+            status: 'stuck',
           },
         ],
       },
     ],
+    files: [],
+    unmatched: [],
+    versions: [],
+    ...overrides,
+  }
+}
+
+type LedgerFile = Media['files'][number]
+
+function ledgerFile(overrides: Partial<LedgerFile> = {}): LedgerFile {
+  return {
+    id: 1,
+    action: 'import',
+    season: 1,
+    episode_start: 1,
+    episode_end: null,
+    tags: '[WEB][1080p][Lilith-Raws]',
+    target_path:
+      '/data/library/anime/SPY x FAMILY (2022) [tmdbid-120089]/Season 01/SPY x FAMILY (2022) - S01E01 - OPERATION STRIX [WEB][1080p][Lilith-Raws].mkv',
+    status: 'ok',
+    presence: 'found',
+    resolve_after: null,
+    resolve_attempts: 0,
+    job_hash: '4bd0f6ef1d3b1e3cbb1e1b6b6c2a9c7d8e5f0a1b',
     ...overrides,
   }
 }
@@ -219,6 +249,8 @@ describe('Media 詳情頁', () => {
               name: 'Specials',
               episode_count: 3,
               air_date: '2023-07-28',
+              imported: 0,
+              aired: 0,
               episodes: [],
             },
             ...media().seasons,
@@ -353,6 +385,177 @@ describe('Media 詳情頁', () => {
     expect(await screen.findByText(/TMDB 上沒有這部作品/)).toBeVisible()
     expect(screen.queryByRole('button', { name: '重試' })).not.toBeInTheDocument()
     expect(screen.getByRole('link', { name: '回探索頁' })).toBeVisible()
+  })
+
+  it('集表多一欄「入庫」，每一集說得出它在媒體庫裡的樣子（票 13）', async () => {
+    render()
+    renderApp('/media/tv:120089')
+
+    await userEvent.click(await screen.findByText('Season 1'))
+    const imported = (await screen.findByText('OPERATION STRIX')).closest('tr')!
+    expect(within(imported).getByText('已入庫')).toBeVisible()
+
+    await userEvent.click(screen.getByText('Season 2'))
+    const stuck = (await screen.findByText('FOLLOW MAMA AND PAPA')).closest('tr')!
+    // 卡住的那一集要人去看是哪一筆下載停下來了。
+    expect(within(stuck).getByRole('link', { name: '卡住' })).toHaveAttribute('href', '/jobs')
+  })
+
+  it('季列說得出這一季播出的集數裡入庫了幾集', async () => {
+    render()
+    renderApp('/media/tv:120089')
+
+    const season = (await screen.findByText('Season 1')).closest('summary')!
+
+    expect(within(season).getByText('1 / 1 集入庫')).toBeVisible()
+  })
+
+  it('檔案清單說得出每個檔案的季集、Tags、目標路徑、帳本與 Jellyfin', async () => {
+    render({ [SPY_PATH]: { body: media({ files: [ledgerFile()] }) } })
+    renderApp('/media/tv:120089')
+
+    const files = await screen.findByRole('region', { name: '檔案與版本' })
+    await userEvent.click(within(files).getByText('1 個檔案'))
+
+    expect(within(files).getByText('正片')).toBeVisible()
+    expect(within(files).getByText('S01E01')).toBeVisible()
+    expect(within(files).getByText('[WEB][1080p][Lilith-Raws]')).toBeVisible()
+    expect(within(files).getByText(/Season 01\/SPY x FAMILY \(2022\) - S01E01/)).toBeVisible()
+    expect(within(files).getByText('對得上')).toBeVisible()
+    expect(within(files).getByText('Jellyfin 已收錄')).toBeVisible()
+  })
+
+  it('還在等 Jellyfin 的檔案說得出下一次什麼時候查', async () => {
+    const soon = new Date(Date.now() + 3 * 60 * 1000).toISOString()
+    render({
+      [SPY_PATH]: {
+        body: media({
+          files: [ledgerFile({ presence: 'searching', resolve_after: soon, resolve_attempts: 1 })],
+        }),
+      },
+    })
+    renderApp('/media/tv:120089')
+
+    const files = await screen.findByRole('region', { name: '檔案與版本' })
+    await userEvent.click(within(files).getByText('1 個檔案'))
+
+    expect(within(files).getByText(/Jellyfin 還在掃描/)).toBeVisible()
+    expect(within(files).getByText(/3 分鐘/)).toBeVisible()
+  })
+
+  it('反查用完的檔案說得出試了幾次', async () => {
+    render({
+      [SPY_PATH]: {
+        body: media({ files: [ledgerFile({ presence: 'lost', resolve_attempts: 6 })] }),
+      },
+    })
+    renderApp('/media/tv:120089')
+
+    const files = await screen.findByRole('region', { name: '檔案與版本' })
+    await userEvent.click(within(files).getByText('1 個檔案'))
+
+    expect(within(files).getByText('Jellyfin 試了 6 次都沒找到')).toBeVisible()
+  })
+
+  it('季列的計數照後端給的數字，不自己重算（shape brief §7）', async () => {
+    const plain = media()
+    render({
+      [SPY_PATH]: {
+        body: media({ seasons: [{ ...plain.seasons[0], imported: 3, aired: 7 }] }),
+      },
+    })
+    renderApp('/media/tv:120089')
+
+    const season = (await screen.findByText('Season 1')).closest('summary')!
+
+    expect(within(season).getByText('3 / 7 集入庫')).toBeVisible()
+  })
+
+  it('有檔案但沒有多版本時說一句話，不留空區塊', async () => {
+    render({ [SPY_PATH]: { body: media({ files: [ledgerFile()] }) } })
+    renderApp('/media/tv:120089')
+
+    const files = await screen.findByRole('region', { name: '檔案與版本' })
+
+    expect(within(files).getByText('每一集都只有一個版本。')).toBeVisible()
+  })
+
+  it('只有對不到的檔案時，仍然說得出一個檔案都還沒入庫', async () => {
+    render({
+      [SPY_PATH]: {
+        body: media({
+          unmatched: [{ rel_path: 'SP01.mkv', job_hash: 'a'.repeat(40), job_name: 'release' }],
+        }),
+      },
+    })
+    renderApp('/media/tv:120089')
+
+    const files = await screen.findByRole('region', { name: '檔案與版本' })
+
+    expect(within(files).getByText('還沒有任何檔案入庫。')).toBeVisible()
+    expect(within(files).getByText('SP01.mkv')).toBeVisible()
+  })
+
+  it('一個檔案都沒入庫時說一句話，不留一塊空白', async () => {
+    render()
+    renderApp('/media/tv:120089')
+
+    const files = await screen.findByRole('region', { name: '檔案與版本' })
+
+    expect(within(files).getByText('還沒有任何檔案入庫。')).toBeVisible()
+  })
+
+  it('對不到的檔案列出來，並說得出它留在原位', async () => {
+    render({
+      [SPY_PATH]: {
+        body: media({
+          unmatched: [
+            {
+              rel_path: '[Group] SPY×FAMILY/[Group] SPY×FAMILY [SP][01] [1080p].mkv',
+              job_hash: '4bd0f6ef1d3b1e3cbb1e1b6b6c2a9c7d8e5f0a1b',
+              job_name: '[Group] SPY×FAMILY S01 [01-25][1080p][CHT]',
+            },
+          ],
+        }),
+      },
+    })
+    renderApp('/media/tv:120089')
+
+    const files = await screen.findByRole('region', { name: '檔案與版本' })
+
+    expect(within(files).getByText('對不到的檔案')).toBeVisible()
+    expect(within(files).getByText(/\[SP\]\[01\]/)).toBeVisible()
+    expect(within(files).getByText(/留在 complete 原位/)).toBeVisible()
+    expect(within(files).getByRole('link', { name: '看下載列表' })).toHaveAttribute('href', '/jobs')
+  })
+
+  it('多版本並存列出 Jellyfin 版本選單上會出現的名字（brief §7.7）', async () => {
+    render({
+      [SPY_PATH]: {
+        body: media({
+          // 有版本群組就一定有正片——版本區塊掛在「有正片」底下。
+          files: [ledgerFile()],
+          versions: [
+            {
+              season: 1,
+              episode_start: 1,
+              episode_end: null,
+              labels: [
+                'SPY x FAMILY (2022) - S01E01 - OPERATION STRIX [WEB][1080p][Lilith-Raws]',
+                'SPY x FAMILY (2022) - S01E01 - OPERATION STRIX [BD][2160p][Sakurato]',
+              ],
+            },
+          ],
+        }),
+      },
+    })
+    renderApp('/media/tv:120089')
+
+    const files = await screen.findByRole('region', { name: '檔案與版本' })
+
+    expect(within(files).getByText('多版本並存')).toBeVisible()
+    expect(within(files).getByText(/\[BD\]\[2160p\]\[Sakurato\]/)).toBeVisible()
+    expect(within(files).getByText(/先後順序不保證/)).toBeVisible()
   })
 
   it('憑證缺失時連到精靈的泊位 3，與探索頁同一塊', async () => {

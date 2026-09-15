@@ -45,6 +45,10 @@ class JellyfinSettings(SettingsGroup):
 
     base_url: str = ""
     api_key: str = ""
+    #: 瀏覽器到得了的 Jellyfin 網址（Seerr 的 `externalHostname` 慣例，票 13）。選填：
+    #: 空的時候由 `services/deeplink.py` 推導。`base_url` 是 Berth 自己連過去的那一條，
+    #: 套件內是 compose 內網的 `http://jellyfin:8096`——瀏覽器解不到那個名字。
+    public_url: str = ""
 
     #: 建立媒體庫時寫進 `LibraryOptions.TypeOptions[].MetadataFetchers` 的名字（plan §9.4）。
     #: 鍵是媒體庫 slug，順序即優先序；名字是 Jellyfin 自己報的 fetcher 名

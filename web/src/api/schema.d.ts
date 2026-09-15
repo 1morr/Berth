@@ -189,6 +189,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/inventory": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Inventories
+         * @description 切換列：每一條 Route 與它的作品數。
+         */
+        get: operations["get_inventories_api_inventory_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/inventory/{slug}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Inventory */
+        get: operations["get_inventory_api_inventory__slug__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/jobs": {
         parameters: {
             query?: never;
@@ -465,6 +502,27 @@ export interface paths {
          * @description 「還原建議設定」。只寫有差異的鍵，跑的是精靈第 4 步的同一支命令。
          */
         post: operations["post_qbittorrent_apply_api_settings_qbittorrent_apply_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/settings/jellyfin": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Jellyfin
+         * @description 對外網址，與它沒填時推導出來的樣子——欄位旁邊要說得出「空著的話會開在哪」。
+         */
+        get: operations["get_jellyfin_api_settings_jellyfin_get"];
+        put?: never;
+        /** Post Jellyfin */
+        post: operations["post_jellyfin_api_settings_jellyfin_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -962,7 +1020,18 @@ export interface components {
             runtime: number | null;
             /** Absolute Number */
             absolute_number: number | null;
+            status: components["schemas"]["EpisodeStatus"];
         };
+        /**
+         * EpisodeStatus
+         * @description Media 詳情集表上一集的入庫狀態（票 13，使用者拍板五種）。
+         *
+         *     **宣告順序就是優先序**：第二個版本在下載的那一集已經看得了，所以是已入庫。
+         *     「卡住」與「下載中」分開、「未播出」與「缺」分開：停在待審的那一集說成下載中是騙人，
+         *     還沒播的集說成缺也是。
+         * @enum {string}
+         */
+        EpisodeStatus: "imported" | "stuck" | "downloading" | "missing" | "unaired";
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -1078,6 +1147,80 @@ export interface components {
             error: string;
         };
         /**
+         * InventoryItemOut
+         * @description 牆上的一格。判定規則全部在後端（`services/inventory.py`），前端只照畫。
+         */
+        InventoryItemOut: {
+            /** Media Id */
+            media_id: string;
+            kind: components["schemas"]["MediaKind"];
+            /** Title */
+            title: string;
+            /** Title En */
+            title_en: string;
+            /** Year */
+            year: number | null;
+            /** Poster Url */
+            poster_url: string;
+            status: components["schemas"]["InventoryStatus"];
+            /** Imported */
+            imported: number;
+            /** Aired */
+            aired: number;
+            /** Versions */
+            versions: number;
+            /** Needs Review */
+            needs_review: boolean;
+            /** Has Unmatched */
+            has_unmatched: boolean;
+            presence: components["schemas"]["JellyfinPresence"];
+            /** Jellyfin Item Id */
+            jellyfin_item_id: string;
+        };
+        /** InventoryOut */
+        InventoryOut: {
+            route: components["schemas"]["InventoryRouteOut"];
+            jellyfin: components["schemas"]["JellyfinWebOut"];
+            /** Items */
+            items: components["schemas"]["InventoryItemOut"][];
+        };
+        /**
+         * InventoryRouteOut
+         * @description 切換列上的一條 Route，與兩個篩選的數字。
+         */
+        InventoryRouteOut: {
+            /** Slug */
+            slug: string;
+            /** Name */
+            name: string;
+            collection_type: components["schemas"]["CollectionType"];
+            /** Enabled */
+            enabled: boolean;
+            /** Titles */
+            titles: number;
+            /** Review */
+            review: number;
+            /** Unmatched */
+            unmatched: number;
+        };
+        /**
+         * InventoryStatus
+         * @description 媒體庫牆上一格的狀態（票 13、`.scratch/m1/library-shape.md` §5）。
+         *
+         *     **宣告順序就是優先序**：一部作品常常同時是好幾件事（第一季入庫了、第二季在下載、
+         *     有一包停在待審），而一格只說一件——需要人的那一件排前面。
+         * @enum {string}
+         */
+        InventoryStatus: "failed" | "review" | "downloading" | "complete" | "partial" | "empty";
+        /** JellyfinAddressIn */
+        JellyfinAddressIn: {
+            /**
+             * Public Url
+             * @default
+             */
+            public_url?: string;
+        };
+        /**
          * JellyfinConnectIn
          * @description 既有 Jellyfin 的管理員帳密。只用來換 API key，不存下來。
          */
@@ -1087,6 +1230,15 @@ export interface components {
             /** Password */
             password: string;
         };
+        /**
+         * JellyfinPresence
+         * @description Jellyfin 找到這部作品了沒——媒體庫卡片上那一行（票 13）。
+         *
+         *     分四種而不是「有沒有連結」：「還在找」只要等，「找不到」要人去 Jellyfin 看它把資料夾
+         *     認成了什麼（`IssueType.JELLYFIN_ITEM_UNRESOLVED`），兩者的下一步不同。
+         * @enum {string}
+         */
+        JellyfinPresence: "found" | "searching" | "lost" | "none";
         /** JellyfinSetupOut */
         JellyfinSetupOut: {
             origin: components["schemas"]["ServiceOrigin"];
@@ -1104,6 +1256,18 @@ export interface components {
             merge_movies_task_id: string;
             /** Merge Episodes Task Id */
             merge_episodes_task_id: string;
+        };
+        /**
+         * JellyfinWebOut
+         * @description 深連結開在哪一台主機上（`services/deeplink.py`、票 13）。媒體庫的牆與設定頁共用。
+         */
+        JellyfinWebOut: {
+            /** Public Url */
+            public_url: string;
+            /** Url */
+            url: string;
+            /** Port */
+            port: number | null;
         };
         /** JobCreateIn */
         JobCreateIn: {
@@ -1240,6 +1404,41 @@ export interface components {
          * @enum {string}
          */
         JobTrigger: "manual" | "rss" | "reimport";
+        /**
+         * LedgerFileOut
+         * @description 檔案清單的一列：一筆帳本（CONTEXT.md 的 Ledger Entry）。
+         */
+        LedgerFileOut: {
+            /** Id */
+            id: number;
+            action: components["schemas"]["PlanAction"];
+            /** Season */
+            season: number | null;
+            /** Episode Start */
+            episode_start: number | null;
+            /** Episode End */
+            episode_end: number | null;
+            /** Tags */
+            tags: string;
+            /** Target Path */
+            target_path: string;
+            status: components["schemas"]["LedgerStatus"];
+            presence: components["schemas"]["JellyfinPresence"];
+            /** Resolve After */
+            resolve_after: string | null;
+            /** Resolve Attempts */
+            resolve_attempts: number;
+            /** Job Hash */
+            job_hash: string | null;
+        };
+        /**
+         * LedgerStatus
+         * @description 一筆帳本現在與磁碟對不對得起來（plan §2.3 的 `ledger.status`、brief §9.1）。
+         *
+         *     importer 寫下的一律是 `ok`；其餘三種是 M2 的 Reconciler 比對之後寫的。
+         * @enum {string}
+         */
+        LedgerStatus: "ok" | "target_missing" | "source_missing" | "inode_mismatch";
         /** LibraryChoiceOut */
         LibraryChoiceOut: {
             /** Name */
@@ -1377,6 +1576,12 @@ export interface components {
             problem: components["schemas"]["TmdbProblem"] | null;
             /** Detail */
             detail: string;
+            /** Files */
+            files: components["schemas"]["LedgerFileOut"][];
+            /** Unmatched */
+            unmatched: components["schemas"]["UnmatchedFileOut"][];
+            /** Versions */
+            versions: components["schemas"]["VersionGroupOut"][];
         };
         /**
          * PlanAction
@@ -1722,6 +1927,10 @@ export interface components {
             episode_count: number;
             /** Air Date */
             air_date: string | null;
+            /** Imported */
+            imported: number;
+            /** Aired */
+            aired: number;
             /** Episodes */
             episodes: components["schemas"]["EpisodeOut"][];
         };
@@ -1893,6 +2102,18 @@ export interface components {
             /** State */
             state: string;
         };
+        /**
+         * UnmatchedFileOut
+         * @description 對不到任何一集的檔案。它留在 complete 原位，不在帳本裡（brief §7.4）。
+         */
+        UnmatchedFileOut: {
+            /** Rel Path */
+            rel_path: string;
+            /** Job Hash */
+            job_hash: string;
+            /** Job Name */
+            job_name: string;
+        };
         /** ValidationError */
         ValidationError: {
             /** Location */
@@ -1905,6 +2126,20 @@ export interface components {
             input?: unknown;
             /** Context */
             ctx?: Record<string, never>;
+        };
+        /**
+         * VersionGroupOut
+         * @description 同一集（或同一部電影）並存的版本（brief §7.7）。
+         */
+        VersionGroupOut: {
+            /** Season */
+            season: number | null;
+            /** Episode Start */
+            episode_start: number | null;
+            /** Episode End */
+            episode_end: number | null;
+            /** Labels */
+            labels: string[];
         };
     };
     responses: never;
@@ -2134,6 +2369,57 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HealthDetailOut"];
+                };
+            };
+        };
+    };
+    get_inventories_api_inventory_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryRouteOut"][];
+                };
+            };
+        };
+    };
+    get_inventory_api_inventory__slug__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -2565,6 +2851,59 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["QbittorrentOut"];
+                };
+            };
+        };
+    };
+    get_jellyfin_api_settings_jellyfin_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JellyfinWebOut"];
+                };
+            };
+        };
+    };
+    post_jellyfin_api_settings_jellyfin_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["JellyfinAddressIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JellyfinWebOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

@@ -139,7 +139,10 @@ class TestDetail:
             "air_date": "2022-04-09",
             "runtime": 25,
             "absolute_number": 1,
+            # 播出了，媒體庫裡沒有，也沒有任何一筆 Job 衝著它來（票 13）。
+            "status": "missing",
         }
+        assert (body["files"], body["unmatched"], body["versions"]) == ([], [], [])
 
     def test_a_film_carries_a_runtime_and_no_seasons(self, client: TestClient) -> None:
         sign_in(client)

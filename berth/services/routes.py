@@ -31,6 +31,7 @@ from berth.adapters.fs import (
     PathEscapeError,
     ensure_directory,
     free_space,
+    is_within,
     link_test,
     probe_file,
     stat,
@@ -611,6 +612,18 @@ def save_path_of(complete_root: str, slug: str) -> str:
     """Route 的 complete 子目錄（brief §4.1）。**一個地方算，到處用**——精靈的檢查、
     健康頁、畫面上那一行，以及票 09 的送單（category 的 save path 就是它）。"""
     return f"{complete_root.rstrip('/')}/{slug}"
+
+
+def owning_route(target_path: str, routes: Sequence[Route]) -> Route | None:
+    """媒體庫裡這個檔案屬於哪一條 Route。
+
+    帳本只記目標路徑、不記 Route，所以它屬於**目標在它底下**的那一條——有好幾條時是最深的
+    那一條（`/data/library/tv` 與 `/data/library/tv/anime` 可以同時是 Route，brief §4.3）。
+    反查（票 12）與媒體庫（票 13）問的是同一件事。
+    """
+    target = Path(target_path)
+    owners = [route for route in routes if is_within(target, Path(route.target_path))]
+    return max(owners, key=lambda route: len(route.target_path), default=None)
 
 
 def _library_choice(library: SetupLibrary, library_root: str, route: Route | None) -> LibraryChoice:

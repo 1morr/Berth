@@ -302,6 +302,23 @@ Windows Docker Desktop（NTFS bind mount）與 Linux（ext4）上各跑一次 `d
   `jellyfin_item_unresolved`。
 - 下載列表上入庫失敗的那一筆有一顆「再試一次入庫」（與「重新送單」同一個端點，回到的是另一站；
   不叫「重新入庫」——那是 M2 的 Reimport）。鏈接失敗只有擋住入庫時才是紅字。
+- **媒體庫頁 `/library/:routeSlug`**（票 13、`.scratch/m1/library-shape.md`）：依 Route 分頁的卡片牆，
+  牆上是這條 Route 上有 Job 的作品加上檔案落在它底下的。一格說得出狀態（失敗 → 待審 → 下載中 →
+  已入庫 / 部分 / 沒有檔案，依序取第一個成立的；只有需要人的那幾格塗漆）、`N / M 集入庫`（分母是
+  已播出的正片，S00 不算），以及 Jellyfin 找到了沒——找到了是一條深連結，還沒找到說原因、不給死
+  連結。「待審」「Unmatched」兩個篩選在網址上。卡片本體連到 Media 詳情，Jellyfin 那一行是並排的
+  另一條連結。`GET /api/inventory`、`GET /api/inventory/{slug}`；頁首多一項「媒體庫」。
+- Media 詳情的第 4 塊「檔案與版本」：帳本裡每一個檔案的季集、Tags、目標路徑、帳本狀態與 Jellyfin
+  反查狀態（還在掃描時說下一次什麼時候查），對不到的檔案，以及多版本並存（電影是 Tags，劇集是
+  整個檔名主幹，brief §7.7）。集表多一欄「入庫」：已入庫 · 卡住 · 下載中 · 缺 · 未播出。
+- **Jellyfin 對外網址**（`settings.services.jellyfin.public_url`，在服務設定頁改；
+  `GET|POST /api/settings/jellyfin`）：選填，沒填時推導——既有服務用它自己的位址，套件內用瀏覽器
+  的主機名加 `base_url` 的 port（Seerr 的 `externalHostname` 慣例）。深連結的形狀是
+  `{對外網址}/web/#/details?id=…`，不帶 `serverId`（Jellyfin 12.0.0 實測不需要）。
+- 帳本多一欄 `jellyfin_series_id`：resolver 反查到一集時連同它所屬的 Series 寫下，深連結開到作品
+  而不是某一集。
+- 演練情境 `inventory`（`scripts/fake_setup_server.py`）：替身 Jellyfin 會「掃到」入庫的檔案，媒體庫
+  的卡片看得到從「還在掃描」換成「在 Jellyfin 開啟」。
 
 ### Changed
 

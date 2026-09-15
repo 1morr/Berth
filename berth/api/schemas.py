@@ -161,6 +161,20 @@ class HealthDetailOut(BaseModel):
     poller: PollerOut
 
 
+class JellyfinWebOut(BaseModel):
+    """深連結開在哪一台主機上（`services/deeplink.py`、票 13）。媒體庫的牆與設定頁共用。"""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    #: 管理員填的對外網址。空的時候下面兩格是推導出來的。
+    public_url: str
+    #: 有值就拿它組深連結。
+    url: str
+    #: `url` 是空的時候：瀏覽器現在的主機名加上這個 port（套件內的 Jellyfin）。
+    #: 主機名只有瀏覽器知道，所以這一步只能在前端補完。
+    port: int | None
+
+
 def health_detail(report: HealthReport) -> HealthDetailOut:
     return HealthDetailOut(
         status="degraded" if report.degraded else "ok",

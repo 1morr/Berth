@@ -71,6 +71,7 @@ async def scanned(session: AsyncSession, route: Route, factory: FakeClientFactor
                 path=entry.target_path,
                 tmdb_id="",
                 source_paths=(entry.target_path,),
+                series_id="series-1",
             )
             for entry in episodes
         ),
@@ -236,6 +237,17 @@ class TestMatching:
         resolved = [row for row in await events_of(session) if row.type == "jellyfin_item_resolved"]
         assert [(row.payload_json or {})["count"] for row in resolved] == [3]
 
+    async def test_an_episode_remembers_the_series_it_belongs_to(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """媒體庫的卡片連到作品，不是某一集（票 13）：Episode 自己帶 `SeriesId`（12.0.0 實測）。"""
+        route, factory = await imported(session, roots)
+        await scanned(session, route, factory)
+
+        await resolve(session, factory, FIRST)
+
+        assert {entry.jellyfin_series_id for entry in await features(session)} == {"series-1"}
+
     async def test_subtitles_and_extras_are_never_looked_up(
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
@@ -288,7 +300,7 @@ class TestMatching:
         )
 
         assert locate(f"{folder}/Your Name. (2016) [tmdbid-372058] - 2160p.mkv", [merged]) == (
-            "movie-1"
+            merged
         )
 
     async def test_a_path_that_only_shares_a_prefix_is_not_a_match(self) -> None:
@@ -301,7 +313,7 @@ class TestMatching:
             source_paths=(),
         )
 
-        assert locate("/data/library/tv/Show/Season 01/Show S01E01", [episode]) == ""
+        assert locate("/data/library/tv/Show/Season 01/Show S01E01", [episode]) is None
 
 
 class TestMergeVersions:

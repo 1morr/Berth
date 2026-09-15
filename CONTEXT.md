@@ -18,6 +18,11 @@ _Avoid_: subscribed media, library item
 一個入庫目的地：Jellyfin 媒體庫、一個寫入目標路徑、一個 qBittorrent category、一個命名 profile（standard / anime）。
 _Avoid_: root folder, destination；程式碼中不要用 `library` 指 Route（`library` 一律指下一條的 Jellyfin Library）
 
+**Inventory**（UI 顯示「媒體庫」頁）:
+一條 Library Route 上 Berth 經手的作品與它們的入庫狀態：這條 Route 上有 Job 的作品，加上帳本裡
+目標落在它底下的。一格說得出入庫了幾集、哪一部需要人、Jellyfin 找到了沒。
+_Avoid_: library（程式碼中，那是下一條的 Jellyfin Library）, collection, shelf
+
 **Jellyfin Library**（UI 顯示「Jellyfin 媒體庫」）:
 Jellyfin 那一端的 virtual folder：一個名字、一個 collection type、**一到多條**路徑。Berth 不擁有它——
 套件內的 Jellyfin 由 Berth 建三個（Movies / TV / Anime），既有的一律只讀，最多加一條路徑。

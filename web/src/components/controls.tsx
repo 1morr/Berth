@@ -152,6 +152,16 @@ export const GHOST_LINK =
   'label justify-self-start border-2 border-rule px-4 py-2.5 text-ink hover:border-rule-strong'
 
 /**
+ * 導覽方塊：頁首導覽、媒體庫的 Route 切換列與篩選列（票 13）。當前那一個重橫線 + `deck` 底，
+ * 不靠顏色（狀態不只靠顏色，PRODUCT.md）。
+ *
+ * **不含內距**：兩種尺寸的方塊共用這一份，而同一個元素上的 `px-4` 與 `px-3` 誰贏看的是
+ * CSS 裡的先後，不是類名字串的先後——內距由呼叫端自己給一次。
+ */
+export const NAV_BOX = 'label border-2 border-rule hover:border-rule-strong'
+export const NAV_BOX_ACTIVE = 'label border-2 border-rule-strong bg-deck'
+
+/**
  * 帶狀態的訊息塊。標記是**塗上去的色塊 + 模板字**，不是左側的粗色條——
  * 那條粗色條是 AI 介面最好認的胎記，也不是這塊板子的語彙。
  */

@@ -2,7 +2,8 @@ import { queryOptions } from '@tanstack/react-query'
 
 import { apiGet, apiPost } from './client'
 import type { HealthDetail } from './health'
-import type { QbittorrentSetup, ServiceKind } from './schemas'
+import type { JellyfinWeb } from './inventory'
+import type { QbittorrentSetup, Schemas, ServiceKind } from './schemas'
 
 /**
  * 服務設定頁（`/settings/services`，只有 admin）。
@@ -31,4 +32,22 @@ export const qbittorrentDriftQueryOptions = queryOptions({
 /** 「還原建議設定」。只寫有差異的鍵，跑的是精靈第 4 步的同一支命令。 */
 export function restoreQbittorrent(): Promise<QbittorrentSetup> {
   return apiPost<QbittorrentSetup>('/settings/qbittorrent/apply')
+}
+
+/**
+ * Jellyfin 的對外網址，與它沒填時推導出來的樣子（票 13）。
+ *
+ * 它是這一頁唯一的「表單」，但不是連線資訊：精靈用不到它，填錯也不會讓任何服務斷線——
+ * 它只決定媒體庫上那一條深連結開在哪台主機。
+ */
+export const jellyfinAddressQueryOptions = queryOptions({
+  queryKey: ['settings', 'jellyfin'],
+  queryFn: () => apiGet<JellyfinWeb>('/settings/jellyfin'),
+})
+
+/** 存下對外網址。空白就是清掉，回到推導。不是 http(s) 的位址回 422。 */
+export function saveJellyfinAddress(publicUrl: string): Promise<JellyfinWeb> {
+  return apiPost<JellyfinWeb>('/settings/jellyfin', {
+    public_url: publicUrl,
+  } satisfies Schemas['JellyfinAddressIn'])
 }

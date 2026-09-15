@@ -467,7 +467,7 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 
 ## 12. 播放【決定】
 
-第一階段 **深連結到 Jellyfin** 該項目的詳情頁（帳本存有 Jellyfin item id），格式沿用 Seerr 來源碼：`{externalUrl}/web/index.html#!/details?id={itemId}&serverId={serverId}`，10.9+ 是否需改為 `#/details` 列入實測。Jellyfin 沒有「直接開始播放」的穩定 URL。不做內嵌播放器：播放器牽涉轉碼協商、字幕、播放進度回報，是最大工作量且與本系統核心無關。媒體庫頁的價值在「狀態與修正」，不在「取代 Jellyfin 播放」。
+第一階段 **深連結到 Jellyfin** 該項目的詳情頁（帳本存有 Jellyfin item id；劇集連 Series，電影連 Movie）。格式原本沿用 Seerr 來源碼的 `{externalUrl}/web/index.html#!/details?id={itemId}&serverId={serverId}`；**實作用 `{對外網址}/web/#/details?id={itemId}`**——客戶端自己的 `#/` 形式（M0 票 04 實測），不帶 `serverId`（2026-09-15 對 12.0.0 實測開到同一頁，§20.1）。主機是選填的「Jellyfin 對外網址」，沒填時推導（票 13，Seerr 的 `externalHostname` 慣例）。Jellyfin 沒有「直接開始播放」的穩定 URL。不做內嵌播放器：播放器牽涉轉碼協商、字幕、播放進度回報，是最大工作量且與本系統核心無關。媒體庫頁的價值在「狀態與修正」，不在「取代 Jellyfin 播放」。
 
 ---
 
@@ -656,6 +656,8 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 - **`DELETE /Items/{id}` 會刪除磁碟檔案**（`DeleteFileLocation = true`），本系統絕不呼叫它。（[LibraryController.cs](https://github.com/jellyfin/jellyfin/blob/master/Jellyfin.Api/Controllers/LibraryController.cs)）
 - 登入 `POST /Users/AuthenticateByName` 回 `AccessToken`、`ServerId`、`User`；`POST /Auth/Keys` 建 API key。
 - 深連結：`{server}/web/index.html#!/details?id={itemId}&serverId={serverId}` 在 10.10.7 與 10.11.11 **都能開到詳細頁**，前端會正規化成 `#/details?id=…`；客戶端自己產生的連結一律不帶 `!`（2026-09-07 playwright 實測，§20.6）。沒有「直接開始播放」的穩定 URL。
+- **`serverId` 可以不帶**：12.0.0 上登入後直接開 `{server}/web/#/details?id={seriesId}`（沒有 `serverId`）照樣畫出該作品的詳細頁與季列（2026-09-15 playwright 實測，Series `大熊餐廳`）。10.10 / 10.11 沒有測過不帶的形式。Berth 產生的連結不帶它（票 13）。
+- **`GET /Items` 的每一筆都帶 `ServerId`，Episode 另帶 `SeriesId` 與 `SeasonId`**，不必另外在 `fields` 要（2026-09-15 對 12.0.0 實測）。反查一集時順手就知道它屬於哪個 Series，媒體庫的深連結靠它開到作品而不是某一集（票 13）。
 - Webhook 插件有 `ItemAdded` / `ItemDeleted`，但走排程批次且社群長期回報不可靠（[#252](https://github.com/jellyfin/jellyfin-plugin-webhook/issues/252)、[#367](https://github.com/jellyfin/jellyfin-plugin-webhook/issues/367)）→ 支持 §9 以排程對帳為主。
 
 **Provider**

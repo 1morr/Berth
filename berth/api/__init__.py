@@ -10,6 +10,7 @@ from berth.api import (
     discover,
     events,
     health,
+    inventory,
     jobs,
     media,
     plans,
@@ -24,6 +25,7 @@ router.include_router(auth.router)
 router.include_router(discover.router)
 router.include_router(events.router)
 router.include_router(health.router)
+router.include_router(inventory.router)
 router.include_router(jobs.router)
 router.include_router(media.router)
 router.include_router(plans.router)

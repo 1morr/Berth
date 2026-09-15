@@ -14,6 +14,8 @@ const SERVICES = 'GET /api/settings/services'
 const DRIFT = 'GET /api/settings/qbittorrent/diff'
 const APPLY = 'POST /api/settings/qbittorrent/apply'
 const TEST_QBIT = 'POST /api/settings/services/qbittorrent/test'
+const JELLYFIN = 'GET /api/settings/jellyfin'
+const SAVE_JELLYFIN = 'POST /api/settings/jellyfin'
 
 /** 建議值全部一致的那一台：沒有漂移，所以不該出現還原按鈕。 */
 const CLEAN = qbittorrentSetup({
@@ -29,6 +31,8 @@ function render(routes: Record<string, StubRoute | (() => StubRoute)>) {
     'GET /api/auth/me': { body: { name: 'skipper', role: 'admin' } },
     [SERVICES]: { body: healthDetail() },
     [DRIFT]: { body: CLEAN },
+    // 套件內的 Jellyfin、對外網址沒填：深連結開在瀏覽器的主機名上。
+    [JELLYFIN]: { body: { public_url: '', url: '', port: 8096 } },
     ...routes,
   })
 }
@@ -115,5 +119,46 @@ describe('服務設定頁', () => {
     const { router } = renderApp('/settings/services')
 
     await waitFor(() => expect(router.state.location.pathname).toBe('/health'))
+  })
+
+  it('Jellyfin 對外網址空著時，說得出深連結會開在哪（票 13）', async () => {
+    render({})
+    renderApp('/settings/services')
+
+    expect(
+      await screen.findByText('現在沒有填：深連結開在這個瀏覽器目前的主機名，port 8096。'),
+    ).toBeInTheDocument()
+  })
+
+  it('存下對外網址之後，說明換成填進去的那一個', async () => {
+    const stub = render({
+      [SAVE_JELLYFIN]: {
+        body: { public_url: 'https://jf.example.com', url: 'https://jf.example.com', port: null },
+      },
+    })
+    renderApp('/settings/services')
+
+    await userEvent.type(await screen.findByLabelText('對外網址'), 'https://jf.example.com')
+    await userEvent.click(screen.getByRole('button', { name: '儲存' }))
+
+    expect(await screen.findByText('深連結開在 https://jf.example.com。')).toBeInTheDocument()
+    const call = stub.mock.calls.find(
+      ([url, init]) => url === '/api/settings/jellyfin' && init?.method === 'POST',
+    )
+    expect(JSON.parse(String(call?.[1]?.body))).toEqual({ public_url: 'https://jf.example.com' })
+  })
+
+  it('不是 http 的網址，欄位自己說不行', async () => {
+    render({
+      [SAVE_JELLYFIN]: { status: 422, body: { detail: "'jf' is not an http(s) address" } },
+    })
+    renderApp('/settings/services')
+
+    await userEvent.type(await screen.findByLabelText('對外網址'), 'jf')
+    await userEvent.click(screen.getByRole('button', { name: '儲存' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      '要是一個 http:// 或 https:// 開頭的網址。',
+    )
   })
 })

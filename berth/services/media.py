@@ -45,6 +45,13 @@ from berth.models import media_id as build_media_id
 from berth.naming import folder_name
 from berth.services.clients import ServiceClientFactory
 from berth.services.discover import POSTER_SIZE, image_base
+from berth.services.inventory import (
+    LedgerFileView,
+    SeasonView,
+    UnmatchedFileView,
+    VersionGroupView,
+    read_holdings,
+)
 from berth.services.settings import read_settings
 from berth.services.steps import message
 from berth.services.tmdb import MISSING_CREDENTIAL, credential
@@ -98,13 +105,19 @@ class MediaView:
     tracked: bool
     #: 上次送單用的 Route，下拉的預選值（plan §2.2）。還沒送過單時是 `None`。
     default_route_id: int | None
-    seasons: tuple[SeasonSnapshot, ...]
+    seasons: tuple[SeasonView, ...]
     #: 這份快照什麼時候抓的。畫面用它說「這是 N 前的快照」。
     fetched_at: datetime | None
     routes: tuple[RouteChoice, ...]
     problem: TmdbProblem | None = None
     #: 失敗時服務回的原文（英文），與精靈的纜繩同一個規矩。
     detail: str = ""
+    #: 帳本裡這部作品的每一個檔案，照季集排（票 13）。
+    files: tuple[LedgerFileView, ...] = ()
+    #: 現在那幾份計劃裡對不到的檔案——它們留在 complete，不在帳本裡（brief §7.4）。
+    unmatched: tuple[UnmatchedFileView, ...] = ()
+    #: 兩個以上版本並存的集（或電影）（brief §7.7）。
+    versions: tuple[VersionGroupView, ...] = ()
 
 
 async def read_media(
@@ -402,13 +415,9 @@ async def _view(
     problem: TmdbProblem | None = None,
     detail: str = "",
 ) -> MediaView:
-    # 快照可能不在：TMDB 從第一次開啟這一頁起就連不上時，這一列上只有 `_store` 之外的
-    # 途徑寫下的那幾欄。那時仍然畫得出識別欄位與資料夾名，季集是空的。
-    snapshot = (
-        MediaSnapshot.model_validate(row.tmdb_snapshot_json)
-        if row.tmdb_snapshot_json
-        else _bare(row)
-    )
+    snapshot = row.snapshot()
+    # 這部作品在媒體庫裡有什麼（票 13）。與媒體庫的牆共用同一組判定，所以住在 inventory。
+    holdings = await read_holdings(session, row, snapshot)
     return MediaView(
         id=row.id,
         tmdb_id=row.tmdb_id,
@@ -425,23 +434,14 @@ async def _view(
         folder_frozen=row.folder_frozen,
         tracked=await is_tracked(session, row.id),
         default_route_id=row.default_route_id,
-        seasons=snapshot.seasons,
+        seasons=holdings.seasons,
         fetched_at=row.tmdb_fetched_at,
         routes=await _routes(session, row.kind),
         problem=problem,
         detail=detail,
-    )
-
-
-def _bare(row: Media) -> MediaSnapshot:
-    """沒有快照時，這一列自己知道的那幾格。"""
-    return MediaSnapshot(
-        tmdb_id=row.tmdb_id,
-        kind=row.kind,
-        title=row.title_en,
-        title_en=row.title_en,
-        title_original=row.title_original,
-        year=row.year,
+        files=holdings.files,
+        unmatched=holdings.unmatched,
+        versions=holdings.versions,
     )
 
 

@@ -26,12 +26,11 @@ import logging
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from pathlib import Path, PurePosixPath
+from pathlib import PurePosixPath
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from berth.adapters import fs
 from berth.adapters.http import ServiceError
 from berth.adapters.jellyfin import (
     ITEM_EPISODE,
@@ -46,6 +45,7 @@ from berth.models import JellyfinSettings, Job, LedgerEntry, Media, Route
 from berth.models.types import utcnow
 from berth.services.clients import ServiceClientFactory
 from berth.services.jobs import actor_of, record_event
+from berth.services.routes import owning_route
 from berth.services.settings import read_settings
 from berth.services.steps import message
 
@@ -121,9 +121,10 @@ async def sweep_resolutions(
         for route, entries in _by_route(due, routes):
             items = await _look_up(session, client, route, entries)
             for entry in entries:
-                item_id = locate(entry.target_path, items)
-                if item_id:
-                    entry.jellyfin_item_id = item_id
+                item = locate(entry.target_path, items)
+                if item is not None:
+                    entry.jellyfin_item_id = item.id
+                    entry.jellyfin_series_id = item.series_id
                     entry.resolve_after = None
                     found.append(entry)
                     if route is not None and entry.job_hash is not None:
@@ -144,8 +145,8 @@ async def sweep_resolutions(
     return ResolveOutcome(resolved=len(found), retried=len(waiting), exhausted=len(given_up))
 
 
-def locate(target_path: str, items: Sequence[JellyfinItem]) -> str:
-    """帳本那一條路徑在 Jellyfin 裡是哪一個 item；找不到就是空字串。
+def locate(target_path: str, items: Sequence[JellyfinItem]) -> JellyfinItem | None:
+    """帳本那一條路徑在 Jellyfin 裡是哪一個 item。
 
     也比 `source_paths`：多版本合併之後，第二個版本的檔案只是那個 item 底下的一個來源
     （brief §7.7）。
@@ -153,8 +154,8 @@ def locate(target_path: str, items: Sequence[JellyfinItem]) -> str:
     wanted = target_path.rstrip("/")
     for item in items:
         if item.path.rstrip("/") == wanted or wanted in item.source_paths:
-            return item.id
-    return ""
+            return item
+    return None
 
 
 def _reschedule(entry: LedgerEntry, now: datetime) -> bool:
@@ -173,17 +174,10 @@ def _by_route(
     """一條 Route 一個媒體庫、一次查詢。找不到 Route 的那幾筆（Route 被刪了）照樣算一次沒找到。"""
     groups: dict[int | None, tuple[Route | None, list[LedgerEntry]]] = {}
     for entry in entries:
-        route = _route_of(entry, routes)
+        route = owning_route(entry.target_path, routes)
         key = route.id if route is not None else None
         groups.setdefault(key, (route, []))[1].append(entry)
     return list(groups.values())
-
-
-def _route_of(entry: LedgerEntry, routes: Sequence[Route]) -> Route | None:
-    """帳本只記目標路徑，不記 Route：它屬於**目標在它底下**的那一條（最深的那一條）。"""
-    target = Path(entry.target_path)
-    owners = [route for route in routes if fs.is_within(target, Path(route.target_path))]
-    return max(owners, key=lambda route: len(route.target_path), default=None)
 
 
 async def _look_up(

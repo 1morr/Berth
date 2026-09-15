@@ -11,11 +11,14 @@ import {
 import { meQueryOptions, type Me } from './api/auth'
 import { ApiError } from './api/client'
 import { healthQueryOptions } from './api/health'
+import { inventoriesQueryOptions } from './api/inventory'
 import { destination } from './auth/destination'
 import { AppShell } from './AppShell'
 import { DiscoverPage } from './pages/DiscoverPage'
 import { HealthPage } from './pages/HealthPage'
 import { JobsPage } from './pages/JobsPage'
+import { InventoryPage, type InventoryFilter } from './pages/InventoryPage'
+import { InventoryPageRoute } from './pages/InventoryPageRoute'
 import { LoginPage } from './pages/LoginPage'
 import { MediaRoute } from './pages/MediaRoute'
 import { ServiceSettingsPage } from './pages/ServiceSettingsPage'
@@ -199,6 +202,49 @@ const mediaRoute = createRoute({
 })
 
 /**
+ * 媒體庫 `/library`（票 13）：直接落在第一條啟用中的 Route。
+ *
+ * 一條 Route 都沒有、或問不到後端時留在這裡，由頁面自己說下一步——導向一個不存在的 slug
+ * 只會多一次 404。
+ */
+const inventoryIndexRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/library',
+  beforeLoad: async ({ context, location }) => {
+    if ((await requireSignedInPage(context.queryClient, location)) === null) return
+    try {
+      const routes = await context.queryClient.fetchQuery(inventoriesQueryOptions)
+      const first = routes.find((row) => row.enabled) ?? routes[0]
+      if (first) throw redirect({ to: '/library/$routeSlug', params: { routeSlug: first.slug } })
+    } catch (error) {
+      if (isRedirect(error)) throw error
+    }
+  },
+  component: () => (
+    <AppShell>
+      <InventoryPage slug={null} />
+    </AppShell>
+  ),
+})
+
+interface InventorySearch {
+  /** 待審 / Unmatched。沒帶就是全部——`false` 與空字串一樣不寫進網址。 */
+  filter?: InventoryFilter
+}
+
+/** 一條 Route 的牆（票 13）。瀏覽不是管理動作，一般使用者也進得來（brief §11）。 */
+const inventoryRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/library/$routeSlug',
+  validateSearch: (search: Record<string, unknown>): InventorySearch =>
+    search.filter === 'review' || search.filter === 'unmatched' ? { filter: search.filter } : {},
+  beforeLoad: async ({ context, location }) => {
+    await requireSignedInPage(context.queryClient, location)
+  },
+  component: InventoryPageRoute,
+})
+
+/**
  * 下載列表 `/jobs`（票 09）。送單之後去的地方。
  *
  * 一般使用者也進得來：送單本來就是他做的事（brief §11），而這一頁是它的結果。
@@ -249,6 +295,8 @@ export const routeTree = rootRoute.addChildren([
   indexRoute,
   healthRoute,
   jobsRoute,
+  inventoryIndexRoute,
+  inventoryRoute,
   loginRoute,
   mediaRoute,
   serviceSettingsRoute,

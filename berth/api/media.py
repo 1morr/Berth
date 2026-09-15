@@ -15,7 +15,15 @@ from fastapi import APIRouter
 from pydantic import BaseModel, ConfigDict
 
 from berth.api.deps import ClientFactoryDep, SessionDep
-from berth.domain import CollectionType, MediaKind, TmdbProblem
+from berth.domain import (
+    CollectionType,
+    EpisodeStatus,
+    JellyfinPresence,
+    LedgerStatus,
+    MediaKind,
+    PlanAction,
+    TmdbProblem,
+)
 from berth.services.media import read_media, refresh_media
 
 router = APIRouter(prefix="/media", tags=["media"])
@@ -34,6 +42,8 @@ class EpisodeOut(BaseModel):
     runtime: int | None
     #: Absolute episode group 給的絕對編號。沒有那種 group 的作品整欄是 `None`。
     absolute_number: int | None
+    #: 這一集在媒體庫裡的樣子（票 13）。依序取：已入庫 → 卡住 → 下載中 → 缺 / 未播出。
+    status: EpisodeStatus
 
 
 class SeasonOut(BaseModel):
@@ -47,6 +57,9 @@ class SeasonOut(BaseModel):
     #: TMDB 自己報的集數。與 `episodes` 的長度可能不同（未播的集數已經先列進來）。
     episode_count: int
     air_date: date | None
+    #: 這一季播出了的集數裡入庫了幾集，與它的分母（票 13）。與媒體庫卡片同一個定義，前端不重算。
+    imported: int
+    aired: int
     episodes: list[EpisodeOut]
 
 
@@ -63,6 +76,56 @@ class RouteChoiceOut(BaseModel):
     name: str
     slug: str
     collection_type: CollectionType
+
+
+class LedgerFileOut(BaseModel):
+    """檔案清單的一列：一筆帳本（CONTEXT.md 的 Ledger Entry）。"""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    #: `import` / `extra` / `subtitle`。
+    action: PlanAction
+    season: int | None
+    episode_start: int | None
+    #: 單檔多集時的結尾集號（`S01E01-E02`，brief §6.6）。
+    episode_end: int | None
+    #: `[WEB][1080p][CHT][Group]`——檔名裡的那一段，不是文案。
+    tags: str
+    #: 容器裡的完整路徑。
+    target_path: str
+    #: 帳本與磁碟對不對得起來。M1 只會是 `ok`，其餘三種是 M2 的 Reconciler 寫的。
+    status: LedgerStatus
+    #: 正片才查 Jellyfin；字幕與特典是 `none`。
+    presence: JellyfinPresence
+    #: 下一次反查的時間。`presence` 是 `searching` 時畫面拿它說「下一次 N 後」。
+    resolve_after: datetime | None
+    resolve_attempts: int
+    job_hash: str | None
+
+
+class UnmatchedFileOut(BaseModel):
+    """對不到任何一集的檔案。它留在 complete 原位，不在帳本裡（brief §7.4）。"""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    #: 相對於 torrent 內容根的路徑。
+    rel_path: str
+    job_hash: str
+    #: 發佈名，原樣——使用者在下載列表上認得出那一筆的東西。
+    job_name: str
+
+
+class VersionGroupOut(BaseModel):
+    """同一集（或同一部電影）並存的版本（brief §7.7）。"""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    season: int | None
+    episode_start: int | None
+    episode_end: int | None
+    #: Jellyfin 版本選單上會顯示的名字：電影是 Tags，劇集是整個檔名主幹。先後順序不保證。
+    labels: list[str]
 
 
 class MediaOut(BaseModel):
@@ -106,6 +169,12 @@ class MediaOut(BaseModel):
     problem: TmdbProblem | None
     #: 失敗時服務回的原文（英文），與精靈的纜繩同一個規矩。
     detail: str
+    #: 帳本裡這部作品的每一個檔案（跨 Route），照季集排（票 13）。
+    files: list[LedgerFileOut]
+    #: 現在那幾份計劃裡對不到的檔案。預估不算。
+    unmatched: list[UnmatchedFileOut]
+    #: 只有兩個以上版本並存的那幾組。
+    versions: list[VersionGroupOut]
 
 
 @router.get("/{media_id}")

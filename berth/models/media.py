@@ -16,7 +16,7 @@ from pydantic import BaseModel, ConfigDict
 from sqlalchemy import ForeignKey, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
-from berth.domain import MediaKind
+from berth.domain import MediaKind, MediaSnapshot
 from berth.models.base import Base
 from berth.models.types import JsonText, UtcDateTime, enum_column, utcnow
 
@@ -106,6 +106,23 @@ class Media(Base):
     #: 季集結構、各季 `name`、別名與翻譯（plan §2.2、§4.3）。票 04 開始寫。
     tmdb_snapshot_json: Mapped[dict[str, Any] | None] = mapped_column(JsonText, default=None)
     tmdb_fetched_at: Mapped[datetime | None] = mapped_column(UtcDateTime, default=None)
+
+    def snapshot(self) -> MediaSnapshot:
+        """`tmdb_snapshot_json` 的型別化版本（`*_json` 的兩個方向都住在 `models/`，plan §2）。
+
+        快照可能不在：TMDB 從第一次開啟這一頁起就連不上時，這一列上只有它自己知道的那幾格。
+        那時仍然畫得出識別欄位與資料夾名，季集是空的。
+        """
+        if self.tmdb_snapshot_json:
+            return MediaSnapshot.model_validate(self.tmdb_snapshot_json)
+        return MediaSnapshot(
+            tmdb_id=self.tmdb_id,
+            kind=self.kind,
+            title=self.title_en,
+            title_en=self.title_en,
+            title_original=self.title_original,
+            year=self.year,
+        )
 
 
 class TmdbCache(Base):

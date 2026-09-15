@@ -84,9 +84,11 @@ export function MediaWall({
  * 塗底的話，只搜到一部作品時整排空欄會變成一塊灰色的板子——實跑第一輪就是這個樣子。
  */
 function Grid({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="grid grid-cols-2 gap-0 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
-      {children}
-    </div>
-  )
+  return <div className={WALL_GRID}>{children}</div>
 }
+
+/**
+ * 牆的欄數。媒體庫的牆（票 13）是同一座堆場的盤點表，格子必須與這裡對得齊——
+ * 所以斷點只有這一份。
+ */
+export const WALL_GRID = 'grid grid-cols-2 gap-0 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6'

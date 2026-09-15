@@ -68,6 +68,10 @@ class LedgerEntry(Base):
     #: `import` / `extra` / `subtitle`。只有 `import` 在 Jellyfin 裡是一個查得到的 item。
     action: Mapped[PlanAction] = mapped_column(enum_column(PlanAction))
     jellyfin_item_id: Mapped[str] = mapped_column(Text, default="")
+    #: 正片是劇集的一集時，它所屬的 Series item（票 13）。媒體庫的深連結開的是作品，
+    #: 不是某一集；反查那一刻 `/Items` 的 Episode 自己帶著它，所以與 item id 一起寫下。
+    #: `server_default` 是 migration 原生 `ADD COLUMN` 留下來的（不重建表，理由在 `7c3e5a9b2d41`）。
+    jellyfin_series_id: Mapped[str] = mapped_column(Text, default="", server_default="")
     resolve_attempts: Mapped[int] = mapped_column(default=0)
     resolve_after: Mapped[datetime | None] = mapped_column(UtcDateTime, default=None)
     link_mode: Mapped[str] = mapped_column(Text, default=HARDLINK)

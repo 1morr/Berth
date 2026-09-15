@@ -2,7 +2,7 @@ import { useTranslation } from 'react-i18next'
 
 import type { Plan, PlanItem } from '../api/plans'
 import { Dot } from '../components/Dot'
-import { formatEpisode } from './jobState'
+import { formatEpisode } from '../components/episodes'
 
 /**
  * 一筆 Job 的 Import Plan（brief §6.5、票 11）。

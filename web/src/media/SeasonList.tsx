@@ -1,6 +1,9 @@
+import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 
 import type { Episode, Season } from '../api/media'
+import { episodeCode, seasonCode } from '../components/episodes'
+import { SIGNAL_FILL } from '../components/signal'
 
 /**
  * 各季各集（`.scratch/m1/media-detail-shape.md` §6，使用者拍板「每季一個可展開列，預設全收」）。
@@ -35,6 +38,12 @@ export function SeasonList({ seasons }: { seasons: readonly Season[] }) {
             <span className="value text-xs text-ink-dim">
               {t('media.episode.count', { count: season.episode_count })}
             </span>
+            {season.aired > 0 && (
+              // 兩個數字由後端算（shape brief §7）：分母是播出了的集數，與媒體庫卡片同一個定義。
+              <span className="value text-xs text-ink">
+                {t('inventory.episodes', { imported: season.imported, aired: season.aired })}
+              </span>
+            )}
             <span className="value w-24 text-right text-xs text-ink-dim">
               {season.air_date ?? '—'}
             </span>
@@ -43,7 +52,7 @@ export function SeasonList({ seasons }: { seasons: readonly Season[] }) {
           {season.episodes.length > 0 ? (
             // 集表過寬時由**它自己**橫向捲動，不是整頁（shape brief §7）。
             <div className="overflow-x-auto border-t-2 border-rule bg-hull">
-              <table className="w-full min-w-[32rem] border-collapse text-left">
+              <table className="w-full min-w-[36rem] border-collapse text-left">
                 <thead>
                   <tr className="border-b-2 border-rule">
                     <th scope="col" className="label px-4 py-2 text-ink-dim">
@@ -62,6 +71,9 @@ export function SeasonList({ seasons }: { seasons: readonly Season[] }) {
                     </th>
                     <th scope="col" className="label px-4 py-2 text-right text-ink-dim">
                       {t('media.episode.airDate')}
+                    </th>
+                    <th scope="col" className="label px-4 py-2 text-right text-ink-dim">
+                      {t('media.episode.inLibrary')}
                     </th>
                   </tr>
                 </thead>
@@ -106,18 +118,37 @@ function EpisodeRow({ episode, absolute }: { episode: Episode; absolute: boolean
         {episode.runtime === null ? '—' : t('media.minutesShort', { count: episode.runtime })}
       </td>
       <td className="value px-4 py-2 text-right text-xs text-ink-dim">{episode.air_date ?? '—'}</td>
+      <td className="px-4 py-2 text-right">
+        <EpisodeState status={episode.status} />
+      </td>
     </tr>
   )
 }
 
 /**
- * `S01` / `E01`：與 `BTH 1` 同一個語域的分類代號，在哪個語言都是同一串字母數字，
- * 所以不走 i18n，也不走 `.label`（它會把拉丁字母大寫掉，而這兩個本來就是大寫）。
+ * 一集在媒體庫裡的樣子（票 13）。
+ *
+ * **常態不塗漆，例外才塗**：一季 1213 集的表不該是一整欄綠色勾勾（DESIGN.md 拒絕的那一種）。
+ * 下載中是 `working`；卡住是 `assigned`——它要人去下載列表看是哪一筆停下來了，所以它是一條連結。
  */
-function seasonCode(season: number) {
-  return `S${String(season).padStart(2, '0')}`
-}
+function EpisodeState({ status }: { status: Episode['status'] }) {
+  const { t } = useTranslation()
+  const label = t(`media.episode.state.${status}`)
 
-function episodeCode(episode: number) {
-  return `E${String(episode).padStart(2, '0')}`
+  if (status === 'stuck') {
+    return (
+      <Link
+        to="/jobs"
+        className={`label inline-flex min-h-6 items-center px-1.5 ${SIGNAL_FILL.assigned}`}
+      >
+        {label}
+      </Link>
+    )
+  }
+  if (status === 'downloading') {
+    return <span className={`label px-1.5 py-0.5 ${SIGNAL_FILL.working}`}>{label}</span>
+  }
+  return (
+    <span className={`label ${status === 'unaired' ? 'text-ink-dim' : 'text-ink'}`}>{label}</span>
+  )
 }

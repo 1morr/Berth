@@ -11,13 +11,15 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import hashlib
 import os
+import re
 import sys
 import tempfile
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from urllib.parse import quote
 
 import uvicorn
@@ -31,7 +33,11 @@ from berth.adapters.indexer import IndexerResult, IndexerSearch
 from berth.adapters.indexer.fake import FakeIndexerSearch
 from berth.adapters.indexer.prowlarr import ProwlarrSearch
 from berth.adapters.jellyfin import (
+    ITEM_EPISODE,
+    ITEM_MOVIE,
+    ITEM_SERIES,
     JellyfinClient,
+    JellyfinItem,
     JellyfinLibrary,
     JellyfinPlugin,
     JellyfinTask,
@@ -601,6 +607,92 @@ def plan_scenario() -> Scenario:
     return scenario
 
 
+#: 替身 Jellyfin 認得的影片副檔名。字幕與其他檔案不會自己成為一個 item（brief §20.1）。
+VIDEO_SUFFIXES = frozenset({".mkv", ".mp4"})
+
+#: 作品資料夾名裡的 TMDB id（plan §5 的命名模板）。Jellyfin 靠它把 Series 認成那一部作品。
+TMDB_TAG = re.compile(r"\[tmdbid-(\d+)\]")
+
+
+class ScanningJellyfin(FakeJellyfinClient):
+    """被通知過的路徑，下一次 `items()` 就「掃到了」（`inventory` 情境，票 13）。
+
+    一般的替身什麼都不會掃，於是反查永遠找不到東西、媒體庫的卡片永遠是「Jellyfin 還在掃描」。
+    這一台照 Jellyfin 真的回的形狀長出 item（2026-09-15 對 12.0.0 實測）：劇集媒體庫裡作品資料夾
+    是一個 Series、每個影片檔一個帶 `SeriesId` 的 Episode；電影媒體庫裡每個影片檔一個 Movie。
+    resolver 跑的是產品自己的兩段查詢與比對，所以 Series id 是一路真的寫進帳本的。
+    """
+
+    async def items(self, library_id: str, item_types: Sequence[str]) -> tuple[JellyfinItem, ...]:
+        self.items_ = [item for library in self.libraries_ for item in self._scanned(library)]
+        return await super().items(library_id, item_types)
+
+    def _scanned(self, library: JellyfinLibrary) -> list[JellyfinItem]:
+        grown: dict[str, JellyfinItem] = {}
+        for path in dict.fromkeys(self.notified):
+            if PurePosixPath(path).suffix not in VIDEO_SUFFIXES:
+                continue
+            location = next((row for row in library.locations if path.startswith(f"{row}/")), None)
+            if location is None:
+                continue
+            folder = f"{location}/{PurePosixPath(path).relative_to(location).parts[0]}"
+            found = TMDB_TAG.search(folder)
+            tmdb_id = found.group(1) if found else ""
+            name = PurePosixPath(path).stem
+            if library.collection_type == "movies":
+                grown[path] = JellyfinItem(
+                    id=_scanned_id(path),
+                    type=ITEM_MOVIE,
+                    name=name,
+                    path=path,
+                    tmdb_id=tmdb_id,
+                    source_paths=(path,),
+                )
+                continue
+            grown[folder] = JellyfinItem(
+                id=_scanned_id(folder),
+                type=ITEM_SERIES,
+                name=PurePosixPath(folder).name,
+                path=folder,
+                tmdb_id=tmdb_id,
+                source_paths=(),
+            )
+            grown[path] = JellyfinItem(
+                id=_scanned_id(path),
+                type=ITEM_EPISODE,
+                name=name,
+                path=path,
+                tmdb_id="",
+                source_paths=(path,),
+                series_id=_scanned_id(folder),
+            )
+        return list(grown.values())
+
+
+def _scanned_id(path: str) -> str:
+    """Jellyfin 的 item id 是 32 個十六進位字元。由路徑導出，重掃時同一個檔案拿到同一個 id。"""
+    return hashlib.md5(path.encode(), usedforsecurity=False).hexdigest()
+
+
+def inventory_scenario() -> Scenario:
+    """媒體庫頁 `/library` 與 Media 詳情的檔案、版本（票 13）。
+
+    與 `plan` 同樣兩包，只多一台會「掃到」入庫檔案的 Jellyfin：送單之後約 30 秒，resolver 第一次
+    反查就找得到那一包的 Series，卡片從「Jellyfin 還在掃描」換成「在 Jellyfin 開啟」；OST 那一包
+    停在待審，是「待審」篩選要找得到的那一格。
+
+    深連結開在瀏覽器的主機名 + 8096（套件內的 Jellyfin），而那台 Jellyfin 不存在——這個情境驗的
+    是 Berth 這一頁，Jellyfin 那一端由真的那一套驗（票 12 的驗收環境）。
+    """
+    scenario = plan_scenario()
+    scenario.jellyfin = ScanningJellyfin(
+        startup_wizard_completed=True,
+        admin=("skipper", "harbour"),
+        users={"deckhand": "rope"},
+    )
+    return scenario
+
+
 def tmdb_down() -> Scenario:
     """憑證有、TMDB 連不上：探索頁要給原文與重試，而不是一片空白。"""
     scenario = healthy()
@@ -616,6 +708,7 @@ SCENARIOS = {
     "discover": discover,
     "search": search,
     "plan": plan_scenario,
+    "inventory": inventory_scenario,
     "poll": poll,
     "submit": submit,
     "submit-failing": submit_failing,

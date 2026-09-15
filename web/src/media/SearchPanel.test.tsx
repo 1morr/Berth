@@ -41,6 +41,9 @@ function media(overrides: Partial<Media> = {}): Media {
       { id: 2, name: 'Anime', slug: 'anime', collection_type: 'tvshows' },
     ],
     seasons: [],
+    files: [],
+    unmatched: [],
+    versions: [],
     ...overrides,
   }
 }

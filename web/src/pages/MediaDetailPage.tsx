@@ -9,6 +9,7 @@ import { GHOST_LINK, GhostButton, Notice } from '../components/controls'
 import { KIND_CODE } from '../components/kind'
 import { Timestamp } from '../components/Timestamp'
 import { TmdbNotice } from '../components/TmdbNotice'
+import { FilesPanel } from '../media/FilesPanel'
 import { Poster } from '../media/Poster'
 import { SearchPanel } from '../media/SearchPanel'
 import { SeasonList } from '../media/SeasonList'
@@ -91,6 +92,9 @@ export function MediaDetailPage({ id }: { id: string }) {
           </section>
 
           <SearchPanel media={found} />
+
+          {/* 區塊序列的第 4 塊（shape brief §3）：往搜尋與頁尾之間插，不重排前面。 */}
+          <FilesPanel media={found} />
         </>
       )}
 

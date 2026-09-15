@@ -4,7 +4,7 @@ import { Link, useNavigate } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 
 import { meQueryOptions, signOut } from './api/auth'
-import { GhostButton } from './components/controls'
+import { GhostButton, NAV_BOX, NAV_BOX_ACTIVE } from './components/controls'
 import { LanguageToggle } from './components/LanguageToggle'
 
 /**
@@ -37,7 +37,7 @@ function NavLink({
   to,
   children,
 }: {
-  to: '/' | '/jobs' | '/health' | '/settings/services'
+  to: '/' | '/library' | '/jobs' | '/health' | '/settings/services'
   children: ReactNode
 }) {
   return (
@@ -45,8 +45,8 @@ function NavLink({
       to={to}
       // `/` 是每一條路徑的前綴，預設的模糊比對會讓探索永遠是「當前頁」。
       activeOptions={{ exact: to === '/' }}
-      className="label border-2 border-rule px-4 py-2.5 hover:border-rule-strong"
-      activeProps={{ className: 'label border-2 border-rule-strong bg-deck px-4 py-2.5' }}
+      className={`${NAV_BOX} px-4 py-2.5`}
+      activeProps={{ className: `${NAV_BOX_ACTIVE} px-4 py-2.5` }}
     >
       {children}
     </Link>
@@ -84,6 +84,7 @@ function Identity() {
         <span className="value text-sm text-ink">{me.data.name}</span>
       </span>
       <NavLink to="/">{t('nav.discover')}</NavLink>
+      <NavLink to="/library">{t('nav.inventory')}</NavLink>
       <NavLink to="/jobs">{t('nav.jobs')}</NavLink>
       <NavLink to="/health">{t('nav.health')}</NavLink>
       {me.data.role === 'admin' && <NavLink to="/settings/services">{t('nav.settings')}</NavLink>}

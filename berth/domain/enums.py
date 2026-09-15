@@ -183,6 +183,64 @@ class LedgerStatus(StrEnum):
     INODE_MISMATCH = "inode_mismatch"
 
 
+class InventoryStatus(StrEnum):
+    """媒體庫牆上一格的狀態（票 13、`.scratch/m1/library-shape.md` §5）。
+
+    **宣告順序就是優先序**：一部作品常常同時是好幾件事（第一季入庫了、第二季在下載、
+    有一包停在待審），而一格只說一件——需要人的那一件排前面。
+    """
+
+    #: 這條 Route 上有一筆 Job 卡在失敗（送單、客戶端、入庫）。在你動手之前不會自己好。
+    FAILED = "failed"
+    #: 有一份計劃停下來等人。
+    REVIEW = "review"
+    #: 有東西還在路上：送單到入庫之間的任何一站。
+    DOWNLOADING = "downloading"
+    #: 電影的正片入庫了；劇集每一集已經播出的正片都入庫了。
+    COMPLETE = "complete"
+    #: 有入庫，但還有已經播出的集數沒有。
+    PARTIAL = "partial"
+    #: 媒體庫裡一個正片都沒有（torrent 被移除了、只入庫了特典）。
+    EMPTY = "empty"
+
+
+class EpisodeStatus(StrEnum):
+    """Media 詳情集表上一集的入庫狀態（票 13，使用者拍板五種）。
+
+    **宣告順序就是優先序**：第二個版本在下載的那一集已經看得了，所以是已入庫。
+    「卡住」與「下載中」分開、「未播出」與「缺」分開：停在待審的那一集說成下載中是騙人，
+    還沒播的集說成缺也是。
+    """
+
+    #: 帳本裡有正片蓋到這一集。
+    IMPORTED = "imported"
+    #: 有一筆停下來的 Job（待審、入庫失敗），它的計劃蓋到這一集。
+    STUCK = "stuck"
+    #: 有一筆還在路上的 Job，它的計劃（含下載中的預估）蓋到這一集。
+    DOWNLOADING = "downloading"
+    #: 已經播出，而上面三件都不成立。
+    MISSING = "missing"
+    #: 還沒播，或 TMDB 還沒有播出日。
+    UNAIRED = "unaired"
+
+
+class JellyfinPresence(StrEnum):
+    """Jellyfin 找到這部作品了沒——媒體庫卡片上那一行（票 13）。
+
+    分四種而不是「有沒有連結」：「還在找」只要等，「找不到」要人去 Jellyfin 看它把資料夾
+    認成了什麼（`IssueType.JELLYFIN_ITEM_UNRESOLVED`），兩者的下一步不同。
+    """
+
+    #: 有一個正片反查到了（劇集要連 Series 也到手）。畫得出一條深連結。
+    FOUND = "found"
+    #: 還排著反查，或找到了那一集卻還不知道它屬於哪個 Series。
+    SEARCHING = "searching"
+    #: 每一個正片的反查都用完了。
+    LOST = "lost"
+    #: 媒體庫裡還沒有正片，沒有東西可以找。
+    NONE = "none"
+
+
 class CollectionType(StrEnum):
     """Jellyfin 媒體庫的類型；沿用 Jellyfin 的字串（brief §4.3）。"""
 

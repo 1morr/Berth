@@ -138,6 +138,9 @@ class JellyfinItem:
     #: `MediaSources[].Path`：這個 item 底下每一個版本的檔案。電影的多版本與 MergeVersions
     #: 合併過的劇集，第二個版本的檔案**不是** item 自己的 `Path`，只出現在這裡（brief §7.7）。
     source_paths: tuple[str, ...]
+    #: Episode 的 `SeriesId`：它屬於哪一部作品（2026-09-15 對 12.0.0 實測，每一集都帶）。
+    #: 媒體庫的卡片連到作品而不是某一集（票 13）。其餘型別是空字串。
+    series_id: str = ""
 
 
 class JellyfinClient(Protocol):

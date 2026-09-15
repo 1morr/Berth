@@ -18,7 +18,7 @@ from berth.adapters.tmdb import TmdbDetail, TmdbEpisode, TmdbSeason, TmdbSeasonE
 from berth.adapters.tmdb.fake import FakeTmdbClient
 from berth.domain import CollectionType, MediaKind, Profile, TmdbProblem
 from berth.models import Media, Route, TmdbSettings
-from berth.services.media import SNAPSHOT_TTL, read_media, refresh_media
+from berth.services.media import SNAPSHOT_TTL, read_media, read_snapshot, refresh_media
 from berth.services.settings import write_settings
 from tests.conftest import TMDB_API_KEY
 from tests.integration.factories import FakeClientFactory
@@ -189,10 +189,11 @@ class TestSnapshot:
         )
         factory = await credentialled(session, client)
 
-        view = await read_media(session, factory, SPY_ID)
+        snapshot = await read_snapshot(session, factory, SPY_ID)
 
-        assert view.seasons[2].name == "Season 2"
-        assert view.seasons[2].names == ("Season 2", "柱訓練篇", "柱训练篇")
+        assert snapshot is not None
+        assert snapshot.seasons[2].name == "Season 2"
+        assert snapshot.seasons[2].names == ("Season 2", "柱訓練篇", "柱训练篇")
 
     async def test_a_movie_does_not_pay_for_the_third_round(self, session: AsyncSession) -> None:
         """第三輪只為了季名，而電影沒有季（plan §4.4）。"""

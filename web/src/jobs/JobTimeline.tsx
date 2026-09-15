@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
 
 import type { JobEvent } from '../api/jobs'
@@ -69,7 +70,9 @@ const EVENT_TYPES = [
 
 type KnownEvent = (typeof EVENT_TYPES)[number]
 
-type Translate = ReturnType<typeof useTranslation>['t']
+// `TFunction` 而不是 `ReturnType<typeof useTranslation>['t']`：後者要把整棵鍵樹再展開一次，
+// 票 13 多了媒體庫的鍵之後 tsc 報「型別展開太深」（TS2589）。兩者對呼叫端是同一個型別。
+type Translate = TFunction
 
 interface Facing {
   t: Translate
@@ -100,7 +103,9 @@ const FACTS: Record<KnownEvent, (facing: Facing) => ReactNode> = {
   // 從沒鏈接的檔案接著做（票 12）。`state` 是後端寫的，不是前端猜的。
   retried: ({ t, payload }) => (
     <p className="max-w-prose text-xs text-ink-dim">
-      {payload.state === 'importing' ? t('jobs.timeline.retriedImport') : t('jobs.timeline.retried')}
+      {payload.state === 'importing'
+        ? t('jobs.timeline.retriedImport')
+        : t('jobs.timeline.retried')}
     </p>
   ),
   metadata_received: ({ t, locale, payload }) => (

@@ -319,6 +319,7 @@ def _item(row: dict[str, Any]) -> JellyfinItem:
             for source in row.get("MediaSources") or ()
             if isinstance(source, dict) and source.get("Path")
         ),
+        series_id=str(row.get("SeriesId") or ""),
     )
 
 
