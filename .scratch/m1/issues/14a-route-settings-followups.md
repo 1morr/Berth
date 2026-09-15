@@ -1,6 +1,6 @@
 # 14a — Route 設定頁的後續：門禁收緊、並行安全、精靈重跑與 UX
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Blocked by:** 14（done）。2026-09-15 插入，排在 14 之後、14b 之前。
 
@@ -132,24 +132,24 @@ skills：services 修 bug 用 `mattpocock-skills:tdd`；鎖 helper 與 `RouteDel
 
 ## 驗收
 
-- [ ] B1–B10、F1–F6 每一項都有測試釘住（B1 是既有行為的回歸測試）。
-- [ ] 刪除與建立的並行測試（B6、B7）在修正前是紅的、修正後是綠的，證明寫鎖真的擋得住另一條連線。
-- [ ] 精靈跑完之前，匿名打不到 `/api/routes/*` 與 `/api/jellyfin/libraries`；精靈的刪除照常可用。
-- [ ] `uv run ruff check . && uv run ruff format --check . && uv run mypy && uv run lint-imports && uv run pytest` 全綠，貼指令輸出。
-- [ ] 跑過 `pnpm -C web gen:api`，`schema.d.ts` 已提交；`pnpm -C web format:check && pnpm -C web typecheck && pnpm -C web lint && pnpm -C web test`
+- [x] B1–B10、F1–F6 每一項都有測試釘住（B1 是既有行為的回歸測試）。
+- [x] 刪除與建立的並行測試（B6、B7）在修正前是紅的、修正後是綠的，證明寫鎖真的擋得住另一條連線。
+- [x] 精靈跑完之前，匿名打不到 `/api/routes/*` 與 `/api/jellyfin/libraries`；精靈的刪除照常可用。
+- [x] `uv run ruff check . && uv run ruff format --check . && uv run mypy && uv run lint-imports && uv run pytest` 全綠，貼指令輸出。
+- [x] 跑過 `pnpm -C web gen:api`，`schema.d.ts` 已提交；`pnpm -C web format:check && pnpm -C web typecheck && pnpm -C web lint && pnpm -C web test`
       全綠，貼指令輸出。
-- [ ] 用 `uv run python scripts/fake_setup_server.py --scenario routes` 實跑，工具用 playwright；被佔用時改 chrome-devtools
+- [x] 用 `uv run python scripts/fake_setup_server.py --scenario routes` 實跑，工具用 playwright；被佔用時改 chrome-devtools
       或 claude-in-chrome，並記在 Comments。要看的畫面：
-  - [ ] `/settings` 轉址，頁首「設定」在兩個設定頁都亮。
-  - [ ] TV 一鍵停用：出現停用色塊、有播報、按鈕消失。
-  - [ ] 新增時選 Anime，出現 Jellyfin 連結，核對 href。
-  - [ ] TV 已佔用的路徑，顯示後端給的 Route 名。
-  - [ ] 建 TV 2 再刪掉：列消失、有播報。
-  - [ ] 重新檢查有播報。
-  - [ ] `/setup?berth=4` 的刪除打的是 `/api/setup/routes/{id}`。
-  - [ ] 切 EN。
-  - [ ] 深淺兩主題 × 1280 / 390：對比 ≥ 4.5:1，沒有橫向捲動。
-- [ ] 文件已更新、已 commit。
+  - [x] `/settings` 轉址，頁首「設定」在兩個設定頁都亮。
+  - [x] TV 一鍵停用：出現停用色塊、有播報、按鈕消失。
+  - [x] 新增時選 Anime，出現 Jellyfin 連結，核對 href。
+  - [x] TV 已佔用的路徑，顯示後端給的 Route 名。
+  - [x] 建 TV 2 再刪掉：列消失、有播報。
+  - [x] 重新檢查有播報。
+  - [x] `/setup?berth=4` 的刪除打的是 `/api/setup/routes/{id}`。
+  - [x] 切 EN。
+  - [x] 深淺兩主題 × 1280 / 390：對比 ≥ 4.5:1，沒有橫向捲動。
+- [x] 文件已更新、已 commit。
 
 **不做：**
 
@@ -158,7 +158,88 @@ skills：services 修 bug 用 `mattpocock-skills:tdd`；鎖 helper 與 `RouteDel
 - 精靈勾選表上標出已被佔用的路徑：記債。
 - 刪除時清掉 qBittorrent 的分類：票 14 已記。
 
+## 驗證
+
+```
+$ uv run ruff check . && uv run ruff format --check . && uv run mypy && uv run lint-imports && uv run pytest -q
+All checks passed!
+262 files already formatted
+Success: no issues found in 198 source files
+Contracts: 6 kept, 0 broken.
+1321 passed in 263.59s (0:04:23)
+
+$ pnpm -C web format:check && pnpm -C web typecheck && pnpm -C web lint && pnpm -C web test
+All matched files use Prettier code style!
+$ tsc -b --noEmit
+$ eslint .
+ Test Files  20 passed (20)
+      Tests  295 passed (295)
+```
+
+（Git Bash 裡跑，`deploy/` 的 shell 腳本測試包含在 1321 裡。`pnpm -C web gen:api` 已重產 `schema.d.ts`。）
+
+寫鎖與前綴修正的「修正前紅」（暫時改 `routes.py` 再還原，`cmp` 確認還原）：
+
+```
+--- 拿掉 `_write_lock` 取鎖那一句：
+E       Failed: DID NOT RAISE IntegrityError                              # 刪除競態：插入先落地
+E       AssertionError: assert ['route_conflict', 'tv-2'] == ['tv-2', 'tv-3']   # 兩條不同路徑並行建立
+2 failed
+--- 前綴換回照字面的 `rstrip("/")`：
+1 failed                                                                  # 巢狀 `…/tv//anime` 引用數
+```
+
 ## Comments
 
 - main-2 的 worktree（`C:\Users\Roxy\orca\workspaces\MediaServer\main-2`，分支 `1morr/main-2`）這張票完成之前先不動；
-  完成之後再問使用者要不要清理（先問要不要備份）。
+  完成之後再問使用者要不要清理（先問要不要備份）。→ 票完成時已詢問使用者，worktree 仍未動。
+
+### 實跑（`--scenario routes`，playwright）
+
+playwright 這次沒有被佔用。前端 build 過兩次：code-review 修正之後重 build，對比、EN 與 Anime 連結是在新 build 上看的；
+一鍵停用、建 TV 2 再刪、精靈刪除是在修正前的 build 上看的（修正只動了拒絕文案、型別與連結的組法，這三條流程的行為有測試守著）。
+
+- **`/settings`**：未登入時導到 `/login?redirect=%2Fsettings%2Fservices`；登入 `skipper` 之後落在 `/settings/services`。頁首「設定」
+  的 `href` 是 `/settings`，在服務頁與媒體庫路徑頁都是 `aria-current="page"`。console 只有登入前兩個 `/api/auth/me` 401。
+- **TV 一鍵停用**：展開 TV 是「1 筆下載、0 個入庫檔案指著這條 Route，所以它刪不得。停用它，新的送單就不會再選到它；已經在路上的
+  下載照常入庫。」→「停用這條 Route」→ `PUT /api/routes/2` body `{"name":"TV","profile":"standard","enabled":false}` → 播報
+  「已停用「TV」：新的送單不會再選到它。」→ summary 多「停用」色塊、按鈕消失、勾選框未勾，說明換成「它已經停用……」。
+- **新增 → Anime**：沒有空路徑，連結「到 Jellyfin 替媒體庫加路徑」`href=http://127.0.0.1:8096/web/#/dashboard/libraries`、
+  `target=_blank`（套件內 Jellyfin：瀏覽器主機名加 8096，`/api/settings/jellyfin` 回 `port: 8096`）。
+- **新增 → TV**：`…/library/tv` 選不了，旁邊「已是「TV」」（後端的 `route_name`）；`…/library-disk2/tv` 可選。
+- **建 TV 2 再刪**：「已建立「TV 2」：五條纜繩全綠，已經啟用。」→ 刪除 → 播報「已刪除「TV 2」。」、那一列消失。
+- **重新檢查**（Movies）：「檢查跑完了。」，`aria-live="polite"`。
+- **`/setup?berth=4`**：每條 Route 底下有刪除、0 顆停用鈕；刪 Anime → `DELETE /api/setup/routes/3` → 204、播報「已刪除「Anime」。」、
+  剩 2 顆刪除鍵。接著按「建立 1 條 Route 並檢查」（精靈跑完之後重跑）→ Anime 建回來 `health=ok`、`enabled=true`
+  （先停用、綠了才啟用；中間那一刻由 `test_after_setup_a_rerun_enables_new_routes_only_once_they_pass` 釘住）。
+- **EN**：頁首 Settings 仍是當前頁、連結「Add a path in Jellyfin」同一個 href、三顆「Check again」。
+- **對比與窄版**（展開全部列、新增區塊打開到 Anime 的連結，逐一算 150 個文字元素對實際底色）：深色 1280 / 390 最低 **5.22:1**、
+  淺色 1280 / 390 最低 **5.71:1**；四輪頁面層級橫向捲動都是 0。截圖在 session scratchpad（`t14a-*.png`）。
+- 實跑腳本自己寫錯過兩次選擇器（Movies 那一列的比對、精靈確認鍵出現後刪除鍵消失），不是產品的問題；改寫腳本重跑都過了。
+
+### code-review（兩軸，基準 `95dfb88`，工作目錄 diff）
+
+**處理了的**：
+- Spec：B7 的並行測試原本證明不了寫鎖（拿掉鎖、只靠 IntegrityError 兜底也會綠）→ 新增「同一個媒體庫兩條不同路徑並行建立」，
+  拿掉鎖時是 `route_conflict`（見〈驗證〉）。
+- Spec：B9 改包 `ensure_category`（票面原文）。
+- Spec：「精靈不給停用鈕」的斷言不可能失敗 → 拿掉，改在 `RouteDelete.test.tsx` 釘「沒給 `onDisable` 就沒有停用鈕」。
+- Spec：409 沒帶數字時說成「後端可能沒在跑」→ 新文案 `delete.refusedUncounted`。
+- Spec：`_usage_of` 的前綴照 importer 用 `PurePosixPath` 正規化（`…//…` 的目標會少算、被引用了還刪得掉）。
+- Spec：`_write_lock` 取鎖那句移進 `try`，等不到鎖也會 rollback。
+- Standards：`RouteDelete` 的 counts 抽成 `usageCounts`、`usage` 型別改用 `RouteUsage`；Jellyfin 網頁路由收進
+  `jellyfinLink.ts`（`jellyfinLibrariesUrl`）；`_gone_is_missing` 改名 `_stale_write_as_missing`；`files` 別名改 `ledgerEntries`。
+
+**沒處理、留著的**：
+- `_usage_of` 與 `_usages` 兩份計數：票面指定清單的聚合不動（整張表本來就要讀），規則在 docstring 互相指著。
+- `api/setup.py` import `api/routes.py` 的 `route_refusal()`：票面指定它放在那裡；import-linter 沒有禁止。
+- `_TAKE_WRITE_LOCK` 是 services 層第一句 raw SQL：只有 routes 用，等出現第二個使用者再搬去 `db`。
+- 兩個頁面各一份播報區塊（兩行）；`onDisable?.()` 的可選呼叫是 hook 不能放在條件裡的結果（註解已寫）。
+- `create_route` 的檢查也包了 stale 轉換、`populate_existing`、`inUseDisabled` 文案：票面沒寫，理由在 progress.md。
+
+### 這一票沒做、另外記下的
+
+- `check_routes`（健康迴圈、精靈重跑第 7 步）途中另一個分頁刪掉 Route，仍是 `StaleDataError`：健康迴圈有接住（那一輪 Route 項記紅），
+  `POST /api/setup/routes` 會是 500。票面只點名修改與重新檢查。
+- `services/inventory.py` 的 `_survey` 也用照字面的 `rstrip("/")` 前綴篩帳本，與這裡修掉的是同一個問題（不正規的目標會少列檔案）。
+- 精靈勾選表上標出已被佔用的路徑：票面「不做」，記債。

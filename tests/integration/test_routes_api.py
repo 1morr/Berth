@@ -1,8 +1,8 @@
 """`/api/routes` 與 `/api/jellyfin/libraries`（plan §6 routes 群組、票 14）。
 
 命令本身的規則在 `test_routes.py`；這裡驗的是形狀、每種拒絕理由對到哪個狀態碼，以及誰進得來。
-誰進得來的規則在門禁（`api/gate.py`），不在 router 的相依：精靈跑完之前與 `setup/*` 一樣匿名
-開放——精靈第 7 步的「刪除」打的就是這一支——跑完之後只有管理員。
+誰進得來的規則在門禁（`api/gate.py`），不在 router 的相依：與 `settings/*` 一樣永遠只有管理員
+（票 14a）。精靈第 7 步的刪除走自己的 `DELETE /setup/routes/{id}`，跟著 `setup/*` 的規則。
 """
 
 from __future__ import annotations
@@ -94,6 +94,13 @@ def route_id(client: TestClient, slug: str) -> int:
     return int(routes(client)[slug]["route"]["id"])
 
 
+def setup_route_id(client: TestClient, slug: str) -> int:
+    """精靈那一邊認得的 id（`GET /api/setup/routes`）。精靈跑完之前 `GET /api/routes` 要登入。"""
+    # Any：剛解析出來的 JSON，形狀由被測的端點決定。
+    rows: list[dict[str, Any]] = client.get("/api/setup/routes").json()["routes"]
+    return int(next(row for row in rows if row["slug"] == slug)["id"])
+
+
 def second_route(client: TestClient, disk: Path, **overrides: object) -> dict[str, object]:
     body = {
         "library_id": "item-1",
@@ -140,18 +147,59 @@ class TestWhoGetsIn:
 
         assert client.get("/api/routes/not-built-yet").status_code == 403
 
-    def test_before_setup_completes_the_wizard_reaches_them_without_a_session(
+    def test_before_setup_completes_they_still_need_an_administrator(
         self, wizard: TestClient
     ) -> None:
-        """精靈跑完之前還沒有人登入得了；第 7 步的「刪除」打的就是這一組。"""
-        assert wizard.get("/api/routes").status_code == 200
-        assert wizard.get("/api/jellyfin/libraries").status_code == 200
-        movies = route_id(wizard, "movies")
-        assert wizard.delete(f"/api/routes/{movies}").status_code == 204
+        """票 14a 推翻票 14 的「跟著 `setup/*` 匿名開放」：那樣的話精靈跑完之前，匿名的人可以把
+        紅燈 Route 停用、再按完成。精靈要的只有刪除，它有自己的一支。"""
+        assert wizard.get("/api/routes").status_code == 401
+        assert wizard.get("/api/jellyfin/libraries").status_code == 401
+        movies = setup_route_id(wizard, "movies")
+        assert (
+            wizard.put(
+                f"/api/routes/{movies}",
+                json={"name": "Movies", "profile": "standard", "enabled": False},
+            ).status_code
+            == 401
+        )
+        assert wizard.delete(f"/api/routes/{movies}").status_code == 401
 
-    def test_other_jellyfin_paths_do_not_inherit_the_wizard_rule(self, wizard: TestClient) -> None:
-        """跟著精靈規則走的只有媒體庫清單那一支：`/jellyfin` 底下之後新掛的端點預設要登入。"""
-        assert wizard.get("/api/jellyfin/not-built-yet").status_code == 401
+    def test_before_setup_completes_the_wizard_deletes_through_its_own_endpoint(
+        self, wizard: TestClient
+    ) -> None:
+        """精靈第 7 步的刪除走 `DELETE /setup/routes/{id}`，跟著 `setup/*` 的規則。"""
+        movies = setup_route_id(wizard, "movies")
+
+        assert wizard.delete(f"/api/setup/routes/{movies}").status_code == 204
+        slugs = [row["slug"] for row in wizard.get("/api/setup/routes").json()["routes"]]
+        assert slugs == ["tv", "anime"]
+
+    def test_the_wizard_delete_refuses_the_same_way_as_the_settings_page(
+        self, wizard: TestClient
+    ) -> None:
+        tv = setup_route_id(wizard, "tv")
+        _add_job(wizard, tv)
+
+        in_use = wizard.delete(f"/api/setup/routes/{tv}")
+        missing = wizard.delete("/api/setup/routes/999")
+
+        assert in_use.status_code == 409
+        detail = in_use.json()["detail"]
+        assert (detail["reason"], detail["jobs"], detail["ledger_entries"]) == (
+            "route_in_use",
+            1,
+            0,
+        )
+        assert (missing.status_code, missing.json()["detail"]["reason"]) == (404, "route_missing")
+
+    def test_after_setup_the_wizard_delete_is_for_administrators(self, client: TestClient) -> None:
+        sign_in(client, ADMIN)
+        movies = route_id(client, "movies")
+        sign_in(client, DECKHAND)
+
+        assert client.delete(f"/api/setup/routes/{movies}").status_code == 403
+        sign_in(client, ADMIN)
+        assert client.delete(f"/api/setup/routes/{movies}").status_code == 204
 
 
 class TestCommands:
@@ -163,7 +211,10 @@ class TestCommands:
         tv = next(
             row for row in client.get("/api/jellyfin/libraries").json() if row["name"] == "TV"
         )
-        assert tv["taken"] == [str(roots["library"] / "tv")]
+        assert tv["paths"] == [
+            {"path": str(roots["library"] / "tv"), "route_name": "TV"},
+            {"path": str(disk), "route_name": None},
+        ]
 
         created = second_route(client, disk)
 
@@ -217,7 +268,13 @@ class TestCommands:
         response = client.delete(f"/api/routes/{tv}")
 
         assert response.status_code == 409
-        assert response.json()["detail"]["reason"] == "route_in_use"
+        detail = response.json()["detail"]
+        # 數字是結構化的欄位，畫面照它說「1 筆下載、0 個入庫檔案」，不必解析原文（票 14a）。
+        assert (detail["reason"], detail["jobs"], detail["ledger_entries"]) == (
+            "route_in_use",
+            1,
+            0,
+        )
         assert (routes(client)["tv"]["jobs"], routes(client)["tv"]["in_use"]) == (1, True)
 
     def test_an_unused_route_is_deleted(self, client: TestClient, roots: dict[str, Path]) -> None:

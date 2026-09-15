@@ -1,8 +1,8 @@
 """Route 設定頁的端點（plan §6 routes 群組、brief §4.3、票 14）。
 
-誰進得來由門禁決定（`api/gate.py`）：精靈跑完之前與 `setup/*` 一樣匿名開放——精靈第 7 步的
-「刪除」打的就是這裡——跑完之後只有管理員。規則不掛在這裡的相依上，理由與 `setup/*` 相同：
-新掛的端點什麼都不做就已經在門後。
+誰進得來由門禁決定（`api/gate.py`）：與 `settings/*` 一樣永遠只有管理員（票 14a）。精靈第 7 步的
+「刪除」走自己的 `DELETE /setup/routes/{id}`（`api/setup.py`），跟著 `setup/*` 的規則。規則不掛在
+這裡的相依上：新掛的端點什麼都不做就已經在門後。
 """
 
 from __future__ import annotations
@@ -14,6 +14,7 @@ from berth.api.deps import ClientFactoryDep, SessionDep
 from berth.api.schemas import RouteOut
 from berth.domain import Profile
 from berth.services.routes import (
+    RouteInUseError,
     RouteRejectedError,
     check_route,
     create_route,
@@ -30,6 +31,8 @@ _STATUS = {
     "route_missing": status.HTTP_404_NOT_FOUND,
     "route_in_use": status.HTTP_409_CONFLICT,
     "route_unhealthy": status.HTTP_409_CONFLICT,
+    #: 建立時撞上唯一索引（鎖外的寫入搶先了）。選擇本身沒錯，再按一次就好。
+    "route_conflict": status.HTTP_409_CONFLICT,
     #: 與登入同一個判斷（plan §6 auth）：Jellyfin 連不上不是使用者選錯了。
     "jellyfin_unreachable": status.HTTP_503_SERVICE_UNAVAILABLE,
 }
@@ -47,6 +50,16 @@ class ManagedRouteOut(BaseModel):
     in_use: bool
 
 
+class LibraryPathOut(BaseModel):
+    """媒體庫回報的一條路徑。"""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    path: str
+    #: 已經寫在這條路徑的 Route 名，沒有就是 `null`。同一個目標不會有第二條 Route。
+    route_name: str | None
+
+
 class LibraryOptionOut(BaseModel):
     """新增 Route 時可選的一個 Jellyfin 媒體庫（現查）。"""
 
@@ -55,9 +68,8 @@ class LibraryOptionOut(BaseModel):
     item_id: str
     name: str
     collection_type: str
-    locations: list[str]
-    #: 已經有 Route 寫在那裡的路徑。同一個目標不會有第二條 Route。
-    taken: list[str]
+    #: Jellyfin 回報的順序；被佔用的帶著 Route 名。
+    paths: list[LibraryPathOut]
     #: Berth 建得了 Route 的類型（movies / tvshows）。
     supported: bool
     uses_tvdb: bool
@@ -109,7 +121,7 @@ async def post_route(session: SessionDep, factory: ClientFactoryDep, body: Route
             profile=body.profile,
         )
     except RouteRejectedError as refusal:
-        raise _refuse(refusal) from refusal
+        raise route_refusal(refusal) from refusal
     return RouteOut.model_validate(view)
 
 
@@ -128,7 +140,7 @@ async def put_route(
             enabled=body.enabled,
         )
     except RouteRejectedError as refusal:
-        raise _refuse(refusal) from refusal
+        raise route_refusal(refusal) from refusal
     return RouteOut.model_validate(view)
 
 
@@ -138,7 +150,7 @@ async def delete_route_endpoint(session: SessionDep, route_id: int) -> None:
     try:
         await delete_route(session, route_id)
     except RouteRejectedError as refusal:
-        raise _refuse(refusal) from refusal
+        raise route_refusal(refusal) from refusal
 
 
 @router.post("/routes/{route_id}/check")
@@ -149,7 +161,7 @@ async def post_route_check(
     try:
         view = await check_route(session, factory, route_id)
     except RouteRejectedError as refusal:
-        raise _refuse(refusal) from refusal
+        raise route_refusal(refusal) from refusal
     return RouteOut.model_validate(view)
 
 
@@ -161,13 +173,20 @@ async def get_jellyfin_libraries(
     try:
         options = await list_libraries(session, factory)
     except RouteRejectedError as refusal:
-        raise _refuse(refusal) from refusal
+        raise route_refusal(refusal) from refusal
     return [LibraryOptionOut.model_validate(row) for row in options]
 
 
-def _refuse(refusal: RouteRejectedError) -> HTTPException:
-    """與送單的拒絕同形（`api/jobs.py`）：`reason` 給畫面挑句子，`detail` 是原文。"""
+def route_refusal(refusal: RouteRejectedError) -> HTTPException:
+    """與送單的拒絕同形（`api/jobs.py`）：`reason` 給畫面挑句子，`detail` 是原文。
+
+    刪除被拒時另帶 `jobs`、`ledger_entries`（與 `GET /routes` 同一組詞），畫面說得出數字。
+    精靈的刪除（`api/setup.py`）走同一支，兩個入口的拒絕長得一樣。
+    """
+    body: dict[str, object] = {"reason": refusal.reason, "detail": refusal.detail}
+    if isinstance(refusal, RouteInUseError):
+        body |= {"jobs": refusal.usage.jobs, "ledger_entries": refusal.usage.ledger_entries}
     return HTTPException(
         status_code=_STATUS.get(refusal.reason, status.HTTP_422_UNPROCESSABLE_CONTENT),
-        detail={"reason": refusal.reason, "detail": refusal.detail},
+        detail=body,
     )

@@ -262,8 +262,10 @@ export function libraryOption(overrides: Partial<LibraryOption> = {}): LibraryOp
     item_id: 'item-1',
     name: 'TV',
     collection_type: 'tvshows',
-    locations: ['/data/library/tv', '/mnt/disk2/tv'],
-    taken: ['/data/library/tv'],
+    paths: [
+      { path: '/data/library/tv', route_name: 'TV' },
+      { path: '/mnt/disk2/tv', route_name: null },
+    ],
     supported: true,
     uses_tvdb: false,
     ...overrides,

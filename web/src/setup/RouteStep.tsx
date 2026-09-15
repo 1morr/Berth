@@ -1,7 +1,12 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { type LibraryChoice, type RouteSelectionInput, type RouteSetup } from '../api/setup'
+import {
+  deleteSetupRoute,
+  type LibraryChoice,
+  type RouteSelectionInput,
+  type RouteSetup,
+} from '../api/setup'
 import { type Profile, type RouteView } from '../api/schemas'
 import { STICKY_ACTION, Checkbox, GhostButton, Notice, PrimaryButton } from '../components/controls'
 import { ROUTE_HEALTH_LABEL, ROUTE_SIGNAL } from '../components/routeChecks'
@@ -52,6 +57,8 @@ export function RouteStep({
   const { t } = useTranslation()
   const bundled = setup.origin === 'bundled'
   const [picks, setPicks] = useState<Record<string, LibraryPick>>({})
+  // 刪掉的那一條連同它的訊息一起卸載，所以「已刪除」由這一層說（票 14a）。
+  const [announcement, setAnnouncement] = useState('')
   const routable = setup.libraries.filter((library) => library.supported)
 
   function pickOf(library: LibraryChoice): LibraryPick {
@@ -150,12 +157,20 @@ export function RouteStep({
           </div>
         )}
 
+        {/* 先在畫面上、內容再換：`aria-live` 區塊要在變化之前就存在，螢幕閱讀器才念得到。 */}
+        <p aria-live="polite" className="mt-4 max-w-prose text-sm text-ink">
+          {announcement}
+        </p>
+
         {setup.routes.map((route) => (
           <RouteSequence
             key={route.slug}
             route={route}
             building={building}
-            onDeleted={onRouteDeleted}
+            onDeleted={() => {
+              setAnnouncement(t('routeSettings.delete.done', { name: route.name }))
+              onRouteDeleted()
+            }}
           />
         ))}
       </div>
@@ -401,9 +416,14 @@ function RouteSequence({
       <div className="mt-3">
         <RouteCheckList route={route} busy={building} />
       </div>
-      {/* 精靈只新增不改不刪；選錯了、紅燈卡住時的出路是明確地刪掉這一條（票 14）。 */}
+      {/* 精靈只新增不改不刪；選錯了、紅燈卡住時的出路是明確地刪掉這一條（票 14）。
+          打的是精靈自己的那一支，跟著精靈的門禁；停用在 Route 設定頁，這裡不給（票 14a）。 */}
       <div className="mt-3">
-        <RouteDelete route={route} onDeleted={onDeleted} />
+        <RouteDelete
+          route={route}
+          onDelete={() => deleteSetupRoute(route.id)}
+          onChanged={onDeleted}
+        />
       </div>
     </section>
   )

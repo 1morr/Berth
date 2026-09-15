@@ -37,7 +37,7 @@ function NavLink({
   to,
   children,
 }: {
-  to: '/' | '/library' | '/jobs' | '/health' | '/settings/services'
+  to: '/' | '/library' | '/jobs' | '/health' | '/settings'
   children: ReactNode
 }) {
   return (
@@ -87,7 +87,8 @@ function Identity() {
       <NavLink to="/library">{t('nav.inventory')}</NavLink>
       <NavLink to="/jobs">{t('nav.jobs')}</NavLink>
       <NavLink to="/health">{t('nav.health')}</NavLink>
-      {me.data.role === 'admin' && <NavLink to="/settings/services">{t('nav.settings')}</NavLink>}
+      {/* 連 `/settings` 而不是第一個分頁：前綴比對讓它在兩個設定頁上都是當前頁（票 14a）。 */}
+      {me.data.role === 'admin' && <NavLink to="/settings">{t('nav.settings')}</NavLink>}
       <GhostButton type="button" disabled={leave.isPending} onClick={() => leave.mutate()}>
         {leave.isPending ? t('nav.signingOut') : t('nav.signOut')}
       </GhostButton>

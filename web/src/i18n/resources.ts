@@ -1055,6 +1055,7 @@ const zhHant = {
     recheck: '重新檢查',
     rechecking: '檢查中…',
     recheckFailed: '檢查沒有走完。Berth 後端可能沒在跑——確認容器狀態後再按一次。',
+    rechecked: '檢查跑完了。',
     delete: {
       label: '刪除這條 Route',
       confirm: '確定刪除',
@@ -1062,10 +1063,21 @@ const zhHant = {
       warning:
         '刪除之後這條 Route 的設定就不在了。qBittorrent 的分類與 complete 子目錄留著不動；之後用同一個名字重建時，分類檢查認得它們。',
       inUse:
-        '{{jobs}}、{{files}}指著這條 Route，所以它刪不得。停用它（取消上面的「啟用」再儲存），新的送單就不會再選到它。',
+        '{{jobs}}、{{files}}指著這條 Route，所以它刪不得。停用它，新的送單就不會再選到它；已經在路上的下載照常入庫。',
+      inUseDisabled:
+        '{{jobs}}、{{files}}指著這條 Route，所以它刪不得。它已經停用，新的送單不會選到它。',
       refused:
+        '刪的那一刻發現還有 {{jobs}}、{{files}}指著這條 Route，所以它刪不得。停用它，新的送單就不會再選到它。',
+      refusedUncounted:
         '刪的那一刻發現還有下載或入庫檔案指著這條 Route，所以它刪不得。停用它，新的送單就不會再選到它。',
       failed: '沒有刪掉。Berth 後端可能沒在跑——確認容器狀態後再按一次。',
+      done: '已刪除「{{name}}」。',
+    },
+    disable: {
+      label: '停用這條 Route',
+      pending: '停用中…',
+      done: '已停用「{{name}}」：新的送單不會再選到它。',
+      failed: '沒有停用。Berth 後端可能沒在跑——確認容器狀態後再按一次。',
     },
     add: {
       open: '新增 Route',
@@ -1075,8 +1087,8 @@ const zhHant = {
       library: '媒體庫',
       target: '寫入目標',
       taken: '已是「{{name}}」',
-      takenUnnamed: '已經有 Route',
       noneFree: '這個媒體庫回報的路徑都已經有 Route 了。先在 Jellyfin 替它加一條路徑，再回來新增。',
+      openJellyfin: '到 Jellyfin 替媒體庫加路徑',
       pickFirst: '先選一個媒體庫，與一條還沒有 Route 的寫入目標。',
       submit: '建立並檢查',
       submitting: '建立並檢查中…',
@@ -1092,6 +1104,7 @@ const zhHant = {
         target_not_in_library:
           '這條路徑已經不是這個媒體庫的了——Jellyfin 那邊剛改過。取消後重新打開這個區塊再選一次。',
         target_taken: '這條路徑剛被另一條 Route 用走了。每條 Route 要有自己的寫入目標。',
+        route_conflict: '另一條 Route 在同一時間建立，這一條沒有存進去。再按一次「建立並檢查」。',
         jellyfin_unreachable: '建立的那一刻問不到 Jellyfin。確認它還在跑，再按一次。',
         profile_unsupported: '動漫 profile 只給劇集媒體庫：電影沒有季與集。',
       },
@@ -2166,6 +2179,7 @@ const en: Translations<typeof zhHant> = {
     rechecking: 'Checking…',
     recheckFailed:
       'The check did not finish. The Berth backend may be down — check the container and press again.',
+    rechecked: 'The check finished.',
     delete: {
       label: 'Delete this route',
       confirm: 'Delete it',
@@ -2173,11 +2187,23 @@ const en: Translations<typeof zhHant> = {
       warning:
         'Deleting removes this route from Berth. The qBittorrent category and the complete subdirectory stay where they are; rebuilding a route with the same name picks them up again.',
       inUse:
-        '{{jobs}} and {{files}} point at this route, so it cannot be deleted. Disable it instead (untick Enabled above and save) and new downloads will no longer pick it.',
+        '{{jobs}} and {{files}} point at this route, so it cannot be deleted. Disable it instead and new downloads will no longer pick it; the ones already on their way still import.',
+      inUseDisabled:
+        '{{jobs}} and {{files}} point at this route, so it cannot be deleted. It is disabled, so new downloads will not pick it.',
       refused:
-        'Downloads or imported files turned out to point at this route when it was deleted, so it cannot be. Disable it instead and new downloads will no longer pick it.',
+        'When it came to deleting, {{jobs}} and {{files}} turned out to point at this route, so it cannot be deleted. Disable it instead and new downloads will no longer pick it.',
+      refusedUncounted:
+        'Downloads or imported files turned out to point at this route when it was deleted, so it cannot be deleted. Disable it instead and new downloads will no longer pick it.',
       failed:
         'It was not deleted. The Berth backend may be down — check the container and press again.',
+      done: 'Deleted “{{name}}”.',
+    },
+    disable: {
+      label: 'Disable this route',
+      pending: 'Disabling…',
+      done: 'Disabled “{{name}}”: new downloads will no longer pick it.',
+      failed:
+        'It was not disabled. The Berth backend may be down — check the container and press again.',
     },
     add: {
       open: 'Add a route',
@@ -2187,9 +2213,9 @@ const en: Translations<typeof zhHant> = {
       library: 'Library',
       target: 'Write target',
       taken: 'Already “{{name}}”',
-      takenUnnamed: 'Already has a route',
       noneFree:
         'Every path this library reports already has a route. Add another path to it in Jellyfin, then come back.',
+      openJellyfin: 'Add a path in Jellyfin',
       pickFirst: 'Pick a library and a write target that has no route yet.',
       submit: 'Create and check',
       submitting: 'Creating and checking…',
@@ -2208,6 +2234,8 @@ const en: Translations<typeof zhHant> = {
           'This path no longer belongs to the library — it just changed in Jellyfin. Cancel, reopen this section and pick again.',
         target_taken:
           'Another route just took this path. Each route needs a write target of its own.',
+        route_conflict:
+          'Another route was being created at the same moment, so this one was not saved. Press Create and check again.',
         jellyfin_unreachable:
           'Jellyfin did not answer when the route was being created. Check that it is running and press again.',
         profile_unsupported:

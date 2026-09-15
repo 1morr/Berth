@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 
 import { healthQueryOptions } from '../api/health'
 import {
+  deleteRoute,
   recheckRoute,
   routeRefusalOf,
   routesQueryOptions,
@@ -15,7 +16,7 @@ import { Checkbox, Field, GhostButton, Notice, PrimaryButton } from '../componen
 import { Dot } from '../components/Dot'
 import { ProfilePicker } from '../components/ProfilePicker'
 import { RouteCheckList } from '../components/RouteCheckList'
-import { RouteDelete } from '../components/RouteDelete'
+import { RouteDelete, type RouteChange } from '../components/RouteDelete'
 import { RouteIdentity } from '../components/RouteIdentity'
 import { SettingsTabs } from '../components/SettingsTabs'
 import { AddRoute } from '../settings/AddRoute'
@@ -30,6 +31,8 @@ export function RouteSettingsPage() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const routes = useQuery(routesQueryOptions)
+  // 刪掉的那一列連同它自己的訊息一起卸載，所以「已刪除」「已停用」由頁面這一層說（票 14a）。
+  const [announcement, setAnnouncement] = useState('')
 
   if (routes.isPending) {
     return <p className="px-6 py-8 text-sm text-ink-dim">{t('health.checking')}</p>
@@ -45,11 +48,24 @@ export function RouteSettingsPage() {
     )
   }
 
+  function changed(route: RouteView, change: RouteChange) {
+    setAnnouncement(
+      change === 'deleted'
+        ? t('routeSettings.delete.done', { name: route.name })
+        : t('routeSettings.disable.done', { name: route.name }),
+    )
+    refreshRoutes(queryClient)
+  }
+
   return (
     <div className="mx-auto w-full max-w-3xl px-6 py-8">
       <SettingsTabs />
       <h2 className="value mt-6 text-lg font-semibold text-ink">{t('routeSettings.title')}</h2>
       <p className="mt-2 max-w-prose text-sm text-ink-dim">{t('routeSettings.lede')}</p>
+      {/* 先在畫面上、內容再換：`aria-live` 區塊要在變化之前就存在，螢幕閱讀器才念得到。 */}
+      <p aria-live="polite" className="mt-2 max-w-prose text-sm text-ink">
+        {announcement}
+      </p>
 
       {routes.data.length === 0 ? (
         <p className="mt-6 max-w-prose text-sm text-ink-dim">{t('routeSettings.empty')}</p>
@@ -57,13 +73,13 @@ export function RouteSettingsPage() {
         <ul className="mt-6 grid gap-3">
           {routes.data.map((row) => (
             <li key={row.route.id} className="min-w-0">
-              <RouteRow row={row} />
+              <RouteRow row={row} onChanged={(change) => changed(row.route, change)} />
             </li>
           ))}
         </ul>
       )}
 
-      <AddRoute routes={routes.data} onCreated={() => refreshRoutes(queryClient)} />
+      <AddRoute onCreated={() => refreshRoutes(queryClient)} />
     </div>
   )
 }
@@ -83,9 +99,14 @@ function refreshRoutes(queryClient: QueryClient) {
  * 一條 Route。用原生 `<details>`：鍵盤與螢幕閱讀器的行為比自己管 state 好（票 05 的決定）。
  * `<summary>` 是 flex，三角形會被吃掉，所以展開與否由模板字自己說出來。
  */
-function RouteRow({ row }: { row: ManagedRoute }) {
+function RouteRow({
+  row,
+  onChanged,
+}: {
+  row: ManagedRoute
+  onChanged: (change: RouteChange) => void
+}) {
   const { t } = useTranslation()
-  const queryClient = useQueryClient()
   const { route } = row
   const attention = route.health === 'failed' || !route.enabled
 
@@ -116,7 +137,16 @@ function RouteRow({ row }: { row: ManagedRoute }) {
       <div className="grid gap-6 border-t-2 border-rule px-4 py-4">
         <RouteEditor route={route} />
         <RouteChecks route={route} />
-        <RouteDelete route={route} usage={row} onDeleted={() => refreshRoutes(queryClient)} />
+        <RouteDelete
+          route={route}
+          usage={row}
+          onDelete={() => deleteRoute(route.id)}
+          // 送的是**存下來的**名稱與 profile：上面表單裡還沒存的編輯不該跟著這一顆出去（票 14a）。
+          onDisable={() =>
+            updateRoute(route.id, { name: route.name, profile: route.profile, enabled: false })
+          }
+          onChanged={onChanged}
+        />
       </div>
     </details>
   )
@@ -142,6 +172,10 @@ function RouteChecks({ route }: { route: RouteView }) {
           {recheck.isPending ? t('routeSettings.rechecking') : t('routeSettings.recheck')}
         </GhostButton>
       </div>
+      {/* 全綠時重跑一次，纜繩列一個字都不會變：沒有這一句就沒有回饋（票 14a）。 */}
+      <p aria-live="polite" className="text-xs text-ink-dim">
+        {recheck.isSuccess ? t('routeSettings.rechecked') : ''}
+      </p>
       {recheck.isError && (
         <Notice signal="blocked" label={t('common.failed')}>
           {t('routeSettings.recheckFailed')}
@@ -164,6 +198,13 @@ function RouteEditor({ route }: { route: RouteView }) {
   const [profile, setProfile] = useState<Profile>(route.profile)
   const [enabled, setEnabled] = useState(route.enabled)
   const [blank, setBlank] = useState(false)
+  // 存下來的啟用狀態從別處變了（下面的一鍵停用、另一個分頁）：勾選框跟著它走，否則下一次儲存
+  // 會把它打開回去（票 14a）。在 render 裡對齊而不是 effect：React 文件「prop 變了時調整 state」。
+  const [savedEnabled, setSavedEnabled] = useState(route.enabled)
+  if (savedEnabled !== route.enabled) {
+    setSavedEnabled(route.enabled)
+    setEnabled(route.enabled)
+  }
 
   const save = useMutation({
     mutationFn: () => updateRoute(route.id, { name: name.trim(), profile, enabled }),

@@ -277,6 +277,18 @@ const healthRoute = createRoute({
   ),
 })
 
+/**
+ * `/settings` 本身沒有頁面，落在第一個分頁（票 14a）。頁首的「設定」連到這裡，所以兩個設定頁上
+ * 它都是當前頁；守衛由目的地那一頁自己做。
+ */
+const settingsIndexRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/settings',
+  beforeLoad: () => {
+    throw redirect({ to: '/settings/services' })
+  },
+})
+
 const serviceSettingsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/settings/services',
@@ -320,5 +332,6 @@ export const routeTree = rootRoute.addChildren([
   mediaRoute,
   routeSettingsRoute,
   serviceSettingsRoute,
+  settingsIndexRoute,
   setupRoute,
 ])

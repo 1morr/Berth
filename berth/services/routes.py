@@ -20,13 +20,16 @@ from __future__ import annotations
 
 import errno
 from collections import Counter
-from collections.abc import Awaitable, Callable, Mapping, Sequence
+from collections.abc import AsyncIterator, Awaitable, Callable, Mapping, Sequence
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import datetime
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm.exc import StaleDataError
 
 from berth.adapters.fs import (
     PathEscapeError,
@@ -86,6 +89,19 @@ class RouteRejectedError(Exception):
         super().__init__(f"{reason}: {detail}")
         self.reason = reason
         self.detail = detail
+
+
+class RouteInUseError(RouteRejectedError):
+    """刪除被拒：還有東西指著這條 Route（`route_in_use`，票 14a）。
+
+    數字帶在 `usage` 上而不只是原文：畫面要說「N 筆下載、M 個入庫檔案」，不該去解析 `detail`。
+    """
+
+    def __init__(self, usage: RouteUsage) -> None:
+        super().__init__(
+            "route_in_use", f"jobs={usage.jobs} · ledger_entries={usage.ledger_entries}"
+        )
+        self.usage = usage
 
 
 @dataclass(frozen=True, slots=True)
@@ -226,23 +242,27 @@ async def build_routes(
     對不上它的 Route。已經有 Route 的媒體庫的選擇因此略過；刪除與停用是 Route 設定頁上
     明確的動作（`delete_route`、`update_route`）。重跑這一步的意思就剩「補上新勾的，全部重驗」。
 
-    新建的 Route 啟不啟用分兩個時期：精靈跑完之前直接啟用——它紅著就擋完成（票 09）；跑完之後
-    重跑已經沒有完成條件擋著，所以與設定頁同一條規則，紅燈就維持停用（票 14 code-review）。
+    新建的 Route 啟不啟用分兩個時期：精靈跑完之前直接啟用——它紅著就擋完成（票 09）。跑完之後
+    重跑已經沒有完成條件擋著，所以**先停用建立、檢查綠了才啟用**（票 14a）：先啟用再把紅的關掉的話，
+    檢查跑完之前的那幾秒裡，送單選得到一條還沒驗過的 Route。
     """
-    setup = await read_settings(session, SetupSettings)
-    paths = await read_settings(session, PathSettings)
-    existing = tuple((await _existing_routes(session)).values())
-    planned = _plan(setup, paths, selections, existing)
-    for plan_row in planned:
-        session.add(_new_route(plan_row, name=plan_row.library_name, enabled=True))
-    await session.commit()
+    async with _write_lock(session):
+        # 鎖內重讀：另一個分頁可能剛在設定頁建了一條，`_plan` 要看到它的 slug 與目標。
+        setup = await read_settings(session, SetupSettings)
+        paths = await read_settings(session, PathSettings)
+        existing = tuple((await _existing_routes(session)).values())
+        planned = _plan(setup, paths, selections, existing)
+        for plan_row in planned:
+            session.add(
+                _new_route(plan_row, name=plan_row.library_name, enabled=not setup.completed)
+            )
 
     await check_routes(session, factory)
-    if setup.completed:
+    if setup.completed and planned:
         fresh = {plan_row.slug for plan_row in planned}
         for route in (await _existing_routes(session)).values():
-            if route.slug in fresh and route.health_status is not HealthStatus.OK:
-                route.enabled = False
+            if route.slug in fresh and route.health_status is HealthStatus.OK:
+                route.enabled = True
         await session.commit()
     return await read_route_status(session)
 
@@ -283,6 +303,9 @@ async def create_route(
 
     建立時先停用、檢查全綠才啟用（使用者拍板）：紅的 Route 送單一定失敗（brief §4.4），
     而留著這一列，修好掛載之後按一次「重新檢查」再啟用就好，不必重填一次。
+
+    順序是鎖的規矩（`_write_lock`）：問 Jellyfin 在鎖外，看目標有沒有人佔、算 slug、寫入在鎖內，
+    五條纜繩又回到鎖外。兩個分頁同時建同一個目標時，後到的那一個重讀之後說 `target_taken`。
     """
     library = await _live_library(session, factory, library_id)
     collection_type = SUPPORTED_TYPES.get(library.collection_type)
@@ -300,29 +323,32 @@ async def create_route(
             f"(it has {', '.join(library.locations) or 'none'})",
         )
     paths = await read_settings(session, PathSettings)
-    existing = tuple((await _existing_routes(session)).values())
-    holder = next((route for route in existing if route.target_path == target_path), None)
-    if holder is not None:
-        # 帳本以目標路徑認 Route（`owning_route`）：兩條同一個目標就分不出檔案是誰的。
-        raise RouteRejectedError("target_taken", f"{target_path!r} is already {holder.slug!r}")
-    slug = _unique_slug(library.name, {route.slug for route in existing})
-    plan_row = _Planned(
-        slug=slug,
-        library_name=library.name,
-        library_item_id=library.item_id,
-        collection_type=collection_type,
-        target_path=target_path,
-        category=f"{CATEGORY_PREFIX}{slug}",
-        save_path=save_path_of(paths.complete_root, slug),
-        profile=profile,
-    )
-    route = _new_route(plan_row, name=name, enabled=False)
-    session.add(route)
-    await session.commit()
+    try:
+        async with _write_lock(session):
+            existing = tuple((await _existing_routes(session)).values())
+            _refuse_taken(target_path, existing)
+            slug = _unique_slug(library.name, {route.slug for route in existing})
+            plan_row = _Planned(
+                slug=slug,
+                library_name=library.name,
+                library_item_id=library.item_id,
+                collection_type=collection_type,
+                target_path=target_path,
+                category=f"{CATEGORY_PREFIX}{slug}",
+                save_path=save_path_of(paths.complete_root, slug),
+                profile=profile,
+            )
+            route = _new_route(plan_row, name=name, enabled=False)
+            session.add(route)
+    except IntegrityError as exc:
+        # 建立點都在鎖內看過了；還是撞上唯一索引代表有鎖外的寫入。重讀之後照實說，不是 500。
+        _refuse_taken(target_path, tuple((await _existing_routes(session)).values()))
+        raise RouteRejectedError("route_conflict", str(exc.orig)) from exc
 
-    await _run_checks(session, factory, (plan_row,), (route,))
-    route.enabled = route.health_status is HealthStatus.OK
-    await session.commit()
+    async with _stale_write_as_missing(session, route.id):
+        await _run_checks(session, factory, (plan_row,), (route,))
+        route.enabled = route.health_status is HealthStatus.OK
+        await session.commit()
     return _route_view(route, paths.complete_root)
 
 
@@ -346,16 +372,17 @@ async def update_route(
     """
     route = await _find_route(session, route_id)
     _check_profile(route.collection_type, profile)
-    route.name = name
-    route.profile = profile
-    await session.commit()
-
     paths = await read_settings(session, PathSettings)
-    await _run_checks(session, factory, (_planned_from(route, paths),), (route,))
-    if enabled and not route.enabled and route.health_status is not HealthStatus.OK:
-        raise RouteRejectedError("route_unhealthy", route.slug)
-    route.enabled = enabled
-    await session.commit()
+    async with _stale_write_as_missing(session, route_id):
+        route.name = name
+        route.profile = profile
+        await session.commit()
+
+        await _run_checks(session, factory, (_planned_from(route, paths),), (route,))
+        if enabled and not route.enabled and route.health_status is not HealthStatus.OK:
+            raise RouteRejectedError("route_unhealthy", route.slug)
+        route.enabled = enabled
+        await session.commit()
     return _route_view(route, paths.complete_root)
 
 
@@ -369,7 +396,8 @@ async def check_route(
     """
     route = await _find_route(session, route_id)
     paths = await read_settings(session, PathSettings)
-    await _run_checks(session, factory, (_planned_from(route, paths),), (route,))
+    async with _stale_write_as_missing(session, route_id):
+        await _run_checks(session, factory, (_planned_from(route, paths),), (route,))
     return _route_view(route, paths.complete_root)
 
 
@@ -396,15 +424,23 @@ class ManagedRoute:
 
 
 @dataclass(frozen=True, slots=True)
+class LibraryPath:
+    """媒體庫回報的一條路徑，與已經寫在那裡的 Route。"""
+
+    path: str
+    #: 佔用它的那條 Route 的名字，沒有就是 `None`。同一個目標不會有第二條（`target_taken`）。
+    route_name: str | None
+
+
+@dataclass(frozen=True, slots=True)
 class LibraryOption:
     """新增 Route 時可選的一個 Jellyfin 媒體庫（現查）。"""
 
     item_id: str
     name: str
     collection_type: str
-    locations: tuple[str, ...]
-    #: 已經有 Route 寫在那裡的路徑。
-    taken: tuple[str, ...]
+    #: Jellyfin 回報的順序。被佔用的帶著 Route 名，畫面不必再拿清單反查（票 14a）。
+    paths: tuple[LibraryPath, ...]
     supported: bool
     uses_tvdb: bool
 
@@ -429,14 +465,17 @@ async def list_libraries(
     Jellyfin 那邊加的。
     """
     libraries = await _live_libraries(session, factory)
-    targets = {route.target_path for route in (await _existing_routes(session)).values()}
+    holders = {
+        route.target_path: route.name for route in (await _existing_routes(session)).values()
+    }
     return tuple(
         LibraryOption(
             item_id=library.item_id,
             name=library.name,
             collection_type=library.collection_type,
-            locations=library.locations,
-            taken=tuple(path for path in library.locations if path in targets),
+            paths=tuple(
+                LibraryPath(path=path, route_name=holders.get(path)) for path in library.locations
+            ),
             supported=library.collection_type in SUPPORTED_TYPES,
             uses_tvdb=any(
                 TVDB_MARKER in fetcher.lower()
@@ -465,30 +504,104 @@ async def _usages(session: AsyncSession, routes: Sequence[Route]) -> dict[int, R
     }
 
 
+async def _usage_of(session: AsyncSession, route: Route, routes: Sequence[Route]) -> RouteUsage:
+    """一條 Route 的引用數。刪除只問這一條，不必把整張帳本讀進來（清單才需要 `_usages`）。
+
+    帳本的目標是 importer 以 `PurePosixPath(route.target_path) / …` 組出來的，所以前綴照同一個
+    正規化（`//`、結尾斜線）去粗篩，否則目標寫法不正規的 Route 會少算、被引用了還刪得掉；
+    再用 `owning_route` 精判——`…/tv/anime` 可能是另一條更深的 Route（與媒體庫頁同一條規則）。
+    """
+    jobs = await session.scalar(
+        select(func.count()).select_from(Job).where(Job.route_id == route.id)
+    )
+    prefix = str(PurePosixPath(route.target_path)).rstrip("/") + "/"
+    candidates = await session.scalars(
+        select(LedgerEntry.target_path).where(
+            LedgerEntry.target_path.startswith(prefix, autoescape=True)
+        )
+    )
+    owned = sum(1 for target in candidates if owning_route(target, routes) is route)
+    return RouteUsage(jobs=jobs or 0, ledger_entries=owned)
+
+
 async def delete_route(session: AsyncSession, route_id: int) -> None:
     """Route 設定頁的「刪除」：一個明確、要二次確認的動作（票 14）。
 
     **被引用就拒絕**，理由是 `route_in_use`，出路是停用（`update_route`）：停用擋得住新的送單，
     又不讓已經發生的下載與入庫失去它們的 Route。qBittorrent 的 category 與 complete 子目錄
     不跟著刪——刪得了就代表沒有東西在用它們，而同一個 slug 之後重建時 category 檢查會認得它。
+
+    算引用數與刪除在同一把寫鎖裡（票 14a）：否則算完的那一刻另一個請求送了一筆單，刪除接著把它的
+    `route_id` 設成 NULL，留下一筆不知道要入庫到哪裡的下載。有鎖時那一筆等到這裡 commit，
+    然後在外鍵上撞牆（`add_download` 回 `route_missing`）。
     """
-    route = await _find_route(session, route_id)
-    routes = tuple((await _existing_routes(session)).values())
-    usage = (await _usages(session, routes))[route.id]
-    if usage.in_use:
-        raise RouteRejectedError(
-            "route_in_use", f"jobs={usage.jobs} · ledger_entries={usage.ledger_entries}"
-        )
-    await session.delete(route)
-    await session.commit()
+    async with _write_lock(session):
+        route = await _find_route(session, route_id)
+        routes = tuple((await _existing_routes(session)).values())
+        usage = await _usage_of(session, route, routes)
+        if usage.in_use:
+            raise RouteInUseError(usage)
+        await session.delete(route)
 
 
 async def _find_route(session: AsyncSession, route_id: int) -> Route:
-    """設定頁的命令認的那一條。不在了是一個理由（`route_missing` → 404），不是 500。"""
-    route = await session.get(Route, route_id)
+    """設定頁的命令認的那一條。不在了是一個理由（`route_missing` → 404），不是 500。
+
+    `populate_existing`：identity map 裡的那一份可能是另一條連線刪掉或改掉之前讀的。
+    """
+    route = await session.get(Route, route_id, populate_existing=True)
     if route is None:
         raise RouteRejectedError("route_missing", str(route_id))
     return route
+
+
+def _refuse_taken(target_path: str, routes: Sequence[Route]) -> None:
+    """帳本以目標路徑認 Route（`owning_route`）：兩條同一個目標就分不出檔案是誰的。"""
+    holder = next((route for route in routes if route.target_path == target_path), None)
+    if holder is not None:
+        raise RouteRejectedError("target_taken", f"{target_path!r} is already {holder.slug!r}")
+
+
+#: 一句改不到任何一列的 UPDATE。用途見 `_write_lock`。
+_TAKE_WRITE_LOCK = text("UPDATE routes SET id = id WHERE id = -1")
+
+
+@asynccontextmanager
+async def _write_lock(session: AsyncSession) -> AsyncIterator[None]:
+    """在 SQLite 的寫鎖裡做完一段「先讀、再寫」；正常離開時 commit，丟例外就 rollback（票 14a）。
+
+    刪除要先算引用數、建立要先看目標有沒有人佔：兩步之間另一條連線插一筆進來，檢查就白做了。
+    SQLite 一個資料庫只有一把寫鎖，借它就不必自己做鎖，而且跨連線、跨 worker 都算數。
+
+    做法：先 commit 收掉前一個交易，再下一句 0 列的 UPDATE。驅動在 legacy 交易模式下只為 DML
+    發 `BEGIN`、SELECT 不發（SQLAlchemy 的 sqlite 方言文件），而 UPDATE 一開始執行就要寫鎖，
+    不管改到幾列——`test_routes.py` 的 `TestRaces` 實證這一點。別的連線在 `busy_timeout` 內等它。
+
+    規矩：取鎖之後一律重讀（鎖外讀到的可能已經不是現在的樣子）；鎖內不打網路（別的寫入都在等）。
+    """
+    await session.commit()
+    try:
+        # 等不到鎖（`busy_timeout` 到期）也要 rollback，別把半開的交易留給呼叫端。
+        await session.execute(_TAKE_WRITE_LOCK)
+        yield
+        await session.commit()
+    except BaseException:
+        await session.rollback()
+        raise
+
+
+@asynccontextmanager
+async def _stale_write_as_missing(session: AsyncSession, route_id: int) -> AsyncIterator[None]:
+    """在鎖外打網路的那幾秒裡，這條 Route 可能在另一個分頁被刪掉了（票 14a）。
+
+    寫回時 0 列被改到（`StaleDataError`）：與一開始就找不到它是同一個理由，
+    `route_missing`，不是 500。
+    """
+    try:
+        yield
+    except StaleDataError as exc:
+        await session.rollback()
+        raise RouteRejectedError("route_missing", str(route_id)) from exc
 
 
 def _check_profile(collection_type: CollectionType, profile: Profile) -> None:
@@ -601,6 +714,11 @@ def _plan(
 
     已經有 Route 的媒體庫略過（精靈只新增，見 `build_routes`）；slug 與整張表比，不只與
     這一批比——Route 設定頁建的第二條（`tv-2`）也佔著名字。
+
+    **目標已經被佔用的選擇也略過，不回 422**（票 14a，使用者拍板）。佔用者可以是既有的 Route，
+    也可以是這一批前面的選擇。帳本以目標路徑認 Route，同一個目標兩條就分不出檔案是誰的；而這與
+    「已經有 Route 的媒體庫略過」是同一條只新增規則——套件內三個媒體庫自動全勾，舊 Route 的 key
+    一旦對不上（沒有 `ItemId`、媒體庫又改了名），回 422 的話重跑就永遠卡在這一步。
     """
     libraries = {library.name: library for library in setup.jellyfin.libraries}
     chosen = (
@@ -611,6 +729,7 @@ def _plan(
 
     planned: list[_Planned] = []
     taken = {route.slug for route in existing}
+    targets = {route.target_path for route in existing}
     routed = {
         _library_key(route.jellyfin_library_id, route.jellyfin_library_name) for route in existing
     }
@@ -635,6 +754,9 @@ def _plan(
                 f"{selection.target_path!r} is not a path of {library.name!r} "
                 f"(it has {', '.join(library.locations) or 'none'})"
             )
+        if selection.target_path in targets:
+            continue
+        targets.add(selection.target_path)
         slug = _unique_slug(library.name, taken)
         taken.add(slug)
         planned.append(

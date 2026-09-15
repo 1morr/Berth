@@ -7,26 +7,28 @@ import {
   libraryOptionsQueryOptions,
   routeRefusalOf,
   type LibraryOption,
-  type ManagedRoute,
   type RouteRefusal,
 } from '../api/routes'
 import type { Profile, RouteView } from '../api/schemas'
+import { jellyfinAddressQueryOptions } from '../api/settings'
 import { Field, GhostButton, Notice, PrimaryButton } from '../components/controls'
 import { ProfilePicker } from '../components/ProfilePicker'
+import { jellyfinLibrariesUrl } from '../inventory/jellyfinLink'
 
-/** 建立時會遇到的五種拒絕。查表而不是動態組 key——動態組過不了 `strictKeyChecks`（票 06）。 */
+/** 建立時會遇到的拒絕。查表而不是動態組 key——動態組過不了 `strictKeyChecks`（票 06）。 */
 const CREATE_REFUSAL = {
   library_missing: 'routeSettings.add.refusal.library_missing',
   library_unsupported: 'routeSettings.add.refusal.library_unsupported',
   target_not_in_library: 'routeSettings.add.refusal.target_not_in_library',
   target_taken: 'routeSettings.add.refusal.target_taken',
+  route_conflict: 'routeSettings.add.refusal.route_conflict',
   jellyfin_unreachable: 'routeSettings.add.refusal.jellyfin_unreachable',
   profile_unsupported: 'routeSettings.add.refusal.profile_unsupported',
 } as const satisfies Partial<Record<RouteRefusal, string>>
 
-/** 這個媒體庫還沒有 Route 的路徑。哪些被佔了由後端判定（`taken`），這裡只是把它們挑掉。 */
+/** 這個媒體庫還沒有 Route 的路徑。哪些被佔了由後端判定（`route_name`），這裡只是把它們挑掉。 */
 function freePaths(library: LibraryOption): string[] {
-  return library.locations.filter((path) => !library.taken.includes(path))
+  return library.paths.filter((row) => row.route_name === null).map((row) => row.path)
 }
 
 /**
@@ -35,7 +37,7 @@ function freePaths(library: LibraryOption): string[] {
  * **按下去才向 Jellyfin 問**：這一頁多數時候是在看狀態。路徑一律用選的（brief §4.1）；已經有 Route
  * 的路徑列出來但選不了，並說是哪一條——同一個目標兩條 Route，帳本就認不出檔案是誰的。
  */
-export function AddRoute({ routes, onCreated }: { routes: ManagedRoute[]; onCreated: () => void }) {
+export function AddRoute({ onCreated }: { onCreated: () => void }) {
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const [created, setCreated] = useState<RouteView | null>(null)
@@ -52,7 +54,6 @@ export function AddRoute({ routes, onCreated }: { routes: ManagedRoute[]; onCrea
       </p>
       {open ? (
         <AddRouteForm
-          routes={routes}
           onCancel={() => setOpen(false)}
           onCreated={(route) => {
             setCreated(route)
@@ -78,11 +79,9 @@ export function AddRoute({ routes, onCreated }: { routes: ManagedRoute[]; onCrea
 }
 
 function AddRouteForm({
-  routes,
   onCancel,
   onCreated,
 }: {
-  routes: ManagedRoute[]
   onCancel: () => void
   onCreated: (route: RouteView) => void
 }) {
@@ -195,13 +194,7 @@ function AddRouteForm({
             </fieldset>
 
             {library && (
-              <Targets
-                formId={formId}
-                library={library}
-                routes={routes}
-                target={target}
-                onPick={setTarget}
-              />
+              <Targets formId={formId} library={library} target={target} onPick={setTarget} />
             )}
             {incomplete && (!library || !target) && (
               <p role="alert" className="text-xs text-blocked-ink">
@@ -246,17 +239,18 @@ function AddRouteForm({
   )
 }
 
-/** 這個媒體庫回報的路徑。已經有 Route 的選不了，旁邊寫是哪一條（以 `aria-describedby` 掛上）。 */
+/**
+ * 這個媒體庫回報的路徑。已經有 Route 的選不了，旁邊寫是哪一條（以 `aria-describedby` 掛上）；
+ * 名字是後端帶來的（`route_name`，票 14a），不拿清單反查。
+ */
 function Targets({
   formId,
   library,
-  routes,
   target,
   onPick,
 }: {
   formId: string
   library: LibraryOption
-  routes: ManagedRoute[]
   target: string
   onPick: (path: string) => void
 }) {
@@ -266,39 +260,61 @@ function Targets({
   return (
     <fieldset className="grid gap-2">
       <legend className="label text-ink-dim">{t('routeSettings.add.target')}</legend>
-      {library.locations.map((path, index) => {
+      {library.paths.map((row, index) => {
         const id = `${formId}-target-${index}`
-        const taken = library.taken.includes(path)
-        const holder = routes.find((row) => row.route.target_path === path)?.route.name
+        const holder = row.route_name
         return (
-          <div key={path} className="flex flex-wrap items-start gap-x-3 gap-y-1">
+          <div key={row.path} className="flex flex-wrap items-start gap-x-3 gap-y-1">
             <input
               id={id}
               type="radio"
               name={`${formId}-target`}
-              value={path}
-              checked={target === path}
-              disabled={taken}
-              aria-describedby={taken ? `${id}-taken` : undefined}
-              onChange={() => onPick(path)}
+              value={row.path}
+              checked={target === row.path}
+              disabled={holder !== null}
+              aria-describedby={holder !== null ? `${id}-taken` : undefined}
+              onChange={() => onPick(row.path)}
               className="mt-0.5 size-4 shrink-0 accent-[var(--color-assigned)]"
             />
             <label htmlFor={id} className="value min-w-0 break-words text-xs text-ink">
-              {path}
+              {row.path}
             </label>
-            {taken && (
+            {holder !== null && (
               <span id={`${id}-taken`} className="text-xs text-ink-dim">
-                {holder
-                  ? t('routeSettings.add.taken', { name: holder })
-                  : t('routeSettings.add.takenUnnamed')}
+                {t('routeSettings.add.taken', { name: holder })}
               </span>
             )}
           </div>
         )
       })}
-      {free.length === 0 && (
-        <p className="max-w-prose text-xs text-ink-dim">{t('routeSettings.add.noneFree')}</p>
-      )}
+      {free.length === 0 && <NoFreePath />}
     </fieldset>
+  )
+}
+
+/**
+ * 這個媒體庫回報的路徑都已經有 Route 了：下一步在 Jellyfin 那邊，所以給一條直達媒體庫設定的連結
+ * （票 14a）。主機與深連結同一份推導（`jellyfinLink.ts`）；推不出來時只留文字，不給一條死連結。
+ */
+function NoFreePath() {
+  const { t } = useTranslation()
+  // 走到這一步才問：多數時候有空路徑可選，用不到 Jellyfin 的網址。
+  const address = useQuery(jellyfinAddressQueryOptions)
+  const libraries = address.data ? jellyfinLibrariesUrl(address.data, window.location) : null
+
+  return (
+    <div className="grid gap-1">
+      <p className="max-w-prose text-xs text-ink-dim">{t('routeSettings.add.noneFree')}</p>
+      {libraries && (
+        <a
+          href={libraries}
+          target="_blank"
+          rel="noreferrer"
+          className="w-fit py-1 text-xs text-ink underline decoration-rule-strong underline-offset-4 hover:decoration-ink"
+        >
+          {t('routeSettings.add.openJellyfin')}
+        </a>
+      )}
+    </div>
   )
 }

@@ -16,6 +16,7 @@ export type RouteRefusal =
   | 'route_missing'
   | 'route_in_use'
   | 'route_unhealthy'
+  | 'route_conflict'
   | 'profile_unsupported'
 
 const REASONS: readonly RouteRefusal[] = [
@@ -27,13 +28,19 @@ const REASONS: readonly RouteRefusal[] = [
   'route_missing',
   'route_in_use',
   'route_unhealthy',
+  'route_conflict',
   'profile_unsupported',
 ]
+
+/** 有多少東西指著一條 Route。與清單那一列（`ManagedRoute`）同一組詞。 */
+export type RouteUsage = Pick<ManagedRoute, 'jobs' | 'ledger_entries'>
 
 /** 拒絕的完整形狀：封閉集合的理由，加上服務回的原文。 */
 export interface RouteRefusalDetail {
   reason: RouteRefusal
   detail: string
+  /** `route_in_use` 帶的兩個數字（票 14a），畫面照它說「N 筆下載、M 個入庫檔案」。 */
+  usage?: RouteUsage
 }
 
 /** 這一次失敗是「後端說不行」還是別的。認不得的理由回 `null`，畫面落回一句通用的話。 */
@@ -44,14 +51,22 @@ export function routeRefusalOf(error: unknown): RouteRefusalDetail | null {
   const reason = (detail as { reason?: unknown }).reason
   if (typeof reason !== 'string' || !REASONS.includes(reason as RouteRefusal)) return null
   const text = (detail as { detail?: unknown }).detail
-  return { reason: reason as RouteRefusal, detail: typeof text === 'string' ? text : '' }
+  const jobs = (detail as { jobs?: unknown }).jobs
+  const ledgerEntries = (detail as { ledger_entries?: unknown }).ledger_entries
+  return {
+    reason: reason as RouteRefusal,
+    detail: typeof text === 'string' ? text : '',
+    ...(typeof jobs === 'number' && typeof ledgerEntries === 'number'
+      ? { usage: { jobs, ledger_entries: ledgerEntries } }
+      : {}),
+  }
 }
 
 /**
  * Route 設定頁（`/settings/routes`，票 14、`.scratch/m1/route-settings-shape.md`）。
  *
- * 誰進得來由後端門禁決定：精靈跑完之後只有 admin；跑完之前與 `setup/*` 一樣開放——精靈第 7 步的
- * 「刪除」打的就是這裡的 `deleteRoute`。
+ * 誰進得來由後端門禁決定：永遠只有 admin（票 14a）。精靈第 7 步的「刪除」不打這裡，
+ * 它走 `deleteSetupRoute`（`api/setup.ts`），跟著精靈的門禁。
  */
 
 /** 一條 Route，加上有多少下載與入庫檔案指著它（刪不得時說得出為什麼）。 */

@@ -123,11 +123,19 @@ describe('泊位 4：媒體庫路徑（套件內）', () => {
     expect(await screen.findByRole('button', { name: '重新檢查 3 條 Route' })).toBeEnabled()
   })
 
-  it('每條 Route 底下都有刪除：二次確認之後才打與設定頁同一支 DELETE（票 14）', async () => {
+  it('每條 Route 底下都有刪除：二次確認之後打精靈自己的 DELETE，刪完列消失並播報（票 14、14a）', async () => {
+    let deleted = false
+    const withoutMovies = routeSetup({
+      ...BUILT,
+      routes: BUILT.routes.filter((route) => route.slug !== 'movies'),
+    })
     const fetch = stubApi({
       [STATUS]: { body: AT_BERTH_FOUR },
-      [ROUTES]: { body: BUILT },
-      'DELETE /api/routes/2': { status: 204, body: null },
+      [ROUTES]: () => ({ body: deleted ? withoutMovies : BUILT }),
+      'DELETE /api/setup/routes/2': () => {
+        deleted = true
+        return { status: 204, body: null }
+      },
     })
 
     renderWithProviders(<SetupPage />)
@@ -135,13 +143,60 @@ describe('泊位 4：媒體庫路徑（套件內）', () => {
     await userEvent.click(first)
     await userEvent.click(screen.getByRole('button', { name: '確定刪除' }))
 
+    expect(await screen.findByText('已刪除「Movies」。')).toBeInTheDocument()
     await waitFor(() =>
-      expect(
-        fetch.mock.calls.some(
-          ([input, init]) => init?.method === 'DELETE' && String(input) === '/api/routes/2',
-        ),
-      ).toBe(true),
+      expect(screen.getAllByRole('button', { name: '刪除這條 Route' })).toHaveLength(2),
     )
+    // `/routes/*` 永遠只有 admin；精靈跑完之前沒有人登入得了，所以精靈走 `setup/*` 那一支。
+    expect(
+      fetch.mock.calls.some(
+        ([input, init]) => init?.method === 'DELETE' && String(input) === '/api/setup/routes/2',
+      ),
+    ).toBe(true)
+  })
+
+  it('刪的那一刻被引用：說出數字（票 14a）', async () => {
+    stubApi({
+      [STATUS]: { body: AT_BERTH_FOUR },
+      [ROUTES]: { body: BUILT },
+      'DELETE /api/setup/routes/2': {
+        status: 409,
+        body: {
+          detail: {
+            reason: 'route_in_use',
+            detail: 'jobs=1 · ledger_entries=0',
+            jobs: 1,
+            ledger_entries: 0,
+          },
+        },
+      },
+    })
+
+    renderWithProviders(<SetupPage />)
+    const [first] = await screen.findAllByRole('button', { name: '刪除這條 Route' })
+    await userEvent.click(first)
+    await userEvent.click(screen.getByRole('button', { name: '確定刪除' }))
+
+    expect(await screen.findByText(/刪不得/)).toHaveTextContent('1 筆下載、0 個入庫檔案')
+  })
+
+  it('409 沒帶數字時仍說刪不得，不說後端沒在跑', async () => {
+    stubApi({
+      [STATUS]: { body: AT_BERTH_FOUR },
+      [ROUTES]: { body: BUILT },
+      'DELETE /api/setup/routes/2': {
+        status: 409,
+        body: { detail: { reason: 'route_in_use', detail: 'jobs=1 · ledger_entries=0' } },
+      },
+    })
+
+    renderWithProviders(<SetupPage />)
+    const [first] = await screen.findAllByRole('button', { name: '刪除這條 Route' })
+    await userEvent.click(first)
+    await userEvent.click(screen.getByRole('button', { name: '確定刪除' }))
+
+    expect(await screen.findByText(/刪不得/)).toBeInTheDocument()
+    expect(screen.queryByText(/沒在跑/)).not.toBeInTheDocument()
   })
 
   it('停用中的紅燈 Route 不讓第四格變紅：它不是目的地，完成條件也不算它（票 14）', async () => {

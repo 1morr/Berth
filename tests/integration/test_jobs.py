@@ -15,13 +15,14 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import delete, select
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from berth.adapters.http import AuthFailedError, ServiceUnavailableError
 from berth.adapters.qbittorrent import QbittorrentCategory
 from berth.adapters.torrent import NotATorrentError, TorrentSource
 from berth.adapters.torrent_fake import DEFAULT_HASH, FakeTorrentFetcher
+from berth.db import create_session_factory
 from berth.domain import (
     CollectionType,
     EventType,
@@ -125,6 +126,39 @@ class TestAddDownload:
         assert outcome.job.state is JobState.SUBMITTED
         assert outcome.job.name == RELEASE
         assert outcome.job.trigger is JobTrigger.MANUAL
+
+    async def test_a_route_deleted_while_the_torrent_is_fetched_is_a_reason_not_a_crash(
+        self, session: AsyncSession, roots: dict[str, Path], engine: AsyncEngine
+    ) -> None:
+        """前提查過之後、建 Job 之前，Route 在另一個請求裡被刪掉了（票 14a）。外鍵在 flush 當下
+        就擋下那一列，等不到 commit；那是 `route_missing`（422），不是 500。"""
+        media, route, factory = await _ready(session, roots)
+        sessions = create_session_factory(engine)
+
+        class DeletingFetcher(FakeTorrentFetcher):
+            """去要 torrent 的那幾秒裡，Route 設定頁上有人按了刪除。"""
+
+            async def fetch(self, url: str) -> TorrentSource:
+                async with sessions() as other:
+                    await other.execute(delete(Route).where(Route.id == route.id))
+                    await other.commit()
+                return await super().fetch(url)
+
+        factory.torrent_ = DeletingFetcher()
+
+        with pytest.raises(JobRejectedError) as refusal:
+            await add_download(
+                session,
+                factory,
+                source=_source(),
+                media_id=media.id,
+                route_id=route.id,
+                user_id=None,
+            )
+
+        assert refusal.value.reason == "route_missing"
+        assert (await session.scalars(select(Job))).all() == []
+        assert factory.qbittorrent_.added == []
 
     async def test_the_torrent_lands_in_the_routes_category_with_the_berth_tag(
         self, session: AsyncSession, roots: dict[str, Path]

@@ -6,6 +6,7 @@ from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field
 
 from berth.api.deps import ClientFactoryDep, SessionDep, SetupProbesDep
+from berth.api.routes import route_refusal
 from berth.api.schemas import QbittorrentOut, RouteOut, StepOut
 from berth.domain import (
     DetectionReason,
@@ -28,7 +29,13 @@ from berth.services.jellyfin import (
     read_jellyfin_status,
 )
 from berth.services.qbittorrent import apply_qbittorrent, read_qbittorrent_diff
-from berth.services.routes import RouteSelection, build_routes, read_route_status
+from berth.services.routes import (
+    RouteRejectedError,
+    RouteSelection,
+    build_routes,
+    delete_route,
+    read_route_status,
+)
 from berth.services.setup import (
     ServiceConnection,
     SetupStatus,
@@ -446,6 +453,19 @@ async def post_routes(
     except ValueError as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
     return RouteSetupOut.model_validate(result)
+
+
+@router.delete("/routes/{route_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_setup_route(session: SessionDep, route_id: int) -> None:
+    """第 7 步每條 Route 底下的「刪除」（票 14a）。
+
+    與 Route 設定頁同一個命令、同一種拒絕（404 `route_missing`、409 `route_in_use`），只是跟著
+    `setup/*` 的門禁：精靈跑完之前還沒有人登入得了，而 `/routes/*` 永遠只有管理員。
+    """
+    try:
+        await delete_route(session, route_id)
+    except RouteRejectedError as refusal:
+        raise route_refusal(refusal) from refusal
 
 
 @router.post("/complete")

@@ -1,6 +1,6 @@
 import { queryOptions } from '@tanstack/react-query'
 
-import { apiGet, apiPost } from './client'
+import { apiDelete, apiGet, apiPost } from './client'
 import type { QbittorrentSetup, Schemas, ServiceKind } from './schemas'
 
 /** `DetectionReason`：判定的理由，UI 逐服務顯示。 */
@@ -161,6 +161,14 @@ export const routeSetupQueryOptions = queryOptions({
 
 export function buildRoutes(selections: RouteSelectionInput[]): Promise<RouteSetup> {
   return apiPost<RouteSetup>('/setup/routes', { selections } satisfies Schemas['RoutesIn'])
+}
+
+/**
+ * 第 7 步每條 Route 底下的刪除（票 14a）。與設定頁的 `deleteRoute` 同一個命令、同一種拒絕，
+ * 只是跟著精靈的門禁：精靈跑完之前還沒有人登入得了，而 `/routes/*` 永遠只有 admin。
+ */
+export function deleteSetupRoute(id: number): Promise<void> {
+  return apiDelete(`/setup/routes/${id}`)
 }
 
 /** 寫下 `settings.setup.completed`。**之後 `setup/*` 就要登入了**（票 07）。 */

@@ -26,7 +26,11 @@ export function stubApi(routes: Record<string, StubRoute | (() => StubRoute)>) {
     const route = routes[`${method} ${path}`]
     if (!route) return new Response(JSON.stringify({ detail: 'Not Found' }), { status: 404 })
     const resolved = typeof route === 'function' ? route() : route
-    return new Response(JSON.stringify(resolved.body), { status: resolved.status ?? 200 })
+    const status = resolved.status ?? 200
+    // 204 不能帶 body：`new Response('null', { status: 204 })` 會丟 TypeError，替身自己炸掉、
+    // 呼叫端走進失敗分支——票 14 的刪除測試因此從來沒看到過「刪掉了」（票 14a）。
+    const body = status === 204 ? null : JSON.stringify(resolved.body)
+    return new Response(body, { status })
   })
   vi.stubGlobal('fetch', stub)
   return stub

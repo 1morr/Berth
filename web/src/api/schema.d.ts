@@ -973,6 +973,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/setup/routes/{route_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Setup Route
+         * @description 第 7 步每條 Route 底下的「刪除」（票 14a）。
+         *
+         *     與 Route 設定頁同一個命令、同一種拒絕（404 `route_missing`、409 `route_in_use`），只是跟著
+         *     `setup/*` 的門禁：精靈跑完之前還沒有人登入得了，而 `/routes/*` 永遠只有管理員。
+         */
+        delete: operations["delete_setup_route_api_setup_routes__route_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/setup/complete": {
         parameters: {
             query?: never;
@@ -1561,10 +1584,8 @@ export interface components {
             name: string;
             /** Collection Type */
             collection_type: string;
-            /** Locations */
-            locations: string[];
-            /** Taken */
-            taken: string[];
+            /** Paths */
+            paths: components["schemas"]["LibraryPathOut"][];
             /** Supported */
             supported: boolean;
             /** Uses Tvdb */
@@ -1591,6 +1612,16 @@ export interface components {
         LibraryPathIn: {
             /** Library */
             library: string;
+        };
+        /**
+         * LibraryPathOut
+         * @description 媒體庫回報的一條路徑。
+         */
+        LibraryPathOut: {
+            /** Path */
+            path: string;
+            /** Route Name */
+            route_name: string | null;
         };
         /**
          * LoginIn
@@ -3725,6 +3756,35 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["RouteSetupOut"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_setup_route_api_setup_routes__route_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                route_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

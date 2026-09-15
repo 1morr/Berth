@@ -31,11 +31,21 @@ const SECOND_DISK = managedRoute({
   }),
 })
 
+/** Anime 媒體庫唯一的一條路徑已經是 Anime 那條 Route 的：沒有空路徑可以選。 */
+const ANIME_FULL = libraryOption({
+  item_id: 'item-2',
+  name: 'Anime',
+  paths: [{ path: '/data/library/anime', route_name: 'Anime' }],
+})
+
+/** TV：3 筆下載與 12 個入庫檔案指著它，刪不得。 */
+const IN_USE_TV = managedRoute({ jobs: 3, ledger_entries: 12, in_use: true })
+
 function render(routes: Record<string, StubRoute | (() => StubRoute)> = {}, role = 'admin') {
   return stubApi({
     'GET /api/health': { body: HEALTHY },
     'GET /api/auth/me': { body: { name: 'skipper', role } },
-    [ROUTES]: { body: [managedRoute({ jobs: 3, ledger_entries: 12, in_use: true }), SECOND_DISK] },
+    [ROUTES]: { body: [IN_USE_TV, SECOND_DISK] },
     ...routes,
   })
 }
@@ -122,8 +132,15 @@ describe('Route 設定頁', () => {
     )
   })
 
-  it('沒有東西指著它的 Route：二次確認之後才刪（票 14 驗收）', async () => {
-    const fetch = render({ 'DELETE /api/routes/4': { status: 204, body: null } })
+  it('沒有東西指著它的 Route：二次確認之後才刪，刪完列消失並播報（票 14 驗收、票 14a）', async () => {
+    let deleted = false
+    const fetch = render({
+      [ROUTES]: () => ({ body: deleted ? [IN_USE_TV] : [IN_USE_TV, SECOND_DISK] }),
+      'DELETE /api/routes/4': () => {
+        deleted = true
+        return { status: 204, body: null }
+      },
+    })
     renderApp('/settings/routes')
 
     const second = within(await row('TV 2'))
@@ -131,13 +148,16 @@ describe('Route 設定頁', () => {
     expect(fetch.mock.calls.some(([, init]) => init?.method === 'DELETE')).toBe(false)
     await userEvent.click(second.getByRole('button', { name: '確定刪除' }))
 
+    // 那一列不在了，說「刪掉了」的是頁面那一層：元件跟著列一起卸載，播不出來。
+    expect(await screen.findByText('已刪除「TV 2」。')).toBeInTheDocument()
     await waitFor(() =>
-      expect(
-        fetch.mock.calls.some(
-          ([input, init]) => init?.method === 'DELETE' && String(input) === '/api/routes/4',
-        ),
-      ).toBe(true),
+      expect(screen.queryByText('TV 2', { selector: 'summary *' })).not.toBeInTheDocument(),
     )
+    expect(
+      fetch.mock.calls.some(
+        ([input, init]) => init?.method === 'DELETE' && String(input) === '/api/routes/4',
+      ),
+    ).toBe(true)
   })
 
   it('被下載或入庫檔案指著的 Route 不給刪除鍵，說出原因與出路', async () => {
@@ -147,14 +167,61 @@ describe('Route 設定頁', () => {
     const tv = within(await row('TV'))
     expect(tv.queryByRole('button', { name: '刪除這條 Route' })).not.toBeInTheDocument()
     expect(tv.getByText(/刪不得/)).toHaveTextContent('3 筆下載')
-    expect(tv.getByText(/刪不得/)).toHaveTextContent('停用')
+    expect(tv.getByRole('button', { name: '停用這條 Route' })).toBeInTheDocument()
   })
 
-  it('刪除時才發現被引用（清單之後有人送了單）：說出原因，列留著', async () => {
+  it('被引用而且還啟用著：一鍵停用，送的是存下來的名稱與 profile，沒存的編輯不跟著送（票 14a）', async () => {
+    let disabled = false
+    const fetch = render({
+      [ROUTES]: () => ({
+        body: [
+          disabled ? { ...IN_USE_TV, route: routeView({ enabled: false }) } : IN_USE_TV,
+          SECOND_DISK,
+        ],
+      }),
+      'PUT /api/routes/2': () => {
+        disabled = true
+        return { body: routeView({ enabled: false }) }
+      },
+    })
+    renderApp('/settings/routes')
+
+    const tv = within(await row('TV'))
+    // 名稱改到一半還沒存：停用是另一個動作，不該把它一起送出去。
+    const name = tv.getByRole('textbox', { name: '名稱' })
+    await userEvent.clear(name)
+    await userEvent.type(name, '改到一半')
+    await userEvent.click(tv.getByRole('button', { name: '停用這條 Route' }))
+
+    expect(await screen.findByText('已停用「TV」：新的送單不會再選到它。')).toBeInTheDocument()
+    const call = fetch.mock.calls.find(([, init]) => init?.method === 'PUT')
+    expect(JSON.parse(String(call![1]?.body))).toEqual({
+      name: 'TV',
+      profile: 'standard',
+      enabled: false,
+    })
+    await waitFor(() =>
+      expect(tv.queryByRole('button', { name: '停用這條 Route' })).not.toBeInTheDocument(),
+    )
+    expect(
+      within((await row('TV')).querySelector('summary')!).getByText('停用'),
+    ).toBeInTheDocument()
+    // 上面的勾選框跟著存下來的狀態走，不留著「啟用」讓下一次儲存又把它打開。
+    expect(tv.getByRole('checkbox', { name: '啟用' })).not.toBeChecked()
+  })
+
+  it('刪除時才發現被引用（清單之後有人送了單）：說出數字與原因，列留著', async () => {
     render({
       'DELETE /api/routes/4': {
         status: 409,
-        body: { detail: { reason: 'route_in_use', detail: 'jobs=1 · ledger_entries=0' } },
+        body: {
+          detail: {
+            reason: 'route_in_use',
+            detail: 'jobs=1 · ledger_entries=0',
+            jobs: 1,
+            ledger_entries: 0,
+          },
+        },
       },
     })
     renderApp('/settings/routes')
@@ -163,7 +230,17 @@ describe('Route 設定頁', () => {
     await userEvent.click(second.getByRole('button', { name: '刪除這條 Route' }))
     await userEvent.click(second.getByRole('button', { name: '確定刪除' }))
 
-    expect(await second.findByText(/刪不得/)).toBeInTheDocument()
+    expect(await second.findByText(/刪不得/)).toHaveTextContent('1 筆下載、0 個入庫檔案')
+  })
+
+  it('重新檢查之後說一句「檢查跑完了」——全綠時纜繩列什麼都沒變，沒有這一句就沒有回饋（票 14a）', async () => {
+    render({ 'POST /api/routes/2/check': { body: routeView() } })
+    renderApp('/settings/routes')
+
+    const tv = within(await row('TV'))
+    await userEvent.click(tv.getByRole('button', { name: '重新檢查' }))
+
+    expect(await tv.findByText('檢查跑完了。')).toBeInTheDocument()
   })
 
   it('新增 Route：按下才向 Jellyfin 問，已經有 Route 的路徑選不了，送出去的就是選的那一條', async () => {
@@ -221,6 +298,80 @@ describe('Route 設定頁', () => {
     await userEvent.click(form.getByRole('button', { name: '建立並檢查' }))
 
     expect(await screen.findByText(/已建立「TV 2」.*維持停用/)).toBeInTheDocument()
+  })
+
+  it('建立時撞上同一時間建立的另一條：說再按一次就好（票 14a）', async () => {
+    render({
+      [LIBRARIES]: { body: [libraryOption()] },
+      'POST /api/routes': {
+        status: 409,
+        body: {
+          detail: { reason: 'route_conflict', detail: 'UNIQUE constraint failed: routes.slug' },
+        },
+      },
+    })
+    renderApp('/settings/routes')
+
+    await userEvent.click(await screen.findByRole('button', { name: '新增 Route' }))
+    const form = within(await screen.findByRole('region', { name: '新增 Route' }))
+    await userEvent.click(await form.findByRole('radio', { name: 'TV' }))
+    await userEvent.click(form.getByRole('radio', { name: '/mnt/disk2/tv' }))
+    await userEvent.click(form.getByRole('button', { name: '建立並檢查' }))
+
+    expect(await form.findByText(/同一時間/)).toBeInTheDocument()
+  })
+
+  it('媒體庫的路徑都有 Route 了：給一條到 Jellyfin 媒體庫設定的連結（票 14a）', async () => {
+    render({
+      [LIBRARIES]: { body: [ANIME_FULL] },
+      'GET /api/settings/jellyfin': {
+        body: { public_url: '', url: 'http://nas.local:8096', port: null },
+      },
+    })
+    renderApp('/settings/routes')
+
+    await userEvent.click(await screen.findByRole('button', { name: '新增 Route' }))
+    const form = within(await screen.findByRole('region', { name: '新增 Route' }))
+    await userEvent.click(await form.findByRole('radio', { name: 'Anime' }))
+
+    expect(await form.findByRole('link', { name: '到 Jellyfin 替媒體庫加路徑' })).toHaveAttribute(
+      'href',
+      'http://nas.local:8096/web/#/dashboard/libraries',
+    )
+  })
+
+  it('不知道 Jellyfin 開在哪裡時只留文字，不給一條死連結', async () => {
+    const fetch = render({
+      [LIBRARIES]: { body: [ANIME_FULL] },
+      'GET /api/settings/jellyfin': { body: { public_url: '', url: '', port: null } },
+    })
+    renderApp('/settings/routes')
+
+    await userEvent.click(await screen.findByRole('button', { name: '新增 Route' }))
+    const form = within(await screen.findByRole('region', { name: '新增 Route' }))
+    await userEvent.click(await form.findByRole('radio', { name: 'Anime' }))
+
+    expect(await form.findByText(/都已經有 Route 了/)).toBeInTheDocument()
+    await waitFor(() =>
+      expect(fetch.mock.calls.some(([input]) => String(input) === '/api/settings/jellyfin')).toBe(
+        true,
+      ),
+    )
+    expect(form.queryByRole('link')).not.toBeInTheDocument()
+  })
+
+  it('已經有 Route 的路徑說出是哪一條：名字由後端帶來，不拿清單反查（票 14a）', async () => {
+    render({
+      [ROUTES]: { body: [] },
+      [LIBRARIES]: { body: [libraryOption()] },
+    })
+    renderApp('/settings/routes')
+
+    await userEvent.click(await screen.findByRole('button', { name: '新增 Route' }))
+    const form = within(await screen.findByRole('region', { name: '新增 Route' }))
+    await userEvent.click(await form.findByRole('radio', { name: 'TV' }))
+
+    expect(form.getByText('已是「TV」')).toBeInTheDocument()
   })
 
   it('問不到 Jellyfin：新增區塊說出原文，清單照常', async () => {

@@ -258,31 +258,37 @@ async def add_download(
             route_id=route.id,
             state=JobState.REQUESTED,
         )
-        session.add(job)
-        await record_event(
-            session,
-            job,
-            EventType.CREATED,
-            actor=actor_of(user_id),
-            payload={
-                "trigger": trigger.value,
-                "media": media.id,
-                "route": route.slug,
-                "name": source.title,
-            },
-        )
         # **打 qBittorrent 之前就 commit**（與精靈每一步「做之前先寫 `running`」同一個道理，
         # plan §2.1）：在那之後任何一個沒接住的例外或斷線都會 rollback，而 torrent 可能
         # 已經進了下載器——那就成了一個沒有 Job 的孤兒（plan §3.2 的 `unknown_torrent`）。
+        #
+        # `try` 從 `add` 就開始：約束在 flush 當下就丟（`record_event` 會 flush），等不到 commit。
         try:
+            session.add(job)
+            await record_event(
+                session,
+                job,
+                EventType.CREATED,
+                actor=actor_of(user_id),
+                payload={
+                    "trigger": trigger.value,
+                    "media": media.id,
+                    "route": route.slug,
+                    "name": source.title,
+                },
+            )
             await session.commit()
-        except IntegrityError:
-            # 兩個分頁同時送同一筆：主鍵擋下第二個。回既有的那一列，不是 500（plan §3.3）。
+        except IntegrityError as exc:
             await session.rollback()
+            # 兩個分頁同時送同一筆：主鍵擋下第二個。回既有的那一列，不是 500（plan §3.3）。
             duplicate = await session.get(Job, torrent.info_hash)
-            if duplicate is None:
-                raise
-            return AddDownloadOutcome(job=await _view(session, duplicate), created=False)
+            if duplicate is not None:
+                return AddDownloadOutcome(job=await _view(session, duplicate), created=False)
+            # 前提查過之後 Route 在 Route 設定頁被刪掉了：外鍵擋下這一列（票 14a）。
+            # 用參數的 id 而不是 `route.id`——rollback 之後那個物件已經過期，讀它要再打一次資料庫。
+            if await session.get(Route, route_id) is None:
+                raise JobRejectedError("route_missing", str(route_id)) from exc
+            raise
         logger.info("job created", extra={"state": job.state.value, "route": route.slug})
         # 從這裡開始 poller 也看得到這一列（它已經 commit 了），所以送單與迴圈要排隊。
         async with job_lock(job.hash):

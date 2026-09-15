@@ -129,6 +129,21 @@ describe('角色', () => {
     expect(screen.getByText('skipper')).toBeInTheDocument()
   })
 
+  it('/settings 轉到服務設定；頁首的「設定」在兩個設定頁都標成當前頁（票 14a）', async () => {
+    stubApi({ [HEALTH]: DONE, [ME]: ADMIN, 'GET /api/routes': { body: [] } })
+
+    const { router } = renderApp('/settings')
+
+    await waitFor(() => expect(router.state.location.pathname).toBe('/settings/services'))
+    expect(await screen.findByRole('link', { name: '設定' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    )
+    await router.navigate({ to: '/settings/routes' })
+    await waitFor(() => expect(router.state.location.pathname).toBe('/settings/routes'))
+    expect(screen.getByRole('link', { name: '設定' })).toHaveAttribute('aria-current', 'page')
+  })
+
   it('非 admin 看不到設定入口，但看得到自己是什麼角色（票 07 驗收）', async () => {
     stubApi({ [HEALTH]: DONE, [ME]: USER, ...DISCOVER })
 

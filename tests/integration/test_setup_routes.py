@@ -17,11 +17,17 @@ from pathlib import Path
 
 import pytest
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from berth.adapters.http import AuthFailedError, ServiceUnavailableError
-from berth.adapters.qbittorrent import QbittorrentCategory
+from berth.adapters.qbittorrent import (
+    CategoryOutcome,
+    QbittorrentCategory,
+    QbittorrentClient,
+    ensure_category,
+)
 from berth.adapters.qbittorrent.fake import FakeQbittorrentClient
+from berth.db import create_session_factory
 from berth.domain import (
     CollectionType,
     HealthStatus,
@@ -250,6 +256,62 @@ class TestExisting:
         ]
 
     @pytest.mark.asyncio
+    async def test_a_rerun_after_a_rename_does_not_grow_a_second_route_on_the_same_target(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """票 09 之前存下的 Route 沒有 `ItemId`，只能以名字認媒體庫；媒體庫在 Jellyfin 改名之後，
+        精靈就認不出它已經有 Route。目標已經被佔用就略過（票 14a）：兩條 Route 同一個目標，
+        帳本分不出檔案是誰的。"""
+        berth = berth_path(roots, "影集")
+        Path(berth).mkdir()
+        libraries = (existing_library(berth),)
+        await arrange(session, roots, origin=ServiceOrigin.EXISTING, libraries=libraries)
+        await build_routes(
+            session,
+            factory_for(roots, libraries=libraries),
+            (RouteSelection(library="影集", target_path=berth),),
+        )
+        (await session.scalars(select(Route))).one().jellyfin_library_id = ""
+        renamed = (libraries[0].model_copy(update={"name": "劇集"}),)
+        setup = await read_settings(session, SetupSettings)
+        setup.jellyfin.libraries = list(renamed)
+        await write_settings(session, setup)
+        await session.commit()
+
+        status = await build_routes(
+            session,
+            factory_for(roots, libraries=renamed),
+            (RouteSelection(library="劇集", target_path=berth),),
+        )
+
+        assert [row.target_path for row in status.routes] == [berth]
+
+    @pytest.mark.asyncio
+    async def test_two_selections_for_the_same_target_build_one_route(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """兩個媒體庫回報同一條路徑、兩個都勾了它：只建第一條，第二個選擇與
+        「已經有 Route」同樣略過。"""
+        shared = berth_path(roots, "shared")
+        Path(shared).mkdir()
+        libraries = (
+            existing_library(shared),
+            existing_library(shared).model_copy(update={"name": "動畫", "item_id": "a2"}),
+        )
+        await arrange(session, roots, origin=ServiceOrigin.EXISTING, libraries=libraries)
+
+        status = await build_routes(
+            session,
+            factory_for(roots, libraries=libraries),
+            (
+                RouteSelection(library="影集", target_path=shared),
+                RouteSelection(library="動畫", target_path=shared),
+            ),
+        )
+
+        assert [(row.library, row.target_path) for row in status.routes] == [("影集", shared)]
+
+    @pytest.mark.asyncio
     async def test_refuses_a_target_that_is_not_one_of_the_library_paths(
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
@@ -468,6 +530,54 @@ class TestCompletion:
 
         rebuilt = next(row for row in status.routes if row.slug == "anime")
         assert (rebuilt.health, rebuilt.enabled) == (HealthStatus.FAILED, False)
+
+    @pytest.mark.asyncio
+    async def test_after_setup_a_rerun_enables_new_routes_only_once_they_pass(
+        self,
+        session: AsyncSession,
+        roots: dict[str, Path],
+        engine: AsyncEngine,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """精靈跑完之後重跑：新建的 Route 在檢查跑完之前就啟用的話，送單在那幾秒裡選得到一條
+        還沒驗過、可能是紅的 Route。所以一律停用建立，檢查綠了才啟用（票 14a）。"""
+        await arrange(session, roots)
+        await build_routes(session, factory_for(roots), ())
+        await complete_setup(session)
+        for slug in ("tv", "anime"):
+            gone = next(
+                row for row in (await read_route_status(session)).routes if row.slug == slug
+            )
+            await delete_route(session, gone.id)
+        blind = fake_jellyfin(
+            bundled_libraries(roots["library"]),
+            visible_roots=(str(roots["library"] / "movies"), str(roots["library"] / "tv")),
+        )
+        factory = factory_for(roots, jellyfin=blind)
+        sessions = create_session_factory(engine)
+        seen: list[bool] = []
+
+        async def peek_mid_check(
+            client: QbittorrentClient, name: str, save_path: str
+        ) -> CategoryOutcome:
+            """每條 Route 的第一條纜繩：這時新建的那兩條已經 commit，另一個 session 讀得到。"""
+            async with sessions() as other:
+                fresh = select(Route.enabled).where(Route.slug.in_(("tv", "anime")))
+                seen.extend((await other.scalars(fresh)).all())
+            return await ensure_category(client, name, save_path)
+
+        # 包的是 routes 模組 import 進來的那個名字：檢查呼叫的是它，不是 adapter 上的原件。
+        monkeypatch.setattr("berth.services.routes.ensure_category", peek_mid_check)
+
+        status = await build_routes(session, factory, ())
+
+        assert seen
+        assert not any(seen)
+        assert {row.slug: (row.health, row.enabled) for row in status.routes} == {
+            "movies": (HealthStatus.OK, True),
+            "tv": (HealthStatus.OK, True),
+            "anime": (HealthStatus.FAILED, False),
+        }
 
     @pytest.mark.asyncio
     async def test_completing_writes_the_bit_the_gate_reads(

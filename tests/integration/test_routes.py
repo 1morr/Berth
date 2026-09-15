@@ -9,16 +9,27 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+import asyncio
+from collections.abc import Sequence
+from pathlib import Path, PurePosixPath
 
 import pytest
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from berth.adapters.http import ServiceUnavailableError
-from berth.domain import HealthStatus, JobTrigger, PlanAction, Profile, StepStatus
-from berth.models import Job, LedgerEntry, SetupLibrary
+from berth.adapters.jellyfin import JellyfinLibrary
+from berth.adapters.qbittorrent import QbittorrentCategory
+from berth.db import create_session_factory
+from berth.domain import CollectionType, HealthStatus, JobTrigger, PlanAction, Profile, StepStatus
+from berth.models import Job, LedgerEntry, Route, SetupLibrary
+from berth.services import routes as routes_service
 from berth.services.routes import (
+    LibraryPath,
+    RouteInUseError,
     RouteRejectedError,
+    RouteUsage,
     build_routes,
     check_route,
     create_route,
@@ -37,6 +48,7 @@ from tests.integration.arrange import (
     fake_jellyfin,
     with_second_disk,
 )
+from tests.integration.factories import FakeClientFactory
 
 pytestmark = pytest.mark.asyncio
 
@@ -237,6 +249,46 @@ class TestUpdate:
 
         assert (route.enabled, route.health) == (True, HealthStatus.OK)
 
+    async def test_an_enabled_route_that_turns_red_on_save_stays_enabled(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """規則擋的是「啟用」這個動作，不是「紅了就停用」：改個名字剛好碰上 Jellyfin 看不到掛載，
+        不該把它靜靜關掉——紅的 Route 送單本來就擋（票 09），默默停用是另一種隱式改動（票 14a）。"""
+        await arrange(session, roots)
+        await build_routes(session, factory_for(roots), ())
+        tv = next(row for row in (await read_route_status(session)).routes if row.slug == "tv")
+        blind = fake_jellyfin(bundled_libraries(roots["library"]), visible_roots=("/elsewhere",))
+
+        route = await update_route(
+            session,
+            factory_for(roots, jellyfin=blind),
+            tv.id,
+            name="Series",
+            profile=Profile.STANDARD,
+            enabled=True,
+        )
+
+        assert (route.name, route.health, route.enabled) == ("Series", HealthStatus.FAILED, True)
+
+    async def test_disabling_is_always_allowed(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """停用是「刪不得」時的出路（票 14），紅著也要停得掉。"""
+        route_id, _ = await red_second_route(session, roots)
+        libraries, _ = with_second_disk(roots)
+        blind = fake_jellyfin(libraries, visible_roots=("/elsewhere",))
+
+        route = await update_route(
+            session,
+            factory_for(roots, jellyfin=blind),
+            route_id,
+            name="TV 2",
+            profile=Profile.STANDARD,
+            enabled=False,
+        )
+
+        assert (route.health, route.enabled) == (HealthStatus.FAILED, False)
+
     async def test_an_unknown_route_is_a_reason(
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
@@ -285,7 +337,7 @@ class TestDelete:
     ) -> None:
         """帳本不記 Route，以目標路徑認它（`owning_route`）。Job 可以不在了，檔案還在。"""
         route_id, disk = await red_second_route(session, roots)
-        session.add(ledger_entry(f"{disk.as_posix()}/Show (2024)/Season 01/Show - S01E01.mkv"))
+        session.add(ledger_entry(f"{disk}/Show (2024)/Season 01/Show - S01E01.mkv"))
         await session.commit()
 
         with pytest.raises(RouteRejectedError) as refusal:
@@ -293,11 +345,50 @@ class TestDelete:
 
         assert refusal.value.reason == "route_in_use"
 
+    async def test_nested_routes_count_the_same_one_by_one_as_in_the_list(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """刪除只算那一條（前綴粗篩、`owning_route` 精判），清單一次算全部；兩邊的數字要一樣。
+        `…/tv/anime` 底下的檔案是更深那一條的，不算 `…/tv` 的（brief §4.3）。"""
+        await arrange(session, roots)
+        await build_routes(session, factory_for(roots), ())
+        tv = next(row for row in (await read_route_status(session)).routes if row.slug == "tv")
+        nested = nested_route(roots)
+        session.add(nested)
+        await session.commit()
+        # importer 以 `PurePosixPath(route.target_path) / 相對路徑` 組目標（`importer.py`），
+        # 這裡照著組；巢狀那一條的目標寫法不正規（`//`），組出來的帳本路徑卻是正規的。
+        for target in (
+            str(PurePosixPath(tv.target_path) / "Show (2024)/Season 01/Show - S01E01.mkv"),
+            str(
+                PurePosixPath(nested.target_path) / "Frieren (2023)/Season 01/Frieren - S01E01.mkv"
+            ),
+            str(
+                PurePosixPath(nested.target_path) / "Frieren (2023)/Season 01/Frieren - S01E02.mkv"
+            ),
+            # 字面前綴相同、卻不在它底下：`…/tv-extras` 不是 `…/tv` 的。
+            f"{tv.target_path}-extras/Show - S01E01.mkv",
+        ):
+            session.add(ledger_entry(target))
+        await session.commit()
+        # 被拒的刪除會 rollback，session 裡的 ORM 物件跟著過期：id 先記下來。
+        ids = (tv.id, nested.id)
+        listed = {row.route.id: row.usage for row in await list_routes(session)}
+
+        refused = {}
+        for route_id in ids:
+            with pytest.raises(RouteInUseError) as refusal:
+                await delete_route(session, route_id)
+            refused[route_id] = refusal.value.usage
+
+        assert refused == {route_id: listed[route_id] for route_id in ids}
+        assert [listed[route_id].ledger_entries for route_id in ids] == [1, 2]
+
     async def test_files_under_another_route_do_not_hold_this_one(
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
         route_id, _ = await red_second_route(session, roots)
-        tv = (roots["library"] / "tv").as_posix()
+        tv = roots["library"] / "tv"
         session.add(ledger_entry(f"{tv}/Show (2024)/Season 01/Show - S01E01.mkv"))
         await session.commit()
 
@@ -314,6 +405,214 @@ class TestDelete:
             await delete_route(session, 999)
 
         assert refusal.value.reason == "route_missing"
+
+
+class TestRaces:
+    """兩條連線同時動同一條 Route（票 14a）。`engine` 開第二個 session，交錯是真的。"""
+
+    async def test_a_job_sent_while_a_delete_counts_waits_then_misses_the_route(
+        self,
+        session: AsyncSession,
+        roots: dict[str, Path],
+        engine: AsyncEngine,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """刪除先算引用數再刪；算完的那一刻另一個請求送了一筆單過來。
+
+        沒有寫鎖時那一筆先落地，刪除接著把它的 `route_id` 設成 NULL——一筆不知道要入庫到哪裡的
+        下載。寫鎖讓它等到刪除 commit，然後在外鍵上撞牆（送單那一邊回 `route_missing`）。
+        """
+        route_id, _ = await red_second_route(session, roots)
+        sessions = create_session_factory(engine)
+        count = routes_service._usage_of
+        sent: list[asyncio.Task[None]] = []
+        waiting_while_held: list[bool] = []
+
+        async def send_a_job() -> None:
+            async with sessions() as other:
+                other.add(
+                    Job(hash="a" * 40, name="release", trigger=JobTrigger.MANUAL, route_id=route_id)
+                )
+                await other.commit()
+
+        async def count_then_race(
+            counting: AsyncSession, route: Route, routes: Sequence[Route]
+        ) -> RouteUsage:
+            usage = await count(counting, route, routes)
+            sent.append(asyncio.create_task(send_a_job()))
+            await asyncio.sleep(0.5)
+            waiting_while_held.append(not sent[0].done())
+            return usage
+
+        monkeypatch.setattr(routes_service, "_usage_of", count_then_race)
+
+        await delete_route(session, route_id)
+
+        with pytest.raises(IntegrityError):
+            await sent[0]
+        assert waiting_while_held == [True]
+        orphans = await session.scalar(
+            select(func.count()).select_from(Job).where(Job.route_id.is_(None))
+        )
+        assert orphans == 0
+
+    async def test_two_creates_for_the_same_target_make_one_route(
+        self,
+        session: AsyncSession,
+        roots: dict[str, Path],
+        engine: AsyncEngine,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """兩個分頁同時按「建立並檢查」，選的是同一條路徑。
+
+        沒有寫鎖時兩邊都看到「還沒人佔」、算出同一個 slug，後到的撞上唯一索引變成 500。
+        寫鎖讓後到的那一個等先到的 commit、重讀之後說 `target_taken`。
+        """
+        libraries, disk = with_second_disk(roots)
+        await arrange(session, roots, libraries=libraries)
+        factory = factory_for(roots, libraries=libraries)
+        await build_routes(session, factory, ())
+        ask_jellyfin_together(factory, monkeypatch)
+        sessions = create_session_factory(engine)
+
+        outcomes = await asyncio.gather(
+            create_in_own_session(sessions, factory, disk, "TV 2"),
+            create_in_own_session(sessions, factory, disk, "TV 3"),
+        )
+
+        assert sorted(outcomes) == ["target_taken", "tv-2"]
+        targets = [row.target_path for row in (await read_route_status(session)).routes]
+        assert targets.count(str(disk)) == 1
+
+    async def test_two_creates_on_different_paths_of_one_library_both_land(
+        self,
+        session: AsyncSession,
+        roots: dict[str, Path],
+        engine: AsyncEngine,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """同一個媒體庫、兩條不同的路徑，兩個分頁同時建立。**這一條證明的是寫鎖本身**：
+
+        沒有鎖時兩邊都算出 `tv-2`，後到的撞上唯一索引，兜底重讀之後目標沒被佔，回 `route_conflict`——
+        使用者什麼都沒做錯卻被拒絕。有鎖時後到的那一個重讀之後算出 `tv-3`，兩條都建成。
+        """
+        libraries, disk = with_second_disk(roots)
+        third = roots["library"] / "tv-disk3"
+        third.mkdir()
+        libraries = tuple(
+            row.model_copy(update={"locations": [*row.locations, str(third)]})
+            if row.name == "TV"
+            else row
+            for row in libraries
+        )
+        await arrange(session, roots, libraries=libraries)
+        factory = factory_for(roots, libraries=libraries)
+        await build_routes(session, factory, ())
+        ask_jellyfin_together(factory, monkeypatch)
+        sessions = create_session_factory(engine)
+
+        outcomes = await asyncio.gather(
+            create_in_own_session(sessions, factory, disk, "TV 2"),
+            create_in_own_session(sessions, factory, third, "TV 3"),
+        )
+
+        assert sorted(outcomes) == ["tv-2", "tv-3"]
+
+    async def test_a_slug_that_collides_anyway_is_a_conflict_not_a_crash(
+        self, session: AsyncSession, roots: dict[str, Path], monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """建立點都在鎖內算 slug；還是撞上唯一索引時（鎖外的寫入）回 409 `route_conflict`，
+        不是 500。"""
+        libraries, disk = with_second_disk(roots)
+        await arrange(session, roots, libraries=libraries)
+        factory = factory_for(roots, libraries=libraries)
+        await build_routes(session, factory, ())
+        monkeypatch.setattr(routes_service, "_unique_slug", lambda name, taken: "tv")
+
+        with pytest.raises(RouteRejectedError) as refusal:
+            await create_route(
+                session,
+                factory,
+                library_id="item-1",
+                target_path=str(disk),
+                name="TV 2",
+                profile=Profile.STANDARD,
+            )
+
+        assert refusal.value.reason == "route_conflict"
+        assert len((await read_route_status(session)).routes) == 3
+
+    @pytest.mark.parametrize("command", ["update", "check"])
+    async def test_a_route_deleted_during_its_checks_is_missing_not_a_crash(
+        self,
+        session: AsyncSession,
+        roots: dict[str, Path],
+        engine: AsyncEngine,
+        monkeypatch: pytest.MonkeyPatch,
+        command: str,
+    ) -> None:
+        """修改與重新檢查在鎖外打網路；那幾秒裡另一個分頁刪掉了這一條。寫回時 0 列被改到
+        （`StaleDataError`），那就是 `route_missing`（404），不是 500。"""
+        route_id, _ = await red_second_route(session, roots)
+        libraries, _ = with_second_disk(roots)
+        factory = factory_for(roots, libraries=libraries)
+        sessions = create_session_factory(engine)
+        categories = factory.qbittorrent_.categories
+
+        async def deleted_meanwhile() -> tuple[QbittorrentCategory, ...]:
+            async with sessions() as other:
+                await delete_route(other, route_id)
+            return await categories()
+
+        monkeypatch.setattr(factory.qbittorrent_, "categories", deleted_meanwhile)
+
+        with pytest.raises(RouteRejectedError) as refusal:
+            if command == "update":
+                await update_route(
+                    session, factory, route_id, name="TV 2", profile=Profile.STANDARD, enabled=True
+                )
+            else:
+                await check_route(session, factory, route_id)
+
+        assert refusal.value.reason == "route_missing"
+
+
+def ask_jellyfin_together(factory: FakeClientFactory, monkeypatch: pytest.MonkeyPatch) -> None:
+    """頭兩次問 Jellyfin 的呼叫要等彼此都到了才一起回：兩個建立都在鎖外問完，才一起去搶鎖。
+
+    之後的呼叫（五條纜繩裡的 `library_path`）照常，否則只剩一個建立在檢查時會永遠等下去。
+    """
+    both_asked = asyncio.Barrier(2)
+    ask = factory.jellyfin_.libraries
+    asked = 0
+
+    async def ask_together() -> tuple[JellyfinLibrary, ...]:
+        nonlocal asked
+        asked += 1
+        if asked <= 2:
+            await both_asked.wait()
+        return await ask()
+
+    monkeypatch.setattr(factory.jellyfin_, "libraries", ask_together)
+
+
+async def create_in_own_session(
+    sessions: async_sessionmaker[AsyncSession], factory: FakeClientFactory, target: Path, name: str
+) -> str:
+    """一個分頁的「建立並檢查」：自己的 session、自己的連線。回建出來的 slug，或拒絕的理由。"""
+    async with sessions() as own:
+        try:
+            route = await create_route(
+                own,
+                factory,
+                library_id="item-1",
+                target_path=str(target),
+                name=name,
+                profile=Profile.STANDARD,
+            )
+        except RouteRejectedError as refusal:
+            return refusal.reason
+        return route.slug
 
 
 class TestCheck:
@@ -348,7 +647,7 @@ class TestListing:
         session.add(
             Job(hash="a" * 40, name="release", trigger=JobTrigger.MANUAL, route_id=route_id)
         )
-        session.add(ledger_entry(f"{disk.as_posix()}/Show (2024)/Season 01/Show - S01E01.mkv"))
+        session.add(ledger_entry(f"{disk}/Show (2024)/Season 01/Show - S01E01.mkv"))
         await session.commit()
 
         rows = await list_routes(session)
@@ -373,10 +672,13 @@ class TestListing:
         options = await list_libraries(session, factory)
 
         tv = next(row for row in options if row.name == "TV")
-        assert (tv.item_id, tv.locations, tv.taken) == (
+        # 被佔用的路徑帶著佔用它的 Route 名，畫面照著說「已是『TV』」，不必自己反查（票 14a）。
+        assert (tv.item_id, tv.paths) == (
             "item-1",
-            (str(roots["library"] / "tv"), str(disk)),
-            (str(roots["library"] / "tv"),),
+            (
+                LibraryPath(path=str(roots["library"] / "tv"), route_name="TV"),
+                LibraryPath(path=str(disk), route_name=None),
+            ),
         )
         assert tv.supported is True
 
@@ -463,6 +765,25 @@ class TestDisabledRoutes:
 
         assert await routes_ready(session) is True
         assert await routes_health(session) is HealthStatus.OK
+
+
+def nested_route(roots: dict[str, Path]) -> Route:
+    """`…/tv` 底下更深的一條（brief §4.3 允許）。直接寫進表：這裡問的是引用數，不是建立。
+
+    目標故意寫成不正規的 `…/tv//anime`：Jellyfin 回報的路徑是使用者打的，不保證正規。
+    """
+    target = f"{roots['library'] / 'tv'}//anime"
+    Path(target).mkdir(parents=True, exist_ok=True)
+    return Route(
+        slug="tv-anime",
+        name="TV anime",
+        jellyfin_library_id="item-1",
+        jellyfin_library_name="TV",
+        collection_type=CollectionType.TVSHOWS,
+        target_path=target,
+        category="berth-tv-anime",
+        profile=Profile.ANIME,
+    )
 
 
 def ledger_entry(target: str) -> LedgerEntry:

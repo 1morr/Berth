@@ -331,6 +331,16 @@ Windows Docker Desktop（NTFS bind mount）與 Linux（ext4）上各跑一次 `d
 
 ### Changed
 
+- **精靈第 7 步略過寫入目標已經被佔用的選擇**（票 14a）：佔用者可以是既有的 Route，也可以是同一批
+  前面的選擇；不回 422。沒有 `ItemId` 的舊 Route 在媒體庫改名之後，重跑不再長出同一個目標的第二條。
+- **精靈跑完之後重跑第 7 步新建的 Route 先停用，檢查綠了才啟用**（票 14a）。原本是先啟用、檢查紅了
+  再停掉，檢查跑完之前的那幾秒裡送單選得到還沒驗過的 Route。
+- `GET /api/jellyfin/libraries` 的 `locations` 與 `taken` 合成 `paths[{path, route_name}]`：已經有 Route 的
+  路徑帶著 Route 名，新增 Route 的表單不再拿清單反查。`DELETE /api/routes/{id}` 的 409 `route_in_use`
+  另帶 `jobs` 與 `ledger_entries`，畫面照著說數字。建立時同一時間撞上唯一索引回 409 `route_conflict`。
+- Route 設定頁：被引用而且還啟用著的 Route 旁邊有一顆「停用這條 Route」（送的是存下來的名稱與
+  profile），刪除、停用、重新檢查之後都有 `aria-live` 播報；新增時媒體庫沒有空路徑，給一條到 Jellyfin
+  媒體庫設定的連結。頁首的「設定」連到新的 `/settings`（導向服務設定），兩個設定頁上都標成當前頁。
 - **精靈第 7 步只新增、不改不刪**（票 14）：重跑不再隱式刪掉沒勾的 Route，也不再改寫已經有 Route
   的媒體庫；那些媒體庫在勾選表上鎖住，重跑的意思是「補上新勾的、全部重驗」。每條 Route 底下有
   明確的刪除（被引用時拒絕）。
@@ -412,6 +422,14 @@ Windows Docker Desktop（NTFS bind mount）與 Linux（ext4）上各跑一次 `d
 
 ### Fixed
 
+- **刪除 Route 與送單的競態**（票 14a）：刪除先算引用數再刪，兩步之間另一個請求送的單會先落地，
+  接著被刪除設成 `route_id = NULL`。現在算引用數與刪除在同一把 SQLite 寫鎖裡，那一筆等到刪除 commit
+  之後撞上外鍵，送單回 422 `route_missing` 而不是 500（`add_download` 的 `try` 往前擴到 flush）。
+- **兩個分頁同時新增 Route 回 500**（票 14a）：兩邊都看到目標沒人佔、算出同一個 slug，後到的撞上唯一
+  索引。建立改在寫鎖內重讀再寫，後到的那一個回 `target_taken`；修改與重新檢查途中 Route 被刪掉回 404
+  `route_missing`。
+- `/api/routes/{id}` 的刪除只算那一條的引用數（帳本以前綴粗篩、`owning_route` 精判），不再整張帳本讀進來。
+- 前端測試的 fetch 替身遇到 204 會自己丟 TypeError，票 14 的刪除成功測試因此從來沒走到成功分支。
 - **`[01-13Fin]` 被讀成「第 1 集」**（`berth/parser/release.py`）：`Fin` / `END` 黏在集號後面是中文
   字幕組的季末寫法，而方括號的集號規則不認得它們，於是一整類季包的預估季集是錯的。`完` / `完結`
   沒事——`normalize_cjk` 已經把它們吃掉了。票 08 在真的索引站回應裡抓到，`berth bench` 的
@@ -453,3 +471,9 @@ Windows Docker Desktop（NTFS bind mount）與 Linux（ext4）上各跑一次 `d
   第一次 `indexer/schema` 要讀進 627 份定義再組出 5.6 MB 回應，Windows 的 9p bind mount 上實測
   9.42 秒（第二次 0.34 秒），5 秒的探測逾時讓精靈第 5 步在乾淨部署上直接失敗。這一支端點改用自己的
   逾時。
+
+### Security
+
+- **`/api/routes/*` 與 `/api/jellyfin/libraries` 永遠只有 admin**（票 14a，推翻票 14）。原本精靈跑完之前
+  它們與 `/api/setup/*` 一樣匿名開放，而停用的 Route 不算進完成條件，所以那一刻任何人都能把紅燈 Route
+  停用、再按完成。精靈第 7 步的刪除改走 `DELETE /api/setup/routes/{id}`（同一個命令、同一種拒絕）。

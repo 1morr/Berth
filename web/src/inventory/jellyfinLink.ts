@@ -22,8 +22,26 @@ export function jellyfinDetailsUrl(
   here: BrowserLocation,
 ): string | null {
   if (!itemId) return null
-  const base =
-    web.url || (web.port === null ? '' : `${here.protocol}//${here.hostname}:${web.port}`)
+  const base = jellyfinBase(web, here)
   if (!base) return null
   return `${base}/web/#/details?id=${encodeURIComponent(itemId)}`
+}
+
+/**
+ * Jellyfin 的媒體庫設定頁（票 14a）：新增 Route 時媒體庫沒有空路徑，下一步是在那裡替它加一條。
+ * 推不出主機時回 `null`，畫面只留文字。
+ */
+export function jellyfinLibrariesUrl(web: JellyfinWeb, here: BrowserLocation): string | null {
+  const base = jellyfinBase(web, here)
+  return base ? `${base}/web/#/dashboard/libraries` : null
+}
+
+/**
+ * 瀏覽器開 Jellyfin 網頁用的主機。深連結與媒體庫設定頁的連結共用這一份推導；兩者都不知道時回 `null`。
+ * Jellyfin 網頁的路由形狀（`/web/#/…`）只寫在這個檔案裡。
+ */
+export function jellyfinBase(web: JellyfinWeb, here: BrowserLocation): string | null {
+  const base =
+    web.url || (web.port === null ? '' : `${here.protocol}//${here.hostname}:${web.port}`)
+  return base || null
 }
