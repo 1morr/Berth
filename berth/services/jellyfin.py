@@ -2,10 +2,14 @@
 
 兩條路徑共用同一份狀態形狀（`SetupJellyfin`）：
 
-- **套件內**：`bootstrap_jellyfin` 跑完 plan §9.4 的九步。每一步都冪等——媒體庫先看再建、
-  API key 先列再建、插件先看裝了沒。重按只會把已經對的那幾步標成 `skipped`。
+- **套件內**：`bootstrap_jellyfin` 跑完 plan §9.4 的七步。每一步都冪等——媒體庫先看再建、
+  API key 先列再建。重按只會把已經對的那幾步標成 `skipped`。
 - **既有**：`connect_jellyfin` 以管理員帳密登入並建立 API key、列出媒體庫；`add_berth_path`
-  為選定的媒體庫**加**一條路徑；`install_merge_versions` 是那顆要二次確認的按鈕。
+  為選定的媒體庫**加**一條路徑。
+
+**第一步是版本閘門**（brief §16.4、§19、§20.9）：低於 Jellyfin 12.0 就停在那裡，不往下做。
+10.x 上同一集的兩個版本是兩個重複的條目，要靠 MergeVersions 插件；12.0 起原生合併，所以
+Berth 只支援 12 以上，序列裡也不再有「裝插件」與「重啟」那兩步（票 14b）。
 
 既有 Jellyfin 的紅線（brief §16.4）：本檔絕不自動建立媒體庫、不改既有 `LibraryOptions`、
 不刪除任何東西——adapter 的介面上根本沒有那些方法。
@@ -16,7 +20,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import re
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
@@ -25,13 +28,14 @@ from pathlib import Path
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from berth.adapters.fs import ensure_directory
-from berth.adapters.http import ServiceBusyError, ServiceError, ServiceUnavailableError
+from berth.adapters.http import ServiceError
 from berth.adapters.jellyfin import (
     JellyfinClient,
     JellyfinLibrary,
-    JellyfinRepository,
     NewLibrary,
     TypeOption,
+    unsupported_message,
+    version_supported,
 )
 from berth.domain import CollectionType, JellyfinStep, ServiceKind, ServiceOrigin, StepStatus
 from berth.models import (
@@ -60,31 +64,21 @@ METADATA_COUNTRY = "TW"
 #: brief §10 的決定：第一階段只用 TMDB。設定裡沒寫的媒體庫落回這個。
 DEFAULT_METADATA_FETCHER = "TheMovieDb"
 
-MERGE_VERSIONS_REPOSITORY = JellyfinRepository(
-    name="danieladov",
-    url="https://raw.githubusercontent.com/danieladov/JellyfinPluginManifest/master/manifest.json",
-    enabled=True,
-)
-MERGE_VERSIONS_PACKAGE = "Merge Versions"
-MERGE_VERSIONS_GUID = "f21bbed8-3a97-4d8b-88b2-48aaa65427cb"
-MERGE_MOVIES_TASK_KEY = "MergeMoviesTask"
-MERGE_EPISODES_TASK_KEY = "MergeEpisodesTask"
-
 #: 媒體庫掛了 TVDB 的 metadata fetcher 就警告（brief §16.4）。比對小寫子字串，因為名字由
 #: 插件自己決定（官方插件是 `TheTVDB`）。
 TVDB_MARKER = "tvdb"
 
-#: 插件庫要多久才出現這個套件、下載安裝重試幾次、重啟後等多久（brief §20.7）。
-PACKAGE_ATTEMPTS = 30
-INSTALL_ATTEMPTS = 3
-RESTART_ATTEMPTS = 100
-POLL_SECONDS = 4.0
-
-Sleeper = Callable[[float], Awaitable[None]]
-
 
 class StepFailedError(Exception):
-    """這一步做不下去，而且原因不是外部服務丟出來的例外。"""
+    """這一步做不下去，而且原因不是外部服務丟出來的例外。
+
+    `detail` 是失敗那一刻仍然量得到的實測值（版本太舊時就是它的版本號）：那一行要同時說得出
+    「這台是什麼」與「為什麼不行」。
+    """
+
+    def __init__(self, message: str, *, detail: str = "") -> None:
+        super().__init__(message)
+        self.detail = detail
 
 
 @dataclass(frozen=True, slots=True)
@@ -125,9 +119,10 @@ class JellyfinSetupStatus:
     api_key_present: bool
     steps: tuple[StepView, ...]
     libraries: tuple[LibraryView, ...]
-    merge_versions_installed: bool
-    merge_movies_task_id: str
-    merge_episodes_task_id: str
+    #: 這台 Jellyfin 上一次報的版本號（`public_info` 那一步的實測值）。還沒問過就是空字串。
+    version: str
+    #: 版本夠不夠新（brief §16.4）。**還沒問過時是 `True`**：那一格是「尚未取得」而不是紅燈。
+    version_supported: bool
 
 
 async def read_jellyfin_status(session: AsyncSession) -> JellyfinSetupStatus:
@@ -136,33 +131,23 @@ async def read_jellyfin_status(session: AsyncSession) -> JellyfinSetupStatus:
     jellyfin = await read_settings(session, JellyfinSettings)
     paths = await read_settings(session, PathSettings)
     origin, base_url = _target(setup, jellyfin)
+    version = _measured_version(setup)
     return JellyfinSetupStatus(
         origin=origin,
         base_url=base_url,
         api_key_present=bool(jellyfin.api_key),
         steps=step_views(setup.jellyfin.steps),
         libraries=tuple(_library_view(row, paths.library_root) for row in setup.jellyfin.libraries),
-        merge_versions_installed=setup.jellyfin.merge_versions_installed,
-        merge_movies_task_id=jellyfin.merge_movies_task_id,
-        merge_episodes_task_id=jellyfin.merge_episodes_task_id,
+        version=version,
+        version_supported=not version or version_supported(version),
     )
 
 
 async def bootstrap_jellyfin(
-    session: AsyncSession, factory: ServiceClientFactory, *, sleep: Sleeper = asyncio.sleep
+    session: AsyncSession, factory: ServiceClientFactory
 ) -> JellyfinSetupStatus:
-    """套件內路徑：跑完 plan §9.4 的九步。重按只補做還沒做的那幾步。"""
-    return await _run(session, factory, tuple(JellyfinStep), sleep=sleep)
-
-
-async def install_merge_versions(
-    session: AsyncSession, factory: ServiceClientFactory, *, sleep: Sleeper = asyncio.sleep
-) -> JellyfinSetupStatus:
-    """既有路徑的「安裝 MergeVersions」按鈕：只跑第 8、9 步（plan §9.5）。
-
-    與套件內走的是同一段程式碼，所以「會重啟 Jellyfin」這件事在兩條路徑上完全一樣。
-    """
-    return await _run(session, factory, (JellyfinStep.PLUGIN, JellyfinStep.TASKS), sleep=sleep)
+    """套件內路徑：跑完 plan §9.4 的七步。重按只補做還沒做的那幾步。"""
+    return await _run(session, factory, tuple(JellyfinStep))
 
 
 async def connect_jellyfin(
@@ -176,7 +161,6 @@ async def connect_jellyfin(
         session,
         factory,
         (JellyfinStep.PUBLIC_INFO, JellyfinStep.API_KEY),
-        sleep=asyncio.sleep,
         credentials=(username, password),
     )
 
@@ -247,7 +231,6 @@ async def _run(
     factory: ServiceClientFactory,
     steps: tuple[JellyfinStep, ...],
     *,
-    sleep: Sleeper,
     credentials: tuple[str, str] | None = None,
 ) -> JellyfinSetupStatus:
     setup = await read_settings(session, SetupSettings)
@@ -256,7 +239,7 @@ async def _run(
     _, base_url = _target(setup, jellyfin)
 
     client = factory.jellyfin(base_url, token=jellyfin.api_key)
-    runner = _Runner(client, setup.admin, jellyfin, paths, sleep=sleep)
+    runner = _Runner(client, setup.admin, jellyfin, paths)
     if credentials is not None:
         runner.sign_in_as(*credentials)
     try:
@@ -272,15 +255,9 @@ async def _run(
     finally:
         await client.aclose()
 
-    await _remember(
-        session, libraries=runner.libraries, merge_installed=runner.merge_versions_installed
-    )
+    await _remember(session, libraries=runner.libraries)
     jellyfin.base_url = base_url
     jellyfin.api_key = runner.api_key or jellyfin.api_key
-    jellyfin.merge_movies_task_id = runner.merge_movies_task_id or jellyfin.merge_movies_task_id
-    jellyfin.merge_episodes_task_id = (
-        runner.merge_episodes_task_id or jellyfin.merge_episodes_task_id
-    )
     await write_settings(session, jellyfin)
     await session.commit()
     return await read_jellyfin_status(session)
@@ -302,10 +279,7 @@ async def _record(session: AsyncSession, *steps: SetupStep) -> None:
 
 
 async def _remember(
-    session: AsyncSession,
-    *,
-    libraries: tuple[JellyfinLibrary, ...] | None = None,
-    merge_installed: bool = False,
+    session: AsyncSession, *, libraries: tuple[JellyfinLibrary, ...] | None = None
 ) -> None:
     setup = await read_settings(session, SetupSettings)
     if libraries is not None:
@@ -321,8 +295,6 @@ async def _remember(
             )
             for library in libraries
         ]
-    if merge_installed:
-        setup.jellyfin.merge_versions_installed = True
     await write_settings(session, setup)
 
 
@@ -342,22 +314,16 @@ class _Runner:
         admin: SetupAdmin,
         jellyfin: JellyfinSettings,
         paths: PathSettings,
-        *,
-        sleep: Sleeper = asyncio.sleep,
     ) -> None:
         self._client = client
         self._jellyfin = jellyfin
         self._paths = paths
-        self._sleep = sleep
         self._credentials = (admin.username, admin.password)
         self._token = jellyfin.api_key
         self._fresh = False
         self.api_key = jellyfin.api_key
         #: `None` 代表這一輪沒讀到媒體庫；不要拿它覆寫存下來的清單。
         self.libraries: tuple[JellyfinLibrary, ...] | None = None
-        self.merge_versions_installed = False
-        self.merge_movies_task_id = ""
-        self.merge_episodes_task_id = ""
 
     def sign_in_as(self, username: str, password: str) -> None:
         """既有 Jellyfin 的管理員帳密，與 Berth 自己的那一組無關。"""
@@ -367,7 +333,12 @@ class _Runner:
     async def run(self, step: JellyfinStep) -> SetupStep:
         try:
             status, detail = await _ACTIONS[step](self)
-        except (ServiceError, StepFailedError, OSError) as exc:
+        except StepFailedError as exc:
+            # 量得到的實測值照樣帶著：版本太舊那一行要同時說出「它是 10.11.11」與「要 12 以上」。
+            return SetupStep(
+                key=step.value, status=StepStatus.FAILED, detail=exc.detail, error=_message(exc)
+            )
+        except (ServiceError, OSError) as exc:
             return SetupStep(key=step.value, status=StepStatus.FAILED, error=_message(exc))
         return SetupStep(key=step.value, status=status, detail=detail)
 
@@ -378,10 +349,13 @@ class _Runner:
         except ServiceError:
             return
 
-    # --- 九個步驟 ---
+    # --- 七個步驟 ---
 
     async def _public_info(self) -> tuple[StepStatus, str]:
         info = await self._client.public_info()
+        if not info.supported:
+            # 版本閘門就在第一步，後面的步驟因此一步都不會跑（brief §16.4、§19）。
+            raise StepFailedError(unsupported_message(info.version), detail=info.version)
         self._fresh = not info.startup_wizard_completed
         return StepStatus.OK, info.version
 
@@ -404,8 +378,11 @@ class _Runner:
             return StepStatus.SKIPPED, username
         # GET 不是多餘的讀取：它會建立預設使用者，少了它 POST 回 500（brief §20.7）。
         await self._client.ensure_default_user()
-        await self._client.create_startup_user(username, password)
-        return StepStatus.OK, username
+        # 12.0 起「第一個使用者已經有密碼」回 403，而那是**已經設過了**不是失敗：第 3 步成功、
+        # 之後某一步失敗、Jellyfin 沒重啟時按重試就走到這裡（brief §20.9、票 14b）。密碼對不對
+        # 由第 7 步的登入驗證——那一步本來就要拿同一組帳密換 API key。
+        created = await self._client.create_startup_user(username, password)
+        return (StepStatus.OK if created else StepStatus.SKIPPED), username
 
     async def _libraries(self) -> tuple[StepStatus, str]:
         if not self._fresh:
@@ -458,44 +435,6 @@ class _Runner:
         self._use(created)
         return StepStatus.OK, API_KEY_APP
 
-    async def _plugin(self) -> tuple[StepStatus, str]:
-        await self._authenticate()
-        version = await self._installed_merge_versions()
-        if version is not None:
-            self.merge_versions_installed = True
-            return StepStatus.SKIPPED, version
-        repositories = await self._client.repositories()
-        if not any(repo.url == MERGE_VERSIONS_REPOSITORY.url for repo in repositories):
-            # `POST /Repositories` 是整份覆寫，所以先讀再合併。
-            await self._client.set_repositories((*repositories, MERGE_VERSIONS_REPOSITORY))
-        await self._wait_for_package()
-        await self._install_package()
-        await self._restart()
-        await self._wait_for_admin_api()
-        version = await self._installed_merge_versions()
-        if version is None:
-            raise StepFailedError("MergeVersions is not listed after the restart")
-        self.merge_versions_installed = True
-        return StepStatus.OK, version
-
-    async def _tasks(self) -> tuple[StepStatus, str]:
-        await self._authenticate()
-        tasks = {task.key: task.id for task in await self._client.scheduled_tasks()}
-        movies = tasks.get(MERGE_MOVIES_TASK_KEY, "")
-        episodes = tasks.get(MERGE_EPISODES_TASK_KEY, "")
-        if not movies or not episodes:
-            raise StepFailedError(
-                f"{MERGE_MOVIES_TASK_KEY} / {MERGE_EPISODES_TASK_KEY} are not in /ScheduledTasks"
-            )
-        # 存的是 `Id` 不是 `Key`：觸發要用 Id（brief §20.7）。
-        self.merge_movies_task_id = movies
-        self.merge_episodes_task_id = episodes
-        unchanged = (
-            movies == self._jellyfin.merge_movies_task_id
-            and episodes == self._jellyfin.merge_episodes_task_id
-        )
-        return (StepStatus.SKIPPED if unchanged else StepStatus.OK), f"{movies} · {episodes}"
-
     # --- 步驟共用 ---
 
     async def _authenticate(self) -> None:
@@ -546,69 +485,6 @@ class _Runner:
             metadata_country_code=METADATA_COUNTRY,
         )
 
-    async def _installed_merge_versions(self) -> str | None:
-        wanted = MERGE_VERSIONS_GUID.replace("-", "").lower()
-        for plugin in await self._client.plugins():
-            if plugin.id == wanted:
-                return plugin.version
-        return None
-
-    async def _wait_for_package(self) -> None:
-        """加完 repository 之後 Jellyfin 要自己去抓 manifest，套件才會出現在插件庫。"""
-        for _ in range(PACKAGE_ATTEMPTS):
-            if await self._client.package_versions(MERGE_VERSIONS_PACKAGE):
-                return
-            await self._sleep(POLL_SECONDS)
-        raise StepFailedError(
-            f"{MERGE_VERSIONS_PACKAGE} did not appear in the plugin catalogue; "
-            "Jellyfin could not reach the manifest"
-        )
-
-    async def _install_package(self) -> None:
-        """下載由 Jellyfin 自己連 GitHub，實測會偶發 TLS 中斷回 500，所以重試（brief §20.7）。"""
-        last = ""
-        for _ in range(INSTALL_ATTEMPTS):
-            try:
-                await self._client.install_package(
-                    MERGE_VERSIONS_PACKAGE, assembly_guid=MERGE_VERSIONS_GUID
-                )
-            except ServiceError as exc:
-                last = _message(exc)
-            await self._sleep(POLL_SECONDS)
-            if await self._installed_merge_versions() is not None:
-                return
-        raise StepFailedError(
-            f"MergeVersions did not install after {INSTALL_ATTEMPTS} tries: {last}"
-        )
-
-    async def _restart(self) -> None:
-        """`POST /System/Restart` 有時候在回應送出去之前就把連線切了（brief §20.7）。
-
-        那是重啟開始了的樣子，不是失敗——重啟到底有沒有成功，由接下來的輪詢決定。
-        """
-        try:
-            await self._client.restart()
-        except ServiceUnavailableError:
-            return
-
-    async def _wait_for_admin_api(self) -> None:
-        """輪詢**真正要用的**管理員端點回 200，不是 `/System/Info/Public`。
-
-        後者在伺服器還在載入時就回 200 了，這時 `/ScheduledTasks` 回 503（brief §20.7）。
-        重啟瞬間連線會直接被切斷，所以「連不上」也算還沒好。
-        """
-        for _ in range(RESTART_ATTEMPTS):
-            await self._sleep(POLL_SECONDS)
-            try:
-                await self._client.scheduled_tasks()
-            except (ServiceBusyError, ServiceUnavailableError):
-                continue
-            return
-        raise StepFailedError(
-            "Jellyfin did not answer /ScheduledTasks within "
-            f"{int(RESTART_ATTEMPTS * POLL_SECONDS)}s after the restart"
-        )
-
 
 _ACTIONS: dict[JellyfinStep, Callable[[_Runner], Awaitable[tuple[StepStatus, str]]]] = {
     JellyfinStep.PUBLIC_INFO: _Runner._public_info,
@@ -618,8 +494,6 @@ _ACTIONS: dict[JellyfinStep, Callable[[_Runner], Awaitable[tuple[StepStatus, str
     JellyfinStep.REMOTE_ACCESS: _Runner._remote_access,
     JellyfinStep.COMPLETE: _Runner._complete,
     JellyfinStep.API_KEY: _Runner._api_key,
-    JellyfinStep.PLUGIN: _Runner._plugin,
-    JellyfinStep.TASKS: _Runner._tasks,
 }
 
 #: 少一步就在 import 時炸，而不是等使用者按下去才 `KeyError`。
@@ -639,6 +513,18 @@ def _target(setup: SetupSettings, jellyfin: JellyfinSettings) -> tuple[ServiceOr
 
 def _step(step: JellyfinStep, status: StepStatus) -> SetupStep:
     return SetupStep(key=step.value, status=status)
+
+
+def _measured_version(setup: SetupSettings) -> str:
+    """上一輪 `public_info` 量到的版本號。**失敗的那一輪也算**：版本太舊時這一格就是理由。"""
+    return next(
+        (
+            row.detail
+            for row in setup.jellyfin.steps
+            if row.key == JellyfinStep.PUBLIC_INFO.value and row.detail
+        ),
+        "",
+    )
 
 
 #: 路徑上不能出現的字元（Windows 最嚴，brief §4.5）。中日文照留，它們在兩種檔案系統都合法。

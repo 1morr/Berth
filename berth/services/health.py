@@ -27,6 +27,7 @@ from typing import Literal
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from berth.adapters.http import ServiceError
+from berth.adapters.jellyfin import unsupported_message
 from berth.adapters.qbittorrent import MIN_WEBAPI, IpBannedError
 from berth.domain import HealthStatus, IndexerKind, ServiceKind, ServiceOrigin, StepStatus
 from berth.models import (
@@ -78,6 +79,8 @@ class ServiceHealthView:
     drift: tuple[str, ...]
     #: qBittorrent 把這台的 IP 封了（brief §20.2）。畫面照它說出下一步——改帳密沒有用。
     banned: bool
+    #: 這台 Jellyfin 低於 12.0（brief §16.4、§20.9）。同上：下一步是升級，而升級不可逆。
+    unsupported: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -230,6 +233,9 @@ class _Outcome:
     #: qBittorrent 把這台的 IP 封了。**旗標而不是一句話**：原文由 `error` 帶著（服務說的），
     #: 而畫面要照這個事實挑一句 Berth 自己的下一步（PRODUCT 原則 4）。
     banned: bool = False
+    #: 這台 Jellyfin 低於 12.0（brief §16.4、§20.9）。同上：原文說「幾版對幾版」，
+    #: 而升級的那幾件事（先備份、移除第三方插件、升完完整掃描、降不回去）由畫面說。
+    unsupported: bool = False
 
 
 async def _record(
@@ -261,6 +267,7 @@ async def _record(
             configured=outcome.configured,
             drift=list(outcome.drift),
             banned=outcome.banned,
+            unsupported=outcome.unsupported,
         ),
     }
     await write_settings(session, health)
@@ -293,10 +300,14 @@ async def _check_routes(session: AsyncSession, factory: ServiceClientFactory) ->
 
 
 async def _check_jellyfin(session: AsyncSession, factory: ServiceClientFactory) -> _Outcome:
-    """連得上，而且 Berth 那把 API key 還列得出媒體庫。
+    """版本夠新、連得上，而且 Berth 那把 API key 還列得出媒體庫。
 
     列媒體庫不是多做的：`public_info` 匿名就回得出來，key 被撤銷時它照樣是綠的，而 M1 入庫
     要用的每一支端點都需要那把 key。
+
+    **版本先看**（brief §16.4、§20.9）：低於 12.0 的伺服器上，同一集的兩個版本會是兩個重複的
+    條目，而 Berth 不再為它裝插件。那不是「現在連不上」而是「這台不能用」，所以是紅燈加一個
+    說得出下一步的旗標，不是警告。
     """
     settings = await read_settings(session, JellyfinSettings)
     if not settings.base_url:
@@ -305,6 +316,13 @@ async def _check_jellyfin(session: AsyncSession, factory: ServiceClientFactory) 
     client = factory.jellyfin(settings.base_url, token=settings.api_key)
     try:
         info = await client.public_info()
+        if not info.supported:
+            return _Outcome(
+                HealthStatus.FAILED,
+                detail=info.version,
+                error=unsupported_message(info.version),
+                unsupported=True,
+            )
         libraries = await client.libraries()
     except ServiceError as exc:
         return _Outcome(HealthStatus.FAILED, error=message(exc))
@@ -397,6 +415,7 @@ def _view(
         configured=health.configured,
         drift=tuple(health.drift),
         banned=health.banned,
+        unsupported=health.unsupported,
     )
 
 

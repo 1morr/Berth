@@ -44,7 +44,7 @@ describe('健康頁', () => {
 
     await screen.findByRole('region', { name: 'Jellyfin' })
 
-    expect(card('Jellyfin').getByText('10.11.11 · 3 libraries')).toBeInTheDocument()
+    expect(card('Jellyfin').getByText('12.1.0 · 3 libraries')).toBeInTheDocument()
     expect(card('qBittorrent').getByText('v5.2.3 · Web API 2.15.1')).toBeInTheDocument()
   })
 

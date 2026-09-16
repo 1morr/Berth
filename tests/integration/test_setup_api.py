@@ -24,7 +24,6 @@ from berth.api.deps import get_client_factory, get_setup_probes
 from berth.api.gate import CSRF_HEADER
 from berth.config import Config
 from berth.main import create_app
-from berth.services import jellyfin as jellyfin_service
 from berth.services.clients import SetupProbes
 from berth.services.indexer import DEFAULT_INDEXERS
 from tests.integration.factories import FakeClientFactory
@@ -144,7 +143,7 @@ class TestDetect:
         services = client.post("/api/setup/detect", json={}).json()["services"]
 
         by_kind = {row["kind"]: row for row in services}
-        assert by_kind["jellyfin"]["detail"] == "10.11.11"
+        assert by_kind["jellyfin"]["detail"] == "12.1.0"
         assert by_kind["jellyfin"]["base_url"] == "http://jellyfin:8096"
         assert by_kind["jellyfin"]["reason"] == "setup_pending"
 
@@ -217,12 +216,7 @@ def _complete_setup(client: TestClient) -> None:
 
 
 class TestJellyfin:
-    """第 3 步的四支端點（plan §9.4、§9.5、票 06）。判定與冪等本身在 `test_setup_jellyfin.py`。"""
-
-    @pytest.fixture(autouse=True)
-    def _fast_polling(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """插件與重啟的輪詢間隔在測試裡不必真的等。"""
-        monkeypatch.setattr(jellyfin_service, "POLL_SECONDS", 0.0)
+    """第 3 步的三支端點（plan §9.4、§9.5、票 06）。判定與冪等本身在 `test_setup_jellyfin.py`。"""
 
     @pytest.fixture
     def jellyfin(self) -> FakeJellyfinClient:
@@ -258,9 +252,9 @@ class TestJellyfin:
             "api_key_present": False,
             "steps": [],
             "libraries": [],
-            "merge_versions_installed": False,
-            "merge_movies_task_id": "",
-            "merge_episodes_task_id": "",
+            "version": "",
+            # 還沒問過就不是紅燈：那一格是「尚未取得」。
+            "version_supported": True,
         }
 
     def test_bootstrap_returns_every_step_with_its_measured_value(
@@ -281,13 +275,11 @@ class TestJellyfin:
             "remote_access",
             "complete",
             "api_key",
-            "plugin",
-            "tasks",
         ]
         assert {row["status"] for row in body["steps"]} == {"ok"}
         assert body["origin"] == "bundled"
         assert body["api_key_present"] is True
-        assert body["merge_versions_installed"] is True
+        assert (body["version"], body["version_supported"]) == ("12.1.0", True)
         assert [row["name"] for row in body["libraries"]] == ["Movies", "TV", "Anime"]
         assert jellyfin.admin == ("skipper", "harbour")
 
@@ -299,21 +291,26 @@ class TestJellyfin:
         body = client.get("/api/setup/jellyfin").json()
 
         assert {row["status"] for row in body["steps"]} == {"ok"}
-        assert body["merge_movies_task_id"] == "fd957c84b0cfc2380becf2893e4b76fc"
+        assert body["version"] == "12.1.0"
 
     def test_a_failed_step_comes_back_with_its_error(
         self, client: TestClient, jellyfin: FakeJellyfinClient
     ) -> None:
+        """版本閘門就是第一步：低於 12.0 時整段停在那裡（brief §16.4、§19）。"""
         client.post("/api/setup/admin", json={"username": "skipper", "password": "harbour"})
         client.post("/api/setup/detect", json={})
-        jellyfin.install_failures = 99
+        jellyfin.version = "10.11.11"
 
         body = client.post("/api/setup/jellyfin/bootstrap").json()
 
-        plugin = next(row for row in body["steps"] if row["step"] == "plugin")
-        assert plugin["status"] == "failed"
-        assert plugin["error"]
-        assert next(row for row in body["steps"] if row["step"] == "tasks")["status"] == "pending"
+        public_info = next(row for row in body["steps"] if row["step"] == "public_info")
+        assert public_info["status"] == "failed"
+        assert public_info["detail"] == "10.11.11"
+        assert "12.0" in public_info["error"]
+        assert body["version_supported"] is False
+        assert next(row for row in body["steps"] if row["step"] == "libraries")["status"] == (
+            "pending"
+        )
 
     def test_connect_needs_credentials(self, client: TestClient) -> None:
         assert client.post("/api/setup/jellyfin/connect", json={}).status_code == 422
@@ -369,25 +366,14 @@ class TestJellyfin:
         assert libraries["status"] == "failed"
         assert "Nope" in libraries["error"]
 
-    def test_the_plugin_button_only_runs_the_last_two_steps(
-        self, client: TestClient, jellyfin: FakeJellyfinClient
-    ) -> None:
-        jellyfin.startup_wizard_completed = True
-        jellyfin.admin = ("owner", "s3cret")
-        client.post("/api/setup/jellyfin/connect", json={"username": "owner", "password": "s3cret"})
-
-        body = client.post("/api/setup/jellyfin/plugin").json()
-
-        assert body["merge_versions_installed"] is True
-        assert jellyfin.created == []
-        assert jellyfin.restarts == 1
-
     def test_the_jellyfin_endpoints_close_after_setup(self, client: TestClient) -> None:
         _complete_setup(client)
 
         assert client.get("/api/setup/jellyfin").status_code == 401
         assert client.post("/api/setup/jellyfin/bootstrap").status_code == 401
-        assert client.post("/api/setup/jellyfin/plugin").status_code == 401
+        assert client.post(
+            "/api/setup/jellyfin/libraries/paths", json={"library": "x"}
+        ).status_code == (401)
 
 
 class OneJellyfin:
@@ -656,10 +642,6 @@ class TestRoutes:
     這一組是**整個精靈跑一遍**：管理員 → 偵測 → Jellyfin → qBittorrent → 跳過來源 →
     建 Route → 完成。檔案系統是真的（`tmp_path`），所以硬鏈接檢查也是真的。
     """
-
-    @pytest.fixture(autouse=True)
-    def _fast_polling(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setattr(jellyfin_service, "POLL_SECONDS", 0.0)
 
     @pytest.fixture
     def jellyfin(self) -> FakeJellyfinClient:

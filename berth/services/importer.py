@@ -227,8 +227,36 @@ async def _place(
             actor=actor_of(None),
             payload={"file": item.rel_path, "target": target_text},
         )
+        await _restate_versions(session, item, target_text, now)
     item.applied_at = now
     item.error = ""
+
+
+async def _restate_versions(
+    session: AsyncSession, item: PlanItem, target: str, now: datetime
+) -> None:
+    """同一個資料夾裡其他正片重新排一次反查（票 14b）。
+
+    Jellyfin 12 的版本名是「去掉**各版本**檔名的共同前綴」剩下的部分，所以多一個版本會改掉
+    同一集其他版本的名字：單獨一個時是整個檔名主幹，第二個進來之後兩個都縮短（2026-09-16 對
+    12.1.0 實測）。帳本上先前那幾筆已經反查完、不再排程，不推它們一把就會停在舊名字，而畫面
+    正是在多版本那一塊把它們並排（`services/inventory.py` 的 `_versions`）。
+    """
+    if item.action is not PlanAction.IMPORT or item.media_id is None:
+        return
+    folder = str(PurePosixPath(target).parent)
+    siblings = await session.scalars(
+        select(LedgerEntry).where(
+            LedgerEntry.media_id == item.media_id,
+            LedgerEntry.action == PlanAction.IMPORT,
+            LedgerEntry.target_path != target,
+            LedgerEntry.resolve_after.is_(None),
+        )
+    )
+    for entry in siblings:
+        if str(PurePosixPath(entry.target_path).parent) == folder:
+            entry.resolve_attempts = 0
+            entry.resolve_after = first_resolve_at(now)
 
 
 async def _link_failed(

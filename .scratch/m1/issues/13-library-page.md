@@ -24,7 +24,7 @@ Berth 不做內嵌播放器（brief §12），播放一律交給 Jellyfin。
       Series，靠新的 `jellyfin_series_id`；卡片本體連 Media 詳情，深連結是並排的另一條，使用者拍板）
 - [x] Media 詳情頁補上檔案清單：每個檔案的季集、Tags、目標路徑、ledger 狀態（外加 Jellyfin 反查狀態與
       對不到的檔案）
-- [x] Media 詳情頁補上多版本並存清單（brief §7.7；劇集經 MergeVersions 合併後顯示的是整個檔名主幹）
+- [x] Media 詳情頁補上多版本並存清單（brief §7.7；~~劇集經 MergeVersions 合併後顯示的是整個檔名主幹~~ —— 票 14b 改掉這個前提：版本名一律讀 Jellyfin 回的 `MediaSources[].Name`，還沒收錄就照實說）
 - [x] Media 詳情的各集狀態反映實際入庫情形（使用者拍板五種：已入庫 / 卡住 / 下載中 / 缺 / 未播出）
 - [x] 一條 Route 都還沒有東西時的空狀態說得出下一步該做什麼
 - [x] 媒體庫頁走 `/impeccable shape`（`.scratch/m1/library-shape.md`）；playwright 實跑並附結果

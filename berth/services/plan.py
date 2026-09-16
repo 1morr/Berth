@@ -24,7 +24,7 @@ from collections import Counter
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -49,9 +49,9 @@ from berth.domain import (
 )
 from berth.domain import PlanItem as PlannedFile
 from berth.logs import job_context
-from berth.models import Job, JobFile, Media, Plan, PlanItem, Route
+from berth.models import Job, JobFile, LedgerEntry, Media, Plan, PlanItem, Route
 from berth.models.types import utcnow
-from berth.parser import classify
+from berth.parser import SPAN_CLASH_CONSEQUENCE, classify, episode_span
 from berth.parser import plan as decide
 from berth.services.clients import ServiceClientFactory
 from berth.services.events import EventHub, JobSignal
@@ -303,7 +303,12 @@ async def _plan(
     snapshot = await _snapshot(session, factory, job)
     contents = await _contents(session, job)
     entries = await _measure(session, job, contents)
-    items = _apply_policy(decide(job.name, entries, _context(route, snapshot)), route)
+    items = await _against_ledger(
+        session,
+        job,
+        route,
+        _apply_policy(decide(job.name, entries, _context(route, snapshot)), route),
+    )
     status, reason = _verdict(items, route)
     row = await _store(session, job, contents, items, status=status, reason=reason, now=now)
 
@@ -339,8 +344,13 @@ async def _preplan(session: AsyncSession, hub: EventHub, job_hash: str, now: dat
     entries = contents.entries()
     if not entries:
         return 0
-    items = _apply_policy(
-        decide(job.name, entries, _context(route, await _stored(session, job))), route
+    items = await _against_ledger(
+        session,
+        job,
+        route,
+        _apply_policy(
+            decide(job.name, entries, _context(route, await _stored(session, job))), route
+        ),
     )
     _, reason = _verdict(items, route)
     row = await _store(
@@ -526,6 +536,74 @@ def _apply_policy(items: Sequence[PlannedFile], route: Route | None) -> tuple[Pl
         if item.action in WRITTEN and item.confidence is Confidence.MEDIUM
         else item
         for item in items
+    )
+
+
+async def _against_ledger(
+    session: AsyncSession,
+    job: Job,
+    route: Route | None,
+    items: Sequence[PlannedFile],
+) -> tuple[PlannedFile, ...]:
+    """媒體庫裡已經有、起始集相同而結束集不同的正片 → 這一列送 review（brief §7.8、§20.9）。
+
+    解析器只看得見這一包裡的檔案，同一條規則在 `parser/planner.py`（純函式，benchmark 量它）；
+    上一批入庫的那一集在帳本裡，而帳本要 session 才讀得到，所以這一半住在 services。
+
+    比的是**同一個資料夾裡**、同一季、同一個起始集——那正是 Jellyfin 12 的版本分組鍵（同一個
+    季資料夾、同一個 `S/E`，它不看結束集）。`S01E03-E04` 與 `S01E03` 於是被併成同一集的兩個
+    版本，第 4 集從集列表上消失。**資料夾是判準的一部分**：同一部作品可以有兩條 Route（兩個
+    Jellyfin 媒體庫、兩個資料夾），那是兩個條目，跨資料夾不會被併（`inventory._versions`
+    的版本分組同一個道理）。
+    """
+    if job.media_id is None or route is None:
+        return tuple(items)
+    root = PurePosixPath(route.target_path)
+    ends: dict[tuple[str, int, int], set[int]] = {}
+    for entry in await session.scalars(
+        select(LedgerEntry).where(
+            LedgerEntry.media_id == job.media_id, LedgerEntry.action == PlanAction.IMPORT
+        )
+    ):
+        if entry.season is None or entry.episode_start is None:
+            continue
+        folder = str(PurePosixPath(entry.target_path).parent)
+        ends.setdefault((folder, entry.season, entry.episode_start), set()).add(
+            entry.episode_end or entry.episode_start
+        )
+    return tuple(_against(item, root, ends) for item in items)
+
+
+def _against(
+    item: PlannedFile, root: PurePosixPath, ends: dict[tuple[str, int, int], set[int]]
+) -> PlannedFile:
+    """判準與同一包裡那一半共用（`parser.episode_span`）：分岔了就會有兩個答案。"""
+    span = episode_span(item)
+    if span is None or not item.target_path:
+        return item
+    season, start, end = span
+    folder = str((root / item.target_path).parent)
+    others = ends.get((folder, season, start), set()) - {end}
+    if not others:
+        return item
+    return item.model_copy(
+        update={
+            "action": PlanAction.REVIEW,
+            "confidence": Confidence.LOW,
+            "reasons": (*item.reasons, _span_clash(season, start, others)),
+        }
+    )
+
+
+def _span_clash(season: int, start: int, others: set[int]) -> str:
+    """開頭說得出媒體庫裡已經有哪一段，後果接解析器那一句（同一個後果只有一份字）。"""
+    known = ", ".join(
+        f"S{season:02d}E{start:02d}" + (f"-E{end:02d}" if end != start else "")
+        for end in sorted(others)
+    )
+    return (
+        f"the library already has {known}, which starts at the same episode but covers a "
+        f"different range; {SPAN_CLASH_CONSEQUENCE}"
     )
 
 

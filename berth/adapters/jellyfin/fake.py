@@ -8,8 +8,9 @@
 - 同一條路徑加兩次，媒體庫就有兩個一樣的 location。
 - `POST /Auth/Keys` 不檢查重複，同一個 `AppName` 會有第二把。
 - `POST /Startup/User` 之前沒有 `GET /Startup/User` 會失敗。
+- 第一個使用者已經有密碼時，`POST /Startup/User` 回 403——精靈第 3 步的重試靠它才測得出來
+  （12.0 起，brief §20.9、票 14b）。
 - 初始精靈完成之後，管理員端點沒有 token 就是 401。
-- 重啟後有一段時間所有端點回 503。
 - `GET /Items` 沒有路徑篩選：`parentId=<library>&recursive=true` 回的是那個媒體庫路徑底下的全部。
 """
 
@@ -19,32 +20,18 @@ import hashlib
 from collections.abc import Sequence
 from dataclasses import replace
 
-from berth.adapters.http import (
-    AuthFailedError,
-    ProtocolMismatchError,
-    ServiceBusyError,
-    ServiceUnavailableError,
-)
+from berth.adapters.http import AuthFailedError, ProtocolMismatchError
 from berth.adapters.jellyfin import (
     JellyfinApiKey,
     JellyfinAuth,
     JellyfinItem,
     JellyfinLibrary,
-    JellyfinPlugin,
     JellyfinPublicInfo,
-    JellyfinRepository,
     JellyfinTask,
     NewLibrary,
     TypeOption,
 )
 from berth.domain import CollectionType
-
-#: `GET /Repositories` 在乾淨安裝上的內容（實測 10.11.11）。
-JELLYFIN_STABLE_REPOSITORY = JellyfinRepository(
-    name="Jellyfin Stable",
-    url="https://repo.jellyfin.org/files/plugin/manifest.json",
-    enabled=True,
-)
 
 #: 這台伺服器裝了哪些 fetcher（`GET /Libraries/AvailableOptions`，實測 10.11.11）。
 AVAILABLE_TYPE_OPTIONS: dict[CollectionType, tuple[TypeOption, ...]] = {
@@ -82,16 +69,6 @@ AVAILABLE_TYPE_OPTIONS: dict[CollectionType, tuple[TypeOption, ...]] = {
     ),
 }
 
-#: MergeVersions 裝好並重啟後出現的兩個排程任務（實測 id，brief §20.7）。
-MERGE_VERSIONS_TASKS = (
-    JellyfinTask(
-        id="dcaf151dd1af25aefe775c58e214477e", key="MergeEpisodesTask", name="Merge All Episodes"
-    ),
-    JellyfinTask(
-        id="fd957c84b0cfc2380becf2893e4b76fc", key="MergeMoviesTask", name="Merge All Movies"
-    ),
-)
-
 #: 內建的「重新掃描媒體庫」（實測 12.0.0 的 id 與 key，brief §20.1）。
 LIBRARY_SCAN_TASK = JellyfinTask(
     id="7738148ffcd07979c7ceb148e06b3aed", key="RefreshLibrary", name="Scan Media Library"
@@ -103,7 +80,9 @@ class FakeJellyfinClient:
         self,
         *,
         base_url: str = "http://jellyfin:8096",
-        version: str = "10.11.11",
+        #: 預設是支援下限之上的那一條線（`deploy/` 釘的 12.1，brief §19）。低於 12.0 的值
+        #: 讓精靈與健康檢查的版本閘門測得出來。
+        version: str = "12.1.0",
         server_name: str = "jellyfin",
         startup_wizard_completed: bool = False,
         #: 已存在的管理員帳密。`authenticate` 給它 `IsAdministrator=true`。
@@ -112,16 +91,9 @@ class FakeJellyfinClient:
         users: dict[str, str] | None = None,
         libraries: tuple[JellyfinLibrary, ...] = (),
         api_keys: tuple[JellyfinApiKey, ...] = (),
-        plugins: tuple[JellyfinPlugin, ...] = (),
         tasks: tuple[JellyfinTask, ...] = (),
         #: 每一次呼叫都丟這個例外。用來演練「服務不在」「連不上」這類判定。
         error: Exception | None = None,
-        #: `install_package` 前幾次失敗（實測會遇到 TLS 中斷回 500）。
-        install_failures: int = 0,
-        #: 重啟後有幾次呼叫回 503。0 代表重啟瞬間就好了。
-        busy_after_restart: int = 0,
-        #: `restart()` 在回應送出去之前就把連線切了（實測遇得到，brief §20.7）。
-        drop_on_restart: bool = False,
         #: 這台 Jellyfin 掛得到的路徑前綴。`None` = 與 Berth 看到的一樣（正常部署）。
         visible_roots: tuple[str, ...] | None = None,
         #: 掃描過的媒體樹（`GET /Items`）。測試擺出「Jellyfin 已經掃到了什麼」。
@@ -137,12 +109,8 @@ class FakeJellyfinClient:
         self.users = dict(users or {})
         self.libraries_ = list(libraries)
         self.api_keys_ = list(api_keys)
-        self.plugins_ = list(plugins)
         self.tasks_ = list(tasks)
         self.error = error
-        self.install_failures = install_failures
-        self.busy_after_restart = busy_after_restart
-        self.drop_on_restart = drop_on_restart
         self.visible_roots = visible_roots
         self.items_ = list(items)
         self.notify_error = notify_error
@@ -153,19 +121,12 @@ class FakeJellyfinClient:
         self.item_queries: list[tuple[str, tuple[str, ...]]] = []
         #: 每一次 `run_task` 觸發的任務 id。
         self.tasks_run: list[str] = []
-        self.repositories_ = [JELLYFIN_STABLE_REPOSITORY]
-        #: 插件庫裡看得到的套件。加了 repository 才長出來。
-        self.packages_: dict[str, tuple[str, ...]] = {}
         self.token = ""
-        self.restarts = 0
         self.culture: tuple[str, str, str] | None = None
         self.remote_access: bool | None = None
-        self.installs: list[str] = []
         #: 每一次 `create_library` 收到的整份請求，測試用來斷言寫進去的選項。
         self.created: list[NewLibrary] = []
-        self._busy = 0
         self._default_user_read = False
-        self._tasks_after_restart: list[JellyfinTask] = []
 
     def use_token(self, token: str) -> None:
         self.token = token
@@ -191,12 +152,16 @@ class FakeJellyfinClient:
         self._default_user_read = True
         return "root"
 
-    async def create_startup_user(self, name: str, password: str) -> None:
+    async def create_startup_user(self, name: str, password: str) -> bool:
         self._checkpoint()
         if not self._default_user_read:
             # 真的 Jellyfin 在這裡回 500「Sequence contains no elements」（brief §20.7）。
             raise ProtocolMismatchError("POST /Startup/User: 500 Sequence contains no elements")
+        if self.admin is not None and self.admin[1]:
+            # 12.0 起：第一個使用者已經有密碼就回 403，密碼不動（brief §20.9）。
+            return False
         self.admin = (name, password)
+        return True
 
     async def set_remote_access(self, *, enabled: bool) -> None:
         self._checkpoint()
@@ -280,49 +245,7 @@ class FakeJellyfinClient:
             return True
         return any(path.startswith(root) for root in self.visible_roots)
 
-    # --- 插件與排程任務 ---
-
-    async def repositories(self) -> tuple[JellyfinRepository, ...]:
-        self._checkpoint(always=True)
-        return tuple(self.repositories_)
-
-    async def set_repositories(self, repositories: tuple[JellyfinRepository, ...]) -> None:
-        self._checkpoint(always=True)
-        self.repositories_ = list(repositories)
-        # 加了 repository，套件才在插件庫裡看得到。
-        self.packages_.setdefault("Merge Versions", ("10.11.0.1",))
-
-    async def package_versions(self, name: str) -> tuple[str, ...]:
-        self._checkpoint(always=True)
-        return self.packages_.get(name, ())
-
-    async def install_package(self, name: str, *, assembly_guid: str) -> None:
-        self._checkpoint(always=True)
-        self.installs.append(name)
-        if self.install_failures > 0:
-            self.install_failures -= 1
-            raise ProtocolMismatchError(f"POST /Packages/Installed/{name}: 500")
-        self.plugins_.append(
-            JellyfinPlugin(
-                id=assembly_guid.replace("-", "").lower(), name=name, version="10.11.0.1"
-            )
-        )
-        # 排程任務要重啟之後才出現。
-        self._tasks_after_restart = list(MERGE_VERSIONS_TASKS)
-
-    async def plugins(self) -> tuple[JellyfinPlugin, ...]:
-        self._checkpoint(always=True)
-        return tuple(self.plugins_)
-
-    async def restart(self) -> None:
-        self._checkpoint(always=True)
-        self.restarts += 1
-        self._busy = self.busy_after_restart
-        self.tasks_.extend(self._tasks_after_restart)
-        self._tasks_after_restart = []
-        if self.drop_on_restart:
-            # 伺服器已經在重啟了，只是回應沒送到。
-            raise ServiceUnavailableError("POST /System/Restart: connection dropped")
+    # --- 排程任務 ---
 
     async def scheduled_tasks(self) -> tuple[JellyfinTask, ...]:
         self._checkpoint(always=True)
@@ -360,16 +283,13 @@ class FakeJellyfinClient:
         return None
 
     def _checkpoint(self, *, elevated: bool = True, always: bool = False) -> None:
-        """每一支端點的共同前置：注入的錯誤、重啟後的 503、以及要不要 token。
+        """每一支端點的共同前置：注入的錯誤，以及要不要 token。
 
         `elevated=True` 的端點在初始精靈跑完之前匿名可用（`FirstTimeSetupOrElevated`），
         跑完之後就要 token；`always=True` 的（`RequiresElevation`）永遠要。
         """
         if self.error is not None:
             raise self.error
-        if self._busy > 0:
-            self._busy -= 1
-            raise ServiceBusyError("503 still loading")
         if elevated and (always or self.startup_wizard_completed) and not self.token:
             raise AuthFailedError("401 requires elevation")
 

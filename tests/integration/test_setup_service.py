@@ -140,7 +140,7 @@ async def test_all_three_bundled_on_a_clean_compose(session: AsyncSession) -> No
 async def test_measured_values_are_carried_to_the_ui(session: AsyncSession) -> None:
     status = await detect_services(session, probes(), now=NOW)
 
-    assert detail(status, ServiceKind.JELLYFIN) == "10.11.11"
+    assert detail(status, ServiceKind.JELLYFIN) == "12.1.0"
     assert "v5.2.3" in detail(status, ServiceKind.QBITTORRENT)
     assert "2.15.1" in detail(status, ServiceKind.QBITTORRENT)
     jellyfin = next(row for row in status.services if row.kind is ServiceKind.JELLYFIN)
@@ -150,7 +150,7 @@ async def test_measured_values_are_carried_to_the_ui(session: AsyncSession) -> N
 @pytest.mark.asyncio
 async def test_jellyfin_that_finished_its_own_wizard_is_existing(session: AsyncSession) -> None:
     configured = FakeJellyfinClient(
-        server_name="nas", version="10.10.7", startup_wizard_completed=True
+        server_name="nas", version="12.0.0", startup_wizard_completed=True
     )
 
     status = await detect_services(session, probes(jellyfin=configured), now=NOW)

@@ -9,9 +9,15 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+from itertools import takewhile
 from typing import Protocol
 
 from berth.domain import CollectionType
+
+#: 支援下限（brief §16.4、§20.9）。**12.0 就是原本的 10.12**——Jellyfin 只是把版號前面
+#: 永遠不變的 `10` 拿掉了，所以比的是 `12.0` 而不是 `10.12`。10.x 上同一集的兩個版本是兩個
+#: 重複的條目，要靠 MergeVersions 插件；12.0 起原生合併，Berth 只支援這一邊（brief §19）。
+MIN_VERSION = (12, 0)
 
 
 @dataclass(frozen=True, slots=True)
@@ -21,6 +27,37 @@ class JellyfinPublicInfo:
     server_name: str
     version: str
     startup_wizard_completed: bool
+
+    @property
+    def supported(self) -> bool:
+        """這台 Jellyfin 夠新嗎（brief §16.4）。**版號讀不出來時當成不支援**：
+        Berth 在它上面做的第一件事就是入庫，而 10.x 的多版本會變成兩個重複的條目。
+        """
+        return version_supported(self.version)
+
+
+def version_supported(version: str) -> bool:
+    """版號字串 ≥ `MIN_VERSION`。空字串（還沒問過）不在這裡判，呼叫端自己決定。"""
+    return _parse(version) >= MIN_VERSION
+
+
+def unsupported_message(version: str) -> str:
+    """版本太舊時的原文（英文）。健康檢查與精靈第 3 步共用同一句，因為那是同一個事實。
+
+    升級注意事項（先完整備份、移除第三方插件、升級後完整掃描、不能降級）**不在這裡**：
+    那是 Berth 自己的建議而不是服務說的話，所以它走 i18n，與使用者的語言一致。
+    """
+    floor = ".".join(str(part) for part in MIN_VERSION)
+    return f"Jellyfin {version or 'with no version string'} is older than {floor}"
+
+
+def _parse(version: str) -> tuple[int, ...]:
+    """`12.1.0` → `(12, 1, 0)`。認不得的片段當 0，整串認不得就是 `(0,)`。"""
+    parts = []
+    for chunk in version.split("."):
+        digits = "".join(takewhile(str.isdigit, chunk))
+        parts.append(int(digits) if digits else 0)
+    return tuple(parts) or (0,)
 
 
 @dataclass(frozen=True, slots=True)
@@ -83,30 +120,8 @@ class JellyfinApiKey:
 
 
 @dataclass(frozen=True, slots=True)
-class JellyfinRepository:
-    """`GET /Repositories` 的一項（`{Name, Url, Enabled}`）。"""
-
-    name: str
-    url: str
-    enabled: bool
-
-
-@dataclass(frozen=True, slots=True)
-class JellyfinPlugin:
-    """`GET /Plugins` 的一項。`id` 是去掉連字號的 GUID。"""
-
-    id: str
-    name: str
-    version: str
-
-
-@dataclass(frozen=True, slots=True)
 class JellyfinTask:
-    """`GET /ScheduledTasks` 的一項。
-
-    觸發時要用 `id`，不是 `key`（brief §20.7）。MergeVersions 的 key 是
-    `MergeMoviesTask` 與 `MergeEpisodesTask`。
-    """
+    """`GET /ScheduledTasks` 的一項。觸發時要用 `id`，不是 `key`（brief §20.7）。"""
 
     id: str
     key: str
@@ -124,6 +139,18 @@ LIBRARY_SCAN_TASK_KEY = "RefreshLibrary"
 
 
 @dataclass(frozen=True, slots=True)
+class JellyfinSource:
+    """`MediaSources[]` 的一項：一個版本的檔案，與它在版本選單上的名字。
+
+    **名字由 Jellyfin 算**（12.0 起是「去掉各版本檔名的共同前綴」剩下的部分，算法與標題的
+    標點有關，12.0 與 12.1 還不一樣），所以 Berth 讀它回的值而不是自己重算（brief §7.7、§20.9）。
+    """
+
+    path: str
+    name: str
+
+
+@dataclass(frozen=True, slots=True)
 class JellyfinItem:
     """`GET /Items` 的一項（入庫之後的反查，brief §20.1、plan §8.2）。"""
 
@@ -135,16 +162,32 @@ class JellyfinItem:
     path: str
     #: `ProviderIds.Tmdb`，沒有就是空字串。
     tmdb_id: str
-    #: `MediaSources[].Path`：這個 item 底下每一個版本的檔案。電影的多版本與 MergeVersions
-    #: 合併過的劇集，第二個版本的檔案**不是** item 自己的 `Path`，只出現在這裡（brief §7.7）。
-    source_paths: tuple[str, ...]
+    #: `MediaSources[]`：這個 item 底下的每一個版本。同一集或同一部電影的第二個版本**不是**
+    #: item 自己的 `Path`，只出現在這裡——12.0 起劇集也原生合併（brief §7.7、§20.9）。
+    sources: tuple[JellyfinSource, ...] = ()
     #: Episode 的 `SeriesId`：它屬於哪一部作品（2026-09-15 對 12.0.0 實測，每一集都帶）。
     #: 媒體庫的卡片連到作品而不是某一集（票 13）。其餘型別是空字串。
     series_id: str = ""
 
+    @property
+    def source_paths(self) -> tuple[str, ...]:
+        return tuple(source.path for source in self.sources)
+
+    def version_name(self, path: str) -> str:
+        """這一條路徑在 Jellyfin 的版本選單上叫什麼。不是這個 item 的檔案就回空字串。"""
+        wanted = path.rstrip("/")
+        return next(
+            (source.name for source in self.sources if source.path.rstrip("/") == wanted), ""
+        )
+
 
 class JellyfinClient(Protocol):
-    """一台 Jellyfin。憑證是可變狀態：初始精靈期間匿名，之後帶 token 或 API key。"""
+    """一台 Jellyfin。憑證是可變狀態：初始精靈期間匿名，之後帶 token 或 API key。
+
+    **沒有插件那幾支**（`/Repositories`、`/Packages`、`/Plugins`、`/System/Restart`）：Berth 只支援
+    Jellyfin 12，而 12.x 原生合併多版本，不需要裝任何插件（brief §19、§20.9）。介面上沒有它們，
+    所以 Berth 也就不會重啟別人的 Jellyfin。
+    """
 
     @property
     def base_url(self) -> str: ...
@@ -169,7 +212,15 @@ class JellyfinClient(Protocol):
         """
         ...
 
-    async def create_startup_user(self, name: str, password: str) -> None: ...
+    async def create_startup_user(self, name: str, password: str) -> bool:
+        """`POST /Startup/User`。回「這一次真的設了密碼嗎」。
+
+        12.0 起第一個使用者已經有密碼時它回 **403**（[PR #17369](https://github.com/jellyfin/jellyfin/pull/17369)），
+        而那是「已經設過了」不是失敗：第 3 步成功、之後某一步失敗、Jellyfin 沒重啟時按重試
+        就會走到這裡，翻成錯誤的話重試永遠走不完（brief §20.9、票 14b）。密碼對不對由之後的
+        登入驗證。
+        """
+        ...
 
     async def set_remote_access(self, *, enabled: bool) -> None: ...
 
@@ -223,27 +274,11 @@ class JellyfinClient(Protocol):
         """
         ...
 
-    # --- 插件與排程任務（plan §9.4 第 8、9 步）---
+    # --- 排程任務 ---
 
-    async def repositories(self) -> tuple[JellyfinRepository, ...]: ...
-
-    async def set_repositories(self, repositories: tuple[JellyfinRepository, ...]) -> None:
-        """`POST /Repositories` 是整份覆寫，所以呼叫端要先讀再合併。"""
+    async def scheduled_tasks(self) -> tuple[JellyfinTask, ...]:
+        """`GET /ScheduledTasks`。Berth 只用內建的 `RefreshLibrary`（反查的後備，brief §20.1）。"""
         ...
-
-    async def package_versions(self, name: str) -> tuple[str, ...]:
-        """`GET /Packages` 裡某個套件的可用版本。加完 repository 後要輪詢它出現。"""
-        ...
-
-    async def install_package(self, name: str, *, assembly_guid: str) -> None: ...
-
-    async def plugins(self) -> tuple[JellyfinPlugin, ...]: ...
-
-    async def restart(self) -> None:
-        """`POST /System/Restart`。連線會被切斷，重啟完成要靠輪詢管理員端點確認。"""
-        ...
-
-    async def scheduled_tasks(self) -> tuple[JellyfinTask, ...]: ...
 
     async def run_task(self, task_id: str) -> None:
         """`POST /ScheduledTasks/Running/{id}`。用 `Id` 不是 `Key`（brief §20.7）。"""
@@ -275,15 +310,17 @@ __all__ = [
     "ITEM_MOVIE",
     "ITEM_SERIES",
     "LIBRARY_SCAN_TASK_KEY",
+    "MIN_VERSION",
     "JellyfinApiKey",
     "JellyfinAuth",
     "JellyfinClient",
     "JellyfinItem",
     "JellyfinLibrary",
-    "JellyfinPlugin",
     "JellyfinPublicInfo",
-    "JellyfinRepository",
+    "JellyfinSource",
     "JellyfinTask",
     "NewLibrary",
     "TypeOption",
+    "unsupported_message",
+    "version_supported",
 ]

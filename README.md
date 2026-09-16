@@ -22,7 +22,7 @@ docker compose up -d
 | 泊位 | 步驟 | 套件內的服務 | 你自己的服務 |
 | --- | --- | --- | --- |
 | — | 1–2 建立 Berth 管理員、逐服務探測 | 探到 compose 主機名就是套件內 | 探不到就填位址，就地測連線 |
-| BTH 1 | 3 Jellyfin | 建管理員、Movies / TV / Anime 三個媒體庫、API key、裝 MergeVersions、重啟 | 只做檢查；「加入 Berth 路徑」與「安裝 MergeVersions」各是一顆要確認的按鈕 |
+| BTH 1 | 3 Jellyfin | 確認版本 ≥ 12.0、建管理員、Movies / TV / Anime 三個媒體庫、API key | 只做檢查；「加入 Berth 路徑」是一顆要確認的按鈕 |
 | BTH 2 | 4 qBittorrent | 套用五個建議鍵、設 WebUI 密碼 | 先顯示逐鍵差異再問要不要套用 |
 | BTH 3 | 5–6 索引站與 TMDB | 加十個預設公開站 | 填既有 Prowlarr 或任一 Torznab 網址 |
 | BTH 4 | 7–8 媒體庫路徑 | 自動建三條 Route | 勾選媒體庫與寫入目標 |
@@ -78,7 +78,9 @@ TMDB 的條款限非商業使用；歸屬聲明見〈[授權與歸屬](#授權�
 ### 外部服務的前提
 
 - **qBittorrent**：最低 4.4（Web API 2.8.4）。套件內的容器由 `deploy/preseed/qbittorrent/10-berth.sh` 在服務啟動前補上免密白名單，而且只放行 Berth 那一個固定 IP —— 4.6.1 起首次啟動的隨機密碼只印在容器 log，沒有這一步 Berth 進不去；WebUI 從宿主或 LAN 進來仍然要密碼。其餘偏好（temp path、save path、category 的 autoTMM）與 WebUI 密碼由精靈經 API 設定，按之前會顯示差異。腳本不覆蓋任何已經有值的設定。
-- **Jellyfin**：同一部片的多個版本要合併需要 [MergeVersions](https://github.com/danieladov/jellyfin-plugin-mergeversions) 插件。套件內的 Jellyfin 由精靈自動安裝並重啟；既有的 Jellyfin 是一顆要確認的按鈕。
+- **Jellyfin**：**最低 12.0**（12.0 就是原本的 10.12 —— Jellyfin 把版號前面永遠不變的 `10` 拿掉了）。12.0 起同一集的多個版本由 Jellyfin 自己合併成一個條目，不需要任何插件；10.x 要靠第三方插件，而那個插件在 12 上是空跑、還會跨媒體庫誤併，所以 Berth 只支援 12 以上。更舊的伺服器在精靈第 3 步與健康頁都是紅燈，不會被接進來。
+  - **從 10.x 升上來**：10.10.7 與任何 10.11.x 都可以直接升，不必經過中繼版本。**升級前**把 Jellyfin 的 `${CONFIG_ROOT}/jellyfin` 完整備份 —— 12 改了資料庫，降不回去，只能還原備份；再移除第三方插件，10.11 的插件在 12 載入不了。**升級後**完整掃描一次媒體庫，自動分組的版本才會回來。
+  - **套件內的 Jellyfin 釘在 `version-12.1ubu2604`**：`docker compose pull` 只會拿到 12.1 這條線的重建，不會默默跨到下一個大版本。要升級時先備份上面那個目錄，再改 `deploy/docker-compose.yml` 的 tag 並 `docker compose up -d jellyfin`。
 - **Prowlarr**：不預置任何東西，Berth 唯讀掛載它的設定目錄以讀取它自動產生的 API key。
 - **TMDB**：要你自己申請一把 API key（上面那一節），Berth 不內建。憑證存在 Berth 自己的資料庫裡，
   精靈第 6 步或「設定 → 來源」都改得了。
@@ -264,8 +266,7 @@ uv run python scripts/fake_setup_server.py --scenario mixed
 | `mixed` | NAS 的常見組合：既有 Jellyfin（跑過自己的精靈、兩個媒體庫，其中一個掛 TVDB）、qBittorrent 已設密碼、Prowlarr 已有索引站 |
 | `starting` | 容器還在啟動：qBittorrent 連不上，Prowlarr 讀不到 API key |
 | `absent` | Jellyfin 不在 `COMPOSE_PROFILES` 裡：探不到，要在第 2 步填自己那一台的位址 |
-| `failing` | 套件內 Jellyfin，但插件下載一直失敗：看第 8 步的失敗樣子與可複製的手動步驟 |
-| `installed` | 既有 Jellyfin 而且 MergeVersions 已裝好：兩顆按鈕的「已完成」樣子 |
+| `old-jellyfin` | 既有 Jellyfin 還停在 10.11（其餘兩個服務照 `bundled`，擋路的只留一個）：泊位 1 紅燈，說出目前版本、為什麼要 12，以及升級前後要做的事；健康頁上同一台也是紅的 |
 | `signed-out` | 精靈已跑完，畫面從登入頁開始。`skipper` / `harbour` 是管理員，`deckhand` / `rope` 是普通使用者（看不到設定入口） |
 | `unmounted` | Jellyfin 少了媒體庫目錄的掛載：泊位 4 的第四條纜繩失敗，看「哪個容器少了哪個掛載」與 compose 修正片段 |
 | `healthy` | 精靈已跑完、三條 Route 綠燈、四項健康檢查全綠：健康頁 `/health` 與服務設定頁 `/settings/services` 的起點。帳號同 `signed-out` |

@@ -540,9 +540,16 @@ describe('Media 詳情頁', () => {
               season: 1,
               episode_start: 1,
               episode_end: null,
-              labels: [
-                'SPY x FAMILY (2022) - S01E01 - OPERATION STRIX [WEB][1080p][Lilith-Raws]',
-                'SPY x FAMILY (2022) - S01E01 - OPERATION STRIX [BD][2160p][Sakurato]',
+              // 名字是 Jellyfin 算的（票 14b）：反查到的那一刻抄進帳本。
+              versions: [
+                {
+                  name: 'OPERATION STRIX [WEB][1080p][Lilith-Raws]',
+                  tags: '[WEB][1080p][Lilith-Raws]',
+                },
+                {
+                  name: 'OPERATION STRIX [BD][2160p][Sakurato]',
+                  tags: '[BD][2160p][Sakurato]',
+                },
               ],
             },
           ],
@@ -554,8 +561,8 @@ describe('Media 詳情頁', () => {
     const files = await screen.findByRole('region', { name: '檔案與版本' })
 
     expect(within(files).getByText('多版本並存')).toBeVisible()
-    expect(within(files).getByText(/\[BD\]\[2160p\]\[Sakurato\]/)).toBeVisible()
-    expect(within(files).getByText(/先後順序不保證/)).toBeVisible()
+    expect(within(files).getByText('OPERATION STRIX [BD][2160p][Sakurato]')).toBeVisible()
+    expect(within(files).getByText(/由 Jellyfin 決定/)).toBeVisible()
   })
 
   it('憑證缺失時連到精靈的泊位 3，與探索頁同一塊', async () => {

@@ -78,7 +78,10 @@ services:
       test: [CMD-SHELL, "curl -fsS http://localhost:8080/ >/dev/null"]
 
   jellyfin:
-    image: lscr.io/linuxserver/jellyfin:latest
+    # 釘在 12.1 這條線（brief §19、plan §9.1）：跟得上 12.1 的修正與重建，但 `docker compose pull`
+    # 不會默默跨到下一個大版本。12.0 證明那種跨版是不可逆的——它改資料庫、讓插件失效、改變版本
+    # 分組。升級步驟（先備份 /config、升完完整掃描）見 README。Berth 支援的下限是 Jellyfin 12.0。
+    image: lscr.io/linuxserver/jellyfin:version-12.1ubu2604
     container_name: jellyfin
     restart: unless-stopped
     profiles: [jellyfin]

@@ -63,7 +63,7 @@ def plan(
 
     videos = [entry for entry in entries if entry.kind is not FileKind.SUBTITLE]
     decisions = [_decide(entry, release, resolved, torrent_name) for entry in videos]
-    items = _resolve(_targets(score(decisions, resolved), resolved.media))
+    items = _spans(_resolve(_targets(score(decisions, resolved), resolved.media)))
 
     subtitles = [entry for entry in entries if entry.kind is FileKind.SUBTITLE]
     items = _resolve((*items, *_attach(subtitles, items, release, resolved.media)))
@@ -282,3 +282,64 @@ def _contested(item: PlanItem) -> PlanItem:
             ),
         }
     )
+
+
+# --- 涵蓋範圍衝突（brief §7.8、§20.9） ---------------------------------------------------
+
+
+#: **後果**那一句。使用者看到的不是「檔案重複」，而是一集會從 Jellyfin 的集列表上消失。
+#: 比帳本的那一半（`services/plan.py`）接的是同一句——同一個後果不該有兩份字。
+SPAN_CLASH_CONSEQUENCE = (
+    "Jellyfin 12 groups files by season and episode only, so it would fold them into one "
+    "episode and the later ones would disappear from the season"
+)
+
+#: 同一包裡撞上的那一句。帳本那一邊的開頭不同（它說得出媒體庫裡已經有哪一段），後果共用。
+SPAN_CLASH = (
+    "another feature file starts at the same episode but covers a different range; "
+    + SPAN_CLASH_CONSEQUENCE
+)
+
+
+def _spans(items: Sequence[PlanItem]) -> tuple[PlanItem, ...]:
+    """多集檔與同起始集的單集 → 誰都不自動入庫（brief §7.8，2026-09-15 使用者拍板）。
+
+    `_resolve` 比的是目標路徑，而 `S01E03-E04` 與 `S01E03` 的檔名不同，路徑也就不同——
+    它擋不下這一組。Jellyfin 12 的版本分組鍵**只有季號與集號**（`IndexNumberEnd` 不在裡面），
+    所以它們會被併成同一集的兩個版本，第 4 集從集列表上消失（brief §20.9 實測）。
+    同一集有兩份涵蓋範圍不同的正片，本來就該由人決定留哪一份——這條規則不分 Jellyfin 版本。
+    """
+    ends: dict[tuple[int, int], set[int]] = {}
+    for item in items:
+        span = episode_span(item)
+        if span is not None:
+            season, start, end = span
+            ends.setdefault((season, start), set()).add(end)
+    return tuple(_clashing(item, ends) for item in items)
+
+
+def _clashing(item: PlanItem, ends: dict[tuple[int, int], set[int]]) -> PlanItem:
+    span = episode_span(item)
+    if span is None or len(ends[(span[0], span[1])]) < 2:
+        return item
+    return item.model_copy(
+        update={
+            "action": PlanAction.REVIEW,
+            "confidence": Confidence.LOW,
+            "reasons": (*item.reasons, SPAN_CLASH),
+        }
+    )
+
+
+def episode_span(item: PlanItem) -> tuple[int, int, int] | None:
+    """這一列蓋到的（季, 起始集, 結束集）。不是正片、或說不出季集的回 `None`。
+
+    **比帳本的那一半也用它**（`services/plan.py`）：判準一分岔，同一份檔案在兩條路徑上
+    就會得到兩個答案。
+
+    **目標路徑留著**：兩個檔案各有各的路徑，都寫得出去，停下來只是因為該由人挑一份
+    （與 `_apply_policy` 同一個道理）。
+    """
+    if item.action is not PlanAction.IMPORT or item.season is None or item.episode_start is None:
+        return None
+    return (item.season, item.episode_start, item.episode_end or item.episode_start)

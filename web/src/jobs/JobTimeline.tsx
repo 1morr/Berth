@@ -64,7 +64,6 @@ const EVENT_TYPES = [
   'link_failed',
   'jellyfin_scan_requested',
   'jellyfin_item_resolved',
-  'merge_versions_requested',
   'jellyfin_request_failed',
 ] as const
 
@@ -180,10 +179,7 @@ const FACTS: Record<KnownEvent, (facing: Facing) => ReactNode> = {
   jellyfin_item_resolved: ({ t, payload }) => (
     <Row>{t('jobs.timeline.resolved', { count: number(payload.count) })}</Row>
   ),
-  merge_versions_requested: ({ t }) => (
-    <p className="max-w-prose text-xs text-ink-dim">{t('jobs.timeline.merged')}</p>
-  ),
-  // **不是紅字**：這兩種失敗都不擋入庫（檔案已經在媒體庫裡了），紅色只代表阻擋
+  // **不是紅字**：這種失敗不擋入庫（檔案已經在媒體庫裡了），紅色只代表阻擋
   // （The One Meaning Rule）。理由翻譯、原文接在後面，與 `issue_detected` 同一個規矩。
   jellyfin_request_failed: ({ t, payload }) => {
     const request = JELLYFIN_REQUESTS.find((known) => known === payload.request)
@@ -195,8 +191,8 @@ const FACTS: Record<KnownEvent, (facing: Facing) => ReactNode> = {
   },
 }
 
-/** `domain.JellyfinRequest` 的兩種。認不得的只印原文——它可能是後端加的，而前端還沒有那句話。 */
-const JELLYFIN_REQUESTS = ['scan', 'merge'] as const
+/** `domain.JellyfinRequest`。認不得的只印原文——它可能是後端加的，而前端還沒有那句話。 */
+const JELLYFIN_REQUESTS = ['scan'] as const
 
 /** `domain.ReviewReason` 的三種。認不得的不畫——它可能是後端加的，而前端還沒有那句話。 */
 const REVIEW_REASONS: readonly ReviewReason[] = [

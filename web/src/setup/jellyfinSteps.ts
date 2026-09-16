@@ -1,8 +1,10 @@
 import { JELLYFIN_STEPS, type JellyfinStep } from '../api/setup'
 
 /**
- * plan §9.4 的九步。**每一步標的是它真的打的那支端點**，不是一句形容——剖面裡逐行列出來，
+ * plan §9.4 的七步。**每一步標的是它真的打的那支端點**，不是一句形容——剖面裡逐行列出來，
  * 使用者按之前就知道 Berth 會對他的 Jellyfin 做什麼（direction contract 的 Proof）。
+ *
+ * 沒有「裝插件」與「重啟」：Berth 只支援 Jellyfin 12，而 12.x 原生合併多版本（票 14b）。
  */
 export const STEP_ENDPOINT: Record<JellyfinStep, string> = {
   public_info: 'GET /System/Info/Public',
@@ -12,8 +14,6 @@ export const STEP_ENDPOINT: Record<JellyfinStep, string> = {
   remote_access: 'POST /Startup/RemoteAccess',
   complete: 'POST /Startup/Complete',
   api_key: 'POST /Auth/Keys',
-  plugin: 'POST /Packages/Installed',
-  tasks: 'GET /ScheduledTasks',
 }
 
 export const STEP_LABEL = {
@@ -24,8 +24,6 @@ export const STEP_LABEL = {
   remote_access: 'jellyfin.step.remote_access',
   complete: 'jellyfin.step.complete',
   api_key: 'jellyfin.step.api_key',
-  plugin: 'jellyfin.step.plugin',
-  tasks: 'jellyfin.step.tasks',
 } as const satisfies Record<JellyfinStep, string>
 
 /** 失敗時的手動步驟說明。與 `STEP_LABEL` 一樣是查表而不是拼字串——拼出來的 key 型別檢查不到。 */
@@ -37,8 +35,6 @@ export const STEP_FIX = {
   remote_access: 'jellyfin.fix.remote_access',
   complete: 'jellyfin.fix.complete',
   api_key: 'jellyfin.fix.api_key',
-  plugin: 'jellyfin.fix.plugin',
-  tasks: 'jellyfin.fix.tasks',
 } as const satisfies Record<JellyfinStep, string>
 
 /**
@@ -58,13 +54,6 @@ export function manualSteps(step: string, base: string): readonly string[] {
       return [`${base}/web/#/dashboard/libraries`]
     case 'api_key':
       return [`${base}/web/#/dashboard/keys`]
-    case 'plugin':
-      return [
-        `${base}/web/#/dashboard/plugins/repositories`,
-        'https://raw.githubusercontent.com/danieladov/JellyfinPluginManifest/master/manifest.json',
-      ]
-    case 'tasks':
-      return [`${base}/web/#/dashboard/tasks`]
     default:
       return []
   }

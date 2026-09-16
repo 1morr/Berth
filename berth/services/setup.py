@@ -481,8 +481,8 @@ def _current_step(setup: SetupSettings, *, routes: bool) -> int:
 def _jellyfin_secured(setup: SetupSettings) -> bool:
     """第 3 步做完了沒（票 06）。
 
-    套件內要 plan §9.4 的九步都有結論；既有只要拿得到 API key——建立媒體庫與安裝插件
-    在既有 Jellyfin 上是使用者按不按都可以的按鈕，不是這一步的完成條件（brief §16.4）。
+    套件內要 plan §9.4 的七步都有結論；既有只要拿得到 API key——「加入 Berth 路徑」在既有
+    Jellyfin 上是使用者按不按都可以的按鈕，不是這一步的完成條件（brief §16.4）。
     """
     done = {
         row.key for row in setup.jellyfin.steps if row.status in (StepStatus.OK, StepStatus.SKIPPED)

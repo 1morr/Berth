@@ -48,7 +48,6 @@ from berth.adapters.tmdb.client import RATE_PER_SECOND, HttpTmdbClient
 from berth.adapters.torznab.client import HttpTorznabClient
 from berth.domain import CollectionType, MediaKind
 from berth.services.indexer import DEFAULT_INDEXERS
-from berth.services.jellyfin import MERGE_VERSIONS_REPOSITORY
 from tests.conftest import read_fixture
 
 JELLYFIN_URL = "http://jellyfin:8096"
@@ -82,6 +81,8 @@ async def test_jellyfin_public_info_before_startup_wizard() -> None:
 
     assert info.startup_wizard_completed is False
     assert info.version == "10.11.11"
+    # 這份是對真的 10.11.11 錄的，所以它同時證明版本閘門擋得住真實的舊伺服器（brief §16.4）。
+    assert info.supported is False
 
 
 @respx.mock
@@ -1022,28 +1023,8 @@ async def test_jellyfin_authenticate_reports_the_administrator_flag() -> None:
 
 @respx.mock
 @pytest.mark.asyncio
-async def test_jellyfin_merge_tasks_are_found_by_key_and_used_by_id() -> None:
-    """觸發要用 `Id`，`Key` 只是找得到它的依據（brief §20.7）。"""
-    respx.get(f"{JELLYFIN_URL}/ScheduledTasks").respond(
-        200, text=read_fixture("http/jellyfin/scheduledtasks.merge-versions.json")
-    )
-
-    client = jellyfin_client("key")
-    try:
-        tasks = await client.scheduled_tasks()
-    finally:
-        await client.aclose()
-
-    by_key = {task.key: task for task in tasks}
-    assert by_key["MergeMoviesTask"].id == "fd957c84b0cfc2380becf2893e4b76fc"
-    assert by_key["MergeEpisodesTask"].id == "dcaf151dd1af25aefe775c58e214477e"
-    assert by_key["MergeMoviesTask"].name == "Merge All Movies"
-
-
-@respx.mock
-@pytest.mark.asyncio
 async def test_jellyfin_runs_a_task_by_its_id() -> None:
-    """MergeVersions 用精靈第 3 步存下的 `Id` 觸發（票 12），不是 `Key`。"""
+    """排程任務用 `Id` 觸發，不是 `Key`（brief §20.7）。反查的後備靠它（brief §20.1）。"""
     route = respx.post(
         f"{JELLYFIN_URL}/ScheduledTasks/Running/dcaf151dd1af25aefe775c58e214477e"
     ).respond(204)
@@ -1083,6 +1064,10 @@ async def test_jellyfin_items_are_asked_of_the_library_with_the_three_fields() -
     )
     # 單一版本時，唯一的那個來源就是自己的 `Path`；多版本合併之後才會多出別的（brief §7.7）。
     assert first.source_paths == (first.path,)
+    # 版本選單上的名字由 Jellyfin 算（票 14b）：單一版本時它就是整個檔名主幹。
+    assert first.version_name(first.path) == (
+        "The Bear (2022) - S03E01 - Tomorrow [WEB][1080p][SuccessfulCrab]"
+    )
 
 
 @respx.mock
@@ -1121,6 +1106,9 @@ async def test_jellyfin_a_movie_is_its_own_file() -> None:
     assert movie.tmdb_id == "872585"
     assert movie.path.endswith("Oppenheimer (2023) [tmdbid-872585] - [BD][1080p][YTS.MX].mp4")
     assert movie.path in movie.source_paths
+    assert movie.version_name(movie.path) == (
+        "Oppenheimer (2023) [tmdbid-872585] - [BD][1080p][YTS.MX]"
+    )
 
 
 @respx.mock
@@ -1172,74 +1160,6 @@ async def test_jellyfin_is_told_about_each_new_path_not_asked_to_rescan_everythi
             {"Path": episode.format(2), "UpdateType": "Created"},
         ]
     }
-
-
-@respx.mock
-@pytest.mark.asyncio
-async def test_jellyfin_repositories_round_trip() -> None:
-    """`POST /Repositories` 是整份覆寫，所以要先讀再合併（plan §9.4 第 8 步）。
-
-    這份是 Berth 加完之後錄的，所以它同時證明「重按不會加第二次」認得出自己加的那一筆。
-    """
-    respx.get(f"{JELLYFIN_URL}/Repositories").respond(
-        200, text=read_fixture("http/jellyfin/repositories.with-merge-versions.json")
-    )
-    route = respx.post(f"{JELLYFIN_URL}/Repositories").respond(204)
-
-    client = jellyfin_client("key")
-    try:
-        existing = await client.repositories()
-        await client.set_repositories(existing)
-    finally:
-        await client.aclose()
-
-    assert [repo.name for repo in existing] == ["Jellyfin Stable", "danieladov"]
-    assert any(repo.url == MERGE_VERSIONS_REPOSITORY.url for repo in existing)
-    assert json.loads(route.calls.last.request.content) == [
-        {
-            "Name": "Jellyfin Stable",
-            "Url": "https://repo.jellyfin.org/files/plugin/manifest.json",
-            "Enabled": True,
-        },
-        {"Name": "danieladov", "Url": MERGE_VERSIONS_REPOSITORY.url, "Enabled": True},
-    ]
-
-
-@respx.mock
-@pytest.mark.asyncio
-async def test_jellyfin_package_versions_read_the_manifest_casing() -> None:
-    """`/Packages` 是 manifest 的原文轉發，鍵是 camelCase 而不是 Jellyfin 的 PascalCase。"""
-    respx.get(f"{JELLYFIN_URL}/Packages").respond(
-        200, text=read_fixture("http/jellyfin/packages.merge-versions.json")
-    )
-
-    client = jellyfin_client("key")
-    try:
-        versions = await client.package_versions("Merge Versions")
-        missing = await client.package_versions("Nothing")
-    finally:
-        await client.aclose()
-
-    assert versions[:2] == ("10.11.0.1", "10.10.0.5")
-    assert missing == ()
-
-
-@respx.mock
-@pytest.mark.asyncio
-async def test_jellyfin_plugin_ids_are_compared_without_hyphens() -> None:
-    respx.get(f"{JELLYFIN_URL}/Plugins").respond(
-        200, text=read_fixture("http/jellyfin/plugins.merge-versions-installed.json")
-    )
-
-    client = jellyfin_client("key")
-    try:
-        plugins = await client.plugins()
-    finally:
-        await client.aclose()
-
-    by_id = {plugin.id: plugin for plugin in plugins}
-    assert by_id["f21bbed83a974d8b88b248aaa65427cb"].name == "Merge Versions"
-    assert by_id["f21bbed83a974d8b88b248aaa65427cb"].version == "10.11.0.1"
 
 
 @respx.mock

@@ -77,7 +77,7 @@ async def test_an_existing_jellyfin_reports_its_version(session: AsyncSession) -
         jellyfin=FakeJellyfinClient(
             base_url="http://nas:8096",
             server_name="nas",
-            version="10.10.7",
+            version="12.0.0",
             startup_wizard_completed=True,
         )
     )
@@ -259,7 +259,7 @@ async def test_a_connected_service_is_not_reprobed_by_the_polling_loop(
         jellyfin=FakeJellyfinClient(
             base_url="http://nas:8096",
             server_name="nas",
-            version="10.10.7",
+            version="12.0.0",
             startup_wizard_completed=True,
         )
     )

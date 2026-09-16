@@ -1,7 +1,7 @@
 """用 Fake adapter 起一台 Berth，讓精靈的 UI 不必真的有四個容器也能實跑驗證。
 
 真的 API、真的資料庫、真的前端 build——只有三個外部服務換成 `adapters/*/fake.py`。
-Fake 是**有狀態**的，而且每個情境只有一份，所以精靈的第 3 步（plan §9.4 的九步）真的會把
+Fake 是**有狀態**的，而且每個情境只有一份，所以精靈的第 3 步（plan §9.4 的七步）真的會把
 那台假 Jellyfin 一步一步改掉，重按也真的會標成「已經是這樣」。
 
 指令與情境見根目錄 README 的〈設定精靈的 Fake 後端〉。
@@ -39,8 +39,7 @@ from berth.adapters.jellyfin import (
     JellyfinClient,
     JellyfinItem,
     JellyfinLibrary,
-    JellyfinPlugin,
-    JellyfinTask,
+    JellyfinSource,
     TypeOption,
 )
 from berth.adapters.jellyfin.fake import FakeJellyfinClient
@@ -89,7 +88,6 @@ from berth.models import (
 )
 from berth.services.clients import SetupProbes
 from berth.services.health import check_health
-from berth.services.jellyfin import MERGE_VERSIONS_GUID
 from berth.services.routes import build_routes
 from berth.services.settings import read_settings, write_settings
 
@@ -145,7 +143,7 @@ def nas_jellyfin(**overrides: object) -> FakeJellyfinClient:
     defaults: dict[str, object] = {
         "base_url": "http://nas:8096",
         "server_name": "nas",
-        "version": "10.10.7",
+        "version": "12.0.0",
         "startup_wizard_completed": True,
         "admin": ("owner", "s3cret"),
         "libraries": NAS_LIBRARIES,
@@ -244,7 +242,7 @@ def mixed() -> Scenario:
 def starting() -> Scenario:
     """容器還在啟動：qBittorrent 連不上，其餘兩個已就緒。"""
     return Scenario(
-        jellyfin=FakeJellyfinClient(version="10.10.7"),
+        jellyfin=FakeJellyfinClient(),
         qbittorrent=FakeQbittorrentClient(error=ServiceUnavailableError("connection refused")),
         prowlarr=FakeProwlarrClient(),
         prowlarr_api_key="",
@@ -258,21 +256,16 @@ def absent() -> Scenario:
     return scenario
 
 
-def installed() -> Scenario:
-    """既有 Jellyfin，而且 MergeVersions 已經裝好了——兩顆按鈕的「已完成」樣子。"""
-    scenario = mixed()
-    scenario.jellyfin = nas_jellyfin(
-        version="10.11.11",
-        plugins=(
-            JellyfinPlugin(
-                id=MERGE_VERSIONS_GUID.replace("-", ""), name="Merge Versions", version="10.11.0.1"
-            ),
-        ),
-        tasks=(
-            JellyfinTask(id="m1", key="MergeMoviesTask", name="Merge All Movies"),
-            JellyfinTask(id="e1", key="MergeEpisodesTask", name="Merge All Episodes"),
-        ),
-    )
+def old_jellyfin() -> Scenario:
+    """既有 Jellyfin 還停在 10.11：泊位 1 紅燈，說得出目前版本與升級注意（brief §16.4、§20.9）。
+
+    這是「只支援 Jellyfin 12 以上」唯一看得到的畫面（票 14b）。健康頁上同一台也是紅的。
+
+    **其餘兩個服務照 `bundled`**，不是 `mixed`：那一份的 qBittorrent 永遠回 403，第 2 步過不去，
+    而這個情境要看的是泊位 1。擋路的東西只留一個。
+    """
+    scenario = bundled()
+    scenario.jellyfin = nas_jellyfin(version="10.11.11")
     return scenario
 
 
@@ -285,13 +278,6 @@ def signed_out() -> Scenario:
     scenario = mixed()
     scenario.jellyfin = nas_jellyfin(admin=("skipper", "harbour"), users={"deckhand": "rope"})
     scenario.setup_completed = True
-    return scenario
-
-
-def failing() -> Scenario:
-    """套件內 Jellyfin，但插件下載一直失敗——第 8 步的失敗樣子與可複製的手動步驟。"""
-    scenario = bundled()
-    scenario.jellyfin = FakeJellyfinClient(install_failures=99)
     return scenario
 
 
@@ -661,7 +647,7 @@ class ScanningJellyfin(FakeJellyfinClient):
                     name=name,
                     path=path,
                     tmdb_id=tmdb_id,
-                    source_paths=(path,),
+                    sources=(JellyfinSource(path=path, name=name),),
                 )
                 continue
             grown[folder] = JellyfinItem(
@@ -670,7 +656,6 @@ class ScanningJellyfin(FakeJellyfinClient):
                 name=PurePosixPath(folder).name,
                 path=folder,
                 tmdb_id=tmdb_id,
-                source_paths=(),
             )
             grown[path] = JellyfinItem(
                 id=_scanned_id(path),
@@ -678,7 +663,8 @@ class ScanningJellyfin(FakeJellyfinClient):
                 name=name,
                 path=path,
                 tmdb_id="",
-                source_paths=(path,),
+                # 單一版本時 Jellyfin 的版本名就是整個檔名主幹（12.0.0 / 12.1.0 實測）。
+                sources=(JellyfinSource(path=path, name=name),),
                 series_id=_scanned_id(folder),
             )
         return list(grown.values())
@@ -734,11 +720,10 @@ SCENARIOS = {
     "drifted": drifted,
     "outdated": outdated,
     "signed-out": signed_out,
-    "failing": failing,
     "mixed": mixed,
     "starting": starting,
     "absent": absent,
-    "installed": installed,
+    "old-jellyfin": old_jellyfin,
     "unmounted": unmounted,
 }
 

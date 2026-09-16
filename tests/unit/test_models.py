@@ -10,7 +10,7 @@ from sqlalchemy import Text
 from sqlalchemy.dialects import sqlite
 
 from berth.domain import Role
-from berth.models import SETTINGS_GROUPS, Base, PathSettings
+from berth.models import SETTINGS_GROUPS, Base, JellyfinSettings, PathSettings, SetupSettings
 from berth.models.types import JsonText, UtcDateTime, enum_column
 
 #: 這兩個 TypeDecorator 都不看 dialect，但簽章要求一個，所以給真的而不是 None。
@@ -138,3 +138,29 @@ def test_settings_groups_ignore_keys_written_by_older_versions() -> None:
     stored = {"complete_root": "/x", "removed_in_a_later_version": 1}
 
     assert PathSettings.model_validate(stored).complete_root == "/x"
+
+
+def test_rows_written_before_mergeversions_was_removed_still_read() -> None:
+    """票 14b 拿掉了那三個鍵，而已經存在資料庫裡的 JSON 還帶著它們（brief §19、§20.9）。
+
+    這一條守的是「**不需要 Alembic**」那個決定：讀不起來的話就得寫一支 migration 去清，
+    而不是像現在這樣讓 `extra="ignore"` 把它們丟掉，model 上也不留相容欄位。
+    """
+    jellyfin = JellyfinSettings.model_validate(
+        {
+            "base_url": "http://jellyfin:8096",
+            "api_key": "key",
+            "merge_movies_task_id": "fd957c84b0cfc2380becf2893e4b76fc",
+            "merge_episodes_task_id": "dcaf151dd1af25aefe775c58e214477e",
+        }
+    )
+    setup = SetupSettings.model_validate(
+        {"completed": True, "jellyfin": {"steps": [], "merge_versions_installed": True}}
+    )
+
+    assert jellyfin.base_url == "http://jellyfin:8096"
+    assert jellyfin.api_key == "key"
+    assert not hasattr(jellyfin, "merge_movies_task_id")
+    assert not hasattr(jellyfin, "merge_episodes_task_id")
+    assert setup.completed is True
+    assert not hasattr(setup.jellyfin, "merge_versions_installed")

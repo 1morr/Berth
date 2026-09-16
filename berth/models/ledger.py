@@ -72,6 +72,9 @@ class LedgerEntry(Base):
     #: 不是某一集；反查那一刻 `/Items` 的 Episode 自己帶著它，所以與 item id 一起寫下。
     #: `server_default` 是 migration 原生 `ADD COLUMN` 留下來的（不重建表，理由在 `7c3e5a9b2d41`）。
     jellyfin_series_id: Mapped[str] = mapped_column(Text, default="", server_default="")
+    #: Jellyfin 版本選單上這個檔案的名字（`MediaSources[].Name`，票 14b）。反查到的那一刻寫下；
+    #: 還沒收錄就是空字串，畫面照實說「Jellyfin 還沒收錄」而不是自己重算一個（brief §7.7、§20.9）。
+    jellyfin_version_name: Mapped[str] = mapped_column(Text, default="", server_default="")
     resolve_attempts: Mapped[int] = mapped_column(default=0)
     resolve_after: Mapped[datetime | None] = mapped_column(UtcDateTime, default=None)
     link_mode: Mapped[str] = mapped_column(Text, default=HARDLINK)

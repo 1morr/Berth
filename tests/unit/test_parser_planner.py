@@ -88,6 +88,67 @@ class TestActions:
         assert (item.action, item.season, item.episode_start) == (PlanAction.REVIEW, 2, 99)
 
 
+class TestEpisodeSpans:
+    """多集檔與同起始集的單集（brief §7.8、§20.9，2026-09-15 使用者拍板）。"""
+
+    def test_a_multi_episode_file_and_a_single_episode_both_wait_for_a_human(self) -> None:
+        """Jellyfin 12 的分組鍵只有季號與集號，兩者會被併成一集、第 4 集消失。"""
+        files = entries(
+            "[DBD-Raws][不死者之王 第二季][03-04][1080P][BDRip][FLAC].mkv",
+            "[DBD-Raws][不死者之王 第二季][03][1080P][BDRip][FLAC].mkv",
+        )
+
+        items = plan(TORRENT, files, overlord())
+
+        assert {item.action for item in items} == {PlanAction.REVIEW}
+        assert {item.confidence for item in items} == {Confidence.LOW}
+
+    def test_the_reason_says_what_would_happen_in_jellyfin(self) -> None:
+        """理由不是「重複」，而是「後面那一集會從集列表上消失」（使用者拍板的要求）。"""
+        files = entries(
+            "[DBD-Raws][不死者之王 第二季][03-04][1080P][BDRip][FLAC].mkv",
+            "[DBD-Raws][不死者之王 第二季][03][1080P][BDRip][FLAC].mkv",
+        )
+
+        reasons = [reason for item in plan(TORRENT, files, overlord()) for reason in item.reasons]
+
+        assert any("disappear from the season" in reason for reason in reasons)
+
+    def test_the_target_path_is_kept_so_the_choice_is_visible(self) -> None:
+        """兩個檔案各有各的路徑，都寫得出去——停下來只是因為該由人挑一份。"""
+        files = entries(
+            "[DBD-Raws][不死者之王 第二季][03-04][1080P][BDRip][FLAC].mkv",
+            "[DBD-Raws][不死者之王 第二季][03][1080P][BDRip][FLAC].mkv",
+        )
+
+        items = plan(TORRENT, files, overlord())
+
+        assert all(item.target_path for item in items)
+        assert len({item.target_path for item in items}) == 2
+
+    def test_two_versions_of_one_episode_still_import_by_themselves(self) -> None:
+        """同起始集**同結束集**是多版本並存，本來就該一起入庫（brief §7.7）。"""
+        files = entries(
+            "[DBD-Raws][不死者之王 第二季][03][1080P][BDRip][FLAC].mkv",
+            "[Lilith-Raws] Overlord II - 03 [WebDL][720p][CHS].mkv",
+        )
+
+        items = plan(TORRENT, files, overlord())
+
+        assert {item.action for item in items} == {PlanAction.IMPORT}
+
+    def test_a_different_episode_is_not_dragged_in(self) -> None:
+        files = entries(
+            "[DBD-Raws][不死者之王 第二季][03-04][1080P][BDRip][FLAC].mkv",
+            "[DBD-Raws][不死者之王 第二季][03][1080P][BDRip][FLAC].mkv",
+            "[DBD-Raws][不死者之王 第二季][05][1080P][BDRip][FLAC].mkv",
+        )
+
+        by_episode = {item.episode_start: item.action for item in plan(TORRENT, files, overlord())}
+
+        assert by_episode[5] is PlanAction.IMPORT
+
+
 class TestTargets:
     """目標路徑（plan §5）。Plan 說得出「這個檔案會被放到哪裡」才審核得了。"""
 

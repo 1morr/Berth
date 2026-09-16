@@ -116,6 +116,18 @@ class UnmatchedFileOut(BaseModel):
     job_name: str
 
 
+class VersionOut(BaseModel):
+    """並存的版本裡的一個（brief §7.7）。"""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    #: Jellyfin 版本選單上的名字（帳本的 `jellyfin_version_name`）。**由 Jellyfin 算**，
+    #: 所以它還沒收錄這個檔案時是空字串。
+    name: str
+    #: 這個檔案的 Tags。沒有 `name` 時畫面顯示它，並說明那不是版本名（brief §7.7）。
+    tags: str
+
+
 class VersionGroupOut(BaseModel):
     """同一集（或同一部電影）並存的版本（brief §7.7）。"""
 
@@ -124,8 +136,8 @@ class VersionGroupOut(BaseModel):
     season: int | None
     episode_start: int | None
     episode_end: int | None
-    #: Jellyfin 版本選單上會顯示的名字：電影是 Tags，劇集是整個檔名主幹。先後順序不保證。
-    labels: list[str]
+    #: 先後順序不保證：Jellyfin 依解析度降冪再依檔名排，Berth 這裡照帳本的順序。
+    versions: list[VersionOut]
 
 
 class MediaOut(BaseModel):

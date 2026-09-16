@@ -65,7 +65,7 @@ async def arrange(
         ServiceKind.JELLYFIN: ServiceProbe(
             origin=ServiceOrigin.EXISTING,
             reason=DetectionReason.SETUP_COMPLETED,
-            detail="10.11.11",
+            detail="12.1.0",
             base_url="http://nas:8096",
             checked_at=NOW,
             configured=True,

@@ -169,11 +169,11 @@ describe('Job 時間線', () => {
     const line = render([
       event({
         type: 'jellyfin_request_failed',
-        payload: { request: 'merge', error: 'POST /ScheduledTasks/Running/x: 404' },
+        payload: { request: 'scan', error: 'POST /Library/Media/Updated: 404' },
       }),
     ])
 
-    expect(line.getByText(/MergeVersions 沒有觸發/)).toBeInTheDocument()
+    expect(line.getByText(/通知沒送到/)).toBeInTheDocument()
     expect(line.getByText(/404/)).toBeInTheDocument()
   })
 

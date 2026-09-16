@@ -224,7 +224,7 @@ export function CopyLine({ command }: { command: string }) {
 }
 
 /**
- * 需要二次確認的動作（plan §9.5 的兩顆按鈕）。確認就地展開，不跳離當前泊位
+ * 需要二次確認的動作（plan §9.5 的「加入 Berth 路徑」）。確認就地展開，不跳離當前泊位
  * （direction contract：失敗與確認都在原地）。`warning` 說清楚按下去會發生什麼。
  */
 export function ConfirmAction({

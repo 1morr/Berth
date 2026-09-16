@@ -33,7 +33,7 @@ export function connectService(kind: ServiceKind, body: ConnectInput): Promise<S
 }
 
 /**
- * `JellyfinStep`：plan §9.4 的九步，順序即宣告順序。
+ * `JellyfinStep`：plan §9.4 的七步，順序即宣告順序。
  *
  * 後端把 `StepOut.step` 宣告成 `str`，所以這個集合在 OpenAPI 裡不存在——它是 UI 的
  * 顯示順序，不是 API 的形狀（`QBITTORRENT_STEPS` 同理）。
@@ -46,8 +46,6 @@ export const JELLYFIN_STEPS = [
   'remote_access',
   'complete',
   'api_key',
-  'plugin',
-  'tasks',
 ] as const
 export type JellyfinStep = (typeof JELLYFIN_STEPS)[number]
 
@@ -75,10 +73,6 @@ export function addLibraryPath(library: string): Promise<JellyfinSetup> {
   return apiPost<JellyfinSetup>('/setup/jellyfin/libraries/paths', {
     library,
   } satisfies Schemas['LibraryPathIn'])
-}
-
-export function installMergeVersions(): Promise<JellyfinSetup> {
-  return apiPost<JellyfinSetup>('/setup/jellyfin/plugin')
 }
 
 /** --- 第 4 步：qBittorrent（plan §9.3 第 4 步、§8.1）--- */

@@ -130,8 +130,6 @@ class EventType(StrEnum):
     JELLYFIN_SCAN_REQUESTED = "jellyfin_scan_requested"
     #: 反查到這一筆 Job 入庫的檔案在 Jellyfin 裡的 item（count）。
     JELLYFIN_ITEM_RESOLVED = "jellyfin_item_resolved"
-    #: 觸發了 MergeVersions 的排程任務（task）。
-    MERGE_VERSIONS_REQUESTED = "merge_versions_requested"
     #: 對 Jellyfin 的一次請求沒成（request 是 `JellyfinRequest`、error）。**只記不擋**：
     #: 檔案已經在媒體庫裡了，Jellyfin 自己的排程掃描遲早會看到它們（plan §3.3）。
     JELLYFIN_REQUEST_FAILED = "jellyfin_request_failed"
@@ -140,14 +138,12 @@ class EventType(StrEnum):
 class JellyfinRequest(StrEnum):
     """`jellyfin_request_failed` 事件 payload 裡的 `request`：沒成的是哪一次請求。
 
-    封閉集合，因為兩種的下一步不同：通知沒送到，Jellyfin 的排程掃描遲早會補上；
-    MergeVersions 沒觸發，同一集的兩個版本會一直是兩個條目，直到有人去按那個任務。
+    **只剩一種，仍然是封閉集合**（票 14b 拿掉了 `merge`）：畫面照它說出那一種失敗的下一步，
+    而自由文字翻譯不了。下一種失敗加進來時，舊事件的 payload 不必改。
     """
 
     #: `POST /Library/Media/Updated`（plan §8.2 的 `notify_paths`）。
     SCAN = "scan"
-    #: `POST /ScheduledTasks/Running/{id}`，或根本沒有存下任務 id（brief §7.7）。
-    MERGE = "merge"
 
 
 class IssueType(StrEnum):
@@ -328,7 +324,11 @@ class StepStatus(StrEnum):
 
 
 class JellyfinStep(StrEnum):
-    """Jellyfin 自動初始化序列的九步（plan §9.4）。順序即宣告順序。"""
+    """Jellyfin 自動初始化序列的七步（plan §9.4）。順序即宣告順序。
+
+    原本有第 8、9 步（裝 MergeVersions、記下兩個合併任務的 Id）。12.x 原生合併多版本，
+    插件在上面是空跑，所以整段移除了（票 14b、brief §19、§20.9）。
+    """
 
     PUBLIC_INFO = "public_info"
     CONFIGURATION = "configuration"
@@ -337,8 +337,6 @@ class JellyfinStep(StrEnum):
     REMOTE_ACCESS = "remote_access"
     COMPLETE = "complete"
     API_KEY = "api_key"
-    PLUGIN = "plugin"
-    TASKS = "tasks"
 
 
 class RouteCheck(StrEnum):

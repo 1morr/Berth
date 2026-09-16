@@ -16,8 +16,9 @@
 送到，或 Berth 在狀態落地與通知之間被關掉——那兩種情況下 Jellyfin 根本不知道要去掃。路徑級的
 通知是冪等的，多送一次的代價只是一個請求。
 
-找到之後觸發 MergeVersions（brief §7.7、§20.7）。放在**反查成功之後**而不是入庫當下：合併要
-Jellyfin 已經看得到那些檔案，而入庫的那一刻它多半還沒掃完——那時候觸發只是空跑一次。
+**找到的那一刻順手記下版本名**（brief §7.7）：12.0 起劇集也原生合併，而版本選單上的名字是
+Jellyfin 自己算的（去掉各版本檔名的共同前綴，算法連 12.0 與 12.1 都不一樣）。存進帳本之後，
+詳情頁不必為了一行字再問一次 Jellyfin，也不必追著三種算法跑。
 """
 
 from __future__ import annotations
@@ -40,7 +41,7 @@ from berth.adapters.jellyfin import (
     JellyfinClient,
     JellyfinItem,
 )
-from berth.domain import CollectionType, EventType, IssueType, JellyfinRequest
+from berth.domain import CollectionType, EventType, IssueType
 from berth.models import JellyfinSettings, Job, LedgerEntry, Media, Route
 from berth.models.types import utcnow
 from berth.services.clients import ServiceClientFactory
@@ -69,11 +70,6 @@ SCAN_AFTER_MISSES = 2
 #: 請 Jellyfin 掃描之後，下一次最晚多久再看。原本的間隔到後面是一小時，那是在等它自己的排程；
 #: 已經開口請它掃了，就不必等那麼久。
 SCAN_SETTLE = timedelta(minutes=10)
-
-#: 存下來的任務 id 是空的時候，事件裡那一句原文。下一步是精靈第 3 步的那顆按鈕（plan §9.5）。
-NO_MERGE_TASK = (
-    "no MergeVersions task id is stored; install MergeVersions from step 3 of the setup wizard"
-)
 
 
 def first_resolve_at(now: datetime) -> datetime:
@@ -115,8 +111,6 @@ async def sweep_resolutions(
     found: list[LedgerEntry] = []
     waiting: list[LedgerEntry] = []
     given_up: list[LedgerEntry] = []
-    #: 找到東西的那幾筆 Job，照媒體庫的種類分：MergeVersions 一種媒體庫一個任務。
-    merges: dict[CollectionType, set[str]] = {}
     try:
         for route, entries in _by_route(due, routes):
             items = await _look_up(session, client, route, entries)
@@ -125,10 +119,9 @@ async def sweep_resolutions(
                 if item is not None:
                     entry.jellyfin_item_id = item.id
                     entry.jellyfin_series_id = item.series_id
+                    entry.jellyfin_version_name = item.version_name(entry.target_path)
                     entry.resolve_after = None
                     found.append(entry)
-                    if route is not None and entry.job_hash is not None:
-                        merges.setdefault(route.collection_type, set()).add(entry.job_hash)
                 elif _reschedule(entry, moment):
                     given_up.append(entry)
                 else:
@@ -138,7 +131,6 @@ async def sweep_resolutions(
                 if entry.resolve_after is not None:
                     entry.resolve_after = min(entry.resolve_after, moment + SCAN_SETTLE)
         await _announce(session, found, given_up)
-        await _merge(session, client, settings, merges)
     finally:
         await client.aclose()
     await session.commit()
@@ -301,46 +293,6 @@ async def _announce(
             },
         )
         logger.warning("jellyfin never showed these files", extra={"count": len(entries)})
-
-
-async def _merge(
-    session: AsyncSession,
-    client: JellyfinClient,
-    settings: JellyfinSettings,
-    merges: dict[CollectionType, set[str]],
-) -> None:
-    """找到了東西就觸發 MergeVersions（brief §7.7）。**找不到任務只記事件**（plan §8.2）。
-
-    一種媒體庫一輪最多觸發一次：那個任務本來就是整庫合併。
-    """
-    for kind, job_hashes in merges.items():
-        task_id = (
-            settings.merge_movies_task_id
-            if kind is CollectionType.MOVIES
-            else settings.merge_episodes_task_id
-        )
-        event, payload = await _run_merge(client, task_id)
-        for job_hash in sorted(job_hashes):
-            job = await session.get(Job, job_hash)
-            if job is not None:
-                await record_event(session, job, event, actor=actor_of(None), payload=payload)
-
-
-async def _run_merge(client: JellyfinClient, task_id: str) -> tuple[EventType, dict[str, object]]:
-    if not task_id:
-        return EventType.JELLYFIN_REQUEST_FAILED, {
-            "request": JellyfinRequest.MERGE.value,
-            "error": NO_MERGE_TASK,
-        }
-    try:
-        await client.run_task(task_id)
-    except ServiceError as exc:
-        logger.warning("mergeversions was not triggered", extra={"error": message(exc)})
-        return EventType.JELLYFIN_REQUEST_FAILED, {
-            "request": JellyfinRequest.MERGE.value,
-            "error": message(exc),
-        }
-    return EventType.MERGE_VERSIONS_REQUESTED, {"task": task_id}
 
 
 async def _by_job(

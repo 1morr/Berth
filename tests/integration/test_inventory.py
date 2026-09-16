@@ -173,6 +173,7 @@ async def linked(
     tags: Tags | None = None,
     item: str = "",
     series: str = "",
+    version_name: str = "",
     resolve_after: datetime | None = None,
     attempts: int = 0,
     of: Job | None = None,
@@ -204,6 +205,7 @@ async def linked(
         action=action,
         jellyfin_item_id=item,
         jellyfin_series_id=series,
+        jellyfin_version_name=version_name,
         resolve_after=resolve_after,
         resolve_attempts=attempts,
     )

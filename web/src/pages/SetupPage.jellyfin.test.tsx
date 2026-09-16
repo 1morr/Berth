@@ -24,7 +24,6 @@ const JELLYFIN = 'GET /api/setup/jellyfin'
 const BOOTSTRAP = 'POST /api/setup/jellyfin/bootstrap'
 const CONNECT = 'POST /api/setup/jellyfin/connect'
 const PATHS = 'POST /api/setup/jellyfin/libraries/paths'
-const PLUGIN = 'POST /api/setup/jellyfin/plugin'
 
 /** 第 1–2 步都做完了，精靈在泊位 1。 */
 const AT_BERTH_ONE = setupStatus({
@@ -37,13 +36,13 @@ const AT_BERTH_ONE = setupStatus({
 const NAS = setupStatus({
   ...AT_BERTH_ONE,
   services: [
-    detection({ origin: 'existing', reason: 'setup_completed', detail: '10.10.7' }),
+    detection({ origin: 'existing', reason: 'setup_completed', detail: '12.0.0' }),
     ...ALL_BUNDLED.slice(1),
   ],
 })
 
 describe('泊位 1：套件內 Jellyfin', () => {
-  it('剖面在按之前就列出九支端點', async () => {
+  it('剖面在按之前就列出七支端點', async () => {
     stubApi({ [STATUS]: { body: AT_BERTH_ONE }, [JELLYFIN]: { body: jellyfinSetup() } })
 
     renderWithProviders(<SetupPage />)
@@ -53,8 +52,9 @@ describe('泊位 1：套件內 Jellyfin', () => {
     expect(within(cutaway).getByText('POST /Startup/User')).toBeInTheDocument()
     expect(within(cutaway).getByText('POST /Library/VirtualFolders')).toBeInTheDocument()
     expect(within(cutaway).getByText('POST /Auth/Keys')).toBeInTheDocument()
-    expect(within(cutaway).getByText('GET /ScheduledTasks')).toBeInTheDocument()
     expect(within(cutaway).getByText('建立 Movies / TV / Anime 三個媒體庫')).toBeInTheDocument()
+    // 12.x 原生合併多版本，序列裡沒有「裝插件」也沒有「重啟」（票 14b）。
+    expect(within(cutaway).queryByText('POST /Packages/Installed')).not.toBeInTheDocument()
   })
 
   it('按下靠泊之後逐條纜繩留下實測值', async () => {
@@ -69,9 +69,9 @@ describe('泊位 1：套件內 Jellyfin', () => {
     await user.click(await screen.findByRole('button', { name: '開始靠泊' }))
 
     const sequence = await screen.findByTestId('sequence')
-    await waitFor(() => expect(within(sequence).getAllByText('已完成')).toHaveLength(9))
+    await waitFor(() => expect(within(sequence).getAllByText('已完成')).toHaveLength(7))
     expect(within(sequence).getByText('Movies · TV · Anime')).toBeInTheDocument()
-    expect(within(sequence).getByText('fd957c84 · dcaf151d')).toBeInTheDocument()
+    expect(within(sequence).getByText('12.1.0')).toBeInTheDocument()
     expect(fetchStub.mock.calls.some(([url]) => url === '/api/setup/jellyfin/bootstrap')).toBe(true)
   })
 
@@ -81,8 +81,9 @@ describe('泊位 1：套件內 Jellyfin', () => {
       [JELLYFIN]: {
         body: jellyfinSetup({
           api_key_present: true,
+          version: '12.1.0',
           steps: [
-            step('public_info', 'ok', '10.11.11'),
+            step('public_info', 'ok', '12.1.0'),
             ...SEQUENCE_DONE.slice(1).map((row) => ({ ...row, status: 'skipped' as const })),
           ],
         }),
@@ -92,7 +93,7 @@ describe('泊位 1：套件內 Jellyfin', () => {
     renderWithProviders(<SetupPage />)
     const sequence = await screen.findByTestId('sequence')
 
-    await waitFor(() => expect(within(sequence).getAllByText('已經是這樣')).toHaveLength(8))
+    await waitFor(() => expect(within(sequence).getAllByText('已經是這樣')).toHaveLength(6))
     expect(screen.getByRole('button', { name: '重新跑一次' })).toBeInTheDocument()
   })
 
@@ -101,11 +102,12 @@ describe('泊位 1：套件內 Jellyfin', () => {
       [STATUS]: { body: AT_BERTH_ONE },
       [JELLYFIN]: {
         body: jellyfinSetup({
-          api_key_present: true,
           steps: [
-            ...SEQUENCE_DONE.slice(0, 7),
-            step('plugin', 'failed', '', 'MergeVersions did not install after 3 tries: 500'),
-            step('tasks', 'pending'),
+            ...SEQUENCE_DONE.slice(0, 3),
+            step('libraries', 'failed', '', 'POST /Library/VirtualFolders: 500'),
+            step('remote_access', 'pending'),
+            step('complete', 'pending'),
+            step('api_key', 'pending'),
           ],
         }),
       },
@@ -113,15 +115,33 @@ describe('泊位 1：套件內 Jellyfin', () => {
 
     renderWithProviders(<SetupPage />)
 
-    expect(await screen.findByText(/MergeVersions did not install/)).toBeInTheDocument()
-    expect(
-      screen.getByText(
-        'https://raw.githubusercontent.com/danieladov/JellyfinPluginManifest/master/manifest.json',
-      ),
-    ).toBeInTheDocument()
+    expect(await screen.findByText(/POST \/Library\/VirtualFolders: 500/)).toBeInTheDocument()
+    expect(screen.getByText('http://jellyfin:8096/web/#/dashboard/libraries')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '重試失敗的那一步' })).toBeInTheDocument()
     const sequence = screen.getByTestId('sequence')
-    expect(within(sequence).getByText('尚未執行')).toBeInTheDocument()
+    // 失敗那一步之後的都沒跑到——序列停在那裡，而不是跳過它繼續。
+    expect(within(sequence).getAllByText('尚未執行')).toHaveLength(3)
+  })
+
+  it('版本低於 12 時說出目前版本與升級前要做的事', async () => {
+    stubApi({
+      [STATUS]: { body: AT_BERTH_ONE },
+      [JELLYFIN]: {
+        body: jellyfinSetup({
+          version: '10.11.11',
+          version_supported: false,
+          steps: [
+            step('public_info', 'failed', '10.11.11', 'Jellyfin 10.11.11 is older than 12.0'),
+          ],
+        }),
+      },
+    })
+
+    renderWithProviders(<SetupPage />)
+
+    expect(await screen.findByText(/這台 Jellyfin 是 10.11.11/)).toBeInTheDocument()
+    expect(screen.getByText(/完整備份/)).toBeInTheDocument()
+    expect(screen.getByText(/移除第三方插件/)).toBeInTheDocument()
   })
 
   it('泊位板在精靈前進之後把 BTH 1 標成已繫上', async () => {
@@ -144,7 +164,8 @@ describe('泊位 1：既有 Jellyfin', () => {
     origin: 'existing',
     base_url: 'http://nas:8096',
     api_key_present: true,
-    steps: [step('public_info', 'ok', '10.10.7'), step('api_key', 'ok', 'Berth')],
+    version: '12.0.0',
+    steps: [step('public_info', 'ok', '12.0.0'), step('api_key', 'ok', 'Berth')],
     libraries: [
       library(),
       library({
@@ -257,25 +278,15 @@ describe('泊位 1：既有 Jellyfin', () => {
     expect(screen.queryByRole('button', { name: '加入 Berth 路徑' })).not.toBeInTheDocument()
   })
 
-  it('「安裝 MergeVersions」要二次確認並說明會重啟 Jellyfin', async () => {
-    const fetchStub = stubApi({
-      [STATUS]: { body: NAS },
-      [JELLYFIN]: { body: CONNECTED },
-      [PLUGIN]: { body: { ...CONNECTED, merge_versions_installed: true } },
-    })
-    const user = userEvent.setup()
+  it('既有 Jellyfin 上沒有任何安裝插件或重啟的動作', async () => {
+    stubApi({ [STATUS]: { body: NAS }, [JELLYFIN]: { body: CONNECTED } })
 
     renderWithProviders(<SetupPage />)
-    await user.click(await screen.findByRole('button', { name: '安裝 MergeVersions' }))
 
-    expect(screen.getByText(/重啟 Jellyfin/)).toBeInTheDocument()
-    expect(fetchStub.mock.calls.some(([url]) => url === '/api/setup/jellyfin/plugin')).toBe(false)
-
-    await user.click(screen.getByRole('button', { name: '確認安裝並重啟' }))
-
-    await waitFor(() =>
-      expect(fetchStub.mock.calls.some(([url]) => url === '/api/setup/jellyfin/plugin')).toBe(true),
-    )
+    expect(await screen.findByText('Films')).toBeInTheDocument()
+    // 12.x 原生合併多版本，Berth 不再碰別人的插件，也就不會重啟別人的 Jellyfin（票 14b）。
+    expect(screen.queryByRole('button', { name: /MergeVersions/ })).not.toBeInTheDocument()
+    expect(screen.queryByText(/重啟 Jellyfin/)).not.toBeInTheDocument()
   })
 
   it('加路徑失敗時就地顯示原文與手動步驟', async () => {

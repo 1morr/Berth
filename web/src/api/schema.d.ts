@@ -720,7 +720,7 @@ export interface paths {
         put?: never;
         /**
          * Post Jellyfin Bootstrap
-         * @description 套件內路徑：跑完 plan §9.4 的九步。重按只補做還沒做的那幾步。
+         * @description 套件內路徑：跑完 plan §9.4 的七步。重按只補做還沒做的那幾步。
          */
         post: operations["post_jellyfin_bootstrap_api_setup_jellyfin_bootstrap_post"];
         delete?: never;
@@ -765,26 +765,6 @@ export interface paths {
          *     失敗不是 4xx/5xx，而是回一條 `failed` 的 `libraries` 步驟——畫面靠它顯示原文與手動步驟。
          */
         post: operations["post_jellyfin_library_path_api_setup_jellyfin_libraries_paths_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/setup/jellyfin/plugin": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Post Jellyfin Plugin
-         * @description 既有路徑的「安裝 MergeVersions」。**會重啟 Jellyfin**，所以 UI 要二次確認。
-         */
-        post: operations["post_jellyfin_plugin_api_setup_jellyfin_plugin_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1362,12 +1342,10 @@ export interface components {
             steps: components["schemas"]["StepOut"][];
             /** Libraries */
             libraries: components["schemas"]["LibraryOut"][];
-            /** Merge Versions Installed */
-            merge_versions_installed: boolean;
-            /** Merge Movies Task Id */
-            merge_movies_task_id: string;
-            /** Merge Episodes Task Id */
-            merge_episodes_task_id: string;
+            /** Version */
+            version: string;
+            /** Version Supported */
+            version_supported: boolean;
         };
         /**
          * JellyfinWebOut
@@ -2154,6 +2132,8 @@ export interface components {
             drift: string[];
             /** Banned */
             banned: boolean;
+            /** Unsupported */
+            unsupported: boolean;
         };
         /**
          * ServiceKind
@@ -2318,8 +2298,18 @@ export interface components {
             episode_start: number | null;
             /** Episode End */
             episode_end: number | null;
-            /** Labels */
-            labels: string[];
+            /** Versions */
+            versions: components["schemas"]["VersionOut"][];
+        };
+        /**
+         * VersionOut
+         * @description 並存的版本裡的一個（brief §7.7）。
+         */
+        VersionOut: {
+            /** Name */
+            name: string;
+            /** Tags */
+            tags: string;
         };
     };
     responses: never;
@@ -3479,26 +3469,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    post_jellyfin_plugin_api_setup_jellyfin_plugin_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["JellyfinSetupOut"];
                 };
             };
         };

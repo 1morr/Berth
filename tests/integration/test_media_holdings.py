@@ -202,26 +202,44 @@ class TestFiles:
 
 
 class TestVersions:
-    async def test_an_episode_version_is_named_by_its_whole_file_stem(
-        self, session: AsyncSession
-    ) -> None:
-        """劇集經 MergeVersions 合併後，版本選單顯示的是整個檔名主幹（brief §7.7、§20.6）。"""
+    async def test_a_version_is_named_by_jellyfin_not_by_berth(self, session: AsyncSession) -> None:
+        """版本名是 Jellyfin 算的，反查時抄進帳本（brief §7.7、§20.9、票 14b）。
+
+        12.0 起它是「去掉各版本檔名的共同前綴」剩下的部分，算法跟標題的標點有關，12.0 與 12.1
+        還不一樣——自己重算就要同時追三種算法。票 13 原本的「整個檔名主幹」是 10.x + 插件的樣子。
+        """
         tv = await route(session)
         spy = await title(session)
-        await linked(session, spy, tv, episode=1, tags=Tags(resolution="1080p", group="Lilith"))
-        await linked(session, spy, tv, episode=1, tags=Tags(resolution="2160p", group="Sakurato"))
+        await linked(
+            session,
+            spy,
+            tv,
+            episode=1,
+            tags=Tags(resolution="1080p", group="Lilith"),
+            version_name="Winter Is Coming [1080p][Lilith]",
+        )
+        await linked(
+            session,
+            spy,
+            tv,
+            episode=1,
+            tags=Tags(resolution="2160p", group="Sakurato"),
+            version_name="Winter Is Coming [2160p][Sakurato]",
+        )
         await linked(session, spy, tv, episode=2)
 
         (group,) = (await detail(session, spy)).versions
 
         assert (group.season, group.episode_start) == (1, 1)
-        assert group.labels == (
-            "SPY x FAMILY - S01E01 [1080p][Lilith]",
-            "SPY x FAMILY - S01E01 [2160p][Sakurato]",
-        )
+        assert [row.name for row in group.versions] == [
+            "Winter Is Coming [1080p][Lilith]",
+            "Winter Is Coming [2160p][Sakurato]",
+        ]
 
-    async def test_a_film_version_is_named_by_its_tags(self, session: AsyncSession) -> None:
-        """電影的版本標籤是 ` - ` 之後那一段（brief §7.2、§7.7）。"""
+    async def test_a_version_jellyfin_has_not_indexed_yet_only_has_its_tags(
+        self, session: AsyncSession
+    ) -> None:
+        """還沒收錄就沒有版本名。畫面照實說，不自己算一個（票 14b）。"""
         movies = await route(session, "movies", collection_type=CollectionType.MOVIES)
         oppenheimer = await film(session)
         await linked(
@@ -243,7 +261,10 @@ class TestVersions:
 
         (group,) = (await detail(session, oppenheimer)).versions
 
-        assert group.labels == ("[1080p]", "[2160p]")
+        assert [(row.name, row.tags) for row in group.versions] == [
+            ("", "[1080p]"),
+            ("", "[2160p]"),
+        ]
 
     async def test_a_single_version_is_not_a_group(self, session: AsyncSession) -> None:
         tv = await route(session)

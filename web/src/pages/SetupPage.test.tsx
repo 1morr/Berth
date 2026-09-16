@@ -133,7 +133,7 @@ describe('第 2 步：偵測服務', () => {
     await waitFor(() => {
       expect(within(sequence).getAllByText('套件內')).toHaveLength(3)
     })
-    expect(within(sequence).getByText('10.11.11')).toBeInTheDocument()
+    expect(within(sequence).getByText('12.1.0')).toBeInTheDocument()
     expect(within(sequence).getByText('v5.2.3 · Web API 2.15.1')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '前往泊位 1' })).toBeInTheDocument()
   })
@@ -167,7 +167,7 @@ describe('第 2 步：偵測服務', () => {
 
   it('既有服務就地展開連線表單', async () => {
     const existing = [
-      detection({ origin: 'existing', reason: 'setup_completed', detail: '10.10.7' }),
+      detection({ origin: 'existing', reason: 'setup_completed', detail: '12.0.0' }),
       ...ALL_BUNDLED.slice(1),
     ]
     stubApi({ [STATUS]: { body: setupStatus({ ...AT_STEP_TWO, services: existing }) } })
@@ -197,7 +197,7 @@ describe('第 2 步：偵測服務', () => {
   it('既有服務連得上就不再是「待你處理」，連不上才是', async () => {
     const services = [
       // 連得上：判定是服務自己報的事實（跑過初始精靈）。
-      detection({ origin: 'existing', reason: 'setup_completed', detail: '10.10.7' }),
+      detection({ origin: 'existing', reason: 'setup_completed', detail: '12.0.0' }),
       // 連不上：要使用者補連線資訊。
       detection({
         kind: 'qbittorrent',

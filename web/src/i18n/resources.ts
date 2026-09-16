@@ -153,20 +153,22 @@ const zhHant = {
       held: '已取得',
       absent: '尚未取得',
       libraries: '媒體庫',
-      mergeVersions: 'MergeVersions',
-      installed: '已安裝',
-      notInstalled: '未安裝',
+    },
+    version: {
+      label: '版本太舊',
+      current: '這台 Jellyfin 是 {{version}}，Berth 需要 12.0 以上。',
+      why: 'Jellyfin 12.0 起同一集的多個版本由它自己合併成一個條目；10.x 要靠第三方插件，而那個插件在 12 上是空跑，還會跨媒體庫誤併。所以 Berth 只支援 12 以上。（12.0 就是原本的 10.12，只是拿掉了版號前面的 10。）',
+      upgrade:
+        '升級前：先把 Jellyfin 的 /config 完整備份 —— 12 改了資料庫，降不回去，只能還原備份；再移除第三方插件，10.11 的插件在 12 載入不了。升級後：完整掃描一次媒體庫，自動分組的版本才會回來。',
     },
     step: {
-      public_info: '確認初始精靈還沒跑過',
+      public_info: '確認版本與初始精靈還沒跑過',
       configuration: '語言與 metadata 地區',
       admin_user: '以 Berth 的帳密建立管理員',
       libraries: '建立 Movies / TV / Anime 三個媒體庫',
       remote_access: '開啟遠端存取',
       complete: '結束初始精靈',
       api_key: '建立 Berth 專用的 API key',
-      plugin: '安裝 MergeVersions 並重啟',
-      tasks: '記下兩個合併任務的 Id',
     },
     bundled: {
       title: '接手這台 Jellyfin',
@@ -175,7 +177,7 @@ const zhHant = {
       rerun: '重新跑一次',
       retry: '重試失敗的那一步',
       running: '進行中…',
-      done: '這個泊位的事做完了。Jellyfin 有 Berth 管理員、三個媒體庫與 MergeVersions。',
+      done: '這個泊位的事做完了。Jellyfin 有 Berth 管理員、三個媒體庫與一把 Berth 專用的 API key。',
       requestFailed: '請求沒跑完。Berth 後端可能沒在跑——確認容器狀態後再試一次。',
     },
     existing: {
@@ -211,19 +213,9 @@ const zhHant = {
       addFailed:
         '路徑沒加上去。最常見的原因是 Berth 與 Jellyfin 沒把同一個宿主目錄掛在同一個容器路徑——Berth 建得出目錄，Jellyfin 卻看不到。也可以在 Jellyfin 自己的媒體庫設定裡手動加這一條：',
     },
-    plugin: {
-      title: 'MergeVersions 插件',
-      lede: '同一集有多個版本時，Jellyfin 預設會顯示成兩個重複的條目。這個插件把它們合併成一個條目的多個版本。',
-      install: '安裝 MergeVersions',
-      confirm: '確認安裝並重啟',
-      installing: '安裝中…',
-      warning:
-        '會在你的 Jellyfin 加入 danieladov 插件庫、安裝 MergeVersions，然後重啟 Jellyfin。重啟期間正在播放的人會斷線，通常一分鐘內回來。',
-      already: '版本 {{version}}；合併任務 Id {{movies}} 與 {{episodes}} 已記下。',
-    },
     fix: {
       generic: '在你的 Jellyfin 上手動做這一步，然後回來重試。',
-      public_info: '確認 Jellyfin 容器活著，再確認位址與 port 沒有被改掉：',
+      public_info: '確認 Jellyfin 容器活著、版本是 12.0 以上，再確認位址與 port 沒有被改掉：',
       configuration: '在 Jellyfin 自己的初始精靈把語言設成繁體中文、地區設成台灣：',
       admin_user: '在 Jellyfin 自己的初始精靈建立管理員，帳密要與這裡的第 1 步一致：',
       libraries:
@@ -231,10 +223,6 @@ const zhHant = {
       remote_access: '在 Jellyfin 的初始精靈開啟遠端存取：',
       complete: '在 Jellyfin 自己的初始精靈按到最後一頁完成它：',
       api_key: '在 Jellyfin 的「API 金鑰」建立一把名為 Berth 的金鑰：',
-      plugin:
-        '在 Jellyfin 的「插件 → 儲存庫」加入下面這個 manifest，安裝 Merge Versions，然後重啟 Jellyfin：',
-      tasks:
-        '確認 MergeVersions 已啟用，並在「排程任務」看得到 Merge All Movies 與 Merge All Episodes：',
       retryHint: '手動做完之後按下面的按鈕，Berth 只會重跑還沒完成的步驟。',
     },
   },
@@ -637,7 +625,8 @@ const zhHant = {
         title: '多版本並存',
         noneTv: '每一集都只有一個版本。',
         noneMovie: '這部電影只有一個版本。',
-        note: '同一集的這幾個版本在 Jellyfin 裡是同一個條目的版本選單。選單上的先後順序不保證。',
+        note: '同一集的這幾個版本在 Jellyfin 裡是同一個條目的版本選單。選單上的名字與先後順序由 Jellyfin 決定，這裡顯示的就是它回報的那一串。',
+        pending: 'Jellyfin 還沒收錄的版本沒有名字，上面顯示的是檔名裡的 tags。',
       },
       unmatched: {
         title: '對不到的檔案',
@@ -789,7 +778,6 @@ const zhHant = {
       link_failed: '鏈接失敗',
       jellyfin_scan_requested: '已通知 Jellyfin',
       jellyfin_item_resolved: 'Jellyfin 已收錄',
-      merge_versions_requested: '要求合併版本',
       jellyfin_request_failed: 'Jellyfin 請求沒成',
     },
     timeline: {
@@ -802,11 +790,9 @@ const zhHant = {
       scanRequested_other: '通知了 {{count}} 個檔案的路徑',
       resolved_one: '{{count}} 個檔案在 Jellyfin 裡找到了',
       resolved_other: '{{count}} 個檔案在 Jellyfin 裡找到了',
-      merged: 'MergeVersions 會把同一集的不同版本併成一個條目。',
-      // 不擋入庫的兩種失敗，各自說下一步會怎樣（理由翻譯，原文接在後面）。
+      // 不擋入庫的失敗，說下一步會怎樣（理由翻譯，原文接在後面）。
       jellyfin: {
         scan: '通知沒送到。Jellyfin 自己的排程掃描會補上。',
-        merge: 'MergeVersions 沒有觸發，同一集的兩個版本暫時會是兩個條目。',
       },
       files_one: '{{count}} 個檔案 · {{size}}',
       files_other: '{{count}} 個檔案 · {{size}}',
@@ -974,6 +960,8 @@ const zhHant = {
       existing:
         '這是你自己的服務，Berth 只知道它現在回不出東西。位址或憑證變了的話回設定精靈重新填一次。',
       unconfigured: '這個服務還沒接上。到設定精靈接它——沒接上的話它負責的那件事一律不會發生。',
+      unsupported:
+        'Berth 需要 Jellyfin 12.0 以上（12.0 就是原本的 10.12）。升級前先把 Jellyfin 的 /config 完整備份 —— 12 改了資料庫，降不回去；再移除第三方插件，10.11 的插件在 12 載入不了。升級後完整掃描一次媒體庫。',
       drift:
         'Berth 的建議設定被改掉了（{{keys}}）。服務本身還在動，但下載路徑或自動管理一旦不對，入庫遲早會失敗。',
     },
@@ -1271,20 +1259,22 @@ const en: Translations<typeof zhHant> = {
       held: 'Held',
       absent: 'Not yet',
       libraries: 'Libraries',
-      mergeVersions: 'MergeVersions',
-      installed: 'Installed',
-      notInstalled: 'Not installed',
+    },
+    version: {
+      label: 'Too old',
+      current: 'This Jellyfin is {{version}}; Berth needs 12.0 or newer.',
+      why: 'From Jellyfin 12.0 the server itself folds the versions of one episode into a single entry. On 10.x that needed a third-party plugin, which on 12 does nothing and can merge across libraries. So Berth supports 12 and newer only. (12.0 is what would have been 10.12 — they dropped the leading 10.)',
+      upgrade:
+        'Before upgrading: back up Jellyfin’s /config in full — 12 changes the database and there is no way back except restoring that backup; then remove third-party plugins, since 10.11 plugins cannot load on 12. After upgrading: run one full library scan so the automatically grouped versions come back.',
     },
     step: {
-      public_info: 'Confirm the startup wizard has not run',
+      public_info: 'Confirm the version and that the startup wizard has not run',
       configuration: 'Language and metadata region',
       admin_user: 'Create the administrator from the Berth credentials',
       libraries: 'Create the Movies / TV / Anime libraries',
       remote_access: 'Enable remote access',
       complete: 'Finish the startup wizard',
       api_key: 'Create an API key for Berth',
-      plugin: 'Install MergeVersions and restart',
-      tasks: 'Record the two merge task Ids',
     },
     bundled: {
       title: 'Take this Jellyfin over',
@@ -1293,7 +1283,7 @@ const en: Translations<typeof zhHant> = {
       rerun: 'Run it again',
       retry: 'Retry the failed step',
       running: 'Running…',
-      done: 'This berth is secured. Jellyfin has the Berth administrator, the three libraries and MergeVersions.',
+      done: 'This berth is secured. Jellyfin has the Berth administrator, the three libraries and an API key for Berth.',
       requestFailed:
         'The request did not finish. The Berth backend may not be running — check it and retry.',
     },
@@ -1331,20 +1321,10 @@ const en: Translations<typeof zhHant> = {
       addFailed:
         'The path was not added. The usual cause is that Berth and Jellyfin do not mount the same host directory at the same container path — Berth can create the directory but Jellyfin cannot see it. You can also add the path by hand under Jellyfin Libraries:',
     },
-    plugin: {
-      title: 'MergeVersions plugin',
-      lede: 'With two files for the same episode Jellyfin shows two duplicate entries by default. This plugin merges them into one entry with several versions.',
-      install: 'Install MergeVersions',
-      confirm: 'Confirm and restart',
-      installing: 'Installing…',
-      warning:
-        'Adds the danieladov plugin repository to your Jellyfin, installs MergeVersions, then restarts Jellyfin. Anyone watching is disconnected during the restart, usually for under a minute.',
-      already: 'Version {{version}}; merge task Ids {{movies}} and {{episodes}} recorded.',
-    },
     fix: {
       generic: 'Do this step by hand on your Jellyfin, then come back and retry.',
       public_info:
-        'Check the Jellyfin container is running, then check the address and port were not changed:',
+        'Check the Jellyfin container is running and on 12.0 or newer, then check the address and port were not changed:',
       configuration: "Set the language and metadata country in Jellyfin's own startup wizard:",
       admin_user:
         "Create the administrator in Jellyfin's own startup wizard, using the same credentials as step 1 here:",
@@ -1353,10 +1333,6 @@ const en: Translations<typeof zhHant> = {
       remote_access: "Enable remote access in Jellyfin's startup wizard:",
       complete: "Finish Jellyfin's own startup wizard through to the last page:",
       api_key: "Create an API key named Berth under Jellyfin's API Keys:",
-      plugin:
-        "Add the manifest below under Jellyfin's Plugins → Repositories, install Merge Versions, then restart Jellyfin:",
-      tasks:
-        'Check MergeVersions is enabled and that Merge All Movies and Merge All Episodes appear under Scheduled Tasks:',
       retryHint:
         'Once you have done it by hand, press the button below — Berth only reruns the steps that are not finished.',
     },
@@ -1764,7 +1740,8 @@ const en: Translations<typeof zhHant> = {
         title: 'Versions side by side',
         noneTv: 'Every episode has a single version.',
         noneMovie: 'This film has a single version.',
-        note: 'In Jellyfin these versions share one entry with a version menu. The order of that menu is not guaranteed.',
+        note: 'In Jellyfin these versions share one entry with a version menu. Jellyfin decides the names and the order in that menu; what you see here is what it reports.',
+        pending: 'Versions Jellyfin has not indexed yet have no name, so the tags from the file name are shown instead.',
       },
       unmatched: {
         title: 'Unmatched files',
@@ -1906,7 +1883,6 @@ const en: Translations<typeof zhHant> = {
       link_failed: 'Link failed',
       jellyfin_scan_requested: 'Jellyfin told',
       jellyfin_item_resolved: 'In Jellyfin',
-      merge_versions_requested: 'Merge requested',
       jellyfin_request_failed: 'Jellyfin request failed',
     },
     timeline: {
@@ -1919,11 +1895,8 @@ const en: Translations<typeof zhHant> = {
       scanRequested_other: 'told about {{count}} file paths',
       resolved_one: 'found {{count}} file in Jellyfin',
       resolved_other: 'found {{count}} files in Jellyfin',
-      merged: 'MergeVersions will fold the versions of one episode into a single entry.',
       jellyfin: {
         scan: 'The notice did not get through. Jellyfin’s own scheduled scan will catch up.',
-        merge:
-          'MergeVersions did not run, so two versions of one episode stay two entries for now.',
       },
       files_one: '{{count}} file · {{size}}',
       files_other: '{{count}} files · {{size}}',
@@ -2094,6 +2067,8 @@ const en: Translations<typeof zhHant> = {
         'This is your own service, and all Berth knows is that it stopped answering. If its address or credentials changed, fill them in again in the setup wizard.',
       unconfigured:
         'This service is not connected yet. Connect it in the setup wizard — until then, whatever it is responsible for simply will not happen.',
+      unsupported:
+        'Berth needs Jellyfin 12.0 or newer (12.0 is what would have been 10.12). Before upgrading, back up Jellyfin’s /config in full — 12 changes the database and there is no way back — and remove third-party plugins, which cannot load on 12. Run one full library scan afterwards.',
       drift:
         "Berth's recommended settings were changed ({{keys}}). The service itself is still running, but once the download paths or automatic management are wrong, imports will fail sooner or later.",
     },

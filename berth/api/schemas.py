@@ -113,6 +113,9 @@ class ServiceHealthOut(BaseModel):
     drift: list[str]
     #: qBittorrent 把這台的 IP 封了（brief §20.2）。畫面照它說出下一步——改帳密沒有用。
     banned: bool
+    #: 這台 Jellyfin 低於 12.0（brief §16.4、§20.9）。同上：下一步是升級，而升級不可逆，
+    #: 所以畫面說的是「先備份、移除第三方插件、升完完整掃描」而不是「檢查容器還在嗎」。
+    unsupported: bool
 
 
 class UnknownTorrentOut(BaseModel):

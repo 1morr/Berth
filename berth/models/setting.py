@@ -61,11 +61,6 @@ class JellyfinSettings(SettingsGroup):
         ANIME_SLUG: ["TheMovieDb"],
     }
 
-    #: MergeVersions 兩個排程任務的 `Id`（**不是 `Key`**，觸發時要用 Id，brief §20.7）。
-    #: 入庫後由 pipeline 呼叫 `POST /ScheduledTasks/Running/{Id}`（M1）。
-    merge_movies_task_id: str = ""
-    merge_episodes_task_id: str = ""
-
 
 class QbittorrentSettings(SettingsGroup):
     KEY = "services.qbittorrent"
@@ -170,14 +165,17 @@ class SetupLibrary(BaseModel):
 
 
 class SetupJellyfin(BaseModel):
-    """精靈第 3 步的狀態（plan §9.4、§9.5）。兩條路徑共用同一份形狀。"""
+    """精靈第 3 步的狀態（plan §9.4、§9.5）。兩條路徑共用同一份形狀。
+
+    票 14b 拿掉了 `merge_versions_installed`，`JellyfinSettings` 拿掉了那兩個任務 id。
+    **舊資料庫存下來的 JSON 還帶著那幾個鍵**，`extra="ignore"` 讓它們照樣讀得回來，
+    所以不需要 migration，model 上也不留相容欄位。
+    """
 
     model_config = ConfigDict(extra="ignore")
 
     steps: list[SetupStep] = []
     libraries: list[SetupLibrary] = []
-    #: MergeVersions 是否已安裝。既有路徑的按鈕與套件內的第 8 步看同一個欄位。
-    merge_versions_installed: bool = False
 
 
 class SetupQbittorrent(BaseModel):
@@ -238,6 +236,9 @@ class ServiceHealth(BaseModel):
     #: qBittorrent 把 Berth 這台的 IP 封了（brief §20.2、票 10）。與「帳密不對」分開存，
     #: 因為畫面上的下一步不同——改帳密只會再失敗五次，把封鎖時間重新算一輪。
     banned: bool = False
+    #: 這台 Jellyfin 低於支援下限 12.0（brief §16.4、§20.9、票 14b）。與「連不上」分開存，
+    #: 理由同上：下一步是升級，而升級不可逆，畫面要說出那幾件先做的事。
+    unsupported: bool = False
 
 
 class HealthSettings(SettingsGroup):

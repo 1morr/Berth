@@ -1,8 +1,8 @@
 """`jellyfin_resolver`：入庫的檔案在 Jellyfin 裡是哪一個 item（plan §3.2、brief §20.1、票 12）。
 
 起點是 importer 真的跑完的那一份帳本（`test_importer.importing`），替身 Jellyfin 擺出「它掃到了
-什麼」。三組斷言：**什麼時候問**（排程）、**怎麼對上**（兩段查詢與路徑）、**對上之後做什麼**
-（MergeVersions 與時間線）。
+什麼」。三組斷言：**什麼時候問**（排程）、**怎麼對上**（兩段查詢與路徑）、**對上之後記下什麼**
+（item id、Series id、Jellyfin 算的版本名與時間線）。
 """
 
 from __future__ import annotations
@@ -14,23 +14,21 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from berth.adapters.http import ServiceUnavailableError
-from berth.adapters.jellyfin import JellyfinItem
-from berth.adapters.jellyfin.fake import LIBRARY_SCAN_TASK, MERGE_VERSIONS_TASKS
+from berth.adapters.jellyfin import JellyfinItem, JellyfinSource
+from berth.adapters.jellyfin.fake import LIBRARY_SCAN_TASK
 from berth.db import create_session_factory
-from berth.domain import IssueType, JellyfinRequest, PlanAction
-from berth.models import JellyfinSettings, LedgerEntry, Route
+from berth.domain import IssueType, PlanAction
+from berth.models import LedgerEntry, Route
 from berth.pipeline import JellyfinResolver
 from berth.services.events import EventHub
 from berth.services.importer import sweep_imports
 from berth.services.resolver import RESOLVE_DELAYS, ResolveOutcome, locate, sweep_resolutions
-from berth.services.settings import read_settings, write_settings
 from tests.integration.factories import FakeClientFactory
 from tests.integration.test_importer import importing, ledger_of
 from tests.integration.test_plan import NOW, events_of
 
 pytestmark = pytest.mark.asyncio
 
-EPISODES_TASK = next(task.id for task in MERGE_VERSIONS_TASKS if task.key == "MergeEpisodesTask")
 FIRST = RESOLVE_DELAYS[0]
 
 
@@ -61,7 +59,6 @@ async def scanned(session: AsyncSession, route: Route, factory: FakeClientFactor
             name="SPY x FAMILY",
             path=str(folder),
             tmdb_id="120089",
-            source_paths=(),
         ),
         *(
             JellyfinItem(
@@ -70,7 +67,13 @@ async def scanned(session: AsyncSession, route: Route, factory: FakeClientFactor
                 name=f"Episode {entry.episode_start}",
                 path=entry.target_path,
                 tmdb_id="",
-                source_paths=(entry.target_path,),
+                # 單一版本時 Jellyfin 回的 `MediaSources[].Name` 就是整個檔名主幹
+                # （2026-09-15 對 12.0.0 / 12.1.0 實測，brief §20.9）。
+                sources=(
+                    JellyfinSource(
+                        path=entry.target_path, name=PurePosixPath(entry.target_path).stem
+                    ),
+                ),
                 series_id="series-1",
             )
             for entry in episodes
@@ -293,15 +296,24 @@ class TestMatching:
             name="Your Name.",
             path=f"{folder}/Your Name. (2016) [tmdbid-372058] - 1080p.mkv",
             tmdb_id="372058",
-            source_paths=(
-                f"{folder}/Your Name. (2016) [tmdbid-372058] - 1080p.mkv",
-                f"{folder}/Your Name. (2016) [tmdbid-372058] - 2160p.mkv",
+            sources=(
+                JellyfinSource(
+                    path=f"{folder}/Your Name. (2016) [tmdbid-372058] - 1080p.mkv", name="1080p"
+                ),
+                JellyfinSource(
+                    path=f"{folder}/Your Name. (2016) [tmdbid-372058] - 2160p.mkv", name="2160p"
+                ),
             ),
         )
 
         assert locate(f"{folder}/Your Name. (2016) [tmdbid-372058] - 2160p.mkv", [merged]) == (
             merged
         )
+        # 版本名是 Jellyfin 算的，逐條路徑對回去（brief §7.7）。
+        assert merged.version_name(f"{folder}/Your Name. (2016) [tmdbid-372058] - 2160p.mkv") == (
+            "2160p"
+        )
+        assert merged.version_name("/somewhere/else.mkv") == ""
 
     async def test_a_path_that_only_shares_a_prefix_is_not_a_match(self) -> None:
         episode = JellyfinItem(
@@ -310,73 +322,37 @@ class TestMatching:
             name="E1",
             path="/data/library/tv/Show/Season 01/Show S01E01.mkv",
             tmdb_id="",
-            source_paths=(),
         )
 
         assert locate("/data/library/tv/Show/Season 01/Show S01E01", [episode]) is None
 
 
-class TestMergeVersions:
-    async def _task_ids(self, session: AsyncSession, factory: FakeClientFactory) -> None:
-        settings = await read_settings(session, JellyfinSettings)
-        settings.merge_episodes_task_id = EPISODES_TASK
-        await write_settings(session, settings)
-        await session.commit()
-        factory.jellyfin_.tasks_ = list(MERGE_VERSIONS_TASKS)
+class TestVersionNames:
+    """版本選單上的名字由 Jellyfin 算，Berth 讀它（brief §7.7、§20.9、票 14b）。"""
 
-    async def test_it_runs_once_something_was_found(
+    async def test_the_name_jellyfin_computed_is_written_to_the_ledger(
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
-        """合併要 Jellyfin 已經看得到那些檔案，所以放在找到之後（brief §7.7）。"""
+        """自己重算就要追著 10.x / 12.0 / 12.1 三種算法跑，所以反查到的那一刻抄下來。"""
         route, factory = await imported(session, roots)
-        await self._task_ids(session, factory)
         await scanned(session, route, factory)
 
         await resolve(session, factory, FIRST)
 
-        assert factory.jellyfin_.tasks_run == [EPISODES_TASK]
-        requested = [
-            row for row in await events_of(session) if row.type == "merge_versions_requested"
+        entries = await features(session)
+        assert [entry.jellyfin_version_name for entry in entries] == [
+            PurePosixPath(entry.target_path).stem for entry in entries
         ]
-        assert [(row.payload_json or {})["task"] for row in requested] == [EPISODES_TASK]
 
-    async def test_nothing_found_means_nothing_to_merge(
+    async def test_a_file_jellyfin_has_not_indexed_has_no_name(
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
+        """還沒收錄的沒有版本名：畫面照實說，不自己補一個。"""
         _, factory = await imported(session, roots)
-        await self._task_ids(session, factory)
 
         await resolve(session, factory, FIRST)
 
-        assert factory.jellyfin_.tasks_run == []
-
-    async def test_a_missing_task_is_only_an_event(
-        self, session: AsyncSession, roots: dict[str, Path]
-    ) -> None:
-        """找不到任務只記事件（plan §8.2）：item 仍然找到了，只是兩個版本暫時是兩個條目。"""
-        route, factory = await imported(session, roots)
-        await scanned(session, route, factory)
-
-        outcome = await resolve(session, factory, FIRST)
-
-        assert outcome.resolved == 3
-        failed = [row for row in await events_of(session) if row.type == "jellyfin_request_failed"]
-        assert len(failed) == 1
-        assert (failed[0].payload_json or {})["request"] == JellyfinRequest.MERGE.value
-
-    async def test_a_task_id_jellyfin_no_longer_knows_is_only_an_event(
-        self, session: AsyncSession, roots: dict[str, Path]
-    ) -> None:
-        route, factory = await imported(session, roots)
-        await self._task_ids(session, factory)
-        factory.jellyfin_.tasks_ = []
-        await scanned(session, route, factory)
-
-        outcome = await resolve(session, factory, FIRST)
-
-        assert outcome.resolved == 3
-        failed = [row for row in await events_of(session) if row.type == "jellyfin_request_failed"]
-        assert "404" in (failed[0].payload_json or {})["error"]
+        assert {entry.jellyfin_version_name for entry in await features(session)} == {""}
 
 
 class TestRunner:

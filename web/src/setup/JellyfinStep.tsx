@@ -12,8 +12,8 @@ import { STEP_ENDPOINT, STEP_FIX, STEP_LABEL, isJellyfinStep, manualSteps } from
 /**
  * 泊位 1：Jellyfin（plan §9.3 第 3 步）。兩條路徑由第 2 步的判定決定，使用者不必自己選。
  *
- * 套件內：一顆按鈕跑完 plan §9.4 的九步，畫面逐條纜繩顯示結果與實測值。
- * 既有：連線表單 + 媒體庫清單 + 兩顆要二次確認的按鈕（`JellyfinExisting`）。
+ * 套件內：一顆按鈕跑完 plan §9.4 的七步，畫面逐條纜繩顯示結果與實測值。
+ * 既有：連線表單 + 媒體庫清單 + 一顆要二次確認的按鈕（`JellyfinExisting` 的「加入 Berth 路徑」）。
  */
 export function JellyfinStep({
   setup,
@@ -23,10 +23,8 @@ export function JellyfinStep({
   onBootstrap,
   onConnect,
   onAddPath,
-  onInstallPlugin,
   connecting,
   addingPath,
-  installing,
 }: {
   setup: JellyfinSetup
   running: boolean
@@ -36,10 +34,8 @@ export function JellyfinStep({
   onBootstrap: () => void
   onConnect: (input: JellyfinConnectInput) => void
   onAddPath: (library: string) => void
-  onInstallPlugin: () => void
   connecting: boolean
   addingPath: string | null
-  installing: boolean
 }) {
   const { t } = useTranslation()
   const bundled = setup.origin === 'bundled'
@@ -60,6 +56,8 @@ export function JellyfinStep({
           {t(bundled ? 'jellyfin.bundled.lede' : 'jellyfin.existing.lede')}
         </p>
 
+        {!setup.version_supported && <VersionNotice version={setup.version} />}
+
         {bundled ? (
           <BootstrapSequence
             setup={setup}
@@ -73,10 +71,8 @@ export function JellyfinStep({
             signInFailed={signInFailed}
             connecting={connecting}
             addingPath={addingPath}
-            installing={installing}
             onConnect={onConnect}
             onAddPath={onAddPath}
-            onInstallPlugin={onInstallPlugin}
           />
         )}
       </div>
@@ -84,7 +80,7 @@ export function JellyfinStep({
   )
 }
 
-/** 剖面即預覽：九步各自打哪一支端點，按之前就攤開來（direction contract 的 Proof）。 */
+/** 剖面即預覽：七步各自打哪一支端點，按之前就攤開來（direction contract 的 Proof）。 */
 function SequenceCutaway() {
   const { t } = useTranslation()
 
@@ -97,10 +93,28 @@ function SequenceCutaway() {
   )
 }
 
+/**
+ * 版本太舊（brief §16.4、§19、§20.9）。**擺在最上面、在序列之前**：升級之前按幾次靠泊
+ * 都是同一個結果，而升級是不可逆的，那幾件先做的事要在按之前就看得到。
+ */
+function VersionNotice({ version }: { version: string }) {
+  const { t } = useTranslation()
+
+  return (
+    <div className="mt-4 grid gap-2">
+      <Notice signal="blocked" label={t('jellyfin.version.label')}>
+        {t('jellyfin.version.current', { version })}
+      </Notice>
+      <p className="max-w-prose text-xs text-ink-dim">{t('jellyfin.version.why')}</p>
+      <p className="max-w-prose text-xs text-ink">{t('jellyfin.version.upgrade')}</p>
+    </div>
+  )
+}
+
 /** 既有服務的剖面：這台伺服器現在是什麼樣子，全部是它自己報出來的值。 */
 function ServerCutaway({ setup }: { setup: JellyfinSetup }) {
   const { t } = useTranslation()
-  const version = setup.steps.find((row) => row.step === 'public_info')?.detail
+  const version = setup.version
 
   return (
     <Cutaway title={t('jellyfin.cutaway.server')}>
@@ -115,15 +129,6 @@ function ServerCutaway({ setup }: { setup: JellyfinSetup }) {
         term={t('jellyfin.cutaway.libraries')}
         value={setup.libraries.length ? String(setup.libraries.length) : '—'}
         muted={setup.libraries.length === 0}
-      />
-      <CutawayRow
-        term={t('jellyfin.cutaway.mergeVersions')}
-        value={t(
-          setup.merge_versions_installed
-            ? 'jellyfin.cutaway.installed'
-            : 'jellyfin.cutaway.notInstalled',
-        )}
-        muted={!setup.merge_versions_installed}
       />
     </Cutaway>
   )

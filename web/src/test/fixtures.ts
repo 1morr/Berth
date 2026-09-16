@@ -44,7 +44,7 @@ export function detection(overrides: Partial<ServiceDetection> = {}): ServiceDet
     kind: 'jellyfin',
     origin: 'bundled',
     reason: 'setup_pending',
-    detail: '10.11.11',
+    detail: '12.1.0',
     base_url: 'http://jellyfin:8096',
     // 探測 compose 主機名的結果，不是使用者填的連線表單。
     configured: false,
@@ -78,9 +78,8 @@ export function jellyfinSetup(overrides: Partial<JellyfinSetup> = {}): JellyfinS
     api_key_present: false,
     steps: [],
     libraries: [],
-    merge_versions_installed: false,
-    merge_movies_task_id: '',
-    merge_episodes_task_id: '',
+    version: '',
+    version_supported: true,
     ...overrides,
   }
 }
@@ -89,17 +88,15 @@ export function step(key: string, status: SetupStep['status'], detail = '', erro
   return { step: key, status, detail, error }
 }
 
-/** 九步全過的一輪。 */
+/** 七步全過的一輪。 */
 export const SEQUENCE_DONE: SetupStep[] = [
-  step('public_info', 'ok', '10.11.11'),
+  step('public_info', 'ok', '12.1.0'),
   step('configuration', 'ok', 'zh-TW · TW'),
   step('admin_user', 'ok', 'skipper'),
   step('libraries', 'ok', 'Movies · TV · Anime'),
   step('remote_access', 'ok'),
   step('complete', 'ok'),
   step('api_key', 'ok', 'Berth'),
-  step('plugin', 'ok', '10.11.0.1'),
-  step('tasks', 'ok', 'fd957c84 · dcaf151d'),
 ]
 
 export function library(overrides: Partial<JellyfinLibrary> = {}): JellyfinLibrary {
@@ -289,7 +286,7 @@ export function serviceHealth(overrides: Partial<ServiceHealth> = {}): ServiceHe
     origin: 'bundled',
     base_url: 'http://jellyfin:8096',
     status: 'ok',
-    detail: '10.11.11 · 3 libraries',
+    detail: '12.1.0 · 3 libraries',
     error: '',
     checked_at: CHECKED_AT,
     last_ok_at: CHECKED_AT,
@@ -297,6 +294,7 @@ export function serviceHealth(overrides: Partial<ServiceHealth> = {}): ServiceHe
     configured: true,
     drift: [],
     banned: false,
+    unsupported: false,
     ...overrides,
   }
 }

@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import shutil
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 import pytest
 from sqlalchemy import func, select
@@ -35,8 +35,10 @@ from berth.domain import (
     Profile,
     ReviewReason,
     SeasonSnapshot,
+    Tags,
 )
-from berth.models import Event, Job, JobFile, Media, Plan, PlanItem, Route
+from berth.models import Event, Job, JobFile, LedgerEntry, Media, Plan, PlanItem, Route
+from berth.naming import episode_target
 from berth.parser import plan as decide
 from berth.pipeline import PlannerRunner
 from berth.services.events import EventHub, JobSignal
@@ -207,6 +209,50 @@ async def run(
     await sweep_plans(session, factory, hub or EventHub(), now=NOW)
 
 
+async def already_in_the_library(
+    session: AsyncSession,
+    media: Media,
+    route: Route,
+    *,
+    season: int,
+    episode_start: int,
+    episode_end: int,
+) -> None:
+    """媒體庫裡已經有的一份正片（帳本一列）。涵蓋範圍衝突的另一半在這裡（brief §7.8）。
+
+    路徑用**產品自己的命名模板**算，不手寫：判定以所在資料夾為界（Jellyfin 12 只併同一個季
+    資料夾裡的），手寫一條長得不一樣的路徑，測到的就會是「兩個資料夾」而不是這條規則。
+    """
+    snapshot = MediaSnapshot.model_validate(media.tmdb_snapshot_json)
+    relative = episode_target(
+        snapshot,
+        season=season,
+        episode=episode_start,
+        episode_end=episode_end,
+        tags=Tags(resolution="1080p", group="Old"),
+        ext=".mkv",
+    )
+    target = str(PurePosixPath(route.target_path) / relative)
+    # 來源那一側只是個標籤：這一列要的是「媒體庫裡已經有這一段」，不是它從哪一包來的。
+    span = f"S{season:02d}E{episode_start:02d}-E{episode_end:02d}"
+    session.add(
+        LedgerEntry(
+            source_rel_path=f"old/{span}.mkv",
+            source_abs_path=f"/data/torrent/complete/anime/old/{span}.mkv",
+            source_inode="1",
+            source_dev="1",
+            target_path=target,
+            target_inode="1",
+            media_id=media.id,
+            season=season,
+            episode_start=episode_start,
+            episode_end=episode_end,
+            action=PlanAction.IMPORT,
+        )
+    )
+    await session.commit()
+
+
 async def items_of(session: AsyncSession, job_hash: str = HASH) -> list[PlanItem]:
     rows = await session.scalars(
         select(PlanItem)
@@ -226,6 +272,70 @@ async def plan_of(session: AsyncSession, job_hash: str = HASH) -> Plan:
 async def events_of(session: AsyncSession, job_hash: str = HASH) -> list[Event]:
     rows = await session.scalars(select(Event).where(Event.job_hash == job_hash).order_by(Event.id))
     return list(rows)
+
+
+class TestEpisodeSpans:
+    """媒體庫裡已經有的那一份（brief §7.8、§20.9）。同一包裡的那一半在 `test_parser_planner.py`。"""
+
+    async def test_a_new_file_clashing_with_the_library_waits_for_a_human(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """帳本上已經有 S01E01-E02，新的 S01E01 不能自己進去（Jellyfin 12 會把第 2 集併掉）。"""
+        media, route, factory = await ready(session, roots)
+        await already_in_the_library(
+            session, media, route, season=1, episode_start=1, episode_end=2
+        )
+        await downloaded_job(session, media, route, roots)
+
+        await run(session, factory)
+
+        plan = await read_plan(session, await _plan_id(session))
+        assert plan is not None
+        first = next(item for item in plan.items if item.episode_start == 1)
+        assert first.action is PlanAction.REVIEW
+        assert any("disappear from the season" in reason for reason in first.reasons)
+        assert plan.status is PlanStatus.PENDING_REVIEW
+
+    async def test_the_other_episodes_of_the_batch_keep_their_verdict(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """只擋起始集撞上的那一列：同一包的其他集照樣是正片。"""
+        media, route, factory = await ready(session, roots)
+        await already_in_the_library(
+            session, media, route, season=1, episode_start=1, episode_end=2
+        )
+        await downloaded_job(session, media, route, roots)
+
+        await run(session, factory)
+
+        plan = await read_plan(session, await _plan_id(session))
+        assert plan is not None
+        by_episode = {item.episode_start: item.action for item in plan.items if item.episode_start}
+        assert by_episode[2] is PlanAction.IMPORT
+        assert by_episode[3] is PlanAction.IMPORT
+
+    async def test_the_same_span_is_a_second_version_not_a_clash(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """同起始集**同結束集**是多版本並存，本來就該一起入庫（brief §7.7）。"""
+        media, route, factory = await ready(session, roots)
+        await already_in_the_library(
+            session, media, route, season=1, episode_start=1, episode_end=1
+        )
+        await downloaded_job(session, media, route, roots)
+
+        await run(session, factory)
+
+        plan = await read_plan(session, await _plan_id(session))
+        assert plan is not None
+        first = next(item for item in plan.items if item.episode_start == 1)
+        assert first.action is PlanAction.IMPORT
+
+
+async def _plan_id(session: AsyncSession) -> int:
+    found = await plan_id_of(session, HASH)
+    assert found is not None
+    return found
 
 
 class TestPlanning:

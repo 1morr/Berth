@@ -71,6 +71,10 @@ export function ServiceCard({ row, actions }: { row: ServiceHealth; actions?: Re
               取代平常那段修正說明，而不是接在它後面。 */}
           {row.banned ? (
             <p className="mt-3 max-w-prose text-xs text-ink">{t('health.fix.banned')}</p>
+          ) : row.unsupported ? (
+            /* 版本太舊也是同一個道理：下一步是升級而不是「檢查容器活著嗎」，而升級不可逆
+               （brief §16.4、§20.9）。 */
+            <p className="mt-3 max-w-prose text-xs text-ink">{t('health.fix.unsupported')}</p>
           ) : (
             <Fix row={row} />
           )}

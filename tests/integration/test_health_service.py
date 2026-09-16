@@ -74,7 +74,7 @@ class TestAllFour:
         report = await check_health(session, factory, now=NOW)
         detail = {row.kind: row.detail for row in report.services}
 
-        assert "10.11.11" in detail[ServiceKind.JELLYFIN]
+        assert "12.1.0" in detail[ServiceKind.JELLYFIN]
         assert "5.2.3" in detail[ServiceKind.QBITTORRENT]
         assert detail[ServiceKind.PROWLARR]
 
@@ -138,6 +138,22 @@ class TestOneServiceDown:
 
         assert report.degraded is True
         assert await overall_status(session) == "degraded"
+
+    async def test_a_jellyfin_below_twelve_is_red_with_a_next_step(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """只支援 Jellyfin 12 以上（brief §16.4、§19）：那不是「連不上」而是「這台不能用」。"""
+        factory = await ready(session, roots)
+        factory.jellyfin_.version = "10.11.11"
+
+        report = await check_health(session, factory, now=NOW)
+        jellyfin = next(row for row in report.services if row.kind is ServiceKind.JELLYFIN)
+
+        assert jellyfin.status is HealthStatus.FAILED
+        assert jellyfin.detail == "10.11.11"
+        assert "12.0" in jellyfin.error
+        # 旗標而不是一句話：畫面照它說出升級的那幾件事（先備份、移除第三方插件、完整掃描）。
+        assert jellyfin.unsupported is True
 
     async def test_jellyfin_going_down_also_reddens_the_routes(
         self, session: AsyncSession, roots: dict[str, Path]

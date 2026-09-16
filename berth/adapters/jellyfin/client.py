@@ -15,9 +15,8 @@ from berth.adapters.jellyfin import (
     JellyfinAuth,
     JellyfinItem,
     JellyfinLibrary,
-    JellyfinPlugin,
     JellyfinPublicInfo,
-    JellyfinRepository,
+    JellyfinSource,
     JellyfinTask,
     NewLibrary,
     TypeOption,
@@ -89,10 +88,13 @@ class HttpJellyfinClient:
         payload = await self._get("/Startup/User")
         return str(payload.get("Name", "")) if isinstance(payload, dict) else ""
 
-    async def create_startup_user(self, name: str, password: str) -> None:
-        await self._session.request(
-            "POST", "/Startup/User", json={"Name": name, "Password": password}
+    async def create_startup_user(self, name: str, password: str) -> bool:
+        # 403 = 第一個使用者已經有密碼了（12.0 起）。**那是答案不是失敗**：`HttpSession` 會把它
+        # 翻成 `AuthFailedError`，而精靈第 3 步的重試會因此永遠走不完（brief §20.9）。
+        response = await self._session.request(
+            "POST", "/Startup/User", json={"Name": name, "Password": password}, tolerate=(403,)
         )
+        return response.status_code != 403
 
     async def set_remote_access(self, *, enabled: bool) -> None:
         await self._session.request(
@@ -193,59 +195,7 @@ class HttpJellyfinClient:
         )
         return response.status_code != 404
 
-    # --- 插件與排程任務 ---
-
-    async def repositories(self) -> tuple[JellyfinRepository, ...]:
-        payload = await self._get("/Repositories")
-        rows = payload if isinstance(payload, list) else []
-        return tuple(
-            JellyfinRepository(
-                name=str(row.get("Name", "")),
-                url=str(row.get("Url", "")),
-                enabled=bool(row.get("Enabled", True)),
-            )
-            for row in rows
-        )
-
-    async def set_repositories(self, repositories: tuple[JellyfinRepository, ...]) -> None:
-        await self._session.request(
-            "POST",
-            "/Repositories",
-            json=[
-                {"Name": repo.name, "Url": repo.url, "Enabled": repo.enabled}
-                for repo in repositories
-            ],
-        )
-
-    async def package_versions(self, name: str) -> tuple[str, ...]:
-        payload = await self._get("/Packages")
-        rows = payload if isinstance(payload, list) else []
-        for row in rows:
-            # `/Packages` 是 manifest 的原文轉發，鍵是 camelCase 而不是 Jellyfin 自己的
-            # PascalCase（實測 10.11.11）。
-            if str(row.get("name", "")) == name:
-                return tuple(str(v.get("version", "")) for v in row.get("versions", []))
-        return ()
-
-    async def install_package(self, name: str, *, assembly_guid: str) -> None:
-        await self._session.request(
-            "POST", f"/Packages/Installed/{name}", params={"assemblyGuid": assembly_guid}
-        )
-
-    async def plugins(self) -> tuple[JellyfinPlugin, ...]:
-        payload = await self._get("/Plugins")
-        rows = payload if isinstance(payload, list) else []
-        return tuple(
-            JellyfinPlugin(
-                id=str(row.get("Id", "")).replace("-", "").lower(),
-                name=str(row.get("Name", "")),
-                version=str(row.get("Version", "")),
-            )
-            for row in rows
-        )
-
-    async def restart(self) -> None:
-        await self._session.request("POST", "/System/Restart")
+    # --- 排程任務 ---
 
     async def scheduled_tasks(self) -> tuple[JellyfinTask, ...]:
         payload = await self._get("/ScheduledTasks")
@@ -314,8 +264,8 @@ def _item(row: dict[str, Any]) -> JellyfinItem:
         name=str(row.get("Name", "")),
         path=str(row.get("Path") or ""),
         tmdb_id=str(providers.get("Tmdb") or ""),
-        source_paths=tuple(
-            str(source["Path"])
+        sources=tuple(
+            JellyfinSource(path=str(source["Path"]), name=str(source.get("Name") or ""))
             for source in row.get("MediaSources") or ()
             if isinstance(source, dict) and source.get("Path")
         ),

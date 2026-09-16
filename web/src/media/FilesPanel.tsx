@@ -85,20 +85,28 @@ export function FilesPanel({ media }: { media: Media }) {
               <ul className="grid gap-3">
                 {media.versions.map((group) => (
                   <li
-                    key={`${group.season}-${group.episode_start}-${group.episode_end}-${group.labels[0]}`}
+                    key={`${group.season}-${group.episode_start}-${group.episode_end}`}
                     className="grid min-w-0 gap-1 border-l-2 border-rule pl-3"
                   >
                     {formatEpisode(group) && (
                       <p className="value text-xs text-ink">{formatEpisode(group)}</p>
                     )}
-                    {/* 版本名就是 Jellyfin 選單上的那一串（brief §7.7）：整條換行，不截斷。 */}
+                    {/* 版本名是 **Jellyfin 算的**（brief §7.7）：整條換行，不截斷。它還沒收錄
+                        的那幾個沒有名字，顯示檔名的 tags 並在底下說一句，不自己重算一個。 */}
+                    {/* key 用位置：這一組是一次讀出來的快照，不排序也不增刪，而兩個版本的
+                        名字與 tags 都可能是空的（Jellyfin 還沒收錄、檔名也沒有 tag）。 */}
                     <ul className="grid gap-0.5">
-                      {group.labels.map((label) => (
-                        <li key={label} className="value text-xs break-words text-ink-dim">
-                          {label}
+                      {group.versions.map((version, index) => (
+                        <li key={index} className="value text-xs break-words text-ink-dim">
+                          {version.name || version.tags || '—'}
                         </li>
                       ))}
                     </ul>
+                    {group.versions.some((version) => !version.name) && (
+                      <p className="max-w-prose text-xs text-ink-dim">
+                        {t('media.files.versions.pending')}
+                      </p>
+                    )}
                   </li>
                 ))}
               </ul>

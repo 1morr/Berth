@@ -186,13 +186,24 @@ class UnmatchedFileView:
 
 
 @dataclass(frozen=True, slots=True)
+class VersionView:
+    """同一集（或同一部電影）的一個版本。"""
+
+    #: Jellyfin 版本選單上的名字（帳本的 `jellyfin_version_name`，同一個東西同一個詞）。
+    #: **由 Jellyfin 算**（brief §7.7），反查到的那一刻抄進帳本；還沒收錄就是空字串。
+    name: str
+    #: 這個檔案的 Tags。還沒有 `name` 時畫面顯示它，並說明那是檔名的 tags 而不是版本名。
+    tags: str
+
+
+@dataclass(frozen=True, slots=True)
 class VersionGroupView:
-    """同一集（或同一部電影）的幾個版本，名字照 Jellyfin 版本選單會顯示的那樣寫。"""
+    """同一集（或同一部電影）的幾個版本。"""
 
     season: int | None
     episode_start: int | None
     episode_end: int | None
-    labels: tuple[str, ...]
+    versions: tuple[VersionView, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -319,7 +330,7 @@ async def read_holdings(session: AsyncSession, media: Media, snapshot: MediaSnap
         seasons=tuple(seasons),
         files=tuple(_file(entry) for entry in entries),
         unmatched=tuple(unmatched),
-        versions=_versions(media.kind, features),
+        versions=_versions(features),
     )
 
 
@@ -530,32 +541,31 @@ def _file_presence(entry: LedgerEntry) -> JellyfinPresence:
     return JellyfinPresence.LOST
 
 
-def _versions(kind: MediaKind, features: list[LedgerEntry]) -> tuple[VersionGroupView, ...]:
+def _versions(features: list[LedgerEntry]) -> tuple[VersionGroupView, ...]:
     """同一集兩個以上正片的那幾組。
 
     **以所在的資料夾分組**，不只看季集：兩條 Route 是兩個 Jellyfin 媒體庫、兩個條目，版本選單
     只合併同一個資料夾裡的（code-review 抓到的）。
+
+    版本名讀 Jellyfin 回的 `MediaSources[].Name`（反查時抄進帳本，`services/resolver.py`）。
+    **不自己重算**：12.0 起那個名字是「去掉各版本檔名的共同前綴」剩下的部分，算法跟標題的
+    標點有關，12.0 與 12.1 還不一樣（brief §7.7、§20.9）。Jellyfin 還沒收錄的那幾個沒有名字，
+    畫面照實說。
     """
-    groups: dict[tuple[str, int | None, int | None, int | None], list[str]] = {}
+    groups: dict[tuple[str, int | None, int | None, int | None], list[VersionView]] = {}
     for entry in features:
         folder = str(PurePosixPath(entry.target_path).parent)
         key = (folder, entry.season, entry.episode_start, entry.episode_end)
-        groups.setdefault(key, []).append(_version_label(kind, entry.target_path))
+        groups.setdefault(key, []).append(
+            VersionView(
+                name=entry.jellyfin_version_name,
+                tags=Tags.model_validate(entry.tags_json).render() if entry.tags_json else "",
+            )
+        )
     return tuple(
-        VersionGroupView(season=season, episode_start=start, episode_end=end, labels=tuple(labels))
-        for (_, season, start, end), labels in groups.items()
-        if len(labels) > 1
+        VersionGroupView(
+            season=season, episode_start=start, episode_end=end, versions=tuple(versions)
+        )
+        for (_, season, start, end), versions in groups.items()
+        if len(versions) > 1
     )
-
-
-def _version_label(kind: MediaKind, target_path: str) -> str:
-    """Jellyfin 版本選單上的那個名字（brief §7.7）。
-
-    劇集經 MergeVersions 合併之後顯示的是**整個檔名主幹**；電影是 ` - ` 之後的那一段。
-    電影那一段以資料夾名切，不以第一個 ` - ` 切：`Mission: Impossible - Dead Reckoning`
-    這種標題自己就帶著 ` - `，而檔名在 ` - ` 之前與資料夾名一字不差（brief §7.2）。
-    """
-    path = PurePosixPath(target_path)
-    if kind is MediaKind.MOVIE:
-        return path.stem.removeprefix(f"{path.parent.name} - ")
-    return path.stem

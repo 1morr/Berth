@@ -331,6 +331,29 @@ Windows Docker Desktop（NTFS bind mount）與 Linux（ext4）上各跑一次 `d
 
 ### Changed
 
+- **只支援 Jellyfin 12 以上**（票 14b、brief §19、§20.9）。12.0 起同一集的多個版本由 Jellyfin
+  自己合併成一個條目，10.x 需要的 MergeVersions 插件在它上面是空跑，還會跨媒體庫誤併——所以
+  **插件整段移除**：精靈第 3 步從九步變七步（沒有「裝插件」與「重啟」）、既有服務少了「安裝
+  MergeVersions」按鈕與那支 `POST /api/setup/jellyfin/plugin`、resolver 不再觸發合併任務、
+  adapter 的介面上不再有 `/Repositories`、`/Packages`、`/Plugins` 與 `/System/Restart`。
+  設定裡的 `merge_movies_task_id` / `merge_episodes_task_id` 與 `setup.jellyfin.merge_versions_installed`
+  一併拿掉；舊資料庫存的那幾個鍵照樣讀得回來（`extra="ignore"`），不需要 migration。
+- **低於 Jellyfin 12.0 就紅燈**：精靈第 3 步（套件內與既有都是）與健康檢查讀 `/System/Info/Public`
+  的 `Version`，不足就停下，說出目前版本、為什麼要 12，以及升級前後要做的事（先完整備份、
+  移除第三方插件、升級後完整掃描、降不回去）。`GET /api/setup/jellyfin` 多 `version` 與
+  `version_supported` 兩個欄位。
+- **精靈第 3 步的重試在 12.x 走得完**：`POST /Startup/User` 在第一個使用者已有密碼時回 403，
+  現在當成「已經設過了」繼續往下（密碼對不對由之後的登入驗證）。原本會翻成 `AuthFailedError`，
+  讓「第 4 步失敗後重試」永遠卡在第 3 步。
+- **劇集的版本名改讀 Jellyfin 回的 `MediaSources[].Name`**，不再自己重算（12.0 起它是「去掉各版本
+  檔名的共同前綴」剩下的部分，算法連 12.0 與 12.1 都不一樣）。反查到的那一刻抄進帳本
+  （`ledger.jellyfin_version_name`，migration `3f6c0a7d94e2`）；Jellyfin 還沒收錄的版本顯示檔名的
+  tags 並說明那不是版本名。
+- **多集檔與同起始集的單集送審核**（brief §7.8）：同一份 Plan 裡、或與同一部作品同一季的帳本
+  Entry 之間，起始集相同而結束集不同的正片一律停下等人，理由說出「Jellyfin 12 只用季號與集號
+  分組，會把它們併成一集、後面那一集從集列表上消失」。
+- `deploy/docker-compose.yml` 的 Jellyfin 從 `:latest` 釘到 `lscr.io/linuxserver/jellyfin:version-12.1ubu2604`。
+- 演練情境：`installed` 與 `failing` 換成 `old-jellyfin`（既有 Jellyfin 停在 10.11 的樣子）。
 - **精靈第 7 步略過寫入目標已經被佔用的選擇**（票 14a）：佔用者可以是既有的 Route，也可以是同一批
   前面的選擇；不回 422。沒有 `ItemId` 的舊 Route 在媒體庫改名之後，重跑不再長出同一個目標的第二條。
 - **精靈跑完之後重跑第 7 步新建的 Route 先停用，檢查綠了才啟用**（票 14a）。原本是先啟用、檢查紅了

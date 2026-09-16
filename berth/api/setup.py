@@ -25,7 +25,6 @@ from berth.services.jellyfin import (
     add_berth_path,
     bootstrap_jellyfin,
     connect_jellyfin,
-    install_merge_versions,
     read_jellyfin_status,
 )
 from berth.services.qbittorrent import apply_qbittorrent, read_qbittorrent_diff
@@ -180,9 +179,10 @@ class JellyfinSetupOut(BaseModel):
     api_key_present: bool
     steps: list[StepOut]
     libraries: list[LibraryOut]
-    merge_versions_installed: bool
-    merge_movies_task_id: str
-    merge_episodes_task_id: str
+    #: 這台 Jellyfin 上一次報的版本號。還沒問過就是空字串。
+    version: str
+    #: 版本是不是 12.0 以上（brief §16.4）。還沒問過時是 `true`。
+    version_supported: bool
 
 
 class JellyfinConnectIn(BaseModel):
@@ -207,7 +207,7 @@ async def get_jellyfin(session: SessionDep) -> JellyfinSetupOut:
 async def post_jellyfin_bootstrap(
     session: SessionDep, factory: ClientFactoryDep
 ) -> JellyfinSetupOut:
-    """套件內路徑：跑完 plan §9.4 的九步。重按只補做還沒做的那幾步。"""
+    """套件內路徑：跑完 plan §9.4 的七步。重按只補做還沒做的那幾步。"""
     return JellyfinSetupOut.model_validate(await bootstrap_jellyfin(session, factory))
 
 
@@ -232,12 +232,6 @@ async def post_jellyfin_library_path(
     return JellyfinSetupOut.model_validate(
         await add_berth_path(session, factory, library_name=body.library)
     )
-
-
-@router.post("/jellyfin/plugin")
-async def post_jellyfin_plugin(session: SessionDep, factory: ClientFactoryDep) -> JellyfinSetupOut:
-    """既有路徑的「安裝 MergeVersions」。**會重啟 Jellyfin**，所以 UI 要二次確認。"""
-    return JellyfinSetupOut.model_validate(await install_merge_versions(session, factory))
 
 
 # --- 第 4 步：qBittorrent（plan §9.3 第 4 步、§8.1）---

@@ -16,7 +16,6 @@ import {
   createAdmin,
   detectServices,
   indexerSetupQueryOptions,
-  installMergeVersions,
   jellyfinSetupQueryOptions,
   qbittorrentSetupQueryOptions,
   routeSetupQueryOptions,
@@ -153,7 +152,6 @@ export function SetupPage({
       void queryClient.invalidateQueries({ queryKey: routeSetupQueryOptions.queryKey })
     },
   })
-  const plugin = useMutation({ mutationFn: installMergeVersions, onSuccess: absorbJellyfin })
   const applyPreferences = useMutation({
     mutationFn: applyQbittorrent,
     onSuccess: (next) => absorbBerth(qbittorrentSetupQueryOptions.queryKey, next),
@@ -195,7 +193,7 @@ export function SetupPage({
   const current = status.data
   const waiting = current?.services.some((row) => row.origin === 'pending') ?? false
   const step = revisit ?? current?.current_step ?? 1
-  const inFlight = bootstrap.isPending || plugin.isPending
+  const inFlight = bootstrap.isPending
 
   const jellyfin = useQuery({
     ...jellyfinSetupQueryOptions,
@@ -279,11 +277,9 @@ export function SetupPage({
             signInFailed={signIn.isError}
             connecting={signIn.isPending}
             addingPath={addPath.isPending ? addPath.variables : null}
-            installing={plugin.isPending}
             onBootstrap={() => bootstrap.mutate()}
             onConnect={(input) => signIn.mutate(input)}
             onAddPath={(library) => addPath.mutate(library)}
-            onInstallPlugin={() => plugin.mutate()}
           />
         ) : (
           <Waiting failed={jellyfin.isError} message={t('jellyfin.unreachable')} />

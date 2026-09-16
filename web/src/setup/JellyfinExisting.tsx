@@ -12,6 +12,7 @@ import {
   PasswordField,
   PrimaryButton,
 } from '../components/controls'
+
 import { SIGNAL_FILL } from '../components/signal'
 
 /**
@@ -23,24 +24,19 @@ export function JellyfinExisting({
   signInFailed,
   connecting,
   addingPath,
-  installing,
   onConnect,
   onAddPath,
-  onInstallPlugin,
 }: {
   setup: JellyfinSetup
   signInFailed: boolean
   connecting: boolean
   addingPath: string | null
-  installing: boolean
   onConnect: (input: JellyfinConnectInput) => void
   onAddPath: (library: string) => void
-  onInstallPlugin: () => void
 }) {
   const { t } = useTranslation()
   const signedIn = setup.api_key_present
   const apiKeyStep = setup.steps.find((row) => row.step === 'api_key')
-  const pluginStep = setup.steps.find((row) => row.step === 'plugin')
   const libraryStep = setup.steps.find((row) => row.step === 'libraries')
 
   return (
@@ -61,48 +57,13 @@ export function JellyfinExisting({
       )}
 
       {signedIn && (
-        <>
-          <Libraries
-            libraries={setup.libraries}
-            addingPath={addingPath}
-            failure={libraryStep?.status === 'failed' ? libraryStep : undefined}
-            baseUrl={setup.base_url}
-            onAddPath={onAddPath}
-          />
-
-          <section className="mt-8 border-t-2 border-rule pt-6">
-            <h3 className="text-sm font-semibold text-ink">{t('jellyfin.plugin.title')}</h3>
-            <p className="mt-2 max-w-prose text-xs text-ink-dim">{t('jellyfin.plugin.lede')}</p>
-            <div className="mt-3">
-              {setup.merge_versions_installed ? (
-                <Notice signal="secured" label={t('jellyfin.cutaway.installed')}>
-                  {t('jellyfin.plugin.already', {
-                    version: pluginStep?.detail || '',
-                    movies: setup.merge_movies_task_id,
-                    episodes: setup.merge_episodes_task_id,
-                  })}
-                </Notice>
-              ) : (
-                <ConfirmAction
-                  label={t('jellyfin.plugin.install')}
-                  confirmLabel={t('jellyfin.plugin.confirm')}
-                  warning={t('jellyfin.plugin.warning')}
-                  pending={installing}
-                  pendingLabel={t('jellyfin.plugin.installing')}
-                  onConfirm={onInstallPlugin}
-                />
-              )}
-            </div>
-            {pluginStep?.status === 'failed' && (
-              <div className="mt-3 grid grid-cols-1 gap-2">
-                <Notice signal="blocked" label={t('common.failed')}>
-                  <span className="value break-words">{pluginStep.error}</span>
-                </Notice>
-                <CopyLine command={`${setup.base_url}/web/#/dashboard/plugins/repositories`} />
-              </div>
-            )}
-          </section>
-        </>
+        <Libraries
+          libraries={setup.libraries}
+          addingPath={addingPath}
+          failure={libraryStep?.status === 'failed' ? libraryStep : undefined}
+          baseUrl={setup.base_url}
+          onAddPath={onAddPath}
+        />
       )}
     </>
   )
