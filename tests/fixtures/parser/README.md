@@ -102,6 +102,33 @@ v0 涵蓋不到、由單元測試補的一件事：
 | `anime/shingeki-s3-part2-erai` | **cour 偏移**：`Season 3 Part 2 - 01 ~ 10`，集號從 01 重數，正確答案是 S03E13–22。研究 §6.1.1 裡唯一「有季號還是三家一起錯」的那一類 |
 | `anime/mizuiro-jidai-shincaps` | **單檔多集**（brief §6.6）：一個 `.ts` 檔涵蓋 01 與 02 兩集，正確答案是 `S01E01-E02`。找了很多輪——nyaa 上掛 `S01E01-E02` 標題的幾乎都是兩個獨立檔案 |
 
+## v2 補的五筆（2026-09-16，M1 票 14c）
+
+brief §6.4「只有集號 → 絕對編號」那一支。v1 的 23 筆一次都沒走到它（34 次全是 TMDB 只有一季），
+所以 Route profile 量不出作用。條件是**只有集號、TMDB 上 ≥2 個正規季**，挑之前先查過快照的季數，
+並以 `scripts/experiments/profile_effect.py` 的側錄證明每一筆真的走到那一支。語料變成動漫 14、
+劇集 10、電影 4。
+
+| id | 為什麼是它 |
+| --- | --- |
+| `anime/spy-x-family-s2-subsplease-batch` | SubsPlease 第二季接著第一季的 25 集往下數（`- 26v2`–`37v2`），正確答案 S02E01–12；absolute group 與各季累加一致 |
+| `anime/my-hero-academia-139-subsplease` | 八季作品的 `- 139`，正確答案 S07E01（AnimeTosho 上另一組標 `S07E01 [EP: 139]`） |
+| `anime/one-piece-1089-1104-erai` | **TMDB 第 22 季沿用官方集數**（S22E1089–1155）：absolute group 換對、各季累加換成 S22E01 是錯的。另有兩支特別篇，見下 |
+| `tv/home-and-away-8214-bill` | 澳洲肥皂劇 `Episode.8214.2024-02-29`：累加換成 S37E32，正確答案 S37E39（TMDB 集名就叫 `Episode 8214`、播於同一天）。**非動漫上換算會錯的反例** |
+| `tv/return-of-superman-e079-limo` | 韓國電視台的 `E079.150524` 無季寫法；TMDB 按年份分季，累加換成 S03E21，播出日與檔名一致，是對的 |
+
+這五筆的正確答案都**不是從檔名推出來的**——是 TMDB 快照裡那一集的播出日與集名，對上檔名的日期、
+別的發佈組標的季集或官方集數。逐筆怎麼判的在 `docs/research/profile-effect.md` §3。
+
+- **兩筆非動漫沒有 `min_confidence`**：只有集號時該不該自動入庫，正是這一票要量的問題，寫下限等於
+  先替答案選邊。
+- **航海王的兩支特別篇是 `unmatched`**（`Dai Tannou Kikaku - Shi no Gekai - Trafalgar Law`、
+  `Innen no Log - Mugiwara no Ichimi to Cipher Pol`）：TMDB 是 S00E28 / S00E29，但只有集名說得出來，
+  與上面「自己的特典序號」同一條判準。
+- **`tv-2354.json` 有 1.4 MB**（39 季、8,802 集），是其他快照加起來的好幾倍。它是唯一一筆「換算會錯」
+  的非動漫反例，所以留著。
+- 找過但沒收的（韓劇第二季以後、半澤直樹、Neighbours）與語料外的《死神》相剋譚，記在研究文件 §4、§5。
+
 ## 外掛字幕怎麼算（票 07 的決定）
 
 字幕檔的 `target` 是**它那個影片的目標路徑**換上字幕的副檔名與語言段（plan §5）。所以：

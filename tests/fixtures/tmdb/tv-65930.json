@@ -1,0 +1,1485 @@
+{
+ "first_air_date": "2016-04-03",
+ "kind": "tv",
+ "overview": "一位平凡的學生從敵人手中救出一名惡霸後，不僅獲得超能力，還獲准進入一間專門訓練英雄的高校。",
+ "poster_url": "https://image.tmdb.org/t/p/w342/qujEHyDSSbEC6rHxxZf7VjxcBq7.jpg",
+ "runtime": null,
+ "seasons": [
+  {
+   "air_date": "2017-04-04",
+   "episode_count": 19,
+   "episodes": [
+    {
+     "absolute_number": null,
+     "air_date": "2017-04-04",
+     "episode_number": 1,
+     "name": "Save! Rescue Training!",
+     "runtime": 26
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2017-03-25",
+     "episode_number": 2,
+     "name": "Hero Notebook",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2017-06-02",
+     "episode_number": 3,
+     "name": "Training of the Dead",
+     "runtime": 23
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2019-02-13",
+     "episode_number": 4,
+     "name": "All Might: Rising",
+     "runtime": 2
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2019-02-13",
+     "episode_number": 5,
+     "name": "End-Roll BBQ Picture Drama",
+     "runtime": 6
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2020-08-16",
+     "episode_number": 6,
+     "name": "Make It! Do-or-Die Survival Training (1)",
+     "runtime": 23
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2020-08-16",
+     "episode_number": 7,
+     "name": "Make It! Do-or-Die Survival Training (2)",
+     "runtime": 23
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2020-07-15",
+     "episode_number": 8,
+     "name": "Heroes Rising - Epilogue Plus",
+     "runtime": 10
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2022-02-16",
+     "episode_number": 9,
+     "name": "World Heroes' Mission - Take-off",
+     "runtime": 6
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2022-06-16",
+     "episode_number": 10,
+     "name": "HLB",
+     "runtime": 23
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2022-06-16",
+     "episode_number": 11,
+     "name": "Laugh! As If You Are in Hell",
+     "runtime": 23
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-10-20",
+     "episode_number": 12,
+     "name": "U.A. Heroes Battle",
+     "runtime": 23
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-04-06",
+     "episode_number": 13,
+     "name": "Memories Episode 1 - Izuku Midoriya: Resolve",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-04-13",
+     "episode_number": 14,
+     "name": "Memories Episode 2 - Toshinori Yagi: Embers",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-04-20",
+     "episode_number": 15,
+     "name": "Memories Episode 3 - Heroes: Convictions",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-04-27",
+     "episode_number": 16,
+     "name": "Memories Episode 4 - Tomura Shigaraki: Destruction",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-02-19",
+     "episode_number": 17,
+     "name": "A Piece of Cake",
+     "runtime": 4
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-05-02",
+     "episode_number": 18,
+     "name": "More",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-08-03",
+     "episode_number": 19,
+     "name": "I am a hero too",
+     "runtime": 7
+    }
+   ],
+   "name": "Specials",
+   "names": [
+    "Specials",
+    "特別篇",
+    "特别篇"
+   ],
+   "season_number": 0
+  },
+  {
+   "air_date": "2016-04-03",
+   "episode_count": 13,
+   "episodes": [
+    {
+     "absolute_number": 1,
+     "air_date": "2016-04-03",
+     "episode_number": 1,
+     "name": "Izuku Midoriya: Origin",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 2,
+     "air_date": "2016-04-10",
+     "episode_number": 2,
+     "name": "What It Takes to Be a Hero",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 3,
+     "air_date": "2016-04-17",
+     "episode_number": 3,
+     "name": "Roaring Muscles",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 4,
+     "air_date": "2016-04-24",
+     "episode_number": 4,
+     "name": "Start Line",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 5,
+     "air_date": "2016-05-01",
+     "episode_number": 5,
+     "name": "What I Can Do for Now",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 6,
+     "air_date": "2016-05-08",
+     "episode_number": 6,
+     "name": "Rage, You Damn Nerd",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 7,
+     "air_date": "2016-05-15",
+     "episode_number": 7,
+     "name": "Deku vs. Kacchan",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 8,
+     "air_date": "2016-05-22",
+     "episode_number": 8,
+     "name": "Bakugo’s Start Line",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 9,
+     "air_date": "2016-05-29",
+     "episode_number": 9,
+     "name": "Yeah, Just Do Your Best, Iida!",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 10,
+     "air_date": "2016-06-05",
+     "episode_number": 10,
+     "name": "Encounter with the Unknown",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 11,
+     "air_date": "2016-06-12",
+     "episode_number": 11,
+     "name": "Game Over",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 12,
+     "air_date": "2016-06-19",
+     "episode_number": 12,
+     "name": "All Might",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 13,
+     "air_date": "2016-06-26",
+     "episode_number": 13,
+     "name": "In Each of Our Hearts",
+     "runtime": 24
+    }
+   ],
+   "name": "Season 1",
+   "names": [
+    "Season 1",
+    "第 1 季"
+   ],
+   "season_number": 1
+  },
+  {
+   "air_date": "2017-04-01",
+   "episode_count": 25,
+   "episodes": [
+    {
+     "absolute_number": 14,
+     "air_date": "2017-04-01",
+     "episode_number": 1,
+     "name": "That’s the Idea, Ochaco",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 15,
+     "air_date": "2017-04-08",
+     "episode_number": 2,
+     "name": "Roaring Sports Festival",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 16,
+     "air_date": "2017-04-15",
+     "episode_number": 3,
+     "name": "In Their Own Quirky Ways",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 17,
+     "air_date": "2017-04-22",
+     "episode_number": 4,
+     "name": "Strategy, Strategy, Strategy",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 18,
+     "air_date": "2017-04-29",
+     "episode_number": 5,
+     "name": "Cavalry Battle Finale",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 19,
+     "air_date": "2017-05-06",
+     "episode_number": 6,
+     "name": "The Boy Born with Everything",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 20,
+     "air_date": "2017-05-13",
+     "episode_number": 7,
+     "name": "Victory or Defeat",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 21,
+     "air_date": "2017-05-20",
+     "episode_number": 8,
+     "name": "Battle on, Challengers!",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 22,
+     "air_date": "2017-05-27",
+     "episode_number": 9,
+     "name": "Bakugo vs. Uraraka",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 23,
+     "air_date": "2017-06-03",
+     "episode_number": 10,
+     "name": "Shoto Todoroki: Origin",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 24,
+     "air_date": "2017-06-10",
+     "episode_number": 11,
+     "name": "Fight On, Iida",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 25,
+     "air_date": "2017-06-17",
+     "episode_number": 12,
+     "name": "Todoroki vs. Bakugo",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 26,
+     "air_date": "2017-06-24",
+     "episode_number": 13,
+     "name": "Time to Pick Some Names",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 27,
+     "air_date": "2017-07-08",
+     "episode_number": 14,
+     "name": "Bizarre! Gran Torino Appears",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 28,
+     "air_date": "2017-07-15",
+     "episode_number": 15,
+     "name": "Midoriya and Shigaraki",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 29,
+     "air_date": "2017-07-22",
+     "episode_number": 16,
+     "name": "Hero Killer: Stain vs U.A. Students",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 30,
+     "air_date": "2017-07-29",
+     "episode_number": 17,
+     "name": "Climax",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 31,
+     "air_date": "2017-08-05",
+     "episode_number": 18,
+     "name": "The Aftermath of Hero Killer: Stain",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 32,
+     "air_date": "2017-08-12",
+     "episode_number": 19,
+     "name": "Everyone's Internships",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 33,
+     "air_date": "2017-08-19",
+     "episode_number": 20,
+     "name": "Listen Up!! A Tale from the Past",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 34,
+     "air_date": "2017-09-02",
+     "episode_number": 21,
+     "name": "Gear up for Final Exams",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 35,
+     "air_date": "2017-09-09",
+     "episode_number": 22,
+     "name": "Yaoyorozu: Rising",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 36,
+     "air_date": "2017-09-16",
+     "episode_number": 23,
+     "name": "Stripping the Varnish",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 37,
+     "air_date": "2017-09-23",
+     "episode_number": 24,
+     "name": "Katsuki Bakugo: Origin",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 38,
+     "air_date": "2017-09-30",
+     "episode_number": 25,
+     "name": "Encounter",
+     "runtime": 24
+    }
+   ],
+   "name": "Season 2",
+   "names": [
+    "Season 2",
+    "第 2 季"
+   ],
+   "season_number": 2
+  },
+  {
+   "air_date": "2018-04-07",
+   "episode_count": 25,
+   "episodes": [
+    {
+     "absolute_number": 39,
+     "air_date": "2018-04-07",
+     "episode_number": 1,
+     "name": "Game Start",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 40,
+     "air_date": "2018-04-14",
+     "episode_number": 2,
+     "name": "Wild, Wild Pussycats",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 41,
+     "air_date": "2018-04-21",
+     "episode_number": 3,
+     "name": "Kota",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 42,
+     "air_date": "2018-04-28",
+     "episode_number": 4,
+     "name": "My Hero",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 43,
+     "air_date": "2018-05-05",
+     "episode_number": 5,
+     "name": "Drive It Home, Iron Fist!!!",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 44,
+     "air_date": "2018-05-12",
+     "episode_number": 6,
+     "name": "Roaring Upheaval",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 45,
+     "air_date": "2018-05-19",
+     "episode_number": 7,
+     "name": "What a Twist!",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 46,
+     "air_date": "2018-05-26",
+     "episode_number": 8,
+     "name": "From Iida to Midoriya",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 47,
+     "air_date": "2018-06-02",
+     "episode_number": 9,
+     "name": "All For One",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 48,
+     "air_date": "2018-06-09",
+     "episode_number": 10,
+     "name": "Symbol of Peace",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 49,
+     "air_date": "2018-06-16",
+     "episode_number": 11,
+     "name": "One For All",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 50,
+     "air_date": "2018-06-23",
+     "episode_number": 12,
+     "name": "End of the Beginning, Beginning of the End",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 51,
+     "air_date": "2018-06-30",
+     "episode_number": 13,
+     "name": "Moving into Dorms",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 52,
+     "air_date": "2018-07-14",
+     "episode_number": 14,
+     "name": "Create Those Ultimate Moves",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 53,
+     "air_date": "2018-07-21",
+     "episode_number": 15,
+     "name": "The Test",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 54,
+     "air_date": "2018-07-28",
+     "episode_number": 16,
+     "name": "Shiketsu High Lurking",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 55,
+     "air_date": "2018-08-04",
+     "episode_number": 17,
+     "name": "Class 1-A",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 56,
+     "air_date": "2018-08-11",
+     "episode_number": 18,
+     "name": "RUSH!",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 57,
+     "air_date": "2018-08-18",
+     "episode_number": 19,
+     "name": "Rescue Exercises",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 58,
+     "air_date": "2018-08-25",
+     "episode_number": 20,
+     "name": "Special Episode: Save the World with Love!",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 59,
+     "air_date": "2018-09-01",
+     "episode_number": 21,
+     "name": "What’s the Big Idea?",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 60,
+     "air_date": "2018-09-08",
+     "episode_number": 22,
+     "name": "A Talk about Your Quirk",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 61,
+     "air_date": "2018-09-15",
+     "episode_number": 23,
+     "name": "Deku vs. Kacchan, Part 2",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 62,
+     "air_date": "2018-09-22",
+     "episode_number": 24,
+     "name": "A Season for Encounters",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 63,
+     "air_date": "2018-09-29",
+     "episode_number": 25,
+     "name": "Unrivaled",
+     "runtime": 24
+    }
+   ],
+   "name": "Season 3",
+   "names": [
+    "Season 3",
+    "第 3 季"
+   ],
+   "season_number": 3
+  },
+  {
+   "air_date": "2019-10-12",
+   "episode_count": 25,
+   "episodes": [
+    {
+     "absolute_number": 64,
+     "air_date": "2019-10-12",
+     "episode_number": 1,
+     "name": "The Scoop on U.A. Class 1-A",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 65,
+     "air_date": "2019-10-19",
+     "episode_number": 2,
+     "name": "Overhaul",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 66,
+     "air_date": "2019-10-26",
+     "episode_number": 3,
+     "name": "Boy Meets…",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 67,
+     "air_date": "2019-11-09",
+     "episode_number": 4,
+     "name": "Fighting Fate",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 68,
+     "air_date": "2019-11-16",
+     "episode_number": 5,
+     "name": "Let’s Go, Gutsy Red Riot",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 69,
+     "air_date": "2019-11-23",
+     "episode_number": 6,
+     "name": "An Unpleasant Talk",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 70,
+     "air_date": "2019-11-30",
+     "episode_number": 7,
+     "name": "GO!!",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 71,
+     "air_date": "2019-12-07",
+     "episode_number": 8,
+     "name": "Suneater of the Big Three",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 72,
+     "air_date": "2019-12-14",
+     "episode_number": 9,
+     "name": "Red Riot",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 73,
+     "air_date": "2019-12-21",
+     "episode_number": 10,
+     "name": "Temp Squad",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 74,
+     "air_date": "2019-12-28",
+     "episode_number": 11,
+     "name": "Lemillion",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 75,
+     "air_date": "2020-01-04",
+     "episode_number": 12,
+     "name": "Unforeseen Hope",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 76,
+     "air_date": "2020-01-11",
+     "episode_number": 13,
+     "name": "Infinite 100%",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 77,
+     "air_date": "2020-01-18",
+     "episode_number": 14,
+     "name": "Bright Future",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 78,
+     "air_date": "2020-01-25",
+     "episode_number": 15,
+     "name": "Smoldering Flames",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 79,
+     "air_date": "2020-02-01",
+     "episode_number": 16,
+     "name": "Win Those Kids’ Hearts",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 80,
+     "air_date": "2020-02-08",
+     "episode_number": 17,
+     "name": "Relief for License Trainees",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 81,
+     "air_date": "2020-02-15",
+     "episode_number": 18,
+     "name": "School Festival",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 82,
+     "air_date": "2020-02-22",
+     "episode_number": 19,
+     "name": "Prepping for the School Festival Is the Most Fun Part",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 83,
+     "air_date": "2020-02-29",
+     "episode_number": 20,
+     "name": "Gold Tips Imperial",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 84,
+     "air_date": "2020-03-07",
+     "episode_number": 21,
+     "name": "Deku vs. Gentle Criminal",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 85,
+     "air_date": "2020-03-14",
+     "episode_number": 22,
+     "name": "School Festival Start!!",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 86,
+     "air_date": "2020-03-21",
+     "episode_number": 23,
+     "name": "Let It Flow! School Festival!",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 87,
+     "air_date": "2020-03-28",
+     "episode_number": 24,
+     "name": "Japanese Hero Billboard Chart",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 88,
+     "air_date": "2020-04-04",
+     "episode_number": 25,
+     "name": "His Start",
+     "runtime": 24
+    }
+   ],
+   "name": "Season 4",
+   "names": [
+    "Season 4",
+    "第 4 季"
+   ],
+   "season_number": 4
+  },
+  {
+   "air_date": "2021-03-27",
+   "episode_count": 25,
+   "episodes": [
+    {
+     "absolute_number": 89,
+     "air_date": "2021-03-27",
+     "episode_number": 1,
+     "name": "All Hands on Deck! Class 1-A",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 90,
+     "air_date": "2021-04-03",
+     "episode_number": 2,
+     "name": "Vestiges",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 91,
+     "air_date": "2021-04-10",
+     "episode_number": 3,
+     "name": "Clash! Class A vs. Class B!",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 92,
+     "air_date": "2021-04-17",
+     "episode_number": 4,
+     "name": "Make It Happen, Shinso!",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 93,
+     "air_date": "2021-04-24",
+     "episode_number": 5,
+     "name": "Operation New Improv Moves",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 94,
+     "air_date": "2021-05-01",
+     "episode_number": 6,
+     "name": "Foresight",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 95,
+     "air_date": "2021-05-08",
+     "episode_number": 7,
+     "name": "Match 3",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 96,
+     "air_date": "2021-05-15",
+     "episode_number": 8,
+     "name": "Match 3 Conclusion",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 97,
+     "air_date": "2021-05-22",
+     "episode_number": 9,
+     "name": "Early Bird!",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 98,
+     "air_date": "2021-05-29",
+     "episode_number": 10,
+     "name": "That Which Is Inherited",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 99,
+     "air_date": "2021-06-05",
+     "episode_number": 11,
+     "name": "Our Brawl",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 100,
+     "air_date": "2021-06-12",
+     "episode_number": 12,
+     "name": "The New Power and All For One",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 101,
+     "air_date": "2021-06-19",
+     "episode_number": 13,
+     "name": "Have a Merry Christmas!",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 102,
+     "air_date": "2021-06-26",
+     "episode_number": 14,
+     "name": "Off to Endeavor's Agency!",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 103,
+     "air_date": "2021-07-10",
+     "episode_number": 15,
+     "name": "One Thing at a Time",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 104,
+     "air_date": "2021-07-17",
+     "episode_number": 16,
+     "name": "Long Time No See, Selkie",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 105,
+     "air_date": "2021-07-24",
+     "episode_number": 17,
+     "name": "The Hellish Todoroki Family",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 106,
+     "air_date": "2021-07-31",
+     "episode_number": 18,
+     "name": "The Unforgiven",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 107,
+     "air_date": "2021-08-14",
+     "episode_number": 19,
+     "name": "More of a Hero Than Anyone",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 108,
+     "air_date": "2021-08-21",
+     "episode_number": 20,
+     "name": "My Villain Academia",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 109,
+     "air_date": "2021-08-28",
+     "episode_number": 21,
+     "name": "Revival Party",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 110,
+     "air_date": "2021-09-04",
+     "episode_number": 22,
+     "name": "Sad Man's Parade",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 111,
+     "air_date": "2021-09-11",
+     "episode_number": 23,
+     "name": "Tenko Shimura: Origin",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 112,
+     "air_date": "2021-09-18",
+     "episode_number": 24,
+     "name": "Tomura Shigaraki: Origin",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 113,
+     "air_date": "2021-09-25",
+     "episode_number": 25,
+     "name": "The High, Deep Blue Sky",
+     "runtime": 24
+    }
+   ],
+   "name": "Season 5",
+   "names": [
+    "Season 5",
+    "第 5 季"
+   ],
+   "season_number": 5
+  },
+  {
+   "air_date": "2022-10-01",
+   "episode_count": 25,
+   "episodes": [
+    {
+     "absolute_number": 114,
+     "air_date": "2022-10-01",
+     "episode_number": 1,
+     "name": "A Quiet Beginning",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 115,
+     "air_date": "2022-10-08",
+     "episode_number": 2,
+     "name": "Mirko, the No. 5 Hero",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 116,
+     "air_date": "2022-10-15",
+     "episode_number": 3,
+     "name": "One's Justice",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 117,
+     "air_date": "2022-10-22",
+     "episode_number": 4,
+     "name": "Inheritance",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 118,
+     "air_date": "2022-10-29",
+     "episode_number": 5,
+     "name": "The Thrill of Destruction",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 119,
+     "air_date": "2022-11-05",
+     "episode_number": 6,
+     "name": "Encounter, Part 2",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 120,
+     "air_date": "2022-11-12",
+     "episode_number": 7,
+     "name": "Disaster Walker",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 121,
+     "air_date": "2022-11-19",
+     "episode_number": 8,
+     "name": "League of Villains vs. U.A. Students",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 122,
+     "air_date": "2022-11-26",
+     "episode_number": 9,
+     "name": "Katsuki Bakugo: Rising",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 123,
+     "air_date": "2022-12-03",
+     "episode_number": 10,
+     "name": "The Ones Within Us",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 124,
+     "air_date": "2022-12-10",
+     "episode_number": 11,
+     "name": "Dabi's Dance",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 125,
+     "air_date": "2022-12-17",
+     "episode_number": 12,
+     "name": "Threads of Hope",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 126,
+     "air_date": "2022-12-24",
+     "episode_number": 13,
+     "name": "Final Performance",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 127,
+     "air_date": "2023-01-07",
+     "episode_number": 14,
+     "name": "Hellish Hell",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 128,
+     "air_date": "2023-01-14",
+     "episode_number": 15,
+     "name": "Tartarus",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 129,
+     "air_date": "2023-01-21",
+     "episode_number": 16,
+     "name": "The Hellish Todoroki Family, Part 2",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 130,
+     "air_date": "2023-01-28",
+     "episode_number": 17,
+     "name": "The Wrong Way to Put Out a Fire",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 131,
+     "air_date": "2023-02-04",
+     "episode_number": 18,
+     "name": "Izuku Midoriya and Tomura Shigaraki",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 132,
+     "air_date": "2023-02-11",
+     "episode_number": 19,
+     "name": "Full Power!!",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 133,
+     "air_date": "2023-02-18",
+     "episode_number": 20,
+     "name": "Hired Gun",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 134,
+     "air_date": "2023-02-25",
+     "episode_number": 21,
+     "name": "The Lovely Lady Nagant",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 135,
+     "air_date": "2023-03-04",
+     "episode_number": 22,
+     "name": "Friend",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 136,
+     "air_date": "2023-03-11",
+     "episode_number": 23,
+     "name": "Deku vs. Class A",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 137,
+     "air_date": "2023-03-18",
+     "episode_number": 24,
+     "name": "A Young Woman's Declaration",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 138,
+     "air_date": "2023-03-25",
+     "episode_number": 25,
+     "name": "No Man Is an Island",
+     "runtime": 24
+    }
+   ],
+   "name": "Season 6",
+   "names": [
+    "Season 6",
+    "第 6 季"
+   ],
+   "season_number": 6
+  },
+  {
+   "air_date": "2024-05-04",
+   "episode_count": 21,
+   "episodes": [
+    {
+     "absolute_number": 139,
+     "air_date": "2024-05-04",
+     "episode_number": 1,
+     "name": "In the Nick of Time! A Big-Time Maverick from the West",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 140,
+     "air_date": "2024-05-11",
+     "episode_number": 2,
+     "name": "Specter",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 141,
+     "air_date": "2024-05-18",
+     "episode_number": 3,
+     "name": "Villain",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 142,
+     "air_date": "2024-05-25",
+     "episode_number": 4,
+     "name": "The Story of How We All Became Heroes",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 143,
+     "air_date": "2024-06-01",
+     "episode_number": 5,
+     "name": "Let You Down",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 144,
+     "air_date": "2024-06-08",
+     "episode_number": 6,
+     "name": "Division",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 145,
+     "air_date": "2024-06-15",
+     "episode_number": 7,
+     "name": "Inflation",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 146,
+     "air_date": "2024-06-22",
+     "episode_number": 8,
+     "name": "Two Flashfires",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 147,
+     "air_date": "2024-06-29",
+     "episode_number": 9,
+     "name": "Extras",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 148,
+     "air_date": "2024-07-13",
+     "episode_number": 10,
+     "name": "Wounded Hero, Burning Bright and True!!",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 149,
+     "air_date": "2024-07-20",
+     "episode_number": 11,
+     "name": "Light Fades to Rain",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 150,
+     "air_date": "2024-08-03",
+     "episode_number": 12,
+     "name": "Those Who Defend, Those Who Violate",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 151,
+     "air_date": "2024-08-17",
+     "episode_number": 13,
+     "name": "A Chain of Events, Across the Ages",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 152,
+     "air_date": "2024-08-24",
+     "episode_number": 14,
+     "name": "Together with Shoji",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 153,
+     "air_date": "2024-08-31",
+     "episode_number": 15,
+     "name": "Butterfly Effect",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 154,
+     "air_date": "2024-09-07",
+     "episode_number": 16,
+     "name": "The Chain Thus Far",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 155,
+     "air_date": "2024-09-14",
+     "episode_number": 17,
+     "name": "Hopes",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 156,
+     "air_date": "2024-09-21",
+     "episode_number": 18,
+     "name": "It's a Small World",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 157,
+     "air_date": "2024-09-28",
+     "episode_number": 19,
+     "name": "I Am Here",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 158,
+     "air_date": "2024-10-05",
+     "episode_number": 20,
+     "name": "A Girl's Ego",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 159,
+     "air_date": "2024-10-12",
+     "episode_number": 21,
+     "name": "Battle Without a Quirk",
+     "runtime": 24
+    }
+   ],
+   "name": "Season 7",
+   "names": [
+    "Season 7",
+    "第 7 季"
+   ],
+   "season_number": 7
+  },
+  {
+   "air_date": "2025-10-04",
+   "episode_count": 11,
+   "episodes": [
+    {
+     "absolute_number": 160,
+     "air_date": "2025-10-04",
+     "episode_number": 1,
+     "name": "Toshinori Yagi: Rising/Origin",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 161,
+     "air_date": "2025-10-11",
+     "episode_number": 2,
+     "name": "The End of an Era, and the Beginning",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 162,
+     "air_date": "2025-10-18",
+     "episode_number": 3,
+     "name": "The Final Boss!!",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 163,
+     "air_date": "2025-10-25",
+     "episode_number": 4,
+     "name": "Quirk: Explosion!!",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 164,
+     "air_date": "2025-11-01",
+     "episode_number": 5,
+     "name": "History's Greatest Villain",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 165,
+     "air_date": "2025-11-08",
+     "episode_number": 6,
+     "name": "Wrench It Open, Izuku Midoriya!!",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 166,
+     "air_date": "2025-11-15",
+     "episode_number": 7,
+     "name": "From Aizawa",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 167,
+     "air_date": "2025-11-22",
+     "episode_number": 8,
+     "name": "Izuku Midoriya: Rising",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 168,
+     "air_date": "2025-11-29",
+     "episode_number": 9,
+     "name": "Epilogue, The Hellish Todoroki Family: Final",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 169,
+     "air_date": "2025-12-06",
+     "episode_number": 10,
+     "name": "The Girl Who Loves Smiles",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 170,
+     "air_date": "2025-12-13",
+     "episode_number": 11,
+     "name": "My Hero Academia",
+     "runtime": 23
+    }
+   ],
+   "name": "FINAL SEASON",
+   "names": [
+    "FINAL SEASON",
+    "第 8 季",
+    "最终季"
+   ],
+   "season_number": 8
+  }
+ ],
+ "title": "我的英雄學院",
+ "title_en": "My Hero Academia",
+ "title_original": "僕のヒーローアカデミア",
+ "titles": [
+  "My Hero Academia",
+  "僕のヒーローアカデミア",
+  "मेरा नायक एकेडेमिया",
+  "माई हीरो एकेडेमिया",
+  "ヒロアカ",
+  "Boku no Hero Academia",
+  "BNHA",
+  "僕のヒーローアカデミア Memories",
+  "僕のヒーローアカデミア No. 170+1 More",
+  "Boku no Hero Academia: More",
+  "Boku no Hero Academia No. 170+1: More",
+  "Boku no Hero Academia: I am a hero too",
+  "나의 히어로 아카데미아",
+  "أكاديمية بطلي",
+  "我的英雄學院 FINAL SEASON",
+  "Моя геройська академія",
+  "MHA",
+  "My Hero Academia: More",
+  "My Hero Academia: I am a hero too",
+  "Anh Hùng Học Viện",
+  "Моя академія героїв",
+  "Моя геройская академия",
+  "我的英雄学院",
+  "Hősakadémia",
+  "Моята академия за герои",
+  "אקדמיית הגיבורים שלי",
+  "我的英雄學院",
+  "Academia eroilor",
+  "Học Viện Siêu Anh Hùng",
+  "Η Δική Μου Ακαδημία Ηρώων",
+  "Akademia bohaterów",
+  "มายฮีโร่ อคาเดเมีย",
+  "Kahramanlık Akademim",
+  "Mit helteakademi",
+  "Moje hrdinská akademie",
+  "ჩემი საგმირო აკადემია"
+ ],
+ "tmdb_id": 65930,
+ "year": 2016
+}

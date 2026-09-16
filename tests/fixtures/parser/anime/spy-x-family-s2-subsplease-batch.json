@@ -1,0 +1,35 @@
+{
+  "id": "anime/spy-x-family-s2-subsplease-batch",
+  "source_url": "https://nyaa.si/view/2059571",
+  "torrent_name": "[SubsPlease] Spy x Family (26-37) (1080p) [Batch]",
+  "tmdb": "tv-120089",
+  "context": {"media": "tv:120089", "profile": "anime", "season_hint": null, "episode_offset": null},
+  "files": [
+    {"path": "[SubsPlease] Spy x Family - 26v2 (1080p) [29DDC85B].mkv", "size": 1449715714},
+    {"path": "[SubsPlease] Spy x Family - 27v2 (1080p) [BE27DD09].mkv", "size": 1448460465},
+    {"path": "[SubsPlease] Spy x Family - 28v2 (1080p) [3E12608C].mkv", "size": 1450904590},
+    {"path": "[SubsPlease] Spy x Family - 29v2 (1080p) [2D79EE6B].mkv", "size": 1448605176},
+    {"path": "[SubsPlease] Spy x Family - 30v2 (1080p) [B4AC037B].mkv", "size": 1447416972},
+    {"path": "[SubsPlease] Spy x Family - 31v2 (1080p) [1AD28FA2].mkv", "size": 1448962532},
+    {"path": "[SubsPlease] Spy x Family - 32v2 (1080p) [1FCD523A].mkv", "size": 1445573448},
+    {"path": "[SubsPlease] Spy x Family - 33v2 (1080p) [2354E9BC].mkv", "size": 1449135426},
+    {"path": "[SubsPlease] Spy x Family - 34v2 (1080p) [BEC338D2].mkv", "size": 1449160493},
+    {"path": "[SubsPlease] Spy x Family - 35v2 (1080p) [511970E3].mkv", "size": 1448201225},
+    {"path": "[SubsPlease] Spy x Family - 36v2 (1080p) [484C504A].mkv", "size": 1447947606},
+    {"path": "[SubsPlease] Spy x Family - 37v2 (1080p) [5D0BA3FC].mkv", "size": 1451178950}
+  ],
+  "expected": [
+    {"path": "[SubsPlease] Spy x Family - 26v2 (1080p) [29DDC85B].mkv", "kind": "video", "action": "import", "season": 2, "episode": 1, "tags": {"resolution": "1080p", "group": "SubsPlease", "version": "v2"}, "target": "SPY x FAMILY (2022) [tmdbid-120089]/Season 02/SPY x FAMILY (2022) - S02E01 - FOLLOW MAMA AND PAPA [1080p][SubsPlease][v2].mkv", "min_confidence": "medium"},
+    {"path": "[SubsPlease] Spy x Family - 27v2 (1080p) [BE27DD09].mkv", "kind": "video", "action": "import", "season": 2, "episode": 2, "tags": {"resolution": "1080p", "group": "SubsPlease", "version": "v2"}, "target": "SPY x FAMILY (2022) [tmdbid-120089]/Season 02/SPY x FAMILY (2022) - S02E02 - BOND'S STRATEGY TO STAY ALIVE DAMIAN'S FIELD RESEARCH TRIP [1080p][SubsPlease][v2].mkv", "min_confidence": "medium"},
+    {"path": "[SubsPlease] Spy x Family - 28v2 (1080p) [3E12608C].mkv", "kind": "video", "action": "import", "season": 2, "episode": 3, "tags": {"resolution": "1080p", "group": "SubsPlease", "version": "v2"}, "target": "SPY x FAMILY (2022) [tmdbid-120089]/Season 02/SPY x FAMILY (2022) - S02E03 - MISSION AND FAMILY THE ELEGANT BONDMAN THE HEART OF A CHILD WAKING UP [1080p][SubsPlease][v2].mkv", "min_confidence": "medium"},
+    {"path": "[SubsPlease] Spy x Family - 29v2 (1080p) [2D79EE6B].mkv", "kind": "video", "action": "import", "season": 2, "episode": 4, "tags": {"resolution": "1080p", "group": "SubsPlease", "version": "v2"}, "target": "SPY x FAMILY (2022) [tmdbid-120089]/Season 02/SPY x FAMILY (2022) - S02E04 - THE PASTRY OF KNOWLEDGE THE INFORMANT'S GREAT ROMANCE PLAN II [1080p][SubsPlease][v2].mkv", "min_confidence": "medium"},
+    {"path": "[SubsPlease] Spy x Family - 30v2 (1080p) [B4AC037B].mkv", "kind": "video", "action": "import", "season": 2, "episode": 5, "tags": {"resolution": "1080p", "group": "SubsPlease", "version": "v2"}, "target": "SPY x FAMILY (2022) [tmdbid-120089]/Season 02/SPY x FAMILY (2022) - S02E05 - PLAN TO CROSS THE BORDER [1080p][SubsPlease][v2].mkv", "min_confidence": "medium"},
+    {"path": "[SubsPlease] Spy x Family - 31v2 (1080p) [1AD28FA2].mkv", "kind": "video", "action": "import", "season": 2, "episode": 6, "tags": {"resolution": "1080p", "group": "SubsPlease", "version": "v2"}, "target": "SPY x FAMILY (2022) [tmdbid-120089]/Season 02/SPY x FAMILY (2022) - S02E06 - THE FEARSOME LUXURY CRUISE SHIP [1080p][SubsPlease][v2].mkv", "min_confidence": "medium"},
+    {"path": "[SubsPlease] Spy x Family - 32v2 (1080p) [1FCD523A].mkv", "kind": "video", "action": "import", "season": 2, "episode": 7, "tags": {"resolution": "1080p", "group": "SubsPlease", "version": "v2"}, "target": "SPY x FAMILY (2022) [tmdbid-120089]/Season 02/SPY x FAMILY (2022) - S02E07 - WHO IS THIS MISSION FOR [1080p][SubsPlease][v2].mkv", "min_confidence": "medium"},
+    {"path": "[SubsPlease] Spy x Family - 33v2 (1080p) [2354E9BC].mkv", "kind": "video", "action": "import", "season": 2, "episode": 8, "tags": {"resolution": "1080p", "group": "SubsPlease", "version": "v2"}, "target": "SPY x FAMILY (2022) [tmdbid-120089]/Season 02/SPY x FAMILY (2022) - S02E08 - THE SYMPHONY UPON THE SHIP [1080p][SubsPlease][v2].mkv", "min_confidence": "medium"},
+    {"path": "[SubsPlease] Spy x Family - 34v2 (1080p) [BEC338D2].mkv", "kind": "video", "action": "import", "season": 2, "episode": 9, "tags": {"resolution": "1080p", "group": "SubsPlease", "version": "v2"}, "target": "SPY x FAMILY (2022) [tmdbid-120089]/Season 02/SPY x FAMILY (2022) - S02E09 - THE HAND THAT CONNECTS TO THE FUTURE [1080p][SubsPlease][v2].mkv", "min_confidence": "medium"},
+    {"path": "[SubsPlease] Spy x Family - 35v2 (1080p) [511970E3].mkv", "kind": "video", "action": "import", "season": 2, "episode": 10, "tags": {"resolution": "1080p", "group": "SubsPlease", "version": "v2"}, "target": "SPY x FAMILY (2022) [tmdbid-120089]/Season 02/SPY x FAMILY (2022) - S02E10 - ENJOY THE RESORT TO THE FULLEST BRAGGING ABOUT VACATION [1080p][SubsPlease][v2].mkv", "min_confidence": "medium"},
+    {"path": "[SubsPlease] Spy x Family - 36v2 (1080p) [484C504A].mkv", "kind": "video", "action": "import", "season": 2, "episode": 11, "tags": {"resolution": "1080p", "group": "SubsPlease", "version": "v2"}, "target": "SPY x FAMILY (2022) [tmdbid-120089]/Season 02/SPY x FAMILY (2022) - S02E11 - BERLINT IN LOVE NIGHTFALL'S DAILY LIFE [1080p][SubsPlease][v2].mkv", "min_confidence": "medium"},
+    {"path": "[SubsPlease] Spy x Family - 37v2 (1080p) [5D0BA3FC].mkv", "kind": "video", "action": "import", "season": 2, "episode": 12, "tags": {"resolution": "1080p", "group": "SubsPlease", "version": "v2"}, "target": "SPY x FAMILY (2022) [tmdbid-120089]/Season 02/SPY x FAMILY (2022) - S02E12 - PART OF THE FAMILY [1080p][SubsPlease][v2].mkv", "min_confidence": "medium"}
+  ]
+}

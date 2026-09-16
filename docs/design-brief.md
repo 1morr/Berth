@@ -622,6 +622,7 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 | Jellyfin 支援版本（2026-09-15） | **只支援 Jellyfin 12 以上**（同日稍早定的「兩條版本線都支援、13.0 發佈才拿掉 10.x」被使用者改掉，為了降低複雜度）。MergeVersions 的精靈步驟、既有服務按鈕、resolver 的合併觸發與任務 id 整段移除；既有 Jellyfin 低於 12 時，精靈與健康檢查紅燈，說出目前版本並附升級注意（§20.9），不往下做。代價是已知的：從 10.11 升到 12 有遷移失敗的 open issue、舊客戶端要升級、binhex（unRAID）與 QNAP 社群套件還沒有 12，那些使用者要先升級才能接本系統 | §1.2、§7.7、§16.4、§20.9、M1 票 14b |
 | 套件內 Jellyfin image（2026-09-15） | 釘在 12.1 這條線（linuxserver `version-12.1ubu2604`）：跟得上 12.1 的修正與重建，但 pull 時不會默默跨到下一版；本系統實測過新版才調高，README 寫升級步驟（先備份 Jellyfin 的 `/config`、升級後完整掃描） | §16.3、§20.9、plan §9.1、M1 票 14b |
 | 多集檔與同起始集的單集（2026-09-15） | 同一季已有、或同一批要入的正片裡，有同起始集而結束集不同的，送審核不自動入庫；理由要說出 Jellyfin 12 會把它們併成一集、藏掉後面的集 | §7.8、§20.9、M1 票 14b |
+| Route profile（2026-09-16） | **移除**。量測（§20.4）顯示它唯一的作用是「只有集號、TMDB 多季」時絕對編號換算自動入庫（anime）還是送審核（standard），而「是不是動漫」預測不了換算對錯。改由兩條證據決定：集號 ≤ 第一季集數、或檔名的播出日與換算出的那一集對不上，就送審核，其餘 medium。季號搜尋變體改成對所有劇集都做。代價：多季作品第一季的無季號發佈送審核 | §20.4、`docs/research/profile-effect.md`、M1 票 14d / 14e（實作時回寫 §6.4、§6.5、CONTEXT.md） |
 | M1.5 拆票前的四條（2026-09-15） | 媒體庫頁一個 Jellyfin 媒體庫一頁，只列這位使用者 `UserViews` 裡有的，Route 退成卡片上入庫狀態的來源；首頁上方放這位使用者的繼續觀看與下一集（沒有內容就不出現），下面維持探索；瀏覽時取允許清單一併讀 Jellyfin 帳號的 `Policy`（同一份短時間快取），帳號被停用就結束 Berth 的 session，不縮短 session 效期；Jellyfin 的圖片由 Berth 代理，快取鍵用 `tag` | §12、§13、§20.8、plan §11.2b |
 
 M1.5 拆票前的四條待決，2026-09-15 已全數照推薦拍板（上表最後一列），這裡留著當時的理由：
@@ -857,6 +858,26 @@ M1.5 拆票前的四條待決，2026-09-15 已全數照推薦拍板（上表最�
   - [VCB-Studio 魔王2099](https://share.dmhy.org/topics/view/726629_VCB-Studio_2099_Demon_Lord_2099_10-bit_1080p_HEVC_BDRip_Fin.html)（223 個檔案）：`SPs/`、`CDs/`（每張碟一個子資料夾，內含 flac 與 webp）、`CDs/…/Scans/`、`Scans/`（`BDBOX`、`Vol.1`…）。**沒有** `Fonts/` 與 `Menu/`。
   - [DBD-Raws 不死者之王 第二季](https://share.dmhy.org/topics/view/668157_DBD-Raws_Overlord_Overlord_S2_01-13TV_SP_1080P_BDRip_HEVC-10bit_FLAC_MKV.html)（106 個檔案）：`SP/`（帶 SP 編號，每個配 `.sc.ass` / `.tc.ass`）、`PV/`、`NCOP&NCED/`、`menu/`（小寫）、`Fonts/Fonts.zip`（字型是壓縮檔不是散檔）。
   - 兩份都成了 §6.9 的語料（`tests/fixtures/parser/`），分類規則因此有真實輸入可以釘。
+
+**只有集號、TMDB 上多季的真實發佈（2026-09-16，M1 票 14c，[研究](research/profile-effect.md)）**：
+§6.4「只有集號 → 絕對編號」那一支在 v1 的 23 筆語料上一次都沒走到（34 次全是 TMDB 只有一季），
+補了 5 筆走得到的才量得出 Route profile 的作用。
+
+- **動漫的跨季連號換算得對**：SubsPlease `Spy x Family - 26`–`37`（S02E01–12）、`Boku no Hero Academia - 139`
+  （S07E01）、Erai-raws `One Piece - 1089 ~ 1104`。**TMDB 的航海王第 22 季沿用官方集數當 `episode_number`**
+  （S22E1089–1155），所以只有 absolute group 換對，各季累加換成 S22E01 是錯的。
+- **非動漫的「集號」可能是另一套數法**：《Home and Away》`Episode.8214.2024-02-29` 累加換成 S37E32，
+  但 TMDB 的 S37E39 集名就是 `Episode 8214`、播於同一天——TMDB 前 36 季比官方編號多收 7 集。
+  韓國電視台的 `The.Return.of.Superman.E079.150524` 累加換成 S03E21，播出日與檔名一致，是對的。
+- **字幕組每 cour 重數、篇章名只寫羅馬字時會被當成絕對編號**：Erai-raws
+  `Bleach - Sennen Kessen Hen - Soukoku Tan - 01 ~ 14` 換成 S01E01–14，正解 S02E27–40（TMDB 季名是
+  `Thousand-Year Blood War` / `千年血戰篇`，比不到羅馬字）。
+- **`guessit` 預設把韓國電視台的 `YYMMDD` 讀錯**：`150524` 讀成 2024-05-15（本機 guessit 實測），要加
+  `date_year_first`——官方說明「If short date is found, consider the first digits as the year」
+  （[guessit 文件](https://guessit-io.github.io/guessit)的 `-Y, --date-year-first`；設定檔裡是 `date_year_first`）。
+  加上之後讀成 2015-05-24，`2024-02-29` 這種四位數年份不受影響。
+- 韓劇第二季以後、檔名沒有季號的 `Show.2.E01.YYMMDD` 在 TPB、Knaben、dmhy 都沒找到，公開索引站上的
+  第二季發佈全部帶 `S02E`。
 
 **Jellyfin 動漫命名的社群痛點**
 

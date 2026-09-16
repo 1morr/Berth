@@ -1,0 +1,4452 @@
+{
+ "first_air_date": "2013-11-03",
+ "kind": "tv",
+ "overview": "節目邀請名人爸爸獨力照顧自己的孩子48小時，在此期間，媽媽將因而獲得享受閒暇的自由時間。透過鏡頭，新手爸爸們完成媽媽交託的各種任務及拆解各種育兒的突發狀況，向觀眾呈現他們一步步努力成為一個「超人」爸爸的故事，分享育兒的苦與樂。",
+ "poster_url": "https://image.tmdb.org/t/p/w342/qwB7MfK8srVtlyskQM9u8hnNU8q.jpg",
+ "runtime": null,
+ "seasons": [
+  {
+   "air_date": "2013-09-19",
+   "episode_count": 4,
+   "episodes": [
+    {
+     "absolute_number": null,
+     "air_date": "2013-09-19",
+     "episode_number": 1,
+     "name": "A Man Became A Dad",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2013-09-20",
+     "episode_number": 2,
+     "name": "The Dads Are In Crisis",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2013-09-21",
+     "episode_number": 3,
+     "name": "In The Name of Father...",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2022-04-15",
+     "episode_number": 4,
+     "name": "[스페셜] 너의 모든 처음을 기억해",
+     "runtime": null
+    }
+   ],
+   "name": "Specials",
+   "names": [
+    "Specials",
+    "特別篇",
+    "特别篇"
+   ],
+   "season_number": 0
+  },
+  {
+   "air_date": "2013-11-03",
+   "episode_count": 9,
+   "episodes": [
+    {
+     "absolute_number": null,
+     "air_date": "2013-11-03",
+     "episode_number": 1,
+     "name": "1. Things You Only Realize Once You Raise Them",
+     "runtime": 85
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2013-11-10",
+     "episode_number": 2,
+     "name": "2. They're Just Like Me",
+     "runtime": 85
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2013-11-17",
+     "episode_number": 3,
+     "name": "3. I Can't Live Without You",
+     "runtime": 85
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2013-11-24",
+     "episode_number": 4,
+     "name": "4. This is What Your Dad is Like",
+     "runtime": 85
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2013-12-01",
+     "episode_number": 5,
+     "name": "5. It's Okay to Fail at First",
+     "runtime": 85
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2013-12-08",
+     "episode_number": 6,
+     "name": "6. Kids Raise Dads",
+     "runtime": 85
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2013-12-15",
+     "episode_number": 7,
+     "name": "7. Sons and Daughters",
+     "runtime": 85
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2013-12-22",
+     "episode_number": 8,
+     "name": "8. Merry Christmas",
+     "runtime": 85
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2013-12-29",
+     "episode_number": 9,
+     "name": "9. No Flower Blossoms Without Hardship",
+     "runtime": 85
+    }
+   ],
+   "name": "Season 2013",
+   "names": [
+    "Season 2013",
+    "第 1 季"
+   ],
+   "season_number": 1
+  },
+  {
+   "air_date": "2014-01-05",
+   "episode_count": 49,
+   "episodes": [
+    {
+     "absolute_number": null,
+     "air_date": "2014-01-05",
+     "episode_number": 1,
+     "name": "10. Tell Me Your Wish!",
+     "runtime": 76
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2014-01-12",
+     "episode_number": 2,
+     "name": "11. My Children's Private Life",
+     "runtime": 85
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2014-01-19",
+     "episode_number": 3,
+     "name": "12. If We Hadn't Met Then...",
+     "runtime": 85
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2014-01-26",
+     "episode_number": 4,
+     "name": "13. Why Are You at My House?",
+     "runtime": 85
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2014-02-02",
+     "episode_number": 5,
+     "name": "14. Families are like Puzzles",
+     "runtime": 85
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2014-02-09",
+     "episode_number": 6,
+     "name": "15. Daddy's Miracle Effect",
+     "runtime": 85
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2014-02-16",
+     "episode_number": 7,
+     "name": "16. I'm Not Afraid If We're Together",
+     "runtime": 95
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2014-02-23",
+     "episode_number": 8,
+     "name": "17. Good Daddy Complex",
+     "runtime": 95
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2014-03-02",
+     "episode_number": 9,
+     "name": "18. Dads Will Fight Through Anything",
+     "runtime": 95
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2014-03-09",
+     "episode_number": 10,
+     "name": "19. You Are My Spring",
+     "runtime": 95
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2014-03-16",
+     "episode_number": 11,
+     "name": "20. Dating Rather Than Babysitting",
+     "runtime": 95
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2014-03-23",
+     "episode_number": 12,
+     "name": "21. This is the Moment",
+     "runtime": 95
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2014-03-30",
+     "episode_number": 13,
+     "name": "22. Daddies Need Holidays Too",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2014-04-06",
+     "episode_number": 14,
+     "name": "23. The Story I Want to Tell You",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2014-04-13",
+     "episode_number": 15,
+     "name": "24. I Love Jeju-do, I Love You",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2014-05-04",
+     "episode_number": 16,
+     "name": "25. The First Time Is Always Exciting",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2014-05-11",
+     "episode_number": 17,
+     "name": "26. Spring is Here",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2014-05-18",
+     "episode_number": 18,
+     "name": "27. And That's How You Become a Father",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2014-05-25",
+     "episode_number": 19,
+     "name": "28. Great Expectations",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2014-06-01",
+     "episode_number": 20,
+     "name": "29. You Are My Destiny",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2014-06-08",
+     "episode_number": 21,
+     "name": "30. Memories Are Delicious",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2014-06-15",
+     "episode_number": 22,
+     "name": "31. Let's Be Friends",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2014-06-22",
+     "episode_number": 23,
+     "name": "32. A Dream Come True",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2014-06-29",
+     "episode_number": 24,
+     "name": "33. Kids Grow Up Watching Me",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2014-07-06",
+     "episode_number": 25,
+     "name": "34. Family Ties",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2014-07-13",
+     "episode_number": 26,
+     "name": "35. No Pain, No Gain",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2014-07-20",
+     "episode_number": 27,
+     "name": "36. I'm Happier Today",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2014-07-27",
+     "episode_number": 28,
+     "name": "37. Slow Steps",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2014-08-03",
+     "episode_number": 29,
+     "name": "38. How to Beat Mom",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2014-08-10",
+     "episode_number": 30,
+     "name": "39. Daddy's Weight",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2014-08-17",
+     "episode_number": 31,
+     "name": "40. A Midsummer Night's Dream",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2014-08-24",
+     "episode_number": 32,
+     "name": "41. Travel Together to Travel Far",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2014-08-31",
+     "episode_number": 33,
+     "name": "42. I Will Always Root For You",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2014-09-07",
+     "episode_number": 34,
+     "name": "43. Chuseok Special: 1 Year Anniversary Special -- The Neighborhood is Needed to Raise One Child, Part 1",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2014-09-14",
+     "episode_number": 35,
+     "name": "44. Chuseok Special: 1 Year Anniversary Special -- The Neighborhood is Needed to Raise One Child, Part 2",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2014-09-21",
+     "episode_number": 36,
+     "name": "45. A Brand New World",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2014-09-28",
+     "episode_number": 37,
+     "name": "46. Raising Kids Makes Life A Joy",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2014-10-05",
+     "episode_number": 38,
+     "name": "47. That's How Love Began",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2014-10-12",
+     "episode_number": 39,
+     "name": "48. Dads are the Toughest Men in the World",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2014-10-26",
+     "episode_number": 40,
+     "name": "49. Children Grow on the Road",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2014-11-02",
+     "episode_number": 41,
+     "name": "50. Growing Up with Compliments",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2014-11-09",
+     "episode_number": 42,
+     "name": "51. Keep it A Secret From Mom",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2014-11-16",
+     "episode_number": 43,
+     "name": "52. It's Great to be Together",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2014-11-23",
+     "episode_number": 44,
+     "name": "53. A Very Special Day",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2014-11-30",
+     "episode_number": 45,
+     "name": "54. Dads Make Their Children Dream",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2014-12-07",
+     "episode_number": 46,
+     "name": "55. A Good Path is One Taken Together",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2014-12-14",
+     "episode_number": 47,
+     "name": "56. If By Life You Were Deceived",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2014-12-21",
+     "episode_number": 48,
+     "name": "57. Love Actually",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2014-12-28",
+     "episode_number": 49,
+     "name": "58. Happier Day By Day",
+     "runtime": 100
+    }
+   ],
+   "name": "Season 2014",
+   "names": [
+    "Season 2014",
+    "第 2 季"
+   ],
+   "season_number": 2
+  },
+  {
+   "air_date": "2015-01-04",
+   "episode_count": 52,
+   "episodes": [
+    {
+     "absolute_number": null,
+     "air_date": "2015-01-04",
+     "episode_number": 1,
+     "name": "59. In Between Fear and Excitement",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2015-01-11",
+     "episode_number": 2,
+     "name": "60. Look Forward To It",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2015-01-18",
+     "episode_number": 3,
+     "name": "61. Growing Up Fast",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2015-01-25",
+     "episode_number": 4,
+     "name": "62. Today Was Another Great Day",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2015-02-01",
+     "episode_number": 5,
+     "name": "63. A Whole New World With Dad",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2015-02-08",
+     "episode_number": 6,
+     "name": "64. Children Grow Together",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2015-02-15",
+     "episode_number": 7,
+     "name": "65. Just Like Now",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2015-02-22",
+     "episode_number": 8,
+     "name": "66. It's A First For Dad Too",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2015-03-01",
+     "episode_number": 9,
+     "name": "67. Who Do You Take After?",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2015-03-08",
+     "episode_number": 10,
+     "name": "68. The Sound of Spring Approaching",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2015-03-15",
+     "episode_number": 11,
+     "name": "69. When Did They Grow So Big?",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2015-03-22",
+     "episode_number": 12,
+     "name": "70. Like a Sturdy Tree",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2015-03-29",
+     "episode_number": 13,
+     "name": "71. One Step at a Time",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2015-04-05",
+     "episode_number": 14,
+     "name": "72. I Can Do It",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2015-04-12",
+     "episode_number": 15,
+     "name": "73. I Do It Because I'm Dad",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2015-04-19",
+     "episode_number": 16,
+     "name": "74. The Person Who Makes Me Happy",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2015-04-26",
+     "episode_number": 17,
+     "name": "75. Children Grow With Nature",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2015-05-03",
+     "episode_number": 18,
+     "name": "76. Even If You Don't Remember",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2015-05-10",
+     "episode_number": 19,
+     "name": "77. Four Families Under One Roof",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2015-05-17",
+     "episode_number": 20,
+     "name": "78. Already One Year",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2015-05-24",
+     "episode_number": 21,
+     "name": "79. Grow Up Slowly",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2015-05-31",
+     "episode_number": 22,
+     "name": "80. Dad's Imagination Comes True",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2015-06-07",
+     "episode_number": 23,
+     "name": "81. You Can Do It!",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2015-06-14",
+     "episode_number": 24,
+     "name": "82. We Get Along Pretty Well",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2015-06-21",
+     "episode_number": 25,
+     "name": "83. Daddy Doesn't Get Tired",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2015-06-28",
+     "episode_number": 26,
+     "name": "84. Raise Them Tough and They Become Strong",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2015-07-05",
+     "episode_number": 27,
+     "name": "85. Off On A Trip",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2015-07-12",
+     "episode_number": 28,
+     "name": "86. Gift From Time",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2015-07-19",
+     "episode_number": 29,
+     "name": "87. About Time",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2015-07-26",
+     "episode_number": 30,
+     "name": "88. Just Like Now",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2015-08-02",
+     "episode_number": 31,
+     "name": "89. Dads Are Men",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2015-08-09",
+     "episode_number": 32,
+     "name": "90. A Big Happy Family",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2015-08-16",
+     "episode_number": 33,
+     "name": "91. People Who Make Me Stronger",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2015-08-23",
+     "episode_number": 34,
+     "name": "92. You Are the Happiness",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2015-08-30",
+     "episode_number": 35,
+     "name": "93. The Fancy Outing",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2015-09-06",
+     "episode_number": 36,
+     "name": "94. The Value of Being Together",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2015-09-13",
+     "episode_number": 37,
+     "name": "95. Every Day Is a Surprise",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2015-09-20",
+     "episode_number": 38,
+     "name": "96. You're my Superstar",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2015-09-27",
+     "episode_number": 39,
+     "name": "97. Great Father Grandfather",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2015-10-04",
+     "episode_number": 40,
+     "name": "Believe in Dad",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2015-10-11",
+     "episode_number": 41,
+     "name": "99. Struggles Lead to a Strong Dad",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2015-10-18",
+     "episode_number": 42,
+     "name": "100. To Become a 100% Great Dad",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2015-10-25",
+     "episode_number": 43,
+     "name": "101. Changing Fear into Courage",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2015-11-01",
+     "episode_number": 44,
+     "name": "102. Tug-of-War with the Kids",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2015-11-08",
+     "episode_number": 45,
+     "name": "103. Wise and Gentle",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2015-11-15",
+     "episode_number": 46,
+     "name": "104. Little Big Hero",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2015-11-22",
+     "episode_number": 47,
+     "name": "105. Drops of Memories",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2015-11-29",
+     "episode_number": 48,
+     "name": "106. The Gift of Waiting",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2015-12-06",
+     "episode_number": 49,
+     "name": "107. The Long-Awaited Moment",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2015-12-13",
+     "episode_number": 50,
+     "name": "108. You are my Energy",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2015-12-20",
+     "episode_number": 51,
+     "name": "109. The Power of Dad",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2015-12-27",
+     "episode_number": 52,
+     "name": "110. Miracle Made By Dad",
+     "runtime": 100
+    }
+   ],
+   "name": "Season 2015",
+   "names": [
+    "Season 2015",
+    "第 3 季"
+   ],
+   "season_number": 3
+  },
+  {
+   "air_date": "2016-01-03",
+   "episode_count": 52,
+   "episodes": [
+    {
+     "absolute_number": null,
+     "air_date": "2016-01-03",
+     "episode_number": 1,
+     "name": "111. Every Wish Comes True",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-01-10",
+     "episode_number": 2,
+     "name": "112. Kids Are Like Clay",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-01-17",
+     "episode_number": 3,
+     "name": "113. I'll Watch Over and Protect You",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-01-24",
+     "episode_number": 4,
+     "name": "114. This is Dad's First Time Too",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-01-31",
+     "episode_number": 5,
+     "name": "115. Don't Worry, Dad",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-02-07",
+     "episode_number": 6,
+     "name": "116. I Love You, I Love You, I Love You",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-02-14",
+     "episode_number": 7,
+     "name": "117. Thank You For Coming To Me",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-02-21",
+     "episode_number": 8,
+     "name": "118. Fly Little Chick",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-02-28",
+     "episode_number": 9,
+     "name": "119. Good to be Different, Good to be Similar",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-03-06",
+     "episode_number": 10,
+     "name": "120. It's Okay, It'll All Work Out",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-03-13",
+     "episode_number": 11,
+     "name": "121. Always Spring",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-03-20",
+     "episode_number": 12,
+     "name": "122. I Love You and Remember You",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-03-27",
+     "episode_number": 13,
+     "name": "123. Family is My Strength",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-04-03",
+     "episode_number": 14,
+     "name": "124. I Prepared This For You",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-04-10",
+     "episode_number": 15,
+     "name": "125. Two Is Better Than One",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-04-17",
+     "episode_number": 16,
+     "name": "126. Take a Break from Child Rearing: Part One",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-04-24",
+     "episode_number": 17,
+     "name": "127. Take a Break from Child Rearing: Part Two",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-05-01",
+     "episode_number": 18,
+     "name": "128. My Child's Operation Manual",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-05-08",
+     "episode_number": 19,
+     "name": "129. Dads Needs Dads Too",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-05-15",
+     "episode_number": 20,
+     "name": "130. Raising Them As Our Child",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-05-22",
+     "episode_number": 21,
+     "name": "131. Raising a Small Child to be Big",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-05-29",
+     "episode_number": 22,
+     "name": "132. Joint Babysitting Project, Babysitting is Fun",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-06-05",
+     "episode_number": 23,
+     "name": "133. Dads Dashing Through Time",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-06-12",
+     "episode_number": 24,
+     "name": "134. How to Make The Day Special",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-06-19",
+     "episode_number": 25,
+     "name": "135. Dad School",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-06-26",
+     "episode_number": 26,
+     "name": "136. Friends Grow Alike",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-07-03",
+     "episode_number": 27,
+     "name": "137. My Child Has A Secret. Too",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-07-10",
+     "episode_number": 28,
+     "name": "138. Strong And Fearless",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-07-17",
+     "episode_number": 29,
+     "name": "139. Can You Hear My Heart ?",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-07-24",
+     "episode_number": 30,
+     "name": "140. Parenting Is Not Graceful",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-07-31",
+     "episode_number": 31,
+     "name": "141. Fondly Together",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-08-07",
+     "episode_number": 32,
+     "name": "142. Who Is Your Father ?",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-08-14",
+     "episode_number": 33,
+     "name": "143. Operation Parenting",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-08-21",
+     "episode_number": 34,
+     "name": "144. Six Children",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-08-28",
+     "episode_number": 35,
+     "name": "145. Courage Brings Happiness",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-09-04",
+     "episode_number": 36,
+     "name": "146. What Is Precious Is Near You",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-09-11",
+     "episode_number": 37,
+     "name": "147. Grow Up Just Like This",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-09-18",
+     "episode_number": 38,
+     "name": "148. You Are My Star",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-09-25",
+     "episode_number": 39,
+     "name": "149. As You Wish, As You Say",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-10-02",
+     "episode_number": 40,
+     "name": "150. You Don't Have To Be Perfect",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-10-09",
+     "episode_number": 41,
+     "name": "Dad Who Teaches How to Catch Fish",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-10-16",
+     "episode_number": 42,
+     "name": "People Who Changed Me",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-10-23",
+     "episode_number": 43,
+     "name": "Happiness to People Who Give Us Joy",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-10-30",
+     "episode_number": 44,
+     "name": "Everyday Becomes an Adventure",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-11-06",
+     "episode_number": 45,
+     "name": "The Law of 20,000 Hours",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-11-13",
+     "episode_number": 46,
+     "name": "Love Builds as Much as You Love",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-11-20",
+     "episode_number": 47,
+     "name": "Kids Will Keep On Marching",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-11-27",
+     "episode_number": 48,
+     "name": "Who Plays Better?",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-12-04",
+     "episode_number": 49,
+     "name": "That Year, the Winter Was Warm",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-12-11",
+     "episode_number": 50,
+     "name": "Cheer Up Dad",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-12-18",
+     "episode_number": 51,
+     "name": "A Dad is a Child's First Teacher",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2016-12-25",
+     "episode_number": 52,
+     "name": "The Christmas Miracle",
+     "runtime": 100
+    }
+   ],
+   "name": "Season 2016",
+   "names": [
+    "Season 2016",
+    "第 4 季"
+   ],
+   "season_number": 4
+  },
+  {
+   "air_date": "2017-01-01",
+   "episode_count": 45,
+   "episodes": [
+    {
+     "absolute_number": null,
+     "air_date": "2017-01-01",
+     "episode_number": 1,
+     "name": "The Present is a Present",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2017-01-08",
+     "episode_number": 2,
+     "name": "You Can't Have a Rainbow Without Rain",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2017-01-15",
+     "episode_number": 3,
+     "name": "The Moments Shine Brighter When We Are Together",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2017-01-22",
+     "episode_number": 4,
+     "name": "Let's Learn About Yourself Today",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2017-01-29",
+     "episode_number": 5,
+     "name": "As Much Love That's Spread in the World",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2017-02-05",
+     "episode_number": 6,
+     "name": "Dad is the Best Playground",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2017-02-12",
+     "episode_number": 7,
+     "name": "Remember and Look Forward",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2017-02-19",
+     "episode_number": 8,
+     "name": "I Support Your Beginning",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2017-02-26",
+     "episode_number": 9,
+     "name": "I Have Grown Up With You",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2017-03-05",
+     "episode_number": 10,
+     "name": "Will You Be My Friend?",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2017-03-12",
+     "episode_number": 11,
+     "name": "A Day Like a Present",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2017-03-19",
+     "episode_number": 12,
+     "name": "One Kind Word",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2017-03-27",
+     "episode_number": 13,
+     "name": "Love Comes Back",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2017-04-02",
+     "episode_number": 14,
+     "name": "Everyday Heroes",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2017-04-09",
+     "episode_number": 15,
+     "name": "Episode 15",
+     "runtime": null
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2017-04-16",
+     "episode_number": 16,
+     "name": "Episode 16",
+     "runtime": null
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2017-04-23",
+     "episode_number": 17,
+     "name": "Episode 17",
+     "runtime": null
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2017-04-24",
+     "episode_number": 18,
+     "name": "Episode 18",
+     "runtime": null
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2017-04-30",
+     "episode_number": 19,
+     "name": "Episode 19",
+     "runtime": null
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2017-05-08",
+     "episode_number": 20,
+     "name": "Episode 20",
+     "runtime": null
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2017-05-15",
+     "episode_number": 21,
+     "name": "Episode 21",
+     "runtime": null
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2017-05-21",
+     "episode_number": 22,
+     "name": "Episode 22",
+     "runtime": null
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2017-05-28",
+     "episode_number": 23,
+     "name": "Episode 23",
+     "runtime": null
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2017-06-04",
+     "episode_number": 24,
+     "name": "Episode 24",
+     "runtime": null
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2017-06-11",
+     "episode_number": 25,
+     "name": "Episode 25",
+     "runtime": null
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2017-06-18",
+     "episode_number": 26,
+     "name": "Episode 26",
+     "runtime": null
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2017-06-25",
+     "episode_number": 27,
+     "name": "Episode 27",
+     "runtime": null
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2017-07-02",
+     "episode_number": 28,
+     "name": "Episode 28",
+     "runtime": null
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2017-07-09",
+     "episode_number": 29,
+     "name": "Episode 29",
+     "runtime": null
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2017-07-16",
+     "episode_number": 30,
+     "name": "I Will Be Your Umbrella",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2017-07-23",
+     "episode_number": 31,
+     "name": "Very Warm Moments",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2017-07-30",
+     "episode_number": 32,
+     "name": "I'm a Star",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2017-08-06",
+     "episode_number": 33,
+     "name": "A Midsummer Night's Honey",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2017-08-13",
+     "episode_number": 34,
+     "name": "The Gift of Coincidence",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2017-08-20",
+     "episode_number": 35,
+     "name": "A Great New Discovery in Everyday Routine",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2017-08-27",
+     "episode_number": 36,
+     "name": "A Day Like No Other",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2017-09-03",
+     "episode_number": 37,
+     "name": "We Are Not Alone",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2017-09-10",
+     "episode_number": 38,
+     "name": "Episode 38",
+     "runtime": null
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2017-09-17",
+     "episode_number": 39,
+     "name": "Episode 39",
+     "runtime": null
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2017-09-24",
+     "episode_number": 40,
+     "name": "Our Sweet Relationship",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2017-10-02",
+     "episode_number": 41,
+     "name": "Bringing Warmth to One Another",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2017-10-08",
+     "episode_number": 42,
+     "name": "We Need Secrets of Our Own",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2017-10-15",
+     "episode_number": 43,
+     "name": "Love is the Warmest Temperature",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2017-10-22",
+     "episode_number": 44,
+     "name": "My Little Hero",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2017-10-29",
+     "episode_number": 45,
+     "name": "My First Ever",
+     "runtime": 100
+    }
+   ],
+   "name": "Season 2017",
+   "names": [
+    "Season 2017",
+    "第 5 季"
+   ],
+   "season_number": 5
+  },
+  {
+   "air_date": "2018-01-07",
+   "episode_count": 51,
+   "episodes": [
+    {
+     "absolute_number": null,
+     "air_date": "2018-01-07",
+     "episode_number": 1,
+     "name": "We'd Choose Ourselves Again in Another Life",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-01-14",
+     "episode_number": 2,
+     "name": "I'm Glad to Have You",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-01-21",
+     "episode_number": 3,
+     "name": "For You, Who Always Shine",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-01-28",
+     "episode_number": 4,
+     "name": "I Cheer on Your Courage",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-02-04",
+     "episode_number": 5,
+     "name": "Raising Them is Never Easy",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-02-18",
+     "episode_number": 6,
+     "name": "That Makes a Family",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-02-25",
+     "episode_number": 7,
+     "name": "We're Coming to Meet You",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-03-04",
+     "episode_number": 8,
+     "name": "I'll Be on Your Side",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-03-11",
+     "episode_number": 9,
+     "name": "Living, Loving and Learning",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-03-18",
+     "episode_number": 10,
+     "name": "The Road to You",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-03-25",
+     "episode_number": 11,
+     "name": "Traveling and Discovering New Things",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-04-01",
+     "episode_number": 12,
+     "name": "Like a Lie, Like a Gift",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-04-08",
+     "episode_number": 13,
+     "name": "In Retrospect, Every Moment was Touching",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-04-15",
+     "episode_number": 14,
+     "name": "It's Always Spring When Love Abounds",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-04-22",
+     "episode_number": 15,
+     "name": "The Whole World Is Your Flower",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-04-29",
+     "episode_number": 16,
+     "name": "You Make Me Happy",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-05-06",
+     "episode_number": 17,
+     "name": "Dreaming Children and Fulfilling Fathers",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-05-13",
+     "episode_number": 18,
+     "name": "Happy Incidents Occur Every Day",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-05-20",
+     "episode_number": 19,
+     "name": "I Like You For Who You Are",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-05-27",
+     "episode_number": 20,
+     "name": "Which Star Are You From?",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-06-03",
+     "episode_number": 21,
+     "name": "Looking at the World Through Your Eyes",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-06-10",
+     "episode_number": 22,
+     "name": "A Small Adventure for a Happy Day",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-06-17",
+     "episode_number": 23,
+     "name": "The World Is a School",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-06-24",
+     "episode_number": 24,
+     "name": "Explore, Dream, and Discover",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-07-01",
+     "episode_number": 25,
+     "name": "Small but Definite Happiness",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-07-08",
+     "episode_number": 26,
+     "name": "The Moment You Mature into a Father",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-07-15",
+     "episode_number": 27,
+     "name": "A Surreal Day",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-07-22",
+     "episode_number": 28,
+     "name": "Because You're So Precious",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-07-29",
+     "episode_number": 29,
+     "name": "Waiting for Rainbows",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-08-05",
+     "episode_number": 30,
+     "name": "Today is Always a Special Day",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-08-12",
+     "episode_number": 31,
+     "name": "Summer Be Good to Me",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-08-19",
+     "episode_number": 32,
+     "name": "There is No Flower Prettier Than You",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-08-26",
+     "episode_number": 33,
+     "name": "You Don't Have to Be in a Hurry!",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-09-02",
+     "episode_number": 34,
+     "name": "I'm Lucky to Have Met You",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-09-09",
+     "episode_number": 35,
+     "name": "The Time We Walk Together",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-09-16",
+     "episode_number": 36,
+     "name": "I Support Your First Tries",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-09-23",
+     "episode_number": 37,
+     "name": "May Everyday Be Like Today",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-09-30",
+     "episode_number": 38,
+     "name": "Your Day Will be Sunny All Day",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-10-07",
+     "episode_number": 39,
+     "name": "I Miss You Even When You're With Me",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-10-14",
+     "episode_number": 40,
+     "name": "You're Always There During Happy Times",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-10-21",
+     "episode_number": 41,
+     "name": "Changing Together Like Autumn Leaves",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-10-28",
+     "episode_number": 42,
+     "name": "5th Anniversary Special: From Mount Halla to Mount Paektu",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-11-04",
+     "episode_number": 43,
+     "name": "5th Anniversary Special: From Mount Halla to Mount Paektu Part 2",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-11-11",
+     "episode_number": 44,
+     "name": "5th Anniversary Special: From Mount Halla to Mount Paektu Part 3",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-11-18",
+     "episode_number": 45,
+     "name": "One Step at a Time Into the World",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-11-25",
+     "episode_number": 46,
+     "name": "The Reason Why Life is Worth Living",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-12-02",
+     "episode_number": 47,
+     "name": "I'll Go to You Like Winter's First Snow",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-12-09",
+     "episode_number": 48,
+     "name": "You're the Center of My Universe",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-12-16",
+     "episode_number": 49,
+     "name": "A Winter Fairytale",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-12-23",
+     "episode_number": 50,
+     "name": "The Miracle of December",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2018-12-30",
+     "episode_number": 51,
+     "name": "End or And",
+     "runtime": 90
+    }
+   ],
+   "name": "Season 2018",
+   "names": [
+    "Season 2018",
+    "第 6 季"
+   ],
+   "season_number": 6
+  },
+  {
+   "air_date": "2019-01-06",
+   "episode_count": 52,
+   "episodes": [
+    {
+     "absolute_number": null,
+     "air_date": "2019-01-06",
+     "episode_number": 1,
+     "name": "Every Moment Was for You",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2019-01-13",
+     "episode_number": 2,
+     "name": "I Can Hear Your Heart",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2019-01-20",
+     "episode_number": 3,
+     "name": "Our Winter Story",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2019-01-27",
+     "episode_number": 4,
+     "name": "I Learned Love from You",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2019-02-03",
+     "episode_number": 5,
+     "name": "Everyday is an Existence",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2019-02-10",
+     "episode_number": 6,
+     "name": "A Superhero Just for You",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2019-02-17",
+     "episode_number": 7,
+     "name": "A Noisy But Happy Day",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2019-02-24",
+     "episode_number": 8,
+     "name": "I Will Share My Warmth with You",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2019-03-03",
+     "episode_number": 9,
+     "name": "A Magical Day",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2019-03-10",
+     "episode_number": 10,
+     "name": "The Loving People",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2019-03-17",
+     "episode_number": 11,
+     "name": "I Think I Love You",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2019-03-24",
+     "episode_number": 12,
+     "name": "I Want to Take It Slow With You",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2019-03-31",
+     "episode_number": 13,
+     "name": "A Bright Day With You",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2019-04-07",
+     "episode_number": 14,
+     "name": "You're Blooming Next to Me",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2019-04-14",
+     "episode_number": 15,
+     "name": "The Most Beautiful Thoughts Are for You",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2019-04-21",
+     "episode_number": 16,
+     "name": "My Heart is Filled with You",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2019-04-28",
+     "episode_number": 17,
+     "name": "The Memory of How We Had Fun",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2019-05-05",
+     "episode_number": 18,
+     "name": "Do Whatever You Want to Do",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2019-05-12",
+     "episode_number": 19,
+     "name": "A Lesson Into the Unfamiliar World",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2019-05-19",
+     "episode_number": 20,
+     "name": "Never-ending Cherry Blossom",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2019-05-26",
+     "episode_number": 21,
+     "name": "Today, We Sing Again",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2019-06-02",
+     "episode_number": 22,
+     "name": "Will You Remember Me?",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2019-06-09",
+     "episode_number": 23,
+     "name": "To You Who Taught Me Happiness",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2019-06-16",
+     "episode_number": 24,
+     "name": "A Fairytale in Our Daily Life",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2019-06-23",
+     "episode_number": 25,
+     "name": "A Poem for the Little Things",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2019-06-30",
+     "episode_number": 26,
+     "name": "I'm Happy When You Smile",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2019-07-07",
+     "episode_number": 27,
+     "name": "The Sound of Summer Approaching",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2019-07-14",
+     "episode_number": 28,
+     "name": "We Must Stay Together to Live",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2019-07-21",
+     "episode_number": 29,
+     "name": "You're My Flower",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2019-07-28",
+     "episode_number": 30,
+     "name": "Fly to Your World",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2019-08-04",
+     "episode_number": 31,
+     "name": "The Memories of Summer",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2019-08-11",
+     "episode_number": 32,
+     "name": "The Story Dad Didn't Know About",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2019-08-18",
+     "episode_number": 33,
+     "name": "The Hottest Day of My Life",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2019-08-25",
+     "episode_number": 34,
+     "name": "To You Who Shines Today",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2019-09-01",
+     "episode_number": 35,
+     "name": "Can You Translate How I Feel?",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2019-09-08",
+     "episode_number": 36,
+     "name": "It's Written as Failure, but Read as Experience",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2019-09-15",
+     "episode_number": 37,
+     "name": "Dear Moon, Our Love",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2019-09-22",
+     "episode_number": 38,
+     "name": "Today is Another Lovely Day",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2019-09-29",
+     "episode_number": 39,
+     "name": "Walking Through Memories",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2019-10-06",
+     "episode_number": 40,
+     "name": "If I'm with You, I Can Do It",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2019-10-13",
+     "episode_number": 41,
+     "name": "Let's Walk Our Autumn",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2019-10-20",
+     "episode_number": 42,
+     "name": "I Love You 300",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2019-10-27",
+     "episode_number": 43,
+     "name": "If Only There Were Practice in Childcare",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2019-11-03",
+     "episode_number": 44,
+     "name": "They Grow as Much as You Trust in Them",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2019-11-10",
+     "episode_number": 45,
+     "name": "The World is Beautiful When You Smile",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2019-11-17",
+     "episode_number": 46,
+     "name": "Finding Happiness by Chance",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2019-11-24",
+     "episode_number": 47,
+     "name": "A Little Village Called Memories",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2019-12-01",
+     "episode_number": 48,
+     "name": "It's Okay Even When Winter is Here",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2019-12-08",
+     "episode_number": 49,
+     "name": "The Time to Change the World",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2019-12-15",
+     "episode_number": 50,
+     "name": "The Miracle of an Ordinary Day",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2019-12-22",
+     "episode_number": 51,
+     "name": "The Long-Awaited Today",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2019-12-29",
+     "episode_number": 52,
+     "name": "Hello and Goodbye",
+     "runtime": 100
+    }
+   ],
+   "name": "Season 2019",
+   "names": [
+    "Season 2019",
+    "第 7 季"
+   ],
+   "season_number": 7
+  },
+  {
+   "air_date": "2020-01-05",
+   "episode_count": 52,
+   "episodes": [
+    {
+     "absolute_number": null,
+     "air_date": "2020-01-05",
+     "episode_number": 1,
+     "name": "Even in the New Year, We're Pretty, Cute and Lovely",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2020-01-12",
+     "episode_number": 2,
+     "name": "For All Supermen in the World",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2020-01-19",
+     "episode_number": 3,
+     "name": "Love Is Beautiful, Childrearing Is Wonderful",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2020-01-26",
+     "episode_number": 4,
+     "name": "Together on Lunar New Year",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2020-02-02",
+     "episode_number": 5,
+     "name": "Our Love Lasts Forever",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2020-02-09",
+     "episode_number": 6,
+     "name": "Playing with Daddy",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2020-02-16",
+     "episode_number": 7,
+     "name": "A Great Day for A Random Getaway",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2020-02-23",
+     "episode_number": 8,
+     "name": "The Challenge Has Already Begun",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2020-03-01",
+     "episode_number": 9,
+     "name": "Hurray for the Fathers in Korea",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2020-03-08",
+     "episode_number": 10,
+     "name": "I'll Go to You When the Weather Is Fine",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2020-03-15",
+     "episode_number": 11,
+     "name": "Victory to Superman",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2020-03-22",
+     "episode_number": 12,
+     "name": "Our Childrearing League",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2020-03-29",
+     "episode_number": 13,
+     "name": "Meeting You Has Made My Life Fuller",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2020-04-05",
+     "episode_number": 14,
+     "name": "Childrearing Playbook",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2020-04-12",
+     "episode_number": 15,
+     "name": "It's Spring by Chance",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2020-04-19",
+     "episode_number": 16,
+     "name": "My Universe Was Filled with You",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2020-04-26",
+     "episode_number": 17,
+     "name": "Superman Class",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2020-05-03",
+     "episode_number": 18,
+     "name": "So You Can Fly Free",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2020-05-10",
+     "episode_number": 19,
+     "name": "You are My Love",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2020-05-17",
+     "episode_number": 20,
+     "name": "Today is Another Fun Day",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2020-05-24",
+     "episode_number": 21,
+     "name": "My Love, My Family",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2020-05-31",
+     "episode_number": 22,
+     "name": "We are Ordered to Be Happy",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2020-06-07",
+     "episode_number": 23,
+     "name": "You, My Beautiful Love",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2020-06-14",
+     "episode_number": 24,
+     "name": "You're Bright Like Sunlight",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2020-06-21",
+     "episode_number": 25,
+     "name": "Splendid Childrearing Wraps Around My Body",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2020-06-28",
+     "episode_number": 26,
+     "name": "School on Wheels",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2020-07-05",
+     "episode_number": 27,
+     "name": "Today Shines Again Because I Have You",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2020-07-12",
+     "episode_number": 28,
+     "name": "The Master of Childcare",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2020-07-19",
+     "episode_number": 29,
+     "name": "Follow Your Heart",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2020-07-26",
+     "episode_number": 30,
+     "name": "Everybody, Cha, Cha, Cha!",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2020-08-02",
+     "episode_number": 31,
+     "name": "Everyone Was a Kid Once",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2020-08-09",
+     "episode_number": 32,
+     "name": "Our Song is Not Over Yet",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2020-08-16",
+     "episode_number": 33,
+     "name": "I'll Be Loyal to You",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2020-08-23",
+     "episode_number": 34,
+     "name": "You Can't Be Happier Than This",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2020-08-30",
+     "episode_number": 35,
+     "name": "Kids Are the Index of the Fathers",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2020-09-06",
+     "episode_number": 36,
+     "name": "To My Small and Precious Child",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2020-09-13",
+     "episode_number": 37,
+     "name": "The Study of Memories",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2020-09-20",
+     "episode_number": 38,
+     "name": "Upbringing a Child Is an Uphill Road",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2020-09-27",
+     "episode_number": 39,
+     "name": "Today is Yours as Well",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2020-10-04",
+     "episode_number": 40,
+     "name": "You Are Like an Assorted Gift Box to Me",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2020-10-11",
+     "episode_number": 41,
+     "name": "My Dear Love, You Stay by My Side",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2020-10-18",
+     "episode_number": 42,
+     "name": "The Parents Need to Grow Up for the Kids to Grow Up",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2020-10-25",
+     "episode_number": 43,
+     "name": "Love Returns",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2020-11-01",
+     "episode_number": 44,
+     "name": "It Bloomed Perfectly After Meeting You",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2020-11-08",
+     "episode_number": 45,
+     "name": "Children's Imagination Becomes Real",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2020-11-15",
+     "episode_number": 46,
+     "name": "The Apple of My Eye",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2020-11-22",
+     "episode_number": 47,
+     "name": "Our Happy Moments Together",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2020-11-29",
+     "episode_number": 48,
+     "name": "You're Like Jelly, You're So Lovely",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2020-12-06",
+     "episode_number": 49,
+     "name": "Let's Connect Our Yesterday with Today",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2020-12-13",
+     "episode_number": 50,
+     "name": "Build a Nest in My Arms",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2020-12-20",
+     "episode_number": 51,
+     "name": "Dance with Santa",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2020-12-27",
+     "episode_number": 52,
+     "name": "Being with You Brings Me Happiness",
+     "runtime": 100
+    }
+   ],
+   "name": "Season 2020",
+   "names": [
+    "Season 2020",
+    "第 8 季"
+   ],
+   "season_number": 8
+  },
+  {
+   "air_date": "2021-01-03",
+   "episode_count": 50,
+   "episodes": [
+    {
+     "absolute_number": null,
+     "air_date": "2021-01-03",
+     "episode_number": 1,
+     "name": "Nice to Meet You, Be Happy",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-01-10",
+     "episode_number": 2,
+     "name": "You Are My Ocean, Overflowing Love",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-01-17",
+     "episode_number": 3,
+     "name": "I'm Grateful I Met You",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-01-24",
+     "episode_number": 4,
+     "name": "Secret Garden at Home",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-01-31",
+     "episode_number": 5,
+     "name": "The Never-ending Story of Childrearing",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-02-07",
+     "episode_number": 6,
+     "name": "We Shall Be Happy, We Shall Love, We Shall Be Together",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-02-14",
+     "episode_number": 7,
+     "name": "We Hope You Shine This Year As Well",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-02-21",
+     "episode_number": 8,
+     "name": "The Golden Goal of My Life",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-02-28",
+     "episode_number": 9,
+     "name": "Do You Want to Walk with Daddy?",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-03-07",
+     "episode_number": 10,
+     "name": "I'll Protect You Until the End",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-03-14",
+     "episode_number": 11,
+     "name": "Okay, Shiny Daddy",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-03-21",
+     "episode_number": 12,
+     "name": "Spring Will Come to Childrearing",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-03-28",
+     "episode_number": 13,
+     "name": "Being a Dad Makes Me Happy All Year Round",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-04-04",
+     "episode_number": 14,
+     "name": "Getting Used to Childrearing",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-04-11",
+     "episode_number": 15,
+     "name": "Hello to a Child Who's Like a Flower Petal",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-04-18",
+     "episode_number": 16,
+     "name": "It Was Fate to Have Met You",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-04-25",
+     "episode_number": 17,
+     "name": "A Tale of a Little Kid",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-05-02",
+     "episode_number": 18,
+     "name": "Thank You, You're My All",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-05-09",
+     "episode_number": 19,
+     "name": "A Serenade for Father",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-05-16",
+     "episode_number": 20,
+     "name": "Everything Is Fun When We're Together",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-05-23",
+     "episode_number": 21,
+     "name": "It's a Small Star, But It's Still Shining",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-05-30",
+     "episode_number": 22,
+     "name": "Let's Go Anywhere Right Now",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-06-06",
+     "episode_number": 23,
+     "name": "The Rose of Sharon Has Bloomed",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-06-13",
+     "episode_number": 24,
+     "name": "I'll Make Everything You Want Come True",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-06-20",
+     "episode_number": 25,
+     "name": "We'll Meet on One Fine Day",
+     "runtime": 100
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-06-27",
+     "episode_number": 26,
+     "name": "10 out of 10 for Our Superman",
+     "runtime": 110
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-07-04",
+     "episode_number": 27,
+     "name": "You're an Honor to My Family",
+     "runtime": 98
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-07-11",
+     "episode_number": 28,
+     "name": "Accept My Heart",
+     "runtime": 97
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-07-18",
+     "episode_number": 29,
+     "name": "Today Is Your Greenest Day",
+     "runtime": 80
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-08-01",
+     "episode_number": 30,
+     "name": "This Moment Shines Brighter than a Gold Medal",
+     "runtime": 80
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-08-08",
+     "episode_number": 31,
+     "name": "A Little Yet Big Hero",
+     "runtime": 99
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-08-15",
+     "episode_number": 32,
+     "name": "Happy To Be With You Today",
+     "runtime": 99
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-08-22",
+     "episode_number": 33,
+     "name": "The More Exciting Things, The Better",
+     "runtime": 99
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-08-29",
+     "episode_number": 34,
+     "name": "Your Smile Makes Me Dance",
+     "runtime": 81
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-09-05",
+     "episode_number": 35,
+     "name": "Childrearing Starts with Outs in the 9th Winning",
+     "runtime": 80
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-09-12",
+     "episode_number": 36,
+     "name": "Childrearing Olympics for 365 Days",
+     "runtime": 80
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-09-19",
+     "episode_number": 37,
+     "name": "Do As Your Heart Says on Chuseok",
+     "runtime": 80
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-09-26",
+     "episode_number": 38,
+     "name": "Our 400th Memory",
+     "runtime": 80
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-10-03",
+     "episode_number": 39,
+     "name": "Yes, This is What Life is About",
+     "runtime": 81
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-10-10",
+     "episode_number": 40,
+     "name": "I Hope Your Day Shines Brighter than the Stars",
+     "runtime": 80
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-10-17",
+     "episode_number": 41,
+     "name": "Stop Rushing Me While I Look After My Kids",
+     "runtime": 81
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-10-24",
+     "episode_number": 42,
+     "name": "For the Childrearing Home Run",
+     "runtime": 80
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-10-31",
+     "episode_number": 43,
+     "name": "On a Great Day in October",
+     "runtime": 96
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-11-07",
+     "episode_number": 44,
+     "name": "Dogged Perseverance for Childrearing",
+     "runtime": 80
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-11-14",
+     "episode_number": 45,
+     "name": "Forever Silly Parent",
+     "runtime": 81
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-11-21",
+     "episode_number": 46,
+     "name": "Take Childrearing Slow and Firm",
+     "runtime": 80
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-11-28",
+     "episode_number": 47,
+     "name": "You Are My Most Precious Treasure",
+     "runtime": 80
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-12-05",
+     "episode_number": 48,
+     "name": "You're in Love with Me",
+     "runtime": 80
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-12-12",
+     "episode_number": 49,
+     "name": "An Aria for You",
+     "runtime": 82
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2021-12-19",
+     "episode_number": 50,
+     "name": "That Winter, We're Raising Kids",
+     "runtime": 82
+    }
+   ],
+   "name": "Season 2021",
+   "names": [
+    "Season 2021",
+    "第 9 季"
+   ],
+   "season_number": 9
+  },
+  {
+   "air_date": "2022-01-02",
+   "episode_count": 47,
+   "episodes": [
+    {
+     "absolute_number": null,
+     "air_date": "2022-01-02",
+     "episode_number": 1,
+     "name": "Can You Remember it for Me",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2022-01-09",
+     "episode_number": 2,
+     "name": "Here Comes the Tiger with Child-rearing Spirits",
+     "runtime": 78
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2022-01-16",
+     "episode_number": 3,
+     "name": "You are the Biggest Prize of My Life",
+     "runtime": 78
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2022-01-23",
+     "episode_number": 4,
+     "name": "Everyday is New, Thanks to You",
+     "runtime": 79
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2022-01-30",
+     "episode_number": 5,
+     "name": "Grow! Child-rearing is Fun",
+     "runtime": 80
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2022-02-06",
+     "episode_number": 6,
+     "name": "The Sweet Life of Childrearing",
+     "runtime": 81
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2022-02-13",
+     "episode_number": 7,
+     "name": "All of Us are Parenting",
+     "runtime": 80
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2022-02-20",
+     "episode_number": 8,
+     "name": "It's Okay to Grow Slowly",
+     "runtime": 81
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2022-02-27",
+     "episode_number": 9,
+     "name": "We are Alike",
+     "runtime": 78
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2022-03-06",
+     "episode_number": 10,
+     "name": "Happier Together",
+     "runtime": 81
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2022-03-13",
+     "episode_number": 11,
+     "name": "Our Happy Story",
+     "runtime": 80
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2022-03-20",
+     "episode_number": 12,
+     "name": "Growing A Little At A Time",
+     "runtime": 79
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2022-04-03",
+     "episode_number": 13,
+     "name": "I'm Happy Wherever I'm with You",
+     "runtime": 81
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2022-04-10",
+     "episode_number": 14,
+     "name": "A Heart-fluttering Journey of Every Moment with You!",
+     "runtime": 80
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2022-04-22",
+     "episode_number": 15,
+     "name": "Hello, Nice to Meet You!",
+     "runtime": 80
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2022-04-29",
+     "episode_number": 16,
+     "name": "Strong Body, Strong Mind",
+     "runtime": 77
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2022-05-06",
+     "episode_number": 17,
+     "name": "Children's Day! As Happy as You Want!",
+     "runtime": 77
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2022-05-13",
+     "episode_number": 18,
+     "name": "I Guess We Love Spring",
+     "runtime": 78
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2022-05-20",
+     "episode_number": 19,
+     "name": "You're the Best, No Matter What!",
+     "runtime": 78
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2022-05-27",
+     "episode_number": 20,
+     "name": "I'll Show You a New World!",
+     "runtime": 80
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2022-06-03",
+     "episode_number": 21,
+     "name": "I Miss You and Miss You More!",
+     "runtime": 80
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2022-06-10",
+     "episode_number": 22,
+     "name": "I Will Be with You at All Your Firsts!",
+     "runtime": 76
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2022-06-17",
+     "episode_number": 23,
+     "name": "It's a Miracle We Met",
+     "runtime": 80
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2022-06-24",
+     "episode_number": 24,
+     "name": "We're Still Growing",
+     "runtime": 73
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2022-07-01",
+     "episode_number": 25,
+     "name": "When You Smile, I Smile",
+     "runtime": 77
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2022-07-08",
+     "episode_number": 26,
+     "name": "Let's Celebrate Today, the Most Special Day Ever",
+     "runtime": 77
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2022-07-15",
+     "episode_number": 27,
+     "name": "Hyper Baby Is Here!",
+     "runtime": 76
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2022-07-22",
+     "episode_number": 28,
+     "name": "The Birth of a New Superman",
+     "runtime": 77
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2022-07-29",
+     "episode_number": 29,
+     "name": "Look How Much We've Grown!",
+     "runtime": 74
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2022-08-05",
+     "episode_number": 30,
+     "name": "The World I Want to Show You",
+     "runtime": 78
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2022-08-19",
+     "episode_number": 31,
+     "name": "My Love, My Everything",
+     "runtime": 76
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2022-08-26",
+     "episode_number": 32,
+     "name": "Childcare More Refreshing Than a Vacation?",
+     "runtime": 77
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2022-09-02",
+     "episode_number": 33,
+     "name": "You Are My Universe",
+     "runtime": 77
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2022-09-09",
+     "episode_number": 34,
+     "name": "You're as Bright as the Full Moon",
+     "runtime": 78
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2022-09-16",
+     "episode_number": 35,
+     "name": "The Moment I Learn About You",
+     "runtime": 74
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2022-09-23",
+     "episode_number": 36,
+     "name": "My Day That Changed After Meeting You",
+     "runtime": 75
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2022-09-30",
+     "episode_number": 37,
+     "name": "A Perfect Superman No Matter What Others Say",
+     "runtime": 74
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2022-10-07",
+     "episode_number": 38,
+     "name": "A Miracle That Makes Daily Life Special",
+     "runtime": 77
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2022-10-14",
+     "episode_number": 39,
+     "name": "A World We Dream Together",
+     "runtime": 75
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2022-10-21",
+     "episode_number": 40,
+     "name": "Parenting is Beautiful",
+     "runtime": 76
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2022-10-28",
+     "episode_number": 41,
+     "name": "We Slowly Resemble Each Other",
+     "runtime": 80
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2022-11-04",
+     "episode_number": 42,
+     "name": "Thank You For Being You",
+     "runtime": 77
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2022-11-11",
+     "episode_number": 43,
+     "name": "Every Lovely Moment of You",
+     "runtime": 76
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2022-11-18",
+     "episode_number": 44,
+     "name": "A World Colored with You",
+     "runtime": 75
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2022-12-09",
+     "episode_number": 45,
+     "name": "Dad Is A National Team Player",
+     "runtime": 77
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2022-12-23",
+     "episode_number": 46,
+     "name": "I Prepared It For You",
+     "runtime": 79
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2022-12-30",
+     "episode_number": 47,
+     "name": "My Beloved Family",
+     "runtime": 80
+    }
+   ],
+   "name": "Season 2022",
+   "names": [
+    "Season 2022",
+    "第 10 季"
+   ],
+   "season_number": 10
+  },
+  {
+   "air_date": "2023-01-07",
+   "episode_count": 48,
+   "episodes": [
+    {
+     "absolute_number": null,
+     "air_date": "2023-01-07",
+     "episode_number": 1,
+     "name": "Our Shining End of the Year",
+     "runtime": 76
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-01-14",
+     "episode_number": 2,
+     "name": "Children Who Grow With Love",
+     "runtime": 75
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-01-21",
+     "episode_number": 3,
+     "name": "Bed of Roses for the New Year",
+     "runtime": 78
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-01-28",
+     "episode_number": 4,
+     "name": "It's Better Because We're Together",
+     "runtime": 77
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-02-04",
+     "episode_number": 5,
+     "name": "I Love You with This Heart",
+     "runtime": 77
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-02-11",
+     "episode_number": 6,
+     "name": "Cheering on New Challenges",
+     "runtime": 71
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-02-18",
+     "episode_number": 7,
+     "name": "The Most Beautiful Moment is Now",
+     "runtime": 74
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-02-25",
+     "episode_number": 8,
+     "name": "I'm Grateful and I Love You and All That",
+     "runtime": 77
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-03-04",
+     "episode_number": 9,
+     "name": "You Can Grow at Your Own Pace",
+     "runtime": 77
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-03-11",
+     "episode_number": 10,
+     "name": "You're the Brightest in the Whole World",
+     "runtime": 73
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-03-18",
+     "episode_number": 11,
+     "name": "A Magical Day",
+     "runtime": 77
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-03-25",
+     "episode_number": 12,
+     "name": "Our First Moments Together",
+     "runtime": 77
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-04-01",
+     "episode_number": 13,
+     "name": "That's How You Grow, Little by Little",
+     "runtime": 75
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-04-08",
+     "episode_number": 14,
+     "name": "Shush, This is a Secret from Mom",
+     "runtime": 76
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-04-15",
+     "episode_number": 15,
+     "name": "You Are My Brilliant Spring",
+     "runtime": 78
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-04-22",
+     "episode_number": 16,
+     "name": "Your Dreams Will Come True",
+     "runtime": 72
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-04-29",
+     "episode_number": 17,
+     "name": "A Newer World Will Spread Before You",
+     "runtime": 75
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-05-06",
+     "episode_number": 18,
+     "name": "I Hope You're As Happy As Can Be",
+     "runtime": 77
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-05-13",
+     "episode_number": 19,
+     "name": "Welcome to Childcare World",
+     "runtime": 75
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-05-20",
+     "episode_number": 20,
+     "name": "A New Start with You",
+     "runtime": 76
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-05-27",
+     "episode_number": 21,
+     "name": "You Are My Happiness",
+     "runtime": 80
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-06-03",
+     "episode_number": 22,
+     "name": "The You Who Makes Me Laugh",
+     "runtime": 61
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-06-10",
+     "episode_number": 23,
+     "name": "You Make My Day Bright",
+     "runtime": 61
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-06-17",
+     "episode_number": 24,
+     "name": "I Will Give My Fullest Love to You",
+     "runtime": 59
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-06-24",
+     "episode_number": 25,
+     "name": "Thank You for Being Born",
+     "runtime": 59
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-07-01",
+     "episode_number": 26,
+     "name": "My Forever Superhero",
+     "runtime": 60
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-07-08",
+     "episode_number": 27,
+     "name": "We're Twice as Happy When We're Together",
+     "runtime": 63
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-07-15",
+     "episode_number": 28,
+     "name": "Wherever It Is, Let's Go Together",
+     "runtime": 61
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-07-22",
+     "episode_number": 29,
+     "name": "Into the Parenting World",
+     "runtime": 59
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-07-29",
+     "episode_number": 30,
+     "name": "I Love You As Much As the Ocean",
+     "runtime": 61
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-08-05",
+     "episode_number": 31,
+     "name": "Oh, My Family",
+     "runtime": 60
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-08-12",
+     "episode_number": 32,
+     "name": "Your Smile is My Sunshine",
+     "runtime": 62
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-08-19",
+     "episode_number": 33,
+     "name": "I Will Remember This Summer Day",
+     "runtime": 61
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-08-26",
+     "episode_number": 34,
+     "name": "The Way I Love You",
+     "runtime": 62
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-09-02",
+     "episode_number": 35,
+     "name": "Thank You, My Superman",
+     "runtime": 62
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-09-09",
+     "episode_number": 36,
+     "name": "I'll Gift You a Special Day",
+     "runtime": 60
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-09-13",
+     "episode_number": 37,
+     "name": "Miracles Are Always Close By",
+     "runtime": 59
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-09-20",
+     "episode_number": 38,
+     "name": "It Came Like Fate",
+     "runtime": 61
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-10-11",
+     "episode_number": 39,
+     "name": "Our Meeting was Inevitable",
+     "runtime": 61
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-10-18",
+     "episode_number": 40,
+     "name": "I Miss You All the Time",
+     "runtime": 59
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-10-25",
+     "episode_number": 41,
+     "name": "We're 500 Times Happier Because We're Together",
+     "runtime": 62
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-11-08",
+     "episode_number": 42,
+     "name": "You Are My Happiness",
+     "runtime": 60
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-11-15",
+     "episode_number": 43,
+     "name": "Shall We Go on a Trip?",
+     "runtime": 59
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-11-25",
+     "episode_number": 44,
+     "name": "Daddy Will Protect You As You Grow Up",
+     "runtime": 61
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-11-29",
+     "episode_number": 45,
+     "name": "All Seasons Are So Precious",
+     "runtime": 61
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-12-06",
+     "episode_number": 46,
+     "name": "With You, Every Day Is Christmas",
+     "runtime": 60
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-12-13",
+     "episode_number": 47,
+     "name": "I Want To Give You My Everything",
+     "runtime": 60
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-12-20",
+     "episode_number": 48,
+     "name": "When You Came to Me, It Felt Like a Dream",
+     "runtime": 60
+    }
+   ],
+   "name": "Season 2023",
+   "names": [
+    "Season 2023",
+    "第 11 季"
+   ],
+   "season_number": 11
+  },
+  {
+   "air_date": "2024-01-03",
+   "episode_count": 47,
+   "episodes": [
+    {
+     "absolute_number": null,
+     "air_date": "2024-01-03",
+     "episode_number": 1,
+     "name": "Our Happy Time",
+     "runtime": 61
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-01-09",
+     "episode_number": 2,
+     "name": "Let's Rise Up Again In the New Year",
+     "runtime": 60
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-01-16",
+     "episode_number": 3,
+     "name": "Look Closely. This Is How A Super Mom Parents",
+     "runtime": 65
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-01-23",
+     "episode_number": 4,
+     "name": "We Shine So Bright",
+     "runtime": 60
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-01-30",
+     "episode_number": 5,
+     "name": "Hey, Gather At My House",
+     "runtime": 60
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-02-06",
+     "episode_number": 6,
+     "name": "Let's Always Be Together In the New Year",
+     "runtime": 60
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-02-13",
+     "episode_number": 7,
+     "name": "The True Child-Rearing Master Is Here",
+     "runtime": 60
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-02-20",
+     "episode_number": 8,
+     "name": "My Love, My Star",
+     "runtime": 62
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-02-27",
+     "episode_number": 9,
+     "name": "The Brightest Superman in the World",
+     "runtime": 61
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-03-05",
+     "episode_number": 10,
+     "name": "High-Energy Super Parenting",
+     "runtime": 61
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-03-12",
+     "episode_number": 11,
+     "name": "Pit-A-Pat, Our Meeting",
+     "runtime": 61
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-03-19",
+     "episode_number": 12,
+     "name": "Let's Celebrate Every Moment",
+     "runtime": 62
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-04-07",
+     "episode_number": 13,
+     "name": "You Are My Spring",
+     "runtime": 65
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-04-14",
+     "episode_number": 14,
+     "name": "A Happy Spring Picnic Together",
+     "runtime": 65
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-04-21",
+     "episode_number": 15,
+     "name": "Yo! Hip-Hop Baby is Here",
+     "runtime": null
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-04-28",
+     "episode_number": 16,
+     "name": "Spring, Spring, Spring! Spring is Here",
+     "runtime": null
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-05-05",
+     "episode_number": 17,
+     "name": "The Biggest Gift in the World",
+     "runtime": null
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-05-12",
+     "episode_number": 18,
+     "name": "Every Day is A Warm Spring Day When I Look At You",
+     "runtime": null
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-05-19",
+     "episode_number": 19,
+     "name": "Happiness From the Heart",
+     "runtime": null
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-05-26",
+     "episode_number": 20,
+     "name": "Happy First Birthday",
+     "runtime": null
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-06-02",
+     "episode_number": 21,
+     "name": "I Will Do Anything for You",
+     "runtime": null
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-06-09",
+     "episode_number": 22,
+     "name": "Parenting? Don't Try to Be Perfect",
+     "runtime": null
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-06-16",
+     "episode_number": 23,
+     "name": "The New Hosts",
+     "runtime": null
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-06-23",
+     "episode_number": 24,
+     "name": "A Birthday Trip and the Taekwondo Competition",
+     "runtime": null
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-06-30",
+     "episode_number": 25,
+     "name": "The Athletic Niccolo and Adorable Si Ha",
+     "runtime": null
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-07-07",
+     "episode_number": 26,
+     "name": "Let All My Wishes Come True",
+     "runtime": null
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-07-14",
+     "episode_number": 27,
+     "name": "I Love You. Be Happy. Let's Be Together",
+     "runtime": null
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-07-21",
+     "episode_number": 28,
+     "name": "Every New Experience with You is Precious",
+     "runtime": null
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-08-11",
+     "episode_number": 29,
+     "name": "Jeju Trip Part 2, Niccolo Meets a Baby",
+     "runtime": null
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-08-18",
+     "episode_number": 30,
+     "name": "The Soon to Be Dad and Jun Beom TV",
+     "runtime": null
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-08-25",
+     "episode_number": 31,
+     "name": "I Miss You, and I Miss You More",
+     "runtime": null
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-09-01",
+     "episode_number": 32,
+     "name": "The Shining Gold Medalist Uncles",
+     "runtime": null
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-09-08",
+     "episode_number": 33,
+     "name": "You're So Cute, I Want To Hug You Tightly",
+     "runtime": null
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-09-22",
+     "episode_number": 34,
+     "name": "Thank You For Growing Up Well",
+     "runtime": null
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-09-29",
+     "episode_number": 35,
+     "name": "Children Grow As Much As You Wait",
+     "runtime": null
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-10-06",
+     "episode_number": 36,
+     "name": "Perfect Happiness Is You",
+     "runtime": null
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-10-13",
+     "episode_number": 37,
+     "name": "Trot Queen Super Mom Has Appeared!",
+     "runtime": null
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-10-20",
+     "episode_number": 38,
+     "name": "Everyone, Abalone was Born!",
+     "runtime": null
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-10-27",
+     "episode_number": 39,
+     "name": "We All Love Ji Woo",
+     "runtime": null
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-11-06",
+     "episode_number": 40,
+     "name": "Your World Will Be Entirely Beautiful",
+     "runtime": null
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-11-13",
+     "episode_number": 41,
+     "name": "Good Baby, Just Like Me",
+     "runtime": null
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-11-20",
+     "episode_number": 42,
+     "name": "I Really Like You Who Look Like The Ocean",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-11-27",
+     "episode_number": 43,
+     "name": "It's Supernatural That I Love You",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-12-04",
+     "episode_number": 44,
+     "name": "Our Sparkling Day",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-12-11",
+     "episode_number": 45,
+     "name": "You're Always the Number One In My Heart",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-12-18",
+     "episode_number": 46,
+     "name": "Even More Happiness Because We're Together",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-12-25",
+     "episode_number": 47,
+     "name": "Let's be together! Merry Christmas",
+     "runtime": 90
+    }
+   ],
+   "name": "Season 2024",
+   "names": [
+    "Season 2024",
+    "第 12 季"
+   ],
+   "season_number": 12
+  },
+  {
+   "air_date": "2025-01-01",
+   "episode_count": 46,
+   "episodes": [
+    {
+     "absolute_number": null,
+     "air_date": "2025-01-01",
+     "episode_number": 1,
+     "name": "The Year of the Blue Snake, Full of Joy, Full of Love\"",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-01-08",
+     "episode_number": 2,
+     "name": "Our Meeting Doubles the Joy",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-01-15",
+     "episode_number": 3,
+     "name": "Welcome to the Earth",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-01-22",
+     "episode_number": 4,
+     "name": "Thank You for Coming To Me",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-02-05",
+     "episode_number": 5,
+     "name": "The More You Get Excited, the Better",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-02-12",
+     "episode_number": 6,
+     "name": "Congratulations, I love you, Let’s Be Together",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-02-19",
+     "episode_number": 7,
+     "name": "We’re Growing Up Well",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-02-26",
+     "episode_number": 8,
+     "name": "Episode 562",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-03-05",
+     "episode_number": 9,
+     "name": "Episode 563",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-03-12",
+     "episode_number": 10,
+     "name": "Episode 564",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-03-19",
+     "episode_number": 11,
+     "name": "Episode 565",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-03-26",
+     "episode_number": 12,
+     "name": "Episode 566",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-04-02",
+     "episode_number": 13,
+     "name": "Episode 567",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-04-09",
+     "episode_number": 14,
+     "name": "Episode 568",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-04-16",
+     "episode_number": 15,
+     "name": "Episode 569",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-04-23",
+     "episode_number": 16,
+     "name": "Episode 570",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-04-30",
+     "episode_number": 17,
+     "name": "Episode 571",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-05-07",
+     "episode_number": 18,
+     "name": "Episode 572",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-05-14",
+     "episode_number": 19,
+     "name": "Episode 573",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-05-21",
+     "episode_number": 20,
+     "name": "Episode 574",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-05-28",
+     "episode_number": 21,
+     "name": "Episode 575",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-06-04",
+     "episode_number": 22,
+     "name": "Episode 576",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-06-11",
+     "episode_number": 23,
+     "name": "Episode 577",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-06-18",
+     "episode_number": 24,
+     "name": "Episode 578",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-06-25",
+     "episode_number": 25,
+     "name": "Episode 579",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-07-02",
+     "episode_number": 26,
+     "name": "Episode 580",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-07-09",
+     "episode_number": 27,
+     "name": "Episode 581",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-07-16",
+     "episode_number": 28,
+     "name": "Episode 582",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-07-23",
+     "episode_number": 29,
+     "name": "Episode 583",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-07-30",
+     "episode_number": 30,
+     "name": "Episode 584",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-08-13",
+     "episode_number": 31,
+     "name": "Episode 585",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-08-20",
+     "episode_number": 32,
+     "name": "Episode 586",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-08-27",
+     "episode_number": 33,
+     "name": "Episode 587",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-09-03",
+     "episode_number": 34,
+     "name": "Episode 588",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-09-10",
+     "episode_number": 35,
+     "name": "Episode 589",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-09-17",
+     "episode_number": 36,
+     "name": "Episode 590",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-09-24",
+     "episode_number": 37,
+     "name": "Episode 591",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-10-01",
+     "episode_number": 38,
+     "name": "Episode 592",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-10-08",
+     "episode_number": 39,
+     "name": "Episode 593",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-10-15",
+     "episode_number": 40,
+     "name": "Episode 594",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-10-22",
+     "episode_number": 41,
+     "name": "Episode 595",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-10-29",
+     "episode_number": 42,
+     "name": "Episode 596",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-11-05",
+     "episode_number": 43,
+     "name": "Episode 597",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-11-12",
+     "episode_number": 44,
+     "name": "Episode 598",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-11-19",
+     "episode_number": 45,
+     "name": "Episode 599",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-11-26",
+     "episode_number": 46,
+     "name": "Episode 600",
+     "runtime": 90
+    }
+   ],
+   "name": "Season 2025",
+   "names": [
+    "Season 2025",
+    "第 13 季"
+   ],
+   "season_number": 13
+  },
+  {
+   "air_date": "2026-01-07",
+   "episode_count": 2,
+   "episodes": [
+    {
+     "absolute_number": null,
+     "air_date": "2026-01-07",
+     "episode_number": 1,
+     "name": "Episode 1",
+     "runtime": 90
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-01-14",
+     "episode_number": 2,
+     "name": "Episode 2",
+     "runtime": 90
+    }
+   ],
+   "name": "Season 2026",
+   "names": [
+    "Season 2026",
+    "第 14 季"
+   ],
+   "season_number": 14
+  }
+ ],
+ "title": "我的超人爸爸",
+ "title_en": "The Return of Superman",
+ "title_original": "슈퍼맨이 돌아왔다",
+ "titles": [
+  "The Return of Superman",
+  "슈퍼맨이 돌아왔다",
+  "超人回来了",
+  "我的超人爸爸",
+  "Superman Is Back",
+  "Superman Returns",
+  "Siêu Nhân Trở Lại",
+  "Возвращение Суперпапочек",
+  "שובו של סופרמן",
+  "El regreso de superman",
+  "O Retorno do Super-homem",
+  "เดอะรีเทิร์นออฟซุปเปอร์แมน",
+  "Întoarcerea suprabărbatului"
+ ],
+ "tmdb_id": 64356,
+ "year": 2013
+}

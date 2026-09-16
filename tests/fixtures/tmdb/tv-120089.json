@@ -1,0 +1,475 @@
+{
+ "first_air_date": "2022-04-09",
+ "kind": "tv",
+ "overview": "每一個人，都有不能展現給任何人看的一面──這是個世界各國都在檯面下進行激烈情報戰的時代。東國與西國，兩國之間已持續冷戰了十多年。隸屬於西國情報局對東課〈WISE〉的幹練間諜〈黃昏〉，被指派一項極機密任務，奉命接近威脅東西和平的危險人物，要刺探出東國國家統一黨黨魁──唐納文‧戴斯蒙德的戰爭計畫。其任務名為──行動代號〈梟〉。任務內容是：「在一週內組好家庭，並潛入戴斯蒙德兒子所就讀的名校。」於是〈黃昏〉扮起精神科醫生──洛伊德‧佛傑，開始組織家庭。然而，他找到的女兒‧安妮亞是會讀心的超能力者，妻子‧約兒則是位暗殺者！由於利害一致，三人便互相隱瞞真實身分，並展開共同生活。世界的和平，就這樣被託付給狀況百出的臨時家庭──",
+ "poster_url": "https://image.tmdb.org/t/p/w342/mvolqXssikgLeUomc59cB2RkH1k.jpg",
+ "runtime": null,
+ "seasons": [
+  {
+   "air_date": "2023-07-28",
+   "episode_count": 3,
+   "episodes": [
+    {
+     "absolute_number": null,
+     "air_date": "2023-07-28",
+     "episode_number": 1,
+     "name": "Spy x Family Movie: Code: White Manner Movie",
+     "runtime": 1
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-12-04",
+     "episode_number": 2,
+     "name": "Street Fighter 6 x Spy x Family Movie: Code: White",
+     "runtime": 1
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2024-01-29",
+     "episode_number": 3,
+     "name": "Ayataka Spy x Family Movie Campaign Ayataka de Hotto Hitoiki",
+     "runtime": 1
+    }
+   ],
+   "name": "Specials",
+   "names": [
+    "Specials",
+    "特別篇",
+    "特别篇"
+   ],
+   "season_number": 0
+  },
+  {
+   "air_date": "2022-04-09",
+   "episode_count": 25,
+   "episodes": [
+    {
+     "absolute_number": 1,
+     "air_date": "2022-04-09",
+     "episode_number": 1,
+     "name": "OPERATION STRIX",
+     "runtime": 25
+    },
+    {
+     "absolute_number": 2,
+     "air_date": "2022-04-16",
+     "episode_number": 2,
+     "name": "SECURE A WIFE",
+     "runtime": 25
+    },
+    {
+     "absolute_number": 3,
+     "air_date": "2022-04-23",
+     "episode_number": 3,
+     "name": "PREPARE FOR THE INTERVIEW",
+     "runtime": 25
+    },
+    {
+     "absolute_number": 4,
+     "air_date": "2022-04-30",
+     "episode_number": 4,
+     "name": "THE PRESTIGIOUS SCHOOL'S INTERVIEW",
+     "runtime": 25
+    },
+    {
+     "absolute_number": 5,
+     "air_date": "2022-05-07",
+     "episode_number": 5,
+     "name": "WILL THEY PASS OR FAIL?",
+     "runtime": 25
+    },
+    {
+     "absolute_number": 6,
+     "air_date": "2022-05-14",
+     "episode_number": 6,
+     "name": "THE FRIENDSHIP SCHEME",
+     "runtime": 25
+    },
+    {
+     "absolute_number": 7,
+     "air_date": "2022-05-21",
+     "episode_number": 7,
+     "name": "THE TARGET'S SECOND SON",
+     "runtime": 25
+    },
+    {
+     "absolute_number": 8,
+     "air_date": "2022-05-28",
+     "episode_number": 8,
+     "name": "THE COUNTER-SECRET POLICE COVER OPERATION",
+     "runtime": 25
+    },
+    {
+     "absolute_number": 9,
+     "air_date": "2022-06-04",
+     "episode_number": 9,
+     "name": "SHOW OFF HOW IN LOVE YOU ARE",
+     "runtime": 25
+    },
+    {
+     "absolute_number": 10,
+     "air_date": "2022-06-11",
+     "episode_number": 10,
+     "name": "THE GREAT DODGEBALL PLAN",
+     "runtime": 25
+    },
+    {
+     "absolute_number": 11,
+     "air_date": "2022-06-18",
+     "episode_number": 11,
+     "name": "STELLA",
+     "runtime": 25
+    },
+    {
+     "absolute_number": 12,
+     "air_date": "2022-06-25",
+     "episode_number": 12,
+     "name": "PENGUIN PARK",
+     "runtime": 25
+    },
+    {
+     "absolute_number": 13,
+     "air_date": "2022-10-01",
+     "episode_number": 13,
+     "name": "PROJECT APPLE",
+     "runtime": 25
+    },
+    {
+     "absolute_number": 14,
+     "air_date": "2022-10-08",
+     "episode_number": 14,
+     "name": "DISARM THE TIME BOMB",
+     "runtime": 25
+    },
+    {
+     "absolute_number": 15,
+     "air_date": "2022-10-15",
+     "episode_number": 15,
+     "name": "A NEW FAMILY MEMBER",
+     "runtime": 25
+    },
+    {
+     "absolute_number": 16,
+     "air_date": "2022-10-22",
+     "episode_number": 16,
+     "name": "YOR'S KITCHEN / THE INFORMANT'S GREAT ROMANCE PLAN",
+     "runtime": 25
+    },
+    {
+     "absolute_number": 17,
+     "air_date": "2022-10-29",
+     "episode_number": 17,
+     "name": "CARRY OUT THE GRIFFIN PLAN / FULLMETAL LADY / OMELET RICE♥",
+     "runtime": 25
+    },
+    {
+     "absolute_number": 18,
+     "air_date": "2022-11-05",
+     "episode_number": 18,
+     "name": "UNCLE THE PRIVATE TUTOR / DAYBREAK",
+     "runtime": 25
+    },
+    {
+     "absolute_number": 19,
+     "air_date": "2022-11-12",
+     "episode_number": 19,
+     "name": "A REVENGE PLOT AGAINST DESMOND / MAMA BECOMES THE WIND",
+     "runtime": 25
+    },
+    {
+     "absolute_number": 20,
+     "air_date": "2022-11-19",
+     "episode_number": 20,
+     "name": "INVESTIGATE THE GENERAL HOSPITAL / DECIPHER THE PERPLEXING CODE",
+     "runtime": 25
+    },
+    {
+     "absolute_number": 21,
+     "air_date": "2022-11-26",
+     "episode_number": 21,
+     "name": "NIGHTFALL / FIRST FIT OF JEALOUSY",
+     "runtime": 25
+    },
+    {
+     "absolute_number": 22,
+     "air_date": "2022-12-03",
+     "episode_number": 22,
+     "name": "THE UNDERGROUND TENNIS TOURNAMENT: THE CAMPBELLDON",
+     "runtime": 25
+    },
+    {
+     "absolute_number": 23,
+     "air_date": "2022-12-10",
+     "episode_number": 23,
+     "name": "THE UNWAVERING PATH",
+     "runtime": 25
+    },
+    {
+     "absolute_number": 24,
+     "air_date": "2022-12-17",
+     "episode_number": 24,
+     "name": "THE ROLE OF A MOTHER AND WIFE / SHOPPING WITH FRIENDS",
+     "runtime": 25
+    },
+    {
+     "absolute_number": 25,
+     "air_date": "2022-12-24",
+     "episode_number": 25,
+     "name": "FIRST CONTACT",
+     "runtime": 25
+    }
+   ],
+   "name": "Season 1",
+   "names": [
+    "Season 1",
+    "第 1 季"
+   ],
+   "season_number": 1
+  },
+  {
+   "air_date": "2023-10-07",
+   "episode_count": 12,
+   "episodes": [
+    {
+     "absolute_number": 26,
+     "air_date": "2023-10-07",
+     "episode_number": 1,
+     "name": "FOLLOW MAMA AND PAPA",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 27,
+     "air_date": "2023-10-14",
+     "episode_number": 2,
+     "name": "BOND'S STRATEGY TO STAY ALIVE / DAMIAN'S FIELD RESEARCH TRIP",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 28,
+     "air_date": "2023-10-21",
+     "episode_number": 3,
+     "name": "MISSION AND FAMILY / THE ELEGANT BONDMAN / THE HEART OF A CHILD / WAKING UP",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 29,
+     "air_date": "2023-10-28",
+     "episode_number": 4,
+     "name": "THE PASTRY OF KNOWLEDGE / THE INFORMANT'S GREAT ROMANCE PLAN II",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 30,
+     "air_date": "2023-11-04",
+     "episode_number": 5,
+     "name": "PLAN TO CROSS THE BORDER",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 31,
+     "air_date": "2023-11-11",
+     "episode_number": 6,
+     "name": "THE FEARSOME LUXURY CRUISE SHIP",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 32,
+     "air_date": "2023-11-18",
+     "episode_number": 7,
+     "name": "WHO IS THIS MISSION FOR?",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 33,
+     "air_date": "2023-11-25",
+     "episode_number": 8,
+     "name": "THE SYMPHONY UPON THE SHIP",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 34,
+     "air_date": "2023-12-02",
+     "episode_number": 9,
+     "name": "THE HAND THAT CONNECTS TO THE FUTURE",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 35,
+     "air_date": "2023-12-09",
+     "episode_number": 10,
+     "name": "ENJOY THE RESORT TO THE FULLEST / BRAGGING ABOUT VACATION",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 36,
+     "air_date": "2023-12-16",
+     "episode_number": 11,
+     "name": "BERLINT IN LOVE / NIGHTFALL'S DAILY LIFE",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 37,
+     "air_date": "2023-12-23",
+     "episode_number": 12,
+     "name": "PART OF THE FAMILY",
+     "runtime": 24
+    }
+   ],
+   "name": "Season 2",
+   "names": [
+    "Season 2",
+    "第 2 季"
+   ],
+   "season_number": 2
+  },
+  {
+   "air_date": "2025-10-04",
+   "episode_count": 13,
+   "episodes": [
+    {
+     "absolute_number": 38,
+     "air_date": "2025-10-04",
+     "episode_number": 1,
+     "name": "Berlint Panic | The Informant and Nightfall",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 39,
+     "air_date": "2025-10-11",
+     "episode_number": 2,
+     "name": "Avoid Getting Tonitrus Bolts | ■■■■'s Memories I",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 40,
+     "air_date": "2025-10-18",
+     "episode_number": 3,
+     "name": "■■■■'s Memories II",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 41,
+     "air_date": "2025-10-25",
+     "episode_number": 4,
+     "name": "Behind the Scandal | The Path to an Imperial Scholar",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 42,
+     "air_date": "2025-11-01",
+     "episode_number": 5,
+     "name": "The Mommy-Friends Scheme",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 43,
+     "air_date": "2025-11-08",
+     "episode_number": 6,
+     "name": "White Jealousy | The Eden College Busjacking Incident",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 44,
+     "air_date": "2025-11-15",
+     "episode_number": 7,
+     "name": "The Red Circus",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 45,
+     "air_date": "2025-11-22",
+     "episode_number": 8,
+     "name": "Take Down the Busjacker",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 46,
+     "air_date": "2025-11-29",
+     "episode_number": 9,
+     "name": "Anya's Era Has Come",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 47,
+     "air_date": "2025-12-07",
+     "episode_number": 10,
+     "name": "Austin's Troubles | A Normal Mixer | Moon Landing",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 48,
+     "air_date": "2025-12-13",
+     "episode_number": 11,
+     "name": "Extreme Level 3 Situation",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 49,
+     "air_date": "2025-12-20",
+     "episode_number": 12,
+     "name": "Battle to the Death in the Sewers",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 50,
+     "air_date": "2025-12-27",
+     "episode_number": 13,
+     "name": "A World Where We Cannot Survive",
+     "runtime": 24
+    }
+   ],
+   "name": "Season 3",
+   "names": [
+    "Season 3",
+    "第 3 季"
+   ],
+   "season_number": 3
+  }
+ ],
+ "title": "SPY×FAMILY 間諜家家酒",
+ "title_en": "SPY x FAMILY",
+ "title_original": "SPY×FAMILY",
+ "titles": [
+  "SPY x FAMILY",
+  "SPY×FAMILY",
+  "Agent x Ailə",
+  "间谍过家家",
+  "间谍家家酒",
+  "Spy X Family",
+  "SPY x FAMILY 間諜家家酒 Season 2",
+  "SPYFAMILY間諜家家酒Season2",
+  "SPY FAMILY 間諜家家酒 Season 2",
+  "SPYxFAMILY間諜家家酒Season2",
+  "מרגל × משפחה",
+  "स्पाई x फैमिली",
+  "スパイファミリー",
+  "Spy Family",
+  "Spy x Family 2nd",
+  "SPY×FAMILY：2022",
+  "스파이×패밀리",
+  "간첩 가족",
+  "스파이 패밀리",
+  "عائلة × جاسوس",
+  "สปายแฟมิลี่",
+  "SPY X FAMILY 間諜家家酒",
+  "間諜家家酒",
+  "SPY×FAMILY 間諜家家酒 Season 3",
+  "Шпигун × Сім’я",
+  "Сім’я шпигуна",
+  "Шпигун × Родина",
+  "Шпигун та сім'я",
+  "Сім'я × Шпигуна",
+  "Gia Đình Điệp Viên",
+  "Семья шпиона",
+  "SPY×FAMILY 間諜家家酒",
+  "Gia Đình × Điệp Viên",
+  "สปาย x แฟมิลี่",
+  "משפחה × חשאית",
+  "SPYxFAMILY",
+  "جاسوس×خانواده",
+  "Шпионин × Семейство",
+  "जासूस × परिवार"
+ ],
+ "tmdb_id": 120089,
+ "year": 2022
+}

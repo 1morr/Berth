@@ -328,6 +328,13 @@ Windows Docker Desktop（NTFS bind mount）與 Linux（ext4）上各跑一次 `d
   `GET /api/jellyfin/libraries`。健康頁的 Route 區塊對 admin 多一條「到 Route 設定」。
 - 演練情境 `routes`（`scripts/fake_setup_server.py`）：TV 媒體庫在 Jellyfin 上多掛一顆碟、Movies 多一條
   沒掛進來的路徑、TV 那條 Route 有一筆下載——第二條 Route、紅燈建立與「刪不得」三種樣子都看得到。
+- 語料補五筆「只有集號、TMDB 上多季」的真實發佈（票 14c；動漫 14 / 劇集 10 / 電影 4，共 28 筆 368 個
+  檔案）：SPY×FAMILY 第二季合集、我的英雄學院 139、航海王 1089–1104、Home and Away 第 8214 集、
+  超人回來了 E079。絕對編號換算那一支第一次有語料走到；baseline 的 `auto_correct` 140 → 169，
+  `auto_wrong` 仍是 0。
+- `scripts/experiments/profile_effect.py`（票 14c）：Route profile 對語料有沒有作用——四種組合重算、
+  逐檔比桶、側錄 `_from_number` 的分支。結論在 `docs/research/profile-effect.md`：使用者拍板移除
+  profile（票 14d、14e）。
 
 ### Changed
 

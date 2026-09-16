@@ -1,0 +1,13 @@
+{
+  "id": "tv/return-of-superman-e079-limo",
+  "source_url": "https://thepiratebay.org/description.php?id=11971639",
+  "torrent_name": "The.Return.of.Superman.E079.150524.HDTV.H264.720p-LIMO [kimch1]",
+  "tmdb": "tv-64356",
+  "context": {"media": "tv:64356", "profile": "standard", "season_hint": null, "episode_offset": null},
+  "files": [
+    {"path": "The.Return.of.Superman.E079.150524.HDTV.H264.720p-LIMO.avi", "size": 1803503616}
+  ],
+  "expected": [
+    {"path": "The.Return.of.Superman.E079.150524.HDTV.H264.720p-LIMO.avi", "kind": "video", "action": "import", "season": 3, "episode": 21, "tags": {"source": "HDTV", "resolution": "720p", "group": "LIMO"}, "target": "The Return of Superman (2013) [tmdbid-64356]/Season 03/The Return of Superman (2013) - S03E21 - 79. Grow Up Slowly [HDTV][720p][LIMO].avi"}
+  ]
+}

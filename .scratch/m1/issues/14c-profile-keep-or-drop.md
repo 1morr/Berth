@@ -1,6 +1,6 @@
 # 14c — Profile 去留：補踩得到絕對編號分支的語料，量過再決定
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Blocked by:** 無硬相依（2026-09-15 插入，排在 14b 之後、15 之前：結論若是移除或改名，精靈與 Route 設定頁的 UI 會變，
 票 15 的 UI 收尾要審的是定案之後的樣子）
@@ -81,16 +81,16 @@ Route 的 profile（`standard` / `anime`）在介面上叫「命名 profile」�
 
 ## 驗收
 
-- [ ] 至少兩筆新語料：動漫絕對編號 ≥ 1、非動漫只有集號 ≥ 1（後者找不到時記下找過的作品與理由）。逐筆 `source_url`、
+- [x] 至少兩筆新語料：動漫絕對編號 ≥ 1、非動漫只有集號 ≥ 1（後者找不到時記下找過的作品與理由）。逐筆 `source_url`、
       TMDB 快照已錄、README 已記。
-- [ ] 每筆新語料走到 `_from_number` 絕對編號分支的側錄證據寫在研究文件。
-- [ ] `uv run python scripts/experiments/profile_effect.py` 可重跑，四種組合的報表與逐檔差異寫進
+- [x] 每筆新語料走到 `_from_number` 絕對編號分支的側錄證據寫在研究文件。
+- [x] `uv run python scripts/experiments/profile_effect.py` 可重跑，四種組合的報表與逐檔差異寫進
       `docs/research/profile-effect.md`，結論摘進 brief。
-- [ ] `uv run berth bench` 輸出已貼上；baseline 已更新；`auto_wrong` 沒有上升。
-- [ ] 使用者已拍板（保留 / 移除 / 改成作品層級），決定記進 `docs/progress.md`「偏差與決定」。
-- [ ] 保留：介面文案、CONTEXT.md、brief、plan 已改，前端測試綠。移除或改粒度：後續票已開、檔案清單已列、
+- [x] `uv run berth bench` 輸出已貼上；baseline 已更新；`auto_wrong` 沒有上升。
+- [x] 使用者已拍板（保留 / 移除 / 改成作品層級），決定記進 `docs/progress.md`「偏差與決定」。
+- [x] 保留：介面文案、CONTEXT.md、brief、plan 已改，前端測試綠。移除或改粒度：後續票已開、檔案清單已列、
       `docs/progress.md` 里程碑列的票數已更新。
-- [ ] `uv run ruff check . && uv run ruff format --check . && uv run mypy && uv run lint-imports && uv run pytest` 全綠，
+- [x] `uv run ruff check . && uv run ruff format --check . && uv run mypy && uv run lint-imports && uv run pytest` 全綠，
       貼指令輸出。動到前端時再加 `pnpm -C web format:check && pnpm -C web typecheck && pnpm -C web lint && pnpm -C web test`。
 
 **不做：**
@@ -101,3 +101,58 @@ Route 的 profile（`standard` / `anime`）在介面上叫「命名 profile」�
 - 為了讓 profile 有作用而改解析器規則。
 
 ## Comments
+
+**拍板（2026-09-16）**：第一輪「保留並改名 / 改成作品層級 / 移除」三選一，使用者的回答是「我會想盡可能簡單，可以移除他的同時
+讓他能夠自動使用正確的方法嗎」——票面三個選項都沒有這一條。帶著 scratchpad 原型的數字問第二輪，定案：移除 profile，
+絕對編號換算改由兩條證據決定信心；季號搜尋變體對所有劇集。《死神》缺陷票排在 15 之前。實作拆成 14d、14e（研究 §6）。
+
+**指令輸出**（2026-09-16）：
+
+```
+$ uv run ruff check . && uv run ruff format --check . && uv run mypy && uv run lint-imports && uv run pytest
+All checks passed!
+268 files already formatted
+Success: no issues found in 200 source files
+Contracts: 6 kept, 0 broken.
+1320 passed in 217.65s (0:03:37)
+
+$ uv run berth bench
+28 fixtures, 368 files
+
+category  files  classify  tags     confidence  auto_correct  auto_wrong  review  missed  unmatched_correct  extra_correct  subtitle_correct  skipped
+anime     206    206/206   111/111  111/111     111           0           2       0       42                 24             26                1
+tv        79     79/79     57/57    55/55       55            0           2       0       0                  0              11                11
+movie     83     83/83     3/3      3/3         3             0           61      0       0                  17             0                 2
+overall   368    368/368   171/171  169/169     169           0           65      0       42                 41             37                14
+
+high: 0/83 wrong (0.0%)  medium: 0/86 wrong (0.0%)
+```
+
+baseline：`auto_correct` 140 → 169（新語料的 29 個動漫檔），`auto_wrong` 0 不變。前端沒動，沒跑 pnpm。
+`profile_effect.py` 的完整輸出貼在研究文件附錄 A。
+
+**測試抓到的**：`tests/unit/test_bench.py` 的 `CORPUS_SHAPE` 釘著語料組成（動漫 11 / 劇集 8 / 電影 4），補語料之後紅了。
+改成 14 / 10 / 4。
+
+**語料外沒收的**：Erai-raws《死神》相剋譚 01–14（研究 §4）。以動漫 Route 收錄會讓 `auto_wrong` 0 → 14，票面規定另開票，
+檔案清單與正解抄進 14d 當紅燈。
+
+## code-review（兩軸）
+
+**Standards 軸**——修掉的：
+
+- CHANGELOG 沒記新指令、語料與 baseline（全域 CLAUDE.md、plan §0）：`### Added` 補兩條。
+- `profile_effect.py` 的 `measure` 沒呼叫 `bench._check_pairing`，語料指錯快照不會炸：補上。
+- `Call.branch` 用裸字串：改 `Literal["single_season", "absolute"]`。區間摘要的變數 `first` 與 `Call.first` 同名異義：改名 `converted`。
+- `scripts/experiments/README.md` 開頭兩句沒提 14c 與 brief §19 / §20.4：改掉。
+- brief §20.4 的 `guessit` `date_year_first` 只寫實測、沒有來源：context7 查到官方 CLI 說明並附連結；最小測試由 14d 的驗收要求。
+
+**Standards 軸**——留著的：`measure` 自己組 `Report`、逐檔再跑一次 `plan`（解析器跑兩遍）。票面指定用 `bench.score` 算計數，
+而 `score` 不回逐檔結果；腳本在 14e 會刪，不為它改 `bench`。
+
+**Spec 軸**——修掉的：
+
+- 研究文件只有摘要數字，缺八個桶的完整報表與逐檔差異（票面「內容是四種組合的桶、逐檔差異」）：加附錄 A，直接取腳本輸出。
+- 14e 的檔案清單漏了 brief §10 的措辭、`adapters/indexer/__init__.py` 的 docstring、CHANGELOG：補上。
+- 14d 寫《死神》的快照「已錄」，但 `tv-30984` 不在 repo，檔案清單也不在：改成「還沒錄」，14 個檔案的路徑與位元組數抄進票裡；
+  研究 §4 與 §6.1 註明那兩張表從 repo 重跑不出來、由 14d 重量。

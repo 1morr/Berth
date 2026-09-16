@@ -417,6 +417,14 @@ python scripts/experiments/anime_episode_source.py --discover        # 重新找
 `.local/experiments/cache/`，之後重跑分析是秒級。結果見
 [`docs/research/anime-episode-source.md`](docs/research/anime-episode-source.md)。
 
+Route profile 對解析結果的作用（M1 票 14c）。不連線、不需要憑證，但 import `berth`，所以用 `uv run`：
+
+```bash
+uv run python scripts/experiments/profile_effect.py    # 語料四種 profile 組合的報表、逐檔差異、分支側錄
+```
+
+結果見 [`docs/research/profile-effect.md`](docs/research/profile-effect.md)。
+
 ## 目錄結構
 
 ```

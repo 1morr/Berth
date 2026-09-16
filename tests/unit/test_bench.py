@@ -39,8 +39,9 @@ _WRITTEN = frozenset({PlanAction.IMPORT, PlanAction.EXTRA, PlanAction.SUBTITLE})
 TARGET = "Show (2020) [tmdbid-1]/Season 01/Show (2020) - S01E02.mkv"
 
 #: 語料的組成（plan §4.6、brief §20.4 的樣本清單）。v0 是 20 筆（動漫 8 / 劇集 8 / 電影 4），
-#: 票 06 補了三筆動漫：篇章名、cour 偏移與單檔多集（brief §6.6）。
-CORPUS_SHAPE = {"anime": 11, "tv": 8, "movie": 4}
+#: 票 06 補了三筆動漫：篇章名、cour 偏移與單檔多集（brief §6.6）；
+#: 票 14c 補了「只有集號、TMDB 上多季」的動漫三筆、劇集兩筆（brief §20.4）。
+CORPUS_SHAPE = {"anime": 14, "tv": 10, "movie": 4}
 
 
 @pytest.fixture(scope="module")

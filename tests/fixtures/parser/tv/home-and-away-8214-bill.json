@@ -1,0 +1,17 @@
+{
+  "id": "tv/home-and-away-8214-bill",
+  "source_url": "https://thepiratebay.org/description.php?id=74753319",
+  "torrent_name": "Home.and.Away.Episode.8214.2024-02-29.Thu.720p.WEB-DL.H",
+  "tmdb": "tv-2354",
+  "context": {"media": "tv:2354", "profile": "standard", "season_hint": null, "episode_offset": null},
+  "files": [
+    {"path": "Home.and.Away.Episode.8214.2024-02-29.Thu.720p.WEB-DL.H.264-bill.mkv", "size": 506319011},
+    {"path": "Home.and.Away.Episode.8214.2024-02-29.Thu.720p.WEB-DL.H.264-bill.mkv.nfo", "size": 3460},
+    {"path": "Torrent Downloaded From Torrenting.com.txt", "size": 84}
+  ],
+  "expected": [
+    {"path": "Home.and.Away.Episode.8214.2024-02-29.Thu.720p.WEB-DL.H.264-bill.mkv", "kind": "video", "action": "import", "season": 37, "episode": 39, "tags": {"source": "WEB", "resolution": "720p", "group": "bill"}, "target": "Home and Away (1988) [tmdbid-2354]/Season 37/Home and Away (1988) - S37E39 [WEB][720p][bill].mkv"},
+    {"path": "Home.and.Away.Episode.8214.2024-02-29.Thu.720p.WEB-DL.H.264-bill.mkv.nfo", "kind": "other", "action": "skip"},
+    {"path": "Torrent Downloaded From Torrenting.com.txt", "kind": "other", "action": "skip"}
+  ]
+}

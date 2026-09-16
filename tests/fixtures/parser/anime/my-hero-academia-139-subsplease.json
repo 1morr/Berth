@@ -1,0 +1,13 @@
+{
+  "id": "anime/my-hero-academia-139-subsplease",
+  "source_url": "https://nyaa.si/view/1814011",
+  "torrent_name": "[SubsPlease] Boku no Hero Academia - 139 (1080p) [5AA223A9].mkv",
+  "tmdb": "tv-65930",
+  "context": {"media": "tv:65930", "profile": "anime", "season_hint": null, "episode_offset": null},
+  "files": [
+    {"path": "[SubsPlease] Boku no Hero Academia - 139 (1080p) [5AA223A9].mkv", "size": 1456630212}
+  ],
+  "expected": [
+    {"path": "[SubsPlease] Boku no Hero Academia - 139 (1080p) [5AA223A9].mkv", "kind": "video", "action": "import", "season": 7, "episode": 1, "tags": {"resolution": "1080p", "group": "SubsPlease"}, "target": "My Hero Academia (2016) [tmdbid-65930]/Season 07/My Hero Academia (2016) - S07E01 - In the Nick of Time! A Big-Time Maverick from the West [1080p][SubsPlease].mkv", "min_confidence": "medium"}
+  ]
+}
