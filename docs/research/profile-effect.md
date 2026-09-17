@@ -327,10 +327,10 @@ Berth 讀到的集號對不起來（例如 `[20] [1080p] [2022年10月番]` 被 
 28 fixtures, 368 files
 
 category  files  classify  tags     confidence  auto_correct  auto_wrong  review  missed  unmatched_correct  extra_correct  subtitle_correct  skipped
-anime     206    206/206   111/111  111/111     111           0           2       0       42                 24             26                1      
-tv        79     79/79     57/57    55/55       55            0           2       0       0                  0              11                11     
-movie     83     83/83     3/3      3/3         3             0           61      0       0                  17             0                 2      
-overall   368    368/368   171/171  169/169     169           0           65      0       42                 41             37                14     
+anime     206    206/206   111/111  111/111     111           0           2       0       42                 24             26                1
+tv        79     79/79     57/57    55/55       55            0           2       0       0                  0              11                11
+movie     83     83/83     3/3      3/3         3             0           61      0       0                  17             0                 2
+overall   368    368/368   171/171  169/169     169           0           65      0       42                 41             37                14
 
 high: 0/83 wrong (0.0%)  medium: 0/86 wrong (0.0%)
 ```
@@ -341,10 +341,10 @@ high: 0/83 wrong (0.0%)  medium: 0/86 wrong (0.0%)
 28 fixtures, 368 files
 
 category  files  classify  tags     confidence  auto_correct  auto_wrong  review  missed  unmatched_correct  extra_correct  subtitle_correct  skipped
-anime     206    206/206   111/111  82/111      82            0           31      0       42                 24             26                1      
-tv        79     79/79     57/57    55/55       56            1           0       0       0                  0              11                11     
-movie     83     83/83     3/3      3/3         3             0           61      0       0                  17             0                 2      
-overall   368    368/368   171/171  140/169     141           1           92      0       42                 41             37                14     
+anime     206    206/206   111/111  82/111      82            0           31      0       42                 24             26                1
+tv        79     79/79     57/57    55/55       56            1           0       0       0                  0              11                11
+movie     83     83/83     3/3      3/3         3             0           61      0       0                  17             0                 2
+overall   368    368/368   171/171  140/169     141           1           92      0       42                 41             37                14
 
 high: 0/83 wrong (0.0%)  medium: 1/59 wrong (1.7%)
 ```
@@ -355,10 +355,10 @@ high: 0/83 wrong (0.0%)  medium: 1/59 wrong (1.7%)
 28 fixtures, 368 files
 
 category  files  classify  tags     confidence  auto_correct  auto_wrong  review  missed  unmatched_correct  extra_correct  subtitle_correct  skipped
-anime     206    206/206   111/111  82/111      82            0           31      0       42                 24             26                1      
-tv        79     79/79     57/57    55/55       55            0           2       0       0                  0              11                11     
-movie     83     83/83     3/3      3/3         3             0           61      0       0                  17             0                 2      
-overall   368    368/368   171/171  140/169     140           0           94      0       42                 41             37                14     
+anime     206    206/206   111/111  82/111      82            0           31      0       42                 24             26                1
+tv        79     79/79     57/57    55/55       55            0           2       0       0                  0              11                11
+movie     83     83/83     3/3      3/3         3             0           61      0       0                  17             0                 2
+overall   368    368/368   171/171  140/169     140           0           94      0       42                 41             37                14
 
 high: 0/83 wrong (0.0%)  medium: 0/57 wrong (0.0%)
 ```
@@ -369,10 +369,10 @@ high: 0/83 wrong (0.0%)  medium: 0/57 wrong (0.0%)
 28 fixtures, 368 files
 
 category  files  classify  tags     confidence  auto_correct  auto_wrong  review  missed  unmatched_correct  extra_correct  subtitle_correct  skipped
-anime     206    206/206   111/111  111/111     111           0           2       0       42                 24             26                1      
-tv        79     79/79     57/57    55/55       56            1           0       0       0                  0              11                11     
-movie     83     83/83     3/3      3/3         3             0           61      0       0                  17             0                 2      
-overall   368    368/368   171/171  169/169     170           1           63      0       42                 41             37                14     
+anime     206    206/206   111/111  111/111     111           0           2       0       42                 24             26                1
+tv        79     79/79     57/57    55/55       56            1           0       0       0                  0              11                11
+movie     83     83/83     3/3      3/3         3             0           61      0       0                  17             0                 2
+overall   368    368/368   171/171  169/169     170           1           63      0       42                 41             37                14
 
 high: 0/83 wrong (0.0%)  medium: 1/88 wrong (1.1%)
 ```
