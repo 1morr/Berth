@@ -1,4 +1,5 @@
 import { screen, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 
 import type { JobEvent } from '../api/jobs'
@@ -78,6 +79,16 @@ describe('Job 時間線', () => {
     expect(line.getByText(/qBittorrent 說檔案不見了/)).toBeInTheDocument()
   })
 
+  it('只有擋住這一筆的 issue 是紅字——torrent 從客戶端消失不是阻擋（The One Meaning Rule）', () => {
+    const line = render([
+      event({ id: 1, type: 'issue_detected', payload: { type: 'missing_files' } }),
+      event({ id: 2, type: 'issue_detected', payload: { type: 'client_removed' } }),
+    ])
+
+    expect(line.getByText(/qBittorrent 說檔案不見了/)).toHaveClass('text-blocked-ink')
+    expect(line.getByText(/torrent 從 qBittorrent 上消失了/)).not.toHaveClass('text-blocked-ink')
+  })
+
   it('認不得的 issue 型別不畫，也不印出一條 i18n key', () => {
     const line = render([
       event({ type: 'issue_detected', payload: { type: 'something_new_in_m2' } }),
@@ -125,6 +136,31 @@ describe('Job 時間線', () => {
 
     expect(line.getByText('已鏈接')).toBeInTheDocument()
     expect(line.getByText(target)).toBeInTheDocument()
+  })
+
+  it('連續的鏈接合成一行，逐檔的目標收在底下（票 15：一季 39 檔展開後有七千多 px）', async () => {
+    const targets = ['E01.mkv', 'E02.mkv', 'E03.mkv'].map((name) => `/data/library/anime/${name}`)
+    renderWithProviders(
+      <JobTimeline
+        events={[
+          ...targets.map((target, index) =>
+            event({ id: index + 1, type: 'linked', payload: { target } }),
+          ),
+          event({ id: 9, type: 'jellyfin_scan_requested', payload: { count: 3 } }),
+        ]}
+      />,
+    )
+
+    const list = screen.getAllByRole('list')[0]
+    const lines = within(list)
+      .getAllByRole('listitem')
+      .filter((item) => item.parentElement === list)
+    expect(lines).toHaveLength(2)
+    expect(within(lines[0]).getByText('已鏈接')).toBeInTheDocument()
+    expect(within(lines[0]).getByText('3 個檔案')).toBeInTheDocument()
+
+    await userEvent.click(within(lines[0]).getByText('列出目標路徑'))
+    for (const target of targets) expect(within(lines[0]).getByText(target)).toBeVisible()
   })
 
   it('鏈接失敗那一筆帶著原文——它是「哪個掛載少了」的證據', () => {

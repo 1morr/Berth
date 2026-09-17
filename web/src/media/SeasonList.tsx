@@ -34,7 +34,11 @@ export function SeasonList({ seasons }: { seasons: readonly Season[] }) {
             <span className="value text-sm font-semibold text-ink">
               {seasonCode(season.season_number)}
             </span>
-            <span className="min-w-0 flex-1 text-sm text-ink">{season.name}</span>
+            {/* 窄版上季名自己一行：與集數擠在同一行時 `flex-1` 被壓成 0 寬，兩段字疊在一起
+                （票 15 在 342px 內容寬量到）。 */}
+            <span className="min-w-0 basis-full text-sm break-words text-ink sm:basis-0 sm:flex-1">
+              {season.name}
+            </span>
             <span className="value text-xs text-ink-dim">
               {t('media.episode.count', { count: season.episode_count })}
             </span>
@@ -47,33 +51,52 @@ export function SeasonList({ seasons }: { seasons: readonly Season[] }) {
             <span className="value w-24 text-right text-xs text-ink-dim">
               {season.air_date ?? '—'}
             </span>
+            {/* marker 拿掉了，所以「這一列展得開」要自己說（與 Route 設定頁同一種寫法）。 */}
+            <span className="label shrink-0 text-ink-dim group-open:hidden">
+              {t('common.expand')}
+            </span>
+            <span className="label hidden shrink-0 text-ink-dim group-open:inline">
+              {t('common.collapse')}
+            </span>
           </summary>
 
           {season.episodes.length > 0 ? (
             // 集表過寬時由**它自己**橫向捲動，不是整頁（shape brief §7）。
+            // 欄序是**集號 → 絕對編號 → 入庫 → 集名**：絕對編號貼著集號（shape §8），而「入庫」
+            // 是這張表在這一頁存在的理由——它原本排在最後，390px 上整欄在捲動範圍外（票 15）。
+            // 片長與播出日窄版不畫，表就不必比畫面寬。
             <div className="overflow-x-auto border-t-2 border-rule bg-hull">
-              <table className="w-full min-w-[36rem] border-collapse text-left">
+              <table className="w-full border-collapse text-left sm:min-w-[36rem]">
                 <thead>
                   <tr className="border-b-2 border-rule">
-                    <th scope="col" className="label px-4 py-2 text-ink-dim">
+                    <th scope="col" className="label px-4 py-2 whitespace-nowrap text-ink-dim">
                       {t('media.episode.number')}
                     </th>
-                    <th scope="col" className="label px-4 py-2 text-ink-dim">
-                      {t('media.episode.name')}
-                    </th>
                     {absolute && (
-                      <th scope="col" className="label px-4 py-2 text-right text-ink-dim">
+                      <th
+                        scope="col"
+                        className="label px-4 py-2 text-right whitespace-nowrap text-ink-dim"
+                      >
                         {t('media.episode.absolute')}
                       </th>
                     )}
-                    <th scope="col" className="label px-4 py-2 text-right text-ink-dim">
+                    <th scope="col" className="label px-4 py-2 whitespace-nowrap text-ink-dim">
+                      {t('media.episode.inLibrary')}
+                    </th>
+                    <th scope="col" className="label px-4 py-2 whitespace-nowrap text-ink-dim">
+                      {t('media.episode.name')}
+                    </th>
+                    <th
+                      scope="col"
+                      className="label hidden px-4 py-2 text-right text-ink-dim sm:table-cell"
+                    >
                       {t('media.episode.runtime')}
                     </th>
-                    <th scope="col" className="label px-4 py-2 text-right text-ink-dim">
+                    <th
+                      scope="col"
+                      className="label hidden px-4 py-2 text-right text-ink-dim sm:table-cell"
+                    >
                       {t('media.episode.airDate')}
-                    </th>
-                    <th scope="col" className="label px-4 py-2 text-right text-ink-dim">
-                      {t('media.episode.inLibrary')}
                     </th>
                   </tr>
                 </thead>
@@ -107,19 +130,22 @@ function EpisodeRow({ episode, absolute }: { episode: Episode; absolute: boolean
       <td className="value px-4 py-2 text-xs text-ink-dim">
         {episodeCode(episode.episode_number)}
       </td>
-      <td className="px-4 py-2 text-sm text-ink">{episode.name}</td>
       {absolute && (
         <td className="value px-4 py-2 text-right text-xs text-ink-dim">
           {/* 沒有排進 group 的特輯就是沒有絕對編號。`—` 而不是省略——欄位消失會讓基線錯開。 */}
           {episode.absolute_number === null ? '—' : `#${episode.absolute_number}`}
         </td>
       )}
-      <td className="value px-4 py-2 text-right text-xs text-ink-dim">
+      {/* `whitespace-nowrap`：窄版上集名那一欄會吃掉寬度，狀態被擠成一字一行（票 15 實跑）。 */}
+      <td className="px-4 py-2 whitespace-nowrap">
+        <EpisodeState status={episode.status} />
+      </td>
+      <td className="px-4 py-2 text-sm break-words text-ink">{episode.name}</td>
+      <td className="value hidden px-4 py-2 text-right text-xs text-ink-dim sm:table-cell">
         {episode.runtime === null ? '—' : t('media.minutesShort', { count: episode.runtime })}
       </td>
-      <td className="value px-4 py-2 text-right text-xs text-ink-dim">{episode.air_date ?? '—'}</td>
-      <td className="px-4 py-2 text-right">
-        <EpisodeState status={episode.status} />
+      <td className="value hidden px-4 py-2 text-right text-xs text-ink-dim sm:table-cell">
+        {episode.air_date ?? '—'}
       </td>
     </tr>
   )

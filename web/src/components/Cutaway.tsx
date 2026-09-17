@@ -4,10 +4,22 @@ import type { ReactNode } from 'react'
  * 剖面即預覽：把「將會做什麼」切開露出來，套用前後看同一個剖面（direction contract）。
  * 值貼在它那一行，不進散文。
  */
-export function Cutaway({ title, children }: { title: string; children: ReactNode }) {
+export function Cutaway({
+  title,
+  level = 3,
+  children,
+}: {
+  title: string
+  /** 標題層級跟著它所在的頁面：精靈裡它在步驟的 h2 底下，Media 詳情裡它緊接著 h1（票 15 audit）。 */
+  level?: 2 | 3
+  children: ReactNode
+}) {
+  const Heading = level === 2 ? 'h2' : 'h3'
   return (
     <section className="border-2 border-rule bg-well">
-      <h3 className="label border-b-2 border-rule bg-deck px-4 py-2.5 text-ink-dim">{title}</h3>
+      <Heading className="label border-b-2 border-rule bg-deck px-4 py-2.5 text-ink-dim">
+        {title}
+      </Heading>
       <dl className="divide-y divide-rule">{children}</dl>
     </section>
   )

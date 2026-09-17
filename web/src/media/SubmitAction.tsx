@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useId, useRef } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
@@ -8,6 +8,7 @@ import { refusalOf, submitJob } from '../api/jobs'
 import type { SearchResult } from '../api/search'
 import { GhostButton, PrimaryButton } from '../components/controls'
 import { SIGNAL_FILL } from '../components/signal'
+import { useInPlaceConfirm } from '../components/useInPlaceConfirm'
 
 /**
  * 結果表一列上的送單（票 09、`.scratch/m1/search-results-shape.md` §4 留的位置）。
@@ -22,6 +23,9 @@ import { SIGNAL_FILL } from '../components/signal'
  * 送單本身**不是二選一的成功／失敗**：qBittorrent 收不下時 Job 仍然建好了
  * （`submit_failed` 加原文，plan §3.1），所以成功的畫面是一條「去看下載列表」的連結，
  * 而不是一句「已送出」。
+ *
+ * **確認裡重述送到哪一條 Route**：選 Route 的下拉在表格上面，按下這一列的送單時它早就捲出
+ * 畫面了，而 Route 與資料夾名一起決定了檔案落在哪裡（票 15 的 critique）。
  */
 export function SubmitAction({
   media,
@@ -35,7 +39,10 @@ export function SubmitAction({
 }) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
-  const [asked, setAsked] = useState(false)
+  const { asked, open, close, trigger, panel, onKeyDown } = useInPlaceConfirm()
+  const toJobs = useRef<HTMLAnchorElement>(null)
+  const confirmId = useId()
+  const destination = media.routes.find((choice) => choice.id === route)
 
   const submit = useMutation({
     mutationFn: () => {
@@ -51,7 +58,6 @@ export function SubmitAction({
       })
     },
     onSuccess: async () => {
-      setAsked(false)
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['jobs'] }),
         // 送單成功之後這部作品變成 tracked，資料夾名也定了——詳情頁那兩格要跟著換。
@@ -60,13 +66,19 @@ export function SubmitAction({
     },
   })
 
+  // 送出之後確認區塊整個換掉，焦點不能跟著它消失：落在接下來最可能要按的那一條連結上。
+  useEffect(() => {
+    if (submit.isSuccess) toJobs.current?.focus()
+  }, [submit.isSuccess])
+
   if (submit.isSuccess) {
     return (
-      <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
+      <p role="status" className="flex flex-wrap items-center gap-x-2 gap-y-1">
         <span className={`label px-2 py-1.5 ${SIGNAL_FILL.secured}`}>
           {submit.data.created ? t('submit.done') : t('submit.already')}
         </span>
         <Link
+          ref={toJobs}
           to="/jobs"
           className="text-xs underline decoration-rule-strong underline-offset-4 hover:decoration-ink"
         >
@@ -78,20 +90,32 @@ export function SubmitAction({
 
   if (!asked) {
     return (
-      <GhostButton type="button" onClick={() => setAsked(true)}>
+      <GhostButton ref={trigger} type="button" onClick={open}>
         {t('submit.start')}
       </GhostButton>
     )
   }
 
   return (
-    <div className="grid gap-3 border-2 border-rule-strong bg-well px-3 py-3">
+    <div
+      ref={panel}
+      role="group"
+      aria-labelledby={confirmId}
+      tabIndex={-1}
+      onKeyDown={onKeyDown}
+      className="grid gap-3 border-2 border-rule-strong bg-well px-3 py-3"
+    >
       <div className="grid gap-1">
-        <p className="max-w-prose text-xs text-ink">
+        {destination && (
+          <p className="max-w-prose text-xs break-words text-ink">
+            {t('submit.destination', { route: destination.name })}
+          </p>
+        )}
+        <p id={confirmId} className="max-w-prose text-xs text-ink">
           {route === null ? t('submit.needRoute') : t('submit.confirm')}
         </p>
         {/* 資料夾名是機器字串——它會原樣出現在檔案系統上，所以走 `.value`。 */}
-        <p className="value text-xs break-words text-ink">{media.folder_name || '—'}</p>
+        <p className="value text-xs wrap-anywhere text-ink">{media.folder_name || '—'}</p>
         <p className="max-w-prose text-xs text-ink-dim">
           {media.folder_frozen ? t('submit.alreadyFrozen') : t('submit.willFreeze')}
         </p>
@@ -102,12 +126,15 @@ export function SubmitAction({
         <PrimaryButton type="button" onClick={() => submit.mutate()}>
           {submit.isPending ? t('submit.submitting') : t('submit.submit')}
         </PrimaryButton>
-        <GhostButton type="button" onClick={() => setAsked(false)}>
+        <GhostButton type="button" onClick={close}>
           {t('common.cancel')}
         </GhostButton>
       </div>
 
-      {submit.isError && <Refusal error={submit.error} />}
+      {/* 「先選一條 Route」在選了之後就不成立了——留著它會與上面那句正常的確認互相矛盾。 */}
+      {submit.isError && !(submit.error instanceof NoRouteError && route !== null) && (
+        <Refusal error={submit.error} />
+      )}
     </div>
   )
 }
@@ -130,14 +157,14 @@ function Refusal({ error }: { error: unknown }) {
     <div role="alert" className="grid gap-1">
       <p className="max-w-prose text-xs text-blocked-ink">
         {error instanceof NoRouteError
-          ? t('submit.needRoute')
+          ? t('submit.needRouteError')
           : refusal
             ? t(`jobs.refusal.${refusal.reason}`)
             : t('submit.off')}
       </p>
       {/* 服務回的原文，不翻譯（與精靈的纜繩同一個規矩）。 */}
       {refusal?.detail && (
-        <p className="value text-xs break-words text-ink-dim">{refusal.detail}</p>
+        <p className="value text-xs wrap-anywhere text-ink-dim">{refusal.detail}</p>
       )}
     </div>
   )

@@ -52,13 +52,20 @@ export function FilesPanel({ media }: { media: Media }) {
           <div className="grid gap-px bg-rule">
             {bySeason(media.files).map(([season, files]) => (
               // `min-w-0`：grid 項目預設不肯縮，長路徑會把整頁撐寬（票 04 踩過的同一個坑）。
-              <details key={season ?? 'none'} className="min-w-0 bg-well">
+              <details key={season ?? 'none'} className="group min-w-0 bg-well">
                 <summary className="flex cursor-pointer flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3 marker:content-none">
                   <span className="value text-sm font-semibold text-ink">
                     {season === null ? '—' : seasonCode(season)}
                   </span>
-                  <span className="value text-xs text-ink-dim">
+                  <span className="value grow text-xs text-ink-dim">
                     {t('media.files.count', { count: files.length })}
+                  </span>
+                  {/* marker 拿掉了，所以「這一列展得開」要自己說（與季表同一種寫法）。 */}
+                  <span className="label shrink-0 text-ink-dim group-open:hidden">
+                    {t('common.expand')}
+                  </span>
+                  <span className="label hidden shrink-0 text-ink-dim group-open:inline">
+                    {t('common.collapse')}
                   </span>
                 </summary>
                 <div className="border-t-2 border-rule bg-hull px-4 py-3">
@@ -97,7 +104,7 @@ export function FilesPanel({ media }: { media: Media }) {
                         名字與 tags 都可能是空的（Jellyfin 還沒收錄、檔名也沒有 tag）。 */}
                     <ul className="grid gap-0.5">
                       {group.versions.map((version, index) => (
-                        <li key={index} className="value text-xs break-words text-ink-dim">
+                        <li key={index} className="value text-xs wrap-anywhere text-ink-dim">
                           {version.name || version.tags || '—'}
                         </li>
                       ))}
@@ -126,8 +133,8 @@ export function FilesPanel({ media }: { media: Media }) {
                 key={`${row.job_hash}-${row.rel_path}`}
                 className="grid min-w-0 gap-0.5 border-l-2 border-rule-strong pl-3"
               >
-                <p className="value text-xs break-words text-ink">{row.rel_path}</p>
-                <p className="value text-xs break-words text-ink-dim">{row.job_name}</p>
+                <p className="value text-xs wrap-anywhere text-ink">{row.rel_path}</p>
+                <p className="value text-xs wrap-anywhere text-ink-dim">{row.job_name}</p>
               </li>
             ))}
           </ul>
@@ -160,7 +167,10 @@ function FileRow({ file }: { file: LedgerFile }) {
       <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
         {/* 處置是分類不是狀態：中性色塊（The Role Is Not A State Rule）。 */}
         <span className="label bg-deck px-1.5 py-0.5 text-ink">
-          {t(`media.files.action.${file.action}`)}
+          {/* S00 的正片是 Specials（TMDB season 0），不是「正片」也不是 extras（CONTEXT.md）。 */}
+          {file.action === 'import' && file.season === 0
+            ? t('media.files.special')
+            : t(`media.files.action.${file.action}`)}
         </span>
         {episode && (
           <>
@@ -171,11 +181,11 @@ function FileRow({ file }: { file: LedgerFile }) {
         {file.tags && (
           <>
             <Dot />
-            <span className="value text-xs break-words text-ink">{file.tags}</span>
+            <span className="value text-xs wrap-anywhere text-ink">{file.tags}</span>
           </>
         )}
       </p>
-      <p className="value text-xs break-words text-ink-dim">{file.target_path}</p>
+      <p className="value text-xs wrap-anywhere text-ink-dim">{file.target_path}</p>
       <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
         <span className="label text-ink-dim">{t('media.files.ledger.label')}</span>
         <span className="text-ink">{t(`media.files.ledger.${file.status}`)}</span>

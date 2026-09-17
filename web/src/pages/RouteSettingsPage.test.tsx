@@ -56,6 +56,13 @@ async function row(name: string) {
 }
 
 describe('Route 設定頁', () => {
+  it('頁標題是這一頁唯一的 h1（票 15 audit）', async () => {
+    render()
+    renderApp('/settings/routes')
+
+    expect(await screen.findByRole('heading', { level: 1, name: '媒體庫路徑' })).toBeInTheDocument()
+  })
+
   it('每條 Route 一列：狀態、名稱、寫入目標，以及有多少東西用著它', async () => {
     render()
     renderApp('/settings/routes')

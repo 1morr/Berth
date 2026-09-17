@@ -69,15 +69,45 @@ export function JobRow({ job }: { job: Job }) {
           <span className={`label shrink-0 px-2 py-1.5 ${SIGNAL_FILL[JOB_SIGNAL[job.state]]}`}>
             {t(`jobs.state.${job.state}`)}
           </span>
-          <span className="grid min-w-0 flex-1 gap-1.5">
-            {/* 發佈名整行換行，不截斷：它是使用者認得出這一列的東西（票 08 §8 的同一條）。 */}
-            <span className="value block text-sm break-words text-ink">{job.name}</span>
+          {/* medium 自動入庫的檔案：狀態是綠色的「已入庫」，而它們還要人看一眼（brief §6.5、
+              PRODUCT 原則 3）。`assigned` 就是「需要你」，與狀態那一格是兩件事所以各一塊。 */}
+          {job.audits > 0 && (
+            <span className={`label shrink-0 px-2 py-1.5 ${SIGNAL_FILL.assigned}`}>
+              {t('jobs.audits', { count: job.audits })}
+            </span>
+          )}
+          {/* `summary` 的 marker 拿掉了（它在窄版會把整列推歪），所以「這一列展得開」要自己說。
+              窄版上它跟色塊同一行、靠右；寬版上排到最後（`sm:order-last`）。 */}
+          <span className="label ml-auto shrink-0 text-ink-dim sm:order-last">
+            {open ? t('common.collapse') : t('common.expand')}
+          </span>
+          {/* 窄版上發佈名自己一行：與兩塊色塊擠在同一行時，`wrap-anywhere` 讓它縮得下去，
+              結果是一條幾個字寬的直欄（票 15 在 390px 實跑看到）。 */}
+          <span className="grid min-w-0 basis-full gap-1.5 sm:basis-0 sm:flex-1">
+            {/* 發佈名整行換行，不截斷：它是使用者認得出這一列的東西（票 08 §8 的同一條）。
+                `wrap-anywhere` 而不是 `break-words`：沒有空格的發佈名在後者底下仍然是 flex
+                子項的最小寬度，390px 上整頁橫向捲動（票 15 實測）。 */}
+            <span className="value block text-sm wrap-anywhere text-ink">{job.name}</span>
             <Facts job={job} locale={i18n.language} />
           </span>
         </span>
       </summary>
 
       <div className="grid gap-3 border-t-2 border-rule bg-hull px-4 py-3 [&>*]:min-w-0">
+        {/* 作品連結在這裡而不是摘要列：`<summary>` 本身是一顆按鈕，按鈕裡不能再包連結。 */}
+        {open && job.media_id && (
+          <p className="flex flex-wrap items-baseline gap-x-2">
+            <span className="label text-ink-dim">{t('jobs.media')}</span>
+            <Link
+              to="/media/$mediaId"
+              params={{ mediaId: job.media_id }}
+              className="value text-xs text-ink underline decoration-rule-strong underline-offset-4 hover:decoration-ink"
+            >
+              {job.media_title || job.media_id}
+            </Link>
+          </p>
+        )}
+
         {/* **先問有沒有 `plan_id`**：停用的 query 在 TanStack 眼裡永遠是 `pending`，
             所以順序反過來的話還沒算過計劃的那幾列會永遠掛著一句「讀取計劃…」。 */}
         {job.plan_id === null ? null : plan.isPending ? (
@@ -173,25 +203,14 @@ function Action({
  * 列上的實測值那一行：作品 · Route · trigger · 大小 · 進度 · 時間。
  *
  * **一份 DOM 兩種版面**（同票 08 的結果表）：中點分隔並允許換行，窄版自己疊起來，
- * 不橫向捲動。作品是這一頁唯一的導航出口。
+ * 不橫向捲動。作品在這裡只是字——它的連結在展開區（`summary` 裡不放互動元素）。
  */
 function Facts({ job, locale }: { job: Job; locale: string }) {
   const { t } = useTranslation()
 
   return (
     <span className="value flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ink-dim">
-      {job.media_id ? (
-        <Link
-          to="/media/$mediaId"
-          params={{ mediaId: job.media_id }}
-          onClick={(event) => event.stopPropagation()}
-          className="underline decoration-rule-strong underline-offset-4 hover:decoration-ink"
-        >
-          {job.media_title || job.media_id}
-        </Link>
-      ) : (
-        <span>—</span>
-      )}
+      <span>{job.media_title || job.media_id || '—'}</span>
       <Dot />
       <span>{job.route_name || '—'}</span>
       <Dot />

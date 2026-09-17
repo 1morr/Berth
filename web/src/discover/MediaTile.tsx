@@ -2,6 +2,7 @@ import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 
 import type { DiscoverItem } from '../api/discover'
+import { Dot } from '../components/Dot'
 import { KIND_CODE } from '../components/kind'
 
 /**
@@ -48,7 +49,7 @@ export function MediaTile({ item }: { item: DiscoverItem }) {
             「部分 / 完整 / 下載中」還沒有——那要等帳本（票 12）才推導得出來。 */}
         <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
           <span className="value text-xs text-ink-dim">
-            {KIND_CODE[item.kind]} · {item.year ?? '—'}
+            {KIND_CODE[item.kind]} <Dot /> {item.year ?? '—'}
           </span>
           {item.tracked && (
             // 中性色塊：「Berth 為它做過事」是一個事實，不是四個信號色裡的任何一個狀態

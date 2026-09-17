@@ -59,7 +59,7 @@ export function RouteSettingsPage() {
   return (
     <div className="mx-auto w-full max-w-3xl px-6 py-8">
       <SettingsTabs />
-      <h2 className="value mt-6 text-lg font-semibold text-ink">{t('routeSettings.title')}</h2>
+      <h1 className="value mt-6 text-lg font-semibold text-ink">{t('routeSettings.title')}</h1>
       <p className="mt-2 max-w-prose text-sm text-ink-dim">{t('routeSettings.lede')}</p>
       {/* 先在畫面上、內容再換：`aria-live` 區塊要在變化之前就存在，螢幕閱讀器才念得到。 */}
       <p aria-live="polite" className="mt-2 max-w-prose text-sm text-ink">
@@ -116,7 +116,7 @@ function RouteRow({
     >
       <summary className="flex cursor-pointer flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3">
         <RouteIdentity route={route} />
-        <span className="value min-w-0 grow break-words text-xs text-ink-dim">
+        <span className="value min-w-0 grow wrap-anywhere text-xs text-ink-dim">
           {route.target_path}
         </span>
         <span className="flex flex-wrap items-center gap-x-2 text-xs text-ink-dim">

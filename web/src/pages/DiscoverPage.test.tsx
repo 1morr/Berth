@@ -65,6 +65,26 @@ describe('探索頁', () => {
     expect(screen.getByRole('region', { name: '熱門' })).toBeInTheDocument()
   })
 
+  it('頁面結構說得出自己：一個 h1、主要導覽是 landmark、第一個 Tab 能跳過頁首（票 15 audit）', async () => {
+    render()
+    renderApp('/')
+    await screen.findByRole('region', { name: '本週趨勢' })
+
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1)
+    expect(screen.getByRole('navigation', { name: '主要導覽' })).toBeInTheDocument()
+    const skip = screen.getByRole('link', { name: '跳到內容' })
+    expect(skip).toHaveAttribute('href', '#main')
+    expect(document.getElementById('main')?.tagName).toBe('MAIN')
+  })
+
+  it('牆上的筆數唸得出單位，數字本身不重複唸一次', async () => {
+    render()
+    renderApp('/')
+
+    await screen.findByText('綠燈軍團')
+    expect(section('本週趨勢').getByText('1 部作品')).toHaveClass('sr-only')
+  })
+
   it('卡片顯示顯示用標題、英文標題、類型與年份', async () => {
     render()
     renderApp('/')
@@ -74,7 +94,8 @@ describe('探索頁', () => {
 
     expect(within(card).getByText('綠燈軍團')).toBeInTheDocument()
     expect(within(card).getByText('Lanterns')).toBeInTheDocument()
-    expect(within(card).getByText('TV · 2026')).toBeInTheDocument()
+    // 中點是 `Dot`（`aria-hidden`），所以類型與年份在同一個元素裡、中間隔著它。
+    expect(within(card).getByText('TV', { exact: false })).toHaveTextContent('TV · 2026')
   })
 
   it('顯示用標題與英文標題相同時不重複印一次', async () => {

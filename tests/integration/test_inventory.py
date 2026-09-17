@@ -14,6 +14,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path, PurePosixPath
 
 import pytest
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from berth.domain import (
@@ -393,6 +394,24 @@ class TestFilters:
         await plan(session, done, (PlanAction.IMPORT, 1, 1), (PlanAction.UNMATCHED, None, None))
 
         assert (await card(session)).has_unmatched is True
+
+    async def test_imports_waiting_for_a_look_are_counted_on_the_card(
+        self, session: AsyncSession
+    ) -> None:
+        """medium 自動入庫的檔案（audit）在牆上要看得到，跨這部作品的每一筆 Job 加總（票 15）。"""
+        tv = await route(session)
+        spy = await title(session)
+        for index, hash_ in enumerate(("a" * 40, "b" * 40), start=1):
+            done = await job(session, spy, tv, JobState.IMPORTED, hash=hash_)
+            row = await plan(
+                session, done, (PlanAction.IMPORT, 1, index), (PlanAction.IMPORT, 1, 9)
+            )
+            first = await session.scalar(select(PlanItem).where(PlanItem.plan_id == row.id))
+            assert first is not None
+            first.audit = True
+            await session.commit()
+
+        assert (await card(session)).audits == 2
 
     async def test_an_estimate_made_while_downloading_flags_nothing(
         self, session: AsyncSession

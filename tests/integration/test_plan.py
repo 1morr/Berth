@@ -519,6 +519,34 @@ class TestReview:
         assert item.action is PlanAction.IMPORT
         assert item.audit is True
 
+    async def test_the_job_says_how_many_imports_wait_for_a_look(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """下載列表那一列要說得出「N 個待確認」：否則它是一個綠色的「已入庫」，而 medium 的
+        檔案只寫在展開幾千 px 之後的弱字裡（票 15 的 critique，PRODUCT 原則 3）。"""
+        from berth.services.jobs import read_job
+
+        media, route, factory = await ready(session, roots)
+        await downloaded_job(session, media, route, roots, name=SINGLE, files=SINGLE_FILES)
+
+        await run(session, factory)
+
+        view = await read_job(session, HASH)
+        assert view is not None
+        assert view.audits == 1
+
+    async def test_a_job_without_a_plan_waits_for_nothing(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        from berth.services.jobs import read_job
+
+        media, route, _ = await ready(session, roots)
+        await downloaded_job(session, media, route, roots, state=JobState.SUBMITTED, files=())
+
+        view = await read_job(session, HASH)
+        assert view is not None
+        assert (view.plan_id, view.audits) == (None, 0)
+
     async def test_a_route_that_refuses_medium_sends_it_to_review(
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:

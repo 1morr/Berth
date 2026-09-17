@@ -24,20 +24,60 @@ export function JobTimeline({ events }: { events: readonly JobEvent[] }) {
 
   return (
     <ol className="grid gap-2">
-      {events.map((event) => (
-        <li key={event.id} className="grid gap-1 border-l-2 border-rule pl-3">
-          <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
-            {/* 事件型別是**分類**不是狀態，所以中性色塊（The Role Is Not A State Rule）。 */}
-            <span className="label bg-deck px-1.5 py-1 text-ink">{label(t, event.type)}</span>
-            <span className="text-xs text-ink-dim">
-              <Timestamp at={event.created_at} />
-            </span>
-          </p>
-          <Facts event={event} />
-        </li>
-      ))}
+      {runs(events).map((run) => {
+        const last = run[run.length - 1]
+        return (
+          <li key={run[0].id} className="grid min-w-0 gap-1 border-l-2 border-rule pl-3">
+            <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              {/* 事件型別是**分類**不是狀態，所以中性色塊（The Role Is Not A State Rule）。 */}
+              <span className="label bg-deck px-1.5 py-1 text-ink">{label(t, last.type)}</span>
+              {run.length > 1 && (
+                <span className="value text-xs text-ink">
+                  {t('jobs.timeline.linkedFiles', { count: run.length })}
+                </span>
+              )}
+              <span className="text-xs text-ink-dim">
+                <Timestamp at={last.created_at} />
+              </span>
+            </p>
+            {run.length === 1 ? (
+              <Facts event={last} />
+            ) : (
+              <details className="min-w-0">
+                <summary className="label cursor-pointer text-ink-dim">
+                  {t('jobs.timeline.linkedTargets')}
+                </summary>
+                <ol className="mt-1 grid gap-0.5">
+                  {run.map((event) => (
+                    <li key={event.id}>
+                      <Row>{text(event.payload.target)}</Row>
+                    </li>
+                  ))}
+                </ol>
+              </details>
+            )}
+          </li>
+        )
+      })}
     </ol>
   )
+}
+
+/**
+ * 把連續的 `linked` 收成一段，其餘事件各自一段。
+ *
+ * 一個檔案一筆 `linked`（票 12），一季 39 個檔案展開之後就是 39 行只差一條路徑的「已鏈接」，
+ * 把這一筆之後發生的事推到幾千 px 以下（票 15 的 critique）。它們是同一件事的逐檔證據：
+ * 一行說「鏈接了幾個」，路徑收在底下要看才展開。中間夾著別的事件就是另一段——時間線的順序不動。
+ */
+function runs(events: readonly JobEvent[]): JobEvent[][] {
+  const out: JobEvent[][] = []
+  for (const event of events) {
+    const previous = out[out.length - 1]
+    if (event.type === 'linked' && previous?.[0].type === 'linked') previous.push(event)
+    else out.push([event])
+  }
+  return out
 }
 
 /**
@@ -96,7 +136,7 @@ const FACTS: Record<KnownEvent, (facing: Facing) => ReactNode> = {
   // 服務回的原文，不翻譯（與精靈的纜繩同一個規矩）。用 `blocked-ink` 而不是色塊——
   // 這是一句字，不是一個狀態格。
   submit_failed: ({ payload }) => (
-    <p className="value text-xs break-words text-blocked-ink">{text(payload.error)}</p>
+    <p className="value text-xs wrap-anywhere text-blocked-ink">{text(payload.error)}</p>
   ),
   // 兩種重試回到的站不同：送單的重試退回「已建立」再送一次，入庫的重試退回「入庫中」
   // 從沒鏈接的檔案接著做（票 12）。`state` 是後端寫的，不是前端猜的。
@@ -139,8 +179,13 @@ const FACTS: Record<KnownEvent, (facing: Facing) => ReactNode> = {
   issue_detected: ({ t, payload }) => {
     const kind = ISSUES.find((known) => known === payload.type)
     if (!kind) return null
+    // 紅字只給擋住這一筆的那兩種（與 `jobState.ts` 的狀態字典同一條線）：torrent 從客戶端消失、
+    // 不認得的 torrent、Jellyfin 還沒列出，都是要人看一眼的事，不是阻擋（The One Meaning Rule）。
+    const blocking = kind === 'missing_files' || kind === 'client_error'
     return (
-      <p className="max-w-prose text-xs break-words text-blocked-ink">
+      <p
+        className={`max-w-prose text-xs break-words ${blocking ? 'text-blocked-ink' : 'text-ink'}`}
+      >
         {join([t(`jobs.timeline.issue.${kind}`), text(payload.client_state)])}
       </p>
     )
@@ -167,7 +212,7 @@ const FACTS: Record<KnownEvent, (facing: Facing) => ReactNode> = {
     <>
       <Row>{text(payload.target)}</Row>
       <p
-        className={`value text-xs break-words ${payload.blocking === true ? 'text-blocked-ink' : 'text-ink-dim'}`}
+        className={`value text-xs wrap-anywhere ${payload.blocking === true ? 'text-blocked-ink' : 'text-ink-dim'}`}
       >
         {text(payload.error)}
       </p>
@@ -242,7 +287,7 @@ const ISSUES = [
 
 function Row({ children }: { children: string }) {
   if (!children) return null
-  return <p className="value text-xs break-words text-ink-dim">{children}</p>
+  return <p className="value text-xs wrap-anywhere text-ink-dim">{children}</p>
 }
 
 /** 型別的顯示名。認不得的型別原樣顯示——它仍然是一件真的發生過的事。 */

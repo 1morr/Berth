@@ -42,12 +42,13 @@ export function MediaWall({
           {title}
         </h2>
         {result && result.items.length > 0 && (
-          // 光一個「40」唸出來是沒有意義的，所以數字本身帶一個說得出單位的名稱。
-          <p
-            aria-label={t('discover.search.count', { count: result.items.length })}
-            className="value text-xs text-ink-dim"
-          >
-            {result.items.length}
+          // 光一個「40」唸出來是沒有意義的，所以唸的是帶單位的那一句。`aria-label` 掛在 `<p>`
+          // 上不可靠（它不是一個有名字的角色），改成看得見的數字 + 只給螢幕閱讀器的句子。
+          <p className="value text-xs text-ink-dim">
+            <span aria-hidden="true">{result.items.length}</span>
+            <span className="sr-only">
+              {t('discover.search.count', { count: result.items.length })}
+            </span>
           </p>
         )}
       </div>

@@ -116,7 +116,7 @@ describe('匯入計劃', () => {
 
     // 計劃自己與那一列都說「待審核」：一個說整份停下來了，一個說是哪個檔案讓它停的。
     expect(screen.getAllByText('待審核')).toHaveLength(2)
-    expect(screen.getByText(/關掉了「medium 信心自動入庫」/)).toBeInTheDocument()
+    expect(screen.getByText(/不讓 medium 信心的檔案自動入庫/)).toBeInTheDocument()
   })
 
   it('下載中的那一份說得出它只是預估', () => {

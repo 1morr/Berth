@@ -1265,6 +1265,8 @@ export interface components {
             needs_review: boolean;
             /** Has Unmatched */
             has_unmatched: boolean;
+            /** Audits */
+            audits: number;
             presence: components["schemas"]["JellyfinPresence"];
             /** Jellyfin Item Id */
             jellyfin_item_id: string;
@@ -1454,6 +1456,8 @@ export interface components {
             replannable: boolean;
             /** Plan Id */
             plan_id: number | null;
+            /** Audits */
+            audits: number;
         };
         /**
          * JobSourceIn

@@ -103,6 +103,7 @@ function job(): Job {
     retryable: false,
     replannable: false,
     plan_id: null,
+    audits: 0,
   }
 }
 
@@ -485,6 +486,59 @@ describe('搜尋 torrent 與結果表', () => {
 
       expect(await screen.findByRole('alert')).toHaveTextContent(/先在上面選一條/)
       expect(stub.mock.calls.filter(([, init]) => init?.method === 'POST')).toEqual([])
+    })
+
+    it('確認說出送到哪一條 Route（票 15 critique：選 Route 的下拉在表格外面）', async () => {
+      await searched()
+
+      await userEvent.click(screen.getByRole('button', { name: '送單' }))
+
+      expect(within(panel()).getByText('入庫到「TV」')).toBeVisible()
+    })
+
+    it('展開確認時焦點進到確認裡，取消之後回到送單鍵（票 15 critique）', async () => {
+      await searched()
+
+      await userEvent.click(screen.getByRole('button', { name: '送單' }))
+      expect(screen.getByRole('group', { name: /這部作品在媒體庫裡的資料夾會是/ })).toHaveFocus()
+
+      await userEvent.click(screen.getByRole('button', { name: '取消' }))
+      expect(screen.getByRole('button', { name: '送單' })).toHaveFocus()
+    })
+
+    it('Esc 收起確認，焦點回到送單鍵', async () => {
+      await searched()
+
+      await userEvent.click(screen.getByRole('button', { name: '送單' }))
+      await userEvent.keyboard('{Escape}')
+
+      expect(screen.queryByRole('button', { name: '確認送單' })).not.toBeInTheDocument()
+      expect(screen.getByRole('button', { name: '送單' })).toHaveFocus()
+    })
+
+    it('送出之後宣告結果，焦點落在「看下載列表」', async () => {
+      await searched({ 'POST /api/jobs': { body: { job: job(), created: true } } })
+
+      await userEvent.click(screen.getByRole('button', { name: '送單' }))
+      await userEvent.click(screen.getByRole('button', { name: '確認送單' }))
+
+      expect(await screen.findByRole('status')).toHaveTextContent('已送出')
+      expect(screen.getByRole('link', { name: '看下載列表' })).toHaveFocus()
+    })
+
+    it('選了 Route 之後，「先選一條 Route」那句錯誤就不在了', async () => {
+      render({ [`${SEARCH_PATH}`]: { body: results() } })
+      renderApp('/media/tv:120089')
+      await userEvent.click(await screen.findByRole('button', { name: '搜尋' }))
+      await within(panel()).findByRole('table')
+      await userEvent.click(screen.getByRole('button', { name: '送單' }))
+      await userEvent.click(screen.getByRole('button', { name: '確認送單' }))
+      // 錯誤是一句完整的話，不是懸著冒號、等著接資料夾名的那一句。
+      expect(await screen.findByRole('alert')).toHaveTextContent(/先在上面選一條.*。$/)
+
+      await userEvent.selectOptions(screen.getByLabelText('入庫到'), 'TV')
+
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument()
     })
 
     it('上次送單用的那條 Route 是下一次的預選值（plan §2.2）', async () => {

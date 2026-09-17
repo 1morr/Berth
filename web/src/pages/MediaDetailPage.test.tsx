@@ -151,6 +151,17 @@ describe('Media 詳情頁', () => {
     expect(await screen.findByRole('heading', { name: 'SPY×FAMILY 間諜家家酒' })).toBeVisible()
   })
 
+  it('標題層級不跳級：h1 之後的第一個區塊是 h2（票 15 audit）', async () => {
+    render()
+    renderApp('/media/tv:120089')
+    await screen.findByRole('heading', { level: 1 })
+
+    const levels = screen.getAllByRole('heading').map((heading) => Number(heading.tagName.slice(1)))
+    for (const [index, level] of levels.entries()) {
+      if (index > 0) expect(level - levels[index - 1]).toBeLessThanOrEqual(1)
+    }
+  })
+
   it('三個標題都在——英文那一個是檔名用的（brief §7.5）', async () => {
     render()
     renderApp('/media/tv:120089')
@@ -408,6 +419,19 @@ describe('Media 詳情頁', () => {
     const season = (await screen.findByText('Season 1')).closest('summary')!
 
     expect(within(season).getByText('1 / 1 集入庫')).toBeVisible()
+  })
+
+  it('S00 的檔案說的是特別篇，不是正片（CONTEXT.md：Specials 是 TMDB season 0）', async () => {
+    render({
+      [SPY_PATH]: { body: media({ files: [ledgerFile({ season: 0, episode_start: 3 })] }) },
+    })
+    renderApp('/media/tv:120089')
+
+    const files = await screen.findByRole('region', { name: '檔案與版本' })
+    await userEvent.click(within(files).getByText('1 個檔案'))
+
+    expect(within(files).getByText('特別篇')).toBeVisible()
+    expect(within(files).queryByText('正片')).toBeNull()
   })
 
   it('檔案清單說得出每個檔案的季集、Tags、目標路徑、帳本與 Jellyfin', async () => {

@@ -145,6 +145,7 @@ class TestInventory:
                 "versions": 0,
                 "needs_review": False,
                 "has_unmatched": False,
+                "audits": 0,
                 "presence": "found",
                 "jellyfin_item_id": "series-1",
             }

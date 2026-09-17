@@ -68,7 +68,8 @@ export function JobPlan({ plan }: { plan: Plan }) {
 function PlanRow({ item }: { item: PlanItem }) {
   const { t } = useTranslation()
   // 需要人的那幾列**線變重，不是變紅**：紅色只代表阻擋（The One Meaning Rule）。
-  const held = item.action === 'review' || item.action === 'unmatched'
+  // audit 也算：它已經入庫了，但 medium 那一個判斷還要人看一眼（brief §6.5、票 15）。
+  const held = item.action === 'review' || item.action === 'unmatched' || item.audit
   const episode = formatEpisode(item)
 
   return (
@@ -89,16 +90,16 @@ function PlanRow({ item }: { item: PlanItem }) {
         {item.audit && (
           <>
             <Dot />
-            <span className="value text-xs text-ink-dim">{t('jobs.plan.audit')}</span>
+            <span className="value text-xs text-ink">{t('jobs.plan.audit')}</span>
           </>
         )}
       </p>
 
       {/* 來源檔名整條換行，不截斷：它是使用者認得出這個檔案的東西（票 08 §8 的同一條）。 */}
-      <p className="value text-xs break-words text-ink">{item.rel_path}</p>
+      <p className="value text-xs wrap-anywhere text-ink">{item.rel_path}</p>
 
       {item.target_path && (
-        <p className="value text-xs break-words text-ink-dim">
+        <p className="value text-xs wrap-anywhere text-ink-dim">
           <span className="label mr-2 text-ink-dim">{t('jobs.plan.target')}</span>
           {item.target_path}
         </p>
@@ -109,7 +110,7 @@ function PlanRow({ item }: { item: PlanItem }) {
         // 不走 i18n；`lang` 標出來，螢幕閱讀器才會用對的語音念它們。
         <ul lang="en" className="grid gap-0.5">
           {item.reasons.map((reason) => (
-            <li key={reason} className="value text-xs break-words text-ink-dim">
+            <li key={reason} className="value text-xs wrap-anywhere text-ink-dim">
               {reason}
             </li>
           ))}

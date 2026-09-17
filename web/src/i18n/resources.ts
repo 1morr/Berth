@@ -456,6 +456,8 @@ const zhHant = {
     user: '使用者',
   },
   nav: {
+    label: '主要導覽',
+    skip: '跳到內容',
     discover: '探索',
     inventory: '媒體庫',
     jobs: '下載',
@@ -599,6 +601,7 @@ const zhHant = {
       total_one: '共 {{count}} 個檔案',
       total_other: '共 {{count}} 個檔案',
       none: '還沒有任何檔案入庫。',
+      special: '特別篇',
       action: {
         import: '正片',
         extra: '特典',
@@ -724,6 +727,9 @@ const zhHant = {
     empty: '還沒有送過任何下載。到探索頁找一部作品，在它的頁面上搜 torrent 再送單。',
     toDiscover: '回探索頁',
     off: '讀不到下載列表。Berth 自己的 API 沒有回應，先確認它還活著。',
+    media: '作品',
+    audits_one: '{{count}} 個待確認',
+    audits_other: '{{count}} 個待確認',
     hash: 'info hash',
     // 這一列沒有欄頭，所以每一格自己帶標籤。大小與進度都要等票 10 的客戶端輪詢才有值。
     sizeInline: '大小 {{value}}',
@@ -785,6 +791,9 @@ const zhHant = {
       off: '讀不到時間線。',
       retried: '狀態退回「已建立」，接著再送一次。',
       retriedImport: '狀態退回「入庫中」，從還沒鏈接的檔案接著做。',
+      linkedFiles_one: '{{count}} 個檔案',
+      linkedFiles_other: '{{count}} 個檔案',
+      linkedTargets: '列出目標路徑',
       scanRequested_one: '通知了 {{count}} 個檔案的路徑',
       scanRequested_other: '通知了 {{count}} 個檔案的路徑',
       resolved_one: '{{count}} 個檔案在 Jellyfin 裡找到了',
@@ -841,7 +850,7 @@ const zhHant = {
         low_confidence:
           '有檔案的季集推不出來，或這一包的數量與 TMDB 對不上。M1 還沒有審核佇列——改好 Route 或等 TMDB 補上季集之後按「重新規劃」。',
         medium_not_allowed:
-          '這條 Route 關掉了「medium 信心自動入庫」。到設定裡打開它，再按「重新規劃」。',
+          '這條 Route 不讓 medium 信心的檔案自動入庫，所以整份計劃停下來等人看。逐檔確認要等審核佇列；現在能做的是看過下面每一列的理由。',
         nothing_to_import: '這一包裡沒有任何一個檔案會進媒體庫。多半是送錯了 torrent。',
         target_exists:
           '媒體庫裡這個位置已經有一個不是 Berth 鏈接的檔案，Berth 不會覆寫它；其餘檔案已經入庫了。M1 還沒有審核佇列——把那個檔案移走之後按「重新規劃」。',
@@ -890,6 +899,8 @@ const zhHant = {
     submitting: '送單中…',
     confirm: '送出去之後，這部作品在媒體庫裡的資料夾會是：',
     needRoute: '先在上面選一條「入庫到」的 Route。這一串字會是它在媒體庫裡的資料夾名：',
+    needRouteError: '先在上面選一條「入庫到」的 Route。',
+    destination: '入庫到「{{route}}」',
     willFreeze: '送單成功那一刻這串字就定下來，之後 TMDB 改標題也不會動它。',
     alreadyFrozen: '這串字已經定下來了，這一次不會再動它。',
     done: '已送出',
@@ -1100,6 +1111,8 @@ const zhHant = {
     },
   },
   common: {
+    expand: '展開',
+    collapse: '收起',
     failed: '失敗',
     warning: '警告',
     cancel: '取消',
@@ -1583,6 +1596,8 @@ const en: Translations<typeof zhHant> = {
     user: 'User',
   },
   nav: {
+    label: 'Main',
+    skip: 'Skip to content',
     discover: 'Discover',
     inventory: 'Library',
     jobs: 'Downloads',
@@ -1715,6 +1730,7 @@ const en: Translations<typeof zhHant> = {
       total_one: '{{count}} file in total',
       total_other: '{{count}} files in total',
       none: 'Nothing has been imported yet.',
+      special: 'Special',
       action: {
         import: 'Feature',
         extra: 'Extra',
@@ -1834,6 +1850,9 @@ const en: Translations<typeof zhHant> = {
       'Nothing has been sent to download yet. Find a title on the discover page, search it for torrents, and send one.',
     toDiscover: 'Back to discover',
     off: 'Could not read the download list. Berth’s own API did not answer — check that it is still running.',
+    media: 'Title',
+    audits_one: '{{count}} to check',
+    audits_other: '{{count}} to check',
     hash: 'info hash',
     sizeInline: 'Size {{value}}',
     progressInline: 'Progress {{value}}',
@@ -1892,6 +1911,9 @@ const en: Translations<typeof zhHant> = {
       off: 'Could not read the timeline.',
       retried: 'Back to created, then sent again.',
       retriedImport: 'Back to importing; it picks up from the files not linked yet.',
+      linkedFiles_one: '{{count}} file',
+      linkedFiles_other: '{{count}} files',
+      linkedTargets: 'List the targets',
       scanRequested_one: 'told about {{count}} file path',
       scanRequested_other: 'told about {{count}} file paths',
       resolved_one: 'found {{count}} file in Jellyfin',
@@ -1943,7 +1965,7 @@ const en: Translations<typeof zhHant> = {
         low_confidence:
           'Some files could not be placed in a season and episode, or the count does not match TMDB. There is no review queue yet in M1 — fix the route or wait for TMDB, then press replan.',
         medium_not_allowed:
-          'This library route has medium-confidence auto-import turned off. Turn it back on in settings, then press replan.',
+          'This library route does not auto-import medium-confidence files, so the whole plan stopped for a person to look at. Confirming file by file comes with the review queue; for now, read the reason on each row below.',
         nothing_to_import:
           'Nothing in this torrent would reach the library. Most likely the wrong torrent was sent.',
         target_exists:
@@ -1994,6 +2016,8 @@ const en: Translations<typeof zhHant> = {
     submitting: 'Sending…',
     confirm: 'Once this is sent, the folder for this title in your library will be:',
     needRoute: 'Pick a library route above first. This is the folder name it would get:',
+    needRouteError: 'Pick a library route above first.',
+    destination: 'Into “{{route}}”',
     willFreeze:
       'The moment a send succeeds this string is fixed; a later TMDB title change will not move it.',
     alreadyFrozen: 'This string is already fixed; this send will not change it.',
@@ -2221,6 +2245,8 @@ const en: Translations<typeof zhHant> = {
     },
   },
   common: {
+    expand: 'Expand',
+    collapse: 'Collapse',
     failed: 'Failed',
     warning: 'Warning',
     cancel: 'Cancel',

@@ -175,7 +175,7 @@ function QueryPreview({ keyword, planned }: { keyword: string; planned: string[]
         {typed ? t('search.willAskTyped') : t('search.willAsk')}
       </p>
       {/* 關鍵字是機器字串（送出去的就是它），走 `.value`。 */}
-      <p className="value max-w-prose text-xs break-words text-ink">
+      <p className="value max-w-prose text-xs wrap-anywhere text-ink">
         {typed || (planned ?? []).join(' · ') || '—'}
       </p>
       <p className="max-w-prose text-xs text-ink-dim">{t('search.slow')}</p>

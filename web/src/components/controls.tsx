@@ -2,6 +2,7 @@ import { useId, useState, type ComponentPropsWithRef, type ReactNode } from 'rea
 import { useTranslation } from 'react-i18next'
 
 import { SIGNAL_FILL, type Signal } from './signal'
+import { useInPlaceConfirm } from './useInPlaceConfirm'
 
 /**
  * 表單控制項。用原生 `input` / `button` / `checkbox`：第 1–2 步沒有任何需要行為基礎的
@@ -243,31 +244,41 @@ export function ConfirmAction({
   onConfirm: () => void
 }) {
   const { t } = useTranslation()
-  const [asked, setAsked] = useState(false)
+  const { asked, open, close, trigger, panel, onKeyDown } = useInPlaceConfirm()
+  const warningId = useId()
 
   if (!asked) {
     return (
-      <GhostButton type="button" disabled={pending} onClick={() => setAsked(true)}>
+      <GhostButton ref={trigger} type="button" disabled={pending} onClick={open}>
         {pending ? pendingLabel : label}
       </GhostButton>
     )
   }
 
   return (
-    <div className="grid gap-3 border-2 border-rule-strong bg-well px-3 py-3">
-      <p className="max-w-prose text-xs text-ink">{warning}</p>
+    <div
+      ref={panel}
+      role="group"
+      aria-labelledby={warningId}
+      tabIndex={-1}
+      onKeyDown={onKeyDown}
+      className="grid gap-3 border-2 border-rule-strong bg-well px-3 py-3"
+    >
+      <p id={warningId} className="max-w-prose text-xs text-ink">
+        {warning}
+      </p>
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,14rem)_auto] sm:items-center">
         <PrimaryButton
           type="button"
           disabled={pending}
           onClick={() => {
-            setAsked(false)
+            close()
             onConfirm()
           }}
         >
           {pending ? pendingLabel : confirmLabel}
         </PrimaryButton>
-        <GhostButton type="button" onClick={() => setAsked(false)}>
+        <GhostButton type="button" onClick={close}>
           {t('common.cancel')}
         </GhostButton>
       </div>

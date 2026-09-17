@@ -148,7 +148,7 @@ function IdentityBand({ media, freshness }: { media: Media; freshness: ReactNode
       </div>
 
       <div className="grid gap-2">
-        <Cutaway title={t('media.identity')}>
+        <Cutaway title={t('media.identity')} level={2}>
           {/* `TV` / `MOVIE` 與 `tmdbid-…` 是機器字串，走 `.value`（The Machine String Rule）。 */}
           <CutawayRow term={t('media.kind')} value={KIND_CODE[media.kind]} />
           <CutawayRow term="tmdb_id" value={media.tmdb_id} code />
@@ -220,7 +220,9 @@ function Freshness({
           <Notice signal="assigned" label={t('media.stale')}>
             {t(`tmdb.problem.${media.problem}`)}
           </Notice>
-          {media.detail && <p className="value text-xs break-words text-ink-dim">{media.detail}</p>}
+          {media.detail && (
+            <p className="value text-xs wrap-anywhere text-ink-dim">{media.detail}</p>
+          )}
         </>
       )}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">

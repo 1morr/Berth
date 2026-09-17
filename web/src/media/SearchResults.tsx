@@ -116,7 +116,7 @@ function ResultRow({
     <tr>
       <td className="px-4 py-3 align-top">
         {/* 發佈名整行換行，不截斷：它是這一列的證據，解析器讀的就是同一串字。 */}
-        <p className="value text-sm break-words text-ink">{row.title}</p>
+        <p className="value text-sm wrap-anywhere text-ink">{row.title}</p>
         <TagStrip row={row} />
         {/* 窄版把另外四欄收成一行。桌機上它整行不畫，那四欄自己在右邊。 */}
         <p className="value mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ink-dim sm:hidden">

@@ -116,6 +116,8 @@ class JobOut(BaseModel):
     #: 這一筆現在那一份 Import Plan 的 id（票 11）。還沒算過就是 `null`——畫面照它決定
     #: 要不要去要那一份逐檔的決定，而不是先打一次 404。
     plan_id: int | None
+    #: 那一份計劃裡 medium 自動入庫、掛著 audit 的檔案數。列上說「N 個待確認」用它（票 15）。
+    audits: int
 
 
 class JobCreatedOut(BaseModel):

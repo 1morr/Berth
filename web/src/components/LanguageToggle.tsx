@@ -23,7 +23,8 @@ export function LanguageToggle() {
             type="button"
             aria-pressed={current}
             onClick={() => setLanguage(language)}
-            className={`label px-2.5 py-1.5 ${
+            // `min-h-6`：WCAG 2.2 的 24px 命中面積，兩顆之間只有 1px 縫，間距例外不成立（票 15）。
+            className={`label inline-flex min-h-6 items-center px-2.5 py-1.5 ${
               current ? 'bg-assigned text-on-signal' : 'bg-deck text-ink-dim hover:text-ink'
             }`}
           >

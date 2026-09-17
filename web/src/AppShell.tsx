@@ -18,6 +18,15 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="min-h-dvh bg-hull text-ink">
+      {/* 頁首有八個 Tab 停留點；鍵盤使用者每換一頁都要先過完它們（票 15 audit）。
+          平常看不見，拿到焦點才浮出來。`not-sr-only` 會把 padding 歸零，所以浮出時的 padding
+          寫在 `focus:` 那一組（票 15 實跑量到 58×15px）。 */}
+      <a
+        href="#main"
+        className="label sr-only border-2 border-rule-strong bg-deck text-ink focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:px-4 focus:py-2.5"
+      >
+        {t('nav.skip')}
+      </a>
       <header className="flex flex-wrap items-center gap-x-6 gap-y-3 border-b-2 border-rule-strong px-6 py-4">
         <div>
           <p className="value text-lg font-semibold tracking-tight">{t('app.name')}</p>
@@ -27,7 +36,10 @@ export function AppShell({ children }: { children: ReactNode }) {
           <Identity />
         </span>
       </header>
-      <main>{children}</main>
+      {/* `tabIndex={-1}`：skip link 跳過來時焦點要真的落在這裡，下一個 Tab 才從內容開始。 */}
+      <main id="main" tabIndex={-1} className="outline-none">
+        {children}
+      </main>
     </div>
   )
 }
@@ -83,12 +95,15 @@ function Identity() {
         <span className="label bg-deck px-2 py-1.5 text-ink">{t(`role.${me.data.role}`)}</span>
         <span className="value text-sm text-ink">{me.data.name}</span>
       </span>
-      <NavLink to="/">{t('nav.discover')}</NavLink>
-      <NavLink to="/library">{t('nav.inventory')}</NavLink>
-      <NavLink to="/jobs">{t('nav.jobs')}</NavLink>
-      <NavLink to="/health">{t('nav.health')}</NavLink>
-      {/* 連 `/settings` 而不是第一個分頁：前綴比對讓它在兩個設定頁上都是當前頁（票 14a）。 */}
-      {me.data.role === 'admin' && <NavLink to="/settings">{t('nav.settings')}</NavLink>}
+      {/* 導覽是 landmark：螢幕閱讀器的地標清單跳得到它（M0 的 critique 記過，票 15 收掉）。 */}
+      <nav aria-label={t('nav.label')} className="flex flex-wrap items-stretch gap-x-4 gap-y-2">
+        <NavLink to="/">{t('nav.discover')}</NavLink>
+        <NavLink to="/library">{t('nav.inventory')}</NavLink>
+        <NavLink to="/jobs">{t('nav.jobs')}</NavLink>
+        <NavLink to="/health">{t('nav.health')}</NavLink>
+        {/* 連 `/settings` 而不是第一個分頁：前綴比對讓它在兩個設定頁上都是當前頁（票 14a）。 */}
+        {me.data.role === 'admin' && <NavLink to="/settings">{t('nav.settings')}</NavLink>}
+      </nav>
       <GhostButton type="button" disabled={leave.isPending} onClick={() => leave.mutate()}>
         {leave.isPending ? t('nav.signingOut') : t('nav.signOut')}
       </GhostButton>

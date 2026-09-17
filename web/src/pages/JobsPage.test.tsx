@@ -40,6 +40,7 @@ function job(overrides: Partial<Job> = {}): Job {
     retryable: false,
     replannable: false,
     plan_id: null,
+    audits: 0,
     ...overrides,
   }
 }
@@ -89,9 +90,51 @@ describe('下載列表頁', () => {
     const row = await screen.findByText(/SPY×FAMILY - 13/)
     const list = within(row.closest('details') as HTMLElement)
     expect(list.getByText('已送出')).toBeInTheDocument()
-    expect(list.getByRole('link', { name: 'SPY x FAMILY' })).toBeInTheDocument()
+    expect(list.getByText('SPY x FAMILY')).toBeInTheDocument()
     expect(list.getByText('Anime')).toBeInTheDocument()
     expect(list.getByText('手動')).toBeInTheDocument()
+  })
+
+  it('摘要列裡沒有連結，作品連結在展開區（票 15 critique）', async () => {
+    // `<summary>` 本身就是一顆按鈕；按鈕裡再包一條連結，鍵盤與螢幕閱讀器都分不清按下去是哪一個。
+    render()
+    renderApp('/jobs')
+    const row = await screen.findByText(/SPY×FAMILY - 13/)
+
+    expect(within(row.closest('summary') as HTMLElement).queryByRole('link')).toBeNull()
+
+    await userEvent.click(row)
+    const link = await screen.findByRole('link', { name: 'SPY x FAMILY' })
+    expect(decodeURIComponent(link.getAttribute('href') ?? '')).toBe('/media/tv:120089')
+  })
+
+  it('列上說得出能展開，展開之後說得出能收起', async () => {
+    render()
+    renderApp('/jobs')
+    const row = await screen.findByText(/SPY×FAMILY - 13/)
+    const summary = within(row.closest('summary') as HTMLElement)
+
+    expect(summary.getByText('展開')).toBeInTheDocument()
+    await userEvent.click(row)
+    expect(summary.getByText('收起')).toBeInTheDocument()
+  })
+
+  it('medium 自動入庫、還要人看一眼的檔案數在列上就看得到（brief §6.5、PRODUCT 原則 3）', async () => {
+    render({ [JOBS]: { body: [job({ state: 'imported', plan_id: 7, audits: 11 })] } })
+    renderApp('/jobs')
+    const row = await screen.findByText(/SPY×FAMILY - 13/)
+
+    expect(
+      within(row.closest('summary') as HTMLElement).getByText('11 個待確認'),
+    ).toBeInTheDocument()
+  })
+
+  it('沒有待確認的檔案時什麼都不說', async () => {
+    render({ [JOBS]: { body: [job({ state: 'imported', plan_id: 7 })] } })
+    renderApp('/jobs')
+    await screen.findByText(/SPY×FAMILY - 13/)
+
+    expect(screen.queryByText(/待確認/)).toBeNull()
   })
 
   it('進度還沒有值時那一格是 `—` 而不是 0%', async () => {

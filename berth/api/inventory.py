@@ -60,6 +60,8 @@ class InventoryItemOut(BaseModel):
     versions: int
     needs_review: bool
     has_unmatched: bool
+    #: medium 自動入庫、掛著 audit 的檔案數（跨這部作品在這條 Route 上的 Job 加總，票 15）。
+    audits: int
     presence: JellyfinPresence
     #: 深連結要開的 item：劇集是 Series，電影是 Movie。沒找到時是空字串。
     jellyfin_item_id: str

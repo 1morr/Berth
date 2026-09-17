@@ -48,6 +48,8 @@ export function DiscoverPage() {
 
   return (
     <div className="mx-auto grid w-full max-w-[110rem] gap-8 px-6 py-8">
+      {/* 這一頁的視覺標題是兩面牆自己的抬頭；h1 給看不見畫面的人一個「我在哪一頁」（票 15 audit）。 */}
+      <h1 className="sr-only">{t('nav.discover')}</h1>
       <div className="flex flex-wrap items-end gap-x-6 gap-y-2">
         <div className="min-w-0 flex-1 sm:max-w-[28rem]">
           <Field

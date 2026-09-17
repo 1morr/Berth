@@ -37,6 +37,7 @@ function item(overrides: Partial<InventoryItem> = {}): InventoryItem {
     versions: 0,
     needs_review: false,
     has_unmatched: false,
+    audits: 0,
     presence: 'found',
     jellyfin_item_id: 'b26853ef1000814d9563768d24869a99',
     ...overrides,
@@ -110,6 +111,10 @@ function render(
 /** 牆上的一格：以標題（每一格一個 heading）找到它所在的那一格。 */
 function tile(title: string) {
   return screen.getByRole('heading', { name: new RegExp(title) }).closest('article')!
+}
+
+async function findTile(title: string) {
+  return (await screen.findByRole('heading', { name: new RegExp(title) })).closest('article')!
 }
 
 describe('媒體庫頁', () => {
@@ -192,6 +197,17 @@ describe('媒體庫頁', () => {
     expect(within(tile('大熊餐廳')).getByText('部分')).toBeVisible()
     expect(within(tile('大熊餐廳')).getByText('10 / 28 集入庫')).toBeVisible()
     expect(within(tile('SPY×FAMILY')).getByText('待審')).toBeVisible()
+  })
+
+  it('medium 自動入庫、還要人看一眼的檔案數貼在卡片上（brief §6.5、票 15）', async () => {
+    render({
+      'GET /api/inventory/tv': {
+        body: wall({ items: [item({ status: 'complete', audits: 11 })] }),
+      },
+    })
+    renderApp('/library/tv')
+
+    expect(within(await findTile('大熊餐廳')).getByText('11 個待確認')).toBeVisible()
   })
 
   it('電影說的是版本數，不是集數', async () => {

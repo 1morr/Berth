@@ -23,7 +23,7 @@ from datetime import date, datetime
 from pathlib import PurePosixPath
 from typing import Protocol
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from berth.domain import (
@@ -101,6 +101,9 @@ class InventoryItem:
     needs_review: bool
     #: 這條 Route 上有 Job 現在那一份計劃裡有對不到的檔案（預估不算）。
     has_unmatched: bool
+    #: medium 自動入庫、掛著 audit 的檔案數，這部作品在這條 Route 上的每一筆 Job 加總
+    #: （brief §6.5）。卡片的狀態是「已入庫」時，這個數字是唯一說得出「還要看一眼」的地方（票 15）。
+    audits: int
     presence: JellyfinPresence
     #: 深連結要開的那一個 item：劇集是 Series，電影是 Movie。沒找到時是空字串。
     jellyfin_item_id: str
@@ -403,6 +406,7 @@ async def _survey(session: AsyncSession, route: Route, routes: Sequence[Route]) 
         if owning_route(entry.target_path, routes) is route
     ]
     flagged = await _unmatched_jobs(session, [job.hash for job in jobs])
+    audits = await _audits(session, [job.hash for job in jobs])
     media_ids = {job.media_id for job in jobs if job.media_id is not None} | {
         entry.media_id for entry in entries if entry.media_id is not None
     }
@@ -416,6 +420,7 @@ async def _survey(session: AsyncSession, route: Route, routes: Sequence[Route]) 
                 [job for job in jobs if job.media_id == media.id],
                 [entry for entry in entries if entry.media_id == media.id],
                 flagged=flagged,
+                audits=audits,
                 today=today,
             )
             for media in titles
@@ -454,12 +459,25 @@ async def _unmatched_jobs(session: AsyncSession, job_hashes: Iterable[str]) -> s
     return {job_hash for job_hash in rows if job_hash is not None}
 
 
+async def _audits(session: AsyncSession, job_hashes: Sequence[str]) -> dict[str, int]:
+    """每一筆 Job 現在那一份計劃裡掛著 audit 的檔案數。audit 只在真的自動入庫時才掛
+    （`services/plan._audit`），所以不必再排除預估。"""
+    rows = await session.execute(
+        select(Plan.job_hash, func.count(PlanItem.id))
+        .join(PlanItem, PlanItem.plan_id == Plan.id)
+        .where(Plan.job_hash.in_(list(job_hashes)), PlanItem.audit)
+        .group_by(Plan.job_hash)
+    )
+    return {job_hash: count for job_hash, count in rows if job_hash is not None}
+
+
 def _item(
     media: Media,
     jobs: Sequence[Job],
     entries: Sequence[LedgerEntry],
     *,
     flagged: set[str],
+    audits: dict[str, int],
     today: date,
 ) -> InventoryItem:
     snapshot = media.snapshot()
@@ -485,6 +503,7 @@ def _item(
         versions=versions,
         needs_review=JobState.REVIEW in states,
         has_unmatched=any(job.hash in flagged for job in jobs),
+        audits=sum(audits.get(job.hash, 0) for job in jobs),
         presence=presence,
         jellyfin_item_id=link,
     )

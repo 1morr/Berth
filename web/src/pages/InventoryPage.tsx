@@ -67,7 +67,8 @@ export function InventoryPage({ slug, filter }: { slug: string | null; filter?: 
                 className={SWITCH}
                 activeProps={{ className: SWITCH_ACTIVE }}
               >
-                <span>{row.name}</span>
+                {/* Route 名是使用者打的字：`.label` 的大寫會把 `Movies` 印成 `MOVIES`（票 15）。 */}
+                <span className="normal-case">{row.name}</span>
                 <span className="value text-xs text-ink-dim">
                   {t('inventory.titles', { count: row.titles })}
                 </span>

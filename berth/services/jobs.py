@@ -55,6 +55,7 @@ from berth.models import (
     Media,
     PathSettings,
     Plan,
+    PlanItem,
     QbittorrentSettings,
     Route,
     User,
@@ -197,6 +198,9 @@ class JobView:
     #: **是 id 而不是整份 Plan**：下載列表一次畫幾十列，而逐檔的決定只有展開那一列時才要
     #: （`GET /api/plans/{id}`）。有沒有值本身就是畫面要的答案——要不要畫那一區。
     plan_id: int | None
+    #: 那一份計劃裡 medium 自動入庫、掛著 audit 的檔案數（brief §6.5）。列上要說得出
+    #: 「N 個待確認」：Job 的狀態是綠色的「已入庫」，而原則 3 說的是那幾個還要人看一眼（票 15）。
+    audits: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -664,6 +668,17 @@ async def _view(session: AsyncSession, job: Job) -> JobView:
     route = await session.get(Route, job.route_id) if job.route_id is not None else None
     media = await session.get(Media, job.media_id) if job.media_id is not None else None
     user = await session.get(User, job.user_id) if job.user_id is not None else None
+    # 這一句與 `services/plan.plan_id_of` 是同一個查詢。**故意各寫一次**：
+    # `services/plan` 已經 import 這一支（`transition`、`job_lock`），反過來 import
+    # 就是一個循環，而這裡要的只是「有沒有」與那一個計數。
+    plan = (
+        await session.execute(
+            select(Plan.id, func.count(PlanItem.id).filter(PlanItem.audit))
+            .outerjoin(PlanItem, PlanItem.plan_id == Plan.id)
+            .where(Plan.job_hash == job.hash)
+            .group_by(Plan.id)
+        )
+    ).first()
     return JobView(
         hash=job.hash,
         name=job.name,
@@ -688,8 +703,6 @@ async def _view(session: AsyncSession, job: Job) -> JobView:
         imported_at=job.imported_at,
         retryable=job.state in RETRYABLE,
         replannable=job.state in REPLANNABLE,
-        # 這一句與 `services/plan.plan_id_of` 是同一個查詢。**故意各寫一次**：
-        # `services/plan` 已經 import 這一支（`transition`、`job_lock`），反過來 import
-        # 就是一個循環，而這裡要的只是「有沒有」那一格。
-        plan_id=await session.scalar(select(Plan.id).where(Plan.job_hash == job.hash)),
+        plan_id=plan[0] if plan is not None else None,
+        audits=plan[1] if plan is not None else 0,
     )

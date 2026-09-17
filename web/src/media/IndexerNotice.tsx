@@ -27,7 +27,7 @@ export function IndexerNotice({ problem, detail }: { problem: IndexerProblem; de
       >
         {t(`search.problem.${problem}.body`)}
       </Notice>
-      {detail && <p className="value text-xs break-words text-ink-dim">{detail}</p>}
+      {detail && <p className="value text-xs wrap-anywhere text-ink-dim">{detail}</p>}
       {toSetup && (
         // 泊位 3 是「來源」：索引站與 TMDB 兩步都在那一格。
         <SetupHint
