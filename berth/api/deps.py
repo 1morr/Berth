@@ -71,7 +71,10 @@ def get_client_factory(request: Request) -> ServiceClientFactory:
     return factory
 
 
-SessionDep = Annotated[AsyncSession, Depends(get_session)]
+#: `scope="function"`：commit 在回應送出**之前**。FastAPI 的預設是回應送出之後才跑 `yield`
+#: 之後的收尾——客戶端拿到 200 時寫入還沒落地，緊接著的下一個請求讀到舊狀態，commit 失敗時
+#: 他手上也已經是一個成功（票 15 的 e2e 抓到，`test_app.py::TestUnitOfWork`）。
+SessionDep = Annotated[AsyncSession, Depends(get_session, scope="function")]
 ClientFactoryDep = Annotated[ServiceClientFactory, Depends(get_client_factory)]
 EventHubDep = Annotated[EventHub, Depends(get_event_hub)]
 ImportHintsDep = Annotated[JobHints, Depends(get_import_hints)]

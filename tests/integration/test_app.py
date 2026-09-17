@@ -4,14 +4,19 @@ from __future__ import annotations
 
 import asyncio
 import json
+import sqlite3
+from contextlib import closing
 from dataclasses import replace
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+from starlette.types import Message, Receive, Scope, Send
 
+from berth.api.gate import CSRF_HEADER
 from berth.config import Config
 from berth.main import HEALTH_CHECKER_TASK, QBIT_POLLER_TASK, create_app
+from berth.models import SetupSettings
 
 
 @pytest.fixture
@@ -133,6 +138,46 @@ class TestApiCaching:
         """靜態檔有自己的快取規則（檔名帶內容雜湊），門禁不碰它。"""
         with client:
             assert "cache-control" not in client.get("/index.html").headers
+
+
+class TestUnitOfWork:
+    """一個請求一個工作單元，**commit 在回應送出之前**（plan §1.3、票 15）。
+
+    FastAPI 對 `yield` 相依的預設是回應送出之後才跑收尾。那樣客戶端拿到 200 的那一刻寫入
+    還沒落地：接著馬上打下一支的人讀到的是舊狀態，而 commit 失敗時他手上已經是一個成功。
+    2026-09-17 的 e2e 當場抓到——精靈第 2 步判定完、第 3 步緊接著就讀不到 Jellyfin 的位址。
+    """
+
+    def test_a_write_is_committed_before_its_response_starts(
+        self, config: Config, web_root: Path
+    ) -> None:
+        app = create_app(replace(config, web_root=web_root))
+        committed_at_start: list[bool] = []
+
+        async def watching(scope: Scope, receive: Receive, send: Send) -> None:
+            async def watched(message: Message) -> None:
+                if message["type"] == "http.response.start":
+                    committed_at_start.append(_admin_committed(config))
+                await send(message)
+
+            await app(scope, receive, watched if scope["type"] == "http" else send)
+
+        with TestClient(watching, headers={CSRF_HEADER: "XMLHttpRequest"}) as client:
+            response = client.post(
+                "/api/setup/admin", json={"username": "skipper", "password": "harbour"}
+            )
+
+        assert response.status_code == 200
+        assert committed_at_start == [True]
+
+
+def _admin_committed(config: Config) -> bool:
+    """另開一條連線讀：看得到的只有已經 commit 的東西。"""
+    with closing(sqlite3.connect(config.database_path)) as db:
+        row = db.execute(
+            "SELECT value_json FROM settings WHERE key = ?", (SetupSettings.KEY,)
+        ).fetchone()
+    return row is not None and json.loads(row[0])["admin"]["username"] == "skipper"
 
 
 class TestBackgroundLoops:
