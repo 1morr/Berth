@@ -17,6 +17,9 @@
   「Berth 自己擋」的測試要靠這台替身不替它擋，才證明得了是 Berth 擋的。
 - **停用的帳號照樣代讀得到**：`user_views` 不看停用，只有 `user_policy` 說得出來（同上）。
 - **圖片匿名可取、`tag` 不驗證**（研究 §6）：`image` 不要 token，錯的 tag 一樣回圖。
+- **標記已看 / 未看由 Jellyfin 自己查可見性**（研究 §5）：這位使用者看不到的 item 回 404、沒有寫入。
+  對 Series 標記遞迴到底下每一集，Series 自己的紀錄由它的集算出來（`PlayedPercentage`、
+  `UnplayedItemCount`）；標記會把看到一半的位置歸零。停用的帳號照樣寫得進去（研究 §2）。
 """
 
 from __future__ import annotations
@@ -27,6 +30,7 @@ from dataclasses import replace
 
 from berth.adapters.http import AuthFailedError, NotFoundError, ProtocolMismatchError
 from berth.adapters.jellyfin import (
+    ITEM_SERIES,
     JellyfinApiKey,
     JellyfinAuth,
     JellyfinImage,
@@ -36,6 +40,7 @@ from berth.adapters.jellyfin import (
     JellyfinPolicy,
     JellyfinPublicInfo,
     JellyfinTask,
+    JellyfinUserData,
     JellyfinView,
     NewLibrary,
     TypeOption,
@@ -113,6 +118,10 @@ class FakeJellyfinClient:
         notify_error: Exception | None = None,
         #: `(item id, 圖片類型)` → 那張圖。沒列的是 404。
         images: dict[tuple[str, str], JellyfinImage] | None = None,
+        #: 帳號 → 他看過的集與電影的 item id。Series 的紀錄由它的集算出來，不在這裡。
+        played: dict[str, set[str]] | None = None,
+        #: 帳號 → 看到一半的集與電影 → 看到幾 %。
+        positions: dict[str, dict[str, float]] | None = None,
     ) -> None:
         self.base_url = base_url
         self.version = version
@@ -131,6 +140,8 @@ class FakeJellyfinClient:
         self.items_ = list(items)
         self.notify_error = notify_error
         self.images = dict(images or {})
+        self.played = {name: set(ids) for name, ids in (played or {}).items()}
+        self.positions = {name: dict(rows) for name, rows in (positions or {}).items()}
 
         #: 每一次 `notify_paths` 收到的路徑，攤平。
         self.notified: list[str] = []
@@ -147,6 +158,8 @@ class FakeJellyfinClient:
         #: 每一次 `image` 收到的整組參數：`(item_id, image_type, tag, fill_width, fill_height,
         #: quality)`。尺寸白名單翻成了哪幾個數字靠它斷言。
         self.image_queries: list[tuple[str, str, str, int, int, int]] = []
+        #: 每一次 `mark_played` 收到的 `(user_id, item_id, played)`，被 404 擋下的也記。
+        self.played_queries: list[tuple[str, str, bool]] = []
         self.token = ""
         self.culture: tuple[str, str, str] | None = None
         self.remote_access: bool | None = None
@@ -310,11 +323,9 @@ class FakeJellyfinClient:
     async def user_views(self, user_id: str) -> tuple[JellyfinView, ...]:
         self._checkpoint(always=True)
         self.view_queries.append(user_id)
-        allowed = self.folders.get(self._username(user_id))
         return tuple(
             JellyfinView(id=row.item_id, name=row.name, collection_type=row.collection_type)
-            for row in self.libraries_
-            if allowed is None or row.item_id in allowed
+            for row in self._folders_of(self._username(user_id))
         )
 
     async def user_policy(self, user_id: str) -> JellyfinPolicy:
@@ -326,7 +337,15 @@ class FakeJellyfinClient:
         self, *, user_id: str, library_id: str, item_type: str, start: int, limit: int
     ) -> JellyfinPage:
         titles = self._browse(user_id, library_id, item_type)
-        return JellyfinPage(items=titles[start : start + limit], total=len(titles))
+        # 牆的查詢一向不驗 id（媒體庫測試用一個替身不認得的觀看者）：不認得的人就是什麼都沒看過。
+        name = self._account(user_id) or ""
+        return JellyfinPage(
+            items=tuple(
+                replace(item, user_data=self._user_data(name, item))
+                for item in titles[start : start + limit]
+            ),
+            total=len(titles),
+        )
 
     async def library_index(
         self, *, user_id: str, library_id: str, item_type: str
@@ -341,14 +360,62 @@ class FakeJellyfinClient:
         library = next((row for row in self.libraries_ if row.item_id == library_id), None)
         if library is None:
             return ()
-        titles = [
-            item
-            for item in self.items_
-            if item.type == item_type
-            and any(item.path.startswith(f"{location}/") for location in library.locations)
-        ]
+        titles = [item for item in self.items_ if item.type == item_type and _under(item, library)]
         # `SortName` 是小寫化的名稱（研究 §3.1）；替身不去掉冠詞。
         return tuple(sorted(titles, key=lambda item: (item.name.casefold(), item.id)))
+
+    async def mark_played(self, *, user_id: str, item_id: str, played: bool) -> JellyfinUserData:
+        self._checkpoint(always=True)
+        self.played_queries.append((user_id, item_id, played))
+        name = self._username(user_id)
+        item = next((row for row in self.items_ if row.id == item_id), None)
+        if item is None or not self._visible(name, item):
+            method = "POST" if played else "DELETE"
+            raise NotFoundError(f"{method} /UserPlayedItems/{item_id}: 404")
+        episodes = self._episodes(item)
+        seen = self.played.setdefault(name, set())
+        positions = self.positions.setdefault(name, {})
+        for target in episodes or (item,):
+            if played:
+                seen.add(target.id)
+            else:
+                seen.discard(target.id)
+            positions.pop(target.id, None)
+        return self._user_data(name, item)
+
+    def _folders_of(self, name: str) -> list[JellyfinLibrary]:
+        """這個帳號看得到的媒體庫（沒列在 `folders` 的看得到全部）。"""
+        allowed = self.folders.get(name)
+        return [row for row in self.libraries_ if allowed is None or row.item_id in allowed]
+
+    def _visible(self, name: str, item: JellyfinItem) -> bool:
+        return any(_under(item, library) for library in self._folders_of(name))
+
+    def _episodes(self, item: JellyfinItem) -> tuple[JellyfinItem, ...]:
+        if item.type != ITEM_SERIES:
+            return ()
+        return tuple(row for row in self.items_ if row.series_id == item.id)
+
+    def _user_data(self, name: str, item: JellyfinItem) -> JellyfinUserData:
+        """劇集的紀錄由底下的集算：看過的比例與沒看的集數（12.1.0 錄的 `UserData`，研究 §5）。"""
+        seen = self.played.get(name, set())
+        if item.type != ITEM_SERIES:
+            return JellyfinUserData(
+                played=item.id in seen,
+                played_percentage=self.positions.get(name, {}).get(item.id, 0.0),
+                unplayed_item_count=None,
+            )
+        episodes = self._episodes(item)
+        if not episodes:
+            return JellyfinUserData(
+                played=item.id in seen, played_percentage=0.0, unplayed_item_count=0
+            )
+        unplayed = sum(episode.id not in seen for episode in episodes)
+        return JellyfinUserData(
+            played=unplayed == 0,
+            played_percentage=100 * (len(episodes) - unplayed) / len(episodes),
+            unplayed_item_count=unplayed,
+        )
 
     # --- 圖片 ---
 
@@ -370,13 +437,16 @@ class FakeJellyfinClient:
             raise NotFoundError(f"GET /Items/{item_id}/Images/{image_type}: no such image")
         return found
 
+    def _account(self, user_id: str) -> str | None:
+        accounts = [*self.users, *([self.admin[0]] if self.admin else [])]
+        return next((name for name in accounts if _user_id(name) == user_id), None)
+
     def _username(self, user_id: str) -> str:
         """id 反查帳號名。不認得的 id 在真的 Jellyfin 是 4xx，client 翻成協定不符。"""
-        accounts = [*self.users, *([self.admin[0]] if self.admin else [])]
-        for name in accounts:
-            if _user_id(name) == user_id:
-                return name
-        raise ProtocolMismatchError(f"GET /Users/{user_id}: 404")
+        name = self._account(user_id)
+        if name is None:
+            raise ProtocolMismatchError(f"GET /Users/{user_id}: 404")
+        return name
 
     async def aclose(self) -> None:
         return None
@@ -402,6 +472,11 @@ def _auth(username: str, *, is_administrator: bool) -> JellyfinAuth:
         server_id="4e71f8d8bc324291b6e6c5a4f3fa8825",
         is_administrator=is_administrator,
     )
+
+
+def _under(item: JellyfinItem, library: JellyfinLibrary) -> bool:
+    """item 在不在這個媒體庫的某一條路徑底下（`parentId=<library>&recursive=true` 的意思）。"""
+    return any(item.path.startswith(f"{location}/") for location in library.locations)
 
 
 def _user_id(username: str) -> str:

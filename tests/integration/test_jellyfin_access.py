@@ -5,6 +5,10 @@
 **擋下來的請求有沒有真的沒送出去**。替身 Jellyfin 刻意不替 Berth 擋（`adapters/jellyfin/fake.py`），
 斷言看的是它記下的查詢。
 
+標記已看 / 未看（M1.5 票 05）是這裡唯一的寫入。**可見性由 Jellyfin 自己查**（`UserPlayedItems`
+對看不到的 item 回 404 而且沒有寫入，研究 §5、12.1.0 讀回確認），替身照做；這裡驗的是寫進去的是
+session 那個人的紀錄、404 變成拒絕，以及停用的帳號在問 Jellyfin 之前就被擋下。
+
 API 那一層（前端塞進來的 `userId`、401 之後的下一個請求）在 `test_inventory_api.py`。
 """
 
@@ -14,7 +18,13 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from berth.adapters.http import ServiceUnavailableError
-from berth.adapters.jellyfin import JellyfinLibrary
+from berth.adapters.jellyfin import (
+    ITEM_EPISODE,
+    ITEM_MOVIE,
+    ITEM_SERIES,
+    JellyfinItem,
+    JellyfinLibrary,
+)
 from berth.adapters.jellyfin.fake import FakeJellyfinClient
 from berth.models import JellyfinSettings
 from berth.services.auth import AuthenticatedUser, read_session, sign_in
@@ -22,6 +32,7 @@ from berth.services.jellyfin_access import (
     ACCESS_TTL_SECONDS,
     AccessCache,
     AccountDisabledError,
+    ItemNotVisibleError,
     JellyfinUnreachableError,
     LibraryNotVisibleError,
     jellyfin_access,
@@ -71,6 +82,27 @@ def jellyfin() -> FakeJellyfinClient:
             library(ANIME, "Anime", "tvshows"),
             library(MUSIC, "Music", "music"),
         ),
+    )
+
+
+#: TV 上一部兩集的劇、Movies 上一部片，與 `deckhand` 看不到的 Anime 上一部劇。
+SERIES, FIRST, SECOND = "series-bear", "bear-e01", "bear-e02"
+FILM = "film-oppenheimer"
+HIDDEN = "series-frieren"
+
+
+def watchable() -> tuple[JellyfinItem, ...]:
+    def item(item_id: str, kind: str, path: str, series: str = "") -> JellyfinItem:
+        return JellyfinItem(
+            id=item_id, type=kind, name=item_id, path=path, tmdb_id="", series_id=series
+        )
+
+    return (
+        item(SERIES, ITEM_SERIES, "/data/library/tv/The Bear"),
+        item(FIRST, ITEM_EPISODE, "/data/library/tv/The Bear/S01E01.mkv", SERIES),
+        item(SECOND, ITEM_EPISODE, "/data/library/tv/The Bear/S01E02.mkv", SERIES),
+        item(FILM, ITEM_MOVIE, "/data/library/movies/Oppenheimer/Oppenheimer.mkv"),
+        item(HIDDEN, ITEM_SERIES, "/data/library/anime/Frieren"),
     )
 
 
@@ -275,3 +307,93 @@ class TestUnreachable:
             jellyfin.error = ServiceUnavailableError("GET /Items: connection refused")
             with pytest.raises(JellyfinUnreachableError):
                 await access.page(TV, start=0, limit=100)
+
+
+class TestMarkPlayed:
+    async def test_the_record_written_is_the_signed_in_users(
+        self,
+        session: AsyncSession,
+        factory: FakeClientFactory,
+        jellyfin: FakeJellyfinClient,
+        cache: AccessCache,
+    ) -> None:
+        jellyfin.items_ = list(watchable())
+        user, _ = await signed_in(session, factory, "deckhand", "rope")
+
+        async with jellyfin_access(session, factory, cache, user) as access:
+            written = await access.mark_played(FILM, played=True)
+
+        assert jellyfin.played_queries == [(user.jellyfin_user_id, FILM, True)]
+        assert jellyfin.played == {"deckhand": {FILM}}
+        assert written.played
+
+    async def test_marking_unplayed_clears_the_record_it_wrote(
+        self,
+        session: AsyncSession,
+        factory: FakeClientFactory,
+        jellyfin: FakeJellyfinClient,
+        cache: AccessCache,
+    ) -> None:
+        jellyfin.items_ = list(watchable())
+        jellyfin.played = {"deckhand": {FIRST}, "skipper": {FIRST}}
+        user, _ = await signed_in(session, factory, "deckhand", "rope")
+
+        async with jellyfin_access(session, factory, cache, user) as access:
+            written = await access.mark_played(SERIES, played=False)
+
+        assert (written.played, written.unplayed_episodes) == (False, 2)
+        assert jellyfin.played == {"deckhand": set(), "skipper": {FIRST}}
+
+    @pytest.mark.parametrize("played", [True, False])
+    async def test_an_item_this_user_cannot_see_is_refused_and_nothing_is_written(
+        self,
+        session: AsyncSession,
+        factory: FakeClientFactory,
+        jellyfin: FakeJellyfinClient,
+        cache: AccessCache,
+        played: bool,
+    ) -> None:
+        """Jellyfin 回 404 而且沒有寫入（研究 §5）；看不到與不存在是同一種拒絕。"""
+        jellyfin.items_ = list(watchable())
+        jellyfin.played = {"skipper": {HIDDEN}}
+        user, _ = await signed_in(session, factory, "deckhand", "rope")
+
+        async with jellyfin_access(session, factory, cache, user) as access:
+            for wanted in (HIDDEN, "no-such-item"):
+                with pytest.raises(ItemNotVisibleError):
+                    await access.mark_played(wanted, played=played)
+
+        assert jellyfin.played == {"skipper": {HIDDEN}}
+
+    async def test_a_disabled_account_writes_nothing(
+        self,
+        session: AsyncSession,
+        factory: FakeClientFactory,
+        jellyfin: FakeJellyfinClient,
+        cache: AccessCache,
+    ) -> None:
+        """API key 替停用的帳號照樣寫得進去（研究 §2），所以擋的是 Berth。"""
+        jellyfin.items_ = list(watchable())
+        user, _ = await signed_in(session, factory, "deckhand", "rope")
+        jellyfin.disabled.add("deckhand")
+
+        with pytest.raises(AccountDisabledError):
+            async with jellyfin_access(session, factory, cache, user) as access:
+                await access.mark_played(FILM, played=True)
+
+        assert jellyfin.played_queries == []
+
+    async def test_jellyfin_not_answering_is_the_same_reason_as_for_reading(
+        self,
+        session: AsyncSession,
+        factory: FakeClientFactory,
+        jellyfin: FakeJellyfinClient,
+        cache: AccessCache,
+    ) -> None:
+        jellyfin.items_ = list(watchable())
+        user, _ = await signed_in(session, factory, "deckhand", "rope")
+
+        async with jellyfin_access(session, factory, cache, user) as access:
+            jellyfin.error = ServiceUnavailableError("POST /UserPlayedItems: connection refused")
+            with pytest.raises(JellyfinUnreachableError):
+                await access.mark_played(FILM, played=True)

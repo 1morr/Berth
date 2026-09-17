@@ -1401,6 +1401,144 @@ async def test_jellyfin_a_page_without_an_items_array_is_not_jellyfin() -> None:
         await client.aclose()
 
 
+# --- M1.5 票 05：觀看狀態（研究 library-browsing.md §1.2、§5）-----------------------
+#
+# `UserData` 的欄位不是每筆都有：`PlayedPercentage` 只在看到一半或資料夾出現、`UnplayedItemCount`
+# 只在資料夾、`LastPlayedDate` 只在看過之後（研究 §1.2）。牆那兩份錄製正好各缺不同的格。
+
+#: `userplayeditems.{post,delete}.json` 錄的那一集（Bravo Show S01E02）。
+BRAVO_EPISODE = "5ff804c21aa9edf479f4b827413e1eee"
+#: `userplayeditems.forbidden.json` 打的那一集：Anime 裡的 Delta Mecha S01E02（實驗腳本的
+#: `matrix_rows`；id 在 `items.parent-forbidden.json` 裡）。
+FORBIDDEN_EPISODE = "5e51bcab9dae9b1b3bee242bcf21930e"
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_jellyfin_a_series_on_the_wall_reads_its_unplayed_episodes() -> None:
+    respx.get(f"{JELLYFIN_URL}/Items").respond(
+        200, text=read_fixture("http/jellyfin/items.tv.series.userdata.json")
+    )
+
+    client = jellyfin_client("key")
+    try:
+        page = await client.library_page(
+            user_id=RESTRICTED_USER, library_id=TV_LIBRARY, item_type="Series", start=0, limit=100
+        )
+    finally:
+        await client.aclose()
+
+    # 資料夾一定帶 `PlayedPercentage` 與 `UnplayedItemCount`：看過五集裡的一集是 20%、剩 4 集。
+    assert [
+        (item.name, data.played, data.played_percentage, data.unplayed_item_count)
+        for item in page.items
+        if (data := item.user_data) is not None
+    ] == [
+        ("Alpha Show", False, 20.0, 4),
+        ("Bravo Show", False, 50.0, 1),
+        ("Frieren", False, 0.0, 2),
+        ("Hotel Show", False, 0.0, 1),
+    ]
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_jellyfin_a_film_on_the_wall_missing_fields_read_as_zero_or_none() -> None:
+    respx.get(f"{JELLYFIN_URL}/Items").respond(
+        200, text=read_fixture("http/jellyfin/items.movies.movie.userdata.json")
+    )
+
+    client = jellyfin_client("key")
+    try:
+        page = await client.library_page(
+            user_id=RESTRICTED_USER,
+            library_id=MOVIES_LIBRARY,
+            item_type="Movie",
+            start=0,
+            limit=100,
+        )
+    finally:
+        await client.aclose()
+
+    rows = json.loads(read_fixture("http/jellyfin/items.movies.movie.userdata.json"))["Items"]
+    # 錄製裡真的缺那幾格——不是這份斷言自己想像的形狀。
+    assert ["PlayedPercentage" in row["UserData"] for row in rows] == [False, True, False]
+    assert not any("UnplayedItemCount" in row["UserData"] for row in rows)
+    # 看過的沒有 `PlayedPercentage`（當 0）、不是資料夾的沒有 `UnplayedItemCount`（`None`）。
+    assert [
+        (item.name, data.played, data.played_percentage, data.unplayed_item_count)
+        for item in page.items
+        if (data := item.user_data) is not None
+    ] == [
+        ("Echo Movie", True, 0.0, None),
+        ("Foxtrot Movie", False, 50.0, None),
+        ("Golf Movie", True, 0.0, None),
+    ]
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_jellyfin_the_index_carries_no_user_data() -> None:
+    respx.get(f"{JELLYFIN_URL}/Items").respond(
+        200, text=read_fixture("http/jellyfin/items.tv.series.index.json")
+    )
+
+    client = jellyfin_client("key")
+    try:
+        titles = await client.library_index(
+            user_id=RESTRICTED_USER, library_id=TV_LIBRARY, item_type="Series"
+        )
+    finally:
+        await client.aclose()
+
+    assert {item.user_data for item in titles} == {None}
+
+
+@respx.mock
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("played", "method", "fixture"),
+    [(True, "POST", "userplayeditems.post.json"), (False, "DELETE", "userplayeditems.delete.json")],
+)
+async def test_jellyfin_marking_an_item_writes_this_users_record_and_reads_it_back(
+    played: bool, method: str, fixture: str
+) -> None:
+    route = respx.route(method=method, url=f"{JELLYFIN_URL}/UserPlayedItems/{BRAVO_EPISODE}")
+    route.respond(200, text=read_fixture(f"http/jellyfin/{fixture}"))
+
+    client = jellyfin_client("key")
+    try:
+        data = await client.mark_played(
+            user_id=RESTRICTED_USER, item_id=BRAVO_EPISODE, played=played
+        )
+    finally:
+        await client.aclose()
+
+    assert dict(route.calls.last.request.url.params) == {"userId": RESTRICTED_USER}
+    # 集不是資料夾：兩個方向都沒有 `UnplayedItemCount`，`DELETE` 的回應連 `LastPlayedDate` 都沒有。
+    assert (data.played, data.played_percentage, data.unplayed_item_count) == (played, 0.0, None)
+
+
+@respx.mock
+@pytest.mark.asyncio
+@pytest.mark.parametrize("method", ["POST", "DELETE"])
+async def test_jellyfin_an_item_this_user_cannot_see_is_not_found(method: str) -> None:
+    """Jellyfin 自己查可見性（`GetItemById<BaseItem>(itemId, user)`，研究 §5）：無權的集回 404
+    而且沒有寫入（票 01 打完立刻讀回）。那是答案，不是「接到了別的服務」。"""
+    respx.route(method=method, url=f"{JELLYFIN_URL}/UserPlayedItems/{FORBIDDEN_EPISODE}").respond(
+        404, text=read_fixture("http/jellyfin/userplayeditems.forbidden.json")
+    )
+
+    client = jellyfin_client("key")
+    try:
+        with pytest.raises(NotFoundError):
+            await client.mark_played(
+                user_id=RESTRICTED_USER, item_id=FORBIDDEN_EPISODE, played=method == "POST"
+            )
+    finally:
+        await client.aclose()
+
+
 # --- Jellyfin 的圖（M1.5 票 04，研究 library-browsing.md §6）----------------------
 
 

@@ -151,6 +151,23 @@ class JellyfinSource:
 
 
 @dataclass(frozen=True, slots=True)
+class JellyfinUserData:
+    """`UserData`（`UserItemDataDto`）裡 Berth 讀的那幾格：一位使用者對一個 item 的觀看紀錄
+    （M1.5 票 05）。
+
+    **欄位不是每筆都有**（研究 library-browsing.md §1.2）：`PlayedPercentage` 只在看到一半的影片或
+    資料夾（Series / Season）出現，`UnplayedItemCount` 只在資料夾。缺的百分比是 0、缺的集數是
+    `None`。
+    """
+
+    played: bool
+    #: 影片：看到幾 %（沒在看是 0）。資料夾：底下看過的集佔幾 %。
+    played_percentage: float
+    #: 資料夾底下還有幾集沒看；**只有資料夾有這一格**，影片與集是 `None`。
+    unplayed_item_count: int | None
+
+
+@dataclass(frozen=True, slots=True)
 class JellyfinItem:
     """`GET /Items` 的一項（入庫之後的反查，brief §20.1、plan §8.2）。"""
 
@@ -173,6 +190,8 @@ class JellyfinItem:
     #: `ImageTags.Primary`：代理圖片的網址要帶它，Jellyfin 換圖時網址才會變（M1.5 票 04、研究 §6）。
     #: 沒有 Primary 圖，或查詢關掉了圖（`enableImages=false`）時是空字串。
     primary_tag: str = ""
+    #: 帶著 `userId` 查、而且沒有關掉 `enableUserData` 時才有（M1.5 票 05）。
+    user_data: JellyfinUserData | None = None
 
     @property
     def source_paths(self) -> tuple[str, ...]:
@@ -385,6 +404,16 @@ class JellyfinClient(Protocol):
         """
         ...
 
+    async def mark_played(self, *, user_id: str, item_id: str, played: bool) -> JellyfinUserData:
+        """`POST`（已看）/ `DELETE`（未看）`/UserPlayedItems/{id}?userId=`，回寫入之後的紀錄。
+
+        **可見性由 Jellyfin 自己查**：這位使用者看不到（或沒有）這個 item 時回 404 而且沒有寫入
+        （研究 §5 的原始碼；12.1.0 打完立刻讀回，研究 §2 的表），翻成 `NotFoundError`。
+        對 Series / Season 會遞迴到底下每一集；標為未看清掉 `PlayCount` 與 `LastPlayedDate`，
+        復原不了。
+        """
+        ...
+
     # --- 圖片（M1.5 票 04）---
 
     async def image(
@@ -424,6 +453,7 @@ __all__ = [
     "JellyfinPublicInfo",
     "JellyfinSource",
     "JellyfinTask",
+    "JellyfinUserData",
     "JellyfinView",
     "NewLibrary",
     "TypeOption",

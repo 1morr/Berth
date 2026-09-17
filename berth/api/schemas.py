@@ -188,3 +188,19 @@ def health_detail(report: HealthReport) -> HealthDetailOut:
         routes=[RouteOut.model_validate(row) for row in report.routes],
         poller=PollerOut.model_validate(report.poller),
     )
+
+
+class WatchStateOut(BaseModel):
+    """這位使用者在 Jellyfin 看到哪了（`services/watch.py`、M1.5 票 05）。媒體庫的牆與標記已看共用。
+
+    三格至多一格有話說：已看優先，其次是看到一半（只有影片）、剩幾集沒看（只有劇集）。都沒有就是
+    還沒看過。
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    played: bool
+    #: 看到一半的影片看到幾 %（1–99）。
+    progress: int | None
+    #: 還沒看完的劇集剩幾集沒看；沒開始看的劇也有。
+    unplayed_episodes: int | None

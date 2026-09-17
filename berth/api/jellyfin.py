@@ -1,11 +1,15 @@
-"""Jellyfin 的圖（plan §6、M1.5 票 04）。
+"""替這位使用者經手的 Jellyfin item：圖（plan §6、M1.5 票 04）與標記已看 / 未看（票 05）。
 
-路徑與 `tag` 沿用 Jellyfin 自己的 `/Items/{id}/Images/{type}?tag=`
-（研究 library-browsing.md §6、§7），尺寸換成具名的 `size`（TMDB 圖片網址的 `w342` 那種做法），
-不收 Jellyfin 的 `fillWidth` 之類的數字。
+- **圖**：路徑與 `tag` 沿用 Jellyfin 自己的 `/Items/{id}/Images/{type}?tag=`
+  （研究 library-browsing.md §6、§7），尺寸換成具名的 `size`（TMDB 圖片網址的 `w342` 那種做法），
+  不收 Jellyfin 的 `fillWidth` 之類的數字。判定在 `services/jellyfin_images.py`。
+- **已看**：`POST`（標為已看）/ `DELETE`（標為未看）`/items/{id}/played`。動詞成對沿用 Jellyfin 的
+  `/UserPlayedItems/{id}`，使用者不在網址上（GitHub `PUT|DELETE /user/starred/...` 的做法）：
+  它只從 session 來（`services/jellyfin_access.py`）。回寫入之後的觀看狀態，前端拿它改牆上那一格，
+  不必重抓整面牆（jellyfin-web 收到 `UserDataChanged` 也是就地改卡片）。
 
-誰進得來由門禁決定（`api/gate.py`）：不在白名單上，所以要登入。`/jellyfin/libraries` 那一支是
-管理員的，這一支不是（`ADMIN_PREFIXES` 只收那一支）。判定都在 `services/jellyfin_images.py`。
+誰進得來由門禁決定（`api/gate.py`）：不在白名單上，所以要登入；寫入另要 CSRF 標頭。
+`/jellyfin/libraries` 那一支是管理員的，這兩組不是（`ADMIN_PREFIXES` 只收那一支）。
 """
 
 from __future__ import annotations
@@ -13,12 +17,21 @@ from __future__ import annotations
 from typing import Annotated
 from urllib.parse import urlencode
 
-from fastapi import APIRouter, HTTPException, Path, Query, status
+from fastapi import APIRouter, HTTPException, Path, Query, Request, status
 from fastapi.responses import Response
 
-from berth.api.deps import ClientFactoryDep, SessionDep
+from berth.api.deps import AccessCacheDep, ClientFactoryDep, SessionDep
+from berth.api.gate import current_user
+from berth.api.schemas import WatchStateOut
 from berth.domain import ImageSize, JellyfinImageType
-from berth.services.jellyfin_access import JellyfinUnreachableError
+from berth.services.auth import AuthenticatedUser
+from berth.services.jellyfin_access import (
+    AccountDisabledError,
+    ItemNotVisibleError,
+    JellyfinUnreachableError,
+    LibraryNotVisibleError,
+    jellyfin_access,
+)
 from berth.services.jellyfin_images import ImageMissingError, read_image
 
 router = APIRouter(prefix="/jellyfin", tags=["jellyfin"])
@@ -83,3 +96,80 @@ async def get_image(
         media_type=image.content_type,
         headers=IMAGE_HEADERS,
     )
+
+
+#: 已看 / 未看的拒絕，照 `access_refusal` 的表。
+PLAYED_RESPONSES: dict[int | str, dict[str, str]] = {
+    401: {"description": "`account_disabled`：帳號在 Jellyfin 被停用，session 已結束"},
+    404: {"description": "`item_not_visible`：這位使用者看不到這個 item，或沒有這個 item"},
+    503: {"description": "`jellyfin_unreachable`：問不到 Jellyfin"},
+}
+
+
+@router.post("/items/{item_id}/played", responses=PLAYED_RESPONSES)
+async def mark_played(
+    session: SessionDep,
+    factory: ClientFactoryDep,
+    cache: AccessCacheDep,
+    request: Request,
+    item_id: Annotated[str, Path(pattern=HEX32)],
+) -> WatchStateOut:
+    """標為已看。劇集會連每一集一起標，看到一半的位置歸零（研究 §5）。"""
+    return await _mark(session, factory, cache, request, item_id, played=True)
+
+
+@router.delete("/items/{item_id}/played", responses=PLAYED_RESPONSES)
+async def mark_unplayed(
+    session: SessionDep,
+    factory: ClientFactoryDep,
+    cache: AccessCacheDep,
+    request: Request,
+    item_id: Annotated[str, Path(pattern=HEX32)],
+) -> WatchStateOut:
+    """標為未看：清掉觀看次數與最後觀看時間，**復原不了**；劇集清的是每一集（研究 §5）。
+    先確認是畫面的事。"""
+    return await _mark(session, factory, cache, request, item_id, played=False)
+
+
+async def _mark(
+    session: SessionDep,
+    factory: ClientFactoryDep,
+    cache: AccessCacheDep,
+    request: Request,
+    item_id: str,
+    *,
+    played: bool,
+) -> WatchStateOut:
+    try:
+        async with jellyfin_access(session, factory, cache, session_user(request)) as access:
+            written = await access.mark_played(item_id, played=played)
+    except (AccountDisabledError, ItemNotVisibleError, JellyfinUnreachableError) as refusal:
+        raise access_refusal(refusal) from refusal
+    return WatchStateOut.model_validate(written)
+
+
+def session_user(request: Request) -> AuthenticatedUser:
+    """替誰讀寫 Jellyfin：一律是 session 的那個人（`services/jellyfin_access.py`）。"""
+    user = current_user(request)
+    if user is None:  # pragma: no cover - 門禁保證不會發生
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "sign in to use this API")
+    return user
+
+
+#: 權限閘門的拒絕 → 狀態碼與 `reason`。媒體庫與這一組共用。
+#:
+#: - `account_disabled`（401）：session 已經結束，前端照「登入失效」處理。
+#: - `library_not_visible` / `item_not_visible`（404）：沒有權限與不存在是同一個回應。
+#: - `jellyfin_unreachable`（503）：`detail` 是服務回的原文。
+_REFUSALS: dict[type[Exception], tuple[int, str]] = {
+    AccountDisabledError: (status.HTTP_401_UNAUTHORIZED, "account_disabled"),
+    LibraryNotVisibleError: (status.HTTP_404_NOT_FOUND, "library_not_visible"),
+    ItemNotVisibleError: (status.HTTP_404_NOT_FOUND, "item_not_visible"),
+    JellyfinUnreachableError: (status.HTTP_503_SERVICE_UNAVAILABLE, "jellyfin_unreachable"),
+}
+
+
+def access_refusal(refusal: Exception) -> HTTPException:
+    """`{reason, detail}`，與 Route 設定頁的拒絕同形（`api/routes.py`）。"""
+    code, reason = _REFUSALS[type(refusal)]
+    return HTTPException(code, {"reason": reason, "detail": str(refusal)})

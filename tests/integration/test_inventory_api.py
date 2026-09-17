@@ -8,6 +8,10 @@
 牆上的海報由 Berth 代理 Jellyfin 的圖（`/api/jellyfin/items/{id}/images/{type}`，M1.5 票 04）：
 卡片帶的網址真的打得回那一張圖、它是 `/api` 底下唯一可以長期快取的回應、白名單以外的類型
 與尺寸不轉發。
+
+標記已看 / 未看（`POST` / `DELETE /api/jellyfin/items/{id}/played`，M1.5 票 05）是 M1.5 第一條寫進
+Jellyfin 使用者資料的路：寫的是 session 那個人、前端塞的 id 不起作用、看不到的 item 被拒而且
+Jellyfin 那一端沒有寫入。
 """
 
 from __future__ import annotations
@@ -23,7 +27,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 
 from berth.adapters.http import ServiceUnavailableError
-from berth.adapters.jellyfin import ITEM_SERIES, JellyfinImage, JellyfinItem
+from berth.adapters.jellyfin import ITEM_EPISODE, ITEM_SERIES, JellyfinImage, JellyfinItem
 from berth.adapters.jellyfin.fake import FakeJellyfinClient
 from berth.api.deps import get_client_factory
 from berth.api.gate import CSRF_HEADER
@@ -47,6 +51,9 @@ MOVIES, TV, ANIME = "item-0", "item-1", "item-2"
 #: TV 上的 SPY×FAMILY 與它的 Primary 圖。Jellyfin 的 item id 與 `ImageTags` 都是 32 個十六進位字元。
 SPY = "5d2c1a0b9e8f7d6c5b4a39281706f5e4"
 SPY_POSTER = "f99664090dfd3223c18e80663440deac"
+#: SPY×FAMILY 的兩集，與 `deckhand` 看不到的 Anime 上那部劇。
+SPY_EPISODES = ("0e3a2f5b1c9d4e7f8a6b5c4d3e2f1a0b", "1f4b3a6c2d0e5f8a9b7c6d5e4f3a2b1c")
+FRIEREN = "8836e6e2b1400442080287739a22c85d"
 POSTER = JellyfinImage(content=b"RIFF\x00\x00\x00\x00WEBPVP8 ", content_type="image/webp")
 
 
@@ -73,8 +80,19 @@ def jellyfin(roots: dict[str, Path]) -> FakeJellyfinClient:
         JellyfinItem(
             id="hotel", type=ITEM_SERIES, name="Hotel Show", path=f"{tv}/Hotel Show", tmdb_id=""
         ),
+        *(
+            JellyfinItem(
+                id=episode,
+                type=ITEM_EPISODE,
+                name=f"Episode {number}",
+                path=f"{tv}/SPY x FAMILY (2022) [tmdbid-120089]/Season 01/S01E0{number}.mkv",
+                tmdb_id="",
+                series_id=SPY,
+            )
+            for number, episode in enumerate(SPY_EPISODES, start=1)
+        ),
         JellyfinItem(
-            id="frieren",
+            id=FRIEREN,
             type=ITEM_SERIES,
             name="Frieren",
             path=f"{anime}/Frieren (2023) [tmdbid-209867]",
@@ -305,6 +323,8 @@ class TestInventory:
             "jellyfin_item_id": SPY,
             "tracking": tracking,
         }
+        # 管理員一集都沒看過；Berth 那一份清單不帶觀看紀錄（`test_inventory.py`）。
+        unwatched = {"played": False, "progress": None, "unplayed_episodes": 2}
         assert body["titles"] == [
             {
                 "media_id": "",
@@ -316,15 +336,134 @@ class TestInventory:
                 "presence": "found",
                 "jellyfin_item_id": "hotel",
                 "tracking": None,
+                "watch": {"played": False, "progress": None, "unplayed_episodes": None},
             },
-            spy,
+            {**spy, "watch": unwatched},
         ]
-        assert body["tracked"] == [spy]
+        assert body["tracked"] == [{**spy, "watch": None}]
 
     def test_a_page_number_below_one_is_refused(self, client: TestClient) -> None:
         sign_in(client)
 
         assert client.get(f"/api/inventory/{TV}", params={"page": 0}).status_code == 422
+
+
+PLAYED = f"/api/jellyfin/items/{SPY}/played"
+
+
+class TestWatchState:
+    def test_marking_a_series_played_writes_this_users_record_of_every_episode(
+        self, client: TestClient, jellyfin: FakeJellyfinClient
+    ) -> None:
+        sign_in(client, CREW)
+
+        response = client.post(PLAYED, headers=BROWSER)
+
+        assert response.status_code == 200
+        assert response.json() == {"played": True, "progress": None, "unplayed_episodes": None}
+        assert jellyfin.played_queries == [(jellyfin_id(client, CREW), SPY, True)]
+        assert jellyfin.played == {CREW["username"]: set(SPY_EPISODES)}
+
+    def test_marking_unplayed_clears_it_and_the_wall_says_so(
+        self, client: TestClient, jellyfin: FakeJellyfinClient
+    ) -> None:
+        jellyfin.played = {
+            CREW["username"]: set(SPY_EPISODES),
+            ADMIN["username"]: {SPY_EPISODES[0]},
+        }
+        sign_in(client, CREW)
+
+        response = client.delete(PLAYED, headers=BROWSER)
+        [card] = [
+            card
+            for card in client.get(f"/api/inventory/{TV}").json()["titles"]
+            if card["jellyfin_item_id"] == SPY
+        ]
+
+        expected = {"played": False, "progress": None, "unplayed_episodes": 2}
+        assert (response.status_code, response.json()) == (200, expected)
+        assert card["watch"] == expected
+        assert jellyfin.played == {CREW["username"]: set(), ADMIN["username"]: {SPY_EPISODES[0]}}
+
+    def test_a_user_id_slipped_into_the_request_changes_nothing(
+        self, client: TestClient, jellyfin: FakeJellyfinClient
+    ) -> None:
+        sign_in(client, ADMIN)
+        sign_in(client, CREW)
+        crew, admin = jellyfin_id(client, CREW), jellyfin_id(client, ADMIN)
+        smuggled = {"userId": admin, "user_id": admin, "UserId": admin}
+
+        response = client.post(PLAYED, params=smuggled, json=smuggled, headers=BROWSER)
+
+        assert response.status_code == 200
+        assert jellyfin.played_queries == [(crew, SPY, True)]
+        assert ADMIN["username"] not in jellyfin.played
+
+    @pytest.mark.parametrize("method", ["POST", "DELETE"])
+    def test_an_item_this_user_cannot_see_is_refused_and_nothing_is_written(
+        self, client: TestClient, jellyfin: FakeJellyfinClient, method: str
+    ) -> None:
+        jellyfin.played = {ADMIN["username"]: {FRIEREN}}
+        sign_in(client, CREW)
+
+        response = client.request(method, f"/api/jellyfin/items/{FRIEREN}/played", headers=BROWSER)
+
+        # 看不到與沒有這個 item 是同一個回應。
+        assert response.status_code == 404
+        assert response.json()["detail"]["reason"] == "item_not_visible"
+        assert jellyfin.played == {ADMIN["username"]: {FRIEREN}}
+
+    def test_signed_out_or_without_the_csrf_header_is_refused_before_jellyfin_is_asked(
+        self, client: TestClient, jellyfin: FakeJellyfinClient
+    ) -> None:
+        assert client.post(PLAYED, headers=BROWSER).status_code == 401
+        sign_in(client, CREW)
+        assert client.post(PLAYED).status_code == 403
+        assert client.delete(PLAYED).status_code == 403
+
+        assert jellyfin.played_queries == []
+
+    @pytest.mark.parametrize(
+        "path",
+        [
+            pytest.param("/api/jellyfin/items/spy/played", id="item-shape"),
+            pytest.param("/api/jellyfin/items/%2E%2E/played", id="item-dot-dot"),
+        ],
+    )
+    def test_only_jellyfin_shaped_ids_are_forwarded(
+        self, client: TestClient, jellyfin: FakeJellyfinClient, path: str
+    ) -> None:
+        sign_in(client, CREW)
+
+        assert client.post(path, headers=BROWSER).status_code == 422
+        assert jellyfin.played_queries == []
+
+    def test_a_disabled_account_is_signed_out_and_nothing_is_written(
+        self, client: TestClient, jellyfin: FakeJellyfinClient
+    ) -> None:
+        sign_in(client, CREW)
+        jellyfin.disabled.add(CREW["username"])
+
+        response = client.post(PLAYED, headers=BROWSER)
+
+        assert response.status_code == 401
+        assert response.json()["detail"]["reason"] == "account_disabled"
+        assert jellyfin.played_queries == []
+        assert client.get("/api/auth/me").status_code == 401
+
+    def test_jellyfin_not_answering_says_so_with_its_own_words(
+        self, client: TestClient, jellyfin: FakeJellyfinClient
+    ) -> None:
+        sign_in(client, CREW)
+        jellyfin.error = ServiceUnavailableError("GET /UserViews: connection refused")
+
+        response = client.delete(PLAYED, headers=BROWSER)
+
+        assert response.status_code == 503
+        assert response.json()["detail"] == {
+            "reason": "jellyfin_unreachable",
+            "detail": "GET /UserViews: connection refused",
+        }
 
 
 IMAGE = f"/api/jellyfin/items/{SPY}/images/Primary"

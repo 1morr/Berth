@@ -310,6 +310,10 @@ GET /Shows/{seriesId}/Episodes?userId=U&seasonId={seasonId}&fields=Overview,Prim
     單獨看過的集也一起清掉**（Alpha Show 第一集 2026-01-01 的紀錄沒了）。
   - 對 Season 標記只動那一季的集，別季單獨看過的集不動；Series 的 `UnplayedItemCount` / `PlayedPercentage` 跟著重算。
   - 單集的兩個方向的回應錄在 fixture `userplayeditems.{post,delete}.json`：`DELETE` 的回應沒有 `LastPlayedDate` 這個鍵。
+  - **兩個方向回的是同一種 DTO**【原始碼 v12.0，M1.5 票 05】：`MarkPlayedItem` 與 `MarkUnplayedItem` 都經
+    `UpdatePlayedStatus` 回 `_userDataRepository.GetUserDataDto(item, user)`，所以對 Series 標為未看的回應與上面實測的
+    標為已看同一個形狀（帶 `UnplayedItemCount`，Berth 靠它分辨劇集與影片，`services/watch.py`）。Series 那兩個回應沒有錄
+    fixture。—— [PlaystateController.cs v12.0](https://github.com/jellyfin/jellyfin/blob/v12.0/Jellyfin.Api/Controllers/PlaystateController.cs)
 - **「標為未看」不可逆**：`PlayCount` 歸零、`LastPlayedDate` 消失，UI 的「復原」沒辦法恢復原本的觀看次數與時間；
   對整部劇或整季做時，清掉的是底下每一集的紀錄。
 
@@ -416,6 +420,27 @@ GET /Shows/{seriesId}/Episodes?userId=U&seasonId={seasonId}&fields=Overview,Prim
 [cardBuilder.js](https://github.com/jellyfin/jellyfin-web/blob/v10.10.7/src/components/cardbuilder/cardBuilder.js)、
 master [url.ts](https://github.com/jellyfin/jellyfin-web/blob/f0f7b226a26e1512a4dac43e6ddec325977d09d4/src/components/cardbuilder/utils/url.ts)。
 10.11.11 與 10.10.7 在這些檔案上邏輯相同（電影庫多了「播放全部」）。
+
+### 7.1 卡片上的觀看標記與已看切換【原始碼 v10.11.11，M1.5 票 05】
+
+研究子代理讀 jellyfin-web `v10.11.11` 與 master（兩邊只差幾個 item 型別的增減，判定形狀相同）：
+
+| 區塊 | 行為 |
+| --- | --- |
+| 計數徽章 | `getPlayedIndicatorHtml`：**先看 `UserData.UnplayedItemCount`**，非 0 就畫集數（≥ 100 畫 `99+`）——**沒開始看的劇也畫**；否則 `PlayedPercentage >= 100 \|\| Played` 才畫勾。可標記的型別由 `itemHelper.canMarkPlayed` 決定（影片、`Series`、`Season`、`BoxSet` 等） |
+| 進度條 | `getProgressBarHtml` 只給 `enableProgressIndicator` 成立的 item（`MediaType === 'Video'`，不含 `TvChannel`），`PlayedPercentage` 在 0 到 100 之間才畫。**劇集沒有 `MediaType`，永遠沒有進度條** |
+| 已看切換 | `emby-playstatebutton`（React 版 `PlayedButton.tsx` 同）：`POST` / `DELETE /Users/{userId}/PlayedItems/{itemId}`；多選選單的「Mark played / Mark unplayed」也是直接送。**兩個方向都沒有確認**，`confirm()` 只用在刪除 |
+| 切換之後 | 按鈕先就地改狀態；卡片網格收到伺服器推的 `UserDataChanged` 之後就地改那一格的標記（`cardBuilder.onUserDataChanged`），**不重抓卡片**；React 版改成 `invalidateQueries` |
+
+來源：[indicators.js](https://github.com/jellyfin/jellyfin-web/blob/v10.11.11/src/components/indicators/indicators.js)、
+[useIndicator.tsx](https://github.com/jellyfin/jellyfin-web/blob/v10.11.11/src/components/indicators/useIndicator.tsx)、
+[itemHelper.js](https://github.com/jellyfin/jellyfin-web/blob/v10.11.11/src/components/itemHelper.js)、
+[emby-playstatebutton.js](https://github.com/jellyfin/jellyfin-web/blob/v10.11.11/src/elements/emby-playstatebutton/emby-playstatebutton.js)、
+[multiSelect.js](https://github.com/jellyfin/jellyfin-web/blob/v10.11.11/src/components/multiSelect/multiSelect.js)、
+[apiClient.js markPlayed / markUnplayed](https://github.com/jellyfin/jellyfin-apiclient-javascript/blob/v1.11.0/src/apiClient.js#L3087)。
+
+Berth 照前兩列畫牆上那一行（`services/watch.py`），照第四列就地改那一格；**不照第三列**：Berth 不提供「復原」，
+而標為未看清掉的次數與時間找不回來（§5），所以標為未看先確認。
 
 ## 8. 直接開始播放某一集的 Web URL
 

@@ -30,6 +30,7 @@ function jellyfinCard(overrides: Partial<InventoryCard> = {}): InventoryCard {
     presence: 'found',
     jellyfin_item_id: '2a9857e656bbd18b7c3c3a3b4ee5eef1',
     tracking: null,
+    watch: null,
     ...overrides,
   }
 }
@@ -277,6 +278,227 @@ describe('媒體庫頁', () => {
 
       expect(within(await findTile('Oppenheimer')).getByText('2 個版本')).toBeVisible()
       expect(screen.getByText('已入庫')).toBeVisible()
+    })
+  })
+
+  describe('觀看狀態（票 05）', () => {
+    const UNWATCHED = { played: false, progress: null, unplayed_episodes: null }
+    /** 五集看過一集的劇、看到一半的片、看完的劇、還沒看過的片。 */
+    const ALPHA = jellyfinCard({ watch: { ...UNWATCHED, unplayed_episodes: 4 } })
+    const ECHO = jellyfinCard({
+      media_id: 'movie:27205',
+      kind: 'movie',
+      title: 'Echo Movie',
+      title_en: 'Echo Movie',
+      jellyfin_item_id: '3b8941d78aeda0bdfb69c6381c8bd1a9',
+      watch: { ...UNWATCHED, progress: 42 },
+    })
+    const BRAVO = jellyfinCard({
+      media_id: 'tv:1396',
+      title: 'Bravo Show',
+      title_en: 'Bravo Show',
+      jellyfin_item_id: '6d616414836b339f17e139c3b00fd2ae',
+      watch: { ...UNWATCHED, played: true },
+    })
+    const GOLF = jellyfinCard({
+      media_id: 'movie:1',
+      kind: 'movie',
+      title: 'Golf Movie',
+      title_en: 'Golf Movie',
+      jellyfin_item_id: 'eab6bd53ab3da44543cdcdf2ab031696',
+      watch: { ...UNWATCHED, played: true },
+    })
+    const PLAYED = (id: string) => `/api/jellyfin/items/${id}/played`
+
+    function watching(routes: Record<string, StubRoute | (() => StubRoute)> = {}) {
+      return render({
+        [`GET /api/inventory/${TV}`]: {
+          body: wall({ titles: [ALPHA, BRAVO, ECHO, GOLF], tracked: [FRIEREN, SPY] }),
+        },
+        ...routes,
+      })
+    }
+
+    function sent(api: ReturnType<typeof render>, method: string, path: string) {
+      return api.mock.calls.filter(([url, init]) => url === path && init?.method === method)
+    }
+
+    it('卡片用字說出已看、看到幾 %、剩幾集沒看；還沒看過的片什麼都不說', async () => {
+      watching({
+        [`GET /api/inventory/${TV}`]: {
+          body: wall({
+            titles: [ALPHA, BRAVO, ECHO, jellyfinCard({ title: 'Hotel Show', watch: UNWATCHED })],
+          }),
+        },
+      })
+      renderApp(`/library/${TV}`)
+
+      expect(within(await findTile('Alpha Show')).getByText('剩 4 集沒看')).toBeVisible()
+      expect(within(tile('Bravo Show')).getByText('已看')).toBeVisible()
+      expect(within(tile('Echo Movie')).getByText('看到 42%')).toBeVisible()
+      const hotel = tile('Hotel Show')
+      expect(within(hotel).queryByText('已看')).not.toBeInTheDocument()
+      expect(hotel).not.toHaveTextContent(/看到|沒看/)
+      // 沒看過的照樣標得了。
+      expect(within(hotel).getByRole('button', { name: '標為已看' })).toBeVisible()
+    })
+
+    it('還沒進 Jellyfin 的作品沒有觀看狀態，也沒有切換鍵', async () => {
+      watching()
+      renderApp(`/library/${TV}`)
+      await findTile('Alpha Show')
+
+      expect(within(band()).queryByRole('button', { name: /標為/ })).not.toBeInTheDocument()
+    })
+
+    it('標為已看：送出之後牆上那一格當場換掉，不重抓整面牆', async () => {
+      const api = watching({
+        [`POST ${PLAYED(ALPHA.jellyfin_item_id)}`]: { body: { ...UNWATCHED, played: true } },
+      })
+      renderApp(`/library/${TV}`)
+      const alpha = await findTile('Alpha Show')
+      const walls = sent(api, 'GET', `/api/inventory/${TV}`).length
+
+      const mark = within(alpha).getByRole('button', { name: '標為已看' })
+      // 每一格都有同名的這一顆：描述說是哪一部（WCAG 2.4.4）。
+      expect(mark).toHaveAccessibleDescription('Alpha Show')
+      await userEvent.click(mark)
+
+      expect(await within(alpha).findByText('已看')).toBeVisible()
+      expect(within(alpha).queryByText('剩 4 集沒看')).not.toBeInTheDocument()
+      expect(within(alpha).getByRole('button', { name: '標為未看' })).toBeVisible()
+      expect(sent(api, 'POST', PLAYED(ALPHA.jellyfin_item_id))).toHaveLength(1)
+      expect(sent(api, 'GET', `/api/inventory/${TV}`)).toHaveLength(walls)
+    })
+
+    it('標為未看先確認：說得出會清掉觀看次數與時間，取消就什麼都不送', async () => {
+      const api = watching()
+      renderApp(`/library/${TV}`)
+      const golf = await findTile('Golf Movie')
+
+      await userEvent.click(within(golf).getByRole('button', { name: '標為未看' }))
+
+      const confirm = within(golf).getByRole('group')
+      expect(confirm).toHaveAccessibleName(/觀看次數.*最後觀看時間.*找不回來/)
+      // 電影沒有「集」可以清。
+      expect(confirm).not.toHaveAccessibleName(/每一集/)
+      expect(confirm).toHaveFocus()
+
+      await userEvent.click(within(golf).getByRole('button', { name: '取消' }))
+
+      expect(within(golf).getByRole('button', { name: '標為未看' })).toHaveFocus()
+      expect(within(golf).getByText('已看')).toBeVisible()
+      expect(api.mock.calls.filter(([, init]) => init?.method === 'DELETE')).toHaveLength(0)
+    })
+
+    it('劇集的確認說得出清掉的是每一集，確認之後才送出，牆上換成剩幾集沒看', async () => {
+      const api = watching({
+        [`DELETE ${PLAYED(BRAVO.jellyfin_item_id)}`]: {
+          body: { ...UNWATCHED, unplayed_episodes: 2 },
+        },
+      })
+      renderApp(`/library/${TV}`)
+      const bravo = await findTile('Bravo Show')
+
+      await userEvent.click(within(bravo).getByRole('button', { name: '標為未看' }))
+      const confirm = within(bravo).getByRole('group')
+      expect(confirm).toHaveAccessibleName(/每一集.*觀看次數.*最後觀看時間/)
+      expect(sent(api, 'DELETE', PLAYED(BRAVO.jellyfin_item_id))).toHaveLength(0)
+
+      await userEvent.click(within(confirm).getByRole('button', { name: '標為未看' }))
+
+      expect(await within(bravo).findByText('剩 2 集沒看')).toBeVisible()
+      expect(within(bravo).queryByText('已看')).not.toBeInTheDocument()
+      expect(sent(api, 'DELETE', PLAYED(BRAVO.jellyfin_item_id))).toHaveLength(1)
+    })
+
+    it('鍵盤做得完：Enter 打開確認、Esc 收起並回到那一顆鍵', async () => {
+      const api = watching({
+        [`DELETE ${PLAYED(GOLF.jellyfin_item_id)}`]: { body: UNWATCHED },
+      })
+      renderApp(`/library/${TV}`)
+      const golf = await findTile('Golf Movie')
+      const unmark = within(golf).getByRole('button', { name: '標為未看' })
+
+      unmark.focus()
+      await userEvent.keyboard('{Enter}')
+      expect(within(golf).getByRole('group')).toHaveFocus()
+      await userEvent.keyboard('{Escape}')
+      expect(within(golf).getByRole('button', { name: '標為未看' })).toHaveFocus()
+
+      await userEvent.keyboard('{Enter}')
+      await userEvent.tab()
+      await userEvent.keyboard('{Enter}')
+
+      await waitFor(() => expect(within(golf).queryByText('已看')).not.toBeInTheDocument())
+      expect(sent(api, 'DELETE', PLAYED(GOLF.jellyfin_item_id))).toHaveLength(1)
+      // 送出之後焦點回到同一顆鍵（現在是「標為已看」），不掉回頁首（playwright 實跑抓到）。
+      expect(within(golf).getByRole('button', { name: '標為已看' })).toHaveFocus()
+    })
+
+    it('寫不進去時就在那一格說原因，狀態不變', async () => {
+      watching({
+        [`POST ${PLAYED(ALPHA.jellyfin_item_id)}`]: {
+          status: 404,
+          body: { detail: { reason: 'item_not_visible', detail: 'no such item' } },
+        },
+      })
+      renderApp(`/library/${TV}`)
+      const alpha = await findTile('Alpha Show')
+
+      await userEvent.click(within(alpha).getByRole('button', { name: '標為已看' }))
+
+      expect(await within(alpha).findByRole('alert')).toHaveTextContent(
+        '你在 Jellyfin 看不到這部作品，沒有寫入。',
+      )
+      expect(within(alpha).getByText('剩 4 集沒看')).toBeVisible()
+    })
+
+    it('Jellyfin 問不到時說下一步並貼服務原文', async () => {
+      watching({
+        [`DELETE ${PLAYED(GOLF.jellyfin_item_id)}`]: {
+          status: 503,
+          body: {
+            detail: {
+              reason: 'jellyfin_unreachable',
+              detail: 'DELETE /UserPlayedItems: connection refused',
+            },
+          },
+        },
+      })
+      renderApp(`/library/${TV}`)
+      const golf = await findTile('Golf Movie')
+
+      await userEvent.click(within(golf).getByRole('button', { name: '標為未看' }))
+      await userEvent.click(
+        within(within(golf).getByRole('group')).getByRole('button', { name: '標為未看' }),
+      )
+
+      expect(await within(golf).findByRole('alert')).toHaveTextContent(/問不到 Jellyfin.*健康頁/)
+      expect(within(golf).getByText('DELETE /UserPlayedItems: connection refused')).toBeVisible()
+      expect(within(golf).getByText('已看')).toBeVisible()
+    })
+
+    it('帳號在 Jellyfin 被停用時，標記那一下就把人送回登入頁', async () => {
+      const account = session({ name: 'deckhand', role: 'user' })
+      stubApi({
+        'GET /api/health': { body: HEALTHY },
+        'GET /api/auth/me': account.me,
+        'GET /api/inventory': { body: LIBRARIES },
+        [`GET /api/inventory/${TV}`]: { body: wall({ titles: [ALPHA] }) },
+        [`POST ${PLAYED(ALPHA.jellyfin_item_id)}`]: () => {
+          account.signOut()
+          return { status: 401, body: { detail: { reason: 'account_disabled', detail: '' } } }
+        },
+      })
+      const { router } = renderApp(`/library/${TV}`)
+
+      await userEvent.click(
+        within(await findTile('Alpha Show')).getByRole('button', { name: '標為已看' }),
+      )
+
+      await waitFor(() => expect(router.state.location.pathname).toBe('/login'))
+      expect(router.state.location.search).toMatchObject({ expired: true })
     })
   })
 

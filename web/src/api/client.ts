@@ -40,9 +40,12 @@ export async function apiPut<T>(path: string, body?: unknown): Promise<T> {
   return request<T>('PUT', path, body)
 }
 
-/** 成功是 204，沒有 body（`request` 對 204 回 `undefined`）。 */
-export async function apiDelete(path: string): Promise<void> {
-  return request<void>('DELETE', path)
+/**
+ * 多數成功是 204，沒有 body（`request` 對 204 回 `undefined`）；標為未看回寫入之後的狀態，
+ * 所以回應型別由呼叫端指定。
+ */
+export async function apiDelete<T = void>(path: string): Promise<T> {
+  return request<T>('DELETE', path)
 }
 
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {

@@ -598,6 +598,12 @@ ISO 6346 標識在哪個語言都是同一串字母數字）、狀態標籤（`.
   `border-t-2 border-rule`、`min-h-10` 固定高度讓基線對齊；找到了是 `.label` 文字連結（開新分頁，帶 `sr-only` 的新分頁說明，`aria-describedby` 指到那一格的標題——
   每一格都有同名的這一條），還沒找到就說原因
   （掃描中 / 沒有位址 / 找不到），不給死連結。框的 hover 用 `has-[a:hover]` 跟著任一條連結變重。
+  **觀看狀態**（M1.5 票 05）：Jellyfin 那一頁的卡片在名稱與盤點行之間多一行 `.value text-xs text-ink` 的字——「已看」
+  「看到 42%」「剩 4 集沒看」，不塗漆也不畫勾（它不是 Berth 的狀態，The Usual Stays Unpainted Rule），沒話說時留空但保留高度。
+  Jellyfin 那一行多一顆「標為已看 / 未看」：比 Ghost 小一號（`border-2 border-rule`、`px-2 py-1`、`min-h-6`），整行
+  `flex-wrap`，窄的時候換到深連結下一行。標為未看走就地確認（`useInPlaceConfirm` + `ConfirmPanel`），確認區塊佔滿那一行、
+  兩顆鍵**永遠疊成一欄**（卡片再寬也只有十幾 rem，`ConfirmAction` 的 `sm:` 兩欄在卡片裡會溢出）。送出中這一顆不停用、
+  只換字（停用的鍵接不住確認收起時送回來的焦點）。
 
 ### Media 詳情（提單）
 

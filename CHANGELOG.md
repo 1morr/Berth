@@ -370,6 +370,13 @@ Windows Docker Desktop（NTFS bind mount）與 Linux（ext4）上各跑一次 `d
   Berth 端不另存圖（量測見 `docs/research/library-browsing.md` §6.1）。
 - `scripts/experiments/jellyfin_images.py`（M1.5 票 04）：量縮圖參數與格式協商、Jellyfin 自己的縮圖快取，以及 6 條並行下
   直連 Jellyfin 與經過 Berth 的延遲。演練情境 `library` 的替身 Jellyfin 帶海報。
+- **媒體庫牆上的卡片說得出你看到哪了，並可標為已看 / 未看**（M1.5 票 05，brief §12）：Jellyfin 那一頁的每一格多一行
+  「已看」「看到 42%」（電影）或「剩 4 集沒看」（劇集，沒開始看的也說），照 jellyfin-web 卡片的判定；最下面那一行多一顆
+  「標為已看 / 未看」，寫進你在 Jellyfin 的紀錄，寫完那一格當場換掉、不重抓整面牆。**標為未看先確認**：它清掉觀看次數與
+  最後觀看時間、找不回來，劇集清的是每一集。`POST` / `DELETE /api/jellyfin/items/{item_id}/played` 回寫入之後的
+  `WatchStateOut`；Jellyfin 的使用者 id 只從 session 來，你在 Jellyfin 看不到的 item 回 404 `item_not_visible` 而且沒有寫入。
+  `InventoryCardOut` 多 `watch`（`tracked` 與還沒進 Jellyfin 的是 `null`）。演練情境 `library` 的替身 Jellyfin 每部劇擺
+  六集，`deckhand` 與 `skipper` 各看過一些。
 
 ### Changed
 

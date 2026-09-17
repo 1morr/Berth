@@ -25,6 +25,13 @@ _Avoid_: root folder, destination；程式碼中不要用 `library` 指 Route（
 它是一條 Route 一頁、只有 Berth 經手的作品，M1.5 票 03 改成現在的定義。
 _Avoid_: library（程式碼中，那是下一條的 Jellyfin Library）, collection, shelf
 
+**Watch State**（UI 顯示「觀看狀態」）:
+一位使用者在 Jellyfin 對一部作品（或一集）的觀看紀錄，Inventory 的卡片上一行字：**已看**、**看到 N%**（只有影片）、
+**剩 N 集沒看**（只有劇集，沒開始看的也算），都不成立就是還沒看過。紀錄存在 Jellyfin、屬於那個人，Berth 不存；
+Berth 只讀它，並替那個人**標為已看 / 標為未看**（寫回 Jellyfin）。標為未看會清掉觀看次數與最後觀看時間，對劇集是
+每一集，復原不了。
+_Avoid_: seen, history, played state
+
 **Jellyfin Library**（UI 顯示「Jellyfin 媒體庫」）:
 Jellyfin 那一端的 virtual folder：一個名字、一個 collection type、**一到多條**路徑。Berth 不擁有它——
 套件內的 Jellyfin 由 Berth 建三個（Movies / TV / Anime），既有的一律只讀，最多加一條路徑。

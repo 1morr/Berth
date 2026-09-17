@@ -12,13 +12,12 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, Query, Request, status
+from fastapi import APIRouter, Query, Request
 from pydantic import BaseModel, ConfigDict
 
 from berth.api.deps import AccessCacheDep, ClientFactoryDep, SessionDep
-from berth.api.gate import current_user
-from berth.api.jellyfin import image_url
-from berth.api.schemas import JellyfinWebOut
+from berth.api.jellyfin import access_refusal, image_url, session_user
+from berth.api.schemas import JellyfinWebOut, WatchStateOut
 from berth.domain import (
     CollectionType,
     ImageSize,
@@ -27,7 +26,6 @@ from berth.domain import (
     JellyfinPresence,
     MediaKind,
 )
-from berth.services.auth import AuthenticatedUser
 from berth.services.deeplink import jellyfin_web
 from berth.services.inventory import InventoryCard, read_wall
 from berth.services.jellyfin_access import (
@@ -94,6 +92,9 @@ class InventoryCardOut(BaseModel):
     jellyfin_item_id: str
     #: Berth 沒經手的作品是 `null`。
     tracking: TrackingOut | None
+    #: 這位使用者看到哪了（票 05）。只有 `titles` 的卡片有；`tracked` 一律是 `null`（整份清單不帶
+    #: 觀看紀錄），還沒進 Jellyfin 的也是。
+    watch: WatchStateOut | None
 
 
 class InventoryOut(BaseModel):
@@ -120,10 +121,10 @@ async def get_inventories(
 ) -> list[InventoryLibraryOut]:
     """切換列：這位使用者在 Jellyfin 看得到、Berth 瀏覽得了的媒體庫。"""
     try:
-        async with jellyfin_access(session, factory, cache, _user(request)) as access:
+        async with jellyfin_access(session, factory, cache, session_user(request)) as access:
             libraries = access.libraries
     except (AccountDisabledError, JellyfinUnreachableError) as refusal:
-        raise _refusal(refusal) from refusal
+        raise access_refusal(refusal) from refusal
     return [InventoryLibraryOut.model_validate(row) for row in libraries]
 
 
@@ -137,10 +138,10 @@ async def get_inventory(
     page: Annotated[int, Query(ge=1)] = 1,
 ) -> InventoryOut:
     try:
-        async with jellyfin_access(session, factory, cache, _user(request)) as access:
+        async with jellyfin_access(session, factory, cache, session_user(request)) as access:
             wall = await read_wall(session, access, library_id, page=page)
     except (AccountDisabledError, JellyfinUnreachableError, LibraryNotVisibleError) as refusal:
-        raise _refusal(refusal) from refusal
+        raise access_refusal(refusal) from refusal
     return InventoryOut(
         library=InventoryLibraryOut.model_validate(wall.library),
         jellyfin=JellyfinWebOut.model_validate(await jellyfin_web(session)),
@@ -164,28 +165,3 @@ def _card(card: InventoryCard) -> InventoryCardOut:
         card.jellyfin_item_id, JellyfinImageType.PRIMARY, size=ImageSize.POSTER, tag=card.poster_tag
     )
     return out.model_copy(update={"poster_url": url})
-
-
-def _user(request: Request) -> AuthenticatedUser:
-    user = current_user(request)
-    if user is None:  # pragma: no cover - 門禁保證不會發生
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "sign in to use this API")
-    return user
-
-
-#: 閘門的三種拒絕 → 狀態碼與 `reason`。
-#:
-#: - `account_disabled`（401）：session 已經結束，前端照「登入失效」處理。
-#: - `library_not_visible`（404）：沒有權限與不存在是同一個回應。
-#: - `jellyfin_unreachable`（503）：`detail` 是服務回的原文。
-_REFUSALS: dict[type[Exception], tuple[int, str]] = {
-    AccountDisabledError: (status.HTTP_401_UNAUTHORIZED, "account_disabled"),
-    LibraryNotVisibleError: (status.HTTP_404_NOT_FOUND, "library_not_visible"),
-    JellyfinUnreachableError: (status.HTTP_503_SERVICE_UNAVAILABLE, "jellyfin_unreachable"),
-}
-
-
-def _refusal(refusal: Exception) -> HTTPException:
-    """`{reason, detail}`，與 Route 設定頁的拒絕同形（`api/routes.py`）。"""
-    code, reason = _REFUSALS[type(refusal)]
-    return HTTPException(code, {"reason": reason, "detail": str(refusal)})

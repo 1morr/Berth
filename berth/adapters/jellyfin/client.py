@@ -22,6 +22,7 @@ from berth.adapters.jellyfin import (
     JellyfinPublicInfo,
     JellyfinSource,
     JellyfinTask,
+    JellyfinUserData,
     JellyfinView,
     NewLibrary,
     TypeOption,
@@ -310,6 +311,19 @@ class HttpJellyfinClient:
         )
         return _items(payload)
 
+    async def mark_played(self, *, user_id: str, item_id: str, played: bool) -> JellyfinUserData:
+        path = f"/UserPlayedItems/{item_id}"
+        method = "POST" if played else "DELETE"
+        response = await self._session.request(
+            method, path, params={"userId": user_id}, tolerate=(404,)
+        )
+        if response.status_code == 404:
+            raise NotFoundError(f"{method} {path}: no such item for this user")
+        payload = json_body(response)
+        if not isinstance(payload, dict) or "Played" not in payload:
+            raise ProtocolMismatchError(f"{method} {path}: not a user data payload")
+        return _user_data(payload)
+
     # --- 圖片 ---
 
     async def image(
@@ -390,6 +404,19 @@ def _item(row: dict[str, Any]) -> JellyfinItem:
         series_id=str(row.get("SeriesId") or ""),
         year=year if isinstance(year := row.get("ProductionYear"), int) else None,
         primary_tag=str((row.get("ImageTags") or {}).get("Primary") or ""),
+        user_data=_user_data(data) if isinstance(data := row.get("UserData"), dict) else None,
+    )
+
+
+def _user_data(row: dict[str, Any]) -> JellyfinUserData:
+    """缺的格子不是錯：`PlayedPercentage` 與 `UnplayedItemCount` 本來就只在某些 item 上有
+    （研究 §1.2）。"""
+    percentage = row.get("PlayedPercentage")
+    unplayed = row.get("UnplayedItemCount")
+    return JellyfinUserData(
+        played=bool(row.get("Played", False)),
+        played_percentage=float(percentage) if isinstance(percentage, int | float) else 0.0,
+        unplayed_item_count=unplayed if isinstance(unplayed, int) else None,
     )
 
 

@@ -8,7 +8,7 @@ import { ApiError } from '../api/client'
 import {
   inventoriesQueryOptions,
   inventoryQueryOptions,
-  inventoryRefusal,
+  accessRefusal,
   type Inventory,
   type InventoryCard,
   type InventoryLibrary,
@@ -119,7 +119,7 @@ function Wall({
 
   if (wall.isPending) return <Placeholders />
   if (!wall.data) {
-    if (inventoryRefusal(wall.error)?.reason === 'library_not_visible') {
+    if (accessRefusal(wall.error)?.reason === 'library_not_visible') {
       return <UnknownLibrary first={libraries[0]} />
     }
     return <Trouble error={wall.error} retry={() => void wall.refetch()} />
@@ -192,6 +192,7 @@ function Tiles({ cards, inventory }: { cards: InventoryCard[]; inventory: Invent
           key={`${card.media_id}|${card.jellyfin_item_id}`}
           card={card}
           web={inventory.jellyfin}
+          libraryId={inventory.library.id}
         />
       ))}
     </div>
@@ -441,7 +442,7 @@ function UnknownLibrary({ first }: { first: InventoryLibrary | undefined }) {
 /** 讀不到東西的三種樣子：session 被結束、Jellyfin 問不到、Berth 自己沒回應。 */
 function Trouble({ error, retry }: { error: Error | null; retry: () => void }) {
   const { t } = useTranslation()
-  const refusal = inventoryRefusal(error)
+  const refusal = accessRefusal(error)
 
   if (error instanceof ApiError && error.status === 401) return <SessionEnded />
   if (refusal?.reason === 'jellyfin_unreachable') {

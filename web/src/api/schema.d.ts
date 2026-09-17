@@ -243,6 +243,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/jellyfin/items/{item_id}/played": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mark Played
+         * @description 標為已看。劇集會連每一集一起標，看到一半的位置歸零（研究 §5）。
+         */
+        post: operations["mark_played_api_jellyfin_items__item_id__played_post"];
+        /**
+         * Mark Unplayed
+         * @description 標為未看：清掉觀看次數與最後觀看時間，**復原不了**；劇集清的是每一集（研究 §5）。
+         *     先確認是畫面的事。
+         */
+        delete: operations["mark_unplayed_api_jellyfin_items__item_id__played_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/jobs": {
         parameters: {
             query?: never;
@@ -1284,6 +1309,7 @@ export interface components {
             /** Jellyfin Item Id */
             jellyfin_item_id: string;
             tracking: components["schemas"]["TrackingOut"] | null;
+            watch: components["schemas"]["WatchStateOut"] | null;
         };
         /**
          * InventoryLibraryOut
@@ -2353,6 +2379,21 @@ export interface components {
             /** Tags */
             tags: string;
         };
+        /**
+         * WatchStateOut
+         * @description 這位使用者在 Jellyfin 看到哪了（`services/watch.py`、M1.5 票 05）。媒體庫的牆與標記已看共用。
+         *
+         *     三格至多一格有話說：已看優先，其次是看到一半（只有影片）、剩幾集沒看（只有劇集）。都沒有就是
+         *     還沒看過。
+         */
+        WatchStateOut: {
+            /** Played */
+            played: boolean;
+            /** Progress */
+            progress: number | null;
+            /** Unplayed Episodes */
+            unplayed_episodes: number | null;
+        };
     };
     responses: never;
     parameters: never;
@@ -2663,6 +2704,110 @@ export interface operations {
                 };
             };
             /** @description `image_missing`：Jellyfin 沒有這張圖 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description `jellyfin_unreachable`：問不到 Jellyfin */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mark_played_api_jellyfin_items__item_id__played_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WatchStateOut"];
+                };
+            };
+            /** @description `account_disabled`：帳號在 Jellyfin 被停用，session 已結束 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `item_not_visible`：這位使用者看不到這個 item，或沒有這個 item */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description `jellyfin_unreachable`：問不到 Jellyfin */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mark_unplayed_api_jellyfin_items__item_id__played_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WatchStateOut"];
+                };
+            };
+            /** @description `account_disabled`：帳號在 Jellyfin 被停用，session 已結束 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `item_not_visible`：這位使用者看不到這個 item，或沒有這個 item */
             404: {
                 headers: {
                     [name: string]: unknown;

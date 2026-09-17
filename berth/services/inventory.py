@@ -45,6 +45,7 @@ from berth.models import Job, LedgerEntry, Media, Plan, PlanItem, Route, media_i
 from berth.models.types import utcnow
 from berth.services.jellyfin_access import BrowsableLibrary, JellyfinAccess
 from berth.services.routes import owning_route, target_prefix
+from berth.services.watch import WatchState, watch_state
 
 #: 卡在失敗、在你動手之前不會自己好的狀態——下載列表上塗紅的那四個（`jobs/jobState.ts`）。
 FAILED_STATES: frozenset[JobState] = frozenset(
@@ -129,6 +130,9 @@ class InventoryCard:
     jellyfin_item_id: str
     #: Berth 沒經手的作品是 `None`：牆上那一格不印任何狀態。
     tracking: Tracking | None
+    #: 這位使用者看到哪了（票 05）。**只有 Jellyfin 那一頁的卡片有**：還沒進 Jellyfin 的沒有紀錄，
+    #: `tracked` 裡在 Jellyfin 的那幾格來自整份清單，它不帶觀看紀錄（`library_index`）。
+    watch: WatchState | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -523,6 +527,7 @@ def _jellyfin_card(
         presence=JellyfinPresence.FOUND,
         jellyfin_item_id=item.id,
         tracking=None if mine is None else mine.tracking,
+        watch=None if item.user_data is None else watch_state(item.user_data),
     )
 
 
@@ -544,6 +549,7 @@ def _tracked_card(
         presence=row.presence,
         jellyfin_item_id="",
         tracking=row.tracking,
+        watch=None,
     )
 
 

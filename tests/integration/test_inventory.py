@@ -8,6 +8,8 @@
   **對應不只靠帳本的 Series id**：Jellyfin 的 TMDB id 對得上也算（票 13 留下的缺口）。
 - **一格說什麼**：六種狀態依序取第一個成立的、`N / M 集`、兩個篩選（票 13 的判定，沿用）。
 - **還沒進 Jellyfin 的那一行**：還在找、找不到、沒有東西可以找。
+- **這位使用者看到哪了**（M1.5 票 05）：只在 Jellyfin 那一頁的卡片上；推導規則在
+  `tests/unit/test_watch.py`。
 
 權限不在這裡測（`test_jellyfin_access.py`）：牆拿到的 `JellyfinAccess` 已經是驗過的那一份。
 資料列是直接擺進去的：送單、規劃、入庫與反查各自有自己的測試，這裡要的是「帳本、Job 與
@@ -24,7 +26,13 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from berth.adapters.jellyfin import ITEM_MOVIE, ITEM_SERIES, JellyfinItem, JellyfinLibrary
+from berth.adapters.jellyfin import (
+    ITEM_EPISODE,
+    ITEM_MOVIE,
+    ITEM_SERIES,
+    JellyfinItem,
+    JellyfinLibrary,
+)
 from berth.adapters.jellyfin.fake import FakeJellyfinClient
 from berth.domain import (
     CollectionType,
@@ -53,6 +61,7 @@ from berth.services.inventory import (
 )
 from berth.services.jellyfin_access import BrowsableLibrary, JellyfinAccess
 from berth.services.settings import read_settings, write_settings
+from berth.services.watch import WatchState
 from tests.integration.arrange import arrange
 
 pytestmark = pytest.mark.asyncio
@@ -260,6 +269,7 @@ async def access_for(
     items: Sequence[JellyfinItem] = (),
     *,
     jellyfin: FakeJellyfinClient | None = None,
+    viewer: str = VIEWER,
 ) -> tuple[JellyfinAccess, FakeJellyfinClient]:
     """資料庫裡每一條 Route 指向的媒體庫都在 Jellyfin 上、而且這位使用者都看得到。"""
     routes = list(await session.scalars(select(Route).order_by(Route.id)))
@@ -283,7 +293,7 @@ async def access_for(
         BrowsableLibrary(id=library_id, name=rows[0].name, collection_type=rows[0].collection_type)
         for library_id, rows in libraries.items()
     )
-    return JellyfinAccess(fake, VIEWER, granted), fake
+    return JellyfinAccess(fake, viewer, granted), fake
 
 
 async def wall(
@@ -540,6 +550,77 @@ class TestTrackedOnTheWall:
         await session.commit()
 
         assert (await card(session)).media_id == "tv:120089"
+
+
+class TestWatchState:
+    async def test_each_title_on_the_wall_says_how_far_this_viewer_got(
+        self, session: AsyncSession
+    ) -> None:
+        tv = await route(session)
+        fake = FakeJellyfinClient(
+            startup_wizard_completed=True, users={"viewer": "pw", "other": "pw"}
+        )
+        viewer = (await fake.authenticate("viewer", "pw")).user_id
+
+        def episode(series: str, number: int) -> JellyfinItem:
+            return JellyfinItem(
+                id=f"{series}-e{number}",
+                type=ITEM_EPISODE,
+                name=f"{series} {number}",
+                path=f"{tv.target_path}/{series}/S01E{number:02d}.mkv",
+                tmdb_id="",
+                series_id=series,
+            )
+
+        items = [
+            in_jellyfin(tv, "alpha", id="alpha"),
+            *(episode("alpha", number) for number in (1, 2, 3)),
+            in_jellyfin(tv, "bravo", id="bravo"),
+            *(episode("bravo", number) for number in (1, 2)),
+            in_jellyfin(tv, "charlie", id="charlie"),
+            episode("charlie", 1),
+        ]
+        # 別人看過的不算這個人的。
+        fake.played = {"viewer": {"alpha-e1", "bravo-e1", "bravo-e2"}, "other": {"charlie-e1"}}
+        access, _ = await access_for(session, items, jellyfin=fake, viewer=viewer)
+
+        shown = await read_wall(session, access, tv.jellyfin_library_id, page=1)
+
+        assert [(row.jellyfin_item_id, row.watch) for row in shown.titles] == [
+            ("alpha", WatchState(played=False, progress=None, unplayed_episodes=2)),
+            ("bravo", WatchState(played=True, progress=None, unplayed_episodes=None)),
+            ("charlie", WatchState(played=False, progress=None, unplayed_episodes=1)),
+        ]
+
+    async def test_a_film_under_way_says_how_far(self, session: AsyncSession) -> None:
+        movies = await route(session, "movies", collection_type=CollectionType.MOVIES)
+        fake = FakeJellyfinClient(startup_wizard_completed=True, users={"viewer": "pw"})
+        viewer = (await fake.authenticate("viewer", "pw")).user_id
+        fake.positions = {"viewer": {"echo": 41.7}}
+        items = [in_jellyfin(movies, "Echo Movie", id="echo", kind=MediaKind.MOVIE)]
+        access, _ = await access_for(session, items, jellyfin=fake, viewer=viewer)
+
+        (shown,) = (await read_wall(session, access, movies.jellyfin_library_id, page=1)).titles
+
+        assert shown.watch == WatchState(played=False, progress=42, unplayed_episodes=None)
+
+    async def test_berths_own_list_says_nothing_about_watching(self, session: AsyncSession) -> None:
+        """「還沒進 Jellyfin」那一條與兩個篩選取自整份清單（`library_index`），它不帶觀看紀錄：
+        要帶就是整個媒體庫每一部都要一份，代價沒有量過，而那一份是 Berth 的工作清單（票 05）。
+        Jellyfin 那一頁上的同一部照樣有。"""
+        tv = await route(session)
+        spy = await title(session)
+        severance = await title(session, tmdb_id=95396, name="Severance")
+        await linked(session, spy, tv, item="episode-1", series="spy")
+        await job(session, severance, tv, JobState.DOWNLOADING)
+        items = [in_jellyfin(tv, "SPY×FAMILY", id="spy", tmdb_id="120089")]
+
+        shown = await wall(session, "tv", items)
+
+        assert [row.watch for row in shown.tracked] == [None, None]
+        assert shown.titles[0].watch == WatchState(
+            played=False, progress=None, unplayed_episodes=None
+        )
 
 
 class TestStatus:

@@ -527,6 +527,27 @@ const zhHant = {
     episodes: '{{imported}} / {{aired}} 集入庫',
     versions_one: '{{count}} 個版本',
     versions_other: '{{count}} 個版本',
+    // 這位使用者在 Jellyfin 看到哪了（票 05）。一行只說一件事，判定在後端（`services/watch.py`）。
+    watch: {
+      played: '已看',
+      progress: '看到 {{progress}}%',
+      // 沒開始看的劇也說（jellyfin-web 的計數徽章）。
+      unplayed_one: '剩 {{count}} 集沒看',
+      unplayed_other: '剩 {{count}} 集沒看',
+      markPlayed: '標為已看',
+      markUnplayed: '標為未看',
+      pending: '寫入中…',
+      // 標為未看復原不了（研究 §5）：說清楚清掉的是什麼、範圍多大。
+      warningMovie: '會清掉你看這部片的觀看次數與最後觀看時間，清掉就找不回來。',
+      warningSeries:
+        '會清掉你看這部劇每一集的觀看次數與最後觀看時間，之前單獨看過的集也一起清掉，清掉就找不回來。',
+      refused: {
+        item_not_visible: '你在 Jellyfin 看不到這部作品，沒有寫入。',
+        jellyfin_unreachable:
+          'Berth 問不到 Jellyfin，沒有寫入。到健康頁確認 Jellyfin 還在，再按一次。',
+        other: '沒有寫入。Berth 自己的 API 沒有回應，先確認它還活著，再按一次。',
+      },
+    },
     jellyfin: {
       open: '在 Jellyfin 開啟',
       // 看不見的那一半：連結會開新分頁。
@@ -1672,6 +1693,26 @@ const en: Translations<typeof zhHant> = {
     episodes: '{{imported}} of {{aired}} episodes in',
     versions_one: '{{count}} version',
     versions_other: '{{count}} versions',
+    watch: {
+      played: 'Watched',
+      progress: '{{progress}}% watched',
+      unplayed_one: '{{count}} episode unwatched',
+      unplayed_other: '{{count}} episodes unwatched',
+      markPlayed: 'Mark watched',
+      markUnplayed: 'Mark unwatched',
+      pending: 'Saving…',
+      warningMovie:
+        'This clears how many times you watched this film and when you last did. It cannot be brought back.',
+      warningSeries:
+        'This clears how many times you watched every episode of this show and when you last did, including episodes you watched on their own. It cannot be brought back.',
+      refused: {
+        item_not_visible: 'You cannot see this title in Jellyfin. Nothing was saved.',
+        jellyfin_unreachable:
+          'Berth cannot reach Jellyfin. Nothing was saved. Check on the Health page that Jellyfin is up, then press it again.',
+        other:
+          'Nothing was saved. Berth’s own API did not answer — check that it is still running, then press it again.',
+      },
+    },
     jellyfin: {
       open: 'Open in Jellyfin',
       newTab: ' (opens in a new tab)',

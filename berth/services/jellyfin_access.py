@@ -1,4 +1,4 @@
-"""替某一位使用者向 Jellyfin 讀東西的唯一入口：權限閘門（M1.5 票 03、plan §11.2b）。
+"""替某一位使用者向 Jellyfin 讀寫東西的唯一入口：權限閘門（M1.5 票 03、plan §11.2b）。
 
 Berth 只有一把伺服器 API key，而 Jellyfin 把 API key 當管理員：帶誰的 `userId` 就是誰，帶
 `parentId` 的查詢**不套**媒體庫權限，停用的帳號也照樣代讀得到（12.1.0 實測，研究
@@ -11,9 +11,12 @@ library-browsing.md §2、§9）。所以「這個人看得到什麼」由 Berth
   token 都擋不住，所以這裡根本不收它們。
 - **允許清單與 `Policy` 同一份短時間快取**（`AccessCache`）。帳號被停用就結束這個人的每一張
   Berth session，而不是縮短 session 的效期（brief §19）。
+- **寫入只有標記已看 / 未看**（`JellyfinAccess.mark_played`，票 05）。它不先查可見性：
+  `UserPlayedItems` 自己查，看不到的回 404 而且沒有寫入（研究 §5 的原始碼；12.1.0 打完立刻讀回，
+  研究 §2 的表）。
 
 單一作品與集的讀取（`/Items/{id}?userId=`、`/Shows/{id}/Seasons|Episodes?userId=`，會檢查可見性的那幾支）
-要加在這裡，跟著它們第一個呼叫端一起來（票 05、08）；票 03 的牆用不到。
+要加在這裡，跟著它們第一個呼叫端一起來（票 08）。
 """
 
 from __future__ import annotations
@@ -26,7 +29,7 @@ from dataclasses import dataclass
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from berth.adapters.http import ServiceError
+from berth.adapters.http import NotFoundError, ServiceError
 from berth.adapters.jellyfin import (
     ITEM_MOVIE,
     ITEM_SERIES,
@@ -41,6 +44,7 @@ from berth.services.auth import AuthenticatedUser, end_sessions
 from berth.services.clients import ServiceClientFactory
 from berth.services.settings import read_settings
 from berth.services.steps import message
+from berth.services.watch import WatchState, watch_state
 
 #: 允許清單與 `Policy` 記多久（秒）。
 #:
@@ -68,6 +72,11 @@ class AccountDisabledError(Exception):
 class LibraryNotVisibleError(Exception):
     """這個媒體庫不在這個人的允許清單上。**沒有權限、瀏覽不了、不存在是同一種拒絕**：
     分得出來就是在告訴人那個媒體庫存在。"""
+
+
+class ItemNotVisibleError(Exception):
+    """這位使用者在 Jellyfin 看不到這個 item，或沒有這個 item：與 `LibraryNotVisibleError`
+    同一個道理，兩者不分。"""
 
 
 class JellyfinUnreachableError(Exception):
@@ -158,6 +167,23 @@ class JellyfinAccess:
             return await self._client.library_index(
                 user_id=self._user_id, library_id=library.id, item_type=library.item_type
             )
+
+    async def mark_played(self, item_id: str, *, played: bool) -> WatchState:
+        """把這個 item 標為已看或未看，寫進這個人在 Jellyfin 的紀錄；回寫入之後的觀看狀態。
+
+        **對劇集會遞迴到每一集**，標為未看清掉觀看次數與最後觀看時間、復原不了（研究 §5）——
+        要不要先確認是畫面的事。看不到這個 item 時丟 `ItemNotVisibleError`，Jellyfin 那一端
+        沒有寫入。
+        """
+        with reachable():
+            try:
+                written = await self._client.mark_played(
+                    user_id=self._user_id, item_id=item_id, played=played
+                )
+            except NotFoundError as exc:
+                # 在 `reachable()` 之內先接住：404 是答案，不是「問不到」。
+                raise ItemNotVisibleError("no such item, or not yours to see") from exc
+        return watch_state(written)
 
 
 @asynccontextmanager

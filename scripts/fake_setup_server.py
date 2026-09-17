@@ -1126,6 +1126,19 @@ NO_POSTER = frozenset({"Home Videos 2019"})
 #: DTO 帶著 tag、圖卻不見了（掃描之後被刪）：代理回 404，卡片在瀏覽器裡換成佔位。
 LOST_POSTER = frozenset({"Harbour Film 007"})
 
+#: 每部劇在替身 Jellyfin 上擺幾集（M1.5 票 05）：劇集的「剩幾集沒看」由它們算出來。
+DEMO_EPISODES = 6
+
+#: 誰看過什麼（M1.5 票 05），三張表各是一種紀錄。這一張是劇集看過的集數（從第一集起）；
+#: 下面兩張是看過的電影與看到一半的電影。`deckhand`：The Bear 看到第三集、Breaking Bad 看完、
+#: Oppenheimer 看到 42%、Harbour Film 001 看過；`skipper`：Slow Horses 看完、The Bear 看過第一集。
+DEMO_WATCHED: dict[str, dict[str, int]] = {
+    "deckhand": {"The Bear": 3, "Breaking Bad": DEMO_EPISODES},
+    "skipper": {"Slow Horses": DEMO_EPISODES, "The Bear": 1},
+}
+DEMO_FILMS_WATCHED: dict[str, set[str]] = {"deckhand": {"Harbour Film 001"}}
+DEMO_UNDER_WAY: dict[str, dict[str, float]] = {"deckhand": {"Oppenheimer": 42.0}}
+
 
 def demo_poster(name: str) -> JellyfinImage:
     """一張 2:3 的 SVG 海報：底色由名稱導出，名稱一個詞一行。
@@ -1157,6 +1170,7 @@ async def _seed_library(session: AsyncSession, scenario: Scenario, paths: PathSe
     - **Movies**：Oppenheimer 兩個版本；Moana 2 入庫失敗、Jellyfin 裡沒有；另有 130 部填充片
       撐出第二頁。
     - **Anime**（`deckhand` 看不到）：SPY×FAMILY 入庫了一集；葬送的芙莉蓮停在待審、Jellyfin 裡沒有。
+    - **觀看狀態**（M1.5 票 05）：每部劇 `DEMO_EPISODES` 集，誰看過什麼見 `DEMO_WATCHED`。
     """
     routes = {row.slug: row for row in await session.scalars(select(Route))}
     root = paths.library_root
@@ -1192,8 +1206,31 @@ async def _seed_library(session: AsyncSession, scenario: Scenario, paths: PathSe
         items[index] = replace(item, primary_tag=tag)
         if item.name not in LOST_POSTER:
             scenario.jellyfin.images[(item.id, "Primary")] = demo_poster(item.name)
-    scenario.jellyfin.items_ = items
+    episodes = {
+        item.name: [
+            JellyfinItem(
+                id=_scanned_id(path := f"{item.path}/Season 01/{item.name} - S01E{number:02d}.mkv"),
+                type=ITEM_EPISODE,
+                name=f"{item.name} {number}",
+                path=path,
+                tmdb_id="",
+                series_id=item.id,
+            )
+            for number in range(1, DEMO_EPISODES + 1)
+        ]
+        for item in items
+        if item.type == ITEM_SERIES
+    }
     found = {item.name: item for item in items}
+    for user, watched in DEMO_WATCHED.items():
+        scenario.jellyfin.played[user] = {
+            episode.id for name, count in watched.items() for episode in episodes[name][:count]
+        } | {found[name].id for name in DEMO_FILMS_WATCHED.get(user, set())}
+    for user, under_way in DEMO_UNDER_WAY.items():
+        scenario.jellyfin.positions[user] = {
+            found[name].id: percentage for name, percentage in under_way.items()
+        }
+    scenario.jellyfin.items_ = [*items, *(row for rows in episodes.values() for row in rows)]
 
     bear = _demo_media(session, MediaKind.TV, 136315, "The Bear", "大熊餐廳", 2022, seasons=3)
     slow = _demo_media(session, MediaKind.TV, 95480, "Slow Horses", "流人", 2022, seasons=4)
