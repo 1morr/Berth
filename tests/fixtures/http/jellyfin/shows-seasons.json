@@ -1,0 +1,72 @@
+{
+  "Items": [
+    {
+      "BackdropImageTags": [],
+      "ChannelId": null,
+      "Id": "e287646874088d4b73b9578d6fc51da6",
+      "ImageBlurHashes": {
+        "Primary": {
+          "f99664090dfd3223c18e80663440deac": "d23KQ.pLfQpLktfkfQfkfQfQfQfQktfkfQfkfQfQfQfQ"
+        }
+      },
+      "ImageTags": {},
+      "IndexNumber": 1,
+      "IsFolder": true,
+      "LocationType": "FileSystem",
+      "MediaType": "Unknown",
+      "Name": "第 1 季",
+      "PrimaryImageAspectRatio": 0.6666666666666666,
+      "ProductionYear": 2022,
+      "SeriesId": "2a9857e656bbd18b7c3c3a3b4ee5eef1",
+      "SeriesName": "Alpha Show",
+      "SeriesPrimaryImageTag": "f99664090dfd3223c18e80663440deac",
+      "ServerId": "2564a1be47c14ee48993a8d68427c0c7",
+      "Type": "Season",
+      "UserData": {
+        "IsFavorite": false,
+        "ItemId": "e287646874088d4b73b9578d6fc51da6",
+        "Key": "2a9857e6-56bb-d18b-7c3c-3a3b4ee5eef1001",
+        "PlayCount": 0,
+        "PlaybackPositionTicks": 0,
+        "Played": false,
+        "PlayedPercentage": 33.33333333333333,
+        "UnplayedItemCount": 2
+      }
+    },
+    {
+      "BackdropImageTags": [],
+      "ChannelId": null,
+      "Id": "8d54712028c27d182218a373dd4e6460",
+      "ImageBlurHashes": {
+        "Primary": {
+          "f99664090dfd3223c18e80663440deac": "d23KQ.pLfQpLktfkfQfkfQfQfQfQktfkfQfkfQfQfQfQ"
+        }
+      },
+      "ImageTags": {},
+      "IndexNumber": 2,
+      "IsFolder": true,
+      "LocationType": "FileSystem",
+      "MediaType": "Unknown",
+      "Name": "第 2 季",
+      "PrimaryImageAspectRatio": 0.6666666666666666,
+      "ProductionYear": 2022,
+      "SeriesId": "2a9857e656bbd18b7c3c3a3b4ee5eef1",
+      "SeriesName": "Alpha Show",
+      "SeriesPrimaryImageTag": "f99664090dfd3223c18e80663440deac",
+      "ServerId": "2564a1be47c14ee48993a8d68427c0c7",
+      "Type": "Season",
+      "UserData": {
+        "IsFavorite": false,
+        "ItemId": "8d54712028c27d182218a373dd4e6460",
+        "Key": "2a9857e6-56bb-d18b-7c3c-3a3b4ee5eef1002",
+        "PlayCount": 0,
+        "PlaybackPositionTicks": 0,
+        "Played": false,
+        "PlayedPercentage": 0,
+        "UnplayedItemCount": 2
+      }
+    }
+  ],
+  "StartIndex": 0,
+  "TotalRecordCount": 2
+}

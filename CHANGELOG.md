@@ -354,6 +354,12 @@ Windows Docker Desktop（NTFS bind mount）與 Linux（ext4）上各跑一次 `d
   檔案清單與 `tests/fixtures/e2e/` 的兩支 330 秒種子影片造出發佈與 `.torrent`，送單之後放進 qBittorrent 的
   下載路徑再 recheck。平常的 `uv run pytest` 不收它（`-m e2e` 才跑）；`.github/workflows/e2e.yml` 在
   nightly、`v*` tag 與手動觸發時跑，TMDB 憑證是 repo secret `TMDB_API_KEY`。
+- `scripts/experiments/jellyfin_permissions.py`（M1.5 票 01）：在一次性的 Jellyfin 12.1 上以只開放部分媒體庫的使用者，
+  實測伺服器 API key 代讀時哪些端點套用媒體庫權限、`/Items` 的過濾排序分頁是否真的有作用、由 TMDB id 找作品、
+  Series / Season 標記遞迴與停用帳號；自己起停容器，`--record` 重錄契約測試用的 fixture（`UserViews`、
+  `/Users/{id}`、帶 `UserData` 的 `/Items`、`/Items/Filters`、Resume、NextUp、Seasons、Episodes、
+  `UserPlayedItems`、圖片標頭，以及沒權限時的 404 與 `parentId` 洩漏）。結論在 `docs/research/library-browsing.md`
+  §2、§3.1、§5、§10、§11 與 brief §20.8。`lib.Response` 多帶回應標頭。
 
 ### Changed
 

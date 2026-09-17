@@ -171,3 +171,41 @@ Berth 在精靈第 3 步建的 API key，**不帶 `userId`**：
 | `jellyfin/items.tv.series.json` | `GET /Items?parentId=<TV 媒體庫>&recursive=true&includeItemTypes=Series&fields=Path,ProviderIds,MediaSources`。`Path` 是作品資料夾，`ProviderIds.Tmdb` 是字串；Series 沒有檔案，所以沒有來源路徑 |
 | `jellyfin/items.tv.episodes.json` | 同一支端點，`includeItemTypes=Episode`。10 筆只留前 2 筆。單一版本時 `MediaSources[0].Path` 就是自己的 `Path` |
 | `jellyfin/items.movies.movie.json` | Movies 媒體庫，`includeItemTypes=Movie`。電影的檔案就是 item 自己 |
+
+2026-09-17（M1.5 票 01），`scripts/experiments/jellyfin_permissions.py --record` 對一次性的
+`lscr.io/linuxserver/jellyfin:version-12.1ubu2604`（**12.1.0**）錄的。那一台有三個媒體庫 TV / Movies / Anime，
+metadata 來自 NFO（網路 fetcher 關掉）；憑證是那一台的 API key，`userId` 一律是**只開放 TV 與 Movies 的一般使用者**
+（Anime 是他沒有權限的媒體庫），所以每一份都是「受限使用者看到的樣子」。錄之前用 API key 替他寫了觀看紀錄：
+Alpha Show 與 Bravo Show 看過第一集、Frieren（TV）第一集看到 3 分鐘、Foxtrot Movie 看到 5 分鐘、Echo / Golf Movie
+看過 3 / 1 次。**重跑腳本會整組重錄**：item id 是 `MD5(型別全名 + 路徑)`（brief §20.9，原始碼；兩輪一次性容器實測相同）
+所以不變，使用者 id、`ServerId`、日期與 `traceId` 會變。伺服器不是 12.1.0 時 `--record` 會停下來——依下面的規則，
+新版本要開新檔名。
+測量結果與判準在研究文件 `docs/research/library-browsing.md` §2、§3.1、§5、§6、§10。
+
+| 檔案 | 來源 |
+| --- | --- |
+| `jellyfin/userviews.restricted.json` | `GET /UserViews?userId=U`。只有 TV 與 Movies——這是權限的**權威清單**，`Id` 與 `/Library/VirtualFolders` 的 `ItemId` 同一種格式 |
+| `jellyfin/users.restricted.json` | `GET /Users/{U}`（API key）。`Policy.EnableAllFolders=false`、`Policy.EnabledFolders` 是兩個媒體庫的 id、`Policy.IsDisabled=false` |
+| `jellyfin/users.restricted.disabled.json` | 同一支端點，`Policy.IsDisabled=true` 之後。停用之後 API key 代讀照常回資料（研究 §2），所以「停用」只能從這裡讀出來 |
+| `jellyfin/items.tv.series.userdata.json` | `GET /Items?userId=U&parentId=<TV>&recursive=true&includeItemTypes=Series&sortBy=SortName&sortOrder=Ascending&fields=PrimaryImageAspectRatio,ProviderIds,Path&imageTypeLimit=1&enableImageTypes=Primary,Backdrop,Thumb&startIndex=0&limit=100`（媒體庫牆，jellyfin-web 的參數）。每部劇帶 `UserData`：`UnplayedItemCount`、`PlayedPercentage`；**Hotel Show 沒有 `ProviderIds.Tmdb`**、也沒有 `CommunityRating` |
+| `jellyfin/items.movies.movie.userdata.json` | 同上，Movies 媒體庫、`includeItemTypes=Movie`。看到一半的那部帶 `PlaybackPositionTicks` 與 `PlayedPercentage`，看過的帶 `PlayCount` 與 `LastPlayedDate` |
+| `jellyfin/items-filters.tv.json` | `GET /Items/Filters?userId=U&parentId=<TV>&includeItemTypes=Series`。`{Genres, Tags, OfficialRatings, Years}`；**不帶 `parentId` 時四份全空**，所以沒有另存那一份 |
+| `jellyfin/useritems-resume.restricted.json` | `GET /UserItems/Resume?userId=U&mediaTypes=Video`。一集一部電影；Anime 裡看到一半的那一集**不在**（不帶 `parentId` 會套權限） |
+| `jellyfin/shows-nextup.restricted.json` | `GET /Shows/NextUp?userId=U`。Alpha 與 Bravo 的第二集；Anime 那部看過第一集的劇**不在** |
+| `jellyfin/shows-seasons.json` | `GET /Shows/{Alpha}/Seasons?userId=U&fields=ItemCounts,PrimaryImageAspectRatio`。兩季，季名是伺服器 UI 語言的「第 1 季」 |
+| `jellyfin/shows-episodes.json` | `GET /Shows/{Alpha}/Episodes?userId=U&seasonId=<第一季>&fields=Overview,PrimaryImageAspectRatio`。三集；集名來自檔名（沒有集的 NFO） |
+| `jellyfin/userplayeditems.post.json` | `POST /UserPlayedItems/{Bravo S01E02}?userId=U` 的 200：`Played=true, PlayCount=1, LastPlayedDate` |
+| `jellyfin/userplayeditems.delete.json` | 同一集接著 `DELETE`：`Played=false, PlayCount=0`，**沒有 `LastPlayedDate` 這個鍵** |
+| `jellyfin/images-primary.no-tag.headers.json` | `GET /Items/{Alpha}/Images/Primary`，**匿名**。只存狀態碼與標頭：`Cache-Control: public`、沒有 `ETag` |
+| `jellyfin/images-primary.tag.headers.json` | 同上加 `?tag=<ImageTags.Primary>`：`Cache-Control: public, max-age=31536000, immutable` 與 `ETag: "<tag>"`（錯的 tag 也是這樣，研究 §6） |
+| `jellyfin/images-primary.resized.headers.json` | 同上加 `fillWidth=100&quality=90&format=Webp`：`image/webp`，`Last-Modified` 是縮圖產生的時間 |
+
+**沒權限時回什麼**（同一個受限使用者、API key，對象都在 Anime）：
+
+| 檔案 | 來源 |
+| --- | --- |
+| `jellyfin/items-id.forbidden.json` | `GET /Items/{無權的劇}?userId=U` 的 **404**。body 是 problem details（`type`、`title`、`status`、`traceId`） |
+| `jellyfin/shows-seasons.forbidden.json` | `GET /Shows/{無權的劇}/Seasons?userId=U` 的 **404**，problem details |
+| `jellyfin/shows-episodes.forbidden.json` | `GET /Shows/{無權的劇}/Episodes?userId=U` 的 **404**。body 是**一個 JSON 字串** `"Series not found"`，不是 problem details——解析 404 不能假設是物件 |
+| `jellyfin/userplayeditems.forbidden.json` | `POST /UserPlayedItems/{無權的集}?userId=U` 的 **404**，problem details；打完立刻讀回（`ids=` 不檢查權限）確認沒有寫入 |
+| `jellyfin/items.parent-forbidden.json` | `GET /Items?userId=U&parentId=<Anime>&recursive=true` 的 **200**：Anime 的劇、季、集與一個 `Folder` 共 10 筆。**這是洩漏的證據**，不是正常回應——API key 帶 `parentId` 時 Jellyfin 不套權限，所以 Berth 要先對 `UserViews` 驗 `parentId` |

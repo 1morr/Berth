@@ -33,6 +33,7 @@ class Response:
 
     status: int
     body: bytes
+    headers: dict[str, str] = field(default_factory=dict)
 
     @property
     def text(self) -> str:
@@ -73,9 +74,9 @@ def request(
     req = urllib.request.Request(url, data=body, method=method, headers=sent)
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
-            return Response(resp.status, resp.read())
+            return Response(resp.status, resp.read(), dict(resp.headers.items()))
     except urllib.error.HTTPError as exc:
-        return Response(exc.code, exc.read())
+        return Response(exc.code, exc.read(), dict(exc.headers.items()))
 
 
 def multipart(

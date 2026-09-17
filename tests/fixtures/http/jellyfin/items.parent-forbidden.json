@@ -1,0 +1,360 @@
+{
+  "Items": [
+    {
+      "BackdropImageTags": [],
+      "ChannelId": null,
+      "Id": "06f9758b34889bd244444d11c09285f0",
+      "ImageBlurHashes": {
+        "Primary": {
+          "72b89b6fd73a9b8bb27ea030114f9d5d": "d23KQ.pLfQpLktfkfQfkfQfQfQfQktfkfQfkfQfQfQfQ"
+        }
+      },
+      "ImageTags": {},
+      "IndexNumber": 1,
+      "IsFolder": true,
+      "LocationType": "FileSystem",
+      "MediaType": "Unknown",
+      "Name": "第 1 季",
+      "PrimaryImageAspectRatio": 0.6666666666666666,
+      "ProductionYear": 2023,
+      "SeriesId": "8836e6e2b1400442080287739a22c85d",
+      "SeriesName": "Frieren",
+      "SeriesPrimaryImageTag": "72b89b6fd73a9b8bb27ea030114f9d5d",
+      "ServerId": "2564a1be47c14ee48993a8d68427c0c7",
+      "Type": "Season",
+      "UserData": {
+        "IsFavorite": false,
+        "ItemId": "06f9758b34889bd244444d11c09285f0",
+        "Key": "8836e6e2-b140-0442-0802-87739a22c85d001",
+        "PlayCount": 0,
+        "PlaybackPositionTicks": 0,
+        "Played": false,
+        "PlayedPercentage": 0,
+        "UnplayedItemCount": 3
+      }
+    },
+    {
+      "BackdropImageTags": [],
+      "ChannelId": null,
+      "Id": "9d994e733d96e7a0b724b3deee65e9ca",
+      "ImageBlurHashes": {
+        "Primary": {
+          "ad7462f86d38ebe01b9b6da853443827": "d23KQ.pLfQpLktfkfQfkfQfQfQfQktfkfQfkfQfQfQfQ"
+        }
+      },
+      "ImageTags": {},
+      "IndexNumber": 1,
+      "IsFolder": true,
+      "LocationType": "FileSystem",
+      "MediaType": "Unknown",
+      "Name": "第 1 季",
+      "PrimaryImageAspectRatio": 0.6666666666666666,
+      "ProductionYear": 2019,
+      "SeriesId": "9668eee0685888eecd8815e31bf93e01",
+      "SeriesName": "Delta Mecha",
+      "SeriesPrimaryImageTag": "ad7462f86d38ebe01b9b6da853443827",
+      "ServerId": "2564a1be47c14ee48993a8d68427c0c7",
+      "Type": "Season",
+      "UserData": {
+        "IsFavorite": false,
+        "ItemId": "9d994e733d96e7a0b724b3deee65e9ca",
+        "Key": "9668eee0-6858-88ee-cd88-15e31bf93e01001",
+        "PlayCount": 0,
+        "PlaybackPositionTicks": 0,
+        "Played": false,
+        "PlayedPercentage": 50,
+        "UnplayedItemCount": 1
+      }
+    },
+    {
+      "BackdropImageTags": [],
+      "ChannelId": null,
+      "Container": "mkv",
+      "Id": "d7ee93cac996c2388986e166bf3ced3a",
+      "ImageBlurHashes": {
+        "Primary": {
+          "ad7462f86d38ebe01b9b6da853443827": "d23KQ.pLfQpLktfkfQfkfQfQfQfQktfkfQfkfQfQfQfQ"
+        }
+      },
+      "ImageTags": {},
+      "IndexNumber": 1,
+      "IsFolder": false,
+      "LocationType": "FileSystem",
+      "MediaType": "Video",
+      "Name": "Delta Mecha",
+      "ParentIndexNumber": 1,
+      "ParentPrimaryImageItemId": "9668eee0685888eecd8815e31bf93e01",
+      "ParentPrimaryImageTag": "ad7462f86d38ebe01b9b6da853443827",
+      "PrimaryImageAspectRatio": 0.6666666666666666,
+      "ProductionYear": 2019,
+      "RunTimeTicks": 6000000000,
+      "SeasonId": "9d994e733d96e7a0b724b3deee65e9ca",
+      "SeasonName": "第 1 季",
+      "SeriesId": "9668eee0685888eecd8815e31bf93e01",
+      "SeriesName": "Delta Mecha",
+      "SeriesPrimaryImageTag": "ad7462f86d38ebe01b9b6da853443827",
+      "ServerId": "2564a1be47c14ee48993a8d68427c0c7",
+      "Type": "Episode",
+      "UserData": {
+        "IsFavorite": false,
+        "ItemId": "d7ee93cac996c2388986e166bf3ced3a",
+        "Key": "d7ee93ca-c996-c238-8986-e166bf3ced3a",
+        "LastPlayedDate": "2026-02-01T12:00:00.0000000Z",
+        "PlayCount": 1,
+        "PlaybackPositionTicks": 0,
+        "Played": true
+      },
+      "VideoType": "VideoFile"
+    },
+    {
+      "BackdropImageTags": [],
+      "ChannelId": null,
+      "Container": "mkv",
+      "Id": "bd0296c711088d7c0b957410fd467a4b",
+      "ImageBlurHashes": {
+        "Primary": {
+          "72b89b6fd73a9b8bb27ea030114f9d5d": "d23KQ.pLfQpLktfkfQfkfQfQfQfQktfkfQfkfQfQfQfQ"
+        }
+      },
+      "ImageTags": {},
+      "IndexNumber": 1,
+      "IsFolder": false,
+      "LocationType": "FileSystem",
+      "MediaType": "Video",
+      "Name": "Frieren",
+      "ParentIndexNumber": 1,
+      "ParentPrimaryImageItemId": "8836e6e2b1400442080287739a22c85d",
+      "ParentPrimaryImageTag": "72b89b6fd73a9b8bb27ea030114f9d5d",
+      "PrimaryImageAspectRatio": 0.6666666666666666,
+      "ProductionYear": 2023,
+      "RunTimeTicks": 6000000000,
+      "SeasonId": "06f9758b34889bd244444d11c09285f0",
+      "SeasonName": "第 1 季",
+      "SeriesId": "8836e6e2b1400442080287739a22c85d",
+      "SeriesName": "Frieren",
+      "SeriesPrimaryImageTag": "72b89b6fd73a9b8bb27ea030114f9d5d",
+      "ServerId": "2564a1be47c14ee48993a8d68427c0c7",
+      "Type": "Episode",
+      "UserData": {
+        "IsFavorite": false,
+        "ItemId": "bd0296c711088d7c0b957410fd467a4b",
+        "Key": "bd0296c7-1108-8d7c-0b95-7410fd467a4b",
+        "PlayCount": 0,
+        "PlaybackPositionTicks": 2400000000,
+        "Played": false,
+        "PlayedPercentage": 40
+      },
+      "VideoType": "VideoFile"
+    },
+    {
+      "BackdropImageTags": [],
+      "ChannelId": null,
+      "Container": "mkv",
+      "Id": "5e51bcab9dae9b1b3bee242bcf21930e",
+      "ImageBlurHashes": {
+        "Primary": {
+          "ad7462f86d38ebe01b9b6da853443827": "d23KQ.pLfQpLktfkfQfkfQfQfQfQktfkfQfkfQfQfQfQ"
+        }
+      },
+      "ImageTags": {},
+      "IndexNumber": 2,
+      "IsFolder": false,
+      "LocationType": "FileSystem",
+      "MediaType": "Video",
+      "Name": "Delta Mecha",
+      "ParentIndexNumber": 1,
+      "ParentPrimaryImageItemId": "9668eee0685888eecd8815e31bf93e01",
+      "ParentPrimaryImageTag": "ad7462f86d38ebe01b9b6da853443827",
+      "PrimaryImageAspectRatio": 0.6666666666666666,
+      "ProductionYear": 2019,
+      "RunTimeTicks": 6000000000,
+      "SeasonId": "9d994e733d96e7a0b724b3deee65e9ca",
+      "SeasonName": "第 1 季",
+      "SeriesId": "9668eee0685888eecd8815e31bf93e01",
+      "SeriesName": "Delta Mecha",
+      "SeriesPrimaryImageTag": "ad7462f86d38ebe01b9b6da853443827",
+      "ServerId": "2564a1be47c14ee48993a8d68427c0c7",
+      "Type": "Episode",
+      "UserData": {
+        "IsFavorite": false,
+        "ItemId": "5e51bcab9dae9b1b3bee242bcf21930e",
+        "Key": "9668eee0-6858-88ee-cd88-15e31bf93e01001002",
+        "PlayCount": 0,
+        "PlaybackPositionTicks": 0,
+        "Played": false
+      },
+      "VideoType": "VideoFile"
+    },
+    {
+      "BackdropImageTags": [],
+      "ChannelId": null,
+      "Container": "mkv",
+      "Id": "7ef9040c12e7702bec95dff2ae9a7512",
+      "ImageBlurHashes": {
+        "Primary": {
+          "72b89b6fd73a9b8bb27ea030114f9d5d": "d23KQ.pLfQpLktfkfQfkfQfQfQfQktfkfQfkfQfQfQfQ"
+        }
+      },
+      "ImageTags": {},
+      "IndexNumber": 2,
+      "IsFolder": false,
+      "LocationType": "FileSystem",
+      "MediaType": "Video",
+      "Name": "Frieren",
+      "ParentIndexNumber": 1,
+      "ParentPrimaryImageItemId": "8836e6e2b1400442080287739a22c85d",
+      "ParentPrimaryImageTag": "72b89b6fd73a9b8bb27ea030114f9d5d",
+      "PrimaryImageAspectRatio": 0.6666666666666666,
+      "ProductionYear": 2023,
+      "RunTimeTicks": 6000000000,
+      "SeasonId": "06f9758b34889bd244444d11c09285f0",
+      "SeasonName": "第 1 季",
+      "SeriesId": "8836e6e2b1400442080287739a22c85d",
+      "SeriesName": "Frieren",
+      "SeriesPrimaryImageTag": "72b89b6fd73a9b8bb27ea030114f9d5d",
+      "ServerId": "2564a1be47c14ee48993a8d68427c0c7",
+      "Type": "Episode",
+      "UserData": {
+        "IsFavorite": false,
+        "ItemId": "7ef9040c12e7702bec95dff2ae9a7512",
+        "Key": "8836e6e2-b140-0442-0802-87739a22c85d001002",
+        "PlayCount": 0,
+        "PlaybackPositionTicks": 0,
+        "Played": false
+      },
+      "VideoType": "VideoFile"
+    },
+    {
+      "BackdropImageTags": [],
+      "ChannelId": null,
+      "Container": "mkv",
+      "Id": "4ee25db8d1155f41d1bea67e2b038635",
+      "ImageBlurHashes": {
+        "Primary": {
+          "72b89b6fd73a9b8bb27ea030114f9d5d": "d23KQ.pLfQpLktfkfQfkfQfQfQfQktfkfQfkfQfQfQfQ"
+        }
+      },
+      "ImageTags": {},
+      "IndexNumber": 3,
+      "IsFolder": false,
+      "LocationType": "FileSystem",
+      "MediaType": "Video",
+      "Name": "Frieren",
+      "ParentIndexNumber": 1,
+      "ParentPrimaryImageItemId": "8836e6e2b1400442080287739a22c85d",
+      "ParentPrimaryImageTag": "72b89b6fd73a9b8bb27ea030114f9d5d",
+      "PrimaryImageAspectRatio": 0.6666666666666666,
+      "ProductionYear": 2023,
+      "RunTimeTicks": 6000000000,
+      "SeasonId": "06f9758b34889bd244444d11c09285f0",
+      "SeasonName": "第 1 季",
+      "SeriesId": "8836e6e2b1400442080287739a22c85d",
+      "SeriesName": "Frieren",
+      "SeriesPrimaryImageTag": "72b89b6fd73a9b8bb27ea030114f9d5d",
+      "ServerId": "2564a1be47c14ee48993a8d68427c0c7",
+      "Type": "Episode",
+      "UserData": {
+        "IsFavorite": false,
+        "ItemId": "4ee25db8d1155f41d1bea67e2b038635",
+        "Key": "8836e6e2-b140-0442-0802-87739a22c85d001003",
+        "PlayCount": 0,
+        "PlaybackPositionTicks": 0,
+        "Played": false
+      },
+      "VideoType": "VideoFile"
+    },
+    {
+      "BackdropImageTags": [],
+      "ChannelId": null,
+      "Id": "e51479848f016b7ccd0d57fa4b8e9fa8",
+      "ImageBlurHashes": {},
+      "ImageTags": {},
+      "IsFolder": true,
+      "LocationType": "FileSystem",
+      "MediaType": "Unknown",
+      "Name": "anime",
+      "ServerId": "2564a1be47c14ee48993a8d68427c0c7",
+      "Type": "Folder",
+      "UserData": {
+        "IsFavorite": false,
+        "ItemId": "e51479848f016b7ccd0d57fa4b8e9fa8",
+        "Key": "e5147984-8f01-6b7c-cd0d-57fa4b8e9fa8",
+        "PlayCount": 0,
+        "PlaybackPositionTicks": 0,
+        "Played": false,
+        "PlayedPercentage": 20,
+        "UnplayedItemCount": 4
+      }
+    },
+    {
+      "AirDays": [],
+      "BackdropImageTags": [],
+      "ChannelId": null,
+      "CommunityRating": 6,
+      "Id": "9668eee0685888eecd8815e31bf93e01",
+      "ImageBlurHashes": {
+        "Primary": {
+          "ad7462f86d38ebe01b9b6da853443827": "d23KQ.pLfQpLktfkfQfkfQfQfQfQktfkfQfkfQfQfQfQ"
+        }
+      },
+      "ImageTags": {
+        "Primary": "ad7462f86d38ebe01b9b6da853443827"
+      },
+      "IsFolder": true,
+      "LocationType": "FileSystem",
+      "MediaType": "Unknown",
+      "Name": "Delta Mecha",
+      "OfficialRating": "TV-Y7",
+      "PremiereDate": "2019-10-05T00:00:00.0000000Z",
+      "ProductionYear": 2019,
+      "ServerId": "2564a1be47c14ee48993a8d68427c0c7",
+      "Type": "Series",
+      "UserData": {
+        "IsFavorite": false,
+        "ItemId": "9668eee0685888eecd8815e31bf93e01",
+        "Key": "9668eee0-6858-88ee-cd88-15e31bf93e01",
+        "PlayCount": 0,
+        "PlaybackPositionTicks": 0,
+        "Played": false,
+        "PlayedPercentage": 50,
+        "UnplayedItemCount": 1
+      }
+    },
+    {
+      "AirDays": [],
+      "BackdropImageTags": [],
+      "ChannelId": null,
+      "CommunityRating": 8,
+      "Id": "8836e6e2b1400442080287739a22c85d",
+      "ImageBlurHashes": {
+        "Primary": {
+          "72b89b6fd73a9b8bb27ea030114f9d5d": "d23KQ.pLfQpLktfkfQfkfQfQfQfQktfkfQfkfQfQfQfQ"
+        }
+      },
+      "ImageTags": {
+        "Primary": "72b89b6fd73a9b8bb27ea030114f9d5d"
+      },
+      "IsFolder": true,
+      "LocationType": "FileSystem",
+      "MediaType": "Unknown",
+      "Name": "Frieren",
+      "OfficialRating": "TV-PG",
+      "PremiereDate": "2023-09-29T00:00:00.0000000Z",
+      "ProductionYear": 2023,
+      "ServerId": "2564a1be47c14ee48993a8d68427c0c7",
+      "Type": "Series",
+      "UserData": {
+        "IsFavorite": false,
+        "ItemId": "8836e6e2b1400442080287739a22c85d",
+        "Key": "8836e6e2-b140-0442-0802-87739a22c85d",
+        "PlayCount": 0,
+        "PlaybackPositionTicks": 0,
+        "Played": false,
+        "PlayedPercentage": 0,
+        "UnplayedItemCount": 3
+      }
+    }
+  ],
+  "StartIndex": 0,
+  "TotalRecordCount": 10
+}

@@ -1,12 +1,13 @@
 # 實驗腳本
 
-M0 票 04、M1 票 01（brief §20.6）與 M1 票 14d 的實驗。**指令在根目錄的 [README](../../README.md#實驗腳本)**（那份是本專案
+M0 票 04、M1 票 01（brief §20.6）、M1 票 14d 與 M1.5 票 01 的實驗。**指令在根目錄的 [README](../../README.md#實驗腳本)**（那份是本專案
 指令的單一來源）；這裡寫的是每個腳本在回答什麼、為什麼這樣寫、有哪些坑。
 
 結論在 [`docs/research/m0-experiments.md`](../../docs/research/m0-experiments.md)、
 [`docs/research/anime-episode-source.md`](../../docs/research/anime-episode-source.md) 與
-[`docs/research/profile-effect.md`](../../docs/research/profile-effect.md)，摘要進
-brief §10 / §19 / §20.3 / §20.4 / §20.6 / §20.7。原始 JSON 落在 `.local/experiments/results/`（不進版控），
+[`docs/research/profile-effect.md`](../../docs/research/profile-effect.md) 與
+[`docs/research/library-browsing.md`](../../docs/research/library-browsing.md)，摘要進
+brief §10 / §19 / §20.3 / §20.4 / §20.6 / §20.7 / §20.8。原始 JSON 落在 `.local/experiments/results/`（不進版控），
 stdout 是同一份東西的人類版（`absolute_rule_cost.py` 只印 stdout）。
 
 腳本只用 Python 標準庫，不 import `berth`，也不需要專案的虛擬環境 —— 這樣才能原封不動搬到 NAS
@@ -29,6 +30,7 @@ ffmpeg 產種子檔），那只影響「造測試素材」這一步，不影響 
 | `anime_sample.json` | 上一支的樣本：10 部動漫、挑選理由、Mikan 的番組 id |
 | `qbittorrent_poller.py` | M1 票 10：`sync/maindata` 的 rid 增量形狀、`torrents/files` 的相對基準（多檔）、三種處境下的 `state` / `progress` / `completion_on`，以及**連續登入失敗之後的 403 與帳密錯差在哪裡**。最後一項會封住來源 IP，所以它一定跑在最後 |
 | `absolute_rule_cost.py` | M1 票 14d：「集號 ≤ 第一季集數就送審核」擋下的是對的多還是錯的多，以及「標題有認不出的多餘字」分不分得開。正解借 `anime_episode_source.py` 的校準，Berth 的讀法是把每筆 Mikan 發佈丟進 `plan`。只印 stdout |
+| `jellyfin_permissions.py` | M1.5 票 01：伺服器 API key 代讀某位使用者時，Jellyfin 哪些端點套用他的媒體庫權限（研究 §2 的表逐列，API key 與使用者 token 各一次）；`/Items` 的過濾、排序、分頁是不是真的有作用；由 TMDB id 找作品；Series / Season 標記遞迴；停用帳號。自己起停一次性容器，`--record` 重錄 `tests/fixtures/http/jellyfin/` 的權限 fixture |
 | `lib.py` | 共用的 HTTP、輪詢、bencode、報告輸出 |
 
 ## 幾個不明顯的地方
@@ -60,3 +62,16 @@ ffmpeg 產種子檔），那只影響「造測試素材」這一步，不影響 
   單檔 torrent，合集逐集重問 `map_episode`——與限制寫在研究文件 `profile-effect.md` §6.1.1。
 - **判斷「字幕組寫的 12 是哪一集」靠的是發佈時間，不是編號規則。** 為什麼要這樣做、三道校準
   閘在擋什麼，見 research 文件的 §4.1。動過 `calibrate_offset` 就要重跑 `--self-test`。
+- **`jellyfin_permissions.py` 不用 compose，自己 `docker run` 一台再刪掉**（image 從 `deploy/docker-compose.yml`
+  讀，跟著套件釘的版本走）。`--record` 只在伺服器是 12.1.0 時錄：fixture README 的規則是新版本開新檔名，
+  版本變了就停下來由人決定，不悄悄蓋掉舊的證據。工作目錄預設是系統暫存目錄下的新目錄，跑完連同容器與匿名 volume 一起刪；
+  `--workdir` 指定的目錄必須是空的，因為結束時整個刪掉。`--keep` 留著除錯；下次跑時腳本開頭會自己砍掉同名容器，
+  但那個工作目錄要自己清。它 import 同目錄的 `jellyfin_naming.py`
+  借初始精靈與等掃描，那一支的 `/Startup/*` 在 12.x 標 deprecated 但還能用。
+- **它的媒體庫把網路 fetcher 全關了，metadata 只來自 NFO**：類型、年份、評分、分級、片長刻意排成彼此不同的順序，
+  「伺服器真的有過濾 / 排序」才判得出來，結果也不隨 TMDB 變動。`TypeOptions` 列出型別但 fetcher 清單留空才是
+  「全關」（實測：集沒有截圖、劇沒有背景圖與簡介），整個留空是「用預設」（`jellyfin_naming.py` 就是那樣）。
+- **`/System/Info/Public` 回 200 不代表 Jellyfin 載入完了**：這時精靈的端點是 503，所以它先等
+  `/Startup/Configuration` 回 200。每種身分（管理員、API key、受限使用者）用自己的 `DeviceId`：
+  Jellyfin 以裝置管理 session，這是預防同一個裝置重新登入時作廢別的身分的 token（沒有實測過會不會）。
+- **觀看紀錄要在縮權之前寫**：縮權之後 API key 也寫不進沒權限的媒體庫（那正是要量的一列）。

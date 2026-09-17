@@ -633,7 +633,7 @@ M1.5 拆票前的四條待決，2026-09-15 已全數照推薦拍板（上表「M
 
 - **媒體庫頁的分頁單位**：票 13 是一條 Route 一頁，但牆上改成整個 Jellyfin 媒體庫之後，一個 Jellyfin 媒體庫可以有多條 Route（§4.3、M1 票 14），也可以有 Berth 路徑以外的舊路徑——照 Route 分頁會讓同一批作品出現在兩頁。**推薦**：一個 Jellyfin 媒體庫一頁（Jellyfin 自己的慣例），並且只列這位使用者 `UserViews` 裡有的；Route 退成卡片上入庫狀態的來源。
 - **首頁 `/`**：現在是探索頁；Jellyfin 的首頁是繼續觀看與下一集。**推薦**：首頁上方放繼續觀看與下一集兩列（沒有內容就不出現），下面維持探索——找片與接著看是同一位使用者最常做的兩件事。
-- **帳號狀態跟不上**：Berth 的 session 活 30 天、只在登入時向 Jellyfin 驗證，而 API key 代讀的路徑上沒看到檢查帳號是否被停用（§20.8，原始碼推論）。**推薦**：瀏覽請求取 `UserViews` 允許清單時，一起讀 `GET /Users/{id}` 的 `Policy`，兩者同一份短時間快取；帳號被停用就結束 Berth 的 session。不縮短 session，因為管理類頁面（下載、設定）也會一起被迫重新登入。
+- **帳號狀態跟不上**：Berth 的 session 活 30 天、只在登入時向 Jellyfin 驗證，而 API key 代讀被停用的帳號照常回資料（§20.8，2026-09-17 在 12.1.0 實測）。**推薦**：瀏覽請求取 `UserViews` 允許清單時，一起讀 `GET /Users/{id}` 的 `Policy`，兩者同一份短時間快取；帳號被停用就結束 Berth 的 session。不縮短 session，因為管理類頁面（下載、設定）也會一起被迫重新登入。
 - **圖片怎麼到瀏覽器**：瀏覽器直連 Jellyfin（最簡單，但瀏覽器要連得到它，HTTPS 的 Berth 配 HTTP 的 Jellyfin 是 mixed content），還是由 Berth 代理（頻寬與快取自己處理）。**推薦**：Berth 代理，快取鍵用 `tag`。瀏覽器只要連得到 Berth，不依賴深連結的主機推導、也沒有 mixed content；縮圖後一張約 45 KB（§20.8 實測），代價可接受。
 
 ---
@@ -1109,17 +1109,19 @@ thepiratebay / yts，fixture 在 `tests/fixtures/http/prowlarr/search.*.json` �
 
 ### 20.8 媒體庫瀏覽用的 Jellyfin API（M1.5 前置）
 
-2026-09-15 查證；全文、端點範例與原始碼連結見 [`docs/research/library-browsing.md`](research/library-browsing.md)。只有 **12.0.0 實測**，10.10 / 10.11 讀原始碼（tag `v10.10.7`、`v10.11.11`、`v12.0`）。
+2026-09-15 查證；全文、端點範例與原始碼連結見 [`docs/research/library-browsing.md`](research/library-browsing.md)。2026-09-15 在 **12.0.0** 上實測，2026-09-17 在一次性的 **12.1.0** 上以只開放部分媒體庫的使用者補測權限、過濾排序、TMDB 反查、標記遞迴與停用帳號（M1.5 票 01，`scripts/experiments/jellyfin_permissions.py`，研究 §0、§2、§3.1、§5、§10、§11；12.0.0 量過的行為在 12.1.0 上沒看到不同，只有圖片 CORS 標頭的條件判定不了）。原始碼對照 tag `v10.10.7`、`v10.11.11`、`v12.0`。
 
 - **伺服器 API key 可以代讀代寫任何使用者**：API key 在驗證層一律算 Administrator，帶哪個 `userId` 就是誰（三版一致）。繼續觀看 `GET /UserItems/Resume?userId=&mediaTypes=Video`（不帶 `mediaTypes` 會混進 Season 與 Series）、下一集 `GET /Shows/NextUp?userId=`、附 `UserData` 的項目 `GET /Items?userId=`、已看 / 未看 `POST|DELETE /UserPlayedItems/{id}?userId=`。不帶 `userId` 時 Resume、NextUp、PlayedItems 回 400，`/Items` 回整台伺服器且沒有 `UserData`。舊路徑 `/Users/{userId}/...` 還能用但已不在 12.0.0 的 OpenAPI；NextUp 的 `disableFirstEpisode` 在 12.0 移除。【實測 12.0.0 + 原始碼】
-- **媒體庫存取權限只有一部分會套用**（家長分級只要帶 `userId` 就套）：`/UserViews?userId=`、不帶 `parentId` / `ids` 的 `/Items`、不帶 `parentId` 的 Resume 與 NextUp、`/Items/{id}?userId=`、`/Shows/{id}/Seasons|Episodes?userId=`、`/UserPlayedItems` 會照使用者的權限（無權時不列或 404）；**帶 `parentId` / `ids` / `seriesId` 的查詢，以及 `/Genres`、`/Years`、`/Items/Filters`、`/Items/Filters2` 不會**。所以權限要由 Berth 自己擋（§12、plan §11.2b）。【只讀原始碼：伺服器上沒有受限使用者，M1.5 票 01 逐列實測】
-- **`/Items` 靜默忽略不存在的參數**：實測帶 `seriesId` 或 `ancestorIds` 都回整台伺服器的集。每個過濾參數都要測「伺服器真的有過濾」。
-- **排序與篩選**：`sortBy`（逗號、多鍵）加 `sortOrder`；`genres` 以 `|` 分隔、`years` 以逗號。類型與年份清單用 `GET /Items/Filters?userId=&parentId=&includeItemTypes=Series|Movie`（三版形狀一致，jellyfin-web 的篩選面板用這支；`Filters2` 沒有年份；`/Years` 不帶 `includeItemTypes` 會混進集的播出年）。劇集的「新集加入」排序是 `DateLastContentAdded`、「最近看過」是 `SeriesDatePlayed`。
+- **媒體庫存取權限只有一部分會套用**（家長分級只要帶 `userId` 就套，這一條只讀原始碼）：`/UserViews?userId=`、不帶 `parentId` / `ids` 的 `/Items`、不帶 `parentId` 的 Resume / NextUp / `/Items/Latest` / `/Genres`、`/Items/{id}?userId=`、`/Shows/{id}/Seasons|Episodes?userId=`、`/UserItems/{id}/UserData?userId=`、`/UserPlayedItems` 會照使用者的權限（無權時不列或 404）；**帶 `parentId` / `ids` / `seriesId` 的查詢，以及帶 `parentId` 的 `/Genres`、`/Years`、`/Items/Filters`、`/Items/Filters2`、`/Items/Latest` 不會**。而且**使用者自己的 token 也只擋下 `/Items?parentId=<無權的媒體庫>`（401）**：劇或季當 `parentId`、`ids`，以及 Resume、NextUp、`/Genres`、`/Years`、`/Items/Filters(2)`、`/Items/Latest` 帶 `parentId`（NextUp 帶 `seriesId`）時，使用者 token 一樣照回。所以權限要由 Berth 自己擋，`parentId` 只放對 `UserViews` 驗證過的媒體庫 id（§12、plan §11.2b）。【實測 12.1.0 + 原始碼】
+- **`/Items` 靜默忽略不存在的參數**：實測帶 `seriesId` 或 `ancestorIds` 都回整台伺服器的集，打錯字的 `genre=`、`year=` 回全部（12.0.0、12.1.0）。每個過濾參數都要測「伺服器真的有過濾」。
+- **漏帶 `userId`**：`/Shows/{id}/Seasons|Episodes` 回 200 並**略過權限**（無聲洩漏），`/Items/{id}` 回 400，Resume、NextUp、`UserPlayedItems` 回 400。【實測 12.1.0】
+- **排序與篩選**：`sortBy`（逗號、多鍵）加 `sortOrder`；`genres` 以 `|` 分隔（「或」）、`years` 以逗號（「或」），兩個參數之間是「且」。類型與年份清單用 `GET /Items/Filters?userId=&parentId=&includeItemTypes=Series|Movie`（三版形狀一致，jellyfin-web 的篩選面板用這支；**不帶 `parentId` 四份清單全空**；`Filters2` 沒有年份；`/Years` 不帶 `includeItemTypes` 會混進集的播出年）。劇集的「新集加入」排序是 `DateLastContentAdded`、「最近看過」是 `SeriesDatePlayed`。12.1.0 逐一驗過 `parentId`、`includeItemTypes`、`genres`、`years`、`startIndex` / `limit` 真的有過濾；排序鍵除了劇集庫的 `DateCreated`（值的順序剛好等於名稱順序，證明不了）、`OfficialRating`（只驗到升降冪互為反序）與 `Random` 之外，都驗到照值排序。沒有值的排在升冪最前；劇集的分級照高低（`TV-G < TV-PG < TV-14 < TV-MA`）不是照字串。【實測 12.1.0】
 - **選季選集**：`/Shows/{id}/Seasons?userId=` 與 `/Shows/{id}/Episodes?userId=&seasonId=`（jellyfin-web 詳細頁的查法，會套權限）。§20.1 的「10.11 第一次掃描後回 0」**在 12.0.0 沒有重現**（一次性容器：掃完當下、兩分鐘後、第二次掃描後都對）；10.11 沒有重測，那一條仍成立，後備是媒體庫遞迴查詢照 `Path` 分群（三版都驗過）。
-- **圖片不需要驗證**：`GET /Items/{id}/Images/{Primary|Backdrop|Thumb}` 匿名 200、帶 `Access-Control-Allow-Origin: *`；縮放用 `fillWidth` / `fillHeight` / `quality` / `format=Webp`。`tag` 只是快取鍵（錯的也回圖），URL 要帶 DTO 的 `ImageTags` 才會在換圖時失效。瀏覽器直連的前提是連得到 Jellyfin（與深連結同一個主機），HTTPS 的 Berth 配 HTTP 的 Jellyfin 是 mixed content（§19 待決）。
-- **標為未看會清掉 `PlayCount` 與 `LastPlayedDate`**，復原不了原本的次數與時間。
+- **圖片不需要驗證**：`GET /Items/{id}/Images/{Primary|Backdrop|Thumb}` 匿名 200，請求帶 `Origin` 時回 `Access-Control-Allow-Origin: *`；縮放用 `fillWidth` / `fillHeight` / `quality` / `format=Webp`。`tag` 只是快取鍵（錯的也回圖），URL 要帶 DTO 的 `ImageTags` 才會在換圖時失效。瀏覽器直連的前提是連得到 Jellyfin（與深連結同一個主機），HTTPS 的 Berth 配 HTTP 的 Jellyfin 是 mixed content（§19 已定由 Berth 代理）。
+- **標為未看會清掉 `PlayCount` 與 `LastPlayedDate`**，復原不了原本的次數與時間。**對 Series / Season 標記會遞迴到底下每一集**：標已看把看到一半的位置歸零，標未看連之前單獨看過的集一起清掉；對季只動那一季。【實測 12.1.0】
+- **由 TMDB id 找作品**：`/Items` 沒有 provider id 過濾參數（猜的參數名都被忽略），但有 `hasTmdbId`。`GET /Items?userId=&recursive=true&includeItemTypes=Series,Movie&hasTmdbId=true&fields=ProviderIds` **不帶 `parentId`** 就會套權限，在 Berth 端比 `ProviderIds.Tmdb`；同一個 TMDB id 在沒權限的媒體庫裡的那一份不會回來。已知 item id 時用 `/Items/{id}?userId=` 驗可見性（研究 §10）。【實測 12.1.0】
 - **沒有直接開始播放的網址**（§12 維持）：三版的 `#/video` 都不吃 item id，「播放某一集」只能深連結到那一集的 `#/details?id=`。
-- **帳號狀態**：API key 代讀的路徑上沒看到檢查 `Policy.IsDisabled`（原始碼推論，未實測）——被 Jellyfin 停用的人，在 Berth 的 session 過期前可能照樣讀得到（§19 待決）。
+- **帳號狀態**：Jellyfin 停用帳號之後，**API key 代讀這位使用者的 `UserViews`、`/Items`、Resume、NextUp、Seasons 照常回資料，`UserPlayedItems` 照常寫入**；只有他自己的 token 回 401、重新登入回 403。`GET /Users/{id}` 讀得到 `Policy.IsDisabled` 與 `EnabledFolders`（與 `UserViews` 的 `Id` 同一種格式）。所以 Berth 要自己讀 `Policy`（§19 已定）。【實測 12.1.0】
 
 ### 20.9 Jellyfin 12（2026-09-15 查證）
 
@@ -1147,7 +1149,7 @@ thepiratebay / yts，fixture 在 `tests/fixtures/http/prowlarr/search.*.json` �
   - `POST /Startup/User` 在第一個使用者已有密碼時回 **403**（[PR #17369](https://github.com/jellyfin/jellyfin/pull/17369)）。精靈第 3 步做完、後面某步失敗、Jellyfin 沒重啟時按重試，會一直卡在這裡（M1 票 14b）。【原始碼 + 部分實測：精靈未完成時匿名送的那條只讀了原始碼】
   - `POST /Startup/Configuration`、`GET /Startup/User`、`POST /Startup/RemoteAccess` 在 12.x 的 OpenAPI 標 deprecated，現在還能用。Jellyfin 的政策是至少標滿一個大版本週期才移除，所以 13.0 發佈前要換成設定端點（替代端點的欄位【未查】）。【實測 + 文件】
 - **舊式驗證預設關閉**，連既有安裝也由遷移關掉：`X-Emby-Token`、`X-Emby-Authorization`、`?api_key=` 回 401。本系統用的 `Authorization: MediaBrowser …, Token="…"` 不受影響。【實測 + 原始碼】
-- `GET /Items` 帶 `includeItemTypes` 而沒指定 `recursive` 時預設遞迴，本系統一律明確帶 `recursive=true`。`POST /Library/Media/Updated` 背後的 `FileRefresher` 一行沒改，所以「空的媒體庫收到路徑通知無效」（§20.1）仍成立。【原始碼】
+- `GET /Items` 帶 `includeItemTypes` 而沒指定 `recursive` 時預設遞迴（2026-09-17 在 12.1.0 實測，§20.8），本系統一律明確帶 `recursive=true`。`POST /Library/Media/Updated` 背後的 `FileRefresher` 一行沒改，所以「空的媒體庫收到路徑通知無效」（§20.1）仍成立。【原始碼 + 前半句實測 12.1.0】
 - **linuxserver image**：
   - tag 變成 `12.0ubu2604-ls48`、`12.1ubu2604-ls49` 這種形式。
   - `latest` 已是 12.1。

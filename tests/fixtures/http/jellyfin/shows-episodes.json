@@ -1,0 +1,124 @@
+{
+  "Items": [
+    {
+      "BackdropImageTags": [],
+      "ChannelId": null,
+      "Container": "mkv",
+      "Id": "f33fb9f2cecad5b489d1a572a99558bf",
+      "ImageBlurHashes": {
+        "Primary": {
+          "f99664090dfd3223c18e80663440deac": "d23KQ.pLfQpLktfkfQfkfQfQfQfQktfkfQfkfQfQfQfQ"
+        }
+      },
+      "ImageTags": {},
+      "IndexNumber": 1,
+      "IsFolder": false,
+      "LocationType": "FileSystem",
+      "MediaType": "Video",
+      "Name": "Alpha Show",
+      "ParentIndexNumber": 1,
+      "ParentPrimaryImageItemId": "2a9857e656bbd18b7c3c3a3b4ee5eef1",
+      "ParentPrimaryImageTag": "f99664090dfd3223c18e80663440deac",
+      "PrimaryImageAspectRatio": 0.6666666666666666,
+      "ProductionYear": 2022,
+      "RunTimeTicks": 6000000000,
+      "SeasonId": "e287646874088d4b73b9578d6fc51da6",
+      "SeasonName": "第 1 季",
+      "SeriesId": "2a9857e656bbd18b7c3c3a3b4ee5eef1",
+      "SeriesName": "Alpha Show",
+      "SeriesPrimaryImageTag": "f99664090dfd3223c18e80663440deac",
+      "ServerId": "2564a1be47c14ee48993a8d68427c0c7",
+      "Type": "Episode",
+      "UserData": {
+        "IsFavorite": false,
+        "ItemId": "f33fb9f2cecad5b489d1a572a99558bf",
+        "Key": "f33fb9f2-ceca-d5b4-89d1-a572a99558bf",
+        "LastPlayedDate": "2026-01-01T12:00:00.0000000Z",
+        "PlayCount": 1,
+        "PlaybackPositionTicks": 0,
+        "Played": true
+      },
+      "VideoType": "VideoFile"
+    },
+    {
+      "BackdropImageTags": [],
+      "ChannelId": null,
+      "Container": "mkv",
+      "Id": "cd2f059cd4fdef1da23617e86514232e",
+      "ImageBlurHashes": {
+        "Primary": {
+          "f99664090dfd3223c18e80663440deac": "d23KQ.pLfQpLktfkfQfkfQfQfQfQktfkfQfkfQfQfQfQ"
+        }
+      },
+      "ImageTags": {},
+      "IndexNumber": 2,
+      "IsFolder": false,
+      "LocationType": "FileSystem",
+      "MediaType": "Video",
+      "Name": "Alpha Show",
+      "ParentIndexNumber": 1,
+      "ParentPrimaryImageItemId": "2a9857e656bbd18b7c3c3a3b4ee5eef1",
+      "ParentPrimaryImageTag": "f99664090dfd3223c18e80663440deac",
+      "PrimaryImageAspectRatio": 0.6666666666666666,
+      "ProductionYear": 2022,
+      "RunTimeTicks": 6000000000,
+      "SeasonId": "e287646874088d4b73b9578d6fc51da6",
+      "SeasonName": "第 1 季",
+      "SeriesId": "2a9857e656bbd18b7c3c3a3b4ee5eef1",
+      "SeriesName": "Alpha Show",
+      "SeriesPrimaryImageTag": "f99664090dfd3223c18e80663440deac",
+      "ServerId": "2564a1be47c14ee48993a8d68427c0c7",
+      "Type": "Episode",
+      "UserData": {
+        "IsFavorite": false,
+        "ItemId": "cd2f059cd4fdef1da23617e86514232e",
+        "Key": "2a9857e6-56bb-d18b-7c3c-3a3b4ee5eef1001002",
+        "PlayCount": 0,
+        "PlaybackPositionTicks": 0,
+        "Played": false
+      },
+      "VideoType": "VideoFile"
+    },
+    {
+      "BackdropImageTags": [],
+      "ChannelId": null,
+      "Container": "mkv",
+      "Id": "af186255fbb0f0673dcb32978970c192",
+      "ImageBlurHashes": {
+        "Primary": {
+          "f99664090dfd3223c18e80663440deac": "d23KQ.pLfQpLktfkfQfkfQfQfQfQktfkfQfkfQfQfQfQ"
+        }
+      },
+      "ImageTags": {},
+      "IndexNumber": 3,
+      "IsFolder": false,
+      "LocationType": "FileSystem",
+      "MediaType": "Video",
+      "Name": "Alpha Show",
+      "ParentIndexNumber": 1,
+      "ParentPrimaryImageItemId": "2a9857e656bbd18b7c3c3a3b4ee5eef1",
+      "ParentPrimaryImageTag": "f99664090dfd3223c18e80663440deac",
+      "PrimaryImageAspectRatio": 0.6666666666666666,
+      "ProductionYear": 2022,
+      "RunTimeTicks": 6000000000,
+      "SeasonId": "e287646874088d4b73b9578d6fc51da6",
+      "SeasonName": "第 1 季",
+      "SeriesId": "2a9857e656bbd18b7c3c3a3b4ee5eef1",
+      "SeriesName": "Alpha Show",
+      "SeriesPrimaryImageTag": "f99664090dfd3223c18e80663440deac",
+      "ServerId": "2564a1be47c14ee48993a8d68427c0c7",
+      "Type": "Episode",
+      "UserData": {
+        "IsFavorite": false,
+        "ItemId": "af186255fbb0f0673dcb32978970c192",
+        "Key": "2a9857e6-56bb-d18b-7c3c-3a3b4ee5eef1001003",
+        "PlayCount": 0,
+        "PlaybackPositionTicks": 0,
+        "Played": false
+      },
+      "VideoType": "VideoFile"
+    }
+  ],
+  "StartIndex": 0,
+  "TotalRecordCount": 3
+}

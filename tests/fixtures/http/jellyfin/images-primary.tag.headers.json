@@ -1,0 +1,20 @@
+{
+  "status": 200,
+  "headers": {
+    "Age": "2592038",
+    "Cache-Control": "public, max-age=31536000, immutable",
+    "Connection": "close",
+    "Content-Disposition": "attachment",
+    "Content-Language": "en-US",
+    "Content-Length": "595",
+    "Content-Type": "image/jpeg",
+    "Date": "Thu, 17 Sep 2026 09:05:08 GMT",
+    "ETag": "\"f99664090dfd3223c18e80663440deac\"",
+    "Last-Modified": "Tue, 18 Aug 2026 09:04:31 GMT",
+    "Server": "Kestrel",
+    "Vary": "Accept",
+    "X-Response-Time-ms": "9.7855",
+    "realTimeInfo.dlna.org": "DLNA.ORG_TLAG=*",
+    "transferMode.dlna.org": "Interactive"
+  }
+}

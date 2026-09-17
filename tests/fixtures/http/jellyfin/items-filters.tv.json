@@ -1,0 +1,23 @@
+{
+  "Genres": [
+    "Adventure",
+    "Animation",
+    "Comedy",
+    "Documentary",
+    "Drama",
+    "Fantasy"
+  ],
+  "OfficialRatings": [
+    "TV-14",
+    "TV-G",
+    "TV-MA",
+    "TV-PG"
+  ],
+  "Tags": [],
+  "Years": [
+    2020,
+    2021,
+    2022,
+    2023
+  ]
+}

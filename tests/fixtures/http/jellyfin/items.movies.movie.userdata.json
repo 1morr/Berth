@@ -1,0 +1,129 @@
+{
+  "Items": [
+    {
+      "BackdropImageTags": [],
+      "ChannelId": null,
+      "CommunityRating": 8.4,
+      "Container": "mkv",
+      "CriticRating": 87,
+      "Id": "3b8941d78aeda0bdfb69c6381c8bd1a9",
+      "ImageBlurHashes": {
+        "Primary": {
+          "0e0672b253489b84f8349258587e9b6d": "d23KQ.pLfQpLktfkfQfkfQfQfQfQktfkfQfkfQfQfQfQ"
+        }
+      },
+      "ImageTags": {
+        "Primary": "0e0672b253489b84f8349258587e9b6d"
+      },
+      "IsFolder": false,
+      "LocationType": "FileSystem",
+      "MediaType": "Video",
+      "Name": "Echo Movie",
+      "OfficialRating": "PG-13",
+      "Path": "/media/movies/Echo Movie (2021) [tmdbid-27205]/Echo Movie (2021) [tmdbid-27205].mkv",
+      "PremiereDate": "2021-10-22T00:00:00.0000000Z",
+      "PrimaryImageAspectRatio": 0.6666666666666666,
+      "ProductionYear": 2021,
+      "ProviderIds": {
+        "Tmdb": "27205"
+      },
+      "RunTimeTicks": 12000000000,
+      "ServerId": "2564a1be47c14ee48993a8d68427c0c7",
+      "Type": "Movie",
+      "UserData": {
+        "IsFavorite": false,
+        "ItemId": "3b8941d78aeda0bdfb69c6381c8bd1a9",
+        "Key": "3b8941d7-8aed-a0bd-fb69-c6381c8bd1a9",
+        "LastPlayedDate": "2026-04-01T12:00:00.0000000Z",
+        "PlayCount": 3,
+        "PlaybackPositionTicks": 0,
+        "Played": true
+      },
+      "VideoType": "VideoFile"
+    },
+    {
+      "BackdropImageTags": [],
+      "ChannelId": null,
+      "CommunityRating": 7.1,
+      "Container": "mkv",
+      "CriticRating": 72,
+      "Id": "aaad8034da2f8c4db82f7aa3e26a4e3e",
+      "ImageBlurHashes": {
+        "Primary": {
+          "f57d3e17ea16a5158f744c9eff887325": "d23KQ.pLfQpLktfkfQfkfQfQfQfQktfkfQfkfQfQfQfQ"
+        }
+      },
+      "ImageTags": {
+        "Primary": "f57d3e17ea16a5158f744c9eff887325"
+      },
+      "IsFolder": false,
+      "LocationType": "FileSystem",
+      "MediaType": "Video",
+      "Name": "Foxtrot Movie",
+      "OfficialRating": "R",
+      "Path": "/media/movies/Foxtrot Movie (2018) [tmdbid-157336]/Foxtrot Movie (2018) [tmdbid-157336].mkv",
+      "PremiereDate": "2018-03-09T00:00:00.0000000Z",
+      "PrimaryImageAspectRatio": 0.6666666666666666,
+      "ProductionYear": 2018,
+      "ProviderIds": {
+        "Tmdb": "157336"
+      },
+      "RunTimeTicks": 6000000000,
+      "ServerId": "2564a1be47c14ee48993a8d68427c0c7",
+      "Type": "Movie",
+      "UserData": {
+        "IsFavorite": false,
+        "ItemId": "aaad8034da2f8c4db82f7aa3e26a4e3e",
+        "Key": "aaad8034-da2f-8c4d-b82f-7aa3e26a4e3e",
+        "PlayCount": 0,
+        "PlaybackPositionTicks": 3000000000,
+        "Played": false,
+        "PlayedPercentage": 50
+      },
+      "VideoType": "VideoFile"
+    },
+    {
+      "BackdropImageTags": [],
+      "ChannelId": null,
+      "CommunityRating": 7.8,
+      "Container": "mkv",
+      "CriticRating": 94,
+      "Id": "eab6bd53ab3da44543cdcdf2ab031696",
+      "ImageBlurHashes": {
+        "Primary": {
+          "4d2e5a0ed655dd3d0774c2e4d940f32d": "d23KQ.pLfQpLktfkfQfkfQfQfQfQktfkfQfkfQfQfQfQ"
+        }
+      },
+      "ImageTags": {
+        "Primary": "4d2e5a0ed655dd3d0774c2e4d940f32d"
+      },
+      "IsFolder": false,
+      "LocationType": "FileSystem",
+      "MediaType": "Video",
+      "Name": "Golf Movie",
+      "OfficialRating": "PG",
+      "Path": "/media/movies/Golf Movie (2024) [tmdbid-693134]/Golf Movie (2024) [tmdbid-693134].mkv",
+      "PremiereDate": "2024-03-01T00:00:00.0000000Z",
+      "PrimaryImageAspectRatio": 0.6666666666666666,
+      "ProductionYear": 2024,
+      "ProviderIds": {
+        "Tmdb": "693134"
+      },
+      "RunTimeTicks": 9000000000,
+      "ServerId": "2564a1be47c14ee48993a8d68427c0c7",
+      "Type": "Movie",
+      "UserData": {
+        "IsFavorite": false,
+        "ItemId": "eab6bd53ab3da44543cdcdf2ab031696",
+        "Key": "eab6bd53-ab3d-a445-43cd-cdf2ab031696",
+        "LastPlayedDate": "2026-05-01T12:00:00.0000000Z",
+        "PlayCount": 1,
+        "PlaybackPositionTicks": 0,
+        "Played": true
+      },
+      "VideoType": "VideoFile"
+    }
+  ],
+  "StartIndex": 0,
+  "TotalRecordCount": 3
+}

@@ -415,6 +415,15 @@ python scripts/experiments/qbittorrent_poller.py --base-url http://localhost:180
 python scripts/experiments/prowlarr_host_config.py     --base-url http://localhost:19696 --config .local/experiments/prowlarr
 ```
 
+Jellyfin 的權限與瀏覽 API（M1.5 票 01）自己起停一台一次性的 Jellyfin（image 取 `deploy/` 釘的那一個，
+不需要上面的 compose），跑完連容器與工作目錄一起刪。結果見
+[`docs/research/library-browsing.md`](docs/research/library-browsing.md) §2、§3.1、§5、§10、§11：
+
+```bash
+python scripts/experiments/jellyfin_permissions.py            # 只量，報告寫到 .local/experiments/results/
+python scripts/experiments/jellyfin_permissions.py --record   # 另外重錄 tests/fixtures/http/jellyfin/ 的權限 fixture
+```
+
 `jellyfin_naming.py` 必須從乾淨的 `/config` 跑（Jellyfin 的 DB 會留住舊掃描結果，插件裝過
 就在了，量不到「未裝插件」的基準）：
 

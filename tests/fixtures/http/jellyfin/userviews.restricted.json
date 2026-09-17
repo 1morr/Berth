@@ -1,0 +1,116 @@
+{
+  "Items": [
+    {
+      "BackdropImageTags": [],
+      "CanDelete": false,
+      "CanDownload": false,
+      "ChannelId": null,
+      "Chapters": [],
+      "ChildCount": 3,
+      "CollectionType": "movies",
+      "DateCreated": "2026-09-17T09:04:44.5974178Z",
+      "DateLastMediaAdded": "0001-01-01T00:00:00.0000000Z",
+      "DisplayPreferencesId": "f137a2dd21bbc1b99aa5c0f6bf02a805",
+      "EnableMediaSourceDisplay": true,
+      "Etag": "0b00c5047b23d71365e0135e09fcec76",
+      "ExternalUrls": [],
+      "GenreItems": [],
+      "Genres": [],
+      "Id": "f137a2dd21bbc1b99aa5c0f6bf02a805",
+      "ImageBlurHashes": {
+        "Primary": {
+          "703131aa60eb2c8f6b27440b718fef39": "W968s[of9FRjj[ofogj[WBayayj[00WB?bt7ayayRjWBt7ofj[ay"
+        }
+      },
+      "ImageTags": {
+        "Primary": "703131aa60eb2c8f6b27440b718fef39"
+      },
+      "IsFolder": true,
+      "LocalTrailerCount": 0,
+      "LocationType": "FileSystem",
+      "LockData": false,
+      "LockedFields": [],
+      "MediaType": "Unknown",
+      "Name": "Movies",
+      "ParentId": "e9d5075a555c1cbc394eec4cef295274",
+      "Path": "/config/data/root/default/Movies",
+      "People": [],
+      "PlayAccess": "Full",
+      "PrimaryImageAspectRatio": 1.7777777777777777,
+      "ProviderIds": {},
+      "RemoteTrailers": [],
+      "ServerId": "2564a1be47c14ee48993a8d68427c0c7",
+      "SortName": "movies",
+      "SpecialFeatureCount": 0,
+      "Studios": [],
+      "Taglines": [],
+      "Tags": [],
+      "Type": "CollectionFolder",
+      "UserData": {
+        "IsFavorite": false,
+        "ItemId": "f137a2dd21bbc1b99aa5c0f6bf02a805",
+        "Key": "f137a2dd-21bb-c1b9-9aa5-c0f6bf02a805",
+        "PlayCount": 0,
+        "PlaybackPositionTicks": 0,
+        "Played": false
+      }
+    },
+    {
+      "BackdropImageTags": [],
+      "CanDelete": false,
+      "CanDownload": false,
+      "ChannelId": null,
+      "Chapters": [],
+      "ChildCount": 4,
+      "CollectionType": "tvshows",
+      "DateCreated": "2026-09-17T09:04:43.0829044Z",
+      "DateLastMediaAdded": "0001-01-01T00:00:00.0000000Z",
+      "DisplayPreferencesId": "4514ec850e5ad0c47b58444e17b6346c",
+      "EnableMediaSourceDisplay": true,
+      "Etag": "70e14bb18af16e81092aeafdd321979c",
+      "ExternalUrls": [],
+      "GenreItems": [],
+      "Genres": [],
+      "Id": "4514ec850e5ad0c47b58444e17b6346c",
+      "ImageBlurHashes": {
+        "Primary": {
+          "56513b25460873f593ba6d9bab2fee03": "W33]WXj]0KbI_3kCt8j[Rjayt7j[4nfQ_3j[4nayIVay%MoLM{WB"
+        }
+      },
+      "ImageTags": {
+        "Primary": "56513b25460873f593ba6d9bab2fee03"
+      },
+      "IsFolder": true,
+      "LocalTrailerCount": 0,
+      "LocationType": "FileSystem",
+      "LockData": false,
+      "LockedFields": [],
+      "MediaType": "Unknown",
+      "Name": "TV",
+      "ParentId": "e9d5075a555c1cbc394eec4cef295274",
+      "Path": "/config/data/root/default/TV",
+      "People": [],
+      "PlayAccess": "Full",
+      "PrimaryImageAspectRatio": 1.7777777777777777,
+      "ProviderIds": {},
+      "RemoteTrailers": [],
+      "ServerId": "2564a1be47c14ee48993a8d68427c0c7",
+      "SortName": "tv",
+      "SpecialFeatureCount": 0,
+      "Studios": [],
+      "Taglines": [],
+      "Tags": [],
+      "Type": "CollectionFolder",
+      "UserData": {
+        "IsFavorite": false,
+        "ItemId": "4514ec850e5ad0c47b58444e17b6346c",
+        "Key": "4514ec85-0e5a-d0c4-7b58-444e17b6346c",
+        "PlayCount": 0,
+        "PlaybackPositionTicks": 0,
+        "Played": false
+      }
+    }
+  ],
+  "StartIndex": 0,
+  "TotalRecordCount": 2
+}

@@ -1,0 +1,82 @@
+{
+  "Items": [
+    {
+      "BackdropImageTags": [],
+      "ChannelId": null,
+      "Container": "mkv",
+      "Id": "99701a68c9a746b2f3a2d31d0b6c49f2",
+      "ImageBlurHashes": {
+        "Primary": {
+          "ae92dd1bdff3b398370c5b46b3123200": "d23KQ.pLfQpLktfkfQfkfQfQfQfQktfkfQfkfQfQfQfQ"
+        }
+      },
+      "ImageTags": {},
+      "IndexNumber": 1,
+      "IsFolder": false,
+      "LocationType": "FileSystem",
+      "MediaType": "Video",
+      "Name": "Frieren",
+      "ParentIndexNumber": 1,
+      "ParentPrimaryImageItemId": "02c06be72a8c11102b98e17665c9fef2",
+      "ParentPrimaryImageTag": "ae92dd1bdff3b398370c5b46b3123200",
+      "PrimaryImageAspectRatio": 0.6666666666666666,
+      "ProductionYear": 2023,
+      "RunTimeTicks": 6000000000,
+      "SeasonId": "07a528fa42ef6bf81fffb993098d54de",
+      "SeasonName": "第 1 季",
+      "SeriesId": "02c06be72a8c11102b98e17665c9fef2",
+      "SeriesName": "Frieren",
+      "SeriesPrimaryImageTag": "ae92dd1bdff3b398370c5b46b3123200",
+      "ServerId": "2564a1be47c14ee48993a8d68427c0c7",
+      "Type": "Episode",
+      "UserData": {
+        "IsFavorite": false,
+        "ItemId": "99701a68c9a746b2f3a2d31d0b6c49f2",
+        "Key": "99701a68-c9a7-46b2-f3a2-d31d0b6c49f2",
+        "PlayCount": 0,
+        "PlaybackPositionTicks": 1800000000,
+        "Played": false,
+        "PlayedPercentage": 30
+      },
+      "VideoType": "VideoFile"
+    },
+    {
+      "BackdropImageTags": [],
+      "ChannelId": null,
+      "CommunityRating": 7.1,
+      "Container": "mkv",
+      "CriticRating": 72,
+      "Id": "aaad8034da2f8c4db82f7aa3e26a4e3e",
+      "ImageBlurHashes": {
+        "Primary": {
+          "f57d3e17ea16a5158f744c9eff887325": "d23KQ.pLfQpLktfkfQfkfQfQfQfQktfkfQfkfQfQfQfQ"
+        }
+      },
+      "ImageTags": {
+        "Primary": "f57d3e17ea16a5158f744c9eff887325"
+      },
+      "IsFolder": false,
+      "LocationType": "FileSystem",
+      "MediaType": "Video",
+      "Name": "Foxtrot Movie",
+      "OfficialRating": "R",
+      "PremiereDate": "2018-03-09T00:00:00.0000000Z",
+      "ProductionYear": 2018,
+      "RunTimeTicks": 6000000000,
+      "ServerId": "2564a1be47c14ee48993a8d68427c0c7",
+      "Type": "Movie",
+      "UserData": {
+        "IsFavorite": false,
+        "ItemId": "aaad8034da2f8c4db82f7aa3e26a4e3e",
+        "Key": "aaad8034-da2f-8c4d-b82f-7aa3e26a4e3e",
+        "PlayCount": 0,
+        "PlaybackPositionTicks": 3000000000,
+        "Played": false,
+        "PlayedPercentage": 50
+      },
+      "VideoType": "VideoFile"
+    }
+  ],
+  "StartIndex": 0,
+  "TotalRecordCount": 2
+}
