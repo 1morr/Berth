@@ -8,6 +8,8 @@
 from __future__ import annotations
 
 import socket
+import ssl
+from functools import cache
 from types import TracebackType
 from typing import Any, Self
 
@@ -15,6 +17,18 @@ import httpx
 
 #: 探測用的逾時。容器啟動中通常是 connect 就失敗，不需要等太久（plan §9.3 第 2 步）。
 DEFAULT_TIMEOUT_SECONDS = 5.0
+
+
+@cache
+def _ssl_context() -> ssl.SSLContext:
+    """整個程序共用一個 SSL context，內容與 httpx 的預設相同（certifi、`SSL_CERT_FILE`）。
+
+    **不是微調**：httpx 每個 client 預設各建一個，要讀一次 certifi 的憑證包，約 14 ms 的 CPU，
+    而且卡在事件迴圈上。services 每個請求都開新 client，媒體庫牆一頁要代理幾十張圖——M1.5 票 04
+    量到經過 Berth 的熱圖 6 條並行時每張 140 ms、直連 Jellyfin 只要 20 ms
+    （研究 library-browsing.md §6.1）。
+    """
+    return httpx.create_ssl_context()
 
 
 class ServiceError(Exception):
@@ -69,6 +83,7 @@ class HttpSession:
             headers=headers or {},
             timeout=timeout,
             follow_redirects=True,
+            verify=_ssl_context(),
         )
 
     async def __aenter__(self) -> Self:

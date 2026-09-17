@@ -1,13 +1,15 @@
-"""adapter 的純函式：錯誤分類與 Prowlarr 設定檔解析。"""
+"""adapter 的純函式：錯誤分類與 Prowlarr 設定檔解析；HTTP 外殼開一個 session 的成本。"""
 
 from __future__ import annotations
 
 import socket
+import ssl
 from pathlib import Path
+from typing import Any
 
 import pytest
 
-from berth.adapters.http import is_dns_failure
+from berth.adapters.http import HttpSession, is_dns_failure
 from berth.adapters.prowlarr.config_file import API_KEY_ENV, read_api_key, read_api_key_from_config
 from berth.adapters.qbittorrent import (
     BERTH_TAG,
@@ -58,6 +60,34 @@ def test_dns_failure_survives_a_self_referential_chain() -> None:
     looped.__cause__ = looped
 
     assert is_dns_failure(looped) is False
+
+
+@pytest.mark.asyncio
+async def test_opening_a_session_does_not_build_another_ssl_context(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """httpx 每個 client 預設各建一個 SSL context：讀 certifi 的憑證包，約 14 ms 的 CPU，
+    卡在事件迴圈上。
+
+    services 每個請求都開一個新 client，而媒體庫牆一頁要代理幾十張圖——M1.5 票 04 量到經過 Berth 的
+    熱圖 6 條並行時每張 140 ms、直連 Jellyfin 20 ms（研究 library-browsing.md §6.1）。
+    """
+    built: list[object] = []
+    create = ssl.create_default_context
+
+    def counting(*args: Any, **kwargs: Any) -> ssl.SSLContext:
+        built.append(object())
+        return create(*args, **kwargs)
+
+    # 共用的那一個如果還沒建過，在這裡建。
+    await HttpSession("http://jellyfin:8096").aclose()
+    monkeypatch.setattr(ssl, "create_default_context", counting)
+
+    sessions = [HttpSession("http://jellyfin:8096") for _ in range(3)]
+    for session in sessions:
+        await session.aclose()
+
+    assert built == []
 
 
 def test_api_key_read_from_the_mounted_config(tmp_path: Path) -> None:

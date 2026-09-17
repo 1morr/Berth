@@ -505,6 +505,9 @@ Windows Docker Desktop（NTFS bind mount）與 Linux（ext4）上各跑一次 `d
   `GET /api/inventory` 回媒體庫而不是 Route，`GET /api/inventory/{slug}` → `GET /api/inventory/{library_id}?page=`，
   回應的 `route` / `items` 換成 `library` / `titles` / `tracked`，每一格的入庫狀態收進 `tracking`，兩個篩選的數字
   從切換列搬到牆上（`review` / `unmatched`）。內部 API，不留相容層。
+- 對外服務的 HTTP client 整個程序共用一個 SSL context（M1.5 票 04）：httpx 預設每個 client 各建一個，要讀一次
+  certifi 的憑證包、約 14 ms 的 CPU，而且卡在事件迴圈上。每個請求都開新 client 的 services 因此每次多付這一筆；
+  量到經過 Berth 的圖 6 條並行時每張從 140 ms 降到 54 ms（`docs/research/library-browsing.md` §6.1）。
 
 ### Removed
 
