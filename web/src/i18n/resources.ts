@@ -85,7 +85,8 @@ const zhHant = {
     waitingHint: '容器還在啟動。Berth 會持續探測到上限為止。',
     failed: '探測沒跑完。Berth 後端可能沒在跑——確認容器狀態後再試一次。',
     empty: '還沒探測過。',
-    done: '{{count}} 個服務已判定',
+    done_one: '{{count}} 個服務已判定',
+    done_other: '{{count}} 個服務已判定',
   },
   service: {
     jellyfin: 'Jellyfin',
@@ -355,7 +356,8 @@ const zhHant = {
       '這台 Jellyfin 一個媒體庫都沒有。先在 Jellyfin 建一個再回來，Berth 才有地方寫入。Berth 不會替你的伺服器建媒體庫。',
     unreachable: '讀不到媒體庫清單。Berth 後端可能沒在跑——確認容器狀態後重新整理。',
     building: '建立中…',
-    build: '建立 {{count}} 條 Route 並檢查',
+    build_one: '建立 {{count}} 條 Route 並檢查',
+    build_other: '建立 {{count}} 條 Route 並檢查',
     recheck_one: '重新檢查 {{count}} 條 Route',
     recheck_other: '重新檢查 {{count}} 條 Route',
     requestFailed: '請求沒有走完。Berth 後端可能沒在跑——確認容器狀態後再按一次。',
@@ -496,8 +498,10 @@ const zhHant = {
     filters: '篩選',
     filter: {
       all: '全部',
-      review: '待審 {{count}}',
-      unmatched: 'Unmatched {{count}}',
+      review_one: '待審 {{count}}',
+      review_other: '待審 {{count}}',
+      unmatched_one: 'Unmatched {{count}}',
+      unmatched_other: 'Unmatched {{count}}',
     },
     showing_one: '顯示 {{count}} 部作品',
     showing_other: '顯示 {{count}} 部作品',
@@ -918,7 +922,8 @@ const zhHant = {
     recheck: '立即重測',
     rechecking: '重測中…',
     recheckFailed: '重測沒有走完。Berth 後端可能沒在跑——確認容器狀態後再按一次。',
-    failures: '連續失敗 {{count}} 次',
+    failures_one: '連續失敗 {{count}} 次',
+    failures_other: '連續失敗 {{count}} 次',
     state: {
       ok: '已繫上',
       drift: '設定被改過',
@@ -941,7 +946,8 @@ const zhHant = {
     },
     routes: {
       title: '媒體庫路徑',
-      count: '{{count}} 條 Route',
+      count_one: '{{count}} 條 Route',
+      count_other: '{{count}} 條 Route',
       expand: '展開檢查',
       collapse: '收起',
       empty: '還沒有 Route。在設定精靈的最後一個泊位建立它們，Berth 才有地方寫入。',
@@ -995,7 +1001,8 @@ const zhHant = {
     drift: {
       title: 'qBittorrent 建議設定',
       clean: '五個建議鍵都還是建議值。',
-      changed: '{{count}} 個鍵與建議值不同。',
+      changed_one: '{{count}} 個鍵與建議值不同。',
+      changed_other: '{{count}} 個鍵與建議值不同。',
       changedKey: '已改',
       key: '鍵',
       current: '現值',
@@ -1183,7 +1190,8 @@ const en: Translations<typeof zhHant> = {
     waitingHint: 'Containers are still starting. Berth keeps probing until the limit.',
     failed: 'The probe did not finish. The Berth backend may not be running — check it and retry.',
     empty: 'Not probed yet.',
-    done: '{{count}} services decided',
+    done_one: '{{count}} service decided',
+    done_other: '{{count}} services decided',
   },
   service: {
     jellyfin: 'Jellyfin',
@@ -1468,7 +1476,8 @@ const en: Translations<typeof zhHant> = {
     unreachable:
       'Could not read the library list. The Berth backend may be down — check the container, then reload.',
     building: 'Building…',
-    build: 'Build {{count}} routes and check',
+    build_one: 'Build {{count}} route and check',
+    build_other: 'Build {{count}} routes and check',
     recheck_one: 'Check {{count}} route again',
     recheck_other: 'Check {{count}} routes again',
     requestFailed:
@@ -1611,8 +1620,10 @@ const en: Translations<typeof zhHant> = {
     filters: 'Filter',
     filter: {
       all: 'All',
-      review: 'Review {{count}}',
-      unmatched: 'Unmatched {{count}}',
+      review_one: 'Review {{count}}',
+      review_other: 'Review {{count}}',
+      unmatched_one: 'Unmatched {{count}}',
+      unmatched_other: 'Unmatched {{count}}',
     },
     showing_one: 'Showing {{count}} title',
     showing_other: 'Showing {{count}} titles',
@@ -2018,7 +2029,8 @@ const en: Translations<typeof zhHant> = {
     rechecking: 'Checking…',
     recheckFailed:
       'The check did not go through. The Berth backend may be down — check the container, then try again.',
-    failures: '{{count}} consecutive failures',
+    failures_one: '{{count}} consecutive failure',
+    failures_other: '{{count}} consecutive failures',
     state: {
       ok: 'Moored',
       drift: 'Settings changed',
@@ -2041,7 +2053,8 @@ const en: Translations<typeof zhHant> = {
     },
     routes: {
       title: 'Library paths',
-      count: '{{count}} routes',
+      count_one: '{{count}} route',
+      count_other: '{{count}} routes',
       expand: 'Show checks',
       collapse: 'Hide',
       empty:
@@ -2096,7 +2109,8 @@ const en: Translations<typeof zhHant> = {
     drift: {
       title: 'qBittorrent recommended settings',
       clean: 'All five recommended keys still hold their recommended values.',
-      changed: '{{count}} keys differ from the recommended values.',
+      changed_one: '{{count}} key differs from the recommended value.',
+      changed_other: '{{count}} keys differ from the recommended values.',
       changedKey: 'changed',
       key: 'Key',
       current: 'Current',
