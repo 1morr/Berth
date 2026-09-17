@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import shutil
+import subprocess
 from collections.abc import AsyncIterator
 from pathlib import Path
 
@@ -57,3 +59,21 @@ TMDB_API_KEY = "00000000000000000000000000000003"
 def read_fixture(relative: str) -> str:
     """`tests/fixtures/` 底下的錄製回應（plan §1.2）。"""
     return (FIXTURES / relative).read_text(encoding="utf-8")
+
+
+def host_bash() -> str | None:
+    """讀得到宿主路徑的 bash：`deploy/` 的 shell 腳本測試用它跑腳本本人。
+
+    Windows 的 PowerShell 裡 `bash` 先解析到 WSL 的 `System32\bash.exe`，它讀不到 `C:/…` 形式的
+    路徑，於是每一條腳本測試都是與腳本無關的 exit 127（票 12 記下、票 15 收掉）。所以不看
+    平台，問它讀不讀得到這一個檔案：Linux 與 Git Bash 讀得到，WSL 的啟動器讀不到就略過。
+    """
+    bash = shutil.which("bash")
+    if bash is None:
+        return None
+    probe = subprocess.run(
+        [bash, "-c", 'test -r "$1"', "bash", Path(__file__).as_posix()],
+        capture_output=True,
+        check=False,
+    )
+    return bash if probe.returncode == 0 else None

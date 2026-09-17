@@ -12,17 +12,18 @@
 from __future__ import annotations
 
 import os
-import shutil
 import subprocess
 from pathlib import Path
 
 import pytest
 
+from tests.conftest import host_bash
+
 SCRIPT = Path(__file__).resolve().parents[2] / "deploy" / "entrypoint.sh"
 
-BASH = shutil.which("bash")
+BASH = host_bash()
 
-pytestmark = pytest.mark.skipif(BASH is None, reason="入口腳本要有 bash 才能跑")
+pytestmark = pytest.mark.skipif(BASH is None, reason="入口腳本要有讀得到宿主路徑的 bash 才能跑")
 
 #: 腳本在真的容器裡會用到、但在測試主機上不存在或需要 root 的指令。
 STUBS = {

@@ -8,17 +8,18 @@
 from __future__ import annotations
 
 import os
-import shutil
 import subprocess
 from pathlib import Path
 
 import pytest
 
+from tests.conftest import host_bash
+
 SCRIPT = Path(__file__).resolve().parents[2] / "deploy" / "preseed" / "qbittorrent" / "10-berth.sh"
 
-BASH = shutil.which("bash")
+BASH = host_bash()
 
-pytestmark = pytest.mark.skipif(BASH is None, reason="preseed 腳本要有 bash 才能跑")
+pytestmark = pytest.mark.skipif(BASH is None, reason="preseed 腳本要有讀得到宿主路徑的 bash 才能跑")
 
 WHITELIST_ENABLED = r"WebUI\AuthSubnetWhitelistEnabled=true"
 BERTH_IP = "172.28.0.2"
