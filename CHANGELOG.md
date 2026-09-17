@@ -361,6 +361,8 @@ Windows Docker Desktop（NTFS bind mount）與 Linux（ext4）上各跑一次 `d
   `UserPlayedItems`、圖片標頭，以及沒權限時的 404 與 `parentId` 洩漏）。結論在 `docs/research/library-browsing.md`
   §2、§3.1、§5、§10、§11 與 brief §20.8。`lib.Response` 多帶回應標頭。
 - `jellyfin_permissions.py --only`（M1.5 票 03）：只寫指定的 fixture 檔名；加錄了牆的第二頁與整份清單兩份。
+- `jellyfin_permissions.py`（M1.5 票 06）：加錄牆的排序（評分遞增 / 遞減、電影庫的 `DatePlayed`）與類型、年份篩選
+  五份 fixture，排序實測補上電影庫的 `DatePlayed`。
 - 演練情境 `library`（M1.5 票 03）：整庫瀏覽、分頁、受限使用者，以及 `POST /demo/jellyfin/{disable,enable}` 停用帳號。
 - **媒體庫牆上的海報是 Jellyfin 的圖，由 Berth 轉給瀏覽器**（M1.5 票 04，brief §19）：`GET /api/jellyfin/items/{item_id}/images/{image_type}?size=&tag=`。
   瀏覽器不必連得到 Jellyfin，HTTPS 的 Berth 配 HTTP 的 Jellyfin 也沒有 mixed content。縮放由 Jellyfin 做，只收白名單裡的
@@ -377,6 +379,14 @@ Windows Docker Desktop（NTFS bind mount）與 Linux（ext4）上各跑一次 `d
   `WatchStateOut`；Jellyfin 的使用者 id 只從 session 來，你在 Jellyfin 看不到的 item 回 404 `item_not_visible` 而且沒有寫入。
   `InventoryCardOut` 多 `watch`（`tracked` 與還沒進 Jellyfin 的是 `null`）。演練情境 `library` 的替身 Jellyfin 每部劇擺
   六集，`deckhand` 與 `skipper` 各看過一些。
+- **媒體庫牆可以排序，並依類型、年份篩選**（M1.5 票 06，brief §13）：排序選單照 jellyfin-web，劇集庫與電影庫各自一份
+  （劇集有「新集加入」「最近看過」，電影有「影評評分」「播放次數」「片長」），可切遞增 / 遞減；類型與年份各一份勾選清單，
+  選項是這個媒體庫的作品真的有的（Jellyfin `/Items/Filters`），可多選、勾了就套用。狀態都在網址上
+  （`?sort=&order=&genres=&years=`），重新整理與分享的連結還原得回來，換任何一項回到第 1 頁；「待審」「Unmatched」
+  切過去再切回「全部」，排序與篩選還在。篩類型或年份時「還沒進 Jellyfin」那一條收起（它們在 Jellyfin 裡沒有類型），
+  篩完一部都沒有時說出篩了什麼，並給一條清掉類型與年份的路。`GET /api/inventory/{library_id}` 多收 `sort`、`order`、
+  重複的 `genres` 與 `years`，選單外的排序鍵回 422 `sort_not_offered`；新增 `GET /api/inventory/{library_id}/filters`；
+  `InventoryLibraryOut` 多 `sorts`。演練情境 `library` 的作品有類型與評分。
 
 ### Changed
 
@@ -618,6 +628,9 @@ Windows Docker Desktop（NTFS bind mount）與 Linux（ext4）上各跑一次 `d
   Jellyfin 不套媒體庫權限、停用的帳號照樣代讀得到（12.1.0 實測），所以：Jellyfin 的使用者 id 只從 session 來；
   媒體庫 id 對 `GET /UserViews` 的允許清單驗過才會送出，不在清單回 404 且不問 Jellyfin；允許清單與帳號 `Policy`
   共用 60 秒快取；帳號在 Jellyfin 被停用時，他在 Berth 的每一張 session 都結束，下一個請求是 401。
+- **類型與年份清單同樣先驗媒體庫**（M1.5 票 06）：Jellyfin 的 `/Items/Filters` 帶 `parentId` 時不套權限，連使用者自己的
+  token 都照回（12.1.0 實測），不擋就會透出沒有權限的媒體庫有哪些類型與年份。不在允許清單回 404 且不問 Jellyfin；
+  排序鍵不在這種媒體庫的選單上也在問 Jellyfin 之前拒絕，連同時送出的整份清單那一支都不送。
 - **`/api/routes/*` 與 `/api/jellyfin/libraries` 永遠只有 admin**（票 14a，推翻票 14）。原本精靈跑完之前
   它們與 `/api/setup/*` 一樣匿名開放，而停用的 Route 不算進完成條件，所以那一刻任何人都能把紅燈 Route
   停用、再按完成。精靈第 7 步的刪除改走 `DELETE /api/setup/routes/{id}`（同一個命令、同一種拒絕）。

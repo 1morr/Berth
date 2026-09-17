@@ -24,7 +24,9 @@ from berth.domain import (
     InventoryStatus,
     JellyfinImageType,
     JellyfinPresence,
+    LibrarySort,
     MediaKind,
+    SortOrder,
 )
 from berth.services.deeplink import jellyfin_web
 from berth.services.inventory import InventoryCard, read_wall
@@ -32,6 +34,8 @@ from berth.services.jellyfin_access import (
     AccountDisabledError,
     JellyfinUnreachableError,
     LibraryNotVisibleError,
+    SortNotOfferedError,
+    WallQuery,
     jellyfin_access,
 )
 
@@ -50,6 +54,18 @@ class InventoryLibraryOut(BaseModel):
     id: str
     name: str
     collection_type: CollectionType
+    #: 排序選單，照 jellyfin-web 的順序；第一個是打開牆時的排序（票 06）。劇集庫與電影庫不同，
+    #: 牆那一支只收這裡有的。
+    sorts: list[LibrarySort]
+
+
+class InventoryFiltersOut(BaseModel):
+    """類型與年份篩選的選項：這個媒體庫裡的作品有的那些（Jellyfin `/Items/Filters`，票 06）。"""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    genres: list[str]
+    years: list[int]
 
 
 class TrackingOut(BaseModel):
@@ -136,11 +152,24 @@ async def get_inventory(
     request: Request,
     library_id: str,
     page: Annotated[int, Query(ge=1)] = 1,
+    sort: LibrarySort | None = None,
+    order: SortOrder = SortOrder.ASCENDING,
+    genres: Annotated[list[str] | None, Query()] = None,
+    years: Annotated[list[int] | None, Query()] = None,
 ) -> InventoryOut:
+    """一頁牆。`sort` 要在這個媒體庫的 `sorts` 上（否則 422 `sort_not_offered`）；`genres` 與
+    `years` 重複帶，同一種之間是「或」、兩種之間是「且」。排序與篩選只套在 `titles`：`tracked` 與
+    兩個篩選的數字是 Berth 的清單。"""
+    query = WallQuery(sort=sort, order=order, genres=tuple(genres or ()), years=tuple(years or ()))
     try:
         async with jellyfin_access(session, factory, cache, session_user(request)) as access:
-            wall = await read_wall(session, access, library_id, page=page)
-    except (AccountDisabledError, JellyfinUnreachableError, LibraryNotVisibleError) as refusal:
+            wall = await read_wall(session, access, library_id, page=page, query=query)
+    except (
+        AccountDisabledError,
+        JellyfinUnreachableError,
+        LibraryNotVisibleError,
+        SortNotOfferedError,
+    ) as refusal:
         raise access_refusal(refusal) from refusal
     return InventoryOut(
         library=InventoryLibraryOut.model_validate(wall.library),
@@ -153,6 +182,23 @@ async def get_inventory(
         review=wall.review,
         unmatched=wall.unmatched,
     )
+
+
+@router.get("/{library_id}/filters")
+async def get_inventory_filters(
+    session: SessionDep,
+    factory: ClientFactoryDep,
+    cache: AccessCacheDep,
+    request: Request,
+    library_id: str,
+) -> InventoryFiltersOut:
+    """篩選面板的選項。與牆分開一支：換頁、換排序都不必重問，而 jellyfin-web 也是打開面板才問。"""
+    try:
+        async with jellyfin_access(session, factory, cache, session_user(request)) as access:
+            filters = await access.filters(library_id)
+    except (AccountDisabledError, JellyfinUnreachableError, LibraryNotVisibleError) as refusal:
+        raise access_refusal(refusal) from refusal
+    return InventoryFiltersOut.model_validate(filters)
 
 
 def _card(card: InventoryCard) -> InventoryCardOut:

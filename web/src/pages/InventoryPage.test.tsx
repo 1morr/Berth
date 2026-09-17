@@ -14,8 +14,32 @@ afterEach(() => {
 const TV = '4514ec850e5ad0c47b58444e17b6346c'
 const MOVIES = 'f137a2dd21bbc1b99aa5c0f6bf02a805'
 
+/** 兩種媒體庫的排序選單（後端 `BROWSABLE`，照 jellyfin-web）。 */
+const TV_SORTS: InventoryLibrary['sorts'] = [
+  'SortName',
+  'Random',
+  'CommunityRating',
+  'DateCreated',
+  'DateLastContentAdded',
+  'SeriesDatePlayed',
+  'OfficialRating',
+  'PremiereDate',
+]
+const MOVIE_SORTS: InventoryLibrary['sorts'] = [
+  'SortName',
+  'Random',
+  'CommunityRating',
+  'CriticRating',
+  'DateCreated',
+  'DatePlayed',
+  'OfficialRating',
+  'PlayCount',
+  'PremiereDate',
+  'Runtime',
+]
+
 function library(overrides: Partial<InventoryLibrary> = {}): InventoryLibrary {
-  return { id: TV, name: 'TV', collection_type: 'tvshows', ...overrides }
+  return { id: TV, name: 'TV', collection_type: 'tvshows', sorts: TV_SORTS, ...overrides }
 }
 
 /** Jellyfin 牆上、不是 Berth 經手的一部。 */
@@ -107,7 +131,10 @@ function wall(overrides: Partial<Inventory> = {}): Inventory {
   }
 }
 
-const LIBRARIES = [library(), library({ id: MOVIES, name: 'Movies', collection_type: 'movies' })]
+const LIBRARIES = [
+  library(),
+  library({ id: MOVIES, name: 'Movies', collection_type: 'movies', sorts: MOVIE_SORTS }),
+]
 
 function render(
   routes: Record<string, StubRoute | (() => StubRoute)> = {},
@@ -683,6 +710,240 @@ describe('媒體庫頁', () => {
         'href',
         `/library/${TV}`,
       )
+    })
+  })
+
+  describe('排序與類型、年份（票 06）', () => {
+    /** 類型、年份的開關：展開之後的面板標題也叫這個名字。 */
+    const findToggle = (label: string) =>
+      screen.findByRole('button', { name: new RegExp(`^${label}`) })
+    /** 網址上的陣列是 TanStack Router 的 JSON 形狀。 */
+    const json = (value: unknown) => encodeURIComponent(JSON.stringify(value))
+    const walls = (api: ReturnType<typeof render>) =>
+      api.mock.calls
+        .map(([input]) => String(input))
+        .filter((url) => url.startsWith(`/api/inventory/${TV}`) && !url.endsWith('/filters'))
+
+    it('劇集庫與電影庫各有自己的排序選單', async () => {
+      render({ [`GET /api/inventory/${MOVIES}`]: { body: wall({ library: LIBRARIES[1] }) } })
+      renderApp(`/library/${TV}`)
+
+      const tv = within(await screen.findByLabelText('排序')).getAllByRole('option')
+      expect(tv.map((option) => option.textContent)).toEqual([
+        '名稱',
+        '隨機',
+        '社群評分',
+        '加入日期',
+        '新集加入',
+        '最近看過',
+        '分級',
+        '發行日期',
+      ])
+
+      await userEvent.click(screen.getByRole('link', { name: 'Movies' }))
+      await waitFor(() =>
+        expect(screen.getByRole('option', { name: '播放次數' })).toBeInTheDocument(),
+      )
+      expect(screen.getByRole('option', { name: '片長' })).toBeInTheDocument()
+      expect(screen.queryByRole('option', { name: '新集加入' })).not.toBeInTheDocument()
+    })
+
+    it('換排序與方向寫進網址、回到第 1 頁，向後端要照那樣排的牆', async () => {
+      const api = render({
+        [`GET /api/inventory/${TV}?page=2`]: { body: wall({ page: 2, total: 150 }) },
+        [`GET /api/inventory/${TV}?sort=CommunityRating`]: { body: wall() },
+        [`GET /api/inventory/${TV}?sort=CommunityRating&order=Descending`]: { body: wall() },
+      })
+      const { router } = renderApp(`/library/${TV}?page=2`)
+
+      await userEvent.selectOptions(await screen.findByLabelText('排序'), '社群評分')
+      await waitFor(() => expect(router.state.location.search).toEqual({ sort: 'CommunityRating' }))
+      await userEvent.selectOptions(screen.getByLabelText('排序方向'), '遞減')
+
+      await waitFor(() =>
+        expect(router.state.location.search).toEqual({
+          sort: 'CommunityRating',
+          order: 'Descending',
+        }),
+      )
+      expect(walls(api)).toContain(`/api/inventory/${TV}?sort=CommunityRating&order=Descending`)
+    })
+
+    it('類型清單打開才問；勾選可多選、寫進網址、回到第 1 頁，焦點留在那一格', async () => {
+      const api = render({
+        [`GET /api/inventory/${TV}?page=2`]: { body: wall({ page: 2, total: 150 }) },
+        [`GET /api/inventory/${TV}/filters`]: {
+          body: { genres: ['Comedy', 'Drama'], years: [2020, 2022] },
+        },
+        [`GET /api/inventory/${TV}?genres=Drama`]: { body: wall() },
+        [`GET /api/inventory/${TV}?genres=Comedy&genres=Drama`]: { body: wall() },
+      })
+      const { router } = renderApp(`/library/${TV}?page=2`)
+      const filterLists = () =>
+        api.mock.calls.filter(([input]) => String(input).endsWith('/filters')).length
+
+      const genres = await findToggle('類型')
+      expect(filterLists()).toBe(0)
+      expect(genres).toHaveAttribute('aria-expanded', 'false')
+      await userEvent.click(genres)
+      expect(genres).toHaveAttribute('aria-expanded', 'true')
+      expect(screen.getByRole('group', { name: '類型' })).toHaveAttribute(
+        'id',
+        genres.getAttribute('aria-controls'),
+      )
+      await userEvent.click(await screen.findByRole('checkbox', { name: 'Drama' }))
+      await waitFor(() => expect(router.state.location.search).toEqual({ genres: ['Drama'] }))
+      await userEvent.click(screen.getByRole('checkbox', { name: 'Comedy' }))
+
+      await waitFor(() =>
+        expect(router.state.location.search).toEqual({ genres: ['Comedy', 'Drama'] }),
+      )
+      expect(screen.getByRole('checkbox', { name: 'Comedy' })).toHaveFocus()
+      expect(screen.getByRole('checkbox', { name: 'Drama' })).toBeChecked()
+      expect(walls(api)).toContain(`/api/inventory/${TV}?genres=Comedy&genres=Drama`)
+      expect(filterLists()).toBe(1)
+    })
+
+    it('年份也是勾選，取消勾選就拿掉', async () => {
+      render({
+        [`GET /api/inventory/${TV}/filters`]: { body: { genres: [], years: [2020, 2022] } },
+        [`GET /api/inventory/${TV}?years=2020&years=2022`]: { body: wall() },
+        [`GET /api/inventory/${TV}?years=2022`]: { body: wall() },
+      })
+      const { router } = renderApp(`/library/${TV}?years=${json([2020, 2022])}`)
+
+      await userEvent.click(await findToggle('年份'))
+      await userEvent.click(await screen.findByRole('checkbox', { name: '2020' }))
+
+      await waitFor(() => expect(router.state.location.search).toEqual({ years: [2022] }))
+    })
+
+    it('網址上選著、這個媒體庫卻沒有的類型照樣列出來，取消得了', async () => {
+      render({
+        [`GET /api/inventory/${TV}?genres=Mecha`]: { body: wall() },
+        [`GET /api/inventory/${TV}/filters`]: {
+          body: { genres: ['Comedy', 'Drama'], years: [] },
+        },
+      })
+      const { router } = renderApp(`/library/${TV}?genres=${json(['Mecha'])}`)
+
+      await userEvent.click(await findToggle('類型'))
+      await screen.findByRole('checkbox', { name: 'Drama' })
+      const boxes = within(screen.getByRole('group', { name: '類型' })).getAllByRole('checkbox')
+      expect(boxes.map((box) => box.closest('div')?.textContent)).toEqual([
+        'Comedy',
+        'Drama',
+        'Mecha',
+      ])
+      await userEvent.click(screen.getByRole('checkbox', { name: 'Mecha' }))
+
+      await waitFor(() => expect(router.state.location.search).toEqual({}))
+    })
+
+    it('重新整理與分享的連結還原得回來：控制項照網址，向後端要同一面牆', async () => {
+      const api = render({
+        [`GET /api/inventory/${TV}?sort=CommunityRating&order=Descending&genres=Drama&years=2020`]:
+          { body: wall() },
+      })
+      renderApp(
+        `/library/${TV}?sort=CommunityRating&order=Descending&genres=${json(['Drama'])}&years=${json([2020])}`,
+      )
+
+      expect(await screen.findByLabelText('排序')).toHaveValue('CommunityRating')
+      expect(screen.getByLabelText('排序方向')).toHaveValue('Descending')
+      expect(await findToggle('類型')).toHaveAccessibleName(/^類型\s*已選 1 個$/)
+      await waitFor(() =>
+        expect(walls(api)).toEqual([
+          `/api/inventory/${TV}?sort=CommunityRating&order=Descending&genres=Drama&years=2020`,
+        ]),
+      )
+    })
+
+    it('這個媒體庫的選單上沒有的排序當成預設，不送出去', async () => {
+      const api = render()
+      renderApp(`/library/${TV}?sort=DatePlayed`)
+
+      expect(await screen.findByLabelText('排序')).toHaveValue('SortName')
+      expect(walls(api)).toEqual([`/api/inventory/${TV}`])
+    })
+
+    it('分頁鍵與「待審」帶著排序與篩選，按「全部」回到原本排好、篩好的那一頁', async () => {
+      const big = wall({ page: 2, total: 250 })
+      const api = render({
+        [`GET /api/inventory/${TV}?page=2&sort=CommunityRating&genres=Drama`]: { body: big },
+      })
+      const { router } = renderApp(
+        `/library/${TV}?page=2&sort=CommunityRating&genres=${json(['Drama'])}`,
+      )
+
+      const pager = (await screen.findAllByRole('navigation', { name: '分頁' }))[0]!
+      expect(within(pager).getByRole('link', { name: '下一頁' })).toHaveAttribute(
+        'href',
+        `/library/${TV}?page=3&sort=CommunityRating&genres=${json(['Drama'])}`,
+      )
+
+      await userEvent.click(screen.getByRole('link', { name: '待審 1' }))
+      await waitFor(() =>
+        expect(router.state.location.search).toEqual({
+          page: 2,
+          filter: 'review',
+          sort: 'CommunityRating',
+          genres: ['Drama'],
+        }),
+      )
+      // 待審是 Berth 的清單，Jellyfin 的類型套不上：控制項收起（使用者拍板）。
+      expect(screen.queryByLabelText('排序')).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /^類型/ })).not.toBeInTheDocument()
+
+      await userEvent.click(screen.getByRole('link', { name: '全部' }))
+      await waitFor(() =>
+        expect(router.state.location.search).toEqual({
+          page: 2,
+          sort: 'CommunityRating',
+          genres: ['Drama'],
+        }),
+      )
+      // 待審與全部之間切換不重抓：Berth 的清單跟著那一頁一起到手。
+      expect(walls(api)).toEqual([`/api/inventory/${TV}?page=2&sort=CommunityRating&genres=Drama`])
+    })
+
+    it('篩類型或年份時「還沒進 Jellyfin」收起；只換排序時照舊', async () => {
+      render({
+        [`GET /api/inventory/${TV}?genres=Drama`]: { body: wall() },
+        [`GET /api/inventory/${TV}?sort=CommunityRating`]: { body: wall() },
+      })
+      const { router } = renderApp(`/library/${TV}?genres=${json(['Drama'])}`)
+
+      await findTile('Alpha Show')
+      expect(screen.queryByRole('region', { name: '還沒進 Jellyfin' })).not.toBeInTheDocument()
+
+      await router.navigate({
+        to: '/library/$libraryId',
+        params: { libraryId: TV },
+        search: { sort: 'CommunityRating' },
+      })
+      expect(await screen.findByRole('region', { name: '還沒進 Jellyfin' })).toBeVisible()
+    })
+
+    it('篩完什麼都沒有時說得出篩了什麼，給一條清掉類型與年份的路（排序留著）', async () => {
+      render({
+        [`GET /api/inventory/${TV}?sort=CommunityRating&genres=Drama&years=2020`]: {
+          body: wall({ total: 0, titles: [] }),
+        },
+      })
+      renderApp(
+        `/library/${TV}?sort=CommunityRating&genres=${json(['Drama'])}&years=${json([2020])}`,
+      )
+
+      expect(await screen.findByText('這個媒體庫沒有符合篩選的作品。')).toBeVisible()
+      expect(screen.getByText('類型：Drama')).toBeVisible()
+      expect(screen.getByText('年份：2020')).toBeVisible()
+      expect(screen.getByRole('link', { name: '清除類型與年份' })).toHaveAttribute(
+        'href',
+        `/library/${TV}?sort=CommunityRating`,
+      )
+      // 空的是篩選的結果，不是媒體庫本身。
+      expect(screen.queryByText('「TV」還沒有任何作品。')).not.toBeInTheDocument()
     })
   })
 

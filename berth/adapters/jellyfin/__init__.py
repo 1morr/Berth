@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from itertools import takewhile
 from typing import Protocol
 
-from berth.domain import CollectionType
+from berth.domain import CollectionType, SortOrder
 
 #: 支援下限（brief §16.4、§20.9）。**12.0 就是原本的 10.12**——Jellyfin 只是把版號前面
 #: 永遠不變的 `10` 拿掉了，所以比的是 `12.0` 而不是 `10.12`。10.x 上同一集的兩個版本是兩個
@@ -240,6 +240,15 @@ class JellyfinPage:
 
 
 @dataclass(frozen=True, slots=True)
+class JellyfinFilters:
+    """`GET /Items/Filters` 裡 Berth 讀的兩份清單：一個媒體庫的作品有哪些類型與年份
+    （jellyfin-web 篩選面板那一支，研究 library-browsing.md §3.2）。"""
+
+    genres: tuple[str, ...]
+    years: tuple[int, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class JellyfinImage:
     """`GET /Items/{id}/Images/{type}` 的一張圖，已由 Jellyfin 縮好。"""
 
@@ -385,11 +394,34 @@ class JellyfinClient(Protocol):
         ...
 
     async def library_page(
-        self, *, user_id: str, library_id: str, item_type: str, start: int, limit: int
+        self,
+        *,
+        user_id: str,
+        library_id: str,
+        item_type: str,
+        start: int,
+        limit: int,
+        sort_by: Sequence[str],
+        sort_order: SortOrder,
+        genres: Sequence[str],
+        years: Sequence[int],
     ) -> JellyfinPage:
-        """一個媒體庫的一頁作品，依 `SortName` 升冪。
+        """一個媒體庫的一頁作品。參數照 jellyfin-web 的劇集庫與電影庫（研究 §7）。
 
-        參數照 jellyfin-web 的劇集庫與電影庫（研究 §7）。
+        `sort_by` 是 `sortBy` 的每一個鍵，`sort_order` 套在每一個鍵上（jellyfin-web 只送一個）。
+        `genres` 之間、`years` 之間是「或」，兩者之間是「且」；空的就是不篩
+        （研究 §3.1，12.1.0 實測）。
+        """
+        ...
+
+    async def library_filters(
+        self, *, user_id: str, library_id: str, item_type: str
+    ) -> JellyfinFilters:
+        """`GET /Items/Filters?userId=&parentId=&includeItemTypes=`：這個媒體庫裡這一種作品的
+        類型與年份。
+
+        **不帶 `parentId` 四份清單全空**（研究 §2，12.1.0 實測），而帶了就不套媒體庫權限——同一條
+        「`library_id` 必須先驗過」的規矩。
         """
         ...
 
@@ -445,6 +477,7 @@ __all__ = [
     "JellyfinApiKey",
     "JellyfinAuth",
     "JellyfinClient",
+    "JellyfinFilters",
     "JellyfinImage",
     "JellyfinItem",
     "JellyfinLibrary",

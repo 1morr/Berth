@@ -11,7 +11,7 @@ import {
 import { meQueryOptions, type Me } from './api/auth'
 import { ApiError } from './api/client'
 import { healthQueryOptions } from './api/health'
-import { inventoriesQueryOptions } from './api/inventory'
+import { inventoriesQueryOptions, type WallSearch } from './api/inventory'
 import { destination } from './auth/destination'
 import { AppShell } from './AppShell'
 import { DiscoverPage } from './pages/DiscoverPage'
@@ -228,12 +228,26 @@ const inventoryIndexRoute = createRoute({
   ),
 })
 
-interface InventorySearch {
+interface InventorySearch extends WallSearch {
   /** 第幾頁（1 起算）。第 1 頁不寫進網址。 */
   page?: number
   /** 待審 / Unmatched。沒帶就是全部——`false` 與空字串一樣不寫進網址。 */
   filter?: InventoryFilter
 }
+
+/**
+ * 網址上的類型或年份（M1.5 票 06）。一個值或一串都收（`?years=2020` 被解析成數字，不是陣列），
+ * 去掉重複並排好：勾選的先後不同，網址與快取鍵仍是同一個。
+ */
+function listOf<T extends string | number>(value: unknown, keep: (item: unknown) => item is T) {
+  const items = (Array.isArray(value) ? value : [value]).filter(keep)
+  return [...new Set(items)].sort((a, b) =>
+    typeof a === 'number' && typeof b === 'number' ? a - b : String(a) < String(b) ? -1 : 1,
+  )
+}
+
+const isGenre = (item: unknown): item is string => typeof item === 'string' && item !== ''
+const isYear = (item: unknown): item is number => Number.isInteger(item)
 
 /**
  * 一個 Jellyfin 媒體庫的牆（M1.5 票 03，取代票 13 的 `/library/:routeSlug`）。瀏覽不是管理動作，
@@ -247,6 +261,13 @@ const inventoryRoute = createRoute({
     const page = Number(search.page)
     if (Number.isInteger(page) && page > 1) parsed.page = page
     if (search.filter === 'review' || search.filter === 'unmatched') parsed.filter = search.filter
+    // 排序鍵只認形狀：選單是每個媒體庫自己的，頁面拿到媒體庫之後才對（`wallQuery`）。
+    if (typeof search.sort === 'string' && search.sort !== '') parsed.sort = search.sort
+    if (search.order === 'Descending') parsed.order = search.order
+    const genres = listOf(search.genres, isGenre)
+    if (genres.length > 0) parsed.genres = genres
+    const years = listOf(search.years, isYear)
+    if (years.length > 0) parsed.years = years
     return parsed
   },
   beforeLoad: async ({ context, location }) => {

@@ -14,6 +14,8 @@ API 那一層（前端塞進來的 `userId`、401 之後的下一個請求）在
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -25,7 +27,8 @@ from berth.adapters.jellyfin import (
     JellyfinItem,
     JellyfinLibrary,
 )
-from berth.adapters.jellyfin.fake import FakeJellyfinClient
+from berth.adapters.jellyfin.fake import FakeJellyfinClient, ItemMetadata
+from berth.domain import LibrarySort, SortOrder
 from berth.models import JellyfinSettings
 from berth.services.auth import AuthenticatedUser, read_session, sign_in
 from berth.services.jellyfin_access import (
@@ -35,6 +38,8 @@ from berth.services.jellyfin_access import (
     ItemNotVisibleError,
     JellyfinUnreachableError,
     LibraryNotVisibleError,
+    SortNotOfferedError,
+    WallQuery,
     jellyfin_access,
 )
 from berth.services.settings import write_settings
@@ -156,14 +161,16 @@ class TestAllowList:
         user, _ = await signed_in(session, factory, "deckhand", "rope")
 
         async with jellyfin_access(session, factory, cache, user) as access:
-            await access.page(TV, start=0, limit=100)
+            await access.page(TV, start=0, limit=100, query=WallQuery())
             await access.index(MOVIES)
+            await access.filters(TV)
 
         assert set(jellyfin.view_queries) == {user.jellyfin_user_id}
         assert set(jellyfin.policy_queries) == {user.jellyfin_user_id}
         assert jellyfin.browse_queries == [
             (user.jellyfin_user_id, TV),
             (user.jellyfin_user_id, MOVIES),
+            (user.jellyfin_user_id, TV),
         ]
 
     @pytest.mark.parametrize("wanted", [ANIME, MUSIC, "no-such-library"])
@@ -180,12 +187,109 @@ class TestAllowList:
 
         async with jellyfin_access(session, factory, cache, user) as access:
             with pytest.raises(LibraryNotVisibleError):
-                await access.page(wanted, start=0, limit=100)
+                await access.page(wanted, start=0, limit=100, query=WallQuery())
             with pytest.raises(LibraryNotVisibleError):
                 await access.index(wanted)
+            # 類型與年份清單帶 `parentId` 時同樣不套權限，連使用者自己的 token 都照回（研究 §2）。
+            with pytest.raises(LibraryNotVisibleError):
+                await access.filters(wanted)
 
         # 替身不替 Berth 擋（真的 Jellyfin 也不擋，研究 §2），所以一筆都沒有就是 Berth 擋下的。
         assert jellyfin.browse_queries == []
+
+
+class TestWallQuery:
+    """排序與類型、年份篩選（M1.5 票 06）。伺服器真的照參數排、篩，是契約測試對著錄製證明的；
+    這裡驗的是 Berth 問出去的那一個問題，替身照著排、照著篩。"""
+
+    @pytest.fixture
+    def shelved(self, jellyfin: FakeJellyfinClient) -> FakeJellyfinClient:
+        def series(name: str, year: int) -> JellyfinItem:
+            path = f"/data/library/tv/{name}"
+            return JellyfinItem(
+                id=name, type=ITEM_SERIES, name=name, path=path, tmdb_id="", year=year
+            )
+
+        jellyfin.items_ = [series("Alpha", 2022), series("Bravo", 2020), series("Charlie", 2023)]
+        jellyfin.metadata = {
+            "Alpha": ItemMetadata(genres=("Drama",), sort_values={"CommunityRating": 7.0}),
+            "Bravo": ItemMetadata(genres=("Comedy",), sort_values={"CommunityRating": 9.0}),
+            "Charlie": ItemMetadata(genres=("Drama", "Fantasy")),
+        }
+        return jellyfin
+
+    async def test_the_wall_comes_back_in_the_order_asked_for(
+        self,
+        session: AsyncSession,
+        factory: FakeClientFactory,
+        shelved: FakeJellyfinClient,
+        cache: AccessCache,
+    ) -> None:
+        user, _ = await signed_in(session, factory, "deckhand", "rope")
+        rating = WallQuery(sort=LibrarySort.COMMUNITY_RATING)
+
+        async with jellyfin_access(session, factory, cache, user) as access:
+            by_name = await access.page(TV, start=0, limit=100, query=WallQuery())
+            ascending = await access.page(TV, start=0, limit=100, query=rating)
+            descending = await access.page(
+                TV, start=0, limit=100, query=replace(rating, order=SortOrder.DESCENDING)
+            )
+
+        assert [item.id for item in by_name.items] == ["Alpha", "Bravo", "Charlie"]
+        # 沒有評分的排在升冪最前、降冪最後（研究 §3.1）。
+        assert [item.id for item in ascending.items] == ["Charlie", "Alpha", "Bravo"]
+        assert [item.id for item in descending.items] == ["Bravo", "Alpha", "Charlie"]
+
+    async def test_genres_and_years_narrow_the_wall_and_its_total(
+        self,
+        session: AsyncSession,
+        factory: FakeClientFactory,
+        shelved: FakeJellyfinClient,
+        cache: AccessCache,
+    ) -> None:
+        """類型之間、年份之間是「或」，兩者之間是「且」（研究 §3.1）。"""
+        user, _ = await signed_in(session, factory, "deckhand", "rope")
+        query = WallQuery(genres=("Drama", "Comedy"), years=(2020, 2023))
+
+        async with jellyfin_access(session, factory, cache, user) as access:
+            page = await access.page(TV, start=0, limit=100, query=query)
+
+        assert ([item.id for item in page.items], page.total) == (["Bravo", "Charlie"], 2)
+
+    async def test_a_sort_this_kind_of_library_does_not_offer_is_refused_without_asking(
+        self,
+        session: AsyncSession,
+        factory: FakeClientFactory,
+        shelved: FakeJellyfinClient,
+        cache: AccessCache,
+    ) -> None:
+        """「最近看過」在劇集庫是 `SeriesDatePlayed`、在電影庫是 `DatePlayed`：用錯的那一個，
+        Jellyfin 不會報錯，牆只會默默變成別的順序。"""
+        user, _ = await signed_in(session, factory, "deckhand", "rope")
+
+        async with jellyfin_access(session, factory, cache, user) as access:
+            with pytest.raises(SortNotOfferedError):
+                await access.page(
+                    TV, start=0, limit=100, query=WallQuery(sort=LibrarySort.DATE_PLAYED)
+                )
+
+        assert shelved.browse_queries == []
+
+    async def test_the_filter_lists_are_this_librarys_genres_and_years(
+        self,
+        session: AsyncSession,
+        factory: FakeClientFactory,
+        shelved: FakeJellyfinClient,
+        cache: AccessCache,
+    ) -> None:
+        user, _ = await signed_in(session, factory, "deckhand", "rope")
+
+        async with jellyfin_access(session, factory, cache, user) as access:
+            filters = await access.filters(TV)
+
+        assert filters.genres == ("Comedy", "Drama", "Fantasy")
+        assert filters.years == (2020, 2022, 2023)
+        assert shelved.browse_queries == [(user.jellyfin_user_id, TV)]
 
 
 class TestAccountState:
@@ -251,7 +355,7 @@ class TestAccountState:
         jellyfin.folders["deckhand"] = (MOVIES,)
         jellyfin.disabled.add("deckhand")
         async with jellyfin_access(session, factory, cache, user) as access:
-            await access.page(TV, start=0, limit=100)
+            await access.page(TV, start=0, limit=100, query=WallQuery())
 
         clock.now += ACCESS_TTL_SECONDS + 1
         with pytest.raises(AccountDisabledError):
@@ -306,7 +410,7 @@ class TestUnreachable:
         async with jellyfin_access(session, factory, cache, user) as access:
             jellyfin.error = ServiceUnavailableError("GET /Items: connection refused")
             with pytest.raises(JellyfinUnreachableError):
-                await access.page(TV, start=0, limit=100)
+                await access.page(TV, start=0, limit=100, query=WallQuery())
 
 
 class TestMarkPlayed:

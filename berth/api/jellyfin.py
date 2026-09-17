@@ -30,6 +30,7 @@ from berth.services.jellyfin_access import (
     ItemNotVisibleError,
     JellyfinUnreachableError,
     LibraryNotVisibleError,
+    SortNotOfferedError,
     jellyfin_access,
 )
 from berth.services.jellyfin_images import ImageMissingError, read_image
@@ -161,11 +162,14 @@ def session_user(request: Request) -> AuthenticatedUser:
 #: - `account_disabled`（401）：session 已經結束，前端照「登入失效」處理。
 #: - `library_not_visible` / `item_not_visible`（404）：沒有權限與不存在是同一個回應。
 #: - `jellyfin_unreachable`（503）：`detail` 是服務回的原文。
+#: - `sort_not_offered`（422）：這一種媒體庫的排序選單上沒有這個鍵（票 06）。前端照媒體庫的 `sorts`
+#:   畫選單，所以只有手改網址會走到這裡。
 _REFUSALS: dict[type[Exception], tuple[int, str]] = {
     AccountDisabledError: (status.HTTP_401_UNAUTHORIZED, "account_disabled"),
     LibraryNotVisibleError: (status.HTTP_404_NOT_FOUND, "library_not_visible"),
     ItemNotVisibleError: (status.HTTP_404_NOT_FOUND, "item_not_visible"),
     JellyfinUnreachableError: (status.HTTP_503_SERVICE_UNAVAILABLE, "jellyfin_unreachable"),
+    SortNotOfferedError: (status.HTTP_422_UNPROCESSABLE_CONTENT, "sort_not_offered"),
 }
 
 

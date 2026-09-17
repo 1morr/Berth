@@ -14,6 +14,7 @@ from berth.adapters.http import (
 from berth.adapters.jellyfin import (
     JellyfinApiKey,
     JellyfinAuth,
+    JellyfinFilters,
     JellyfinImage,
     JellyfinItem,
     JellyfinLibrary,
@@ -27,7 +28,7 @@ from berth.adapters.jellyfin import (
     NewLibrary,
     TypeOption,
 )
-from berth.domain import CollectionType
+from berth.domain import CollectionType, SortOrder
 
 #: 插件下載與重啟都比一次探測慢得多，所以這個 client 的逾時比 `DEFAULT_TIMEOUT_SECONDS` 長。
 JELLYFIN_TIMEOUT_SECONDS = 30.0
@@ -266,29 +267,58 @@ class HttpJellyfinClient:
         return JellyfinPolicy(is_disabled=bool(policy.get("IsDisabled", False)))
 
     async def library_page(
-        self, *, user_id: str, library_id: str, item_type: str, start: int, limit: int
+        self,
+        *,
+        user_id: str,
+        library_id: str,
+        item_type: str,
+        start: int,
+        limit: int,
+        sort_by: Sequence[str],
+        sort_order: SortOrder,
+        genres: Sequence[str],
+        years: Sequence[int],
     ) -> JellyfinPage:
-        payload = await self._get(
-            "/Items",
-            params={
-                "userId": user_id,
-                "parentId": library_id,
-                "recursive": "true",
-                "includeItemTypes": item_type,
-                "sortBy": "SortName",
-                "sortOrder": "Ascending",
-                # jellyfin-web 的牆要的那幾格（研究 §7）；Primary 的 tag 是海報（票 04），
-                # 觀看紀錄是票 05 讀的。
-                "fields": "PrimaryImageAspectRatio,ProviderIds,Path",
-                "imageTypeLimit": "1",
-                "enableImageTypes": "Primary,Backdrop,Thumb",
-                "startIndex": str(start),
-                "limit": str(limit),
-            },
-        )
+        params = {
+            "userId": user_id,
+            "parentId": library_id,
+            "recursive": "true",
+            "includeItemTypes": item_type,
+            "sortBy": ",".join(sort_by),
+            "sortOrder": sort_order.value,
+            # jellyfin-web 的牆要的那幾格（研究 §7）；Primary 的 tag 是海報（票 04），
+            # 觀看紀錄是票 05 讀的。
+            "fields": "PrimaryImageAspectRatio,ProviderIds,Path",
+            "imageTypeLimit": "1",
+            "enableImageTypes": "Primary,Backdrop,Thumb",
+            "startIndex": str(start),
+            "limit": str(limit),
+        }
+        # 類型名可能含逗號，所以 Jellyfin 用 `|` 分；年份用逗號（研究 §3.1）。
+        if genres:
+            params["genres"] = "|".join(genres)
+        if years:
+            params["years"] = ",".join(str(year) for year in years)
+        payload = await self._get("/Items", params=params)
         items = _items(payload)
         total = payload.get("TotalRecordCount")
         return JellyfinPage(items=items, total=total if isinstance(total, int) else len(items))
+
+    async def library_filters(
+        self, *, user_id: str, library_id: str, item_type: str
+    ) -> JellyfinFilters:
+        payload = await self._get(
+            "/Items/Filters",
+            params={"userId": user_id, "parentId": library_id, "includeItemTypes": item_type},
+        )
+        genres = payload.get("Genres") if isinstance(payload, dict) else None
+        years = payload.get("Years") if isinstance(payload, dict) else None
+        if not isinstance(genres, list) or not isinstance(years, list):
+            raise ProtocolMismatchError("/Items/Filters: no Genres and Years in the response")
+        return JellyfinFilters(
+            genres=tuple(str(genre) for genre in genres),
+            years=tuple(year for year in years if isinstance(year, int)),
+        )
 
     async def library_index(
         self, *, user_id: str, library_id: str, item_type: str

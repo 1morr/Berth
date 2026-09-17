@@ -13,8 +13,10 @@
 - 初始精靈完成之後，管理員端點沒有 token 就是 401。
 - `GET /Items` 沒有路徑篩選：`parentId=<library>&recursive=true` 回的是那個媒體庫路徑底下的全部。
 - **API key 帶 `parentId` 替使用者查時不套媒體庫權限**（12.1.0 實測，研究 library-browsing.md §2）：
-  `library_page` / `library_index` 對他沒有權限的媒體庫照樣回內容。權限只在 `user_views` 上成立——
-  「Berth 自己擋」的測試要靠這台替身不替它擋，才證明得了是 Berth 擋的。
+  `library_page` / `library_index` / `library_filters` 對他沒有權限的媒體庫照樣回內容。權限只在
+  `user_views` 上成立——「Berth 自己擋」的測試要靠這台替身不替它擋，才證明得了是 Berth 擋的。
+- **牆真的照 `sortBy` 排、照 `genres` / `years` 篩**（研究 §3.1）：沒有值的排在升冪最前，`sortOrder`
+  套在每一個鍵上。類型與排序用的值擺在 `metadata`（`ItemMetadata`）。
 - **停用的帳號照樣代讀得到**：`user_views` 不看停用，只有 `user_policy` 說得出來（同上）。
 - **圖片匿名可取、`tag` 不驗證**（研究 §6）：`image` 不要 token，錯的 tag 一樣回圖。
 - **標記已看 / 未看由 Jellyfin 自己查可見性**（研究 §5）：這位使用者看不到的 item 回 404、沒有寫入。
@@ -25,14 +27,17 @@
 from __future__ import annotations
 
 import hashlib
-from collections.abc import Sequence
-from dataclasses import replace
+import random
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass, field, replace
+from typing import Any
 
 from berth.adapters.http import AuthFailedError, NotFoundError, ProtocolMismatchError
 from berth.adapters.jellyfin import (
     ITEM_SERIES,
     JellyfinApiKey,
     JellyfinAuth,
+    JellyfinFilters,
     JellyfinImage,
     JellyfinItem,
     JellyfinLibrary,
@@ -45,7 +50,21 @@ from berth.adapters.jellyfin import (
     NewLibrary,
     TypeOption,
 )
-from berth.domain import CollectionType
+from berth.domain import CollectionType, SortOrder
+
+
+@dataclass(frozen=True, slots=True)
+class ItemMetadata:
+    """替身上一部作品的類型與排序用的值（M1.5 票 06）。
+
+    `JellyfinItem` 不帶它們：Berth 只拿類型與排序鍵去問 Jellyfin，從不讀回來。
+    """
+
+    genres: tuple[str, ...] = ()
+    #: `ItemSortBy` 的名字 → 值（`{"CommunityRating": 8.2}`）。`SortName` 與 `ProductionYear`
+    #: 由 item 自己算；沒列的鍵是「沒有值」，升冪排最前、降冪排最後（研究 §3.1）。
+    sort_values: Mapping[str, float | str] = field(default_factory=dict)
+
 
 #: 這台伺服器裝了哪些 fetcher（`GET /Libraries/AvailableOptions`，實測 10.11.11）。
 AVAILABLE_TYPE_OPTIONS: dict[CollectionType, tuple[TypeOption, ...]] = {
@@ -122,6 +141,8 @@ class FakeJellyfinClient:
         played: dict[str, set[str]] | None = None,
         #: 帳號 → 看到一半的集與電影 → 看到幾 %。
         positions: dict[str, dict[str, float]] | None = None,
+        #: item id → 類型與排序用的值。沒列的作品沒有類型、每個排序鍵都沒有值。
+        metadata: dict[str, ItemMetadata] | None = None,
     ) -> None:
         self.base_url = base_url
         self.version = version
@@ -142,6 +163,7 @@ class FakeJellyfinClient:
         self.images = dict(images or {})
         self.played = {name: set(ids) for name, ids in (played or {}).items()}
         self.positions = {name: dict(rows) for name, rows in (positions or {}).items()}
+        self.metadata = dict(metadata or {})
 
         #: 每一次 `notify_paths` 收到的路徑，攤平。
         self.notified: list[str] = []
@@ -152,8 +174,8 @@ class FakeJellyfinClient:
         #: 每一次 `user_views` / `user_policy` 問的是誰。快取有沒有擋下重複的問題靠它斷言。
         self.view_queries: list[str] = []
         self.policy_queries: list[str] = []
-        #: 每一次帶 `parentId` 替使用者查的 `(user_id, library_id)`（`library_page` 與
-        #: `library_index` 都算）。「沒有轉發給 Jellyfin」就是這裡記不到那一次。
+        #: 每一次帶 `parentId` 替使用者查的 `(user_id, library_id)`（`library_page`、`library_index`
+        #: 與 `library_filters` 都算）。「沒有轉發給 Jellyfin」就是這裡記不到那一次。
         self.browse_queries: list[tuple[str, str]] = []
         #: 每一次 `image` 收到的整組參數：`(item_id, image_type, tag, fill_width, fill_height,
         #: quality)`。尺寸白名單翻成了哪幾個數字靠它斷言。
@@ -334,9 +356,31 @@ class FakeJellyfinClient:
         return JellyfinPolicy(is_disabled=self._username(user_id) in self.disabled)
 
     async def library_page(
-        self, *, user_id: str, library_id: str, item_type: str, start: int, limit: int
+        self,
+        *,
+        user_id: str,
+        library_id: str,
+        item_type: str,
+        start: int,
+        limit: int,
+        sort_by: Sequence[str],
+        sort_order: SortOrder,
+        genres: Sequence[str],
+        years: Sequence[int],
     ) -> JellyfinPage:
-        titles = self._browse(user_id, library_id, item_type)
+        """類型之間、年份之間是「或」，兩者之間是「且」；`sort_order` 套在每一個鍵上
+        （研究 §3.1）。"""
+        asked = set(genres)
+        titles = self._arranged(
+            [
+                item
+                for item in self._browse(user_id, library_id, item_type)
+                if (not asked or asked & set(self._metadata(item).genres))
+                and (not years or item.year in years)
+            ],
+            sort_by,
+            sort_order,
+        )
         # 牆的查詢一向不驗 id（媒體庫測試用一個替身不認得的觀看者）：不認得的人就是什麼都沒看過。
         name = self._account(user_id) or ""
         return JellyfinPage(
@@ -363,6 +407,46 @@ class FakeJellyfinClient:
         titles = [item for item in self.items_ if item.type == item_type and _under(item, library)]
         # `SortName` 是小寫化的名稱（研究 §3.1）；替身不去掉冠詞。
         return tuple(sorted(titles, key=lambda item: (item.name.casefold(), item.id)))
+
+    async def library_filters(
+        self, *, user_id: str, library_id: str, item_type: str
+    ) -> JellyfinFilters:
+        titles = self._browse(user_id, library_id, item_type)
+        return JellyfinFilters(
+            genres=tuple(
+                sorted({genre for item in titles for genre in self._metadata(item).genres})
+            ),
+            years=tuple(sorted({item.year for item in titles if item.year is not None})),
+        )
+
+    def _metadata(self, item: JellyfinItem) -> ItemMetadata:
+        return self.metadata.get(item.id) or ItemMetadata()
+
+    def _arranged(
+        self, titles: list[JellyfinItem], sort_by: Sequence[str], sort_order: SortOrder
+    ) -> list[JellyfinItem]:
+        if list(sort_by) == ["Random"]:
+            # 每一次查詢換一種順序，但同一串查詢重跑是同一組結果。
+            random.Random(len(self.browse_queries)).shuffle(titles)
+            return titles
+
+        # `Any`：一個排序鍵的值是名稱、年份或評分，型別隨鍵而變；同一個鍵之內才互相比較。
+        def value(item: JellyfinItem, key: str) -> Any:
+            if key == "SortName":
+                return item.name.casefold()
+            if key == "ProductionYear":
+                return item.year
+            return self._metadata(item).sort_values.get(key)
+
+        def order(item: JellyfinItem) -> tuple[Any, ...]:  # `Any`：同上，值隨鍵而變
+            # 沒有值的排在有值的前面；反過來排的時候就到了最後。
+            values = [value(item, key) for key in sort_by]
+            return (
+                *((found is not None, 0 if found is None else found) for found in values),
+                item.id,
+            )
+
+        return sorted(titles, key=order, reverse=sort_order is SortOrder.DESCENDING)
 
     async def mark_played(self, *, user_id: str, item_id: str, played: bool) -> JellyfinUserData:
         self._checkpoint(always=True)

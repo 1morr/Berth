@@ -44,7 +44,7 @@ from berth.adapters.jellyfin import (
     JellyfinSource,
     TypeOption,
 )
-from berth.adapters.jellyfin.fake import FakeJellyfinClient
+from berth.adapters.jellyfin.fake import FakeJellyfinClient, ItemMetadata
 from berth.adapters.prowlarr import ProwlarrClient, ProwlarrIndexer
 from berth.adapters.prowlarr.fake import FakeProwlarrClient
 from berth.adapters.qbittorrent import (
@@ -1121,6 +1121,30 @@ LIBRARY_TITLES: tuple[tuple[str, str, int, int], ...] = (
 #: 電影媒體庫多擺這麼多部沒有 TMDB id 的片，牆才翻得到第二頁（一頁 100 部）。
 FILLER_FILMS = 130
 
+#: 類型與排序用的值（M1.5 票 06）：換排序、篩類型或年份看得出差別。`War & Politics` 帶 `&`，
+#: 網址編碼走一遍。沒列的（Home Videos 2019）沒有類型、沒有評分，排序時落在升冪最前。
+DEMO_METADATA: dict[str, ItemMetadata] = {
+    "The Bear": ItemMetadata(("Comedy", "Drama"), {"CommunityRating": 8.2}),
+    "Slow Horses": ItemMetadata(("Drama", "Thriller"), {"CommunityRating": 8.1}),
+    "Breaking Bad": ItemMetadata(("Crime", "Drama"), {"CommunityRating": 8.9}),
+    "Game of Thrones": ItemMetadata(("Drama", "Fantasy"), {"CommunityRating": 8.5}),
+    "Shōgun": ItemMetadata(("Drama", "War & Politics"), {"CommunityRating": 8.6}),
+    "The Office": ItemMetadata(("Comedy",), {"CommunityRating": 8.6}),
+    "Oppenheimer": ItemMetadata(
+        ("Drama", "History"), {"CommunityRating": 8.1, "CriticRating": 93, "Runtime": 180}
+    ),
+    "SPY×FAMILY": ItemMetadata(("Animation", "Comedy"), {"CommunityRating": 8.6}),
+}
+
+
+def filler_metadata(index: int) -> ItemMetadata:
+    """填充片輪流是 Drama 與 Documentary，評分與片長照編號變，排序之後不是名稱順序。"""
+    return ItemMetadata(
+        ("Documentary",) if index % 3 == 0 else ("Drama",),
+        {"CommunityRating": 5 + (index * 7 % 40) / 10, "Runtime": 80 + index * 13 % 50},
+    )
+
+
 #: 替身 Jellyfin 上沒有 Primary 圖的作品：牆上印「無海報」（M1.5 票 04）。
 NO_POSTER = frozenset({"Home Videos 2019"})
 #: DTO 帶著 tag、圖卻不見了（掃描之後被刪）：代理回 404，卡片在瀏覽器裡換成佔位。
@@ -1171,6 +1195,7 @@ async def _seed_library(session: AsyncSession, scenario: Scenario, paths: PathSe
       撐出第二頁。
     - **Anime**（`deckhand` 看不到）：SPY×FAMILY 入庫了一集；葬送的芙莉蓮停在待審、Jellyfin 裡沒有。
     - **觀看狀態**（M1.5 票 05）：每部劇 `DEMO_EPISODES` 集，誰看過什麼見 `DEMO_WATCHED`。
+    - **類型與評分**（M1.5 票 06）：`DEMO_METADATA` 與 `filler_metadata`。
     """
     routes = {row.slug: row for row in await session.scalars(select(Route))}
     root = paths.library_root
@@ -1199,6 +1224,10 @@ async def _seed_library(session: AsyncSession, scenario: Scenario, paths: PathSe
                 year=2020,
             )
         )
+        scenario.jellyfin.metadata[items[-1].id] = filler_metadata(index)
+    for item in items:
+        if item.name in DEMO_METADATA:
+            scenario.jellyfin.metadata[item.id] = DEMO_METADATA[item.name]
     for index, item in enumerate(items):
         if item.name in NO_POSTER:
             continue

@@ -1,20 +1,35 @@
-import { useEffect, useId } from 'react'
+import { useEffect, useId, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Link, useRouter } from '@tanstack/react-router'
+import { Link, useNavigate, useRouter } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 
 import { meQueryOptions } from '../api/auth'
 import { ApiError } from '../api/client'
 import {
   inventoriesQueryOptions,
+  inventoryFiltersQueryOptions,
   inventoryQueryOptions,
   accessRefusal,
+  narrowed,
+  wallQuery,
   type Inventory,
   type InventoryCard,
+  type InventoryFilters,
   type InventoryLibrary,
+  type SortOrder,
+  type WallQuery,
+  type WallSearch,
 } from '../api/inventory'
 import { jellyfinAddressQueryOptions } from '../api/settings'
-import { GHOST_LINK, GhostButton, NAV_BOX, NAV_BOX_ACTIVE, Notice } from '../components/controls'
+import {
+  Checkbox,
+  GHOST_LINK,
+  GhostButton,
+  NAV_BOX,
+  NAV_BOX_ACTIVE,
+  Notice,
+} from '../components/controls'
+import { Dot } from '../components/Dot'
 import { TilePlaceholder } from '../discover/MediaTile'
 import { WALL_GRID } from '../discover/MediaWall'
 import { InventoryTile } from '../inventory/InventoryTile'
@@ -35,6 +50,9 @@ const FILTER = `${NAV_BOX} inline-flex items-center px-3 py-1.5`
 const FILTER_ACTIVE = `${NAV_BOX_ACTIVE} inline-flex items-center px-3 py-1.5`
 /** 分頁鍵：Ghost 的外觀，但它們換網址，所以是連結。到頭的那一顆是同樣大小的一段字。 */
 const PAGE_KEY = 'label inline-flex min-h-6 items-center border-2 px-3 py-1.5'
+/** 排序的兩個下拉：輸入框那一套外觀（DESIGN.md Inputs），高度與篩選列的方塊對齊。 */
+const SELECT =
+  'value max-w-full border-2 border-rule bg-hull px-2 py-1 text-sm text-ink focus:border-rule-strong'
 
 /**
  * 媒體庫頁 `/library/:libraryId`（M1.5 票 03、`.scratch/m1.5/library-shape.md`）。
@@ -42,17 +60,20 @@ const PAGE_KEY = 'label inline-flex min-h-6 items-center border-2 px-3 py-1.5'
  * 堆場全景加一條待卸貨的碼頭邊：Jellyfin 的牆是已經進倉的整座堆場（一頁 100 箱，照 Jellyfin 的順序），
  * 上方那一條是 Berth 經手、還沒進倉的貨。使用者在兩個時刻打開它——「我想看那部片」與「怎麼那部還沒好」。
  *
- * 一個媒體庫一個網址，頁碼與篩選也在網址上：重新整理、分享與上一頁都留得住。篩選不重抓——Berth 經手的
- * 那一份跟著每一頁一起到手，數字由後端算好。
+ * 一個媒體庫一個網址，頁碼、篩選、排序與類型年份也在網址上：重新整理、分享與上一頁都留得住。「待審」
+ * 「Unmatched」不重抓——Berth 經手的那一份跟著每一頁一起到手，數字由後端算好；排序與類型、年份是 Jellyfin
+ * 的查詢（票 06）。
  */
 export function InventoryPage({
   libraryId,
   page,
   filter,
+  search = {},
 }: {
   libraryId: string | null
   page: number
   filter?: InventoryFilter
+  search?: WallSearch
 }) {
   const { t } = useTranslation()
   const libraries = useQuery(inventoriesQueryOptions)
@@ -88,7 +109,13 @@ export function InventoryPage({
             ))}
           </nav>
           {libraryId !== null && (
-            <Wall libraryId={libraryId} page={page} filter={filter} libraries={libraries.data} />
+            <Wall
+              libraryId={libraryId}
+              page={page}
+              filter={filter}
+              search={search}
+              libraries={libraries.data}
+            />
           )}
         </>
       )}
@@ -106,16 +133,25 @@ function Wall({
   libraryId,
   page,
   filter,
+  search,
   libraries,
 }: {
   libraryId: string
   page: number
   filter?: InventoryFilter
+  search: WallSearch
   libraries: InventoryLibrary[]
 }) {
   const { t } = useTranslation()
-  const wall = useQuery(inventoryQueryOptions(libraryId, page))
+  const query = wallQuery(
+    search,
+    libraries.find((row) => row.id === libraryId),
+  )
+  const wall = useQuery(inventoryQueryOptions(libraryId, page, query))
   const wallTitle = useId()
+  const panel = useId()
+  // 一次開一份清單：兩份一起攤開，牆就被推到第二屏。
+  const [open, setOpen] = useState<Narrowing | null>(null)
 
   if (wall.isPending) return <Placeholders />
   if (!wall.data) {
@@ -136,34 +172,61 @@ function Wall({
       }
     : null
 
+  const narrowing = narrowed(query)
+
   return (
     <>
-      {/* 還沒進 Jellyfin 的作品不在 Jellyfin 的分頁結果裡，所以自己一條，翻到第幾頁都在（使用者拍板）。 */}
-      {!flagged && notInJellyfin.length > 0 && (
+      {/* 還沒進 Jellyfin 的作品不在 Jellyfin 的分頁結果裡，所以自己一條，翻到第幾頁都在（使用者拍板）。
+          篩類型或年份時收起：它們在 Jellyfin 裡沒有類型，套不上（票 06，使用者拍板）。 */}
+      {!flagged && !narrowing && notInJellyfin.length > 0 && (
         <NotInJellyfin cards={notInJellyfin} inventory={inventory} />
       )}
 
-      <section aria-labelledby={wallTitle} className="grid gap-4">
+      <section
+        aria-labelledby={wallTitle}
+        aria-busy={wall.isPlaceholderData || undefined}
+        className="grid gap-4"
+      >
         <h2 id={wallTitle} className="sr-only">
           {inventory.library.name}
         </h2>
         <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
-          <Filters inventory={inventory} page={page} />
+          <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-3">
+            <Filters inventory={inventory} page={page} query={query} />
+            {/* 待審與 Unmatched 是 Berth 的清單：排序與類型年份留在網址上，但套不上，所以不畫。 */}
+            {!flagged && (
+              <Arrange
+                library={inventory.library}
+                query={query}
+                open={open}
+                panel={panel}
+                onToggle={(kind) => setOpen(open === kind ? null : kind)}
+              />
+            )}
+          </div>
           {flagged ? (
             // 牆換掉了要說得出來——螢幕閱讀器看不到格子從 100 格變成 2 格。
             <p aria-live="polite" className="value text-xs text-ink-dim">
               {t('inventory.showing', { count: flagged.cards.length })}
             </p>
           ) : (
-            <Pager inventory={inventory} announce />
+            <Pager inventory={inventory} query={query} announce />
           )}
         </div>
+        {!flagged && open && (
+          <NarrowPanel id={panel} kind={open} library={inventory.library} query={query} />
+        )}
 
         {flagged ? (
           flagged.cards.length > 0 ? (
             <Tiles cards={flagged.cards} inventory={inventory} />
           ) : (
-            <EmptyFilter library={inventory.library} filter={flagged.filter} page={page} />
+            <EmptyFilter
+              library={inventory.library}
+              filter={flagged.filter}
+              page={page}
+              query={query}
+            />
           )
         ) : inventory.titles.length > 0 ? (
           <>
@@ -171,16 +234,222 @@ function Wall({
             {/* 牆底那一組只在真的有別頁時出現：只有一頁時總數已經寫在篩選列旁。 */}
             {(inventory.total > inventory.page_size || inventory.page > 1) && (
               <div className="flex justify-end">
-                <Pager inventory={inventory} />
+                <Pager inventory={inventory} query={query} />
               </div>
             )}
           </>
-        ) : inventory.total > 0 || notInJellyfin.length === 0 ? (
-          <EmptyWall inventory={inventory} />
+        ) : inventory.total > 0 ? (
+          <EmptyWall inventory={inventory} query={query} />
+        ) : narrowing ? (
+          <EmptyNarrowed library={inventory.library} query={query} />
+        ) : notInJellyfin.length === 0 ? (
+          <EmptyWall inventory={inventory} query={query} />
         ) : // Jellyfin 裡還沒有任何作品、但上面那一條有：說「這個媒體庫還沒有任何作品」就是謊話。
         null}
       </section>
     </>
+  )
+}
+
+/** 類型或年份：兩個勾選清單各一顆開關。 */
+type Narrowing = 'genres' | 'years'
+
+/** 換排序或篩選：換網址、回到第 1 頁（jellyfin-web 同樣把 `StartIndex` 歸零）。 */
+function useRearrange(library: InventoryLibrary) {
+  const navigate = useNavigate()
+  return (next: WallQuery) =>
+    void navigate({
+      to: '/library/$libraryId',
+      params: { libraryId: library.id },
+      search: wallQuery(next, library),
+    })
+}
+
+/**
+ * 排序、方向、類型、年份的開關（票 06；使用者拍板：兩個原生下拉，類型與年份各一份就地展開、勾了就套用的清單）。
+ *
+ * 排序選單是這個媒體庫的 `sorts`（照 jellyfin-web）。類型與年份的開關是 `aria-expanded` 的按鈕，清單畫在整列
+ * 控制項下方（`NarrowPanel`）：`<details>` 的內容只能長在它自己裡面，展開時不是把旁邊的開關擠到下一行，
+ * 就是困在半欄寬裡（實跑量到）。
+ */
+function Arrange({
+  library,
+  query,
+  open,
+  panel,
+  onToggle,
+}: {
+  library: InventoryLibrary
+  query: WallQuery
+  open: Narrowing | null
+  panel: string
+  onToggle: (kind: Narrowing) => void
+}) {
+  const { t } = useTranslation()
+  const rearrange = useRearrange(library)
+  const sortId = useId()
+
+  return (
+    <div className="flex min-w-0 flex-wrap items-center gap-2">
+      <label htmlFor={sortId} className="label text-ink-dim">
+        {t('inventory.sort.label')}
+      </label>
+      <select
+        id={sortId}
+        value={query.sort ?? library.sorts[0]}
+        onChange={(event) =>
+          rearrange({ ...query, sort: library.sorts.find((key) => key === event.target.value) })
+        }
+        className={SELECT}
+      >
+        {library.sorts.map((key) => (
+          <option key={key} value={key}>
+            {t(`inventory.sort.by.${key}`)}
+          </option>
+        ))}
+      </select>
+      <select
+        aria-label={t('inventory.sort.order')}
+        value={query.order ?? ORDERS[0]}
+        onChange={(event) => {
+          const order = ORDERS.find((key) => key === event.target.value)
+          rearrange({ ...query, order: order === 'Descending' ? order : undefined })
+        }}
+        className={SELECT}
+      >
+        {ORDERS.map((order) => (
+          <option key={order} value={order}>
+            {t(`inventory.sort.${order}`)}
+          </option>
+        ))}
+      </select>
+      {NARROWINGS.map((kind) => {
+        const chosen = query[kind]?.length ?? 0
+        return (
+          <button
+            key={kind}
+            type="button"
+            aria-expanded={open === kind}
+            aria-controls={open === kind ? panel : undefined}
+            onClick={() => onToggle(kind)}
+            className={`${chosen > 0 ? FILTER_ACTIVE : FILTER} gap-2`}
+          >
+            <span>{t(`inventory.narrow.${kind}`)}</span>
+            {chosen > 0 && (
+              <>
+                <span aria-hidden="true" className="value text-xs leading-none">
+                  {chosen}
+                </span>
+                <span className="sr-only">{t('inventory.narrow.chosen', { count: chosen })}</span>
+              </>
+            )}
+            {/* 看得見的展開狀態；聽得見的是 `aria-expanded`。 */}
+            <span aria-hidden="true" className="text-ink-dim">
+              {open === kind ? t('common.collapse') : t('common.expand')}
+            </span>
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+/** 排序方向。第一個是打開牆時的方向，不寫進網址。 */
+const ORDERS: readonly SortOrder[] = ['Ascending', 'Descending']
+
+const NARROWINGS: readonly Narrowing[] = ['genres', 'years']
+
+/**
+ * 兩份清單各自從哪裡讀、寫回網址的哪一格。年份在網址與後端是數字，勾選框的值是字串。
+ */
+const NARROWING: Record<
+  Narrowing,
+  {
+    chosen: (query: WallQuery) => string[]
+    listed: (options: InventoryFilters) => string[]
+    with: (query: WallQuery, next: string[]) => WallQuery
+  }
+> = {
+  genres: {
+    chosen: (query) => query.genres ?? [],
+    listed: (options) => options.genres,
+    with: (query, genres) => ({ ...query, genres }),
+  },
+  years: {
+    chosen: (query) => (query.years ?? []).map(String),
+    listed: (options) => options.years.map(String),
+    with: (query, years) => ({ ...query, years: years.map(Number) }),
+  },
+}
+
+/**
+ * 類型或年份的勾選清單。勾了就套用、可多選（同一種之間是「或」，研究 §3.1）。打開才向後端要選項。
+ *
+ * **選著的不在清單上時照樣列出來**，才取消得了——分享來的連結可能帶著這個媒體庫沒有的類型（jellyfin-web 的
+ * 篩選面板也是把兩份併起來）。
+ */
+function NarrowPanel({
+  id,
+  kind,
+  library,
+  query,
+}: {
+  id: string
+  kind: Narrowing
+  library: InventoryLibrary
+  query: WallQuery
+}) {
+  const { t } = useTranslation()
+  const rearrange = useRearrange(library)
+  const filters = useQuery(inventoryFiltersQueryOptions(library.id))
+  const titleId = useId()
+  const narrowing = NARROWING[kind]
+  const chosen = narrowing.chosen(query)
+  const listed = filters.data ? narrowing.listed(filters.data) : []
+  const shown = [...listed, ...chosen.filter((value) => !listed.includes(value))]
+  const change = (next: string[]) => rearrange(narrowing.with(query, next))
+
+  return (
+    <div
+      id={id}
+      role="group"
+      aria-labelledby={titleId}
+      className="grid justify-items-start gap-3 border-2 border-rule bg-well px-4 py-3"
+    >
+      <p id={titleId} className="label text-ink-dim">
+        {t(`inventory.narrow.${kind}`)}
+      </p>
+      {shown.length > 0 ? (
+        <div className="grid w-full grid-cols-[repeat(auto-fill,minmax(9rem,1fr))] gap-x-4 gap-y-2">
+          {shown.map((value) => (
+            <Checkbox
+              key={value}
+              label={value}
+              checked={chosen.includes(value)}
+              onChange={(checked) =>
+                change(checked ? [...chosen, value] : chosen.filter((item) => item !== value))
+              }
+            />
+          ))}
+        </div>
+      ) : filters.isPending ? (
+        <p className="text-sm text-ink-dim">{t('inventory.narrow.loading')}</p>
+      ) : filters.isError ? (
+        <div className="grid justify-items-start gap-2">
+          <p className="text-sm text-ink">{t('inventory.narrow.failed')}</p>
+          <GhostButton type="button" onClick={() => void filters.refetch()}>
+            {t('inventory.narrow.retry')}
+          </GhostButton>
+        </div>
+      ) : (
+        <p className="text-sm text-ink-dim">{t(`inventory.narrow.none.${kind}`)}</p>
+      )}
+      {chosen.length > 0 && (
+        <GhostButton type="button" onClick={() => change([])}>
+          {t(`inventory.narrow.clear.${kind}`)}
+        </GhostButton>
+      )}
+    </div>
   )
 }
 
@@ -222,15 +491,28 @@ function NotInJellyfin({ cards, inventory }: { cards: InventoryCard[]; inventory
   )
 }
 
+/** 某一頁的網址：第 1 頁不寫頁碼，排序與類型年份照帶。 */
+function onPage(page: number, query: WallQuery) {
+  return { ...(page > 1 ? { page } : {}), ...query }
+}
+
 /**
  * 全部 · 待審 N · Unmatched N。數字是後端算的、整個媒體庫的，不隨篩選變。
  *
- * **每一個都帶著現在的頁碼**：篩選的清單跟著每一頁一起到手，換篩選不必重抓（shape §6）；按回「全部」
- * 也回到原本那一頁。
+ * **每一個都帶著現在的頁碼、排序與類型年份**：篩選的清單跟著每一頁一起到手，換篩選不必重抓（shape §6）；
+ * 按回「全部」也回到原本排好、篩好的那一頁（票 06）。
  */
-function Filters({ inventory, page }: { inventory: Inventory; page: number }) {
+function Filters({
+  inventory,
+  page,
+  query,
+}: {
+  inventory: Inventory
+  page: number
+  query: WallQuery
+}) {
   const { t } = useTranslation()
-  const kept = page > 1 ? { page } : {}
+  const kept = onPage(page, query)
   const options = [
     { search: kept, label: t('inventory.filter.all') },
     {
@@ -267,7 +549,15 @@ function Filters({ inventory, page }: { inventory: Inventory; page: number }) {
  * `1–100 / 523` 加上一頁 / 下一頁（jellyfin-web 的分頁，使用者拍板）。看得見的是數字，聽得見的是
  * 帶單位的那一句（DESIGN.md 的區塊標題規則）；牆上方那一組把它放進 `aria-live`，換頁時念得出來。
  */
-function Pager({ inventory, announce = false }: { inventory: Inventory; announce?: boolean }) {
+function Pager({
+  inventory,
+  query,
+  announce = false,
+}: {
+  inventory: Inventory
+  query: WallQuery
+  announce?: boolean
+}) {
   const { t } = useTranslation()
   const { page, page_size: size, total, library } = inventory
   if (total === 0) return null
@@ -290,10 +580,14 @@ function Pager({ inventory, announce = false }: { inventory: Inventory; announce
       )}
       {(pages > 1 || page > 1) && (
         <>
-          <PageKey libraryId={library.id} to={page > 1 ? Math.min(page - 1, pages) : null}>
+          <PageKey
+            libraryId={library.id}
+            to={page > 1 ? Math.min(page - 1, pages) : null}
+            query={query}
+          >
             {t('inventory.previous')}
           </PageKey>
-          <PageKey libraryId={library.id} to={page < pages ? page + 1 : null}>
+          <PageKey libraryId={library.id} to={page < pages ? page + 1 : null} query={query}>
             {t('inventory.next')}
           </PageKey>
         </>
@@ -305,10 +599,12 @@ function Pager({ inventory, announce = false }: { inventory: Inventory; announce
 function PageKey({
   libraryId,
   to,
+  query,
   children,
 }: {
   libraryId: string
   to: number | null
+  query: WallQuery
   children: string
 }) {
   if (to === null) {
@@ -323,7 +619,7 @@ function PageKey({
     <Link
       to="/library/$libraryId"
       params={{ libraryId }}
-      search={to > 1 ? { page: to } : {}}
+      search={onPage(to, query)}
       className={`${PAGE_KEY} border-rule text-ink hover:border-rule-strong`}
     >
       {children}
@@ -336,10 +632,12 @@ function EmptyFilter({
   library,
   filter,
   page,
+  query,
 }: {
   library: InventoryLibrary
   filter: InventoryFilter
   page: number
+  query: WallQuery
 }) {
   const { t } = useTranslation()
 
@@ -349,7 +647,7 @@ function EmptyFilter({
       <Link
         to="/library/$libraryId"
         params={{ libraryId: library.id }}
-        search={page > 1 ? { page } : {}}
+        search={onPage(page, query)}
         className={GHOST_LINK}
       >
         {t('inventory.empty.showAll')}
@@ -358,8 +656,46 @@ function EmptyFilter({
   )
 }
 
+/**
+ * 篩類型或年份之後一部都沒有（票 06）。說出篩了什麼——空的是篩選的結果，不是媒體庫本身——並給一條清掉
+ * 類型與年份的路；排序留著，它不會讓作品不見。
+ */
+function EmptyNarrowed({ library, query }: { library: InventoryLibrary; query: WallQuery }) {
+  const { t, i18n } = useTranslation()
+  // 同一種之間是「或」（研究 §3.1），照語言的習慣列出來。
+  const either = new Intl.ListFormat(i18n.language, { type: 'disjunction' })
+  const { genres, years } = query
+
+  return (
+    <div className="grid justify-items-start gap-3 border-2 border-rule bg-well px-4 py-4">
+      <p aria-live="polite" className="max-w-prose text-sm text-ink">
+        {t('inventory.narrow.nothing')}
+      </p>
+      <p className="value flex flex-wrap gap-x-2 text-xs wrap-anywhere text-ink-dim">
+        {genres && (
+          <span>{t('inventory.narrow.listed.genres', { list: either.format(genres) })}</span>
+        )}
+        {genres && years && <Dot />}
+        {years && (
+          <span>
+            {t('inventory.narrow.listed.years', { list: either.format(years.map(String)) })}
+          </span>
+        )}
+      </p>
+      <Link
+        to="/library/$libraryId"
+        params={{ libraryId: library.id }}
+        search={wallQuery({ sort: query.sort, order: query.order }, library)}
+        className={GHOST_LINK}
+      >
+        {t('inventory.narrow.clearBoth')}
+      </Link>
+    </div>
+  )
+}
+
 /** 這一頁沒有作品：媒體庫是空的，或頁碼超出範圍。兩種下一步不同。 */
-function EmptyWall({ inventory }: { inventory: Inventory }) {
+function EmptyWall({ inventory, query }: { inventory: Inventory; query: WallQuery }) {
   const { t } = useTranslation()
   const beyond = inventory.total > 0
 
@@ -374,7 +710,7 @@ function EmptyWall({ inventory }: { inventory: Inventory }) {
         <Link
           to="/library/$libraryId"
           params={{ libraryId: inventory.library.id }}
-          search={{}}
+          search={query}
           className={GHOST_LINK}
         >
           {t('inventory.empty.toFirstPage')}

@@ -43,7 +43,11 @@ from berth.domain import (
 )
 from berth.models import Job, LedgerEntry, Media, Plan, PlanItem, Route, media_id
 from berth.models.types import utcnow
-from berth.services.jellyfin_access import BrowsableLibrary, JellyfinAccess
+from berth.services.jellyfin_access import (
+    BrowsableLibrary,
+    JellyfinAccess,
+    WallQuery,
+)
 from berth.services.routes import owning_route, target_prefix
 from berth.services.watch import WatchState, watch_state
 
@@ -255,20 +259,29 @@ class Covers(Protocol):
 
 
 async def read_wall(
-    session: AsyncSession, access: JellyfinAccess, library_id: str, *, page: int
+    session: AsyncSession,
+    access: JellyfinAccess,
+    library_id: str,
+    *,
+    page: int,
+    query: WallQuery,
 ) -> InventoryWall:
     """一個媒體庫的一頁牆。媒體庫不在這個人的允許清單上時丟 `LibraryNotVisibleError`，
-    而且在問 Jellyfin 或讀 Berth 的任何東西之前。"""
+    而且在問 Jellyfin 或讀 Berth 的任何東西之前。
+
+    `query` 只套在 Jellyfin 那一頁（票 06）：`tracked` 與兩個篩選的數字是 Berth 的清單，
+    沒有 Jellyfin 的類型可以篩。
+    """
     library = access.library(library_id)
     tracked = await _survey(session, library, await _routes(session), today=utcnow().date())
     start = (page - 1) * PAGE_SIZE
+    # 拒絕（排序鍵不在選單上）在這一行就丟出，兩個請求都還沒送出去。
+    page_request = access.page(library.id, start=start, limit=PAGE_SIZE, query=query)
     if tracked:
-        jellyfin_page, index = await asyncio.gather(
-            access.page(library.id, start=start, limit=PAGE_SIZE), access.index(library.id)
-        )
+        jellyfin_page, index = await asyncio.gather(page_request, access.index(library.id))
     else:
         # 整份清單只為了比對 Berth 經手的作品；一部都沒有時一頁一個請求就夠。
-        jellyfin_page, index = await access.page(library.id, start=start, limit=PAGE_SIZE), ()
+        jellyfin_page, index = await page_request, ()
 
     match = _Matcher(tracked)
     in_jellyfin: dict[str, JellyfinItem] = {}

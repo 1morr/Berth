@@ -1,0 +1,84 @@
+{
+  "Items": [
+    {
+      "AirDays": [],
+      "BackdropImageTags": [],
+      "ChannelId": null,
+      "CommunityRating": 9,
+      "Id": "6d616414836b339f17e139c3b00fd2ae",
+      "ImageBlurHashes": {
+        "Primary": {
+          "d808e5fea0ba0bb4bafd5767345c6f44": "d23KQ.pLfQpLktfkfQfkfQfQfQfQktfkfQfkfQfQfQfQ"
+        }
+      },
+      "ImageTags": {
+        "Primary": "d808e5fea0ba0bb4bafd5767345c6f44"
+      },
+      "IsFolder": true,
+      "LocationType": "FileSystem",
+      "MediaType": "Unknown",
+      "Name": "Bravo Show",
+      "OfficialRating": "TV-MA",
+      "Path": "/media/tv/Bravo Show (2020) [tmdbid-1396]",
+      "PremiereDate": "2020-01-20T00:00:00.0000000Z",
+      "PrimaryImageAspectRatio": 0.6666666666666666,
+      "ProductionYear": 2020,
+      "ProviderIds": {
+        "Tmdb": "1396"
+      },
+      "ServerId": "6fac46a916a547eaa9d82e8df1f6a255",
+      "Type": "Series",
+      "UserData": {
+        "IsFavorite": false,
+        "ItemId": "6d616414836b339f17e139c3b00fd2ae",
+        "Key": "6d616414-836b-339f-17e1-39c3b00fd2ae",
+        "PlayCount": 0,
+        "PlaybackPositionTicks": 0,
+        "Played": false,
+        "PlayedPercentage": 50,
+        "UnplayedItemCount": 1
+      }
+    },
+    {
+      "AirDays": [],
+      "BackdropImageTags": [],
+      "ChannelId": null,
+      "CommunityRating": 8,
+      "Id": "02c06be72a8c11102b98e17665c9fef2",
+      "ImageBlurHashes": {
+        "Primary": {
+          "43659814c0aac3c4fdefff1b003733ed": "d23KQ.pLfQpLktfkfQfkfQfQfQfQktfkfQfkfQfQfQfQ"
+        }
+      },
+      "ImageTags": {
+        "Primary": "43659814c0aac3c4fdefff1b003733ed"
+      },
+      "IsFolder": true,
+      "LocationType": "FileSystem",
+      "MediaType": "Unknown",
+      "Name": "Frieren",
+      "OfficialRating": "TV-PG",
+      "Path": "/media/tv/Frieren (2023) [tmdbid-209867]",
+      "PremiereDate": "2023-09-29T00:00:00.0000000Z",
+      "PrimaryImageAspectRatio": 0.6666666666666666,
+      "ProductionYear": 2023,
+      "ProviderIds": {
+        "Tmdb": "209867"
+      },
+      "ServerId": "6fac46a916a547eaa9d82e8df1f6a255",
+      "Type": "Series",
+      "UserData": {
+        "IsFavorite": false,
+        "ItemId": "02c06be72a8c11102b98e17665c9fef2",
+        "Key": "02c06be7-2a8c-1110-2b98-e17665c9fef2",
+        "PlayCount": 0,
+        "PlaybackPositionTicks": 0,
+        "Played": false,
+        "PlayedPercentage": 0,
+        "UnplayedItemCount": 2
+      }
+    }
+  ],
+  "StartIndex": 0,
+  "TotalRecordCount": 2
+}

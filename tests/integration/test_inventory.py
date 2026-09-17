@@ -33,7 +33,7 @@ from berth.adapters.jellyfin import (
     JellyfinItem,
     JellyfinLibrary,
 )
-from berth.adapters.jellyfin.fake import FakeJellyfinClient
+from berth.adapters.jellyfin.fake import FakeJellyfinClient, ItemMetadata
 from berth.domain import (
     CollectionType,
     Confidence,
@@ -42,12 +42,14 @@ from berth.domain import (
     JellyfinPresence,
     JobState,
     JobTrigger,
+    LibrarySort,
     MediaKind,
     MediaSnapshot,
     PlanAction,
     PlanStatus,
     SeasonSnapshot,
     ServiceOrigin,
+    SortOrder,
     Tags,
 )
 from berth.models import JellyfinSettings, Job, LedgerEntry, Media, Plan, PlanItem, Route
@@ -59,7 +61,12 @@ from berth.services.inventory import (
     Tracking,
     read_wall,
 )
-from berth.services.jellyfin_access import BrowsableLibrary, JellyfinAccess
+from berth.services.jellyfin_access import (
+    BrowsableLibrary,
+    JellyfinAccess,
+    SortNotOfferedError,
+    WallQuery,
+)
 from berth.services.settings import read_settings, write_settings
 from berth.services.watch import WatchState
 from tests.integration.arrange import arrange
@@ -307,7 +314,9 @@ async def wall(
     target = await session.scalar(select(Route).where(Route.slug == slug))
     assert target is not None
     access, _ = await access_for(session, items)
-    return await read_wall(session, access, target.jellyfin_library_id, page=page)
+    return await read_wall(
+        session, access, target.jellyfin_library_id, page=page, query=WallQuery()
+    )
 
 
 async def card(session: AsyncSession, slug: str = "tv") -> InventoryCard:
@@ -402,9 +411,54 @@ class TestJellyfinWall:
         target = tv.jellyfin_library_id
         access, jellyfin = await access_for(session, [in_jellyfin(tv, "Alpha Show", id="alpha")])
 
-        await read_wall(session, access, target, page=1)
+        await read_wall(session, access, target, page=1, query=WallQuery())
 
         assert jellyfin.browse_queries == [(VIEWER, target)]
+
+    async def test_the_wall_is_sorted_and_filtered_as_asked_but_berths_own_list_is_not(
+        self, session: AsyncSession
+    ) -> None:
+        """排序與類型、年份只套在 Jellyfin 那一頁：「還沒進 Jellyfin」那一條與「待審」「Unmatched」
+        是 Berth 的清單，Jellyfin 的類型套不上（票 06，使用者拍板）。"""
+        tv = await route(session)
+        spy = await title(session)
+        await job(session, spy, tv, JobState.REVIEW, hash="a" * 40)
+        items = [
+            in_jellyfin(tv, "Alpha Show", id="alpha", year=2022),
+            in_jellyfin(tv, "Bravo Show", id="bravo", year=2020),
+            in_jellyfin(tv, "Charlie Show", id="charlie", year=2020),
+        ]
+        access, jellyfin = await access_for(session, items)
+        jellyfin.metadata = {
+            "bravo": ItemMetadata(sort_values={"CommunityRating": 6.0}),
+            "charlie": ItemMetadata(sort_values={"CommunityRating": 9.0}),
+        }
+        query = WallQuery(
+            sort=LibrarySort.COMMUNITY_RATING, order=SortOrder.DESCENDING, years=(2020,)
+        )
+
+        shown = await read_wall(session, access, tv.jellyfin_library_id, page=1, query=query)
+
+        assert ([row.title for row in shown.titles], shown.total) == (
+            ["Charlie Show", "Bravo Show"],
+            2,
+        )
+        assert [row.media_id for row in shown.tracked] == [spy.id]
+        assert shown.review == 1
+
+    async def test_a_sort_this_library_does_not_offer_asks_jellyfin_nothing_at_all(
+        self, session: AsyncSession
+    ) -> None:
+        """牆與整份清單是同時問的：拒絕要在兩個請求都還沒送出去之前。"""
+        tv = await route(session)
+        await job(session, await title(session), tv, JobState.REVIEW)
+        access, jellyfin = await access_for(session, [in_jellyfin(tv, "Alpha Show", id="alpha")])
+        film_only = WallQuery(sort=LibrarySort.DATE_PLAYED)
+
+        with pytest.raises(SortNotOfferedError):
+            await read_wall(session, access, tv.jellyfin_library_id, page=1, query=film_only)
+
+        assert jellyfin.browse_queries == []
 
 
 class TestTrackedOnTheWall:
@@ -584,7 +638,7 @@ class TestWatchState:
         fake.played = {"viewer": {"alpha-e1", "bravo-e1", "bravo-e2"}, "other": {"charlie-e1"}}
         access, _ = await access_for(session, items, jellyfin=fake, viewer=viewer)
 
-        shown = await read_wall(session, access, tv.jellyfin_library_id, page=1)
+        shown = await read_wall(session, access, tv.jellyfin_library_id, page=1, query=WallQuery())
 
         assert [(row.jellyfin_item_id, row.watch) for row in shown.titles] == [
             ("alpha", WatchState(played=False, progress=None, unplayed_episodes=2)),
@@ -600,7 +654,9 @@ class TestWatchState:
         items = [in_jellyfin(movies, "Echo Movie", id="echo", kind=MediaKind.MOVIE)]
         access, _ = await access_for(session, items, jellyfin=fake, viewer=viewer)
 
-        (shown,) = (await read_wall(session, access, movies.jellyfin_library_id, page=1)).titles
+        (shown,) = (
+            await read_wall(session, access, movies.jellyfin_library_id, page=1, query=WallQuery())
+        ).titles
 
         assert shown.watch == WatchState(played=False, progress=42, unplayed_episodes=None)
 

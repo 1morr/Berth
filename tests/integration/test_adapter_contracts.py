@@ -11,6 +11,7 @@ import socket
 import urllib.parse
 from collections.abc import Awaitable, Callable
 from datetime import date
+from typing import Any
 from urllib.parse import parse_qsl
 
 import httpx
@@ -46,7 +47,7 @@ from berth.adapters.rate import TokenBucket
 from berth.adapters.tmdb import TmdbEntry, parse_absolute_ordering
 from berth.adapters.tmdb.client import RATE_PER_SECOND, HttpTmdbClient
 from berth.adapters.torznab.client import HttpTorznabClient
-from berth.domain import CollectionType, MediaKind
+from berth.domain import CollectionType, MediaKind, SortOrder
 from berth.services.indexer import DEFAULT_INDEXERS
 from tests.conftest import read_fixture
 
@@ -1280,7 +1281,15 @@ async def test_jellyfin_a_library_page_is_filtered_by_the_server() -> None:
     client = jellyfin_client("key")
     try:
         page = await client.library_page(
-            user_id=RESTRICTED_USER, library_id=TV_LIBRARY, item_type="Series", start=0, limit=100
+            user_id=RESTRICTED_USER,
+            library_id=TV_LIBRARY,
+            item_type="Series",
+            start=0,
+            limit=100,
+            sort_by=("SortName",),
+            sort_order=SortOrder.ASCENDING,
+            genres=(),
+            years=(),
         )
     finally:
         await client.aclose()
@@ -1328,7 +1337,15 @@ async def test_jellyfin_a_later_page_is_a_slice_of_the_whole_library() -> None:
     client = jellyfin_client("key")
     try:
         page = await client.library_page(
-            user_id=RESTRICTED_USER, library_id=TV_LIBRARY, item_type="Series", start=1, limit=2
+            user_id=RESTRICTED_USER,
+            library_id=TV_LIBRARY,
+            item_type="Series",
+            start=1,
+            limit=2,
+            sort_by=("SortName",),
+            sort_order=SortOrder.ASCENDING,
+            genres=(),
+            years=(),
         )
     finally:
         await client.aclose()
@@ -1395,7 +1412,244 @@ async def test_jellyfin_a_page_without_an_items_array_is_not_jellyfin() -> None:
     try:
         with pytest.raises(ProtocolMismatchError):
             await client.library_page(
-                user_id=RESTRICTED_USER, library_id=TV_LIBRARY, item_type="Series", start=0, limit=1
+                user_id=RESTRICTED_USER,
+                library_id=TV_LIBRARY,
+                item_type="Series",
+                start=0,
+                limit=1,
+                sort_by=("SortName",),
+                sort_order=SortOrder.ASCENDING,
+                genres=(),
+                years=(),
+            )
+    finally:
+        await client.aclose()
+
+
+# --- M1.5 票 06：牆的排序與類型、年份篩選（研究 library-browsing.md §3）----------------
+#
+# 每一份錄製都是牆的查詢加上被測的那一個參數（fixture README，票 06 加錄）。判準與票 01 相同：
+# 結果照那個值排或篩，**而且與名稱順序的那一份（`items.tv.series.userdata.json`）不同**——同一份
+# 結果證明不了伺服器沒有把參數當成打錯字忽略掉。
+
+#: 名稱順序的那一份牆（沒有排序、沒有篩選）。
+NAME_ORDER = ["Alpha Show", "Bravo Show", "Frieren", "Hotel Show"]
+
+
+def recorded_rows(fixture: str) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = json.loads(read_fixture(f"http/jellyfin/{fixture}"))["Items"]
+    return rows
+
+
+@respx.mock
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("order", "fixture", "expected"),
+    [
+        # 沒有評分的排在升冪最前、降冪最後（研究 §3.1）。
+        (
+            SortOrder.ASCENDING,
+            "items.tv.series.sort-rating.ascending.json",
+            ["Hotel Show", "Alpha Show", "Frieren", "Bravo Show"],
+        ),
+        (
+            SortOrder.DESCENDING,
+            "items.tv.series.sort-rating.descending.json",
+            ["Bravo Show", "Frieren", "Alpha Show", "Hotel Show"],
+        ),
+    ],
+)
+async def test_jellyfin_the_wall_is_sorted_by_the_server(
+    order: SortOrder, fixture: str, expected: list[str]
+) -> None:
+    """`sortBy` 與 `sortOrder`：兩份錄製只差 `sortOrder`，順序互為反序，也都不是名稱順序。"""
+    route = respx.get(f"{JELLYFIN_URL}/Items").respond(
+        200, text=read_fixture(f"http/jellyfin/{fixture}")
+    )
+
+    client = jellyfin_client("key")
+    try:
+        page = await client.library_page(
+            user_id=RESTRICTED_USER,
+            library_id=TV_LIBRARY,
+            item_type="Series",
+            start=0,
+            limit=100,
+            sort_by=("CommunityRating", "SortName"),
+            sort_order=order,
+            genres=(),
+            years=(),
+        )
+    finally:
+        await client.aclose()
+
+    assert dict(route.calls.last.request.url.params) == {
+        **WALL_QUERY,
+        "sortBy": "CommunityRating,SortName",
+        "sortOrder": order.value,
+        "startIndex": "0",
+        "limit": "100",
+    }
+    assert [item.name for item in page.items] == expected != NAME_ORDER
+    ratings = [row.get("CommunityRating") for row in recorded_rows(fixture)]
+    rated = [rating for rating in ratings if isinstance(rating, int | float)]
+    assert rated == sorted(rated, reverse=order is SortOrder.DESCENDING)
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_jellyfin_a_film_library_sorts_with_its_own_tiebreakers() -> None:
+    """電影庫的排序鍵後面接 `SortName,ProductionYear`（jellyfin-web `movies.js`）。`DatePlayed`
+    只在電影庫的選單上：最近看的在前，沒看過的排最後。"""
+    fixture = "items.movies.movie.sort-dateplayed.descending.json"
+    route = respx.get(f"{JELLYFIN_URL}/Items").respond(
+        200, text=read_fixture(f"http/jellyfin/{fixture}")
+    )
+
+    client = jellyfin_client("key")
+    try:
+        page = await client.library_page(
+            user_id=RESTRICTED_USER,
+            library_id=MOVIES_LIBRARY,
+            item_type="Movie",
+            start=0,
+            limit=100,
+            sort_by=("DatePlayed", "SortName", "ProductionYear"),
+            sort_order=SortOrder.DESCENDING,
+            genres=(),
+            years=(),
+        )
+    finally:
+        await client.aclose()
+
+    assert dict(route.calls.last.request.url.params) == {
+        **WALL_QUERY,
+        "parentId": MOVIES_LIBRARY,
+        "includeItemTypes": "Movie",
+        "sortBy": "DatePlayed,SortName,ProductionYear",
+        "sortOrder": "Descending",
+        "startIndex": "0",
+        "limit": "100",
+    }
+    # 名稱順序是 Echo、Foxtrot、Golf。
+    assert [item.name for item in page.items] == ["Golf Movie", "Echo Movie", "Foxtrot Movie"]
+    played = [(row.get("UserData") or {}).get("LastPlayedDate") for row in recorded_rows(fixture)]
+    assert played == ["2026-05-01T12:00:00.0000000Z", "2026-04-01T12:00:00.0000000Z", None]
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_jellyfin_genres_are_filtered_by_the_server() -> None:
+    """`genres` 以 `|` 分隔、是「或」。錄製那一台的類型寫在 NFO 裡（實驗腳本的 `TITLES`）：
+    Alpha Show 是 Drama / Fantasy、Bravo Show 是 Comedy，Frieren 與 Hotel Show 兩個都不是。"""
+    fixture = "items.tv.series.genres.json"
+    route = respx.get(f"{JELLYFIN_URL}/Items").respond(
+        200, text=read_fixture(f"http/jellyfin/{fixture}")
+    )
+
+    client = jellyfin_client("key")
+    try:
+        page = await client.library_page(
+            user_id=RESTRICTED_USER,
+            library_id=TV_LIBRARY,
+            item_type="Series",
+            start=0,
+            limit=100,
+            genres=("Drama", "Comedy"),
+            sort_by=("SortName",),
+            sort_order=SortOrder.ASCENDING,
+            years=(),
+        )
+    finally:
+        await client.aclose()
+
+    assert dict(route.calls.last.request.url.params) == {
+        **WALL_QUERY,
+        "genres": "Drama|Comedy",
+        "startIndex": "0",
+        "limit": "100",
+    }
+    assert [item.name for item in page.items] == ["Alpha Show", "Bravo Show"]
+    # 總數是篩過之後的，不是整個媒體庫的 4。
+    assert page.total == 2
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_jellyfin_years_are_filtered_by_the_server() -> None:
+    """`years` 以逗號分隔、是「或」。"""
+    fixture = "items.tv.series.years.json"
+    route = respx.get(f"{JELLYFIN_URL}/Items").respond(
+        200, text=read_fixture(f"http/jellyfin/{fixture}")
+    )
+
+    client = jellyfin_client("key")
+    try:
+        page = await client.library_page(
+            user_id=RESTRICTED_USER,
+            library_id=TV_LIBRARY,
+            item_type="Series",
+            start=0,
+            limit=100,
+            years=(2020, 2023),
+            sort_by=("SortName",),
+            sort_order=SortOrder.ASCENDING,
+            genres=(),
+        )
+    finally:
+        await client.aclose()
+
+    assert dict(route.calls.last.request.url.params) == {
+        **WALL_QUERY,
+        "years": "2020,2023",
+        "startIndex": "0",
+        "limit": "100",
+    }
+    assert [(item.name, item.year) for item in page.items] == [
+        ("Bravo Show", 2020),
+        ("Frieren", 2023),
+    ]
+    assert page.total == 2
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_jellyfin_filters_are_the_genres_and_years_of_this_library_only() -> None:
+    """`/Items/Filters`（jellyfin-web 篩選面板那一支，研究 §3.2）。`parentId` 與 `includeItemTypes`
+    真的有作用：Movies 才有的 Science Fiction、2018、2024，與沒有權限的 Anime 的 Mecha、2019
+    都不在。
+    **帶了 `parentId` 就不套權限**（研究 §2），所以媒體庫要先驗過，那是 services 的事。"""
+    route = respx.get(f"{JELLYFIN_URL}/Items/Filters").respond(
+        200, text=read_fixture("http/jellyfin/items-filters.tv.json")
+    )
+
+    client = jellyfin_client("key")
+    try:
+        filters = await client.library_filters(
+            user_id=RESTRICTED_USER, library_id=TV_LIBRARY, item_type="Series"
+        )
+    finally:
+        await client.aclose()
+
+    assert dict(route.calls.last.request.url.params) == {
+        "userId": RESTRICTED_USER,
+        "parentId": TV_LIBRARY,
+        "includeItemTypes": "Series",
+    }
+    assert filters.genres == ("Adventure", "Animation", "Comedy", "Documentary", "Drama", "Fantasy")
+    assert filters.years == (2020, 2021, 2022, 2023)
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_jellyfin_filters_without_the_lists_are_not_jellyfin() -> None:
+    respx.get(f"{JELLYFIN_URL}/Items/Filters").respond(200, json={"Nothing": []})
+
+    client = jellyfin_client("key")
+    try:
+        with pytest.raises(ProtocolMismatchError):
+            await client.library_filters(
+                user_id=RESTRICTED_USER, library_id=TV_LIBRARY, item_type="Series"
             )
     finally:
         await client.aclose()
@@ -1423,7 +1677,15 @@ async def test_jellyfin_a_series_on_the_wall_reads_its_unplayed_episodes() -> No
     client = jellyfin_client("key")
     try:
         page = await client.library_page(
-            user_id=RESTRICTED_USER, library_id=TV_LIBRARY, item_type="Series", start=0, limit=100
+            user_id=RESTRICTED_USER,
+            library_id=TV_LIBRARY,
+            item_type="Series",
+            start=0,
+            limit=100,
+            sort_by=("SortName",),
+            sort_order=SortOrder.ASCENDING,
+            genres=(),
+            years=(),
         )
     finally:
         await client.aclose()
@@ -1456,6 +1718,10 @@ async def test_jellyfin_a_film_on_the_wall_missing_fields_read_as_zero_or_none()
             item_type="Movie",
             start=0,
             limit=100,
+            sort_by=("SortName",),
+            sort_order=SortOrder.ASCENDING,
+            genres=(),
+            years=(),
         )
     finally:
         await client.aclose()
@@ -1553,7 +1819,15 @@ async def test_jellyfin_the_wall_carries_each_titles_primary_image_tag() -> None
     client = jellyfin_client("key")
     try:
         page = await client.library_page(
-            user_id=RESTRICTED_USER, library_id=TV_LIBRARY, item_type="Series", start=0, limit=100
+            user_id=RESTRICTED_USER,
+            library_id=TV_LIBRARY,
+            item_type="Series",
+            start=0,
+            limit=100,
+            sort_by=("SortName",),
+            sort_order=SortOrder.ASCENDING,
+            genres=(),
+            years=(),
         )
     finally:
         await client.aclose()
@@ -1577,7 +1851,15 @@ async def test_jellyfin_an_item_without_a_primary_image_has_no_primary_tag() -> 
     client = jellyfin_client("key")
     try:
         page = await client.library_page(
-            user_id=RESTRICTED_USER, library_id=TV_LIBRARY, item_type="Series", start=0, limit=100
+            user_id=RESTRICTED_USER,
+            library_id=TV_LIBRARY,
+            item_type="Series",
+            start=0,
+            limit=100,
+            sort_by=("SortName",),
+            sort_order=SortOrder.ASCENDING,
+            genres=(),
+            years=(),
         )
     finally:
         await client.aclose()

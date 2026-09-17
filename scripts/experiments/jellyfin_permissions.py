@@ -820,6 +820,7 @@ def run_sorts(srv: Server, api: Credential, c: Catalog, user_id: str, report: Re
         "DateCreated": lambda i: i.get("DateCreated"),
         "DateLastContentAdded": lambda i: i.get("DateLastMediaAdded"),
         "SeriesDatePlayed": lambda i: series_played.get(i["Id"]),
+        "DatePlayed": lambda i: (i.get("UserData") or {}).get("LastPlayedDate"),
         "PlayCount": lambda i: (i.get("UserData") or {}).get("PlayCount"),
         "Runtime": lambda i: i.get("RunTimeTicks"),
         "OfficialRating": None,
@@ -830,8 +831,8 @@ def run_sorts(srv: Server, api: Credential, c: Catalog, user_id: str, report: Re
                           "OfficialRating", "DateCreated", "DateLastContentAdded",
                           "SeriesDatePlayed", "Random"]),
         "Movies": ("Movie", ["SortName", "CommunityRating", "CriticRating", "PremiereDate",
-                             "ProductionYear", "OfficialRating", "DateCreated", "PlayCount",
-                             "Runtime", "Random"]),
+                             "ProductionYear", "OfficialRating", "DateCreated", "DatePlayed",
+                             "PlayCount", "Runtime", "Random"]),
     }  # fmt: skip
     fields = "SortName,DateCreated,DateLastMediaAdded"
     results = []
@@ -1224,6 +1225,27 @@ def record_browsing(
         "enableTotalRecordCount": "false",
     }
     fixtures.write("items.tv.series.index.json", srv.send(api, "/Items", params=index))
+    # 排序與篩選（M1.5 票 06）：牆的查詢加上一個參數。每一份都要與名稱順序的那一份不同，
+    # 才證明得了伺服器真的照它排或篩（`/Items` 靜默忽略打錯的參數）。
+    rating = {**wall, **tv_series, "sortBy": "CommunityRating,SortName"}
+    for name, params in (
+        ("items.tv.series.sort-rating.ascending.json", rating),
+        ("items.tv.series.sort-rating.descending.json", {**rating, "sortOrder": "Descending"}),
+        ("items.tv.series.genres.json", {**wall, **tv_series, "genres": "Drama|Comedy"}),
+        ("items.tv.series.years.json", {**wall, **tv_series, "years": "2020,2023"}),
+    ):
+        fixtures.write(name, srv.send(api, "/Items", params=params))
+    # 電影庫的排序鍵後面接 `SortName,ProductionYear`（jellyfin-web `movies.js`）；`DatePlayed`
+    # 只在電影庫的選單上，研究 §3.1 原本沒驗。
+    played = {
+        **wall,
+        "parentId": c.libraries["Movies"],
+        "includeItemTypes": "Movie",
+        "sortBy": "DatePlayed,SortName,ProductionYear",
+        "sortOrder": "Descending",
+    }
+    resp = srv.send(api, "/Items", params=played)
+    fixtures.write("items.movies.movie.sort-dateplayed.descending.json", resp)
     alpha = c.title_id("TV", "Alpha Show")
     user = {"userId": user_id}
     seasons = {**user, "fields": "ItemCounts,PrimaryImageAspectRatio"}

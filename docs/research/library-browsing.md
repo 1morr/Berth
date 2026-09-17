@@ -202,7 +202,8 @@ DTO 上的那個值單調、兩者順序不同：
 - **劇集庫**：`SortName`、`CommunityRating`、`PremiereDate`、`ProductionYear`、`DateLastContentAdded`、
   `SeriesDatePlayed` 都照值排序；`OfficialRating` 升降冪互為反序；`Random` 不判定。
 - **電影庫**：`SortName`、`CommunityRating`、`CriticRating`、`PremiereDate`、`ProductionYear`、`DateCreated`、
-  `PlayCount`、`Runtime` 都照值排序；`OfficialRating` 升降冪互為反序。
+  `PlayCount`、`Runtime` 都照值排序，`DatePlayed`（M1.5 票 06 補驗：`UserData.LastPlayedDate` 升冪 Foxtrot（沒看過）→
+  Echo → Golf，降冪反過來）也是；`OfficialRating` 升降冪互為反序。
 - **沒有值的排在升冪最前、降冪最後**：沒有評分的劇在 `CommunityRating` 升冪排第一；從沒看過的劇在
   `SeriesDatePlayed` 升冪排前面。「最近看過」要用降冪。
 - **`OfficialRating` 照分級高低排，不是照字串**：劇集庫升冪是 `TV-G < TV-PG < TV-14 < TV-MA`，字串順序會是
@@ -402,8 +403,8 @@ GET /Shows/{seriesId}/Episodes?userId=U&seasonId={seasonId}&fields=Overview,Prim
 | 繼續觀看 | 10.10 / 10.11：`GET /Users/{userId}/Items/Resume`（jellyfin-apiclient `getResumableItems`）；master：`@jellyfin/sdk` 的等價新路徑 | `Limit, Recursive=true, Fields=PrimaryImageAspectRatio, ImageTypeLimit=1, EnableImageTypes=Primary,Backdrop,Thumb, EnableTotalRecordCount=false, MediaTypes=Video`（影片區塊） |
 | 下一集 | `GET /Shows/NextUp` | `Limit=15`（overflow 24）`, Fields=PrimaryImageAspectRatio,DateCreated,Path,MediaSourceCount, UserId, ImageTypeLimit=1, EnableImageTypes=Primary,Backdrop,Banner,Thumb`（master 拿掉 Banner）`, EnableTotalRecordCount=false, DisableFirstEpisode=false, NextUpDateCutoff=<今天 − 使用者設定 maxDaysForNextUp 天>`（master 只送日期）`, EnableResumable=false, EnableRewatching=<使用者設定>` |
 | 最新加入（每個媒體庫一列） | 10.10 / 10.11：`GET /Users/{userId}/Items/Latest`；master：等價新路徑 | `Limit`（依庫類型 16/30/9/8/5）`, Fields=PrimaryImageAspectRatio,Path, ImageTypeLimit=1, EnableImageTypes=Primary,Backdrop,Thumb, ParentId=<庫>`；不送 `GroupItems`（伺服器預設 true） |
-| 劇集庫 | `GET /Users/{userId}/Items` | `SortBy=SortName, SortOrder=Ascending, IncludeItemTypes=Series, Recursive=true, Fields=PrimaryImageAspectRatio, ImageTypeLimit=1, EnableImageTypes=Primary,Backdrop,Banner,Thumb, StartIndex=0, Limit=<libraryPageSize>, ParentId`；排序選單：`SortName`、`Random`、`CommunityRating`、`DateCreated`（加入日期）、`DateLastContentAdded`（新集加入）、`SeriesDatePlayed`（最近看過）、`OfficialRating`、`PremiereDate`，每項後接 `,SortName` |
-| 電影庫 | 同上 | `SortBy=SortName,ProductionYear, IncludeItemTypes=Movie, Fields=PrimaryImageAspectRatio,MediaSourceCount`；排序另有 `CriticRating`、`PlayCount`、`Runtime` |
+| 劇集庫 | `GET /Users/{userId}/Items` | `SortBy=SortName, SortOrder=Ascending, IncludeItemTypes=Series, Recursive=true, Fields=PrimaryImageAspectRatio, ImageTypeLimit=1, EnableImageTypes=Primary,Backdrop,Banner,Thumb, StartIndex=0, Limit=<libraryPageSize>, ParentId`；排序選單：`SortName`、`Random`、`CommunityRating`、`DateCreated`（`OptionDateShowAdded`，作品加入日期）、`DateLastContentAdded`（`OptionDateEpisodeAdded`，新集加入）、`SeriesDatePlayed`（最近看過）、`OfficialRating`、`PremiereDate`，每項後接 `,SortName`（`Random` 不接） |
+| 電影庫 | 同上 | `SortBy=SortName,ProductionYear, IncludeItemTypes=Movie, Fields=PrimaryImageAspectRatio,MediaSourceCount`；排序選單：`SortName`、`Random`、`CommunityRating`、`CriticRating`、`DateCreated`、`DatePlayed`、`OfficialRating`、`PlayCount`、`PremiereDate`、`Runtime`，每項後接 `,SortName,ProductionYear`（`Random` 不接；M1.5 票 06 對原始碼逐項核對，原本這一格漏了 `DatePlayed`） |
 | 篩選面板 | `GET /Items/Filters?UserId&ParentId&IncludeItemTypes`（**不是 Filters2**） | 勾選：`Filters=IsPlayed,IsUnplayed,IsResumable,IsFavorite`、`SeriesStatus=Continuing/Ended/Unreleased`、`VideoTypes`、`HasSubtitles`；動態清單 Genres / OfficialRatings / Tags / Years 來自 Filters 回傳 |
 | 詳細頁列季 | `GET /Shows/{id}/Seasons` | `userId, Fields=ItemCounts,PrimaryImageAspectRatio,CanDelete,MediaSourceCount` |
 | 詳細頁列集 | `GET /Shows/{id}/Episodes` | `seasonId, userId, Fields=ItemCounts,PrimaryImageAspectRatio,CanDelete,MediaSourceCount,Overview` |

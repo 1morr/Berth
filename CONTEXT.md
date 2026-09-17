@@ -20,10 +20,17 @@ _Avoid_: root folder, destination；程式碼中不要用 `library` 指 Route（
 
 **Inventory**（UI 顯示「媒體庫」頁）:
 一個 Jellyfin Library 的整面牆（這位使用者在 Jellyfin 看得到的那幾個之一），疊上 Berth 經手作品的入庫
-狀態。牆上是 Jellyfin 的每一部作品、分頁照 Jellyfin；Berth 經手的作品是指向這個媒體庫的每一條 Route 上
+狀態。牆上是 Jellyfin 的每一部作品、分頁與排序照 Jellyfin，可依類型、年份篩選（M1.5 票 06，只篩 Jellyfin 那一頁）；Berth 經手的作品是指向這個媒體庫的每一條 Route 上
 有 Job 的，加上帳本目標落在它們底下的——在 Jellyfin 裡的疊到那一格，還沒進的另列一條。M1（票 13）時
 它是一條 Route 一頁、只有 Berth 經手的作品，M1.5 票 03 改成現在的定義。
 _Avoid_: library（程式碼中，那是下一條的 Jellyfin Library）, collection, shelf
+
+**Narrowing**（UI 顯示「類型」「年份」）:
+Inventory 牆上依類型、年份縮小 **Jellyfin 那一頁**（M1.5 票 06）；同一種之間是「或」、兩種之間是「且」。它和牆的排序合稱
+**Wall Query**（`WallQuery`：`sort`、`order`、`genres`、`years`）。選項清單在程式碼裡叫 `filters`（`/Items/Filters`、
+`GET /api/inventory/{id}/filters`），沿用 Jellyfin 的名字；前端的開關與面板叫 narrowing。**不是**「待審」「Unmatched」
+那兩個 filter：那兩個篩的是 Berth 經手的作品清單，Jellyfin 的類型套不上。
+_Avoid_: filter（指類型、年份時）, facet
 
 **Watch State**（UI 顯示「觀看狀態」）:
 一位使用者在 Jellyfin 對一部作品（或一集）的觀看紀錄，Inventory 的卡片上一行字：**已看**、**看到 N%**（只有影片）、

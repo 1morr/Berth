@@ -216,8 +216,33 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get Inventory */
+        /**
+         * Get Inventory
+         * @description 一頁牆。`sort` 要在這個媒體庫的 `sorts` 上（否則 422 `sort_not_offered`）；`genres` 與
+         *     `years` 重複帶，同一種之間是「或」、兩種之間是「且」。排序與篩選只套在 `titles`：`tracked` 與
+         *     兩個篩選的數字是 Berth 的清單。
+         */
         get: operations["get_inventory_api_inventory__library_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/inventory/{library_id}/filters": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Inventory Filters
+         * @description 篩選面板的選項。與牆分開一支：換頁、換排序都不必重問，而 jellyfin-web 也是打開面板才問。
+         */
+        get: operations["get_inventory_filters_api_inventory__library_id__filters_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1312,6 +1337,16 @@ export interface components {
             watch: components["schemas"]["WatchStateOut"] | null;
         };
         /**
+         * InventoryFiltersOut
+         * @description 類型與年份篩選的選項：這個媒體庫裡的作品有的那些（Jellyfin `/Items/Filters`，票 06）。
+         */
+        InventoryFiltersOut: {
+            /** Genres */
+            genres: string[];
+            /** Years */
+            years: number[];
+        };
+        /**
          * InventoryLibraryOut
          * @description 這位使用者看得到、Berth 瀏覽得了的一個媒體庫。
          *
@@ -1323,6 +1358,8 @@ export interface components {
             /** Name */
             name: string;
             collection_type: components["schemas"]["CollectionType"];
+            /** Sorts */
+            sorts: components["schemas"]["LibrarySort"][];
         };
         /** InventoryOut */
         InventoryOut: {
@@ -1660,6 +1697,15 @@ export interface components {
             /** Route Name */
             route_name: string | null;
         };
+        /**
+         * LibrarySort
+         * @description 媒體庫牆的排序鍵（M1.5 票 06）；沿用 Jellyfin `ItemSortBy` 的字串。
+         *
+         *     **是 jellyfin-web 排序選單上的那幾個**，不是 `ItemSortBy` 的全部。劇集庫與電影庫各開哪幾個、
+         *     順序與後面接什麼鍵在 `services/jellyfin_access.BROWSABLE`（研究 library-browsing.md §7）。
+         * @enum {string}
+         */
+        LibrarySort: "SortName" | "Random" | "CommunityRating" | "CriticRating" | "DateCreated" | "DateLastContentAdded" | "SeriesDatePlayed" | "DatePlayed" | "OfficialRating" | "PlayCount" | "PremiereDate" | "Runtime";
         /**
          * LoginIn
          * @description 帳密**不加約束、也不設必填**：少一個欄位就會是 422，而 422 與 401 分得出來就是一個
@@ -2224,6 +2270,12 @@ export interface components {
             skipped?: boolean;
         };
         /**
+         * SortOrder
+         * @description 排序方向；沿用 Jellyfin `sortOrder` 的字串。沒有值的排在升冪最前、降冪最後（研究 §3.1）。
+         * @enum {string}
+         */
+        SortOrder: "Ascending" | "Descending";
+        /**
          * Source
          * @description 來源 token（brief §6.8）。BDRip / BluRay → `BD`，WEB-DL / WebRip → `WEB`。
          * @enum {string}
@@ -2650,6 +2702,10 @@ export interface operations {
         parameters: {
             query?: {
                 page?: number;
+                sort?: components["schemas"]["LibrarySort"] | null;
+                order?: components["schemas"]["SortOrder"];
+                genres?: string[] | null;
+                years?: number[] | null;
             };
             header?: never;
             path: {
@@ -2666,6 +2722,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["InventoryOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_inventory_filters_api_inventory__library_id__filters_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                library_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryFiltersOut"];
                 };
             };
             /** @description Validation Error */

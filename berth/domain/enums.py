@@ -264,6 +264,39 @@ class ImageSize(StrEnum):
     POSTER = "poster"
 
 
+class LibrarySort(StrEnum):
+    """媒體庫牆的排序鍵（M1.5 票 06）；沿用 Jellyfin `ItemSortBy` 的字串。
+
+    **是 jellyfin-web 排序選單上的那幾個**，不是 `ItemSortBy` 的全部。劇集庫與電影庫各開哪幾個、
+    順序與後面接什麼鍵在 `services/jellyfin_access.BROWSABLE`（研究 library-browsing.md §7）。
+    """
+
+    SORT_NAME = "SortName"
+    RANDOM = "Random"
+    COMMUNITY_RATING = "CommunityRating"
+    CRITIC_RATING = "CriticRating"
+    #: 劇集庫是作品加入的時間（Jellyfin 掃到它的那一刻），電影庫是檔案時間（研究 §3.1）。
+    DATE_CREATED = "DateCreated"
+    #: 劇集：最新那一集加入的時間（「新集加入」）。
+    DATE_LAST_CONTENT_ADDED = "DateLastContentAdded"
+    #: 劇集：這位使用者最近看過其中一集的時間。
+    SERIES_DATE_PLAYED = "SeriesDatePlayed"
+    #: 電影：這位使用者最近看的時間。
+    DATE_PLAYED = "DatePlayed"
+    #: 照分級高低，不是照字串（研究 §3.1）。
+    OFFICIAL_RATING = "OfficialRating"
+    PLAY_COUNT = "PlayCount"
+    PREMIERE_DATE = "PremiereDate"
+    RUNTIME = "Runtime"
+
+
+class SortOrder(StrEnum):
+    """排序方向；沿用 Jellyfin `sortOrder` 的字串。沒有值的排在升冪最前、降冪最後（研究 §3.1）。"""
+
+    ASCENDING = "Ascending"
+    DESCENDING = "Descending"
+
+
 def collection_type_for(kind: MediaKind) -> CollectionType:
     """一部作品進得了哪一種媒體庫。
 

@@ -28,7 +28,7 @@ from sqlalchemy import select
 
 from berth.adapters.http import ServiceUnavailableError
 from berth.adapters.jellyfin import ITEM_EPISODE, ITEM_SERIES, JellyfinImage, JellyfinItem
-from berth.adapters.jellyfin.fake import FakeJellyfinClient
+from berth.adapters.jellyfin.fake import FakeJellyfinClient, ItemMetadata
 from berth.api.deps import get_client_factory
 from berth.api.gate import CSRF_HEADER
 from berth.config import Config
@@ -211,6 +211,20 @@ class TestPermissions:
         assert response.json()["detail"]["reason"] == "library_not_visible"
         assert library not in {queried for _, queried in jellyfin.browse_queries}
 
+    @pytest.mark.parametrize("library", [ANIME, "no-such-library"])
+    def test_the_filter_lists_of_a_library_off_the_list_are_refused_and_never_forwarded(
+        self, client: TestClient, jellyfin: FakeJellyfinClient, library: str
+    ) -> None:
+        """`/Items/Filters` 帶了 `parentId` 就不套權限，連使用者自己的 token 都照回（研究 §2）：
+        沒有這一道，Anime 的類型與年份就漏出來了。"""
+        sign_in(client, CREW)
+
+        response = client.get(f"/api/inventory/{library}/filters")
+
+        assert response.status_code == 404
+        assert response.json()["detail"]["reason"] == "library_not_visible"
+        assert jellyfin.browse_queries == []
+
     def test_a_user_id_slipped_into_the_request_changes_nothing(
         self, client: TestClient, jellyfin: FakeJellyfinClient
     ) -> None:
@@ -223,10 +237,11 @@ class TestPermissions:
 
         listed = client.get("/api/inventory", params=smuggled)
         walled = client.get(f"/api/inventory/{TV}", params=smuggled)
+        filtered = client.get(f"/api/inventory/{TV}/filters", params=smuggled)
         refused = client.get(f"/api/inventory/{ANIME}", params=smuggled)
 
         assert [row["id"] for row in listed.json()] == [MOVIES, TV]
-        assert walled.status_code == 200
+        assert walled.status_code == filtered.status_code == 200
         assert refused.status_code == 404
         assert set(jellyfin.view_queries) == set(jellyfin.policy_queries) == {crew}
         assert {user for user, _ in jellyfin.browse_queries} == {crew}
@@ -265,7 +280,7 @@ class TestPermissions:
         sign_in(client, CREW)
         jellyfin.error = ServiceUnavailableError("GET /UserViews: connection refused")
 
-        for path in ("/api/inventory", f"/api/inventory/{TV}"):
+        for path in ("/api/inventory", f"/api/inventory/{TV}", f"/api/inventory/{TV}/filters"):
             response = client.get(path)
 
             assert response.status_code == 503
@@ -284,12 +299,23 @@ class TestInventory:
 
         rows = client.get("/api/inventory").json()
 
-        assert rows == [
-            {"id": MOVIES, "name": "Movies", "collection_type": "movies"},
-            {"id": TV, "name": "TV", "collection_type": "tvshows"},
-            {"id": ANIME, "name": "Anime", "collection_type": "tvshows"},
+        assert [(row["id"], row["name"], row["collection_type"]) for row in rows] == [
+            (MOVIES, "Movies", "movies"),
+            (TV, "TV", "tvshows"),
+            (ANIME, "Anime", "tvshows"),
         ]
         assert jellyfin.browse_queries == []
+
+    def test_each_library_says_which_sorts_it_offers(self, client: TestClient) -> None:
+        """前端照這一份畫排序選單：兩種媒體庫不同，而判定在後端（`tests/unit/test_browsable_library.py`）。"""
+        sign_in(client)
+
+        rows = {row["id"]: row["sorts"] for row in client.get("/api/inventory").json()}
+
+        assert "SeriesDatePlayed" in rows[TV]
+        assert "DatePlayed" not in rows[TV]
+        assert "DatePlayed" in rows[MOVIES]
+        assert rows[TV][0] == rows[MOVIES][0] == "SortName"
 
     def test_a_wall_carries_jellyfins_page_berths_titles_and_where_jellyfin_lives(
         self, client: TestClient
@@ -299,7 +325,7 @@ class TestInventory:
 
         body = client.get(f"/api/inventory/{TV}").json()
 
-        assert body["library"] == {"id": TV, "name": "TV", "collection_type": "tvshows"}
+        assert body["library"]["id"] == TV
         assert body["jellyfin"] == {"public_url": "", "url": "", "port": 8096}
         assert (body["page"], body["page_size"], body["total"]) == (1, 100, 2)
         assert (body["review"], body["unmatched"]) == (0, 0)
@@ -346,6 +372,80 @@ class TestInventory:
         sign_in(client)
 
         assert client.get(f"/api/inventory/{TV}", params={"page": 0}).status_code == 422
+
+
+class TestSortAndFilter:
+    """排序與類型、年份篩選（M1.5 票 06）。網址的形狀是 `?sort=&order=&genres=&genres=&years=`：
+    類型名可能含逗號（研究 §3.1），所以重複參數，不自己再發明一種分隔符。"""
+
+    @pytest.fixture
+    def shelved(self, jellyfin: FakeJellyfinClient) -> FakeJellyfinClient:
+        jellyfin.metadata = {
+            SPY: ItemMetadata(genres=("Animation", "Comedy"), sort_values={"CommunityRating": 8.6}),
+            "hotel": ItemMetadata(genres=("Documentary",), sort_values={"CommunityRating": 6.1}),
+        }
+        return jellyfin
+
+    def test_the_wall_comes_sorted_as_the_url_says(
+        self, client: TestClient, shelved: FakeJellyfinClient
+    ) -> None:
+        sign_in(client)
+
+        def names(**params: str) -> list[str]:
+            body = client.get(f"/api/inventory/{TV}", params=params).json()
+            return [card["title"] for card in body["titles"]]
+
+        assert names() == ["Hotel Show", "SPY×FAMILY"]
+        assert names(sort="CommunityRating", order="Descending") == ["SPY×FAMILY", "Hotel Show"]
+
+    def test_genres_and_years_narrow_the_wall(
+        self, client: TestClient, shelved: FakeJellyfinClient
+    ) -> None:
+        sign_in(client)
+
+        by_genre = client.get(
+            f"/api/inventory/{TV}", params=[("genres", "Documentary"), ("genres", "Drama")]
+        ).json()
+        by_year = client.get(f"/api/inventory/{TV}", params={"years": 2022}).json()
+
+        assert ([card["title"] for card in by_genre["titles"]], by_genre["total"]) == (
+            ["Hotel Show"],
+            1,
+        )
+        assert [card["title"] for card in by_year["titles"]] == ["SPY×FAMILY"]
+
+    def test_a_sort_this_library_does_not_offer_is_refused_and_never_forwarded(
+        self, client: TestClient, jellyfin: FakeJellyfinClient
+    ) -> None:
+        sign_in(client)
+
+        response = client.get(f"/api/inventory/{TV}", params={"sort": "DatePlayed"})
+
+        assert response.status_code == 422
+        assert response.json()["detail"]["reason"] == "sort_not_offered"
+        assert jellyfin.browse_queries == []
+
+    @pytest.mark.parametrize("params", [{"sort": "Name"}, {"order": "down"}, {"years": "recent"}])
+    def test_anything_else_in_the_url_is_refused_before_jellyfin_is_asked(
+        self, client: TestClient, jellyfin: FakeJellyfinClient, params: dict[str, str]
+    ) -> None:
+        sign_in(client)
+
+        assert client.get(f"/api/inventory/{TV}", params=params).status_code == 422
+        assert jellyfin.browse_queries == []
+
+    def test_the_filter_lists_are_the_genres_and_years_in_this_library(
+        self, client: TestClient, shelved: FakeJellyfinClient
+    ) -> None:
+        sign_in(client, CREW)
+
+        response = client.get(f"/api/inventory/{TV}/filters")
+
+        # Frieren 在 Anime：它的年份不在這裡。
+        assert response.json() == {
+            "genres": ["Animation", "Comedy", "Documentary"],
+            "years": [2022],
+        }
 
 
 PLAYED = f"/api/jellyfin/items/{SPY}/played"

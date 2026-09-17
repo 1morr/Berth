@@ -8,7 +8,8 @@ library-browsing.md §2、§9）。所以「這個人看得到什麼」由 Berth
   （`services/auth.read_session` 的產物），沒有任何一個參數收得下前端送來的 id。
 - **媒體庫 id 對 `GET /UserViews?userId=` 的允許清單驗證**，不在清單就丟 `LibraryNotVisibleError`，
   而且**在問 Jellyfin 之前**。`parentId` 只放驗過的媒體庫 id：劇或季當 `parentId` 連使用者自己的
-  token 都擋不住，所以這裡根本不收它們。
+  token 都擋不住，所以這裡根本不收它們。牆（`page`）、整份清單（`index`）與類型年份清單（`filters`，
+  票 06）都走這一道。排序鍵不在這種媒體庫的選單上也在這裡拒絕（`SortNotOfferedError`）。
 - **允許清單與 `Policy` 同一份短時間快取**（`AccessCache`）。帳號被停用就結束這個人的每一張
   Berth session，而不是縮短 session 的效期（brief §19）。
 - **寫入只有標記已看 / 未看**（`JellyfinAccess.mark_played`，票 05）。它不先查可見性：
@@ -23,7 +24,7 @@ from __future__ import annotations
 
 import asyncio
 import time
-from collections.abc import AsyncIterator, Callable, Iterator
+from collections.abc import AsyncIterator, Awaitable, Callable, Iterator
 from contextlib import asynccontextmanager, contextmanager
 from dataclasses import dataclass
 
@@ -34,11 +35,12 @@ from berth.adapters.jellyfin import (
     ITEM_MOVIE,
     ITEM_SERIES,
     JellyfinClient,
+    JellyfinFilters,
     JellyfinItem,
     JellyfinPage,
     JellyfinView,
 )
-from berth.domain import CollectionType, MediaKind
+from berth.domain import CollectionType, LibrarySort, MediaKind, SortOrder
 from berth.models import JellyfinSettings
 from berth.services.auth import AuthenticatedUser, end_sessions
 from berth.services.clients import ServiceClientFactory
@@ -55,11 +57,69 @@ from berth.services.watch import WatchState, watch_state
 #: 翻一分鐘——Berth 的 session 本來活 30 天、只在登入時驗證（plan §2.1），一分鐘是從 30 天縮下來的。
 ACCESS_TTL_SECONDS = 60.0
 
-#: Berth 瀏覽得了的媒體庫類型，與牆上那一種作品。音樂、書、`mixed` 沒有 Berth 認得的東西。
-BROWSABLE: dict[CollectionType, tuple[MediaKind, str]] = {
-    CollectionType.TVSHOWS: (MediaKind.TV, ITEM_SERIES),
-    CollectionType.MOVIES: (MediaKind.MOVIE, ITEM_MOVIE),
+
+@dataclass(frozen=True, slots=True)
+class LibraryWall:
+    """一種媒體庫（劇集或電影）的牆：放哪一種作品、排序選單上有什麼。"""
+
+    kind: MediaKind
+    #: 牆上那一種作品在 Jellyfin 的型別名（`includeItemTypes`）。
+    item_type: str
+    #: 排序選單，照 jellyfin-web 的順序（`tvshows.js` / `movies.js` 的 `showSortMenu`，v10.10.7 與
+    #: v10.11.11 相同，研究 library-browsing.md §7）。第一個是打開牆時的排序。
+    sorts: tuple[LibrarySort, ...]
+    #: 每個排序鍵後面接的鍵：值相同的作品照什麼排（同上）。Jellyfin `sortBy` 的字串，
+    #: 不全是 `LibrarySort`：`ProductionYear` 不在選單上。
+    tiebreak: tuple[str, ...]
+
+
+#: Berth 瀏覽得了的媒體庫類型。音樂、書、`mixed` 沒有 Berth 認得的東西。
+BROWSABLE: dict[CollectionType, LibraryWall] = {
+    CollectionType.TVSHOWS: LibraryWall(
+        kind=MediaKind.TV,
+        item_type=ITEM_SERIES,
+        sorts=(
+            LibrarySort.SORT_NAME,
+            LibrarySort.RANDOM,
+            LibrarySort.COMMUNITY_RATING,
+            LibrarySort.DATE_CREATED,
+            LibrarySort.DATE_LAST_CONTENT_ADDED,
+            LibrarySort.SERIES_DATE_PLAYED,
+            LibrarySort.OFFICIAL_RATING,
+            LibrarySort.PREMIERE_DATE,
+        ),
+        tiebreak=("SortName",),
+    ),
+    CollectionType.MOVIES: LibraryWall(
+        kind=MediaKind.MOVIE,
+        item_type=ITEM_MOVIE,
+        sorts=(
+            LibrarySort.SORT_NAME,
+            LibrarySort.RANDOM,
+            LibrarySort.COMMUNITY_RATING,
+            LibrarySort.CRITIC_RATING,
+            LibrarySort.DATE_CREATED,
+            LibrarySort.DATE_PLAYED,
+            LibrarySort.OFFICIAL_RATING,
+            LibrarySort.PLAY_COUNT,
+            LibrarySort.PREMIERE_DATE,
+            LibrarySort.RUNTIME,
+        ),
+        tiebreak=("SortName", "ProductionYear"),
+    ),
 }
+
+
+@dataclass(frozen=True, slots=True)
+class WallQuery:
+    """牆怎麼排、怎麼篩（M1.5 票 06）。什麼都沒給就是打開牆時的樣子。"""
+
+    #: `None` 是這種媒體庫選單上的第一個（`LibraryWall.sorts`）：打開牆時的排序只寫在那裡。
+    sort: LibrarySort | None = None
+    order: SortOrder = SortOrder.ASCENDING
+    #: 類型名，彼此之間是「或」；與年份之間是「且」（研究 §3.1）。空的就是不篩。
+    genres: tuple[str, ...] = ()
+    years: tuple[int, ...] = ()
 
 
 class AccountDisabledError(Exception):
@@ -72,6 +132,11 @@ class AccountDisabledError(Exception):
 class LibraryNotVisibleError(Exception):
     """這個媒體庫不在這個人的允許清單上。**沒有權限、瀏覽不了、不存在是同一種拒絕**：
     分得出來就是在告訴人那個媒體庫存在。"""
+
+
+class SortNotOfferedError(Exception):
+    """這一種媒體庫的排序選單上沒有這個鍵。**Jellyfin 不會替 Berth 擋**：劇集庫收下電影庫的
+    `DatePlayed` 照樣回 200，牆只是默默換成另一種順序。"""
 
 
 class ItemNotVisibleError(Exception):
@@ -97,12 +162,28 @@ class BrowsableLibrary:
 
     @property
     def kind(self) -> MediaKind:
-        return BROWSABLE[self.collection_type][0]
+        return BROWSABLE[self.collection_type].kind
 
     @property
     def item_type(self) -> str:
         """牆上那一種作品在 Jellyfin 的型別名（`includeItemTypes`）。"""
-        return BROWSABLE[self.collection_type][1]
+        return BROWSABLE[self.collection_type].item_type
+
+    @property
+    def sorts(self) -> tuple[LibrarySort, ...]:
+        return BROWSABLE[self.collection_type].sorts
+
+    def sort_by(self, sort: LibrarySort | None) -> tuple[str, ...]:
+        """`sortBy` 的每一個鍵：選的那一個（`None` 是選單第一個），後面接值相同時照什麼排；
+        隨機不接（jellyfin-web 也不接）。選單上沒有的鍵丟 `SortNotOfferedError`。
+        """
+        chosen = self.sorts[0] if sort is None else sort
+        if chosen not in self.sorts:
+            raise SortNotOfferedError(f"{self.collection_type} libraries do not sort by {chosen}")
+        if chosen is LibrarySort.RANDOM:
+            return (chosen.value,)
+        tiebreak = BROWSABLE[self.collection_type].tiebreak
+        return (chosen.value, *(key for key in tiebreak if key != chosen.value))
 
 
 class AccessCache:
@@ -147,9 +228,28 @@ class JellyfinAccess:
             raise LibraryNotVisibleError("no such library, or not yours to see")
         return found
 
-    async def page(self, library_id: str, *, start: int, limit: int) -> JellyfinPage:
-        """這個媒體庫的一頁作品。媒體庫先對允許清單驗過，才會變成 `parentId`。"""
+    def page(
+        self, library_id: str, *, start: int, limit: int, query: WallQuery
+    ) -> Awaitable[JellyfinPage]:
+        """這個媒體庫的一頁作品。媒體庫先對允許清單驗過，才會變成 `parentId`；排序鍵不在這種媒體庫的
+        選單上時丟 `SortNotOfferedError`。
+
+        **兩種拒絕在呼叫的當下就丟出，不等到 await**：牆與整份清單是同時問的（`read_wall`），
+        等到 await 才丟的話，另一個請求已經送出去了。
+        """
         library = self.library(library_id)
+        sort_by = library.sort_by(query.sort)
+        return self._page(library, start=start, limit=limit, sort_by=sort_by, query=query)
+
+    async def _page(
+        self,
+        library: BrowsableLibrary,
+        *,
+        start: int,
+        limit: int,
+        sort_by: tuple[str, ...],
+        query: WallQuery,
+    ) -> JellyfinPage:
         with reachable():
             return await self._client.library_page(
                 user_id=self._user_id,
@@ -157,6 +257,19 @@ class JellyfinAccess:
                 item_type=library.item_type,
                 start=start,
                 limit=limit,
+                sort_by=sort_by,
+                sort_order=query.order,
+                genres=query.genres,
+                years=query.years,
+            )
+
+    async def filters(self, library_id: str) -> JellyfinFilters:
+        """這個媒體庫裡的作品有哪些類型與年份。同樣先驗媒體庫：`/Items/Filters` 帶了 `parentId`
+        就不套權限，連使用者自己的 token 都照回（研究 §2）。"""
+        library = self.library(library_id)
+        with reachable():
+            return await self._client.library_filters(
+                user_id=self._user_id, library_id=library.id, item_type=library.item_type
             )
 
     async def index(self, library_id: str) -> tuple[JellyfinItem, ...]:
