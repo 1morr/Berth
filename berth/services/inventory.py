@@ -391,8 +391,10 @@ async def _survey(session: AsyncSession, route: Route, routes: Sequence[Route]) 
             select(LedgerEntry)
             .where(
                 LedgerEntry.media_id.is_not(None),
+                # 帳本的目標是 importer 以 `PurePosixPath` 組出來的，前綴照同一個正規化
+                # （`//`、結尾斜線）；與 `routes._usage_of` 同一條規則。
                 LedgerEntry.target_path.startswith(
-                    route.target_path.rstrip("/") + "/", autoescape=True
+                    str(PurePosixPath(route.target_path)).rstrip("/") + "/", autoescape=True
                 ),
             )
             .order_by(LedgerEntry.id)

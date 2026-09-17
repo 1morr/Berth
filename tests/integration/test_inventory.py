@@ -11,7 +11,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -244,6 +244,22 @@ class TestWall:
         tv = await route(session)
         spy = await title(session)
         await linked(session, spy, tv)
+
+        assert (await card(session)).media_id == "tv:120089"
+
+    async def test_files_count_under_a_route_whose_target_is_not_normalised(
+        self, session: AsyncSession
+    ) -> None:
+        """Route 的目標是 Jellyfin 回報的、使用者打的字（`…//tv`），帳本卻是 importer 以
+        `PurePosixPath` 組出來的正規路徑——前綴照字面比的話，這條 Route 的牆是空的（票 14a 修掉
+        同一個問題的 `_usage_of`，票 15 收掉這一處）。"""
+        tv = await route(session)
+        tv.target_path = "/data/library//tv/"
+        await session.commit()
+        spy = await title(session)
+        entry = await linked(session, spy, tv)
+        entry.target_path = str(PurePosixPath(entry.target_path))
+        await session.commit()
 
         assert (await card(session)).media_id == "tv:120089"
 
