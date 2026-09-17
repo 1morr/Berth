@@ -4,6 +4,10 @@
 以及**權限從 HTTP 那一端看起來的樣子**：前端塞進來的 `userId` 不起作用、不在允許清單的媒體庫被拒而且
 沒有轉發給 Jellyfin、帳號被停用之後 session 結束而下一個請求是 401。對外網址是設定，只有 admin
 改得了，規則在門禁（`/api/settings/*`）。
+
+牆上的海報由 Berth 代理 Jellyfin 的圖（`/api/jellyfin/items/{id}/images/{type}`，M1.5 票 04）：
+卡片帶的網址真的打得回那一張圖、它是 `/api` 底下唯一可以長期快取的回應、白名單以外的類型
+與尺寸不轉發。
 """
 
 from __future__ import annotations
@@ -19,7 +23,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 
 from berth.adapters.http import ServiceUnavailableError
-from berth.adapters.jellyfin import ITEM_SERIES, JellyfinItem
+from berth.adapters.jellyfin import ITEM_SERIES, JellyfinImage, JellyfinItem
 from berth.adapters.jellyfin.fake import FakeJellyfinClient
 from berth.api.deps import get_client_factory
 from berth.api.gate import CSRF_HEADER
@@ -40,6 +44,11 @@ CREW = {"username": "deckhand", "password": "rope"}
 #: 套件內的三個媒體庫（`arrange.bundled_libraries`）。`deckhand` 看不到 Anime。
 MOVIES, TV, ANIME = "item-0", "item-1", "item-2"
 
+#: TV 上的 SPY×FAMILY 與它的 Primary 圖。Jellyfin 的 item id 與 `ImageTags` 都是 32 個十六進位字元。
+SPY = "5d2c1a0b9e8f7d6c5b4a39281706f5e4"
+SPY_POSTER = "f99664090dfd3223c18e80663440deac"
+POSTER = JellyfinImage(content=b"RIFF\x00\x00\x00\x00WEBPVP8 ", content_type="image/webp")
+
 
 @pytest.fixture
 def jellyfin(roots: dict[str, Path]) -> FakeJellyfinClient:
@@ -53,12 +62,13 @@ def jellyfin(roots: dict[str, Path]) -> FakeJellyfinClient:
     anime = fake.libraries_[2].locations[0]
     fake.items_ = [
         JellyfinItem(
-            id="spy",
+            id=SPY,
             type=ITEM_SERIES,
             name="SPY×FAMILY",
             path=f"{tv}/SPY x FAMILY (2022) [tmdbid-120089]",
             tmdb_id="120089",
             year=2022,
+            primary_tag=SPY_POSTER,
         ),
         JellyfinItem(
             id="hotel", type=ITEM_SERIES, name="Hotel Show", path=f"{tv}/Hotel Show", tmdb_id=""
@@ -71,6 +81,7 @@ def jellyfin(roots: dict[str, Path]) -> FakeJellyfinClient:
             tmdb_id="209867",
         ),
     ]
+    fake.images = {(SPY, "Primary"): POSTER}
     return fake
 
 
@@ -289,9 +300,9 @@ class TestInventory:
             "title": "SPY×FAMILY",
             "title_en": "SPY×FAMILY",
             "year": 2022,
-            "poster_url": "",
+            "poster_url": f"/api/jellyfin/items/{SPY}/images/Primary?size=poster&tag={SPY_POSTER}",
             "presence": "found",
-            "jellyfin_item_id": "spy",
+            "jellyfin_item_id": SPY,
             "tracking": tracking,
         }
         assert body["titles"] == [
@@ -314,6 +325,136 @@ class TestInventory:
         sign_in(client)
 
         assert client.get(f"/api/inventory/{TV}", params={"page": 0}).status_code == 422
+
+
+IMAGE = f"/api/jellyfin/items/{SPY}/images/Primary"
+POSTER_QUERY = {"size": "poster", "tag": SPY_POSTER}
+
+
+class TestImages:
+    def test_the_poster_on_a_wall_card_is_served_through_berth(
+        self, client: TestClient, jellyfin: FakeJellyfinClient
+    ) -> None:
+        sign_in(client, CREW)
+        put_on_the_wall(client)
+        body = client.get(f"/api/inventory/{TV}").json()
+        [url] = [card["poster_url"] for card in body["titles"] if card["jellyfin_item_id"] == SPY]
+
+        response = client.get(url)
+
+        assert response.status_code == 200
+        assert response.content == POSTER.content
+        assert response.headers["content-type"] == "image/webp"
+        # `poster` 翻成 Jellyfin 的 2:3、342 寬：與同一面牆上 TMDB 的 `w342` 海報同寬。
+        # **這幾個數字（與 adapter 的 `format=Webp`）不在網址裡**，而瀏覽器把網址快取一年、
+        # `immutable`：改了它們就要換 `ImageSize` 的值，看過的瀏覽器才會拿到新圖。
+        assert jellyfin.image_queries == [(SPY, "Primary", SPY_POSTER, 342, 513, 90)]
+
+    def test_a_poster_is_cached_for_good_and_everything_else_is_not(
+        self, client: TestClient
+    ) -> None:
+        """網址帶著 `ImageTags`，換圖時網址就變，所以圖可以長期快取；
+        其餘 `/api` 仍是 `no-store`。"""
+        sign_in(client)
+
+        image = client.get(IMAGE, params=POSTER_QUERY)
+        wall = client.get(f"/api/inventory/{TV}")
+
+        assert image.headers["cache-control"] == "private, max-age=31536000, immutable"
+        assert wall.headers["cache-control"] == "no-store"
+
+    def test_an_svg_from_jellyfin_cannot_run_script_on_berths_origin(
+        self, client: TestClient, jellyfin: FakeJellyfinClient
+    ) -> None:
+        """圖是 Jellyfin 那一端的內容（管理員上傳的、metadata 來源給的），卻從 Berth 的網域送出去：
+        直接開這個網址時，SVG 裡的 script 會帶著 Berth 的 session 跑。`<img>` 裡本來就不執行。"""
+        sign_in(client)
+        svg = b'<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>'
+        jellyfin.images[(SPY, "Primary")] = JellyfinImage(content=svg, content_type="image/svg+xml")
+
+        response = client.get(IMAGE, params=POSTER_QUERY)
+
+        assert response.headers["content-security-policy"] == (
+            "default-src 'none'; style-src 'unsafe-inline'; sandbox"
+        )
+        assert response.headers["x-content-type-options"] == "nosniff"
+
+    def test_jellyfin_is_asked_without_a_key_and_nobody_checks_each_image(
+        self, client: TestClient, factory: FakeClientFactory, jellyfin: FakeJellyfinClient
+    ) -> None:
+        """Jellyfin 的圖匿名可取（研究 §6）：Berth 不為它帶 API key，也不逐張問這個人看不看得到。"""
+        sign_in(client, CREW)
+
+        assert client.get(IMAGE, params=POSTER_QUERY).status_code == 200
+        assert factory.tokens[-1] == ""
+        assert jellyfin.view_queries == jellyfin.policy_queries == []
+
+    def test_signed_out_is_refused_before_jellyfin_is_asked(
+        self, client: TestClient, jellyfin: FakeJellyfinClient
+    ) -> None:
+        response = client.get(IMAGE, params=POSTER_QUERY)
+
+        assert response.status_code == 401
+        assert response.headers["cache-control"] == "no-store"
+        assert jellyfin.image_queries == []
+
+    @pytest.mark.parametrize(
+        ("path", "params"),
+        [
+            pytest.param(f"/api/jellyfin/items/{SPY}/images/Backdrop", POSTER_QUERY, id="type"),
+            pytest.param(IMAGE, {**POSTER_QUERY, "size": "original"}, id="size"),
+            pytest.param(IMAGE, {"tag": SPY_POSTER}, id="no-size"),
+            pytest.param(IMAGE, {"size": "poster"}, id="no-tag"),
+            pytest.param(IMAGE, {**POSTER_QUERY, "tag": "latest"}, id="tag-shape"),
+            pytest.param("/api/jellyfin/items/spy/images/Primary", POSTER_QUERY, id="item-shape"),
+            pytest.param(
+                "/api/jellyfin/items/%2E%2E/images/Primary", POSTER_QUERY, id="item-dot-dot"
+            ),
+        ],
+    )
+    def test_only_listed_types_sizes_and_jellyfin_shaped_ids_are_forwarded(
+        self,
+        client: TestClient,
+        jellyfin: FakeJellyfinClient,
+        path: str,
+        params: dict[str, str],
+    ) -> None:
+        """尺寸讓前端任意指定，一個網址就能讓 Jellyfin 重算任意大小的圖；
+        item id 會進 Jellyfin 的路徑。"""
+        sign_in(client)
+
+        response = client.get(path, params=params)
+
+        assert response.status_code == 422
+        assert response.headers["cache-control"] == "no-store"
+        assert jellyfin.image_queries == []
+
+    def test_an_image_jellyfin_does_not_have_is_a_404(
+        self, client: TestClient, jellyfin: FakeJellyfinClient
+    ) -> None:
+        sign_in(client)
+        jellyfin.images.clear()
+
+        response = client.get(IMAGE, params=POSTER_QUERY)
+
+        assert response.status_code == 404
+        assert response.json()["detail"]["reason"] == "image_missing"
+        assert response.headers["cache-control"] == "no-store"
+
+    def test_jellyfin_not_answering_is_a_503_that_is_not_cached(
+        self, client: TestClient, jellyfin: FakeJellyfinClient
+    ) -> None:
+        sign_in(client)
+        jellyfin.error = ServiceUnavailableError(f"GET /Items/{SPY}/Images/Primary: timed out")
+
+        response = client.get(IMAGE, params=POSTER_QUERY)
+
+        assert response.status_code == 503
+        assert response.json()["detail"] == {
+            "reason": "jellyfin_unreachable",
+            "detail": f"GET /Items/{SPY}/Images/Primary: timed out",
+        }
+        assert response.headers["cache-control"] == "no-store"
 
 
 class TestJellyfinAddress:

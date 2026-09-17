@@ -19,6 +19,7 @@ import tempfile
 from collections.abc import AsyncIterator, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
+from html import escape
 from pathlib import Path, PurePosixPath
 from urllib.parse import quote
 
@@ -37,6 +38,7 @@ from berth.adapters.jellyfin import (
     ITEM_MOVIE,
     ITEM_SERIES,
     JellyfinClient,
+    JellyfinImage,
     JellyfinItem,
     JellyfinLibrary,
     JellyfinSource,
@@ -1119,6 +1121,33 @@ LIBRARY_TITLES: tuple[tuple[str, str, int, int], ...] = (
 #: 電影媒體庫多擺這麼多部沒有 TMDB id 的片，牆才翻得到第二頁（一頁 100 部）。
 FILLER_FILMS = 130
 
+#: 替身 Jellyfin 上沒有 Primary 圖的作品：牆上印「無海報」（M1.5 票 04）。
+NO_POSTER = frozenset({"Home Videos 2019"})
+#: DTO 帶著 tag、圖卻不見了（掃描之後被刪）：代理回 404，卡片在瀏覽器裡換成佔位。
+LOST_POSTER = frozenset({"Harbour Film 007"})
+
+
+def demo_poster(name: str) -> JellyfinImage:
+    """一張 2:3 的 SVG 海報：底色由名稱導出，名稱一個詞一行。
+
+    真的 Jellyfin 回的是 WebP（研究 §6）；替身只要瀏覽器畫得出來。
+    """
+    digest = hashlib.md5(name.encode(), usedforsecurity=False).digest()
+    hue = digest[0] * 360 // 256
+    words = name.split() or [name]
+    lines = "".join(
+        f'<tspan x="24" dy="{0 if index == 0 else 40}">{escape(word)}</tspan>'
+        for index, word in enumerate(words)
+    )
+    svg = (
+        '<svg xmlns="http://www.w3.org/2000/svg" width="342" height="513" viewBox="0 0 342 513">'
+        f'<rect width="342" height="513" fill="hsl({hue} 45% 32%)"/>'
+        f'<rect y="360" width="342" height="12" fill="hsl({hue} 60% 62%)"/>'
+        '<text y="400" font-family="ui-monospace, monospace" font-size="32" font-weight="700" '
+        f'fill="#f4f1e8">{lines}</text></svg>'
+    )
+    return JellyfinImage(content=svg.encode(), content_type="image/svg+xml")
+
 
 async def _seed_library(session: AsyncSession, scenario: Scenario, paths: PathSettings) -> None:
     """媒體庫頁的樣子（M1.5 票 03）。Jellyfin 那一端與 Berth 那一端各擺一份，彼此對得上：
@@ -1156,6 +1185,13 @@ async def _seed_library(session: AsyncSession, scenario: Scenario, paths: PathSe
                 year=2020,
             )
         )
+    for index, item in enumerate(items):
+        if item.name in NO_POSTER:
+            continue
+        tag = hashlib.md5(f"{item.id}/Primary".encode(), usedforsecurity=False).hexdigest()
+        items[index] = replace(item, primary_tag=tag)
+        if item.name not in LOST_POSTER:
+            scenario.jellyfin.images[(item.id, "Primary")] = demo_poster(item.name)
     scenario.jellyfin.items_ = items
     found = {item.name: item for item in items}
 

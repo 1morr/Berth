@@ -17,11 +17,19 @@ from pydantic import BaseModel, ConfigDict
 
 from berth.api.deps import AccessCacheDep, ClientFactoryDep, SessionDep
 from berth.api.gate import current_user
+from berth.api.jellyfin import image_url
 from berth.api.schemas import JellyfinWebOut
-from berth.domain import CollectionType, InventoryStatus, JellyfinPresence, MediaKind
+from berth.domain import (
+    CollectionType,
+    ImageSize,
+    InventoryStatus,
+    JellyfinImageType,
+    JellyfinPresence,
+    MediaKind,
+)
 from berth.services.auth import AuthenticatedUser
 from berth.services.deeplink import jellyfin_web
-from berth.services.inventory import read_wall
+from berth.services.inventory import InventoryCard, read_wall
 from berth.services.jellyfin_access import (
     AccountDisabledError,
     JellyfinUnreachableError,
@@ -78,7 +86,8 @@ class InventoryCardOut(BaseModel):
     title: str
     title_en: str
     year: int | None
-    #: 還沒進 Jellyfin 的作品的 TMDB 海報；在 Jellyfin 裡的是空字串。
+    #: 還沒進 Jellyfin 的是 TMDB 的海報；在 Jellyfin 裡的是 Berth 代理的 Jellyfin Primary 圖
+    #: （`/api/jellyfin/items/...`，票 04）。沒有海報時是空字串。
     poster_url: str
     presence: JellyfinPresence
     #: 深連結要開的 Series / Movie。還沒進 Jellyfin 時是空字串。
@@ -138,11 +147,23 @@ async def get_inventory(
         page=wall.page,
         page_size=wall.page_size,
         total=wall.total,
-        titles=[InventoryCardOut.model_validate(card) for card in wall.titles],
-        tracked=[InventoryCardOut.model_validate(card) for card in wall.tracked],
+        titles=[_card(card) for card in wall.titles],
+        tracked=[_card(card) for card in wall.tracked],
         review=wall.review,
         unmatched=wall.unmatched,
     )
+
+
+def _card(card: InventoryCard) -> InventoryCardOut:
+    """在 Jellyfin 裡的作品，海報網址在這一層組：services 只知道 Jellyfin 的 tag，
+    不知道 `/api` 的路由。"""
+    out = InventoryCardOut.model_validate(card)
+    if not card.poster_tag:
+        return out
+    url = image_url(
+        card.jellyfin_item_id, JellyfinImageType.PRIMARY, size=ImageSize.POSTER, tag=card.poster_tag
+    )
+    return out.model_copy(update={"poster_url": url})
 
 
 def _user(request: Request) -> AuthenticatedUser:

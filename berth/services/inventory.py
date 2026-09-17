@@ -117,8 +117,12 @@ class InventoryCard:
     title: str
     title_en: str
     year: int | None
-    #: 還沒進 Jellyfin 的作品用 TMDB 的海報；在 Jellyfin 裡的留空（Jellyfin 的圖是票 04）。
+    #: 還沒進 Jellyfin 的作品的 TMDB 海報；在 Jellyfin 裡的是空字串，海報看 `poster_tag`。
     poster_url: str
+    #: 在 Jellyfin 裡的作品的 `ImageTags.Primary`：海報由 Berth 代理 Jellyfin 的圖，
+    #: 網址由 API 那一層組（`api/jellyfin.image_url`，票 04）。還沒進 Jellyfin、或 Jellyfin
+    #: 沒有圖時是空字串。
+    poster_tag: str
     #: 在 Jellyfin 裡就是 `found`；還沒進的說得出還在找、找不到、沒有東西可以找。
     presence: JellyfinPresence
     #: 深連結要開的 Jellyfin 作品（Series 或 Movie）。還沒進 Jellyfin 時是空字串。
@@ -515,6 +519,7 @@ def _jellyfin_card(
         title_en=item.name,
         year=item.year,
         poster_url="",
+        poster_tag=item.primary_tag,
         presence=JellyfinPresence.FOUND,
         jellyfin_item_id=item.id,
         tracking=None if mine is None else mine.tracking,
@@ -535,6 +540,7 @@ def _tracked_card(
         title_en=row.media.title_en,
         year=row.media.year,
         poster_url=snapshot.poster_url,
+        poster_tag="",
         presence=row.presence,
         jellyfin_item_id="",
         tracking=row.tracking,

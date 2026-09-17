@@ -16,6 +16,7 @@
   `library_page` / `library_index` 對他沒有權限的媒體庫照樣回內容。權限只在 `user_views` 上成立——
   「Berth 自己擋」的測試要靠這台替身不替它擋，才證明得了是 Berth 擋的。
 - **停用的帳號照樣代讀得到**：`user_views` 不看停用，只有 `user_policy` 說得出來（同上）。
+- **圖片匿名可取、`tag` 不驗證**（研究 §6）：`image` 不要 token，錯的 tag 一樣回圖。
 """
 
 from __future__ import annotations
@@ -24,10 +25,11 @@ import hashlib
 from collections.abc import Sequence
 from dataclasses import replace
 
-from berth.adapters.http import AuthFailedError, ProtocolMismatchError
+from berth.adapters.http import AuthFailedError, NotFoundError, ProtocolMismatchError
 from berth.adapters.jellyfin import (
     JellyfinApiKey,
     JellyfinAuth,
+    JellyfinImage,
     JellyfinItem,
     JellyfinLibrary,
     JellyfinPage,
@@ -109,6 +111,8 @@ class FakeJellyfinClient:
         items: tuple[JellyfinItem, ...] = (),
         #: 只有 `POST /Library/Media/Updated` 丟這個例外。「通知失敗不擋入庫」要它才測得出來。
         notify_error: Exception | None = None,
+        #: `(item id, 圖片類型)` → 那張圖。沒列的是 404。
+        images: dict[tuple[str, str], JellyfinImage] | None = None,
     ) -> None:
         self.base_url = base_url
         self.version = version
@@ -126,6 +130,7 @@ class FakeJellyfinClient:
         self.visible_roots = visible_roots
         self.items_ = list(items)
         self.notify_error = notify_error
+        self.images = dict(images or {})
 
         #: 每一次 `notify_paths` 收到的路徑，攤平。
         self.notified: list[str] = []
@@ -139,6 +144,9 @@ class FakeJellyfinClient:
         #: 每一次帶 `parentId` 替使用者查的 `(user_id, library_id)`（`library_page` 與
         #: `library_index` 都算）。「沒有轉發給 Jellyfin」就是這裡記不到那一次。
         self.browse_queries: list[tuple[str, str]] = []
+        #: 每一次 `image` 收到的整組參數：`(item_id, image_type, tag, fill_width, fill_height,
+        #: quality)`。尺寸白名單翻成了哪幾個數字靠它斷言。
+        self.image_queries: list[tuple[str, str, str, int, int, int]] = []
         self.token = ""
         self.culture: tuple[str, str, str] | None = None
         self.remote_access: bool | None = None
@@ -341,6 +349,26 @@ class FakeJellyfinClient:
         ]
         # `SortName` 是小寫化的名稱（研究 §3.1）；替身不去掉冠詞。
         return tuple(sorted(titles, key=lambda item: (item.name.casefold(), item.id)))
+
+    # --- 圖片 ---
+
+    async def image(
+        self,
+        item_id: str,
+        image_type: str,
+        *,
+        tag: str,
+        fill_width: int,
+        fill_height: int,
+        quality: int,
+    ) -> JellyfinImage:
+        """匿名可取：不看 token（研究 §6）。`tag` 錯了一樣回圖。"""
+        self._checkpoint(elevated=False)
+        self.image_queries.append((item_id, image_type, tag, fill_width, fill_height, quality))
+        found = self.images.get((item_id, image_type))
+        if found is None:
+            raise NotFoundError(f"GET /Items/{item_id}/Images/{image_type}: no such image")
+        return found
 
     def _username(self, user_id: str) -> str:
         """id 反查帳號名。不認得的 id 在真的 Jellyfin 是 4xx，client 翻成協定不符。"""

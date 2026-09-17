@@ -482,10 +482,11 @@ hover 與焦點也是同一個語彙（牆卡片、Ghost 按鈕、導覽方塊�
 按鈕輪廓就看不出來（WCAG 2.2 非文字對比 3:1）。
 
 **沒有圖示。** 系統裡沒有 icon font、沒有 SVG 圖示集。唯一的非文字標記是中文標籤前那道 2px 塗刻度，
-它由 CSS 畫出來、不是字元、不進無障礙名稱。唯一的圖像資產是 TMDB 條款要求的標誌與海報。
+它由 CSS 畫出來、不是字元、不進無障礙名稱。唯一的圖像資產是 TMDB 條款要求的標誌，與作品海報（TMDB 的，或 Berth 代理的 Jellyfin 的）。
 
 **海報是 2:3 的矩形。** `aspect-[2/3]` + `object-cover`，底是 `hull`；沒有海報時同一塊矩形裡印一行
-`.value text-xs text-ink-dim` 的「沒有海報」，格子高度不變。
+`.value text-xs text-ink-dim` 的「無海報」（EN `NO ART`，`discover.noArt`），格子高度不變。媒體庫牆上**圖載不下來**（Jellyfin 回 404、連不上）
+也換成同一行（M1.5 票 04）——不留瀏覽器的破圖示。
 
 ## Components
 
@@ -588,7 +589,7 @@ ISO 6346 標識在哪個語言都是同一串字母數字）、狀態標籤（`.
   原文 / 英文標題不同時第三行 `ink-dim`。狀態色塊貼在這條帶上，不壓在海報上。
 - **探索牆:** 整格是一條連結；「已追蹤」是中性小色塊。
 - **媒體庫牆:**（M1.5 票 03 起一個 Jellyfin 媒體庫一頁、整庫 100 部一頁，`.scratch/m1.5/library-shape.md`）
-  Jellyfin 裡的作品顯示 Jellyfin 的名稱、沒有第二行；Berth 經手的才有狀態色塊，依 The Usual Stays Unpainted Rule
+  Jellyfin 裡的作品顯示 Jellyfin 的名稱、沒有第二行，海報是 Berth 代理的 Jellyfin Primary 圖（票 04）；Berth 經手的才有狀態色塊，依 The Usual Stays Unpainted Rule
   （失敗 `blocked`、待審核 `assigned`、下載中 `working`，完整 / 部分 / 空是中性），有待確認檔案時另一塊 `assigned`；
   盤點行（「已入庫 N / 已播出 M」或版本數）在沒經手的作品上留空但保留高度。還沒進 Jellyfin 的 Berth 作品是牆上方
   自己一條（`.label` 標題 + 數字壓在重橫線上，同一份 `WALL_GRID`）。分頁鍵是 Ghost 外觀的連結，到頭的那一顆是
@@ -755,10 +756,6 @@ The Focus Follows The Confirm Rule。送單確認（`SubmitAction`）是同一�
   `blocked-ink` / `secured-ink`，四個信號色與 `on-signal` 兩個主題共用（註釋寫明理由：
   白字配中明度色只有 3.6:1）。以 build 為準——本文件記錄的是共用漆的那一版。
   `web-src-pages-healthpage-tsx.md` 已不再有這句話；setup 那份尚未更新。
-
-- **Jellyfin 裡的作品海報位是空的**（M1.5 票 03 到票 04 之間）：Shapes 寫「沒有海報時印一行『沒有海報』」，
-  但這些作品在 Jellyfin 裡有海報，只是 Berth 還沒代理 Jellyfin 的圖——印那一句就是謊話。票 04 接上之後，
-  Jellyfin 真的沒有圖的作品回到 Shapes 的規則，這一條刪掉。
 
 - 實測對比下限（2026-09-17，探索、下載、Media 詳情、媒體庫、Route 設定五頁，深淺兩主題 × 1280 / 390 全部量過）：
   **深色最低 6.53:1、亮色最低 5.71:1**；`rule-strong` 對兩個底色 6.4:1。

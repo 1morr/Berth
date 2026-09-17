@@ -343,6 +343,52 @@ GET /Shows/{seriesId}/Episodes?userId=U&seasonId={seasonId}&fields=Overview,Prim
   沒有的圖片類型 404。回應另帶 `Content-Disposition: attachment`、`Vary: Accept`、`Age` 與 DLNA 的兩個標頭
   （`realTimeInfo.dlna.org`、`transferMode.dlna.org`），代理時要決定哪些轉給瀏覽器。
 
+### 6.1 經 Berth 代理：要不要在 Berth 端另存一份【實測 12.1.0，M1.5 票 04】
+
+`scripts/experiments/jellyfin_images.py`，2026-09-17，一次性的 Jellyfin **12.1.0**（`version-12.1ubu2604`）。
+一個電影媒體庫 100 部，每部一張 1000×1500、帶雜訊的 JPEG 海報（486 KB；純色圖只有幾 KB，縮圖大小與時間都會失真）。
+直連是 urllib 直接打 Jellyfin；經過 Berth 是另一個程序的 `berth serve`，帶真的 session cookie（門禁、兩次 SQLite、
+每張圖一個不帶 token 的 httpx client）。本機 Docker Desktop，數字是量級，不是 NAS 上的值。
+
+**縮圖參數（每種 5 張，單條依序）**
+
+| 查詢 | 回應 | 尺寸 | 大小中位數 | 冷 / 熱中位數 |
+| --- | --- | --- | --- | --- |
+| `fillWidth=342&fillHeight=513&quality=90&format=Webp` | `image/webp` | 342×513 | 23 KB | 246 / 28 ms |
+| 同上，`quality=96`（jellyfin-web 的值） | `image/webp` | 342×513 | 51 KB | 238 / 24 ms |
+| 不帶 `format`，`Accept: */*`（Berth 的 httpx） | `image/jpeg` | 342×513 | 33 KB | 211 / 26 ms |
+| 不帶 `format`，Chromium 的圖片 `Accept` | `image/webp` | 342×513 | 24 KB | 232 / 25 ms |
+
+- 2:3 的原圖帶 `fillWidth` / `fillHeight` 回的就是 342×513。
+- **不帶 `format` 時 Jellyfin 照 `Accept` 挑格式**：Berth 自己的請求拿到 JPEG，大 40%。所以代理固定送 `format=Webp`。
+- `quality=96` 是 `quality=90` 的兩倍多大。選 90（研究當時在 12.0.0 量的也是 90）；兩者的畫質沒有做肉眼比較。
+- 每一種都回 `Cache-Control: public, max-age=31536000, immutable`（帶了 `tag`）。
+
+**40 張、6 條並行（瀏覽器對同一主機的連線數）**
+
+| | 總時間 | 每張中位數 | p90 |
+| --- | --- | --- | --- |
+| 直連 Jellyfin，冷（第一次縮） | 2,067 ms | 303 ms | 312 ms |
+| 直連 Jellyfin，熱 | 161 ms | 21 ms | 37 ms |
+| 經過 Berth，冷 | 2,241 ms | 307 ms | 383 ms |
+| 經過 Berth，熱 | 403 ms | 54 ms | 69 ms |
+| 經過 Berth，Jellyfin 已被直連那一輪熱過 | 469 ms | 60 ms | 88 ms |
+| 經過 Berth，熱——**修正之前**（每個 httpx client 各建一個 SSL context） | 993 ms | 140 ms | 174 ms |
+
+- **Jellyfin 自己存了一份縮好的圖**：跑完後 `/config/cache/images/resized-images` 有 100 個檔、2.6 MB（每張海報在這個
+  尺寸一份），同一張第二次從 ~250 ms 掉到 ~25 ms。
+- **冷的那一次由 Jellyfin 縮圖主導**（直連與經過 Berth 差 8%），Berth 端另存一份也躲不掉：那一份得先由 Jellyfin 縮出來。
+- **熱的時候 Berth 每張多約 35 ms**（門禁讀 session、讀設定、每張圖一條新的 Jellyfin 連線）。Berth 端另存一份最多省下
+  Jellyfin 那一段（直連熱 21 ms），門禁與資料庫照樣要走。
+- **修正之前每張多 120 ms**：httpx 每個 client 預設各建一個 SSL context（讀 certifi 的憑證包，約 14 ms 的 CPU），而
+  CPU 工作卡在事件迴圈上，6 條並行時彼此排隊。`adapters/http.py` 改成整個程序共用一個之後降到上表的值
+  （`tests/unit/test_adapters.py` 守著）。
+
+**結論：Berth 端不另存。** Jellyfin 已經在磁碟上存了縮好的圖，冷的那一次存不存都得等它縮；熱的時候另存只省二十幾毫秒，
+卻要多一份磁碟、照 `tag` 失效、作品刪掉時清掉的邏輯。每個瀏覽器第一次看到之後，`immutable` 讓重新整理不再發請求
+（playwright 實跑，票 04 的 Comments）。大媒體庫在 NAS 上若量到牆明顯慢，先看每張圖的連線（共用 keep-alive）與門禁，
+而不是存圖。
+
 ## 7. Jellyfin Web 自己用的端點與參數（要沿用的慣例）
 
 【原始碼，研究子代理讀 jellyfin-web；未實測抓網路請求——那需要登入 Jellyfin Web 建立 session，屬於不允許的寫入】

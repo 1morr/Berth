@@ -170,6 +170,9 @@ class JellyfinItem:
     series_id: str = ""
     #: `ProductionYear`。媒體庫牆上那一格的年份（M1.5 票 03）；Jellyfin 不知道時是 `None`。
     year: int | None = None
+    #: `ImageTags.Primary`：代理圖片的網址要帶它，Jellyfin 換圖時網址才會變（M1.5 票 04、研究 §6）。
+    #: 沒有 Primary 圖，或查詢關掉了圖（`enableImages=false`）時是空字串。
+    primary_tag: str = ""
 
     @property
     def source_paths(self) -> tuple[str, ...]:
@@ -215,6 +218,15 @@ class JellyfinPage:
     items: tuple[JellyfinItem, ...]
     #: `TotalRecordCount`：整個查詢的筆數，不是這一頁的。
     total: int
+
+
+@dataclass(frozen=True, slots=True)
+class JellyfinImage:
+    """`GET /Items/{id}/Images/{type}` 的一張圖，已由 Jellyfin 縮好。"""
+
+    content: bytes
+    #: Jellyfin 回的 `Content-Type`，一定是 `image/*`。
+    content_type: str
 
 
 class JellyfinClient(Protocol):
@@ -365,10 +377,30 @@ class JellyfinClient(Protocol):
     async def library_index(
         self, *, user_id: str, library_id: str, item_type: str
     ) -> tuple[JellyfinItem, ...]:
-        """一個媒體庫的**每一部**作品，只帶 id、名稱、年份與 TMDB id——不分頁，不要圖與觀看紀錄。
+        """一個媒體庫的**每一部**作品，只帶 id、名稱、年份、TMDB id 與 Primary 圖的 tag——不分頁，
+        不要觀看紀錄。
 
         Berth 端比對「哪一部是 Berth 經手的」用（票 03）：`/Items` 沒有 provider id 的過濾參數
         （研究 §10），只能整份拿回來自己比。
+        """
+        ...
+
+    # --- 圖片（M1.5 票 04）---
+
+    async def image(
+        self,
+        item_id: str,
+        image_type: str,
+        *,
+        tag: str,
+        fill_width: int,
+        fill_height: int,
+        quality: int,
+    ) -> JellyfinImage:
+        """`GET /Items/{id}/Images/{type}`：縮放由 Jellyfin 做。沒有這張圖是 `NotFoundError`。
+
+        **不需要憑證**（研究 §6，三版都沒有 `[Authorize]`），所以呼叫端給一個不帶 token 的 client。
+        `tag` 只是快取鍵，錯的也回圖；帶著它 Jellyfin 才回一年的 `immutable`。
         """
         ...
 
@@ -384,6 +416,7 @@ __all__ = [
     "JellyfinApiKey",
     "JellyfinAuth",
     "JellyfinClient",
+    "JellyfinImage",
     "JellyfinItem",
     "JellyfinLibrary",
     "JellyfinPage",

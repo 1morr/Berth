@@ -244,6 +244,26 @@ class CollectionType(StrEnum):
     TVSHOWS = "tvshows"
 
 
+class JellyfinImageType(StrEnum):
+    """Berth 代理得了的 Jellyfin 圖片類型（M1.5 票 04）；沿用 Jellyfin 的字串。
+
+    **是白名單**：沒有呼叫端的類型不開。劇照、橫卡（票 07、08）用到時再加。
+    """
+
+    PRIMARY = "Primary"
+
+
+class ImageSize(StrEnum):
+    """代理圖片的具名尺寸（M1.5 票 04）。實際像素在 `services/jellyfin_images.py`。
+
+    **前端不能指定任意尺寸**：每一種尺寸都要 Jellyfin 重算一次、在它的快取裡多存一份，
+    所以只收幾個名字（TMDB `w342` 那種具名尺寸的做法），名字照形狀取。
+    """
+
+    #: 2:3 的海報，牆上一格。
+    POSTER = "poster"
+
+
 def collection_type_for(kind: MediaKind) -> CollectionType:
     """一部作品進得了哪一種媒體庫。
 

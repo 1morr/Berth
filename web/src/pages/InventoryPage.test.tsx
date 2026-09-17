@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -188,6 +188,43 @@ describe('媒體庫頁', () => {
         'http://localhost:8096/web/#/details?id=9ea3bb1459aa4795a5ebf54b94fe0cc9',
       )
       expect(links[0]).toHaveAttribute('target', '_blank')
+    })
+
+    it('海報是 Berth 代理的 Jellyfin 圖，網址照後端給的（票 04）', async () => {
+      const poster =
+        '/api/jellyfin/items/2a9857e656bbd18b7c3c3a3b4ee5eef1/images/Primary?size=poster&tag=f99664090dfd3223c18e80663440deac'
+      render({
+        [`GET /api/inventory/${TV}`]: {
+          body: wall({ titles: [jellyfinCard({ poster_url: poster }), HOTEL] }),
+        },
+      })
+      renderApp(`/library/${TV}`)
+
+      const alpha = await findTile('Alpha Show')
+
+      // `alt=""`：標題就在下面那一行，所以海報不在無障礙樹上，只能從元素找。
+      expect(alpha.querySelector('img')).toHaveAttribute('src', poster)
+      expect(within(alpha).queryByText('無海報')).not.toBeInTheDocument()
+      // Jellyfin 真的沒有圖的那一部，說「無海報」是真話。
+      expect(within(tile('Hotel Show')).getByText('無海報')).toBeVisible()
+    })
+
+    it('海報載不下來（Jellyfin 回 404 或連不上）時換成佔位，其餘的格子照樣在', async () => {
+      const poster =
+        '/api/jellyfin/items/2a9857e656bbd18b7c3c3a3b4ee5eef1/images/Primary?size=poster&tag=f99664090dfd3223c18e80663440deac'
+      render({
+        [`GET /api/inventory/${TV}`]: {
+          body: wall({ titles: [jellyfinCard({ poster_url: poster }), HOTEL, BEAR] }),
+        },
+      })
+      renderApp(`/library/${TV}`)
+      const alpha = await findTile('Alpha Show')
+
+      fireEvent.error(alpha.querySelector('img')!)
+
+      expect(await within(alpha).findByText('無海報')).toBeVisible()
+      expect(alpha.querySelector('img')).not.toBeInTheDocument()
+      expect(tile('The Bear')).toBeVisible()
     })
 
     it('Berth 經手的作品疊上狀態與入庫集數', async () => {

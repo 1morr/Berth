@@ -226,6 +226,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/jellyfin/items/{item_id}/images/{image_type}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Image */
+        get: operations["get_image_api_jellyfin_items__item_id__images__image_type__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/jobs": {
         parameters: {
             query?: never;
@@ -1168,6 +1185,15 @@ export interface components {
          * @enum {string}
          */
         HealthStatus: "unknown" | "ok" | "failed";
+        /**
+         * ImageSize
+         * @description 代理圖片的具名尺寸（M1.5 票 04）。實際像素在 `services/jellyfin_images.py`。
+         *
+         *     **前端不能指定任意尺寸**：每一種尺寸都要 Jellyfin 重算一次、在它的快取裡多存一份，
+         *     所以只收幾個名字（TMDB `w342` 那種具名尺寸的做法），名字照形狀取。
+         * @enum {string}
+         */
+        ImageSize: "poster";
         /** IndexerApplyIn */
         IndexerApplyIn: {
             /**
@@ -1318,6 +1344,14 @@ export interface components {
             /** Password */
             password: string;
         };
+        /**
+         * JellyfinImageType
+         * @description Berth 代理得了的 Jellyfin 圖片類型（M1.5 票 04）；沿用 Jellyfin 的字串。
+         *
+         *     **是白名單**：沒有呼叫端的類型不開。劇照、橫卡（票 07、08）用到時再加。
+         * @enum {string}
+         */
+        JellyfinImageType: "Primary";
         /**
          * JellyfinPresence
          * @description Jellyfin 找到這部作品了沒——媒體庫卡片上那一行（票 13）。
@@ -2601,6 +2635,55 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+        };
+    };
+    get_image_api_jellyfin_items__item_id__images__image_type__get: {
+        parameters: {
+            query: {
+                size: components["schemas"]["ImageSize"];
+                tag: string;
+            };
+            header?: never;
+            path: {
+                item_id: string;
+                image_type: components["schemas"]["JellyfinImageType"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 縮好的圖 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/webp": unknown;
+                };
+            };
+            /** @description `image_missing`：Jellyfin 沒有這張圖 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description `jellyfin_unreachable`：問不到 Jellyfin */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

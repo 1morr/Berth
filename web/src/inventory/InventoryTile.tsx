@@ -1,4 +1,4 @@
-import { useId, type ReactNode } from 'react'
+import { useId, useState, type ReactNode } from 'react'
 import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 
@@ -31,8 +31,8 @@ const STATUS_SIGNAL = {
  * 與探索牆的 `MediaTile` 是同一種貨櫃：海報 + 模板字標識帶、每一格自己的 `border-2`。一格有兩種來歷，
  * 版面相同、由資料決定內容：
  *
- * - **Jellyfin 牆上的作品**：Jellyfin 的名稱（不跟 UI 語言），Berth 經手時疊上狀態與盤點，最下面一定是
- *   「在 Jellyfin 開啟」。海報位是空的——Jellyfin 的圖是票 04。
+ * - **Jellyfin 牆上的作品**：Jellyfin 的名稱（不跟 UI 語言）與 Berth 代理的 Jellyfin 海報（票 04），Berth 經手時
+ *   疊上狀態與盤點，最下面一定是「在 Jellyfin 開啟」。
  * - **還沒進 Jellyfin 的 Berth 作品**：TMDB 的標題與海報，最下面說它在 Jellyfin 那邊走到哪了。
  *
  * 兩條連結**並排不巢狀**（使用者拍板，票 13）：海報與標題那一塊連到 Berth 的 Media 詳情，Jellyfin 那一行是
@@ -47,24 +47,7 @@ export function InventoryTile({ card, web }: { card: InventoryCard; web: Jellyfi
 
   const body = (
     <>
-      <div className="relative aspect-[2/3] bg-hull">
-        {card.poster_url ? (
-          // 標題就在下面那一行，海報是裝飾性的——給它 alt 只會把同一個名字唸兩次。
-          <img
-            src={card.poster_url}
-            alt=""
-            loading="lazy"
-            className="size-full object-cover"
-            width={342}
-            height={513}
-          />
-        ) : card.presence === 'found' ? null : (
-          // 在 Jellyfin 裡的作品有海報，只是還沒接上（票 04），所以不說「沒有海報」。
-          <span className="value absolute inset-0 flex items-center justify-center text-xs text-ink-dim">
-            {t('discover.noArt')}
-          </span>
-        )}
-      </div>
+      <PosterSlot url={card.poster_url} />
       <div className="grid content-start gap-1 px-3 py-2.5">
         {/* 狀態貼在標識帶上，不壓在海報上（The Paint Needs A Painted Ground Rule）。 */}
         <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
@@ -106,6 +89,37 @@ export function InventoryTile({ card, web }: { card: InventoryCard; web: Jellyfi
       )}
       <JellyfinLine card={card} web={web} titleId={titleId} />
     </article>
+  )
+}
+
+/**
+ * 2:3 的海報位。網址是空的、或圖載不下來（Jellyfin 回 404、連不上）時同一塊矩形裡印「無海報」，
+ * 格子高度不變，牆不壞（票 04）。
+ */
+function PosterSlot({ url }: { url: string }) {
+  const { t } = useTranslation()
+  // 記載入失敗的是哪一個網址而不是一個布林值：換頁時同一格換了一張圖，就該重新試。
+  const [failed, setFailed] = useState('')
+
+  return (
+    <div className="relative aspect-[2/3] bg-hull">
+      {url && url !== failed ? (
+        // 標題就在下面那一行，海報是裝飾性的——給它 alt 只會把同一個名字唸兩次。
+        <img
+          src={url}
+          alt=""
+          loading="lazy"
+          className="size-full object-cover"
+          width={342}
+          height={513}
+          onError={() => setFailed(url)}
+        />
+      ) : (
+        <span className="value absolute inset-0 flex items-center justify-center text-xs text-ink-dim">
+          {t('discover.noArt')}
+        </span>
+      )}
+    </div>
   )
 }
 

@@ -1211,13 +1211,15 @@ def record_browsing(
     # 牆的第二頁（M1.5 票 03）：整份 4 部，`startIndex=1&limit=2` 要恰好是第 2、3 部。
     page = {**wall, **tv_series, "startIndex": "1", "limit": "2"}
     fixtures.write("items.tv.series.page.json", srv.send(api, "/Items", params=page))
-    # Berth 端比對用的整份索引（票 03）：只要 id、名稱、年份與 TMDB id，圖與觀看紀錄都不要。
+    # Berth 端比對用的整份索引（票 03）：只要 id、名稱、年份與 TMDB id，觀看紀錄不要；
+    # 圖只要 Primary 的 tag（票 04：篩選後的牆從這一份畫海報）。
     index = {
         "userId": user_id,
         "recursive": "true",
         **tv_series,
         "fields": "ProviderIds",
-        "enableImages": "false",
+        "imageTypeLimit": "1",
+        "enableImageTypes": "Primary",
         "enableUserData": "false",
         "enableTotalRecordCount": "false",
     }

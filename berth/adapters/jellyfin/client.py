@@ -7,12 +7,14 @@ from typing import Any
 
 from berth.adapters.http import (
     HttpSession,
+    NotFoundError,
     ProtocolMismatchError,
     json_body,
 )
 from berth.adapters.jellyfin import (
     JellyfinApiKey,
     JellyfinAuth,
+    JellyfinImage,
     JellyfinItem,
     JellyfinLibrary,
     JellyfinPage,
@@ -34,6 +36,12 @@ JELLYFIN_TIMEOUT_SECONDS = 30.0
 _CLIENT = "Berth"
 _DEVICE = "Berth"
 _DEVICE_ID = "berth-server"
+
+#: 代理出去的圖一律要 WebP。**不靠 `Accept` 協商**：發請求的是 Berth 不是瀏覽器，Jellyfin 看到的
+#: `Accept` 說不出瀏覽器吃什麼；而 Berth 支援的瀏覽器都吃 WebP
+#: （研究 §6：`format=Webp` 回 `image/webp`）。改它就要換 `ImageSize` 的值：格式不在 Berth 的
+#: 網址裡，而那個網址被快取一年（`services/jellyfin_images.IMAGE_SIZES`）。
+_IMAGE_FORMAT = "Webp"
 
 
 class HttpJellyfinClient:
@@ -268,7 +276,8 @@ class HttpJellyfinClient:
                 "includeItemTypes": item_type,
                 "sortBy": "SortName",
                 "sortOrder": "Ascending",
-                # jellyfin-web 的牆要的那幾格（研究 §7）；圖與觀看紀錄是票 04、05 讀的。
+                # jellyfin-web 的牆要的那幾格（研究 §7）；Primary 的 tag 是海報（票 04），
+                # 觀看紀錄是票 05 讀的。
                 "fields": "PrimaryImageAspectRatio,ProviderIds,Path",
                 "imageTypeLimit": "1",
                 "enableImageTypes": "Primary,Backdrop,Thumb",
@@ -291,12 +300,48 @@ class HttpJellyfinClient:
                 "recursive": "true",
                 "includeItemTypes": item_type,
                 "fields": "ProviderIds",
-                "enableImages": "false",
+                # 圖只要 Primary 的 tag：篩選後的牆從這一份畫海報（M1.5 票 04）。它的 BlurHash 會
+                # 跟著來（12.1.0 錄製），每部多一百多個位元組。
+                "imageTypeLimit": "1",
+                "enableImageTypes": "Primary",
                 "enableUserData": "false",
                 "enableTotalRecordCount": "false",
             },
         )
         return _items(payload)
+
+    # --- 圖片 ---
+
+    async def image(
+        self,
+        item_id: str,
+        image_type: str,
+        *,
+        tag: str,
+        fill_width: int,
+        fill_height: int,
+        quality: int,
+    ) -> JellyfinImage:
+        path = f"/Items/{item_id}/Images/{image_type}"
+        response = await self._session.request(
+            "GET",
+            path,
+            params={
+                "tag": tag,
+                "fillWidth": str(fill_width),
+                "fillHeight": str(fill_height),
+                "quality": str(quality),
+                "format": _IMAGE_FORMAT,
+            },
+            tolerate=(404,),
+        )
+        if response.status_code == 404:
+            raise NotFoundError(f"GET {path}: no such image")
+        content_type = response.headers.get("content-type", "")
+        if not content_type.startswith("image/"):
+            shown = content_type or "no content type"
+            raise ProtocolMismatchError(f"GET {path}: {shown}, not an image")
+        return JellyfinImage(content=response.content, content_type=content_type)
 
     async def aclose(self) -> None:
         await self._session.aclose()
@@ -344,6 +389,7 @@ def _item(row: dict[str, Any]) -> JellyfinItem:
         ),
         series_id=str(row.get("SeriesId") or ""),
         year=year if isinstance(year := row.get("ProductionYear"), int) else None,
+        primary_tag=str((row.get("ImageTags") or {}).get("Primary") or ""),
     )
 
 

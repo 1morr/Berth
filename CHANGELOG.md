@@ -362,6 +362,14 @@ Windows Docker Desktop（NTFS bind mount）與 Linux（ext4）上各跑一次 `d
   §2、§3.1、§5、§10、§11 與 brief §20.8。`lib.Response` 多帶回應標頭。
 - `jellyfin_permissions.py --only`（M1.5 票 03）：只寫指定的 fixture 檔名；加錄了牆的第二頁與整份清單兩份。
 - 演練情境 `library`（M1.5 票 03）：整庫瀏覽、分頁、受限使用者，以及 `POST /demo/jellyfin/{disable,enable}` 停用帳號。
+- **媒體庫牆上的海報是 Jellyfin 的圖，由 Berth 轉給瀏覽器**（M1.5 票 04，brief §19）：`GET /api/jellyfin/items/{item_id}/images/{image_type}?size=&tag=`。
+  瀏覽器不必連得到 Jellyfin，HTTPS 的 Berth 配 HTTP 的 Jellyfin 也沒有 mixed content。縮放由 Jellyfin 做，只收白名單裡的
+  類型與具名尺寸（現在是 `Primary` 與 `poster`，其餘 422）；要登入，向 Jellyfin 取圖不帶 API key。圖片回應是 `/api`
+  底下唯一不是 `no-store` 的：`private, max-age=31536000, immutable`（網址帶著 Jellyfin 的 `ImageTags`，換圖就換網址）。
+  `InventoryCardOut.poster_url` 在 Jellyfin 裡的作品上是這一支的網址；Jellyfin 沒有圖、或圖載不下來時卡片印「無海報」。
+  Berth 端不另存圖（量測見 `docs/research/library-browsing.md` §6.1）。
+- `scripts/experiments/jellyfin_images.py`（M1.5 票 04）：量縮圖參數與格式協商、Jellyfin 自己的縮圖快取，以及 6 條並行下
+  直連 Jellyfin 與經過 Berth 的延遲。演練情境 `library` 的替身 Jellyfin 帶海報。
 
 ### Changed
 
@@ -508,6 +516,8 @@ Windows Docker Desktop（NTFS bind mount）與 Linux（ext4）上各跑一次 `d
 - 對外服務的 HTTP client 整個程序共用一個 SSL context（M1.5 票 04）：httpx 預設每個 client 各建一個，要讀一次
   certifi 的憑證包、約 14 ms 的 CPU，而且卡在事件迴圈上。每個請求都開新 client 的 services 因此每次多付這一筆；
   量到經過 Berth 的圖 6 條並行時每張從 140 ms 降到 54 ms（`docs/research/library-browsing.md` §6.1）。
+- 媒體庫的整份清單（`library_index`，比對 Berth 經手的作品用）多帶每部的 Primary 圖 tag（M1.5 票 04）：
+  篩選「待審」「Unmatched」時，已在 Jellyfin 裡的作品也畫得出海報。Jellyfin 連它的 BlurHash 一起回，每部多一百多個位元組。
 
 ### Removed
 

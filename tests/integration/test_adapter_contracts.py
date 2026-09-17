@@ -1344,8 +1344,9 @@ async def test_jellyfin_a_later_page_is_a_slice_of_the_whole_library() -> None:
 
 @respx.mock
 @pytest.mark.asyncio
-async def test_jellyfin_the_index_of_a_library_is_every_title_without_images() -> None:
-    """Berth 端比對用的整份清單：不分頁、不要圖與觀看紀錄，但仍然由伺服器照媒體庫與型別過濾。"""
+async def test_jellyfin_the_index_of_a_library_is_every_title_with_only_its_poster_tag() -> None:
+    """Berth 端比對用的整份清單：不分頁、不要觀看紀錄，圖只要 Primary 的 tag
+    （票 04：篩選後的牆從這一份畫海報），仍然由伺服器照媒體庫與型別過濾。"""
     route = respx.get(f"{JELLYFIN_URL}/Items").respond(
         200, text=read_fixture("http/jellyfin/items.tv.series.index.json")
     )
@@ -1364,23 +1365,24 @@ async def test_jellyfin_the_index_of_a_library_is_every_title_without_images() -
         "recursive": "true",
         "includeItemTypes": "Series",
         "fields": "ProviderIds",
-        "enableImages": "false",
+        "imageTypeLimit": "1",
+        "enableImageTypes": "Primary",
         "enableUserData": "false",
         "enableTotalRecordCount": "false",
     }
     assert {item.type for item in titles} == {"Series"}
     assert FORBIDDEN_FRIEREN not in {item.id for item in titles}
-    # `enableImages=false`、`enableUserData=false`：同一個媒體庫的牆那一份每一部都帶，
-    # 這一份一部都沒有。
+    # `enableUserData=false`：同一個媒體庫的牆那一份每一部都帶，這一份一部都沒有。
     rows = json.loads(read_fixture("http/jellyfin/items.tv.series.index.json"))["Items"]
     wall = json.loads(read_fixture("http/jellyfin/items.tv.series.userdata.json"))["Items"]
-    assert all("UserData" in row and row["ImageTags"] for row in wall)
-    assert not any("UserData" in row or "ImageTags" in row for row in rows)
-    assert [(item.name, item.tmdb_id) for item in titles] == [
-        ("Alpha Show", "1399"),
-        ("Bravo Show", "1396"),
-        ("Frieren", "209867"),
-        ("Hotel Show", ""),
+    assert all("UserData" in row for row in wall)
+    assert not any("UserData" in row for row in rows)
+    # tag 由圖的修改時間算出來，這一份是另一輪容器錄的，所以與牆那一份的值不同（fixture README）。
+    assert [(item.name, item.tmdb_id, item.primary_tag) for item in titles] == [
+        ("Alpha Show", "1399", "a559a2354a1a4a612c48440de5e621f6"),
+        ("Bravo Show", "1396", "6db82abaab2067a1956415b245cfe1e8"),
+        ("Frieren", "209867", "4b6e43fff7571a7f1e1604ce6fd214fc"),
+        ("Hotel Show", "", "7b1ed5c62143ecfd6b20a6371a27dab0"),
     ]
 
 
@@ -1394,6 +1396,141 @@ async def test_jellyfin_a_page_without_an_items_array_is_not_jellyfin() -> None:
         with pytest.raises(ProtocolMismatchError):
             await client.library_page(
                 user_id=RESTRICTED_USER, library_id=TV_LIBRARY, item_type="Series", start=0, limit=1
+            )
+    finally:
+        await client.aclose()
+
+
+# --- Jellyfin 的圖（M1.5 票 04，研究 library-browsing.md §6）----------------------
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_jellyfin_the_wall_carries_each_titles_primary_image_tag() -> None:
+    """代理的網址要帶 DTO 的 `ImageTags.Primary`：`tag` 只是快取鍵，錯的也回圖（研究 §6）。"""
+    respx.get(f"{JELLYFIN_URL}/Items").respond(
+        200, text=read_fixture("http/jellyfin/items.tv.series.userdata.json")
+    )
+
+    client = jellyfin_client("key")
+    try:
+        page = await client.library_page(
+            user_id=RESTRICTED_USER, library_id=TV_LIBRARY, item_type="Series", start=0, limit=100
+        )
+    finally:
+        await client.aclose()
+
+    assert [(item.name, item.primary_tag) for item in page.items] == [
+        ("Alpha Show", "f99664090dfd3223c18e80663440deac"),
+        ("Bravo Show", "fa01c79f6d2ed4ceaa8ea470a7f7ac3b"),
+        ("Frieren", "ae92dd1bdff3b398370c5b46b3123200"),
+        ("Hotel Show", "fd9be66f6a4daa46815b2f72f256286c"),
+    ]
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_jellyfin_an_item_without_a_primary_image_has_no_primary_tag() -> None:
+    """沒有圖的 item 是 `ImageTags: {}`。錄到這個形狀的是無權媒體庫那一份（季與集沒有海報）。"""
+    respx.get(f"{JELLYFIN_URL}/Items").respond(
+        200, text=read_fixture("http/jellyfin/items.parent-forbidden.json")
+    )
+
+    client = jellyfin_client("key")
+    try:
+        page = await client.library_page(
+            user_id=RESTRICTED_USER, library_id=TV_LIBRARY, item_type="Series", start=0, limit=100
+        )
+    finally:
+        await client.aclose()
+
+    tagged: dict[str, set[bool]] = {}
+    for item in page.items:
+        tagged.setdefault(item.type, set()).add(bool(item.primary_tag))
+    assert tagged == {"Season": {False}, "Episode": {False}, "Folder": {False}, "Series": {True}}
+
+
+#: `images-primary.resized.headers.json` 錄的那一張：Alpha Show 的 Primary（票 01）。
+ALPHA_SHOW = "2a9857e656bbd18b7c3c3a3b4ee5eef1"
+ALPHA_PRIMARY_TAG = "f99664090dfd3223c18e80663440deac"
+
+
+def recorded_image_headers(fixture: str) -> dict[str, str]:
+    headers: dict[str, str] = json.loads(read_fixture(f"http/jellyfin/{fixture}"))["headers"]
+    return headers
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_jellyfin_an_image_is_resized_by_jellyfin() -> None:
+    """縮放交給 Jellyfin（`fillWidth` / `fillHeight` / `quality` / `format`），網址帶 `tag`。"""
+    body = b"RIFF\x00\x00\x00\x00WEBPVP8 "
+    route = respx.get(f"{JELLYFIN_URL}/Items/{ALPHA_SHOW}/Images/Primary").respond(
+        200, content=body, headers=recorded_image_headers("images-primary.resized.headers.json")
+    )
+
+    client = jellyfin_client()
+    try:
+        image = await client.image(
+            ALPHA_SHOW,
+            "Primary",
+            tag=ALPHA_PRIMARY_TAG,
+            fill_width=342,
+            fill_height=513,
+            quality=90,
+        )
+    finally:
+        await client.aclose()
+
+    assert dict(route.calls.last.request.url.params) == {
+        "tag": ALPHA_PRIMARY_TAG,
+        "fillWidth": "342",
+        "fillHeight": "513",
+        "quality": "90",
+        "format": "Webp",
+    }
+    assert (image.content, image.content_type) == (body, "image/webp")
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_jellyfin_a_missing_image_is_an_answer_not_a_mismatch() -> None:
+    """沒有這張圖（或沒有這個 item）是 404（研究 §6）：卡片換成佔位，不是「接到了別的服務」。"""
+    respx.get(f"{JELLYFIN_URL}/Items/{ALPHA_SHOW}/Images/Primary").respond(404)
+
+    client = jellyfin_client()
+    try:
+        with pytest.raises(NotFoundError):
+            await client.image(
+                ALPHA_SHOW,
+                "Primary",
+                tag=ALPHA_PRIMARY_TAG,
+                fill_width=342,
+                fill_height=513,
+                quality=90,
+            )
+    finally:
+        await client.aclose()
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_jellyfin_an_image_that_is_not_an_image_is_not_jellyfin() -> None:
+    """位址接到了別的服務（回一頁 HTML）時不能把它當成圖轉給瀏覽器。"""
+    respx.get(f"{JELLYFIN_URL}/Items/{ALPHA_SHOW}/Images/Primary").respond(
+        200, text="<html>router login</html>", headers={"Content-Type": "text/html"}
+    )
+
+    client = jellyfin_client()
+    try:
+        with pytest.raises(ProtocolMismatchError):
+            await client.image(
+                ALPHA_SHOW,
+                "Primary",
+                tag=ALPHA_PRIMARY_TAG,
+                fill_width=342,
+                fill_height=513,
+                quality=90,
             )
     finally:
         await client.aclose()

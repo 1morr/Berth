@@ -141,7 +141,7 @@ class JellyfinAccess:
     async def page(self, library_id: str, *, start: int, limit: int) -> JellyfinPage:
         """這個媒體庫的一頁作品。媒體庫先對允許清單驗過，才會變成 `parentId`。"""
         library = self.library(library_id)
-        with _reachable():
+        with reachable():
             return await self._client.library_page(
                 user_id=self._user_id,
                 library_id=library.id,
@@ -151,9 +151,10 @@ class JellyfinAccess:
             )
 
     async def index(self, library_id: str) -> tuple[JellyfinItem, ...]:
-        """這個媒體庫的每一部作品（只有 id、名稱、年份、TMDB id）。同樣先驗媒體庫。"""
+        """這個媒體庫的每一部作品（只有 id、名稱、年份、TMDB id、Primary 圖的 tag）。
+        同樣先驗媒體庫。"""
         library = self.library(library_id)
-        with _reachable():
+        with reachable():
             return await self._client.library_index(
                 user_id=self._user_id, library_id=library.id, item_type=library.item_type
             )
@@ -183,7 +184,7 @@ async def jellyfin_access(
 async def _grant(
     session: AsyncSession, client: JellyfinClient, user: AuthenticatedUser
 ) -> tuple[BrowsableLibrary, ...]:
-    with _reachable():
+    with reachable():
         policy, views = await asyncio.gather(
             client.user_policy(user.jellyfin_user_id), client.user_views(user.jellyfin_user_id)
         )
@@ -197,7 +198,7 @@ _TYPES = {kind.value for kind in BROWSABLE}
 
 
 @contextmanager
-def _reachable() -> Iterator[None]:
+def reachable() -> Iterator[None]:
     """服務層的錯誤一律翻成 `JellyfinUnreachableError`，帶著服務回的原文。"""
     try:
         yield

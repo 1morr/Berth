@@ -40,7 +40,7 @@ docker compose up -d
 | 探索 `/` | TMDB 的趨勢、熱門與搜尋。每一格連到那部作品的詳情 |
 | Media 詳情 `/media/:id` | 季集表；向索引站搜 torrent，結果表附 Tags 與預估季集；選 Route 送單（送出前印出會用的資料夾名）；已入庫的檔案、版本與 Jellyfin 找到了沒 |
 | 下載 `/jobs` | 送單之後的每一筆，狀態與進度即時更新；展開看時間線與匯入計劃（逐檔的處置、信心、目標路徑與理由），送單失敗、入庫失敗、待審各有自己的下一步 |
-| 媒體庫 `/library/:library` | 一個 Jellyfin 媒體庫一頁，只列你在 Jellyfin 看得到的：整庫 100 部一頁（不是 Berth 入庫的也在），Berth 經手的疊上入庫了幾集、哪一部在等人；還沒進 Jellyfin 的另列一條；「在 Jellyfin 開啟」；「待審」「Unmatched」兩個篩選 |
+| 媒體庫 `/library/:library` | 一個 Jellyfin 媒體庫一頁，只列你在 Jellyfin 看得到的：整庫 100 部一頁（不是 Berth 入庫的也在，海報是 Jellyfin 的、經 Berth 轉給瀏覽器），Berth 經手的疊上入庫了幾集、哪一部在等人；還沒進 Jellyfin 的另列一條；「在 Jellyfin 開啟」；「待審」「Unmatched」兩個篩選 |
 | 健康 `/health` | 四項健康檢查與下載迴圈；一般使用者也看得到 |
 | 設定 `/settings/services`、`/settings/routes` | 只有管理員：服務位址與建議設定的差異；Route 的新增（同一個 Jellyfin 媒體庫可以有第二條）、改名、停用、重新檢查與刪除 |
 
@@ -318,7 +318,7 @@ uv run python scripts/fake_setup_server.py --scenario mixed
 | `submit-failing` | 同上，但 qBittorrent 收不下：送單失敗那一列、服務回的原文，以及「重新送單」 |
 | `plan` | 下載完成 → **Import Plan**（票 11）：索引站給兩包替身結果——一包對得上的批次（自動入庫）與一包對不到任何一集的 OST（停在待審核）。qBittorrent 是替身，但它會把那幾個檔案**真的寫進 save path** 並報成 100%，所以 poller 走完狀態機、planner 算出真的 Plan：解析、命名、mediainfo、TMDB 快照全是產品自己的程式碼 |
 | `inventory` | Media 詳情的「檔案與版本」與送單到入庫的媒體庫（票 13）：同 `plan` 的兩包，加上一台會「掃到」入庫檔案的替身 Jellyfin。送單之後那一部先在媒體庫頁的「還沒進 Jellyfin」那一條，約 30 秒後 resolver 反查、替身「掃到」它，它就換到牆上；OST 那一包是「待審」篩選要找到的那一格。深連結指向瀏覽器主機名的 8096，那台 Jellyfin 不存在——Jellyfin 那一端要用真的一套驗 |
-| `library` | 媒體庫頁 `/library` 的整庫瀏覽與權限（M1.5 票 03）：Movies / TV / Anime 三個媒體庫擺好作品（Movies 有 131 部，翻得到第二頁；有一部沒有 TMDB id），Berth 經手的有在牆上的、還沒進 Jellyfin 的、待審與 Unmatched。`skipper` / `harbour` 看得到三個媒體庫；`deckhand` / `rope` 只開放 Movies 與 TV，開 `/library/item-anime` 是「找不到或沒有權限」。`curl -X POST 'http://127.0.0.1:8484/demo/jellyfin/disable?user=deckhand'` 在替身 Jellyfin 停用他（`enable` 復原），至多 60 秒後他的下一個請求被送回登入頁。有 `TMDB_API_KEY` 時詳情頁打真的 TMDB |
+| `library` | 媒體庫頁 `/library` 的整庫瀏覽與權限（M1.5 票 03）：Movies / TV / Anime 三個媒體庫擺好作品（Movies 有 131 部，翻得到第二頁；有一部沒有 TMDB id），海報經 Berth 代理替身 Jellyfin 的 SVG（票 04；`Home Videos 2019` 沒有圖、`Harbour Film 007` 有 tag 但圖不見了，兩格都是「無海報」），Berth 經手的有在牆上的、還沒進 Jellyfin 的、待審與 Unmatched。`skipper` / `harbour` 看得到三個媒體庫；`deckhand` / `rope` 只開放 Movies 與 TV，開 `/library/item-anime` 是「找不到或沒有權限」。`curl -X POST 'http://127.0.0.1:8484/demo/jellyfin/disable?user=deckhand'` 在替身 Jellyfin 停用他（`enable` 復原），至多 60 秒後他的下一個請求被送回登入頁。有 `TMDB_API_KEY` 時詳情頁打真的 TMDB |
 | `poll` | 送單到完成的狀態**自己走完**（票 10）：qBittorrent 打**真的**那一台，所以 `sync/maindata` 會真的換 state、poller 會真的驅動 §3.1 的轉換、SSE 會真的把那一列推著動。位址從 `BERTH_QBITTORRENT_URL` 讀，準備步驟見下方 |
 
 `healthy` 沒有 TMDB 憑證，所以它同時是探索頁「還沒填憑證」的樣子——那一步是精靈的必填閘門
@@ -424,6 +424,13 @@ Jellyfin 的權限與瀏覽 API（M1.5 票 01）自己起停一台一次性的 J
 python scripts/experiments/jellyfin_permissions.py            # 只量，報告寫到 .local/experiments/results/
 python scripts/experiments/jellyfin_permissions.py --record   # 另外重錄 tests/fixtures/http/jellyfin/ 的權限 fixture
 python scripts/experiments/jellyfin_permissions.py --record --only items.tv.series.page.json   # 只加錄這幾個，其餘不動
+```
+
+Jellyfin 的圖經 Berth 代理要不要另存一份（M1.5 票 04）：同樣自己起停一次性 Jellyfin，另外起一個 `berth serve`
+量經過代理的延遲，所以要用 `uv run`。結果見 [`docs/research/library-browsing.md`](docs/research/library-browsing.md) §6.1：
+
+```bash
+uv run python scripts/experiments/jellyfin_images.py   # 報告寫到 .local/experiments/results/jellyfin-images.json
 ```
 
 `jellyfin_naming.py` 必須從乾淨的 `/config` 跑（Jellyfin 的 DB 會留住舊掃描結果，插件裝過

@@ -1,6 +1,6 @@
 # 實驗腳本
 
-M0 票 04、M1 票 01（brief §20.6）、M1 票 14d 與 M1.5 票 01 的實驗。**指令在根目錄的 [README](../../README.md#實驗腳本)**（那份是本專案
+M0 票 04、M1 票 01（brief §20.6）、M1 票 14d、M1.5 票 01 與 04 的實驗。**指令在根目錄的 [README](../../README.md#實驗腳本)**（那份是本專案
 指令的單一來源）；這裡寫的是每個腳本在回答什麼、為什麼這樣寫、有哪些坑。
 
 結論在 [`docs/research/m0-experiments.md`](../../docs/research/m0-experiments.md)、
@@ -11,8 +11,8 @@ brief §10 / §19 / §20.3 / §20.4 / §20.6 / §20.7 / §20.8。原始 JSON 落
 stdout 是同一份東西的人類版（`absolute_rule_cost.py` 只印 stdout）。
 
 腳本只用 Python 標準庫，不 import `berth`，也不需要專案的虛擬環境 —— 這樣才能原封不動搬到 NAS
-或別人的 Linux 宿主上跑。**例外是 `absolute_rule_cost.py`**：它量的就是 Berth
-自己的解析器，搬到別台機器上跑沒有意義，所以 import `berth`、要用 `uv run` 跑。唯一的宿主相依是 `make_media.py` 會呼叫 `docker`（借 Jellyfin image 的
+或別人的 Linux 宿主上跑。**例外是 `absolute_rule_cost.py` 與 `jellyfin_images.py`**：它們量的就是 Berth
+自己的解析器與圖片代理，搬到別台機器上跑沒有意義，所以 import `berth`、要用 `uv run` 跑。唯一的宿主相依是 `make_media.py` 會呼叫 `docker`（借 Jellyfin image 的
 ffmpeg 產種子檔），那只影響「造測試素材」這一步，不影響 `hardlink.sh` 的可攜性。
 
 ## 每個檔案在做什麼
@@ -31,6 +31,7 @@ ffmpeg 產種子檔），那只影響「造測試素材」這一步，不影響 
 | `qbittorrent_poller.py` | M1 票 10：`sync/maindata` 的 rid 增量形狀、`torrents/files` 的相對基準（多檔）、三種處境下的 `state` / `progress` / `completion_on`，以及**連續登入失敗之後的 403 與帳密錯差在哪裡**。最後一項會封住來源 IP，所以它一定跑在最後 |
 | `absolute_rule_cost.py` | M1 票 14d：「集號 ≤ 第一季集數就送審核」擋下的是對的多還是錯的多，以及「標題有認不出的多餘字」分不分得開。正解借 `anime_episode_source.py` 的校準，Berth 的讀法是把每筆 Mikan 發佈丟進 `plan`。只印 stdout |
 | `jellyfin_permissions.py` | M1.5 票 01：伺服器 API key 代讀某位使用者時，Jellyfin 哪些端點套用他的媒體庫權限（研究 §2 的表逐列，API key 與使用者 token 各一次）；`/Items` 的過濾、排序、分頁是不是真的有作用；由 TMDB id 找作品；Series / Season 標記遞迴；停用帳號。自己起停一次性容器，`--record` 重錄 `tests/fixtures/http/jellyfin/` 的權限 fixture |
+| `jellyfin_images.py` | M1.5 票 04：Jellyfin 的圖經 Berth 代理要不要在 Berth 端另存一份。縮圖參數與格式協商、Jellyfin 自己的縮圖快取（冷熱延遲）、6 條並行下直連與經過 Berth（`berth serve` 子程序）各多少毫秒。自己起停一次性容器 |
 | `lib.py` | 共用的 HTTP、輪詢、bencode、報告輸出 |
 
 ## 幾個不明顯的地方
@@ -75,4 +76,8 @@ ffmpeg 產種子檔），那只影響「造測試素材」這一步，不影響 
 - **`/System/Info/Public` 回 200 不代表 Jellyfin 載入完了**：這時精靈的端點是 503，所以它先等
   `/Startup/Configuration` 回 200。每種身分（管理員、API key、受限使用者）用自己的 `DeviceId`：
   Jellyfin 以裝置管理 session，這是預防同一個裝置重新登入時作廢別的身分的 token（沒有實測過會不會）。
+- **`jellyfin_images.py` 的 Berth 是另一個程序**（`python -m berth.cli serve`）：量測用 6 條執行緒並行打圖，與伺服器同一個
+  程序的話兩邊搶同一把 GIL，量到的是 Python 而不是代理。資料庫直接寫好「精靈跑完、Jellyfin 位址」兩格，登入走真的
+  `POST /api/auth/login`（對一次性 Jellyfin 的管理員）。海報是 ffmpeg `testsrc2` 加雜訊的 1000×1500 JPEG：純色圖幾 KB，
+  縮圖的大小與時間都會失真。
 - **觀看紀錄要在縮權之前寫**：縮權之後 API key 也寫不進沒權限的媒體庫（那正是要量的一列）。

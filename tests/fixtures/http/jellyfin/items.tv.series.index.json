@@ -5,7 +5,14 @@
       "ChannelId": null,
       "CommunityRating": 7,
       "Id": "2a9857e656bbd18b7c3c3a3b4ee5eef1",
-      "ImageBlurHashes": {},
+      "ImageBlurHashes": {
+        "Primary": {
+          "a559a2354a1a4a612c48440de5e621f6": "d23KQ.pLfQpLktfkfQfkfQfQfQfQktfkfQfkfQfQfQfQ"
+        }
+      },
+      "ImageTags": {
+        "Primary": "a559a2354a1a4a612c48440de5e621f6"
+      },
       "IsFolder": true,
       "LocationType": "FileSystem",
       "MediaType": "Unknown",
@@ -16,7 +23,7 @@
       "ProviderIds": {
         "Tmdb": "1399"
       },
-      "ServerId": "59ee82345be94d3388a1c7bed69314a2",
+      "ServerId": "35f4d98b74664f4eb3cb2b4d789d53d4",
       "Type": "Series"
     },
     {
@@ -24,7 +31,14 @@
       "ChannelId": null,
       "CommunityRating": 9,
       "Id": "6d616414836b339f17e139c3b00fd2ae",
-      "ImageBlurHashes": {},
+      "ImageBlurHashes": {
+        "Primary": {
+          "6db82abaab2067a1956415b245cfe1e8": "d23KQ.pLfQpLktfkfQfkfQfQfQfQktfkfQfkfQfQfQfQ"
+        }
+      },
+      "ImageTags": {
+        "Primary": "6db82abaab2067a1956415b245cfe1e8"
+      },
       "IsFolder": true,
       "LocationType": "FileSystem",
       "MediaType": "Unknown",
@@ -35,7 +49,7 @@
       "ProviderIds": {
         "Tmdb": "1396"
       },
-      "ServerId": "59ee82345be94d3388a1c7bed69314a2",
+      "ServerId": "35f4d98b74664f4eb3cb2b4d789d53d4",
       "Type": "Series"
     },
     {
@@ -43,7 +57,14 @@
       "ChannelId": null,
       "CommunityRating": 8,
       "Id": "02c06be72a8c11102b98e17665c9fef2",
-      "ImageBlurHashes": {},
+      "ImageBlurHashes": {
+        "Primary": {
+          "4b6e43fff7571a7f1e1604ce6fd214fc": "d23KQ.pLfQpLktfkfQfkfQfQfQfQktfkfQfkfQfQfQfQ"
+        }
+      },
+      "ImageTags": {
+        "Primary": "4b6e43fff7571a7f1e1604ce6fd214fc"
+      },
       "IsFolder": true,
       "LocationType": "FileSystem",
       "MediaType": "Unknown",
@@ -54,14 +75,21 @@
       "ProviderIds": {
         "Tmdb": "209867"
       },
-      "ServerId": "59ee82345be94d3388a1c7bed69314a2",
+      "ServerId": "35f4d98b74664f4eb3cb2b4d789d53d4",
       "Type": "Series"
     },
     {
       "AirDays": [],
       "ChannelId": null,
       "Id": "9ea3bb1459aa4795a5ebf54b94fe0cc9",
-      "ImageBlurHashes": {},
+      "ImageBlurHashes": {
+        "Primary": {
+          "7b1ed5c62143ecfd6b20a6371a27dab0": "d23KQ.pLfQpLktfkfQfkfQfQfQfQktfkfQfkfQfQfQfQ"
+        }
+      },
+      "ImageTags": {
+        "Primary": "7b1ed5c62143ecfd6b20a6371a27dab0"
+      },
       "IsFolder": true,
       "LocationType": "FileSystem",
       "MediaType": "Unknown",
@@ -70,7 +98,7 @@
       "PremiereDate": "2021-06-01T00:00:00.0000000Z",
       "ProductionYear": 2021,
       "ProviderIds": {},
-      "ServerId": "59ee82345be94d3388a1c7bed69314a2",
+      "ServerId": "35f4d98b74664f4eb3cb2b4d789d53d4",
       "Type": "Series"
     }
   ],
