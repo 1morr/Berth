@@ -115,6 +115,17 @@ describe('泊位 4：媒體庫路徑（套件內）', () => {
     expect(JSON.parse(String(call[1]?.body))).toEqual({ selections: [] })
   })
 
+  it('三條都建好之後，剖面不再說「將建立」那三條（票 14、14e 留給票 15 的兩條）', async () => {
+    stubApi({ [STATUS]: { body: AT_BERTH_FOUR }, [ROUTES]: { body: BUILT } })
+
+    renderWithProviders(<SetupPage />)
+    await screen.findByRole('button', { name: '重新檢查 3 條 Route' })
+
+    expect(screen.queryByText('將建立')).not.toBeInTheDocument()
+    const count = screen.getByText('這一輪要建的 Route').closest('div')!
+    expect(within(count).getByText('0')).toBeInTheDocument()
+  })
+
   it('三條都建好之後再按一次是全部重驗，不會多建（票 14：精靈只新增）', async () => {
     stubApi({ [STATUS]: { body: AT_BERTH_FOUR }, [ROUTES]: { body: BUILT } })
 

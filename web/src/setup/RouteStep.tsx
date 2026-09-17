@@ -181,11 +181,13 @@ function RouteCutaway({
   planned?: RouteSelectionInput[]
 }) {
   const { t } = useTranslation()
-  // 套件內沒有可選的東西，剖面列的就是伺服器會建的那幾條——只有建得了 Route 的類型算數。
+  // 套件內沒有可選的東西，剖面列的就是伺服器**這一輪**會建的那幾條——只有建得了 Route、而且
+  // 還沒有 Route 的媒體庫算數。已經建好的列在右邊；精靈只新增（票 14），剖面若照樣列三條
+  // 「將建立」就是在說一件不會發生的事（票 14、14e 留下、票 15 收掉）。
   const rows =
     planned ??
     setup.libraries
-      .filter((library) => library.supported)
+      .filter((library) => library.supported && !library.has_route)
       .map((library) => ({ library: library.name, target_path: library.locations[0] ?? '' }))
 
   return (
@@ -218,13 +220,13 @@ function RouteCutaway({
             <tbody className="divide-y divide-rule">
               {rows.map((row) => (
                 <tr key={row.library}>
-                  <th scope="row" className="value px-4 py-3 text-xs font-normal break-words">
+                  <th scope="row" className="value px-4 py-3 text-xs font-normal wrap-anywhere">
                     {row.library}
                   </th>
-                  <td className="value px-4 py-3 text-xs break-all text-ink">
+                  <td className="value px-4 py-3 text-xs wrap-anywhere text-ink">
                     {row.target_path || '—'}
                   </td>
-                  <td className="value px-4 py-3 text-xs break-all text-ink-dim">
+                  <td className="value px-4 py-3 text-xs wrap-anywhere text-ink-dim">
                     {categoryOf(setup, row.library)}
                   </td>
                 </tr>
@@ -363,7 +365,7 @@ function Targets({
             onChange={() => onPick(location)}
             className="mt-0.5 size-4 shrink-0 accent-[var(--color-assigned)]"
           />
-          <span className="value min-w-0 text-xs break-all text-ink">{location}</span>
+          <span className="value min-w-0 text-xs wrap-anywhere text-ink">{location}</span>
         </label>
       ))}
     </fieldset>

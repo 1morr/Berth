@@ -67,9 +67,9 @@ export function CompleteStep({
               </div>
               <dl className="mt-2 grid gap-x-4 gap-y-1 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
                 <dt className="label self-center text-ink-dim">{t('routes.cutaway.target')}</dt>
-                <dd className="value text-xs break-all text-ink">{route.target_path}</dd>
+                <dd className="value text-xs wrap-anywhere text-ink">{route.target_path}</dd>
                 <dt className="label self-center text-ink-dim">{t('complete.savePath')}</dt>
-                <dd className="value text-xs break-all text-ink">{route.save_path}</dd>
+                <dd className="value text-xs wrap-anywhere text-ink">{route.save_path}</dd>
               </dl>
             </li>
           ))}

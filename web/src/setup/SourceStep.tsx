@@ -454,7 +454,7 @@ function Unreachable({ indexers }: { indexers: IndexerSetup }) {
         {t('source.unreachable')}
       </Notice>
       {indexers.error && (
-        <p role="alert" className="value max-w-prose break-words text-xs text-blocked-ink">
+        <p role="alert" className="value max-w-prose wrap-anywhere text-xs text-blocked-ink">
           {indexers.error}
         </p>
       )}

@@ -42,7 +42,7 @@ from berth.domain import (
 )
 from berth.models import Job, LedgerEntry, Media, Plan, PlanItem, Route
 from berth.models.types import utcnow
-from berth.services.routes import owning_route
+from berth.services.routes import owning_route, target_prefix
 
 #: 卡在失敗、在你動手之前不會自己好的狀態——下載列表上塗紅的那四個（`jobs/jobState.ts`）。
 FAILED_STATES: frozenset[JobState] = frozenset(
@@ -394,11 +394,7 @@ async def _survey(session: AsyncSession, route: Route, routes: Sequence[Route]) 
             select(LedgerEntry)
             .where(
                 LedgerEntry.media_id.is_not(None),
-                # 帳本的目標是 importer 以 `PurePosixPath` 組出來的，前綴照同一個正規化
-                # （`//`、結尾斜線）；與 `routes._usage_of` 同一條規則。
-                LedgerEntry.target_path.startswith(
-                    str(PurePosixPath(route.target_path)).rstrip("/") + "/", autoescape=True
-                ),
+                LedgerEntry.target_path.startswith(target_prefix(route), autoescape=True),
             )
             .order_by(LedgerEntry.id)
         )

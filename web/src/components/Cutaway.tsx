@@ -53,7 +53,7 @@ export function CutawayRow({
       >
         {term}
       </dt>
-      <dd className={`value min-w-0 break-words text-sm ${muted ? 'text-ink-dim' : 'text-ink'}`}>
+      <dd className={`value min-w-0 wrap-anywhere text-sm ${muted ? 'text-ink-dim' : 'text-ink'}`}>
         {value}
       </dd>
     </div>

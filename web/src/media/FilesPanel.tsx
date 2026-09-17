@@ -7,6 +7,7 @@ import { GHOST_LINK } from '../components/controls'
 import { Dot } from '../components/Dot'
 import { formatEpisode, seasonCode } from '../components/episodes'
 import { Timestamp } from '../components/Timestamp'
+import { ExpandHint } from '../components/ExpandHint'
 
 type LedgerFile = Media['files'][number]
 
@@ -60,13 +61,7 @@ export function FilesPanel({ media }: { media: Media }) {
                   <span className="value grow text-xs text-ink-dim">
                     {t('media.files.count', { count: files.length })}
                   </span>
-                  {/* marker 拿掉了，所以「這一列展得開」要自己說（與季表同一種寫法）。 */}
-                  <span className="label shrink-0 text-ink-dim group-open:hidden">
-                    {t('common.expand')}
-                  </span>
-                  <span className="label hidden shrink-0 text-ink-dim group-open:inline">
-                    {t('common.collapse')}
-                  </span>
+                  <ExpandHint />
                 </summary>
                 <div className="border-t-2 border-rule bg-hull px-4 py-3">
                   <FileList files={files} />

@@ -604,7 +604,7 @@ WebUI\AuthSubnetWhitelist=172.28.0.2/32
 | adapter 契約 | pytest + respx | 每個 adapter 對錄製回應（`tests/fixtures/http/`）的解析；版本差異（qBittorrent 4.4 vs 5.x 的參數） |
 | 整合 | pytest + Fake adapters + 暫存 SQLite | services 與 pipeline：送單 → 完成 → planning → importing → ledger；重入與冪等；刪除範圍；reconciler 對三種人為破壞的偵測 |
 | 前端 | vitest、playwright | 元件與關鍵頁面；playwright 對 Fake 後端跑精靈與 M1 流程 |
-| e2e | docker compose（GitHub Actions，`tests/e2e/`） | 真 qBittorrent + 真 Jellyfin + 真 Prowlarr + 這一份工作目錄 build 的 Berth + 真 TMDB：用本地產生的 .torrent 與檔案（benchmark 語料的三包：美劇一季、動漫一季、電影），送單之後把位元組放進 qBittorrent 回報的下載路徑再 `recheck`，跑通 M1 驗收；驗證硬鏈接 inode 與 Jellyfin 反查（票 15 以 recheck 取代原本寫的 `seedMode`：那是 Web API 2.16 起才有、而且要由送單的 Berth 帶的參數） |
+| e2e | docker compose（GitHub Actions，`tests/e2e/`） | 真 qBittorrent + 真 Jellyfin + 這一份工作目錄 build 的 Berth + 真 TMDB（Prowlarr 起來讓精靈偵測，索引站那一步跳過，搜尋不在 e2e 裡）：用本地產生的 .torrent 與檔案（benchmark 語料的三包：美劇一季、動漫一季、電影），送單之後把位元組放進 qBittorrent 回報的下載路徑再 `recheck`，跑通 M1 驗收；驗證時間線依序走過各站、硬鏈接 inode、帳本逐檔的 Jellyfin item id（票 15 以 recheck 取代原本寫的 `seedMode`：那是 Web API 2.16 起才有、而且要由送單的 Berth 帶的參數） |
 | 部署腳本 | pytest + bash 替身 | `deploy/` 的 shell：preseed 的「缺鍵才補」規則、entrypoint 的擁有者接手。真的跑腳本，把 `chown` / `setpriv` 換成會記錄參數的替身；路徑用 `BERTH_*` 的測試 seam 覆寫 |
 | 實驗 | `scripts/experiments/` | brief §20.6，一次性但保留腳本，結果寫回 brief |
 
@@ -651,7 +651,7 @@ WebUI\AuthSubnetWhitelist=172.28.0.2/32
 
 範圍：媒體庫頁改成瀏覽**整個 Jellyfin 媒體庫**（不只 Berth 經手的），Berth 經手的作品疊上票 13 的入庫狀態，還沒進 Jellyfin 的（下載中、待審）仍在牆上；繼續觀看、下一集；卡片與各集顯示已看 / 看到一半 / 剩幾集沒看，可切換並寫回 Jellyfin 該使用者的紀錄；依類型、年份排序與篩選；Jellyfin 的圖（海報、劇照）。Media 詳情在作品已在 Jellyfin 時把**觀看區**（繼續看、選季選集、各集已看）放最上，搜尋 torrent 與檔案版本收到下面——探索與媒體庫共用 `/media/:id`，不另建媒體庫詳情頁。
 前置：Jellyfin API 已查證（brief §20.8、`docs/research/library-browsing.md`）——功能都做得到，但伺服器 API key 代讀時 Jellyfin 只套用一部分媒體庫權限，所以**權限檢查集中在 services 的一處**：`userId` 一律取自 session、絕不收前端傳入；媒體庫 id 對 `GET /UserViews?userId=` 的允許清單驗證；單一作品與集走會檢查可見性的端點（`/Items/{id}?userId=`、`/Shows/{id}/Seasons|Episodes?userId=`），不用 `/Items?ids=`。越權請求被拒寫成整合測試，並在一次性 Jellyfin 上用只開放單一媒體庫的使用者實測 research 第 2 節那張表。adapter 的每個過濾參數都要測「伺服器真的有過濾」（`/Items` 靜默忽略不存在的參數）。brief §19 的四條待決已定（2026-09-15）：媒體庫頁一個 Jellyfin 媒體庫一頁（取代票 13 的一條 Route 一頁，`/library/:routeSlug` 跟著改）；首頁上方放繼續觀看與下一集，下面維持探索；瀏覽時取 `UserViews` 允許清單一併讀帳號 `Policy`（同一份短時間快取），停用就結束 session；Jellyfin 圖片由 Berth 代理，快取鍵用 `tag`。
-M1 帶過來的（票 15 的 critique，2026-09-17，使用者拍板交給這一輪的 shape）：Media 詳情頁的動作沉底（1280×900 下「搜尋」在 y=984、390px 在第三屏）、全綠的搜尋纜繩佔 311px 把結果表推到下一屏、下載列展開後的計劃與「檔案與版本」逐檔列出（Frieren 那一筆展開後 9,000 px 以上）、季表收起時仍渲染整張集表（1213 集的作品開頁就多幾千個節點）。觀看區要放上最上面，這幾件跟著一起定。另有顯示用標題的語言（brief §19 待決）。
+M1 帶過來的（票 15 的 critique，2026-09-17，使用者拍板交給這一輪的 shape）：Media 詳情頁的動作沉底（1280×900 下「搜尋」在 y=984、390px 在第三屏）、全綠的搜尋纜繩佔 311px 把結果表推到下一屏、下載列展開後的計劃與「檔案與版本」逐檔列出（Frieren 那一筆展開後 9,000 px 以上）、季表收起時仍渲染整張集表（1213 集的作品開頁就多幾千個節點），而且一季展開之後只能捲回頂端收起；不能只看缺集、缺集也不能一鍵搜（搜尋仍從作品名開始，而季表已經知道缺哪幾集）。觀看區要放上最上面，這幾件跟著一起定。另有顯示用標題的語言（brief §19 待決）。
 驗收：以一般使用者（`user` 角色）登入，不開 Jellyfin Web 就能從媒體庫找到要看的那一集、看到自己的觀看進度並標記已看，按播放落在 Jellyfin 的那一集；該使用者在 Jellyfin 沒有權限的媒體庫在 Berth 也看不到；既有媒體庫裡不是 Berth 入庫的作品照樣瀏覽得到。
 
 ### 11.3 M2 修正與對帳
@@ -668,7 +668,8 @@ M1 帶過來的（票 15 收尾時把票 01–14f 的 Comments 逐條過完，20
 - **有 repro、還沒修的兩個 500**：同一個新使用者兩次登入同時進來，撞 `users.jellyfin_user_id` 的 unique（票 10）；`check_routes` 途中另一個分頁刪掉 Route，`POST /api/setup/routes` 是 `StaleDataError`（健康迴圈有接住，票 14a）。
 - **解析器**：`Season 3 / … Season 3 - 46` 被 `_LOOSE_RANGE` 讀成 `S03E03–E46`，要自己的語料 fixture 與一輪 `berth bench`（票 08）。
 - **精靈與設定頁**：通過 TMDB 閘門之後泊位板 BTH 3 的詳情列不動；TMDB 與索引站的 API key 是明文欄位（要改就三處一起改成 `PasswordField`）；`complete.failed` 在缺憑證時錯怪後端；勾選表標出已被佔用的路徑（票 02b / 14a）。
-- **票 15 critique 的小項（沒排進那一輪的範圍）**：Route 設定頁表單沒改過時黃色「儲存」仍亮著，而且它會重跑五條檢查卻沒說；所有路徑都被佔用時「建立並檢查」仍是主動作；確認區的「取消」比主動作寬；EN 文案 `Already so`、`Moored`、`10 of 46 episodes in` 讀起來不順；EN 子分頁 `Library paths` 與導覽的 `Library` 撞名（頁面上的物件叫 route）；語言鍵的選中態用 `assigned` 黃漆，與 DESIGN.md 的 The Role Is Not A State Rule 矛盾（記在 DESIGN.md 的 Known contradictions）；媒體庫卡片的「Jellyfin 還在掃描」不會自己更新；fake `inventory` 情境把 demo torrent 網址寫死成 8484。M0 的精靈與服務設定頁還有 12 處 `break-all`、`TmdbNotice` / `AddRoute` / `StepLine` / 健康頁卡片的錯誤原文仍用 `break-words`（DESIGN.md 的 Known contradictions；M1 頁面已改成 `wrap-anywhere`）。
+- **票 15 critique 的小項（沒排進那一輪的範圍）**：Route 設定頁表單沒改過時黃色「儲存」仍亮著，而且它會重跑五條檢查卻沒說；所有路徑都被佔用時「建立並檢查」仍是主動作；確認區的「取消」比主動作寬；EN 文案 `Already so`、`Moored`、`10 of 46 episodes in` 讀起來不順；EN 子分頁 `Library paths` 與導覽的 `Library` 撞名（頁面上的物件叫 route）；語言鍵的選中態用 `assigned` 黃漆，與 DESIGN.md 的 The Role Is Not A State Rule 矛盾（記在 DESIGN.md 的 Known contradictions）；媒體庫卡片的「Jellyfin 還在掃描」不會自己更新；fake `inventory` 情境把 demo torrent 網址寫死成 8484。
+- **票 15 critique 沒修、也不屬於 M1.5 版面的**：信心在同一塊展開區有兩套詞（`信心 high` 與「高信心」）；沒接索引站時要按了搜尋才知道（`queries` 端點可以先帶 `problem`）；頁首不 sticky、沒有 `/` 聚焦搜尋之類的快捷鍵；探索頁在手機上兩面牆之間沒有跳轉（14,260px）；說明散在各處，沒有通往文件的出口。
 
 ### 11.4 M3 RSS
 

@@ -132,7 +132,7 @@ function AddRouteForm({
             {reachFailure?.reason === 'jellyfin_unreachable' ? (
               <>
                 {t('routeSettings.add.unreachable')}{' '}
-                <code className="value text-xs break-words">{reachFailure.detail}</code>
+                <code className="value text-xs wrap-anywhere">{reachFailure.detail}</code>
               </>
             ) : (
               t('routeSettings.add.failed')
@@ -269,7 +269,7 @@ function Targets({
               onChange={() => onPick(row.path)}
               className="mt-0.5 size-4 shrink-0 accent-[var(--color-assigned)]"
             />
-            <label htmlFor={id} className="value min-w-0 break-words text-xs text-ink">
+            <label htmlFor={id} className="value min-w-0 wrap-anywhere text-xs text-ink">
               {row.path}
             </label>
             {holder !== null && (

@@ -63,7 +63,7 @@ export function ServiceCard({ row, actions }: { row: ServiceHealth; actions?: Re
 
       {failed && (
         <div className="border-t-2 border-rule bg-hull px-4 py-4">
-          <p role="alert" className="value max-w-prose break-words text-xs text-blocked-ink">
+          <p role="alert" className="value max-w-prose wrap-anywhere text-xs text-blocked-ink">
             {row.error}
           </p>
           {/* 被封了與帳密不對在原文上分得出來，但**下一步不同**才是重點：改帳密只會再

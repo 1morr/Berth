@@ -83,6 +83,7 @@ class MediaSnapshot(BaseModel):
     titles: tuple[str, ...] = ()
     #: 劇集的各季各集；電影是空的。
     seasons: tuple[SeasonSnapshot, ...] = ()
-    #: 凍結的作品資料夾名（`media.folder_name`，brief §4.5）。**不是 TMDB 的資料**：services 在
-    #: 交給解析器之前才放進來，所以不進快照的 JSON。空字串 = 還沒凍結，命名照標題算。
-    folder: str = Field(default="", exclude=True)
+    #: 凍結的作品資料夾名（CONTEXT.md 的 Folder Name、`media.folder_name`，brief §4.5）。
+    #: **不是 TMDB 的資料**：`models.Media.snapshot()` 讀出來時才放進來，所以不進快照的 JSON。
+    #: 空字串 = 還沒凍結，命名照標題算。
+    folder_name: str = Field(default="", exclude=True)

@@ -51,7 +51,7 @@ export function JellyfinExisting({
       {apiKeyStep?.status === 'failed' && (
         <div className="mt-4">
           <Notice signal="blocked" label={t('common.failed')}>
-            <span className="value break-words">{apiKeyStep.error}</span>
+            <span className="value wrap-anywhere">{apiKeyStep.error}</span>
           </Notice>
         </div>
       )}
@@ -152,7 +152,7 @@ function Libraries({
       {failure && (
         <div className="mt-4 grid grid-cols-1 gap-2">
           <Notice signal="blocked" label={t('common.failed')}>
-            <span className="value break-words">{failure.error}</span>
+            <span className="value wrap-anywhere">{failure.error}</span>
           </Notice>
           <p className="max-w-prose text-xs text-ink-dim">{t('jellyfin.libraries.addFailed')}</p>
           <CopyLine command={`${baseUrl}/web/#/dashboard/libraries`} />
@@ -210,7 +210,7 @@ function LibraryRow({
         <dt className="label self-center text-ink-dim">{t('jellyfin.libraries.paths')}</dt>
         <dd className="value min-w-0 text-sm text-ink">
           {library.locations.map((path) => (
-            <span key={path} className="block break-all">
+            <span key={path} className="block wrap-anywhere">
               {path}
               {path === library.berth_path && (
                 <span className="label ml-2 text-ink-dim">{t('jellyfin.libraries.berthPath')}</span>
@@ -219,7 +219,7 @@ function LibraryRow({
           ))}
         </dd>
         <dt className="label mt-1 self-center text-ink-dim">{t('jellyfin.libraries.fetchers')}</dt>
-        <dd className="value mt-1 min-w-0 break-words text-sm text-ink">
+        <dd className="value mt-1 min-w-0 wrap-anywhere text-sm text-ink">
           {library.metadata_fetchers.join(' · ') || '—'}
         </dd>
       </dl>

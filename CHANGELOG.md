@@ -342,9 +342,10 @@ Windows Docker Desktop（NTFS bind mount）與 Linux（ext4）上各跑一次 `d
   ≤ 第一季集數就送審核」擋下的對與錯，以及「標題有認不出的多餘字」能不能分開兩者（結論：分不開，研究 §6.1.1）。
   `anime_episode_source.py` 的 `Trial` 為此多帶 Mikan 的原始標題。
 - **e2e**（票 15、plan §10、README〈e2e〉）：`tests/e2e/` 疊在 `deploy/docker-compose.yml` 上，對真的
-  qBittorrent、Jellyfin 12.1、Prowlarr 與 TMDB 走一遍 M1——精靈八步只打 Berth 的 API，送美劇一季（The Bear
-  S03）、動漫一季（葬送的芙莉蓮 S01 + 特典）、電影（奧本海默），驗三筆不經人工入庫、帳本季集對語料、硬鏈接
-  兩端同一個 inode、Jellyfin 在那條路徑上的 item 就是 Berth 反查到的。下載的替身是 `torrents` 容器：由語料的
+  qBittorrent、Jellyfin 12.1 與 TMDB 走一遍 M1（Prowlarr 起來讓精靈偵測，索引站那一步跳過）——精靈八步只打
+  Berth 的 API，送美劇一季（The Bear S03）、動漫一季（葬送的芙莉蓮 S01 + 特典）、電影（奧本海默），驗三筆不經
+  人工、依序走過完成 → 規劃 → 入庫、帳本季集對語料、硬鏈接兩端同一個 inode、帳本逐檔的 item id 就是 Jellyfin
+  在那條路徑上的 item。下載的替身是 `torrents` 容器：由語料的
   檔案清單與 `tests/fixtures/e2e/` 的兩支 330 秒種子影片造出發佈與 `.torrent`，送單之後放進 qBittorrent 的
   下載路徑再 recheck。平常的 `uv run pytest` 不收它（`-m e2e` 才跑）；`.github/workflows/e2e.yml` 在
   nightly、`v*` tag 與手動觸發時跑，TMDB 憑證是 repo secret `TMDB_API_KEY`。

@@ -2,6 +2,7 @@ import { useId, useState, type ComponentPropsWithRef, type ReactNode } from 'rea
 import { useTranslation } from 'react-i18next'
 
 import { SIGNAL_FILL, type Signal } from './signal'
+import { ConfirmPanel } from './ConfirmPanel'
 import { useInPlaceConfirm } from './useInPlaceConfirm'
 
 /**
@@ -256,14 +257,7 @@ export function ConfirmAction({
   }
 
   return (
-    <div
-      ref={panel}
-      role="group"
-      aria-labelledby={warningId}
-      tabIndex={-1}
-      onKeyDown={onKeyDown}
-      className="grid gap-3 border-2 border-rule-strong bg-well px-3 py-3"
-    >
+    <ConfirmPanel panelRef={panel} onKeyDown={onKeyDown} labelledBy={warningId}>
       <p id={warningId} className="max-w-prose text-xs text-ink">
         {warning}
       </p>
@@ -282,6 +276,6 @@ export function ConfirmAction({
           {t('common.cancel')}
         </GhostButton>
       </div>
-    </div>
+    </ConfirmPanel>
   )
 }

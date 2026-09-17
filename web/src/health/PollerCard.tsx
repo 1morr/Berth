@@ -74,7 +74,7 @@ export function PollerCard({ poller }: { poller: PollerView }) {
                       `.value`**——`.label` 會把 `stalledDL` 大寫成 `STALLEDDL`，而使用者要拿
                       這一串去 qBittorrent 的介面上對照（The Machine String Rule）。 */}
                   <span className="value bg-deck px-1.5 py-1 text-xs text-ink">{row.state}</span>
-                  <span className="value min-w-0 text-xs break-words text-ink">{row.name}</span>
+                  <span className="value min-w-0 text-xs wrap-anywhere text-ink">{row.name}</span>
                 </p>
                 <p className="value flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ink-dim">
                   <span>{row.category}</span>

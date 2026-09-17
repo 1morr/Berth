@@ -106,18 +106,18 @@ function DiffCutaway({ setup }: { setup: QbittorrentSetup }) {
                 <tr key={row.key}>
                   <th
                     scope="row"
-                    className="value px-4 py-3 text-xs font-normal break-all text-ink-dim"
+                    className="value px-4 py-3 text-xs font-normal wrap-anywhere text-ink-dim"
                   >
                     {row.key}
                   </th>
                   <td
-                    className={`value px-4 py-3 text-xs break-all ${
+                    className={`value px-4 py-3 text-xs wrap-anywhere ${
                       row.differs ? 'text-ink' : 'text-ink-dim'
                     }`}
                   >
                     {row.current || '—'}
                   </td>
-                  <td className="value px-4 py-3 text-xs font-semibold break-all text-ink">
+                  <td className="value px-4 py-3 text-xs font-semibold wrap-anywhere text-ink">
                     {row.differs ? row.recommended : t('qbittorrent.cutaway.same')}
                   </td>
                 </tr>
@@ -143,7 +143,7 @@ function Blocked({ setup }: { setup: QbittorrentSetup }) {
           : t('qbittorrent.blocked.unreachable')}
       </Notice>
       {setup.error && (
-        <p role="alert" className="value max-w-prose break-words text-xs text-blocked-ink">
+        <p role="alert" className="value max-w-prose wrap-anywhere text-xs text-blocked-ink">
           {setup.error}
         </p>
       )}

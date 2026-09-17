@@ -141,9 +141,7 @@ async def read_snapshot(
     if parsed is None:
         return None
     row = await session.get(Media, build_media_id(*parsed))
-    if row is None or row.tmdb_snapshot_json is None:
-        return None
-    return row.snapshot()
+    return row.stored_snapshot() if row is not None else None
 
 
 async def snapshot_for_planning(
@@ -162,9 +160,7 @@ async def snapshot_for_planning(
     if row is None or not _fresh(row, PLANNING_TTL):
         await _load(session, factory, media_id, force=True)
         row = await session.get(Media, build_media_id(*parsed))
-    if row is None or row.tmdb_snapshot_json is None:
-        return None
-    return row.snapshot()
+    return row.stored_snapshot() if row is not None else None
 
 
 async def refresh_media(

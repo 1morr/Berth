@@ -1,8 +1,8 @@
 name: e2e
 
-# plan §10：真的 qBittorrent、Jellyfin、Prowlarr，加上這一份工作目錄 build 的 Berth，把 M1 走一遍
-# （tests/e2e/）。一輪要二十分鐘以上——套件內的媒體庫一開始是空的，Jellyfin 的反查要等 Berth
-# 請它掃描之後那一輪——所以不在每個 push 上跑，只在 nightly 與發版。
+# plan §10：真的 qBittorrent、Jellyfin（Prowlarr 也起，但精靈跳過索引站），加上這一份工作目錄
+# build 的 Berth，把 M1 走一遍（tests/e2e/）。一輪約 15 分鐘——套件內的媒體庫一開始是空的，
+# Jellyfin 的反查要等 Berth 請它掃描之後那一輪——所以不在每個 push 上跑，只在 nightly 與發版。
 on:
   schedule:
     - cron: '23 18 * * *'

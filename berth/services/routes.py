@@ -497,17 +497,15 @@ async def _usages(session: AsyncSession, routes: Sequence[Route]) -> dict[int, R
 async def _usage_of(session: AsyncSession, route: Route, routes: Sequence[Route]) -> RouteUsage:
     """一條 Route 的引用數。刪除只問這一條，不必把整張帳本讀進來（清單才需要 `_usages`）。
 
-    帳本的目標是 importer 以 `PurePosixPath(route.target_path) / …` 組出來的，所以前綴照同一個
-    正規化（`//`、結尾斜線）去粗篩，否則目標寫法不正規的 Route 會少算、被引用了還刪得掉；
-    再用 `owning_route` 精判——`…/tv/anime` 可能是另一條更深的 Route（與媒體庫頁同一條規則）。
+    前綴粗篩（`target_prefix`）再用 `owning_route` 精判，與媒體庫頁同一條規則；前綴不正規化的話
+    目標寫法不正規的 Route 會少算、被引用了還刪得掉。
     """
     jobs = await session.scalar(
         select(func.count()).select_from(Job).where(Job.route_id == route.id)
     )
-    prefix = str(PurePosixPath(route.target_path)).rstrip("/") + "/"
     candidates = await session.scalars(
         select(LedgerEntry.target_path).where(
-            LedgerEntry.target_path.startswith(prefix, autoescape=True)
+            LedgerEntry.target_path.startswith(target_prefix(route), autoescape=True)
         )
     )
     owned = sum(1 for target in candidates if owning_route(target, routes) is route)
@@ -1022,6 +1020,16 @@ def save_path_of(complete_root: str, slug: str) -> str:
     """Route 的 complete 子目錄（brief §4.1）。**一個地方算，到處用**——精靈的檢查、
     健康頁、畫面上那一行，以及票 09 的送單（category 的 save path 就是它）。"""
     return f"{complete_root.rstrip('/')}/{slug}"
+
+
+def target_prefix(route: Route) -> str:
+    """帳本目標路徑以這條 Route 開頭的樣子，給 SQL 的 `startswith` 粗篩用。
+
+    帳本的目標是 importer 以 `PurePosixPath(route.target_path) / …` 組出來的，所以前綴照同一個
+    正規化（`//`、結尾斜線）；照字面比的話，目標打成 `…//tv/` 的 Route 會少算（票 14a、15）。
+    粗篩之後仍要 `owning_route` 精判：`…/tv/anime` 可能是另一條更深的 Route。
+    """
+    return str(PurePosixPath(route.target_path)).rstrip("/") + "/"
 
 
 def owning_route(target_path: str, routes: Sequence[Route]) -> Route | None:

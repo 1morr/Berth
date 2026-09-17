@@ -7,7 +7,7 @@ import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
  * 那段後果說明），取消或 Esc 收起時要回到觸發鍵。沒有這兩步的話焦點掉回 `body`，鍵盤使用者
  * 得從頁首重新 Tab 一遍才回得到原處（票 15 的 critique 實測）。
  *
- * 確認區塊掛 `panel`、`tabIndex={-1}` 與 `onKeyDown`；觸發鍵掛 `trigger`。
+ * 確認區塊用 `ConfirmPanel`（它掛好 `panel`、`tabIndex` 與 Esc）；觸發鍵掛 `trigger`。
  */
 export function useInPlaceConfirm() {
   const [asked, setAsked] = useState(false)

@@ -53,7 +53,7 @@ export function StepLine({
 
       {status === 'failed' && row && (
         <div className="border-t-2 border-rule bg-hull px-4 py-4">
-          <p role="alert" className="value max-w-prose break-words text-xs text-blocked-ink">
+          <p role="alert" className="value max-w-prose wrap-anywhere text-xs text-blocked-ink">
             {row.error}
           </p>
           {fix && (

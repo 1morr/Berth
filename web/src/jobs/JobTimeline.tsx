@@ -3,10 +3,11 @@ import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
 
 import type { JobEvent } from '../api/jobs'
+import type { Signal } from '../components/signal'
 import { Timestamp } from '../components/Timestamp'
 import type { ReviewReason } from '../api/plans'
 import { formatSize } from '../media/searchResult'
-import { formatPercent } from './jobState'
+import { JOB_SIGNAL, formatPercent } from './jobState'
 
 /**
  * 一筆 Job 的時間線（brief §5.2、`.scratch/m1/jobs-shape.md` §6）。
@@ -179,9 +180,9 @@ const FACTS: Record<KnownEvent, (facing: Facing) => ReactNode> = {
   issue_detected: ({ t, payload }) => {
     const kind = ISSUES.find((known) => known === payload.type)
     if (!kind) return null
-    // 紅字只給擋住這一筆的那兩種（與 `jobState.ts` 的狀態字典同一條線）：torrent 從客戶端消失、
-    // 不認得的 torrent、Jellyfin 還沒列出，都是要人看一眼的事，不是阻擋（The One Meaning Rule）。
-    const blocking = kind === 'missing_files' || kind === 'client_error'
+    // 紅字只給擋住這一筆的：與列上的狀態色塊查同一張表（`JOB_SIGNAL`）。torrent 從客戶端消失、
+    // 不認得的 torrent、Jellyfin 還沒列出都是要人看一眼的事，不是阻擋（The One Meaning Rule）。
+    const blocking = (JOB_SIGNAL as Partial<Record<string, Signal>>)[kind] === 'blocked'
     return (
       <p
         className={`max-w-prose text-xs break-words ${blocking ? 'text-blocked-ink' : 'text-ink'}`}

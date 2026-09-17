@@ -8,6 +8,7 @@ import { refusalOf, submitJob } from '../api/jobs'
 import type { SearchResult } from '../api/search'
 import { GhostButton, PrimaryButton } from '../components/controls'
 import { SIGNAL_FILL } from '../components/signal'
+import { ConfirmPanel } from '../components/ConfirmPanel'
 import { useInPlaceConfirm } from '../components/useInPlaceConfirm'
 
 /**
@@ -97,14 +98,7 @@ export function SubmitAction({
   }
 
   return (
-    <div
-      ref={panel}
-      role="group"
-      aria-labelledby={confirmId}
-      tabIndex={-1}
-      onKeyDown={onKeyDown}
-      className="grid gap-3 border-2 border-rule-strong bg-well px-3 py-3"
-    >
+    <ConfirmPanel panelRef={panel} onKeyDown={onKeyDown} labelledBy={confirmId}>
       <div className="grid gap-1">
         {destination && (
           <p className="max-w-prose text-xs break-words text-ink">
@@ -135,7 +129,7 @@ export function SubmitAction({
       {submit.isError && !(submit.error instanceof NoRouteError && route !== null) && (
         <Refusal error={submit.error} />
       )}
-    </div>
+    </ConfirmPanel>
   )
 }
 

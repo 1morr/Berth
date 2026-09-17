@@ -271,9 +271,9 @@ function Drift({
               <tbody>
                 {drift.diffs.map((row) => (
                   <tr key={row.key} className="border-b border-rule last:border-0">
-                    <td className="value break-all px-3 py-2 text-ink">{row.key}</td>
+                    <td className="value wrap-anywhere px-3 py-2 text-ink">{row.key}</td>
                     <td
-                      className={`value break-all px-3 py-2 ${
+                      className={`value wrap-anywhere px-3 py-2 ${
                         row.differs ? 'text-blocked-ink' : 'text-ink-dim'
                       }`}
                     >
@@ -286,7 +286,7 @@ function Drift({
                       )}
                       {row.current || '—'}
                     </td>
-                    <td className="value break-all px-3 py-2 text-ink">{row.recommended}</td>
+                    <td className="value wrap-anywhere px-3 py-2 text-ink">{row.recommended}</td>
                   </tr>
                 ))}
               </tbody>

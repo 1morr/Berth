@@ -31,7 +31,7 @@ export function TmdbNotice({
       <Notice signal="blocked" label={t('common.failed')}>
         {t(`tmdb.problem.${problem}`)}
       </Notice>
-      {detail && <p className="value text-xs break-words text-ink-dim">{detail}</p>}
+      {detail && <p className="value text-xs wrap-anywhere text-ink-dim">{detail}</p>}
       {credential ? (
         // 泊位 3 是**來源**（索引站 + TMDB 兩步），`BERTHS` 的 slot 沿用 `prowlarr`
         // 只是因為那一格的服務判定來自 Prowlarr；TMDB 的第 6 步也在同一格。

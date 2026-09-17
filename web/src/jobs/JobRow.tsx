@@ -11,7 +11,9 @@ import { useTranslation } from 'react-i18next'
 import { jobEventsQueryOptions, retryJob, refusalOf, type Job } from '../api/jobs'
 import { planQueryOptions, replanJob } from '../api/plans'
 import { CopyLine, GhostButton } from '../components/controls'
+import { AuditChip } from '../components/AuditChip'
 import { Dot } from '../components/Dot'
+import { ExpandHint } from '../components/ExpandHint'
 import { SIGNAL_FILL } from '../components/signal'
 import { Timestamp } from '../components/Timestamp'
 import { formatSize } from '../media/searchResult'
@@ -62,25 +64,16 @@ export function JobRow({ job }: { job: Job }) {
       open={open}
       onToggle={(event) => setOpen(event.currentTarget.open)}
       // 失敗那一列**線變重**，不是變紅：紅色留給狀態色塊那一格（The One Meaning Rule）。
-      className={`min-w-0 border-2 bg-well ${failed ? 'border-rule-strong' : 'border-rule'}`}
+      className={`group min-w-0 border-2 bg-well ${failed ? 'border-rule-strong' : 'border-rule'}`}
     >
       <summary className="cursor-pointer list-none px-4 py-3">
         <span className="flex flex-wrap items-start gap-x-3 gap-y-2">
           <span className={`label shrink-0 px-2 py-1.5 ${SIGNAL_FILL[JOB_SIGNAL[job.state]]}`}>
             {t(`jobs.state.${job.state}`)}
           </span>
-          {/* medium 自動入庫的檔案：狀態是綠色的「已入庫」，而它們還要人看一眼（brief §6.5、
-              PRODUCT 原則 3）。`assigned` 就是「需要你」，與狀態那一格是兩件事所以各一塊。 */}
-          {job.audits > 0 && (
-            <span className={`label shrink-0 px-2 py-1.5 ${SIGNAL_FILL.assigned}`}>
-              {t('jobs.audits', { count: job.audits })}
-            </span>
-          )}
-          {/* `summary` 的 marker 拿掉了（它在窄版會把整列推歪），所以「這一列展得開」要自己說。
-              窄版上它跟色塊同一行、靠右；寬版上排到最後（`sm:order-last`）。 */}
-          <span className="label ml-auto shrink-0 text-ink-dim sm:order-last">
-            {open ? t('common.collapse') : t('common.expand')}
-          </span>
+          <AuditChip count={job.audits} />
+          {/* 窄版上它跟色塊同一行、靠右；寬版上排到最後（`sm:order-last`）。 */}
+          <ExpandHint className="ml-auto sm:order-last" />
           {/* 窄版上發佈名自己一行：與兩塊色塊擠在同一行時，`wrap-anywhere` 讓它縮得下去，
               結果是一條幾個字寬的直欄（票 15 在 390px 實跑看到）。 */}
           <span className="grid min-w-0 basis-full gap-1.5 sm:basis-0 sm:flex-1">

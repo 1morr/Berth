@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import type { Episode, Season } from '../api/media'
 import { episodeCode, seasonCode } from '../components/episodes'
 import { SIGNAL_FILL } from '../components/signal'
+import { ExpandHint } from '../components/ExpandHint'
 
 /**
  * 各季各集（`.scratch/m1/media-detail-shape.md` §6，使用者拍板「每季一個可展開列，預設全收」）。
@@ -51,13 +52,7 @@ export function SeasonList({ seasons }: { seasons: readonly Season[] }) {
             <span className="value w-24 text-right text-xs text-ink-dim">
               {season.air_date ?? '—'}
             </span>
-            {/* marker 拿掉了，所以「這一列展得開」要自己說（與 Route 設定頁同一種寫法）。 */}
-            <span className="label shrink-0 text-ink-dim group-open:hidden">
-              {t('common.expand')}
-            </span>
-            <span className="label hidden shrink-0 text-ink-dim group-open:inline">
-              {t('common.collapse')}
-            </span>
+            <ExpandHint />
           </summary>
 
           {season.episodes.length > 0 ? (

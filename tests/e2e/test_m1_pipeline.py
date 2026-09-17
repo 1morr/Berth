@@ -7,9 +7,12 @@
 3. **下載的替身**：問 qBittorrent 這一筆要下載到哪裡，把 staging 的檔案複製過去，再叫它 recheck
 4. 等 Berth 自己走完 completed → planning → importing → imported，再等 Jellyfin 反查
 
-斷言都拿外面的事實對 Berth 說的話：季集對語料、inode 在容器裡 `stat`、item 在 Jellyfin 裡查。
-套件內的媒體庫一開始是空的，所以反查要等 resolver 請 Jellyfin 掃描之後那一輪（約 13 分鐘，
-`services/resolver.py` 的 `SCAN_AFTER_MISSES`）。
+斷言都拿外面的事實對 Berth 說的話：季集對語料、inode 在容器裡 `stat`、item id 在 Jellyfin 裡查。
+套件內的媒體庫一開始是空的，所以反查要等 resolver 請 Jellyfin 掃描之後那一輪（`services/resolver.py`
+的 `SCAN_AFTER_MISSES`），整個模組約 13 分鐘。
+
+**Prowlarr 在跑但沒被測到**：精靈偵測得到它，第 5 步按「之後再說」，送單直接帶 `.torrent` 的網址。
+索引站搜尋有自己的契約測試（`tests/integration/test_indexer_search.py`）。
 """
 
 from __future__ import annotations
@@ -64,6 +67,30 @@ STAT_EACH = (
 
 JELLYFIN_CLIENT = 'MediaBrowser Client="Berth e2e", Device="ci", DeviceId="berth-e2e", Version="1"'
 
+#: 時間線上一定依序出現的站（中間可以夾別的，例如 `preplan`、`progress`）。狀態欄位只看得到終點，
+#: 這一串才說得出它真的走過完成 → 規劃 → 入庫 → 通知 Jellyfin（票 15 的 code-review）。
+PATH = (
+    "created",
+    "submitted",
+    "metadata_received",
+    "completed",
+    "plan_generated",
+    "linked",
+    "jellyfin_scan_requested",
+)
+
+#: 帳本逐檔的 Jellyfin item id。API 只給 `presence`（找到了沒），id 本身只在資料庫裡，
+#: 所以直接在 berth 容器裡讀——拿它對 Jellyfin 在那條路徑上的 item，才證明得了「反查得到 item id」。
+LEDGER_ITEM_IDS = (
+    "import json, sqlite3; "
+    "rows = sqlite3.connect('/config/berth.db').execute("
+    "\"select target_path, jellyfin_item_id from ledger where action = 'import'\").fetchall(); "
+    "print(json.dumps(dict(rows)))"
+)
+
+#: 外部服務回的 JSON。形狀由每一條斷言自己檢查，型別層寫死它只會是第二份不會被驗的 schema。
+type Json = Any
+
 
 @dataclass(frozen=True, slots=True)
 class Submitted:
@@ -75,9 +102,13 @@ class Submitted:
     #: 語料裡要入庫的正片，相對 torrent 的根。
     imports: tuple[str, ...]
 
+    @property
+    def tmdb_id(self) -> str:
+        return self.media.split(":")[1]
 
-def _corpus(pack: Pack) -> dict[str, Any]:
-    data: dict[str, Any] = json.loads(
+
+def _corpus(pack: Pack) -> dict[str, Json]:
+    data: dict[str, Json] = json.loads(
         (FIXTURES / "parser" / pack.fixture).read_text(encoding="utf-8")
     )
     return data
@@ -94,17 +125,17 @@ def _wait[T](what: str, seconds: float, probe: Callable[[], T | None], *, every:
         time.sleep(every)
 
 
-def _ok(response: httpx.Response) -> Any:
+def _ok(response: httpx.Response) -> Json:
     assert response.is_success, (
         f"{response.request.method} {response.url}: {response.status_code} {response.text[:600]}"
     )
     return response.json() if response.content else None
 
 
-def _in_container(*command: str) -> str:
-    """在 `torrents` 容器裡跑：它掛著同一個 /data，而且是 uid 1000。"""
+def _in_container(*command: str, container: str = TORRENTS_CONTAINER) -> str:
+    """預設在 `torrents` 容器裡跑：它掛著同一個 /data，而且是 uid 1000。"""
     result = subprocess.run(
-        ["docker", "exec", TORRENTS_CONTAINER, *command],
+        ["docker", "exec", container, *command],
         capture_output=True,
         text=True,
         encoding="utf-8",
@@ -122,6 +153,16 @@ def berth() -> Iterator[httpx.Client]:
     ) as client:
         _wait("Berth", 180, lambda: _healthy(client))
         yield client
+
+
+def _imports(berth: httpx.Client, job: Submitted) -> list[Json]:
+    """這一筆 Job 寫進帳本的正片（Media 詳情的「檔案與版本」）。"""
+    media = _ok(berth.get(f"/media/{job.media}"))
+    return [
+        row
+        for row in media["files"]
+        if row["job_hash"] == job.info_hash and row["action"] == "import"
+    ]
 
 
 def _healthy(client: httpx.Client) -> bool | None:
@@ -211,8 +252,8 @@ def planted(submitted: tuple[Submitted, ...]) -> None:
         for job in submitted:
             info = f"/api/v2/torrents/info?hashes={job.info_hash}"
 
-            def listed(info: str = info) -> dict[str, Any] | None:
-                rows: list[dict[str, Any]] = _ok(qbittorrent.get(info))
+            def listed(info: str = info) -> Json | None:
+                rows: list[Json] = _ok(qbittorrent.get(info))
                 return rows[0] if rows else None
 
             row = _wait(f"qBittorrent to list {job.pack.route_slug}", 120, listed)
@@ -223,12 +264,10 @@ def planted(submitted: tuple[Submitted, ...]) -> None:
 
 
 @pytest.fixture(scope="module")
-def jobs(
-    berth: httpx.Client, submitted: tuple[Submitted, ...], planted: None
-) -> dict[str, dict[str, Any]]:
+def jobs(berth: httpx.Client, submitted: tuple[Submitted, ...], planted: None) -> dict[str, Json]:
     wanted = {job.info_hash for job in submitted}
 
-    def settled() -> dict[str, dict[str, Any]] | None:
+    def settled() -> dict[str, Json] | None:
         rows = {row["hash"]: row for row in _ok(berth.get("/jobs")) if row["hash"] in wanted}
         done = len(rows) == len(wanted) and all(row["state"] in SETTLED for row in rows.values())
         return rows if done else None
@@ -238,11 +277,11 @@ def jobs(
 
 @pytest.fixture(scope="module")
 def resolved(
-    berth: httpx.Client, submitted: tuple[Submitted, ...], jobs: dict[str, dict[str, Any]]
-) -> dict[str, dict[str, Any]]:
+    berth: httpx.Client, submitted: tuple[Submitted, ...], jobs: dict[str, Json]
+) -> dict[str, Json]:
     """每一個正片都被 Jellyfin 反查到（`presence == found`）之後的 Media 詳情。"""
 
-    def found() -> dict[str, dict[str, Any]] | None:
+    def found() -> dict[str, Json] | None:
         details = {job.media: _ok(berth.get(f"/media/{job.media}")) for job in submitted}
         imports = [
             row for media in details.values() for row in media["files"] if row["action"] == "import"
@@ -269,12 +308,14 @@ def jellyfin() -> Iterator[httpx.Client]:
 
 
 def test_every_release_is_imported_without_a_human(
-    berth: httpx.Client, submitted: tuple[Submitted, ...], jobs: dict[str, dict[str, Any]]
+    berth: httpx.Client, submitted: tuple[Submitted, ...], jobs: dict[str, Json]
 ) -> None:
     for job in submitted:
         events = _ok(berth.get(f"/jobs/{job.info_hash}/events"))
         types = [row["type"] for row in events]
         assert jobs[job.info_hash]["state"] == "imported", (job.pack.route_slug, types)
+        remaining = iter(types)
+        assert all(station in remaining for station in PATH), (job.pack.route_slug, types)
         by_hand = [
             (row["type"], row["actor"])
             for row in events
@@ -285,34 +326,24 @@ def test_every_release_is_imported_without_a_human(
 
 
 def test_the_ledger_holds_every_episode_the_corpus_imports(
-    berth: httpx.Client, submitted: tuple[Submitted, ...], jobs: dict[str, dict[str, Any]]
+    berth: httpx.Client, submitted: tuple[Submitted, ...], jobs: dict[str, Json]
 ) -> None:
     """季集對語料（benchmark 驗過的那一份正解），不對集名：集名來自活的 TMDB，會被編輯。"""
     for job in submitted:
-        media = _ok(berth.get(f"/media/{job.media}"))
-        imports = [
-            row
-            for row in media["files"]
-            if row["job_hash"] == job.info_hash and row["action"] == "import"
-        ]
+        imports = _imports(berth, job)
         got = Counter((row["season"], row["episode_start"]) for row in imports)
         assert got == job.episodes, job.pack.route_slug
-        tmdb_id = job.media.split(":")[1]
-        assert all(f"[tmdbid-{tmdb_id}]/" in row["target_path"] for row in imports)
+        assert all(f"[tmdbid-{job.tmdb_id}]/" in row["target_path"] for row in imports)
 
 
 def test_imports_are_hard_links_of_the_downloaded_files(
-    berth: httpx.Client, submitted: tuple[Submitted, ...], jobs: dict[str, dict[str, Any]]
+    berth: httpx.Client, submitted: tuple[Submitted, ...], jobs: dict[str, Json]
 ) -> None:
     """在容器裡 `stat` 兩端：同一個 device 與 inode，而且至少兩個鏈接。"""
     for job in submitted:
         root = jobs[job.info_hash]["content_path"]
         sources = [f"{root}/{path}" for path in job.imports]
-        targets = [
-            row["target_path"]
-            for row in _ok(berth.get(f"/media/{job.media}"))["files"]
-            if row["job_hash"] == job.info_hash and row["action"] == "import"
-        ]
+        targets = [row["target_path"] for row in _imports(berth, job)]
         stats = json.loads(
             _in_container(
                 "python",
@@ -332,10 +363,11 @@ def test_imports_are_hard_links_of_the_downloaded_files(
 def test_jellyfin_holds_every_import_where_berth_says(
     berth: httpx.Client,
     submitted: tuple[Submitted, ...],
-    resolved: dict[str, dict[str, Any]],
+    resolved: dict[str, Json],
     jellyfin: httpx.Client,
 ) -> None:
-    """Berth 反查到的 item 就是 Jellyfin 自己在那條路徑上的 item，季集也是它認的。"""
+    """帳本逐檔記下的 item id 就是 Jellyfin 自己在那條路徑上的 item，季集也是它認的；
+    媒體庫卡片深連結的 Series / Movie 也是 Jellyfin 以 TMDB id 認出來的那一個。"""
     items = _ok(
         jellyfin.get(
             "/Items",
@@ -347,12 +379,16 @@ def test_jellyfin_holds_every_import_where_berth_says(
         )
     )["Items"]
     by_path = {source["Path"]: item for item in items for source in item.get("MediaSources") or []}
+    ledger: dict[str, str] = json.loads(
+        _in_container("python", "-c", LEDGER_ITEM_IDS, container="berth")
+    )
     for job in submitted:
         for row in resolved[job.media]["files"]:
             if row["action"] != "import":
                 continue
             item = by_path.get(row["target_path"])
             assert item is not None, row["target_path"]
+            assert ledger[row["target_path"]] == item["Id"], row["target_path"]
             if item["Type"] == "Episode":
                 assert (item["ParentIndexNumber"], item["IndexNumber"]) == (
                     row["season"],
@@ -366,11 +402,10 @@ def test_jellyfin_holds_every_import_where_berth_says(
     }
     for job in submitted:
         kind = "Movie" if job.media.startswith("movie:") else "Series"
-        tmdb_id = job.media.split(":")[1]
         owners = [
             item["Id"]
             for item in items
-            if item["Type"] == kind and (item.get("ProviderIds") or {}).get("Tmdb") == tmdb_id
+            if item["Type"] == kind and (item.get("ProviderIds") or {}).get("Tmdb") == job.tmdb_id
         ]
         assert cards[job.media]["jellyfin_item_id"] in owners, (job.media, owners)
         print(f"{job.media}: Jellyfin {kind} {cards[job.media]['jellyfin_item_id']}")

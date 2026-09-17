@@ -3,6 +3,7 @@ import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 
 import type { InventoryItem, JellyfinWeb } from '../api/inventory'
+import { AuditChip } from '../components/AuditChip'
 import { Dot } from '../components/Dot'
 import { KIND_CODE } from '../components/kind'
 import { SIGNAL_FILL, type Signal } from '../components/signal'
@@ -69,13 +70,7 @@ export function InventoryTile({ item, web }: { item: InventoryItem; web: Jellyfi
             <span className={`label px-1.5 py-0.5 ${SIGNAL_FILL[STATUS_SIGNAL[item.status]]}`}>
               {t(`inventory.status.${item.status}`)}
             </span>
-            {/* 「已入庫」之外的另一件事：medium 自動入庫的檔案還要人看一眼（brief §6.5）。
-                `assigned` 是「需要你」——與上面那一格同一種語彙，所以它一樣跳得出來。 */}
-            {item.audits > 0 && (
-              <span className={`label px-1.5 py-0.5 ${SIGNAL_FILL.assigned}`}>
-                {t('jobs.audits', { count: item.audits })}
-              </span>
-            )}
+            <AuditChip count={item.audits} compact />
           </p>
           <h2 id={titleId} className="value line-clamp-2 min-h-10 text-sm leading-snug text-ink">
             {item.title}

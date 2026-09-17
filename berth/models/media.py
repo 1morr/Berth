@@ -128,8 +128,16 @@ class Media(Base):
                 year=self.year,
             )
         if self.folder_frozen:
-            return snapshot.model_copy(update={"folder": self.folder_name})
+            return snapshot.model_copy(update={"folder_name": self.folder_name})
         return snapshot
+
+    def stored_snapshot(self) -> MediaSnapshot | None:
+        """真的從 TMDB 抓過的那一份；沒抓過就是 `None`。
+
+        與 `snapshot()` 的差別：那一支在沒有快照時仍然湊得出識別欄位給畫面用，而解析器與搜尋
+        要的是真的季集與標題集合——湊出來的空殼會讓它們以為這部作品沒有任何一集。
+        """
+        return self.snapshot() if self.tmdb_snapshot_json else None
 
 
 class TmdbCache(Base):

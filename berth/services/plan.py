@@ -426,9 +426,7 @@ async def _stored(session: AsyncSession, job: Job) -> MediaSnapshot | None:
     if job.media_id is None:
         return None
     row = await session.get(Media, job.media_id)
-    if row is None or row.tmdb_snapshot_json is None:
-        return None
-    return row.snapshot()
+    return row.stored_snapshot() if row is not None else None
 
 
 def _context(route: Route | None, snapshot: MediaSnapshot | None) -> ParseContext:

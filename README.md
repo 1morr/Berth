@@ -261,9 +261,10 @@ CI（`.github/workflows/ci.yml`）在 push 到 `main` 與所有 PR 上跑同一�
 
 ### e2e
 
-M1 的整條路徑對**真的** qBittorrent、Jellyfin、Prowlarr 跑一遍（plan §10、`tests/e2e/`）：精靈八步只走
-Berth 的 API，送一部美劇一季、一部動漫一季、一部電影，等它們不經人工入庫，再驗硬鏈接兩端同一個 inode、
-Jellyfin 反查得到 item。套件內的媒體庫一開始是空的，反查要等 Berth 請 Jellyfin 掃描之後那一輪，所以一次
+M1 的整條路徑對**真的** qBittorrent 與 Jellyfin 跑一遍（plan §10、`tests/e2e/`）：精靈八步只走
+Berth 的 API，送一部美劇一季、一部動漫一季、一部電影，等它們不經人工、依序走過完成 → 規劃 → 入庫，
+再驗硬鏈接兩端同一個 inode、帳本逐檔記下的 item id 就是 Jellyfin 在那條路徑上的 item。Prowlarr 也會
+起來讓精靈偵測，但第 5 步跳過索引站、送單直接帶 `.torrent` 網址——搜尋不在 e2e 裡。套件內的媒體庫一開始是空的，反查要等 Berth 請 Jellyfin 掃描之後那一輪，所以一次
 **約 15 分鐘**，平常的 `uv run pytest` 不收它（`-m 'not e2e'`）。
 
 ```bash

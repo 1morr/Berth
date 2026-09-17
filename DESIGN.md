@@ -417,7 +417,7 @@ flex / grid 子項的最小寬度，一串沒有空格的發佈名在 390px 上�
 成一段說明加兩顆按鈕。
 
 **The Focus Follows The Confirm Rule（確認就地展開，焦點跟著走）。** 確認不是 dialog，瀏覽器不會替它管焦點，
-所以每一個就地確認都走 `useInPlaceConfirm`：展開時焦點進到確認區塊（`role="group"` + `tabIndex={-1}`，
+所以每一個就地確認都走 `useInPlaceConfirm` 加 `ConfirmPanel`：展開時焦點進到確認區塊（`role="group"` + `tabIndex={-1}`，
 `aria-labelledby` 指向那段後果說明，螢幕閱讀器才念得到）；取消或 `Esc` 收起時焦點回到觸發鍵；
 `Esc` 會 `stopPropagation`，只收起確認，不連帶收起它所在的 `<details>`。確認之後整塊被換掉時
 （送單成功），焦點落在接下來最可能要按的那條連結上。沒有這幾步，焦點掉回 `body`，鍵盤使用者得從頁首
@@ -652,11 +652,12 @@ ISO 6346 標識在哪個語言都是同一串字母數字）、狀態標籤（`.
 - **刪除:** 被引用的 Route **不給刪除鍵**，直接說「刪不得、為什麼」，還啟用著就旁邊給一顆 Ghost「停用」當出路。
   沒被引用時是 `ConfirmAction` 就地確認。刪掉的那一列會卸載，所以「已刪除」由頁面那一層宣告。
 
-### 就地確認（`ConfirmAction` / `useInPlaceConfirm`）
+### 就地確認（`ConfirmAction` / `useInPlaceConfirm` / `ConfirmPanel`）
 
 觸發鍵是 Ghost；展開後是 `well` 底 + `border-2 border-rule-strong` + `0.75rem` 內距的區塊：一段
 `body-small` 的後果說明，底下主要鍵（`minmax(0,14rem)`）與取消鍵，窄版疊成一欄。焦點與 `Esc` 的行為見
-The Focus Follows The Confirm Rule。送單確認（`SubmitAction`）是同一個 hook、同一個外殼。
+The Focus Follows The Confirm Rule。送單確認（`SubmitAction`）是同一個 hook、同一個外殼（`ConfirmPanel`）。
+可展開列摘要上的「展開 / 收起」是 `ExpandHint`，「N 個待確認」是 `AuditChip`——各一份，不在列元件裡各抄。
 
 ### 訊息塊（`Notice`）
 
@@ -695,12 +696,13 @@ The Focus Follows The Confirm Rule。送單確認（`SubmitAction`）是同一�
 - **Do** 讓新增的互動元件被全域 `:focus-visible` 選擇器涵蓋（含 `summary`），並保持 24px 的命中/間距底線。
 - **Do** 在窄版把泊位板排成 2×2，讓四格同時在畫面內（The Board Never Scrolls Rule）。
 - **Do** 讓長字串換行，不橫向捲動、不截斷：機器字串用 `wrap-anywhere`，散文用 `break-words`，
-  flex / grid 子項加 `min-w-0`。
+  flex / grid 子項加 `min-w-0`。`web/src/wrapping.test.ts` 守著「`.value` 不配 `break-words`、
+  任何地方不用 `break-all`」這兩條。
 - **Do** 用中性色塊表達角色、語言、分類這類非狀態的東西（The Role Is Not A State Rule）。
 - **Do** 用原生 `input` / `button` / `details`，直到某一步真的需要行為基礎的元件為止。
 - **Do** 讓一份全部正常的清單看不到信號色，只給例外塗漆（The Usual Stays Unpainted Rule）。
 - **Do** 讓需要注意的列把線換成 `rule-strong`，紅色只留給狀態色塊（The Heavier Line Rule）。
-- **Do** 讓每個就地確認走 `useInPlaceConfirm`：展開時焦點進去、收起時回觸發鍵、`Esc` 只收起確認
+- **Do** 讓每個就地確認走 `useInPlaceConfirm` 與 `ConfirmPanel`：展開時焦點進去、收起時回觸發鍵、`Esc` 只收起確認
   （The Focus Follows The Confirm Rule）。
 - **Do** 把「需要你」的計數塗在摘要層，不要只放在展開區裡（The Needs-You Floats Up Rule）。
 - **Do** 讓窄版少掉的欄收成一行帶標籤的 `Dot` 分隔值，一份 DOM 兩種版面。
@@ -749,12 +751,6 @@ The Focus Follows The Confirm Rule。送單確認（`SubmitAction`）是同一�
   `blocked-ink` / `secured-ink`，四個信號色與 `on-signal` 兩個主題共用（註釋寫明理由：
   白字配中明度色只有 3.6:1）。以 build 為準——本文件記錄的是共用漆的那一版。
   `web-src-pages-healthpage-tsx.md` 已不再有這句話；setup 那份尚未更新。
-
-- **`break-all` 還留在 M0 的畫面上**：`setup/QbittorrentStep.tsx`、`setup/RouteStep.tsx`、`setup/CompleteStep.tsx`、
-  `setup/JellyfinExisting.tsx` 與 `pages/ServiceSettingsPage.tsx` 的設定鍵與路徑欄（2026-09-17 共 12 處）。
-  Don't 那一條照樣成立，這幾處是 build 帶著的缺陷，不是被認可的例外。同樣沒跟上的還有幾處機器字串仍是
-  `.value break-words`（`TmdbNotice` 的原文、`settings/AddRoute.tsx`、`StepLine` 與健康頁卡片的錯誤原文）；
-  M1 的發佈名、路徑、資料夾名已走 `wrap-anywhere`。
 
 - 實測對比下限（2026-09-17，探索、下載、Media 詳情、媒體庫、Route 設定五頁，深淺兩主題 × 1280 / 390 全部量過）：
   **深色最低 6.53:1、亮色最低 5.71:1**；`rule-strong` 對兩個底色 6.4:1。
