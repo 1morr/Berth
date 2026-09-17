@@ -59,6 +59,7 @@ docker compose up -d
 
 Berth **不內建任何 provider 的 API key**，TMDB 的憑證要你自己申請 —— 專案不替所有使用者背一把
 共用憑證。它是必要的：作品標題、季集結構與封面全部來自 TMDB，沒有它精靈走不完。
+**這台機器也要連得到 `api.themoviedb.org`**：第 6 步真的打一次 TMDB 驗憑證，被防火牆擋住的話精靈同樣走不完。
 
 1. 在 <https://www.themoviedb.org/signup> 註冊一個免費帳號（要收驗證信）。
 2. 開 <https://www.themoviedb.org/settings/api>，申請 API key，用途（Type of Use）選
