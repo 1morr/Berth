@@ -137,7 +137,7 @@ _Avoid_: mapping, import job, rename plan
 _Avoid_: draft plan, preview
 
 **Review Reason**（停下來的理由）:
-一份 Plan 停在 review 的三種理由：`low_confidence`、`medium_not_allowed`、`nothing_to_import`。三種的下一步不同，所以是封閉集合而不是一句話。
+一份 Plan 停在 review 的四種理由：`low_confidence`、`medium_not_allowed`、`nothing_to_import`，以及入庫途中目標上已經有別人的檔案的 `target_exists`。四種的下一步不同，所以是封閉集合而不是一句話。
 _Avoid_: error, message
 
 **Plan Item**:
@@ -152,9 +152,25 @@ _Avoid_: score, probability
 medium 信心自動入庫後掛的旗標，在 Review Queue 顯示為「已入庫待確認」。
 _Avoid_: pending, provisional
 
+**Folder Name**（資料夾名）:
+作品在媒體庫裡的資料夾：`Title (Year) [tmdbid-N]`。在第一次送單成功那一刻凍結，之後 TMDB 改名不動它，計劃與入庫都照凍結的那一串寫；在那之前它跟著標題走，畫面上是「將會是」。
+_Avoid_: directory name, slug（slug 是 Route 的）
+
+**Version**（版本）:
+同一集或同一部電影並存的其中一個檔案，以 Tags 區分。版本選單上的名字由 Jellyfin 算（12 起原生合併），Berth 只抄下來。
+_Avoid_: copy, duplicate（Tags 完全相同的才是重複）
+
+**Resolve**（反查）:
+入庫之後向 Jellyfin 問出那個檔案是哪一個 item（劇集再加它的 Series）。延遲、會重試，排程存在帳本上；找到之前卡片說「Jellyfin 還在掃描」。
+_Avoid_: sync, lookup, match
+
 **Ledger Entry**:
 一條「來源檔案 → 目標硬鏈接」的紀錄，含 hash、來源相對路徑、目標路徑、inode、Media / 季 / 集、Tags、plan item、Jellyfin item id。
 _Avoid_: link record, file record, history
+
+**Benchmark Corpus**（語料）:
+凍結的真實 torrent 檔案清單加上逐檔正解與 TMDB 快照（`tests/fixtures/parser/`）。`berth bench` 在它上面量解析器，門檻是 `auto_wrong`（自動處置但處置錯）不得上升。e2e 也從它取三包發佈。
+_Avoid_: dataset, test data
 
 **Extras**:
 可辨識但不屬於正片的內容（NCOP / NCED、PV、CM、Menu、預告、花絮、特典映像），入庫到 Jellyfin 的 `extras/`。

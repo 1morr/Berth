@@ -341,6 +341,13 @@ Windows Docker Desktop（NTFS bind mount）與 Linux（ext4）上各跑一次 `d
 - `scripts/experiments/absolute_rule_cost.py`（票 14d）：用 M1 票 01 以發佈時間判定正解的 Mikan 發佈，量「集號
   ≤ 第一季集數就送審核」擋下的對與錯，以及「標題有認不出的多餘字」能不能分開兩者（結論：分不開，研究 §6.1.1）。
   `anime_episode_source.py` 的 `Trial` 為此多帶 Mikan 的原始標題。
+- **e2e**（票 15、plan §10、README〈e2e〉）：`tests/e2e/` 疊在 `deploy/docker-compose.yml` 上，對真的
+  qBittorrent、Jellyfin 12.1、Prowlarr 與 TMDB 走一遍 M1——精靈八步只打 Berth 的 API，送美劇一季（The Bear
+  S03）、動漫一季（葬送的芙莉蓮 S01 + 特典）、電影（奧本海默），驗三筆不經人工入庫、帳本季集對語料、硬鏈接
+  兩端同一個 inode、Jellyfin 在那條路徑上的 item 就是 Berth 反查到的。下載的替身是 `torrents` 容器：由語料的
+  檔案清單與 `tests/fixtures/e2e/` 的兩支 330 秒種子影片造出發佈與 `.torrent`，送單之後放進 qBittorrent 的
+  下載路徑再 recheck。平常的 `uv run pytest` 不收它（`-m e2e` 才跑）；`.github/workflows/e2e.yml` 在
+  nightly、`v*` tag 與手動觸發時跑，TMDB 憑證是 repo secret `TMDB_API_KEY`。
 
 ### Changed
 
@@ -479,6 +486,27 @@ Windows Docker Desktop（NTFS bind mount）與 Linux（ext4）上各跑一次 `d
   `docs/research/profile-effect.md` 留著當紀錄。
 
 ### Fixed
+
+- **M1 的 critique（票 15，26 / 40）**：`/jobs` 在手機上被沒有空格的發佈名撐出 67px 橫向捲動（機器字串改用
+  `overflow-wrap: anywhere`）；季表的「入庫」欄在窄版畫面外、季名與集數疊在一起；medium 自動入庫的檔案在
+  下載列與媒體庫卡片上看不出「還要看一眼」（新增「N 個待確認」色塊與 API 的 `audits` 欄位）；送單與其他就地
+  確認在按下之後把鍵盤焦點丟回頁首、Esc 不關、確認不說送到哪條 Route；頁面沒有 skip link、頁首導覽不是
+  landmark、探索與 Route 設定頁沒有 h1、詳情頁 h1 直接接 h3、`<summary>` 裡包著連結、語言鍵只有 23px 高。
+  另外：連續的「已鏈接」事件合成一行、可展開的列會說「展開 / 收起」、S00 的正片標「特別篇」、torrent 從
+  客戶端消失不再是紅字、媒體庫切換列不再把 Route 名大寫。
+- **請求的 commit 發生在回應送出之後**（票 15，`berth/api/deps.py`）：FastAPI 對 `yield` 相依的收尾預設在
+  回應送出之後才跑，客戶端拿到 200 時寫入還沒落地——緊接著的下一個請求讀到舊狀態，commit 失敗時手上也已經是
+  一個成功。e2e 第一輪就抓到：精靈第 2 步判定完、第 3 步馬上讀不到 Jellyfin 的位址。瀏覽器按鈕之間的間隔
+  通常蓋掉了它。
+- **TMDB 改名之後，下一包入庫到另一個資料夾**（票 15）：資料夾名在第一次送單成功那一刻凍結（brief §4.5），
+  但命名一律照快照的標題重算，凍結的那一串沒有任何人讀。同一部作品因此會在 Jellyfin 裡出現第二部，電影的多版本
+  也斷掉。計劃與 pre-plan 現在都照凍結的資料夾名寫。
+- **目標路徑寫法不正規（`…//tv/`）的 Route，媒體庫牆是空的**（票 15）：帳本的目標是正規化過的，前綴卻照字面比。
+  與票 14a 修掉的刪除引用數同一個問題、同一個修法。
+- **英文在只有一筆時說「1 routes」「1 services decided」**（票 15）：七個帶 `{{count}}` 的鍵沒有 `_one` /
+  `_other`，i18next 找不到就退回原鍵。補齊之後加了一條測試：任何帶 `{{count}}` 的值都必須成對。
+- **Windows 的 PowerShell 裡 `deploy/` 腳本測試全紅**（票 15）：`bash` 解析到 WSL 的啟動器，它讀不到 `C:/…`
+  路徑（exit 127）。改成先問 bash 讀不讀得到宿主路徑，讀不到就略過；Linux 與 Git Bash 照跑。
 
 - **季號剛好等於方括號集號時被丟掉**（票 14f，`berth/parser/release.py`）：為 `The_Final_Season[28]`
   寫的規則是「季號等於方括號集號就丟掉季號」，於是 `Mushoku Tensei S2 [02]` 讀成沒有季號的第 2 集。

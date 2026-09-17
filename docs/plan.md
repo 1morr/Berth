@@ -372,7 +372,7 @@ Session 以 httpOnly cookie（`berth_session`）承載，`SameSite=Strict`、`Pa
 - 路由：`/setup`、`/login`、`/`（探索，票 03 起是真的探索頁，不再導向 `/health`）、`/health`、`/media/:id`、`/library`（導向第一條啟用中的 Route）、`/library/:routeSlug`（`?filter=review|unmatched`，票 13）、`/jobs`、`/jobs/:hash`、`/review`、`/rss`、`/issues`、`/settings`（導向 `/settings/services`；頁首的「設定」連這裡，在兩個設定頁上都是當前頁，票 14a）、`/settings/services`、`/settings/routes`（票 14，兩頁共用一條子分頁列）、其餘 `/settings/*`。
 - 守衛：精靈未完成 → 一律導向 `/setup`（讀 `GET /health` 的 `setup_completed`，那是匿名答得出來的唯一來源）；未登入 → 導向 `/login?redirect=<原路徑>`，`?redirect=` 只收站內路徑；`/setup` 與 `/settings/*` 在精靈完成後只放行 `admin`。頁首顯示角色、導覽（健康 / 設定）與登出，`admin` 才看得到設定入口——前端隱藏不是安全機制，後端同時回 403。健康頁是唯讀診斷，一般使用者也進得去。
 - 資料：TanStack Query 管 API 快取；SSE 事件到達時使 job 相關 query 失效。
-- 元件：shadcn/ui 為基礎；媒體卡片、狀態徽章、時間線、Plan 表格（逐列可改季集與動作）、檔案樹是專案自有元件。**M1 的 Plan 畫在 `/jobs` 的就地展開區**（票 11），不是 `/jobs/:hash`：票 09 拍板不另建那一頁，而 `/jobs/:hash` 仍然保留給 T1.7 的完整 Job 詳情。M1 的那一塊是唯讀的——逐列可改要等 M2 的 Review Queue。
+- 元件：shadcn/ui 為基礎；媒體卡片、狀態徽章、時間線、Plan 表格（逐列可改季集與動作）、檔案樹是專案自有元件。**M1 的 Plan 畫在 `/jobs` 的就地展開區**（票 11），不是 `/jobs/:hash`：票 09 拍板不另建那一頁。M1 收尾時 `/jobs/:hash` 仍然沒有做，移到 M2（§11.3：刪除範圍需要一個地方放）。M1 的那一塊是唯讀的——逐列可改要等 M2 的 Review Queue。
 - 文案：react-i18next，`zh-Hant` 與 `en` 兩個語言檔並列，預設跟隨瀏覽器；所有字串走 key，不硬編。
 - 主題：深色為預設（媒體應用慣例），亮色跟隨系統。
 - 版面：桌機為主，但每一頁都要有真正可用的窄版（審核、佇列、送單在手機上要做得完）。
@@ -651,6 +651,7 @@ WebUI\AuthSubnetWhitelist=172.28.0.2/32
 
 範圍：媒體庫頁改成瀏覽**整個 Jellyfin 媒體庫**（不只 Berth 經手的），Berth 經手的作品疊上票 13 的入庫狀態，還沒進 Jellyfin 的（下載中、待審）仍在牆上；繼續觀看、下一集；卡片與各集顯示已看 / 看到一半 / 剩幾集沒看，可切換並寫回 Jellyfin 該使用者的紀錄；依類型、年份排序與篩選；Jellyfin 的圖（海報、劇照）。Media 詳情在作品已在 Jellyfin 時把**觀看區**（繼續看、選季選集、各集已看）放最上，搜尋 torrent 與檔案版本收到下面——探索與媒體庫共用 `/media/:id`，不另建媒體庫詳情頁。
 前置：Jellyfin API 已查證（brief §20.8、`docs/research/library-browsing.md`）——功能都做得到，但伺服器 API key 代讀時 Jellyfin 只套用一部分媒體庫權限，所以**權限檢查集中在 services 的一處**：`userId` 一律取自 session、絕不收前端傳入；媒體庫 id 對 `GET /UserViews?userId=` 的允許清單驗證；單一作品與集走會檢查可見性的端點（`/Items/{id}?userId=`、`/Shows/{id}/Seasons|Episodes?userId=`），不用 `/Items?ids=`。越權請求被拒寫成整合測試，並在一次性 Jellyfin 上用只開放單一媒體庫的使用者實測 research 第 2 節那張表。adapter 的每個過濾參數都要測「伺服器真的有過濾」（`/Items` 靜默忽略不存在的參數）。brief §19 的四條待決已定（2026-09-15）：媒體庫頁一個 Jellyfin 媒體庫一頁（取代票 13 的一條 Route 一頁，`/library/:routeSlug` 跟著改）；首頁上方放繼續觀看與下一集，下面維持探索；瀏覽時取 `UserViews` 允許清單一併讀帳號 `Policy`（同一份短時間快取），停用就結束 session；Jellyfin 圖片由 Berth 代理，快取鍵用 `tag`。
+M1 帶過來的（票 15 的 critique，2026-09-17，使用者拍板交給這一輪的 shape）：Media 詳情頁的動作沉底（1280×900 下「搜尋」在 y=984、390px 在第三屏）、全綠的搜尋纜繩佔 311px 把結果表推到下一屏、下載列展開後的計劃與「檔案與版本」逐檔列出（Frieren 那一筆展開後 9,000 px 以上）、季表收起時仍渲染整張集表（1213 集的作品開頁就多幾千個節點）。觀看區要放上最上面，這幾件跟著一起定。另有顯示用標題的語言（brief §19 待決）。
 驗收：以一般使用者（`user` 角色）登入，不開 Jellyfin Web 就能從媒體庫找到要看的那一集、看到自己的觀看進度並標記已看，按播放落在 Jellyfin 的那一集；該使用者在 Jellyfin 沒有權限的媒體庫在 Berth 也看不到；既有媒體庫裡不是 Berth 入庫的作品照樣瀏覽得到。
 
 ### 11.3 M2 修正與對帳
@@ -660,10 +661,21 @@ WebUI\AuthSubnetWhitelist=172.28.0.2/32
 
 M0 帶過來的兩條（票 10 判定要等 Issue 這個載體才做得對，票 11 收尾時確認）：媒體庫掛 TVDB 插件的警告要成為一則 Issue（brief §16.4，目前只出現在精靈的媒體庫清單裡，健康頁沒有對應動作）；磁碟空間要有門檻判定（plan §3.2，目前只在 Route 的 `hardlink` 纜繩上顯示 `free=` 實測值）。
 
+M1 帶過來的（票 15 收尾時把票 01–14f 的 Comments 逐條過完，2026-09-17；逐條的判定記在 `docs/progress.md`）。拆 M2 的票時一併拆，不另開票：
+
+- **Review Queue 要接住的**：與帳本既有版本完全相同的 Plan item（brief §7.8 的 `duplicate`，目前會撞同一個目標路徑、以 `target_exists` 停下，票 07 / 12）；Plan item 的理由從解析器的英文句子改成封閉集合的 code + 參數，才翻得了譯（票 11）；`list_jobs` 的逐列查詢改批次（同一份清單要帶更多東西，票 11）；`/jobs/:hash` 完整 Job 詳情——刪除範圍需要一個地方放，M2 拆票時決定是另建這一頁還是留在 `/jobs` 的展開區（§7、票 09 / 11）。
+- **Reconciler 要接住的**：票 13 之前就反查完的劇集沒有 `jellyfin_series_id`，卡片一直說「還在掃描」（票 13）；Jellyfin 12 合併版本之後帳本上的 `jellyfin_item_id` 可能不再是主條目（票 12 / 14b）；`/Items` 帶整份 `MediaSources` 在大媒體庫上很重，對帳要把整個媒體庫走一遍時再決定要不要分兩段取（票 12）。
+- **有 repro、還沒修的兩個 500**：同一個新使用者兩次登入同時進來，撞 `users.jellyfin_user_id` 的 unique（票 10）；`check_routes` 途中另一個分頁刪掉 Route，`POST /api/setup/routes` 是 `StaleDataError`（健康迴圈有接住，票 14a）。
+- **解析器**：`Season 3 / … Season 3 - 46` 被 `_LOOSE_RANGE` 讀成 `S03E03–E46`，要自己的語料 fixture 與一輪 `berth bench`（票 08）。
+- **精靈與設定頁**：通過 TMDB 閘門之後泊位板 BTH 3 的詳情列不動；TMDB 與索引站的 API key 是明文欄位（要改就三處一起改成 `PasswordField`）；`complete.failed` 在缺憑證時錯怪後端；勾選表標出已被佔用的路徑（票 02b / 14a）。
+- **票 15 critique 的小項（沒排進那一輪的範圍）**：Route 設定頁表單沒改過時黃色「儲存」仍亮著，而且它會重跑五條檢查卻沒說；所有路徑都被佔用時「建立並檢查」仍是主動作；確認區的「取消」比主動作寬；EN 文案 `Already so`、`Moored`、`10 of 46 episodes in` 讀起來不順；EN 子分頁 `Library paths` 與導覽的 `Library` 撞名（頁面上的物件叫 route）；語言鍵的選中態用 `assigned` 黃漆，與 DESIGN.md 的 The Role Is Not A State Rule 矛盾（記在 DESIGN.md 的 Known contradictions）；媒體庫卡片的「Jellyfin 還在掃描」不會自己更新；fake `inventory` 情境把 demo torrent 網址寫死成 8484。M0 的精靈與服務設定頁還有 12 處 `break-all`、`TmdbNotice` / `AddRoute` / `StepLine` / 健康頁卡片的錯誤原文仍用 `break-words`（DESIGN.md 的 Known contradictions；M1 頁面已改成 `wrap-anywhere`）。
+
 ### 11.4 M3 RSS
 
 範圍：Mikan 與 Nyaa adapter（先抓 fixture 定欄位）、feeds / rules / items 資料流、`rss_poller`、去重、Rule 從 Media 頁建立並即時預覽、一次性 RSS 連結、未匹配 item 綁定 Media、offset 預填。
 驗收：一個當季動漫分別以 Mikan 與 Nyaa feed 全自動追完，含 v2 取代與合集排除。
+
+M1 帶過來的一條（票 15）：brief §6.4 的「以**發佈時間**推測虛擬季」票 06 刻意沒做——解析器那時拿不到發佈時間。RSS item 一定帶著它，接上之後回頭補，要有自己的語料與一輪 `berth bench`。
 
 ### 11.5 M4 AI fallback
 

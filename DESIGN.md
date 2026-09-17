@@ -123,6 +123,18 @@ components:
     typography: "{typography.label}"
     rounded: "{rounded.none}"
     padding: "0.375rem 0.5rem"
+  chip-compact:
+    backgroundColor: "{colors.deck}"
+    textColor: "{colors.ink}"
+    typography: "{typography.label}"
+    rounded: "{rounded.none}"
+    padding: "0.125rem 0.375rem"
+  tag-token:
+    backgroundColor: "{colors.deck}"
+    textColor: "{colors.ink}"
+    typography: "{typography.value-small}"
+    rounded: "{rounded.none}"
+    padding: "0.125rem 0.375rem"
   board-cell:
     backgroundColor: "{colors.secured}"
     textColor: "{colors.on-signal}"
@@ -151,6 +163,59 @@ components:
     typography: "{typography.body}"
     rounded: "{rounded.none}"
     padding: "0.625rem 0.75rem"
+  wall-tile:
+    backgroundColor: "{colors.well}"
+    textColor: "{colors.ink}"
+    typography: "{typography.value}"
+    rounded: "{rounded.none}"
+  wall-tile-band:
+    backgroundColor: "{colors.well}"
+    textColor: "{colors.ink}"
+    typography: "{typography.value-small}"
+    rounded: "{rounded.none}"
+    padding: "0.625rem 0.75rem"
+  row-summary:
+    backgroundColor: "{colors.well}"
+    textColor: "{colors.ink}"
+    typography: "{typography.value}"
+    rounded: "{rounded.none}"
+    padding: "0.75rem 1rem"
+  row-expanded:
+    backgroundColor: "{colors.hull}"
+    textColor: "{colors.ink}"
+    typography: "{typography.value-small}"
+    rounded: "{rounded.none}"
+    padding: "0.75rem 1rem"
+  confirm-panel:
+    backgroundColor: "{colors.well}"
+    textColor: "{colors.ink}"
+    typography: "{typography.body-small}"
+    rounded: "{rounded.none}"
+    padding: "0.75rem"
+  nav-box:
+    backgroundColor: "transparent"
+    textColor: "{colors.ink}"
+    typography: "{typography.label}"
+    rounded: "{rounded.none}"
+    padding: "0.625rem 1rem"
+  nav-box-active:
+    backgroundColor: "{colors.deck}"
+    textColor: "{colors.ink}"
+    typography: "{typography.label}"
+    rounded: "{rounded.none}"
+    padding: "0.625rem 1rem"
+  language-key:
+    backgroundColor: "{colors.deck}"
+    textColor: "{colors.ink-dim}"
+    typography: "{typography.label}"
+    rounded: "{rounded.none}"
+    padding: "0.375rem 0.625rem"
+  language-key-active:
+    backgroundColor: "{colors.assigned}"
+    textColor: "{colors.on-signal}"
+    typography: "{typography.label}"
+    rounded: "{rounded.none}"
+    padding: "0.375rem 0.625rem"
 ---
 
 # Design System: Berth
@@ -241,6 +306,12 @@ primary、uptime 儀表板的折線圖與綠色勾勾牆、訊息塊左緣的粗
 實測到的失敗是：`deck` 在亮色主題是近白，壓在深色海報上很清楚；深色主題它是中灰，壓在同樣深色的
 海報上幾乎消失（票 03）。要標在圖上，就得先鋪一塊自己的不透明底，而那等於把圖遮掉一塊。
 
+**The Usual Stays Unpainted Rule（常態不塗漆，例外才塗）。** 一面牆、一張表、一份清單裡「沒事」的那些
+不上信號色：媒體庫牆上的「完整 / 部分 / 空」是中性色塊，季表裡已入庫與未播出的集只是字，
+只有下載中（`working`）、卡住（`assigned`）、失敗（`blocked`）才塗漆。已入庫的作品塗成 `secured`，
+整面牆就是一面綠色勾勾牆；需要人的那幾格要靠「只有它們有顏色」才跳得出來。
+審計測試：一份全部正常的清單在畫面上應該看不到任何一塊信號色。
+
 ## Typography
 
 **Display Font:** 無。這個系統沒有 display 級別的字，最大的字是 1.125rem 的應用名。
@@ -255,12 +326,17 @@ primary、uptime 儀表板的折線圖與綠色勾勾牆、訊息塊左緣的粗
 
 - **App name**（mono，600，1.125rem，`tracking-tight`）：頁首的 `Berth`，每一頁只有一個。
 - **Berth name**（mono，600，1rem）：泊位格裡的服務名。板上唯一比內文大的字。
-- **Value**（mono，400，0.875rem，`tabular-nums`）：實測值、服務名、檢查項名稱。
-- **Value small**（mono，400，0.75rem，`tabular-nums`）：端點、路徑、位址、錯誤原文、指令列。
+- **Value**（mono，400，0.875rem，`tabular-nums`）：實測值、服務名、檢查項名稱、牆卡片與下載列上的作品名與發佈名。
+- **Value small**（mono，400，0.75rem，`tabular-nums`）：端點、路徑、位址、錯誤原文、指令列、
+  列上中點分隔的實測值那一行、Tags 詞彙。
 - **Label（Latin）**（mono，600，0.6875rem，`0.18em`，全大寫）：模板字。狀態標籤、欄位名、
-  面板抬頭、按鈕文字、導覽項。
+  面板抬頭、按鈕文字、導覽項、區塊標題、「展開 / 收起」提示。
 - **Label（zh-Hant）**（sans，600，0.6875rem，`0.05em`，不轉大小寫，前置塗刻度）：同一個角色的中文版。
-- **Body / Body small**（sans，0.875rem / 0.75rem）：說明、提示、修正步驟的散文。上限 `max-w-prose`。
+- **Body / Body small**（sans，0.875rem / 0.75rem）：說明、提示、修正步驟、確認說明的散文。上限 `max-w-prose`。
+
+頁面與區塊的標題不另立一階大字：下載列表、探索牆、搜尋、檔案這些區塊的 `h1` / `h2` 都是
+`.label` 模板字壓在一條 `border-b-2 border-rule-strong` 重橫線上，旁邊跟一個 `.value text-xs` 的計數。
+唯一的例外是 Media 詳情的作品名（sans，600，1.25rem）——那是一張提單的抬頭，而它是散文而不是代號。
 
 ### Named Rules
 
@@ -284,6 +360,8 @@ primary、uptime 儀表板的折線圖與綠色勾勾牆、訊息塊左緣的粗
 
 **外框。** 頁首是一條 `border-b-2 border-rule-strong` 的重橫線帶，左側應用名與副標，右側依序是
 角色色塊、導覽、登出、`ZH / EN` 語言鍵。`main` 不設寬度上限：泊位板是整寬橫幅，每一頁自己決定內文欄寬。
+頁首之前有一條 skip link（平常 `sr-only`，拿到焦點才以 `deck` 底 + `rule-strong` 框浮在左上角），
+跳到 `main#main`（`tabIndex={-1}`，焦點真的落在內容上，下一個 Tab 才從內容開始）。
 
 **泊位板橫幅。** 四格等寬，格與格之間是 1px `gap-px`（底色 `rule-strong` 透出來當線，不是 border）。
 窄螢幕 `grid-cols-2`（2×2），`sm`（640px）以上 `grid-cols-4` 一列四格。欄數寫死，因為泊位就是那四個。
@@ -295,12 +373,35 @@ primary、uptime 儀表板的折線圖與綠色勾勾牆、訊息塊左緣的粗
 登入頁是 `max-w-[26rem]` 的單一登船口窗格，用 `my-auto` 而不是 `items-center` 置中——矮螢幕
 （手機橫放且開了鍵盤）上 flex 置中會把上緣切掉且捲不回去。
 
+**頁寬。** 三種寬度，由頁面的工作決定：掃視用的牆（探索、媒體庫）`max-w-[110rem]`；
+決策與清單（Media 詳情、下載列表）`max-w-[80rem]`；設定（健康、Route 設定）`max-w-3xl`。
+外緣一律 `px-6 py-8`。
+
+**牆（堆場）。** 探索與媒體庫共用同一份欄數（`WALL_GRID`）：窄版 2 欄、`sm` 3 欄、`lg` 4 欄、`xl`（1280px）6 欄，
+`gap-0`，格線由每一格自己的 `border-2` 畫。窄版兩欄而不是一欄——一欄時一屏只看得到一部作品，而這一頁的工作是掃視。
+媒體庫的格子必須與探索牆對得齊，所以斷點只有一份。
+
+**提單（Media 詳情）。** 上方身分帶（海報 `7rem` / `sm` 以上 `11rem` + 識別欄位 + 簡介，底下一條
+`border-b-2 border-rule-strong`），下方整寬堆疊：季集 → 搜尋 → 檔案與版本 → TMDB 標示。**後一票往中間插，
+不重排前面**。整寬是為了五欄的結果表——它在一個 5:7 的右欄裡讀不完。
+
 **節奏。** 內部間距只有幾階：色塊 `0.375rem 0.5rem`、列與面板 `0.75rem 1rem`、頁面外緣 `1.5rem`、
 區塊之間 `1rem`–`1.5rem`、頁面上下 `2rem`。列與列之間用 `gap-3`（0.75rem）或 1px 的線。
+牆卡片與列內的小色塊是一階更緊的 `0.125rem 0.375rem`。
 
 **手機。** 主要動作在窄版固定於底部安全區之上（`sticky bottom-0` + `env(safe-area-inset-bottom)`，
-`-mx-6` 讓它橫跨整個工作面），`lg` 以上恢復成一般行內按鈕。長路徑一律換行（`break-words`），
-不橫向捲動——被切掉的建議值等於沒顯示。`break-all` 已被移除，它會在英文詞中間斷行。
+`-mx-6` 讓它橫跨整個工作面），`lg` 以上恢復成一般行內按鈕。長字串一律換行，不橫向捲動——
+被切掉的建議值等於沒顯示。**機器字串（`.value` 的發佈名、路徑、資料夾名、原文錯誤）用 `wrap-anywhere`
+（`overflow-wrap: anywhere`），散文用 `break-words`。** 差別是實測出來的：`break-words` 不改變
+flex / grid 子項的最小寬度，一串沒有空格的發佈名在 390px 上仍然把整頁撐出橫向捲動（票 15 量到 67px）；
+`anywhere` 會把可斷行點算進 min-content。flex / grid 子項另加 `min-w-0`——grid 項目的 `min-width`
+預設是 `auto`，展開的集表曾把整頁撐到 560px。
+
+**窄版的收法。** 窄版不畫的欄用 `hidden sm:table-cell` 收掉，值改成發佈名底下一行中點分隔（`Dot`）的
+`.value text-xs`，**一份 DOM 兩種版面**——`display: none` 的東西不進無障礙樹，螢幕閱讀器在任何寬度下
+只讀到一份。沒有欄頭的那一行，每一格要自己說出它是什麼（「大小 1.2 GiB」而不是裸的「1.2 GiB」）。
+下載列與季表在窄版讓發佈名 / 季名自己佔一行（`basis-full`，`sm` 以上回到 `flex-1`）：與色塊擠在同一行時
+它會被壓成幾個字寬的直欄。自己會橫向捲動的只有一個東西：展開後的集表那一格（`overflow-x-auto`），不是整頁。
 
 ### Named Rules
 
@@ -315,6 +416,24 @@ primary、uptime 儀表板的折線圖與綠色勾勾牆、訊息塊左緣的粗
 （服務回的原文 + 修正說明 + 可複製指令），其他列不動、不跳頁、不開 dialog。二次確認同樣就地展開
 成一段說明加兩顆按鈕。
 
+**The Focus Follows The Confirm Rule（確認就地展開，焦點跟著走）。** 確認不是 dialog，瀏覽器不會替它管焦點，
+所以每一個就地確認都走 `useInPlaceConfirm`：展開時焦點進到確認區塊（`role="group"` + `tabIndex={-1}`，
+`aria-labelledby` 指向那段後果說明，螢幕閱讀器才念得到）；取消或 `Esc` 收起時焦點回到觸發鍵；
+`Esc` 會 `stopPropagation`，只收起確認，不連帶收起它所在的 `<details>`。確認之後整塊被換掉時
+（送單成功），焦點落在接下來最可能要按的那條連結上。沒有這幾步，焦點掉回 `body`，鍵盤使用者得從頁首
+重新 Tab 一遍（票 15 實測）。確認裡要重述會被寫死的東西：送單的確認印出 Route 名與資料夾名，
+因為選 Route 的下拉早就捲出畫面了。
+
+**The Needs-You Floats Up Rule（需要你的事浮到摘要層）。** 需要人處理的事不能藏在展開之後才看得到。
+一筆已入庫、卻有 medium 自動入庫檔案待人看一眼的 Job，狀態色塊照樣是綠的「已入庫」，旁邊另塗一塊
+`assigned` 的「N 個待確認」——兩件事各一塊，同樣出現在媒體庫牆的標識帶上。Route 設定頁的紅燈與停用列
+預設展開，綠燈的收起。審計測試：一整份收起的清單，要能直接數出有幾件事在等你。
+
+**The Summary Is One Button Rule（摘要只是一顆按鈕）。** 可展開的列用原生 `<details>`，而 `<summary>`
+本身就是一顆按鈕：它裡面不放連結或任何互動元素——下載列的作品連結因此在展開區裡，不在摘要列上。
+`summary` 的 marker 拿掉了（它在窄版會把整列推歪），所以列要自己用 `.label text-ink-dim` 說出
+「展開 / 收起」（Route 設定頁是「管理 / 收起」）；這兩個字是 i18n key，不是三角形字元。
+
 ## Elevation & Depth
 
 **這個系統沒有陰影，也沒有 z 軸。** 深度完全由三件事表達：中性色階（`well` 下沉 / `hull` 底 /
@@ -323,6 +442,11 @@ primary、uptime 儀表板的折線圖與綠色勾勾牆、訊息塊左緣的粗
 
 程式碼裡只有兩處 `box-shadow`，兩處都不表達深度：焦點環的外圈，以及泊位板目前那一格的
 `inset 0 -3px 0 0 currentColor` 底線——那是一條畫在格子裡的線，`inset` 讓它不佔版面、格子不會跳。
+
+展開區一律往下沉一階：列本身是 `well`，展開的時間線、集表、檔案清單是 `hull`，中間一條 `border-t-2 border-rule`。
+列內的子項（計劃的逐檔列、時間線的每一筆、檔案、版本組）是左側一條 `border-l-2` 加 `pl-3` 內縮——
+它們在同一塊展開區裡，長得一樣才不會被讀成兩種東西。這條是結構線，不是訊息塊左緣的粗色條：
+它永遠是中性的 `rule` / `rule-strong`，從不塗信號色。
 
 **焦點環。** `outline: 2px solid var(--color-ink)` + `outline-offset: 2px` + `box-shadow: 0 0 0 2px var(--color-hull)`。
 雙環是刻意的：焦點會落在四塊漆上（黃色按鈕、狀態色塊），任何單一顏色都會在其中一塊漆上消失；
@@ -333,12 +457,20 @@ primary、uptime 儀表板的折線圖與綠色勾勾牆、訊息塊左緣的粗
 **動態。** 沒有轉場、沒有動畫類別。署名互動「靠泊序列 / 複驗序列」是逐條纜繩換狀態，不是 spinner
 也不是動畫；每完成一條就把實際結果數值留在旁邊。`prefers-reduced-motion: reduce` 下全域把
 `animation-duration` 與 `transition-duration` 壓到 0.01ms，這是防護欄而不是效果開關。
+讀取中的佔位（牆的空格、下載列的空列、詳情頁的海報位）是**不動的** `deck` 色條，沒有骨架屏動畫；
+下載列表透過 SSE 自己更新，沒有「即時」指示器也沒有脈動點——值自己換就是訊號。
+搜尋那 35–85 秒裡動的是纜繩：先鋪出要問的關鍵字（`working`），有結果就換成筆數。
 
 ### Named Rules
 
 **The Rule-Line Rule（以線分層）。** 分層一律用線與色階，不用陰影。需要「抬起」時換 `deck`，
 需要「下沉」時換 `well`，需要「這是另一個區塊」時加 `border-2 border-rule`，需要「這是分區」時
 加 `border-b-2 border-rule-strong`。`box-shadow` 只允許出現在焦點環，以及當成畫在元素內部的線。
+
+**The Heavier Line Rule（要人看的線變重，不是變紅）。** 一列需要注意時，它的框或左線由 `rule` 換成
+`rule-strong`：失敗的下載列、計劃裡待審核 / 對不到 / 待確認的檔案、Media 詳情裡對不到的檔案、
+紅燈或停用的 Route 列、展開中的確認區塊。紅色只留給那一列的狀態色塊（The One Meaning Rule）；
+hover 與焦點也是同一個語彙（牆卡片、Ghost 按鈕、導覽方塊的線變重）。
 
 ## Shapes
 
@@ -350,7 +482,10 @@ primary、uptime 儀表板的折線圖與綠色勾勾牆、訊息塊左緣的粗
 按鈕輪廓就看不出來（WCAG 2.2 非文字對比 3:1）。
 
 **沒有圖示。** 系統裡沒有 icon font、沒有 SVG 圖示集。唯一的非文字標記是中文標籤前那道 2px 塗刻度，
-它由 CSS 畫出來、不是字元、不進無障礙名稱。
+它由 CSS 畫出來、不是字元、不進無障礙名稱。唯一的圖像資產是 TMDB 條款要求的標誌與海報。
+
+**海報是 2:3 的矩形。** `aspect-[2/3]` + `object-cover`，底是 `hull`；沒有海報時同一塊矩形裡印一行
+`.value text-xs text-ink-dim` 的「沒有海報」，格子高度不變。
 
 ## Components
 
@@ -359,17 +494,29 @@ primary、uptime 儀表板的折線圖與綠色勾勾牆、訊息塊左緣的粗
 - **Shape:** 直角（`0`），`border-2`。
 - **Primary（`PrimaryButton`）:** `assigned` 黃漆填滿 + `on-signal` 深墨字 + `rule-strong` 邊框，
   `padding: 0.875rem 1rem`，`.label` 模板字，寬度滿版。停用態換成 `deck` 底 + `ink-dim` 字，
-  `cursor: not-allowed`。整個系統只有這一種主要動作外觀。
+  `cursor: not-allowed`。整個系統只有這一種主要動作外觀。放進窄欄時由外層限寬（`sm:max-w-xs`、`lg:w-40`、
+  確認區塊的 `minmax(0,14rem)`），元件本身永遠滿版。
 - **Ghost（`GhostButton`）:** 只有 `rule` 外框與 `ink` 字，`padding: 0.625rem 1rem`。
-  hover 時邊框換 `rule-strong`——次要動作不靠顏色搶位置，靠線變重。
+  hover 時邊框換 `rule-strong`——次要動作不靠顏色搶位置，靠線變重。導到別頁的次要動作是
+  `GHOST_LINK`：同一個外觀的連結，不是一顆包著連結的按鈕。展開區裡的次要動作（重試、重新規劃）
+  `justify-items-start`，不佔滿整條——滿版是主要動作的形狀。
+- **按了還在跑:** 按鈕多半不停用，只換文字（「搜尋」→「搜尋中…」）；說不行的是旁邊那句話或欄位本身。
 - **Focus:** 全域雙環（見 Elevation & Depth），元件不自帶焦點樣式。
 - **命中面積:** 互動元件不得小於 24×24 CSS px，或與鄰近目標保持 24px 間距（WCAG 2.2 AA 2.5.8）。
   密碼欄的「顯示」鍵曾是 38.6×15px 且距輸入框 11.5px，兩條都不成立，現在是 `min-h-6 min-w-6`。
+  語言鍵兩顆之間只有 1px 縫，間距例外不成立，所以每顆 `min-h-6`（票 15）；季表裡「卡住」那塊可點的色塊、
+  媒體庫卡片的 Jellyfin 連結同樣 `min-h-6`。
 
 ### Chips（狀態色塊）
 
 - **Style:** `.label` 模板字 + `padding: 0.375rem 0.5rem`，信號色填滿 + `on-signal` 深墨字。
   中性色塊（角色、語言未選中）用 `deck` + `ink`。
+- **Compact:** 牆卡片標識帶、列內的分類（trigger、處置、計劃狀態、「已追蹤」）用 `0.125rem 0.375rem`
+  的小一號色塊；時間線的事件型別與預估說明是 `0.25rem 0.375rem`。
+- **Tag token:** 解析出的 Tags（`WEB`、`1080p`、`CHS+CHT`）是 `deck` 底的 `.value text-xs`，不是 `.label`——
+  它們是詞彙表不是文案，`.label` 會把 `1080p` 大寫掉。
+- **分類 vs 狀態:** 事件型別、trigger、處置、信心、計劃狀態、停用都是分類，一律中性；
+  「判斷不出來」是一句話不是分類，不給色塊，免得看起來像個結論。
 - **不透明度:** 色塊上的文字**永遠不加 opacity**。`label opacity-70` 疊在信號色上實測 3.56:1，
   兩個主題兩種寬度都不過關；共用信號色與 `on-signal` 的整個安排就是為了避免這件事。
   泊位格裡的 `opacity-80` 是疊在 `on-signal` 深墨上的次要行，實測仍在 6.67–9.63:1 之間。
@@ -382,6 +529,13 @@ primary、uptime 儀表板的折線圖與綠色勾勾牆、訊息塊左緣的粗
 - **Internal Padding:** 抬頭列 `0.625rem 1rem`，內容列 `0.75rem 1rem`。
 - **剖面（`Cutaway` / `CutawayRow`）:** `dl` 的兩欄表，`sm` 以上 `1fr / 1fr`，以下疊成單欄。
   term 預設走 `.label`；term 是機器字串時必須用 `code` 變體（`.value text-xs`），見 The Machine String Rule。
+  標題層級由 `level` 屬性決定（預設 `3`）：精靈裡它在步驟的 `h2` 底下，Media 詳情裡它緊接著 `h1`，
+  所以那裡傳 `level={2}`——標題層級跟著它所在的頁面，不跳級（票 15 audit）。
+  機器字串在 `dd` 而 term 是角色名的列（「資料夾名」）照樣用 `.label` term。
+- **區塊標題:** 頁內每個區塊是 `.label text-ink` 的標題 + 可選的 `.value text-xs text-ink-dim` 計數，
+  壓在 `border-b-2 border-rule-strong pb-2` 上；沒有名字的 `section` 用 `aria-labelledby` 接上標題。
+  只有數字的計數，看得見的是數字（`aria-hidden`），聽得見的是帶單位的那一句（`sr-only`）。
+- **空狀態:** `well` 底 + `rule` 框的一塊，一句 `ink` 散文加一條 `GHOST_LINK` 下一步。空不是錯誤。
 
 ### Inputs / Fields
 
@@ -392,15 +546,22 @@ primary、uptime 儀表板的折線圖與綠色勾勾牆、訊息塊左緣的粗
   文字用 `blocked-ink`。
 - **Disabled:** `well` 底 + `ink-dim` 字。
 - **Checkbox:** 原生 `input[type=checkbox]`，`accent-color: var(--color-assigned)`，`size-4`。
-- **元件基礎:** 原生 `input` / `button` / `checkbox` / `details`。M0 沒有任何需要 Radix 行為的元件
-  （無 dropdown / dialog / popover / tabs），原生的無障礙比重寫一份好。要 shadcn/ui 時再引入。
+- **Select:** 原生 `select`，與輸入框同一套外觀（`hull` + `border-2 border-rule` + `.value`）。
+- **元件基礎:** 原生 `input` / `button` / `checkbox` / `select` / `details`。到 M1 為止仍沒有任何需要
+  Radix 行為的元件（無 dropdown / dialog / popover / tabs），原生的無障礙比重寫一份好。要 shadcn/ui 時再引入。
 
 ### Navigation
 
 - 頁首導覽項是 `.label` 模板字 + `border-2 border-rule` 的外框方塊。當前頁用**重橫線加 `deck` 底**
   標出（`border-rule-strong`），不靠顏色——狀態不只靠顏色是產品層級的無障礙底線。
+- 導覽包在 `<nav aria-label>` 裡，是一個地標；頁首之前有 skip link（見 Layout）。
+- 同一個方塊（`NAV_BOX` / `NAV_BOX_ACTIVE`，不含內距）也是設定的子分頁列（`SettingsTabs`，`0.5rem 0.75rem`，
+  自己一個 `<nav>`）、媒體庫的 Route 切換列與篩選列（篩選小一號，`0.375rem 0.75rem`）。內距由呼叫端給一次。
+- 可排序的欄頭同樣靠線：選中的欄頭 `border-b-2 border-rule-strong` + `ink` 字，`aria-sort` 掛在 `th` 上。
 - `設定` 只對 `admin` 顯示；角色本身以中性色塊呈現，讓 `user` 知道自己為什麼沒有那顆按鈕。
-- 語言鍵（`LanguageToggle`）是 `role="group"` 加兩顆 `aria-pressed` 按鈕，選中那顆是 `assigned` 黃漆。
+- 語言鍵（`LanguageToggle`）是 `role="group"` 加兩顆 `aria-pressed` 按鈕，選中那顆是 `assigned` 黃漆，
+  未選中是 `deck` 底 + `ink-dim` 字，兩顆之間 1px 縫。這與 The Role Is Not A State Rule 衝突，見 Known contradictions。
+- **文字連結:** `underline decoration-rule-strong underline-offset-4`，hover 時底線換 `ink`。
 
 ### 泊位板（`BerthBoard`，署名元件）
 
@@ -415,7 +576,87 @@ ISO 6346 標識在哪個語言都是同一串字母數字）、狀態標籤（`.
 一條纜繩是一個步驟：狀態色塊 + `.label` 狀態字 + 名稱 + 實測值 + 它打的那支端點（靠右、`ink-dim`）。
 失敗時整列邊框換 `rule-strong`，下方就地展開 `role="alert"` 的服務原文、修正說明與 `CopyLine` 指令，
 其餘已繫上的纜繩不動。精靈第 7 步與健康頁跑的是同一組檢查、用同一個元件，所以
-「精靈當時是綠的、現在紅了」在畫面上是同一種東西。
+「精靈當時是綠的、現在紅了」在畫面上是同一種東西。搜尋 torrent 時每個關鍵字也是一條纜繩。
+
+### 牆卡片（`MediaTile` / `InventoryTile`）
+
+一格是一個貨櫃：上方 2:3 海報是塗裝，下方標識帶是噴在箱體上的編號——同一個語彙，不是「圖片加說明文字」。
+- **框:** 每一格自己的 `border-2 border-rule` + `well` 底；hover / focus 時框換 `rule-strong`。不用整塊塗底再透 `gap-px`。
+- **海報:** `alt=""`——標題就在下面那一行，給它 alt 只會讓同一個名字念兩次。
+- **標識帶（`0.625rem 0.75rem`）:** 第一行是 `.value text-xs text-ink-dim` 的類型代號 `Dot` 年份，後面接色塊；
+  第二行作品名（`.value text-sm`，`line-clamp-2`，`min-h-10` 讓兩行名與一行名的格子一樣高）；
+  原文 / 英文標題不同時第三行 `ink-dim`。狀態色塊貼在這條帶上，不壓在海報上。
+- **探索牆:** 整格是一條連結；「已追蹤」是中性小色塊。
+- **媒體庫牆:** 狀態色塊依 The Usual Stays Unpainted Rule（失敗 `blocked`、待審核 `assigned`、下載中 `working`，
+  完整 / 部分 / 空是中性），有待確認檔案時另一塊 `assigned`；多一行盤點（「已入庫 N / 已播出 M」或版本數）。
+  海報與標識帶連到 Media 詳情，底下 **Jellyfin 那一行**是同一格裡、並排不巢狀的另一條連結：
+  `border-t-2 border-rule`、`min-h-10` 固定高度讓基線對齊；找到了是 `.label` 文字連結（開新分頁，帶 `sr-only` 的新分頁說明，`aria-describedby` 指到那一格的標題——
+  每一格都有同名的這一條），還沒找到就說原因
+  （掃描中 / 沒有位址 / 找不到），不給死連結。框的 hover 用 `has-[a:hover]` 跟著任一條連結變重。
+
+### Media 詳情（提單）
+
+- **身分帶:** 海報 + 作品名 `h1` + 英文標題（檔名用的那一個）+ 原文標題 + 簡介；「已追蹤」中性色塊在標題上方。
+  下面是 `Cutaway level={2}` 的識別欄位：類型、`tmdb_id`（`code`）、首播 / 上映日、季集數（Specials 不算）、
+  資料夾名——凍結前 term 是「將會是」，凍結後換成「就是」，底下一行小字說它什麼時候定下來。
+  快照新鮮度（`Timestamp` + Ghost「重新抓取」）住在身分帶裡；快照過期而 TMDB 連不上時是 `assigned` 的 `Notice`，
+  不是 `blocked`——頁面照樣畫得出來。
+- **季表（`SeasonList`）:** 每季一個 `<details>`，**預設全收**（一季可以是 1213 集，攤平的話永遠捲不到搜尋）。
+  季列之間是 `gap-px` 透出的 `rule`。摘要：`S01` 代號、季名、集數、「已入庫 / 已播出」、播出日、「展開 / 收起」。
+  展開後是 `hull` 底的表，**欄序固定為集號 → 絕對編號 → 入庫 → 集名 → 片長 → 播出日**；
+  絕對編號只在有 Absolute group 時整欄出現（沒有時不留一整排 `—`）；片長與播出日在窄版不畫；
+  入庫那一格 `whitespace-nowrap`。集的狀態依 The Usual Stays Unpainted Rule：下載中 `working`、卡住是一塊可點的
+  `assigned` 連到下載列表，其餘是字（未播出 `ink-dim`）。
+- **搜尋（`SearchPanel`）:** 待命，按了才搜。關鍵字欄 + Route 下拉 + 主要按鈕（`lg` 以上一列三格），
+  底下先列出**會送出去的那幾個關鍵字**（`.value text-xs wrap-anywhere`）與「一次要 35–85 秒」。
+  跑的時候是一串纜繩；結果到了有 `aria-live` 宣告筆數。窄版沒有欄頭，排序改成一個 `select`。
+- **結果表（`SearchResults`）:** `well` 底、`border-2 border-rule` 的真表格，抬頭列 `deck`。
+  發佈名整行換行不截斷（`wrap-anywhere`）；底下是 Tags 詞彙列；窄版把大小 / 做種 / 來源站 / 預估收成一行 `Dot` 分隔；
+  表外不包 `overflow-x`。來源站有集頁就是文字連結。
+- **送單（`SubmitAction`）:** 住在發佈名那一格。Ghost「送單」→ 就地展開 `border-2 border-rule-strong` 的確認區塊：
+  送到哪一條 Route、會被寫死的資料夾名（`.value wrap-anywhere`）、「這一按就定了」或「它已經是」，加主要 / 取消兩顆鍵。
+  被擋下時在同一塊裡以 `role="alert"` 的 `blocked-ink` 說封閉集合的理由，原文接在下面。成功時整塊換成
+  `secured` 色塊 + 「去看下載列表」連結（`role="status"`，焦點移到連結上）。
+- **檔案與版本（`FilesPanel`）:** 劇集依季 `<details>` 分組、預設全收，電影不分組。一個檔案是一條 `border-l-2` 的內縮列：
+  處置中性小色塊 `Dot` 季集 `Dot` Tags；目標路徑（`.value text-xs wrap-anywhere text-ink-dim`）；
+  帳本狀態 `Dot` Jellyfin 找到了沒。版本組說 Jellyfin 算出的版本名；對不到的檔案排在最後，左線 `rule-strong`，
+  帶一條到下載列表的 `GHOST_LINK`。常態也說一句（「沒有多版本」），空白與沒畫出來不能長得一樣。
+
+### 下載列（`JobRow`，船期表的一列）
+
+- **外殼:** 原生 `<details>`，`well` 底 + `border-2`；失敗那一列框換 `rule-strong`。列之間 `gap-3`。
+  排序純粹最新在前，失敗不置頂。
+- **摘要列:** 狀態色塊（十六個狀態映射到四色 + 中性，`jobState.ts` 的 `JOB_SIGNAL`）；有待確認檔案時旁邊另一塊
+  `assigned` 的「N 個待確認」；靠右的「展開 / 收起」（`sm` 以上排到最後）；發佈名（`.value text-sm wrap-anywhere`，
+  窄版自己一行）；底下一行 `Dot` 分隔的實測值：作品 · Route · trigger 中性小色塊 · 大小 · 進度 · 相對時間 · hash 前 12 字。
+  作品在這裡只是字。進度沒有值時是 `—` 不是 `0%`。
+- **展開區（`hull` 底，`border-t-2 border-rule`）:** 作品連結（`.label` 標記 + 文字連結）→ 計劃 → 時間線 →
+  整串 hash 的 `CopyLine` → 重新規劃 / 重試（Ghost，只換文字，失敗說封閉集合的理由）。計劃與時間線展開時才請求。
+- **計劃（`JobPlan`）:** 抬頭是計劃狀態中性小色塊 + 「N 個檔案 · 高 / 中 / 低」計數；預估與「為什麼停下來」只在成立時出現。
+  逐檔一條 `border-l-2` 內縮列：處置中性小色塊 + 信心 + 季集 + 待確認；來源檔名；「目標」+ 目標路徑；
+  解析器的英文理由（`lang="en"`）。這一塊**沒有信號色**；待審核、對不到、待確認的列左線換 `rule-strong`。
+- **時間線（`JobTimeline`）:** 每筆事件一條 `border-l-2 border-rule` 內縮列：事件型別中性色塊 + 相對時間 +
+  **那一個型別自己的那幾格**（不做通用 key/value 傾印）。**連續的 `linked` 合成一行**「鏈接了 N 個檔案」，
+  目標路徑收在一個巢狀 `<details>` 裡——一季 39 個檔案不該是 39 行只差一條路徑。服務原文不翻譯、理由翻譯。
+  紅字（`blocked-ink`）只給擋住這一筆的：`submit_failed`、`issue_detected` 裡的 `missing_files` 與 `client_error`、
+  `blocking` 為真的 `link_failed`；`issue_detected` 其餘三種是 `ink`，Jellyfin 請求失敗是 `ink-dim`。
+
+### Route 設定列（`RouteSettingsPage` / `RouteDelete`）
+
+- 頁首是 `SettingsTabs`，標題 `.value text-lg font-semibold`，`max-w-3xl`。
+- 每條 Route 一個 `<details>`，形狀與健康頁的 Route 列相同（`RouteIdentity`：健康色塊、停用中性色塊、
+  名稱、category）。紅燈或停用的 **預設展開且框換 `rule-strong`**，綠燈收起。摘要另有目標路徑（`wrap-anywhere`）
+  與「N 筆下載 · M 個入庫檔案」的引用數，靠右「管理 / 收起」。
+- 展開區：名稱與啟用的表單（主要按鈕 `sm:max-w-xs`）→ 五條纜繩 + Ghost「重新檢查」→ 刪除。
+  儲存、重新檢查、刪除 / 停用的結果都有 `aria-live` 的一句話——全綠重跑時纜繩一個字都不會變，沒有那句話就沒有回饋。
+- **刪除:** 被引用的 Route **不給刪除鍵**，直接說「刪不得、為什麼」，還啟用著就旁邊給一顆 Ghost「停用」當出路。
+  沒被引用時是 `ConfirmAction` 就地確認。刪掉的那一列會卸載，所以「已刪除」由頁面那一層宣告。
+
+### 就地確認（`ConfirmAction` / `useInPlaceConfirm`）
+
+觸發鍵是 Ghost；展開後是 `well` 底 + `border-2 border-rule-strong` + `0.75rem` 內距的區塊：一段
+`body-small` 的後果說明，底下主要鍵（`minmax(0,14rem)`）與取消鍵，窄版疊成一欄。焦點與 `Esc` 的行為見
+The Focus Follows The Confirm Rule。送單確認（`SubmitAction`）是同一個 hook、同一個外殼。
 
 ### 訊息塊（`Notice`）
 
@@ -426,7 +667,13 @@ ISO 6346 標識在哪個語言都是同一串字母數字）、狀態標籤（`.
 ### 指令列（`CopyLine`）
 
 `hull` 底的 `<code>`（`.value text-xs`，`whitespace-pre`，可橫向捲動）加右側 `deck` 底的複製鍵，
-中間用 1px 縫。每個失敗都要給得出可複製的下一步。
+中間用 1px 縫。每個失敗都要給得出可複製的下一步。外層 `min-w-0`，否則不斷行的指令會把 grid 欄撐寬、
+`overflow-x-auto` 永遠沒事做。
+
+### 中點分隔（`Dot`）
+
+值與值之間的 `·`，`aria-hidden` + `ink-dim`。列上有元素邊界的值用這個元件；時間線那種純字串的一行用
+`' · '` 接起來，空的那幾格不留分隔符——「· ·」讀起來像少了一個值。
 
 ### 時間（`Timestamp`）
 
@@ -447,9 +694,17 @@ ISO 6346 標識在哪個語言都是同一串字母數字）、狀態標籤（`.
 - **Do** 讓失敗在它自己那一列就地展開服務回的原文、修正說明與可複製指令。
 - **Do** 讓新增的互動元件被全域 `:focus-visible` 選擇器涵蓋（含 `summary`），並保持 24px 的命中/間距底線。
 - **Do** 在窄版把泊位板排成 2×2，讓四格同時在畫面內（The Board Never Scrolls Rule）。
-- **Do** 讓長路徑換行（`break-words`），不橫向捲動、不截斷。
+- **Do** 讓長字串換行，不橫向捲動、不截斷：機器字串用 `wrap-anywhere`，散文用 `break-words`，
+  flex / grid 子項加 `min-w-0`。
 - **Do** 用中性色塊表達角色、語言、分類這類非狀態的東西（The Role Is Not A State Rule）。
 - **Do** 用原生 `input` / `button` / `details`，直到某一步真的需要行為基礎的元件為止。
+- **Do** 讓一份全部正常的清單看不到信號色，只給例外塗漆（The Usual Stays Unpainted Rule）。
+- **Do** 讓需要注意的列把線換成 `rule-strong`，紅色只留給狀態色塊（The Heavier Line Rule）。
+- **Do** 讓每個就地確認走 `useInPlaceConfirm`：展開時焦點進去、收起時回觸發鍵、`Esc` 只收起確認
+  （The Focus Follows The Confirm Rule）。
+- **Do** 把「需要你」的計數塗在摘要層，不要只放在展開區裡（The Needs-You Floats Up Rule）。
+- **Do** 讓窄版少掉的欄收成一行帶標籤的 `Dot` 分隔值，一份 DOM 兩種版面。
+- **Do** 讓 `Cutaway` 的 `level` 跟著它所在頁面的標題層級，不跳級。
 
 ### Don't:
 
@@ -469,6 +724,11 @@ ISO 6346 標識在哪個語言都是同一串字母數字）、狀態標籤（`.
   卡片牆不行——最後一排沒填滿時，空欄會變成一塊灰色的板子（票 03 實跑）。線交給每一格自己的 `border-2`。
 - **Don't** 引入 webfont 或對外部字型服務發請求；離線可用是自架應用的底線。
 - **Don't** 用 `break-all`：它會在英文詞中間斷行（`(S` / `TEP 4)`）。
+- **Don't** 以為 `break-words` 擋得住橫向捲動：它不改變 flex / grid 子項的最小寬度，沒有空格的發佈名照樣
+  撐寬整頁（票 15 在 390px 量到 67px）。機器字串用 `wrap-anywhere`。
+- **Don't** 在 `<summary>` 裡放連結或按鈕；把它們放進展開區（The Summary Is One Button Rule）。
+- **Don't** 把已入庫、已完成這類常態塗成 `secured` 鋪滿一面牆或一整欄。
+- **Don't** 用骨架屏動畫、脈動點或「即時」指示器；讀取中是不動的佔位，值自己換就是訊號。
 
 ## Known contradictions
 
@@ -476,14 +736,26 @@ ISO 6346 標識在哪個語言都是同一串字母數字）、狀態標籤（`.
   「不用字元當裝飾標記」。那條規則說的是**會進無障礙名稱**的標記（`▸`、`•`、emoji）——
   螢幕閱讀器會把它們念出來。`Dot` 掛 `aria-hidden`，所以它從無障礙樹上消失了；
   而它必須是行內字元：CSS 畫的刻度要靠一個固定的盒子定位，跟不上一行會換行、寬度
-  由內容決定的值列表（票 08 的結果表與票 09 的下載列表都是這種）。
+  由內容決定的值列表（結果表、下載列、牆卡片標識帶、檔案與計劃列都是這種）。
 
-- `.impeccable/surfaces/web-src-pages-setuppage-tsx.md`（票 05 的 Resolved 段）與
-  `.impeccable/surfaces/web-src-pages-healthpage-tsx.md` 都描述亮色主題「同樣四個信號色，
+- **語言鍵的選中態是 `assigned` 黃漆**（`web/src/components/LanguageToggle.tsx`：`bg-assigned text-on-signal`），
+  而 The Role Is Not A State Rule 寫「角色、語言、分類……一律用中性色塊」。本文件兩處自相矛盾：
+  Colors 的 `assigned` 與 Navigation 都記著「目前語言鍵是黃漆」。以程式碼為準記錄黃漆（frontmatter 的
+  `language-key-active`），但這不是被認可的用法：M1 的 critique（2026-09-17）指出它稀釋了「需要你」——
+  頁首右上角永遠有一塊黃，而它什麼都不需要你做。規則原文保留；改語言鍵或改規則要擇一收掉這條。
+
+- `.impeccable/surfaces/web-src-pages-setuppage-tsx.md` 的方向段仍描述亮色主題「同樣四個信號色，
   降明度提彩度以達 AA」。**程式碼沒有這樣做**：`web/src/index.css` 的亮色區塊只換中性色與
   `blocked-ink` / `secured-ink`，四個信號色與 `on-signal` 兩個主題共用（註釋寫明理由：
   白字配中明度色只有 3.6:1）。以 build 為準——本文件記錄的是共用漆的那一版。
-  兩份 surface brief 的那句話已過時，尚未更新。
-- 實測對比下限（票 10 與票 11 的瀏覽器實測）：泊位板標籤 6.67–9.63:1，
-  登入頁 5.71:1（亮色）/ 6.53:1（深色），`rule-strong` 對兩個底色 6.4:1。
+  `web-src-pages-healthpage-tsx.md` 已不再有這句話；setup 那份尚未更新。
+
+- **`break-all` 還留在 M0 的畫面上**：`setup/QbittorrentStep.tsx`、`setup/RouteStep.tsx`、`setup/CompleteStep.tsx`、
+  `setup/JellyfinExisting.tsx` 與 `pages/ServiceSettingsPage.tsx` 的設定鍵與路徑欄（2026-09-17 共 12 處）。
+  Don't 那一條照樣成立，這幾處是 build 帶著的缺陷，不是被認可的例外。同樣沒跟上的還有幾處機器字串仍是
+  `.value break-words`（`TmdbNotice` 的原文、`settings/AddRoute.tsx`、`StepLine` 與健康頁卡片的錯誤原文）；
+  M1 的發佈名、路徑、資料夾名已走 `wrap-anywhere`。
+
+- 實測對比下限（2026-09-17，探索、下載、Media 詳情、媒體庫、Route 設定五頁，深淺兩主題 × 1280 / 390 全部量過）：
+  **深色最低 6.53:1、亮色最低 5.71:1**；`rule-strong` 對兩個底色 6.4:1。
   這些是**現況的最低值**，不是目標值；新畫面仍以 AA 數值為驗收條件。

@@ -2,7 +2,7 @@
 
 自託管的媒體取得與入庫協調器：把索引站或 RSS 命中的 torrent 送到 qBittorrent，下載完成後解析、比對 TMDB，以硬鏈接入庫到 Jellyfin，並維護可修復的帳本。
 
-**M0（骨架）已完成，但整套流程要到 M1 才跑得通**：現在裝起來能做的是把四個服務接起來並看它們的健康狀態，還不能搜尋、下載或入庫。設計與決定見 `docs/design-brief.md`，架構與里程碑見 `docs/plan.md`，名詞表見 `CONTEXT.md`。
+**M1（手動全流程）已完成**：探索 → 搜 torrent → 送單 → 下載 → 解析比對 → 硬鏈接入庫 → Jellyfin 找到它，一部美劇一季、一部動漫一季、一部電影都不經人工走完（nightly 的 e2e 對真的服務守著這一條）。還沒有的：審核佇列、刪除、對帳與重新入庫（M2），RSS 自動追番（M3），像 Jellyfin 那樣瀏覽整個媒體庫（M1.5）。設計與決定見 `docs/design-brief.md`，架構與里程碑見 `docs/plan.md`，名詞表見 `CONTEXT.md`。
 
 ## 部署
 
@@ -32,6 +32,17 @@ docker compose up -d
 每條 Route 建立時都會**真的建一個硬鏈接再比對 inode**，三個容器看到的不是同一個檔案系統就當場失敗，並指出是哪個容器少了哪個掛載。全部綠燈才走得到最後一步。
 
 設定完成後精靈關閉，之後用 Jellyfin 的帳號登入；健康頁 `/health` 每 5 分鐘重跑同一組檢查。
+
+### 頁面
+
+| 頁面 | 做什麼 |
+| --- | --- |
+| 探索 `/` | TMDB 的趨勢、熱門與搜尋。每一格連到那部作品的詳情 |
+| Media 詳情 `/media/:id` | 季集表；向索引站搜 torrent，結果表附 Tags 與預估季集；選 Route 送單（送出前印出會用的資料夾名）；已入庫的檔案、版本與 Jellyfin 找到了沒 |
+| 下載 `/jobs` | 送單之後的每一筆，狀態與進度即時更新；展開看時間線與匯入計劃（逐檔的處置、信心、目標路徑與理由），送單失敗、入庫失敗、待審各有自己的下一步 |
+| 媒體庫 `/library/:route` | 一條 Route 上 Berth 經手的作品：入庫了幾集、哪一部在等人、「在 Jellyfin 開啟」；「待審」「Unmatched」兩個篩選 |
+| 健康 `/health` | 四項健康檢查與下載迴圈；一般使用者也看得到 |
+| 設定 `/settings/services`、`/settings/routes` | 只有管理員：服務位址與建議設定的差異；Route 的新增（同一個 Jellyfin 媒體庫可以有第二條）、改名、停用、重新檢查與刪除 |
 
 > **compose 範本 pin 的 `ghcr.io/1morr/berth:latest` 還是空的。** GHCR 上目前只有預發佈的 `0.1.0-rc1`（`:latest` 要等第一個正式版本 tag），所以現在要跑 compose 得先在 repo 根目錄自己 build 一份：見下面的〈自己 build image〉。
 
