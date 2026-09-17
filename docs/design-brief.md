@@ -170,7 +170,7 @@ Event 是 Job 頁時間線的資料來源，也是未來 AI 理解「發生了�
 
 ### 6.1 輸入
 
-1. **上下文**：Job 是從哪個 Media 詳情頁送出、Route 的 profile、RSS 規則綁定的 Media 與季 offset。這是最強的訊號，第一階段的絕大多數 Job 都有上下文。
+1. **上下文**：Job 是從哪個 Media 詳情頁送出、送到哪一種媒體庫（電影 / 劇集）、RSS 規則綁定的 Media 與季 offset。這是最強的訊號，第一階段的絕大多數 Job 都有上下文。
 2. **torrent 名稱**與**檔案清單**（相對路徑、大小）。
 3. 下載完成後的 **mediainfo**：時長、影音軌、內封字幕語言。
 4. **TMDB**：該 Media 的季/集數、集標題、首播日、別名與各語言標題、episode groups。
@@ -274,7 +274,7 @@ Event 是 Job 頁時間線的資料來源，也是未來 AI 理解「發生了�
 
 ### 6.9 解析基準測試（Benchmark）【決定】
 
-- repo 內維護一組 fixture：每筆含 torrent 名、檔案清單（路徑、大小）、上下文（Media id、profile）、期望輸出（每檔的分類、季、集、tags 或 unmatched）。
+- repo 內維護一組 fixture：每筆含 torrent 名、檔案清單（路徑、大小）、上下文（Media id，RSS 的季號提示與 offset）、期望輸出（每檔的分類、季、集、tags 或 unmatched）。
 - 來源：真實 torrent 的檔案清單（Nyaa、dmhy、Mikan、公開 tracker），去除個資後入庫；每修一個解析 bug 就加一筆。
 - CI 跑基準並輸出：整體與分類別（anime / tv / movie）的正確率、誤判率（錯誤自動入庫最嚴重，要單獨列）、需 review 比例。
 - 目標：**誤自動入庫率趨近 0**，其次才是提高自動入庫率。先有 benchmark 才允許調整門檻或引入 AI。
@@ -372,7 +372,7 @@ NCOP/NCED、PV、CM、Menu、預告、花絮等**可辨識**的非正片內容�
 
 - `users`：Jellyfin user id、顯示名、角色（admin / user）、偏好。
 - `services`：qBittorrent / Jellyfin / 索引站 / TMDB 的連線設定與最後健康狀態。
-- `routes`：Jellyfin library id、目標路徑、category、profile、啟用狀態、健康狀態。
+- `routes`：Jellyfin library id、目標路徑、category、啟用狀態、健康狀態。
 - `media`：tmdb id、類型、標題（英文/原文）、年份、資料夾名（送單那一刻凍結，§4.5）、TMDB 快取（含季集結構、更新時間）。「追蹤過」不是欄位而是從 Job / 帳本 / Rule 推導。
 - `jobs`：hash、名稱、trigger、user、media、route、狀態、qBittorrent 的 save/content path、時間戳。
 - `job_files`：hash + 相對路徑、大小、分類、ReleaseInfo、mediainfo 摘要。
@@ -435,7 +435,7 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 - Seerr 長期只用 TMDB，媒體牆體驗已被驗證（近期才加入實驗性 TVDB，目的只是配合 Sonarr）。
 - TVDB 在動漫 split-cour 上與 TMDB 採**同樣的合併政策**（§20.3），換 provider 不解決主要的編號錯誤來源；引入第二個 provider 的代價是每個 Media 多一層 ID 對應與衝突處理，第一階段不值得。（原本列的第三個理由「TVDB 要每位使用者付費並輸入 PIN」已於 2026-09-07 重查推翻，見 §20.3。）
 
-**TVDB 作為 anime profile 的季集來源已於 2026-09-09 定案：不採用【決定】。** M1 票 01 對 10 部動漫、7,833 筆真實字幕組釋出量化了三種來源的換算失敗率（[`docs/research/anime-episode-source.md`](research/anime-episode-source.md)）：TMDB 季集 **8.0%**、TVDB default(aired) **7.6%**、TVDB absolute **7.6%**。差距 0.4 個百分點，且方向兩邊都有（TVDB 在《航海王》贏 4.4 點、在《SPY×FAMILY》輸 3.9 點）。換不到的東西不值得付三個代價：**引入第二個 provider** —— 每個 Media 多一組 `tvdb_id` 與對不上時的處理、快照抓兩次快取兩份、精靈與設定頁多一把使用者自備的 key；**Jellyfin 那一端必須跟著改** —— 媒體庫要改用 TVDB 插件刮，編號才對得上，而這是 Berth 保證不了的使用者設定；**走 absolute 還要再多一步** —— Jellyfin 本體沒有絕對編號的概念，得對每一部劇寫 `Series.DisplayOrder`（§20.3）。因此 `media` 表不加 `tvdb_id` / `episode_source`，不做 TVDB adapter。
+**TVDB 作為動漫的季集來源已於 2026-09-09 定案：不採用【決定】。** M1 票 01 對 10 部動漫、7,833 筆真實字幕組釋出量化了三種來源的換算失敗率（[`docs/research/anime-episode-source.md`](research/anime-episode-source.md)）：TMDB 季集 **8.0%**、TVDB default(aired) **7.6%**、TVDB absolute **7.6%**。差距 0.4 個百分點，且方向兩邊都有（TVDB 在《航海王》贏 4.4 點、在《SPY×FAMILY》輸 3.9 點）。換不到的東西不值得付三個代價：**引入第二個 provider** —— 每個 Media 多一組 `tvdb_id` 與對不上時的處理、快照抓兩次快取兩份、精靈與設定頁多一把使用者自備的 key；**Jellyfin 那一端必須跟著改** —— 媒體庫要改用 TVDB 插件刮，編號才對得上，而這是 Berth 保證不了的使用者設定；**走 absolute 還要再多一步** —— Jellyfin 本體沒有絕對編號的概念，得對每一部劇寫 `Series.DisplayOrder`（§20.3）。因此 `media` 表不加 `tvdb_id` / `episode_source`，不做 TVDB adapter。
 
 **授權不在上面那三條裡（2026-09-09 更正）。** 先前一版把它算成主要代價是錯的：§20.3 早已查證 v4 key 免費且自助申請、不帶 PIN 可讀，ToS 擋的是「內建一把 key 發給所有使用者」而不是「使用者自己申請一把填進 Berth」。後者與 TMDB 的做法對稱，兩個 provider 之間不構成差異。
 
@@ -622,7 +622,7 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 | Jellyfin 支援版本（2026-09-15） | **只支援 Jellyfin 12 以上**（同日稍早定的「兩條版本線都支援、13.0 發佈才拿掉 10.x」被使用者改掉，為了降低複雜度）。MergeVersions 的精靈步驟、既有服務按鈕、resolver 的合併觸發與任務 id 整段移除；既有 Jellyfin 低於 12 時，精靈與健康檢查紅燈，說出目前版本並附升級注意（§20.9），不往下做。代價是已知的：從 10.11 升到 12 有遷移失敗的 open issue、舊客戶端要升級、binhex（unRAID）與 QNAP 社群套件還沒有 12，那些使用者要先升級才能接本系統 | §1.2、§7.7、§16.4、§20.9、M1 票 14b |
 | 套件內 Jellyfin image（2026-09-15） | 釘在 12.1 這條線（linuxserver `version-12.1ubu2604`）：跟得上 12.1 的修正與重建，但 pull 時不會默默跨到下一版；本系統實測過新版才調高，README 寫升級步驟（先備份 Jellyfin 的 `/config`、升級後完整掃描） | §16.3、§20.9、plan §9.1、M1 票 14b |
 | 多集檔與同起始集的單集（2026-09-15） | 同一季已有、或同一批要入的正片裡，有同起始集而結束集不同的，送審核不自動入庫；理由要說出 Jellyfin 12 會把它們併成一集、藏掉後面的集 | §7.8、§20.9、M1 票 14b |
-| Route profile（2026-09-16） | **移除**。量測（§20.4）顯示它唯一的作用是「只有集號、TMDB 多季」時絕對編號換算自動入庫（anime）還是送審核（standard），而「是不是動漫」預測不了換算對錯。改由兩條證據決定：集號 ≤ 第一季集數、或檔名的播出日與換算出的那一集對不上，就送審核，其餘 medium。季號搜尋變體改成對所有劇集都做。代價：多季作品第一季的無季號發佈送審核。**14d 量過**（M1 票 01 的真實發佈，§20.4）：規則 1 擋下的 1,095 個檔案裡 928 個其實是第一季；「標題有認不出的多餘字」分不開兩者——連 TMDB 別名一起比會讓 14 個後面季的自動入錯，只比主標題時一個不漏卻是靠 TMDB 英文標題碰巧夠長。**2026-09-17 維持規則 1 原形** | §6.4、§6.5、§20.4、`docs/research/profile-effect.md` §6.1、M1 票 14d（解析器，已完成）/ 14e（拿掉欄位與 CONTEXT.md） |
+| Route profile（2026-09-16） | **移除**。量測（§20.4）顯示它唯一的作用是「只有集號、TMDB 多季」時絕對編號換算自動入庫（anime）還是送審核（standard），而「是不是動漫」預測不了換算對錯。改由兩條證據決定：集號 ≤ 第一季集數、或檔名的播出日與換算出的那一集對不上，就送審核，其餘 medium。季號搜尋變體改成對所有劇集都做。代價：多季作品第一季的無季號發佈送審核。**14d 量過**（M1 票 01 的真實發佈，§20.4）：規則 1 擋下的 1,095 個檔案裡 928 個其實是第一季；「標題有認不出的多餘字」分不開兩者——連 TMDB 別名一起比會讓 14 個後面季的自動入錯，只比主標題時一個不漏卻是靠 TMDB 英文標題碰巧夠長。**2026-09-17 維持規則 1 原形** | §6.4、§6.5、§20.4、`docs/research/profile-effect.md` §6.1、M1 票 14d（解析器，已完成）/ 14e（拿掉欄位、API、介面與語料，已完成） |
 | M1.5 拆票前的四條（2026-09-15） | 媒體庫頁一個 Jellyfin 媒體庫一頁，只列這位使用者 `UserViews` 裡有的，Route 退成卡片上入庫狀態的來源；首頁上方放這位使用者的繼續觀看與下一集（沒有內容就不出現），下面維持探索；瀏覽時取允許清單一併讀 Jellyfin 帳號的 `Policy`（同一份短時間快取），帳號被停用就結束 Berth 的 session，不縮短 session 效期；Jellyfin 的圖片由 Berth 代理，快取鍵用 `tag` | §12、§13、§20.8、plan §11.2b |
 
 M1.5 拆票前的四條待決，2026-09-15 已全數照推薦拍板（上表最後一列），這裡留著當時的理由：

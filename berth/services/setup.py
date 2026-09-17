@@ -170,7 +170,7 @@ async def detect_services(
 
     **已經手動接好的服務不重探**：它根本不在 compose 主機名上，再探一次只會把使用者剛填好的
     連線判回「探不到」。前端在有服務還在啟動時每 3 秒自動探一次，沒有這條保護的話，
-    「Jellyfin 被拿掉 profile + qBittorrent 還在啟動」這個組合會在填完表單三秒後被清掉。
+    「Jellyfin 從 `COMPOSE_PROFILES` 拿掉 + qBittorrent 還在啟動」這個組合會在填完表單三秒後被清掉。
     要重測那一個服務，用它自己的「測試連線」（`connect_service`）。
     """
     moment = now or _utcnow()

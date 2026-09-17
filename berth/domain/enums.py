@@ -273,13 +273,6 @@ class IndexerProblem(StrEnum):
     UNREACHABLE = "unreachable"
 
 
-class Profile(StrEnum):
-    """Route 的命名與解析偏好（CONTEXT.md）。"""
-
-    STANDARD = "standard"
-    ANIME = "anime"
-
-
 class HealthStatus(StrEnum):
     """Route 或服務的最後檢查結果；`UNKNOWN` 表示尚未檢查過。"""
 

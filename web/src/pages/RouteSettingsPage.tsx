@@ -11,10 +11,9 @@ import {
   updateRoute,
   type ManagedRoute,
 } from '../api/routes'
-import type { Profile, RouteView } from '../api/schemas'
+import type { RouteView } from '../api/schemas'
 import { Checkbox, Field, GhostButton, Notice, PrimaryButton } from '../components/controls'
 import { Dot } from '../components/Dot'
-import { ProfilePicker } from '../components/ProfilePicker'
 import { RouteCheckList } from '../components/RouteCheckList'
 import { RouteDelete, type RouteChange } from '../components/RouteDelete'
 import { RouteIdentity } from '../components/RouteIdentity'
@@ -141,10 +140,8 @@ function RouteRow({
           route={route}
           usage={row}
           onDelete={() => deleteRoute(route.id)}
-          // 送的是**存下來的**名稱與 profile：上面表單裡還沒存的編輯不該跟著這一顆出去（票 14a）。
-          onDisable={() =>
-            updateRoute(route.id, { name: route.name, profile: route.profile, enabled: false })
-          }
+          // 送的是**存下來的**名稱：上面表單裡還沒存的編輯不該跟著這一顆出去（票 14a）。
+          onDisable={() => updateRoute(route.id, { name: route.name, enabled: false })}
           onChanged={onChanged}
         />
       </div>
@@ -186,16 +183,15 @@ function RouteChecks({ route }: { route: RouteView }) {
 }
 
 /**
- * 名稱、profile、啟用（使用者拍板：建立之後只改得了這三個）。
+ * 名稱與啟用（使用者拍板：建立之後只改得了這兩個）。
  *
  * 儲存一定重跑五條纜繩（票 14）。**從停用到啟用而檢查是紅的**，後端回 409 `route_unhealthy`：
- * 名稱與 profile 照樣存下，勾選框退回停用，並指向下面紅的那一條——那一條就是這一列展開著的原因。
+ * 名稱照樣存下，勾選框退回停用，並指向下面紅的那一條——那一條就是這一列展開著的原因。
  */
 function RouteEditor({ route }: { route: RouteView }) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [name, setName] = useState(route.name)
-  const [profile, setProfile] = useState<Profile>(route.profile)
   const [enabled, setEnabled] = useState(route.enabled)
   const [blank, setBlank] = useState(false)
   // 存下來的啟用狀態從別處變了（下面的一鍵停用、另一個分頁）：勾選框跟著它走，否則下一次儲存
@@ -207,7 +203,7 @@ function RouteEditor({ route }: { route: RouteView }) {
   }
 
   const save = useMutation({
-    mutationFn: () => updateRoute(route.id, { name: name.trim(), profile, enabled }),
+    mutationFn: () => updateRoute(route.id, { name: name.trim(), enabled }),
     onError: () => setEnabled(route.enabled),
     onSettled: () => refreshRoutes(queryClient),
   })
@@ -235,9 +231,6 @@ function RouteEditor({ route }: { route: RouteView }) {
           onChange={(event) => setName(event.target.value)}
           error={blank ? t('routeSettings.edit.nameRequired') : undefined}
         />
-        {route.collection_type === 'tvshows' && (
-          <ProfilePicker group={`profile-route-${route.id}`} value={profile} onPick={setProfile} />
-        )}
         <Checkbox
           label={t('routeSettings.edit.enabled')}
           hint={t('routeSettings.edit.enabledHint')}

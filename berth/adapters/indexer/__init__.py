@@ -6,8 +6,8 @@ client 多加一個方法，是因為兩邊的實作只有位址是共通的：P
 跨站聚合 Torznab，brief §20.7），任意 Torznab 端點走 XML。
 
 **一次呼叫一個查詢**（推翻 plan §8.4 原本的 `search(queries, categories)`）：多標題展開、
-合併去重、逐查詢逾時全部是領域決策——要看 `MediaSnapshot` 的標題集合與 Route 的 profile
-才決定得了，而 adapter 不認得那兩個東西。留在這一層的話兩個實作各要抄一份同樣的邏輯。
+合併去重、逐查詢逾時全部是領域決策——要看 `MediaSnapshot` 的標題集合與季數才決定得了，
+而 adapter 不認得它。留在這一層的話兩個實作各要抄一份同樣的邏輯。
 搬去 `services/search.py` 之後這裡只剩「一個查詢 → 一次 HTTP → 一串結果」。
 """
 

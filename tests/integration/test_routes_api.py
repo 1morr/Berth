@@ -106,7 +106,6 @@ def second_route(client: TestClient, disk: Path, **overrides: object) -> dict[st
         "library_id": "item-1",
         "target_path": str(disk),
         "name": "TV 2",
-        "profile": "anime",
         **overrides,
     }
     response = client.post("/api/routes", json=body)
@@ -158,7 +157,7 @@ class TestWhoGetsIn:
         assert (
             wizard.put(
                 f"/api/routes/{movies}",
-                json={"name": "Movies", "profile": "standard", "enabled": False},
+                json={"name": "Movies", "enabled": False},
             ).status_code
             == 401
         )
@@ -218,11 +217,7 @@ class TestCommands:
 
         created = second_route(client, disk)
 
-        assert (created["slug"], created["category"], created["profile"]) == (
-            "tv-2",
-            "berth-tv-2",
-            "anime",
-        )
+        assert (created["slug"], created["category"]) == ("tv-2", "berth-tv-2")
         assert (created["health"], created["enabled"]) == ("ok", True)
         assert list(routes(client)) == ["movies", "tv", "anime", "tv-2"]
 
@@ -237,7 +232,6 @@ class TestCommands:
                 "library_id": "item-1",
                 "target_path": "/mnt/elsewhere",
                 "name": "TV 2",
-                "profile": "standard",
             },
         )
 
@@ -254,7 +248,7 @@ class TestCommands:
 
         response = client.put(
             f"/api/routes/{created['id']}",
-            json={"name": "TV 2", "profile": "anime", "enabled": True},
+            json={"name": "TV 2", "enabled": True},
         )
 
         assert response.status_code == 409
@@ -298,9 +292,7 @@ class TestCommands:
     def test_an_unknown_route_is_404(self, client: TestClient) -> None:
         sign_in(client, ADMIN)
 
-        response = client.put(
-            "/api/routes/999", json={"name": "x", "profile": "standard", "enabled": True}
-        )
+        response = client.put("/api/routes/999", json={"name": "x", "enabled": True})
 
         assert response.status_code == 404
         assert response.json()["detail"]["reason"] == "route_missing"

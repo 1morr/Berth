@@ -699,10 +699,10 @@ class TestRoutes:
 
         assert response.status_code == 200
         body = response.json()
-        assert [(row["slug"], row["profile"], row["health"]) for row in body["routes"]] == [
-            ("movies", "standard", "ok"),
-            ("tv", "standard", "ok"),
-            ("anime", "anime", "ok"),
+        assert [(row["slug"], row["health"]) for row in body["routes"]] == [
+            ("movies", "ok"),
+            ("tv", "ok"),
+            ("anime", "ok"),
         ]
         assert [row["step"] for row in body["routes"][0]["checks"]] == [
             "category",

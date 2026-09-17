@@ -22,7 +22,7 @@ from berth.adapters.http import ServiceUnavailableError
 from berth.adapters.jellyfin import JellyfinLibrary
 from berth.adapters.qbittorrent import QbittorrentCategory
 from berth.db import create_session_factory
-from berth.domain import CollectionType, HealthStatus, JobTrigger, PlanAction, Profile, StepStatus
+from berth.domain import CollectionType, HealthStatus, JobTrigger, PlanAction, StepStatus
 from berth.models import Job, LedgerEntry, Route, SetupLibrary
 from berth.services import routes as routes_service
 from berth.services.routes import (
@@ -68,7 +68,6 @@ class TestCreate:
             library_id="item-1",
             target_path=str(disk),
             name="TV 2",
-            profile=Profile.ANIME,
         )
 
         assert (route.slug, route.name, route.library, route.target_path) == (
@@ -77,7 +76,7 @@ class TestCreate:
             "TV",
             str(disk),
         )
-        assert (route.category, route.profile) == ("berth-tv-2", Profile.ANIME)
+        assert route.category == "berth-tv-2"
         assert (route.health, route.enabled) == (HealthStatus.OK, True)
         assert [row.slug for row in (await read_route_status(session)).routes] == [
             "movies",
@@ -101,7 +100,6 @@ class TestCreate:
             library_id="item-1",
             target_path=str(disk),
             name="TV 2",
-            profile=Profile.STANDARD,
         )
 
         assert (route.health, route.enabled) == (HealthStatus.FAILED, False)
@@ -144,7 +142,6 @@ class TestCreate:
                 library_id=library_id,
                 target_path=str(roots["library"] / target),
                 name="Another",
-                profile=Profile.STANDARD,
             )
 
         assert refusal.value.reason == reason
@@ -164,7 +161,6 @@ class TestCreate:
                 library_id="item-1",
                 target_path=str(disk),
                 name="TV 2",
-                profile=Profile.STANDARD,
             )
 
         assert refusal.value.reason == "jellyfin_unreachable"
@@ -183,15 +179,12 @@ async def red_second_route(session: AsyncSession, roots: dict[str, Path]) -> tup
         library_id="item-1",
         target_path=str(disk),
         name="TV 2",
-        profile=Profile.STANDARD,
     )
     return route.id, disk
 
 
 class TestUpdate:
-    async def test_name_and_profile_change(
-        self, session: AsyncSession, roots: dict[str, Path]
-    ) -> None:
+    async def test_name_change(self, session: AsyncSession, roots: dict[str, Path]) -> None:
         route_id, _ = await red_second_route(session, roots)
         libraries, _ = with_second_disk(roots)
 
@@ -200,11 +193,10 @@ class TestUpdate:
             factory_for(roots, libraries=libraries),
             route_id,
             name="Second disk",
-            profile=Profile.ANIME,
             enabled=False,
         )
 
-        assert (route.name, route.profile, route.enabled) == ("Second disk", Profile.ANIME, False)
+        assert (route.name, route.enabled) == ("Second disk", False)
         # slug 與目標路徑不動：category、complete 子目錄與帳本歸屬都由它們導出（使用者拍板）。
         assert (route.slug, route.category) == ("tv-2", "berth-tv-2")
 
@@ -212,7 +204,7 @@ class TestUpdate:
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
         """紅的不給啟用（票 14 驗收）。啟用那一刻再檢查一次，不相信上一輪的結果；
-        同一次送出的名稱與 profile 照樣存下（使用者拍板）。"""
+        同一次送出的名稱照樣存下（使用者拍板）。"""
         route_id, _ = await red_second_route(session, roots)
         libraries, _ = with_second_disk(roots)
         blind = fake_jellyfin(libraries, visible_roots=("/elsewhere",))
@@ -223,14 +215,13 @@ class TestUpdate:
                 factory_for(roots, jellyfin=blind),
                 route_id,
                 name="Second disk",
-                profile=Profile.ANIME,
                 enabled=True,
             )
 
         assert refusal.value.reason == "route_unhealthy"
         route = next(row for row in (await read_route_status(session)).routes if row.id == route_id)
         assert (route.enabled, route.health) == (False, HealthStatus.FAILED)
-        assert (route.name, route.profile) == ("Second disk", Profile.ANIME)
+        assert route.name == "Second disk"
 
     async def test_a_fixed_route_can_be_enabled(
         self, session: AsyncSession, roots: dict[str, Path]
@@ -243,7 +234,6 @@ class TestUpdate:
             factory_for(roots, libraries=libraries),
             route_id,
             name="TV 2",
-            profile=Profile.STANDARD,
             enabled=True,
         )
 
@@ -264,7 +254,6 @@ class TestUpdate:
             factory_for(roots, jellyfin=blind),
             tv.id,
             name="Series",
-            profile=Profile.STANDARD,
             enabled=True,
         )
 
@@ -283,7 +272,6 @@ class TestUpdate:
             factory_for(roots, jellyfin=blind),
             route_id,
             name="TV 2",
-            profile=Profile.STANDARD,
             enabled=False,
         )
 
@@ -295,9 +283,7 @@ class TestUpdate:
         await arrange(session, roots)
 
         with pytest.raises(RouteRejectedError) as refusal:
-            await update_route(
-                session, factory_for(roots), 999, name="x", profile=Profile.STANDARD, enabled=True
-            )
+            await update_route(session, factory_for(roots), 999, name="x", enabled=True)
 
         assert refusal.value.reason == "route_missing"
 
@@ -536,7 +522,6 @@ class TestRaces:
                 library_id="item-1",
                 target_path=str(disk),
                 name="TV 2",
-                profile=Profile.STANDARD,
             )
 
         assert refusal.value.reason == "route_conflict"
@@ -568,9 +553,7 @@ class TestRaces:
 
         with pytest.raises(RouteRejectedError) as refusal:
             if command == "update":
-                await update_route(
-                    session, factory, route_id, name="TV 2", profile=Profile.STANDARD, enabled=True
-                )
+                await update_route(session, factory, route_id, name="TV 2", enabled=True)
             else:
                 await check_route(session, factory, route_id)
 
@@ -608,7 +591,6 @@ async def create_in_own_session(
                 library_id="item-1",
                 target_path=str(target),
                 name=name,
-                profile=Profile.STANDARD,
             )
         except RouteRejectedError as refusal:
             return refusal.reason
@@ -694,48 +676,6 @@ class TestListing:
         assert refusal.value.reason == "jellyfin_unreachable"
 
 
-class TestProfile:
-    async def test_a_movie_library_cannot_get_an_anime_route(
-        self, session: AsyncSession, roots: dict[str, Path]
-    ) -> None:
-        """票面：「劇集可挑不同 profile」。anime 是劇集的季集與命名規則，電影沒有這條路徑——
-        規則在後端，不只靠前端把選項藏起來。"""
-        await arrange(session, roots)
-
-        with pytest.raises(RouteRejectedError) as refusal:
-            await create_route(
-                session,
-                factory_for(roots),
-                library_id="item-0",
-                target_path=str(roots["library"] / "movies"),
-                name="Movies",
-                profile=Profile.ANIME,
-            )
-
-        assert refusal.value.reason == "profile_unsupported"
-
-    async def test_a_movie_route_cannot_switch_to_anime(
-        self, session: AsyncSession, roots: dict[str, Path]
-    ) -> None:
-        await arrange(session, roots)
-        await build_routes(session, factory_for(roots), ())
-        movies = next(
-            row for row in (await read_route_status(session)).routes if row.slug == "movies"
-        )
-
-        with pytest.raises(RouteRejectedError) as refusal:
-            await update_route(
-                session,
-                factory_for(roots),
-                movies.id,
-                name="Movies",
-                profile=Profile.ANIME,
-                enabled=True,
-            )
-
-        assert refusal.value.reason == "profile_unsupported"
-
-
 class TestLibraryIdentity:
     async def test_a_library_renamed_in_jellyfin_is_still_its_routes_library(
         self, session: AsyncSession, roots: dict[str, Path]
@@ -782,7 +722,6 @@ def nested_route(roots: dict[str, Path]) -> Route:
         collection_type=CollectionType.TVSHOWS,
         target_path=target,
         category="berth-tv-anime",
-        profile=Profile.ANIME,
     )
 
 

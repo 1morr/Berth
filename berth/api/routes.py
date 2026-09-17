@@ -12,7 +12,6 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from berth.api.deps import ClientFactoryDep, SessionDep
 from berth.api.schemas import RouteOut
-from berth.domain import Profile
 from berth.services.routes import (
     RouteInUseError,
     RouteRejectedError,
@@ -82,14 +81,12 @@ class RouteIn(BaseModel):
     library_id: str = Field(min_length=1)
     target_path: str = Field(min_length=1)
     name: str = Field(min_length=1)
-    profile: Profile = Profile.STANDARD
 
 
 class RouteEditIn(BaseModel):
     """修改一條 Route。slug 與目標路徑建立之後不能改（使用者拍板，理由在 `update_route`）。"""
 
     name: str = Field(min_length=1)
-    profile: Profile
     enabled: bool
 
 
@@ -118,7 +115,6 @@ async def post_route(session: SessionDep, factory: ClientFactoryDep, body: Route
             library_id=body.library_id,
             target_path=body.target_path,
             name=body.name,
-            profile=body.profile,
         )
     except RouteRejectedError as refusal:
         raise route_refusal(refusal) from refusal
@@ -129,14 +125,13 @@ async def post_route(session: SessionDep, factory: ClientFactoryDep, body: Route
 async def put_route(
     session: SessionDep, factory: ClientFactoryDep, route_id: int, body: RouteEditIn
 ) -> RouteOut:
-    """修改並重跑檢查。從停用到啟用而檢查是紅的：409 `route_unhealthy`，名稱與 profile 照樣存下。"""
+    """修改並重跑檢查。從停用到啟用而檢查是紅的：409 `route_unhealthy`，名稱照樣存下。"""
     try:
         view = await update_route(
             session,
             factory,
             route_id,
             name=body.name,
-            profile=body.profile,
             enabled=body.enabled,
         )
     except RouteRejectedError as refusal:

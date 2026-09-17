@@ -7,13 +7,12 @@ import {
   type RouteSelectionInput,
   type RouteSetup,
 } from '../api/setup'
-import { type Profile, type RouteView } from '../api/schemas'
+import { type RouteView } from '../api/schemas'
 import { STICKY_ACTION, Checkbox, GhostButton, Notice, PrimaryButton } from '../components/controls'
 import { ROUTE_HEALTH_LABEL, ROUTE_SIGNAL } from '../components/routeChecks'
 import { RouteCheckList } from '../components/RouteCheckList'
 import { SIGNAL_FILL } from '../components/signal'
 import { Cutaway, CutawayRow } from '../components/Cutaway'
-import { ProfilePicker } from '../components/ProfilePicker'
 import { RouteDelete } from '../components/RouteDelete'
 
 /**
@@ -31,7 +30,6 @@ import { RouteDelete } from '../components/RouteDelete'
 interface LibraryPick {
   selected: boolean
   target: string
-  profile: Profile
 }
 
 export function RouteStep({
@@ -66,7 +64,6 @@ export function RouteStep({
       picks[library.name] ?? {
         selected: library.has_route,
         target: library.target_path,
-        profile: library.profile,
       }
     )
   }
@@ -89,11 +86,7 @@ export function RouteStep({
         library.locations.includes(pick.target)
       )
     })
-    .map((library) => ({
-      library: library.name,
-      target_path: pickOf(library).target,
-      profile: pickOf(library).profile,
-    }))
+    .map((library) => ({ library: library.name, target_path: pickOf(library).target }))
   // 按下去會新建幾條。沒有新的時候這一顆就是「全部重驗」——重跑第 7 步只剩這個意思。
   const fresh = bundled
     ? routable.filter((library) => !library.has_route).length
@@ -193,11 +186,7 @@ function RouteCutaway({
     planned ??
     setup.libraries
       .filter((library) => library.supported)
-      .map((library) => ({
-        library: library.name,
-        target_path: library.locations[0] ?? '',
-        profile: library.profile,
-      }))
+      .map((library) => ({ library: library.name, target_path: library.locations[0] ?? '' }))
 
   return (
     <div className="grid gap-6">
@@ -334,13 +323,6 @@ function LibraryPicker({
                         {t('routes.picker.addHint', { path: library.berth_path })}
                       </p>
                     </div>
-                  )}
-                  {library.collection_type === 'tvshows' && (
-                    <ProfilePicker
-                      group={`profile-${library.name}`}
-                      value={pick.profile}
-                      onPick={(profile) => onChange(library, { profile })}
-                    />
                   )}
                 </div>
               )}

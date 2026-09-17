@@ -31,7 +31,6 @@ from berth.db import create_session_factory
 from berth.domain import (
     CollectionType,
     HealthStatus,
-    Profile,
     RouteCheck,
     ServiceOrigin,
     StepStatus,
@@ -96,12 +95,10 @@ class TestBundled:
 
         status = await build_routes(session, factory_for(roots), ())
 
-        assert [
-            (row.slug, row.name, row.profile, row.collection_type) for row in status.routes
-        ] == [
-            ("movies", "Movies", Profile.STANDARD, CollectionType.MOVIES),
-            ("tv", "TV", Profile.STANDARD, CollectionType.TVSHOWS),
-            ("anime", "Anime", Profile.ANIME, CollectionType.TVSHOWS),
+        assert [(row.slug, row.name, row.collection_type) for row in status.routes] == [
+            ("movies", "Movies", CollectionType.MOVIES),
+            ("tv", "TV", CollectionType.TVSHOWS),
+            ("anime", "Anime", CollectionType.TVSHOWS),
         ]
         assert [row.target_path for row in status.routes] == [
             str(roots["library"] / "movies"),
@@ -192,12 +189,10 @@ class TestExisting:
         status = await build_routes(
             session,
             factory_for(roots, libraries=libraries),
-            (RouteSelection(library="影集", target_path=berth, profile=Profile.ANIME),),
+            (RouteSelection(library="影集", target_path=berth),),
         )
 
-        assert [(row.library, row.target_path, row.profile) for row in status.routes] == [
-            ("影集", berth, Profile.ANIME)
-        ]
+        assert [(row.library, row.target_path) for row in status.routes] == [("影集", berth)]
         assert [row.health for row in status.routes] == [HealthStatus.OK]
 
     @pytest.mark.asyncio
@@ -248,12 +243,10 @@ class TestExisting:
         status = await build_routes(
             session,
             factory,
-            (RouteSelection(library="影集", target_path=str(old), profile=Profile.ANIME),),
+            (RouteSelection(library="影集", target_path=str(old)),),
         )
 
-        assert [(row.target_path, row.profile) for row in status.routes] == [
-            (berth, Profile.STANDARD)
-        ]
+        assert [row.target_path for row in status.routes] == [berth]
 
     @pytest.mark.asyncio
     async def test_a_rerun_after_a_rename_does_not_grow_a_second_route_on_the_same_target(

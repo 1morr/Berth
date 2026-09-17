@@ -46,7 +46,7 @@ const BUILT = routeSetup({
   routes: [
     routeView({ library: 'Movies', slug: 'movies', collection_type: 'movies' }),
     routeView({ library: 'TV', slug: 'tv' }),
-    routeView({ library: 'Anime', slug: 'anime', profile: 'anime' }),
+    routeView({ library: 'Anime', slug: 'anime' }),
   ],
   libraries: routeSetup().libraries.map((row) => ({ ...row, has_route: true })),
   ready: true,
@@ -335,43 +335,8 @@ describe('泊位 4：媒體庫路徑（既有 Jellyfin）', () => {
       const call = fetch.mock.calls.find(([, init]) => init?.method === 'POST')
       expect(call).toBeDefined()
       expect(JSON.parse(String(call![1]?.body))).toEqual({
-        selections: [{ library: '影集', target_path: '/data/library/影集', profile: 'standard' }],
+        selections: [{ library: '影集', target_path: '/data/library/影集' }],
       })
-    })
-  })
-
-  it('兩個劇集媒體庫各有自己的 profile，選一個不會清掉另一個', async () => {
-    const two = routeSetup({
-      origin: 'existing',
-      libraries: [
-        libraryChoice({ name: '影集', target_path: '/data/library/影集' }),
-        libraryChoice({ name: '動畫', target_path: '/data/library/動畫' }),
-      ],
-    })
-    const fetch = stubApi({
-      [STATUS]: { body: AT_BERTH_FOUR },
-      [ROUTES]: { body: two },
-      [BUILD]: { body: two },
-    })
-
-    renderWithProviders(<SetupPage />)
-    await userEvent.click(await screen.findByRole('checkbox', { name: '影集' }))
-    await userEvent.click(screen.getByRole('checkbox', { name: '動畫' }))
-    const [firstAnime, secondAnime] = screen.getAllByRole('radio', { name: '動漫' })
-    // 原生 radio 群組是靠 `name` 分的：兩個媒體庫共用一個名字，方向鍵就會在它們之間跳，
-    // 螢幕閱讀器也會把兩組唸成同一組。
-    expect(firstAnime.getAttribute('name')).not.toBe(secondAnime.getAttribute('name'))
-    await userEvent.click(firstAnime)
-    await userEvent.click(secondAnime)
-    await userEvent.click(screen.getByRole('button', { name: '建立 2 條 Route 並檢查' }))
-
-    await waitFor(() => {
-      const call = fetch.mock.calls.find(([, init]) => init?.method === 'POST')
-      const profiles = JSON.parse(String(call![1]?.body)).selections.map(
-        (row: { profile: string }) => row.profile,
-      )
-      // 兩組 radio 各自獨立：後選的那個沒有把前一個彈回標準。
-      expect(profiles).toEqual(['anime', 'anime'])
     })
   })
 
@@ -435,25 +400,6 @@ describe('泊位 4：媒體庫路徑（既有 Jellyfin）', () => {
     expect(screen.getByText(/精靈只新增/)).toBeInTheDocument()
     // 沒有新勾的東西時，這一顆是「全部重驗」而不是一顆按不下去的建立鍵。
     expect(screen.getByRole('button', { name: '重新檢查 1 條 Route' })).toBeEnabled()
-  })
-
-  it('劇集媒體庫可以挑動漫 profile', async () => {
-    const fetch = stubApi({
-      [STATUS]: { body: AT_BERTH_FOUR },
-      [ROUTES]: { body: NAS },
-      [BUILD]: { body: NAS },
-    })
-
-    renderWithProviders(<SetupPage />)
-    await userEvent.click(await screen.findByRole('checkbox', { name: '影集' }))
-    await userEvent.click(screen.getByRole('radio', { name: '/volume1/media/tv' }))
-    await userEvent.click(screen.getByRole('radio', { name: '動漫' }))
-    await userEvent.click(screen.getByRole('button', { name: '建立 1 條 Route 並檢查' }))
-
-    await waitFor(() => {
-      const call = fetch.mock.calls.find(([, init]) => init?.method === 'POST')
-      expect(JSON.parse(String(call![1]?.body)).selections[0].profile).toBe('anime')
-    })
   })
 })
 

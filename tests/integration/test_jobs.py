@@ -30,7 +30,6 @@ from berth.domain import (
     JobState,
     JobTrigger,
     MediaKind,
-    Profile,
     Role,
 )
 from berth.logs import JOB_FIELD, configure_logging, json_line
@@ -90,7 +89,6 @@ async def _route(
         collection_type=collection_type,
         target_path=str(roots["library"] / "anime"),
         category=f"berth-{slug}",
-        profile=Profile.ANIME,
         health_status=health,
     )
     session.add(row)

@@ -3,7 +3,7 @@
   "source_url": "https://thepiratebay.org/description.php?id=36404874",
   "torrent_name": "Fleabag (2016) Season 1-2 S01-S02 (1080p BluRay x265 HEVC 10bit AAC 5.1 Silence)",
   "tmdb": "tv-67070",
-  "context": {"media": "tv:67070", "profile": "standard", "season_hint": null, "episode_offset": null},
+  "context": {"media": "tv:67070", "season_hint": null, "episode_offset": null},
   "files": [
     {"path": "Season 1/Fleabag (2016) - S01E01 - Episode 1 (1080p BluRay x265 RZeroX).mkv", "size": 815280289},
     {"path": "Season 1/Fleabag (2016) - S01E02 - Episode 2 (1080p BluRay x265 RZeroX).mkv", "size": 823564427},

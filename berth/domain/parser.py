@@ -14,7 +14,7 @@ from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict
 
-from berth.domain.enums import CollectionType, Profile, ReviewReason
+from berth.domain.enums import CollectionType, ReviewReason
 from berth.domain.media import MediaSnapshot
 
 
@@ -370,7 +370,6 @@ class ParseContext(BaseModel):
     #: `media` 缺席時可以比對的作品（brief §6.4 第 2 點）。呼叫端先搜好放進來——
     #: 解析器沒有 IO，認得出作品的前提是有人把候選遞給它。
     candidates: tuple[MediaSnapshot, ...] = ()
-    profile: Profile = Profile.STANDARD
     #: RSS Rule 或使用者指定的季號。有值時勝過檔名（brief §6.4）。
     season_hint: int | None = None
     #: RSS Rule 的手動偏移量。有值時**優先且信心可為 high**（plan §4.4）。

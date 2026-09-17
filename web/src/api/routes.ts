@@ -17,7 +17,6 @@ export type RouteRefusal =
   | 'route_in_use'
   | 'route_unhealthy'
   | 'route_conflict'
-  | 'profile_unsupported'
 
 const REASONS: readonly RouteRefusal[] = [
   'library_missing',
@@ -29,7 +28,6 @@ const REASONS: readonly RouteRefusal[] = [
   'route_in_use',
   'route_unhealthy',
   'route_conflict',
-  'profile_unsupported',
 ]
 
 /** 有多少東西指著一條 Route。與清單那一列（`ManagedRoute`）同一組詞。 */

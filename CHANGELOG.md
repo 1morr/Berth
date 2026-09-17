@@ -459,9 +459,24 @@ Windows Docker Desktop（NTFS bind mount）與 Linux（ext4）上各跑一次 `d
   預設 medium（自動入庫），集號沒超過第一季的集數、或檔名的播出日與換算出的那一集在 TMDB 上的播出日不同，
   就降到 low 送審核並說出是哪一條。所以 `anime` Route 上第一季的無季號發佈（`Spy x Family - 05`）改送審核，
   `standard` Route 上的跨季連號與播出日對得上的（`The.Return.of.Superman.E079.150524`）改自動入庫。
-  Route 上的 profile 欄位還在，解析器已經不讀它（票 14e 拿掉）。
+  Route 上的 profile 欄位隨票 14e 拿掉（見下）。
 - 發佈名解析多讀檔名裡的播出日（`ReleaseInfo.air_date`）；六位數的短日期年份在前，韓國電視台的 `150524`
   讀成 2015-05-24，而不是 guessit 預設的 2024-05-15。
+- **破壞性：Route 不再有 profile**（票 14e，brief §19）。`routes.profile` 欄位由 migration `9d4f1b6e2a70`
+  刪除（降版補回 `standard`；升降兩個方向都不動 `jobs.route_id` 與 `media.default_route_id`——batch 重建
+  `routes` 會被外鍵的 `SET NULL` 清空它們，所以升版用 SQLite 原生的 `DROP COLUMN`）。API 形狀跟著改：
+  `RouteOut`、`LibraryChoiceOut` 少了 `profile`，`POST /api/routes`、`PUT /api/routes/{id}` 與
+  `POST /api/setup/routes` 的 body 不再收它；`GET /api/search` 與 `GET /api/search/queries` 不再收 `route`，
+  查詢只由作品的快照決定。語料的 `context.profile` 整批拿掉。內部 API，不留相容層。
+- **搜尋的季號變體對所有劇集都做**（票 14e）：最新一季 ≥ 2 就多問 `<英文標題> Season N` / `<標題> 第N季`，
+  不再只給 anime Route；單季與電影不加。效果沒有量，要打真的索引站才量得到。
+
+### Removed
+
+- Route 的 profile 選擇（票 14e）：精靈泊位 4、設定 →「媒體庫路徑」的新增與修改都不再問「命名 profile」，
+  `ProfilePicker` 刪除；拒絕理由 `profile_unsupported`（電影 Route 不收 anime）跟著規則一起消失。
+- `scripts/experiments/profile_effect.py`（票 14e）：它量的東西不存在了。研究文件
+  `docs/research/profile-effect.md` 留著當紀錄。
 
 ### Fixed
 

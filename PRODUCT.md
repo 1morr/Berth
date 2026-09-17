@@ -106,8 +106,8 @@ TanStack Router 與 Query、react-i18next。plan §7 另外指定 shadcn/ui 為�
 **API-first**（brief §14）：UI 的每個動作都是一個有名字、有 schema、冪等的服務命令；Plan、Event、Issue
 都是結構化 JSON。這是為了之後接 AI 與 MCP 留的形狀，不是現在要做 agent 迴圈。
 
-**未定**：TVDB 是否作為 anime profile 的季集來源仍標記【研究】（brief §10），必須在 M1 拆票前定案。
-TMDB 仍是媒體牆、標題、海報與電影的唯一來源，這一條不變。
+**季集來源是 TMDB**（brief §10，2026-09-09 M1 票 01 定案）：TVDB 不採用。TMDB 是媒體牆、標題、海報、
+季集與電影的唯一來源。
 
 ## Brand Commitments
 

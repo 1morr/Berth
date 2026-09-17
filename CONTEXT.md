@@ -15,7 +15,7 @@ Berth 曾為其下載、訂閱或入庫過的 Media。
 _Avoid_: subscribed media, library item
 
 **Library Route**（UI 顯示「媒體庫」）:
-一個入庫目的地：Jellyfin 媒體庫、一個寫入目標路徑、一個 qBittorrent category、一個命名 profile（standard / anime）。
+一個入庫目的地：Jellyfin 媒體庫、一個寫入目標路徑、一個 qBittorrent category。
 _Avoid_: root folder, destination；程式碼中不要用 `library` 指 Route（`library` 一律指下一條的 Jellyfin Library）
 
 **Inventory**（UI 顯示「媒體庫」頁）:
@@ -38,10 +38,6 @@ _Avoid_: media root, library path（那是單一媒體庫的路徑）
 Library root 底下、Berth 寫入用的那一條路徑（`<library root>/<slug>`）。既有 Jellyfin 是**加**這一條，
 舊路徑原地不動。
 _Avoid_: target path（那是 Route 上的欄位）, new path
-
-**Profile**:
-Route 的命名與解析偏好，`standard` 或 `anime`。
-_Avoid_: series type, mode
 
 **Complete / Incomplete root**:
 qBittorrent 的完成與未完成下載根目錄；complete 是硬鏈接的來源。

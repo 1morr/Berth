@@ -1,7 +1,7 @@
 """精靈第 7 步：媒體庫 → Library Route 與跨服務檢查（plan §9.3 第 7 步、§9.5、brief §4）。
 
-一個 Route 是「一個 Jellyfin 媒體庫 + 一條寫入目標路徑 + 一個 qBittorrent category +
-一個 profile」（CONTEXT.md）。這一步做兩件事：
+一個 Route 是「一個 Jellyfin 媒體庫 + 一條寫入目標路徑 + 一個 qBittorrent category」
+（CONTEXT.md）。這一步做兩件事：
 
 - **建 Route**。套件內由 Berth 自己建的三個媒體庫自動長出三個 Route；既有 Jellyfin 由使用者
   勾選媒體庫，並從**那個媒體庫自己回報的路徑**裡選一條當寫入目標——路徑一律用選的，不用打的
@@ -46,7 +46,6 @@ from berth.adapters.qbittorrent import QbittorrentClient, ensure_category
 from berth.domain import (
     CollectionType,
     HealthStatus,
-    Profile,
     RouteCheck,
     ServiceKind,
     ServiceOrigin,
@@ -111,7 +110,6 @@ class RouteSelection:
     library: str
     #: 寫入目標。必須是這個媒體庫回報的路徑之一（brief §4.1、§4.3）。
     target_path: str
-    profile: Profile = Profile.STANDARD
 
 
 @dataclass(frozen=True, slots=True)
@@ -129,7 +127,6 @@ class RouteView:
     category: str
     #: 這個 category 的 save path，也就是硬鏈接的來源目錄（brief §4.1）。
     save_path: str
-    profile: Profile
     enabled: bool
     health: HealthStatus
     checks: tuple[StepView, ...]
@@ -156,7 +153,6 @@ class LibraryChoice:
     #: 已經有 Route 了：精靈只新增，這個媒體庫在勾選表上鎖住（票 14）。
     has_route: bool
     target_path: str
-    profile: Profile
 
 
 @dataclass(frozen=True, slots=True)
@@ -293,7 +289,6 @@ async def create_route(
     library_id: str,
     target_path: str,
     name: str,
-    profile: Profile,
 ) -> RouteView:
     """Route 設定頁的「新增 Route」（plan §6 routes 群組、brief §4.3、票 14）。
 
@@ -314,7 +309,6 @@ async def create_route(
             "library_unsupported",
             f"{library.name!r} is a {library.collection_type or 'mixed'} library",
         )
-    _check_profile(collection_type, profile)
     if target_path not in library.locations:
         # 路徑一律從 Jellyfin 讀，使用者只做選擇（brief §4.1）。
         raise RouteRejectedError(
@@ -336,7 +330,6 @@ async def create_route(
                 target_path=target_path,
                 category=f"{CATEGORY_PREFIX}{slug}",
                 save_path=save_path_of(paths.complete_root, slug),
-                profile=profile,
             )
             route = _new_route(plan_row, name=name, enabled=False)
             session.add(route)
@@ -358,24 +351,21 @@ async def update_route(
     route_id: int,
     *,
     name: str,
-    profile: Profile,
     enabled: bool,
 ) -> RouteView:
-    """Route 設定頁的「修改」：名稱、profile、啟用（使用者拍板）。
+    """Route 設定頁的「修改」：名稱與啟用（使用者拍板）。
 
     slug 與目標路徑不在這裡：category 與 complete 子目錄由 slug 導出，帳本以目標路徑認 Route，
     改了就是另一條 Route——要換就新增一條、刪掉舊的（Sonarr 的 root folder 同樣不能改路徑）。
 
     每一次修改都重跑五條纜繩（票 14 驗收）。**從停用到啟用**要那一輪全綠，否則拒絕並留在停用；
-    名稱與 profile 照樣存下。已經啟用的 Route 這一輪變紅不會被停掉——它的紅燈本來就擋得住
+    名稱照樣存下。已經啟用的 Route 這一輪變紅不會被停掉——它的紅燈本來就擋得住
     送單（`jobs._check_route`），默默替人停用反而是另一種隱式的改動。
     """
     route = await _find_route(session, route_id)
-    _check_profile(route.collection_type, profile)
     paths = await read_settings(session, PathSettings)
     async with _stale_write_as_missing(session, route_id):
         route.name = name
-        route.profile = profile
         await session.commit()
 
         await _run_checks(session, factory, (_planned_from(route, paths),), (route,))
@@ -604,14 +594,6 @@ async def _stale_write_as_missing(session: AsyncSession, route_id: int) -> Async
         raise RouteRejectedError("route_missing", str(route_id)) from exc
 
 
-def _check_profile(collection_type: CollectionType, profile: Profile) -> None:
-    """anime 是劇集的季集與命名規則（CONTEXT.md 的 Profile）；電影沒有這條路徑（票 14）。"""
-    if profile is Profile.ANIME and collection_type is CollectionType.MOVIES:
-        raise RouteRejectedError(
-            "profile_unsupported", f"a {collection_type.value} route cannot use {profile.value}"
-        )
-
-
 async def _live_libraries(
     session: AsyncSession, factory: ServiceClientFactory
 ) -> tuple[JellyfinLibrary, ...]:
@@ -649,7 +631,6 @@ def _planned_from(route: Route, paths: PathSettings) -> _Planned:
         target_path=route.target_path,
         category=route.category,
         save_path=save_path_of(paths.complete_root, route.slug),
-        profile=route.profile,
     )
 
 
@@ -701,7 +682,6 @@ class _Planned:
     target_path: str
     category: str
     save_path: str
-    profile: Profile
 
 
 def _plan(
@@ -768,14 +748,13 @@ def _plan(
                 target_path=selection.target_path,
                 category=f"{CATEGORY_PREFIX}{slug}",
                 save_path=save_path_of(paths.complete_root, slug),
-                profile=selection.profile,
             )
         )
     return tuple(planned)
 
 
 def _bundled_selections(libraries: Mapping[str, SetupLibrary]) -> tuple[RouteSelection, ...]:
-    """套件內：三個媒體庫各一個 Route，anime 用 `anime` profile（plan §9.3 第 7 步）。
+    """套件內：三個媒體庫各一個 Route（plan §9.3 第 7 步）。
 
     目標路徑取自 **Jellyfin 回報的** `locations`，不是自己算一遍——第 3 步建立時的路徑與
     這裡算出來的路徑一旦分岔，錯的那個要到入庫時才會被發現。
@@ -788,13 +767,7 @@ def _bundled_selections(libraries: Mapping[str, SetupLibrary]) -> tuple[RouteSel
                 f"Jellyfin does not report a library named {bundled.name!r} with a path; "
                 "rerun step 3 before building routes"
             )
-        chosen.append(
-            RouteSelection(
-                library=bundled.name,
-                target_path=library.locations[0],
-                profile=Profile.ANIME if bundled.slug == "anime" else Profile.STANDARD,
-            )
-        )
+        chosen.append(RouteSelection(library=bundled.name, target_path=library.locations[0]))
     return tuple(chosen)
 
 
@@ -822,7 +795,6 @@ def _new_route(plan_row: _Planned, *, name: str, enabled: bool) -> Route:
         collection_type=plan_row.collection_type,
         target_path=plan_row.target_path,
         category=plan_row.category,
-        profile=plan_row.profile,
         enabled=enabled,
         health_status=HealthStatus.UNKNOWN,
     )
@@ -1037,7 +1009,6 @@ def _route_view(route: Route, complete_root: str) -> RouteView:
         target_path=route.target_path,
         category=route.category,
         save_path=save_path_of(complete_root, route.slug),
-        profile=route.profile,
         enabled=route.enabled,
         health=route.health_status,
         checks=step_views(health.checks),
@@ -1078,7 +1049,6 @@ def _library_choice(library: SetupLibrary, library_root: str, route: Route | Non
         supported=library.collection_type in SUPPORTED_TYPES,
         has_route=route is not None,
         target_path=route.target_path if route is not None else _default_target(library),
-        profile=route.profile if route is not None else Profile.STANDARD,
     )
 
 

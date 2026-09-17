@@ -64,7 +64,7 @@ async def test_every_migration_downgrades_off_an_empty_database(config: Config) 
     engine = create_engine(config)
     try:
         async with engine.begin() as connection:
-            await connection.run_sync(_downgrade)
+            await connection.run_sync(_downgrade_to, "base")
     finally:
         await engine.dispose()
 
@@ -79,7 +79,7 @@ async def test_downgrading_then_upgrading_lands_on_the_same_schema(config: Confi
     engine = create_engine(config)
     try:
         async with engine.begin() as connection:
-            await connection.run_sync(_downgrade)
+            await connection.run_sync(_downgrade_to, "base")
     finally:
         await engine.dispose()
     await migrate(config)
@@ -101,15 +101,80 @@ async def test_downgrading_the_last_revision_lands_on_the_previous_schema(
     engine = create_engine(config)
     try:
         async with engine.begin() as connection:
-            await connection.run_sync(_downgrade_one)
+            await connection.run_sync(_downgrade_to, "-1")
         rolled_back = _columns_of(config.database_path)
         async with engine.begin() as connection:
-            await connection.run_sync(_downgrade)
+            await connection.run_sync(_downgrade_to, "base")
             await connection.run_sync(_upgrade_to_previous)
     finally:
         await engine.dispose()
 
     assert _columns_of(config.database_path) == rolled_back
+
+
+#: 票 14e 刪 `routes.profile` 的那一版，與它的前一版。
+PROFILE_DROPPED = "9d4f1b6e2a70"
+BEFORE_PROFILE_DROPPED = "3f6c0a7d94e2"
+
+
+async def test_dropping_the_route_profile_keeps_what_points_at_the_route(config: Config) -> None:
+    """票 14e：升版刪掉 `routes.profile`，降版補回 `standard`，**指向 Route 的列兩個方向都不動**。
+
+    `jobs.route_id` 與 `media.default_route_id` 都是 `ON DELETE SET NULL`，而外鍵在 migration 時
+    開著：用 batch 重建 `routes` 的話 `DROP TABLE` 那一步會把它們全部清空（2026-09-17 實測）。
+    schema 比對的測試抓不到這件事——它們跑在空的資料庫上。
+    """
+    config.config_root.mkdir(parents=True, exist_ok=True)
+    engine = create_engine(config)
+    try:
+        async with engine.begin() as connection:
+            await connection.run_sync(_upgrade_to, BEFORE_PROFILE_DROPPED)
+        with _sqlite(config.database_path) as db:
+            _arrange_a_routed_job(db)
+            db.commit()
+
+        async with engine.begin() as connection:
+            await connection.run_sync(_upgrade_to, PROFILE_DROPPED)
+        assert "profile" not in _columns_of(config.database_path)["routes"]
+        assert _pointers_at_route(config.database_path) == (1, 1)
+
+        async with engine.begin() as connection:
+            await connection.run_sync(_downgrade_to, BEFORE_PROFILE_DROPPED)
+        with _sqlite(config.database_path) as db:
+            profiles = [profile for (profile,) in db.execute("SELECT profile FROM routes")]
+        assert profiles == ["standard"]
+        assert _pointers_at_route(config.database_path) == (1, 1)
+    finally:
+        await engine.dispose()
+
+
+def _arrange_a_routed_job(db: sqlite3.Connection) -> None:
+    """一條 anime Route，一部把它當預選的作品，一個送到它的 Job。"""
+    db.execute(
+        "INSERT INTO routes (id, slug, name, jellyfin_library_id, jellyfin_library_name,"
+        " collection_type, target_path, category, profile, medium_auto_import, enabled,"
+        " health_status, created_at)"
+        " VALUES (1, 'anime', 'Anime', 'lib', 'Anime', 'tvshows', '/data/library/anime',"
+        " 'berth-anime', 'anime', 1, 1, 'ok', '2026-09-17T00:00:00.000000+00:00')"
+    )
+    db.execute(
+        "INSERT INTO media (id, tmdb_id, kind, title_en, title_original, folder_name,"
+        " folder_frozen, default_route_id)"
+        " VALUES ('tv:1', 1, 'tv', 'Show', 'Show', 'Show (2020) [tmdbid-1]', 1, 1)"
+    )
+    db.execute(
+        "INSERT INTO jobs (hash, name, source_url, trigger, trigger_ref, media_id, route_id, state,"
+        " error, save_path, content_path, total_size, progress, client_state, added_at)"
+        " VALUES ('a', 'Show - 01', '', 'manual', '', 'tv:1', 1, 'downloading', '', '', '', 0,"
+        " 0.0, '', '2026-09-17T00:00:00.000000+00:00')"
+    )
+
+
+def _pointers_at_route(database_path: Path) -> tuple[int | None, int | None]:
+    with _sqlite(database_path) as db:
+        (job,) = db.execute("SELECT route_id FROM jobs").fetchone()
+        (media,) = db.execute("SELECT default_route_id FROM media").fetchone()
+    return job, media
 
 
 async def test_alembic_records_the_head_revision(config: Config) -> None:
@@ -186,16 +251,16 @@ async def test_foreign_keys_are_enforced(config: Config) -> None:
     assert enabled == 1
 
 
-def _downgrade(connection: Connection) -> None:
+def _upgrade_to(connection: Connection, revision: str) -> None:
     config = alembic_config()
     config.attributes["connection"] = connection
-    command.downgrade(config, "base")
+    command.upgrade(config, revision)
 
 
-def _downgrade_one(connection: Connection) -> None:
+def _downgrade_to(connection: Connection, revision: str) -> None:
     config = alembic_config()
     config.attributes["connection"] = connection
-    command.downgrade(config, "-1")
+    command.downgrade(config, revision)
 
 
 def _upgrade_to_previous(connection: Connection) -> None:

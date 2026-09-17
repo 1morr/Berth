@@ -1,16 +1,16 @@
 # 實驗腳本
 
-M0 票 04、M1 票 01（brief §20.6）、M1 票 14c 與 14d 的實驗。**指令在根目錄的 [README](../../README.md#實驗腳本)**（那份是本專案
+M0 票 04、M1 票 01（brief §20.6）與 M1 票 14d 的實驗。**指令在根目錄的 [README](../../README.md#實驗腳本)**（那份是本專案
 指令的單一來源）；這裡寫的是每個腳本在回答什麼、為什麼這樣寫、有哪些坑。
 
 結論在 [`docs/research/m0-experiments.md`](../../docs/research/m0-experiments.md)、
 [`docs/research/anime-episode-source.md`](../../docs/research/anime-episode-source.md) 與
 [`docs/research/profile-effect.md`](../../docs/research/profile-effect.md)，摘要進
 brief §10 / §19 / §20.3 / §20.4 / §20.6 / §20.7。原始 JSON 落在 `.local/experiments/results/`（不進版控），
-stdout 是同一份東西的人類版（`profile_effect.py` 與 `absolute_rule_cost.py` 只印 stdout）。
+stdout 是同一份東西的人類版（`absolute_rule_cost.py` 只印 stdout）。
 
 腳本只用 Python 標準庫，不 import `berth`，也不需要專案的虛擬環境 —— 這樣才能原封不動搬到 NAS
-或別人的 Linux 宿主上跑。**例外是 `profile_effect.py` 與 `absolute_rule_cost.py`**：它們量的就是 Berth
+或別人的 Linux 宿主上跑。**例外是 `absolute_rule_cost.py`**：它量的就是 Berth
 自己的解析器，搬到別台機器上跑沒有意義，所以 import `berth`、要用 `uv run` 跑。唯一的宿主相依是 `make_media.py` 會呼叫 `docker`（借 Jellyfin image 的
 ffmpeg 產種子檔），那只影響「造測試素材」這一步，不影響 `hardlink.sh` 的可攜性。
 
@@ -28,7 +28,6 @@ ffmpeg 產種子檔），那只影響「造測試素材」這一步，不影響 
 | `anime_episode_source.py` | M1 票 01：字幕組編號換算到 TMDB 季集 / TVDB aired / TVDB absolute 的失敗率 |
 | `anime_sample.json` | 上一支的樣本：10 部動漫、挑選理由、Mikan 的番組 id |
 | `qbittorrent_poller.py` | M1 票 10：`sync/maindata` 的 rid 增量形狀、`torrents/files` 的相對基準（多檔）、三種處境下的 `state` / `progress` / `completion_on`，以及**連續登入失敗之後的 403 與帳密錯差在哪裡**。最後一項會封住來源 IP，所以它一定跑在最後 |
-| `profile_effect.py` | M1 票 14c：Route 的 profile 對 benchmark 語料有沒有作用。四種組合重算、逐檔比桶、側錄 `_from_number` 走的分支。不連線、不寫檔 |
 | `absolute_rule_cost.py` | M1 票 14d：「集號 ≤ 第一季集數就送審核」擋下的是對的多還是錯的多，以及「標題有認不出的多餘字」分不分得開。正解借 `anime_episode_source.py` 的校準，Berth 的讀法是把每筆 Mikan 發佈丟進 `plan`。只印 stdout |
 | `lib.py` | 共用的 HTTP、輪詢、bencode、報告輸出 |
 

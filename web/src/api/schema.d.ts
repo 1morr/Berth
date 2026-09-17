@@ -426,7 +426,7 @@ export interface paths {
         get?: never;
         /**
          * Put Route
-         * @description 修改並重跑檢查。從停用到啟用而檢查是紅的：409 `route_unhealthy`，名稱與 profile 照樣存下。
+         * @description 修改並重跑檢查。從停用到啟用而檢查是紅的：409 `route_unhealthy`，名稱照樣存下。
          */
         put: operations["put_route_api_routes__route_id__put"];
         post?: never;
@@ -489,7 +489,7 @@ export interface paths {
         };
         /**
          * Get Queries
-         * @description 不打索引站，只讀快照——所以改 Route 時可以隨手重問。
+         * @description 不打索引站，只讀快照。
          */
         get: operations["get_queries_api_search_queries_get"];
         put?: never;
@@ -1549,7 +1549,6 @@ export interface components {
             has_route: boolean;
             /** Target Path */
             target_path: string;
-            profile: components["schemas"]["Profile"];
         };
         /**
          * LibraryOptionOut
@@ -1855,12 +1854,6 @@ export interface components {
             differs: boolean;
         };
         /**
-         * Profile
-         * @description Route 的命名與解析偏好（CONTEXT.md）。
-         * @enum {string}
-         */
-        Profile: "standard" | "anime";
-        /**
          * QbittorrentOut
          * @description 精靈第 4 步與設定頁的漂移還原共用（brief §16.3）。
          */
@@ -1928,7 +1921,6 @@ export interface components {
         RouteEditIn: {
             /** Name */
             name: string;
-            profile: components["schemas"]["Profile"];
             /** Enabled */
             enabled: boolean;
         };
@@ -1943,8 +1935,6 @@ export interface components {
             target_path: string;
             /** Name */
             name: string;
-            /** @default standard */
-            profile?: components["schemas"]["Profile"];
         };
         /** RouteOut */
         RouteOut: {
@@ -1963,7 +1953,6 @@ export interface components {
             category: string;
             /** Save Path */
             save_path: string;
-            profile: components["schemas"]["Profile"];
             /** Enabled */
             enabled: boolean;
             health: components["schemas"]["HealthStatus"];
@@ -1985,8 +1974,6 @@ export interface components {
             library: string;
             /** Target Path */
             target_path: string;
-            /** @default standard */
-            profile?: components["schemas"]["Profile"];
         };
         /** RouteSetupOut */
         RouteSetupOut: {
@@ -3037,8 +3024,6 @@ export interface operations {
             query: {
                 /** @description `tv:<tmdb>` / `movie:<tmdb>`。 */
                 media: string;
-                /** @description 換這條 Route 的 profile 算一次（anime 多兩個季號變體）。 */
-                route?: number | null;
             };
             header?: never;
             path?: never;
@@ -3073,8 +3058,6 @@ export interface operations {
                 media: string;
                 /** @description 自己打的關鍵字。有值時取代作品的各個標題，只問這一個。 */
                 q?: string;
-                /** @description **這一輪搜尋的偏好，不是承諾**（票 04b）：只用來決定 anime profile 要不要加季號變體，不寫進 `media`，也不代表之後一定送到那條 Route。 */
-                route?: number | null;
             };
             header?: never;
             path?: never;

@@ -32,7 +32,6 @@ from berth.domain import (
     PlanAction,
     PlanEngine,
     PlanStatus,
-    Profile,
     ReviewReason,
     SeasonSnapshot,
     Tags,
@@ -149,7 +148,6 @@ async def _route(
         collection_type=CollectionType.TVSHOWS,
         target_path=str(roots["library"] / "anime"),
         category="berth-anime",
-        profile=Profile.ANIME,
         medium_auto_import=medium_auto_import,
         health_status=HealthStatus.OK,
     )

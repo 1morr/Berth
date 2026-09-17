@@ -36,9 +36,6 @@ export type MediaKind = Schemas['MediaKind']
  */
 export type TmdbProblem = NonNullable<Schemas['TmdbProblem']>
 
-/** `Profile`：Route 的命名與解析偏好（CONTEXT.md）。 */
-export type Profile = Schemas['Profile']
-
 /** 一個 Route 或一個服務上一次檢查的結果。 */
 export type HealthStatus = Schemas['HealthStatus']
 

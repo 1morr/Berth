@@ -22,8 +22,10 @@ import { sortRows, type SortKey } from './searchResult'
  * 對五個公開站發五輪查詢。所以它是 mutation 不是 query——使用者按下去才發生的事。
  *
  * 按下之前畫面先列出**會送出去的那幾個關鍵字**（PRODUCT 原則 2：動手前先給看）。那份清單
- * 由後端算（`GET /api/search/queries`），不是前端重算一份——它要看快照的標題集合與 Route
- * 的 profile，兩邊各算一次遲早會給出不同的答案。
+ * 由後端算（`GET /api/search/queries`），不是前端重算一份——它要看快照的標題集合與季數，
+ * 兩邊各算一次遲早會給出不同的答案。
+ *
+ * Route 下拉住在這一區，但**搜尋不看它**（票 14e）：它只決定結果表裡那一顆送單送去哪裡。
  */
 export function SearchPanel({ media }: { media: Media }) {
   const { t } = useTranslation()
@@ -37,9 +39,9 @@ export function SearchPanel({ media }: { media: Media }) {
   const [keyword, setKeyword] = useState('')
   const [sort, setSort] = useState<SortKey>('seeders')
 
-  const planned = useQuery(queriesQueryOptions(media.id, chosen))
+  const planned = useQuery(queriesQueryOptions(media.id))
   const search = useMutation({
-    mutationFn: () => searchTorrents({ media: media.id, q: keyword.trim(), route: chosen }),
+    mutationFn: () => searchTorrents({ media: media.id, q: keyword.trim() }),
   })
 
   const results = search.data

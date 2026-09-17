@@ -9,10 +9,9 @@ import {
   type LibraryOption,
   type RouteRefusal,
 } from '../api/routes'
-import type { Profile, RouteView } from '../api/schemas'
+import type { RouteView } from '../api/schemas'
 import { jellyfinAddressQueryOptions } from '../api/settings'
 import { Field, GhostButton, Notice, PrimaryButton } from '../components/controls'
-import { ProfilePicker } from '../components/ProfilePicker'
 import { jellyfinLibrariesUrl } from '../inventory/jellyfinLink'
 
 /** 建立時會遇到的拒絕。查表而不是動態組 key——動態組過不了 `strictKeyChecks`（票 06）。 */
@@ -23,7 +22,6 @@ const CREATE_REFUSAL = {
   target_taken: 'routeSettings.add.refusal.target_taken',
   route_conflict: 'routeSettings.add.refusal.route_conflict',
   jellyfin_unreachable: 'routeSettings.add.refusal.jellyfin_unreachable',
-  profile_unsupported: 'routeSettings.add.refusal.profile_unsupported',
 } as const satisfies Partial<Record<RouteRefusal, string>>
 
 /** 這個媒體庫還沒有 Route 的路徑。哪些被佔了由後端判定（`route_name`），這裡只是把它們挑掉。 */
@@ -92,13 +90,12 @@ function AddRouteForm({
   const [libraryId, setLibraryId] = useState('')
   const [target, setTarget] = useState('')
   const [name, setName] = useState('')
-  const [profile, setProfile] = useState<Profile>('standard')
   const [incomplete, setIncomplete] = useState(false)
   const [blank, setBlank] = useState(false)
 
   const create = useMutation({
     mutationFn: () =>
-      createRoute({ library_id: libraryId, target_path: target, name: name.trim(), profile }),
+      createRoute({ library_id: libraryId, target_path: target, name: name.trim() }),
     onSuccess: onCreated,
   })
 
@@ -113,7 +110,6 @@ function AddRouteForm({
     setTarget(free.length === 1 ? free[0] : '')
     // 名稱預填媒體庫名，但使用者打過的不蓋掉。
     setName((was) => (was === '' || was === library?.name ? next.name : was))
-    setProfile('standard')
   }
 
   return (
@@ -209,9 +205,6 @@ function AddRouteForm({
                 onChange={(event) => setName(event.target.value)}
                 error={blank ? t('routeSettings.edit.nameRequired') : undefined}
               />
-              {library?.collection_type === 'tvshows' && (
-                <ProfilePicker group={`${formId}-profile`} value={profile} onPick={setProfile} />
-              )}
             </div>
 
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,14rem)_auto] sm:items-center">

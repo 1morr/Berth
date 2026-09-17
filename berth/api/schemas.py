@@ -13,7 +13,6 @@ from pydantic import BaseModel, ConfigDict
 from berth.domain import (
     CollectionType,
     HealthStatus,
-    Profile,
     ServiceKind,
     ServiceOrigin,
     StepStatus,
@@ -48,7 +47,6 @@ class RouteOut(BaseModel):
     category: str
     #: 這個 category 的 save path，也就是硬鏈接的來源目錄。
     save_path: str
-    profile: Profile
     enabled: bool
     health: HealthStatus
     #: 逐項檢查，`step` 是 `RouteCheck`。形狀與其他泊位的纜繩一樣。

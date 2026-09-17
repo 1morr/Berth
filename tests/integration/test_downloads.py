@@ -31,7 +31,6 @@ from berth.domain import (
     JobState,
     JobTrigger,
     MediaKind,
-    Profile,
 )
 from berth.models import Event, Job, JobFile, Media, PollerSettings, QbittorrentSettings, Route
 from berth.services.downloads import (
@@ -119,7 +118,6 @@ async def setup_job(
         collection_type=CollectionType.TVSHOWS,
         target_path=str(roots["library"] / "anime"),
         category=CATEGORY,
-        profile=Profile.ANIME,
         health_status=HealthStatus.OK,
     )
     session.add(route)

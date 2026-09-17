@@ -11,7 +11,6 @@ from berth.api.schemas import QbittorrentOut, RouteOut, StepOut
 from berth.domain import (
     DetectionReason,
     IndexerKind,
-    Profile,
     ServiceKind,
     ServiceOrigin,
 )
@@ -388,7 +387,6 @@ class LibraryChoiceOut(BaseModel):
     #: 已經有 Route 了：精靈只新增，這個媒體庫在勾選表上鎖住（票 14）。
     has_route: bool
     target_path: str
-    profile: Profile
 
 
 class RouteSetupOut(BaseModel):
@@ -410,7 +408,6 @@ class RouteSelectionIn(BaseModel):
     library: str = Field(min_length=1)
     #: 必須是那個媒體庫回報的路徑之一——路徑用選的，不用打的（brief §4.1）。
     target_path: str = Field(min_length=1)
-    profile: Profile = Profile.STANDARD
 
 
 class RoutesIn(BaseModel):
@@ -438,9 +435,7 @@ async def post_routes(
             session,
             factory,
             [
-                RouteSelection(
-                    library=row.library, target_path=row.target_path, profile=row.profile
-                )
+                RouteSelection(library=row.library, target_path=row.target_path)
                 for row in (body or RoutesIn()).selections
             ],
         )

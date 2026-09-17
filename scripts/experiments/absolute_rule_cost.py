@@ -11,7 +11,7 @@
 - 集號 > 第一季集數那一側，現行換算對與錯各有幾個；
 - 收窄規則 R「集號 ≤ 第一季集數**而且**標題有認不出的多餘字」在 A 裡放行幾個、在 B 裡漏掉幾個。
 
-與 `profile_effect.py` 一樣 **import `berth`**（量的就是 Berth 自己的解析器），另外 import 同目錄的
+**import `berth`**（量的就是 Berth 自己的解析器），另外 import 同目錄的
 `anime_episode_source.py` 取正解。要 `TMDB_API_KEY`（那一支的快取鍵不含憑證，但它要求環境變數在）；
 快取在 `.local/experiments/cache/anime_episode_source/`，被清掉的話重抓約十分鐘：
 
@@ -384,7 +384,7 @@ def probe(snapshot_root: Path) -> list[str]:
 
 
 def main() -> int:
-    # 標題裡有中文與全形符號，Windows 主控台預設是 cp950（`profile_effect.py` 同一個坑）。
+    # 標題裡有中文與全形符號，Windows 主控台預設是 cp950。
     if isinstance(sys.stdout, io.TextIOWrapper):
         sys.stdout.reconfigure(encoding="utf-8")
     token = source.tmdb_token()

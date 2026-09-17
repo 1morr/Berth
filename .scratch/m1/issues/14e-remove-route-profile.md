@@ -1,6 +1,6 @@
 # 14e — 把 Route profile 整個拿掉
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Blocked by:** 14d（2026-09-16 插入，排在 14d 之後、15 之前：票 15 的 UI 收尾要審的是拿掉之後的精靈與設定頁）
 
@@ -53,13 +53,13 @@
 
 ## 驗收
 
-- [ ] 上面清單逐項拿掉；`grep -rni profile berth web/src tests CONTEXT.md PRODUCT.md docs/plan.md` 只剩與 Route profile 無關的
+- [x] 上面清單逐項拿掉；`grep -rni profile berth web/src tests CONTEXT.md PRODUCT.md docs/plan.md` 只剩與 Route profile 無關的
       （`COMPOSE_PROFILES`、`appProfileId`、Sonarr 的 quality / release profile），brief 只剩 §19 與 §20.4 的紀錄；CHANGELOG 已記。
-- [ ] migration 升版刪欄位、降版補回（預設 `standard`）；schema 比對的測試綠。
-- [ ] 季號變體對非動漫的多季劇集也產生，單季與電影不產生，有測試。
-- [ ] 精靈的 Route 步驟與「設定 → 媒體庫路徑」以 playwright 實跑，看得到沒有 profile 選擇、建立與修改照常；深淺兩主題各一張截圖。
-- [ ] `uv run berth bench` 數字與 14d 結束時相同，貼輸出。
-- [ ] `uv run ruff check . && uv run ruff format --check . && uv run mypy && uv run lint-imports && uv run pytest` 與
+- [x] migration 升版刪欄位、降版補回（預設 `standard`）；schema 比對的測試綠。
+- [x] 季號變體對非動漫的多季劇集也產生，單季與電影不產生，有測試。
+- [x] 精靈的 Route 步驟與「設定 → 媒體庫路徑」以 playwright 實跑，看得到沒有 profile 選擇、建立與修改照常；深淺兩主題各一張截圖。
+- [x] `uv run berth bench` 數字與 14d 結束時相同，貼輸出。
+- [x] `uv run ruff check . && uv run ruff format --check . && uv run mypy && uv run lint-imports && uv run pytest` 與
       `pnpm -C web format:check && pnpm -C web typecheck && pnpm -C web lint && pnpm -C web test` 全綠，貼指令輸出。
 
 **不做：**
@@ -68,3 +68,27 @@
 - 量季號變體對真實索引站的效果。
 
 ## Comments
+
+- 2026-09-17 驗收 grep 剩下的命中逐類說明（都不是 Route profile 的讀寫）：m0 migration 建的 `profile` 欄位與這一票的
+  migration `9d4f1b6e2a70` 本身、`tests/integration/test_database.py` 守它的測試；指向研究文件檔名
+  `docs/research/profile-effect.md` 的連結（`parser/mapping.py`、`tests/unit/test_parser_mapping.py`、語料 README、
+  plan §4.4、brief §6.4）；錄下來的外部服務回應（Jellyfin 的 `"Profile": "High"`、Prowlarr 的 `Sync profile`、TMDB 的
+  `profile_path`）；`COMPOSE_PROFILES`、`appProfileId`。
+- **migration 升版用原生 `DROP COLUMN`、降版存下再寫回指向 Route 的兩欄**：`jobs.route_id` 與 `media.default_route_id`
+  是 `ON DELETE SET NULL`，batch 重建 `routes` 會在 `DROP TABLE` 那一步把它們清空（scratchpad 實驗、再以票上的測試
+  先用 batch 寫法看過紅燈 `(None, None)`、拿掉寫回那段也看過紅燈）。
+- 「設定 → 媒體庫路徑」的實跑中途 playwright MCP 斷線，後半段（改名儲存、新增第二條 Route、兩張截圖）改用
+  chrome-devtools；精靈泊位 4 是 playwright 跑的。截圖在 session scratchpad：`wizard-routes-{dark,light}.png`、
+  `settings-routes-{dark,light}.png`。PUT body `{"name":"TV","enabled":true}`、POST body
+  `{"library_id":"item-tv","target_path":"…/library-disk2/tv","name":"TV 2"}`，四條 Route 的回應都沒有 `profile`。
+- 精靈用 `mixed` 情境（既有 Jellyfin）：泊位 4 勾選劇集類型的 Anime 媒體庫，展開區只有寫入目標與「加入 Berth 路徑」；
+  建立照常。那條 Route 的 `library_path` 紅燈是替身 NAS 的 `/volume1/media/anime` 在這台機器上不存在，與本票無關。
+- `web/src/i18n/resources.ts` 英文 `inventory…versions.pending` 那一行的換行是 prettier 改的：e02e54e 的這個檔就過不了
+  `prettier --check`（票 14b 加的那一行），驗收要 `format:check` 綠燈所以留著。
+- code-review 沒處理的發現：
+  - `services/search._context` 把作品類型填進 `ParseContext.route_collection_type`，搜尋不帶 Route 之後名字不準
+    （Standards 軸，判斷題）。那是 domain 欄位名，解析器與 plan 都用它，不在這一票改。
+  - `test_a_movie_does_not_add_them` 單獨紅不起來：電影快照本來就沒有季，與單季劇集落在同一條規則（兩軸都提）。
+    沒有替它在 `_season_variants` 加 `kind` 判斷——那是替不存在的資料寫的分支；docstring 照實寫它守的是什麼。
+- 順帶看到、沒動：精靈泊位 4 的剖面「Route 數」數的是「這一輪要新建的」，建完之後變 0（e02e54e 就是這樣），
+  票 15 的 critique 可以看一眼。

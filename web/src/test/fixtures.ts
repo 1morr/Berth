@@ -218,7 +218,6 @@ export function libraryChoice(overrides: Partial<LibraryChoice> = {}): LibraryCh
     supported: true,
     has_route: false,
     target_path: `/data/library/${slug}`,
-    profile: 'standard',
     ...overrides,
   }
 }
@@ -235,7 +234,6 @@ export function routeView(overrides: Partial<RouteView> = {}): RouteView {
     target_path: `/data/library/${slug}`,
     category: `berth-${slug}`,
     save_path: `/data/torrent/complete/${slug}`,
-    profile: 'standard',
     enabled: true,
     health: 'ok',
     checks: CHECKS_PASSED,

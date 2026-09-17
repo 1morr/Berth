@@ -21,7 +21,6 @@ from berth.domain import (
     MediaKind,
     MediaSnapshot,
     ParseContext,
-    Profile,
     SeasonSnapshot,
 )
 from berth.parser import map_episode, parse_release, structure_hints
@@ -88,14 +87,11 @@ def run(
     media: MediaSnapshot,
     *,
     path: str = "",
-    profile: Profile = Profile.STANDARD,
     torrent: str = "",
     season_hint: int | None = None,
     episode_offset: int | None = None,
 ) -> tuple[Candidate, ...]:
-    context = ParseContext(
-        media=media, profile=profile, season_hint=season_hint, episode_offset=episode_offset
-    )
+    context = ParseContext(media=media, season_hint=season_hint, episode_offset=episode_offset)
     return map_episode(
         parse_release(name),
         structure_hints(path or name),
@@ -115,7 +111,7 @@ class TestExplicit:
 
     def test_sxxeyy(self) -> None:
         bear = show(season(1, 8), season(2, 10), season(3, 10), title="The Bear")
-        candidates = run("The.Bear.S03E02.1080p.WEB.mkv", bear, profile=Profile.STANDARD)
+        candidates = run("The.Bear.S03E02.1080p.WEB.mkv", bear)
 
         assert best(candidates) == (3, 2, MappingStrategy.EXPLICIT)
         assert candidates[0].confidence is Confidence.HIGH
@@ -131,15 +127,13 @@ class TestExplicit:
 
     def test_an_episode_tmdb_does_not_have_drops_to_low(self) -> None:
         """還沒收錄不代表解析錯，但也不能自動入庫（brief §6.5 的 low 進 review）。"""
-        candidates = run("Show.S01E99.1080p.WEB.mkv", show(season(1, 10)), profile=Profile.STANDARD)
+        candidates = run("Show.S01E99.1080p.WEB.mkv", show(season(1, 10)))
 
         assert candidates[0].confidence is Confidence.LOW
 
     def test_a_multi_episode_file_keeps_both_ends(self) -> None:
         """brief §6.6 的單檔多集。"""
-        candidates = run(
-            "Show.S01E01-E02.1080p.WEB.mkv", show(season(1, 12)), profile=Profile.STANDARD
-        )
+        candidates = run("Show.S01E01-E02.1080p.WEB.mkv", show(season(1, 12)))
 
         assert (candidates[0].episode_start, candidates[0].episode_end) == (1, 2)
 
@@ -325,16 +319,12 @@ class TestCourOffset:
 class TestSingleSeason:
     def test_an_episode_number_alone_lands_in_the_only_season(self) -> None:
         """韓劇的 `EP08` 與單季動漫的 `- 08`（brief §6.4）。"""
-        candidates = run(
-            "True.Beauty.2020.EP08.HD1080P.mp4", show(season(1, 16)), profile=Profile.STANDARD
-        )
+        candidates = run("True.Beauty.2020.EP08.HD1080P.mp4", show(season(1, 16)))
 
         assert best(candidates) == (1, 8, MappingStrategy.SINGLE_SEASON)
 
     def test_it_is_never_more_than_medium(self) -> None:
-        candidates = run(
-            "True.Beauty.2020.EP08.HD1080P.mp4", show(season(1, 16)), profile=Profile.STANDARD
-        )
+        candidates = run("True.Beauty.2020.EP08.HD1080P.mp4", show(season(1, 16)))
 
         assert candidates[0].confidence is Confidence.MEDIUM
 
@@ -547,9 +537,7 @@ class TestSpecials:
 
 class TestMovies:
     def test_a_movie_has_no_season_or_episode(self) -> None:
-        candidates = run(
-            "Oppenheimer.2023.1080p.BluRay.x264.mp4", movie(), profile=Profile.STANDARD
-        )
+        candidates = run("Oppenheimer.2023.1080p.BluRay.x264.mp4", movie())
 
         assert best(candidates) == (None, None, MappingStrategy.MOVIE)
         assert candidates[0].confidence is Confidence.HIGH
@@ -559,7 +547,6 @@ class TestMovies:
         candidates = run(
             "Psycho.1960.Uncut.1080p.BluRay.x265.mkv",
             movie("Psycho", 1960),
-            profile=Profile.STANDARD,
         )
 
         assert candidates[0].episode_start is None
@@ -569,7 +556,7 @@ class TestNoMedia:
     """RSS 與重新入庫沒有上下文 Media，那時只能靠標題（brief §6.4 第 2 點）。"""
 
     def test_without_a_snapshot_or_candidates_there_is_nothing_to_map_against(self) -> None:
-        context = ParseContext(media=None, profile=Profile.ANIME)
+        context = ParseContext(media=None)
 
         assert (
             map_episode(parse_release("Show - 01.mkv"), structure_hints("Show - 01.mkv"), context)
@@ -580,7 +567,6 @@ class TestNoMedia:
         bear = show(season(1, 8), season(2, 10), season(3, 10), title="The Bear", year=2022)
         context = ParseContext(
             media=None,
-            profile=Profile.STANDARD,
             candidates=(show(season(1, 6), title="Fleabag", year=2016), bear),
         )
         name = "The.Bear.S03E02.1080p.WEB.mkv"
@@ -592,7 +578,6 @@ class TestNoMedia:
     def test_a_title_that_matches_nobody_maps_to_nothing(self) -> None:
         context = ParseContext(
             media=None,
-            profile=Profile.STANDARD,
             candidates=(show(season(1, 6), title="Fleabag", year=2016),),
         )
         name = "The.Bear.S03E02.1080p.WEB.mkv"
@@ -602,7 +587,7 @@ class TestNoMedia:
     def test_a_title_without_a_year_is_never_more_than_medium(self) -> None:
         """brief §6.5 的 high 要的是「標題 **+ 年份**精確命中」。"""
         bear = show(season(1, 8), season(2, 10), season(3, 10), title="The Bear", year=2022)
-        context = ParseContext(media=None, profile=Profile.STANDARD, candidates=(bear,))
+        context = ParseContext(media=None, candidates=(bear,))
         name = "The.Bear.S03E02.1080p.WEB.mkv"
 
         candidates = map_episode(parse_release(name), structure_hints(name), context)
@@ -611,7 +596,7 @@ class TestNoMedia:
 
     def test_a_title_with_the_year_may_be_high(self) -> None:
         bear = show(season(1, 8), season(2, 10), season(3, 10), title="The Bear", year=2022)
-        context = ParseContext(media=None, profile=Profile.STANDARD, candidates=(bear,))
+        context = ParseContext(media=None, candidates=(bear,))
         name = "The.Bear.2022.S03E02.1080p.WEB.mkv"
 
         candidates = map_episode(parse_release(name), structure_hints(name), context)
@@ -625,7 +610,6 @@ class TestWrongShow:
         candidates = run(
             "The.Bear.S03E02.1080p.WEB.mkv",
             show(season(1, 9), season(2, 7), season(3, 6), title="Squid Game"),
-            profile=Profile.STANDARD,
         )
 
         assert candidates[0].confidence is not Confidence.HIGH

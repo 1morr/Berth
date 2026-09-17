@@ -3,7 +3,7 @@
   "source_url": "https://thepiratebay.org/description.php?id=77660121",
   "torrent_name": "Squid.Game.Season.2.COMPLETE.ENG.1080p.NF.WEB-DL.x264.ESubs.[5.8GB].MP4.S02.FULL",
   "tmdb": "tv-93405",
-  "context": {"media": "tv:93405", "profile": "standard", "season_hint": null, "episode_offset": null},
+  "context": {"media": "tv:93405", "season_hint": null, "episode_offset": null},
   "files": [
     {"path": "[ y2flix.cc ].txt", "size": 0},
     {"path": "Squid.Game.S02E05.ENG.1080p.NF.x264-[y2flix.cc].mp4", "size": 1118915559},

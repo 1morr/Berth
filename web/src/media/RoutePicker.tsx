@@ -8,14 +8,15 @@ import { SetupHint } from '../components/SetupHint'
 /**
  * 「入庫到哪裡」那一行（票 04b、`.scratch/m1/search-results-shape.md` §4）。
  *
- * 這是一個**偏好，不是承諾**：選了不會寫進任何地方。票 08 的搜尋把它當查詢參數送
- * （anime profile 多兩個季號變體）、票 09 的送單把它當 body 送，`media.default_route_id`
- * 由送單成功時寫成「上次用的」。為了一個下拉的初值多一支 `PUT /media/{id}/route` 不划算。
+ * 這是一個**偏好，不是承諾**：選了不會寫進任何地方。票 09 的送單把它當 body 送，
+ * `media.default_route_id` 由送單成功時寫成「上次用的」。為了一個下拉的初值多一支
+ * `PUT /media/{id}/route` 不划算。搜尋不看它（票 14e）。
  *
  * **它住在搜尋區塊裡**（使用者 2026-09-10 拍板，推翻 `media-detail-shape.md` §3 的
- * 「不動身分帶」）：它現在真的驅動一件事，而留在身分帶等於一個按了沒反應的控制項。
+ * 「不動身分帶」）：當時的理由是它驅動查詢變體，留在身分帶等於一個按了沒反應的控制項。
+ * 票 14e 起查詢不看它，它驅動的是結果表裡每一列的送單，位置不變。
  *
- * 受控元件：狀態在 `SearchPanel`，因為送出去的查詢與「會問哪幾個關鍵字」的預覽都要讀它。
+ * 受控元件：狀態在 `SearchPanel`，因為結果表裡每一列的送單都要讀它。
  */
 export function RoutePicker({
   media,

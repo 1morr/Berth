@@ -373,7 +373,6 @@ const zhHant = {
       title: '選擇媒體庫',
       lede: '一個媒體庫一條 Route。路徑是 Jellyfin 回報的，所以這裡用選的，不用打的。',
       target: '寫入目標',
-      profile: '命名 profile',
       mixed: '混合',
       unsupported: 'Berth 只寫入電影與劇集類型的媒體庫，這一個跳過。',
       tvdb: '這個媒體庫掛了 TVDB 的 metadata fetcher。Berth 以 TMDB 為準，兩者的季集編號可能不同。',
@@ -383,10 +382,6 @@ const zhHant = {
       addBerthPath: '加入 Berth 路徑',
       adding: '加入中…',
       addHint: '在這個媒體庫加一條 {{path}}，舊路徑原地不動；加完就用它當寫入目標。',
-    },
-    profile: {
-      standard: '標準',
-      anime: '動漫',
     },
     health: {
       unknown: '尚未檢查',
@@ -1094,7 +1089,6 @@ const zhHant = {
         target_taken: '這條路徑剛被另一條 Route 用走了。每條 Route 要有自己的寫入目標。',
         route_conflict: '另一條 Route 在同一時間建立，這一條沒有存進去。再按一次「建立並檢查」。',
         jellyfin_unreachable: '建立的那一刻問不到 Jellyfin。確認它還在跑，再按一次。',
-        profile_unsupported: '動漫 profile 只給劇集媒體庫：電影沒有季與集。',
       },
     },
   },
@@ -1493,7 +1487,6 @@ const en: Translations<typeof zhHant> = {
       title: 'Pick the libraries',
       lede: 'One route per library. The paths come from Jellyfin, so you pick one instead of typing it.',
       target: 'Write target',
-      profile: 'Naming profile',
       mixed: 'Mixed',
       unsupported: 'Berth writes into movie and TV libraries only, so this one is skipped.',
       tvdb: 'This library has a TVDB metadata fetcher. Berth follows TMDB, and the two number seasons and episodes differently.',
@@ -1504,10 +1497,6 @@ const en: Translations<typeof zhHant> = {
       adding: 'Adding…',
       addHint:
         'Adds {{path}} to this library. Your existing paths stay where they are, and the new one becomes the write target.',
-    },
-    profile: {
-      standard: 'Standard',
-      anime: 'Anime',
     },
     health: {
       unknown: 'Not checked',
@@ -1741,7 +1730,8 @@ const en: Translations<typeof zhHant> = {
         noneTv: 'Every episode has a single version.',
         noneMovie: 'This film has a single version.',
         note: 'In Jellyfin these versions share one entry with a version menu. Jellyfin decides the names and the order in that menu; what you see here is what it reports.',
-        pending: 'Versions Jellyfin has not indexed yet have no name, so the tags from the file name are shown instead.',
+        pending:
+          'Versions Jellyfin has not indexed yet have no name, so the tags from the file name are shown instead.',
       },
       unmatched: {
         title: 'Unmatched files',
@@ -2213,8 +2203,6 @@ const en: Translations<typeof zhHant> = {
           'Another route was being created at the same moment, so this one was not saved. Press Create and check again.',
         jellyfin_unreachable:
           'Jellyfin did not answer when the route was being created. Check that it is running and press again.',
-        profile_unsupported:
-          'The anime profile is for TV libraries only: movies have no seasons or episodes.',
       },
     },
   },

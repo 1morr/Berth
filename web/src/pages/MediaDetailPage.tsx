@@ -26,8 +26,8 @@ import tmdbLogo from '../assets/tmdb.svg'
  * **後一票往中間插，不重排前面**：票 13 的檔案與版本清單插在搜尋結果表之後
  * （shape brief §3 的區塊序列）。整寬是為了它們——五欄的結果表在一個 5:7 的右欄裡讀不完。
  *
- * 票 08 把 Route 下拉從身分帶搬進了搜尋區塊（使用者 2026-09-10 拍板）：它現在真的驅動
- * 一件事（anime profile 的查詢變體），留在身分帶等於一個按了沒反應的控制項。
+ * 票 08 把 Route 下拉從身分帶搬進了搜尋區塊（使用者 2026-09-10 拍板）：當時它驅動查詢變體，
+ * 留在身分帶等於一個按了沒反應的控制項。票 14e 起查詢不看它，它驅動的是結果表裡的送單。
  */
 export function MediaDetailPage({ id }: { id: string }) {
   const { t } = useTranslation()

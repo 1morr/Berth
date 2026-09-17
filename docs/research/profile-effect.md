@@ -1,8 +1,11 @@
 # Route profile 的作用（M1 票 14c / brief §6.4、§20.4）
 
-2026-09-16。腳本是 [`scripts/experiments/profile_effect.py`](../../scripts/experiments/profile_effect.py)，
-可重跑（`uv run python scripts/experiments/profile_effect.py`，不連線、不寫檔）。語料是
+2026-09-16。腳本是 `scripts/experiments/profile_effect.py`（不連線、不寫檔）。語料是
 `tests/fixtures/parser/` 本身，這一票補了 5 筆（見 §3）。
+
+> **2026-09-17 起這是紀錄**：Route profile 已在 M1 票 14e 從資料庫、API、介面與語料整個拿掉，腳本量的
+> 東西不存在了，隨同一票刪除（要看它，`git show 7d5c245:scripts/experiments/profile_effect.py`）。
+> §6.1.1 的 `absolute_rule_cost.py` 仍在。
 
 ## 0. 結論
 

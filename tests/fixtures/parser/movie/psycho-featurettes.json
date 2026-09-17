@@ -3,7 +3,7 @@
   "source_url": "https://thepiratebay.org/description.php?id=36830371",
   "torrent_name": "Psycho (1960) Uncut Turdien + Extras (1080p BluRay x265 HEVC 10bit AAC 2.0 afm72)",
   "tmdb": "movie-539",
-  "context": {"media": "movie:539", "profile": "standard", "season_hint": null, "episode_offset": null},
+  "context": {"media": "movie:539", "season_hint": null, "episode_offset": null},
   "files": [
     {"path": "Featurettes/Behind the Scenes Photographs.mkv", "size": 9397503},
     {"path": "Featurettes/Hitchcock-Truffaut audio interview with scenes from the movie.mkv", "size": 312555926},

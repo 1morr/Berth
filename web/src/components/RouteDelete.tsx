@@ -41,7 +41,7 @@ export function RouteDelete({
   route: RouteView
   usage?: RouteUsage & { in_use: boolean }
   onDelete: () => Promise<void>
-  /** 停用這一條。只有設定頁給；呼叫端決定送什麼（存下來的名稱與 profile）。 */
+  /** 停用這一條。只有設定頁給；呼叫端決定送什麼（存下來的名稱）。 */
   onDisable?: () => Promise<unknown>
   onChanged: (change: RouteChange) => void
 }) {

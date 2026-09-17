@@ -3,7 +3,7 @@
   "source_url": "https://nyaa.si/view/2059957",
   "torrent_name": "Your.Name.2016.MULTI.BDMV.2160p.HEVC-MaitreAnonyme",
   "tmdb": "movie-372058",
-  "context": {"media": "movie:372058", "profile": "anime", "season_hint": null, "episode_offset": null},
+  "context": {"media": "movie:372058", "season_hint": null, "episode_offset": null},
   "files": [
     {"path": "BDMV/index.bdmv", "size": 180},
     {"path": "BDMV/MovieObject.bdmv", "size": 1114},

@@ -388,25 +388,10 @@ describe('搜尋 torrent 與結果表', () => {
     )
   })
 
-  it('換一條 Route 就重問一次「會用哪幾個關鍵字」——它只影響這一輪搜尋（票 04b）', async () => {
-    const stub = render({
-      [`${QUERIES_PATH}&route=2`]: {
-        body: { queries: ['SPY x FAMILY', 'SPY x FAMILY Season 3', '間諜家家酒 第3季'] },
-      },
-    })
-    renderApp('/media/tv:120089')
-
-    await userEvent.selectOptions(await screen.findByLabelText('入庫到'), 'Anime')
-
-    expect(await screen.findByText(/SPY x FAMILY Season 3/)).toBeVisible()
-    // 偏好不落地：整輪下來一個非 GET 都沒送出去。
-    expect(stub.mock.calls.filter(([, init]) => init?.method === 'POST')).toEqual([])
-  })
-
   describe('送單（票 09）', () => {
     /** 搜一次，回一列結果。送單那顆鍵掛在那一列上。 */
     async function searched(routes: Record<string, StubRoute | (() => StubRoute)> = {}) {
-      const stub = render({ [`${SEARCH_PATH}&route=1`]: { body: results() }, ...routes })
+      const stub = render({ [SEARCH_PATH]: { body: results() }, ...routes })
       renderApp('/media/tv:120089')
       await userEvent.selectOptions(await screen.findByLabelText('入庫到'), 'TV')
       await userEvent.click(screen.getByRole('button', { name: '搜尋' }))

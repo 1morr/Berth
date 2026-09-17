@@ -9,7 +9,7 @@ from pydantic import BaseModel, ConfigDict
 from sqlalchemy import Text
 from sqlalchemy.orm import Mapped, mapped_column
 
-from berth.domain import CollectionType, HealthStatus, Profile
+from berth.domain import CollectionType, HealthStatus
 from berth.models.base import Base
 from berth.models.setting import SetupStep
 from berth.models.types import JsonText, UtcDateTime, enum_column, utcnow
@@ -46,7 +46,6 @@ class Route(Base):
     target_path: Mapped[str] = mapped_column(Text)
     #: qBittorrent category，預設 `berth-<slug>`（brief §4.1）。
     category: Mapped[str] = mapped_column(Text)
-    profile: Mapped[Profile] = mapped_column(enum_column(Profile))
     #: medium 信心是否自動入庫；false 時一律進 Review Queue（brief §6.5）。
     medium_auto_import: Mapped[bool] = mapped_column(default=True)
     enabled: Mapped[bool] = mapped_column(default=True)

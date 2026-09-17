@@ -417,12 +417,6 @@ python scripts/experiments/anime_episode_source.py --discover        # 重新找
 `.local/experiments/cache/`，之後重跑分析是秒級。結果見
 [`docs/research/anime-episode-source.md`](docs/research/anime-episode-source.md)。
 
-Route profile 對解析結果的作用（M1 票 14c）。不連線、不需要憑證，但 import `berth`，所以用 `uv run`：
-
-```bash
-uv run python scripts/experiments/profile_effect.py    # 語料四種 profile 組合的報表、逐檔差異、分支側錄
-```
-
 「集號 ≤ 第一季集數就送審核」這條規則的代價（M1 票 14d）。拿上面 `anime_episode_source.py` 的快取當正解、
 丟進 Berth 的解析器，所以要憑證也要 `uv run`（快取被清掉的話會先重抓，約十分鐘）：
 
@@ -430,7 +424,7 @@ uv run python scripts/experiments/profile_effect.py    # 語料四種 profile �
 uv run --env-file .env python scripts/experiments/absolute_rule_cost.py    # A / B、收窄規則 R 的放行與漏掉
 ```
 
-兩支的結果都見 [`docs/research/profile-effect.md`](docs/research/profile-effect.md)。
+結果見 [`docs/research/profile-effect.md`](docs/research/profile-effect.md) §6.1.1。
 
 ## 目錄結構
 

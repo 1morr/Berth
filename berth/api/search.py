@@ -102,14 +102,9 @@ async def get_queries(
     session: SessionDep,
     factory: ClientFactoryDep,
     media: Annotated[str, Query(description="`tv:<tmdb>` / `movie:<tmdb>`。")],
-    route: Annotated[
-        int | None, Query(description="換這條 Route 的 profile 算一次（anime 多兩個季號變體）。")
-    ] = None,
 ) -> SearchQueriesOut:
-    """不打索引站，只讀快照——所以改 Route 時可以隨手重問。"""
-    return SearchQueriesOut(
-        queries=list(await plan_queries(session, factory, media_id=media, route_id=route))
-    )
+    """不打索引站，只讀快照。"""
+    return SearchQueriesOut(queries=list(await plan_queries(session, factory, media_id=media)))
 
 
 @router.get("")
@@ -120,17 +115,8 @@ async def get_search(
     q: Annotated[
         str, Query(description="自己打的關鍵字。有值時取代作品的各個標題，只問這一個。")
     ] = "",
-    route: Annotated[
-        int | None,
-        Query(
-            description=(
-                "**這一輪搜尋的偏好，不是承諾**（票 04b）：只用來決定 anime profile 要不要"
-                "加季號變體，不寫進 `media`，也不代表之後一定送到那條 Route。"
-            )
-        ),
-    ] = None,
 ) -> SearchOut:
-    return _out(await search_torrents(session, factory, media_id=media, query=q, route_id=route))
+    return _out(await search_torrents(session, factory, media_id=media, query=q))
 
 
 def _out(view: SearchView) -> SearchOut:

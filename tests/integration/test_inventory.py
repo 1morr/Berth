@@ -28,7 +28,6 @@ from berth.domain import (
     MediaSnapshot,
     PlanAction,
     PlanStatus,
-    Profile,
     SeasonSnapshot,
     ServiceOrigin,
     Tags,
@@ -111,7 +110,6 @@ async def route(
         collection_type=collection_type,
         target_path=f"/data/library/{slug}",
         category=f"berth-{slug}",
-        profile=Profile.STANDARD,
         enabled=enabled,
     )
     session.add(row)

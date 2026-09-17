@@ -3,7 +3,7 @@
   "source_url": "https://thepiratebay.org/description.php?id=73431269",
   "torrent_name": "Oppenheimer (2023) [1080p] [BluRay] [5.1]",
   "tmdb": "movie-872585",
-  "context": {"media": "movie:872585", "profile": "standard", "season_hint": null, "episode_offset": null},
+  "context": {"media": "movie:872585", "season_hint": null, "episode_offset": null},
   "files": [
     {"path": "Oppenheimer.2023.1080p.BluRay.x264.AAC5.1-[YTS.MX].mp4", "size": 3573505001},
     {"path": "YTSProxies.com.txt", "size": 584},

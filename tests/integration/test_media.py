@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from berth.adapters.http import AuthFailedError, ServiceUnavailableError
 from berth.adapters.tmdb import TmdbDetail, TmdbEpisode, TmdbSeason, TmdbSeasonEntry
 from berth.adapters.tmdb.fake import FakeTmdbClient
-from berth.domain import CollectionType, MediaKind, Profile, TmdbProblem
+from berth.domain import CollectionType, MediaKind, TmdbProblem
 from berth.models import Media, Route, TmdbSettings
 from berth.services.media import SNAPSHOT_TTL, read_media, read_snapshot, refresh_media
 from berth.services.settings import write_settings
@@ -138,7 +138,6 @@ async def add_route(
         collection_type=collection_type,
         target_path=f"/data/library/{slug}",
         category=f"berth-{slug}",
-        profile=Profile.STANDARD,
     )
     session.add(route)
     await session.commit()

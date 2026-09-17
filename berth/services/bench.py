@@ -26,7 +26,6 @@ from berth.domain import (
     ParseContext,
     PlanAction,
     PlanItem,
-    Profile,
     Source,
     Tags,
     at_least,
@@ -90,8 +89,6 @@ class Fixture:
     tmdb: str
     #: 上下文（brief §6.1 的第一個訊號）：Job 是從哪個 Media 送出的。
     context_media: str
-    #: Route 的解析偏好。動漫的絕對編號是慣例，其他 Route 上它是可疑的（brief §6.4）。
-    profile: Profile
     season_hint: int | None
     episode_offset: int | None
     files: tuple[FileEntry, ...]
@@ -101,7 +98,6 @@ class Fixture:
         """解析器看得到的東西。快照是凍結的那一份，所以 benchmark 不連線。"""
         return ParseContext(
             media=snapshot,
-            profile=self.profile,
             season_hint=self.season_hint,
             episode_offset=self.episode_offset,
         )
@@ -295,7 +291,6 @@ def _fixture(raw: dict[str, Any]) -> Fixture:
         torrent_name=raw["torrent_name"],
         tmdb=raw["tmdb"],
         context_media=context["media"],
-        profile=Profile(context["profile"]),
         season_hint=context.get("season_hint"),
         episode_offset=context.get("episode_offset"),
         files=tuple(FileEntry(rel_path=row["path"], size=row["size"]) for row in raw["files"]),

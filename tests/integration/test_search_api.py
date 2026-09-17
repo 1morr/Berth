@@ -268,24 +268,9 @@ class TestQueryPreview:
         body = client.get(f"/api/search/queries?media={SPY_ID}").json()
 
         assert body["queries"][:2] == ["SPY x FAMILY", "SPY×FAMILY"]
+        # 季號變體與真的搜尋同一份規則（`search_titles`），不看 Route（票 14e）。
+        assert "SPY x FAMILY Season 2" in body["queries"]
         assert indexer.queries == []
-
-    def test_an_anime_route_changes_the_answer(self, client: TestClient) -> None:
-        """`route` 這個參數要看得見自己做了什麼，不然選了動漫 Route 畫面毫無反應。"""
-        sign_in(client)
-        anime = next(
-            row
-            for row in client.get(f"/api/media/{SPY_ID}").json()["routes"]
-            if row["slug"] == "anime"
-        )
-
-        standard = client.get(f"/api/search/queries?media={SPY_ID}").json()["queries"]
-        with_anime = client.get(f"/api/search/queries?media={SPY_ID}&route={anime['id']}").json()[
-            "queries"
-        ]
-
-        assert "SPY x FAMILY Season 2" in with_anime
-        assert "SPY x FAMILY Season 2" not in standard
 
     def test_it_needs_a_session(self, client: TestClient) -> None:
         assert client.get(f"/api/search/queries?media={SPY_ID}").status_code == 401

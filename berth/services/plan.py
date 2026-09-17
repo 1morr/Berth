@@ -43,7 +43,6 @@ from berth.domain import (
     PlanEngine,
     PlanStatus,
     PlanSummary,
-    Profile,
     ReviewReason,
     Tags,
 )
@@ -440,7 +439,6 @@ def _context(route: Route | None, snapshot: MediaSnapshot | None) -> ParseContex
     """
     return ParseContext(
         media=snapshot,
-        profile=route.profile if route is not None else Profile.STANDARD,
         route_collection_type=route.collection_type if route is not None else None,
     )
 

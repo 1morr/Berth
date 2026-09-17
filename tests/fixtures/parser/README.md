@@ -12,7 +12,7 @@
   "source_url": "https://share.dmhy.org/topics/view/725809_….html",
   "torrent_name": "[7³ACG] 葬送的芙莉莲/Sousou no Frieren S01 | 01-28+SPx11 [简繁字幕] BDrip 1080p x265 OPUS 2.0",
   "tmdb": "tv-209867",
-  "context": { "media": "tv:209867", "profile": "anime", "season_hint": null, "episode_offset": null },
+  "context": { "media": "tv:209867", "season_hint": null, "episode_offset": null },
   "files": [{ "path": "Sousou no Frieren 2023 S01E01-[1080p][BDRIP][x265.OPUS].mkv", "size": 1234567890 }],
   "expected": [
     { "path": "…", "kind": "video", "action": "import", "season": 1, "episode": 1,
@@ -105,8 +105,8 @@ v0 涵蓋不到、由單元測試補的一件事：
 ## v2 補的五筆（2026-09-16，M1 票 14c）
 
 brief §6.4「只有集號 → 絕對編號」那一支。v1 的 23 筆一次都沒走到它（34 次全是 TMDB 只有一季），
-所以 Route profile 量不出作用。條件是**只有集號、TMDB 上 ≥2 個正規季**，挑之前先查過快照的季數，
-並以 `scripts/experiments/profile_effect.py` 的側錄證明每一筆真的走到那一支。語料變成動漫 14、
+所以那一支換算得對不對量不出來。條件是**只有集號、TMDB 上 ≥2 個正規季**，挑之前先查過快照的季數，
+並在票 14c 以側錄證明每一筆真的走到那一支（那支實驗腳本隨 M1 票 14e 刪除）。語料變成動漫 14、
 劇集 10、電影 4。
 
 | id | 為什麼是它 |
@@ -141,7 +141,6 @@ brief §6.4「只有集號 → 絕對編號」那一支。v1 的 23 筆一次都
 
 - **兩筆都沒有 `min_confidence`**：與 v2 的兩筆非動漫同一個理由，它們量的就是「該不該自動入庫」。
 - **《死神》的 tags 沒有 `subs`**：`[MultiSub]` 沒說是哪幾種語言（同一家的航海王寫了 `[ENG][POR-BR]…`，那一筆才有 `EN`）。
-- `context.profile` 暫時照動漫寫 `anime`；解析器已經不讀它，M1 票 14e 整批拿掉。
 
 ## 外掛字幕怎麼算（票 07 的決定）
 

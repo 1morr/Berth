@@ -79,7 +79,7 @@ describe('Route 設定頁', () => {
     expect(within(second).getByText('Jellyfin cannot see /mnt/disk2/tv')).toBeInTheDocument()
   })
 
-  it('改名稱、profile 與啟用：送出去的就是那三個欄位', async () => {
+  it('改名稱與啟用：送出去的就是那兩個欄位', async () => {
     const fetch = render({ 'PUT /api/routes/2': { body: routeView({ name: '電視' }) } })
     renderApp('/settings/routes')
 
@@ -87,17 +87,12 @@ describe('Route 設定頁', () => {
     const name = tv.getByRole('textbox', { name: '名稱' })
     await userEvent.clear(name)
     await userEvent.type(name, '電視')
-    await userEvent.click(tv.getByRole('radio', { name: '動漫' }))
     await userEvent.click(tv.getByRole('button', { name: '儲存' }))
 
     await waitFor(() => {
       const call = fetch.mock.calls.find(([, init]) => init?.method === 'PUT')
       expect(call).toBeDefined()
-      expect(JSON.parse(String(call![1]?.body))).toEqual({
-        name: '電視',
-        profile: 'anime',
-        enabled: true,
-      })
+      expect(JSON.parse(String(call![1]?.body))).toEqual({ name: '電視', enabled: true })
     })
   })
 
@@ -170,7 +165,7 @@ describe('Route 設定頁', () => {
     expect(tv.getByRole('button', { name: '停用這條 Route' })).toBeInTheDocument()
   })
 
-  it('被引用而且還啟用著：一鍵停用，送的是存下來的名稱與 profile，沒存的編輯不跟著送（票 14a）', async () => {
+  it('被引用而且還啟用著：一鍵停用，送的是存下來的名稱，沒存的編輯不跟著送（票 14a）', async () => {
     let disabled = false
     const fetch = render({
       [ROUTES]: () => ({
@@ -195,11 +190,7 @@ describe('Route 設定頁', () => {
 
     expect(await screen.findByText('已停用「TV」：新的送單不會再選到它。')).toBeInTheDocument()
     const call = fetch.mock.calls.find(([, init]) => init?.method === 'PUT')
-    expect(JSON.parse(String(call![1]?.body))).toEqual({
-      name: 'TV',
-      profile: 'standard',
-      enabled: false,
-    })
+    expect(JSON.parse(String(call![1]?.body))).toEqual({ name: 'TV', enabled: false })
     await waitFor(() =>
       expect(tv.queryByRole('button', { name: '停用這條 Route' })).not.toBeInTheDocument(),
     )
@@ -265,7 +256,6 @@ describe('Route 設定頁', () => {
     const name = form.getByRole('textbox', { name: '名稱' })
     await userEvent.clear(name)
     await userEvent.type(name, 'TV 2')
-    await userEvent.click(form.getByRole('radio', { name: '動漫' }))
     await userEvent.click(form.getByRole('button', { name: '建立並檢查' }))
 
     await waitFor(() => {
@@ -277,7 +267,6 @@ describe('Route 設定頁', () => {
         library_id: 'item-1',
         target_path: '/mnt/disk2/tv',
         name: 'TV 2',
-        profile: 'anime',
       })
     })
   })

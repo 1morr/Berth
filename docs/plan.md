@@ -113,7 +113,7 @@ adapters ──► domain                  （不 import services、models；回
 
 ### 2.2 Route 與 Media
 
-- `routes`：`id`、`slug`（unique）、`name`、`jellyfin_library_id`、`jellyfin_library_name`、`collection_type`（`movies` / `tvshows`）、`target_path`、`category`、`profile`（`standard` / `anime`）、`medium_auto_import`（預設 true）、`enabled`、`health_status`、`health_detail_json`、`created_at`。`health_detail_json` 是 `RouteHealth`：逐項檢查（形狀同精靈的步驟：`key` 是 `RouteCheck`、`status`、`detail`、`error`）與 `cross_device`。category 的 save path 不存欄位，它一律是 `<complete root>/<slug>`（brief §4.1）。**slug 與 `target_path` 建立之後不可改**：category 與 complete 子目錄由 slug 導出，帳本以目標路徑認 Route（`owning_route`）；要換目標就新增一條、刪掉舊的（票 14）。`enabled` 是設定頁的啟用：新建或從停用到啟用都要五條纜繩那一輪全綠；停用的 Route 不收新的送單，也不算進健康總結與精靈第 7 步的完成條件。被 Job 或帳本引用的 Route 刪不得。
+- `routes`：`id`、`slug`（unique）、`name`、`jellyfin_library_id`、`jellyfin_library_name`、`collection_type`（`movies` / `tvshows`）、`target_path`、`category`、`medium_auto_import`（預設 true）、`enabled`、`health_status`、`health_detail_json`、`created_at`。`health_detail_json` 是 `RouteHealth`：逐項檢查（形狀同精靈的步驟：`key` 是 `RouteCheck`、`status`、`detail`、`error`）與 `cross_device`。category 的 save path 不存欄位，它一律是 `<complete root>/<slug>`（brief §4.1）。**slug 與 `target_path` 建立之後不可改**：category 與 complete 子目錄由 slug 導出，帳本以目標路徑認 Route（`owning_route`）；要換目標就新增一條、刪掉舊的（票 14）。`enabled` 是設定頁的啟用：新建或從停用到啟用都要五條纜繩那一輪全綠；停用的 Route 不收新的送單，也不算進健康總結與精靈第 7 步的完成條件。被 Job 或帳本引用的 Route 刪不得。
 - `media`：`id`（`tv:<tmdb>` / `movie:<tmdb>`）、`tmdb_id`、`kind`、`title_en`、`title_original`、`year`、`folder_name`、`folder_frozen`、`default_route_id`、`tmdb_snapshot_json`（含**各季的 `name`**——`Hashira Training Arc` 這種篇章名是 §4.4 的季號來源——與各季各集：number、name、air_date、runtime；episode groups 的 absolute 排序若存在）、`tmdb_fetched_at`。`tmdb_snapshot_json` 的型別化版本是 `domain/media.py` 的 `MediaSnapshot`（§4.3）——它住在 `domain/` 是因為 `naming` 與 `parser` 都要它，而那兩個依契約只 import `domain`（§1.3）。
   **點進詳情頁就會寫下一列**（快照要有地方放），所以有這一列不代表 Berth 為它做過任何事。「追蹤過」是**推導**出來的（`CONTEXT.md`）：票 09 起是 `EXISTS(jobs)`，票 12 加帳本，M3 加 Rule——不存成欄位。
   `folder_name` 因此**跟著標題走**（畫面上它是「將會是」的預覽），每次刷新快照都重算；**第一次真的通向磁碟那一刻凍結**：手動送單成功時（票 09）或建 RSS Rule 時（M3），兩個都有人在場、都要一次明確確認。凍結之後 refresh 一律不動它（§5、brief §4.5、票 04b）。不拖到入庫才凍——importer 是背景迴圈，那時候沒有人看著。
@@ -252,7 +252,7 @@ files ─► classify ─► (video | subtitle | font | audio | image | archive 
 
 ### 4.3 上下文與 TMDB 快照
 
-`ParseContext`：`media: MediaSnapshot | None`、`candidates: tuple[MediaSnapshot, ...]`、`profile`、`season_hint`、`episode_offset`、`route_collection_type`。`candidates` 是 `media` 缺席時可以比對的作品（brief §6.4 第 2 點的 RSS 與重新入庫）——解析器沒有 IO，認得出作品的前提是呼叫端先把候選搜好遞進來；認出來時信心上限是 medium，「標題 **+ 年份**精確命中」才配得上 high（brief §6.5）。`MediaSnapshot` 是 `media.tmdb_snapshot_json` 的型別化版本，含各季集數、**各季的 `names`**（§4.4 的篇章名比對靠它）、每集 `air_date` 與 `name`、absolute 排序（若有）、標題集合。解析器不知道 TMDB API 的存在。
+`ParseContext`：`media: MediaSnapshot | None`、`candidates: tuple[MediaSnapshot, ...]`、`season_hint`、`episode_offset`、`route_collection_type`。`candidates` 是 `media` 缺席時可以比對的作品（brief §6.4 第 2 點的 RSS 與重新入庫）——解析器沒有 IO，認得出作品的前提是呼叫端先把候選搜好遞進來；認出來時信心上限是 medium，「標題 **+ 年份**精確命中」才配得上 high（brief §6.5）。`MediaSnapshot` 是 `media.tmdb_snapshot_json` 的型別化版本，含各季集數、**各季的 `names`**（§4.4 的篇章名比對靠它）、每集 `air_date` 與 `name`、absolute 排序（若有）、標題集合。解析器不知道 TMDB API 的存在。
 
 `SeasonSnapshot.name` 是英文季名（會進畫面），`names` 是**同一季在三輪語言下的名字**（`en-US` / `zh-TW` / `zh-CN`，去重）。要三套是因為篇章名比對的對手是真實發佈寫的那一種字：`Hashira Training Arc` / `柱訓練篇` / `柱训练篇` 指的是同一季，而簡體字幕組佔了失敗案例的多數（M1 票 06，§4.4）。多打的那一輪是 `tv/{id}` 的 `zh-CN`，只取季名，電影不打。
 
@@ -272,7 +272,7 @@ files ─► classify ─► (video | subtitle | font | audio | image | archive 
   - cour 怎麼切**與虛擬季同一條規則**（間隔 > 180 天）——它們本來就是同一件事：一季裡的兩輪播出。進擊的巨人第三季實測 12 + 10 集，中間隔 196 天。
   - 加上偏移之後超出該季時**回頭照字面讀**：那表示這一組其實是季內連號。所以「季內連號」與「每 cour 重數」兩種寫法用同一條規則就都對了。
   - 看到 cour 標記時，**照字面讀的那個候選不再產生**——不是排序問題，兩種讀法在 TMDB 裡都存在。
-- **絕對編號換算**：TMDB 沒有 absolute 欄位，只能數播出序位，而 TMDB 與 TVDB 收錄的集數不一定一致（航海王 1181 vs 1177）。這條只影響 16% 的釋出、失敗率 4.4%，維持現況即可，但要標 confidence 至多 medium。**降到 low 看證據，不看 Route profile**（M1 票 14d，`mapping._doubts`，brief §6.4）：集號 ≤ 第一個正規季的集數（也讀得成後面某季從 01 重數），或檔名的播出日（`ReleaseInfo.air_date`；guessit 開 `date_year_first`，韓國電視台的 `150524` 才讀得成 2015-05-24）與換算出的那一集的 `air_date` 不是同一天（不容忍），兩條各自附一句理由。前一條收窄成「而且標題有認不出的多餘字」量過不成立（`docs/research/profile-effect.md` §6.1.1）。**三種換算不在同一個分支**（M1 票 06）：`absolute_group` 與 `absolute_cumulative` 是「只有集號」時的兩條路，而虛擬季換算要有一個季號才索引得到那一輪播出（`第二季` 對不到任何一季時才輪到它）。brief §6.4 另外提的「以**發佈時間**推測虛擬季」需要索引站給的發佈時間，解析器在 M1 拿不到（票 08 起才有 `published_at`），沒有它就只是換一種猜法，所以沒有做。
+- **絕對編號換算**：TMDB 沒有 absolute 欄位，只能數播出序位，而 TMDB 與 TVDB 收錄的集數不一定一致（航海王 1181 vs 1177）。這條只影響 16% 的釋出、失敗率 4.4%，維持現況即可，但要標 confidence 至多 medium。**降到 low 看證據，不看 Route**（M1 票 14d，`mapping._doubts`，brief §6.4）：集號 ≤ 第一個正規季的集數（也讀得成後面某季從 01 重數），或檔名的播出日（`ReleaseInfo.air_date`；guessit 開 `date_year_first`，韓國電視台的 `150524` 才讀得成 2015-05-24）與換算出的那一集的 `air_date` 不是同一天（不容忍），兩條各自附一句理由。前一條收窄成「而且標題有認不出的多餘字」量過不成立（`docs/research/profile-effect.md` §6.1.1）。**三種換算不在同一個分支**（M1 票 06）：`absolute_group` 與 `absolute_cumulative` 是「只有集號」時的兩條路，而虛擬季換算要有一個季號才索引得到那一輪播出（`第二季` 對不到任何一季時才輪到它）。brief §6.4 另外提的「以**發佈時間**推測虛擬季」需要索引站給的發佈時間，解析器在 M1 拿不到（票 08 起才有 `published_at`），沒有它就只是換一種猜法，所以沒有做。
 - **數量明顯不符就交給人**（brief §6.5 的 low，M1 票 06）：一季十二集卻對出二十個檔案時，是哪一個檔案讀錯了看不出來，所以整季一起進 review 而不是挑一個代罪的。
 
 ### 4.5 AI fallback（M4）
@@ -289,7 +289,7 @@ fixture 一筆一個 JSON：
   "source_url": "https://share.dmhy.org/topics/view/...",
   "torrent_name": "[7³ACG] 葬送的芙莉莲/Sousou no Frieren S01 | 01-28+SPx11 [简繁字幕] BDrip 1080p x265 OPUS 2.0",
   "files": [{ "path": "Sousou no Frieren 2023 S01E01-[1080p][BDRIP][x265.OPUS].mkv", "size": 1234567890 }],
-  "context": { "media": "tv:209867", "profile": "anime", "season_hint": null, "episode_offset": null },
+  "context": { "media": "tv:209867", "season_hint": null, "episode_offset": null },
   "tmdb": "tv-209867",
   "expected": [
     { "path": "Sousou no Frieren 2023 S01E01-[1080p][BDRIP][x265.OPUS].mkv",
@@ -347,11 +347,11 @@ Session 以 httpOnly cookie（`berth_session`）承載，`SameSite=Strict`、`Pa
 | auth | `POST /auth/login`（Jellyfin 帳密 → 發 session；帳密錯與帳號不存在回同一個 401，Jellyfin 連不上回 503）、`POST /auth/logout`（204，一律成功）、`GET /auth/me`（`name`、`role`） | `auth.*` |
 | setup | `GET /setup/status`、`POST /setup/admin`、`POST /setup/detect`（回每個服務的來源：套件內 / 既有）、`POST /setup/services/{kind}`（既有服務的連線表單：存下位址與憑證並立刻測一次）、`GET /setup/jellyfin`（不連線，回上一輪的七步狀態、媒體庫，以及版本閘門的 `version` / `version_supported`；bootstrap 進行中前端輪詢它看進度）、`POST /setup/jellyfin/bootstrap`、`POST /setup/jellyfin/connect`（既有：以管理員帳密換 API key）、`POST /setup/jellyfin/libraries/paths`（**沒有 `/setup/jellyfin/plugin`**：票 14b 起只支援 Jellyfin 12，不裝任何插件）、`GET /setup/qbittorrent/diff`（現查，回逐鍵差異）、`POST /setup/qbittorrent/apply`、`GET /setup/indexers`（套件內：十個預設站與它們現在的狀態）、`POST /setup/indexers/apply`（勾起來的站逐個加）、`POST /setup/indexers/connect`（既有 Prowlarr 或任意 Torznab）、`POST /setup/indexers/skip`、`GET /setup/tmdb`、`POST /setup/tmdb/test`（憑證使用者自備、必填，所以**沒有 skip**）、`GET /setup/routes`（媒體庫清單與已建的 Route，含上一輪逐項檢查）、`POST /setup/routes`（套件內導出三條；既有用勾選，目標必須是該媒體庫回報的路徑之一）、`DELETE /setup/routes/{id}`（第 7 步每條 Route 底下的刪除：與 `DELETE /routes/{id}` 同一個命令、同一種拒絕，只是跟著 `setup/*` 的門禁；204 / 404 `route_missing` / 409 `route_in_use`，票 14a）、`POST /setup/complete`（TMDB 綠燈且每個 Route 都綠燈才寫得下 `settings.setup.completed`） | `setup.*`（§9） |
 | settings | `GET /settings/services`（三個服務的連線資訊與最後健康狀態，形狀與 `health/detail` 相同）、`POST /settings/services/{kind}/test`（只重測這一個服務）、`GET /settings/qbittorrent/diff`、`POST /settings/qbittorrent/apply`（「還原建議設定」，brief §16.3）、`GET|POST /settings/jellyfin`（Jellyfin 對外網址與它沒填時推導出來的主機；不是 http(s) 的位址回 422，票 13）。**整組只有 `role=admin` 進得來**（規則在門禁，不在 router 的相依）。位址與憑證仍然在精靈裡改——精靈跑完之後它就是設定入口，所以不做 `PUT /settings/{group}`（票 10 改） | `health.*`、`qbittorrent.apply` |
-| routes | `GET /routes`（全部 Route 與引用數 `jobs`、`ledger_entries`，不連線）、`POST /routes`（`{library_id, target_path, name, profile}`；媒體庫與路徑向 Jellyfin 現查，目標必須是它回報的路徑之一且還沒有 Route；檢查紅燈照樣建立、維持停用；同一時間的建立撞上唯一索引回 409 `route_conflict`）、`PUT /routes/{id}`（只改 `name`、`profile`、`enabled`，一律重跑檢查；從停用到啟用而檢查是紅的回 409 `route_unhealthy`）、`DELETE /routes/{id}`（被 Job 或帳本引用回 409 `route_in_use`，detail 另帶 `jobs`、`ledger_entries`）、`POST /routes/{id}/check`（重跑這一條，不動啟用）、`GET /jellyfin/libraries`（現查，每個媒體庫的路徑是 `paths[{path, route_name}]`，已經有 Route 的帶 Route 名，沒有的是 `null`）。拒絕一律是 `{reason, detail}`，Jellyfin 連不上回 503；檢查途中 Route 被刪掉是 404 `route_missing`（票 14、14a）。「先讀再寫」的命令（刪除算引用數、建立看目標佔用）在同一把 SQLite 寫鎖裡做完，鎖內不打網路 | `routes.*` |
+| routes | `GET /routes`（全部 Route 與引用數 `jobs`、`ledger_entries`，不連線）、`POST /routes`（`{library_id, target_path, name}`；媒體庫與路徑向 Jellyfin 現查，目標必須是它回報的路徑之一且還沒有 Route；檢查紅燈照樣建立、維持停用；同一時間的建立撞上唯一索引回 409 `route_conflict`）、`PUT /routes/{id}`（只改 `name`、`enabled`，一律重跑檢查；從停用到啟用而檢查是紅的回 409 `route_unhealthy`）、`DELETE /routes/{id}`（被 Job 或帳本引用回 409 `route_in_use`，detail 另帶 `jobs`、`ledger_entries`）、`POST /routes/{id}/check`（重跑這一條，不動啟用）、`GET /jellyfin/libraries`（現查，每個媒體庫的路徑是 `paths[{path, route_name}]`，已經有 Route 的帶 Route 名，沒有的是 `null`）。拒絕一律是 `{reason, detail}`，Jellyfin 連不上回 503；檢查途中 Route 被刪掉是 404 `route_missing`（票 14、14a）。「先讀再寫」的命令（刪除算引用數、建立看目標佔用）在同一把 SQLite 寫鎖裡做完，鎖內不打網路 | `routes.*` |
 | discover | `GET /discover/trending`、`GET /discover/popular`、`GET /discover/search?q=`（三支回同一個形狀：`items` + `problem` + `detail`）。**拿不到 TMDB 時仍是 200**，理由寫在 `problem`（`credential_missing` / `credential_rejected` / `unreachable`）——一頁上有三個 feed，一個垮掉時另外兩個要照樣畫得出來，而畫面要說得出下一步（票 03） | `discover.*` |
 | inventory | `GET /inventory`（媒體庫的切換列：每條 Route 的作品數與「待審」「Unmatched」兩個篩選的數字）、`GET /inventory/{slug}`（一條 Route 的牆：卡片狀態、`N / M 集`、Jellyfin 找到了沒與深連結要開的 item，加上深連結的主機）。**叫 inventory 不叫 library**：`CONTEXT.md` 裡程式碼的 `library` 一律指 Jellyfin 那一端（票 13）。牆上是這條 Route 上有 Job 的作品加上檔案落在它底下的；判定規則全部在後端 | `inventory.*` |
-| media | `GET /media/{id}`（TMDB + 收得下它的 Route + 狀態 + 檔案 + Unmatched + 版本；票 13 起集表每一集帶 `status`：已入庫 / 卡住 / 下載中 / 缺 / 未播出，依序取）、`POST /media/{id}/refresh`。**沒有 track 那一支**（票 04b）：入庫到哪一條 Route 是搜尋與送單時才帶上的偏好，不為一個下拉的初值多一個對外介面 | `media.*` |
-| search | `GET /search?media=&q=&route=`（索引站搜尋，結果附解析出的 Tags 與預估季集；**只回名字對得上這部作品的那些**，被丟掉的筆數另報 `discarded`——實測 The Pirate Bay 對搜不到的關鍵字會回它自己的熱門清單）、`GET /search/queries?media=&route=`（按下搜尋之前先給看：會拿哪幾個名字去問。不打索引站，只讀快照，所以改 Route 時可以隨手重問；規則只能有一份實作，前端不重算） | `search_torrents`、`plan_queries` |
+| media | `GET /media/{id}`（TMDB + 收得下它的 Route + 狀態 + 檔案 + Unmatched + 版本；票 13 起集表每一集帶 `status`：已入庫 / 卡住 / 下載中 / 缺 / 未播出，依序取）、`POST /media/{id}/refresh`。**沒有 track 那一支**（票 04b）：入庫到哪一條 Route 是送單時才帶上的偏好（票 14e 起搜尋不帶它），不為一個下拉的初值多一個對外介面 | `media.*` |
+| search | `GET /search?media=&q=`（索引站搜尋，結果附解析出的 Tags 與預估季集；**只回名字對得上這部作品的那些**，被丟掉的筆數另報 `discarded`——實測 The Pirate Bay 對搜不到的關鍵字會回它自己的熱門清單）、`GET /search/queries?media=`（按下搜尋之前先給看：會拿哪幾個名字去問。不打索引站，只讀快照；規則只能有一份實作，前端不重算）。**兩支都不帶 Route**（票 14e）：入庫到哪一條是送單時的事，查詢只由快照決定 | `search_torrents`、`plan_queries` |
 | jobs | `POST /jobs`（`{source, media, route}`）、`GET /jobs`、`GET /jobs/{hash}`、`GET /jobs/{hash}/events`、`POST /jobs/{hash}/replan`、`POST /jobs/{hash}/reimport`、`POST /jobs/{hash}/retry`、`DELETE /jobs/{hash}?unlink=&remove_torrent=&delete_files=&purge=` | `add_download`、`generate_plan`、`reimport`、`delete_job` |
 | plans | `GET /plans/{id}`、`PUT /plans/{id}/items`、`POST /plans/{id}/approve`、`POST /plans/{id}/reject`。**M1 只有 `GET`**（票 11）：逐列編輯與核准是 M2 的 Review Queue（§11.3），而 M1 停在 `review` 的 Job 就是停在那裡——那一份唯讀的答案是使用者看得到的全部 | `review.*`、`apply_plan` |
 | review | `GET /review`（低信心、audit、Unmatched、重複、Issue 的統一佇列）、`POST /review/audit/{ledger_id}/confirm`、`POST /review/audit/{ledger_id}/undo` | `review.*` |
@@ -429,13 +429,14 @@ Session 以 httpOnly cookie（`berth_session`）承載，`SameSite=Strict`、`Pa
 
 - 介面 `IndexerSearch.search(query) -> [SearchResult]` 加 `capabilities() -> SearchCapability`，兩個實作。
   **一次呼叫一個查詢**（票 08 推翻原本的 `search(queries, categories)`）：多標題展開、合併去重、逐查詢
-  逾時全部要看 `MediaSnapshot` 與 Route 的 profile 才決定得了，而 adapter 不認得那兩個東西——留在這一層
+  逾時全部要看 `MediaSnapshot` 的標題集合與季數才決定得了，而 adapter 不認得它——留在這一層
   的話兩個實作各要抄一份同樣的邏輯。那些搬進 `services/search.py`。**分類碼不送**：各站的映射自訂，
   2026-09-10 實測 dmhy 對 `cat=5000`、`cat=5070` 與不帶 `cat` 都回同樣 80 筆，它不是可靠的篩子。
   - `ProwlarrSearch`：`GET /api/v1/search?query=&categories=&type=search`，回傳 `ReleaseResource`（`title`、`size`、`seeders`、`leechers`、`downloadUrl`、`magnetUrl`、`infoHash`、`indexer`、`categories`、`publishDate`、`guid`、`infoUrl`）。Prowlarr 刻意不提供跨站聚合 Torznab，所以走 REST（brief §20.7）。
   - `TorznabSearch`：任意 Torznab 端點（Jackett 的 `indexers/all/results/torznab/api` 或單站）：`?t=caps`、`?t=search&q=&cat=`、`?t=tvsearch&tmdbid=`、`?t=movie&tmdbid=`（依 caps 決定是否可用 id 搜尋）；解析 XML 的 `item` 與 `torznab:attr`（seeders、peers、size、infohash、magneturl、category）。
 - 搜尋詞：Media 的英文標題、原文標題、**顯示用標題**，然後才是各語言 alternative titles，各發一次，
-  併發，最多五個（`MAX_QUERIES`）；動漫 profile 另加 `第N季` / `Season N` 變體，佔掉排最後的別名。
+  併發，最多五個（`MAX_QUERIES`）；劇集另加 `第N季` / `Season N` 變體，佔掉排最後的別名。
+  **不分動漫**（票 14e，brief §19）：票 14e 之前只給動漫 Route，效果沒有量（要打真的索引站）。
   變體只對**季數 ≥2 的最新一季**做——第一季的發佈幾乎不寫季號，而每多一個變體就是每個追蹤站
   再被問一次；要找舊季自己打字那條路一直都在。
   顯示用標題明確排第三是因為 TMDB 的 `alternative_titles` 沒有順序可言——實測它把 `Agent x Ailə`
@@ -537,7 +538,7 @@ WebUI\AuthSubnetWhitelist=172.28.0.2/32
    - 套件內 Prowlarr 的 API key 讀自唯讀掛載，**探測時就存進 `settings.services.indexer`**，第 5 步與 M1 的搜尋從同一個地方拿憑證。使用者貼過的值優先。
    - qBittorrent 設過密碼、Prowlarr 加過索引站之後，那個服務的判定**釘住不再重探**（`ServiceProbe.configured`）：判定規則是「免密可進 / 一個索引站都沒有 → 套件內」，而這兩件事正是 Berth 自己剛做掉的，重探會說謊。
 6. **TMDB**：使用者貼自己的 API key（v3 key 或 v4 token 都收），按「測試」。**這一步是必填的閘門**：`configuration` 綠燈才走得到第 7 步，畫面同時要說得出去哪裡申請（themoviedb.org → 設定 → API）。第 8 步再擋一次，因為使用者回得去把 key 清掉。
-7. **媒體庫與 Route**：套件內 Jellyfin → 自動由三個媒體庫建立三個 Route（`movies` / `tv` / `anime`，anime 用 `anime` profile），寫入目標取自 **Jellyfin 回報的** `locations`；既有 Jellyfin → 使用者勾選媒體庫，每個媒體庫可「加入 Berth 路徑」（§9.5）或在既有路徑中選寫入目標，劇集類型可挑 profile。目標只能從那個媒體庫回報的路徑裡選，送別的路徑回 422。每個 Route 立即建立 qBittorrent category 並跑 §9.5 的五項檢查；**每一條都綠燈**才走得到第 8 步——紅的那個 Route 送單一定失敗（brief §4.4）。**重跑只新增、不改不刪**（票 14，使用者拍板）：已經有 Route 的媒體庫在勾選表上鎖住、它的選擇略過，slug 與整張表比；**寫入目標已經被別的 Route（或同一批前面的選擇）佔用的選擇也略過**，不回 422——與前一條是同一條只新增規則，套件內三個媒體庫自動全勾，舊 Route 的 key 一旦對不上（沒有 `ItemId`、媒體庫又改了名），回 422 會讓重跑永遠卡住（票 14a）。重跑的意思只剩「補上新勾的、全部重驗」。精靈跑完之前新建的 Route 直接啟用（紅著就擋完成）；跑完之後重跑新建的**先停用建立，檢查綠了才啟用**（票 14a：先啟用再關掉紅的，檢查跑完之前的那幾秒裡送單選得到還沒驗過的 Route）。重讀既有 Route、`_plan` 與插入在同一把寫鎖裡。認媒體庫用 `ItemId`（沒有 id 的舊資料才用名字）。選錯了的出路是每條 Route 底下明確的刪除（`DELETE /setup/routes/{id}`，被引用時拒絕）；精靈跑完之後在 `/settings/routes` 逐條管理。
+7. **媒體庫與 Route**：套件內 Jellyfin → 自動由三個媒體庫建立三個 Route（`movies` / `tv` / `anime`），寫入目標取自 **Jellyfin 回報的** `locations`；既有 Jellyfin → 使用者勾選媒體庫，每個媒體庫可「加入 Berth 路徑」（§9.5）或在既有路徑中選寫入目標。目標只能從那個媒體庫回報的路徑裡選，送別的路徑回 422。每個 Route 立即建立 qBittorrent category 並跑 §9.5 的五項檢查；**每一條都綠燈**才走得到第 8 步——紅的那個 Route 送單一定失敗（brief §4.4）。**重跑只新增、不改不刪**（票 14，使用者拍板）：已經有 Route 的媒體庫在勾選表上鎖住、它的選擇略過，slug 與整張表比；**寫入目標已經被別的 Route（或同一批前面的選擇）佔用的選擇也略過**，不回 422——與前一條是同一條只新增規則，套件內三個媒體庫自動全勾，舊 Route 的 key 一旦對不上（沒有 `ItemId`、媒體庫又改了名），回 422 會讓重跑永遠卡住（票 14a）。重跑的意思只剩「補上新勾的、全部重驗」。精靈跑完之前新建的 Route 直接啟用（紅著就擋完成）；跑完之後重跑新建的**先停用建立，檢查綠了才啟用**（票 14a：先啟用再關掉紅的，檢查跑完之前的那幾秒裡送單選得到還沒驗過的 Route）。重讀既有 Route、`_plan` 與插入在同一把寫鎖裡。認媒體庫用 `ItemId`（沒有 id 的舊資料才用名字）。選錯了的出路是每條 Route 底下明確的刪除（`DELETE /setup/routes/{id}`，被引用時拒絕）；精靈跑完之後在 `/settings/routes` 逐條管理。
 8. **完成**：`POST /setup/complete` 寫 `settings.setup.completed`（第 6 步沒綠燈或第 7 步沒全綠時回 422），說出跳過了什麼與在哪裡補，然後回首頁——那一刻起 `setup/*` 需登入、`/` 不再導向精靈，所以前端要就地把 `GET /health` 的那一個位元改掉再導航。
 
 **續行與跳過**：精靈狀態存在 `settings.setup`，關掉瀏覽器再回來回到原本那一步。**可跳過的只有第 5 步（索引站）**，完成頁說出跳過了什麼與在哪裡補；第 3、4、6、7 步不可跳。兩者不同級：沒有索引站只是搜尋不到東西，沒有 TMDB 則探索、季集快照與命名全部停擺（M1 票 02b）。八步的畫面結構與狀態見 `.scratch/m0/wizard-shape.md`。

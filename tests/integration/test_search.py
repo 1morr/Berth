@@ -17,20 +17,19 @@ from berth.adapters.http import AuthFailedError, ServiceUnavailableError
 from berth.adapters.indexer import IndexerResult
 from berth.adapters.indexer.fake import FakeIndexerSearch
 from berth.domain import (
-    CollectionType,
     IndexerProblem,
     MediaKind,
-    Profile,
     Source,
     StepStatus,
 )
-from berth.models import IndexerSettings, Media, Route
+from berth.models import IndexerSettings, Media
 from berth.models import media_id as build_media_id
 from berth.services.search import RESULT_LIMIT, search_torrents
 from berth.services.settings import write_settings
 from tests.integration.factories import FakeClientFactory
 
 SPY = build_media_id(MediaKind.TV, 120089)
+OPPENHEIMER = build_media_id(MediaKind.MOVIE, 872585)
 
 
 def result(title: str, **kwargs: Any) -> IndexerResult:
@@ -86,29 +85,39 @@ async def arrange_indexer(session: AsyncSession) -> None:
     await session.commit()
 
 
-async def arrange_route(session: AsyncSession, profile: Profile) -> Route:
-    route = Route(
-        slug="anime",
-        name="動畫",
-        jellyfin_library_id="lib-anime",
-        jellyfin_library_name="Anime",
-        collection_type=CollectionType.TVSHOWS,
-        target_path="/data/library/anime",
-        category="berth-anime",
-        profile=profile,
-    )
-    session.add(route)
+async def restyle(session: AsyncSession, **fields: Any) -> None:
+    """把存下來的快照換掉幾格：同一列 Media，換成另一種作品的樣子。"""
+    row = await session.get(Media, SPY)
+    assert row is not None
+    row.tmdb_snapshot_json = {**(row.tmdb_snapshot_json or {}), **fields}
     await session.commit()
-    return route
+
+
+def season_queries(indexer: FakeIndexerSearch) -> list[str]:
+    """問出去的查詢裡，哪幾個是季號變體（`Season N` / `第N季`）。"""
+    return [query.text for query in indexer.queries if "Season" in query.text or "季" in query.text]
+
+
+def season_of(number: int, episodes: int) -> dict[str, Any]:
+    return {
+        "season_number": number,
+        "name": f"Season {number}",
+        "episode_count": episodes,
+        "episodes": [{"episode_number": n, "name": f"E{n}"} for n in range(1, episodes + 1)],
+    }
 
 
 @pytest.mark.asyncio
 async def test_every_known_title_gets_its_own_query_and_the_results_merge(
     session: AsyncSession,
 ) -> None:
-    """英文、原文與各語言別名各發一次：實測三個標題的聯集比任何一個都大得多（票 08）。"""
+    """英文、原文與各語言別名各發一次：實測三個標題的聯集比任何一個都大得多（票 08）。
+
+    只有一季，所以沒有季號變體佔掉排最後的別名。
+    """
     await arrange_media(session)
     await arrange_indexer(session)
+    await restyle(session, seasons=[season_of(1, 12)])
     indexer = FakeIndexerSearch(
         by_query={
             "SPY x FAMILY": (result("SPY x FAMILY S03E01 1080p WEB", info_hash="a" * 40),),
@@ -371,19 +380,32 @@ async def test_a_typed_keyword_turns_the_filter_off(session: AsyncSession) -> No
 
 
 @pytest.mark.asyncio
-async def test_an_anime_route_adds_the_season_variants(session: AsyncSession) -> None:
-    """動漫的發佈名常常只寫得出 `第3季` / `Season 3`，光靠作品名搜不到那一季（plan §8.4）。"""
+async def test_a_show_past_its_first_season_adds_the_season_variants(
+    session: AsyncSession,
+) -> None:
+    """發佈名常常只寫得出 `第3季` / `Season 3`，光靠作品名搜不到那一季（plan §8.4）。
+
+    **不分動漫**（票 14e，brief §19）：Route 上已經沒有東西說得出「這是動漫」，而美劇的
+    `The Bear Season 3` 一樣是真的發佈名。
+    """
     await arrange_media(session)
     await arrange_indexer(session)
-    route = await arrange_route(session, Profile.ANIME)
+    await restyle(
+        session,
+        title="熊家餐館",
+        title_en="The Bear",
+        title_original="The Bear",
+        titles=["The Bear", "熊家餐館"],
+        seasons=[season_of(0, 3), season_of(1, 8), season_of(2, 10), season_of(3, 10)],
+    )
     indexer = FakeIndexerSearch()
     factory = FakeClientFactory(indexer_search=indexer)
 
-    await search_torrents(session, factory, media_id=SPY, route_id=route.id)
+    await search_torrents(session, factory, media_id=SPY)
 
     texts = [query.text for query in indexer.queries]
-    assert "SPY x FAMILY Season 3" in texts
-    assert "間諜家家酒 第3季" in texts
+    assert "The Bear Season 3" in texts
+    assert "熊家餐館 第3季" in texts
 
 
 @pytest.mark.asyncio
@@ -412,17 +434,56 @@ async def test_the_display_title_beats_a_random_alias(session: AsyncSession) -> 
 
 
 @pytest.mark.asyncio
-async def test_a_standard_route_does_not_add_them(session: AsyncSession) -> None:
-    """美劇的發佈名寫 `S03E01`，不寫 `第3季`——多問兩次只是替每個站多添兩趟。"""
+async def test_a_single_season_show_does_not_add_them(session: AsyncSession) -> None:
+    """只有一季時沒有「哪一季」要分：第一季的發佈幾乎不寫季號，多問一次只是替每個站多添一趟。
+
+    Specials（第 0 季）不算一季。
+    """
     await arrange_media(session)
     await arrange_indexer(session)
-    route = await arrange_route(session, Profile.STANDARD)
+    await restyle(session, seasons=[season_of(0, 2), season_of(1, 12)])
     indexer = FakeIndexerSearch()
     factory = FakeClientFactory(indexer_search=indexer)
 
-    await search_torrents(session, factory, media_id=SPY, route_id=route.id)
+    await search_torrents(session, factory, media_id=SPY)
 
-    assert not [query.text for query in indexer.queries if "Season" in query.text]
+    assert season_queries(indexer) == []
+
+
+@pytest.mark.asyncio
+async def test_a_movie_does_not_add_them(session: AsyncSession) -> None:
+    """電影的快照沒有季，所以它與單季劇集落在同一條規則上；這一條釘的是真的一部電影
+    （`movie:` 的 id、`kind=movie`）照樣問得出去，而且不帶季號變體。"""
+    await arrange_indexer(session)
+    session.add(
+        Media(
+            id=OPPENHEIMER,
+            tmdb_id=872585,
+            kind=MediaKind.MOVIE,
+            title_en="Oppenheimer",
+            title_original="Oppenheimer",
+            year=2023,
+            folder_name="Oppenheimer (2023) [tmdbid-872585]",
+            tmdb_snapshot_json={
+                "tmdb_id": 872585,
+                "kind": "movie",
+                "title": "奧本海默",
+                "title_en": "Oppenheimer",
+                "title_original": "Oppenheimer",
+                "year": 2023,
+                "titles": ["Oppenheimer", "奧本海默"],
+            },
+            tmdb_fetched_at=datetime.now(UTC),
+        )
+    )
+    await session.commit()
+    indexer = FakeIndexerSearch()
+    factory = FakeClientFactory(indexer_search=indexer)
+
+    await search_torrents(session, factory, media_id=OPPENHEIMER)
+
+    assert [query.text for query in indexer.queries] == ["Oppenheimer", "奧本海默"]
+    assert season_queries(indexer) == []
 
 
 @pytest.mark.asyncio
@@ -436,23 +497,6 @@ async def test_a_typed_query_replaces_the_titles(session: AsyncSession) -> None:
     await search_torrents(session, factory, media_id=SPY, query="Spy Family BDRip")
 
     assert [query.text for query in indexer.queries] == ["Spy Family BDRip"]
-
-
-@pytest.mark.asyncio
-async def test_the_route_is_a_preference_for_this_search_only(session: AsyncSession) -> None:
-    """`route` 只影響這一輪的查詢變體，不落地（票 04b、票 08 驗收）。"""
-    await arrange_media(session)
-    await arrange_indexer(session)
-    route = await arrange_route(session, Profile.ANIME)
-    factory = FakeClientFactory(indexer_search=FakeIndexerSearch())
-
-    await search_torrents(session, factory, media_id=SPY, route_id=route.id)
-
-    row = await session.get(Media, SPY)
-    assert row is not None
-    # `media.default_route_id` 是**送單成功**才寫的「上次用的」（票 09）。搜尋碰不得它——
-    # 搜過一次不代表之後一定送到那條 Route。
-    assert row.default_route_id is None
 
 
 @pytest.mark.asyncio

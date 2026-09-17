@@ -3,7 +3,7 @@
   "source_url": "https://thepiratebay.org/description.php?id=11971639",
   "torrent_name": "The.Return.of.Superman.E079.150524.HDTV.H264.720p-LIMO [kimch1]",
   "tmdb": "tv-64356",
-  "context": {"media": "tv:64356", "profile": "standard", "season_hint": null, "episode_offset": null},
+  "context": {"media": "tv:64356", "season_hint": null, "episode_offset": null},
   "files": [
     {"path": "The.Return.of.Superman.E079.150524.HDTV.H264.720p-LIMO.avi", "size": 1803503616}
   ],

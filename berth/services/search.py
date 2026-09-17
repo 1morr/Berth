@@ -2,8 +2,8 @@
 
 這是使用者第一次看見解析器的判斷。一次搜尋做四件事，順序不能換：
 
-1. **一部作品有好幾個名字**，所以查詢不只一個。英文、原文與各語言別名各發一次，動漫的
-   Route 另加季號變體。2026-09-10 實測 SPY×FAMILY 的三個標題各自搜出 1200 / 908 / 1210 筆，
+1. **一部作品有好幾個名字**，所以查詢不只一個。英文、原文與各語言別名各發一次，播到第二季
+   以後的劇集另加季號變體。2026-09-10 實測 SPY×FAMILY 的三個標題各自搜出 1200 / 908 / 1210 筆，
    聯集 1854 筆——每一個標題都帶來另外兩個問不到的東西（各 391 / 196 / 169 筆）。
 2. **併發**。單一聚合查詢實測 60–85 秒（Prowlarr 要現場去連五個追蹤站），三個查詢併發
    共 35 秒——逐個問會變成三分鐘。一個查詢垮掉時剩下的照樣回得來（票 08 驗收）。
@@ -15,8 +15,8 @@
 4. **逐筆問解析器**。`parse_release` 給 Tags、`map_episode` 給預估季集，兩者都是純函式，
    所以這一步不打任何服務。
 
-**`route` 是搜尋用的偏好，不是承諾**（票 04b、08）：它只影響這一輪的查詢變體（profile 決定
-動漫要不要加季號），不寫進 `media`，也不代表之後一定送到那條 Route。
+搜尋不看 Route：入庫到哪一條是送單時才決定的事（票 04b、09），而季號變體對所有劇集都做
+（票 14e），查詢長什麼樣子只由作品的快照決定。
 """
 
 from __future__ import annotations
@@ -37,13 +37,12 @@ from berth.domain import (
     MediaKind,
     MediaSnapshot,
     ParseContext,
-    Profile,
     SeasonSnapshot,
     StepStatus,
     Tags,
     collection_type_for,
 )
-from berth.models import IndexerSettings, Route, SetupSettings
+from berth.models import IndexerSettings, SetupSettings
 from berth.parser import map_episode, mentions, parse_release, tags_of
 from berth.parser.structure import StructureHints
 from berth.services.clients import ServiceClientFactory
@@ -53,7 +52,7 @@ from berth.services.steps import StepView, message
 
 #: 一次搜尋最多發幾個查詢。每一個都是「請這台索引站現場去連它認得的每一個追蹤站」，
 #: 所以上限不是為了省 Berth 的力氣，是為了不要替使用者把那些公開站打到封 IP。
-#: 五個涵蓋英文 + 原文 + 兩三個別名，或英文 + 原文 + 三個動漫季變體。
+#: 五個涵蓋英文 + 原文 + 兩三個別名，或英文 + 原文 + 顯示用標題 + 兩個季號變體。
 MAX_QUERIES = 5
 
 #: 送給畫面的筆數上限。實測一次搜尋去重後有 1854 筆——全部送出去是一份 1–2 MB 的 JSON，
@@ -122,18 +121,13 @@ async def plan_queries(
     factory: ServiceClientFactory,
     *,
     media_id: str,
-    route_id: int | None = None,
 ) -> tuple[str, ...]:
     """按下搜尋之前，Berth 會拿哪幾個名字去問（PRODUCT 原則 2：動手前先給看）。
 
-    存在的理由是**這條規則只能有一份實作**：`search_titles` 要看快照的標題集合與 Route 的
-    profile，前端重算一份的話「動漫 Route 多兩個季號變體」遲早會在兩邊長出不同的答案。
-    順帶讓 `route` 這個參數看得見自己做了什麼——不然選了動漫 Route 在畫面上毫無反應。
-
-    不打索引站，只讀快照，所以它可以在使用者改 Route 時隨手重問。
+    存在的理由是**這條規則只能有一份實作**：`search_titles` 要看快照的標題集合與季數，前端重算
+    一份的話「第二季以後多兩個季號變體」遲早會在兩邊長出不同的答案。不打索引站，只讀快照。
     """
-    snapshot, route = await _subject(session, factory, media_id, route_id)
-    return search_titles(snapshot, _profile(route))
+    return search_titles(await read_snapshot(session, factory, media_id))
 
 
 async def search_torrents(
@@ -142,7 +136,6 @@ async def search_torrents(
     *,
     media_id: str,
     query: str = "",
-    route_id: int | None = None,
     timeout: float = QUERY_TIMEOUT_SECONDS,
 ) -> SearchView:
     """一部作品現在有哪些發佈可以下載。"""
@@ -151,8 +144,8 @@ async def search_torrents(
     if not settings.base_url or setup.indexer.skipped:
         return _blank(IndexerProblem.NOT_CONFIGURED)
 
-    snapshot, route = await _subject(session, factory, media_id, route_id)
-    texts = (query.strip(),) if query.strip() else search_titles(snapshot, _profile(route))
+    snapshot = await read_snapshot(session, factory, media_id)
+    texts = (query.strip(),) if query.strip() else search_titles(snapshot)
     if not texts:
         return _blank(IndexerProblem.NO_QUERY)
 
@@ -175,7 +168,7 @@ async def search_torrents(
     found = _dedupe(row for _, rows in outcomes for row in rows)
     # 自己打了關鍵字時不篩：他要的就是那一串字，不是這部作品（票 08）。
     results = found if query.strip() else [row for row in found if _about(row, snapshot)]
-    context = _context(snapshot, route)
+    context = _context(snapshot)
     return SearchView(
         rows=tuple(_row(result, snapshot, context) for result in _take(results, RESULT_LIMIT)),
         total=len(results),
@@ -217,7 +210,7 @@ def _about(result: IndexerResult, snapshot: MediaSnapshot | None) -> bool:
     return snapshot is None or mentions(result.title, snapshot)
 
 
-def search_titles(snapshot: MediaSnapshot | None, profile: Profile) -> tuple[str, ...]:
+def search_titles(snapshot: MediaSnapshot | None) -> tuple[str, ...]:
     """這部作品要用哪幾個名字去問（plan §8.4）。
 
     順序即優先序，因為 `MAX_QUERIES` 會從尾巴砍：英文標題（檔名用的那一個，brief §7.5）、
@@ -231,18 +224,21 @@ def search_titles(snapshot: MediaSnapshot | None, profile: Profile) -> tuple[str
     """
     if snapshot is None:
         return ()
-    variants = _season_variants(snapshot) if profile is Profile.ANIME else ()
+    variants = _season_variants(snapshot)
     titles = _unique([snapshot.title_en, snapshot.title_original, snapshot.title, *snapshot.titles])
     # 季號變體**佔掉的是排最後的別名**，不是額外的配額。上限管的是「那些公開站被問幾次」，
-    # 而動漫 Route 上「第 N 季」比第四個羅馬拼音別名更可能命中（plan §8.4）。
+    # 而找最新一季時「第 N 季」比第四個羅馬拼音別名更可能命中（plan §8.4）。
     return _unique([*titles[: MAX_QUERIES - len(variants)], *variants])
 
 
 def _season_variants(snapshot: MediaSnapshot) -> tuple[str, ...]:
     """`SPY x FAMILY Season 3` / `間諜家家酒 第3季`。
 
-    只做**最新的一季**，而且只在它不是第一季時做：字幕組的第一季發佈幾乎不寫季號，
-    而每多一個變體就是每一個追蹤站再被問一次。使用者要找舊季時自己打字，那條路一直都在。
+    只做**最新的一季**，而且只在它不是第一季時做：第一季的發佈幾乎不寫季號，而每多一個變體
+    就是每一個追蹤站再被問一次。使用者要找舊季時自己打字，那條路一直都在。
+
+    **不分動漫**（票 14e，brief §19）：美劇的 `The Bear Season 3` 一樣是真的發佈名。效果沒有量，
+    要打真的索引站才量得到。電影沒有季，自然不產生。
     """
     numbers = [season.season_number for season in snapshot.seasons if season.season_number > 0]
     if len(numbers) < 2:
@@ -319,35 +315,10 @@ def _dedupe(results: Iterable[IndexerResult]) -> list[IndexerResult]:
     )
 
 
-async def _subject(
-    session: AsyncSession,
-    factory: ServiceClientFactory,
-    media_id: str,
-    route_id: int | None,
-) -> tuple[MediaSnapshot | None, Route | None]:
-    """這一次搜尋在講哪一部作品、帶著哪一條 Route 的偏好。
-
-    兩支命令（`plan_queries` 與 `search_torrents`）問的是同一件事，而快照那一步還會順手把
-    過期的重抓一次——各載一次的話兩邊會對同一部作品看到不同的標題。
-    """
-    snapshot = await read_snapshot(session, factory, media_id)
-    route = await session.get(Route, route_id) if route_id is not None else None
-    return snapshot, route
-
-
-def _profile(route: Route | None) -> Profile:
-    return route.profile if route is not None else Profile.STANDARD
-
-
-def _context(snapshot: MediaSnapshot | None, route: Route | None) -> ParseContext:
+def _context(snapshot: MediaSnapshot | None) -> ParseContext:
     return ParseContext(
         media=snapshot,
-        profile=_profile(route),
-        route_collection_type=(
-            route.collection_type
-            if route is not None
-            else (collection_type_for(snapshot.kind) if snapshot is not None else None)
-        ),
+        route_collection_type=collection_type_for(snapshot.kind) if snapshot is not None else None,
     )
 
 

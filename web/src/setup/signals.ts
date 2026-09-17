@@ -24,7 +24,7 @@ export function signalOf(detection: ServiceDetection | undefined): Signal {
   }
 }
 
-/** 既有與逾時都要能就地填連線資訊（票 05 驗收：拿掉 profile 後要出現表單）。 */
+/** 既有與逾時都要能就地填連線資訊（票 05 驗收：從 `COMPOSE_PROFILES` 拿掉之後要出現表單）。 */
 export function needsConnectionForm(detection: ServiceDetection | undefined): boolean {
   if (!detection) return false
   return detection.origin === 'existing' || detection.origin === 'timeout'

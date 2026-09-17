@@ -146,7 +146,7 @@ class TestBench:
             "source_url": "https://example.invalid/stub",
             "torrent_name": "[Group] Show - 02 [1080p]",
             "tmdb": "tv-1",
-            "context": {"media": "tv:1", "profile": "anime"},
+            "context": {"media": "tv:1"},
             "files": [{"path": "Show - 02.mkv", "size": 1000}],
             "expected": [{"path": "Show - 02.mkv", "kind": kind, "action": "review"}],
         }
