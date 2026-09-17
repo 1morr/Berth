@@ -1,0 +1,47 @@
+# e2e（plan §10、票 15）：疊在 deploy/docker-compose.yml 之上，其餘就是使用者起的那一套——
+# 真的 qBittorrent、真的 Jellyfin、真的 Prowlarr，Berth 由這份工作目錄 build。
+#
+#   CONFIG_ROOT=<空目錄> docker compose -f deploy/docker-compose.yml -f tests/e2e/compose.yml \
+#     --env-file tests/e2e/e2e.env up -d --build --wait
+#
+# **相對路徑相對於第一個檔案所在的 deploy/**，不是這個檔案：compose 把多個 -f 合併成同一個專案。
+#
+# 專案名換掉，`down -v` 才只刪 e2e 自己的 volume。容器名與網路名沿用正式的那一份（berth 的固定
+# IP 是 qBittorrent 免密白名單的依據），所以同一台機器上不能與正式部署同時跑。
+name: berth-e2e
+
+services:
+  berth:
+    image: berth:e2e
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+
+  torrents:
+    # 只用標準庫（`payload.py`），不必等 Berth 的 image build 完。
+    image: python:3.13-alpine
+    container_name: berth-e2e-torrents
+    # 與另外三個容器同一個擁有者：qBittorrent 要搬得動這些檔案，而 Linux 的 protected_hardlinks
+    # 不讓 uid 1000 鏈接別人擁有的檔案。
+    user: "1000:1000"
+    command: [python, /e2e/payload.py]
+    depends_on:
+      # 空的 /data 由 Berth 的入口腳本接手擁有者；這台先寫進去的話那一步就不會發生。
+      berth:
+        condition: service_healthy
+    volumes:
+      - ${DATA_ROOT}:/data
+      - ../tests/e2e:/e2e:ro
+      - ../tests/fixtures:/fixtures:ro
+    healthcheck:
+      # http.server 在三包都建好之後才開始聽，所以回得出來就代表資料齊了。
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/')"]
+      interval: 5s
+      timeout: 5s
+      start_period: 60s
+      retries: 3
+
+volumes:
+  # e2e.env 的 DATA_ROOT。named volume 而不是 bind mount：發佈名很長，Windows 宿主的 260 字元
+  # 路徑上限放不下（票 12 實測）；而 Docker Desktop VM 的 ext4 與 CI 上的 Linux 是同一種檔案系統。
+  berth-e2e-data: {}

@@ -604,11 +604,11 @@ WebUI\AuthSubnetWhitelist=172.28.0.2/32
 | adapter 契約 | pytest + respx | 每個 adapter 對錄製回應（`tests/fixtures/http/`）的解析；版本差異（qBittorrent 4.4 vs 5.x 的參數） |
 | 整合 | pytest + Fake adapters + 暫存 SQLite | services 與 pipeline：送單 → 完成 → planning → importing → ledger；重入與冪等；刪除範圍；reconciler 對三種人為破壞的偵測 |
 | 前端 | vitest、playwright | 元件與關鍵頁面；playwright 對 Fake 後端跑精靈與 M1 流程 |
-| e2e | docker compose（GitHub Actions） | 真 qBittorrent + 真 Jellyfin + Berth：用本地產生的 .torrent 與檔案，以 `seedMode`（`skip_checking` 的替代）讓 torrent 立即完成，跑通 M1 驗收；驗證硬鏈接 inode 與 Jellyfin 反查 |
+| e2e | docker compose（GitHub Actions，`tests/e2e/`） | 真 qBittorrent + 真 Jellyfin + 真 Prowlarr + 這一份工作目錄 build 的 Berth + 真 TMDB：用本地產生的 .torrent 與檔案（benchmark 語料的三包：美劇一季、動漫一季、電影），送單之後把位元組放進 qBittorrent 回報的下載路徑再 `recheck`，跑通 M1 驗收；驗證硬鏈接 inode 與 Jellyfin 反查（票 15 以 recheck 取代原本寫的 `seedMode`：那是 Web API 2.16 起才有、而且要由送單的 Berth 帶的參數） |
 | 部署腳本 | pytest + bash 替身 | `deploy/` 的 shell：preseed 的「缺鍵才補」規則、entrypoint 的擁有者接手。真的跑腳本，把 `chown` / `setpriv` 換成會記錄參數的替身；路徑用 `BERTH_*` 的測試 seam 覆寫 |
 | 實驗 | `scripts/experiments/` | brief §20.6，一次性但保留腳本，結果寫回 brief |
 
-- CI（GitHub Actions）：lint、type、unit + integration、benchmark 門檻、前端 build、image build；e2e 在 nightly 與 release 跑。
+- CI（GitHub Actions）：lint、type、unit + integration、benchmark 門檻、前端 build、image build；e2e 在 nightly、`v*` tag 與手動觸發時跑（`.github/workflows/e2e.yml`，TMDB 憑證是 repo secret）。
 - 覆蓋率不設硬門檻，但 `parser/`、`naming/`、`services/` 的新程式碼必須有測試。
 
 ---

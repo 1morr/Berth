@@ -248,6 +248,31 @@ uv run pre-commit run --all-files
 
 CI（`.github/workflows/ci.yml`）在 push 到 `main` 與所有 PR 上跑同一組檢查。
 
+### e2e
+
+M1 的整條路徑對**真的** qBittorrent、Jellyfin、Prowlarr 跑一遍（plan §10、`tests/e2e/`）：精靈八步只走
+Berth 的 API，送一部美劇一季、一部動漫一季、一部電影，等它們不經人工入庫，再驗硬鏈接兩端同一個 inode、
+Jellyfin 反查得到 item。套件內的媒體庫一開始是空的，反查要等 Berth 請 Jellyfin 掃描之後那一輪，所以一次
+**約 15 分鐘**，平常的 `uv run pytest` 不收它（`-m 'not e2e'`）。
+
+```bash
+# CONFIG_ROOT 是宿主上的空目錄；/data 是 named volume（tests/e2e/e2e.env），
+# 因為發佈名很長，Windows bind mount 的 260 字元路徑放不下。
+export CONFIG_ROOT="$PWD/.local/e2e-config"          # PowerShell: $env:CONFIG_ROOT = "$PWD/.local/e2e-config"
+docker compose -f deploy/docker-compose.yml -f tests/e2e/compose.yml --env-file tests/e2e/e2e.env up -d --build --wait
+uv run --env-file .env pytest -m e2e tests/e2e -rA     # 要 .env 裡的 TMDB_API_KEY：精靈第 6 步是閘門
+docker compose -f deploy/docker-compose.yml -f tests/e2e/compose.yml --env-file tests/e2e/e2e.env down --volumes
+```
+
+- **一次 `up` 只跑得了一次**：精靈走完就不能再走一遍，重跑前先 `down --volumes`。
+- 容器名、網路名與 port 與正式部署相同（qBittorrent 的免密白名單認的是 berth 的固定 IP），
+  所以同一台機器上正式的那一套要先停下來。
+- 沒有 peer 可以真的下載：`torrents` 容器在 `/data/e2e/staging` 造出三包發佈（檔案清單取自 benchmark
+  語料、影片是 `tests/fixtures/e2e/` 的種子），測試在送單之後把它們複製到 qBittorrent 說的下載路徑
+  再叫它 recheck。
+- GitHub Actions 的 `.github/workflows/e2e.yml` 在 nightly、`v*` tag 與手動觸發時跑同一組指令，
+  TMDB 憑證是 repo secret `TMDB_API_KEY`。
+
 ### UI 的 Fake 後端
 
 精靈與健康頁的 UI 不必真的有四個容器也能實跑：`scripts/fake_setup_server.py` 起一台真的 Berth
@@ -450,6 +475,8 @@ scripts/
   fake_setup_server.py  以 Fake adapter 起一台 Berth，用來實跑驗證設定精靈
   record_tmdb_snapshots.py  錄 tests/fixtures/tmdb/ 的快照（語料加了新作品時跑）
 tests/            後端測試
+  e2e/              對真服務跑整條 M1 路徑（compose 覆寫檔、下載替身、pytest -m e2e）
+  fixtures/e2e/     e2e 用的兩支 330 秒種子影片
   fixtures/http/    對真服務錄下來的回應，adapter 契約測試的輸入
   fixtures/mediainfo/  ffmpeg 造的一份真 Matroska（2 秒、17 KB），mediainfo adapter 的輸入
   fixtures/parser/  解析基準測試的語料（真實 torrent 的檔案清單）

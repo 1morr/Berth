@@ -61,7 +61,9 @@ enable_error_code = ["ignore-without-code", "redundant-expr", "truthy-bool"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "--strict-markers --strict-config"
+# e2e 要一整套 compose 在跑（README〈e2e〉），平常的 `pytest` 不收；`-m e2e` 蓋過這一個。
+addopts = "--strict-markers --strict-config -m 'not e2e'"
+markers = ["e2e: needs the tests/e2e compose stack running (README, e2e)"]
 xfail_strict = true
 asyncio_mode = "strict"
 asyncio_default_fixture_loop_scope = "function"

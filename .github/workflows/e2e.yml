@@ -1,0 +1,51 @@
+name: e2e
+
+# plan §10：真的 qBittorrent、Jellyfin、Prowlarr，加上這一份工作目錄 build 的 Berth，把 M1 走一遍
+# （tests/e2e/）。一輪要二十分鐘以上——套件內的媒體庫一開始是空的，Jellyfin 的反查要等 Berth
+# 請它掃描之後那一輪——所以不在每個 push 上跑，只在 nightly 與發版。
+on:
+  schedule:
+    - cron: '23 18 * * *'
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  e2e:
+    name: e2e
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      # 與 README〈e2e〉的 -f / --env-file 是同一組，寫成環境變數之後每一步都不必重複。
+      COMPOSE_FILE: deploy/docker-compose.yml:tests/e2e/compose.yml
+      COMPOSE_ENV_FILES: tests/e2e/e2e.env
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v10.0.1
+        with:
+          enable-cache: true
+
+      - run: uv sync --locked
+
+      # compose 的 CONFIG_ROOT 是宿主上的目錄；runner.temp 在 job 層級的 env 裡還讀不到。
+      - run: echo "CONFIG_ROOT=$RUNNER_TEMP/berth-e2e-config" >> "$GITHUB_ENV"
+
+      - run: docker compose up --detach --build --wait --wait-timeout 600
+
+      - run: uv run pytest -m e2e tests/e2e -rA
+        env:
+          # 精靈第 6 步是閘門（票 02b）：沒有一把驗得過的 key，走不到建 Route。
+          TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
+
+      - if: failure()
+        run: |
+          docker compose ps --all
+          docker compose logs --no-color --timestamps
+
+      - if: always()
+        run: docker compose down --volumes
