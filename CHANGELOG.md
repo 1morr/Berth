@@ -12,6 +12,11 @@ Windows Docker Desktop（NTFS bind mount）與 Linux（ext4）上各跑一次 `d
 套件內 qBittorrent 與 Prowlarr」的組合走一次，既有媒體庫是**加**一條路徑而不是搬路徑，項目 ID 與
 觀看紀錄都沒有變。M0 建的東西全部列在下面，M1 之後的變更接在同一份清單後面；還沒有發佈過正式版本。
 
+**M1（手動全流程）在 2026-09-17 通過驗收**（brief §17、`.scratch/m1/issues/15-m1-acceptance.md`）：一部美劇一季
+（The Bear S03）、一部動漫一季（葬送的芙莉蓮 S01 加 11 個特典）、一部電影（奧本海默）從送單到入庫不經人工，
+硬鏈接兩端同一個 inode，Jellyfin 以正確的名稱、季集與海報列出它們，Berth 反查到的 item 就是 Jellyfin 的那一個。
+這條路徑現在是 nightly 的 e2e（`tests/e2e/`），對真的 qBittorrent 與 Jellyfin 跑。
+
 ### Added
 
 - Repo 骨架：uv 後端專案與 `berth` CLI（`--version`）、pnpm + Vite + React + TypeScript 前端。
