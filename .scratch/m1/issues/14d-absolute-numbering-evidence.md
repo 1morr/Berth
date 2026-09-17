@@ -1,6 +1,6 @@
 # 14d — 絕對編號換算改由證據決定信心，不再看 Route profile
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Blocked by:** 14c（2026-09-16 插入，排在 14c 之後、14e 與 15 之前：14e 要拿掉的欄位，解析器先不讀）
 
@@ -94,15 +94,15 @@
 
 ## 驗收
 
-- [ ] `uv run python scripts/experiments/absolute_rule_cost.py` 可重跑；A、B、R 放行與漏掉的數量、「> 第一季集數」那一側的對錯、
+- [x] `uv run python scripts/experiments/absolute_rule_cost.py` 可重跑；A、B、R 放行與漏掉的數量、「> 第一季集數」那一側的對錯、
       近似的限制寫進研究 §6.1 並摘進 brief §20.4；規則 1 的形狀照判準定案（需要時使用者已拍板），決定記進 `docs/progress.md`。
-- [ ] 兩筆新語料進 `tests/fixtures/parser/`，README 已記；紅燈的 `berth bench` 輸出已貼（《死神》`auto_wrong` 14）。
-- [ ] `mapping._from_number` 不讀 `context.profile`；規則 1、2 各有雙向單元測試；`ReleaseInfo` 帶播出日，`150524` 有測試。
-- [ ] `uv run berth bench` 輸出已貼：`auto_wrong` 0、《死神》`review` 14、`Spy x Family - 05` 照第 1 步的結論（原規則 `review`、
+- [x] 兩筆新語料進 `tests/fixtures/parser/`，README 已記；紅燈的 `berth bench` 輸出已貼（《死神》`auto_wrong` 14）。
+- [x] `mapping._from_number` 不讀 `context.profile`；規則 1、2 各有雙向單元測試；`ReleaseInfo` 帶播出日，`150524` 有測試。
+- [x] `uv run berth bench` 輸出已貼：`auto_wrong` 0、《死神》`review` 14、`Spy x Family - 05` 照第 1 步的結論（原規則 `review`、
       採用 R 則 `auto_correct`）；baseline 已更新。
-- [ ] `profile_effect.py` 四種組合相同的輸出已貼。
-- [ ] brief §6.4、§6.5、§19（Route profile 那一列的代價說明），plan §4.4，研究 §6.1 已改；兩支新腳本的 README 條目已補。
-- [ ] `uv run ruff check . && uv run ruff format --check . && uv run mypy && uv run lint-imports && uv run pytest` 全綠，貼指令輸出。
+- [x] `profile_effect.py` 四種組合相同的輸出已貼。
+- [x] brief §6.4、§6.5、§19（Route profile 那一列的代價說明），plan §4.4，研究 §6.1 已改；兩支新腳本的 README 條目已補。
+- [x] `uv run ruff check . && uv run ruff format --check . && uv run mypy && uv run lint-imports && uv run pytest` 全綠，貼指令輸出。
 
 **不做：**
 
@@ -111,3 +111,10 @@
 - 用索引站的發佈時間推測季（brief §6.4 提過）：解析器拿不到，研究 §4 也說明它分不出這兩種情形。
 
 ## Comments
+
+- 2026-09-17 規則 1 的形狀：R 連 TMDB `titles` 比漏 B 14、只比三個主標題漏 0（但靠英文標題長度，probe 會入錯），使用者拍板維持原規則 1（研究 §6.1.1）。
+- 規則 2 的「差一天」解讀成同一天才不觸發，沒有容忍範圍；TMDB 沒有那一集的播出日也送審核（progress.md 偏差與決定）。
+- code-review 沒處理的發現：
+  - `release._date` 與 `_int` 同一種寫法（Standards 軸，判斷題）——與既有的 `_text` 一致，沒抽共用函式。
+  - `tests/unit/test_parser_mapping.py` 的 `run()` 預設 profile 改成 `standard` 之後，約十處顯式的 `profile=Profile.STANDARD` 變成多餘——14e 拿掉 profile 時一起清。
+  - 量測順帶發現 `release._numbers` 在季號等於方括號集號時丟掉季號（`Mushoku Tensei S2 [02]`），不在這一票的範圍，沒修；規則 1 之下不會入錯。

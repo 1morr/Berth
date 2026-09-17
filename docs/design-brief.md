@@ -198,7 +198,7 @@ Event 是 Job 頁時間線的資料來源，也是未來 AI 理解「發生了�
 
 對 torrent 名與每個檔名解析出結構化欄位（缺就留空，不猜）：
 
-`title_candidates[]`、`season`（顯式）、`episode`/`episode_range`、`absolute_number`、`version`（v2/v3）、`group`、`source`（BD/WEB/DVD/HDTV/Remux）、`resolution`、`video_codec`、`bit_depth`、`audio`、`subtitle_langs[]`、`subtitle_kind`（hardsub/softsub/external/unknown）、`edition`（Remaster/Director's Cut/Uncut/…）、`year`、`season_hint_from_folder`、`special_kind`（SP/OVA/OAD/Movie/NC）。
+`title_candidates[]`、`season`（顯式）、`episode`/`episode_range`、`absolute_number`、`version`（v2/v3）、`group`、`source`（BD/WEB/DVD/HDTV/Remux）、`resolution`、`video_codec`、`bit_depth`、`audio`、`subtitle_langs[]`、`subtitle_kind`（hardsub/softsub/external/unknown）、`edition`（Remaster/Director's Cut/Uncut/…）、`year`、`air_date`（檔名寫的播出日，§6.4）、`season_hint_from_folder`、`special_kind`（SP/OVA/OAD/Movie/NC）。
 
 - 沒有現成庫能處理中文字幕組命名（§20.4）。【決定】解析分兩段：先用本系統維護的 **CJK 字幕組詞典**（簡繁/繁日/簡日/BIG5/GB/CHT/CHS/內嵌/內封/外掛/第 N 話/第 N 集/全集/合集/第 N 季/劇場版/番外/重製/★前綴/招募廣告/地區限制…，起點是 AutoBangumi `classic.py` 與 Sonarr `Parser.cs` 的規則）做正規化與 CJK 欄位抽取，再把剩餘字串交給成熟的西方命名解析庫（Python 用 guessit，TS 用 @ctrl/video-filename-parser）。
 - 欄位定義對齊 AutoBangumi 的 `ParsedRelease`（含 `media_type` 與 `release_kind = single | range | batch | collection`），讓 benchmark 可以互相比較。
@@ -214,7 +214,7 @@ Event 是 Job 頁時間線的資料來源，也是未來 AI 理解「發生了�
    - 顯式 `SxxEyy` → 直接採用（並用 TMDB 驗證該集存在）。
    - 資料夾提示（`Season 2` / `S2` / `第二季` / `2nd Season` / `Part 2`）+ 檔內集號。
    - 標題含季名（`Title 2nd Season`、`Title Part 2`、`Title: Subtitle`）→ 用 TMDB 該劇各季的 `name` 與首播年比對決定季。
-   - 只有集號（動漫常見）→ 若集號 ≤ 該季集數且上下文指定季 → 該季；否則視為 **絕對編號**，依序嘗試：TMDB episode group（Absolute 類型）、各季累計集數換算、以 TMDB 各集 `air_date` 與發佈時間推測「虛擬季」offset（AutoBangumi v3.2 的做法）。換算過程寫入理由。
+   - 只有集號（動漫常見）→ TMDB 只有一季而且那一集存在 → 該季；否則視為 **絕對編號**，TMDB episode group（Absolute 類型）與各季累計集數兩種換算各產一個候選，換算過程寫入理由。**信心看證據，不看 Route**（2026-09-16，§19）：預設 medium，遇到任一條降到 low 送審核並附理由——(1) **集號 ≤ 第一個正規季的集數**：這個數字同時讀得成「第一季第 N 集」與「後面某季從 01 重數的第 N 集」，檔名分不出來（Erai-raws《死神》相剋譚 01–14 是後者）；§20.4 量過它擋下的多半其實是第一季，但「標題有認不出的多餘字」分不開兩者，2026-09-17 維持原形。(2) **檔名帶播出日，而換算出的那一集在 TMDB 上不是那一天播的**：日期是明說的，換算是推論的；沒有容忍範圍，因為日播的劇差一集就是差一天。以發佈時間推測「虛擬季」offset（AutoBangumi v3.2 的做法）**沒有做**：解析器拿不到發佈時間，而且它分不出上面那兩種讀法（plan §4.4、`docs/research/profile-effect.md` §4）。
    - 已知陷阱：TMDB 與 TVDB 近年都把 split-cour 動漫併成單季連續編號，而字幕組每個 cour 從 01 重數（§20.3）。RSS Rule 因此必須支援手動 offset；第二階段接入 Fribb/anime-lists 的 `season.tmdb` + `episode_offset.tmdb` 自動填 offset。
    - 韓劇常見 `E01` 無季 → 視為 Season 1（多數韓劇單季）並驗證集數。
 4. **批次一致性**：同一 torrent 內所有影片以同一種模式解析成功、集號連續、數量與 TMDB 該季集數吻合 → 大幅加分；只有少數檔案解析失敗 → 那些檔案進 review，其餘照常入庫（不因為一顆 NCOP 卡住整季）。
@@ -224,8 +224,8 @@ Event 是 Job 頁時間線的資料來源，也是未來 AI 理解「發生了�
 
 - 不用單一浮點數黑箱。每個 Plan item 帶 `confidence ∈ {high, medium, low}` 與 `reasons[]`。
 - **high**：Media 由上下文或「標題 + 年份精確命中」決定；每個影片檔都有顯式季/集或資料夾提示；季/集都存在於 TMDB；無衝突；批次一致性通過。
-- **medium**：Media 確定，但季/集靠推論（絕對編號換算、air_date offset、標題季名比對），或批次一致性只部分通過（少數檔案例外）。
-- **low**：Media 不確定、有衝突、或影片數量與 TMDB 集數明顯不符。
+- **medium**：Media 確定，但季/集靠推論（絕對編號換算、air_date offset、標題季名比對），或批次一致性只部分通過（少數檔案例外）。絕對編號換算要**沒有反證**才是 medium：集號超過第一季的集數，而且檔名若帶播出日就要與換算出的那一集相同（§6.4）。
+- **low**：Media 不確定、有衝突、影片數量與 TMDB 集數明顯不符，或絕對編號換算有反證（§6.4 的兩條）。
 - **high 與 medium 都自動入庫**（owner 決定，所有 Route 預設開啟；可在 Route 上關閉 medium）。medium 入庫的檔案帶 `audit` 旗標，在審核佇列以「已入庫待確認」列出，一鍵撤銷（拆鏈接、清帳本）或確認。硬鏈接讓撤銷幾乎零成本，這是敢於自動入庫 medium 的前提。
 - low 進 review，並在啟用 AI 時觸發 §6.10。
 - 取捨：medium 自動入庫會提高誤入庫率。§6.9 的 benchmark 必須分開報告 high 與 medium 的誤判率，若 medium 誤判率明顯高於 high，回頭收緊 medium 的定義而不是關掉自動入庫。
@@ -622,7 +622,7 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 | Jellyfin 支援版本（2026-09-15） | **只支援 Jellyfin 12 以上**（同日稍早定的「兩條版本線都支援、13.0 發佈才拿掉 10.x」被使用者改掉，為了降低複雜度）。MergeVersions 的精靈步驟、既有服務按鈕、resolver 的合併觸發與任務 id 整段移除；既有 Jellyfin 低於 12 時，精靈與健康檢查紅燈，說出目前版本並附升級注意（§20.9），不往下做。代價是已知的：從 10.11 升到 12 有遷移失敗的 open issue、舊客戶端要升級、binhex（unRAID）與 QNAP 社群套件還沒有 12，那些使用者要先升級才能接本系統 | §1.2、§7.7、§16.4、§20.9、M1 票 14b |
 | 套件內 Jellyfin image（2026-09-15） | 釘在 12.1 這條線（linuxserver `version-12.1ubu2604`）：跟得上 12.1 的修正與重建，但 pull 時不會默默跨到下一版；本系統實測過新版才調高，README 寫升級步驟（先備份 Jellyfin 的 `/config`、升級後完整掃描） | §16.3、§20.9、plan §9.1、M1 票 14b |
 | 多集檔與同起始集的單集（2026-09-15） | 同一季已有、或同一批要入的正片裡，有同起始集而結束集不同的，送審核不自動入庫；理由要說出 Jellyfin 12 會把它們併成一集、藏掉後面的集 | §7.8、§20.9、M1 票 14b |
-| Route profile（2026-09-16） | **移除**。量測（§20.4）顯示它唯一的作用是「只有集號、TMDB 多季」時絕對編號換算自動入庫（anime）還是送審核（standard），而「是不是動漫」預測不了換算對錯。改由兩條證據決定：集號 ≤ 第一季集數、或檔名的播出日與換算出的那一集對不上，就送審核，其餘 medium。季號搜尋變體改成對所有劇集都做。代價：多季作品第一季的無季號發佈送審核——這個代價沒量過，14d 先用 M1 票 01 的 7,833 筆真實發佈量，若「標題有認不出的多餘字」分得開第一季與後面季的重數，規則 1 就收窄成兩者同時成立才送審核 | §20.4、`docs/research/profile-effect.md`、M1 票 14d / 14e（實作時回寫 §6.4、§6.5、CONTEXT.md） |
+| Route profile（2026-09-16） | **移除**。量測（§20.4）顯示它唯一的作用是「只有集號、TMDB 多季」時絕對編號換算自動入庫（anime）還是送審核（standard），而「是不是動漫」預測不了換算對錯。改由兩條證據決定：集號 ≤ 第一季集數、或檔名的播出日與換算出的那一集對不上，就送審核，其餘 medium。季號搜尋變體改成對所有劇集都做。代價：多季作品第一季的無季號發佈送審核。**14d 量過**（M1 票 01 的真實發佈，§20.4）：規則 1 擋下的 1,095 個檔案裡 928 個其實是第一季；「標題有認不出的多餘字」分不開兩者——連 TMDB 別名一起比會讓 14 個後面季的自動入錯，只比主標題時一個不漏卻是靠 TMDB 英文標題碰巧夠長。**2026-09-17 維持規則 1 原形** | §6.4、§6.5、§20.4、`docs/research/profile-effect.md` §6.1、M1 票 14d（解析器，已完成）/ 14e（拿掉欄位與 CONTEXT.md） |
 | M1.5 拆票前的四條（2026-09-15） | 媒體庫頁一個 Jellyfin 媒體庫一頁，只列這位使用者 `UserViews` 裡有的，Route 退成卡片上入庫狀態的來源；首頁上方放這位使用者的繼續觀看與下一集（沒有內容就不出現），下面維持探索；瀏覽時取允許清單一併讀 Jellyfin 帳號的 `Policy`（同一份短時間快取），帳號被停用就結束 Berth 的 session，不縮短 session 效期；Jellyfin 的圖片由 Berth 代理，快取鍵用 `tag` | §12、§13、§20.8、plan §11.2b |
 
 M1.5 拆票前的四條待決，2026-09-15 已全數照推薦拍板（上表最後一列），這裡留著當時的理由：
@@ -878,6 +878,16 @@ M1.5 拆票前的四條待決，2026-09-15 已全數照推薦拍板（上表最�
   加上之後讀成 2015-05-24，`2024-02-29` 這種四位數年份不受影響。
 - 韓劇第二季以後、檔名沒有季號的 `Show.2.E01.YYMMDD` 在 TPB、Knaben、dmhy 都沒找到，公開索引站上的
   第二季發佈全部帶 `S02E`。
+- **「集號 ≤ 第一季集數就送審核」擋下的多半是對的**（2026-09-17，M1 票 14d，[研究 §6.1.1](research/profile-effect.md)，
+  `scripts/experiments/absolute_rule_cost.py`）：M1 票 01 那批以發佈時間判定正解的 Mikan 發佈，取 TMDB 上 ≥ 2 季的
+  5 部（SPY×FAMILY、無職轉生、鬼滅之刃、進擊的巨人、航海王），每筆當成以標題為檔名的單檔 torrent 丟進 `plan`、
+  合集逐集展開。走到絕對編號換算的檔案裡，集號 ≤ 第一季集數的**正解在第一季 928 個、在後面某季 167 個**；
+  超過第一季集數的 1,219 對、54 錯，錯的 54 個正解全是播出日對不上、退回序位的那種，本身存疑。
+  「標題有認不出的多餘字」（guessit 的標題候選不等於作品的已知名字）分不開兩者：連 TMDB 的 `titles` 一起比，
+  放行 793 個第一季、漏掉 14 個後面季的——`Kimetsu no Yaiba: Katanakaji no Sato-hen` 本身就是 TMDB 別名，
+  `Mushoku Tensei S2 [02]` 的季號被 Berth 丟掉（季號等於方括號集號時）；只比三個主標題，放行 328 個、一個不漏，
+  但無職轉生那 5 個是因為 TMDB 英文標題 `Mushoku Tensei: Jobless Reincarnation` 比羅馬字長才擋下，同一種寫法換成
+  英文標題就是 `SPY x FAMILY` 的作品就會入錯。近似的限制：Mikan 只有標題沒有檔名、樣本以中文字幕組與動漫為主。
 
 **Jellyfin 動漫命名的社群痛點**
 

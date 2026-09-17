@@ -6,6 +6,8 @@
 
 from __future__ import annotations
 
+from datetime import date
+
 import pytest
 
 from berth.domain import Lang, ReleaseKind, Source, SpecialKind, SubtitleKind, Tags
@@ -184,6 +186,26 @@ class TestFields:
         assert parse_release(name).raw_title == name
 
 
+class TestAirDate:
+    """檔名裡的播出日。只有集號時它是換算對不對的證據（brief §6.4、M1 票 14d）。"""
+
+    def test_a_korean_broadcast_date_puts_the_year_first(self) -> None:
+        """韓國電視台的 `YYMMDD`：guessit 預設把 `150524` 讀成 2024-05-15（M1 票 14c 實測）。"""
+        info = parse_release("The.Return.of.Superman.E079.150524.HDTV.H264.720p-LIMO.avi")
+
+        assert info.air_date == date(2015, 5, 24)
+
+    def test_a_four_digit_year_reads_as_written(self) -> None:
+        info = parse_release("Home.and.Away.Episode.8214.2024-02-29.Thu.720p.WEB-DL.H.264-bill.mkv")
+
+        assert info.air_date == date(2024, 2, 29)
+
+    def test_a_release_without_a_date_says_nothing(self) -> None:
+        info = parse_release("[SubsPlease] Spy x Family - 05 (1080p) [547FDE9F].mkv")
+
+        assert info.air_date is None
+
+
 class TestMerge:
     """檔名說了算，torrent 名補空缺。"""
 
@@ -212,6 +234,22 @@ class TestMerge:
         merged = merge_release(file, torrent)
 
         assert (merged.season, merged.episode, merged.episode_end) == (1, 5, None)
+
+    def test_a_pack_date_does_not_become_the_air_date_of_a_numbered_file(self) -> None:
+        """播出日是某一集的，跟著集號走（與 `episode_end` 同一個道理）。"""
+        torrent = parse_release("Home.and.Away.Week.Pack.2024-02-26.720p.WEB-DL.H.264-bill")
+        file = parse_release("Home.and.Away.Episode.8215.720p.WEB-DL.H.264-bill.mkv")
+
+        assert merge_release(file, torrent).air_date is None
+
+    def test_the_torrent_date_comes_along_with_the_torrent_episode(self) -> None:
+        """檔名什麼都沒說時，集號與播出日一起從 torrent 名來。"""
+        torrent = parse_release("Home.and.Away.Episode.8214.2024-02-29.Thu.720p.WEB-DL.H")
+        file = parse_release("bill-haa-720p.mkv")
+
+        merged = merge_release(file, torrent)
+
+        assert (merged.episode, merged.air_date) == (8214, date(2024, 2, 29))
 
     def test_a_pack_that_contains_specials_does_not_make_every_file_one(self) -> None:
         """`[01-13TV全集+SP]` 說的是這一包裡有特典，不是這個檔案是特典（真實語料）。"""

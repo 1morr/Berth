@@ -11,6 +11,7 @@ guessit（brief §20.4 的結論——沒有現成庫兩邊都行）。這裡是
 from __future__ import annotations
 
 import re
+from datetime import date
 from typing import Any
 
 from guessit import guessit
@@ -62,13 +63,18 @@ _LOOSE_RANGE = re.compile(r"(?<![0-9A-Za-z])([0-9]{1,4})\s*[-~]\s*([0-9]{1,4})(?
 #: 年份長得像集號，所以四位數的 19xx / 20xx 不當集號用。
 _YEAR_RANGE = range(1900, 2100)
 
+#: 六位數的短日期年份在前：韓國電視台的 `Show.E079.150524` 是 2015-05-24，guessit 預設卻讀成
+#: 2024-05-15（M1 票 14c 實測；guessit 文件的 `-Y, --date-year-first`，brief §20.4）。
+#: 四位數年份的 `2024-02-29` 不受影響。
+_GUESSIT_OPTIONS = {"date_year_first": True}
+
 
 def parse_release(name: str) -> ReleaseInfo:
     """一個發佈名（torrent 名或檔名）→ `ReleaseInfo`。缺的欄位留空，不猜（brief §6.3）。"""
     trailing = _TRAILING_GROUP.search(name)
     stripped = _TRAILING_GROUP.sub("", name) if trailing else name
     cleaned, hints = normalize_cjk(stripped)
-    guess: dict[str, Any] = dict(guessit(cleaned))
+    guess: dict[str, Any] = dict(guessit(cleaned, _GUESSIT_OPTIONS))
 
     season, episode, episode_end = _numbers(cleaned, hints, guess)
     group = (
@@ -95,6 +101,7 @@ def parse_release(name: str) -> ReleaseInfo:
         subtitle_kind=hints.subtitle_kind,
         edition=_text(guess.get("edition")) or hints.edition,
         year=_int(guess.get("year")),
+        air_date=_date(guess.get("date")),
         special_kind=hints.special or (SpecialKind.MOVIE if hints.movie else None),
         release_kind=_release_kind(hints, episode_end, guess),
         matched_tokens=hints.matched,
@@ -113,9 +120,9 @@ def merge_release(primary: ReleaseInfo, fallback: ReleaseInfo) -> ReleaseInfo:
             # `special_kind` 不補：`[01-13TV全集+SP]` 說的是「這一包裡有特典」，
             # 不是「這個檔案是特典」。整包 13 集正片會因此全部被當成 SP（真實語料）。
             continue
-        # `episode_end` 跟著 `episode` 走：檔名說了第 5 集，torrent 名的 `01-28`
-        # 不會讓它變成第 5 到 28 集。
-        if field == "episode_end" and primary.episode is not None:
+        # `episode_end` 與 `air_date` 跟著 `episode` 走：檔名說了第 5 集，torrent 名的 `01-28`
+        # 不會讓它變成第 5 到 28 集，包名上的日期也不是第 5 集的播出日。
+        if field in ("episode_end", "air_date") and primary.episode is not None:
             continue
         if _empty(filled[field]) and not _empty(value):
             filled[field] = value
@@ -255,3 +262,9 @@ def _int(value: object) -> int | None:
     if isinstance(value, list):
         value = value[0] if value else None
     return value if isinstance(value, int) else None
+
+
+def _date(value: object) -> date | None:
+    if isinstance(value, list):
+        value = value[0] if value else None
+    return value if isinstance(value, date) else None

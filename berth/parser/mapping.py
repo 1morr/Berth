@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from datetime import timedelta
+from datetime import date, timedelta
 
 from berth.domain import (
     Candidate,
@@ -28,7 +28,6 @@ from berth.domain import (
     MediaKind,
     MediaSnapshot,
     ParseContext,
-    Profile,
     ReleaseInfo,
     SeasonSnapshot,
     SpecialKind,
@@ -139,7 +138,7 @@ def map_episode(
     hint = _hint(info, structure, context, media, text)
     if hint is not None:
         return _from_hint(hint, media, info, structure, span, check)
-    return _from_number(media, context, span, check)
+    return _from_number(media, info, span, check)
 
 
 # --- 季號的來源 ------------------------------------------------------------------------
@@ -358,13 +357,16 @@ def _cours(season: SeasonSnapshot) -> tuple[tuple[EpisodeSnapshot, ...], ...]:
 
 
 def _from_number(
-    media: MediaSnapshot, context: ParseContext, span: _Span, check: _Check
+    media: MediaSnapshot, info: ReleaseInfo, span: _Span, check: _Check
 ) -> tuple[Candidate, ...]:
     """沒有任何季號提示（brief §6.4 的第四條）。
 
     **虛擬季換算不在這裡**：它要有一個季號才索引得到那一輪播出（`_virtual`），而這條路上
     連季號都沒有。brief §6.4 另外提到的「以發佈時間推測」需要索引站給的發佈時間，
     解析器現在拿不到它（票 08 才有），沒有它就只是換一種猜法。
+
+    絕對編號換算的信心**只看證據，不看 Route 是不是動漫**（M1 票 14c 量過，「是不是動漫」
+    預測不了換算對錯）：預設 medium，`_doubts` 說得出理由時降到 low。
     """
     regular = _regular(media)
     if len(regular) == 1 and _exists(regular[0], span.start) and _exists(regular[0], span.end):
@@ -382,21 +384,64 @@ def _from_number(
         )
 
     # 絕對編號的換算法各產一個 Candidate 並附理由（plan §4.1）。
-    confidence = Confidence.MEDIUM if context.profile is Profile.ANIME else Confidence.LOW
-    aside = (
-        ()
-        if context.profile is Profile.ANIME
-        else ("absolute numbering is an anime convention; this route is not anime",)
-    )
     conversions = (
         (MappingStrategy.ABSOLUTE_GROUP, _absolute_group(regular, span)),
         (MappingStrategy.ABSOLUTE_CUMULATIVE, _cumulative(regular, span)),
     )
-    return tuple(
-        _from_mapped(found, strategy, confidence, span, check, aside)
-        for strategy, found in conversions
-        if found is not None
-    )
+    candidates: list[Candidate] = []
+    for strategy, found in conversions:
+        if found is None:
+            continue
+        doubts = _doubts(media, info, span, found)
+        confidence = Confidence.LOW if doubts else Confidence.MEDIUM
+        candidates.append(_from_mapped(found, strategy, confidence, span, check, doubts))
+    return tuple(candidates)
+
+
+def _doubts(
+    media: MediaSnapshot, info: ReleaseInfo, span: _Span, found: _Mapped
+) -> tuple[str, ...]:
+    """絕對編號換算不該自動入庫的理由（brief §6.4、§6.5，M1 票 14d）。沒有理由就是空的。
+
+    1. **集號沒超過第一季的集數**：這個數字同時讀得成「第一季第 N 集」與「後面某季從 01
+       重數的第 N 集」，檔名裡沒有東西分得出來——Erai-raws《死神 千年血戰篇 相剋譚》的
+       01–14 是後者。「標題有認不出的多餘字」試過分不開這兩種：在 M1 票 01 的真實發佈上
+       不是漏掉後者，就是只靠 TMDB 英文標題碰巧夠長才擋下（研究 `profile-effect.md` §6.1）。
+    2. **檔名的播出日不是換算出的那一集的播出日**：日期是發佈明說的，換算是推論的。
+       **沒有容忍範圍**——日播的劇差一集就是差一天；TMDB 沒有那一集的播出日也算對不上，
+       因為沒有東西證實它。
+    """
+    doubts: list[str] = []
+    first = _regular(media)[0]
+    length = _length(first)
+    if span.start <= length:
+        doubts.append(
+            f"#{span.start} does not go past the {length} episodes of season "
+            f"{first.season_number}, so it could also be episode {span.start} of a later "
+            f"season that numbers from 01 again"
+        )
+    if info.air_date is not None:
+        label = f"S{found.season:02d}E{found.start:02d}"
+        aired = _aired(media, found.season, found.start)
+        if aired is None:
+            doubts.append(
+                f"the release says it aired on {info.air_date.isoformat()}, "
+                f"but TMDB has no air date for {label}"
+            )
+        elif aired != info.air_date:
+            doubts.append(
+                f"the release says it aired on {info.air_date.isoformat()}, "
+                f"but TMDB says {label} aired on {aired.isoformat()}"
+            )
+    return tuple(doubts)
+
+
+def _aired(media: MediaSnapshot, season: int, episode: int) -> date | None:
+    """TMDB 說這一集哪天播。沒有這一集、或 TMDB 沒填日期，都是 `None`。"""
+    found = _season(media, season)
+    if found is None:
+        return None
+    return next((row.air_date for row in found.episodes if row.episode_number == episode), None)
 
 
 def _from_mapped(

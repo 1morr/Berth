@@ -423,7 +423,14 @@ Route profile 對解析結果的作用（M1 票 14c）。不連線、不需要�
 uv run python scripts/experiments/profile_effect.py    # 語料四種 profile 組合的報表、逐檔差異、分支側錄
 ```
 
-結果見 [`docs/research/profile-effect.md`](docs/research/profile-effect.md)。
+「集號 ≤ 第一季集數就送審核」這條規則的代價（M1 票 14d）。拿上面 `anime_episode_source.py` 的快取當正解、
+丟進 Berth 的解析器，所以要憑證也要 `uv run`（快取被清掉的話會先重抓，約十分鐘）：
+
+```bash
+uv run --env-file .env python scripts/experiments/absolute_rule_cost.py    # A / B、收窄規則 R 的放行與漏掉
+```
+
+兩支的結果都見 [`docs/research/profile-effect.md`](docs/research/profile-effect.md)。
 
 ## 目錄結構
 

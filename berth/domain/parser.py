@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+from datetime import date
 from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict
@@ -275,6 +276,9 @@ class ReleaseInfo(BaseModel):
     subtitle_kind: SubtitleKind = SubtitleKind.UNKNOWN
     edition: str = ""
     year: int | None = None
+    #: 檔名寫的播出日（`2024-02-29`、韓國電視台的 `150524`）。只有集號時，它是絕對編號換算
+    #: 對不對的證據：換算出的那一集在 TMDB 上不是這一天播的，就不自動入庫（brief §6.4）。
+    air_date: date | None = None
     special_kind: SpecialKind | None = None
     release_kind: ReleaseKind = ReleaseKind.SINGLE
     #: 解析時真的認出來的片段，原文照抄。

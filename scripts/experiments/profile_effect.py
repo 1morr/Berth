@@ -26,7 +26,7 @@ from pathlib import Path
 from typing import Literal
 from unittest import mock
 
-from berth.domain import Candidate, MappingStrategy, MediaSnapshot, ParseContext, Profile
+from berth.domain import Candidate, MappingStrategy, MediaSnapshot, Profile, ReleaseInfo
 from berth.parser import mapping, plan
 from berth.services import bench
 
@@ -73,11 +73,11 @@ def spying(calls: list[Call], fixture: str) -> Iterator[None]:
 
     def spy(
         media: MediaSnapshot,
-        context: ParseContext,
+        info: ReleaseInfo,
         span: mapping._Span,
         check: mapping._Check,
     ) -> tuple[Candidate, ...]:
-        found = original(media, context, span, check)
+        found = original(media, info, span, check)
         strategies = tuple(candidate.strategy.value for candidate in found)
         single = MappingStrategy.SINGLE_SEASON.value in strategies
         calls.append(

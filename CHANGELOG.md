@@ -335,6 +335,12 @@ Windows Docker Desktop（NTFS bind mount）與 Linux（ext4）上各跑一次 `d
 - `scripts/experiments/profile_effect.py`（票 14c）：Route profile 對語料有沒有作用——四種組合重算、
   逐檔比桶、側錄 `_from_number` 的分支。結論在 `docs/research/profile-effect.md`：使用者拍板移除
   profile（票 14d、14e）。
+- 語料補兩筆（票 14d；動漫 16 / 劇集 10 / 電影 4，共 30 筆 383 個檔案）：Erai-raws《死神 千年血戰篇 相剋譚》
+  01–14（每 cour 重數，正解 S02E27–40；改解析器之前是 `auto_wrong` 14）與 SubsPlease `Spy x Family - 05`
+  （第一季的無季號發佈，正解 S01E05）。baseline 的 `auto_correct` 169 → 170，`auto_wrong` 仍是 0。
+- `scripts/experiments/absolute_rule_cost.py`（票 14d）：用 M1 票 01 以發佈時間判定正解的 Mikan 發佈，量「集號
+  ≤ 第一季集數就送審核」擋下的對與錯，以及「標題有認不出的多餘字」能不能分開兩者（結論：分不開，研究 §6.1.1）。
+  `anime_episode_source.py` 的 `Trial` 為此多帶 Mikan 的原始標題。
 
 ### Changed
 
@@ -449,6 +455,13 @@ Windows Docker Desktop（NTFS bind mount）與 Linux（ext4）上各跑一次 `d
   token 兩種形狀仍然都收。取得步驟寫在 README 的〈先申請一把 TMDB API key〉。
 - `scripts/experiments/anime_episode_source.py` 的 TMDB 憑證改從環境變數 `TMDB_API_KEY` 讀
   （原本是從 adapter 原始碼刮那把內建的）。
+- **只有集號、TMDB 上不只一季時，絕對編號換算的信心改看證據，不再看 Route 的 profile**（票 14d，brief §6.4）：
+  預設 medium（自動入庫），集號沒超過第一季的集數、或檔名的播出日與換算出的那一集在 TMDB 上的播出日不同，
+  就降到 low 送審核並說出是哪一條。所以 `anime` Route 上第一季的無季號發佈（`Spy x Family - 05`）改送審核，
+  `standard` Route 上的跨季連號與播出日對得上的（`The.Return.of.Superman.E079.150524`）改自動入庫。
+  Route 上的 profile 欄位還在，解析器已經不讀它（票 14e 拿掉）。
+- 發佈名解析多讀檔名裡的播出日（`ReleaseInfo.air_date`）；六位數的短日期年份在前，韓國電視台的 `150524`
+  讀成 2015-05-24，而不是 guessit 預設的 2024-05-15。
 
 ### Fixed
 

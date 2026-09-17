@@ -1,0 +1,3062 @@
+{
+ "first_air_date": "2004-10-05",
+ "kind": "tv",
+ "overview": "在現世，死神朽木露琪亞突然闖進了從小就有強大靈力的少年—黑崎一護的臥室，緊接著一隻名為虛的怪物攻擊了一護的家人，一護和露琪亞一起投入了消滅虛的戰鬥中。露琪亞在戰鬥中受傷並無法行動，所以她只得把斬魄刀插進一護的身體裡，藉此把死神的靈力給一護，讓他變成一位死神。從此，擁有了「為了守護」所需力量的少年，他的生活，發生了翻天覆地的變化……",
+ "poster_url": "https://image.tmdb.org/t/p/w342/e0f7PbxksVMd3CoYweWMikzu6HO.jpg",
+ "runtime": null,
+ "seasons": [
+  {
+   "air_date": "2004-12-18",
+   "episode_count": 4,
+   "episodes": [
+    {
+     "absolute_number": null,
+     "air_date": "2004-12-18",
+     "episode_number": 1,
+     "name": "Memories in the Rain",
+     "runtime": 29
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2005-12-06",
+     "episode_number": 2,
+     "name": "13 Court Guard Squads Omake",
+     "runtime": 3
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2006-03-23",
+     "episode_number": 3,
+     "name": "The Sealed Sword Frenzy",
+     "runtime": 33
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2023-09-02",
+     "episode_number": 4,
+     "name": "The Blood Warfare, Separation (Interlude)",
+     "runtime": 24
+    }
+   ],
+   "name": "Specials",
+   "names": [
+    "Specials",
+    "特別篇",
+    "特别篇"
+   ],
+   "season_number": 0
+  },
+  {
+   "air_date": "2004-10-05",
+   "episode_count": 366,
+   "episodes": [
+    {
+     "absolute_number": 1,
+     "air_date": "2004-10-05",
+     "episode_number": 1,
+     "name": "The Day I Became a Shinigami",
+     "runtime": 23
+    },
+    {
+     "absolute_number": 2,
+     "air_date": "2004-10-12",
+     "episode_number": 2,
+     "name": "A Shinigami's Work",
+     "runtime": 23
+    },
+    {
+     "absolute_number": 3,
+     "air_date": "2004-10-19",
+     "episode_number": 3,
+     "name": "The Older Brother's Wish, the Younger Sister's Wish",
+     "runtime": 23
+    },
+    {
+     "absolute_number": 4,
+     "air_date": "2004-10-26",
+     "episode_number": 4,
+     "name": "Cursed Parakeet",
+     "runtime": 23
+    },
+    {
+     "absolute_number": 5,
+     "air_date": "2004-11-02",
+     "episode_number": 5,
+     "name": "Beat the Invisible Enemy!",
+     "runtime": 23
+    },
+    {
+     "absolute_number": 6,
+     "air_date": "2004-11-09",
+     "episode_number": 6,
+     "name": "Fight to the Death! Ichigo vs. Ichigo",
+     "runtime": 23
+    },
+    {
+     "absolute_number": 7,
+     "air_date": "2004-11-16",
+     "episode_number": 7,
+     "name": "Greetings from a Stuffed Lion",
+     "runtime": 23
+    },
+    {
+     "absolute_number": 8,
+     "air_date": "2004-11-23",
+     "episode_number": 8,
+     "name": "June 17, Memories in the Rain",
+     "runtime": 23
+    },
+    {
+     "absolute_number": 9,
+     "air_date": "2004-11-30",
+     "episode_number": 9,
+     "name": "Unbeatable Enemy",
+     "runtime": 23
+    },
+    {
+     "absolute_number": 10,
+     "air_date": "2004-12-07",
+     "episode_number": 10,
+     "name": "Assault on Trip at Sacred Ground!",
+     "runtime": 23
+    },
+    {
+     "absolute_number": 11,
+     "air_date": "2004-12-14",
+     "episode_number": 11,
+     "name": "The Legendary Quincy",
+     "runtime": 23
+    },
+    {
+     "absolute_number": 12,
+     "air_date": "2004-12-21",
+     "episode_number": 12,
+     "name": "A Gentle Right Arm",
+     "runtime": 23
+    },
+    {
+     "absolute_number": 13,
+     "air_date": "2004-12-28",
+     "episode_number": 13,
+     "name": "Flower and Hollow",
+     "runtime": 23
+    },
+    {
+     "absolute_number": 14,
+     "air_date": "2005-01-11",
+     "episode_number": 14,
+     "name": "Back to Back, a Fight to the Death!",
+     "runtime": 23
+    },
+    {
+     "absolute_number": 15,
+     "air_date": "2005-01-18",
+     "episode_number": 15,
+     "name": "Kon's Great Plan",
+     "runtime": 23
+    },
+    {
+     "absolute_number": 16,
+     "air_date": "2005-01-25",
+     "episode_number": 16,
+     "name": "The Encounter, Abarai Renji!",
+     "runtime": 23
+    },
+    {
+     "absolute_number": 17,
+     "air_date": "2005-02-01",
+     "episode_number": 17,
+     "name": "Ichigo Dies!",
+     "runtime": 23
+    },
+    {
+     "absolute_number": 18,
+     "air_date": "2005-02-08",
+     "episode_number": 18,
+     "name": "Reclaim! The Power of the Shinigami!",
+     "runtime": 23
+    },
+    {
+     "absolute_number": 19,
+     "air_date": "2005-02-15",
+     "episode_number": 19,
+     "name": "Ichigo Becomes a Hollow!",
+     "runtime": 23
+    },
+    {
+     "absolute_number": 20,
+     "air_date": "2005-02-22",
+     "episode_number": 20,
+     "name": "Ichimaru Gin's Shadow",
+     "runtime": 23
+    },
+    {
+     "absolute_number": 21,
+     "air_date": "2005-03-01",
+     "episode_number": 21,
+     "name": "Enter! The World of the Shinigami",
+     "runtime": 23
+    },
+    {
+     "absolute_number": 22,
+     "air_date": "2005-03-08",
+     "episode_number": 22,
+     "name": "The Man who Hates Shinigami",
+     "runtime": 23
+    },
+    {
+     "absolute_number": 23,
+     "air_date": "2005-03-15",
+     "episode_number": 23,
+     "name": "14 Days Before Rukia's Execution",
+     "runtime": 23
+    },
+    {
+     "absolute_number": 24,
+     "air_date": "2005-03-22",
+     "episode_number": 24,
+     "name": "Assemble! The 13 Divisions",
+     "runtime": 23
+    },
+    {
+     "absolute_number": 25,
+     "air_date": "2005-03-29",
+     "episode_number": 25,
+     "name": "Penetrate the Center with an Enormous Bombshell?",
+     "runtime": 23
+    },
+    {
+     "absolute_number": 26,
+     "air_date": "2005-04-05",
+     "episode_number": 26,
+     "name": "Formation! The Worst Tag",
+     "runtime": 23
+    },
+    {
+     "absolute_number": 27,
+     "air_date": "2005-04-12",
+     "episode_number": 27,
+     "name": "Release the Death Blow!",
+     "runtime": 23
+    },
+    {
+     "absolute_number": 28,
+     "air_date": "2005-04-19",
+     "episode_number": 28,
+     "name": "Orihime Targeted",
+     "runtime": 23
+    },
+    {
+     "absolute_number": 29,
+     "air_date": "2005-04-26",
+     "episode_number": 29,
+     "name": "Breakthrough! The Shinigami's Encompassing Net",
+     "runtime": 23
+    },
+    {
+     "absolute_number": 30,
+     "air_date": "2005-05-03",
+     "episode_number": 30,
+     "name": "Renji's Confrontation",
+     "runtime": 23
+    },
+    {
+     "absolute_number": 31,
+     "air_date": "2005-05-10",
+     "episode_number": 31,
+     "name": "The Resolution to Kill",
+     "runtime": 23
+    },
+    {
+     "absolute_number": 32,
+     "air_date": "2005-05-17",
+     "episode_number": 32,
+     "name": "Stars and the Stray",
+     "runtime": 23
+    },
+    {
+     "absolute_number": 33,
+     "air_date": "2005-05-26",
+     "episode_number": 33,
+     "name": "Miracle! The Mysterious New Hero",
+     "runtime": 23
+    },
+    {
+     "absolute_number": 34,
+     "air_date": "2005-06-01",
+     "episode_number": 34,
+     "name": "Tragedy of Dawn",
+     "runtime": 23
+    },
+    {
+     "absolute_number": 35,
+     "air_date": "2005-06-07",
+     "episode_number": 35,
+     "name": "Aizen Assassinated! The Darkness which Approaches",
+     "runtime": 23
+    },
+    {
+     "absolute_number": 36,
+     "air_date": "2005-06-14",
+     "episode_number": 36,
+     "name": "Zaraki Kenpachi Approaches!",
+     "runtime": 23
+    },
+    {
+     "absolute_number": 37,
+     "air_date": "2005-06-21",
+     "episode_number": 37,
+     "name": "Motive of the Fist",
+     "runtime": 23
+    },
+    {
+     "absolute_number": 38,
+     "air_date": "2005-06-28",
+     "episode_number": 38,
+     "name": "Desperation! The Broken Zangetsu",
+     "runtime": 23
+    },
+    {
+     "absolute_number": 39,
+     "air_date": "2005-07-05",
+     "episode_number": 39,
+     "name": "The Immortal Man",
+     "runtime": 23
+    },
+    {
+     "absolute_number": 40,
+     "air_date": "2005-07-12",
+     "episode_number": 40,
+     "name": "The Shinigami whom Ganju Met",
+     "runtime": 23
+    },
+    {
+     "absolute_number": 41,
+     "air_date": "2005-07-19",
+     "episode_number": 41,
+     "name": "Reunion, Ichigo and Rukia",
+     "runtime": 23
+    },
+    {
+     "absolute_number": 42,
+     "air_date": "2005-07-26",
+     "episode_number": 42,
+     "name": "Yoruichi, Goddess of Flash, Dances!",
+     "runtime": 23
+    },
+    {
+     "absolute_number": 43,
+     "air_date": "2005-08-02",
+     "episode_number": 43,
+     "name": "The Despicable Shinigami",
+     "runtime": 23
+    },
+    {
+     "absolute_number": 44,
+     "air_date": "2005-08-09",
+     "episode_number": 44,
+     "name": "Ishida Ultimate Power!",
+     "runtime": 23
+    },
+    {
+     "absolute_number": 45,
+     "air_date": "2005-08-16",
+     "episode_number": 45,
+     "name": "Overcome Your Limits!",
+     "runtime": 23
+    },
+    {
+     "absolute_number": 46,
+     "air_date": "2005-08-23",
+     "episode_number": 46,
+     "name": "Authentic Records! School of Shinigami",
+     "runtime": 23
+    },
+    {
+     "absolute_number": 47,
+     "air_date": "2005-08-30",
+     "episode_number": 47,
+     "name": "The Avengers",
+     "runtime": 23
+    },
+    {
+     "absolute_number": 48,
+     "air_date": "2005-09-06",
+     "episode_number": 48,
+     "name": "Hitsugaya Roars!",
+     "runtime": 23
+    },
+    {
+     "absolute_number": 49,
+     "air_date": "2005-09-13",
+     "episode_number": 49,
+     "name": "Rukia's Nightmare",
+     "runtime": 23
+    },
+    {
+     "absolute_number": 50,
+     "air_date": "2005-09-20",
+     "episode_number": 50,
+     "name": "The Reviving Lion",
+     "runtime": 23
+    },
+    {
+     "absolute_number": 51,
+     "air_date": "2005-09-27",
+     "episode_number": 51,
+     "name": "Morning of the Sentence",
+     "runtime": 23
+    },
+    {
+     "absolute_number": 52,
+     "air_date": "2005-10-04",
+     "episode_number": 52,
+     "name": "Renji, Oath of the Soul! Death Match with Byakuya",
+     "runtime": 25
+    },
+    {
+     "absolute_number": 53,
+     "air_date": "2005-10-04",
+     "episode_number": 53,
+     "name": "Ichimaru Gin's Temptation, Resolution Shattered",
+     "runtime": 25
+    },
+    {
+     "absolute_number": 54,
+     "air_date": "2005-10-18",
+     "episode_number": 54,
+     "name": "An Accomplished Oath! Get back Rukia!",
+     "runtime": 25
+    },
+    {
+     "absolute_number": 55,
+     "air_date": "2005-10-25",
+     "episode_number": 55,
+     "name": "The Strongest Shinigami! Ultimate Confrontation Between Teacher and Students",
+     "runtime": 25
+    },
+    {
+     "absolute_number": 56,
+     "air_date": "2005-11-01",
+     "episode_number": 56,
+     "name": "Supersonic Battle! Determine the Goddess of Battle",
+     "runtime": 25
+    },
+    {
+     "absolute_number": 57,
+     "air_date": "2005-11-08",
+     "episode_number": 57,
+     "name": "Senbonzakura, Crushed! Zangetsu Thrusts through the Sky",
+     "runtime": 25
+    },
+    {
+     "absolute_number": 58,
+     "air_date": "2005-11-15",
+     "episode_number": 58,
+     "name": "Unseal! The Black Blade, the Miraculous Power",
+     "runtime": 25
+    },
+    {
+     "absolute_number": 59,
+     "air_date": "2005-11-22",
+     "episode_number": 59,
+     "name": "Conclusion of the Death Match! White Pride and Black Desire",
+     "runtime": 25
+    },
+    {
+     "absolute_number": 60,
+     "air_date": "2005-12-06",
+     "episode_number": 60,
+     "name": "Reality of the Despair, the Assassin's Dagger is Swung",
+     "runtime": 25
+    },
+    {
+     "absolute_number": 61,
+     "air_date": "2005-12-13",
+     "episode_number": 61,
+     "name": "Aizen Stands! Horrible Ambitions",
+     "runtime": 25
+    },
+    {
+     "absolute_number": 62,
+     "air_date": "2005-12-20",
+     "episode_number": 62,
+     "name": "Gather Together! Group of the Strongest Shinigami!",
+     "runtime": 25
+    },
+    {
+     "absolute_number": 63,
+     "air_date": "2006-01-10",
+     "episode_number": 63,
+     "name": "Rukia's Resolution, Ichigo's Feelings",
+     "runtime": 25
+    },
+    {
+     "absolute_number": 64,
+     "air_date": "2006-01-17",
+     "episode_number": 64,
+     "name": "New School Term, Renji Has Come to the Material World?!",
+     "runtime": 25
+    },
+    {
+     "absolute_number": 65,
+     "air_date": "2006-01-24",
+     "episode_number": 65,
+     "name": "Creeping Terror, the Second Victim",
+     "runtime": 25
+    },
+    {
+     "absolute_number": 66,
+     "air_date": "2006-01-31",
+     "episode_number": 66,
+     "name": "Breakthrough! The Trap Hidden in the Labyrinth",
+     "runtime": 25
+    },
+    {
+     "absolute_number": 67,
+     "air_date": "2006-02-07",
+     "episode_number": 67,
+     "name": "Death Game! The Missing Classmate",
+     "runtime": 25
+    },
+    {
+     "absolute_number": 68,
+     "air_date": "2006-02-14",
+     "episode_number": 68,
+     "name": "True Identity of the Devil, the Secret which Is Revealed",
+     "runtime": 25
+    },
+    {
+     "absolute_number": 69,
+     "air_date": "2006-02-14",
+     "episode_number": 69,
+     "name": "Bount! The Ones Who Hunt Souls",
+     "runtime": 25
+    },
+    {
+     "absolute_number": 70,
+     "air_date": "2006-02-21",
+     "episode_number": 70,
+     "name": "Rukia's Return! Revival of the Substitute Team!",
+     "runtime": 25
+    },
+    {
+     "absolute_number": 71,
+     "air_date": "2006-03-07",
+     "episode_number": 71,
+     "name": "The Moment of Collision! An Evil Hand Draws Near to the Quincy",
+     "runtime": 25
+    },
+    {
+     "absolute_number": 72,
+     "air_date": "2006-03-14",
+     "episode_number": 72,
+     "name": "Water Attack! Escape from the Shutdown Hospital",
+     "runtime": 25
+    },
+    {
+     "absolute_number": 73,
+     "air_date": "2006-03-28",
+     "episode_number": 73,
+     "name": "Gathering Bounts! The Man Who Makes His Move",
+     "runtime": 25
+    },
+    {
+     "absolute_number": 74,
+     "air_date": "2006-03-28",
+     "episode_number": 74,
+     "name": "Memories of an Eternally Living Clan",
+     "runtime": 25
+    },
+    {
+     "absolute_number": 75,
+     "air_date": "2006-04-04",
+     "episode_number": 75,
+     "name": "Earth-Shattering Event at 11th Squad! The Shinigami Who Rises Again",
+     "runtime": 25
+    },
+    {
+     "absolute_number": 76,
+     "air_date": "2006-04-04",
+     "episode_number": 76,
+     "name": "Crashing Force! Fried vs. Zangetsu",
+     "runtime": 25
+    },
+    {
+     "absolute_number": 77,
+     "air_date": "2006-04-11",
+     "episode_number": 77,
+     "name": "Unfading Grudge! The Shinigami whom Kenpachi Killed",
+     "runtime": 25
+    },
+    {
+     "absolute_number": 78,
+     "air_date": "2006-05-02",
+     "episode_number": 78,
+     "name": "Shocking Revelations for the 13 Divisions!! The Truth Buried in History",
+     "runtime": 25
+    },
+    {
+     "absolute_number": 79,
+     "air_date": "2006-05-09",
+     "episode_number": 79,
+     "name": "Yoshino's Decision of Death",
+     "runtime": 25
+    },
+    {
+     "absolute_number": 80,
+     "air_date": "2006-05-16",
+     "episode_number": 80,
+     "name": "Assault from a Formidable Enemy! A Tiny Final Line of Defense?!",
+     "runtime": 25
+    },
+    {
+     "absolute_number": 81,
+     "air_date": "2006-05-23",
+     "episode_number": 81,
+     "name": "Hitsugaya Moves! The Attacked City",
+     "runtime": 25
+    },
+    {
+     "absolute_number": 82,
+     "air_date": "2006-05-30",
+     "episode_number": 82,
+     "name": "Ichigo vs. Dalk! Appearance of the Faded Darkness",
+     "runtime": 25
+    },
+    {
+     "absolute_number": 83,
+     "air_date": "2006-06-06",
+     "episode_number": 83,
+     "name": "Grey Shadow, the Secret of the Dolls",
+     "runtime": 25
+    },
+    {
+     "absolute_number": 84,
+     "air_date": "2006-06-13",
+     "episode_number": 84,
+     "name": "Dissension in the Substitute Team? Rukia's Betrayal",
+     "runtime": 25
+    },
+    {
+     "absolute_number": 85,
+     "air_date": "2006-06-13",
+     "episode_number": 85,
+     "name": "Deadly Battle of Tears! Rukia vs. Orihime",
+     "runtime": 25
+    },
+    {
+     "absolute_number": 86,
+     "air_date": "2006-06-20",
+     "episode_number": 86,
+     "name": "Rangiku Dances! Slice the Invisible Enemy!",
+     "runtime": 25
+    },
+    {
+     "absolute_number": 87,
+     "air_date": "2006-07-04",
+     "episode_number": 87,
+     "name": "Byakuya is summoned! The Gotei 13 start to move!",
+     "runtime": 25
+    },
+    {
+     "absolute_number": 88,
+     "air_date": "2006-07-11",
+     "episode_number": 88,
+     "name": "Annihilation of the Lieutenants!? Trap in the Underground Cave",
+     "runtime": 25
+    },
+    {
+     "absolute_number": 89,
+     "air_date": "2006-07-18",
+     "episode_number": 89,
+     "name": "Rematch?! Ishida vs. Nemu",
+     "runtime": 25
+    },
+    {
+     "absolute_number": 90,
+     "air_date": "2006-07-25",
+     "episode_number": 90,
+     "name": "Renji Abarai, Bankai of the Soul!",
+     "runtime": 25
+    },
+    {
+     "absolute_number": 91,
+     "air_date": "2006-08-01",
+     "episode_number": 91,
+     "name": "Shinigami and Quincy, the Reviving Power",
+     "runtime": 25
+    },
+    {
+     "absolute_number": 92,
+     "air_date": "2006-08-08",
+     "episode_number": 92,
+     "name": "Invasion of the Shinigami World, Again",
+     "runtime": 25
+    },
+    {
+     "absolute_number": 93,
+     "air_date": "2006-08-15",
+     "episode_number": 93,
+     "name": "The Bount Assault! The Gotei 13 of Destructive Earthquake",
+     "runtime": 25
+    },
+    {
+     "absolute_number": 94,
+     "air_date": "2006-08-22",
+     "episode_number": 94,
+     "name": "Hitsugaya's Decision! The Clash Approaches",
+     "runtime": 25
+    },
+    {
+     "absolute_number": 95,
+     "air_date": "2006-09-05",
+     "episode_number": 95,
+     "name": "Byakuya Takes the Field! Dance of the Wind-Splitting Cherry Blossoms",
+     "runtime": 25
+    },
+    {
+     "absolute_number": 96,
+     "air_date": "2006-09-12",
+     "episode_number": 96,
+     "name": "Ichigo, Byakuya, Kariya, The Battle of the Three Extremes!",
+     "runtime": 25
+    },
+    {
+     "absolute_number": 97,
+     "air_date": "2006-09-19",
+     "episode_number": 97,
+     "name": "Hitsugaya Strikes! Slice the Enemy in the Middle of the Forest",
+     "runtime": 25
+    },
+    {
+     "absolute_number": 98,
+     "air_date": "2006-10-04",
+     "episode_number": 98,
+     "name": "Clash! Kenpachi Zaraki vs. Maki Ichinose",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 99,
+     "air_date": "2006-10-11",
+     "episode_number": 99,
+     "name": "Shinigami vs. Shinigami! The Uncontrollable Power",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 100,
+     "air_date": "2006-10-18",
+     "episode_number": 100,
+     "name": "Suì-Fēng Dies? The Last of the Special Forces",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 101,
+     "air_date": "2006-11-01",
+     "episode_number": 101,
+     "name": "Mayuri's Bankai!! Sawatari: Clash of the Demon",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 102,
+     "air_date": "2006-11-08",
+     "episode_number": 102,
+     "name": "The Last Quincy! The Exploding Power",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 103,
+     "air_date": "2006-11-15",
+     "episode_number": 103,
+     "name": "Ishida, Exceeding the Limits to Attack!",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 104,
+     "air_date": "2006-11-22",
+     "episode_number": 104,
+     "name": "10th Division's Death Struggle! The Release of Hyōrinmaru",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 105,
+     "air_date": "2006-11-29",
+     "episode_number": 105,
+     "name": "Kariya! Countdown to the Detonation",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 106,
+     "air_date": "2006-12-06",
+     "episode_number": 106,
+     "name": "Life and Revenge! Ishida, the Ultimate Choice",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 107,
+     "air_date": "2006-12-13",
+     "episode_number": 107,
+     "name": "The Swung-Down Edge! The Moment of Ruin",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 108,
+     "air_date": "2006-12-20",
+     "episode_number": 108,
+     "name": "The Wailing Bount! The Last Clash",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 109,
+     "air_date": "2007-01-04",
+     "episode_number": 109,
+     "name": "Ichigo and Rukia, Thoughts in the Revolving Around Heaven",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 110,
+     "air_date": "2007-01-10",
+     "episode_number": 110,
+     "name": "Reopening of the Substitute Business! The Terrifying Transfer Student",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 111,
+     "air_date": "2007-01-17",
+     "episode_number": 111,
+     "name": "Shock! The Father's True Identity",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 112,
+     "air_date": "2007-01-24",
+     "episode_number": 112,
+     "name": "The Commencement of War, Vizards and the Arrancars",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 113,
+     "air_date": "2007-01-31",
+     "episode_number": 113,
+     "name": "Prelude to the Apocalypse, The Arrancar's Offensive",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 114,
+     "air_date": "2007-02-07",
+     "episode_number": 114,
+     "name": "Reunion, Ichigo and Rukia and Soul Reapers",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 115,
+     "air_date": "2007-02-14",
+     "episode_number": 115,
+     "name": "Mission! The Soul Reapers Have Come",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 116,
+     "air_date": "2007-02-21",
+     "episode_number": 116,
+     "name": "The Evil Eye, Aizen Returns",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 117,
+     "air_date": "2007-02-28",
+     "episode_number": 117,
+     "name": "Rukia's Battle Commences! The Freezing White Blade",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 118,
+     "air_date": "2007-03-07",
+     "episode_number": 118,
+     "name": "Ikkaku's Bankai! The Power That Breaks Everything",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 119,
+     "air_date": "2007-03-21",
+     "episode_number": 119,
+     "name": "Zaraki Division's Secret Story! The Lucky Men",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 120,
+     "air_date": "2007-03-28",
+     "episode_number": 120,
+     "name": "Hitsugaya Scatters! The Broken Hyōrinmaru",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 121,
+     "air_date": "2007-04-11",
+     "episode_number": 121,
+     "name": "Clash! The Protector vs. The Bearer",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 122,
+     "air_date": "2007-04-18",
+     "episode_number": 122,
+     "name": "Vizard! The Power of the Awakened",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 123,
+     "air_date": "2007-04-25",
+     "episode_number": 123,
+     "name": "Ichigo, Complete Hollowification!?",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 124,
+     "air_date": "2007-05-02",
+     "episode_number": 124,
+     "name": "Collision! Black Bankai and the White Bankai",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 125,
+     "air_date": "2007-05-09",
+     "episode_number": 125,
+     "name": "Urgent Report! Aizen's Terrifying Plan!",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 126,
+     "air_date": "2007-05-16",
+     "episode_number": 126,
+     "name": "Uryū vs. Ryūken! Clash of the Parent-Child Quincys",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 127,
+     "air_date": "2007-05-30",
+     "episode_number": 127,
+     "name": "Urahara's Decision, Orihime's Thoughts",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 128,
+     "air_date": "2007-06-06",
+     "episode_number": 128,
+     "name": "The Nightmare Arrancar! Team Hitsugaya Moves Out",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 129,
+     "air_date": "2007-06-13",
+     "episode_number": 129,
+     "name": "The Swooping Descent of the Dark Emissary! The Propagation of Malice",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 130,
+     "air_date": "2007-06-20",
+     "episode_number": 130,
+     "name": "The Invisible Enemy! Hitsugaya's Merciless Decision",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 131,
+     "air_date": "2007-06-27",
+     "episode_number": 131,
+     "name": "Rangiku's Tears, the Sorrowful Parting of Brother and Sister",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 132,
+     "air_date": "2007-07-04",
+     "episode_number": 132,
+     "name": "Hitsugaya, Karin, and Soccer Ball",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 133,
+     "air_date": "2007-07-11",
+     "episode_number": 133,
+     "name": "Ikkaku: The Hot-Blooded Kendo Tale",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 134,
+     "air_date": "2007-07-18",
+     "episode_number": 134,
+     "name": "The Beautiful Patissier, Yumichika!",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 135,
+     "air_date": "2007-07-25",
+     "episode_number": 135,
+     "name": "Kon is Deceived! Rangiku on the Lookout...",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 136,
+     "air_date": "2007-08-08",
+     "episode_number": 136,
+     "name": "Civil War in Hueco Mundo! Ulquiorra's Death",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 137,
+     "air_date": "2007-08-22",
+     "episode_number": 137,
+     "name": "The Malicious Battle, Aizen's Trap",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 138,
+     "air_date": "2007-08-29",
+     "episode_number": 138,
+     "name": "Hueco Mundo moves again! Hitsugaya vs. Yammy",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 139,
+     "air_date": "2007-09-05",
+     "episode_number": 139,
+     "name": "Ichigo vs. Grimmjow, the 11-second battle!",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 140,
+     "air_date": "2007-09-12",
+     "episode_number": 140,
+     "name": "Ulquiorra's Scheme, the Moment when the Sun Sets!",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 141,
+     "air_date": "2007-09-19",
+     "episode_number": 141,
+     "name": "Goodbye..., Kurosaki!",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 142,
+     "air_date": "2007-09-26",
+     "episode_number": 142,
+     "name": "Strict Order! The Forbidden Rescue of Orihime Inoue",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 143,
+     "air_date": "2007-10-03",
+     "episode_number": 143,
+     "name": "Grimmjow Revived",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 144,
+     "air_date": "2007-10-17",
+     "episode_number": 144,
+     "name": "Ishida and Chad, The Quickening of a New Power",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 145,
+     "air_date": "2007-10-24",
+     "episode_number": 145,
+     "name": "The Espada Gather! Aizen's Royal Assembly",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 146,
+     "air_date": "2007-10-31",
+     "episode_number": 146,
+     "name": "The Name's Nel! The Appearance of a Strange Arrancar",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 147,
+     "air_date": "2007-11-07",
+     "episode_number": 147,
+     "name": "Forest of Menos! Search for the Missing Rukia",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 148,
+     "air_date": "2007-11-14",
+     "episode_number": 148,
+     "name": "Ashido, The Soul Reaper Who Came from the Past",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 149,
+     "air_date": "2007-11-21",
+     "episode_number": 149,
+     "name": "Through the Crumbling Forest, a Million Menos",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 150,
+     "air_date": "2007-11-28",
+     "episode_number": 150,
+     "name": "Oath! Back Here Alive Again",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 151,
+     "air_date": "2007-12-05",
+     "episode_number": 151,
+     "name": "The Raging Storm! Encounter with the Dancing Arrancar",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 152,
+     "air_date": "2007-12-12",
+     "episode_number": 152,
+     "name": "Ichigo Strikes Back! This Is My Bankai",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 153,
+     "air_date": "2007-12-19",
+     "episode_number": 153,
+     "name": "The Devilish Research! Szayelaporro's Plan",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 154,
+     "air_date": "2007-12-26",
+     "episode_number": 154,
+     "name": "Rukia and Kaien, the Sorrowful Reunion",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 155,
+     "air_date": "2008-01-09",
+     "episode_number": 155,
+     "name": "Rukia Retaliates! Release the Desperate Kidō",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 156,
+     "air_date": "2008-01-16",
+     "episode_number": 156,
+     "name": "Ishida & Pesche, the United Attack of Friendship",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 157,
+     "air_date": "2008-01-23",
+     "episode_number": 157,
+     "name": "Ishida's Trump Card, Seele Schneider",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 158,
+     "air_date": "2008-01-30",
+     "episode_number": 158,
+     "name": "Right Arm of the Giant, Left Arm of the Devil",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 159,
+     "air_date": "2008-02-06",
+     "episode_number": 159,
+     "name": "Yasutora Sado Dies! Orihime's Tears",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 160,
+     "air_date": "2008-02-13",
+     "episode_number": 160,
+     "name": "Testament, Your Heart is Right Here...",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 161,
+     "air_date": "2008-02-20",
+     "episode_number": 161,
+     "name": "The Cruel Arrancar, Ulquiorra's Provocation",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 162,
+     "air_date": "2008-02-27",
+     "episode_number": 162,
+     "name": "Szayelaporro Laughs, The Net Trapping Renji is Complete",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 163,
+     "air_date": "2008-03-05",
+     "episode_number": 163,
+     "name": "Shinigami and Quincy, The Battle with Madness",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 164,
+     "air_date": "2008-03-12",
+     "episode_number": 164,
+     "name": "Ishida's Strategy, 20-Second Offense and Defense",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 165,
+     "air_date": "2008-03-19",
+     "episode_number": 165,
+     "name": "The Murderous Intent Boils! The Joyful Grimmjow",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 166,
+     "air_date": "2008-04-09",
+     "episode_number": 166,
+     "name": "Desperate Effort vs. Desperate Effort! Hollowfied Ichigo",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 167,
+     "air_date": "2008-04-16",
+     "episode_number": 167,
+     "name": "The Moment of Conclusion, The End of Grimmjow",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 168,
+     "air_date": "2008-04-23",
+     "episode_number": 168,
+     "name": "The New Captain Appears! His Name Is Shūsuke Amagai",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 169,
+     "air_date": "2008-05-07",
+     "episode_number": 169,
+     "name": "New Development, the Dangerous Transfer Student Appears!",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 170,
+     "air_date": "2008-05-14",
+     "episode_number": 170,
+     "name": "Desperate Struggle Under the Moonlit Night, the Mysterious Assassin and Zanpakutō",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 171,
+     "air_date": "2008-05-21",
+     "episode_number": 171,
+     "name": "Kenryū, the Profusion of Blooming Crimson Flowers",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 172,
+     "air_date": "2008-05-28",
+     "episode_number": 172,
+     "name": "Kibune Goes to War! The Violent Wind that Rages",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 173,
+     "air_date": "2008-06-04",
+     "episode_number": 173,
+     "name": "The Appearance of the Great Evil! The Darkness in the House of Kasumiōji",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 174,
+     "air_date": "2008-06-11",
+     "episode_number": 174,
+     "name": "Break the Mirror's Boundary! Ichigo's Captivity",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 175,
+     "air_date": "2008-06-18",
+     "episode_number": 175,
+     "name": "The Revenging Assassin, Ichigo is Targeted",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 176,
+     "air_date": "2008-06-25",
+     "episode_number": 176,
+     "name": "Mystery! The Sword-Consuming Assassin",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 177,
+     "air_date": "2008-06-25",
+     "episode_number": 177,
+     "name": "The Reversal of Rukia! The Rampaging Blade",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 178,
+     "air_date": "2008-07-02",
+     "episode_number": 178,
+     "name": "The Nightmare Which is Shown, Ichigo's Inside the Mirror",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 179,
+     "air_date": "2008-07-09",
+     "episode_number": 179,
+     "name": "Confrontation!? Amagai vs. Gotei 13",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 180,
+     "air_date": "2008-07-16",
+     "episode_number": 180,
+     "name": "The Princess's Decision, the Sorrowful Bride",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 181,
+     "air_date": "2008-07-23",
+     "episode_number": 181,
+     "name": "The 2nd Division Sorties! Ichigo is Surrounded",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 182,
+     "air_date": "2008-07-30",
+     "episode_number": 182,
+     "name": "Amagai's True Strength, the Released Zanpakuto!",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 183,
+     "air_date": "2008-08-06",
+     "episode_number": 183,
+     "name": "The Darkness Which Moves! Kibune's True Colors",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 184,
+     "air_date": "2008-08-20",
+     "episode_number": 184,
+     "name": "Kira and Kibune, Offense and Defense of the 3rd Division",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 185,
+     "air_date": "2008-08-27",
+     "episode_number": 185,
+     "name": "Ice and Flame! Fierce Fight of Amagai vs. Hitsugaya",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 186,
+     "air_date": "2008-09-03",
+     "episode_number": 186,
+     "name": "Sortie Orders! Suppress the House of Kasumiōji",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 187,
+     "air_date": "2008-09-10",
+     "episode_number": 187,
+     "name": "Ichigo Rages! The Assassin's Secret",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 188,
+     "air_date": "2008-09-17",
+     "episode_number": 188,
+     "name": "Duel! Amagai vs. Ichigo",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 189,
+     "air_date": "2008-10-07",
+     "episode_number": 189,
+     "name": "The Fallen Shinigami's Pride",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 190,
+     "air_date": "2008-10-14",
+     "episode_number": 190,
+     "name": "Hueco Mundo Chapter, Restart!",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 191,
+     "air_date": "2008-10-21",
+     "episode_number": 191,
+     "name": "The Frightening Banquet, Szayelaporro Theater",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 192,
+     "air_date": "2008-10-28",
+     "episode_number": 192,
+     "name": "Nel's Secret, A Busty Beauty Joins the Battle!?",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 193,
+     "air_date": "2008-11-04",
+     "episode_number": 193,
+     "name": "Irresistible, Puppet Show of Terror",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 194,
+     "air_date": "2008-11-11",
+     "episode_number": 194,
+     "name": "Neliel's Past",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 195,
+     "air_date": "2008-11-18",
+     "episode_number": 195,
+     "name": "The Ultimate Union! Pesche's Seriousness",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 196,
+     "air_date": "2008-11-25",
+     "episode_number": 196,
+     "name": "Joining the Battle! The Strongest Soul Reaper Army Appears",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 197,
+     "air_date": "2008-12-02",
+     "episode_number": 197,
+     "name": "Byakuya's Bankai, The Quiet Anger",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 198,
+     "air_date": "2008-12-09",
+     "episode_number": 198,
+     "name": "The Two Scientists, Mayuri's Trap",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 199,
+     "air_date": "2008-12-16",
+     "episode_number": 199,
+     "name": "Holy Birth, The Resurrected Szayel Aporro",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 200,
+     "air_date": "2008-12-23",
+     "episode_number": 200,
+     "name": "The Hardest Body!? Cut Down Nnoitra",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 201,
+     "air_date": "2009-01-06",
+     "episode_number": 201,
+     "name": "Nnoitra Released! Multiplying Arms",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 202,
+     "air_date": "2009-01-13",
+     "episode_number": 202,
+     "name": "Fierce Fighting Conclusion! Who's the Strongest?",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 203,
+     "air_date": "2009-01-20",
+     "episode_number": 203,
+     "name": "Karakura Town Gathers! Aizen Versus the Soul Reapers",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 204,
+     "air_date": "2009-01-27",
+     "episode_number": 204,
+     "name": "Ichigo's Seppuku Persuasion Strategy ☆",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 205,
+     "air_date": "2009-02-03",
+     "episode_number": 205,
+     "name": "Thump! A Kemari Tournament Filled with Hollows",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 206,
+     "air_date": "2009-02-10",
+     "episode_number": 206,
+     "name": "The Past Chapter Begins! The Truth from 110 Years Ago",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 207,
+     "air_date": "2009-02-17",
+     "episode_number": 207,
+     "name": "12th Division's New Captain, Urahara Kisuke",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 208,
+     "air_date": "2009-02-24",
+     "episode_number": 208,
+     "name": "Aizen and the Genius Boy",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 209,
+     "air_date": "2009-03-03",
+     "episode_number": 209,
+     "name": "Muguruma 9th Division, Moves Out",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 210,
+     "air_date": "2009-03-10",
+     "episode_number": 210,
+     "name": "Hiyori Dies? The Beginning of Tragedy",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 211,
+     "air_date": "2009-03-17",
+     "episode_number": 211,
+     "name": "Betrayal! Aizen's Secret Maneuvers",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 212,
+     "air_date": "2009-03-24",
+     "episode_number": 212,
+     "name": "Rescue Hirako! Aizen vs. Urahara",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 213,
+     "air_date": "2009-03-31",
+     "episode_number": 213,
+     "name": "The Konso Cop Karakuraizer is Born",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 214,
+     "air_date": "2009-04-07",
+     "episode_number": 214,
+     "name": "Karakuraizer's Last Day",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 215,
+     "air_date": "2009-04-14",
+     "episode_number": 215,
+     "name": "Defend Karakura Town! Entire Appearance of the Shinigami",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 216,
+     "air_date": "2009-04-21",
+     "episode_number": 216,
+     "name": "Elite! The Four Shinigami",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 217,
+     "air_date": "2009-04-28",
+     "episode_number": 217,
+     "name": "Beautiful Little Devil Charlotte",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 218,
+     "air_date": "2009-05-05",
+     "episode_number": 218,
+     "name": "Kira, The Battle Within Despair",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 219,
+     "air_date": "2009-05-12",
+     "episode_number": 219,
+     "name": "Hisagi's Shikai! The Name is...",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 220,
+     "air_date": "2009-05-19",
+     "episode_number": 220,
+     "name": "Ikkaku Falls! The Shinigami's Crisis",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 221,
+     "air_date": "2009-05-26",
+     "episode_number": 221,
+     "name": "The Full Showdown! Soul Reapers vs. Espada",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 222,
+     "air_date": "2009-06-02",
+     "episode_number": 222,
+     "name": "The Most Evil Tag!? Suì-Fēng & Ōmaeda",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 223,
+     "air_date": "2009-06-09",
+     "episode_number": 223,
+     "name": "A Miraculous Body! Ggio Releases",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 224,
+     "air_date": "2009-06-16",
+     "episode_number": 224,
+     "name": "3 vs. 1 Battle! Rangiku's Crisis",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 225,
+     "air_date": "2009-06-23",
+     "episode_number": 225,
+     "name": "Vice-Captains Annihilated! The Terrifying Demonic Beast",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 226,
+     "air_date": "2009-06-30",
+     "episode_number": 226,
+     "name": "Fierce Fighting Concludes? Towards a New Battle!",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 227,
+     "air_date": "2009-07-07",
+     "episode_number": 227,
+     "name": "Wonderful Error",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 228,
+     "air_date": "2009-07-14",
+     "episode_number": 228,
+     "name": "Summer! Sea! Swimsuit Festival!!",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 229,
+     "air_date": "2009-07-21",
+     "episode_number": 229,
+     "name": "Cry of the Soul? The Rug Shinigami is Born!",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 230,
+     "air_date": "2009-07-28",
+     "episode_number": 230,
+     "name": "A New Enemy! The Materialization of Zanpakutō",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 231,
+     "air_date": "2009-08-04",
+     "episode_number": 231,
+     "name": "Byakuya, Disappearing with the Cherry Blossoms",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 232,
+     "air_date": "2009-08-11",
+     "episode_number": 232,
+     "name": "Sode no Shirayuki vs. Rukia! Confused Heart",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 233,
+     "air_date": "2009-08-18",
+     "episode_number": 233,
+     "name": "Zangetsu Becomes an Enemy",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 234,
+     "air_date": "2009-08-25",
+     "episode_number": 234,
+     "name": "Renji Surprised?! The Two Zabimarus",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 235,
+     "air_date": "2009-09-01",
+     "episode_number": 235,
+     "name": "Clash! Hisagi vs. Kazeshini",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 236,
+     "air_date": "2009-09-08",
+     "episode_number": 236,
+     "name": "Release! The New Getsuga Tenshō",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 237,
+     "air_date": "2009-09-15",
+     "episode_number": 237,
+     "name": "Suì-Fēng, Surrounding the Zanpakutō",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 238,
+     "air_date": "2009-09-22",
+     "episode_number": 238,
+     "name": "Friendship? Hatred? Haineko & Tobiume",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 239,
+     "air_date": "2009-09-29",
+     "episode_number": 239,
+     "name": "The Awakening Hyōrinmaru! Hitsugaya's Fierce Fight",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 240,
+     "air_date": "2009-10-06",
+     "episode_number": 240,
+     "name": "Byakuya's Betrayal",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 241,
+     "air_date": "2009-10-13",
+     "episode_number": 241,
+     "name": "For the Sake of Pride! Byakuya vs. Renji",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 242,
+     "air_date": "2009-10-20",
+     "episode_number": 242,
+     "name": "Shinigami and Zanpakutō, Total Sortie",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 243,
+     "air_date": "2009-10-27",
+     "episode_number": 243,
+     "name": "One-to-One Fight! Ichigo vs. Senbonzakura",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 244,
+     "air_date": "2009-11-03",
+     "episode_number": 244,
+     "name": "The Long Awaited... Kenpachi Appears!",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 245,
+     "air_date": "2009-11-10",
+     "episode_number": 245,
+     "name": "Pursue Byakuya! The Confused Gotei Divisions",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 246,
+     "air_date": "2009-11-17",
+     "episode_number": 246,
+     "name": "Special Mission! Rescue Captain Commander Yamamoto!",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 247,
+     "air_date": "2009-11-24",
+     "episode_number": 247,
+     "name": "Deceived Shinigami! The World Collapse Crisis",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 248,
+     "air_date": "2009-12-01",
+     "episode_number": 248,
+     "name": "Dragon of Ice and Dragon of Flame! The Strongest Showdown!",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 249,
+     "air_date": "2009-12-08",
+     "episode_number": 249,
+     "name": "Senbonzakura's Bankai! Offense and Defense of the Living World",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 250,
+     "air_date": "2009-12-15",
+     "episode_number": 250,
+     "name": "That Man, for the Sake of the Kuchiki",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 251,
+     "air_date": "2009-12-22",
+     "episode_number": 251,
+     "name": "Dark History! The Worst Shinigami Is Born",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 252,
+     "air_date": "2010-01-05",
+     "episode_number": 252,
+     "name": "Byakuya, the Truth Behind His Betrayal",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 253,
+     "air_date": "2010-01-12",
+     "episode_number": 253,
+     "name": "Muramasa's True Identity Revealed",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 254,
+     "air_date": "2010-01-19",
+     "episode_number": 254,
+     "name": "Byakuya and Renji, the 6th Division Returns",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 255,
+     "air_date": "2010-01-26",
+     "episode_number": 255,
+     "name": "Final Chapter - Zanpakutō The Alternate Tale",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 256,
+     "air_date": "2010-02-02",
+     "episode_number": 256,
+     "name": "The Angered Byakuya! The Collapse of the Kuchiki House",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 257,
+     "air_date": "2010-02-09",
+     "episode_number": 257,
+     "name": "A New Enemy! The True Nature of the Sword Beasts",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 258,
+     "air_date": "2010-02-16",
+     "episode_number": 258,
+     "name": "Stray Snake, Tortured Monkey",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 259,
+     "air_date": "2010-02-23",
+     "episode_number": 259,
+     "name": "Terror! The Monster That Lurks Underground",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 260,
+     "air_date": "2010-03-02",
+     "episode_number": 260,
+     "name": "Conclusion!? Hisagi vs. Kazeshini",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 261,
+     "air_date": "2010-03-09",
+     "episode_number": 261,
+     "name": "The Person with the Unknown Ability! Orihime Is Targeted",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 262,
+     "air_date": "2010-03-16",
+     "episode_number": 262,
+     "name": "Haineko Cries! The Tragic Sword Beast!",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 263,
+     "air_date": "2010-03-23",
+     "episode_number": 263,
+     "name": "Imprisonment?! Senbonzakura & Zabimaru",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 264,
+     "air_date": "2010-03-30",
+     "episode_number": 264,
+     "name": "Battle of the Females? Katen Kyōkotsu vs. Nanao!",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 265,
+     "air_date": "2010-04-06",
+     "episode_number": 265,
+     "name": "Evolution?! The Menace of the Final Sword Beast",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 266,
+     "air_date": "2010-04-13",
+     "episode_number": 266,
+     "name": "Ichigo vs. Ulquiorra, Resume",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 267,
+     "air_date": "2010-04-20",
+     "episode_number": 267,
+     "name": "Connected Hearts! The Left Fist of Certain Death",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 268,
+     "air_date": "2010-04-27",
+     "episode_number": 268,
+     "name": "Hatred and Jealousy, Orihime's Dilemma",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 269,
+     "air_date": "2010-05-04",
+     "episode_number": 269,
+     "name": "Ichigo and Uryū, Bonded Back to Back",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 270,
+     "air_date": "2010-05-11",
+     "episode_number": 270,
+     "name": "Beginning of Despair... Ichigo, the Unreachable Blade",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 271,
+     "air_date": "2010-05-18",
+     "episode_number": 271,
+     "name": "Ichigo Dies! Orihime, the Cry of Sorrow!",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 272,
+     "air_date": "2010-05-25",
+     "episode_number": 272,
+     "name": "Ichigo vs. Ulquiorra, Conclusion!",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 273,
+     "air_date": "2010-06-01",
+     "episode_number": 273,
+     "name": "Fury of the Shark! Halibel's Release",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 274,
+     "air_date": "2010-06-08",
+     "episode_number": 274,
+     "name": "Hitsugaya, the Desperate Hyōten Hyakkasō!",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 275,
+     "air_date": "2010-06-15",
+     "episode_number": 275,
+     "name": "The Approaching Breath of Death, the King Who Rules Over Death!",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 276,
+     "air_date": "2010-06-22",
+     "episode_number": 276,
+     "name": "One Hit Kill, Suì-Fēng, Bankai!",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 277,
+     "air_date": "2010-06-29",
+     "episode_number": 277,
+     "name": "Climax! Kyōraku vs. Stark!",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 278,
+     "air_date": "2010-07-06",
+     "episode_number": 278,
+     "name": "The Nightmare Returns... Revival of the Espada",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 279,
+     "air_date": "2010-07-13",
+     "episode_number": 279,
+     "name": "Hirako and Aizen...the Reunion of Fate!",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 280,
+     "air_date": "2010-07-20",
+     "episode_number": 280,
+     "name": "Hisagi and Tōsen, the Moment of Parting",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 281,
+     "air_date": "2010-07-27",
+     "episode_number": 281,
+     "name": "Crown of Lies, Baraggan's Grudge",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 282,
+     "air_date": "2010-08-03",
+     "episode_number": 282,
+     "name": "Power of the Soul! Los Lobos, Attack!",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 283,
+     "air_date": "2010-08-10",
+     "episode_number": 283,
+     "name": "Stark, the Lone Battle",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 284,
+     "air_date": "2010-08-17",
+     "episode_number": 284,
+     "name": "Chain of Sacrifice, Halibel's Past",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 285,
+     "air_date": "2010-08-24",
+     "episode_number": 285,
+     "name": "The Hundred-Year Grudge! Hiyori's Revenge",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 286,
+     "air_date": "2010-08-31",
+     "episode_number": 286,
+     "name": "Ichigo's Return! Protect Karakura Town",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 287,
+     "air_date": "2010-09-07",
+     "episode_number": 287,
+     "name": "Side Story! Ichigo and the Magic Lamp",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 288,
+     "air_date": "2010-09-14",
+     "episode_number": 288,
+     "name": "The Final Trump Card! Ichigo, Towards the Decisive Battle",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 289,
+     "air_date": "2010-09-21",
+     "episode_number": 289,
+     "name": "Byakuya vs. Kenpachi?! The Melee Commences",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 290,
+     "air_date": "2010-09-28",
+     "episode_number": 290,
+     "name": "For the Sake of Justice?! The Man Who Deserted the Shinigami",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 291,
+     "air_date": "2010-10-05",
+     "episode_number": 291,
+     "name": "Desperate Struggle with Aizen! Hirako, Shikai!",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 292,
+     "air_date": "2010-10-12",
+     "episode_number": 292,
+     "name": "All Out War! Aizen vs. Shinigami",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 293,
+     "air_date": "2010-10-19",
+     "episode_number": 293,
+     "name": "Hitsugaya, Enraged! Blade of Hatred!",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 294,
+     "air_date": "2010-10-26",
+     "episode_number": 294,
+     "name": "Impossible to Attack? The Sealed Genryūsai!",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 295,
+     "air_date": "2010-11-02",
+     "episode_number": 295,
+     "name": "It's All a Trap... Engineered Bonds!",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 296,
+     "air_date": "2010-11-09",
+     "episode_number": 296,
+     "name": "The Shocking Truth...The Mysterious Power Within Ichigo!",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 297,
+     "air_date": "2010-11-16",
+     "episode_number": 297,
+     "name": "The Extending Blade?! Ichigo vs. Gin!",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 298,
+     "air_date": "2010-11-23",
+     "episode_number": 298,
+     "name": "Film! Festival! Shinigami Film Festival!",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 299,
+     "air_date": "2010-11-30",
+     "episode_number": 299,
+     "name": "Theatre Opening Commemoration! The Hell Verse: Prologue",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 300,
+     "air_date": "2010-12-07",
+     "episode_number": 300,
+     "name": "Urahara Appears! Stop Aizen!",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 301,
+     "air_date": "2010-12-14",
+     "episode_number": 301,
+     "name": "Ichigo Loses His Fighting Spirit!? Gin's Expectation!",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 302,
+     "air_date": "2010-12-21",
+     "episode_number": 302,
+     "name": "The Final Getsuga Tenshō!? Ichigo's Training!",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 303,
+     "air_date": "2011-01-04",
+     "episode_number": 303,
+     "name": "Real World and Shinigami! The New Year Special!",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 304,
+     "air_date": "2011-01-11",
+     "episode_number": 304,
+     "name": "Another Side Story! This Time's Enemy Is a Monster!?",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 305,
+     "air_date": "2011-01-18",
+     "episode_number": 305,
+     "name": "Delusion Roars! Hisagi, Towards the Hot Springs Inn!",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 306,
+     "air_date": "2011-01-25",
+     "episode_number": 306,
+     "name": "For the Sake of Protecting! Ichigo vs. Tensa Zangetsu!",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 307,
+     "air_date": "2011-02-01",
+     "episode_number": 307,
+     "name": "Emergency Situation! Aizen, New Evolution!",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 308,
+     "air_date": "2011-02-08",
+     "episode_number": 308,
+     "name": "Goodbye...Rangiku",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 309,
+     "air_date": "2011-02-15",
+     "episode_number": 309,
+     "name": "Fierce Fighting Conclusion! Release, the Final Getsuga Tenshō!",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 310,
+     "air_date": "2011-02-22",
+     "episode_number": 310,
+     "name": "Ichigo's Resolution! The Price of the Fierce Battle",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 311,
+     "air_date": "2011-03-01",
+     "episode_number": 311,
+     "name": "The Soul Detective: Karakuraizer Takes Off Again!",
+     "runtime": 22
+    },
+    {
+     "absolute_number": 312,
+     "air_date": "2011-03-08",
+     "episode_number": 312,
+     "name": "Inauguration! The Brand New 2nd Division Captain!",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 313,
+     "air_date": "2011-03-15",
+     "episode_number": 313,
+     "name": "The Man Who Risks His Life in the 11th Division!",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 314,
+     "air_date": "2011-03-22",
+     "episode_number": 314,
+     "name": "Kon Saw It! The Secret of a Beautiful Office Lady",
+     "runtime": 22
+    },
+    {
+     "absolute_number": 315,
+     "air_date": "2011-03-29",
+     "episode_number": 315,
+     "name": "Yachiru's Friend! The Shinigami of Justice Appears!",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 316,
+     "air_date": "2011-04-05",
+     "episode_number": 316,
+     "name": "Toshirō Hitsugaya's Holiday!",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 317,
+     "air_date": "2011-04-12",
+     "episode_number": 317,
+     "name": "Unusual Incident in Seireitei?! Gotei 13 Invading Army Arc!",
+     "runtime": 22
+    },
+    {
+     "absolute_number": 318,
+     "air_date": "2011-04-19",
+     "episode_number": 318,
+     "name": "Renji vs. Rukia?! Battle With Comrades!",
+     "runtime": 22
+    },
+    {
+     "absolute_number": 319,
+     "air_date": "2011-04-26",
+     "episode_number": 319,
+     "name": "Ichigo's Capture Net! Escape From Soul Society!",
+     "runtime": 22
+    },
+    {
+     "absolute_number": 320,
+     "air_date": "2011-05-03",
+     "episode_number": 320,
+     "name": "Gotei 13, Gathering in the Real World!",
+     "runtime": 22
+    },
+    {
+     "absolute_number": 321,
+     "air_date": "2011-05-10",
+     "episode_number": 321,
+     "name": "Showdown of Mutual Self, Ikkaku vs. Ikkaku!",
+     "runtime": 22
+    },
+    {
+     "absolute_number": 322,
+     "air_date": "2011-05-17",
+     "episode_number": 322,
+     "name": "Clash! Rukia vs. Rukia!",
+     "runtime": 22
+    },
+    {
+     "absolute_number": 323,
+     "air_date": "2011-05-24",
+     "episode_number": 323,
+     "name": "Protect Ichigo! Nozomi's Determination",
+     "runtime": 22
+    },
+    {
+     "absolute_number": 324,
+     "air_date": "2011-05-31",
+     "episode_number": 324,
+     "name": "Recapture Seireitei! The Captains Move!",
+     "runtime": 22
+    },
+    {
+     "absolute_number": 325,
+     "air_date": "2011-06-07",
+     "episode_number": 325,
+     "name": "For the Sake of the Believers! Byakuya vs. Hitsugaya!",
+     "runtime": 22
+    },
+    {
+     "absolute_number": 326,
+     "air_date": "2011-06-14",
+     "episode_number": 326,
+     "name": "The Two Hinamori, Hitsugaya's Resolution",
+     "runtime": 22
+    },
+    {
+     "absolute_number": 327,
+     "air_date": "2011-06-21",
+     "episode_number": 327,
+     "name": "Pride of the Kuchiki Family! Byakuya vs. Byakuya!",
+     "runtime": 22
+    },
+    {
+     "absolute_number": 328,
+     "air_date": "2011-06-28",
+     "episode_number": 328,
+     "name": "Defeat Kageroza! Shinigami, All-Out War!",
+     "runtime": 22
+    },
+    {
+     "absolute_number": 329,
+     "air_date": "2011-07-05",
+     "episode_number": 329,
+     "name": "The Forbidden Research...Nozomi's Hidden Secret!",
+     "runtime": 22
+    },
+    {
+     "absolute_number": 330,
+     "air_date": "2011-07-12",
+     "episode_number": 330,
+     "name": "I Want to Live...! Nozomi's Zanpakutō",
+     "runtime": 22
+    },
+    {
+     "absolute_number": 331,
+     "air_date": "2011-07-19",
+     "episode_number": 331,
+     "name": "For the Sake of Fighting! The Awakened Nozomi!",
+     "runtime": 22
+    },
+    {
+     "absolute_number": 332,
+     "air_date": "2011-07-26",
+     "episode_number": 332,
+     "name": "The Most Evil Reigai, Appearing in the Real World!",
+     "runtime": 22
+    },
+    {
+     "absolute_number": 333,
+     "air_date": "2011-08-02",
+     "episode_number": 333,
+     "name": "Destroy Nozomi!? Genryusai's Decision!",
+     "runtime": 22
+    },
+    {
+     "absolute_number": 334,
+     "air_date": "2011-08-09",
+     "episode_number": 334,
+     "name": "The Depleting Reiatsu! Ichigo, Death Struggle of the Soul!",
+     "runtime": 22
+    },
+    {
+     "absolute_number": 335,
+     "air_date": "2011-08-16",
+     "episode_number": 335,
+     "name": "Hiding in the Dangai? Another Ichigo?!",
+     "runtime": 22
+    },
+    {
+     "absolute_number": 336,
+     "air_date": "2011-08-23",
+     "episode_number": 336,
+     "name": "Pursue Kageroza! Technological Development Department, Infiltration!",
+     "runtime": 22
+    },
+    {
+     "absolute_number": 337,
+     "air_date": "2011-08-30",
+     "episode_number": 337,
+     "name": "The Developer of the Modified Souls",
+     "runtime": 22
+    },
+    {
+     "absolute_number": 338,
+     "air_date": "2011-09-06",
+     "episode_number": 338,
+     "name": "Kon's Thoughts, Nozomi's Thoughts",
+     "runtime": 22
+    },
+    {
+     "absolute_number": 339,
+     "air_date": "2011-09-13",
+     "episode_number": 339,
+     "name": "Protect Ichigo! The Bonds of Friends!",
+     "runtime": 22
+    },
+    {
+     "absolute_number": 340,
+     "air_date": "2011-09-20",
+     "episode_number": 340,
+     "name": "Reigai vs. Original, The Fierce Fighting for Gambled Pride!",
+     "runtime": 22
+    },
+    {
+     "absolute_number": 341,
+     "air_date": "2011-09-27",
+     "episode_number": 341,
+     "name": "Invading Army Arc, Final Conclusion!",
+     "runtime": 22
+    },
+    {
+     "absolute_number": 342,
+     "air_date": "2011-10-04",
+     "episode_number": 342,
+     "name": "Thank You",
+     "runtime": 22
+    },
+    {
+     "absolute_number": 343,
+     "air_date": "2011-10-11",
+     "episode_number": 343,
+     "name": "3rd Year High School Student! Dressed Up, and a New Chapter Begins!",
+     "runtime": 22
+    },
+    {
+     "absolute_number": 344,
+     "air_date": "2011-10-18",
+     "episode_number": 344,
+     "name": "A Dispute in School!? Ichigo and Uryū, Fight Together!",
+     "runtime": 22
+    },
+    {
+     "absolute_number": 345,
+     "air_date": "2011-10-25",
+     "episode_number": 345,
+     "name": "Uryū is Attacked, A Threat Draws Near the Friends!",
+     "runtime": 22
+    },
+    {
+     "absolute_number": 346,
+     "air_date": "2011-11-01",
+     "episode_number": 346,
+     "name": "The Man with the Fullbring Ability: Kūgo Ginjō",
+     "runtime": 22
+    },
+    {
+     "absolute_number": 347,
+     "air_date": "2011-11-08",
+     "episode_number": 347,
+     "name": "A Crisis Sneaking up on the Kurosaki Family!? Ichigo's Confusion!",
+     "runtime": 22
+    },
+    {
+     "absolute_number": 348,
+     "air_date": "2011-11-15",
+     "episode_number": 348,
+     "name": "Power of the Substitute Badge, Ichigo's 'Pride'!",
+     "runtime": 22
+    },
+    {
+     "absolute_number": 349,
+     "air_date": "2011-11-22",
+     "episode_number": 349,
+     "name": "Next Target, The Devil's Hand Aims at Orihime!",
+     "runtime": 22
+    },
+    {
+     "absolute_number": 350,
+     "air_date": "2011-11-29",
+     "episode_number": 350,
+     "name": "The Man Who Killed the Shinigami Substitute!? Tsukishima Makes His Move",
+     "runtime": 22
+    },
+    {
+     "absolute_number": 351,
+     "air_date": "2011-12-06",
+     "episode_number": 351,
+     "name": "Fullbring, The Detested Power!",
+     "runtime": 22
+    },
+    {
+     "absolute_number": 352,
+     "air_date": "2011-12-13",
+     "episode_number": 352,
+     "name": "Tsukishima Attacks! The Training Has Been Thwarted",
+     "runtime": 22
+    },
+    {
+     "absolute_number": 353,
+     "air_date": "2011-12-20",
+     "episode_number": 353,
+     "name": "Ichigo, Mastering the Fullbring!",
+     "runtime": 22
+    },
+    {
+     "absolute_number": 354,
+     "air_date": "2011-12-27",
+     "episode_number": 354,
+     "name": "Ichigo vs. Ginjō! To the Game's Space",
+     "runtime": 22
+    },
+    {
+     "absolute_number": 355,
+     "air_date": "2012-01-10",
+     "episode_number": 355,
+     "name": "Shinigami at War! New Year in Seireitei Special!",
+     "runtime": 22
+    },
+    {
+     "absolute_number": 356,
+     "air_date": "2012-01-17",
+     "episode_number": 356,
+     "name": "Friend or Foe!? Ginjō's True Intentions!",
+     "runtime": 22
+    },
+    {
+     "absolute_number": 357,
+     "air_date": "2012-01-24",
+     "episode_number": 357,
+     "name": "Tsukishima's Ability, the Danger is Drawing Near!",
+     "runtime": 22
+    },
+    {
+     "absolute_number": 358,
+     "air_date": "2012-01-31",
+     "episode_number": 358,
+     "name": "Clash!? Xcution attacks Ginjō",
+     "runtime": 22
+    },
+    {
+     "absolute_number": 359,
+     "air_date": "2012-02-07",
+     "episode_number": 359,
+     "name": "The Sorrowful Battle! Ichigo vs. Sado & Orihime",
+     "runtime": 22
+    },
+    {
+     "absolute_number": 360,
+     "air_date": "2012-02-14",
+     "episode_number": 360,
+     "name": "Ichigo vs Uryū!? Who is the Traitor!?",
+     "runtime": 22
+    },
+    {
+     "absolute_number": 361,
+     "air_date": "2012-02-21",
+     "episode_number": 361,
+     "name": "A New Appearance! The Gotei 13, Arrives!",
+     "runtime": 22
+    },
+    {
+     "absolute_number": 362,
+     "air_date": "2012-02-28",
+     "episode_number": 362,
+     "name": "Revival! Substitute Shinigami: Ichigo Kurosaki!",
+     "runtime": 22
+    },
+    {
+     "absolute_number": 363,
+     "air_date": "2012-03-06",
+     "episode_number": 363,
+     "name": "Fierce Fight! Shinigami vs. XCUTION!",
+     "runtime": 22
+    },
+    {
+     "absolute_number": 364,
+     "air_date": "2012-03-13",
+     "episode_number": 364,
+     "name": "Desperate Struggle!? Byakuya's Troubled Memories",
+     "runtime": 22
+    },
+    {
+     "absolute_number": 365,
+     "air_date": "2012-03-20",
+     "episode_number": 365,
+     "name": "Ichigo vs. Ginjō! Secret of the Substitute Badge",
+     "runtime": 22
+    },
+    {
+     "absolute_number": 366,
+     "air_date": "2012-03-27",
+     "episode_number": 366,
+     "name": "Changing History, Unchanging Heart",
+     "runtime": 24
+    }
+   ],
+   "name": "Bleach",
+   "names": [
+    "Bleach",
+    "第 1 季",
+    "本篇"
+   ],
+   "season_number": 1
+  },
+  {
+   "air_date": "2022-10-11",
+   "episode_count": 50,
+   "episodes": [
+    {
+     "absolute_number": 1,
+     "air_date": "2022-10-11",
+     "episode_number": 1,
+     "name": "The Blood Warfare",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 2,
+     "air_date": "2022-10-18",
+     "episode_number": 2,
+     "name": "Foundation Stones",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 3,
+     "air_date": "2022-10-25",
+     "episode_number": 3,
+     "name": "March of the Starcross",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 4,
+     "air_date": "2022-11-01",
+     "episode_number": 4,
+     "name": "Kill the Shadow",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 5,
+     "air_date": "2022-11-08",
+     "episode_number": 5,
+     "name": "Wrath as a Lightning",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 6,
+     "air_date": "2022-11-15",
+     "episode_number": 6,
+     "name": "The Fire",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 7,
+     "air_date": "2022-11-22",
+     "episode_number": 7,
+     "name": "Born in the Dark",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 8,
+     "air_date": "2022-11-29",
+     "episode_number": 8,
+     "name": "The Shooting Star Project [Zero Mix]",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 9,
+     "air_date": "2022-12-06",
+     "episode_number": 9,
+     "name": "The Drop",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 10,
+     "air_date": "2022-12-13",
+     "episode_number": 10,
+     "name": "The Battle",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 11,
+     "air_date": "2022-12-20",
+     "episode_number": 11,
+     "name": "Everything but the Rain",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 12,
+     "air_date": "2022-12-27",
+     "episode_number": 12,
+     "name": "Everything but the Rain: June Truth",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 13,
+     "air_date": "2022-12-27",
+     "episode_number": 13,
+     "name": "The Blade Is Me",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 14,
+     "air_date": "2023-07-08",
+     "episode_number": 14,
+     "name": "The Last 9 Days",
+     "runtime": 25
+    },
+    {
+     "absolute_number": 15,
+     "air_date": "2023-07-15",
+     "episode_number": 15,
+     "name": "PEACE FROM SHADOWS",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 16,
+     "air_date": "2023-07-22",
+     "episode_number": 16,
+     "name": "THE FUNDAMENTAL VIRULENCE",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 17,
+     "air_date": "2023-07-29",
+     "episode_number": 17,
+     "name": "HEART OF WOLF",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 18,
+     "air_date": "2023-08-05",
+     "episode_number": 18,
+     "name": "RAGES AT RINGSIDE",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 19,
+     "air_date": "2023-08-12",
+     "episode_number": 19,
+     "name": "THE WHITE HAZE",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 20,
+     "air_date": "2023-08-19",
+     "episode_number": 20,
+     "name": "I AM THE EDGE",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 21,
+     "air_date": "2023-08-26",
+     "episode_number": 21,
+     "name": "THE HEADLESS STAR",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 22,
+     "air_date": "2023-09-09",
+     "episode_number": 22,
+     "name": "MARCHING OUT THE ZOMBIES",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 23,
+     "air_date": "2023-09-16",
+     "episode_number": 23,
+     "name": "MARCHING OUT THE ZOMBIES 2",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 24,
+     "air_date": "2023-09-23",
+     "episode_number": 24,
+     "name": "TOO EARLY TO WIN TOO LATE TO KNOW",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 25,
+     "air_date": "2023-09-30",
+     "episode_number": 25,
+     "name": "THE MASTER",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 26,
+     "air_date": "2023-09-30",
+     "episode_number": 26,
+     "name": "BLACK",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 27,
+     "air_date": "2024-10-05",
+     "episode_number": 27,
+     "name": "A",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 28,
+     "air_date": "2024-10-12",
+     "episode_number": 28,
+     "name": "KILL THE KING",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 29,
+     "air_date": "2024-10-19",
+     "episode_number": 29,
+     "name": "THE DARK ARM",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 30,
+     "air_date": "2024-10-26",
+     "episode_number": 30,
+     "name": "THE BETRAYER",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 31,
+     "air_date": "2024-11-02",
+     "episode_number": 31,
+     "name": "AGAINST THE JUDGEMENT",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 32,
+     "air_date": "2024-11-09",
+     "episode_number": 32,
+     "name": "THE HOLY NEWBORN",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 33,
+     "air_date": "2024-11-16",
+     "episode_number": 33,
+     "name": "GATE OF THE SUN",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 34,
+     "air_date": "2024-11-23",
+     "episode_number": 34,
+     "name": "BABY, HOLD YOUR HAND",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 35,
+     "air_date": "2024-11-30",
+     "episode_number": 35,
+     "name": "DON'T CHASE A SHADOW",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 36,
+     "air_date": "2024-12-07",
+     "episode_number": 36,
+     "name": "BABY, HOLD YOUR HAND 2 [NEVER ENDING MY DREAM]",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 37,
+     "air_date": "2024-12-14",
+     "episode_number": 37,
+     "name": "SHADOWS GONE",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 38,
+     "air_date": "2024-12-21",
+     "episode_number": 38,
+     "name": "FRIEND",
+     "runtime": 26
+    },
+    {
+     "absolute_number": 39,
+     "air_date": "2024-12-28",
+     "episode_number": 39,
+     "name": "THE VISIBLE ANSWER",
+     "runtime": 25
+    },
+    {
+     "absolute_number": 40,
+     "air_date": "2024-12-29",
+     "episode_number": 40,
+     "name": "MY LAST WORDS",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 41,
+     "air_date": "2026-07-25",
+     "episode_number": 41,
+     "name": "GOD OF THUNDER",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 42,
+     "air_date": "2026-08-01",
+     "episode_number": 42,
+     "name": "SON OF DARKNESS",
+     "runtime": 25
+    },
+    {
+     "absolute_number": 43,
+     "air_date": "2026-08-08",
+     "episode_number": 43,
+     "name": "BLOOD FOR MY BONE",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 44,
+     "air_date": "2026-08-15",
+     "episode_number": 44,
+     "name": "THE PERFECT CRIMSON",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 45,
+     "air_date": "2026-08-22",
+     "episode_number": 45,
+     "name": "DEFEND YOU",
+     "runtime": 27
+    },
+    {
+     "absolute_number": 46,
+     "air_date": "2026-08-29",
+     "episode_number": 46,
+     "name": "THE END",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 47,
+     "air_date": "2026-09-05",
+     "episode_number": 47,
+     "name": "THE END 2",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 48,
+     "air_date": "2026-09-12",
+     "episode_number": 48,
+     "name": "THE END TWO WORLD",
+     "runtime": 24
+    },
+    {
+     "absolute_number": 49,
+     "air_date": "2026-10-20",
+     "episode_number": 49,
+     "name": "THE BLADE",
+     "runtime": null
+    },
+    {
+     "absolute_number": 50,
+     "air_date": "2026-10-27",
+     "episode_number": 50,
+     "name": "Episode 50",
+     "runtime": null
+    }
+   ],
+   "name": "Thousand-Year Blood War",
+   "names": [
+    "Thousand-Year Blood War",
+    "千年血戰篇",
+    "千年血战篇"
+   ],
+   "season_number": 2
+  }
+ ],
+ "title": "死神",
+ "title_en": "Bleach",
+ "title_original": "BLEACH",
+ "titles": [
+  "Bleach",
+  "BLEACH",
+  "Блийч",
+  "Белина",
+  "Блиич",
+  "死神-BLEACH",
+  "BLEACH 千年血戦編",
+  "死神 千年血战篇",
+  "BLEACH 千年血战篇",
+  "BLEACH 死神 千年血战篇",
+  "死神千年血战诀别谭",
+  "死神 千年血战篇 第二季",
+  "Bleach : Thousand-Year Blood War",
+  "ბლიჩი",
+  "მათეთრებელი",
+  "漂灵",
+  "בליץ’: מלחמת הדם בת אלף השנים",
+  "Bleach Sennen Kessen Hen",
+  "BLEACH 千年血戦篇",
+  "Burīchi: Sennen Kessen-hen",
+  "ブリーチ",
+  "Bleach Sennen Kessen-hen",
+  "Bleach - Sennen Kessen-hen",
+  "Bleach - Sennen Kessen hen",
+  "BLEACH 千年血戦篇ー相剋譚ー",
+  "BLEACH Sennen Kessen-hen: Kakahjuu-tan",
+  "BLEACH 千年血戦篇-禍進譚-",
+  "블리치 천년혈전 편",
+  "블리치 천년혈전 편: 결별담",
+  "블리치 사신대행 편",
+  "블리치 소울 소사이어티 잠입 편",
+  "블리치 소울 소사이어티 구출 편",
+  "블리치 바운트 편",
+  "블리치 바운트 소울 소사이어티 습격 편",
+  "블리치 아란칼 출현 편",
+  "블리치 웨코문도 돌입 편",
+  "블리치 신임 대장 아마가이 슈스케 편",
+  "블리치 아란칼 VS 사신 편",
+  "블리치 과거 편",
+  "블리치 아란칼 카라쿠라 결전 편",
+  "블리치 참백도 이문 편",
+  "블리치 도수(刀獣) 편",
+  "블리치 아란칼 멸망 편",
+  "블리치 호정 13대 침군 편",
+  "블리치 사신대행 소실 편",
+  "블리치 천년혈전 편: 화진담",
+  "Izbeljivač",
+  "المطهر",
+  "บลีช",
+  "เทพมรณะออนไลน์",
+  "BLEACH 死神",
+  "BLEACH 死神 千年血戰篇",
+  "BLEACH 死神 千年血戰篇-訣別譚-",
+  "Bleach: Thousand-Year Blood War",
+  "Bleach: Thousand-Year Blood War - The Separation",
+  "Bleach: Thousand-Year Blood War - The Conflict",
+  "Bleach: TYBW",
+  "Bleach: Thousand-Year Blood War - The Calamity",
+  "Блич",
+  "בליץ'",
+  "블리치",
+  "死神",
+  "Бліч",
+  "Sứ Mệnh Thần Chết",
+  "เทพมรณะ",
+  "漂靈",
+  "بلیچ"
+ ],
+ "tmdb_id": 30984,
+ "year": 2004
+}

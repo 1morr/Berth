@@ -248,11 +248,16 @@ def batch_numbers(parsed: ParsedTitle) -> range:
 
 @dataclass(frozen=True)
 class Release:
-    """一筆釋出：解析出來的標題，加上「發佈時間對到正篇第幾集」（對不到就是 None）。"""
+    """一筆釋出：解析出來的標題，加上「發佈時間對到正篇第幾集」（對不到就是 None）。
+
+    `title` 是 Mikan 的原始標題。這一支自己用不到，M1 票 14d 的 `absolute_rule_cost.py`
+    要拿它餵 Berth 的解析器，再對這裡校準出來的正解。
+    """
 
     parsed: ParsedTitle
     published: str | None
     ordinal: int | None
+    title: str
 
 
 def _group_of(title: str) -> str | None:
@@ -582,6 +587,8 @@ class Trial:
     season_hint: int | None
     number: int
     truth_ordinal: int
+    #: 這一集來自哪一筆釋出的原始標題（見 `Release.title`）。合集展開的每一集共用同一個。
+    title: str
     outcomes: dict[str, str] = field(default_factory=dict)
     #: 每個來源的「正確座標」是怎麼對出來的：direct / air_date / position / no_source
     joins: dict[str, str] = field(default_factory=dict)
@@ -699,7 +706,14 @@ def evaluate(
                     skipped["out_of_range"] += 1
                     continue
                 trial = Trial(
-                    series_key, part_index, group, convention, parsed.season_hint, number, truth
+                    series_key,
+                    part_index,
+                    group,
+                    convention,
+                    parsed.season_hint,
+                    number,
+                    truth,
+                    item.title,
                 )
                 for key, scheme in schemes.items():
                     expected, how = coord_for_ordinal(scheme, aired, truth)
@@ -780,7 +794,7 @@ def collect(series: Series, token: str, gap_days: int) -> SeriesResult:
             ordinal = match_ordinal(aired, published)
             anchored += ordinal is not None
             releases.setdefault((part_index, parsed.group or "?"), []).append(
-                Release(parsed, published, ordinal)
+                Release(parsed, published, ordinal, title)
             )
         bangumi_rows.append(
             {

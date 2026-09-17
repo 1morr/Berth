@@ -1,7 +1,7 @@
 {
   "note": "Written by `berth bench --update-baseline`. Raising it needs a reason in the PR.",
   "auto_wrong": 0,
-  "auto_correct": 169,
+  "auto_correct": 170,
   "extra_correct": 41,
   "subtitle_correct": 37
 }

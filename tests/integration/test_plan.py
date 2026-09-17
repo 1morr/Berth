@@ -67,7 +67,8 @@ BATCH_FILES = (
 
 #: 只寫了集號的單集發佈：兩季的作品上它只能靠累計集數換算，所以信心是 medium
 #: （brief §6.5）。medium 的兩條路（自動入庫掛 audit / 被 Route 擋下）都拿它演。
-SINGLE = "[ANi] SPY×FAMILY - 13 [1080P][WEB-DL][AAC AVC][CHT]"
+#: 集號要超過第一季的 25 集——沒超過的話它也讀得成第二季的某一集，只會是 low（brief §6.4）。
+SINGLE = "[ANi] SPY×FAMILY - 26 [1080P][WEB-DL][AAC AVC][CHT]"
 SINGLE_FILES = ((f"{SINGLE}/{SINGLE}.mkv", 1_400_000_000),)
 
 #: 對不到任何一集的東西：解析器答不出季集，所以整份 Plan 停下來等人。

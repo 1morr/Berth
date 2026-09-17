@@ -1,0 +1,39 @@
+{
+  "id": "anime/bleach-tybw-soukoku-tan-erai",
+  "source_url": "https://nyaa.si/view/1950688",
+  "torrent_name": "[Erai-raws] Bleach: Sennen Kessen Hen - Soukoku Tan - 01 ~ 14 [1080p DSNP WEB-DL AVC AAC][MultiSub] [BATCH]",
+  "tmdb": "tv-30984",
+  "context": {"media": "tv:30984", "profile": "anime", "season_hint": null, "episode_offset": null},
+  "files": [
+    {"path": "[Erai-raws] Bleach - Sennen Kessen Hen - Soukoku Tan - 01 [1080p DSNP WEB-DL AVC AAC][MultiSub][46878389].mkv", "size": 1005682790},
+    {"path": "[Erai-raws] Bleach - Sennen Kessen Hen - Soukoku Tan - 02 [1080p DSNP WEB-DL AVC AAC][MultiSub][B84D074C].mkv", "size": 1027267731},
+    {"path": "[Erai-raws] Bleach - Sennen Kessen Hen - Soukoku Tan - 03 [1080p DSNP WEB-DL AVC AAC][MultiSub][5FFBA8A1].mkv", "size": 845597434},
+    {"path": "[Erai-raws] Bleach - Sennen Kessen Hen - Soukoku Tan - 04 [1080p DSNP WEB-DL AVC AAC][MultiSub][0897C7A1].mkv", "size": 1138436893},
+    {"path": "[Erai-raws] Bleach - Sennen Kessen Hen - Soukoku Tan - 05 [1080p DSNP WEB-DL AVC AAC][MultiSub][EFF80224].mkv", "size": 927448504},
+    {"path": "[Erai-raws] Bleach - Sennen Kessen Hen - Soukoku Tan - 06 [1080p DSNP WEB-DL AVC AAC][MultiSub][A1734715].mkv", "size": 887387375},
+    {"path": "[Erai-raws] Bleach - Sennen Kessen Hen - Soukoku Tan - 07 [1080p DSNP WEB-DL AVC AAC][MultiSub][A695DE37].mkv", "size": 1074281784},
+    {"path": "[Erai-raws] Bleach - Sennen Kessen Hen - Soukoku Tan - 08 [1080p DSNP WEB-DL AVC AAC][MultiSub][4FD5F4B3].mkv", "size": 1070955540},
+    {"path": "[Erai-raws] Bleach - Sennen Kessen Hen - Soukoku Tan - 09 [1080p DSNP WEB-DL AVC AAC][MultiSub][D83A43C6].mkv", "size": 899504051},
+    {"path": "[Erai-raws] Bleach - Sennen Kessen Hen - Soukoku Tan - 10 [1080p DSNP WEB-DL AVC AAC][MultiSub][2D7AD539].mkv", "size": 904352363},
+    {"path": "[Erai-raws] Bleach - Sennen Kessen Hen - Soukoku Tan - 11 [1080p DSNP WEB-DL AVC AAC][MultiSub][5DC5FB94].mkv", "size": 960025102},
+    {"path": "[Erai-raws] Bleach - Sennen Kessen Hen - Soukoku Tan - 12 [1080p DSNP WEB-DL AVC AAC][MultiSub][06EF2F73].mkv", "size": 960377830},
+    {"path": "[Erai-raws] Bleach - Sennen Kessen Hen - Soukoku Tan - 13 [1080p DSNP WEB-DL AVC AAC][MultiSub][080FB8D7].mkv", "size": 907725338},
+    {"path": "[Erai-raws] Bleach - Sennen Kessen Hen - Soukoku Tan - 14 [1080p DSNP WEB-DL AVC AAC][MultiSub][B1131AEC].mkv", "size": 935238338}
+  ],
+  "expected": [
+    {"path": "[Erai-raws] Bleach - Sennen Kessen Hen - Soukoku Tan - 01 [1080p DSNP WEB-DL AVC AAC][MultiSub][46878389].mkv", "kind": "video", "action": "import", "season": 2, "episode": 27, "tags": {"source": "WEB", "resolution": "1080p", "group": "Erai-raws"}, "target": "Bleach (2004) [tmdbid-30984]/Season 02/Bleach (2004) - S02E27 - A [WEB][1080p][Erai-raws].mkv"},
+    {"path": "[Erai-raws] Bleach - Sennen Kessen Hen - Soukoku Tan - 02 [1080p DSNP WEB-DL AVC AAC][MultiSub][B84D074C].mkv", "kind": "video", "action": "import", "season": 2, "episode": 28, "tags": {"source": "WEB", "resolution": "1080p", "group": "Erai-raws"}, "target": "Bleach (2004) [tmdbid-30984]/Season 02/Bleach (2004) - S02E28 - KILL THE KING [WEB][1080p][Erai-raws].mkv"},
+    {"path": "[Erai-raws] Bleach - Sennen Kessen Hen - Soukoku Tan - 03 [1080p DSNP WEB-DL AVC AAC][MultiSub][5FFBA8A1].mkv", "kind": "video", "action": "import", "season": 2, "episode": 29, "tags": {"source": "WEB", "resolution": "1080p", "group": "Erai-raws"}, "target": "Bleach (2004) [tmdbid-30984]/Season 02/Bleach (2004) - S02E29 - THE DARK ARM [WEB][1080p][Erai-raws].mkv"},
+    {"path": "[Erai-raws] Bleach - Sennen Kessen Hen - Soukoku Tan - 04 [1080p DSNP WEB-DL AVC AAC][MultiSub][0897C7A1].mkv", "kind": "video", "action": "import", "season": 2, "episode": 30, "tags": {"source": "WEB", "resolution": "1080p", "group": "Erai-raws"}, "target": "Bleach (2004) [tmdbid-30984]/Season 02/Bleach (2004) - S02E30 - THE BETRAYER [WEB][1080p][Erai-raws].mkv"},
+    {"path": "[Erai-raws] Bleach - Sennen Kessen Hen - Soukoku Tan - 05 [1080p DSNP WEB-DL AVC AAC][MultiSub][EFF80224].mkv", "kind": "video", "action": "import", "season": 2, "episode": 31, "tags": {"source": "WEB", "resolution": "1080p", "group": "Erai-raws"}, "target": "Bleach (2004) [tmdbid-30984]/Season 02/Bleach (2004) - S02E31 - AGAINST THE JUDGEMENT [WEB][1080p][Erai-raws].mkv"},
+    {"path": "[Erai-raws] Bleach - Sennen Kessen Hen - Soukoku Tan - 06 [1080p DSNP WEB-DL AVC AAC][MultiSub][A1734715].mkv", "kind": "video", "action": "import", "season": 2, "episode": 32, "tags": {"source": "WEB", "resolution": "1080p", "group": "Erai-raws"}, "target": "Bleach (2004) [tmdbid-30984]/Season 02/Bleach (2004) - S02E32 - THE HOLY NEWBORN [WEB][1080p][Erai-raws].mkv"},
+    {"path": "[Erai-raws] Bleach - Sennen Kessen Hen - Soukoku Tan - 07 [1080p DSNP WEB-DL AVC AAC][MultiSub][A695DE37].mkv", "kind": "video", "action": "import", "season": 2, "episode": 33, "tags": {"source": "WEB", "resolution": "1080p", "group": "Erai-raws"}, "target": "Bleach (2004) [tmdbid-30984]/Season 02/Bleach (2004) - S02E33 - GATE OF THE SUN [WEB][1080p][Erai-raws].mkv"},
+    {"path": "[Erai-raws] Bleach - Sennen Kessen Hen - Soukoku Tan - 08 [1080p DSNP WEB-DL AVC AAC][MultiSub][4FD5F4B3].mkv", "kind": "video", "action": "import", "season": 2, "episode": 34, "tags": {"source": "WEB", "resolution": "1080p", "group": "Erai-raws"}, "target": "Bleach (2004) [tmdbid-30984]/Season 02/Bleach (2004) - S02E34 - BABY, HOLD YOUR HAND [WEB][1080p][Erai-raws].mkv"},
+    {"path": "[Erai-raws] Bleach - Sennen Kessen Hen - Soukoku Tan - 09 [1080p DSNP WEB-DL AVC AAC][MultiSub][D83A43C6].mkv", "kind": "video", "action": "import", "season": 2, "episode": 35, "tags": {"source": "WEB", "resolution": "1080p", "group": "Erai-raws"}, "target": "Bleach (2004) [tmdbid-30984]/Season 02/Bleach (2004) - S02E35 - DON'T CHASE A SHADOW [WEB][1080p][Erai-raws].mkv"},
+    {"path": "[Erai-raws] Bleach - Sennen Kessen Hen - Soukoku Tan - 10 [1080p DSNP WEB-DL AVC AAC][MultiSub][2D7AD539].mkv", "kind": "video", "action": "import", "season": 2, "episode": 36, "tags": {"source": "WEB", "resolution": "1080p", "group": "Erai-raws"}, "target": "Bleach (2004) [tmdbid-30984]/Season 02/Bleach (2004) - S02E36 - BABY, HOLD YOUR HAND 2 [NEVER ENDING MY DREAM] [WEB][1080p][Erai-raws].mkv"},
+    {"path": "[Erai-raws] Bleach - Sennen Kessen Hen - Soukoku Tan - 11 [1080p DSNP WEB-DL AVC AAC][MultiSub][5DC5FB94].mkv", "kind": "video", "action": "import", "season": 2, "episode": 37, "tags": {"source": "WEB", "resolution": "1080p", "group": "Erai-raws"}, "target": "Bleach (2004) [tmdbid-30984]/Season 02/Bleach (2004) - S02E37 - SHADOWS GONE [WEB][1080p][Erai-raws].mkv"},
+    {"path": "[Erai-raws] Bleach - Sennen Kessen Hen - Soukoku Tan - 12 [1080p DSNP WEB-DL AVC AAC][MultiSub][06EF2F73].mkv", "kind": "video", "action": "import", "season": 2, "episode": 38, "tags": {"source": "WEB", "resolution": "1080p", "group": "Erai-raws"}, "target": "Bleach (2004) [tmdbid-30984]/Season 02/Bleach (2004) - S02E38 - FRIEND [WEB][1080p][Erai-raws].mkv"},
+    {"path": "[Erai-raws] Bleach - Sennen Kessen Hen - Soukoku Tan - 13 [1080p DSNP WEB-DL AVC AAC][MultiSub][080FB8D7].mkv", "kind": "video", "action": "import", "season": 2, "episode": 39, "tags": {"source": "WEB", "resolution": "1080p", "group": "Erai-raws"}, "target": "Bleach (2004) [tmdbid-30984]/Season 02/Bleach (2004) - S02E39 - THE VISIBLE ANSWER [WEB][1080p][Erai-raws].mkv"},
+    {"path": "[Erai-raws] Bleach - Sennen Kessen Hen - Soukoku Tan - 14 [1080p DSNP WEB-DL AVC AAC][MultiSub][B1131AEC].mkv", "kind": "video", "action": "import", "season": 2, "episode": 40, "tags": {"source": "WEB", "resolution": "1080p", "group": "Erai-raws"}, "target": "Bleach (2004) [tmdbid-30984]/Season 02/Bleach (2004) - S02E40 - MY LAST WORDS [WEB][1080p][Erai-raws].mkv"}
+  ]
+}

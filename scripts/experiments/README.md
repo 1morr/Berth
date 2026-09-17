@@ -1,17 +1,17 @@
 # 實驗腳本
 
-M0 票 04、M1 票 01（brief §20.6）與 M1 票 14c 的實驗。**指令在根目錄的 [README](../../README.md#實驗腳本)**（那份是本專案
+M0 票 04、M1 票 01（brief §20.6）、M1 票 14c 與 14d 的實驗。**指令在根目錄的 [README](../../README.md#實驗腳本)**（那份是本專案
 指令的單一來源）；這裡寫的是每個腳本在回答什麼、為什麼這樣寫、有哪些坑。
 
 結論在 [`docs/research/m0-experiments.md`](../../docs/research/m0-experiments.md)、
 [`docs/research/anime-episode-source.md`](../../docs/research/anime-episode-source.md) 與
 [`docs/research/profile-effect.md`](../../docs/research/profile-effect.md)，摘要進
 brief §10 / §19 / §20.3 / §20.4 / §20.6 / §20.7。原始 JSON 落在 `.local/experiments/results/`（不進版控），
-stdout 是同一份東西的人類版（`profile_effect.py` 只印 stdout）。
+stdout 是同一份東西的人類版（`profile_effect.py` 與 `absolute_rule_cost.py` 只印 stdout）。
 
 腳本只用 Python 標準庫，不 import `berth`，也不需要專案的虛擬環境 —— 這樣才能原封不動搬到 NAS
-或別人的 Linux 宿主上跑。**例外是 `profile_effect.py`**：它量的就是 Berth 自己的解析器與語料，
-搬到別台機器上跑沒有意義，所以 import `berth`、要用 `uv run` 跑。唯一的宿主相依是 `make_media.py` 會呼叫 `docker`（借 Jellyfin image 的
+或別人的 Linux 宿主上跑。**例外是 `profile_effect.py` 與 `absolute_rule_cost.py`**：它們量的就是 Berth
+自己的解析器，搬到別台機器上跑沒有意義，所以 import `berth`、要用 `uv run` 跑。唯一的宿主相依是 `make_media.py` 會呼叫 `docker`（借 Jellyfin image 的
 ffmpeg 產種子檔），那只影響「造測試素材」這一步，不影響 `hardlink.sh` 的可攜性。
 
 ## 每個檔案在做什麼
@@ -29,6 +29,7 @@ ffmpeg 產種子檔），那只影響「造測試素材」這一步，不影響 
 | `anime_sample.json` | 上一支的樣本：10 部動漫、挑選理由、Mikan 的番組 id |
 | `qbittorrent_poller.py` | M1 票 10：`sync/maindata` 的 rid 增量形狀、`torrents/files` 的相對基準（多檔）、三種處境下的 `state` / `progress` / `completion_on`，以及**連續登入失敗之後的 403 與帳密錯差在哪裡**。最後一項會封住來源 IP，所以它一定跑在最後 |
 | `profile_effect.py` | M1 票 14c：Route 的 profile 對 benchmark 語料有沒有作用。四種組合重算、逐檔比桶、側錄 `_from_number` 走的分支。不連線、不寫檔 |
+| `absolute_rule_cost.py` | M1 票 14d：「集號 ≤ 第一季集數就送審核」擋下的是對的多還是錯的多，以及「標題有認不出的多餘字」分不分得開。正解借 `anime_episode_source.py` 的校準，Berth 的讀法是把每筆 Mikan 發佈丟進 `plan`。只印 stdout |
 | `lib.py` | 共用的 HTTP、輪詢、bencode、報告輸出 |
 
 ## 幾個不明顯的地方
@@ -54,5 +55,9 @@ ffmpeg 產種子檔），那只影響「造測試素材」這一步，不影響 
 - **它會把抓到的東西快取在 `.local/experiments/cache/`。** Mikan 的頁面動輒 500 KB 以上、
   連線常常中途被掐掉，第一次跑要十來分鐘；重跑分析（例如換 `--gap-days`）則是秒級。要重新
   抓一次就砍掉那個目錄。
+- **`absolute_rule_cost.py` 直接 import 同目錄的 `anime_episode_source.py`**（`uv run` 跑腳本時，腳本所在的目錄就在
+  `sys.path` 上），吃的是同一份快取，所以也要 `TMDB_API_KEY`（`uv run --env-file .env`）。為了它，後者的 `Trial` 多帶
+  一個 Mikan 原始標題；那一支自己的數字不受影響。它的近似——Mikan 只有標題、沒有檔案清單，每筆當成以標題為檔名的
+  單檔 torrent，合集逐集重問 `map_episode`——與限制寫在研究文件 `profile-effect.md` §6.1.1。
 - **判斷「字幕組寫的 12 是哪一集」靠的是發佈時間，不是編號規則。** 為什麼要這樣做、三道校準
   閘在擋什麼，見 research 文件的 §4.1。動過 `calibrate_offset` 就要重跑 `--self-test`。

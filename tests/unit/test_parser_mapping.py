@@ -88,7 +88,7 @@ def run(
     media: MediaSnapshot,
     *,
     path: str = "",
-    profile: Profile = Profile.ANIME,
+    profile: Profile = Profile.STANDARD,
     torrent: str = "",
     season_hint: int | None = None,
     episode_offset: int | None = None,
@@ -390,13 +390,81 @@ class TestAbsoluteNumbers:
     def test_a_number_beyond_every_season_maps_to_nothing(self) -> None:
         assert run("[Group] Shingeki no Kyojin - 999 [1080p].mkv", self.long_running) == ()
 
-    def test_a_standard_profile_release_only_gets_review(self) -> None:
-        """非動漫的發佈不用絕對編號，所以一個孤零零的數字是可疑的，不是慣例。"""
-        candidates = run(
-            "[Group] Show - 30 [1080p].mkv", self.long_running, profile=Profile.STANDARD
+    def test_a_number_past_the_first_season_is_trusted(self) -> None:
+        """超過第一季集數的數字只剩跨季連號一種讀法（SPY×FAMILY 26、MHA 139）。"""
+        candidates = run("[Group] Shingeki no Kyojin - 26 [1080p].mkv", self.long_running)
+
+        assert best(candidates) == (2, 1, MappingStrategy.ABSOLUTE_CUMULATIVE)
+        assert all(item.confidence is Confidence.MEDIUM for item in candidates)
+
+    def test_a_number_within_the_first_season_is_only_reviewed(self) -> None:
+        """`- 25` 也讀得成後面某季從 01 重數的第 25 集——《死神》相剋譚的 01–14 就是。"""
+        candidates = run("[Group] Shingeki no Kyojin - 25 [1080p].mkv", self.long_running)
+
+        assert best(candidates) == (1, 25, MappingStrategy.ABSOLUTE_CUMULATIVE)
+        assert all(item.confidence is Confidence.LOW for item in candidates)
+        assert any("later season" in reason for reason in candidates[0].reasons)
+
+
+class TestAbsoluteNumbersAgainstTheAirDate:
+    """檔名帶播出日時，換算出的那一集要是那一天播的（brief §6.4「明說的贏推論的」）。
+
+    《Home and Away》`Episode.8214.2024-02-29` 累加換成 S37E32，那一集播於 2024-02-21——
+    TMDB 前幾季比官方編號多收了集數（`docs/research/profile-effect.md` §3.4）。
+    """
+
+    #: 第二季隔一年開播，兩季的播出日不重疊。
+    daily = show(
+        season(1, 25, start=date(2020, 1, 5)),
+        season(2, 12, start=date(2021, 1, 3)),
+        title="Show",
+    )
+
+    def test_the_air_date_of_the_converted_episode_confirms_it(self) -> None:
+        candidates = run("Show.E026.2021-01-03.1080p.WEB.mkv", self.daily)
+
+        assert best(candidates) == (2, 1, MappingStrategy.ABSOLUTE_CUMULATIVE)
+        assert candidates[0].confidence is Confidence.MEDIUM
+
+    def test_a_day_off_is_only_reviewed(self) -> None:
+        """日播的劇差一集就是差一天，所以沒有容忍範圍。"""
+        candidates = run("Show.E026.2021-01-04.1080p.WEB.mkv", self.daily)
+
+        assert best(candidates) == (2, 1, MappingStrategy.ABSOLUTE_CUMULATIVE)
+        assert candidates[0].confidence is Confidence.LOW
+        assert any("2021-01-04" in reason for reason in candidates[0].reasons)
+
+    def test_an_episode_tmdb_has_no_air_date_for_is_only_reviewed(self) -> None:
+        """發佈明說了日期，而 TMDB 沒有東西證實它——這不是「對得上」。"""
+        undated = show(
+            season(1, 25, start=date(2020, 1, 5)),
+            SeasonSnapshot(
+                season_number=2,
+                name="Season 2",
+                episode_count=12,
+                episodes=tuple(EpisodeSnapshot(episode_number=n) for n in range(1, 13)),
+            ),
+            title="Show",
         )
 
+        candidates = run("Show.E026.2021-01-03.1080p.WEB.mkv", undated)
+
+        assert best(candidates) == (2, 1, MappingStrategy.ABSOLUTE_CUMULATIVE)
         assert candidates[0].confidence is Confidence.LOW
+
+    def test_a_korean_broadcast_date_is_read_year_first(self) -> None:
+        """`150524` 是 2015-05-24（《超人回來了》E079 對到的 S03E21 就是那一天播的）。"""
+        superman = show(
+            season(1, 9, start=date(2013, 11, 3)),
+            season(2, 49, start=date(2014, 1, 5)),
+            season(3, 52, start=date(2015, 1, 4)),
+            title="The Return of Superman",
+        )
+
+        candidates = run("The.Return.of.Superman.E079.150524.HDTV.H264.720p-LIMO.avi", superman)
+
+        assert best(candidates) == (3, 21, MappingStrategy.ABSOLUTE_CUMULATIVE)
+        assert candidates[0].confidence is Confidence.MEDIUM
 
 
 class TestVirtualSeasons:

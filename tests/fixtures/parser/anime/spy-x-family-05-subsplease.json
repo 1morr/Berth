@@ -1,0 +1,13 @@
+{
+  "id": "anime/spy-x-family-05-subsplease",
+  "source_url": "https://nyaa.si/view/1525282",
+  "torrent_name": "[SubsPlease] Spy x Family - 05 (1080p) [547FDE9F].mkv",
+  "tmdb": "tv-120089",
+  "context": {"media": "tv:120089", "profile": "anime", "season_hint": null, "episode_offset": null},
+  "files": [
+    {"path": "[SubsPlease] Spy x Family - 05 (1080p) [547FDE9F].mkv", "size": 1476197510}
+  ],
+  "expected": [
+    {"path": "[SubsPlease] Spy x Family - 05 (1080p) [547FDE9F].mkv", "kind": "video", "action": "import", "season": 1, "episode": 5, "tags": {"resolution": "1080p", "group": "SubsPlease"}, "target": "SPY x FAMILY (2022) [tmdbid-120089]/Season 01/SPY x FAMILY (2022) - S01E05 - WILL THEY PASS OR FAIL [1080p][SubsPlease].mkv"}
+  ]
+}
