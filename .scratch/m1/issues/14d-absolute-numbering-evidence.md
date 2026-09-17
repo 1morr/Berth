@@ -117,4 +117,4 @@
 - code-review 沒處理的發現：
   - `release._date` 與 `_int` 同一種寫法（Standards 軸，判斷題）——與既有的 `_text` 一致，沒抽共用函式。
   - `tests/unit/test_parser_mapping.py` 的 `run()` 預設 profile 改成 `standard` 之後，約十處顯式的 `profile=Profile.STANDARD` 變成多餘——14e 拿掉 profile 時一起清。
-  - 量測順帶發現 `release._numbers` 在季號等於方括號集號時丟掉季號（`Mushoku Tensei S2 [02]`），不在這一票的範圍，沒修；規則 1 之下不會入錯。
+  - 量測順帶發現 `release._numbers` 在季號等於方括號集號時丟掉季號（`Mushoku Tensei S2 [02]`），不在這一票的範圍，沒修。無職轉生那 5 個在規則 1 之下送審核；**但 TMDB 併成一季的作品碰不到規則 1**，Re:Zero `S2][02]` 會自動入錯（14d 收尾時說成「不會入錯」是錯的）。使用者要求開票 → 14f。
