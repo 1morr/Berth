@@ -64,20 +64,33 @@ from berth.api.deps import get_client_factory, get_setup_probes
 from berth.config import Config, load_config
 from berth.db import create_engine, create_session_factory, upgrade_to_head
 from berth.domain import (
+    Confidence,
     DetectionReason,
+    EpisodeSnapshot,
     HealthStatus,
     IndexerKind,
     JobState,
     JobTrigger,
+    MediaKind,
+    MediaSnapshot,
+    PlanAction,
+    PlanStatus,
+    SeasonSnapshot,
     ServiceKind,
     ServiceOrigin,
+    Source,
+    Tags,
 )
 from berth.main import create_app
 from berth.models import (
     IndexerSettings,
     JellyfinSettings,
     Job,
+    LedgerEntry,
+    Media,
     PathSettings,
+    Plan,
+    PlanItem,
     QbittorrentSettings,
     Route,
     ServiceProbe,
@@ -85,6 +98,7 @@ from berth.models import (
     SetupLibrary,
     SetupSettings,
     TmdbSettings,
+    media_id,
 )
 from berth.services.clients import SetupProbes
 from berth.services.health import check_health
@@ -199,6 +213,8 @@ class Scenario:
     demo_releases: tuple[str, ...] = ()
     #: Route 設定頁的三種樣子（票 14）：一庫多條、紅燈建立、刪不得。見 `_seed_route_settings`。
     route_settings_demo: bool = False
+    #: 媒體庫頁的整庫瀏覽與受限使用者（M1.5 票 03）。見 `_seed_library`。
+    library_demo: bool = False
 
     def probes(self) -> SetupProbes:
         return SetupProbes(
@@ -694,6 +710,26 @@ def inventory_scenario() -> Scenario:
     return scenario
 
 
+def library_scenario() -> Scenario:
+    """媒體庫頁 `/library`（M1.5 票 03）：一個 Jellyfin 媒體庫一頁，整庫瀏覽加上權限。
+
+    同 `discover`（有 `TMDB_API_KEY` 時詳情頁打真的 TMDB），Jellyfin 上另外擺好三個媒體庫的作品，
+    資料庫裡擺好 Berth 經手的那幾部（`_seed_library`）。`deckhand` / `rope` 只開放 Movies 與 TV——
+    Anime 在他的切換列上不存在，直接開 `/library/item-anime` 是「找不到或沒有權限」。
+    `POST /demo/jellyfin/disable?user=deckhand` 在 Jellyfin 停用他（`enable` 復原），允許清單的快取
+    過了之後（至多 60 秒）他的 session 結束。
+    """
+    scenario = discover()
+    scenario.jellyfin = FakeJellyfinClient(
+        startup_wizard_completed=True,
+        admin=("skipper", "harbour"),
+        users={"deckhand": "rope"},
+        folders={"deckhand": ("item-movies", "item-tv")},
+    )
+    scenario.library_demo = True
+    return scenario
+
+
 def tmdb_down() -> Scenario:
     """憑證有、TMDB 連不上：探索頁要給原文與重試，而不是一片空白。"""
     scenario = healthy()
@@ -710,6 +746,7 @@ SCENARIOS = {
     "search": search,
     "plan": plan_scenario,
     "inventory": inventory_scenario,
+    "library": library_scenario,
     "poll": poll,
     "submit": submit,
     "submit-failing": submit_failing,
@@ -816,6 +853,8 @@ def main(argv: list[str] | None = None) -> int:
     app.dependency_overrides[get_client_factory] = lambda: factory
     if scenario.demo_releases:
         _mount_demo_torrent(app, scenario.demo_releases)
+    if scenario.library_demo:
+        _mount_demo_accounts(app, scenario.jellyfin)
 
     print(f"scenario={args.scenario} config_root={config_root}", file=sys.stderr)
     uvicorn.run(app, host="127.0.0.1", port=args.port, log_level="warning")
@@ -844,6 +883,28 @@ def _mount_demo_torrent(app: FastAPI, releases: tuple[str, ...]) -> None:
     # 沒被更早的路由比對到的路徑——照順序 `app.get(...)` 加進去的話，這一支永遠拿到
     # `index.html`（實測：`adapters/torrent.py` 收到一頁 HTML 並正確地說「這不是 torrent」）。
     app.router.routes.insert(0, StarletteRoute("/demo/torrent", endpoint, methods=["GET"]))
+
+
+def _mount_demo_accounts(app: FastAPI, jellyfin: FakeJellyfinClient) -> None:
+    """`POST /demo/jellyfin/{disable,enable}?user=`：在替身 Jellyfin 上停用 / 復原一個帳號。
+
+    演「帳號在 Jellyfin 被停用之後，Berth 的 session 結束」（M1.5 票 03）。插在最前面的理由同
+    `_mount_demo_torrent`。
+    """
+
+    async def endpoint(request: Request) -> Response:
+        user = request.query_params.get("user", "")
+        if user not in jellyfin.users:
+            return Response(status_code=404)
+        if request.path_params["action"] == "disable":
+            jellyfin.disabled.add(user)
+        else:
+            jellyfin.disabled.discard(user)
+        return Response(status_code=204)
+
+    app.router.routes.insert(
+        0, StarletteRoute("/demo/jellyfin/{action:str}", endpoint, methods=["POST"])
+    )
 
 
 def demo_torrent(release: str) -> Torrent:
@@ -1000,6 +1061,8 @@ async def _moor(
         scenario.prowlarr.ping_error = ServiceUnavailableError("GET /ping: connection refused")
     if scenario.route_settings_demo:
         await _seed_route_settings(session, scenario, paths)
+    if scenario.library_demo:
+        await _seed_library(session, scenario, paths)
 
 
 async def _seed_route_settings(
@@ -1037,6 +1100,249 @@ async def _seed_route_settings(
         )
     )
     await session.commit()
+
+
+#: `library` 情境擺在 Jellyfin 上的作品：`(媒體庫 slug, 名稱, 年份, TMDB id)`。TMDB id 是 0 的沒有
+#: provider id——牆上照樣有它，只是連不到 Berth 的詳情頁。
+LIBRARY_TITLES: tuple[tuple[str, str, int, int], ...] = (
+    ("tv", "The Bear", 2022, 136315),
+    ("tv", "Slow Horses", 2022, 95480),
+    ("tv", "Breaking Bad", 2008, 1396),
+    ("tv", "Game of Thrones", 2011, 1399),
+    ("tv", "Shōgun", 2024, 126308),
+    ("tv", "The Office", 2005, 2316),
+    ("tv", "Home Videos 2019", 2019, 0),
+    ("movies", "Oppenheimer", 2023, 872585),
+    ("anime", "SPY×FAMILY", 2022, 120089),
+)
+
+#: 電影媒體庫多擺這麼多部沒有 TMDB id 的片，牆才翻得到第二頁（一頁 100 部）。
+FILLER_FILMS = 130
+
+
+async def _seed_library(session: AsyncSession, scenario: Scenario, paths: PathSettings) -> None:
+    """媒體庫頁的樣子（M1.5 票 03）。Jellyfin 那一端與 Berth 那一端各擺一份，彼此對得上：
+
+    - **TV**：七部 Jellyfin 作品。The Bear 是 Berth 入庫的（S01 八集，計劃裡另有一個對不到的檔案）；
+      Slow Horses 在 Jellyfin 裡、Berth 又送了一包停在待審；Severance 還在下載，Jellyfin 裡沒有它。
+    - **Movies**：Oppenheimer 兩個版本；Moana 2 入庫失敗、Jellyfin 裡沒有；另有 130 部填充片
+      撐出第二頁。
+    - **Anime**（`deckhand` 看不到）：SPY×FAMILY 入庫了一集；葬送的芙莉蓮停在待審、Jellyfin 裡沒有。
+    """
+    routes = {row.slug: row for row in await session.scalars(select(Route))}
+    root = paths.library_root
+    items: list[JellyfinItem] = []
+    for slug, name, year, tmdb_id in LIBRARY_TITLES:
+        folder = f"{root}/{slug}/{name} ({year})" + (f" [tmdbid-{tmdb_id}]" if tmdb_id else "")
+        items.append(
+            JellyfinItem(
+                id=_scanned_id(folder),
+                type=ITEM_MOVIE if slug == "movies" else ITEM_SERIES,
+                name=name,
+                path=folder,
+                tmdb_id=str(tmdb_id) if tmdb_id else "",
+                year=year,
+            )
+        )
+    for index in range(1, FILLER_FILMS + 1):
+        folder = f"{root}/movies/Harbour Film {index:03d} (2020)"
+        items.append(
+            JellyfinItem(
+                id=_scanned_id(folder),
+                type=ITEM_MOVIE,
+                name=f"Harbour Film {index:03d}",
+                path=folder,
+                tmdb_id="",
+                year=2020,
+            )
+        )
+    scenario.jellyfin.items_ = items
+    found = {item.name: item for item in items}
+
+    bear = _demo_media(session, MediaKind.TV, 136315, "The Bear", "大熊餐廳", 2022, seasons=3)
+    slow = _demo_media(session, MediaKind.TV, 95480, "Slow Horses", "流人", 2022, seasons=4)
+    severance = _demo_media(
+        session, MediaKind.TV, 95396, "Severance", "人生切割術", 2022, seasons=2
+    )
+    oppenheimer = _demo_media(session, MediaKind.MOVIE, 872585, "Oppenheimer", "奧本海默", 2023)
+    moana = _demo_media(session, MediaKind.MOVIE, 1241982, "Moana 2", "海洋奇緣2", 2024)
+    spy = _demo_media(
+        session, MediaKind.TV, 120089, "SPY x FAMILY", "SPY×FAMILY 間諜家家酒", 2022, seasons=2
+    )
+    frieren = _demo_media(
+        session,
+        MediaKind.TV,
+        209867,
+        "Frieren: Beyond Journey's End",
+        "葬送的芙莉蓮",
+        2023,
+        seasons=1,
+    )
+    await session.flush()
+
+    bear_job = _demo_job(session, bear, routes["tv"], JobState.IMPORTED, "1")
+    _demo_job(session, slow, routes["tv"], JobState.REVIEW, "2")
+    severance_job = _demo_job(session, severance, routes["tv"], JobState.DOWNLOADING, "3")
+    _demo_job(session, oppenheimer, routes["movies"], JobState.IMPORTED, "4")
+    _demo_job(session, moana, routes["movies"], JobState.IMPORT_FAILED, "5")
+    _demo_job(session, spy, routes["anime"], JobState.IMPORTED, "6")
+    frieren_job = _demo_job(session, frieren, routes["anime"], JobState.REVIEW, "7")
+    await session.flush()
+
+    unmatched = Plan(job_hash=bear_job.hash, status=PlanStatus.APPLIED)
+    held = Plan(job_hash=frieren_job.hash, status=PlanStatus.PENDING_REVIEW)
+    session.add_all([unmatched, held])
+    await session.flush()
+    session.add_all(
+        [
+            PlanItem(
+                plan_id=unmatched.id,
+                rel_path="The.Bear.S01.1080p/Extras/behind the scenes.mkv",
+                action=PlanAction.UNMATCHED,
+                media_id=bear.id,
+                confidence=Confidence.LOW,
+            ),
+            PlanItem(
+                plan_id=held.id,
+                rel_path="[Demo] Frieren - 01-28 [1080p]/Frieren 01.mkv",
+                action=PlanAction.REVIEW,
+                media_id=frieren.id,
+                season=1,
+                episode_start=1,
+                confidence=Confidence.LOW,
+            ),
+        ]
+    )
+
+    for episode in range(1, 9):
+        _demo_link(session, bear, routes["tv"], found["The Bear"].id, season=1, episode=episode)
+    for resolution in ("1080p", "2160p"):
+        _demo_link(
+            session, oppenheimer, routes["movies"], found["Oppenheimer"].id, resolution=resolution
+        )
+    _demo_link(session, spy, routes["anime"], found["SPY×FAMILY"].id, season=1, episode=1)
+
+    # 下載中的那一筆要真的在替身 qBittorrent 裡，poller 才不會把它當成被移除（plan §3.1）。
+    now = int(datetime.now(UTC).timestamp())
+    save_path = f"{paths.complete_root}/tv"
+    scenario.qbittorrent.torrents = (
+        *scenario.qbittorrent.torrents,
+        TorrentStatus(
+            hash=severance_job.hash,
+            name=severance_job.name,
+            state="downloading",
+            category="berth-tv",
+            tags=("berth",),
+            progress=0.42,
+            completion_on=-1,
+            last_activity=now,
+            added_on=now,
+            save_path=save_path,
+            content_path=f"{save_path}/{severance_job.name}",
+            total_size=24_000_000_000,
+        ),
+    )
+    await session.commit()
+
+
+def _demo_media(
+    session: AsyncSession,
+    kind: MediaKind,
+    tmdb_id: int,
+    title_en: str,
+    title: str,
+    year: int,
+    *,
+    seasons: int = 0,
+) -> Media:
+    """一部快照擺好的作品：每季十集、全都播過（牆上的「N / M 集」有分母可算）。"""
+    aired = datetime(year, 6, 1, tzinfo=UTC).date()
+    snapshot = MediaSnapshot(
+        tmdb_id=tmdb_id,
+        kind=kind,
+        title=title,
+        title_en=title_en,
+        title_original=title_en,
+        year=year,
+        seasons=tuple(
+            SeasonSnapshot(
+                season_number=number,
+                name=f"Season {number}",
+                episode_count=10,
+                air_date=aired,
+                episodes=tuple(
+                    EpisodeSnapshot(episode_number=episode, air_date=aired)
+                    for episode in range(1, 11)
+                ),
+            )
+            for number in range(1, seasons + 1)
+        ),
+    )
+    row = Media(
+        id=media_id(kind, tmdb_id),
+        tmdb_id=tmdb_id,
+        kind=kind,
+        title_en=title_en,
+        title_original=title_en,
+        year=year,
+        folder_name=f"{title_en} ({year}) [tmdbid-{tmdb_id}]",
+        folder_frozen=True,
+        tmdb_snapshot_json=snapshot.model_dump(mode="json"),
+        tmdb_fetched_at=datetime.now(UTC),
+    )
+    session.add(row)
+    return row
+
+
+def _demo_job(
+    session: AsyncSession, media: Media, route: Route, state: JobState, digit: str
+) -> Job:
+    row = Job(
+        hash=digit * 40,
+        name=f"{media.title_en.replace(' ', '.')}.1080p.WEB-DL",
+        trigger=JobTrigger.MANUAL,
+        media_id=media.id,
+        route_id=route.id,
+        state=state,
+    )
+    session.add(row)
+    return row
+
+
+def _demo_link(
+    session: AsyncSession,
+    media: Media,
+    route: Route,
+    jellyfin_id: str,
+    *,
+    season: int | None = None,
+    episode: int | None = None,
+    resolution: str = "1080p",
+) -> None:
+    """一筆已經反查到的帳本。劇集記下 Series id、電影記下 Movie id（`services/resolver.py`）。"""
+    tags = Tags(source=Source.WEB, resolution=resolution)
+    where = (
+        f"Season {season:02d}/{media.title_en} - S{season:02d}E{episode:02d} {tags.render()}"
+        if season is not None and episode is not None
+        else f"{media.folder_name} - {tags.render()}"
+    )
+    session.add(
+        LedgerEntry(
+            source_rel_path=f"release/{where}.mkv",
+            source_abs_path=f"/data/torrent/complete/{route.slug}/release/{where}.mkv",
+            source_inode="1",
+            source_dev="1",
+            target_path=f"{route.target_path}/{media.folder_name}/{where}.mkv",
+            target_inode="1",
+            media_id=media.id,
+            season=season,
+            episode_start=episode,
+            tags_json=tags.model_dump(mode="json"),
+            action=PlanAction.IMPORT,
+            jellyfin_item_id=f"{jellyfin_id}-{season}-{episode}" if season else jellyfin_id,
+            jellyfin_series_id=jellyfin_id if season else "",
+        )
+    )
 
 
 if __name__ == "__main__":

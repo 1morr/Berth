@@ -1196,6 +1196,209 @@ async def test_jellyfin_token_travels_in_the_mediabrowser_header() -> None:
     assert 'Token="the-key"' in route.calls.last.request.headers["Authorization"]
 
 
+# --- M1.5 票 03：替某一位使用者瀏覽媒體庫（研究 library-browsing.md §2、§3.1、§7）---------
+#
+# fixture 是 12.1.0 上以**只開放 TV 與 Movies 的使用者**錄的（M1.5 票 01、03，fixture README）。
+# `/Items` 靜默忽略打錯的參數（brief §20.8），所以每個過濾參數要兩件事一起成立：adapter 送出去的
+# 參數名與錄製那一次一字不差，而錄下來的回應看得出伺服器真的照它過濾了。
+
+#: 受限使用者與兩個媒體庫的 id（`userviews.restricted.json`、`users.restricted.json`）。
+RESTRICTED_USER = "c7c3e8c2d6d443b38cac62383fbd5716"
+TV_LIBRARY = "4514ec850e5ad0c47b58444e17b6346c"
+MOVIES_LIBRARY = "f137a2dd21bbc1b99aa5c0f6bf02a805"
+#: 同一個 TMDB id 在他沒有權限的 Anime 裡也有一份（研究 §0）；那一份的 id 不在任何回應裡。
+FORBIDDEN_FRIEREN = "8836e6e2b1400442080287739a22c85d"
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_jellyfin_user_views_are_the_libraries_this_user_may_open() -> None:
+    route = respx.get(f"{JELLYFIN_URL}/UserViews").respond(
+        200, text=read_fixture("http/jellyfin/userviews.restricted.json")
+    )
+
+    client = jellyfin_client("key")
+    try:
+        views = await client.user_views(RESTRICTED_USER)
+    finally:
+        await client.aclose()
+
+    assert dict(route.calls.last.request.url.params) == {"userId": RESTRICTED_USER}
+    # Anime 不在：這一份就是權限的權威清單（研究 §2 第 1 列）。
+    assert [(view.id, view.name, view.collection_type) for view in views] == [
+        (MOVIES_LIBRARY, "Movies", "movies"),
+        (TV_LIBRARY, "TV", "tvshows"),
+    ]
+
+
+@respx.mock
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("fixture", "disabled"),
+    [("users.restricted.json", False), ("users.restricted.disabled.json", True)],
+)
+async def test_jellyfin_policy_says_whether_the_account_is_disabled(
+    fixture: str, disabled: bool
+) -> None:
+    """停用之後 API key 代讀照常回資料（研究 §2），「停用」只讀得出這裡。"""
+    route = respx.get(f"{JELLYFIN_URL}/Users/{RESTRICTED_USER}").respond(
+        200, text=read_fixture(f"http/jellyfin/{fixture}")
+    )
+
+    client = jellyfin_client("key")
+    try:
+        policy = await client.user_policy(RESTRICTED_USER)
+    finally:
+        await client.aclose()
+
+    assert route.called
+    assert policy.is_disabled is disabled
+
+
+#: `items.tv.series.userdata.json` 錄製時的查詢（jellyfin-web 劇集庫的參數，研究 §7），
+#: 扣掉分頁那兩格。
+WALL_QUERY = {
+    "userId": RESTRICTED_USER,
+    "parentId": TV_LIBRARY,
+    "recursive": "true",
+    "includeItemTypes": "Series",
+    "sortBy": "SortName",
+    "sortOrder": "Ascending",
+    "fields": "PrimaryImageAspectRatio,ProviderIds,Path",
+    "imageTypeLimit": "1",
+    "enableImageTypes": "Primary,Backdrop,Thumb",
+}
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_jellyfin_a_library_page_is_filtered_by_the_server() -> None:
+    route = respx.get(f"{JELLYFIN_URL}/Items").respond(
+        200, text=read_fixture("http/jellyfin/items.tv.series.userdata.json")
+    )
+
+    client = jellyfin_client("key")
+    try:
+        page = await client.library_page(
+            user_id=RESTRICTED_USER, library_id=TV_LIBRARY, item_type="Series", start=0, limit=100
+        )
+    finally:
+        await client.aclose()
+
+    assert dict(route.calls.last.request.url.params) == {
+        **WALL_QUERY,
+        "startIndex": "0",
+        "limit": "100",
+    }
+    # `includeItemTypes`：沒有它時同一位使用者拿回 24 筆，含季、集與電影（研究 §3.1）。
+    assert {item.type for item in page.items} == {"Series"}
+    # `parentId`：只有 TV 的作品，沒有 Movies 的電影，也沒有 Anime 那一份 Frieren。
+    assert all(item.path.startswith("/media/tv/") for item in page.items)
+    assert FORBIDDEN_FRIEREN not in {item.id for item in page.items}
+    # `sortBy=SortName`：不帶它時（`items.tv.series.index.json`）Jellyfin 回的也是這個順序，
+    # 所以這份錄製證明不了它有作用——而結果一樣，也就不必證明。別的排序鍵是票 06 的事，
+    # 研究 §3.1 已逐一驗過。
+    assert [item.name for item in page.items] == [
+        "Alpha Show",
+        "Bravo Show",
+        "Frieren",
+        "Hotel Show",
+    ]
+    assert page.total == 4
+    alpha = page.items[0]
+    assert (alpha.id, alpha.year, alpha.tmdb_id) == (
+        "2a9857e656bbd18b7c3c3a3b4ee5eef1",
+        2022,
+        "1399",
+    )
+    # 沒有 TMDB id 的作品照樣在牆上，只是連不到 Berth 的詳情頁（票 03）。
+    assert page.items[3].tmdb_id == ""
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_jellyfin_a_later_page_is_a_slice_of_the_whole_library() -> None:
+    """`startIndex` / `limit`：第二頁恰好是整份排序結果的第 2、3 部，總數仍是整份的
+    （票 03 錄製）。"""
+    route = respx.get(f"{JELLYFIN_URL}/Items").respond(
+        200, text=read_fixture("http/jellyfin/items.tv.series.page.json")
+    )
+    whole = json.loads(read_fixture("http/jellyfin/items.tv.series.userdata.json"))
+
+    client = jellyfin_client("key")
+    try:
+        page = await client.library_page(
+            user_id=RESTRICTED_USER, library_id=TV_LIBRARY, item_type="Series", start=1, limit=2
+        )
+    finally:
+        await client.aclose()
+
+    assert dict(route.calls.last.request.url.params) == {
+        **WALL_QUERY,
+        "startIndex": "1",
+        "limit": "2",
+    }
+    assert [item.id for item in page.items] == [row["Id"] for row in whole["Items"][1:3]]
+    assert page.total == whole["TotalRecordCount"] == 4
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_jellyfin_the_index_of_a_library_is_every_title_without_images() -> None:
+    """Berth 端比對用的整份清單：不分頁、不要圖與觀看紀錄，但仍然由伺服器照媒體庫與型別過濾。"""
+    route = respx.get(f"{JELLYFIN_URL}/Items").respond(
+        200, text=read_fixture("http/jellyfin/items.tv.series.index.json")
+    )
+
+    client = jellyfin_client("key")
+    try:
+        titles = await client.library_index(
+            user_id=RESTRICTED_USER, library_id=TV_LIBRARY, item_type="Series"
+        )
+    finally:
+        await client.aclose()
+
+    assert dict(route.calls.last.request.url.params) == {
+        "userId": RESTRICTED_USER,
+        "parentId": TV_LIBRARY,
+        "recursive": "true",
+        "includeItemTypes": "Series",
+        "fields": "ProviderIds",
+        "enableImages": "false",
+        "enableUserData": "false",
+        "enableTotalRecordCount": "false",
+    }
+    assert {item.type for item in titles} == {"Series"}
+    assert FORBIDDEN_FRIEREN not in {item.id for item in titles}
+    # `enableImages=false`、`enableUserData=false`：同一個媒體庫的牆那一份每一部都帶，
+    # 這一份一部都沒有。
+    rows = json.loads(read_fixture("http/jellyfin/items.tv.series.index.json"))["Items"]
+    wall = json.loads(read_fixture("http/jellyfin/items.tv.series.userdata.json"))["Items"]
+    assert all("UserData" in row and row["ImageTags"] for row in wall)
+    assert not any("UserData" in row or "ImageTags" in row for row in rows)
+    assert [(item.name, item.tmdb_id) for item in titles] == [
+        ("Alpha Show", "1399"),
+        ("Bravo Show", "1396"),
+        ("Frieren", "209867"),
+        ("Hotel Show", ""),
+    ]
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_jellyfin_a_page_without_an_items_array_is_not_jellyfin() -> None:
+    respx.get(f"{JELLYFIN_URL}/Items").respond(200, json={"Nothing": []})
+
+    client = jellyfin_client("key")
+    try:
+        with pytest.raises(ProtocolMismatchError):
+            await client.library_page(
+                user_id=RESTRICTED_USER, library_id=TV_LIBRARY, item_type="Series", start=0, limit=1
+            )
+    finally:
+        await client.aclose()
+
+
 # --- 票 08：索引站與 TMDB（plan §8.3、§8.4）---------------------------------
 
 

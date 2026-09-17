@@ -587,9 +587,13 @@ ISO 6346 標識在哪個語言都是同一串字母數字）、狀態標籤（`.
   第二行作品名（`.value text-sm`，`line-clamp-2`，`min-h-10` 讓兩行名與一行名的格子一樣高）；
   原文 / 英文標題不同時第三行 `ink-dim`。狀態色塊貼在這條帶上，不壓在海報上。
 - **探索牆:** 整格是一條連結；「已追蹤」是中性小色塊。
-- **媒體庫牆:** 狀態色塊依 The Usual Stays Unpainted Rule（失敗 `blocked`、待審核 `assigned`、下載中 `working`，
-  完整 / 部分 / 空是中性），有待確認檔案時另一塊 `assigned`；多一行盤點（「已入庫 N / 已播出 M」或版本數）。
-  海報與標識帶連到 Media 詳情，底下 **Jellyfin 那一行**是同一格裡、並排不巢狀的另一條連結：
+- **媒體庫牆:**（M1.5 票 03 起一個 Jellyfin 媒體庫一頁、整庫 100 部一頁，`.scratch/m1.5/library-shape.md`）
+  Jellyfin 裡的作品顯示 Jellyfin 的名稱、沒有第二行；Berth 經手的才有狀態色塊，依 The Usual Stays Unpainted Rule
+  （失敗 `blocked`、待審核 `assigned`、下載中 `working`，完整 / 部分 / 空是中性），有待確認檔案時另一塊 `assigned`；
+  盤點行（「已入庫 N / 已播出 M」或版本數）在沒經手的作品上留空但保留高度。還沒進 Jellyfin 的 Berth 作品是牆上方
+  自己一條（`.label` 標題 + 數字壓在重橫線上，同一份 `WALL_GRID`）。分頁鍵是 Ghost 外觀的連結，到頭的那一顆是
+  `aria-disabled` 的 `ink-dim` 字、位置不變。
+  海報與標識帶連到 Media 詳情（沒有 TMDB id 的作品那一塊不是連結），底下 **Jellyfin 那一行**是同一格裡、並排不巢狀的另一條連結：
   `border-t-2 border-rule`、`min-h-10` 固定高度讓基線對齊；找到了是 `.label` 文字連結（開新分頁，帶 `sr-only` 的新分頁說明，`aria-describedby` 指到那一格的標題——
   每一格都有同名的這一條），還沒找到就說原因
   （掃描中 / 沒有位址 / 找不到），不給死連結。框的 hover 用 `has-[a:hover]` 跟著任一條連結變重。
@@ -751,6 +755,10 @@ The Focus Follows The Confirm Rule。送單確認（`SubmitAction`）是同一�
   `blocked-ink` / `secured-ink`，四個信號色與 `on-signal` 兩個主題共用（註釋寫明理由：
   白字配中明度色只有 3.6:1）。以 build 為準——本文件記錄的是共用漆的那一版。
   `web-src-pages-healthpage-tsx.md` 已不再有這句話；setup 那份尚未更新。
+
+- **Jellyfin 裡的作品海報位是空的**（M1.5 票 03 到票 04 之間）：Shapes 寫「沒有海報時印一行『沒有海報』」，
+  但這些作品在 Jellyfin 裡有海報，只是 Berth 還沒代理 Jellyfin 的圖——印那一句就是謊話。票 04 接上之後，
+  Jellyfin 真的沒有圖的作品回到 Shapes 的規則，這一條刪掉。
 
 - 實測對比下限（2026-09-17，探索、下載、Media 詳情、媒體庫、Route 設定五頁，深淺兩主題 × 1280 / 390 全部量過）：
   **深色最低 6.53:1、亮色最低 5.71:1**；`rule-strong` 對兩個底色 6.4:1。

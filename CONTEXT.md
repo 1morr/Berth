@@ -19,8 +19,10 @@ _Avoid_: subscribed media, library item
 _Avoid_: root folder, destination；程式碼中不要用 `library` 指 Route（`library` 一律指下一條的 Jellyfin Library）
 
 **Inventory**（UI 顯示「媒體庫」頁）:
-一條 Library Route 上 Berth 經手的作品與它們的入庫狀態：這條 Route 上有 Job 的作品，加上帳本裡
-目標落在它底下的。一格說得出入庫了幾集、哪一部需要人、Jellyfin 找到了沒。
+一個 Jellyfin Library 的整面牆（這位使用者在 Jellyfin 看得到的那幾個之一），疊上 Berth 經手作品的入庫
+狀態。牆上是 Jellyfin 的每一部作品、分頁照 Jellyfin；Berth 經手的作品是指向這個媒體庫的每一條 Route 上
+有 Job 的，加上帳本目標落在它們底下的——在 Jellyfin 裡的疊到那一格，還沒進的另列一條。M1（票 13）時
+它是一條 Route 一頁、只有 Berth 經手的作品，M1.5 票 03 改成現在的定義。
 _Avoid_: library（程式碼中，那是下一條的 Jellyfin Library）, collection, shelf
 
 **Jellyfin Library**（UI 顯示「Jellyfin 媒體庫」）:

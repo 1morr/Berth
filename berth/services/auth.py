@@ -50,6 +50,9 @@ class AuthenticatedUser:
     id: int
     name: str
     role: Role
+    #: 替這個人向 Jellyfin 讀東西時帶的 `userId`（`services/jellyfin_access.py`）。**只從 session
+    #: 來**：API key 帶誰的 id 就是誰，所以前端送來的 id 一個都不收（plan §11.2b）。
+    jellyfin_user_id: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -113,6 +116,16 @@ async def sign_out(session: AsyncSession, token: str | None) -> None:
     await session.commit()
 
 
+async def end_sessions(session: AsyncSession, user_id: int) -> None:
+    """這個人在每一台裝置上的 session 全部失效，並當場 commit。
+
+    Jellyfin 停用了他的帳號時呼叫（`services/jellyfin_access.py`）。**自己 commit**：呼叫端接著會丟
+    例外，而請求的工作單元遇到例外是 rollback（`api/deps.get_session`）。
+    """
+    await session.execute(delete(UserSession).where(UserSession.user_id == user_id))
+    await session.commit()
+
+
 def token_digest(token: str) -> str:
     """存進 `sessions.token_hash` 的值。
 
@@ -163,7 +176,9 @@ async def _mirror_user(session: AsyncSession, auth: JellyfinAuth) -> Authenticat
 
 
 def _view(user: User) -> AuthenticatedUser:
-    return AuthenticatedUser(id=user.id, name=user.name, role=user.role)
+    return AuthenticatedUser(
+        id=user.id, name=user.name, role=user.role, jellyfin_user_id=user.jellyfin_user_id
+    )
 
 
 def _utcnow() -> datetime:

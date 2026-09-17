@@ -1,14 +1,14 @@
-"""媒體庫：Berth 經手的作品在媒體庫與管線裡的樣子（票 13、`.scratch/m1/library-shape.md`）。
+"""媒體庫：Jellyfin 的整面牆與 Berth 經手的作品在上面的樣子（M1.5 票 03、票 13）。
 
 **名字叫 inventory 不叫 library**：`CONTEXT.md` 裡程式碼的 `library` 一律指 Jellyfin 那一端的
-媒體庫，而這一支盤點的是 Library Route 上的東西（UI 顯示「媒體庫」）。
+媒體庫，而這一支盤點的是「那個媒體庫裡有什麼、Berth 經手的那幾部走到哪了」（UI 顯示「媒體庫」）。
 
 同一件事有兩種切法，所以兩個入口住在一起、共用同一組分類：
 
-- **一條 Route 的牆**（`read_inventory`）：牆上是這條 Route 上有 Job 的作品——包含一個檔案都還沒
-  入庫的（使用者拍板，否則「有待審」找不到從沒入庫過的作品）——加上帳本裡目標落在這條 Route
-  底下的：帳本自己站得住，Job 被刪了檔案仍然在（`models/ledger.py`）。一格說得出入庫了幾集、
-  哪一部需要你、Jellyfin 找到了沒。
+- **一個 Jellyfin 媒體庫的牆**（`read_wall`，`.scratch/m1.5/library-shape.md`）：牆上是
+  Jellyfin 那一頁的每一部作品，包括不是 Berth 入庫的；分頁與排序照 Jellyfin。Berth 經手的作品
+  （指向這個媒體庫的每一條 Route 上有 Job 的，加上帳本落在它們底下的）疊到牆上那一格；
+  Jellyfin 裡還沒有的另列一份。讀 Jellyfin 一律經過權限閘門（`services/jellyfin_access.py`）。
 - **一部作品的內容**（`read_holdings`，Media 詳情頁）：各集狀態、帳本裡的每一個檔案、對不到的
   檔案與多版本並存。**跨 Route**：詳情頁回答的是一部作品的事。
 
@@ -17,6 +17,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Iterable, Iterator, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime
@@ -26,8 +27,8 @@ from typing import Protocol
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from berth.adapters.jellyfin import JellyfinItem
 from berth.domain import (
-    CollectionType,
     EpisodeSnapshot,
     EpisodeStatus,
     InventoryStatus,
@@ -40,8 +41,9 @@ from berth.domain import (
     PlanStatus,
     Tags,
 )
-from berth.models import Job, LedgerEntry, Media, Plan, PlanItem, Route
+from berth.models import Job, LedgerEntry, Media, Plan, PlanItem, Route, media_id
 from berth.models.types import utcnow
+from berth.services.jellyfin_access import BrowsableLibrary, JellyfinAccess
 from berth.services.routes import owning_route, target_prefix
 
 #: 卡在失敗、在你動手之前不會自己好的狀態——下載列表上塗紅的那四個（`jobs/jobState.ts`）。
@@ -76,21 +78,16 @@ STUCK_STATES: frozenset[JobState] = frozenset({JobState.REVIEW, JobState.IMPORT_
 _CLAIMING: frozenset[PlanAction] = frozenset({PlanAction.IMPORT, PlanAction.REVIEW})
 
 
-# --- 一條 Route 的牆 ---------------------------------------------------------
+# --- 一個 Jellyfin 媒體庫的牆 -------------------------------------------------
+
+#: 牆一頁幾部。jellyfin-web 的預設 `libraryPageSize`（研究 library-browsing.md §7）；前端不能指定。
+PAGE_SIZE = 100
 
 
 @dataclass(frozen=True, slots=True)
-class InventoryItem:
-    """牆上的一格。"""
+class Tracking:
+    """Berth 經手的一部作品在這個媒體庫上的入庫狀態：疊在牆上那一格的那一層（票 13 的判定）。"""
 
-    media_id: str
-    kind: MediaKind
-    #: `zh-Hant` 介面的顯示用標題（`zh-TW` 那一輪）；`en` 介面用 `title_en`（brief §7.5）。
-    #: 牆的排序照這一個，EN 介面上看起來不是字母序——這面牆由 M1.5 票 03 換掉。
-    title: str
-    title_en: str
-    year: int | None
-    poster_url: str
     status: InventoryStatus
     #: 劇集：已經播出的正片入庫了幾集（S00 不算）。電影：正片在不在（0 / 1）。
     imported: int
@@ -98,36 +95,54 @@ class InventoryItem:
     aired: int
     #: 電影的正片有幾個版本（brief §7.7）。劇集的版本在詳情頁逐集列，這裡是 0。
     versions: int
-    #: 這條 Route 上有一份計劃停下來等人。
+    #: 指向這個媒體庫的 Route 上有一份計劃停下來等人。
     needs_review: bool
-    #: 這條 Route 上有 Job 現在那一份計劃裡有對不到的檔案（預估不算）。
+    #: 有 Job 現在那一份計劃裡有對不到的檔案（預估不算）。
     has_unmatched: bool
-    #: medium 自動入庫、掛著 audit 的檔案數，這部作品在這條 Route 上的每一筆 Job 加總
-    #: （brief §6.5）。卡片的狀態是「已入庫」時，這個數字是唯一說得出「還要看一眼」的地方（票 15）。
+    #: medium 自動入庫、掛著 audit 的檔案數，這部作品在這個媒體庫的每一筆 Job 加總
+    #: （brief §6.5、票 15）。
     audits: int
-    presence: JellyfinPresence
-    #: 深連結要開的那一個 item：劇集是 Series，電影是 Movie。沒找到時是空字串。
-    jellyfin_item_id: str
 
 
 @dataclass(frozen=True, slots=True)
-class InventoryRoute:
-    """切換列上的一條 Route，與它兩個篩選的數字。"""
+class InventoryCard:
+    """牆上（或「還沒進 Jellyfin」那一份裡）的一格。"""
 
-    slug: str
-    name: str
-    collection_type: CollectionType
-    #: 停用的 Route 仍然列出來：已經入庫的東西還在它底下。
-    enabled: bool
-    titles: int
+    #: `/media/:id` 要開的那一部。Jellyfin 的作品沒有 TMDB id、Berth 也不認得它時是空字串——
+    #: 那一格只有 Jellyfin 的深連結（票 03）。
+    media_id: str
+    kind: MediaKind
+    #: 顯示用標題。在 Jellyfin 裡的作品是 **Jellyfin 的名稱，兩格相同**（使用者拍板，brief §7.5）；
+    #: 還沒進的是 TMDB `zh-TW` 那一輪與英文那一輪，畫面照 UI 語言挑（票 02）。
+    title: str
+    title_en: str
+    year: int | None
+    #: 還沒進 Jellyfin 的作品用 TMDB 的海報；在 Jellyfin 裡的留空（Jellyfin 的圖是票 04）。
+    poster_url: str
+    #: 在 Jellyfin 裡就是 `found`；還沒進的說得出還在找、找不到、沒有東西可以找。
+    presence: JellyfinPresence
+    #: 深連結要開的 Jellyfin 作品（Series 或 Movie）。還沒進 Jellyfin 時是空字串。
+    jellyfin_item_id: str
+    #: Berth 沒經手的作品是 `None`：牆上那一格不印任何狀態。
+    tracking: Tracking | None
+
+
+@dataclass(frozen=True, slots=True)
+class InventoryWall:
+    library: BrowsableLibrary
+    #: 1 起算。
+    page: int
+    page_size: int
+    #: Jellyfin 說這個媒體庫一共有幾部（整份查詢的，不是這一頁的）。
+    total: int
+    #: Jellyfin 的這一頁。
+    titles: tuple[InventoryCard, ...]
+    #: 這個媒體庫上 Berth 經手的**每一部**，不分頁：畫面從這裡取「還沒進 Jellyfin」那一份
+    #: （`presence` 不是 `found` 的）與兩個篩選的結果。
+    tracked: tuple[InventoryCard, ...]
+    #: 兩個篩選的數字：`tracked` 裡有計劃停下來等人的、有對不到的檔案的（Jellyfin 內外都算）。
     review: int
     unmatched: int
-
-
-@dataclass(frozen=True, slots=True)
-class InventoryView:
-    route: InventoryRoute
-    items: tuple[InventoryItem, ...]
 
 
 # --- 一部作品的內容 -----------------------------------------------------------
@@ -231,16 +246,43 @@ class Covers(Protocol):
     def episode_end(self) -> int | None: ...
 
 
-async def list_inventories(session: AsyncSession) -> tuple[InventoryRoute, ...]:
-    """切換列：每一條 Route 與它的作品數。一條一條盤，Route 是個位數。"""
-    routes = await _routes(session)
-    return tuple([(await _survey(session, route, routes)).route for route in routes])
+async def read_wall(
+    session: AsyncSession, access: JellyfinAccess, library_id: str, *, page: int
+) -> InventoryWall:
+    """一個媒體庫的一頁牆。媒體庫不在這個人的允許清單上時丟 `LibraryNotVisibleError`，
+    而且在問 Jellyfin 或讀 Berth 的任何東西之前。"""
+    library = access.library(library_id)
+    tracked = await _survey(session, library, await _routes(session), today=utcnow().date())
+    start = (page - 1) * PAGE_SIZE
+    if tracked:
+        jellyfin_page, index = await asyncio.gather(
+            access.page(library.id, start=start, limit=PAGE_SIZE), access.index(library.id)
+        )
+    else:
+        # 整份清單只為了比對 Berth 經手的作品；一部都沒有時一頁一個請求就夠。
+        jellyfin_page, index = await access.page(library.id, start=start, limit=PAGE_SIZE), ()
 
-
-async def read_inventory(session: AsyncSession, slug: str) -> InventoryView | None:
-    routes = await _routes(session)
-    route = next((row for row in routes if row.slug == slug), None)
-    return None if route is None else await _survey(session, route, routes)
+    match = _Matcher(tracked)
+    in_jellyfin: dict[str, JellyfinItem] = {}
+    for item in index:
+        mine = match(item)
+        if mine is not None:
+            in_jellyfin.setdefault(mine.media.id, item)
+    return InventoryWall(
+        library=library,
+        page=page,
+        page_size=PAGE_SIZE,
+        total=jellyfin_page.total,
+        titles=tuple(_jellyfin_card(item, library, match(item)) for item in jellyfin_page.items),
+        tracked=tuple(
+            sorted(
+                (_tracked_card(row, library, in_jellyfin.get(row.media.id)) for row in tracked),
+                key=lambda card: (card.title.casefold(), card.media_id),
+            )
+        ),
+        review=sum(row.tracking.needs_review for row in tracked),
+        unmatched=sum(row.tracking.has_unmatched for row in tracked),
+    )
 
 
 async def read_holdings(session: AsyncSession, media: Media, snapshot: MediaSnapshot) -> Holdings:
@@ -357,21 +399,17 @@ def aired_episodes(snapshot: MediaSnapshot, today: date) -> set[tuple[int, int]]
     }
 
 
-def presence_of(kind: MediaKind, features: Sequence[LedgerEntry]) -> tuple[JellyfinPresence, str]:
-    """這部作品在 Jellyfin 裡找到了沒，與深連結要開的那一個 item（shape brief §5）。
+def _presence(features: Sequence[LedgerEntry]) -> JellyfinPresence:
+    """一部**還沒在 Jellyfin 牆上找到**的作品，那一行說什麼（票 13 shape §5）。
 
-    **劇集要連 Series**：連到某一集的連結不是「該作品」，所以只找到集、還不知道 Series 時
-    算「還在找」（shape brief §7）。一個檔案自己找到了沒是另一個問題（`_file_presence`）。
+    反查找到了某一集、甚至帳本記著 Series id，Jellyfin 的清單上卻沒有它，仍然是「還在找」：
+    那一集的 id 不是作品的連結，而一條會 404 的連結比一句「還在掃描」更糟。
     """
     if not features:
-        return JellyfinPresence.NONE, ""
-    for entry in features:
-        link = entry.jellyfin_series_id if kind is MediaKind.TV else entry.jellyfin_item_id
-        if link:
-            return JellyfinPresence.FOUND, link
+        return JellyfinPresence.NONE
     if any(entry.resolve_after is not None or entry.jellyfin_item_id for entry in features):
-        return JellyfinPresence.SEARCHING, ""
-    return JellyfinPresence.LOST, ""
+        return JellyfinPresence.SEARCHING
+    return JellyfinPresence.LOST
 
 
 def _aired(episode: EpisodeSnapshot, today: date) -> bool:
@@ -383,58 +421,123 @@ async def _routes(session: AsyncSession) -> list[Route]:
     return list(await session.scalars(select(Route).order_by(Route.id)))
 
 
-async def _survey(session: AsyncSession, route: Route, routes: Sequence[Route]) -> InventoryView:
+@dataclass(frozen=True, slots=True)
+class _Tracked:
+    """Berth 經手的一部作品，在一個媒體庫上。"""
+
+    media: Media
+    tracking: Tracking
+    #: 帳本記下的 Jellyfin 作品 id：劇集是 Series，電影是 Movie。
+    links: frozenset[str]
+    #: 它不在 Jellyfin 牆上時那一行說什麼。
+    presence: JellyfinPresence
+
+
+class _Matcher:
+    """Jellyfin 的一部作品是不是 Berth 經手的那一部。
+
+    **不只看帳本的 Series id**（票 03）：反查找到了集卻還沒有 Series id 的作品，Jellyfin 那一端
+    本來就帶著 TMDB id。帳本的 id 先比——Jellyfin 認錯 TMDB id 時，Berth 自己寫下的那一個才是對的。
+    """
+
+    def __init__(self, tracked: Sequence[_Tracked]) -> None:
+        self._by_link = {link: row for row in tracked for link in row.links}
+        self._by_tmdb = {str(row.media.tmdb_id): row for row in tracked}
+
+    def __call__(self, item: JellyfinItem) -> _Tracked | None:
+        found = self._by_link.get(item.id)
+        if found is None and item.tmdb_id:
+            found = self._by_tmdb.get(item.tmdb_id)
+        return found
+
+
+async def _survey(
+    session: AsyncSession, library: BrowsableLibrary, routes: Sequence[Route], *, today: date
+) -> list[_Tracked]:
+    """這個媒體庫上 Berth 經手的作品：指向它的每一條 Route 上有 Job 的，加上帳本落在它們底下的。
+
+    一個媒體庫可以有兩條 Route（brief §4.3），同一部作品合成一份。
+    """
+    mine = [row for row in routes if row.jellyfin_library_id == library.id]
+    if not mine:
+        return []
     jobs = list(
         await session.scalars(
-            select(Job).where(Job.route_id == route.id, Job.media_id.is_not(None))
+            select(Job).where(Job.route_id.in_([row.id for row in mine]), Job.media_id.is_not(None))
         )
     )
-    entries = [
-        entry
+    entries: dict[int, LedgerEntry] = {}
+    for row in mine:
         for entry in await session.scalars(
-            select(LedgerEntry)
-            .where(
+            select(LedgerEntry).where(
                 LedgerEntry.media_id.is_not(None),
-                LedgerEntry.target_path.startswith(target_prefix(route), autoescape=True),
+                LedgerEntry.target_path.startswith(target_prefix(row), autoescape=True),
             )
-            .order_by(LedgerEntry.id)
-        )
-        # 前綴只是粗篩：`/data/library/tv/anime` 可能是另一條更深的 Route 的目標。
-        if owning_route(entry.target_path, routes) is route
-    ]
+        ):
+            # 前綴只是粗篩：`/data/library/tv/anime` 可能是另一條更深的 Route 的目標。
+            if owning_route(entry.target_path, routes) in mine:
+                entries[entry.id] = entry
     flagged = await _unmatched_jobs(session, [job.hash for job in jobs])
     audits = await _audits(session, [job.hash for job in jobs])
     media_ids = {job.media_id for job in jobs if job.media_id is not None} | {
-        entry.media_id for entry in entries if entry.media_id is not None
+        entry.media_id for entry in entries.values() if entry.media_id is not None
     }
     titles = await session.scalars(select(Media).where(Media.id.in_(media_ids)))
-    today = utcnow().date()
+    return [
+        _tracked(
+            media,
+            [job for job in jobs if job.media_id == media.id],
+            sorted(
+                (entry for entry in entries.values() if entry.media_id == media.id),
+                key=lambda entry: entry.id,
+            ),
+            flagged=flagged,
+            audits=audits,
+            today=today,
+        )
+        for media in titles
+    ]
 
-    items = sorted(
-        (
-            _item(
-                media,
-                [job for job in jobs if job.media_id == media.id],
-                [entry for entry in entries if entry.media_id == media.id],
-                flagged=flagged,
-                audits=audits,
-                today=today,
-            )
-            for media in titles
-        ),
-        key=lambda item: (item.title.casefold(), item.media_id),
+
+def _jellyfin_card(
+    item: JellyfinItem, library: BrowsableLibrary, mine: _Tracked | None
+) -> InventoryCard:
+    if mine is not None:
+        target = mine.media.id
+    elif item.tmdb_id.isdigit():
+        target = media_id(library.kind, int(item.tmdb_id))
+    else:
+        target = ""
+    return InventoryCard(
+        media_id=target,
+        kind=library.kind,
+        title=item.name,
+        title_en=item.name,
+        year=item.year,
+        poster_url="",
+        presence=JellyfinPresence.FOUND,
+        jellyfin_item_id=item.id,
+        tracking=None if mine is None else mine.tracking,
     )
-    return InventoryView(
-        route=InventoryRoute(
-            slug=route.slug,
-            name=route.name,
-            collection_type=route.collection_type,
-            enabled=route.enabled,
-            titles=len(items),
-            review=sum(item.needs_review for item in items),
-            unmatched=sum(item.has_unmatched for item in items),
-        ),
-        items=tuple(items),
+
+
+def _tracked_card(
+    row: _Tracked, library: BrowsableLibrary, item: JellyfinItem | None
+) -> InventoryCard:
+    """Berth 經手的一部：在 Jellyfin 裡就是牆上那一格的樣子，還沒進就用 TMDB 的快照。"""
+    if item is not None:
+        return _jellyfin_card(item, library, row)
+    snapshot = row.media.snapshot()
+    return InventoryCard(
+        media_id=row.media.id,
+        kind=row.media.kind,
+        title=snapshot.title or row.media.title_en,
+        title_en=row.media.title_en,
+        year=row.media.year,
+        poster_url=snapshot.poster_url,
+        presence=row.presence,
+        jellyfin_item_id="",
+        tracking=row.tracking,
     )
 
 
@@ -468,7 +571,7 @@ async def _audits(session: AsyncSession, job_hashes: Sequence[str]) -> dict[str,
     return {job_hash: count for job_hash, count in rows if job_hash is not None}
 
 
-def _item(
+def _tracked(
     media: Media,
     jobs: Sequence[Job],
     entries: Sequence[LedgerEntry],
@@ -476,7 +579,7 @@ def _item(
     flagged: set[str],
     audits: dict[str, int],
     today: date,
-) -> InventoryItem:
+) -> _Tracked:
     snapshot = media.snapshot()
     features = [entry for entry in entries if entry.action is PlanAction.IMPORT]
     if media.kind is MediaKind.MOVIE:
@@ -485,24 +588,24 @@ def _item(
         aired_set = aired_episodes(snapshot, today)
         covered = {pair for entry in features for pair in episodes_of(entry)}
         imported, aired, versions = len(covered & aired_set), len(aired_set), 0
-    presence, link = presence_of(media.kind, features)
     states = {job.state for job in jobs}
-    return InventoryItem(
-        media_id=media.id,
-        kind=media.kind,
-        title=snapshot.title or media.title_en,
-        title_en=media.title_en,
-        year=media.year,
-        poster_url=snapshot.poster_url,
-        status=_status(states, has_features=bool(features), imported=imported, aired=aired),
-        imported=imported,
-        aired=aired,
-        versions=versions,
-        needs_review=JobState.REVIEW in states,
-        has_unmatched=any(job.hash in flagged for job in jobs),
-        audits=sum(audits.get(job.hash, 0) for job in jobs),
-        presence=presence,
-        jellyfin_item_id=link,
+    links = {
+        entry.jellyfin_series_id if media.kind is MediaKind.TV else entry.jellyfin_item_id
+        for entry in features
+    }
+    return _Tracked(
+        media=media,
+        tracking=Tracking(
+            status=_status(states, has_features=bool(features), imported=imported, aired=aired),
+            imported=imported,
+            aired=aired,
+            versions=versions,
+            needs_review=JobState.REVIEW in states,
+            has_unmatched=any(job.hash in flagged for job in jobs),
+            audits=sum(audits.get(job.hash, 0) for job in jobs),
+        ),
+        links=frozenset(link for link in links if link),
+        presence=_presence(features),
     )
 
 

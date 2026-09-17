@@ -26,6 +26,7 @@ from berth.pipeline import HealthChecker, Importer, JellyfinResolver, PlannerRun
 from berth.services.clients import HttpServiceClientFactory, ServiceClientFactory
 from berth.services.events import EventHub
 from berth.services.hints import JobHints
+from berth.services.jellyfin_access import AccessCache
 
 logger = logging.getLogger(__name__)
 
@@ -85,6 +86,8 @@ def create_app(
     app.state.clients = clients or HttpServiceClientFactory()
     # 一個程序一個 hub：發佈的是背景迴圈，訂閱的是這個程序裡開著的 SSE 連線（票 10）。
     app.state.events = EventHub()
+    # 替使用者讀 Jellyfin 時的允許清單與帳號狀態，一個程序一份（M1.5 票 03）。
+    app.state.jellyfin_access = AccessCache()
     # 門禁包住整個 `/api`，所以它要在路由之外（票 07）。
     app.add_middleware(ApiGate, prefix=API_PREFIX)
     app.add_exception_handler(RequestValidationError, validation_error)

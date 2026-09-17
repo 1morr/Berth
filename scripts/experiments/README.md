@@ -64,7 +64,8 @@ ffmpeg 產種子檔），那只影響「造測試素材」這一步，不影響 
   閘在擋什麼，見 research 文件的 §4.1。動過 `calibrate_offset` 就要重跑 `--self-test`。
 - **`jellyfin_permissions.py` 不用 compose，自己 `docker run` 一台再刪掉**（image 從 `deploy/docker-compose.yml`
   讀，跟著套件釘的版本走）。`--record` 只在伺服器是 12.1.0 時錄：fixture README 的規則是新版本開新檔名，
-  版本變了就停下來由人決定，不悄悄蓋掉舊的證據。工作目錄預設是系統暫存目錄下的新目錄，跑完連同容器與匿名 volume 一起刪；
+  版本變了就停下來由人決定，不悄悄蓋掉舊的證據。`--only a.json,b.json` 只寫這幾個檔名：加錄新的 fixture 時，
+  既有那一組的使用者 id、`ServerId` 與日期不會跟著換掉（item id 由路徑決定，兩輪相同）。工作目錄預設是系統暫存目錄下的新目錄，跑完連同容器與匿名 volume 一起刪；
   `--workdir` 指定的目錄必須是空的，因為結束時整個刪掉。`--keep` 留著除錯；下次跑時腳本開頭會自己砍掉同名容器，
   但那個工作目錄要自己清。它 import 同目錄的 `jellyfin_naming.py`
   借初始精靈與等掃描，那一支的 `/Startup/*` 在 12.x 標 deprecated 但還能用。

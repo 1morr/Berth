@@ -12,6 +12,10 @@
   （12.0 起，brief §20.9、票 14b）。
 - 初始精靈完成之後，管理員端點沒有 token 就是 401。
 - `GET /Items` 沒有路徑篩選：`parentId=<library>&recursive=true` 回的是那個媒體庫路徑底下的全部。
+- **API key 帶 `parentId` 替使用者查時不套媒體庫權限**（12.1.0 實測，研究 library-browsing.md §2）：
+  `library_page` / `library_index` 對他沒有權限的媒體庫照樣回內容。權限只在 `user_views` 上成立——
+  「Berth 自己擋」的測試要靠這台替身不替它擋，才證明得了是 Berth 擋的。
+- **停用的帳號照樣代讀得到**：`user_views` 不看停用，只有 `user_policy` 說得出來（同上）。
 """
 
 from __future__ import annotations
@@ -26,8 +30,11 @@ from berth.adapters.jellyfin import (
     JellyfinAuth,
     JellyfinItem,
     JellyfinLibrary,
+    JellyfinPage,
+    JellyfinPolicy,
     JellyfinPublicInfo,
     JellyfinTask,
+    JellyfinView,
     NewLibrary,
     TypeOption,
 )
@@ -89,6 +96,8 @@ class FakeJellyfinClient:
         admin: tuple[str, str] | None = None,
         #: 其餘使用者（帳號 → 密碼），一律非管理員。票 07 的角色判定靠它才測得出來。
         users: dict[str, str] | None = None,
+        #: 帳號 → 他看得到的媒體庫 `item_id`。沒列的帳號看得到全部（`EnableAllFolders`）。
+        folders: dict[str, tuple[str, ...]] | None = None,
         libraries: tuple[JellyfinLibrary, ...] = (),
         api_keys: tuple[JellyfinApiKey, ...] = (),
         tasks: tuple[JellyfinTask, ...] = (),
@@ -107,6 +116,9 @@ class FakeJellyfinClient:
         self.startup_wizard_completed = startup_wizard_completed
         self.admin = admin
         self.users = dict(users or {})
+        self.folders = dict(folders or {})
+        #: 在 Jellyfin 被停用的帳號名。測試在登入之後才加進來，演「帳號被停用」。
+        self.disabled: set[str] = set()
         self.libraries_ = list(libraries)
         self.api_keys_ = list(api_keys)
         self.tasks_ = list(tasks)
@@ -121,6 +133,12 @@ class FakeJellyfinClient:
         self.item_queries: list[tuple[str, tuple[str, ...]]] = []
         #: 每一次 `run_task` 觸發的任務 id。
         self.tasks_run: list[str] = []
+        #: 每一次 `user_views` / `user_policy` 問的是誰。快取有沒有擋下重複的問題靠它斷言。
+        self.view_queries: list[str] = []
+        self.policy_queries: list[str] = []
+        #: 每一次帶 `parentId` 替使用者查的 `(user_id, library_id)`（`library_page` 與
+        #: `library_index` 都算）。「沒有轉發給 Jellyfin」就是這裡記不到那一次。
+        self.browse_queries: list[tuple[str, str]] = []
         self.token = ""
         self.culture: tuple[str, str, str] | None = None
         self.remote_access: bool | None = None
@@ -279,6 +297,59 @@ class FakeJellyfinClient:
             and any(item.path.startswith(f"{location}/") for location in library.locations)
         )
 
+    # --- 替某一位使用者瀏覽 ---
+
+    async def user_views(self, user_id: str) -> tuple[JellyfinView, ...]:
+        self._checkpoint(always=True)
+        self.view_queries.append(user_id)
+        allowed = self.folders.get(self._username(user_id))
+        return tuple(
+            JellyfinView(id=row.item_id, name=row.name, collection_type=row.collection_type)
+            for row in self.libraries_
+            if allowed is None or row.item_id in allowed
+        )
+
+    async def user_policy(self, user_id: str) -> JellyfinPolicy:
+        self._checkpoint(always=True)
+        self.policy_queries.append(user_id)
+        return JellyfinPolicy(is_disabled=self._username(user_id) in self.disabled)
+
+    async def library_page(
+        self, *, user_id: str, library_id: str, item_type: str, start: int, limit: int
+    ) -> JellyfinPage:
+        titles = self._browse(user_id, library_id, item_type)
+        return JellyfinPage(items=titles[start : start + limit], total=len(titles))
+
+    async def library_index(
+        self, *, user_id: str, library_id: str, item_type: str
+    ) -> tuple[JellyfinItem, ...]:
+        return self._browse(user_id, library_id, item_type)
+
+    def _browse(self, user_id: str, library_id: str, item_type: str) -> tuple[JellyfinItem, ...]:
+        """**不看 `user_id` 的權限**：真的 Jellyfin 在 API key 帶 `parentId` 時也不看
+        （研究 §2）。"""
+        self._checkpoint(always=True)
+        self.browse_queries.append((user_id, library_id))
+        library = next((row for row in self.libraries_ if row.item_id == library_id), None)
+        if library is None:
+            return ()
+        titles = [
+            item
+            for item in self.items_
+            if item.type == item_type
+            and any(item.path.startswith(f"{location}/") for location in library.locations)
+        ]
+        # `SortName` 是小寫化的名稱（研究 §3.1）；替身不去掉冠詞。
+        return tuple(sorted(titles, key=lambda item: (item.name.casefold(), item.id)))
+
+    def _username(self, user_id: str) -> str:
+        """id 反查帳號名。不認得的 id 在真的 Jellyfin 是 4xx，client 翻成協定不符。"""
+        accounts = [*self.users, *([self.admin[0]] if self.admin else [])]
+        for name in accounts:
+            if _user_id(name) == user_id:
+                return name
+        raise ProtocolMismatchError(f"GET /Users/{user_id}: 404")
+
     async def aclose(self) -> None:
         return None
 
@@ -296,11 +367,14 @@ class FakeJellyfinClient:
 
 def _auth(username: str, *, is_administrator: bool) -> JellyfinAuth:
     """每個帳號一個穩定的假 id，兩個人登入才會是 `users` 表的兩列。"""
-    user_id = hashlib.sha256(username.encode()).hexdigest()[:32]
     return JellyfinAuth(
         token=f"token-for-{username}",
-        user_id=user_id,
+        user_id=_user_id(username),
         name=username,
         server_id="4e71f8d8bc324291b6e6c5a4f3fa8825",
         is_administrator=is_administrator,
     )
+
+
+def _user_id(username: str) -> str:
+    return hashlib.sha256(username.encode()).hexdigest()[:32]

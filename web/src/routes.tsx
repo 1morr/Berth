@@ -203,10 +203,10 @@ const mediaRoute = createRoute({
 })
 
 /**
- * 媒體庫 `/library`（票 13）：直接落在第一條啟用中的 Route。
+ * 媒體庫 `/library`（票 13、M1.5 票 03）：直接落在第一個媒體庫——這位使用者在 Jellyfin 排在最前面的那一個。
  *
- * 一條 Route 都沒有、或問不到後端時留在這裡，由頁面自己說下一步——導向一個不存在的 slug
- * 只會多一次 404。
+ * 一個都沒有、問不到後端或問不到 Jellyfin 時留在這裡，由頁面自己說原因與下一步——導向一個不存在的
+ * id 只會多一次 404。
  */
 const inventoryIndexRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -214,31 +214,41 @@ const inventoryIndexRoute = createRoute({
   beforeLoad: async ({ context, location }) => {
     if ((await requireSignedInPage(context.queryClient, location)) === null) return
     try {
-      const routes = await context.queryClient.fetchQuery(inventoriesQueryOptions)
-      const first = routes.find((row) => row.enabled) ?? routes[0]
-      if (first) throw redirect({ to: '/library/$routeSlug', params: { routeSlug: first.slug } })
+      const libraries = await context.queryClient.fetchQuery(inventoriesQueryOptions)
+      const first = libraries[0]
+      if (first) throw redirect({ to: '/library/$libraryId', params: { libraryId: first.id } })
     } catch (error) {
       if (isRedirect(error)) throw error
     }
   },
   component: () => (
     <AppShell>
-      <InventoryPage slug={null} />
+      <InventoryPage libraryId={null} page={1} />
     </AppShell>
   ),
 })
 
 interface InventorySearch {
+  /** 第幾頁（1 起算）。第 1 頁不寫進網址。 */
+  page?: number
   /** 待審 / Unmatched。沒帶就是全部——`false` 與空字串一樣不寫進網址。 */
   filter?: InventoryFilter
 }
 
-/** 一條 Route 的牆（票 13）。瀏覽不是管理動作，一般使用者也進得來（brief §11）。 */
+/**
+ * 一個 Jellyfin 媒體庫的牆（M1.5 票 03，取代票 13 的 `/library/:routeSlug`）。瀏覽不是管理動作，
+ * 一般使用者也進得來（brief §11）；看得到哪幾個媒體庫由後端對 Jellyfin 的允許清單決定。
+ */
 const inventoryRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: '/library/$routeSlug',
-  validateSearch: (search: Record<string, unknown>): InventorySearch =>
-    search.filter === 'review' || search.filter === 'unmatched' ? { filter: search.filter } : {},
+  path: '/library/$libraryId',
+  validateSearch: (search: Record<string, unknown>): InventorySearch => {
+    const parsed: InventorySearch = {}
+    const page = Number(search.page)
+    if (Number.isInteger(page) && page > 1) parsed.page = page
+    if (search.filter === 'review' || search.filter === 'unmatched') parsed.filter = search.filter
+    return parsed
+  },
   beforeLoad: async ({ context, location }) => {
     await requireSignedInPage(context.queryClient, location)
   },

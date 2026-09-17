@@ -15,9 +15,12 @@ from berth.adapters.jellyfin import (
     JellyfinAuth,
     JellyfinItem,
     JellyfinLibrary,
+    JellyfinPage,
+    JellyfinPolicy,
     JellyfinPublicInfo,
     JellyfinSource,
     JellyfinTask,
+    JellyfinView,
     NewLibrary,
     TypeOption,
 )
@@ -231,10 +234,69 @@ class HttpJellyfinClient:
                 "fields": "Path,ProviderIds,MediaSources",
             },
         )
-        rows = payload.get("Items") if isinstance(payload, dict) else None
-        if not isinstance(rows, list):
-            raise ProtocolMismatchError("/Items: no Items array in the response")
-        return tuple(_item(row) for row in rows if isinstance(row, dict))
+        return _items(payload)
+
+    # --- 替某一位使用者瀏覽 ---
+
+    async def user_views(self, user_id: str) -> tuple[JellyfinView, ...]:
+        payload = await self._get("/UserViews", params={"userId": user_id})
+        return tuple(
+            JellyfinView(
+                id=str(row.get("Id", "")),
+                name=str(row.get("Name", "")),
+                collection_type=str(row.get("CollectionType") or ""),
+            )
+            for row in _rows(payload, "/UserViews")
+        )
+
+    async def user_policy(self, user_id: str) -> JellyfinPolicy:
+        payload = await self._get(f"/Users/{user_id}")
+        policy = payload.get("Policy") if isinstance(payload, dict) else None
+        if not isinstance(policy, dict):
+            raise ProtocolMismatchError("/Users/{id}: no Policy in the response")
+        return JellyfinPolicy(is_disabled=bool(policy.get("IsDisabled", False)))
+
+    async def library_page(
+        self, *, user_id: str, library_id: str, item_type: str, start: int, limit: int
+    ) -> JellyfinPage:
+        payload = await self._get(
+            "/Items",
+            params={
+                "userId": user_id,
+                "parentId": library_id,
+                "recursive": "true",
+                "includeItemTypes": item_type,
+                "sortBy": "SortName",
+                "sortOrder": "Ascending",
+                # jellyfin-web 的牆要的那幾格（研究 §7）；圖與觀看紀錄是票 04、05 讀的。
+                "fields": "PrimaryImageAspectRatio,ProviderIds,Path",
+                "imageTypeLimit": "1",
+                "enableImageTypes": "Primary,Backdrop,Thumb",
+                "startIndex": str(start),
+                "limit": str(limit),
+            },
+        )
+        items = _items(payload)
+        total = payload.get("TotalRecordCount")
+        return JellyfinPage(items=items, total=total if isinstance(total, int) else len(items))
+
+    async def library_index(
+        self, *, user_id: str, library_id: str, item_type: str
+    ) -> tuple[JellyfinItem, ...]:
+        payload = await self._get(
+            "/Items",
+            params={
+                "userId": user_id,
+                "parentId": library_id,
+                "recursive": "true",
+                "includeItemTypes": item_type,
+                "fields": "ProviderIds",
+                "enableImages": "false",
+                "enableUserData": "false",
+                "enableTotalRecordCount": "false",
+            },
+        )
+        return _items(payload)
 
     async def aclose(self) -> None:
         await self._session.aclose()
@@ -256,6 +318,17 @@ def _authorization(token: str) -> str:
     return "MediaBrowser " + ", ".join(parts)
 
 
+def _rows(payload: Any, path: str) -> list[dict[str, Any]]:
+    rows = payload.get("Items") if isinstance(payload, dict) else None
+    if not isinstance(rows, list):
+        raise ProtocolMismatchError(f"{path}: no Items array in the response")
+    return [row for row in rows if isinstance(row, dict)]
+
+
+def _items(payload: Any) -> tuple[JellyfinItem, ...]:
+    return tuple(_item(row) for row in _rows(payload, "/Items"))
+
+
 def _item(row: dict[str, Any]) -> JellyfinItem:
     providers = row.get("ProviderIds") or {}
     return JellyfinItem(
@@ -270,6 +343,7 @@ def _item(row: dict[str, Any]) -> JellyfinItem:
             if isinstance(source, dict) and source.get("Path")
         ),
         series_id=str(row.get("SeriesId") or ""),
+        year=year if isinstance(year := row.get("ProductionYear"), int) else None,
     )
 
 

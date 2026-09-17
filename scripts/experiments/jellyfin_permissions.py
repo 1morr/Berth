@@ -18,6 +18,7 @@
 用法（報告寫到 .local/experiments/results/）：
     python scripts/experiments/jellyfin_permissions.py
     python scripts/experiments/jellyfin_permissions.py --record   # 另外重錄 fixture
+    python scripts/experiments/jellyfin_permissions.py --record --only items.tv.series.page.json
 """
 
 from __future__ import annotations
@@ -509,11 +510,14 @@ class Fixtures:
     狀態碼不在檔案裡，寫在 fixture README。圖片只存狀態碼與標頭。
     """
 
-    def __init__(self, enabled: bool) -> None:
+    def __init__(self, enabled: bool, only: frozenset[str] = frozenset()) -> None:
         self.enabled = enabled
+        #: 空的就是整組。非空時只寫這幾個檔名：一次加錄新的 fixture，不必讓既有的那一組跟著換掉
+        #: 使用者 id、`ServerId` 與日期（item id 由路徑決定，兩輪相同）。
+        self.only = only
 
     def write(self, name: str, resp: Response) -> None:
-        if not self.enabled:
+        if not self.enabled or (self.only and name not in self.only):
             return
         path = FIXTURES / name
         if name.endswith(".headers.json"):
@@ -1203,6 +1207,21 @@ def record_browsing(
     ):
         params = {**wall, "parentId": c.libraries[library], "includeItemTypes": kind}
         fixtures.write(name, srv.send(api, "/Items", params=params))
+    tv_series = {"parentId": c.libraries["TV"], "includeItemTypes": "Series"}
+    # 牆的第二頁（M1.5 票 03）：整份 4 部，`startIndex=1&limit=2` 要恰好是第 2、3 部。
+    page = {**wall, **tv_series, "startIndex": "1", "limit": "2"}
+    fixtures.write("items.tv.series.page.json", srv.send(api, "/Items", params=page))
+    # Berth 端比對用的整份索引（票 03）：只要 id、名稱、年份與 TMDB id，圖與觀看紀錄都不要。
+    index = {
+        "userId": user_id,
+        "recursive": "true",
+        **tv_series,
+        "fields": "ProviderIds",
+        "enableImages": "false",
+        "enableUserData": "false",
+        "enableTotalRecordCount": "false",
+    }
+    fixtures.write("items.tv.series.index.json", srv.send(api, "/Items", params=index))
     alpha = c.title_id("TV", "Alpha Show")
     user = {"userId": user_id}
     seasons = {**user, "fields": "ItemCounts,PrimaryImageAspectRatio"}
@@ -1222,13 +1241,18 @@ def main() -> int:
     parser.add_argument("--workdir", type=Path, default=None, help="預設是系統暫存目錄下的新目錄")
     parser.add_argument("--out", type=Path, default=Path(".local/experiments/results"))
     parser.add_argument("--record", action="store_true", help="重錄 tests/fixtures/http/jellyfin/")
+    parser.add_argument(
+        "--only",
+        default="",
+        help="搭配 --record：只寫這幾個 fixture（逗號分隔的檔名），其餘不動",
+    )
     parser.add_argument("--keep", action="store_true", help="跑完不刪容器與工作目錄")
     args = parser.parse_args()
 
     image = compose_image()
     workdir = args.workdir or Path(tempfile.mkdtemp(prefix="berth-jellyfin-permissions-"))
     report = Report(name="jellyfin-permissions", out_dir=args.out)
-    fixtures = Fixtures(args.record)
+    fixtures = Fixtures(args.record, frozenset(filter(None, args.only.split(","))))
     report.heading(f"Jellyfin 受限使用者權限實測（{image}）")
 
     with disposable_jellyfin(workdir, image, args.port, args.keep, report) as base:

@@ -198,7 +198,7 @@ export interface paths {
         };
         /**
          * Get Inventories
-         * @description 切換列：每一條 Route 與它的作品數。
+         * @description 切換列：這位使用者在 Jellyfin 看得到、Berth 瀏覽得了的媒體庫。
          */
         get: operations["get_inventories_api_inventory_get"];
         put?: never;
@@ -209,7 +209,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/inventory/{slug}": {
+    "/api/inventory/{library_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -217,7 +217,7 @@ export interface paths {
             cookie?: never;
         };
         /** Get Inventory */
-        get: operations["get_inventory_api_inventory__slug__get"];
+        get: operations["get_inventory_api_inventory__library_id__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1239,10 +1239,10 @@ export interface components {
             error: string;
         };
         /**
-         * InventoryItemOut
-         * @description 牆上的一格。判定規則全部在後端（`services/inventory.py`），前端只照畫。
+         * InventoryCardOut
+         * @description 牆上的一格。在不在 Jellyfin、連到哪裡、需不需要人都由後端算好，前端只照畫。
          */
-        InventoryItemOut: {
+        InventoryCardOut: {
             /** Media Id */
             media_id: string;
             kind: components["schemas"]["MediaKind"];
@@ -1254,44 +1254,38 @@ export interface components {
             year: number | null;
             /** Poster Url */
             poster_url: string;
-            status: components["schemas"]["InventoryStatus"];
-            /** Imported */
-            imported: number;
-            /** Aired */
-            aired: number;
-            /** Versions */
-            versions: number;
-            /** Needs Review */
-            needs_review: boolean;
-            /** Has Unmatched */
-            has_unmatched: boolean;
-            /** Audits */
-            audits: number;
             presence: components["schemas"]["JellyfinPresence"];
             /** Jellyfin Item Id */
             jellyfin_item_id: string;
-        };
-        /** InventoryOut */
-        InventoryOut: {
-            route: components["schemas"]["InventoryRouteOut"];
-            jellyfin: components["schemas"]["JellyfinWebOut"];
-            /** Items */
-            items: components["schemas"]["InventoryItemOut"][];
+            tracking: components["schemas"]["TrackingOut"] | null;
         };
         /**
-         * InventoryRouteOut
-         * @description 切換列上的一條 Route，與兩個篩選的數字。
+         * InventoryLibraryOut
+         * @description 這位使用者看得到、Berth 瀏覽得了的一個媒體庫。
+         *
+         *     切換列只畫名稱（`.scratch/m1.5/library-shape.md`）；兩個篩選的數字在牆上（`InventoryOut`）。
          */
-        InventoryRouteOut: {
-            /** Slug */
-            slug: string;
+        InventoryLibraryOut: {
+            /** Id */
+            id: string;
             /** Name */
             name: string;
             collection_type: components["schemas"]["CollectionType"];
-            /** Enabled */
-            enabled: boolean;
+        };
+        /** InventoryOut */
+        InventoryOut: {
+            library: components["schemas"]["InventoryLibraryOut"];
+            jellyfin: components["schemas"]["JellyfinWebOut"];
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+            /** Total */
+            total: number;
             /** Titles */
-            titles: number;
+            titles: components["schemas"]["InventoryCardOut"][];
+            /** Tracked */
+            tracked: components["schemas"]["InventoryCardOut"][];
             /** Review */
             review: number;
             /** Unmatched */
@@ -2244,6 +2238,25 @@ export interface components {
             api_key: string;
         };
         /**
+         * TrackingOut
+         * @description Berth 經手的作品在這個媒體庫上的入庫狀態。判定規則在 `services/inventory.py`。
+         */
+        TrackingOut: {
+            status: components["schemas"]["InventoryStatus"];
+            /** Imported */
+            imported: number;
+            /** Aired */
+            aired: number;
+            /** Versions */
+            versions: number;
+            /** Needs Review */
+            needs_review: boolean;
+            /** Has Unmatched */
+            has_unmatched: boolean;
+            /** Audits */
+            audits: number;
+        };
+        /**
          * UnknownTorrentOut
          * @description qBittorrent 上一個 Berth 沒有 Job 的 torrent（plan §3.2、票 10）。
          */
@@ -2553,17 +2566,19 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["InventoryRouteOut"][];
+                    "application/json": components["schemas"]["InventoryLibraryOut"][];
                 };
             };
         };
     };
-    get_inventory_api_inventory__slug__get: {
+    get_inventory_api_inventory__library_id__get: {
         parameters: {
-            query?: never;
+            query?: {
+                page?: number;
+            };
             header?: never;
             path: {
-                slug: string;
+                library_id: string;
             };
             cookie?: never;
         };

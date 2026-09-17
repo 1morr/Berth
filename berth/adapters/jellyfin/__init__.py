@@ -168,6 +168,8 @@ class JellyfinItem:
     #: Episode 的 `SeriesId`：它屬於哪一部作品（2026-09-15 對 12.0.0 實測，每一集都帶）。
     #: 媒體庫的卡片連到作品而不是某一集（票 13）。其餘型別是空字串。
     series_id: str = ""
+    #: `ProductionYear`。媒體庫牆上那一格的年份（M1.5 票 03）；Jellyfin 不知道時是 `None`。
+    year: int | None = None
 
     @property
     def source_paths(self) -> tuple[str, ...]:
@@ -179,6 +181,40 @@ class JellyfinItem:
         return next(
             (source.name for source in self.sources if source.path.rstrip("/") == wanted), ""
         )
+
+
+@dataclass(frozen=True, slots=True)
+class JellyfinView:
+    """`GET /UserViews?userId=` 的一項：這位使用者在 Jellyfin 首頁看得到的一個媒體庫。
+
+    **這一份是權限的權威清單**（研究 library-browsing.md §2、§9）：API key 代讀時，帶 `parentId`
+    的查詢 Jellyfin 不套媒體庫權限，所以 Berth 只拿這裡有的 id 去當 `parentId`。`id` 與
+    `/Library/VirtualFolders` 的 `ItemId` 同一種格式（12.1.0 實測）。
+    """
+
+    id: str
+    name: str
+    #: `CollectionType`：`tvshows`、`movies`、`music`……沒有類型的混合媒體庫是空字串。
+    collection_type: str
+
+
+@dataclass(frozen=True, slots=True)
+class JellyfinPolicy:
+    """`GET /Users/{id}` 的 `Policy` 裡 Berth 讀的那一格。
+
+    停用的帳號 API key 照樣代讀得到資料（12.1.0 實測，brief §20.8），「停用」只讀得出這裡。
+    """
+
+    is_disabled: bool
+
+
+@dataclass(frozen=True, slots=True)
+class JellyfinPage:
+    """一頁 `/Items`。"""
+
+    items: tuple[JellyfinItem, ...]
+    #: `TotalRecordCount`：整個查詢的筆數，不是這一頁的。
+    total: int
 
 
 class JellyfinClient(Protocol):
@@ -302,6 +338,40 @@ class JellyfinClient(Protocol):
         """
         ...
 
+    # --- 替某一位使用者瀏覽（M1.5 票 03，研究 library-browsing.md §2、§9）---
+    #
+    # **`user_id` 在這幾支是必要參數**（plan §11.2b）：API key 在 Jellyfin 眼中是管理員，帶誰的 id
+    # 就是誰；漏帶的查詢不是報錯，而是回整台伺服器（`/Items`）或略過權限（`/Shows/{id}/Seasons`），
+    # 所以用型別擋。**`library_id` 必須先對 `user_views` 驗過**：帶 `parentId` 時 Jellyfin 不套
+    # 媒體庫權限。這條由 `services/jellyfin_access.py` 守著，adapter 只忠實翻譯協定。
+
+    async def user_views(self, user_id: str) -> tuple[JellyfinView, ...]:
+        """`GET /UserViews?userId=`：這位使用者看得到的媒體庫，照他在 Jellyfin 排的順序。"""
+        ...
+
+    async def user_policy(self, user_id: str) -> JellyfinPolicy:
+        """`GET /Users/{id}`。"""
+        ...
+
+    async def library_page(
+        self, *, user_id: str, library_id: str, item_type: str, start: int, limit: int
+    ) -> JellyfinPage:
+        """一個媒體庫的一頁作品，依 `SortName` 升冪。
+
+        參數照 jellyfin-web 的劇集庫與電影庫（研究 §7）。
+        """
+        ...
+
+    async def library_index(
+        self, *, user_id: str, library_id: str, item_type: str
+    ) -> tuple[JellyfinItem, ...]:
+        """一個媒體庫的**每一部**作品，只帶 id、名稱、年份與 TMDB id——不分頁，不要圖與觀看紀錄。
+
+        Berth 端比對「哪一部是 Berth 經手的」用（票 03）：`/Items` 沒有 provider id 的過濾參數
+        （研究 §10），只能整份拿回來自己比。
+        """
+        ...
+
     async def aclose(self) -> None: ...
 
 
@@ -316,9 +386,12 @@ __all__ = [
     "JellyfinClient",
     "JellyfinItem",
     "JellyfinLibrary",
+    "JellyfinPage",
+    "JellyfinPolicy",
     "JellyfinPublicInfo",
     "JellyfinSource",
     "JellyfinTask",
+    "JellyfinView",
     "NewLibrary",
     "TypeOption",
     "unsupported_message",

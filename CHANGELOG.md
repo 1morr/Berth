@@ -360,6 +360,8 @@ Windows Docker Desktop（NTFS bind mount）與 Linux（ext4）上各跑一次 `d
   `/Users/{id}`、帶 `UserData` 的 `/Items`、`/Items/Filters`、Resume、NextUp、Seasons、Episodes、
   `UserPlayedItems`、圖片標頭，以及沒權限時的 404 與 `parentId` 洩漏）。結論在 `docs/research/library-browsing.md`
   §2、§3.1、§5、§10、§11 與 brief §20.8。`lib.Response` 多帶回應標頭。
+- `jellyfin_permissions.py --only`（M1.5 票 03）：只寫指定的 fixture 檔名；加錄了牆的第二頁與整份清單兩份。
+- 演練情境 `library`（M1.5 票 03）：整庫瀏覽、分頁、受限使用者，以及 `POST /demo/jellyfin/{disable,enable}` 停用帳號。
 
 ### Changed
 
@@ -494,6 +496,15 @@ Windows Docker Desktop（NTFS bind mount）與 Linux（ext4）上各跑一次 `d
   不重新整理也不重抓。檔名、資料夾名與季名比對不受影響；海報仍是 `zh-TW` 那一輪的。API 兩輪都送：`MediaOut`
   多 `overview_en`，`JobOut` 的 `media_title` 改為 `zh-TW` 那一輪（缺就是英文）並多 `media_title_en`。
   快照多一欄 `overview_en`，舊快照照樣讀得開（英文簡介先是空的，下一次刷新補上），不需要 migration。
+- **媒體庫頁改成一個 Jellyfin 媒體庫一頁、瀏覽整個媒體庫**（M1.5 票 03，brief §13、§19）：切換列只列你在 Jellyfin
+  看得到的電影與劇集媒體庫；牆上是那個媒體庫的每一部作品（不是 Berth 入庫的也在），100 部一頁、上一頁 / 下一頁；
+  Berth 經手的作品疊上入庫狀態，在 Jellyfin 裡的顯示 Jellyfin 的名稱，還沒進 Jellyfin 的另列一條「還沒進 Jellyfin」；
+  沒有 TMDB id 的作品只給 Jellyfin 深連結。「待審」「Unmatched」篩選換成這個媒體庫裡被標記的每一部。Berth 的作品
+  與 Jellyfin 的作品不再只靠帳本的 Series id 對應：Jellyfin 的 TMDB id 對得上也算，所以「反查找到了集卻一直說還在
+  掃描」不會再發生在已經在 Jellyfin 裡的作品上。頁面網址 `/library/:routeSlug` → `/library/:libraryId`（舊網址不轉址）；
+  `GET /api/inventory` 回媒體庫而不是 Route，`GET /api/inventory/{slug}` → `GET /api/inventory/{library_id}?page=`，
+  回應的 `route` / `items` 換成 `library` / `titles` / `tracked`，每一格的入庫狀態收進 `tracking`，兩個篩選的數字
+  從切換列搬到牆上（`review` / `unmatched`）。內部 API，不留相容層。
 
 ### Removed
 
@@ -583,6 +594,10 @@ Windows Docker Desktop（NTFS bind mount）與 Linux（ext4）上各跑一次 `d
 
 ### Security
 
+- **媒體庫瀏覽由 Berth 自己擋 Jellyfin 的權限**（M1.5 票 03，plan §11.2b）。伺服器 API key 帶 `parentId` 替使用者查時
+  Jellyfin 不套媒體庫權限、停用的帳號照樣代讀得到（12.1.0 實測），所以：Jellyfin 的使用者 id 只從 session 來；
+  媒體庫 id 對 `GET /UserViews` 的允許清單驗過才會送出，不在清單回 404 且不問 Jellyfin；允許清單與帳號 `Policy`
+  共用 60 秒快取；帳號在 Jellyfin 被停用時，他在 Berth 的每一張 session 都結束，下一個請求是 401。
 - **`/api/routes/*` 與 `/api/jellyfin/libraries` 永遠只有 admin**（票 14a，推翻票 14）。原本精靈跑完之前
   它們與 `/api/setup/*` 一樣匿名開放，而停用的 Route 不算進完成條件，所以那一刻任何人都能把紅燈 Route
   停用、再按完成。精靈第 7 步的刪除改走 `DELETE /api/setup/routes/{id}`（同一個命令、同一種拒絕）。

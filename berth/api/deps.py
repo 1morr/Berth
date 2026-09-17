@@ -21,6 +21,7 @@ from berth.services.clients import (
 )
 from berth.services.events import EventHub
 from berth.services.hints import JobHints
+from berth.services.jellyfin_access import AccessCache
 
 
 def get_config(request: Request) -> Config:
@@ -65,6 +66,12 @@ def get_import_hints(request: Request) -> JobHints:
     return hints
 
 
+def get_access_cache(request: Request) -> AccessCache:
+    """允許清單與 `Policy` 的快取（`create_app` 放進 `app.state`）：一個程序一份，每個請求共用。"""
+    cache: AccessCache = request.app.state.jellyfin_access
+    return cache
+
+
 def get_client_factory(request: Request) -> ServiceClientFactory:
     """端點與背景迴圈用同一份（`create_app` 放進 `app.state`）。"""
     factory: ServiceClientFactory = request.app.state.clients
@@ -76,6 +83,7 @@ def get_client_factory(request: Request) -> ServiceClientFactory:
 #: 他手上也已經是一個成功（票 15 的 e2e 抓到，`test_app.py::TestUnitOfWork`）。
 SessionDep = Annotated[AsyncSession, Depends(get_session, scope="function")]
 ClientFactoryDep = Annotated[ServiceClientFactory, Depends(get_client_factory)]
+AccessCacheDep = Annotated[AccessCache, Depends(get_access_cache)]
 EventHubDep = Annotated[EventHub, Depends(get_event_hub)]
 ImportHintsDep = Annotated[JobHints, Depends(get_import_hints)]
 ConfigDep = Annotated[Config, Depends(get_config)]

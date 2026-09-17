@@ -3,13 +3,13 @@ import { useParams, useSearch } from '@tanstack/react-router'
 import { AppShell } from '../AppShell'
 import { InventoryPage } from './InventoryPage'
 
-/** `/library/$routeSlug` 的路由層：把路徑段與篩選讀出來交給頁面（`MediaRoute` 是同一個道理）。 */
+/** `/library/$libraryId` 的路由層：把路徑段、頁碼與篩選讀出來交給頁面（`MediaRoute` 是同一個道理）。 */
 export function InventoryPageRoute() {
-  const { routeSlug } = useParams({ from: '/library/$routeSlug' })
-  const { filter } = useSearch({ from: '/library/$routeSlug' })
+  const { libraryId } = useParams({ from: '/library/$libraryId' })
+  const { page, filter } = useSearch({ from: '/library/$libraryId' })
   return (
     <AppShell>
-      <InventoryPage slug={routeSlug} filter={filter} />
+      <InventoryPage libraryId={libraryId} page={page ?? 1} filter={filter} />
     </AppShell>
   )
 }
