@@ -338,7 +338,7 @@ NCOP/NCED、PV、CM、Menu、預告、花絮等**可辨識**的非正片內容�
 
 `Title` = TMDB 英文 `name`；英文缺或與 `original_name` 相同時用 `original_name`。資料夾名決定後凍結（§4.5）。
 
-**畫面上的顯示用標題與簡介跟著 UI 語言走**（2026-09-17 決定，§19）：`zh-Hant` 取 TMDB `zh-TW` 那一輪，`en` 取 `en-US` 那一輪。這一條只管畫面；檔名、資料夾名與季名比對用的字串不跟 UI 走。
+**畫面上的顯示用標題與簡介跟著 UI 語言走**（2026-09-17 決定，§19）：`zh-Hant` 取 TMDB `zh-TW` 那一輪，`en` 取 `en-US` 那一輪。這一條只管畫面；檔名、資料夾名與季名比對用的字串不跟 UI 走。**媒體庫牆上已在 Jellyfin 裡的作品例外**，顯示 Jellyfin 的名稱（M1.5 拆票時決定，§19）：牆上多數作品不是 Berth 經手的，Berth 手上沒有它們的 TMDB 快照，而 Jellyfin 的名稱與使用者在 Jellyfin 裡看到的一致；還沒進 Jellyfin 的卡片照樣跟著 UI 語言。
 
 ### 7.6 Specials / OVA / OAD / SP
 
@@ -626,7 +626,7 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 | 多集檔與同起始集的單集（2026-09-15） | 同一季已有、或同一批要入的正片裡，有同起始集而結束集不同的，送審核不自動入庫；理由要說出 Jellyfin 12 會把它們併成一集、藏掉後面的集 | §7.8、§20.9、M1 票 14b |
 | Route profile（2026-09-16） | **移除**。量測（§20.4）顯示它唯一的作用是「只有集號、TMDB 多季」時絕對編號換算自動入庫（anime）還是送審核（standard），而「是不是動漫」預測不了換算對錯。改由兩條證據決定：集號 ≤ 第一季集數、或檔名的播出日與換算出的那一集對不上，就送審核，其餘 medium。季號搜尋變體改成對所有劇集都做。代價：多季作品第一季的無季號發佈送審核。**14d 量過**（M1 票 01 的真實發佈，§20.4）：規則 1 擋下的 1,095 個檔案裡 928 個其實是第一季；「標題有認不出的多餘字」分不開兩者——連 TMDB 別名一起比會讓 14 個後面季的自動入錯，只比主標題時一個不漏卻是靠 TMDB 英文標題碰巧夠長。**2026-09-17 維持規則 1 原形** | §6.4、§6.5、§20.4、`docs/research/profile-effect.md` §6.1、M1 票 14d（解析器，已完成）/ 14e（拿掉欄位、API、介面與語料，已完成） |
 | M1.5 拆票前的四條（2026-09-15） | 媒體庫頁一個 Jellyfin 媒體庫一頁，只列這位使用者 `UserViews` 裡有的，Route 退成卡片上入庫狀態的來源；首頁上方放這位使用者的繼續觀看與下一集（沒有內容就不出現），下面維持探索；瀏覽時取允許清單一併讀 Jellyfin 帳號的 `Policy`（同一份短時間快取），帳號被停用就結束 Berth 的 session，不縮短 session 效期；Jellyfin 的圖片由 Berth 代理，快取鍵用 `tag` | §12、§13、§20.8、plan §11.2b |
-| 顯示用標題的語言（2026-09-17） | **跟著 UI 語言走**，不另做「片庫語言」設定：`zh-Hant` 介面顯示 TMDB `zh-TW` 那一輪的標題與簡介，EN 介面顯示 `en-US` 那一輪的。檔名與資料夾名照舊只用英文（§7.5），不跟 UI 走。M1 票 15 的 critique（2026-09-17）量到 EN 介面上海報牆、詳情頁 h1 與簡介全是中文，與「英文是一等公民」（`PRODUCT.md`）衝突 | §7.5、plan §8.3、§11.2b（M1.5 實作） |
+| 顯示用標題的語言（2026-09-17） | **跟著 UI 語言走**，不另做「片庫語言」設定：`zh-Hant` 介面顯示 TMDB `zh-TW` 那一輪的標題與簡介，EN 介面顯示 `en-US` 那一輪的。檔名與資料夾名照舊只用英文（§7.5），不跟 UI 走。M1 票 15 的 critique（2026-09-17）量到 EN 介面上海報牆、詳情頁 h1 與簡介全是中文，與「英文是一等公民」（`PRODUCT.md`）衝突。**例外**（同日 M1.5 拆票時拍板）：媒體庫牆上已在 Jellyfin 裡的作品顯示 Jellyfin 的名稱，不為每一部去查 TMDB——牆上多數作品 Berth 沒有快照，大媒體庫第一次載入要打上千個請求；代價是 EN 介面從牆上點進 Media 詳情時標題可能換成另一種語言 | §7.5、plan §8.3、§11.2b（M1.5 票 02、03） |
 | TMDB 連不上時的精靈（2026-09-17） | **接受**：TMDB 憑證維持精靈第 6 步的閘門（M1 票 02b），`api.themoviedb.org` 被防火牆擋住的使用者裝不起來是這個決定的代價，不另開「先完成精靈、探索與入庫停擺」的路 | §16.3、README〈先申請一把 TMDB API key〉 |
 
 M1.5 拆票前的四條待決，2026-09-15 已全數照推薦拍板（上表「M1.5 拆票前的四條」那一列），這裡留著當時的理由：
@@ -1112,7 +1112,7 @@ thepiratebay / yts，fixture 在 `tests/fixtures/http/prowlarr/search.*.json` �
 2026-09-15 查證；全文、端點範例與原始碼連結見 [`docs/research/library-browsing.md`](research/library-browsing.md)。只有 **12.0.0 實測**，10.10 / 10.11 讀原始碼（tag `v10.10.7`、`v10.11.11`、`v12.0`）。
 
 - **伺服器 API key 可以代讀代寫任何使用者**：API key 在驗證層一律算 Administrator，帶哪個 `userId` 就是誰（三版一致）。繼續觀看 `GET /UserItems/Resume?userId=&mediaTypes=Video`（不帶 `mediaTypes` 會混進 Season 與 Series）、下一集 `GET /Shows/NextUp?userId=`、附 `UserData` 的項目 `GET /Items?userId=`、已看 / 未看 `POST|DELETE /UserPlayedItems/{id}?userId=`。不帶 `userId` 時 Resume、NextUp、PlayedItems 回 400，`/Items` 回整台伺服器且沒有 `UserData`。舊路徑 `/Users/{userId}/...` 還能用但已不在 12.0.0 的 OpenAPI；NextUp 的 `disableFirstEpisode` 在 12.0 移除。【實測 12.0.0 + 原始碼】
-- **媒體庫存取權限只有一部分會套用**（家長分級只要帶 `userId` 就套）：`/UserViews?userId=`、不帶 `parentId` / `ids` 的 `/Items`、不帶 `parentId` 的 Resume 與 NextUp、`/Items/{id}?userId=`、`/Shows/{id}/Seasons|Episodes?userId=`、`/UserPlayedItems` 會照使用者的權限（無權時不列或 404）；**帶 `parentId` / `ids` / `seriesId` 的查詢，以及 `/Genres`、`/Years`、`/Items/Filters`、`/Items/Filters2` 不會**。所以權限要由 Berth 自己擋（§12、plan §11.2b）。【只讀原始碼：伺服器上沒有受限使用者，M1.5 拆票時要逐列實測】
+- **媒體庫存取權限只有一部分會套用**（家長分級只要帶 `userId` 就套）：`/UserViews?userId=`、不帶 `parentId` / `ids` 的 `/Items`、不帶 `parentId` 的 Resume 與 NextUp、`/Items/{id}?userId=`、`/Shows/{id}/Seasons|Episodes?userId=`、`/UserPlayedItems` 會照使用者的權限（無權時不列或 404）；**帶 `parentId` / `ids` / `seriesId` 的查詢，以及 `/Genres`、`/Years`、`/Items/Filters`、`/Items/Filters2` 不會**。所以權限要由 Berth 自己擋（§12、plan §11.2b）。【只讀原始碼：伺服器上沒有受限使用者，M1.5 票 01 逐列實測】
 - **`/Items` 靜默忽略不存在的參數**：實測帶 `seriesId` 或 `ancestorIds` 都回整台伺服器的集。每個過濾參數都要測「伺服器真的有過濾」。
 - **排序與篩選**：`sortBy`（逗號、多鍵）加 `sortOrder`；`genres` 以 `|` 分隔、`years` 以逗號。類型與年份清單用 `GET /Items/Filters?userId=&parentId=&includeItemTypes=Series|Movie`（三版形狀一致，jellyfin-web 的篩選面板用這支；`Filters2` 沒有年份；`/Years` 不帶 `includeItemTypes` 會混進集的播出年）。劇集的「新集加入」排序是 `DateLastContentAdded`、「最近看過」是 `SeriesDatePlayed`。
 - **選季選集**：`/Shows/{id}/Seasons?userId=` 與 `/Shows/{id}/Episodes?userId=&seasonId=`（jellyfin-web 詳細頁的查法，會套權限）。§20.1 的「10.11 第一次掃描後回 0」**在 12.0.0 沒有重現**（一次性容器：掃完當下、兩分鐘後、第二次掃描後都對）；10.11 沒有重測，那一條仍成立，後備是媒體庫遞迴查詢照 `Path` 分群（三版都驗過）。

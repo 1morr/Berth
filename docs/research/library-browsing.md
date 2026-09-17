@@ -96,7 +96,8 @@
 **沒有實測**：伺服器上只有一個全權限的管理員，建立受限使用者屬於不被允許的寫入。下表全部是【原始碼】，
 行號是 v12.0；10.10.7 / 10.11.11 的同一段以 grep 比對過結構相同（`!isApiKey` 分支、`AddUserToQuery`
 的條件、Resume 的 `ParentId = parentIdGuid`、NextUp 的 `GetUserRootFolder().GetChildren(user, true)`）。
-**拆票時應在一次性 Jellyfin 上建一個只開放單一媒體庫的使用者，把這張表逐列實測。**
+**拆票時應在一次性 Jellyfin 上建一個只開放單一媒體庫的使用者，把這張表逐列實測。**（2026-09-17 拆票時改排成
+M1.5 票 01。）
 
 | 呼叫（API key + `userId=U`） | 媒體庫權限 | 依據 |
 | --- | --- | --- |
