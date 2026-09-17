@@ -277,7 +277,7 @@ Berth 讀到的集號對不起來（例如 `[20] [1080p] [2022年10月番]` 被 
     它們不代表沒有多餘字。
   - 5 個 `[桜都字幕组] 无职转生～到了异世界就拿出真本事～ S2 / Mushoku Tensei S2 [02]`：Berth 在**季號等於方括號
     集號**時把季號丟掉（`release._numbers` 為 `The_Final_Season[28]` 寫的那一條），guessit 的標題只剩
-    `Mushoku Tensei`。
+    `Mushoku Tensei`。M1 票 14f 已修（判準改成 `Season` 緊接著方括號），這 5 個之後讀得出季號，表裡的數字是修之前量的。
 - **只比三個主標題，漏 0 個——但這個 0 靠運氣**：上面那 5 個是因為 TMDB 英文標題是
   `Mushoku Tensei: Jobless Reincarnation`、比羅馬字長才被擋下。同一個字幕組的同一種寫法換成 TMDB 英文標題
   就是 `SPY x FAMILY` 的作品——腳本最後的 probe，`[桜都字幕组] 间谍过家家 S2 / Spy x Family S2 [02]`（照樣造的，

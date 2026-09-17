@@ -1,0 +1,13 @@
+{
+  "id": "anime/rezero-s2-02-hyakuhuyu",
+  "source_url": "https://mikanani.me/Home/Episode/2af35f8c1ee3089096f06e1584133253081ad271",
+  "torrent_name": "【百冬练习组】【Re: 从零开始的异世界的生活 S2_Re꞉ Zero kara Hajimeru Isekai Seikatsu S2】[02][1080p AVC AAC][简体]",
+  "tmdb": "tv-65942",
+  "context": {"media": "tv:65942", "season_hint": null, "episode_offset": null},
+  "files": [
+    {"path": "[hyakuhuyu][Re꞉ Zero kara Hajimeru Isekai Seikatsu s2][02][1080p AVC AAC][CHS].mp4", "size": 313460539}
+  ],
+  "expected": [
+    {"path": "[hyakuhuyu][Re꞉ Zero kara Hajimeru Isekai Seikatsu s2][02][1080p AVC AAC][CHS].mp4", "kind": "video", "action": "import", "season": 1, "episode": 27, "tags": {"resolution": "1080p", "subs": ["CHS"], "group": "hyakuhuyu"}, "target": "ReZERO -Starting Life in Another World- (2016) [tmdbid-65942]/Season 01/ReZERO -Starting Life in Another World- (2016) - S01E27 - The Next Location [1080p][CHS][hyakuhuyu].mp4", "min_confidence": "medium"}
+  ]
+}

@@ -1,6 +1,6 @@
 # 14f — 季號剛好等於方括號集號時，不要把季號丟掉
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Blocked by:** 14e（2026-09-17 插入，排在 14e 之後、15 之前：新語料照 14e 之後沒有 `context.profile` 的格式寫）
 
@@ -55,12 +55,12 @@
 
 ## 驗收
 
-- [ ] 兩筆新語料進 `tests/fixtures/parser/`，README 已記；紅燈的 `berth bench` 輸出已貼（Re:Zero `auto_wrong` 1）。
-- [ ] `_numbers` 不再丟掉獨立的季號記號；判準寫在註解裡；雙向單元測試（四種獨立季號讀回、兩種黏著 `Season` 的方括號仍是集號）。
-- [ ] 票 01 標題重掃的前後數字記進 progress.md：原本丟對的 94 個仍丟、丟錯的 21 個讀回季號。
-- [ ] `uv run berth bench` 輸出已貼：`auto_wrong` 0、兩筆新語料 `auto_correct`；baseline 已更新。
-- [ ] CHANGELOG 已記。
-- [ ] `uv run ruff check . && uv run ruff format --check . && uv run mypy && uv run lint-imports && uv run pytest` 全綠，貼指令輸出。
+- [x] 兩筆新語料進 `tests/fixtures/parser/`，README 已記；紅燈的 `berth bench` 輸出已貼（Re:Zero `auto_wrong` 1）。
+- [x] `_numbers` 不再丟掉獨立的季號記號；判準寫在註解裡；雙向單元測試（四種獨立季號讀回、兩種黏著 `Season` 的方括號仍是集號）。
+- [x] 票 01 標題重掃的前後數字記進 progress.md：原本丟對的 94 個仍丟、丟錯的 21 個讀回季號。
+- [x] `uv run berth bench` 輸出已貼：`auto_wrong` 0、兩筆新語料 `auto_correct`；baseline 已更新。
+- [x] CHANGELOG 已記。
+- [x] `uv run ruff check . && uv run ruff format --check . && uv run mypy && uv run lint-imports && uv run pytest` 全綠，貼指令輸出。
 
 **不做：**
 
@@ -69,3 +69,6 @@
 - 規則 1 的形狀（票 14d 已定案）。
 
 ## Comments
+
+- 2026-09-17 code-review（Spec）：沒有缺漏。另指出兩處不在第 5 步清單內：brief §20.4、研究 §6.1.1 的「已修」註記（保留，讓它們不再描述一個已修掉的 bug），plan §4.6 的語料數順手補上 14d 漏寫的兩筆（保留，不然 28 → 32 接不起來）。
+- 2026-09-17 code-review（Standards）：分隔符與 `== season` 沒有測試守（已處理：補 `The Final Season [75]` 測試、刪掉比數字）；註解說「直接接方括號」與 regex 不符、帶已刪判準的量測數字（已改）；brief 第 888 行沒換行（已改）。**沒處理**：`_SEASON_WORD_BEFORE_BRACKET` 與 `_BRACKET_EPISODE` 的 `\[\s*[0-9]{1,4}\s*` 片段相同（審查自己也判定量太小不值得抽）。

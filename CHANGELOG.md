@@ -480,6 +480,12 @@ Windows Docker Desktop（NTFS bind mount）與 Linux（ext4）上各跑一次 `d
 
 ### Fixed
 
+- **季號剛好等於方括號集號時被丟掉**（票 14f，`berth/parser/release.py`）：為 `The_Final_Season[28]`
+  寫的規則是「季號等於方括號集號就丟掉季號」，於是 `Mushoku Tensei S2 [02]` 讀成沒有季號的第 2 集。
+  TMDB 併成一季的 Re:Zero 因此把 `S2][02]` 以 medium **自動入錯**成 S01E02（正解 S01E27），多季作品
+  則被絕對編號的規則送審核。判準改成「`Season` 緊接著方括號」：票 01 的 16,688 個 Mikan 標題裡，
+  原本丟對的 94 個照樣丟、丟錯的 21 個讀回季號，其餘標題的季集逐筆不變。語料補兩筆，`berth bench`
+  的 `auto_correct` 170 → 172、`auto_wrong` 仍是 0。
 - **刪除 Route 與送單的競態**（票 14a）：刪除先算引用數再刪，兩步之間另一個請求送的單會先落地，
   接著被刪除設成 `route_id = NULL`。現在算引用數與刪除在同一把 SQLite 寫鎖裡，那一筆等到刪除 commit
   之後撞上外鍵，送單回 422 `route_missing` 而不是 500（`add_download` 的 `try` 往前擴到 flush）。

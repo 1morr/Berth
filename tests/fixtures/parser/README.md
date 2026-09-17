@@ -142,6 +142,18 @@ brief §6.4「只有集號 → 絕對編號」那一支。v1 的 23 筆一次都
 - **兩筆都沒有 `min_confidence`**：與 v2 的兩筆非動漫同一個理由，它們量的就是「該不該自動入庫」。
 - **《死神》的 tags 沒有 `subs`**：`[MultiSub]` 沒說是哪幾種語言（同一家的航海王寫了 `[ENG][POR-BR]…`，那一筆才有 `EN`）。
 
+## v4 補的兩筆（2026-09-17，M1 票 14f）
+
+**季號剛好等於方括號集號**（`S2 [02]`）。為 `The_Final_Season[28]` 寫的那條規則曾經把這種季號丟掉。兩筆都從
+Mikan 下載 `.torrent` 解出檔案清單（單檔 torrent，infohash 與 Mikan 的 episode id 相同）；語料變成動漫 18、劇集 10、電影 4。
+
+| id | 為什麼是它 |
+| --- | --- |
+| `anime/rezero-s2-02-hyakuhuyu` | **TMDB 併成一季**：`S2][02]` 丟掉季號就是「只有集號、TMDB 只有一季」，直接以 medium 自動入庫成 S01E02。正確答案 **S01E27** `The Next Location`（2020-07-15）：第二輪從 S01E26 起，Mikan 發佈時間 2020-07-16，票 01 的校準也把這一組的 `[02]` 釘在第二季第 2 集。修之前是 `auto_wrong` 1。檔名裡的 `꞉` 是 U+A789，不是半形冒號 |
+| `anime/mushoku-tensei-s2-02-sakurato` | **TMDB 多季**：同一個錯在這裡被「集號 ≤ 第一季集數」送審核，不會入錯但也入不了。正確答案 S02E02 `The Forest in the Dead of Night`（2023-07-17；Mikan 發佈 2023-07-19）。季號是明說的，所以 `min_confidence` 是 high |
+
+- Re:Zero 的 `min_confidence` 是 medium：季號 2 在 TMDB 上不存在，要靠虛擬季換算（plan §4.4），至多 medium。
+
 ## 外掛字幕怎麼算（票 07 的決定）
 
 字幕檔的 `target` 是**它那個影片的目標路徑**換上字幕的副檔名與語言段（plan §5）。所以：

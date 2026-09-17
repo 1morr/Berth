@@ -41,8 +41,9 @@ TARGET = "Show (2020) [tmdbid-1]/Season 01/Show (2020) - S01E02.mkv"
 #: 語料的組成（plan §4.6、brief §20.4 的樣本清單）。v0 是 20 筆（動漫 8 / 劇集 8 / 電影 4），
 #: 票 06 補了三筆動漫：篇章名、cour 偏移與單檔多集（brief §6.6）；
 #: 票 14c 補了「只有集號、TMDB 上多季」的動漫三筆、劇集兩筆（brief §20.4）；
-#: 票 14d 補了「集號 ≤ 第一季集數」兩個方向的動漫各一筆（每 cour 重數、第一季的無季號發佈）。
-CORPUS_SHAPE = {"anime": 16, "tv": 10, "movie": 4}
+#: 票 14d 補了「集號 ≤ 第一季集數」兩個方向的動漫各一筆（每 cour 重數、第一季的無季號發佈）；
+#: 票 14f 補了「季號剛好等於方括號集號」的動漫兩筆（TMDB 一季、多季各一）。
+CORPUS_SHAPE = {"anime": 18, "tv": 10, "movie": 4}
 
 
 @pytest.fixture(scope="module")

@@ -1,0 +1,13 @@
+{
+  "id": "anime/mushoku-tensei-s2-02-sakurato",
+  "source_url": "https://mikanani.me/Home/Episode/a88e398734a8fbdcd8a6aa810a19f967c6f24842",
+  "torrent_name": "[桜都字幕组] 无职转生～到了异世界就拿出真本事～ S2 / Mushoku Tensei S2 [02][1080p][简繁内封]",
+  "tmdb": "tv-94664",
+  "context": {"media": "tv:94664", "season_hint": null, "episode_offset": null},
+  "files": [
+    {"path": "[Sakurato] Mushoku Tensei S2 [02][HEVC-10bit 1080P AAC][CHS&CHT].mkv", "size": 442054657}
+  ],
+  "expected": [
+    {"path": "[Sakurato] Mushoku Tensei S2 [02][HEVC-10bit 1080P AAC][CHS&CHT].mkv", "kind": "video", "action": "import", "season": 2, "episode": 2, "tags": {"resolution": "1080p", "subs": ["CHS", "CHT"], "group": "Sakurato"}, "target": "Mushoku Tensei Jobless Reincarnation (2021) [tmdbid-94664]/Season 02/Mushoku Tensei Jobless Reincarnation (2021) - S02E02 - The Forest in the Dead of Night [1080p][CHS+CHT][Sakurato].mkv", "min_confidence": "high"}
+  ]
+}

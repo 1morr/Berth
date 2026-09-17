@@ -53,14 +53,68 @@ class TestAnimeEpisodePatterns:
 
         assert (info.season, info.episode) == (None, 7)
 
-    def test_a_bracket_glued_to_the_word_season_is_an_episode(self) -> None:
+    @pytest.mark.parametrize(
+        ("name", "episode"),
+        [
+            ("[NaN-Raws]进击的巨人_The_Final_Season[28][1080P].mp4", 28),
+            ("[ANi]进击的巨人 The Final Season[28][1080P][Baha][WEB-DL][AAC AVC]", 28),
+            (
+                "[桜都字幕组] 进击的巨人 The Final Season / Shingeki no Kyojin The Final Season "
+                "[75][1080p][简日内嵌]",
+                75,
+            ),
+        ],
+    )
+    def test_a_bracket_right_after_the_word_season_is_an_episode(
+        self, name: str, episode: int
+    ) -> None:
         """`The_Final_Season[28]`：guessit 把那個 28 讀成季號，但它是集號（研究 §6.1）。
 
-        中間有空白時（`Season 3 [04]`）guessit 自己就分得開，黏在一起才會誤讀。
+        `Season` 與方括號之間隔一格空白（`Season [75]`）也一樣誤讀；`Season 3 [04]` 中間
+        有自己的季號，guessit 才分得開。
         """
-        info = parse_release("[NaN-Raws]进击的巨人_The_Final_Season[28][1080P].mp4")
+        info = parse_release(name)
 
-        assert (info.season, info.episode) == (None, 28)
+        assert (info.season, info.episode) == (None, episode)
+
+    @pytest.mark.parametrize(
+        ("name", "season", "episode"),
+        [
+            (
+                "[桜都字幕组] 无职转生～到了异世界就拿出真本事～ S2 / Mushoku Tensei S2 "
+                "[02][1080p][简繁内封]",
+                2,
+                2,
+            ),
+            (
+                "[诸神字幕组][进击的巨人][Attack on Titan S2][02][简繁日双语字幕][1080P][HEVC MKV]",
+                2,
+                2,
+            ),
+            (
+                "[织梦字幕组] 鬼灭之刃 柱训练篇 Kimetsu no Yaiba S05 [05] "
+                "[HEVC-10bit 1080P] [繁日双语]",
+                5,
+                5,
+            ),
+            (
+                "[爱恋&漫猫字幕组][7月新番][Re:从零开始的异世界生活 S2]"
+                "[Re:Zero kara Hajimeru Isekai Seikatsu S2][02][1080p][AVC][繁中]",
+                2,
+                2,
+            ),
+        ],
+    )
+    def test_a_season_that_happens_to_equal_the_bracketed_episode_stays(
+        self, name: str, season: int, episode: int
+    ) -> None:
+        """`S2 [02]`：兩個數字剛好相等，但 `S2` 是自己一格的季號，不是被 guessit 讀歪的集號。
+
+        票 01 的 Mikan 標題裡這種寫法有 21 個（M1 票 14f），TMDB 併成一季的 Re:Zero 會因此自動入錯。
+        """
+        info = parse_release(name)
+
+        assert (info.season, info.episode) == (season, episode)
 
     def test_a_cour_marker_is_read_next_to_the_season(self) -> None:
         """`Season 3 Part 2 - 01`：季號 3、cour 2、集號 1，三個數字互不覆蓋（plan §4.4）。"""

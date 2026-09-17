@@ -305,7 +305,7 @@ fixture 一筆一個 JSON：
 - `tests/fixtures/tmdb/<id>.json` 是 TMDB 快照，錄一次即凍結（`scripts/record_tmdb_snapshots.py`）。
 - `berth bench` 輸出：整體與分類別（anime / tv / movie）的 `auto_correct`、`auto_wrong`（自動處置但錯，最嚴重）、`review`、`unmatched_correct`、`extra_correct`、`subtitle_correct`，加上 `missed`（該入庫的被丟成 unmatched / skip）與 `skipped`（雙方都同意可忽略）；**八個桶互斥且窮盡，加起來等於檔案數**——加不起來的報表會讓沒被數到的檔案看起來不存在。`subtitle_correct` 與 `extra_correct` 同一個道理（M1 票 07）：外掛字幕也是自動搬進媒體庫的檔案，混進 `auto_correct` 會讓「入對幾集」這個數字說不清楚。另列分類正確率、tag 正確率與**信心達標率**（語料寫的 `min_confidence` 有沒有達到；不達標不是做錯事，但它說得出「本來該自動入庫的少了幾個」），以及 high 與 medium 的錯誤率（brief §6.5）。
 - CI 規則：`auto_wrong` 不得高於 `tests/fixtures/parser/baseline.json`，`auto_correct`、`extra_correct`、`subtitle_correct` 三格都不得低於 baseline 減 1 筆；改善時更新 baseline 並在 PR 說明。三格都要守是因為**字幕或 extras 整批掉出來時 `auto_wrong` 一格都不會動**（M1 票 07），只守兩個數字的話那種退步在 CI 上看不見。門檻與報表是同一支（`services/bench.py`），單元測試與 `berth bench` 共用，所以 CI 不另開 job。
-- v0 語料：20 筆，來源 brief §20.4 的樣本清單（動漫 8、非動漫劇集 8、電影 4）；票 06 補三筆動漫（篇章名、cour 偏移、單檔多集），共 23 筆；票 14c 補五筆「只有集號、TMDB 上多季」（動漫 3、非動漫 2，§4.4 絕對編號換算那一支第一次有語料走到），共 28 筆，逐步擴到 100+。出處與涵蓋範圍逐筆記在 `tests/fixtures/parser/README.md`。
+- v0 語料：20 筆，來源 brief §20.4 的樣本清單（動漫 8、非動漫劇集 8、電影 4）；票 06 補三筆動漫（篇章名、cour 偏移、單檔多集），共 23 筆；票 14c 補五筆「只有集號、TMDB 上多季」（動漫 3、非動漫 2，§4.4 絕對編號換算那一支第一次有語料走到），共 28 筆；票 14d 補兩筆動漫（集號 ≤ 第一季集數的兩個方向），共 30 筆；票 14f 補兩筆動漫（季號剛好等於方括號集號，TMDB 一季與多季各一），共 32 筆，逐步擴到 100+。出處與涵蓋範圍逐筆記在 `tests/fixtures/parser/README.md`。
 
 ---
 

@@ -53,6 +53,12 @@ _BRACKET_EPISODE = re.compile(
     r"\[\s*([0-9]{1,4})\s*(?:[-~]\s*([0-9]{1,4})\s*)?(?:v[0-9]|fin|end)?\s*\]", re.IGNORECASE
 )
 
+#: `The_Final_Season[28]`、`The Final Season [75]`：`Season` 與方括號之間只隔空白、底線或點時，
+#: guessit 把方括號裡的集號讀成季號，而且不再回集號。判準看的是**這個字的位置**，不是「季號
+#: 等於方括號集號」——`Mushoku Tensei S2 [02]` 的兩個數字也相等，但 `S2` 是自己一格的季號
+#: （M1 票 14f 以票 01 的 Mikan 標題驗證過，兩種寫法分得一個不差）。
+_SEASON_WORD_BEFORE_BRACKET = re.compile(r"season[\s_.]*\[\s*[0-9]{1,4}\s*\]", re.IGNORECASE)
+
 #: `Fin` / `END` 黏在集號後面是中文字幕組的季末寫法（`[01-13Fin]`）。`完` / `完結` 不在
 #: 這裡——`normalize_cjk` 已經把它們吃掉了，而 ASCII 的這兩個它認不得。少了這兩個字，
 #: `[01-13Fin]` 會被讀成「第 1 集」（2026-09-10 票 08 在真的索引站回應裡抓到）。
@@ -168,12 +174,15 @@ def _numbers(
         # `GTO.2026.EP08` → guessit 同時給 `year` 與 `season` 2026。年份不是季號。
         season = None if raw_season == guess.get("year") else raw_season
 
-    if season is not None and hints.season is None and raw_episode is None:
-        # `The_Final_Season[28]`：`Season` 黏著方括號時 guessit 把集號讀成季號，而且
-        # 不再回集號——同一個數字被 claim 兩次時，方括號裡的那個是集號（真實語料）。
-        bracketed, _ = _episode_from_brackets(cleaned)
-        if bracketed == season:
-            season = None
+    # guessit 只回季號、沒回集號時，那個季號就是 `Season [N]` 的 N，所以不必再比數字；
+    # `Season 3 [04]` 會回兩個數字，走不到這裡。
+    if (
+        season is not None
+        and hints.season is None
+        and raw_episode is None
+        and _SEASON_WORD_BEFORE_BRACKET.search(cleaned)
+    ):
+        season = None
 
     # 方括號裡的區間先問：`[135-136]` guessit 只回最後一個數字，區間比單一個數字更具體。
     if episode is None:
