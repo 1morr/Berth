@@ -23,6 +23,7 @@ function media(overrides: Partial<Media> = {}): Media {
     year: 2022,
     first_air_date: '2022-04-09',
     overview: '互相隱藏了真實身份的新家庭。',
+    overview_en: 'A spy, an assassin and a telepath keep house.',
     poster_url: 'https://image.tmdb.org/t/p/w342/spy.jpg',
     runtime: null,
     folder_name: 'SPY x FAMILY (2022) [tmdbid-120089]',
@@ -169,6 +170,38 @@ describe('Media 詳情頁', () => {
     expect(await screen.findByRole('heading', { name: 'SPY×FAMILY 間諜家家酒' })).toBeVisible()
     expect(screen.getByText('SPY x FAMILY')).toBeVisible()
     expect(screen.getByText('SPY×FAMILY')).toBeVisible()
+  })
+
+  it('切到 EN 時 h1 與簡介換成 en-US 那一輪，不另印中文，也不重抓（brief §7.5）', async () => {
+    const api = render()
+    renderApp('/media/tv:120089')
+    await screen.findByRole('heading', { level: 1, name: 'SPY×FAMILY 間諜家家酒' })
+    const fetched = api.mock.calls.length
+
+    await userEvent.click(screen.getByRole('button', { name: 'EN' }))
+
+    const heading = await screen.findByRole('heading', { level: 1, name: 'SPY x FAMILY' })
+    // 標題那一組裡只印一次（搜尋區塊的關鍵字預覽裡也有這串字，那不算）。
+    expect(within(heading.parentElement as HTMLElement).getAllByText('SPY x FAMILY')).toHaveLength(
+      1,
+    )
+    expect(screen.getByText('A spy, an assassin and a telepath keep house.')).toBeVisible()
+    expect(screen.queryByText('SPY×FAMILY 間諜家家酒')).not.toBeInTheDocument()
+    expect(screen.queryByText('互相隱藏了真實身份的新家庭。')).not.toBeInTheDocument()
+    // 原文標題與兩者都不同，照樣在：字幕組會把它寫進檔名。
+    expect(screen.getByText('SPY×FAMILY')).toBeVisible()
+    expect(api.mock.calls.length).toBe(fetched)
+  })
+
+  it('EN 介面上 en-US 那一輪沒有簡介時就不印簡介，不改印中文的', async () => {
+    render({ [SPY_PATH]: { body: media({ overview_en: '' }) } })
+    renderApp('/media/tv:120089')
+    await screen.findByRole('heading', { level: 1, name: 'SPY×FAMILY 間諜家家酒' })
+
+    await userEvent.click(screen.getByRole('button', { name: 'EN' }))
+
+    await screen.findByRole('heading', { level: 1, name: 'SPY x FAMILY' })
+    expect(screen.queryByText('互相隱藏了真實身份的新家庭。')).not.toBeInTheDocument()
   })
 
   it('資料夾名在送單之前就看得到，而且說得出它什麼時候定下來（票 04b）', async () => {

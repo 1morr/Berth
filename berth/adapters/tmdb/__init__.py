@@ -21,7 +21,7 @@ BASE_URL = "https://api.themoviedb.org/3"
 
 #: 取英文標題與檔名用的那一輪（brief §7.5）。
 BASE_LANGUAGE = "en-US"
-#: 顯示用標題另外取的那一輪（plan §8.3）。
+#: `zh-Hant` 介面的顯示用標題與簡介另外取的那一輪（plan §8.3）。`en` 介面用的是 `BASE_LANGUAGE`。
 DISPLAY_LANGUAGE = "zh-TW"
 #: 只為了**季名**多取的那一輪（plan §4.4）。簡體字幕組寫的是「柱训练篇」，
 #: 而 `zh-TW` 給的是「柱訓練篇」——同一個篇章名，兩套字，比對時一個字都不重疊。

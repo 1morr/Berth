@@ -173,6 +173,47 @@ class TestSnapshot:
         assert view.title_en == "SPY x FAMILY"
         assert view.title_original == "SPY×FAMILY"
 
+    async def test_both_rounds_keep_their_own_overview(self, session: AsyncSession) -> None:
+        """顯示用簡介跟著 UI 語言走（brief §7.5）：EN 介面讀 `en-US` 那一輪，所以兩輪都要存。"""
+        client = tmdb(overview_translations={120089: "互相隱藏了真實身份的新家庭。"})
+        factory = await credentialled(session, client)
+
+        view = await read_media(session, factory, SPY_ID)
+
+        assert view.overview == "互相隱藏了真實身份的新家庭。"
+        assert view.overview_en == "A spy, an assassin and a telepath keep house."
+
+    async def test_a_missing_translation_falls_back_to_the_english_round(
+        self, session: AsyncSession
+    ) -> None:
+        """`zh-TW` 那一輪缺標題或簡介時，`zh-Hant` 介面顯示英文的（plan §8.3 既有的後備）。
+
+        兩種缺法不一樣：沒翻譯的標題 TMDB 自己回英文（brief §20.3，2026-09-09 實測），
+        沒翻譯的簡介是空字串，由快照落回英文那一輪的。替身照這個樣子演。
+        """
+        client = tmdb(translations={}, overview_translations={120089: ""})
+        factory = await credentialled(session, client)
+
+        view = await read_media(session, factory, SPY_ID)
+
+        assert view.title == "SPY x FAMILY"
+        assert view.overview == "A spy, an assassin and a telepath keep house."
+
+    async def test_the_english_round_does_not_borrow_a_chinese_overview(
+        self, session: AsyncSession
+    ) -> None:
+        """後備只有一個方向：英文那一輪沒有簡介就是沒有，`en` 介面不改印中文（brief §7.5）。"""
+        client = tmdb(
+            details=[replace(SPY, overview=""), MOANA],
+            overview_translations={120089: "互相隱藏了真實身份的新家庭。"},
+        )
+        factory = await credentialled(session, client)
+
+        view = await read_media(session, factory, SPY_ID)
+
+        assert view.overview_en == ""
+        assert view.overview == "互相隱藏了真實身份的新家庭。"
+
     async def test_every_season_keeps_the_names_the_other_rounds_gave_it(
         self, session: AsyncSession
     ) -> None:
@@ -405,3 +446,45 @@ class TestProblems:
         assert view.problem is TmdbProblem.UNREACHABLE
         assert view.seasons[1].episodes[0].name == "OPERATION STRIX"
         assert view.fetched_at is not None
+
+
+class TestStoredBeforeTheLanguageSplit:
+    """M1.5 票 02 之前寫下的快照少一欄 `overview_en`。升級上來的資料庫不會為此重抓一次。"""
+
+    async def test_an_old_snapshot_still_draws_both_titles(self, session: AsyncSession) -> None:
+        """讀得開、兩種語言的標題都在；英文簡介是空的，等下一次刷新（至多 24 小時）補上。"""
+        session.add(
+            Media(
+                id=SPY_ID,
+                tmdb_id=120089,
+                kind=MediaKind.TV,
+                title_en="SPY x FAMILY",
+                title_original="SPY×FAMILY",
+                year=2022,
+                folder_name="SPY x FAMILY (2022) [tmdbid-120089]",
+                # M1 的 `_store` 寫下的形狀，逐鍵照抄，刻意不從 `MediaSnapshot` 產生。
+                tmdb_snapshot_json={
+                    "tmdb_id": 120089,
+                    "kind": "tv",
+                    "title": "SPY×FAMILY 間諜家家酒",
+                    "title_en": "SPY x FAMILY",
+                    "title_original": "SPY×FAMILY",
+                    "year": 2022,
+                    "overview": "互相隱藏了真實身份的新家庭。",
+                    "poster_url": "",
+                    "first_air_date": "2022-04-09",
+                    "runtime": None,
+                    "titles": ["SPY x FAMILY", "SPY×FAMILY"],
+                    "seasons": [],
+                },
+                tmdb_fetched_at=datetime.now(UTC),
+            )
+        )
+        await session.commit()
+        client = tmdb(error=ServiceUnavailableError("GET /tv/120089: connection refused"))
+
+        view = await read_media(session, await credentialled(session, client), SPY_ID)
+
+        assert (view.title, view.title_en) == ("SPY×FAMILY 間諜家家酒", "SPY x FAMILY")
+        assert (view.overview, view.overview_en) == ("互相隱藏了真實身份的新家庭。", "")
+        assert client.requests == []

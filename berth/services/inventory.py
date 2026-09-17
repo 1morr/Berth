@@ -85,7 +85,8 @@ class InventoryItem:
 
     media_id: str
     kind: MediaKind
-    #: 顯示用標題（`zh-TW` 那一輪）。
+    #: `zh-Hant` 介面的顯示用標題（`zh-TW` 那一輪）；`en` 介面用 `title_en`（brief §7.5）。
+    #: 牆的排序照這一個，EN 介面上看起來不是字母序——這面牆由 M1.5 票 03 換掉。
     title: str
     title_en: str
     year: int | None

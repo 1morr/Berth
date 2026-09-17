@@ -23,7 +23,8 @@ function job(overrides: Partial<Job> = {}): Job {
     trigger_ref: '',
     error: '',
     media_id: 'tv:120089',
-    media_title: 'SPY x FAMILY',
+    media_title: 'SPY×FAMILY 間諜家家酒',
+    media_title_en: 'SPY x FAMILY',
     route_id: 2,
     route_name: 'Anime',
     route_slug: 'anime',
@@ -51,7 +52,8 @@ const FAILED = job({
   state: 'submit_failed',
   error: 'torrents/add: connection refused',
   media_id: 'movie:1241982',
-  media_title: 'Moana 2',
+  media_title: '海洋奇緣2',
+  media_title_en: 'Moana 2',
   route_name: 'Movies',
   route_slug: 'movies',
   retryable: true,
@@ -90,7 +92,7 @@ describe('下載列表頁', () => {
     const row = await screen.findByText(/SPY×FAMILY - 13/)
     const list = within(row.closest('details') as HTMLElement)
     expect(list.getByText('已送出')).toBeInTheDocument()
-    expect(list.getByText('SPY x FAMILY')).toBeInTheDocument()
+    expect(list.getByText('SPY×FAMILY 間諜家家酒')).toBeInTheDocument()
     expect(list.getByText('Anime')).toBeInTheDocument()
     expect(list.getByText('手動')).toBeInTheDocument()
   })
@@ -104,8 +106,25 @@ describe('下載列表頁', () => {
     expect(within(row.closest('summary') as HTMLElement).queryByRole('link')).toBeNull()
 
     await userEvent.click(row)
-    const link = await screen.findByRole('link', { name: 'SPY x FAMILY' })
+    const link = await screen.findByRole('link', { name: 'SPY×FAMILY 間諜家家酒' })
     expect(decodeURIComponent(link.getAttribute('href') ?? '')).toBe('/media/tv:120089')
+  })
+
+  it('切到 EN 時作品名換成 en-US 那一輪，摘要列與展開區的連結都換，也不重抓（brief §7.5）', async () => {
+    const api = render()
+    renderApp('/jobs')
+    const row = await screen.findByText(/SPY×FAMILY - 13/)
+    await userEvent.click(row)
+    await screen.findByRole('link', { name: 'SPY×FAMILY 間諜家家酒' })
+    const fetched = api.mock.calls.length
+
+    await userEvent.click(screen.getByRole('button', { name: 'EN' }))
+
+    const details = within(row.closest('details') as HTMLElement)
+    expect(await details.findByRole('link', { name: 'SPY x FAMILY' })).toBeInTheDocument()
+    expect(details.getAllByText('SPY x FAMILY')).toHaveLength(2)
+    expect(details.queryByText('SPY×FAMILY 間諜家家酒')).toBeNull()
+    expect(api.mock.calls.length).toBe(fetched)
   })
 
   it('列上說得出能展開，展開之後說得出能收起', async () => {

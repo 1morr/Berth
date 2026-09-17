@@ -9,6 +9,7 @@ import { GHOST_LINK, GhostButton, Notice } from '../components/controls'
 import { KIND_CODE } from '../components/kind'
 import { Timestamp } from '../components/Timestamp'
 import { TmdbNotice } from '../components/TmdbNotice'
+import { tmdbText } from '../i18n/tmdbText'
 import { FilesPanel } from '../media/FilesPanel'
 import { Poster } from '../media/Poster'
 import { SearchPanel } from '../media/SearchPanel'
@@ -112,9 +113,12 @@ export function MediaDetailPage({ id }: { id: string }) {
  *
  * 三個標題都在：顯示用標題是 `h1`，**英文標題是檔名用的那一個**（brief §7.5），
  * 原文標題是字幕組會寫在檔名裡的那一個——使用者要認得出三者的關係。
+ * 顯示用標題與簡介跟著 UI 語言走；EN 介面上 `h1` 就是英文標題，所以不再印第二次。
  */
 function IdentityBand({ media, freshness }: { media: Media; freshness: ReactNode }) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  const title = tmdbText(i18n.language, { 'zh-Hant': media.title, en: media.title_en })
+  const overview = tmdbText(i18n.language, { 'zh-Hant': media.overview, en: media.overview_en })
   // **Specials 不算進季數與集數**：TMDB 自己報的 `number_of_seasons` 也不算它，
   // 而「4 季 53 集」與封面上印的「3 季 50 集」對不起來只會讓人以為 Berth 抓錯了。
   // 季集清單本身仍然列出 S00——那一季是真的存在，只是不進總數。
@@ -133,16 +137,16 @@ function IdentityBand({ media, freshness }: { media: Media; freshness: ReactNode
                 <span className="label bg-deck px-2 py-1.5 text-ink">{t('media.tracked')}</span>
               </p>
             )}
-            <h1 className="text-xl leading-snug font-semibold text-ink">{media.title}</h1>
-            {media.title_en !== media.title && (
+            <h1 className="text-xl leading-snug font-semibold text-ink">{title}</h1>
+            {media.title_en !== title && (
               <p className="value text-sm text-ink-dim">{media.title_en}</p>
             )}
-            {media.title_original !== media.title_en && media.title_original !== media.title && (
+            {media.title_original !== media.title_en && media.title_original !== title && (
               <p className="value text-sm text-ink-dim">{media.title_original}</p>
             )}
           </div>
-          {media.overview && (
-            <p className="max-w-prose text-sm leading-relaxed text-ink-dim">{media.overview}</p>
+          {overview && (
+            <p className="max-w-prose text-sm leading-relaxed text-ink-dim">{overview}</p>
           )}
         </div>
       </div>

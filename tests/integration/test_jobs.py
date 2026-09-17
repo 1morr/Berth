@@ -734,7 +734,27 @@ class TestReading:
 
         assert [row.name for row in rows] == ["A second release", RELEASE]
         assert rows[0].route_name == "Anime"
-        assert rows[0].media_title == "SPY x FAMILY"
+        # 這一列的 Media 從沒抓過快照：`zh-Hant` 那一格落回英文標題，不是空的。
+        assert (rows[0].media_title, rows[0].media_title_en) == ("SPY x FAMILY", "SPY x FAMILY")
+
+    async def test_the_media_title_comes_in_both_languages(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """下載列的作品名跟著 UI 語言走（brief §7.5），所以兩輪都送，畫面挑一個。"""
+        media, route, factory = await _ready(session, roots)
+        media.tmdb_snapshot_json = (
+            media.snapshot()
+            .model_copy(update={"title": "SPY×FAMILY 間諜家家酒"})
+            .model_dump(mode="json")
+        )
+        await session.commit()
+        await add_download(
+            session, factory, source=_source(), media_id=media.id, route_id=route.id, user_id=None
+        )
+
+        (row,) = await list_jobs(session)
+
+        assert (row.media_title, row.media_title_en) == ("SPY×FAMILY 間諜家家酒", "SPY x FAMILY")
 
     async def test_one_job_reads_back_by_hash(
         self, session: AsyncSession, roots: dict[str, Path]

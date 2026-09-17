@@ -45,8 +45,9 @@ class InventoryItemOut(BaseModel):
 
     media_id: str
     kind: MediaKind
-    #: 顯示用標題（`zh-TW` 那一輪）。
+    #: `zh-Hant` 介面的顯示用標題（`zh-TW` 那一輪）。兩種語言都送，畫面照 UI 語言挑（brief §7.5）。
     title: str
+    #: 英文標題：`en` 介面的顯示用標題，也是檔名用的那一個。
     title_en: str
     year: int | None
     poster_url: str

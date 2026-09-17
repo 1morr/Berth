@@ -49,9 +49,10 @@ class MediaCard(BaseModel):
 
     tmdb_id: int
     kind: MediaKind
-    #: 顯示用標題：`zh-TW` 那一輪有值就用它，沒有就落回英文（plan §8.3）。
+    #: `zh-Hant` 介面的顯示用標題：`zh-TW` 那一輪有值就用它，沒有就落回英文（plan §8.3）。
     title: str
-    #: 英文標題。檔名與比對用的那一個（brief §7.5、§5）；與 `title` 不同時卡片兩個都顯示。
+    #: 英文標題。檔名與比對用的那一個（brief §7.5、§5），也是 `en` 介面的顯示用標題。
+    #: 兩輪從票 03 起就都在卡片上，所以標題跟著 UI 語言走（M1.5 票 02）不必改快取的形狀。
     title_en: str
     #: 首播 / 上映年。TMDB 未定檔時是空字串，那時這裡是 `None`。
     year: int | None = None

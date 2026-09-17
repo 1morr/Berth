@@ -7,6 +7,7 @@ import { AuditChip } from '../components/AuditChip'
 import { Dot } from '../components/Dot'
 import { KIND_CODE } from '../components/kind'
 import { SIGNAL_FILL, type Signal } from '../components/signal'
+import { tmdbText } from '../i18n/tmdbText'
 import { jellyfinDetailsUrl } from './jellyfinLink'
 
 /**
@@ -34,7 +35,8 @@ const STATUS_SIGNAL = {
  * 是狀態與修正（brief §12）——Jellyfin 那一行是同一格裡、在它底下的另一條。
  */
 export function InventoryTile({ item, web }: { item: InventoryItem; web: JellyfinWeb }) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  const title = tmdbText(i18n.language, { 'zh-Hant': item.title, en: item.title_en })
   const titleId = useId()
 
   return (
@@ -73,9 +75,10 @@ export function InventoryTile({ item, web }: { item: InventoryItem; web: Jellyfi
             <AuditChip count={item.audits} compact />
           </p>
           <h2 id={titleId} className="value line-clamp-2 min-h-10 text-sm leading-snug text-ink">
-            {item.title}
+            {title}
           </h2>
-          {item.title_en !== item.title && (
+          {/* 第二行是檔名用的英文標題；EN 介面上它就是標題本身，不再印一次。 */}
+          {item.title_en !== title && (
             <p className="value line-clamp-1 text-xs text-ink-dim">{item.title_en}</p>
           )}
           <p className="value text-xs text-ink">

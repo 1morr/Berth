@@ -62,6 +62,7 @@ def factory(roots: dict[str, Path]) -> FakeClientFactory:
             ordering=ORDERING,
             search={"spy x family": [SPY_ON_THE_WALL]},
             translations={120089: "SPY×FAMILY 間諜家家酒"},
+            overview_translations={120089: "互相隱藏了真實身份的新家庭。"},
         ),
     )
 
@@ -130,6 +131,11 @@ class TestDetail:
 
         assert (body["id"], body["kind"], body["tmdb_id"]) == (SPY_ID, "tv", 120089)
         assert (body["title"], body["title_en"]) == ("SPY×FAMILY 間諜家家酒", "SPY x FAMILY")
+        # 兩種語言都送：UI 換語言時當場換掉，不必重抓（brief §7.5）。
+        assert (body["overview"], body["overview_en"]) == (
+            "互相隱藏了真實身份的新家庭。",
+            SPY.overview,
+        )
         assert body["folder_name"] == "SPY x FAMILY (2022) [tmdbid-120089]"
         assert body["problem"] is None
         assert [row["season_number"] for row in body["seasons"]] == [0, 1, 2]

@@ -195,6 +195,40 @@ class TestCache:
         assert len(client.requests) == requested
         assert [item.id for item in result.items] == ["tv:120089"]
 
+    async def test_a_row_cached_before_the_language_split_still_carries_both_titles(
+        self, session: AsyncSession
+    ) -> None:
+        """顯示用標題跟著 UI 語言走之後（M1.5 票 02），快取裡還沒過期的舊列照樣畫得出兩種語言。
+
+        卡片從票 03 起就兩輪都帶（`title` 是 `zh-TW`、`title_en` 是 `en-US`），所以這一票不改快取的
+        形狀；這一條釘住的是「不必為了換語言而丟掉快取」。
+        """
+        client = tmdb()
+        factory = await credentialled(session, client)
+        session.add(
+            TmdbCache(
+                key="discover:trending",
+                # M1 寫下的形狀，逐鍵照抄，刻意不從 `MediaCard` 產生。
+                value_json=[
+                    {
+                        "tmdb_id": 95350,
+                        "kind": "tv",
+                        "title": "綠燈軍團",
+                        "title_en": "Lanterns",
+                        "year": 2026,
+                        "poster_url": "",
+                    }
+                ],
+                fetched_at=datetime.now(UTC),
+            )
+        )
+        await session.commit()
+
+        result = await read_trending(session, factory)
+
+        assert [(item.title, item.title_en) for item in result.items] == [("綠燈軍團", "Lanterns")]
+        assert client.requests == []
+
     async def test_an_empty_search_asks_tmdb_nothing(self, session: AsyncSession) -> None:
         client = tmdb()
         factory = await credentialled(session, client)

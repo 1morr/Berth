@@ -98,6 +98,19 @@ describe('探索頁', () => {
     expect(within(card).getByText('TV', { exact: false })).toHaveTextContent('TV · 2026')
   })
 
+  it('切到 EN 時卡片換成 en-US 那一輪的標題，不另印中文，也不重抓（brief §7.5）', async () => {
+    const api = render()
+    renderApp('/')
+    const card = await screen.findByRole('link', { name: /綠燈軍團/ })
+    const fetched = api.mock.calls.length
+
+    await userEvent.click(screen.getByRole('button', { name: 'EN' }))
+
+    expect(card).not.toHaveTextContent('綠燈軍團')
+    expect(within(card).getAllByText('Lanterns')).toHaveLength(1)
+    expect(api.mock.calls.length).toBe(fetched)
+  })
+
   it('顯示用標題與英文標題相同時不重複印一次', async () => {
     render({ [TRENDING]: wall([MOANA]), [POPULAR]: wall() })
     renderApp('/')
@@ -162,6 +175,25 @@ describe('探索頁的搜尋', () => {
 
     expect(await screen.findByRole('region', { name: '「moana」的結果' })).toBeInTheDocument()
     expect(screen.queryByRole('region', { name: '本週趨勢' })).not.toBeInTheDocument()
+  })
+
+  it('切到 EN 時搜尋結果的卡片也換成 en-US 那一輪的標題，不重搜（brief §7.5）', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    const api = render({
+      'GET /api/discover/search?q=moana': wall([item({ title: '海洋奇緣2', title_en: 'Moana 2' })]),
+    })
+    renderApp('/')
+    await screen.findByRole('region', { name: '本週趨勢' })
+    await user.type(screen.getByLabelText('搜尋作品'), 'moana')
+    await vi.advanceTimersByTimeAsync(500)
+    const card = await screen.findByRole('link', { name: /海洋奇緣2/ })
+    const fetched = api.mock.calls.length
+
+    await user.click(screen.getByRole('button', { name: 'EN' }))
+
+    expect(card).not.toHaveTextContent('海洋奇緣2')
+    expect(within(card).getAllByText('Moana 2')).toHaveLength(1)
+    expect(api.mock.calls.length).toBe(fetched)
   })
 
   it('一個字不發搜尋——那一輪結果沒有意義，卻要花掉使用者自備的額度', async () => {

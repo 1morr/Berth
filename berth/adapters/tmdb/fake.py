@@ -34,6 +34,7 @@ class FakeTmdbClient:
         popular: Mapping[MediaKind, Sequence[TmdbEntry]] | None = None,
         search: Mapping[str, Sequence[TmdbEntry]] | None = None,
         translations: Mapping[int, str] | None = None,
+        overview_translations: Mapping[int, str] | None = None,
         season_names: Mapping[str, Mapping[int, str]] | None = None,
         display_absent: Iterable[int] = (),
         details: Sequence[TmdbDetail] = (),
@@ -51,6 +52,8 @@ class FakeTmdbClient:
         self._popular = dict(popular or {})
         self._search = dict(search or {})
         self._translations = dict(translations or {})
+        #: `id → 簡介`，英文那一輪以外的每一輪都回它。沒列的作品照英文那一輪（與標題同一個規矩）。
+        self._overview_translations = dict(overview_translations or {})
         #: `語言 → {季號: 季名}`。真的 TMDB 每一輪回的季名都是那個語言的
         #: （`Hashira Training Arc` / `柱訓練篇` / `柱训练篇`），篇章名比對靠這件事。
         self._season_names = {
@@ -99,6 +102,7 @@ class FakeTmdbClient:
         return replace(
             found,
             title=self._translations.get(tmdb_id, found.title),
+            overview=self._overview_translations.get(tmdb_id, found.overview),
             seasons=self._localised_seasons(found.seasons, language),
         )
 

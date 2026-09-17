@@ -172,7 +172,10 @@ class TestSubmitting:
         assert job["trigger"] == "manual"
         assert job["route_slug"] == "tv"
         assert job["media_id"] == SPY_ID
-        assert job["media_title"] == "SPY x FAMILY"
+        assert (job["media_title"], job["media_title_en"]) == (
+            "SPY×FAMILY 間諜家家酒",
+            "SPY x FAMILY",
+        )
         assert job["user_name"] == "skipper"
         assert job["retryable"] is False
 

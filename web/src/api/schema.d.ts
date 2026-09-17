@@ -1421,6 +1421,8 @@ export interface components {
             media_id: string | null;
             /** Media Title */
             media_title: string;
+            /** Media Title En */
+            media_title_en: string;
             /** Route Id */
             route_id: number | null;
             /** Route Name */
@@ -1689,6 +1691,8 @@ export interface components {
             first_air_date: string | null;
             /** Overview */
             overview: string;
+            /** Overview En */
+            overview_en: string;
             /** Poster Url */
             poster_url: string;
             /** Runtime */

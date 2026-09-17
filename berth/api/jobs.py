@@ -90,8 +90,11 @@ class JobOut(BaseModel):
     #: 失敗時服務回的原文（英文），與精靈的纜繩同一個規矩。
     error: str
     media_id: str | None
-    #: 英文標題。作品那一格連到 `/media/{id}`。
+    #: `zh-Hant` 介面的作品名（`zh-TW` 那一輪，缺就是英文）。作品那一格連到 `/media/{id}`。
+    #: **兩種語言都送**，畫面照 UI 語言挑一個：換語言時當場換掉，不必重抓（brief §7.5）。
     media_title: str
+    #: `en` 介面的作品名：英文標題，也就是檔名用的那一個。
+    media_title_en: str
     route_id: int | None
     route_name: str
     route_slug: str

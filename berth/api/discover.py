@@ -27,9 +27,11 @@ class DiscoverItemOut(BaseModel):
     id: str
     tmdb_id: int
     kind: MediaKind
-    #: 顯示用標題（`zh-TW` 有就用它）。
+    #: `zh-Hant` 介面的顯示用標題（`zh-TW` 有就用它）。**兩種語言都送**，畫面照 UI 語言挑一個：
+    #: 換語言時當場換掉，不必重抓（brief §7.5）。
     title: str
-    #: 英文標題。與 `title` 不同時卡片兩個都顯示——檔名用的是這一個（brief §7.5）。
+    #: 英文標題：`en` 介面的顯示用標題，也是檔名用的那一個（brief §7.5）。`zh-Hant` 介面上
+    #: 與 `title` 不同時卡片兩個都顯示。
     title_en: str
     year: int | None
     #: 完整的海報網址；沒有海報時是空字串，卡片自己畫沒有海報的樣子。

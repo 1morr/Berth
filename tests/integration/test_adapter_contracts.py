@@ -1757,6 +1757,37 @@ async def test_tmdb_tv_detail_reads_the_season_list_and_the_absolute_group() -> 
 
 @respx.mock
 @pytest.mark.asyncio
+async def test_tmdb_an_empty_title_falls_back_to_the_original_title() -> None:
+    """`name` / `title` 是空字串時用原文標題（brief §7.5、§20.3）。
+
+    `en` 介面的顯示用標題就是英文那一輪的這一格（M1.5 票 02），空字串會直接變成一張沒有名字的
+    卡。清單與詳情各自解析一次，兩條路都要守。
+    """
+    respx.get(f"{TMDB_URL}/trending/tv/week").respond(
+        200,
+        json={
+            "results": [
+                {"id": 1, "media_type": "tv", "name": "", "original_name": "葬送のフリーレン"}
+            ]
+        },
+    )
+    respx.get(f"{TMDB_URL}/movie/2").respond(
+        200, json={"id": 2, "title": "", "original_title": "君たちはどう生きるか"}
+    )
+
+    client = HttpTmdbClient(V4_READ_TOKEN, base_url=TMDB_URL)
+    try:
+        (entry,) = await client.trending(MediaKind.TV, language="en-US")
+        detail = await client.detail(MediaKind.MOVIE, 2, language="en-US")
+    finally:
+        await client.aclose()
+
+    assert entry.title == "葬送のフリーレン"
+    assert detail.title == "君たちはどう生きるか"
+
+
+@respx.mock
+@pytest.mark.asyncio
 async def test_tmdb_tv_detail_collects_every_title_it_can_match_against() -> None:
     """比對用的標題集合＝英文 + 原文 + 各國別名 + 各語言翻譯，去重（plan §4.3、brief §20.3）。
 

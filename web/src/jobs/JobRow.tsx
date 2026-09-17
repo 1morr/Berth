@@ -16,6 +16,7 @@ import { Dot } from '../components/Dot'
 import { ExpandHint } from '../components/ExpandHint'
 import { SIGNAL_FILL } from '../components/signal'
 import { Timestamp } from '../components/Timestamp'
+import { tmdbText } from '../i18n/tmdbText'
 import { formatSize } from '../media/searchResult'
 import { JOB_SIGNAL, formatProgress, shortHash } from './jobState'
 import { JobPlan } from './JobPlan'
@@ -54,6 +55,9 @@ export function JobRow({ job }: { job: Job }) {
     },
   })
 
+  // 作品名跟著 UI 語言走（brief §7.5）。沒有作品名時退回 id，摘要列與連結說的是同一個字。
+  const mediaTitle =
+    tmdbText(i18n.language, { 'zh-Hant': job.media_title, en: job.media_title_en }) || job.media_id
   const failed = JOB_SIGNAL[job.state] === 'blocked'
   // 同一個端點、兩種重試（plan §3.1）：送單失敗是「再送一次」，入庫失敗是「從沒鏈接的那幾個
   // 接著做」。按鈕上的字要說得出是哪一種，按下去之前才知道會發生什麼。
@@ -81,7 +85,7 @@ export function JobRow({ job }: { job: Job }) {
                 `wrap-anywhere` 而不是 `break-words`：沒有空格的發佈名在後者底下仍然是 flex
                 子項的最小寬度，390px 上整頁橫向捲動（票 15 實測）。 */}
             <span className="value block text-sm wrap-anywhere text-ink">{job.name}</span>
-            <Facts job={job} locale={i18n.language} />
+            <Facts job={job} mediaTitle={mediaTitle} locale={i18n.language} />
           </span>
         </span>
       </summary>
@@ -96,7 +100,7 @@ export function JobRow({ job }: { job: Job }) {
               params={{ mediaId: job.media_id }}
               className="value text-xs text-ink underline decoration-rule-strong underline-offset-4 hover:decoration-ink"
             >
-              {job.media_title || job.media_id}
+              {mediaTitle}
             </Link>
           </p>
         )}
@@ -198,12 +202,20 @@ function Action({
  * **一份 DOM 兩種版面**（同票 08 的結果表）：中點分隔並允許換行，窄版自己疊起來，
  * 不橫向捲動。作品在這裡只是字——它的連結在展開區（`summary` 裡不放互動元素）。
  */
-function Facts({ job, locale }: { job: Job; locale: string }) {
+function Facts({
+  job,
+  mediaTitle,
+  locale,
+}: {
+  job: Job
+  mediaTitle: string | null
+  locale: string
+}) {
   const { t } = useTranslation()
 
   return (
     <span className="value flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ink-dim">
-      <span>{job.media_title || job.media_id || '—'}</span>
+      <span>{mediaTitle || '—'}</span>
       <Dot />
       <span>{job.route_name || '—'}</span>
       <Dot />

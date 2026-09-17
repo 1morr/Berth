@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import type { DiscoverItem } from '../api/discover'
 import { Dot } from '../components/Dot'
 import { KIND_CODE } from '../components/kind'
+import { tmdbText } from '../i18n/tmdbText'
 
 /**
  * 牆上的一格（`.scratch/m1/discover-shape.md` §3）。
@@ -17,7 +18,8 @@ import { KIND_CODE } from '../components/kind'
  * 目標要夠大，而不是只有標題那一行。
  */
 export function MediaTile({ item }: { item: DiscoverItem }) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  const title = tmdbText(i18n.language, { 'zh-Hant': item.title, en: item.title_en })
 
   return (
     <Link
@@ -57,8 +59,9 @@ export function MediaTile({ item }: { item: DiscoverItem }) {
             <span className="label bg-deck px-1.5 py-0.5 text-ink">{t('discover.tracked')}</span>
           )}
         </p>
-        <p className="value line-clamp-2 min-h-10 text-sm leading-snug text-ink">{item.title}</p>
-        {item.title_en !== item.title && (
+        <p className="value line-clamp-2 min-h-10 text-sm leading-snug text-ink">{title}</p>
+        {/* 第二行是檔名用的英文標題；EN 介面上它就是第一行，不再印一次。 */}
+        {item.title_en !== title && (
           <p className="value line-clamp-1 text-xs text-ink-dim">{item.title_en}</p>
         )}
       </div>

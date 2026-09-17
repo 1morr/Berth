@@ -64,15 +64,18 @@ class MediaSnapshot(BaseModel):
 
     tmdb_id: int
     kind: MediaKind
-    #: 顯示用標題（`zh-TW` 那一輪）。缺翻譯時與 `title_en` 相同。
+    #: `zh-Hant` 介面的顯示用標題（`zh-TW` 那一輪）。缺翻譯時與 `title_en` 相同。
     title: str
-    #: 英文標題。**檔名與比對用的那一個**（brief §7.5）。
+    #: 英文標題。**檔名與比對用的那一個**（brief §7.5），也是 `en` 介面的顯示用標題。
     title_en: str
     title_original: str
     #: 首播 / 上映年。TMDB 未定檔時是 `None`。
     year: int | None = None
-    #: 顯示用簡介（`zh-TW` 那一輪，缺就是英文）。詳情頁靠它回答「這是不是我要的那部」。
+    #: `zh-Hant` 介面的簡介（`zh-TW` 那一輪，缺就是英文）。詳情頁靠它回答「這是不是我要的那部」。
     overview: str = ""
+    #: `en` 介面的簡介（`en-US` 那一輪，brief §7.5）。缺就是空字串，不落回中文。
+    #: M1.5 之前寫下的快照沒有這一欄，讀出來是空字串，下一次刷新（至多 24 小時）補上。
+    overview_en: str = ""
     poster_url: str = ""
     #: 首播日 / 上映日。年份由它導出，但整個日期在 §4.4 的 offset 偵測裡也有用。
     first_air_date: date | None = None

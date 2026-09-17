@@ -489,6 +489,11 @@ Windows Docker Desktop（NTFS bind mount）與 Linux（ext4）上各跑一次 `d
   查詢只由作品的快照決定。語料的 `context.profile` 整批拿掉。內部 API，不留相容層。
 - **搜尋的季號變體對所有劇集都做**（票 14e）：最新一季 ≥ 2 就多問 `<英文標題> Season N` / `<標題> 第N季`，
   不再只給 anime Route；單季與電影不加。效果沒有量，要打真的索引站才量得到。
+- **畫面上的作品標題與簡介跟著介面語言**（M1.5 票 02，brief §7.5）：EN 介面的探索牆、搜尋結果、Media 詳情
+  （h1 與簡介）、下載列與媒體庫牆顯示 TMDB `en-US` 那一輪，ZH 介面維持 `zh-TW` 那一輪；在頁首切換語言當場換掉，
+  不重新整理也不重抓。檔名、資料夾名與季名比對不受影響；海報仍是 `zh-TW` 那一輪的。API 兩輪都送：`MediaOut`
+  多 `overview_en`，`JobOut` 的 `media_title` 改為 `zh-TW` 那一輪（缺就是英文）並多 `media_title_en`。
+  快照多一欄 `overview_en`，舊快照照樣讀得開（英文簡介先是空的，下一次刷新補上），不需要 migration。
 
 ### Removed
 

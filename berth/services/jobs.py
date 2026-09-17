@@ -174,7 +174,10 @@ class JobView:
     trigger_ref: str
     error: str
     media_id: str | None
+    #: 作品名的兩輪（brief §7.5）：`zh-Hant` 介面用 `media_title`（`zh-TW` 那一輪，缺就是英文），
+    #: `en` 介面用 `media_title_en`。沒有作品時兩個都是空字串。
     media_title: str
+    media_title_en: str
     route_id: int | None
     route_name: str
     route_slug: str
@@ -688,7 +691,8 @@ async def _view(session: AsyncSession, job: Job) -> JobView:
         trigger_ref=job.trigger_ref,
         error=job.error,
         media_id=job.media_id,
-        media_title=media.title_en if media is not None else "",
+        media_title=media.snapshot().title if media is not None else "",
+        media_title_en=media.title_en if media is not None else "",
         route_id=job.route_id,
         route_name=route.name if route is not None else "",
         route_slug=route.slug if route is not None else "",

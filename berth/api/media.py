@@ -153,15 +153,19 @@ class MediaOut(BaseModel):
     id: str
     tmdb_id: int
     kind: MediaKind
-    #: 顯示用標題（`zh-TW` 有就用它）。
+    #: `zh-Hant` 介面的顯示用標題（`zh-TW` 有就用它）。**兩種語言都送**，畫面照 UI 語言挑一個：
+    #: 換語言時當場換掉，不必重抓（brief §7.5）。
     title: str
-    #: 英文標題。**檔名用的那一個**（brief §7.5），所以與 `title` 不同時兩個都要顯示。
+    #: 英文標題。**檔名用的那一個**（brief §7.5），也是 `en` 介面的顯示用標題。
     title_en: str
     title_original: str
     year: int | None
     #: 首播 / 上映日。TMDB 未定檔時是 `None`。
     first_air_date: date | None
+    #: `zh-Hant` 介面的簡介（`zh-TW` 那一輪，缺就是英文）。
     overview: str
+    #: `en` 介面的簡介（`en-US` 那一輪）。缺就是空字串，不落回中文。
+    overview_en: str
     poster_url: str
     #: 電影片長（分鐘）；劇集是 `None`，它的片長在每一集上。
     runtime: int | None

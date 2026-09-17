@@ -6,8 +6,9 @@
 
 三條規則值得先讀：
 
-- **英文那一輪是結構本身**，`zh-TW` 只補顯示用標題與簡介（plan §8.3、票 03 的同一個理由）。
-  季名、集名都留英文——它們會進檔名（plan §5），而且季名是 §4.4 篇章名比對的來源。
+- **英文那一輪是結構本身**，`zh-TW` 只補 `zh-Hant` 介面的顯示用標題與簡介（plan §8.3、票 03 的
+  同一個理由）；`en` 介面顯示英文那一輪的（brief §7.5）。季名、集名都留英文——它們會進檔名
+  （plan §5），而且季名是 §4.4 篇章名比對的來源。
 - **快照 24 小時**（plan §8.3）。過期就重抓，使用者不必按任何東西。
 - **`folder_name` 跟著標題走**（plan §5、brief §4.5）。它在畫面上是「將會是」的預覽，
   凍結發生在第一次真的通向磁碟那一刻——手動送單成功時（`services/jobs`，票 09）。
@@ -94,6 +95,7 @@ class MediaView:
     #: 首播 / 上映日。識別欄位那一行的標籤說的就是它，所以年份之外整個日期也要送出去。
     first_air_date: date | None
     overview: str
+    overview_en: str
     poster_url: str
     #: 電影片長（分鐘）。劇集是 `None`。
     runtime: int | None
@@ -212,7 +214,8 @@ async def _fetch(
 ) -> MediaSnapshot:
     """三輪詳情 + 每季一次 + Absolute group（有的話），收斂成一份快照。
 
-    英文那一輪決定結構與所有會進檔名的字串；`zh-TW` 那一輪只回答「這一部叫什麼、簡介怎麼寫」。
+    英文那一輪決定結構與所有會進檔名的字串，它的標題與簡介也是 `en` 介面顯示的那一份；
+    `zh-TW` 那一輪只回答「`zh-Hant` 介面上這一部叫什麼、簡介怎麼寫」。
     季集只取英文那一輪：集名會進檔名（plan §5 的 `{episode_title}`），中文集名放進去
     等於讓磁碟上的檔名跟著 UI 的語言跑。
 
@@ -265,6 +268,7 @@ async def _fetch(
         title_original=base.original_title,
         year=base.year,
         overview=display.overview or base.overview,
+        overview_en=base.overview,
         poster_url=await _poster(session, client, display.poster_path or base.poster_path),
         first_air_date=base.first_air_date,
         runtime=base.runtime,
@@ -364,6 +368,7 @@ async def _problem(
         year=None,
         first_air_date=None,
         overview="",
+        overview_en="",
         poster_url="",
         runtime=None,
         folder_name="",
@@ -390,6 +395,7 @@ def _missing(media_id: str) -> MediaView:
         year=None,
         first_air_date=None,
         overview="",
+        overview_en="",
         poster_url="",
         runtime=None,
         folder_name="",
@@ -424,6 +430,7 @@ async def _view(
         year=row.year,
         first_air_date=snapshot.first_air_date,
         overview=snapshot.overview,
+        overview_en=snapshot.overview_en,
         poster_url=snapshot.poster_url,
         runtime=snapshot.runtime,
         folder_name=row.folder_name,

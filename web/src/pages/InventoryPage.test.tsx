@@ -147,6 +147,20 @@ describe('媒體庫頁', () => {
     expect(link).toHaveAttribute('href', '/media/tv%3A136315')
   })
 
+  it('切到 EN 時卡片換成 en-US 那一輪的標題，不另印中文，也不重抓（brief §7.5）', async () => {
+    const api = render()
+    renderApp('/library/tv')
+    const card = await findTile('大熊餐廳')
+    const fetched = api.mock.calls.length
+
+    await userEvent.click(screen.getByRole('button', { name: 'EN' }))
+
+    expect(await within(card).findByRole('heading', { name: 'The Bear' })).toBeInTheDocument()
+    expect(within(card).getAllByText('The Bear')).toHaveLength(1)
+    expect(card).not.toHaveTextContent('大熊餐廳')
+    expect(api.mock.calls.length).toBe(fetched)
+  })
+
   it('Jellyfin 找到了的作品有一條連到它的深連結，開在瀏覽器自己的主機上', async () => {
     render()
     renderApp('/library/tv')
