@@ -143,7 +143,7 @@ async def read_snapshot(
     row = await session.get(Media, build_media_id(*parsed))
     if row is None or row.tmdb_snapshot_json is None:
         return None
-    return MediaSnapshot.model_validate(row.tmdb_snapshot_json)
+    return row.snapshot()
 
 
 async def snapshot_for_planning(
@@ -164,7 +164,7 @@ async def snapshot_for_planning(
         row = await session.get(Media, build_media_id(*parsed))
     if row is None or row.tmdb_snapshot_json is None:
         return None
-    return MediaSnapshot.model_validate(row.tmdb_snapshot_json)
+    return row.snapshot()
 
 
 async def refresh_media(

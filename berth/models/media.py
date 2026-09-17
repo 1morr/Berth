@@ -112,17 +112,24 @@ class Media(Base):
 
         快照可能不在：TMDB 從第一次開啟這一頁起就連不上時，這一列上只有它自己知道的那幾格。
         那時仍然畫得出識別欄位與資料夾名，季集是空的。
+
+        **凍結了的資料夾名跟著快照走**（brief §4.5）：命名從快照算資料夾名，而 TMDB 在凍結
+        之後改名時，照新標題算出來的是另一個資料夾（票 15 收掉的缺陷）。
         """
         if self.tmdb_snapshot_json:
-            return MediaSnapshot.model_validate(self.tmdb_snapshot_json)
-        return MediaSnapshot(
-            tmdb_id=self.tmdb_id,
-            kind=self.kind,
-            title=self.title_en,
-            title_en=self.title_en,
-            title_original=self.title_original,
-            year=self.year,
-        )
+            snapshot = MediaSnapshot.model_validate(self.tmdb_snapshot_json)
+        else:
+            snapshot = MediaSnapshot(
+                tmdb_id=self.tmdb_id,
+                kind=self.kind,
+                title=self.title_en,
+                title_en=self.title_en,
+                title_original=self.title_original,
+                year=self.year,
+            )
+        if self.folder_frozen:
+            return snapshot.model_copy(update={"folder": self.folder_name})
+        return snapshot
 
 
 class TmdbCache(Base):

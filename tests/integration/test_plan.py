@@ -37,7 +37,7 @@ from berth.domain import (
     Tags,
 )
 from berth.models import Event, Job, JobFile, LedgerEntry, Media, Plan, PlanItem, Route
-from berth.naming import episode_target
+from berth.naming import episode_target, folder_name
 from berth.parser import plan as decide
 from berth.pipeline import PlannerRunner
 from berth.services.events import EventHub, JobSignal
@@ -127,7 +127,8 @@ async def _media(session: AsyncSession, *, age: timedelta = timedelta()) -> Medi
         title_en="SPY x FAMILY",
         title_original="SPY×FAMILY",
         year=2022,
-        folder_name="SPY x FAMILY (2022)",
+        # 送單成功那一刻凍結下來的就是命名模板算出來的這一串（票 09）。
+        folder_name=folder_name(_snapshot()),
         folder_frozen=True,
         tmdb_snapshot_json=_snapshot().model_dump(mode="json"),
         tmdb_fetched_at=datetime.now(UTC) - age,
@@ -752,6 +753,28 @@ class TestSnapshot:
         await run(session, factory)
 
         assert client.requests == []
+
+    @pytest.mark.parametrize("state", [JobState.COMPLETED, JobState.DOWNLOADING])
+    async def test_a_frozen_folder_outlives_a_rename_on_tmdb(
+        self, session: AsyncSession, roots: dict[str, Path], state: JobState
+    ) -> None:
+        """資料夾名在第一次送單成功那一刻凍結，之後 TMDB 改名不動它（brief §4.5、plan §5）。
+
+        否則同一部作品的下一包會入庫到另一個資料夾：Jellyfin 多出第二部同名作品，電影的
+        多版本也斷掉（檔名前綴要與資料夾一字不差）。正式計劃與 pre-plan 各讀一次快照，兩條都驗。
+        """
+        media, route, factory = await ready(session, roots)
+        frozen = media.folder_name
+        renamed = _snapshot().model_copy(update={"title_en": "Spy Family Code White"})
+        media.tmdb_snapshot_json = renamed.model_dump(mode="json")
+        await session.commit()
+        await downloaded_job(session, media, route, roots, state=state)
+
+        await run(session, factory)
+
+        written = [row for row in await items_of(session) if row.target_path]
+        assert written
+        assert all(row.target_path.startswith(f"{frozen}/") for row in written)
 
     async def test_tmdb_being_down_does_not_stop_the_plan(
         self, session: AsyncSession, roots: dict[str, Path]

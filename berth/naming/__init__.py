@@ -65,8 +65,10 @@ def folder_name(media: MediaSnapshot) -> str:
 
     凍結發生在第一次送單成功那一刻（票 09）——第一次真的通向磁碟。在那之前每次刷新快照都
     重算一次，畫面上它是「將會是」的預覽；之後 TMDB 改了標題也不會讓已經入庫的資料夾對不上，
-    改名是顯式動作（brief §4.5）。
+    改名是顯式動作（brief §4.5）。凍結的那一串由 `Media.snapshot()` 放進 `media.folder`。
     """
+    if media.folder:
+        return media.folder
     dated = _dated(media)
     template = FOLDER_TEMPLATE if dated else FOLDER_TEMPLATE_UNDATED
     return sanitize(template.format(title=title_of(media), year=media.year, tmdb_id=media.tmdb_id))

@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from datetime import date
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from berth.domain.enums import MediaKind
 
@@ -83,3 +83,6 @@ class MediaSnapshot(BaseModel):
     titles: tuple[str, ...] = ()
     #: 劇集的各季各集；電影是空的。
     seasons: tuple[SeasonSnapshot, ...] = ()
+    #: 凍結的作品資料夾名（`media.folder_name`，brief §4.5）。**不是 TMDB 的資料**：services 在
+    #: 交給解析器之前才放進來，所以不進快照的 JSON。空字串 = 還沒凍結，命名照標題算。
+    folder: str = Field(default="", exclude=True)
