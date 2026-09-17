@@ -1,6 +1,6 @@
-import { useEffect, useId, useState } from 'react'
+import { useId, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Link, useNavigate, useRouter } from '@tanstack/react-router'
+import { Link, useNavigate } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 
 import { meQueryOptions } from '../api/auth'
@@ -30,9 +30,11 @@ import {
   Notice,
 } from '../components/controls'
 import { Dot } from '../components/Dot'
+import { SessionEnded } from '../components/SessionEnded'
 import { TilePlaceholder } from '../discover/MediaTile'
-import { WALL_GRID } from '../discover/MediaWall'
+import { WALL_GRID } from '../discover/wallGrid'
 import { InventoryTile } from '../inventory/InventoryTile'
+import { LibraryWatching } from '../watching/WatchingRows'
 import { jellyfinLibrariesUrl } from '../inventory/jellyfinLink'
 import tmdbLogo from '../assets/tmdb.svg'
 
@@ -108,6 +110,14 @@ export function InventoryPage({
               </Link>
             ))}
           </nav>
+          {/* 接著看在「還沒進 Jellyfin」之前（票 07）。只在打開媒體庫的那一刻：翻頁與篩選是在堆場裡找東西，
+              兩列不再把牆往下推，而且它們不照類型年份篩（使用者拍板）。排序不算——它不會讓哪一集不見。 */}
+          {libraryId !== null &&
+            page === 1 &&
+            !filter &&
+            !narrowed({ genres: search.genres, years: search.years }) && (
+              <LibraryWatching libraryId={libraryId} />
+            )}
           {libraryId !== null && (
             <Wall
               libraryId={libraryId}
@@ -780,7 +790,9 @@ function Trouble({ error, retry }: { error: Error | null; retry: () => void }) {
   const { t } = useTranslation()
   const refusal = accessRefusal(error)
 
-  if (error instanceof ApiError && error.status === 401) return <SessionEnded />
+  if (error instanceof ApiError && error.status === 401) {
+    return <SessionEnded pending={<Placeholders />} />
+  }
   if (refusal?.reason === 'jellyfin_unreachable') {
     return (
       <div className="grid max-w-prose justify-items-start gap-3">
@@ -802,18 +814,6 @@ function Trouble({ error, retry }: { error: Error | null; retry: () => void }) {
     )
   }
   return <p className="max-w-prose text-sm text-ink-dim">{t('inventory.off')}</p>
-}
-
-/**
- * 後端結束了這個 session（帳號在 Jellyfin 被停用）。重跑路由守衛：它問 `GET /auth/me` 拿到 401，
- * 就把人送到 `/login` 並說「登入已失效」——與 session 自然過期同一條路，不另寫一份。
- */
-function SessionEnded() {
-  const router = useRouter()
-  useEffect(() => {
-    void router.invalidate()
-  }, [router])
-  return <Placeholders />
 }
 
 /** 讀取中：不動的空位格。這個世界沒有骨架屏動畫。 */

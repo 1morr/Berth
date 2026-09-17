@@ -37,10 +37,14 @@ def watch_state(data: JellyfinUserData) -> WatchState:
         return WatchState(
             played=False, progress=None, unplayed_episodes=data.unplayed_item_count or None
         )
-    under_way = data.played_percentage > 0
     return WatchState(
-        played=False,
-        # 「看到 0%」「看到 100%」卻沒看完都是假話，所以夾在 1–99。
-        progress=min(99, max(1, round(data.played_percentage))) if under_way else None,
-        unplayed_episodes=None,
+        played=False, progress=shown_progress(data.played_percentage), unplayed_episodes=None
     )
+
+
+def shown_progress(played_percentage: float) -> int | None:
+    """畫面上「看到幾 %」的那個數，沒在看是 `None`。繼續觀看那一列也用它（票 07）。"""
+    if played_percentage <= 0:
+        return None
+    # 「看到 0%」「看到 100%」卻沒看完都是假話，所以夾在 1–99。
+    return min(99, max(1, round(played_percentage)))

@@ -19,6 +19,10 @@
   套在每一個鍵上。類型與排序用的值擺在 `metadata`（`ItemMetadata`）。
 - **停用的帳號照樣代讀得到**：`user_views` 不看停用，只有 `user_policy` 說得出來（同上）。
 - **圖片匿名可取、`tag` 不驗證**（研究 §6）：`image` 不要 token，錯的 tag 一樣回圖。
+- **繼續觀看與下一集不帶 `parentId` 時照使用者的權限限縮，帶了就不限縮**（研究 §2，M1.5 票 07）。
+  替身沒有觀看日期：繼續觀看照 `positions` 寫入的順序、後寫的在前；下一集照劇在 `items` 的順序，
+  `nextUpDateCutoff` 只記下來、不過濾。下一集是看過的最後一集之後、還沒看的第一集，看到一半的不算
+  （`enableResumable=false`）。
 - **標記已看 / 未看由 Jellyfin 自己查可見性**（研究 §5）：這位使用者看不到的 item 回 404、沒有寫入。
   對 Series 標記遞迴到底下每一集，Series 自己的紀錄由它的集算出來（`PlayedPercentage`、
   `UnplayedItemCount`）；標記會把看到一半的位置歸零。停用的帳號照樣寫得進去（研究 §2）。
@@ -30,10 +34,13 @@ import hashlib
 import random
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, replace
+from datetime import datetime
 from typing import Any
 
 from berth.adapters.http import AuthFailedError, NotFoundError, ProtocolMismatchError
 from berth.adapters.jellyfin import (
+    ITEM_EPISODE,
+    ITEM_MOVIE,
     ITEM_SERIES,
     JellyfinApiKey,
     JellyfinAuth,
@@ -182,6 +189,11 @@ class FakeJellyfinClient:
         self.image_queries: list[tuple[str, str, str, int, int, int]] = []
         #: 每一次 `mark_played` 收到的 `(user_id, item_id, played)`，被 404 擋下的也記。
         self.played_queries: list[tuple[str, str, bool]] = []
+        #: 每一次 `resume` / `next_up` 收到的 `("resume" | "next_up", user_id, library_id)`。
+        #: 首頁那兩支不帶 `parentId`（`library_id` 是 `None`）靠它斷言。
+        self.watching_queries: list[tuple[str, str, str | None]] = []
+        #: 每一次 `next_up` 收到的 `nextUpDateCutoff`。
+        self.next_up_cutoffs: list[datetime] = []
         self.token = ""
         self.culture: tuple[str, str, str] | None = None
         self.remote_access: bool | None = None
@@ -466,6 +478,57 @@ class FakeJellyfinClient:
                 seen.discard(target.id)
             positions.pop(target.id, None)
         return self._user_data(name, item)
+
+    async def resume(
+        self, *, user_id: str, library_id: str | None, limit: int
+    ) -> tuple[JellyfinItem, ...]:
+        self._checkpoint(always=True)
+        self.watching_queries.append(("resume", user_id, library_id))
+        name = self._username(user_id)
+        found = {item.id: item for item in self.items_}
+        under_way = [
+            found[item_id]
+            for item_id, percentage in reversed(self.positions.get(name, {}).items())
+            if percentage > 0 and item_id in found
+        ]
+        return tuple(
+            replace(item, user_data=self._user_data(name, item))
+            for item in under_way
+            if item.type in (ITEM_EPISODE, ITEM_MOVIE) and self._in_scope(name, item, library_id)
+        )[:limit]
+
+    async def next_up(
+        self, *, user_id: str, library_id: str | None, limit: int, cutoff: datetime
+    ) -> tuple[JellyfinItem, ...]:
+        self._checkpoint(always=True)
+        self.watching_queries.append(("next_up", user_id, library_id))
+        self.next_up_cutoffs.append(cutoff)
+        name = self._username(user_id)
+        seen = self.played.get(name, set())
+        positions = self.positions.get(name, {})
+        found: list[JellyfinItem] = []
+        for series in self.items_:
+            if series.type != ITEM_SERIES or not self._in_scope(name, series, library_id):
+                continue
+            episodes = sorted(
+                self._episodes(series), key=lambda row: (row.season or 0, row.episode_start or 0)
+            )
+            watched = [index for index, row in enumerate(episodes) if row.id in seen]
+            if not watched:
+                continue
+            candidate = next(
+                (row for row in episodes[watched[-1] + 1 :] if row.id not in seen), None
+            )
+            if candidate is not None and not positions.get(candidate.id):
+                found.append(replace(candidate, user_data=self._user_data(name, candidate)))
+        return tuple(found[:limit])
+
+    def _in_scope(self, name: str, item: JellyfinItem, library_id: str | None) -> bool:
+        """不帶 `parentId` 照這個帳號的權限；帶了只看路徑，**不看權限**（研究 §2）。"""
+        if library_id is None:
+            return self._visible(name, item)
+        library = next((row for row in self.libraries_ if row.item_id == library_id), None)
+        return library is not None and _under(item, library)
 
     def _folders_of(self, name: str) -> list[JellyfinLibrary]:
         """這個帳號看得到的媒體庫（沒列在 `folders` 的看得到全部）。"""

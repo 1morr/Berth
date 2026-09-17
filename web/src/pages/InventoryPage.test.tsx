@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { Inventory, InventoryCard, InventoryLibrary } from '../api/inventory'
+import type { Watching } from '../api/watching'
 import { HEALTHY, session, stubApi, type StubRoute } from '../test/fetch'
 import { renderApp } from '../test/render'
 
@@ -722,7 +723,13 @@ describe('媒體庫頁', () => {
     const walls = (api: ReturnType<typeof render>) =>
       api.mock.calls
         .map(([input]) => String(input))
-        .filter((url) => url.startsWith(`/api/inventory/${TV}`) && !url.endsWith('/filters'))
+        // 牆那一支：類型年份清單與上方兩列（票 07）是另外的端點。
+        .filter(
+          (url) =>
+            url.startsWith(`/api/inventory/${TV}`) &&
+            !url.endsWith('/filters') &&
+            !url.endsWith('/watching'),
+        )
 
     it('劇集庫與電影庫各有自己的排序選單', async () => {
       render({ [`GET /api/inventory/${MOVIES}`]: { body: wall({ library: LIBRARIES[1] }) } })
@@ -1043,6 +1050,130 @@ describe('媒體庫頁', () => {
 
       await waitFor(() => expect(router.state.location.pathname).toBe('/login'))
       expect(router.state.location.search).toMatchObject({ expired: true })
+    })
+  })
+
+  describe('繼續觀看與下一集（票 07）', () => {
+    const WATCHING = `/api/inventory/${TV}/watching`
+    const EPISODE = 'cd2f059cd4fdef1da23617e86514232e'
+
+    function rows(): StubRoute {
+      return {
+        body: {
+          jellyfin: { public_url: '', url: '', port: 8096 },
+          resume: [],
+          next_up: [
+            {
+              item_id: EPISODE,
+              kind: 'tv',
+              title: 'Alpha Show',
+              episode_name: 'The Second One',
+              season: 1,
+              episode_start: 2,
+              episode_end: null,
+              year: null,
+              progress: null,
+              image_url: '',
+            },
+          ],
+        } satisfies Watching,
+      }
+    }
+
+    function asked(api: ReturnType<typeof render>) {
+      return api.mock.calls.filter(([url]) => String(url).endsWith('/watching')).map(([url]) => url)
+    }
+
+    it('第 1 頁、沒有篩選時畫這個媒體庫的兩列，在切換列與「還沒進 Jellyfin」之間', async () => {
+      const api = render({ [`GET ${WATCHING}`]: rows() })
+      renderApp(`/library/${TV}`)
+
+      const next = await screen.findByRole('region', { name: '下一集' })
+      await findTile('Alpha Show')
+
+      expect(
+        within(next).getByRole('link', { name: /S01E02.*Alpha Show.*The Second One/ }),
+      ).toHaveAttribute('href', `http://localhost:8096/web/#/details?id=${EPISODE}`)
+      // 沒有內容的繼續觀看那一列不畫。
+      expect(screen.queryByRole('region', { name: '繼續觀看' })).not.toBeInTheDocument()
+      const switcher = screen.getByRole('navigation', { name: '媒體庫' })
+      expect(switcher.compareDocumentPosition(next) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+      expect(next.compareDocumentPosition(band()) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+      // 問的是這個媒體庫的那一支，不是首頁那一支。
+      expect(asked(api)).toEqual([WATCHING])
+    })
+
+    it.each([
+      [
+        '第 2 頁',
+        `?page=2`,
+        'Alpha Show',
+        { [`GET /api/inventory/${TV}?page=2`]: { body: wall({ page: 2, total: 150 }) } },
+      ],
+      // 待審那一面牆是 Berth 的清單：Alpha Show 不在上面。
+      ['待審', `?filter=review`, 'SPY', {}],
+      [
+        '篩類型',
+        `?genres=${encodeURIComponent(JSON.stringify(['Drama']))}`,
+        'Alpha Show',
+        { [`GET /api/inventory/${TV}?genres=Drama`]: { body: wall() } },
+      ],
+    ])('%s時不畫、也不問', async (_, search, shown, routes) => {
+      const api = render({ [`GET ${WATCHING}`]: rows(), ...routes })
+      renderApp(`/library/${TV}${search}`)
+
+      await findTile(shown)
+
+      expect(screen.queryByRole('region', { name: '下一集' })).not.toBeInTheDocument()
+      expect(asked(api)).toEqual([])
+    })
+
+    it('只換排序照樣畫：排序不會讓哪一集不見', async () => {
+      render({
+        [`GET ${WATCHING}`]: rows(),
+        [`GET /api/inventory/${TV}?sort=CommunityRating`]: { body: wall() },
+      })
+      renderApp(`/library/${TV}?sort=CommunityRating`)
+
+      expect(await screen.findByRole('region', { name: '下一集' })).toBeInTheDocument()
+    })
+
+    it('媒體庫不在允許清單上時兩列不畫，由牆說找不到', async () => {
+      render({
+        [`GET ${WATCHING}`]: {
+          status: 404,
+          body: { detail: { reason: 'library_not_visible', detail: '' } },
+        },
+        [`GET /api/inventory/${TV}`]: {
+          status: 404,
+          body: { detail: { reason: 'library_not_visible', detail: '' } },
+        },
+      })
+      renderApp(`/library/${TV}`)
+
+      expect(await screen.findByText(/找不到這個媒體庫/)).toBeVisible()
+      expect(screen.queryByRole('region', { name: '下一集' })).not.toBeInTheDocument()
+    })
+
+    it('在牆上標為已看之後兩列不當場重問：它們一換，牆就在指標底下移動', async () => {
+      const alpha = jellyfinCard({ watch: { played: false, progress: null, unplayed_episodes: 4 } })
+      const api = render({
+        [`GET /api/inventory/${TV}`]: { body: wall({ titles: [alpha] }) },
+        [`GET ${WATCHING}`]: rows(),
+        [`POST /api/jellyfin/items/${alpha.jellyfin_item_id}/played`]: {
+          body: { played: true, progress: null, unplayed_episodes: null },
+        },
+      })
+      renderApp(`/library/${TV}`)
+      await screen.findByRole('region', { name: '下一集' })
+      expect(asked(api)).toHaveLength(1)
+
+      await userEvent.click(
+        within(await findTile('Alpha Show')).getByRole('button', { name: '標為已看' }),
+      )
+
+      expect(await within(await findTile('Alpha Show')).findByText('已看')).toBeVisible()
+      expect(asked(api)).toHaveLength(1)
     })
   })
 })

@@ -251,6 +251,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/inventory/{library_id}/watching": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Inventory Watching
+         * @description 這個媒體庫的繼續觀看與下一集（票 07）。媒體庫先對允許清單驗過才轉給 Jellyfin：帶了 `parentId`
+         *     的 Resume 與 NextUp 不套媒體庫權限（研究 §2）。
+         */
+        get: operations["get_inventory_watching_api_inventory__library_id__watching_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/jellyfin/items/{item_id}/images/{image_type}": {
         parameters: {
             query?: never;
@@ -260,6 +281,26 @@ export interface paths {
         };
         /** Get Image */
         get: operations["get_image_api_jellyfin_items__item_id__images__image_type__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/jellyfin/watching": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Watching
+         * @description 首頁上方的繼續觀看與下一集：這個人整個帳號的（不帶媒體庫，Jellyfin 才照他的權限限縮）。
+         */
+        get: operations["get_watching_api_jellyfin_watching_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1243,7 +1284,7 @@ export interface components {
          *     所以只收幾個名字（TMDB `w342` 那種具名尺寸的做法），名字照形狀取。
          * @enum {string}
          */
-        ImageSize: "poster";
+        ImageSize: "poster" | "wide";
         /** IndexerApplyIn */
         IndexerApplyIn: {
             /**
@@ -1411,10 +1452,10 @@ export interface components {
          * JellyfinImageType
          * @description Berth 代理得了的 Jellyfin 圖片類型（M1.5 票 04）；沿用 Jellyfin 的字串。
          *
-         *     **是白名單**：沒有呼叫端的類型不開。劇照、橫卡（票 07、08）用到時再加。
+         *     **是白名單**：沒有呼叫端的類型不開。劇照（票 08）用到時再加。
          * @enum {string}
          */
-        JellyfinImageType: "Primary";
+        JellyfinImageType: "Primary" | "Thumb" | "Backdrop";
         /**
          * JellyfinPresence
          * @description Jellyfin 找到這部作品了沒——媒體庫卡片上那一行（票 13）。
@@ -2446,6 +2487,46 @@ export interface components {
             /** Unplayed Episodes */
             unplayed_episodes: number | null;
         };
+        /**
+         * WatchingCardOut
+         * @description 繼續觀看或下一集的一格（`services/watching.py`、M1.5 票 07）：一集或一部電影。
+         *
+         *     名稱都是 Jellyfin 的，不跟 UI 語言。點下去開 Jellyfin 的 `item_id`
+         *     （深連結的主機在 `WatchingOut`）。
+         */
+        WatchingCardOut: {
+            /** Item Id */
+            item_id: string;
+            kind: components["schemas"]["MediaKind"];
+            /** Title */
+            title: string;
+            /** Episode Name */
+            episode_name: string;
+            /** Season */
+            season: number | null;
+            /** Episode Start */
+            episode_start: number | null;
+            /** Episode End */
+            episode_end: number | null;
+            /** Year */
+            year: number | null;
+            /** Progress */
+            progress: number | null;
+            /** Image Url */
+            image_url: string;
+        };
+        /**
+         * WatchingOut
+         * @description 這位使用者的繼續觀看與下一集。首頁是整個帳號，媒體庫頁只含那個媒體庫的；沒有內容的
+         *     那一列是空陣列。
+         */
+        WatchingOut: {
+            jellyfin: components["schemas"]["JellyfinWebOut"];
+            /** Resume */
+            resume: components["schemas"]["WatchingCardOut"][];
+            /** Next Up */
+            next_up: components["schemas"]["WatchingCardOut"][];
+        };
     };
     responses: never;
     parameters: never;
@@ -2766,6 +2847,37 @@ export interface operations {
             };
         };
     };
+    get_inventory_watching_api_inventory__library_id__watching_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                library_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WatchingOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_image_api_jellyfin_items__item_id__images__image_type__get: {
         parameters: {
             query: {
@@ -2805,6 +2917,40 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+            /** @description `jellyfin_unreachable`：問不到 Jellyfin */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_watching_api_jellyfin_watching_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WatchingOut"];
+                };
+            };
+            /** @description `account_disabled`：帳號在 Jellyfin 被停用，session 已結束 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description `jellyfin_unreachable`：問不到 Jellyfin */
             503: {

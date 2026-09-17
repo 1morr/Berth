@@ -42,6 +42,7 @@ from berth.adapters.jellyfin import (
     JellyfinItem,
     JellyfinLibrary,
     JellyfinSource,
+    ParentImage,
     TypeOption,
 )
 from berth.adapters.jellyfin.fake import FakeJellyfinClient, ItemMetadata
@@ -719,14 +720,15 @@ def library_scenario() -> Scenario:
     資料庫裡擺好 Berth 經手的那幾部（`_seed_library`）。`deckhand` / `rope` 只開放 Movies 與 TV——
     Anime 在他的切換列上不存在，直接開 `/library/item-anime` 是「找不到或沒有權限」。
     `POST /demo/jellyfin/disable?user=deckhand` 在 Jellyfin 停用他（`enable` 復原），允許清單的快取
-    過了之後（至多 60 秒）他的 session 結束。
+    過了之後（至多 60 秒）他的 session 結束。`bosun` / `knot` 與 `deckhand` 同樣的權限，但什麼都
+    沒看過：首頁與媒體庫頁上方沒有繼續觀看與下一集（票 07）。
     """
     scenario = discover()
     scenario.jellyfin = FakeJellyfinClient(
         startup_wizard_completed=True,
         admin=("skipper", "harbour"),
-        users={"deckhand": "rope"},
-        folders={"deckhand": ("item-movies", "item-tv")},
+        users={"deckhand": "rope", "bosun": "knot"},
+        folders={"deckhand": ("item-movies", "item-tv"), "bosun": ("item-movies", "item-tv")},
     )
     scenario.library_demo = True
     return scenario
@@ -1153,15 +1155,58 @@ LOST_POSTER = frozenset({"Harbour Film 007"})
 #: 每部劇在替身 Jellyfin 上擺幾集（M1.5 票 05）：劇集的「剩幾集沒看」由它們算出來。
 DEMO_EPISODES = 6
 
-#: 誰看過什麼（M1.5 票 05），三張表各是一種紀錄。這一張是劇集看過的集數（從第一集起）；
-#: 下面兩張是看過的電影與看到一半的電影。`deckhand`：The Bear 看到第三集、Breaking Bad 看完、
-#: Oppenheimer 看到 42%、Harbour Film 001 看過；`skipper`：Slow Horses 看完、The Bear 看過第一集。
+#: 誰看過什麼（M1.5 票 05），四張表各是一種紀錄。這一張是劇集看過的集數（從第一集起）；
+#: 下面三張是看過的電影、看到一半的電影與看到一半的集。
+#: - `deckhand`：The Bear 看到第三集、第四集看到 18%；Breaking Bad 看完；Slow Horses、Shōgun 各看
+#:   一集；Game of Thrones 兩集；The Office 四集；Oppenheimer 看到 42%；Harbour Film 002 看到 65%；
+#:   Harbour Film 001 看過。
+#: - `skipper`：Slow Horses 看完、The Bear 看過第一集。`bosun` 什麼都沒看過。
+#: 繼續觀看與下一集（票 07）由它們算出來：`deckhand` 的下一集是四部劇：The Bear 不在（第四集看到
+#: 一半，只在繼續觀看）、Breaking Bad 看完了。窄版收起時看得到「全部 4 項」。
 DEMO_WATCHED: dict[str, dict[str, int]] = {
-    "deckhand": {"The Bear": 3, "Breaking Bad": DEMO_EPISODES},
+    "deckhand": {
+        "The Bear": 3,
+        "Breaking Bad": DEMO_EPISODES,
+        "Slow Horses": 1,
+        "Game of Thrones": 2,
+        "Shōgun": 1,
+        "The Office": 4,
+    },
     "skipper": {"Slow Horses": DEMO_EPISODES, "The Bear": 1},
 }
 DEMO_FILMS_WATCHED: dict[str, set[str]] = {"deckhand": {"Harbour Film 001"}}
-DEMO_UNDER_WAY: dict[str, dict[str, float]] = {"deckhand": {"Oppenheimer": 42.0}}
+DEMO_UNDER_WAY: dict[str, dict[str, float]] = {
+    "deckhand": {"Harbour Film 002": 65.0, "Oppenheimer": 42.0}
+}
+DEMO_EPISODES_UNDER_WAY: dict[str, dict[tuple[str, int], float]] = {
+    "deckhand": {("The Bear", 4): 18.0}
+}
+#: 橫卡的圖（票 07）：劇有 Backdrop、其中幾部另有 Thumb，集借劇的；Oppenheimer 有自己的 Thumb。
+#: 沒列的（Home Videos 2019、填充片）沒有橫圖，卡片印「無圖」。
+DEMO_THUMBS = frozenset({"The Bear", "Shōgun", "Oppenheimer"})
+DEMO_BACKDROPS = frozenset(
+    {"The Bear", "Slow Horses", "Breaking Bad", "Game of Thrones", "Shōgun", "The Office"}
+)
+
+
+def _demo_tag(item_id: str, image_type: str) -> str:
+    """替身的 `ImageTags`：32 個十六進位字元，換圖時才會變（這裡永遠不換）。"""
+    return hashlib.md5(f"{item_id}/{image_type}".encode(), usedforsecurity=False).hexdigest()
+
+
+def demo_wide(name: str, image_type: str) -> JellyfinImage:
+    """一張 16:9 的 SVG：與同名海報同一個色相，Thumb 亮、Backdrop 暗，看得出取的是哪一種。"""
+    digest = hashlib.md5(name.encode(), usedforsecurity=False).digest()
+    hue = digest[0] * 360 // 256
+    light = 42 if image_type == "Thumb" else 24
+    svg = (
+        '<svg xmlns="http://www.w3.org/2000/svg" width="342" height="192" viewBox="0 0 342 192">'
+        f'<rect width="342" height="192" fill="hsl({hue} 45% {light}%)"/>'
+        f'<rect y="140" width="342" height="8" fill="hsl({hue} 60% 62%)"/>'
+        '<text x="20" y="176" font-family="ui-monospace, monospace" font-size="18" '
+        f'font-weight="700" fill="#f4f1e8">{escape(name)} · {image_type}</text></svg>'
+    )
+    return JellyfinImage(content=svg.encode(), content_type="image/svg+xml")
 
 
 def demo_poster(name: str) -> JellyfinImage:
@@ -1229,10 +1274,15 @@ async def _seed_library(session: AsyncSession, scenario: Scenario, paths: PathSe
         if item.name in DEMO_METADATA:
             scenario.jellyfin.metadata[item.id] = DEMO_METADATA[item.name]
     for index, item in enumerate(items):
+        thumb = _demo_tag(item.id, "Thumb") if item.name in DEMO_THUMBS else ""
+        backdrop = _demo_tag(item.id, "Backdrop") if item.name in DEMO_BACKDROPS else ""
+        items[index] = item = replace(item, thumb_tag=thumb, backdrop_tag=backdrop)
+        for image_type, wide_tag in (("Thumb", thumb), ("Backdrop", backdrop)):
+            if wide_tag:
+                scenario.jellyfin.images[(item.id, image_type)] = demo_wide(item.name, image_type)
         if item.name in NO_POSTER:
             continue
-        tag = hashlib.md5(f"{item.id}/Primary".encode(), usedforsecurity=False).hexdigest()
-        items[index] = replace(item, primary_tag=tag)
+        items[index] = replace(item, primary_tag=_demo_tag(item.id, "Primary"))
         if item.name not in LOST_POSTER:
             scenario.jellyfin.images[(item.id, "Primary")] = demo_poster(item.name)
     episodes = {
@@ -1240,10 +1290,18 @@ async def _seed_library(session: AsyncSession, scenario: Scenario, paths: PathSe
             JellyfinItem(
                 id=_scanned_id(path := f"{item.path}/Season 01/{item.name} - S01E{number:02d}.mkv"),
                 type=ITEM_EPISODE,
-                name=f"{item.name} {number}",
+                name=f"Episode {number}",
                 path=path,
                 tmdb_id="",
                 series_id=item.id,
+                series_name=item.name,
+                season=1,
+                episode_start=number,
+                # 集沒有自己的橫圖：借劇的（jellyfin-web 的順序，`services/watching.landscape`）。
+                parent_thumb=ParentImage(item.id, item.thumb_tag) if item.thumb_tag else None,
+                parent_backdrop=(
+                    ParentImage(item.id, item.backdrop_tag) if item.backdrop_tag else None
+                ),
             )
             for number in range(1, DEMO_EPISODES + 1)
         ]
@@ -1258,6 +1316,9 @@ async def _seed_library(session: AsyncSession, scenario: Scenario, paths: PathSe
     for user, under_way in DEMO_UNDER_WAY.items():
         scenario.jellyfin.positions[user] = {
             found[name].id: percentage for name, percentage in under_way.items()
+        } | {
+            episodes[name][number - 1].id: percentage
+            for (name, number), percentage in DEMO_EPISODES_UNDER_WAY.get(user, {}).items()
         }
     scenario.jellyfin.items_ = [*items, *(row for rows in episodes.values() for row in rows)]
 

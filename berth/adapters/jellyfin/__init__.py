@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+from datetime import datetime
 from itertools import takewhile
 from typing import Protocol
 
@@ -168,8 +169,22 @@ class JellyfinUserData:
 
 
 @dataclass(frozen=True, slots=True)
+class ParentImage:
+    """上層 item 的一張圖：`ParentThumbItemId` + `ParentThumbImageTag` 這種成對的欄位。
+
+    集沒有自己的橫圖時，jellyfin-web 借季或劇的（研究 library-browsing.md §7）。**是哪一層由
+    Jellyfin 決定**（v12.0 `DtoService.AddInheritedImages`）：Thumb 先找季、劇自己有就換成劇的；
+    Backdrop 取往上找到的第一個。
+    """
+
+    item_id: str
+    tag: str
+
+
+@dataclass(frozen=True, slots=True)
 class JellyfinItem:
-    """`GET /Items` 的一項（入庫之後的反查，brief §20.1、plan §8.2）。"""
+    """`GET /Items` 的一項（入庫之後的反查，brief §20.1、plan §8.2），也是繼續觀看與下一集的一項
+    （`/UserItems/Resume`、`/Shows/NextUp` 回同一種 DTO，M1.5 票 07）。"""
 
     id: str
     #: Jellyfin 自己的型別名：`Series`、`Episode`、`Movie`。
@@ -192,6 +207,26 @@ class JellyfinItem:
     primary_tag: str = ""
     #: 帶著 `userId` 查、而且沒有關掉 `enableUserData` 時才有（M1.5 票 05）。
     user_data: JellyfinUserData | None = None
+    # --- 集的身分與橫卡的圖（M1.5 票 07）---
+    #: `SeriesName`：集屬於哪一部劇，Jellyfin 的名稱。其餘型別是空字串。
+    series_name: str = ""
+    #: `ParentIndexNumber` / `IndexNumber` / `IndexNumberEnd`：季號、集號、多集檔的最後一集
+    #: （名字照帳本與計劃的 `episode_start` / `episode_end`）。Jellyfin 認不出編號時沒有這幾格
+    #: （`None`）；S00 是 0。
+    season: int | None = None
+    episode_start: int | None = None
+    episode_end: int | None = None
+    #: `ImageTags.Thumb` 與 `BackdropImageTags[0]`：這個 item 自己的橫圖。查詢沒開這兩種圖
+    #: （`enableImageTypes`）時一律是空字串（v12.0 `DtoService` 照 `GetImageLimit` 收錄）。
+    thumb_tag: str = ""
+    backdrop_tag: str = ""
+    #: `SeriesThumbImageTag`：集所屬的劇的 Thumb（item id 是 `series_id`）。**12.1.0 錄的 NextUp
+    #: 沒有回它**，劇的 Thumb 從 `parent_thumb` 來；jellyfin-web 兩格都看，Berth 也都讀。
+    series_thumb_tag: str = ""
+    #: `ParentThumbItemId` + `ParentThumbImageTag`，
+    #: `ParentBackdropItemId` + `ParentBackdropImageTags[0]`。
+    parent_thumb: ParentImage | None = None
+    parent_backdrop: ParentImage | None = None
 
     @property
     def source_paths(self) -> tuple[str, ...]:
@@ -446,6 +481,26 @@ class JellyfinClient(Protocol):
         """
         ...
 
+    async def resume(
+        self, *, user_id: str, library_id: str | None, limit: int
+    ) -> tuple[JellyfinItem, ...]:
+        """`GET /UserItems/Resume`：看到一半的集與電影，最近看的在前。帶 `mediaTypes=Video`
+        （研究 §1.2：不帶會混進 Season 與 Series）。
+
+        **`library_id` 是 `None` 時不帶 `parentId`**，Jellyfin 才照這個人的媒體庫限縮；帶了就不限縮
+        （研究 §2）——同一條「`library_id` 必須先驗過」的規矩。
+        """
+        ...
+
+    async def next_up(
+        self, *, user_id: str, library_id: str | None, limit: int, cutoff: datetime
+    ) -> tuple[JellyfinItem, ...]:
+        """`GET /Shows/NextUp`：每部看過的劇的下一集，劇最後看過的日期新的在前。只算 `cutoff`
+        之後看過的劇；看到一半的集不算（`enableResumable=false`，它們在 `resume`）。
+        `library_id` 同 `resume`。
+        """
+        ...
+
     # --- 圖片（M1.5 票 04）---
 
     async def image(
@@ -489,6 +544,7 @@ __all__ = [
     "JellyfinUserData",
     "JellyfinView",
     "NewLibrary",
+    "ParentImage",
     "TypeOption",
     "unsupported_message",
     "version_supported",

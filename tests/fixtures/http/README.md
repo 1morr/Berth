@@ -197,6 +197,12 @@ Alpha Show 與 Bravo Show 看過第一集、Frieren（TV）第一集看到 3 分
 | `jellyfin/items-filters.tv.json` | `GET /Items/Filters?userId=U&parentId=<TV>&includeItemTypes=Series`。`{Genres, Tags, OfficialRatings, Years}`；**不帶 `parentId` 時四份全空**，所以沒有另存那一份 |
 | `jellyfin/useritems-resume.restricted.json` | `GET /UserItems/Resume?userId=U&mediaTypes=Video`。一集一部電影；Anime 裡看到一半的那一集**不在**（不帶 `parentId` 會套權限） |
 | `jellyfin/shows-nextup.restricted.json` | `GET /Shows/NextUp?userId=U`。Alpha 與 Bravo 的第二集；Anime 那部看過第一集的劇**不在** |
+| `jellyfin/useritems-resume.watching.json` | **M1.5 票 07 加錄**（`--record --only`，另一輪一次性容器：使用者 id、`ServerId`、日期與 `ImageTags` 和這一組其他檔案不同；item id 相同）。**媒體樹多了橫圖**：Alpha Show 與 Foxtrot Movie 的資料夾有 `landscape.jpg`（Thumb）與 `fanart.jpg`（Backdrop），Bravo Show 只有 `fanart.jpg`，其餘仍只有 `poster.jpg`。`GET /UserItems/Resume?userId=U&limit=12&imageTypeLimit=1&enableImageTypes=Primary,Backdrop,Thumb&enableTotalRecordCount=false&mediaTypes=Video`（Berth 首頁那一支，jellyfin-web 的參數）：Frieren 那一集（沒有任何橫圖）與 Foxtrot Movie（自己的 Thumb 與 Backdrop）；`TotalRecordCount` 照樣回 2 |
+| `jellyfin/useritems-resume.watching.mixed.json` | 同上一輪，拿掉 `mediaTypes`：多出三季與三部劇——`mediaTypes=Video` 伺服器真的有過濾的對照 |
+| `jellyfin/useritems-resume.watching.tv.json` | 同上一輪，加 `parentId=<TV>`：只剩 Frieren 那一集 |
+| `jellyfin/shows-nextup.watching.json` | 同上一輪。`GET /Shows/NextUp?userId=U&limit=24&imageTypeLimit=1&enableImageTypes=Primary,Backdrop,Thumb&enableTotalRecordCount=false&enableResumable=false&nextUpDateCutoff=<錄製當下減 365 天>`：Bravo（最後看 2026-03-01）在 Alpha（2026-01-01）前。Alpha 的集帶 `ParentThumbItemId` / `ParentBackdropItemId`（都是劇），Bravo 的集只有 `ParentBackdrop*`；**兩集都沒有 `SeriesThumbImageTag`** |
+| `jellyfin/shows-nextup.watching.cutoff.json` | 同上，`nextUpDateCutoff=2026-02-15T00:00:00.000Z`：只剩 Bravo |
+| `jellyfin/shows-nextup.watching.movies.json` | 同上，加 `parentId=<Movies>`：空 |
 | `jellyfin/shows-seasons.json` | `GET /Shows/{Alpha}/Seasons?userId=U&fields=ItemCounts,PrimaryImageAspectRatio`。兩季，季名是伺服器 UI 語言的「第 1 季」 |
 | `jellyfin/shows-episodes.json` | `GET /Shows/{Alpha}/Episodes?userId=U&seasonId=<第一季>&fields=Overview,PrimaryImageAspectRatio`。三集；集名來自檔名（沒有集的 NFO） |
 | `jellyfin/userplayeditems.post.json` | `POST /UserPlayedItems/{Bravo S01E02}?userId=U` 的 200：`Played=true, PlayCount=1, LastPlayedDate` |

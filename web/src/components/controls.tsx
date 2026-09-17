@@ -154,6 +154,13 @@ export function GhostButton({
  * （票 04 的 code review）——外觀的單一來源是元件，不是一段字串。
  * `children` 之外的 prop 交給呼叫端的 `Link`，所以路由型別檢查仍然成立。
  */
+/**
+ * 比 Ghost 小一號的按鈕，擠得進卡片最下面那一行或區塊標題列（命中面積仍 ≥ 24px）：牆卡片的「標為已看」
+ * （票 05）與繼續觀看、下一集的「全部 N 項」（票 07）。
+ */
+export const COMPACT_BUTTON =
+  'label inline-flex min-h-6 items-center border-2 border-rule px-2 py-1 text-ink hover:border-rule-strong aria-disabled:text-ink-dim'
+
 export const GHOST_LINK =
   'label justify-self-start border-2 border-rule px-4 py-2.5 text-ink hover:border-rule-strong'
 

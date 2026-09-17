@@ -8,8 +8,11 @@
   它只從 session 來（`services/jellyfin_access.py`）。回寫入之後的觀看狀態，前端拿它改牆上那一格，
   不必重抓整面牆（jellyfin-web 收到 `UserDataChanged` 也是就地改卡片）。
 
+- **繼續觀看與下一集**（`GET /watching`，票 07）：首頁上方的兩列，這個人的整個帳號。媒體庫頁那兩列是
+  `GET /inventory/{id}/watching`，形狀相同（`watching_out`）。
+
 誰進得來由門禁決定（`api/gate.py`）：不在白名單上，所以要登入；寫入另要 CSRF 標頭。
-`/jellyfin/libraries` 那一支是管理員的，這兩組不是（`ADMIN_PREFIXES` 只收那一支）。
+`/jellyfin/libraries` 那一支是管理員的，這幾組都不是（`ADMIN_PREFIXES` 只收那一支）。
 """
 
 from __future__ import annotations
@@ -22,9 +25,10 @@ from fastapi.responses import Response
 
 from berth.api.deps import AccessCacheDep, ClientFactoryDep, SessionDep
 from berth.api.gate import current_user
-from berth.api.schemas import WatchStateOut
+from berth.api.schemas import JellyfinWebOut, WatchingCardOut, WatchingOut, WatchStateOut
 from berth.domain import ImageSize, JellyfinImageType
 from berth.services.auth import AuthenticatedUser
+from berth.services.deeplink import jellyfin_web
 from berth.services.jellyfin_access import (
     AccountDisabledError,
     ItemNotVisibleError,
@@ -34,6 +38,7 @@ from berth.services.jellyfin_access import (
     jellyfin_access,
 )
 from berth.services.jellyfin_images import ImageMissingError, read_image
+from berth.services.watching import Watching, WatchingCard, read_watching
 
 router = APIRouter(prefix="/jellyfin", tags=["jellyfin"])
 
@@ -96,6 +101,52 @@ async def get_image(
         image.content,
         media_type=image.content_type,
         headers=IMAGE_HEADERS,
+    )
+
+
+@router.get(
+    "/watching",
+    responses={
+        401: {"description": "`account_disabled`：帳號在 Jellyfin 被停用，session 已結束"},
+        503: {"description": "`jellyfin_unreachable`：問不到 Jellyfin"},
+    },
+)
+async def get_watching(
+    session: SessionDep, factory: ClientFactoryDep, cache: AccessCacheDep, request: Request
+) -> WatchingOut:
+    """首頁上方的繼續觀看與下一集：這個人整個帳號的（不帶媒體庫，Jellyfin 才照他的權限限縮）。"""
+    try:
+        async with jellyfin_access(session, factory, cache, session_user(request)) as access:
+            watching = await read_watching(access, None)
+    except (AccountDisabledError, JellyfinUnreachableError) as refusal:
+        raise access_refusal(refusal) from refusal
+    return await watching_out(session, watching)
+
+
+async def watching_out(session: SessionDep, watching: Watching) -> WatchingOut:
+    """首頁與媒體庫頁共用的形狀。圖片網址在這一層組：services 只知道 Jellyfin 的 tag。"""
+    return WatchingOut(
+        jellyfin=JellyfinWebOut.model_validate(await jellyfin_web(session)),
+        resume=[_watching_card(card) for card in watching.resume],
+        next_up=[_watching_card(card) for card in watching.next_up],
+    )
+
+
+def _watching_card(card: WatchingCard) -> WatchingCardOut:
+    image = card.image
+    return WatchingCardOut(
+        item_id=card.item_id,
+        kind=card.kind,
+        title=card.title,
+        episode_name=card.episode_name,
+        season=card.season,
+        episode_start=card.episode_start,
+        episode_end=card.episode_end,
+        year=card.year,
+        progress=card.progress,
+        image_url=image_url(image.item_id, image.image_type, size=ImageSize.WIDE, tag=image.tag)
+        if image
+        else "",
     )
 
 

@@ -39,6 +39,17 @@ Berth 只讀它，並替那個人**標為已看 / 標為未看**（寫回 Jellyf
 每一集，復原不了。
 _Avoid_: seen, history, played state
 
+**Resume**（UI 顯示「繼續觀看」）:
+一位使用者在 Jellyfin 看到一半的集與電影（Jellyfin `/UserItems/Resume`），最近看的在前；卡片說的是看到幾 %，看過又重看
+到一半的片也算。首頁上方是整個帳號的，Inventory 頁上方只含那個 Jellyfin Library 的（M1.5 票 07）。
+_Avoid_: continue, in progress, recently watched
+
+**Next Up**（UI 顯示「下一集」）:
+一位使用者每部看過的劇的下一集（Jellyfin `/Shows/NextUp`）：最後看過的那一集之後、還沒看的第一集。看到一半的集不算
+（它在 Resume），一年內沒看過的劇也不算（jellyfin-web 的預設）；範圍同 Resume。兩者合稱 **Watching**
+（`services/watching.py`、`WatchingOut`）。
+_Avoid_: upcoming, next episode（TMDB 的「下一集播出」是另一件事）, queue
+
 **Jellyfin Library**（UI 顯示「Jellyfin 媒體庫」）:
 Jellyfin 那一端的 virtual folder：一個名字、一個 collection type、**一到多條**路徑。Berth 不擁有它——
 套件內的 Jellyfin 由 Berth 建三個（Movies / TV / Anime），既有的一律只讀，最多加一條路徑。

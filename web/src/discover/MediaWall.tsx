@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import type { Discover } from '../api/discover'
 import { TmdbNotice } from '../components/TmdbNotice'
 import { MediaTile, TilePlaceholder } from './MediaTile'
+import { WALL_GRID } from './wallGrid'
 
 /** 讀取中先畫幾格空位。夠填滿桌機第一屏，版面才不會在圖到齊時整個往下跳。 */
 const PLACEHOLDERS = 12
@@ -87,9 +88,3 @@ export function MediaWall({
 function Grid({ children }: { children: React.ReactNode }) {
   return <div className={WALL_GRID}>{children}</div>
 }
-
-/**
- * 牆的欄數。媒體庫的牆（票 13）是同一座堆場的盤點表，格子必須與這裡對得齊——
- * 所以斷點只有這一份。
- */
-export const WALL_GRID = 'grid grid-cols-2 gap-0 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6'

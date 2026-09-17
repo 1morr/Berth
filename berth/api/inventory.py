@@ -16,8 +16,8 @@ from fastapi import APIRouter, Query, Request
 from pydantic import BaseModel, ConfigDict
 
 from berth.api.deps import AccessCacheDep, ClientFactoryDep, SessionDep
-from berth.api.jellyfin import access_refusal, image_url, session_user
-from berth.api.schemas import JellyfinWebOut, WatchStateOut
+from berth.api.jellyfin import access_refusal, image_url, session_user, watching_out
+from berth.api.schemas import JellyfinWebOut, WatchingOut, WatchStateOut
 from berth.domain import (
     CollectionType,
     ImageSize,
@@ -38,6 +38,7 @@ from berth.services.jellyfin_access import (
     WallQuery,
     jellyfin_access,
 )
+from berth.services.watching import read_watching
 
 router = APIRouter(prefix="/inventory", tags=["inventory"])
 
@@ -199,6 +200,24 @@ async def get_inventory_filters(
     except (AccountDisabledError, JellyfinUnreachableError, LibraryNotVisibleError) as refusal:
         raise access_refusal(refusal) from refusal
     return InventoryFiltersOut.model_validate(filters)
+
+
+@router.get("/{library_id}/watching")
+async def get_inventory_watching(
+    session: SessionDep,
+    factory: ClientFactoryDep,
+    cache: AccessCacheDep,
+    request: Request,
+    library_id: str,
+) -> WatchingOut:
+    """這個媒體庫的繼續觀看與下一集（票 07）。媒體庫先對允許清單驗過才轉給 Jellyfin：帶了 `parentId`
+    的 Resume 與 NextUp 不套媒體庫權限（研究 §2）。"""
+    try:
+        async with jellyfin_access(session, factory, cache, session_user(request)) as access:
+            watching = await read_watching(access, library_id)
+    except (AccountDisabledError, JellyfinUnreachableError, LibraryNotVisibleError) as refusal:
+        raise access_refusal(refusal) from refusal
+    return await watching_out(session, watching)
 
 
 def _card(card: InventoryCard) -> InventoryCardOut:

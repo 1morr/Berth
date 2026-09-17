@@ -30,6 +30,8 @@ from berth.services.settings import read_settings
 IMAGE_SIZES: dict[ImageSize, tuple[int, int]] = {
     # 與同一面牆上還沒進 Jellyfin 的卡片用的 TMDB `w342` 同寬（`services/discover.POSTER_SIZE`）。
     ImageSize.POSTER: (342, 513),
+    # 16:9、與海報同寬：繼續觀看與下一集的格子與牆共用同一份欄數（票 07）。
+    ImageSize.WIDE: (342, 192),
 }
 
 #: Jellyfin 的 `quality`。90 是 96（jellyfin-web 的值）的一半大小（研究 §6.1）。

@@ -1,0 +1,91 @@
+{
+  "Items": [
+    {
+      "BackdropImageTags": [],
+      "ChannelId": null,
+      "Container": "mkv",
+      "Id": "99701a68c9a746b2f3a2d31d0b6c49f2",
+      "ImageBlurHashes": {
+        "Primary": {
+          "ff4fb403e27270c45b14d22db5079a79": "d23KQ.pLfQpLktfkfQfkfQfQfQfQktfkfQfkfQfQfQfQ"
+        }
+      },
+      "ImageTags": {},
+      "IndexNumber": 1,
+      "IsFolder": false,
+      "LocationType": "FileSystem",
+      "MediaType": "Video",
+      "Name": "Frieren",
+      "ParentIndexNumber": 1,
+      "ParentPrimaryImageItemId": "02c06be72a8c11102b98e17665c9fef2",
+      "ParentPrimaryImageTag": "ff4fb403e27270c45b14d22db5079a79",
+      "PrimaryImageAspectRatio": 0.6666666666666666,
+      "ProductionYear": 2023,
+      "RunTimeTicks": 6000000000,
+      "SeasonId": "07a528fa42ef6bf81fffb993098d54de",
+      "SeasonName": "第 1 季",
+      "SeriesId": "02c06be72a8c11102b98e17665c9fef2",
+      "SeriesName": "Frieren",
+      "SeriesPrimaryImageTag": "ff4fb403e27270c45b14d22db5079a79",
+      "ServerId": "6254dde8088a47fdadab7f3c41c92a5e",
+      "Type": "Episode",
+      "UserData": {
+        "IsFavorite": false,
+        "ItemId": "99701a68c9a746b2f3a2d31d0b6c49f2",
+        "Key": "99701a68-c9a7-46b2-f3a2-d31d0b6c49f2",
+        "PlayCount": 0,
+        "PlaybackPositionTicks": 1800000000,
+        "Played": false,
+        "PlayedPercentage": 30
+      },
+      "VideoType": "VideoFile"
+    },
+    {
+      "BackdropImageTags": [
+        "b047847fd9a28b24b283c806f022fa1a"
+      ],
+      "ChannelId": null,
+      "CommunityRating": 7.1,
+      "Container": "mkv",
+      "CriticRating": 72,
+      "Id": "aaad8034da2f8c4db82f7aa3e26a4e3e",
+      "ImageBlurHashes": {
+        "Backdrop": {
+          "b047847fd9a28b24b283c806f022fa1a": "W23V}qptfQptfQptqBfkfQfkfQfkfQfQfQfQfQfQqBfkfQfkfQfk"
+        },
+        "Primary": {
+          "b047847fd9a28b24b283c806f022fa1a": "d23KQ.pLfQpLktfkfQfkfQfQfQfQktfkfQfkfQfQfQfQ"
+        },
+        "Thumb": {
+          "b047847fd9a28b24b283c806f022fa1a": "W2FgQ{=vfQ=vfQ=v}qj@fQj@fQj@fQfQfQfQfQfQ}qj@fQj@fQj@"
+        }
+      },
+      "ImageTags": {
+        "Primary": "b047847fd9a28b24b283c806f022fa1a",
+        "Thumb": "b047847fd9a28b24b283c806f022fa1a"
+      },
+      "IsFolder": false,
+      "LocationType": "FileSystem",
+      "MediaType": "Video",
+      "Name": "Foxtrot Movie",
+      "OfficialRating": "R",
+      "PremiereDate": "2018-03-09T00:00:00.0000000Z",
+      "ProductionYear": 2018,
+      "RunTimeTicks": 6000000000,
+      "ServerId": "6254dde8088a47fdadab7f3c41c92a5e",
+      "Type": "Movie",
+      "UserData": {
+        "IsFavorite": false,
+        "ItemId": "aaad8034da2f8c4db82f7aa3e26a4e3e",
+        "Key": "aaad8034-da2f-8c4d-b82f-7aa3e26a4e3e",
+        "PlayCount": 0,
+        "PlaybackPositionTicks": 3000000000,
+        "Played": false,
+        "PlayedPercentage": 50
+      },
+      "VideoType": "VideoFile"
+    }
+  ],
+  "StartIndex": 0,
+  "TotalRecordCount": 2
+}

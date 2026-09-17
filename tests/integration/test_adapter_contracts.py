@@ -10,7 +10,7 @@ import json
 import socket
 import urllib.parse
 from collections.abc import Awaitable, Callable
-from datetime import date
+from datetime import UTC, date, datetime
 from typing import Any
 from urllib.parse import parse_qsl
 
@@ -27,7 +27,13 @@ from berth.adapters.http import (
     ServiceNotDeployedError,
     ServiceUnavailableError,
 )
-from berth.adapters.jellyfin import LIBRARY_SCAN_TASK_KEY, NewLibrary, TypeOption
+from berth.adapters.jellyfin import (
+    LIBRARY_SCAN_TASK_KEY,
+    JellyfinItem,
+    NewLibrary,
+    ParentImage,
+    TypeOption,
+)
 from berth.adapters.jellyfin.client import HttpJellyfinClient
 from berth.adapters.prowlarr import (
     DEFAULT_APP_PROFILE_ID,
@@ -2719,3 +2725,204 @@ def test_tmdb_absolute_numbers_follow_the_order_field_even_with_gaps() -> None:
     )
 
     assert ordering == {(1, 1): 1, (1, 3): 3, (2, 1): 6}
+
+
+# --- 繼續觀看與下一集（M1.5 票 07，研究 library-browsing.md §1、§2、§7）--------------------
+#
+# 參數照 jellyfin-web 首頁（`resume.ts`、`nextUp.ts`）。fixture 是 2026-09-17 以 `--record --only`
+# 在一次性 12.1.0 上加錄的（媒體樹多了 `landscape.jpg` / `fanart.jpg`，fixture README）。每個過濾
+# 參數另有一份拿掉或換值的錄製，兩份不同才證明得了伺服器真的照它過濾——`/Items` 那一族會靜默忽略
+# 不認得的參數。
+
+#: `useritems-resume.watching.json` 錄製時的查詢（首頁：不帶 `parentId`）。
+RESUME_QUERY = {
+    "userId": RESTRICTED_USER,
+    "limit": "12",
+    "imageTypeLimit": "1",
+    "enableImageTypes": "Primary,Backdrop,Thumb",
+    "enableTotalRecordCount": "false",
+    "mediaTypes": "Video",
+}
+FRIEREN_EPISODE = "99701a68c9a746b2f3a2d31d0b6c49f2"
+FOXTROT_MOVIE = "aaad8034da2f8c4db82f7aa3e26a4e3e"
+ALPHA_EPISODE = "cd2f059cd4fdef1da23617e86514232e"
+BRAVO_SHOW = "6d616414836b339f17e139c3b00fd2ae"
+#: 下一集的截止日。錄製時用的是「錄製當下減 365 天」，契約測試只驗形狀。
+CUTOFF = datetime(2025, 9, 17, 14, 39, 58, 123000, tzinfo=UTC)
+
+
+async def resume(library_id: str | None) -> tuple[JellyfinItem, ...]:
+    client = jellyfin_client("key")
+    try:
+        return await client.resume(user_id=RESTRICTED_USER, library_id=library_id, limit=12)
+    finally:
+        await client.aclose()
+
+
+async def next_up(library_id: str | None, cutoff: datetime = CUTOFF) -> tuple[JellyfinItem, ...]:
+    client = jellyfin_client("key")
+    try:
+        return await client.next_up(
+            user_id=RESTRICTED_USER, library_id=library_id, limit=24, cutoff=cutoff
+        )
+    finally:
+        await client.aclose()
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_jellyfin_resume_for_the_whole_account_carries_no_parent_id() -> None:
+    """不帶 `parentId` 時 Jellyfin 照這個人的媒體庫限縮（研究 §2）：Anime 裡看到一半的那集不在。"""
+    route = respx.get(f"{JELLYFIN_URL}/UserItems/Resume").respond(
+        200, text=read_fixture("http/jellyfin/useritems-resume.watching.json")
+    )
+
+    items = await resume(None)
+
+    assert dict(route.calls.last.request.url.params) == RESUME_QUERY
+    assert [(item.id, item.type) for item in items] == [
+        (FRIEREN_EPISODE, "Episode"),
+        (FOXTROT_MOVIE, "Movie"),
+    ]
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_jellyfin_resume_with_video_only_has_no_seasons_or_series() -> None:
+    """`mediaTypes=Video`：不帶它時 Resume 混進三季與三部劇（研究 §1.2，12.1.0 同樣）。"""
+    route = respx.get(f"{JELLYFIN_URL}/UserItems/Resume").respond(
+        200, text=read_fixture("http/jellyfin/useritems-resume.watching.json")
+    )
+    mixed = json.loads(read_fixture("http/jellyfin/useritems-resume.watching.mixed.json"))["Items"]
+
+    items = await resume(None)
+
+    assert route.calls.last.request.url.params["mediaTypes"] == "Video"
+    assert {item.type for item in items} == {"Episode", "Movie"}
+    assert {row["Type"] for row in mixed} == {"Season", "Series", "Episode", "Movie"}
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_jellyfin_resume_in_one_library_is_filtered_by_the_server() -> None:
+    """`parentId=<TV>`：Movies 那部看到一半的片不在。**這個 id 必須先對允許清單驗過**——帶
+    `parentId` 時 Jellyfin 不套媒體庫權限（研究 §2），那一道在 `services/jellyfin_access.py`。"""
+    route = respx.get(f"{JELLYFIN_URL}/UserItems/Resume").respond(
+        200, text=read_fixture("http/jellyfin/useritems-resume.watching.tv.json")
+    )
+
+    items = await resume(TV_LIBRARY)
+
+    assert dict(route.calls.last.request.url.params) == {**RESUME_QUERY, "parentId": TV_LIBRARY}
+    assert [item.id for item in items] == [FRIEREN_EPISODE]
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_jellyfin_an_episode_under_way_reads_as_the_show_the_numbers_and_how_far_in() -> None:
+    respx.get(f"{JELLYFIN_URL}/UserItems/Resume").respond(
+        200, text=read_fixture("http/jellyfin/useritems-resume.watching.json")
+    )
+
+    frieren, foxtrot = await resume(None)
+
+    # dummy 媒體樹的集沒有 NFO，Jellyfin 拿劇名當集名。
+    assert (frieren.series_name, frieren.name, frieren.season, frieren.episode_start) == (
+        "Frieren",
+        "Frieren",
+        1,
+        1,
+    )
+    assert frieren.episode_end is None
+    assert frieren.series_id == "02c06be72a8c11102b98e17665c9fef2"
+    assert frieren.user_data is not None
+    assert frieren.user_data.played_percentage == 30.0
+    # Frieren 的資料夾只有 `poster.jpg`：沒有任何一張橫圖可取，季的 Primary 不是這一集的。
+    assert (frieren.thumb_tag, frieren.backdrop_tag, frieren.primary_tag) == ("", "", "")
+    assert frieren.parent_thumb is None
+    assert frieren.parent_backdrop is None
+    # 電影自己的 Thumb（`landscape.jpg`）與 Backdrop（`fanart.jpg`），`imageTypeLimit=1` 各一張。
+    tag = "b047847fd9a28b24b283c806f022fa1a"
+    assert (foxtrot.name, foxtrot.year, foxtrot.series_name, foxtrot.season) == (
+        "Foxtrot Movie",
+        2018,
+        "",
+        None,
+    )
+    assert (foxtrot.thumb_tag, foxtrot.backdrop_tag, foxtrot.primary_tag) == (tag, tag, tag)
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_jellyfin_next_up_for_the_whole_account_follows_jellyfin_web() -> None:
+    """不帶 `parentId` / `seriesId`（研究 §2）；`enableResumable=false`：看到一半的集只在
+    繼續觀看那一列（v12.0 `TVSeriesManager.DetermineNextEpisode`，原始碼）。順序是劇最後看過的
+    日期，新的在前。"""
+    route = respx.get(f"{JELLYFIN_URL}/Shows/NextUp").respond(
+        200, text=read_fixture("http/jellyfin/shows-nextup.watching.json")
+    )
+
+    items = await next_up(None)
+
+    assert dict(route.calls.last.request.url.params) == {
+        "userId": RESTRICTED_USER,
+        "limit": "24",
+        "imageTypeLimit": "1",
+        "enableImageTypes": "Primary,Backdrop,Thumb",
+        "enableTotalRecordCount": "false",
+        "enableResumable": "false",
+        # jellyfin-web 送 `Date.toISOString()` 的形狀。
+        "nextUpDateCutoff": "2025-09-17T14:39:58.123Z",
+    }
+    assert [(item.series_name, item.season, item.episode_start) for item in items] == [
+        ("Bravo Show", 1, 2),
+        ("Alpha Show", 1, 2),
+    ]
+    bravo, alpha = items
+    # Alpha 的資料夾有 `landscape.jpg` 與 `fanart.jpg`：集借劇的 Thumb。12.1.0 沒有回
+    # `SeriesThumbImageTag`，劇的 Thumb 在 `ParentThumb*` 那一對。
+    assert alpha.id == ALPHA_EPISODE
+    assert alpha.series_thumb_tag == ""
+    assert alpha.parent_thumb == ParentImage(ALPHA_SHOW, "1c629ae266a739951e9b1b98bc6255e9")
+    assert alpha.parent_backdrop == ParentImage(ALPHA_SHOW, "1c629ae266a739951e9b1b98bc6255e9")
+    # Bravo 只有 `fanart.jpg`：沒有 Thumb 可借，只有劇的 Backdrop。
+    assert bravo.parent_thumb is None
+    assert bravo.parent_backdrop == ParentImage(BRAVO_SHOW, "609790cd6a30bf8277a008ba2fecb77f")
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_jellyfin_next_up_leaves_out_shows_last_watched_before_the_cutoff() -> None:
+    """`nextUpDateCutoff`：Alpha 最後看的是 2026-01-01、Bravo 是 2026-03-01，截在 2026-02-15
+    只剩 Bravo。"""
+    route = respx.get(f"{JELLYFIN_URL}/Shows/NextUp").respond(
+        200, text=read_fixture("http/jellyfin/shows-nextup.watching.cutoff.json")
+    )
+
+    items = await next_up(None, cutoff=datetime(2026, 2, 15, tzinfo=UTC))
+
+    assert route.calls.last.request.url.params["nextUpDateCutoff"] == "2026-02-15T00:00:00.000Z"
+    assert [item.series_name for item in items] == ["Bravo Show"]
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_jellyfin_next_up_in_one_library_is_filtered_by_the_server() -> None:
+    """`parentId=<Movies>`：兩部劇都在 TV，電影庫的下一集是空的。同樣必須先對允許清單驗過。"""
+    route = respx.get(f"{JELLYFIN_URL}/Shows/NextUp").respond(
+        200, text=read_fixture("http/jellyfin/shows-nextup.watching.movies.json")
+    )
+
+    items = await next_up(MOVIES_LIBRARY)
+
+    assert route.calls.last.request.url.params["parentId"] == MOVIES_LIBRARY
+    assert items == ()
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_jellyfin_next_up_without_an_items_array_is_not_jellyfin() -> None:
+    respx.get(f"{JELLYFIN_URL}/Shows/NextUp").respond(200, json={"Nothing": []})
+
+    with pytest.raises(ProtocolMismatchError):
+        await next_up(None)

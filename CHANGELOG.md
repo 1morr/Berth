@@ -387,6 +387,16 @@ Windows Docker Desktop（NTFS bind mount）與 Linux（ext4）上各跑一次 `d
   篩完一部都沒有時說出篩了什麼，並給一條清掉類型與年份的路。`GET /api/inventory/{library_id}` 多收 `sort`、`order`、
   重複的 `genres` 與 `years`，選單外的排序鍵回 422 `sort_not_offered`；新增 `GET /api/inventory/{library_id}/filters`；
   `InventoryLibraryOut` 多 `sorts`。演練情境 `library` 的作品有類型與評分。
+- **首頁與媒體庫頁上方有繼續觀看與下一集**（M1.5 票 07，brief §13、§19）：首頁 `/` 在搜尋列之上是你在 Jellyfin 看到一半的
+  集與電影（「看到 42%」），以及每部看過的劇的下一集；媒體庫頁在切換列之下只列這個媒體庫的（只在第 1 頁、沒有篩選時）。
+  沒有內容的那一列不畫；一行放不下時收起，「全部 N 項」就地展開。卡片是 16:9 的圖（照 jellyfin-web 橫卡的順序取，經
+  Berth 代理），說得出作品、季集與集名，點下去在新分頁開 Jellyfin 的那一集——Jellyfin 沒有直接播放的網址。Jellyfin
+  連不上時首頁說一行原因並可重試，探索照畫。新增 `GET /api/jellyfin/watching`
+  （整個帳號）與 `GET /api/inventory/{library_id}/watching`（`WatchingOut`：`jellyfin`、`resume`、`next_up`）；圖片代理多開
+  `Thumb`、`Backdrop` 兩種類型與 `wide`（16:9、342×192）尺寸。演練情境 `library` 的劇有集號與橫圖、`deckhand` 有看到
+  一半的集，另加什麼都沒看過的 `bosun` / `knot`。
+- `jellyfin_permissions.py`（M1.5 票 07）：dummy 媒體樹幾部作品多 `landscape.jpg` / `fanart.jpg`，加錄 Resume 與 NextUp
+  六份 fixture（Berth 的參數，加上拿掉 `mediaTypes`、帶 `parentId`、換 `nextUpDateCutoff` 的對照）。
 
 ### Changed
 
@@ -631,6 +641,9 @@ Windows Docker Desktop（NTFS bind mount）與 Linux（ext4）上各跑一次 `d
 - **類型與年份清單同樣先驗媒體庫**（M1.5 票 06）：Jellyfin 的 `/Items/Filters` 帶 `parentId` 時不套權限，連使用者自己的
   token 都照回（12.1.0 實測），不擋就會透出沒有權限的媒體庫有哪些類型與年份。不在允許清單回 404 且不問 Jellyfin；
   排序鍵不在這種媒體庫的選單上也在問 Jellyfin 之前拒絕，連同時送出的整份清單那一支都不送。
+- **繼續觀看與下一集照樣只給你看得到的**（M1.5 票 07）：Jellyfin 的 Resume 與 NextUp 帶 `parentId` 時不套媒體庫權限、
+  連使用者自己的 token 都照回（12.1.0 實測），所以首頁那一支一律不帶；媒體庫頁那一支先對允許清單驗過，不在清單回 404
+  且不問 Jellyfin。
 - **`/api/routes/*` 與 `/api/jellyfin/libraries` 永遠只有 admin**（票 14a，推翻票 14）。原本精靈跑完之前
   它們與 `/api/setup/*` 一樣匿名開放，而停用的 Route 不算進完成條件，所以那一刻任何人都能把紅燈 Route
   停用、再按完成。精靈第 7 步的刪除改走 `DELETE /api/setup/routes/{id}`（同一個命令、同一種拒絕）。

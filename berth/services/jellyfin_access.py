@@ -10,6 +10,8 @@ library-browsing.md §2、§9）。所以「這個人看得到什麼」由 Berth
   而且**在問 Jellyfin 之前**。`parentId` 只放驗過的媒體庫 id：劇或季當 `parentId` 連使用者自己的
   token 都擋不住，所以這裡根本不收它們。牆（`page`）、整份清單（`index`）與類型年份清單（`filters`，
   票 06）都走這一道。排序鍵不在這種媒體庫的選單上也在這裡拒絕（`SortNotOfferedError`）。
+- **繼續觀看與下一集**（`resume` / `next_up`，票 07）：首頁要的是整個帳號，**不帶 `parentId`**——
+  Jellyfin 只在不帶的時候照這個人的媒體庫限縮；媒體庫頁的 id 同樣先驗過才帶。
 - **允許清單與 `Policy` 同一份短時間快取**（`AccessCache`）。帳號被停用就結束這個人的每一張
   Berth session，而不是縮短 session 的效期（brief §19）。
 - **寫入只有標記已看 / 未看**（`JellyfinAccess.mark_played`，票 05）。它不先查可見性：
@@ -27,6 +29,7 @@ import time
 from collections.abc import AsyncIterator, Awaitable, Callable, Iterator
 from contextlib import asynccontextmanager, contextmanager
 from dataclasses import dataclass
+from datetime import datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -239,19 +242,8 @@ class JellyfinAccess:
         """
         library = self.library(library_id)
         sort_by = library.sort_by(query.sort)
-        return self._page(library, start=start, limit=limit, sort_by=sort_by, query=query)
-
-    async def _page(
-        self,
-        library: BrowsableLibrary,
-        *,
-        start: int,
-        limit: int,
-        sort_by: tuple[str, ...],
-        query: WallQuery,
-    ) -> JellyfinPage:
-        with reachable():
-            return await self._client.library_page(
+        return self._reachable(
+            self._client.library_page(
                 user_id=self._user_id,
                 library_id=library.id,
                 item_type=library.item_type,
@@ -262,6 +254,7 @@ class JellyfinAccess:
                 genres=query.genres,
                 years=query.years,
             )
+        )
 
     async def filters(self, library_id: str) -> JellyfinFilters:
         """這個媒體庫裡的作品有哪些類型與年份。同樣先驗媒體庫：`/Items/Filters` 帶了 `parentId`
@@ -280,6 +273,35 @@ class JellyfinAccess:
             return await self._client.library_index(
                 user_id=self._user_id, library_id=library.id, item_type=library.item_type
             )
+
+    def resume(self, library_id: str | None, *, limit: int) -> Awaitable[tuple[JellyfinItem, ...]]:
+        """看到一半的集與電影。`library_id` 是 `None` 時是整個帳號；否則先驗過、在呼叫的當下就拒絕
+        （與 `page` 同一個理由：繼續觀看與下一集是同時問的）。"""
+        scope = self._scope(library_id)
+        return self._reachable(
+            self._client.resume(user_id=self._user_id, library_id=scope, limit=limit)
+        )
+
+    def next_up(
+        self, library_id: str | None, *, limit: int, cutoff: datetime
+    ) -> Awaitable[tuple[JellyfinItem, ...]]:
+        """每部看過的劇的下一集，只算 `cutoff` 之後看過的劇。`library_id` 同 `resume`。"""
+        scope = self._scope(library_id)
+        return self._reachable(
+            self._client.next_up(
+                user_id=self._user_id, library_id=scope, limit=limit, cutoff=cutoff
+            )
+        )
+
+    def _scope(self, library_id: str | None) -> str | None:
+        return None if library_id is None else self.library(library_id).id
+
+    @staticmethod
+    async def _reachable[T](request: Awaitable[T]) -> T:
+        """到 await 才送出的那一個請求；服務層的錯誤翻成 `JellyfinUnreachableError`。拒絕要在建立它
+        之前丟（`page`、`resume`、`next_up`）：同時問的另一支不該因為這一支被拒而已經送出去。"""
+        with reachable():
+            return await request
 
     async def mark_played(self, item_id: str, *, played: bool) -> WatchState:
         """把這個 item 標為已看或未看，寫進這個人在 Jellyfin 的紀錄；回寫入之後的觀看狀態。

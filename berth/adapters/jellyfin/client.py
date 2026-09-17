@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from datetime import UTC, datetime
 from typing import Any
 
 from berth.adapters.http import (
@@ -26,6 +27,7 @@ from berth.adapters.jellyfin import (
     JellyfinUserData,
     JellyfinView,
     NewLibrary,
+    ParentImage,
     TypeOption,
 )
 from berth.domain import CollectionType, SortOrder
@@ -354,6 +356,26 @@ class HttpJellyfinClient:
             raise ProtocolMismatchError(f"{method} {path}: not a user data payload")
         return _user_data(payload)
 
+    async def resume(
+        self, *, user_id: str, library_id: str | None, limit: int
+    ) -> tuple[JellyfinItem, ...]:
+        params = {**_watching(user_id, library_id, limit), "mediaTypes": "Video"}
+        return _items(await self._get("/UserItems/Resume", params=params))
+
+    async def next_up(
+        self, *, user_id: str, library_id: str | None, limit: int, cutoff: datetime
+    ) -> tuple[JellyfinItem, ...]:
+        params = {
+            **_watching(user_id, library_id, limit),
+            # 伺服器預設是 `true`；jellyfin-web 送 `false`，看到一半的集才不會兩列都出現。
+            "enableResumable": "false",
+            # jellyfin-web 送 `Date.toISOString()`：UTC、毫秒、`Z`。
+            "nextUpDateCutoff": cutoff.astimezone(UTC)
+            .isoformat(timespec="milliseconds")
+            .replace("+00:00", "Z"),
+        }
+        return _items(await self._get("/Shows/NextUp", params=params))
+
     # --- 圖片 ---
 
     async def image(
@@ -420,6 +442,7 @@ def _items(payload: Any) -> tuple[JellyfinItem, ...]:
 
 def _item(row: dict[str, Any]) -> JellyfinItem:
     providers = row.get("ProviderIds") or {}
+    tags = row.get("ImageTags") or {}
     return JellyfinItem(
         id=str(row.get("Id", "")),
         type=str(row.get("Type", "")),
@@ -433,9 +456,53 @@ def _item(row: dict[str, Any]) -> JellyfinItem:
         ),
         series_id=str(row.get("SeriesId") or ""),
         year=year if isinstance(year := row.get("ProductionYear"), int) else None,
-        primary_tag=str((row.get("ImageTags") or {}).get("Primary") or ""),
+        primary_tag=str(tags.get("Primary") or ""),
         user_data=_user_data(data) if isinstance(data := row.get("UserData"), dict) else None,
+        series_name=str(row.get("SeriesName") or ""),
+        season=_number(row.get("ParentIndexNumber")),
+        episode_start=_number(row.get("IndexNumber")),
+        episode_end=_number(row.get("IndexNumberEnd")),
+        thumb_tag=str(tags.get("Thumb") or ""),
+        backdrop_tag=_first(row.get("BackdropImageTags")),
+        series_thumb_tag=str(row.get("SeriesThumbImageTag") or ""),
+        parent_thumb=_parent_image(row.get("ParentThumbItemId"), row.get("ParentThumbImageTag")),
+        parent_backdrop=_parent_image(
+            row.get("ParentBackdropItemId"), _first(row.get("ParentBackdropImageTags"))
+        ),
     )
+
+
+def _watching(user_id: str, library_id: str | None, limit: int) -> dict[str, str]:
+    """繼續觀看與下一集共用的參數（jellyfin-web 首頁那兩列，研究 §7.2）。
+
+    **`library_id` 是 `None` 時不帶 `parentId`**：Jellyfin 只在不帶的時候照這個人的媒體庫限縮。
+    圖只開那兩列要的三種——不開的類型連上層借來的那幾格（`ParentThumb*`、`ParentBackdrop*`）都不會回
+    （v12.0 `DtoService` 照 `GetImageLimit` 收錄）。
+    """
+    params = {
+        "userId": user_id,
+        "limit": str(limit),
+        "imageTypeLimit": "1",
+        "enableImageTypes": "Primary,Backdrop,Thumb",
+        "enableTotalRecordCount": "false",
+    }
+    if library_id is not None:
+        params["parentId"] = library_id
+    return params
+
+
+def _number(value: Any) -> int | None:
+    # `bool` 是 `int` 的子類別，JSON 的 `true` 不是集號。
+    return value if isinstance(value, int) and not isinstance(value, bool) else None
+
+
+def _first(tags: Any) -> str:
+    """`BackdropImageTags` 這種陣列的第一個；`imageTypeLimit=1` 時本來就只有一個。"""
+    return str(tags[0]) if isinstance(tags, list) and tags else ""
+
+
+def _parent_image(item_id: Any, tag: Any) -> ParentImage | None:
+    return ParentImage(item_id=str(item_id), tag=str(tag)) if item_id and tag else None
 
 
 def _user_data(row: dict[str, Any]) -> JellyfinUserData:

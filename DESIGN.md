@@ -486,7 +486,8 @@ hover 與焦點也是同一個語彙（牆卡片、Ghost 按鈕、導覽方塊�
 
 **海報是 2:3 的矩形。** `aspect-[2/3]` + `object-cover`，底是 `hull`；沒有海報時同一塊矩形裡印一行
 `.value text-xs text-ink-dim` 的「無海報」（EN `NO ART`，`discover.noArt`），格子高度不變。媒體庫牆上**圖載不下來**（Jellyfin 回 404、連不上）
-也換成同一行（M1.5 票 04）——不留瀏覽器的破圖示。
+也換成同一行（M1.5 票 04）——不留瀏覽器的破圖示。**繼續觀看與下一集的圖是 16:9**（`aspect-video`，M1.5 票 07），
+沒有合用的橫圖時同一塊印「無圖」（EN `NO ART`）。兩種形狀是同一個元件（`components/ArtSlot.tsx`）。
 
 ## Components
 
@@ -610,6 +611,25 @@ ISO 6346 標識在哪個語言都是同一串字母數字）、狀態標籤（`.
   原生勾選框、`repeat(auto-fill,minmax(9rem,1fr))`），一次開一份，勾了就換網址、焦點留在那一格（換網址時牆先留著上一份，
   不換成空位格）。**不用 `<details>`**：內容只能長在它自己裡面，展開時旁邊的開關被擠到下一行、清單困在半欄寬（票 06 實跑）。
   「待審」「Unmatched」時整組不畫；篩類型或年份時「還沒進 Jellyfin」那一條不畫。
+
+### 橫卡（`WatchingRows`，繼續觀看與下一集）
+
+M1.5 票 07（`.scratch/m1.5/watching-shape.md`）。**橫放的貨櫃**：16:9 的圖是塗裝（`aspect-video`，Berth 代理的 Jellyfin
+Thumb / Backdrop / 劇照），下方同一條標識帶，框與底同牆卡片（`border-2 border-rule` + `well`、hover 換 `rule-strong`）。
+- **兩列在頁面上方**：首頁在搜尋列之上（搜尋時不收起，打字時輸入框不跳）；媒體庫頁在切換列與「還沒進 Jellyfin」之間，
+  只在第 1 頁、沒有篩選時畫。每一列是區塊標題（`.label` + 計數，重橫線）加一份 `WALL_GRID`，格線與下面的牆對齊。
+- **不橫向捲動**（The Board Never Scrolls Rule 的同一個理由）：收起時每一格帶「哪個寬度以上才出現」
+  （第 3 格 `sm`、第 4 格 `lg`、第 5–6 格 `xl`、第 7 格起藏著），一份 DOM、不量寬度。標題列右邊一顆小一號的開關
+  「全部 N 項 / 收起」（`aria-expanded`、`aria-controls`、`min-h-6`），在一行放得下的寬度以上 `display: none`。
+  **開關在標題列不在清單下方**：展開之後下一個 Tab 從第一格往下走。
+- **標識帶**：季集代號（`S01E05`，`episodes.ts`）或 `MOVIE` `Dot` 年份；作品名 `.value text-sm` 一行截斷；集名 `ink-dim`
+  一行（電影留高度）；繼續觀看多一行 `text-ink` 的「看到 42%」（牆上觀看狀態那一句）。**不塗漆、不疊入庫狀態、不在圖上疊
+  進度條**：每一格都已在 Jellyfin 裡，而進度不是 Berth 的狀態（The Usual Stays Unpainted Rule、The Paint Needs A Painted
+  Ground Rule）。
+- **整格是一條連結**，開 Jellyfin 那一集的詳細頁、新分頁（`sr-only` 說明）；主機推不出時整格不是連結，最下面一行說
+  「不知道 Jellyfin 開在哪裡」。
+- **讀取中不畫、沒有內容不畫**（不留空位格）。首頁問不到 Jellyfin 時換成一行 `ink-dim` 的原因 + 原文 + Ghost「重試」，
+  不用 `blocked` Notice 搶探索的位置；媒體庫頁不另外說（牆會說）。
 
 ### Media 詳情（提單）
 

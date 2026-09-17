@@ -1,0 +1,325 @@
+{
+  "Items": [
+    {
+      "BackdropImageTags": [],
+      "ChannelId": null,
+      "Id": "07a528fa42ef6bf81fffb993098d54de",
+      "ImageBlurHashes": {
+        "Primary": {
+          "ff4fb403e27270c45b14d22db5079a79": "d23KQ.pLfQpLktfkfQfkfQfQfQfQktfkfQfkfQfQfQfQ"
+        }
+      },
+      "ImageTags": {},
+      "IndexNumber": 1,
+      "IsFolder": true,
+      "LocationType": "FileSystem",
+      "MediaType": "Unknown",
+      "Name": "第 1 季",
+      "PrimaryImageAspectRatio": 0.6666666666666666,
+      "ProductionYear": 2023,
+      "SeriesId": "02c06be72a8c11102b98e17665c9fef2",
+      "SeriesName": "Frieren",
+      "SeriesPrimaryImageTag": "ff4fb403e27270c45b14d22db5079a79",
+      "ServerId": "6254dde8088a47fdadab7f3c41c92a5e",
+      "Type": "Season",
+      "UserData": {
+        "IsFavorite": false,
+        "ItemId": "07a528fa42ef6bf81fffb993098d54de",
+        "Key": "02c06be7-2a8c-1110-2b98-e17665c9fef2001",
+        "PlayCount": 0,
+        "PlaybackPositionTicks": 0,
+        "Played": false,
+        "PlayedPercentage": 0,
+        "UnplayedItemCount": 2
+      }
+    },
+    {
+      "BackdropImageTags": [],
+      "ChannelId": null,
+      "Id": "3e0017cdd1b6b5c0d5d3f94cabc63947",
+      "ImageBlurHashes": {
+        "Backdrop": {
+          "609790cd6a30bf8277a008ba2fecb77f": "W23V}qptfQptfQptqBfkfQfkfQfkfQfQfQfQfQfQqBfkfQfkfQfk"
+        },
+        "Primary": {
+          "609790cd6a30bf8277a008ba2fecb77f": "d23KQ.pLfQpLktfkfQfkfQfQfQfQktfkfQfkfQfQfQfQ"
+        }
+      },
+      "ImageTags": {},
+      "IndexNumber": 1,
+      "IsFolder": true,
+      "LocationType": "FileSystem",
+      "MediaType": "Unknown",
+      "Name": "第 1 季",
+      "ParentBackdropImageTags": [
+        "609790cd6a30bf8277a008ba2fecb77f"
+      ],
+      "ParentBackdropItemId": "6d616414836b339f17e139c3b00fd2ae",
+      "PrimaryImageAspectRatio": 0.6666666666666666,
+      "ProductionYear": 2020,
+      "SeriesId": "6d616414836b339f17e139c3b00fd2ae",
+      "SeriesName": "Bravo Show",
+      "SeriesPrimaryImageTag": "609790cd6a30bf8277a008ba2fecb77f",
+      "ServerId": "6254dde8088a47fdadab7f3c41c92a5e",
+      "Type": "Season",
+      "UserData": {
+        "IsFavorite": false,
+        "ItemId": "3e0017cdd1b6b5c0d5d3f94cabc63947",
+        "Key": "6d616414-836b-339f-17e1-39c3b00fd2ae001",
+        "PlayCount": 0,
+        "PlaybackPositionTicks": 0,
+        "Played": false,
+        "PlayedPercentage": 50,
+        "UnplayedItemCount": 1
+      }
+    },
+    {
+      "BackdropImageTags": [],
+      "ChannelId": null,
+      "Id": "e287646874088d4b73b9578d6fc51da6",
+      "ImageBlurHashes": {
+        "Backdrop": {
+          "1c629ae266a739951e9b1b98bc6255e9": "W23V}qptfQptfQptqBfkfQfkfQfkfQfQfQfQfQfQqBfkfQfkfQfk"
+        },
+        "Primary": {
+          "1c629ae266a739951e9b1b98bc6255e9": "d23KQ.pLfQpLktfkfQfkfQfQfQfQktfkfQfkfQfQfQfQ"
+        },
+        "Thumb": {
+          "1c629ae266a739951e9b1b98bc6255e9": "W2FgQ{=vfQ=vfQ=v}qj@fQj@fQj@fQfQfQfQfQfQ}qj@fQj@fQj@"
+        }
+      },
+      "ImageTags": {},
+      "IndexNumber": 1,
+      "IsFolder": true,
+      "LocationType": "FileSystem",
+      "MediaType": "Unknown",
+      "Name": "第 1 季",
+      "ParentBackdropImageTags": [
+        "1c629ae266a739951e9b1b98bc6255e9"
+      ],
+      "ParentBackdropItemId": "2a9857e656bbd18b7c3c3a3b4ee5eef1",
+      "ParentThumbImageTag": "1c629ae266a739951e9b1b98bc6255e9",
+      "ParentThumbItemId": "2a9857e656bbd18b7c3c3a3b4ee5eef1",
+      "PrimaryImageAspectRatio": 0.6666666666666666,
+      "ProductionYear": 2022,
+      "SeriesId": "2a9857e656bbd18b7c3c3a3b4ee5eef1",
+      "SeriesName": "Alpha Show",
+      "SeriesPrimaryImageTag": "1c629ae266a739951e9b1b98bc6255e9",
+      "ServerId": "6254dde8088a47fdadab7f3c41c92a5e",
+      "Type": "Season",
+      "UserData": {
+        "IsFavorite": false,
+        "ItemId": "e287646874088d4b73b9578d6fc51da6",
+        "Key": "2a9857e6-56bb-d18b-7c3c-3a3b4ee5eef1001",
+        "PlayCount": 0,
+        "PlaybackPositionTicks": 0,
+        "Played": false,
+        "PlayedPercentage": 33.33333333333333,
+        "UnplayedItemCount": 2
+      }
+    },
+    {
+      "BackdropImageTags": [],
+      "ChannelId": null,
+      "Container": "mkv",
+      "Id": "99701a68c9a746b2f3a2d31d0b6c49f2",
+      "ImageBlurHashes": {
+        "Primary": {
+          "ff4fb403e27270c45b14d22db5079a79": "d23KQ.pLfQpLktfkfQfkfQfQfQfQktfkfQfkfQfQfQfQ"
+        }
+      },
+      "ImageTags": {},
+      "IndexNumber": 1,
+      "IsFolder": false,
+      "LocationType": "FileSystem",
+      "MediaType": "Video",
+      "Name": "Frieren",
+      "ParentIndexNumber": 1,
+      "ParentPrimaryImageItemId": "02c06be72a8c11102b98e17665c9fef2",
+      "ParentPrimaryImageTag": "ff4fb403e27270c45b14d22db5079a79",
+      "PrimaryImageAspectRatio": 0.6666666666666666,
+      "ProductionYear": 2023,
+      "RunTimeTicks": 6000000000,
+      "SeasonId": "07a528fa42ef6bf81fffb993098d54de",
+      "SeasonName": "第 1 季",
+      "SeriesId": "02c06be72a8c11102b98e17665c9fef2",
+      "SeriesName": "Frieren",
+      "SeriesPrimaryImageTag": "ff4fb403e27270c45b14d22db5079a79",
+      "ServerId": "6254dde8088a47fdadab7f3c41c92a5e",
+      "Type": "Episode",
+      "UserData": {
+        "IsFavorite": false,
+        "ItemId": "99701a68c9a746b2f3a2d31d0b6c49f2",
+        "Key": "99701a68-c9a7-46b2-f3a2-d31d0b6c49f2",
+        "PlayCount": 0,
+        "PlaybackPositionTicks": 1800000000,
+        "Played": false,
+        "PlayedPercentage": 30
+      },
+      "VideoType": "VideoFile"
+    },
+    {
+      "AirDays": [],
+      "BackdropImageTags": [
+        "1c629ae266a739951e9b1b98bc6255e9"
+      ],
+      "ChannelId": null,
+      "CommunityRating": 7,
+      "Id": "2a9857e656bbd18b7c3c3a3b4ee5eef1",
+      "ImageBlurHashes": {
+        "Backdrop": {
+          "1c629ae266a739951e9b1b98bc6255e9": "W23V}qptfQptfQptqBfkfQfkfQfkfQfQfQfQfQfQqBfkfQfkfQfk"
+        },
+        "Primary": {
+          "1c629ae266a739951e9b1b98bc6255e9": "d23KQ.pLfQpLktfkfQfkfQfQfQfQktfkfQfkfQfQfQfQ"
+        },
+        "Thumb": {
+          "1c629ae266a739951e9b1b98bc6255e9": "W2FgQ{=vfQ=vfQ=v}qj@fQj@fQj@fQfQfQfQfQfQ}qj@fQj@fQj@"
+        }
+      },
+      "ImageTags": {
+        "Primary": "1c629ae266a739951e9b1b98bc6255e9",
+        "Thumb": "1c629ae266a739951e9b1b98bc6255e9"
+      },
+      "IsFolder": true,
+      "LocationType": "FileSystem",
+      "MediaType": "Unknown",
+      "Name": "Alpha Show",
+      "OfficialRating": "TV-14",
+      "PremiereDate": "2022-04-01T00:00:00.0000000Z",
+      "ProductionYear": 2022,
+      "ServerId": "6254dde8088a47fdadab7f3c41c92a5e",
+      "Type": "Series",
+      "UserData": {
+        "IsFavorite": false,
+        "ItemId": "2a9857e656bbd18b7c3c3a3b4ee5eef1",
+        "Key": "2a9857e6-56bb-d18b-7c3c-3a3b4ee5eef1",
+        "PlayCount": 0,
+        "PlaybackPositionTicks": 0,
+        "Played": false,
+        "PlayedPercentage": 20,
+        "UnplayedItemCount": 4
+      }
+    },
+    {
+      "AirDays": [],
+      "BackdropImageTags": [
+        "609790cd6a30bf8277a008ba2fecb77f"
+      ],
+      "ChannelId": null,
+      "CommunityRating": 9,
+      "Id": "6d616414836b339f17e139c3b00fd2ae",
+      "ImageBlurHashes": {
+        "Backdrop": {
+          "609790cd6a30bf8277a008ba2fecb77f": "W23V}qptfQptfQptqBfkfQfkfQfkfQfQfQfQfQfQqBfkfQfkfQfk"
+        },
+        "Primary": {
+          "609790cd6a30bf8277a008ba2fecb77f": "d23KQ.pLfQpLktfkfQfkfQfQfQfQktfkfQfkfQfQfQfQ"
+        }
+      },
+      "ImageTags": {
+        "Primary": "609790cd6a30bf8277a008ba2fecb77f"
+      },
+      "IsFolder": true,
+      "LocationType": "FileSystem",
+      "MediaType": "Unknown",
+      "Name": "Bravo Show",
+      "OfficialRating": "TV-MA",
+      "PremiereDate": "2020-01-20T00:00:00.0000000Z",
+      "ProductionYear": 2020,
+      "ServerId": "6254dde8088a47fdadab7f3c41c92a5e",
+      "Type": "Series",
+      "UserData": {
+        "IsFavorite": false,
+        "ItemId": "6d616414836b339f17e139c3b00fd2ae",
+        "Key": "6d616414-836b-339f-17e1-39c3b00fd2ae",
+        "PlayCount": 0,
+        "PlaybackPositionTicks": 0,
+        "Played": false,
+        "PlayedPercentage": 50,
+        "UnplayedItemCount": 1
+      }
+    },
+    {
+      "BackdropImageTags": [
+        "b047847fd9a28b24b283c806f022fa1a"
+      ],
+      "ChannelId": null,
+      "CommunityRating": 7.1,
+      "Container": "mkv",
+      "CriticRating": 72,
+      "Id": "aaad8034da2f8c4db82f7aa3e26a4e3e",
+      "ImageBlurHashes": {
+        "Backdrop": {
+          "b047847fd9a28b24b283c806f022fa1a": "W23V}qptfQptfQptqBfkfQfkfQfkfQfQfQfQfQfQqBfkfQfkfQfk"
+        },
+        "Primary": {
+          "b047847fd9a28b24b283c806f022fa1a": "d23KQ.pLfQpLktfkfQfkfQfQfQfQktfkfQfkfQfQfQfQ"
+        },
+        "Thumb": {
+          "b047847fd9a28b24b283c806f022fa1a": "W2FgQ{=vfQ=vfQ=v}qj@fQj@fQj@fQfQfQfQfQfQ}qj@fQj@fQj@"
+        }
+      },
+      "ImageTags": {
+        "Primary": "b047847fd9a28b24b283c806f022fa1a",
+        "Thumb": "b047847fd9a28b24b283c806f022fa1a"
+      },
+      "IsFolder": false,
+      "LocationType": "FileSystem",
+      "MediaType": "Video",
+      "Name": "Foxtrot Movie",
+      "OfficialRating": "R",
+      "PremiereDate": "2018-03-09T00:00:00.0000000Z",
+      "ProductionYear": 2018,
+      "RunTimeTicks": 6000000000,
+      "ServerId": "6254dde8088a47fdadab7f3c41c92a5e",
+      "Type": "Movie",
+      "UserData": {
+        "IsFavorite": false,
+        "ItemId": "aaad8034da2f8c4db82f7aa3e26a4e3e",
+        "Key": "aaad8034-da2f-8c4d-b82f-7aa3e26a4e3e",
+        "PlayCount": 0,
+        "PlaybackPositionTicks": 3000000000,
+        "Played": false,
+        "PlayedPercentage": 50
+      },
+      "VideoType": "VideoFile"
+    },
+    {
+      "AirDays": [],
+      "BackdropImageTags": [],
+      "ChannelId": null,
+      "CommunityRating": 8,
+      "Id": "02c06be72a8c11102b98e17665c9fef2",
+      "ImageBlurHashes": {
+        "Primary": {
+          "ff4fb403e27270c45b14d22db5079a79": "d23KQ.pLfQpLktfkfQfkfQfQfQfQktfkfQfkfQfQfQfQ"
+        }
+      },
+      "ImageTags": {
+        "Primary": "ff4fb403e27270c45b14d22db5079a79"
+      },
+      "IsFolder": true,
+      "LocationType": "FileSystem",
+      "MediaType": "Unknown",
+      "Name": "Frieren",
+      "OfficialRating": "TV-PG",
+      "PremiereDate": "2023-09-29T00:00:00.0000000Z",
+      "ProductionYear": 2023,
+      "ServerId": "6254dde8088a47fdadab7f3c41c92a5e",
+      "Type": "Series",
+      "UserData": {
+        "IsFavorite": false,
+        "ItemId": "02c06be72a8c11102b98e17665c9fef2",
+        "Key": "02c06be7-2a8c-1110-2b98-e17665c9fef2",
+        "PlayCount": 0,
+        "PlaybackPositionTicks": 0,
+        "Played": false,
+        "PlayedPercentage": 0,
+        "UnplayedItemCount": 2
+      }
+    }
+  ],
+  "StartIndex": 0,
+  "TotalRecordCount": 8
+}

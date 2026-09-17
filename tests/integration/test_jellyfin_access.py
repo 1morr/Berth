@@ -15,6 +15,7 @@ API 那一層（前端塞進來的 `userId`、401 之後的下一個請求）在
 from __future__ import annotations
 
 from dataclasses import replace
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -43,6 +44,7 @@ from berth.services.jellyfin_access import (
     jellyfin_access,
 )
 from berth.services.settings import write_settings
+from berth.services.watching import read_watching
 from tests.integration.factories import FakeClientFactory
 
 pytestmark = pytest.mark.asyncio
@@ -97,15 +99,24 @@ HIDDEN = "series-frieren"
 
 
 def watchable() -> tuple[JellyfinItem, ...]:
-    def item(item_id: str, kind: str, path: str, series: str = "") -> JellyfinItem:
+    def item(
+        item_id: str, kind: str, path: str, series: str = "", episode: int | None = None
+    ) -> JellyfinItem:
         return JellyfinItem(
-            id=item_id, type=kind, name=item_id, path=path, tmdb_id="", series_id=series
+            id=item_id,
+            type=kind,
+            name=item_id,
+            path=path,
+            tmdb_id="",
+            series_id=series,
+            season=None if episode is None else 1,
+            episode_start=episode,
         )
 
     return (
         item(SERIES, ITEM_SERIES, "/data/library/tv/The Bear"),
-        item(FIRST, ITEM_EPISODE, "/data/library/tv/The Bear/S01E01.mkv", SERIES),
-        item(SECOND, ITEM_EPISODE, "/data/library/tv/The Bear/S01E02.mkv", SERIES),
+        item(FIRST, ITEM_EPISODE, "/data/library/tv/The Bear/S01E01.mkv", SERIES, 1),
+        item(SECOND, ITEM_EPISODE, "/data/library/tv/The Bear/S01E02.mkv", SERIES, 2),
         item(FILM, ITEM_MOVIE, "/data/library/movies/Oppenheimer/Oppenheimer.mkv"),
         item(HIDDEN, ITEM_SERIES, "/data/library/anime/Frieren"),
     )
@@ -501,3 +512,109 @@ class TestMarkPlayed:
             jellyfin.error = ServiceUnavailableError("POST /UserPlayedItems: connection refused")
             with pytest.raises(JellyfinUnreachableError):
                 await access.mark_played(FILM, played=True)
+
+
+class TestWatching:
+    """繼續觀看與下一集（M1.5 票 07）。Resume 與 NextUp **不帶** `parentId` 時 Jellyfin 照這個人的
+    媒體庫限縮，帶了就不限縮（研究 §2，12.1.0 實測）：首頁那兩支一定不帶，媒體庫頁先對允許清單
+    驗過才帶。"""
+
+    @pytest.fixture(autouse=True)
+    def watched(self, jellyfin: FakeJellyfinClient) -> None:
+        """`deckhand` 看完 The Bear 第一集、Oppenheimer 看到一半；Anime 那部他看不到的劇在 `skipper`
+        帳號上看到一半——替身照 Jellyfin 的規矩，不帶 `parentId` 時不會把它交給 `deckhand`。"""
+        jellyfin.items_ = list(watchable())
+        jellyfin.played = {"deckhand": {FIRST}}
+        jellyfin.positions = {"deckhand": {FILM: 42.0}}
+
+    async def test_the_home_rows_are_asked_for_the_whole_account_without_a_library(
+        self,
+        session: AsyncSession,
+        factory: FakeClientFactory,
+        jellyfin: FakeJellyfinClient,
+        cache: AccessCache,
+    ) -> None:
+        user, _ = await signed_in(session, factory, "deckhand", "rope")
+
+        async with jellyfin_access(session, factory, cache, user) as access:
+            watching = await read_watching(access, None)
+
+        assert sorted(jellyfin.watching_queries) == [
+            ("next_up", user.jellyfin_user_id, None),
+            ("resume", user.jellyfin_user_id, None),
+        ]
+        assert jellyfin.browse_queries == []
+        assert [(card.item_id, card.progress) for card in watching.resume] == [(FILM, 42)]
+        assert [card.item_id for card in watching.next_up] == [SECOND]
+
+    async def test_a_library_on_the_list_is_asked_with_its_id(
+        self,
+        session: AsyncSession,
+        factory: FakeClientFactory,
+        jellyfin: FakeJellyfinClient,
+        cache: AccessCache,
+    ) -> None:
+        user, _ = await signed_in(session, factory, "deckhand", "rope")
+
+        async with jellyfin_access(session, factory, cache, user) as access:
+            watching = await read_watching(access, TV)
+
+        assert sorted(jellyfin.watching_queries) == [
+            ("next_up", user.jellyfin_user_id, TV),
+            ("resume", user.jellyfin_user_id, TV),
+        ]
+        # Oppenheimer 在 Movies：TV 的繼續觀看是空的。
+        assert watching.resume == ()
+        assert [card.item_id for card in watching.next_up] == [SECOND]
+
+    @pytest.mark.parametrize("wanted", [ANIME, MUSIC, "no-such-library"])
+    async def test_a_library_off_the_list_is_refused_without_asking_jellyfin(
+        self,
+        session: AsyncSession,
+        factory: FakeClientFactory,
+        jellyfin: FakeJellyfinClient,
+        cache: AccessCache,
+        wanted: str,
+    ) -> None:
+        """帶了 `parentId` 連使用者自己的 token 都擋不住（研究 §2）：替身也不擋，一筆都沒有就是
+        Berth 擋的。"""
+        user, _ = await signed_in(session, factory, "deckhand", "rope")
+
+        async with jellyfin_access(session, factory, cache, user) as access:
+            with pytest.raises(LibraryNotVisibleError):
+                await read_watching(access, wanted)
+
+        assert jellyfin.watching_queries == []
+
+    async def test_next_up_counts_only_shows_watched_within_a_year(
+        self,
+        session: AsyncSession,
+        factory: FakeClientFactory,
+        jellyfin: FakeJellyfinClient,
+        cache: AccessCache,
+    ) -> None:
+        """jellyfin-web 的 `maxDaysForNextUp` 預設 365（研究 §7）。"""
+        user, _ = await signed_in(session, factory, "deckhand", "rope")
+        before = datetime.now(UTC)
+
+        async with jellyfin_access(session, factory, cache, user) as access:
+            await read_watching(access, None)
+
+        [cutoff] = jellyfin.next_up_cutoffs
+        assert before - timedelta(days=365, seconds=5) < cutoff <= before - timedelta(days=364)
+
+    async def test_jellyfin_going_away_is_the_same_reason_as_for_the_wall(
+        self,
+        session: AsyncSession,
+        factory: FakeClientFactory,
+        jellyfin: FakeJellyfinClient,
+        cache: AccessCache,
+    ) -> None:
+        user, _ = await signed_in(session, factory, "deckhand", "rope")
+
+        async with jellyfin_access(session, factory, cache, user) as access:
+            jellyfin.error = ServiceUnavailableError("GET /UserItems/Resume: connection refused")
+            with pytest.raises(JellyfinUnreachableError) as refused:
+                await read_watching(access, None)
+
+        assert refused.value.detail == "GET /UserItems/Resume: connection refused"

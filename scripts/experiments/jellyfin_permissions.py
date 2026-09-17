@@ -19,6 +19,7 @@
     python scripts/experiments/jellyfin_permissions.py
     python scripts/experiments/jellyfin_permissions.py --record   # 另外重錄 fixture
     python scripts/experiments/jellyfin_permissions.py --record --only items.tv.series.page.json
+    python scripts/experiments/jellyfin_permissions.py --record --only shows-nextup.watching.json,…
 """
 
 from __future__ import annotations
@@ -34,7 +35,7 @@ import tempfile
 from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -84,6 +85,10 @@ class Title:
     #: 檔案 mtime 往回推幾天。電影與集的 DateCreated 在這個 bind mount 上實測就是 mtime
     #: （劇的 DateCreated 是掃描時間，不受它影響），「加入日期」「新集加入」排序才有不同的值可比。
     age_days: int = 0
+    #: 資料夾裡 `poster.jpg` 以外的本機圖：`landscape`（Jellyfin 讀成 Thumb）、`fanart`
+    #: （Backdrop）。繼續觀看與下一集的橫卡照 Thumb → 劇的 Thumb → Backdrop → 劇的 Backdrop
+    #: 取圖（M1.5 票 07，研究 §7），幾部作品各缺不同的圖，DTO 上的每一格才都錄得到。
+    art: tuple[str, ...] = ()
 
     @property
     def folder(self) -> str:
@@ -104,9 +109,9 @@ S1 = ((1, 1), (1, 2))
 
 TITLES: tuple[Title, ...] = (
     Title("TV", "Alpha Show", 2022, "2022-04-01", 7.0, "TV-14", ("Drama", "Fantasy"), 1399,
-          ((1, 1), (1, 2), (1, 3), (2, 1), (2, 2)), age_days=30),
+          ((1, 1), (1, 2), (1, 3), (2, 1), (2, 2)), age_days=30, art=("landscape", "fanart")),
     Title("TV", "Bravo Show", 2020, "2020-01-20", 9.0, "TV-MA", ("Comedy",), 1396, S1,
-          age_days=10),
+          age_days=10, art=("fanart",)),
     Title("TV", *FRIEREN, S1, age_days=40),
     # 沒有 TMDB id 的作品：`hasTmdbId` 有沒有真的過濾，要靠它看。
     Title("TV", "Hotel Show", 2021, "2021-06-01", None, "TV-G", ("Documentary",), None,
@@ -119,7 +124,7 @@ TITLES: tuple[Title, ...] = (
     Title("Movies", "Echo Movie", 2021, "2021-10-22", 8.4, "PG-13", ("Science Fiction",), 27205,
           critic=87, minutes=20, age_days=20),
     Title("Movies", "Foxtrot Movie", 2018, "2018-03-09", 7.1, "R", ("Drama",), 157336,
-          critic=72, minutes=10, age_days=30),
+          critic=72, minutes=10, age_days=30, art=("landscape", "fanart")),
     Title("Movies", "Golf Movie", 2024, "2024-03-01", 7.8, "PG", ("Science Fiction", "Adventure"),
           693134, critic=94, minutes=15, age_days=10),
 )  # fmt: skip
@@ -137,6 +142,8 @@ PLAYED = (
 )
 #: 看到一半的集（媒體庫, 作品, 季, 集, 分鐘）。
 IN_PROGRESS = (("TV", "Frieren", 1, 1, 3), ("Anime", "Frieren", 1, 1, 4))
+#: `shows-nextup.watching.cutoff.json` 的 `nextUpDateCutoff`：落在 `PLAYED` 的 Alpha 與 Bravo 之間。
+NEXT_UP_CUTOFF = "2026-02-15T00:00:00.000Z"
 
 #: 研究 §1.3、§4.1 記下的 12.0.0 參數表；拿來比這一版的 OpenAPI。
 RESEARCH_12_0_PARAMS: dict[str, set[str]] = {
@@ -213,8 +220,13 @@ def make_media(workdir: Path, image: str) -> None:
         black = ["-i", "color=c=black:s=64x64:r=1", "-t", str(minutes * 60)]
         encode = ["-c:v", "libx264", "-pix_fmt", "yuv420p", f"/out/seed-{minutes}.mkv"]
         docker(*ffmpeg, *quiet, *black, *encode)
-    poster = ["-i", "color=c=0x1d4e89:s=200x300", "-frames:v", "1", "/out/poster.jpg"]
-    docker(*ffmpeg, *quiet, *poster)
+    for name, color, size in (
+        ("poster", "0x1d4e89", "200x300"),
+        ("landscape", "0x89511d", "320x180"),
+        ("fanart", "0x1d8951", "320x180"),
+    ):
+        still = ["-i", f"color=c={color}:s={size}", "-frames:v", "1", f"/out/{name}.jpg"]
+        docker(*ffmpeg, *quiet, *still)
 
     media = workdir / "media"
     now = datetime.now(UTC).timestamp()
@@ -222,7 +234,8 @@ def make_media(workdir: Path, image: str) -> None:
         folder = media / title.library.lower() / title.folder
         folder.mkdir(parents=True)
         seed = seeds / f"seed-{title.minutes}.mkv"
-        shutil.copyfile(seeds / "poster.jpg", folder / "poster.jpg")
+        for art in ("poster", *title.art):
+            shutil.copyfile(seeds / f"{art}.jpg", folder / f"{art}.jpg")
         if title.is_movie:
             shutil.copyfile(seed, folder / f"{title.folder}.mkv")
             (folder / "movie.nfo").write_text(nfo(title), "utf-8")
@@ -533,7 +546,7 @@ class Fixtures:
 
 
 def create_library(srv: Server, admin: Credential, name: str, collection_type: str) -> None:
-    """關掉所有網路 fetcher：metadata 只來自 NFO，圖只來自資料夾裡的 poster.jpg。
+    """關掉所有網路 fetcher：metadata 只來自 NFO，圖只來自資料夾裡的 jpg（`Title.art`）。
 
     `TypeOptions` 列出型別而 fetcher 清單留空 = 那個型別一個 fetcher 都不開；
     整個 `TypeOptions` 留空才是「用預設」（TMDB）。
@@ -1254,6 +1267,52 @@ def record_browsing(
     episodes = {**user, "seasonId": season_one, "fields": "Overview,PrimaryImageAspectRatio"}
     resp = srv.send(api, f"/Shows/{alpha}/Episodes", params=episodes)
     fixtures.write("shows-episodes.json", resp)
+    record_watching(srv, api, c, user_id, fixtures)
+
+
+def record_watching(
+    srv: Server, api: Credential, c: Catalog, user_id: str, fixtures: Fixtures
+) -> None:
+    """繼續觀看與下一集（M1.5 票 07）：參數照 jellyfin-web 首頁（`resume.ts`、`nextUp.ts`，
+    研究 §7），每個過濾參數另錄一份拿掉或換值的，證明伺服器真的照它過濾。
+
+    - Resume 不帶 `mediaTypes=Video` 會混進 Season 與 Series（研究 §1.2）。
+    - `parentId` 只放允許清單上的媒體庫：Resume 帶 TV 就沒有 Movies 的那部片，NextUp 帶 Movies
+      是空的。
+    - `nextUpDateCutoff`：jellyfin-web 送「今天減使用者設定的天數」（預設 365）。Alpha 最後看的日期
+      （2026-01-01）早於 2026-02-15、Bravo（2026-03-01）晚於它。
+    """
+    images = {"imageTypeLimit": "1", "enableImageTypes": "Primary,Backdrop,Thumb"}
+    resume = {
+        "userId": user_id,
+        "limit": "12",
+        **images,
+        "enableTotalRecordCount": "false",
+        "mediaTypes": "Video",
+    }
+    mixed = {key: value for key, value in resume.items() if key != "mediaTypes"}
+    tv = {**resume, "parentId": c.libraries["TV"]}
+    for name, params in (
+        ("useritems-resume.watching.json", resume),
+        ("useritems-resume.watching.mixed.json", mixed),
+        ("useritems-resume.watching.tv.json", tv),
+    ):
+        fixtures.write(name, srv.send(api, "/UserItems/Resume", params=params))
+    year_ago = datetime.now(UTC) - timedelta(days=365)
+    next_up = {
+        "userId": user_id,
+        "limit": "24",
+        **images,
+        "enableTotalRecordCount": "false",
+        "enableResumable": "false",
+        "nextUpDateCutoff": year_ago.isoformat(timespec="milliseconds").replace("+00:00", "Z"),
+    }
+    for name, params in (
+        ("shows-nextup.watching.json", next_up),
+        ("shows-nextup.watching.cutoff.json", {**next_up, "nextUpDateCutoff": NEXT_UP_CUTOFF}),
+        ("shows-nextup.watching.movies.json", {**next_up, "parentId": c.libraries["Movies"]}),
+    ):
+        fixtures.write(name, srv.send(api, "/Shows/NextUp", params=params))
 
 
 # --- main ------------------------------------------------------------------------

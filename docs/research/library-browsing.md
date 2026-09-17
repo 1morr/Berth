@@ -408,7 +408,7 @@ GET /Shows/{seriesId}/Episodes?userId=U&seasonId={seasonId}&fields=Overview,Prim
 | 篩選面板 | `GET /Items/Filters?UserId&ParentId&IncludeItemTypes`（**不是 Filters2**） | 勾選：`Filters=IsPlayed,IsUnplayed,IsResumable,IsFavorite`、`SeriesStatus=Continuing/Ended/Unreleased`、`VideoTypes`、`HasSubtitles`；動態清單 Genres / OfficialRatings / Tags / Years 來自 Filters 回傳 |
 | 詳細頁列季 | `GET /Shows/{id}/Seasons` | `userId, Fields=ItemCounts,PrimaryImageAspectRatio,CanDelete,MediaSourceCount` |
 | 詳細頁列集 | `GET /Shows/{id}/Episodes` | `seasonId, userId, Fields=ItemCounts,PrimaryImageAspectRatio,CanDelete,MediaSourceCount,Overview` |
-| 卡片圖 | `Items/{id}/Images/{type}` | `fillWidth, fillHeight, quality=96, tag`；**不帶 token**。橫向卡（繼續觀看 / 下一集）優先 `Thumb` → `ParentThumb`（集用劇的 Thumb）→ `Backdrop` → `ParentBackdrop`；直向卡優先 `Primary` → `SeriesPrimary` / `ParentPrimary` |
+| 卡片圖 | `Items/{id}/Images/{type}` | `fillWidth, fillHeight, quality=96, tag`；**不帶 token**。橫向卡（繼續觀看 / 下一集）優先 `Thumb` → `ParentThumb`（集用劇的 Thumb）→ `Backdrop` → `ParentBackdrop`；直向卡優先 `Primary` → `SeriesPrimary` / `ParentPrimary`。**這一格是摘要**，完整順序見 §7.2 |
 
 來源：
 [resume.ts](https://github.com/jellyfin/jellyfin-web/blob/v10.10.7/src/components/homesections/sections/resume.ts)、
@@ -442,6 +442,27 @@ master [url.ts](https://github.com/jellyfin/jellyfin-web/blob/f0f7b226a26e1512a4
 
 Berth 照前兩列畫牆上那一行（`services/watch.py`），照第四列就地改那一格；**不照第三列**：Berth 不提供「復原」，
 而標為未看清掉的次數與時間找不回來（§5），所以標為未看先確認。
+
+### 7.2 繼續觀看與下一集【原始碼 v10.11.11 / v12.0 + 實測 12.1.0，M1.5 票 07】
+
+研究子代理讀 jellyfin-web `v10.11.11`（與 master 的 `cardbuilder/utils/url.ts`）和 jellyfin `v12.0`；Berth 送的參數以
+`jellyfin_permissions.py --record --only` 在一次性 12.1.0 上加錄（dummy 媒體樹的 Alpha Show 與 Foxtrot Movie 多
+`landscape.jpg` + `fanart.jpg`、Bravo Show 多 `fanart.jpg`）。
+
+| 項目 | 內容 |
+| --- | --- |
+| 繼續觀看的請求 | `resume.ts`：`Limit: enableOverflow ? 12 : 5, Recursive: true, Fields: 'PrimaryImageAspectRatio', ImageTypeLimit: 1, EnableImageTypes: 'Primary,Backdrop,Thumb', EnableTotalRecordCount: false, MediaTypes`。伺服器（`ItemsController.GetResumeItems`）固定 `OrderBy = DatePlayed Descending`、`IsResumable = true`、`IsVirtualItem = false`；`/UserItems/Resume` 沒有 `recursive` 參數 |
+| 下一集的請求 | `nextUp.ts`：`EnableImageTypes: 'Primary,Backdrop,Banner,Thumb'`（master 拿掉 Banner）、`EnableResumable: false`、`NextUpDateCutoff`（使用者設定 `maxDaysForNextUp`，預設 365）。伺服器預設 `enableResumable=true`、`enableRewatching=false`、沒有截止日 |
+| 下一集怎麼算 | `NextUpService.GetNextUpSeriesKeys`：只挑 `LastPlayedDate >= cutoff` 的劇，照最後觀看日期降冪；每部劇取最後看過的季集之後、還沒看的第一集。`enableResumable=false` 時候選集任一版本有 `PlaybackPositionTicks > 0` 就不列（`TVSeriesManager.DetermineNextEpisode`）。**從沒看過的劇不列**，除非明確帶 `seriesId` |
+| 橫卡取圖 | `cardBuilder.getCardImageUrl`，首頁兩列 `preferThumb: true`、`inheritThumb: !useEpisodeImagesInNextUpAndResume`（使用者設定，預設 false，所以預設繼承）：自己的 `ImageTags.Thumb` → `SeriesThumbImageTag` → `ParentThumbItemId` + `ParentThumbImageTag`（照片除外）→ 自己的 `BackdropImageTags[0]` → `ParentBackdropImageTags[0]`（只有集）→ 自己的 Primary → `SeriesPrimaryImageTag` → `ParentPrimaryImageTag` → ……（中間還有 Banner、Disc、Logo，首頁兩列不開） |
+| DTO 上的那幾格 | v12.0 `DtoService`：`ImageTags` 與 `BackdropImageTags` 照 `GetImageLimit(type)` 收錄（`EnableImageTypes` 沒開的類型一律不回）；`AddInheritedImages` 由季往劇爬，Thumb 先取季的、劇自己有就換成劇的，Backdrop 取找到的第一個。**12.1.0 錄的 NextUp 沒有 `SeriesThumbImageTag`**：Alpha Show 的集帶 `ParentThumbItemId=<劇>`，劇的 Thumb 從那裡來 |
+| 卡片文字 | `getCardFooterText` + `itemHelper.getDisplayName`：集是兩行，劇名、`S1:E2 - 集名`（`ParentIndexNumber === 0` 時是「特別篇」）；電影一行片名 |
+| 過濾參數的對照錄製 | `mediaTypes=Video`：不帶時同一位使用者混進三季與三部劇（`useritems-resume.watching.mixed.json`）；`parentId=<TV>`：Movies 那部看到一半的片不在；NextUp `parentId=<Movies>`：空；`nextUpDateCutoff=2026-02-15`：只剩 Bravo（最後看 2026-03-01），Alpha（2026-01-01）不在 |
+
+Berth（`services/watching.py`）照上面的請求參數，一律不送 `recursive`、`fields`（用不到）與 `enableRewatching`（伺服器
+預設與 jellyfin-web 預設相同）。取圖照順序取到集自己的 Primary 為止：**電影不取 Primary**，jellyfin-web 會，但那是 2:3
+海報，Jellyfin 照 16:9 `fillWidth` / `fillHeight` 裁切時只剩中間一條。卡片只收 Episode 與 Movie：第一行是季集代號或
+`MOVIE` 與年份，別的型別說不出自己是什麼，而 `mediaTypes=Video` 仍可能回家庭影片與音樂錄影帶（首頁不分媒體庫）。
 
 ## 8. 直接開始播放某一集的 Web URL
 

@@ -247,10 +247,13 @@ class CollectionType(StrEnum):
 class JellyfinImageType(StrEnum):
     """Berth 代理得了的 Jellyfin 圖片類型（M1.5 票 04）；沿用 Jellyfin 的字串。
 
-    **是白名單**：沒有呼叫端的類型不開。劇照、橫卡（票 07、08）用到時再加。
+    **是白名單**：沒有呼叫端的類型不開。劇照（票 08）用到時再加。
     """
 
     PRIMARY = "Primary"
+    #: 繼續觀看與下一集的橫卡（票 07）：16:9 的劇照或背景圖。
+    THUMB = "Thumb"
+    BACKDROP = "Backdrop"
 
 
 class ImageSize(StrEnum):
@@ -262,6 +265,8 @@ class ImageSize(StrEnum):
 
     #: 2:3 的海報，牆上一格。
     POSTER = "poster"
+    #: 16:9 的橫圖，繼續觀看與下一集的一格（票 07）。
+    WIDE = "wide"
 
 
 class LibrarySort(StrEnum):

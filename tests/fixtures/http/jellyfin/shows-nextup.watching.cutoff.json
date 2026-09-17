@@ -1,0 +1,52 @@
+{
+  "Items": [
+    {
+      "BackdropImageTags": [],
+      "ChannelId": null,
+      "Container": "mkv",
+      "Id": "5ff804c21aa9edf479f4b827413e1eee",
+      "ImageBlurHashes": {
+        "Backdrop": {
+          "609790cd6a30bf8277a008ba2fecb77f": "W23V}qptfQptfQptqBfkfQfkfQfkfQfQfQfQfQfQqBfkfQfkfQfk"
+        },
+        "Primary": {
+          "609790cd6a30bf8277a008ba2fecb77f": "d23KQ.pLfQpLktfkfQfkfQfQfQfQktfkfQfkfQfQfQfQ"
+        }
+      },
+      "ImageTags": {},
+      "IndexNumber": 2,
+      "IsFolder": false,
+      "LocationType": "FileSystem",
+      "MediaType": "Video",
+      "Name": "Bravo Show",
+      "ParentBackdropImageTags": [
+        "609790cd6a30bf8277a008ba2fecb77f"
+      ],
+      "ParentBackdropItemId": "6d616414836b339f17e139c3b00fd2ae",
+      "ParentIndexNumber": 1,
+      "ParentPrimaryImageItemId": "6d616414836b339f17e139c3b00fd2ae",
+      "ParentPrimaryImageTag": "609790cd6a30bf8277a008ba2fecb77f",
+      "PrimaryImageAspectRatio": 0.6666666666666666,
+      "ProductionYear": 2020,
+      "RunTimeTicks": 6000000000,
+      "SeasonId": "3e0017cdd1b6b5c0d5d3f94cabc63947",
+      "SeasonName": "第 1 季",
+      "SeriesId": "6d616414836b339f17e139c3b00fd2ae",
+      "SeriesName": "Bravo Show",
+      "SeriesPrimaryImageTag": "609790cd6a30bf8277a008ba2fecb77f",
+      "ServerId": "6254dde8088a47fdadab7f3c41c92a5e",
+      "Type": "Episode",
+      "UserData": {
+        "IsFavorite": false,
+        "ItemId": "5ff804c21aa9edf479f4b827413e1eee",
+        "Key": "6d616414-836b-339f-17e1-39c3b00fd2ae001002",
+        "PlayCount": 0,
+        "PlaybackPositionTicks": 0,
+        "Played": false
+      },
+      "VideoType": "VideoFile"
+    }
+  ],
+  "StartIndex": 0,
+  "TotalRecordCount": 0
+}

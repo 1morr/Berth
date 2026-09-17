@@ -30,7 +30,7 @@ ffmpeg 產種子檔），那只影響「造測試素材」這一步，不影響 
 | `anime_sample.json` | 上一支的樣本：10 部動漫、挑選理由、Mikan 的番組 id |
 | `qbittorrent_poller.py` | M1 票 10：`sync/maindata` 的 rid 增量形狀、`torrents/files` 的相對基準（多檔）、三種處境下的 `state` / `progress` / `completion_on`，以及**連續登入失敗之後的 403 與帳密錯差在哪裡**。最後一項會封住來源 IP，所以它一定跑在最後 |
 | `absolute_rule_cost.py` | M1 票 14d：「集號 ≤ 第一季集數就送審核」擋下的是對的多還是錯的多，以及「標題有認不出的多餘字」分不分得開。正解借 `anime_episode_source.py` 的校準，Berth 的讀法是把每筆 Mikan 發佈丟進 `plan`。只印 stdout |
-| `jellyfin_permissions.py` | M1.5 票 01：伺服器 API key 代讀某位使用者時，Jellyfin 哪些端點套用他的媒體庫權限（研究 §2 的表逐列，API key 與使用者 token 各一次）；`/Items` 的過濾、排序、分頁是不是真的有作用；由 TMDB id 找作品；Series / Season 標記遞迴；停用帳號。自己起停一次性容器，`--record` 重錄 `tests/fixtures/http/jellyfin/` 的權限 fixture |
+| `jellyfin_permissions.py` | M1.5 票 01：伺服器 API key 代讀某位使用者時，Jellyfin 哪些端點套用他的媒體庫權限（研究 §2 的表逐列，API key 與使用者 token 各一次）；`/Items` 的過濾、排序、分頁是不是真的有作用；由 TMDB id 找作品；Series / Season 標記遞迴；停用帳號。自己起停一次性容器，`--record` 重錄 `tests/fixtures/http/jellyfin/` 的權限 fixture，也錄媒體庫牆、排序篩選與繼續觀看 / 下一集（票 03–07）的回應 |
 | `jellyfin_images.py` | M1.5 票 04：Jellyfin 的圖經 Berth 代理要不要在 Berth 端另存一份。縮圖參數與格式協商、Jellyfin 自己的縮圖快取（冷熱延遲）、6 條並行下直連與經過 Berth（`berth serve` 子程序）各多少毫秒。自己起停一次性容器 |
 | `lib.py` | 共用的 HTTP、輪詢、bencode、報告輸出 |
 
@@ -73,6 +73,8 @@ ffmpeg 產種子檔），那只影響「造測試素材」這一步，不影響 
 - **它的媒體庫把網路 fetcher 全關了，metadata 只來自 NFO**：類型、年份、評分、分級、片長刻意排成彼此不同的順序，
   「伺服器真的有過濾 / 排序」才判得出來，結果也不隨 TMDB 變動。`TypeOptions` 列出型別但 fetcher 清單留空才是
   「全關」（實測：集沒有截圖、劇沒有背景圖與簡介），整個留空是「用預設」（`jellyfin_naming.py` 就是那樣）。
+  圖只來自資料夾裡的 jpg：每部都有 `poster.jpg`，幾部另有 `landscape.jpg`（Jellyfin 讀成 Thumb）與 `fanart.jpg`
+  （Backdrop），繼續觀看與下一集的橫卡取圖順序才錄得到（`Title.art`，M1.5 票 07）。
 - **`/System/Info/Public` 回 200 不代表 Jellyfin 載入完了**：這時精靈的端點是 503，所以它先等
   `/Startup/Configuration` 回 200。每種身分（管理員、API key、受限使用者）用自己的 `DeviceId`：
   Jellyfin 以裝置管理 session，這是預防同一個裝置重新登入時作廢別的身分的 token（沒有實測過會不會）。

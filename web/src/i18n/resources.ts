@@ -489,6 +489,20 @@ const zhHant = {
     },
     attribution: '本產品使用 TMDB 的 API，但未經 TMDB 認可或認證。',
   },
+  // 首頁與媒體庫頁上方的兩列（M1.5 票 07）。資料原樣來自 Jellyfin，名稱不是文案。
+  watching: {
+    resume: '繼續觀看',
+    nextUp: '下一集',
+    count_one: '{{count}} 項',
+    count_other: '{{count}} 項',
+    showAll_one: '全部 {{count}} 項',
+    showAll_other: '全部 {{count}} 項',
+    showFewer: '收起',
+    // 16:9 的那一塊：這裡沒有海報可說。
+    noArt: '無圖',
+    down: '問不到 Jellyfin，繼續觀看與下一集暫時看不到。',
+    retry: '重試',
+  },
   // 媒體庫頁（票 13、`.scratch/m1/library-shape.md`）。作品標題與 Route 名字不是文案，原樣顯示。
   inventory: {
     title: '媒體庫',
@@ -1706,6 +1720,18 @@ const en: Translations<typeof zhHant> = {
       back: 'Back to trending',
     },
     attribution: 'This product uses the TMDB API but is not endorsed or certified by TMDB.',
+  },
+  watching: {
+    resume: 'Continue watching',
+    nextUp: 'Next up',
+    count_one: '{{count}} item',
+    count_other: '{{count}} items',
+    showAll_one: 'Show all {{count}}',
+    showAll_other: 'Show all {{count}}',
+    showFewer: 'Show fewer',
+    noArt: 'NO ART',
+    down: "Berth can't reach Jellyfin, so Continue watching and Next up are unavailable for now.",
+    retry: 'Retry',
   },
   inventory: {
     title: 'Library',

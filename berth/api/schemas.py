@@ -13,6 +13,7 @@ from pydantic import BaseModel, ConfigDict
 from berth.domain import (
     CollectionType,
     HealthStatus,
+    MediaKind,
     ServiceKind,
     ServiceOrigin,
     StepStatus,
@@ -188,6 +189,43 @@ def health_detail(report: HealthReport) -> HealthDetailOut:
         routes=[RouteOut.model_validate(row) for row in report.routes],
         poller=PollerOut.model_validate(report.poller),
     )
+
+
+class WatchingCardOut(BaseModel):
+    """繼續觀看或下一集的一格（`services/watching.py`、M1.5 票 07）：一集或一部電影。
+
+    名稱都是 Jellyfin 的，不跟 UI 語言。點下去開 Jellyfin 的 `item_id`
+    （深連結的主機在 `WatchingOut`）。
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    item_id: str
+    kind: MediaKind
+    #: 劇名或電影名。
+    title: str
+    #: 集名；電影是空字串。
+    episode_name: str
+    #: 季號、集號、多集檔的最後一集。電影、或 Jellyfin 認不出編號時是 `null`。
+    season: int | None
+    episode_start: int | None
+    episode_end: int | None
+    #: 電影的年份；集是 `null`。
+    year: int | None
+    #: 看到幾 %（1–99），沒在看是 `null`。
+    progress: int | None
+    #: Berth 代理的 16:9 圖（`/api/jellyfin/items/...?size=wide`）；沒有合用的橫圖時是空字串。
+    image_url: str
+
+
+class WatchingOut(BaseModel):
+    """這位使用者的繼續觀看與下一集。首頁是整個帳號，媒體庫頁只含那個媒體庫的；沒有內容的
+    那一列是空陣列。"""
+
+    #: 深連結的主機。兩列的每一格都用同一台。
+    jellyfin: JellyfinWebOut
+    resume: list[WatchingCardOut]
+    next_up: list[WatchingCardOut]
 
 
 class WatchStateOut(BaseModel):

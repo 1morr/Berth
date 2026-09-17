@@ -1,4 +1,4 @@
-import { useId, useState, type ReactNode } from 'react'
+import { useId, type ReactNode } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link, useRouter } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
@@ -14,9 +14,10 @@ import {
   type JellyfinWeb,
   type WatchState,
 } from '../api/inventory'
+import { ArtSlot } from '../components/ArtSlot'
 import { AuditChip } from '../components/AuditChip'
 import { ConfirmPanel } from '../components/ConfirmPanel'
-import { GhostButton, Notice, PrimaryButton } from '../components/controls'
+import { COMPACT_BUTTON, GhostButton, Notice, PrimaryButton } from '../components/controls'
 import { Dot } from '../components/Dot'
 import { KIND_CODE } from '../components/kind'
 import { SIGNAL_FILL, type Signal } from '../components/signal'
@@ -72,7 +73,7 @@ export function InventoryTile({
 
   const body = (
     <>
-      <PosterSlot url={card.poster_url} />
+      <ArtSlot url={card.poster_url} shape="poster" />
       <div className="grid content-start gap-1 px-3 py-2.5">
         {/* 狀態貼在標識帶上，不壓在海報上（The Paint Needs A Painted Ground Rule）。 */}
         <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
@@ -117,37 +118,6 @@ export function InventoryTile({
       )}
       <JellyfinLine card={card} web={web} titleId={titleId} libraryId={libraryId} />
     </article>
-  )
-}
-
-/**
- * 2:3 的海報位。網址是空的、或圖載不下來（Jellyfin 回 404、連不上）時同一塊矩形裡印「無海報」，
- * 格子高度不變，牆不壞（票 04）。
- */
-function PosterSlot({ url }: { url: string }) {
-  const { t } = useTranslation()
-  // 記載入失敗的是哪一個網址而不是一個布林值：換頁時同一格換了一張圖，就該重新試。
-  const [failed, setFailed] = useState('')
-
-  return (
-    <div className="relative aspect-[2/3] bg-hull">
-      {url && url !== failed ? (
-        // 標題就在下面那一行，海報是裝飾性的——給它 alt 只會把同一個名字唸兩次。
-        <img
-          src={url}
-          alt=""
-          loading="lazy"
-          className="size-full object-cover"
-          width={342}
-          height={513}
-          onError={() => setFailed(url)}
-        />
-      ) : (
-        <span className="value absolute inset-0 flex items-center justify-center text-xs text-ink-dim">
-          {t('discover.noArt')}
-        </span>
-      )}
-    </div>
   )
 }
 
@@ -234,10 +204,6 @@ function JellyfinLine({
   )
 }
 
-/** 比 Ghost 小一號，擠得進卡片最下面那一行（命中面積仍 ≥ 24px）。 */
-const TOGGLE =
-  'label inline-flex min-h-6 items-center border-2 border-rule px-2 py-1 text-ink hover:border-rule-strong aria-disabled:text-ink-dim'
-
 /**
  * 標為已看 / 未看，寫進這個人在 Jellyfin 的紀錄。**標為未看先就地確認**：觀看次數與最後觀看時間
  * 清掉就找不回來，劇集清的是每一集（研究 §5）。jellyfin-web 兩個方向都不確認；Berth 不提供「復原」，
@@ -265,6 +231,8 @@ function WatchToggle({
   const warningId = useId()
   const mark = useMutation({
     mutationFn: (played: boolean) => markPlayed(itemId, played),
+    // 只改牆上那一格。上方的繼續觀看與下一集（票 07）**不在這裡重問**：它們一換，整面牆就在指標底下
+    // 上下移動；它們沒有快取期限，下一次打開頁面或切回視窗時自己會重問。
     onSuccess: (written) =>
       queryClient.setQueriesData<Inventory>({ queryKey: inventoryKey(libraryId) }, (data) =>
         data ? withWatch(data, itemId, written) : data,
@@ -316,7 +284,7 @@ function WatchToggle({
             if (watch.played) open()
             else mark.mutate(true)
           }}
-          className={TOGGLE}
+          className={COMPACT_BUTTON}
         >
           {mark.isPending
             ? t('inventory.watch.pending')
