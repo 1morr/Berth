@@ -1,8 +1,10 @@
 import { useTranslation } from 'react-i18next'
 
 import type { Plan, PlanItem } from '../api/plans'
+import { CollapsibleRow } from '../components/CollapsibleRow'
 import { Dot } from '../components/Dot'
-import { formatEpisode } from '../components/episodes'
+import { formatCoverage, formatEpisode } from '../components/episodes'
+import { groupRows, type RowGroup } from '../components/rowGroups'
 
 /**
  * 一筆 Job 的 Import Plan（brief §6.5、票 11）。
@@ -12,6 +14,9 @@ import { formatEpisode } from '../components/episodes'
  *
  * **一個檔案一列，包含略過的那些**：一包 torrent 裡有字型、有海報、有 readme，而
  * 「Berth 沒有動它」與「Berth 沒看到它」是兩件事。逐列說得出處置，那份清單才算數。
+ * 但逐檔那一列**收在組裡**（M1.5 票 09、`.scratch/m1.5/long-lists-shape.md`，使用者拍板）：一組是「處置 × 季 × 信心 ×
+ * 待確認」，一組一行說蓋到哪幾集、幾個檔案，展開才逐檔列出——芙莉蓮 39 個檔案逐檔攤開，這一列展開是 8,500px。
+ * 待審、對不到、待確認的組排最前。
  *
  * **這一塊沒有信號色**（The One Meaning Rule）：這一列的狀態格已經在上面塗過一次漆了，
  * 而處置與信心是**分類不是狀態**（The Role Is Not A State Rule）——所以它們是中性色塊
@@ -50,12 +55,72 @@ export function JobPlan({ plan }: { plan: Plan }) {
         <p className="max-w-prose text-xs text-ink-dim">{t(`jobs.plan.reason.${reason}`)}</p>
       )}
 
-      <ol className="grid min-w-0 gap-2">
-        {plan.items.map((item) => (
-          <PlanRow key={item.id} item={item} />
+      <div className="grid gap-px bg-rule">
+        {byDecision(plan.items).map((group) => (
+          <PlanGroup key={group.key} group={group} />
         ))}
-      </ol>
+      </div>
     </section>
+  )
+}
+
+/** 需要人的那幾列：待審、對不到，以及已經入庫、但 medium 那一個判斷還要人看一眼的（brief §6.5、票 15）。 */
+function held(item: PlanItem): boolean {
+  return item.action === 'review' || item.action === 'unmatched' || item.audit
+}
+
+function byDecision(items: readonly PlanItem[]): RowGroup<PlanItem>[] {
+  return groupRows(
+    items,
+    (item) => [item.action, item.season ?? '', item.confidence, item.audit].join(':'),
+    held,
+  )
+}
+
+/** 一組：處置 · 信心 · 待確認 · 蓋到的集 · 檔案數。組裡的逐檔列照舊（理由逐檔不同，不合併）。 */
+function PlanGroup({ group }: { group: RowGroup<PlanItem> }) {
+  const { t } = useTranslation()
+  const [first] = group.rows
+  const action = t(`jobs.plan.action.${first.action}`)
+  const coverage = formatCoverage(first.season, group.rows)
+
+  return (
+    <CollapsibleRow
+      name={[action, coverage].filter(Boolean).join(' ')}
+      held={group.held}
+      summary={
+        <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+          <span className="label bg-deck px-1.5 py-0.5 text-ink">{action}</span>
+          <span className="label text-ink-dim">
+            {t(`jobs.plan.confidence.${first.confidence}`)}
+          </span>
+          {first.audit && (
+            <>
+              <Dot />
+              <span className="value text-xs text-ink">{t('jobs.plan.audit')}</span>
+            </>
+          )}
+          {coverage && (
+            <>
+              <Dot />
+              <span className="value text-sm text-ink">{coverage}</span>
+            </>
+          )}
+          <Dot />
+          <span className="value text-xs text-ink-dim">
+            {t('jobs.plan.files', { count: group.rows.length })}
+          </span>
+        </span>
+      }
+    >
+      {() => (
+        <ol className="grid min-w-0 gap-2 px-4 py-3">
+          {group.rows.map((item) => (
+            <PlanRow key={item.id} item={item} />
+          ))}
+        </ol>
+      )}
+    </CollapsibleRow>
   )
 }
 
@@ -67,14 +132,12 @@ export function JobPlan({ plan }: { plan: Plan }) {
  */
 function PlanRow({ item }: { item: PlanItem }) {
   const { t } = useTranslation()
-  // 需要人的那幾列**線變重，不是變紅**：紅色只代表阻擋（The One Meaning Rule）。
-  // audit 也算：它已經入庫了，但 medium 那一個判斷還要人看一眼（brief §6.5、票 15）。
-  const held = item.action === 'review' || item.action === 'unmatched' || item.audit
   const episode = formatEpisode(item)
 
   return (
+    // 需要人的那幾列**線變重，不是變紅**：紅色只代表阻擋（The One Meaning Rule）。
     <li
-      className={`grid min-w-0 gap-1 border-l-2 pl-3 ${held ? 'border-rule-strong' : 'border-rule'}`}
+      className={`grid min-w-0 gap-1 border-l-2 pl-3 ${held(item) ? 'border-rule-strong' : 'border-rule'}`}
     >
       <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
         <span className="label bg-deck px-1.5 py-0.5 text-ink">

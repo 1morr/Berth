@@ -1,118 +1,181 @@
+import { useState } from 'react'
 import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 
 import type { Episode, Season } from '../api/media'
+import { CollapsibleRow } from '../components/CollapsibleRow'
+import { NAV_BOX, NAV_BOX_ACTIVE } from '../components/controls'
 import { episodeCode, seasonCode } from '../components/episodes'
 import { SIGNAL_FILL } from '../components/signal'
-import { ExpandHint } from '../components/ExpandHint'
 
 /**
  * 各季各集（`.scratch/m1/media-detail-shape.md` §6，使用者拍板「每季一個可展開列，預設全收」）。
  *
- * 用原生 `<details>`：這個系統沒有 dropdown / accordion 元件，而原生的鍵盤與螢幕閱讀器行為
- * 比重寫一份好（DESIGN.md 的元件基礎）。`<summary>` 已經在全域 `:focus-visible` 的選擇器裡
- * ——那是票 11 補進去的，少了它 Chrome 會退回 0.67px 的預設焦點環。
- *
  * **預設全收**的理由是真實資料：TMDB 把名偵探柯南併成一季 1213 集（brief §20.3），
- * 攤平的話那一頁永遠捲不到底下的搜尋結果表（票 08）與檔案清單（票 13）。
+ * 攤平的話那一頁永遠捲不到底下的搜尋結果表（票 08）與檔案清單（票 13）。每一季是一段 `CollapsibleRow`
+ * （M1.5 票 09、`.scratch/m1.5/long-lists-shape.md`）：收起的季不渲染集列，展開的季摘要列黏頂、底端也收得起來。
+ *
+ * 上面一條工具列（media-detail-shape §4 留的位置）：「只看缺集」。缺＝`missing`（已播出、沒有任何下載在處理），
+ * 卡住、下載中、未播出都不算（使用者拍板）——判定在後端，這裡只數它。
  */
 export function SeasonList({ seasons }: { seasons: readonly Season[] }) {
   const { t } = useTranslation()
+  const [missingOnly, setMissingOnly] = useState(false)
   // 有 Absolute group 的作品才畫絕對編號那一欄——六成的動漫才有（brief §20.3），
   // 沒有的時候整欄不畫，而不是留一整排 `—`。
   const absolute = seasons.some((season) =>
     season.episodes.some((episode) => episode.absolute_number !== null),
   )
+  const missing = new Map(seasons.map((season) => [season.season_number, missingOf(season)]))
+  const total = [...missing.values()].reduce((sum, episodes) => sum + episodes.length, 0)
 
   return (
-    <div className="grid gap-px bg-rule">
-      {seasons.map((season) => (
-        // `min-w-0`：grid 項目的 `min-width` 預設是 `auto`，所以它不肯縮到比內容窄——少了
-        // 這一條，展開的集表會把**整頁**撐寬並橫向捲動（390px 實跑量到 560px），
-        // 而該捲的是集表自己那一格（shape brief §7）。
-        <details key={season.season_number} className="group min-w-0 bg-well">
-          <summary className="flex cursor-pointer flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3 marker:content-none">
-            <span className="value text-sm font-semibold text-ink">
-              {seasonCode(season.season_number)}
-            </span>
-            {/* 窄版上季名自己一行：與集數擠在同一行時 `flex-1` 被壓成 0 寬，兩段字疊在一起
-                （票 15 在 342px 內容寬量到）。 */}
-            <span className="min-w-0 basis-full text-sm break-words text-ink sm:basis-0 sm:flex-1">
-              {season.name}
-            </span>
-            <span className="value text-xs text-ink-dim">
-              {t('media.episode.count', { count: season.episode_count })}
-            </span>
-            {season.aired > 0 && (
-              // 兩個數字由後端算（shape brief §7）：分母是播出了的集數，與媒體庫卡片同一個定義。
-              <span className="value text-xs text-ink">
-                {t('inventory.episodes', { imported: season.imported, aired: season.aired })}
-              </span>
-            )}
-            <span className="value w-24 text-right text-xs text-ink-dim">
-              {season.air_date ?? '—'}
-            </span>
-            <ExpandHint />
-          </summary>
+    <div className="grid gap-3">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <button
+          type="button"
+          aria-pressed={missingOnly}
+          onClick={() => setMissingOnly(!missingOnly)}
+          className={`${missingOnly ? NAV_BOX_ACTIVE : NAV_BOX} inline-flex min-h-6 items-center px-3 py-1.5 text-ink`}
+        >
+          {t('media.season.missingOnly')}
+        </button>
+        {/* 一直在 DOM 裡：`aria-live` 要先存在，之後換進去的字才會被念出來。 */}
+        <p aria-live="polite" className="value text-xs text-ink">
+          {missingOnly &&
+            (total > 0
+              ? t('media.season.missingTotal', { count: total })
+              : t('media.season.noneMissingAnywhere'))}
+        </p>
+      </div>
 
-          {season.episodes.length > 0 ? (
-            // 集表過寬時由**它自己**橫向捲動，不是整頁（shape brief §7）。
-            // 欄序是**集號 → 絕對編號 → 入庫 → 集名**：絕對編號貼著集號（shape §8），而「入庫」
-            // 是這張表在這一頁存在的理由——它原本排在最後，390px 上整欄在捲動範圍外（票 15）。
-            // 片長與播出日窄版不畫，表就不必比畫面寬。
-            <div className="overflow-x-auto border-t-2 border-rule bg-hull">
-              <table className="w-full border-collapse text-left sm:min-w-[36rem]">
-                <thead>
-                  <tr className="border-b-2 border-rule">
-                    <th scope="col" className="label px-4 py-2 whitespace-nowrap text-ink-dim">
-                      {t('media.episode.number')}
-                    </th>
-                    {absolute && (
-                      <th
-                        scope="col"
-                        className="label px-4 py-2 text-right whitespace-nowrap text-ink-dim"
-                      >
-                        {t('media.episode.absolute')}
-                      </th>
-                    )}
-                    <th scope="col" className="label px-4 py-2 whitespace-nowrap text-ink-dim">
-                      {t('media.episode.inLibrary')}
-                    </th>
-                    <th scope="col" className="label px-4 py-2 whitespace-nowrap text-ink-dim">
-                      {t('media.episode.name')}
-                    </th>
-                    <th
-                      scope="col"
-                      className="label hidden px-4 py-2 text-right text-ink-dim sm:table-cell"
-                    >
-                      {t('media.episode.runtime')}
-                    </th>
-                    <th
-                      scope="col"
-                      className="label hidden px-4 py-2 text-right text-ink-dim sm:table-cell"
-                    >
-                      {t('media.episode.airDate')}
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-rule">
-                  {season.episodes.map((episode) => (
-                    <EpisodeRow
-                      key={episode.episode_number}
-                      episode={episode}
-                      absolute={absolute}
-                    />
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <p className="border-t-2 border-rule bg-hull px-4 py-3 text-xs text-ink-dim">
-              {t('media.season.empty')}
-            </p>
-          )}
-        </details>
-      ))}
+      <div className="grid gap-px bg-rule">
+        {seasons.map((season) => {
+          const gaps = missing.get(season.season_number) ?? []
+          return (
+            <CollapsibleRow
+              key={season.season_number}
+              name={seasonCode(season.season_number)}
+              summary={<SeasonSummary season={season} gaps={missingOnly ? gaps.length : null} />}
+            >
+              {() => (
+                <SeasonBody
+                  season={season}
+                  episodes={missingOnly ? gaps : season.episodes}
+                  missingOnly={missingOnly}
+                  absolute={absolute}
+                />
+              )}
+            </CollapsibleRow>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function missingOf(season: Season): Episode[] {
+  return season.episodes.filter((episode) => episode.status === 'missing')
+}
+
+/** `gaps` 是 `null` 時沒開「只看缺集」，不說缺幾集。 */
+function SeasonSummary({ season, gaps }: { season: Season; gaps: number | null }) {
+  const { t } = useTranslation()
+
+  return (
+    <>
+      <span className="value text-sm font-semibold text-ink">
+        {seasonCode(season.season_number)}
+      </span>
+      {/* 窄版上季名自己一行：與集數擠在同一行時 `flex-1` 被壓成 0 寬，兩段字疊在一起
+          （票 15 在 342px 內容寬量到）。 */}
+      <span className="min-w-0 basis-full text-sm break-words text-ink sm:basis-0 sm:flex-1">
+        {season.name}
+      </span>
+      <span className="value text-xs text-ink-dim">
+        {t('media.episode.count', { count: season.episode_count })}
+      </span>
+      {season.aired > 0 && (
+        // 兩個數字由後端算（shape brief §7）：分母是播出了的集數，與媒體庫卡片同一個定義。
+        <span className="value text-xs text-ink">
+          {t('inventory.episodes', { imported: season.imported, aired: season.aired })}
+        </span>
+      )}
+      {gaps !== null &&
+        (gaps > 0 ? (
+          <span className="value text-xs text-ink">
+            {t('media.season.missing', { count: gaps })}
+          </span>
+        ) : (
+          <span className="value text-xs text-ink-dim">{t('media.season.noneMissing')}</span>
+        ))}
+      <span className="value w-24 text-right text-xs text-ink-dim">{season.air_date ?? '—'}</span>
+    </>
+  )
+}
+
+function SeasonBody({
+  season,
+  episodes,
+  missingOnly,
+  absolute,
+}: {
+  season: Season
+  episodes: readonly Episode[]
+  missingOnly: boolean
+  absolute: boolean
+}) {
+  const { t } = useTranslation()
+
+  if (season.episodes.length === 0) {
+    return <p className="px-4 py-3 text-xs text-ink-dim">{t('media.season.empty')}</p>
+  }
+  if (episodes.length === 0 && missingOnly) {
+    return <p className="px-4 py-3 text-xs text-ink-dim">{t('media.season.noneMissingHere')}</p>
+  }
+  return (
+    // 集表過寬時由**它自己**橫向捲動，不是整頁（shape brief §7）。
+    // 欄序是**集號 → 絕對編號 → 入庫 → 集名**：絕對編號貼著集號（shape §8），而「入庫」
+    // 是這張表在這一頁存在的理由——它原本排在最後，390px 上整欄在捲動範圍外（票 15）。
+    // 片長與播出日窄版不畫，表就不必比畫面寬。
+    <div className="overflow-x-auto">
+      <table className="w-full border-collapse text-left sm:min-w-[36rem]">
+        <thead>
+          <tr className="border-b-2 border-rule">
+            <th scope="col" className="label px-4 py-2 whitespace-nowrap text-ink-dim">
+              {t('media.episode.number')}
+            </th>
+            {absolute && (
+              <th scope="col" className="label px-4 py-2 text-right whitespace-nowrap text-ink-dim">
+                {t('media.episode.absolute')}
+              </th>
+            )}
+            <th scope="col" className="label px-4 py-2 whitespace-nowrap text-ink-dim">
+              {t('media.episode.inLibrary')}
+            </th>
+            <th scope="col" className="label px-4 py-2 whitespace-nowrap text-ink-dim">
+              {t('media.episode.name')}
+            </th>
+            <th
+              scope="col"
+              className="label hidden px-4 py-2 text-right text-ink-dim sm:table-cell"
+            >
+              {t('media.episode.runtime')}
+            </th>
+            <th
+              scope="col"
+              className="label hidden px-4 py-2 text-right text-ink-dim sm:table-cell"
+            >
+              {t('media.episode.airDate')}
+            </th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-rule">
+          {episodes.map((episode) => (
+            <EpisodeRow key={episode.episode_number} episode={episode} absolute={absolute} />
+          ))}
+        </tbody>
+      </table>
     </div>
   )
 }

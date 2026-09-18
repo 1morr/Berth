@@ -319,6 +319,8 @@ describe('下載列表頁', () => {
       expect(stub.mock.calls.some(([url]) => String(url).includes('/plans/'))).toBe(false)
 
       await userEvent.click(screen.getByText(/SPY×FAMILY - 13/))
+      // 逐檔收在組裡（M1.5 票 09）：展開那一組才畫。
+      await userEvent.click(await screen.findByText('1 個檔案'))
 
       expect(await screen.findByText('Disc 1/theme.mkv')).toBeInTheDocument()
       expect(screen.getByText('no season and episode could be worked out')).toBeInTheDocument()

@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import hashlib
+import json
 import os
 import re
 import sys
@@ -113,6 +114,11 @@ from berth.services.settings import read_settings, write_settings
 # 而它只用標準庫——為了一個演練情境在產品程式碼裡加一個編碼器不值得。
 sys.path.insert(0, str(Path(__file__).parent / "experiments"))
 from lib import Torrent, make_torrent
+
+# `long-lists` 情境把 benchmark 語料的發佈名當成資料夾名寫出來，而「換掉檔案系統不收的字元」
+# 這條規則 e2e 已經有一份（它只用標準庫）。repo 根目錄進 `sys.path` 才 import 得到 `tests.`。
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from tests.e2e.payload import info_name
 
 #: 這台假 Prowlarr 連不上的站。訊息是 2026-09-08 對真的 Prowlarr 錄到的原文（brief §20.7）——
 #: 十個公開站裡有幾個連不上是常態，畫面必須撐得住這個組合。
@@ -607,12 +613,15 @@ def plan_scenario() -> Scenario:
     索引站給兩筆：一包對得上的批次（自動入庫），與一包對不到任何一集的 OST（停在待審核）。
     兩條路徑都要看得到——M1 沒有審核佇列，所以「為什麼停在這裡」只有 Plan 那一塊說得出口。
     """
-    scenario = discover()
+    return _planning(discover(), {PLAN_RELEASE: PLAN_FILES, STRAY_RELEASE: STRAY_FILES})
+
+
+def _planning(scenario: Scenario, packs: dict[str, tuple[tuple[str, int], ...]]) -> Scenario:
+    """索引站給這幾包、qBittorrent 收下就當場完成（`PlanningQbittorrent`）。"""
     scenario.qbittorrent = PlanningQbittorrent(
-        {PLAN_RELEASE: PLAN_FILES, STRAY_RELEASE: STRAY_FILES},
-        version=QbittorrentVersion(app="v5.2.3", webapi="2.15.1"),
+        packs, version=QbittorrentVersion(app="v5.2.3", webapi="2.15.1")
     )
-    scenario.demo_releases = (PLAN_RELEASE, STRAY_RELEASE)
+    scenario.demo_releases = tuple(packs)
     scenario.indexer_results = tuple(
         IndexerResult(
             title=release,
@@ -623,7 +632,7 @@ def plan_scenario() -> Scenario:
             download_url=f"http://127.0.0.1:8484/demo/torrent?release={quote(release)}",
             info_hash="",
         )
-        for release, files in ((PLAN_RELEASE, PLAN_FILES), (STRAY_RELEASE, STRAY_FILES))
+        for release, files in packs.items()
     )
     return scenario
 
@@ -714,6 +723,46 @@ def inventory_scenario() -> Scenario:
     return scenario
 
 
+def _corpus_pack(fixture: str) -> tuple[str, tuple[tuple[str, int], ...]]:
+    """benchmark 語料的一筆（`tests/fixtures/parser/`）→ 一包演練用的發佈。
+
+    發佈名換掉檔案系統不收的字元（`/`、`|`）**走 e2e 的 `info_name`**：替身會把它當成 save path
+    底下的資料夾真的寫出來，而那一支就是為了「兩邊不各算一份」而存在的（`tests/e2e/payload.py`）。
+    影片是 4 KB 的確定位元組，其他檔案 120 B。
+    """
+    spec = json.loads((CORPUS_ROOT / fixture).read_text(encoding="utf-8"))
+    release = info_name(spec["torrent_name"])
+    files = tuple(
+        (
+            f"{release}/{row['path']}",
+            4000 if PurePosixPath(row["path"]).suffix in VIDEO_SUFFIXES else 120,
+        )
+        for row in spec["files"]
+    )
+    return release, files
+
+
+#: benchmark 語料的位置。`long-lists` 情境送的是語料裡真的那一包檔案清單。
+CORPUS_ROOT = Path(__file__).resolve().parent.parent / "tests" / "fixtures" / "parser"
+
+#: 葬送的芙莉蓮 `[7³ACG]` BD 合集：39 個檔案（S01 28 集 + S00 11 集），票 15 critique 量到
+#: 計劃展開 9,000 px 以上的就是這一包（M1.5 票 09）。
+FRIEREN_RELEASE, FRIEREN_FILES = _corpus_pack("anime/frieren-7acg-bd-batch.json")
+DEMO_PACKS[FRIEREN_RELEASE] = FRIEREN_FILES
+
+
+def long_lists_scenario() -> Scenario:
+    """長清單（M1.5 票 09）：季表、檔案與版本、下載列的計劃撐得住真實的長度。
+
+    同 `inventory`（會「掃到」入庫檔案的替身 Jellyfin、真的 TMDB），索引站只給芙莉蓮那一包。
+    送到 Anime 那條 Route 之後，planner 算出 39 列的計劃、importer 入庫 39 個檔案、resolver
+    讓替身「掃到」它們。名偵探柯南（`/media/tv:30983`）不必送單：TMDB 把它併成一季 1213 集，
+    打開詳情頁就是那張季表。
+    """
+    scenario = inventory_scenario()
+    return _planning(scenario, {FRIEREN_RELEASE: FRIEREN_FILES})
+
+
 def library_scenario() -> Scenario:
     """媒體庫頁 `/library`（M1.5 票 03）：一個 Jellyfin 媒體庫一頁，整庫瀏覽加上權限。
 
@@ -751,6 +800,7 @@ SCENARIOS = {
     "search": search,
     "plan": plan_scenario,
     "inventory": inventory_scenario,
+    "long-lists": long_lists_scenario,
     "library": library_scenario,
     "poll": poll,
     "submit": submit,

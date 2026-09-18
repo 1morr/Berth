@@ -223,17 +223,30 @@ describe('Media 詳情頁', () => {
     expect(screen.queryByText('已追蹤')).not.toBeInTheDocument()
   })
 
-  it('季預設全收，展開才列出那一季的集（使用者拍板）', async () => {
+  it('季預設全收，收起的季不渲染集列，展開才畫、收起又拿掉（M1.5 票 09）', async () => {
     render()
     renderApp('/media/tv:120089')
 
     const season = await screen.findByText('Season 2')
-    // 收起來的 `<details>` 仍然在 DOM 裡，看不見的是它——所以問的是可見性不是存在。
-    expect(screen.getByText('FOLLOW MAMA AND PAPA')).not.toBeVisible()
+    // 不是「在 DOM 裡但看不見」：一季 1213 集的表收起時仍在 DOM 裡，開頁就多上萬個節點（票 15 audit）。
+    expect(screen.queryByText('FOLLOW MAMA AND PAPA')).not.toBeInTheDocument()
 
     await userEvent.click(season)
-
     expect(await screen.findByText('FOLLOW MAMA AND PAPA')).toBeVisible()
+
+    await userEvent.click(season)
+    await waitFor(() => expect(screen.queryByText('FOLLOW MAMA AND PAPA')).not.toBeInTheDocument())
+  })
+
+  it('展開的一季底端就收得起來，收起之後焦點回到那一季的摘要列（M1.5 票 09）', async () => {
+    render()
+    renderApp('/media/tv:120089')
+
+    await userEvent.click(await screen.findByText('Season 2'))
+    await userEvent.click(await screen.findByRole('button', { name: '收起 S02' }))
+
+    await waitFor(() => expect(screen.queryByText('FOLLOW MAMA AND PAPA')).not.toBeInTheDocument())
+    expect(screen.getByText('Season 2').closest('summary')).toHaveFocus()
   })
 
   it('第二季第一集的絕對編號是 26，不是 1（brief §20.3）', async () => {
@@ -378,6 +391,7 @@ describe('Media 詳情頁', () => {
     renderApp('/media/movie:1241982')
 
     expect(await screen.findByText('電影沒有季集。')).toBeVisible()
+    expect(screen.queryByRole('button', { name: '只看缺集' })).not.toBeInTheDocument()
     expect(screen.getByText('100 分鐘')).toBeVisible()
     expect(screen.getByText('上映 2022-04-09')).toBeVisible()
   })
@@ -464,7 +478,8 @@ describe('Media 詳情頁', () => {
     const files = await screen.findByRole('region', { name: '檔案與版本' })
     await userEvent.click(within(files).getByText('1 個檔案'))
 
-    expect(within(files).getByText('特別篇')).toBeVisible()
+    // 組的摘要與那一個檔案都這樣說。
+    expect(within(files).getAllByText('特別篇')).toHaveLength(2)
     expect(within(files).queryByText('正片')).toBeNull()
   })
 
@@ -475,12 +490,14 @@ describe('Media 詳情頁', () => {
     const files = await screen.findByRole('region', { name: '檔案與版本' })
     await userEvent.click(within(files).getByText('1 個檔案'))
 
-    expect(within(files).getByText('正片')).toBeVisible()
-    expect(within(files).getByText('S01E01')).toBeVisible()
-    expect(within(files).getByText('[WEB][1080p][Lilith-Raws]')).toBeVisible()
-    expect(within(files).getByText(/Season 01\/SPY x FAMILY \(2022\) - S01E01/)).toBeVisible()
-    expect(within(files).getByText('對得上')).toBeVisible()
-    expect(within(files).getByText('Jellyfin 已收錄')).toBeVisible()
+    const row = within(files)
+      .getByText(/Season 01\/SPY x FAMILY \(2022\) - S01E01/)
+      .closest('li')!
+    expect(within(row).getByText('正片')).toBeVisible()
+    expect(within(row).getByText('S01E01')).toBeVisible()
+    expect(within(row).getByText('[WEB][1080p][Lilith-Raws]')).toBeVisible()
+    expect(within(row).getByText('對得上')).toBeVisible()
+    expect(within(row).getByText('Jellyfin 已收錄')).toBeVisible()
   })
 
   it('還在等 Jellyfin 的檔案說得出下一次什麼時候查', async () => {
@@ -513,6 +530,188 @@ describe('Media 詳情頁', () => {
     await userEvent.click(within(files).getByText('1 個檔案'))
 
     expect(within(files).getByText('Jellyfin 試了 6 次都沒找到')).toBeVisible()
+  })
+
+  describe('只看缺集（M1.5 票 09）', () => {
+    const episode = media().seasons[0].episodes[0]
+
+    /** 第一季：已入庫、缺、未播出各一集；第二季：只有一集卡住。 */
+    function gappy() {
+      const [first, second] = media().seasons
+      return media({
+        seasons: [
+          {
+            ...first,
+            episodes: [
+              episode,
+              { ...episode, episode_number: 2, name: 'SECURE A WIFE', status: 'missing' },
+              {
+                ...episode,
+                episode_number: 3,
+                name: 'PREPARE FOR THE INTERVIEW',
+                status: 'unaired',
+              },
+            ],
+          },
+          second,
+        ],
+      })
+    }
+
+    it('每一季說得出缺幾集；卡住、下載中、未播出都不算缺', async () => {
+      render({ [SPY_PATH]: { body: gappy() } })
+      renderApp('/media/tv:120089')
+      const toggle = await screen.findByRole('button', { name: '只看缺集' })
+      expect(toggle).toHaveAttribute('aria-pressed', 'false')
+
+      await userEvent.click(toggle)
+
+      expect(toggle).toHaveAttribute('aria-pressed', 'true')
+      expect(screen.getByText('共缺 1 集')).toBeVisible()
+      const first = screen.getByText('Season 1').closest('summary')!
+      const second = screen.getByText('Season 2').closest('summary')!
+      expect(within(first).getByText('缺 1 集')).toBeVisible()
+      expect(within(second).getByText('沒有缺集')).toBeVisible()
+    })
+
+    it('展開的集表只留缺的那幾列；一季沒有缺集時說一句話，不畫一張空表', async () => {
+      render({ [SPY_PATH]: { body: gappy() } })
+      renderApp('/media/tv:120089')
+      await userEvent.click(await screen.findByRole('button', { name: '只看缺集' }))
+
+      await userEvent.click(screen.getByText('Season 1'))
+      expect(await screen.findByText('SECURE A WIFE')).toBeVisible()
+      expect(screen.queryByText('OPERATION STRIX')).not.toBeInTheDocument()
+      expect(screen.queryByText('PREPARE FOR THE INTERVIEW')).not.toBeInTheDocument()
+
+      await userEvent.click(screen.getByText('Season 2'))
+      expect(await screen.findByText('這一季沒有缺集。')).toBeVisible()
+      expect(screen.queryByText('FOLLOW MAMA AND PAPA')).not.toBeInTheDocument()
+
+      // 關掉就是整張表，展開的季不因切換而收起。
+      await userEvent.click(screen.getByRole('button', { name: '只看缺集' }))
+      expect(screen.getByText('OPERATION STRIX')).toBeVisible()
+      expect(screen.getByText('FOLLOW MAMA AND PAPA')).toBeVisible()
+    })
+
+    it('整部作品都沒有缺集時工具列說得出來', async () => {
+      render()
+      renderApp('/media/tv:120089')
+
+      await userEvent.click(await screen.findByRole('button', { name: '只看缺集' }))
+
+      expect(screen.getByText('這部作品沒有缺集')).toBeVisible()
+    })
+
+    it('還沒有任何一季的劇集沒有這顆切換鍵（電影見票 04 那一條）', async () => {
+      render({ [SPY_PATH]: { body: media({ seasons: [] }) } })
+      renderApp('/media/tv:120089')
+
+      expect(await screen.findByText('TMDB 上這部作品還沒有任何一季。')).toBeVisible()
+      expect(screen.queryByRole('button', { name: '只看缺集' })).not.toBeInTheDocument()
+    })
+  })
+
+  describe('檔案依決定分組（M1.5 票 09）', () => {
+    /** 芙莉蓮那一包的形狀：S01 三集正片、第一集多一個字幕。 */
+    function batch() {
+      return [1, 2, 3].map((episode) =>
+        ledgerFile({
+          id: episode,
+          episode_start: episode,
+          target_path: `/data/library/anime/Frieren/Season 01/Frieren - S01E0${episode}.mkv`,
+        }),
+      )
+    }
+
+    it('一組一行：處置、蓋到的集、檔案數、帳本與 Jellyfin；逐檔要展開那一組才畫', async () => {
+      render({
+        [SPY_PATH]: {
+          body: media({
+            files: [
+              ...batch(),
+              ledgerFile({
+                id: 9,
+                action: 'subtitle',
+                presence: 'none',
+                target_path: '/data/library/anime/Frieren/Season 01/Frieren - S01E01.zh-TW.ass',
+              }),
+            ],
+          }),
+        },
+      })
+      renderApp('/media/tv:120089')
+
+      const files = await screen.findByRole('region', { name: '檔案與版本' })
+      const [videos, subtitles] = within(files)
+        .getAllByText(/^\d+ 個檔案$/)
+        .map((count) => count.closest('summary')!)
+      expect(within(videos).getByText('正片')).toBeVisible()
+      expect(within(videos).getByText('S01 E01–E03')).toBeVisible()
+      expect(within(videos).getByText('3 個檔案')).toBeVisible()
+      expect(within(videos).getByText('帳本對得上')).toBeVisible()
+      expect(within(videos).getByText('Jellyfin 已收錄 3')).toBeVisible()
+      // 字幕不查 Jellyfin，所以沒有那一格。
+      expect(within(subtitles).getByText('字幕')).toBeVisible()
+      expect(within(subtitles).getByText('S01 E01')).toBeVisible()
+      expect(within(subtitles).queryByText(/Jellyfin/)).not.toBeInTheDocument()
+      expect(within(files).queryByText(/Frieren - S01E02\.mkv/)).not.toBeInTheDocument()
+
+      await userEvent.click(within(videos).getByText('3 個檔案'))
+
+      expect(within(files).getByText(/Frieren - S01E02\.mkv/)).toBeVisible()
+      await userEvent.click(within(files).getByRole('button', { name: '收起 正片 S01 E01–E03' }))
+      await waitFor(() =>
+        expect(within(files).queryByText(/Frieren - S01E02\.mkv/)).not.toBeInTheDocument(),
+      )
+    })
+
+    it('帳本對不上或 Jellyfin 找不到的那一組排到最前面，摘要說得出幾個', async () => {
+      render({
+        [SPY_PATH]: {
+          body: media({
+            files: [
+              ...batch(),
+              ledgerFile({ id: 21, season: 2, episode_start: 1, presence: 'lost' }),
+              ledgerFile({ id: 22, season: 2, episode_start: 2, status: 'target_missing' }),
+              ledgerFile({ id: 23, season: 2, episode_start: 3, presence: 'searching' }),
+            ],
+          }),
+        },
+      })
+      renderApp('/media/tv:120089')
+
+      const files = await screen.findByRole('region', { name: '檔案與版本' })
+      const first = within(files)
+        .getAllByText(/^\d+ 個檔案$/)[0]
+        .closest('summary')!
+
+      expect(within(first).getByText('S02 E01–E03')).toBeVisible()
+      expect(within(first).getByText('1 個帳本對不上')).toBeVisible()
+      expect(within(first).getByText('Jellyfin 已收錄 1')).toBeVisible()
+      expect(within(first).getByText('Jellyfin 掃描中 1')).toBeVisible()
+      expect(within(first).getByText('Jellyfin 找不到 1')).toBeVisible()
+    })
+
+    it('電影的檔案一兩個，照舊逐檔攤開、不分組', async () => {
+      render({
+        'GET /api/media/movie%3A872585': {
+          body: media({
+            id: 'movie:872585',
+            tmdb_id: 872585,
+            kind: 'movie',
+            seasons: [],
+            files: [ledgerFile({ season: null, episode_start: null })],
+          }),
+        },
+      })
+      renderApp('/media/movie:872585')
+
+      const files = await screen.findByRole('region', { name: '檔案與版本' })
+
+      expect(within(files).getByText(/Season 01\/SPY x FAMILY/)).toBeVisible()
+      expect(within(files).queryByRole('button', { name: /^收起/ })).not.toBeInTheDocument()
+    })
   })
 
   it('季列的計數照後端給的數字，不自己重算（shape brief §7）', async () => {

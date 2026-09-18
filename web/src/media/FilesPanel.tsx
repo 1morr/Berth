@@ -1,13 +1,15 @@
 import { useId } from 'react'
 import { Link } from '@tanstack/react-router'
+import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
 
 import type { Media } from '../api/media'
+import { CollapsibleRow } from '../components/CollapsibleRow'
 import { GHOST_LINK } from '../components/controls'
 import { Dot } from '../components/Dot'
-import { formatEpisode, seasonCode } from '../components/episodes'
+import { formatCoverage, formatEpisode } from '../components/episodes'
+import { groupRows, type RowGroup } from '../components/rowGroups'
 import { Timestamp } from '../components/Timestamp'
-import { ExpandHint } from '../components/ExpandHint'
 
 type LedgerFile = Media['files'][number]
 
@@ -17,8 +19,10 @@ type LedgerFile = Media['files'][number]
  * 它回答的是「這部作品在媒體庫裡**實際上**有什麼」：季集表說的是每一集的狀態，這一塊說的是
  * 每一個檔案——它蓋到哪一集、帶什麼 Tags、落在哪條路徑、帳本對不對得上、Jellyfin 找到了沒。
  *
- * 劇集依季分組、預設全收（與季集表同一個理由：一季的檔案可以是幾十個）；電影的檔案是一兩個，
- * 不分組。對不到的檔案排在最後——它們不在媒體庫裡，只是需要人知道它們在哪。
+ * 劇集**依決定分組**（M1.5 票 09、`.scratch/m1.5/long-lists-shape.md`，使用者拍板）：一組是「處置 × 季」，一組一行說
+ * 蓋到哪幾集、幾個檔案、帳本與 Jellyfin；逐檔要展開那一組才畫（芙莉蓮一季 28 個檔案逐檔攤開是 3,800px）。
+ * 帳本對不上、Jellyfin 找不到的那一組排最前。電影的檔案是一兩個，不分組。對不到的檔案排在最後——它們不在媒體庫裡，
+ * 只是需要人知道它們在哪。
  */
 export function FilesPanel({ media }: { media: Media }) {
   const { t } = useTranslation()
@@ -51,22 +55,8 @@ export function FilesPanel({ media }: { media: Media }) {
           </div>
         ) : (
           <div className="grid gap-px bg-rule">
-            {bySeason(media.files).map(([season, files]) => (
-              // `min-w-0`：grid 項目預設不肯縮，長路徑會把整頁撐寬（票 04 踩過的同一個坑）。
-              <details key={season ?? 'none'} className="group min-w-0 bg-well">
-                <summary className="flex cursor-pointer flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3 marker:content-none">
-                  <span className="value text-sm font-semibold text-ink">
-                    {season === null ? '—' : seasonCode(season)}
-                  </span>
-                  <span className="value grow text-xs text-ink-dim">
-                    {t('media.files.count', { count: files.length })}
-                  </span>
-                  <ExpandHint />
-                </summary>
-                <div className="border-t-2 border-rule bg-hull px-4 py-3">
-                  <FileList files={files} />
-                </div>
-              </details>
+            {byDecision(media.files).map((group) => (
+              <FileGroup key={group.key} group={group} />
             ))}
           </div>
         ))}
@@ -142,6 +132,62 @@ export function FilesPanel({ media }: { media: Media }) {
   )
 }
 
+/**
+ * 一組：處置 · 蓋到的集 · 檔案數 · 帳本 · Jellyfin。
+ *
+ * 帳本與 Jellyfin 是這一組的**計數**：常態說一句「帳本對得上」「Jellyfin 已收錄 28」，例外說幾個（是 0 的不說）。
+ * Jellyfin 那一格只算正片——字幕與特典不查（`presence` 是 `none`），整組都不查時那一格不畫。
+ */
+function FileGroup({ group }: { group: RowGroup<LedgerFile> }) {
+  const { t } = useTranslation()
+  const [first] = group.rows
+  const coverage = formatCoverage(first.season, group.rows)
+  const action = actionLabel(t, first)
+  const off = group.rows.filter((file) => file.status !== 'ok').length
+  const seen = (kind: LedgerFile['presence']) =>
+    group.rows.filter((file) => file.presence === kind).length
+  const facts = [
+    t('media.files.count', { count: group.rows.length }),
+    off === 0 ? t('media.files.ledger.allOk') : t('media.files.ledger.off', { count: off }),
+    ...(['found', 'searching', 'lost'] as const)
+      .filter((kind) => seen(kind) > 0)
+      .map((kind) => t(`media.files.jellyfin.${kind}Count`, { count: seen(kind) })),
+  ]
+
+  return (
+    <CollapsibleRow
+      name={[action, coverage].filter(Boolean).join(' ')}
+      held={group.held}
+      summary={
+        <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+          {/* 處置是分類不是狀態：中性色塊（The Role Is Not A State Rule）。 */}
+          <span className="label bg-deck px-1.5 py-0.5 text-ink">{action}</span>
+          {coverage && <span className="value text-sm text-ink">{coverage}</span>}
+          {facts.map((fact) => (
+            <span key={fact} className="contents">
+              <Dot />
+              <span className="value text-xs text-ink-dim">{fact}</span>
+            </span>
+          ))}
+        </span>
+      }
+    >
+      {() => (
+        <div className="px-4 py-3">
+          <FileList files={group.rows} />
+        </div>
+      )}
+    </CollapsibleRow>
+  )
+}
+
+/** S00 的正片是 Specials（TMDB season 0），不是「正片」也不是 extras（CONTEXT.md）。 */
+function actionLabel(t: TFunction, file: LedgerFile): string {
+  return file.action === 'import' && file.season === 0
+    ? t('media.files.special')
+    : t(`media.files.action.${file.action}`)
+}
+
 function FileList({ files }: { files: readonly LedgerFile[] }) {
   return (
     <ol className="grid min-w-0 gap-3">
@@ -161,12 +207,7 @@ function FileRow({ file }: { file: LedgerFile }) {
     <li className="grid min-w-0 gap-1 border-l-2 border-rule pl-3">
       <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
         {/* 處置是分類不是狀態：中性色塊（The Role Is Not A State Rule）。 */}
-        <span className="label bg-deck px-1.5 py-0.5 text-ink">
-          {/* S00 的正片是 Specials（TMDB season 0），不是「正片」也不是 extras（CONTEXT.md）。 */}
-          {file.action === 'import' && file.season === 0
-            ? t('media.files.special')
-            : t(`media.files.action.${file.action}`)}
-        </span>
+        <span className="label bg-deck px-1.5 py-0.5 text-ink">{actionLabel(t, file)}</span>
         {episode && (
           <>
             <Dot />
@@ -213,13 +254,14 @@ function Presence({ file }: { file: LedgerFile }) {
   )
 }
 
-/** 依季分組，季號小的在前、沒有季號的（特典）殿後——後端已經照這個順序排好了。 */
-function bySeason(files: readonly LedgerFile[]): Array<[number | null, LedgerFile[]]> {
-  const groups = new Map<number | null, LedgerFile[]>()
-  for (const file of files) {
-    const group = groups.get(file.season) ?? []
-    group.push(file)
-    groups.set(file.season, group)
-  }
-  return [...groups.entries()]
+/**
+ * 「處置 × 季」分組。組照後端的順序（季號小的在前、沒有季號的殿後）；帳本對不上或 Jellyfin 找不到的組排到最前。
+ * 正片在 S00 與 S01 是兩組：特別篇與正篇是兩件事（上面的 `actionLabel`）。
+ */
+function byDecision(files: readonly LedgerFile[]): RowGroup<LedgerFile>[] {
+  return groupRows(
+    files,
+    (file) => `${file.action}:${file.season ?? ''}`,
+    (file) => file.status !== 'ok' || file.presence === 'lost',
+  )
 }

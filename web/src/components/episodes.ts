@@ -47,6 +47,42 @@ export function formatJellyfinEpisode(
   return ''
 }
 
+/**
+ * 一組檔案蓋到的集數（檔案與版本、計劃的一組，M1.5 票 09）：`S01 E01–E28`、`S01 E01–E05, E07`。
+ *
+ * **季代號與集號之間空一格、範圍用 en dash**：`S01E01-E28` 是 Jellyfin 的多集檔寫法（`formatEpisode`），寫成那樣會被讀成
+ * 一個檔案。多集檔算它蓋到的每一集，同一集的第二個檔案（字幕、另一個版本）不重複算。有季沒有集的只寫季，沒有季的是空字串。
+ */
+export function formatCoverage(
+  season: number | null,
+  items: readonly Pick<PlanItem, 'episode_start' | 'episode_end'>[],
+): string {
+  if (season === null) return ''
+  const episodes = new Set<number>()
+  for (const item of items) {
+    if (item.episode_start === null) continue
+    for (
+      let episode = item.episode_start;
+      episode <= (item.episode_end ?? item.episode_start);
+      episode++
+    ) {
+      episodes.add(episode)
+    }
+  }
+  if (episodes.size === 0) return seasonCode(season)
+
+  const runs: Array<[number, number]> = []
+  for (const episode of [...episodes].sort((left, right) => left - right)) {
+    const last = runs[runs.length - 1]
+    if (last && last[1] === episode - 1) last[1] = episode
+    else runs.push([episode, episode])
+  }
+  const spans = runs.map(([start, end]) =>
+    start === end ? episodeCode(start) : `${episodeCode(start)}–${episodeCode(end)}`,
+  )
+  return `${seasonCode(season)} ${spans.join(', ')}`
+}
+
 function pad(value: number): string {
   return String(value).padStart(2, '0')
 }

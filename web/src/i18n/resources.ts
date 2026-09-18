@@ -672,6 +672,15 @@ const zhHant = {
       empty: 'TMDB 還沒有這一季的集數。開播之後會補上。',
       film: '電影沒有季集。',
       none: 'TMDB 上這部作品還沒有任何一季。',
+      // 季表工具列的「只看缺集」（M1.5 票 09）。缺＝已播出、沒有任何下載在處理；卡住與未播出不算。
+      missingOnly: '只看缺集',
+      missingTotal_one: '共缺 {{count}} 集',
+      missingTotal_other: '共缺 {{count}} 集',
+      noneMissingAnywhere: '這部作品沒有缺集',
+      missing_one: '缺 {{count}} 集',
+      missing_other: '缺 {{count}} 集',
+      noneMissing: '沒有缺集',
+      noneMissingHere: '這一季沒有缺集。',
     },
     episode: {
       count_one: '{{count}} 集',
@@ -713,6 +722,10 @@ const zhHant = {
       ledger: {
         label: '帳本',
         ok: '對得上',
+        // 一組檔案的摘要（M1.5 票 09）。
+        allOk: '帳本對得上',
+        off_one: '{{count}} 個帳本對不上',
+        off_other: '{{count}} 個帳本對不上',
         target_missing: '媒體庫裡的檔案不見了',
         source_missing: 'complete 裡的來源不見了',
         inode_mismatch: '兩邊不再是同一個 inode',
@@ -720,6 +733,13 @@ const zhHant = {
       jellyfin: {
         found: 'Jellyfin 已收錄',
         searching: 'Jellyfin 還在掃描，下一次查詢',
+        // 一組檔案的摘要，只算正片（M1.5 票 09）。
+        foundCount_one: 'Jellyfin 已收錄 {{count}}',
+        foundCount_other: 'Jellyfin 已收錄 {{count}}',
+        searchingCount_one: 'Jellyfin 掃描中 {{count}}',
+        searchingCount_other: 'Jellyfin 掃描中 {{count}}',
+        lostCount_one: 'Jellyfin 找不到 {{count}}',
+        lostCount_other: 'Jellyfin 找不到 {{count}}',
         lost_one: 'Jellyfin 試了 {{count}} 次都沒找到',
         lost_other: 'Jellyfin 試了 {{count}} 次都沒找到',
       },
@@ -956,6 +976,9 @@ const zhHant = {
       off: '讀不到這一份計劃。',
       planned_one: '{{count}} 個檔案要入庫',
       planned_other: '{{count}} 個檔案要入庫',
+      // 一組的檔案數（M1.5 票 09：依處置 × 季 × 信心分組）。
+      files_one: '{{count}} 個檔案',
+      files_other: '{{count}} 個檔案',
       levels: '信心 high {{high}} / medium {{medium}} / low {{low}}',
       estimate: '這是下載中的預估，沒有讀過檔案本身；下載完成之後會重算一份。',
       status: {
@@ -1236,6 +1259,8 @@ const zhHant = {
   common: {
     expand: '展開',
     collapse: '收起',
+    // 長清單一段底端的那一顆（M1.5 票 09）：說得出收起的是哪一段。
+    collapseNamed: '收起 {{name}}',
     audits_one: '{{count}} 個待確認',
     audits_other: '{{count}} 個待確認',
     failed: '失敗',
@@ -1917,6 +1942,14 @@ const en: Translations<typeof zhHant> = {
       empty: 'TMDB has no episodes for this season yet. They arrive once it airs.',
       film: 'Films have no seasons.',
       none: 'TMDB lists no seasons for this title yet.',
+      missingOnly: 'Missing only',
+      missingTotal_one: '{{count}} episode missing',
+      missingTotal_other: '{{count}} episodes missing',
+      noneMissingAnywhere: 'Nothing missing',
+      missing_one: '{{count}} missing',
+      missing_other: '{{count}} missing',
+      noneMissing: 'None missing',
+      noneMissingHere: 'Nothing is missing from this season.',
     },
     episode: {
       count_one: '{{count}} episode',
@@ -1954,6 +1987,9 @@ const en: Translations<typeof zhHant> = {
       ledger: {
         label: 'Ledger',
         ok: 'Matches',
+        allOk: 'Ledger matches',
+        off_one: '{{count}} ledger entry off',
+        off_other: '{{count}} ledger entries off',
         target_missing: 'The library file is gone',
         source_missing: 'The source in complete is gone',
         inode_mismatch: 'No longer the same inode',
@@ -1961,6 +1997,12 @@ const en: Translations<typeof zhHant> = {
       jellyfin: {
         found: 'In Jellyfin',
         searching: 'Jellyfin is still scanning; next look',
+        foundCount_one: '{{count}} in Jellyfin',
+        foundCount_other: '{{count}} in Jellyfin',
+        searchingCount_one: '{{count}} still scanning',
+        searchingCount_other: '{{count}} still scanning',
+        lostCount_one: '{{count}} not found by Jellyfin',
+        lostCount_other: '{{count}} not found by Jellyfin',
         lost_one: 'Jellyfin did not show it after {{count}} try',
         lost_other: 'Jellyfin did not show it after {{count}} tries',
       },
@@ -2181,6 +2223,8 @@ const en: Translations<typeof zhHant> = {
       off: 'Could not read this plan.',
       planned_one: '{{count}} file will be imported',
       planned_other: '{{count}} files will be imported',
+      files_one: '{{count}} file',
+      files_other: '{{count}} files',
       levels: 'confidence high {{high}} / medium {{medium}} / low {{low}}',
       estimate:
         'An estimate made while the download runs — nothing has read the files themselves yet. Berth works it out again once the download finishes.',
@@ -2479,6 +2523,7 @@ const en: Translations<typeof zhHant> = {
   common: {
     expand: 'Expand',
     collapse: 'Collapse',
+    collapseNamed: 'Collapse {{name}}',
     audits_one: '{{count}} to check',
     audits_other: '{{count}} to check',
     failed: 'Failed',

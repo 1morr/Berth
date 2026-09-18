@@ -654,8 +654,11 @@ Thumb / Backdrop / 劇照），下方同一條標識帶，框與底同牆卡片�
   `WatchToggle`，並排不巢狀。讀取中是一行不動的 `deck` 空位格；換季時先留著上一季（`placeholderData`，`aria-busy`）。
   問不到 Jellyfin 時整塊換成一行 `ink-dim` 原因 + 原文 + Ghost「重試」，不用紅色 Notice。
 - **季表（`SeasonList`，區塊標題「季集與入庫」）:** TMDB 的季集與入庫狀態（觀看區的季是 Jellyfin 的，兩份各回答一件事）。
-  每季一個 `<details>`，**預設全收**（一季可以是 1213 集，攤平的話永遠捲不到搜尋）。
+  每季一段**長清單段落**（下面一節），**預設全收**（一季可以是 1213 集，攤平的話永遠捲不到搜尋）；收起的季不渲染集列。
   季列之間是 `gap-px` 透出的 `rule`。摘要：`S01` 代號、季名、集數、「已入庫 / 已播出」、播出日、「展開 / 收起」。
+  標題列下方一條**工具列**：`NAV_BOX` 切換鍵「只看缺集」（`aria-pressed`）+ 一行 `aria-live` 的「共缺 N 集 / 這部作品沒有缺集」；
+  開著時每季摘要多一格「缺 N 集」（`ink`）或「沒有缺集」（`ink-dim`），展開的表只留缺的那幾列，沒有就一句話。缺只算
+  `missing`（卡住、下載中、未播出都不算）。切換不改變哪幾季展開著。電影與沒有季的劇集不畫工具列。
   展開後是 `hull` 底的表，**欄序固定為集號 → 絕對編號 → 入庫 → 集名 → 片長 → 播出日**；
   絕對編號只在有 Absolute group 時整欄出現（沒有時不留一整排 `—`）；片長與播出日在窄版不畫；
   入庫那一格 `whitespace-nowrap`。集的狀態依 The Usual Stays Unpainted Rule：下載中 `working`、卡住是一塊可點的
@@ -673,7 +676,10 @@ Thumb / Backdrop / 劇照），下方同一條標識帶，框與底同牆卡片�
   送到哪一條 Route、會被寫死的資料夾名（`.value wrap-anywhere`）、「這一按就定了」或「它已經是」，加主要 / 取消兩顆鍵。
   被擋下時在同一塊裡以 `role="alert"` 的 `blocked-ink` 說封閉集合的理由，原文接在下面。成功時整塊換成
   `secured` 色塊 + 「去看下載列表」連結（`role="status"`，焦點移到連結上）。
-- **檔案與版本（`FilesPanel`）:** 劇集依季 `<details>` 分組、預設全收，電影不分組。一個檔案是一條 `border-l-2` 的內縮列：
+- **檔案與版本（`FilesPanel`）:** 劇集**依決定分組**（處置 × 季，各是一段長清單段落，預設全收），電影不分組。
+  組的摘要：處置中性小色塊 + `S01 E01–E28`（`.value text-sm`）+ `Dot` 分隔的檔案數、「帳本對得上 / N 個帳本對不上」、
+  只算正片的「Jellyfin 已收錄 / 掃描中 / 找不到 N」（是 0 的不說，字幕與特典整組都沒有這一格）。帳本對不上或
+  Jellyfin 找不到的組排最前、左線 `rule-strong`。展開一組才逐檔列出。一個檔案是一條 `border-l-2` 的內縮列：
   處置中性小色塊 `Dot` 季集 `Dot` Tags；目標路徑（`.value text-xs wrap-anywhere text-ink-dim`）；
   帳本狀態 `Dot` Jellyfin 找到了沒。版本組說 Jellyfin 算出的版本名；對不到的檔案排在最後，左線 `rule-strong`，
   帶一條到下載列表的 `GHOST_LINK`。常態也說一句（「沒有多版本」），空白與沒畫出來不能長得一樣。
@@ -689,6 +695,8 @@ Thumb / Backdrop / 劇照），下方同一條標識帶，框與底同牆卡片�
 - **展開區（`hull` 底，`border-t-2 border-rule`）:** 作品連結（`.label` 標記 + 文字連結）→ 計劃 → 時間線 →
   整串 hash 的 `CopyLine` → 重新規劃 / 重試（Ghost，只換文字，失敗說封閉集合的理由）。計劃與時間線展開時才請求。
 - **計劃（`JobPlan`）:** 抬頭是計劃狀態中性小色塊 + 「N 個檔案 · 高 / 中 / 低」計數；預估與「為什麼停下來」只在成立時出現。
+  **依決定分組**（處置 × 季 × 信心 × 待確認，各是一段長清單段落）：摘要是處置中性小色塊 + 信心 + 待確認 + `S01 E01–E28` +
+  檔案數；待審核、對不到、待確認的組排最前、左線 `rule-strong`。展開一組才逐檔列出：
   逐檔一條 `border-l-2` 內縮列：處置中性小色塊 + 信心 + 季集 + 待確認；來源檔名；「目標」+ 目標路徑；
   解析器的英文理由（`lang="en"`）。這一塊**沒有信號色**；待審核、對不到、待確認的列左線換 `rule-strong`。
 - **時間線（`JobTimeline`）:** 每筆事件一條 `border-l-2 border-rule` 內縮列：事件型別中性色塊 + 相對時間 +
@@ -696,6 +704,18 @@ Thumb / Backdrop / 劇照），下方同一條標識帶，框與底同牆卡片�
   目標路徑收在一個巢狀 `<details>` 裡——一季 39 個檔案不該是 39 行只差一條路徑。服務原文不翻譯、理由翻譯。
   紅字（`blocked-ink`）只給擋住這一筆的：`submit_failed`、`issue_detected` 裡的 `missing_files` 與 `client_error`、
   `blocking` 為真的 `link_failed`；`issue_detected` 其餘三種是 `ink`，Jellyfin 請求失敗是 `ink-dim`。
+
+### 長清單段落（`CollapsibleRow`：季表的一季、檔案與計劃的一組）
+
+- 原生 `<details>`，`well` 底，段落之間是 `gap-px` 透出的 `rule`；需要人的那一段左線 `border-l-2 border-rule-strong`
+  （其餘同寬但透明，內容不會錯開）。**收起時不渲染內容**（瀏覽器的頁內搜尋因此找不到收起的內容，這是拍板時知道的代價）。
+- **展開時摘要列黏在畫面頂端**（`sticky top-0`，`well` 底 + 底線 `border-b-2 border-rule`，內容從它下面捲過去；GitHub PR
+  檔案標頭的做法）。摘要列裡只有字（The Summary Is One Button Rule），靠右「展開 / 收起」由狀態決定——不用 `group-open:`，
+  它會跟著外層下載列的 `<details>` 一起亮。
+- 內容最後一行 `border-t-2 border-rule` 裡一顆 `COMPACT_BUTTON`「收起 S01 / 收起 正片 S01 E01–E28」。從它收起之後焦點回到
+  摘要列；兩條路收起之後，摘要列若在畫面上方就捲回來。內容裡的連結與按鈕帶 `scroll-margin-top`，反向 Tab 回去時不會
+  躲在黏頂的摘要列底下（WCAG 2.2 2.4.11）。
+- 範圍用 en dash、季代號與集號之間空一格（`S01 E01–E05, E07`）：`S01E01-E02` 是 Jellyfin 的多集檔寫法，不能拿來寫一組。
 
 ### Route 設定列（`RouteSettingsPage` / `RouteDelete`）
 

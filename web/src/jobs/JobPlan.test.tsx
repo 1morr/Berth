@@ -1,4 +1,5 @@
 import { screen, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 
 import type { Plan, PlanItem } from '../api/plans'
@@ -38,15 +39,101 @@ function plan(overrides: Partial<Plan> = {}): Plan {
   }
 }
 
-/** 逐檔那一份清單。理由自己也是一份 `ul`，所以取的是外層那一個。 */
-function render(row: Plan) {
+/** 展開每一組之後的逐檔清單（M1.5 票 09：逐檔要展開那一組才畫）。理由自己也是一份 `ul`，所以取的是外層那一個。 */
+async function render(row: Plan) {
   renderWithProviders(<JobPlan plan={row} />)
+  for (const summary of screen.getAllByText('展開')) await userEvent.click(summary)
   return within(screen.getAllByRole('list')[0])
 }
 
+/** 一組的摘要列（`<summary>`），照畫面上的順序。 */
+function groups() {
+  return screen.getAllByText(/^\d+ 個檔案$/).map((count) => count.closest('summary')!)
+}
+
+/** 葬送的芙莉蓮 `[7³ACG]` BD 合集的形狀：S00 11 個中信心待確認、S01 28 個高信心（票 15 critique 量到的那一包）。 */
+function frieren(): Plan {
+  const specials = Array.from({ length: 11 }, (_, index) =>
+    item({
+      id: index + 1,
+      rel_path: `Sousou no Frieren 2023 S00E${String(index + 1).padStart(2, '0')}.mkv`,
+      season: 0,
+      episode_start: index + 1,
+      episode_end: index + 1,
+      confidence: 'medium',
+      audit: true,
+    }),
+  )
+  const episodes = Array.from({ length: 28 }, (_, index) =>
+    item({
+      id: index + 12,
+      rel_path: `Sousou no Frieren 2023 S01E${String(index + 1).padStart(2, '0')}.mkv`,
+      episode_start: index + 1,
+      episode_end: index + 1,
+    }),
+  )
+  return plan({
+    summary: {
+      files: 39,
+      high: 28,
+      medium: 11,
+      low: 0,
+      actions: { import: 39 },
+      review_reason: null,
+    },
+    items: [...specials, ...episodes],
+  })
+}
+
 describe('匯入計劃', () => {
-  it('一個檔案一列：決定、信心、季集、目標路徑與理由（票 11 驗收）', () => {
-    const list = render(plan())
+  it('依「處置 × 季 × 信心 × 待確認」分組：芙莉蓮 39 個檔案收成兩行（M1.5 票 09）', () => {
+    renderWithProviders(<JobPlan plan={frieren()} />)
+
+    const [audited, plain] = groups()
+    expect(groups()).toHaveLength(2)
+    expect(within(audited).getByText('入庫')).toBeVisible()
+    expect(within(audited).getByText('中信心')).toBeVisible()
+    expect(within(audited).getByText('已入庫待確認')).toBeVisible()
+    expect(within(audited).getByText('S00 E01–E11')).toBeVisible()
+    expect(within(audited).getByText('11 個檔案')).toBeVisible()
+    expect(within(plain).getByText('高信心')).toBeVisible()
+    expect(within(plain).getByText('S01 E01–E28')).toBeVisible()
+    expect(within(plain).getByText('28 個檔案')).toBeVisible()
+    expect(within(plain).queryByText('已入庫待確認')).not.toBeInTheDocument()
+    // 逐檔要展開那一組才畫。
+    expect(screen.queryByText('Sousou no Frieren 2023 S01E05.mkv')).not.toBeInTheDocument()
+  })
+
+  it('展開一組才逐檔列出，底端收得起來', async () => {
+    renderWithProviders(<JobPlan plan={frieren()} />)
+
+    await userEvent.click(within(groups()[1]).getByText('28 個檔案'))
+    expect(screen.getByText('Sousou no Frieren 2023 S01E05.mkv')).toBeVisible()
+    expect(screen.queryByText('Sousou no Frieren 2023 S00E05.mkv')).not.toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: '收起 入庫 S01 E01–E28' }))
+    expect(screen.queryByText('Sousou no Frieren 2023 S01E05.mkv')).not.toBeInTheDocument()
+  })
+
+  it('需要人的那一組排在最前面，即使它在 torrent 裡排在後面（The Needs-You Floats Up Rule）', () => {
+    renderWithProviders(
+      <JobPlan
+        plan={plan({
+          items: [
+            item(),
+            item({ id: 2, rel_path: 'NCOP.mkv', action: 'review', confidence: 'low' }),
+          ],
+        })}
+      />,
+    )
+
+    const [first, second] = groups()
+    expect(within(first).getByText('待審核')).toBeVisible()
+    expect(within(second).getByText('入庫')).toBeVisible()
+  })
+
+  it('一個檔案一列：決定、信心、季集、目標路徑與理由（票 11 驗收）', async () => {
+    const list = await render(plan())
 
     expect(list.getByText('入庫')).toBeInTheDocument()
     expect(list.getByText('高信心')).toBeInTheDocument()
@@ -55,8 +142,8 @@ describe('匯入計劃', () => {
     expect(list.getByText('the filename says S01E01')).toBeInTheDocument()
   })
 
-  it('略過的檔案也有一列——「沒有動它」與「沒看到它」是兩件事', () => {
-    const list = render(
+  it('略過的檔案也有一列——「沒有動它」與「沒看到它」是兩件事', async () => {
+    const list = await render(
       plan({
         items: [
           item({
@@ -83,14 +170,14 @@ describe('匯入計劃', () => {
     expect(list.getByText('readme.txt')).toBeInTheDocument()
   })
 
-  it('單檔多集寫成 Jellyfin 認得的那一種（brief §6.6）', () => {
-    const list = render(plan({ items: [item({ episode_end: 2 })] }))
+  it('單檔多集寫成 Jellyfin 認得的那一種（brief §6.6）', async () => {
+    const list = await render(plan({ items: [item({ episode_end: 2 })] }))
 
     expect(list.getByText('S01E01-E02')).toBeInTheDocument()
   })
 
-  it('medium 自動入庫的那一列說得出它還等一次確認', () => {
-    const list = render(plan({ items: [item({ confidence: 'medium', audit: true })] }))
+  it('medium 自動入庫的那一列說得出它還等一次確認', async () => {
+    const list = await render(plan({ items: [item({ confidence: 'medium', audit: true })] }))
 
     expect(list.getByText('中信心')).toBeInTheDocument()
     expect(list.getByText('已入庫待確認')).toBeInTheDocument()
@@ -114,7 +201,7 @@ describe('匯入計劃', () => {
       />,
     )
 
-    // 計劃自己與那一列都說「待審核」：一個說整份停下來了，一個說是哪個檔案讓它停的。
+    // 計劃自己與那一組都說「待審核」：一個說整份停下來了，一個說是哪幾個檔案讓它停的。
     expect(screen.getAllByText('待審核')).toHaveLength(2)
     expect(screen.getByText(/不讓 medium 信心的檔案自動入庫/)).toBeInTheDocument()
   })
