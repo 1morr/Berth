@@ -6,7 +6,7 @@ import type { TFunction } from 'i18next'
 
 import { ApiError } from '../api/client'
 import { healthDetailQueryOptions, healthQueryOptions, type HealthDetail } from '../api/health'
-import type { JellyfinWeb } from '../api/inventory'
+import type { JellyfinWeb } from '../api/jellyfin'
 import type { QbittorrentSetup, ServiceKind } from '../api/schemas'
 import {
   jellyfinAddressQueryOptions,

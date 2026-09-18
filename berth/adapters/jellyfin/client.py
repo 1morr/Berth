@@ -22,6 +22,7 @@ from berth.adapters.jellyfin import (
     JellyfinPage,
     JellyfinPolicy,
     JellyfinPublicInfo,
+    JellyfinSeason,
     JellyfinSource,
     JellyfinTask,
     JellyfinUserData,
@@ -376,6 +377,57 @@ class HttpJellyfinClient:
         }
         return _items(await self._get("/Shows/NextUp", params=params))
 
+    # --- Media 詳情的觀看區 ---
+
+    async def tmdb_index(self, *, user_id: str, item_type: str) -> tuple[JellyfinItem, ...]:
+        # 不帶 `parentId`：只有這樣 Jellyfin 才照這個人的 `UserViews` 限縮（研究 §10）。
+        payload = await self._get(
+            "/Items",
+            params={
+                "userId": user_id,
+                "recursive": "true",
+                "includeItemTypes": item_type,
+                "hasTmdbId": "true",
+                "fields": "ProviderIds",
+                "enableImages": "false",
+                "enableUserData": "false",
+            },
+        )
+        return _items(payload)
+
+    async def item(self, *, user_id: str, item_id: str) -> JellyfinItem:
+        path = f"/Items/{item_id}"
+        payload = await self._found(path, params={"userId": user_id})
+        if not isinstance(payload, dict) or "Id" not in payload:
+            raise ProtocolMismatchError(f"GET {path}: not an item")
+        return _item(payload)
+
+    async def seasons(self, *, user_id: str, series_id: str) -> tuple[JellyfinSeason, ...]:
+        path = f"/Shows/{series_id}/Seasons"
+        # `fields` 照 jellyfin-web 的詳細頁（研究 §7）；fixture 是這一組參數錄的。
+        params = {"userId": user_id, "fields": "ItemCounts,PrimaryImageAspectRatio"}
+        return tuple(_season(row) for row in _rows(await self._found(path, params=params), path))
+
+    async def episodes(
+        self, *, user_id: str, series_id: str, season_id: str
+    ) -> tuple[JellyfinItem, ...]:
+        path = f"/Shows/{series_id}/Episodes"
+        # 同 `seasons`：照 jellyfin-web 的詳細頁、也是 fixture 錄的那一組。Berth 讀的欄位（季集號、
+        # `UserData`、`ImageTags`）不必 `fields` 就有（研究 §4.1），多要的 `Overview` 沒有用到。
+        params = {
+            "userId": user_id,
+            "seasonId": season_id,
+            "fields": "Overview,PrimaryImageAspectRatio",
+        }
+        return tuple(_item(row) for row in _rows(await self._found(path, params=params), path))
+
+    async def series_next_up(self, *, user_id: str, series_id: str) -> JellyfinItem | None:
+        # 只送 jellyfin-web 劇集頁送的那兩個，其餘吃伺服器預設（研究 §7.3）。
+        payload = await self._get(
+            "/Shows/NextUp", params={"userId": user_id, "seriesId": series_id}
+        )
+        return next(iter(_items(payload)), None)
+
     # --- 圖片 ---
 
     async def image(
@@ -414,6 +466,14 @@ class HttpJellyfinClient:
 
     async def _get(self, path: str, *, params: dict[str, str] | None = None) -> Any:
         response = await self._session.request("GET", path, params=params)
+        return json_body(response)
+
+    async def _found(self, path: str, *, params: dict[str, str]) -> Any:
+        """看不到（或沒有）的東西 Jellyfin 回 404，body 可能是 problem details 也可能是一個 JSON
+        字串（`"Series not found"`，研究 §2），所以只看狀態碼。"""
+        response = await self._session.request("GET", path, params=params, tolerate=(404,))
+        if response.status_code == 404:
+            raise NotFoundError(f"GET {path}: not found for this user")
         return json_body(response)
 
 
@@ -455,6 +515,7 @@ def _item(row: dict[str, Any]) -> JellyfinItem:
             if isinstance(source, dict) and source.get("Path")
         ),
         series_id=str(row.get("SeriesId") or ""),
+        season_id=str(row.get("SeasonId") or ""),
         year=year if isinstance(year := row.get("ProductionYear"), int) else None,
         primary_tag=str(tags.get("Primary") or ""),
         user_data=_user_data(data) if isinstance(data := row.get("UserData"), dict) else None,
@@ -469,6 +530,15 @@ def _item(row: dict[str, Any]) -> JellyfinItem:
         parent_backdrop=_parent_image(
             row.get("ParentBackdropItemId"), _first(row.get("ParentBackdropImageTags"))
         ),
+    )
+
+
+def _season(row: dict[str, Any]) -> JellyfinSeason:
+    return JellyfinSeason(
+        id=str(row.get("Id", "")),
+        name=str(row.get("Name", "")),
+        number=_number(row.get("IndexNumber")),
+        user_data=_user_data(data) if isinstance(data := row.get("UserData"), dict) else None,
     )
 
 

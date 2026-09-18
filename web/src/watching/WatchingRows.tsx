@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 
 import { ApiError } from '../api/client'
-import { accessRefusal, type JellyfinWeb } from '../api/inventory'
+import { accessRefusal, type JellyfinWeb } from '../api/jellyfin'
 import {
   homeWatchingQueryOptions,
   libraryWatchingQueryOptions,
@@ -13,7 +13,7 @@ import {
 import { ArtSlot } from '../components/ArtSlot'
 import { COMPACT_BUTTON, GhostButton } from '../components/controls'
 import { Dot } from '../components/Dot'
-import { episodeCode, formatEpisode, seasonCode } from '../components/episodes'
+import { formatJellyfinEpisode } from '../components/episodes'
 import { KIND_CODE } from '../components/kind'
 import { SessionEnded } from '../components/SessionEnded'
 import { WALL_GRID, fitsOneRowFrom, oneRowOnly } from '../discover/wallGrid'
@@ -162,7 +162,7 @@ function WatchingTile({
               {KIND_CODE.movie} <Dot /> {card.year ?? '—'}
             </>
           ) : (
-            episodeLabel(card)
+            formatJellyfinEpisode(card)
           )}
         </p>
         <p className="value line-clamp-1 text-sm text-ink">{card.title}</p>
@@ -187,12 +187,4 @@ function WatchingTile({
       {body}
     </a>
   )
-}
-
-/** 季集代號（`S01E05`、`S01E05-E06`）。Jellyfin 認不出編號時只剩有的那一段。 */
-function episodeLabel(card: WatchingCard): string {
-  if (card.season !== null && card.episode_start !== null) return formatEpisode(card)
-  if (card.season !== null) return seasonCode(card.season)
-  if (card.episode_start !== null) return episodeCode(card.episode_start)
-  return ''
 }

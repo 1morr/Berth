@@ -1268,6 +1268,7 @@ def record_browsing(
     resp = srv.send(api, f"/Shows/{alpha}/Episodes", params=episodes)
     fixtures.write("shows-episodes.json", resp)
     record_watching(srv, api, c, user_id, fixtures)
+    record_title_watch(srv, api, c, user_id, fixtures)
 
 
 def record_watching(
@@ -1312,6 +1313,43 @@ def record_watching(
         ("shows-nextup.watching.cutoff.json", {**next_up, "nextUpDateCutoff": NEXT_UP_CUTOFF}),
         ("shows-nextup.watching.movies.json", {**next_up, "parentId": c.libraries["Movies"]}),
     ):
+        fixtures.write(name, srv.send(api, "/Shows/NextUp", params=params))
+
+
+def record_title_watch(
+    srv: Server, api: Credential, c: Catalog, user_id: str, fixtures: Fixtures
+) -> None:
+    """Media 詳情的觀看區（M1.5 票 08）：由 TMDB id 找作品、確認看得到、這部劇的下一集。
+
+    - 找作品不帶 `parentId`（研究 §10）：TV 的 Frieren 在、Anime 的那一份不在，沒有 TMDB id 的
+      Hotel Show 不在（`hasTmdbId` 真的有過濾）。
+    - `/Items/{id}` 不必 `fields` 就帶 `ProviderIds` 與 `UserData`（v12.0 `new DtoOptions()`）。
+    - 帶 `seriesId` 的 NextUp 用伺服器預設（jellyfin-web 劇集頁同樣不送 `enableResumable`）：
+      Alpha 看過 E01 → E02；Frieren E01 看到一半 → 回 E01 與它的位置；Hotel 沒看過 → S01E01。
+    """
+    user = {"userId": user_id}
+    lookup = {
+        **user,
+        "recursive": "true",
+        "includeItemTypes": "Series",
+        "hasTmdbId": "true",
+        "fields": "ProviderIds",
+        "enableImages": "false",
+        "enableUserData": "false",
+    }
+    fixtures.write("items.tmdb-lookup.series.json", srv.send(api, "/Items", params=lookup))
+    for name, library, title in (
+        ("items-id.series.json", "TV", "Alpha Show"),
+        ("items-id.movie.json", "Movies", "Foxtrot Movie"),
+    ):
+        path = f"/Items/{c.title_id(library, title)}"
+        fixtures.write(name, srv.send(api, path, params=user))
+    for name, title in (
+        ("shows-nextup.series.json", "Alpha Show"),
+        ("shows-nextup.series.resumable.json", "Frieren"),
+        ("shows-nextup.series.unwatched.json", "Hotel Show"),
+    ):
+        params = {**user, "seriesId": c.title_id("TV", title)}
         fixtures.write(name, srv.send(api, "/Shows/NextUp", params=params))
 
 

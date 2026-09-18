@@ -1,0 +1,63 @@
+{
+  "Items": [
+    {
+      "AirDays": [],
+      "ChannelId": null,
+      "CommunityRating": 7,
+      "Id": "2a9857e656bbd18b7c3c3a3b4ee5eef1",
+      "ImageBlurHashes": {},
+      "IsFolder": true,
+      "LocationType": "FileSystem",
+      "MediaType": "Unknown",
+      "Name": "Alpha Show",
+      "OfficialRating": "TV-14",
+      "PremiereDate": "2022-04-01T00:00:00.0000000Z",
+      "ProductionYear": 2022,
+      "ProviderIds": {
+        "Tmdb": "1399"
+      },
+      "ServerId": "1af78f6d10cf47d5a3d350608fb3833f",
+      "Type": "Series"
+    },
+    {
+      "AirDays": [],
+      "ChannelId": null,
+      "CommunityRating": 9,
+      "Id": "6d616414836b339f17e139c3b00fd2ae",
+      "ImageBlurHashes": {},
+      "IsFolder": true,
+      "LocationType": "FileSystem",
+      "MediaType": "Unknown",
+      "Name": "Bravo Show",
+      "OfficialRating": "TV-MA",
+      "PremiereDate": "2020-01-20T00:00:00.0000000Z",
+      "ProductionYear": 2020,
+      "ProviderIds": {
+        "Tmdb": "1396"
+      },
+      "ServerId": "1af78f6d10cf47d5a3d350608fb3833f",
+      "Type": "Series"
+    },
+    {
+      "AirDays": [],
+      "ChannelId": null,
+      "CommunityRating": 8,
+      "Id": "02c06be72a8c11102b98e17665c9fef2",
+      "ImageBlurHashes": {},
+      "IsFolder": true,
+      "LocationType": "FileSystem",
+      "MediaType": "Unknown",
+      "Name": "Frieren",
+      "OfficialRating": "TV-PG",
+      "PremiereDate": "2023-09-29T00:00:00.0000000Z",
+      "ProductionYear": 2023,
+      "ProviderIds": {
+        "Tmdb": "209867"
+      },
+      "ServerId": "1af78f6d10cf47d5a3d350608fb3833f",
+      "Type": "Series"
+    }
+  ],
+  "StartIndex": 0,
+  "TotalRecordCount": 3
+}

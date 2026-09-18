@@ -26,6 +26,11 @@
 - **標記已看 / 未看由 Jellyfin 自己查可見性**（研究 §5）：這位使用者看不到的 item 回 404、沒有寫入。
   對 Series 標記遞迴到底下每一集，Series 自己的紀錄由它的集算出來（`PlayedPercentage`、
   `UnplayedItemCount`）；標記會把看到一半的位置歸零。停用的帳號照樣寫得進去（研究 §2）。
+- **Media 詳情的觀看區**（M1.5 票 08）：由 TMDB id 找作品（`tmdb_index`，不帶 `parentId`）
+  照使用者的權限限縮；`item`、`seasons`、`episodes` 自己查可見性、看不到 404；
+  **`series_next_up` 不看權限**（帶 `seriesId` 的 NextUp 不套，研究 §2）。季是 `Season` 型別的
+  item（`series_id` 指劇、`season` 是季號），集用 `season_id` 指它。這部劇的下一集照伺服器預設：
+  看到一半的也回、沒看過回第一集、看完了沒有（v12.0 原始碼，研究 §7.3）。
 """
 
 from __future__ import annotations
@@ -41,6 +46,7 @@ from berth.adapters.http import AuthFailedError, NotFoundError, ProtocolMismatch
 from berth.adapters.jellyfin import (
     ITEM_EPISODE,
     ITEM_MOVIE,
+    ITEM_SEASON,
     ITEM_SERIES,
     JellyfinApiKey,
     JellyfinAuth,
@@ -51,6 +57,7 @@ from berth.adapters.jellyfin import (
     JellyfinPage,
     JellyfinPolicy,
     JellyfinPublicInfo,
+    JellyfinSeason,
     JellyfinTask,
     JellyfinUserData,
     JellyfinView,
@@ -194,6 +201,10 @@ class FakeJellyfinClient:
         self.watching_queries: list[tuple[str, str, str | None]] = []
         #: 每一次 `next_up` 收到的 `nextUpDateCutoff`。
         self.next_up_cutoffs: list[datetime] = []
+        #: Media 詳情的觀看區（M1.5 票 08）每一次問的 `(方法名, user_id, 對象)`：`tmdb_index`
+        #: 記型別名，`item` / `seasons` / `series_next_up` 記作品，`episodes` 記季。「確認看得到
+        #: 之前不問這部劇的下一集」靠它斷言。
+        self.watch_area_queries: list[tuple[str, str, str]] = []
         self.token = ""
         self.culture: tuple[str, str, str] | None = None
         self.remote_access: bool | None = None
@@ -505,23 +516,103 @@ class FakeJellyfinClient:
         self.next_up_cutoffs.append(cutoff)
         name = self._username(user_id)
         seen = self.played.get(name, set())
-        positions = self.positions.get(name, {})
         found: list[JellyfinItem] = []
         for series in self.items_:
             if series.type != ITEM_SERIES or not self._in_scope(name, series, library_id):
                 continue
-            episodes = sorted(
-                self._episodes(series), key=lambda row: (row.season or 0, row.episode_start or 0)
-            )
-            watched = [index for index, row in enumerate(episodes) if row.id in seen]
-            if not watched:
+            # 從沒看過的劇不列（不帶 `seriesId` 時，研究 §7.2）。
+            if not any(row.id in seen for row in self._episodes(series)):
                 continue
-            candidate = next(
-                (row for row in episodes[watched[-1] + 1 :] if row.id not in seen), None
-            )
-            if candidate is not None and not positions.get(candidate.id):
+            candidate = self._next_episode(name, series, resumable=False)
+            if candidate is not None:
                 found.append(replace(candidate, user_data=self._user_data(name, candidate)))
         return tuple(found[:limit])
+
+    # --- Media 詳情的觀看區 ---
+
+    async def tmdb_index(self, *, user_id: str, item_type: str) -> tuple[JellyfinItem, ...]:
+        """不帶 `parentId`：照這個帳號的權限（研究 §10）。沒有 TMDB id 的不回（`hasTmdbId`）。"""
+        self._checkpoint(always=True)
+        self.watch_area_queries.append(("tmdb_index", user_id, item_type))
+        name = self._username(user_id)
+        return tuple(
+            item
+            for item in self.items_
+            if item.type == item_type and item.tmdb_id and self._visible(name, item)
+        )
+
+    async def item(self, *, user_id: str, item_id: str) -> JellyfinItem:
+        self._checkpoint(always=True)
+        self.watch_area_queries.append(("item", user_id, item_id))
+        name = self._username(user_id)
+        found = self._seen_by(name, item_id)
+        if found is None:
+            raise NotFoundError(f"GET /Items/{item_id}: 404")
+        return replace(found, user_data=self._user_data(name, found))
+
+    async def seasons(self, *, user_id: str, series_id: str) -> tuple[JellyfinSeason, ...]:
+        self._checkpoint(always=True)
+        self.watch_area_queries.append(("seasons", user_id, series_id))
+        name = self._username(user_id)
+        series = self._seen_by(name, series_id)
+        if series is None or series.type != ITEM_SERIES:
+            raise NotFoundError(f"GET /Shows/{series_id}/Seasons: 404")
+        rows = sorted(
+            (row for row in self.items_ if row.type == ITEM_SEASON and row.series_id == series_id),
+            key=lambda row: row.season or 0,
+        )
+        return tuple(
+            JellyfinSeason(
+                id=row.id, name=row.name, number=row.season, user_data=self._user_data(name, row)
+            )
+            for row in rows
+        )
+
+    async def episodes(
+        self, *, user_id: str, series_id: str, season_id: str
+    ) -> tuple[JellyfinItem, ...]:
+        self._checkpoint(always=True)
+        self.watch_area_queries.append(("episodes", user_id, season_id))
+        name = self._username(user_id)
+        # 劇與季各自照這個人查可見性（研究 §2）。兩者是不是同一部，真的 Jellyfin 怎麼處理沒有量過，
+        # 替身不替它發明一條規則：回的是那一季的集。
+        series = self._seen_by(name, series_id)
+        season = self._seen_by(name, season_id)
+        if series is None or season is None:
+            raise NotFoundError(f"GET /Shows/{series_id}/Episodes: 404 Series not found")
+        return tuple(
+            replace(row, user_data=self._user_data(name, row)) for row in self._episodes(season)
+        )
+
+    async def series_next_up(self, *, user_id: str, series_id: str) -> JellyfinItem | None:
+        """**不看權限**：帶 `seriesId` 的 NextUp 在真的 Jellyfin 也不套（研究 §2）。"""
+        self._checkpoint(always=True)
+        self.watch_area_queries.append(("series_next_up", user_id, series_id))
+        name = self._username(user_id)
+        series = next((row for row in self.items_ if row.id == series_id), None)
+        if series is None:
+            return None
+        found = self._next_episode(name, series, resumable=True)
+        return None if found is None else replace(found, user_data=self._user_data(name, found))
+
+    def _seen_by(self, name: str, item_id: str) -> JellyfinItem | None:
+        found = next((row for row in self.items_ if row.id == item_id), None)
+        return found if found is not None and self._visible(name, found) else None
+
+    def _next_episode(
+        self, name: str, series: JellyfinItem, *, resumable: bool
+    ) -> JellyfinItem | None:
+        """最後看過的那一集之後、還沒看的第一集；一集都沒看過就是第一集（v12.0
+        `NextUpService`，Specials 不算）。`resumable=False` 時候選那一集看到一半就不回
+        （`enableResumable=false`）。"""
+        seen = self.played.get(name, set())
+        episodes = [row for row in self._episodes(series) if row.season != 0]
+        watched = [index for index, row in enumerate(episodes) if row.id in seen]
+        after = episodes[watched[-1] + 1 :] if watched else episodes
+        candidate = next((row for row in after if row.id not in seen), None)
+        if candidate is None or (not resumable and self.positions.get(name, {}).get(candidate.id)):
+            return None
+        return candidate
 
     def _in_scope(self, name: str, item: JellyfinItem, library_id: str | None) -> bool:
         """不帶 `parentId` 照這個帳號的權限；帶了只看路徑，**不看權限**（研究 §2）。"""
@@ -539,14 +630,21 @@ class FakeJellyfinClient:
         return any(_under(item, library) for library in self._folders_of(name))
 
     def _episodes(self, item: JellyfinItem) -> tuple[JellyfinItem, ...]:
-        if item.type != ITEM_SERIES:
+        """劇或季底下的集，照季集號排。"""
+        if item.type not in (ITEM_SERIES, ITEM_SEASON):
             return ()
-        return tuple(row for row in self.items_ if row.series_id == item.id)
+        rows = [
+            row
+            for row in self.items_
+            if row.type == ITEM_EPISODE
+            and (row.series_id if item.type == ITEM_SERIES else row.season_id) == item.id
+        ]
+        return tuple(sorted(rows, key=lambda row: (row.season or 0, row.episode_start or 0)))
 
     def _user_data(self, name: str, item: JellyfinItem) -> JellyfinUserData:
         """劇集的紀錄由底下的集算：看過的比例與沒看的集數（12.1.0 錄的 `UserData`，研究 §5）。"""
         seen = self.played.get(name, set())
-        if item.type != ITEM_SERIES:
+        if item.type not in (ITEM_SERIES, ITEM_SEASON):
             return JellyfinUserData(
                 played=item.id in seen,
                 played_percentage=self.positions.get(name, {}).get(item.id, 0.0),

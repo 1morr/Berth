@@ -1,0 +1,46 @@
+{
+  "Items": [
+    {
+      "BackdropImageTags": [],
+      "ChannelId": null,
+      "Container": "mkv",
+      "Id": "99701a68c9a746b2f3a2d31d0b6c49f2",
+      "ImageBlurHashes": {
+        "Primary": {
+          "1b16fea99154646878616d5bcfb91aa7": "d23KQ.pLfQpLktfkfQfkfQfQfQfQktfkfQfkfQfQfQfQ"
+        }
+      },
+      "ImageTags": {},
+      "IndexNumber": 1,
+      "IsFolder": false,
+      "LocationType": "FileSystem",
+      "MediaType": "Video",
+      "Name": "Frieren",
+      "ParentIndexNumber": 1,
+      "ParentPrimaryImageItemId": "02c06be72a8c11102b98e17665c9fef2",
+      "ParentPrimaryImageTag": "1b16fea99154646878616d5bcfb91aa7",
+      "PrimaryImageAspectRatio": 0.6666666666666666,
+      "ProductionYear": 2023,
+      "RunTimeTicks": 6000000000,
+      "SeasonId": "07a528fa42ef6bf81fffb993098d54de",
+      "SeasonName": "第 1 季",
+      "SeriesId": "02c06be72a8c11102b98e17665c9fef2",
+      "SeriesName": "Frieren",
+      "SeriesPrimaryImageTag": "1b16fea99154646878616d5bcfb91aa7",
+      "ServerId": "1af78f6d10cf47d5a3d350608fb3833f",
+      "Type": "Episode",
+      "UserData": {
+        "IsFavorite": false,
+        "ItemId": "99701a68c9a746b2f3a2d31d0b6c49f2",
+        "Key": "99701a68-c9a7-46b2-f3a2-d31d0b6c49f2",
+        "PlayCount": 0,
+        "PlaybackPositionTicks": 1800000000,
+        "Played": false,
+        "PlayedPercentage": 30
+      },
+      "VideoType": "VideoFile"
+    }
+  ],
+  "StartIndex": 0,
+  "TotalRecordCount": 1
+}

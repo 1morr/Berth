@@ -1,0 +1,45 @@
+{
+  "Items": [
+    {
+      "BackdropImageTags": [],
+      "ChannelId": null,
+      "Container": "mkv",
+      "Id": "5fa033d9aaeac575ed72d5212c3a3bf0",
+      "ImageBlurHashes": {
+        "Primary": {
+          "e0cd8bbd53922bd7307b778d2d2690d8": "d23KQ.pLfQpLktfkfQfkfQfQfQfQktfkfQfkfQfQfQfQ"
+        }
+      },
+      "ImageTags": {},
+      "IndexNumber": 1,
+      "IsFolder": false,
+      "LocationType": "FileSystem",
+      "MediaType": "Video",
+      "Name": "Hotel Show",
+      "ParentIndexNumber": 1,
+      "ParentPrimaryImageItemId": "9ea3bb1459aa4795a5ebf54b94fe0cc9",
+      "ParentPrimaryImageTag": "e0cd8bbd53922bd7307b778d2d2690d8",
+      "PrimaryImageAspectRatio": 0.6666666666666666,
+      "ProductionYear": 2021,
+      "RunTimeTicks": 6000000000,
+      "SeasonId": "dabe6308b21a1353095f215394f3236b",
+      "SeasonName": "第 1 季",
+      "SeriesId": "9ea3bb1459aa4795a5ebf54b94fe0cc9",
+      "SeriesName": "Hotel Show",
+      "SeriesPrimaryImageTag": "e0cd8bbd53922bd7307b778d2d2690d8",
+      "ServerId": "1af78f6d10cf47d5a3d350608fb3833f",
+      "Type": "Episode",
+      "UserData": {
+        "IsFavorite": false,
+        "ItemId": "5fa033d9aaeac575ed72d5212c3a3bf0",
+        "Key": "9ea3bb14-59aa-4795-a5eb-f54b94fe0cc9001001",
+        "PlayCount": 0,
+        "PlaybackPositionTicks": 0,
+        "Played": false
+      },
+      "VideoType": "VideoFile"
+    }
+  ],
+  "StartIndex": 0,
+  "TotalRecordCount": 1
+}

@@ -17,16 +17,17 @@ library-browsing.md §2、§9）。所以「這個人看得到什麼」由 Berth
 - **寫入只有標記已看 / 未看**（`JellyfinAccess.mark_played`，票 05）。它不先查可見性：
   `UserPlayedItems` 自己查，看不到的回 404 而且沒有寫入（研究 §5 的原始碼；12.1.0 打完立刻讀回，
   研究 §2 的表）。
-
-單一作品與集的讀取（`/Items/{id}?userId=`、`/Shows/{id}/Seasons|Episodes?userId=`，會檢查可見性的那幾支）
-要加在這裡，跟著它們第一個呼叫端一起來（票 08）。
+- **Media 詳情的觀看區**（`locate`、`seasons`、`episodes`、`series_next_up`，票 08）：由 TMDB id
+  找作品**不帶 `parentId`**；單一作品與季集走會檢查可見性的端點（`/Items/{id}?userId=`、
+  `/Shows/{id}/Seasons|Episodes?userId=`），不用 `/Items?ids=`。**這部劇的 NextUp（`seriesId`）
+  不套權限**，所以只問這一次 `locate` 確認過看得到的劇。
 """
 
 from __future__ import annotations
 
 import asyncio
 import time
-from collections.abc import AsyncIterator, Awaitable, Callable, Iterator
+from collections.abc import AsyncIterator, Awaitable, Callable, Collection, Iterator
 from contextlib import asynccontextmanager, contextmanager
 from dataclasses import dataclass
 from datetime import datetime
@@ -41,6 +42,7 @@ from berth.adapters.jellyfin import (
     JellyfinFilters,
     JellyfinItem,
     JellyfinPage,
+    JellyfinSeason,
     JellyfinView,
 )
 from berth.domain import CollectionType, LibrarySort, MediaKind, SortOrder
@@ -224,6 +226,8 @@ class JellyfinAccess:
         self._client = client
         self._user_id = user_id
         self.libraries = libraries
+        #: 這一次確認過看得到的作品（`locate`）。這部劇的 NextUp 只問這裡面的。
+        self._confirmed: set[str] = set()
 
     def library(self, library_id: str) -> BrowsableLibrary:
         found = next((row for row in self.libraries if row.id == library_id), None)
@@ -302,6 +306,65 @@ class JellyfinAccess:
         之前丟（`page`、`resume`、`next_up`）：同時問的另一支不該因為這一支被拒而已經送出去。"""
         with reachable():
             return await request
+
+    # --- Media 詳情的觀看區（票 08）---
+
+    async def locate(
+        self, kind: MediaKind, tmdb_id: int, *, links: Collection[str]
+    ) -> JellyfinItem | None:
+        """這部作品在 Jellyfin 裡、這個人看得到的那一份，帶他的觀看紀錄；沒有就是 `None`。
+
+        **不帶 `parentId` 找**（研究 §10），Jellyfin 才照這個人的 `UserViews` 限縮：看不到與不在
+        Jellyfin 是同一個答案。比對照媒體庫牆（票 03）：帳本記下的 Series / Movie id（`links`）
+        先比，Jellyfin 認錯 TMDB id 時那一個才是對的；再比 `ProviderIds.Tmdb`。找到之後向 Jellyfin
+        確認一次（`/Items/{id}?userId=`，看不到 404）——之後 `series_next_up` 才肯問這部劇。
+        """
+        item_type = ITEM_SERIES if kind is MediaKind.TV else ITEM_MOVIE
+        with reachable():
+            titles = await self._client.tmdb_index(user_id=self._user_id, item_type=item_type)
+        wanted = str(tmdb_id)
+        linked = [item for item in titles if item.id in links]
+        matched = [item for item in titles if item.tmdb_id == wanted and item not in linked]
+        for candidate in (*linked, *matched):
+            with reachable():
+                try:
+                    found = await self._client.item(user_id=self._user_id, item_id=candidate.id)
+                except NotFoundError:
+                    # 找作品與確認之間被收回了權限（或被刪了）：下一個候選。
+                    continue
+            if found.type == item_type:
+                self._confirmed.add(found.id)
+                return found
+        return None
+
+    async def seasons(self, series_id: str) -> tuple[JellyfinSeason, ...]:
+        """這部劇的季。Jellyfin 自己查可見性（帶 `userId` 時看不到回 404，研究 §2）。"""
+        with reachable():
+            try:
+                return await self._client.seasons(user_id=self._user_id, series_id=series_id)
+            except NotFoundError as exc:
+                raise ItemNotVisibleError("no such show, or not yours to see") from exc
+
+    async def episodes(self, series_id: str, season_id: str) -> tuple[JellyfinItem, ...]:
+        """那一季的集。劇與季的可見性都由 Jellyfin 查（`seasonId` 同樣帶著使用者查，研究 §2）。"""
+        with reachable():
+            try:
+                return await self._client.episodes(
+                    user_id=self._user_id, series_id=series_id, season_id=season_id
+                )
+            except NotFoundError as exc:
+                raise ItemNotVisibleError("no such season, or not yours to see") from exc
+
+    async def series_next_up(self, series_id: str) -> JellyfinItem | None:
+        """這部劇接下來看哪一集（看到一半的、沒看過的第一集都算），看完了是 `None`。
+
+        **帶 `seriesId` 的 NextUp 不套權限**（研究 §2，連使用者自己的 token 都照回），所以只問這一次
+        `locate` 確認過的劇；其餘在問 Jellyfin 之前丟 `ItemNotVisibleError`。
+        """
+        if series_id not in self._confirmed:
+            raise ItemNotVisibleError("not confirmed as visible to this user")
+        with reachable():
+            return await self._client.series_next_up(user_id=self._user_id, series_id=series_id)
 
     async def mark_played(self, item_id: str, *, played: bool) -> WatchState:
         """把這個 item 標為已看或未看，寫進這個人在 Jellyfin 的紀錄；回寫入之後的觀看狀態。

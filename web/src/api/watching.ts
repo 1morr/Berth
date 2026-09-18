@@ -1,7 +1,7 @@
 import { queryOptions } from '@tanstack/react-query'
 
 import { apiGet } from './client'
-import { retryUnlessRefused } from './inventory'
+import { retryUnlessRefused } from './jellyfin'
 import type { Schemas } from './schemas'
 
 /**

@@ -1,27 +1,17 @@
 import { useId, type ReactNode } from 'react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { Link, useRouter } from '@tanstack/react-router'
+import { useQueryClient } from '@tanstack/react-query'
+import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 
-import { ApiError } from '../api/client'
-import {
-  inventoryKey,
-  accessRefusal,
-  markPlayed,
-  withWatch,
-  type Inventory,
-  type InventoryCard,
-  type JellyfinWeb,
-  type WatchState,
-} from '../api/inventory'
+import { inventoryKey, withWatch, type Inventory, type InventoryCard } from '../api/inventory'
+import type { JellyfinWeb } from '../api/jellyfin'
 import { ArtSlot } from '../components/ArtSlot'
 import { AuditChip } from '../components/AuditChip'
-import { ConfirmPanel } from '../components/ConfirmPanel'
-import { COMPACT_BUTTON, GhostButton, Notice, PrimaryButton } from '../components/controls'
 import { Dot } from '../components/Dot'
 import { KIND_CODE } from '../components/kind'
 import { SIGNAL_FILL, type Signal } from '../components/signal'
-import { useInPlaceConfirm } from '../components/useInPlaceConfirm'
+import { WatchToggle } from '../components/WatchToggle'
+import { watchLine } from '../components/watchLine'
 import { tmdbText } from '../i18n/tmdbText'
 import { jellyfinDetailsUrl } from './jellyfinLink'
 
@@ -95,9 +85,7 @@ export function InventoryTile({
           <p className="value line-clamp-1 text-xs text-ink-dim">{card.title_en}</p>
         )}
         {/* 觀看狀態與盤點行。沒話說時是空的，但留著高度，基線才對得齊。 */}
-        <p className="value min-h-4 text-xs text-ink">
-          {card.watch && <Watched watch={card.watch} />}
-        </p>
+        <p className="value min-h-4 text-xs text-ink">{card.watch && watchLine(t, card.watch)}</p>
         <p className="value min-h-4 text-xs text-ink">{tracking && <Count card={card} />}</p>
       </div>
     </>
@@ -119,20 +107,6 @@ export function InventoryTile({
       <JellyfinLine card={card} web={web} titleId={titleId} libraryId={libraryId} />
     </article>
   )
-}
-
-/**
- * 一行只說一件事（判定在後端，`services/watch.py`）：已看、看到幾 %（影片）、剩幾集沒看（劇集，
- * 沒開始看的也說——jellyfin-web 的計數徽章）。都是字，不靠顏色；還沒看過的片什麼都不說。
- */
-function Watched({ watch }: { watch: WatchState }): ReactNode {
-  const { t } = useTranslation()
-  if (watch.played) return t('inventory.watch.played')
-  if (watch.progress !== null) return t('inventory.watch.progress', { progress: watch.progress })
-  if (watch.unplayed_episodes !== null) {
-    return t('inventory.watch.unplayed', { count: watch.unplayed_episodes })
-  }
-  return null
 }
 
 function Count({ card }: { card: InventoryCard }): ReactNode {
@@ -163,6 +137,7 @@ function JellyfinLine({
   libraryId: string
 }) {
   const { t } = useTranslation()
+  const queryClient = useQueryClient()
   const url =
     card.presence === 'found'
       ? jellyfinDetailsUrl(web, card.jellyfin_item_id, window.location)
@@ -194,118 +169,18 @@ function JellyfinLine({
       {card.watch && (
         <WatchToggle
           itemId={card.jellyfin_item_id}
-          kind={card.kind}
+          target={card.kind === 'tv' ? 'series' : 'movie'}
           watch={card.watch}
-          titleId={titleId}
-          libraryId={libraryId}
+          describedBy={titleId}
+          // 只改牆上那一格。上方的繼續觀看與下一集（票 07）**不在這裡重問**：它們一換，整面牆就在指標底下
+          // 上下移動；它們沒有快取期限，下一次打開頁面或切回視窗時自己會重問。
+          onWritten={(written) =>
+            queryClient.setQueriesData<Inventory>({ queryKey: inventoryKey(libraryId) }, (data) =>
+              data ? withWatch(data, card.jellyfin_item_id, written) : data,
+            )
+          }
         />
       )}
     </div>
-  )
-}
-
-/**
- * 標為已看 / 未看，寫進這個人在 Jellyfin 的紀錄。**標為未看先就地確認**：觀看次數與最後觀看時間
- * 清掉就找不回來，劇集清的是每一集（研究 §5）。jellyfin-web 兩個方向都不確認；Berth 不提供「復原」，
- * 所以把確認放在送出之前。
- *
- * 寫入之後拿回應改牆上那一格，不重抓整面牆。
- */
-function WatchToggle({
-  itemId,
-  kind,
-  watch,
-  titleId,
-  libraryId,
-}: {
-  itemId: string
-  kind: InventoryCard['kind']
-  watch: WatchState
-  titleId: string
-  libraryId: string
-}) {
-  const { t } = useTranslation()
-  const queryClient = useQueryClient()
-  const router = useRouter()
-  const { asked, open, close, trigger, panel, onKeyDown } = useInPlaceConfirm()
-  const warningId = useId()
-  const mark = useMutation({
-    mutationFn: (played: boolean) => markPlayed(itemId, played),
-    // 只改牆上那一格。上方的繼續觀看與下一集（票 07）**不在這裡重問**：它們一換，整面牆就在指標底下
-    // 上下移動；它們沒有快取期限，下一次打開頁面或切回視窗時自己會重問。
-    onSuccess: (written) =>
-      queryClient.setQueriesData<Inventory>({ queryKey: inventoryKey(libraryId) }, (data) =>
-        data ? withWatch(data, itemId, written) : data,
-      ),
-    onError: (error) => {
-      // 帳號在 Jellyfin 被停用：後端已經結束 session，重跑守衛把人送回登入頁（與牆那一支同一條路）。
-      if (error instanceof ApiError && error.status === 401) void router.invalidate()
-    },
-  })
-  const refusal = accessRefusal(mark.error)
-
-  return (
-    <>
-      {asked ? (
-        <div className="basis-full">
-          <ConfirmPanel panelRef={panel} onKeyDown={onKeyDown} labelledBy={warningId}>
-            <p id={warningId} className="text-xs text-ink">
-              {kind === 'tv'
-                ? t('inventory.watch.warningSeries')
-                : t('inventory.watch.warningMovie')}
-            </p>
-            {/* 卡片再寬也只有十幾 rem：兩顆鍵永遠疊成一欄。 */}
-            <div className="grid gap-2">
-              <PrimaryButton
-                type="button"
-                onClick={() => {
-                  close()
-                  mark.mutate(false)
-                }}
-              >
-                {t('inventory.watch.markUnplayed')}
-              </PrimaryButton>
-              <GhostButton type="button" onClick={close}>
-                {t('common.cancel')}
-              </GhostButton>
-            </div>
-          </ConfirmPanel>
-        </div>
-      ) : (
-        <button
-          ref={trigger}
-          type="button"
-          aria-describedby={titleId}
-          // 送出中不用 `disabled`：確認收起時焦點要回到這一顆，停用的鍵接不住焦點，鍵盤使用者會
-          // 掉回 `body`（playwright 實跑抓到）。按鈕照常可按，這一下什麼都不做。
-          aria-disabled={mark.isPending || undefined}
-          onClick={() => {
-            if (mark.isPending) return
-            if (watch.played) open()
-            else mark.mutate(true)
-          }}
-          className={COMPACT_BUTTON}
-        >
-          {mark.isPending
-            ? t('inventory.watch.pending')
-            : watch.played
-              ? t('inventory.watch.markUnplayed')
-              : t('inventory.watch.markPlayed')}
-        </button>
-      )}
-      {/* 失敗就在那一格說原因與下一步，Jellyfin 問不到時貼服務原文（PRODUCT 原則 4）。再按一次就是重試。 */}
-      {mark.isError && refusal?.reason !== 'account_disabled' && (
-        <div className="grid basis-full gap-1.5">
-          <Notice signal="blocked" label={t('common.failed')}>
-            {refusal?.reason === 'item_not_visible' || refusal?.reason === 'jellyfin_unreachable'
-              ? t(`inventory.watch.refused.${refusal.reason}`)
-              : t('inventory.watch.refused.other')}
-          </Notice>
-          {refusal?.reason === 'jellyfin_unreachable' && refusal.detail && (
-            <p className="value text-xs wrap-anywhere text-ink-dim">{refusal.detail}</p>
-          )}
-        </div>
-      )}
-    </>
   )
 }

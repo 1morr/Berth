@@ -336,12 +336,24 @@ describe('媒體庫頁', () => {
       jellyfin_item_id: 'eab6bd53ab3da44543cdcdf2ab031696',
       watch: { ...UNWATCHED, played: true },
     })
+    /** 還沒看過的片：標為已看什麼都不會清掉，一按就送。 */
+    const FOXTROT = jellyfinCard({
+      media_id: 'movie:157336',
+      kind: 'movie',
+      title: 'Foxtrot Movie',
+      title_en: 'Foxtrot Movie',
+      jellyfin_item_id: 'aaad8034da2f8c4db82f7aa3e26a4e3e',
+      watch: UNWATCHED,
+    })
     const PLAYED = (id: string) => `/api/jellyfin/items/${id}/played`
 
     function watching(routes: Record<string, StubRoute | (() => StubRoute)> = {}) {
       return render({
         [`GET /api/inventory/${TV}`]: {
-          body: wall({ titles: [ALPHA, BRAVO, ECHO, GOLF], tracked: [FRIEREN, SPY] }),
+          body: wall({
+            titles: [ALPHA, BRAVO, ECHO, GOLF, FOXTROT],
+            tracked: [FRIEREN, SPY],
+          }),
         },
         ...routes,
       })
@@ -379,7 +391,7 @@ describe('媒體庫頁', () => {
       expect(within(band()).queryByRole('button', { name: /標為/ })).not.toBeInTheDocument()
     })
 
-    it('標為已看：送出之後牆上那一格當場換掉，不重抓整面牆', async () => {
+    it('劇集標為已看先確認每一集看到一半的位置會歸零；確認之後那一格當場換掉，不重抓整面牆', async () => {
       const api = watching({
         [`POST ${PLAYED(ALPHA.jellyfin_item_id)}`]: { body: { ...UNWATCHED, played: true } },
       })
@@ -391,12 +403,49 @@ describe('媒體庫頁', () => {
       // 每一格都有同名的這一顆：描述說是哪一部（WCAG 2.4.4）。
       expect(mark).toHaveAccessibleDescription('Alpha Show')
       await userEvent.click(mark)
+      // 劇集的觀看紀錄看不出底下有沒有看到一半的集，所以一律先說（M1.5 票 08 使用者拍板）。
+      const confirm = within(alpha).getByRole('group')
+      expect(confirm).toHaveAccessibleName(/每一集.*看到一半.*歸零/)
+      expect(sent(api, 'POST', PLAYED(ALPHA.jellyfin_item_id))).toHaveLength(0)
+      await userEvent.click(within(confirm).getByRole('button', { name: '標為已看' }))
 
       expect(await within(alpha).findByText('已看')).toBeVisible()
       expect(within(alpha).queryByText('剩 4 集沒看')).not.toBeInTheDocument()
       expect(within(alpha).getByRole('button', { name: '標為未看' })).toBeVisible()
       expect(sent(api, 'POST', PLAYED(ALPHA.jellyfin_item_id))).toHaveLength(1)
       expect(sent(api, 'GET', `/api/inventory/${TV}`)).toHaveLength(walls)
+    })
+
+    it('看到一半的片標為已看先確認：說得出會清掉看到幾 % 的位置', async () => {
+      const api = watching({
+        [`POST ${PLAYED(ECHO.jellyfin_item_id)}`]: { body: { ...UNWATCHED, played: true } },
+      })
+      renderApp(`/library/${TV}`)
+      const echo = await findTile('Echo Movie')
+
+      await userEvent.click(within(echo).getByRole('button', { name: '標為已看' }))
+
+      const confirm = within(echo).getByRole('group')
+      expect(confirm).toHaveAccessibleName(/42%.*位置.*找不回來/)
+      expect(confirm).toHaveFocus()
+      await userEvent.click(within(confirm).getByRole('button', { name: '標為已看' }))
+
+      expect(await within(echo).findByText('已看')).toBeVisible()
+      expect(sent(api, 'POST', PLAYED(ECHO.jellyfin_item_id))).toHaveLength(1)
+    })
+
+    it('還沒看過的片標為已看什麼都不會清掉，一按就送', async () => {
+      const api = watching({
+        [`POST ${PLAYED(FOXTROT.jellyfin_item_id)}`]: { body: { ...UNWATCHED, played: true } },
+      })
+      renderApp(`/library/${TV}`)
+      const foxtrot = await findTile('Foxtrot Movie')
+
+      await userEvent.click(within(foxtrot).getByRole('button', { name: '標為已看' }))
+
+      expect(await within(foxtrot).findByText('已看')).toBeVisible()
+      expect(within(foxtrot).queryByRole('group')).not.toBeInTheDocument()
+      expect(sent(api, 'POST', PLAYED(FOXTROT.jellyfin_item_id))).toHaveLength(1)
     })
 
     it('標為未看先確認：說得出會清掉觀看次數與時間，取消就什麼都不送', async () => {
@@ -466,20 +515,21 @@ describe('媒體庫頁', () => {
 
     it('寫不進去時就在那一格說原因，狀態不變', async () => {
       watching({
-        [`POST ${PLAYED(ALPHA.jellyfin_item_id)}`]: {
+        [`POST ${PLAYED(FOXTROT.jellyfin_item_id)}`]: {
           status: 404,
           body: { detail: { reason: 'item_not_visible', detail: 'no such item' } },
         },
       })
       renderApp(`/library/${TV}`)
-      const alpha = await findTile('Alpha Show')
+      const foxtrot = await findTile('Foxtrot Movie')
 
-      await userEvent.click(within(alpha).getByRole('button', { name: '標為已看' }))
+      await userEvent.click(within(foxtrot).getByRole('button', { name: '標為已看' }))
 
-      expect(await within(alpha).findByRole('alert')).toHaveTextContent(
+      expect(await within(foxtrot).findByRole('alert')).toHaveTextContent(
         '你在 Jellyfin 看不到這部作品，沒有寫入。',
       )
-      expect(within(alpha).getByText('剩 4 集沒看')).toBeVisible()
+      expect(within(foxtrot).getByRole('button', { name: '標為已看' })).toBeVisible()
+      expect(within(foxtrot).queryByText('已看')).not.toBeInTheDocument()
     })
 
     it('Jellyfin 問不到時說下一步並貼服務原文', async () => {
@@ -513,8 +563,8 @@ describe('媒體庫頁', () => {
         'GET /api/health': { body: HEALTHY },
         'GET /api/auth/me': account.me,
         'GET /api/inventory': { body: LIBRARIES },
-        [`GET /api/inventory/${TV}`]: { body: wall({ titles: [ALPHA] }) },
-        [`POST ${PLAYED(ALPHA.jellyfin_item_id)}`]: () => {
+        [`GET /api/inventory/${TV}`]: { body: wall({ titles: [FOXTROT] }) },
+        [`POST ${PLAYED(FOXTROT.jellyfin_item_id)}`]: () => {
           account.signOut()
           return { status: 401, body: { detail: { reason: 'account_disabled', detail: '' } } }
         },
@@ -522,7 +572,7 @@ describe('媒體庫頁', () => {
       const { router } = renderApp(`/library/${TV}`)
 
       await userEvent.click(
-        within(await findTile('Alpha Show')).getByRole('button', { name: '標為已看' }),
+        within(await findTile('Foxtrot Movie')).getByRole('button', { name: '標為已看' }),
       )
 
       await waitFor(() => expect(router.state.location.pathname).toBe('/login'))
@@ -1168,8 +1218,10 @@ describe('媒體庫頁', () => {
       await screen.findByRole('region', { name: '下一集' })
       expect(asked(api)).toHaveLength(1)
 
+      const tileOf = await findTile('Alpha Show')
+      await userEvent.click(within(tileOf).getByRole('button', { name: '標為已看' }))
       await userEvent.click(
-        within(await findTile('Alpha Show')).getByRole('button', { name: '標為已看' }),
+        within(within(tileOf).getByRole('group')).getByRole('button', { name: '標為已看' }),
       )
 
       expect(await within(await findTile('Alpha Show')).findByText('已看')).toBeVisible()

@@ -36,7 +36,7 @@ _Avoid_: filter（指類型、年份時）, facet
 一位使用者在 Jellyfin 對一部作品（或一集）的觀看紀錄，Inventory 的卡片上一行字：**已看**、**看到 N%**（只有影片）、
 **剩 N 集沒看**（只有劇集，沒開始看的也算），都不成立就是還沒看過。紀錄存在 Jellyfin、屬於那個人，Berth 不存；
 Berth 只讀它，並替那個人**標為已看 / 標為未看**（寫回 Jellyfin）。標為未看會清掉觀看次數與最後觀看時間，對劇集是
-每一集，復原不了。
+每一集，復原不了；標為已看會把看到一半的位置歸零（對劇集是每一集），所以兩者清得掉東西時都先確認（M1.5 票 08）。
 _Avoid_: seen, history, played state
 
 **Resume**（UI 顯示「繼續觀看」）:
@@ -49,6 +49,17 @@ _Avoid_: continue, in progress, recently watched
 （它在 Resume），一年內沒看過的劇也不算（jellyfin-web 的預設）；範圍同 Resume。兩者合稱 **Watching**
 （`services/watching.py`、`WatchingOut`）。
 _Avoid_: upcoming, next episode（TMDB 的「下一集播出」是另一件事）, queue
+
+**Watch Area**（UI 顯示「觀看」）:
+Media 詳情最上面那一塊：作品在 Jellyfin 裡、而且這位使用者看得到時才有——身分帶裡的主按鈕（**Carry On**），加上 Jellyfin
+的季切換與那一季的集（`services/watch_area.py`、`GET /api/media/{id}/watch`，M1.5 票 08）。季與集是 Jellyfin 的，不是 Media 的
+Season / Episode（那一份在下面的「季集與入庫」）。不在 Jellyfin 與看不到是同一個答案：沒有這一塊。
+_Avoid_: player, playback area, library detail
+
+**Carry On**（UI 在主按鈕上：「繼續看」「看下一集」「從 S01E01 開始看」）:
+這位使用者接下來看這部劇的哪一集：Jellyfin 的 NextUp 帶 `seriesId`——看到一半的那一集也算、沒看過是第一集、看完了就沒有。
+與 **Next Up** 不同：那是首頁一整列、每部看過的劇一格，看到一半的不算、沒看過的劇不列。電影沒有 Carry On，主按鈕開那一部。
+_Avoid_: next up（指這一顆時）, resume point, up next
 
 **Jellyfin Library**（UI 顯示「Jellyfin 媒體庫」）:
 Jellyfin 那一端的 virtual folder：一個名字、一個 collection type、**一到多條**路徑。Berth 不擁有它——

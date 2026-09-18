@@ -1,4 +1,4 @@
-import type { JellyfinWeb } from '../api/inventory'
+import type { JellyfinWeb } from '../api/jellyfin'
 
 /** 瀏覽器現在在哪裡。只取組網址要的兩格，測試才不必偽造整個 `Location`。 */
 export interface BrowserLocation {

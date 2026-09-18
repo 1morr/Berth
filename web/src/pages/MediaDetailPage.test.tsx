@@ -2,8 +2,8 @@ import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import type { Media } from '../api/media'
-import { HEALTHY, stubApi, type StubRoute } from '../test/fetch'
+import type { Media, WatchArea, WatchEpisode } from '../api/media'
+import { HEALTHY, session, stubApi, type StubRoute } from '../test/fetch'
 import { renderApp } from '../test/render'
 
 afterEach(() => {
@@ -305,18 +305,18 @@ describe('Media 詳情頁', () => {
     renderApp('/media/tv:120089')
 
     // TMDB 自己報的是 3 季 50 集；把特輯算進去會變成 4 季 53 集，與封面對不起來。
-    expect(await screen.findByText('2 季 · 37 集')).toBeVisible()
+    expect(await screen.findByText('2 季')).toBeVisible()
+    expect(screen.getByText('37 集')).toBeVisible()
     // 但清單本身仍然列得出那一季——它是真的存在。
     expect(screen.getByText('Specials')).toBeVisible()
   })
 
-  it('識別欄位說「首播 / 上映」，值就是那個日期而不是一個年份', async () => {
+  it('識別值說「首播」，值就是那個日期而不是一個年份', async () => {
     render()
     renderApp('/media/tv:120089')
 
-    // 季列上也有同一個日期，所以問的是識別那一份剖面裡的那一格。
-    const row = (await screen.findByText('首播 / 上映')).closest('div')
-    expect(within(row!).getByText('2022-04-09')).toBeVisible()
+    expect(await screen.findByText('首播 2022-04-09')).toBeVisible()
+    expect(screen.getByText('TMDB 120089')).toBeVisible()
   })
 
   it('只有一條相符的 Route 時自動選它（票 04b）', async () => {
@@ -379,6 +379,7 @@ describe('Media 詳情頁', () => {
 
     expect(await screen.findByText('電影沒有季集。')).toBeVisible()
     expect(screen.getByText('100 分鐘')).toBeVisible()
+    expect(screen.getByText('上映 2022-04-09')).toBeVisible()
   })
 
   it('一條相符的 Route 都沒有時說得出下一步', async () => {
@@ -637,5 +638,339 @@ describe('Media 詳情頁', () => {
 
     const link = await screen.findByRole('link', { name: '前往設定精靈' })
     expect(link).toHaveAttribute('href', '/setup?berth=3')
+  })
+})
+
+describe('觀看區（M1.5 票 08）', () => {
+  const WATCH_PATH = 'GET /api/media/tv%3A120089/watch'
+  const MOVIE_PATH = 'GET /api/media/movie%3A1241982'
+  const MOVIE_WATCH_PATH = 'GET /api/media/movie%3A1241982/watch'
+  const SERIES = '0b1a2c3d4e5f60718293a4b5c6d7e8f9'
+  const SEASON_ONE = '1c2b3a4d5e6f708192a3b4c5d6e7f8a9'
+  const SEASON_TWO = '2d3c4b5a6f7e8091a2b3c4d5e6f7a8b9'
+  const FILM = '6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e'
+  const JELLYFIN = { public_url: '', url: 'http://jf.example:8096', port: null }
+  const UNWATCHED = { played: false, progress: null, unplayed_episodes: null }
+  const EPISODES = (season: string) =>
+    `GET /api/jellyfin/shows/${SERIES}/episodes?season_id=${season}`
+  const PLAYED = (id: string) => `/api/jellyfin/items/${id}/played`
+
+  function episode(number: number, overrides: Partial<WatchEpisode> = {}): WatchEpisode {
+    return {
+      item_id: `e${String(number).padStart(31, '0')}`,
+      name: `Episode ${number}`,
+      season: 2,
+      episode_start: number,
+      episode_end: null,
+      watch: UNWATCHED,
+      still_url: '',
+      ...overrides,
+    }
+  }
+
+  const RESUMING = episode(4, {
+    watch: { ...UNWATCHED, progress: 18 },
+    still_url: `/api/jellyfin/items/${episode(4).item_id}/images/Primary?size=wide&tag=f00`,
+  })
+
+  function area(overrides: Partial<WatchArea> = {}): WatchArea {
+    return {
+      item_id: SERIES,
+      kind: 'tv',
+      watch: { ...UNWATCHED, unplayed_episodes: 9 },
+      carry_on: RESUMING,
+      seasons: [
+        { id: SEASON_ONE, name: 'Season 1', number: 1 },
+        { id: SEASON_TWO, name: 'Season 2', number: 2 },
+      ],
+      jellyfin: JELLYFIN,
+      ...overrides,
+    }
+  }
+
+  function inJellyfin(routes: Record<string, StubRoute | (() => StubRoute)> = {}) {
+    return render({
+      [WATCH_PATH]: { body: area() },
+      [EPISODES(SEASON_TWO)]: {
+        body: [episode(3, { watch: { ...UNWATCHED, played: true } }), RESUMING, episode(5)],
+      },
+      [EPISODES(SEASON_ONE)]: { body: [episode(1, { season: 1 })] },
+      ...routes,
+    })
+  }
+
+  function calls(api: ReturnType<typeof render>, method: string, path: string) {
+    return api.mock.calls.filter(
+      ([url, init]) => url === path && (init?.method ?? 'GET') === method,
+    )
+  }
+
+  function tile(name: string) {
+    return screen.getByText(name).closest('article') as HTMLElement
+  }
+
+  it('主按鈕在簡介之前，開 Jellyfin 那一集、新分頁，下面一行說集名與看到哪', async () => {
+    inJellyfin()
+    renderApp('/media/tv:120089')
+
+    const carryOn = await screen.findByRole('link', { name: /繼續看 S02E04/ })
+    expect(carryOn).toHaveAttribute(
+      'href',
+      `http://jf.example:8096/web/#/details?id=${RESUMING.item_id}`,
+    )
+    expect(carryOn).toHaveAttribute('target', '_blank')
+    expect(carryOn).toHaveAccessibleName(/開新分頁/)
+    expect(carryOn).toHaveAccessibleDescription('Episode 4 · 看到 18%')
+    const overview = screen.getByText('互相隱藏了真實身份的新家庭。')
+    expect(
+      carryOn.compareDocumentPosition(overview) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+  })
+
+  it('在 Jellyfin 裡：觀看在最上，Berth 的那一半收到下面（使用者拍板：分層）', async () => {
+    inJellyfin()
+    renderApp('/media/tv:120089')
+    await screen.findByRole('heading', { name: '觀看' })
+
+    expect(screen.getAllByRole('heading', { level: 2 }).map((row) => row.textContent)).toEqual([
+      '觀看',
+      '搜尋 torrent',
+      '季集與入庫',
+      '檔案與版本',
+    ])
+    expect(screen.getByText('剩 9 集沒看')).toBeVisible()
+  })
+
+  it('不在 Jellyfin（或看不到）時沒有觀看區也沒有主按鈕，搜尋就在身分帶正下方', async () => {
+    render({ [WATCH_PATH]: { body: null } })
+    renderApp('/media/tv:120089')
+    await screen.findByRole('heading', { level: 1 })
+    await waitFor(() => expect(screen.getByRole('button', { name: '搜尋' })).toBeVisible())
+
+    expect(screen.getAllByRole('heading', { level: 2 }).map((row) => row.textContent)).toEqual([
+      '搜尋 torrent',
+      '季集與入庫',
+      '檔案與版本',
+    ])
+    expect(screen.queryByRole('link', { name: /繼續看|看下一集|開始看/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /在 Jellyfin/ })).not.toBeInTheDocument()
+  })
+
+  it('季切換預設是主按鈕那一集所在的季；換季才問那一季的集', async () => {
+    const api = inJellyfin()
+    renderApp('/media/tv:120089')
+
+    const seasons = await screen.findByRole('group', { name: '季' })
+    expect(within(seasons).getByRole('button', { name: 'Season 2' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+    expect(await screen.findByText('Episode 5')).toBeVisible()
+    expect(calls(api, 'GET', EPISODES(SEASON_ONE).slice(4))).toHaveLength(0)
+
+    await userEvent.click(within(seasons).getByRole('button', { name: 'Season 1' }))
+
+    expect(await screen.findByText('Episode 1')).toBeVisible()
+    expect(within(seasons).getByRole('button', { name: 'Season 1' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+    expect(calls(api, 'GET', EPISODES(SEASON_ONE).slice(4))).toHaveLength(1)
+  })
+
+  it('一集一格：劇照、季集代號、集名、看到哪；主按鈕那一集帶「繼續看」，點下去開那一集', async () => {
+    inJellyfin()
+    renderApp('/media/tv:120089')
+
+    await screen.findByText('Episode 5')
+    const resuming = tile('Episode 4')
+    expect(within(resuming).getByText('S02E04')).toBeVisible()
+    expect(within(resuming).getByText('繼續看')).toBeVisible()
+    expect(within(resuming).getByText('看到 18%')).toBeVisible()
+    expect(resuming.querySelector('img')).toHaveAttribute('src', RESUMING.still_url)
+    expect(within(resuming).getByRole('link')).toHaveAttribute(
+      'href',
+      `http://jf.example:8096/web/#/details?id=${RESUMING.item_id}`,
+    )
+    // 沒有劇照的集不借劇的圖：整季一模一樣的圖沒辦法用來挑集。
+    expect(within(tile('Episode 5')).getByText('無圖')).toBeVisible()
+    expect(within(tile('Episode 3')).getByText('已看')).toBeVisible()
+  })
+
+  it('沒有進度的集一按就標為已看：那一格就地換，主按鈕重問，那一季不重抓', async () => {
+    const api = inJellyfin({
+      [`POST ${PLAYED(episode(5).item_id)}`]: { body: { ...UNWATCHED, played: true } },
+    })
+    renderApp('/media/tv:120089')
+    await screen.findByText('Episode 5')
+    const seasons = calls(api, 'GET', EPISODES(SEASON_TWO).slice(4)).length
+    const areas = calls(api, 'GET', WATCH_PATH.slice(4)).length
+
+    const mark = within(tile('Episode 5')).getByRole('button', { name: '標為已看' })
+    expect(mark).toHaveAccessibleDescription('Episode 5')
+    await userEvent.click(mark)
+
+    expect(await within(tile('Episode 5')).findByText('已看')).toBeVisible()
+    expect(calls(api, 'POST', PLAYED(episode(5).item_id))).toHaveLength(1)
+    await waitFor(() => expect(calls(api, 'GET', WATCH_PATH.slice(4)).length).toBe(areas + 1))
+    expect(calls(api, 'GET', EPISODES(SEASON_TWO).slice(4))).toHaveLength(seasons)
+  })
+
+  it('看到一半的集標為已看先確認：說得出會清掉看到幾 % 的位置', async () => {
+    const api = inJellyfin()
+    renderApp('/media/tv:120089')
+    await screen.findByText('Episode 5')
+    const resuming = tile('Episode 4')
+
+    await userEvent.click(within(resuming).getByRole('button', { name: '標為已看' }))
+
+    const confirm = within(resuming).getByRole('group')
+    expect(confirm).toHaveAccessibleName(/18%.*位置.*找不回來/)
+    expect(confirm).toHaveFocus()
+    await userEvent.click(within(confirm).getByRole('button', { name: '取消' }))
+    expect(calls(api, 'POST', PLAYED(RESUMING.item_id))).toHaveLength(0)
+  })
+
+  it('電影：主按鈕說繼續看與看到幾 %，旁邊一顆標為已看；沒有觀看區', async () => {
+    render({
+      [MOVIE_PATH]: {
+        body: media({
+          id: 'movie:1241982',
+          tmdb_id: 1241982,
+          kind: 'movie',
+          title: '海洋奇緣2',
+          title_en: 'Moana 2',
+          title_original: 'Moana 2',
+          runtime: 100,
+          seasons: [],
+        }),
+      },
+      [MOVIE_WATCH_PATH]: {
+        body: area({
+          item_id: FILM,
+          kind: 'movie',
+          watch: { ...UNWATCHED, progress: 42 },
+          carry_on: null,
+          seasons: [],
+        }),
+      },
+      'GET /api/search/queries?media=movie%3A1241982': { body: { queries: ['Moana 2'] } },
+    })
+    renderApp('/media/movie:1241982')
+
+    const carryOn = await screen.findByRole('link', { name: /繼續看/ })
+    expect(carryOn).toHaveAttribute('href', `http://jf.example:8096/web/#/details?id=${FILM}`)
+    expect(carryOn).toHaveAccessibleDescription('看到 42%')
+    await userEvent.click(screen.getByRole('button', { name: '標為已看' }))
+    expect(screen.getByRole('group', { name: /42%.*位置/ })).toHaveFocus()
+    expect(screen.queryByRole('heading', { name: '觀看' })).not.toBeInTheDocument()
+  })
+
+  it('劇集全部看完時主按鈕開那部劇，說全部看完了', async () => {
+    inJellyfin({
+      [WATCH_PATH]: {
+        body: area({ watch: { ...UNWATCHED, played: true }, carry_on: null }),
+      },
+    })
+    renderApp('/media/tv:120089')
+
+    const open = await screen.findByRole('link', {
+      name: /^在 Jellyfin 開啟/,
+      description: '全部看完了',
+    })
+    expect(open).toHaveAttribute('href', `http://jf.example:8096/web/#/details?id=${SERIES}`)
+    // 沒有下一集時選第一個正片季。
+    expect(
+      within(screen.getByRole('group', { name: '季' })).getByRole('button', { name: 'Season 1' }),
+    ).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('不知道 Jellyfin 開在哪裡時不給一條死連結', async () => {
+    inJellyfin({
+      [WATCH_PATH]: { body: area({ jellyfin: { public_url: '', url: '', port: null } }) },
+    })
+    renderApp('/media/tv:120089')
+
+    expect(await screen.findAllByText('不知道 Jellyfin 開在哪裡')).not.toHaveLength(0)
+    expect(screen.queryByRole('link', { name: /繼續看/ })).not.toBeInTheDocument()
+  })
+
+  it('Jellyfin 問不到時觀看區換成一行字與重試，搜尋照樣在', async () => {
+    const api = render({
+      [WATCH_PATH]: {
+        status: 503,
+        body: {
+          detail: { reason: 'jellyfin_unreachable', detail: 'GET /Items: connection refused' },
+        },
+      },
+    })
+    renderApp('/media/tv:120089')
+
+    expect(await screen.findByText('問不到 Jellyfin，觀看區暫時看不到。')).toBeVisible()
+    expect(screen.getByText('GET /Items: connection refused')).toBeVisible()
+    expect(screen.getByRole('button', { name: '搜尋' })).toBeVisible()
+    const asked = calls(api, 'GET', WATCH_PATH.slice(4)).length
+    await userEvent.click(screen.getByRole('button', { name: '重試' }))
+    await waitFor(() => expect(calls(api, 'GET', WATCH_PATH.slice(4)).length).toBe(asked + 1))
+  })
+
+  it('看過的集標為未看先確認：說得出清掉的是這一集的次數與時間', async () => {
+    const api = inJellyfin()
+    renderApp('/media/tv:120089')
+    await screen.findByText('Episode 5')
+    const watched = tile('Episode 3')
+
+    await userEvent.click(within(watched).getByRole('button', { name: '標為未看' }))
+
+    const confirm = within(watched).getByRole('group')
+    expect(confirm).toHaveAccessibleName(/這一集.*觀看次數.*最後觀看時間.*找不回來/)
+    expect(confirm).not.toHaveAccessibleName(/每一集/)
+    await userEvent.click(within(confirm).getByRole('button', { name: '取消' }))
+    expect(calls(api, 'DELETE', PLAYED(episode(3).item_id))).toHaveLength(0)
+  })
+
+  it('沒有下一集但還沒看完（只剩特別篇或缺片）時不說「全部看完了」', async () => {
+    inJellyfin({ [WATCH_PATH]: { body: area({ carry_on: null }) } })
+    renderApp('/media/tv:120089')
+
+    // 主按鈕與觀看區標題列各一條，主按鈕在前；兩條都沒有描述。
+    const [open] = await screen.findAllByRole('link', { name: /^在 Jellyfin 開啟/ })
+    expect(open).not.toHaveAttribute('aria-describedby')
+    expect(open).toHaveAttribute('href', `http://jf.example:8096/web/#/details?id=${SERIES}`)
+    expect(screen.queryByText('全部看完了')).not.toBeInTheDocument()
+    expect(screen.getByText('剩 9 集沒看')).toBeVisible()
+  })
+
+  it('沒看過的電影：主按鈕下面沒有那一行，切換鍵也不指向一個不存在的描述', async () => {
+    render({
+      [MOVIE_PATH]: {
+        body: media({ id: 'movie:1241982', tmdb_id: 1241982, kind: 'movie', seasons: [] }),
+      },
+      [MOVIE_WATCH_PATH]: {
+        body: area({ item_id: FILM, kind: 'movie', watch: UNWATCHED, carry_on: null, seasons: [] }),
+      },
+      'GET /api/search/queries?media=movie%3A1241982': { body: { queries: ['Moana 2'] } },
+    })
+    renderApp('/media/movie:1241982')
+
+    expect(await screen.findByRole('link', { name: /在 Jellyfin 看/ })).toBeVisible()
+    expect(screen.getByRole('button', { name: '標為已看' })).not.toHaveAttribute('aria-describedby')
+  })
+
+  it('帳號在 Jellyfin 被停用時送回登入頁', async () => {
+    const account = session({ name: 'deckhand', role: 'user' })
+    stubApi({
+      'GET /api/health': { body: HEALTHY },
+      'GET /api/auth/me': account.me,
+      [SPY_PATH]: { body: media() },
+      'GET /api/search/queries?media=tv%3A120089': { body: { queries: ['SPY x FAMILY'] } },
+      [WATCH_PATH]: () => {
+        account.signOut()
+        return { status: 401, body: { detail: { reason: 'account_disabled', detail: '' } } }
+      },
+    })
+    const { router } = renderApp('/media/tv:120089')
+
+    await waitFor(() => expect(router.state.location.pathname).toBe('/login'))
   })
 })

@@ -2926,3 +2926,244 @@ async def test_jellyfin_next_up_without_an_items_array_is_not_jellyfin() -> None
 
     with pytest.raises(ProtocolMismatchError):
         await next_up(None)
+
+
+# --- M1.5 票 08：Media 詳情的觀看區（研究 library-browsing.md §2、§4.1、§10）-------------
+#
+# 找作品、單一作品與選季選集的 fixture 同樣是**只開放 TV 與 Movies 的使用者**。`seasons` /
+# `episodes` 是票 01 錄的（`fields` 照 jellyfin-web 的詳細頁）；其餘是票 08 以 `--record --only`
+# 加錄的（另一輪一次性容器，item id 相同，fixture README）。
+
+#: `shows-seasons.json` 的兩季、`shows-episodes.json` 那一季。
+ALPHA_SEASON_ONE = "e287646874088d4b73b9578d6fc51da6"
+ALPHA_SEASON_TWO = "8d54712028c27d182218a373dd4e6460"
+TV_FRIEREN = "02c06be72a8c11102b98e17665c9fef2"
+HOTEL_SHOW = "9ea3bb1459aa4795a5ebf54b94fe0cc9"
+HOTEL_EPISODE = "5fa033d9aaeac575ed72d5212c3a3bf0"
+
+
+async def jellyfin_call[T](call: Callable[[HttpJellyfinClient], Awaitable[T]]) -> T:
+    client = jellyfin_client("key")
+    try:
+        return await call(client)
+    finally:
+        await client.aclose()
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_jellyfin_titles_are_looked_up_among_only_what_this_user_sees() -> None:
+    """不帶 `parentId`，Jellyfin 才照這個人的 `UserViews` 限縮（研究 §10）：Anime 裡同一個 TMDB id
+    的那一份不在；`hasTmdbId` 真的有過濾——沒有 TMDB id 的 Hotel Show 不在。"""
+    route = respx.get(f"{JELLYFIN_URL}/Items").respond(
+        200, text=read_fixture("http/jellyfin/items.tmdb-lookup.series.json")
+    )
+
+    titles = await jellyfin_call(
+        lambda client: client.tmdb_index(user_id=RESTRICTED_USER, item_type="Series")
+    )
+
+    assert dict(route.calls.last.request.url.params) == {
+        "userId": RESTRICTED_USER,
+        "recursive": "true",
+        "includeItemTypes": "Series",
+        "hasTmdbId": "true",
+        "fields": "ProviderIds",
+        "enableImages": "false",
+        "enableUserData": "false",
+    }
+    assert [(item.id, item.tmdb_id) for item in titles] == [
+        (ALPHA_SHOW, "1399"),
+        (BRAVO_SHOW, "1396"),
+        (TV_FRIEREN, "209867"),
+    ]
+    assert FORBIDDEN_FRIEREN not in {item.id for item in titles}
+    assert HOTEL_SHOW not in {item.id for item in titles}
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_jellyfin_an_item_is_read_with_this_users_record() -> None:
+    """`/Items/{id}` 不必 `fields` 就帶 `ProviderIds` 與 `UserData`（v12.0 `new DtoOptions()`）。
+    劇集的紀錄由底下的集算：五集看過一集。"""
+    route = respx.get(f"{JELLYFIN_URL}/Items/{ALPHA_SHOW}").respond(
+        200, text=read_fixture("http/jellyfin/items-id.series.json")
+    )
+
+    series = await jellyfin_call(
+        lambda client: client.item(user_id=RESTRICTED_USER, item_id=ALPHA_SHOW)
+    )
+
+    assert dict(route.calls.last.request.url.params) == {"userId": RESTRICTED_USER}
+    assert (series.id, series.type, series.name, series.tmdb_id) == (
+        ALPHA_SHOW,
+        "Series",
+        "Alpha Show",
+        "1399",
+    )
+    assert series.user_data is not None
+    assert (series.user_data.played, series.user_data.unplayed_item_count) == (False, 4)
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_jellyfin_a_film_under_way_reads_how_far_in() -> None:
+    respx.get(f"{JELLYFIN_URL}/Items/{FOXTROT_MOVIE}").respond(
+        200, text=read_fixture("http/jellyfin/items-id.movie.json")
+    )
+
+    film = await jellyfin_call(
+        lambda client: client.item(user_id=RESTRICTED_USER, item_id=FOXTROT_MOVIE)
+    )
+
+    assert (film.type, film.tmdb_id) == ("Movie", "157336")
+    assert film.user_data is not None
+    assert (film.user_data.played_percentage, film.user_data.unplayed_item_count) == (50.0, None)
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_jellyfin_reading_an_item_this_user_cannot_see_is_not_found() -> None:
+    """`GetItemById<BaseItem>(itemId, user)`：無權的劇回 404 problem details（研究 §2）。"""
+    respx.get(f"{JELLYFIN_URL}/Items/{FORBIDDEN_FRIEREN}").respond(
+        404, text=read_fixture("http/jellyfin/items-id.forbidden.json")
+    )
+
+    with pytest.raises(NotFoundError):
+        await jellyfin_call(
+            lambda client: client.item(user_id=RESTRICTED_USER, item_id=FORBIDDEN_FRIEREN)
+        )
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_jellyfin_an_item_that_is_not_an_item_is_not_jellyfin() -> None:
+    respx.get(f"{JELLYFIN_URL}/Items/{ALPHA_SHOW}").respond(200, json={"Items": []})
+
+    with pytest.raises(ProtocolMismatchError):
+        await jellyfin_call(lambda client: client.item(user_id=RESTRICTED_USER, item_id=ALPHA_SHOW))
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_jellyfin_seasons_carry_their_name_number_and_this_users_record() -> None:
+    """季名是伺服器 UI 語言的「第 1 季」，不是 Berth 的文案（研究 §4.1）。"""
+    route = respx.get(f"{JELLYFIN_URL}/Shows/{ALPHA_SHOW}/Seasons").respond(
+        200, text=read_fixture("http/jellyfin/shows-seasons.json")
+    )
+
+    seasons = await jellyfin_call(
+        lambda client: client.seasons(user_id=RESTRICTED_USER, series_id=ALPHA_SHOW)
+    )
+
+    assert dict(route.calls.last.request.url.params) == {
+        "userId": RESTRICTED_USER,
+        "fields": "ItemCounts,PrimaryImageAspectRatio",
+    }
+    assert [(season.id, season.name, season.number) for season in seasons] == [
+        (ALPHA_SEASON_ONE, "第 1 季", 1),
+        (ALPHA_SEASON_TWO, "第 2 季", 2),
+    ]
+    assert [season.user_data.unplayed_item_count for season in seasons if season.user_data] == [
+        2,
+        2,
+    ]
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_jellyfin_seasons_of_a_show_this_user_cannot_see_are_not_found() -> None:
+    """漏帶 `userId` 時這一支回 200 並略過權限；帶了就 404（研究 §2）。"""
+    respx.get(f"{JELLYFIN_URL}/Shows/{FORBIDDEN_FRIEREN}/Seasons").respond(
+        404, text=read_fixture("http/jellyfin/shows-seasons.forbidden.json")
+    )
+
+    with pytest.raises(NotFoundError):
+        await jellyfin_call(
+            lambda client: client.seasons(user_id=RESTRICTED_USER, series_id=FORBIDDEN_FRIEREN)
+        )
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_jellyfin_episodes_of_a_season_carry_their_numbers_and_this_users_record() -> None:
+    """dummy 媒體樹的集沒有 NFO：集名是劇名（檔名）。第一集看過（票 01 寫的紀錄）。"""
+    route = respx.get(f"{JELLYFIN_URL}/Shows/{ALPHA_SHOW}/Episodes").respond(
+        200, text=read_fixture("http/jellyfin/shows-episodes.json")
+    )
+
+    episodes = await jellyfin_call(
+        lambda client: client.episodes(
+            user_id=RESTRICTED_USER, series_id=ALPHA_SHOW, season_id=ALPHA_SEASON_ONE
+        )
+    )
+
+    assert dict(route.calls.last.request.url.params) == {
+        "userId": RESTRICTED_USER,
+        "seasonId": ALPHA_SEASON_ONE,
+        "fields": "Overview,PrimaryImageAspectRatio",
+    }
+    assert [
+        (item.type, item.season, item.episode_start, item.season_id, item.series_id)
+        for item in episodes
+    ] == [("Episode", 1, number, ALPHA_SEASON_ONE, ALPHA_SHOW) for number in (1, 2, 3)]
+    assert [item.user_data.played for item in episodes if item.user_data] == [True, False, False]
+    # 這棵樹的集沒有劇照：`ImageTags` 是空的，`ParentPrimaryImage*` 那一對是劇的海報，不是劇照。
+    assert {item.primary_tag for item in episodes} == {""}
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_jellyfin_episodes_of_a_show_this_user_cannot_see_are_not_found() -> None:
+    """這一支的 404 body 是一個 JSON 字串 `"Series not found"`，不是 problem details。"""
+    respx.get(f"{JELLYFIN_URL}/Shows/{FORBIDDEN_FRIEREN}/Episodes").respond(
+        404, text=read_fixture("http/jellyfin/shows-episodes.forbidden.json")
+    )
+
+    with pytest.raises(NotFoundError):
+        await jellyfin_call(
+            lambda client: client.episodes(
+                user_id=RESTRICTED_USER, series_id=FORBIDDEN_FRIEREN, season_id=ALPHA_SEASON_ONE
+            )
+        )
+
+
+@respx.mock
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("fixture", "series", "expected"),
+    [
+        # 看過 E01：最後看過的那一集之後、還沒看的第一集。
+        ("shows-nextup.series.json", ALPHA_SHOW, (ALPHA_EPISODE, 1, 2, 0.0)),
+        # E01 看到一半：伺服器預設 `enableResumable=true`，回那一集與它的位置（v12.0 原始碼）。
+        ("shows-nextup.series.resumable.json", TV_FRIEREN, (FRIEREN_EPISODE, 1, 1, 30.0)),
+        # 一集都沒看過：帶 `seriesId` 時回 S01E01（不帶時從沒看過的劇不列，研究 §7.2）。
+        ("shows-nextup.series.unwatched.json", HOTEL_SHOW, (HOTEL_EPISODE, 1, 1, 0.0)),
+    ],
+)
+async def test_jellyfin_next_up_of_one_show_is_where_this_user_carries_on(
+    fixture: str, series: str, expected: tuple[str, int, int, float]
+) -> None:
+    """jellyfin-web 劇集頁的「Next Up」只送 `SeriesId` 與 `UserId`，其餘吃伺服器預設；帶
+    `seriesId` 時 `nextUpDateCutoff` 不套用（v12.0 `TVSeriesManager.GetNextUp`）。**帶 `seriesId`
+    就不套權限**（研究 §2），呼叫端要先確認看得到。"""
+    route = respx.get(f"{JELLYFIN_URL}/Shows/NextUp").respond(
+        200, text=read_fixture(f"http/jellyfin/{fixture}")
+    )
+
+    found = await jellyfin_call(
+        lambda client: client.series_next_up(user_id=RESTRICTED_USER, series_id=series)
+    )
+
+    assert dict(route.calls.last.request.url.params) == {
+        "userId": RESTRICTED_USER,
+        "seriesId": series,
+    }
+    assert found is not None
+    assert found.user_data is not None
+    assert (
+        found.id,
+        found.season,
+        found.episode_start,
+        found.user_data.played_percentage,
+    ) == expected

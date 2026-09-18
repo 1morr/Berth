@@ -6,6 +6,7 @@ import type { Media } from '../api/media'
 import { queriesQueryOptions, searchTorrents } from '../api/search'
 import { Notice, PrimaryButton } from '../components/controls'
 import type { SetupStep } from '../api/schemas'
+import { ExpandHint } from '../components/ExpandHint'
 import { StepLine } from '../components/StepLine'
 import { IndexerNotice } from './IndexerNotice'
 import { RoutePicker } from './RoutePicker'
@@ -26,6 +27,10 @@ import { sortRows, type SortKey } from './searchResult'
  * 兩邊各算一次遲早會給出不同的答案。
  *
  * Route 下拉住在這一區，但**搜尋不看它**（票 14e）：它只決定結果表裡那一顆送單送去哪裡。
+ * **資料夾名也住在這一區**（M1.5 票 08，原本在身分帶的剖面裡）：它是送單那一刻會寫死的那一串字。
+ *
+ * 搜尋中逐條亮起的纜繩是署名互動；**結束之後有回應的收成一行**，失敗的照舊一條一條畫在上面（M1.5 票 08：
+ * 全綠的纜繩曾把結果表推到下一屏，票 15 critique 量到 311px）。
  */
 export function SearchPanel({ media }: { media: Media }) {
   const { t } = useTranslation()
@@ -94,6 +99,8 @@ export function SearchPanel({ media }: { media: Media }) {
         <QueryPreview keyword={keyword} planned={planned.data?.queries} />
       </form>
 
+      <FolderLine media={media} />
+
       {search.isError && (
         <Notice signal="blocked" label={t('common.failed')}>
           {t('search.off')}
@@ -103,12 +110,14 @@ export function SearchPanel({ media }: { media: Media }) {
       {/* 一次搜尋要 35–85 秒。那段時間裡畫面上要有東西在動，而這塊板子沒有 spinner——
           動的是纜繩：先鋪出要問的那幾個關鍵字（`working`），一有結果就換成筆數
           （shape brief §3 的焦點時刻，與精靈的靠泊序列是同一種東西）。 */}
-      {(search.isPending || (results && results.attempts.length > 0)) && (
+      {search.isPending ? (
         <ol className="grid gap-2">
-          {(results?.attempts ?? pending(keyword, planned.data?.queries)).map((attempt) => (
+          {pending(keyword, planned.data?.queries).map((attempt) => (
             <StepLine key={attempt.step} label={attempt.step} row={attempt} />
           ))}
         </ol>
+      ) : (
+        results && results.attempts.length > 0 && <Cables attempts={results.attempts} />
       )}
 
       {results?.problem && <IndexerNotice problem={results.problem} detail={results.detail} />}
@@ -179,6 +188,69 @@ function QueryPreview({ keyword, planned }: { keyword: string; planned: string[]
         {typed || (planned ?? []).join(' · ') || '—'}
       </p>
       <p className="max-w-prose text-xs text-ink-dim">{t('search.slow')}</p>
+    </div>
+  )
+}
+
+/**
+ * 送單會寫死的資料夾名（plan §5、brief §4.5）。凍結之前是「將會是」，之後是「就是」——兩件事，各自一句
+ * 什麼時候定下來（票 04b、09）。
+ */
+function FolderLine({ media }: { media: Media }) {
+  const { t } = useTranslation()
+
+  return (
+    <div className="grid gap-1">
+      <dl className="grid gap-1">
+        <dt className="label text-ink-dim">
+          {media.folder_frozen ? t('media.folderFrozen') : t('media.folderPreview')}
+        </dt>
+        {/* 機器字串：之後真的會出現在檔案系統上的那一串，換行不截斷。 */}
+        <dd className="value text-sm wrap-anywhere text-ink">{media.folder_name}</dd>
+      </dl>
+      <p className="max-w-prose text-xs text-ink-dim">
+        {media.folder_frozen ? t('media.folderFrozenNote') : t('media.folderNote')}
+      </p>
+    </div>
+  )
+}
+
+/**
+ * 搜尋結束之後的纜繩。**失敗的一條一條畫**，原文就地展開（The Needs-You Floats Up Rule）；有回應的收成一個
+ * `<details>`，摘要說幾個關鍵字有回應、展開才逐條列筆數。全部有回應時整塊只有一行，而且不塗漆
+ * （The Usual Stays Unpainted Rule：一份全部正常的清單看不到信號色）。
+ */
+function Cables({ attempts }: { attempts: readonly SetupStep[] }) {
+  const { t } = useTranslation()
+  const failed = attempts.filter((attempt) => attempt.status === 'failed')
+  const answered = attempts.filter((attempt) => attempt.status !== 'failed')
+
+  return (
+    <div className="grid gap-2">
+      {failed.length > 0 && (
+        <ol className="grid gap-2">
+          {failed.map((attempt) => (
+            <StepLine key={attempt.step} label={attempt.step} row={attempt} />
+          ))}
+        </ol>
+      )}
+      {answered.length > 0 && (
+        <details className="group min-w-0">
+          <summary className="flex cursor-pointer flex-wrap items-center gap-x-4 gap-y-1 border-2 border-rule bg-well px-4 py-2.5 marker:content-none">
+            <span className="text-sm text-ink">
+              {failed.length > 0
+                ? t('search.answeredRest', { count: answered.length })
+                : t('search.answeredAll', { count: answered.length })}
+            </span>
+            <ExpandHint className="ms-auto" />
+          </summary>
+          <ol className="mt-2 grid gap-2">
+            {answered.map((attempt) => (
+              <StepLine key={attempt.step} label={attempt.step} row={attempt} />
+            ))}
+          </ol>
+        </details>
+      )}
     </div>
   )
 }

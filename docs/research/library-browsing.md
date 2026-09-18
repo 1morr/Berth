@@ -464,6 +464,34 @@ Berth（`services/watching.py`）照上面的請求參數，一律不送 `recurs
 海報，Jellyfin 照 16:9 `fillWidth` / `fillHeight` 裁切時只剩中間一條。卡片只收 Episode 與 Movie：第一行是季集代號或
 `MOVIE` 與年份，別的型別說不出自己是什麼，而 `mediaTypes=Video` 仍可能回家庭影片與音樂錄影帶（首頁不分媒體庫）。
 
+### 7.3 劇集詳情頁：這部劇的下一集、選季選集【原始碼 v12.0 / v10.11.11 + 實測 12.1.0，M1.5 票 08】
+
+研究子代理讀 jellyfin `v12.0` 與 jellyfin-web `v10.11.11`；Berth 送的參數以 `jellyfin_permissions.py --record --only` 在一次性
+12.1.0 上加錄（`items.tmdb-lookup.series.json`、`items-id.{series,movie}.json`、`shows-nextup.series*.json`，fixture README）。
+
+| 項目 | 內容 |
+| --- | --- |
+| jellyfin-web 劇集頁的 Next Up | `getNextUpEpisodes({SeriesId, UserId, Fields: 'MediaSourceCount'})`，**其餘全吃伺服器預設**（不送 `EnableResumable`、`NextUpDateCutoff`、`EnableRewatching`、`Limit`）——[itemDetails/index.js L778-L809](https://github.com/jellyfin/jellyfin-web/blob/v10.11.11/src/controllers/itemDetails/index.js#L778-L809) |
+| 帶 `seriesId` 時截止日 | **不套用**：`TVSeriesManager.GetNextUp` 在 `SeriesId` 有值時直接走 `GetNextUpBatched`，`NextUpDateCutoff` 只在不帶 `seriesId` 的那條路用——[TVSeriesManager.cs L36-L52](https://github.com/jellyfin/jellyfin/blob/v12.0/Emby.Server.Implementations/TV/TVSeriesManager.cs#L36-L52)、[L80-L108](https://github.com/jellyfin/jellyfin/blob/v12.0/Emby.Server.Implementations/TV/TVSeriesManager.cs#L80-L108) |
+| `enableResumable` | 伺服器預設 `true`：候選那一集看到一半就照樣回它、帶著 `PlaybackPositionTicks`；`false` 時那部劇整個不列（不是跳到下一集）——[TvShowsController.cs L90-L91](https://github.com/jellyfin/jellyfin/blob/v12.0/Jellyfin.Api/Controllers/TvShowsController.cs#L90-L91)、[TVSeriesManager.cs L227-L240](https://github.com/jellyfin/jellyfin/blob/v12.0/Emby.Server.Implementations/TV/TVSeriesManager.cs#L227-L240)。**12.1.0 實測**：Frieren E01 看到 3 分鐘 → 回 E01、`PlayedPercentage` 30 |
+| 下一集怎麼挑 | 「最後看過」是已標記 `Played` 的最大季集號（不看日期），取它之後第一個還沒看完的；排在它之前看到一半的集不會被提到（那在 Resume）。候選池排除 Specials（`ParentIndexNumber == 0`）與 virtual（缺片、未播出）——[NextUpService.cs L93-L117、L195-L238](https://github.com/jellyfin/jellyfin/blob/v12.0/Jellyfin.Server.Implementations/Item/NextUpService.cs#L195-L238)。Specials 設了 `AirsBeforeSeasonNumber` 時可能插隊到 S01E01 之前【推論，沒實測】 |
+| 從沒看過 / 全部看完 | 沒看過回 S01E01（**12.1.0 實測**：Hotel Show）；全部看完、`enableRewatching` 預設 `false` 時回空——[TVSeriesManager.cs L136-L152](https://github.com/jellyfin/jellyfin/blob/v12.0/Emby.Server.Implementations/TV/TVSeriesManager.cs#L136-L152) |
+| jellyfin-web 的主按鈕 | 文字只看**那一項自己**的 `UserData.PlaybackPositionTicks > 0`（`ButtonResume` / `Play`），劇集的 `UserData` 沒有這一格，所以劇集頁幾乎永遠是「Play」；按下去由 `playbackManager` 先問這部劇的 NextUp、從那一集開始播——[itemDetails/index.js L321-L360](https://github.com/jellyfin/jellyfin-web/blob/v10.11.11/src/controllers/itemDetails/index.js#L321-L360)、[playbackmanager.js L1978-L2030](https://github.com/jellyfin/jellyfin-web/blob/v10.11.11/src/components/playback/playbackmanager.js#L1978-L2030) |
+| jellyfin-web 的季與集 | 劇頁列季卡（`overflowPortrait`），點進季頁才列集（清單列，不是卡片）；集的圖是自己的 `Primary`，沒有就退回劇的 `SeriesPrimaryImageTag`、再退回 `ParentPrimaryImageTag`——[listview.js L82-L107](https://github.com/jellyfin/jellyfin-web/blob/v10.11.11/src/components/listview/listview.js#L82-L107)；季與集的參數見 §7 的表 |
+| `/Items/{id}?userId=` 的欄位 | 這一支沒有 `fields` 參數，用 `new DtoOptions()`（除了 `SeasonUserData`、`RefreshState` 全開），所以 `ProviderIds`、`UserData`、`ImageTags`、季集號不必要就有——[UserLibraryController.cs L82-L105](https://github.com/jellyfin/jellyfin/blob/v12.0/Jellyfin.Api/Controllers/UserLibraryController.cs#L82-L105)、[DtoOptions.cs L29-L47](https://github.com/jellyfin/jellyfin/blob/v12.0/MediaBrowser.Controller/Dto/DtoOptions.cs#L29-L47)。**12.1.0 實測**：劇帶 `UnplayedItemCount` 4 / `PlayedPercentage` 20，看到一半的片帶 `PlayedPercentage` 50 |
+
+Berth（`services/watch_area.py`、`services/jellyfin_access.py`）：
+
+- **找作品**照 §10 的一段法（不帶 `parentId`），比對照媒體庫牆：帳本記下的 Series / Movie id 先比、再比 TMDB id；找到之後以
+  `/Items/{id}?userId=` 確認一次。**這部劇的 NextUp 只問確認過的劇**（帶 `seriesId` 不套權限，§2），這條由閘門的結構守著。
+- **主按鈕**用 NextUp 帶 `seriesId`、只送 `userId` 與 `seriesId`（照 jellyfin-web 劇集頁）；文字照**那一集**的進度挑：看到一半是
+  「繼續看」、S01E01 是「從 S01E01 開始看」、其餘「看下一集」，看完了開那部劇。偏離 jellyfin-web 的「永遠 Play」：Berth 知道是哪一集，
+  說出來。
+- **季與集在同一頁**（串流 app 的慣例），不另開季頁：`/media/:id` 是探索與媒體庫共用的一頁（brief §13）。
+- **集的劇照只取集自己的 `Primary`**，偏離 jellyfin-web：它退回劇的海報，那是 2:3，放進 16:9 的格子只剩中間一條，而整季一模一樣的圖
+  沒辦法用來挑集（§7.2 電影不取 Primary 的同一個理由）。
+- 12.1.0 的 dummy 樹沒有集劇照，`ImageTags.Primary` 的解析與牆上同一段（票 04 的契約測試）；12.0.0 的主環境量過集的 DTO 帶它（§4.1）。
+
 ## 8. 直接開始播放某一集的 Web URL
 
 **結論：沒有，brief §20.1 維持。** 【原始碼】三版路由表都有 `#/video`（`playback/video/index`），但它不吃
@@ -519,6 +547,7 @@ Berth（`services/watching.py`）照上面的請求參數，一律不送 `recurs
 11. **播放**：沒有自動播放的 URL；「播放」按鈕深連結到該集的詳細頁，由使用者在 Jellyfin 按播放。
 12. **由 TMDB id 找作品**（Media 詳情的觀看區）：`/Items` 沒有 provider id 過濾參數，但不帶 `parentId` 的
     `/Items?userId=U&hasTmdbId=true&fields=ProviderIds` 會套權限，在 Berth 端比 `ProviderIds.Tmdb` 即可（第 10 節）。
+    M1.5 票 08 照這條做，找到之後以 `/Items/{id}?userId=` 確認，這部劇的 NextUp（`seriesId`）只問確認過的（§7.3）。
 
 ## 10. 由 TMDB id 找到這位使用者看得到的作品【實測 12.1.0】
 

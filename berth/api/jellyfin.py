@@ -10,6 +10,8 @@
 
 - **繼續觀看與下一集**（`GET /watching`，票 07）：首頁上方的兩列，這個人的整個帳號。媒體庫頁那兩列是
   `GET /inventory/{id}/watching`，形狀相同（`watching_out`）。
+- **選季選集的一季**（`GET /shows/{id}/episodes?season_id=`，票 08）：Media 詳情的觀看區換季時
+  問。整個觀看區是 `GET /media/{id}/watch`（`api/media.py`）。
 
 誰進得來由門禁決定（`api/gate.py`）：不在白名單上，所以要登入；寫入另要 CSRF 標頭。
 `/jellyfin/libraries` 那一支是管理員的，這幾組都不是（`ADMIN_PREFIXES` 只收那一支）。
@@ -25,7 +27,13 @@ from fastapi.responses import Response
 
 from berth.api.deps import AccessCacheDep, ClientFactoryDep, SessionDep
 from berth.api.gate import current_user
-from berth.api.schemas import JellyfinWebOut, WatchingCardOut, WatchingOut, WatchStateOut
+from berth.api.schemas import (
+    JellyfinWebOut,
+    WatchEpisodeOut,
+    WatchingCardOut,
+    WatchingOut,
+    WatchStateOut,
+)
 from berth.domain import ImageSize, JellyfinImageType
 from berth.services.auth import AuthenticatedUser
 from berth.services.deeplink import jellyfin_web
@@ -38,6 +46,7 @@ from berth.services.jellyfin_access import (
     jellyfin_access,
 )
 from berth.services.jellyfin_images import ImageMissingError, read_image
+from berth.services.watch_area import WatchEpisode, read_episodes
 from berth.services.watching import Watching, WatchingCard, read_watching
 
 router = APIRouter(prefix="/jellyfin", tags=["jellyfin"])
@@ -146,6 +155,48 @@ def _watching_card(card: WatchingCard) -> WatchingCardOut:
         progress=card.progress,
         image_url=image_url(image.item_id, image.image_type, size=ImageSize.WIDE, tag=image.tag)
         if image
+        else "",
+    )
+
+
+@router.get(
+    "/shows/{series_id}/episodes",
+    responses={
+        401: {"description": "`account_disabled`：帳號在 Jellyfin 被停用，session 已結束"},
+        404: {"description": "`item_not_visible`：這位使用者看不到這部劇或這一季，或沒有它們"},
+        503: {"description": "`jellyfin_unreachable`：問不到 Jellyfin"},
+    },
+)
+async def get_episodes(
+    session: SessionDep,
+    factory: ClientFactoryDep,
+    cache: AccessCacheDep,
+    request: Request,
+    series_id: Annotated[str, Path(pattern=HEX32)],
+    season_id: Annotated[str, Query(pattern=HEX32)],
+) -> list[WatchEpisodeOut]:
+    """Media 詳情觀看區的一季（票 08）。路徑照 Jellyfin 的 `/Shows/{id}/Episodes?seasonId=`；
+    劇與季的可見性由 Jellyfin 對 session 那個人查，前端送來的 id 只是 Jellyfin 那一端的 id。"""
+    try:
+        async with jellyfin_access(session, factory, cache, session_user(request)) as access:
+            episodes = await read_episodes(access, series_id, season_id)
+    except (AccountDisabledError, ItemNotVisibleError, JellyfinUnreachableError) as refusal:
+        raise access_refusal(refusal) from refusal
+    return [watch_episode_out(episode) for episode in episodes]
+
+
+def watch_episode_out(episode: WatchEpisode) -> WatchEpisodeOut:
+    """一集的形狀：劇照網址在這一層組（services 只知道 Jellyfin 的 tag）。"""
+    still = episode.still
+    return WatchEpisodeOut(
+        item_id=episode.item_id,
+        name=episode.name,
+        season=episode.season,
+        episode_start=episode.episode_start,
+        episode_end=episode.episode_end,
+        watch=WatchStateOut.model_validate(episode.watch),
+        still_url=image_url(still.item_id, still.image_type, size=ImageSize.WIDE, tag=still.tag)
+        if still
         else "",
     )
 

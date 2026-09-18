@@ -614,10 +614,7 @@ def _tracked(
         covered = {pair for entry in features for pair in episodes_of(entry)}
         imported, aired, versions = len(covered & aired_set), len(aired_set), 0
     states = {job.state for job in jobs}
-    links = {
-        entry.jellyfin_series_id if media.kind is MediaKind.TV else entry.jellyfin_item_id
-        for entry in features
-    }
+    links = {jellyfin_link(entry, media.kind) for entry in features}
     return _Tracked(
         media=media,
         tracking=Tracking(
@@ -632,6 +629,12 @@ def _tracked(
         links=frozenset(link for link in links if link),
         presence=_presence(features),
     )
+
+
+def jellyfin_link(entry: LedgerEntry, kind: MediaKind) -> str:
+    """一筆帳本記下的、這部作品在 Jellyfin 的 id：劇集連 Series、電影連 Movie（票 13）。還沒反查到
+    是空字串。媒體庫牆與 Media 詳情的觀看區（票 08）拿它比對 Jellyfin 的作品。"""
+    return entry.jellyfin_series_id if kind is MediaKind.TV else entry.jellyfin_item_id
 
 
 def _status(

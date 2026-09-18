@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { ApiError } from './client'
-import { retryUnlessRefused } from './inventory'
+import { retryUnlessRefused } from './jellyfin'
 
 describe('媒體庫查詢的重試', () => {
   it('說得出理由的拒絕不重試：那是答案，不是故障', () => {

@@ -1,0 +1,192 @@
+{
+  "BackdropImageTags": [
+    "de29a0bab24d29dc0c2bc2e0f885268b"
+  ],
+  "CanDelete": false,
+  "CanDownload": true,
+  "ChannelId": null,
+  "Chapters": [],
+  "CommunityRating": 7.1,
+  "Container": "mkv",
+  "CriticRating": 72,
+  "DateCreated": "2026-08-19T06:36:13.5488259Z",
+  "DisplayPreferencesId": "dbf7709c41faaa746463d67978eb863d",
+  "EnableMediaSourceDisplay": true,
+  "Etag": "d92620e57f44efc535a62e3592f50036",
+  "ExternalUrls": [
+    {
+      "Name": "TMDB",
+      "Url": "https://www.themoviedb.org/movie/157336"
+    }
+  ],
+  "GenreItems": [
+    {
+      "Id": "090eac6e9de4fe1fbc194e5b96691277",
+      "Name": "Drama"
+    }
+  ],
+  "Genres": [
+    "Drama"
+  ],
+  "Height": 64,
+  "Id": "aaad8034da2f8c4db82f7aa3e26a4e3e",
+  "ImageBlurHashes": {
+    "Backdrop": {
+      "de29a0bab24d29dc0c2bc2e0f885268b": "W23V}qptfQptfQptqBfkfQfkfQfkfQfQfQfQfQfQqBfkfQfkfQfk"
+    },
+    "Primary": {
+      "de29a0bab24d29dc0c2bc2e0f885268b": "d23KQ.pLfQpLktfkfQfkfQfQfQfQktfkfQfkfQfQfQfQ"
+    },
+    "Thumb": {
+      "de29a0bab24d29dc0c2bc2e0f885268b": "W2FgQ{=vfQ=vfQ=v}qj@fQj@fQj@fQfQfQfQfQfQ}qj@fQj@fQj@"
+    }
+  },
+  "ImageTags": {
+    "Primary": "de29a0bab24d29dc0c2bc2e0f885268b",
+    "Thumb": "de29a0bab24d29dc0c2bc2e0f885268b"
+  },
+  "IsFolder": false,
+  "LocalTrailerCount": 0,
+  "LocationType": "FileSystem",
+  "LockData": false,
+  "LockedFields": [],
+  "MediaSources": [
+    {
+      "Bitrate": 207,
+      "Container": "mkv",
+      "ETag": "c29e48255f768666dc27b6615240e6d1",
+      "Formats": [],
+      "GenPtsInput": false,
+      "HasSegments": false,
+      "Id": "aaad8034da2f8c4db82f7aa3e26a4e3e",
+      "IgnoreDts": false,
+      "IgnoreIndex": false,
+      "IsInfiniteStream": false,
+      "IsRemote": false,
+      "MediaAttachments": [],
+      "MediaStreams": [
+        {
+          "AspectRatio": "1:1",
+          "AudioSpatialFormat": "None",
+          "AverageFrameRate": 1,
+          "BitDepth": 8,
+          "BitRate": 207,
+          "Codec": "h264",
+          "DisplayTitle": "144p H264 SDR",
+          "Height": 64,
+          "Index": 0,
+          "IsAVC": true,
+          "IsAnamorphic": false,
+          "IsDefault": false,
+          "IsExternal": false,
+          "IsForced": false,
+          "IsHearingImpaired": false,
+          "IsInterlaced": false,
+          "IsOriginal": false,
+          "IsTextSubtitleStream": false,
+          "Level": 10,
+          "NalLengthSize": "4",
+          "PixelFormat": "yuv420p",
+          "Profile": "High",
+          "RealFrameRate": 1,
+          "RefFrames": 1,
+          "ReferenceFrameRate": 1,
+          "SupportsExternalStream": false,
+          "TimeBase": "1/1000",
+          "Type": "Video",
+          "VideoRange": "SDR",
+          "VideoRangeType": "SDR",
+          "Width": 64
+        }
+      ],
+      "Name": "Foxtrot Movie (2018) [tmdbid-157336]",
+      "Path": "/media/movies/Foxtrot Movie (2018) [tmdbid-157336]/Foxtrot Movie (2018) [tmdbid-157336].mkv",
+      "Protocol": "File",
+      "ReadAtNativeFramerate": false,
+      "RequiredHttpHeaders": {},
+      "RequiresClosing": false,
+      "RequiresLooping": false,
+      "RequiresOpening": false,
+      "RunTimeTicks": 6000000000,
+      "Size": 15568,
+      "SupportsDirectPlay": true,
+      "SupportsDirectStream": true,
+      "SupportsProbing": true,
+      "SupportsTranscoding": true,
+      "TranscodingSubProtocol": "http",
+      "Type": "Default",
+      "UseMostCompatibleTranscodingProfile": false,
+      "VideoType": "VideoFile"
+    }
+  ],
+  "MediaStreams": [
+    {
+      "AspectRatio": "1:1",
+      "AudioSpatialFormat": "None",
+      "AverageFrameRate": 1,
+      "BitDepth": 8,
+      "BitRate": 207,
+      "Codec": "h264",
+      "DisplayTitle": "144p H264 SDR",
+      "Height": 64,
+      "Index": 0,
+      "IsAVC": true,
+      "IsAnamorphic": false,
+      "IsDefault": false,
+      "IsExternal": false,
+      "IsForced": false,
+      "IsHearingImpaired": false,
+      "IsInterlaced": false,
+      "IsOriginal": false,
+      "IsTextSubtitleStream": false,
+      "Level": 10,
+      "NalLengthSize": "4",
+      "PixelFormat": "yuv420p",
+      "Profile": "High",
+      "RealFrameRate": 1,
+      "RefFrames": 1,
+      "ReferenceFrameRate": 1,
+      "SupportsExternalStream": false,
+      "TimeBase": "1/1000",
+      "Type": "Video",
+      "VideoRange": "SDR",
+      "VideoRangeType": "SDR",
+      "Width": 64
+    }
+  ],
+  "MediaType": "Video",
+  "Name": "Foxtrot Movie",
+  "OfficialRating": "R",
+  "ParentId": "ba9c5cad4ccd875366bf54fd50e04928",
+  "Path": "/media/movies/Foxtrot Movie (2018) [tmdbid-157336]/Foxtrot Movie (2018) [tmdbid-157336].mkv",
+  "People": [],
+  "PlayAccess": "Full",
+  "PremiereDate": "2018-03-09T00:00:00.0000000Z",
+  "PrimaryImageAspectRatio": 0.6666666666666666,
+  "ProductionLocations": [],
+  "ProductionYear": 2018,
+  "ProviderIds": {
+    "Tmdb": "157336"
+  },
+  "RemoteTrailers": [],
+  "RunTimeTicks": 6000000000,
+  "ServerId": "1af78f6d10cf47d5a3d350608fb3833f",
+  "SortName": "foxtrot movie",
+  "SpecialFeatureCount": 0,
+  "Studios": [],
+  "Taglines": [],
+  "Tags": [],
+  "Trickplay": {},
+  "Type": "Movie",
+  "UserData": {
+    "IsFavorite": false,
+    "ItemId": "aaad8034da2f8c4db82f7aa3e26a4e3e",
+    "Key": "157336",
+    "PlayCount": 0,
+    "PlaybackPositionTicks": 3000000000,
+    "Played": false,
+    "PlayedPercentage": 50
+  },
+  "VideoType": "VideoFile",
+  "Width": 64
+}

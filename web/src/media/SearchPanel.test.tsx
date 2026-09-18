@@ -268,6 +268,64 @@ describe('搜尋 torrent 與結果表', () => {
     expect(within(panel()).getByRole('table')).toBeVisible()
   })
 
+  it('搜尋結束之後有回應的纜繩收成一行，展開才逐條列筆數（M1.5 票 08：全綠的纜繩曾佔掉 311px）', async () => {
+    render({
+      [SEARCH_PATH]: {
+        body: results({
+          attempts: [
+            { step: 'SPY x FAMILY', status: 'ok', detail: '12', error: '' },
+            { step: 'SPY×FAMILY', status: 'ok', detail: '3', error: '' },
+            { step: '間諜家家酒', status: 'ok', detail: '0', error: '' },
+          ],
+        }),
+      },
+    })
+    renderApp('/media/tv:120089')
+
+    await userEvent.click(await screen.findByRole('button', { name: '搜尋' }))
+
+    const summary = await within(panel()).findByText('3 個關鍵字都有回應')
+    expect(summary).toBeVisible()
+    // 收起來的 `<details>` 仍在 DOM 裡，看不見的是它；全部正常時整塊沒有任何一塊信號色。
+    expect(within(panel()).getByText('SPY×FAMILY')).not.toBeVisible()
+    for (const done of within(panel()).getAllByText('已完成')) expect(done).not.toBeVisible()
+
+    await userEvent.click(summary)
+
+    expect(within(panel()).getByText('SPY×FAMILY')).toBeVisible()
+    expect(within(panel()).getByText('12')).toBeVisible()
+  })
+
+  it('垮掉的纜繩不收：它與原文畫在收起的那一行上面', async () => {
+    render({
+      [SEARCH_PATH]: {
+        body: results({
+          attempts: [
+            { step: 'SPY x FAMILY', status: 'ok', detail: '1', error: '' },
+            { step: '間諜家家酒', status: 'ok', detail: '2', error: '' },
+            {
+              step: 'SPY×FAMILY',
+              status: 'failed',
+              detail: '',
+              error: 'GET /api/v1/search: ReadTimeout',
+            },
+          ],
+        }),
+      },
+    })
+    renderApp('/media/tv:120089')
+
+    await userEvent.click(await screen.findByRole('button', { name: '搜尋' }))
+
+    const failed = await within(panel()).findByText('GET /api/v1/search: ReadTimeout')
+    const summary = within(panel()).getByText('其餘 2 個關鍵字有回應')
+    expect(failed).toBeVisible()
+    expect(summary).toBeVisible()
+    // 垮掉的那一條在摘要上面（需要你的事浮到摘要層）。
+    expect(failed.compareDocumentPosition(summary) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(within(panel()).getByText('SPY x FAMILY')).not.toBeVisible()
+  })
+
   it('索引站沒接時說得出下一步，而不是一張空清單（票 08 驗收）', async () => {
     render({
       [SEARCH_PATH]: {
@@ -407,8 +465,8 @@ describe('搜尋 torrent 與結果表', () => {
 
       await userEvent.click(screen.getByRole('button', { name: '送單' }))
 
-      // 身分帶上也有同一串字（那是「將會是」的預覽），所以只看確認區塊裡的那一份。
-      const confirm = within(panel())
+      // 搜尋列底下也有同一串字（那是「將會是」的預覽，M1.5 票 08 從身分帶搬來），所以只看確認區塊裡的那一份。
+      const confirm = within(within(panel()).getByRole('group', { name: /資料夾會是/ }))
       expect(confirm.getByText('SPY x FAMILY (2022) [tmdbid-120089]')).toBeVisible()
       expect(confirm.getByText(/送單成功那一刻這串字就定下來/)).toBeVisible()
     })

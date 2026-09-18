@@ -5,11 +5,11 @@ import { useTranslation } from 'react-i18next'
 
 import { meQueryOptions } from '../api/auth'
 import { ApiError } from '../api/client'
+import { accessRefusal } from '../api/jellyfin'
 import {
   inventoriesQueryOptions,
   inventoryFiltersQueryOptions,
   inventoryQueryOptions,
-  accessRefusal,
   narrowed,
   wallQuery,
   type Inventory,

@@ -36,6 +36,7 @@ from berth.adapters.indexer.prowlarr import ProwlarrSearch
 from berth.adapters.jellyfin import (
     ITEM_EPISODE,
     ITEM_MOVIE,
+    ITEM_SEASON,
     ITEM_SERIES,
     JellyfinClient,
     JellyfinImage,
@@ -1155,6 +1156,13 @@ LOST_POSTER = frozenset({"Harbour Film 007"})
 #: 每部劇在替身 Jellyfin 上擺幾集（M1.5 票 05）：劇集的「剩幾集沒看」由它們算出來。
 DEMO_EPISODES = 6
 
+#: 不只一季的劇（M1.5 票 08，Media 詳情的季切換）：季號 → 集數，其餘的劇只有第 1 季六集。The Office
+#: 多一季與 Specials（S00 排在最後、不算進「看過前幾集」）。
+DEMO_SEASONS: dict[str, dict[int, int]] = {"The Office": {1: DEMO_EPISODES, 2: 4, 0: 1}}
+
+#: 集有自己劇照（`Primary`）的劇（M1.5 票 08）：選季選集的橫卡畫得出劇照；其餘的劇印「無圖」。
+DEMO_STILLS = frozenset({"The Bear"})
+
 #: 誰看過什麼（M1.5 票 05），四張表各是一種紀錄。這一張是劇集看過的集數（從第一集起）；
 #: 下面三張是看過的電影、看到一半的電影與看到一半的集。
 #: - `deckhand`：The Bear 看到第三集、第四集看到 18%；Breaking Bad 看完；Slow Horses、Shōgun 各看
@@ -1209,6 +1217,21 @@ def demo_wide(name: str, image_type: str) -> JellyfinImage:
     return JellyfinImage(content=svg.encode(), content_type="image/svg+xml")
 
 
+def demo_still(series: str, code: str) -> JellyfinImage:
+    """一張 16:9 的集劇照：與劇同一個色相、每一集換亮度，看得出每一格是自己的圖。"""
+    digest = hashlib.md5(series.encode(), usedforsecurity=False).digest()
+    hue = digest[0] * 360 // 256
+    light = 28 + int(hashlib.md5(code.encode(), usedforsecurity=False).digest()[0]) % 24
+    svg = (
+        '<svg xmlns="http://www.w3.org/2000/svg" width="342" height="192" viewBox="0 0 342 192">'
+        f'<rect width="342" height="192" fill="hsl({hue} 35% {light}%)"/>'
+        f'<circle cx="270" cy="70" r="44" fill="hsl({hue} 55% {light + 20}%)"/>'
+        '<text x="20" y="176" font-family="ui-monospace, monospace" font-size="18" '
+        f'font-weight="700" fill="#f4f1e8">{escape(series)} {escape(code)}</text></svg>'
+    )
+    return JellyfinImage(content=svg.encode(), content_type="image/svg+xml")
+
+
 def demo_poster(name: str) -> JellyfinImage:
     """一張 2:3 的 SVG 海報：底色由名稱導出，名稱一個詞一行。
 
@@ -1241,6 +1264,8 @@ async def _seed_library(session: AsyncSession, scenario: Scenario, paths: PathSe
     - **Anime**（`deckhand` 看不到）：SPY×FAMILY 入庫了一集；葬送的芙莉蓮停在待審、Jellyfin 裡沒有。
     - **觀看狀態**（M1.5 票 05）：每部劇 `DEMO_EPISODES` 集，誰看過什麼見 `DEMO_WATCHED`。
     - **類型與評分**（M1.5 票 06）：`DEMO_METADATA` 與 `filler_metadata`。
+    - **季與劇照**（M1.5 票 08）：The Office 有兩季與 Specials（`DEMO_SEASONS`），The Bear 的集有
+      劇照（`DEMO_STILLS`）。
     """
     routes = {row.slug: row for row in await session.scalars(select(Route))}
     root = paths.library_root
@@ -1285,29 +1310,52 @@ async def _seed_library(session: AsyncSession, scenario: Scenario, paths: PathSe
         items[index] = replace(item, primary_tag=_demo_tag(item.id, "Primary"))
         if item.name not in LOST_POSTER:
             scenario.jellyfin.images[(item.id, "Primary")] = demo_poster(item.name)
-    episodes = {
-        item.name: [
-            JellyfinItem(
-                id=_scanned_id(path := f"{item.path}/Season 01/{item.name} - S01E{number:02d}.mkv"),
-                type=ITEM_EPISODE,
-                name=f"Episode {number}",
-                path=path,
+    seasons: list[JellyfinItem] = []
+    episodes: dict[str, list[JellyfinItem]] = {}
+    for item in items:
+        if item.type != ITEM_SERIES:
+            continue
+        episodes[item.name] = []
+        for number, count in DEMO_SEASONS.get(item.name, {1: DEMO_EPISODES}).items():
+            folder = f"{item.path}/" + ("Specials" if number == 0 else f"Season {number:02d}")
+            season = JellyfinItem(
+                id=_scanned_id(folder),
+                type=ITEM_SEASON,
+                name="Specials" if number == 0 else f"Season {number}",
+                path=folder,
                 tmdb_id="",
                 series_id=item.id,
-                series_name=item.name,
-                season=1,
-                episode_start=number,
-                # 集沒有自己的橫圖：借劇的（jellyfin-web 的順序，`services/watching.landscape`）。
-                parent_thumb=ParentImage(item.id, item.thumb_tag) if item.thumb_tag else None,
-                parent_backdrop=(
-                    ParentImage(item.id, item.backdrop_tag) if item.backdrop_tag else None
-                ),
+                season=number,
             )
-            for number in range(1, DEMO_EPISODES + 1)
-        ]
-        for item in items
-        if item.type == ITEM_SERIES
-    }
+            seasons.append(season)
+            for episode in range(1, count + 1):
+                code = f"S{number:02d}E{episode:02d}"
+                row = JellyfinItem(
+                    id=_scanned_id(file := f"{folder}/{item.name} - {code}.mkv"),
+                    type=ITEM_EPISODE,
+                    name=f"Episode {episode}",
+                    path=file,
+                    tmdb_id="",
+                    series_id=item.id,
+                    season_id=season.id,
+                    series_name=item.name,
+                    season=number,
+                    episode_start=episode,
+                    # 集沒有自己的橫圖：借劇的（jellyfin-web 的順序，
+                    # `services/watching.landscape`）。
+                    parent_thumb=ParentImage(item.id, item.thumb_tag) if item.thumb_tag else None,
+                    parent_backdrop=(
+                        ParentImage(item.id, item.backdrop_tag) if item.backdrop_tag else None
+                    ),
+                )
+                if item.name in DEMO_STILLS:
+                    row = replace(row, primary_tag=_demo_tag(row.id, "Primary"))
+                    scenario.jellyfin.images[(row.id, "Primary")] = demo_still(item.name, code)
+                episodes[item.name].append(row)
+        # 「看過前幾集」照播出順序算：正片在前，Specials 排最後。
+        episodes[item.name].sort(
+            key=lambda row: (row.season == 0, row.season or 0, row.episode_start or 0)
+        )
     found = {item.name: item for item in items}
     for user, watched in DEMO_WATCHED.items():
         scenario.jellyfin.played[user] = {
@@ -1320,7 +1368,11 @@ async def _seed_library(session: AsyncSession, scenario: Scenario, paths: PathSe
             episodes[name][number - 1].id: percentage
             for (name, number), percentage in DEMO_EPISODES_UNDER_WAY.get(user, {}).items()
         }
-    scenario.jellyfin.items_ = [*items, *(row for rows in episodes.values() for row in rows)]
+    scenario.jellyfin.items_ = [
+        *items,
+        *seasons,
+        *(row for rows in episodes.values() for row in rows),
+    ]
 
     bear = _demo_media(session, MediaKind.TV, 136315, "The Bear", "大熊餐廳", 2022, seasons=3)
     slow = _demo_media(session, MediaKind.TV, 95480, "Slow Horses", "流人", 2022, seasons=4)

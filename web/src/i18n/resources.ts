@@ -601,6 +601,11 @@ const zhHant = {
       warningMovie: '會清掉你看這部片的觀看次數與最後觀看時間，清掉就找不回來。',
       warningSeries:
         '會清掉你看這部劇每一集的觀看次數與最後觀看時間，之前單獨看過的集也一起清掉，清掉就找不回來。',
+      warningEpisode: '會清掉你看這一集的觀看次數與最後觀看時間，清掉就找不回來。',
+      // 標為已看也會清掉東西（M1.5 票 08 使用者拍板）：看到一半的位置歸零。
+      warningProgress: '會清掉你看到 {{progress}}% 的位置，清掉就找不回來。',
+      // 劇集的觀看紀錄看不出底下有沒有看到一半的集，所以一律說。
+      warningSeriesPlayed: '每一集都會標為已看，看到一半的集位置也會歸零，清掉就找不回來。',
       refused: {
         item_not_visible: '你在 Jellyfin 看不到這部作品，沒有寫入。',
         jellyfin_unreachable:
@@ -638,11 +643,10 @@ const zhHant = {
     off: '讀不到媒體庫。Berth 自己的 API 沒有回應，先確認它還活著。',
   },
   media: {
-    identity: '識別',
-    kind: '類型',
-    year: '首播 / 上映',
-    runtime: '片長',
-    counts: '季數與集數',
+    // 身分帶那一行識別值（M1.5 票 08：五列剖面收成一行）。日期與 TMDB id 是值，不是文案。
+    aired: '首播 {{date}}',
+    released: '上映 {{date}}',
+    tmdbId: 'TMDB {{id}}',
     // 現在它跟著 TMDB 的標題走，所以說的是「將會是」；定下來是送單那一刻的事。
     folderPreview: '資料夾將會是',
     folderNote: '第一次送單成功那一刻這串字就定下來，之後 TMDB 改標題也不會動它。',
@@ -650,7 +654,8 @@ const zhHant = {
     folderFrozen: '資料夾是',
     folderFrozenNote: '這串字在第一次送單成功時定下來了，TMDB 改標題也不會動它。',
     tracked: '已下載過',
-    seasons: '季集',
+    // Berth 的季表：TMDB 的季集與它們的入庫狀態（上面觀看區的季是 Jellyfin 的）。
+    seasons: '季集與入庫',
     backToDiscover: '回探索頁',
     stale: '快照是舊的',
     fetchedAt: '快照抓取於',
@@ -742,6 +747,26 @@ const zhHant = {
       },
     },
   },
+  // Media 詳情的觀看區（M1.5 票 08、`.scratch/m1.5/media-detail-shape.md`）。季名與集名是 Jellyfin 的，
+  // 不是文案。主按鈕開 Jellyfin 那一集的詳細頁——Jellyfin 沒有直接開始播放的網址（研究 §8）。
+  watch: {
+    title: '觀看',
+    resume: '繼續看 {{code}}',
+    next: '看下一集 {{code}}',
+    first: '從 {{code}} 開始看',
+    film: '在 Jellyfin 看',
+    filmResume: '繼續看',
+    open: '在 Jellyfin 開啟',
+    allWatched: '全部看完了',
+    seasons: '季',
+    chipResume: '繼續看',
+    chipNext: '下一集',
+    noSeasons: 'Jellyfin 還沒有這部作品的集。',
+    emptySeason: '這一季在 Jellyfin 還沒有集。',
+    failed: '這一季的集讀不出來。',
+    retry: '重試',
+    down: '問不到 Jellyfin，觀看區暫時看不到。',
+  },
   // 索引站搜尋與結果表（票 08）。發佈名、站名與 Tags token 不是文案——它們來自索引站
   // 與 brief §6.8 的詞彙表，原樣顯示。
   search: {
@@ -752,6 +777,11 @@ const zhHant = {
     submitting: '搜尋中…',
     willAsk: 'Berth 會拿這幾個名字各問一次：',
     willAskTyped: 'Berth 只會問這一個：',
+    // 搜尋結束之後，有回應的纜繩收成這一行（M1.5 票 08：全綠的纜繩曾佔掉 311px）。
+    answeredAll_one: '{{count}} 個關鍵字都有回應',
+    answeredAll_other: '{{count}} 個關鍵字都有回應',
+    answeredRest_one: '其餘 {{count}} 個關鍵字有回應',
+    answeredRest_other: '其餘 {{count}} 個關鍵字有回應',
     slow: '索引站要現場去連它認得的每一個追蹤站，這通常要一分鐘左右。',
     count_one: '共 {{count}} 筆',
     count_other: '共 {{count}} 筆',
@@ -1820,6 +1850,11 @@ const en: Translations<typeof zhHant> = {
         'This clears how many times you watched this film and when you last did. It cannot be brought back.',
       warningSeries:
         'This clears how many times you watched every episode of this show and when you last did, including episodes you watched on their own. It cannot be brought back.',
+      warningEpisode:
+        'This clears how many times you watched this episode and when you last did. It cannot be brought back.',
+      warningProgress: 'This clears your place at {{progress}}%. It cannot be brought back.',
+      warningSeriesPlayed:
+        'Every episode is marked watched, and any episode you are partway through goes back to the start. It cannot be brought back.',
       refused: {
         item_not_visible: 'You cannot see this title in Jellyfin. Nothing was saved.',
         jellyfin_unreachable:
@@ -1856,11 +1891,9 @@ const en: Translations<typeof zhHant> = {
     off: 'Cannot read the library. Berth’s own API did not answer — check that it is still running.',
   },
   media: {
-    identity: 'Identity',
-    kind: 'Kind',
-    year: 'First aired / released',
-    runtime: 'Runtime',
-    counts: 'Seasons and episodes',
+    aired: 'First aired {{date}}',
+    released: 'Released {{date}}',
+    tmdbId: 'TMDB {{id}}',
     folderPreview: 'Folder will be',
     folderNote:
       'This name is fixed the moment a download goes through; a later TMDB rename will not move it.',
@@ -1868,7 +1901,7 @@ const en: Translations<typeof zhHant> = {
     folderFrozenNote:
       'This name was fixed when the first download went through; a later TMDB rename will not move it.',
     tracked: 'Downloaded before',
-    seasons: 'Seasons',
+    seasons: 'Seasons and imports',
     backToDiscover: 'Back to Discover',
     stale: 'Stale snapshot',
     fetchedAt: 'Snapshot taken',
@@ -1956,6 +1989,24 @@ const en: Translations<typeof zhHant> = {
       },
     },
   },
+  watch: {
+    title: 'Watch',
+    resume: 'Resume {{code}}',
+    next: 'Play next {{code}}',
+    first: 'Start with {{code}}',
+    film: 'Watch in Jellyfin',
+    filmResume: 'Resume',
+    open: 'Open in Jellyfin',
+    allWatched: 'All watched',
+    seasons: 'Seasons',
+    chipResume: 'Resume',
+    chipNext: 'Next',
+    noSeasons: 'Jellyfin has no episodes of this show yet.',
+    emptySeason: 'Jellyfin has no episodes in this season yet.',
+    failed: 'The episodes of this season could not be read.',
+    retry: 'Try again',
+    down: 'Berth cannot reach Jellyfin, so the watch area is unavailable for now.',
+  },
   search: {
     title: 'Search torrents',
     keyword: 'Keyword',
@@ -1963,6 +2014,10 @@ const en: Translations<typeof zhHant> = {
     submit: 'Search',
     submitting: 'Searching…',
     willAsk: 'Berth will ask for each of these names:',
+    answeredAll_one: '{{count}} keyword answered',
+    answeredAll_other: 'All {{count}} keywords answered',
+    answeredRest_one: '{{count}} other keyword answered',
+    answeredRest_other: '{{count}} other keywords answered',
     willAskTyped: 'Berth will ask for this only:',
     slow: 'The indexer contacts every tracker it knows, which usually takes about a minute.',
     count_one: '{{count}} result',

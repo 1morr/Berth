@@ -132,6 +132,13 @@ export function PrimaryButton({
   )
 }
 
+/**
+ * 主要動作，但它是一條連結（換頁、開新分頁）：Media 詳情的主按鈕「繼續看」（M1.5 票 08）。外觀同 `PrimaryButton`，
+ * 寬度由呼叫端給（元件的滿版是按鈕的形狀，這一條在 `sm` 以上有最小寬度就好）。
+ */
+export const PRIMARY_LINK =
+  'label inline-flex min-h-12 items-center justify-center border-2 border-rule-strong bg-assigned px-4 py-3.5 text-center text-on-signal'
+
 /** 次要動作：只有外框，不搶主要動作的位置。 */
 export function GhostButton({
   children,

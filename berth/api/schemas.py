@@ -242,3 +242,21 @@ class WatchStateOut(BaseModel):
     progress: int | None
     #: 還沒看完的劇集剩幾集沒看；沒開始看的劇也有。
     unplayed_episodes: int | None
+
+
+class WatchEpisodeOut(BaseModel):
+    """Media 詳情觀看區的一集（`services/watch_area.py`、M1.5 票 08）：選季選集的一格，也是
+    主按鈕那一集。
+
+    名稱是 Jellyfin 的，不跟 UI 語言。點下去開 Jellyfin 的 `item_id`（沒有直接播放的網址）。
+    """
+
+    item_id: str
+    name: str
+    #: 季號、集號、多集檔的最後一集；Jellyfin 認不出編號時是 `null`。
+    season: int | None
+    episode_start: int | None
+    episode_end: int | None
+    watch: WatchStateOut
+    #: Berth 代理的 16:9 劇照（集自己的 `Primary`）；沒有劇照時是空字串。
+    still_url: str

@@ -397,6 +397,16 @@ Windows Docker Desktop（NTFS bind mount）與 Linux（ext4）上各跑一次 `d
   一半的集，另加什麼都沒看過的 `bosun` / `knot`。
 - `jellyfin_permissions.py`（M1.5 票 07）：dummy 媒體樹幾部作品多 `landscape.jpg` / `fanart.jpg`，加錄 Resume 與 NextUp
   六份 fixture（Berth 的參數，加上拿掉 `mediaTypes`、帶 `parentId`、換 `nextUpDateCutoff` 的對照）。
+- **Media 詳情最上面有觀看區**（M1.5 票 08，brief §12、§13）：作品在 Jellyfin 裡、而且你在 Jellyfin 看得到它時，
+  標題底下是一顆主按鈕——看到一半的集是「繼續看 S01E04」、看過前面的是「看下一集」、沒看過是「從 S01E01 開始看」、
+  電影是「在 Jellyfin 看 / 繼續看」——在新分頁開 Jellyfin 的那一集（哪一集由 Jellyfin 的 NextUp 算）；下面一塊「觀看」
+  是 Jellyfin 的季切換與那一季的集（16:9 劇照、季集代號、集名、已看 / 看到幾 %），每一集可以就地標為已看 / 未看，點下去
+  開那一集。電影的標為已看在主按鈕旁邊。**看不到的作品頁面上沒有任何 Jellyfin 的東西**：不在 Jellyfin 與看不到是同一個樣子。
+  新增 `GET /api/media/{id}/watch`（`WatchAreaOut`，不在或看不到時是 `null`）與
+  `GET /api/jellyfin/shows/{series_id}/episodes?season_id=`（`WatchEpisodeOut[]`）。演練情境 `library` 的 The Office 有兩季
+  與 Specials、The Bear 的集有劇照。
+- `jellyfin_permissions.py`（M1.5 票 08）：加錄由 TMDB id 找作品、`/Items/{id}` 的劇與電影、這部劇的下一集三種情況
+  （看過前面的、看到一半的、沒看過的）六份 fixture。
 
 ### Changed
 
@@ -543,6 +553,14 @@ Windows Docker Desktop（NTFS bind mount）與 Linux（ext4）上各跑一次 `d
 - 對外服務的 HTTP client 整個程序共用一個 SSL context（M1.5 票 04）：httpx 預設每個 client 各建一個，要讀一次
   certifi 的憑證包、約 14 ms 的 CPU，而且卡在事件迴圈上。每個請求都開新 client 的 services 因此每次多付這一筆；
   量到經過 Berth 的圖 6 條並行時每張從 140 ms 降到 54 ms（`docs/research/library-browsing.md` §6.1）。
+- **Media 詳情重排**（M1.5 票 08）：身分帶的五列識別剖面收成標題下一行（類型、首播 / 上映、季集數或片長、TMDB id），
+  資料夾名搬進搜尋區塊（送單會寫死的就是它），在 Jellyfin 裡的作品多一顆主按鈕與觀看區；Berth 的那一半順序固定為
+  搜尋 → 季集與入庫（原本的「季集」）→ 檔案與版本。量到的差別：1280×900 下「搜尋」從 y=1027 升到 579（葬送的芙莉蓮）、
+  953 → 501（奧本海默），390px 從第三屏到第二屏。**搜尋結束之後有回應的纜繩收成一行**、展開才逐條列，垮掉的照舊一條一條
+  畫在上面：五個關鍵字的纜繩從 287 px 變成 44 px。
+- **標為已看也可能先確認**（M1.5 票 08，使用者拍板）：看到一半的集或電影標為已看會把那個位置歸零、找不回來，所以先說；
+  整部劇標為已看一律先說（每一集看到一半的位置都會歸零，而劇集的紀錄看不出底下有沒有這種集）。媒體庫牆與 Media 詳情是
+  同一顆鍵。
 - 媒體庫的整份清單（`library_index`，比對 Berth 經手的作品用）多帶每部的 Primary 圖 tag（M1.5 票 04）：
   篩選「待審」「Unmatched」時，已在 Jellyfin 裡的作品也畫得出海報。Jellyfin 連它的 BlurHash 一起回，每部多一百多個位元組。
 

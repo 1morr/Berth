@@ -2,7 +2,7 @@ import { queryOptions } from '@tanstack/react-query'
 
 import { apiGet, apiPost } from './client'
 import type { HealthDetail } from './health'
-import type { JellyfinWeb } from './inventory'
+import type { JellyfinWeb } from './jellyfin'
 import type { QbittorrentSetup, Schemas, ServiceKind } from './schemas'
 
 /**

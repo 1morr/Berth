@@ -1,0 +1,90 @@
+{
+  "AirDays": [],
+  "BackdropImageTags": [
+    "5789574838650d09a74a25651edfcdf5"
+  ],
+  "CanDelete": false,
+  "CanDownload": false,
+  "ChannelId": null,
+  "Chapters": [],
+  "ChildCount": 2,
+  "CommunityRating": 7,
+  "DateCreated": "2026-09-18T06:36:32.6339624Z",
+  "DateLastMediaAdded": "2026-08-19T06:36:13.5488259Z",
+  "DisplayPreferencesId": "f63033ff6886ecc7083a696cbeced1b0",
+  "EnableMediaSourceDisplay": true,
+  "Etag": "cb53734dfd47219c361ede25e2b743ab",
+  "ExternalUrls": [
+    {
+      "Name": "TMDB",
+      "Url": "https://www.themoviedb.org/tv/1399"
+    }
+  ],
+  "GenreItems": [
+    {
+      "Id": "090eac6e9de4fe1fbc194e5b96691277",
+      "Name": "Drama"
+    },
+    {
+      "Id": "a30dcc65be22eb3c21c03f7c1c7a57d1",
+      "Name": "Fantasy"
+    }
+  ],
+  "Genres": [
+    "Drama",
+    "Fantasy"
+  ],
+  "Id": "2a9857e656bbd18b7c3c3a3b4ee5eef1",
+  "ImageBlurHashes": {
+    "Backdrop": {
+      "5789574838650d09a74a25651edfcdf5": "W23V}qptfQptfQptqBfkfQfkfQfkfQfQfQfQfQfQqBfkfQfkfQfk"
+    },
+    "Primary": {
+      "5789574838650d09a74a25651edfcdf5": "d23KQ.pLfQpLktfkfQfkfQfQfQfQktfkfQfkfQfQfQfQ"
+    },
+    "Thumb": {
+      "5789574838650d09a74a25651edfcdf5": "W2FgQ{=vfQ=vfQ=v}qj@fQj@fQj@fQfQfQfQfQfQ}qj@fQj@fQj@"
+    }
+  },
+  "ImageTags": {
+    "Primary": "5789574838650d09a74a25651edfcdf5",
+    "Thumb": "5789574838650d09a74a25651edfcdf5"
+  },
+  "IsFolder": true,
+  "LocalTrailerCount": 0,
+  "LocationType": "FileSystem",
+  "LockData": false,
+  "LockedFields": [],
+  "MediaType": "Unknown",
+  "Name": "Alpha Show",
+  "OfficialRating": "TV-14",
+  "ParentId": "e39a1fa5022aa25575a26eb89562d76b",
+  "Path": "/media/tv/Alpha Show (2022) [tmdbid-1399]",
+  "People": [],
+  "PlayAccess": "Full",
+  "PremiereDate": "2022-04-01T00:00:00.0000000Z",
+  "PrimaryImageAspectRatio": 0.6666666666666666,
+  "ProductionYear": 2022,
+  "ProviderIds": {
+    "Tmdb": "1399"
+  },
+  "RecursiveItemCount": 5,
+  "RemoteTrailers": [],
+  "ServerId": "1af78f6d10cf47d5a3d350608fb3833f",
+  "SortName": "alpha show",
+  "SpecialFeatureCount": 0,
+  "Studios": [],
+  "Taglines": [],
+  "Tags": [],
+  "Type": "Series",
+  "UserData": {
+    "IsFavorite": false,
+    "ItemId": "2a9857e656bbd18b7c3c3a3b4ee5eef1",
+    "Key": "2a9857e6-56bb-d18b-7c3c-3a3b4ee5eef1",
+    "PlayCount": 0,
+    "PlaybackPositionTicks": 0,
+    "Played": false,
+    "PlayedPercentage": 20,
+    "UnplayedItemCount": 4
+  }
+}

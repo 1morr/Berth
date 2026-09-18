@@ -24,12 +24,14 @@ from berth.adapters.http import ServiceUnavailableError
 from berth.adapters.jellyfin import (
     ITEM_EPISODE,
     ITEM_MOVIE,
+    ITEM_SEASON,
     ITEM_SERIES,
     JellyfinItem,
     JellyfinLibrary,
+    JellyfinUserData,
 )
 from berth.adapters.jellyfin.fake import FakeJellyfinClient, ItemMetadata
-from berth.domain import LibrarySort, SortOrder
+from berth.domain import LibrarySort, MediaKind, SortOrder
 from berth.models import JellyfinSettings
 from berth.services.auth import AuthenticatedUser, read_session, sign_in
 from berth.services.jellyfin_access import (
@@ -618,3 +620,247 @@ class TestWatching:
                 await read_watching(access, None)
 
         assert refused.value.detail == "GET /UserItems/Resume: connection refused"
+
+
+#: Media 詳情的觀看區（M1.5 票 08）：TV 上一部分季的劇、Movies 上一部片、Anime 上一部 `deckhand`
+#: 看不到的劇，以及一部 Jellyfin 認錯 TMDB id 的劇（帳本記得它是哪一部）。
+BEAR, BEAR_S01, BEAR_E01, BEAR_E02 = "series-bear", "bear-s01", "bear-e01", "bear-e02"
+OPPENHEIMER = "film-oppenheimer"
+FRIEREN, FRIEREN_S01 = "series-frieren", "frieren-s01"
+MISNAMED = "series-misnamed"
+
+
+def titled() -> tuple[JellyfinItem, ...]:
+    tv = "/data/library/tv"
+    return (
+        JellyfinItem(BEAR, ITEM_SERIES, "The Bear", f"{tv}/The Bear", "136315"),
+        JellyfinItem(
+            BEAR_S01, ITEM_SEASON, "Season 1", f"{tv}/The Bear/S1", "", series_id=BEAR, season=1
+        ),
+        *(
+            JellyfinItem(
+                episode_id,
+                ITEM_EPISODE,
+                f"Episode {number}",
+                f"{tv}/The Bear/S1/S01E0{number}.mkv",
+                "",
+                series_id=BEAR,
+                season_id=BEAR_S01,
+                season=1,
+                episode_start=number,
+            )
+            for number, episode_id in ((1, BEAR_E01), (2, BEAR_E02))
+        ),
+        JellyfinItem(
+            OPPENHEIMER, ITEM_MOVIE, "Oppenheimer", "/data/library/movies/Oppenheimer.mkv", "872585"
+        ),
+        JellyfinItem(FRIEREN, ITEM_SERIES, "Frieren", "/data/library/anime/Frieren", "209867"),
+        JellyfinItem(
+            FRIEREN_S01,
+            ITEM_SEASON,
+            "Season 1",
+            "/data/library/anime/Frieren/S1",
+            "",
+            series_id=FRIEREN,
+            season=1,
+        ),
+        JellyfinItem(MISNAMED, ITEM_SERIES, "Slow Horses", f"{tv}/Slow Horses", "1"),
+    )
+
+
+class TestLocate:
+    """由 TMDB id 找這位使用者看得到的作品（研究 §10）。**不帶 `parentId`**，Jellyfin 才照他的
+    權限限縮；找到之後向 Jellyfin 確認一次看得到（`/Items/{id}?userId=`），**這部劇的 NextUp 只在
+    確認之後才問**——帶 `seriesId` 的 NextUp 不套權限（研究 §2），替身照做，所以問了就是 Berth
+    放行的。"""
+
+    @pytest.fixture(autouse=True)
+    def catalogue(self, jellyfin: FakeJellyfinClient) -> None:
+        jellyfin.items_ = list(titled())
+        jellyfin.played = {"deckhand": {BEAR_E01}}
+
+    async def test_a_title_is_looked_up_across_what_this_user_sees_then_confirmed(
+        self,
+        session: AsyncSession,
+        factory: FakeClientFactory,
+        jellyfin: FakeJellyfinClient,
+        cache: AccessCache,
+    ) -> None:
+        user, _ = await signed_in(session, factory, "deckhand", "rope")
+
+        async with jellyfin_access(session, factory, cache, user) as access:
+            found = await access.locate(MediaKind.TV, 136315, links=())
+
+        assert found is not None
+        assert found.id == BEAR
+        assert found.user_data is not None
+        assert found.user_data.unplayed_item_count == 1
+        me = user.jellyfin_user_id
+        assert jellyfin.watch_area_queries == [("tmdb_index", me, ITEM_SERIES), ("item", me, BEAR)]
+        # 找作品不帶 `parentId`：不走任何一個媒體庫。
+        assert jellyfin.browse_queries == []
+
+    async def test_a_film_is_looked_up_among_films(
+        self,
+        session: AsyncSession,
+        factory: FakeClientFactory,
+        jellyfin: FakeJellyfinClient,
+        cache: AccessCache,
+    ) -> None:
+        user, _ = await signed_in(session, factory, "deckhand", "rope")
+
+        async with jellyfin_access(session, factory, cache, user) as access:
+            found = await access.locate(MediaKind.MOVIE, 872585, links=())
+            # 同一個 TMDB id 在劇集那邊沒有這部片。
+            series = await access.locate(MediaKind.TV, 872585, links=())
+
+        assert found is not None
+        assert found.id == OPPENHEIMER
+        assert series is None
+
+    async def test_a_title_only_in_a_library_this_user_cannot_see_is_not_there(
+        self,
+        session: AsyncSession,
+        factory: FakeClientFactory,
+        jellyfin: FakeJellyfinClient,
+        cache: AccessCache,
+    ) -> None:
+        """看不到與不在 Jellyfin 是同一個答案：分得出來就是在告訴人那部作品在哪裡。"""
+        user, _ = await signed_in(session, factory, "deckhand", "rope")
+
+        async with jellyfin_access(session, factory, cache, user) as access:
+            found = await access.locate(MediaKind.TV, 209867, links=())
+
+        assert found is None
+        assert [query for query, *_ in jellyfin.watch_area_queries] == ["tmdb_index"]
+
+    async def test_the_ledgers_link_wins_over_a_tmdb_id_jellyfin_got_wrong(
+        self,
+        session: AsyncSession,
+        factory: FakeClientFactory,
+        jellyfin: FakeJellyfinClient,
+        cache: AccessCache,
+    ) -> None:
+        """媒體庫牆的同一條規則（票 03）：Jellyfin 認錯 TMDB id 時，帳本記下的那一個才是對的。"""
+        user, _ = await signed_in(session, factory, "deckhand", "rope")
+
+        async with jellyfin_access(session, factory, cache, user) as access:
+            found = await access.locate(MediaKind.TV, 95480, links=(MISNAMED,))
+
+        assert found is not None
+        assert found.id == MISNAMED
+
+    async def test_a_link_to_a_title_this_user_cannot_see_is_not_followed(
+        self,
+        session: AsyncSession,
+        factory: FakeClientFactory,
+        jellyfin: FakeJellyfinClient,
+        cache: AccessCache,
+    ) -> None:
+        """帳本記的是 Berth 入庫的那一份，不是這個人看得到的那一份：連結只在找作品的結果裡比。"""
+        user, _ = await signed_in(session, factory, "deckhand", "rope")
+
+        async with jellyfin_access(session, factory, cache, user) as access:
+            found = await access.locate(MediaKind.TV, 1, links=(FRIEREN,))
+
+        assert found is not None
+        assert found.id == MISNAMED
+        assert ("item", user.jellyfin_user_id, FRIEREN) not in jellyfin.watch_area_queries
+
+    async def test_next_up_of_a_show_is_asked_only_after_it_was_confirmed(
+        self,
+        session: AsyncSession,
+        factory: FakeClientFactory,
+        jellyfin: FakeJellyfinClient,
+        cache: AccessCache,
+    ) -> None:
+        user, _ = await signed_in(session, factory, "deckhand", "rope")
+
+        async with jellyfin_access(session, factory, cache, user) as access:
+            with pytest.raises(ItemNotVisibleError):
+                await access.series_next_up(BEAR)
+            assert jellyfin.watch_area_queries == []
+
+            await access.locate(MediaKind.TV, 136315, links=())
+            carry_on = await access.series_next_up(BEAR)
+
+        assert carry_on is not None
+        assert carry_on.id == BEAR_E02
+        assert jellyfin.watch_area_queries[-1] == ("series_next_up", user.jellyfin_user_id, BEAR)
+
+    async def test_next_up_of_a_show_this_user_cannot_see_is_never_asked(
+        self,
+        session: AsyncSession,
+        factory: FakeClientFactory,
+        jellyfin: FakeJellyfinClient,
+        cache: AccessCache,
+    ) -> None:
+        user, _ = await signed_in(session, factory, "deckhand", "rope")
+
+        async with jellyfin_access(session, factory, cache, user) as access:
+            assert await access.locate(MediaKind.TV, 209867, links=()) is None
+            with pytest.raises(ItemNotVisibleError):
+                await access.series_next_up(FRIEREN)
+
+        assert "series_next_up" not in {query for query, *_ in jellyfin.watch_area_queries}
+
+    async def test_seasons_and_episodes_come_from_jellyfin_for_this_user(
+        self,
+        session: AsyncSession,
+        factory: FakeClientFactory,
+        jellyfin: FakeJellyfinClient,
+        cache: AccessCache,
+    ) -> None:
+        user, _ = await signed_in(session, factory, "deckhand", "rope")
+
+        async with jellyfin_access(session, factory, cache, user) as access:
+            seasons = await access.seasons(BEAR)
+            episodes = await access.episodes(BEAR, BEAR_S01)
+
+        assert [(season.id, season.number) for season in seasons] == [(BEAR_S01, 1)]
+        assert [(episode.id, episode.user_data) for episode in episodes] == [
+            (
+                BEAR_E01,
+                JellyfinUserData(played=True, played_percentage=0.0, unplayed_item_count=None),
+            ),
+            (
+                BEAR_E02,
+                JellyfinUserData(played=False, played_percentage=0.0, unplayed_item_count=None),
+            ),
+        ]
+
+    async def test_seasons_and_episodes_of_a_show_this_user_cannot_see_are_refused(
+        self,
+        session: AsyncSession,
+        factory: FakeClientFactory,
+        jellyfin: FakeJellyfinClient,
+        cache: AccessCache,
+    ) -> None:
+        """這兩支 Jellyfin 自己查可見性（帶 `userId` 時無權 404，研究 §2）：404 是答案，
+        翻成拒絕。"""
+        user, _ = await signed_in(session, factory, "deckhand", "rope")
+
+        async with jellyfin_access(session, factory, cache, user) as access:
+            with pytest.raises(ItemNotVisibleError):
+                await access.seasons(FRIEREN)
+            with pytest.raises(ItemNotVisibleError):
+                await access.episodes(FRIEREN, BEAR_S01)
+            # 看得到的劇配上看不到的季也一樣：`seasonId` 同樣帶著這個人查（研究 §2）。
+            with pytest.raises(ItemNotVisibleError):
+                await access.episodes(BEAR, FRIEREN_S01)
+
+    async def test_jellyfin_going_away_is_the_same_reason_as_for_the_wall(
+        self,
+        session: AsyncSession,
+        factory: FakeClientFactory,
+        jellyfin: FakeJellyfinClient,
+        cache: AccessCache,
+    ) -> None:
+        user, _ = await signed_in(session, factory, "deckhand", "rope")
+
+        async with jellyfin_access(session, factory, cache, user) as access:
+            jellyfin.error = ServiceUnavailableError("GET /Items: connection refused")
+            with pytest.raises(JellyfinUnreachableError):
+                await access.locate(MediaKind.TV, 136315, links=())
+            with pytest.raises(JellyfinUnreachableError):
+                await access.episodes(BEAR, BEAR_S01)

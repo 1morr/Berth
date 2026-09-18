@@ -133,6 +133,8 @@ class JellyfinTask:
 ITEM_SERIES = "Series"
 ITEM_EPISODE = "Episode"
 ITEM_MOVIE = "Movie"
+#: 季（`/Shows/{id}/Seasons` 回的那一種）。只有替身會把它當成一個 item 存（M1.5 票 08）。
+ITEM_SEASON = "Season"
 
 #: 內建「重新掃描媒體庫」排程任務的 `Key`（`GET /ScheduledTasks`，2026-09-15 對 12.0.0 實測）。
 #: 路徑通知對從沒掃到過內容的媒體庫無效時，反查靠它（brief §20.1）。
@@ -200,6 +202,8 @@ class JellyfinItem:
     #: Episode 的 `SeriesId`：它屬於哪一部作品（2026-09-15 對 12.0.0 實測，每一集都帶）。
     #: 媒體庫的卡片連到作品而不是某一集（票 13）。其餘型別是空字串。
     series_id: str = ""
+    #: Episode 的 `SeasonId`：它屬於哪一季（Media 詳情的選季選集，M1.5 票 08）。其餘型別是空字串。
+    season_id: str = ""
     #: `ProductionYear`。媒體庫牆上那一格的年份（M1.5 票 03）；Jellyfin 不知道時是 `None`。
     year: int | None = None
     #: `ImageTags.Primary`：代理圖片的網址要帶它，Jellyfin 換圖時網址才會變（M1.5 票 04、研究 §6）。
@@ -238,6 +242,19 @@ class JellyfinItem:
         return next(
             (source.name for source in self.sources if source.path.rstrip("/") == wanted), ""
         )
+
+
+@dataclass(frozen=True, slots=True)
+class JellyfinSeason:
+    """`GET /Shows/{id}/Seasons` 的一季（M1.5 票 08）。"""
+
+    id: str
+    #: Jellyfin 的季名，跟伺服器的 metadata 語言（`第 1 季`、`Specials`、篇章名）。
+    #: 不是 Berth 的文案，畫面原樣顯示。
+    name: str
+    #: `IndexNumber`：季號，Specials 是 0；Jellyfin 認不出來時是 `None`。
+    number: int | None
+    user_data: JellyfinUserData | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -501,6 +518,42 @@ class JellyfinClient(Protocol):
         """
         ...
 
+    # --- Media 詳情的觀看區（M1.5 票 08，研究 §2、§4.1、§10）---
+
+    async def tmdb_index(self, *, user_id: str, item_type: str) -> tuple[JellyfinItem, ...]:
+        """這位使用者看得到、有 TMDB id 的每一部作品，只帶 id、名稱與 TMDB id。
+
+        **不帶 `parentId`**：Jellyfin 才照這個人的 `UserViews` 限縮（研究 §10）。`/Items` 沒有
+        provider id 的過濾參數，由 TMDB id 比對是呼叫端的事。
+        """
+        ...
+
+    async def item(self, *, user_id: str, item_id: str) -> JellyfinItem:
+        """`GET /Items/{id}?userId=`，帶這個人的觀看紀錄。**可見性由 Jellyfin 查**：看不到（或沒有）
+        時 404，翻成 `NotFoundError`。"""
+        ...
+
+    async def seasons(self, *, user_id: str, series_id: str) -> tuple[JellyfinSeason, ...]:
+        """`GET /Shows/{id}/Seasons?userId=`。看不到這部劇時 404（`NotFoundError`）；**漏帶 `userId`
+        會回 200 並略過權限**（研究 §2），所以它是必要參數。"""
+        ...
+
+    async def episodes(
+        self, *, user_id: str, series_id: str, season_id: str
+    ) -> tuple[JellyfinItem, ...]:
+        """`GET /Shows/{id}/Episodes?userId=&seasonId=`：那一季的集。看不到這部劇或這一季時 404
+        （`NotFoundError`）。"""
+        ...
+
+    async def series_next_up(self, *, user_id: str, series_id: str) -> JellyfinItem | None:
+        """`GET /Shows/NextUp?userId=&seriesId=`：這部劇接下來看哪一集，全部看完是 `None`。
+
+        參數照 jellyfin-web 劇集頁，其餘吃伺服器預設：看到一半的那一集照樣回（`enableResumable`
+        預設 `true`），一集都沒看過回 S01E01，截止日不套用（v12.0 原始碼、12.1.0 錄製）。
+        **帶 `seriesId` 就不套權限**（研究 §2）：呼叫端要先確認這位使用者看得到這部劇。
+        """
+        ...
+
     # --- 圖片（M1.5 票 04）---
 
     async def image(
@@ -526,6 +579,7 @@ class JellyfinClient(Protocol):
 __all__ = [
     "ITEM_EPISODE",
     "ITEM_MOVIE",
+    "ITEM_SEASON",
     "ITEM_SERIES",
     "LIBRARY_SCAN_TASK_KEY",
     "MIN_VERSION",
@@ -539,6 +593,7 @@ __all__ = [
     "JellyfinPage",
     "JellyfinPolicy",
     "JellyfinPublicInfo",
+    "JellyfinSeason",
     "JellyfinSource",
     "JellyfinTask",
     "JellyfinUserData",

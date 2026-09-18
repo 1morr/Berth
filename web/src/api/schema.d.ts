@@ -309,6 +309,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/jellyfin/shows/{series_id}/episodes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Episodes
+         * @description Media 詳情觀看區的一季（票 08）。路徑照 Jellyfin 的 `/Shows/{id}/Episodes?seasonId=`；
+         *     劇與季的可見性由 Jellyfin 對 session 那個人查，前端送來的 id 只是 Jellyfin 那一端的 id。
+         */
+        get: operations["get_episodes_api_jellyfin_shows__series_id__episodes_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/jellyfin/items/{item_id}/played": {
         parameters: {
             query?: never;
@@ -476,6 +497,27 @@ export interface paths {
          * @description 不管幾歲都重抓一次。TMDB 改了標題，`folder_name` 就跟著改（票 04b 驗收）。
          */
         post: operations["post_refresh_api_media__media_id__refresh_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/media/{media_id}/watch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Watch
+         * @description 這部作品在 Jellyfin 裡、session 那個人看得到時的觀看區；**不在或看不到時是 `null`**——兩者
+         *     不分，分得出來就是在告訴人那部作品在哪裡。
+         */
+        get: operations["get_watch_api_media__media_id__watch_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -2473,6 +2515,55 @@ export interface components {
             tags: string;
         };
         /**
+         * WatchAreaOut
+         * @description Media 詳情最上面的觀看區（`services/watch_area.py`、
+         *     `.scratch/m1.5/media-detail-shape.md`）。
+         */
+        WatchAreaOut: {
+            /** Item Id */
+            item_id: string;
+            kind: components["schemas"]["MediaKind"];
+            watch: components["schemas"]["WatchStateOut"];
+            carry_on: components["schemas"]["WatchEpisodeOut"] | null;
+            /** Seasons */
+            seasons: components["schemas"]["WatchSeasonOut"][];
+            jellyfin: components["schemas"]["JellyfinWebOut"];
+        };
+        /**
+         * WatchEpisodeOut
+         * @description Media 詳情觀看區的一集（`services/watch_area.py`、M1.5 票 08）：選季選集的一格，也是
+         *     主按鈕那一集。
+         *
+         *     名稱是 Jellyfin 的，不跟 UI 語言。點下去開 Jellyfin 的 `item_id`（沒有直接播放的網址）。
+         */
+        WatchEpisodeOut: {
+            /** Item Id */
+            item_id: string;
+            /** Name */
+            name: string;
+            /** Season */
+            season: number | null;
+            /** Episode Start */
+            episode_start: number | null;
+            /** Episode End */
+            episode_end: number | null;
+            watch: components["schemas"]["WatchStateOut"];
+            /** Still Url */
+            still_url: string;
+        };
+        /**
+         * WatchSeasonOut
+         * @description 觀看區的一季：Jellyfin 的季，不是 TMDB 的（那是 `SeasonOut`）。
+         */
+        WatchSeasonOut: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Number */
+            number: number | null;
+        };
+        /**
          * WatchStateOut
          * @description 這位使用者在 Jellyfin 看到哪了（`services/watch.py`、M1.5 票 05）。媒體庫的牆與標記已看共用。
          *
@@ -2961,6 +3052,60 @@ export interface operations {
             };
         };
     };
+    get_episodes_api_jellyfin_shows__series_id__episodes_get: {
+        parameters: {
+            query: {
+                season_id: string;
+            };
+            header?: never;
+            path: {
+                series_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WatchEpisodeOut"][];
+                };
+            };
+            /** @description `account_disabled`：帳號在 Jellyfin 被停用，session 已結束 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `item_not_visible`：這位使用者看不到這部劇或這一季，或沒有它們 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description `jellyfin_unreachable`：問不到 Jellyfin */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     mark_played_api_jellyfin_items__item_id__played_post: {
         parameters: {
             query?: never;
@@ -3301,6 +3446,51 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+        };
+    };
+    get_watch_api_media__media_id__watch_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                media_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WatchAreaOut"] | null;
+                };
+            };
+            /** @description `account_disabled`：帳號在 Jellyfin 被停用，session 已結束 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description `jellyfin_unreachable`：問不到 Jellyfin */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

@@ -5,16 +5,22 @@
 
 **這一頁沒有「追蹤」這個動作**（票 04b）：`tracked` 是推導出來的（票 09 起是 `EXISTS(jobs)`），
 而「入庫到哪一條 Route」由送單那一刻寫成 `default_route_id`，不另外開一支端點。
+
+**觀看區是另一支**（`GET /media/{id}/watch`，M1.5 票 08）：它問的是 Jellyfin、替 session 那個人問，
+不在 Jellyfin 或看不到時是 `null`。`GET /media/{id}` 那一份永遠不帶 Jellyfin 的任何東西——頁面不必等
+Jellyfin 才畫得出來，而看不到的作品連 item id 都不會出現在任何一份回應裡。
 """
 
 from __future__ import annotations
 
 from datetime import date, datetime
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 from pydantic import BaseModel, ConfigDict
 
-from berth.api.deps import ClientFactoryDep, SessionDep
+from berth.api.deps import AccessCacheDep, ClientFactoryDep, SessionDep
+from berth.api.jellyfin import access_refusal, session_user, watch_episode_out
+from berth.api.schemas import JellyfinWebOut, WatchEpisodeOut, WatchStateOut
 from berth.domain import (
     CollectionType,
     EpisodeStatus,
@@ -24,7 +30,14 @@ from berth.domain import (
     PlanAction,
     TmdbProblem,
 )
+from berth.services.deeplink import jellyfin_web
+from berth.services.jellyfin_access import (
+    AccountDisabledError,
+    JellyfinUnreachableError,
+    jellyfin_access,
+)
 from berth.services.media import read_media, refresh_media
+from berth.services.watch_area import read_watch_area
 
 router = APIRouter(prefix="/media", tags=["media"])
 
@@ -203,3 +216,67 @@ async def get_media(session: SessionDep, factory: ClientFactoryDep, media_id: st
 async def post_refresh(session: SessionDep, factory: ClientFactoryDep, media_id: str) -> MediaOut:
     """不管幾歲都重抓一次。TMDB 改了標題，`folder_name` 就跟著改（票 04b 驗收）。"""
     return MediaOut.model_validate(await refresh_media(session, factory, media_id))
+
+
+class WatchSeasonOut(BaseModel):
+    """觀看區的一季：Jellyfin 的季，不是 TMDB 的（那是 `SeasonOut`）。"""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    #: Jellyfin 的季 id：換季時拿它問那一季的集（`GET /jellyfin/shows/{id}/episodes?season_id=`）。
+    id: str
+    #: Jellyfin 的季名，跟伺服器的 metadata 語言（`第 1 季`、`Specials`）。
+    name: str
+    #: 季號；Specials 是 0，Jellyfin 認不出來是 `null`。
+    number: int | None
+
+
+class WatchAreaOut(BaseModel):
+    """Media 詳情最上面的觀看區（`services/watch_area.py`、
+    `.scratch/m1.5/media-detail-shape.md`）。"""
+
+    #: 劇或電影在 Jellyfin 的 item id：深連結與「標為已看」都用它。
+    item_id: str
+    kind: MediaKind
+    #: 劇集：剩幾集沒看或已看；電影：看到幾 % 或已看。
+    watch: WatchStateOut
+    #: 劇集接下來看哪一集（Jellyfin 的 NextUp：看到一半的、沒看過的第一集都算）；
+    #: 看完了或電影是 `null`。
+    carry_on: WatchEpisodeOut | None
+    #: Jellyfin 的季；電影是空陣列。
+    seasons: list[WatchSeasonOut]
+    #: 深連結的主機。
+    jellyfin: JellyfinWebOut
+
+
+@router.get(
+    "/{media_id}/watch",
+    responses={
+        401: {"description": "`account_disabled`：帳號在 Jellyfin 被停用，session 已結束"},
+        503: {"description": "`jellyfin_unreachable`：問不到 Jellyfin"},
+    },
+)
+async def get_watch(
+    session: SessionDep,
+    factory: ClientFactoryDep,
+    cache: AccessCacheDep,
+    request: Request,
+    media_id: str,
+) -> WatchAreaOut | None:
+    """這部作品在 Jellyfin 裡、session 那個人看得到時的觀看區；**不在或看不到時是 `null`**——兩者
+    不分，分得出來就是在告訴人那部作品在哪裡。"""
+    try:
+        async with jellyfin_access(session, factory, cache, session_user(request)) as access:
+            area = await read_watch_area(session, access, media_id)
+    except (AccountDisabledError, JellyfinUnreachableError) as refusal:
+        raise access_refusal(refusal) from refusal
+    if area is None:
+        return None
+    return WatchAreaOut(
+        item_id=area.item_id,
+        kind=area.kind,
+        watch=WatchStateOut.model_validate(area.watch),
+        carry_on=None if area.carry_on is None else watch_episode_out(area.carry_on),
+        seasons=[WatchSeasonOut.model_validate(season) for season in area.seasons],
+        jellyfin=JellyfinWebOut.model_validate(await jellyfin_web(session)),
+    )

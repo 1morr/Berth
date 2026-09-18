@@ -34,6 +34,19 @@ export function formatEpisode(
   return `${seasonCode(item.season)}${episodeCode(item.episode_start)}${end}`
 }
 
+/**
+ * Jellyfin 那一端的集（繼續觀看與下一集的橫卡、Media 詳情的選季選集）：`formatEpisode` 的寫法，但 Jellyfin
+ * 認不出編號時只剩有的那一段（`S01`、`E05`），兩個都沒有是空字串。
+ */
+export function formatJellyfinEpisode(
+  item: Pick<PlanItem, 'season' | 'episode_start' | 'episode_end'>,
+): string {
+  if (item.season !== null && item.episode_start !== null) return formatEpisode(item)
+  if (item.season !== null) return seasonCode(item.season)
+  if (item.episode_start !== null) return episodeCode(item.episode_start)
+  return ''
+}
+
 function pad(value: number): string {
   return String(value).padStart(2, '0')
 }

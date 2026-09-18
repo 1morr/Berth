@@ -205,6 +205,9 @@ Alpha Show 與 Bravo Show 看過第一集、Frieren（TV）第一集看到 3 分
 | `jellyfin/shows-nextup.watching.movies.json` | 同上，加 `parentId=<Movies>`：空 |
 | `jellyfin/shows-seasons.json` | `GET /Shows/{Alpha}/Seasons?userId=U&fields=ItemCounts,PrimaryImageAspectRatio`。兩季，季名是伺服器 UI 語言的「第 1 季」 |
 | `jellyfin/shows-episodes.json` | `GET /Shows/{Alpha}/Episodes?userId=U&seasonId=<第一季>&fields=Overview,PrimaryImageAspectRatio`。三集；集名來自檔名（沒有集的 NFO） |
+| `jellyfin/items.tmdb-lookup.series.json` | **M1.5 票 08 加錄**（`--record --only`，另一輪一次性容器：使用者 id、`ServerId`、日期與 `ImageTags` 和這一組其他檔案不同；item id 相同）。`GET /Items?userId=U&recursive=true&includeItemTypes=Series&hasTmdbId=true&fields=ProviderIds&enableImages=false&enableUserData=false`（Media 詳情由 TMDB id 找作品，研究 §10，**不帶 `parentId`**）：Alpha、Bravo 與 TV 的 Frieren——Anime 裡同一個 TMDB id 的那一份不在（照這個人的 `UserViews` 限縮），沒有 TMDB id 的 Hotel Show 不在（`hasTmdbId` 真的有過濾） |
+| `jellyfin/items-id.{series,movie}.json` | 同上一輪。`GET /Items/{Alpha Show}?userId=U` 與 `/Items/{Foxtrot Movie}?userId=U` 的 200：不帶 `fields` 就有 `ProviderIds` 與 `UserData`（劇 `UnplayedItemCount` 4、`PlayedPercentage` 20；看到一半的片 `PlayedPercentage` 50）。看不到時的 404 是 `items-id.forbidden.json` |
+| `jellyfin/shows-nextup.series{,.resumable,.unwatched}.json` | 同上一輪。`GET /Shows/NextUp?userId=U&seriesId=<劇>`（jellyfin-web 劇集頁只送這兩個，研究 §7.3）：Alpha 看過 E01 → E02；TV 的 Frieren E01 看到 3 分鐘 → 回 E01 與 `PlayedPercentage` 30（`enableResumable` 伺服器預設 `true`）；Hotel Show 沒看過 → S01E01 |
 | `jellyfin/userplayeditems.post.json` | `POST /UserPlayedItems/{Bravo S01E02}?userId=U` 的 200：`Played=true, PlayCount=1, LastPlayedDate` |
 | `jellyfin/userplayeditems.delete.json` | 同一集接著 `DELETE`：`Played=false, PlayCount=0`，**沒有 `LastPlayedDate` 這個鍵** |
 | `jellyfin/images-primary.no-tag.headers.json` | `GET /Items/{Alpha}/Images/Primary`，**匿名**。只存狀態碼與標頭：`Cache-Control: public`、沒有 `ETag` |
