@@ -681,6 +681,9 @@ const zhHant = {
       missing_other: '缺 {{count}} 集',
       noneMissing: '沒有缺集',
       noneMissingHere: '這一季沒有缺集。',
+      // 缺集一鍵搜（M1.5 票 10）：查詢由後端依缺的季集產生，結果畫在上面的搜尋區塊裡。
+      searchMissing: '搜這部作品缺的集',
+      searchMissingSeason: '搜 {{season}} 缺的集',
     },
     episode: {
       count_one: '{{count}} 集',
@@ -800,6 +803,10 @@ const zhHant = {
     submitting: '搜尋中…',
     willAsk: 'Berth 會拿這幾個名字各問一次：',
     willAskTyped: 'Berth 只會問這一個：',
+    // 從季表按進來的那一種（M1.5 票 10）：問的是缺的那幾集，關鍵字一樣由後端給。
+    willAskMissing: '這部作品缺的那幾集，Berth 會這樣問：',
+    willAskMissingSeason: '{{season}} 缺的那幾集，Berth 會這樣問：',
+    missingOff: '改回作品名搜尋',
     // 搜尋結束之後，有回應的纜繩收成這一行（M1.5 票 08：全綠的纜繩曾佔掉 311px）。
     answeredAll_one: '{{count}} 個關鍵字都有回應',
     answeredAll_other: '{{count}} 個關鍵字都有回應',
@@ -1953,6 +1960,8 @@ const en: Translations<typeof zhHant> = {
       missing_other: '{{count}} missing',
       noneMissing: 'None missing',
       noneMissingHere: 'Nothing is missing from this season.',
+      searchMissing: 'Search for the missing episodes',
+      searchMissingSeason: 'Search for what {{season}} is missing',
     },
     episode: {
       count_one: '{{count}} episode',
@@ -2060,6 +2069,9 @@ const en: Translations<typeof zhHant> = {
     keywordPlaceholder: "Leave empty to use the title's own names",
     submit: 'Search',
     submitting: 'Searching…',
+    willAskMissing: 'Berth will ask for the episodes this title is missing:',
+    willAskMissingSeason: 'Berth will ask for the episodes {{season}} is missing:',
+    missingOff: 'Search by title instead',
     willAsk: 'Berth will ask for each of these names:',
     answeredAll_one: '{{count}} keyword answered',
     answeredAll_other: 'All {{count}} keywords answered',

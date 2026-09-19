@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 
 import type { Episode, Season } from '../api/media'
 import { CollapsibleRow } from '../components/CollapsibleRow'
+import { COMPACT_BUTTON } from '../components/controls'
 import { episodeCode, seasonCode } from '../components/episodes'
 import { SIGNAL_FILL } from '../components/signal'
 import { missingOf } from './missing'
@@ -14,15 +15,20 @@ import { missingOf } from './missing'
  * 攤平的話那一頁永遠捲不到底下的搜尋結果表（票 08）與檔案清單（票 13）。每一季是一段 `CollapsibleRow`
  * （M1.5 票 09、`.scratch/m1.5/long-lists-shape.md`）：收起的季不渲染集列，展開的季摘要列黏頂、底端也收得起來。
  *
- * 「只看缺集」的開關與整部作品的計數在 `SeasonsPanel`（shape §4 的工具列）；這一份只收它的結果。
+ * 「只看缺集」的開關、整部作品的計數與整部作品的一鍵搜在 `SeasonsPanel`（shape §4 的工具列）；
+ * 這一份只收它的結果，另外在每一季的展開區第一行放那一季的一鍵搜（票 10）。
  */
 export function SeasonList({
   seasons,
   missingOnly,
+  onSearchMissing,
 }: {
   seasons: readonly Season[]
   missingOnly: boolean
+  /** 這一季缺的集一鍵搜（M1.5 票 10）。 */
+  onSearchMissing: (season: number) => void
 }) {
+  const { t } = useTranslation()
   // 有 Absolute group 的作品才畫絕對編號那一欄——六成的動漫才有（brief §20.3），
   // 沒有的時候整欄不畫，而不是留一整排 `—`。
   const absolute = seasons.some((season) =>
@@ -40,12 +46,29 @@ export function SeasonList({
             summary={<SeasonSummary season={season} gaps={missingOnly ? gaps.length : null} />}
           >
             {() => (
-              <SeasonBody
-                season={season}
-                episodes={missingOnly ? gaps : season.episodes}
-                missingOnly={missingOnly}
-                absolute={absolute}
-              />
+              <>
+                {/* 這一季缺的集一鍵搜（票 10）：在展開區的**第一行**，不在 `<summary>` 裡
+                    （The Summary Is One Button Rule）。沒有缺集的季不畫這一行。 */}
+                {gaps.length > 0 && (
+                  <p className="border-b-2 border-rule px-4 py-2">
+                    <button
+                      type="button"
+                      onClick={() => onSearchMissing(season.season_number)}
+                      className={COMPACT_BUTTON}
+                    >
+                      {t('media.season.searchMissingSeason', {
+                        season: seasonCode(season.season_number),
+                      })}
+                    </button>
+                  </p>
+                )}
+                <SeasonBody
+                  season={season}
+                  episodes={missingOnly ? gaps : season.episodes}
+                  missingOnly={missingOnly}
+                  absolute={absolute}
+                />
+              </>
             )}
           </CollapsibleRow>
         )

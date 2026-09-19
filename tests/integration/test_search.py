@@ -14,7 +14,7 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from berth.adapters.http import AuthFailedError, ServiceUnavailableError
-from berth.adapters.indexer import IndexerResult
+from berth.adapters.indexer import IndexerResult, SearchCapability
 from berth.adapters.indexer.fake import FakeIndexerSearch
 from berth.domain import (
     IndexerProblem,
@@ -24,9 +24,11 @@ from berth.domain import (
 )
 from berth.models import IndexerSettings, Media
 from berth.models import media_id as build_media_id
-from berth.services.search import RESULT_LIMIT, search_torrents
+from berth.services.search import RESULT_LIMIT, plan_queries, search_torrents
 from berth.services.settings import write_settings
 from tests.integration.factories import FakeClientFactory
+from tests.integration.test_inventory import linked, route, title
+from tests.integration.test_inventory import season as season_snapshot
 
 SPY = build_media_id(MediaKind.TV, 120089)
 OPPENHEIMER = build_media_id(MediaKind.MOVIE, 872585)
@@ -518,3 +520,107 @@ async def test_tags_render_the_way_the_file_name_will(session: AsyncSession) -> 
 
     assert view.rows[0].tags.source is Source.WEB
     assert view.rows[0].tags.render().startswith("[WEB][1080p]")
+
+
+class TestMissingEpisodes:
+    """缺集一鍵搜（M1.5 票 10）：季表已經知道缺哪幾集，搜尋就不必從作品名開始。
+
+    記號怎麼組由 `tests/unit/test_search_missing.py` 守著（純函式）；這裡守的是**搜尋真的走
+    同一份規則**，而且缺哪幾集是現在的帳本與 Job 說的，不是快照說的。
+    """
+
+    @pytest.mark.asyncio
+    async def test_the_search_asks_for_the_episodes_the_library_is_missing(
+        self, session: AsyncSession
+    ) -> None:
+        tv = await route(session)
+        spy = await title(session, seasons=(season_snapshot(1, aired=3),))
+        await linked(session, spy, tv, episode=1)
+        await linked(session, spy, tv, episode=2)
+        await arrange_indexer(session)
+        indexer = FakeIndexerSearch()
+        factory = FakeClientFactory(indexer_search=indexer)
+
+        await search_torrents(session, factory, media_id=spy.id, missing=True)
+
+        assert [query.text for query in indexer.queries] == ["SPY x FAMILY S01E03"]
+
+    @pytest.mark.asyncio
+    async def test_one_season_only_asks_for_that_seasons_gaps(self, session: AsyncSession) -> None:
+        tv = await route(session)
+        spy = await title(
+            session, seasons=(season_snapshot(1, aired=2), season_snapshot(2, aired=2))
+        )
+        await linked(session, spy, tv, episode=1)
+        await arrange_indexer(session)
+        indexer = FakeIndexerSearch()
+        factory = FakeClientFactory(indexer_search=indexer)
+
+        await search_torrents(session, factory, media_id=spy.id, missing=True, season=2)
+
+        assert [query.text for query in indexer.queries] == ["SPY x FAMILY S02"]
+
+    @pytest.mark.asyncio
+    async def test_the_preview_and_the_search_ask_the_same_thing(
+        self, session: AsyncSession
+    ) -> None:
+        """`/search/queries` 的預覽就是待會兒真的送出去的那幾個——規則只有一份實作（票 10）。"""
+        tv = await route(session)
+        spy = await title(session, seasons=(season_snapshot(1, aired=3),))
+        await linked(session, spy, tv, episode=1)
+        await arrange_indexer(session)
+        indexer = FakeIndexerSearch()
+        factory = FakeClientFactory(indexer_search=indexer)
+
+        preview = await plan_queries(session, factory, media_id=spy.id, missing=True)
+        await search_torrents(session, factory, media_id=spy.id, missing=True)
+
+        assert list(preview) == [query.text for query in indexer.queries]
+        assert preview == ("SPY x FAMILY S01E02", "SPY x FAMILY S01E03")
+
+    @pytest.mark.asyncio
+    async def test_nothing_missing_asks_nothing(self, session: AsyncSession) -> None:
+        """缺的集是零就不問——**不退回作品名**，那會在使用者按「搜缺的集」時搜出整部作品。"""
+        tv = await route(session)
+        spy = await title(session, seasons=(season_snapshot(1, aired=1),))
+        await linked(session, spy, tv, episode=1)
+        await arrange_indexer(session)
+        indexer = FakeIndexerSearch()
+        factory = FakeClientFactory(indexer_search=indexer)
+
+        view = await search_torrents(session, factory, media_id=spy.id, missing=True)
+
+        assert indexer.queries == []
+        assert view.problem is IndexerProblem.NO_QUERY
+
+    @pytest.mark.asyncio
+    async def test_a_typed_keyword_still_wins(self, session: AsyncSession) -> None:
+        """自己打了字就只問那一個：他比季表更知道自己在找什麼（票 08 的規矩不變）。"""
+        tv = await route(session)
+        spy = await title(session, seasons=(season_snapshot(1, aired=2),))
+        await linked(session, spy, tv, episode=1)
+        await arrange_indexer(session)
+        indexer = FakeIndexerSearch()
+        factory = FakeClientFactory(indexer_search=indexer)
+
+        await search_torrents(
+            session, factory, media_id=spy.id, query="Spy Family BDRip", missing=True
+        )
+
+        assert [query.text for query in indexer.queries] == ["Spy Family BDRip"]
+
+    @pytest.mark.asyncio
+    async def test_an_id_search_does_not_swallow_the_narrowing(self, session: AsyncSession) -> None:
+        """端點認得 tmdbid 時整批換成一個 id 查詢（票 08）——但 id 找的是**整部作品**，
+        收窄到缺的那幾集就沒了，而預覽已經說了要問那幾集。缺集搜尋因此不走 id 那條路。"""
+        tv = await route(session)
+        spy = await title(session, seasons=(season_snapshot(1, aired=2),))
+        await linked(session, spy, tv, episode=1)
+        await arrange_indexer(session)
+        indexer = FakeIndexerSearch(capability=SearchCapability(tmdb_id=frozenset({MediaKind.TV})))
+        factory = FakeClientFactory(indexer_search=indexer)
+
+        await search_torrents(session, factory, media_id=spy.id, missing=True)
+
+        assert [query.text for query in indexer.queries] == ["SPY x FAMILY S01E02"]
+        assert [query.tmdb_id for query in indexer.queries] == [None]

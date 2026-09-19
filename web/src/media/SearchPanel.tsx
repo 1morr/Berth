@@ -1,10 +1,11 @@
-import { useId, useState } from 'react'
+import { useId, useImperativeHandle, useRef, useState, type Ref } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 
 import type { Media } from '../api/media'
-import { queriesQueryOptions, searchTorrents } from '../api/search'
-import { Notice, PrimaryButton } from '../components/controls'
+import { queriesQueryOptions, searchTorrents, type MissingScope } from '../api/search'
+import { COMPACT_BUTTON, Notice, PrimaryButton } from '../components/controls'
+import { seasonCode } from '../components/episodes'
 import type { SetupStep } from '../api/schemas'
 import { ExpandHint } from '../components/ExpandHint'
 import { StepLine } from '../components/StepLine'
@@ -12,6 +13,11 @@ import { IndexerNotice } from './IndexerNotice'
 import { RoutePicker } from './RoutePicker'
 import { SearchResults } from './SearchResults'
 import { sortRows, type SortKey } from './searchResult'
+
+export interface SearchHandle {
+  /** 從季表的缺集開始搜：`season` 是 `null` 時整部作品（M1.5 票 10）。 */
+  searchMissing: (season: number | null) => void
+}
 
 /**
  * 搜尋 torrent 與結果表（`.scratch/m1/search-results-shape.md`，票 08）。
@@ -31,23 +37,46 @@ import { sortRows, type SortKey } from './searchResult'
  *
  * 搜尋中逐條亮起的纜繩是署名互動；**結束之後有回應的收成一行**，失敗的照舊一條一條畫在上面（M1.5 票 08：
  * 全綠的纜繩曾把結果表推到下一屏，票 15 critique 量到 311px）。
+ *
+ * 季表上的缺集也從這裡搜（M1.5 票 10）：那兩顆按鈕呼叫 `SearchHandle.searchMissing`，結果照舊畫在這一區塊，
+ * 照舊送單。**查詢仍然由後端產生**——換成缺的那幾集之後，預覽與真的送出去的那幾個還是同一份。
  */
-export function SearchPanel({ media }: { media: Media }) {
+export function SearchPanel({ media, ref }: { media: Media; ref: Ref<SearchHandle> }) {
   const { t } = useTranslation()
   const headingId = useId()
   const keywordId = useId()
   const sortId = useId()
+  const heading = useRef<HTMLHeadingElement>(null)
 
   // `undefined` 是「這一輪還沒動過」，與刻意選「尚未指定」（`null`）不是同一件事。
   const [route, setRoute] = useState<number | null | undefined>(undefined)
   const chosen = route === undefined ? preselected(media) : route
   const [keyword, setKeyword] = useState('')
   const [sort, setSort] = useState<SortKey>('seeders')
+  // `null` = 照作品名搜（預設）。有值時這一區塊搜的是季表上缺的那幾集。
+  const [missing, setMissing] = useState<MissingScope | null>(null)
 
-  const planned = useQuery(queriesQueryOptions(media.id))
+  const planned = useQuery(queriesQueryOptions(media.id, missing))
+  // 關鍵字與範圍都當**參數**傳，不從 render 的 closure 讀：季表那兩顆按鈕在同一個 tick 裡清掉關鍵字
+  // 又送出搜尋，而「清掉」要等下一次 render 才生效——讀 closure 的話送出去的會是上一個關鍵字，
+  // 而 `q` 有值時後端只問那一個（票 08），畫面上的預覽就成了謊話。
   const search = useMutation({
-    mutationFn: () => searchTorrents({ media: media.id, q: keyword.trim() }),
+    mutationFn: ({ q, scope }: { q: string; scope: MissingScope | null }) =>
+      searchTorrents({ media: media.id, q, missing: scope }),
   })
+
+  // 季表那兩顆按鈕**直接**做這件事（React 的「觸發子元件的動作」逃生口），不繞一圈狀態再用
+  // effect 追：狀態鏡射會讓「按第二次」與「按下之後又改了關鍵字」變成兩個要對齊的真相。
+  useImperativeHandle(ref, () => ({
+    searchMissing(season) {
+      setKeyword('')
+      setMissing({ season })
+      search.mutate({ q: '', scope: { season } })
+      // 結果畫在這一區塊裡，所以焦點也要到這裡來——季表在下面好幾屏（shape §4）。
+      // 瀏覽器會把拿到焦點的元素捲進畫面，所以不必自己捲一次。
+      heading.current?.focus()
+    },
+  }))
 
   const results = search.data
   const rows = results ? sortRows(results.rows, sort) : []
@@ -55,7 +84,8 @@ export function SearchPanel({ media }: { media: Media }) {
   return (
     <section className="grid gap-4" aria-labelledby={headingId}>
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b-2 border-rule-strong pb-2">
-        <h2 id={headingId} className="label text-ink">
+        {/* `tabIndex={-1}`：程式送得進焦點（季表那兩顆按鈕按下之後），但不進 Tab 順序。 */}
+        <h2 id={headingId} ref={heading} tabIndex={-1} className="label text-ink">
           {t('search.title')}
         </h2>
         {results && results.total > 0 && (
@@ -71,7 +101,7 @@ export function SearchPanel({ media }: { media: Media }) {
         className="grid gap-3"
         onSubmit={(event) => {
           event.preventDefault()
-          search.mutate()
+          search.mutate({ q: keyword.trim(), scope: missing })
         }}
       >
         <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,16rem)_auto] lg:items-end">
@@ -96,7 +126,12 @@ export function SearchPanel({ media }: { media: Media }) {
           </span>
         </div>
 
-        <QueryPreview keyword={keyword} planned={planned.data?.queries} />
+        <QueryPreview
+          keyword={keyword}
+          planned={planned.data?.queries}
+          missing={missing}
+          onTitles={() => setMissing(null)}
+        />
       </form>
 
       <FolderLine media={media} />
@@ -173,15 +208,41 @@ export function SearchPanel({ media }: { media: Media }) {
  * 按下去之前先給看：Berth 會拿哪幾個名字去問，以及這要花多久。
  *
  * 自己打了關鍵字時就只問那一個——他比 TMDB 更知道自己在找什麼，所以清單換成那一句。
+ *
+ * 從季表按進來時（`missing`）問的是缺的那幾集，而那幾個關鍵字**也是後端給的**（票 10）：
+ * 這一行因此照實說範圍，旁邊留一條回作品名的路——按進來之後沒有出口的話，只剩重整這一招。
  */
-function QueryPreview({ keyword, planned }: { keyword: string; planned: string[] | undefined }) {
+function QueryPreview({
+  keyword,
+  planned,
+  missing,
+  onTitles,
+}: {
+  keyword: string
+  planned: string[] | undefined
+  missing: MissingScope | null
+  onTitles: () => void
+}) {
   const { t } = useTranslation()
   const typed = keyword.trim()
 
   return (
     <div className="grid gap-1">
-      <p className="max-w-prose text-xs text-ink-dim">
-        {typed ? t('search.willAskTyped') : t('search.willAsk')}
+      <p className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <span className="max-w-prose text-xs text-ink-dim">
+          {typed
+            ? t('search.willAskTyped')
+            : missing === null
+              ? t('search.willAsk')
+              : missing.season === null
+                ? t('search.willAskMissing')
+                : t('search.willAskMissingSeason', { season: seasonCode(missing.season) })}
+        </span>
+        {missing !== null && (
+          <button type="button" onClick={onTitles} className={COMPACT_BUTTON}>
+            {t('search.missingOff')}
+          </button>
+        )}
       </p>
       {/* 關鍵字是機器字串（送出去的就是它），走 `.value`。 */}
       <p className="value max-w-prose text-xs wrap-anywhere text-ink">

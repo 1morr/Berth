@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { Media, WatchArea, WatchEpisode } from '../api/media'
+import type { SearchResults } from '../api/search'
 import { HEALTHY, session, stubApi, type StubRoute } from '../test/fetch'
 import { renderApp } from '../test/render'
 
@@ -672,6 +673,175 @@ describe('Media 詳情頁', () => {
         'aria-pressed',
         'false',
       )
+    })
+  })
+
+  describe('缺集一鍵搜（M1.5 票 10）', () => {
+    const MISSING_QUERIES = 'GET /api/search/queries?media=tv%3A120089&missing=true'
+    const MISSING_SEARCH = 'GET /api/search?media=tv%3A120089&missing=true'
+
+    /** 第一季：已入庫、缺、未播出各一集；第二季：只有一集卡住（缺集是零）。 */
+    function gappy() {
+      const [first, second] = media().seasons
+      const episode = first.episodes[0]
+      return media({
+        seasons: [
+          {
+            ...first,
+            episodes: [
+              episode,
+              { ...episode, episode_number: 2, name: 'SECURE A WIFE', status: 'missing' },
+              { ...episode, episode_number: 3, name: 'PREPARE', status: 'unaired' },
+            ],
+          },
+          second,
+        ],
+      })
+    }
+
+    function found(title: string): SearchResults {
+      return {
+        rows: [
+          {
+            title,
+            indexer: 'ACG.RIP',
+            size: 524288000,
+            seeders: 42,
+            info_url: 'https://acg.rip/t/344604',
+            download_url: 'http://prowlarr:9696/2/download?apikey=k',
+            key: 'a'.repeat(40),
+            info_hash: 'a'.repeat(40),
+            tags: {
+              source: 'WEB',
+              resolution: '1080p',
+              subs: ['CHT'],
+              hardsub: false,
+              group: 'ANi',
+              version: '',
+              edition: '',
+            },
+            season: 1,
+            episode_start: 2,
+            episode_end: 2,
+            whole_season: false,
+            strategy: 'explicit',
+          },
+        ],
+        total: 1,
+        discarded: 0,
+        attempts: [{ step: 'SPY x FAMILY S01E02', status: 'ok', detail: '1', error: '' }],
+        problem: null,
+        detail: '',
+      }
+    }
+
+    function gaps(extra: Record<string, StubRoute | (() => StubRoute)> = {}) {
+      return render({
+        [SPY_PATH]: { body: gappy() },
+        [MISSING_QUERIES]: { body: { queries: ['SPY x FAMILY S01E02'] } },
+        [MISSING_SEARCH]: { body: found('[ANi] SPY x FAMILY - 02 [1080P][Baha][CHT]') },
+        ...extra,
+      })
+    }
+
+    function panel() {
+      return screen.getByRole('region', { name: '搜尋 torrent' })
+    }
+
+    function asked(stub: ReturnType<typeof stubApi>) {
+      return stub.mock.calls.map(([input]) => String(input))
+    }
+
+    it('季表上有缺集時工具列有入口；沒有缺集的作品不畫（票 10 驗收）', async () => {
+      gaps()
+      renderApp('/media/tv:120089')
+
+      expect(await screen.findByRole('button', { name: '搜這部作品缺的集' })).toBeVisible()
+    })
+
+    it('一集都不缺時那顆按鈕不在——沒有缺集就沒有這條路', async () => {
+      render()
+      renderApp('/media/tv:120089')
+
+      expect(await screen.findByRole('button', { name: '只看缺集' })).toBeVisible()
+      expect(screen.queryByRole('button', { name: '搜這部作品缺的集' })).not.toBeInTheDocument()
+    })
+
+    it('按下去用後端依缺集產生的查詢搜，預覽照實換成那幾個（票 10 驗收）', async () => {
+      const stub = gaps()
+      renderApp('/media/tv:120089')
+
+      await userEvent.click(await screen.findByRole('button', { name: '搜這部作品缺的集' }))
+
+      // 預覽的那幾個字由後端給（`/search/queries` 收同一組參數），不是前端自己拼的。
+      expect(await within(panel()).findByText('這部作品缺的那幾集，Berth 會這樣問：')).toBeVisible()
+      expect(asked(stub)).toContain('/api/search/queries?media=tv%3A120089&missing=true')
+      expect(asked(stub)).toContain('/api/search?media=tv%3A120089&missing=true')
+      // 結果照舊畫在這一區塊裡，不在季表那邊另開一張表（shape §4）。
+      expect(await within(panel()).findByText(/\[ANi\] SPY x FAMILY - 02/)).toBeVisible()
+    })
+
+    it('按下去焦點落在搜尋區塊的標題上（結果畫在那裡，shape §4）', async () => {
+      gaps()
+      renderApp('/media/tv:120089')
+
+      await userEvent.click(await screen.findByRole('button', { name: '搜這部作品缺的集' }))
+
+      expect(screen.getByRole('heading', { level: 2, name: '搜尋 torrent' })).toHaveFocus()
+    })
+
+    it('一季的入口住在展開區裡、只搜那一季（The Summary Is One Button Rule）', async () => {
+      const stub = gaps({
+        'GET /api/search/queries?media=tv%3A120089&missing=true&season=1': {
+          body: { queries: ['SPY x FAMILY S01E02'] },
+        },
+        'GET /api/search?media=tv%3A120089&missing=true&season=1': {
+          body: found('[ANi] SPY x FAMILY - 02 [1080P][Baha][CHT]'),
+        },
+      })
+      renderApp('/media/tv:120089')
+      await userEvent.click(await screen.findByText('Season 1'))
+
+      const entry = await screen.findByRole('button', { name: '搜 S01 缺的集' })
+      expect(entry.closest('summary')).toBeNull()
+      await userEvent.click(entry)
+
+      expect(asked(stub)).toContain('/api/search?media=tv%3A120089&missing=true&season=1')
+    })
+
+    it('沒有缺集的那一季展開之後也沒有這顆按鈕', async () => {
+      gaps()
+      renderApp('/media/tv:120089')
+
+      await userEvent.click(await screen.findByText('Season 2'))
+
+      expect(await screen.findByText('FOLLOW MAMA AND PAPA')).toBeVisible()
+      expect(screen.queryByRole('button', { name: '搜 S02 缺的集' })).not.toBeInTheDocument()
+    })
+
+    it('先打了關鍵字再按缺集，送出去的是缺集那幾個——不是那個關鍵字', async () => {
+      // `q` 有值時後端只問那一個（票 08），所以舊的關鍵字跟著送出去 = 預覽說一套、問的是另一套。
+      const stub = gaps()
+      renderApp('/media/tv:120089')
+      await userEvent.type(await screen.findByLabelText('關鍵字'), 'BDRip')
+
+      await userEvent.click(screen.getByRole('button', { name: '搜這部作品缺的集' }))
+
+      expect(asked(stub)).toContain('/api/search?media=tv%3A120089&missing=true')
+      expect(asked(stub).filter((url) => url.includes('q=BDRip'))).toEqual([])
+      expect(screen.getByLabelText('關鍵字')).toHaveValue('')
+    })
+
+    it('改回作品名搜尋：預覽換回那幾個名字，出口自己收起來', async () => {
+      gaps()
+      renderApp('/media/tv:120089')
+      await userEvent.click(await screen.findByRole('button', { name: '搜這部作品缺的集' }))
+      await within(panel()).findByText('這部作品缺的那幾集，Berth 會這樣問：')
+
+      await userEvent.click(screen.getByRole('button', { name: '改回作品名搜尋' }))
+
+      expect(await within(panel()).findByText('SPY x FAMILY')).toBeVisible()
+      expect(screen.queryByRole('button', { name: '改回作品名搜尋' })).not.toBeInTheDocument()
     })
   })
 

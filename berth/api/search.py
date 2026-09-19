@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict
 
 from berth.api.deps import ClientFactoryDep, SessionDep
@@ -97,14 +97,32 @@ class SearchQueriesOut(BaseModel):
     queries: list[str]
 
 
+#: 缺集一鍵搜的兩個參數（M1.5 票 10）。預覽與搜尋收同一組，兩支才問得出同一件事。
+MissingParam = Annotated[
+    bool,
+    Query(description="從季表的缺集開始搜：查詢由後端依缺的季集產生，不是作品名。"),
+]
+SeasonParam = Annotated[
+    int | None,
+    Query(ge=0, description="把缺集搜尋收到這一季。只在 `missing=true` 時有意義。"),
+]
+
+
 @router.get("/queries")
 async def get_queries(
     session: SessionDep,
     factory: ClientFactoryDep,
     media: Annotated[str, Query(description="`tv:<tmdb>` / `movie:<tmdb>`。")],
+    missing: MissingParam = False,
+    season: SeasonParam = None,
 ) -> SearchQueriesOut:
-    """不打索引站，只讀快照。"""
-    return SearchQueriesOut(queries=list(await plan_queries(session, factory, media_id=media)))
+    """不打索引站，只讀快照與這部作品的入庫狀態。"""
+    _refuse_bare_season(missing, season)
+    return SearchQueriesOut(
+        queries=list(
+            await plan_queries(session, factory, media_id=media, missing=missing, season=season)
+        )
+    )
 
 
 @router.get("")
@@ -115,8 +133,28 @@ async def get_search(
     q: Annotated[
         str, Query(description="自己打的關鍵字。有值時取代作品的各個標題，只問這一個。")
     ] = "",
+    missing: MissingParam = False,
+    season: SeasonParam = None,
 ) -> SearchOut:
-    return _out(await search_torrents(session, factory, media_id=media, query=q))
+    _refuse_bare_season(missing, season)
+    return _out(
+        await search_torrents(
+            session, factory, media_id=media, query=q, missing=missing, season=season
+        )
+    )
+
+
+def _refuse_bare_season(missing: bool, season: int | None) -> None:
+    """`season` 單獨帶著沒有意義——它是「缺集搜尋收到那一季」的參數。
+
+    默默當成整部作品搜的話，手改網址的人會拿到他沒有要的那一份，而畫面上沒有任何地方說得出
+    差別。照實拒絕，形狀與其餘的拒絕一樣（`{reason, detail}`）。
+    """
+    if season is not None and not missing:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            {"reason": "season_without_missing", "detail": "season needs missing=true"},
+        )
 
 
 def _out(view: SearchView) -> SearchOut:

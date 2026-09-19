@@ -31,6 +31,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from berth.adapters.http import AuthFailedError, ServiceError
 from berth.adapters.indexer import IndexerResult, IndexerSearch, SearchQuery
 from berth.domain import (
+    EpisodeStatus,
     IndexerKind,
     IndexerProblem,
     MappingStrategy,
@@ -46,7 +47,8 @@ from berth.models import IndexerSettings, SetupSettings
 from berth.parser import map_episode, mentions, parse_release, tags_of
 from berth.parser.structure import StructureHints
 from berth.services.clients import ServiceClientFactory
-from berth.services.media import read_snapshot
+from berth.services.inventory import EpisodeView, SeasonView
+from berth.services.media import read_media, read_snapshot
 from berth.services.settings import read_settings
 from berth.services.steps import StepView, message
 
@@ -121,13 +123,40 @@ async def plan_queries(
     factory: ServiceClientFactory,
     *,
     media_id: str,
+    missing: bool = False,
+    season: int | None = None,
 ) -> tuple[str, ...]:
     """按下搜尋之前，Berth 會拿哪幾個名字去問（PRODUCT 原則 2：動手前先給看）。
 
     存在的理由是**這條規則只能有一份實作**：`search_titles` 要看快照的標題集合與季數，前端重算
     一份的話「第二季以後多兩個季號變體」遲早會在兩邊長出不同的答案。不打索引站，只讀快照。
+
+    `missing` 是缺集一鍵搜（M1.5 票 10）：預覽與真的送出去的那幾個查詢走同一個 `_texts`，
+    所以畫面上寫的就是待會兒問出去的。
     """
-    return search_titles(await read_snapshot(session, factory, media_id))
+    snapshot = await read_snapshot(session, factory, media_id)
+    return await _texts(session, factory, media_id, snapshot, missing=missing, season=season)
+
+
+async def _texts(
+    session: AsyncSession,
+    factory: ServiceClientFactory,
+    media_id: str,
+    snapshot: MediaSnapshot | None,
+    *,
+    missing: bool,
+    season: int | None,
+) -> tuple[str, ...]:
+    """這一次要問的那幾個關鍵字。預覽與搜尋共用**一份**（票 10）。
+
+    缺集那一種要的是現在的帳本與 Job 說了什麼（`read_media` 的季表），不是快照上的季集——
+    快照只知道 TMDB 有幾集，缺哪幾集是這一台機器上的事。
+    """
+    if not missing:
+        return search_titles(snapshot)
+    # 快照由呼叫端讀過了（那一趟已經套過 24 小時的規則），所以這一趟只讀資料庫，不打 TMDB。
+    view = await read_media(session, factory, media_id)
+    return missing_queries(snapshot, view.seasons, season=season)
 
 
 async def search_torrents(
@@ -136,16 +165,27 @@ async def search_torrents(
     *,
     media_id: str,
     query: str = "",
+    missing: bool = False,
+    season: int | None = None,
     timeout: float = QUERY_TIMEOUT_SECONDS,
 ) -> SearchView:
-    """一部作品現在有哪些發佈可以下載。"""
+    """一部作品現在有哪些發佈可以下載。
+
+    `missing` 是從季表的缺集開始搜（M1.5 票 10），`season` 再把範圍收到那一季。
+    """
     settings = await read_settings(session, IndexerSettings)
     setup = await read_settings(session, SetupSettings)
     if not settings.base_url or setup.indexer.skipped:
         return _blank(IndexerProblem.NOT_CONFIGURED)
 
     snapshot = await read_snapshot(session, factory, media_id)
-    texts = (query.strip(),) if query.strip() else search_titles(snapshot)
+    typed = query.strip()
+    narrowed = missing and not typed
+    texts = (
+        (typed,)
+        if typed
+        else await _texts(session, factory, media_id, snapshot, missing=missing, season=season)
+    )
     if not texts:
         return _blank(IndexerProblem.NO_QUERY)
 
@@ -154,7 +194,9 @@ async def search_torrents(
         capability = await client.capabilities()
         if not capability.searchable:
             return _blank(IndexerProblem.NO_SEARCH)
-        queries = _queries(texts, snapshot, capability.tmdb_id)
+        # 缺集搜尋不走 id 那條路：id 找的是**整部作品**，收窄到缺的那幾集就沒了，
+        # 而預覽已經告訴使用者要問那幾集（票 10）。
+        queries = _queries(texts, snapshot, frozenset() if narrowed else capability.tmdb_id)
         outcomes = await asyncio.gather(
             *(_attempt(client, item, timeout) for item in queries), return_exceptions=False
         )
@@ -225,10 +267,74 @@ def search_titles(snapshot: MediaSnapshot | None) -> tuple[str, ...]:
     if snapshot is None:
         return ()
     variants = _season_variants(snapshot)
-    titles = _unique([snapshot.title_en, snapshot.title_original, snapshot.title, *snapshot.titles])
+    titles = _title_order(snapshot)
     # 季號變體**佔掉的是排最後的別名**，不是額外的配額。上限管的是「那些公開站被問幾次」，
     # 而找最新一季時「第 N 季」比第四個羅馬拼音別名更可能命中（plan §8.4）。
     return _unique([*titles[: MAX_QUERIES - len(variants)], *variants])
+
+
+def missing_queries(
+    snapshot: MediaSnapshot | None, seasons: Sequence[SeasonView], *, season: int | None = None
+) -> tuple[str, ...]:
+    """季表上缺的那幾集要拿哪幾個名字去問（M1.5 票 10、plan §6）。
+
+    季表已經知道缺哪幾集，所以搜尋不必再從作品名開始。查詢是**標題 × 記號**，記號由缺的形狀
+    決定（使用者 2026-09-19 拍板）：
+
+    - **整季缺**（那一季播出了的每一集都缺）→ 一個季記號 `S03`。
+    - **缺幾集 / 缺一集** → 一集一個記號：TMDB 給了絕對編號就用它（兩位數補零，照 Sonarr 的
+      動漫查詢），否則 `S03E05`。有絕對編號的作品，發佈就是照絕對編號編的——`S02E01` 在那些
+      站上一筆都搜不到；反過來也一樣，所以**一集只有一個記號**，兩種都送會讓記號數加倍。
+    - 記號放不下 `MAX_QUERIES` 時逐級退：先整批收成季記號，季記號也放不下就退回作品名
+      （`search_titles`，今天的行為）。
+
+    展開成查詢時**標題優先**：第一個標題先問完它的每一個記號，缺的每一集才至少都被問過一次。
+    `season` 有值時只看那一季（展開區那一顆按鈕）。沒有缺集就回空的——不退回作品名，
+    使用者按的是「搜缺的集」。
+    """
+    if snapshot is None:
+        return ()
+    if season is not None:
+        seasons = [row for row in seasons if row.season_number == season]
+    tokens = tuple(token for row in seasons for token in _season_tokens(row))
+    if len(tokens) > MAX_QUERIES:
+        # 逐集放不下就整批收成季記號：問前五集等於默默漏掉其餘那幾集，而使用者按的是
+        # 「搜缺的集」。收窄到季之後那一季的發佈都回得來，逐集交給結果表的預估去分。
+        tokens = tuple(f"S{row.season_number:02d}" for row in seasons if _gaps(row))
+    if len(tokens) > MAX_QUERIES:
+        # 連季記號都放不下（六季以上有缺）：沒有東西收窄得了，退回作品名。
+        return search_titles(snapshot)
+    return _unique(f"{title} {token}" for title in _title_order(snapshot) for token in tokens)[
+        :MAX_QUERIES
+    ]
+
+
+def _season_tokens(season: SeasonView) -> tuple[str, ...]:
+    """這一季缺的那幾集寫成記號。整季都缺時是一個季記號，否則一集一個。"""
+    gaps = _gaps(season)
+    if not gaps:
+        return ()
+    if len(gaps) == season.aired:
+        return (f"S{season.season_number:02d}",)
+    return tuple(_episode_token(season.season_number, episode) for episode in gaps)
+
+
+def _gaps(season: SeasonView) -> list[EpisodeView]:
+    """這一季缺的那幾集。**判定在後端一處**（`EpisodeStatus.MISSING`：已經播了、沒有任何
+    下載在處理它），季表上的「只看缺集」數的也是它。"""
+    return [episode for episode in season.episodes if episode.status is EpisodeStatus.MISSING]
+
+
+def _episode_token(season_number: int, episode: EpisodeView) -> str:
+    """一集一個記號：有絕對編號就用它（兩位數補零，照 Sonarr 的動漫查詢），否則 `S03E05`。"""
+    if episode.absolute_number is not None:
+        return f"{episode.absolute_number:02d}"
+    return f"S{season_number:02d}E{episode.episode_number:02d}"
+
+
+def _title_order(snapshot: MediaSnapshot) -> tuple[str, ...]:
+    """這部作品的名字，照優先序（理由見 `search_titles`）。作品名搜尋與缺集搜尋共用同一份順序。"""
+    return _unique([snapshot.title_en, snapshot.title_original, snapshot.title, *snapshot.titles])
 
 
 def _season_variants(snapshot: MediaSnapshot) -> tuple[str, ...]:

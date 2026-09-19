@@ -2,7 +2,7 @@ import { useId, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import type { Media } from '../api/media'
-import { NAV_BOX, NAV_BOX_ACTIVE } from '../components/controls'
+import { COMPACT_BUTTON, NAV_BOX, NAV_BOX_ACTIVE } from '../components/controls'
 import { missingOf } from './missing'
 import { SeasonList } from './SeasonList'
 
@@ -12,14 +12,21 @@ import { SeasonList } from './SeasonList'
  * 它回答的是「TMDB 上有幾季幾集、磁碟上有哪幾集」——與上面的觀看區各說一件事，不合併
  * （合併要以季集號對齊兩個來源，Jellyfin 認錯編號時整列對歪）。
  *
- * 標題列下方一條**工具列**（shape §4）：「只看缺集」在這裡，票 10 的「缺集一鍵搜」也會進來。
+ * 標題列下方一條**工具列**（shape §4）：「只看缺集」與「搜這部作品缺的集」（票 10）都在這裡。
  * 沒有東西可以篩的時候不畫、不留高度——電影與還沒有任何一季的作品都沒有。
  *
  * **篩選是這一部作品當下的視角，不寫進網址**：它不換資料、不分頁，也沒有人要分享「只看缺集的那一頁」
  * （媒體庫牆的篩選寫網址是因為它換的是後端的查詢並且會翻頁，票 06）。也因為它只屬於這一部作品，
  * 呼叫端要給 `key`——`/media/$mediaId` 是同一條路由，少了它篩選會跟著換過去的那一部走（票 09b）。
  */
-export function SeasonsPanel({ media }: { media: Media }) {
+export function SeasonsPanel({
+  media,
+  onSearchMissing,
+}: {
+  media: Media
+  /** 缺集一鍵搜：整部作品是 `null`，一季是那一季的季號（M1.5 票 10）。 */
+  onSearchMissing: (season: number | null) => void
+}) {
   const { t } = useTranslation()
   const headingId = useId()
   const [missingOnly, setMissingOnly] = useState(false)
@@ -47,6 +54,13 @@ export function SeasonsPanel({ media }: { media: Media }) {
           >
             {t('media.season.missingOnly')}
           </button>
+          {/* 缺集一鍵搜（票 10）：**沒有缺集時整顆不畫**——按了也沒有東西可搜。按下去不在這裡
+              另開結果表，它把查詢交給上面那一個搜尋區塊（shape §4）。 */}
+          {total > 0 && (
+            <button type="button" onClick={() => onSearchMissing(null)} className={COMPACT_BUTTON}>
+              {t('media.season.searchMissing')}
+            </button>
+          )}
           {/* 一直在 DOM 裡：`aria-live` 要先存在，之後換進去的字才會被念出來。 */}
           <p aria-live="polite" className="value text-xs text-ink">
             {missingOnly &&
@@ -61,7 +75,11 @@ export function SeasonsPanel({ media }: { media: Media }) {
         // 電影沒有季集區塊（票 04 驗收）。說一句話，不留一塊空白。
         <p className="max-w-prose text-sm text-ink-dim">{t('media.season.film')}</p>
       ) : listed ? (
-        <SeasonList seasons={media.seasons} missingOnly={missingOnly} />
+        <SeasonList
+          seasons={media.seasons}
+          missingOnly={missingOnly}
+          onSearchMissing={onSearchMissing}
+        />
       ) : (
         <p className="max-w-prose text-sm text-ink-dim">{t('media.season.none')}</p>
       )}

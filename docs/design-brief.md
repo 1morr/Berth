@@ -1127,6 +1127,18 @@ thepiratebay / yts，fixture 在 `tests/fixtures/http/prowlarr/search.*.json` �
 - **沒有直接開始播放的網址**（§12 維持）：三版的 `#/video` 都不吃 item id，「播放某一集」只能深連結到那一集的 `#/details?id=`。
 - **帳號狀態**：Jellyfin 停用帳號之後，**API key 代讀這位使用者的 `UserViews`、`/Items`、Resume、NextUp、Seasons 照常回資料，`UserPlayedItems` 照常寫入**；只有他自己的 token 回 401、重新登入回 403。`GET /Users/{id}` 讀得到 `Policy.IsDisabled` 與 `EnabledFolders`（與 `UserViews` 的 `Id` 同一種格式）。所以 Berth 要自己讀 `Policy`（§19 已定）。【實測 12.1.0】
 
+### 20.10 Sonarr 怎麼替一集組查詢（2026-09-19 查證）
+
+缺集一鍵搜（M1.5 票 10）要決定「缺一集時拿什麼字去問」，採用的是 Sonarr 的慣例：
+
+- Sonarr 的 Newznab / Torznab 請求把季集放在**結構化參數**上（`&season=<n>&ep=<n>`），標題只放 `q=`。
+- **只有動漫的絕對編號是接在關鍵字後面的**：`&q={NewsnabifyTitle(queryTitle)}+{searchCriteria.AbsoluteEpisodeNumber:00}`
+  ——絕對編號補零到兩位，與標題之間一個空白。
+  【來源：`Sonarr/src/NzbDrone.Core/Indexers/Newznab/NewznabRequestGenerator.cs`，develop 分支，2026-09-19 讀】
+- Berth 的兩個實作都只送 `q=`（Prowlarr 的 REST 與 Torznab 的 `t=search`，plan §8.4「分類碼不送」同一個理由：
+  各站對結構化參數的支援與映射不一致，而 Berth 打的是公開站），所以季集一律進關鍵字：整季 `S03`、
+  單集 `S03E05`、有絕對編號的 `26`。
+
 ### 20.9 Jellyfin 12（2026-09-15 查證）
 
 全文、原始碼行號與實測紀錄見 [`docs/research/jellyfin-12.md`](research/jellyfin-12.md)。實測對象是一次性的 linuxserver `12.0ubu2604-ls48`（12.0.0）與 `12.1ubu2604-ls49`（12.1.0），跑完即刪；10.x 的對照引 §20.6 與 `m0-experiments.md`。

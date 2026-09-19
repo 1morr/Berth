@@ -639,7 +639,7 @@ export interface paths {
         };
         /**
          * Get Queries
-         * @description 不打索引站，只讀快照。
+         * @description 不打索引站，只讀快照與這部作品的入庫狀態。
          */
         get: operations["get_queries_api_search_queries_get"];
         put?: never;
@@ -3698,6 +3698,10 @@ export interface operations {
             query: {
                 /** @description `tv:<tmdb>` / `movie:<tmdb>`。 */
                 media: string;
+                /** @description 從季表的缺集開始搜：查詢由後端依缺的季集產生，不是作品名。 */
+                missing?: boolean;
+                /** @description 把缺集搜尋收到這一季。只在 `missing=true` 時有意義。 */
+                season?: number | null;
             };
             header?: never;
             path?: never;
@@ -3732,6 +3736,10 @@ export interface operations {
                 media: string;
                 /** @description 自己打的關鍵字。有值時取代作品的各個標題，只問這一個。 */
                 q?: string;
+                /** @description 從季表的缺集開始搜：查詢由後端依缺的季集產生，不是作品名。 */
+                missing?: boolean;
+                /** @description 把缺集搜尋收到這一季。只在 `missing=true` 時有意義。 */
+                season?: number | null;
             };
             header?: never;
             path?: never;

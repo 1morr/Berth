@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useRef, type ReactNode } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
@@ -15,7 +15,7 @@ import { TmdbNotice } from '../components/TmdbNotice'
 import { tmdbText } from '../i18n/tmdbText'
 import { FilesPanel } from '../media/FilesPanel'
 import { Poster } from '../media/Poster'
-import { SearchPanel } from '../media/SearchPanel'
+import { SearchPanel, type SearchHandle } from '../media/SearchPanel'
 import { SeasonsPanel } from '../media/SeasonsPanel'
 import { CarryOn, WatchDown, WatchSection } from '../media/WatchArea'
 import tmdbLogo from '../assets/tmdb.svg'
@@ -42,6 +42,8 @@ export function MediaDetailPage({ id }: { id: string }) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const media = useQuery(mediaQueryOptions(id))
+  // 季表那兩顆「搜缺的集」按下去時，做事的是搜尋區塊（結果照舊畫在那裡，shape §4、票 10）。
+  const search = useRef<SearchHandle>(null)
   const watch = useQuery(watchQueryOptions(id))
 
   const reload = useMutation({
@@ -96,7 +98,7 @@ export function MediaDetailPage({ id }: { id: string }) {
             <WatchDown detail={refusal.detail} onRetry={() => void watch.refetch()} />
           )}
 
-          <SearchPanel media={found} />
+          <SearchPanel media={found} ref={search} />
 
           {/* Berth 的季表：TMDB 的季集與入庫狀態。票 10 的缺集一鍵搜往它的工具列與展開區裡填
               （單季的入口在那一季展開區的第一行，shape §4）。
@@ -104,7 +106,11 @@ export function MediaDetailPage({ id }: { id: string }) {
               `key`：`/media/$mediaId` 是同一條路由，所以在作品之間換頁時這棵樹不重掛，而工具列的
               「只看缺集」是**這一部作品當下的視角**——少了它，上一部篩過的狀態會跟著下一部走
               （目標已在快取裡、沒有讀取中的空檔時特別明顯，票 09b）。 */}
-          <SeasonsPanel key={found.id} media={found} />
+          <SeasonsPanel
+            key={found.id}
+            media={found}
+            onSearchMissing={(season) => search.current?.searchMissing(season)}
+          />
 
           <FilesPanel media={found} />
         </>

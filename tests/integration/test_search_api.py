@@ -276,6 +276,57 @@ class TestQueryPreview:
         assert client.get(f"/api/search/queries?media={SPY_ID}").status_code == 401
 
 
+class TestMissingEpisodes:
+    """缺集一鍵搜（M1.5 票 10）：季表上的缺集直接變成查詢，規則在後端一份。
+
+    這份替身的 SPY×FAMILY 三季都還沒有任何一集入庫，所以每一季都是「整季缺」。
+    """
+
+    def test_the_preview_lists_the_gaps_without_touching_the_indexer(
+        self, client: TestClient, indexer: FakeIndexerSearch
+    ) -> None:
+        sign_in(client)
+
+        body = client.get(f"/api/search/queries?media={SPY_ID}&missing=true").json()
+
+        assert body["queries"][:3] == [
+            "SPY x FAMILY S00",
+            "SPY x FAMILY S01",
+            "SPY x FAMILY S02",
+        ]
+        assert indexer.queries == []
+
+    def test_the_search_asks_exactly_what_the_preview_said(
+        self, client: TestClient, indexer: FakeIndexerSearch
+    ) -> None:
+        sign_in(client)
+        preview = client.get(f"/api/search/queries?media={SPY_ID}&missing=true").json()["queries"]
+
+        body = client.get(f"/api/search?media={SPY_ID}&missing=true").json()
+
+        assert [query.text for query in indexer.queries] == preview
+        assert [attempt["step"] for attempt in body["attempts"]] == preview
+
+    def test_one_season_narrows_it(self, client: TestClient, indexer: FakeIndexerSearch) -> None:
+        """展開區那一顆按鈕：只問那一季（shape §4）。"""
+        sign_in(client)
+
+        body = client.get(f"/api/search/queries?media={SPY_ID}&missing=true&season=2").json()
+
+        assert body["queries"][0] == "SPY x FAMILY S02"
+        assert all("S00" not in query and "S01" not in query for query in body["queries"])
+
+    def test_a_season_without_the_missing_flag_is_refused(self, client: TestClient) -> None:
+        """`season` 是「缺集搜尋收到那一季」的參數，單獨帶著沒有意義——照實拒絕，
+        不要默默當成整部作品搜（那會在手改網址時搜出使用者沒有要的東西）。"""
+        sign_in(client)
+
+        refusal = client.get(f"/api/search/queries?media={SPY_ID}&season=2")
+
+        assert refusal.status_code == 422
+        assert refusal.json()["detail"]["reason"] == "season_without_missing"
+
+
 class TestProblems:
     def test_an_indexer_that_was_skipped_is_not_an_error(
         self, client: TestClient, factory: FakeClientFactory

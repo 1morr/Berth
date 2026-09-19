@@ -130,6 +130,11 @@ _Avoid_: hit, item, row
 索引站回傳的一筆候選 torrent，附解析出的 Tags 與預估季集。也就是 Indexer Result 過了解析器之後的樣子。
 _Avoid_: release（僅指發佈名解析時可用）
 
+**Missing Episode Search**（UI 顯示「搜這部作品缺的集」/「搜 S01 缺的集」）:
+從季表上缺的那幾集開始的搜尋：查詢由後端依缺的季集產生（整季缺問季包、缺幾集逐集問、有絕對編號的用絕對編號），
+不是作品名。範圍是整部作品或一季。
+_Avoid_: gap search, 補集, 一鍵補齊
+
 ### 入庫
 
 **Import Source**:

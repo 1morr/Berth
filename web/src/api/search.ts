@@ -19,10 +19,35 @@ export type IndexerProblem = NonNullable<Schemas['IndexerProblem']>
  * 索引站搜尋。**這一支很慢**——實測 35–85 秒，因為 Prowlarr 收到請求之後要現場去連它認得的
  * 每一個追蹤站。所以它是使用者按下去才發生的事（`useMutation`），不是進頁面就跑的查詢。
  */
-export async function searchTorrents({ media, q = '' }: { media: string; q?: string }) {
+export async function searchTorrents({
+  media,
+  q = '',
+  missing = null,
+}: {
+  media: string
+  q?: string
+  missing?: MissingScope | null
+}) {
   const params = new URLSearchParams({ media })
   if (q) params.set('q', q)
-  return apiGet<SearchResults>(`/search?${params}`)
+  return apiGet<SearchResults>(`/search?${missingParams(params, missing)}`)
+}
+
+/**
+ * 從季表的缺集開始搜（M1.5 票 10）：`season` 是 `null` 時整部作品，有值時只有那一季。
+ *
+ * 查詢長什麼樣子**由後端決定**——這裡送的是範圍，不是關鍵字。
+ */
+export interface MissingScope {
+  season: number | null
+}
+
+function missingParams(params: URLSearchParams, missing: MissingScope | null) {
+  if (missing) {
+    params.set('missing', 'true')
+    if (missing.season !== null) params.set('season', String(missing.season))
+  }
+  return params
 }
 
 /**
@@ -31,11 +56,11 @@ export async function searchTorrents({ media, q = '' }: { media: string; q?: str
  * 規則在後端一份（`search_titles`）：第二季以後多出來的 `第N季` / `Season N` 變體要看得見，
  * 而前端重算一份遲早會與真的搜尋長出不同的答案。
  */
-export function queriesQueryOptions(media: string) {
-  const params = new URLSearchParams({ media })
+export function queriesQueryOptions(media: string, missing: MissingScope | null = null) {
+  const params = missingParams(new URLSearchParams({ media }), missing)
 
   return queryOptions({
-    queryKey: ['search', 'queries', media],
+    queryKey: ['search', 'queries', media, missing ? (missing.season ?? 'all') : 'titles'],
     queryFn: () => apiGet<Schemas['SearchQueriesOut']>(`/search/queries?${params}`),
     staleTime: 5 * 60 * 1000,
   })
