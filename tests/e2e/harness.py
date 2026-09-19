@@ -24,8 +24,8 @@ JELLYFIN = "http://127.0.0.1:8096"
 #: compose 網路裡 `torrents` 那台的位址：抓 `.torrent` 的是 Berth 的容器，不是這個程序。
 TORRENTS = "http://torrents:8000"
 TORRENTS_CONTAINER = "berth-e2e-torrents"
-#: `jellyfin` / `qbittorrent` / `berth` 的 `container_name` 兩份 compose 相同：e2e 那一份只換專案名，
-#: 另外加了 `torrents` 這台與自己的 volume。
+#: `jellyfin` / `qbittorrent` / `berth` 的 `container_name` 兩份 compose 相同：e2e 那一份只換
+#: 專案名，另外加了 `torrents` 這台與自己的 volume。
 JELLYFIN_CONTAINER = "jellyfin"
 
 ADMIN = "skipper"

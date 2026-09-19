@@ -1,6 +1,6 @@
 # 11 — M1.5 驗收與里程碑收尾
 
-**Status:** in-progress
+**Status:** done
 
 **Blocked by:** 06、09、10
 
@@ -27,7 +27,7 @@ Jellyfin API 建一個只開放一個媒體庫的一般使用者，用它登入 
 
 ## 驗收
 
-- [ ] e2e 以受限的一般使用者驗證上面五件事，GitHub Actions 的 `e2e.yml` 綠燈（附執行紀錄）——**本機那一輪已綠（10 passed），Actions 那一次要等 push；`origin/main` 還停在 M1 收尾**
+- [x] e2e 以受限的一般使用者驗證上面五件事，GitHub Actions 的 `e2e.yml` 綠燈（附執行紀錄）
 - [x] brief §17 M1.5 的驗收在真環境以 `user` 角色實跑一次並附證據
 - [x] `/impeccable critique`、`audit`、`polish` 對 M1.5 的頁面跑完，發現逐條處理或明確記錄為延後
 - [x] `DESIGN.md` 依 M1.5 實際做出來的東西更新
@@ -66,9 +66,13 @@ $ uv run pre-commit run --all-files
 
 **e2e**（`tests/e2e/`，一輪 compose 兩個模組）：
 
-| 在哪裡 | 結果 |
-| --- | --- |
-| 本機 Docker Desktop（乾淨重建，`down --volumes` 後 `up --build`） | **10 passed in 879.68s（14:39）** |
+| 在哪裡 | 版本 | 結果 |
+| --- | --- | --- |
+| 本機 Docker Desktop（乾淨重建，`down --volumes` 後 `up --build`） | 工作目錄 | **10 passed in 879.68s（14:39）** |
+| GitHub Actions [run 35443772012](https://github.com/1morr/Berth/actions/runs/35443772012)（`workflow_dispatch`） | `73c155e` | **10 passed in 840.01s（14:00）**，job 15m23s |
+
+**這是 M1.5 的程式碼在 CI 上跑的第一次**：`origin/main` 在這一票之前停在 M1 收尾（`bbbf9e5`），
+所以 09-17 與 09-18 兩次 nightly 的綠燈跑的是 M1 的碼（見 Comments 第一條）。
 
 **brief §17 M1.5 的真環境驗收**（同一套 compose，真的 Jellyfin 12.1，以 `deckhand` 這個只開放 TV 媒體庫的
 一般使用者登入 Berth，全程沒有打開 Jellyfin Web）：

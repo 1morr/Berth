@@ -2,7 +2,7 @@
 
 自託管的媒體取得與入庫協調器：把索引站或 RSS 命中的 torrent 送到 qBittorrent，下載完成後解析、比對 TMDB，以硬鏈接入庫到 Jellyfin，並維護可修復的帳本。
 
-**M1（手動全流程）已完成**：探索 → 搜 torrent → 送單 → 下載 → 解析比對 → 硬鏈接入庫 → Jellyfin 找到它，一部美劇一季、一部動漫一季、一部電影都不經人工走完（nightly 的 e2e 對真的服務守著這一條）。還沒有的：審核佇列、刪除、對帳與重新入庫（M2），RSS 自動追番（M3），像 Jellyfin 那樣瀏覽整個媒體庫（M1.5）。設計與決定見 `docs/design-brief.md`，架構與里程碑見 `docs/plan.md`，名詞表見 `CONTEXT.md`。
+**M1（手動全流程）已完成**：探索 → 搜 torrent → 送單 → 下載 → 解析比對 → 硬鏈接入庫 → Jellyfin 找到它，一部美劇一季、一部動漫一季、一部電影都不經人工走完（nightly 的 e2e 對真的服務守著這一條）。**M1.5（媒體庫瀏覽）也已完成**：媒體庫是一個 Jellyfin 媒體庫一頁、瀏覽整個媒體庫（不只 Berth 經手的），繼續觀看與下一集、已看 / 未看與切換、依類型與年份排序篩選、Jellyfin 的圖由 Berth 代理，Media 詳情最上面是觀看區；權限一律由 Berth 自己對 Jellyfin 的允許清單擋，播放仍深連結到 Jellyfin。還沒有的：審核佇列、刪除、對帳與重新入庫（M2），RSS 自動追番（M3）。設計與決定見 `docs/design-brief.md`，架構與里程碑見 `docs/plan.md`，名詞表見 `CONTEXT.md`。
 
 ## 部署
 

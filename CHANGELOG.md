@@ -17,6 +17,12 @@ Windows Docker Desktop（NTFS bind mount）與 Linux（ext4）上各跑一次 `d
 硬鏈接兩端同一個 inode，Jellyfin 以正確的名稱、季集與海報列出它們，Berth 反查到的 item 就是 Jellyfin 的那一個。
 這條路徑現在是 nightly 的 e2e（`tests/e2e/`），對真的 qBittorrent 與 Jellyfin 跑。
 
+**M1.5（媒體庫瀏覽）在 2026-09-19 通過驗收**（brief §17、`.scratch/m1.5/issues/11-m15-acceptance.md`）：以一個
+只開放一個媒體庫的**一般使用者**登入 Berth，不打開 Jellyfin Web 就從媒體庫找到要看的那一集、看到自己的進度並
+標記已看，按播放落在 Jellyfin 的那一集；他在 Jellyfin 沒有權限的媒體庫在 Berth 也看不到；既有媒體庫裡不是
+Berth 入庫的作品照樣瀏覽得到。這六件事現在是 nightly e2e 的第二個模組（`tests/e2e/test_2_m15_library.py`），
+對真的 Jellyfin 12.1 跑。
+
 ### Added
 
 - Repo 骨架：uv 後端專案與 `berth` CLI（`--version`）、pnpm + Vite + React + TypeScript 前端。
