@@ -35,6 +35,7 @@ class FakeTmdbClient:
         search: Mapping[str, Sequence[TmdbEntry]] | None = None,
         translations: Mapping[int, str] | None = None,
         overview_translations: Mapping[int, str] | None = None,
+        poster_translations: Mapping[int, str] | None = None,
         season_names: Mapping[str, Mapping[int, str]] | None = None,
         display_absent: Iterable[int] = (),
         details: Sequence[TmdbDetail] = (),
@@ -54,6 +55,8 @@ class FakeTmdbClient:
         self._translations = dict(translations or {})
         #: `id → 簡介`，英文那一輪以外的每一輪都回它。沒列的作品照英文那一輪（與標題同一個規矩）。
         self._overview_translations = dict(overview_translations or {})
+        #: `id → 海報路徑`。TMDB 的海報也分語言（同一部作品各語言各一張），M1.5 票 11 起兩輪都要送。
+        self._poster_translations = dict(poster_translations or {})
         #: `語言 → {季號: 季名}`。真的 TMDB 每一輪回的季名都是那個語言的
         #: （`Hashira Training Arc` / `柱訓練篇` / `柱训练篇`），篇章名比對靠這件事。
         self._season_names = {
@@ -103,6 +106,7 @@ class FakeTmdbClient:
             found,
             title=self._translations.get(tmdb_id, found.title),
             overview=self._overview_translations.get(tmdb_id, found.overview),
+            poster_path=self._poster_translations.get(tmdb_id, found.poster_path),
             seasons=self._localised_seasons(found.seasons, language),
         )
 
@@ -138,7 +142,11 @@ class FakeTmdbClient:
         if language == BASE_LANGUAGE:
             return tuple(entries)
         return tuple(
-            replace(entry, title=self._translations.get(entry.tmdb_id, entry.title))
+            replace(
+                entry,
+                title=self._translations.get(entry.tmdb_id, entry.title),
+                poster_path=self._poster_translations.get(entry.tmdb_id, entry.poster_path),
+            )
             for entry in entries
             if entry.tmdb_id not in self._display_absent
         )

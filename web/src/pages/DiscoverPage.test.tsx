@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -25,6 +25,7 @@ function item(overrides: Partial<DiscoverItem> = {}): DiscoverItem {
     title_en: 'Lanterns',
     year: 2026,
     poster_url: 'https://image.tmdb.org/t/p/w342/lanterns.jpg',
+    poster_url_en: 'https://image.tmdb.org/t/p/w342/lanterns-en.jpg',
     tracked: false,
     ...overrides,
   }
@@ -37,6 +38,7 @@ const MOANA = item({
   title: 'Moana',
   title_en: 'Moana',
   poster_url: 'https://image.tmdb.org/t/p/w342/moana.jpg',
+  poster_url_en: 'https://image.tmdb.org/t/p/w342/moana-en.jpg',
 })
 
 /** 走真正的 route tree：這一頁掛在 `/`，而憑證錯誤裡有一條連到精靈的站內連結。 */
@@ -110,6 +112,30 @@ describe('探索頁', () => {
     expect(card).not.toHaveTextContent('綠燈軍團')
     expect(within(card).getAllByText('Lanterns')).toHaveLength(1)
     expect(api.mock.calls.length).toBe(fetched)
+  })
+
+  it('切到 EN 時海報也換成 en-US 那一張（TMDB 的海報分語言，票 11）', async () => {
+    render()
+    renderApp('/')
+    const card = await screen.findByRole('link', { name: /綠燈軍團/ })
+    const poster = () => within(card).getByRole('presentation', { hidden: true })
+    expect(poster()).toHaveAttribute('src', 'https://image.tmdb.org/t/p/w342/lanterns.jpg')
+
+    await userEvent.click(screen.getByRole('button', { name: 'EN' }))
+
+    expect(poster()).toHaveAttribute('src', 'https://image.tmdb.org/t/p/w342/lanterns-en.jpg')
+  })
+
+  it('海報載不下來時換成「無海報」，不留瀏覽器的破圖示（票 11）', async () => {
+    render()
+    renderApp('/')
+    const card = await screen.findByRole('link', { name: /綠燈軍團/ })
+
+    // 這一格是 TMDB 的海報：那一端的圖不在時瀏覽器就會發 error。
+    fireEvent.error(within(card).getByRole('presentation', { hidden: true }))
+
+    expect(await within(card).findByText('無海報')).toBeVisible()
+    expect(card.querySelector('img')).toBeNull()
   })
 
   it('顯示用標題與英文標題相同時不重複印一次', async () => {

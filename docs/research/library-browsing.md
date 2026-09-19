@@ -317,6 +317,13 @@ GET /Shows/{seriesId}/Episodes?userId=U&seasonId={seasonId}&fields=Overview,Prim
     fixture。—— [PlaystateController.cs v12.0](https://github.com/jellyfin/jellyfin/blob/v12.0/Jellyfin.Api/Controllers/PlaystateController.cs)
 - **「標為未看」不可逆**：`PlayCount` 歸零、`LastPlayedDate` 消失，UI 的「復原」沒辦法恢復原本的觀看次數與時間；
   對整部劇或整季做時，清掉的是底下每一集的紀錄。
+- **遞迴寫入的結果要用清單端點讀**【實測 12.1.0，M1.5 票 11 的 e2e】：一集的 `UserData` 在
+  `GET /Items/{集}?userId=U` 與在 `GET /Shows/{劇}/Episodes?userId=U`、`GET /Items?ids=<集>&userId=U`
+  是**兩把不同的 `Key`**——前者是 provider 導出的（大熊餐廳 S03E01 是 `403294003001`），後者是 item id
+  （`0ee15e70-738c-…`）。對**整部劇**標記已看之後，清單端點的每一集都是 `Played=true, PlayCount=1`、
+  `filters=IsPlayed` 數得到 10 筆，但 `GET /Items/{集}?userId=` 仍回 `Played=false`；對**單集**標記時
+  兩邊都會更新。Berth 讀集一律走 `/Shows/{id}/Episodes`（`services/watch_area.py`），與寫入那一側一致；
+  `/Items/{id}?userId=` 只用來確認「這個人看不看得到」（票 08），不拿它讀觀看狀態。
 
 ## 6. 圖片
 

@@ -119,6 +119,10 @@ class TestTrending:
                 "title_en": "Lanterns",
                 "year": 2026,
                 "poster_url": ("https://image.tmdb.org/t/p/w342/gpC7h43xPMEV3goYMQShfJbTtLq.jpg"),
+                # TMDB 的海報分語言（票 11）。這一部兩輪同一張：替身沒有給它別的。
+                "poster_url_en": (
+                    "https://image.tmdb.org/t/p/w342/gpC7h43xPMEV3goYMQShfJbTtLq.jpg"
+                ),
                 # Berth 還沒為它做過任何事（票 09 起是 `EXISTS(jobs)`）。
                 "tracked": False,
             },
@@ -130,6 +134,9 @@ class TestTrending:
                 "title_en": "Moana",
                 "year": 2026,
                 "poster_url": ("https://image.tmdb.org/t/p/w342/gaet1xQ2nxrG0V1Ep9T20ZMNEIC.jpg"),
+                "poster_url_en": (
+                    "https://image.tmdb.org/t/p/w342/gaet1xQ2nxrG0V1Ep9T20ZMNEIC.jpg"
+                ),
                 "tracked": False,
             },
         ]

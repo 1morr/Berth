@@ -417,7 +417,23 @@ Windows Docker Desktop（NTFS bind mount）與 Linux（ext4）上各跑一次 `d
   所以預覽寫的就是待會兒送出去的。整季缺問季包（`S03`），缺幾集、缺一集逐集問，有絕對編號的用絕對編號
   （`26`，照 Sonarr 的動漫查詢）；記號放不下五個查詢的配額時先收成季記號，六季以上有缺才退回作品名。
 
+- **e2e 多一個模組：權限與瀏覽**（M1.5 票 11，plan §10）。`tests/e2e/` 疊在同一輪 compose 上（精靈、送單、入庫的
+  fixture 搬到 `conftest.py`，session scope），`test_2_m15_library.py` 以 Jellyfin API 建一個**只開放一個媒體庫**的
+  一般使用者，用它登入 Berth，對真的 Jellyfin 12.1 驗六件事：看不到沒權限的媒體庫、直接請求那個媒體庫也被拒；
+  不經 Berth 放進 TV 媒體庫的一部作品照樣在牆上（`tracking` 是 `null`）；觀看區每一集的 `item_id` 就是 Jellyfin
+  在帳本那條路徑上的 item；標為已看 / 未看之後**那個帳號自己的**觀看紀錄真的變了（一集自己一次、整部劇遞迴一次）；
+  帳號在 Jellyfin 被停用之後 Berth 的 session 結束。最後一條停掉 Jellyfin 容器，驗「問不到 Jellyfin」那一句
+  （票 07 留下的：那條路徑之前只有 vitest 與後端單元測試）。
+
 ### Changed
+
+- **顯示用海報也跟著 UI 語言走**（M1.5 票 11，brief §7.5、plan §8.3）。TMDB 的海報分語言，票 02 只換了標題與簡介，
+  所以 EN 介面上 Moana 仍掛著「海洋奇緣」的中文海報。API 兩輪都送（`poster_url` / `poster_url_en`），前端照
+  `i18n.language` 與標題挑同一輪：探索牆、Media 詳情、媒體庫牆上還沒進 Jellyfin 的卡片；在 Jellyfin 裡的卡片
+  兩輪同一張（Jellyfin 的圖不分語言，名稱也是兩格相同）。快照與 `tmdb_cache` 各多一欄，票 11 之前寫下的讀出來
+  是空字串，下一次刷新補上。
+
+- **zh-Hant 介面的 `Unmatched` 翻成「對不到」**（M1.5 票 11，使用者拍板）。它是 `CONTEXT.md` 的名詞，UI 原本直接印英文，在「待審 1」旁邊站著「Unmatched 1」；程式碼識別符、文檔與英文 UI 不動。
 
 - **只支援 Jellyfin 12 以上**（票 14b、brief §19、§20.9）。12.0 起同一集的多個版本由 Jellyfin
   自己合併成一個條目，10.x 需要的 MergeVersions 插件在它上面是空跑，還會跨媒體庫誤併——所以
@@ -673,6 +689,11 @@ Windows Docker Desktop（NTFS bind mount）與 Linux（ext4）上各跑一次 `d
   第一次 `indexer/schema` 要讀進 627 份定義再組出 5.6 MB 回應，Windows 的 9p bind mount 上實測
   9.42 秒（第二次 0.34 秒），5 秒的探測逾時讓精靈第 5 步在乾淨部署上直接失敗。這一支端點改用自己的
   逾時。
+
+- **牆上不認得的 `?filter=` 值不再被當成「對不到」**（M1.5 票 11 的 critique 實測）。判定原本是「不是 `review` 就是 unmatched」，所以手改網址帶一個不存在的值時，畫面顯示的是一份他沒有要的清單，而三顆篩選鍵都沒有被標成當前。兩個值各判一次，其餘回到「全部」。
+- **壞掉的海報不再露出瀏覽器的破圖示**（M1.5 票 11 的 critique 與 audit）。票 04 做的 `ArtSlot`（載入失敗換成「無海報」）只被媒體庫牆用到，探索牆的卡片與 Media 詳情的身份帶各留了一份沒有 `onError` 的舊 `<img>`；兩處都改走同一份。圖片代理對沒有的圖回 404，所以這條路徑是走得到的。
+- **卡片裡的就地確認不再把整排牆撐高**（M1.5 票 11 的 critique）。牆是 CSS grid 而格子預設 `stretch`，所以展開確認時同排的每一格都被拉成一樣高——390px 上量到同排多出約 300px 空白，而位移正好發生在使用者要決定一個清掉就回不來的動作時。`WALL_GRID` 加 `items-start`，只有展開的那一格自己長高。
+- **標為已看 / 未看成功之後說得出來**（M1.5 票 11 的 audit）。失敗本來就有 `role="alert"`，成功只有「元素自己變了」；焦點這時已經回到那顆鍵上而它的名字剛換過，螢幕閱讀器不會重念，所以寫入成功對輔助技術是無聲的（WCAG 2.1.3）。旁邊補一個 `aria-live` 的 `sr-only` 段落。
 
 ### Security
 

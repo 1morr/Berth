@@ -52,6 +52,7 @@ function jellyfinCard(overrides: Partial<InventoryCard> = {}): InventoryCard {
     title_en: 'Alpha Show',
     year: 2022,
     poster_url: '',
+    poster_url_en: '',
     presence: 'found',
     jellyfin_item_id: '2a9857e656bbd18b7c3c3a3b4ee5eef1',
     tracking: null,
@@ -88,6 +89,7 @@ const SPY = jellyfinCard({
   title: 'SPY×FAMILY 間諜家家酒',
   title_en: 'SPY x FAMILY',
   poster_url: 'https://image.tmdb.org/t/p/w342/spy.jpg',
+  poster_url_en: 'https://image.tmdb.org/t/p/w342/spy-en.jpg',
   presence: 'none',
   jellyfin_item_id: '',
   tracking: tracking({
@@ -412,6 +414,8 @@ describe('媒體庫頁', () => {
       expect(await within(alpha).findByText('已看')).toBeVisible()
       expect(within(alpha).queryByText('剩 4 集沒看')).not.toBeInTheDocument()
       expect(within(alpha).getByRole('button', { name: '標為未看' })).toBeVisible()
+      // 成功也要唸得出來：焦點回到那一顆鍵時它的名字剛換過，螢幕閱讀器不會重念（票 11 的 audit）。
+      expect(within(alpha).getByText('已標為已看。')).toHaveAttribute('aria-live', 'polite')
       expect(sent(api, 'POST', PLAYED(ALPHA.jellyfin_item_id))).toHaveLength(1)
       expect(sent(api, 'GET', `/api/inventory/${TV}`)).toHaveLength(walls)
     })
@@ -616,6 +620,11 @@ describe('媒體庫頁', () => {
 
       const spy = await findTile('SPY x FAMILY')
       expect(spy).not.toHaveTextContent('間諜家家酒')
+      // 海報也跟著換（TMDB 的海報分語言，票 11）。
+      expect(within(spy).getByRole('presentation', { hidden: true })).toHaveAttribute(
+        'src',
+        'https://image.tmdb.org/t/p/w342/spy-en.jpg',
+      )
     })
 
     it('Jellyfin 裡還一部都沒有時，不說「這個媒體庫還沒有任何作品」', async () => {
@@ -743,13 +752,28 @@ describe('媒體庫頁', () => {
       expect(walls()).toBe(fetched)
     })
 
-    it('「Unmatched」也看得到已經在 Jellyfin 裡的作品', async () => {
+    it('「對不到」也看得到已經在 Jellyfin 裡的作品', async () => {
       const flagged = { ...BEAR, tracking: tracking({ has_unmatched: true }) }
       render({ [`GET /api/inventory/${TV}`]: { body: wall({ tracked: [flagged, FRIEREN] }) } })
       renderApp(`/library/${TV}?filter=unmatched`)
 
+      // zh-Hant 的文案是「對不到」，不是名詞表裡的 `Unmatched`（票 11，使用者拍板）。
+      expect(await screen.findByRole('link', { name: '對不到 1' })).toBeVisible()
+      expect(screen.queryByRole('link', { name: /Unmatched/ })).not.toBeInTheDocument()
       expect(await screen.findByRole('heading', { name: 'The Bear' })).toBeVisible()
       expect(screen.queryByRole('heading', { name: /葬送的芙莉蓮/ })).not.toBeInTheDocument()
+    })
+
+    it('網址上不認得的篩選值當成沒有篩選，不落進 Unmatched', async () => {
+      // 三顆篩選鍵都不會被標成當前，畫面卻只剩 Berth 經手的那幾部——使用者看到的是一份他沒有要的清單。
+      const flagged = { ...BEAR, tracking: tracking({ has_unmatched: true }) }
+      render({ [`GET /api/inventory/${TV}`]: { body: wall({ tracked: [flagged, FRIEREN] }) } })
+      renderApp(`/library/${TV}?filter=nonsense`)
+
+      // Jellyfin 那一頁照畫（分頁與帶子都在），不是被篩成 Berth 的那一份清單。
+      expect(await findTile('Alpha Show')).toBeVisible()
+      expect(screen.getByText('1–3 / 3')).toBeVisible()
+      expect(screen.queryByText('顯示 1 部作品')).not.toBeInTheDocument()
     })
 
     it('篩完什麼都沒有時，給一條回到全部的路', async () => {

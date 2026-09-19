@@ -132,12 +132,31 @@ class TestTrending:
 
         assert result.items[0].poster_url == "https://image.tmdb.org/t/p/w342/poster.jpg"
 
+    async def test_the_poster_comes_from_both_rounds(self, session: AsyncSession) -> None:
+        """TMDB 的海報也分語言（票 11）：兩輪都送，畫面照 UI 語言挑——中文標題配英文海報是
+        兩個來源拼出來的東西，反過來也是。"""
+        client = tmdb(poster_translations={95350: "/zh.jpg"})
+        result = await read_trending(session, await credentialled(session, client))
+
+        lanterns = result.items[0]
+        assert lanterns.poster_url == "https://image.tmdb.org/t/p/w342/zh.jpg"
+        assert lanterns.poster_url_en == "https://image.tmdb.org/t/p/w342/poster.jpg"
+
+    async def test_a_work_with_no_translated_poster_shows_the_english_one(
+        self, session: AsyncSession
+    ) -> None:
+        client = tmdb(poster_translations={95350: "/zh.jpg"})
+        result = await read_trending(session, await credentialled(session, client))
+
+        silo = next(item for item in result.items if item.id == "tv:125988")
+        assert silo.poster_url == silo.poster_url_en != ""
+
     async def test_a_work_without_a_poster_gets_an_empty_url(self, session: AsyncSession) -> None:
         """卡片自己畫沒有海報的樣子；組出半條網址只會變成一個破圖。"""
         client = tmdb(trending={MediaKind.TV: [entry(1, MediaKind.TV, "No Art", poster="")]})
         result = await read_trending(session, await credentialled(session, client))
 
-        assert result.items[0].poster_url == ""
+        assert (result.items[0].poster_url, result.items[0].poster_url_en) == ("", "")
 
 
 class TestCache:

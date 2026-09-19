@@ -14,6 +14,13 @@ _Avoid_: title, show, series, item
 Berth 曾為其下載、訂閱或入庫過的 Media。
 _Avoid_: subscribed media, library item
 
+**Display Round**（顯示用那一輪；沒有 UI 文案）:
+TMDB 對同一部 Media 回的兩輪資料裡，畫面照 UI 語言挑的那一輪：`zh-Hant` 取 `zh-TW`、`en` 取 `en-US`
+（brief §7.5）。成對的欄位一律是 `x` / `x_en`——`title`、`overview`、`poster_url`（M1.5 票 11 起海報也成對，
+TMDB 的海報分語言），下載列是 `media_title`。**後端不知道 UI 語言**：兩輪都送，前端 `i18n/tmdbText.ts` 挑一個，
+換語言當場換、不重抓。`title_en` 同時是檔名與比對用的那一個，不跟 UI 語言走（brief §7.5、§5）。
+_Avoid_: locale, translation（那是 TMDB `translations` 端點）, localized title
+
 **Library Route**（UI 顯示「媒體庫」）:
 一個入庫目的地：Jellyfin 媒體庫、一個寫入目標路徑、一個 qBittorrent category。
 _Avoid_: root folder, destination；程式碼中不要用 `library` 指 Route（`library` 一律指下一條的 Jellyfin Library）
@@ -219,8 +226,9 @@ _Avoid_: dataset, test data
 可辨識但不屬於正片的內容（NCOP / NCED、PV、CM、Menu、預告、花絮、特典映像），入庫到 Jellyfin 的 `extras/`。
 _Avoid_: bonus, specials（Specials 指 TMDB season 0）
 
-**Unmatched**:
-解析後對不到 TMDB 任何一集或一部的影片或字幕檔；留在 complete，不入庫。
+**Unmatched**（zh-Hant UI 顯示「對不到」）:
+解析後對不到 TMDB 任何一集或一部的影片或字幕檔；留在 complete，不入庫。程式碼、文檔與英文 UI 一律用
+`Unmatched`；zh-Hant 的文案從 M1.5 票 11 起翻成「對不到」（原本直接印英文，與旁邊的「待審」並排讀不順）。
 _Avoid_: unknown, orphan（Orphan 是對帳用語）
 
 **Review Queue**:

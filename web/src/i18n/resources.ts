@@ -513,8 +513,8 @@ const zhHant = {
       all: '全部',
       review_one: '待審 {{count}}',
       review_other: '待審 {{count}}',
-      unmatched_one: 'Unmatched {{count}}',
-      unmatched_other: 'Unmatched {{count}}',
+      unmatched_one: '對不到 {{count}}',
+      unmatched_other: '對不到 {{count}}',
     },
     // 排序與類型、年份篩選（票 06）。選項照 jellyfin-web 的排序選單，兩種媒體庫各開哪幾個由後端說。
     sort: {
@@ -597,6 +597,10 @@ const zhHant = {
       markPlayed: '標為已看',
       markUnplayed: '標為未看',
       pending: '寫入中…',
+      // 寫入成功之後唸出來（票 11 的 audit，WCAG 2.1.3）。焦點這時已經回到那一顆鍵上，
+      // 而它的名字是「剛剛換過的」——螢幕閱讀器不會為已經聚焦的元素重念新名字，所以要自己說。
+      donePlayed: '已標為已看。',
+      doneUnplayed: '已標為未看。',
       // 標為未看復原不了（研究 §5）：說清楚清掉的是什麼、範圍多大。
       warningMovie: '會清掉你看這部片的觀看次數與最後觀看時間，清掉就找不回來。',
       warningSeries:
@@ -634,7 +638,7 @@ const zhHant = {
       page: '這一頁沒有作品。',
       toFirstPage: '回第 1 頁',
       review: '這個媒體庫沒有待審的作品。',
-      unmatched: '這個媒體庫沒有 Unmatched 的作品。',
+      unmatched: '這個媒體庫沒有對不到檔案的作品。',
       showAll: '顯示全部',
       // 沒有權限與不存在是同一句話：分得出來就是在告訴人那個媒體庫存在。
       unknown: '找不到這個媒體庫，或你沒有權限看它。',
@@ -1881,6 +1885,8 @@ const en: Translations<typeof zhHant> = {
       markPlayed: 'Mark watched',
       markUnplayed: 'Mark unwatched',
       pending: 'Saving…',
+      donePlayed: 'Marked as watched.',
+      doneUnplayed: 'Marked as unwatched.',
       warningMovie:
         'This clears how many times you watched this film and when you last did. It cannot be brought back.',
       warningSeries:

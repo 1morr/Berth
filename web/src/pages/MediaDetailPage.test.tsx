@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -26,6 +26,7 @@ function media(overrides: Partial<Media> = {}): Media {
     overview: '互相隱藏了真實身份的新家庭。',
     overview_en: 'A spy, an assassin and a telepath keep house.',
     poster_url: 'https://image.tmdb.org/t/p/w342/spy.jpg',
+    poster_url_en: 'https://image.tmdb.org/t/p/w342/spy-en.jpg',
     runtime: null,
     folder_name: 'SPY x FAMILY (2022) [tmdbid-120089]',
     folder_frozen: false,
@@ -135,6 +136,7 @@ describe('Media 詳情頁', () => {
               title_en: 'SPY x FAMILY',
               year: 2022,
               poster_url: '',
+              poster_url_en: '',
             },
           ],
           problem: null,
@@ -192,6 +194,35 @@ describe('Media 詳情頁', () => {
     // 原文標題與兩者都不同，照樣在：字幕組會把它寫進檔名。
     expect(screen.getByText('SPY×FAMILY')).toBeVisible()
     expect(api.mock.calls.length).toBe(fetched)
+  })
+
+  it('海報跟著 UI 語言換（TMDB 的海報分語言，票 11）', async () => {
+    // 海報沒有 alt（標題就在旁邊），所以照它的網址找那一張。
+    const poster = () =>
+      document.querySelector<HTMLImageElement>('img[src^="https://image.tmdb.org/"]')
+    render()
+    renderApp('/media/tv:120089')
+    await screen.findByRole('heading', { level: 1, name: 'SPY×FAMILY 間諜家家酒' })
+    expect(poster()).toHaveAttribute('src', 'https://image.tmdb.org/t/p/w342/spy.jpg')
+
+    await userEvent.click(screen.getByRole('button', { name: 'EN' }))
+
+    await screen.findByRole('heading', { level: 1, name: 'SPY x FAMILY' })
+    expect(poster()).toHaveAttribute('src', 'https://image.tmdb.org/t/p/w342/spy-en.jpg')
+  })
+
+  it('海報載不下來時換成「無海報」，不留瀏覽器的破圖示（票 11 的 audit）', async () => {
+    const poster = () =>
+      document.querySelector<HTMLImageElement>('img[src^="https://image.tmdb.org/"]')
+    render()
+    renderApp('/media/tv:120089')
+    await screen.findByRole('heading', { level: 1, name: 'SPY×FAMILY 間諜家家酒' })
+
+    // 這一格是 TMDB 的海報：那一端的圖不在時瀏覽器就會發 error。
+    fireEvent.error(poster()!)
+
+    expect(await screen.findByText('無海報')).toBeVisible()
+    expect(poster()).toBeNull()
   })
 
   it('EN 介面上 en-US 那一輪沒有簡介時就不印簡介，不改印中文的', async () => {

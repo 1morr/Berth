@@ -262,11 +262,19 @@ CI（`.github/workflows/ci.yml`）在 push 到 `main` 與所有 PR 上跑同一�
 
 ### e2e
 
-M1 的整條路徑對**真的** qBittorrent 與 Jellyfin 跑一遍（plan §10、`tests/e2e/`）：精靈八步只走
-Berth 的 API，送一部美劇一季、一部動漫一季、一部電影，等它們不經人工、依序走過完成 → 規劃 → 入庫，
-再驗硬鏈接兩端同一個 inode、帳本逐檔記下的 item id 就是 Jellyfin 在那條路徑上的 item。Prowlarr 也會
-起來讓精靈偵測，但第 5 步跳過索引站、送單直接帶 `.torrent` 網址——搜尋不在 e2e 裡。套件內的媒體庫一開始是空的，反查要等 Berth 請 Jellyfin 掃描之後那一輪，所以一次
-**約 15 分鐘**，平常的 `uv run pytest` 不收它（`-m 'not e2e'`）。
+M1 的整條路徑與 M1.5 的權限、瀏覽對**真的** qBittorrent 與 Jellyfin 跑一遍（plan §10、`tests/e2e/`）。
+**一次 compose、一次精靈、一次入庫，兩個模組共享**（fixture 在 `tests/e2e/conftest.py`；檔名的數字就是執行順序）：
+
+- `test_1_m1_pipeline.py`：精靈八步只走 Berth 的 API，送一部美劇一季、一部動漫一季、一部電影，等它們不經人工、
+  依序走過完成 → 規劃 → 入庫，再驗硬鏈接兩端同一個 inode、帳本逐檔記下的 item id 就是 Jellyfin 在那條路徑上的 item。
+- `test_2_m15_library.py`：以 Jellyfin API 建一個只開放一個媒體庫的一般使用者，用它登入 Berth——看不到沒權限的
+  媒體庫、直接請求也被拒；不經 Berth 放進那個媒體庫的作品照樣在牆上；某一集的 `item_id` 就是 Jellyfin 在帳本
+  那條路徑上的 item；標為已看 / 未看之後那個帳號自己的觀看紀錄真的變了；帳號被停用之後 session 結束。
+  最後停掉 Jellyfin 容器，驗「問不到 Jellyfin」那一句（跑完會把它起回來）。
+
+Prowlarr 也會起來讓精靈偵測，但第 5 步跳過索引站、送單直接帶 `.torrent` 網址——搜尋不在 e2e 裡。套件內的媒體庫
+一開始是空的，反查要等 Berth 請 Jellyfin 掃描之後那一輪，所以一次**約 15 分鐘**，平常的 `uv run pytest` 不收它
+（`-m 'not e2e'`）。
 
 ```bash
 # CONFIG_ROOT 是宿主上的空目錄；/data 是 named volume（tests/e2e/e2e.env），

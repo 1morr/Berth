@@ -1,4 +1,4 @@
-import { useId } from 'react'
+import { useId, useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { useRouter } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
@@ -22,6 +22,10 @@ export type WatchTarget = 'series' | 'movie' | 'episode'
  * - 標為已看一整部劇：每一集看到一半的位置都歸零，而劇集的觀看紀錄看不出底下有沒有這種集，所以一律確認。
  *
  * 寫入之後把回應交給 `onWritten`，由呼叫端就地改它那一份快取，不重抓整面牆或整季。
+ *
+ * **成功也要出聲**（票 11 的 audit，WCAG 2.1.3 Status Messages、PRODUCT 的無障礙那一節）：焦點這時
+ * 已經回到這一顆鍵上，而它的名字剛剛換過——螢幕閱讀器不會為一個已經聚焦的元素重念新名字，所以
+ * 成功那一句由旁邊的 `aria-live` 說。失敗那一半本來就有（`Notice signal="blocked"` 是 `role="alert"`）。
  */
 export function WatchToggle({
   itemId,
@@ -41,9 +45,15 @@ export function WatchToggle({
   const router = useRouter()
   const { asked, open, close, trigger, panel, onKeyDown } = useInPlaceConfirm()
   const warningId = useId()
+  const [announced, setAnnounced] = useState('')
   const mark = useMutation({
     mutationFn: (played: boolean) => markPlayed(itemId, played),
-    onSuccess: onWritten,
+    onSuccess: (written) => {
+      setAnnounced(
+        written.played ? t('inventory.watch.donePlayed') : t('inventory.watch.doneUnplayed'),
+      )
+      onWritten(written)
+    },
     onError: (error) => {
       // 帳號在 Jellyfin 被停用：後端已經結束 session，重跑守衛把人送回登入頁（與牆那一支同一條路）。
       if (error instanceof ApiError && error.status === 401) void router.invalidate()
@@ -107,6 +117,9 @@ export function WatchToggle({
               : t('inventory.watch.markUnplayed')}
         </button>
       )}
+      <p aria-live="polite" className="sr-only">
+        {announced}
+      </p>
       {/* 失敗就在那一格說原因與下一步，Jellyfin 問不到時貼服務原文（PRODUCT 原則 4）。再按一次就是重試。 */}
       {mark.isError && refusal?.reason !== 'account_disabled' && (
         <div className="grid basis-full gap-1.5">

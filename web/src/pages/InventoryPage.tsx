@@ -32,7 +32,7 @@ import {
 import { Dot } from '../components/Dot'
 import { SessionEnded } from '../components/SessionEnded'
 import { TilePlaceholder } from '../discover/MediaTile'
-import { WALL_GRID } from '../discover/wallGrid'
+import { WALL_GRID_CONFIRMABLE } from '../discover/wallGrid'
 import { InventoryTile } from '../inventory/InventoryTile'
 import { LibraryWatching } from '../watching/WatchingRows'
 import { jellyfinLibrariesUrl } from '../inventory/jellyfinLink'
@@ -173,14 +173,17 @@ function Wall({
 
   const inventory = wall.data
   const notInJellyfin = inventory.tracked.filter((card) => card.presence !== 'found')
-  const flagged = filter
-    ? {
-        filter,
-        cards: inventory.tracked.filter((card) =>
-          filter === 'review' ? card.tracking?.needs_review : card.tracking?.has_unmatched,
-        ),
-      }
-    : null
+  // 兩個值各判一次，不是「不是 review 就是 unmatched」：網址上帶一個不認得的值時，
+  // 後者會讓畫面顯示一份他沒有要的清單，而三顆篩選鍵都不會被標成當前（票 11 的 critique 實測）。
+  const flagged =
+    filter === 'review' || filter === 'unmatched'
+      ? {
+          filter,
+          cards: inventory.tracked.filter((card) =>
+            filter === 'review' ? card.tracking?.needs_review : card.tracking?.has_unmatched,
+          ),
+        }
+      : null
 
   const narrowing = narrowed(query)
 
@@ -465,7 +468,7 @@ function NarrowPanel({
 
 function Tiles({ cards, inventory }: { cards: InventoryCard[]; inventory: Inventory }) {
   return (
-    <div className={WALL_GRID}>
+    <div className={WALL_GRID_CONFIRMABLE}>
       {cards.map((card) => (
         <InventoryTile
           key={`${card.media_id}|${card.jellyfin_item_id}`}
@@ -819,7 +822,7 @@ function Trouble({ error, retry }: { error: Error | null; retry: () => void }) {
 /** 讀取中：不動的空位格。這個世界沒有骨架屏動畫。 */
 function Placeholders() {
   return (
-    <div className={WALL_GRID}>
+    <div className={WALL_GRID_CONFIRMABLE}>
       {Array.from({ length: PLACEHOLDERS }, (_, index) => (
         <TilePlaceholder key={index} />
       ))}

@@ -1229,6 +1229,8 @@ export interface components {
             year: number | null;
             /** Poster Url */
             poster_url: string;
+            /** Poster Url En */
+            poster_url_en: string;
             /** Tracked */
             tracked: boolean;
         };
@@ -1413,6 +1415,8 @@ export interface components {
             year: number | null;
             /** Poster Url */
             poster_url: string;
+            /** Poster Url En */
+            poster_url_en: string;
             presence: components["schemas"]["JellyfinPresence"];
             /** Jellyfin Item Id */
             jellyfin_item_id: string;
@@ -1878,6 +1882,8 @@ export interface components {
             overview_en: string;
             /** Poster Url */
             poster_url: string;
+            /** Poster Url En */
+            poster_url_en: string;
             /** Runtime */
             runtime: number | null;
             /** Folder Name */

@@ -58,12 +58,14 @@ export function InventoryTile({
   const { t, i18n } = useTranslation()
   // 在 Jellyfin 裡的作品兩輪是同一個名稱，所以這一步不必分兩種卡片。
   const title = tmdbText(i18n.language, { 'zh-Hant': card.title, en: card.title_en })
+  // 還沒進 Jellyfin 的那幾格是 TMDB 的海報，兩輪不同（票 11）；在 Jellyfin 裡的兩輪同一張。
+  const poster = tmdbText(i18n.language, { 'zh-Hant': card.poster_url, en: card.poster_url_en })
   const titleId = useId()
   const tracking = card.tracking
 
   const body = (
     <>
-      <ArtSlot url={card.poster_url} shape="poster" />
+      <ArtSlot url={poster} shape="poster" />
       <div className="grid content-start gap-1 px-3 py-2.5">
         {/* 狀態貼在標識帶上，不壓在海報上（The Paint Needs A Painted Ground Rule）。 */}
         <p className="flex flex-wrap items-center gap-x-2 gap-y-1">

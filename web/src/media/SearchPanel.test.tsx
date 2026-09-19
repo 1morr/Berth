@@ -29,6 +29,7 @@ function media(overrides: Partial<Media> = {}): Media {
     overview: '',
     overview_en: '',
     poster_url: '',
+    poster_url_en: '',
     runtime: null,
     folder_name: 'SPY x FAMILY (2022) [tmdbid-120089]',
     folder_frozen: false,

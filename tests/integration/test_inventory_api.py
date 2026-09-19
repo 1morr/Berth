@@ -352,6 +352,10 @@ class TestInventory:
             "title_en": "SPY×FAMILY",
             "year": 2022,
             "poster_url": f"/api/jellyfin/items/{SPY}/images/Primary?size=poster&tag={SPY_POSTER}",
+            # Jellyfin 的圖不分語言，兩輪同一張（TMDB 的才分，票 11）。
+            "poster_url_en": (
+                f"/api/jellyfin/items/{SPY}/images/Primary?size=poster&tag={SPY_POSTER}"
+            ),
             "presence": "found",
             "jellyfin_item_id": SPY,
             "tracking": tracking,
@@ -366,6 +370,7 @@ class TestInventory:
                 "title_en": "Hotel Show",
                 "year": None,
                 "poster_url": "",
+                "poster_url_en": "",
                 "presence": "found",
                 "jellyfin_item_id": "hotel",
                 "tracking": None,

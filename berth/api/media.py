@@ -180,6 +180,8 @@ class MediaOut(BaseModel):
     #: `en` 介面的簡介（`en-US` 那一輪）。缺就是空字串，不落回中文。
     overview_en: str
     poster_url: str
+    #: `en` 介面的海報。TMDB 的海報分語言，與標題同一個規矩兩輪都送（票 11）。
+    poster_url_en: str
     #: 電影片長（分鐘）；劇集是 `None`，它的片長在每一集上。
     runtime: int | None
     #: 作品資料夾名。凍結之前是「將會是」的預覽（plan §5、票 09）。

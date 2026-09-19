@@ -53,7 +53,7 @@
 - 里程碑開頭拆票：`/to-tickets docs/plan.md`，每張票寫明「讀：plan §x、brief §y」與驗收條件；每張票做一個 session：`/implement`。
 - `parser`、`naming`、`domain`、`services` 的新功能與修 bug：`mattpocock-skills:tdd`（紅 → 綠 → 重構，benchmark fixture 就是紅燈）。
 - 設計 adapter 介面、解析器階段、services 命令的邊界：`mattpocock-skills:codebase-design`。
-- 用實驗回答設計問題（T0.3 的 Jellyfin 命名實測這類）：`mattpocock-skills:prototype`，結論寫回 brief，原型不留。
+- 用實驗回答設計問題（T0.3 的 Jellyfin 命名實測這類）：`mattpocock-skills:prototype`，結論寫回 brief。**實驗腳本留在 `scripts/experiments/`**（plan §10：一次性但保留腳本，下一次換版本要重量），UI 原型不留。
 - 查證外部事實：`mattpocock-skills:research`，輸出放 `docs/research/`，結論摘進 brief §20 並連結。
 - 每張票收尾與里程碑收尾：`mattpocock-skills:code-review`（Spec 軸讀票，Standards 軸讀本檔）；難 bug 或效能退化：`mattpocock-skills:diagnosing-bugs`。
 - 改本檔或 progress.md 的流程段：`mattpocock-skills:writing-for-agents`。

@@ -61,13 +61,18 @@ class DiscoverItem:
     title_en: str
     year: int | None
     poster_url: str
+    poster_url_en: str
     #: Berth 已經為這部作品做過事（`CONTEXT.md` 的 Tracked Media）。**不進 `tmdb_cache`**：
     #: 它是本地事實而且會當場改掉，而那份快取一小時才換一次（plan §8.3）。
     tracked: bool = False
 
     @classmethod
     def from_card(cls, card: MediaCard, *, tracked: bool = False) -> DiscoverItem:
-        return cls(id=card.id, tracked=tracked, **card.model_dump())
+        fields = card.model_dump()
+        # 票 11 之前寫下的快取列沒有 `poster_url_en`，讀出來是空字串——落回另一輪，EN 介面才不會在
+        # Berth 手上就有那張圖的時候印「無海報」（至多一小時換新，`services/media.py` 同一個理由）。
+        fields["poster_url_en"] = fields["poster_url_en"] or fields["poster_url"]
+        return cls(id=card.id, tracked=tracked, **fields)
 
 
 @dataclass(frozen=True, slots=True)
@@ -190,8 +195,8 @@ def _card(
 ) -> MediaCard:
     """一筆英文結果 + 顯示用那一輪的同一部作品（可能沒有）→ 一張卡。
 
-    標題與海報**同時**取自顯示用那一輪：TMDB 的海報也是分語言的，中文標題配英文海報是
-    兩個來源拼出來的東西。年份與英文標題永遠來自英文那一輪。
+    標題與海報**兩輪都帶**（TMDB 的海報也分語言，M1.5 票 11），畫面照 UI 語言挑同一輪的那一對：
+    中文標題配英文海報是兩個來源拼出來的東西。年份永遠來自英文那一輪。
     """
     shown = display.get((entry.kind, entry.tmdb_id), entry)
     return MediaCard(
@@ -201,6 +206,7 @@ def _card(
         title_en=entry.title,
         year=entry.year,
         poster_url=_poster(shown.poster_path or entry.poster_path, base),
+        poster_url_en=_poster(entry.poster_path, base),
     )
 
 

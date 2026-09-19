@@ -56,8 +56,12 @@ class MediaCard(BaseModel):
     title_en: str
     #: 首播 / 上映年。TMDB 未定檔時是空字串，那時這裡是 `None`。
     year: int | None = None
-    #: 完整的海報網址（`configuration` 的 secure base + 尺寸 + 路徑）。沒有海報時是空字串。
+    #: `zh-Hant` 介面的海報：完整網址（`configuration` 的 secure base + 尺寸 + 路徑）。
+    #: 沒有海報時是空字串。
     poster_url: str = ""
+    #: `en` 介面的海報。**TMDB 的海報也分語言**（M1.5 票 11），所以與標題一樣兩輪都存。
+    #: 票 11 之前寫下的快取沒有這一欄，讀出來是空字串，至多一小時後換新（plan §8.3）。
+    poster_url_en: str = ""
 
     @property
     def id(self) -> str:

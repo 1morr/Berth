@@ -96,7 +96,9 @@ class MediaView:
     first_air_date: date | None
     overview: str
     overview_en: str
+    #: 海報兩輪都送，畫面照 UI 語言挑（TMDB 的海報分語言，票 11）。
     poster_url: str
+    poster_url_en: str
     #: 電影片長（分鐘）。劇集是 `None`。
     runtime: int | None
     #: 畫面上的「將會是」。凍結在第一次送單成功那一刻（票 09），在那之前跟著標題走。
@@ -270,6 +272,7 @@ async def _fetch(
         overview=display.overview or base.overview,
         overview_en=base.overview,
         poster_url=await _poster(session, client, display.poster_path or base.poster_path),
+        poster_url_en=await _poster(session, client, base.poster_path),
         first_air_date=base.first_air_date,
         runtime=base.runtime,
         titles=_titles(base, display),
@@ -370,6 +373,7 @@ async def _problem(
         overview="",
         overview_en="",
         poster_url="",
+        poster_url_en="",
         runtime=None,
         folder_name="",
         folder_frozen=False,
@@ -397,6 +401,7 @@ def _missing(media_id: str) -> MediaView:
         overview="",
         overview_en="",
         poster_url="",
+        poster_url_en="",
         runtime=None,
         folder_name="",
         folder_frozen=False,
@@ -432,6 +437,9 @@ async def _view(
         overview=snapshot.overview,
         overview_en=snapshot.overview_en,
         poster_url=snapshot.poster_url,
+        # 票 11 之前寫下的快照沒有 `poster_url_en`，讀出來是空字串——落回另一輪，EN 介面才不會在
+        # Berth 手上就有那張圖的時候印「無海報」。TMDB 真的沒有海報時兩輪都是空的，還是「無海報」。
+        poster_url_en=snapshot.poster_url_en or snapshot.poster_url,
         runtime=snapshot.runtime,
         folder_name=row.folder_name,
         folder_frozen=row.folder_frozen,

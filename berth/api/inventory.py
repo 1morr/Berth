@@ -101,9 +101,11 @@ class InventoryCardOut(BaseModel):
     title: str
     title_en: str
     year: int | None
-    #: 還沒進 Jellyfin 的是 TMDB 的海報；在 Jellyfin 裡的是 Berth 代理的 Jellyfin Primary 圖
-    #: （`/api/jellyfin/items/...`，票 04）。沒有海報時是空字串。
+    #: 還沒進 Jellyfin 的是 TMDB 的海報（兩輪，畫面照 UI 語言挑；TMDB 的海報分語言，票 11）；
+    #: 在 Jellyfin 裡的是 Berth 代理的 Jellyfin Primary 圖（`/api/jellyfin/items/...`，票 04），
+    #: 兩格相同。沒有海報時是空字串。
     poster_url: str
+    poster_url_en: str
     presence: JellyfinPresence
     #: 深連結要開的 Series / Movie。還沒進 Jellyfin 時是空字串。
     jellyfin_item_id: str
@@ -229,4 +231,5 @@ def _card(card: InventoryCard) -> InventoryCardOut:
     url = image_url(
         card.jellyfin_item_id, JellyfinImageType.PRIMARY, size=ImageSize.POSTER, tag=card.poster_tag
     )
-    return out.model_copy(update={"poster_url": url})
+    # Jellyfin 的圖不分語言（名稱也是兩格相同），所以兩輪是同一張。
+    return out.model_copy(update={"poster_url": url, "poster_url_en": url})

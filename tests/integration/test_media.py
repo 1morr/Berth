@@ -214,6 +214,16 @@ class TestSnapshot:
         assert view.overview_en == ""
         assert view.overview == "互相隱藏了真實身份的新家庭。"
 
+    async def test_both_rounds_keep_their_own_poster(self, session: AsyncSession) -> None:
+        """TMDB 的海報也分語言（票 11）：兩輪都存，畫面照 UI 語言挑。"""
+        client = tmdb(poster_translations={120089: "/zh.jpg"})
+        factory = await credentialled(session, client)
+
+        view = await read_media(session, factory, SPY_ID)
+
+        assert view.poster_url.endswith("/zh.jpg")
+        assert view.poster_url_en.endswith("/3zQ6cM3o6NleaR5NrDvHzeaBmM6.jpg")
+
     async def test_every_season_keeps_the_names_the_other_rounds_gave_it(
         self, session: AsyncSession
     ) -> None:
@@ -448,38 +458,41 @@ class TestProblems:
         assert view.fetched_at is not None
 
 
+def _stored_before_the_split(poster_url: str) -> Media:
+    """M1 的 `_store` 寫下的那個形狀，逐鍵照抄，刻意不從 `MediaSnapshot` 產生。"""
+    return Media(
+        id=SPY_ID,
+        tmdb_id=120089,
+        kind=MediaKind.TV,
+        title_en="SPY x FAMILY",
+        title_original="SPY×FAMILY",
+        year=2022,
+        folder_name="SPY x FAMILY (2022) [tmdbid-120089]",
+        tmdb_snapshot_json={
+            "tmdb_id": 120089,
+            "kind": "tv",
+            "title": "SPY×FAMILY 間諜家家酒",
+            "title_en": "SPY x FAMILY",
+            "title_original": "SPY×FAMILY",
+            "year": 2022,
+            "overview": "互相隱藏了真實身份的新家庭。",
+            "poster_url": poster_url,
+            "first_air_date": "2022-04-09",
+            "runtime": None,
+            "titles": ["SPY x FAMILY", "SPY×FAMILY"],
+            "seasons": [],
+        },
+        tmdb_fetched_at=datetime.now(UTC),
+    )
+
+
 class TestStoredBeforeTheLanguageSplit:
-    """M1.5 票 02 之前寫下的快照少一欄 `overview_en`。升級上來的資料庫不會為此重抓一次。"""
+    """M1.5 票 02 之前寫下的快照少 `overview_en`、票 11 之前少 `poster_url_en`。
+    升級上來的資料庫不會為此重抓一次。"""
 
     async def test_an_old_snapshot_still_draws_both_titles(self, session: AsyncSession) -> None:
         """讀得開、兩種語言的標題都在；英文簡介是空的，等下一次刷新（至多 24 小時）補上。"""
-        session.add(
-            Media(
-                id=SPY_ID,
-                tmdb_id=120089,
-                kind=MediaKind.TV,
-                title_en="SPY x FAMILY",
-                title_original="SPY×FAMILY",
-                year=2022,
-                folder_name="SPY x FAMILY (2022) [tmdbid-120089]",
-                # M1 的 `_store` 寫下的形狀，逐鍵照抄，刻意不從 `MediaSnapshot` 產生。
-                tmdb_snapshot_json={
-                    "tmdb_id": 120089,
-                    "kind": "tv",
-                    "title": "SPY×FAMILY 間諜家家酒",
-                    "title_en": "SPY x FAMILY",
-                    "title_original": "SPY×FAMILY",
-                    "year": 2022,
-                    "overview": "互相隱藏了真實身份的新家庭。",
-                    "poster_url": "",
-                    "first_air_date": "2022-04-09",
-                    "runtime": None,
-                    "titles": ["SPY x FAMILY", "SPY×FAMILY"],
-                    "seasons": [],
-                },
-                tmdb_fetched_at=datetime.now(UTC),
-            )
-        )
+        session.add(_stored_before_the_split(""))
         await session.commit()
         client = tmdb(error=ServiceUnavailableError("GET /tv/120089: connection refused"))
 
@@ -488,3 +501,27 @@ class TestStoredBeforeTheLanguageSplit:
         assert (view.title, view.title_en) == ("SPY×FAMILY 間諜家家酒", "SPY x FAMILY")
         assert (view.overview, view.overview_en) == ("互相隱藏了真實身份的新家庭。", "")
         assert client.requests == []
+
+    async def test_an_old_snapshot_shows_its_one_poster_in_both_languages(
+        self, session: AsyncSession
+    ) -> None:
+        """簡介缺了就是缺了，海報不一樣：Berth 手上就有那張圖，EN 介面不該因此印「無海報」。"""
+        session.add(_stored_before_the_split("https://image.tmdb.org/t/p/w342/old.jpg"))
+        await session.commit()
+        client = tmdb(error=ServiceUnavailableError("GET /tv/120089: connection refused"))
+
+        view = await read_media(session, await credentialled(session, client), SPY_ID)
+
+        assert view.poster_url == view.poster_url_en == "https://image.tmdb.org/t/p/w342/old.jpg"
+
+    async def test_a_work_with_no_poster_at_all_stays_empty_in_both(
+        self, session: AsyncSession
+    ) -> None:
+        """兩輪都空就是真的沒有海報，後備不該把空字串變成別的東西。"""
+        session.add(_stored_before_the_split(""))
+        await session.commit()
+        client = tmdb(error=ServiceUnavailableError("GET /tv/120089: connection refused"))
+
+        view = await read_media(session, await credentialled(session, client), SPY_ID)
+
+        assert (view.poster_url, view.poster_url_en) == ("", "")

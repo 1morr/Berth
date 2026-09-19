@@ -420,7 +420,7 @@ Session 以 httpOnly cookie（`berth_session`）承載，`SameSite=Strict`、`Pa
 - 端點：`configuration`、`trending/{tv,movie}/week`、`{tv,movie}/popular`、`search/multi`、`tv/{id}`（`append_to_response=alternative_titles,translations,episode_groups`）、`tv/{id}/season/{n}`、`tv/episode_group/{id}`、`movie/{id}`（`append_to_response=alternative_titles,translations`）。**兩個 append 拿掉了**（票 04）：`external_ids` 與 `release_dates` 在快照裡沒有任何欄位讀它們，而後者每部電影是一百多筆各國上映日（2026-09-09 實測 138 筆）。要用時再加回來。
 - **Media 詳情打三輪 + 每季一次**：`tv/{id}` 的 `en-US` 那一輪決定結構與所有會進檔名的字串（季名、集名、英文標題），`zh-TW` 那一輪只補顯示用標題與簡介，`zh-CN` 那一輪**只取季名**（§4.3 的篇章名比對，票 06；電影不打這一輪）；季集**只取 `en-US`**——集名會進檔名（§5 的 `{episode_title}`），中文集名放進去等於讓磁碟上的檔名跟著 UI 的語言跑。一部四季的作品因此是 3 + 4 + 1 = 8 個請求，24 小時一次（票 04、06）。
 - **絕對編號要從 0-based 的 `order` 推**，不是 group 裡的 `episode_number`——那一欄保留播出序的原值，所以 SPY×FAMILY 的 S02E01 在 group 裡仍然是 `episode_number: 1`，而它是絕對第 26 集（2026-09-09 對真 API 實測，brief §20.3）。一部作品可能有好幾個 episode group（實測五個），只有 `type: 2` 是絕對編號，取第一個。
-- 語言 `en-US` 取英文標題，`name` 空時退回 `original_name`；另以 `zh-TW` 取一次顯示用標題與簡介給 UI（brief §7.5 的檔名仍用英文）。**顯示用標題與簡介跟著 UI 語言走**（2026-09-17 決定，brief §19；M1.5 票 02 實作）：`zh-Hant` 介面顯示 `zh-TW` 那一輪（缺翻譯落回英文），`en` 介面顯示 `en-US` 那一輪（簡介缺就不印，不借中文）。**API 兩輪都送、前端照 UI 語言挑**，後端不知道 UI 語言：`title` / `title_en`、`overview` / `overview_en`、下載列的 `media_title` / `media_title_en`。換語言時畫面當場換、不重抓，`tmdb_cache` 與 Media 快照也不必按語言分列。快照為此多一欄 `overview_en`；M1.5 之前寫下的快照讀出來是空字串，下一次刷新（至多 24 小時）補上。**海報仍取 `zh-TW` 那一輪**，EN 介面上可能是中文海報（票 02 範圍外，記在票的 Comments）。**清單本身一律以 `en-US` 那一輪為準，`zh-TW` 只是一張「這一部叫什麼、海報是哪張」的查表**：`language` 會換掉 trending 回的**成員與順序**而不只是文字（2026-09-09 實測 `trending/tv/week`，兩輪 20 筆差 3 筆），照 `zh-TW` 當清單會讓作品憑空消失（票 03）。
+- 語言 `en-US` 取英文標題，`name` 空時退回 `original_name`；另以 `zh-TW` 取一次顯示用標題與簡介給 UI（brief §7.5 的檔名仍用英文）。**顯示用標題與簡介跟著 UI 語言走**（2026-09-17 決定，brief §19；M1.5 票 02 實作）：`zh-Hant` 介面顯示 `zh-TW` 那一輪（缺翻譯落回英文），`en` 介面顯示 `en-US` 那一輪（簡介缺就不印，不借中文）。**API 兩輪都送、前端照 UI 語言挑**，後端不知道 UI 語言：`title` / `title_en`、`overview` / `overview_en`、`poster_url` / `poster_url_en`、下載列的 `media_title` / `media_title_en`。換語言時畫面當場換、不重抓，`tmdb_cache` 與 Media 快照也不必按語言分列。快照為此多兩欄 `overview_en`（票 02）與 `poster_url_en`（票 11）；寫在那之前的快照讀出來是空字串，下一次刷新（至多 24 小時）補上。**海報也分語言**（票 11 補上）：`poster_url` 是 `zh-TW` 那一輪、`poster_url_en` 是 `en-US` 那一輪，畫面與標題挑同一輪；在 Jellyfin 裡的牆卡兩輪同一張（Jellyfin 的圖不分語言，名稱也是兩格相同）。**清單本身一律以 `en-US` 那一輪為準，`zh-TW` 只是一張「這一部叫什麼、海報是哪張」的查表**：`language` 會換掉 trending 回的**成員與順序**而不只是文字（2026-09-09 實測 `trending/tv/week`，兩輪 20 筆差 3 筆），照 `zh-TW` 當清單會讓作品憑空消失（票 03）。
 - 快取：探索與搜尋 1 小時（`tmdb_cache`，一個 feed 一列，存的是已經合併好的卡片而不是 TMDB 原始 payload）；Media 快照 24 小時，**planning** 前若快照超過 6 小時則刷新（新播集數會變）。**送單那一步不刷新**（票 09）：它會凍結 `folder_name`，而凍下去的必須就是使用者剛剛在確認畫面上看到的那一串字（§2.2、brief §4.5）——刷新會在他按下去與那串字落地之間把它換掉。**卡片上的本地狀態不進快取**：它是本地事實而且會當場改掉（M1 票 04b 之後卡片上沒有狀態，票 09 起以 Job 推導）。
 - 順序：`trending` 與 `popular` 回的順序**就是**那個 feed 的排名，不要重排——回應裡的 `popularity` 欄位與清單順序不一致（2026-09-09 實測，兩者都是亂序的）。劇集與電影兩份清單合成一面牆時用交錯（票 03）。
 - 圖片基底：`configuration` 的 `secure_base_url` 對同一把憑證是常數，精靈第 6 步驗憑證時就寫進 `settings.services.tmdb.image_base_url`，探索頁直接讀它。海報尺寸 `w342`。
@@ -618,7 +618,7 @@ WebUI\AuthSubnetWhitelist=172.28.0.2/32
 | adapter 契約 | pytest + respx | 每個 adapter 對錄製回應（`tests/fixtures/http/`）的解析；版本差異（qBittorrent 4.4 vs 5.x 的參數） |
 | 整合 | pytest + Fake adapters + 暫存 SQLite | services 與 pipeline：送單 → 完成 → planning → importing → ledger；重入與冪等；刪除範圍；reconciler 對三種人為破壞的偵測 |
 | 前端 | vitest、playwright | 元件與關鍵頁面；playwright 對 Fake 後端跑精靈與 M1 流程 |
-| e2e | docker compose（GitHub Actions，`tests/e2e/`） | 真 qBittorrent + 真 Jellyfin + 這一份工作目錄 build 的 Berth + 真 TMDB（Prowlarr 起來讓精靈偵測，索引站那一步跳過，搜尋不在 e2e 裡）：用本地產生的 .torrent 與檔案（benchmark 語料的三包：美劇一季、動漫一季、電影），送單之後把位元組放進 qBittorrent 回報的下載路徑再 `recheck`，跑通 M1 驗收；驗證時間線依序走過各站、硬鏈接 inode、帳本逐檔的 Jellyfin item id（票 15 以 recheck 取代原本寫的 `seedMode`：那是 Web API 2.16 起才有、而且要由送單的 Berth 帶的參數） |
+| e2e | docker compose（GitHub Actions，`tests/e2e/`） | 真 qBittorrent + 真 Jellyfin + 這一份工作目錄 build 的 Berth + 真 TMDB（Prowlarr 起來讓精靈偵測，索引站那一步跳過，搜尋不在 e2e 裡）。**一次 compose、一次精靈、一次入庫，兩個模組共享**（fixture 在 `tests/e2e/conftest.py`，session scope）：<br>**M1**（`test_1_m1_pipeline.py`）用本地產生的 .torrent 與檔案（benchmark 語料的三包：美劇一季、動漫一季、電影），送單之後把位元組放進 qBittorrent 回報的下載路徑再 `recheck`，跑通 M1 驗收；驗證時間線依序走過各站、硬鏈接 inode、帳本逐檔的 Jellyfin item id（票 15 以 recheck 取代原本寫的 `seedMode`：那是 Web API 2.16 起才有、而且要由送單的 Berth 帶的參數）。<br>**M1.5**（`test_2_m15_library.py`，票 11）以 Jellyfin API 建一個只開放一個媒體庫的一般使用者，用它登入 Berth：看不到沒權限的媒體庫、直接請求也被拒；不經 Berth 放進那個媒體庫的作品照樣在牆上；某一集的 `item_id` 就是 Jellyfin 在帳本那條路徑上的 item；標為已看 / 未看之後**那個帳號自己的** `UserData` 真的變了；帳號被停用之後 Berth 的 session 結束。最後停掉 Jellyfin 容器，驗「問不到 Jellyfin」那一句（票 07 留給這一輪的） |
 | 部署腳本 | pytest + bash 替身 | `deploy/` 的 shell：preseed 的「缺鍵才補」規則、entrypoint 的擁有者接手。真的跑腳本，把 `chown` / `setpriv` 換成會記錄參數的替身；路徑用 `BERTH_*` 的測試 seam 覆寫 |
 | 實驗 | `scripts/experiments/` | brief §20.6，一次性但保留腳本，結果寫回 brief |
 
@@ -684,6 +684,28 @@ M1 帶過來的（票 15 收尾時把票 01–14f 的 Comments 逐條過完，20
 - **精靈與設定頁**：通過 TMDB 閘門之後泊位板 BTH 3 的詳情列不動；TMDB 與索引站的 API key 是明文欄位（要改就三處一起改成 `PasswordField`）；`complete.failed` 在缺憑證時錯怪後端；勾選表標出已被佔用的路徑（票 02b / 14a）。
 - **票 15 critique 的小項（沒排進那一輪的範圍）**：Route 設定頁表單沒改過時黃色「儲存」仍亮著，而且它會重跑五條檢查卻沒說；所有路徑都被佔用時「建立並檢查」仍是主動作；確認區的「取消」比主動作寬；EN 文案 `Already so`、`Moored`、`10 of 46 episodes in` 讀起來不順；EN 子分頁 `Library paths` 與導覽的 `Library` 撞名（頁面上的物件叫 route）；語言鍵的選中態用 `assigned` 黃漆，與 DESIGN.md 的 The Role Is Not A State Rule 矛盾（記在 DESIGN.md 的 Known contradictions）；媒體庫卡片的「Jellyfin 還在掃描」不會自己更新；fake `inventory` 情境把 demo torrent 網址寫死成 8484。
 - **票 15 critique 沒修、也不屬於 M1.5 版面的**：信心在同一塊展開區有兩套詞（`信心 high` 與「高信心」）；沒接索引站時要按了搜尋才知道（`queries` 端點可以先帶 `problem`）；頁首不 sticky、沒有 `/` 聚焦搜尋之類的快捷鍵；探索頁在手機上兩面牆之間沒有跳轉（14,260px）；說明散在各處，沒有通往文件的出口。
+
+M1.5 帶過來的（票 11 收尾時把票 01–10 的 Comments 逐條過完，2026-09-19；逐條的判定記在票 11 的 Comments，摘要在 `docs/progress.md`）。拆 M2 的票時一併拆，不另開票：
+
+- **大媒體庫的代價要量了才知道要不要快取**（票 03 / 08 留下的同一個待量，M2 的 reconciler 本來就要把整個媒體庫走一遍）：Berth 在那個媒體庫有作品時，每看一次牆就抓一份**整份清單**（`library_index`，無快取）；每開一次 Media 詳情就以不帶 `parentId` 的 `/Items?hasTmdbId=true` 整份拿回來比 TMDB id；`/Items` 帶整份 `MediaSources` 也很重（票 12）。三件事一起量，再決定快取或分段取。
+- **「待審」「Unmatched」篩選後的牆沒有觀看狀態**（票 05）：那一份來自 `library_index`（`enableUserData=false`），卡片的 `watch` 是 `null`、沒有切換鍵。要帶就是整個媒體庫每一部都要一份觀看紀錄，代價與上一條一起量。
+- **被刪掉的 Jellyfin 帳號沒有實測**（票 03）：`GET /Users/{id}` 對已刪的帳號回什麼不知道，現在會落到「問不到 Jellyfin」那一句。停用帳號的路徑已由票 11 的 e2e 對真服務驗過，刪除的沒有。
+- **缺集散在六季以上時只退回作品名**（票 10）：不分批問，因為一次搜尋的查詢數上限是為了不把公開站打到封 IP（§8.4）。要做就得決定分批的節奏。
+- **票 11 的 critique 沒修的（2026-09-19，29 / 40）**：
+  - **「待審」/「對不到」篩出來的卡片不說為什麼在這**（P1）。`has_unmatched` 在 payload 裡卻沒有畫，使用者只看到一個灰色的「部分」，唯一的路是點進詳情頁往下捲到「檔案與版本」去數。一個「需要你」的篩選器就是一份工作佇列，而 The Needs-You Floats Up Rule 的審計測試（「一整份收起的清單要能直接數出有幾件事在等你」）現在過不了。連帶的問題是**佇列不該是一面牆**：篩出來常常只有一兩格，做成一列一件事的清單才誠實。
+  - **媒體庫頁用一屏半的前置內容蓋住媒體庫本身**（P1）。1280 上第一張卡在 y=538、390 上在 y=889（摺線之下）；一列只有一張卡時仍佔一條滿版重橫線。兩條路：收成一顆「接著看 N 項」的展開鍵，或把兩列移到牆的下方（首頁不動）。
+  - **牆上沒有辦法用名字找一部片**（P2）。131 部的媒體庫只有排序、類型、年份與分頁；探索頁的搜尋打的是 TMDB，回答的是「這部片存在嗎」不是「我有沒有」。做法是 `WallQuery` 加 `q`、映射到 Jellyfin 已經在打的 `SearchTerm`、寫進網址。
+  - **詳情頁同時有三個集數系統**（P3）：觀看區是 Jellyfin 的集、季表是 TMDB 的、檔案與版本是帳本的，卡片上又是第四個數字，畫面上沒有一句話把它們對起來。至少要在季表標題列說明它是哪一份，集號欄改用 `S01E09` 而不是裸的 `E09`。
+  - 四張卡片元件（`MediaTile` / `InventoryTile` / `WatchingTile` / `EpisodeTile`）各自實作同一條標識帶，改節奏要改四處。逐行量過：只有 1 條顯著行出現在四張卡上，任兩張之間最長連續相同區塊 2–7 行，真正逐字重複的是 class 語彙。**值得合併的只有 `InventoryTile` ↔ `EpisodeTile`**（內層 wrapper 逐字相同、footer 只差一個 token）；`MediaTile` 是離群值（整格站內 `Link`、無 footer、無切換鍵），不要硬塞。
+- **票 11 的 audit 沒修的（2026-09-19，15 / 20）**：
+  - **首頁 CLS 0.3553、媒體庫 0.1605**（P1，連兩次冷載入逐字相同）。`WatchingRows` 在讀取中回 `null`，那兩列的資料是第二支請求，回來之後插在搜尋框與兩面牆**上方**，整頁下移約 440px。`/media/:id` 只有 0.0316——差別就在沒有那兩列。註釋寫的理由（「先畫格子再整列消失比晚一點出現更跳」）只適用於**空的**那一列，不適用於**載入中**；`MediaDetailPage` 的 `Loading()`（空位 + 兩條線、不動畫、`aria-hidden`）就是現成的樣子。
+  - **`activeProps` 讓四處的 class 字串自我加倍**（P2，`AppShell.tsx:61`、`InventoryPage.tsx:106`、`:552`、`SettingsTabs.tsx:28`）：`border-rule` 與 `border-rule-strong` 同時出現在同一個元素上，誰贏由 Tailwind 產生的樣式表順序決定。**實測現在是對的**（active 邊框量到 `rule-strong`），但這是僥倖；換 Tailwind 版本或改 token 名都可能無聲翻盤。乾淨的做法是走 TanStack 自己設的 `data-status="active"` 變體，一份 class 字串、不靠順序。
+  - **媒體庫牆 1621 個 DOM 節點**（P2，Lighthouse `dom-size` 的 error 門檻是 1400；首頁 838）與**全樹零 memoization**：6× CPU 節流下按一次「標為已看」是一個 67 ms 的 long task，而實際只有 1 筆 DOM mutation。`page_size` 100 → 50 是一行改動。
+  - **牆的清單語意兩頁相反**（P2）：媒體庫牆的卡片標題是 `<h3>`（101 個）、探索牆是 `<p>`（0 個）；兩面牆的容器都是 `<div>`，而繼續觀看那兩列是 `<ul>/<li>`。同一頁上兩種清單語意，而 100 個 `<article>` 都沒有可存取名稱。
+  - **重複控制項只靠 `aria-describedby` 區分**（P2）：100 個「在 Jellyfin 開啟」與一頁 6 個「標為已看 / 未看」的可存取**名稱**逐字相同。描述不是名稱——螢幕閱讀器的連結清單與語音控制只吃名稱。這是全站一致的手法，要嘛接受並記進 DESIGN.md，要嘛全站把名稱補成唯一的。
+  - **同一頁兩個同名的 `<nav aria-label="分頁">`**（P2）；`assigned` / `working` 沒有亮色主題的「當字用」值（P2，目前 0 個使用點，屬缺閘門的潛在坑）；`ArtSlot` 寫死 342px 無 `srcset`，1920 高 DPI 上海報是糊的（P2）。
+  - **票 11 的 code-review 記下的**：`Poster.tsx` 與 `components/ArtSlot.tsx` 是同一段程式碼的第二份（只差外框，合併要讓 `ArtSlot` 多收一個 `className`）；`?filter=` 有兩道閘門而 `routes.tsx` 的 `validateSearch` 實際上擋不住（實測 `useSearch` 原樣交出 `filter="nonsense"`，真正擋下來的是頁面那一道）——抽一個共用的型別守衛；`i18n/tmdbText.ts` 的名字與 docstring 還是「文字」，但它從票 11 起也挑圖。
+  - **P3 九條**（各自獨立的小改，適合塞進 M2 的第一張收尾票）：季表沒有 `<caption>`；篩選連結掛 `aria-current="page"`（它是篩選值不是一頁）；排序方向的 `<select>` 只有 `aria-label` 沒有可見標籤；`ExpandHint` 的「展開 / 收起」會進可存取名稱而 `Dot` 不會；集表的「片長」「播出」在 <640px 真的不存在（沒有替代路徑）；庫存回應 53 KB 且 `no-store` 無 `ETag`；`TilePlaceholder` 跨目錄 import 且內距與真卡片差 4px；`routes.cutaway.category` 的 zh-Hant 值是英文小寫 `category`；三處硬寫的 `alt="TMDB"`。
 
 ### 11.4 M3 RSS
 

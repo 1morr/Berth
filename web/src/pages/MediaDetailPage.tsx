@@ -146,10 +146,11 @@ function IdentityBand({
   const { t, i18n } = useTranslation()
   const title = tmdbText(i18n.language, { 'zh-Hant': media.title, en: media.title_en })
   const overview = tmdbText(i18n.language, { 'zh-Hant': media.overview, en: media.overview_en })
+  const poster = tmdbText(i18n.language, { 'zh-Hant': media.poster_url, en: media.poster_url_en })
 
   return (
     <section className="grid grid-cols-[7rem_minmax(0,1fr)] gap-x-4 gap-y-5 border-b-2 border-rule-strong pb-8 sm:grid-cols-[11rem_minmax(0,1fr)] sm:gap-x-6">
-      <Poster url={media.poster_url} className="sm:row-span-2" />
+      <Poster url={poster} className="sm:row-span-2" />
       <div className="grid content-start gap-2">
         {/* 中性色塊：「Berth 為它做過事」是一個事實，不是四個信號色裡的任何一個狀態
             （The Role Is Not A State Rule）。推導出來的，不是一顆按鈕（票 04b）。 */}

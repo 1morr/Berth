@@ -9,7 +9,7 @@
 3. 用 http.server 送那個目錄。Berth 送單時自己來抓（票 09），這台就是索引站的下載連結。
 
 沒有 peer 可以真的下載，所以位元組是測試在送單之後從 staging 複製到 qBittorrent 說的下載路徑、
-再叫它 recheck（`test_m1_pipeline.py`）。plan §10 原本寫的 `seedMode` 是 qBittorrent Web API
+再叫它 recheck（`test_1_m1_pipeline.py`）。plan §10 原本寫的 `seedMode` 是 qBittorrent Web API
 2.16 起才有、而且要由送單的一方帶——那是 Berth，不是測試。
 
 **只用標準庫**：容器是 `python:3.13-alpine`，沒有 Berth 也沒有測試相依。宿主上的測試 import

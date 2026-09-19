@@ -2,6 +2,7 @@ import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 
 import type { DiscoverItem } from '../api/discover'
+import { ArtSlot } from '../components/ArtSlot'
 import { Dot } from '../components/Dot'
 import { KIND_CODE } from '../components/kind'
 import { tmdbText } from '../i18n/tmdbText'
@@ -16,10 +17,15 @@ import { tmdbText } from '../i18n/tmdbText'
  * **整格是一個連結**（票 04 接手了票 03 留下的那條線）：hover / focus 時邊框由 `rule` 換
  * `rule-strong`——線變重，不是變色，與 GhostButton 同一條規則。整格可點是因為手指點得到的
  * 目標要夠大，而不是只有標題那一行。
+ *
+ * 海報位與媒體庫牆共用 `ArtSlot`（票 11）：這裡原本自己寫了一份沒有 `onError` 的 `<img>`，
+ * 所以壞掉的 TMDB 海報會露出瀏覽器的破圖示，而媒體庫牆同樣的情況印「無海報」。
  */
 export function MediaTile({ item }: { item: DiscoverItem }) {
   const { t, i18n } = useTranslation()
   const title = tmdbText(i18n.language, { 'zh-Hant': item.title, en: item.title_en })
+  // 海報也分語言（票 11）：跟標題挑同一輪，中文標題配英文海報是兩個來源拼出來的東西。
+  const poster = tmdbText(i18n.language, { 'zh-Hant': item.poster_url, en: item.poster_url_en })
 
   return (
     <Link
@@ -27,23 +33,7 @@ export function MediaTile({ item }: { item: DiscoverItem }) {
       params={{ mediaId: item.id }}
       className="grid grid-rows-[auto_1fr] border-2 border-rule bg-well hover:border-rule-strong"
     >
-      <div className="relative aspect-[2/3] bg-hull">
-        {item.poster_url ? (
-          // 標題就在下面那一行，所以海報是裝飾性的——給它 alt 只會讓螢幕閱讀器把同一個名字唸兩次。
-          <img
-            src={item.poster_url}
-            alt=""
-            loading="lazy"
-            className="size-full object-cover"
-            width={342}
-            height={513}
-          />
-        ) : (
-          <span className="value absolute inset-0 flex items-center justify-center text-xs text-ink-dim">
-            {t('discover.noArt')}
-          </span>
-        )}
-      </div>
+      <ArtSlot url={poster} shape="poster" />
       <div className="grid content-start gap-1 px-3 py-2.5">
         {/* 狀態貼在**這條標識帶**上，不壓在海報上：`deck` 在深色主題是中灰，壓在同樣
             深色的海報上幾乎消失（票 03 實測；DESIGN.md 的 The Paint Needs A Painted
