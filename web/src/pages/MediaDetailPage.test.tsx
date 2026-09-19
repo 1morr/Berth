@@ -478,26 +478,60 @@ describe('Media 詳情頁', () => {
     const files = await screen.findByRole('region', { name: '檔案與版本' })
     await userEvent.click(within(files).getByText('1 個檔案'))
 
-    // 組的摘要與那一個檔案都這樣說。
-    expect(within(files).getAllByText('特別篇')).toHaveLength(2)
+    // 處置在組的摘要上說一次就夠（M1.5 票 09b：逐檔列不再重複）。
+    expect(within(files).getAllByText('特別篇')).toHaveLength(1)
     expect(within(files).queryByText('正片')).toBeNull()
   })
 
-  it('檔案清單說得出每個檔案的季集、Tags、目標路徑、帳本與 Jellyfin', async () => {
+  it('逐檔列：季集與檔名在外面，Tags 與完整路徑收在裡面（M1.5 票 09b）', async () => {
     render({ [SPY_PATH]: { body: media({ files: [ledgerFile()] }) } })
     renderApp('/media/tv:120089')
 
     const files = await screen.findByRole('region', { name: '檔案與版本' })
     await userEvent.click(within(files).getByText('1 個檔案'))
 
-    const row = within(files)
-      .getByText(/Season 01\/SPY x FAMILY \(2022\) - S01E01/)
-      .closest('li')!
-    expect(within(row).getByText('正片')).toBeVisible()
+    const name = 'SPY x FAMILY (2022) - S01E01 - OPERATION STRIX [WEB][1080p][Lilith-Raws].mkv'
+    const row = within(files).getByText(name).closest('li')!
     expect(within(row).getByText('S01E01')).toBeVisible()
+    // 資料夾是整組共用的，所以外面只留檔名；完整路徑與 Tags 展開才有。
+    expect(within(row).getByText(/^\/data\/library\/anime\/SPY x FAMILY/)).not.toBeVisible()
+    expect(within(row).getByText('[WEB][1080p][Lilith-Raws]')).not.toBeVisible()
+    // 常態的帳本與 Jellyfin 由組的摘要說（「帳本對得上」「Jellyfin 已收錄 1」），逐檔列不重複。
+    expect(within(row).queryByText('正片')).not.toBeInTheDocument()
+    expect(within(row).queryByText('對得上')).not.toBeInTheDocument()
+    expect(within(row).queryByText('Jellyfin 已收錄')).not.toBeInTheDocument()
+
+    await userEvent.click(within(row).getByText(name))
+
+    expect(within(row).getByText(/^\/data\/library\/anime\/SPY x FAMILY/)).toBeVisible()
     expect(within(row).getByText('[WEB][1080p][Lilith-Raws]')).toBeVisible()
-    expect(within(row).getByText('對得上')).toBeVisible()
-    expect(within(row).getByText('Jellyfin 已收錄')).toBeVisible()
+  })
+
+  it('例外仍然逐列說得出來：帳本對不上，以及組的計數說不出的那幾格（M1.5 票 09b）', async () => {
+    const soon = new Date(Date.now() + 3 * 60 * 1000).toISOString()
+    render({
+      [SPY_PATH]: {
+        body: media({
+          files: [
+            ledgerFile({ id: 1, episode_start: 1 }),
+            ledgerFile({ id: 2, episode_start: 2, status: 'target_missing' }),
+            ledgerFile({ id: 3, episode_start: 3, presence: 'searching', resolve_after: soon }),
+          ],
+        }),
+      },
+    })
+    renderApp('/media/tv:120089')
+
+    const files = await screen.findByRole('region', { name: '檔案與版本' })
+    await userEvent.click(within(files).getByText('3 個檔案'))
+
+    const rows = within(files).getAllByRole('listitem')
+    // 對得上的那一列什麼都不必說；對不上的那一列自己說。
+    expect(within(rows[0]).queryByText(/對得上|對不上/)).not.toBeInTheDocument()
+    expect(within(rows[1]).getByText('媒體庫裡的檔案不見了')).toBeVisible()
+    // 「還在掃描」帶的是下一次什麼時候查——組的計數說不出這個，所以留在列上。
+    expect(within(rows[2]).getByText(/Jellyfin 還在掃描/)).toBeVisible()
+    expect(within(rows[2]).getByText(/3 分鐘/)).toBeVisible()
   })
 
   it('還在等 Jellyfin 的檔案說得出下一次什麼時候查', async () => {
@@ -610,6 +644,35 @@ describe('Media 詳情頁', () => {
       expect(await screen.findByText('TMDB 上這部作品還沒有任何一季。')).toBeVisible()
       expect(screen.queryByRole('button', { name: '只看缺集' })).not.toBeInTheDocument()
     })
+
+    it('換一部作品時回到全部——它是這一部當下的視角，不跟著走（M1.5 票 09b）', async () => {
+      const bear = media({ id: 'tv:136315', tmdb_id: 136315, title: 'The Bear' })
+      render({
+        [SPY_PATH]: { body: gappy() },
+        'GET /api/media/tv%3A136315': { body: bear },
+        'GET /api/search/queries?media=tv%3A136315': { body: { queries: ['The Bear'] } },
+      })
+      // 先去一趟把 The Bear 放進快取：**它已經在快取裡**才是這個 bug 的重現條件——沒有讀取中的
+      // 空檔，季表就不會卸掉重掛，篩選會原封不動跟著過去。
+      const { router } = renderApp('/media/tv:136315')
+      expect(await screen.findByRole('heading', { level: 1, name: /The Bear/ })).toBeVisible()
+      await router.navigate({ to: '/media/$mediaId', params: { mediaId: 'tv:120089' } })
+
+      await userEvent.click(await screen.findByRole('button', { name: '只看缺集' }))
+      expect(screen.getByRole('button', { name: '只看缺集' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      )
+
+      // `/media/$mediaId` 是同一條路由，所以換作品時元件不重掛（少了 `key` 篩選就跟著過去）。
+      await router.navigate({ to: '/media/$mediaId', params: { mediaId: 'tv:136315' } })
+
+      expect(await screen.findByRole('heading', { level: 1, name: /The Bear/ })).toBeVisible()
+      expect(screen.getByRole('button', { name: '只看缺集' })).toHaveAttribute(
+        'aria-pressed',
+        'false',
+      )
+    })
   })
 
   describe('檔案依決定分組（M1.5 票 09）', () => {
@@ -655,14 +718,15 @@ describe('Media 詳情頁', () => {
       expect(within(subtitles).getByText('字幕')).toBeVisible()
       expect(within(subtitles).getByText('S01 E01')).toBeVisible()
       expect(within(subtitles).queryByText(/Jellyfin/)).not.toBeInTheDocument()
-      expect(within(files).queryByText(/Frieren - S01E02\.mkv/)).not.toBeInTheDocument()
+      expect(within(files).queryAllByText(/Frieren - S01E02\.mkv/)).toHaveLength(0)
 
       await userEvent.click(within(videos).getByText('3 個檔案'))
 
-      expect(within(files).getByText(/Frieren - S01E02\.mkv/)).toBeVisible()
+      // 檔名出現兩次：摘要上那一段，以及收起來的完整路徑裡（M1.5 票 09b）。
+      expect(within(files).getAllByText(/Frieren - S01E02\.mkv/)[0]).toBeVisible()
       await userEvent.click(within(files).getByRole('button', { name: '收起 正片 S01 E01–E03' }))
       await waitFor(() =>
-        expect(within(files).queryByText(/Frieren - S01E02\.mkv/)).not.toBeInTheDocument(),
+        expect(within(files).queryAllByText(/Frieren - S01E02\.mkv/)).toHaveLength(0),
       )
     })
 
@@ -709,8 +773,20 @@ describe('Media 詳情頁', () => {
 
       const files = await screen.findByRole('region', { name: '檔案與版本' })
 
-      expect(within(files).getByText(/Season 01\/SPY x FAMILY/)).toBeVisible()
+      // 不分組，所以沒有組的收合鍵，檔案一打開頁面就在那裡。
       expect(within(files).queryByRole('button', { name: /^收起/ })).not.toBeInTheDocument()
+      // 上面沒有任何一行摘要說過，所以這一列每一格都自己說（M1.5 票 09b）。
+      expect(within(files).getByText('正片')).toBeVisible()
+      expect(within(files).getByText('對得上')).toBeVisible()
+      expect(within(files).getByText('Jellyfin 已收錄')).toBeVisible()
+      // 長路徑仍然收在列裡，展開才有。
+      expect(within(files).getByText(/^\/data\/library\/anime\/SPY x FAMILY/)).not.toBeVisible()
+
+      await userEvent.click(
+        within(files).getByText(/^SPY x FAMILY \(2022\) - S01E01 - OPERATION STRIX/),
+      )
+
+      expect(within(files).getByText(/^\/data\/library\/anime\/SPY x FAMILY/)).toBeVisible()
     })
   })
 

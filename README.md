@@ -295,7 +295,11 @@ docker compose -f deploy/docker-compose.yml -f tests/e2e/compose.yml --env-file 
 pnpm -C web build                                          # 先有前端產物
 uv run python scripts/fake_setup_server.py                 # http://127.0.0.1:8484
 uv run python scripts/fake_setup_server.py --scenario mixed
+uv run python scripts/fake_setup_server.py --port 8383     # 換 port（索引站給的下載連結跟著走）
 ```
+
+`--port 8383` 是後端的預設 port（`berth/config.py` 的 `DEFAULT_PORT`），也就是 `web/vite.config.ts` 代理
+`/api` 的去處——想對著某個演練情境跑 `pnpm -C web dev`（改前端存檔就重載）時用它。
 
 | `--scenario` | 演的是什麼 |
 | --- | --- |

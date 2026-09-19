@@ -120,6 +120,17 @@ from lib import Torrent, make_torrent
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from tests.e2e.payload import info_name
 
+#: 這台 demo server 自己聽在哪個 port。索引站給的下載連結指回它自己（送單時 Berth 真的會去抓），
+#: 所以 `--port` 一改這一份要跟著改——寫死的話換 port 就只會拿到 `source_unavailable`。
+#: `main()` 在建情境之前設定它。
+DEMO_PORT = 8484
+
+
+def demo_url(path: str) -> str:
+    """指回這台 demo server 自己的網址（`--port` 生效）。"""
+    return f"http://127.0.0.1:{DEMO_PORT}{path}"
+
+
 #: 這台假 Prowlarr 連不上的站。訊息是 2026-09-08 對真的 Prowlarr 錄到的原文（brief §20.7）——
 #: 十個公開站裡有幾個連不上是常態，畫面必須撐得住這個組合。
 BLOCKED_SITES = {
@@ -504,7 +515,7 @@ def poll() -> Scenario:
             seeders=1,
             # demo server 自己掛的那一支。送單走的是真的 `adapters/torrent.py`：
             # 它抓下來、算 info hash、把位元組交給 qBittorrent（票 09）。
-            download_url="http://127.0.0.1:8484/demo/torrent",
+            download_url=demo_url("/demo/torrent"),
             info_hash="",
         ),
     )
@@ -629,7 +640,7 @@ def _planning(scenario: Scenario, packs: dict[str, tuple[tuple[str, int], ...]])
             size=sum(size for _, size in files),
             seeders=1,
             # 送單走的是真的那條路徑：抓下來、算 info hash、把位元組交給 qBittorrent（票 09）。
-            download_url=f"http://127.0.0.1:8484/demo/torrent?release={quote(release)}",
+            download_url=demo_url(f"/demo/torrent?release={quote(release)}"),
             info_hash="",
         )
         for release, files in packs.items()
@@ -893,6 +904,10 @@ def main(argv: list[str] | None = None) -> int:
 
     config_root = args.config_root or Path(tempfile.mkdtemp(prefix="berth-fake-"))
     config = load_config({"CONFIG_ROOT": str(config_root), "DATA_ROOT": str(config_root / "data")})
+
+    # 情境裡的下載連結指回這台 server 自己，所以 port 要在建情境之前就定下來。
+    global DEMO_PORT
+    DEMO_PORT = args.port
 
     scenario = SCENARIOS[args.scenario]()
     factory = FakeClientFactory(scenario)

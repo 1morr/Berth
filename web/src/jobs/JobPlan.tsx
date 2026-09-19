@@ -4,6 +4,7 @@ import type { Plan, PlanItem } from '../api/plans'
 import { CollapsibleRow } from '../components/CollapsibleRow'
 import { Dot } from '../components/Dot'
 import { formatCoverage, formatEpisode } from '../components/episodes'
+import { FileEntry } from '../components/FileEntry'
 import { groupRows, type RowGroup } from '../components/rowGroups'
 
 /**
@@ -125,7 +126,11 @@ function PlanGroup({ group }: { group: RowGroup<PlanItem> }) {
 }
 
 /**
- * 逐檔的一列：處置 · 信心 · 季集 → 目標路徑，底下是理由。
+ * 逐檔的一列：**摘要是季集 · 來源檔名**，目標路徑與理由收在裡面（M1.5 票 09b）。
+ *
+ * 處置、信心與待確認**是組鍵的一部分**（`byDecision`），一組裡必然相同——組的摘要說過了，這一列
+ * 不再重複。留在外面的來源檔名是使用者認得出這個檔案的東西：一包 torrent 裡有字型、有海報、有
+ * readme，少了它那幾列的「略過」長得一模一樣。
  *
  * 版面與時間線的一筆刻意相同（左邊一條線 + 內縮）：它們在同一塊展開區裡，長得不一樣
  * 只會讓人以為那是另一種東西。
@@ -136,31 +141,16 @@ function PlanRow({ item }: { item: PlanItem }) {
 
   return (
     // 需要人的那幾列**線變重，不是變紅**：紅色只代表阻擋（The One Meaning Rule）。
-    <li
-      className={`grid min-w-0 gap-1 border-l-2 pl-3 ${held(item) ? 'border-rule-strong' : 'border-rule'}`}
+    <FileEntry
+      heavy={held(item)}
+      summary={
+        <>
+          {episode && <span className="value text-xs text-ink">{episode}</span>}
+          {/* 來源檔名整條換行，不截斷（票 08 §8 的同一條）。 */}
+          <span className="value min-w-0 text-xs wrap-anywhere text-ink">{item.rel_path}</span>
+        </>
+      }
     >
-      <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
-        <span className="label bg-deck px-1.5 py-0.5 text-ink">
-          {t(`jobs.plan.action.${item.action}`)}
-        </span>
-        <span className="label text-ink-dim">{t(`jobs.plan.confidence.${item.confidence}`)}</span>
-        {episode && (
-          <>
-            <Dot />
-            <span className="value text-xs text-ink">{episode}</span>
-          </>
-        )}
-        {item.audit && (
-          <>
-            <Dot />
-            <span className="value text-xs text-ink">{t('jobs.plan.audit')}</span>
-          </>
-        )}
-      </p>
-
-      {/* 來源檔名整條換行，不截斷：它是使用者認得出這個檔案的東西（票 08 §8 的同一條）。 */}
-      <p className="value text-xs wrap-anywhere text-ink">{item.rel_path}</p>
-
       {item.target_path && (
         <p className="value text-xs wrap-anywhere text-ink-dim">
           <span className="label mr-2 text-ink-dim">{t('jobs.plan.target')}</span>
@@ -179,6 +169,6 @@ function PlanRow({ item }: { item: PlanItem }) {
           ))}
         </ul>
       )}
-    </li>
+    </FileEntry>
   )
 }

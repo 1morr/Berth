@@ -16,7 +16,7 @@ import { tmdbText } from '../i18n/tmdbText'
 import { FilesPanel } from '../media/FilesPanel'
 import { Poster } from '../media/Poster'
 import { SearchPanel } from '../media/SearchPanel'
-import { SeasonList } from '../media/SeasonList'
+import { SeasonsPanel } from '../media/SeasonsPanel'
 import { CarryOn, WatchDown, WatchSection } from '../media/WatchArea'
 import tmdbLogo from '../assets/tmdb.svg'
 
@@ -98,24 +98,13 @@ export function MediaDetailPage({ id }: { id: string }) {
 
           <SearchPanel media={found} />
 
-          {/* Berth 的季表：TMDB 的季集與入庫狀態。票 09 的收合、只看缺集與票 10 的缺集一鍵搜往這一塊裡填
-              （工具列在標題列下方，單季的入口在那一季展開區的第一行，shape §4）。 */}
-          <section className="grid gap-3">
-            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b-2 border-rule-strong pb-2">
-              <h2 className="label text-ink">{t('media.seasons')}</h2>
-              {found.seasons.length > 0 && (
-                <p className="value text-xs text-ink-dim">{found.seasons.length}</p>
-              )}
-            </div>
-            {found.kind === 'movie' ? (
-              // 電影沒有季集區塊（票 04 驗收）。說一句話，不留一塊空白。
-              <p className="max-w-prose text-sm text-ink-dim">{t('media.season.film')}</p>
-            ) : found.seasons.length > 0 ? (
-              <SeasonList seasons={found.seasons} />
-            ) : (
-              <p className="max-w-prose text-sm text-ink-dim">{t('media.season.none')}</p>
-            )}
-          </section>
+          {/* Berth 的季表：TMDB 的季集與入庫狀態。票 10 的缺集一鍵搜往它的工具列與展開區裡填
+              （單季的入口在那一季展開區的第一行，shape §4）。
+
+              `key`：`/media/$mediaId` 是同一條路由，所以在作品之間換頁時這棵樹不重掛，而工具列的
+              「只看缺集」是**這一部作品當下的視角**——少了它，上一部篩過的狀態會跟著下一部走
+              （目標已在快取裡、沒有讀取中的空檔時特別明顯，票 09b）。 */}
+          <SeasonsPanel key={found.id} media={found} />
 
           <FilesPanel media={found} />
         </>

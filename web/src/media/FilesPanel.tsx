@@ -8,6 +8,7 @@ import { CollapsibleRow } from '../components/CollapsibleRow'
 import { GHOST_LINK } from '../components/controls'
 import { Dot } from '../components/Dot'
 import { formatCoverage, formatEpisode } from '../components/episodes'
+import { FileEntry } from '../components/FileEntry'
 import { groupRows, type RowGroup } from '../components/rowGroups'
 import { Timestamp } from '../components/Timestamp'
 
@@ -51,7 +52,7 @@ export function FilesPanel({ media }: { media: Media }) {
       {media.files.length > 0 &&
         (media.kind === 'movie' ? (
           <div className="border-2 border-rule bg-well px-4 py-3">
-            <FileList files={media.files} />
+            <FileList files={media.files} summarised={false} />
           </div>
         ) : (
           <div className="grid gap-px bg-rule">
@@ -174,7 +175,7 @@ function FileGroup({ group }: { group: RowGroup<LedgerFile> }) {
     >
       {() => (
         <div className="px-4 py-3">
-          <FileList files={group.rows} />
+          <FileList files={group.rows} summarised />
         </div>
       )}
     </CollapsibleRow>
@@ -188,54 +189,108 @@ function actionLabel(t: TFunction, file: LedgerFile): string {
     : t(`media.files.action.${file.action}`)
 }
 
-function FileList({ files }: { files: readonly LedgerFile[] }) {
+/** `summarised`：上面有一行組摘要說過處置、帳本與 Jellyfin 了嗎？電影不分組，所以是 `false`。 */
+function FileList({ files, summarised }: { files: readonly LedgerFile[]; summarised: boolean }) {
   return (
     <ol className="grid min-w-0 gap-3">
       {files.map((file) => (
-        <FileRow key={file.id} file={file} />
+        <FileRow key={file.id} file={file} summarised={summarised} />
       ))}
     </ol>
   )
 }
 
-/** 一個檔案：處置 · 季集 · Tags，底下是目標路徑，再底下是帳本與 Jellyfin。 */
-function FileRow({ file }: { file: LedgerFile }) {
+/**
+ * 一個檔案：**摘要一行是處置 · 季集 · 檔名 · 帳本 · Jellyfin**，Tags 與完整路徑收在裡面（M1.5 票 09b）。
+ *
+ * 規則只有一條：**上面的摘要說過而且是常態值的，這一列不再說**。所以在組裡（`summarised`）只剩季集、
+ * 檔名與例外——處置是組鍵的一部分，帳本「對得上」與 Jellyfin「已收錄」由組的計數說過了；例外留著，
+ * 因為組數得出幾個卻說不出是哪一個。電影不分組，上面沒有人說，所以每一格都自己說。
+ *
+ * 資料夾整組共用，外面只留檔名——那一段才是這一筆與隔壁那一筆不同的地方。
+ */
+function FileRow({ file, summarised }: { file: LedgerFile; summarised: boolean }) {
   const { t } = useTranslation()
   const episode = formatEpisode(file)
 
   return (
-    <li className="grid min-w-0 gap-1 border-l-2 border-rule pl-3">
-      <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
-        {/* 處置是分類不是狀態：中性色塊（The Role Is Not A State Rule）。 */}
-        <span className="label bg-deck px-1.5 py-0.5 text-ink">{actionLabel(t, file)}</span>
-        {episode && (
-          <>
-            <Dot />
-            <span className="value text-xs text-ink">{episode}</span>
-          </>
-        )}
-        {file.tags && (
-          <>
-            <Dot />
-            <span className="value text-xs wrap-anywhere text-ink">{file.tags}</span>
-          </>
-        )}
-      </p>
-      <p className="value text-xs wrap-anywhere text-ink-dim">{file.target_path}</p>
-      <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
-        <span className="label text-ink-dim">{t('media.files.ledger.label')}</span>
-        <span className="text-ink">{t(`media.files.ledger.${file.status}`)}</span>
-        <Presence file={file} />
-      </p>
-    </li>
+    <FileEntry
+      summary={
+        <>
+          {!summarised && (
+            // 處置是分類不是狀態：中性色塊（The Role Is Not A State Rule）。
+            <span className="label bg-deck px-1.5 py-0.5 text-ink">{actionLabel(t, file)}</span>
+          )}
+          {episode && <span className="value text-xs text-ink">{episode}</span>}
+          {/* 檔名整條換行，不截斷：它是使用者認得出這個檔案的東西（票 08 §8 的同一條）。 */}
+          <span className="value min-w-0 text-xs wrap-anywhere text-ink">{baseName(file)}</span>
+          <Facts file={file} summarised={summarised} />
+        </>
+      }
+    >
+      <Labelled label={t('media.files.tags')} value={file.tags} />
+      <Labelled label={t('media.files.target')} value={file.target_path} />
+    </FileEntry>
   )
 }
 
-/** Jellyfin 找到這個檔案了沒。字幕與特典不查，所以什麼都不說。 */
-function Presence({ file }: { file: LedgerFile }) {
+/**
+ * 帳本與 Jellyfin。在組裡時只說例外——常態的那兩句組的摘要已經數過了。
+ *
+ * 兩邊都沒話說時**整個不畫**：空的 `<span>` 仍然是一個 flex 項目，會在檔名後面多撐一個 `gap-x-2`。
+ */
+function Facts({ file, summarised }: { file: LedgerFile; summarised: boolean }) {
+  const { t } = useTranslation()
+  const ledger = !summarised || file.status !== 'ok'
+
+  if (!ledger && !saysPresence(file, summarised)) return null
+  return (
+    <span className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+      {ledger && (
+        <>
+          <Dot />
+          <span className="label text-ink-dim">{t('media.files.ledger.label')}</span>
+          <span className="text-ink">{t(`media.files.ledger.${file.status}`)}</span>
+        </>
+      )}
+      <Presence file={file} summarised={summarised} />
+    </span>
+  )
+}
+
+/** 收起來的那幾行：每一格自己說出它是什麼，沒有欄頭時一串路徑說不出自己是目標還是來源。 */
+function Labelled({ label, value }: { label: string; value: string }) {
+  if (!value) return null
+  return (
+    <p className="value text-xs wrap-anywhere text-ink-dim">
+      <span className="label mr-2 text-ink-dim">{label}</span>
+      {value}
+    </p>
+  )
+}
+
+/** 目標路徑的最後一段。資料夾是整組共用的，所以摘要上只留這一段（票 09 的 Comments）。 */
+function baseName(file: LedgerFile): string {
+  return file.target_path.split('/').pop() || file.target_path
+}
+
+/**
+ * 這一列要不要說 Jellyfin 那一格。字幕與特典不查（`presence` 是 `none`）；**在組裡時「已收錄」也不說**
+ * ——那是常態，而組的摘要已經數過了（「Jellyfin 已收錄 28」）。另外兩種在組裡也留著，因為它們各自帶一個
+ * 組數不出來的值：下一次什麼時候查、試了幾次。
+ *
+ * `Facts` 要先知道整行會不會是空的，所以這個判準單獨一份，不寫在 `Presence` 裡（M1.5 票 09b）。
+ */
+function saysPresence(file: LedgerFile, summarised: boolean): boolean {
+  if (file.presence === 'none') return false
+  return !(summarised && file.presence === 'found')
+}
+
+/** Jellyfin 找到這個檔案了沒（要不要說由 `saysPresence` 決定）。 */
+function Presence({ file, summarised }: { file: LedgerFile; summarised: boolean }) {
   const { t } = useTranslation()
 
-  if (file.presence === 'none') return null
+  if (!saysPresence(file, summarised)) return null
   return (
     <>
       <Dot />

@@ -132,42 +132,50 @@ describe('匯入計劃', () => {
     expect(within(second).getByText('入庫')).toBeVisible()
   })
 
-  it('一個檔案一列：決定、信心、季集、目標路徑與理由（票 11 驗收）', async () => {
+  it('一個檔案一列：季集、來源檔名，目標路徑與理由收在它自己的展開區（M1.5 票 09b）', async () => {
     const list = await render(plan())
 
-    expect(list.getByText('入庫')).toBeInTheDocument()
-    expect(list.getByText('高信心')).toBeInTheDocument()
-    expect(list.getByText('S01E01')).toBeInTheDocument()
-    expect(list.getByText(/Season 01/)).toBeInTheDocument()
-    expect(list.getByText('the filename says S01E01')).toBeInTheDocument()
+    expect(list.getByText('S01E01')).toBeVisible()
+    expect(list.getByText('[Group] SPY×FAMILY S01E01 [1080p][CHT].mkv')).toBeVisible()
+    // 處置與信心是**組鍵的一部分**，一組裡必然相同——組的摘要說過了，逐檔列不再重複。
+    expect(list.queryByText('入庫')).not.toBeInTheDocument()
+    expect(list.queryByText('高信心')).not.toBeInTheDocument()
+    // 長的那兩段收起來，展開才有。
+    expect(list.getByText(/Season 01/)).not.toBeVisible()
+    expect(list.getByText('the filename says S01E01')).not.toBeVisible()
+
+    await userEvent.click(list.getByText('[Group] SPY×FAMILY S01E01 [1080p][CHT].mkv'))
+
+    expect(list.getByText(/Season 01/)).toBeVisible()
+    expect(list.getByText('the filename says S01E01')).toBeVisible()
   })
 
   it('略過的檔案也有一列——「沒有動它」與「沒看到它」是兩件事', async () => {
-    const list = await render(
-      plan({
-        items: [
-          item({
-            id: 2,
-            rel_path: 'readme.txt',
-            action: 'skip',
-            target_path: '',
-            season: null,
-            episode_start: null,
-          }),
-        ],
-        summary: {
-          files: 0,
-          high: 1,
-          medium: 0,
-          low: 0,
-          actions: { skip: 1 },
-          review_reason: null,
-        },
-      }),
-    )
+    const skipped = plan({
+      items: [
+        item({
+          id: 2,
+          rel_path: 'readme.txt',
+          action: 'skip',
+          target_path: '',
+          season: null,
+          episode_start: null,
+        }),
+      ],
+      summary: {
+        files: 0,
+        high: 1,
+        medium: 0,
+        low: 0,
+        actions: { skip: 1 },
+        review_reason: null,
+      },
+    })
+    const list = await render(skipped)
 
-    expect(list.getByText('略過')).toBeInTheDocument()
-    expect(list.getByText('readme.txt')).toBeInTheDocument()
+    // 處置在組的摘要上，檔名在它自己那一列——沒有季集時檔名就是認出這一筆的唯一憑據。
+    expect(within(groups()[0]).getByText('略過')).toBeVisible()
+    expect(list.getByText('readme.txt')).toBeVisible()
   })
 
   it('單檔多集寫成 Jellyfin 認得的那一種（brief §6.6）', async () => {
@@ -176,11 +184,13 @@ describe('匯入計劃', () => {
     expect(list.getByText('S01E01-E02')).toBeInTheDocument()
   })
 
-  it('medium 自動入庫的那一列說得出它還等一次確認', async () => {
-    const list = await render(plan({ items: [item({ confidence: 'medium', audit: true })] }))
+  it('medium 自動入庫的那一組說得出它還等一次確認', async () => {
+    await render(plan({ items: [item({ confidence: 'medium', audit: true })] }))
 
-    expect(list.getByText('中信心')).toBeInTheDocument()
-    expect(list.getByText('已入庫待確認')).toBeInTheDocument()
+    // 信心與待確認也在組鍵裡（M1.5 票 09b：逐檔列不再重複組說過的）。
+    const summary = groups()[0]
+    expect(within(summary).getByText('中信心')).toBeVisible()
+    expect(within(summary).getByText('已入庫待確認')).toBeVisible()
   })
 
   it('停下來時說得出理由與下一步（PRODUCT 原則 4）', () => {

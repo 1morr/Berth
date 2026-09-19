@@ -711,6 +711,9 @@ const zhHant = {
       total_other: '共 {{count}} 個檔案',
       none: '還沒有任何檔案入庫。',
       special: '特別篇',
+      // 逐檔列收起來的那兩行（M1.5 票 09b）：沒有欄頭時一串路徑說不出自己是目標還是來源。
+      tags: 'Tags',
+      target: '目標',
       action: {
         import: '正片',
         extra: '特典',
@@ -1976,6 +1979,8 @@ const en: Translations<typeof zhHant> = {
       total_other: '{{count}} files in total',
       none: 'Nothing has been imported yet.',
       special: 'Special',
+      tags: 'Tags',
+      target: 'Target',
       action: {
         import: 'Feature',
         extra: 'Extra',

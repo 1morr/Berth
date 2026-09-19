@@ -1,12 +1,11 @@
-import { useState } from 'react'
 import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 
 import type { Episode, Season } from '../api/media'
 import { CollapsibleRow } from '../components/CollapsibleRow'
-import { NAV_BOX, NAV_BOX_ACTIVE } from '../components/controls'
 import { episodeCode, seasonCode } from '../components/episodes'
 import { SIGNAL_FILL } from '../components/signal'
+import { missingOf } from './missing'
 
 /**
  * 各季各集（`.scratch/m1/media-detail-shape.md` §6，使用者拍板「每季一個可展開列，預設全收」）。
@@ -15,67 +14,44 @@ import { SIGNAL_FILL } from '../components/signal'
  * 攤平的話那一頁永遠捲不到底下的搜尋結果表（票 08）與檔案清單（票 13）。每一季是一段 `CollapsibleRow`
  * （M1.5 票 09、`.scratch/m1.5/long-lists-shape.md`）：收起的季不渲染集列，展開的季摘要列黏頂、底端也收得起來。
  *
- * 上面一條工具列（media-detail-shape §4 留的位置）：「只看缺集」。缺＝`missing`（已播出、沒有任何下載在處理），
- * 卡住、下載中、未播出都不算（使用者拍板）——判定在後端，這裡只數它。
+ * 「只看缺集」的開關與整部作品的計數在 `SeasonsPanel`（shape §4 的工具列）；這一份只收它的結果。
  */
-export function SeasonList({ seasons }: { seasons: readonly Season[] }) {
-  const { t } = useTranslation()
-  const [missingOnly, setMissingOnly] = useState(false)
+export function SeasonList({
+  seasons,
+  missingOnly,
+}: {
+  seasons: readonly Season[]
+  missingOnly: boolean
+}) {
   // 有 Absolute group 的作品才畫絕對編號那一欄——六成的動漫才有（brief §20.3），
   // 沒有的時候整欄不畫，而不是留一整排 `—`。
   const absolute = seasons.some((season) =>
     season.episodes.some((episode) => episode.absolute_number !== null),
   )
-  const missing = new Map(seasons.map((season) => [season.season_number, missingOf(season)]))
-  const total = [...missing.values()].reduce((sum, episodes) => sum + episodes.length, 0)
 
   return (
-    <div className="grid gap-3">
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-        <button
-          type="button"
-          aria-pressed={missingOnly}
-          onClick={() => setMissingOnly(!missingOnly)}
-          className={`${missingOnly ? NAV_BOX_ACTIVE : NAV_BOX} inline-flex min-h-6 items-center px-3 py-1.5 text-ink`}
-        >
-          {t('media.season.missingOnly')}
-        </button>
-        {/* 一直在 DOM 裡：`aria-live` 要先存在，之後換進去的字才會被念出來。 */}
-        <p aria-live="polite" className="value text-xs text-ink">
-          {missingOnly &&
-            (total > 0
-              ? t('media.season.missingTotal', { count: total })
-              : t('media.season.noneMissingAnywhere'))}
-        </p>
-      </div>
-
-      <div className="grid gap-px bg-rule">
-        {seasons.map((season) => {
-          const gaps = missing.get(season.season_number) ?? []
-          return (
-            <CollapsibleRow
-              key={season.season_number}
-              name={seasonCode(season.season_number)}
-              summary={<SeasonSummary season={season} gaps={missingOnly ? gaps.length : null} />}
-            >
-              {() => (
-                <SeasonBody
-                  season={season}
-                  episodes={missingOnly ? gaps : season.episodes}
-                  missingOnly={missingOnly}
-                  absolute={absolute}
-                />
-              )}
-            </CollapsibleRow>
-          )
-        })}
-      </div>
+    <div className="grid gap-px bg-rule">
+      {seasons.map((season) => {
+        const gaps = missingOf(season)
+        return (
+          <CollapsibleRow
+            key={season.season_number}
+            name={seasonCode(season.season_number)}
+            summary={<SeasonSummary season={season} gaps={missingOnly ? gaps.length : null} />}
+          >
+            {() => (
+              <SeasonBody
+                season={season}
+                episodes={missingOnly ? gaps : season.episodes}
+                missingOnly={missingOnly}
+                absolute={absolute}
+              />
+            )}
+          </CollapsibleRow>
+        )
+      })}
     </div>
   )
-}
-
-function missingOf(season: Season): Episode[] {
-  return season.episodes.filter((episode) => episode.status === 'missing')
 }
 
 /** `gaps` 是 `null` 時沒開「只看缺集」，不說缺幾集。 */
