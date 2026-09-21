@@ -9,6 +9,8 @@
 `deploy/` 是完整的 compose 套件：Berth 加 qBittorrent、Jellyfin、Prowlarr，四個容器掛同一個媒體根。Linux 與 Windows 共用同一份 `docker-compose.yml`。
 
 ```bash
+# GHCR 的 :latest 要等第一個正式版 tag，先自己在根目錄 build 一份（見〈自己 build image〉）
+docker build -f deploy/Dockerfile -t ghcr.io/1morr/berth:latest .
 cd deploy
 cp .env.example .env        # 改 DATA_ROOT 與 CONFIG_ROOT
 docker compose up -d
@@ -44,7 +46,7 @@ docker compose up -d
 | 健康 `/health` | 四項健康檢查與下載迴圈；一般使用者也看得到 |
 | 設定 `/settings/services`、`/settings/routes` | 只有管理員：服務位址與建議設定的差異；Route 的新增（同一個 Jellyfin 媒體庫可以有第二條）、改名、停用、重新檢查與刪除 |
 
-> **compose 範本 pin 的 `ghcr.io/1morr/berth:latest` 還是空的。** GHCR 上目前只有預發佈的 `0.1.0-rc1`（`:latest` 要等第一個正式版本 tag），所以現在要跑 compose 得先在 repo 根目錄自己 build 一份：見下面的〈自己 build image〉。
+> GHCR 上目前只有預發佈的 `0.1.0-rc1`；`:latest` 會在第一個正式版 tag 由 release workflow 補上，屆時上面的 build 步驟可以省掉。
 
 | 服務 | Port | 備註 |
 | --- | --- | --- |
