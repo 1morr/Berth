@@ -20,9 +20,12 @@ from berth.api.deps import ClientFactoryDep, EventHubDep, ImportHintsDep, Sessio
 from berth.api.errors import refusal_responses
 from berth.api.gate import current_user
 from berth.domain import JobRefusal, JobState, JobTrigger
+from berth.services import deletion
+from berth.services.deletion import DeleteScope
 from berth.services.jobs import (
     JobRejectedError,
     JobSource,
+    actor_of,
     add_download,
     list_jobs,
     read_job,
@@ -48,6 +51,9 @@ _STATUS: dict[JobRefusal, int] = {
     JobRefusal.NOT_RETRYABLE: status.HTTP_409_CONFLICT,
     # 已經在入庫的那一份計劃正被 importer 照著動檔案（票 12），重算會讓兩邊指向不同的地方。
     JobRefusal.NOT_REPLANNABLE: status.HTTP_409_CONFLICT,
+    # 勾錯組合是 422：請求本身說不通（brief §9.2），不是「現在做不了」。
+    JobRefusal.DELETE_FILES_REQUIRES_REMOVE_TORRENT: status.HTTP_422_UNPROCESSABLE_CONTENT,
+    JobRefusal.CLIENT_UNREACHABLE: status.HTTP_502_BAD_GATEWAY,
 }
 
 
@@ -91,6 +97,17 @@ RETRY_RESPONSES = _refusals(
 
 #: 重新規劃只看這一筆自己（`services/plan.replan_job`），碰不到 Route 與索引站。
 REPLAN_RESPONSES = _refusals(JobRefusal.JOB_MISSING, JobRefusal.NOT_REPLANNABLE)
+
+#: 刪除：沒有這一筆、勾錯組合，以及要移除 torrent 而 qBittorrent 問不到
+#: （`services/deletion.delete_job`）。
+DELETE_RESPONSES = _refusals(
+    JobRefusal.JOB_MISSING,
+    JobRefusal.DELETE_FILES_REQUIRES_REMOVE_TORRENT,
+    JobRefusal.CLIENT_UNREACHABLE,
+)
+
+#: 估算只讀磁碟（`services/deletion.estimate_deletion`），所以只有「沒有這一筆」。
+ESTIMATE_RESPONSES = _refusals(JobRefusal.JOB_MISSING)
 
 
 class JobSourceIn(BaseModel):
@@ -177,6 +194,47 @@ class JobCreatedOut(BaseModel):
 
     job: JobOut
     created: bool
+
+
+class DeletionEstimateOut(BaseModel):
+    """`services/deletion.DeletionEstimate` 的對外形狀（理由與算法在那裡）。
+
+    畫面要的那一句在 `reclaimable`：**它不是 `link_bytes + source_bytes`**——來源與它的
+    媒體庫鏈接是同一份資料，兩邊各算一次會把答案說成兩倍。
+    """
+
+    #: 帳本上、磁碟上還在的媒體庫鏈接數。
+    links: int
+    #: 帳本上有、磁碟上已經不在的。畫面拿它說「其中 N 個已經不在了」。
+    links_missing: int
+    link_bytes: int
+    #: complete 底下還在的來源檔數。**比鏈接多**：沒人要的 readme 也是下載下來的東西。
+    sources: int
+    sources_missing: int
+    source_bytes: int
+    #: 來源與所有鏈接都刪掉時真的會空出來的位元組。
+    reclaimable: int
+    #: 有別人也握著、刪了也不會空出來的位元組。
+    held: int
+
+
+class JobDeletedOut(BaseModel):
+    """`services/deletion.DeleteOutcome` 的對外形狀：一次刪除**真的**做掉了什麼。
+
+    與「勾了哪幾個」不是同一件事，所以它是一份回應而不是回聲；時間線上那一筆 `deleted`
+    寫的是同一組數字。
+    """
+
+    #: 真的移掉的媒體庫鏈接數。
+    links: int
+    #: 真的刪掉的 complete 檔案數。
+    sources: int
+    #: 有沒有向 qBittorrent 送出移除。
+    torrent: bool
+    #: 帳本與 Job 紀錄清掉了嗎。清了的話這一筆從清單上消失，沒清就是一列 `removed`。
+    purged: bool
+    #: 真的空出來的位元組。只有來源與所有鏈接都刪掉時才不是 0。
+    freed: int
 
 
 class JobEventOut(BaseModel):
@@ -275,6 +333,60 @@ async def post_retry(
         # importer 平常 60 秒才醒一次，而按下重試的人要的是現在。
         imports.nudge()
     return JobOut.model_validate(job)
+
+
+@router.get("/{job_hash}/deletion", responses=ESTIMATE_RESPONSES)
+async def get_deletion(session: SessionDep, job_hash: str) -> DeletionEstimateOut:
+    """刪除對話框打開時算的那一份（brief §9.2、票 04）。**只讀，不改任何東西。**
+
+    **慢是刻意的**：逐一 `stat` 每一個來源與目標，不用 qBittorrent 報的 `total_size` 去猜
+    ——那是 torrent 的大小，而磁碟上可能只下載了一部分、可能有人手動刪過幾個檔案。畫面在
+    等它的時候說「正在算」。
+    """
+    try:
+        estimate = await deletion.estimate_deletion(session, job_hash)
+    except JobRejectedError as refusal:
+        raise _refuse(refusal) from refusal
+    return DeletionEstimateOut.model_validate(estimate, from_attributes=True)
+
+
+@router.delete("/{job_hash}", responses=DELETE_RESPONSES)
+async def delete_job(
+    session: SessionDep,
+    factory: ClientFactoryDep,
+    request: Request,
+    job_hash: str,
+    unlink: bool = False,
+    remove_torrent: bool = False,
+    delete_files: bool = False,
+    purge: bool = False,
+) -> JobDeletedOut:
+    """刪除範圍的四個旗標（brief §9.2、plan §3.1 的最後一列、票 04）。
+
+    **四個預設全不勾**，而且預設值在後端也成立：一個參數都不帶的 `DELETE` 只把這一筆收成
+    `removed`，磁碟上一個檔案都不動。預設只寫在對話框上的話，之後的每一個呼叫端（Issue 的
+    修復、票 06 的 audit 撤銷）都要自己記得這件事。
+
+    回的是**真的發生了什麼**而不是 204：勾了「移除鏈接」而那幾個檔案早就被人在 Jellyfin 裡
+    刪掉時，畫面要說得出「0 個鏈接」而不是一句「刪好了」。
+    """
+    user = current_user(request)
+    try:
+        outcome = await deletion.delete_job(
+            session,
+            factory,
+            job_hash,
+            DeleteScope(
+                unlink=unlink,
+                remove_torrent=remove_torrent,
+                delete_files=delete_files,
+                purge=purge,
+            ),
+            actor=actor_of(user.id if user is not None else None),
+        )
+    except JobRejectedError as refusal:
+        raise _refuse(refusal) from refusal
+    return JobDeletedOut.model_validate(outcome, from_attributes=True)
 
 
 def _refuse(refusal: JobRejectedError) -> HTTPException:

@@ -227,6 +227,9 @@ class VersionView:
     name: str
     #: 這個檔案的 Tags。還沒有 `name` 時畫面顯示它，並說明那是檔名的 tags 而不是版本名。
     tags: str
+    #: 這個版本是哪一筆下載帶進來的（M2 票 04）。版本清單上的刪除按的就是那一筆——
+    #: 多版本並存時「刪掉哪一個」在畫面上一定要指得明確。重新入庫那種沒有 Job 的是空字串。
+    job_hash: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -714,6 +717,7 @@ def _versions(features: list[LedgerEntry]) -> tuple[VersionGroupView, ...]:
             VersionView(
                 name=entry.jellyfin_version_name,
                 tags=Tags.model_validate(entry.tags_json).render() if entry.tags_json else "",
+                job_hash=entry.job_hash or "",
             )
         )
     return tuple(

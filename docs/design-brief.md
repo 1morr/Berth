@@ -421,6 +421,8 @@ NCOP/NCED、PV、CM、Menu、預告、花絮等**可辨識**的非正片內容�
 
 顯示「預估可釋放空間」：只有當來源與所有鏈接都刪掉時才真的釋放，UI 要說清楚。
 
+實作（M2 票 04，`services/deletion.py`）：順序是**移除 torrent → 移除鏈接 → 刪來源 → 清紀錄**，移除 torrent 排第一是因為它是唯一可能失敗的一步，問不到那一台時整次刪除不做而不是刪到一半才發現；`unlink` / `delete_files` 之後帳本那幾列留著當歷史（清帳本是另一個旗標），只把 `status` 改成 `target_missing` / `source_missing`；空掉的目錄跟著收（留著 `Show/Season 01/` 兩層空目錄的話 Jellyfin 的牆上那部作品還在）；刪除與鏈接**同一道路徑守衛**（plan §8.6），帳本被改壞、指到媒體庫外面的那一條不刪而其餘照樣做完。
+
 2026-09-22 定：四個旗標**預設全不勾**——Sonarr 的對話框預設勾「同時刪除檔案」，但這裡的刪除以 Job 為單位而不是作品，預設刪檔會誤刪還在做種的東西；空間估算**同步 `stat` 每一個來源與目標**（慢而準，畫面上說「正在算」），不用來源大小去猜；對話框住在 Job 詳情頁與 Media 詳情的版本清單，同一個元件；對帳發現的 `library_link_missing` 選「連 complete 一起刪」時走同一組旗標。
 
 ### 9.3 重新入庫
@@ -740,6 +742,19 @@ M1.5 拆票前的四條待決，2026-09-15 已全數照推薦拍板（上表「M
 - `state` 值：`error`、`missingFiles`、`uploading`、`pausedUP`/`stoppedUP`、`queuedUP`、`stalledUP`、`checkingUP`、`forcedUP`、`allocating`、`downloading`、`metaDL`、`pausedDL`/`stoppedDL`、`queuedDL`、`stalledDL`、`checkingDL`、`forcedDL`、`checkingResumeData`、`moving`、`unknown`。「完成」判定：`progress == 1` 且 `completion_on > 0` 且 state **不是** `moving` / `checking*`（從 temp path 搬到 save path 期間 state 為 `moving`，此時不可入庫）。
 - `torrents/files` 回傳 `index`、`name`（含相對路徑）、`size`、`progress`、`priority`（0 = 不下載）、`availability`。`name` 相對於 `save_path` 還是 `content_path` 文件未明 → adapter 以 `stat` 驗證組出的絕對路徑，兩種都試。`priority == 0` 的檔案要從 Plan 排除。
 - 其他端點：`setLocation`、`rename`、`renameFile` / `renameFolder`（API 2.8.0）、`delete(deleteFiles)`、`setCategory`（category 不存在回 409）、`addTags`、`recheck`。
+- **`torrents/delete` 的確切形狀**（2026-09-22 對 `release-4.1.0` 到 `release-5.2.3` 共十個 tag 逐一核對原始碼，M2 票 04）：
+
+  | 項目 | 事實 |
+  | --- | --- |
+  | 方法 | **一律 POST**。4.4.4 引入「方法不對回 405」的機制但 delete 不在白名單上（4.4.5 仍可 GET）；**4.5.0 起 delete 進了 POST 白名單，GET 從此是 405**（[`webapplication.h` 的 `m_allowedMethod`](https://github.com/qbittorrent/qBittorrent/blob/release-4.5.0/src/webui/webapplication.h)） |
+  | 參數 | `hashes`（多個以 `\|` 分隔，特殊值 `all` 是全部）與 `deleteFiles`，**兩個都是必填**（`requireParams`），少一個回 400 |
+  | `deleteFiles` 的值 | 只認字面 `true` / `false`（大小寫不敏感，`Utils::String::parseBool`）。**`1` 不是真**——解析不出來就退回 `false`，於是呼叫端以為檔案刪了而磁碟上還在。四個大版本都沒改過這一段 |
+  | 回應 | 成功是 `200` + 空 body |
+  | 不認得的 hash | **靜默成功**（`applyToTorrents` 找不到就跳過，整個請求仍是 200）。所以「移除 torrent」對早就不在客戶端的那一筆是成立的，不必先問一次 |
+
+  5.0.0 的內部重構（`deleteTorrent` → `removeTorrent`）沒有改動對外的參數與回應。Berth 據此
+  **不用 `deleteFiles=true` 刪檔**：那一筆 torrent 可能早就不在客戶端了（`client_removed`），
+  而刪除範圍仍然要刪得掉磁碟上的東西、數得出刪了幾個、空出多少（§9.2、`services/deletion.py`）。
 - **沒有 webhook**；`sync/maindata` 以 `rid` 做增量輪詢。`autorun_enabled` / `autorun_program`（完成時執行外部程式，可帶 `%f` `%n`）可作為「喚醒輪詢」的加速手段，非必要。
 - **`rid` 的狀態掛在 session（SID cookie）上**（2026-09-10 票 10 對 4.4.5 與 5.2.3 實測）：不帶 cookie 的話每一次請求都是新 session，回的永遠是 `full_update: true`。所以輪詢那一側必須把 HTTP client 握著不放（Berth 的 `Downloader`）。
 - **增量那一輪的 `torrents[hash]` 只帶變動的欄位**（實測有的只剩 `{"num_leechs", "time_active"}`），所以呼叫端一定要把它併回上一份完整快照再讀——照字面讀會得到一個沒有 category、沒有 state 的空殼。被刪掉的 torrent 在 `torrents_removed`（hash 陣列）。

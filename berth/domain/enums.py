@@ -130,6 +130,11 @@ class EventType(StrEnum):
     JELLYFIN_SCAN_REQUESTED = "jellyfin_scan_requested"
     #: 反查到這一筆 Job 入庫的檔案在 Jellyfin 裡的 item（count）。
     JELLYFIN_ITEM_RESOLVED = "jellyfin_item_resolved"
+    #: 刪除範圍跑完了（brief §9.2）。payload 逐旗標說出**真的**做了什麼：`links` 是移掉的
+    #: 媒體庫鏈接數、`sources` 是刪掉的來源檔數、`torrent` 是有沒有從 qBittorrent 移除、
+    #: `freed` 是真的空出來的位元組。「按了哪幾個勾」與「發生了什麼」不是同一件事——
+    #: 帳本上早就不在的那一條勾了也沒得刪，而時間線要說得出實際發生的那一份。
+    DELETED = "deleted"
     #: 對 Jellyfin 的一次請求沒成（request 是 `JellyfinRequest`、error）。**只記不擋**：
     #: 檔案已經在媒體庫裡了，Jellyfin 自己的排程掃描遲早會看到它們（plan §3.3）。
     JELLYFIN_REQUEST_FAILED = "jellyfin_request_failed"
@@ -551,6 +556,13 @@ class JobRefusal(StrEnum):
     NOT_RETRYABLE = "not_retryable"
     #: 正在照著那一份計劃動檔案，重算會讓兩邊指向不同的地方（票 12）。
     NOT_REPLANNABLE = "not_replannable"
+    #: 要向 qBittorrent 動手而它問不到。刪除範圍勾了「移除 torrent」時它是**先決條件**：
+    #: 檔案刪了而 torrent 還在做種的話，下一次重新檢查就把整包再抓一遍。
+    CLIENT_UNREACHABLE = "client_unreachable"
+    #: 刪除範圍勾了「刪除 complete 檔案」卻沒勾「從 qBittorrent 移除 torrent」（brief §9.2）。
+    #: 檔案在 torrent 底下被抽走時 qBittorrent 會報 `missingFiles`，而它下一次重新檢查就把
+    #: 那幾個檔案再抓一遍——刪了等於沒刪，只多繞了一圈流量。
+    DELETE_FILES_REQUIRES_REMOVE_TORRENT = "delete_files_requires_remove_torrent"
 
 
 class RouteRefusal(StrEnum):

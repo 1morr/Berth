@@ -1,6 +1,6 @@
 import { queryOptions } from '@tanstack/react-query'
 
-import { apiGet, apiPost } from './client'
+import { apiDelete, apiGet, apiPost } from './client'
 import { parseRefusal, type ReasonSet } from './refusal'
 import type { Schemas } from './schemas'
 
@@ -41,6 +41,8 @@ const REASONS: ReasonSet<JobRefusal> = {
   job_missing: true,
   not_retryable: true,
   not_replannable: true,
+  client_unreachable: true,
+  delete_files_requires_remove_torrent: true,
 }
 
 /** 這一次失敗是「後端說不行」還是「網路壞了」。判定與另外兩組共用（`api/refusal.ts`）。 */
@@ -82,4 +84,56 @@ export async function submitJob(body: JobCreate) {
 /** `submit_failed` → `requested` → 再送一次（plan §3.1）。 */
 export async function retryJob(hash: string) {
   return apiPost<Job>(`/jobs/${encodeURIComponent(hash)}/retry`)
+}
+
+/**
+ * 刪除範圍的四個旗標（brief §9.2）。**預設全不勾**——後端的 `DeleteScope` 是同一組預設，
+ * 所以對話框沒送出去的那幾格與命令自己的預設是同一件事。
+ */
+export type DeleteScope = {
+  unlink: boolean
+  removeTorrent: boolean
+  deleteFiles: boolean
+  purge: boolean
+}
+
+/** 什麼都不勾。對話框開啟時的狀態，也是「只把這一筆從清單上收掉」那一種刪除。 */
+export const NOTHING_TICKED: DeleteScope = {
+  unlink: false,
+  removeTorrent: false,
+  deleteFiles: false,
+  purge: false,
+}
+
+/** 刪下去會空出多少（`berth/api/jobs.py` 的 `DeletionEstimateOut`）。 */
+export type DeletionEstimate = Schemas['DeletionEstimateOut']
+
+/** 一次刪除真的做掉了什麼（`JobDeletedOut`）。 */
+export type JobDeleted = Schemas['JobDeletedOut']
+
+/**
+ * 這一筆刪下去會空出多少。**逐一 `stat` 每一個來源與目標，所以它慢**（brief §9.2）——
+ * 畫面在等它的時候要說「正在算」。
+ *
+ * 只在對話框打開時才問（`enabled`）：一份清單裡多數列不會被展開，而這一支會去摸磁碟。
+ */
+export function deletionQueryOptions(hash: string, enabled: boolean) {
+  return queryOptions({
+    queryKey: ['jobs', hash, 'deletion'],
+    queryFn: () => apiGet<DeletionEstimate>(`/jobs/${encodeURIComponent(hash)}/deletion`),
+    enabled,
+    // 估算是「現在磁碟上的樣子」。對話框重開一次就該重算，不拿上一次的答案賭它還成立。
+    staleTime: 0,
+  })
+}
+
+/** 照勾選的那幾格刪（`DELETE /jobs/{hash}`）。回的是**真的做掉了什麼**。 */
+export async function deleteJob(hash: string, scope: DeleteScope) {
+  const query = new URLSearchParams({
+    unlink: String(scope.unlink),
+    remove_torrent: String(scope.removeTorrent),
+    delete_files: String(scope.deleteFiles),
+    purge: String(scope.purge),
+  })
+  return apiDelete<JobDeleted>(`/jobs/${encodeURIComponent(hash)}?${query}`)
 }

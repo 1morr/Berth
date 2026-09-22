@@ -62,6 +62,9 @@ class FakeQbittorrentClient:
         #: 收下的每一筆 `torrents/add`。送單測試斷言的就是它——category、tag 與
         #: 交出去的到底是磁力連結還是一份 `.torrent`。
         self.added: list[TorrentAdd] = []
+        #: 每一次 `torrents/delete` 收到的 `(hash, delete_files)`。刪除範圍的測試斷言的是它：
+        #: 「不刪檔」與「刪檔」送出去的是不同的請求，而磁碟上的事實由 Berth 自己那一半決定。
+        self.deleted: list[tuple[str, bool]] = []
         #: 客戶端當下有哪些 torrent。**是公開的可變欄位**：poller 的測試要在兩輪之間
         #: 換掉它（下載完成、torrent 被使用者刪掉），那正是狀態機的輸入。
         self.torrents: tuple[TorrentStatus, ...] = torrents
@@ -110,6 +113,18 @@ class FakeQbittorrentClient:
         if self.add_error is not None:
             raise self.add_error
         self.added.append(request)
+
+    async def delete_torrent(self, info_hash: str, *, delete_files: bool) -> None:
+        """有狀態：那一筆真的從 `torrents` 裡消失，下一輪 poller 看到的就是「它不在了」。
+
+        **不認得的 hash 不是錯誤**，與真的那一台同形（brief §20.2）。`delete_files=True` 時
+        替身**不動磁碟**：真 qBittorrent 刪的是它自己記的那份內容，而 Berth 逐檔刪來源是
+        `services/deletion.py` 自己做的事（它要數得出刪了幾個、空出多少）。
+        """
+        if self.error is not None:
+            raise self.error
+        self.deleted.append((info_hash, delete_files))
+        self.torrents = tuple(row for row in self.torrents if row.hash != info_hash)
 
     async def sync(self) -> tuple[TorrentStatus, ...]:
         """替身直接回「現在有哪些」——合併本來就發生在真 client 的 `MaindataCursor` 裡，

@@ -336,6 +336,43 @@ async def test_qbittorrent_categories_read_the_snake_case_spelling() -> None:
 
 @respx.mock
 @pytest.mark.asyncio
+@pytest.mark.parametrize("delete_files", [False, True])
+async def test_qbittorrent_delete_posts_the_literal_boolean(delete_files: bool) -> None:
+    """`torrents/delete` 只認字面 `true` / `false`（`Utils::String::parseBool`，brief §20.2）。
+
+    `deleteFiles=1` 在 qBittorrent 眼裡不是真，是「解析不出來」→ `false`，於是 Berth 以為
+    檔案刪了而磁碟上還在。**用 POST**：4.5.0 起 GET 回 405（同一份查證）。
+    """
+    route = respx.post(f"{QBITTORRENT_URL}/api/v2/torrents/delete").respond(200, text="")
+
+    client = HttpQbittorrentClient(QBITTORRENT_URL)
+    try:
+        await client.delete_torrent("abc123", delete_files=delete_files)
+    finally:
+        await client.aclose()
+
+    sent = dict(parse_qsl(route.calls.last.request.content.decode()))
+    assert sent == {"hashes": "abc123", "deleteFiles": "true" if delete_files else "false"}
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_qbittorrent_delete_of_a_torrent_it_does_not_have_is_not_an_error() -> None:
+    """找不到那個 hash 時它靜靜回 200（原始碼 `applyToTorrents` 直接跳過，brief §20.2）。
+
+    所以「移除 torrent」對已經不在客戶端的那一筆是成立的，不是失敗——Berth 不必先問一次。
+    """
+    respx.post(f"{QBITTORRENT_URL}/api/v2/torrents/delete").respond(200, text="")
+
+    client = HttpQbittorrentClient(QBITTORRENT_URL)
+    try:
+        await client.delete_torrent("not-here", delete_files=False)
+    finally:
+        await client.aclose()
+
+
+@respx.mock
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("release", "save_path", "temp_path"),
     [

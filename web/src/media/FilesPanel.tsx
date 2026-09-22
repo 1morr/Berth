@@ -1,8 +1,10 @@
 import { useId } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
 
+import { meQueryOptions } from '../api/auth'
 import type { Media } from '../api/media'
 import { CollapsibleRow } from '../components/CollapsibleRow'
 import { GHOST_LINK } from '../components/controls'
@@ -11,6 +13,7 @@ import { formatCoverage, formatEpisode } from '../components/episodes'
 import { FileEntry } from '../components/FileEntry'
 import { groupRows, type RowGroup } from '../components/rowGroups'
 import { Timestamp } from '../components/Timestamp'
+import { JobDelete } from '../jobs/JobDelete'
 
 type LedgerFile = Media['files'][number]
 
@@ -29,6 +32,8 @@ export function FilesPanel({ media }: { media: Media }) {
   const { t } = useTranslation()
   const headingId = useId()
   const hasFeature = media.files.some((file) => file.action === 'import')
+  // 刪除只有 admin 按得到（plan §6，後端同時回 403）。前端隱藏不是安全機制。
+  const isAdmin = useQuery(meQueryOptions).data?.role === 'admin'
 
   return (
     <section aria-labelledby={headingId} className="grid gap-4">
@@ -88,10 +93,16 @@ export function FilesPanel({ media }: { media: Media }) {
                         的那幾個沒有名字，顯示檔名的 tags 並在底下說一句，不自己重算一個。 */}
                     {/* key 用位置：這一組是一次讀出來的快照，不排序也不增刪，而兩個版本的
                         名字與 tags 都可能是空的（Jellyfin 還沒收錄、檔名也沒有 tag）。 */}
-                    <ul className="grid gap-0.5">
+                    <ul className="grid gap-2">
                       {group.versions.map((version, index) => (
-                        <li key={index} className="value text-xs wrap-anywhere text-ink-dim">
-                          {version.name || version.tags || '—'}
+                        <li key={index} className="grid gap-1.5">
+                          <span className="value block text-xs wrap-anywhere text-ink-dim">
+                            {version.name || version.tags || '—'}
+                          </span>
+                          {/* 刪除掛在**每一個版本**上而不是整組（plan §7、M2 票 04）：多版本
+                              並存時使用者要拿掉的是其中一個，而那一個是一筆下載帶進來的。
+                              重新入庫那種沒有 Job 的版本刪不了，所以那時候不畫這顆鍵。 */}
+                          {isAdmin && version.job_hash && <JobDelete hash={version.job_hash} />}
                         </li>
                       ))}
                     </ul>

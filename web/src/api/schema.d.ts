@@ -393,7 +393,18 @@ export interface paths {
         get: operations["get_job_api_jobs__job_hash__get"];
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Delete Job Endpoint
+         * @description 刪除範圍的四個旗標（brief §9.2、plan §3.1 的最後一列、票 04）。
+         *
+         *     **四個預設全不勾**，而且預設值在後端也成立：一個參數都不帶的 `DELETE` 只把這一筆收成
+         *     `removed`，磁碟上一個檔案都不動。預設只寫在對話框上的話，之後的每一個呼叫端（Issue 的
+         *     修復、票 05 的 audit 撤銷）都要自己記得這件事。
+         *
+         *     回的是**真的發生了什麼**而不是 204：勾了「移除鏈接」而那幾個檔案早就被人在 Jellyfin 裡
+         *     刪掉時，畫面要說得出「0 個鏈接」而不是一句「刪好了」。
+         */
+        delete: operations["delete_job_endpoint_api_jobs__job_hash__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -457,6 +468,30 @@ export interface paths {
          * @description `submit_failed` → `requested` → 再送一次；`import_failed` → `importing`（plan §3.1）。
          */
         post: operations["post_retry_api_jobs__job_hash__retry_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/jobs/{job_hash}/deletion": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Deletion
+         * @description 刪除對話框打開時算的那一份（brief §9.2、票 04）。**只讀，不改任何東西。**
+         *
+         *     **慢是刻意的**：逐一 `stat` 每一個來源與目標，不用 qBittorrent 報的 `total_size` 去猜
+         *     ——那是 torrent 的大小，而磁碟上可能只下載了一部分、可能有人手動刪過幾個檔案。畫面在
+         *     等它的時候說「正在算」。
+         */
+        get: operations["get_deletion_api_jobs__job_hash__deletion_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1220,6 +1255,32 @@ export interface components {
              */
             password?: string;
         };
+        /**
+         * DeletionEstimateOut
+         * @description 刪下去會空出多少（brief §9.2）。每一個數字都是剛剛 `stat` 出來的。
+         *
+         *     **`reclaimable` 與 `link_bytes` + `source_bytes` 不是同一件事**：來源與它的媒體庫鏈接
+         *     是同一份資料，兩邊各算一次會把答案說成兩倍。只有來源與所有鏈接都刪掉時那些位元組才
+         *     真的回到檔案系統，`held` 是連那樣做也拿不回來的（有 Berth 不知道的第三個鏈接握著）。
+         */
+        DeletionEstimateOut: {
+            /** Links */
+            links: number;
+            /** Links Missing */
+            links_missing: number;
+            /** Link Bytes */
+            link_bytes: number;
+            /** Sources */
+            sources: number;
+            /** Sources Missing */
+            sources_missing: number;
+            /** Source Bytes */
+            source_bytes: number;
+            /** Reclaimable */
+            reclaimable: number;
+            /** Held */
+            held: number;
+        };
         /** DetectIn */
         DetectIn: {
             /**
@@ -1583,6 +1644,25 @@ export interface components {
             created: boolean;
         };
         /**
+         * JobDeletedOut
+         * @description 一次刪除**真的**做掉了什麼（brief §9.2）。
+         *
+         *     與「勾了哪幾個」不是同一件事，所以它是一份回應而不是回聲：時間線上那一筆 `deleted`
+         *     寫的是同一組數字。
+         */
+        JobDeletedOut: {
+            /** Links */
+            links: number;
+            /** Sources */
+            sources: number;
+            /** Torrent */
+            torrent: boolean;
+            /** Purged */
+            purged: boolean;
+            /** Freed */
+            freed: number;
+        };
+        /**
          * JobEventOut
          * @description 時間線上的一筆（brief §5.2）。
          */
@@ -1670,7 +1750,7 @@ export interface components {
          *     列上有一顆重試（plan §3.1）。這裡的每一種都是「還沒開始就停住」。
          * @enum {string}
          */
-        JobRefusal: "media_missing" | "route_missing" | "route_kind_mismatch" | "route_disabled" | "route_unhealthy" | "source_unavailable" | "job_missing" | "not_retryable" | "not_replannable";
+        JobRefusal: "media_missing" | "route_missing" | "route_kind_mismatch" | "route_disabled" | "route_unhealthy" | "source_unavailable" | "job_missing" | "not_retryable" | "not_replannable" | "client_unreachable" | "delete_files_requires_remove_torrent";
         /**
          * JobRefusalOut
          * @description 做不了的時候回的那一份。`reason` 給畫面挑句子、挑下一步，`detail` 是原文，不翻譯。
@@ -2602,6 +2682,8 @@ export interface components {
             name: string;
             /** Tags */
             tags: string;
+            /** Job Hash */
+            job_hash: string;
         };
         /**
          * WatchAreaOut
@@ -3524,6 +3606,60 @@ export interface operations {
             };
         };
     };
+    delete_job_endpoint_api_jobs__job_hash__delete: {
+        parameters: {
+            query?: {
+                unlink?: boolean;
+                remove_torrent?: boolean;
+                delete_files?: boolean;
+                purge?: boolean;
+            };
+            header?: never;
+            path: {
+                job_hash: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobDeletedOut"];
+                };
+            };
+            /** @description `job_missing` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobRefusalOut"];
+                };
+            };
+            /** @description `delete_files_requires_remove_torrent` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobRefusalOut"];
+                };
+            };
+            /** @description `client_unreachable` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobRefusalOut"];
+                };
+            };
+        };
+    };
     get_job_events_api_jobs__job_hash__events_get: {
         parameters: {
             query?: never;
@@ -3649,6 +3785,46 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["JobRefusalOut"];
+                };
+            };
+        };
+    };
+    get_deletion_api_jobs__job_hash__deletion_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_hash: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeletionEstimateOut"];
+                };
+            };
+            /** @description `job_missing` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobRefusalOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

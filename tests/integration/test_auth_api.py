@@ -30,6 +30,8 @@ JELLYFIN_URL = "http://jellyfin:8096"
 BROWSER = {CSRF_HEADER: "XMLHttpRequest"}
 ADMIN = {"username": "skipper", "password": "harbour"}
 DECKHAND = {"username": "deckhand", "password": "rope"}
+#: 形狀對的 info hash。這一台上沒有這筆 Job——門禁跑在 router 之前，所以它照樣測得了。
+HASH = "4bd0f6ef1d3b1e3cbb1e1b6b6c2a9c7d8e5f0a1b"
 
 
 class OneJellyfin:
@@ -288,6 +290,46 @@ class TestSettingsAreAdminOnly:
         sign_in(client, DECKHAND)
 
         assert client.get("/api/setup/not-built-yet").status_code == 403
+
+
+class TestDeletingIsAdminOnlyWhileTheRestOfJobsIsNot:
+    """門禁認得**方法**（M2 票 04）。
+
+    `/jobs` 整組不能是 admin——一般使用者要送得了單、看得到自己的 job（brief §11）。而
+    刪除是 admin 的事（plan §6，2026-09-22 拍板）。所以這是第一條「同一條路徑、不同方法、
+    不同門禁」的規則，而它仍然只住在門禁一處。
+
+    兩邊都斷言：把規則改回純前綴的話，不是 `/jobs` 整組變成 admin（下面那三條紅），就是
+    刪除對誰都開著（上面那條紅）。
+    """
+
+    def test_an_ordinary_user_cannot_delete_a_job(self, client: TestClient) -> None:
+        sign_in(client, DECKHAND)
+
+        assert delete(client, f"/api/jobs/{HASH}").status_code == 403
+
+    def test_an_administrator_gets_past_the_gate(self, client: TestClient) -> None:
+        """門禁放行之後才輪到 router：這一台上沒有這筆 Job，所以 404 就是「進得來」。"""
+        sign_in(client, ADMIN)
+
+        assert delete(client, f"/api/jobs/{HASH}").status_code == 404
+
+    def test_an_ordinary_user_still_reads_and_submits(self, client: TestClient) -> None:
+        sign_in(client, DECKHAND)
+
+        assert client.get("/api/jobs").status_code == 200
+        assert client.get(f"/api/jobs/{HASH}/events").status_code == 200
+        # 送單的 body 是空的，所以這是 422——重點是它**不是** 403：門禁放行了。
+        assert post(client, "/api/jobs", {}).status_code == 422
+
+    def test_signing_out_still_beats_the_method_rule(self, client: TestClient) -> None:
+        """未登入是 401 而不是 403：前端據此導向 `/login`，不是說「你不是管理員」。"""
+        assert delete(client, f"/api/jobs/{HASH}").status_code == 401
+
+
+def delete(client: TestClient, path: str) -> httpx.Response:
+    response: httpx.Response = client.delete(path, headers=BROWSER)
+    return response
 
 
 def _finish_setup(client: TestClient) -> None:

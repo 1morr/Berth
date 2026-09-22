@@ -144,6 +144,9 @@ class VersionOut(BaseModel):
     name: str
     #: 這個檔案的 Tags。沒有 `name` 時畫面顯示它，並說明那不是版本名（brief §7.7）。
     tags: str
+    #: 這個版本是哪一筆下載帶進來的（票 04）。版本清單上的刪除按的就是那一筆；重新入庫
+    #: 那種沒有 Job 的是空字串，那時候畫不出刪除。
+    job_hash: str
 
 
 class VersionGroupOut(BaseModel):

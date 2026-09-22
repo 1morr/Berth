@@ -105,6 +105,36 @@ function ledgerFile(overrides: Partial<LedgerFile> = {}): LedgerFile {
   }
 }
 
+/**
+ * 同一集兩個版本（brief §7.7）。**有版本群組就一定有正片**——版本區塊掛在「有正片」底下。
+ *
+ * 每個版本各帶自己的 `job_hash`：版本清單上的刪除按的就是那一筆（M2 票 04），多版本並存時
+ * 要拿掉的是其中一個。
+ */
+const TWO_VERSIONS = {
+  files: [ledgerFile()],
+  versions: [
+    {
+      season: 1,
+      episode_start: 1,
+      episode_end: null,
+      // 名字是 Jellyfin 算的（票 14b）：反查到的那一刻抄進帳本。
+      versions: [
+        {
+          name: 'OPERATION STRIX [WEB][1080p][Lilith-Raws]',
+          tags: '[WEB][1080p][Lilith-Raws]',
+          job_hash: 'aaaa1111',
+        },
+        {
+          name: 'OPERATION STRIX [BD][2160p][Sakurato]',
+          tags: '[BD][2160p][Sakurato]',
+          job_hash: 'bbbb2222',
+        },
+      ],
+    },
+  ],
+}
+
 /** 走真正的 route tree：這一頁掛在 `/media/$mediaId`，而錯誤裡有站內連結。 */
 function render(
   routes: Record<string, StubRoute | (() => StubRoute)> = {},
@@ -1066,28 +1096,7 @@ describe('Media 詳情頁', () => {
   it('多版本並存列出 Jellyfin 版本選單上會出現的名字（brief §7.7）', async () => {
     render({
       [SPY_PATH]: {
-        body: media({
-          // 有版本群組就一定有正片——版本區塊掛在「有正片」底下。
-          files: [ledgerFile()],
-          versions: [
-            {
-              season: 1,
-              episode_start: 1,
-              episode_end: null,
-              // 名字是 Jellyfin 算的（票 14b）：反查到的那一刻抄進帳本。
-              versions: [
-                {
-                  name: 'OPERATION STRIX [WEB][1080p][Lilith-Raws]',
-                  tags: '[WEB][1080p][Lilith-Raws]',
-                },
-                {
-                  name: 'OPERATION STRIX [BD][2160p][Sakurato]',
-                  tags: '[BD][2160p][Sakurato]',
-                },
-              ],
-            },
-          ],
-        }),
+        body: media(TWO_VERSIONS),
       },
     })
     renderApp('/media/tv:120089')
@@ -1097,6 +1106,27 @@ describe('Media 詳情頁', () => {
     expect(within(files).getByText('多版本並存')).toBeVisible()
     expect(within(files).getByText('OPERATION STRIX [BD][2160p][Sakurato]')).toBeVisible()
     expect(within(files).getByText(/由 Jellyfin 決定/)).toBeVisible()
+  })
+
+  it('版本清單上每一個版本各有自己的刪除——要拿掉的是其中一個（M2 票 04）', async () => {
+    // 刪除的對話框是**同一個元件**（plan §7）：`/jobs` 的展開區掛的是它，這裡也是。
+    render({ [SPY_PATH]: { body: media(TWO_VERSIONS) } })
+    renderApp('/media/tv:120089')
+
+    const files = await screen.findByRole('region', { name: '檔案與版本' })
+
+    expect(within(files).getAllByRole('button', { name: '刪除' })).toHaveLength(2)
+  })
+
+  it('一般使用者在版本清單上看不到刪除（M2 票 04 驗收）', async () => {
+    // **前端隱藏不是安全機制**：擋住的那一條在門禁上（`DELETE /jobs/{hash}` 回 403）。
+    render({ [SPY_PATH]: { body: media(TWO_VERSIONS) } }, 'user')
+    renderApp('/media/tv:120089')
+
+    const files = await screen.findByRole('region', { name: '檔案與版本' })
+
+    expect(within(files).getByText('多版本並存')).toBeVisible()
+    expect(within(files).queryByRole('button', { name: '刪除' })).toBeNull()
   })
 
   it('憑證缺失時連到精靈的泊位 3，與探索頁同一塊', async () => {

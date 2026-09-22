@@ -307,3 +307,102 @@ class TestSubmitFailed:
 
         assert job["state"] == "submitted"
         assert job["error"] == ""
+
+
+class TestDeleteScope:
+    """`DELETE /jobs/{hash}` 的四個旗標與估算那一支（brief §9.2、M2 票 04）。
+
+    命令本身的行為在 `test_deletion.py` 貼著磁碟驗；這裡驗的是 HTTP 那一層——預設值、
+    拒絕的狀態碼與理由，以及「真的做了什麼」有沒有原樣回到畫面上。
+    """
+
+    def test_the_four_flags_default_to_off(self, client: TestClient) -> None:
+        """一個參數都不帶時什麼都不刪（brief §9.2）：預設在後端也成立，不只在對話框上。"""
+        sign_in(client)
+        submit(client)
+
+        response = client.delete(f"/api/jobs/{MAGNET_HASH}", headers=BROWSER)
+
+        assert response.status_code == 200
+        assert response.json() == {
+            "links": 0,
+            "sources": 0,
+            "torrent": False,
+            "purged": False,
+            "freed": 0,
+        }
+
+    def test_deleting_files_without_removing_the_torrent_is_422_with_a_reason(
+        self, client: TestClient
+    ) -> None:
+        sign_in(client)
+        submit(client)
+
+        response = client.delete(f"/api/jobs/{MAGNET_HASH}?delete_files=true", headers=BROWSER)
+
+        assert response.status_code == 422
+        assert response.json()["detail"]["reason"] == "delete_files_requires_remove_torrent"
+
+    def test_a_job_that_is_not_there_is_404_with_a_reason(self, client: TestClient) -> None:
+        sign_in(client)
+
+        response = client.delete(f"/api/jobs/{MAGNET_HASH}", headers=BROWSER)
+
+        assert response.status_code == 404
+        assert response.json()["detail"]["reason"] == "job_missing"
+
+    def test_removing_the_torrent_says_so_in_the_answer(self, client: TestClient) -> None:
+        sign_in(client)
+        submit(client)
+
+        response = client.delete(f"/api/jobs/{MAGNET_HASH}?remove_torrent=true", headers=BROWSER)
+
+        assert response.status_code == 200
+        assert response.json()["torrent"] is True
+
+    def test_purging_takes_the_job_off_the_list(self, client: TestClient) -> None:
+        sign_in(client)
+        submit(client)
+
+        client.delete(f"/api/jobs/{MAGNET_HASH}?purge=true", headers=BROWSER)
+
+        assert client.get("/api/jobs").json() == []
+
+    def test_without_purge_it_stays_on_the_list_as_removed(self, client: TestClient) -> None:
+        sign_in(client)
+        submit(client)
+
+        client.delete(f"/api/jobs/{MAGNET_HASH}", headers=BROWSER)
+
+        assert [row["state"] for row in client.get("/api/jobs").json()] == ["removed"]
+
+    def test_the_estimate_answers_before_anything_is_deleted(self, client: TestClient) -> None:
+        """送單當下還沒有檔案，所以每一格都是 0——**而且那一筆 Job 一點都沒有變**。"""
+        sign_in(client)
+        submit(client)
+
+        response = client.get(f"/api/jobs/{MAGNET_HASH}/deletion")
+
+        assert response.status_code == 200
+        assert response.json()["reclaimable"] == 0
+        assert [row["state"] for row in client.get("/api/jobs").json()] == ["submitted"]
+
+    def test_the_estimate_of_a_job_that_is_not_there_is_404(self, client: TestClient) -> None:
+        sign_in(client)
+
+        response = client.get(f"/api/jobs/{MAGNET_HASH}/deletion")
+
+        assert response.status_code == 404
+        assert response.json()["detail"]["reason"] == "job_missing"
+
+    def test_an_ordinary_user_can_neither_delete_nor_estimate(self, client: TestClient) -> None:
+        """刪除與它的估算都是 admin（plan §6）。送單與清單照常——那一條在
+        `test_auth_api.py` 的門禁那一組。"""
+        sign_in(client, ADMIN)
+        submit(client)
+        client.post("/api/auth/logout", headers=BROWSER)
+        sign_in(client, CREW)
+
+        assert client.delete(f"/api/jobs/{MAGNET_HASH}", headers=BROWSER).status_code == 403
+        assert client.get(f"/api/jobs/{MAGNET_HASH}/deletion").status_code == 403
+        assert client.get("/api/jobs").status_code == 200

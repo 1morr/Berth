@@ -37,10 +37,17 @@ class PathEscapeError(Exception):
 
 @dataclass(frozen=True, slots=True)
 class PathFacts:
-    """`stat` 的結果。硬鏈接檢查要的就是 `device` 與 `inode` 這一對。"""
+    """`stat` 的結果。硬鏈接檢查要的就是 `device` 與 `inode` 這一對。
+
+    `size` 與 `links` 是刪除範圍的空間估算要的（brief §9.2）：**一次 `stat` 拿四個值**，
+    而不是為了 `st_nlink` 再摸一次磁碟——那會讓同一個檔案的四個數字來自兩個不同的時刻。
+    `links` 是這份資料現在有幾個名字，只有最後一個消失時那些位元組才回到檔案系統。
+    """
 
     device: int
     inode: int
+    size: int
+    links: int
 
 
 def ensure_directory(path: Path) -> bool:
@@ -68,7 +75,9 @@ def is_within(path: Path, root: Path) -> bool:
 def stat(path: Path) -> PathFacts:
     """這條路徑在 Berth 這個容器裡看得到嗎，看得到的話它是誰。看不到就丟 `OSError`。"""
     facts = path.stat()
-    return PathFacts(device=facts.st_dev, inode=facts.st_ino)
+    return PathFacts(
+        device=facts.st_dev, inode=facts.st_ino, size=facts.st_size, links=facts.st_nlink
+    )
 
 
 def same_inode(a: Path, b: Path) -> bool:
@@ -80,6 +89,48 @@ def same_inode(a: Path, b: Path) -> bool:
 def free_space(path: Path) -> int:
     """這條路徑所在檔案系統的可用位元組。"""
     return shutil.disk_usage(path).free
+
+
+def remove(path: Path, *, roots: Sequence[Path]) -> bool:
+    """刪掉一個檔案。真的刪了回 `True`，本來就不在回 `False`。
+
+    **刪除也是寫入**，所以它與 `link` 走同一道守衛：要刪的位置不在 `roots` 底下就拒絕。
+    呼叫端傳的是 Route 的目標（刪 library 鏈接）或 complete root（刪來源），所以「Berth 只
+    刪得掉自己放進去的那幾層」在簽名上就跑不掉。
+
+    **單位是一個檔案**：目錄一律拒絕（`IsADirectoryError`）。帳本與 `job_files` 記的都是
+    檔案，而一個目錄底下可能有 Berth 不知道的東西——brief §9.1 的 `unmanaged_library_file`
+    說的就是那些，它們永不自動刪。空掉的目錄由 `prune_empty_parents` 收。
+
+    **不在了不是失敗**：帳本上那一條可能早就被人在 Jellyfin 或檔案總管裡刪掉了（brief §9.5
+    的 `library_link_missing` 就是這件事），而刪除要做的事本來就已經成立。
+    """
+    _guard(path, roots)
+    if path.is_dir():
+        raise IsADirectoryError(errno.EISDIR, "refusing to remove a folder", str(path))
+    try:
+        path.unlink()
+    except FileNotFoundError:
+        return False
+    return True
+
+
+def prune_empty_parents(path: Path, *, root: Path) -> None:
+    """把 `path` 留下的空目錄一層層收掉，收到 `root` 為止（不含 `root` 自己）。
+
+    刪掉一季裡最後一集之後留著 `Show/Season 01/` 兩層空目錄，Jellyfin 的牆上那部作品就還在
+    ——畫面說刪掉了，媒體庫說沒有。`root` 本身不碰：媒體庫目錄與 complete root 是設定值，
+    不是這一次刪除建出來的東西。
+
+    **只刪空的**：`rmdir` 對非空目錄丟 `OSError`，遇到第一個就停——那底下還有別人的檔案。
+    """
+    current = path.parent
+    while is_within(current, root) and _normalised(current) != _normalised(root):
+        try:
+            current.rmdir()
+        except OSError:
+            return
+        current = current.parent
 
 
 def link(source: Path, target: Path, *, roots: Sequence[Path]) -> None:
@@ -174,10 +225,21 @@ def link_test(source_dir: Path, target_dir: Path, *, roots: Sequence[Path]) -> P
                 target.unlink()
 
 
+def root_of(path: Path, roots: Sequence[Path]) -> Path:
+    """`path` 落在 `roots` 的哪一個底下。都不在就丟 `PathEscapeError`。
+
+    守衛與「收掉空目錄要收到哪一層」問的是同一件事，所以只算一次：`remove` 之後呼叫端拿著
+    這個答案去 `prune_empty_parents`，不必自己再走一次 `is_within`。
+    """
+    for root in roots:
+        if is_within(path, root):
+            return root
+    listed = ", ".join(str(root) for root in roots) or "none"
+    raise PathEscapeError(f"{path} is outside every Berth route target (allowed: {listed})")
+
+
 def _guard(path: Path, roots: Sequence[Path]) -> None:
-    if not any(is_within(path, root) for root in roots):
-        listed = ", ".join(str(root) for root in roots) or "none"
-        raise PathEscapeError(f"{path} is outside every Berth route target (allowed: {listed})")
+    root_of(path, roots)
 
 
 def _normalised(path: Path) -> Path:

@@ -430,8 +430,31 @@ Berth 入庫的作品照樣瀏覽得到。這六件事現在是 nightly e2e 的�
   在帳本那條路徑上的 item；標為已看 / 未看之後**那個帳號自己的**觀看紀錄真的變了（一集自己一次、整部劇遞迴一次）；
   帳號在 Jellyfin 被停用之後 Berth 的 session 結束。最後一條停掉 Jellyfin 容器，驗「問不到 Jellyfin」那一句
   （票 07 留下的：那條路徑之前只有 vitest 與後端單元測試）。
+- **刪除範圍：四個可組合的旗標與空間估算**（M2 票 04，brief §9.2、plan §3.1、§6）。
+  `DELETE /jobs/{hash}?unlink=&remove_torrent=&delete_files=&purge=`——移除 library 硬鏈接 /
+  從 qBittorrent 移除 torrent（不刪檔）/ 刪除 complete 檔案 / 清除帳本與 Job 紀錄，**四個預設
+  全不勾**（後端也是，不只對話框）。`delete_files` 沒帶 `remove_torrent` 是 422：qBittorrent
+  還握著那個 torrent 時把檔案抽走，它會在下一次重新檢查時把整包再抓一遍。Job 進 `removed`、
+  時間線多一筆 `deleted`，payload 說的是**真的**做掉了什麼而不是勾了哪幾個。檔案由 Berth 自己
+  逐檔刪（不用 `torrents/delete?deleteFiles=true`）：torrent 可能早就不在客戶端了，而時間線要
+  數得出刪了幾個、空出多少。刪除與鏈接同一道路徑守衛（`fs.remove` 要 `roots`），空掉的目錄跟著收。
+- **空間估算逐一 `stat`**（M2 票 04，`GET /jobs/{hash}/deletion`）。不用 qBittorrent 報的
+  `total_size` 去猜——那是 torrent 的大小，而磁碟上可能只下載了一部分。把要刪的路徑按
+  `(device, inode)` 分組，**一組的路徑數等於它的 `st_nlink` 時才算進「真的會釋放」**：硬鏈接
+  底下只有最後一個名字消失時那些位元組才回到檔案系統，有 Berth 不知道的第三個鏈接握著的另
+  外報 `held`。對話框在算的時候說「正在逐一量測這幾個檔案…」，算不出來仍然刪得下去。
+- **刪除對話框是一個元件**（M2 票 04，plan §7）：`/jobs` 的展開區與 Media 詳情的版本清單共用，
+  票 11 的 `/jobs/:hash` 掛的也是它。就地展開而不是 dialog（The Failure Expands In Place Rule）——
+  「哪一筆正在被刪」正是這個動作最怕搞錯的事。取消「移除 torrent」會把「刪除檔案」一起收掉，
+  不留一個送出去一定被擋下來的勾。版本清單上的刪除掛在**每一個版本**上（`VersionOut` 多帶
+  `job_hash`）：多版本並存時要拿掉的是其中一個。
 
 ### Changed
+
+- **門禁多一個維度：方法**（M2 票 04，plan §6）。`ADMIN_PREFIXES` 只比路徑前綴，而 `/jobs`
+  整組不能是 admin——`user` 要送得了單、看得到自己的 job。新的 `ADMIN_ROUTES` 是
+  `(方法, 路徑樣式)`，樣式裡的 `*` 配一段，所以 `DELETE /jobs/*` 與 `GET /jobs/*/deletion`
+  是 admin 而 `POST /jobs` 不是。規則仍然只在 `api/gate.py` 一處，不散到 router 的相依裡。
 
 - **顯示用海報也跟著 UI 語言走**（M1.5 票 11，brief §7.5、plan §8.3）。TMDB 的海報分語言，票 02 只換了標題與簡介，
   所以 EN 介面上 Moana 仍掛著「海洋奇緣」的中文海報。API 兩輪都送（`poster_url` / `poster_url_en`），前端照

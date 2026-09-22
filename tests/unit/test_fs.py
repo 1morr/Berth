@@ -22,6 +22,9 @@ from berth.adapters.fs import (
     link_test,
     mount_point,
     probe_file,
+    prune_empty_parents,
+    remove,
+    root_of,
     same_inode,
     stat,
 )
@@ -66,6 +69,26 @@ class TestStat:
         """包成別的字串只會讓使用者看不出是哪個容器少了哪個掛載（brief §16.4）。"""
         with pytest.raises(FileNotFoundError):
             stat(tmp_path / "nowhere")
+
+
+class TestFileFacts:
+    """空間估算靠這兩個（brief §9.2）：**一次 `stat` 拿四個值**，不為了 `st_nlink` 再摸一次磁碟。"""
+
+    def test_reports_the_size_and_a_lone_file_has_one_name(self, tmp_path: Path) -> None:
+        path = tmp_path / "solo.mkv"
+        path.write_bytes(b"berth")
+
+        facts = stat(path)
+
+        assert (facts.size, facts.links) == (5, 1)
+
+    def test_a_hard_linked_file_counts_both_names(self, tmp_path: Path) -> None:
+        """只有**最後一個**名字消失時那些位元組才回到檔案系統。"""
+        source = tmp_path / "source.mkv"
+        source.write_bytes(b"x")
+        os.link(source, tmp_path / "library.mkv")
+
+        assert stat(source).links == 2
 
 
 class TestSameInode:
@@ -323,3 +346,108 @@ class TestProbeFile:
 
 def test_free_space_reports_the_target_file_system(tmp_path: Path) -> None:
     assert free_space(tmp_path) == shutil.disk_usage(tmp_path).free
+
+
+class TestRemove:
+    """刪除也是寫入，所以它要與 `link` 同一道守衛（票 M2/04）。"""
+
+    def test_removes_a_file_inside_an_allowed_root(self, tmp_path: Path) -> None:
+        library = tmp_path / "library"
+        ensure_directory(library)
+        target = library / "Show" / "episode.mkv"
+        target.parent.mkdir(parents=True)
+        target.write_bytes(b"x")
+
+        assert remove(target, roots=[library]) is True
+        assert not target.exists()
+
+    def test_a_file_that_is_already_gone_reports_false(self, tmp_path: Path) -> None:
+        """對帳本上早就被人刪掉的那一條，刪除不是失敗——它只是沒有事情要做。"""
+        library = tmp_path / "library"
+        ensure_directory(library)
+
+        assert remove(library / "gone.mkv", roots=[library]) is False
+
+    def test_refuses_a_path_outside_every_root(self, tmp_path: Path) -> None:
+        victim = tmp_path / "elsewhere.mkv"
+        victim.write_bytes(b"x")
+
+        with pytest.raises(PathEscapeError):
+            remove(victim, roots=[tmp_path / "library"])
+
+        assert victim.exists()
+
+    def test_refuses_when_there_is_no_root_at_all(self, tmp_path: Path) -> None:
+        victim = tmp_path / "victim.mkv"
+        victim.write_bytes(b"x")
+
+        with pytest.raises(PathEscapeError):
+            remove(victim, roots=[])
+
+        assert victim.exists()
+
+    def test_refuses_a_directory(self, tmp_path: Path) -> None:
+        """刪除的單位是**一個檔案**：帳本與 job_files 記的都是檔案，而一個目錄底下可能
+        有別人的東西（brief §9.1 的 `unmanaged_library_file` 永不自動刪）。"""
+        library = tmp_path / "library"
+        folder = library / "Show"
+        folder.mkdir(parents=True)
+
+        with pytest.raises(IsADirectoryError):
+            remove(folder, roots=[library])
+
+        assert folder.is_dir()
+
+
+class TestPruneEmptyParents:
+    def test_removes_the_folders_that_the_file_left_empty(self, tmp_path: Path) -> None:
+        library = tmp_path / "library"
+        target = library / "Show" / "Season 01" / "episode.mkv"
+        target.parent.mkdir(parents=True)
+        target.write_bytes(b"x")
+        remove(target, roots=[library])
+
+        prune_empty_parents(target, root=library)
+
+        assert library.is_dir()
+        assert not (library / "Show").exists()
+
+    def test_stops_at_the_first_folder_that_still_has_something(self, tmp_path: Path) -> None:
+        library = tmp_path / "library"
+        season = library / "Show" / "Season 01"
+        season.mkdir(parents=True)
+        (season / "kept.mkv").write_bytes(b"x")
+
+        prune_empty_parents(season / "gone.mkv", root=library)
+
+        assert season.is_dir()
+
+    def test_never_removes_the_root_itself(self, tmp_path: Path) -> None:
+        """媒體庫目錄是設定值，不是這一次刪除建出來的東西。"""
+        library = tmp_path / "library"
+        ensure_directory(library)
+
+        prune_empty_parents(library / "episode.mkv", root=library)
+
+        assert library.is_dir()
+
+    def test_a_path_outside_the_root_prunes_nothing(self, tmp_path: Path) -> None:
+        elsewhere = tmp_path / "elsewhere"
+        elsewhere.mkdir()
+
+        prune_empty_parents(elsewhere / "file.mkv", root=tmp_path / "library")
+
+        assert elsewhere.is_dir()
+
+
+class TestRootOf:
+    """守衛與「空目錄要收到哪一層」問的是同一件事，所以只算一次（M2 票 04）。"""
+
+    def test_names_the_root_the_path_falls_under(self, tmp_path: Path) -> None:
+        library, complete = tmp_path / "library", tmp_path / "complete"
+
+        assert root_of(complete / "pack" / "a.mkv", [library, complete]) == complete
+
+    def test_a_path_outside_every_root_raises(self, tmp_path: Path) -> None:
+        with pytest.raises(PathEscapeError):
+            root_of(tmp_path / "elsewhere.mkv", [tmp_path / "library"])

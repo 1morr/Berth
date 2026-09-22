@@ -106,6 +106,7 @@ const EVENT_TYPES = [
   'jellyfin_scan_requested',
   'jellyfin_item_resolved',
   'jellyfin_request_failed',
+  'deleted',
 ] as const
 
 type KnownEvent = (typeof EVENT_TYPES)[number]
@@ -235,6 +236,26 @@ const FACTS: Record<KnownEvent, (facing: Facing) => ReactNode> = {
       </p>
     )
   },
+  // 刪除範圍跑完（brief §9.2、M2 票 04）。說的是**真的做掉了什麼**而不是勾了哪幾個：
+  // 勾了「移除鏈接」而那幾個檔案早就被人刪掉時，這裡是「0 個鏈接」。空出來的位元組另
+  // 起一行，因為它才是使用者按下去時想知道的那一件事。
+  deleted: ({ t, locale, payload }) => (
+    <>
+      <Row>
+        {join([
+          t('jobs.timeline.deletedLinks', { count: number(payload.links) }),
+          t('jobs.timeline.deletedSources', { count: number(payload.sources) }),
+          payload.torrent === true ? t('jobs.timeline.deletedTorrent') : '',
+          payload.purged === true ? t('jobs.timeline.deletedPurged') : '',
+        ])}
+      </Row>
+      <Row>
+        {number(payload.freed) > 0
+          ? t('jobs.timeline.freed', { size: formatSize(number(payload.freed), locale) })
+          : t('jobs.timeline.freedNothing')}
+      </Row>
+    </>
+  ),
 }
 
 /** `domain.JellyfinRequest`。認不得的只印原文——它可能是後端加的，而前端還沒有那句話。 */

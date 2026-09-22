@@ -125,10 +125,37 @@ describe('Job 時間線', () => {
   })
 
   it('認不得的事件型別原樣顯示——它仍然是一件真的發生過的事', () => {
-    // `deleted` 是 M2 的刪除才會寫的那一種（brief §5.2）。
-    const line = render([event({ type: 'deleted' })])
+    // `review_decided` 是票 06 的審核才會寫的那一種（brief §5.2）。
+    const line = render([event({ type: 'review_decided' })])
 
-    expect(line.getByText('deleted')).toBeInTheDocument()
+    expect(line.getByText('review_decided')).toBeInTheDocument()
+  })
+
+  it('刪除那一筆說得出真的刪了哪幾樣、空出多少', () => {
+    const line = render([
+      event({
+        type: 'deleted',
+        payload: { links: 5, sources: 6, torrent: true, purged: false, freed: 1_500_000_000 },
+      }),
+    ])
+
+    expect(line.getByText('已刪除')).toBeInTheDocument()
+    expect(line.getByText(/移除 5 個鏈接/)).toBeInTheDocument()
+    expect(line.getByText(/刪掉 6 個下載檔案/)).toBeInTheDocument()
+    expect(line.getByText(/從 qBittorrent 移除/)).toBeInTheDocument()
+    expect(line.getByText(/空出 1\.4 GB/)).toBeInTheDocument()
+  })
+
+  it('只移除鏈接時說的是「沒有空出空間」而不是「已釋放 0 B」', () => {
+    // 硬鏈接的另一半還在時一個位元組都沒回到磁碟（brief §9.2）。
+    const line = render([
+      event({
+        type: 'deleted',
+        payload: { links: 5, sources: 0, torrent: false, purged: false, freed: 0 },
+      }),
+    ])
+
+    expect(line.getByText(/沒有空出空間/)).toBeInTheDocument()
   })
 
   it('鏈接那一筆說得出檔案進了媒體庫的哪裡', () => {

@@ -74,6 +74,18 @@ function event(overrides: Partial<JobEvent> = {}): JobEvent {
   }
 }
 
+/** 刪除對話框打開時問的那一份（M2 票 04）。這一頁只在乎有沒有那顆鍵，數字不重要。 */
+const ESTIMATE = {
+  links: 0,
+  links_missing: 0,
+  link_bytes: 0,
+  sources: 0,
+  sources_missing: 0,
+  source_bytes: 0,
+  reclaimable: 0,
+  held: 0,
+}
+
 function render(routes: Record<string, StubRoute | (() => StubRoute)> = {}) {
   return stubApi({
     'GET /api/health': { body: HEALTHY },
@@ -383,5 +395,29 @@ describe('下載列表頁', () => {
 
       expect(screen.queryByRole('button', { name: '重新規劃' })).not.toBeInTheDocument()
     })
+  })
+})
+
+describe('刪除入口只給管理員（M2 票 04 驗收）', () => {
+  it('admin 展開一列時看得到刪除', async () => {
+    render({ [`GET /api/jobs/${HASH}/deletion`]: { body: ESTIMATE } })
+    renderApp('/jobs')
+
+    await userEvent.click(await screen.findByText(/SPY×FAMILY - 13/))
+
+    expect(await screen.findByRole('button', { name: '刪除' })).toBeInTheDocument()
+  })
+
+  it('一般使用者展開同一列時看不到刪除', async () => {
+    // **前端隱藏不是安全機制**：擋住的那一條在門禁上（`DELETE /jobs/{hash}` 回 403，
+    // `tests/integration/test_auth_api.py`）。這裡驗的是「這顆鍵不是給你的」。
+    render({ 'GET /api/auth/me': { body: { name: 'deckhand', role: 'user' } } })
+    renderApp('/jobs')
+
+    await userEvent.click(await screen.findByText(/SPY×FAMILY - 13/))
+
+    // 時間線畫出來了才代表展開區真的開了——否則這一條在任何情況下都會綠。
+    await screen.findByText('info hash')
+    expect(screen.queryByRole('button', { name: '刪除' })).toBeNull()
   })
 })

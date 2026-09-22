@@ -8,6 +8,7 @@ import {
 import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 
+import { meQueryOptions } from '../api/auth'
 import { jobEventsQueryOptions, retryJob, refusalOf, type Job } from '../api/jobs'
 import { planQueryOptions, replanJob } from '../api/plans'
 import { CopyLine, GhostButton } from '../components/controls'
@@ -19,6 +20,7 @@ import { Timestamp } from '../components/Timestamp'
 import { tmdbText } from '../i18n/tmdbText'
 import { formatSize } from '../media/searchResult'
 import { JOB_SIGNAL, formatProgress, shortHash } from './jobState'
+import { JobDelete } from './JobDelete'
 import { JobPlan } from './JobPlan'
 import { JobTimeline } from './JobTimeline'
 
@@ -40,6 +42,9 @@ export function JobRow({ job }: { job: Job }) {
   const queryClient = useQueryClient()
   const [open, setOpen] = useState(false)
 
+  // 刪除只有 admin 按得到（plan §6，後端同時回 403）。**前端隱藏不是安全機制**：
+  // 它的意思是「這顆鍵不是給你的」，擋住的那一條在門禁上。
+  const me = useQuery(meQueryOptions)
   const events = useQuery(jobEventsQueryOptions(job.hash, open))
   const plan = useQuery(planQueryOptions(job.hash, job.plan_id, open))
   const retry = useMutation({
@@ -146,6 +151,9 @@ export function JobRow({ job }: { job: Job }) {
             off={t('jobs.retryOff')}
           />
         )}
+        {/* 刪除排在最後：它是這一塊裡唯一不可回復的動作，而重試與重新規劃是常用的那兩顆。
+            展開區已經在 `<details>` 裡，所以刪除的二次確認也就地展開（不是 dialog）。 */}
+        {open && me.data?.role === 'admin' && <JobDelete hash={job.hash} />}
         {/* 重試成功時畫面上動的只有這一小塊，看不見畫面的人得知道發生了什麼。 */}
         <p aria-live="polite" className="sr-only">
           {retry.isSuccess ? t('jobs.retried', { state: t(`jobs.state.${job.state}`) }) : ''}

@@ -161,6 +161,25 @@ class HttpQbittorrentClient:
             return
         raise TorrentRejectedError(f"torrents/add: {response.status_code} {_reason(response)}")
 
+    async def delete_torrent(self, info_hash: str, *, delete_files: bool) -> None:
+        """`torrents/delete`（2026-09-22 對 4.1.0–5.2.3 逐個 tag 核對原始碼，brief §20.2）。
+
+        兩件事是照著原始碼寫的，不是照著直覺：
+
+        - **`deleteFiles` 只認字面 `true` / `false`**（`Utils::String::parseBool`，大小寫不敏感）。
+          `1` 不是真，是「解析不出來」→ 退回 `false`，於是呼叫端以為檔案刪了而磁碟上還在。
+          兩個參數都是必填，少一個是 400。
+        - **一律 POST**。4.4.5 以前 GET 也行，4.5.0 起 `torrents/delete` 進了 POST 白名單，
+          GET 從此是 405；Berth 接得了的最低版本涵蓋兩邊，所以只用兩邊都成立的那一種。
+
+        成功是 200 + 空 body，**而且它沒有這個 hash 時也是 200**——不必先問一次它還在不在。
+        """
+        await self._session.request(
+            "POST",
+            "/api/v2/torrents/delete",
+            data={"hashes": info_hash, "deleteFiles": "true" if delete_files else "false"},
+        )
+
     async def sync(self) -> tuple[TorrentStatus, ...]:
         """`sync/maindata?rid=N`。合併由 `MaindataCursor` 做，這裡只負責問與檢查形狀。"""
         path = f"/api/v2/sync/maindata?rid={self._cursor.rid}"

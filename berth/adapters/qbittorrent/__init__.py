@@ -321,6 +321,14 @@ class QbittorrentClient(Protocol):
         """
         ...
 
+    async def delete_torrent(self, info_hash: str, *, delete_files: bool) -> None:
+        """`torrents/delete`。刪除範圍的「從 qBittorrent 移除 torrent」那一個旗標（brief §9.2）。
+
+        **它沒有這個 hash 也是成功**（實測原始碼 `applyToTorrents` 直接跳過，brief §20.2）：
+        torrent 早就被人在 qBittorrent 介面上刪掉的那一筆，這裡照樣走得完。
+        """
+        ...
+
     async def create_category(self, name: str, save_path: str) -> None:
         """`torrents/createCategory`。同名的已經存在時回 409（實測原始碼的
         `Unable to create category`），所以呼叫端要先讀再建——`ensure_category` 做這件事。

@@ -951,6 +951,7 @@ const zhHant = {
       jellyfin_scan_requested: '已通知 Jellyfin',
       jellyfin_item_resolved: 'Jellyfin 已收錄',
       jellyfin_request_failed: 'Jellyfin 請求沒成',
+      deleted: '已刪除',
     },
     timeline: {
       loading: '讀取時間線…',
@@ -981,6 +982,16 @@ const zhHant = {
         nothing_to_import: '沒有東西會進媒體庫',
         target_exists: '目標位置上已經有別的檔案',
       },
+      // 刪除範圍那一筆（M2 票 04）。說的是**真的**做掉了什麼，不是勾了哪幾個。
+      deletedLinks_one: '移除 {{count}} 個鏈接',
+      deletedLinks_other: '移除 {{count}} 個鏈接',
+      deletedSources_one: '刪掉 {{count}} 個下載檔案',
+      deletedSources_other: '刪掉 {{count}} 個下載檔案',
+      deletedTorrent: '從 qBittorrent 移除',
+      deletedPurged: '清除紀錄',
+      freed: '空出 {{size}}',
+      // 硬鏈接的另一半還在時一個位元組都沒回到磁碟。時間線照實說，不說「已釋放 0 B」。
+      freedNothing: '沒有空出空間：還有別的名字指著同一份資料。',
       // 理由翻譯，原文不翻譯：後面接的 `client_state` 是 qBittorrent 的機器字串。
       issue: {
         missing_files: 'qBittorrent 說檔案不見了。到它的介面上重新檢查那一筆。',
@@ -1062,6 +1073,48 @@ const zhHant = {
         '這一筆現在不能重試——只有送單失敗或入庫失敗的那些可以。重新整理看看它現在的狀態。',
       not_replannable:
         '這一筆現在不能重新規劃——已經在入庫的那一份計劃正被照著動檔案。重新整理看看它現在的狀態。',
+      client_unreachable: '連不上 qBittorrent，所以什麼都沒有刪。先確認它還活著，再按一次。',
+      delete_files_requires_remove_torrent:
+        '要刪下載目錄裡的檔案，得同時從 qBittorrent 移除這個 torrent——否則它會在下一次重新檢查時把整包再抓一遍。',
+    },
+    // 刪除範圍（brief §9.2、M2 票 04）。四個旗標各自說出後果，預設全不勾。
+    delete: {
+      label: '刪除',
+      pending: '刪除中…',
+      confirm: '確認刪除',
+      title: '要刪掉哪幾樣',
+      // 一句把「以什麼為單位」說清楚：刪的是這一筆下載，不是這部作品。
+      lede: '刪的是這一筆下載經手的東西。同一部作品的其他下載不受影響。',
+      unlink: '移除媒體庫裡的硬鏈接',
+      unlinkHint: 'Jellyfin 下次掃描時會少掉這幾個檔案。下載目錄裡的原檔不動。',
+      removeTorrent: '從 qBittorrent 移除這個 torrent',
+      removeTorrentHint: '不刪檔案，但做種會停。',
+      deleteFiles: '刪除下載目錄裡的檔案',
+      deleteFilesHint: '要同時移除 torrent，否則 qBittorrent 會把整包再抓一遍。',
+      // 沒勾「移除 torrent」時它是鎖住的，而鎖住的控制項要說得出為什麼（PRODUCT 原則 4）。
+      deleteFilesLocked: '先勾上面那一格才選得了。',
+      purge: '清除帳本與這一筆的紀錄',
+      purgeHint: '不勾的話它留在清單上，狀態是「已刪除」，時間線也還在。',
+      // 估算（brief §9.2）。逐一 stat，所以它慢——畫面要說得出自己正在做什麼。
+      estimate: {
+        // 「正在算」不是轉圈圈：它說得出正在量什麼、為什麼要等。
+        pending: '正在逐一量測這幾個檔案…',
+        off: '算不出可以空出多少。Berth 自己的 API 沒有回應——刪除仍然按得下去。',
+        links_one: '媒體庫 {{count}} 個鏈接',
+        links_other: '媒體庫 {{count}} 個鏈接',
+        sources_one: '下載目錄 {{count}} 個檔案',
+        sources_other: '下載目錄 {{count}} 個檔案',
+        missing_one: '另有 {{count}} 個帳本上有、磁碟上已經不在了',
+        missing_other: '另有 {{count}} 個帳本上有、磁碟上已經不在了',
+        frees: '這樣刪會空出 {{size}}。',
+        // 硬鏈接的規矩：來源與所有鏈接都刪掉，那些位元組才回到磁碟（brief §9.2）。
+        freesNothing:
+          '這樣刪不會空出空間：媒體庫的鏈接與下載目錄的檔案是同一份資料，要兩邊都刪掉才算數。',
+        held: '其中 {{size}} 有 Berth 不知道的鏈接握著，怎麼刪都拿不回來。',
+      },
+      done: '已移除 {{links}} 個鏈接、刪掉 {{sources}} 個檔案，空出 {{size}}。',
+      doneNothing: '已移除 {{links}} 個鏈接、刪掉 {{sources}} 個檔案，沒有空出空間。',
+      off: '刪除沒有送出去。Berth 自己的 API 沒有回應，先確認它還活著。',
     },
   },
   // 送單（票 09）。資料夾名在這裡定下來，所以按下去之前它要出現在畫面上。
@@ -2229,6 +2282,7 @@ const en: Translations<typeof zhHant> = {
       jellyfin_scan_requested: 'Jellyfin told',
       jellyfin_item_resolved: 'In Jellyfin',
       jellyfin_request_failed: 'Jellyfin request failed',
+      deleted: 'Deleted',
     },
     timeline: {
       loading: 'Reading the timeline…',
@@ -2257,6 +2311,14 @@ const en: Translations<typeof zhHant> = {
         nothing_to_import: 'nothing would reach the library',
         target_exists: 'another file already sits at the target',
       },
+      deletedLinks_one: 'removed {{count}} link',
+      deletedLinks_other: 'removed {{count}} links',
+      deletedSources_one: 'deleted {{count}} downloaded file',
+      deletedSources_other: 'deleted {{count}} downloaded files',
+      deletedTorrent: 'removed from qBittorrent',
+      deletedPurged: 'records cleared',
+      freed: 'freed {{size}}',
+      freedNothing: 'Nothing was freed: another name still points at the same data.',
       issue: {
         missing_files: 'qBittorrent says the files are gone. Force a recheck in its own UI.',
         client_error: 'qBittorrent reported an error of its own. Its UI or log says which one.',
@@ -2335,6 +2397,44 @@ const en: Translations<typeof zhHant> = {
         'This one cannot be retried — only the ones that failed to send or to import can. Reload to see where it stands now.',
       not_replannable:
         'This one cannot be planned again — the plan it is importing is already being applied to files. Reload to see where it stands now.',
+      client_unreachable:
+        'qBittorrent could not be reached, so nothing was deleted. Check that it is up, then try again.',
+      delete_files_requires_remove_torrent:
+        'To delete the downloaded files, remove the torrent from qBittorrent at the same time — otherwise it fetches the whole thing again on its next recheck.',
+    },
+    delete: {
+      label: 'Delete',
+      pending: 'Deleting…',
+      confirm: 'Delete',
+      title: 'Choose what to delete',
+      lede: 'This deletes what this download touched. Other downloads of the same title are left alone.',
+      unlink: 'Remove the hard links from the library',
+      unlinkHint:
+        'Jellyfin drops these files on its next scan. The originals in the download folder stay.',
+      removeTorrent: 'Remove the torrent from qBittorrent',
+      removeTorrentHint: 'The files stay, but seeding stops.',
+      deleteFiles: 'Delete the files in the download folder',
+      deleteFilesHint: 'Remove the torrent as well, or qBittorrent fetches the whole thing again.',
+      deleteFilesLocked: 'Tick the box above to enable this.',
+      purge: 'Clear the ledger and this job’s records',
+      purgeHint: 'Leave it off and the job stays on the list as “Deleted”, timeline and all.',
+      estimate: {
+        pending: 'Measuring each of these files…',
+        off: 'Could not work out how much this frees. Berth’s own API did not answer — you can still delete.',
+        links_one: '{{count}} link in the library',
+        links_other: '{{count}} links in the library',
+        sources_one: '{{count}} file in the download folder',
+        sources_other: '{{count}} files in the download folder',
+        missing_one: '{{count}} more is in the ledger but no longer on disk',
+        missing_other: '{{count}} more are in the ledger but no longer on disk',
+        frees: 'This frees {{size}}.',
+        freesNothing:
+          'This frees nothing: the library links and the downloaded files are the same data, so both sides have to go.',
+        held: '{{size}} of it is held by a link Berth does not know about, and no choice here gets it back.',
+      },
+      done: 'Removed {{links}} links, deleted {{sources}} files, freed {{size}}.',
+      doneNothing: 'Removed {{links}} links, deleted {{sources}} files. Nothing was freed.',
+      off: 'The delete did not go out. Berth’s own API did not answer — check that it is up.',
     },
   },
   submit: {

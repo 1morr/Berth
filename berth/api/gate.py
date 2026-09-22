@@ -57,6 +57,20 @@ SETUP_PREFIX = "/setup"
 #: `/jellyfin` 只收媒體庫清單那一支：之後掛在它底下的端點照預設規則（登入即可）另外決定。
 ADMIN_PREFIXES = ("/settings", "/routes", "/jellyfin/libraries")
 
+#: 只有管理員做得了的**單一方法**（M2 票 04）。`(方法, 路徑樣式)`，樣式裡的 `*` 配一段。
+#:
+#: 上面那一份說的是「這整塊是 admin」，這一份說的是「**這一個動詞**在這條路徑上是 admin，
+#: 它的兄弟不是」。`/jobs` 整組不可以是 admin——一般使用者要送得了單、看得到自己的 job
+#: （brief §11）——而刪除是 admin 的事（plan §6，2026-09-22 拍板）。兩件事在同一條路徑上，
+#: 所以前綴分不開它們。
+#:
+#: 估算與刪除一起：對話框打開時算的那一份逐一 `stat` 每一個檔案（brief §9.2），按不到
+#: 刪除的人不必替他算。
+ADMIN_ROUTES: tuple[tuple[str, str], ...] = (
+    ("DELETE", "/jobs/*"),
+    ("GET", "/jobs/*/deletion"),
+)
+
 #: `/api` 底下的每一個回應都帶它。
 #:
 #: **這不是最佳化，是正確性**（票 10 實跑當場抓到）：Berth 一個 header 都不送，於是瀏覽器
@@ -109,7 +123,7 @@ class ApiGate:
             return None
         if _under_any(path, (SETUP_PREFIX,)):
             return await _setup_verdict(request, user)
-        if _under_any(path, ADMIN_PREFIXES):
+        if _under_any(path, ADMIN_PREFIXES) or _is_admin_route(request.method, path):
             return _admin_verdict(user)
         if user is None:
             # 未知路徑也走這裡：401 早於 404，才不會讓人靠回應碼列舉端點。
@@ -161,6 +175,25 @@ def _admin_verdict(user: AuthenticatedUser | None) -> JSONResponse | None:
 
 def _under_any(path: str, prefixes: tuple[str, ...]) -> bool:
     return any(path == prefix or path.startswith(prefix + "/") for prefix in prefixes)
+
+
+def _is_admin_route(method: str, path: str) -> bool:
+    """`ADMIN_ROUTES` 上有沒有哪一條同時配上這個方法與這條路徑。
+
+    **逐段比，不是前綴比**：樣式裡的 `*` 配掉一段（job hash 就落在那裡），所以
+    `DELETE /jobs/<hash>` 配得上而 `POST /jobs` 配不上——後者正是一般使用者要按的那一顆。
+    """
+    segments = path.split("/")
+    return any(
+        method == wanted and _segments_match(pattern.split("/"), segments)
+        for wanted, pattern in ADMIN_ROUTES
+    )
+
+
+def _segments_match(pattern: list[str], segments: list[str]) -> bool:
+    return len(pattern) == len(segments) and all(
+        wanted in ("*", actual) for wanted, actual in zip(pattern, segments, strict=True)
+    )
 
 
 def _sessions(request: Request) -> async_sessionmaker[AsyncSession]:
