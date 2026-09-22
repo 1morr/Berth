@@ -92,8 +92,8 @@ adapters ──► domain                  （不 import services、models；回
 | 執行環境 | Python 3.13（`.python-version`）、Node 24 | 計劃內的依賴都有 cp313 wheel；`python:3.13-slim` 供 §9.1 的 image 使用 |
 | CLI | argparse（stdlib） | 只有數個子指令與旗標，不值得引入 typer / click |
 | 套件管理與工具 | uv、ruff、mypy、pytest、pytest-asyncio、respx、import-linter | — |
-| 前端 | React 19、TypeScript、Vite、TanStack Query、TanStack Router、Tailwind、shadcn/ui、react-i18next | 通用、可長期維護；shadcn 讓元件在 repo 內可改 |
-| 前端工具 | pnpm、eslint、prettier、vitest、playwright | — |
+| 前端 | React 19、TypeScript、Vite、TanStack Query、TanStack Router、Tailwind v4、react-i18next | 通用、可長期維護。**不引入 shadcn/ui**（M0 票 05 起，2026-09-22 結案）：三個里程碑下來沒有一個元件需要 Radix 的行為原語，原生 `input` / `button` / `details` 的無障礙比重寫的好；要 dropdown / dialog 時再議 |
+| 前端工具 | pnpm、eslint、prettier、vitest | 沒有腳本化的 playwright e2e，見 §10 |
 
 ---
 
@@ -139,7 +139,8 @@ adapters ──► domain                  （不 import services、models；回
 - `rss_feeds`：`id`、`name`、`url`、`kind`（`mikan` / `nyaa` / `generic`）、`interval_sec`、`enabled`、`last_polled_at`、`last_error`
 - `rss_rules`：`id`、`feed_id`（nullable = 所有 feed）、`media_id`、`route_id`、`include_regex`、`exclude_regex`、`groups_json`（白名單與優先序）、`resolution`、`subtitle_pref`、`season`、`episode_offset`、`policy`（`all_new` / `fill_missing`）、`enabled`、`created_at`
 - `rss_items`：`id`、`feed_id`、`guid`（與 feed 合併 unique）、`title`、`link`、`torrent_url`、`info_hash`、`published_at`、`seen_at`、`release_info_json`、`matched_rule_id`、`job_hash`、`status`（`new` / `matched` / `downloaded` / `ignored` / `unmatched`）
-- `issues`：`id`、`type`（brief §9.1 的七種）、`job_hash`、`ledger_id`、`path`、`detail_json`、`status`（`open` / `resolved` / `ignored`）、`detected_at`、`resolved_at`、`resolved_by`
+- `issues`：`id`、`type`（**十一種**，2026-09-22 定：brief §9.1 對帳的七種 `library_link_missing` / `source_missing` / `inode_mismatch` / `orphan_complete` / `unknown_torrent` / `unmanaged_library_file` / `job_without_files`，加上管線自己發現的四種 `missing_files` / `client_error` / `client_removed` / `jellyfin_item_unresolved`——後四種是 M1 `issue_detected` 事件已經在用的 `IssueType`，`issues.type` 與事件共用同一個封閉集合）、`job_hash`、`ledger_id`、`path`、`detail_json`、`status`（`open` / `resolved` / `ignored`）、`detected_at`、`resolved_at`、`resolved_by`。
+  **冪等鍵**是 `(type, subject)`，`subject` 依型別取：有路徑的用 `path`（`library_link_missing` / `source_missing` / `inode_mismatch` / `unmanaged_library_file` / `missing_files` 用帳本或檔案的路徑，`orphan_complete` 用目錄路徑）、`unknown_torrent` 與 `client_*` 用 `job_hash` 或 info hash、`job_without_files` 與 `jellyfin_item_unresolved` 用 `job_hash` / `ledger_id`——同一個 `(type, subject)` 只有一筆 `open`，再偵測到就更新 `detail_json` 與 `detected_at`。`ledger.status.target_missing` 與 Issue 的 `library_link_missing` 是同一件事的兩個角度：帳本那一欄是這一列的現況，Issue 是「要有人決定」的那一件，resolve 之後把帳本那一欄改回 `ok` 或刪掉那一列。
 
 ### 2.5 不做的事
 
@@ -188,7 +189,7 @@ adapters ──► domain                  （不 import services、models；回
 | `planner_runner` | 事件驅動（提示）+ 每 60s 掃 `completed` **與 `planning`** | 讀 mediainfo → 解析（§4）→ 建 Plan → 決定 auto / review；順手替下載中、還沒有 Plan 的 job 算 pre-plan |
 | `importer` | 事件驅動（planner 算完、使用者按入庫重試）+ 每 60s 掃 `importing` | 逐 item：建目錄 → `link()` → 寫 ledger → event，**一個檔案 commit 一次**；完成後 `POST /Library/Media/Updated`；一次只處理一個 job（依序：同一個作品資料夾可能同時是兩筆 Job 的目標） |
 | `jellyfin_resolver` | 每 15s 醒一次；每筆帳本自己的排程 30s → 2m → 10m → 1h → 1h → 1h，共 6 次（`ledger.resolve_after`） | 為到時間的 ledger 找 item（brief §20.1 的兩段查詢，也比 `MediaSources[].Path`——第二個版本不是 item 自己的 `Path`）；找到之後把那一條來源的 `Name` 抄進帳本（版本名是 Jellyfin 算的，票 14b）；**沒找到的那幾條每一輪再通知一次**（入庫當下那一次可能沒送到）；**沒找到兩次以上改跑 Jellyfin 的「重新掃描媒體庫」排程任務（`RefreshLibrary`），之後最晚 10 分鐘再看**——路徑通知對從沒掃到過內容的媒體庫無效，而套件內的媒體庫一開始一定是空的（brief §20.1，票 12 實跑抓到）；耗盡寫 `issue_detected(jellyfin_item_unresolved)`（`issues` 表在 M2）。**不是事件驅動**（票 12）：第一次反查本來就排在入庫 30 秒後，importer 那一刻叫醒它也只會看到「還沒到」 |
-| `reconciler` | 每日 04:00 + 手動 | brief §9.1 全部檢查，寫 `issues`（冪等：同 type + path 只有一筆 open） |
+| `reconciler` | 每日 04:00（容器的 `TZ`，compose 範本預設 `Etc/UTC`）+ 手動 `POST /reconcile` | brief §9.1 全部檢查，寫 `issues`（冪等鍵見 §2.4）。**一輪是一個可觀察的工作**（2026-09-22 定）：`POST /reconcile` 回 202 並給這一輪的 id，`GET /reconcile` 回上一輪與進行中的進度（哪一方比到哪、幾筆），上一輪還在跑時再按是 409 `reconcile_running`——不排隊，因為排隊的那一輪看到的會是同一份磁碟；e2e 的「三種破壞都能偵測」靠輪詢它。四方各自走完才寫下 Issue，任一方問不到（qBittorrent 掛了、Route 目錄沒掛上）就跳過那一方並在這一輪的結果上說出來，不把「問不到」誤判成「不見了」（brief §16.2）。大媒體庫分不分批由 §11.3 的量測票決定，門檻寫在那張票上 |
 | `rss_poller` | 每個 feed 自己的 `interval_sec`，預設 15 分鐘 | 抓 feed → 解析 → 比對 rule → 去重 → `add_download` |
 | `health_checker` | 每 30 秒醒來，上一輪滿 5 分鐘才真的跑；也可手動觸發（`POST /health/check`） | 四項：Jellyfin（連線 + API key 列得出媒體庫）、qBittorrent（連線 + Web API 版本 + 建議設定漂移）、索引站（Prowlarr 或 Torznab 端點）、Route（§9.5 的五條纜繩重跑一次） |
 
@@ -336,7 +337,7 @@ fixture 一筆一個 JSON：
 
 REST + JSON，前綴 `/api`。門禁是 middleware（`api/gate.py`）而不是逐個 router 的相依，所以**預設拒絕**：新增端點什麼都不做就已經在門後。白名單只有三條——`auth/login`、`auth/logout`（一律成功，順便清 cookie）、`health`。未知路徑也走同一道門，匿名時回 401 而不是 404。
 
-`setup/*` 有自己的規則（也在門禁）：精靈未完成時整組匿名開放（那時候還沒有人登入得了），完成之後它就是設定入口，只有 `role=admin` 進得來（非 admin 回 403）。`settings/*`、`routes/*` 與 `jellyfin/libraries` **永遠只有 admin**。`routes` 在票 14 曾跟著 `setup/*` 匿名開放，票 14a 收回：停用的 Route 不算進完成條件，匿名開放等於讓精靈跑完之前的任何人把紅燈 Route 停用、再按完成。精靈第 7 步只需要刪除，它走自己的 `DELETE /setup/routes/{id}`。
+`setup/*` 有自己的規則（也在門禁）：精靈未完成時整組匿名開放（那時候還沒有人登入得了），完成之後它就是設定入口，只有 `role=admin` 進得來（非 admin 回 403）。`settings/*`、`routes/*` 與 `jellyfin/libraries` **永遠只有 admin**；M2 起 **`review/*`、`issues/*`、`files/*`、`reconcile`、`DELETE /jobs/{hash}` 與 `POST /jobs/{hash}/reimport` 也是**（2026-09-22 使用者拍板，與 brief §11、`PRODUCT.md` 一致：審核、修正、刪除都是 admin 的事；`user` 送單之後碰到低信心 Plan 只能等 admin，畫面上要說得出「等管理員審核」）。`ADMIN_PREFIXES` 在 `api/gate.py` 一處。`routes` 在票 14 曾跟著 `setup/*` 匿名開放，票 14a 收回：停用的 Route 不算進完成條件，匿名開放等於讓精靈跑完之前的任何人把紅燈 Route 停用、再按完成。精靈第 7 步只需要刪除，它走自己的 `DELETE /setup/routes/{id}`。
 
 `health` 匿名可讀，回 `status`（ok / degraded）、`version` 與 `setup_completed`。**最後那一個位元掛在這裡而不是 `setup/status`**：前端要在還沒有人登入時就決定該畫精靈還是登入頁，而精靈未完成時本來就整組匿名開放，所以它不多洩漏任何東西。
 
@@ -355,10 +356,10 @@ Session 以 httpOnly cookie（`berth_session`）承載，`SameSite=Strict`、`Pa
 | search | `GET /search?media=&q=&missing=&season=`（索引站搜尋，結果附解析出的 Tags 與預估季集；**只回名字對得上這部作品的那些**，被丟掉的筆數另報 `discarded`——實測 The Pirate Bay 對搜不到的關鍵字會回它自己的熱門清單）、`GET /search/queries?media=&missing=&season=`（按下搜尋之前先給看：會拿哪幾個名字去問。不打索引站，只讀快照與這部作品的入庫狀態；規則只能有一份實作，前端不重算）。**兩支都不帶 Route**（票 14e）：入庫到哪一條是送單時的事，查詢只由快照與缺的季集決定。`missing=true` 是**缺集一鍵搜**（M1.5 票 10）：查詢改由季表上缺的那幾集產生（`missing_queries`，規則見 §8.4），`season=` 再收到那一季；兩支收同一組參數，所以預覽與真的送出去的那幾個永遠是同一份。缺的集是零時回空的查詢（搜尋因此是 `no_query`）——**不退回作品名**，使用者按的是「搜缺的集」。`season` 單獨帶著是 422 `season_without_missing`；缺集搜尋也**不走 tmdbid 那條路**（id 找的是整部作品，收窄就沒了） | `search_torrents`、`plan_queries`、`missing_queries` |
 | jobs | `POST /jobs`（`{source, media, route}`）、`GET /jobs`、`GET /jobs/{hash}`、`GET /jobs/{hash}/events`、`POST /jobs/{hash}/replan`、`POST /jobs/{hash}/reimport`、`POST /jobs/{hash}/retry`、`DELETE /jobs/{hash}?unlink=&remove_torrent=&delete_files=&purge=` | `add_download`、`generate_plan`、`reimport`、`delete_job` |
 | plans | `GET /plans/{id}`、`PUT /plans/{id}/items`、`POST /plans/{id}/approve`、`POST /plans/{id}/reject`。**M1 只有 `GET`**（票 11）：逐列編輯與核准是 M2 的 Review Queue（§11.3），而 M1 停在 `review` 的 Job 就是停在那裡——那一份唯讀的答案是使用者看得到的全部 | `review.*`、`apply_plan` |
-| review | `GET /review`（低信心、audit、Unmatched、重複、Issue 的統一佇列）、`POST /review/audit/{ledger_id}/confirm`、`POST /review/audit/{ledger_id}/undo` | `review.*` |
-| files | `POST /files/rematch`（`{ledger_id \| job_file_id, action, season, episode_start, episode_end}`） | `rematch_file` |
+| review | `GET /review`（低信心、audit、Unmatched、重複、Issue 的統一佇列。**一支端點、一份清單、一列一件事**（2026-09-22 定）：每一列帶 `kind`（`plan` / `audit` / `unmatched` / `duplicate` / `issue`）、指向它的物件（plan id / ledger id / issue id）、一句封閉集合的理由與這一列能按的動作；排序是「需要人動手的排前面」（`plan` 與 `unmatched` 先、`audit` 與 `duplicate` 次、`issue` 最後），同類之內舊的在前；不分頁——佇列超過 200 列時回前 200 並帶 `total`，那時候該修的是上游而不是分頁。`issue` 那一類的動作就地按（同 `POST /issues/{id}/resolve`），不跳頁）、`POST /review/audit/{ledger_id}/confirm`（清掉 `ledger.audit` 與對應 `plan_items.audit`，寫 event `audit_confirmed`）、`POST /review/audit/{ledger_id}/undo`（走 `delete_job` 的 `unlink` 那一個旗標刪掉硬鏈接、帳本那一列刪掉、Job 回 `review` 並帶 `review_reason = audit_undone`，寫 event） | `review.*` |
+| files | `POST /files/rematch`（`{ledger_id \| job_file_id, action, season, episode_start, episode_end}`）。**內部建一份單 item 的 Plan 並立刻套用**（2026-09-22 定，brief §9.4「一律經過 Plan」）：`plans.job_hash = NULL`、`engine = user`、`source_path` 是那個檔案，走同一條 `apply_plan`（建新鏈接 → 刪舊鏈接 → 改帳本 → 通知掃描），對外仍是一支命令，UI 不必看到一份只有一列的 Plan，但 Plan 歷史與 event 留得下紀錄 | `rematch_file` |
 | rss | `GET/POST /rss/feeds`、`PUT/DELETE /rss/feeds/{id}`、`POST /rss/feeds/{id}/poll`、`GET /rss/items`、`GET/POST /rss/rules`、`PUT/DELETE /rss/rules/{id}`、`POST /rss/rules/preview`、`POST /rss/oneshot` | `rss.*` |
-| issues | `GET /issues`、`POST /issues/{id}/resolve`（`{action}`）、`POST /issues/{id}/ignore`、`POST /reconcile` | `reconcile`、`issues.resolve` |
+| issues | `GET /issues`、`POST /issues/{id}/resolve`（`{action}`，動作是 brief §9.1 那一欄的封閉集合；`library_link_missing` 的「連 complete 一起刪」走 `delete_job` 同一組旗標）、`POST /issues/{id}/ignore`、`POST /reconcile`（202，回這一輪的 id；正在跑是 409 `reconcile_running`）、`GET /reconcile`（上一輪與進行中的進度，§3.2） | `reconcile`、`issues.resolve` |
 | health | `GET /health`（匿名：`status`、`version`、`setup_completed`；`status` 只讀 `settings.health` 那一列，不連任何服務）、`GET /health/detail`（要登入，一般使用者也讀得到：逐服務與逐 Route 的明細、最後成功時間、檢查間隔）、`POST /health/check`（立刻重跑四項） | `health.*` |
 | events | `GET /events/stream`（SSE：job 狀態與進度。**M1 只有 job**——健康變化每 5 分鐘一次，值不到一條長連線）。推的是**提示不是真相**：`{hash, state, progress}`，前端據此讓 `['jobs']` 失效再問一次，所以漏掉一筆的後果是慢一點而不是畫面說謊。連上的那一刻也重問一次（訂閱建立之前推出去的那幾筆誰都收不到，票 10） | — |
 
@@ -373,7 +374,7 @@ Session 以 httpOnly cookie（`berth_session`）承載，`SameSite=Strict`、`Pa
 - 路由：`/setup`、`/login`、`/`（探索，票 03 起是真的探索頁，不再導向 `/health`）、`/health`、`/media/:id`、`/library`（導向這位使用者的第一個媒體庫）、`/library/:libraryId`（`?page=`、`?filter=review|unmatched`、`?sort=&order=&genres=&years=`（票 06）；M1.5 票 03 取代票 13 的 `/library/:routeSlug`，舊網址不留轉址）、`/jobs`、`/jobs/:hash`、`/review`、`/rss`、`/issues`、`/settings`（導向 `/settings/services`；頁首的「設定」連這裡，在兩個設定頁上都是當前頁，票 14a）、`/settings/services`、`/settings/routes`（票 14，兩頁共用一條子分頁列）、其餘 `/settings/*`。
 - 守衛：精靈未完成 → 一律導向 `/setup`（讀 `GET /health` 的 `setup_completed`，那是匿名答得出來的唯一來源）；未登入 → 導向 `/login?redirect=<原路徑>`，`?redirect=` 只收站內路徑；`/setup` 與 `/settings/*` 在精靈完成後只放行 `admin`。頁首顯示角色、導覽（健康 / 設定）與登出，`admin` 才看得到設定入口——前端隱藏不是安全機制，後端同時回 403。健康頁是唯讀診斷，一般使用者也進得去。
 - 資料：TanStack Query 管 API 快取；SSE 事件到達時使 job 相關 query 失效。
-- 元件：shadcn/ui 為基礎；媒體卡片、狀態徽章、時間線、Plan 表格（逐列可改季集與動作）、檔案樹是專案自有元件。**M1 的 Plan 畫在 `/jobs` 的就地展開區**（票 11），不是 `/jobs/:hash`：票 09 拍板不另建那一頁。M1 收尾時 `/jobs/:hash` 仍然沒有做，移到 M2（§11.3：刪除範圍需要一個地方放）。M1 的那一塊是唯讀的——逐列可改要等 M2 的 Review Queue。
+- 元件：全部是專案自有元件（媒體卡片、狀態徽章、時間線、Plan 表格（逐列可改季集與動作）、檔案樹、`CollapsibleRow`），不用 shadcn/ui（§1.4）。**M1 的 Plan 畫在 `/jobs` 的就地展開區**（票 11），不是 `/jobs/:hash`：票 09 拍板不另建那一頁。**M2 另建 `/jobs/:hash`**（2026-09-22 定）：brief §13 的 Job 詳情頁——時間線、檔案清單與各檔決策、Plan 歷史、動作（重新解析、重新入庫、刪除範圍）；刪除範圍是要二次確認的破壞性動作，塞在列表的展開區說不清楚「哪一筆正在被刪」。`/jobs` 的展開區留著，只留狀態與時間線摘要，Plan 表格只在詳情頁。M1 的那一塊是唯讀的——逐列可改要等 M2 的 Review Queue。
 - 文案：react-i18next，`zh-Hant` 與 `en` 兩個語言檔並列，預設跟隨瀏覽器；所有字串走 key，不硬編。
 - 主題：深色為預設（媒體應用慣例），亮色跟隨系統。
 - 版面：桌機為主，但每一頁都要有真正可用的窄版（審核、佇列、送單在手機上要做得完）。
@@ -617,7 +618,7 @@ WebUI\AuthSubnetWhitelist=172.28.0.2/32
 | 單元 | pytest | `parser/`、`naming/`、`domain/` 狀態機、`Tags.render`、sanitize；benchmark 是單元測試的一部分 |
 | adapter 契約 | pytest + respx | 每個 adapter 對錄製回應（`tests/fixtures/http/`）的解析；版本差異（qBittorrent 4.4 vs 5.x 的參數） |
 | 整合 | pytest + Fake adapters + 暫存 SQLite | services 與 pipeline：送單 → 完成 → planning → importing → ledger；重入與冪等；刪除範圍；reconciler 對三種人為破壞的偵測 |
-| 前端 | vitest、playwright | 元件與關鍵頁面；playwright 對 Fake 後端跑精靈與 M1 流程 |
+| 前端 | vitest | 元件與關鍵頁面。**沒有腳本化的 playwright e2e**（2026-09-22 承認，原文寫「playwright 對 Fake 後端跑精靈與 M1 流程」但從未寫過）：UI 的驗證是每張票用 playwright MCP 對 `scripts/fake_setup_server.py` 的演練情境實跑並把結果貼進票與 progress.md（CLAUDE.md 的規則）。要把它變成閘門是 M2 的一張候選票（對演練情境跑精靈與送單），沒做之前不當成既有閘門宣稱 |
 | e2e | docker compose（GitHub Actions，`tests/e2e/`） | 真 qBittorrent + 真 Jellyfin + 這一份工作目錄 build 的 Berth + 真 TMDB（Prowlarr 起來讓精靈偵測，索引站那一步跳過，搜尋不在 e2e 裡）。**一次 compose、一次精靈、一次入庫，兩個模組共享**（fixture 在 `tests/e2e/conftest.py`，session scope）：<br>**M1**（`test_1_m1_pipeline.py`）用本地產生的 .torrent 與檔案（benchmark 語料的三包：美劇一季、動漫一季、電影），送單之後把位元組放進 qBittorrent 回報的下載路徑再 `recheck`，跑通 M1 驗收；驗證時間線依序走過各站、硬鏈接 inode、帳本逐檔的 Jellyfin item id（票 15 以 recheck 取代原本寫的 `seedMode`：那是 Web API 2.16 起才有、而且要由送單的 Berth 帶的參數）。<br>**M1.5**（`test_2_m15_library.py`，票 11）以 Jellyfin API 建一個只開放一個媒體庫的一般使用者，用它登入 Berth：看不到沒權限的媒體庫、直接請求也被拒；不經 Berth 放進那個媒體庫的作品照樣在牆上；某一集的 `item_id` 就是 Jellyfin 在帳本那條路徑上的 item；標為已看 / 未看之後**那個帳號自己的** `UserData` 真的變了；帳號被停用之後 Berth 的 session 結束。最後停掉 Jellyfin 容器，驗「問不到 Jellyfin」那一句（票 07 留給這一輪的） |
 | 部署腳本 | pytest + bash 替身 | `deploy/` 的 shell：preseed 的「缺鍵才補」規則、entrypoint 的擁有者接手。真的跑腳本，把 `chown` / `setpriv` 換成會記錄參數的替身；路徑用 `BERTH_*` 的測試 seam 覆寫 |
 | 實驗 | `scripts/experiments/` | brief §20.6，一次性但保留腳本，結果寫回 brief |
@@ -670,42 +671,48 @@ M1 帶過來的（票 15 的 critique，2026-09-17，使用者拍板交給這一
 
 ### 11.3 M2 修正與對帳
 
-範圍：Review Queue（Plan 逐列編輯、批次核准、audit 確認 / 撤銷）、Unmatched 指派、`rematch_file`、`reconciler` 與 issues 頁、刪除範圍（四旗標與空間估算）、`reimport`（以目錄為 Import Source）、`berth rebuild-ledger`。
-驗收：刪掉 library 後一鍵重建；對「Jellyfin 內刪除」「complete 目錄手動刪檔」「用複製取代硬鏈接」三種破壞都能偵測並修復；medium 自動入庫的檔案可在佇列中一鍵撤銷。
+範圍：Review Queue（Plan 逐列編輯、批次核准、audit 確認 / 撤銷）、Unmatched 指派、`rematch_file`、`reconciler` 與 issues 頁、刪除範圍（四旗標與空間估算）、`reimport`（以目錄為 Import Source）、`berth rebuild-ledger`、`/jobs/:hash` 詳情頁。
+驗收：刪掉 library 後一鍵重建；對「Jellyfin 內刪除」「complete 目錄手動刪檔」「用複製取代硬鏈接」三種破壞都能偵測並修復；medium 自動入庫的檔案可在佇列中一鍵撤銷；以 `user` 登入時看不到也按不到審核、修正與刪除。
 
-M0 帶過來的兩條（票 10 判定要等 Issue 這個載體才做得對，票 11 收尾時確認）：媒體庫掛 TVDB 插件的警告要成為一則 Issue（brief §16.4，目前只出現在精靈的媒體庫清單裡，健康頁沒有對應動作）；磁碟空間要有門檻判定（plan §3.2，目前只在 Route 的 `hardlink` 纜繩上顯示 `free=` 實測值）。
+**2026-09-22 拆票前的設計決定**（使用者拍板「照建議」；出處與理由各在指到的章節）：
 
-M1 帶過來的（票 15 收尾時把票 01–14f 的 Comments 逐條過完，2026-09-17；逐條的判定記在 `docs/progress.md`）。拆 M2 的票時一併拆，不另開票：
+1. `/jobs/:hash` 另建一頁，`/jobs` 的展開區只留摘要（§7）。
+2. 大媒體庫要不要快取，拆票時不決定；量測票的驗收寫死門檻：**1,000 部的媒體庫上 `GET /inventory/{id}` p95 > 1 s，或 reconciler 走完一輪 > 10 分鐘，就做分段取；否則不做快取**（快取要解失效，M1.5 的經驗是網址帶 `tag` 才敢長快取）。
+3. Issue 型別是十一種的聯集，冪等鍵依型別，`/issues` 是獨立頁而不是健康頁的一段（§2.4；健康頁是唯讀診斷，issues 要按動作）。
+4. 刪除範圍四旗標**預設全不勾**（brief §9.2）；空間估算同步 `stat`（慢而準，UI 說「正在算」）；對話框住在 `/jobs/:hash` 與 Media 詳情的版本清單，同一個元件；Issue 的「連 complete 一起刪」走同一組旗標。
+5. reconciler 手動觸發回 202、`GET /reconcile` 可輪詢、正在跑是 409（§3.2）。
+6. `GET /review` 一支、一列一件事、需要人動手的排前面、不分頁（§6）。
+7. 審核、Issue 動作、rematch、刪除、reconcile 一律 admin（§6、brief §11）。
+8. `rematch_file` 內部建單 item Plan 立刻套用（§6）。
+9. `berth rebuild-ledger` 從 library 的 inode 反查 complete：配得上的重建完整一列（季集與 Tags 從目標路徑反解），**配不到的一律建 `unmanaged_library_file` Issue，不猜**。
 
-- **Review Queue 要接住的**：與帳本既有版本完全相同的 Plan item（brief §7.8 的 `duplicate`，目前會撞同一個目標路徑、以 `target_exists` 停下，票 07 / 12）；Plan item 的理由從解析器的英文句子改成封閉集合的 code + 參數，才翻得了譯（票 11）；`list_jobs` 的逐列查詢改批次（同一份清單要帶更多東西，票 11）；`/jobs/:hash` 完整 Job 詳情——刪除範圍需要一個地方放，M2 拆票時決定是另建這一頁還是留在 `/jobs` 的展開區（§7、票 09 / 11）。
-- **Reconciler 要接住的**：票 13 之前就反查完的劇集沒有 `jellyfin_series_id`，卡片一直說「還在掃描」（票 13）；Jellyfin 12 合併版本之後帳本上的 `jellyfin_item_id` 可能不再是主條目（票 12 / 14b）；`/Items` 帶整份 `MediaSources` 在大媒體庫上很重，對帳要把整個媒體庫走一遍時再決定要不要分兩段取（票 12）。
-- **有 repro、還沒修的兩個 500**：同一個新使用者兩次登入同時進來，撞 `users.jellyfin_user_id` 的 unique（票 10）；`check_routes` 途中另一個分頁刪掉 Route，`POST /api/setup/routes` 是 `StaleDataError`（健康迴圈有接住，票 14a）。
-- **解析器**：`Season 3 / … Season 3 - 46` 被 `_LOOSE_RANGE` 讀成 `S03E03–E46`，要自己的語料 fixture 與一輪 `berth bench`（票 08）。
-- **精靈與設定頁**：通過 TMDB 閘門之後泊位板 BTH 3 的詳情列不動；TMDB 與索引站的 API key 是明文欄位（要改就三處一起改成 `PasswordField`）；`complete.failed` 在缺憑證時錯怪後端；勾選表標出已被佔用的路徑（票 02b / 14a）。
-- **票 15 critique 的小項（沒排進那一輪的範圍）**：Route 設定頁表單沒改過時黃色「儲存」仍亮著，而且它會重跑五條檢查卻沒說；所有路徑都被佔用時「建立並檢查」仍是主動作；確認區的「取消」比主動作寬；EN 文案 `Already so`、`Moored`、`10 of 46 episodes in` 讀起來不順；EN 子分頁 `Library paths` 與導覽的 `Library` 撞名（頁面上的物件叫 route）；語言鍵的選中態用 `assigned` 黃漆，與 DESIGN.md 的 The Role Is Not A State Rule 矛盾（記在 DESIGN.md 的 Known contradictions）；媒體庫卡片的「Jellyfin 還在掃描」不會自己更新；fake `inventory` 情境把 demo torrent 網址寫死成 8484。
-- **票 15 critique 沒修、也不屬於 M1.5 版面的**：信心在同一塊展開區有兩套詞（`信心 high` 與「高信心」）；沒接索引站時要按了搜尋才知道（`queries` 端點可以先帶 `problem`）；頁首不 sticky、沒有 `/` 聚焦搜尋之類的快捷鍵；探索頁在手機上兩面牆之間沒有跳轉（14,260px）；說明散在各處，沒有通往文件的出口。
+**遺留清單裡的兩個二選一也定了**：媒體庫頁上方的繼續觀看與下一集**收成一行「接著看 N 項」就地展開**（同票 07 的 watching-shape 慣例，首頁不動）；重複控制項的可存取名稱**在四個卡片元件裡用 `aria-label` 帶上作品名**（改四處而不是一百處，不走「接受並記進 DESIGN.md」）。
 
-M1.5 帶過來的（票 11 收尾時把票 01–10 的 Comments 逐條過完，2026-09-19；逐條的判定記在票 11 的 Comments，摘要在 `docs/progress.md`）。拆 M2 的票時一併拆，不另開票：
+**建議票序**（每票一個 session，tracer bullet 先端到端；`/to-tickets` 時以此為底，使用者參與拆分）：
 
-- **大媒體庫的代價要量了才知道要不要快取**（票 03 / 08 留下的同一個待量，M2 的 reconciler 本來就要把整個媒體庫走一遍）：Berth 在那個媒體庫有作品時，每看一次牆就抓一份**整份清單**（`library_index`，無快取）；每開一次 Media 詳情就以不帶 `parentId` 的 `/Items?hasTmdbId=true` 整份拿回來比 TMDB id；`/Items` 帶整份 `MediaSources` 也很重（票 12）。三件事一起量，再決定快取或分段取。
-- **「待審」「Unmatched」篩選後的牆沒有觀看狀態**（票 05）：那一份來自 `library_index`（`enableUserData=false`），卡片的 `watch` 是 `null`、沒有切換鍵。要帶就是整個媒體庫每一部都要一份觀看紀錄，代價與上一條一起量。
-- **被刪掉的 Jellyfin 帳號沒有實測**（票 03）：`GET /Users/{id}` 對已刪的帳號回什麼不知道，現在會落到「問不到 Jellyfin」那一句。停用帳號的路徑已由票 11 的 e2e 對真服務驗過，刪除的沒有。
-- **缺集散在六季以上時只退回作品名**（票 10）：不分批問，因為一次搜尋的查詢數上限是為了不把公開站打到封 IP（§8.4）。要做就得決定分批的節奏。
-- **票 11 的 critique 沒修的（2026-09-19，29 / 40）**：
-  - **「待審」/「對不到」篩出來的卡片不說為什麼在這**（P1）。`has_unmatched` 在 payload 裡卻沒有畫，使用者只看到一個灰色的「部分」，唯一的路是點進詳情頁往下捲到「檔案與版本」去數。一個「需要你」的篩選器就是一份工作佇列，而 The Needs-You Floats Up Rule 的審計測試（「一整份收起的清單要能直接數出有幾件事在等你」）現在過不了。連帶的問題是**佇列不該是一面牆**：篩出來常常只有一兩格，做成一列一件事的清單才誠實。
-  - **媒體庫頁用一屏半的前置內容蓋住媒體庫本身**（P1）。1280 上第一張卡在 y=538、390 上在 y=889（摺線之下）；一列只有一張卡時仍佔一條滿版重橫線。兩條路：收成一顆「接著看 N 項」的展開鍵，或把兩列移到牆的下方（首頁不動）。
-  - **牆上沒有辦法用名字找一部片**（P2）。131 部的媒體庫只有排序、類型、年份與分頁；探索頁的搜尋打的是 TMDB，回答的是「這部片存在嗎」不是「我有沒有」。做法是 `WallQuery` 加 `q`、映射到 Jellyfin 已經在打的 `SearchTerm`、寫進網址。
-  - **詳情頁同時有三個集數系統**（P3）：觀看區是 Jellyfin 的集、季表是 TMDB 的、檔案與版本是帳本的，卡片上又是第四個數字，畫面上沒有一句話把它們對起來。至少要在季表標題列說明它是哪一份，集號欄改用 `S01E09` 而不是裸的 `E09`。
-  - 四張卡片元件（`MediaTile` / `InventoryTile` / `WatchingTile` / `EpisodeTile`）各自實作同一條標識帶，改節奏要改四處。逐行量過：只有 1 條顯著行出現在四張卡上，任兩張之間最長連續相同區塊 2–7 行，真正逐字重複的是 class 語彙。**值得合併的只有 `InventoryTile` ↔ `EpisodeTile`**（內層 wrapper 逐字相同、footer 只差一個 token）；`MediaTile` 是離群值（整格站內 `Link`、無 footer、無切換鍵），不要硬塞。
-- **票 11 的 audit 沒修的（2026-09-19，15 / 20）**：
-  - **首頁 CLS 0.3553、媒體庫 0.1605**（P1，連兩次冷載入逐字相同）。`WatchingRows` 在讀取中回 `null`，那兩列的資料是第二支請求，回來之後插在搜尋框與兩面牆**上方**，整頁下移約 440px。`/media/:id` 只有 0.0316——差別就在沒有那兩列。註釋寫的理由（「先畫格子再整列消失比晚一點出現更跳」）只適用於**空的**那一列，不適用於**載入中**；`MediaDetailPage` 的 `Loading()`（空位 + 兩條線、不動畫、`aria-hidden`）就是現成的樣子。
-  - **`activeProps` 讓四處的 class 字串自我加倍**（P2，`AppShell.tsx:61`、`InventoryPage.tsx:106`、`:552`、`SettingsTabs.tsx:28`）：`border-rule` 與 `border-rule-strong` 同時出現在同一個元素上，誰贏由 Tailwind 產生的樣式表順序決定。**實測現在是對的**（active 邊框量到 `rule-strong`），但這是僥倖；換 Tailwind 版本或改 token 名都可能無聲翻盤。乾淨的做法是走 TanStack 自己設的 `data-status="active"` 變體，一份 class 字串、不靠順序。
-  - **媒體庫牆 1621 個 DOM 節點**（P2，Lighthouse `dom-size` 的 error 門檻是 1400；首頁 838）與**全樹零 memoization**：6× CPU 節流下按一次「標為已看」是一個 67 ms 的 long task，而實際只有 1 筆 DOM mutation。`page_size` 100 → 50 是一行改動。
-  - **牆的清單語意兩頁相反**（P2）：媒體庫牆的卡片標題是 `<h3>`（101 個）、探索牆是 `<p>`（0 個）；兩面牆的容器都是 `<div>`，而繼續觀看那兩列是 `<ul>/<li>`。同一頁上兩種清單語意，而 100 個 `<article>` 都沒有可存取名稱。
-  - **重複控制項只靠 `aria-describedby` 區分**（P2）：100 個「在 Jellyfin 開啟」與一頁 6 個「標為已看 / 未看」的可存取**名稱**逐字相同。描述不是名稱——螢幕閱讀器的連結清單與語音控制只吃名稱。這是全站一致的手法，要嘛接受並記進 DESIGN.md，要嘛全站把名稱補成唯一的。
-  - **同一頁兩個同名的 `<nav aria-label="分頁">`**（P2）；`assigned` / `working` 沒有亮色主題的「當字用」值（P2，目前 0 個使用點，屬缺閘門的潛在坑）；`ArtSlot` 寫死 342px 無 `srcset`，1920 高 DPI 上海報是糊的（P2）。
-  - **票 11 的 code-review 記下的**：`Poster.tsx` 與 `components/ArtSlot.tsx` 是同一段程式碼的第二份（只差外框，合併要讓 `ArtSlot` 多收一個 `className`）；`?filter=` 有兩道閘門而 `routes.tsx` 的 `validateSearch` 實際上擋不住（實測 `useSearch` 原樣交出 `filter="nonsense"`，真正擋下來的是頁面那一道）——抽一個共用的型別守衛；`i18n/tmdbText.ts` 的名字與 docstring 還是「文字」，但它從票 11 起也挑圖。
-  - **P3 九條**（各自獨立的小改，適合塞進 M2 的第一張收尾票）：季表沒有 `<caption>`；篩選連結掛 `aria-current="page"`（它是篩選值不是一頁）；排序方向的 `<select>` 只有 `aria-label` 沒有可見標籤；`ExpandHint` 的「展開 / 收起」會進可存取名稱而 `Dot` 不會；集表的「片長」「播出」在 <640px 真的不存在（沒有替代路徑）；庫存回應 53 KB 且 `no-store` 無 `ETag`；`TilePlaceholder` 跨目錄 import 且內距與真卡片差 4px；`routes.cutaway.category` 的 zh-Hant 值是英文小寫 `category`；三處硬寫的 `alt="TMDB"`。
+| # | 票 | 內容 | 位置的理由 |
+| --- | --- | --- | --- |
+| 01 | 開工收尾（後端） | 兩個有 repro 的 500（同一個新使用者兩次登入同時進來撞 `users.jellyfin_user_id` unique，`services/auth.py` `_mirror_user` 沒接 `IntegrityError`；`check_routes` 途中 Route 被刪，`api/setup.py` 只接 `ValueError` 而 `StaleDataError` 裸奔）；`Season 3 / … Season 3 - 46` 被 `_LOOSE_RANGE` 讀成 `S03E03–E46`（自己的語料 fixture + 一輪 `berth bench`）；`list_jobs` 逐列查詢改批次；`QbitPoller` 補整合測試（五個迴圈裡唯一沒有的，而它扛著 §3.2 的排程規則）；前端三組手抄的拒絕理由（`web/src/api/jobs.ts` `JobRefusal`、`jellyfin.ts` `AccessRefusal`、`routes.ts` `RouteRefusal`、`events.ts` `JobSignal`）改成 pydantic model 進 OpenAPI 讓 `openapi-typescript` 產；`web/vite.config.ts` 設 `testTimeout` / `asyncUtilTimeout`（本機全量跑固定兩條 `findBy*` 逾時） | 都有 repro、都便宜、都不需要新載體 |
+| 02 | 開工收尾（前端） | M1 票 15 與 M1.5 票 11 沒排進範圍的小項（下方「B」組）；`/impeccable document` 把 `.impeccable/design.json` 追上 `DESIGN.md`（M1.5 票 11 改了後者沒動前者，M1 票 11 / 13 / 14 的同一個債重現） | 純前端、互相獨立 |
+| 03 | **`issues` 表 + 最小 reconciler + issues 頁** | migration；`GET /issues`、`POST /issues/{id}/resolve \| ignore`、`POST /reconcile`、`GET /reconcile`；迴圈**先只做 `library_link_missing`**；`/issues` 頁；M1 的 `issue_detected` 事件改成同時寫一列 `issues` | M0 / M1 遺留等了兩輪的載體；端到端最小版：刪一個 library 檔 → 對帳 → 一條 Issue → 按「重新鏈接」修好 |
+| 04 | 刪除範圍 + `delete_job` | `DELETE /jobs/{hash}?unlink=&remove_torrent=&delete_files=&purge=`、空間估算、Job 進 `removed`、event `deleted`；對話框元件 | 票 05 的撤銷與票 07 的 rematch 都靠它 |
+| 05 | Review Queue ⅓：audit 確認 / 撤銷 | `GET /review`（先只有 `audit` 一類）、`/review` 頁的清單骨架、confirm / undo | 驗收第三條本身就是 tracer bullet |
+| 06 | Review Queue ⅔：低信心 Plan 逐列編輯 + 批次核准 | Plan item 的理由改封閉集合 code + 參數（前置，不然翻不了譯）、`PUT /plans/{id}/items`、`approve` / `reject`、`apply_plan`、`JobState.REVIEW` 的出邊；先 `/impeccable shape` | 最重的一張 |
+| 07 | Review Queue 3/3：Unmatched 指派 + `rematch_file` + duplicate | `POST /files/rematch`；Unmatched 的指派 / 標 extra / 忽略；brief §7.8 的 `duplicate`（目前撞同一目標路徑以 `target_exists` 停下） | 票 06 之後才有清單可放 |
+| 08 | reconciler 其餘 + 重新反查 | 其餘十種 Issue 的偵測；`jellyfin_series_id` 回填（票 13 之前反查完的劇集卡片一直說「還在掃描」，順手讓它會自己更新）；Jellyfin 12 合併後 `jellyfin_item_id` 可能不再是主條目；M0 兩條：媒體庫掛 TVDB 插件的警告變成 Issue、磁碟空間門檻變成 Issue | 十種檢查是同一支命令的分支 |
+| 09 | `reimport` + `berth rebuild-ledger` | `POST /jobs/{hash}/reimport` 與目錄版；CLI 子命令 | 驗收第一條 |
+| 10 | 【研究】大媒體庫量測 | 三件一起量：`library_index` 整份清單、不帶 `parentId` 的 `/Items?hasTmdbId=true`、`/Items` 帶整份 `MediaSources`；順便量「待審 / 對不到」篩選後的牆帶觀看狀態的代價（現在那一份 `enableUserData=false`，卡片 `watch` 是 `null`）；同一個一次性環境實測**被刪掉的 Jellyfin 帳號** `GET /Users/{id}` 回什麼（停用的驗過，刪除的沒有）。結論回寫 brief §20.8，門檻見決定 2 | reconciler 要走整個媒體庫，票 08 之後才有東西可量 |
+| 11 | `/jobs/:hash` | 時間線、檔案清單與各檔決策、Plan 歷史、動作 | 決定 1 |
+| 12 | 前端品質（M1.5 audit P1 / P2） | 首頁 CLS 0.3553、媒體庫 0.1605（`WatchingRows` 讀取中回 `null`，資料回來後插在上方整頁下移 440px；改成 `MediaDetailPage` `Loading()` 那種不動的佔位）；`activeProps` 讓 `border-rule` 與 `border-rule-strong` 同時出現（`AppShell.tsx`、`InventoryPage.tsx` 兩處、`SettingsTabs.tsx`，改走 TanStack 的 `data-status="active"`）；牆 1,621 個 DOM 節點與零 memoization（`page_size` 100 → 50 先做）；兩頁清單語意相反（媒體庫牆 `<h3>` 探索牆 `<p>`、容器 `<div>` 而繼續觀看是 `<ul>`）；重複控制項的名稱（上面的二選一）；同一頁兩個 `<nav aria-label="分頁">`；`ArtSlot` 寫死 342px 無 `srcset`；`Poster.tsx` 與 `ArtSlot.tsx` 合併（`ArtSlot` 多收 `className`）；`?filter=` 抽共用型別守衛（`validateSearch` 擋不住）；`i18n/tmdbText.ts` 改名（它從票 11 起也挑圖） | WCAG 2.2 AA 是 §7 的驗收 |
+| 13 | M1.5 critique 剩餘（P1 / P2） | 「待審 / 對不到」篩出來的卡片要說為什麼在這（`has_unmatched` 在 payload 裡卻沒畫）並且**做成一列一件事的清單而不是牆**（與票 05–07 的 `/review` 同一個元件）；媒體庫頁前置內容收成「接著看 N 項」；牆上按名字找（`WallQuery` 加 `q` → Jellyfin `SearchTerm`，寫進網址）；詳情頁四個集數系統至少在季表標題列說明是哪一份、集號欄用 `S01E09`；`InventoryTile` ↔ `EpisodeTile` 合併（只有這一對值得，`MediaTile` 是離群值） | 其中清單那一件是票 05 的 shape 輸入，拆票時看要不要提前 |
+| 14 | 前端 e2e 閘門（候選） | 把 playwright 對演練情境跑精靈與送單腳本化進 CI（§10）；不做就維持 §10 現在的實話 | 可延後 |
+| 15 | M2 驗收 | e2e 覆蓋三種破壞 + 一鍵重建 + `user` 越權；里程碑收尾；critique / audit / polish | — |
+
+**遺留清單的歸屬**（M0 票 11、M1 票 15、M1.5 票 11 收尾時逐條過完的；2026-09-22 再審一次，過時的已刪、重複的已併）：
+
+- **A. 跟著上表某張票做**：`duplicate`（07）、Plan item 理由改 code（06）、`list_jobs` 批次（01）、`/jobs/:hash`（11）、`jellyfin_series_id` 回填與「還在掃描」不自更新（08，同一件事）、合併後主條目（08）、`MediaSources` 成本（10，只列一次）、兩個 500（01）、`Season 3 - 46`（01）、M0 的 TVDB 警告與磁碟門檻（08）、大媒體庫三件與篩選後的觀看狀態與刪除帳號（10）、`?filter=` 守衛（12）、P3 九條（02：季表沒 `<caption>`；篩選連結掛 `aria-current="page"`；排序方向 `<select>` 只有 `aria-label`；`ExpandHint` 的字進可存取名稱而 `Dot` 不進；集表「片長」「播出」在 <640px 沒有替代路徑；庫存回應 53 KB `no-store` 無 `ETag`；`TilePlaceholder` 跨目錄 import 且內距差 4px；`routes.cutaway.category` 的 zh-Hant 值是英文；三處硬寫 `alt="TMDB"`）。
+- **B. 開工收尾票 02 的小項**：Route 設定頁表單沒改過時「儲存」仍亮且會重跑五條檢查卻沒說；所有路徑被佔用時「建立並檢查」仍是主動作；確認區「取消」比主動作寬；EN 文案 `Already so` → `Already there`、`Moored` → `Imported`、`10 of 46 episodes in` → `10 of 46 episodes imported`（驗收是這三句）；EN 子分頁 `Library paths` 改 `Routes`；語言鍵選中態的 `assigned` 黃漆改中性（收掉 DESIGN.md 那條矛盾）；信心在同一塊展開區兩套詞（`信心 high` 與「高信心」）統一；沒接索引站時 `queries` 端點先帶 `problem`；通過 TMDB 閘門後 BTH 3 的詳情列不動；TMDB 與索引站 API key 三處一起改 `PasswordField`；`complete.failed` 缺憑證時錯怪後端；勾選表標出已被佔用的路徑；`HealthPage` / `ServiceSettingsPage` / `SetupPage` 補 `<h1>` 並統一三頁 `h1` 的大小與可見性；非 admin 開 `/settings/*` 靜默 `redirect` 改成帶一句訊息（`routes.tsx` 兩處）；`<summary>` 在無障礙樹是 `generic` 不是 `button[expanded]`（全站 `<details>` 的共同問題，查一次能不能用 `role` 補）；窄版 Route 列截掉路徑尾巴讓三條看起來一樣；健康頁全綠一千像素同一顆綠章重複八次；精靈每一步左欄剖面與右欄纜繩列是同一份清單（重構，可再延）；缺集搜之後關鍵字欄的 placeholder 仍說「留空就用這部作品的各個名字」；`?page=2` 不畫兩列但畫面沒說；電影牆 222 個 Tab 停留點；M1.5 票 01 的 `useritems-resume.restricted.json` / `shows-nextup.restricted.json` 沒有測試引用（補引用或刪）。
+- **C. 延後**：缺集散在六季以上只退回作品名——分批的節奏與 M3 的輪詢預算是同一件事，**移到 §11.4**；頁首不 sticky、`/` 聚焦搜尋之類的快捷鍵、探索頁手機上兩面牆沒有跳轉、「說明散在各處沒有通往文件的出口」——票 15 就判「不排里程碑」，沒有新證據，**不進 M2**；記在這裡是為了不再逐輪重審。
 
 ### 11.4 M3 RSS
 
@@ -714,10 +721,29 @@ M1.5 帶過來的（票 11 收尾時把票 01–10 的 Comments 逐條過完，2
 
 M1 帶過來的一條（票 15）：brief §6.4 的「以**發佈時間**推測虛擬季」票 06 刻意沒做——解析器那時拿不到發佈時間。RSS item 一定帶著它，接上之後回頭補，要有自己的語料與一輪 `berth bench`。
 
+M1.5 帶過來的一條（票 10，2026-09-22 從 §11.3 移來）：缺集散在六季以上時只退回作品名，不分批問——一次搜尋的查詢數上限是為了不把公開站打到封 IP（§8.4）。分批的節奏與 RSS 輪詢的預算是同一個決定，在這裡一起定。
+
 ### 11.5 M4 AI fallback
 
 範圍：`AiPlanner` 的 Anthropic 實作（provider 介面保留給其他家）、輸入壓縮、schema 驗證、快取、月預算、Event 記帳、RSS 未匹配 item 的 Media 建議、設定頁開關。
 驗收：benchmark 上 low 信心案例的 review 比例下降，`auto_wrong` 不升；每次呼叫的 tokens 與費用可在 Job 時間線看到。
+
+**M4 是 brief §6.10 的 fallback 解析器，不是 agent**：`AiPlanner.propose(context, files, rules_plan) -> Plan | None`（§4.5），只在規則層信心 low 且使用者開啟時被 `services/plan.py` 呼叫，產出的 Plan 一律進 review。它留下的三樣東西是 M6 / M7 的地基：provider 介面與設定頁的憑證、月預算與每次呼叫的 Event 記帳、`settings.ai` 這一組。
+
+### 11.6 M5 通知
+
+2026-09-22 使用者拍板加入（brief §14、§17、§19）。範圍：`events` 表上的**訂閱者**——哪些事件型別要送出去（第一批：一集或一部入庫並在 Jellyfin 反查到、RSS 規則命中並送單、Job 停在 review、Issue 新增）、送到哪一個**管道**（`adapters/notify/` 的 channel adapter 介面 + 第一個實作，Telegram 或 Discord 擇一，拆票時定）、每位使用者自己的訂閱與管道設定（`settings.notify` 或 `users` 上的欄位，拆票時定）、送出的紀錄與失敗重試、設定頁的測試按鈕。**不是**推播給瀏覽器（SSE 已經有），是人不在 Berth 頁面上時的那一條。
+驗收：一個 RSS 規則命中 → 下載 → 入庫 → Jellyfin 可見的全程，使用者的手機收到「正在下載」與「可以看了」兩則，內容說得出作品、季集與 Route；管道掛掉時 Berth 不阻塞任何管線、健康頁說得出來。
+
+### 11.7 M6 AI 助理
+
+範圍：一個 **agent 核心**（`services/assistant.py`：對話 → 挑 services 命令 → 產生**提案** → 等人確認 → 執行，工具就是 brief §14 那一份命令清單，schema 直接沿用 pydantic model）、**提案**這個實體（`proposals` 表：命令名、參數、AI 的理由、狀態 `proposed` / `approved` / `rejected` / `applied` / `failed`、誰決定的；讀取類命令不需要提案，改狀態的一律要，除非使用者在設定頁對某一類開了自動）、兩個介面：**Review Queue 的 AI 模式**（開關打開後佇列裡每一件先由 AI 跑一次、提案掛在那一列上，人只按確認 / 拒絕）與**側面板**（每一頁都開得到的對話區，提案以卡片顯示在對話裡，卡片上確認 / 拒絕，執行結果回到同一張卡）、工具權限模型（哪些命令 AI 永遠不能自動、預算與速率、每一次呼叫記 Event）。走 M4 的 provider 與預算。
+驗收：把一個 low 信心 Job 交給 AI 模式，佇列上出現一張說得出理由的提案，人按確認之後入庫；側面板裡說「把這一集標成已看」「這部作品缺的集搜一下」能做到並先給看；AI 不能在沒有確認的情況下動任何檔案（整合測試）。
+
+### 11.8 M7 外部對話
+
+範圍：把 M5 的管道接上 M6 的核心——同一個 Telegram / Discord bot 既推通知也收訊息；訊息的身分對到 Berth 的使用者（個人 API token，brief §16.2）並帶著他的角色；提案卡在外部管道上是一則帶按鈕的訊息，確認 / 拒絕回到同一個 `proposals` 列；每個管道自己的訊息長度與按鈕限制在 adapter 裡吸收。與側面板共用核心與提案，只多一個介面。
+驗收：在手機的聊天軟體裡收到「S02E05 正在下載」，回一句「下好了通知我並標成已看」，Berth 在入庫後推第二則並附一張提案卡，按下確認之後那一集在 Jellyfin 是已看；`user` 角色在外部管道上碰到的是同一道門禁。
 
 ---
 

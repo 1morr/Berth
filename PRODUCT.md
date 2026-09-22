@@ -19,8 +19,8 @@ web
 **角色**（brief §11、plan §11.1 T0.5）：以 Jellyfin 帳號登入，Berth 不自建密碼系統；角色由 Jellyfin 的
 `Policy.IsAdministrator` 決定。
 
-- `admin`：改 Route、刪除、審核、所有設定。首次設定必須用 Jellyfin 管理員帳號，該帳號成為 Berth admin。
-- `user`：探索、送單到指定 Route、看自己的 Job。看不到設定入口。
+- `admin`：改 Route、刪除、審核（Review Queue、Issue 的動作、rematch、手動對帳）、所有設定。首次設定必須用 Jellyfin 管理員帳號，該帳號成為 Berth admin。
+- `user`：探索、送單到指定 Route、看自己的 Job。看不到設定入口；自己的 Job 停在 review 時只能等 admin（2026-09-22 明確，brief §11、§19）。
 
 Jellyfin 掛掉時沒有人能登入 Berth。這是已接受的取捨（brief §11，Seerr 同樣如此）。
 
@@ -57,9 +57,9 @@ Jellyfin 正確顯示」。長期指標是解析 benchmark 的**誤自動入庫�
 - **medium 信心自動入庫但掛 audit 旗標**，在審核佇列顯示為「已入庫待確認」，可一鍵撤銷。不是二選一的
   「全自動」或「全手動」。
 
-明確不做（brief §18）：品質自動升級替換、內嵌播放器、多人審批、非影片媒體、AI 側面板、
+明確不做（brief §18）：品質自動升級替換、內嵌播放器、多人審批、非影片媒體、
 complete/incomplete 鏡像 library 結構、remote path mapping、TVDB / AniList 以外的多 provider、
-字型安裝與字幕解壓、BDMV 原盤處理。
+字型安裝與字幕解壓、BDMV 原盤處理。通知與 AI 助理（側面板、外部對話）不是不做，是 M5–M7（brief §14、§17）。
 
 ## Operating Context
 
@@ -86,9 +86,13 @@ complete/incomplete 鏡像 library 結構、remote path mapping、TVDB / AniList
 | --- | --- |
 | M0 骨架 | 實驗、compose 套件、設定精靈、Route 建立、健康檢查 |
 | M1 手動全流程 | 探索 → 搜尋 → 送單 → 輪詢 → 規則 planning → 硬鏈接 → 掃描 → 可播放 |
-| M2 修正與對帳 | 審核佇列、Unmatched 指派、rematch、Reconciler、刪除範圍、重新入庫 |
+| M1.5 媒體庫瀏覽 | 整個 Jellyfin 媒體庫疊上 Berth 狀態、繼續觀看、已看 / 未看、選季選集（**2026-09-19 完成**） |
+| M2 修正與對帳 | 審核佇列、Unmatched 指派、rematch、Reconciler、刪除範圍、重新入庫、`rebuild-ledger`、Job 詳情頁 |
 | M3 RSS | Mikan / Nyaa adapter、Rule、去重、一次性連結、dry-run |
-| M4 AI fallback | AI Plan、驗證、快取、預算、Event 記帳 |
+| M4 AI fallback | AI Plan、驗證、快取、預算、Event 記帳（fallback 解析器，不是 agent） |
+| M5 通知 | `events` 訂閱者、channel adapter（Telegram / Discord 擇一）、每人的訂閱設定 |
+| M6 AI 助理 | agent 核心、提案、審核佇列的 AI 模式、側面板、工具權限模型 |
+| M7 外部對話 | 聊天軟體裡與助理對話，提案卡帶按鈕，個人 API token |
 
 **技術限制**：
 
@@ -100,8 +104,8 @@ complete/incomplete 鏡像 library 結構、remote path mapping、TVDB / AniList
 - 秘密（API key、密碼）存在 SQLite，只靠檔案權限保護，不做應用層加密（brief §16.2）。
 
 **前端既定技術**（plan §1.4、§7，已實作到 repo）：React 19、TypeScript、Vite、Tailwind v4、
-TanStack Router 與 Query、react-i18next。plan §7 另外指定 shadcn/ui 為元件基礎，媒體卡片、狀態徽章、
-時間線、Plan 表格、檔案樹是專案自有元件。
+TanStack Router 與 Query、react-i18next。不用 shadcn/ui（2026-09-22 結案）；媒體卡片、狀態徽章、
+時間線、Plan 表格、檔案樹全是專案自有元件。
 
 **API-first**（brief §14）：UI 的每個動作都是一個有名字、有 schema、冪等的服務命令；Plan、Event、Issue
 都是結構化 JSON。這是為了之後接 AI 與 MCP 留的形狀，不是現在要做 agent 迴圈。
@@ -129,8 +133,8 @@ TanStack Router 與 Query、react-i18next。plan §7 另外指定 shadcn/ui 為�
 - `docs/research/m0-experiments.md` —— 對真實 Jellyfin 10.10 / 10.11 與 qBittorrent 4.4 / 5.2 的實測結果，
   命名模板與 API 行為以它為準；Jellyfin 12（Berth 支援的唯一版本線）與它不同的地方，以 `docs/research/jellyfin-12.md` 為準。
 
-**目前沒有、不可捏造**：使用者見證、使用者數、效能數據、任何「已有 N 人在用」的說法。Berth 處於 M0，
-產品尚不可用，README 明說這件事。
+**目前沒有、不可捏造**：使用者見證、使用者數、效能數據、任何「已有 N 人在用」的說法。Berth 做到 M1.5
+（手動全流程與媒體庫瀏覽），還沒有對帳與修正（M2），README 明說這件事。
 
 ## Product Principles
 

@@ -41,7 +41,7 @@
 | Metadata | TMDB | 第一階段唯一的 provider，見 §10 |
 | 同一集多版本的合併顯示 | Jellyfin（12 起原生合併；本系統只支援 12 以上） | 本系統只保證命名讓 Jellyfin 能合併；不裝 MergeVersions（§7.7、§19） |
 
-刻意不做的事（第一階段）：品質檔案自動升級替換（Sonarr 的 quality profile upgrade）、內嵌播放器、多人審批、非影片媒體、AI 側面板。見 §18。
+刻意不做的事（第一階段）：品質檔案自動升級替換（Sonarr 的 quality profile upgrade）、內嵌播放器、多人審批、非影片媒體。AI 側面板與外部通知不在第一階段，排在 M5–M7（§14、§17）。見 §18。
 
 ### 1.3 參考的成熟產品與採用的慣例
 
@@ -403,6 +403,12 @@ NCOP/NCED、PV、CM、Menu、預告、花絮等**可辨識**的非正片內容�
 | `unknown_torrent` | qBittorrent 本系統 category 下有 torrent 但無 Job | 認領（建 Job 並解析）/ 忽略 |
 | `unmanaged_library_file` | library 內有本系統不知道的檔案 | **只列出，永不自動刪**；可「認領」進帳本 |
 | `job_without_files` | Job 已 imported 但帳本為空 | 重新 planning |
+| `missing_files` | 管線：qBittorrent 回報完成但 Berth 在 complete 找不到（或 `stat` 不到）那些檔案 | 重新 recheck / 承認遺失 |
+| `client_error` | 管線：torrent 在 qBittorrent 進入 error 狀態 | 重試 / 忽略 |
+| `client_removed` | 管線：Job 還沒完成，torrent 已不在 qBittorrent | 重新送單 / 承認移除 |
+| `jellyfin_item_unresolved` | 管線：入庫後六次反查都沒在 Jellyfin 找到那個檔案 | 重新反查 / 重新掃描媒體庫 |
+
+後四種是管線自己發現的（M1 以 `issue_detected` 事件記著，M2 起與對帳的七種共用 `issues` 表與同一個封閉集合，plan §2.4，2026-09-22 定）。`ledger.status` 的 `target_missing` / `source_missing` / `inode_mismatch` 是帳本那一列的現況，Issue 是「要有人決定」的那一件——同一件事的兩個角度，resolve 之後帳本那一欄跟著改。
 
 ### 9.2 刪除範圍【決定】
 
@@ -414,6 +420,8 @@ NCOP/NCED、PV、CM、Menu、預告、花絮等**可辨識**的非正片內容�
 - 清除帳本與 Job 紀錄（否則保留為歷史）
 
 顯示「預估可釋放空間」：只有當來源與所有鏈接都刪掉時才真的釋放，UI 要說清楚。
+
+2026-09-22 定：四個旗標**預設全不勾**——Sonarr 的對話框預設勾「同時刪除檔案」，但這裡的刪除以 Job 為單位而不是作品，預設刪檔會誤刪還在做種的東西；空間估算**同步 `stat` 每一個來源與目標**（慢而準，畫面上說「正在算」），不用來源大小去猜；對話框住在 Job 詳情頁與 Media 詳情的版本清單，同一個元件；對帳發現的 `library_link_missing` 選「連 complete 一起刪」時走同一組旗標。
 
 ### 9.3 重新入庫
 
@@ -463,7 +471,7 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 沿用 Seerr 做法：以 Jellyfin 帳號登入本系統。
 
 - 初次設定：輸入 Jellyfin 位址 → 以 Jellyfin **管理員**帳號登入 → 該帳號成為本系統 admin，並產生本系統用的 Jellyfin API key。
-- 其他 Jellyfin 使用者可登入，預設角色 `user`（可探索、可送單到指定 Route、可看自己的 Job）；admin 可改 Route、刪除、審核。
+- 其他 Jellyfin 使用者可登入，預設角色 `user`（可探索、可送單到指定 Route、可看自己的 Job）；admin 可改 Route、刪除、審核。**2026-09-22 明確**（M2 拆票前）：Review Queue、Issue 的動作、rematch、刪除範圍、手動對帳一律只有 admin（plan §6 的門禁與 `api/gate.py` 同輪補上）；`user` 送單的 Job 停在 review 時只能等，畫面上說「等管理員審核」。
 - 不自建密碼系統；本系統的 `users` 表只存 Jellyfin user id 與偏好。
 - 未來的審批、配額、通知都掛在這個角色模型上。
 - 取捨：Jellyfin 掛掉時無法登入。可接受，Seerr 同樣如此。
@@ -487,21 +495,32 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 | Media 詳情 | 決策中心與觀看入口 | 探索與媒體庫點進的是**同一頁**（2026-09-15 使用者拍板，不另建媒體庫詳情頁）。作品已在 Jellyfin 裡時最上面是**觀看區**（M1.5）：繼續看 / 下一集的深連結、選季選集、各集劇照與已看標記。其下：TMDB 資訊、各季各集入庫狀態、**搜尋 torrent**（結果表：大小、做種、來源、解析出的 tags、預估匹配；作品已入庫時收合）、選 Route 送單、RSS 訂閱、檔案清單（含 Unmatched 與 rematch）、版本並存清單 |
 | 媒體庫 | 瀏覽與修正 | 像 Jellyfin 那樣瀏覽**整個 Jellyfin 媒體庫**（M1.5，不只 Berth 經手的）：一個 Jellyfin 媒體庫一頁、只列這位使用者在 Jellyfin 看得到的；繼續觀看、下一集、卡片牆附已看 / 未看、依類型或年份排序；Berth 經手的作品疊上入庫狀態，還沒進 Jellyfin 的（下載中、待審）也在牆上；篩選：有 Issue / 有 Unmatched / 有待審。M1（票 13）是依 Route 分頁、只列 Berth 經手的作品＋深連結 |
 | 下載與活動 | 全域狀態 | 所有 Job 列表：狀態、進度、Route、trigger；點入 Job 頁 |
-| Job 詳情 | 可觀測性 | **時間線**（§5.2）、檔案清單與各檔決策、Plan 歷史、動作（重新解析、重新入庫、刪除範圍） |
-| 審核佇列 | 人工介入 | 低信心 Plan（逐檔可改）、已入庫待確認（medium 自動入庫的 audit 清單，可一鍵撤銷）、Unmatched、重複版本、Issue；批次核准 |
+| Job 詳情 | 可觀測性 | **獨立頁 `/jobs/:hash`**（M2，2026-09-22 定；M1 只有 `/jobs` 的就地展開區）：**時間線**（§5.2）、檔案清單與各檔決策、Plan 歷史、動作（重新解析、重新入庫、刪除範圍） |
+| 審核佇列 | 人工介入 | 低信心 Plan（逐檔可改）、已入庫待確認（medium 自動入庫的 audit 清單，可一鍵撤銷）、Unmatched、重複版本、Issue；批次核准。**一列一件事的清單，不是牆**（2026-09-22 定，M1.5 的 critique：篩出來常常只有一兩件，卡片牆說不出「有幾件事在等你」）；只有 admin 進得來 |
 | RSS | 自動化 | 訂閱清單、規則清單、最近命中與未匹配項目、一次性 RSS 連結、規則試跑 |
 | 健康與問題 | 維運 | 服務連線、Route 硬鏈接檢查、Reconciler 結果、磁碟空間 |
 | 設定 | 管理 | 服務、路徑、Route、命名詞彙、解析與 AI 開關與預算、使用者角色 |
 
 ---
 
-## 14. AI 接口預留【決定】
+## 14. AI 與通知【決定】
 
-要預留，但只做便宜的事：
+**第一階段（M0–M4）只做便宜的事**，形狀從一開始就定：
 
-- **API-first**：UI 做得到的每個動作都是一個有名字、有 schema、冪等的服務命令（`search_torrents`、`add_download`、`generate_plan`、`apply_plan`、`rematch_file`、`delete_job`…）。未來的 AI 工具與 MCP server 只是包裝這些命令。
+- **API-first**：UI 做得到的每個動作都是一個有名字、有 schema、冪等的服務命令（`search_torrents`、`add_download`、`generate_plan`、`apply_plan`、`rematch_file`、`delete_job`、`reconcile`、`issues.resolve`…）。未來的 AI 工具與 MCP server 只是包裝這些命令。
 - **資料可讀**：Plan、Event、Issue 都是結構化 JSON，AI 不需要爬 UI。
-- **不現在做**：agent 迴圈、側面板、工具權限模型。
+- **M4 的 AI 是 fallback 解析器**（§6.10）：只在規則層信心 low 時被叫、只產出 Plan、一律進 review。它不是 agent。
+- **M2–M4 不做**：agent 迴圈、側面板、工具權限模型。
+
+**之後怎麼長**（2026-09-22 使用者拍板，plan §11.6–§11.8）。owner 要的四件事——(1) 開關打開後 Review Queue 交給 AI、(2) 側面板讓 AI 替使用者操作、需要人看的以卡片確認或拒絕、(3) 外部通知（某一集正在下載、在 Jellyfin 可見了）、(4) 像 OpenClaw 那樣在聊天軟體裡與 AI 對話——拆成三個里程碑，因為 (3) 不是 AI，而 (1)(2)(4) 是**同一個 agent 核心的三個介面**：
+
+| 里程碑 | 內容 | 為什麼在這個位置 |
+| --- | --- | --- |
+| **M5 通知** | `events` 的訂閱者 + channel adapter（Telegram / Discord 擇一先做）+ 每人的訂閱設定 | 便宜；M7 要靠它的管道與身分；「最新一集正在下載」要有 M3 的 RSS 才有意義 |
+| **M6 AI 助理** | agent 核心（對話 → 挑命令 → **提案** → 人確認 → 執行）、`proposals` 表、Review Queue 的 AI 模式、側面板、工具權限模型 | M2 的命令面是它的工具集，M4 的 provider 與預算是它的地基 |
+| **M7 外部對話** | M5 的管道接上 M6 的核心：同一個 bot 既推通知也收訊息，提案卡是帶按鈕的訊息，身分用個人 API token（§16.2） | 只多一個介面，核心與提案共用 |
+
+**提案（Proposal）是核心的形狀**：AI 永遠只能提出「叫哪個命令、帶什麼參數、為什麼」，改狀態的命令要人確認才執行（讀取類不用；使用者可在設定頁對某一類開自動）。這與 §6.10 的「AI 只能產出 Plan，不能動檔案」是同一條原則放大到所有命令。
 
 ---
 
@@ -580,10 +599,13 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 | **M0 骨架** | §20.6 的實驗（結果可能改變命名決定，所以最先做）、compose 範本（profiles）與最小預置、精靈（建立管理員、逐服務判斷套件內或既有、套件內服務全自動設定、既有服務連線與確認按鈕）、Route 建立、健康檢查 | 實驗結論寫回本文件；在乾淨的 Linux 與 Windows Docker Desktop 上 `docker compose up` 後只操作 Berth 即完成設定，四項健康檢查綠燈；另以「既有 Jellyfin + 套件內其餘服務」的組合走一次 |
 | **M1 手動全流程** | 探索 → 詳情 → 索引站搜尋 → 送 qBittorrent → 輪詢 → 規則 planning → 硬鏈接 → 掃描 → 媒體庫頁顯示可播放 + 深連結；Job 時間線；benchmark v0 | 一部美劇一季、一部動漫一季、一部電影，三者不經人工入庫並在 Jellyfin 正確顯示 |
 | **M1.5 媒體庫瀏覽** | 媒體庫與 Media 詳情像 Jellyfin 那樣瀏覽（§12、§13）：整個 Jellyfin 媒體庫疊上 Berth 狀態、繼續觀看、下一集、已看 / 未看與切換、類型與年份排序、Jellyfin 的圖、選季選集；播放深連結到 Jellyfin | 以一般使用者登入，不開 Jellyfin Web 就能找到要看的那一集、看到自己的進度並標記已看，按播放落在 Jellyfin 的那一集；Jellyfin 不讓這位使用者看的媒體庫，在 Berth 也看不到 |
-| **M2 修正與對帳** | Review Queue、Unmatched 指派、rematch、Reconciler、刪除範圍、重新入庫 | 刪掉 library 後可一鍵重建；Issue 表對三種人為破壞都能偵測 |
+| **M2 修正與對帳** | Review Queue、Unmatched 指派、rematch、Reconciler、刪除範圍、重新入庫、`berth rebuild-ledger`（§16.2 的災難復原指令）、Job 詳情頁 | 刪掉 library 後可一鍵重建；Issue 表對三種人為破壞都能偵測；medium 自動入庫可一鍵撤銷；`user` 看不到也按不到審核與刪除 |
 | **M3 RSS** | Mikan 與 Nyaa adapter、Rule、去重、一次性連結、dry-run | 一個動漫季度分別以 Mikan 與 Nyaa feed 全自動追完 |
-| **M4 AI fallback** | AI Plan、驗證、快取、預算、Event 記帳 | benchmark 上 review 比例下降且誤入庫率不升 |
-| 之後 | anime-lists 對應、Webhook、字型與字幕解壓、通知、多使用者審批、非影片媒體、AI 側面板 | — |
+| **M4 AI fallback** | AI Plan、驗證、快取、預算、Event 記帳（§6.10；不是 agent） | benchmark 上 review 比例下降且誤入庫率不升 |
+| **M5 通知**（2026-09-22 加） | `events` 訂閱者、channel adapter（Telegram / Discord 擇一）、每人的訂閱設定（§14） | RSS 命中 → 入庫 → Jellyfin 可見的全程，手機收到「正在下載」與「可以看了」兩則 |
+| **M6 AI 助理**（2026-09-22 加） | agent 核心、提案、Review Queue 的 AI 模式、側面板、工具權限模型（§14） | low 信心 Job 交給 AI 模式後佇列上有說得出理由的提案，人確認才入庫；AI 不能在沒有確認下動任何檔案 |
+| **M7 外部對話**（2026-09-22 加） | M5 的管道接上 M6 的核心：聊天軟體裡對話、提案卡帶按鈕、個人 API token（§14、§16.2） | 手機上收到通知、回一句話、按確認之後那一集在 Jellyfin 是已看 |
+| 之後 | anime-lists 對應、Jellyfin Webhook（§9.5，社群回報不可靠）、字型與字幕解壓、多使用者審批、非影片媒體、MCP server | — |
 
 ---
 
@@ -600,7 +622,9 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 | 多 provider（TVDB / AniList） | 延後 | §10 |
 | 字型安裝、字幕解壓、OST 入音樂庫 | 延後 | 非核心流程 |
 | BDMV 原盤 | 只辨識不處理 | 需要 Jellyfin 端特殊結構 |
-| 多使用者審批、配額、通知 | 延後 | 角色模型已預留 |
+| 多使用者審批、配額 | 延後 | 角色模型已預留 |
+| 通知 | M5 | §14、§17（2026-09-22） |
+| AI 助理（Review Queue 的 AI 模式、側面板、外部對話） | M6 / M7 | §14、§17（2026-09-22）；M2 的命令面與 M4 的 provider 先到 |
 
 ---
 
@@ -628,6 +652,11 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 | M1.5 拆票前的四條（2026-09-15） | 媒體庫頁一個 Jellyfin 媒體庫一頁，只列這位使用者 `UserViews` 裡有的，Route 退成卡片上入庫狀態的來源；首頁上方放這位使用者的繼續觀看與下一集（沒有內容就不出現），下面維持探索；瀏覽時取允許清單一併讀 Jellyfin 帳號的 `Policy`（同一份短時間快取），帳號被停用就結束 Berth 的 session，不縮短 session 效期；Jellyfin 的圖片由 Berth 代理，快取鍵用 `tag` | §12、§13、§20.8、plan §11.2b |
 | 顯示用標題的語言（2026-09-17） | **跟著 UI 語言走**，不另做「片庫語言」設定：`zh-Hant` 介面顯示 TMDB `zh-TW` 那一輪的標題與簡介，EN 介面顯示 `en-US` 那一輪的。檔名與資料夾名照舊只用英文（§7.5），不跟 UI 走。M1 票 15 的 critique（2026-09-17）量到 EN 介面上海報牆、詳情頁 h1 與簡介全是中文，與「英文是一等公民」（`PRODUCT.md`）衝突。**例外**（同日 M1.5 拆票時拍板）：媒體庫牆上已在 Jellyfin 裡的作品顯示 Jellyfin 的名稱，不為每一部去查 TMDB——牆上多數作品 Berth 沒有快照，大媒體庫第一次載入要打上千個請求；代價是 EN 介面從牆上點進 Media 詳情時標題可能換成另一種語言 | §7.5、plan §8.3、§11.2b（M1.5 票 02、03） |
 | TMDB 連不上時的精靈（2026-09-17） | **接受**：TMDB 憑證維持精靈第 6 步的閘門（M1 票 02b），`api.themoviedb.org` 被防火牆擋住的使用者裝不起來是這個決定的代價，不另開「先完成精靈、探索與入庫停擺」的路 | §16.3、README〈先申請一把 TMDB API key〉 |
+| 審核、修正與刪除的權限（2026-09-22） | **一律 admin**：Review Queue、Issue 的動作、rematch、刪除範圍、手動對帳。plan §6 與 `api/gate.py` 原本只擋 `settings/*`、`routes/*`，與本文件 §11、`PRODUCT.md` 矛盾，M2 補齊；`user` 的 Job 停在 review 時畫面說「等管理員審核」 | §11、plan §6、§11.3 |
+| M2 拆票前的九題（2026-09-22） | 全部照建議：`/jobs/:hash` 獨立頁；快取門檻寫進量測票；Issue 型別十一種聯集與依型別的冪等鍵、`/issues` 獨立頁；刪除旗標預設全不勾、同步 `stat` 估算；reconciler 手動 202 + 輪詢、正在跑 409；`GET /review` 一支一列一件事不分頁；rematch 內部建單 item Plan；rebuild-ledger 配不到的建 Issue 不猜 | §9、plan §2.4、§3.2、§6、§7、§11.3 |
+| AI 與通知的里程碑（2026-09-22） | M2 → M3 → M4 fallback（維持小範圍）→ **M5 通知 → M6 AI 助理 → M7 外部對話**。owner 要的四件事拆成三個里程碑：通知不是 AI；Review Queue 的 AI 模式、側面板、外部對話是同一個 agent 核心的三個介面，核心的形狀是「提案 → 人確認 → 執行」 | §14、§17、§18、plan §11.6–§11.8 |
+| 精靈的兩個產品問題（2026-09-22，M0 票 11 的 critique 留下） | **維持現狀**：建管理員的密碼只有一格、靠「顯示密碼」（GitHub / Vercel 的慣例，二次確認欄防的是看不見的輸入錯誤）；套件內十個索引站預設全勾（一鍵加入就是精靈那一步的目的，不想要的取消勾） | plan §9.3、M0 票 11 |
+| 前端沒有 shadcn/ui、沒有腳本化的 playwright e2e（2026-09-22 結案） | plan §1.4 / §7 原本寫 shadcn/ui 為元件基礎，M0 票 05 起沒有引入、三個里程碑沒有一個元件需要它，plan 已改；plan §10 原本寫「playwright 對 Fake 後端跑精靈與 M1 流程」但從未寫過，UI 驗證是每張票用 playwright 實跑演練情境並貼結果，plan 已改成實話，腳本化是 M2 的候選票 | plan §1.4、§7、§10、§11.3 |
 
 M1.5 拆票前的四條待決，2026-09-15 已全數照推薦拍板（上表「M1.5 拆票前的四條」那一列），這裡留著當時的理由：
 

@@ -199,7 +199,7 @@ Plan Item 的三級信心：high、medium、low。high 與 medium 自動入庫�
 _Avoid_: score, probability
 
 **Audit**:
-medium 信心自動入庫後掛的旗標，在 Review Queue 顯示為「已入庫待確認」。
+medium 信心自動入庫後掛的旗標（`plan_items.audit` 與 `ledger.audit` 各一份，importer 抄過去），在 Review Queue 顯示為「已入庫待確認」。**確認**清掉兩處旗標並記 event；**撤銷**刪掉硬鏈接與那一列帳本，Job 回 review（`review_reason = audit_undone`）。
 _Avoid_: pending, provisional
 
 **Folder Name**（資料夾名）:
@@ -227,12 +227,12 @@ _Avoid_: dataset, test data
 _Avoid_: bonus, specials（Specials 指 TMDB season 0）
 
 **Unmatched**（zh-Hant UI 顯示「對不到」）:
-解析後對不到 TMDB 任何一集或一部的影片或字幕檔；留在 complete，不入庫。程式碼、文檔與英文 UI 一律用
+解析後對不到 TMDB 任何一集或一部的影片或字幕檔；留在 complete，不入庫。同時是 Plan Item 的一個 `action`：不是低信心而是一個已經做完的決定，不擋自動入庫，但數進 `summary.low` 讓畫面看得見。程式碼、文檔與英文 UI 一律用
 `Unmatched`；zh-Hant 的文案從 M1.5 票 11 起翻成「對不到」（原本直接印英文，與旁邊的「待審」並排讀不順）。
 _Avoid_: unknown, orphan（Orphan 是對帳用語）
 
 **Review Queue**:
-需要人工處理的統一清單：低信心 Plan、Audit、Unmatched、重複版本、Issue。
+需要人工處理的統一清單：低信心 Plan、Audit、Unmatched、重複版本、Issue。一列一件事、需要人動手的排前面；不是一面牆。只有 admin。
 _Avoid_: inbox, pending list, interactive import
 
 **Rematch**:
@@ -250,7 +250,7 @@ _Avoid_: re-run, resync
 _Avoid_: scanner, sync, health check（Health Check 指服務與 Route 連線）
 
 **Issue**:
-Reconciler 或管線發現的不一致，有固定型別（library_link_missing、source_missing、inode_mismatch、orphan_complete、unknown_torrent、unmanaged_library_file、job_without_files）。
+Reconciler 或管線發現的不一致，有固定型別——對帳的七種（library_link_missing、source_missing、inode_mismatch、orphan_complete、unknown_torrent、unmanaged_library_file、job_without_files）與管線的四種（missing_files、client_error、client_removed、jellyfin_item_unresolved）；`issues.type` 與 `issue_detected` 事件共用這十一種。同一個 `(type, subject)` 只有一筆 open。
 _Avoid_: error, problem, orphan（僅作 Issue 型別名的一部分）
 
 **Unmanaged**:
@@ -258,7 +258,7 @@ library 內不是 Berth 建立的檔案；只列出，永不刪除。
 _Avoid_: foreign, external, legacy
 
 **Delete Scope**:
-刪除時可組合的四個旗標：移除 library 鏈接、從 qBittorrent 移除 torrent、刪除 complete 檔案、清除帳本。
+刪除時可組合的四個旗標：移除 library 鏈接（`unlink`）、從 qBittorrent 移除 torrent（`remove_torrent`）、刪除 complete 檔案（`delete_files`）、清除帳本與 Job 紀錄（`purge`）。預設全不勾。
 _Avoid_: purge level, cleanup mode
 
 **Health Check**:
@@ -288,5 +288,27 @@ _Avoid_: subscription（Subscription 是 UI 上「訂閱一部作品」的動作
 _Avoid_: filter, subscription rule, watch
 
 **Feed Item**:
+
+### AI 與通知（M5–M7，2026-09-22 定名）
+
+**Notification**（通知）:
+`events` 的一則事件送到人不在 Berth 頁面上時看得到的地方（聊天軟體）。不是 SSE 推給瀏覽器的那一種。
+_Avoid_: alert, push（push 是瀏覽器推播）
+
+**Channel**（管道）:
+送通知與收訊息的外部服務（Telegram、Discord…），一個 `adapters/notify/` 的 adapter。同一個管道在 M7 也收使用者的話。
+_Avoid_: integration, webhook（webhook 是別人打進來的那一種）
+
+**Assistant**（助理）:
+M6 的 agent 核心：對話 → 挑一個 services 命令 → 提出 Proposal → 人確認 → 執行。它的工具就是 services 的命令，沒有自己的路徑。
+_Avoid_: agent（對外的說法用助理）, bot（bot 是管道那一端的帳號）, copilot
+
+**Proposal**（提案）:
+Assistant 想叫的一個命令：命令名、參數、理由、狀態（proposed / approved / rejected / applied / failed）、誰決定的。改狀態的命令一律先提案；讀取類不用。畫面上是一張卡，外部管道上是一則帶按鈕的訊息。
+_Avoid_: suggestion, action, task
+
+**AI Mode**（Review Queue 的 AI 模式）:
+開關打開後佇列裡每一件先由 Assistant 跑一次，Proposal 掛在那一列上，人只按確認或拒絕。
+_Avoid_: auto-review, autopilot
 Feed 中的一筆項目及其解析與比對結果（new / matched / downloaded / ignored / unmatched）。
 _Avoid_: entry, post
