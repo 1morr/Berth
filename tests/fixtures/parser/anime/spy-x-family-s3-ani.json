@@ -1,0 +1,13 @@
+{
+  "id": "anime/spy-x-family-s3-ani",
+  "source_url": "https://acg.rip/t/344604",
+  "torrent_name": "[ANi] SPY x FAMILY /  SPY×FAMILY 間諜家家酒 Season 3 - 50 [1080P][Baha][WEB-DL][AAC AVC][CHT][MP4]",
+  "tmdb": "tv-120089",
+  "context": {"media": "tv:120089", "season_hint": null, "episode_offset": null},
+  "files": [
+    {"path": "[ANi] SPY×FAMILY 間諜家家酒 Season 3 - 50 [1080P][Baha][WEB-DL][AAC AVC][CHT].mp4", "size": 396849718}
+  ],
+  "expected": [
+    {"path": "[ANi] SPY×FAMILY 間諜家家酒 Season 3 - 50 [1080P][Baha][WEB-DL][AAC AVC][CHT].mp4", "kind": "video", "action": "import", "season": 3, "episode": 13, "tags": {"source": "WEB", "resolution": "1080p", "subs": ["CHT"], "group": "ANi"}, "target": "SPY x FAMILY (2022) [tmdbid-120089]/Season 03/SPY x FAMILY (2022) - S03E13 - A World Where We Cannot Survive [WEB][1080p][CHT][ANi].mp4"}
+  ]
+}

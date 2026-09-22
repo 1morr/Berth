@@ -26,6 +26,7 @@ from berth.config import Config
 from berth.main import create_app
 from berth.services.clients import SetupProbes
 from berth.services.indexer import DEFAULT_INDEXERS
+from tests.integration.arrange import delete_once_during_checks
 from tests.integration.factories import FakeClientFactory
 
 #: 前端每個非 GET 請求都帶這個標頭（`api/client.ts`）；缺了它的行為在 `test_auth_api.py`。
@@ -731,6 +732,25 @@ class TestRoutes:
 
         assert response.status_code == 422
         assert "not a path of" in response.json()["detail"]
+
+    def test_a_route_deleted_while_the_step_rechecks_is_a_404_not_a_crash(
+        self, client: TestClient, qbittorrent: FakeQbittorrentClient
+    ) -> None:
+        """第 7 步重跑時在鎖外打網路，那幾秒裡另一個分頁把某一條刪掉了（票 01）。
+
+        寫回時 0 列被改到，那是 `routes/*` 早就定好的 404 `route_missing`（票 14、14a），
+        不是 500——`api/setup.py` 從前只接 `ValueError`，`StaleDataError` 因此裸奔。
+        """
+        client.post("/api/setup/routes", json={})
+        doomed = client.get("/api/setup/routes").json()["routes"][0]["id"]
+        # app 自己那一份 sessionmaker：刪除要從另一條連線發生，才是另一個分頁的樣子。
+        sessions = client.app.state.session_factory  # type: ignore[attr-defined]
+        delete_once_during_checks(qbittorrent, sessions, doomed)
+
+        refused = client.post("/api/setup/routes", json={})
+
+        assert refused.status_code == 404
+        assert refused.json()["detail"]["reason"] == "route_missing"
 
     def test_completing_needs_a_green_route_first(self, client: TestClient) -> None:
         refused = client.post("/api/setup/complete")

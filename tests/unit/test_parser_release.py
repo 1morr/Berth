@@ -116,6 +116,34 @@ class TestAnimeEpisodePatterns:
 
         assert (info.season, info.episode) == (season, episode)
 
+    @pytest.mark.parametrize(
+        ("name", "episode"),
+        [
+            (
+                "[ANi] SPY×FAMILY 間諜家家酒 Season 3 - 50 [1080P][Baha][WEB-DL][AAC AVC][CHT].mp4",
+                50,
+            ),
+            (
+                "[黒ネズミたち] SPY×FAMILY 間諜家家酒 Season 3 / Spy x Family Season 3 - 47 "
+                "(CR 1920x1080 AVC AAC MKV)[v2]",
+                47,
+            ),
+        ],
+    )
+    def test_a_dash_right_after_the_season_number_carries_the_episode(
+        self, name: str, episode: int
+    ) -> None:
+        """`Season 3 - 50`：破折號後面那個數字是集號，guessit 兩種寫法各錯各的。
+
+        只寫一次時它回 `season: [3, 4, …, 50]` 一整串季號，第二個數字被當成集號（S03E04）；
+        `Season 3 / … Season 3 - 47` 這種重複寫時它只回 `season: 3`，於是 `3 - 47`
+        落進 `_LOOSE_RANGE` 變成集數區間（M1 票 08 在真的索引站回應裡抓到）。
+        """
+        info = parse_release(name)
+
+        assert (info.season, info.episode, info.episode_end) == (3, episode, None)
+        assert info.release_kind is ReleaseKind.SINGLE
+
     def test_a_cour_marker_is_read_next_to_the_season(self) -> None:
         """`Season 3 Part 2 - 01`：季號 3、cour 2、集號 1，三個數字互不覆蓋（plan §4.4）。"""
         info = parse_release(

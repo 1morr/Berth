@@ -59,6 +59,17 @@ _BRACKET_EPISODE = re.compile(
 #: （M1 票 14f 以票 01 的 Mikan 標題驗證過，兩種寫法分得一個不差）。
 _SEASON_WORD_BEFORE_BRACKET = re.compile(r"season[\s_.]*\[\s*[0-9]{1,4}\s*\]", re.IGNORECASE)
 
+#: `Season 3 - 50`：`Season` 之後的數字是季號，破折號之後那個是集號。guessit 兩種寫法各錯各的，
+#: 所以這裡看的是字面而不是它的答案：只寫一次時它回 `season: [3, 4, …, 50]` 一整串，`_numbers`
+#: 取第二個數字就成了 S03E04；`Season 3 / … Season 3 - 47` 這種重複寫時它只回 `season: 3`，
+#: 於是 `3 - 47` 落進 `_LOOSE_RANGE` 變成集數區間（M1 票 08 在真的索引站回應裡抓到）。
+#: `Season 3 Part 2 - 01` 走不到這裡：破折號前面隔著 cour 標記，不是季號。
+#: **只認半形破折號**，不認 `~`：`_LOOSE_RANGE` 兩個都收是因為 `01 ~ 10` 真的是集數區間，
+#: 但接在 `Season` 後面的 `~` 更像季的區間（`Season 1 ~ 3`），而那一種語料裡沒有樣本。
+_SEASON_DASH_EPISODE = re.compile(
+    r"season[\s_.]*([0-9]{1,4})\s*-\s*([0-9]{1,4})(?![0-9A-Za-z])", re.IGNORECASE
+)
+
 #: `Fin` / `END` 黏在集號後面是中文字幕組的季末寫法（`[01-13Fin]`）。`完` / `完結` 不在
 #: 這裡——`normalize_cjk` 已經把它們吃掉了，而 ASCII 的這兩個它認不得。少了這兩個字，
 #: `[01-13Fin]` 會被讀成「第 1 集」（2026-09-10 票 08 在真的索引站回應裡抓到）。
@@ -165,6 +176,11 @@ def _numbers(
 
     raw_season = guess.get("season")
     raw_episode = guess.get("episode")
+
+    # `Season 3 - 50`：季號與集號都寫在字面上，guessit 兩種寫法各讀錯一種。
+    dashed = _SEASON_DASH_EPISODE.search(cleaned)
+    if dashed is not None and raw_episode is None:
+        raw_season, raw_episode = int(dashed.group(1)), int(dashed.group(2))
 
     # `Mushoku Tensei Season 3 [04]` → guessit 回 `season: [3, 4]`：第二個其實是集號。
     if isinstance(raw_season, list) and raw_episode is None:

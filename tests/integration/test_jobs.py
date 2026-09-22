@@ -11,11 +11,13 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import UTC, datetime
+from collections.abc import Iterator
+from contextlib import contextmanager
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
-from sqlalchemy import delete, select
+from sqlalchemy import delete, event, select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from berth.adapters.http import AuthFailedError, ServiceUnavailableError
@@ -25,15 +27,18 @@ from berth.adapters.torrent_fake import DEFAULT_HASH, FakeTorrentFetcher
 from berth.db import create_session_factory
 from berth.domain import (
     CollectionType,
+    Confidence,
     EventType,
     HealthStatus,
     JobState,
     JobTrigger,
     MediaKind,
+    PlanAction,
+    PlanStatus,
     Role,
 )
 from berth.logs import JOB_FIELD, configure_logging, json_line
-from berth.models import Job, Media, Route, User
+from berth.models import Job, Media, Plan, PlanItem, Route, User
 from berth.services.jobs import (
     JobRejectedError,
     JobSource,
@@ -107,6 +112,65 @@ async def _ready(
     media = await _media(session)
     route = await _route(session, roots, **route_kwargs)  # type: ignore[arg-type]
     return media, route, factory_for(roots)
+
+
+@contextmanager
+def counting(engine: AsyncEngine) -> Iterator[list[str]]:
+    """這段期間送到資料庫的每一句 SQL。用它斷言次數，不用計時。"""
+    statements: list[str] = []
+
+    def record(
+        _conn: object,
+        _cursor: object,
+        statement: str,
+        _parameters: object,
+        _context: object,
+        _executemany: bool,
+    ) -> None:
+        statements.append(statement)
+
+    event.listen(engine.sync_engine, "before_cursor_execute", record)
+    try:
+        yield statements
+    finally:
+        event.remove(engine.sync_engine, "before_cursor_execute", record)
+
+
+async def _plan_backed_jobs(
+    session: AsyncSession, media: Media, route: Route, user: User, *, count: int, start: int = 0
+) -> None:
+    """`count` 筆下載，每一筆都有 Route、Media、送單的人與一份掛著 audit 的計劃。
+
+    四種關聯各一個，逐列問就是每筆四次——這個測試要看見的就是那個倍數。
+    """
+    for index in range(start, start + count):
+        job_hash = f"{index:040x}"
+        session.add(
+            Job(
+                hash=job_hash,
+                name=f"Release {index}",
+                state=JobState.IMPORTED,
+                trigger=JobTrigger.MANUAL,
+                media_id=media.id,
+                route_id=route.id,
+                user_id=user.id,
+                added_at=datetime(2026, 1, 1, tzinfo=UTC) + timedelta(minutes=index),
+            )
+        )
+        await session.flush()
+        plan = Plan(job_hash=job_hash, status=PlanStatus.APPLIED)
+        session.add(plan)
+        await session.flush()
+        session.add(
+            PlanItem(
+                plan_id=plan.id,
+                rel_path=f"{index}.mkv",
+                action=PlanAction.IMPORT,
+                confidence=Confidence.MEDIUM,
+                audit=True,
+            )
+        )
+    await session.commit()
 
 
 class TestAddDownload:
@@ -755,6 +819,30 @@ class TestReading:
         (row,) = await list_jobs(session)
 
         assert (row.media_title, row.media_title_en) == ("SPY×FAMILY 間諜家家酒", "SPY x FAMILY")
+
+    async def test_the_query_count_does_not_grow_with_the_list(
+        self, session: AsyncSession, engine: AsyncEngine, roots: dict[str, Path]
+    ) -> None:
+        """一筆與十筆問一樣多次（票 01）。
+
+        逐列問的話一百筆下載就是四百次往返，而這一支是下載列每次重新整理都走的那一支。
+        用查詢次數而不是計時：時間在 CI 上量不準，而這裡要釘住的本來就是次數。
+        """
+        media, route, _ = await _ready(session, roots)
+        user = User(jellyfin_user_id="jf-1", name="skipper", role=Role.ADMIN)
+        session.add(user)
+        await session.commit()
+        await _plan_backed_jobs(session, media, route, user, count=1)
+
+        with counting(engine) as one:
+            assert len(await list_jobs(session)) == 1
+
+        await _plan_backed_jobs(session, media, route, user, count=9, start=1)
+
+        with counting(engine) as ten:
+            assert len(await list_jobs(session)) == 10
+
+        assert len(ten) == len(one)
 
     async def test_one_job_reads_back_by_hash(
         self, session: AsyncSession, roots: dict[str, Path]

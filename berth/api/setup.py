@@ -428,7 +428,8 @@ async def post_routes(
     """建立 Route，並立刻建 category 與跑三項檢查（plan §9.5）。
 
     檢查失敗**不是** 4xx：它是這一步的結果，逐項回在 `routes[].checks` 裡，畫面靠它顯示
-    原文與該補哪個掛載。4xx 只留給「這個選擇本身無效」（不存在的媒體庫、不是它的路徑）。
+    原文與該補哪個掛載。4xx 只留給「這個選擇本身無效」（不存在的媒體庫、不是它的路徑），
+    以及檢查途中被另一個分頁刪掉的那一條（404 `route_missing`，與 `routes/*` 同一種拒絕）。
     """
     try:
         result = await build_routes(
@@ -439,6 +440,8 @@ async def post_routes(
                 for row in (body or RoutesIn()).selections
             ],
         )
+    except RouteRejectedError as refusal:
+        raise route_refusal(refusal) from refusal
     except ValueError as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
     return RouteSetupOut.model_validate(result)

@@ -154,6 +154,27 @@ Mikan 下載 `.torrent` 解出檔案清單（單檔 torrent，infohash 與 Mikan
 
 - Re:Zero 的 `min_confidence` 是 medium：季號 2 在 TMDB 上不存在，要靠虛擬季換算（plan §4.4），至多 medium。
 
+## v5 補的兩筆（2026-09-22，M2 票 01）
+
+**`Season 3 - 50`：破折號後面那個數字是集號**，而它是**跨季累加**的絕對編號——季號明說是 3，數字卻從
+第一季開始數。guessit 對這一種的兩種寫法各錯一種，所以兩筆都收：只寫一次時它回
+`season: [3, 4, …, 50]` 一整串，第二個數字被當成集號；`Season 3 / … Season 3 - 47` 這種重複寫時
+它只回 `season: 3`，`3 - 47` 因此落進 `_LOOSE_RANGE` 變成集數區間（M1 票 08 在真的索引站回應裡抓到
+`S03E03–E46`，留給 M2 票 01）。兩筆都從 ACG.RIP 下載 `.torrent` 解出檔案清單（都是單檔 torrent，
+檔名與索引站標題不同）；語料變成動漫 20、劇集 10、電影 4。
+
+| id | 為什麼是它 |
+| --- | --- |
+| `anime/spy-x-family-s3-ani` | **只寫一次的 `Season 3 - 50`**：修之前 guessit 那一整串季號讓它以 **high 信心自動入庫成 S03E04**（`auto_wrong` 1）。正確答案 **S03E13** `A World Where We Cannot Survive`：S1 25 集 + S2 12 集 = 37，50 − 37 = 13，而 TMDB 的播出日 2025-12-27 與 ACG.RIP 的發佈時間同一天 |
+| `anime/spy-x-family-s3-dynamis` | **重複寫的 `Season 3 / … Season 3 - 47`**：索引站標題是被讀成區間的那一種，而**檔名只寫一次**，所以同一筆同時蓋到兩種寫法（`merge_release` 檔名說了算，修之前一樣是 high 的 S03E04）。正確答案 **S03E10** `Austin's Troubles \| A Normal Mixer \| Moon Landing`，播出日 2025-12-07 與發佈時間同一天 |
+
+- **兩筆都沒有 `min_confidence`**：與 v2 / v3 的四筆同一個理由——明說的季號配上跨季累加的集號該不該
+  自動入庫，正是這兩筆要量的問題。修完之後它們落在 `review`（`auto_wrong` 2 → 0，`auto_correct` 不動）：
+  集號 50 在只有 13 集的第三季裡不存在，而「季號明說時要不要改走絕對編號」現在沒有規則回答，
+  所以交給人比猜一個好。
+- 集名裡的 `|` 進不了檔名（`naming.sanitize`），所以 `target` 上是
+  `Austin's Troubles A Normal Mixer Moon Landing`。
+
 ## 外掛字幕怎麼算（票 07 的決定）
 
 字幕檔的 `target` 是**它那個影片的目標路徑**換上字幕的副檔名與語言段（plan §5）。所以：

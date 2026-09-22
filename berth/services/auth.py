@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import delete, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from berth.adapters.http import AuthFailedError, ServiceError
@@ -160,19 +161,46 @@ async def _authenticate(
 
 
 async def _mirror_user(session: AsyncSession, auth: JellyfinAuth) -> AuthenticatedUser:
-    """`users` 是鏡射，不是真相：名字與角色每次登入都照 Jellyfin 重寫。"""
+    """`users` 是鏡射，不是真相：名字與角色每次登入都照 Jellyfin 重寫。
+
+    同一個新使用者的兩次登入同時進來時，兩邊都在對方 commit 之前讀過 `users`，所以兩邊都
+    以為自己是第一個，後到的那一個撞上 `users.jellyfin_user_id` 的唯一索引。那不是使用者
+    做錯了什麼，是兩個分頁同時按下登入——重讀之後照樣發 session（票 01）。
+    """
     role = Role.ADMIN if auth.is_administrator else Role.USER
-    row = await session.scalar(select(User).where(User.jellyfin_user_id == auth.user_id))
-    if row is None:
-        row = User(jellyfin_user_id=auth.user_id, name=auth.name, role=role)
-        session.add(row)
-    else:
-        row.name = auth.name
-        row.role = role
+    row = await _find_mirror(session, auth.user_id) or await _insert_mirror(session, auth, role)
+    row.name = auth.name
+    row.role = role
     row.last_login_at = _utcnow()
     # id 要在建 session 之前拿得到。
     await session.flush()
     return _view(row)
+
+
+async def _insert_mirror(session: AsyncSession, auth: JellyfinAuth, role: Role) -> User:
+    """建這個人的那一列，或者在另一個分頁搶先建好時拿它建的那一列。
+
+    回滾掉的只有這一次 insert：`sign_in` 走到這裡為止只讀過東西，session 沒有別的待寫。
+    """
+    row = User(jellyfin_user_id=auth.user_id, name=auth.name, role=role)
+    session.add(row)
+    try:
+        await session.flush()
+    except IntegrityError:
+        await session.rollback()
+        theirs = await _find_mirror(session, auth.user_id)
+        if theirs is None:
+            # 撞的不是這個人那一列，那就沒有第二種解釋了。
+            raise
+        return theirs
+    return row
+
+
+async def _find_mirror(session: AsyncSession, jellyfin_user_id: str) -> User | None:
+    row: User | None = await session.scalar(
+        select(User).where(User.jellyfin_user_id == jellyfin_user_id)
+    )
+    return row
 
 
 def _view(user: User) -> AuthenticatedUser:

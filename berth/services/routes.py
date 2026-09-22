@@ -386,8 +386,7 @@ async def check_route(
     """
     route = await _find_route(session, route_id)
     paths = await read_settings(session, PathSettings)
-    async with _stale_write_as_missing(session, route_id):
-        await _run_checks(session, factory, (_planned_from(route, paths),), (route,))
+    await _run_checks(session, factory, (_planned_from(route, paths),), (route,))
     return _route_view(route, paths.complete_root)
 
 
@@ -653,10 +652,12 @@ async def _run_checks(
             health.checked_at = moment
             # 沒過就留住上一次成功的時間，別讓它看起來從來沒通過（brief §16.2）。
             health.last_ok_at = moment if passed else previous.last_ok_at
-            route.health_detail_json = health.model_dump(mode="json")
-            route.health_status = HealthStatus.OK if passed else HealthStatus.FAILED
-            # 逐個 commit：三個 Route 裡的第二個炸了，第一個的結果仍然留得下來。
-            await session.commit()
+            # 逐個 commit：三個 Route 裡的第二個中途被刪掉時，第一個的結果仍然留得下來
+            # （那一條的拒絕會結束這一輪，後面的留到下一輪重新檢查）。
+            async with _stale_write_as_missing(session, route.id):
+                route.health_detail_json = health.model_dump(mode="json")
+                route.health_status = HealthStatus.OK if passed else HealthStatus.FAILED
+                await session.commit()
     finally:
         await qbittorrent.aclose()
         await jellyfin.aclose()

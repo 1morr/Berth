@@ -195,8 +195,6 @@ Alpha Show 與 Bravo Show 看過第一集、Frieren（TV）第一集看到 3 分
 | `jellyfin/items.movies.movie.sort-dateplayed.descending.json` | 同上一輪。電影庫的牆，`sortBy=DatePlayed,SortName,ProductionYear&sortOrder=Descending`（jellyfin-web 電影庫的寫法）：Golf（5 月看的）、Echo（4 月）、沒看過的 Foxtrot，名稱順序是 Echo、Foxtrot、Golf |
 | `jellyfin/items.tv.series.{genres,years}.json` | 同上一輪。牆的查詢加 `genres=Drama\|Comedy` / `years=2020,2023`：各剩 2 部（Alpha 與 Bravo / Bravo 與 Frieren），`TotalRecordCount` 是篩過之後的 2。類型寫在 NFO 裡（實驗腳本的 `TITLES`），DTO 不帶 `Genres` |
 | `jellyfin/items-filters.tv.json` | `GET /Items/Filters?userId=U&parentId=<TV>&includeItemTypes=Series`。`{Genres, Tags, OfficialRatings, Years}`；**不帶 `parentId` 時四份全空**，所以沒有另存那一份 |
-| `jellyfin/useritems-resume.restricted.json` | `GET /UserItems/Resume?userId=U&mediaTypes=Video`。一集一部電影；Anime 裡看到一半的那一集**不在**（不帶 `parentId` 會套權限） |
-| `jellyfin/shows-nextup.restricted.json` | `GET /Shows/NextUp?userId=U`。Alpha 與 Bravo 的第二集；Anime 那部看過第一集的劇**不在** |
 | `jellyfin/useritems-resume.watching.json` | **M1.5 票 07 加錄**（`--record --only`，另一輪一次性容器：使用者 id、`ServerId`、日期與 `ImageTags` 和這一組其他檔案不同；item id 相同）。**媒體樹多了橫圖**：Alpha Show 與 Foxtrot Movie 的資料夾有 `landscape.jpg`（Thumb）與 `fanart.jpg`（Backdrop），Bravo Show 只有 `fanart.jpg`，其餘仍只有 `poster.jpg`。`GET /UserItems/Resume?userId=U&limit=12&imageTypeLimit=1&enableImageTypes=Primary,Backdrop,Thumb&enableTotalRecordCount=false&mediaTypes=Video`（Berth 首頁那一支，jellyfin-web 的參數）：Frieren 那一集（沒有任何橫圖）與 Foxtrot Movie（自己的 Thumb 與 Backdrop）；`TotalRecordCount` 照樣回 2 |
 | `jellyfin/useritems-resume.watching.mixed.json` | 同上一輪，拿掉 `mediaTypes`：多出三季與三部劇——`mediaTypes=Video` 伺服器真的有過濾的對照 |
 | `jellyfin/useritems-resume.watching.tv.json` | 同上一輪，加 `parentId=<TV>`：只剩 Frieren 那一集 |

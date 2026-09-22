@@ -870,20 +870,12 @@ class TestHints:
 
 
 class TestDownloader:
-    async def test_the_connection_is_reused_across_rounds(
-        self, session: AsyncSession, roots: dict[str, Path]
-    ) -> None:
-        """rid 增量掛在 qBittorrent 的 session 上：每輪重造 client 等於每輪都要一份全量。"""
-        await setup_job(session, roots, state=JobState.DOWNLOADING)
-        factory = factory_for(roots)
-        factory.qbittorrent_.torrents = (status(progress=0.2),)
-        downloader = Downloader(factory, EventHub(), JobHints())
+    """「連線握著不放」那一條在 `test_qbit_poller.py::TestTheConnection`（票 01）。
 
-        await downloader.poll(session, now=NOW)
-        await downloader.poll(session, now=NOW)
-        await downloader.aclose()
-
-        assert factory.qbittorrent_.syncs == 2
+    這裡原本有一條同名的測試，但它拿 `FakeClientFactory` 一顆共用的替身去數 `syncs`——
+    每輪重造一個 client 也還是同一顆，所以那個數字兩種寫法都是 2：它綠著的時候規則
+    其實沒有人在守。真的守得住要一個「每次呼叫都造新的」工廠，而那要有迴圈才看得出意義。
+    """
 
     async def test_a_failed_round_drops_the_connection_so_the_next_one_starts_over(
         self, session: AsyncSession, roots: dict[str, Path]

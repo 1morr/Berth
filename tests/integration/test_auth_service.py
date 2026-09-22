@@ -13,7 +13,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 import pytest_asyncio
 from sqlalchemy import func, select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from berth.adapters.http import ServiceUnavailableError
 from berth.adapters.indexer import IndexerSearch
@@ -23,8 +23,10 @@ from berth.adapters.qbittorrent.fake import FakeQbittorrentClient
 from berth.adapters.tmdb.fake import FakeTmdbClient
 from berth.adapters.torrent import TorrentFetcher
 from berth.adapters.torznab.fake import FakeTorznabClient
+from berth.db import create_session_factory
 from berth.domain import IndexerKind, Role
 from berth.models import JellyfinSettings, User, UserSession
+from berth.services import auth as auth_service
 from berth.services.auth import (
     SESSION_TTL,
     InvalidCredentialsError,
@@ -159,6 +161,46 @@ class TestSignIn:
         deckhand = await sign_in(session, factory, username="deckhand", password="rope")
 
         assert skipper.user.id != deckhand.user.id
+
+    async def test_the_same_first_login_twice_at_once_lands_on_one_row(
+        self,
+        session: AsyncSession,
+        engine: AsyncEngine,
+        factory: OneJellyfin,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """同一個新使用者的兩次登入同時進來：兩條都該拿到同一個鏡像使用者。
+
+        兩邊都在對方 commit 之前讀過 `users`，所以兩邊都以為自己是第一個——後到的那一個
+        撞上 `users.jellyfin_user_id` 的唯一索引。那不是使用者做錯了什麼，是兩個分頁
+        同時按下登入，所以它得重讀之後照樣發 session，而不是 500（M2 票 01）。
+
+        競爭由 `_find_mirror` 的替身製造（同 `test_routes.py` 的 `route_conflict`）：真的靠
+        時序去撞，撞不撞得到要看 aiosqlite 兩條連線的執行緒誰先回來。
+        """
+        sessions = create_session_factory(engine)
+        async with sessions() as other:
+            first = await sign_in(other, factory, username="skipper", password="harbour")
+
+        find = auth_service._find_mirror
+        reads = 0
+
+        async def blind_to_the_other_tab(
+            session: AsyncSession, jellyfin_user_id: str
+        ) -> User | None:
+            nonlocal reads
+            reads += 1
+            # 第一次讀落在另一個分頁 commit 之前，所以看不到它；撞上之後的重讀照實回答。
+            return None if reads == 1 else await find(session, jellyfin_user_id)
+
+        monkeypatch.setattr(auth_service, "_find_mirror", blind_to_the_other_tab)
+
+        second = await sign_in(session, factory, username="skipper", password="harbour")
+
+        assert second.user.id == first.user.id
+        assert await session.scalar(select(func.count()).select_from(User)) == 1
+        # 這一次登入照樣拿得到一張能用的 session：回滾掉的只有那一次撞車的 insert。
+        assert (await read_session(session, second.token)) is not None
 
 
 @pytest.mark.usefixtures("configured")

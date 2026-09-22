@@ -20,7 +20,6 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from berth.adapters.http import ServiceUnavailableError
 from berth.adapters.jellyfin import JellyfinLibrary
-from berth.adapters.qbittorrent import QbittorrentCategory
 from berth.db import create_session_factory
 from berth.domain import CollectionType, HealthStatus, JobTrigger, PlanAction, StepStatus
 from berth.models import Job, LedgerEntry, Route, SetupLibrary
@@ -32,6 +31,7 @@ from berth.services.routes import (
     RouteUsage,
     build_routes,
     check_route,
+    check_routes,
     create_route,
     delete_route,
     list_libraries,
@@ -44,6 +44,7 @@ from berth.services.routes import (
 from tests.integration.arrange import (
     arrange,
     bundled_libraries,
+    delete_once_during_checks,
     factory_for,
     fake_jellyfin,
     with_second_disk,
@@ -527,7 +528,7 @@ class TestRaces:
         assert refusal.value.reason == "route_conflict"
         assert len((await read_route_status(session)).routes) == 3
 
-    @pytest.mark.parametrize("command", ["update", "check"])
+    @pytest.mark.parametrize("command", ["update", "check", "check_all"])
     async def test_a_route_deleted_during_its_checks_is_missing_not_a_crash(
         self,
         session: AsyncSession,
@@ -537,25 +538,22 @@ class TestRaces:
         command: str,
     ) -> None:
         """修改與重新檢查在鎖外打網路；那幾秒裡另一個分頁刪掉了這一條。寫回時 0 列被改到
-        （`StaleDataError`），那就是 `route_missing`（404），不是 500。"""
+        （`StaleDataError`），那就是 `route_missing`（404），不是 500。
+
+        `check_all` 是**整組重跑**那一支（`check_routes`，精靈第 7 步與健康迴圈走它）：同一件事
+        在那裡曾經裸奔成 500（票 01）。"""
         route_id, _ = await red_second_route(session, roots)
         libraries, _ = with_second_disk(roots)
         factory = factory_for(roots, libraries=libraries)
-        sessions = create_session_factory(engine)
-        categories = factory.qbittorrent_.categories
-
-        async def deleted_meanwhile() -> tuple[QbittorrentCategory, ...]:
-            async with sessions() as other:
-                await delete_route(other, route_id)
-            return await categories()
-
-        monkeypatch.setattr(factory.qbittorrent_, "categories", deleted_meanwhile)
+        delete_once_during_checks(factory.qbittorrent_, create_session_factory(engine), route_id)
 
         with pytest.raises(RouteRejectedError) as refusal:
             if command == "update":
                 await update_route(session, factory, route_id, name="TV 2", enabled=True)
-            else:
+            elif command == "check":
                 await check_route(session, factory, route_id)
+            else:
+                await check_routes(session, factory)
 
         assert refusal.value.reason == "route_missing"
 

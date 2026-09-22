@@ -10,11 +10,12 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from pathlib import Path
 
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from berth.adapters.indexer.fake import FakeIndexerSearch
 from berth.adapters.jellyfin import JellyfinLibrary
 from berth.adapters.jellyfin.fake import FakeJellyfinClient
+from berth.adapters.qbittorrent import QbittorrentCategory
 from berth.adapters.qbittorrent.fake import FakeQbittorrentClient
 from berth.adapters.tmdb.fake import FakeTmdbClient
 from berth.domain import (
@@ -36,6 +37,7 @@ from berth.models import (
     SetupStep,
 )
 from berth.services.jellyfin import BUNDLED_LIBRARIES
+from berth.services.routes import delete_route
 from berth.services.settings import read_settings, write_settings
 from berth.services.setup import create_admin
 from tests.integration.factories import FakeClientFactory
@@ -219,3 +221,28 @@ def factory_for(
         tmdb=tmdb or FakeTmdbClient(),
         indexer_search=indexer_search or FakeIndexerSearch(),
     )
+
+
+def delete_once_during_checks(
+    qbittorrent: FakeQbittorrentClient,
+    sessions: async_sessionmaker[AsyncSession],
+    route_id: int,
+) -> None:
+    """下一輪檢查問 qBittorrent 的那一刻，另一個 session 把這條 Route 刪掉（票 14a、票 01）。
+
+    五條纜繩在鎖外打網路，那幾秒就是另一個分頁按下刪除的空窗。**只刪一次**：整組重跑會
+    逐條問，刪第二次拿到的是刪除自己的拒絕，不是這裡要造的那個競爭。
+    """
+    categories = qbittorrent.categories
+    deleted = False
+
+    async def deleted_meanwhile() -> tuple[QbittorrentCategory, ...]:
+        nonlocal deleted
+        if not deleted:
+            deleted = True
+            async with sessions() as other:
+                await delete_route(other, route_id)
+        return await categories()
+
+    # 替身的方法是實例屬性，指派回去就是「這一輪改問這個」。
+    qbittorrent.categories = deleted_meanwhile  # type: ignore[method-assign]

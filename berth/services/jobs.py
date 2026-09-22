@@ -28,7 +28,7 @@ import asyncio
 import json
 import logging
 from collections import Counter
-from collections.abc import AsyncIterator, Coroutine
+from collections.abc import AsyncIterator, Coroutine, Sequence
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -37,6 +37,7 @@ from typing import Any
 from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import InstrumentedAttribute
 
 from berth.adapters.http import ServiceError
 from berth.adapters.qbittorrent import TorrentAdd, ensure_category
@@ -246,12 +247,12 @@ async def add_download(
     if source.info_hash:
         existing = await session.get(Job, source.info_hash)
         if existing is not None:
-            return AddDownloadOutcome(job=await _view(session, existing), created=False)
+            return AddDownloadOutcome(job=await _view_one(session, existing), created=False)
 
     torrent = await _resolve(factory, source.url)
     existing = await session.get(Job, torrent.info_hash)
     if existing is not None:
-        return AddDownloadOutcome(job=await _view(session, existing), created=False)
+        return AddDownloadOutcome(job=await _view_one(session, existing), created=False)
 
     with job_context(torrent.info_hash):
         job = Job(
@@ -290,7 +291,7 @@ async def add_download(
             # 兩個分頁同時送同一筆：主鍵擋下第二個。回既有的那一列，不是 500（plan §3.3）。
             duplicate = await session.get(Job, torrent.info_hash)
             if duplicate is not None:
-                return AddDownloadOutcome(job=await _view(session, duplicate), created=False)
+                return AddDownloadOutcome(job=await _view_one(session, duplicate), created=False)
             # 前提查過之後 Route 在 Route 設定頁被刪掉了：外鍵擋下這一列（票 14a）。
             # 用參數的 id 而不是 `route.id`——rollback 之後那個物件已經過期，讀它要再打一次資料庫。
             if await session.get(Route, route_id) is None:
@@ -300,7 +301,7 @@ async def add_download(
         # 從這裡開始 poller 也看得到這一列（它已經 commit 了），所以送單與迴圈要排隊。
         async with job_lock(job.hash):
             await _finish(session, factory, job, route, torrent, media, actor=actor_of(user_id))
-        return AddDownloadOutcome(job=await _view(session, job), created=True)
+        return AddDownloadOutcome(job=await _view_one(session, job), created=True)
 
 
 async def retry_job(session: AsyncSession, factory: ServiceClientFactory, job_hash: str) -> JobView:
@@ -350,9 +351,9 @@ async def _resubmit(
     except JobRejectedError as failure:
         await _fail(session, job, failure.detail or failure.reason, actor="user")
         await session.commit()
-        return await _view(session, job)
+        return await _view_one(session, job)
     await _finish(session, factory, job, route, torrent, subject, actor="user")
-    return await _view(session, job)
+    return await _view_one(session, job)
 
 
 async def _resume_import(session: AsyncSession, job: Job) -> JobView:
@@ -369,7 +370,7 @@ async def _resume_import(session: AsyncSession, job: Job) -> JobView:
     )
     await session.commit()
     logger.info("job import retried", extra={"state": job.state.value})
-    return await _view(session, job)
+    return await _view_one(session, job)
 
 
 async def guarded[T](
@@ -393,13 +394,14 @@ async def guarded[T](
 
 async def list_jobs(session: AsyncSession) -> tuple[JobView, ...]:
     """下載列表頁的一整份，最新的在前面（brief §13）。"""
-    rows = await session.scalars(select(Job).order_by(Job.added_at.desc(), Job.hash))
-    return tuple([await _view(session, row) for row in rows])
+    rows = tuple(await session.scalars(select(Job).order_by(Job.added_at.desc(), Job.hash)))
+    related = await _related(session, rows)
+    return tuple(_view(row, related) for row in rows)
 
 
 async def read_job(session: AsyncSession, job_hash: str) -> JobView | None:
     job = await session.get(Job, job_hash)
-    return None if job is None else await _view(session, job)
+    return None if job is None else await _view_one(session, job)
 
 
 async def read_job_events(session: AsyncSession, job_hash: str) -> tuple[JobEventView, ...]:
@@ -667,22 +669,67 @@ def actor_of(user_id: int | None) -> str:
 # --- 攤平 ---------------------------------------------------------------
 
 
-async def _view(session: AsyncSession, job: Job) -> JobView:
-    route = await session.get(Route, job.route_id) if job.route_id is not None else None
-    media = await session.get(Media, job.media_id) if job.media_id is not None else None
-    user = await session.get(User, job.user_id) if job.user_id is not None else None
-    # 現在那一份計劃的 id 與它掛著 audit 的檔案數，一次問完。`services/plan.plan_id_of`
-    # 問的是前一半；**這裡不呼叫它**：`services/plan` 已經 import 這一支（`transition`、
-    # `job_lock`），反過來就是循環。
-    plan_row = (
-        await session.execute(
-            select(Plan.id, func.count(PlanItem.id).filter(PlanItem.audit))
-            .outerjoin(PlanItem, PlanItem.plan_id == Plan.id)
-            .where(Plan.job_hash == job.hash)
-            .group_by(Plan.id)
-        )
-    ).first()
-    plan_id, audits = (plan_row[0], plan_row[1]) if plan_row is not None else (None, 0)
+async def _view_one(session: AsyncSession, job: Job) -> JobView:
+    """單獨一筆的 view。清單走 `_related` 一次問完，這裡是它的單數形。"""
+    return _view(job, await _related(session, (job,)))
+
+
+@dataclass(frozen=True, slots=True)
+class _Related:
+    """一份 Job 清單身上掛的每一種關聯，四次查詢問完（票 01）。
+
+    逐列問的話一百筆下載就是四百次往返，而下載列每次重新整理都走這一支。
+    """
+
+    routes: dict[int, Route]
+    media: dict[str, Media]
+    users: dict[int, User]
+    #: job hash → 現在那一份計劃的 id 與它掛著 audit 的檔案數。
+    plans: dict[str, tuple[int, int]]
+
+
+async def _related(session: AsyncSession, jobs: Sequence[Job]) -> _Related:
+    """`_view` 要用到的每一種關聯。空的那一種不問。"""
+    return _Related(
+        routes=await _by_id(session, Route, Route.id, {j.route_id for j in jobs}),
+        media=await _by_id(session, Media, Media.id, {j.media_id for j in jobs}),
+        users=await _by_id(session, User, User.id, {j.user_id for j in jobs}),
+        plans=await _plans_of(session, [job.hash for job in jobs]),
+    )
+
+
+async def _by_id[K, T](
+    session: AsyncSession, model: type[T], key: InstrumentedAttribute[K], ids: set[K | None]
+) -> dict[K, T]:
+    wanted = {value for value in ids if value is not None}
+    if not wanted:
+        return {}
+    rows = await session.scalars(select(model).where(key.in_(wanted)))
+    return {getattr(row, key.key): row for row in rows}
+
+
+async def _plans_of(session: AsyncSession, job_hashes: Sequence[str]) -> dict[str, tuple[int, int]]:
+    """每一筆 Job 現在那一份計劃的 id 與掛著 audit 的檔案數。
+
+    `services/plan.plan_id_of` 問的是前一半；**這裡不呼叫它**：`services/plan` 已經 import
+     這一支（`transition`、`job_lock`），反過來就是循環。
+    """
+    if not job_hashes:
+        return {}
+    rows = await session.execute(
+        select(Plan.job_hash, Plan.id, func.count(PlanItem.id).filter(PlanItem.audit))
+        .outerjoin(PlanItem, PlanItem.plan_id == Plan.id)
+        .where(Plan.job_hash.in_(list(job_hashes)))
+        .group_by(Plan.job_hash, Plan.id)
+    )
+    return {job_hash: (plan_id, audits) for job_hash, plan_id, audits in rows if job_hash}
+
+
+def _view(job: Job, related: _Related) -> JobView:
+    route = related.routes.get(job.route_id) if job.route_id is not None else None
+    media = related.media.get(job.media_id) if job.media_id is not None else None
+    user = related.users.get(job.user_id) if job.user_id is not None else None
+    plan_id, audits = related.plans.get(job.hash, (None, 0))
     return JobView(
         hash=job.hash,
         name=job.name,
