@@ -290,7 +290,7 @@ async def _advance(
         # 所以「不在裡面」不必等 `torrents_removed`——重啟後的第一輪（全量）也成立。
         moved = await _issue(session, job, JobState.CLIENT_REMOVED, IssueType.CLIENT_REMOVED)
         if moved:
-            signals.append(JobSignal(hash=job.hash, state=job.state.value, progress=job.progress))
+            signals.append(JobSignal(hash=job.hash, state=job.state, progress=job.progress))
         return moved
 
     # 進度門檻比的是**上一輪存下來的值**，所以要在 `_refresh` 蓋掉它之前先拿走。
@@ -309,7 +309,7 @@ async def _advance(
     # 推 40 次的話，每個開著的分頁就每 5 秒重問一次整份清單——而那正是這條推播要取代的
     # 東西。轉換、進度、client state 三者任一動了才算變了。
     if (job.state, job.progress, job.client_state) != was:
-        signals.append(JobSignal(hash=job.hash, state=job.state.value, progress=job.progress))
+        signals.append(JobSignal(hash=job.hash, state=job.state, progress=job.progress))
     return steps
 
 

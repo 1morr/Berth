@@ -17,18 +17,35 @@
 from __future__ import annotations
 
 import asyncio
-import json
 from collections.abc import AsyncIterator
 from typing import Any
 
 import anyio
 from fastapi import APIRouter
+from pydantic import BaseModel
 from sse_starlette import EventSourceResponse
 
 from berth.api.deps import EventHubDep
+from berth.domain import JobState
 from berth.services.events import JOB_EVENT, EventHub
 
 router = APIRouter(prefix="/events", tags=["events"])
+
+
+class JobSignalOut(BaseModel):
+    """`event: job` 那一行的 `data`。
+
+    **推的是提示不是真相**：前端拿它讓 `['jobs']` 失效再問一次（plan §7），所以這裡只有身分
+    與去不去重問的依據。是 model 而不是手組的 dict，前端才從 OpenAPI 取得到這三格與 `state`
+    的封閉集合——它原本在 `web/src/api/events.ts` 是手抄的 `state: string`（M2 票 02）。
+    """
+
+    #: info hash，小寫十六進位。這一筆的身分（plan §2.3）。
+    hash: str
+    state: JobState
+    #: 0.0–1.0。
+    progress: float
+
 
 #: 沒有事件時多久送一次註解 ping。反向代理常見的閒置逾時是 60 秒。
 PING_SECONDS = 20
@@ -38,7 +55,20 @@ PING_SECONDS = 20
 SHUTDOWN_GRACE_SECONDS = 2.0
 
 
-@router.get("/stream")
+class _Stream(EventSourceResponse):
+    """只為了文件：`sse_starlette` 不在類別上宣告 `media_type`（它自己組標頭），而 FastAPI
+    就是讀那一格決定文件上的 content type——沒有它，這一支會被寫成 `application/json`。
+    端點自己回一個 `EventSourceResponse` 實例，所以這個類別不參與執行期。
+    """
+
+    media_type = "text/event-stream"
+
+
+@router.get(
+    "/stream",
+    response_class=_Stream,
+    responses={200: {"model": JobSignalOut, "description": "一筆接一筆的 `event: job`"}},
+)
 async def stream(hub: EventHubDep) -> EventSourceResponse:
     """一條 SSE 連線。斷線或關機時一定收掉訂閱。"""
     shutdown = anyio.Event()
@@ -73,6 +103,10 @@ async def _signals(hub: EventHub, shutdown: anyio.Event) -> AsyncIterator[dict[s
                 if waiting not in done:
                     waiting.cancel()
                     return
-                yield {"event": JOB_EVENT, "data": json.dumps(waiting.result().payload())}
+                signal = waiting.result()
+                payload = JobSignalOut(
+                    hash=signal.hash, state=signal.state, progress=signal.progress
+                )
+                yield {"event": JOB_EVENT, "data": payload.model_dump_json()}
         finally:
             stopping.cancel()

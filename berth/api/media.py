@@ -19,7 +19,12 @@ from fastapi import APIRouter, Request
 from pydantic import BaseModel, ConfigDict
 
 from berth.api.deps import AccessCacheDep, ClientFactoryDep, SessionDep
-from berth.api.jellyfin import access_refusal, session_user, watch_episode_out
+from berth.api.jellyfin import (
+    access_refusal,
+    access_responses,
+    session_user,
+    watch_episode_out,
+)
 from berth.api.schemas import JellyfinWebOut, WatchEpisodeOut, WatchStateOut
 from berth.domain import (
     CollectionType,
@@ -251,13 +256,12 @@ class WatchAreaOut(BaseModel):
     jellyfin: JellyfinWebOut
 
 
-@router.get(
-    "/{media_id}/watch",
-    responses={
-        401: {"description": "`account_disabled`：帳號在 Jellyfin 被停用，session 已結束"},
-        503: {"description": "`jellyfin_unreachable`：問不到 Jellyfin"},
-    },
-)
+#: 觀看區不碰媒體庫（找作品不帶 `parentId`），看不到的作品回 `null` 而不是拒絕，
+#: 所以只有這兩種。decorator 與底下的 `except` 吃同一份。
+_WATCH_REFUSALS = (AccountDisabledError, JellyfinUnreachableError)
+
+
+@router.get("/{media_id}/watch", responses=access_responses(*_WATCH_REFUSALS))
 async def get_watch(
     session: SessionDep,
     factory: ClientFactoryDep,
@@ -270,7 +274,7 @@ async def get_watch(
     try:
         async with jellyfin_access(session, factory, cache, session_user(request)) as access:
             area = await read_watch_area(session, access, media_id)
-    except (AccountDisabledError, JellyfinUnreachableError) as refusal:
+    except _WATCH_REFUSALS as refusal:
         raise access_refusal(refusal) from refusal
     if area is None:
         return None

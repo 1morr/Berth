@@ -16,7 +16,13 @@ from fastapi import APIRouter, Query, Request
 from pydantic import BaseModel, ConfigDict
 
 from berth.api.deps import AccessCacheDep, ClientFactoryDep, SessionDep
-from berth.api.jellyfin import access_refusal, image_url, session_user, watching_out
+from berth.api.jellyfin import (
+    access_refusal,
+    access_responses,
+    image_url,
+    session_user,
+    watching_out,
+)
 from berth.api.schemas import JellyfinWebOut, WatchingOut, WatchStateOut
 from berth.domain import (
     CollectionType,
@@ -134,7 +140,11 @@ class InventoryOut(BaseModel):
     unmatched: int
 
 
-@router.get("")
+#: 切換列不碰單一媒體庫，所以只有這兩種。decorator 與底下的 `except` 吃同一份。
+_LIBRARIES_REFUSALS = (AccountDisabledError, JellyfinUnreachableError)
+
+
+@router.get("", responses=access_responses(*_LIBRARIES_REFUSALS))
 async def get_inventories(
     session: SessionDep, factory: ClientFactoryDep, cache: AccessCacheDep, request: Request
 ) -> list[InventoryLibraryOut]:
@@ -142,12 +152,21 @@ async def get_inventories(
     try:
         async with jellyfin_access(session, factory, cache, session_user(request)) as access:
             libraries = access.libraries
-    except (AccountDisabledError, JellyfinUnreachableError) as refusal:
+    except _LIBRARIES_REFUSALS as refusal:
         raise access_refusal(refusal) from refusal
     return [InventoryLibraryOut.model_validate(row) for row in libraries]
 
 
-@router.get("/{library_id}")
+#: 牆另外會遇到選單外的排序鍵（票 06）。
+_WALL_REFUSALS = (
+    AccountDisabledError,
+    JellyfinUnreachableError,
+    LibraryNotVisibleError,
+    SortNotOfferedError,
+)
+
+
+@router.get("/{library_id}", responses=access_responses(*_WALL_REFUSALS))
 async def get_inventory(
     session: SessionDep,
     factory: ClientFactoryDep,
@@ -167,12 +186,7 @@ async def get_inventory(
     try:
         async with jellyfin_access(session, factory, cache, session_user(request)) as access:
             wall = await read_wall(session, access, library_id, page=page, query=query)
-    except (
-        AccountDisabledError,
-        JellyfinUnreachableError,
-        LibraryNotVisibleError,
-        SortNotOfferedError,
-    ) as refusal:
+    except _WALL_REFUSALS as refusal:
         raise access_refusal(refusal) from refusal
     return InventoryOut(
         library=InventoryLibraryOut.model_validate(wall.library),
@@ -187,7 +201,11 @@ async def get_inventory(
     )
 
 
-@router.get("/{library_id}/filters")
+#: 篩選面板與媒體庫那兩列：先驗媒體庫，但沒有排序鍵。
+_LIBRARY_REFUSALS = (AccountDisabledError, JellyfinUnreachableError, LibraryNotVisibleError)
+
+
+@router.get("/{library_id}/filters", responses=access_responses(*_LIBRARY_REFUSALS))
 async def get_inventory_filters(
     session: SessionDep,
     factory: ClientFactoryDep,
@@ -199,12 +217,12 @@ async def get_inventory_filters(
     try:
         async with jellyfin_access(session, factory, cache, session_user(request)) as access:
             filters = await access.filters(library_id)
-    except (AccountDisabledError, JellyfinUnreachableError, LibraryNotVisibleError) as refusal:
+    except _LIBRARY_REFUSALS as refusal:
         raise access_refusal(refusal) from refusal
     return InventoryFiltersOut.model_validate(filters)
 
 
-@router.get("/{library_id}/watching")
+@router.get("/{library_id}/watching", responses=access_responses(*_LIBRARY_REFUSALS))
 async def get_inventory_watching(
     session: SessionDep,
     factory: ClientFactoryDep,
@@ -217,7 +235,7 @@ async def get_inventory_watching(
     try:
         async with jellyfin_access(session, factory, cache, session_user(request)) as access:
             watching = await read_watching(access, library_id)
-    except (AccountDisabledError, JellyfinUnreachableError, LibraryNotVisibleError) as refusal:
+    except _LIBRARY_REFUSALS as refusal:
         raise access_refusal(refusal) from refusal
     return await watching_out(session, watching)
 

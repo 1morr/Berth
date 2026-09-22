@@ -244,7 +244,15 @@ pnpm -C web gen:api         # berth openapi → web/openapi.json → src/api/sch
 ```
 
 - **改了任何 pydantic 的 request / response model 就重跑它**，產出的 `schema.d.ts` 與後端的
-  改動放同一個 commit。CI 的 `api-types` job 跑同一個指令再比對，型別檔過期時紅燈。
+  改動放同一個 commit。CI 的 `api-types` job 跑同一個指令再比對，型別檔過期時紅燈；
+  `tests/unit/test_openapi_contract.py` 在本機 `pytest` 就先紅，不必等 CI 跑完產生器。
+- **拒絕的理由是 `berth/domain/enums.py` 的 enum**（`JobRefusal`、`RouteRefusal`、
+  `AccessRefusal`），經由各 router 的 `responses=` 進 OpenAPI，前端從產出的型別取它們。
+  加一種理由要做四件事，**每一件都有閘門**：enum 加一個成員、那一支 router 的 `_STATUS`
+  給它一個狀態碼（`TestStatusTables`）、重跑 `pnpm gen:api`（`TestRefusalReasons` 與 CI）、
+  前端的 `ReasonSet` 加一格（`tsc`，`refusal.test.ts` 的 `@ts-expect-error` 釘著那道閘門本身）。
+  第五件是**畫面要說一句話**：`jobs.refusal.*` 走動態 key，所以 `t()` 的 `strictKeyChecks`
+  會替它擋；`RouteRefusal` 與 `AccessRefusal` 的消費端是查表或單一理由比較，那一句沒有閘門。
 - 產出的型別檔進版控，中間產物 `web/openapi.json` 不進（`.gitignore`）。型別檔進版控，
   `pnpm install` 之後沒有 Python 環境也能 typecheck 與跑測試；`openapi.json` 則會因為
   `info.version` 每次發版都變而製造沒有意義的 diff。

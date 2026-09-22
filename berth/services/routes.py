@@ -47,6 +47,7 @@ from berth.domain import (
     CollectionType,
     HealthStatus,
     RouteCheck,
+    RouteRefusal,
     ServiceKind,
     ServiceOrigin,
     StepStatus,
@@ -84,7 +85,7 @@ class RouteRejectedError(Exception):
     前端認的是同一種錯誤（PRODUCT 原則 4：說得出原因與下一步）。
     """
 
-    def __init__(self, reason: str, detail: str) -> None:
+    def __init__(self, reason: RouteRefusal, detail: str) -> None:
         super().__init__(f"{reason}: {detail}")
         self.reason = reason
         self.detail = detail
@@ -98,7 +99,8 @@ class RouteInUseError(RouteRejectedError):
 
     def __init__(self, usage: RouteUsage) -> None:
         super().__init__(
-            "route_in_use", f"jobs={usage.jobs} · ledger_entries={usage.ledger_entries}"
+            RouteRefusal.ROUTE_IN_USE,
+            f"jobs={usage.jobs} · ledger_entries={usage.ledger_entries}",
         )
         self.usage = usage
 
@@ -306,13 +308,13 @@ async def create_route(
     collection_type = SUPPORTED_TYPES.get(library.collection_type)
     if collection_type is None:
         raise RouteRejectedError(
-            "library_unsupported",
+            RouteRefusal.LIBRARY_UNSUPPORTED,
             f"{library.name!r} is a {library.collection_type or 'mixed'} library",
         )
     if target_path not in library.locations:
         # 路徑一律從 Jellyfin 讀，使用者只做選擇（brief §4.1）。
         raise RouteRejectedError(
-            "target_not_in_library",
+            RouteRefusal.TARGET_NOT_IN_LIBRARY,
             f"{target_path!r} is not a path of {library.name!r} "
             f"(it has {', '.join(library.locations) or 'none'})",
         )
@@ -336,7 +338,7 @@ async def create_route(
     except IntegrityError as exc:
         # 建立點都在鎖內看過了；還是撞上唯一索引代表有鎖外的寫入。重讀之後照實說，不是 500。
         _refuse_taken(target_path, tuple((await _existing_routes(session)).values()))
-        raise RouteRejectedError("route_conflict", str(exc.orig)) from exc
+        raise RouteRejectedError(RouteRefusal.ROUTE_CONFLICT, str(exc.orig)) from exc
 
     async with _stale_write_as_missing(session, route.id):
         await _run_checks(session, factory, (plan_row,), (route,))
@@ -370,7 +372,7 @@ async def update_route(
 
         await _run_checks(session, factory, (_planned_from(route, paths),), (route,))
         if enabled and not route.enabled and route.health_status is not HealthStatus.OK:
-            raise RouteRejectedError("route_unhealthy", route.slug)
+            raise RouteRejectedError(RouteRefusal.ROUTE_UNHEALTHY, route.slug)
         route.enabled = enabled
         await session.commit()
     return _route_view(route, paths.complete_root)
@@ -539,7 +541,7 @@ async def _find_route(session: AsyncSession, route_id: int) -> Route:
     """
     route = await session.get(Route, route_id, populate_existing=True)
     if route is None:
-        raise RouteRejectedError("route_missing", str(route_id))
+        raise RouteRejectedError(RouteRefusal.ROUTE_MISSING, str(route_id))
     return route
 
 
@@ -547,7 +549,9 @@ def _refuse_taken(target_path: str, routes: Sequence[Route]) -> None:
     """帳本以目標路徑認 Route（`owning_route`）：兩條同一個目標就分不出檔案是誰的。"""
     holder = next((route for route in routes if route.target_path == target_path), None)
     if holder is not None:
-        raise RouteRejectedError("target_taken", f"{target_path!r} is already {holder.slug!r}")
+        raise RouteRejectedError(
+            RouteRefusal.TARGET_TAKEN, f"{target_path!r} is already {holder.slug!r}"
+        )
 
 
 #: 一句改不到任何一列的 UPDATE。用途見 `_write_lock`。
@@ -589,7 +593,7 @@ async def _stale_write_as_missing(session: AsyncSession, route_id: int) -> Async
         yield
     except StaleDataError as exc:
         await session.rollback()
-        raise RouteRejectedError("route_missing", str(route_id)) from exc
+        raise RouteRejectedError(RouteRefusal.ROUTE_MISSING, str(route_id)) from exc
 
 
 async def _live_libraries(
@@ -601,7 +605,7 @@ async def _live_libraries(
     try:
         return await jellyfin.libraries()
     except ServiceError as exc:
-        raise RouteRejectedError("jellyfin_unreachable", message(exc)) from exc
+        raise RouteRejectedError(RouteRefusal.JELLYFIN_UNREACHABLE, message(exc)) from exc
     finally:
         await jellyfin.aclose()
 
@@ -614,7 +618,7 @@ async def _live_library(
     library = next((row for row in libraries if row.item_id == library_id), None)
     if library is None:
         raise RouteRejectedError(
-            "library_missing", f"Jellyfin has no library with id {library_id!r}"
+            RouteRefusal.LIBRARY_MISSING, f"Jellyfin has no library with id {library_id!r}"
         )
     return library
 

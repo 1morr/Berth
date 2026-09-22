@@ -1150,6 +1150,28 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * AccessRefusal
+         * @description 替 session 那個人讀寫 Jellyfin 時被擋下來（`services/jellyfin_access.py`，M1.5 票 03）。
+         *
+         *     權限的判定全部在那一處，這裡是它攤給畫面的四種答案加上一種參數錯誤。**說得出理由的拒絕
+         *     是答案不是故障**，所以前端拿到它就不重試（`retryUnlessRefused`）。
+         * @enum {string}
+         */
+        AccessRefusal: "account_disabled" | "library_not_visible" | "item_not_visible" | "jellyfin_unreachable" | "sort_not_offered";
+        /**
+         * AccessRefusalOut
+         * @description 權限閘門說不行的那一份，與送單和 Route 的拒絕同形（`api/jobs.py`、`api/routes.py`）。
+         *
+         *     **說得出理由的拒絕是答案不是故障**，所以前端拿到它就不重試（`retryUnlessRefused`）。
+         *     是 model 而不是手組的 dict，前端才從 OpenAPI 取得到 `AccessRefusal`——它原本在
+         *     `web/src/api/jellyfin.ts` 是手抄的，而且抄漏了 `sort_not_offered`（M2 票 02）。
+         */
+        AccessRefusalOut: {
+            reason: components["schemas"]["AccessRefusal"];
+            /** Detail */
+            detail: string;
+        };
         /** AdminIn */
         AdminIn: {
             /** Username */
@@ -1638,6 +1660,42 @@ export interface components {
             plan_id: number | null;
             /** Audits */
             audits: number;
+        };
+        /**
+         * JobRefusal
+         * @description 送單、重試或重新規劃在做出任何改變之前就停下來了（`services/jobs.py`、`services/plan.py`）。
+         *
+         *     **qBittorrent 收不下不在這裡**：那時 Job 已經建好了，狀態是 `submit_failed` 加上原文，
+         *     列上有一顆重試（plan §3.1）。這裡的每一種都是「還沒開始就停住」。
+         * @enum {string}
+         */
+        JobRefusal: "media_missing" | "route_missing" | "route_kind_mismatch" | "route_disabled" | "route_unhealthy" | "source_unavailable" | "job_missing" | "not_retryable" | "not_replannable";
+        /**
+         * JobRefusalOut
+         * @description 做不了的時候回的那一份。`reason` 給畫面挑句子、挑下一步，`detail` 是原文，不翻譯。
+         *
+         *     是 model 而不是手組的 dict，前端才從 OpenAPI 取得到 `JobRefusal` 這個封閉集合——
+         *     它原本在 `web/src/api/jobs.ts` 是手抄的（M2 票 02）。
+         */
+        JobRefusalOut: {
+            reason: components["schemas"]["JobRefusal"];
+            /** Detail */
+            detail: string;
+        };
+        /**
+         * JobSignalOut
+         * @description `event: job` 那一行的 `data`。
+         *
+         *     **推的是提示不是真相**：前端拿它讓 `['jobs']` 失效再問一次（plan §7），所以這裡只有身分
+         *     與去不去重問的依據。是 model 而不是手組的 dict，前端才從 OpenAPI 取得到這三格與 `state`
+         *     的封閉集合——它原本在 `web/src/api/events.ts` 是手抄的 `state: string`（M2 票 02）。
+         */
+        JobSignalOut: {
+            /** Hash */
+            hash: string;
+            state: components["schemas"]["JobState"];
+            /** Progress */
+            progress: number;
         };
         /**
          * JobSourceIn
@@ -2161,6 +2219,30 @@ export interface components {
             checked_at: string | null;
             /** Last Ok At */
             last_ok_at: string | null;
+        };
+        /**
+         * RouteRefusal
+         * @description Route 設定頁與精靈第 7 步的一個命令做不下去（`services/routes.py`、票 14、14a）。
+         *
+         *     前五種發生在建立的路上（媒體庫與路徑向 Jellyfin 現查），後四種是對既有的那一條動手時。
+         * @enum {string}
+         */
+        RouteRefusal: "library_missing" | "library_unsupported" | "target_not_in_library" | "target_taken" | "jellyfin_unreachable" | "route_missing" | "route_in_use" | "route_unhealthy" | "route_conflict";
+        /**
+         * RouteRefusalOut
+         * @description 與送單的拒絕同形（`api/jobs.py` 的 `JobRefusalOut`）：`reason` 挑句子，`detail` 是原文。
+         *
+         *     是 model 而不是手組的 dict，前端才從 OpenAPI 取得到 `RouteRefusal`——它原本在
+         *     `web/src/api/routes.ts` 是手抄的（M2 票 02）。
+         */
+        RouteRefusalOut: {
+            reason: components["schemas"]["RouteRefusal"];
+            /** Detail */
+            detail: string;
+            /** Jobs */
+            jobs?: number | null;
+            /** Ledger Entries */
+            ledger_entries?: number | null;
         };
         /**
          * RouteSelectionIn
@@ -2785,13 +2867,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description 一筆接一筆的 `event: job` */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "text/event-stream": components["schemas"]["JobSignalOut"];
                 };
             };
         };
@@ -2874,6 +2956,24 @@ export interface operations {
                     "application/json": components["schemas"]["InventoryLibraryOut"][];
                 };
             };
+            /** @description `account_disabled` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessRefusalOut"];
+                };
+            };
+            /** @description `jellyfin_unreachable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessRefusalOut"];
+                };
+            };
         };
     };
     get_inventory_api_inventory__library_id__get: {
@@ -2902,13 +3002,40 @@ export interface operations {
                     "application/json": components["schemas"]["InventoryOut"];
                 };
             };
-            /** @description Validation Error */
+            /** @description `account_disabled` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessRefusalOut"];
+                };
+            };
+            /** @description `library_not_visible` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessRefusalOut"];
+                };
+            };
+            /** @description `sort_not_offered` */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["AccessRefusalOut"];
+                };
+            };
+            /** @description `jellyfin_unreachable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessRefusalOut"];
                 };
             };
         };
@@ -2933,6 +3060,24 @@ export interface operations {
                     "application/json": components["schemas"]["InventoryFiltersOut"];
                 };
             };
+            /** @description `account_disabled` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessRefusalOut"];
+                };
+            };
+            /** @description `library_not_visible` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessRefusalOut"];
+                };
+            };
             /** @description Validation Error */
             422: {
                 headers: {
@@ -2940,6 +3085,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description `jellyfin_unreachable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessRefusalOut"];
                 };
             };
         };
@@ -2964,6 +3118,24 @@ export interface operations {
                     "application/json": components["schemas"]["WatchingOut"];
                 };
             };
+            /** @description `account_disabled` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessRefusalOut"];
+                };
+            };
+            /** @description `library_not_visible` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessRefusalOut"];
+                };
+            };
             /** @description Validation Error */
             422: {
                 headers: {
@@ -2971,6 +3143,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description `jellyfin_unreachable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessRefusalOut"];
                 };
             };
         };
@@ -3042,19 +3223,23 @@ export interface operations {
                     "application/json": components["schemas"]["WatchingOut"];
                 };
             };
-            /** @description `account_disabled`：帳號在 Jellyfin 被停用，session 已結束 */
+            /** @description `account_disabled` */
             401: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AccessRefusalOut"];
+                };
             };
-            /** @description `jellyfin_unreachable`：問不到 Jellyfin */
+            /** @description `jellyfin_unreachable` */
             503: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AccessRefusalOut"];
+                };
             };
         };
     };
@@ -3080,19 +3265,23 @@ export interface operations {
                     "application/json": components["schemas"]["WatchEpisodeOut"][];
                 };
             };
-            /** @description `account_disabled`：帳號在 Jellyfin 被停用，session 已結束 */
+            /** @description `account_disabled` */
             401: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AccessRefusalOut"];
+                };
             };
-            /** @description `item_not_visible`：這位使用者看不到這部劇或這一季，或沒有它們 */
+            /** @description `item_not_visible` */
             404: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AccessRefusalOut"];
+                };
             };
             /** @description Validation Error */
             422: {
@@ -3103,12 +3292,14 @@ export interface operations {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
-            /** @description `jellyfin_unreachable`：問不到 Jellyfin */
+            /** @description `jellyfin_unreachable` */
             503: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AccessRefusalOut"];
+                };
             };
         };
     };
@@ -3132,19 +3323,23 @@ export interface operations {
                     "application/json": components["schemas"]["WatchStateOut"];
                 };
             };
-            /** @description `account_disabled`：帳號在 Jellyfin 被停用，session 已結束 */
+            /** @description `account_disabled` */
             401: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AccessRefusalOut"];
+                };
             };
-            /** @description `item_not_visible`：這位使用者看不到這個 item，或沒有這個 item */
+            /** @description `item_not_visible` */
             404: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AccessRefusalOut"];
+                };
             };
             /** @description Validation Error */
             422: {
@@ -3155,12 +3350,14 @@ export interface operations {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
-            /** @description `jellyfin_unreachable`：問不到 Jellyfin */
+            /** @description `jellyfin_unreachable` */
             503: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AccessRefusalOut"];
+                };
             };
         };
     };
@@ -3184,19 +3381,23 @@ export interface operations {
                     "application/json": components["schemas"]["WatchStateOut"];
                 };
             };
-            /** @description `account_disabled`：帳號在 Jellyfin 被停用，session 已結束 */
+            /** @description `account_disabled` */
             401: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AccessRefusalOut"];
+                };
             };
-            /** @description `item_not_visible`：這位使用者看不到這個 item，或沒有這個 item */
+            /** @description `item_not_visible` */
             404: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AccessRefusalOut"];
+                };
             };
             /** @description Validation Error */
             422: {
@@ -3207,12 +3408,14 @@ export interface operations {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
-            /** @description `jellyfin_unreachable`：問不到 Jellyfin */
+            /** @description `jellyfin_unreachable` */
             503: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AccessRefusalOut"];
+                };
             };
         };
     };
@@ -3258,13 +3461,31 @@ export interface operations {
                     "application/json": components["schemas"]["JobCreatedOut"];
                 };
             };
-            /** @description Validation Error */
+            /** @description `route_disabled` · `route_unhealthy` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobRefusalOut"];
+                };
+            };
+            /** @description `media_missing` · `route_missing` · `route_kind_mismatch` */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["JobRefusalOut"];
+                };
+            };
+            /** @description `source_unavailable` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobRefusalOut"];
                 };
             };
         };
@@ -3351,6 +3572,24 @@ export interface operations {
                     "application/json": components["schemas"]["JobOut"];
                 };
             };
+            /** @description `job_missing` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobRefusalOut"];
+                };
+            };
+            /** @description `not_replannable` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobRefusalOut"];
+                };
+            };
             /** @description Validation Error */
             422: {
                 headers: {
@@ -3382,13 +3621,31 @@ export interface operations {
                     "application/json": components["schemas"]["JobOut"];
                 };
             };
-            /** @description Validation Error */
+            /** @description `job_missing` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobRefusalOut"];
+                };
+            };
+            /** @description `not_retryable` · `route_disabled` · `route_unhealthy` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobRefusalOut"];
+                };
+            };
+            /** @description `route_missing` · `route_kind_mismatch` */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["JobRefusalOut"];
                 };
             };
         };
@@ -3475,12 +3732,14 @@ export interface operations {
                     "application/json": components["schemas"]["WatchAreaOut"] | null;
                 };
             };
-            /** @description `account_disabled`：帳號在 Jellyfin 被停用，session 已結束 */
+            /** @description `account_disabled` */
             401: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AccessRefusalOut"];
+                };
             };
             /** @description Validation Error */
             422: {
@@ -3491,12 +3750,14 @@ export interface operations {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
-            /** @description `jellyfin_unreachable`：問不到 Jellyfin */
+            /** @description `jellyfin_unreachable` */
             503: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AccessRefusalOut"];
+                };
             };
         };
     };
@@ -3573,13 +3834,40 @@ export interface operations {
                     "application/json": components["schemas"]["RouteOut"];
                 };
             };
-            /** @description Validation Error */
+            /** @description `route_missing` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RouteRefusalOut"];
+                };
+            };
+            /** @description `route_in_use` · `route_unhealthy` · `route_conflict` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RouteRefusalOut"];
+                };
+            };
+            /** @description `library_missing` · `library_unsupported` · `target_not_in_library` · `target_taken` */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["RouteRefusalOut"];
+                };
+            };
+            /** @description `jellyfin_unreachable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RouteRefusalOut"];
                 };
             };
         };
@@ -3608,13 +3896,40 @@ export interface operations {
                     "application/json": components["schemas"]["RouteOut"];
                 };
             };
-            /** @description Validation Error */
+            /** @description `route_missing` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RouteRefusalOut"];
+                };
+            };
+            /** @description `route_in_use` · `route_unhealthy` · `route_conflict` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RouteRefusalOut"];
+                };
+            };
+            /** @description `library_missing` · `library_unsupported` · `target_not_in_library` · `target_taken` */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["RouteRefusalOut"];
+                };
+            };
+            /** @description `jellyfin_unreachable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RouteRefusalOut"];
                 };
             };
         };
@@ -3637,13 +3952,40 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Validation Error */
+            /** @description `route_missing` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RouteRefusalOut"];
+                };
+            };
+            /** @description `route_in_use` · `route_unhealthy` · `route_conflict` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RouteRefusalOut"];
+                };
+            };
+            /** @description `library_missing` · `library_unsupported` · `target_not_in_library` · `target_taken` */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["RouteRefusalOut"];
+                };
+            };
+            /** @description `jellyfin_unreachable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RouteRefusalOut"];
                 };
             };
         };
@@ -3668,13 +4010,40 @@ export interface operations {
                     "application/json": components["schemas"]["RouteOut"];
                 };
             };
-            /** @description Validation Error */
+            /** @description `route_missing` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RouteRefusalOut"];
+                };
+            };
+            /** @description `route_in_use` · `route_unhealthy` · `route_conflict` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RouteRefusalOut"];
+                };
+            };
+            /** @description `library_missing` · `library_unsupported` · `target_not_in_library` · `target_taken` */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["RouteRefusalOut"];
+                };
+            };
+            /** @description `jellyfin_unreachable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RouteRefusalOut"];
                 };
             };
         };
@@ -3695,6 +4064,42 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LibraryOptionOut"][];
+                };
+            };
+            /** @description `route_missing` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RouteRefusalOut"];
+                };
+            };
+            /** @description `route_in_use` · `route_unhealthy` · `route_conflict` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RouteRefusalOut"];
+                };
+            };
+            /** @description `library_missing` · `library_unsupported` · `target_not_in_library` · `target_taken` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RouteRefusalOut"];
+                };
+            };
+            /** @description `jellyfin_unreachable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RouteRefusalOut"];
                 };
             };
         };

@@ -401,4 +401,4 @@ async def _notify(session: AsyncSession, factory: ServiceClientFactory, job: Job
 
 def _publish(hub: EventHub, job: Job) -> None:
     """推播在 commit 之後（票 10 實跑抓到的那一條）。"""
-    hub.publish(JobSignal(hash=job.hash, state=job.state.value, progress=job.progress))
+    hub.publish(JobSignal(hash=job.hash, state=job.state, progress=job.progress))

@@ -6,12 +6,13 @@
 
 from __future__ import annotations
 
+from berth.domain import JobState
 from berth.services.downloads import BACKOFF_CEILING, IDLE_INTERVAL, backoff
 from berth.services.events import EventHub, JobSignal
 
 
 def signal(hash_: str) -> JobSignal:
-    return JobSignal(hash=hash_, state="downloading", progress=0.0)
+    return JobSignal(hash=hash_, state=JobState.DOWNLOADING, progress=0.0)
 
 
 def test_a_slow_subscriber_loses_the_oldest_not_the_newest() -> None:

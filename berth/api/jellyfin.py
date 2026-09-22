@@ -19,13 +19,15 @@
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Any
 from urllib.parse import urlencode
 
 from fastapi import APIRouter, HTTPException, Path, Query, Request, status
 from fastapi.responses import Response
+from pydantic import BaseModel
 
 from berth.api.deps import AccessCacheDep, ClientFactoryDep, SessionDep
+from berth.api.errors import refusal_responses
 from berth.api.gate import current_user
 from berth.api.schemas import (
     JellyfinWebOut,
@@ -34,7 +36,7 @@ from berth.api.schemas import (
     WatchingOut,
     WatchStateOut,
 )
-from berth.domain import ImageSize, JellyfinImageType
+from berth.domain import AccessRefusal, ImageSize, JellyfinImageType
 from berth.services.auth import AuthenticatedUser
 from berth.services.deeplink import jellyfin_web
 from berth.services.jellyfin_access import (
@@ -71,6 +73,67 @@ IMAGE_HEADERS = {
 }
 
 
+class AccessRefusalOut(BaseModel):
+    """權限閘門說不行的那一份，與送單和 Route 的拒絕同形（`api/jobs.py`、`api/routes.py`）。
+
+    **說得出理由的拒絕是答案不是故障**，所以前端拿到它就不重試（`retryUnlessRefused`）。
+    是 model 而不是手組的 dict，前端才從 OpenAPI 取得到 `AccessRefusal`——它原本在
+    `web/src/api/jellyfin.ts` 是手抄的，而且抄漏了 `sort_not_offered`（M2 票 02）。
+    """
+
+    reason: AccessRefusal
+    detail: str
+
+
+#: `services/jellyfin_access.py` 丟的例外 → 畫面認得的那個理由。媒體庫與這一組共用。
+_REFUSALS: dict[type[Exception], AccessRefusal] = {
+    AccountDisabledError: AccessRefusal.ACCOUNT_DISABLED,
+    LibraryNotVisibleError: AccessRefusal.LIBRARY_NOT_VISIBLE,
+    ItemNotVisibleError: AccessRefusal.ITEM_NOT_VISIBLE,
+    JellyfinUnreachableError: AccessRefusal.JELLYFIN_UNREACHABLE,
+    SortNotOfferedError: AccessRefusal.SORT_NOT_OFFERED,
+}
+
+#: 理由 → 狀態碼。**每一種都要在這裡**（`tests/unit/test_openapi_contract.py` 守著）。
+#:
+#: - `account_disabled`（401）：session 已經結束，前端照「登入失效」處理。
+#: - `library_not_visible` / `item_not_visible`（404）：沒有權限與不存在是同一個回應。
+#: - `jellyfin_unreachable`（503）：`detail` 是服務回的原文。
+#: - `sort_not_offered`（422）：這一種媒體庫的排序選單上沒有這個鍵（票 06）。
+_STATUS: dict[AccessRefusal, int] = {
+    AccessRefusal.ACCOUNT_DISABLED: status.HTTP_401_UNAUTHORIZED,
+    AccessRefusal.LIBRARY_NOT_VISIBLE: status.HTTP_404_NOT_FOUND,
+    AccessRefusal.ITEM_NOT_VISIBLE: status.HTTP_404_NOT_FOUND,
+    AccessRefusal.JELLYFIN_UNREACHABLE: status.HTTP_503_SERVICE_UNAVAILABLE,
+    AccessRefusal.SORT_NOT_OFFERED: status.HTTP_422_UNPROCESSABLE_CONTENT,
+}
+
+
+def access_responses(*errors: type[Exception]) -> dict[int | str, dict[str, Any]]:
+    """這一支端點回得出來的那幾種，**用它 `except` 的那一組例外說**。
+
+    逐端點列而不是整份倒出來：標記已看碰不到媒體庫與排序鍵，文件把它們寫上去只會讓讀的人
+    以為要處理。收例外而不是收理由，是為了讓 decorator 與 `except` 吃同一個 tuple——
+    兩份各寫一次的話，多接一種例外時文件不會跟著變。
+    """
+    picked = {_REFUSALS[error]: _STATUS[_REFUSALS[error]] for error in errors}
+    return refusal_responses(AccessRefusalOut, picked)
+
+
+#: 整個帳號的那兩列碰不到媒體庫（不帶 `parentId`），所以只有這兩種。
+WATCHING_REFUSALS = (AccountDisabledError, JellyfinUnreachableError)
+
+#: 一季的集：劇與季的可見性由 Jellyfin 查，看不到是 `item_not_visible`。
+EPISODES_REFUSALS = (AccountDisabledError, ItemNotVisibleError, JellyfinUnreachableError)
+
+
+def access_refusal(refusal: Exception) -> HTTPException:
+    """`{reason, detail}`，與 Route 設定頁的拒絕同形（`api/routes.py`）。"""
+    reason = _REFUSALS[type(refusal)]
+    body = AccessRefusalOut(reason=reason, detail=str(refusal))
+    return HTTPException(_STATUS[reason], body.model_dump(mode="json"))
+
+
 def image_url(item_id: str, image_type: JellyfinImageType, *, size: ImageSize, tag: str) -> str:
     """卡片上的圖片網址。**`tag` 一定要是 DTO 的 `ImageTags`**：錯的 tag Jellyfin 一樣回圖，
     而這個網址被快取一年。`/api` 是 `main.API_PREFIX`（api 不 import main）。"""
@@ -98,14 +161,15 @@ async def get_image(
     try:
         image = await read_image(session, factory, item_id, image_type, size=size, tag=tag)
     except ImageMissingError as missing:
+        # `image_missing` 只有這一支說得出來，所以它不在 `AccessRefusal` 裡；前端不解析它
+        # （圖是 `<img>` 的來源，壞掉就是 `onError`）。
         raise HTTPException(
             status.HTTP_404_NOT_FOUND, {"reason": "image_missing", "detail": str(missing)}
         ) from missing
     except JellyfinUnreachableError as refusal:
-        raise HTTPException(
-            status.HTTP_503_SERVICE_UNAVAILABLE,
-            {"reason": "jellyfin_unreachable", "detail": refusal.detail},
-        ) from refusal
+        # 與其餘每一支同一種拒絕，所以走同一支（`JellyfinUnreachableError` 的 `str()` 就是
+        # `detail`）。自己組一份的話那個理由字串會有兩個來源。
+        raise access_refusal(refusal) from refusal
     return Response(
         image.content,
         media_type=image.content_type,
@@ -115,10 +179,7 @@ async def get_image(
 
 @router.get(
     "/watching",
-    responses={
-        401: {"description": "`account_disabled`：帳號在 Jellyfin 被停用，session 已結束"},
-        503: {"description": "`jellyfin_unreachable`：問不到 Jellyfin"},
-    },
+    responses=access_responses(*WATCHING_REFUSALS),
 )
 async def get_watching(
     session: SessionDep, factory: ClientFactoryDep, cache: AccessCacheDep, request: Request
@@ -127,7 +188,7 @@ async def get_watching(
     try:
         async with jellyfin_access(session, factory, cache, session_user(request)) as access:
             watching = await read_watching(access, None)
-    except (AccountDisabledError, JellyfinUnreachableError) as refusal:
+    except WATCHING_REFUSALS as refusal:
         raise access_refusal(refusal) from refusal
     return await watching_out(session, watching)
 
@@ -161,11 +222,7 @@ def _watching_card(card: WatchingCard) -> WatchingCardOut:
 
 @router.get(
     "/shows/{series_id}/episodes",
-    responses={
-        401: {"description": "`account_disabled`：帳號在 Jellyfin 被停用，session 已結束"},
-        404: {"description": "`item_not_visible`：這位使用者看不到這部劇或這一季，或沒有它們"},
-        503: {"description": "`jellyfin_unreachable`：問不到 Jellyfin"},
-    },
+    responses=access_responses(*EPISODES_REFUSALS),
 )
 async def get_episodes(
     session: SessionDep,
@@ -180,7 +237,7 @@ async def get_episodes(
     try:
         async with jellyfin_access(session, factory, cache, session_user(request)) as access:
             episodes = await read_episodes(access, series_id, season_id)
-    except (AccountDisabledError, ItemNotVisibleError, JellyfinUnreachableError) as refusal:
+    except EPISODES_REFUSALS as refusal:
         raise access_refusal(refusal) from refusal
     return [watch_episode_out(episode) for episode in episodes]
 
@@ -201,12 +258,9 @@ def watch_episode_out(episode: WatchEpisode) -> WatchEpisodeOut:
     )
 
 
-#: 已看 / 未看的拒絕，照 `access_refusal` 的表。
-PLAYED_RESPONSES: dict[int | str, dict[str, str]] = {
-    401: {"description": "`account_disabled`：帳號在 Jellyfin 被停用，session 已結束"},
-    404: {"description": "`item_not_visible`：這位使用者看不到這個 item，或沒有這個 item"},
-    503: {"description": "`jellyfin_unreachable`：問不到 Jellyfin"},
-}
+#: 已看 / 未看遇得到的拒絕。decorator 與底下 `_mark` 的 `except` 吃同一份。
+PLAYED_REFUSALS = (AccountDisabledError, ItemNotVisibleError, JellyfinUnreachableError)
+PLAYED_RESPONSES = access_responses(*PLAYED_REFUSALS)
 
 
 @router.post("/items/{item_id}/played", responses=PLAYED_RESPONSES)
@@ -246,7 +300,7 @@ async def _mark(
     try:
         async with jellyfin_access(session, factory, cache, session_user(request)) as access:
             written = await access.mark_played(item_id, played=played)
-    except (AccountDisabledError, ItemNotVisibleError, JellyfinUnreachableError) as refusal:
+    except PLAYED_REFUSALS as refusal:
         raise access_refusal(refusal) from refusal
     return WatchStateOut.model_validate(written)
 
@@ -257,25 +311,3 @@ def session_user(request: Request) -> AuthenticatedUser:
     if user is None:  # pragma: no cover - 門禁保證不會發生
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "sign in to use this API")
     return user
-
-
-#: 權限閘門的拒絕 → 狀態碼與 `reason`。媒體庫與這一組共用。
-#:
-#: - `account_disabled`（401）：session 已經結束，前端照「登入失效」處理。
-#: - `library_not_visible` / `item_not_visible`（404）：沒有權限與不存在是同一個回應。
-#: - `jellyfin_unreachable`（503）：`detail` 是服務回的原文。
-#: - `sort_not_offered`（422）：這一種媒體庫的排序選單上沒有這個鍵（票 06）。前端照媒體庫的 `sorts`
-#:   畫選單，所以只有手改網址會走到這裡。
-_REFUSALS: dict[type[Exception], tuple[int, str]] = {
-    AccountDisabledError: (status.HTTP_401_UNAUTHORIZED, "account_disabled"),
-    LibraryNotVisibleError: (status.HTTP_404_NOT_FOUND, "library_not_visible"),
-    ItemNotVisibleError: (status.HTTP_404_NOT_FOUND, "item_not_visible"),
-    JellyfinUnreachableError: (status.HTTP_503_SERVICE_UNAVAILABLE, "jellyfin_unreachable"),
-    SortNotOfferedError: (status.HTTP_422_UNPROCESSABLE_CONTENT, "sort_not_offered"),
-}
-
-
-def access_refusal(refusal: Exception) -> HTTPException:
-    """`{reason, detail}`，與 Route 設定頁的拒絕同形（`api/routes.py`）。"""
-    code, reason = _REFUSALS[type(refusal)]
-    return HTTPException(code, {"reason": reason, "detail": str(refusal)})
