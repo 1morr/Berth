@@ -609,6 +609,12 @@ Berth 入庫的作品照樣瀏覽得到。這六件事現在是 nightly e2e 的�
   前端改用產出的型別——原本那三份是手抄的字面聯集，後端加一種理由時沒有任何東西會紅。
   SSE 推的 `{hash, state, progress}` 同樣有了 model（`JobSignalOut`），`state` 是 `JobState` 而不是自由字串。
   理由 → 狀態碼的三張表現在要涵蓋整個集合（以前漏掉的會靜靜變成 422）。
+- **會拒絕的端點都要宣告，而且各自宣告它真的會回的那幾種**（M2 票 02a）：精靈的兩支 Route 命令補上
+  `responses=`——`POST /setup/routes` 是 404 `route_missing`（這一步順帶重跑既有 Route 的檢查），
+  `DELETE /setup/routes/{id}` 是 404 加 409 `route_in_use`；兩支各一張小表，不是 `routes/*` 九種理由的聯集。
+  `GET /jellyfin/items/{id}/images/{type}` 的 503 也補上 model（原本只有一行描述）。
+  票 02 留下的「沒有閘門」補成 `TestDeclaringWhatEachEndpointRefuses`：走訪每一條路由，比對它
+  `responses` 上宣告的拒絕**形狀**與 handler 語法樹丟得出來的，漏宣告與多宣告都紅。
 
 ### Removed
 
@@ -628,6 +634,9 @@ Berth 入庫的作品照樣瀏覽得到。這六件事現在是 nightly e2e 的�
   破折號數字是集號不是範圍尾。兩筆真實發佈進語料，`berth bench` 的 `auto_wrong` 維持 0。
 - **下載列表不再逐列查關聯**（M2 票 01）：`list_jobs` 的 Route / Media / User 與計劃改成四次批次查詢，
   查詢次數不隨下載筆數成長。
+- **精靈第 7 步遇到「Route 被另一個分頁刪掉」時只說「請求沒有走完」**（M2 票 02a）：那是一句
+  既沒有原因也沒有下一步的通用失敗。現在說的是「這一步順便重新檢查了既有的 Route，其中一條在途中
+  被刪掉了」與「重新整理這一步」，與 Route 設定頁上的三處同一個形狀。
 - **精靈與設定頁的十餘處狀態說不出後果**（M2 票 03）：表單沒改過時「儲存」不再亮、所有路徑都被佔用時
   「建立並檢查」不再畫成主動作、確認區的「取消」不再比主動作寬、通過 TMDB 閘門後泊位 3 的詳情列跟著更新、
   缺憑證時 `complete.failed` 不再錯怪後端、第 7 步的勾選表直接標出已被佔用的路徑。

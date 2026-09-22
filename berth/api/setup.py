@@ -6,11 +6,12 @@ from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field
 
 from berth.api.deps import ClientFactoryDep, SessionDep, SetupProbesDep
-from berth.api.routes import route_refusal
+from berth.api.routes import route_refusal, route_responses
 from berth.api.schemas import QbittorrentOut, RouteOut, StepOut
 from berth.domain import (
     DetectionReason,
     IndexerKind,
+    RouteRefusal,
     ServiceKind,
     ServiceOrigin,
 )
@@ -421,7 +422,15 @@ async def get_routes(session: SessionDep) -> RouteSetupOut:
     return RouteSetupOut.model_validate(await read_route_status(session))
 
 
-@router.post("/routes")
+#: 這一步順帶重跑**每一條**既有 Route 的檢查，途中被另一個分頁刪掉的那一條就是它
+#: （M2 票 01）。其餘無效的選擇是 `ValueError` → 422，不走拒絕那條路，所以只有這一種。
+_BUILD_RESPONSES = route_responses(RouteRefusal.ROUTE_MISSING)
+
+#: 與 `DELETE /routes/{id}` 同一個命令，所以同樣是這兩種（票 14a）。
+_DELETE_RESPONSES = route_responses(RouteRefusal.ROUTE_MISSING, RouteRefusal.ROUTE_IN_USE)
+
+
+@router.post("/routes", responses=_BUILD_RESPONSES)
 async def post_routes(
     session: SessionDep, factory: ClientFactoryDep, body: RoutesIn | None = None
 ) -> RouteSetupOut:
@@ -447,7 +456,11 @@ async def post_routes(
     return RouteSetupOut.model_validate(result)
 
 
-@router.delete("/routes/{route_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/routes/{route_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses=_DELETE_RESPONSES,
+)
 async def delete_setup_route(session: SessionDep, route_id: int) -> None:
     """第 7 步每條 Route 底下的「刪除」（票 14a）。
 

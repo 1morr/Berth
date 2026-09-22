@@ -7,6 +7,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -59,6 +61,16 @@ class RouteRefusalOut(BaseModel):
     ledger_entries: int | None = None
 
 
+def route_responses(*reasons: RouteRefusal) -> dict[int | str, dict[str, Any]]:
+    """這一支端點**真的會回**的那幾種（`api/jobs.py` 的 `_refusals` 同一個形狀）。
+
+    精靈的兩支 Route 命令（`api/setup.py`）借它：兩個入口共用 `route_refusal()`，所以
+    「理由 → 狀態碼」只能有 `_STATUS` 這一個來源，而它們各自會回的那幾種又不是這裡的聯集。
+    """
+    return refusal_responses(RouteRefusalOut, {reason: _STATUS[reason] for reason in reasons})
+
+
+#: 這一組五支端點的聯集。**不要套到別的模組**：過度宣告的文件跟漏掉的一樣沒用（票 02a）。
 REFUSAL_RESPONSES = refusal_responses(RouteRefusalOut, _STATUS)
 
 

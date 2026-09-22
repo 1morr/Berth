@@ -183,11 +183,14 @@ progress.md（session 紀錄與偏差）。
   `berth/domain/enums.py` 裡已經是 enum——它沒進 OpenAPI 是因為 `StepOut.step` 宣告成 `str`
   （`api/schemas.py`）。同一類問題、同一種解法（把 `step` 收緊成聯集型別），但它不是拒絕理由，
   這一票沒動。要做的話順手：`SERVICE_KINDS` 那一組註解也該跟著改。
-- **「會拒絕的端點都要宣告 `responses=`」這一條沒有閘門。** 這一票掃過的 api 模組都補齊了（合併後補記：`api/setup.py` 的兩支不在其中——`DELETE /setup/routes/{id}` 這一票沒掃到，`POST /setup/routes` 的拒絕是票 01 在另一條分支上同時加的。兩支與票 02a 一起補），
-  但新端點漏掉時不會有東西紅。試過的做法是數原始碼裡 `raise access_refusal(` 與
-  `responses=access_responses(` 各出現幾次——`PLAYED_RESPONSES` 這種先存成常數再用的寫法就
-  數不到，而放寬到數得到就等於沒在守東西，所以拿掉了。真正的解法是讓它由構造保證
-  （註冊端點時一併帶上拒絕），那是比這一票大的改動。
+- ~~**「會拒絕的端點都要宣告 `responses=`」這一條沒有閘門。**~~ **票 02a 做出來了**
+  （`TestDeclaringWhatEachEndpointRefuses`）。這一票試的是數原始碼裡 `raise access_refusal(`
+  與 `responses=access_responses(` 各出現幾次——`PLAYED_RESPONSES` 這種先存成常數再用的寫法
+  數不到，放寬到數得到就等於沒在守東西，所以拿掉了。票 02a 換了兩邊的讀法：`responses` 從
+  **路由物件**上讀（執行期的值，怎麼寫都一樣），handler 丟得出什麼從**語法樹**讀，兩邊都不是
+  字串比對。順帶補上這一票漏掉的三支——`api/setup.py` 的兩支（`DELETE /setup/routes/{id}`
+  這一票沒掃到，`POST /setup/routes` 的拒絕是票 01 在另一條分支上同時加的），以及
+  `api/jellyfin.py` 的 `get_image`（503 手寫成只有描述、沒有 model）。
 - **`AccessRefusal` 與 `RouteRefusal` 新增一種理由時「畫面要說一句話」沒有閘門**：它們的
   消費端是查表（`AddRoute` 的 `Partial<Record<…>>`）或單一理由比較，不是動態 i18n key，所以
   `strictKeyChecks` 擋不到。只有 `jobs.refusal.*` 有（README 已寫明這個差別）。

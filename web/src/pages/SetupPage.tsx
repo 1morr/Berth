@@ -35,6 +35,7 @@ import {
 } from '../api/setup'
 import { type QbittorrentSetup, type ServiceKind } from '../api/schemas'
 import { healthQueryOptions } from '../api/health'
+import { routeRefusalOf } from '../api/routes'
 import { LanguageToggle } from '../components/LanguageToggle'
 import { AdminStep } from '../setup/AdminStep'
 import { BerthBoard, type BerthSignals } from '../setup/BerthBoard'
@@ -304,6 +305,7 @@ export function SetupPage({
             building={build.isPending}
             addingPath={addPath.isPending ? addPath.variables : null}
             requestFailed={build.isError}
+            refusal={routeRefusalOf(build.error)}
             onBuild={(selections) => build.mutate(selections)}
             onAddPath={(library) => addPath.mutate(library)}
             onRouteDeleted={() =>

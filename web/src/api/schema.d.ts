@@ -3202,7 +3202,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AccessRefusalOut"];
+                };
             };
         };
     };
@@ -4804,6 +4806,15 @@ export interface operations {
                     "application/json": components["schemas"]["RouteSetupOut"];
                 };
             };
+            /** @description `route_missing` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RouteRefusalOut"];
+                };
+            };
             /** @description Validation Error */
             422: {
                 headers: {
@@ -4832,6 +4843,24 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description `route_missing` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RouteRefusalOut"];
+                };
+            };
+            /** @description `route_in_use` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RouteRefusalOut"];
+                };
             };
             /** @description Validation Error */
             422: {

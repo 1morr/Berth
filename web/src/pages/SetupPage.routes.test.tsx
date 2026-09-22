@@ -306,6 +306,44 @@ describe('泊位 4 的失敗', () => {
     expect(await screen.findByText(/already points at/)).toBeInTheDocument()
     expect(screen.getByText(/autoTMM/)).toBeInTheDocument()
   })
+
+  /**
+   * 票 02a。這一步順帶重跑既有 Route 的檢查，途中被另一個分頁刪掉的那一條是 404
+   * `route_missing`（票 01）。原本這裡只吃 `build.isError`，畫面因此說「後端可能沒在跑」
+   * ——既不是原因也不是下一步（PRODUCT 原則 4）。
+   */
+  it('建立途中有 Route 被刪掉：說出是哪一種失敗與下一步，不說後端沒在跑', async () => {
+    stubApi({
+      [STATUS]: { body: AT_BERTH_FOUR },
+      [ROUTES]: { body: routeSetup() },
+      [BUILD]: {
+        status: 404,
+        body: { detail: { reason: 'route_missing', detail: '2' } },
+      },
+    })
+
+    renderWithProviders(<SetupPage />)
+    await userEvent.click(await screen.findByRole('button', { name: '建立 3 條 Route 並檢查' }))
+
+    const notice = await screen.findByText(/被刪掉了/)
+    expect(notice).toHaveTextContent('重新檢查了既有的 Route')
+    expect(notice).toHaveTextContent('重新整理這一步')
+    expect(screen.queryByText(/後端可能沒在跑/)).not.toBeInTheDocument()
+  })
+
+  it('認不得的失敗仍落回那句通用的話：只有說得出原因時才換掉它', async () => {
+    stubApi({
+      [STATUS]: { body: AT_BERTH_FOUR },
+      [ROUTES]: { body: routeSetup() },
+      [BUILD]: { status: 500, body: { detail: 'boom' } },
+    })
+
+    renderWithProviders(<SetupPage />)
+    await userEvent.click(await screen.findByRole('button', { name: '建立 3 條 Route 並檢查' }))
+
+    expect(await screen.findByText(/後端可能沒在跑/)).toBeInTheDocument()
+    expect(screen.queryByText(/被刪掉了/)).not.toBeInTheDocument()
+  })
 })
 
 describe('泊位 4：媒體庫路徑（既有 Jellyfin）', () => {

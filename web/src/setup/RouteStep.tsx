@@ -7,6 +7,7 @@ import {
   type RouteSelectionInput,
   type RouteSetup,
 } from '../api/setup'
+import { type RouteRefusalDetail } from '../api/routes'
 import { type RouteView } from '../api/schemas'
 import { STICKY_ACTION, Checkbox, GhostButton, Notice, PrimaryButton } from '../components/controls'
 import { ROUTE_HEALTH_LABEL, ROUTE_SIGNAL } from '../components/routeChecks'
@@ -37,6 +38,7 @@ export function RouteStep({
   building,
   addingPath,
   requestFailed,
+  refusal,
   onBuild,
   onAddPath,
   onRouteDeleted,
@@ -47,6 +49,8 @@ export function RouteStep({
   addingPath: string | null
   /** 請求本身沒跑完。逐項檢查的失敗在 `routes[].checks` 裡，各自貼在它那一行。 */
   requestFailed: boolean
+  /** 後端說不行的那一份。認不得的（或根本不是拒絕）是 `null`，落回一句通用的話。 */
+  refusal: RouteRefusalDetail | null
   onBuild: (selections: RouteSelectionInput[]) => void
   onAddPath: (library: string) => void
   /** 一條 Route 被明確地刪掉了（票 14）：這一步的清單要重讀。 */
@@ -160,7 +164,12 @@ export function RouteStep({
         {requestFailed && (
           <div className="mt-4">
             <Notice signal="blocked" label={t('common.failed')}>
-              {t('routes.requestFailed')}
+              {/* 後端說得出原因的那一種就說原因與下一步（PRODUCT 原則 4），與設定頁上的
+                  三處同一個形狀（`RouteDelete`、`AddRoute`、`RouteSettingsPage`）。這一步
+                  順帶重跑既有 Route 的檢查，所以 `route_missing` 到得了這裡（M2 票 01）。 */}
+              {refusal?.reason === 'route_missing'
+                ? t('routes.routeMissing')
+                : t('routes.requestFailed')}
             </Notice>
           </div>
         )}

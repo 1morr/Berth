@@ -146,8 +146,11 @@ def image_url(item_id: str, image_type: JellyfinImageType, *, size: ImageSize, t
     response_class=Response,
     responses={
         200: {"content": {"image/webp": {}}, "description": "縮好的圖"},
+        #: `image_missing` 只有這一支說得出來，所以它不在 `AccessRefusal` 裡，body 是手組的
+        #: （見下面的 `except`）——只有描述，沒有 model。
         404: {"description": "`image_missing`：Jellyfin 沒有這張圖"},
-        503: {"description": "`jellyfin_unreachable`：問不到 Jellyfin"},
+        #: 這一種與其餘每一支同形，所以照實宣告它的 model（票 02a 的閘門要求宣告的就是這個）。
+        503: {"model": AccessRefusalOut, "description": "`jellyfin_unreachable`：問不到 Jellyfin"},
     },
 )
 async def get_image(

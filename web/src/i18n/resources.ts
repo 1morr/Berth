@@ -364,6 +364,8 @@ const zhHant = {
     recheck_one: '重新檢查 {{count}} 條 Route',
     recheck_other: '重新檢查 {{count}} 條 Route',
     requestFailed: '請求沒有走完。Berth 後端可能沒在跑——確認容器狀態後再按一次。',
+    routeMissing:
+      '這一步順便重新檢查了既有的 Route，其中一條在途中被刪掉了（多半是另一個分頁）。重新整理這一步，剩下的會再檢查一次。',
     cutaway: {
       paths: '路徑',
       libraryRoot: '媒體庫根目錄',
@@ -1676,6 +1678,8 @@ const en: Translations<typeof zhHant> = {
     recheck_other: 'Check {{count}} routes again',
     requestFailed:
       'The request did not finish. The Berth backend may be down — check the container and press again.',
+    routeMissing:
+      'This step also re-checks the routes you already have, and one of them was deleted while it ran — another tab, most likely. Reload this step and the rest will be checked again.',
     cutaway: {
       paths: 'Paths',
       libraryRoot: 'Library root',

@@ -253,6 +253,15 @@ pnpm -C web gen:api         # berth openapi → web/openapi.json → src/api/sch
   前端的 `ReasonSet` 加一格（`tsc`，`refusal.test.ts` 的 `@ts-expect-error` 釘著那道閘門本身）。
   第五件是**畫面要說一句話**：`jobs.refusal.*` 走動態 key，所以 `t()` 的 `strictKeyChecks`
   會替它擋；`RouteRefusal` 與 `AccessRefusal` 的消費端是查表或單一理由比較，那一句沒有閘門。
+- **會拒絕的端點都要在 `responses=` 裡宣告**（`TestDeclaringWhatEachEndpointRefuses`）：走訪
+  `create_app()` 的每一條路由，比對路由**物件**上的 `responses` 與 handler **語法樹**丟得出來的
+  拒絕，漏宣告與多宣告都紅。**守的是形狀那一層**（`RouteRefusalOut` 這幾個 model），不是理由
+  那一層：把 `POST /setup/routes` 的表改成多列一種理由，這道閘門不會紅。
+- 理由那一層**沒有閘門**，是慣例：各端點各給一張小表，只列它真的會回的那幾種
+  （`api/routes.py` 的 `route_responses()`、`api/jobs.py` 的 `_refusals()`）。`REFUSAL_RESPONSES`
+  是 `routes/*` 五支的聯集，別套到別的模組。`routes/*` 那五支自己至今仍共用它，所以
+  `GET /jellyfin/libraries` 的文件上列得出它丟不出來的 `route_in_use`——已知的過度宣告，
+  收它要替那五支各寫一組（M2 票 02a Comments）。
 - 產出的型別檔進版控，中間產物 `web/openapi.json` 不進（`.gitignore`）。型別檔進版控，
   `pnpm install` 之後沒有 Python 環境也能 typecheck 與跑測試；`openapi.json` 則會因為
   `info.version` 每次發版都變而製造沒有意義的 diff。

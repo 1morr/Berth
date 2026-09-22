@@ -11,24 +11,39 @@ M1 票 02 立了閘門（`pnpm gen:api` + CI 的 `git diff --exit-code -- src/ap
 
 **拒絕理由的集合是掃出來的**（`berth.domain.enums` 裡名字以 `Refusal` 結尾的每一個），不是
 在這裡列一份：M2 之後每一張票都會加拒絕理由，列一份的話第四個 enum 加進來時這裡不會紅。
+
+第三件是 `TestDeclaringWhatEachEndpointRefuses`：**會拒絕的端點都要在 `responses=` 裡宣告**。
+它走訪 `create_app()` 的每一條路由，拿那條路由**物件**上的 `responses` 與它的 handler 實際
+丟得出來的拒絕比（票 02a）。
 """
 
 from __future__ import annotations
 
+import ast
+import importlib
 import inspect
+import pkgutil
 import re
+import textwrap
+from collections.abc import Callable
 from enum import StrEnum
 from pathlib import Path
-from typing import Any
+from types import ModuleType
+from typing import Any, NamedTuple
 
 import pytest
+from fastapi import FastAPI
+from fastapi.routing import APIRoute, iter_route_contexts
 
+import berth.api
 from berth.api import jellyfin as jellyfin_api
 from berth.api import jobs as jobs_api
 from berth.api import routes as routes_api
-from berth.domain import enums
+from berth.api.routes import route_refusal, route_responses
+from berth.domain import RouteRefusal, enums
 from berth.main import create_app
 from berth.services import jellyfin_access
+from berth.services.routes import RouteRejectedError
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -240,3 +255,331 @@ class TestReadingTheGeneratedTypes:
             union_members(self.UNION, "RouteRefusal")
         with pytest.raises(AssertionError):
             object_fields(self.OBJECT, "RouteRefusalOut")
+
+
+# --- 會拒絕就要宣告（票 02a）-------------------------------------------------
+
+
+def _api_modules() -> list[ModuleType]:
+    """`berth.api` 底下的每一個模組。"""
+    return [
+        importlib.import_module(f"{berth.api.__name__}.{info.name}")
+        for info in pkgutil.iter_modules(berth.api.__path__)
+    ]
+
+
+def _called_name(func: ast.expr) -> str | None:
+    """被呼叫的那一個名字。`routes_api.route_refusal(...)` 取 `route_refusal`。
+
+    帶模組前綴的寫法也要認得：只認裸名字的話，換一種 import 風格就能靜悄悄地繞過整條規則
+    （`TestReadingWhatAHandlerRaises` 兩種寫法各驗一次）。
+    """
+    if isinstance(func, ast.Name):
+        return func.id
+    if isinstance(func, ast.Attribute):
+        return func.attr
+    return None
+
+
+def _builds_refusal(node: ast.AST) -> str | None:
+    """這個節點是不是在**組**一份拒絕的 body（`RouteRefusalOut(...)`）。
+
+    要求是 `Call`，不是光提到那個名字：`access_responses()` 把 `AccessRefusalOut` 當參數傳
+    給 `refusal_responses`，它整理的是文件，不是在拒絕誰。組了就算數，不要求同一句 `raise`
+    ——三支 helper 都是先組 body 再 `return HTTPException(...)`，而它們正是被跟進來讀的。
+    """
+    if not isinstance(node, ast.Call):
+        return None
+    name = _called_name(node.func)
+    return name if name is not None and name.endswith("RefusalOut") else None
+
+
+def _raised_helper(node: ast.AST) -> str | None:
+    """`raise route_refusal(...)` 那一句被丟出來的東西是哪一支函式組的。"""
+    if isinstance(node, ast.Raise) and isinstance(node.exc, ast.Call):
+        return _called_name(node.exc.func)
+    return None
+
+
+def refusal_helpers() -> dict[str, str]:
+    """api 底下每一支「把拒絕翻成 `HTTPException`」的函式 → 它組出來的那個 model。
+
+    **掃出來而不是在這裡列一份**：第四組拒絕（M2 之後每張票都可能加）自帶的 helper 不必記得
+    回來登記。認法就是「它組 `*RefusalOut`」——那是拒絕的形狀本身，而三支現有的
+    （`route_refusal`、`access_refusal`、`jobs._refuse`）都只為了這件事存在。
+    """
+    found: dict[str, str] = {}
+    for module in _api_modules():
+        for name, member in vars(module).items():
+            if not inspect.isfunction(member) or member.__module__ != module.__name__:
+                continue
+            for node in ast.walk(ast.parse(textwrap.dedent(inspect.getsource(member)))):
+                model = _builds_refusal(node)
+                if model is None:
+                    continue
+                # 同名而組不同 model 的兩支 helper 會讓下面的名字查表說謊。
+                assert found.get(name, model) == model, f"{name} builds two shapes"
+                found[name] = model
+    return found
+
+
+HELPERS = refusal_helpers()
+
+#: 拒絕的形狀。`responses=` 裡其它的 model（將來某支端點的 404 回別的東西）不歸這條規則管。
+REFUSAL_MODELS = frozenset(HELPERS.values())
+
+
+def raised_models(endpoint: Callable[..., Any]) -> set[str]:
+    """這支 handler 實際丟得出哪幾種拒絕的形狀。
+
+    兩條認法：`raise <helper>(...)`（跨模組也算——精靈的兩支借 `api/routes.py` 的
+    `route_refusal`），以及在自己身上直接組一份 `*RefusalOut`。跟著同模組的函式呼叫往下走，
+    因為 `mark_played` / `mark_unplayed` 把 `try` 交給共用的 `_mark`，只看 handler 自己的
+    body 會讀成「它不會拒絕」。
+
+    看的是語法樹而不是數字串：`PLAYED_RESPONSES` 那種先存成常數再用的寫法（票 02 因此收手）
+    在這裡根本不經過——`responses` 從路由物件上讀，是執行期的值。
+
+    **跟不進別的 api 模組**（`route_refusal` 那三支 helper 靠名字認得，其餘不行）：哪一天有支
+    handler 把 `try` 交給另一個模組的共用函式，這裡會讀成「它不會拒絕」而要求拿掉正確的宣告。
+    那是**假紅**，不是靜靜放過——會有人看到並回來補這一段。
+    """
+    seen: set[str] = set()
+    models: set[str] = set()
+
+    def walk(target: Callable[..., Any]) -> None:
+        module = inspect.getmodule(target)
+        definition = ast.parse(textwrap.dedent(inspect.getsource(target))).body[0]
+        assert isinstance(definition, ast.FunctionDef | ast.AsyncFunctionDef)
+        # 只看 body：decorator 上的 `responses=access_responses(...)` 是宣告，不是拒絕。
+        for statement in definition.body:
+            for node in ast.walk(statement):
+                model = _builds_refusal(node)
+                if model is not None:
+                    models.add(model)
+                raised = _raised_helper(node)
+                if raised in HELPERS:
+                    models.add(HELPERS[raised])
+                if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
+                    nested = getattr(module, node.func.id, None)
+                    if (
+                        inspect.isfunction(nested)
+                        and module is not None
+                        and nested.__module__ == module.__name__
+                        and nested.__qualname__ not in seen
+                    ):
+                        seen.add(nested.__qualname__)
+                        walk(nested)
+
+    walk(endpoint)
+    return models
+
+
+def declared_models(route: APIRoute) -> set[str]:
+    """這條路由的 OpenAPI `responses` 上宣告了哪幾種拒絕的形狀。
+
+    只算 4xx / 5xx 那幾格：拒絕的形狀掛在 200 上不算宣告了拒絕，那是在說成功也長這樣。
+    看開頭那個數字而不是 `int()`，因為 OpenAPI 的 key 也可以是 `"4XX"` 這種範圍。
+    """
+    return {
+        response["model"].__name__
+        for code, response in route.responses.items()
+        if str(code).startswith(("4", "5"))
+        and "model" in response
+        and response["model"].__name__ in REFUSAL_MODELS
+    }
+
+
+class Endpoint(NamedTuple):
+    """一條 API 路由，連它掛進 app 之後的完整路徑。"""
+
+    path: str
+    methods: frozenset[str]
+    route: APIRoute
+
+
+def api_endpoints(app: FastAPI) -> list[Endpoint]:
+    """這個 app 上的每一條 API 路由。
+
+    走 `iter_route_contexts`（FastAPI 自己產 OpenAPI 時攤平路由用的那一支）而不是讀
+    `app.routes`：`include_router` 的結果從 0.141 起包在 `_IncludedRouter` 裡，直接讀
+    `app.routes` 一條 `APIRoute` 都拿不到——而**空的 `parametrize` 是會通過的**（票 02a
+    第一版就是這樣「綠燈」的）。`test_it_walks_every_operation_in_the_document` 釘著這件事。
+    """
+    found: list[Endpoint] = []
+    for context in iter_route_contexts(app.routes):
+        route = context.route
+        if not isinstance(route, APIRoute):
+            continue
+        # `APIRoute` 一定有路徑與方法；`RouteContext` 的型別替 Mount 那種留了 `None`。
+        assert context.path is not None
+        found.append(Endpoint(context.path, frozenset(context.methods or ()), route))
+    return found
+
+
+ENDPOINTS = api_endpoints(create_app())
+
+
+class TestDeclaringWhatEachEndpointRefuses:
+    """**會拒絕就要宣告**。票 02 試過數原始碼裡 `raise x_refusal(` 與 `responses=` 各出現
+    幾次，`PLAYED_RESPONSES` 這種先存成常數再用的寫法數不到，放寬到數得到就等於沒在守東西，
+    所以拿掉了（票 02 Comments）。這裡改成拿**路由物件上的 `responses`**（執行期的值，怎麼寫
+    都一樣）比 handler 的**語法樹**，兩邊都不是字串比對。
+
+    兩個方向一起要求：漏宣告的話前端在 OpenAPI 上看不到那個封閉集合（票 02 要解的就是這個），
+    過度宣告的話文件說得出端點根本丟不出來的形狀——`refusal_responses` 的 docstring
+    寫明「收的是端點真的會回的那幾種」。
+    """
+
+    def test_the_helpers_are_the_three_we_know(self) -> None:
+        """掃出來的登記簿本身：多一支少一支都要有人看到。"""
+        assert HELPERS == {
+            "route_refusal": "RouteRefusalOut",
+            "access_refusal": "AccessRefusalOut",
+            "_refuse": "JobRefusalOut",
+        }
+
+    def test_it_walks_every_operation_in_the_document(self, document: dict[str, Any]) -> None:
+        """走訪到的要**剛好**是文件上的每一個 operation。
+
+        沒有這一條，下面那條逐路由的規則在清單塌成空的時候仍然是綠的（`parametrize` 收到
+        空 list 就產生一個什麼都不驗的項目）——閘門看起來還在，其實已經沒有在守東西了。
+        """
+        operations = {
+            (path, method.upper())
+            for path, methods in document["paths"].items()
+            for method in methods
+        }
+
+        walked = {(endpoint.path, method) for endpoint in ENDPOINTS for method in endpoint.methods}
+
+        assert walked == operations
+
+    @pytest.mark.parametrize(
+        "endpoint", ENDPOINTS, ids=lambda row: f"{sorted(row.methods)[0]} {row.path}"
+    )
+    def test_it_declares_exactly_what_it_raises(self, endpoint: Endpoint) -> None:
+        assert declared_models(endpoint.route) == raised_models(endpoint.route.endpoint)
+
+
+# --- 給下面那組變異用的假 handler。沒有一支會被呼叫到，讀的是它們的語法樹 ---
+
+
+def _work() -> None:
+    """假的 services 命令。"""
+    raise RouteRejectedError(RouteRefusal.ROUTE_MISSING, "")
+
+
+def _refuses_plainly() -> None:
+    """一支會拒絕的 handler。"""
+    try:
+        _work()
+    except RouteRejectedError as refusal:
+        raise route_refusal(refusal) from refusal
+
+
+def _refuses_after_renaming() -> None:
+    """與上面同一支，只是換了區域變數的名字、改寫了 docstring、拆了行。
+
+    讀出來要**一樣**：這條規則守的是「它丟不丟得出拒絕」，不是原始碼長什麼樣子。
+    """
+    try:
+        _work()
+    except RouteRejectedError as rejected_by_services:
+        raise route_refusal(
+            rejected_by_services,
+        ) from rejected_by_services
+
+
+def _refuses_through_the_module() -> None:
+    """同一件事，改用帶模組前綴的寫法。只認裸名字的話這一支就靜悄悄地不必宣告了。"""
+    try:
+        _work()
+    except RouteRejectedError as refusal:
+        raise routes_api.route_refusal(refusal) from refusal
+
+
+def _delegates_the_refusal() -> None:
+    """`mark_played` / `mark_unplayed` 的形狀：`try` 在共用的那一支裡。"""
+    _refuses_plainly()
+
+
+def _refuses_and_recurses(depth: int) -> None:
+    """會叫到自己的 handler。`seen` 沒有先放入入口函式的話，這裡是無窮遞迴。"""
+    if depth > 0:
+        _refuses_and_recurses(depth - 1)
+    raise route_refusal(RouteRejectedError(RouteRefusal.ROUTE_MISSING, ""))
+
+
+def _never_refuses() -> None:
+    _work()
+
+
+class TestReadingWhatAHandlerRaises:
+    """`raised_models` 與 `declared_models` 自己的雙向變異（全域 CLAUDE.md）。
+
+    沒有這一段，上面那條逐路由的規則可能只是在比兩個永遠相等的空集合——而它守的又剛好是
+    「不要留一條靠運氣被遵守的規則」。
+    """
+
+    def test_it_reads_the_refusal_a_handler_raises(self) -> None:
+        assert raised_models(_refuses_plainly) == {"RouteRefusalOut"}
+
+    def test_it_follows_a_handler_that_delegates(self) -> None:
+        """只看 handler 自己的 body 會把 `mark_played` 讀成「它不會拒絕」，於是那兩支真正的
+        `PLAYED_RESPONSES` 反而被判成過度宣告。"""
+        assert raised_models(_delegates_the_refusal) == {"RouteRefusalOut"}
+
+    def test_it_reads_a_refusal_raised_through_its_module(self) -> None:
+        """`routes_api.route_refusal(...)`。換一種 import 風格不該讓這條規則消失。"""
+        assert raised_models(_refuses_through_the_module) == {"RouteRefusalOut"}
+
+    def test_a_handler_that_calls_itself_terminates(self) -> None:
+        """自我遞迴的 handler 不該把走訪帶進無窮迴圈。
+
+        停得下來靠的是呼叫點那一份 `seen`（跟進去之前先記下來），不是入口函式的名字——
+        所以這一條是回歸護欄，不是雙向變異的那一對（拿掉 `seen` 才會紅）。
+        """
+        assert raised_models(_refuses_and_recurses) == {"RouteRefusalOut"}
+
+    def test_a_handler_that_does_not_refuse_reads_empty(self) -> None:
+        assert raised_models(_never_refuses) == set()
+
+    def test_a_refusal_shape_on_a_success_code_is_not_a_declaration(self) -> None:
+        """`{200: {"model": RouteRefusalOut}}` 說的是成功也長這樣，不是宣告了拒絕。"""
+        app = FastAPI()
+        app.post("/ok", responses={200: {"model": routes_api.RouteRefusalOut}})(_never_refuses)
+
+        (endpoint,) = api_endpoints(app)
+
+        assert declared_models(endpoint.route) == set()
+
+    def test_renaming_and_reformatting_does_not_change_what_it_reads(self) -> None:
+        assert raised_models(_refuses_after_renaming) == raised_models(_refuses_plainly)
+
+    def test_dropping_the_declaration_turns_that_endpoint_red(self) -> None:
+        """**票 02a 的驗收本身**：把 `responses=` 拿掉就紅。兩支掛的是同一個 handler，
+        差別只有宣告。"""
+        app = FastAPI()
+        app.post("/declared", responses=route_responses(RouteRefusal.ROUTE_MISSING))(
+            _refuses_plainly
+        )
+        app.post("/bare")(_refuses_plainly)
+
+        agrees = {
+            endpoint.path: declared_models(endpoint.route) == raised_models(endpoint.route.endpoint)
+            for endpoint in api_endpoints(app)
+        }
+
+        assert agrees == {"/declared": True, "/bare": False}
+
+    def test_declaring_what_it_cannot_raise_turns_it_red(self) -> None:
+        """反方向：文件說得出端點根本丟不出來的形狀，一樣紅。"""
+        app = FastAPI()
+        app.post("/overdeclared", responses=route_responses(RouteRefusal.ROUTE_MISSING))(
+            _never_refuses
+        )
+
+        (endpoint,) = api_endpoints(app)
+
+        assert declared_models(endpoint.route) != raised_models(endpoint.route.endpoint)
