@@ -389,4 +389,56 @@ describe('泊位 3：來源', () => {
     expect(screen.queryByText(/設定 → API/)).not.toBeInTheDocument()
     expect(screen.getByTestId('tmdb-required')).toHaveTextContent('已完成')
   })
+
+  /**
+   * 票 03 第 12 條。API key 與密碼同級：都是貼上去就不該留在畫面上的憑證
+   * （旁邊的 WebUI 密碼欄本來就遮著，只有 key 是明碼）。遮起來之後仍然看得見——
+   * `PasswordField` 自己帶一顆「顯示」。
+   */
+  it('索引站與 TMDB 的 API key 都是遮著的，且看得見', async () => {
+    stubApi({
+      [STATUS]: { body: AT_BERTH_THREE },
+      [INDEXERS]: { body: indexerSetup({ origin: 'existing', api_key_present: false }) },
+      [TMDB]: { body: tmdbSetup() },
+    })
+    const user = userEvent.setup()
+
+    renderWithProviders(<SetupPage />)
+
+    const tmdbKey = await screen.findByLabelText('你的 TMDB API key')
+    expect(tmdbKey).toHaveAttribute('type', 'password')
+
+    const indexerKey = screen.getByLabelText('API key')
+    expect(indexerKey).toHaveAttribute('type', 'password')
+
+    // 貼錯了要看得出來：每個欄位自己的「顯示」只翻自己那一個。
+    const tmdbField = within(tmdbKey.closest('div.relative')!)
+    await user.click(tmdbField.getByRole('button', { name: '顯示' }))
+    expect(screen.getByLabelText('你的 TMDB API key')).toHaveAttribute('type', 'text')
+    expect(screen.getByLabelText('API key')).toHaveAttribute('type', 'password')
+  })
+
+  /**
+   * 票 03 第 4 條。BTH 3 的詳情列本來只讀服務判定（索引站數），而 TMDB 是這一格的閘門——
+   * 閘門過了，板上那一格卻一個字都不會動。
+   */
+  it('通過 TMDB 閘門之後，BTH 3 的詳情列跟著換', async () => {
+    stubApi({
+      [STATUS]: { body: AT_BERTH_THREE },
+      [INDEXERS]: { body: indexerSetup() },
+      [TMDB]: { body: tmdbSetup({ api_key_present: true }) },
+      [TEST_TMDB]: { body: tmdbSetup({ api_key_present: true, verified: true, steps: [] }) },
+    })
+    const user = userEvent.setup()
+
+    renderWithProviders(<SetupPage />)
+    const berth = within((await screen.findByText('BTH 3')).closest('li')!)
+    expect(await berth.findByText('待驗證')).toBeInTheDocument()
+
+    await user.type(await screen.findByLabelText('你的 TMDB API key'), '0'.repeat(32))
+    await user.click(screen.getByRole('button', { name: '測試 TMDB' }))
+
+    expect(await berth.findByText('已驗證')).toBeInTheDocument()
+    expect(berth.queryByText('待驗證')).not.toBeInTheDocument()
+  })
 })

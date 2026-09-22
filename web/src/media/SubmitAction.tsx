@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next'
 import type { Media } from '../api/media'
 import { refusalOf, submitJob } from '../api/jobs'
 import type { SearchResult } from '../api/search'
-import { GhostButton, PrimaryButton } from '../components/controls'
+import { CONFIRM_ACTIONS, GhostButton, PrimaryButton } from '../components/controls'
 import { SIGNAL_FILL } from '../components/signal'
 import { ConfirmPanel } from '../components/ConfirmPanel'
 import { useInPlaceConfirm } from '../components/useInPlaceConfirm'
@@ -115,7 +115,7 @@ export function SubmitAction({
         </p>
       </div>
 
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,14rem)_auto] sm:items-center">
+      <div className={CONFIRM_ACTIONS}>
         {/* 按鈕永遠按得下去（票 02b）：沒選 Route 時說不行的是上面那句話與下拉本身。 */}
         <PrimaryButton type="button" onClick={() => submit.mutate()}>
           {submit.isPending ? t('submit.submitting') : t('submit.submit')}

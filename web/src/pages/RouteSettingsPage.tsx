@@ -12,7 +12,14 @@ import {
   type ManagedRoute,
 } from '../api/routes'
 import type { RouteView } from '../api/schemas'
-import { Checkbox, Field, GhostButton, Notice, PrimaryButton } from '../components/controls'
+import {
+  PAGE_TITLE,
+  Checkbox,
+  Field,
+  GhostButton,
+  Notice,
+  PrimaryButton,
+} from '../components/controls'
 import { Dot } from '../components/Dot'
 import { RouteCheckList } from '../components/RouteCheckList'
 import { RouteDelete, type RouteChange } from '../components/RouteDelete'
@@ -59,7 +66,7 @@ export function RouteSettingsPage() {
   return (
     <div className="mx-auto w-full max-w-3xl px-6 py-8">
       <SettingsTabs />
-      <h1 className="value mt-6 text-lg font-semibold text-ink">{t('routeSettings.title')}</h1>
+      <h1 className={`mt-6 ${PAGE_TITLE}`}>{t('routeSettings.title')}</h1>
       <p className="mt-2 max-w-prose text-sm text-ink-dim">{t('routeSettings.lede')}</p>
       {/* 先在畫面上、內容再換：`aria-live` 區塊要在變化之前就存在，螢幕閱讀器才念得到。 */}
       <p aria-live="polite" className="mt-2 max-w-prose text-sm text-ink">
@@ -208,6 +215,10 @@ function RouteEditor({ route }: { route: RouteView }) {
     onSettled: () => refreshRoutes(queryClient),
   })
   const refusal = routeRefusalOf(save.error)
+  // 兩個欄位都回到存下來的值就沒有東西要存了。這一顆與空白名稱那一條（票 02b「按鈕永遠按得下去，
+  // 說不行的是欄位自己」）不同級：那是填錯，這是沒東西可做——而按下去的代價是真的跑一輪五條纜繩
+  // （建分類、寫探測檔）。設定表單存到沒動過就變灰是通行慣例（GitHub repo settings、Linear）。
+  const dirty = name.trim() !== route.name || enabled !== route.enabled
 
   return (
     <form
@@ -241,9 +252,11 @@ function RouteEditor({ route }: { route: RouteView }) {
       <p className="max-w-prose text-xs text-ink-dim">{t('routeSettings.edit.identity')}</p>
 
       <div className="grid gap-3 sm:max-w-xs">
-        <PrimaryButton type="submit" disabled={save.isPending}>
+        <PrimaryButton type="submit" disabled={save.isPending || !dirty}>
           {save.isPending ? t('routeSettings.edit.saving') : t('routeSettings.edit.save')}
         </PrimaryButton>
+        {/* 按下去會做的事要先說出來：五條纜繩會重跑一次（票 03 第 1 條）。 */}
+        <p className="max-w-prose text-xs text-ink-dim">{t('routeSettings.edit.saveRechecks')}</p>
       </div>
       <p aria-live="polite" className="text-xs text-ink-dim">
         {save.isSuccess ? t('routeSettings.edit.saved') : ''}

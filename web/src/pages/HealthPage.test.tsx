@@ -29,6 +29,55 @@ function card(name: string) {
 }
 
 describe('健康頁', () => {
+  /** 票 03 第 13 條：這一頁本來從 `<h2>` 開起，整頁沒有 h1。 */
+  it('頁標題是這一頁唯一的 h1', async () => {
+    render({ body: healthDetail() })
+    renderApp('/health')
+
+    expect(await screen.findByRole('heading', { level: 1, name: '健康' })).toBeVisible()
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1)
+  })
+
+  /**
+   * 票 03 第 16 條。全綠時同一顆綠章在一千像素裡出現八次（板四格 + 三張服務卡 + Route 總結，
+   * 每條 Route 再一顆）。板子負責回答「有沒有紅的」，底下不再把同一句話重說一遍。
+   */
+  it('全綠時只有泊位板塗綠，底下的卡片與列是中性色塊（字照樣在）', async () => {
+    render({ body: healthDetail() })
+    renderApp('/health')
+
+    const board = await screen.findByRole('region', { name: '泊位板' })
+    // 收起來的 `<details>` 裡還有五條纜繩，但全綠時它們沒有畫在畫面上——
+    // 重複八次說的是**看得到的**那幾顆。
+    const painted = [...document.querySelectorAll<HTMLElement>('.bg-secured')].filter(
+      (chip) => chip.closest('details:not([open])') === null,
+    )
+    expect(painted).toHaveLength(4)
+    for (const chip of painted) expect(board).toContainElement(chip)
+
+    // 底下的服務卡照樣說得出「已繫上」，只是不再塗一次漆。
+    const chip = card('Jellyfin').getByText('已繫上')
+    expect(chip).toBeVisible()
+    expect(chip.className).not.toMatch(/bg-secured/)
+  })
+
+  /** 票 03 第 15 條：`truncate` 會截掉路徑尾巴，而三條 Route 常常只差最後一段。 */
+  it('Route 列不截斷寫入目標——窄版上尾巴正是分辨它們的依據', async () => {
+    render({
+      body: healthDetail({
+        routes: [
+          routeView({ id: 1, slug: 'tv', name: 'TV', target_path: '/mnt/disk1/tv' }),
+          routeView({ id: 2, slug: 'tv-2', name: 'TV 2', target_path: '/mnt/disk2/tv' }),
+        ],
+      }),
+    })
+    renderApp('/health')
+
+    const path = await screen.findByText('/mnt/disk2/tv')
+    expect(path.className).not.toMatch(/truncate/)
+    expect(screen.getByText('/mnt/disk1/tv')).toBeVisible()
+  })
+
   it('四項全綠時泊位板四格都是已繫上（票 10 驗收）', async () => {
     render({ body: healthDetail() })
     renderApp('/health')
@@ -107,6 +156,24 @@ describe('健康頁', () => {
     expect(card('qBittorrent').getByRole('link', { name: '到服務設定' })).toBeInTheDocument()
     expect(card('Jellyfin').queryByRole('link', { name: '到服務設定' })).not.toBeInTheDocument()
   })
+
+  /**
+   * 票 03 第 14 條。原本是靜默 `redirect` 到 `/health`：一般使用者按下深連結之後
+   * 換了一頁，而畫面一個字都沒說為什麼（PRODUCT.md 原則 4）。
+   */
+  it.each(['/settings/services', '/settings/routes'])(
+    '一般使用者開 %s 被送到健康頁時，畫面說得出為什麼',
+    async (path) => {
+      render(
+        { body: healthDetail() },
+        { 'GET /api/auth/me': { body: { name: 'deckhand', role: 'user' } } },
+      )
+      const { router } = renderApp(path)
+
+      await waitFor(() => expect(router.state.location.pathname).toBe('/health'))
+      expect(await screen.findByText(/只有管理員/)).toBeVisible()
+    },
+  )
 
   it('一般使用者看不到那條連結——設定頁只有 admin 進得去', async () => {
     const base = healthDetail()

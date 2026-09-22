@@ -11,7 +11,7 @@ import {
 } from '../api/routes'
 import type { RouteView } from '../api/schemas'
 import { jellyfinAddressQueryOptions } from '../api/settings'
-import { Field, GhostButton, Notice, PrimaryButton } from '../components/controls'
+import { CONFIRM_ACTIONS, Field, GhostButton, Notice, PrimaryButton } from '../components/controls'
 import { jellyfinLibrariesUrl } from '../inventory/jellyfinLink'
 
 /** 建立時會遇到的拒絕。查表而不是動態組 key——動態組過不了 `strictKeyChecks`（票 06）。 */
@@ -102,6 +102,10 @@ function AddRouteForm({
   const library = libraries.data?.find((row) => row.item_id === libraryId)
   const refusal = routeRefusalOf(create.error)
   const reachFailure = routeRefusalOf(libraries.error)
+  // 選中的媒體庫一條空路徑都沒有：沒有目標可送，按下去一定被後端退回來。那不是填錯
+  // （票 02b 的「說不行的是欄位自己」），是這條路在這個媒體庫上走不通——下一步在 Jellyfin
+  // 那邊，`NoFreePath` 的連結才是主動作（票 03 第 2 條）。
+  const noTarget = library !== undefined && freePaths(library).length === 0
 
   function pick(next: LibraryOption) {
     setLibraryId(next.item_id)
@@ -207,8 +211,8 @@ function AddRouteForm({
               />
             </div>
 
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,14rem)_auto] sm:items-center">
-              <PrimaryButton type="submit" disabled={create.isPending}>
+            <div className={CONFIRM_ACTIONS}>
+              <PrimaryButton type="submit" disabled={create.isPending || noTarget}>
                 {create.isPending
                   ? t('routeSettings.add.submitting')
                   : t('routeSettings.add.submit')}

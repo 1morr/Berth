@@ -1,9 +1,10 @@
+import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
 
-import type { ServiceDetection } from '../api/setup'
+import type { ServiceDetection, TmdbSetup } from '../api/setup'
 import type { ServiceKind } from '../api/schemas'
 import { BerthBoard as Board, type BoardSlot } from '../components/BerthBoard'
-import { BERTHS } from '../components/berths'
+import { BERTHS, SOURCE_SLOT } from '../components/berths'
 import { ORIGIN_LABEL, detailLabel } from '../components/services'
 import type { Signal } from '../components/signal'
 import { signalOf } from './signals'
@@ -35,12 +36,18 @@ export function BerthBoard({
   services,
   signals = {},
   current,
+  tmdb,
 }: {
   services: ServiceDetection[]
   /** 泊位自己那一步的進度覆寫探測結果——探到了不等於那個泊位的事做完了。 */
   signals?: BerthSignals
   /** 現在這一步屬於哪一格（`BERTHS` 的 `code`）。前置的兩步不屬於任何泊位。 */
   current?: string
+  /**
+   * 泊位 3 的另一半。走到第 6 步之後才有值——在那之前這一格說的是索引站，
+   * 之後說的是閘門（見 `sourceDetail`）。
+   */
+  tmdb?: TmdbSetup
 }) {
   const { t } = useTranslation()
   const byKind = new Map(services.map((row) => [row.kind, row]))
@@ -56,15 +63,42 @@ export function BerthBoard({
       name: t(berth.nameKey),
       status: detection ? t(ORIGIN_LABEL[detection.origin]) : t(SIGNAL_LABEL[own ?? 'neutral']),
       detail:
-        detection?.detail && service ? (
-          <>
-            <span className="label">{t(detailLabel(service))}</span> {detection.detail}
-          </>
-        ) : null,
+        key === SOURCE_SLOT && tmdb ? sourceDetail(t, tmdb) : serviceDetail(t, service, detection),
       signal: own ?? signalOf(detection),
       filled: Boolean(detection) || Boolean(own && own !== 'neutral'),
     }
   })
 
   return <Board label={t('board.title')} slots={slots} current={current} />
+}
+
+/** 探到的實測值那一行：版本號或索引站數量，由服務決定（`detailLabel`）。 */
+function serviceDetail(
+  t: TFunction,
+  service: ServiceKind | undefined,
+  detection: ServiceDetection | undefined,
+) {
+  if (!detection?.detail || !service) return null
+  return (
+    <>
+      <span className="label">{t(detailLabel(service))}</span> {detection.detail}
+    </>
+  )
+}
+
+/**
+ * 泊位 3 走到 TMDB 那一半之後的詳情列（票 03 第 4 條）。
+ *
+ * 這一格是「來源」，它有兩半：索引站與 TMDB。索引站那一半連不上幾站是常態、不擋路，
+ * TMDB 是**必填的閘門**（plan §9.3 第 6 步）——所以一旦拿得到 TMDB 的判定，這一格
+ * 要說的就是閘門過了沒，而不是繼續停在索引站數。這一行只容得下一個短語（版面是
+ * 一列 truncate），兩件事並列會把後面那件截掉，所以是換不是接。
+ */
+function sourceDetail(t: TFunction, tmdb: TmdbSetup) {
+  return (
+    <>
+      <span className="label">{t('detail.tmdb')}</span>{' '}
+      {t(tmdb.verified ? 'detail.verified' : 'detail.unverified')}
+    </>
+  )
 }

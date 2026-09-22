@@ -192,6 +192,10 @@ components:
     typography: "{typography.body-small}"
     rounded: "{rounded.none}"
     padding: "0.75rem"
+  page-title:
+    textColor: "{colors.ink}"
+    typography: "{typography.berth-name}"
+    fontSize: "1.125rem"
   nav-box:
     backgroundColor: "transparent"
     textColor: "{colors.ink}"
@@ -205,14 +209,14 @@ components:
     rounded: "{rounded.none}"
     padding: "0.625rem 1rem"
   language-key:
-    backgroundColor: "{colors.deck}"
+    backgroundColor: "{colors.well}"
     textColor: "{colors.ink-dim}"
     typography: "{typography.label}"
     rounded: "{rounded.none}"
     padding: "0.375rem 0.625rem"
   language-key-active:
-    backgroundColor: "{colors.assigned}"
-    textColor: "{colors.on-signal}"
+    backgroundColor: "{colors.deck}"
+    textColor: "{colors.ink}"
     typography: "{typography.label}"
     rounded: "{rounded.none}"
     padding: "0.375rem 0.625rem"
@@ -253,8 +257,8 @@ primary、uptime 儀表板的折線圖與綠色勾勾牆、訊息塊左緣的粗
 
 ### Primary
 
-- **hi-vis 調度黃 `assigned`**：「現在需要你」。精靈的所有主要動作按鈕、目前語言鍵、
-  設定漂移的泊位格、待處理的纜繩都是它。它是整塊板上唯一的主要動作顏色——這塊板子沒有藍色 primary。
+- **hi-vis 調度黃 `assigned`**：「現在需要你」。精靈的所有主要動作按鈕、設定漂移的泊位格、
+  待處理的纜繩都是它。它是整塊板上唯一的主要動作顏色——這塊板子沒有藍色 primary。
 
 ### Secondary
 
@@ -562,8 +566,9 @@ hover 與焦點也是同一個語彙（牆卡片、Ghost 按鈕、導覽方塊�
   自己一個 `<nav>`）、媒體庫的 Route 切換列與篩選列（篩選小一號，`0.375rem 0.75rem`）。內距由呼叫端給一次。
 - 可排序的欄頭同樣靠線：選中的欄頭 `border-b-2 border-rule-strong` + `ink` 字，`aria-sort` 掛在 `th` 上。
 - `設定` 只對 `admin` 顯示；角色本身以中性色塊呈現，讓 `user` 知道自己為什麼沒有那顆按鈕。
-- 語言鍵（`LanguageToggle`）是 `role="group"` 加兩顆 `aria-pressed` 按鈕，選中那顆是 `assigned` 黃漆，
-  未選中是 `deck` 底 + `ink-dim` 字，兩顆之間 1px 縫。這與 The Role Is Not A State Rule 衝突，見 Known contradictions。
+- 語言鍵（`LanguageToggle`）是 `role="group"` 加兩顆 `aria-pressed` 按鈕，選中那顆是 `deck` 底 + `ink` 字
+  （同角色色塊的中性方塊），未選中沉一階到 `well` 底 + `ink-dim` 字，兩顆之間 1px 縫。語言是角色不是狀態
+  （The Role Is Not A State Rule），所以這裡沒有信號色；閘門是 `LanguageToggle.test.tsx`。
 - **文字連結:** `underline decoration-rule-strong underline-offset-4`，hover 時底線換 `ink`。
 
 ### 泊位板（`BerthBoard`，署名元件）
@@ -832,12 +837,6 @@ The Focus Follows The Confirm Rule。送單確認（`SubmitAction`）是同一�
   螢幕閱讀器會把它們念出來。`Dot` 掛 `aria-hidden`，所以它從無障礙樹上消失了；
   而它必須是行內字元：CSS 畫的刻度要靠一個固定的盒子定位，跟不上一行會換行、寬度
   由內容決定的值列表（結果表、下載列、牆卡片標識帶、檔案與計劃列都是這種）。
-
-- **語言鍵的選中態是 `assigned` 黃漆**（`web/src/components/LanguageToggle.tsx`：`bg-assigned text-on-signal`），
-  而 The Role Is Not A State Rule 寫「角色、語言、分類……一律用中性色塊」。本文件兩處自相矛盾：
-  Colors 的 `assigned` 與 Navigation 都記著「目前語言鍵是黃漆」。以程式碼為準記錄黃漆（frontmatter 的
-  `language-key-active`），但這不是被認可的用法：M1 的 critique（2026-09-17）指出它稀釋了「需要你」——
-  頁首右上角永遠有一塊黃，而它什麼都不需要你做。規則原文保留；改語言鍵或改規則要擇一收掉這條。
 
 - `.impeccable/surfaces/web-src-pages-setuppage-tsx.md` 的方向段仍描述亮色主題「同樣四個信號色，
   降明度提彩度以達 AA」。**程式碼沒有這樣做**：`web/src/index.css` 的亮色區塊只換中性色與

@@ -2,7 +2,7 @@ import { useTranslation } from 'react-i18next'
 
 import type { RouteView } from '../api/schemas'
 import { ROUTE_HEALTH_LABEL, ROUTE_SIGNAL } from './routeChecks'
-import { SIGNAL_FILL } from './signal'
+import { UNPAINTED_FILL, SIGNAL_FILL } from './signal'
 
 /**
  * 一條 Route 的身分帶：健康色塊、停用色塊、名稱、category（票 14）。
@@ -16,7 +16,7 @@ export function RouteIdentity({ route }: { route: RouteView }) {
 
   return (
     <>
-      <span className={`label px-2 py-1.5 ${SIGNAL_FILL[ROUTE_SIGNAL[route.health]]}`}>
+      <span className={`label px-2 py-1.5 ${UNPAINTED_FILL[ROUTE_SIGNAL[route.health]]}`}>
         {t(ROUTE_HEALTH_LABEL[route.health])}
       </span>
       {!route.enabled && (

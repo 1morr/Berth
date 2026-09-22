@@ -38,6 +38,15 @@ function render(routes: Record<string, StubRoute | (() => StubRoute)>) {
 }
 
 describe('服務設定頁', () => {
+  /** 票 03 第 13 條：這一頁本來從 `<h2>` 開起，整頁沒有 h1。 */
+  it('頁標題是這一頁唯一的 h1', async () => {
+    render({})
+    renderApp('/settings/services')
+
+    expect(await screen.findByRole('heading', { level: 1, name: '服務設定' })).toBeVisible()
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1)
+  })
+
   it('子分頁列連到 Route 設定頁，當前頁是「服務」（票 14）', async () => {
     render({})
     renderApp('/settings/services')

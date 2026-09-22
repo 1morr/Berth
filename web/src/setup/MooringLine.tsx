@@ -139,7 +139,7 @@ function ConnectPanel({
           onChange={(event) => setBaseUrl(event.target.value)}
         />
         {fields.includes('apiKey') && (
-          <Field
+          <PasswordField
             label={t('connect.field.apiKey')}
             value={apiKey}
             autoComplete="off"

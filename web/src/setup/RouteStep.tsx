@@ -72,6 +72,20 @@ export function RouteStep({
     setPicks((was) => ({ ...was, [library.name]: { ...pickOf(library), ...patch } }))
   }
 
+  /**
+   * 這條路徑已經被誰拿去當寫入目標了（票 03 第 6 條）。兩個來源與 plan §9.3 第 7 步
+   * 的略過規則一致：已經存在的 Route，以及**同一批裡前面已經選走它**的別的媒體庫。
+   * 自己選的那一條不算佔用，否則勾完就再也改不回來。
+   */
+  function takenBy(library: LibraryChoice, path: string): string | null {
+    const route = setup.routes.find((row) => row.target_path === path)
+    if (route) return route.name
+    const other = setup.libraries.find(
+      (row) => row.name !== library.name && pickOf(row).selected && pickOf(row).target === path,
+    )
+    return other ? other.name : null
+  }
+
   // 送得出去的只有「勾了、而且目標真的是這個媒體庫的路徑之一」的那幾個：伺服器用同一條
   // 規則擋（回 422），但那時候畫面只說得出「請求沒走完」。最典型的情況是「加入 Berth 路徑」
   // 失敗——那條路徑沒真的加上去，選它就會被退回來。
@@ -118,6 +132,7 @@ export function RouteStep({
             <LibraryPicker
               libraries={setup.libraries}
               pickOf={pickOf}
+              takenBy={takenBy}
               addingPath={addingPath}
               onChange={change}
               onAddPath={(library) => {
@@ -251,12 +266,15 @@ function categoryOf(setup: RouteSetup, library: string): string {
 function LibraryPicker({
   libraries,
   pickOf,
+  takenBy,
   addingPath,
   onChange,
   onAddPath,
 }: {
   libraries: LibraryChoice[]
   pickOf: (library: LibraryChoice) => LibraryPick
+  /** 這條路徑被誰佔著（對這個媒體庫而言）。`null` 代表還空著。 */
+  takenBy: (library: LibraryChoice, path: string) => string | null
   addingPath: string | null
   onChange: (library: LibraryChoice, patch: Partial<LibraryPick>) => void
   onAddPath: (library: LibraryChoice) => void
@@ -308,6 +326,7 @@ function LibraryPicker({
                   <Targets
                     library={library}
                     target={pick.target}
+                    takenBy={(path) => takenBy(library, path)}
                     onPick={(target) => onChange(library, { target })}
                   />
                   {!library.has_berth_path && (
@@ -336,14 +355,23 @@ function LibraryPicker({
   )
 }
 
-/** 這個媒體庫回報的路徑，選一條當寫入目標。其他的仍然唯讀（brief §4.3）。 */
+/**
+ * 這個媒體庫回報的路徑，選一條當寫入目標。其他的仍然唯讀（brief §4.3）。
+ *
+ * **已經被佔用的選不了**（票 03 第 6 條）：同一個目標兩條 Route，帳本就認不出檔案是誰的，
+ * 所以後端本來就會擋（plan §9.3 第 7 步：被別的 Route 或同一批前面的選擇佔走的一律略過）。
+ * 在按下去之前就說出來——`/settings/routes` 的新增表是同一個做法。
+ */
 function Targets({
   library,
   target,
+  takenBy,
   onPick,
 }: {
   library: LibraryChoice
   target: string
+  /** 路徑 → 佔著它的那條 Route（或同一批裡先選走它的媒體庫）的名字。 */
+  takenBy: (path: string) => string | null
   onPick: (target: string) => void
 }) {
   const { t } = useTranslation()
@@ -355,19 +383,30 @@ function Targets({
   return (
     <fieldset className="grid gap-2">
       <legend className="label text-ink-dim">{t('routes.picker.target')}</legend>
-      {library.locations.map((location) => (
-        <label key={location} className="flex items-start gap-3">
-          <input
-            type="radio"
-            name={`target-${library.name}`}
-            value={location}
-            checked={target === location}
-            onChange={() => onPick(location)}
-            className="mt-0.5 size-4 shrink-0 accent-[var(--color-assigned)]"
-          />
-          <span className="value min-w-0 text-xs wrap-anywhere text-ink">{location}</span>
-        </label>
-      ))}
+      {library.locations.map((location) => {
+        const holder = takenBy(location)
+        const takenId = `taken-${library.name}-${location}`
+        return (
+          <label key={location} className="flex flex-wrap items-start gap-x-3 gap-y-1">
+            <input
+              type="radio"
+              name={`target-${library.name}`}
+              value={location}
+              checked={target === location}
+              disabled={holder !== null}
+              aria-describedby={holder !== null ? takenId : undefined}
+              onChange={() => onPick(location)}
+              className="mt-0.5 size-4 shrink-0 accent-[var(--color-assigned)] disabled:cursor-not-allowed"
+            />
+            <span className="value min-w-0 text-xs wrap-anywhere text-ink">{location}</span>
+            {holder !== null && (
+              <span id={takenId} className="text-xs text-ink-dim">
+                {t('routeSettings.add.taken', { name: holder })}
+              </span>
+            )}
+          </label>
+        )
+      })}
     </fieldset>
   )
 }

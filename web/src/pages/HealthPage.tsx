@@ -1,15 +1,15 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Link } from '@tanstack/react-router'
+import { Link, useSearch } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 
 import { meQueryOptions } from '../api/auth'
 import { healthDetailQueryOptions, healthQueryOptions, runHealthCheck } from '../api/health'
 import type { RouteView } from '../api/schemas'
-import { GhostButton, Notice } from '../components/controls'
+import { PAGE_TITLE, GhostButton, Notice } from '../components/controls'
 import { ROUTE_HEALTH_LABEL, ROUTE_SIGNAL } from '../components/routeChecks'
 import { RouteCheckList } from '../components/RouteCheckList'
 import { RouteIdentity } from '../components/RouteIdentity'
-import { SIGNAL_FILL } from '../components/signal'
+import { UNPAINTED_FILL } from '../components/signal'
 import { Timestamp } from '../components/Timestamp'
 import { HealthBoard } from '../health/HealthBoard'
 import { PollerCard } from '../health/PollerCard'
@@ -31,6 +31,8 @@ export function HealthPage() {
   const detail = useQuery(healthDetailQueryOptions)
   //  設定頁只有 admin 進得去（後端 403、前端守衛會彈回來），所以那條連結也只給 admin。
   const me = useQuery(meQueryOptions)
+  // 剛才是被 `/settings/*` 的守衛送過來的（票 03 第 14 條）：換了一頁就要說出為什麼。
+  const { denied } = useSearch({ from: '/health' })
 
   const recheck = useMutation({
     mutationFn: runHealthCheck,
@@ -64,7 +66,7 @@ export function HealthPage() {
 
       <div className="mx-auto w-full max-w-3xl px-6 py-8">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
-          <h2 className="value text-lg font-semibold text-ink">{t('health.title')}</h2>
+          <h1 className={PAGE_TITLE}>{t('health.title')}</h1>
           <p className="label text-ink-dim">
             {t('health.interval', { minutes: Math.round(report.interval_seconds / 60) })}
           </p>
@@ -82,6 +84,14 @@ export function HealthPage() {
             </GhostButton>
           </span>
         </div>
+
+        {denied === true && (
+          <div className="mt-4">
+            <Notice signal="assigned" label={t('health.deniedChip')}>
+              {t('health.denied')}
+            </Notice>
+          </div>
+        )}
 
         {recheck.isError && (
           <div className="mt-4">
@@ -120,7 +130,7 @@ export function HealthPage() {
         <section className="mt-8" aria-labelledby="health-routes">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
             <span
-              className={`label px-2 py-1.5 ${SIGNAL_FILL[ROUTE_SIGNAL[report.routes_status]]}`}
+              className={`label px-2 py-1.5 ${UNPAINTED_FILL[ROUTE_SIGNAL[report.routes_status]]}`}
             >
               {t(ROUTE_HEALTH_LABEL[report.routes_status])}
             </span>
@@ -176,7 +186,11 @@ function RouteRow({ route }: { route: RouteView }) {
           否則收起來的那一列看不出它是按得開的。 */}
       <summary className="flex cursor-pointer flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3">
         <RouteIdentity route={route} />
-        <span className="value min-w-0 grow truncate text-xs text-ink-dim">
+        {/* `wrap-anywhere` 而不是 `truncate`：三條 Route 常常只差路徑的最後一段
+            （`/mnt/disk1/tv`、`/mnt/disk2/tv`），截掉尾巴之後窄版上三列一模一樣
+            ——而那一段正是分辨它們的唯一依據（票 03 第 15 條）。Route 設定頁的
+            同一列本來就是這樣畫的。 */}
+        <span className="value min-w-0 grow wrap-anywhere text-xs text-ink-dim">
           {route.target_path}
         </span>
         <span className="label shrink-0 text-ink-dim group-open:hidden">

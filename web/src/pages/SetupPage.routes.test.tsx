@@ -393,6 +393,35 @@ describe('泊位 4：媒體庫路徑（既有 Jellyfin）', () => {
     })
   })
 
+  /**
+   * 票 03 第 6 條。已經被佔用的路徑本來得按下「建立並檢查」被後端退回來（422）才知道，
+   * 而那時候畫面只說得出「請求沒有走完」。`/settings/routes` 的新增表早就是這樣做的。
+   */
+  it('已經被別條 Route 佔用的路徑在勾選表上就標出來，選不了', async () => {
+    const shared = routeSetup({
+      origin: 'existing',
+      libraries: [
+        libraryChoice({
+          name: '影集',
+          locations: ['/volume1/media/tv', '/data/library/影集'],
+          target_path: '',
+        }),
+      ],
+      routes: [routeView({ name: '舊影集', library: '別的庫', target_path: '/volume1/media/tv' })],
+    })
+    stubApi({ [STATUS]: { body: AT_BERTH_FOUR }, [ROUTES]: { body: shared } })
+
+    renderWithProviders(<SetupPage />)
+    await userEvent.click(await screen.findByRole('checkbox', { name: '影集' }))
+
+    const taken = screen.getByRole('radio', { name: /\/volume1\/media\/tv/ })
+    expect(taken).toBeDisabled()
+    // 佔著它的那條 Route 的名字就在那一行上，而且掛進了這顆 radio 的可存取描述。
+    expect(taken).toHaveAccessibleDescription('已是「舊影集」')
+    // 沒被佔的那一條照樣選得起來。
+    expect(screen.getByRole('radio', { name: /\/data\/library\/影集/ })).toBeEnabled()
+  })
+
   it('已經有 Route 的媒體庫在勾選表上鎖住：重跑不改也不刪它（票 14）', async () => {
     const routed = routeSetup({
       origin: 'existing',
@@ -428,6 +457,66 @@ describe('第 8 步：完成', () => {
     expect(await screen.findByRole('button', { name: '完成設定' })).toBeInTheDocument()
     expect(screen.getByText('/data/torrent/complete/tv')).toBeInTheDocument()
     expect(screen.getByText(/索引站還沒接/)).toBeInTheDocument()
+  })
+
+  /**
+   * 票 03 第 5 條。後端的 422 是「不可跳的那幾步還沒做完」（`services/setup.py` 的兩個
+   * `ValueError`），不是後端掛了——原本兩種都說「Berth 後端可能沒在跑」，把使用者送去看容器。
+   */
+  it('缺 TMDB 憑證時說的是第 6 步沒做完，不是後端出錯', async () => {
+    stubApi({
+      [STATUS]: { body: AT_THE_END },
+      [ROUTES]: { body: BUILT },
+      [INDEXERS]: { body: indexerSetup() },
+      [TMDB]: { body: tmdbSetup({ api_key_present: false, verified: false }) },
+      [COMPLETE]: { status: 422, body: { detail: 'finish step 6 first: TMDB needs a credential' } },
+    })
+
+    renderWithProviders(<SetupPage />)
+    await userEvent.click(await screen.findByRole('button', { name: '完成設定' }))
+
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent(/TMDB/)
+    expect(alert).not.toHaveTextContent(/後端/)
+    // 修的地方在第 6 步，所以出口也在這裡。
+    expect(screen.getByRole('button', { name: /TMDB/ })).toBeInTheDocument()
+  })
+
+  /**
+   * 票 03 code review：`tmdb.verified` 還沒載回來時原本會一律說「第 6 步」，
+   * 即使真正卡住的是第 7 步。兩份狀態都說沒問題卻仍被擋，就別指名。
+   */
+  it('422 但手上這份看不出是哪一步時，不硬指一步也不怪後端', async () => {
+    stubApi({
+      [STATUS]: { body: AT_THE_END },
+      [ROUTES]: { body: BUILT },
+      [INDEXERS]: { body: indexerSetup() },
+      [TMDB]: { body: tmdbSetup({ api_key_present: true, verified: true }) },
+      [COMPLETE]: { status: 422, body: { detail: 'some newer precondition' } },
+    })
+
+    renderWithProviders(<SetupPage />)
+    await userEvent.click(await screen.findByRole('button', { name: '完成設定' }))
+
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent(/看不出是哪一步/)
+    expect(alert).not.toHaveTextContent(/後端/)
+    expect(screen.queryByRole('button', { name: /TMDB/ })).not.toBeInTheDocument()
+  })
+
+  it('後端真的掛了時才說是後端', async () => {
+    stubApi({
+      [STATUS]: { body: AT_THE_END },
+      [ROUTES]: { body: BUILT },
+      [INDEXERS]: { body: indexerSetup() },
+      [TMDB]: { body: tmdbSetup({ api_key_present: true, verified: true }) },
+      [COMPLETE]: { status: 500, body: { detail: 'boom' } },
+    })
+
+    renderWithProviders(<SetupPage />)
+    await userEvent.click(await screen.findByRole('button', { name: '完成設定' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/後端/)
   })
 
   it('按下完成之後精靈關閉，回首頁時不再被導回精靈', async () => {

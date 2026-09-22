@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next'
 import type { ServiceHealth } from '../api/health'
 import { CopyLine } from '../components/controls'
 import { SERVICE_LABEL, detailLabel } from '../components/services'
-import { SIGNAL_FILL } from '../components/signal'
+import { UNPAINTED_FILL } from '../components/signal'
 import { Timestamp } from '../components/Timestamp'
 import { STATE_LABEL, STATE_SIGNAL, composeCommands, serviceFix, serviceState } from './signals'
 
@@ -27,7 +27,7 @@ export function ServiceCard({ row, actions }: { row: ServiceHealth; actions?: Re
       aria-labelledby={`service-${row.kind}`}
     >
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b-2 border-rule px-4 py-3">
-        <span className={`label px-2 py-1.5 ${SIGNAL_FILL[STATE_SIGNAL[state]]}`}>
+        <span className={`label px-2 py-1.5 ${UNPAINTED_FILL[STATE_SIGNAL[state]]}`}>
           {t(STATE_LABEL[state])}
         </span>
         <h3 id={`service-${row.kind}`} className="value text-sm font-semibold text-ink">

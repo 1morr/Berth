@@ -19,6 +19,12 @@ export const BERTHS = [
 /** 一格對到的東西：三個外部服務，或第 4 格的 Route。 */
 export type BerthSlot = ServiceKind | 'library'
 
+/**
+ * 「來源」那一格對到的服務判定。它同時掛著 TMDB 閘門（plan §9.3 第 5、6 步是同一個泊位），
+ * 所以呼叫端偶爾要認出這一格——認的是這個名字，不是散在各處的 `'prowlarr'` 字面值。
+ */
+export const SOURCE_SLOT: BerthSlot = 'prowlarr'
+
 /** 服務 → 泊位號（1 起算，就是 `BTH n` 的 n）。 */
 export function berthNumberOf(slot: BerthSlot): number {
   return BERTHS.findIndex((berth) => berth.slot === slot) + 1

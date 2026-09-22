@@ -103,6 +103,28 @@ describe('Route 設定頁', () => {
     })
   })
 
+  /**
+   * 票 03 第 1 條。儲存一定重跑五條纜繩（`PUT /routes/{id}` 的副作用），而那一輪會建分類、
+   * 寫探測檔。沒改過還按得下去，等於請使用者在不知情的情況下跑一次跨服務檢查。
+   */
+  it('沒改過時儲存按不下去，改了才亮，並且說得出它會重跑五條纜繩', async () => {
+    render()
+    renderApp('/settings/routes')
+
+    const tv = within(await row('TV'))
+    const save = tv.getByRole('button', { name: '儲存' })
+    expect(save).toBeDisabled()
+    expect(tv.getByText(/重跑.*五條纜繩|重新檢查一次/)).toBeInTheDocument()
+
+    const name = tv.getByRole('textbox', { name: '名稱' })
+    await userEvent.type(name, '2')
+    expect(save).toBeEnabled()
+
+    // 改回原樣就再也不是「有東西要存」了。
+    await userEvent.type(name, '{Backspace}')
+    expect(save).toBeDisabled()
+  })
+
   it('紅的 Route 啟用不了：留在停用，並指向斷掉的那條纜繩（票 14 驗收）', async () => {
     render({
       'PUT /api/routes/4': {
@@ -334,6 +356,28 @@ describe('Route 設定頁', () => {
       'href',
       'http://nas.local:8096/web/#/dashboard/libraries',
     )
+  })
+
+  /**
+   * 票 03 第 2 條。選中的媒體庫一條空路徑都沒有時，「建立並檢查」按下去一定被退回來
+   * （沒有目標可送）。真正的下一步在 Jellyfin 那邊，所以這顆不該畫成主動作。
+   */
+  it('選中的媒體庫沒有空路徑時，「建立並檢查」不是可按的主動作', async () => {
+    render({
+      [LIBRARIES]: { body: [ANIME_FULL, libraryOption()] },
+      'GET /api/settings/jellyfin': { body: { public_url: '', url: '', port: null } },
+    })
+    renderApp('/settings/routes')
+
+    await userEvent.click(await screen.findByRole('button', { name: '新增 Route' }))
+    const form = within(await screen.findByRole('region', { name: '新增 Route' }))
+    await userEvent.click(await form.findByRole('radio', { name: 'Anime' }))
+
+    expect(form.getByRole('button', { name: '建立並檢查' })).toBeDisabled()
+
+    // 換到還有空路徑的媒體庫就恢復：灰掉的理由是這個媒體庫，不是整個表單。
+    await userEvent.click(form.getByRole('radio', { name: 'TV' }))
+    expect(form.getByRole('button', { name: '建立並檢查' })).toBeEnabled()
   })
 
   it('不知道 Jellyfin 開在哪裡時只留文字，不給一條死連結', async () => {
