@@ -288,6 +288,8 @@ _Avoid_: subscription（Subscription 是 UI 上「訂閱一部作品」的動作
 _Avoid_: filter, subscription rule, watch
 
 **Feed Item**:
+Feed 中的一筆項目及其解析與比對結果（new / matched / downloaded / ignored / unmatched）。
+_Avoid_: entry, post
 
 ### AI 與通知（M5–M7，2026-09-22 定名）
 
@@ -310,5 +312,3 @@ _Avoid_: suggestion, action, task
 **AI Mode**（Review Queue 的 AI 模式）:
 開關打開後佇列裡每一件先由 Assistant 跑一次，Proposal 掛在那一列上，人只按確認或拒絕。
 _Avoid_: auto-review, autopilot
-Feed 中的一筆項目及其解析與比對結果（new / matched / downloaded / ignored / unmatched）。
-_Avoid_: entry, post
