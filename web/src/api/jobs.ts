@@ -1,6 +1,7 @@
 import { queryOptions } from '@tanstack/react-query'
 
-import { ApiError, apiGet, apiPost } from './client'
+import { apiGet, apiPost } from './client'
+import { parseRefusal, type ReasonSet } from './refusal'
 import type { Schemas } from './schemas'
 
 /** 下載列表與時間線上的一筆（`berth/api/jobs.py` 的 `JobOut`）。 */
@@ -16,54 +17,35 @@ export type JobEvent = Schemas['JobEventOut']
 export type JobCreate = Schemas['JobCreateIn']
 
 /**
- * 送單被擋下來的理由（`berth/api/jobs.py` 的 `_STATUS`）。
+ * 送單被擋下來的理由（`berth/domain/enums.py` 的 `JobRefusal`）。
  *
- * 是字面聯集而不是 `string`：每一種都有自己的一句話與下一步（PRODUCT 原則 4），
- * 而少寫一種在 `tsc` 就會紅，不會變成畫面上一句空白。
+ * 是封閉集合而不是 `string`：每一種都有自己的一句話與下一步（PRODUCT 原則 4），
+ * 所以 `t(`jobs.refusal.${reason}`)` 少一句就是編譯錯誤，不會變成畫面上一條 i18n key。
  */
-export type JobRefusal =
-  | 'media_missing'
-  | 'route_missing'
-  | 'route_kind_mismatch'
-  | 'route_disabled'
-  | 'route_unhealthy'
-  | 'source_unavailable'
-  | 'job_missing'
-  | 'not_retryable'
-  | 'not_replannable'
+export type JobRefusal = Schemas['JobRefusal']
 
 /** 拒絕的完整形狀：一個封閉集合的理由，加上服務回的原文。 */
-export interface JobRefusalDetail {
-  reason: JobRefusal
-  detail: string
-}
-
-const REASONS: readonly JobRefusal[] = [
-  'media_missing',
-  'route_missing',
-  'route_kind_mismatch',
-  'route_disabled',
-  'route_unhealthy',
-  'source_unavailable',
-  'job_missing',
-  'not_retryable',
-  'not_replannable',
-]
+export type JobRefusalDetail = Schemas['JobRefusalOut']
 
 /**
- * 這一次失敗是「後端說不行」還是「網路壞了」。
- *
- * 認不得的理由回 `null`，畫面落回一句通用的話——後端加了新的理由而前端還沒跟上時，
- * 使用者該看到的是一句誠實的通用訊息，不是一條 i18n key。
+ * 執行期認得的那幾種。型別會在編譯時抹掉，所以這一份表還是要在——但它是
+ * `ReasonSet<JobRefusal>`，**少一種或多一種都是編譯錯誤**（M2 票 02）。
  */
+const REASONS: ReasonSet<JobRefusal> = {
+  media_missing: true,
+  route_missing: true,
+  route_kind_mismatch: true,
+  route_disabled: true,
+  route_unhealthy: true,
+  source_unavailable: true,
+  job_missing: true,
+  not_retryable: true,
+  not_replannable: true,
+}
+
+/** 這一次失敗是「後端說不行」還是「網路壞了」。判定與另外兩組共用（`api/refusal.ts`）。 */
 export function refusalOf(error: unknown): JobRefusalDetail | null {
-  if (!(error instanceof ApiError)) return null
-  const detail = error.detail
-  if (typeof detail !== 'object' || detail === null) return null
-  const reason = (detail as { reason?: unknown }).reason
-  if (typeof reason !== 'string' || !REASONS.includes(reason as JobRefusal)) return null
-  const text = (detail as { detail?: unknown }).detail
-  return { reason: reason as JobRefusal, detail: typeof text === 'string' ? text : '' }
+  return parseRefusal(error, REASONS)
 }
 
 /**

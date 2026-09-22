@@ -22,6 +22,8 @@ import logging
 from collections.abc import Iterator
 from dataclasses import dataclass
 
+from berth.domain import JobState
+
 logger = logging.getLogger(__name__)
 
 #: 每個訂閱者的緩衝上限。一個分頁落後這麼多筆時，它要的其實只是「重問一次」，
@@ -34,14 +36,15 @@ JOB_EVENT = "job"
 
 @dataclass(frozen=True, slots=True)
 class JobSignal:
-    """「這一筆 Job 動了」。"""
+    """「這一筆 Job 動了」。
+
+    程序內的訊息，不是線上的形狀——送出去的那一份是 `api/events.JobSignalOut`（前端從
+    OpenAPI 取它，M2 票 02）。這裡不自己組 JSON，序列化是 api 那一層的事。
+    """
 
     hash: str
-    state: str
+    state: JobState
     progress: float
-
-    def payload(self) -> dict[str, object]:
-        return {"hash": self.hash, "state": self.state, "progress": self.progress}
 
 
 class EventHub:

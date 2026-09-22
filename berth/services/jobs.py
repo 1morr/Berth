@@ -45,6 +45,7 @@ from berth.adapters.torrent import TorrentSource
 from berth.domain import (
     EventType,
     HealthStatus,
+    JobRefusal,
     JobState,
     JobTrigger,
     collection_type_for,
@@ -154,7 +155,7 @@ class JobRejectedError(Exception):
     Berth 自己算出來的實測值——與精靈的纜繩同一個規矩：理由翻譯，原文不翻譯。
     """
 
-    def __init__(self, reason: str, detail: str = "") -> None:
+    def __init__(self, reason: JobRefusal, detail: str = "") -> None:
         super().__init__(f"{reason}: {detail}" if detail else reason)
         self.reason = reason
         self.detail = detail
@@ -295,7 +296,7 @@ async def add_download(
             # 前提查過之後 Route 在 Route 設定頁被刪掉了：外鍵擋下這一列（票 14a）。
             # 用參數的 id 而不是 `route.id`——rollback 之後那個物件已經過期，讀它要再打一次資料庫。
             if await session.get(Route, route_id) is None:
-                raise JobRejectedError("route_missing", str(route_id)) from exc
+                raise JobRejectedError(JobRefusal.ROUTE_MISSING, str(route_id)) from exc
             raise
         logger.info("job created", extra={"state": job.state.value, "route": route.slug})
         # 從這裡開始 poller 也看得到這一列（它已經 commit 了），所以送單與迴圈要排隊。
@@ -312,16 +313,16 @@ async def retry_job(session: AsyncSession, factory: ServiceClientFactory, job_ha
     """
     job = await session.get(Job, job_hash)
     if job is None:
-        raise JobRejectedError("job_missing", job_hash)
+        raise JobRejectedError(JobRefusal.JOB_MISSING, job_hash)
     if job.state not in RETRYABLE:
-        raise JobRejectedError("not_retryable", job.state.value)
+        raise JobRejectedError(JobRefusal.NOT_RETRYABLE, job.state.value)
     if job.state is JobState.IMPORT_FAILED:
         with job_context(job.hash):
             async with job_lock(job.hash):
                 return await _resume_import(session, job)
     route = await session.get(Route, job.route_id) if job.route_id is not None else None
     if route is None:
-        raise JobRejectedError("route_missing", str(job.route_id))
+        raise JobRejectedError(JobRefusal.ROUTE_MISSING, str(job.route_id))
     # **與第一次送單同一組前提**：那條 Route 可能在中間被停用、被改成收別種作品，或紅了。
     # 只檢查健康的話「第一次送不出去、重試卻送得出去」——同一個決定兩種答案。
     subject = await session.get(Media, job.media_id) if job.media_id is not None else None
@@ -343,7 +344,7 @@ async def _resubmit(
     """重試的那幾步。抽出來是為了讓 `job_lock` 包得住整段而不必再縮排一層。"""
     if not await transition(session, job, JobState.REQUESTED, expected=JobState.SUBMIT_FAILED):
         # 有別人（或另一個分頁）先動過它。放棄本次操作，不覆寫他的結果（plan §3.1）。
-        raise JobRejectedError("not_retryable", job.state.value)
+        raise JobRejectedError(JobRefusal.NOT_RETRYABLE, job.state.value)
     await record_event(session, job, EventType.RETRIED, actor="user", payload={})
     logger.info("job retried", extra={"state": job.state.value})
     try:
@@ -364,7 +365,7 @@ async def _resume_import(session: AsyncSession, job: Job) -> JobView:
     說的是「再送一次」，這一個說的是「再入庫一次」。
     """
     if not await transition(session, job, JobState.IMPORTING, expected=JobState.IMPORT_FAILED):
-        raise JobRejectedError("not_retryable", job.state.value)
+        raise JobRejectedError(JobRefusal.NOT_RETRYABLE, job.state.value)
     await record_event(
         session, job, EventType.RETRIED, actor="user", payload={"state": JobState.IMPORTING.value}
     )
@@ -430,10 +431,10 @@ async def _preconditions(
     """四個前提，逐個各有自己的理由——「送不出去」是一句沒有下一步的話。"""
     media = await session.get(Media, media_id)
     if media is None:
-        raise JobRejectedError("media_missing", media_id)
+        raise JobRejectedError(JobRefusal.MEDIA_MISSING, media_id)
     route = await session.get(Route, route_id)
     if route is None:
-        raise JobRejectedError("route_missing", str(route_id))
+        raise JobRejectedError(JobRefusal.ROUTE_MISSING, str(route_id))
     _check_route(route, media)
     return media, route
 
@@ -446,13 +447,13 @@ def _check_route(route: Route, media: Media | None) -> None:
     五分鐘才跑一輪（plan §3.2），拿它擋人等於精靈剛跑完的那五分鐘裡誰都送不了單。
     """
     if not route.enabled:
-        raise JobRejectedError("route_disabled", route.slug)
+        raise JobRejectedError(JobRefusal.ROUTE_DISABLED, route.slug)
     if media is not None and route.collection_type is not collection_type_for(media.kind):
         raise JobRejectedError(
-            "route_kind_mismatch", f"{route.slug} holds {route.collection_type.value}"
+            JobRefusal.ROUTE_KIND_MISMATCH, f"{route.slug} holds {route.collection_type.value}"
         )
     if route.health_status is HealthStatus.FAILED:
-        raise JobRejectedError("route_unhealthy", route.slug)
+        raise JobRejectedError(JobRefusal.ROUTE_UNHEALTHY, route.slug)
 
 
 async def _resolve(factory: ServiceClientFactory, url: str) -> TorrentSource:
@@ -465,7 +466,7 @@ async def _resolve(factory: ServiceClientFactory, url: str) -> TorrentSource:
     try:
         return await fetcher.fetch(url)
     except ServiceError as exc:
-        raise JobRejectedError("source_unavailable", message(exc)) from exc
+        raise JobRejectedError(JobRefusal.SOURCE_UNAVAILABLE, message(exc)) from exc
     finally:
         await fetcher.aclose()
 

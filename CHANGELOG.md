@@ -604,6 +604,11 @@ Berth 入庫的作品照樣瀏覽得到。這六件事現在是 nightly e2e 的�
   上面沒有摘要說過，所以那幾格全部留在列上。
 - 媒體庫的整份清單（`library_index`，比對 Berth 經手的作品用）多帶每部的 Primary 圖 tag（M1.5 票 04）：
   篩選「待審」「Unmatched」時，已在 Jellyfin 裡的作品也畫得出海報。Jellyfin 連它的 BlurHash 一起回，每部多一百多個位元組。
+- **拒絕的理由變成封閉集合並進 OpenAPI**（M2 票 02）：`JobRefusal`、`RouteRefusal`、`AccessRefusal`
+  三個 enum 進 `berth/domain/enums.py`，各 router 以 `responses=` 宣告 `{reason, detail}` 的形狀，
+  前端改用產出的型別——原本那三份是手抄的字面聯集，後端加一種理由時沒有任何東西會紅。
+  SSE 推的 `{hash, state, progress}` 同樣有了 model（`JobSignalOut`），`state` 是 `JobState` 而不是自由字串。
+  理由 → 狀態碼的三張表現在要涵蓋整個集合（以前漏掉的會靜靜變成 422）。
 
 ### Removed
 
@@ -614,6 +619,9 @@ Berth 入庫的作品照樣瀏覽得到。這六件事現在是 nightly e2e 的�
 
 ### Fixed
 
+- **排序鍵不在選單上時不再空等七秒**（M2 票 02）：前端手抄的那一份權限拒絕漏了 `sort_not_offered`，
+  於是後端已經說清楚的 422 被當成「沒說理由」，TanStack Query 照預設重試三次、間隔加倍。封閉集合改由
+  OpenAPI 產出之後它自然補齊了。
 - **「只看缺集」不再跟著換過去的那一部作品走**（M1.5 票 09b）：`/media/$mediaId` 是同一條路由，所以在作品之間
   換頁時季表不重掛，上一部篩過的狀態會留在下一部身上（目標已在快取裡、沒有讀取中的空檔時特別明顯）。季表
   連同工具列抽成 `SeasonsPanel`，由詳情頁以 `key={media.id}` 掛上。

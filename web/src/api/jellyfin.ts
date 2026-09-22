@@ -1,4 +1,5 @@
-import { ApiError, apiDelete, apiPost } from './client'
+import { apiDelete, apiPost } from './client'
+import { parseRefusal, type ReasonSet } from './refusal'
 import type { Schemas } from './schemas'
 
 /**
@@ -15,37 +16,29 @@ export type WatchState = Schemas['WatchStateOut']
 
 /**
  * 權限閘門的拒絕（`api/jellyfin.py` 的 `access_refusal`，媒體庫與標記已看共用）：`reason` 挑句子，
- * `detail` 是原文。
+ * `detail` 是原文。理由的封閉集合從 OpenAPI 來（`berth/domain/enums.py` 的 `AccessRefusal`）。
  */
-export interface AccessRefusal {
-  reason: 'account_disabled' | 'library_not_visible' | 'item_not_visible' | 'jellyfin_unreachable'
-  detail: string
-}
+export type AccessRefusal = Schemas['AccessRefusalOut']
 
-const REASONS: readonly AccessRefusal['reason'][] = [
-  'account_disabled',
-  'library_not_visible',
-  'item_not_visible',
-  'jellyfin_unreachable',
-]
+/**
+ * 執行期認得的那幾種。`ReasonSet` 是總表，少一種或多一種都是編譯錯誤——手抄的那一份漏了
+ * `sort_not_offered`，於是排序鍵不在選單上時前端把它當成「沒說理由」，退回通用訊息並重試
+ * 三次（M2 票 02）。
+ */
+const REASONS: ReasonSet<AccessRefusal['reason']> = {
+  account_disabled: true,
+  library_not_visible: true,
+  item_not_visible: true,
+  jellyfin_unreachable: true,
+  sort_not_offered: true,
+}
 
 /**
  * 錯誤是不是媒體庫端點說得出理由的那幾種（與 `refusalOf`、`routeRefusalOf` 同一個形狀）。
  * 後端不可達、或理由不在這份封閉集合裡時是 `null`。
  */
 export function accessRefusal(error: unknown): AccessRefusal | null {
-  if (!(error instanceof ApiError)) return null
-  const detail = error.detail
-  if (typeof detail !== 'object' || detail === null) return null
-  const reason = (detail as { reason?: unknown }).reason
-  if (typeof reason !== 'string' || !REASONS.includes(reason as AccessRefusal['reason'])) {
-    return null
-  }
-  const text = (detail as { detail?: unknown }).detail
-  return {
-    reason: reason as AccessRefusal['reason'],
-    detail: typeof text === 'string' ? text : '',
-  }
+  return parseRefusal(error, REASONS)
 }
 
 /**

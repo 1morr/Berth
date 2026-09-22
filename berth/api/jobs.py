@@ -17,8 +17,9 @@ from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel, ConfigDict, Field
 
 from berth.api.deps import ClientFactoryDep, EventHubDep, ImportHintsDep, SessionDep
+from berth.api.errors import refusal_responses
 from berth.api.gate import current_user
-from berth.domain import JobState, JobTrigger
+from berth.domain import JobRefusal, JobState, JobTrigger
 from berth.services.jobs import (
     JobRejectedError,
     JobSource,
@@ -34,18 +35,62 @@ router = APIRouter(prefix="/jobs", tags=["jobs"])
 
 #: 哪一種拒絕該回哪個狀態碼。`route_unhealthy` 是 409：請求本身沒問題，是**現在**做不了
 #: （紅的 Route 修好之後同一個請求就會成功），而 422 讀起來像「你送錯東西了」。
-_STATUS = {
-    "media_missing": status.HTTP_422_UNPROCESSABLE_CONTENT,
-    "route_missing": status.HTTP_422_UNPROCESSABLE_CONTENT,
-    "route_kind_mismatch": status.HTTP_422_UNPROCESSABLE_CONTENT,
-    "route_disabled": status.HTTP_409_CONFLICT,
-    "route_unhealthy": status.HTTP_409_CONFLICT,
-    "source_unavailable": status.HTTP_502_BAD_GATEWAY,
-    "job_missing": status.HTTP_404_NOT_FOUND,
-    "not_retryable": status.HTTP_409_CONFLICT,
+#: **每一種理由都要在這裡**（`tests/unit/test_openapi_contract.py` 守著）：漏一種就是執行期
+#: 的 `KeyError`，而預設值會讓一種沒人想過的拒絕靜靜變成 422。
+_STATUS: dict[JobRefusal, int] = {
+    JobRefusal.MEDIA_MISSING: status.HTTP_422_UNPROCESSABLE_CONTENT,
+    JobRefusal.ROUTE_MISSING: status.HTTP_422_UNPROCESSABLE_CONTENT,
+    JobRefusal.ROUTE_KIND_MISMATCH: status.HTTP_422_UNPROCESSABLE_CONTENT,
+    JobRefusal.ROUTE_DISABLED: status.HTTP_409_CONFLICT,
+    JobRefusal.ROUTE_UNHEALTHY: status.HTTP_409_CONFLICT,
+    JobRefusal.SOURCE_UNAVAILABLE: status.HTTP_502_BAD_GATEWAY,
+    JobRefusal.JOB_MISSING: status.HTTP_404_NOT_FOUND,
+    JobRefusal.NOT_RETRYABLE: status.HTTP_409_CONFLICT,
     # 已經在入庫的那一份計劃正被 importer 照著動檔案（票 12），重算會讓兩邊指向不同的地方。
-    "not_replannable": status.HTTP_409_CONFLICT,
+    JobRefusal.NOT_REPLANNABLE: status.HTTP_409_CONFLICT,
 }
+
+
+class JobRefusalOut(BaseModel):
+    """做不了的時候回的那一份。`reason` 給畫面挑句子、挑下一步，`detail` 是原文，不翻譯。
+
+    是 model 而不是手組的 dict，前端才從 OpenAPI 取得到 `JobRefusal` 這個封閉集合——
+    它原本在 `web/src/api/jobs.ts` 是手抄的（M2 票 02）。
+    """
+
+    reason: JobRefusal
+    detail: str
+
+
+def _refusals(*reasons: JobRefusal) -> dict[int | str, dict[str, Any]]:
+    """這一支端點回得出來的那幾種。三支的集合真的不一樣，所以逐支列：重新規劃只到得了兩種，
+    而把另外七種寫上去只會讓讀的人以為要處理（同 `api/jellyfin.access_responses`）。"""
+    return refusal_responses(JobRefusalOut, {reason: _STATUS[reason] for reason in reasons})
+
+
+#: 送單：Route 的四種前提、作品不在、索引站給不出那一份 torrent（`services/jobs.add_download`）。
+SUBMIT_RESPONSES = _refusals(
+    JobRefusal.MEDIA_MISSING,
+    JobRefusal.ROUTE_MISSING,
+    JobRefusal.ROUTE_KIND_MISMATCH,
+    JobRefusal.ROUTE_DISABLED,
+    JobRefusal.ROUTE_UNHEALTHY,
+    JobRefusal.SOURCE_UNAVAILABLE,
+)
+
+#: 重試：**與第一次送單同一組 Route 前提**（`services/jobs.retry_job`），加上這一筆本身的兩種。
+#: 沒有 `source_unavailable`——重試時索引站給不出來不是拒絕，那一筆會變成 `submit_failed`。
+RETRY_RESPONSES = _refusals(
+    JobRefusal.JOB_MISSING,
+    JobRefusal.NOT_RETRYABLE,
+    JobRefusal.ROUTE_MISSING,
+    JobRefusal.ROUTE_KIND_MISMATCH,
+    JobRefusal.ROUTE_DISABLED,
+    JobRefusal.ROUTE_UNHEALTHY,
+)
+
+#: 重新規劃只看這一筆自己（`services/plan.replan_job`），碰不到 Route 與索引站。
+REPLAN_RESPONSES = _refusals(JobRefusal.JOB_MISSING, JobRefusal.NOT_REPLANNABLE)
 
 
 class JobSourceIn(BaseModel):
@@ -149,7 +194,7 @@ class JobEventOut(BaseModel):
     created_at: datetime
 
 
-@router.post("", status_code=status.HTTP_200_OK)
+@router.post("", status_code=status.HTTP_200_OK, responses=SUBMIT_RESPONSES)
 async def post_job(
     session: SessionDep, factory: ClientFactoryDep, request: Request, body: JobCreateIn
 ) -> JobCreatedOut:
@@ -197,7 +242,7 @@ async def get_job_events(session: SessionDep, job_hash: str) -> list[JobEventOut
     return [JobEventOut.model_validate(row) for row in await read_job_events(session, job_hash)]
 
 
-@router.post("/{job_hash}/replan")
+@router.post("/{job_hash}/replan", responses=REPLAN_RESPONSES)
 async def post_replan(
     session: SessionDep, factory: ClientFactoryDep, hub: EventHubDep, job_hash: str
 ) -> JobOut:
@@ -217,7 +262,7 @@ async def post_replan(
     return JobOut.model_validate(job)
 
 
-@router.post("/{job_hash}/retry")
+@router.post("/{job_hash}/retry", responses=RETRY_RESPONSES)
 async def post_retry(
     session: SessionDep, factory: ClientFactoryDep, imports: ImportHintsDep, job_hash: str
 ) -> JobOut:
@@ -234,7 +279,5 @@ async def post_retry(
 
 def _refuse(refusal: JobRejectedError) -> HTTPException:
     """`reason` 是給畫面挑句子的封閉集合，`detail` 是原文。兩個都送出去。"""
-    return HTTPException(
-        status_code=_STATUS.get(refusal.reason, status.HTTP_422_UNPROCESSABLE_CONTENT),
-        detail={"reason": refusal.reason, "detail": refusal.detail},
-    )
+    body = JobRefusalOut(reason=refusal.reason, detail=refusal.detail)
+    return HTTPException(status_code=_STATUS[refusal.reason], detail=body.model_dump(mode="json"))

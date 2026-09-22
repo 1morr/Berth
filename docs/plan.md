@@ -364,7 +364,7 @@ Session 以 httpOnly cookie（`berth_session`）承載，`SameSite=Strict`、`Pa
 | events | `GET /events/stream`（SSE：job 狀態與進度。**M1 只有 job**——健康變化每 5 分鐘一次，值不到一條長連線）。推的是**提示不是真相**：`{hash, state, progress}`，前端據此讓 `['jobs']` 失效再問一次，所以漏掉一筆的後果是慢一點而不是畫面說謊。連上的那一刻也重問一次（訂閱建立之前推出去的那幾筆誰都收不到，票 10） | — |
 
 - **`/api` 底下的每一個回應都帶 `Cache-Control: no-store`**（門禁補的，票 10）。這不是最佳化：一個 header 都不送的話瀏覽器會對 `200` 套用它自己的啟發式快取，而這裡的每一支回的都是「現在的狀態」——實跑抓到 SSE 推來的重問拿回一份幾秒前的快取，畫面因此停在錯的狀態。**唯一的例外是圖片那一支的 200**（M1.5 票 04）：`private, max-age=31536000, immutable`——網址帶著 `ImageTags`，換圖時網址就變。門禁只替沒設 `Cache-Control` 的回應補 `no-store`，所以例外由那一支自己設；它的 401 / 404 / 422 / 503 照樣是 `no-store`。
-- OpenAPI 由 FastAPI 產生；前端用 `openapi-typescript` 產型別，CI 檢查型別檔是否過期。
+- OpenAPI 由 FastAPI 產生；前端用 `openapi-typescript` 產型別，CI 檢查型別檔是否過期。**拒絕的 `reason` 是 `domain/enums.py` 的 enum**（`JobRefusal`、`RouteRefusal`、`AccessRefusal`），由 router 的 `responses=` 帶進文件，所以前端的封閉集合也是產出的（M2 票 02；在那之前它們是裸字串，前端各抄一份，後端加一種理由時沒有東西會紅）。理由 → 狀態碼的表要涵蓋整個 enum（`tests/unit/test_openapi_contract.py` 守著），沒有「其餘一律 422」的預設。權限閘門那一組的 `responses=` 與 `except` 吃同一個例外 tuple，文件因此不會與處理的那幾種漂開。
 - 未來 MCP server 只需把 `services` 的命令包成 tool，schema 直接沿用 pydantic model。
 
 ---

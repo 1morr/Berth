@@ -517,3 +517,83 @@ class ReviewReason(StrEnum):
     #: 目標路徑上已經有一個**別的**檔案（inode 不同，plan §3.3）。Berth 不覆寫媒體庫裡
     #: 不是它鏈接的東西（brief §5.3），所以停下來等人決定。
     TARGET_EXISTS = "target_exists"
+
+
+# 以下三組是 `{reason, detail}` 那一格的 `reason`（plan §6）：理由翻譯、原文不翻譯。
+#
+# **它們是 enum 而不是字串字面值**，因為前端要照每一種說出自己的下一步（PRODUCT 原則 4），
+# 而它從 OpenAPI 取這份集合（`web/src/api/schema.d.ts`）。字串的時候前端只能自己抄一份，
+# 後端加一種理由不會有任何東西紅——畫面上就少一句話（M2 票 02）。
+
+
+class JobRefusal(StrEnum):
+    """送單、重試或重新規劃在做出任何改變之前就停下來了（`services/jobs.py`、`services/plan.py`）。
+
+    **qBittorrent 收不下不在這裡**：那時 Job 已經建好了，狀態是 `submit_failed` 加上原文，
+    列上有一顆重試（plan §3.1）。這裡的每一種都是「還沒開始就停住」。
+    """
+
+    #: `tv:<tmdb>` / `movie:<tmdb>` 在 Berth 手上沒有對應的 Media。
+    MEDIA_MISSING = "media_missing"
+    #: 送單指定的 Route 不在了，或這一筆 Job 記著的那一條被刪了。
+    ROUTE_MISSING = "route_missing"
+    #: 劇集只進得了 tvshows 媒體庫、電影只進得了 movies（`collection_type_for`）。
+    ROUTE_KIND_MISMATCH = "route_kind_mismatch"
+    #: Route 停用中。
+    ROUTE_DISABLED = "route_disabled"
+    #: Route 上一次檢查是紅的——送出去也一定進不了庫。
+    ROUTE_UNHEALTHY = "route_unhealthy"
+    #: 索引站給不出那一份 torrent（連結過期、站台掛了）。
+    SOURCE_UNAVAILABLE = "source_unavailable"
+    #: 沒有這個 hash 的 Job。
+    JOB_MISSING = "job_missing"
+    #: 這個狀態不能重試（plan §3.1 只給 `submit_failed` 與 `import_failed`）。
+    NOT_RETRYABLE = "not_retryable"
+    #: 正在照著那一份計劃動檔案，重算會讓兩邊指向不同的地方（票 12）。
+    NOT_REPLANNABLE = "not_replannable"
+
+
+class RouteRefusal(StrEnum):
+    """Route 設定頁與精靈第 7 步的一個命令做不下去（`services/routes.py`、票 14、14a）。
+
+    前五種發生在建立的路上（媒體庫與路徑向 Jellyfin 現查），後四種是對既有的那一條動手時。
+    """
+
+    #: Jellyfin 上已經沒有這個媒體庫了。
+    LIBRARY_MISSING = "library_missing"
+    #: Berth 只寫入電影與劇集類型的媒體庫（`SUPPORTED_TYPES`）。
+    LIBRARY_UNSUPPORTED = "library_unsupported"
+    #: 目標必須是這個媒體庫回報的路徑之一（brief §4.1）。
+    TARGET_NOT_IN_LIBRARY = "target_not_in_library"
+    #: 那條路徑已經是另一條 Route 的寫入目標。
+    TARGET_TAKEN = "target_taken"
+    #: 現查的那一刻問不到 Jellyfin。
+    JELLYFIN_UNREACHABLE = "jellyfin_unreachable"
+    #: 沒有這個 id 的 Route，或檢查途中它被刪掉了。
+    ROUTE_MISSING = "route_missing"
+    #: 還有 Job 或帳本指著它。拒絕另帶 `jobs`、`ledger_entries` 兩個數字。
+    ROUTE_IN_USE = "route_in_use"
+    #: 從停用改成啟用，而檢查是紅的。
+    ROUTE_UNHEALTHY = "route_unhealthy"
+    #: 同一時間的建立撞上唯一索引。選擇本身沒錯，再按一次就好。
+    ROUTE_CONFLICT = "route_conflict"
+
+
+class AccessRefusal(StrEnum):
+    """替 session 那個人讀寫 Jellyfin 時被擋下來（`services/jellyfin_access.py`，M1.5 票 03）。
+
+    權限的判定全部在那一處，這裡是它攤給畫面的四種答案加上一種參數錯誤。**說得出理由的拒絕
+    是答案不是故障**，所以前端拿到它就不重試（`retryUnlessRefused`）。
+    """
+
+    #: 帳號在 Jellyfin 被停用；Berth 已經刪掉他的每一張 session。
+    ACCOUNT_DISABLED = "account_disabled"
+    #: 這位使用者看不到這個媒體庫。**沒有權限與不存在是同一個回應。**
+    LIBRARY_NOT_VISIBLE = "library_not_visible"
+    #: 這位使用者看不到這個 item，或根本沒有這個 item。
+    ITEM_NOT_VISIBLE = "item_not_visible"
+    #: 問不到 Jellyfin。
+    JELLYFIN_UNREACHABLE = "jellyfin_unreachable"
+    #: 排序鍵不在這一種媒體庫的選單上（票 06）。前端照 `sorts` 畫選單，所以只有手改的
+    #: 網址走得到；Jellyfin 自己對打錯的參數是靜靜換一種順序，所以由 Berth 擋。
+    SORT_NOT_OFFERED = "sort_not_offered"

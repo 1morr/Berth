@@ -1,6 +1,8 @@
 import { useEffect } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 
+import type { Schemas } from './schemas'
+
 /**
  * `GET /api/events/stream`：讓下載列表自己動（plan §6 events 群組、票 10）。
  *
@@ -15,12 +17,8 @@ import { useQueryClient } from '@tanstack/react-query'
 /** SSE 的 `event:` 名。後端的 `services/events.py` 是同一個字串。 */
 const JOB_EVENT = 'job'
 
-/** 推播帶的那三格（後端 `JobSignal`）。 */
-export interface JobSignal {
-  hash: string
-  state: string
-  progress: number
-}
+/** 推播帶的那三格（後端 `api/events.py` 的 `JobSignalOut`）。 */
+export type JobSignal = Schemas['JobSignalOut']
 
 /**
  * 訂閱 job 的動靜，並讓相關 query 失效。
@@ -48,7 +46,7 @@ export function useJobStream(): void {
     const onOpen = () => refetch()
     const onJob = (event: MessageEvent<string>) => {
       // 認得出形狀才動作。
-      if (!parse(event.data)) return
+      if (!looksLikeSignal(event.data)) return
       refetch()
     }
 
@@ -69,15 +67,17 @@ export function useJobStream(): void {
  *
  * 後端加了新的欄位不該讓這一條炸掉——而如果它根本不是 JSON（反向代理插了一頁 HTML），
  * 靜靜忽略比讓整頁白掉好：清單本身是 `GET /jobs` 畫出來的，它還在。
+ *
+ * **只看形狀，不驗 `state` 的值**（也不讀它）：推播是提示不是資料，後端加一個新狀態時這一條
+ * 仍然要讓清單去重問一次——擋下來只會讓畫面停在舊的狀態上。
  */
-function parse(data: string): JobSignal | null {
+function looksLikeSignal(data: string): boolean {
   try {
     const payload: unknown = JSON.parse(data)
-    if (typeof payload !== 'object' || payload === null) return null
-    const { hash, state, progress } = payload as Partial<JobSignal>
-    if (typeof hash !== 'string' || typeof state !== 'string') return null
-    return { hash, state, progress: typeof progress === 'number' ? progress : 0 }
+    if (typeof payload !== 'object' || payload === null) return false
+    const { hash, state } = payload as Partial<JobSignal>
+    return typeof hash === 'string' && typeof state === 'string'
   } catch {
-    return null
+    return false
   }
 }

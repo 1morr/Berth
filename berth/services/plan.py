@@ -36,6 +36,7 @@ from berth.domain import (
     EventType,
     FileEntry,
     FileKind,
+    JobRefusal,
     JobState,
     MediaSnapshot,
     ParseContext,
@@ -191,20 +192,20 @@ async def replan_job(
     """
     job = await session.get(Job, job_hash)
     if job is None:
-        raise JobRejectedError("job_missing", job_hash)
+        raise JobRejectedError(JobRefusal.JOB_MISSING, job_hash)
     if job.state not in REPLANNABLE:
-        raise JobRejectedError("not_replannable", job.state.value)
+        raise JobRejectedError(JobRefusal.NOT_REPLANNABLE, job.state.value)
     with job_context(job_hash):
         async with job_lock(job_hash):
             if job.state is JobState.REVIEW and not await transition(
                 session, job, JobState.COMPLETED, expected=JobState.REVIEW
             ):
-                raise JobRejectedError("not_replannable", job.state.value)
+                raise JobRejectedError(JobRefusal.NOT_REPLANNABLE, job.state.value)
             await _plan(session, factory, hub, job_hash, utcnow())
     plan_id = await plan_id_of(session, job_hash)
     view = None if plan_id is None else await read_plan(session, plan_id)
     if view is None:
-        raise JobRejectedError("not_replannable", job.state.value)
+        raise JobRejectedError(JobRefusal.NOT_REPLANNABLE, job.state.value)
     return view
 
 
@@ -320,7 +321,7 @@ async def _plan(
     await session.commit()
     # 推播在 commit 之後（票 10 實跑抓到的那一條）：反過來的話前端收到提示就立刻重問，
     # 而那一次讀到的是還沒 commit 的舊狀態。
-    hub.publish(JobSignal(hash=job.hash, state=job.state.value, progress=job.progress))
+    hub.publish(JobSignal(hash=job.hash, state=job.state, progress=job.progress))
     logger.info(
         "job planned",
         extra={"state": job.state.value, "plan": row.id, "status": status.value},
@@ -363,7 +364,7 @@ async def _preplan(session: AsyncSession, hub: EventHub, job_hash: str, now: dat
         payload=plan_counts(row) | {"plan": row.id},
     )
     await session.commit()
-    hub.publish(JobSignal(hash=job.hash, state=job.state.value, progress=job.progress))
+    hub.publish(JobSignal(hash=job.hash, state=job.state, progress=job.progress))
     logger.info("job pre-planned", extra={"plan": row.id})
     return 1
 

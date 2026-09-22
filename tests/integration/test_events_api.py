@@ -26,6 +26,7 @@ from fastapi.testclient import TestClient
 from berth.api.deps import get_client_factory
 from berth.api.gate import CSRF_HEADER
 from berth.config import Config
+from berth.domain import JobState
 from berth.main import create_app
 from berth.models import TmdbSettings
 from berth.services.events import JOB_EVENT, EventHub, JobSignal
@@ -89,7 +90,7 @@ def test_a_signed_in_page_reads_the_job_signals(client: TestClient) -> None:
     hub = hub_of(client)
 
     status, headers, body = asyncio.run(
-        _stream_once(client, hub, JobSignal(hash="abc", state="downloading", progress=0.25))
+        _stream_once(client, hub, JobSignal(hash="abc", state=JobState.DOWNLOADING, progress=0.25))
     )
 
     assert status == 200
@@ -105,7 +106,9 @@ def test_closing_the_page_takes_the_subscription_with_it(client: TestClient) -> 
     client.post("/api/auth/login", json=ADMIN, headers=BROWSER)
     hub = hub_of(client)
 
-    asyncio.run(_stream_once(client, hub, JobSignal(hash="abc", state="downloading", progress=0.0)))
+    asyncio.run(
+        _stream_once(client, hub, JobSignal(hash="abc", state=JobState.DOWNLOADING, progress=0.0))
+    )
 
     assert hub.subscribers == 0
 
