@@ -110,6 +110,13 @@ admin 守衛抽成 `requireAdminPage`；`CONFIRM_ACTIONS` 的註釋原本只說�
   它的同步是**票 13 第 18 項**（`/impeccable document`）的範圍，本票不動；記在這裡是為了讓讀票的人
   知道這個缺口存在而不是被忽略。
 
+### 合併後補記（2026-09-22）
+
+- **第 8 條只改了子分頁，EN 的頁標題仍是 `Library paths`**（`routeSettings.title`、`setup` 那一組的
+  `routes.title`，另有一句散文寫「manage routes under Settings → Library paths」指向已改名的那個分頁）。
+  票面寫的就是「子分頁」，所以這一票沒做錯；但 CONTEXT.md 的詞是 Route，分頁與標題現在各叫各的。
+  留給下一張碰設定頁文案的票。
+
 ### 第 17 條（可延）未做，留給票 16
 
 精靈每一步的左欄剖面與右欄纜繩列仍是兩份實作。這是重構不是缺陷，本票已動 13 個檔案，

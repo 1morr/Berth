@@ -619,6 +619,21 @@ Berth 入庫的作品照樣瀏覽得到。這六件事現在是 nightly e2e 的�
 
 ### Fixed
 
+- **同一個新使用者兩次登入同時進來不再是 500**（M2 票 01）：`services/auth.py` 的鏡像使用者撞上
+  `users.jellyfin_user_id` 的唯一索引時重讀那一列，兩條都拿到同一個鏡像使用者。
+- **檢查途中被另一個分頁刪掉的 Route 不再是 500**（M2 票 01）：`POST /setup/routes` 順帶重跑既有 Route 的檢查時，
+  那一條的寫回改判成 404 `route_missing`——與 `routes/*` 同一種拒絕。逐條 commit 因此也各自獨立：
+  第二條被刪掉不會把第一條已經算好的結果一起退掉。
+- **`Season 3 / … Season 3 - 46` 不再被讀成 `S03E03–E46`**（M2 票 01）：`Season <季> - <集>` 這種寫法裡的
+  破折號數字是集號不是範圍尾。兩筆真實發佈進語料，`berth bench` 的 `auto_wrong` 維持 0。
+- **下載列表不再逐列查關聯**（M2 票 01）：`list_jobs` 的 Route / Media / User 與計劃改成四次批次查詢，
+  查詢次數不隨下載筆數成長。
+- **精靈與設定頁的十餘處狀態說不出後果**（M2 票 03）：表單沒改過時「儲存」不再亮、所有路徑都被佔用時
+  「建立並檢查」不再畫成主動作、確認區的「取消」不再比主動作寬、通過 TMDB 閘門後泊位 3 的詳情列跟著更新、
+  缺憑證時 `complete.failed` 不再錯怪後端、第 7 步的勾選表直接標出已被佔用的路徑。
+- **三句 EN 文案與兩處 i18n**（M2 票 03）：`Already so` → `Already there`、`Moored` → `Ready`、
+  `10 of 46 episodes in` → `10 of 46 episodes imported`；EN 子分頁 `Library paths` → `Routes`（CONTEXT.md 的詞是 Route）、
+  `routes.cutaway.category` 的 zh-Hant 值原本是英文；信心在同一塊展開區的兩套詞統一成一套。
 - **排序鍵不在選單上時不再空等七秒**（M2 票 02）：前端手抄的那一份權限拒絕漏了 `sort_not_offered`，
   於是後端已經說清楚的 422 被當成「沒說理由」，TanStack Query 照預設重試三次、間隔加倍。封閉集合改由
   OpenAPI 產出之後它自然補齊了。

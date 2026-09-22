@@ -183,7 +183,7 @@ progress.md（session 紀錄與偏差）。
   `berth/domain/enums.py` 裡已經是 enum——它沒進 OpenAPI 是因為 `StepOut.step` 宣告成 `str`
   （`api/schemas.py`）。同一類問題、同一種解法（把 `step` 收緊成聯集型別），但它不是拒絕理由，
   這一票沒動。要做的話順手：`SERVICE_KINDS` 那一組註解也該跟著改。
-- **「會拒絕的端點都要宣告 `responses=`」這一條沒有閘門。** 十個呼叫點這一票全部補齊了，
+- **「會拒絕的端點都要宣告 `responses=`」這一條沒有閘門。** 這一票掃過的 api 模組都補齊了（合併後補記：`api/setup.py` 的兩支不在其中——`DELETE /setup/routes/{id}` 這一票沒掃到，`POST /setup/routes` 的拒絕是票 01 在另一條分支上同時加的。兩支與票 02a 一起補），
   但新端點漏掉時不會有東西紅。試過的做法是數原始碼裡 `raise access_refusal(` 與
   `responses=access_responses(` 各出現幾次——`PLAYED_RESPONSES` 這種先存成常數再用的寫法就
   數不到，而放寬到數得到就等於沒在守東西，所以拿掉了。真正的解法是讓它由構造保證
