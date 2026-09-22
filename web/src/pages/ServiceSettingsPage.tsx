@@ -17,7 +17,7 @@ import {
   testService,
 } from '../api/settings'
 import { berthNumberOf } from '../components/berths'
-import { Field, GhostButton, Notice, PrimaryButton } from '../components/controls'
+import { PAGE_TITLE, Field, GhostButton, Notice, PrimaryButton } from '../components/controls'
 import { SIGNAL_FILL } from '../components/signal'
 import { SettingsTabs } from '../components/SettingsTabs'
 import { ServiceCard } from '../health/ServiceCard'
@@ -76,7 +76,7 @@ export function ServiceSettingsPage() {
   return (
     <div className="mx-auto w-full max-w-3xl px-6 py-8">
       <SettingsTabs />
-      <h2 className="value mt-6 text-lg font-semibold text-ink">{t('settings.title')}</h2>
+      <h1 className={`mt-6 ${PAGE_TITLE}`}>{t('settings.title')}</h1>
       <p className="mt-2 max-w-prose text-sm text-ink-dim">{t('settings.lede')}</p>
 
       <div className="mt-6 grid gap-4">

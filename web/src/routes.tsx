@@ -124,6 +124,14 @@ async function signedIn(queryClient: QueryClient): Promise<boolean> {
   }
 }
 
+/**
+ * 健康頁的 search。`denied` 是「你剛剛被擋下來了」——一般使用者按到 `/settings/*` 的深連結時
+ * 換了一頁，畫面總要說出為什麼（票 03 第 14 條）。形狀照登入頁的 `expired` 那一條慣例。
+ */
+interface HealthSearch {
+  denied?: boolean
+}
+
 interface SetupSearch {
   /**
    * 直接跳到某一個泊位（1–4）。設定跑完之後精靈就是設定入口（plan §6），
@@ -297,6 +305,8 @@ const jobsRoute = createRoute({
 const healthRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/health',
+  validateSearch: (search: Record<string, unknown>): HealthSearch =>
+    search.denied === true || search.denied === 'true' ? { denied: true } : {},
   /** 診斷是唯讀資訊，一般使用者也看得到（brief §11）。動作在 `/settings/services`。 */
   beforeLoad: async ({ context, location }) => {
     await requireSignedInPage(context.queryClient, location)
@@ -326,7 +336,8 @@ const serviceSettingsRoute = createRoute({
   /** 改設定是管理員的事（brief §11，後端同時回 403）。 */
   beforeLoad: async ({ context, location }) => {
     const me = await requireSignedInPage(context.queryClient, location)
-    if (me !== null && me.role !== 'admin') throw redirect({ to: '/health' })
+    if (me !== null && me.role !== 'admin')
+      throw redirect({ to: '/health', search: { denied: true } })
   },
   component: () => (
     <AppShell>
@@ -344,7 +355,8 @@ const routeSettingsRoute = createRoute({
   path: '/settings/routes',
   beforeLoad: async ({ context, location }) => {
     const me = await requireSignedInPage(context.queryClient, location)
-    if (me !== null && me.role !== 'admin') throw redirect({ to: '/health' })
+    if (me !== null && me.role !== 'admin')
+      throw redirect({ to: '/health', search: { denied: true } })
   },
   component: () => (
     <AppShell>

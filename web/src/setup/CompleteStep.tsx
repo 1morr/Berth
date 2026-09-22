@@ -15,20 +15,41 @@ import { Cutaway, CutawayRow } from '../components/Cutaway'
  * 按下去之後 `settings.setup.completed` 就寫下去了，`setup/*` 從此要登入（票 07），
  * 所以按鈕文案講的是「完成設定」而不是「下一步」。
  */
+/**
+ * 按下完成之後失敗的原因。後端的 422 說的是「不可跳的那幾步還沒做完」
+ * （`services/setup.py`：第 6 步的 TMDB 與第 7 步的 Route），那不是後端出了錯——
+ * 把兩者都講成「後端可能沒在跑」會把使用者送去看容器 log，而真正要做的事在精靈裡面
+ * （票 03 第 5 條；PRODUCT.md 原則 4：失敗要說得出下一步）。
+ *
+ * `unfinished` 是「知道還沒做完、但指不出是哪一步」：寧可說這句，也不要指錯一步。
+ */
+export type CompleteFailure = 'tmdb' | 'routes' | 'unfinished' | 'backend'
+
+/** 查表而不是動態組 key——動態組過不了 `strictKeyChecks`（票 06）。 */
+const FAILURE_MESSAGE = {
+  tmdb: 'complete.needTmdb',
+  routes: 'complete.needRoutes',
+  unfinished: 'complete.unfinished',
+  backend: 'complete.failed',
+} as const satisfies Record<CompleteFailure, string>
+
 export function CompleteStep({
   routes,
   indexers,
   completing,
-  failed,
+  failure,
   onComplete,
   onRevisit,
+  onFixTmdb,
 }: {
   routes: RouteSetup
   indexers: IndexerSetup | undefined
   completing: boolean
-  failed: boolean
+  failure?: CompleteFailure
   onComplete: () => void
   onRevisit: () => void
+  /** 回到第 6 步（TMDB 閘門）。缺憑證時真正的出路。 */
+  onFixTmdb: () => void
 }) {
   const { t } = useTranslation()
   const skippedIndexers = indexers?.skipped ?? false
@@ -84,11 +105,18 @@ export function CompleteStep({
           </section>
         )}
 
-        {failed && (
-          <div className="mt-6">
+        {failure && (
+          <div className="mt-6 grid gap-3">
             <Notice signal="blocked" label={t('common.failed')}>
-              {t('complete.failed')}
+              {t(FAILURE_MESSAGE[failure])}
             </Notice>
+            {failure === 'tmdb' && (
+              <div>
+                <GhostButton type="button" onClick={onFixTmdb}>
+                  {t('complete.fixTmdb')}
+                </GhostButton>
+              </div>
+            )}
           </div>
         )}
 

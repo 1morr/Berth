@@ -123,6 +123,9 @@ const zhHant = {
   detail: {
     version: '版本',
     indexers: '索引站',
+    tmdb: 'TMDB',
+    verified: '已驗證',
+    unverified: '待驗證',
   },
   connect: {
     title: '連到你的 {{service}}',
@@ -369,7 +372,7 @@ const zhHant = {
       plan: '將建立',
       library: '媒體庫',
       target: '寫入目標',
-      category: 'category',
+      category: '分類',
     },
     picker: {
       title: '選擇媒體庫',
@@ -417,6 +420,11 @@ const zhHant = {
     completing: '完成中…',
     back: '回媒體庫路徑',
     failed: '寫不進去。Berth 後端可能沒在跑——確認容器狀態後再按一次。',
+    needTmdb:
+      '第 6 步還沒完成：TMDB 要一把測得過的 key。沒有它，探索、季集快照與命名全部停擺，所以這一步不能跳。',
+    needRoutes: '第 7 步還沒完成：每一條 Route 的五條纜繩都要綠燈。紅著的那一條，送單一定失敗。',
+    unfinished: '還有一步沒做完，但這一頁看不出是哪一步。回上一步逐格看一次，紅的那一格就是。',
+    fixTmdb: '回去填 TMDB key',
     signInHint: '完成後會回到首頁，那裡會請你用剛才建立的 Jellyfin 管理員帳號登入。',
     savePath: 'complete 目錄',
     skippedTitle: '跳過的步驟',
@@ -990,10 +998,12 @@ const zhHant = {
       off: '讀不到這一份計劃。',
       planned_one: '{{count}} 個檔案要入庫',
       planned_other: '{{count}} 個檔案要入庫',
+      // 抬頭與每一組講同一套信心的詞（票 03 第 10 條）：這裡是「高 / 中 / 低」，
+      // 組的摘要是「高信心 / 中信心 / 低信心」，不再把原始列舉值印在中文句子裡。
       // 一組的檔案數（M1.5 票 09：依處置 × 季 × 信心分組）。
       files_one: '{{count}} 個檔案',
       files_other: '{{count}} 個檔案',
-      levels: '信心 high {{high}} / medium {{medium}} / low {{low}}',
+      levels: '信心 高 {{high}} / 中 {{medium}} / 低 {{low}}',
       estimate: '這是下載中的預估，沒有讀過檔案本身；下載完成之後會重算一份。',
       status: {
         preplan: '預估',
@@ -1084,6 +1094,8 @@ const zhHant = {
   },
   health: {
     title: '健康',
+    deniedChip: '沒有權限',
+    denied: '設定只有管理員改得了，所以你被送到這一頁。健康頁是唯讀的診斷，每個人都看得到。',
     checking: '檢查中…',
     unreachable: '連不上 Berth 後端。確認程序是否還在執行。',
     interval: '每 {{minutes}} 分鐘自動檢查一次',
@@ -1207,6 +1219,8 @@ const zhHant = {
       identity:
         'slug 與寫入目標建立之後就不能改：分類、complete 子目錄與帳本都認它們。要換目標就新增一條、刪掉這一條。',
       save: '儲存',
+      saveRechecks:
+        '儲存會重跑下面那五條纜繩：那一輪會建 qBittorrent 分類，並在寫入目標寫一個探測檔。',
       saving: '儲存並檢查中…',
       saved: '已儲存。',
       unhealthy: '五條纜繩沒有全綠，這條 Route 維持停用。修好下面紅的那一條，再按一次儲存。',
@@ -1377,7 +1391,7 @@ const en: Translations<typeof zhHant> = {
   },
   status: {
     ok: 'Done',
-    skipped: 'Already so',
+    skipped: 'Already there',
     failed: 'Failed',
     running: 'Running',
     pending: 'Not run',
@@ -1405,6 +1419,9 @@ const en: Translations<typeof zhHant> = {
   detail: {
     version: 'Version',
     indexers: 'Indexers',
+    tmdb: 'TMDB',
+    verified: 'Verified',
+    unverified: 'Not verified',
   },
   connect: {
     title: 'Connect to your {{service}}',
@@ -1686,7 +1703,7 @@ const en: Translations<typeof zhHant> = {
     },
     health: {
       unknown: 'Not checked',
-      ok: 'Moored',
+      ok: 'Ready',
       failed: 'Blocked',
     },
     check: {
@@ -1716,6 +1733,13 @@ const en: Translations<typeof zhHant> = {
     completing: 'Finishing…',
     back: 'Back to library paths',
     failed: 'Could not save. The Berth backend may be down — check the container and press again.',
+    needTmdb:
+      'Step 6 is not finished: TMDB needs an API key that passes its test. Without it discovery, episode snapshots and naming all stop, so this step cannot be skipped.',
+    needRoutes:
+      'Step 7 is not finished: all five checks have to pass on every route. Submitting to a red one always fails.',
+    unfinished:
+      'A step is still unfinished, but this page cannot tell which. Go back a step and look at each berth — the red one is it.',
+    fixTmdb: 'Go back and enter the TMDB key',
     signInHint:
       'You land on the home page, which asks you to sign in with the Jellyfin administrator you just created.',
     savePath: 'Complete directory',
@@ -1874,7 +1898,7 @@ const en: Translations<typeof zhHant> = {
       partial: 'Partial',
       empty: 'No files',
     },
-    episodes: '{{imported}} of {{aired}} episodes in',
+    episodes: '{{imported}} of {{aired}} episodes imported',
     versions_one: '{{count}} version',
     versions_other: '{{count}} versions',
     watch: {
@@ -2248,7 +2272,7 @@ const en: Translations<typeof zhHant> = {
       planned_other: '{{count}} files will be imported',
       files_one: '{{count}} file',
       files_other: '{{count}} files',
-      levels: 'confidence high {{high}} / medium {{medium}} / low {{low}}',
+      levels: 'Confidence high {{high}} / medium {{medium}} / low {{low}}',
       estimate:
         'An estimate made while the download runs — nothing has read the files themselves yet. Berth works it out again once the download finishes.',
       status: {
@@ -2342,6 +2366,9 @@ const en: Translations<typeof zhHant> = {
   },
   health: {
     title: 'Health',
+    deniedChip: 'Not allowed',
+    denied:
+      'Only an administrator can change the settings, so you were sent here instead. The health page is read-only diagnostics and everyone can see it.',
     checking: 'Checking…',
     unreachable: 'Cannot reach the Berth backend. Check that the process is still running.',
     interval: 'Checked automatically every {{minutes}} min',
@@ -2355,7 +2382,7 @@ const en: Translations<typeof zhHant> = {
     failures_one: '{{count}} consecutive failure',
     failures_other: '{{count}} consecutive failures',
     state: {
-      ok: 'Moored',
+      ok: 'Ready',
       drift: 'Settings changed',
       failed: 'Blocked',
       unknown: 'Not checked',
@@ -2412,7 +2439,7 @@ const en: Translations<typeof zhHant> = {
     tabs: {
       label: 'Settings',
       services: 'Services',
-      routes: 'Library paths',
+      routes: 'Routes',
     },
     jellyfin: {
       title: 'Jellyfin public address',
@@ -2468,6 +2495,8 @@ const en: Translations<typeof zhHant> = {
       identity:
         'The slug and the write target cannot change once the route exists: the category, the complete subdirectory and the ledger all go by them. To use another target, add a route and delete this one.',
       save: 'Save',
+      saveRechecks:
+        'Saving runs the five checks below again: that round creates the qBittorrent category and writes a probe file into the write target.',
       saving: 'Saving and checking…',
       saved: 'Saved.',
       unhealthy:

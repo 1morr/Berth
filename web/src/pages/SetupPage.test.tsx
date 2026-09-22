@@ -20,6 +20,20 @@ function bodyOf(call: Parameters<typeof fetch>): unknown {
   return JSON.parse(String(init?.body))
 }
 
+describe('精靈的外框', () => {
+  /** 票 03 第 13 條：精靈本來一個標題都沒有，每一步的 `<h2>` 底下沒有 h1 撐著。 */
+  it('精靈有唯一的 h1，每一步的標題掛在它底下', async () => {
+    stubApi({ [STATUS]: { body: setupStatus() } })
+
+    renderWithProviders(<SetupPage />)
+
+    // 先等這一步畫出來：外框的 h1 在讀取中就在了，步驟的 h2 要等狀態回來。
+    expect(await screen.findByRole('heading', { level: 2 })).toBeVisible()
+    expect(screen.getByRole('heading', { level: 1, name: '設定精靈' })).toBeVisible()
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1)
+  })
+})
+
 describe('第 1 步：建立管理員', () => {
   it('剖面跟著輸入走，套用前後看同一份「將會寫入」', async () => {
     stubApi({ [STATUS]: { body: setupStatus() } })

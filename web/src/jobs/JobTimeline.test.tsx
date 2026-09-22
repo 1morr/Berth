@@ -105,7 +105,8 @@ describe('Job 時間線', () => {
 
     expect(line.getByText('計劃')).toBeInTheDocument()
     expect(line.getByText(/5 個檔案要入庫/)).toBeInTheDocument()
-    expect(line.getByText(/high 5/)).toBeInTheDocument()
+    // 與展開區的抬頭同一把鍵、同一套詞（票 03 第 10 條：不再印原始列舉值）。
+    expect(line.getByText(/信心 高 5/)).toBeInTheDocument()
   })
 
   it('停下來那一筆說得出當時為什麼停', () => {

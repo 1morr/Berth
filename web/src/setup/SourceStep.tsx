@@ -9,6 +9,7 @@ import {
   Field,
   GhostButton,
   Notice,
+  PasswordField,
   PrimaryButton,
 } from '../components/controls'
 import { SIGNAL_FILL } from '../components/signal'
@@ -310,7 +311,7 @@ function ExistingIndexer({
           hint={t(`source.existing.hint.${kind}`)}
           onChange={(event) => setBaseUrl(event.target.value)}
         />
-        <Field
+        <PasswordField
           label={t('connect.field.apiKey')}
           value={apiKey}
           autoComplete="off"
@@ -409,7 +410,7 @@ function Tmdb({
         noValidate
         className="mt-4 grid gap-4"
       >
-        <Field
+        <PasswordField
           label={t('source.tmdb.field')}
           value={apiKey}
           autoComplete="off"

@@ -86,6 +86,24 @@ function frieren(): Plan {
 }
 
 describe('匯入計劃', () => {
+  /**
+   * 票 03 第 10 條。抬頭那一行原本印的是原始列舉值（`信心 high 28 / medium 11 / low 0`），
+   * 底下每一組卻說「高信心」「中信心」——同一塊展開區兩套詞（M1.5 critique 的一致性那一條）。
+   */
+  it('抬頭與各組講同一套信心的詞，抬頭不印原始列舉值', () => {
+    renderWithProviders(<JobPlan plan={frieren()} />)
+
+    const heading = screen.getByText(/信心/, { selector: 'p > span' })
+    expect(heading).toHaveTextContent('高')
+    expect(heading).toHaveTextContent('中')
+    expect(heading).not.toHaveTextContent(/high|medium|low/)
+
+    // 組的摘要用的是同一組字，不是另一套。
+    const [audited, plain] = groups()
+    expect(within(audited).getByText('中信心')).toBeVisible()
+    expect(within(plain).getByText('高信心')).toBeVisible()
+  })
+
   it('依「處置 × 季 × 信心 × 待確認」分組：芙莉蓮 39 個檔案收成兩行（M1.5 票 09）', () => {
     renderWithProviders(<JobPlan plan={frieren()} />)
 

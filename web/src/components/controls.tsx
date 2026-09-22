@@ -172,6 +172,13 @@ export const GHOST_LINK =
   'label justify-self-start border-2 border-rule px-4 py-2.5 text-ink hover:border-rule-strong'
 
 /**
+ * 每一頁唯一的 `<h1>`（票 03 第 13 條）。四頁本來各長各的——`/settings/routes` 有 h1，
+ * `/health` 與 `/settings/services` 從 `<h2>` 開起，精靈一個標題都沒有。大小與可見性
+ * 在這裡定一次，**外距由呼叫端給**（同 `NAV_BOX` 的理由：同一個元素上誰贏看 CSS 先後）。
+ */
+export const PAGE_TITLE = 'value text-lg font-semibold text-ink'
+
+/**
  * 導覽方塊：頁首導覽、媒體庫的 Route 切換列與篩選列（票 13）。當前那一個重橫線 + `deck` 底，
  * 不靠顏色（狀態不只靠顏色，PRODUCT.md）。
  *
@@ -240,6 +247,18 @@ export function CopyLine({ command }: { command: string }) {
 }
 
 /**
+ * 「主要動作 + 取消」那一列：就地確認（`ConfirmAction`、送單）與新增表單的送出列共用。
+ *
+ * 取消是 `max-content` 而不是 `auto`：`auto` 軌會分掉剩下的空白（CSS Grid §12.8 的
+ * stretch auto tracks），於是容器一寬，取消就畫得比 14rem 的主要動作還寬，看起來像是在推人
+ * 按取消（票 03 第 3 條）。窄版兩顆各自整寬疊起來，主要動作在上。
+ *
+ * 一份而不是每個呼叫端各寫一次：那串類名原本被逐字抄了三遍，而缺陷就在那一段字裡。
+ */
+export const CONFIRM_ACTIONS =
+  'grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,14rem)_max-content] sm:items-center'
+
+/**
  * 需要二次確認的動作（plan §9.5 的「加入 Berth 路徑」）。確認就地展開，不跳離當前泊位
  * （direction contract：失敗與確認都在原地）。`warning` 說清楚按下去會發生什麼。
  */
@@ -275,7 +294,7 @@ export function ConfirmAction({
       <p id={warningId} className="max-w-prose text-xs text-ink">
         {warning}
       </p>
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,14rem)_auto] sm:items-center">
+      <div className={CONFIRM_ACTIONS}>
         <PrimaryButton
           type="button"
           disabled={pending}

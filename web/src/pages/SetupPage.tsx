@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 
+import { ApiError } from '../api/client'
 import {
   addLibraryPath,
   applyIndexers,
@@ -37,13 +38,13 @@ import { healthQueryOptions } from '../api/health'
 import { LanguageToggle } from '../components/LanguageToggle'
 import { AdminStep } from '../setup/AdminStep'
 import { BerthBoard, type BerthSignals } from '../setup/BerthBoard'
-import { CompleteStep } from '../setup/CompleteStep'
+import { CompleteStep, type CompleteFailure } from '../setup/CompleteStep'
 import { DetectStep } from '../setup/DetectStep'
 import { JellyfinStep } from '../setup/JellyfinStep'
 import { QbittorrentStep } from '../setup/QbittorrentStep'
 import { RouteStep } from '../setup/RouteStep'
 import { SourceStep } from '../setup/SourceStep'
-import { GhostButton, Notice } from '../components/controls'
+import { PAGE_TITLE, GhostButton, Notice } from '../components/controls'
 import { SIGNAL_FILL, type Signal } from '../components/signal'
 import { isSettled } from '../components/steps'
 import { signalOf } from '../setup/signals'
@@ -230,6 +231,7 @@ export function SetupPage({
     step,
     revisited,
     services: current.services,
+    tmdb: tmdb.data,
     signals: {
       jellyfin: jellyfinSignal(current, jellyfin.data, inFlight),
       qbittorrent: qbittorrentSignal(current, qbittorrent.data, applyPreferences.isPending),
@@ -317,9 +319,10 @@ export function SetupPage({
             routes={routes.data}
             indexers={indexers.data}
             completing={finish.isPending}
-            failed={finish.isError}
+            failure={completeFailure(finish.error, tmdb.data, routes.data)}
             onComplete={() => finish.mutate()}
             onRevisit={() => setRevisit(STEP_ROUTES)}
+            onFixTmdb={() => setRevisit(STEP_TMDB)}
           />
         ) : (
           <Waiting failed={routes.isError} message={t('routes.unreachable')} />
@@ -400,6 +403,29 @@ function sourceSignal(
 }
 
 /**
+ * 按下「完成設定」失敗的原因（票 03 第 5 條）。
+ *
+ * **422 不是後端出錯**：`complete_setup` 用它說「第 6 步或第 7 步還沒做完」
+ * （`berth/services/setup.py`）。是哪一步前端自己答得出來——TMDB 的綠燈就在手上的
+ * `tmdb.verified`，不必去解那句英文散文。其餘（5xx、連不上）才是後端的問題。
+ */
+function completeFailure(
+  error: unknown,
+  tmdb: TmdbSetup | undefined,
+  routes: RouteSetup | undefined,
+): CompleteFailure | undefined {
+  if (error === null || error === undefined) return undefined
+  if (!(error instanceof ApiError) || error.status !== 422) return 'backend'
+  // 是哪一步用手上的兩份狀態答，而不是去解那句英文散文。**兩份都得明確說不行才指名**：
+  // 還沒載回來時 `verified` 是 `undefined`，拿它當「沒驗過」會在真正卡住的是第 7 步時說錯話
+  // （票 03 的 code review）。兩份都說沒問題卻仍被擋，代表我們這一份過期或後端多了一種 422——
+  // 那就別猜，說「還有一步沒做完」。
+  if (tmdb?.verified === false) return 'tmdb'
+  if (routes?.ready === false) return 'routes'
+  return 'unfinished'
+}
+
+/**
  * 泊位 4 的信號。這一格沒有對應的服務判定，看的是 Route 自己的健康：有紅的就是阻擋，
  * 全綠才是已繫上（`ready` 與後端「第 7 步做完了沒」是同一條規則）。
  */
@@ -420,12 +446,15 @@ function Shell({
   step,
   services = [],
   signals,
+  tmdb,
   revisited = false,
   children,
 }: {
   step: number
   services?: SetupStatus['services']
   signals?: BerthSignals
+  /** 泊位 3 的閘門那一半。第 6 步起才問得到，在那之前這一格說的是索引站。 */
+  tmdb?: TmdbSetup
   /**
    * 精靈已經跑完過。這時候它是設定入口而不是 onboarding，所以要有出口——
    * 否則從設定頁點「改位址或憑證」進來的人，只剩瀏覽器的上一頁可按。
@@ -439,7 +468,8 @@ function Shell({
     <div className="flex min-h-dvh flex-col bg-hull text-ink">
       <header className="flex flex-wrap items-center gap-x-6 gap-y-3 border-b-2 border-rule-strong px-6 py-4">
         <p className="value text-lg font-semibold tracking-tight">{t('app.name')}</p>
-        <p className="label text-ink-dim">{t('setup.title')}</p>
+        {/* 精靈這一頁的標題。每一步自己的 `<h2>` 掛在它底下（票 03 第 13 條）。 */}
+        <h1 className={PAGE_TITLE}>{t('setup.title')}</h1>
         <p className="label ml-auto text-ink-dim">
           {step in BERTH_CODE
             ? t('setup.stage.berth', { code: BERTH_CODE[step] })
@@ -454,7 +484,7 @@ function Shell({
         <LanguageToggle />
       </header>
 
-      <BerthBoard services={services} signals={signals} current={BERTH_CODE[step]} />
+      <BerthBoard services={services} signals={signals} tmdb={tmdb} current={BERTH_CODE[step]} />
 
       {revisited && (
         <div className="border-b-2 border-rule px-6 py-3">
