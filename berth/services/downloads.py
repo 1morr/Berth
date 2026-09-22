@@ -25,13 +25,13 @@ import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path, PurePosixPath
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from berth.adapters import fs
 from berth.adapters.qbittorrent import (
-    BERTH_TAG,
     ERROR_STATE,
     MISSING_FILES_STATE,
     QbittorrentClient,
@@ -53,7 +53,9 @@ from berth.models.types import utcnow
 from berth.services.clients import ServiceClientFactory
 from berth.services.events import EventHub, JobSignal
 from berth.services.hints import JobHints
+from berth.services.issues import record_issue
 from berth.services.jobs import job_lock, record_event, transition
+from berth.services.qbittorrent import managed
 from berth.services.settings import read_settings, write_settings
 
 logger = logging.getLogger(__name__)
@@ -456,10 +458,20 @@ async def _completed(
     """完成判定（brief §5.1、§20.2）。第四條在這裡：檔案真的在 save path 底下。"""
     if not status.complete:
         return False
-    if not await _files_on_disk(session, job, status):
+    if missing := await _files_on_disk(session, job, status):
         # 客戶端說做完了，而 Berth 看得到那個目錄、裡面卻沒有那些檔案。這正是
         # `missingFiles` 說的那件事，只是這一次是 Berth 自己發現的。
-        return bool(await _issue(session, job, JobState.MISSING_FILES, IssueType.MISSING_FILES))
+        return bool(
+            await _issue(
+                session,
+                job,
+                JobState.MISSING_FILES,
+                IssueType.MISSING_FILES,
+                # 少了哪幾個放在 `detail`，不是 `path`：這一種的冪等鍵是那一筆下載
+                # （`SUBJECT_OF` 上寫了理由），而畫面上要說得出少了什麼。
+                detail={"missing": missing},
+            )
+        )
     if not await _to(session, job, JobState.COMPLETED):
         return False
     job.completed_at = now
@@ -474,8 +486,12 @@ async def _completed(
     return True
 
 
-async def _files_on_disk(session: AsyncSession, job: Job, status: TorrentStatus) -> bool:
-    """每個要下載的檔案都在 `save_path` 底下 `stat` 得到嗎（brief §5.1 的第四條）。
+async def _files_on_disk(session: AsyncSession, job: Job, status: TorrentStatus) -> list[str]:
+    """`stat` 不到的那幾個檔案（brief §5.1 的第四條）。全部都在就是空 list。
+
+    **回的是哪幾個而不是成不成**：`missing_files` 那一種 Issue 的冪等鍵是檔案的路徑
+    （plan §2.4），而畫面上那一句要說得出少了什麼——只回一個 bool 的話，兩邊都只剩
+    「有東西不見了」。
 
     **Berth 看不到那個 save path 時視為通過。** 那不是這一筆 torrent 的問題，而是掛載對不上
     ——Berth 與 qBittorrent 必須把同一個宿主目錄掛在同一個容器路徑（brief §16.4），而那件事
@@ -494,21 +510,22 @@ async def _files_on_disk(session: AsyncSession, job: Job, status: TorrentStatus)
     """
     root = status.save_path or job.save_path
     if not root or not Path(root).is_absolute() or not Path(root).is_dir():
-        return True
+        return []
     rows = await session.scalars(
         select(JobFile).where(JobFile.job_hash == job.hash, JobFile.priority != 0)
     )
     wanted = list(rows)
     if not wanted:
-        return True
+        return []
+    missing: list[str] = []
     for row in wanted:
-        target = Path(str(PurePosixPath(root) / row.rel_path))
+        target = str(PurePosixPath(root) / row.rel_path)
         try:
-            fs.stat(target)
+            fs.stat(Path(target))
         except OSError:
-            logger.warning("completed torrent is missing a file", extra={"path": str(target)})
-            return False
-    return True
+            logger.warning("completed torrent is missing a file", extra={"path": target})
+            missing.append(target)
+    return missing
 
 
 async def _issue(
@@ -516,23 +533,23 @@ async def _issue(
     job: Job,
     state: JobState,
     kind: IssueType,
+    *,
+    path: str = "",
+    detail: dict[str, Any] | None = None,
 ) -> int:
-    """轉進一個「需要人處理」的狀態，並寫一筆 `issue_detected`（brief §5.2）。
+    """轉進一個「需要人處理」的狀態，並**兩邊都寫**（brief §5.2、plan §2.4、M2 票 05）。
 
-    **`issues` 表要到 M2 才有**（plan §11.3），所以 M1 的載體是這一筆事件。`type` 是
-    封閉集合（`IssueType`），M2 建表時它就是那張表的同一欄。
+    事件是歷史（時間線上那一行），Issue 是「要有人決定」的那一件（`/issues` 上那一列）。
+    M1 只有前者，因為 `issues` 表要到 M2 才有；從票 05 起兩邊都寫，而 `type` 是**同一個**
+    封閉集合（`IssueType`）——加一種型別到事件而沒加到表是不可能的，因為只有一份定義。
     """
     if job.state is state:
         return 0
     if not await _to(session, job, state):
         return 0
-    await record_event(
-        session,
-        job,
-        EventType.ISSUE_DETECTED,
-        actor=SYSTEM,
-        payload={"type": kind.value, "client_state": job.client_state},
-    )
+    payload = {"type": kind.value, "client_state": job.client_state, **(detail or {})}
+    await record_event(session, job, EventType.ISSUE_DETECTED, actor=SYSTEM, payload=payload)
+    await record_issue(session, kind, path=path, job_hash=job.hash, detail=payload)
     logger.warning("job issue detected", extra={"issue": kind.value, "state": state.value})
     return 1
 
@@ -598,11 +615,7 @@ async def _record_unknown(
     if not statuses:
         return []
     categories = {row for row in await session.scalars(select(Route.category)) if row}
-    ours = [
-        status
-        for status in statuses.values()
-        if status.category in categories or BERTH_TAG in status.tags
-    ]
+    ours = managed(statuses.values(), categories)
     if not ours:
         return []
     known = set(
@@ -621,6 +634,17 @@ async def _record_unknown(
         )
     )
     for row in orphans:
+        payload = {
+            "type": IssueType.UNKNOWN_TORRENT.value,
+            "name": row.name,
+            "category": row.category,
+            "client_state": row.state,
+        }
+        # Issue 那一邊**每一輪都寫**：它自己是冪等的（同一個 hash 更新那一列的
+        # `detected_at`），而「上一次看到它是什麼時候」正是清單上要說的那一句。
+        await record_issue(
+            session, IssueType.UNKNOWN_TORRENT, job_hash=row.hash, detail=payload, now=now
+        )
         if row.hash in reported:
             continue
         session.add(
@@ -628,12 +652,7 @@ async def _record_unknown(
                 job_hash=row.hash,
                 type=EventType.ISSUE_DETECTED.value,
                 actor=SYSTEM,
-                payload_json={
-                    "type": IssueType.UNKNOWN_TORRENT.value,
-                    "name": row.name,
-                    "category": row.category,
-                    "client_state": row.state,
-                },
+                payload_json=payload,
                 created_at=now,
             )
         )

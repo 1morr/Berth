@@ -272,6 +272,101 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/issues": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Issues
+         * @description 還沒有人決定的那幾件，最近偵測到的在前面。
+         *
+         *     **只有 `open`**：這是一份工作清單不是歷史（`services/issues.list_issues`）。
+         */
+        get: operations["get_issues_api_issues_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/issues/{issue_id}/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Resolve
+         * @description 按下那一顆（brief §9.1 的「預設建議動作」那一欄）。
+         *
+         *     **做得到才記成 resolved**：重新鏈接失敗時那一筆仍然是 `open`，清單上還看得到它——
+         *     畫面說修好了而媒體庫沒變，是這一票最糟的結果。
+         */
+        post: operations["post_resolve_api_issues__issue_id__resolve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/issues/{issue_id}/ignore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Ignore
+         * @description 「我知道了，不用管它」。不碰磁碟、不碰帳本。
+         *
+         *     那個檔案仍然不在，所以**下一輪對帳會再開一筆新的**（`services/issues.ignore_issue`）。
+         *     真的要它安靜下來，按的是「承認刪除並清帳本」。
+         */
+        post: operations["post_ignore_api_issues__issue_id__ignore_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/reconcile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Reconcile
+         * @description 上一輪與進行中的那一輪（plan §3.2）。前端在跑的時候輪詢它。
+         */
+        get: operations["get_reconcile_api_reconcile_get"];
+        put?: never;
+        /**
+         * Post Reconcile
+         * @description 開一輪對帳。**202**：收下了，那一輪在背景跑，進度問 `GET /reconcile`。
+         *
+         *     一輪要走過整個媒體庫，而 HTTP 請求不該掛在那上面等。正在跑時再按是 409
+         *     `reconcile_running`——不排隊，排隊的那一輪看到的會是同一份磁碟（plan §3.2）。
+         */
+        post: operations["post_reconcile_api_reconcile_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/jellyfin/items/{item_id}/images/{image_type}": {
         parameters: {
             query?: never;
@@ -394,17 +489,17 @@ export interface paths {
         put?: never;
         post?: never;
         /**
-         * Delete Job Endpoint
+         * Delete Job
          * @description 刪除範圍的四個旗標（brief §9.2、plan §3.1 的最後一列、票 04）。
          *
          *     **四個預設全不勾**，而且預設值在後端也成立：一個參數都不帶的 `DELETE` 只把這一筆收成
          *     `removed`，磁碟上一個檔案都不動。預設只寫在對話框上的話，之後的每一個呼叫端（Issue 的
-         *     修復、票 05 的 audit 撤銷）都要自己記得這件事。
+         *     修復、票 06 的 audit 撤銷）都要自己記得這件事。
          *
          *     回的是**真的發生了什麼**而不是 204：勾了「移除鏈接」而那幾個檔案早就被人在 Jellyfin 裡
          *     刪掉時，畫面要說得出「0 個鏈接」而不是一句「刪好了」。
          */
-        delete: operations["delete_job_endpoint_api_jobs__job_hash__delete"];
+        delete: operations["delete_job_api_jobs__job_hash__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1257,11 +1352,10 @@ export interface components {
         };
         /**
          * DeletionEstimateOut
-         * @description 刪下去會空出多少（brief §9.2）。每一個數字都是剛剛 `stat` 出來的。
+         * @description `services/deletion.DeletionEstimate` 的對外形狀（理由與算法在那裡）。
          *
-         *     **`reclaimable` 與 `link_bytes` + `source_bytes` 不是同一件事**：來源與它的媒體庫鏈接
-         *     是同一份資料，兩邊各算一次會把答案說成兩倍。只有來源與所有鏈接都刪掉時那些位元組才
-         *     真的回到檔案系統，`held` 是連那樣做也拿不回來的（有 Berth 不知道的第三個鏈接握著）。
+         *     畫面要的那一句在 `reclaimable`：**它不是 `link_bytes + source_bytes`**——來源與它的
+         *     媒體庫鏈接是同一份資料，兩邊各算一次會把答案說成兩倍。
          */
         DeletionEstimateOut: {
             /** Links */
@@ -1560,6 +1654,101 @@ export interface components {
          * @enum {string}
          */
         InventoryStatus: "failed" | "review" | "downloading" | "complete" | "partial" | "empty";
+        /**
+         * IssueAction
+         * @description resolve 一件 Issue 時按的那一顆（brief §9.1 的「預設建議動作」那一欄）。
+         *
+         *     **只有 `library_link_missing` 的三顆**（M2 票 05）：其餘十種的動作跟著它們的檢查一起
+         *     在票 09 加。先立三顆是因為形狀要對——`ISSUE_ACTIONS` 那張表逐型別說得出按得了什麼，
+         *     第二種型別進來時只是多一列。
+         * @enum {string}
+         */
+        IssueAction: "relink" | "forget" | "delete_complete";
+        /**
+         * IssueOut
+         * @description 清單上的一列（`services/issues.IssueView` 的對外形狀）。
+         *
+         *     **`actions` 由後端算**（同 `JobOut.retryable`）：按下去會被拒絕的按鈕不該畫出來，而
+         *     「這一筆現在按得了什麼」要看它的型別**與**它的資料（指不到帳本的按不了重新鏈接）。
+         *     前端照這一格畫按鈕，不自己重算一份規則。
+         */
+        IssueOut: {
+            /** Id */
+            id: number;
+            type: components["schemas"]["IssueType"];
+            /** Subject */
+            subject: string;
+            /** Job Hash */
+            job_hash: string;
+            /** Ledger Id */
+            ledger_id: number | null;
+            /** Path */
+            path: string;
+            /** Detail */
+            detail: {
+                [key: string]: unknown;
+            };
+            status: components["schemas"]["IssueStatus"];
+            /**
+             * Detected At
+             * Format: date-time
+             */
+            detected_at: string;
+            /** Actions */
+            actions: components["schemas"]["IssueAction"][];
+        };
+        /**
+         * IssueRefusal
+         * @description 對一件 Issue 動手或按下對帳時，在做出任何改變之前就停下來了（M2 票 05）。
+         *
+         *     **修復失敗不在這裡**：`relink_failed` 是例外——硬鏈接這一步真的碰了磁碟才知道成不成，
+         *     而它的原文（`errno` 與哪兩個掛載）正是使用者要看的那一句，包成別的字串等於丟掉它
+         *     （plan §8.6）。其餘每一種都是「還沒開始就停住」。
+         * @enum {string}
+         */
+        IssueRefusal: "issue_missing" | "issue_not_open" | "action_not_available" | "source_missing" | "relink_failed" | "client_unreachable" | "reconcile_running";
+        /**
+         * IssueRefusalOut
+         * @description 做不了的時候回的那一份。`reason` 給畫面挑句子，`detail` 是原文，不翻譯。
+         *
+         *     `relink_failed` 的 `detail` 尤其重要：它是系統的 `errno` 與「哪兩個掛載」那一句
+         *     （plan §8.6），而那正是使用者要改的那一行 compose。
+         */
+        IssueRefusalOut: {
+            reason: components["schemas"]["IssueRefusal"];
+            /** Detail */
+            detail: string;
+        };
+        /**
+         * IssueResolveIn
+         * @description 按了哪一顆。**封閉集合**（brief §9.1 那一欄），不是自由文字。
+         */
+        IssueResolveIn: {
+            action: components["schemas"]["IssueAction"];
+        };
+        /**
+         * IssueStatus
+         * @description 一件 Issue 還要不要人決定（plan §2.4）。
+         *
+         *     只有 `open` 受冪等鍵約束：同一個 `(type, subject)` 最多一筆。決定過的那幾筆留著當
+         *     歷史，同一件事再發生時開的是新的一筆——「上次怎麼處理的」與「現在又來了」是兩件事。
+         * @enum {string}
+         */
+        IssueStatus: "open" | "resolved" | "ignored";
+        /**
+         * IssueType
+         * @description 一件「要有人決定」的事是哪一種（brief §9.1、plan §2.4）。
+         *
+         *     **十一種的聯集，一個封閉集合**（2026-09-22 定，M2 票 05）：前五種是管線自己在路上
+         *     發現的（M1 起寫 `issue_detected` 事件，M2 起同時寫一列 `issues`），後六種是對帳比完
+         *     四方之後才知道的。兩邊共用同一個集合，所以加一種型別而沒替它決定 `subject` 取哪一欄、
+         *     或沒給它動作，紅的會是 `SUBJECT_OF` 與 `ISSUE_ACTIONS` 那兩條閘門。
+         *
+         *     `unknown_torrent` 那一種在集合裡屬於「管線發現的」——它由 `qbit_poller` 寫（plan §3.2），
+         *     不是對帳走出來的。
+         * @enum {string}
+         */
+        IssueType: "missing_files" | "client_error" | "client_removed" | "unknown_torrent" | "jellyfin_item_unresolved" | "library_link_missing" | "source_missing" | "inode_mismatch" | "orphan_complete" | "unmanaged_library_file" | "job_without_files";
         /** JellyfinAddressIn */
         JellyfinAddressIn: {
             /**
@@ -1645,9 +1834,9 @@ export interface components {
         };
         /**
          * JobDeletedOut
-         * @description 一次刪除**真的**做掉了什麼（brief §9.2）。
+         * @description `services/deletion.DeleteOutcome` 的對外形狀：一次刪除**真的**做掉了什麼。
          *
-         *     與「勾了哪幾個」不是同一件事，所以它是一份回應而不是回聲：時間線上那一筆 `deleted`
+         *     與「勾了哪幾個」不是同一件事，所以它是一份回應而不是回聲；時間線上那一筆 `deleted`
          *     寫的是同一組數字。
          */
         JobDeletedOut: {
@@ -2219,6 +2408,48 @@ export interface components {
             error: string;
         };
         /**
+         * ReconcileRunOut
+         * @description 一輪對帳。`finished_at` 是 `null` 就是還在跑。
+         */
+        ReconcileRunOut: {
+            /** Id */
+            id: number;
+            /**
+             * Started At
+             * Format: date-time
+             */
+            started_at: string;
+            /** Finished At */
+            finished_at: string | null;
+            /** Sides */
+            sides: components["schemas"]["SideOut"][];
+            /** Opened */
+            opened: number;
+            /** Updated */
+            updated: number;
+        };
+        /**
+         * ReconcileSide
+         * @description 對帳比的四方（brief §9.1）。
+         *
+         *     **四方各自走完才寫下 Issue**，而任一方問不到就跳過那一方並在這一輪的結果上說出來
+         *     ——不把「問不到」誤判成「不見了」（brief §16.2、plan §3.2）。所以這是一個封閉集合：
+         *     畫面要逐方說「比到哪、幾筆」，而跳過的那一方要說得出為什麼。
+         * @enum {string}
+         */
+        ReconcileSide: "ledger" | "client" | "complete" | "library";
+        /**
+         * ReconcileStatusOut
+         * @description `GET /reconcile`：上一輪與進行中的那一輪。
+         *
+         *     兩格都可能是 `null`，意思不同：`current` 是 `null` 代表現在沒有在跑，`last` 是 `null`
+         *     代表這個程序起來之後還沒跑過（進度活在記憶體裡，`pipeline/reconciling.py`）。
+         */
+        ReconcileStatusOut: {
+            current: components["schemas"]["ReconcileRunOut"] | null;
+            last: components["schemas"]["ReconcileRunOut"] | null;
+        };
+        /**
          * ReviewReason
          * @description 為什麼這一份 Plan 停下來等人（brief §5.2 的 `review_required(reason)`）。
          *
@@ -2512,6 +2743,19 @@ export interface components {
             waited_seconds: number;
             /** Window Seconds */
             window_seconds: number;
+        };
+        /**
+         * SideOut
+         * @description 一輪裡的一方（plan §3.2 的「哪一方比到哪、幾筆」）。
+         */
+        SideOut: {
+            side: components["schemas"]["ReconcileSide"];
+            /** Counted */
+            counted: number;
+            /** Unavailable */
+            unavailable: string;
+            /** Skipped */
+            skipped: string[];
         };
         /** SkipIn */
         SkipIn: {
@@ -3239,6 +3483,186 @@ export interface operations {
             };
         };
     };
+    get_issues_api_issues_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssueOut"][];
+                };
+            };
+        };
+    };
+    post_resolve_api_issues__issue_id__resolve_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                issue_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IssueResolveIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssueOut"];
+                };
+            };
+            /** @description `issue_missing` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssueRefusalOut"];
+                };
+            };
+            /** @description `issue_not_open` · `source_missing` · `relink_failed` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssueRefusalOut"];
+                };
+            };
+            /** @description `action_not_available` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssueRefusalOut"];
+                };
+            };
+            /** @description `client_unreachable` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssueRefusalOut"];
+                };
+            };
+        };
+    };
+    post_ignore_api_issues__issue_id__ignore_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                issue_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssueOut"];
+                };
+            };
+            /** @description `issue_missing` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssueRefusalOut"];
+                };
+            };
+            /** @description `issue_not_open` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssueRefusalOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_reconcile_api_reconcile_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReconcileStatusOut"];
+                };
+            };
+        };
+    };
+    post_reconcile_api_reconcile_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReconcileRunOut"];
+                };
+            };
+            /** @description `reconcile_running` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssueRefusalOut"];
+                };
+            };
+        };
+    };
     get_image_api_jellyfin_items__item_id__images__image_type__get: {
         parameters: {
             query: {
@@ -3606,7 +4030,7 @@ export interface operations {
             };
         };
     };
-    delete_job_endpoint_api_jobs__job_hash__delete: {
+    delete_job_api_jobs__job_hash__delete: {
         parameters: {
             query?: {
                 unlink?: boolean;

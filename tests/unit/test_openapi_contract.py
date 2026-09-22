@@ -36,6 +36,7 @@ from fastapi import FastAPI
 from fastapi.routing import APIRoute, iter_route_contexts
 
 import berth.api
+from berth.api import issues as issues_api
 from berth.api import jellyfin as jellyfin_api
 from berth.api import jobs as jobs_api
 from berth.api import routes as routes_api
@@ -68,11 +69,18 @@ STATUS_TABLES: dict[str, dict[Any, int]] = {
     "JobRefusal": jobs_api._STATUS,
     "RouteRefusal": routes_api._STATUS,
     "AccessRefusal": jellyfin_api._STATUS,
+    "IssueRefusal": issues_api._STATUS,
 }
 
 #: 拒絕的形狀（`{reason, detail}` 與 Route 多的那兩格）與 SSE 的推播。前端直接取這幾個
 #: （`Schemas['JobRefusalOut']`…），所以欄位增減也要讓產出檔過期。
-MODELS = ("JobRefusalOut", "RouteRefusalOut", "AccessRefusalOut", "JobSignalOut")
+MODELS = (
+    "JobRefusalOut",
+    "RouteRefusalOut",
+    "AccessRefusalOut",
+    "IssueRefusalOut",
+    "JobSignalOut",
+)
 
 
 @pytest.fixture(scope="module")
@@ -431,11 +439,17 @@ class TestDeclaringWhatEachEndpointRefuses:
     寫明「收的是端點真的會回的那幾種」。
     """
 
-    def test_the_helpers_are_the_three_we_know(self) -> None:
-        """掃出來的登記簿本身：多一支少一支都要有人看到。"""
+    def test_the_helpers_are_the_ones_we_know(self) -> None:
+        """掃出來的登記簿本身：多一支少一支都要有人看到。
+
+        **名字要在整個 `berth.api` 底下唯一**（`refusal_helpers` 的那一句 assert 守著）：
+        登記簿以名字為鍵，所以第二支 `_refuse` 會讓查表說謊——`api/issues.py` 那一支因此
+        叫 `issue_refusal`，與 `route_refusal`、`access_refusal` 同一個命名。
+        """
         assert HELPERS == {
             "route_refusal": "RouteRefusalOut",
             "access_refusal": "AccessRefusalOut",
+            "issue_refusal": "IssueRefusalOut",
             "_refuse": "JobRefusalOut",
         }
 

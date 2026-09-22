@@ -16,6 +16,7 @@ import { destination } from './auth/destination'
 import { AppShell } from './AppShell'
 import { DiscoverPage } from './pages/DiscoverPage'
 import { HealthPage } from './pages/HealthPage'
+import { IssuesPage } from './pages/IssuesPage'
 import { JobsPage } from './pages/JobsPage'
 import { InventoryPage, type InventoryFilter } from './pages/InventoryPage'
 import { InventoryPageRoute } from './pages/InventoryPageRoute'
@@ -302,6 +303,28 @@ const jobsRoute = createRoute({
   ),
 })
 
+/**
+ * 待處理 `/issues`（M2 票 05）。
+ *
+ * **只有管理員**（plan §6，2026-09-22 拍板）：修正與對帳都是 admin 的事。後端的規則在門禁
+ * （`api/gate.py` 的 `ADMIN_PREFIXES`），這裡的導向只是讓一般使用者不必看到一頁 403——
+ * 前端隱藏不是安全機制。
+ */
+const issuesRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/issues',
+  beforeLoad: async ({ context, location }) => {
+    const me = await requireSignedInPage(context.queryClient, location)
+    if (me !== null && me.role !== 'admin')
+      throw redirect({ to: '/health', search: { denied: true } })
+  },
+  component: () => (
+    <AppShell>
+      <IssuesPage />
+    </AppShell>
+  ),
+})
+
 const healthRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/health',
@@ -368,6 +391,7 @@ const routeSettingsRoute = createRoute({
 export const routeTree = rootRoute.addChildren([
   indexRoute,
   healthRoute,
+  issuesRoute,
   jobsRoute,
   inventoryIndexRoute,
   inventoryRoute,

@@ -22,11 +22,19 @@ from berth.api.gate import ApiGate
 from berth.config import VERSION, Config, load_config
 from berth.db import create_engine, create_session_factory, upgrade_to_head
 from berth.logs import configure_logging
-from berth.pipeline import HealthChecker, Importer, JellyfinResolver, PlannerRunner, QbitPoller
+from berth.pipeline import (
+    HealthChecker,
+    Importer,
+    JellyfinResolver,
+    PlannerRunner,
+    QbitPoller,
+    Reconciler,
+)
 from berth.services.clients import HttpServiceClientFactory, ServiceClientFactory
 from berth.services.events import EventHub
 from berth.services.hints import JobHints
 from berth.services.jellyfin_access import AccessCache
+from berth.services.reconcile import ReconcileRunner
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +46,7 @@ QBIT_POLLER_TASK = "qbit_poller"
 PLANNER_RUNNER_TASK = "planner_runner"
 IMPORTER_TASK = "importer"
 JELLYFIN_RESOLVER_TASK = "jellyfin_resolver"
+RECONCILER_TASK = "reconciler"
 
 #: mount 掛在 `/`，所以 StaticFiles 收到的 path 沒有開頭的斜線。
 _API_SEGMENT = API_PREFIX.lstrip("/")
@@ -122,6 +131,12 @@ def _lifespan(config: Config) -> Lifespan[FastAPI]:
         planner = PlannerRunner(sessions, clients, app.state.events, plans, import_hints=imports)
         importer = Importer(sessions, clients, app.state.events, imports)
         resolver = JellyfinResolver(sessions, clients)
+        # 對帳那一輪的擁有者。**端點也要拿得到它**（`POST /reconcile` 開一輪、`GET /reconcile`
+        # 讀進度），所以它掛在 `app.state`；每日 04:00 的排程按的是同一個物件，於是
+        # 「一次只有一輪」只有一個地方判斷得出來（plan §3.2）。
+        runner = ReconcileRunner(sessions, clients)
+        app.state.reconciler = runner
+        reconciler = Reconciler(sessions, runner)
         # 背景迴圈（plan §3.2）。每一個都先睡一個間隔，所以啟動本身不會慢。
         tasks = [
             asyncio.create_task(checker.run(), name=HEALTH_CHECKER_TASK),
@@ -129,6 +144,7 @@ def _lifespan(config: Config) -> Lifespan[FastAPI]:
             asyncio.create_task(planner.run(), name=PLANNER_RUNNER_TASK),
             asyncio.create_task(importer.run(), name=IMPORTER_TASK),
             asyncio.create_task(resolver.run(), name=JELLYFIN_RESOLVER_TASK),
+            asyncio.create_task(reconciler.run(), name=RECONCILER_TASK),
         ]
         try:
             yield
@@ -142,6 +158,9 @@ def _lifespan(config: Config) -> Lifespan[FastAPI]:
             # poller 握著一條 qBittorrent 連線（rid 綁在它的 session 上），cancel 之後
             # 要自己還回去——沒還的話關機會留下一個沒關的 httpx client。
             await poller.aclose()
+            # 對帳跑在自己的 task 上（202 之後那個請求早就回完了），所以 cancel 迴圈
+            # 收不到它。跑到一半被收掉的那一輪不留半筆：`reconcile_once` 只在最後 commit。
+            await runner.aclose()
             await engine.dispose()
 
     return lifespan

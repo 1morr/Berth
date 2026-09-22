@@ -22,6 +22,7 @@ from berth.services.clients import (
 from berth.services.events import EventHub
 from berth.services.hints import JobHints
 from berth.services.jellyfin_access import AccessCache
+from berth.services.reconcile import ReconcileRunner
 
 
 def get_config(request: Request) -> Config:
@@ -72,6 +73,17 @@ def get_access_cache(request: Request) -> AccessCache:
     return cache
 
 
+def get_reconciler(request: Request) -> ReconcileRunner:
+    """對帳那一輪的擁有者（`main.py` 的 lifespan 放進 `app.state`）。
+
+    **進度活在它身上**：`POST /reconcile` 開一輪、`GET /reconcile` 讀它，而每日 04:00 的
+    排程（`pipeline/reconciling.py`）按的是同一個物件——「一次只有一輪」因此只有一個地方
+    判斷得出來。它住在 `services` 正是為了這件事：`api` 不可以 import `pipeline`（plan §1.3）。
+    """
+    reconciler: ReconcileRunner = request.app.state.reconciler
+    return reconciler
+
+
 def get_client_factory(request: Request) -> ServiceClientFactory:
     """端點與背景迴圈用同一份（`create_app` 放進 `app.state`）。"""
     factory: ServiceClientFactory = request.app.state.clients
@@ -87,4 +99,5 @@ AccessCacheDep = Annotated[AccessCache, Depends(get_access_cache)]
 EventHubDep = Annotated[EventHub, Depends(get_event_hub)]
 ImportHintsDep = Annotated[JobHints, Depends(get_import_hints)]
 ConfigDep = Annotated[Config, Depends(get_config)]
+ReconcilerDep = Annotated[ReconcileRunner, Depends(get_reconciler)]
 SetupProbesDep = Annotated[SetupProbes, Depends(get_setup_probes)]

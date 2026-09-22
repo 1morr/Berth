@@ -55,7 +55,10 @@ SETUP_PREFIX = "/setup"
 #: Route 管理（票 14）也在這裡，**精靈跑完之前也不匿名開放**（票 14a）：否則那一刻匿名的人可以
 #: 把紅燈 Route 停用、再按完成。精靈第 7 步只需要刪除，它走 `DELETE /setup/routes/{id}`。
 #: `/jellyfin` 只收媒體庫清單那一支：之後掛在它底下的端點照預設規則（登入即可）另外決定。
-ADMIN_PREFIXES = ("/settings", "/routes", "/jellyfin/libraries")
+#:
+#: `issues` 與 `reconcile` 從 M2 票 05 起也在這裡：修正與對帳是管理員的事（plan §6、brief §11）。
+#: `/reconcile` 沒有子路徑，前綴比對對它就是完全比對——`_under_any` 的第一個條件。
+ADMIN_PREFIXES = ("/settings", "/routes", "/jellyfin/libraries", "/issues", "/reconcile")
 
 #: 只有管理員做得了的**單一方法**（M2 票 04）。`(方法, 路徑樣式)`，樣式裡的 `*` 配一段。
 #:

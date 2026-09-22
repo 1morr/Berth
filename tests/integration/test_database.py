@@ -27,7 +27,9 @@ pytestmark = pytest.mark.asyncio
 M0_TABLES = {"users", "sessions", "settings", "routes", "events"}
 #: 票 03 加的兩張（plan §2.2）、票 09 加的兩張、票 11 加的兩張與票 12 的帳本（plan §2.3）。
 M1_TABLES = {"media", "tmdb_cache", "jobs", "job_files", "plans", "plan_items", "ledger"}
-EXPECTED_TABLES = M0_TABLES | M1_TABLES
+#: M2 票 05 加的一張（plan §2.4）。
+M2_TABLES = {"issues"}
+EXPECTED_TABLES = M0_TABLES | M1_TABLES | M2_TABLES
 
 
 @contextmanager
@@ -198,6 +200,39 @@ async def test_indexes_from_the_plan_are_present(config: Config) -> None:
     assert "ix_plans_job_hash" in indexes
     assert "ix_ledger_job_hash" in indexes
     assert "ix_ledger_resolve_after" in indexes
+    assert "ix_issues_status_detected_at" in indexes
+
+
+async def test_one_open_issue_per_subject(config: Config) -> None:
+    """冪等鍵 `(type, subject)` 由**資料庫**守著，而且只蓋 `open`（plan §2.4、M2 票 05）。
+
+    兩件事一起驗，因為它們互相制衡：少了 unique，兩個迴圈同時偵測到同一件事會寫出兩筆
+    `open`（服務那一層先查再寫中間那條縫關不掉）；少了 `WHERE status = 'open'`，一條路徑
+    一輩子只能出一次問題——決定過的那一筆會永遠擋住下一次。
+    """
+    await migrate(config)
+    rows = [
+        ("library_link_missing", "/data/library/Show/S01E01.mkv", "open"),
+        # 同一個 subject 的第二筆：決定過的那一筆不受索引管。
+        ("library_link_missing", "/data/library/Show/S01E01.mkv", "resolved"),
+        ("library_link_missing", "/data/library/Show/S01E01.mkv", "ignored"),
+        # 同一條路徑、不同型別：不是同一件事。
+        ("inode_mismatch", "/data/library/Show/S01E01.mkv", "open"),
+    ]
+
+    with _sqlite(config.database_path) as connection:
+        for kind, subject, status in rows:
+            connection.execute(
+                "INSERT INTO issues (type, subject, path, status, detected_at, resolved_by) "
+                "VALUES (?, ?, ?, ?, '2026-09-22T00:00:00+00:00', '')",
+                (kind, subject, subject, status),
+            )
+        with pytest.raises(sqlite3.IntegrityError):
+            connection.execute(
+                "INSERT INTO issues (type, subject, path, status, detected_at, resolved_by) "
+                "VALUES (?, ?, ?, 'open', '2026-09-22T00:00:00+00:00', '')",
+                (rows[0][0], rows[0][1], rows[0][1]),
+            )
 
 
 async def test_a_library_path_has_at_most_one_ledger_entry(config: Config) -> None:

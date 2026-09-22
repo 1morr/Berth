@@ -443,6 +443,36 @@ Berth 入庫的作品照樣瀏覽得到。這六件事現在是 nightly e2e 的�
   `(device, inode)` 分組，**一組的路徑數等於它的 `st_nlink` 時才算進「真的會釋放」**：硬鏈接
   底下只有最後一個名字消失時那些位元組才回到檔案系統，有 Berth 不知道的第三個鏈接握著的另
   外報 `held`。對話框在算的時候說「正在逐一量測這幾個檔案…」，算不出來仍然刪得下去。
+- **`issues` 表與最小 Reconciler**（M2 票 05，plan §2.4、§3.2、brief §9.1）。十一種型別是一個
+  封閉集合（對帳的七種加上管線已經在用的四種），冪等鍵 `(type, subject)` 由資料庫守著——
+  partial unique index **只蓋 `status = 'open'`**，所以決定過的那一筆留著當歷史，而同一條路徑
+  第二次出問題仍然問得到人。`subject` 依型別取哪一欄寫死在 `domain.SUBJECT_OF`，兩張表都要
+  涵蓋整個 enum（加一種型別而沒替它決定 subject 或動作就紅）。
+- **一輪對帳先把四方各自問完才寫 Issue**（M2 票 05，brief §9.1、§16.2）。四方是帳本、
+  qBittorrent、complete 目錄、每一條 Route 的媒體庫目錄；**任一方問不到就跳過那一方並在這一輪
+  的結果上說出來**，不把「問不到」誤判成「不見了」。媒體庫那一方**逐 Route** 判斷問得到沒有：
+  一條沒掛上不讓其餘幾條停擺，落在它底下的帳本連 `status` 都不動——照著「查不到就是沒有」寫
+  的話，一輪對帳會產出一份把整個媒體庫報成失蹤的清單，而使用者會照著它按下「承認刪除並清帳本」。
+  這一輪只做 `library_link_missing` 一種檢查（其餘六種在票 09）。
+- **`GET /issues`、`POST /issues/{id}/resolve | ignore`、`POST|GET /reconcile`**（M2 票 05，plan §6）。
+  `POST /reconcile` 回 **202** 與這一輪的 id（那一輪在背景跑），`GET /reconcile` 回上一輪與進行中
+  的進度，正在跑時再按是 **409 `reconcile_running`**——**不排隊**，因為排隊的那一輪看到的會是
+  同一份磁碟。整組只有 `admin` 進得來（規則在門禁）。
+- **Issue 的三顆按鈕**（M2 票 05，brief §9.1 的「預設建議動作」那一欄）：重新鏈接（照帳本那一列
+  再 `os.link` 一次，走 Route 的路徑守衛，帳本那一欄回 `ok`）、承認刪除並清帳本（刪掉帳本那一列，
+  來源與其他鏈接不動）、連 complete 一起刪（走票 04 的 `delete_job`，**四個旗標全勾**）。
+  **做得到才記成 `resolved`**：修不好時那一件仍然是 `open`，清單上還看得到它並說出原因——畫面說
+  修好了而媒體庫沒變是最糟的結果。按得了哪幾顆由後端算（型別**與**這一筆的資料一起決定），
+  前端照 `actions` 畫按鈕。
+- **`/issues` 頁**（M2 票 05，plan §7、§11.3 決定 3、`.scratch/m2/issues-shape.md`）。獨立的一頁
+  而不是健康頁的一段：健康頁是唯讀診斷，這一頁要按動作。一列一件事（型別色塊 + 一句話 + 動作），
+  頁首橫幅一顆「立刻對帳」並就地展開四方的進度；「連 complete 一起刪」就地二次確認，文案說清楚
+  它的單位是**整筆下載**而不是那一個檔案。導覽入口只有 `admin` 看得到（後端同時回 403）。
+- **`services/qbittorrent.managed()`**（M2 票 05，plan §3.2）：「掛著 Berth 記號的那幾筆」
+  （category 是某一條 Route 的**或** tag 是 `berth`）只留一份實作，`qbit_poller` 的無主 torrent
+  與對帳的客戶端那一方共用——加第三道篩子時不會漏改一邊。
+- **演練情境 `issues`**（M2 票 05，README〈設定精靈的 Fake 後端〉）：真的入庫一包三集，真的刪掉
+  其中一個媒體庫檔案，所以整條迴圈在瀏覽器裡跑得起來。
 - **刪除對話框是一個元件**（M2 票 04，plan §7）：`/jobs` 的展開區與 Media 詳情的版本清單共用，
   票 11 的 `/jobs/:hash` 掛的也是它。就地展開而不是 dialog（The Failure Expands In Place Rule）——
   「哪一筆正在被刪」正是這個動作最怕搞錯的事。取消「移除 torrent」會把「刪除檔案」一起收掉，
@@ -451,6 +481,16 @@ Berth 入庫的作品照樣瀏覽得到。這六件事現在是 nightly e2e 的�
 
 ### Changed
 
+- **管線發現的那四種 Issue 從此兩邊都寫**（M2 票 05，plan §2.4）。`missing_files` /
+  `client_error` / `client_removed` / `unknown_torrent` / `jellyfin_item_unresolved` 原本只有
+  一筆 `issue_detected` 事件（`issues` 表要到 M2 才有），現在同時寫一列 `issues`：**事件是歷史**
+  （時間線上那一行），**Issue 是「還沒有人決定」的那一件**（清單上那一列）。兩者共用同一個
+  `IssueType`，所以不可能只加到其中一邊。`jellyfin_item_unresolved` 的事件仍是一筆 Job 一行
+  （一季 24 集的時間線不該被 24 行淹沒），而 Issue 是一列帳本一件——它的下一步是逐集去 Jellyfin
+  看那個檔案被認成了什麼。
+- **`issues/*` 與 `reconcile` 只有 `admin`**（M2 票 05，plan §6、brief §11）：修正與對帳都是
+  管理員的事。規則加在 `api/gate.py` 的 `ADMIN_PREFIXES`，底下之後新掛的端點什麼都不做就在同一
+  道門後面。
 - **門禁多一個維度：方法**（M2 票 04，plan §6）。`ADMIN_PREFIXES` 只比路徑前綴，而 `/jobs`
   整組不能是 admin——`user` 要送得了單、看得到自己的 job。新的 `ADMIN_ROUTES` 是
   `(方法, 路徑樣式)`，樣式裡的 `*` 配一段，所以 `DELETE /jobs/*` 與 `GET /jobs/*/deletion`

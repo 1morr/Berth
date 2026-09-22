@@ -49,7 +49,7 @@ function NavLink({
   to,
   children,
 }: {
-  to: '/' | '/library' | '/jobs' | '/health' | '/settings'
+  to: '/' | '/library' | '/jobs' | '/issues' | '/health' | '/settings'
   children: ReactNode
 }) {
   return (
@@ -100,6 +100,8 @@ function Identity() {
         <NavLink to="/">{t('nav.discover')}</NavLink>
         <NavLink to="/library">{t('nav.inventory')}</NavLink>
         <NavLink to="/jobs">{t('nav.jobs')}</NavLink>
+        {/* 待處理與設定同一個規則：修正是 admin 的事（plan §6），後端同時回 403。 */}
+        {me.data.role === 'admin' && <NavLink to="/issues">{t('nav.issues')}</NavLink>}
         <NavLink to="/health">{t('nav.health')}</NavLink>
         {/* 連 `/settings` 而不是第一個分頁：前綴比對讓它在兩個設定頁上都是當前頁（票 14a）。 */}
         {me.data.role === 'admin' && <NavLink to="/settings">{t('nav.settings')}</NavLink>}

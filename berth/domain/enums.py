@@ -152,10 +152,16 @@ class JellyfinRequest(StrEnum):
 
 
 class IssueType(StrEnum):
-    """`issue_detected` 事件 payload 裡的 `type`（brief §5.2、plan §3.1）。
+    """一件「要有人決定」的事是哪一種（brief §9.1、plan §2.4）。
 
-    M2 建 `issues` 表時它就是那張表的 `type` 欄——現在先把封閉集合定下來，因為畫面已經
-    要逐種說一句話，而自由文字的「理由」翻譯不了也查詢不了。
+    **十一種的聯集，一個封閉集合**（2026-09-22 定，M2 票 05）：前五種是管線自己在路上
+    發現的（M1 起寫 `issue_detected` 事件，M2 起同時寫一列 `issues`），後六種是對帳比完
+    四方之後才知道的。兩邊共用同一個集合，所以加一種型別而沒替它決定 `subject` 取哪一欄、
+    或沒給它動作，紅的會是 `SUBJECT_OF` 與 `ISSUE_ACTIONS` 那兩條閘門。
+
+    `unknown_torrent` 在 brief §9.1 的表上算對帳的七種，但**今天寫它的是 `qbit_poller`**
+    （plan §3.2）——票 09 讓對帳也走到它之後，兩個生產者寫的是同一個 `(type, subject)`，
+    而冪等鍵會把它們收成一筆。
     """
 
     #: 客戶端說檔案不見了（`missingFiles`）。
@@ -170,6 +176,130 @@ class IssueType(StrEnum):
     #: 入庫的檔案重試到最後仍然在 Jellyfin 裡找不到對應的 item（plan §3.2 的
     #: `jellyfin_resolver`）。多半是 Jellyfin 看不到那條路徑，或它把資料夾認成了別的作品。
     JELLYFIN_ITEM_UNRESOLVED = "jellyfin_item_unresolved"
+    #: 帳本有、媒體庫裡那個目標檔不在了（使用者在 Jellyfin 或檔案總管刪的，brief §9.5）。
+    #: **M2 票 05 唯一做得出來的對帳檢查**，其餘六種在票 09。
+    LIBRARY_LINK_MISSING = "library_link_missing"
+    #: 帳本有、complete 裡那個來源檔不在了（torrent 被移除且刪檔）。
+    SOURCE_MISSING = "source_missing"
+    #: 目標與來源不是同一個 inode：有人用複製取代了硬鏈接，或它被轉碼覆蓋了。
+    INODE_MISMATCH = "inode_mismatch"
+    #: complete 底下的一個目錄既不屬於 qBittorrent 任何 torrent，也不在帳本上。
+    ORPHAN_COMPLETE = "orphan_complete"
+    #: 媒體庫裡有一個 Berth 不認得的檔案。**只列出，永不自動刪**（brief §9.1）。
+    UNMANAGED_LIBRARY_FILE = "unmanaged_library_file"
+    #: Job 已經 `imported`，帳本上卻一列都沒有。
+    JOB_WITHOUT_FILES = "job_without_files"
+
+
+class IssueStatus(StrEnum):
+    """一件 Issue 還要不要人決定（plan §2.4）。
+
+    只有 `open` 受冪等鍵約束：同一個 `(type, subject)` 最多一筆。決定過的那幾筆留著當
+    歷史，同一件事再發生時開的是新的一筆——「上次怎麼處理的」與「現在又來了」是兩件事。
+    """
+
+    OPEN = "open"
+    RESOLVED = "resolved"
+    IGNORED = "ignored"
+
+
+class IssueSubject(StrEnum):
+    """冪等鍵 `(type, subject)` 裡的 `subject` 取哪一欄（plan §2.4）。
+
+    **依型別取**，因為「同一件事」的定義逐型別不同：媒體庫少一個檔案是那條路徑的事，
+    torrent 報錯是那一筆下載的事。取哪一欄由 `SUBJECT_OF` 寫死，不由呼叫端各自決定。
+    """
+
+    PATH = "path"
+    JOB_HASH = "job_hash"
+    LEDGER_ID = "ledger_id"
+
+
+#: 逐型別的冪等鍵來源（plan §2.4 那一段逐型別寫死了取哪一欄）。
+#:
+#: **要涵蓋整個 `IssueType`**（`tests/unit/test_issue_types.py` 守著）：加一種型別而沒在
+#: 這裡決定它的 `subject`，寫進表裡的那一筆就沒有冪等鍵，於是每一輪對帳都開一筆新的。
+SUBJECT_OF: dict[IssueType, IssueSubject] = {
+    # 有路徑的用路徑：帳本或檔案的那一條。
+    IssueType.LIBRARY_LINK_MISSING: IssueSubject.PATH,
+    IssueType.SOURCE_MISSING: IssueSubject.PATH,
+    IssueType.INODE_MISMATCH: IssueSubject.PATH,
+    IssueType.UNMANAGED_LIBRARY_FILE: IssueSubject.PATH,
+    # complete 那一側的單位是目錄，不是檔案。
+    IssueType.ORPHAN_COMPLETE: IssueSubject.PATH,
+    # 客戶端那幾種的單位是一筆下載（info hash 就是 `job_hash`，plan §2.3）。
+    IssueType.UNKNOWN_TORRENT: IssueSubject.JOB_HASH,
+    IssueType.CLIENT_ERROR: IssueSubject.JOB_HASH,
+    IssueType.CLIENT_REMOVED: IssueSubject.JOB_HASH,
+    IssueType.JOB_WITHOUT_FILES: IssueSubject.JOB_HASH,
+    # **`missing_files` 也是一筆下載**（2026-09-22，票 05 實作時改判；plan §2.4 原本把它
+    # 列在「用路徑」那一組）。它有**兩條偵測路徑**：Berth 自己比 complete 底下的檔案時
+    # 知道少了哪幾個，而 qBittorrent 報 `missingFiles` 時 Berth 手上一條路徑都沒有——
+    # 多半正是因為它看不到那個掛載。同一種型別的 subject 不可以看呼叫端而定，否則
+    # 「同一件事」會有兩種定義。而它的下一步（重新 recheck / 承認遺失，brief §9.1）本來
+    # 就是整包 torrent 的事，不是逐檔的。少了哪幾個放在 `detail_json.missing`。
+    IssueType.MISSING_FILES: IssueSubject.JOB_HASH,
+    # 反查用完是**那一列帳本**的事：同一筆 Job 的兩集各自反查，各自放棄。
+    IssueType.JELLYFIN_ITEM_UNRESOLVED: IssueSubject.LEDGER_ID,
+}
+
+
+class IssueAction(StrEnum):
+    """resolve 一件 Issue 時按的那一顆（brief §9.1 的「預設建議動作」那一欄）。
+
+    **只有 `library_link_missing` 的三顆**（M2 票 05）：其餘十種的動作跟著它們的檢查一起
+    在票 09 加。先立三顆是因為形狀要對——`ISSUE_ACTIONS` 那張表逐型別說得出按得了什麼，
+    第二種型別進來時只是多一列。
+    """
+
+    #: 重新鏈接：來源還在 complete，照帳本那一列再硬鏈接一次。
+    RELINK = "relink"
+    #: 承認刪除並清帳本：那個檔案本來就該不在，把帳本那一列刪掉。
+    FORGET = "forget"
+    #: 連 complete 一起刪：這一筆下載整個不要了。走 `delete_job` 的四個旗標（票 04），
+    #: 不是另一套刪除（plan §11.3 決定 4）。
+    DELETE_COMPLETE = "delete_complete"
+
+
+#: 逐型別按得了哪幾顆，**順序就是畫面上的順序**（第一顆是 brief §9.1 的預設建議動作）。
+#:
+#: **要涵蓋整個 `IssueType`**（`tests/unit/test_issue_types.py` 守著）。空 tuple 是誠實的
+#: 答案：那一種這一票還偵測不出來，也就還沒有人替它決定按下去會發生什麼（票 09）。
+ISSUE_ACTIONS: dict[IssueType, tuple[IssueAction, ...]] = {
+    IssueType.LIBRARY_LINK_MISSING: (
+        IssueAction.RELINK,
+        IssueAction.FORGET,
+        IssueAction.DELETE_COMPLETE,
+    ),
+    IssueType.SOURCE_MISSING: (),
+    IssueType.INODE_MISMATCH: (),
+    IssueType.ORPHAN_COMPLETE: (),
+    IssueType.UNKNOWN_TORRENT: (),
+    IssueType.UNMANAGED_LIBRARY_FILE: (),
+    IssueType.JOB_WITHOUT_FILES: (),
+    IssueType.MISSING_FILES: (),
+    IssueType.CLIENT_ERROR: (),
+    IssueType.CLIENT_REMOVED: (),
+    IssueType.JELLYFIN_ITEM_UNRESOLVED: (),
+}
+
+
+class ReconcileSide(StrEnum):
+    """對帳比的四方（brief §9.1）。
+
+    **四方各自走完才寫下 Issue**，而任一方問不到就跳過那一方並在這一輪的結果上說出來
+    ——不把「問不到」誤判成「不見了」（brief §16.2、plan §3.2）。所以這是一個封閉集合：
+    畫面要逐方說「比到哪、幾筆」，而跳過的那一方要說得出為什麼。
+    """
+
+    #: Berth 自己的帳本。永遠問得到——它就在同一個資料庫裡。
+    LEDGER = "ledger"
+    #: qBittorrent 上掛著 Berth 記號的 torrent。
+    CLIENT = "client"
+    #: complete 目錄。
+    COMPLETE = "complete"
+    #: 每一條 Route 的媒體庫目錄。**逐 Route 各自問得到**：一條沒掛上不該讓其餘幾條停擺。
+    LIBRARY = "library"
 
 
 class LedgerStatus(StrEnum):
@@ -609,3 +739,29 @@ class AccessRefusal(StrEnum):
     #: 排序鍵不在這一種媒體庫的選單上（票 06）。前端照 `sorts` 畫選單，所以只有手改的
     #: 網址走得到；Jellyfin 自己對打錯的參數是靜靜換一種順序，所以由 Berth 擋。
     SORT_NOT_OFFERED = "sort_not_offered"
+
+
+class IssueRefusal(StrEnum):
+    """對一件 Issue 動手或按下對帳時，在做出任何改變之前就停下來了（M2 票 05）。
+
+    **修復失敗不在這裡**：`relink_failed` 是例外——硬鏈接這一步真的碰了磁碟才知道成不成，
+    而它的原文（`errno` 與哪兩個掛載）正是使用者要看的那一句，包成別的字串等於丟掉它
+    （plan §8.6）。其餘每一種都是「還沒開始就停住」。
+    """
+
+    #: 沒有這個 id 的 Issue。
+    ISSUE_MISSING = "issue_missing"
+    #: 這一件已經處理過了（`resolved` / `ignored`）。多半是另一個分頁先按了。
+    ISSUE_NOT_OPEN = "issue_not_open"
+    #: 這一種 Issue 沒有這一顆（`ISSUE_ACTIONS`），或這一筆現在按不了它——「連 complete
+    #: 一起刪」要有一筆還在的 Job，而重新入庫建出來的帳本沒有（`ledger.job_hash` 是弱引用）。
+    ACTION_NOT_AVAILABLE = "action_not_available"
+    #: 要重新鏈接，而 complete 裡那個來源檔也不在了。**兩邊都沒有就不是鏈接的事**，
+    #: 使用者要按的是另外兩顆。
+    SOURCE_MISSING = "source_missing"
+    #: 鏈接真的做了但沒成（跨掛載、權限、目標被佔）。`detail` 是系統原文。
+    RELINK_FAILED = "relink_failed"
+    #: 要向 qBittorrent 動手而它問不到（「連 complete 一起刪」的先決條件，brief §9.2）。
+    CLIENT_UNREACHABLE = "client_unreachable"
+    #: 上一輪對帳還在跑。**不排隊**：排隊的那一輪看到的會是同一份磁碟（plan §3.2）。
+    RECONCILE_RUNNING = "reconcile_running"

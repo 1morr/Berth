@@ -236,6 +236,9 @@ class Scenario:
     route_settings_demo: bool = False
     #: 媒體庫頁的整庫瀏覽與受限使用者（M1.5 票 03）。見 `_seed_library`。
     library_demo: bool = False
+    #: 待處理頁與對帳（M2 票 05）。見 `_seed_issues`：真的入庫一包、真的刪掉其中一個
+    #: 媒體庫檔案，所以按下「立刻對帳」真的會偵測到，按下「重新鏈接」真的會把它接回來。
+    issues_demo: bool = False
 
     def probes(self) -> SetupProbes:
         return SetupProbes(
@@ -346,6 +349,18 @@ def healthy() -> Scenario:
     )
     scenario.setup_completed = True
     scenario.moored = True
+    return scenario
+
+
+def issues_scenario() -> Scenario:
+    """待處理頁 `/issues` 與對帳（M2 票 05）。
+
+    同 `healthy`，加上 `_seed_issues`：一包真的入庫完的檔案，其中一個媒體庫檔案被刪掉了
+    ——使用者在 Jellyfin 按刪除之後就是這個樣子（brief §9.5）。按下「立刻對帳」會真的比
+    四方、真的寫下一件 Issue；按下「重新鏈接」會真的 `os.link` 把它接回來。
+    """
+    scenario = healthy()
+    scenario.issues_demo = True
     return scenario
 
 
@@ -805,6 +820,9 @@ def tmdb_down() -> Scenario:
     return scenario
 
 
+#: `issues` 情境那一包的 info hash。是一串合法的十六進位，不是真的 torrent。
+ISSUES_HASH = "5c1f0a7b2d3e4f60718293a4b5c6d7e8f9a0b1c2"
+
 SCENARIOS = {
     "bundled": bundled,
     "discover": discover,
@@ -818,6 +836,7 @@ SCENARIOS = {
     "submit-failing": submit_failing,
     "tmdb-down": tmdb_down,
     "healthy": healthy,
+    "issues": issues_scenario,
     "routes": routes_scenario,
     "degraded": degraded,
     "drifted": drifted,
@@ -1133,6 +1152,82 @@ async def _moor(
         await _seed_route_settings(session, scenario, paths)
     if scenario.library_demo:
         await _seed_library(session, scenario, paths)
+    if scenario.issues_demo:
+        await _seed_issues(session, paths)
+
+
+async def _seed_issues(session: AsyncSession, paths: PathSettings) -> None:
+    """一包真的入庫完的檔案，其中一個媒體庫檔案被刪掉了（M2 票 05）。
+
+    **每一個檔案都是真的**：來源真的寫在 complete 底下，媒體庫那一份真的是 `os.link` 出來的
+    硬鏈接，帳本記的 inode 是真的量到的。所以「立刻對帳」真的比得出差異，而「重新鏈接」真的
+    把檔案接回來——畫面上那幾個數字沒有一個是寫死的。
+
+    刪掉的是第二集：留著前後兩集才看得出對帳只挑出那一個，而不是把整包都報成失蹤。
+    """
+    route = await session.scalar(select(Route).where(Route.slug == "anime"))
+    assert route is not None
+    show = "SPY x FAMILY (2022) [tmdbid-120089]"
+    source_dir = Path(f"{paths.complete_root}/anime/{show}")
+    target_dir = Path(f"{route.target_path}/{show}/Season 01")
+    source_dir.mkdir(parents=True, exist_ok=True)
+    target_dir.mkdir(parents=True, exist_ok=True)
+
+    session.add(
+        Media(
+            id=media_id(MediaKind.TV, 120089),
+            tmdb_id=120089,
+            kind=MediaKind.TV,
+            title_en="SPY x FAMILY",
+            title_original="SPY×FAMILY",
+            folder_name=show,
+        )
+    )
+    # 先落地：`jobs.media_id` 是外鍵，同一個 flush 裡的順序不保證。
+    await session.flush()
+    session.add(
+        Job(
+            hash=ISSUES_HASH,
+            name="[ANi] SPY×FAMILY - 01~03 [1080P][WEB-DL][AAC AVC][CHT]",
+            source_url="",
+            trigger=JobTrigger.MANUAL,
+            media_id=media_id(MediaKind.TV, 120089),
+            route_id=route.id,
+            state=JobState.IMPORTED,
+            save_path=str(source_dir.parent).replace("\\", "/"),
+            content_path=str(source_dir).replace("\\", "/"),
+            imported_at=datetime.now(UTC),
+        )
+    )
+    await session.flush()
+
+    for episode in (1, 2, 3):
+        name = f"SPY x FAMILY (2022) - S01E{episode:02d} [1080p][CHT][ANi].mkv"
+        source = source_dir / f"[ANi] SPY×FAMILY - {episode:02d}.mkv"
+        target = target_dir / name
+        source.write_bytes(f"episode {episode}".encode())
+        target.unlink(missing_ok=True)
+        os.link(source, target)
+        facts = target.stat()
+        session.add(
+            LedgerEntry(
+                job_hash=ISSUES_HASH,
+                source_rel_path=f"{show}/{source.name}",
+                source_abs_path=str(source).replace("\\", "/"),
+                source_inode=str(facts.st_ino),
+                source_dev=str(facts.st_dev),
+                target_path=str(target).replace("\\", "/"),
+                target_inode=str(facts.st_ino),
+                media_id=media_id(MediaKind.TV, 120089),
+                season=1,
+                episode_start=episode,
+                action=PlanAction.IMPORT,
+            )
+        )
+    await session.commit()
+
+    # **在 Jellyfin 裡刪掉第二集**（brief §9.5）：帳本上還有它，磁碟上沒有了。
+    (target_dir / "SPY x FAMILY (2022) - S01E02 [1080p][CHT][ANi].mkv").unlink()
 
 
 async def _seed_route_settings(

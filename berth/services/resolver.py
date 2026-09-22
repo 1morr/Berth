@@ -45,6 +45,7 @@ from berth.domain import CollectionType, EventType, IssueType
 from berth.models import JellyfinSettings, Job, LedgerEntry, Media, Route
 from berth.models.types import utcnow
 from berth.services.clients import ServiceClientFactory
+from berth.services.issues import record_issue
 from berth.services.jobs import actor_of, record_event
 from berth.services.routes import owning_route
 from berth.services.settings import read_settings
@@ -280,7 +281,9 @@ async def _announce(
             payload={"count": len(entries)},
         )
     for job, entries in await _by_job(session, given_up):
-        # `issues` 表在 M2，M1 的載體是這一筆事件（票 10 的無主 torrent 同一個做法）。
+        # 事件是**一筆 Job 一行**（時間線不該被 24 集淹沒），Issue 是**一列帳本一件**
+        # ——它的冪等鍵是 `ledger_id`（plan §2.4）：同一筆 Job 的兩集各自反查、各自放棄，
+        # 而使用者是逐集去 Jellyfin 看它把那個檔案認成了什麼。
         await record_event(
             session,
             job,
@@ -293,6 +296,20 @@ async def _announce(
             },
         )
         logger.warning("jellyfin never showed these files", extra={"count": len(entries)})
+
+    for entry in given_up:
+        await record_issue(
+            session,
+            IssueType.JELLYFIN_ITEM_UNRESOLVED,
+            path=entry.target_path,
+            job_hash=entry.job_hash,
+            ledger_id=entry.id,
+            detail={
+                "type": IssueType.JELLYFIN_ITEM_UNRESOLVED.value,
+                "attempts": entry.resolve_attempts,
+                "media": entry.media_id,
+            },
+        )
 
 
 async def _by_job(

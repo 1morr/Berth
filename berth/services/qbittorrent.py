@@ -13,14 +13,19 @@
 from __future__ import annotations
 
 import contextlib
-from collections.abc import Mapping
+from collections.abc import Container, Iterable, Mapping
 from dataclasses import dataclass
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from berth.adapters.http import ServiceError
-from berth.adapters.qbittorrent import QbittorrentClient, QbittorrentVersion
+from berth.adapters.qbittorrent import (
+    BERTH_TAG,
+    QbittorrentClient,
+    QbittorrentVersion,
+    TorrentStatus,
+)
 from berth.domain import DetectionReason, QbittorrentStep, ServiceKind, ServiceOrigin, StepStatus
 from berth.models import PathSettings, QbittorrentSettings, SetupSettings, SetupStep
 from berth.models.types import utcnow
@@ -40,6 +45,19 @@ RECOMMENDED_STEPS: tuple[QbittorrentStep, ...] = (
 #: WebUI 帳號的偏好鍵。`web_ui_password` 只寫不讀，讀回來的偏好裡根本沒有它（brief §20.7）。
 WEB_UI_USERNAME_KEY = "web_ui_username"
 WEB_UI_PASSWORD_KEY = "web_ui_password"
+
+
+def managed(statuses: Iterable[TorrentStatus], categories: Container[str]) -> list[TorrentStatus]:
+    """客戶端上掛著 Berth 記號的那幾筆（plan §3.2 的**兩道篩子的聯集**）。
+
+    category 是 Berth 某一條 Route 的，**或** tag 是 `berth`。只認 category 的話，Route 被刪掉
+    之後它送出去的那些 torrent 就再也沒有人認領；只認 tag 的話，使用者自己丟進 Berth category
+    的 torrent 看不見——而那一筆之後會被 importer 撿走。
+
+    **只有一份實作**：poller（無主 torrent）與對帳（客戶端那一方）問的是同一個問題，各寫一份
+    的話加第三道篩子時會漏改一邊。
+    """
+    return [row for row in statuses if row.category in categories or BERTH_TAG in row.tags]
 
 
 async def sign_in(client: QbittorrentClient, settings: QbittorrentSettings) -> None:
