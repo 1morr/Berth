@@ -11,7 +11,6 @@ import {
   type WatchEpisode,
   type WatchSeason,
 } from '../api/media'
-import { ArtSlot } from '../components/ArtSlot'
 import {
   GhostButton,
   NAV_BOX,
@@ -20,6 +19,7 @@ import {
   TEXT_LINK,
 } from '../components/controls'
 import { formatJellyfinEpisode } from '../components/episodes'
+import { Tile } from '../components/Tile'
 import { WatchToggle } from '../components/WatchToggle'
 import { watchLine } from '../components/watchLine'
 import { WALL_GRID, oneRowOnly } from '../components/wallGrid'
@@ -256,8 +256,8 @@ function Episodes({
 }
 
 /**
- * 一集：橫放的貨櫃（首頁那兩列的同一種）。上面那一塊是一條連結，開 Jellyfin 那一集、新分頁；最下面一行是
- * 「標為已看 / 未看」——兩者並排不巢狀（媒體庫牆卡片的同一個規矩）。
+ * 一集：橫放的貨櫃（首頁那兩列的同一種）。外框、圖與底行是 `Tile`（與媒體庫牆的卡片同一份，M2 票 14）：上面那一塊
+ * 是一條連結，開 Jellyfin 那一集、新分頁；最下面一行是「標為已看 / 未看」——兩者並排不巢狀。
  */
 function EpisodeTile({
   episode,
@@ -276,47 +276,14 @@ function EpisodeTile({
   // 「無圖 S01E04 …」，所以連結與「標為已看」都用這一個名字，不讓圖位的字進來。
   const name = [formatJellyfinEpisode(episode), episode.name].filter(Boolean).join(' ')
 
-  const body = (
-    <>
-      <ArtSlot url={episode.still_url} shape="wide" />
-      <div className="grid content-start gap-1 px-3 py-2.5">
-        <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
-          <span className="value text-xs text-ink-dim">{formatJellyfinEpisode(episode)}</span>
-          {upNext && (
-            // 中性小色塊：「接下來看這一集」是一個位置，不是四個信號色裡的任何一個狀態。
-            <span className="label bg-deck px-1.5 py-0.5 text-ink">
-              {episode.watch.progress === null ? t('watch.chipNext') : t('watch.chipResume')}
-            </span>
-          )}
-        </p>
-        <h3 className="value line-clamp-2 min-h-10 text-sm leading-snug text-ink">
-          {episode.name}
-        </h3>
-        <p id={lineId} className="value min-h-4 text-xs text-ink">
-          {watchLine(t, episode.watch)}
-        </p>
-        {!url && <p className="text-xs text-ink">{t('inventory.jellyfin.noAddress')}</p>}
-      </div>
-    </>
-  )
-
   return (
-    <article className="grid h-full grid-rows-[1fr_auto] border-2 border-rule bg-well has-[a:hover]:border-rule-strong has-[a:focus-visible]:border-rule-strong">
-      {url ? (
-        <a
-          href={url}
-          target="_blank"
-          rel="noreferrer"
-          aria-label={t('inventory.jellyfin.itemNewTab', { name })}
-          aria-describedby={lineId}
-          className="grid grid-rows-[auto_1fr]"
-        >
-          {body}
-        </a>
-      ) : (
-        <div className="grid grid-rows-[auto_1fr]">{body}</div>
-      )}
-      <div className="flex min-h-10 flex-wrap items-center gap-x-3 gap-y-1.5 border-t-2 border-rule px-3 py-1.5 text-xs">
+    <Tile
+      url={episode.still_url}
+      shape="wide"
+      link={url ? { href: url } : null}
+      label={t('inventory.jellyfin.itemNewTab', { name })}
+      describedBy={lineId}
+      foot={
         <WatchToggle
           itemId={episode.item_id}
           target="episode"
@@ -324,8 +291,23 @@ function EpisodeTile({
           subject={name}
           onWritten={onWritten}
         />
-      </div>
-    </article>
+      }
+    >
+      <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
+        <span className="value text-xs text-ink-dim">{formatJellyfinEpisode(episode)}</span>
+        {upNext && (
+          // 中性小色塊：「接下來看這一集」是一個位置，不是四個信號色裡的任何一個狀態。
+          <span className="label bg-deck px-1.5 py-0.5 text-ink">
+            {episode.watch.progress === null ? t('watch.chipNext') : t('watch.chipResume')}
+          </span>
+        )}
+      </p>
+      <h3 className="value line-clamp-2 min-h-10 text-sm leading-snug text-ink">{episode.name}</h3>
+      <p id={lineId} className="value min-h-4 text-xs text-ink">
+        {watchLine(t, episode.watch)}
+      </p>
+      {!url && <p className="text-xs text-ink">{t('inventory.jellyfin.noAddress')}</p>}
+    </Tile>
   )
 }
 
