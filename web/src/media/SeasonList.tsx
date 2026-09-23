@@ -210,9 +210,11 @@ function EpisodeRow({ episode, absolute }: { episode: Episode; absolute: boolean
         {/* 窄版的片長與播出（票 13）：那兩欄在 640px 以下不畫，同樣的值在這裡；寬版這一行不畫，不重複念。 */}
         {(runtime || episode.air_date) && (
           <span className="value mt-0.5 flex flex-wrap gap-x-2 text-xs text-ink-dim sm:hidden">
-            {runtime && <span>{`${t('media.episode.runtime')} ${runtime}`}</span>}
+            {runtime && <span>{t('media.episode.runtimeValue', { value: runtime })}</span>}
             {runtime && episode.air_date && <Dot />}
-            {episode.air_date && <span>{`${t('media.episode.airDate')} ${episode.air_date}`}</span>}
+            {episode.air_date && (
+              <span>{t('media.episode.airDateValue', { value: episode.air_date })}</span>
+            )}
           </span>
         )}
       </td>

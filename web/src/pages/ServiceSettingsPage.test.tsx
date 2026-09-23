@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { HEALTHY, stubApi, type StubRoute } from '../test/fetch'
 import { diff, healthDetail, qbittorrentSetup, withFailedService } from '../test/fixtures'
+import { expectCurrentByStateOnly } from '../test/navState'
 import { renderApp } from '../test/render'
 
 afterEach(() => {
@@ -56,7 +57,10 @@ describe('服務設定頁', () => {
     renderApp('/settings/services')
 
     const tabs = within(await screen.findByRole('navigation', { name: '設定' }))
-    expect(tabs.getByRole('link', { name: '服務' })).toHaveAttribute('aria-current', 'page')
+    expectCurrentByStateOnly(
+      tabs.getByRole('link', { name: '服務' }),
+      tabs.getByRole('link', { name: '媒體庫路徑' }),
+    )
     expect(tabs.getByRole('link', { name: '媒體庫路徑' })).toHaveAttribute(
       'href',
       '/settings/routes',

@@ -1,6 +1,6 @@
 import type { Watching } from '../api/watching'
 
-/** 接著看上一次兩列各有幾格。 */
+/** 繼續觀看與下一集上一次兩列各有幾格。 */
 export interface RowShape {
   resume: number
   nextUp: number
@@ -9,7 +9,7 @@ export interface RowShape {
 const PREFIX = 'berth.watching.'
 
 /**
- * 接著看讀取中要佔多少位（M2 票 13，使用者拍板）：照**這個人在這一頁上一次看到的形狀**。
+ * 繼續觀看與下一集讀取中要佔多少位（M2 票 13，使用者拍板）：照**這個人在這一頁上一次看到的形狀**。
  *
  * 讀完之前不知道會是零、一還是兩列，任何固定的佔位都只對其中一種剛好——佔多了，資料到的時候下方整頁往上收，
  * 那一樣是版面位移（首頁量到 CLS 0.35）。上一次的形狀多數時候就是這一次的，只有列數變了（剛看完一部、剛開始

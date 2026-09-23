@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { artSrcSet } from './artSources'
 import { WALL_SIZES } from './wallGrid'
 
-/** 圖位的兩種形狀：牆上與詳情頁的 2:3 海報、接著看與集卡的 16:9 橫圖（後端 `ImageSize` 的小的那一張）。 */
+/** 圖位的兩種形狀：牆上與詳情頁的 2:3 海報、繼續觀看與下一集、集卡的 16:9 橫圖（後端 `ImageSize` 的小的那一張）。 */
 const SHAPES = {
   poster: { box: 'aspect-[2/3]', width: 342, height: 513, missing: 'discover.noArt' },
   wide: { box: 'aspect-video', width: 342, height: 192, missing: 'watching.noArt' },
@@ -14,7 +14,7 @@ const SHAPES = {
  * 一格圖：Berth 代理的 Jellyfin 圖或 TMDB 的海報。網址是空的、或圖載不下來（Jellyfin 回 404、連不上、TMDB
  * 那一端沒有）時同一塊矩形裡印一行「無海報 / 無圖」，格子高度不變，牆不壞（票 04、DESIGN.md Shapes）。
  *
- * **全站只有這一份**（票 13）：牆、接著看、集卡與詳情頁的身分帶都是它。詳情頁那一格原本是另一份
+ * **全站只有這一份**（票 13）：牆、繼續觀看與下一集、集卡與詳情頁的身分帶都是它。詳情頁那一格原本是另一份
  * `Poster.tsx`，同一段 `onError` 寫了兩次，而 M1.5 票 11 的 audit 抓到的正是其中一份漏了它。外框由呼叫端給
  * （`className`：詳情頁的那一格自己有邊框）。
  *

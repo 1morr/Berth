@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { HEALTHY, UNAUTHORIZED, UNCONFIGURED, session, stubApi } from './test/fetch'
+import { expectCurrentByStateOnly } from './test/navState'
 import { renderApp } from './test/render'
 import { discoverWall, setupStatus } from './test/fixtures'
 
@@ -155,13 +156,7 @@ describe('角色', () => {
     const current = nav.getByRole('link', { name: '探索' })
     const other = nav.getByRole('link', { name: '下載' })
 
-    expect(current).toHaveAttribute('aria-current', 'page')
-    expect(other).not.toHaveAttribute('aria-current')
-    expect(current).toHaveAttribute('data-status', 'active')
-    // 多出來的只有 TanStack 預設的 `active` 標記（這裡沒有任何樣式掛在它上面）。
-    expect([...current.classList].filter((name) => !other.classList.contains(name))).toEqual([
-      'active',
-    ])
+    expectCurrentByStateOnly(current, other)
   })
 
   it('非 admin 看不到設定入口，但看得到自己是什麼角色（票 07 驗收）', async () => {

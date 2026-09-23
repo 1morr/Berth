@@ -168,6 +168,13 @@ export function GhostButton({
 export const COMPACT_BUTTON =
   'label inline-flex min-h-6 items-center border-2 border-rule px-2 py-1 text-ink hover:border-rule-strong aria-disabled:text-ink-dim'
 
+/**
+ * 行內的文字連結：`.label` 字、重線底線（`rule-strong`，hover 換 `ink`），`min-h-6` 讓點擊目標夠大。
+ * 卡片底部的「在 Jellyfin 開啟」、觀看區標題列的出口、媒體庫第 2 頁那一行「到第 1 頁看」。外距由呼叫端給。
+ */
+export const TEXT_LINK =
+  'label inline-flex min-h-6 items-center text-ink underline decoration-rule-strong decoration-2 underline-offset-4 hover:decoration-ink'
+
 export const GHOST_LINK =
   'label justify-self-start border-2 border-rule px-4 py-2.5 text-ink hover:border-rule-strong'
 

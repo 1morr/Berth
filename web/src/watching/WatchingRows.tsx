@@ -80,8 +80,7 @@ export function WatchingElsewhere({
   children: ReactNode
 }) {
   const { t } = useTranslation()
-  const key = useRowsKey(`library.${libraryId}`)
-  const [shape] = useState(() => (key ? rememberedRows(key) : null))
+  const shape = useLastShape(useRowsKey(`library.${libraryId}`))
   if (!shape || shape.resume + shape.nextUp === 0) return null
 
   return (
@@ -106,7 +105,11 @@ function useRememberedRows(page: string, watching: Watching | undefined): RowSha
     if (key && watching) rememberRows(key, watching)
   }, [key, watching])
 
-  // 只在第一次畫的那一刻讀：之後這一頁自己就知道形狀了。
+  return useLastShape(key)
+}
+
+/** 上一次的形狀。只在第一次畫的那一刻讀：之後這一頁自己就知道形狀了。 */
+function useLastShape(key: string | null): RowShape | null {
   const [shape] = useState(() => (key ? rememberedRows(key) : null))
   return shape
 }
@@ -310,7 +313,7 @@ function WatchingTile({
       href={url}
       target="_blank"
       rel="noreferrer"
-      aria-label={`${name}${t('inventory.jellyfin.newTab')}`}
+      aria-label={t('inventory.jellyfin.itemNewTab', { name })}
       aria-describedby={percent !== null ? progressId : undefined}
       className={`${frame} hover:border-rule-strong`}
     >

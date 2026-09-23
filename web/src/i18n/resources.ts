@@ -638,6 +638,8 @@ const zhHant = {
     jellyfin: {
       open: '在 Jellyfin 開啟',
       openNamed: '在 Jellyfin 開啟：{{title}}（開新分頁）',
+      // 整格是一條開 Jellyfin 的連結時（繼續觀看與下一集、集卡）：名字是那一集或那一部，後面說會開新分頁。
+      itemNewTab: '{{name}}（開新分頁）',
       // 看不見的那一半：連結會開新分頁。
       newTab: '（開新分頁）',
       searching: 'Jellyfin 還在掃描',
@@ -721,6 +723,9 @@ const zhHant = {
       runtime: '片長',
       airDate: '播出',
       caption: '{{season}} 的每一集',
+      // 窄版收進集名底下那一行（票 13）。
+      runtimeValue: '片長 {{value}}',
+      airDateValue: '播出 {{value}}',
       // 這一集在媒體庫裡的樣子（票 13，使用者拍板五種）。
       inLibrary: '入庫',
       state: {
@@ -2536,6 +2541,7 @@ const en: Translations<typeof zhHant> = {
     jellyfin: {
       open: 'Open in Jellyfin',
       openNamed: 'Open in Jellyfin: {{title}} (opens in a new tab)',
+      itemNewTab: '{{name}} (opens in a new tab)',
       newTab: ' (opens in a new tab)',
       searching: 'Jellyfin is still scanning',
       lost: 'Jellyfin cannot find it',
@@ -2612,6 +2618,8 @@ const en: Translations<typeof zhHant> = {
       runtime: 'Runtime',
       airDate: 'Aired',
       caption: 'Episodes of {{season}}',
+      runtimeValue: 'Runtime {{value}}',
+      airDateValue: 'Aired {{value}}',
       inLibrary: 'In library',
       state: {
         imported: 'Imported',

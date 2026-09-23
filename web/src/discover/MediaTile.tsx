@@ -54,7 +54,7 @@ export function MediaTile({ item }: { item: DiscoverItem }) {
             <span className="label bg-deck px-1.5 py-0.5 text-ink">{t('discover.tracked')}</span>
           )}
         </p>
-        {/* 每一格的標題是 `h3`（牆的標題是 `h2`）：與媒體庫牆、接著看、集卡同一種語意（票 13）。 */}
+        {/* 每一格的標題是 `h3`（牆的標題是 `h2`）：與媒體庫牆、繼續觀看與下一集、集卡同一種語意（票 13）。 */}
         <h3 className="value line-clamp-2 min-h-10 text-sm leading-snug text-ink">{title}</h3>
         {/* 第二行是檔名用的英文標題；EN 介面上它就是第一行，不再印一次。 */}
         {item.title_en !== title && (

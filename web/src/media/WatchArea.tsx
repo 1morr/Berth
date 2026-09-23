@@ -12,7 +12,13 @@ import {
   type WatchSeason,
 } from '../api/media'
 import { ArtSlot } from '../components/ArtSlot'
-import { GhostButton, NAV_BOX, NAV_BOX_ACTIVE, PRIMARY_LINK } from '../components/controls'
+import {
+  GhostButton,
+  NAV_BOX,
+  NAV_BOX_ACTIVE,
+  PRIMARY_LINK,
+  TEXT_LINK,
+} from '../components/controls'
 import { formatJellyfinEpisode } from '../components/episodes'
 import { WatchToggle } from '../components/WatchToggle'
 import { watchLine } from '../components/watchLine'
@@ -132,12 +138,7 @@ export function WatchSection({ mediaId, area }: { mediaId: string; area: WatchAr
         </h2>
         {remaining && <p className="value text-xs text-ink-dim">{remaining}</p>}
         {seriesUrl && (
-          <a
-            href={seriesUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="label ms-auto inline-flex min-h-6 items-center text-ink underline decoration-rule-strong decoration-2 underline-offset-4 hover:decoration-ink"
-          >
+          <a href={seriesUrl} target="_blank" rel="noreferrer" className={`${TEXT_LINK} ms-auto`}>
             {t('watch.open')}
             <span className="sr-only">{t('inventory.jellyfin.newTab')}</span>
           </a>
@@ -306,7 +307,7 @@ function EpisodeTile({
           href={url}
           target="_blank"
           rel="noreferrer"
-          aria-label={`${name}${t('inventory.jellyfin.newTab')}`}
+          aria-label={t('inventory.jellyfin.itemNewTab', { name })}
           aria-describedby={lineId}
           className="grid grid-rows-[auto_1fr]"
         >

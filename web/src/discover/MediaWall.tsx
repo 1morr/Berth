@@ -64,7 +64,7 @@ export function MediaWall({
       ) : result?.problem ? (
         <TmdbNotice problem={result.problem} detail={result.detail} onRetry={onRetry} />
       ) : result && result.items.length > 0 ? (
-        // 一面牆是一份清單（票 13）：螢幕閱讀器念得出「清單，40 項」，與接著看、媒體庫牆同一種。
+        // 一面牆是一份清單（票 13）：螢幕閱讀器念得出「清單，40 項」，與繼續觀看與下一集、媒體庫牆同一種。
         <ul className={WALL_GRID}>
           {result.items.map((item) => (
             <li key={item.id} className="grid">

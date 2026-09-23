@@ -188,7 +188,7 @@ describe('探索頁', () => {
     expect(card).toHaveAccessibleDescription(/^TV\s+2026/)
   })
 
-  it('一面牆是一份清單，每一格的標題是 h3——與媒體庫牆、接著看同一種語意（票 13）', async () => {
+  it('一面牆是一份清單，每一格的標題是 h3——與媒體庫牆、繼續觀看與下一集同一種語意（票 13）', async () => {
     render()
     renderApp('/')
     await screen.findByText('綠燈軍團')
@@ -465,7 +465,7 @@ describe('首頁上方的繼續觀看與下一集（M1.5 票 07）', () => {
   describe('讀取中的佔位（票 13：CLS）', () => {
     const KEY = 'berth.watching.skipper.home'
 
-    /** 接著看那一支一直不回：畫面停在讀取中。其餘照 `render` 的替身。 */
+    /** 繼續觀看與下一集那一支一直不回：畫面停在讀取中。其餘照 `render` 的替身。 */
     function stalled() {
       const api = render()
       vi.stubGlobal('fetch', (input: RequestInfo | URL, init?: RequestInit) =>

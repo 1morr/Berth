@@ -617,12 +617,12 @@ class TestImages:
     @pytest.mark.parametrize(
         ("size", "fill"),
         [
-            pytest.param("poster_large", (684, 1026), id="poster"),
             pytest.param("wide", (342, 192), id="wide"),
+            pytest.param("poster_large", (684, 1026), id="poster-large"),
             pytest.param("wide_large", (684, 384), id="wide-large"),
         ],
     )
-    def test_each_shape_has_a_second_size_twice_as_wide_for_srcset(
+    def test_each_named_size_is_forwarded_as_its_own_fill(
         self, client: TestClient, jellyfin: FakeJellyfinClient, size: str, fill: tuple[int, int]
     ) -> None:
         """前端的 `srcset` 給瀏覽器兩個寬度挑（票 13）：高密度螢幕與手機兩欄的格子要 684 寬才不糊。

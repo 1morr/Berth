@@ -126,6 +126,9 @@ export function MediaDetailPage({ id }: { id: string }) {
   )
 }
 
+/** 身分帶那一格海報的寬：與 `IdentityBand` 的兩欄（`7rem` / `sm:11rem`）同一份。 */
+const DETAIL_POSTER_SIZES = '(min-width: 640px) 11rem, 7rem'
+
 /**
  * 提單抬頭：海報、三個標題、一行識別值、主按鈕、簡介、快照新鮮度。
  *
@@ -135,9 +138,6 @@ export function MediaDetailPage({ id }: { id: string }) {
  * **主按鈕在簡介之前**：簡介再長，它都在第一屏（shape §3）。窄版海報與標題並排，主按鈕、簡介、新鮮度改成整寬
  * ——擠在海報旁那一條窄欄裡的簡介，曾把搜尋推到 390px 的第三屏。
  */
-/** 身分帶那一格海報的寬：與 `IdentityBand` 的兩欄（`7rem` / `sm:11rem`）同一份。 */
-const DETAIL_POSTER_SIZES = '(min-width: 640px) 11rem, 7rem'
-
 function IdentityBand({
   media,
   carryOn,

@@ -7,6 +7,7 @@ import { inventoryKey, withWatch, type Inventory, type InventoryCard } from '../
 import type { JellyfinWeb } from '../api/jellyfin'
 import { ArtSlot } from '../components/ArtSlot'
 import { AuditChip } from '../components/AuditChip'
+import { TEXT_LINK } from '../components/controls'
 import { Dot } from '../components/Dot'
 import { KIND_CODE } from '../components/kind'
 import { SIGNAL_FILL, type Signal } from '../components/signal'
@@ -161,7 +162,7 @@ function JellyfinLine({
           rel="noreferrer"
           // 每一格都有這一條：名字帶上是哪一部（票 13），控制項清單裡才不是一整排同名的連結（WCAG 2.4.4）。
           aria-label={t('inventory.jellyfin.openNamed', { title })}
-          className="label inline-flex min-h-6 items-center text-ink underline decoration-rule-strong decoration-2 underline-offset-4 hover:decoration-ink"
+          className={TEXT_LINK}
         >
           {t('inventory.jellyfin.open')}
         </a>

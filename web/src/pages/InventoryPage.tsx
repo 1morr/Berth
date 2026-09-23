@@ -29,6 +29,7 @@ import {
   NAV_BOX,
   NAV_BOX_ACTIVE,
   NAV_LINK,
+  TEXT_LINK,
   Notice,
 } from '../components/controls'
 import { Dot } from '../components/Dot'
@@ -122,7 +123,7 @@ export function InventoryPage({
                     { sort: search.sort, order: search.order },
                     libraries.data.find((row) => row.id === libraryId),
                   )}
-                  className="label inline-flex min-h-6 items-center text-ink underline decoration-rule-strong decoration-2 underline-offset-4 hover:decoration-ink"
+                  className={TEXT_LINK}
                 >
                   {t('watching.toFirst')}
                 </Link>
@@ -475,7 +476,7 @@ function NarrowPanel({
   )
 }
 
-/** 一面牆是一份清單（票 13）：與探索牆、接著看同一種語意，螢幕閱讀器念得出有幾項。 */
+/** 一面牆是一份清單（票 13）：與探索牆、繼續觀看與下一集同一種語意，螢幕閱讀器念得出有幾項。 */
 function Tiles({ cards, inventory }: { cards: InventoryCard[]; inventory: Inventory }) {
   return (
     <ul className={WALL_GRID_CONFIRMABLE}>

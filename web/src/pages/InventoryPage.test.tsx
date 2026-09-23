@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Inventory, InventoryCard, InventoryLibrary } from '../api/inventory'
 import type { Watching } from '../api/watching'
 import { HEALTHY, session, stubApi, type StubRoute } from '../test/fetch'
+import { expectCurrentByStateOnly } from '../test/navState'
 import { renderApp } from '../test/render'
 
 afterEach(() => {
@@ -153,7 +154,7 @@ function render(
 }
 
 /**
- * 牆上的一格：以標題找到它所在的那一格。接著看的格子也有 `h3`（票 13），但它們不是 `article`，所以只認
+ * 牆上的一格：以標題找到它所在的那一格。繼續觀看與下一集的格子也有 `h3`（票 13），但它們不是 `article`，所以只認
  * 在 `article` 裡的那一個。
  */
 function tile(title: string, within_: HTMLElement = document.body) {
@@ -192,7 +193,8 @@ describe('媒體庫頁', () => {
     const switcher = await screen.findByRole('navigation', { name: '媒體庫' })
     const current = within(switcher).getByRole('link', { name: 'TV' })
 
-    expect(current).toHaveAttribute('aria-current', 'page')
+    // 票 13：當前那一格只差在狀態屬性上，不另外疊一組 class。
+    expectCurrentByStateOnly(current, within(switcher).getByRole('link', { name: 'Movies' }))
     expect(within(switcher).getByRole('link', { name: 'Movies' })).toHaveAttribute(
       'href',
       `/library/${MOVIES}`,
@@ -213,7 +215,7 @@ describe('媒體庫頁', () => {
       expect(toMedia).toHaveAccessibleDescription(/^TV\s+2022/)
     })
 
-    it('牆是一份清單，每一格一個 h3 標題（票 13：與探索牆、接著看同一種語意）', async () => {
+    it('牆是一份清單，每一格一個 h3 標題（票 13：與探索牆、繼續觀看與下一集同一種語意）', async () => {
       render()
       renderApp(`/library/${TV}`)
       await findTile('Alpha Show')
