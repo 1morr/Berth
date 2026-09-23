@@ -567,6 +567,14 @@ Berth 入庫的作品照樣瀏覽得到。這六件事現在是 nightly e2e 的�
   （`jobs/eventTypes.ts` 的 `planHistory`），畫法仍是 `JobTimeline`。深連結：`/jobs` 的一列、`/review` 四類列與
   `/issues` 的「所屬下載」、直接貼網址；不存在的 hash 是「找不到這筆下載」加回下載列表的路。
 
+- **媒體庫頁的「待審 / 對不到」是審核佇列的清單**（M2 票 14，`.scratch/m2/review-shape.md`「媒體庫的子集」）：篩出來的是
+  要處理的事，所以一列一件事、列就是 `/review` 那一列（`review/ReviewItem.tsx`，兩頁同一個 import），就地核准、
+  指派；清單下方一句連到 `/review`，說審核佇列裡還有幾件。後端 `GET /review?library=<Jellyfin 媒體庫 id>` 只回
+  Route 指向它的 `plan` 與 `unmatched`，另帶 `queue_total`。
+- **媒體庫牆上按名字找**（M2 票 14）：`GET /inventory/{id}?q=` 轉成 Jellyfin 的 `searchTerm`（名字裡的任一段、
+  不分大小寫，12.1.0 實測），寫進網址 `?q=`；邊打邊搜、停手 500ms 才換網址（與探索頁同一個間隔），換網址用
+  replace、回第 1 頁。搜不到時說搜了什麼，名字與類型年份各一條清除的路。
+
 ### Changed
 
 - **媒體庫牆一頁 50 部**（M2 票 13，原本照 jellyfin-web 的 100）：100 部的牆量到 1,732 個 DOM 節點、222 個 Tab 停留點；
@@ -811,12 +819,21 @@ Berth 入庫的作品照樣瀏覽得到。這六件事現在是 nightly e2e 的�
   （英文原文）改成同一套 `reasons`。**既有 `plan_items.reasons_json` 的英文句子由 migration 清空**
   （使用者拍板不轉換）；重新規劃就用新格式重算。`/jobs` 計劃區那幾句「M1 還沒有審核佇列」改成指向審核佇列。
 
+- **「待審」「對不到」兩個篩選鍵的數字改數件不數部**（M2 票 14，使用者拍板）：與那兩個篩選的清單同一支查詢
+  （`services/review.library_counts`）。原本數的是 `tracked` 裡旗標成立的部數，而旗標的定義與佇列不同（光碟檔、
+  已移除的下載、等審核的那一份裡的對不到都算），會出現「對不到 1」清單卻是空的。
+- **一般使用者的媒體庫頁沒有「待審 / 對不到」**（M2 票 14，使用者拍板）：那是管理員的工作佇列，`review/*`
+  本來就只給 admin；網址上帶著 `?filter=` 也照畫整面牆。
+
 ### Removed
 
 - Route 的 profile 選擇（票 14e）：精靈泊位 4、設定 →「媒體庫路徑」的新增與修改都不再問「命名 profile」，
   `ProfilePicker` 刪除；拒絕理由 `profile_unsupported`（電影 Route 不收 anime）跟著規則一起消失。
 - `scripts/experiments/profile_effect.py`（票 14e）：它量的東西不存在了。研究文件
   `docs/research/profile-effect.md` 留著當紀錄。
+
+- `InventoryOut` 卡片上的 `tracking.needs_review` 與 `tracking.has_unmatched`（M2 票 14）：唯一的消費點是舊的
+  卡片牆篩選，換成審核佇列的清單之後沒有人讀它們。
 
 ### Fixed
 

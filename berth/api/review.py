@@ -56,7 +56,9 @@ from berth.services.review import (
     ReviewRow,
     UnmatchedRow,
     confirm_audit,
+    library_queue,
     review_queue,
+    review_total,
     undo_audit,
 )
 
@@ -266,13 +268,27 @@ class ReviewQueueOut(BaseModel):
 
     rows: list[ReviewRowOut]
     total: int
+    #: 整份佇列幾件。帶 `library` 時 `total` 只算那個媒體庫的兩類，這一格仍是整份——媒體庫頁清單
+    #: 底下那一句「審核佇列裡還有 N 件」要它（M2 票 14）；不帶時與 `total` 相同。
+    queue_total: int
 
 
 @router.get("")
-async def get_review(session: SessionDep) -> ReviewQueueOut:
-    """需要人動手的排前面，同一類之內舊的在前（plan §6）。"""
-    queue = await review_queue(session)
-    return ReviewQueueOut(rows=[_row_out(row) for row in queue.rows], total=queue.total)
+async def get_review(session: SessionDep, library: str | None = None) -> ReviewQueueOut:
+    """需要人動手的排前面，同一類之內舊的在前（plan §6）。
+
+    `library` 是 Jellyfin 媒體庫 id：只回 Route 指向它的 `plan` 與 `unmatched`（媒體庫頁的
+    「待審 / 對不到」，M2 票 14）。不認得的 id 就是一份空的——它只拿來挑 Route，不問 Jellyfin。
+    """
+    if library is None:
+        queue = await review_queue(session)
+        everything = queue.total
+    else:
+        queue = await library_queue(session, library)
+        everything = await review_total(session)
+    return ReviewQueueOut(
+        rows=[_row_out(row) for row in queue.rows], total=queue.total, queue_total=everything
+    )
 
 
 @router.post(

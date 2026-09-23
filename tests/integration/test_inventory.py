@@ -23,7 +23,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path, PurePosixPath
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from berth.adapters.jellyfin import (
@@ -47,12 +47,22 @@ from berth.domain import (
     MediaSnapshot,
     PlanAction,
     PlanStatus,
+    ReviewKind,
     SeasonSnapshot,
     ServiceOrigin,
     SortOrder,
     Tags,
 )
-from berth.models import JellyfinSettings, Job, LedgerEntry, Media, Plan, PlanItem, Route
+from berth.models import (
+    JellyfinSettings,
+    Job,
+    JobFile,
+    LedgerEntry,
+    Media,
+    Plan,
+    PlanItem,
+    Route,
+)
 from berth.services.deeplink import PublicUrlRejectedError, jellyfin_web, set_public_url
 from berth.services.inventory import (
     PAGE_SIZE,
@@ -67,6 +77,7 @@ from berth.services.jellyfin_access import (
     SortNotOfferedError,
     WallQuery,
 )
+from berth.services.review import library_counts
 from berth.services.settings import read_settings, write_settings
 from berth.services.watch import WatchState
 from tests.integration.arrange import arrange
@@ -178,21 +189,30 @@ async def plan(
     *items: tuple[PlanAction, int | None, int | None],
     status: PlanStatus = PlanStatus.APPLIED,
 ) -> Plan:
-    """`items` 是 `(處置, 季, 集)`。"""
+    """`items` 是 `(處置, 季, 集)`。每一列有它自己的 `job_files` 那一列：審核佇列的 `unmatched`
+    那一類以檔案為單位（`services/review._unmatched`）。"""
+    # 檔名帶著這是第幾份：同一筆 Job 的第二份 Plan 不撞 `job_files` 的唯一鍵。
+    earlier = await session.scalar(select(func.count(Plan.id)).where(Plan.job_hash == of.hash))
     row = Plan(job_hash=of.hash, status=status)
     session.add(row)
+    files = [
+        JobFile(job_hash=of.hash, rel_path=f"file-{earlier}-{index}.mkv", size=1, priority=1)
+        for index in range(len(items))
+    ]
+    session.add_all(files)
     await session.flush()
     session.add_all(
         PlanItem(
             plan_id=row.id,
-            rel_path=f"file-{index}.mkv",
+            rel_path=file.rel_path,
+            job_file_id=file.id,
             action=action,
             media_id=of.media_id,
             season=number,
             episode_start=episode,
             confidence=Confidence.HIGH,
         )
-        for index, (action, number, episode) in enumerate(items)
+        for file, (action, number, episode) in zip(files, items, strict=True)
     )
     await session.commit()
     return row
@@ -446,7 +466,6 @@ class TestJellyfinWall:
             2,
         )
         assert [row.media_id for row in shown.tracked] == [spy.id]
-        assert shown.review == 1
 
     async def test_a_sort_this_library_does_not_offer_asks_jellyfin_nothing_at_all(
         self, session: AsyncSession
@@ -746,9 +765,7 @@ class TestStatus:
         await job(session, spy, tv, JobState.IMPORTED, hash="a" * 40)
         await job(session, spy, tv, JobState.REVIEW, hash="b" * 40)
 
-        found = await tracking(session)
-
-        assert (found.status, found.needs_review) == (InventoryStatus.REVIEW, True)
+        assert (await tracking(session)).status is InventoryStatus.REVIEW
 
     async def test_a_failed_job_outranks_everything_else(self, session: AsyncSession) -> None:
         """紅色只代表阻擋：失敗那一筆在你動手之前不會自己好（The One Meaning Rule）。"""
@@ -797,8 +814,18 @@ class TestStatus:
         assert (found.status, found.versions) == (InventoryStatus.COMPLETE, 2)
 
 
+async def counts(session: AsyncSession, slug: str = "tv") -> dict[ReviewKind, int]:
+    """`slug` 那條 Route 指向的媒體庫上，「待審」「對不到」兩個篩選鍵的數字。"""
+    target = await session.scalar(select(Route).where(Route.slug == slug))
+    assert target is not None
+    return await library_counts(session, target.jellyfin_library_id)
+
+
 class TestFilters:
-    async def test_an_unmatched_file_in_the_current_plan_flags_the_title(
+    """「待審」「對不到」兩個數字是審核佇列在這個媒體庫上的件數（M2 票 14，使用者拍板）：
+    與那兩個篩選的清單同一支查詢（`services/review.library_counts`），數字與清單不會各說各的。"""
+
+    async def test_an_unmatched_file_in_the_current_plan_is_counted(
         self, session: AsyncSession
     ) -> None:
         tv = await route(session)
@@ -806,7 +833,7 @@ class TestFilters:
         done = await job(session, spy, tv, JobState.IMPORTED)
         await plan(session, done, (PlanAction.IMPORT, 1, 1), (PlanAction.UNMATCHED, None, None))
 
-        assert (await tracking(session)).has_unmatched is True
+        assert (await counts(session))[ReviewKind.UNMATCHED] == 1
 
     async def test_imports_waiting_for_a_look_are_counted_on_the_card(
         self, session: AsyncSession
@@ -826,7 +853,7 @@ class TestFilters:
 
         assert (await tracking(session)).audits == 2
 
-    async def test_an_estimate_made_while_downloading_flags_nothing(
+    async def test_an_estimate_made_while_downloading_counts_nothing(
         self, session: AsyncSession
     ) -> None:
         """pre-plan 沒讀過檔案本身（brief §5.1），下載完成之後會重算一份。"""
@@ -835,9 +862,9 @@ class TestFilters:
         busy = await job(session, spy, tv, JobState.DOWNLOADING)
         await plan(session, busy, (PlanAction.UNMATCHED, None, None), status=PlanStatus.PREPLAN)
 
-        assert (await tracking(session)).has_unmatched is False
+        assert (await counts(session))[ReviewKind.UNMATCHED] == 0
 
-    async def test_the_wall_counts_what_needs_you_in_and_out_of_jellyfin(
+    async def test_what_needs_you_is_counted_in_and_out_of_jellyfin(
         self, session: AsyncSession
     ) -> None:
         tv = await route(session, "tv")
@@ -849,14 +876,14 @@ class TestFilters:
         await plan(
             session, held, (PlanAction.UNMATCHED, None, None), status=PlanStatus.PENDING_REVIEW
         )
-        await job(session, frieren, second, JobState.REVIEW, hash="b" * 40)
-        items = [in_jellyfin(tv, "SPY×FAMILY", id="spy", tmdb_id="120089")]
+        done = await job(session, frieren, second, JobState.IMPORTED, hash="b" * 40)
+        await plan(session, done, *[(PlanAction.UNMATCHED, None, None)] * 3)
 
-        shown = await wall(session, "tv", items)
-
-        # 一部在 Jellyfin 裡、一部還沒進，兩條 Route 指向同一個媒體庫：數字照樣都算進來。
-        assert (shown.review, shown.unmatched) == (2, 1)
-        assert (await wall(session, movies.slug)).review == 0
+        # 兩條 Route 指向同一個媒體庫：數字照樣都算進來。數的是件：Frieren 那一包三個對不到的
+        # 檔案是三件；等審核的那一份裡對不到的檔案是那份 Plan 的一列，不另外算一件（`/review`
+        # 同一個判定）。
+        assert await counts(session) == {ReviewKind.PLAN: 1, ReviewKind.UNMATCHED: 3}
+        assert (await counts(session, movies.slug))[ReviewKind.PLAN] == 0
 
 
 class TestNotInJellyfinYet:

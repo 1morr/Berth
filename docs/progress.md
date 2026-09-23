@@ -941,3 +941,5 @@
 - 2026-09-24 M2 票 13：**媒體庫第 2 頁那一行只在上一次有東西可接著看時說**：那兩列在翻頁與篩選時不問 Jellyfin（票 07 使用者拍板），能依據的只有上一次的形狀；新瀏覽器直接開 `?page=2` 時不說。
 - 2026-09-24 M2 票 13：**`<summary>` 不加 role**：ARIA in HTML 規定它是 `details` 第一個子元素時不得指定 role，Playwright aria snapshot 印的 `generic` 是它自己的角色表沒有 `SUMMARY`，不是瀏覽器的無障礙樹。全站 `<details>` 維持原生。
 - 2026-09-24 M2 票 13：**`/api/inventory/{id}` 不另立快取規則**：內容換了網址不變（入庫狀態、觀看紀錄），ETag 仍要算完整份才比得出來、只省傳輸；照舊由門禁補 `no-store`。
+- 2026-09-24 M2 票 14：**「待審」「對不到」只給 admin**（使用者拍板），推翻 library-shape（M1.5 票 03）兩種角色都有這兩個篩選：清單的列是 `/review` 那一列、就地按，而 `review/*` 只給 admin。`user` 的篩選列不畫，網址上帶著 `?filter=` 也照畫整面牆；他碰到停下來的那一筆只能等（PRODUCT.md），卡片上的「待審」色塊與 `/jobs` 的「等管理員審核」已經說了。
+- 2026-09-24 M2 票 14：**兩個篩選鍵的數字改數件不數部、子集由後端依 Route 篩**（使用者拍板）：`GET /review?library=` 與 `InventoryOut.review` / `unmatched` 同一支查詢（`services/review.library_counts`），推翻 plan §6 原本「`tracked` 裡旗標成立的部數」。舊旗標與佇列的定義不同（光碟檔、已移除的下載、等審核那一份裡的對不到都算），會出現「對不到 1」清單卻是空的。`tracking.needs_review` / `has_unmatched` 沒有消費點，刪掉。數字由 `api/inventory.py` 組：services 之間 `review → issues → claims → … → inventory` 已有依賴，反過來會循環。

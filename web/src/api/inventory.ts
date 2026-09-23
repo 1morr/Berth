@@ -51,15 +51,17 @@ export type LibrarySort = Schemas['LibrarySort']
 export type SortOrder = Schemas['SortOrder']
 
 /**
- * 牆怎麼排、怎麼篩（M1.5 票 06）：網址上的 `sort`、`order`、`genres`、`years`，對過這個媒體庫的排序選單。
- * **沒寫的就是打開牆時的樣子**（選單第一個、遞增、不篩），網址與快取鍵都少一種寫法。只套在 Jellyfin 那一頁：
- * 還沒進 Jellyfin、待審、Unmatched 是 Berth 的清單，沒有 Jellyfin 的類型可以篩。
+ * 牆怎麼排、怎麼篩（M1.5 票 06）：網址上的 `sort`、`order`、`genres`、`years`，對過這個媒體庫的排序選單；
+ * `q` 是名字裡的一段（M2 票 14，Jellyfin 的 `searchTerm`）。**沒寫的就是打開牆時的樣子**（選單第一個、遞增、
+ * 不篩），網址與快取鍵都少一種寫法。只套在 Jellyfin 那一頁：還沒進 Jellyfin 是 Berth 的清單，待審與對不到是
+ * 審核佇列，都沒有 Jellyfin 的類型與名字可以篩。
  */
 export interface WallQuery {
   sort?: LibrarySort
   order?: Extract<SortOrder, 'Descending'>
   genres?: string[]
   years?: number[]
+  q?: string
 }
 
 /** 網址上的篩選（`?filter=`）：待審、Unmatched。 */
@@ -87,12 +89,15 @@ export function wallQuery(search: WallSearch, library: InventoryLibrary | undefi
   if (search.order) query.order = search.order
   if (search.genres?.length) query.genres = search.genres
   if (search.years?.length) query.years = search.years
+  // 前後的空白不算：只打了空白就是沒有在找（後端同樣 strip）。
+  const q = search.q?.trim()
+  if (q) query.q = q
   return query
 }
 
-/** 有沒有在篩類型或年份。排序不算：它不會讓哪一部作品不見。 */
+/** 有沒有在篩類型、年份或名字。排序不算：它不會讓哪一部作品不見。 */
 export function narrowed(query: WallQuery): boolean {
-  return Boolean(query.genres?.length || query.years?.length)
+  return Boolean(query.genres?.length || query.years?.length || query.q)
 }
 
 /**
@@ -108,6 +113,7 @@ export function inventoryQueryOptions(libraryId: string, page: number, query: Wa
   if (query.order) params.set('order', query.order)
   for (const genre of query.genres ?? []) params.append('genres', genre)
   for (const year of query.years ?? []) params.append('years', String(year))
+  if (query.q) params.set('q', query.q)
   const search = params.size > 0 ? `?${params}` : ''
   return queryOptions({
     queryKey: [...inventoryKey(libraryId), page, query],

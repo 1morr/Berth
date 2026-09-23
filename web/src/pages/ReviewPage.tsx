@@ -4,11 +4,7 @@ import { useTranslation } from 'react-i18next'
 
 import { reviewQueryOptions, type ReviewKind, type ReviewRow } from '../api/review'
 import { PAGE_TITLE } from '../components/controls'
-import { IssueRow } from '../issues/IssueRow'
-import { AuditRow } from '../review/AuditRow'
-import { DuplicateRow } from '../review/DuplicateRow'
-import { PlanRow } from '../review/PlanRow'
-import { UnmatchedRow } from '../review/UnmatchedRow'
+import { ReviewItem } from '../review/ReviewItem'
 
 /**
  * 審核佇列 `/review`（`.scratch/m2/review-shape.md`，M2 票 06）。
@@ -71,7 +67,7 @@ export function ReviewPage() {
             <ul className="grid gap-3">
               {section.rows.map((row) => (
                 <li key={`${row.kind}:${row.ref}`} className="min-w-0">
-                  <Row row={row} onDone={setSaid} />
+                  <ReviewItem row={row} onDone={setSaid} />
                 </li>
               ))}
             </ul>
@@ -80,22 +76,6 @@ export function ReviewPage() {
       )}
     </div>
   )
-}
-
-/** 一列畫成哪個元件。**窮舉**：後端把新的 `kind` 加進聯集時，少一支是 `tsc` 的事。 */
-function Row({ row, onDone }: { row: ReviewRow; onDone: (said: string) => void }) {
-  switch (row.kind) {
-    case 'plan':
-      return <PlanRow row={row} onDone={onDone} />
-    case 'audit':
-      return <AuditRow row={row} onDone={onDone} />
-    case 'unmatched':
-      return <UnmatchedRow row={row} onDone={onDone} />
-    case 'duplicate':
-      return <DuplicateRow row={row} onDone={onDone} />
-    case 'issue':
-      return <IssueRow issue={row.issue} heading="h3" onDone={onDone} />
-  }
 }
 
 type SectionName = 'decide' | 'look' | 'outside'

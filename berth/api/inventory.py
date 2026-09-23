@@ -32,6 +32,7 @@ from berth.domain import (
     JellyfinPresence,
     LibrarySort,
     MediaKind,
+    ReviewKind,
     SortOrder,
 )
 from berth.services.deeplink import jellyfin_web
@@ -44,7 +45,11 @@ from berth.services.jellyfin_access import (
     WallQuery,
     jellyfin_access,
 )
+from berth.services.review import library_counts
 from berth.services.watching import read_watching
+
+#: 牆上按名字找的上限（M2 票 14）。作品名沒有這麼長；再長的只是貼錯了東西，不轉給 Jellyfin。
+QUERY_MAX_LENGTH = 200
 
 router = APIRouter(prefix="/inventory", tags=["inventory"])
 
@@ -88,8 +93,6 @@ class TrackingOut(BaseModel):
     aired: int
     #: 電影的正片版本數；劇集是 0。
     versions: int
-    needs_review: bool
-    has_unmatched: bool
     #: medium 自動入庫、掛著 audit 的檔案數（跨這部作品在這個媒體庫的 Job 加總，票 15）。
     audits: int
 
@@ -132,11 +135,11 @@ class InventoryOut(BaseModel):
     total: int
     #: Jellyfin 的這一頁。
     titles: list[InventoryCardOut]
-    #: 這個媒體庫上 Berth 經手的每一部，不分頁：「還沒進 Jellyfin」那一條與兩個篩選從這裡取。
+    #: 這個媒體庫上 Berth 經手的每一部，不分頁：「還沒進 Jellyfin」那一條從這裡取。
     tracked: list[InventoryCardOut]
-    #: `tracked` 裡有計劃停下來等人的部數（Jellyfin 內外都算）。
+    #: 「待審」「對不到」兩個篩選鍵的數字：審核佇列在這個媒體庫上的 `plan` 與 `unmatched` 各幾件
+    #: （M2 票 14，使用者拍板數件不數部）。清單本身是 `GET /review?library=`，同一支查詢。
     review: int
-    #: `tracked` 裡現在那一份計劃有對不到的檔案的部數。
     unmatched: int
 
 
@@ -178,16 +181,26 @@ async def get_inventory(
     order: SortOrder = SortOrder.ASCENDING,
     genres: Annotated[list[str] | None, Query()] = None,
     years: Annotated[list[int] | None, Query()] = None,
+    q: Annotated[str, Query(max_length=QUERY_MAX_LENGTH)] = "",
 ) -> InventoryOut:
     """一頁牆。`sort` 要在這個媒體庫的 `sorts` 上（否則 422 `sort_not_offered`）；`genres` 與
-    `years` 重複帶，同一種之間是「或」、兩種之間是「且」。排序與篩選只套在 `titles`：`tracked` 與
-    兩個篩選的數字是 Berth 的清單。"""
-    query = WallQuery(sort=sort, order=order, genres=tuple(genres or ()), years=tuple(years or ()))
+    `years` 重複帶，同一種之間是「或」、兩種之間是「且」；`q` 是名字裡的一段（Jellyfin 的
+    `searchTerm`，M2 票 14），前後的空白不算。排序、篩選與名字只套在 `titles`：`tracked` 與
+    兩個篩選的數字是 Berth 的。"""
+    query = WallQuery(
+        sort=sort,
+        order=order,
+        genres=tuple(genres or ()),
+        years=tuple(years or ()),
+        search=q.strip(),
+    )
     try:
         async with jellyfin_access(session, factory, cache, session_user(request)) as access:
             wall = await read_wall(session, access, library_id, page=page, query=query)
     except _WALL_REFUSALS as refusal:
         raise access_refusal(refusal) from refusal
+    # 媒體庫先過了權限閘門才數：看不到它的人連它有幾件待審都不該知道。
+    counts = await library_counts(session, wall.library.id)
     return InventoryOut(
         library=InventoryLibraryOut.model_validate(wall.library),
         jellyfin=JellyfinWebOut.model_validate(await jellyfin_web(session)),
@@ -196,8 +209,8 @@ async def get_inventory(
         total=wall.total,
         titles=[_card(card) for card in wall.titles],
         tracked=[_card(card) for card in wall.tracked],
-        review=wall.review,
-        unmatched=wall.unmatched,
+        review=counts[ReviewKind.PLAN],
+        unmatched=counts[ReviewKind.UNMATCHED],
     )
 
 

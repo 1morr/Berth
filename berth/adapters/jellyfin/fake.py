@@ -16,7 +16,8 @@
   `library_page` / `library_index` / `library_filters` 對他沒有權限的媒體庫照樣回內容。權限只在
   `user_views` 上成立——「Berth 自己擋」的測試要靠這台替身不替它擋，才證明得了是 Berth 擋的。
 - **牆真的照 `sortBy` 排、照 `genres` / `years` 篩**（研究 §3.1）：沒有值的排在升冪最前，`sortOrder`
-  套在每一個鍵上。類型與排序用的值擺在 `metadata`（`ItemMetadata`）。
+  套在每一個鍵上。類型與排序用的值擺在 `metadata`（`ItemMetadata`）。`searchTerm` 是名字裡的
+  一段、不分大小寫（M2 票 14，12.1.0 實測）。
 - **停用的帳號照樣代讀得到**：`user_views` 不看停用，只有 `user_policy` 說得出來（同上）。
   **刪掉的帳號**（從 `users` 拿掉）在 `user_policy` 是 `NotFoundError`（M2 票 11）。
 - **圖片匿名可取、`tag` 不驗證**（研究 §6）：`image` 不要 token，錯的 tag 一樣回圖。
@@ -396,16 +397,19 @@ class FakeJellyfinClient:
         sort_order: SortOrder,
         genres: Sequence[str],
         years: Sequence[int],
+        search: str = "",
     ) -> JellyfinPage:
         """類型之間、年份之間是「或」，兩者之間是「且」；`sort_order` 套在每一個鍵上
-        （研究 §3.1）。"""
+        （研究 §3.1）。`search` 是名字裡的一段、不分大小寫。"""
         asked = set(genres)
+        needle = search.casefold()
         titles = self._arranged(
             [
                 item
                 for item in self._browse(user_id, library_id, item_type)
                 if (not asked or asked & set(self._metadata(item).genres))
                 and (not years or item.year in years)
+                and needle in item.name.casefold()
             ],
             sort_by,
             sort_order,

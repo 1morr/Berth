@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { Inventory, InventoryCard, InventoryLibrary } from '../api/inventory'
+import type { PlanReviewRow, ReviewQueue, UnmatchedReviewRow } from '../api/review'
 import type { Watching } from '../api/watching'
 import { HEALTHY, session, stubApi, type StubRoute } from '../test/fetch'
 import { expectCurrentByStateOnly } from '../test/navState'
@@ -68,8 +69,6 @@ function tracking(overrides: Partial<NonNullable<InventoryCard['tracking']>> = {
     imported: 10,
     aired: 28,
     versions: 0,
-    needs_review: false,
-    has_unmatched: false,
     audits: 0,
     ...overrides,
   }
@@ -93,13 +92,7 @@ const SPY = jellyfinCard({
   poster_url_en: 'https://image.tmdb.org/t/p/w342/spy-en.jpg',
   presence: 'none',
   jellyfin_item_id: '',
-  tracking: tracking({
-    status: 'review',
-    imported: 0,
-    aired: 37,
-    needs_review: true,
-    has_unmatched: true,
-  }),
+  tracking: tracking({ status: 'review', imported: 0, aired: 37 }),
 })
 const FRIEREN = jellyfinCard({
   media_id: 'tv:209867',
@@ -759,41 +752,130 @@ describe('媒體庫頁', () => {
     })
   })
 
-  describe('篩選', () => {
-    it('「待審」換成 Berth 那一份清單：Jellyfin 內外的都在，帶子與分頁都收起來', async () => {
-      render()
+  describe('待審 / 對不到（M2 票 14）', () => {
+    /** 審核佇列在這個媒體庫上的那兩類（`GET /review?library=`）：一件待審核的計劃、兩個對不到的檔案。 */
+    const LIBRARY_QUEUE = `GET /api/review?library=${TV}`
+    const HELD: PlanReviewRow = {
+      kind: 'plan',
+      ref: 11,
+      reason: { code: 'low_confidence', params: { files: 0, low: 2, medium: 0 } },
+      actions: ['approve', 'reject'],
+      at: '2026-09-23T04:00:00Z',
+      media_id: 'tv:120089',
+      title: 'SPY×FAMILY 間諜家家酒',
+      title_en: 'SPY x FAMILY',
+      job_hash: '4bd0f6ef1d3b1e3cbb1e1b6b6c2a9c7d8e5f0a1b',
+      job_name: '[ANi] SPY×FAMILY - 05 [1080P][WEB-DL][AAC AVC][CHT]',
+      summary: {
+        files: 0,
+        high: 0,
+        medium: 0,
+        low: 2,
+        actions: { review: 2 },
+        review_reason: 'low_confidence',
+      },
+    }
+    function stray(ref: number, name: string): UnmatchedReviewRow {
+      return {
+        kind: 'unmatched',
+        ref,
+        reason: { code: 'left_in_place', params: {} },
+        actions: ['import', 'extra', 'skip'],
+        at: '2026-09-22T04:00:00Z',
+        media_id: 'tv:136315',
+        media_kind: 'tv',
+        title: 'The Bear',
+        title_en: 'The Bear',
+        job_hash: 'b'.repeat(40),
+        job_name: 'The.Bear.S03.1080p.WEB',
+        path: `/data/torrent/complete/tv/The.Bear.S03.1080p.WEB/${name}`,
+        file_kind: 'video',
+        reasons: [{ code: 'own_numbered_special', params: {} }],
+      }
+    }
+    const QUEUE: ReviewQueue = {
+      rows: [HELD, stray(21, 'The.Bear.Special.mkv'), stray(22, 'The.Bear.Extra.mkv')],
+      total: 3,
+      queue_total: 7,
+    }
+    const COUNTED = wall({ review: 1, unmatched: 2 })
+
+    function renderQueue(
+      routes: Record<string, StubRoute | (() => StubRoute)> = {},
+      role: 'admin' | 'user' = 'admin',
+    ) {
+      return render(
+        {
+          [`GET /api/inventory/${TV}`]: { body: COUNTED },
+          [LIBRARY_QUEUE]: { body: QUEUE },
+          ...routes,
+        },
+        role,
+      )
+    }
+
+    it('「待審」是一列一件事的清單，不是牆：每一列說得出為什麼在這，帶子與分頁收起來', async () => {
+      renderQueue()
       const { router } = renderApp(`/library/${TV}`)
 
       await userEvent.click(await screen.findByRole('link', { name: '待審 1' }))
 
       await waitFor(() => expect(router.state.location.search).toEqual({ filter: 'review' }))
-      expect(screen.getByRole('heading', { name: /SPY×FAMILY/ })).toBeVisible()
+      const list = await screen.findByRole('list', { name: '待審' })
+      const [row] = within(list).getAllByRole('article')
+      expect(within(list).getAllByRole('article')).toHaveLength(1)
+      expect(within(row!).getByText('待審核')).toBeVisible()
+      expect(within(row!).getByRole('heading', { name: 'SPY×FAMILY 間諜家家酒' })).toBeVisible()
+      expect(within(row!).getByText(/有檔案的季集要你確認/)).toBeVisible()
+      // 牆上的貨櫃一格都不剩：Jellyfin 那一頁、還沒進 Jellyfin 那一條與分頁都收起來。
       expect(screen.queryByRole('heading', { name: /Alpha Show/ })).not.toBeInTheDocument()
       expect(screen.queryByRole('region', { name: '還沒進 Jellyfin' })).not.toBeInTheDocument()
       expect(screen.queryByRole('navigation', { name: '分頁' })).not.toBeInTheDocument()
-      expect(screen.getByText('顯示 1 部作品')).toHaveAttribute('aria-live', 'polite')
+      expect(screen.getByText('顯示 1 件')).toHaveAttribute('aria-live', 'polite')
+    })
+
+    it('「對不到」一個檔案一列，就地指派；清單下方連到審核佇列裡其餘的件數', async () => {
+      renderQueue()
+      renderApp(`/library/${TV}?filter=unmatched`)
+
+      const list = await screen.findByRole('list', { name: '對不到' })
+      const rows = within(list).getAllByRole('article')
+      expect(rows).toHaveLength(2)
+      expect(within(rows[0]!).getByRole('heading')).toHaveTextContent(
+        'The Bear · The.Bear.Special.mkv',
+      )
+      expect(within(rows[0]!).getByText(/對不到任何一集，留在 complete 原位/)).toBeVisible()
+      // 表單就是這一列的工作：與 `/review` 同一個列元件，就地按。
+      expect(within(rows[0]!).getByRole('combobox', { name: '改成' })).toBeVisible()
+      expect(screen.getByRole('link', { name: '審核佇列裡還有 5 件' })).toHaveAttribute(
+        'href',
+        '/review',
+      )
     })
 
     it('選著的篩選是「當前的一個選項」而不是另一頁：不是連結，也不掛 aria-current="page"（票 13）', async () => {
-      render()
+      renderQueue()
       renderApp(`/library/${TV}?filter=review`)
 
       const filters = within(await screen.findByRole('navigation', { name: '篩選' }))
-      await screen.findByRole('heading', { name: /SPY×FAMILY/ })
+      await screen.findByRole('list', { name: '待審' })
 
       expect(filters.getByText('待審 1')).toHaveAttribute('aria-current', 'true')
       expect(filters.queryByRole('link', { name: '待審 1' })).not.toBeInTheDocument()
       expect(filters.getByRole('link', { name: '全部' })).not.toHaveAttribute('aria-current')
-      expect(filters.getByRole('link', { name: '對不到 1' })).not.toHaveAttribute('aria-current')
-      // 整頁只剩切換列上那一個「當前頁」。
+      // zh-Hant 的文案是「對不到」，不是名詞表裡的 `Unmatched`（票 11，使用者拍板）。
+      expect(filters.getByRole('link', { name: '對不到 2' })).not.toHaveAttribute('aria-current')
       expect(
         [...document.querySelectorAll('[aria-current="page"]')].map((node) => node.textContent),
       ).toEqual(['媒體庫', 'TV'])
     })
 
-    it('在第 2 頁換篩選不重抓，按回「全部」回到第 2 頁', async () => {
-      const second = wall({ page: 2, total: 150 })
-      const api = render({ [`GET /api/inventory/${TV}?page=2`]: { body: second } })
+    it('在第 2 頁換篩選不重抓牆，按回「全部」回到第 2 頁', async () => {
+      const api = renderQueue({
+        [`GET /api/inventory/${TV}?page=2`]: {
+          body: wall({ page: 2, total: 150, review: 1, unmatched: 2 }),
+        },
+      })
       const { router } = renderApp(`/library/${TV}?page=2`)
       await findTile('Alpha Show')
       // 換網址時路由守衛照樣問 `auth/me`，所以只數牆那一支。
@@ -805,34 +887,54 @@ describe('媒體庫頁', () => {
       await waitFor(() =>
         expect(router.state.location.search).toEqual({ page: 2, filter: 'review' }),
       )
+      await screen.findByRole('list', { name: '待審' })
       await userEvent.click(screen.getByRole('link', { name: '全部' }))
 
       await waitFor(() => expect(router.state.location.search).toEqual({ page: 2 }))
       expect(walls()).toBe(fetched)
     })
 
-    it('「對不到」也看得到已經在 Jellyfin 裡的作品', async () => {
-      const flagged = { ...BEAR, tracking: tracking({ has_unmatched: true }) }
-      render({ [`GET /api/inventory/${TV}`]: { body: wall({ tracked: [flagged, FRIEREN] }) } })
-      renderApp(`/library/${TV}?filter=unmatched`)
+    it('按完一列，那一列消失，篩選鍵上的數字跟著重問', async () => {
+      let decided = false
+      renderQueue({
+        [`GET /api/inventory/${TV}`]: () => ({
+          body: decided ? wall({ review: 0, unmatched: 2 }) : COUNTED,
+        }),
+        [LIBRARY_QUEUE]: () => ({
+          body: decided ? { ...QUEUE, rows: QUEUE.rows.slice(1) } : QUEUE,
+        }),
+        'POST /api/plans/11/approve': () => {
+          decided = true
+          return { body: {} }
+        },
+      })
+      renderApp(`/library/${TV}?filter=review`)
+      const list = await screen.findByRole('list', { name: '待審' })
 
-      // zh-Hant 的文案是「對不到」，不是名詞表裡的 `Unmatched`（票 11，使用者拍板）。
-      expect(await screen.findByText('對不到 1')).toHaveAttribute('aria-current', 'true')
-      expect(screen.queryByRole('link', { name: /Unmatched/ })).not.toBeInTheDocument()
-      expect(await screen.findByRole('heading', { name: 'The Bear' })).toBeVisible()
-      expect(screen.queryByRole('heading', { name: /葬送的芙莉蓮/ })).not.toBeInTheDocument()
+      await userEvent.click(within(list).getByRole('button', { name: '核准並入庫' }))
+
+      expect(await screen.findByText('這個媒體庫沒有待審核的下載。')).toBeVisible()
+      expect(await screen.findByText('待審 0')).toHaveAttribute('aria-current', 'true')
     })
 
-    it('網址上不認得的篩選值當成沒有篩選，不落進 Unmatched', async () => {
-      // 三顆篩選鍵都不會被標成當前，畫面卻只剩 Berth 經手的那幾部——使用者看到的是一份他沒有要的清單。
-      const flagged = { ...BEAR, tracking: tracking({ has_unmatched: true }) }
-      render({ [`GET /api/inventory/${TV}`]: { body: wall({ tracked: [flagged, FRIEREN] }) } })
+    it('一般使用者沒有這兩個篩選：那是管理員的工作佇列，網址上帶著也照畫整面牆', async () => {
+      const api = renderQueue({}, 'user')
+      renderApp(`/library/${TV}?filter=review`)
+
+      expect(await findTile('Alpha Show')).toBeVisible()
+      expect(screen.queryByRole('navigation', { name: '篩選' })).not.toBeInTheDocument()
+      expect(screen.queryByRole('link', { name: /待審/ })).not.toBeInTheDocument()
+      expect(api.mock.calls.some(([input]) => String(input).startsWith('/api/review'))).toBe(false)
+    })
+
+    it('網址上不認得的篩選值當成沒有篩選，不落進對不到', async () => {
+      renderQueue()
       renderApp(`/library/${TV}?filter=nonsense`)
 
-      // Jellyfin 那一頁照畫（分頁與帶子都在），不是被篩成 Berth 的那一份清單。
+      // Jellyfin 那一頁照畫（分頁與帶子都在），不是審核佇列那一份清單。
       expect(await findTile('Alpha Show')).toBeVisible()
       expect(screen.getByText('1–3 / 3')).toBeVisible()
-      expect(screen.queryByText('顯示 1 部作品')).not.toBeInTheDocument()
+      expect(screen.queryByRole('list', { name: '對不到' })).not.toBeInTheDocument()
     })
 
     it.each([
@@ -849,15 +951,24 @@ describe('媒體庫頁', () => {
       expect(router.state.matches.at(-1)?.search).toMatchObject(expected)
     })
 
-    it('篩完什麼都沒有時，給一條回到全部的路', async () => {
-      render({ [`GET /api/inventory/${TV}`]: { body: wall({ tracked: [BEAR] }) } })
-      renderApp(`/library/${TV}?filter=review`)
+    it('清單是空的時說這個媒體庫沒有這一種事，給一條回到全部的路', async () => {
+      renderQueue({ [LIBRARY_QUEUE]: { body: { rows: [], total: 0, queue_total: 4 } } })
+      renderApp(`/library/${TV}?filter=unmatched`)
 
-      expect(await screen.findByText('這個媒體庫沒有待審的作品。')).toBeVisible()
+      expect(await screen.findByText('這個媒體庫沒有對不到的檔案。')).toBeVisible()
       expect(screen.getByRole('link', { name: '顯示全部' })).toHaveAttribute(
         'href',
         `/library/${TV}`,
       )
+      expect(screen.getByRole('link', { name: '審核佇列裡還有 4 件' })).toBeVisible()
+    })
+
+    it('讀不到審核佇列時說一句，篩選列照樣在', async () => {
+      renderQueue({ [LIBRARY_QUEUE]: { status: 500, body: {} } })
+      renderApp(`/library/${TV}?filter=review`)
+
+      expect(await screen.findByText(/讀不到審核佇列/)).toBeVisible()
+      expect(screen.getByRole('link', { name: '全部' })).toBeVisible()
     })
   })
 
@@ -1121,6 +1232,135 @@ describe('媒體庫頁', () => {
     })
   })
 
+  describe('按名字找（M2 票 14）', () => {
+    const BEAR_ONLY = wall({ titles: [BEAR], total: 1 })
+    /** 牆那一支每一次問的網址（類型年份清單與上方兩列是另外的端點）。 */
+    const asked = (api: ReturnType<typeof render>) =>
+      api.mock.calls
+        .map(([input]) => String(input))
+        .filter((url) => url.startsWith(`/api/inventory/${TV}`) && !url.includes('/watching'))
+
+    it('打字之後寫進網址、回到第 1 頁，向後端要那一面牆；打字途中不是每個字都問一次', async () => {
+      const api = render({
+        [`GET /api/inventory/${TV}?page=2`]: { body: wall({ page: 2, total: 150 }) },
+        [`GET /api/inventory/${TV}?q=bear`]: { body: BEAR_ONLY },
+      })
+      const { router } = renderApp(`/library/${TV}?page=2`)
+      await findTile('Alpha Show')
+      const entries = router.history.length
+
+      await userEvent.type(screen.getByRole('searchbox', { name: '按名字找' }), 'bear')
+
+      await waitFor(() => expect(router.state.location.search).toEqual({ q: 'bear' }))
+      expect(await findTile('The Bear')).toBeVisible()
+      expect(screen.queryByRole('heading', { name: /Alpha Show/ })).not.toBeInTheDocument()
+      expect(asked(api).filter((url) => url.includes('q='))).toEqual([
+        `/api/inventory/${TV}?q=bear`,
+      ])
+      // 焦點留在搜尋框裡：換牆的時候它沒有被卸掉。
+      expect(screen.getByRole('searchbox', { name: '按名字找' })).toHaveFocus()
+      // 換的是這一筆歷史紀錄：上一頁回到搜尋之前，不是每一段打到一半的字。
+      expect(router.history.length).toBe(entries)
+    })
+
+    it('停在空白上時不吃掉那個空白：網址是去掉空白的名字，框裡的字照打的樣子', async () => {
+      render({
+        [`GET /api/inventory/${TV}?q=the`]: { body: wall() },
+        [`GET /api/inventory/${TV}?q=the+bear`]: { body: BEAR_ONLY },
+      })
+      const { router } = renderApp(`/library/${TV}`)
+      await findTile('Alpha Show')
+      const box = screen.getByRole('searchbox', { name: '按名字找' })
+
+      await userEvent.type(box, 'the ')
+      await waitFor(() => expect(router.state.location.search).toEqual({ q: 'the' }))
+      await userEvent.type(box, 'bear')
+
+      expect(box).toHaveValue('the bear')
+      await waitFor(() => expect(router.state.location.search).toEqual({ q: 'the bear' }))
+    })
+
+    it('重新整理與分享的連結還原得回來：搜尋框照網址，向後端要同一面牆', async () => {
+      const api = render({ [`GET /api/inventory/${TV}?q=bear`]: { body: BEAR_ONLY } })
+      renderApp(`/library/${TV}?q=bear`)
+
+      expect(await screen.findByRole('searchbox', { name: '按名字找' })).toHaveValue('bear')
+      expect(await findTile('The Bear')).toBeVisible()
+      expect(asked(api)).toEqual([`/api/inventory/${TV}?q=bear`])
+    })
+
+    it('搜尋時「還沒進 Jellyfin」那一條收起：它們不在 Jellyfin 的搜尋結果裡', async () => {
+      render({ [`GET /api/inventory/${TV}?q=bear`]: { body: BEAR_ONLY } })
+      renderApp(`/library/${TV}?q=bear`)
+
+      await findTile('The Bear')
+
+      expect(screen.queryByRole('region', { name: '還沒進 Jellyfin' })).not.toBeInTheDocument()
+    })
+
+    it('分頁鍵帶著搜尋；清空搜尋框就回到整面牆', async () => {
+      render({
+        [`GET /api/inventory/${TV}?q=show`]: { body: wall({ total: 120 }) },
+      })
+      const { router } = renderApp(`/library/${TV}?q=show`)
+      await findTile('Alpha Show')
+
+      expect(
+        within(screen.getByRole('navigation', { name: '分頁' })).getByRole('link', {
+          name: '下一頁',
+        }),
+      ).toHaveAttribute('href', `/library/${TV}?page=2&q=show`)
+      await userEvent.clear(screen.getByRole('searchbox', { name: '按名字找' }))
+
+      await waitFor(() => expect(router.state.location.search).toEqual({}))
+    })
+
+    it('搜不到時說搜了什麼，給一條清掉搜尋的路（類型與排序留著）', async () => {
+      render({
+        [`GET /api/inventory/${TV}?sort=CommunityRating&genres=Drama&q=zzz`]: {
+          body: wall({ total: 0, titles: [] }),
+        },
+      })
+      const genres = encodeURIComponent(JSON.stringify(['Drama']))
+      renderApp(`/library/${TV}?sort=CommunityRating&genres=${genres}&q=zzz`)
+
+      expect(await screen.findByText('這個媒體庫沒有符合篩選的作品。')).toBeVisible()
+      expect(screen.getByText('名字含「zzz」')).toBeVisible()
+      expect(screen.getByText('類型：Drama')).toBeVisible()
+      expect(screen.getByRole('link', { name: '清除搜尋' })).toHaveAttribute(
+        'href',
+        `/library/${TV}?sort=CommunityRating&genres=${genres}`,
+      )
+      expect(screen.getByRole('link', { name: '清除類型與年份' })).toHaveAttribute(
+        'href',
+        `/library/${TV}?sort=CommunityRating&q=zzz`,
+      )
+    })
+
+    it('只打了空白不算在找', async () => {
+      const api = render()
+      const { router } = renderApp(`/library/${TV}`)
+      await findTile('Alpha Show')
+
+      await userEvent.type(screen.getByRole('searchbox', { name: '按名字找' }), '   ')
+      await new Promise((resolve) => setTimeout(resolve, 600))
+
+      expect(router.state.location.search).toEqual({})
+      expect(asked(api)).toEqual([`/api/inventory/${TV}`])
+    })
+
+    it('「待審」「對不到」是審核佇列的清單，沒有搜尋框', async () => {
+      render({
+        [`GET /api/review?library=${TV}`]: { body: { rows: [], total: 0, queue_total: 0 } },
+      })
+      renderApp(`/library/${TV}?filter=review`)
+
+      await screen.findByText('這個媒體庫沒有待審核的下載。')
+
+      expect(screen.queryByRole('searchbox')).not.toBeInTheDocument()
+    })
+  })
+
   describe('空與錯', () => {
     it('媒體庫是空的時說得出下一步', async () => {
       render({
@@ -1277,8 +1517,6 @@ describe('媒體庫頁', () => {
         'Alpha Show',
         { [`GET /api/inventory/${TV}?page=2`]: { body: wall({ page: 2, total: 150 }) } },
       ],
-      // 待審那一面牆是 Berth 的清單：Alpha Show 不在上面。
-      ['待審', `?filter=review`, 'SPY', {}],
       [
         '篩類型',
         `?genres=${encodeURIComponent(JSON.stringify(['Drama']))}`,
@@ -1290,6 +1528,19 @@ describe('媒體庫頁', () => {
       renderApp(`/library/${TV}${search}`)
 
       await findTile(shown)
+
+      expect(screen.queryByRole('region', { name: '下一集' })).not.toBeInTheDocument()
+      expect(asked(api)).toEqual([])
+    })
+
+    it('待審時不畫、也不問：那是審核佇列的清單', async () => {
+      const api = render({
+        [`GET ${WATCHING}`]: rows(),
+        [`GET /api/review?library=${TV}`]: { body: { rows: [], total: 0, queue_total: 0 } },
+      })
+      renderApp(`/library/${TV}?filter=review`)
+
+      await screen.findByText('這個媒體庫沒有待審核的下載。')
 
       expect(screen.queryByRole('region', { name: '下一集' })).not.toBeInTheDocument()
       expect(asked(api)).toEqual([])

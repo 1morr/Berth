@@ -18,7 +18,7 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Iterable, Iterator, Sequence
+from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import PurePosixPath
@@ -105,10 +105,6 @@ class Tracking:
     aired: int
     #: 電影的正片有幾個版本（brief §7.7）。劇集的版本在詳情頁逐集列，這裡是 0。
     versions: int
-    #: 指向這個媒體庫的 Route 上有一份計劃停下來等人。
-    needs_review: bool
-    #: 有 Job 現在那一份計劃裡有對不到的檔案（預估不算）。
-    has_unmatched: bool
     #: medium 自動入庫、掛著 audit 的檔案數，這部作品在這個媒體庫的每一筆 Job 加總
     #: （brief §6.5、票 15）。
     audits: int
@@ -157,11 +153,9 @@ class InventoryWall:
     #: Jellyfin 的這一頁。
     titles: tuple[InventoryCard, ...]
     #: 這個媒體庫上 Berth 經手的**每一部**，不分頁：畫面從這裡取「還沒進 Jellyfin」那一份
-    #: （`presence` 不是 `found` 的）與兩個篩選的結果。
+    #: （`presence` 不是 `found` 的）。「待審」「對不到」兩個篩選不在這裡：它們是審核佇列的子集
+    #: （`services/review.library_queue`，M2 票 14）。
     tracked: tuple[InventoryCard, ...]
-    #: 兩個篩選的數字：`tracked` 裡有計劃停下來等人的、有對不到的檔案的（Jellyfin 內外都算）。
-    review: int
-    unmatched: int
 
 
 # --- 一部作品的內容 -----------------------------------------------------------
@@ -290,7 +284,7 @@ async def read_wall(
     """一個媒體庫的一頁牆。媒體庫不在這個人的允許清單上時丟 `LibraryNotVisibleError`，
     而且在問 Jellyfin 或讀 Berth 的任何東西之前。
 
-    `query` 只套在 Jellyfin 那一頁（票 06）：`tracked` 與兩個篩選的數字是 Berth 的清單，
+    `query` 只套在 Jellyfin 那一頁（票 06）：`tracked` 是 Berth 的清單，
     沒有 Jellyfin 的類型可以篩。
     """
     library = access.library(library_id)
@@ -322,8 +316,6 @@ async def read_wall(
                 key=lambda card: (card.title.casefold(), card.media_id),
             )
         ),
-        review=sum(row.tracking.needs_review for row in tracked),
-        unmatched=sum(row.tracking.has_unmatched for row in tracked),
     )
 
 
@@ -540,7 +532,6 @@ async def _survey(
             # 前綴只是粗篩：`/data/library/tv/anime` 可能是另一條更深的 Route 的目標。
             if owning_route(entry.target_path, routes) in mine:
                 entries[entry.id] = entry
-    flagged = await _unmatched_jobs(session, [job.hash for job in jobs])
     audits = await _audits(session, [job.hash for job in jobs])
     # **先分組、一次走完**：逐部作品去篩整張帳本是作品數 × 帳本列數，1,000 部 × 12 集在
     # 容器裡要 3 秒，一頁牆超過門檻的就是它（M2 票 11，研究 large-library.md）。
@@ -558,7 +549,6 @@ async def _survey(
             media,
             jobs_of.get(media.id, []),
             entries_of.get(media.id, []),
-            flagged=flagged,
             audits=audits,
             today=today,
         )
@@ -615,24 +605,6 @@ def _tracked_card(
     )
 
 
-async def _unmatched_jobs(session: AsyncSession, job_hashes: Iterable[str]) -> set[str]:
-    """現在那一份計劃裡有對不到的檔案的 Job。
-
-    **預估不算**：pre-plan 沒讀過檔案本身（brief §5.1），下載完成之後會重算一份。
-    """
-    rows = await session.scalars(
-        select(Plan.job_hash)
-        .join(PlanItem, PlanItem.plan_id == Plan.id)
-        .where(
-            Plan.job_hash.in_(list(job_hashes)),
-            Plan.status != PlanStatus.PREPLAN,
-            PlanItem.action == PlanAction.UNMATCHED,
-        )
-        .distinct()
-    )
-    return {job_hash for job_hash in rows if job_hash is not None}
-
-
 async def _audits(session: AsyncSession, job_hashes: Sequence[str]) -> dict[str, int]:
     """每一筆 Job 現在那一份計劃裡掛著 audit 的檔案數。audit 只在真的自動入庫時才掛
     （`services/plan._audit`），所以不必再排除預估。"""
@@ -650,7 +622,6 @@ def _tracked(
     jobs: Sequence[Job],
     entries: Sequence[LedgerEntry],
     *,
-    flagged: set[str],
     audits: dict[str, int],
     today: date,
 ) -> _Tracked:
@@ -671,8 +642,6 @@ def _tracked(
             imported=imported,
             aired=aired,
             versions=versions,
-            needs_review=JobState.REVIEW in states,
-            has_unmatched=any(job.hash in flagged for job in jobs),
             audits=sum(audits.get(job.hash, 0) for job in jobs),
         ),
         links=frozenset(link for link in links if link),

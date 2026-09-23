@@ -457,12 +457,14 @@ class JellyfinClient(Protocol):
         sort_order: SortOrder,
         genres: Sequence[str],
         years: Sequence[int],
+        search: str = "",
     ) -> JellyfinPage:
         """一個媒體庫的一頁作品。參數照 jellyfin-web 的劇集庫與電影庫（研究 §7）。
 
         `sort_by` 是 `sortBy` 的每一個鍵，`sort_order` 套在每一個鍵上（jellyfin-web 只送一個）。
         `genres` 之間、`years` 之間是「或」，兩者之間是「且」；空的就是不篩
-        （研究 §3.1，12.1.0 實測）。
+        （研究 §3.1，12.1.0 實測）。`search` 是 `searchTerm`：名字裡的一段、不分大小寫，
+        照樣照 `sortBy` 排（M2 票 14，12.1.0 實測）；空的就是不搜。
         """
         ...
 

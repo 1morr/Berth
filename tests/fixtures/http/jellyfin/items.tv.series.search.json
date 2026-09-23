@@ -1,0 +1,134 @@
+{
+  "Items": [
+    {
+      "AirDays": [],
+      "BackdropImageTags": [
+        "cefa6c9b123351b339ad5fd702863a66"
+      ],
+      "ChannelId": null,
+      "CommunityRating": 7,
+      "Id": "2a9857e656bbd18b7c3c3a3b4ee5eef1",
+      "ImageBlurHashes": {
+        "Backdrop": {
+          "cefa6c9b123351b339ad5fd702863a66": "W23V}qptfQptfQptqBfkfQfkfQfkfQfQfQfQfQfQqBfkfQfkfQfk"
+        },
+        "Primary": {
+          "cefa6c9b123351b339ad5fd702863a66": "d23KQ.pLfQpLktfkfQfkfQfQfQfQktfkfQfkfQfQfQfQ"
+        },
+        "Thumb": {
+          "cefa6c9b123351b339ad5fd702863a66": "W2FgQ{=vfQ=vfQ=v}qj@fQj@fQj@fQfQfQfQfQfQ}qj@fQj@fQj@"
+        }
+      },
+      "ImageTags": {
+        "Primary": "cefa6c9b123351b339ad5fd702863a66",
+        "Thumb": "cefa6c9b123351b339ad5fd702863a66"
+      },
+      "IsFolder": true,
+      "LocationType": "FileSystem",
+      "MediaType": "Unknown",
+      "Name": "Alpha Show",
+      "OfficialRating": "TV-14",
+      "Path": "/media/tv/Alpha Show (2022) [tmdbid-1399]",
+      "PremiereDate": "2022-04-01T00:00:00.0000000Z",
+      "PrimaryImageAspectRatio": 0.6666666666666666,
+      "ProductionYear": 2022,
+      "ProviderIds": {
+        "Tmdb": "1399"
+      },
+      "ServerId": "3eeefec8fd4f479688993f529c346b8e",
+      "Type": "Series",
+      "UserData": {
+        "IsFavorite": false,
+        "ItemId": "2a9857e656bbd18b7c3c3a3b4ee5eef1",
+        "Key": "2a9857e6-56bb-d18b-7c3c-3a3b4ee5eef1",
+        "PlayCount": 0,
+        "PlaybackPositionTicks": 0,
+        "Played": false,
+        "PlayedPercentage": 20,
+        "UnplayedItemCount": 4
+      }
+    },
+    {
+      "AirDays": [],
+      "BackdropImageTags": [
+        "616e1316fd31dd7ef2814d879ec717b3"
+      ],
+      "ChannelId": null,
+      "CommunityRating": 9,
+      "Id": "6d616414836b339f17e139c3b00fd2ae",
+      "ImageBlurHashes": {
+        "Backdrop": {
+          "616e1316fd31dd7ef2814d879ec717b3": "W23V}qptfQptfQptqBfkfQfkfQfkfQfQfQfQfQfQqBfkfQfkfQfk"
+        },
+        "Primary": {
+          "616e1316fd31dd7ef2814d879ec717b3": "d23KQ.pLfQpLktfkfQfkfQfQfQfQktfkfQfkfQfQfQfQ"
+        }
+      },
+      "ImageTags": {
+        "Primary": "616e1316fd31dd7ef2814d879ec717b3"
+      },
+      "IsFolder": true,
+      "LocationType": "FileSystem",
+      "MediaType": "Unknown",
+      "Name": "Bravo Show",
+      "OfficialRating": "TV-MA",
+      "Path": "/media/tv/Bravo Show (2020) [tmdbid-1396]",
+      "PremiereDate": "2020-01-20T00:00:00.0000000Z",
+      "PrimaryImageAspectRatio": 0.6666666666666666,
+      "ProductionYear": 2020,
+      "ProviderIds": {
+        "Tmdb": "1396"
+      },
+      "ServerId": "3eeefec8fd4f479688993f529c346b8e",
+      "Type": "Series",
+      "UserData": {
+        "IsFavorite": false,
+        "ItemId": "6d616414836b339f17e139c3b00fd2ae",
+        "Key": "6d616414-836b-339f-17e1-39c3b00fd2ae",
+        "PlayCount": 0,
+        "PlaybackPositionTicks": 0,
+        "Played": false,
+        "PlayedPercentage": 50,
+        "UnplayedItemCount": 1
+      }
+    },
+    {
+      "AirDays": [],
+      "BackdropImageTags": [],
+      "ChannelId": null,
+      "Id": "9ea3bb1459aa4795a5ebf54b94fe0cc9",
+      "ImageBlurHashes": {
+        "Primary": {
+          "37d3b94b9897fbb7ff840981c31a7c74": "d23KQ.pLfQpLktfkfQfkfQfQfQfQktfkfQfkfQfQfQfQ"
+        }
+      },
+      "ImageTags": {
+        "Primary": "37d3b94b9897fbb7ff840981c31a7c74"
+      },
+      "IsFolder": true,
+      "LocationType": "FileSystem",
+      "MediaType": "Unknown",
+      "Name": "Hotel Show",
+      "OfficialRating": "TV-G",
+      "Path": "/media/tv/Hotel Show (2021)",
+      "PremiereDate": "2021-06-01T00:00:00.0000000Z",
+      "PrimaryImageAspectRatio": 0.6666666666666666,
+      "ProductionYear": 2021,
+      "ProviderIds": {},
+      "ServerId": "3eeefec8fd4f479688993f529c346b8e",
+      "Type": "Series",
+      "UserData": {
+        "IsFavorite": false,
+        "ItemId": "9ea3bb1459aa4795a5ebf54b94fe0cc9",
+        "Key": "9ea3bb14-59aa-4795-a5eb-f54b94fe0cc9",
+        "PlayCount": 0,
+        "PlaybackPositionTicks": 0,
+        "Played": false,
+        "PlayedPercentage": 0,
+        "UnplayedItemCount": 1
+      }
+    }
+  ],
+  "StartIndex": 0,
+  "TotalRecordCount": 3
+}

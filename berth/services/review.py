@@ -8,6 +8,10 @@
 `services/plan_review.py`，rematch 在 `services/rematch.py`，重複版本的三顆在
 `services/duplicates.py`。
 
+**媒體庫頁的「待審 / 對不到」是這份佇列的子集**（M2 票 14）：`plan` 與 `unmatched` 兩類、Job 的
+Route 指向那個 Jellyfin 媒體庫的（`library_queue`）。同一支查詢多一個條件，所以篩選鍵上的數字、
+那兩個篩選的清單與 `/review` 上同一件事永遠是同一個判定。
+
 排序是 plan §6 定的：**需要人動手的排前面**（`REVIEW_PRIORITY`），同一級之內舊的在前——
 等得最久的那一件最該先看。**不分頁**：超過 `QUEUE_LIMIT` 列時回前面那幾列並帶 `total`，
 那時候該修的是上游（一次掛載掉了、一條 Route 的 medium 規則太鬆），不是加一個分頁器。
@@ -27,13 +31,14 @@ audit 的兩顆按鈕也在這裡（CONTEXT.md 的 Audit）：
 from __future__ import annotations
 
 import logging
-from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
+from collections.abc import AsyncIterator, Awaitable, Callable, Mapping, Sequence
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import datetime
+from functools import partial
 from pathlib import Path
 
-from sqlalchemy import Select, func, or_, select
+from sqlalchemy import ColumnElement, Select, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from berth.adapters import fs
@@ -62,7 +67,7 @@ from berth.domain import (
 )
 from berth.domain import ReasonCode as Code
 from berth.logs import job_context
-from berth.models import Issue, Job, JobFile, LedgerEntry, Media, Plan, PlanItem
+from berth.models import Issue, Job, JobFile, LedgerEntry, Media, Plan, PlanItem, Route
 from berth.services.deletion import remove_one, route_targets
 from berth.services.issues import IssueView, list_issues
 from berth.services.jobs import job_lock, record_event, transition
@@ -233,16 +238,45 @@ class _Producer:
 
 
 async def review_queue(session: AsyncSession, *, limit: int = QUEUE_LIMIT) -> ReviewQueue:
-    """整份佇列，排好、截好（plan §6）。
+    """整份佇列，排好、截好（plan §6）。"""
+    return await _collect(session, _PRODUCERS, limit)
 
-    **逐類問，不是全部拿回來再排**：一次掛載掉了會讓整個媒體庫變成 Issue，而截掉的那幾千列
+
+async def review_total(session: AsyncSession) -> int:
+    """整份佇列幾件，不拿任何一列。"""
+    return sum([await producer.count(session) for producer in _PRODUCERS.values()])
+
+
+async def library_queue(
+    session: AsyncSession, library_id: str, *, limit: int = QUEUE_LIMIT
+) -> ReviewQueue:
+    """一個 Jellyfin 媒體庫的「待審 / 對不到」（M2 票 14）：`plan` 與 `unmatched` 兩類，Job 的
+    Route 指向它的。排序與上限同整份佇列；`total` 只算這兩類。
+
+    媒體庫 id 只拿來挑 Route，不問 Jellyfin：誰看得到那個媒體庫是牆那一支的事，而這一支只有
+    admin 進得來（`review/*`）。
+    """
+    return await _collect(session, _in_library(library_id), limit)
+
+
+async def library_counts(session: AsyncSession, library_id: str) -> dict[ReviewKind, int]:
+    """`library_queue` 每一類有幾件：媒體庫牆上兩個篩選鍵的數字。"""
+    return {
+        kind: await producer.count(session) for kind, producer in _in_library(library_id).items()
+    }
+
+
+async def _collect(
+    session: AsyncSession, producers: Mapping[ReviewKind, _Producer], limit: int
+) -> ReviewQueue:
+    """**逐類問，不是全部拿回來再排**：一次掛載掉了會讓整個媒體庫變成 Issue，而截掉的那幾千列
     不該先整份讀進記憶體。所以每一類先數、再照「還剩幾格」拿最舊的那幾列——類與類之間的
     順序本來就是固定的（`REVIEW_PRIORITY`），只有類內要排。
     """
     rows: list[ReviewRow] = []
     total = 0
-    for kind in sorted(_PRODUCERS, key=lambda kind: REVIEW_PRIORITY[kind]):
-        producer = _PRODUCERS[kind]
+    for kind in sorted(producers, key=lambda kind: REVIEW_PRIORITY[kind]):
+        producer = producers[kind]
         total += await producer.count(session)
         room = limit - len(rows)
         if room > 0:
@@ -420,7 +454,7 @@ def _audit_row(
     )
 
 
-def _held_plans() -> Select[tuple[Plan, Job, Media]]:
+def _held_plans(library_id: str | None = None) -> Select[tuple[Plan, Job, Media]]:
     """停在 review 的 Plan：Plan 在等人、**那筆 Job 也還在 `review`**。
 
     Media 是外連接，可能是 `None`（型別照 SQLAlchemy 的推導寫，讀的那一端當可空處理）。
@@ -428,21 +462,31 @@ def _held_plans() -> Select[tuple[Plan, Job, Media]]:
     兩件事都要成立：`importing` 途中停下來的那一刻 Plan 先變 `pending_review`，Job 的轉換在
     同一個交易裡，但只看其中一邊的話，一份被重新規劃換掉之前的舊狀態也會被算進來。
     """
-    return (
+    held = (
         select(Plan, Job, Media)
         .join(Job, Job.hash == Plan.job_hash)
         .outerjoin(Media, Media.id == Job.media_id)
         .where(Plan.status == PlanStatus.PENDING_REVIEW, Job.state == JobState.REVIEW)
     )
+    return held if library_id is None else held.where(_into(library_id))
 
 
-async def _count_plans(session: AsyncSession) -> int:
-    counted = select(func.count()).select_from(_held_plans().subquery())
+def _into(library_id: str) -> ColumnElement[bool]:
+    """Job 的 Route 指向這個 Jellyfin 媒體庫（媒體庫牆 `_survey` 的同一條規則）。"""
+    return Job.route_id.in_(select(Route.id).where(Route.jellyfin_library_id == library_id))
+
+
+async def _count_plans(session: AsyncSession, library_id: str | None = None) -> int:
+    counted = select(func.count()).select_from(_held_plans(library_id).subquery())
     return int(await session.scalar(counted) or 0)
 
 
-async def _fetch_plans(session: AsyncSession, limit: int) -> list[PlanRow]:
-    found = await session.execute(_held_plans().order_by(Plan.created_at, Plan.id).limit(limit))
+async def _fetch_plans(
+    session: AsyncSession, limit: int, library_id: str | None = None
+) -> list[PlanRow]:
+    found = await session.execute(
+        _held_plans(library_id).order_by(Plan.created_at, Plan.id).limit(limit)
+    )
     return [_plan_row(*row) for row in found.tuples()]
 
 
@@ -474,14 +518,16 @@ async def _fetch_issues(session: AsyncSession, limit: int) -> list[IssueRow]:
     return [IssueRow(issue=view) for view in views]
 
 
-def _unmatched() -> Select[tuple[PlanItem, Plan, Job, JobFile, Media]]:
+def _unmatched(
+    library_id: str | None = None,
+) -> Select[tuple[PlanItem, Plan, Job, JobFile, Media]]:
     """Job 那一份**定案了**的 Plan 裡對不到的檔案（`SETTLED_PLANS`：預估與等審核的那幾份裡，它們是
     Plan 編輯的一列）。下載被刪掉（`removed`）的那幾筆不算：檔案多半已經不在了。
 
     **光碟結構不列**：整包光碟的每一個檔案都是 `disc`（brief §6.2），一包 BDMV 會把佇列塞滿幾百列
     而它們只能忽略——第一階段不拆光碟。它們仍在 Media 詳情的 Unmatched 區。
     """
-    return (
+    found = (
         select(PlanItem, Plan, Job, JobFile, Media)
         .join(Plan, Plan.id == PlanItem.plan_id)
         .join(Job, Job.hash == Plan.job_hash)
@@ -494,15 +540,20 @@ def _unmatched() -> Select[tuple[PlanItem, Plan, Job, JobFile, Media]]:
             or_(JobFile.kind.is_(None), JobFile.kind != FileKind.DISC),
         )
     )
+    return found if library_id is None else found.where(_into(library_id))
 
 
-async def _count_unmatched(session: AsyncSession) -> int:
-    counted = select(func.count()).select_from(_unmatched().subquery())
+async def _count_unmatched(session: AsyncSession, library_id: str | None = None) -> int:
+    counted = select(func.count()).select_from(_unmatched(library_id).subquery())
     return int(await session.scalar(counted) or 0)
 
 
-async def _fetch_unmatched(session: AsyncSession, limit: int) -> list[UnmatchedRow]:
-    found = await session.execute(_unmatched().order_by(Plan.created_at, PlanItem.id).limit(limit))
+async def _fetch_unmatched(
+    session: AsyncSession, limit: int, library_id: str | None = None
+) -> list[UnmatchedRow]:
+    found = await session.execute(
+        _unmatched(library_id).order_by(Plan.created_at, PlanItem.id).limit(limit)
+    )
     return [_unmatched_row(*row) for row in found.tuples()]
 
 
@@ -601,3 +652,17 @@ _PRODUCERS: dict[ReviewKind, _Producer] = {
     ReviewKind.DUPLICATE: _Producer(count=_count_duplicates, fetch=_fetch_duplicates),
     ReviewKind.ISSUE: _Producer(count=_count_issues, fetch=_fetch_issues),
 }
+
+
+def _in_library(library_id: str) -> dict[ReviewKind, _Producer]:
+    """`library_queue` 的兩類：同兩支查詢，多一個 Route 的條件。"""
+    return {
+        ReviewKind.PLAN: _Producer(
+            count=partial(_count_plans, library_id=library_id),
+            fetch=partial(_fetch_plans, library_id=library_id),
+        ),
+        ReviewKind.UNMATCHED: _Producer(
+            count=partial(_count_unmatched, library_id=library_id),
+            fetch=partial(_fetch_unmatched, library_id=library_id),
+        ),
+    }

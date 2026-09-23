@@ -1736,6 +1736,44 @@ async def test_jellyfin_years_are_filtered_by_the_server() -> None:
 
 @respx.mock
 @pytest.mark.asyncio
+async def test_jellyfin_search_term_is_filtered_by_the_server() -> None:
+    """`searchTerm` 是名字裡的一段，不分大小寫（M2 票 14：媒體庫牆的 `q`）。Frieren 不含 show，
+    剩下三部，而且照 `sortBy` 排——搜尋不會把排序換成相關度。錄製那一輪另外量了字中間的一段
+    （`lpha`）、字首（`frie`）與只在無權媒體庫的名字（研究 library-browsing.md §3.1）。"""
+    fixture = "items.tv.series.search.json"
+    route = respx.get(f"{JELLYFIN_URL}/Items").respond(
+        200, text=read_fixture(f"http/jellyfin/{fixture}")
+    )
+
+    client = jellyfin_client("key")
+    try:
+        page = await client.library_page(
+            user_id=RESTRICTED_USER,
+            library_id=TV_LIBRARY,
+            item_type="Series",
+            start=0,
+            limit=100,
+            sort_by=("SortName",),
+            sort_order=SortOrder.ASCENDING,
+            genres=(),
+            years=(),
+            search="show",
+        )
+    finally:
+        await client.aclose()
+
+    assert dict(route.calls.last.request.url.params) == {
+        **WALL_QUERY,
+        "searchTerm": "show",
+        "startIndex": "0",
+        "limit": "100",
+    }
+    assert [item.name for item in page.items] == ["Alpha Show", "Bravo Show", "Hotel Show"]
+    assert page.total == 3
+
+
+@respx.mock
+@pytest.mark.asyncio
 async def test_jellyfin_filters_are_the_genres_and_years_of_this_library_only() -> None:
     """`/Items/Filters`（jellyfin-web 篩選面板那一支，研究 §3.2）。`parentId` 與 `includeItemTypes`
     真的有作用：Movies 才有的 Science Fiction、2018、2024，與沒有權限的 Anime 的 Mecha、2019

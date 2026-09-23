@@ -195,6 +195,10 @@ DTO 上的那個值單調、兩者順序不同：
 | `genres=Science Fiction&years=2024` | 1 筆 | 兩個參數之間是「且」 |
 | `genres=Mecha`、`years=2019`（只在沒權限的 Anime） | 0 筆 | 不帶 `parentId` 時有照權限過濾 |
 | 對照：`genre=Drama`、`year=2022`（少一個 s） | 7 筆，與對照相同 | **被靜默忽略** |
+| `searchTerm=show` / `searchTerm=SHOW`（M2 票 14 補驗，2026-09-24） | 同樣 3 部：Alpha、Bravo、Hotel Show | 有過濾，**不分大小寫** |
+| `searchTerm=lpha` / `searchTerm=frie` | Alpha Show / Frieren | 比對的是名字裡的**任一段**，不只字首 |
+| `searchTerm=Mecha`（只在沒權限的 Anime） | 0 筆 | 有照權限過濾 |
+| 對照：`search=show`（名字不對） | 7 筆，與對照相同 | **被靜默忽略** |
 | `sortBy=SortName&startIndex=2&limit=3` | 恰好是整份排序結果的第 3–5 筆；`TotalRecordCount=7`（整份的數）、`StartIndex=2` | 分頁正確 |
 
 排序鍵（每個鍵後面接 `,SortName`，jellyfin-web 的寫法）：

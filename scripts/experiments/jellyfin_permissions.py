@@ -784,6 +784,17 @@ def run_filters(srv: Server, api: Credential, c: Catalog, user_id: str, report: 
          titles(lambda t: "Science Fiction" in t.genres and t.year == 2024)),
         ("對照：genre=Drama（少一個 s）", {**base, "genre": "Drama"}, base, None),
         ("對照：year=2022（少一個 s）", {**base, "year": "2022"}, base, None),
+        # 名字搜尋（M2 票 14：媒體庫牆的 `q`）。大小寫、字中間的一段、只在無權媒體庫的名字。
+        ("searchTerm=show", {**base, "searchTerm": "show"}, base,
+         titles(lambda t: "show" in t.name.casefold())),
+        ("searchTerm=SHOW", {**base, "searchTerm": "SHOW"}, base,
+         titles(lambda t: "show" in t.name.casefold())),
+        ("searchTerm=lpha（字中間）", {**base, "searchTerm": "lpha"}, base,
+         titles(lambda t: "lpha" in t.name.casefold())),
+        ("searchTerm=frie（字首）", {**base, "searchTerm": "frie"}, base,
+         titles(lambda t: t.name.casefold().startswith("frie"))),
+        ("searchTerm=Mecha（只在無權的媒體庫）", {**base, "searchTerm": "Mecha"}, base, set()),
+        ("對照：search=show（名字不對）", {**base, "search": "show"}, base, None),
     ]  # fmt: skip
     results = []
     for label, params, baseline_params, expected in checks:
@@ -1248,6 +1259,8 @@ def record_browsing(
         ("items.tv.series.sort-rating.descending.json", {**rating, "sortOrder": "Descending"}),
         ("items.tv.series.genres.json", {**wall, **tv_series, "genres": "Drama|Comedy"}),
         ("items.tv.series.years.json", {**wall, **tv_series, "years": "2020,2023"}),
+        # 名字搜尋（M2 票 14）：Frieren 不含 show，剩三部，而且照 `sortBy` 排。
+        ("items.tv.series.search.json", {**wall, **tv_series, "searchTerm": "show"}),
     ):
         fixtures.write(name, srv.send(api, "/Items", params=params))
     # 電影庫的排序鍵後面接 `SortName,ProductionYear`（jellyfin-web `movies.js`）；`DatePlayed`

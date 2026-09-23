@@ -60,6 +60,20 @@ export function reviewQueryOptions() {
   return queryOptions({ queryKey: ['review'], queryFn: () => apiGet<ReviewQueue>('/review') })
 }
 
+/** 媒體庫頁「待審 / 對不到」的那兩類（M2 票 14）。 */
+export type LibraryReviewKind = Extract<ReviewKind, 'plan' | 'unmatched'>
+
+/**
+ * 一個 Jellyfin 媒體庫的「待審 / 對不到」（M2 票 14）：`plan` 與 `unmatched` 兩類、Route 指向它的。`total` 只算
+ * 這兩類，`queue_total` 是整份佇列。快取鍵在 `['review']` 底下：任何一列按完之後重問整份佇列時，這一份一起重問。
+ */
+export function libraryReviewQueryOptions(libraryId: string) {
+  return queryOptions({
+    queryKey: ['review', 'library', libraryId],
+    queryFn: () => apiGet<ReviewQueue>(`/review?library=${encodeURIComponent(libraryId)}`),
+  })
+}
+
 /** 「它是對的」：清掉兩處 audit 旗標，檔案不動。 */
 export async function confirmAudit(ledgerId: number) {
   return apiPost<void>(`/review/audit/${ledgerId}/confirm`)

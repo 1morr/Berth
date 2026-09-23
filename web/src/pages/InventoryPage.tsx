@@ -1,5 +1,5 @@
-import { useId, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useEffect, useId, useRef, useState } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 
@@ -9,6 +9,7 @@ import { accessRefusal } from '../api/jellyfin'
 import {
   inventoriesQueryOptions,
   inventoryFiltersQueryOptions,
+  inventoryKey,
   inventoryQueryOptions,
   narrowed,
   wallQuery,
@@ -21,6 +22,7 @@ import {
   type WallQuery,
   type WallSearch,
 } from '../api/inventory'
+import { libraryReviewQueryOptions, type LibraryReviewKind } from '../api/review'
 import { jellyfinAddressQueryOptions } from '../api/settings'
 import {
   Checkbox,
@@ -35,11 +37,13 @@ import {
 import { Dot } from '../components/Dot'
 import { SessionEnded } from '../components/SessionEnded'
 import { TilePlaceholder } from '../components/TilePlaceholder'
+import { SEARCH_DEBOUNCE_MS } from '../components/useDebounced'
 import { WALL_GRID_CONFIRMABLE } from '../components/wallGrid'
 import { InventoryTile } from '../inventory/InventoryTile'
 import { LibraryWatching, WatchingElsewhere } from '../watching/WatchingRows'
 import { jellyfinLibrariesUrl } from '../inventory/jellyfinLink'
 import { TmdbAttribution } from '../components/TmdbAttribution'
+import { ReviewItem } from '../review/ReviewItem'
 
 /** 讀取中先畫幾格空位，與探索牆同一個道理：版面不跳。 */
 const PLACEHOLDERS = 12
@@ -61,9 +65,13 @@ const SELECT =
  * 堆場全景加一條待卸貨的碼頭邊：Jellyfin 的牆是已經進倉的整座堆場（一頁 50 箱，照 Jellyfin 的順序），
  * 上方那一條是 Berth 經手、還沒進倉的貨。使用者在兩個時刻打開它——「我想看那部片」與「怎麼那部還沒好」。
  *
- * 一個媒體庫一個網址，頁碼、篩選、排序與類型年份也在網址上：重新整理、分享與上一頁都留得住。「待審」
- * 「Unmatched」不重抓——Berth 經手的那一份跟著每一頁一起到手，數字由後端算好；排序與類型、年份是 Jellyfin
- * 的查詢（票 06）。
+ * 一個媒體庫一個網址，頁碼、篩選、排序與類型年份也在網址上：重新整理、分享與上一頁都留得住。排序與類型、
+ * 年份是 Jellyfin 的查詢（票 06）。
+ *
+ * **「待審」「對不到」是審核佇列在這個媒體庫上的子集**（M2 票 14，`.scratch/m2/review-shape.md`）：篩出來的
+ * 是要處理的事，不是要看的作品，所以是一列一件事的清單、列就是 `/review` 那一列（`ReviewItem`）。它們是管理員
+ * 的工作佇列（使用者拍板）：`user` 看不到這兩個篩選，網址上帶著也照畫整面牆——他碰到停下來的那一筆只能等
+ * （PRODUCT.md），卡片上的「待審」色塊與 `/jobs` 的「等管理員審核」已經說了。
  */
 export function InventoryPage({
   libraryId,
@@ -78,6 +86,9 @@ export function InventoryPage({
 }) {
   const { t } = useTranslation()
   const libraries = useQuery(inventoriesQueryOptions)
+  const me = useQuery(meQueryOptions)
+  const admin = me.data?.role === 'admin'
+  const shown = admin ? filter : undefined
 
   return (
     <div className="mx-auto grid w-full max-w-[110rem] gap-6 px-6 py-8">
@@ -111,7 +122,7 @@ export function InventoryPage({
           {/* 接著看在「還沒進 Jellyfin」之前（票 07）。只在打開媒體庫的那一刻：翻頁與篩選是在堆場裡找東西，
               兩列不再把牆往下推，而且它們不照類型年份篩（使用者拍板）。排序不算——它不會讓哪一集不見。 */}
           {libraryId !== null &&
-            (page === 1 && !filter && !narrowed({ genres: search.genres, years: search.years }) ? (
+            (page === 1 && !shown && !narrowed(wallQuery(search, undefined)) ? (
               <LibraryWatching libraryId={libraryId} />
             ) : (
               <WatchingElsewhere libraryId={libraryId}>
@@ -133,7 +144,8 @@ export function InventoryPage({
             <Wall
               libraryId={libraryId}
               page={page}
-              filter={filter}
+              filter={shown}
+              admin={admin}
               search={search}
               libraries={libraries.data}
             />
@@ -150,16 +162,19 @@ function Wall({
   libraryId,
   page,
   filter,
+  admin,
   search,
   libraries,
 }: {
   libraryId: string
   page: number
+  /** 只有 `admin` 會拿到（`InventoryPage`）。 */
   filter?: InventoryFilter
+  /** 畫不畫「全部 · 待審 · 對不到」那一排。 */
+  admin: boolean
   search: WallSearch
   libraries: InventoryLibrary[]
 }) {
-  const { t } = useTranslation()
   const query = wallQuery(
     search,
     libraries.find((row) => row.id === libraryId),
@@ -180,23 +195,13 @@ function Wall({
 
   const inventory = wall.data
   const notInJellyfin = inventory.tracked.filter((card) => card.presence !== 'found')
-  // 不認得的值在路由那一道就擋掉了（`isInventoryFilter`），這裡拿到的只會是兩個之一或沒有。
-  const flagged = filter
-    ? {
-        filter,
-        cards: inventory.tracked.filter((card) =>
-          filter === 'review' ? card.tracking?.needs_review : card.tracking?.has_unmatched,
-        ),
-      }
-    : null
-
   const narrowing = narrowed(query)
 
   return (
     <>
       {/* 還沒進 Jellyfin 的作品不在 Jellyfin 的分頁結果裡，所以自己一條，翻到第幾頁都在（使用者拍板）。
           篩類型或年份時收起：它們在 Jellyfin 裡沒有類型，套不上（票 06，使用者拍板）。 */}
-      {!flagged && !narrowing && notInJellyfin.length > 0 && (
+      {!filter && !narrowing && notInJellyfin.length > 0 && (
         <NotInJellyfin cards={notInJellyfin} inventory={inventory} />
       )}
 
@@ -210,9 +215,10 @@ function Wall({
         </h2>
         <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
           <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-3">
-            <Filters inventory={inventory} page={page} query={query} filter={filter} />
-            {/* 待審與 Unmatched 是 Berth 的清單：排序與類型年份留在網址上，但套不上，所以不畫。 */}
-            {!flagged && (
+            {admin && <Filters inventory={inventory} page={page} query={query} filter={filter} />}
+            {/* 待審與對不到是審核佇列的清單：排序、類型年份與名字留在網址上，但套不上，所以不畫。 */}
+            {!filter && <SearchBox library={inventory.library} query={query} />}
+            {!filter && (
               <Arrange
                 library={inventory.library}
                 query={query}
@@ -222,30 +228,18 @@ function Wall({
               />
             )}
           </div>
-          {flagged ? (
-            // 牆換掉了要說得出來——螢幕閱讀器看不到格子從 50 格變成 2 格。
-            <p aria-live="polite" className="value text-xs text-ink-dim">
-              {t('inventory.showing', { count: flagged.cards.length })}
-            </p>
+          {filter ? (
+            <QueueCount libraryId={libraryId} filter={filter} />
           ) : (
             <Pager inventory={inventory} query={query} announce />
           )}
         </div>
-        {!flagged && open && (
+        {!filter && open && (
           <NarrowPanel id={panel} kind={open} library={inventory.library} query={query} />
         )}
 
-        {flagged ? (
-          flagged.cards.length > 0 ? (
-            <Tiles cards={flagged.cards} inventory={inventory} />
-          ) : (
-            <EmptyFilter
-              library={inventory.library}
-              filter={flagged.filter}
-              page={page}
-              query={query}
-            />
-          )
+        {filter ? (
+          <LibraryQueue library={inventory.library} filter={filter} page={page} query={query} />
         ) : inventory.titles.length > 0 ? (
           <>
             <Tiles cards={inventory.titles} inventory={inventory} />
@@ -272,15 +266,67 @@ function Wall({
 /** 類型或年份：兩個勾選清單各一顆開關。 */
 type Narrowing = 'genres' | 'years'
 
-/** 換排序或篩選：換網址、回到第 1 頁（jellyfin-web 同樣把 `StartIndex` 歸零）。 */
-function useRearrange(library: InventoryLibrary) {
+/**
+ * 換排序或篩選：換網址、回到第 1 頁（jellyfin-web 同樣把 `StartIndex` 歸零）。`replace` 給邊打邊搜：
+ * 打一個名字不該在上一頁留下每一段打到一半的字。
+ */
+function useRearrange(library: InventoryLibrary, { replace = false } = {}) {
   const navigate = useNavigate()
   return (next: WallQuery) =>
     void navigate({
       to: '/library/$libraryId',
       params: { libraryId: library.id },
       search: wallQuery(next, library),
+      replace,
     })
+}
+
+/**
+ * 牆上按名字找（M2 票 14，critique P2：「真正擁有答案的那一頁反而不能問問題」）。Jellyfin 的 `searchTerm`，
+ * 寫進網址（`q`），重新整理與分享都還在。
+ *
+ * **邊打邊搜**（使用者拍板，Sonarr / Radarr 工具列的搜尋框）：停手 500ms 才換網址，與探索頁同一個間隔；
+ * 換網址用 `replace`、回到第 1 頁。網址自己換了（上一頁、「清除搜尋」）時框裡的字跟著換——但只在兩邊真的
+ * 說的是不同的名字時：打「the 」停下來，網址是 `the`，不能把使用者正要接著打的那個空白吃掉。
+ */
+function SearchBox({ library, query }: { library: InventoryLibrary; query: WallQuery }) {
+  const { t } = useTranslation()
+  const rearrange = useRearrange(library, { replace: true })
+  const id = useId()
+  const asked = query.q ?? ''
+  const [text, setText] = useState(asked)
+  const [seen, setSeen] = useState(asked)
+  const timer = useRef<number | undefined>(undefined)
+
+  if (asked !== seen) {
+    setSeen(asked)
+    if (asked !== text.trim()) setText(asked)
+  }
+  useEffect(() => () => window.clearTimeout(timer.current), [])
+
+  const change = (value: string) => {
+    setText(value)
+    window.clearTimeout(timer.current)
+    timer.current = window.setTimeout(() => {
+      const next = value.trim()
+      if (next !== asked) rearrange({ ...query, q: next || undefined })
+    }, SEARCH_DEBOUNCE_MS)
+  }
+
+  return (
+    <div className="flex min-w-0 items-center gap-2">
+      <label htmlFor={id} className="label shrink-0 text-ink-dim">
+        {t('inventory.search.label')}
+      </label>
+      <input
+        id={id}
+        type="search"
+        value={text}
+        onChange={(event) => change(event.target.value)}
+        className={`${SELECT} w-44 min-w-0 placeholder:text-ink-dim sm:w-56`}
+      />
+    </div>
+  )
 }
 
 /**
@@ -517,11 +563,106 @@ function onPage(page: number, query: WallQuery) {
   return { ...(page > 1 ? { page } : {}), ...query }
 }
 
+/** 每一個篩選是審核佇列的哪一類。 */
+const QUEUE_KIND: Record<InventoryFilter, LibraryReviewKind> = {
+  review: 'plan',
+  unmatched: 'unmatched',
+}
+
+/** 這個媒體庫上、這一個篩選的那幾件。清單與牆上方的件數讀同一份（同一個快取鍵，只問一次）。 */
+function useLibraryQueue(libraryId: string, filter: InventoryFilter) {
+  const queue = useQuery(libraryReviewQueryOptions(libraryId))
+  const rows = queue.data?.rows.filter((row) => row.kind === QUEUE_KIND[filter]) ?? []
+  return { queue, rows }
+}
+
+/** 牆換成清單了要說得出來——螢幕閱讀器看不到格子從 50 格變成 2 列。 */
+function QueueCount({ libraryId, filter }: { libraryId: string; filter: InventoryFilter }) {
+  const { t } = useTranslation()
+  const { queue, rows } = useLibraryQueue(libraryId, filter)
+
+  return (
+    <p aria-live="polite" className="value text-xs text-ink-dim">
+      {queue.data && t('inventory.showing', { count: rows.length })}
+    </p>
+  )
+}
+
 /**
- * 全部 · 待審 N · Unmatched N。數字是後端算的、整個媒體庫的，不隨篩選變。
+ * 「待審」「對不到」：審核佇列在這個媒體庫上的那一類（M2 票 14、`.scratch/m2/review-shape.md`「媒體庫的子集」）。
  *
- * **每一個都帶著現在的頁碼、排序與類型年份**：篩選的清單跟著每一頁一起到手，換篩選不必重抓（shape §6）；
- * 按回「全部」也回到原本排好、篩好的那一頁（票 06）。
+ * **列就是 `/review` 那一列**（`ReviewItem`，同一個 import），就地按；兩類同屬「要你決定」那一段，所以不畫段落
+ * 抬頭。按完那一列從佇列上消失（它自己重問 `['review']`），這裡另外重問牆：篩選鍵上的數字是同一支查詢數的。
+ * 清單下方一句連到 `/review`，說審核佇列裡還有幾件不在這一份裡。
+ */
+function LibraryQueue({
+  library,
+  filter,
+  page,
+  query,
+}: {
+  library: InventoryLibrary
+  filter: InventoryFilter
+  page: number
+  query: WallQuery
+}) {
+  const { t } = useTranslation()
+  const queryClient = useQueryClient()
+  const { queue, rows } = useLibraryQueue(library.id, filter)
+  // 按完那一列就消失了，焦點與畫面上都不剩任何東西說「成了」——這一句給看不見畫面的人（同 `/review`）。
+  const [said, setSaid] = useState('')
+
+  if (queue.isPending) return <QueueLoading />
+  if (!queue.data) return <p className="max-w-prose text-sm text-ink-dim">{t('review.off')}</p>
+
+  const rest = queue.data.queue_total - rows.length
+  const done = (text: string) => {
+    setSaid(text)
+    void queryClient.invalidateQueries({ queryKey: inventoryKey(library.id) })
+  }
+
+  return (
+    <div className="grid max-w-[80rem] gap-3">
+      <p aria-live="polite" className="sr-only">
+        {said}
+      </p>
+      {rows.length > 0 ? (
+        <ul aria-label={t(`inventory.queue.${filter}`)} className="grid gap-3">
+          {rows.map((row) => (
+            <li key={`${row.kind}:${row.ref}`} className="min-w-0">
+              <ReviewItem row={row} onDone={done} />
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <EmptyFilter library={library} filter={filter} page={page} query={query} />
+      )}
+      {rest > 0 && (
+        <p className="text-sm">
+          <Link to="/review" className={TEXT_LINK}>
+            {t('inventory.queue.rest', { count: rest })}
+          </Link>
+        </p>
+      )}
+    </div>
+  )
+}
+
+/** 清單讀取中：兩列靜態方塊，沒有動畫（同 `/review`）。 */
+function QueueLoading() {
+  return (
+    <div className="grid max-w-[80rem] gap-3" aria-hidden="true">
+      <div className="h-24 border-2 border-rule bg-well" />
+      <div className="h-24 border-2 border-rule bg-well" />
+    </div>
+  )
+}
+
+/**
+ * 全部 · 待審 N · 對不到 N。數字是後端數的、整個媒體庫的審核佇列件數（與清單同一支查詢），不隨篩選變。
+ *
+ * **每一個都帶著現在的頁碼、排序與類型年份**：換篩選不重抓牆；按回「全部」回到原本排好、篩好的那一頁
+ * （票 06）。
  *
  * **選著的那一個不是連結**，是一段 `aria-current="true"` 的字（票 13，M1.5 audit P3）：TanStack 的 `Link` 在
  * 當前時一定掛 `aria-current="page"`、改不掉，而同一頁的媒體庫切換列已經有一個「當前頁」——篩選是這一頁裡的
@@ -695,14 +836,19 @@ function EmptyFilter({
 }
 
 /**
- * 篩類型或年份之後一部都沒有（票 06）。說出篩了什麼——空的是篩選的結果，不是媒體庫本身——並給一條清掉
- * 類型與年份的路；排序留著，它不會讓作品不見。
+ * 篩類型、年份或名字之後一部都沒有（票 06、M2 票 14）。說出篩了什麼——空的是篩選的結果，不是媒體庫本身——
+ * 並給清掉的路：名字與類型年份各一條，清一種留另一種；排序一律留著，它不會讓作品不見。
  */
 function EmptyNarrowed({ library, query }: { library: InventoryLibrary; query: WallQuery }) {
   const { t, i18n } = useTranslation()
   // 同一種之間是「或」（研究 §3.1），照語言的習慣列出來。
   const either = new Intl.ListFormat(i18n.language, { type: 'disjunction' })
-  const { genres, years } = query
+  const { genres, years, q } = query
+  const listed = [
+    q && t('inventory.narrow.listed.q', { q }),
+    genres && t('inventory.narrow.listed.genres', { list: either.format(genres) }),
+    years && t('inventory.narrow.listed.years', { list: either.format(years.map(String)) }),
+  ].filter((line) => typeof line === 'string')
 
   return (
     <div className="grid justify-items-start gap-3 border-2 border-rule bg-well px-4 py-4">
@@ -710,24 +856,35 @@ function EmptyNarrowed({ library, query }: { library: InventoryLibrary; query: W
         {t('inventory.narrow.nothing')}
       </p>
       <p className="value flex flex-wrap gap-x-2 text-xs wrap-anywhere text-ink-dim">
-        {genres && (
-          <span>{t('inventory.narrow.listed.genres', { list: either.format(genres) })}</span>
-        )}
-        {genres && years && <Dot />}
-        {years && (
-          <span>
-            {t('inventory.narrow.listed.years', { list: either.format(years.map(String)) })}
+        {listed.map((line, index) => (
+          <span key={line} className="contents">
+            {index > 0 && <Dot />}
+            <span>{line}</span>
           </span>
-        )}
+        ))}
       </p>
-      <Link
-        to="/library/$libraryId"
-        params={{ libraryId: library.id }}
-        search={wallQuery({ sort: query.sort, order: query.order }, library)}
-        className={GHOST_LINK}
-      >
-        {t('inventory.narrow.clearBoth')}
-      </Link>
+      <div className="flex flex-wrap gap-2">
+        {q && (
+          <Link
+            to="/library/$libraryId"
+            params={{ libraryId: library.id }}
+            search={wallQuery({ ...query, q: undefined }, library)}
+            className={GHOST_LINK}
+          >
+            {t('inventory.narrow.clearSearch')}
+          </Link>
+        )}
+        {(genres || years) && (
+          <Link
+            to="/library/$libraryId"
+            params={{ libraryId: library.id }}
+            search={wallQuery({ sort: query.sort, order: query.order, q }, library)}
+            className={GHOST_LINK}
+          >
+            {t('inventory.narrow.clearBoth')}
+          </Link>
+        )}
+      </div>
     </div>
   )
 }

@@ -171,7 +171,7 @@ class TestConfirm:
         response = client.post(f"/api/review/audit/{ledger_id}/confirm", headers=BROWSER)
 
         assert response.status_code == 204
-        assert client.get("/api/review").json() == {"rows": [], "total": 0}
+        assert client.get("/api/review").json() == {"rows": [], "total": 0, "queue_total": 0}
         events = [row["type"] for row in client.get(f"/api/jobs/{HASH}/events").json()]
         assert "audit_confirmed" in events
 
@@ -229,3 +229,43 @@ class TestUndo:
 
         assert response.status_code == 404
         assert response.json()["detail"]["reason"] == "ledger_missing"
+
+
+class TestOneLibrary:
+    """媒體庫頁的「待審 / 對不到」（M2 票 14）：`?library=` 只回那個媒體庫的 plan 與 unmatched，
+    `queue_total` 仍是整份佇列——清單底下那一句「審核佇列裡還有 N 件」要的是它。"""
+
+    def test_only_this_librarys_decisions_come_back(
+        self, client: TestClient, roots: dict[str, Path]
+    ) -> None:
+        ledger_id, _ = seed_audit(client, roots)
+        seed_issue(client)
+        sign_in(client)
+        # 撤銷之後那一筆回到 review：`plan` 那一類，在 anime Route 指向的 `item-2` 上。
+        client.post(f"/api/review/audit/{ledger_id}/undo", headers=BROWSER)
+
+        body = client.get("/api/review", params={"library": "item-2"}).json()
+
+        assert [row["kind"] for row in body["rows"]] == ["plan"]
+        assert (body["total"], body["queue_total"]) == (1, 2)
+        elsewhere = client.get("/api/review", params={"library": "item-9"}).json()
+        assert (elsewhere["rows"], elsewhere["total"], elsewhere["queue_total"]) == ([], 0, 2)
+
+    def test_without_it_the_two_totals_are_the_same(
+        self, client: TestClient, roots: dict[str, Path]
+    ) -> None:
+        seed_audit(client, roots)
+        seed_issue(client)
+        sign_in(client)
+
+        body = client.get("/api/review").json()
+
+        assert (body["total"], body["queue_total"]) == (2, 2)
+
+    def test_an_ordinary_user_is_still_refused(
+        self, client: TestClient, roots: dict[str, Path]
+    ) -> None:
+        seed_audit(client, roots)
+        sign_in(client, CREW)
+
+        assert client.get("/api/review", params={"library": "item-2"}).status_code == 403

@@ -39,6 +39,7 @@ from berth.adapters.jellyfin.fake import FakeJellyfinClient, ItemMetadata
 from berth.api.deps import get_client_factory
 from berth.api.gate import CSRF_HEADER
 from berth.config import Config
+from berth.domain import JobState, PlanAction, PlanStatus
 from berth.main import create_app
 from berth.models import Route, User
 from berth.services.jellyfin_access import ACCESS_TTL_SECONDS, AccessCache
@@ -46,7 +47,7 @@ from berth.services.routes import build_routes
 from berth.services.setup import complete_setup
 from tests.integration.arrange import arrange, bundled_libraries, factory_for, fake_jellyfin
 from tests.integration.factories import FakeClientFactory
-from tests.integration.test_inventory import linked, title
+from tests.integration.test_inventory import job, linked, plan, title
 
 BROWSER = {CSRF_HEADER: "XMLHttpRequest"}
 ADMIN = {"username": "skipper", "password": "harbour"}
@@ -354,8 +355,6 @@ class TestInventory:
             "imported": 1,
             "aired": 4,
             "versions": 0,
-            "needs_review": False,
-            "has_unmatched": False,
             "audits": 0,
         }
         spy = {
@@ -392,6 +391,32 @@ class TestInventory:
             {**spy, "watch": unwatched},
         ]
         assert body["tracked"] == [{**spy, "watch": None}]
+
+    def test_the_two_filter_counts_are_the_review_queues_list(self, client: TestClient) -> None:
+        """M2 票 14（使用者拍板）：「待審」「對不到」的數字是審核佇列在這個媒體庫上的件數，與那兩個
+        篩選的清單（`GET /review?library=`）同一支查詢。同一部作品兩個對不到的檔案是兩件。"""
+        sign_in(client)
+
+        async def run() -> None:
+            sessions = client.app.state.session_factory  # type: ignore[attr-defined]  # 同 `client` 那一條
+            async with sessions() as session:
+                tv = await session.scalar(select(Route).where(Route.slug == "tv"))
+                assert tv is not None
+                spy = await title(session)
+                held = await job(session, spy, tv, JobState.REVIEW, hash="a" * 40)
+                await plan(
+                    session, held, (PlanAction.REVIEW, 1, 1), status=PlanStatus.PENDING_REVIEW
+                )
+                done = await job(session, spy, tv, JobState.IMPORTED, hash="b" * 40)
+                await plan(session, done, *[(PlanAction.UNMATCHED, None, None)] * 2)
+
+        asyncio.run(run())
+
+        body = client.get(f"/api/inventory/{TV}").json()
+        queue = client.get("/api/review", params={"library": TV}).json()
+
+        assert (body["review"], body["unmatched"]) == (1, 2)
+        assert [row["kind"] for row in queue["rows"]] == ["plan", "unmatched", "unmatched"]
 
     def test_a_page_number_below_one_is_refused(self, client: TestClient) -> None:
         sign_in(client)
@@ -438,6 +463,27 @@ class TestSortAndFilter:
             1,
         )
         assert [card["title"] for card in by_year["titles"]] == ["SPY×FAMILY"]
+
+    def test_a_name_narrows_the_wall(self, client: TestClient) -> None:
+        """牆上按名字找（M2 票 14）：`?q=` 是 Jellyfin 的 `searchTerm`，名字裡的一段、不分大小寫。
+        前後的空白不算：只打了空白就是沒有在找。"""
+        sign_in(client)
+
+        def names(**params: str) -> tuple[list[str], int]:
+            body = client.get(f"/api/inventory/{TV}", params=params).json()
+            return [card["title"] for card in body["titles"]], body["total"]
+
+        assert names(q="hotel") == (["Hotel Show"], 1)
+        assert names(q="  SPY ") == (["SPY×FAMILY"], 1)
+        assert names(q="   ") == (["Hotel Show", "SPY×FAMILY"], 2)
+        assert names(q="nothing like it") == ([], 0)
+
+    def test_a_name_too_long_to_be_a_title_is_refused(self, client: TestClient) -> None:
+        sign_in(client)
+
+        response = client.get(f"/api/inventory/{TV}", params={"q": "x" * 201})
+
+        assert response.status_code == 422
 
     def test_a_sort_this_library_does_not_offer_is_refused_and_never_forwarded(
         self, client: TestClient, jellyfin: FakeJellyfinClient

@@ -211,7 +211,7 @@ class TestFiles:
 
         (stray,) = (await detail(session, spy)).unmatched
 
-        assert (stray.rel_path, stray.job_hash) == ("file-1.mkv", done.hash)
+        assert (stray.rel_path, stray.job_hash) == ("file-0-1.mkv", done.hash)
 
     async def test_an_estimate_lists_no_unmatched_file(self, session: AsyncSession) -> None:
         tv = await route(session)

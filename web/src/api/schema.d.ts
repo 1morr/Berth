@@ -239,8 +239,9 @@ export interface paths {
         /**
          * Get Inventory
          * @description 一頁牆。`sort` 要在這個媒體庫的 `sorts` 上（否則 422 `sort_not_offered`）；`genres` 與
-         *     `years` 重複帶，同一種之間是「或」、兩種之間是「且」。排序與篩選只套在 `titles`：`tracked` 與
-         *     兩個篩選的數字是 Berth 的清單。
+         *     `years` 重複帶，同一種之間是「或」、兩種之間是「且」；`q` 是名字裡的一段（Jellyfin 的
+         *     `searchTerm`，M2 票 14），前後的空白不算。排序、篩選與名字只套在 `titles`：`tracked` 與
+         *     兩個篩選的數字是 Berth 的。
          */
         get: operations["get_inventory_api_inventory__library_id__get"];
         put?: never;
@@ -784,6 +785,9 @@ export interface paths {
         /**
          * Get Review
          * @description 需要人動手的排前面，同一類之內舊的在前（plan §6）。
+         *
+         *     `library` 是 Jellyfin 媒體庫 id：只回 Route 指向它的 `plan` 與 `unmatched`（媒體庫頁的
+         *     「待審 / 對不到」，M2 票 14）。不認得的 id 就是一份空的——它只拿來挑 Route，不問 Jellyfin。
          */
         get: operations["get_review_api_review_get"];
         put?: never;
@@ -3058,6 +3062,8 @@ export interface components {
             rows: (components["schemas"]["PlanRowOut"] | components["schemas"]["AuditRowOut"] | components["schemas"]["UnmatchedRowOut"] | components["schemas"]["DuplicateRowOut"] | components["schemas"]["IssueRowOut"])[];
             /** Total */
             total: number;
+            /** Queue Total */
+            queue_total: number;
         };
         /**
          * ReviewReason
@@ -3487,10 +3493,6 @@ export interface components {
             aired: number;
             /** Versions */
             versions: number;
-            /** Needs Review */
-            needs_review: boolean;
-            /** Has Unmatched */
-            has_unmatched: boolean;
             /** Audits */
             audits: number;
         };
@@ -4054,6 +4056,7 @@ export interface operations {
                 order?: components["schemas"]["SortOrder"];
                 genres?: string[] | null;
                 years?: number[] | null;
+                q?: string;
             };
             header?: never;
             path: {
@@ -5338,7 +5341,9 @@ export interface operations {
     };
     get_review_api_review_get: {
         parameters: {
-            query?: never;
+            query?: {
+                library?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -5352,6 +5357,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ReviewQueueOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

@@ -532,6 +532,13 @@ const zhHant = {
       unmatched_one: '對不到 {{count}}',
       unmatched_other: '對不到 {{count}}',
     },
+    // 「待審」「對不到」篩出來的清單（M2 票 14）：審核佇列在這個媒體庫上的子集，一列一件事。
+    queue: {
+      review: '待審',
+      unmatched: '對不到',
+      rest_one: '審核佇列裡還有 {{count}} 件',
+      rest_other: '審核佇列裡還有 {{count}} 件',
+    },
     // 排序與類型、年份篩選（票 06）。選項照 jellyfin-web 的排序選單，兩種媒體庫各開哪幾個由後端說。
     sort: {
       label: '排序',
@@ -575,11 +582,17 @@ const zhHant = {
       listed: {
         genres: '類型：{{list}}',
         years: '年份：{{list}}',
+        q: '名字含「{{q}}」',
       },
       clearBoth: '清除類型與年份',
+      clearSearch: '清除搜尋',
     },
-    showing_one: '顯示 {{count}} 部作品',
-    showing_other: '顯示 {{count}} 部作品',
+    // 牆上按名字找（M2 票 14）：Jellyfin 的 `searchTerm`，名字裡的一段。
+    search: {
+      label: '按名字找',
+    },
+    showing_one: '顯示 {{count}} 件',
+    showing_other: '顯示 {{count}} 件',
     // Berth 經手、Jellyfin 還沒有的作品。不叫「在路上」：失敗的、Jellyfin 找不到的也在這裡。
     notInJellyfin: '還沒進 Jellyfin',
     notInJellyfinCount_one: '{{count}} 部作品還沒進 Jellyfin',
@@ -658,8 +671,8 @@ const zhHant = {
       toDiscover: '回探索頁',
       page: '這一頁沒有作品。',
       toFirstPage: '回第 1 頁',
-      review: '這個媒體庫沒有待審的作品。',
-      unmatched: '這個媒體庫沒有對不到檔案的作品。',
+      review: '這個媒體庫沒有待審核的下載。',
+      unmatched: '這個媒體庫沒有對不到的檔案。',
       showAll: '顯示全部',
       // 沒有權限與不存在是同一句話：分得出來就是在告訴人那個媒體庫存在。
       unknown: '找不到這個媒體庫，或你沒有權限看它。',
@@ -2445,6 +2458,12 @@ const en: Translations<typeof zhHant> = {
       unmatched_one: 'Unmatched {{count}}',
       unmatched_other: 'Unmatched {{count}}',
     },
+    queue: {
+      review: 'Review',
+      unmatched: 'Unmatched',
+      rest_one: '{{count}} more in the review queue',
+      rest_other: '{{count}} more in the review queue',
+    },
     sort: {
       label: 'Sort',
       order: 'Order',
@@ -2485,11 +2504,16 @@ const en: Translations<typeof zhHant> = {
       listed: {
         genres: 'Genres: {{list}}',
         years: 'Years: {{list}}',
+        q: 'Name contains “{{q}}”',
       },
       clearBoth: 'Clear genres and years',
+      clearSearch: 'Clear search',
     },
-    showing_one: 'Showing {{count}} title',
-    showing_other: 'Showing {{count}} titles',
+    search: {
+      label: 'Find by name',
+    },
+    showing_one: 'Showing {{count}} item',
+    showing_other: 'Showing {{count}} items',
     notInJellyfin: 'Not in Jellyfin yet',
     notInJellyfinCount_one: '{{count}} title not in Jellyfin yet',
     notInJellyfinCount_other: '{{count}} titles not in Jellyfin yet',
@@ -2559,8 +2583,8 @@ const en: Translations<typeof zhHant> = {
       toDiscover: 'Back to Discover',
       page: 'There are no titles on this page.',
       toFirstPage: 'Back to page 1',
-      review: 'Nothing in this library is waiting for review.',
-      unmatched: 'Nothing in this library has unmatched files.',
+      review: 'No downloads for this library are waiting for review.',
+      unmatched: 'No files for this library are unmatched.',
       showAll: 'Show all',
       unknown: 'This library does not exist, or you do not have access to it.',
       toFirst: 'Open “{{library}}”',

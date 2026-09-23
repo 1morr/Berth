@@ -247,7 +247,7 @@ const inventoryIndexRoute = createRoute({
 interface InventorySearch extends WallSearch {
   /** 第幾頁（1 起算）。第 1 頁不寫進網址。 */
   page?: number
-  /** 待審 / Unmatched。沒帶就是全部——`false` 與空字串一樣不寫進網址。 */
+  /** 待審 / 對不到。沒帶就是全部——`false` 與空字串一樣不寫進網址。只有 admin 看得到（M2 票 14）。 */
   filter?: InventoryFilter
 }
 
@@ -286,6 +286,11 @@ const inventoryRoute = createRoute({
       order: search.order === 'Descending' ? search.order : undefined,
       genres: genres.length > 0 ? genres : undefined,
       years: years.length > 0 ? years : undefined,
+      // 手打的 `?q=2020` 被 TanStack 讀成數字；它仍然是一段名字。
+      q:
+        (typeof search.q === 'string' || typeof search.q === 'number') && String(search.q).trim()
+          ? String(search.q)
+          : undefined,
     }
   },
   beforeLoad: async ({ context, location }) => {

@@ -282,6 +282,7 @@ class HttpJellyfinClient:
         sort_order: SortOrder,
         genres: Sequence[str],
         years: Sequence[int],
+        search: str = "",
     ) -> JellyfinPage:
         params = {
             "userId": user_id,
@@ -303,6 +304,8 @@ class HttpJellyfinClient:
             params["genres"] = "|".join(genres)
         if years:
             params["years"] = ",".join(str(year) for year in years)
+        if search:
+            params["searchTerm"] = search
         payload = await self._get("/Items", params=params)
         items = _items(payload)
         total = payload.get("TotalRecordCount")

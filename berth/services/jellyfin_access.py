@@ -125,6 +125,8 @@ class WallQuery:
     #: 類型名，彼此之間是「或」；與年份之間是「且」（研究 §3.1）。空的就是不篩。
     genres: tuple[str, ...] = ()
     years: tuple[int, ...] = ()
+    #: 名字裡的一段（Jellyfin 的 `searchTerm`，M2 票 14）。空的就是不搜。
+    search: str = ""
 
 
 class AccountDisabledError(Exception):
@@ -257,6 +259,7 @@ class JellyfinAccess:
                 sort_order=query.order,
                 genres=query.genres,
                 years=query.years,
+                search=query.search,
             )
         )
 
