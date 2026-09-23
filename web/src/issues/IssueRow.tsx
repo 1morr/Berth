@@ -67,11 +67,13 @@ export function IssueRow({
 
   const busy = act.isPending
   const source = typeof issue.detail.source === 'string' ? issue.detail.source : ''
+  // 沒有路徑的那幾種（無主 torrent、帳本為空）以 torrent 的名字認，最後才退回冪等鍵。
+  const name = typeof issue.detail.name === 'string' ? issue.detail.name : ''
 
   return (
     <QueueRow
       label={t(`issues.typeLabel.${issue.type}`)}
-      title={fileName(issue.path) || issue.subject}
+      title={fileName(issue.path) || name || issue.subject}
       heading={heading}
       sentence={t(`issues.type.${issue.type}`)}
       when={t('issues.detectedAt', { value: whenText(issue.detected_at) })}
@@ -80,7 +82,15 @@ export function IssueRow({
         // 完整路徑與來源。掃視的時候只看得到檔名——路徑會把一列撐成三行，而這一頁的工作
         // 是「決定」不是「讀路徑」。
         <>
-          <DetailLine term={t('issues.target')}>{issue.path}</DetailLine>
+          {issue.path !== '' && (
+            <DetailLine
+              term={
+                issue.type === 'orphan_complete' ? t('issues.completePath') : t('issues.target')
+              }
+            >
+              {issue.path}
+            </DetailLine>
+          )}
           {source !== '' && <DetailLine term={t('issues.source')}>{source}</DetailLine>}
           {issue.job_hash !== '' && (
             <DetailLine term={t('issues.job')}>{issue.job_hash}</DetailLine>
@@ -88,15 +98,14 @@ export function IssueRow({
         </>
       }
     >
-      {issue.actions.map((action) =>
-        action === 'delete_complete' ? (
-          // **單位是整筆下載，不是那一個檔案**（brief §9.2），所以它要二次確認並說清楚
-          // 後果。就地確認而不是票 04 的四旗標對話框：那四個旗標是這一顆自己寫死的。
+      {issue.actions.map((action) => {
+        const confirm = CONFIRM[action]
+        return confirm !== null ? (
           <ConfirmAction
             key={action}
-            label={t('issues.action.delete_complete')}
-            confirmLabel={t('issues.confirmDeleteAction')}
-            warning={t('issues.confirmDelete')}
+            label={t(`issues.action.${action}`)}
+            confirmLabel={t(confirm.action)}
+            warning={t(confirm.warning)}
             pending={busy}
             pendingLabel={t('issues.working')}
             onConfirm={() => act.mutate(action)}
@@ -110,8 +119,8 @@ export function IssueRow({
           >
             {busy ? t('issues.working') : t(`issues.action.${action}`)}
           </GhostButton>
-        ),
-      )}
+        )
+      })}
       {/* 忽略永遠在：一件按不了任何一顆的 Issue 仍然要能從清單上收掉。 */}
       <GhostButton type="button" disabled={busy} onClick={() => act.mutate('ignore')}>
         {busy ? t('issues.working') : t('issues.action.ignore')}
@@ -119,6 +128,27 @@ export function IssueRow({
     </QueueRow>
   )
 }
+
+/**
+ * 會刪掉磁碟上東西的那幾顆（後端的 `ACTION_DELETES`）要就地二次確認，並說清楚刪的是什麼。
+ * **總表**：後端加一顆而這裡沒回答它要不要確認，`tsc` 會紅。
+ *
+ * - 「連 complete 一起刪」的**單位是整筆下載**（brief §9.2）。就地確認而不是票 04 的四旗標
+ *   對話框：那四個旗標是這一顆自己寫死的。
+ * - 「刪除這個目錄」刪的是 complete 底下一整棵，後端按下去那一刻會再確認它仍然沒有主。
+ * - 「以硬鏈接取代」會讓媒體庫那一份複製品消失——一樣大，但它可能是別人改過的版本。
+ */
+const CONFIRM = {
+  relink: null,
+  forget: null,
+  delete_complete: { warning: 'issues.confirmDelete', action: 'issues.confirmDeleteAction' },
+  mark_sourceless: null,
+  replace_with_link: { warning: 'issues.confirmReplace', action: 'issues.confirmReplaceAction' },
+  delete_orphan: { warning: 'issues.confirmDeleteOrphan', action: 'issues.confirmDeleteAction' },
+  replan: null,
+  relook: null,
+  rescan: null,
+} as const satisfies Record<IssueAction, { warning: string; action: string } | null>
 
 /** `relink_failed` 的原文是 errno 與「哪兩個掛載」（plan §8.6），所以它接在那一句後面。 */
 function refusalText(

@@ -1267,6 +1267,21 @@ async def _seed_issues(session: AsyncSession, paths: PathSettings) -> None:
     # **在 Jellyfin 裡刪掉第二集**（brief §9.5）：帳本上還有它，磁碟上沒有了。
     (target_dir / "SPY x FAMILY (2022) - S01E02 [1080p][CHT][ANi].mkv").unlink()
 
+    # 票 09 的另外三種破壞，都在同一包旁邊，好讓一輪對帳在一頁上攤出每一種按鈕：
+    # - 第三集被「複製品」取代了（大小一樣）：`inode_mismatch`，按「以硬鏈接取代」。
+    third = target_dir / "SPY x FAMILY (2022) - S01E03 [1080p][CHT][ANi].mkv"
+    data = third.read_bytes()
+    third.unlink()
+    third.write_bytes(data)
+    # - qBittorrent 刪了 torrent、檔案留在 complete：`orphan_complete`，按「刪除這個目錄」。
+    orphan = Path(f"{paths.complete_root}/anime/[Old] Forgotten Batch")
+    orphan.mkdir(parents=True, exist_ok=True)
+    (orphan / "Forgotten - 01.mkv").write_bytes(b"left behind")
+    # - 有人手動放進媒體庫的檔案：`unmanaged_library_file`，只列出、沒有會刪的按鈕。
+    stray = Path(f"{route.target_path}/Hand Placed (2020)/Hand Placed (2020).mkv")
+    stray.parent.mkdir(parents=True, exist_ok=True)
+    stray.write_bytes(b"put here by hand")
+
 
 async def _seed_review(session: AsyncSession, paths: PathSettings) -> None:
     """兩個 medium 自動入庫、等人確認的檔案（M2 票 06）。接在 `_seed_issues` 後面，作品是同一部。

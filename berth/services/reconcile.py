@@ -1,4 +1,4 @@
-"""對帳：比四方、寫下要人決定的那幾件（brief §9.1、§16.2、plan §3.2、M2 票 05）。
+"""對帳：比四方、寫下要人決定的那幾件（brief §9.1、§16.2、plan §3.2、M2 票 05 / 09）。
 
 **一輪對帳是一個可觀察的工作**（2026-09-22 定）：`POST /reconcile` 回 202 與這一輪的 id，
 `GET /reconcile` 回上一輪與進行中的進度，上一輪還在跑時再按是 409。跑的那一段在
@@ -15,9 +15,14 @@
 問得到的單位是**逐 Route**而不是「媒體庫這一方」：三條 Route 裡有一條沒掛上時，其餘兩條的
 帳本仍然該比。跳過哪幾條寫在這一輪的結果上。
 
-**這一輪只做 `library_link_missing`**（票 05）：其餘六種檢查在票 09。客戶端與 complete 那兩方
-仍然要問——沒有檢查在用它們，但「這一方問到了嗎」本身就是結果的一部分，而下一張票只是多幾個
-比對，不是重做這一輪的形狀。
+**每一種檢查只用它需要的那幾方，缺一方就整種不做**：`orphan_complete` 要 qBittorrent 與
+complete 兩方都問到（問不到 qBittorrent 的那一刻，每一個目錄看起來都沒有主），
+`unknown_torrent` 要 qBittorrent，媒體庫那四種逐 Route，`job_without_files` 只看帳本。
+
+**第五方是 Jellyfin**（票 09）：它不開 Issue，只把帳本記著的 item 換成 Jellyfin 現在的樣子
+（`resolver.refresh_resolved`：補上票 13 之前沒有的 Series id、換掉合併之後不再是主條目的
+item id）。放進同一輪而不是另一個迴圈，是因為它與其餘四方一樣「定期比一次、問不到就說」，
+而畫面上逐方說的那一行本來就是給這種事的。
 """
 
 from __future__ import annotations
@@ -29,18 +34,47 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from berth.adapters import fs
 from berth.adapters.http import ServiceError
-from berth.domain import IssueRefusal, IssueType, LedgerStatus, ReconcileSide
-from berth.models import LedgerEntry, PathSettings, QbittorrentSettings, Route
+from berth.adapters.qbittorrent import TorrentStatus
+from berth.domain import (
+    IssueAction,
+    IssueRefusal,
+    IssueStatus,
+    IssueType,
+    JobState,
+    LedgerStatus,
+    PlanAction,
+    ReconcileSide,
+)
+from berth.models import (
+    Issue,
+    JellyfinSettings,
+    Job,
+    LedgerEntry,
+    PathSettings,
+    Plan,
+    PlanItem,
+    QbittorrentSettings,
+    Route,
+)
 from berth.models.types import utcnow
+from berth.services import complete
 from berth.services.clients import ServiceClientFactory
-from berth.services.issues import IssueRejectedError, record_issue
-from berth.services.qbittorrent import managed, sign_in
+from berth.services.issues import IssueRejectedError, Recorded, record_issue
+from berth.services.plan import WRITTEN
+from berth.services.qbittorrent import (
+    managed,
+    sign_in,
+    unknown_torrent_detail,
+    unknown_torrents,
+)
+from berth.services.resolver import refresh_resolved
 from berth.services.settings import read_settings
 from berth.services.steps import message
 
@@ -81,14 +115,42 @@ class ReconcileReport:
 
 @dataclass(slots=True)
 class _Survey:
-    """四方問完之後手上有的東西。**寫 Issue 的那一段只看它**，不再碰磁碟或服務。"""
+    """各方問完之後手上有的東西。**寫 Issue 的那一段只看它**，不再碰服務。"""
 
+    #: 整張帳本，問帳本那一方時讀一次。其餘幾方與檢查用的都是這一份。
+    ledger: list[LedgerEntry] = field(default_factory=list)
     #: 問得到的那幾條 Route 的媒體庫目錄。帳本的目標落在它們底下才比得了。
     library_roots: list[Path] = field(default_factory=list)
-    #: 那幾條底下的帳本。**問那一方的時候就讀出來**：檢查要用的是同一份，整張 `ledger`
-    #: 一輪讀一次就夠（讀兩次還得把 `fs.is_within` 也算兩遍）。
+    #: 那幾條底下的帳本。
     library_entries: list[LedgerEntry] = field(default_factory=list)
+    #: 那幾條底下走訪出來的每一個檔案（`unmanaged_library_file` 比的就是它）。
+    library_files: list[Path] = field(default_factory=list)
+    #: qBittorrent 現在的**全部** torrent。`None` 是問不到——與「一個都沒有」不同。
+    torrents: tuple[TorrentStatus, ...] | None = None
+    #: 每一條 Route 的 complete 子目錄。
+    complete_folders: list[Path] = field(default_factory=list)
+    #: 那幾個子目錄底下的每一項（一個 torrent 的內容根）。`None` 是 complete 讀不到。
+    complete_items: list[Path] | None = None
     reports: list[SideReport] = field(default_factory=list)
+
+
+@dataclass(slots=True)
+class _Tally:
+    """這一輪開了幾件、更新了幾件。
+
+    **數的是 `record_issue` 真的做了什麼**，不是從帳本的舊狀態推：被忽略過的那一列帳本仍然是
+    `target_missing`，而這一輪開的是新的一筆（`ignore` 的意思是「這一次不想處理」，不是「這件
+    事不存在」）——推出來的答案在那一格會說謊。
+    """
+
+    opened: int = 0
+    updated: int = 0
+
+    def add(self, recorded: Recorded) -> None:
+        if recorded.opened:
+            self.opened += 1
+        else:
+            self.updated += 1
 
 
 async def reconcile_once(
@@ -99,7 +161,8 @@ async def reconcile_once(
     run_id: int = 0,
     progress: Progress | None = None,
 ) -> ReconcileReport:
-    """比一輪。**只讀四方，然後只寫 `issues` 與 `ledger.status`。**
+    """比一輪。**只讀各方，然後只寫 `issues` 與帳本**（`status`、`checked_at`，以及 Jellyfin
+    那一方換新的 item id）。
 
     `progress` 讓跑在背景的那一輪把每一方的結果即時交出去（`GET /reconcile` 讀它）。
     不傳也跑得完——整份邏輯不依賴它，測試因此不必先起一個 runner。
@@ -112,7 +175,12 @@ async def reconcile_once(
         if progress is not None:
             progress.side_done(report)
 
-    opened, updated = await _check_library_links(session, survey, started)
+    tally = _Tally()
+    await _check_library(session, survey, started, tally)
+    await _check_unmanaged(session, survey, started, tally)
+    await _check_complete(session, survey, started, tally)
+    await _check_unknown_torrents(session, survey, started, tally)
+    await _check_jobs(session, survey, started, tally)
     await session.commit()
 
     finished = ReconcileReport(
@@ -120,21 +188,21 @@ async def reconcile_once(
         started_at=started,
         finished_at=utcnow(),
         sides=tuple(survey.reports),
-        opened=opened,
-        updated=updated,
+        opened=tally.opened,
+        updated=tally.updated,
     )
     logger.info(
         "reconcile finished",
         extra={
-            "opened": opened,
-            "updated": updated,
+            "opened": tally.opened,
+            "updated": tally.updated,
             "skipped": [row.side.value for row in survey.reports if row.unavailable],
         },
     )
     return finished
 
 
-# --- 問四方 -------------------------------------------------------------
+# --- 問各方 -------------------------------------------------------------
 
 
 async def _ask(
@@ -144,26 +212,30 @@ async def _ask(
     survey: _Survey,
 ) -> SideReport:
     if side is ReconcileSide.LEDGER:
-        return await _ask_ledger(session)
+        return await _ask_ledger(session, survey)
     if side is ReconcileSide.CLIENT:
-        return await _ask_client(session, factory)
+        return await _ask_client(session, factory, survey)
     if side is ReconcileSide.COMPLETE:
-        return await _ask_complete(session)
-    return await _ask_library(session, survey)
+        return await _ask_complete(session, survey)
+    if side is ReconcileSide.LIBRARY:
+        return await _ask_library(session, survey)
+    return await _ask_jellyfin(session, factory, survey)
 
 
-async def _ask_ledger(session: AsyncSession) -> SideReport:
-    """帳本有幾列。**永遠問得到**——它就在同一個資料庫裡，而對帳本來就是在同一個交易裡跑的。"""
-    rows = await session.scalars(select(LedgerEntry.id))
-    return SideReport(side=ReconcileSide.LEDGER, counted=len(list(rows)))
+async def _ask_ledger(session: AsyncSession, survey: _Survey) -> SideReport:
+    """整張帳本。**永遠問得到**——它就在同一個資料庫裡，而對帳本來就是在同一個交易裡跑的。"""
+    survey.ledger = list(await session.scalars(select(LedgerEntry).order_by(LedgerEntry.id)))
+    return SideReport(side=ReconcileSide.LEDGER, counted=len(survey.ledger))
 
 
-async def _ask_client(session: AsyncSession, factory: ServiceClientFactory) -> SideReport:
-    """qBittorrent 上掛著 Berth 記號的那幾筆（plan §3.2 的兩道篩子的聯集）。
+async def _ask_client(
+    session: AsyncSession, factory: ServiceClientFactory, survey: _Survey
+) -> SideReport:
+    """qBittorrent 上的**全部** torrent。
 
-    **這一票沒有檢查在用這一份**（`unknown_torrent` 與 `orphan_complete` 在票 09），但仍然要
-    問：結果上少一方的話，「沒有 Issue」會有兩種意思——都好好的，或根本沒比。票上那一條
-    驗收要的正是「問不到時說出來」。
+    留下全部而不只是掛著 Berth 記號的那幾筆：`orphan_complete` 問的是「qBittorrent 上**任何**
+    一個 torrent 認不認得這一項」。`counted` 仍然只數 Berth 的（plan §3.2 的兩道篩子的聯集），
+    那才是畫面上「比到幾筆」的意思。
     """
     settings = await read_settings(session, QbittorrentSettings)
     client = factory.qbittorrent(settings.base_url)
@@ -181,20 +253,32 @@ async def _ask_client(session: AsyncSession, factory: ServiceClientFactory) -> S
     finally:
         await client.aclose()
 
-    categories = {row for row in await session.scalars(select(Route.category)) if row}
-    return SideReport(side=ReconcileSide.CLIENT, counted=len(managed(statuses, categories)))
+    survey.torrents = statuses
+    ours = managed(statuses, await _categories(session))
+    return SideReport(side=ReconcileSide.CLIENT, counted=len(ours))
 
 
-async def _ask_complete(session: AsyncSession) -> SideReport:
-    """complete 底下有幾個第一層目錄（一個 torrent 一個，brief §4.2）。
+async def _ask_complete(session: AsyncSession, survey: _Survey) -> SideReport:
+    """每一條 Route 的 complete 子目錄底下有哪幾項（一個 torrent 一項，brief §4.1）。
 
-    同樣是「問到了沒」而不是一個檢查（`orphan_complete` 在票 09）。目錄不在＝那個掛載
-    沒掛上，不是「下載目錄空了」。
+    complete root 本身讀不到＝那個掛載沒掛上，不是「下載目錄空了」。某一條 Route 的子目錄
+    還不在不是問題：qBittorrent 第一次往那個 category 下載時才會建它。
     """
     paths = await read_settings(session, PathSettings)
     root = Path(paths.complete_root)
+    folders = await complete.route_folders(session)
     try:
-        entries = list(root.iterdir())
+        list(root.iterdir())
+        # 子目錄讀到一半讀不到（權限、掛載中途掉）與 root 讀不到是同一件事：這一方問不到。
+        # 只跳過那一條不行——`orphan_complete` 的下一步是刪除，少看一條就少認一個主。
+        items = [
+            item
+            for folder in folders
+            if folder.is_dir()
+            for item in sorted(folder.iterdir())
+            # Route 的硬鏈接檢查在這一層放探測檔（`fs.probe_file`），撞上的那一刻不算。
+            if not item.name.startswith(fs.PROBE_PREFIX)
+        ]
     except OSError as exc:
         logger.warning("reconcile could not read complete", extra={"error": message(exc)})
         return SideReport(
@@ -202,31 +286,57 @@ async def _ask_complete(session: AsyncSession) -> SideReport:
             counted=0,
             unavailable=f"the complete folder at {root} could not be read: {message(exc)}",
         )
-    return SideReport(side=ReconcileSide.COMPLETE, counted=len(entries))
+    survey.complete_folders = folders
+    survey.complete_items = items
+    return SideReport(side=ReconcileSide.COMPLETE, counted=len(items))
 
 
 async def _ask_library(session: AsyncSession, survey: _Survey) -> SideReport:
     """**逐 Route 問**：那一條的媒體庫目錄在不在（brief §16.2）。
 
-    在的那幾條留進 `survey.library_roots`，底下的帳本才比得了；不在的那幾條跳過並說出它的
-    名字——使用者要知道的是「哪一條沒掛上」，而不是「有東西不見了」。
+    在的那幾條留進 `survey.library_roots`，底下的帳本與檔案才比得了；不在的那幾條跳過並說出
+    它的名字——使用者要知道的是「哪一條沒掛上」，而不是「有東西不見了」。
 
     `enabled` 不在判準裡：停用說的是「不要再往這裡入庫」，不是「裡面的東西不用管了」。
     那些檔案還在 Jellyfin 的媒體庫裡，帳本仍然要對得上。
     """
     routes = list(await session.scalars(select(Route).order_by(Route.id)))
     skipped: list[str] = []
+    files: dict[str, Path] = {}
     for route in routes:
         root = Path(route.target_path)
-        if root.is_dir():
-            survey.library_roots.append(root)
+        if not root.is_dir():
+            skipped.append(
+                f"{route.name} ({route.target_path}) is not there; is the volume mounted?"
+            )
+            logger.warning(
+                "reconcile skipped a route", extra={"route": route.slug, "path": route.target_path}
+            )
             continue
-        skipped.append(f"{route.name} ({route.target_path}) is not there; is the volume mounted?")
-        logger.warning(
-            "reconcile skipped a route", extra={"route": route.slug, "path": route.target_path}
-        )
+        try:
+            walked = _files_under(root)
+        except OSError as exc:
+            # 走到一半讀不到：這一條整條跳過。只比走到的那一半的話，沒走到的檔案會被報成
+            # 「不見了」，而它們的帳本列會被當成沒人認的鏈接。
+            skipped.append(f"{route.name} ({route.target_path}) could not be read: {message(exc)}")
+            logger.warning(
+                "reconcile could not walk a route",
+                extra={"route": route.slug, "error": message(exc)},
+            )
+            continue
+        survey.library_roots.append(root)
+        # 兩條 Route 的目標巢狀時（`…/tv` 與 `…/tv/anime`）同一個檔案只算一次。
+        for path in walked:
+            files.setdefault(fs.path_key(path), path)
 
-    survey.library_entries = await _entries_under(session, survey.library_roots)
+    # 在 Python 裡篩而不是用 SQL 的 `LIKE`：路徑比對的規則（正規化、Windows 的大小寫、同前綴
+    # 的兄弟目錄）只能有一份實作，而它在 `fs.is_within`（plan §8.6）。
+    survey.library_entries = [
+        entry
+        for entry in survey.ledger
+        if any(fs.is_within(Path(entry.target_path), root) for root in survey.library_roots)
+    ]
+    survey.library_files = list(files.values())
     return SideReport(
         side=ReconcileSide.LIBRARY,
         counted=len(survey.library_entries),
@@ -240,64 +350,239 @@ async def _ask_library(session: AsyncSession, survey: _Survey) -> SideReport:
     )
 
 
+async def _ask_jellyfin(
+    session: AsyncSession, factory: ServiceClientFactory, survey: _Survey
+) -> SideReport:
+    """反查過的正片照 Jellyfin 現在的樣子重對一次（`resolver.refresh_resolved`）。
+
+    **一條都沒反查過就一個請求都不發**：剛裝好、還沒入庫過的 Berth 不該因為 Jellyfin 還沒
+    接好而在每一輪說「問不到」。
+    """
+    resolved = [
+        entry
+        for entry in survey.ledger
+        if entry.action is PlanAction.IMPORT and entry.jellyfin_item_id
+    ]
+    if not resolved:
+        return SideReport(side=ReconcileSide.JELLYFIN, counted=0)
+    settings = await read_settings(session, JellyfinSettings)
+    client = factory.jellyfin(settings.base_url, token=settings.api_key)
+    try:
+        changed = await refresh_resolved(session, client, resolved)
+    except ServiceError as exc:
+        logger.warning("reconcile could not ask jellyfin", extra={"error": message(exc)})
+        return SideReport(
+            side=ReconcileSide.JELLYFIN,
+            counted=0,
+            unavailable=f"Jellyfin did not answer: {message(exc)}",
+        )
+    finally:
+        await client.aclose()
+    if changed:
+        logger.info("reconcile refreshed jellyfin items", extra={"count": changed})
+    return SideReport(side=ReconcileSide.JELLYFIN, counted=len(resolved))
+
+
+def _files_under(root: Path) -> list[Path]:
+    """這個根底下的每一個檔案。探測檔不算（`fs.probe_file`）。讀不到就丟 `OSError`。"""
+    return [
+        path
+        for path in sorted(root.rglob("*"))
+        if not path.name.startswith(fs.PROBE_PREFIX) and path.is_file()
+    ]
+
+
+async def _categories(session: AsyncSession) -> set[str]:
+    return {row for row in await session.scalars(select(Route.category)) if row}
+
+
 # --- 寫 Issue -----------------------------------------------------------
 
 
-async def _check_library_links(
-    session: AsyncSession, survey: _Survey, now: datetime
-) -> tuple[int, int]:
-    """`library_link_missing`：帳本有、媒體庫裡那個目標檔不在了（brief §9.1）。
+async def _check_library(
+    session: AsyncSession, survey: _Survey, now: datetime, tally: _Tally
+) -> None:
+    """帳本那一列的三種：`library_link_missing`、`source_missing`、`inode_mismatch`。
 
     **只比問得到的那幾條 Route 底下的帳本**。落在跳過的那一條底下的每一列連 `status` 都
     不動——那一欄說的是「比對過的現況」，而這一輪根本沒有比到它。
+
+    三種是**同一條路上的三站**，一列只落在其中一站：目標不在就是鏈接遺失（來源在不在由
+    「重新鏈接」那一顆說）；目標在、來源不在才是 `source_missing`（brief §9.1 的「library 檔
+    保留」說的正是這個情況）；兩邊都在而 inode 不同才是 `inode_mismatch`。
     """
-    opened = updated = 0
     for entry in survey.library_entries:
+        entry.checked_at = now
         try:
-            fs.stat(Path(entry.target_path))
+            target = fs.stat(Path(entry.target_path))
         except OSError:
             entry.status = LedgerStatus.TARGET_MISSING
-            entry.checked_at = now
-            recorded = await record_issue(
+            tally.add(await _record_entry(session, IssueType.LIBRARY_LINK_MISSING, entry, now))
+            continue
+        try:
+            source = fs.stat(Path(entry.source_abs_path))
+        except OSError:
+            # **帳本上的 `source_missing` 是使用者決定過的現況**：刪除範圍只勾「刪 complete
+            # 檔案」、或按過「標記為已無來源」的那一列就是這樣，不再問一次。還沒決定過的才開
+            # Issue，而那一欄等按下去才改——偵測時就改的話，「忽略」之後下一輪就再也不會問了。
+            if entry.status is not LedgerStatus.SOURCE_MISSING:
+                tally.add(await _record_entry(session, IssueType.SOURCE_MISSING, entry, now))
+            continue
+        if (source.device, source.inode) != (target.device, target.inode):
+            entry.status = LedgerStatus.INODE_MISMATCH
+            # 「若大小一致提供以硬鏈接取代」（brief §9.1）：那一顆給不給看 `same_size`。
+            sizes = {
+                "same_size": source.size == target.size,
+                "source_size": source.size,
+                "target_size": target.size,
+            }
+            tally.add(
+                await _record_entry(session, IssueType.INODE_MISMATCH, entry, now, extra=sizes)
+            )
+            continue
+        # 兩邊都在、是同一份：檔案自己回來了（使用者放回去、別的地方重新鏈接過、來源被重新
+        # 下載回來）。帳本那一欄回到現況。
+        entry.status = LedgerStatus.OK
+
+
+async def _check_unmanaged(
+    session: AsyncSession, survey: _Survey, now: datetime, tally: _Tally
+) -> None:
+    """`unmanaged_library_file`：媒體庫裡有 Berth 不認得的檔案。**只列出，永不自動刪**。
+
+    比的是**整張帳本**的目標，不只是問得到的那幾條 Route 底下的：巢狀的 Route 會讓同一個檔案
+    落在兩條底下。比對用 `fs.path_key`——帳本記的是容器裡的 POSIX 字串，走訪拿到的是這台
+    機器的 `Path`。
+    """
+    known = {fs.path_key(entry.target_path) for entry in survey.ledger}
+    for path in survey.library_files:
+        if fs.path_key(path) in known:
+            continue
+        tally.add(
+            await record_issue(session, IssueType.UNMANAGED_LIBRARY_FILE, path=str(path), now=now)
+        )
+
+
+async def _check_complete(
+    session: AsyncSession, survey: _Survey, now: datetime, tally: _Tally
+) -> None:
+    """`orphan_complete`：complete 裡一項既不屬於 qBittorrent 任何 torrent，也不在帳本上。
+
+    **qBittorrent 與 complete 兩方都要問到**：問不到 qBittorrent 的那一刻，每一個目錄看起來
+    都沒有主，而這一種的下一步是「刪除」。判準在 `services/complete.claimed`，與按下「刪除」
+    那一刻的再確認是同一份。
+    """
+    if survey.torrents is None or survey.complete_items is None:
+        return
+    owned = await complete.claimed(session, survey.torrents, survey.complete_folders)
+    for item in survey.complete_items:
+        if fs.path_key(item) in owned:
+            continue
+        tally.add(
+            await record_issue(
                 session,
-                IssueType.LIBRARY_LINK_MISSING,
-                path=entry.target_path,
-                job_hash=entry.job_hash,
-                ledger_id=entry.id,
-                detail={
-                    "source": entry.source_abs_path,
-                    "media": entry.media_id,
-                    "season": entry.season,
-                    "episode": entry.episode_start,
-                    "action": entry.action.value,
-                },
+                IssueType.ORPHAN_COMPLETE,
+                path=str(item),
+                detail={"folder": item.is_dir()},
                 now=now,
             )
-            # **數的是 `record_issue` 真的做了什麼**，不是從帳本的舊狀態推。被忽略過的
-            # 那一列帳本仍然是 `target_missing`，而這一輪開的是新的一筆（`ignore` 的意思是
-            # 「這一次不想處理」，不是「這件事不存在」）——推出來的答案在那一格會說謊。
-            opened, updated = (opened + 1, updated) if recorded.opened else (opened, updated + 1)
-            continue
-        entry.checked_at = now
-        if entry.status is LedgerStatus.TARGET_MISSING:
-            # 檔案自己回來了（使用者手動放回去、或別的地方重新鏈接過）。
-            entry.status = LedgerStatus.OK
-    return opened, updated
+        )
 
 
-async def _entries_under(session: AsyncSession, roots: list[Path]) -> list[LedgerEntry]:
-    """帳本裡目標落在這幾個根底下的那幾列。
+async def _check_unknown_torrents(
+    session: AsyncSession, survey: _Survey, now: datetime, tally: _Tally
+) -> None:
+    """`unknown_torrent`：qBittorrent 上掛著 Berth 記號、而 Berth 沒有 Job 的那幾筆。
 
-    在 Python 裡篩而不是用 SQL 的 `LIKE`：路徑比對的規則（正規化、Windows 的大小寫、
-    同前綴的兄弟目錄）只能有一份實作，而它在 `fs.is_within`（plan §8.6）。
+    `qbit_poller` 每一輪也寫它（plan §3.2），兩個生產者寫同一個 `(type, subject)`，冪等鍵把
+    它們收成一筆；判準與內容都是同一份（`unknown_torrents`、`unknown_torrent_detail`）。
     """
-    if not roots:
-        return []
-    return [
-        entry
-        for entry in await session.scalars(select(LedgerEntry).order_by(LedgerEntry.id))
-        if any(fs.is_within(Path(entry.target_path), root) for root in roots)
-    ]
+    if survey.torrents is None:
+        return
+    for row in await unknown_torrents(session, survey.torrents):
+        tally.add(
+            await record_issue(
+                session,
+                IssueType.UNKNOWN_TORRENT,
+                job_hash=row.hash,
+                detail=unknown_torrent_detail(row),
+                now=now,
+            )
+        )
+
+
+async def _check_jobs(session: AsyncSession, survey: _Survey, now: datetime, tally: _Tally) -> None:
+    """`job_without_files`：Job 已經 `imported`，帳本上卻一列都沒有。只看帳本那一方。
+
+    兩種空帳本**不算**：
+
+    - 那一份 Plan 本來就沒有要鏈的檔案（全是重複的那一包自動落地，票 08）——空的就是對的。
+    - 使用者對它按過「承認刪除並清帳本」：帳本是他自己清的。這裡再開一件「重新規劃」的話，
+      他剛決定過的事會自己回來（票 05 的 `purge` 那一條是同一個道理）。
+    """
+    candidates = {
+        job.hash: job
+        for job in await session.scalars(select(Job).where(Job.state == JobState.IMPORTED))
+    }
+    for entry in survey.ledger:
+        candidates.pop(entry.job_hash or "", None)
+    if not candidates:
+        return
+    linkable = set(
+        await session.scalars(
+            select(Plan.job_hash)
+            .join(PlanItem, PlanItem.plan_id == Plan.id)
+            .where(Plan.job_hash.in_(candidates), PlanItem.action.in_(WRITTEN))
+        )
+    )
+    forgotten = {
+        row.job_hash
+        for row in await session.scalars(
+            select(Issue).where(
+                Issue.job_hash.in_(candidates), Issue.status == IssueStatus.RESOLVED
+            )
+        )
+        if (row.detail_json or {}).get("action") == IssueAction.FORGET.value
+    }
+    for job_hash, job in candidates.items():
+        if job_hash not in linkable or job_hash in forgotten:
+            continue
+        tally.add(
+            await record_issue(
+                session,
+                IssueType.JOB_WITHOUT_FILES,
+                job_hash=job_hash,
+                detail={"name": job.name},
+                now=now,
+            )
+        )
+
+
+async def _record_entry(
+    session: AsyncSession,
+    kind: IssueType,
+    entry: LedgerEntry,
+    now: datetime,
+    *,
+    extra: dict[str, Any] | None = None,
+) -> Recorded:
+    """帳本那一列的一件事：來源在哪、是哪一部哪一集，加上這一種自己要說的。"""
+    return await record_issue(
+        session,
+        kind,
+        path=entry.target_path,
+        job_hash=entry.job_hash,
+        ledger_id=entry.id,
+        detail={
+            "source": entry.source_abs_path,
+            "media": entry.media_id,
+            "season": entry.season,
+            "episode": entry.episode_start,
+            "action": entry.action.value,
+            **(extra or {}),
+        },
+        now=now,
+    )
 
 
 class Progress:

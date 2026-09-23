@@ -210,7 +210,7 @@ class TestReconciling:
         assert response.json()["id"] == 1
 
     def test_the_finished_run_says_what_each_side_found(self, client: TestClient) -> None:
-        """`GET /reconcile` 的「哪一方比到哪、幾筆」（plan §3.2）。四方都要出現。"""
+        """`GET /reconcile` 的「哪一方比到哪、幾筆」（plan §3.2）。五方都要在（票 09）。"""
         sign_in(client)
         client.post("/api/reconcile", headers=BROWSER)
 
@@ -223,6 +223,7 @@ class TestReconciling:
             "client",
             "complete",
             "library",
+            "jellyfin",
         ]
 
     def test_nothing_has_run_yet_is_two_nulls(self, client: TestClient) -> None:

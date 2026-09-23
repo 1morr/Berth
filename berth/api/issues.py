@@ -16,7 +16,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel
 
-from berth.api.deps import ClientFactoryDep, ReconcilerDep, SessionDep
+from berth.api.deps import ClientFactoryDep, PlanHintsDep, ReconcilerDep, SessionDep
 from berth.api.errors import refusal_responses
 from berth.api.gate import current_user
 from berth.domain import IssueAction, IssueRefusal, IssueStatus, IssueType, ReconcileSide
@@ -35,8 +35,8 @@ router = APIRouter(tags=["issues"])
 #: 哪一種拒絕該回哪個狀態碼。**每一種理由都要在這裡**（`tests/unit/test_openapi_contract.py`
 #: 守著）：漏一種就是執行期的 `KeyError`。
 #:
-#: 三種 409 的共通點是「請求本身沒問題，是**現在**做不了」：另一個分頁先按了、來源檔也不在、
-#: 掛載壞著。修好之後同一個請求就會成功，所以不是 422。`action_not_available` 反過來——
+#: 409 的共通點是「請求本身沒問題，是**現在**做不了」：另一個分頁先按了、來源檔也不在、
+#: 掛載壞著、目錄有主了。修好之後同一個請求就會成功，所以不是 422。`action_not_available` 反過來——
 #: 那一顆對這一種 Issue 根本不存在，重送幾次都一樣。
 _STATUS: dict[IssueRefusal, int] = {
     IssueRefusal.ISSUE_MISSING: status.HTTP_404_NOT_FOUND,
@@ -46,6 +46,10 @@ _STATUS: dict[IssueRefusal, int] = {
     IssueRefusal.RELINK_FAILED: status.HTTP_409_CONFLICT,
     IssueRefusal.CLIENT_UNREACHABLE: status.HTTP_502_BAD_GATEWAY,
     IssueRefusal.RECONCILE_RUNNING: status.HTTP_409_CONFLICT,
+    IssueRefusal.IN_USE: status.HTTP_409_CONFLICT,
+    IssueRefusal.SIZE_DIFFERS: status.HTTP_409_CONFLICT,
+    IssueRefusal.DELETE_FAILED: status.HTTP_409_CONFLICT,
+    IssueRefusal.JELLYFIN_UNREACHABLE: status.HTTP_502_BAD_GATEWAY,
 }
 
 
@@ -64,8 +68,10 @@ def _refusals(*reasons: IssueRefusal) -> dict[int | str, dict[str, Any]]:
     return refusal_responses(IssueRefusalOut, {reason: _STATUS[reason] for reason in reasons})
 
 
-#: 按下那三顆的任何一顆都到得了的：這一件不在了、已經被決定過了、那一顆按不了。
-#: 另外三種各自屬於一顆（重新鏈接的兩種、連 complete 一起刪的一種）。
+#: 按下任何一顆都到得了的：這一件不在了、已經被決定過了、那一顆按不了。其餘各自屬於幾顆：
+#: 來源不在（重新鏈接、以硬鏈接取代）、鏈接沒成（同兩顆）、問不到 qBittorrent（兩顆會刪
+#: complete 的）、目錄有主了與刪不掉（刪除孤兒）、大小變了（以硬鏈接取代）、問不到 Jellyfin
+#: （重新掃描媒體庫）。
 RESOLVE_RESPONSES = _refusals(
     IssueRefusal.ISSUE_MISSING,
     IssueRefusal.ISSUE_NOT_OPEN,
@@ -73,6 +79,10 @@ RESOLVE_RESPONSES = _refusals(
     IssueRefusal.SOURCE_MISSING,
     IssueRefusal.RELINK_FAILED,
     IssueRefusal.CLIENT_UNREACHABLE,
+    IssueRefusal.IN_USE,
+    IssueRefusal.SIZE_DIFFERS,
+    IssueRefusal.DELETE_FAILED,
+    IssueRefusal.JELLYFIN_UNREACHABLE,
 )
 
 #: 忽略不碰磁碟也不碰服務，所以只有這一件本身的兩種。
@@ -159,6 +169,7 @@ async def get_issues(session: SessionDep) -> list[IssueOut]:
 async def post_resolve(
     session: SessionDep,
     factory: ClientFactoryDep,
+    plans: PlanHintsDep,
     request: Request,
     issue_id: int,
     body: IssueResolveIn,
@@ -176,6 +187,7 @@ async def post_resolve(
             issue_id,
             body.action,
             actor=actor_of(user.id if user is not None else None),
+            plans=plans,
         )
     except IssueRejectedError as refusal:
         raise issue_refusal(refusal) from refusal

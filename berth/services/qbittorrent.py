@@ -17,6 +17,7 @@ from collections.abc import Container, Iterable, Mapping
 from dataclasses import dataclass
 from typing import Any
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from berth.adapters.http import ServiceError
@@ -26,8 +27,15 @@ from berth.adapters.qbittorrent import (
     QbittorrentVersion,
     TorrentStatus,
 )
-from berth.domain import DetectionReason, QbittorrentStep, ServiceKind, ServiceOrigin, StepStatus
-from berth.models import PathSettings, QbittorrentSettings, SetupSettings, SetupStep
+from berth.domain import (
+    DetectionReason,
+    IssueType,
+    QbittorrentStep,
+    ServiceKind,
+    ServiceOrigin,
+    StepStatus,
+)
+from berth.models import Job, PathSettings, QbittorrentSettings, Route, SetupSettings, SetupStep
 from berth.models.types import utcnow
 from berth.services.clients import BUNDLED_QBITTORRENT_URL, ServiceClientFactory
 from berth.services.settings import read_settings, write_settings
@@ -58,6 +66,36 @@ def managed(statuses: Iterable[TorrentStatus], categories: Container[str]) -> li
     的話加第三道篩子時會漏改一邊。
     """
     return [row for row in statuses if row.category in categories or BERTH_TAG in row.tags]
+
+
+async def unknown_torrents(
+    session: AsyncSession, statuses: Iterable[TorrentStatus]
+) -> list[TorrentStatus]:
+    """掛著 Berth 記號、而 Berth 沒有 Job 的那幾筆（plan §3.2 的 `unknown_torrent`）。
+
+    **兩個生產者問同一題**：`qbit_poller` 每一輪、對帳每一天（M2 票 09）。它們寫的是同一個
+    冪等鍵，判準若各寫一份，漂移的那一天兩邊會對同一個 hash 一個開、一個不開。
+    """
+    categories = {row for row in await session.scalars(select(Route.category)) if row}
+    ours = managed(statuses, categories)
+    if not ours:
+        return []
+    known = set(
+        await session.scalars(select(Job.hash).where(Job.hash.in_([row.hash for row in ours])))
+    )
+    return [row for row in ours if row.hash not in known]
+
+
+def unknown_torrent_detail(status: TorrentStatus) -> dict[str, Any]:
+    """`unknown_torrent` 那一件說的內容。**兩個生產者寫同一份**：`qbit_poller` 每一輪、對帳
+    每一天（M2 票 09），而冪等鍵把它們收成一筆——兩邊寫的形狀不同的話，清單上那一列說的話會
+    跟著最後寫的是誰變。"""
+    return {
+        "type": IssueType.UNKNOWN_TORRENT.value,
+        "name": status.name,
+        "category": status.category,
+        "client_state": status.state,
+    }
 
 
 async def sign_in(client: QbittorrentClient, settings: QbittorrentSettings) -> None:

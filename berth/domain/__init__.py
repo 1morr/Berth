@@ -1,6 +1,7 @@
 """純資料型別與狀態機，無 IO（plan §1.2）。"""
 
 from berth.domain.enums import (
+    ACTION_DELETES,
     ISSUE_ACTIONS,
     PROWLARR_LOGIN_STEP,
     REVIEW_PRIORITY,
@@ -93,6 +94,7 @@ from berth.domain.parser import (
 )
 
 __all__ = [
+    "ACTION_DELETES",
     "AUTO_APPLIED",
     "CONFIDENCE_ORDER",
     "EDITABLE_ACTIONS",

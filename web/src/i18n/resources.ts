@@ -907,9 +907,11 @@ const zhHant = {
     detectedAt: '偵測於 {{value}}',
     // 展開區的欄名。路徑是機器字串，走 .value 不走 .label（The Machine String Rule）。
     target: '媒體庫路徑',
+    // `orphan_complete` 那一列的路徑在 complete 底下，不在媒體庫裡。
+    completePath: 'complete 路徑',
     source: '來源路徑',
     job: '下載',
-    // 十一種型別各一句（brief §9.1）。票 05 只偵測得出第一種，其餘由票 09 填。
+    // 十一種型別各一句（brief §9.1）。
     type: {
       library_link_missing: '媒體庫裡少了這個檔案',
       source_missing: 'complete 裡的來源檔不見了',
@@ -940,6 +942,12 @@ const zhHant = {
       relink: '重新鏈接',
       forget: '承認刪除並清帳本',
       delete_complete: '連 complete 一起刪',
+      mark_sourceless: '標記為已無來源',
+      replace_with_link: '以硬鏈接取代',
+      delete_orphan: '刪除這個目錄',
+      replan: '重新規劃',
+      relook: '重新反查',
+      rescan: '重新掃描媒體庫',
       ignore: '忽略',
     },
     working: '處理中…',
@@ -948,6 +956,12 @@ const zhHant = {
     confirmDelete:
       '這會移除這一筆下載的全部：媒體庫裡還在的鏈接、qBittorrent 上的 torrent、complete 底下的檔案，以及它的帳本與紀錄。空出來的空間要等來源與所有鏈接都刪掉才真的回來。',
     confirmDeleteAction: '確認刪除',
+    // 另外兩顆會刪東西的（`ACTION_DELETES`），各自說清楚刪的是什麼。
+    confirmDeleteOrphan:
+      '這會刪掉 complete 底下這一整個目錄與裡面的每一個檔案。qBittorrent 與 Berth 都不認得它；按下去之前會再確認一次它仍然沒有主。',
+    confirmReplace:
+      '媒體庫裡這一份複製品會被換成來源的硬鏈接。兩份一樣大，但複製品本身會消失——它若是別人改過的版本，就不要按。',
+    confirmReplaceAction: '確認取代',
     // 動作失敗時那一列留著 open，就地說出為什麼。
     refusal: {
       issue_missing: '這一件已經不在了。重新整理看看。',
@@ -958,6 +972,12 @@ const zhHant = {
       relink_failed: '鏈接沒有成功。',
       client_unreachable: '問不到 qBittorrent，所以整次刪除沒有做。先確認它還活著。',
       reconcile_running: '上一輪對帳還在跑。等它跑完再按。',
+      in_use:
+        '這個目錄現在有主了（qBittorrent 上有 torrent 指著它，或 Berth 認得它），所以沒有刪。',
+      size_differs: '媒體庫那一份與來源現在大小不一樣了，多半被轉碼覆蓋過，所以沒有取代。',
+      jellyfin_unreachable:
+        '沒有請到 Jellyfin 掃描，這一列也沒有重新排進反查。先到健康頁確認 Jellyfin 還在。',
+      delete_failed: '刪除沒有成功。',
     },
     failed: '沒有成功。Berth 自己的 API 沒有回應，先確認它還活著。',
   },
@@ -1167,13 +1187,15 @@ const zhHant = {
     updated_one: '更新 {{count}} 件',
     updated_other: '更新 {{count}} 件',
     neverRun: '這個程序起來之後還沒有對過帳。',
-    // 四方各一列：「比到哪、幾筆」（plan §3.2）。
+    // 各方一列：「比到哪、幾筆」（plan §3.2）。Jellyfin 那一方是票 09 加的：它只把反查過的
+    // item 換新，不開 Issue。
     sides: '對帳進度',
     side: {
       ledger: '帳本',
       client: 'qBittorrent',
       complete: 'COMPLETE',
       library: '媒體庫',
+      jellyfin: 'Jellyfin',
     },
     counted_one: '比了 {{count}} 筆',
     counted_other: '比了 {{count}} 筆',
@@ -2643,6 +2665,7 @@ const en: Translations<typeof zhHant> = {
     off: 'Could not read the issue list. Berth’s own API did not answer — check that it is still running.',
     detectedAt: 'Found {{value}}',
     target: 'Library path',
+    completePath: 'Complete path',
     source: 'Source path',
     job: 'Download',
     type: {
@@ -2675,6 +2698,12 @@ const en: Translations<typeof zhHant> = {
       relink: 'Link it again',
       forget: 'Accept the deletion',
       delete_complete: 'Delete the download too',
+      mark_sourceless: 'Mark as sourceless',
+      replace_with_link: 'Replace with a hard link',
+      delete_orphan: 'Delete this folder',
+      replan: 'Plan it again',
+      relook: 'Look it up again',
+      rescan: 'Scan the libraries',
       ignore: 'Ignore',
     },
     working: 'Working…',
@@ -2682,6 +2711,11 @@ const en: Translations<typeof zhHant> = {
     confirmDelete:
       'This removes everything belonging to this download: the links still in the library, the torrent in qBittorrent, the files under complete, and its ledger and records. The space only comes back once the source and every link are gone.',
     confirmDeleteAction: 'Delete it',
+    confirmDeleteOrphan:
+      'This deletes this whole folder under complete and every file in it. Neither qBittorrent nor Berth knows it; Berth checks once more that it still has no owner before it deletes.',
+    confirmReplace:
+      'The copy in the library is swapped for a hard link to the source. Both are the same size, but the copy itself goes away — if it is someone’s edited version, do not press this.',
+    confirmReplaceAction: 'Replace it',
     refusal: {
       issue_missing: 'This issue is no longer there. Reload the page.',
       issue_not_open: 'This one has already been dealt with — most likely from another tab.',
@@ -2693,6 +2727,13 @@ const en: Translations<typeof zhHant> = {
       client_unreachable:
         'qBittorrent did not answer, so nothing was deleted. Check that it is still running.',
       reconcile_running: 'A reconcile run is still going. Wait for it to finish.',
+      in_use:
+        'This folder has an owner now (a torrent in qBittorrent points at it, or Berth knows it), so it was not deleted.',
+      size_differs:
+        'The library copy and the source are no longer the same size — most likely it was re-encoded — so it was not replaced.',
+      jellyfin_unreachable:
+        'Jellyfin was not asked to scan, and this file was not queued for another lookup. Check on the health page that Jellyfin is still there.',
+      delete_failed: 'The folder was not deleted.',
     },
     failed:
       'That did not go through. Berth’s own API did not answer — check that it is still running.',
@@ -2898,6 +2939,7 @@ const en: Translations<typeof zhHant> = {
       client: 'qBittorrent',
       complete: 'COMPLETE',
       library: 'Library',
+      jellyfin: 'Jellyfin',
     },
     counted_one: '{{count}} checked',
     counted_other: '{{count}} checked',

@@ -37,9 +37,9 @@ from berth.adapters.jellyfin import (
     ITEM_EPISODE,
     ITEM_MOVIE,
     ITEM_SERIES,
-    LIBRARY_SCAN_TASK_KEY,
     JellyfinClient,
     JellyfinItem,
+    scan_libraries,
 )
 from berth.domain import CollectionType, EventType, IssueType
 from berth.models import JellyfinSettings, Job, LedgerEntry, Media, Route
@@ -118,9 +118,7 @@ async def sweep_resolutions(
             for entry in entries:
                 item = locate(entry.target_path, items)
                 if item is not None:
-                    entry.jellyfin_item_id = item.id
-                    entry.jellyfin_series_id = item.series_id
-                    entry.jellyfin_version_name = item.version_name(entry.target_path)
+                    _remember(entry, item)
                     entry.resolve_after = None
                     found.append(entry)
                 elif _reschedule(entry, moment):
@@ -136,6 +134,57 @@ async def sweep_resolutions(
         await client.aclose()
     await session.commit()
     return ResolveOutcome(resolved=len(found), retried=len(waiting), exhausted=len(given_up))
+
+
+async def refresh_resolved(
+    session: AsyncSession, client: JellyfinClient, entries: Sequence[LedgerEntry]
+) -> int:
+    """反查過的那幾條，照 Jellyfin **現在**的樣子重對一次。回傳改了幾條（M2 票 09）。
+
+    兩件事都是「當時對的、現在不對了」，所以同一支：
+
+    - **票 13 之前反查完的劇集沒有 Series id**：那一欄是票 13 才加的，媒體庫的卡片因此一直說
+      「還在掃描」。migration 裡問不了 Jellyfin，所以由這裡補。
+    - **Jellyfin 12 合併版本之後，反查到的那一個可能不再是主條目**（brief §20.9）：次要版本
+      帶 `PrimaryVersionId`，一般查詢濾掉它，帳本那個檔案變成主條目底下的一個來源。`locate`
+      本來就比 `MediaSources`，所以重對一次就會對到主條目。
+
+    **找不到的那幾條不動**：「Jellyfin 現在沒列出它」可能是還在重掃、可能是它被刪了，而檔案
+    在不在是媒體庫那一方的事。這一支只把找得到的換新，不清掉任何東西。
+
+    Jellyfin 問不到時 `ServiceError` 往上丟：呼叫端（對帳的那一方）要說出「問不到」，而不是
+    把「一條都沒改」當成「都對得上」。
+    """
+    routes = list(await session.scalars(select(Route)))
+    changed = 0
+    for route, group in _by_route(entries, routes):
+        if route is None:
+            continue
+        items = await _items_for(session, client, route, group)
+        for entry in group:
+            item = locate(entry.target_path, items)
+            if item is None:
+                continue
+            before = (
+                entry.jellyfin_item_id,
+                entry.jellyfin_series_id,
+                entry.jellyfin_version_name,
+            )
+            _remember(entry, item)
+            if before != (
+                entry.jellyfin_item_id,
+                entry.jellyfin_series_id,
+                entry.jellyfin_version_name,
+            ):
+                changed += 1
+    return changed
+
+
+def _remember(entry: LedgerEntry, item: JellyfinItem) -> None:
+    """找到了：item、它所屬的 Series、Jellyfin 替這個檔案算的版本名（brief §7.7）。"""
+    entry.jellyfin_item_id = item.id
+    entry.jellyfin_series_id = item.series_id
+    entry.jellyfin_version_name = item.version_name(entry.target_path)
 
 
 def locate(target_path: str, items: Sequence[JellyfinItem]) -> JellyfinItem | None:
@@ -187,19 +236,29 @@ async def _look_up(
     if route is None:
         return ()
     try:
-        if route.collection_type is CollectionType.MOVIES:
-            return await client.items(route.jellyfin_library_id, (ITEM_MOVIE,))
-        series = await client.items(route.jellyfin_library_id, (ITEM_SERIES,))
-        folders = await _scanned_folders(session, route, entries, series)
-        if not folders:
-            return ()
-        episodes = await client.items(route.jellyfin_library_id, (ITEM_EPISODE,))
+        return await _items_for(session, client, route, entries)
     except ServiceError as exc:
         logger.warning(
             "jellyfin lookup failed; it counts as one try",
             extra={"route": route.slug, "error": message(exc)},
         )
         return ()
+
+
+async def _items_for(
+    session: AsyncSession,
+    client: JellyfinClient,
+    route: Route,
+    entries: Sequence[LedgerEntry],
+) -> tuple[JellyfinItem, ...]:
+    """brief §20.1 的兩段查詢本身。問不到就丟 `ServiceError`，要不要吞掉是呼叫端的事。"""
+    if route.collection_type is CollectionType.MOVIES:
+        return await client.items(route.jellyfin_library_id, (ITEM_MOVIE,))
+    series = await client.items(route.jellyfin_library_id, (ITEM_SERIES,))
+    folders = await _scanned_folders(session, route, entries, series)
+    if not folders:
+        return ()
+    episodes = await client.items(route.jellyfin_library_id, (ITEM_EPISODE,))
     return tuple(
         item for item in episodes if any(item.path.startswith(f"{folder}/") for folder in folders)
     )
@@ -244,28 +303,14 @@ async def _remind(client: JellyfinClient, entries: Sequence[LedgerEntry]) -> boo
         await client.notify_paths([entry.target_path for entry in entries])
         if all(entry.resolve_attempts < SCAN_AFTER_MISSES for entry in entries):
             return False
-        return await _scan_libraries(client)
+        if not await scan_libraries(client):
+            logger.warning("jellyfin has no library scan task")
+            return False
+        logger.info("asked jellyfin to scan its libraries")
+        return True
     except ServiceError as exc:
         logger.warning("jellyfin could not be reminded", extra={"error": message(exc)})
         return False
-
-
-async def _scan_libraries(client: JellyfinClient) -> bool:
-    """跑 Jellyfin 的「重新掃描媒體庫」排程任務（一輪一次，不是一個檔案一次）。
-
-    **不用 `POST /Library/Refresh`**：它在請求裡等整次掃描做完（`LibraryController.RefreshLibrary`，
-    2026-09-15 查核 master），大的媒體庫會讓這一輪卡上好幾分鐘；排程任務收下就回。
-    **也不用 `POST /Items/{id}/Refresh`**：master 上它沒有 `Recursive`，只刷新那一個 item 的中繼
-    資料，不會去找新的子資料夾（同日查核，對 12.0.0 實測兩分鐘後仍是 0 個 item）。
-    """
-    tasks = await client.scheduled_tasks()
-    task = next((task for task in tasks if task.key == LIBRARY_SCAN_TASK_KEY), None)
-    if task is None:
-        logger.warning("jellyfin has no library scan task", extra={"key": LIBRARY_SCAN_TASK_KEY})
-        return False
-    await client.run_task(task.id)
-    logger.info("asked jellyfin to scan its libraries", extra={"task": task.id})
-    return True
 
 
 async def _announce(

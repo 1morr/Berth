@@ -10,7 +10,14 @@
 
 from __future__ import annotations
 
-from berth.domain import ISSUE_ACTIONS, SUBJECT_OF, IssueAction, IssueSubject, IssueType
+from berth.domain import (
+    ACTION_DELETES,
+    ISSUE_ACTIONS,
+    SUBJECT_OF,
+    IssueAction,
+    IssueSubject,
+    IssueType,
+)
 
 #: brief §9.1 上半張表的七種。**分的是「哪一張表列了它」，不是「今天誰在寫」**——
 #: `unknown_torrent` 在這一組裡，但寫它的是 `qbit_poller`（plan §3.2）；票 09 讓對帳也走到它
@@ -93,15 +100,24 @@ class TestWhatEachTypeCanBeResolvedWith:
     def test_every_type_says_what_can_be_pressed_on_it(self) -> None:
         assert set(ISSUE_ACTIONS) == set(IssueType)
 
-    def test_the_only_type_with_actions_this_round_is_the_missing_link(self) -> None:
-        """票 05 只做得出 `library_link_missing`，所以只有它按得了東西（其餘在票 09）。
+    def test_what_each_type_offers_this_round(self) -> None:
+        """brief §9.1 那一欄，扣掉還沒做的（M2 票 09）。
 
-        這一條是**刻意會過期的**：票 09 加第二種檢查時它要跟著改，而改它的人正好會看到
-        「新的那一種也要決定按得了什麼」。
+        這一條是**刻意會過期的**：票 10 補認領類的三顆、票 09c 補管線那三種時它要跟著改，
+        而改它的人正好會看到「新的那一顆也要回答它會不會刪東西」（`ACTION_DELETES`）。
         """
-        with_actions = {kind for kind, actions in ISSUE_ACTIONS.items() if actions}
-
-        assert with_actions == {IssueType.LIBRARY_LINK_MISSING}
+        assert {kind: actions for kind, actions in ISSUE_ACTIONS.items() if actions} == {
+            IssueType.LIBRARY_LINK_MISSING: (
+                IssueAction.RELINK,
+                IssueAction.FORGET,
+                IssueAction.DELETE_COMPLETE,
+            ),
+            IssueType.SOURCE_MISSING: (IssueAction.MARK_SOURCELESS,),
+            IssueType.INODE_MISMATCH: (IssueAction.REPLACE_WITH_LINK,),
+            IssueType.ORPHAN_COMPLETE: (IssueAction.DELETE_ORPHAN,),
+            IssueType.JOB_WITHOUT_FILES: (IssueAction.REPLAN,),
+            IssueType.JELLYFIN_ITEM_UNRESOLVED: (IssueAction.RELOOK, IssueAction.RESCAN),
+        }
 
     def test_the_missing_link_offers_the_three_from_the_brief(self) -> None:
         """重新鏈接 / 承認刪除並清帳本 / 連 complete 一起刪，**順序就是畫面上的順序**：
@@ -115,3 +131,34 @@ class TestWhatEachTypeCanBeResolvedWith:
     def test_no_type_offers_an_action_twice(self) -> None:
         for kind, actions in ISSUE_ACTIONS.items():
             assert len(set(actions)) == len(actions), kind
+
+
+def deleting(table: dict[IssueType, tuple[IssueAction, ...]], kind: IssueType) -> list[IssueAction]:
+    """`kind` 按得了的那幾顆裡，會刪東西的是哪幾顆。"""
+    return [action for action in table[kind] if ACTION_DELETES[action]]
+
+
+class TestTheUnmanagedFileIsNeverDeleted:
+    """`unmanaged_library_file`：**只列出，永不自動刪**（brief §9.1，票 09 驗收）。
+
+    服務層那一半（直接打每一顆都被擋、檔案不動）在 `tests/integration/test_issue_repairs.py`。
+    """
+
+    def test_every_action_says_whether_it_deletes(self) -> None:
+        """加一顆新的而沒回答這一題，下面那一條就守不住了。"""
+        assert set(ACTION_DELETES) == set(IssueAction)
+
+    def test_none_of_its_actions_deletes(self) -> None:
+        assert deleting(ISSUE_ACTIONS, IssueType.UNMANAGED_LIBRARY_FILE) == []
+
+    def test_the_rule_turns_red_when_a_deleting_action_is_offered(self) -> None:
+        """變異：票 10 替它加「認領」時手滑多給了一顆刪除。"""
+        mutated = {**ISSUE_ACTIONS, IssueType.UNMANAGED_LIBRARY_FILE: (IssueAction.DELETE_ORPHAN,)}
+
+        assert deleting(mutated, IssueType.UNMANAGED_LIBRARY_FILE) == [IssueAction.DELETE_ORPHAN]
+
+    def test_the_rule_stays_green_for_an_action_that_does_not_delete(self) -> None:
+        """變異：加一顆不刪東西的（票 10 的認領就是這種），規則不該紅。"""
+        mutated = {**ISSUE_ACTIONS, IssueType.UNMANAGED_LIBRARY_FILE: (IssueAction.RELOOK,)}
+
+        assert deleting(mutated, IssueType.UNMANAGED_LIBRARY_FILE) == []

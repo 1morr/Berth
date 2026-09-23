@@ -576,6 +576,26 @@ class JellyfinClient(Protocol):
     async def aclose(self) -> None: ...
 
 
+async def scan_libraries(client: JellyfinClient) -> bool:
+    """跑 Jellyfin 的「重新掃描媒體庫」排程任務。回傳「真的請它掃了沒」（沒有那個任務時 False）。
+
+    **不用 `POST /Library/Refresh`**：它在請求裡等整次掃描做完（`LibraryController.RefreshLibrary`，
+    2026-09-15 查核 master），大的媒體庫會讓呼叫端卡上好幾分鐘；排程任務收下就回。
+    **也不用 `POST /Items/{id}/Refresh`**：master 上它沒有 `Recursive`，只刷新那一個 item 的中繼
+    資料，不會去找新的子資料夾（同日查核，對 12.0.0 實測兩分鐘後仍是 0 個 item）。
+
+    任務 id 每一台不同，以 `Key` 找（brief §20.1）——那是協定的事，所以住在 adapter（同
+    qBittorrent 的 `ensure_category`）。兩個呼叫端：`jellyfin_resolver` 沒找到兩次之後、
+    Issue 的「重新掃描媒體庫」那一顆（M2 票 09）。
+    """
+    tasks = await client.scheduled_tasks()
+    task = next((task for task in tasks if task.key == LIBRARY_SCAN_TASK_KEY), None)
+    if task is None:
+        return False
+    await client.run_task(task.id)
+    return True
+
+
 __all__ = [
     "ITEM_EPISODE",
     "ITEM_MOVIE",
@@ -601,6 +621,7 @@ __all__ = [
     "NewLibrary",
     "ParentImage",
     "TypeOption",
+    "scan_libraries",
     "unsupported_message",
     "version_supported",
 ]

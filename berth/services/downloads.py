@@ -46,7 +46,6 @@ from berth.models import (
     JobFile,
     PollerSettings,
     QbittorrentSettings,
-    Route,
     UnknownTorrent,
 )
 from berth.models.types import utcnow
@@ -55,7 +54,7 @@ from berth.services.events import EventHub, JobSignal
 from berth.services.hints import JobHints
 from berth.services.issues import record_issue
 from berth.services.jobs import job_lock, record_event, transition
-from berth.services.qbittorrent import managed
+from berth.services.qbittorrent import unknown_torrent_detail, unknown_torrents
 from berth.services.settings import read_settings, write_settings
 
 logger = logging.getLogger(__name__)
@@ -614,14 +613,7 @@ async def _record_unknown(
     """
     if not statuses:
         return []
-    categories = {row for row in await session.scalars(select(Route.category)) if row}
-    ours = managed(statuses.values(), categories)
-    if not ours:
-        return []
-    known = set(
-        await session.scalars(select(Job.hash).where(Job.hash.in_([row.hash for row in ours])))
-    )
-    orphans = [row for row in ours if row.hash not in known]
+    orphans = await unknown_torrents(session, statuses.values())
     if not orphans:
         return []
 
@@ -634,12 +626,7 @@ async def _record_unknown(
         )
     )
     for row in orphans:
-        payload = {
-            "type": IssueType.UNKNOWN_TORRENT.value,
-            "name": row.name,
-            "category": row.category,
-            "client_state": row.state,
-        }
+        payload = unknown_torrent_detail(row)
         # Issue 那一邊**每一輪都寫**：它自己是冪等的（同一個 hash 更新那一列的
         # `detected_at`），而「上一次看到它是什麼時候」正是清單上要說的那一句。
         await record_issue(

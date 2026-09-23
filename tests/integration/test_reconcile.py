@@ -1,7 +1,7 @@
 """對帳的一輪：比四方、跳過問不到的那一方、寫下 Issue（brief §9.1、§16.2、plan §3.2、票 05）。
 
-這一輪**只做 `library_link_missing`** 一種檢查（其餘六種在票 09），所以這一份的重點不是
-「七種都找得到」，而是**一輪的形狀**：
+這一份的重點不是「七種都找得到」（那在 `test_reconcile_checks.py`，票 09），而是**一輪的形狀**，
+以 `library_link_missing` 演：
 
 - 四方各自走完才寫 Issue，而任一方問不到就跳過那一方並**在結果上說出來**。
 - 跳過的那一方不得讓任何東西被寫成「不見了」（brief §16.2）。這是整張票最容易靜靜壞掉的
@@ -255,21 +255,6 @@ class TestADisabledRoute:
         await reconcile_once(session, factory, now=NOW)
 
         assert [row.type for row in await issues_of(session)] == [IssueType.LIBRARY_LINK_MISSING]
-
-
-class TestTheThingsThisRoundDoesNotCheck:
-    async def test_a_missing_source_is_not_reported_yet(
-        self, session: AsyncSession, roots: dict[str, Path]
-    ) -> None:
-        """`source_missing` 是票 09 的檢查。這一輪刪掉來源不該開出任何 Issue——尤其不該被
-        `library_link_missing` 誤收（媒體庫那一邊明明還在）。"""
-        _, _, factory = await imported(session, roots)
-        for entry in await ledger_of(session):
-            Path(entry.source_abs_path).unlink(missing_ok=True)
-
-        await reconcile_once(session, factory, now=NOW)
-
-        assert await issues_of(session) == []
 
 
 class TestOnlyOneRunAtATime:

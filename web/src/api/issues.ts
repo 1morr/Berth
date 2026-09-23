@@ -24,10 +24,10 @@ export type ReconcileRun = Schemas['ReconcileRunOut']
 /** 上一輪與進行中的那一輪。 */
 export type ReconcileStatus = Schemas['ReconcileStatusOut']
 
-/** 一輪裡的一方（帳本 / 客戶端 / complete / 媒體庫）。 */
+/** 一輪裡的一方（帳本 / 客戶端 / complete / 媒體庫 / Jellyfin）。 */
 export type ReconcileSideReport = Schemas['SideOut']
 
-/** 對帳比的四方。 */
+/** 對帳比的各方（四方加上票 09 的 Jellyfin）。 */
 export type ReconcileSide = ReconcileSideReport['side']
 
 /** 動作被擋下來的理由（`berth/domain/enums.py` 的 `IssueRefusal`）。 */
@@ -45,6 +45,10 @@ const REASONS: ReasonSet<IssueRefusal> = {
   relink_failed: true,
   client_unreachable: true,
   reconcile_running: true,
+  in_use: true,
+  size_differs: true,
+  jellyfin_unreachable: true,
+  delete_failed: true,
 }
 
 /** 這一次失敗是「後端說不行」還是「網路壞了」。認不得的理由回 `null`。 */

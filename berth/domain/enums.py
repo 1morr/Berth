@@ -267,9 +267,12 @@ SUBJECT_OF: dict[IssueType, IssueSubject] = {
 class IssueAction(StrEnum):
     """resolve 一件 Issue 時按的那一顆（brief §9.1 的「預設建議動作」那一欄）。
 
-    **只有 `library_link_missing` 的三顆**（M2 票 05）：其餘十種的動作跟著它們的檢查一起
-    在票 09 加。先立三顆是因為形狀要對——`ISSUE_ACTIONS` 那張表逐型別說得出按得了什麼，
-    第二種型別進來時只是多一列。
+    **「忽略」不在這裡**：它對每一種型別都按得了，而且不碰磁碟也不碰帳本（`ignore_issue`）。
+
+    brief §9.1 那一欄還有三顆「認領」類的——`orphan_complete` 的重新入庫、`unknown_torrent` 的
+    認領、`unmanaged_library_file` 的認領進帳本——**在票 10**（2026-09-23 使用者拍板）：它們用的
+    正是那一張票的原語（目錄版 `reimport` 與 `rebuild-ledger` 的反查），先做一份會變成兩條入庫
+    路徑。管線那三種（`missing_files` / `client_error` / `client_removed`）的動作在票 09c。
     """
 
     #: 重新鏈接：來源還在 complete，照帳本那一列再硬鏈接一次。
@@ -279,28 +282,63 @@ class IssueAction(StrEnum):
     #: 連 complete 一起刪：這一筆下載整個不要了。走 `delete_job` 的四個旗標（票 04），
     #: 不是另一套刪除（plan §11.3 決定 4）。
     DELETE_COMPLETE = "delete_complete"
+    #: 標記為「已無來源」：媒體庫那一份保留，帳本那一列改成 `source_missing`——對帳之後就
+    #: 不再為它開 Issue（那是使用者的決定，同刪除範圍只勾「刪 complete 檔案」的結果）。
+    MARK_SOURCELESS = "mark_sourceless"
+    #: 以硬鏈接取代：媒體庫裡那一份（複製品）換成來源的硬鏈接。**只在大小一致時給**
+    #: （brief §9.1）：大小不同多半是被轉碼過，換掉等於丟掉別人的成品。
+    REPLACE_WITH_LINK = "replace_with_link"
+    #: 刪掉 complete 裡那個沒人認領的目錄（整棵）。按下去那一刻再確認一次它仍然沒人認領。
+    DELETE_ORPHAN = "delete_orphan"
+    #: 重新規劃：Job 退回 `completed`，規劃器照現在的檔案重算一份並入庫（brief §9.1 的
+    #: 「重新 planning」）。
+    REPLAN = "replan"
+    #: 重新反查：那一列帳本重新排進 `jellyfin_resolver`，六次從頭算。
+    RELOOK = "relook"
+    #: 重新掃描媒體庫：先請 Jellyfin 跑「重新掃描媒體庫」，再重新反查（brief §20.1：路徑通知
+    #: 對從沒掃到過內容的媒體庫無效）。
+    RESCAN = "rescan"
 
 
 #: 逐型別按得了哪幾顆，**順序就是畫面上的順序**（第一顆是 brief §9.1 的預設建議動作）。
 #:
 #: **要涵蓋整個 `IssueType`**（`tests/unit/test_issue_types.py` 守著）。空 tuple 是誠實的
-#: 答案：那一種這一票還偵測不出來，也就還沒有人替它決定按下去會發生什麼（票 09）。
+#: 答案：那一種現在只按得了「忽略」——認領類的在票 10，管線那三種在票 09c。
 ISSUE_ACTIONS: dict[IssueType, tuple[IssueAction, ...]] = {
     IssueType.LIBRARY_LINK_MISSING: (
         IssueAction.RELINK,
         IssueAction.FORGET,
         IssueAction.DELETE_COMPLETE,
     ),
-    IssueType.SOURCE_MISSING: (),
-    IssueType.INODE_MISMATCH: (),
-    IssueType.ORPHAN_COMPLETE: (),
+    IssueType.SOURCE_MISSING: (IssueAction.MARK_SOURCELESS,),
+    # 「否則列出等人決定」（brief §9.1）：大小不同時這一顆不給，由 `_actions` 看 `same_size`。
+    IssueType.INODE_MISMATCH: (IssueAction.REPLACE_WITH_LINK,),
+    IssueType.ORPHAN_COMPLETE: (IssueAction.DELETE_ORPHAN,),
     IssueType.UNKNOWN_TORRENT: (),
+    # **永不刪**（brief §9.1）。`ACTION_DELETES` 與 `test_issue_types.py` 守著這一格裡沒有
+    # 任何一顆會刪東西。
     IssueType.UNMANAGED_LIBRARY_FILE: (),
-    IssueType.JOB_WITHOUT_FILES: (),
+    IssueType.JOB_WITHOUT_FILES: (IssueAction.REPLAN,),
     IssueType.MISSING_FILES: (),
     IssueType.CLIENT_ERROR: (),
     IssueType.CLIENT_REMOVED: (),
-    IssueType.JELLYFIN_ITEM_UNRESOLVED: (),
+    IssueType.JELLYFIN_ITEM_UNRESOLVED: (IssueAction.RELOOK, IssueAction.RESCAN),
+}
+
+#: 按下去會不會刪掉磁碟上的東西。**要涵蓋整個 `IssueAction`**（`test_issue_types.py` 守著）：
+#: 加一顆新的而沒回答這一題，`unmanaged_library_file`「永不刪」那一條就守不住了。
+#:
+#: 「以硬鏈接取代」算刪：被換掉的那一份複製品就沒了，只是大小一樣。
+ACTION_DELETES: dict[IssueAction, bool] = {
+    IssueAction.RELINK: False,
+    IssueAction.FORGET: False,
+    IssueAction.DELETE_COMPLETE: True,
+    IssueAction.MARK_SOURCELESS: False,
+    IssueAction.REPLACE_WITH_LINK: True,
+    IssueAction.DELETE_ORPHAN: True,
+    IssueAction.REPLAN: False,
+    IssueAction.RELOOK: False,
+    IssueAction.RESCAN: False,
 }
 
 
@@ -320,6 +358,10 @@ class ReconcileSide(StrEnum):
     COMPLETE = "complete"
     #: 每一條 Route 的媒體庫目錄。**逐 Route 各自問得到**：一條沒掛上不該讓其餘幾條停擺。
     LIBRARY = "library"
+    #: Jellyfin 裡反查過的那幾條（M2 票 09 加的第五方）。它不開 Issue，只把帳本記著的 item
+    #: 換成 Jellyfin 現在的樣子：票 13 之前反查完的劇集補上 Series id，Jellyfin 12 合併版本
+    #: 之後換掉不再是主條目的 item id（brief §20.9）。問不到一樣跳過並說出來。
+    JELLYFIN = "jellyfin"
 
 
 class LedgerStatus(StrEnum):
@@ -888,6 +930,15 @@ class IssueRefusal(StrEnum):
     CLIENT_UNREACHABLE = "client_unreachable"
     #: 上一輪對帳還在跑。**不排隊**：排隊的那一輪看到的會是同一份磁碟（plan §3.2）。
     RECONCILE_RUNNING = "reconcile_running"
+    #: 要刪的那個 complete 目錄現在有主了（qBittorrent 上某個 torrent、Berth 的某一筆 Job 或
+    #: 帳本上的一列指著它）。偵測與按下去之間隔了一段時間，而刪錯的代價是別人正在做種的資料。
+    IN_USE = "in_use"
+    #: 要以硬鏈接取代，而媒體庫那一份與來源現在大小不一樣了（多半是被轉碼覆蓋）。
+    SIZE_DIFFERS = "size_differs"
+    #: 要請 Jellyfin 掃描媒體庫而它問不到（或它沒有那個排程任務）。
+    JELLYFIN_UNREACHABLE = "jellyfin_unreachable"
+    #: 刪除真的做了但沒成（權限、唯讀掛載）。同 `relink_failed`，`detail` 是系統原文。
+    DELETE_FAILED = "delete_failed"
 
 
 class PlanRefusal(StrEnum):

@@ -410,6 +410,8 @@ NCOP/NCED、PV、CM、Menu、預告、花絮等**可辨識**的非正片內容�
 
 後四種是管線自己發現的（M1 以 `issue_detected` 事件記著，M2 起與對帳的七種共用 `issues` 表與同一個封閉集合，plan §2.4，2026-09-22 定）。`ledger.status` 的 `target_missing` / `source_missing` / `inode_mismatch` 是帳本那一列的現況，Issue 是「要有人決定」的那一件——同一件事的兩個角度，resolve 之後帳本那一欄跟著改。
 
+2026-09-23（M2 票 09 開工時使用者拍板）：「認領」類的三顆——`orphan_complete` 的重新入庫、`unknown_torrent` 的認領、`unmanaged_library_file` 的認領進帳本——在**票 10** 與 `reimport` / `rebuild-ledger` 一起做（同一組原語，先做一份會變成兩條入庫路徑）；管線那三種（`missing_files` / `client_error` / `client_removed`）的動作在**票 09c**。那之前它們只按得了「忽略」。會刪東西的按鈕（連 complete 一起刪、刪除孤兒目錄、以硬鏈接取代）按下去之前再確認一次世界：偵測在早上，按下去在下午。`job_without_files` 的判定有兩個例外（票 09）：那一份 Plan 本來就沒有要鏈的檔案（全是重複的那一包自動落地，§7.8）不算；使用者對那一筆按過「承認刪除並清帳本」的不算——帳本是他自己清的，再問他要不要重新規劃等於讓剛決定過的事自己回來。
+
 ### 9.2 刪除範圍【決定】
 
 刪除是一組可組合的旗標，UI 用勾選框呈現（沿用 Sonarr 的「同時刪除檔案」慣例，但拆得更細）：

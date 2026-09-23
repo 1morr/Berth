@@ -1977,12 +1977,15 @@ export interface components {
          * IssueAction
          * @description resolve 一件 Issue 時按的那一顆（brief §9.1 的「預設建議動作」那一欄）。
          *
-         *     **只有 `library_link_missing` 的三顆**（M2 票 05）：其餘十種的動作跟著它們的檢查一起
-         *     在票 09 加。先立三顆是因為形狀要對——`ISSUE_ACTIONS` 那張表逐型別說得出按得了什麼，
-         *     第二種型別進來時只是多一列。
+         *     **「忽略」不在這裡**：它對每一種型別都按得了，而且不碰磁碟也不碰帳本（`ignore_issue`）。
+         *
+         *     brief §9.1 那一欄還有三顆「認領」類的——`orphan_complete` 的重新入庫、`unknown_torrent` 的
+         *     認領、`unmanaged_library_file` 的認領進帳本——**在票 10**（2026-09-23 使用者拍板）：它們用的
+         *     正是那一張票的原語（目錄版 `reimport` 與 `rebuild-ledger` 的反查），先做一份會變成兩條入庫
+         *     路徑。管線那三種（`missing_files` / `client_error` / `client_removed`）的動作在票 09c。
          * @enum {string}
          */
-        IssueAction: "relink" | "forget" | "delete_complete";
+        IssueAction: "relink" | "forget" | "delete_complete" | "mark_sourceless" | "replace_with_link" | "delete_orphan" | "replan" | "relook" | "rescan";
         /**
          * IssueOut
          * @description 清單上的一列（`services/issues.IssueView` 的對外形狀）。
@@ -2036,7 +2039,7 @@ export interface components {
          *     （plan §8.6）。其餘每一種都是「還沒開始就停住」。
          * @enum {string}
          */
-        IssueRefusal: "issue_missing" | "issue_not_open" | "action_not_available" | "source_missing" | "relink_failed" | "client_unreachable" | "reconcile_running";
+        IssueRefusal: "issue_missing" | "issue_not_open" | "action_not_available" | "source_missing" | "relink_failed" | "client_unreachable" | "reconcile_running" | "in_use" | "size_differs" | "jellyfin_unreachable" | "delete_failed";
         /**
          * IssueRefusalOut
          * @description 做不了的時候回的那一份。`reason` 給畫面挑句子，`detail` 是原文，不翻譯。
@@ -2920,7 +2923,7 @@ export interface components {
          *     畫面要逐方說「比到哪、幾筆」，而跳過的那一方要說得出為什麼。
          * @enum {string}
          */
-        ReconcileSide: "ledger" | "client" | "complete" | "library";
+        ReconcileSide: "ledger" | "client" | "complete" | "library" | "jellyfin";
         /**
          * ReconcileStatusOut
          * @description `GET /reconcile`：上一輪與進行中的那一輪。
@@ -4209,7 +4212,7 @@ export interface operations {
                     "application/json": components["schemas"]["IssueRefusalOut"];
                 };
             };
-            /** @description `issue_not_open` · `source_missing` · `relink_failed` */
+            /** @description `issue_not_open` · `source_missing` · `relink_failed` · `in_use` · `size_differs` · `delete_failed` */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -4227,7 +4230,7 @@ export interface operations {
                     "application/json": components["schemas"]["IssueRefusalOut"];
                 };
             };
-            /** @description `client_unreachable` */
+            /** @description `client_unreachable` · `jellyfin_unreachable` */
             502: {
                 headers: {
                     [name: string]: unknown;

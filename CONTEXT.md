@@ -254,7 +254,7 @@ _Avoid_: re-run, resync
 ### 修復
 
 **Reconciler**:
-比對帳本、qBittorrent、complete 目錄、library 目錄四方一致性的排程工作。
+比對帳本、qBittorrent、complete 目錄、library 目錄四方一致性的排程工作；同一輪也把反查過的 Jellyfin item 換成 Jellyfin 現在的樣子（第五方，不開 Issue）。
 _Avoid_: scanner, sync, health check（Health Check 指服務與 Route 連線）
 
 **Issue**:

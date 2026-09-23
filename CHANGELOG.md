@@ -521,6 +521,18 @@ Berth 入庫的作品照樣瀏覽得到。這六件事現在是 nightly e2e 的�
 - **Media 詳情的修正入口**（M2 票 08）：Unmatched 區每一列一顆「修正」，檔案清單每一列展開後一顆
   （字幕沒有——它跟著影片走），與 `/review` 同一個表單、打同一支；已入庫的先就地確認。只有 admin 看得到。
   演練情境 `review` 多一筆 S01E03 + OVA：一個重複版本、一個對不到的特典。
+- **對帳的其餘六種檢查**（M2 票 09，brief §9.1、plan §3.2）：`source_missing`（媒體庫那一份還在、來源不見了）、
+  `inode_mismatch`（附大小是否一致）、`orphan_complete`（只看每一條 Route 的 complete 子目錄）、
+  `unknown_torrent`（與 `qbit_poller` 共用冪等鍵與內容）、`unmanaged_library_file`（**只列出，永不刪**）、
+  `job_without_files`（那一份 Plan 本來就沒有要鏈的、或使用者自己清掉帳本的不算）。每一種只用它需要的那幾方，
+  缺一方就整種不做。
+- **Issue 的六顆新按鈕**（M2 票 09）：標記為已無來源、以硬鏈接取代（只在大小一致時給）、刪除孤兒目錄、
+  重新規劃、重新反查、重新掃描媒體庫。會刪東西的三顆就地二次確認，而且按下去那一刻重問一次它依據的事
+  （目錄仍然沒有主、複製品仍然與來源一樣大）。新的拒絕理由 `in_use`、`size_differs`、`jellyfin_unreachable`、
+  `delete_failed`。「認領」類三顆在票 10，管線三種的動作在票 09c。
+- **對帳的第五方 Jellyfin**（M2 票 09，brief §20.9）：`GET /reconcile` 的 `sides` 多一方 `jellyfin`。它不開 Issue，
+  只把反查過的正片照 Jellyfin 現在的樣子重對一次——票 13 之前反查完的劇集補上 Series id（媒體庫卡片不再一直說
+  「還在掃描」），Jellyfin 12 合併之後不再是主條目的 item id 換成主條目。
 - **刪除對話框是一個元件**（M2 票 04，plan §7）：`/jobs` 的展開區與 Media 詳情的版本清單共用，
   票 11 的 `/jobs/:hash` 掛的也是它。就地展開而不是 dialog（The Failure Expands In Place Rule）——
   「哪一筆正在被刪」正是這個動作最怕搞錯的事。取消「移除 torrent」會把「刪除檔案」一起收掉，

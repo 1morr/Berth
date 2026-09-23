@@ -115,6 +115,28 @@ def remove(path: Path, *, roots: Sequence[Path]) -> bool:
     return True
 
 
+def remove_tree(path: Path, *, roots: Sequence[Path]) -> bool:
+    """刪掉一整個目錄（或單一檔案），回傳「真的刪了什麼沒有」（M2 票 09 的 `orphan_complete`）。
+
+    **只有一個呼叫端，而它的單位本來就是一整棵**：complete 底下一個 torrent 的內容根，
+    qBittorrent 與 Berth 都不認得它（brief §9.1）。`remove` 刻意不刪目錄，理由是目錄底下可能
+    有 Berth 不知道的東西——這裡正是使用者看過那一句、按了確認之後才走得到的那一條。
+
+    守衛比 `remove` 多一道：**根本身不刪**。`roots` 傳的是每一條 Route 的 complete 子目錄，
+    刪掉它等於刪掉那一條 Route 之後每一筆下載的落點。
+    """
+    root = root_of(path, roots)
+    if _normalised(path) == _normalised(root):
+        raise PathEscapeError(f"refusing to remove the root {root} itself")
+    if not path.exists():
+        return False
+    if path.is_dir() and not path.is_symlink():
+        shutil.rmtree(path)
+    else:
+        path.unlink()
+    return True
+
+
 def prune_empty_parents(path: Path, *, root: Path) -> None:
     """把 `path` 留下的空目錄一層層收掉，收到 `root` 為止（不含 `root` 自己）。
 
@@ -256,6 +278,31 @@ def root_of(path: Path, roots: Sequence[Path]) -> Path:
             return root
     listed = ", ".join(str(root) for root in roots) or "none"
     raise PathEscapeError(f"{path} is outside every Berth route target (allowed: {listed})")
+
+
+def top_level_under(path: Path, roots: Sequence[Path]) -> Path | None:
+    """`path` 落在 `roots` 的哪一個底下的**第一層**那一項。都不在就是 `None`。
+
+    complete 的一個 torrent 就是 `<complete>/<route-slug>/` 底下的一項（brief §4.1）：多檔的
+    是一個目錄，單檔的就是那個檔案。qBittorrent 報的 `content_path`、帳本的來源都比這一層深，
+    「這一項有沒有主」要先把它們收到這一層再比。
+    """
+    for root in roots:
+        if not is_within(path, root):
+            continue
+        parts = _normalised(path).parts[len(_normalised(root).parts) :]
+        return root / parts[0] if parts else None
+    return None
+
+
+def path_key(path: Path | str) -> str:
+    """比兩條路徑是不是同一條時用的鍵。
+
+    帳本記的是容器裡的 POSIX 字串（`models/ledger.py`），走訪目錄拿到的是這台機器的 `Path`：
+    同一個檔案，兩種寫法。逐字比的話每一個入庫的檔案都會被當成不認得的。規則與 `is_within`
+    同一份（`.` 與 `..`、Windows 的大小寫與分隔符）。
+    """
+    return str(_normalised(Path(path)))
 
 
 def _guard(path: Path, roots: Sequence[Path]) -> None:

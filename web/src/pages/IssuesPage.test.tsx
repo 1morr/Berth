@@ -49,6 +49,7 @@ function finished(overrides: Partial<ReconcileStatus['last'] & object> = {}): Re
         { side: 'client', counted: 3, unavailable: '', skipped: [] },
         { side: 'complete', counted: 8, unavailable: '', skipped: [] },
         { side: 'library', counted: 42, unavailable: '', skipped: [] },
+        { side: 'jellyfin', counted: 30, unavailable: '', skipped: [] },
       ],
       opened: 1,
       updated: 0,
@@ -177,6 +178,123 @@ describe('待處理頁', () => {
     await waitFor(() => expect(sent(stub, 'POST /api/issues/1/resolve')).toBe(1))
   })
 
+  it('刪 complete 底下的孤兒目錄要先確認，並說清楚刪的是一整棵', async () => {
+    const folder = '/data/torrent/complete/anime/Someone Else'
+    const stub = render({
+      [ISSUES]: {
+        body: [
+          issue({
+            type: 'orphan_complete',
+            subject: folder,
+            path: folder,
+            job_hash: '',
+            ledger_id: null,
+            detail: { folder: true },
+            actions: ['delete_orphan'],
+          }),
+        ],
+      },
+      'POST /api/issues/1/resolve': { body: issue({ status: 'resolved', actions: [] }) },
+    })
+    renderApp('/issues')
+    const row = await screen.findByRole('article')
+
+    await userEvent.click(within(row).getByRole('button', { name: '刪除這個目錄' }))
+    expect(screen.getByText(/complete 底下這一整個目錄/)).toBeInTheDocument()
+    expect(sent(stub, 'POST /api/issues/1/resolve')).toBe(0)
+
+    await userEvent.click(screen.getByRole('button', { name: '確認刪除' }))
+    await waitFor(() => expect(sent(stub, 'POST /api/issues/1/resolve')).toBe(1))
+  })
+
+  it('以硬鏈接取代也要先確認：媒體庫那一份複製品會消失', async () => {
+    const stub = render({
+      [ISSUES]: {
+        body: [
+          issue({
+            type: 'inode_mismatch',
+            detail: { source: SOURCE, same_size: true },
+            actions: ['replace_with_link'],
+          }),
+        ],
+      },
+    })
+    renderApp('/issues')
+    const row = await screen.findByRole('article')
+
+    await userEvent.click(within(row).getByRole('button', { name: '以硬鏈接取代' }))
+
+    expect(screen.getByText(/複製品本身會消失/)).toBeInTheDocument()
+    expect(sent(stub, 'POST /api/issues/1/resolve')).toBe(0)
+  })
+
+  it('不刪東西的按鈕按下去就送出', async () => {
+    const stub = render({
+      [ISSUES]: {
+        body: [
+          issue({
+            type: 'jellyfin_item_unresolved',
+            detail: { attempts: 6 },
+            actions: ['relook', 'rescan'],
+          }),
+        ],
+      },
+      'POST /api/issues/1/resolve': { body: issue({ status: 'resolved', actions: [] }) },
+    })
+    renderApp('/issues')
+    const row = await screen.findByRole('article')
+
+    await userEvent.click(within(row).getByRole('button', { name: '重新反查' }))
+
+    await waitFor(() => expect(sent(stub, 'POST /api/issues/1/resolve')).toBe(1))
+  })
+
+  it('complete 底下的路徑不叫媒體庫路徑', async () => {
+    const folder = '/data/torrent/complete/anime/Someone Else'
+    render({
+      [ISSUES]: {
+        body: [
+          issue({
+            type: 'orphan_complete',
+            subject: folder,
+            path: folder,
+            job_hash: '',
+            ledger_id: null,
+            detail: { folder: true },
+            actions: ['delete_orphan'],
+          }),
+        ],
+      },
+    })
+    renderApp('/issues')
+    const row = await screen.findByRole('article')
+
+    expect(within(row).getByText('complete 路徑')).toBeInTheDocument()
+    expect(within(row).queryByText('媒體庫路徑')).not.toBeInTheDocument()
+  })
+
+  it('沒有路徑的無主 torrent 以它的名字認，不是一串 hash', async () => {
+    render({
+      [ISSUES]: {
+        body: [
+          issue({
+            type: 'unknown_torrent',
+            subject: HASH,
+            path: '',
+            ledger_id: null,
+            detail: { name: '[Group] Not Ours - 01', category: 'berth-anime' },
+            actions: [],
+          }),
+        ],
+      },
+    })
+    renderApp('/issues')
+    const row = await screen.findByRole('article')
+
+    expect(within(row).getByRole('heading', { name: '[Group] Not Ours - 01' })).toBeInTheDocument()
+    expect(within(row).queryByText('媒體庫路徑')).not.toBeInTheDocument()
+  })
+
   it('空的時候說的是「都對得上」，不是「沒有資料」', async () => {
     render({ [RECONCILE]: { body: finished() } })
     renderApp('/issues')
@@ -197,13 +315,13 @@ describe('待處理頁', () => {
 })
 
 describe('對帳橫幅', () => {
-  it('跑完之後四方都說得出比了幾筆', async () => {
+  it('跑完之後各方都說得出比了幾筆', async () => {
     render({ [RECONCILE]: { body: finished() } })
     renderApp('/issues')
 
     // 在橫幅裡找，不是整頁：`媒體庫` 也是導覽列上的一個連結。
     const banner = await screen.findByRole('list', { name: '對帳進度' })
-    for (const label of ['帳本', 'qBittorrent', 'COMPLETE', '媒體庫'])
+    for (const label of ['帳本', 'qBittorrent', 'COMPLETE', '媒體庫', 'Jellyfin'])
       expect(within(banner).getByText(label)).toBeInTheDocument()
     expect(within(banner).getAllByText(/比了 42 筆/)).toHaveLength(2)
   })
