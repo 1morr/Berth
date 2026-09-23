@@ -53,7 +53,7 @@ export type SortOrder = Schemas['SortOrder']
 /**
  * 牆怎麼排、怎麼篩（M1.5 票 06）：網址上的 `sort`、`order`、`genres`、`years`，對過這個媒體庫的排序選單；
  * `q` 是名字裡的一段（M2 票 14，Jellyfin 的 `searchTerm`）。**沒寫的就是打開牆時的樣子**（選單第一個、遞增、
- * 不篩），網址與快取鍵都少一種寫法。只套在 Jellyfin 那一頁：還沒進 Jellyfin 是 Berth 的清單，待審與對不到是
+ * 不篩），網址與快取鍵都少一種寫法。只套在 Jellyfin 那一頁：還沒進 Jellyfin 是 Berth 的清單，待審與 Unmatched 是
  * 審核佇列，都沒有 Jellyfin 的類型與名字可以篩。
  */
 export interface WallQuery {

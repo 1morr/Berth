@@ -963,6 +963,15 @@ describe('媒體庫頁', () => {
       expect(screen.getByRole('link', { name: '審核佇列裡還有 4 件' })).toBeVisible()
     })
 
+    it('超過上限時說只列出最舊的幾件（同 `/review`）', async () => {
+      renderQueue({
+        [LIBRARY_QUEUE]: { body: { rows: QUEUE.rows, total: 250, queue_total: 260 } },
+      })
+      renderApp(`/library/${TV}?filter=unmatched`)
+
+      expect(await screen.findByText('只列出最舊的 3 件，共 250 件。')).toBeVisible()
+    })
+
     it('讀不到審核佇列時說一句，篩選列照樣在', async () => {
       renderQueue({ [LIBRARY_QUEUE]: { status: 500, body: {} } })
       renderApp(`/library/${TV}?filter=review`)
@@ -1555,6 +1564,13 @@ describe('媒體庫頁', () => {
         `?genres=${encodeURIComponent(JSON.stringify(['Drama']))}`,
         'Alpha Show',
         { [`GET /api/inventory/${TV}?genres=Drama`]: { body: wall() } },
+      ],
+      // 按名字找也讓作品不見（M2 票 14）：那兩列不照名字篩，照畫會是另一份清單。
+      [
+        '按名字找',
+        `?q=alpha`,
+        'Alpha Show',
+        { [`GET /api/inventory/${TV}?q=alpha`]: { body: wall() } },
       ],
     ])('%s時不畫、也不問', async (_, search, shown, routes) => {
       const api = render({ [`GET ${WATCHING}`]: rows(), ...routes })

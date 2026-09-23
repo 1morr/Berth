@@ -282,12 +282,12 @@ async def get_review(session: SessionDep, library: str | None = None) -> ReviewQ
     """
     if library is None:
         queue = await review_queue(session)
-        everything = queue.total
+        queue_total = queue.total
     else:
         queue = await library_queue(session, library)
-        everything = await review_total(session)
+        queue_total = await review_total(session)
     return ReviewQueueOut(
-        rows=[_row_out(row) for row in queue.rows], total=queue.total, queue_total=everything
+        rows=[_row_out(row) for row in queue.rows], total=queue.total, queue_total=queue_total
     )
 
 

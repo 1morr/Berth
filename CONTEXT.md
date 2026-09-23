@@ -34,9 +34,11 @@ _Avoid_: library（程式碼中，那是下一條的 Jellyfin Library）, collec
 
 **Narrowing**（UI 顯示「類型」「年份」）:
 Inventory 牆上依類型、年份縮小 **Jellyfin 那一頁**（M1.5 票 06）；同一種之間是「或」、兩種之間是「且」。它和牆的排序合稱
-**Wall Query**（`WallQuery`：`sort`、`order`、`genres`、`years`）。選項清單在程式碼裡叫 `filters`（`/Items/Filters`、
-`GET /api/inventory/{id}/filters`），沿用 Jellyfin 的名字；前端的開關與面板叫 narrowing。**不是**「待審」「Unmatched」
-那兩個 filter：那兩個篩的是 Berth 經手的作品清單，Jellyfin 的類型套不上。
+**Wall Query**（`WallQuery`：`sort`、`order`、`genres`、`years`，M2 票 14 起加上名字——網址與 API 是 `q`、後端欄位是
+`search`、轉給 Jellyfin 是 `searchTerm`，同一件事）。按名字找也算 narrowing（它讓作品不見，排序不會）。選項清單在程式碼裡
+叫 `filters`（`/Items/Filters`、`GET /api/inventory/{id}/filters`），沿用 Jellyfin 的名字；前端的開關與面板叫 narrowing。
+**不是**「待審」「Unmatched」那兩個 filter：那兩個是 Review Queue 在這個媒體庫上的子集（M2 票 14），Jellyfin 的類型與名字
+套不上。
 _Avoid_: filter（指類型、年份時）, facet
 
 **Watch State**（UI 顯示「觀看狀態」）:
@@ -237,6 +239,8 @@ _Avoid_: unknown, orphan（Orphan 是對帳用語）
 
 **Review Queue**:
 需要人工處理的統一清單：低信心 Plan、Audit、Unmatched、重複版本、Issue。一列一件事、需要人動手的排前面；不是一面牆。只有 admin。
+Inventory 的「待審」「Unmatched」兩個 filter 是它在一個媒體庫上的子集（M2 票 14）：`plan` 與 `unmatched` 兩類、Job 的 Route
+指向那個媒體庫的，列與 `/review` 同一個元件。
 _Avoid_: inbox, pending list, interactive import
 
 **Rematch**:

@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react'
 
-/** 鍵入即搜的防抖（使用者拍板）。每一個不同的字串都會花掉使用者自備的 TMDB 額度。 */
+/**
+ * 鍵入即搜的防抖（使用者拍板）。探索頁：每一個不同的字串都會花掉使用者自備的 TMDB 額度；媒體庫牆的按名字找
+ * （M2 票 14）：每一個不同的字串都是一次 Jellyfin 查詢，而且會換網址。
+ */
 export const SEARCH_DEBOUNCE_MS = 500
 
 /**

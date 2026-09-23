@@ -65,7 +65,7 @@ export function InventoryTile({
 
   return (
     <Tile
-      url={poster}
+      art={poster}
       shape="poster"
       link={card.media_id ? { mediaId: card.media_id } : null}
       // 名字是作品名（票 13）：整格的字串起來是「無海報 TV 2022 …」，控制項清單裡每一條都從代號念起。

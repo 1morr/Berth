@@ -88,7 +88,7 @@ export function InventoryPage({
   const libraries = useQuery(inventoriesQueryOptions)
   const me = useQuery(meQueryOptions)
   const admin = me.data?.role === 'admin'
-  const shown = admin ? filter : undefined
+  const adminFilter = admin ? filter : undefined
 
   return (
     <div className="mx-auto grid w-full max-w-[110rem] gap-6 px-6 py-8">
@@ -122,7 +122,7 @@ export function InventoryPage({
           {/* 接著看在「還沒進 Jellyfin」之前（票 07）。只在打開媒體庫的那一刻：翻頁與篩選是在堆場裡找東西，
               兩列不再把牆往下推，而且它們不照類型年份篩（使用者拍板）。排序不算——它不會讓哪一集不見。 */}
           {libraryId !== null &&
-            (page === 1 && !shown && !narrowed(wallQuery(search, undefined)) ? (
+            (page === 1 && !adminFilter && !narrowed(wallQuery(search, undefined)) ? (
               <LibraryWatching libraryId={libraryId} />
             ) : (
               <WatchingElsewhere libraryId={libraryId}>
@@ -144,7 +144,7 @@ export function InventoryPage({
             <Wall
               libraryId={libraryId}
               page={page}
-              filter={shown}
+              filter={adminFilter}
               admin={admin}
               search={search}
               libraries={libraries.data}
@@ -216,7 +216,7 @@ function Wall({
         <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
           <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-3">
             {admin && <Filters inventory={inventory} page={page} query={query} filter={filter} />}
-            {/* 待審與對不到是審核佇列的清單：排序、類型年份與名字留在網址上，但套不上，所以不畫。 */}
+            {/* 待審與 Unmatched 是審核佇列的清單：排序、類型年份與名字留在網址上，但套不上，所以不畫。 */}
             {!filter && <SearchBox library={inventory.library} query={query} />}
             {!filter && (
               <Arrange
@@ -288,6 +288,9 @@ function useRearrange(library: InventoryLibrary, { replace = false } = {}) {
  * **邊打邊搜**（使用者拍板，Sonarr / Radarr 工具列的搜尋框）：停手 500ms 才換網址，與探索頁同一個間隔；
  * 換網址用 `replace`、回到第 1 頁。網址自己換了（上一頁、「清除搜尋」）時框裡的字跟著換——但只在兩邊真的
  * 說的是不同的名字時：打「the 」停下來，網址是 `the`，不能把使用者正要接著打的那個空白吃掉。
+ *
+ * 計時器在事件裡而不是 `useDebounced` + effect：換網址只該由打字觸發。effect 版要把 `query` 與導覽放進相依
+ * （exhaustive-deps），於是換排序、翻頁這些與打字無關的變動也會跑一次它，再靠比對擋下來。
  */
 function SearchBox({ library, query }: { library: InventoryLibrary; query: WallQuery }) {
   const { t } = useTranslation()
@@ -636,6 +639,12 @@ function LibraryQueue({
         </ul>
       ) : (
         <EmptyFilter library={library} filter={filter} page={page} query={query} />
+      )}
+      {/* 超過上限時照實說（同 `/review`）：這兩類加起來超過 200 件時清單只有最舊的那幾件。 */}
+      {queue.data.total > queue.data.rows.length && (
+        <p className="text-xs text-ink-dim">
+          {t('review.truncated', { shown: queue.data.rows.length, total: queue.data.total })}
+        </p>
       )}
       {rest > 0 && (
         <p className="text-sm">

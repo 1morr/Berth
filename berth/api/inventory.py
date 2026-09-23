@@ -33,6 +33,7 @@ from berth.domain import (
     LibrarySort,
     MediaKind,
     ReviewKind,
+    Role,
     SortOrder,
 )
 from berth.services.deeplink import jellyfin_web
@@ -199,8 +200,14 @@ async def get_inventory(
             wall = await read_wall(session, access, library_id, page=page, query=query)
     except _WALL_REFUSALS as refusal:
         raise access_refusal(refusal) from refusal
-    # 媒體庫先過了權限閘門才數：看不到它的人連它有幾件待審都不該知道。
-    counts = await library_counts(session, wall.library.id)
+    # 媒體庫先過了權限閘門才數：看不到它的人連它有幾件待審都不該知道。那兩個篩選只給 admin
+    # （M2 票 14，使用者拍板：列是 `/review` 那一列、就地按），其餘的人是 0，也不必替他數。
+    user = session_user(request)
+    counts = (
+        await library_counts(session, wall.library.id)
+        if user.role is Role.ADMIN
+        else dict.fromkeys((ReviewKind.PLAN, ReviewKind.UNMATCHED), 0)
+    )
     return InventoryOut(
         library=InventoryLibraryOut.model_validate(wall.library),
         jellyfin=JellyfinWebOut.model_validate(await jellyfin_web(session)),

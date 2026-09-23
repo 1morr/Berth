@@ -247,7 +247,7 @@ const inventoryIndexRoute = createRoute({
 interface InventorySearch extends WallSearch {
   /** 第幾頁（1 起算）。第 1 頁不寫進網址。 */
   page?: number
-  /** 待審 / 對不到。沒帶就是全部——`false` 與空字串一樣不寫進網址。只有 admin 看得到（M2 票 14）。 */
+  /** 待審 / Unmatched。沒帶就是全部——`false` 與空字串一樣不寫進網址。只有 admin 看得到（M2 票 14）。 */
   filter?: InventoryFilter
 }
 

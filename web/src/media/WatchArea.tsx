@@ -278,7 +278,7 @@ function EpisodeTile({
 
   return (
     <Tile
-      url={episode.still_url}
+      art={episode.still_url}
       shape="wide"
       link={url ? { href: url } : null}
       label={t('inventory.jellyfin.itemNewTab', { name })}

@@ -22,7 +22,7 @@ export type TileLink = { mediaId: string } | { href: string }
  * - 底行固定高度（`min-h-10`）、`border-t-2`：同排的卡片基線對得齊，就地確認從這一行展開。
  */
 export function Tile({
-  url,
+  art,
   shape,
   link,
   label,
@@ -30,7 +30,8 @@ export function Tile({
   children,
   foot,
 }: {
-  url: string
+  /** 圖的網址（`ArtSlot`）；空字串是「無圖 / 無海報」。 */
+  art: string
   shape: ComponentProps<typeof ArtSlot>['shape']
   link: TileLink | null
   label: string
@@ -41,7 +42,7 @@ export function Tile({
 }) {
   const body = (
     <>
-      <ArtSlot url={url} shape={shape} />
+      <ArtSlot url={art} shape={shape} />
       <div className="grid content-start gap-1 px-3 py-2.5">{children}</div>
     </>
   )

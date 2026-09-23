@@ -418,6 +418,12 @@ class TestInventory:
         assert (body["review"], body["unmatched"]) == (1, 2)
         assert [row["kind"] for row in queue["rows"]] == ["plan", "unmatched", "unmatched"]
 
+        # 一般使用者沒有那兩個篩選（使用者拍板）：看不到清單的人也不該讀得到件數。
+        client.post("/api/auth/logout", headers=BROWSER)
+        sign_in(client, CREW)
+        crew = client.get(f"/api/inventory/{TV}").json()
+        assert (crew["review"], crew["unmatched"]) == (0, 0)
+
     def test_a_page_number_below_one_is_refused(self, client: TestClient) -> None:
         sign_in(client)
 
