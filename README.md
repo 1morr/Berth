@@ -40,7 +40,7 @@ docker compose up -d
 | 探索 `/` | TMDB 的趨勢、熱門與搜尋。每一格連到那部作品的詳情 |
 | Media 詳情 `/media/:id` | 季集表；向索引站搜 torrent，結果表附 Tags 與預估季集；選 Route 送單（送出前印出會用的資料夾名）；已入庫的檔案、版本與 Jellyfin 找到了沒 |
 | 下載 `/jobs` | 送單之後的每一筆，狀態與進度即時更新；展開看時間線與匯入計劃（逐檔的處置、信心、目標路徑與理由），送單失敗、入庫失敗、待審各有自己的下一步 |
-| 媒體庫 `/library/:library` | 一個 Jellyfin 媒體庫一頁，只列你在 Jellyfin 看得到的：整庫 100 部一頁（不是 Berth 入庫的也在，海報是 Jellyfin 的、經 Berth 轉給瀏覽器），Berth 經手的疊上入庫了幾集、哪一部在等人；每一格說得出你看到哪了（已看、看到幾 %、剩幾集沒看），可標為已看 / 未看（寫回你在 Jellyfin 的紀錄，標為未看先確認）；還沒進 Jellyfin 的另列一條；「在 Jellyfin 開啟」；「待審」「Unmatched」兩個篩選 |
+| 媒體庫 `/library/:library` | 一個 Jellyfin 媒體庫一頁，只列你在 Jellyfin 看得到的：整庫 50 部一頁（不是 Berth 入庫的也在，海報是 Jellyfin 的、經 Berth 轉給瀏覽器），Berth 經手的疊上入庫了幾集、哪一部在等人；每一格說得出你看到哪了（已看、看到幾 %、剩幾集沒看），可標為已看 / 未看（寫回你在 Jellyfin 的紀錄，標為未看先確認）；還沒進 Jellyfin 的另列一條；「在 Jellyfin 開啟」；「待審」「Unmatched」兩個篩選 |
 | 健康 `/health` | 四項健康檢查與下載迴圈；一般使用者也看得到 |
 | 設定 `/settings/services`、`/settings/routes` | 只有管理員：服務位址與建議設定的差異；Route 的新增（同一個 Jellyfin 媒體庫可以有第二條）、改名、停用、重新檢查與刪除 |
 

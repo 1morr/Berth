@@ -463,6 +463,7 @@ flex / grid 子項的最小寬度，一串沒有空格的發佈名在 390px 上�
 也不是動畫；每完成一條就把實際結果數值留在旁邊。`prefers-reduced-motion: reduce` 下全域把
 `animation-duration` 與 `transition-duration` 壓到 0.01ms，這是防護欄而不是效果開關。
 讀取中的佔位（牆的空格、下載列的空列、詳情頁的海報位）是**不動的** `deck` 色條，沒有骨架屏動畫；
+空位格**與真的那一格一樣高**（`TilePlaceholder` 的每一行照卡片的行高抄，M2 票 13）：差幾 px 資料到的那一刻就是一次版面位移。
 下載列表透過 SSE 自己更新，沒有「即時」指示器也沒有脈動點——值自己換就是訊號。
 搜尋那 35–85 秒裡動的是纜繩：先鋪出要問的關鍵字（`working`），有結果就換成筆數。
 
@@ -487,12 +488,15 @@ hover 與焦點也是同一個語彙（牆卡片、Ghost 按鈕、導覽方塊�
 按鈕輪廓就看不出來（WCAG 2.2 非文字對比 3:1）。
 
 **沒有圖示。** 系統裡沒有 icon font、沒有 SVG 圖示集。唯一的非文字標記是中文標籤前那道 2px 塗刻度，
-它由 CSS 畫出來、不是字元、不進無障礙名稱。唯一的圖像資產是 TMDB 條款要求的標誌，與作品海報（TMDB 的，或 Berth 代理的 Jellyfin 的）。
+它由 CSS 畫出來、不是字元、不進無障礙名稱。唯一的圖像資產是 TMDB 條款要求的標誌（一份 `components/TmdbAttribution.tsx`，替代文字走 i18n），與作品海報（TMDB 的，或 Berth 代理的 Jellyfin 的）。
 
 **海報是 2:3 的矩形。** `aspect-[2/3]` + `object-cover`，底是 `hull`；沒有海報時同一塊矩形裡印一行
 `.value text-xs text-ink-dim` 的「無海報」（EN `NO ART`，`discover.noArt`），格子高度不變。媒體庫牆上**圖載不下來**（Jellyfin 回 404、連不上）
 也換成同一行（M1.5 票 04）——不留瀏覽器的破圖示。**繼續觀看與下一集的圖是 16:9**（`aspect-video`，M1.5 票 07），
-沒有合用的橫圖時同一塊印「無圖」（EN `NO ART`）。兩種形狀是同一個元件（`components/ArtSlot.tsx`）。
+沒有合用的橫圖時同一塊印「無圖」（EN `NO ART`）。兩種形狀、所有用到圖的地方（牆、接著看、集卡、詳情頁身分帶）是同一個元件
+（`components/ArtSlot.tsx`，外框由呼叫端的 `className` 給；M2 票 13 收掉了詳情頁那一份 `Poster.tsx`）。**每一張圖帶 `srcset`**
+（M2 票 13）：Berth 代理的圖給 342 與 684 兩個寬度（`poster` / `poster_large`、`wide` / `wide_large`），TMDB 的海報給
+`w185`–`w780` 四個；`sizes` 照 `WALL_GRID` 的斷點（`WALL_SIZES`，改一邊就改另一邊）或詳情頁那一欄的寬。
 
 ## Components
 
@@ -564,6 +568,11 @@ hover 與焦點也是同一個語彙（牆卡片、Ghost 按鈕、導覽方塊�
 - 導覽包在 `<nav aria-label>` 裡，是一個地標；頁首之前有 skip link（見 Layout）。
 - 同一個方塊（`NAV_BOX` / `NAV_BOX_ACTIVE`，不含內距）也是設定的子分頁列（`SettingsTabs`，`0.5rem 0.75rem`，
   自己一個 `<nav>`）、媒體庫的 Route 切換列與篩選列（篩選小一號，`0.375rem 0.75rem`）。內距由呼叫端給一次。
+- **路由的 `Link` 用 `NAV_LINK`**（M2 票 13）：當前那一格由 TanStack 自己掛的 `data-status="active"` 換漆
+  （`data-[status=active]:`），不用 `activeProps`——它的 class 是**接在後面**的，當前那一格同時帶 `border-rule` 與
+  `border-rule-strong`，誰贏看 CSS 的產生順序。按鈕（`aria-pressed` 的季切換、只看缺集）照舊二選一 `NAV_BOX` / `NAV_BOX_ACTIVE`。
+- **篩選列選著的那一個不是連結**，是一段 `aria-current="true"` 的字（`NAV_BOX_ACTIVE` 的外觀）：`Link` 當前時一定掛
+  `aria-current="page"`，而同一頁的切換列已經有一個「當前頁」；篩選是這一頁裡的一組選項，不是另一頁。
 - 可排序的欄頭同樣靠線：選中的欄頭 `border-b-2 border-rule-strong` + `ink` 字，`aria-sort` 掛在 `th` 上。
 - `設定` 只對 `admin` 顯示；角色本身以中性色塊呈現，讓 `user` 知道自己為什麼沒有那顆按鈕。
 - 語言鍵（`LanguageToggle`）是 `role="group"` 加兩顆 `aria-pressed` 按鈕，選中那顆是 `deck` 底 + `ink` 字
@@ -596,25 +605,32 @@ ISO 6346 標識在哪個語言都是同一串字母數字）、狀態標籤（`.
   第二行作品名（`.value text-sm`，`line-clamp-2`，`min-h-10` 讓兩行名與一行名的格子一樣高）；
   原文 / 英文標題不同時第三行 `ink-dim`。狀態色塊貼在這條帶上，不壓在海報上。
 - **探索牆:** 整格是一條連結；「已追蹤」是中性小色塊。
-- **媒體庫牆:**（M1.5 票 03 起一個 Jellyfin 媒體庫一頁、整庫 100 部一頁，`.scratch/m1.5/library-shape.md`）
+- **一面牆是一份清單**（M2 票 13）：探索牆、媒體庫牆、接著看、集卡的容器都是 `<ul>`、一格一個 `<li>`，作品名都是 `<h3>`
+  （牆的標題是 `h2`）。**整格連結的名字是作品名**（`aria-label`），類型年份與狀態、看到哪、盤點是 `aria-describedby`：
+  整格的字串起來是「無海報 TV 2022 …」，控制項清單裡每一條都從代號念起。接著看與集卡的名字是「作品名 S01E04 集名」。
+- **媒體庫牆:**（M1.5 票 03 起一個 Jellyfin 媒體庫一頁；M2 票 13 起一頁 50 部——100 部的牆量到 1,700 個 DOM 節點、
+  222 個 Tab 停留點，`.scratch/m1.5/library-shape.md`）
   Jellyfin 裡的作品顯示 Jellyfin 的名稱、沒有第二行，海報是 Berth 代理的 Jellyfin Primary 圖（票 04）；Berth 經手的才有狀態色塊，依 The Usual Stays Unpainted Rule
   （失敗 `blocked`、待審核 `assigned`、下載中 `working`，完整 / 部分 / 空是中性），有待確認檔案時另一塊 `assigned`；
   盤點行（「已入庫 N / 已播出 M」或版本數）在沒經手的作品上留空但保留高度。還沒進 Jellyfin 的 Berth 作品是牆上方
   自己一條（`.label` 標題 + 數字壓在重橫線上，同一份 `WALL_GRID`）。分頁鍵是 Ghost 外觀的連結，到頭的那一顆是
-  `aria-disabled` 的 `ink-dim` 字、位置不變。
+  `aria-disabled` 的 `ink-dim` 字、位置不變。牆上下各一組分頁，**兩個 `<nav>` 名字不同**（「分頁」「牆底的分頁」）。
   海報與標識帶連到 Media 詳情（沒有 TMDB id 的作品那一塊不是連結），底下 **Jellyfin 那一行**是同一格裡、並排不巢狀的另一條連結：
-  `border-t-2 border-rule`、`min-h-10` 固定高度讓基線對齊；找到了是 `.label` 文字連結（開新分頁，帶 `sr-only` 的新分頁說明，`aria-describedby` 指到那一格的標題——
-  每一格都有同名的這一條），還沒找到就說原因
+  `border-t-2 border-rule`、`min-h-10` 固定高度讓基線對齊；找到了是 `.label` 文字連結（開新分頁）。**每一格都有這一條，
+  名字帶上作品名**（「在 Jellyfin 開啟：The Bear（開新分頁）」，M2 票 13、plan §11.3 的二選一；看得見的字仍是名字的開頭，
+  WCAG 2.5.3）——只靠 `aria-describedby` 區分的話，控制項清單是一整排同名的連結。還沒找到就說原因
   （掃描中 / 沒有位址 / 找不到），不給死連結。框的 hover 用 `has-[a:hover]` 跟著任一條連結變重。
   **觀看狀態**（M1.5 票 05）：Jellyfin 那一頁的卡片在名稱與盤點行之間多一行 `.value text-xs text-ink` 的字——「已看」
   「看到 42%」「剩 4 集沒看」，不塗漆也不畫勾（它不是 Berth 的狀態，The Usual Stays Unpainted Rule），沒話說時留空但保留高度。
   Jellyfin 那一行多一顆「標為已看 / 未看」：比 Ghost 小一號（`border-2 border-rule`、`px-2 py-1`、`min-h-6`），整行
   `flex-wrap`，窄的時候換到深連結下一行。**清得掉東西的那一下走就地確認**（`useInPlaceConfirm` + `ConfirmPanel`）：標為未看、
   看到一半的集或電影標為已看（位置歸零）、整部劇標為已看（每一集的位置都歸零；票 08 使用者拍板）；沒進度的集或電影標為已看
-  一按就送。同一顆鍵（`components/WatchToggle.tsx`）也在 Media 詳情的集卡與電影主按鈕旁。確認區塊佔滿那一行、
+  一按就送。同一顆鍵（`components/WatchToggle.tsx`）也在 Media 詳情的集卡與電影主按鈕旁；牆與集卡上的那幾顆名字帶上
+  是哪一部、哪一集（`subject`：「標為已看：The Bear」）。確認區塊佔滿那一行、
   兩顆鍵**永遠疊成一欄**（卡片再寬也只有十幾 rem，`ConfirmAction` 的 `sm:` 兩欄在卡片裡會溢出）。送出中這一顆不停用、
   只換字（停用的鍵接不住確認收起時送回來的焦點）。
-  **排序與篩選**（M1.5 票 06）：篩選列同一排接 `.label` 的「排序」、兩個原生 `select`（輸入框那一套外觀，小一號 `px-2 py-1`）
+  **排序與篩選**（M1.5 票 06）：篩選列同一排接兩組 `.label` + 原生 `select`——「排序」與「方向」（M2 票 13 起方向也有
+  看得見的標籤，不是只有 `aria-label`；輸入框那一套外觀，小一號 `px-2 py-1`）
   與「類型」「年份」兩顆開關（篩選方塊的外觀；選了東西就是當前那一種重線 + `deck` 底，數字 `aria-hidden`、`sr-only` 說「已選 N 個」，
   後面 `ink-dim` 字說「展開 / 收起」，狀態靠 `aria-expanded`）。勾選清單畫在整列控制項**下方**（`well` 底 + `rule` 框、`.label` 標題、
   原生勾選框、`repeat(auto-fill,minmax(9rem,1fr))`），一次開一份，勾了就換網址、焦點留在那一格（換網址時牆先留著上一份，
@@ -626,7 +642,9 @@ ISO 6346 標識在哪個語言都是同一串字母數字）、狀態標籤（`.
 M1.5 票 07（`.scratch/m1.5/watching-shape.md`）。**橫放的貨櫃**：16:9 的圖是塗裝（`aspect-video`，Berth 代理的 Jellyfin
 Thumb / Backdrop / 劇照），下方同一條標識帶，框與底同牆卡片（`border-2 border-rule` + `well`、hover 換 `rule-strong`）。
 - **兩列在頁面上方**：首頁在搜尋列之上（搜尋時不收起，打字時輸入框不跳）；媒體庫頁在切換列與「還沒進 Jellyfin」之間，
-  只在第 1 頁、沒有篩選時畫。每一列是區塊標題（`.label` + 計數，重橫線）加一份 `WALL_GRID`，格線與下面的牆對齊。
+  只在第 1 頁、沒有篩選時畫；翻頁或篩選時那個位置是一行 `text-xs ink-dim` 的「繼續觀看與下一集只列在第 1 頁、沒有篩選的時候」
+  加一條「到第 1 頁看」（M2 票 13），**只在這個人上一次在這裡真的有東西可接著看時**說。每一列是區塊標題（`.label` + 計數，
+  重橫線）加一份 `WALL_GRID`，格線與下面的牆對齊。
 - **不橫向捲動**（The Board Never Scrolls Rule 的同一個理由）：收起時每一格帶「哪個寬度以上才出現」
   （第 3 格 `sm`、第 4 格 `lg`、第 5–6 格 `xl`、第 7 格起藏著），一份 DOM、不量寬度。標題列右邊一顆小一號的開關
   「全部 N 項 / 收起」（`aria-expanded`、`aria-controls`、`min-h-6`），在一行放得下的寬度以上 `display: none`。
@@ -637,7 +655,10 @@ Thumb / Backdrop / 劇照），下方同一條標識帶，框與底同牆卡片�
   Ground Rule）。
 - **整格是一條連結**，開 Jellyfin 那一集的詳細頁、新分頁（`sr-only` 說明）；主機推不出時整格不是連結，最下面一行說
   「不知道 Jellyfin 開在哪裡」。
-- **讀取中不畫、沒有內容不畫**（不留空位格）。首頁問不到 Jellyfin 時換成一行 `ink-dim` 的原因 + 原文 + Ghost「重試」，
+- **讀取中照這個人在這一頁上一次的形狀佔位**（M2 票 13，推翻 watching-shape 的「讀取中不畫」：資料回來才插進來，
+  下面整頁下移 440px，首頁 CLS 0.35）。上一次的列數存在 `localStorage`（`watching/rememberedRows.ts`，以使用者與頁面區分，
+  讀不到就當沒有）；佔位是真的標題列（計數與「全部 N 項」看不見但佔高度）加一行不動的空位格，整塊 `aria-hidden`。
+  第一次來沒有紀錄，不佔位。沒有內容的那一列不畫。首頁問不到 Jellyfin 時換成一行 `ink-dim` 的原因 + 原文 + Ghost「重試」，
   不用 `blocked` Notice 搶探索的位置；媒體庫頁不另外說（牆會說）。
 
 ### Media 詳情（提單）
@@ -669,7 +690,8 @@ Thumb / Backdrop / 劇照），下方同一條標識帶，框與底同牆卡片�
   **按下去不在原地開結果**，而是把查詢交給上面那一個搜尋區塊、焦點移到它的 `h2`——同一頁只有一個搜尋結果的位置。
   搜尋區塊在缺集模式下換一句「這部作品 / S01 缺的那幾集，Berth 會這樣問：」，並多一顆「改回作品名搜尋」當出口。
   展開後是 `hull` 底的表，**欄序固定為集號 → 絕對編號 → 入庫 → 集名 → 片長 → 播出日**；
-  絕對編號只在有 Absolute group 時整欄出現（沒有時不留一整排 `—`）；片長與播出日在窄版不畫；
+  絕對編號只在有 Absolute group 時整欄出現（沒有時不留一整排 `—`）；片長與播出日在窄版不畫，同樣的兩個值收進集名底下一行
+  （`sm:hidden`，帶「片長」「播出」字樣，M2 票 13）；表有 `sr-only` 的 `<caption>`「S01 的每一集」；
   入庫那一格 `whitespace-nowrap`。集的狀態依 The Usual Stays Unpainted Rule：下載中 `working`、卡住是一塊可點的
   `assigned` 連到下載列表，其餘是字（未播出 `ink-dim`）。
 - **搜尋（`SearchPanel`）:** 待命，按了才搜。關鍵字欄 + Route 下拉 + 主要按鈕（`lg` 以上一列三格），
@@ -678,6 +700,8 @@ Thumb / Backdrop / 劇照），下方同一條標識帶，框與底同牆卡片�
   跑的時候是一串纜繩；**結束之後有回應的收成一個 `<details>`**（摘要一句「N 個關鍵字都有回應」，不塗漆，展開才逐條列筆數），
   垮掉的照舊一條一條畫在它上面、原文就地展開（The Needs-You Floats Up Rule；五條全綠的纜繩曾佔 287–315px）。
   結果到了有 `aria-live` 宣告筆數。窄版沒有欄頭，排序改成一個 `select`。
+  **沒接索引站在按下去之前就說**（M2 票 13：`/search/queries` 先帶 `problem`），與按下去之後同一個位置、同一塊 Notice，
+  只說一次。缺集模式下關鍵字欄的 placeholder 換成「留空就問缺的那幾集」。
 - **結果表（`SearchResults`）:** `well` 底、`border-2 border-rule` 的真表格，抬頭列 `deck`。
   發佈名整行換行不截斷（`wrap-anywhere`）；底下是 Tags 詞彙列；窄版把大小 / 做種 / 來源站 / 預估收成一行 `Dot` 分隔；
   表外不包 `overflow-x`。來源站有集頁就是文字連結。
