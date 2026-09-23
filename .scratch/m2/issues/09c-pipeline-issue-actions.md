@@ -57,4 +57,3 @@ Web API）、§16.4（TVDB 警告）；plan §3.1（`missing_files` / `client_er
     都只有兩三處，沒有收。
   - 沒有實測到的：5.x 上對**停住的** torrent recheck → start 會不會被 `FilesChecked` 再停下來（實驗四包都是
     `missingFiles` 而不是停住的）。`client_error` 的重試只送 start，不受影響。
-
