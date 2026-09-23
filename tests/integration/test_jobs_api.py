@@ -406,6 +406,8 @@ class TestDeleteScope:
         assert client.delete(f"/api/jobs/{MAGNET_HASH}", headers=BROWSER).status_code == 403
         assert client.get(f"/api/jobs/{MAGNET_HASH}/deletion").status_code == 403
         assert client.get("/api/jobs").status_code == 200
+        # 詳情頁 `/jobs/:hash` 讀的那一支（M2 票 12）：他進得來、看得到那一筆。
+        assert client.get(f"/api/jobs/{MAGNET_HASH}").status_code == 200
 
 
 class TestReimport:

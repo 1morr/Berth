@@ -1,5 +1,4 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { Link } from '@tanstack/react-router'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -14,6 +13,7 @@ import {
 import { ConfirmAction, GhostButton } from '../components/controls'
 import { formatEpisode } from '../components/episodes'
 import { DetailLine, QueueRow } from '../components/QueueRow'
+import { JobLink } from '../jobs/JobLink'
 import { fileName, whenText } from '../components/queueText'
 import { tmdbText } from '../i18n/tmdbText'
 import { Reasons } from '../plans/Reasons'
@@ -76,13 +76,7 @@ export function AuditRow({ row, onDone }: { row: AuditReviewRow; onDone: (said: 
           <DetailLine term={t('review.audit.source')}>{row.source_path}</DetailLine>
           {row.job_name !== '' && (
             <DetailLine term={t('review.audit.job')}>
-              {/* 下載列表是它的家：時間線與整份計劃都在那裡。 */}
-              <Link
-                to="/jobs"
-                className="underline decoration-rule-strong underline-offset-4 hover:decoration-ink"
-              >
-                {row.job_name}
-              </Link>
+              <JobLink hash={row.job_hash}>{row.job_name}</JobLink>
             </DetailLine>
           )}
           {row.reasons.length > 0 && (

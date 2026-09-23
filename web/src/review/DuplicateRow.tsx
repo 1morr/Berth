@@ -1,5 +1,4 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { Link } from '@tanstack/react-router'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -13,6 +12,7 @@ import {
 import { ConfirmAction, GhostButton } from '../components/controls'
 import { formatEpisode } from '../components/episodes'
 import { DetailLine, QueueRow } from '../components/QueueRow'
+import { JobLink } from '../jobs/JobLink'
 import { fileName, whenText } from '../components/queueText'
 import { tmdbText } from '../i18n/tmdbText'
 
@@ -81,12 +81,7 @@ export function DuplicateRow({
             {[known, row.known_path].filter(Boolean).join(' · ')}
           </DetailLine>
           <DetailLine term={t('review.duplicate.job')}>
-            <Link
-              to="/jobs"
-              className="underline decoration-rule-strong underline-offset-4 hover:decoration-ink"
-            >
-              {row.job_name}
-            </Link>
+            <JobLink hash={row.job_hash}>{row.job_name}</JobLink>
           </DetailLine>
           {!clash && (
             <DetailLine term={t('review.duplicate.action.keep_both')}>

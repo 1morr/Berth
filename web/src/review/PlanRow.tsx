@@ -1,5 +1,4 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Link } from '@tanstack/react-router'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -7,6 +6,7 @@ import { approvePlan, planQueryOptions, rejectPlan } from '../api/plans'
 import { reviewQueryOptions, type PlanDecision, type PlanReviewRow } from '../api/review'
 import { ConfirmAction, PrimaryButton } from '../components/controls'
 import { DetailLine, QueueRow } from '../components/QueueRow'
+import { JobLink } from '../jobs/JobLink'
 import { whenText } from '../components/queueText'
 import { tmdbText } from '../i18n/tmdbText'
 import { PlanEditor } from '../plans/PlanEditor'
@@ -27,7 +27,7 @@ import { planRefusalText } from '../plans/planRefusal'
 export function PlanRow({ row, onDone }: { row: PlanReviewRow; onDone: (said: string) => void }) {
   const { t, i18n } = useTranslation()
   const queryClient = useQueryClient()
-  const plan = useQuery(planQueryOptions(row.job_hash, row.ref, true))
+  const plan = useQuery(planQueryOptions(row.job_hash, row.ref))
   const [refusal, setRefusal] = useState<string | null>(null)
 
   const decide = useMutation({
@@ -74,13 +74,7 @@ export function PlanRow({ row, onDone }: { row: PlanReviewRow; onDone: (said: st
       details={
         <>
           <DetailLine term={t('review.plan.job')}>
-            {/* 下載列表是它的家：時間線在那裡。 */}
-            <Link
-              to="/jobs"
-              className="underline decoration-rule-strong underline-offset-4 hover:decoration-ink"
-            >
-              {row.job_name}
-            </Link>
+            <JobLink hash={row.job_hash}>{row.job_name}</JobLink>
           </DetailLine>
           <DetailLine term={t('jobs.plan.title')}>
             {[

@@ -1,78 +1,43 @@
 import { useState } from 'react'
-import {
-  useMutation,
-  useQuery,
-  useQueryClient,
-  type UseMutationResult,
-} from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 
 import { meQueryOptions } from '../api/auth'
-import { jobEventsQueryOptions, reimportJob, retryJob, refusalOf, type Job } from '../api/jobs'
-import { planQueryOptions, replanJob } from '../api/plans'
-import { CopyLine, GHOST_LINK, GhostButton } from '../components/controls'
+import { jobEventsQueryOptions, type Job } from '../api/jobs'
+import { CopyLine, GHOST_LINK } from '../components/controls'
 import { AuditChip } from '../components/AuditChip'
-import { Dot } from '../components/Dot'
 import { ExpandHint } from '../components/ExpandHint'
 import { SIGNAL_FILL } from '../components/signal'
-import { Timestamp } from '../components/Timestamp'
-import { tmdbText } from '../i18n/tmdbText'
-import { formatSize } from '../media/searchResult'
-import { JOB_SIGNAL, formatProgress, shortHash } from './jobState'
-import { JobDelete } from './JobDelete'
-import { JobPlan } from './JobPlan'
+import { JobFacts } from './JobFacts'
+import { JOB_SIGNAL, mediaTitleOf } from './jobState'
 import { JobTimeline } from './JobTimeline'
+
+/** 展開區的時間線摘要畫幾段。三段夠說出「剛剛發生了什麼」，完整的一份在詳情頁。 */
+const LATEST_RUNS = 3
 
 /**
  * 船期表上的一列（`.scratch/m1/jobs-shape.md` §6）。
  *
- * **展開的是同一列，不是另一頁**（The Failure Expands In Place Rule）：`<details>` 就地
- * 展開時間線、hash 與重試，其他列不動、不跳頁、不開 dialog。原生 `<details>` 而不是
- * 自己寫一個摺疊——全域焦點環已經涵蓋 `summary`，而原生的鍵盤行為不必重寫一次。
+ * **展開的是同一列，不是另一頁**（The Failure Expands In Place Rule）：`<details>` 就地展開，
+ * 其他列不動。原生 `<details>` 而不是自己寫一個摺疊——全域焦點環已經涵蓋 `summary`，而原生的
+ * 鍵盤行為不必重寫一次。
  *
- * 時間線與計劃**展開時才問**（`enabled`）：一份清單裡多數列不會被展開，而每一列兩個請求會讓
- * 一頁四十筆變成八十次往返。
+ * **展開區只剩狀態與時間線摘要**（M2 票 12、`.scratch/m2/job-detail-shape.md`）：計劃、Plan 歷史與
+ * 每一顆動作都在 `/jobs/:hash`。兩個地方各畫一份計劃的話，下一輪就會各長各的；刪除這種要二次確認
+ * 的動作塞在列表裡，也說不清楚「哪一筆正在被刪」。
  *
- * 展開區的順序是**接下來 → 發生過**：計劃說的是「這幾個檔案會被寫到哪裡」，時間線說的是
- * 「它怎麼走到這裡」。使用者展開一列多半是為了前者（票 11）。
+ * 時間線**展開時才問**（`enabled`）：一份清單裡多數列不會被展開。
  */
 export function JobRow({ job }: { job: Job }) {
   const { t, i18n } = useTranslation()
-  const queryClient = useQueryClient()
   const [open, setOpen] = useState(false)
 
-  // 刪除只有 admin 按得到（plan §6，後端同時回 403）。**前端隱藏不是安全機制**：
-  // 它的意思是「這顆鍵不是給你的」，擋住的那一條在門禁上。
   const me = useQuery(meQueryOptions)
   const events = useQuery(jobEventsQueryOptions(job.hash, open))
-  const plan = useQuery(planQueryOptions(job.hash, job.plan_id, open))
-  const retry = useMutation({
-    mutationFn: () => retryJob(job.hash),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['jobs'] })
-    },
-  })
-  const replan = useMutation({
-    mutationFn: () => replanJob(job.hash),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['jobs'] })
-    },
-  })
-  const reimport = useMutation({
-    mutationFn: () => reimportJob(job.hash),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['jobs'] })
-    },
-  })
 
-  // 作品名跟著 UI 語言走（brief §7.5）。沒有作品名時退回 id，摘要列與連結說的是同一個字。
-  const mediaTitle =
-    tmdbText(i18n.language, { 'zh-Hant': job.media_title, en: job.media_title_en }) || job.media_id
+  const mediaTitle = mediaTitleOf(job, i18n.language)
   const failed = JOB_SIGNAL[job.state] === 'blocked'
-  // 同一個端點、兩種重試（plan §3.1）：送單失敗是「再送一次」，入庫失敗是「從沒鏈接的那幾個
-  // 接著做」。按鈕上的字要說得出是哪一種，按下去之前才知道會發生什麼。
-  const importRetry = job.state === 'import_failed'
 
   return (
     <details
@@ -96,7 +61,7 @@ export function JobRow({ job }: { job: Job }) {
                 `wrap-anywhere` 而不是 `break-words`：沒有空格的發佈名在後者底下仍然是 flex
                 子項的最小寬度，390px 上整頁橫向捲動（票 15 實測）。 */}
             <span className="value block text-sm wrap-anywhere text-ink">{job.name}</span>
-            <Facts job={job} mediaTitle={mediaTitle} locale={i18n.language} />
+            <JobFacts job={job} media={mediaTitle} />
             {/* `user` 按不了審核（plan §6、brief §11），停在這裡的那一筆他只能等——說出來，
                 否則黃色的「待審核」讀起來像是在叫他做什麼。 */}
             {job.state === 'review' && me.data && me.data.role !== 'admin' && (
@@ -121,27 +86,10 @@ export function JobRow({ job }: { job: Job }) {
           </p>
         )}
 
-        {/* admin 在停下來的那一筆看到的是去處理它的路（M2 票 07）；`user` 那一側的「等」在摘要列。 */}
-        {job.state === 'review' && me.data?.role === 'admin' && (
-          <Link to="/review" className={GHOST_LINK}>
-            {t('jobs.toReview')}
-          </Link>
-        )}
-
-        {/* **先問有沒有 `plan_id`**：停用的 query 在 TanStack 眼裡永遠是 `pending`，
-            所以順序反過來的話還沒算過計劃的那幾列會永遠掛著一句「讀取計劃…」。 */}
-        {job.plan_id === null ? null : plan.isPending ? (
-          <p className="text-xs text-ink-dim">{t('jobs.plan.loading')}</p>
-        ) : plan.data ? (
-          <JobPlan plan={plan.data} />
-        ) : (
-          <p className="text-xs text-ink-dim">{t('jobs.plan.off')}</p>
-        )}
-
         {events.isPending ? (
           <p className="text-xs text-ink-dim">{t('jobs.timeline.loading')}</p>
         ) : events.data ? (
-          <JobTimeline events={events.data} />
+          <JobTimeline events={events.data} latest={LATEST_RUNS} />
         ) : (
           <p className="text-xs text-ink-dim">{t('jobs.timeline.off')}</p>
         )}
@@ -152,126 +100,11 @@ export function JobRow({ job }: { job: Job }) {
           <CopyLine command={job.hash} />
         </div>
 
-        {job.replannable && (
-          <Action
-            run={replan}
-            idle={t('jobs.plan.replan')}
-            busy={t('jobs.plan.replanning')}
-            off={t('jobs.plan.replanOff')}
-          />
-        )}
-
-        {job.retryable && (
-          <Action
-            run={retry}
-            idle={importRetry ? t('jobs.retryImport') : t('jobs.retry')}
-            busy={importRetry ? t('jobs.retryingImport') : t('jobs.retrying')}
-            off={t('jobs.retryOff')}
-          />
-        )}
-        {/* 重新入庫會動媒體庫，只有 admin（M2 票 10，門禁同時擋）。以 complete 裡那一包為來源，
-            torrent 不在了也按得了——那正是它存在的理由（brief §9.3）。 */}
-        {job.reimportable && me.data?.role === 'admin' && (
-          <Action
-            run={reimport}
-            idle={t('jobs.reimport')}
-            busy={t('jobs.reimporting')}
-            off={t('jobs.reimportOff')}
-          />
-        )}
-        {/* 刪除排在最後：它是這一塊裡唯一不可回復的動作，而重試與重新規劃是常用的那兩顆。
-            展開區已經在 `<details>` 裡，所以刪除的二次確認也就地展開（不是 dialog）。 */}
-        {open && me.data?.role === 'admin' && <JobDelete hash={job.hash} />}
-        {/* 重試成功時畫面上動的只有這一小塊，看不見畫面的人得知道發生了什麼。 */}
-        <p aria-live="polite" className="sr-only">
-          {retry.isSuccess ? t('jobs.retried', { state: t(`jobs.state.${job.state}`) }) : ''}
-          {replan.isSuccess
-            ? t('jobs.plan.replanned', { state: t(`jobs.state.${job.state}`) })
-            : ''}
-          {reimport.isSuccess ? t('jobs.reimported', { state: t(`jobs.state.${job.state}`) }) : ''}
-        </p>
+        {/* 計劃、完整時間線與每一顆動作都在那一頁。 */}
+        <Link to="/jobs/$hash" params={{ hash: job.hash }} className={GHOST_LINK}>
+          {t('jobs.detail.open')}
+        </Link>
       </div>
     </details>
-  )
-}
-
-/**
- * 展開區裡的一顆次要動作按鈕，加上它失敗時那一句話。
- *
- * 重試與重新規劃的形狀一模一樣，所以它們是同一個元件：**按鈕永遠按得下去，只換文字**
- * （票 02b），失敗時說的是那個封閉集合的理由而不是一句通用的話（PRODUCT 原則 4），
- * 認不得的理由才落回 `off`。
- *
- * `justify-items-start`：次要動作不佔滿整條展開區——滿版是主要動作的形狀
- * （`PrimaryButton`），而這兩顆都會真的再打一次外部服務。
- */
-function Action({
-  run,
-  idle,
-  busy,
-  off,
-}: {
-  run: UseMutationResult<Job, Error, void, unknown>
-  idle: string
-  busy: string
-  off: string
-}) {
-  const { t } = useTranslation()
-  const refusal = refusalOf(run.error)
-
-  return (
-    <div className="grid justify-items-start gap-2">
-      <GhostButton type="button" onClick={() => run.mutate()}>
-        {run.isPending ? busy : idle}
-      </GhostButton>
-      {run.isError && (
-        <p role="alert" className="max-w-prose text-xs text-blocked-ink">
-          {refusal ? t(`jobs.refusal.${refusal.reason}`) : off}
-        </p>
-      )}
-    </div>
-  )
-}
-
-/**
- * 列上的實測值那一行：作品 · Route · trigger · 大小 · 進度 · 時間。
- *
- * **一份 DOM 兩種版面**（同票 08 的結果表）：中點分隔並允許換行，窄版自己疊起來，
- * 不橫向捲動。作品在這裡只是字——它的連結在展開區（`summary` 裡不放互動元素）。
- */
-function Facts({
-  job,
-  mediaTitle,
-  locale,
-}: {
-  job: Job
-  mediaTitle: string | null
-  locale: string
-}) {
-  const { t } = useTranslation()
-
-  return (
-    <span className="value flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ink-dim">
-      <span>{mediaTitle || '—'}</span>
-      <Dot />
-      <span>{job.route_name || '—'}</span>
-      <Dot />
-      {/* trigger 是分類不是狀態，所以中性色塊。 */}
-      <span className="label bg-deck px-1.5 py-0.5 text-ink">
-        {t(`jobs.trigger.${job.trigger}`)}
-      </span>
-      <Dot />
-      {/* **每一格都自己說出它是什麼**：這一列沒有欄頭，而大小與進度在票 10 之前都是
-          `—`——不帶標籤的話那兩條破折號說不出自己少了什麼（票 08 窄版做種欄的同一條）。 */}
-      <span>{t('jobs.sizeInline', { value: formatSize(job.total_size, locale) })}</span>
-      <Dot />
-      <span>{t('jobs.progressInline', { value: formatProgress(job, locale) })}</span>
-      <Dot />
-      <Timestamp at={job.added_at} />
-      <Dot />
-      <span title={job.hash} className="text-ink-dim">
-        {shortHash(job.hash)}
-      </span>
-    </span>
   )
 }

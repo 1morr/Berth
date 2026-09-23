@@ -1,5 +1,6 @@
 import type { Job, JobState } from '../api/jobs'
 import type { Signal } from '../components/signal'
+import { tmdbText } from '../i18n/tmdbText'
 
 /**
  * Job 狀態的讀法（`.scratch/m1/jobs-shape.md` §7）。
@@ -64,4 +65,11 @@ export function formatPercent(value: number, locale: string): string {
  */
 export function shortHash(hash: string): string {
   return hash.slice(0, 12)
+}
+
+/** 作品名跟著 UI 語言走（brief §7.5）。沒有作品名時退回 id，摘要列與連結說的是同一個字。 */
+export function mediaTitleOf(job: Job, locale: string): string {
+  return (
+    tmdbText(locale, { 'zh-Hant': job.media_title, en: job.media_title_en }) || job.media_id || ''
+  )
 }

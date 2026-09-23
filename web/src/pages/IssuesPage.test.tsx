@@ -117,6 +117,40 @@ describe('待處理頁', () => {
     expect(within(row).getByText(SOURCE)).toBeInTheDocument()
   })
 
+  it('所屬下載那一格連到它的詳情頁（M2 票 12）', async () => {
+    render({ [ISSUES]: { body: [issue()] } })
+    renderApp('/issues')
+    const row = await screen.findByRole('article')
+
+    await userEvent.click(within(row).getByText('展開'))
+
+    expect(within(row).getByRole('link', { name: HASH })).toHaveAttribute('href', `/jobs/${HASH}`)
+  })
+
+  it('無主的 torrent 定義上沒有下載：hash 只是字，不連到一頁一定是空的詳情', async () => {
+    render({
+      [ISSUES]: {
+        body: [
+          issue({
+            type: 'unknown_torrent',
+            subject: HASH,
+            path: '',
+            ledger_id: null,
+            detail: { name: '[Group] Not Ours - 01', category: 'berth-anime' },
+            actions: [],
+          }),
+        ],
+      },
+    })
+    renderApp('/issues')
+    const row = await screen.findByRole('article')
+
+    await userEvent.click(within(row).getByText('展開'))
+
+    expect(within(row).getByText(HASH)).toBeInTheDocument()
+    expect(within(row).queryByRole('link', { name: HASH })).toBeNull()
+  })
+
   it('按下重新鏈接之後那一列不見了', async () => {
     let listed = [issue()]
     render({

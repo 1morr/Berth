@@ -18,6 +18,7 @@ import { DiscoverPage } from './pages/DiscoverPage'
 import { HealthPage } from './pages/HealthPage'
 import { IssuesPage } from './pages/IssuesPage'
 import { ReviewPage } from './pages/ReviewPage'
+import { JobDetailPage } from './pages/JobDetailPage'
 import { JobsPage } from './pages/JobsPage'
 import { InventoryPage, type InventoryFilter } from './pages/InventoryPage'
 import { InventoryPageRoute } from './pages/InventoryPageRoute'
@@ -305,6 +306,29 @@ const jobsRoute = createRoute({
 })
 
 /**
+ * Job 詳情 `/jobs/:hash`（M2 票 12）。守衛與 `/jobs` 相同：一般使用者也進得來，他看得到自己的下載
+ * （brief §11）；頁上哪幾顆動作給誰由頁面決定，擋住的那一條在後端的門禁。
+ *
+ * 認不得的 hash 由頁面畫空狀態（後端回 404），不是路由層的 404 頁——貼錯網址的人要看到的是
+ * 「可能打錯了，或已經刪除並清除紀錄」加一條回下載列表的路。
+ */
+const jobDetailRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/jobs/$hash',
+  beforeLoad: async ({ context, location }) => {
+    await requireSignedInPage(context.queryClient, location)
+  },
+  component: function JobDetailRoute() {
+    const { hash } = jobDetailRoute.useParams()
+    return (
+      <AppShell>
+        <JobDetailPage hash={hash} />
+      </AppShell>
+    )
+  },
+})
+
+/**
  * 待處理 `/issues`（M2 票 05）。
  *
  * **只有管理員**（plan §6，2026-09-22 拍板）：修正與對帳都是 admin 的事。後端的規則在門禁
@@ -414,6 +438,7 @@ export const routeTree = rootRoute.addChildren([
   issuesRoute,
   reviewRoute,
   jobsRoute,
+  jobDetailRoute,
   inventoryIndexRoute,
   inventoryRoute,
   loginRoute,

@@ -19,8 +19,8 @@ import { formatSize } from '../media/searchResult'
 /**
  * 刪除範圍：四個旗標、空間估算、二次確認（brief §9.2、M2 票 04）。
  *
- * **一個元件掛兩處**：`/jobs` 的展開區與 Media 詳情的版本清單（plan §7）。票 12 的
- * `/jobs/:hash` 掛的也是這一個——四個旗標的意思與它們的後果只能有一份說法。
+ * **一個元件掛兩處**：`/jobs/:hash` 的動作區（M2 票 12 起；在那之前是 `/jobs` 的展開區）與 Media 詳情的
+ * 版本清單（plan §7）——四個旗標的意思與它們的後果只能有一份說法。
  *
  * **就地展開，不是 dialog**（The Failure Expands In Place Rule）：對話框會蓋住使用者正在
  * 看的那一列，而「哪一筆正在被刪」正是這個動作最怕搞錯的事。展開的位置就在那一列裡面。
@@ -45,7 +45,7 @@ export function JobDelete({ hash }: { hash: string }) {
     onSuccess: async () => {
       close()
       setScope(NOTHING_TICKED)
-      // **兩個掛點各要重畫一次**：下載列表那一列（勾了「清除紀錄」就整列消失，沒勾就換成
+      // **兩個掛點各要重畫一次**：那一筆 Job（勾了「清除紀錄」詳情頁就變成「找不到這筆下載」，沒勾就換成
       // 「已刪除」），以及 Media 詳情——剛刪掉的那個版本與那幾個檔案都是 `['media', id]`
       // 讀出來的，只失效 `['jobs']` 的話版本清單上那一條會留在畫面上（票 04 code-review 抓到）。
       await Promise.all([

@@ -552,8 +552,8 @@ Berth 入庫的作品照樣瀏覽得到。這六件事現在是 nightly e2e 的�
 - **三顆認領**（M2 票 10）：`orphan_complete` 的「重新入庫」、`unknown_torrent` 的「認領並建立下載」
   （兩顆都在列上就地選作品，`POST /issues/{id}/resolve` 多帶 `media`）、`unmanaged_library_file` 的
   「認領進帳本」。三顆都不刪東西。新的拒絕理由 `media_required`、`unclaimable`。
-- **刪除對話框是一個元件**（M2 票 04，plan §7）：`/jobs` 的展開區與 Media 詳情的版本清單共用，
-  票 11 的 `/jobs/:hash` 掛的也是它。就地展開而不是 dialog（The Failure Expands In Place Rule）——
+- **刪除對話框是一個元件**（M2 票 04，plan §7）：Media 詳情的版本清單與 `/jobs/:hash`（M2 票 12 起；
+  在那之前掛在 `/jobs` 的展開區）共用。就地展開而不是 dialog（The Failure Expands In Place Rule）——
   「哪一筆正在被刪」正是這個動作最怕搞錯的事。取消「移除 torrent」會把「刪除檔案」一起收掉，
   不留一個送出去一定被擋下來的勾。版本清單上的刪除掛在**每一個版本**上（`VersionOut` 多帶
   `job_hash`）：多版本並存時要拿掉的是其中一個。
@@ -561,8 +561,16 @@ Berth 入庫的作品照樣瀏覽得到。這六件事現在是 nightly e2e 的�
 - **大媒體庫量測腳本**（M2 票 11）：`scripts/experiments/large_library.py` 自己 build Berth 的 image、起一次性的
   Jellyfin 12.1 與 qBittorrent 5.2、造 1,000 部 × 12 集，量 `GET /inventory/{id}` 的 p95、對帳一輪與票上五件，
   量完全部拆掉；`--keep` / `--reuse` / `--stages` 讓改了 Berth 之後只重量那一段。
+- **Job 詳情頁 `/jobs/:hash`**（M2 票 12，brief §13、`.scratch/m2/job-detail-shape.md`）：身分帶（狀態、發佈名、
+  實測值、送單的人、服務原文、hash）→ 動作（重新規劃、重試、重新入庫、刪除範圍）→ 檔案與決策（唯讀的 `JobPlan`）、
+  **計劃歷史**、完整時間線。一筆 Job 只有一份現行 Plan，所以計劃歷史是時間線上九種與 Plan 有關的事件
+  （`jobs/eventTypes.ts` 的 `planHistory`），畫法仍是 `JobTimeline`。深連結：`/jobs` 的一列、`/review` 四類列與
+  `/issues` 的「所屬下載」、直接貼網址；不存在的 hash 是「找不到這筆下載」加回下載列表的路。
 
 ### Changed
+
+- **`/jobs` 的展開區只剩狀態與時間線摘要**（M2 票 12，plan §11.3 決定 1）：最近三段時間線（說出較早的還有幾筆）、
+  hash 與「下載詳情」。計劃與每一顆動作（重試、重新規劃、重新入庫、刪除）搬到詳情頁，那一塊不再有第二份實作。
 
 - **帳本以來源冪等**（M2 票 10）：importer 先以目標路徑、再以「同一筆 Job 的同一個來源」找那一列帳本。
   TMDB 改了集名之後重新入庫，那一列換到新的路徑、舊的那條鏈接（同 inode 才算自己的）被收掉，
@@ -920,6 +928,8 @@ Berth 入庫的作品照樣瀏覽得到。這六件事現在是 nightly e2e 的�
 - **1,000 部的媒體庫上 `GET /inventory/{id}` 從 3.4 s 降到 0.66–0.68 s**（M2 票 11，plan §11.3 決定 2 的門檻是 1 s）：
   `_survey` 對每一部作品把整張帳本與 Job 各篩一次（1,000 × 13,000），改成先按作品分組、一次走完。不是 Jellyfin
   回太多，所以沒有做分段取，也沒有加快取（`docs/research/large-library.md`）。
+- **不存在的下載不再讓畫面等七秒**（M2 票 12 實跑）：`GET /jobs/{hash}` 的 404 是答案，查詢不重試；只有網路層
+  失敗才照預設重試三次。
 
 ### Security
 

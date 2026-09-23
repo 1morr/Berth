@@ -13,6 +13,7 @@ import {
 import { reviewQueryOptions } from '../api/review'
 import { ConfirmAction, GhostButton } from '../components/controls'
 import { DetailLine, QueueRow } from '../components/QueueRow'
+import { JobLink } from '../jobs/JobLink'
 import { fileName, whenText } from '../components/queueText'
 import { formatSize } from '../media/searchResult'
 import { WorkPicker } from './WorkPicker'
@@ -94,7 +95,14 @@ export function IssueRow({
           )}
           {source !== '' && <DetailLine term={t('issues.source')}>{source}</DetailLine>}
           {issue.job_hash !== '' && (
-            <DetailLine term={t('issues.job')}>{issue.job_hash}</DetailLine>
+            <DetailLine term={t('issues.job')}>
+              {/* 無主的 torrent 在這一格放的是那個 torrent 的 hash——它定義上沒有 Job，連過去一定是空的。 */}
+              {issue.type === 'unknown_torrent' ? (
+                issue.job_hash
+              ) : (
+                <JobLink hash={issue.job_hash}>{issue.job_hash}</JobLink>
+              )}
+            </DetailLine>
           )}
           <Measured issue={issue} />
         </>

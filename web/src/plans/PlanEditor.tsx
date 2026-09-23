@@ -278,7 +278,7 @@ function ItemForm({
         },
       ]),
     onSuccess: (updated) => {
-      queryClient.setQueryData(planQueryOptions(hash, plan.id, true).queryKey, updated)
+      queryClient.setQueryData(planQueryOptions(hash, plan.id).queryKey, updated)
       // 佇列那一列的計數（要入庫幾個、低信心幾個）跟著變了。
       void queryClient.invalidateQueries({ queryKey: ['review'] })
       onApplied(t('review.plan.applied'))

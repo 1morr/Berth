@@ -1,6 +1,6 @@
 import { queryOptions } from '@tanstack/react-query'
 
-import { apiDelete, apiGet, apiPost } from './client'
+import { ApiError, apiDelete, apiGet, apiPost } from './client'
 import { parseRefusal, type ReasonSet } from './refusal'
 import type { Schemas } from './schemas'
 
@@ -60,6 +60,22 @@ export function jobsQueryOptions() {
   return queryOptions({
     queryKey: ['jobs'],
     queryFn: () => apiGet<Job[]>('/jobs'),
+  })
+}
+
+/**
+ * 一筆 Job（`/jobs/:hash`，M2 票 12）。**key 掛在 `['jobs', hash]`**：SSE 讓 `['jobs']` 整個前綴
+ * 失效（`api/events.ts`），所以詳情頁不必另外接一條訂閱就會跟著動。不存在的 hash 是 404——
+ * 詳情頁拿它畫空狀態，而不是當成後端壞了。
+ */
+export function jobQueryOptions(hash: string) {
+  return queryOptions({
+    queryKey: ['jobs', hash],
+    queryFn: () => apiGet<Job>(`/jobs/${encodeURIComponent(hash)}`),
+    // **後端回了狀態碼就是答案**，只有網路層失敗才重試：預設的三次重試、間隔加倍會讓不存在的 hash
+    // 晚七秒才畫出空狀態（實跑量到）；同源的 Berth 回 5xx 是它自己的錯，重試只是晚七秒說。
+    // 與 `api/jellyfin.ts` 的 `retryUnlessRefused` 同一個道理，但這裡的 404 不是 refusal 形狀。
+    retry: (failures, error) => !(error instanceof ApiError) && failures < 3,
   })
 }
 

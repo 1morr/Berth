@@ -104,6 +104,19 @@ describe('審核佇列', () => {
     expect(within(row).getByText('各季集數依序累加，#26 落在 S02E01')).toBeInTheDocument()
   })
 
+  it('所屬下載那一格連到它的詳情頁，不是整份下載列表（M2 票 12）', async () => {
+    render({ [QUEUE]: queue([audit()]) })
+    renderApp('/review')
+    const row = await screen.findByRole('article')
+
+    await userEvent.click(within(row).getByText('展開'))
+
+    expect(within(row).getByRole('link', { name: /SPY×FAMILY - 26/ })).toHaveAttribute(
+      'href',
+      `/jobs/${HASH}`,
+    )
+  })
+
   it('需要人動手的排前面：兩類各在自己那一段，順序照後端', async () => {
     render({ [QUEUE]: queue([audit(), issueRow()]) })
     renderApp('/review')

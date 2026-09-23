@@ -8,6 +8,7 @@ import { Timestamp } from '../components/Timestamp'
 import type { PlanAction, ReviewReason } from '../api/plans'
 import { formatEpisode } from '../components/episodes'
 import { formatSize } from '../media/searchResult'
+import { EVENT_TYPES, type KnownEvent } from './eventTypes'
 import { JOB_SIGNAL, formatPercent } from './jobState'
 
 /**
@@ -17,51 +18,70 @@ import { JOB_SIGNAL, formatPercent } from './jobState'
  * 不做通用的 key/value 傾印——那會把 `trigger: manual` 這種已經在列上的東西再說一次，
  * 而且會在畫面上長出一堆沒有人在意的欄位名（shape brief §8）。
  */
-export function JobTimeline({ events }: { events: readonly JobEvent[] }) {
+export function JobTimeline({
+  events,
+  latest,
+}: {
+  events: readonly JobEvent[]
+  /**
+   * 只畫最近幾段（`/jobs` 展開區的摘要，M2 票 12）。完整的一份在詳情頁；**較早的筆數算的是事件**，
+   * 不是段——連續的鏈接收成一段，但詳情頁上要看的是那幾筆。
+   */
+  latest?: number
+}) {
   const { t } = useTranslation()
 
   if (events.length === 0) {
     return <p className="text-xs text-ink-dim">{t('jobs.timeline.empty')}</p>
   }
 
+  const all = runs(events)
+  const shown = latest === undefined ? all : all.slice(-latest)
+  const earlier = events.length - shown.reduce((sum, run) => sum + run.length, 0)
+
   return (
-    <ol className="grid gap-2">
-      {runs(events).map((run) => {
-        const last = run[run.length - 1]
-        return (
-          <li key={run[0].id} className="grid min-w-0 gap-1 border-l-2 border-rule pl-3">
-            <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
-              {/* 事件型別是**分類**不是狀態，所以中性色塊（The Role Is Not A State Rule）。 */}
-              <span className="label bg-deck px-1.5 py-1 text-ink">{label(t, last)}</span>
-              {run.length > 1 && (
-                <span className="value text-xs text-ink">
-                  {t('jobs.timeline.linkedFiles', { count: run.length })}
+    <div className="grid gap-2">
+      {earlier > 0 && (
+        <p className="text-xs text-ink-dim">{t('jobs.timeline.earlier', { count: earlier })}</p>
+      )}
+      <ol className="grid gap-2">
+        {shown.map((run) => {
+          const last = run[run.length - 1]
+          return (
+            <li key={run[0].id} className="grid min-w-0 gap-1 border-l-2 border-rule pl-3">
+              <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                {/* 事件型別是**分類**不是狀態，所以中性色塊（The Role Is Not A State Rule）。 */}
+                <span className="label bg-deck px-1.5 py-1 text-ink">{label(t, last)}</span>
+                {run.length > 1 && (
+                  <span className="value text-xs text-ink">
+                    {t('jobs.timeline.linkedFiles', { count: run.length })}
+                  </span>
+                )}
+                <span className="text-xs text-ink-dim">
+                  <Timestamp at={last.created_at} />
                 </span>
+              </p>
+              {run.length === 1 ? (
+                <Facts event={last} />
+              ) : (
+                <details className="min-w-0">
+                  <summary className="label cursor-pointer text-ink-dim">
+                    {t('jobs.timeline.linkedTargets')}
+                  </summary>
+                  <ol className="mt-1 grid gap-0.5">
+                    {run.map((event) => (
+                      <li key={event.id}>
+                        <Row>{text(event.payload.target)}</Row>
+                      </li>
+                    ))}
+                  </ol>
+                </details>
               )}
-              <span className="text-xs text-ink-dim">
-                <Timestamp at={last.created_at} />
-              </span>
-            </p>
-            {run.length === 1 ? (
-              <Facts event={last} />
-            ) : (
-              <details className="min-w-0">
-                <summary className="label cursor-pointer text-ink-dim">
-                  {t('jobs.timeline.linkedTargets')}
-                </summary>
-                <ol className="mt-1 grid gap-0.5">
-                  {run.map((event) => (
-                    <li key={event.id}>
-                      <Row>{text(event.payload.target)}</Row>
-                    </li>
-                  ))}
-                </ol>
-              </details>
-            )}
-          </li>
-        )
-      })}
-    </ol>
+            </li>
+          )
+        })}
+      </ol>
+    </div>
   )
 }
 
@@ -81,42 +101,6 @@ function runs(events: readonly JobEvent[]): JobEvent[][] {
   }
   return out
 }
-
-/**
- * 認得的事件型別（`domain.EventType`）。
- *
- * **一份清單，兩個用途**：`FACTS` 的鍵型別由它產生，所以少寫一個 renderer 會在 `tsc` 就紅；
- * `label()` 也讀它，所以「有沒有那一句顯示名」與「畫不畫得出那幾格」不會分岔。
- * 票 11 加 `plan_generated` 時，型別檢查會直接指到還沒補的那一格。
- */
-const EVENT_TYPES = [
-  'created',
-  'submitted',
-  'submit_failed',
-  'retried',
-  'metadata_received',
-  'progress',
-  'stalled',
-  'completed',
-  'issue_detected',
-  'preplan',
-  'plan_generated',
-  'review_required',
-  'review_decided',
-  'linked',
-  'link_failed',
-  'jellyfin_scan_requested',
-  'jellyfin_item_resolved',
-  'jellyfin_request_failed',
-  'deleted',
-  'audit_confirmed',
-  'audit_undone',
-  'rematched',
-  'duplicate_skipped',
-  'duplicate_decided',
-] as const
-
-type KnownEvent = (typeof EVENT_TYPES)[number]
 
 // `TFunction` 而不是 `ReturnType<typeof useTranslation>['t']`：後者要把整棵鍵樹再展開一次，
 // 票 13 多了媒體庫的鍵之後 tsc 報「型別展開太深」（TS2589）。兩者對呼叫端是同一個型別。

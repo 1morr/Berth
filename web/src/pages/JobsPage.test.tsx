@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from '@testing-library/react'
+import { screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -73,18 +73,6 @@ function event(overrides: Partial<JobEvent> = {}): JobEvent {
     created_at: '2026-09-10T12:00:00Z',
     ...overrides,
   }
-}
-
-/** 刪除對話框打開時問的那一份（M2 票 04）。這一頁只在乎有沒有那顆鍵，數字不重要。 */
-const ESTIMATE = {
-  links: 0,
-  links_missing: 0,
-  link_bytes: 0,
-  sources: 0,
-  sources_missing: 0,
-  source_bytes: 0,
-  reclaimable: 0,
-  held: 0,
 }
 
 function render(routes: Record<string, StubRoute | (() => StubRoute)> = {}) {
@@ -214,7 +202,7 @@ describe('下載列表頁', () => {
     expect(await screen.findByText(/讀不到下載列表/)).toBeInTheDocument()
   })
 
-  describe('就地展開', () => {
+  describe('就地展開只剩狀態與時間線摘要（M2 票 12）', () => {
     it('展開才去問時間線——一份清單裡多數列不會被展開', async () => {
       const stub = render({
         [EVENTS]: events([event(), event({ id: 2, type: 'submitted' })]),
@@ -229,254 +217,66 @@ describe('下載列表頁', () => {
       expect(await screen.findByText('route=anime')).toBeInTheDocument()
     })
 
-    it('送單失敗那一筆展開後有原文與一顆重試', async () => {
-      render({
-        [JOBS]: { body: [FAILED] },
-        [`GET /api/jobs/${FAILED.hash}/events`]: events([
-          event({ type: 'submit_failed', payload: { error: 'torrents/add: connection refused' } }),
-        ]),
-      })
-      renderApp('/jobs')
-      await userEvent.click(await screen.findByText(/Moana 2 \(2024\)/))
-
-      expect(await screen.findByText('torrents/add: connection refused')).toBeInTheDocument()
-      expect(screen.getByRole('button', { name: '重新送單' })).toBeInTheDocument()
-    })
-
-    it('入庫失敗那一筆的重試說的是「再試一次入庫」——同一個端點，回到的是另一站（票 12）', async () => {
-      const importFailed = job({
-        state: 'import_failed',
-        error: '[Errno 18] Invalid cross-device link',
-        retryable: true,
-      })
-      render({ [JOBS]: { body: [importFailed] } })
-      renderApp('/jobs')
-      await userEvent.click(await screen.findByText(/SPY×FAMILY - 13/))
-
-      expect(screen.getByRole('button', { name: '再試一次入庫' })).toBeInTheDocument()
-      expect(screen.queryByRole('button', { name: '重新送單' })).not.toBeInTheDocument()
-    })
-
-    it('沒有失敗的那一筆沒有重試鍵——重試是那一條轉換，不是「再送一次」', async () => {
+    it('展開區有一條到詳情頁的路', async () => {
       render()
       renderApp('/jobs')
+
       await userEvent.click(await screen.findByText(/SPY×FAMILY - 13/))
 
-      expect(screen.queryByRole('button', { name: '重新送單' })).not.toBeInTheDocument()
+      expect(await screen.findByRole('link', { name: '下載詳情' })).toHaveAttribute(
+        'href',
+        `/jobs/${HASH}`,
+      )
     })
 
-    it('重試被擋下來時說的是那個理由，不是一句通用的失敗', async () => {
-      render({
-        [JOBS]: { body: [FAILED] },
-        [`GET /api/jobs/${FAILED.hash}/events`]: events([]),
-        [`POST /api/jobs/${FAILED.hash}/retry`]: {
-          status: 409,
-          body: { detail: { reason: 'route_unhealthy', detail: 'movies' } },
+    it('計劃與每一顆動作都只在詳情頁：展開區不問計劃，也沒有任何按鈕', async () => {
+      // 旗標全開、又是 admin：這一列若還有任何一顆動作，這裡一定看得到。
+      const stub = render({
+        [JOBS]: {
+          body: [
+            job({
+              state: 'review',
+              retryable: true,
+              replannable: true,
+              reimportable: true,
+              plan_id: 7,
+            }),
+          ],
         },
       })
       renderApp('/jobs')
-      await userEvent.click(await screen.findByText(/Moana 2 \(2024\)/))
 
-      await userEvent.click(screen.getByRole('button', { name: '重新送單' }))
-
-      expect(await screen.findByRole('alert')).toHaveTextContent(/那條 Route 現在是紅的/)
-    })
-  })
-
-  describe('匯入計劃（票 11）', () => {
-    const PLANNED = job({ state: 'review', replannable: true, plan_id: 7 })
-    const PLAN = 'GET /api/plans/7'
-
-    function plan() {
-      return {
-        body: {
-          id: 7,
-          job_hash: HASH,
-          status: 'pending_review',
-          engine: 'rules',
-          engine_version: '0.1.0',
-          created_at: '2026-09-11T12:00:00Z',
-          media_kind: 'tv',
-          summary: {
-            files: 0,
-            high: 0,
-            medium: 0,
-            low: 1,
-            actions: { review: 1 },
-            review_reason: 'low_confidence',
-          },
-          items: [
-            {
-              id: 1,
-              rel_path: 'Disc 1/theme.mkv',
-              kind: 'video',
-              action: 'review',
-              media_id: 'tv:120089',
-              season: null,
-              episode_start: null,
-              episode_end: null,
-              target_path: '',
-              confidence: 'low',
-              reasons: [{ code: 'no_episode', params: {} }],
-              audit: false,
-              applied: false,
-              actions: [],
-              error: '',
-            },
-          ],
-        },
-      }
-    }
-
-    it('展開才去問那一份計劃——與時間線同一條規則', async () => {
-      const stub = render({ [JOBS]: { body: [PLANNED] }, [PLAN]: plan() })
-      renderApp('/jobs')
-      await screen.findByText(/SPY×FAMILY - 13/)
-
-      expect(stub.mock.calls.some(([url]) => String(url).includes('/plans/'))).toBe(false)
-
-      await userEvent.click(screen.getByText(/SPY×FAMILY - 13/))
-      // 逐檔收在組裡（M1.5 票 09）：展開那一組才畫。
-      await userEvent.click(await screen.findByText('1 個檔案'))
-
-      expect(await screen.findByText('Disc 1/theme.mkv')).toBeInTheDocument()
-      expect(screen.getByText('推不出季集')).toBeInTheDocument()
-      expect(screen.getByText(/管理員在審核佇列逐列確認季集之後核准/)).toBeInTheDocument()
-    })
-
-    it('還沒算過的那一筆連問都不問——`plan_id` 是空的就是答案', async () => {
-      const stub = render()
-      renderApp('/jobs')
       await userEvent.click(await screen.findByText(/SPY×FAMILY - 13/))
-      // 時間線問到了（空的），所以展開真的發生過——計劃那一支仍然一個請求都沒發。
       await screen.findByText('這一筆還沒有任何事件。')
 
       expect(stub.mock.calls.some(([url]) => String(url).includes('/plans/'))).toBe(false)
-      expect(screen.queryByText('匯入計劃')).not.toBeInTheDocument()
+      expect(screen.queryByText('匯入計劃')).toBeNull()
+      for (const name of ['重新送單', '重新規劃', '重新入庫', '刪除']) {
+        expect(screen.queryByRole('button', { name })).toBeNull()
+      }
+      expect(screen.queryByRole('link', { name: '到審核佇列處理' })).toBeNull()
     })
 
-    it('停在待審核的那一筆按得了重新規劃', async () => {
-      const stub = render({
-        [JOBS]: { body: [PLANNED] },
-        [PLAN]: plan(),
-        [`POST /api/jobs/${HASH}/replan`]: { body: { ...PLANNED, state: 'importing' } },
-      })
-      renderApp('/jobs')
-      await userEvent.click(await screen.findByText(/SPY×FAMILY - 13/))
-
-      await userEvent.click(await screen.findByRole('button', { name: '重新規劃' }))
-
-      // 按下去之後那一列自己重問一次（`['jobs']` 失效），所以清單**至少**被要了兩次。
-      // 比「剛好兩次」的話，任何一次額外的失效（視窗重新聚焦…）都會讓這條測試變成擲骰子。
-      await waitFor(() => {
-        expect(
-          stub.mock.calls.filter(([url]) => String(url) === '/api/jobs').length,
-        ).toBeGreaterThanOrEqual(2)
-      })
-      expect(stub.mock.calls.some(([url]) => String(url).endsWith('/replan'))).toBe(true)
-    })
-
-    it('重新規劃被擋下來時說的是那個理由', async () => {
+    it('時間線摘要只畫最近三段，說得出較早的還有幾筆', async () => {
       render({
-        [JOBS]: { body: [PLANNED] },
-        [PLAN]: plan(),
-        [`POST /api/jobs/${HASH}/replan`]: {
-          status: 409,
-          body: { detail: { reason: 'not_replannable', detail: 'importing' } },
-        },
+        [EVENTS]: events([
+          event({ id: 1, type: 'created' }),
+          event({ id: 2, type: 'submitted', payload: {} }),
+          event({ id: 3, type: 'metadata_received', payload: {} }),
+          event({ id: 4, type: 'completed', payload: {} }),
+          event({ id: 5, type: 'plan_generated', payload: {} }),
+        ]),
       })
       renderApp('/jobs')
+
       await userEvent.click(await screen.findByText(/SPY×FAMILY - 13/))
 
-      await userEvent.click(await screen.findByRole('button', { name: '重新規劃' }))
-
-      expect(await screen.findByRole('alert')).toHaveTextContent(/不能重新規劃/)
+      expect(await screen.findByText('計劃')).toBeInTheDocument()
+      expect(screen.getByText('下載完成')).toBeInTheDocument()
+      expect(screen.getByText('檔案清單')).toBeInTheDocument()
+      expect(screen.queryByText('已建立')).toBeNull()
+      expect(screen.getByText('較早的 2 筆事件在詳情頁。')).toBeInTheDocument()
     })
-
-    it('已經在入庫的那一筆沒有那顆按鈕——規則在後端算', async () => {
-      render({ [JOBS]: { body: [job({ state: 'importing', plan_id: 7 })] }, [PLAN]: plan() })
-      renderApp('/jobs')
-      await userEvent.click(await screen.findByText(/SPY×FAMILY - 13/))
-
-      expect(screen.queryByRole('button', { name: '重新規劃' })).not.toBeInTheDocument()
-    })
-  })
-})
-
-describe('刪除入口只給管理員（M2 票 04 驗收）', () => {
-  it('admin 展開一列時看得到刪除', async () => {
-    render({ [`GET /api/jobs/${HASH}/deletion`]: { body: ESTIMATE } })
-    renderApp('/jobs')
-
-    await userEvent.click(await screen.findByText(/SPY×FAMILY - 13/))
-
-    expect(await screen.findByRole('button', { name: '刪除' })).toBeInTheDocument()
-  })
-
-  it('一般使用者展開同一列時看不到刪除', async () => {
-    // **前端隱藏不是安全機制**：擋住的那一條在門禁上（`DELETE /jobs/{hash}` 回 403，
-    // `tests/integration/test_auth_api.py`）。這裡驗的是「這顆鍵不是給你的」。
-    render({ 'GET /api/auth/me': { body: { name: 'deckhand', role: 'user' } } })
-    renderApp('/jobs')
-
-    await userEvent.click(await screen.findByText(/SPY×FAMILY - 13/))
-
-    // 時間線畫出來了才代表展開區真的開了——否則這一條在任何情況下都會綠。
-    await screen.findByText('info hash')
-    expect(screen.queryByRole('button', { name: '刪除' })).toBeNull()
-  })
-})
-
-describe('重新入庫（M2 票 10）', () => {
-  const IMPORTED = job({ state: 'imported', reimportable: true })
-
-  it('admin 在入庫完的那一筆看得到它，按下去打那一支並說出現在的狀態', async () => {
-    const stub = render({
-      [JOBS]: { body: [IMPORTED] },
-      [`POST /api/jobs/${HASH}/reimport`]: { body: { ...IMPORTED, state: 'completed' } },
-    })
-    renderApp('/jobs')
-
-    await userEvent.click(await screen.findByText(/SPY×FAMILY - 13/))
-    await userEvent.click(await screen.findByRole('button', { name: '重新入庫' }))
-
-    await waitFor(() =>
-      expect(
-        stub.mock.calls.some(
-          ([input, init]) =>
-            init?.method === 'POST' && String(input) === `/api/jobs/${HASH}/reimport`,
-        ),
-      ).toBe(true),
-    )
-  })
-
-  it('一般使用者看不到它（門禁同時回 403）', async () => {
-    render({
-      'GET /api/auth/me': { body: { name: 'deckhand', role: 'user' } },
-      [JOBS]: { body: [IMPORTED] },
-    })
-    renderApp('/jobs')
-
-    await userEvent.click(await screen.findByText(/SPY×FAMILY - 13/))
-
-    await screen.findByText('info hash')
-    expect(screen.queryByRole('button', { name: '重新入庫' })).toBeNull()
-  })
-
-  it('後端說還不能重新入庫時照那個理由說', async () => {
-    render({
-      [JOBS]: { body: [IMPORTED] },
-      [`POST /api/jobs/${HASH}/reimport`]: {
-        status: 409,
-        body: { detail: { reason: 'content_missing', detail: '/data/torrent/complete/anime/x' } },
-      },
-    })
-    renderApp('/jobs')
-
-    await userEvent.click(await screen.findByText(/SPY×FAMILY - 13/))
-    await userEvent.click(await screen.findByRole('button', { name: '重新入庫' }))
-
-    expect(await screen.findByText(/complete 裡已經沒有這一包了/)).toBeInTheDocument()
   })
 })
 
@@ -497,31 +297,6 @@ describe('停在待審核的那一筆（M2 票 06）', () => {
 
     await screen.findByText(/SPY×FAMILY - 13/)
     expect(screen.queryByText('等管理員審核')).not.toBeInTheDocument()
-  })
-
-  it('admin 展開那一筆看到的是去處理它的路（M2 票 07）', async () => {
-    render({ [JOBS]: { body: [job({ state: 'review' })] } })
-    renderApp('/jobs')
-
-    await userEvent.click(await screen.findByText(/SPY×FAMILY - 13/))
-
-    expect(await screen.findByRole('link', { name: '到審核佇列處理' })).toHaveAttribute(
-      'href',
-      '/review',
-    )
-  })
-
-  it('一般使用者展開那一筆沒有那條路', async () => {
-    render({
-      'GET /api/auth/me': { body: { name: 'deckhand', role: 'user' } },
-      [JOBS]: { body: [job({ state: 'review' })] },
-    })
-    renderApp('/jobs')
-
-    await userEvent.click(await screen.findByText(/SPY×FAMILY - 13/))
-
-    await screen.findByText('info hash')
-    expect(screen.queryByRole('link', { name: '到審核佇列處理' })).toBeNull()
   })
 
   it('不是待審核的那一筆什麼都不說', async () => {

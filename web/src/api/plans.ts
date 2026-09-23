@@ -59,15 +59,14 @@ export function parsePlanRefusal(error: unknown) {
  * 一筆 Job 現在那一份計劃。
  *
  * **key 掛在那筆 Job 底下**（`['jobs', hash, …]`）：SSE 讓 `['jobs']` 整個前綴失效
- * （`api/events.ts`），所以背景迴圈把 Plan 算出來的那一刻，展開中的那一列自己就會重問。
- *
- * 列展開時才問，與時間線同一條規則：一份清單裡多數列不會被展開。
+ * （`api/events.ts`），所以背景迴圈把 Plan 算出來的那一刻，詳情頁與審核佇列上的那一份自己就會重問。
+ * 還沒算過（`planId` 是 `null`）就不問——那就是答案。
  */
-export function planQueryOptions(hash: string, planId: number | null, enabled: boolean) {
+export function planQueryOptions(hash: string, planId: number | null) {
   return queryOptions({
     queryKey: ['jobs', hash, 'plan', planId],
     queryFn: () => apiGet<Plan>(`/plans/${planId}`),
-    enabled: enabled && planId !== null,
+    enabled: planId !== null,
   })
 }
 

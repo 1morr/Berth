@@ -346,3 +346,31 @@ describe('Job 時間線', () => {
     expect(line.getByText('/lib/a.mkv')).toBeInTheDocument()
   })
 })
+
+describe('時間線摘要（M2 票 12）', () => {
+  it('只畫最近幾段；連續的鏈接算一段，較早的筆數算的是事件', () => {
+    renderWithProviders(
+      <JobTimeline
+        latest={2}
+        events={[
+          event({ id: 1, type: 'created' }),
+          event({ id: 2, type: 'completed' }),
+          event({ id: 3, type: 'linked', payload: { target: '/a' } }),
+          event({ id: 4, type: 'linked', payload: { target: '/b' } }),
+          event({ id: 5, type: 'jellyfin_scan_requested', payload: { count: 2 } }),
+        ]}
+      />,
+    )
+
+    expect(screen.getByText('已通知 Jellyfin')).toBeInTheDocument()
+    expect(screen.getByText('已鏈接')).toBeInTheDocument()
+    expect(screen.queryByText('下載完成')).toBeNull()
+    expect(screen.getByText('較早的 2 筆事件在詳情頁。')).toBeInTheDocument()
+  })
+
+  it('全部畫得下時不說還有較早的', () => {
+    renderWithProviders(<JobTimeline latest={3} events={[event({ id: 1, type: 'created' })]} />)
+
+    expect(screen.queryByText(/較早的/)).toBeNull()
+  })
+})

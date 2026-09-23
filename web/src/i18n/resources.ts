@@ -1288,6 +1288,23 @@ const zhHant = {
     waitingForAdmin: '等管理員審核',
     // admin 在停在 review 的那一列看到的是去處理它的路，不是「等」（M2 票 07）。
     toReview: '到審核佇列處理',
+    // Job 詳情頁 `/jobs/:hash`（M2 票 12、`.scratch/m2/job-detail-shape.md`）。
+    detail: {
+      open: '下載詳情',
+      back: '回下載列表',
+      sentBy: '送單的人',
+      nobody: '沒有人在場',
+      error: '服務回的原文',
+      files: '檔案與決策',
+      noPlan: '還沒有計劃：拿到檔案清單之後 Berth 才算得出一份。',
+      history: '計劃歷史',
+      historyEmpty: '這份計劃還沒有任何紀錄。',
+      timeline: '時間線',
+      loading: '讀取這筆下載…',
+      missing: '找不到這筆下載',
+      missingHint: '網址可能打錯了，或它已經被刪除並清除了紀錄。',
+      off: '讀不到這筆下載。Berth 自己的 API 沒有回應，先確認它還活著。',
+    },
     // 十六個狀態一次定義完（`domain.JobState`）：M1 票 09 只走得到前三個，
     // 其餘由票 10 起的迴圈驅動，而它們是同一個封閉集合。
     state: {
@@ -1343,6 +1360,9 @@ const zhHant = {
       loading: '讀取時間線…',
       empty: '這一筆還沒有任何事件。',
       off: '讀不到時間線。',
+      // `/jobs` 展開區的摘要只畫最近三段（M2 票 12）。
+      earlier_one: '較早的 {{count}} 筆事件在詳情頁。',
+      earlier_other: '較早的 {{count}} 筆事件在詳情頁。',
       retried: '狀態退回「已建立」，接著再送一次。',
       retriedImport: '狀態退回「入庫中」，從還沒鏈接的檔案接著做。',
       // 待處理上那幾顆（M2 票 09、09c）。`action` 是後端寫的，不是前端猜的。
@@ -3110,6 +3130,23 @@ const en: Translations<typeof zhHant> = {
     reimported: 'Queued to import again; it is now {{state}}.',
     waitingForAdmin: 'Waiting for an administrator to review',
     toReview: 'Handle it in the review queue',
+    detail: {
+      open: 'Download details',
+      back: 'Back to downloads',
+      sentBy: 'Sent by',
+      nobody: 'Nobody',
+      error: 'What the service said',
+      files: 'Files and decisions',
+      noPlan: 'No plan yet: Berth works one out once the file list is in.',
+      history: 'Plan history',
+      historyEmpty: 'Nothing has been recorded for this plan yet.',
+      timeline: 'Timeline',
+      loading: 'Reading this download…',
+      missing: 'No such download',
+      missingHint:
+        'The address may be mistyped, or the download was deleted along with its records.',
+      off: 'Could not read this download. Berth’s own API did not answer — check that it is still running.',
+    },
     state: {
       requested: 'Created',
       submitted: 'Sent',
@@ -3163,6 +3200,8 @@ const en: Translations<typeof zhHant> = {
       loading: 'Reading the timeline…',
       empty: 'Nothing has happened to this job yet.',
       off: 'Could not read the timeline.',
+      earlier_one: 'The {{count}} earlier event is on the details page.',
+      earlier_other: 'The {{count}} earlier events are on the details page.',
       retried: 'Back to created, then sent again.',
       retriedImport: 'Back to importing; it picks up from the files not linked yet.',
       retriedRecheck: 'qBittorrent was asked to recheck the files and carry on downloading.',
