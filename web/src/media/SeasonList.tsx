@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next'
 import type { Episode, Season } from '../api/media'
 import { CollapsibleRow } from '../components/CollapsibleRow'
 import { COMPACT_BUTTON } from '../components/controls'
-import { episodeCode, seasonCode } from '../components/episodes'
+import { formatEpisode, seasonCode } from '../components/episodes'
 import { SIGNAL_FILL } from '../components/signal'
 import { Dot } from '../components/Dot'
 import { missingOf } from './missing'
@@ -177,7 +177,12 @@ function SeasonBody({
         </thead>
         <tbody className="divide-y divide-rule">
           {episodes.map((episode) => (
-            <EpisodeRow key={episode.episode_number} episode={episode} absolute={absolute} />
+            <EpisodeRow
+              key={episode.episode_number}
+              season={season.season_number}
+              episode={episode}
+              absolute={absolute}
+            />
           ))}
         </tbody>
       </table>
@@ -185,15 +190,24 @@ function SeasonBody({
   )
 }
 
-function EpisodeRow({ episode, absolute }: { episode: Episode; absolute: boolean }) {
+function EpisodeRow({
+  season,
+  episode,
+  absolute,
+}: {
+  season: number
+  episode: Episode
+  absolute: boolean
+}) {
   const { t } = useTranslation()
   const runtime =
     episode.runtime === null ? null : t('media.minutesShort', { count: episode.runtime })
 
   return (
     <tr>
-      <td className="value px-4 py-2 text-xs text-ink-dim">
-        {episodeCode(episode.episode_number)}
+      {/* `S01E09` 而不是裸的 `E09`（M2 票 14）：與觀看區的集卡、檔名同一種寫法，對得起來才看得出兩邊差在哪。 */}
+      <td className="value px-4 py-2 text-xs whitespace-nowrap text-ink-dim">
+        {formatEpisode({ season, episode_start: episode.episode_number, episode_end: null })}
       </td>
       {absolute && (
         <td className="value px-4 py-2 text-right text-xs text-ink-dim">

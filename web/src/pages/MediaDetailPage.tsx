@@ -114,6 +114,7 @@ export function MediaDetailPage({ id }: { id: string }) {
           <SeasonsPanel
             key={found.id}
             media={found}
+            watched={area?.kind === 'tv'}
             onSearchMissing={(season) => search.current?.searchMissing(season)}
           />
 

@@ -21,9 +21,12 @@ import { SeasonList } from './SeasonList'
  */
 export function SeasonsPanel({
   media,
+  watched,
   onSearchMissing,
 }: {
   media: Media
+  /** 上面有觀看區（作品在 Jellyfin 裡、這個人看得到）：那一份是 Jellyfin 的季集，這一份要說得出不同。 */
+  watched: boolean
   /** 缺集一鍵搜：整部作品是 `null`，一季是那一季的季號（M1.5 票 10）。 */
   onSearchMissing: (season: number | null) => void
 }) {
@@ -43,6 +46,14 @@ export function SeasonsPanel({
           <p className="value text-xs text-ink-dim">{media.seasons.length}</p>
         )}
       </div>
+      {/* 這一頁有四套集數（M2 票 14，M1.5 critique P3）：觀看區是 Jellyfin 的、這一份與檔案是 TMDB 的、絕對編號欄是
+          TMDB 的 Absolute group、媒體庫卡片數的是播出了的正片。從「對不到」進來的人正要找哪裡不對，一句話都不說
+          的話，合理的讀法是 Berth 算錯了。 */}
+      {listed && (
+        <p className="max-w-prose text-xs text-ink-dim">
+          {watched ? t('media.season.numberingWatched') : t('media.season.numbering')}
+        </p>
+      )}
 
       {listed && (
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">

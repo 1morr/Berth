@@ -346,6 +346,28 @@ describe('Media 詳情頁', () => {
     expect(within(row!).getByText('#26')).toBeVisible()
   })
 
+  it('集號欄寫的是 S02E01，不是裸的 E01（M2 票 14，M1.5 critique P3）', async () => {
+    render()
+    renderApp('/media/tv:120089')
+
+    await userEvent.click(await screen.findByText('Season 2'))
+
+    const row = (await screen.findByText('FOLLOW MAMA AND PAPA')).closest('tr')
+    expect(within(row!).getByText('S02E01')).toBeVisible()
+    expect(within(row!).queryByText('E01')).not.toBeInTheDocument()
+  })
+
+  it('季表標題列說這一份是 TMDB 的季集；作品不在 Jellyfin 時不提觀看區（M2 票 14）', async () => {
+    render()
+    renderApp('/media/tv:120089')
+
+    const note = await screen.findByText('季與集照 TMDB 的編號，入庫的檔名也照這一份。')
+
+    const seasons = screen.getByRole('region', { name: '季集與入庫' })
+    expect(within(seasons).getByText(note.textContent ?? '')).toBe(note)
+    expect(screen.queryByText(/上面「觀看」/)).not.toBeInTheDocument()
+  })
+
   it('沒有 Absolute group 的作品不畫絕對編號那一欄', async () => {
     const plain = media()
     render({
@@ -1294,6 +1316,19 @@ describe('觀看區（M1.5 票 08）', () => {
     expect(
       carryOn.compareDocumentPosition(overview) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy()
+  })
+
+  it('在 Jellyfin 裡時，季表標題列說上面「觀看」的季集是 Jellyfin 的（M2 票 14）', async () => {
+    inJellyfin()
+    renderApp('/media/tv:120089')
+
+    const seasons = await screen.findByRole('region', { name: '季集與入庫' })
+
+    expect(
+      await within(seasons).findByText(
+        '季與集照 TMDB 的編號，入庫的檔名也照這一份。上面「觀看」的季與集是 Jellyfin 的，兩邊的編號可能不同。',
+      ),
+    ).toBeVisible()
   })
 
   it('在 Jellyfin 裡：觀看在最上，Berth 的那一半收到下面（使用者拍板：分層）', async () => {

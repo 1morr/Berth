@@ -718,6 +718,10 @@ const zhHant = {
       none: 'TMDB 上這部作品還沒有任何一季。',
       // 季表工具列的「只看缺集」（M1.5 票 09）。缺＝已播出、沒有任何下載在處理；卡住與未播出不算。
       missingOnly: '只看缺集',
+      // 這一頁有四套集數（M2 票 14，M1.5 critique P3）：季表說自己是哪一套，觀看區在時連它一起說。
+      numbering: '季與集照 TMDB 的編號，入庫的檔名也照這一份。',
+      numberingWatched:
+        '季與集照 TMDB 的編號，入庫的檔名也照這一份。上面「觀看」的季與集是 Jellyfin 的，兩邊的編號可能不同。',
       missingTotal_one: '共缺 {{count}} 集',
       missingTotal_other: '共缺 {{count}} 集',
       noneMissingAnywhere: '這部作品沒有缺集',
@@ -2628,6 +2632,9 @@ const en: Translations<typeof zhHant> = {
       film: 'Films have no seasons.',
       none: 'TMDB lists no seasons for this title yet.',
       missingOnly: 'Missing only',
+      numbering: 'Seasons and episodes follow TMDB’s numbering, as do the imported file names.',
+      numberingWatched:
+        'Seasons and episodes follow TMDB’s numbering, as do the imported file names. Watch above uses Jellyfin’s, and the numbers may differ.',
       missingTotal_one: '{{count}} episode missing',
       missingTotal_other: '{{count}} episodes missing',
       noneMissingAnywhere: 'Nothing missing',
