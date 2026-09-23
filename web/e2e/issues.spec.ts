@@ -2,14 +2,28 @@ import { expect, test, type Page } from '@playwright/test'
 
 import { signIn } from './login.ts'
 
-/** 按「立刻對帳」並等那一輪跑完（`POST /api/reconcile` 回來時四方已比完、Issue 已寫下）。 */
+/**
+ * 按「立刻對帳」並等那一輪跑完。POST 回 202 只說收下了，那一輪在背景跑（`api/issues.py`），
+ * 所以照前端的做法輪詢 `GET /api/reconcile`，等 `last` 是這一輪、`current` 清空。
+ */
 async function reconcile(page: Page): Promise<void> {
-  const done = page.waitForResponse(
+  const started = page.waitForResponse(
     (response) =>
       response.url().endsWith('/api/reconcile') && response.request().method() === 'POST',
   )
   await page.getByRole('button', { name: '立刻對帳' }).click()
-  expect((await done).ok()).toBe(true)
+  const response = await started
+  expect(response.status()).toBe(202)
+  const { id } = (await response.json()) as { id: number }
+  await expect
+    .poll(async () => {
+      const state = (await (await page.request.get('/api/reconcile')).json()) as {
+        current: unknown
+        last: { id: number } | null
+      }
+      return state.current === null && state.last?.id === id
+    })
+    .toBe(true)
 }
 
 // `issues`：一包真的入庫完的三集，第二集的媒體庫檔案被刪掉了（M2 票 05）。對帳開出
