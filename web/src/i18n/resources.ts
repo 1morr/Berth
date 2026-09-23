@@ -511,6 +511,9 @@ const zhHant = {
     showAll_one: '全部 {{count}} 項',
     showAll_other: '全部 {{count}} 項',
     showFewer: '收起',
+    // 媒體庫頁收起來的兩列（M2 票 14）：一行、就地展開。
+    carryOn_one: '接著看 {{count}} 項',
+    carryOn_other: '接著看 {{count}} 項',
     // 16:9 的那一塊：這裡沒有海報可說。
     noArt: '無圖',
     down: '問不到 Jellyfin，繼續觀看與下一集暫時看不到。',
@@ -2441,6 +2444,8 @@ const en: Translations<typeof zhHant> = {
     showAll_one: 'Show all {{count}}',
     showAll_other: 'Show all {{count}}',
     showFewer: 'Show fewer',
+    carryOn_one: 'Keep watching: {{count}}',
+    carryOn_other: 'Keep watching: {{count}}',
     noArt: 'NO ART',
     down: "Berth can't reach Jellyfin, so Continue watching and Next up are unavailable for now.",
     retry: 'Retry',

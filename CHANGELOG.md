@@ -571,6 +571,8 @@ Berth 入庫的作品照樣瀏覽得到。這六件事現在是 nightly e2e 的�
   要處理的事，所以一列一件事、列就是 `/review` 那一列（`review/ReviewItem.tsx`，兩頁同一個 import），就地核准、
   指派；清單下方一句連到 `/review`，說審核佇列裡還有幾件。後端 `GET /review?library=<Jellyfin 媒體庫 id>` 只回
   Route 指向它的 `plan` 與 `unmatched`，另帶 `queue_total`。
+- **媒體庫頁的繼續觀看與下一集收成一行「接著看 N 項」、就地展開**（M2 票 14，M1.5 critique P1）：兩列把 390px 上
+  的第一張卡推到 y=889，而這一頁的工作是瀏覽媒體庫。首頁的兩列照舊攤開。
 - **媒體庫牆上按名字找**（M2 票 14）：`GET /inventory/{id}?q=` 轉成 Jellyfin 的 `searchTerm`（名字裡的任一段、
   不分大小寫，12.1.0 實測），寫進網址 `?q=`；邊打邊搜、停手 500ms 才換網址（與探索頁同一個間隔），換網址用
   replace、回第 1 頁。搜不到時說搜了什麼，名字與類型年份各一條清除的路。

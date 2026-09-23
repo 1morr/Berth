@@ -1491,23 +1491,56 @@ describe('媒體庫頁', () => {
       return api.mock.calls.filter(([url]) => String(url).endsWith('/watching')).map(([url]) => url)
     }
 
-    it('第 1 頁、沒有篩選時畫這個媒體庫的兩列，在切換列與「還沒進 Jellyfin」之間', async () => {
+    /** 媒體庫頁的兩列收成的那一顆（M2 票 14）。 */
+    const findCarryOn = () => screen.findByRole('button', { name: /^接著看/ })
+
+    it('第 1 頁、沒有篩選時收成「接著看 N 項」一行，在切換列與「還沒進 Jellyfin」之間，就地展開兩列', async () => {
       const api = render({ [`GET ${WATCHING}`]: rows() })
       renderApp(`/library/${TV}`)
 
-      const next = await screen.findByRole('region', { name: '下一集' })
+      const toggle = await findCarryOn()
       await findTile('Alpha Show')
 
+      // 收著的時候只有這一行：牆的第一格不必等使用者捲過兩列（M1.5 critique P1）。
+      expect(toggle).toHaveAccessibleName('接著看 1 項')
+      expect(toggle).toHaveAttribute('aria-expanded', 'false')
+      expect(screen.queryByRole('region', { name: '下一集' })).not.toBeInTheDocument()
+      const switcher = screen.getByRole('navigation', { name: '媒體庫' })
+      expect(
+        switcher.compareDocumentPosition(toggle) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy()
+      expect(toggle.compareDocumentPosition(band()) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+
+      await userEvent.click(toggle)
+
+      expect(toggle).toHaveAttribute('aria-expanded', 'true')
+      const next = screen.getByRole('region', { name: '下一集' })
+      expect(toggle).toHaveAttribute('aria-controls', next.parentElement?.id)
       expect(
         within(next).getByRole('link', { name: /^Alpha Show S01E02 The Second One/ }),
       ).toHaveAttribute('href', `http://localhost:8096/web/#/details?id=${EPISODE}`)
       // 沒有內容的繼續觀看那一列不畫。
       expect(screen.queryByRole('region', { name: '繼續觀看' })).not.toBeInTheDocument()
-      const switcher = screen.getByRole('navigation', { name: '媒體庫' })
-      expect(switcher.compareDocumentPosition(next) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
       expect(next.compareDocumentPosition(band()) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-      // 問的是這個媒體庫的那一支，不是首頁那一支。
+      // 問的是這個媒體庫的那一支，不是首頁那一支；展開不重問。
       expect(asked(api)).toEqual([WATCHING])
+
+      await userEvent.click(toggle)
+      expect(screen.queryByRole('region', { name: '下一集' })).not.toBeInTheDocument()
+    })
+
+    it('兩列都空時連那一行都不畫', async () => {
+      const api = render({
+        [`GET ${WATCHING}`]: {
+          body: { ...(rows().body as Watching), next_up: [] } satisfies Watching,
+        },
+      })
+      renderApp(`/library/${TV}`)
+      await findTile('Alpha Show')
+      await waitFor(() => expect(asked(api)).toEqual([WATCHING]))
+      await new Promise((resolve) => setTimeout(resolve, 0))
+
+      expect(screen.queryByRole('button', { name: /^接著看/ })).not.toBeInTheDocument()
     })
 
     it.each([
@@ -1529,7 +1562,7 @@ describe('媒體庫頁', () => {
 
       await findTile(shown)
 
-      expect(screen.queryByRole('region', { name: '下一集' })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /^接著看/ })).not.toBeInTheDocument()
       expect(asked(api)).toEqual([])
     })
 
@@ -1542,11 +1575,11 @@ describe('媒體庫頁', () => {
 
       await screen.findByText('這個媒體庫沒有待審核的下載。')
 
-      expect(screen.queryByRole('region', { name: '下一集' })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /^接著看/ })).not.toBeInTheDocument()
       expect(asked(api)).toEqual([])
     })
 
-    it('讀取中照這個媒體庫上一次的形狀佔位，讀到之後換成真的那一列（票 13：CLS）', async () => {
+    it('讀取中照這個媒體庫上一次的形狀佔一行，讀到之後換成真的那一顆（票 13：CLS）', async () => {
       const key = `berth.watching.skipper.library.${TV}`
       localStorage.setItem(key, JSON.stringify({ resume: 0, nextUp: 1 }))
       let answer: (response: Response) => void = () => {}
@@ -1560,11 +1593,11 @@ describe('媒體庫頁', () => {
       await findTile('Alpha Show')
 
       expect(document.querySelectorAll('[data-placeholder="watching"]')).toHaveLength(1)
-      expect(screen.queryByRole('region', { name: '下一集' })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /^接著看/ })).not.toBeInTheDocument()
 
       answer(new Response(JSON.stringify(rows().body)))
 
-      expect(await screen.findByRole('region', { name: '下一集' })).toBeInTheDocument()
+      expect(await findCarryOn()).toBeInTheDocument()
       expect(document.querySelectorAll('[data-placeholder="watching"]')).toHaveLength(0)
       localStorage.clear()
     })
@@ -1603,7 +1636,7 @@ describe('媒體庫頁', () => {
       })
       renderApp(`/library/${TV}?sort=CommunityRating`)
 
-      expect(await screen.findByRole('region', { name: '下一集' })).toBeInTheDocument()
+      expect(await findCarryOn()).toBeInTheDocument()
     })
 
     it('媒體庫不在允許清單上時兩列不畫，由牆說找不到', async () => {
@@ -1620,7 +1653,7 @@ describe('媒體庫頁', () => {
       renderApp(`/library/${TV}`)
 
       expect(await screen.findByText(/找不到這個媒體庫/)).toBeVisible()
-      expect(screen.queryByRole('region', { name: '下一集' })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /^接著看/ })).not.toBeInTheDocument()
     })
 
     it('在牆上標為已看之後兩列不當場重問：它們一換，牆就在指標底下移動', async () => {
@@ -1633,6 +1666,7 @@ describe('媒體庫頁', () => {
         },
       })
       renderApp(`/library/${TV}`)
+      await userEvent.click(await findCarryOn())
       await screen.findByRole('region', { name: '下一集' })
       expect(asked(api)).toHaveLength(1)
 

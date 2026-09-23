@@ -550,6 +550,8 @@ describe('首頁上方的繼續觀看與下一集（M1.5 票 07）', () => {
 
     const resume = await screen.findByRole('region', { name: '繼續觀看' })
     const next = screen.getByRole('region', { name: '下一集' })
+    // 首頁的兩列直接攤開（brief §11.2b 拍板過的位置）；收成「接著看 N 項」的只有媒體庫頁（M2 票 14）。
+    expect(screen.queryByRole('button', { name: /^接著看/ })).not.toBeInTheDocument()
     // 探索牆照舊。
     expect(await screen.findByRole('region', { name: '本週趨勢' })).toBeInTheDocument()
     // 兩列在搜尋列之前：打字時輸入框不會因為兩列收起而往上跳。

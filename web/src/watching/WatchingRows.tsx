@@ -12,7 +12,7 @@ import {
   type WatchingCard,
 } from '../api/watching'
 import { ArtSlot } from '../components/ArtSlot'
-import { COMPACT_BUTTON, GhostButton } from '../components/controls'
+import { COMPACT_BUTTON, GhostButton, NAV_BOX } from '../components/controls'
 import { Dot } from '../components/Dot'
 import { formatJellyfinEpisode } from '../components/episodes'
 import { KIND_CODE } from '../components/kind'
@@ -56,14 +56,71 @@ export function HomeWatching() {
 }
 
 /**
- * 媒體庫頁上方的兩列：只含這個媒體庫的。拒絕與錯誤一律不畫——牆那一塊會說原因，同一件事不說兩次。
+ * 媒體庫頁上方的兩列：只含這個媒體庫的，**收成一行「接著看 N 項」、就地展開**（M2 票 14，2026-09-22 拍板的
+ * 二選一；M1.5 critique P1：兩列把 390px 上的第一張卡推到 y=889，而這一頁的工作是瀏覽媒體庫）。首頁不收：
+ * 那裡的兩列本來就是主角（plan §11.2b）。
+ *
+ * 拒絕與錯誤一律不畫——牆那一塊會說原因，同一件事不說兩次。
  */
 export function LibraryWatching({ libraryId }: { libraryId: string }) {
   const watching = useQuery(libraryWatchingQueryOptions(libraryId))
   const shape = useRememberedRows(`library.${libraryId}`, watching.data)
 
-  if (watching.data) return <WatchingRows watching={watching.data} />
-  return watching.isPending ? <WatchingPlaceholder shape={shape} /> : null
+  if (watching.data) return <CarryOn watching={watching.data} />
+  return watching.isPending ? <CarryOnPlaceholder shape={shape} /> : null
+}
+
+/** 「接著看 N 項」那一顆。開關的樣子同媒體庫篩選列的類型、年份開關（`NAV_BOX` 小一號）。 */
+const CARRY_ON = `${NAV_BOX} inline-flex min-h-6 items-center gap-2 px-3 py-1.5 text-ink`
+
+/**
+ * 開關的慣例同 `WatchingRow` 的「全部 N 項」（watching-shape）：`aria-expanded`；展開才畫那兩列，`aria-controls`
+ * 也只在那時指向它們；換頁面不記住。兩列都空時整行不畫。
+ */
+function CarryOn({ watching }: { watching: Watching }) {
+  const { t } = useTranslation()
+  const panel = useId()
+  const [expanded, setExpanded] = useState(false)
+  const count = watching.resume.length + watching.next_up.length
+  if (count === 0) return null
+
+  return (
+    <div className="grid gap-6">
+      <p>
+        <button
+          type="button"
+          aria-expanded={expanded}
+          aria-controls={expanded ? panel : undefined}
+          onClick={() => setExpanded(!expanded)}
+          className={CARRY_ON}
+        >
+          <span>{t('watching.carryOn', { count })}</span>
+          {/* 看得見的展開狀態；聽得見的是 `aria-expanded`。 */}
+          <span aria-hidden="true" className="text-ink-dim">
+            {expanded ? t('common.collapse') : t('common.expand')}
+          </span>
+        </button>
+      </p>
+      {expanded && (
+        <div id={panel} className="grid gap-6">
+          <WatchingRows watching={watching} />
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** 讀取中：上一次有東西可接著看，就先佔那一行的高度（票 13 的 CLS 同一個理由）；第一次來不佔。 */
+function CarryOnPlaceholder({ shape }: { shape: RowShape | null }) {
+  const { t } = useTranslation()
+  const count = shape ? shape.resume + shape.nextUp : 0
+  if (count === 0) return null
+
+  return (
+    <p aria-hidden="true" data-placeholder="watching">
+      <span className={`${CARRY_ON} invisible`}>{t('watching.carryOn', { count })}</span>
+    </p>
+  )
 }
 
 /**
