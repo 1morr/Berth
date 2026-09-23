@@ -12,8 +12,8 @@ library-browsing.md §2、§9）。所以「這個人看得到什麼」由 Berth
   票 06）都走這一道。排序鍵不在這種媒體庫的選單上也在這裡拒絕（`SortNotOfferedError`）。
 - **繼續觀看與下一集**（`resume` / `next_up`，票 07）：首頁要的是整個帳號，**不帶 `parentId`**——
   Jellyfin 只在不帶的時候照這個人的媒體庫限縮；媒體庫頁的 id 同樣先驗過才帶。
-- **允許清單與 `Policy` 同一份短時間快取**（`AccessCache`）。帳號被停用就結束這個人的每一張
-  Berth session，而不是縮短 session 的效期（brief §19）。
+- **允許清單與 `Policy` 同一份短時間快取**（`AccessCache`）。帳號被停用或刪除（M2 票 11）就結束
+  這個人的每一張 Berth session，而不是縮短 session 的效期（brief §19）。
 - **寫入只有標記已看 / 未看**（`JellyfinAccess.mark_played`，票 05）。它不先查可見性：
   `UserPlayedItems` 自己查，看不到的回 404 而且沒有寫入（研究 §5 的原始碼；12.1.0 打完立刻讀回，
   研究 §2 的表）。
@@ -128,7 +128,7 @@ class WallQuery:
 
 
 class AccountDisabledError(Exception):
-    """這個人的 Jellyfin 帳號被停用了。
+    """這個人的 Jellyfin 帳號被停用或刪除了（刪除與停用同一種處置，M2 票 11）。
 
     丟出之前，他在 Berth 的每一張 session 都已經刪掉並 commit。
     """
@@ -410,8 +410,20 @@ async def _grant(
 ) -> tuple[BrowsableLibrary, ...]:
     with reachable():
         policy, views = await asyncio.gather(
-            client.user_policy(user.jellyfin_user_id), client.user_views(user.jellyfin_user_id)
+            client.user_policy(user.jellyfin_user_id),
+            client.user_views(user.jellyfin_user_id),
+            return_exceptions=True,
         )
+        # **只有 `Users/{id}` 的 404 算「帳號被刪掉」**（M2 票 11 實測）：刪掉的帳號 `UserViews`
+        # 也是 404，但那一支的 404 也可能是位址設錯，不該拿它把人登出。與停用同一種處置
+        # （使用者拍板）——當成「問不到」的話 session 會活到期滿，畫面一直說 Jellyfin 連不上。
+        if isinstance(policy, NotFoundError):
+            await end_sessions(session, user.id)
+            raise AccountDisabledError("this Jellyfin account is gone")
+        if isinstance(policy, BaseException):
+            raise policy
+        if isinstance(views, BaseException):
+            raise views
     if policy.is_disabled:
         await end_sessions(session, user.id)
         raise AccountDisabledError("this Jellyfin account is disabled")

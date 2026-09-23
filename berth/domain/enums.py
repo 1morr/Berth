@@ -968,7 +968,7 @@ class AccessRefusal(StrEnum):
     是答案不是故障**，所以前端拿到它就不重試（`retryUnlessRefused`）。
     """
 
-    #: 帳號在 Jellyfin 被停用；Berth 已經刪掉他的每一張 session。
+    #: 帳號在 Jellyfin 被停用或刪除（M2 票 11）；Berth 已經刪掉他的每一張 session。
     ACCOUNT_DISABLED = "account_disabled"
     #: 這位使用者看不到這個媒體庫。**沒有權限與不存在是同一個回應。**
     LIBRARY_NOT_VISIBLE = "library_not_visible"

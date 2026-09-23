@@ -545,17 +545,19 @@ class Fixtures:
 # --- 建置 ----------------------------------------------------------------------
 
 
-def create_library(srv: Server, admin: Credential, name: str, collection_type: str) -> None:
+def create_library(
+    srv: Server, admin: Credential, name: str, collection_type: str, path: str | None = None
+) -> None:
     """關掉所有網路 fetcher：metadata 只來自 NFO，圖只來自資料夾裡的 jpg（`Title.art`）。
 
     `TypeOptions` 列出型別而 fetcher 清單留空 = 那個型別一個 fetcher 都不開；
-    整個 `TypeOptions` 留空才是「用預設」（TMDB）。
+    整個 `TypeOptions` 留空才是「用預設」（TMDB）。`path` 預設是 `/media/<name>`。
     """
     no_fetchers: list[dict[str, Any]] = [
         {"Type": kind, "MetadataFetchers": [], "ImageFetchers": []}
         for kind in ("Series", "Season", "Episode", "Movie")
     ]
-    path = f"/media/{name.lower()}"
+    path = path if path is not None else f"/media/{name.lower()}"
     options = {
         "Enabled": True,
         "EnableRealtimeMonitor": False,

@@ -1,18 +1,20 @@
 # 實驗腳本
 
-M0 票 04、M1 票 01（brief §20.6）、M1 票 14d、M1.5 票 01 與 04 的實驗。**指令在根目錄的 [README](../../README.md#實驗腳本)**（那份是本專案
+M0 票 04、M1 票 01（brief §20.6）、M1 票 14d、M1.5 票 01 與 04、M2 票 09c 與 11 的實驗。**指令在根目錄的 [README](../../README.md#實驗腳本)**（那份是本專案
 指令的單一來源）；這裡寫的是每個腳本在回答什麼、為什麼這樣寫、有哪些坑。
 
 結論在 [`docs/research/m0-experiments.md`](../../docs/research/m0-experiments.md)、
 [`docs/research/anime-episode-source.md`](../../docs/research/anime-episode-source.md) 與
 [`docs/research/profile-effect.md`](../../docs/research/profile-effect.md) 與
-[`docs/research/library-browsing.md`](../../docs/research/library-browsing.md)，摘要進
+[`docs/research/library-browsing.md`](../../docs/research/library-browsing.md) 與
+[`docs/research/large-library.md`](../../docs/research/large-library.md)，摘要進
 brief §10 / §19 / §20.3 / §20.4 / §20.6 / §20.7 / §20.8。原始 JSON 落在 `.local/experiments/results/`（不進版控），
 stdout 是同一份東西的人類版（`absolute_rule_cost.py` 只印 stdout）。
 
 腳本只用 Python 標準庫，不 import `berth`，也不需要專案的虛擬環境 —— 這樣才能原封不動搬到 NAS
 或別人的 Linux 宿主上跑。**例外是 `absolute_rule_cost.py` 與 `jellyfin_images.py`**：它們量的就是 Berth
-自己的解析器與圖片代理，搬到別台機器上跑沒有意義，所以 import `berth`、要用 `uv run` 跑。唯一的宿主相依是 `make_media.py` 會呼叫 `docker`（借 Jellyfin image 的
+自己的解析器與圖片代理，搬到別台機器上跑沒有意義，所以 import `berth`、要用 `uv run` 跑（`large_library_berth.py`
+也 import `berth`，但它跑在 Berth 自己 build 出來的 image 裡，宿主不需要虛擬環境）。唯一的宿主相依是 `make_media.py` 會呼叫 `docker`（借 Jellyfin image 的
 ffmpeg 產種子檔），那只影響「造測試素材」這一步，不影響 `hardlink.sh` 的可攜性。
 
 ## 每個檔案在做什麼
@@ -33,6 +35,8 @@ ffmpeg 產種子檔），那只影響「造測試素材」這一步，不影響 
 | `absolute_rule_cost.py` | M1 票 14d：「集號 ≤ 第一季集數就送審核」擋下的是對的多還是錯的多，以及「標題有認不出的多餘字」分不分得開。正解借 `anime_episode_source.py` 的校準，Berth 的讀法是把每筆 Mikan 發佈丟進 `plan`。只印 stdout |
 | `jellyfin_permissions.py` | M1.5 票 01：伺服器 API key 代讀某位使用者時，Jellyfin 哪些端點套用他的媒體庫權限（研究 §2 的表逐列，API key 與使用者 token 各一次）；`/Items` 的過濾、排序、分頁是不是真的有作用；由 TMDB id 找作品；Series / Season 標記遞迴；停用帳號。自己起停一次性容器，`--record` 重錄 `tests/fixtures/http/jellyfin/` 的權限 fixture，也錄媒體庫牆、排序篩選與繼續觀看 / 下一集（票 03–07）、Media 詳情觀看區（由 TMDB id 找作品、`/Items/{id}`、這部劇的下一集，票 08）的回應 |
 | `jellyfin_images.py` | M1.5 票 04：Jellyfin 的圖經 Berth 代理要不要在 Berth 端另存一份。縮圖參數與格式協商、Jellyfin 自己的縮圖快取（冷熱延遲）、6 條並行下直連與經過 Berth（`berth serve` 子程序）各多少毫秒。自己起停一次性容器 |
+| `large_library.py` | M2 票 11：1,000 部 × 12 集的媒體庫上，`GET /inventory/{id}` 的 p95 與對帳一輪各多久（plan §11.3 決定 2 的門檻），加上票上五件（整份清單、不帶 `parentId` 的 TMDB 反查、整份 `MediaSources`、篩選後的牆帶觀看狀態、被刪掉的帳號）。宿主那一半：起停 network、三個 volume、Jellyfin、qBittorrent 與 Berth 的 image |
+| `large_library_berth.py` | 上一支在 Berth 的 image 裡跑的那一半：`tree` 造媒體樹，`measure` 灌觀看紀錄、1,000 個 torrent、Berth 的資料庫之後分段量 |
 | `lib.py` | 共用的 HTTP、輪詢、bencode、報告輸出 |
 
 ## 幾個不明顯的地方
@@ -88,3 +92,15 @@ ffmpeg 產種子檔），那只影響「造測試素材」這一步，不影響 
   `POST /api/auth/login`（對一次性 Jellyfin 的管理員）。海報是 ffmpeg `testsrc2` 加雜訊的 1000×1500 JPEG：純色圖幾 KB，
   縮圖的大小與時間都會失真。
 - **觀看紀錄要在縮權之前寫**：縮權之後 API key 也寫不進沒權限的媒體庫（那正是要量的一列）。
+- **`large_library.py` 的 Berth 一定要跑在容器裡**：帳本的路徑要與 Jellyfin 回報的 `Path` 一字不差（brief §20.1），
+  Windows 宿主上的 Berth 拿到的是 `C:\...`，反查與對帳會整份對不上。所以它 build `deploy/Dockerfile` 的 `backend`
+  那一層、把 `/data` volume 同時掛給 Jellyfin（唯讀）、qBittorrent 與 Berth，與正式部署同形。
+- **媒體樹不寫 NFO**：TMDB id 只從資料夾名的 `[tmdbid-N]` 來（網路 fetcher 全關），與 Berth 入庫的樣子相同；寫了
+  `tvshow.nfo` 的話它會被對帳當成媒體庫裡 Berth 不認得的檔案。每一集在 complete 裡各自一個 inode，媒體庫那一份是它的硬鏈接。
+- **`measure` 冪等**：`viewer` / `gone` 兩個帳號每次先刪再建，重複的 torrent 回 409 照樣算。所以 `--keep` 之後可以
+  `--reuse` 只重 build image 再量——改 Berth 的程式碼之後不必再等 6 分鐘的掃描。每一段量完就寫一次報告，只跑一部分時
+  報告檔名帶段名（`large-library-inventory.json`）。
+- **2026-09-23 這台機器（i9-13900HX）在長時間滿載下，Python 與 Jellyfin 的 .NET 都會隨機 segfault**（VM 核心 log
+  有 `segfault at 0 ip 0`、崩在 `libpython` 與 `libc`，沒有 OOM）。所以容器裡的 Python 帶 `-X faulthandler`，
+  Jellyfin 被 s6 無聲拉起來的次數由宿主數 `docker logs` 裡的 `Startup complete` 寫進報告，斷線的請求重打一次、不計入延遲。
+  在別台機器上重量時先看 `jellyfin_startups` 是不是 1、`dropped_connections` 是不是空的。

@@ -20,7 +20,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from berth.adapters.http import ServiceUnavailableError
+from berth.adapters.http import ProtocolMismatchError, ServiceUnavailableError
 from berth.adapters.jellyfin import (
     ITEM_EPISODE,
     ITEM_MOVIE,
@@ -29,6 +29,7 @@ from berth.adapters.jellyfin import (
     JellyfinItem,
     JellyfinLibrary,
     JellyfinUserData,
+    JellyfinView,
 )
 from berth.adapters.jellyfin.fake import FakeJellyfinClient, ItemMetadata
 from berth.domain import LibrarySort, MediaKind, SortOrder
@@ -326,6 +327,48 @@ class TestAccountState:
         assert await read_session(session, laptop) is None
         assert await read_session(session, admin) is not None
         assert jellyfin.browse_queries == []
+
+    async def test_a_deleted_account_is_handled_like_a_disabled_one(
+        self,
+        session: AsyncSession,
+        factory: FakeClientFactory,
+        jellyfin: FakeJellyfinClient,
+        cache: AccessCache,
+    ) -> None:
+        """刪掉的帳號 Jellyfin 回 404（M2 票 11 實測），不是「問不到 Jellyfin」：那樣的話
+        session 會活到 30 天期滿，而畫面一直說 Jellyfin 連不上（使用者拍板與停用同一種處置）。"""
+        user, phone = await signed_in(session, factory, "deckhand", "rope")
+        _, admin = await signed_in(session, factory, "skipper", "harbour")
+        del jellyfin.users["deckhand"]
+
+        with pytest.raises(AccountDisabledError):
+            async with jellyfin_access(session, factory, cache, user):
+                pytest.fail("a deleted account must not get through")
+
+        assert await read_session(session, phone) is None
+        assert await read_session(session, admin) is not None
+        assert jellyfin.browse_queries == []
+
+    async def test_a_user_views_404_alone_is_jellyfin_not_answering_not_a_deleted_account(
+        self,
+        session: AsyncSession,
+        factory: FakeClientFactory,
+        jellyfin: FakeJellyfinClient,
+        cache: AccessCache,
+    ) -> None:
+        """`UserViews` 的 404 可能是位址設錯：只有 `Users/{id}` 的 404 才把人登出。"""
+        user, phone = await signed_in(session, factory, "deckhand", "rope")
+
+        async def refused(user_id: str) -> tuple[JellyfinView, ...]:
+            raise ProtocolMismatchError("GET /UserViews: 404")
+
+        jellyfin.user_views = refused  # type: ignore[method-assign]  # 只有這一支答不出來
+
+        with pytest.raises(JellyfinUnreachableError):
+            async with jellyfin_access(session, factory, cache, user):
+                pytest.fail("an unanswered allow list must not get through")
+
+        assert await read_session(session, phone) is not None
 
     async def test_the_answer_is_kept_for_a_short_while_then_asked_again(
         self,

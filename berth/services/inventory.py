@@ -540,18 +540,22 @@ async def _survey(
                 entries[entry.id] = entry
     flagged = await _unmatched_jobs(session, [job.hash for job in jobs])
     audits = await _audits(session, [job.hash for job in jobs])
-    media_ids = {job.media_id for job in jobs if job.media_id is not None} | {
-        entry.media_id for entry in entries.values() if entry.media_id is not None
-    }
-    titles = await session.scalars(select(Media).where(Media.id.in_(media_ids)))
+    # **先分組、一次走完**：逐部作品去篩整張帳本是作品數 × 帳本列數，1,000 部 × 12 集在
+    # 容器裡要 3 秒，一頁牆超過門檻的就是它（M2 票 11，研究 large-library.md）。
+    jobs_of: dict[str, list[Job]] = {}
+    for job in jobs:
+        if job.media_id is not None:
+            jobs_of.setdefault(job.media_id, []).append(job)
+    entries_of: dict[str, list[LedgerEntry]] = {}
+    for entry in sorted(entries.values(), key=lambda entry: entry.id):
+        if entry.media_id is not None:
+            entries_of.setdefault(entry.media_id, []).append(entry)
+    titles = await session.scalars(select(Media).where(Media.id.in_(jobs_of.keys() | entries_of)))
     return [
         _tracked(
             media,
-            [job for job in jobs if job.media_id == media.id],
-            sorted(
-                (entry for entry in entries.values() if entry.media_id == media.id),
-                key=lambda entry: entry.id,
-            ),
+            jobs_of.get(media.id, []),
+            entries_of.get(media.id, []),
             flagged=flagged,
             audits=audits,
             today=today,

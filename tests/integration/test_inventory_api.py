@@ -266,6 +266,18 @@ class TestPermissions:
         assert client.get("/api/auth/me").status_code == 401
         assert client.get("/api/jobs").status_code == 401
 
+    def test_a_deleted_account_is_signed_out_like_a_disabled_one(
+        self, client: TestClient, jellyfin: FakeJellyfinClient
+    ) -> None:
+        sign_in(client, CREW)
+        del jellyfin.users[CREW["username"]]
+
+        ended = client.get("/api/inventory")
+
+        assert ended.status_code == 401
+        assert ended.json()["detail"]["reason"] == "account_disabled"
+        assert client.get("/api/auth/me").status_code == 401
+
     def test_disabling_catches_up_once_the_short_cache_runs_out(
         self, client: TestClient, jellyfin: FakeJellyfinClient
     ) -> None:

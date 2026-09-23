@@ -1362,6 +1362,22 @@ async def test_jellyfin_policy_says_whether_the_account_is_disabled(
     assert policy.is_disabled is disabled
 
 
+@respx.mock
+@pytest.mark.asyncio
+async def test_a_deleted_jellyfin_account_is_not_found_rather_than_a_different_service() -> None:
+    """被刪掉的帳號：`Users/{id}` 回 404 `"User not found"`（12.1.0 實測，M2 票 11，研究
+    large-library.md §4）。不是「連到了別的服務」——閘門要分得出它才能把人登出
+    （`jellyfin_access._grant`）。"""
+    respx.get(f"{JELLYFIN_URL}/Users/{RESTRICTED_USER}").respond(404, text='"User not found"')
+
+    client = jellyfin_client("key")
+    try:
+        with pytest.raises(NotFoundError):
+            await client.user_policy(RESTRICTED_USER)
+    finally:
+        await client.aclose()
+
+
 #: `items.tv.series.userdata.json` 錄製時的查詢（jellyfin-web 劇集庫的參數，研究 §7），
 #: 扣掉分頁那兩格。
 WALL_QUERY = {

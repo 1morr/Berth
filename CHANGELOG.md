@@ -558,6 +558,10 @@ Berth 入庫的作品照樣瀏覽得到。這六件事現在是 nightly e2e 的�
   不留一個送出去一定被擋下來的勾。版本清單上的刪除掛在**每一個版本**上（`VersionOut` 多帶
   `job_hash`）：多版本並存時要拿掉的是其中一個。
 
+- **大媒體庫量測腳本**（M2 票 11）：`scripts/experiments/large_library.py` 自己 build Berth 的 image、起一次性的
+  Jellyfin 12.1 與 qBittorrent 5.2、造 1,000 部 × 12 集，量 `GET /inventory/{id}` 的 p95、對帳一輪與票上五件，
+  量完全部拆掉；`--keep` / `--reuse` / `--stages` 讓改了 Berth 之後只重量那一段。
+
 ### Changed
 
 - **帳本以來源冪等**（M2 票 10）：importer 先以目標路徑、再以「同一筆 Job 的同一個來源」找那一列帳本。
@@ -908,6 +912,14 @@ Berth 入庫的作品照樣瀏覽得到。這六件事現在是 nightly e2e 的�
 - **壞掉的海報不再露出瀏覽器的破圖示**（M1.5 票 11 的 critique 與 audit）。票 04 做的 `ArtSlot`（載入失敗換成「無海報」）只被媒體庫牆用到，探索牆的卡片與 Media 詳情的身份帶各留了一份沒有 `onError` 的舊 `<img>`；兩處都改走同一份。圖片代理對沒有的圖回 404，所以這條路徑是走得到的。
 - **卡片裡的就地確認不再把整排牆撐高**（M1.5 票 11 的 critique）。牆是 CSS grid 而格子預設 `stretch`，所以展開確認時同排的每一格都被拉成一樣高——390px 上量到同排多出約 300px 空白，而位移正好發生在使用者要決定一個清掉就回不來的動作時。`WALL_GRID` 加 `items-start`，只有展開的那一格自己長高。
 - **標為已看 / 未看成功之後說得出來**（M1.5 票 11 的 audit）。失敗本來就有 `role="alert"`，成功只有「元素自己變了」；焦點這時已經回到那顆鍵上而它的名字剛換過，螢幕閱讀器不會重念，所以寫入成功對輔助技術是無聲的（WCAG 2.1.3）。旁邊補一個 `aria-live` 的 `sr-only` 段落。
+
+- **Jellyfin 帳號被刪掉之後不再卡在「問不到 Jellyfin」**（M2 票 11 實測）：刪除的帳號 `GET /Users/{id}` 回 404，
+  原本被當成協定不符、一路翻成 503 `jellyfin_unreachable`，session 活到 30 天期滿。現在與停用
+  同一種處置：刪掉他的每一張 session、回 401 `account_disabled`（前端照「登入失效」處理，介面不變）。
+  只認 `Users/{id}` 的 404——`UserViews` 的 404 可能是位址設錯，仍是「問不到」。
+- **1,000 部的媒體庫上 `GET /inventory/{id}` 從 3.4 s 降到 0.66–0.68 s**（M2 票 11，plan §11.3 決定 2 的門檻是 1 s）：
+  `_survey` 對每一部作品把整張帳本與 Job 各篩一次（1,000 × 13,000），改成先按作品分組、一次走完。不是 Jellyfin
+  回太多，所以沒有做分段取，也沒有加快取（`docs/research/large-library.md`）。
 
 ### Security
 

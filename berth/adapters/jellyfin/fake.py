@@ -18,6 +18,7 @@
 - **牆真的照 `sortBy` 排、照 `genres` / `years` 篩**（研究 §3.1）：沒有值的排在升冪最前，`sortOrder`
   套在每一個鍵上。類型與排序用的值擺在 `metadata`（`ItemMetadata`）。
 - **停用的帳號照樣代讀得到**：`user_views` 不看停用，只有 `user_policy` 說得出來（同上）。
+  **刪掉的帳號**（從 `users` 拿掉）在 `user_policy` 是 `NotFoundError`（M2 票 11）。
 - **圖片匿名可取、`tag` 不驗證**（研究 §6）：`image` 不要 token，錯的 tag 一樣回圖。
 - **繼續觀看與下一集不帶 `parentId` 時照使用者的權限限縮，帶了就不限縮**（研究 §2，M1.5 票 07）。
   替身沒有觀看日期：繼續觀看照 `positions` 寫入的順序、後寫的在前；下一集照劇在 `items` 的順序，
@@ -376,7 +377,12 @@ class FakeJellyfinClient:
     async def user_policy(self, user_id: str) -> JellyfinPolicy:
         self._checkpoint(always=True)
         self.policy_queries.append(user_id)
-        return JellyfinPolicy(is_disabled=self._username(user_id) in self.disabled)
+        name = self._account(user_id)
+        if name is None:
+            # 被刪掉的帳號（測試從 `users` 拿掉他）在真的 Jellyfin 是 404，client 翻成
+            # `NotFoundError`（M2 票 11 實測）。其餘端點照舊是協定不符（`_username`）。
+            raise NotFoundError(f"GET /Users/{user_id}: not found for this user")
+        return JellyfinPolicy(is_disabled=name in self.disabled)
 
     async def library_page(
         self,

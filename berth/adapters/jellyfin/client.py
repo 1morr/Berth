@@ -263,7 +263,8 @@ class HttpJellyfinClient:
         )
 
     async def user_policy(self, user_id: str) -> JellyfinPolicy:
-        payload = await self._get(f"/Users/{user_id}")
+        # 帳號被刪掉之後是 404 `"User not found"`（12.1.0 實測，M2 票 11），不是「連到了別的服務」。
+        payload = await self._found(f"/Users/{user_id}")
         policy = payload.get("Policy") if isinstance(payload, dict) else None
         if not isinstance(policy, dict):
             raise ProtocolMismatchError("/Users/{id}: no Policy in the response")
@@ -468,7 +469,7 @@ class HttpJellyfinClient:
         response = await self._session.request("GET", path, params=params)
         return json_body(response)
 
-    async def _found(self, path: str, *, params: dict[str, str]) -> Any:
+    async def _found(self, path: str, *, params: dict[str, str] | None = None) -> Any:
         """看不到（或沒有）的東西 Jellyfin 回 404，body 可能是 problem details 也可能是一個 JSON
         字串（`"Series not found"`，研究 §2），所以只看狀態碼。"""
         response = await self._session.request("GET", path, params=params, tolerate=(404,))

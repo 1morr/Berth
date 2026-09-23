@@ -492,6 +492,18 @@ Jellyfin 的圖經 Berth 代理要不要另存一份（M1.5 票 04）：同樣�
 uv run python scripts/experiments/jellyfin_images.py   # 報告寫到 .local/experiments/results/jellyfin-images.json
 ```
 
+1,000 部的媒體庫上量 Berth（M2 票 11，plan §11.3 決定 2 的門檻）：自己 build Berth 的 image（只有 backend 那一層）、
+起一次性的 Jellyfin 與 qBittorrent、造 1,000 部 × 12 集的媒體樹（掃描約 6 分鐘），量完連容器、volume、network、image
+一起刪。宿主只要 Python 標準庫與 docker；量測本身在 Berth 的 image 裡跑。結果見
+[`docs/research/large-library.md`](docs/research/large-library.md)：
+
+```bash
+python scripts/experiments/large_library.py                  # 報告寫到 .local/experiments/results/large-library*.json
+python scripts/experiments/large_library.py --series 30      # 先小規模跑通
+python scripts/experiments/large_library.py --keep           # 留著環境；改了 Berth 之後用下一行只重 build 與重量
+python scripts/experiments/large_library.py --reuse --keep --stages inventory   # 段落：jellyfin,inventory,reconcile
+```
+
 `jellyfin_naming.py` 必須從乾淨的 `/config` 跑（Jellyfin 的 DB 會留住舊掃描結果，插件裝過
 就在了，量不到「未裝插件」的基準）：
 
