@@ -28,6 +28,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import re
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path, PurePosixPath
 
@@ -309,7 +310,7 @@ async def claim_file(
     factory: ServiceClientFactory,
     path: Path,
     *,
-    index: dict[tuple[int, int], Path] | None = None,
+    index: SourceIndex | None = None,
     now: datetime | None = None,
     actor: str = "system",
 ) -> LedgerEntry:
@@ -330,7 +331,7 @@ async def claim_file(
     except OSError:
         raise UnclaimedError(ClaimMiss.NO_SOURCE, path) from None
     lookup = index if index is not None else await source_index(session)
-    source = lookup.get((placed.device, placed.inode))
+    source = lookup.by_inode.get((placed.device, placed.inode))
     if source is None:
         raise UnclaimedError(ClaimMiss.NO_SOURCE, path)
 
@@ -380,19 +381,30 @@ async def claim_file(
     return entry
 
 
-async def source_index(session: AsyncSession) -> dict[tuple[int, int], Path]:
+@dataclass(slots=True)
+class SourceIndex:
+    """complete 裡的來源，以 `(device, inode)` 為鍵，加上這一次沒讀到的那幾條子目錄。"""
+
+    by_inode: dict[tuple[int, int], Path] = field(default_factory=dict)
+    #: 讀不到的 complete 子目錄（原文）。不是空的時候，配不到來源說的就不是「它沒有來源」，
+    #: 而是「問不到」——brief §16.2 的「問不到不算不見了」。
+    unread: list[str] = field(default_factory=list)
+
+
+async def source_index(session: AsyncSession) -> SourceIndex:
     """complete 裡每一條 Route 子目錄底下的每一個檔案，以 `(device, inode)` 為鍵。
 
     只看 Route 的子目錄，與對帳的 `orphan_complete` 同一個範圍（`services/complete`）：complete
-    root 可能與 Sonarr 共用，別人 category 底下的檔案不是 Berth 的來源。讀不到的子目錄略過——
-    在它底下的來源配不到，那幾個檔案就是配不上，不是猜一個。
+    root 可能與 Sonarr 共用，別人 category 底下的檔案不是 Berth 的來源。讀不到的子目錄記在
+    `unread`：在它底下的來源配不到，呼叫端要分得出那是問不到而不是沒有。
     """
-    found: dict[tuple[int, int], Path] = {}
+    index = SourceIndex()
     for folder in await complete.route_folders(session):
         try:
             files = fs.files_under(folder) if folder.is_dir() else []
-        except OSError:
+        except OSError as exc:
             logger.warning("a complete folder could not be read", extra={"path": str(folder)})
+            index.unread.append(f"{folder}: {exc}")
             continue
         for path in files:
             try:
@@ -400,8 +412,8 @@ async def source_index(session: AsyncSession) -> dict[tuple[int, int], Path]:
             except OSError:
                 # 走訪之後、量之前不見了（qBittorrent 正在搬、有人在刪）：這一個配不到，其餘照樣算。
                 continue
-            found.setdefault((facts.device, facts.inode), path)
-    return found
+            index.by_inode.setdefault((facts.device, facts.inode), path)
+    return index
 
 
 async def settle(

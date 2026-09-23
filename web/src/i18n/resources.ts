@@ -1571,7 +1571,7 @@ const zhHant = {
       delete_files_requires_remove_torrent:
         '要刪下載目錄裡的檔案，得同時從 qBittorrent 移除這個 torrent——否則它會在下一次重新檢查時把整包再抓一遍。',
       not_reimportable:
-        '這一筆現在不能重新入庫——它還在下載、規劃或入庫中。重新整理看看它現在的狀態。',
+        '這一筆現在不能重新入庫——它還在下載、規劃或入庫中，或者它從來沒有下載完（complete 裡只有殘件）。重新整理看看它現在的狀態。',
       content_missing:
         'complete 裡已經沒有這一包了（或裡面一個檔案都沒有），所以什麼都沒有動。要入庫就重新下載一次。',
     },
@@ -3382,7 +3382,7 @@ const en: Translations<typeof zhHant> = {
       delete_files_requires_remove_torrent:
         'To delete the downloaded files, remove the torrent from qBittorrent at the same time — otherwise it fetches the whole thing again on its next recheck.',
       not_reimportable:
-        'This one cannot be imported again right now — it is still downloading, planning or importing. Reload to see where it stands now.',
+        'This one cannot be imported again right now — it is still downloading, planning or importing, or it never finished downloading (complete holds only a partial copy). Reload to see where it stands now.',
       content_missing:
         'This download is no longer in complete (or it has no files left), so nothing was touched. Download it again to import it.',
     },

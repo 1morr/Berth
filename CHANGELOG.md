@@ -563,6 +563,16 @@ Berth 入庫的作品照樣瀏覽得到。這六件事現在是 nightly e2e 的�
 - **帳本以來源冪等**（M2 票 10）：importer 先以目標路徑、再以「同一筆 Job 的同一個來源」找那一列帳本。
   TMDB 改了集名之後重新入庫，那一列換到新的路徑、舊的那條鏈接（同 inode 才算自己的）被收掉，
   而不是多長一列、讓 Jellyfin 多一個同一集的版本。
+- **重新入庫把 Issue 收乾淨**（M2 票 10 後續）：importer 接回帳本某一列時，掛在那一列上的
+  `library_link_missing` / `source_missing` / `inode_mismatch` 由系統收掉（以 `ledger_id` 認，集名改了
+  也收得到）；入庫長回至少一列帳本時，那一筆的 `job_without_files` 一起收。規劃時帳本上來源就是這一包
+  自己檔案的那幾列不算另一個版本（`rebuild-ledger` 長回的無 Job 列曾讓自己被判成自己的重複）。
+- **選作品**（M2 票 10 後續）：搜尋框預填解析器從名字讀出的標題（`IssueOut.query`）、展開時焦點進搜尋框，
+  搜尋與探索頁共用 500ms 防抖（`useDebounced`）。`/jobs` 時間線上重新入庫那一格標「重新入庫」而不是「重試」。
+- **重新入庫要下載完過**（M2 票 10 後續）：`JobOut.reimportable` 與命令本身都要求 `completed_at`，
+  下載到一半就被移出 qBittorrent 的那一包不再按得下去。
+- **`rebuild-ledger` 在 complete 讀不到時不開 `no_source`**（M2 票 10 後續，brief §16.2）：印出
+  `unreadable complete` 與 `not decided` 兩行，離開碼 1。
 
 - **管線 Issue 的那一列以下載的名字認**（M2 票 09c）：`missing_files` / `client_error` / `client_removed` 的
   `detail` 多帶 `name`，清單上不再是一串 hash。時間線上 `retried` 那一筆分得出是哪一顆（重新校驗、重試、重新規劃），

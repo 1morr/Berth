@@ -40,7 +40,7 @@ from berth.services.claims import reimport_hash
 from berth.services.deletion import DeleteScope, delete_job
 from berth.services.events import EventHub
 from berth.services.importer import sweep_imports
-from berth.services.issues import IssueRejectedError, resolve_issue
+from berth.services.issues import IssueRejectedError, list_issues, resolve_issue
 from berth.services.ledger_rebuild import rebuild_ledger
 from berth.services.plan import sweep_plans
 from berth.services.reconcile import reconcile_once
@@ -49,10 +49,10 @@ from berth.services.settings import write_settings
 from tests.conftest import TMDB_API_KEY
 from tests.integration.factories import FakeClientFactory
 from tests.integration.test_deletion import LINKS, imported
-from tests.integration.test_importer import ledger_of, same_file
+from tests.integration.test_importer import ledger_of, same_file, state_of
 from tests.integration.test_issue_repairs import LATER
 from tests.integration.test_media import SPY_ID, tmdb
-from tests.integration.test_plan import NOW
+from tests.integration.test_plan import NOW, downloaded_job
 from tests.integration.test_reconcile import issues_of
 from tests.integration.test_reconcile_checks import open_of, torrent
 from tests.integration.test_reimport import wipe_library
@@ -221,6 +221,26 @@ class TestRebuildingTheLedger:
         assert {entry.target_path: entry.source_rel_path for entry in rebuilt} == written
         await nothing_left(session, factory)
 
+    async def test_a_row_grown_back_without_a_job_is_not_its_own_duplicate(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """Job 清掉之後長回來的無 Job 列，在同一包再回到管線時（認領 torrent 之後 poller 走到
+        下載完成）不能被當成「媒體庫裡已經有的另一個版本」：來源就是這一包自己的檔案。"""
+        job, route, factory = await imported(session, roots)
+        await delete_job(session, factory, job.hash, DeleteScope(purge=True), actor=ACTOR)
+        await rebuild_ledger(session, factory, now=NOW)
+        media = await session.get(Media, SPY_ID)
+        assert media is not None
+        again = await downloaded_job(session, media, route, roots)
+
+        await sweep_plans(session, factory, EventHub(), now=NOW)
+        await sweep_imports(session, factory, EventHub(), now=NOW)
+
+        assert await state_of(session, again) is JobState.IMPORTED
+        entries = await ledger_of(session)
+        assert len(entries) == LINKS
+        assert {entry.job_hash for entry in entries} == {again.hash}
+
     async def test_a_work_without_a_snapshot_is_fetched_before_reading(
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
@@ -259,6 +279,31 @@ class TestRebuildingTheLedger:
         report = await rebuild_ledger(session, factory, now=NOW)
 
         assert report.claimed == LINKS
+
+    async def test_an_unreadable_complete_lists_nothing_as_sourceless(
+        self, session: AsyncSession, roots: dict[str, Path], monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """complete 那一條子目錄讀不到（權限、掛載掉了）：問不到不算不見了（brief §16.2）。那一輪
+        說不出媒體庫裡哪個檔案沒有來源，所以一件 `no_source` 都不開，並說出是哪一條沒讀到。"""
+        _, _, factory = await imported(session, roots)
+        await forget_everything(session)
+        real = fs.files_under
+
+        def unreadable(folder: Path) -> list[Path]:
+            if folder.is_relative_to(roots["complete"]):
+                raise PermissionError(folder)
+            return real(folder)
+
+        monkeypatch.setattr(fs, "files_under", unreadable)
+
+        report = await rebuild_ledger(session, factory, now=NOW)
+
+        assert await open_of(session, IssueType.UNMANAGED_LIBRARY_FILE) == []
+        assert report.unmatched == {}
+        assert report.claimed == 0
+        assert report.undecided == LINKS
+        assert any(str(roots["complete"]) in line for line in report.unread_complete)
+        assert await ledger_of(session) == []
 
 
 class TestWhatIsNeverGuessed:
@@ -502,3 +547,46 @@ class TestClaimingAnUnknownTorrent:
         refusal = await refused(session, factory, issue, IssueAction.CLAIM_TORRENT, media=SPY_ID)
 
         assert refusal.reason is IssueRefusal.ACTION_NOT_AVAILABLE
+
+
+class TestWhereThePickerStarts:
+    """選作品的搜尋框預填解析器從名字讀出的標題（`IssueView.query`）：Berth 不猜作品，但要管理員
+    從頭打一次名字也不必。沒有選作品那兩顆的列是空字串。"""
+
+    async def test_an_orphan_folder_starts_from_the_title_in_its_name(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        _, route, factory = await imported(session, roots)
+        folder = roots["complete"] / route.slug / "[Old] SPY×FAMILY - 04 [1080P][CHT]"
+        folder.mkdir(parents=True)
+        (folder / "episode.mkv").write_bytes(b"left behind")
+        await reconcile_once(session, factory, now=NOW)
+
+        (view,) = [v for v in await list_issues(session) if v.type is IssueType.ORPHAN_COMPLETE]
+
+        assert view.query == "SPY×FAMILY"
+
+    async def test_an_unknown_torrent_starts_from_the_title_in_its_name(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        _, route, factory = await imported(session, roots)
+        factory.qbittorrent_.torrents = (
+            torrent(route, roots, "[Sub] SPY×FAMILY - 07 [1080P]", info_hash=UNKNOWN),
+        )
+        await reconcile_once(session, factory, now=NOW)
+
+        (view,) = [v for v in await list_issues(session) if v.type is IssueType.UNKNOWN_TORRENT]
+
+        assert view.query == "SPY×FAMILY"
+
+    async def test_a_row_without_a_picker_has_none(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        _, route, factory = await imported(session, roots)
+        hand_placed(route, "Hand Placed (2020)/Hand Placed (2020).mkv")
+        await reconcile_once(session, factory, now=NOW)
+
+        views = await list_issues(session)
+
+        assert [v.type for v in views] == [IssueType.UNMANAGED_LIBRARY_FILE]
+        assert views[0].query == ""

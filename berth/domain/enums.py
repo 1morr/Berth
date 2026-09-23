@@ -926,8 +926,9 @@ class JobRefusal(StrEnum):
     #: 檔案在 torrent 底下被抽走時 qBittorrent 會報 `missingFiles`，而它下一次重新檢查就把
     #: 那幾個檔案再抓一遍——刪了等於沒刪，只多繞了一圈流量。
     DELETE_FILES_REQUIRES_REMOVE_TORRENT = "delete_files_requires_remove_torrent"
-    #: 這個狀態不能重新入庫（`REIMPORTABLE`）：還在下載、還在規劃或入庫中的那一份不能從頭再來，
-    #: 而送單都還沒成的那一筆 complete 裡什麼都沒有（M2 票 10）。
+    #: 這一筆不能重新入庫（`services/jobs.reimportable`）：還在下載、還在規劃或入庫中的那一份不能
+    #: 從頭再來，送單都還沒成的那一筆 complete 裡什麼都沒有，沒下載完就被移除的那一筆 complete 裡
+    #: 只有殘件（M2 票 10）。
     NOT_REIMPORTABLE = "not_reimportable"
     #: 重新入庫的 Import Source（complete 裡那一包）不在了，或裡面一個檔案都沒有。
     #: 什麼都還沒動：沒有檔案可以規劃，退回 `completed` 只會得到一份空的 Plan（M2 票 10）。

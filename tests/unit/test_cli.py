@@ -218,3 +218,23 @@ class TestRebuildLedger:
         out = capsys.readouterr().out
         assert "already in the ledger: 0" in out
         assert "grown back: 0" in out
+
+    def test_an_unreadable_complete_is_not_a_clean_run(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """complete 有子目錄讀不到：那一輪說不出哪些檔案沒有來源，印出來並以 1 離開。"""
+        from berth import cli
+        from berth.services.ledger_rebuild import RebuildReport
+
+        async def unread(_config: object) -> RebuildReport:
+            return RebuildReport(unread_complete=["/downloads/complete/anime: denied"], undecided=3)
+
+        monkeypatch.setattr(cli, "_run_rebuild", unread)
+
+        assert main(["rebuild-ledger"]) == 1
+        out = capsys.readouterr().out
+        assert "unreadable complete: /downloads/complete/anime: denied" in out
+        assert "not decided (complete unreadable): 3" in out

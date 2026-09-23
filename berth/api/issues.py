@@ -130,6 +130,8 @@ class IssueOut(BaseModel):
     detected_at: datetime
     #: 這一列現在按得了哪幾顆，順序就是畫面上的順序。空的代表只剩「忽略」。
     actions: list[IssueAction]
+    #: 選作品的搜尋框預填這一串：名字裡解析器讀出的標題。沒有選作品那兩顆的列是空字串。
+    query: str
 
 
 class IssueResolveIn(BaseModel):
@@ -265,6 +267,7 @@ def issue_out(view: IssueView) -> IssueOut:
         status=view.status,
         detected_at=view.detected_at,
         actions=list(view.actions),
+        query=view.query,
     )
 
 

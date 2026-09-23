@@ -31,6 +31,7 @@ function issue(overrides: Partial<Issue> = {}): Issue {
     status: 'open',
     detected_at: '2026-09-22T04:00:00Z',
     actions: ['relink', 'forget', 'delete_complete'],
+    query: '',
     ...overrides,
   }
 }
@@ -461,6 +462,72 @@ describe('待處理頁', () => {
     expect(JSON.parse(String(init?.body))).toEqual({ action: 'adopt', media: 'tv:120089' })
   })
 
+  it('選作品從名字讀出的標題開始，焦點在搜尋框上', async () => {
+    const FOLDER = '/data/torrent/complete/anime/[Old] SPY×FAMILY - 04 [1080P][CHT]'
+    render({
+      [ISSUES]: {
+        body: [
+          issue({
+            type: 'orphan_complete',
+            subject: FOLDER,
+            path: FOLDER,
+            job_hash: '',
+            ledger_id: null,
+            detail: { folder: true },
+            actions: ['delete_orphan', 'adopt'],
+            query: 'SPY×FAMILY',
+          }),
+        ],
+      },
+      'GET /api/discover/search?q=SPY%C3%97FAMILY': { body: FOUND },
+    })
+    renderApp('/issues')
+    const row = await screen.findByRole('article')
+
+    await userEvent.click(within(row).getByRole('button', { name: '重新入庫' }))
+
+    const search = within(row).getByRole('searchbox')
+    expect(search).toHaveValue('SPY×FAMILY')
+    expect(search).toHaveFocus()
+    // 預填的字本身就搜：管理員多半只要點一下結果。
+    expect(
+      await within(row).findByRole('button', { name: /SPY×FAMILY 間諜家家酒/ }),
+    ).toBeInTheDocument()
+  })
+
+  it('選作品的搜尋有防抖：連打一個詞不會每個按鍵都打一次 TMDB', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    const FOLDER = '/data/torrent/complete/anime/[Old] Forgotten Batch'
+    const stub = render({
+      [ISSUES]: {
+        body: [
+          issue({
+            type: 'orphan_complete',
+            subject: FOLDER,
+            path: FOLDER,
+            job_hash: '',
+            ledger_id: null,
+            detail: { folder: true },
+            actions: ['adopt'],
+            query: '',
+          }),
+        ],
+      },
+      'GET /api/discover/search?q=spy%20x': { body: FOUND },
+    })
+    renderApp('/issues')
+    const row = await screen.findByRole('article')
+
+    await user.click(within(row).getByRole('button', { name: '重新入庫' }))
+    await user.type(within(row).getByRole('searchbox'), 'spy x')
+    await vi.advanceTimersByTimeAsync(500)
+    await within(row).findByRole('button', { name: /SPY×FAMILY 間諜家家酒/ })
+
+    expect(stub.mock.calls.filter(([url]) => String(url).includes('/search'))).toHaveLength(1)
+    vi.useRealTimers()
+  })
+
   it('認領進帳本配不上時那一列留著，並說出是哪一種配不上', async () => {
     render({
       [ISSUES]: {
@@ -622,6 +689,24 @@ describe('對帳橫幅', () => {
 })
 
 /** 這一支端點被送出去幾次。 */
+const FOUND = {
+  items: [
+    {
+      id: 'tv:120089',
+      tmdb_id: 120089,
+      kind: 'tv',
+      title: 'SPY×FAMILY 間諜家家酒',
+      title_en: 'SPY x FAMILY',
+      year: 2022,
+      poster_url: '',
+      poster_url_en: '',
+      tracked: true,
+    },
+  ],
+  problem: null,
+  detail: '',
+}
+
 function sent(stub: ReturnType<typeof stubApi>, key: string) {
   const [method, path] = key.split(' ')
   return stub.mock.calls.filter(

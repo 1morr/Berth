@@ -107,6 +107,7 @@ export function IssueRow({
             <WorkPicker
               key={action}
               label={t(`issues.action.${action}`)}
+              initialQuery={issue.query}
               pending={busy}
               pendingLabel={t('issues.working')}
               onPick={(media) => act.mutate({ action, media })}

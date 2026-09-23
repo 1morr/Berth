@@ -154,7 +154,8 @@ def _rebuild_ledger(args: argparse.Namespace) -> int:
 
     與服務共用同一個資料庫（WAL，服務開著也能跑），所以先把 schema 升到最新——CLI 可能比
     服務早一步跑在新版本上。**只加不減**：配不上的檔案變成 Issue，一個位元組都不刪。
-    離開碼 1 是有 Route 的目標目錄讀不到：那幾條根本沒有比到，不能說成「全部配好了」。
+    離開碼 1 是有 Route 的目標目錄或 complete 的子目錄讀不到：那幾條根本沒有比到，不能說成
+    「全部配好了」。
     """
     import asyncio
 
@@ -164,10 +165,12 @@ def _rebuild_ledger(args: argparse.Namespace) -> int:
         f"grown back: {report.claimed}",
         *(f"unmatched ({reason.value}): {count}" for reason, count in report.unmatched.items()),
         *(f"skipped route: {line}" for line in report.skipped),
+        *(f"unreadable complete: {line}" for line in report.unread_complete),
+        *([f"not decided (complete unreadable): {report.undecided}"] if report.undecided else []),
     ]
     # 路徑可能是中文，與 `openapi` 同一個理由一律寫 UTF-8 位元組。
     sys.stdout.buffer.write(("\n".join(lines) + "\n").encode("utf-8"))
-    return 1 if report.skipped else 0
+    return 1 if report.skipped or report.unread_complete else 0
 
 
 async def _run_rebuild(config: Config) -> RebuildReport:

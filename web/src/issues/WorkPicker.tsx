@@ -1,10 +1,11 @@
 import { useQuery } from '@tanstack/react-query'
-import { useId, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { MIN_QUERY_LENGTH, searchQueryOptions, type DiscoverItem } from '../api/discover'
 import { ConfirmPanel } from '../components/ConfirmPanel'
 import { CONFIRM_ACTIONS, Field, GhostButton, PrimaryButton } from '../components/controls'
+import { SEARCH_DEBOUNCE_MS, useDebounced } from '../components/useDebounced'
 import { useInPlaceConfirm } from '../components/useInPlaceConfirm'
 import { tmdbText } from '../i18n/tmdbText'
 
@@ -13,29 +14,41 @@ import { tmdbText } from '../i18n/tmdbText'
  *
  * **就地展開，不是 dialog**（The Failure Expands In Place Rule，同 `ConfirmAction`）：按鈕換成一個
  * 搜尋欄，選一部之後主動作說出「入庫到《X》」再按一次。搜的是探索頁同一支 `/discover/search`，
- * 所以結果與使用者平常找作品看到的是同一份。沒選作品時主動作不畫：後端也會拒絕
+ * 所以結果與使用者平常找作品看到的是同一份，防抖也是同一個。沒選作品時主動作不畫：後端也會拒絕
  * （`media_required`），但按下去才被拒的按鈕不該畫出來。
+ *
+ * 搜尋框預填後端從名字讀出的標題（`issue.query`，照 Sonarr / Radarr Manual Import），展開時
+ * 焦點進搜尋框：要做的第一件事是核對或改那個字。
  */
 export function WorkPicker({
   label,
+  initialQuery,
   pending,
   pendingLabel,
   onPick,
 }: {
   label: string
+  initialQuery: string
   pending: boolean
   pendingLabel: string
   onPick: (mediaId: string) => void
 }) {
   const { t, i18n } = useTranslation()
   const { asked, open, close, trigger, panel, onKeyDown } = useInPlaceConfirm()
-  const [query, setQuery] = useState('')
+  const [query, setQuery] = useState(initialQuery)
   const [picked, setPicked] = useState<DiscoverItem | null>(null)
+  const search = useRef<HTMLInputElement>(null)
   const headingId = useId()
+  const debounced = useDebounced(query.trim(), SEARCH_DEBOUNCE_MS)
   const found = useQuery({
-    ...searchQueryOptions(query.trim()),
-    enabled: asked && query.trim().length >= MIN_QUERY_LENGTH,
+    ...searchQueryOptions(debounced),
+    enabled: asked && debounced.length >= MIN_QUERY_LENGTH,
   })
+
+  // 排在 `useInPlaceConfirm` 之後：它先把焦點給整個確認區塊，這裡再送進搜尋框。
+  useEffect(() => {
+    if (asked) search.current?.focus()
+  }, [asked])
 
   if (!asked) {
     return (
@@ -55,6 +68,7 @@ export function WorkPicker({
         {t('issues.pick.label')}
       </p>
       <Field
+        ref={search}
         label={t('issues.pick.placeholder')}
         type="search"
         value={query}

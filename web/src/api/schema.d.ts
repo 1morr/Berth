@@ -2074,6 +2074,8 @@ export interface components {
             detected_at: string;
             /** Actions */
             actions: components["schemas"]["IssueAction"][];
+            /** Query */
+            query: string;
         };
         /**
          * IssueReasonOut

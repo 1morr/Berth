@@ -17,22 +17,24 @@ from datetime import timedelta
 from pathlib import Path
 
 import pytest
-from sqlalchemy import select, update
+from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from berth.domain import EventType, JobRefusal, JobState, LedgerStatus
-from berth.models import Job, JobFile, Media, Route
+from berth.domain import EventType, IssueStatus, IssueType, JobRefusal, JobState, LedgerStatus
+from berth.models import Issue, Job, JobFile, LedgerEntry, Media, Route
 from berth.models.types import utcnow
 from berth.services.events import EventHub
-from berth.services.jobs import JobRejectedError
+from berth.services.jobs import JobRejectedError, read_job
 from berth.services.plan import sweep_plans
+from berth.services.reconcile import reconcile_once
 from berth.services.reimport import reimport_job
 from berth.services.resolver import sweep_resolutions
 from tests.integration.factories import FakeClientFactory
 from tests.integration.test_deletion import LINKS, imported
 from tests.integration.test_importer import ledger_of, run, same_file, state_of
 from tests.integration.test_plan import NOW, events_of
-from tests.integration.test_reconcile_checks import features, scanned
+from tests.integration.test_reconcile import issues_of
+from tests.integration.test_reconcile_checks import features, open_of, scanned
 
 pytestmark = pytest.mark.asyncio
 
@@ -220,6 +222,75 @@ class TestRepeating:
         assert len(await ledger_of(session)) == LINKS
 
 
+class TestTheIssuesItHeals:
+    """重新入庫把鏈接接回來之後，說「這一條鏈接不見了」的那幾件 Issue 不再是事實，由系統收掉
+    （`resolved_by = system`）。不收的話一鍵重建之後 `/issues` 還掛著十幾件按什麼都沒有結果的事。"""
+
+    async def test_the_missing_link_issues_are_closed_once_the_links_are_back(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        job, route, factory = await imported(session, roots)
+        wipe_library(route)
+        await reconcile_once(session, factory, now=NOW)
+        assert await open_of(session, IssueType.LIBRARY_LINK_MISSING) != []
+
+        await reimported(session, factory, job)
+
+        assert await open_of(session, IssueType.LIBRARY_LINK_MISSING) == []
+        closed = [
+            row for row in await issues_of(session) if row.type is IssueType.LIBRARY_LINK_MISSING
+        ]
+        assert {(row.status, row.resolved_by) for row in closed} == {
+            (IssueStatus.RESOLVED, "system")
+        }
+
+    async def test_an_issue_on_the_old_name_is_closed_when_the_row_moves(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """TMDB 改了集名：那一列換到新路徑。舊路徑上那一件「鏈接遺失」說的仍是同一列
+        （`ledger_id`），而那一列的鏈接已經接回來了。"""
+        job, route, factory = await imported(session, roots)
+        wipe_library(route)
+        await reconcile_once(session, factory, now=NOW)
+        await _rename_episode(session, job, season=1, episode=1, name="A Brand New Title")
+
+        await reimported(session, factory, job)
+
+        assert await open_of(session, IssueType.LIBRARY_LINK_MISSING) == []
+
+    async def test_a_job_whose_ledger_grows_back_is_no_longer_without_files(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        job, _, factory = await imported(session, roots)
+        await session.execute(delete(LedgerEntry))
+        await session.commit()
+        await reconcile_once(session, factory, now=NOW)
+        assert await open_of(session, IssueType.JOB_WITHOUT_FILES) != []
+
+        await reimported(session, factory, job)
+
+        assert await open_of(session, IssueType.JOB_WITHOUT_FILES) == []
+
+    async def test_an_issue_on_another_row_stays_open(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """只收重新入庫真的接回來的那幾列：這一包以外的鏈接遺失照舊等人決定。"""
+        job, route, factory = await imported(session, roots)
+        wipe_library(route)
+        await reconcile_once(session, factory, now=NOW)
+        (kept, *_) = await open_of(session, IssueType.LIBRARY_LINK_MISSING)
+        await session.execute(
+            update(Issue).where(Issue.id == kept.id).values(ledger_id=10_000, subject="/elsewhere")
+        )
+        await session.commit()
+
+        await reimported(session, factory, job)
+
+        assert [row.id for row in await open_of(session, IssueType.LIBRARY_LINK_MISSING)] == [
+            kept.id
+        ]
+
+
 class TestRefusals:
     async def test_a_job_still_downloading_cannot_be_reimported(
         self, session: AsyncSession, roots: dict[str, Path]
@@ -235,6 +306,28 @@ class TestRefusals:
 
         assert refusal.value.reason is JobRefusal.NOT_REIMPORTABLE
         assert await state_of(session, job) is JobState.DOWNLOADING
+
+    async def test_a_download_removed_before_it_finished_cannot_be_reimported(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """torrent 在下載到一半時被移出 qBittorrent：complete 裡那幾個檔案是殘件（稀疏檔、只寫了
+        幾個 piece），不是 Import Source。按下去的話規劃器照樣算得出 Plan，殘件就被硬鏈進媒體庫。"""
+        job, _, _ = await imported(session, roots)
+        await session.execute(
+            update(Job)
+            .where(Job.hash == job.hash)
+            .values(state=JobState.CLIENT_REMOVED, completed_at=None)
+        )
+        await session.commit()
+
+        view = await read_job(session, job.hash)
+        assert view is not None
+        assert view.reimportable is False
+        with pytest.raises(JobRejectedError) as refusal:
+            await reimport_job(session, job.hash, actor=ACTOR)
+
+        assert refusal.value.reason is JobRefusal.NOT_REIMPORTABLE
+        assert await state_of(session, job) is JobState.CLIENT_REMOVED
 
     async def test_a_folder_that_is_gone_is_refused_before_anything_moves(
         self, session: AsyncSession, roots: dict[str, Path]

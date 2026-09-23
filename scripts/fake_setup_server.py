@@ -1269,6 +1269,8 @@ async def _seed_issues(session: AsyncSession, paths: PathSettings) -> None:
             state=JobState.IMPORTED,
             save_path=str(source_dir.parent).replace("\\", "/"),
             content_path=str(source_dir).replace("\\", "/"),
+            # 入庫過的一包一定下載完成過（poller 在那一站寫下它）；重新入庫問的就是這一格。
+            completed_at=datetime.now(UTC),
             imported_at=datetime.now(UTC),
         )
     )
@@ -1510,6 +1512,8 @@ async def _seed_review(session: AsyncSession, paths: PathSettings) -> None:
             state=JobState.IMPORTED,
             save_path=str(source_dir.parent).replace("\\", "/"),
             content_path=str(source_dir).replace("\\", "/"),
+            # 入庫過的一包一定下載完成過（poller 在那一站寫下它）；重新入庫問的就是這一格。
+            completed_at=datetime.now(UTC),
             imported_at=datetime.now(UTC),
         )
     )

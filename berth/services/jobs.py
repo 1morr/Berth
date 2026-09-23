@@ -88,9 +88,20 @@ REPLANNABLE = frozenset({JobState.COMPLETED, JobState.PLANNING, JobState.REVIEW}
 #: 動檔案。`client_removed` 在裡面是 plan §3.1 那一列說的「可 reimport 若 complete 檔案仍在」；
 #: `removed` 在裡面是「刪了 library、保留 complete」那一條——刪除範圍只勾移除鏈接時落在那裡。
 #: 規劃中、入庫中、等審核的那幾個不在：重算走 `REPLANNABLE`，那一份計劃還沒被丟掉。
+#: 狀態之外**另外要下載完過**（`reimportable`）。
 REIMPORTABLE = frozenset(
     {JobState.IMPORTED, JobState.IMPORT_FAILED, JobState.REMOVED, JobState.CLIENT_REMOVED}
 )
+
+
+def reimportable(job: Job) -> bool:
+    """這一筆按得了重新入庫：狀態在 `REIMPORTABLE` 裡，**而且下載完成過**（`completed_at`）。
+
+    下載到一半就被移出 qBittorrent 的那一包也會落在 `client_removed` / `removed`，但 complete 裡
+    那幾個檔案是殘件（只寫了幾個 piece 的稀疏檔），不是 Import Source。畫面上的按鈕與命令本身
+    問的是這同一份規則。
+    """
+    return job.state in REIMPORTABLE and job.completed_at is not None
 
 
 class _JobLocks:
@@ -840,7 +851,7 @@ def _view(job: Job, related: _Related) -> JobView:
         imported_at=job.imported_at,
         retryable=job.state in RETRYABLE,
         replannable=job.state in REPLANNABLE,
-        reimportable=job.state in REIMPORTABLE,
+        reimportable=reimportable(job),
         plan_id=plan_id,
         audits=audits,
     )

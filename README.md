@@ -214,8 +214,9 @@ uv run --env-file .env berth rebuild-ledger      # 開發機
 ```
 
 **只加不減**：一個位元組都不刪，帳本上有、磁碟上不在的那幾列也不動（那是對帳的
-`library_link_missing`）。服務開著也能跑（SQLite WAL），schema 由指令自己升到最新。印出四行計數；
-有 Route 的目標目錄讀不到時那一條整條跳過並列出來，離開碼 1。重跑是冪等的。
+`library_link_missing`）。服務開著也能跑（SQLite WAL），schema 由指令自己升到最新。印出計數；
+有 Route 的目標目錄讀不到時那一條整條跳過並列出來，離開碼 1。complete 有子目錄讀不到時也是離開碼 1，
+而且那一輪配不到來源的檔案**不開** `no_source`（問不到不算不見了），只數在 `not decided`。重跑是冪等的。
 
 單一檔案的同一件事是 `/issues` 上 `unmanaged_library_file` 那一列的「認領進帳本」。
 
@@ -544,7 +545,7 @@ uv run --env-file .env python scripts/experiments/absolute_rule_cost.py    # A /
 
 ```
 berth/            後端套件
-  cli.py          命令列進入點（berth serve、berth openapi、berth bench）
+  cli.py          命令列進入點（berth serve、berth openapi、berth bench、berth rebuild-ledger）
   config.py       環境變數與路徑常數
   main.py         FastAPI app 組裝、lifespan
   adapters/       外部服務用戶端（qBittorrent、Jellyfin、TMDB…）

@@ -51,6 +51,7 @@ function issueRow(overrides: Partial<Issue> = {}): IssueReviewRow {
     status: 'open',
     detected_at: '2026-09-21T04:00:00Z',
     actions: ['forget'],
+    query: '',
     ...overrides,
   }
   return {

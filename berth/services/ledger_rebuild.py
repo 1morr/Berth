@@ -48,6 +48,10 @@ class RebuildReport:
     unmatched: dict[ClaimMiss, int] = field(default_factory=dict)
     #: 目標目錄讀不到而整條跳過的 Route（原文）。
     skipped: list[str] = field(default_factory=list)
+    #: 讀不到的 complete 子目錄（原文）。有它的時候配不到來源的檔案不開 Issue，只數在 `undecided`。
+    unread_complete: list[str] = field(default_factory=list)
+    #: 配不到來源、但 complete 沒讀全所以說不出它是不是真的沒有來源的檔案數。
+    undecided: int = 0
 
 
 async def rebuild_ledger(
@@ -57,12 +61,14 @@ async def rebuild_ledger(
 
     **只加不減**：帳本上已經有、磁碟上卻不在的那幾列不在這裡收——那是對帳的 `library_link_missing`，
     要人決定。complete 的 inode 索引整輪只建一次（一個檔案問一次的話，一千個檔案就是走一千次
-    complete）。讀不到的那一條 Route 整條跳過並說出來，與對帳同一個規矩（brief §16.2）。
+    complete）。讀不到的那一條 Route 整條跳過並說出來，與對帳同一個規矩（brief §16.2）；complete
+    有子目錄讀不到時，配不到來源的那幾個檔案也不開 Issue——問不到不算不見了。
     """
     moment = now or utcnow()
     report = RebuildReport()
     known = {fs.path_key(row) for row in await session.scalars(select(LedgerEntry.target_path))}
     index = await source_index(session)
+    report.unread_complete = list(index.unread)
     for route in list(await session.scalars(select(Route).order_by(Route.id))):
         try:
             files = fs.files_under(Path(route.target_path))
@@ -78,6 +84,9 @@ async def rebuild_ledger(
                     session, factory, path, index=index, now=moment, actor=SYSTEM
                 )
             except UnclaimedError as miss:
+                if miss.reason is ClaimMiss.NO_SOURCE and index.unread:
+                    report.undecided += 1
+                    continue
                 report.unmatched[miss.reason] = report.unmatched.get(miss.reason, 0) + 1
                 await record_issue(
                     session,
@@ -96,6 +105,7 @@ async def rebuild_ledger(
             "claimed": report.claimed,
             "unmatched": sum(report.unmatched.values()),
             "skipped": len(report.skipped),
+            "undecided": report.undecided,
         },
     )
     return report

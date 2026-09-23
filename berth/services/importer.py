@@ -24,13 +24,15 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path, PurePosixPath
 
-from sqlalchemy import select
+from sqlalchemy import ColumnElement, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from berth.adapters import fs
 from berth.adapters.http import ServiceError
 from berth.domain import (
     EventType,
+    IssueStatus,
+    IssueType,
     JellyfinRequest,
     JobState,
     LedgerStatus,
@@ -39,7 +41,16 @@ from berth.domain import (
     PlanSummary,
     ReviewReason,
 )
-from berth.models import JellyfinSettings, Job, JobFile, LedgerEntry, Plan, PlanItem, Route
+from berth.models import (
+    Issue,
+    JellyfinSettings,
+    Job,
+    JobFile,
+    LedgerEntry,
+    Plan,
+    PlanItem,
+    Route,
+)
 from berth.models.types import utcnow
 from berth.services.clients import ServiceClientFactory
 from berth.services.deletion import remove_one
@@ -222,12 +233,40 @@ async def _place(
             payload={"file": item.rel_path, "target": target_text},
         )
         await restate_versions(session, item, target_text, now)
+    # 新長的那一列要 flush 過才有 id；它身上不會有 Issue，但一份清單比兩種情況好讀。
+    await session.flush()
+    healed = [entry.id, *(row.id for row in stale)]
     for row in stale:
         await session.delete(row)
     for old in moved_from:
         _take_back_old(old, source, roots)
+    await _close(
+        session,
+        Issue.type.in_(HEALED_BY_LINKING) & Issue.ledger_id.in_(healed),
+        now,
+    )
     item.applied_at = now
     item.error = ""
+
+
+#: 說的是帳本某一列那一條鏈接的幾種。importer 剛以來源的硬鏈接把那一列接回來（或確認它本來
+#: 就是）時，三件都不再是事實：鏈接在、來源在、兩邊同一個 inode。不收的話刪了媒體庫再重新入庫
+#: 之後 `/issues` 還掛著一整排按什麼都沒有結果的「鏈接遺失」。以 `ledger_id` 認而不是路徑：
+#: 集名改了、那一列換到新路徑時，舊路徑上那一件說的也是同一列（M2 票 10）。
+HEALED_BY_LINKING = (
+    IssueType.LIBRARY_LINK_MISSING,
+    IssueType.SOURCE_MISSING,
+    IssueType.INODE_MISMATCH,
+)
+
+
+async def _close(session: AsyncSession, which: ColumnElement[bool], now: datetime) -> None:
+    """條件自己解除的那幾件由系統收掉（`resolved_by = system`，同健康檢查那兩種）。"""
+    for row in await session.scalars(select(Issue).where(Issue.status == IssueStatus.OPEN, which)):
+        row.status = IssueStatus.RESOLVED
+        row.resolved_at = now
+        row.resolved_by = actor_of(None)
+        logger.info("issue cleared", extra={"issue": row.type.value, "subject": row.subject})
 
 
 async def _ledger_rows(
@@ -426,6 +465,15 @@ async def _finish(
         return None
     job.imported_at = now
     plan.status = PlanStatus.APPLIED
+    # 帳本清掉之後對帳開的 `job_without_files`：這一輪長回了至少一列，它說的就不再是事實。
+    # 這一輪一列都沒寫的（全是重複、全是略過）不收——那一件仍然可能是對的。
+    grown = select(LedgerEntry.id).where(LedgerEntry.job_hash == job.hash).limit(1)
+    if await session.scalar(grown) is not None:
+        await _close(
+            session,
+            (Issue.type == IssueType.JOB_WITHOUT_FILES) & (Issue.subject == job.hash),
+            now,
+        )
     await session.commit()
     # 推播在狀態落地之後、通知之前：畫面不必多等 Jellyfin 回應的那一段時間。
     _publish(hub, job)

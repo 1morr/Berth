@@ -271,6 +271,15 @@ describe('Job 時間線', () => {
     expect(line.queryByText(/退回「已建立」/)).not.toBeInTheDocument()
   })
 
+  it('重新入庫那一筆的標籤是「重新入庫」，不是「重試」（M2 票 10）', () => {
+    const line = render([
+      event({ type: 'retried', payload: { state: 'completed', action: 'reimport' } }),
+    ])
+
+    expect(line.getByText('重新入庫', { selector: 'span' })).toBeInTheDocument()
+    expect(line.queryByText('重試')).not.toBeInTheDocument()
+  })
+
   it('目標上有別人的檔案時，停下來那一筆說得出來', () => {
     const line = render([event({ type: 'review_required', payload: { reason: 'target_exists' } })])
 

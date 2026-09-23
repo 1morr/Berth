@@ -61,6 +61,7 @@ from berth.models import (
     subject_of,
 )
 from berth.models.types import utcnow
+from berth.parser import parse_release
 from berth.services import claims, complete
 from berth.services.clients import ServiceClientFactory
 from berth.services.deletion import DeleteScope, delete_job
@@ -126,6 +127,8 @@ class IssueView:
     resolved_by: str
     #: 這一列現在按得了哪幾顆，順序就是畫面上的順序。空的代表只剩「忽略」。
     actions: tuple[IssueAction, ...]
+    #: 選作品的搜尋框預填的字（`NEEDS_MEDIA` 那兩顆才有，其餘是空字串）。
+    query: str
 
 
 async def record_issue(
@@ -733,6 +736,7 @@ async def _live_jobs(session: AsyncSession, rows: Sequence[Issue]) -> dict[str, 
 
 
 def _view(row: Issue, jobs: dict[str, JobState]) -> IssueView:
+    actions = _actions(row, jobs.get(row.job_hash or ""))
     return IssueView(
         id=row.id,
         type=row.type,
@@ -745,8 +749,16 @@ def _view(row: Issue, jobs: dict[str, JobState]) -> IssueView:
         detected_at=row.detected_at,
         resolved_at=row.resolved_at,
         resolved_by=row.resolved_by,
-        actions=_actions(row, jobs.get(row.job_hash or "")),
+        actions=actions,
+        query=_query(row) if not NEEDS_MEDIA.isdisjoint(actions) else "",
     )
+
+
+def _query(row: Issue) -> str:
+    """選作品時搜尋框預填的字：torrent 名（`unknown_torrent`）或目錄名（`orphan_complete`）裡
+    解析器讀出的標題，讀不出來就是那個名字本身。Berth 不替管理員選作品，只是不讓他從頭打。"""
+    name = str((row.detail_json or {}).get("name") or "") or Path(row.path).name
+    return next(iter(parse_release(name).title_candidates), name)
 
 
 def _actions(row: Issue, job_state: JobState | None) -> tuple[IssueAction, ...]:

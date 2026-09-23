@@ -242,6 +242,7 @@ async def _plan(
     items, duplicates = await _against_ledger(
         session,
         job,
+        contents,
         route,
         _apply_policy(decide(job.name, entries, _context(route, snapshot)), route),
     )
@@ -300,6 +301,7 @@ async def _preplan(session: AsyncSession, hub: EventHub, job_hash: str, now: dat
     items, duplicates = await _against_ledger(
         session,
         job,
+        contents,
         route,
         _apply_policy(
             decide(job.name, entries, _context(route, await _stored(session, job))), route
@@ -496,6 +498,7 @@ def _apply_policy(items: Sequence[PlannedFile], route: Route | None) -> tuple[Pl
 async def _against_ledger(
     session: AsyncSession,
     job: Job,
+    contents: Contents,
     route: Route | None,
     items: Sequence[PlannedFile],
 ) -> tuple[tuple[PlannedFile, ...], dict[str, int]]:
@@ -507,7 +510,8 @@ async def _against_ledger(
 
     - **同一個起始集、結束集不同**（2026-09-15 拍板）：Jellyfin 12 的版本分組鍵只有季號與集號，
       `S01E03-E04` 與 `S01E03` 會被併成同一集的兩個版本，第 4 集從集列表上消失（§20.9）。
-    - **同一集、同一組 Tags**：與媒體庫裡那一份是同一個版本。**不比這一筆自己入庫過的**——重新
+    - **同一集、同一組 Tags**：與媒體庫裡那一份是同一個版本。**不比這一包自己的檔案入庫過的**——
+      不論那一列掛在哪一筆 Job（`rebuild-ledger` 長回來的沒有 Job，M2 票 10）。重新
       規劃會看到自己上一輪的鏈接，那不是重複，importer 比 inode 就認得出來（plan §3.3）。
       **範圍衝突那一種照樣比自己的**（刻意不對稱）：同一個來源這一次讀成另一段範圍，不是
       importer 認得出的「同一條鏈接」——它會多鏈一條而舊的留著，Jellyfin 把兩條併掉。交給人決定，
@@ -531,10 +535,13 @@ async def _against_ledger(
             .order_by(LedgerEntry.id)
         )
     )
+    # 這一包自己的檔案。帳本上來源就是它們的那幾列不是「另一個版本」：重新入庫時那一列可能沒有
+    # Job（`rebuild-ledger` 長回來的）或掛在另一筆 Job 上，但說的是同一個檔案（M2 票 10）。
+    own = {fs.path_key(fs.under(job.save_path, row.rel_path)) for row in contents.rows}
     duplicates: dict[str, int] = {}
     decided: list[PlannedFile] = []
     for item in items:
-        found = _duplicate_of(item, root, known, job.hash)
+        found = _duplicate_of(item, root, known, job.hash, own)
         if found is None:
             decided.append(item)
             continue
@@ -553,7 +560,11 @@ async def _against_ledger(
 
 
 def _duplicate_of(
-    item: PlannedFile, root: PurePosixPath, known: Sequence[LedgerEntry], job_hash: str
+    item: PlannedFile,
+    root: PurePosixPath,
+    known: Sequence[LedgerEntry],
+    job_hash: str,
+    own: set[str],
 ) -> tuple[LedgerEntry, ItemReason] | None:
     """這一列與帳本上的哪一列重複、為什麼。判準與同一包那一半共用（`parser.episode_span`）。"""
     if item.action is not PlanAction.IMPORT or not item.target_path:
@@ -584,7 +595,11 @@ def _duplicate_of(
     else:
         return None
     for entry in same:
-        if entry.job_hash != job_hash and Tags.model_validate(entry.tags_json or {}) == item.tags:
+        if (
+            entry.job_hash != job_hash
+            and fs.path_key(entry.source_abs_path) not in own
+            and Tags.model_validate(entry.tags_json or {}) == item.tags
+        ):
             return entry, why(Code.SAME_VERSION, known=PurePosixPath(entry.target_path).name)
     return None
 

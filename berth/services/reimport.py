@@ -23,12 +23,12 @@ from berth.logs import job_context
 from berth.models import Job, JobFile
 from berth.models.types import utcnow
 from berth.services.jobs import (
-    REIMPORTABLE,
     JobRejectedError,
     JobView,
     job_lock,
     read_job,
     record_event,
+    reimportable,
     transition,
 )
 
@@ -50,7 +50,7 @@ async def reimport_job(session: AsyncSession, job_hash: str, *, actor: str) -> J
     job = await session.get(Job, job_hash)
     if job is None:
         raise JobRejectedError(JobRefusal.JOB_MISSING, job_hash)
-    if job.state not in REIMPORTABLE:
+    if not reimportable(job):
         raise JobRejectedError(JobRefusal.NOT_REIMPORTABLE, job.state.value)
     with job_context(job.hash):
         async with job_lock(job.hash):

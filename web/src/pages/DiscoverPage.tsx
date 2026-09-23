@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 
@@ -10,12 +10,10 @@ import {
 } from '../api/discover'
 import { Field, GhostButton } from '../components/controls'
 import { TmdbNotice } from '../components/TmdbNotice'
+import { SEARCH_DEBOUNCE_MS, useDebounced } from '../components/useDebounced'
 import { MediaWall } from '../discover/MediaWall'
 import { HomeWatching } from '../watching/WatchingRows'
 import tmdbLogo from '../assets/tmdb.svg'
-
-/** 鍵入即搜的防抖（使用者拍板）。每一個不同的字串都會花掉使用者自備的 TMDB 額度。 */
-const DEBOUNCE_MS = 500
 
 /**
  * 探索頁 `/`（票 03、`.scratch/m1/discover-shape.md`）。上方是這個人的繼續觀看與下一集（M1.5 票 07）。
@@ -30,7 +28,7 @@ export function DiscoverPage() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [query, setQuery] = useState('')
-  const debounced = useDebounced(query.trim(), DEBOUNCE_MS)
+  const debounced = useDebounced(query.trim(), SEARCH_DEBOUNCE_MS)
   const searching = debounced.length >= MIN_QUERY_LENGTH
 
   const trending = useQuery(trendingQueryOptions)
@@ -121,16 +119,4 @@ export function DiscoverPage() {
     if (results.data?.problem) return ''
     return t('discover.search.count', { count: results.data?.items.length ?? 0 })
   }
-}
-
-/** 鍵入即搜，但不是每個按鍵都送一次。 */
-function useDebounced(value: string, delay: number) {
-  const [settled, setSettled] = useState(value)
-
-  useEffect(() => {
-    const timer = setTimeout(() => setSettled(value), delay)
-    return () => clearTimeout(timer)
-  }, [value, delay])
-
-  return settled
 }

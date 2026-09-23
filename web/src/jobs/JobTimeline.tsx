@@ -32,7 +32,7 @@ export function JobTimeline({ events }: { events: readonly JobEvent[] }) {
           <li key={run[0].id} className="grid min-w-0 gap-1 border-l-2 border-rule pl-3">
             <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
               {/* 事件型別是**分類**不是狀態，所以中性色塊（The Role Is Not A State Rule）。 */}
-              <span className="label bg-deck px-1.5 py-1 text-ink">{label(t, last.type)}</span>
+              <span className="label bg-deck px-1.5 py-1 text-ink">{label(t, last)}</span>
               {run.length > 1 && (
                 <span className="value text-xs text-ink">
                   {t('jobs.timeline.linkedFiles', { count: run.length })}
@@ -427,10 +427,18 @@ function Row({ children }: { children: string | false }) {
   return <p className="value text-xs wrap-anywhere text-ink-dim">{children}</p>
 }
 
-/** 型別的顯示名。認不得的型別原樣顯示——它仍然是一件真的發生過的事。 */
-function label(t: Translate, type: string): string {
-  const known = EVENT_TYPES.find((row) => row === type)
-  return known ? t(`jobs.event.${known}`) : type
+/**
+ * 型別的顯示名。認不得的型別原樣顯示——它仍然是一件真的發生過的事。
+ *
+ * 重新入庫記成 `retried` + `action: reimport`（`services/reimport.py`），但對使用者它不是
+ * 「重試」：那一筆沒有失敗過，是管理員要它照 complete 重來一次。
+ */
+function label(t: Translate, event: JobEvent): string {
+  if (event.type === 'retried' && event.payload.action === 'reimport') {
+    return t('jobs.trigger.reimport')
+  }
+  const known = EVENT_TYPES.find((row) => row === event.type)
+  return known ? t(`jobs.event.${known}`) : event.type
 }
 
 function text(value: unknown): string {
