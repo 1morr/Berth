@@ -214,6 +214,8 @@ class MediaOut(BaseModel):
     unmatched: list[UnmatchedFileOut]
     #: 只有兩個以上版本並存的那幾組。
     versions: list[VersionGroupOut]
+    #: 停在 `review` 的下載筆數。`user` 按不了審核，畫面對他說「等管理員審核」（M2 票 06）。
+    awaiting_review: int
 
 
 @router.get("/{media_id}")

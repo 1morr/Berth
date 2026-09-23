@@ -46,6 +46,7 @@ function media(overrides: Partial<Media> = {}): Media {
     files: [],
     unmatched: [],
     versions: [],
+    awaiting_review: 0,
     ...overrides,
   }
 }

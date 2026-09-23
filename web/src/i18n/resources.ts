@@ -472,6 +472,7 @@ const zhHant = {
     inventory: '媒體庫',
     jobs: '下載',
     issues: '待處理',
+    review: '審核',
     health: '健康',
     settings: '設定',
     signOut: '登出',
@@ -664,6 +665,9 @@ const zhHant = {
     tmdbId: 'TMDB {{id}}',
     // 現在它跟著 TMDB 的標題走，所以說的是「將會是」；定下來是送單那一刻的事。
     folderPreview: '資料夾將會是',
+    // `user` 碰到停在待審核的下載只能等（brief §11、M2 票 06）。這一句只畫給他看。
+    awaitingReview_one: '這部作品有 {{count}} 筆下載停在待審核，等管理員審核。',
+    awaitingReview_other: '這部作品有 {{count}} 筆下載停在待審核，等管理員審核。',
     folderNote: '第一次送單成功那一刻這串字就定下來，之後 TMDB 改標題也不會動它。',
     // 定下來之後說的是「就是」，不是「將會是」（票 09）。
     folderFrozen: '資料夾是',
@@ -937,6 +941,7 @@ const zhHant = {
       ignore: '忽略',
     },
     working: '處理中…',
+    done: '已處理，這一件從清單上收掉了。',
     // 「連 complete 一起刪」的單位是**整筆下載**，不是那一個檔案（brief §9.2）。
     confirmDelete:
       '這會移除這一筆下載的全部：媒體庫裡還在的鏈接、qBittorrent 上的 torrent、complete 底下的檔案，以及它的帳本與紀錄。空出來的空間要等來源與所有鏈接都刪掉才真的回來。',
@@ -953,6 +958,52 @@ const zhHant = {
       reconcile_running: '上一輪對帳還在跑。等它跑完再按。',
     },
     failed: '沒有成功。Berth 自己的 API 沒有回應，先確認它還活著。',
+  },
+  review: {
+    title: '審核',
+    count_one: '{{count}} 件',
+    count_other: '{{count}} 件',
+    // 超過上限時說出來（plan §6：不分頁，那時候該修的是上游）。
+    truncated: '只列出最舊的 {{shown}} 件，共 {{total}} 件。',
+    // 這一頁最好的狀態是沒有東西。
+    empty: '沒有事在等你。',
+    off: '讀不到審核佇列。Berth 自己的 API 沒有回應，先確認它還活著。',
+    // 三段：需要人動手的排前面（`.scratch/m2/review-shape.md`）。
+    section: {
+      decide: '要你決定',
+      look: '已入庫，等你看一眼',
+      outside: '外面發生的事',
+    },
+    // audit 那一列（CONTEXT.md 的 Audit）。
+    audit: {
+      label: '待確認',
+      reason: {
+        medium_auto_imported: '信心 medium，已自動入庫',
+      },
+      importedAt: '入庫於 {{value}}',
+      target: '媒體庫路徑',
+      source: '來源路徑',
+      job: '下載',
+      // 解析器的理由是英文原文，不翻譯。
+      notes: '解析器的理由（原文）',
+      action: {
+        confirm: '確認',
+        undo: '撤銷',
+      },
+      confirmUndo:
+        '這會從媒體庫拿掉這一集，Jellyfin 下次掃描就看不到它；complete 裡的檔案不動，這一筆下載回到待審核。',
+      confirmUndoAction: '確定撤銷',
+      working: '處理中…',
+      refusal: {
+        ledger_missing: '這一列已經不在了，多半是另一個分頁先撤銷了。',
+        not_audited: '這一列已經被確認過了，多半是另一個分頁先按了。',
+        unlink_failed: '媒體庫裡那個檔案拿不掉，所以什麼都沒改。',
+      },
+      failed: '沒有成功。Berth 自己的 API 沒有回應，先確認它還活著。',
+      // 動作結果給看不見畫面的人（那一列會直接消失）。
+      confirmed: '已確認，這一列從佇列上收掉了。',
+      undone: '已撤銷，這一筆下載回到待審核。',
+    },
   },
   reconcile: {
     start: '立刻對帳',
@@ -998,6 +1049,8 @@ const zhHant = {
     retryingImport: '入庫中…',
     retried: '已重試，現在是{{state}}。',
     retryOff: '重試沒有送出去。Berth 自己的 API 沒有回應，先確認它還活著。',
+    // 停在待審核的那一列：`user` 按不了審核，只能等（brief §11）。
+    waitingForAdmin: '等管理員審核',
     // 十六個狀態一次定義完（`domain.JobState`）：M1 票 09 只走得到前三個，
     // 其餘由票 10 起的迴圈驅動，而它們是同一個封閉集合。
     state: {
@@ -1042,6 +1095,8 @@ const zhHant = {
       jellyfin_item_resolved: 'Jellyfin 已收錄',
       jellyfin_request_failed: 'Jellyfin 請求沒成',
       deleted: '已刪除',
+      audit_confirmed: '已確認',
+      audit_undone: '已撤銷入庫',
     },
     timeline: {
       loading: '讀取時間線…',
@@ -1071,7 +1126,13 @@ const zhHant = {
         medium_not_allowed: '這條 Route 不自動入庫 medium',
         nothing_to_import: '沒有東西會進媒體庫',
         target_exists: '目標位置上已經有別的檔案',
+        audit_undone: '有一個自動入庫的檔案被撤銷了',
       },
+      // audit 的兩顆（M2 票 06）。目標路徑是機器字串，接在後面。
+      auditConfirmed: '管理員看過這個 medium 自動入庫的檔案，說它是對的',
+      auditUndone: '管理員撤銷了這個檔案的入庫，這一筆回到待審核',
+      auditUndoneGone:
+        '管理員撤銷了這個檔案的入庫（它在那之前已經不在媒體庫裡了），這一筆回到待審核',
       // 刪除範圍那一筆（M2 票 04）。說的是**真的**做掉了什麼，不是勾了哪幾個。
       deletedLinks_one: '移除 {{count}} 個鏈接',
       deletedLinks_other: '移除 {{count}} 個鏈接',
@@ -1127,6 +1188,8 @@ const zhHant = {
         nothing_to_import: '這一包裡沒有任何一個檔案會進媒體庫。多半是送錯了 torrent。',
         target_exists:
           '媒體庫裡這個位置已經有一個不是 Berth 鏈接的檔案，Berth 不會覆寫它；其餘檔案已經入庫了。M1 還沒有審核佇列——把那個檔案移走之後按「重新規劃」。',
+        audit_undone:
+          '管理員從審核佇列撤銷了一個 medium 自動入庫的檔案：那個檔案已經不在媒體庫裡，complete 裡的來源還在。這份計劃回來等人決定那一列該是哪一集。',
       },
       action: {
         import: '入庫',
@@ -1937,6 +2000,7 @@ const en: Translations<typeof zhHant> = {
     inventory: 'Library',
     jobs: 'Downloads',
     issues: 'Issues',
+    review: 'Review',
     health: 'Health',
     settings: 'Settings',
     signOut: 'Sign out',
@@ -2108,6 +2172,10 @@ const en: Translations<typeof zhHant> = {
     released: 'Released {{date}}',
     tmdbId: 'TMDB {{id}}',
     folderPreview: 'Folder will be',
+    awaitingReview_one:
+      '{{count}} download for this title is waiting for an administrator to review it.',
+    awaitingReview_other:
+      '{{count}} downloads for this title are waiting for an administrator to review them.',
     folderNote:
       'This name is fixed the moment a download goes through; a later TMDB rename will not move it.',
     folderFrozen: 'Folder',
@@ -2357,6 +2425,7 @@ const en: Translations<typeof zhHant> = {
       ignore: 'Ignore',
     },
     working: 'Working…',
+    done: 'Done; it is off the list.',
     confirmDelete:
       'This removes everything belonging to this download: the links still in the library, the torrent in qBittorrent, the files under complete, and its ledger and records. The space only comes back once the source and every link are gone.',
     confirmDeleteAction: 'Delete it',
@@ -2374,6 +2443,47 @@ const en: Translations<typeof zhHant> = {
     },
     failed:
       'That did not go through. Berth’s own API did not answer — check that it is still running.',
+  },
+  review: {
+    title: 'Review',
+    count_one: '{{count}} item',
+    count_other: '{{count}} items',
+    truncated: 'Showing the oldest {{shown}} of {{total}}.',
+    empty: 'Nothing is waiting for you.',
+    off: 'Could not read the review queue. Berth’s own API did not answer — check that it is still running.',
+    section: {
+      decide: 'Needs a decision',
+      look: 'In the library, awaiting a look',
+      outside: 'Happened outside Berth',
+    },
+    audit: {
+      label: 'UNCONFIRMED',
+      reason: {
+        medium_auto_imported: 'Medium confidence, imported automatically',
+      },
+      importedAt: 'Imported {{value}}',
+      target: 'Library path',
+      source: 'Source path',
+      job: 'Download',
+      notes: 'Parser reasons (verbatim)',
+      action: {
+        confirm: 'Confirm',
+        undo: 'Undo',
+      },
+      confirmUndo:
+        'This takes the episode out of the library, so Jellyfin drops it on its next scan. The files under complete stay; the download goes back to review.',
+      confirmUndoAction: 'Undo the import',
+      working: 'Working…',
+      refusal: {
+        ledger_missing: 'This row is gone — most likely undone from another tab.',
+        not_audited: 'This one has already been confirmed — most likely from another tab.',
+        unlink_failed: 'The file in the library could not be removed, so nothing changed.',
+      },
+      failed:
+        'That did not go through. Berth’s own API did not answer — check that it is still running.',
+      confirmed: 'Confirmed; it is off the queue.',
+      undone: 'Undone; the download is back in review.',
+    },
   },
   reconcile: {
     start: 'Reconcile now',
@@ -2417,6 +2527,7 @@ const en: Translations<typeof zhHant> = {
     retried: 'Retried; it is now {{state}}.',
     retryOff:
       'The retry was not sent. Berth’s own API did not answer — check that it is still running.',
+    waitingForAdmin: 'Waiting for an administrator to review',
     state: {
       requested: 'Created',
       submitted: 'Sent',
@@ -2459,6 +2570,8 @@ const en: Translations<typeof zhHant> = {
       jellyfin_item_resolved: 'In Jellyfin',
       jellyfin_request_failed: 'Jellyfin request failed',
       deleted: 'Deleted',
+      audit_confirmed: 'Confirmed',
+      audit_undone: 'Import undone',
     },
     timeline: {
       loading: 'Reading the timeline…',
@@ -2486,7 +2599,12 @@ const en: Translations<typeof zhHant> = {
         medium_not_allowed: 'this route does not auto-import medium',
         nothing_to_import: 'nothing would reach the library',
         target_exists: 'another file already sits at the target',
+        audit_undone: 'an auto-imported file was undone',
       },
+      auditConfirmed: 'An administrator looked at this medium-confidence import and confirmed it',
+      auditUndone: 'An administrator undid this file’s import; the job is back in review',
+      auditUndoneGone:
+        'An administrator undid this file’s import (it had already left the library); the job is back in review',
       deletedLinks_one: 'removed {{count}} link',
       deletedLinks_other: 'removed {{count}} links',
       deletedSources_one: 'deleted {{count}} downloaded file',
@@ -2535,6 +2653,8 @@ const en: Translations<typeof zhHant> = {
           'Nothing in this torrent would reach the library. Most likely the wrong torrent was sent.',
         target_exists:
           'A file Berth did not link already sits at this spot in the library, and Berth will not overwrite it; the other files are already in. There is no review queue yet in M1 — move that file away, then press replan.',
+        audit_undone:
+          'An administrator undid a medium-confidence import from the review queue: that file has left the library, and its source under complete is untouched. The plan is back, waiting for someone to decide which episode that row really is.',
       },
       action: {
         import: 'Import',

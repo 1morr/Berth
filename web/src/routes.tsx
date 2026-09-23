@@ -17,6 +17,7 @@ import { AppShell } from './AppShell'
 import { DiscoverPage } from './pages/DiscoverPage'
 import { HealthPage } from './pages/HealthPage'
 import { IssuesPage } from './pages/IssuesPage'
+import { ReviewPage } from './pages/ReviewPage'
 import { JobsPage } from './pages/JobsPage'
 import { InventoryPage, type InventoryFilter } from './pages/InventoryPage'
 import { InventoryPageRoute } from './pages/InventoryPageRoute'
@@ -325,6 +326,25 @@ const issuesRoute = createRoute({
   ),
 })
 
+/**
+ * 審核佇列 `/review`（M2 票 06）。與 `/issues` 同一個規則：**只有管理員**（plan §6、brief §11）。
+ * `user` 停在待審核的下載只能等，那一句話在 `/jobs` 與 Media 詳情，不在這裡。
+ */
+const reviewRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/review',
+  beforeLoad: async ({ context, location }) => {
+    const me = await requireSignedInPage(context.queryClient, location)
+    if (me !== null && me.role !== 'admin')
+      throw redirect({ to: '/health', search: { denied: true } })
+  },
+  component: () => (
+    <AppShell>
+      <ReviewPage />
+    </AppShell>
+  ),
+})
+
 const healthRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/health',
@@ -392,6 +412,7 @@ export const routeTree = rootRoute.addChildren([
   indexRoute,
   healthRoute,
   issuesRoute,
+  reviewRoute,
   jobsRoute,
   inventoryIndexRoute,
   inventoryRoute,

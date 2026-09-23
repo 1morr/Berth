@@ -107,6 +107,8 @@ const EVENT_TYPES = [
   'jellyfin_item_resolved',
   'jellyfin_request_failed',
   'deleted',
+  'audit_confirmed',
+  'audit_undone',
 ] as const
 
 type KnownEvent = (typeof EVENT_TYPES)[number]
@@ -256,17 +258,36 @@ const FACTS: Record<KnownEvent, (facing: Facing) => ReactNode> = {
       </Row>
     </>
   ),
+  // audit 的兩顆（M2 票 06）。句子說誰做了什麼，目標路徑是機器字串，另起一行。撤銷那一句照
+  // `unlinked` 說**真的**拆到了沒——撤銷之前有人已經在 Jellyfin 裡刪掉它的話，沒有東西可拆。
+  audit_confirmed: ({ t, payload }) => (
+    <>
+      <p className="max-w-prose text-xs text-ink-dim">{t('jobs.timeline.auditConfirmed')}</p>
+      <Row>{text(payload.target)}</Row>
+    </>
+  ),
+  audit_undone: ({ t, payload }) => (
+    <>
+      <p className="max-w-prose text-xs text-ink-dim">
+        {payload.unlinked === false
+          ? t('jobs.timeline.auditUndoneGone')
+          : t('jobs.timeline.auditUndone')}
+      </p>
+      <Row>{text(payload.target)}</Row>
+    </>
+  ),
 }
 
 /** `domain.JellyfinRequest`。認不得的只印原文——它可能是後端加的，而前端還沒有那句話。 */
 const JELLYFIN_REQUESTS = ['scan'] as const
 
-/** `domain.ReviewReason` 的三種。認不得的不畫——它可能是後端加的，而前端還沒有那句話。 */
+/** `domain.ReviewReason` 的五種。認不得的不畫——它可能是後端加的，而前端還沒有那句話。 */
 const REVIEW_REASONS: readonly ReviewReason[] = [
   'low_confidence',
   'medium_not_allowed',
   'nothing_to_import',
   'target_exists',
+  'audit_undone',
 ]
 
 /**

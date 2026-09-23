@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 
 import { ApiError } from '../api/client'
 import { accessRefusal } from '../api/jellyfin'
+import { meQueryOptions } from '../api/auth'
 import { mediaQueryOptions, refresh, watchQueryOptions, type Media } from '../api/media'
 import { GHOST_LINK, GhostButton, Notice } from '../components/controls'
 import { Dot } from '../components/Dot'
@@ -99,6 +100,10 @@ export function MediaDetailPage({ id }: { id: string }) {
           )}
 
           <SearchPanel media={found} ref={search} />
+
+          {/* `user` 碰到停在待審核的下載只能等（brief §11、M2 票 06）。季表上那幾集是「卡住」，
+              這一句說它卡在誰手上。admin 不畫：審核是他自己的事。 */}
+          {found.awaiting_review > 0 && <AwaitingReview count={found.awaiting_review} />}
 
           {/* Berth 的季表：TMDB 的季集與入庫狀態。票 10 的缺集一鍵搜往它的工具列與展開區裡填
               （單季的入口在那一季展開區的第一行，shape §4）。
@@ -285,5 +290,24 @@ function Offline() {
     <div className="mx-auto grid w-full max-w-[80rem] gap-4 px-6 py-8">
       <p className="max-w-prose text-sm text-ink-dim">{t('discover.off')}</p>
     </div>
+  )
+}
+
+/**
+ * 「等管理員審核」那一句。**中性，不塗信號色**：`assigned` 的意思是「現在需要你」，而看這一頁的
+ * `user` 什麼都做不了（The One Meaning Rule）。狀態仍然不只靠顏色——前面是「待審核」的模板字。
+ */
+function AwaitingReview({ count }: { count: number }) {
+  const { t } = useTranslation()
+  // 角色在這裡問而不是頁面頂層：沒有停下來的下載時這一塊根本不掛，整頁不必多等一個查詢。
+  const me = useQuery(meQueryOptions)
+  if (!me.data || me.data.role === 'admin') return null
+  return (
+    <p className="flex flex-wrap items-start gap-x-3 gap-y-2 border-2 border-rule bg-well px-3 py-2.5">
+      <span className="label bg-deck px-2 py-1.5 text-ink">{t('jobs.state.review')}</span>
+      <span className="min-w-0 flex-1 self-center text-sm text-ink">
+        {t('media.awaitingReview', { count })}
+      </span>
+    </p>
   )
 }

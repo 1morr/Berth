@@ -80,6 +80,7 @@ from berth.domain import (
     MediaSnapshot,
     PlanAction,
     PlanStatus,
+    PlanSummary,
     SeasonSnapshot,
     ServiceKind,
     ServiceOrigin,
@@ -239,6 +240,9 @@ class Scenario:
     #: 待處理頁與對帳（M2 票 05）。見 `_seed_issues`：真的入庫一包、真的刪掉其中一個
     #: 媒體庫檔案，所以按下「立刻對帳」真的會偵測到，按下「重新鏈接」真的會把它接回來。
     issues_demo: bool = False
+    #: 審核佇列（M2 票 06）。見 `_seed_review`：兩個 medium 自動入庫的檔案真的硬鏈接在媒體庫裡，
+    #: 帳本與 Plan Item 都掛著 audit——按「確認」清旗標，按「撤銷」真的把鏈接拆掉。
+    review_demo: bool = False
 
     def probes(self) -> SetupProbes:
         return SetupProbes(
@@ -361,6 +365,18 @@ def issues_scenario() -> Scenario:
     """
     scenario = healthy()
     scenario.issues_demo = True
+    return scenario
+
+
+def review_scenario() -> Scenario:
+    """審核佇列 `/review`（M2 票 06）。
+
+    同 `issues`（一件 `library_link_missing` 要先按「立刻對帳」才出現），加上 `_seed_review`：
+    SPY×FAMILY 第二季的兩集只寫了絕對集號，累計換算成 S02E01、S02E02，信心 medium，
+    所以自動入庫並掛 audit。兩個鏈接都是真的，撤銷真的會把它從媒體庫拿掉。
+    """
+    scenario = issues_scenario()
+    scenario.review_demo = True
     return scenario
 
 
@@ -823,6 +839,9 @@ def tmdb_down() -> Scenario:
 #: `issues` 情境那一包的 info hash。是一串合法的十六進位，不是真的 torrent。
 ISSUES_HASH = "5c1f0a7b2d3e4f60718293a4b5c6d7e8f9a0b1c2"
 
+#: `review` 情境那兩集 medium 自動入庫的下載。
+REVIEW_HASH = "6d2e1b8c3e4f5061728394b5c6d7e8f9a0b1c2d3"
+
 SCENARIOS = {
     "bundled": bundled,
     "discover": discover,
@@ -837,6 +856,7 @@ SCENARIOS = {
     "tmdb-down": tmdb_down,
     "healthy": healthy,
     "issues": issues_scenario,
+    "review": review_scenario,
     "routes": routes_scenario,
     "degraded": degraded,
     "drifted": drifted,
@@ -1154,6 +1174,8 @@ async def _moor(
         await _seed_library(session, scenario, paths)
     if scenario.issues_demo:
         await _seed_issues(session, paths)
+    if scenario.review_demo:
+        await _seed_review(session, paths)
 
 
 async def _seed_issues(session: AsyncSession, paths: PathSettings) -> None:
@@ -1228,6 +1250,119 @@ async def _seed_issues(session: AsyncSession, paths: PathSettings) -> None:
 
     # **在 Jellyfin 裡刪掉第二集**（brief §9.5）：帳本上還有它，磁碟上沒有了。
     (target_dir / "SPY x FAMILY (2022) - S01E02 [1080p][CHT][ANi].mkv").unlink()
+
+
+async def _seed_review(session: AsyncSession, paths: PathSettings) -> None:
+    """兩個 medium 自動入庫、等人確認的檔案（M2 票 06）。接在 `_seed_issues` 後面，作品是同一部。
+
+    **每一個檔案都是真的**，與 `_seed_issues` 同一個理由：撤銷要真的把媒體庫裡那個硬鏈接拆掉，
+    畫面上說「撤銷了」而磁碟上還在，是這一票最糟的結果。Plan 也是真的一份（`applied`、兩列
+    medium 掛 audit），撤銷之後它回 `pending_review`、Job 回 `review`，下載列表看得到。
+    """
+    route = await session.scalar(select(Route).where(Route.slug == "anime"))
+    assert route is not None
+    show = "SPY x FAMILY (2022) [tmdbid-120089]"
+    release = "[ANi] SPY×FAMILY - 26-27 [1080P][WEB-DL][AAC AVC][CHT]"
+    source_dir = Path(f"{paths.complete_root}/anime/{release}")
+    target_dir = Path(f"{route.target_path}/{show}/Season 02")
+    source_dir.mkdir(parents=True, exist_ok=True)
+    target_dir.mkdir(parents=True, exist_ok=True)
+    tv = media_id(MediaKind.TV, 120089)
+    # 給作品一份快照：沒有它的話 Media 詳情整頁只剩「沒有 TMDB 憑證」，看不到 `user` 那一句
+    # 「等管理員審核」（這個情境沒有 TMDB 憑證，而新鮮的快照不會去問 TMDB）。
+    spy = await session.get(Media, tv)
+    assert spy is not None
+    aired = datetime(2022, 4, 9, tzinfo=UTC).date()
+    spy.year = 2022
+    spy.tmdb_snapshot_json = MediaSnapshot(
+        tmdb_id=120089,
+        kind=MediaKind.TV,
+        title="SPY×FAMILY 間諜家家酒",
+        title_en="SPY x FAMILY",
+        title_original="SPY×FAMILY",
+        year=2022,
+        seasons=tuple(
+            SeasonSnapshot(
+                season_number=number,
+                name=f"Season {number}",
+                episode_count=count,
+                air_date=aired,
+                episodes=tuple(
+                    EpisodeSnapshot(episode_number=episode, air_date=aired)
+                    for episode in range(1, count + 1)
+                ),
+            )
+            for number, count in ((1, 25), (2, 12))
+        ),
+    ).model_dump(mode="json")
+    spy.tmdb_fetched_at = datetime.now(UTC)
+
+    session.add(
+        Job(
+            hash=REVIEW_HASH,
+            name=release,
+            source_url="",
+            trigger=JobTrigger.MANUAL,
+            media_id=tv,
+            route_id=route.id,
+            state=JobState.IMPORTED,
+            save_path=str(source_dir.parent).replace("\\", "/"),
+            content_path=str(source_dir).replace("\\", "/"),
+            imported_at=datetime.now(UTC),
+        )
+    )
+    await session.flush()
+    plan = Plan(
+        job_hash=REVIEW_HASH,
+        status=PlanStatus.APPLIED,
+        summary_json=PlanSummary(files=2, medium=2, actions={"import": 2}).model_dump(mode="json"),
+    )
+    session.add(plan)
+    await session.flush()
+
+    for absolute, episode in ((26, 1), (27, 2)):
+        source = source_dir / f"[ANi] SPY×FAMILY - {absolute}.mkv"
+        target = target_dir / f"SPY x FAMILY (2022) - S02E{episode:02d} [1080p][CHT][ANi].mkv"
+        source.write_bytes(f"absolute {absolute}".encode())
+        target.unlink(missing_ok=True)
+        os.link(source, target)
+        facts = target.stat()
+        item = PlanItem(
+            plan_id=plan.id,
+            rel_path=f"{release}/{source.name}",
+            action=PlanAction.IMPORT,
+            media_id=tv,
+            season=2,
+            episode_start=episode,
+            target_path=f"{show}/Season 02/{target.name}",
+            confidence=Confidence.MEDIUM,
+            reasons_json=[
+                f"episode {absolute} is past season 1's 25 episodes",
+                f"absolute episode {absolute} is S02E{episode:02d} by the cumulative count",
+            ],
+            audit=True,
+            applied_at=datetime.now(UTC),
+        )
+        session.add(item)
+        await session.flush()
+        session.add(
+            LedgerEntry(
+                job_hash=REVIEW_HASH,
+                source_rel_path=f"{release}/{source.name}",
+                source_abs_path=str(source).replace("\\", "/"),
+                source_inode=str(facts.st_ino),
+                source_dev=str(facts.st_dev),
+                target_path=str(target).replace("\\", "/"),
+                target_inode=str(facts.st_ino),
+                media_id=tv,
+                season=2,
+                episode_start=episode,
+                plan_item_id=item.id,
+                action=PlanAction.IMPORT,
+                audit=True,
+            )
+        )
+    await session.commit()
 
 
 async def _seed_route_settings(

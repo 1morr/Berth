@@ -152,7 +152,7 @@ async def get_issues(session: SessionDep) -> list[IssueOut]:
 
     **只有 `open`**：這是一份工作清單不是歷史（`services/issues.list_issues`）。
     """
-    return [_out(row) for row in await list_issues(session)]
+    return [issue_out(row) for row in await list_issues(session)]
 
 
 @router.post("/issues/{issue_id}/resolve", responses=RESOLVE_RESPONSES)
@@ -179,7 +179,7 @@ async def post_resolve(
         )
     except IssueRejectedError as refusal:
         raise issue_refusal(refusal) from refusal
-    return _out(view)
+    return issue_out(view)
 
 
 @router.post("/issues/{issue_id}/ignore", responses=IGNORE_RESPONSES)
@@ -196,7 +196,7 @@ async def post_ignore(session: SessionDep, request: Request, issue_id: int) -> I
         )
     except IssueRejectedError as refusal:
         raise issue_refusal(refusal) from refusal
-    return _out(view)
+    return issue_out(view)
 
 
 @router.post("/reconcile", status_code=status.HTTP_202_ACCEPTED, responses=RECONCILE_RESPONSES)
@@ -222,7 +222,7 @@ async def get_reconcile(reconciler: ReconcilerDep) -> ReconcileStatusOut:
     )
 
 
-def _out(view: IssueView) -> IssueOut:
+def issue_out(view: IssueView) -> IssueOut:
     return IssueOut(
         id=view.id,
         type=view.type,

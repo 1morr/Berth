@@ -16,6 +16,7 @@ from berth.api import (
     jobs,
     media,
     plans,
+    review,
     routes,
     search,
     settings,
@@ -34,6 +35,7 @@ router.include_router(jellyfin.router)
 router.include_router(jobs.router)
 router.include_router(media.router)
 router.include_router(plans.router)
+router.include_router(review.router)
 router.include_router(routes.router)
 router.include_router(search.router)
 router.include_router(settings.router)

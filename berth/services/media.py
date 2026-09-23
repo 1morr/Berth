@@ -122,6 +122,8 @@ class MediaView:
     unmatched: tuple[UnmatchedFileView, ...] = ()
     #: 兩個以上版本並存的集（或電影）（brief §7.7）。
     versions: tuple[VersionGroupView, ...] = ()
+    #: 停在 `review`、等管理員審核的下載筆數（M2 票 06）。
+    awaiting_review: int = 0
 
 
 async def read_media(
@@ -453,6 +455,7 @@ async def _view(
         files=holdings.files,
         unmatched=holdings.unmatched,
         versions=holdings.versions,
+        awaiting_review=holdings.awaiting_review,
     )
 
 

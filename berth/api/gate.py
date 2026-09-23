@@ -58,7 +58,14 @@ SETUP_PREFIX = "/setup"
 #:
 #: `issues` 與 `reconcile` 從 M2 票 05 起也在這裡：修正與對帳是管理員的事（plan §6、brief §11）。
 #: `/reconcile` 沒有子路徑，前綴比對對它就是完全比對——`_under_any` 的第一個條件。
-ADMIN_PREFIXES = ("/settings", "/routes", "/jellyfin/libraries", "/issues", "/reconcile")
+ADMIN_PREFIXES = (
+    "/settings",
+    "/routes",
+    "/jellyfin/libraries",
+    "/issues",
+    "/reconcile",
+    "/review",
+)
 
 #: 只有管理員做得了的**單一方法**（M2 票 04）。`(方法, 路徑樣式)`，樣式裡的 `*` 配一段。
 #:

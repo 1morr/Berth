@@ -248,6 +248,9 @@ class Holdings:
     files: tuple[LedgerFileView, ...]
     unmatched: tuple[UnmatchedFileView, ...]
     versions: tuple[VersionGroupView, ...]
+    #: 這部作品停在 `review` 的下載筆數。`user` 碰到它只能等，畫面要說「等管理員審核」
+    #: （plan §6、brief §11，M2 票 06）。
+    awaiting_review: int
 
 
 class Covers(Protocol):
@@ -403,6 +406,7 @@ async def read_holdings(session: AsyncSession, media: Media, snapshot: MediaSnap
         files=tuple(_file(entry) for entry in entries),
         unmatched=tuple(unmatched),
         versions=_versions(features),
+        awaiting_review=sum(job.state is JobState.REVIEW for job in jobs.values()),
     )
 
 

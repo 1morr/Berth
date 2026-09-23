@@ -12,6 +12,7 @@ import {
 } from '../api/issues'
 import { GhostButton, Notice } from '../components/controls'
 import { Dot } from '../components/Dot'
+import { whenText } from '../components/queueText'
 
 /**
  * 待處理頁抬頭下面那一條（`.scratch/m2/issues-shape.md`，M2 票 05）。
@@ -94,13 +95,9 @@ export function ReconcileBanner() {
 
 function Summary({ run }: { run: ReconcileRun }) {
   const { t } = useTranslation()
-  const at = new Date(run.started_at)
-
   return (
     <>
-      {t('reconcile.lastRun', {
-        time: Number.isNaN(at.getTime()) ? run.started_at : at.toLocaleString(),
-      })}
+      {t('reconcile.lastRun', { time: whenText(run.started_at) })}
       <Dot />
       {t('reconcile.opened', { count: run.opened })}
       <Dot />

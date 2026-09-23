@@ -147,17 +147,25 @@ async def record_issue(
     return Recorded(issue=row, opened=True)
 
 
-async def list_issues(session: AsyncSession) -> list[IssueView]:
-    """還沒有人決定的那幾件，最近偵測到的在前面。
+async def list_issues(
+    session: AsyncSession, *, oldest_first: bool = False, limit: int | None = None
+) -> list[IssueView]:
+    """還沒有人決定的那幾件，預設最近偵測到的在前面。
 
     **只有 `open`**：這是一份工作清單，不是歷史。決定過的留在資料庫裡（`resolved_by` 與
     `detail_json.action` 說得出當時按了哪一顆），但它們不該再佔著使用者的注意力。
+
+    `oldest_first` 與 `limit` 是 Review Queue 的（`services/review.py`）：那一份是「等得最久
+    的先看」並且有上限，`/issues` 這一頁是「剛發生的先看」、不設上限。
     """
+    order = (
+        (Issue.detected_at, Issue.id)
+        if oldest_first
+        else (Issue.detected_at.desc(), Issue.id.desc())
+    )
     rows = list(
         await session.scalars(
-            select(Issue)
-            .where(Issue.status == IssueStatus.OPEN)
-            .order_by(Issue.detected_at.desc(), Issue.id.desc())
+            select(Issue).where(Issue.status == IssueStatus.OPEN).order_by(*order).limit(limit)
         )
     )
     jobs = await _live_jobs(session, rows)

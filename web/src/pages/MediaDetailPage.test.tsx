@@ -80,6 +80,7 @@ function media(overrides: Partial<Media> = {}): Media {
     files: [],
     unmatched: [],
     versions: [],
+    awaiting_review: 0,
     ...overrides,
   }
 }
@@ -1478,5 +1479,32 @@ describe('觀看區（M1.5 票 08）', () => {
     const { router } = renderApp('/media/tv:120089')
 
     await waitFor(() => expect(router.state.location.pathname).toBe('/login'))
+  })
+})
+
+describe('停在待審核的下載（M2 票 06）', () => {
+  it('一般使用者看得到「等管理員審核」', async () => {
+    render({ [SPY_PATH]: { body: media({ awaiting_review: 1 }) } }, 'user')
+    renderApp('/media/tv:120089')
+
+    expect(
+      await screen.findByText('這部作品有 1 筆下載停在待審核，等管理員審核。'),
+    ).toBeInTheDocument()
+  })
+
+  it('admin 不畫那一句', async () => {
+    render({ [SPY_PATH]: { body: media({ awaiting_review: 1 }) } })
+    renderApp('/media/tv:120089')
+
+    await screen.findByRole('heading', { level: 1 })
+    expect(screen.queryByText(/等管理員審核/)).not.toBeInTheDocument()
+  })
+
+  it('沒有停下來的下載時什麼都不說', async () => {
+    render({}, 'user')
+    renderApp('/media/tv:120089')
+
+    await screen.findByRole('heading', { level: 1 })
+    expect(screen.queryByText(/等管理員審核/)).not.toBeInTheDocument()
   })
 })

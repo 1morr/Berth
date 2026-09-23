@@ -421,3 +421,34 @@ describe('刪除入口只給管理員（M2 票 04 驗收）', () => {
     expect(screen.queryByRole('button', { name: '刪除' })).toBeNull()
   })
 })
+
+describe('停在待審核的那一筆（M2 票 06）', () => {
+  it('一般使用者看得到「等管理員審核」——他按不了審核，只能等', async () => {
+    render({
+      'GET /api/auth/me': { body: { name: 'deckhand', role: 'user' } },
+      [JOBS]: { body: [job({ state: 'review' })] },
+    })
+    renderApp('/jobs')
+
+    expect(await screen.findByText('等管理員審核')).toBeInTheDocument()
+  })
+
+  it('admin 不看到那一句：審核是他自己的事', async () => {
+    render({ [JOBS]: { body: [job({ state: 'review' })] } })
+    renderApp('/jobs')
+
+    await screen.findByText(/SPY×FAMILY - 13/)
+    expect(screen.queryByText('等管理員審核')).not.toBeInTheDocument()
+  })
+
+  it('不是待審核的那一筆什麼都不說', async () => {
+    render({
+      'GET /api/auth/me': { body: { name: 'deckhand', role: 'user' } },
+      [JOBS]: { body: [job({ state: 'imported' })] },
+    })
+    renderApp('/jobs')
+
+    await screen.findByText(/SPY×FAMILY - 13/)
+    expect(screen.queryByText('等管理員審核')).not.toBeInTheDocument()
+  })
+})

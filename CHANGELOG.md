@@ -473,6 +473,23 @@ Berth 入庫的作品照樣瀏覽得到。這六件事現在是 nightly e2e 的�
   與對帳的客戶端那一方共用——加第三道篩子時不會漏改一邊。
 - **演練情境 `issues`**（M2 票 05，README〈設定精靈的 Fake 後端〉）：真的入庫一包三集，真的刪掉
   其中一個媒體庫檔案，所以整條迴圈在瀏覽器裡跑得起來。
+- **Review Queue：`GET /review` 一支端點、一份清單、一列一件事**（M2 票 06，plan §6、§11.3 決定 6）。
+  每一列以 `kind` 區分形狀，共同的是指向它的物件（`ref`）、一句封閉集合的理由（`reason` 是 code +
+  參數，句子由前端翻）、按得了的動作與開始等人的時間。排序是**需要人動手的排前面**
+  （`REVIEW_PRIORITY`：`plan` / `unmatched` → `audit` / `duplicate` → `issue`），同一類之內舊的在前；
+  **不分頁**，超過 200 列回前 200 並帶 `total`。這一票填進 `audit` 與 `issue` 兩類，其餘三類在票 07、08。
+  整組只有 `admin`（規則在門禁）。
+- **audit 的確認與撤銷**（M2 票 06，brief §6.5、CONTEXT.md 的 Audit）：`POST /review/audit/{ledger_id}/confirm`
+  清掉帳本與 Plan Item 兩處旗標並寫 `audit_confirmed`；`.../undo` 先拆掉那一條硬鏈接（與刪除範圍的
+  `unlink` 同一步、同一道 Route 守衛），**拆成了**才刪帳本那一列、Job 回 `review`、Plan 回
+  `pending_review` 並帶 `review_reason = audit_undone`，寫 `audit_undone`（`unlinked` 照實說拆到了沒）。
+  拆不掉是 409 `unlink_failed`，什麼紀錄都不改。complete 裡的來源不動。
+- **`/review` 頁**（M2 票 06，`.scratch/m2/review-shape.md`）：三段抬頭（要你決定 / 已入庫，等你看一眼 /
+  外面發生的事），空的段不畫；撤銷就地二次確認並說出「complete 裡的檔案不動、這一筆回到待審核」。
+  `/issues` 與 `/review` 的列共用新的 `QueueRow`，Issue 那一列在兩頁是同一個元件、就地按。
+- **`user` 看得到「等管理員審核」**（M2 票 06，brief §11）：`/jobs` 上停在待審核的那一列、Media 詳情
+  （`MediaOut.awaiting_review`）各一句；admin 不畫。
+- **演練情境 `review`**（M2 票 06）：`issues` 加上兩集真的硬鏈接、掛 audit 的 medium 自動入庫。
 - **刪除對話框是一個元件**（M2 票 04，plan §7）：`/jobs` 的展開區與 Media 詳情的版本清單共用，
   票 11 的 `/jobs/:hash` 掛的也是它。就地展開而不是 dialog（The Failure Expands In Place Rule）——
   「哪一筆正在被刪」正是這個動作最怕搞錯的事。取消「移除 torrent」會把「刪除檔案」一起收掉，

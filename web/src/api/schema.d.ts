@@ -671,6 +671,68 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Review
+         * @description 需要人動手的排前面，同一類之內舊的在前（plan §6）。
+         */
+        get: operations["get_review_api_review_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/review/audit/{ledger_id}/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Confirm
+         * @description 「它是對的」：清掉 `ledger.audit` 與那一列 Plan Item 的旗標，寫 `audit_confirmed`。
+         *
+         *     204 而不是回那一列：確認完它就不在佇列上了，畫面要的是重問一次佇列。
+         */
+        post: operations["post_confirm_api_review_audit__ledger_id__confirm_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/review/audit/{ledger_id}/undo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Undo
+         * @description 「它是錯的」：拆掉硬鏈接、刪掉帳本那一列、Job 回 `review`（`audit_undone`）。
+         */
+        post: operations["post_undo_api_review_audit__ledger_id__undo_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/routes": {
         parameters: {
             query?: never;
@@ -1316,6 +1378,75 @@ export interface components {
             apply_to_services?: boolean;
         };
         /**
+         * AuditAction
+         * @description `audit` 那一類按得了的兩顆（brief §6.5：「一鍵撤銷或確認」）。
+         * @enum {string}
+         */
+        AuditAction: "confirm" | "undo";
+        /**
+         * AuditReason
+         * @description `audit` 那一類的理由（`GET /review` 每一列的 `reason.code`）。
+         *
+         *     **只有一種，仍然是封閉集合**（同 `JellyfinRequest`）：理由是給畫面挑句子的 code，不是後端
+         *     拼好的一句話（M2 票 06）。解析器那幾句英文的 `reasons` 是原文，放在列上的 `notes`。
+         * @enum {string}
+         */
+        AuditReason: "medium_auto_imported";
+        /**
+         * AuditReasonOut
+         * @description `audit` 那一列的理由：封閉集合的 code 加參數，句子由前端照 code 挑（M2 票 06）。
+         */
+        AuditReasonOut: {
+            code: components["schemas"]["AuditReason"];
+            /** Params */
+            params: {
+                [key: string]: unknown;
+            };
+        };
+        /**
+         * AuditRowOut
+         * @description 一個 medium 自動入庫、等人看一眼的檔案（CONTEXT.md 的 Audit）。`ref` 是帳本那一列的 id。
+         */
+        AuditRowOut: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "audit";
+            /** Ref */
+            ref: number;
+            reason: components["schemas"]["AuditReasonOut"];
+            /** Actions */
+            actions: components["schemas"]["AuditAction"][];
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /** Media Id */
+            media_id: string | null;
+            /** Title */
+            title: string;
+            /** Title En */
+            title_en: string;
+            /** Job Hash */
+            job_hash: string;
+            /** Job Name */
+            job_name: string;
+            /** Path */
+            path: string;
+            /** Source Path */
+            source_path: string;
+            /** Season */
+            season: number | null;
+            /** Episode Start */
+            episode_start: number | null;
+            /** Episode End */
+            episode_end: number | null;
+            /** Notes */
+            notes: string[];
+        };
+        /**
          * CollectionType
          * @description Jellyfin 媒體庫的類型；沿用 Jellyfin 的字串（brief §4.3）。
          * @enum {string}
@@ -1698,6 +1829,17 @@ export interface components {
             actions: components["schemas"]["IssueAction"][];
         };
         /**
+         * IssueReasonOut
+         * @description `issue` 那一列的理由：code 是 Issue 的型別，參數是它逐型別不同的那幾格。
+         */
+        IssueReasonOut: {
+            code: components["schemas"]["IssueType"];
+            /** Params */
+            params: {
+                [key: string]: unknown;
+            };
+        };
+        /**
          * IssueRefusal
          * @description 對一件 Issue 動手或按下對帳時，在做出任何改變之前就停下來了（M2 票 05）。
          *
@@ -1727,6 +1869,31 @@ export interface components {
             action: components["schemas"]["IssueAction"];
         };
         /**
+         * IssueRowOut
+         * @description 一件還開著的 Issue。`ref` 是 Issue 的 id，動作打 `POST /issues/{ref}/resolve`。
+         *
+         *     **整件 `IssueOut` 跟著來**：同一件事在 `/issues` 與這裡畫的是同一個元件，而它要的每一格
+         *     （來源路徑、按得了哪幾顆）都在那一份裡——在這裡另外攤一份，兩頁就會各說各的。
+         */
+        IssueRowOut: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "issue";
+            /** Ref */
+            ref: number;
+            reason: components["schemas"]["IssueReasonOut"];
+            /** Actions */
+            actions: components["schemas"]["IssueAction"][];
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            issue: components["schemas"]["IssueOut"];
+        };
+        /**
          * IssueStatus
          * @description 一件 Issue 還要不要人決定（plan §2.4）。
          *
@@ -1744,8 +1911,9 @@ export interface components {
          *     四方之後才知道的。兩邊共用同一個集合，所以加一種型別而沒替它決定 `subject` 取哪一欄、
          *     或沒給它動作，紅的會是 `SUBJECT_OF` 與 `ISSUE_ACTIONS` 那兩條閘門。
          *
-         *     `unknown_torrent` 那一種在集合裡屬於「管線發現的」——它由 `qbit_poller` 寫（plan §3.2），
-         *     不是對帳走出來的。
+         *     `unknown_torrent` 在 brief §9.1 的表上算對帳的七種，但**今天寫它的是 `qbit_poller`**
+         *     （plan §3.2）——票 09 讓對帳也走到它之後，兩個生產者寫的是同一個 `(type, subject)`，
+         *     而冪等鍵會把它們收成一筆。
          * @enum {string}
          */
         IssueType: "missing_files" | "client_error" | "client_removed" | "unknown_torrent" | "jellyfin_item_unresolved" | "library_link_missing" | "source_missing" | "inode_mismatch" | "orphan_complete" | "unmanaged_library_file" | "job_without_files";
@@ -2237,6 +2405,8 @@ export interface components {
             unmatched: components["schemas"]["UnmatchedFileOut"][];
             /** Versions */
             versions: components["schemas"]["VersionGroupOut"][];
+            /** Awaiting Review */
+            awaiting_review: number;
         };
         /**
          * PlanAction
@@ -2450,6 +2620,16 @@ export interface components {
             last: components["schemas"]["ReconcileRunOut"] | null;
         };
         /**
+         * ReviewQueueOut
+         * @description 整份佇列。**不分頁**（plan §6）：`rows` 最多 200 列，`total` 是全部幾件。
+         */
+        ReviewQueueOut: {
+            /** Rows */
+            rows: (components["schemas"]["AuditRowOut"] | components["schemas"]["IssueRowOut"])[];
+            /** Total */
+            total: number;
+        };
+        /**
          * ReviewReason
          * @description 為什麼這一份 Plan 停下來等人（brief §5.2 的 `review_required(reason)`）。
          *
@@ -2458,7 +2638,26 @@ export interface components {
          *     而「這一包沒有東西可以入庫」多半表示送錯了 torrent。
          * @enum {string}
          */
-        ReviewReason: "low_confidence" | "medium_not_allowed" | "nothing_to_import" | "target_exists";
+        ReviewReason: "low_confidence" | "medium_not_allowed" | "nothing_to_import" | "target_exists" | "audit_undone";
+        /**
+         * ReviewRefusal
+         * @description 確認或撤銷一個 audit 時，在做出任何改變之前就停下來了（M2 票 06）。
+         *
+         *     `unlink_failed` 是例外，理由與 `IssueRefusal.RELINK_FAILED` 相同：移除要真的碰了磁碟才
+         *     知道成不成，而它的原文（權限、路徑逃出 Route）正是使用者要看的那一句。那一次失敗時帳本
+         *     那一列與 Job 都沒動——先拆鏈接、成了才改紀錄。
+         * @enum {string}
+         */
+        ReviewRefusal: "ledger_missing" | "not_audited" | "unlink_failed";
+        /**
+         * ReviewRefusalOut
+         * @description 做不了的時候回的那一份。`reason` 給畫面挑句子，`detail` 是原文，不翻譯。
+         */
+        ReviewRefusalOut: {
+            reason: components["schemas"]["ReviewRefusal"];
+            /** Detail */
+            detail: string;
+        };
         /**
          * Role
          * @description 使用者角色。由 Jellyfin 的 `Policy.IsAdministrator` 決定（plan §11.1 T0.5）。
@@ -4382,6 +4581,120 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PlanOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_review_api_review_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewQueueOut"];
+                };
+            };
+        };
+    };
+    post_confirm_api_review_audit__ledger_id__confirm_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ledger_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `ledger_missing` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewRefusalOut"];
+                };
+            };
+            /** @description `not_audited` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewRefusalOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_undo_api_review_audit__ledger_id__undo_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ledger_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `ledger_missing` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewRefusalOut"];
+                };
+            };
+            /** @description `not_audited` · `unlink_failed` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewRefusalOut"];
                 };
             };
             /** @description Validation Error */

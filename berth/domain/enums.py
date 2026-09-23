@@ -138,6 +138,13 @@ class EventType(StrEnum):
     #: 對 Jellyfin 的一次請求沒成（request 是 `JellyfinRequest`、error）。**只記不擋**：
     #: 檔案已經在媒體庫裡了，Jellyfin 自己的排程掃描遲早會看到它們（plan §3.3）。
     JELLYFIN_REQUEST_FAILED = "jellyfin_request_failed"
+    #: 管理員看過一個 medium 自動入庫的檔案，說它是對的（ledger、target；M2 票 06）。
+    #: `ledger.audit` 與那一列 Plan Item 的旗標同時清掉。
+    AUDIT_CONFIRMED = "audit_confirmed"
+    #: 管理員撤銷了一個 medium 自動入庫的檔案（ledger、target、`unlinked`；M2 票 06）：
+    #: 硬鏈接與帳本那一列都沒了，這一筆回到 `review`。`unlinked` 是**真的**移掉了沒有——
+    #: 撤銷之前有人已經在 Jellyfin 裡刪掉它的話是 `false`。
+    AUDIT_UNDONE = "audit_undone"
 
 
 class JellyfinRequest(StrEnum):
@@ -652,6 +659,60 @@ class ReviewReason(StrEnum):
     #: 目標路徑上已經有一個**別的**檔案（inode 不同，plan §3.3）。Berth 不覆寫媒體庫裡
     #: 不是它鏈接的東西（brief §5.3），所以停下來等人決定。
     TARGET_EXISTS = "target_exists"
+    #: 一個 medium 自動入庫的檔案被管理員從 Review Queue 撤銷了（CONTEXT.md 的 Audit）。
+    #: 下一步是改那一列的季集或駁回，不是再點一次頭——這份 Plan 已經被說過一次「不對」。
+    AUDIT_UNDONE = "audit_undone"
+
+
+class ReviewKind(StrEnum):
+    """Review Queue 上一列是哪一種事（plan §6 review 群組，2026-09-22 定）。
+
+    **五種一開始就在**，雖然 M2 票 06 只填 `audit` 與 `issue`：佇列的排序與畫面的分組都照
+    這五種定（`REVIEW_PRIORITY`），後面兩票只是把列填進去，不改形狀。
+    """
+
+    #: 低信心的 Plan，逐檔可改（票 07）。
+    PLAN = "plan"
+    #: medium 自動入庫、等人確認的檔案（CONTEXT.md 的 Audit）。
+    AUDIT = "audit"
+    #: 對不到的檔案（票 08）。
+    UNMATCHED = "unmatched"
+    #: Tags 完全相同的兩個版本（票 08）。
+    DUPLICATE = "duplicate"
+    #: 一件還開著的 Issue（brief §9.1）。
+    ISSUE = "issue"
+
+
+#: 佇列的排序鍵：**需要人動手的排前面**（plan §6）。`plan` 與 `unmatched` 不處理就卡著一筆
+#: 下載；`audit` 與 `duplicate` 已經在媒體庫裡，只是等人看一眼；`issue` 多半是外面發生的事
+#: （有人在 Jellyfin 裡刪了東西），它的一顆按鈕就是全部的工作。同一級之內舊的在前。
+REVIEW_PRIORITY: dict[ReviewKind, int] = {
+    ReviewKind.PLAN: 0,
+    ReviewKind.UNMATCHED: 0,
+    ReviewKind.AUDIT: 1,
+    ReviewKind.DUPLICATE: 1,
+    ReviewKind.ISSUE: 2,
+}
+
+
+class AuditReason(StrEnum):
+    """`audit` 那一類的理由（`GET /review` 每一列的 `reason.code`）。
+
+    **只有一種，仍然是封閉集合**（同 `JellyfinRequest`）：理由是給畫面挑句子的 code，不是後端
+    拼好的一句話（M2 票 06）。解析器那幾句英文的 `reasons` 是原文，放在列上的 `notes`。
+    """
+
+    #: 信心是 medium，而這條 Route 允許 medium 自動入庫（brief §6.5）。
+    MEDIUM_AUTO_IMPORTED = "medium_auto_imported"
+
+
+class AuditAction(StrEnum):
+    """`audit` 那一類按得了的兩顆（brief §6.5：「一鍵撤銷或確認」）。"""
+
+    #: 它是對的：清掉兩處旗標，檔案留在媒體庫裡。
+    CONFIRM = "confirm"
+    #: 它是錯的：拆掉硬鏈接、刪掉帳本那一列，這一筆回到 `review`。
+    UNDO = "undo"
 
 
 # 以下三組是 `{reason, detail}` 那一格的 `reason`（plan §6）：理由翻譯、原文不翻譯。
@@ -765,3 +826,19 @@ class IssueRefusal(StrEnum):
     CLIENT_UNREACHABLE = "client_unreachable"
     #: 上一輪對帳還在跑。**不排隊**：排隊的那一輪看到的會是同一份磁碟（plan §3.2）。
     RECONCILE_RUNNING = "reconcile_running"
+
+
+class ReviewRefusal(StrEnum):
+    """確認或撤銷一個 audit 時，在做出任何改變之前就停下來了（M2 票 06）。
+
+    `unlink_failed` 是例外，理由與 `IssueRefusal.RELINK_FAILED` 相同：移除要真的碰了磁碟才
+    知道成不成，而它的原文（權限、路徑逃出 Route）正是使用者要看的那一句。那一次失敗時帳本
+    那一列與 Job 都沒動——先拆鏈接、成了才改紀錄。
+    """
+
+    #: 沒有這個 id 的帳本列。多半是另一個分頁先撤銷了。
+    LEDGER_MISSING = "ledger_missing"
+    #: 這一列沒有 `audit` 旗標（已經被確認過，或本來就是 high）。
+    NOT_AUDITED = "not_audited"
+    #: 硬鏈接拆不掉。`detail` 是系統原文。
+    UNLINK_FAILED = "unlink_failed"

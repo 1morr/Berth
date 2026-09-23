@@ -91,6 +91,11 @@ export function JobRow({ job }: { job: Job }) {
                 子項的最小寬度，390px 上整頁橫向捲動（票 15 實測）。 */}
             <span className="value block text-sm wrap-anywhere text-ink">{job.name}</span>
             <Facts job={job} mediaTitle={mediaTitle} locale={i18n.language} />
+            {/* `user` 按不了審核（plan §6、brief §11），停在這裡的那一筆他只能等——說出來，
+                否則黃色的「待審核」讀起來像是在叫他做什麼。 */}
+            {job.state === 'review' && me.data && me.data.role !== 'admin' && (
+              <span className="text-xs text-ink-dim">{t('jobs.waitingForAdmin')}</span>
+            )}
           </span>
         </span>
       </summary>

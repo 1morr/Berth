@@ -115,6 +115,27 @@ class TestEpisodes:
         assert (found.imported, found.aired) == (1, 2)
 
 
+class TestAwaitingReview:
+    """`user` 碰到停在 `review` 的那一筆只能等，詳情頁要說得出「等管理員審核」（M2 票 06）。"""
+
+    async def test_it_counts_the_downloads_held_for_review(self, session: AsyncSession) -> None:
+        tv = await route(session)
+        spy = await title(session, seasons=(season(1, aired=2),))
+        await job(session, spy, tv, JobState.REVIEW, hash="a" * 40)
+        await job(session, spy, tv, JobState.IMPORT_FAILED, hash="b" * 40)
+        await job(session, spy, tv, JobState.DOWNLOADING, hash="c" * 40)
+
+        # 入庫失敗也卡著集數，但那不是「等審核」——它要的是重試，不是一個決定。
+        assert (await detail(session, spy)).awaiting_review == 1
+
+    async def test_nothing_held_is_zero(self, session: AsyncSession) -> None:
+        tv = await route(session)
+        spy = await title(session, seasons=(season(1, aired=1),))
+        await job(session, spy, tv, JobState.IMPORTED)
+
+        assert (await detail(session, spy)).awaiting_review == 0
+
+
 class TestFiles:
     async def test_a_file_carries_its_episode_tags_target_and_ledger_state(
         self, session: AsyncSession

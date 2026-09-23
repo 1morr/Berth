@@ -243,7 +243,7 @@ async def _scope_paths(session: AsyncSession, job: Job) -> _ScopePaths:
             [Path(row.source_abs_path) for row in entries]
             + [fs.under(job.save_path, row.rel_path) for row in files if job.save_path]
         ),
-        route_targets=[Path(row.target_path) for row in await session.scalars(select(Route))],
+        route_targets=await route_targets(session),
         complete_root=Path(paths.complete_root),
     )
 
@@ -301,15 +301,31 @@ def _remove_all(paths: Sequence[Path], *, roots: Sequence[Path]) -> int:
     removed = 0
     for path in paths:
         try:
-            root = fs.root_of(path, roots)
-            gone = fs.remove(path, roots=roots)
+            gone = remove_one(path, roots=roots)
         except (OSError, fs.PathEscapeError) as exc:
             logger.warning("this path was left alone", extra={"path": str(path), "error": str(exc)})
             continue
         if gone:
             removed += 1
-        fs.prune_empty_parents(path, root=root)
     return removed
+
+
+def remove_one(path: Path, *, roots: Sequence[Path]) -> bool:
+    """刪一條路徑，空掉的目錄跟著收。回傳它原本在不在。
+
+    **一條一條的那一步**，`_remove_all` 與 audit 撤銷（`services/review.py`，M2 票 06）都走它：
+    撤銷只拆一個檔案，而且拆不掉時要停下來、什麼紀錄都不改——所以失敗照樣丟出去
+    （`OSError` / `fs.PathEscapeError`），吞不吞由呼叫端決定。
+    """
+    root = fs.root_of(path, roots)
+    gone = fs.remove(path, roots=roots)
+    fs.prune_empty_parents(path, root=root)
+    return gone
+
+
+async def route_targets(session: AsyncSession) -> list[Path]:
+    """刪除守衛認得的那幾個根：每一條 Route 的目標路徑。媒體庫裡只刪得到它們底下的東西。"""
+    return [Path(row.target_path) for row in await session.scalars(select(Route))]
 
 
 async def _restate_ledger(session: AsyncSession, job: Job, scope: DeleteScope) -> None:
