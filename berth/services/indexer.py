@@ -37,7 +37,7 @@ from berth.domain import (
 from berth.models import IndexerSettings, SetupSettings, SetupStep
 from berth.models.types import utcnow
 from berth.services.clients import BUNDLED_PROWLARR_URL, ServiceClientFactory
-from berth.services.settings import read_settings, write_settings
+from berth.services.settings import read_settings, update_settings, write_settings
 from berth.services.steps import StepView, message, step_views
 
 #: 預設勾的十個公開站（plan §9.3 第 5 步、brief §16.3）。值是 Prowlarr 的 `definitionName`：
@@ -152,12 +152,15 @@ async def apply_default_indexers(
 
     settings.kind = IndexerKind.PROWLARR.value
     settings.base_url = base_url
-    setup.indexer.steps = steps
-    setup.indexer.skipped = False
-    _pin_probe(setup, origin)
     await write_settings(session, settings)
-    await write_settings(session, setup)
-    await session.commit()
+
+    def record(latest: SetupSettings) -> None:
+        latest.indexer.steps = steps
+        latest.indexer.skipped = False
+        _pin_probe(latest, origin)
+
+    # 逐站加完要一分鐘上下，這段時間裡第 6 步可能已經寫進同一組設定（M2 票 15）。
+    await update_settings(session, SetupSettings, record)
     return await read_indexer_status(session, factory)
 
 
@@ -170,7 +173,6 @@ async def connect_indexer(
     api_key: str,
 ) -> IndexerSetupStatus:
     """既有路徑的「測試」：先存再測，測不過也存（與第 2 步的連線表單同一個規矩）。"""
-    setup = await read_settings(session, SetupSettings)
     settings = await read_settings(session, IndexerSettings)
     settings.kind = kind.value
     settings.base_url = base_url
@@ -178,11 +180,13 @@ async def connect_indexer(
     await write_settings(session, settings)
 
     step = await probe_indexer(factory, kind, base_url, api_key)
-    setup.indexer.steps = [step]
-    setup.indexer.skipped = False
-    await write_settings(session, setup)
-    await session.commit()
 
+    def record(latest: SetupSettings) -> None:
+        latest.indexer.steps = [step]
+        latest.indexer.skipped = False
+
+    # 測試在路上的那幾秒裡，第 6 步可能已經寫進同一組設定（M2 票 15）。
+    setup = await update_settings(session, SetupSettings, record)
     origin, _ = _target(setup, settings)
     return _view(setup, settings, origin, base_url, options=(), reachable=True, error="")
 

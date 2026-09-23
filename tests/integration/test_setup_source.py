@@ -9,15 +9,16 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 import pytest
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from berth.adapters.http import AuthFailedError, ServiceUnavailableError
-from berth.adapters.prowlarr import ProwlarrIndexer
+from berth.adapters.prowlarr import IndexerDefinition, ProwlarrIndexer
 from berth.adapters.prowlarr.fake import FakeProwlarrClient
 from berth.adapters.tmdb import TmdbConfiguration
 from berth.adapters.tmdb.fake import FakeTmdbClient
 from berth.adapters.torznab import TorznabCaps, TorznabSearchMode
 from berth.adapters.torznab.fake import FakeTorznabClient
+from berth.db import create_session_factory
 from berth.domain import (
     PROWLARR_LOGIN_STEP,
     DetectionReason,
@@ -438,3 +439,64 @@ async def test_berth_never_adds_sites_to_an_existing_indexer(session: AsyncSessi
         await apply_default_indexers(session, FakeClientFactory(prowlarr=client), ["nyaasi"])
 
     assert await client.indexers() == []
+
+
+class _TmdbPressedMeanwhile(FakeProwlarrClient):
+    """加第一個站的那幾秒裡，使用者在同一頁按了「測試 TMDB」（M2 票 15 的 e2e 抓到的）。
+
+    真的 Prowlarr 逐站連線再加上重啟要一分鐘上下，而第 5、6 步在同一頁上，所以這不是假想。
+    """
+
+    def __init__(self, engine: AsyncEngine) -> None:
+        super().__init__()
+        self._engine = engine
+        self._pressed = False
+
+    async def add_indexer(self, definition: IndexerDefinition) -> ProwlarrIndexer:
+        if not self._pressed:
+            self._pressed = True
+            async with create_session_factory(self._engine)() as other:
+                await verify_tmdb(other, FakeClientFactory(), api_key=TMDB_API_KEY)
+        return await super().add_indexer(definition)
+
+
+class _SitesAddedMeanwhile(FakeTmdbClient):
+    """反過來：TMDB 的測試還在路上時，加站那一輪先寫完了。"""
+
+    def __init__(self, engine: AsyncEngine) -> None:
+        super().__init__()
+        self._engine = engine
+
+    async def configuration(self) -> TmdbConfiguration:
+        async with create_session_factory(self._engine)() as other:
+            factory = FakeClientFactory()
+            await apply_default_indexers(other, factory, ["nyaasi"], sleep=_no_sleep)
+        return await super().configuration()
+
+
+@pytest.mark.asyncio
+async def test_sites_being_added_do_not_erase_a_tmdb_check_made_meanwhile(
+    session: AsyncSession, engine: AsyncEngine
+) -> None:
+    """兩支命令都是「讀、打網路、寫回」：後寫完的那一支不准把對方剛寫的那一半蓋回去。"""
+    await arrange(session)
+    factory = FakeClientFactory(prowlarr=_TmdbPressedMeanwhile(engine))
+
+    await apply_default_indexers(session, factory, ["nyaasi"], sleep=_no_sleep)
+
+    assert (await read_tmdb_status(session)).verified is True
+    assert (await read_status(session)).current_step == STEP_ROUTES
+
+
+@pytest.mark.asyncio
+async def test_a_tmdb_check_does_not_erase_sites_added_meanwhile(
+    session: AsyncSession, engine: AsyncEngine
+) -> None:
+    await arrange(session)
+    factory = FakeClientFactory(tmdb=_SitesAddedMeanwhile(engine))
+
+    await verify_tmdb(session, factory, api_key=TMDB_API_KEY)
+
+    status = await read_indexer_status(session, FakeClientFactory())
+    assert [row.step for row in status.steps if row.status is StepStatus.OK][:1] == ["nyaasi"]
+    assert (await read_status(session)).current_step == STEP_ROUTES

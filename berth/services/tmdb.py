@@ -17,7 +17,7 @@ from berth.adapters.http import ServiceError
 from berth.domain import StepStatus
 from berth.models import SetupSettings, SetupStep, TmdbSettings
 from berth.services.clients import ServiceClientFactory
-from berth.services.settings import read_settings, write_settings
+from berth.services.settings import read_settings, update_settings, write_settings
 from berth.services.steps import StepView, message, step_views
 
 #: 這一步唯一的那條纜繩，也是它打的端點。
@@ -50,18 +50,20 @@ async def verify_tmdb(
     session: AsyncSession, factory: ServiceClientFactory, *, api_key: str
 ) -> TmdbSetupStatus:
     """先存再測（與其他連線表單同一個規矩）：測不過也存，使用者才能改一個字再按一次。"""
-    setup = await read_settings(session, SetupSettings)
     settings = await read_settings(session, TmdbSettings)
     settings.api_key = api_key.strip()
 
     step, image_base_url = await _test(factory, settings)
     # 圖片基底順手存下來：它對同一把憑證是常數，而探索頁（票 03）每一張卡都要它。
     settings.image_base_url = image_base_url or settings.image_base_url
-    setup.tmdb.steps = [step]
     # 測不過也存，使用者才能改一個字再按一次（與其他連線表單同一個規矩）。
     await write_settings(session, settings)
-    await write_settings(session, setup)
-    await session.commit()
+
+    def record(latest: SetupSettings) -> None:
+        latest.tmdb.steps = [step]
+
+    # 測試在路上的那幾秒裡，第 5 步可能已經寫進同一組設定（M2 票 15）。
+    setup = await update_settings(session, SetupSettings, record)
     return _view(setup, settings)
 
 
