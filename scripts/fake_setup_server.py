@@ -2012,7 +2012,7 @@ async def _seed_library(session: AsyncSession, scenario: Scenario, paths: PathSe
     await session.flush()
 
     bear_job = _demo_job(session, bear, routes["tv"], JobState.IMPORTED, "1")
-    _demo_job(session, slow, routes["tv"], JobState.REVIEW, "2")
+    slow_job = _demo_job(session, slow, routes["tv"], JobState.REVIEW, "2")
     severance_job = _demo_job(session, severance, routes["tv"], JobState.DOWNLOADING, "3")
     _demo_job(session, oppenheimer, routes["movies"], JobState.IMPORTED, "4")
     _demo_job(session, moana, routes["movies"], JobState.IMPORT_FAILED, "5")
@@ -2022,15 +2022,35 @@ async def _seed_library(session: AsyncSession, scenario: Scenario, paths: PathSe
 
     unmatched = Plan(job_hash=bear_job.hash, status=PlanStatus.APPLIED)
     held = Plan(job_hash=frieren_job.hash, status=PlanStatus.PENDING_REVIEW)
-    session.add_all([unmatched, held])
+    # 媒體庫頁的「待審」「對不到」是審核佇列的子集（M2 票 14）：TV 媒體庫上一份等審核的計劃、兩個
+    # 對不到的檔案。對不到那一類以 `job_files` 為單位，所以檔案要真的有一列。
+    slow_held = Plan(job_hash=slow_job.hash, status=PlanStatus.PENDING_REVIEW)
+    extras = [
+        JobFile(job_hash=bear_job.hash, rel_path=f"The.Bear.S01.1080p/Extras/{name}.mkv", size=1)
+        for name in ("behind the scenes", "cast interview")
+    ]
+    session.add_all([unmatched, held, slow_held, *extras])
     await session.flush()
     session.add_all(
         [
+            *(
+                PlanItem(
+                    plan_id=unmatched.id,
+                    rel_path=extra.rel_path,
+                    job_file_id=extra.id,
+                    action=PlanAction.UNMATCHED,
+                    media_id=bear.id,
+                    confidence=Confidence.LOW,
+                )
+                for extra in extras
+            ),
             PlanItem(
-                plan_id=unmatched.id,
-                rel_path="The.Bear.S01.1080p/Extras/behind the scenes.mkv",
-                action=PlanAction.UNMATCHED,
-                media_id=bear.id,
+                plan_id=slow_held.id,
+                rel_path="Slow.Horses.S01.1080p.WEB-DL/Slow.Horses.05.mkv",
+                action=PlanAction.REVIEW,
+                media_id=slow.id,
+                season=1,
+                episode_start=5,
                 confidence=Confidence.LOW,
             ),
             PlanItem(
