@@ -177,6 +177,28 @@ describe('探索頁', () => {
     expect(card).toHaveAttribute('href', '/media/tv%3A95350')
   })
 
+  it('連結的名字是作品名，類型年份是描述；圖位的「無海報」不進名字（票 13）', async () => {
+    render({ [TRENDING]: wall([item({ poster_url: '', poster_url_en: '' })]) })
+    renderApp('/')
+    await screen.findByText('綠燈軍團')
+
+    const card = section('本週趨勢').getByRole('link')
+
+    expect(card).toHaveAccessibleName('綠燈軍團')
+    expect(card).toHaveAccessibleDescription(/^TV\s+2026/)
+  })
+
+  it('一面牆是一份清單，每一格的標題是 h3——與媒體庫牆、接著看同一種語意（票 13）', async () => {
+    render()
+    renderApp('/')
+    await screen.findByText('綠燈軍團')
+
+    const list = section('本週趨勢').getByRole('list')
+
+    expect(within(list).getAllByRole('listitem')).toHaveLength(1)
+    expect(within(list).getByRole('heading', { level: 3 })).toHaveTextContent('綠燈軍團')
+  })
+
   it('TMDB 的歸屬聲明與標誌永遠在頁面上（brief §20.3 的條款要求）', async () => {
     render()
     renderApp('/')
@@ -453,7 +475,9 @@ describe('首頁上方的繼續觀看與下一集（M1.5 票 07）', () => {
     expect(next.compareDocumentPosition(search) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
 
     const episode = within(resume).getByRole('link', { name: /葬送的芙莉蓮/ })
-    expect(episode).toHaveAccessibleName(/S01E05.*葬送的芙莉蓮.*冒險結束.*看到 42%.*開新分頁/)
+    // 名字從作品名念起（票 13），看到幾 % 是描述。
+    expect(episode).toHaveAccessibleName(/^葬送的芙莉蓮 S01E05 冒險結束.*（開新分頁）$/)
+    expect(episode).toHaveAccessibleDescription('看到 42%')
     expect(episode).toHaveAttribute(
       'href',
       'http://localhost:8096/web/#/details?id=99701a68c9a746b2f3a2d31d0b6c49f2',

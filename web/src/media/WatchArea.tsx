@@ -16,7 +16,7 @@ import { GhostButton, NAV_BOX, NAV_BOX_ACTIVE, PRIMARY_LINK } from '../component
 import { formatJellyfinEpisode } from '../components/episodes'
 import { WatchToggle } from '../components/WatchToggle'
 import { watchLine } from '../components/watchLine'
-import { WALL_GRID, oneRowOnly } from '../discover/wallGrid'
+import { WALL_GRID, oneRowOnly } from '../components/wallGrid'
 import { jellyfinDetailsUrl } from '../inventory/jellyfinLink'
 
 /**
@@ -268,9 +268,12 @@ function EpisodeTile({
   onWritten: (written: WatchState) => void
 }) {
   const { t } = useTranslation()
-  const nameId = useId()
   const url = jellyfinDetailsUrl(area.jellyfin, episode.item_id, window.location)
   const upNext = area.carry_on?.item_id === episode.item_id
+  const lineId = useId()
+  // 集名可能是空的或只是「Episode 4」：名字帶上集號才分得出是哪一集（票 13）。整格的字串起來是
+  // 「無圖 S01E04 …」，所以連結與「標為已看」都用這一個名字，不讓圖位的字進來。
+  const name = [formatJellyfinEpisode(episode), episode.name].filter(Boolean).join(' ')
 
   const body = (
     <>
@@ -285,15 +288,13 @@ function EpisodeTile({
             </span>
           )}
         </p>
-        <p id={nameId} className="value line-clamp-2 min-h-10 text-sm leading-snug text-ink">
+        <h3 className="value line-clamp-2 min-h-10 text-sm leading-snug text-ink">
           {episode.name}
+        </h3>
+        <p id={lineId} className="value min-h-4 text-xs text-ink">
+          {watchLine(t, episode.watch)}
         </p>
-        <p className="value min-h-4 text-xs text-ink">{watchLine(t, episode.watch)}</p>
-        {url ? (
-          <span className="sr-only">{t('inventory.jellyfin.newTab')}</span>
-        ) : (
-          <p className="text-xs text-ink">{t('inventory.jellyfin.noAddress')}</p>
-        )}
+        {!url && <p className="text-xs text-ink">{t('inventory.jellyfin.noAddress')}</p>}
       </div>
     </>
   )
@@ -301,7 +302,14 @@ function EpisodeTile({
   return (
     <article className="grid h-full grid-rows-[1fr_auto] border-2 border-rule bg-well has-[a:hover]:border-rule-strong has-[a:focus-visible]:border-rule-strong">
       {url ? (
-        <a href={url} target="_blank" rel="noreferrer" className="grid grid-rows-[auto_1fr]">
+        <a
+          href={url}
+          target="_blank"
+          rel="noreferrer"
+          aria-label={`${name}${t('inventory.jellyfin.newTab')}`}
+          aria-describedby={lineId}
+          className="grid grid-rows-[auto_1fr]"
+        >
           {body}
         </a>
       ) : (
@@ -312,7 +320,7 @@ function EpisodeTile({
           itemId={episode.item_id}
           target="episode"
           watch={episode.watch}
-          describedBy={nameId}
+          subject={name}
           onWritten={onWritten}
         />
       </div>

@@ -14,6 +14,7 @@ import {
   wallQuery,
   type Inventory,
   type InventoryCard,
+  type InventoryFilter,
   type InventoryFilters,
   type InventoryLibrary,
   type SortOrder,
@@ -27,26 +28,23 @@ import {
   GhostButton,
   NAV_BOX,
   NAV_BOX_ACTIVE,
+  NAV_LINK,
   Notice,
 } from '../components/controls'
 import { Dot } from '../components/Dot'
 import { SessionEnded } from '../components/SessionEnded'
-import { TilePlaceholder } from '../discover/MediaTile'
-import { WALL_GRID_CONFIRMABLE } from '../discover/wallGrid'
+import { TilePlaceholder } from '../components/TilePlaceholder'
+import { WALL_GRID_CONFIRMABLE } from '../components/wallGrid'
 import { InventoryTile } from '../inventory/InventoryTile'
 import { LibraryWatching } from '../watching/WatchingRows'
 import { jellyfinLibrariesUrl } from '../inventory/jellyfinLink'
 import tmdbLogo from '../assets/tmdb.svg'
 
-/** 網址上的篩選（`?filter=`）。Issue 那一種留給 M2（票 13 驗收）。 */
-export type InventoryFilter = 'review' | 'unmatched'
-
 /** 讀取中先畫幾格空位，與探索牆同一個道理：版面不跳。 */
 const PLACEHOLDERS = 12
 
 /** 切換列與篩選列的一個方塊。當前那一個重橫線 + `deck` 底，不靠顏色（與頁首導覽同一種）。 */
-const SWITCH = `${NAV_BOX} inline-flex items-center px-4 py-2.5`
-const SWITCH_ACTIVE = `${NAV_BOX_ACTIVE} inline-flex items-center px-4 py-2.5`
+const SWITCH = `${NAV_LINK} inline-flex items-center px-4 py-2.5`
 /** 篩選列的方塊比切換列小一號。 */
 const FILTER = `${NAV_BOX} inline-flex items-center px-3 py-1.5`
 const FILTER_ACTIVE = `${NAV_BOX_ACTIVE} inline-flex items-center px-3 py-1.5`
@@ -103,7 +101,6 @@ export function InventoryPage({
                 // 換媒體庫時頁碼與篩選不跟著走：那是上一個媒體庫的。
                 activeOptions={{ exact: true, includeSearch: false }}
                 className={SWITCH}
-                activeProps={{ className: SWITCH_ACTIVE }}
               >
                 {/* 媒體庫名是使用者在 Jellyfin 打的字：`.label` 的大寫會把 `Movies` 印成 `MOVIES`（票 15）。 */}
                 <span className="normal-case">{row.name}</span>
@@ -173,17 +170,15 @@ function Wall({
 
   const inventory = wall.data
   const notInJellyfin = inventory.tracked.filter((card) => card.presence !== 'found')
-  // 兩個值各判一次，不是「不是 review 就是 unmatched」：網址上帶一個不認得的值時，
-  // 後者會讓畫面顯示一份他沒有要的清單，而三顆篩選鍵都不會被標成當前（票 11 的 critique 實測）。
-  const flagged =
-    filter === 'review' || filter === 'unmatched'
-      ? {
-          filter,
-          cards: inventory.tracked.filter((card) =>
-            filter === 'review' ? card.tracking?.needs_review : card.tracking?.has_unmatched,
-          ),
-        }
-      : null
+  // 不認得的值在路由那一道就擋掉了（`isInventoryFilter`），這裡拿到的只會是兩個之一或沒有。
+  const flagged = filter
+    ? {
+        filter,
+        cards: inventory.tracked.filter((card) =>
+          filter === 'review' ? card.tracking?.needs_review : card.tracking?.has_unmatched,
+        ),
+      }
+    : null
 
   const narrowing = narrowed(query)
 
@@ -205,7 +200,7 @@ function Wall({
         </h2>
         <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
           <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-3">
-            <Filters inventory={inventory} page={page} query={query} />
+            <Filters inventory={inventory} page={page} query={query} filter={filter} />
             {/* 待審與 Unmatched 是 Berth 的清單：排序與類型年份留在網址上，但套不上，所以不畫。 */}
             {!flagged && (
               <Arrange
@@ -247,7 +242,7 @@ function Wall({
             {/* 牆底那一組只在真的有別頁時出現：只有一頁時總數已經寫在篩選列旁。 */}
             {(inventory.total > inventory.page_size || inventory.page > 1) && (
               <div className="flex justify-end">
-                <Pager inventory={inventory} query={query} />
+                <Pager inventory={inventory} query={query} end />
               </div>
             )}
           </>
@@ -466,18 +461,16 @@ function NarrowPanel({
   )
 }
 
+/** 一面牆是一份清單（票 13）：與探索牆、接著看同一種語意，螢幕閱讀器念得出有幾項。 */
 function Tiles({ cards, inventory }: { cards: InventoryCard[]; inventory: Inventory }) {
   return (
-    <div className={WALL_GRID_CONFIRMABLE}>
+    <ul className={WALL_GRID_CONFIRMABLE}>
       {cards.map((card) => (
-        <InventoryTile
-          key={`${card.media_id}|${card.jellyfin_item_id}`}
-          card={card}
-          web={inventory.jellyfin}
-          libraryId={inventory.library.id}
-        />
+        <li key={`${card.media_id}|${card.jellyfin_item_id}`} className="grid">
+          <InventoryTile card={card} web={inventory.jellyfin} libraryId={inventory.library.id} />
+        </li>
       ))}
-    </div>
+    </ul>
   )
 }
 
@@ -514,46 +507,54 @@ function onPage(page: number, query: WallQuery) {
  *
  * **每一個都帶著現在的頁碼、排序與類型年份**：篩選的清單跟著每一頁一起到手，換篩選不必重抓（shape §6）；
  * 按回「全部」也回到原本排好、篩好的那一頁（票 06）。
+ *
+ * **選著的那一個不是連結**，是一段 `aria-current="true"` 的字（票 13，M1.5 audit P3）：TanStack 的 `Link` 在
+ * 當前時一定掛 `aria-current="page"`、改不掉，而同一頁的媒體庫切換列已經有一個「當前頁」——篩選是這一頁裡的
+ * 一組選項，不是另一頁。按它本來就什麼都不會發生。
  */
 function Filters({
   inventory,
   page,
   query,
+  filter,
 }: {
   inventory: Inventory
   page: number
   query: WallQuery
+  filter: InventoryFilter | undefined
 }) {
   const { t } = useTranslation()
   const kept = onPage(page, query)
   const options = [
-    { search: kept, label: t('inventory.filter.all') },
+    { filter: undefined, label: t('inventory.filter.all') },
+    { filter: 'review' as const, label: t('inventory.filter.review', { count: inventory.review }) },
     {
-      search: { ...kept, filter: 'review' as const },
-      label: t('inventory.filter.review', { count: inventory.review }),
-    },
-    {
-      search: { ...kept, filter: 'unmatched' as const },
+      filter: 'unmatched' as const,
       label: t('inventory.filter.unmatched', { count: inventory.unmatched }),
     },
   ]
 
   return (
     <nav aria-label={t('inventory.filters')} className="flex flex-wrap gap-2">
-      {options.map((option) => (
-        <Link
-          key={option.label}
-          to="/library/$libraryId"
-          params={{ libraryId: inventory.library.id }}
-          search={option.search}
-          // 「全部」的 `{}` 是每一種 search 的子集，不比到一模一樣的話它永遠是當前頁。
-          activeOptions={{ exact: true }}
-          className={FILTER}
-          activeProps={{ className: FILTER_ACTIVE }}
-        >
-          {option.label}
-        </Link>
-      ))}
+      {options.map((option) =>
+        option.filter === filter ? (
+          <span key={option.label} aria-current="true" className={`${FILTER_ACTIVE} text-ink`}>
+            {option.label}
+          </span>
+        ) : (
+          <Link
+            key={option.label}
+            to="/library/$libraryId"
+            params={{ libraryId: inventory.library.id }}
+            search={option.filter ? { ...kept, filter: option.filter } : kept}
+            // 「全部」的 search 是每一種的子集，模糊比對會讓它在待審頁上也被當成當前、掛上 `aria-current`。
+            activeOptions={{ exact: true }}
+            className={FILTER}
+          >
+            {option.label}
+          </Link>
+        ),
+      )}
     </nav>
   )
 }
@@ -561,15 +562,21 @@ function Filters({
 /**
  * `1–100 / 523` 加上一頁 / 下一頁（jellyfin-web 的分頁，使用者拍板）。看得見的是數字，聽得見的是
  * 帶單位的那一句（DESIGN.md 的區塊標題規則）；牆上方那一組把它放進 `aria-live`，換頁時念得出來。
+ *
+ * 牆上下各一組，**兩個 landmark 名字不同**（`end`，票 13）：地標清單裡兩個同名的「分頁」分不出哪個是哪個
+ * （WAI-ARIA landmark 的慣例：同一種出現兩次就各給一個名字）。
  */
 function Pager({
   inventory,
   query,
   announce = false,
+  end = false,
 }: {
   inventory: Inventory
   query: WallQuery
   announce?: boolean
+  /** 牆底那一組。 */
+  end?: boolean
 }) {
   const { t } = useTranslation()
   const { page, page_size: size, total, library } = inventory
@@ -580,7 +587,10 @@ function Pager({
   const beyond = page > pages
 
   return (
-    <nav aria-label={t('inventory.pages')} className="flex flex-wrap items-center gap-2">
+    <nav
+      aria-label={end ? t('inventory.pagesEnd') : t('inventory.pages')}
+      className="flex flex-wrap items-center gap-2"
+    >
       <span aria-hidden="true" className="value text-xs text-ink-dim">
         {beyond ? `— / ${total}` : `${first}–${last} / ${total}`}
       </span>
@@ -824,7 +834,7 @@ function Placeholders() {
   return (
     <div className={WALL_GRID_CONFIRMABLE}>
       {Array.from({ length: PLACEHOLDERS }, (_, index) => (
-        <TilePlaceholder key={index} />
+        <TilePlaceholder key={index} inventory />
       ))}
     </div>
   )

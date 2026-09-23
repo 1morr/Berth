@@ -189,6 +189,15 @@ export const NAV_BOX = 'label border-2 border-rule hover:border-rule-strong'
 export const NAV_BOX_ACTIVE = 'label border-2 border-rule-strong bg-deck'
 
 /**
+ * 路由的 `Link` 用這一個：當前那一個由 TanStack 自己掛的 `data-status="active"` 換漆（票 13）。
+ *
+ * 不用 `activeProps`：它的 `className` 是**接在** `className` 後面，當前那一格因此同時帶著 `border-rule` 與
+ * `border-rule-strong`，誰贏看 Tailwind 產生的先後，不是看字串（M1.5 票 11 audit）。按鈕沒有這個問題
+ * （`aria-pressed` 的那幾處是二選一），照舊用上面兩個。
+ */
+export const NAV_LINK = `${NAV_BOX} data-[status=active]:border-rule-strong data-[status=active]:bg-deck`
+
+/**
  * 帶狀態的訊息塊。標記是**塗上去的色塊 + 模板字**，不是左側的粗色條——
  * 那條粗色條是 AI 介面最好認的胎記，也不是這塊板子的語彙。
  */

@@ -60,15 +60,15 @@ export function InventoryTile({
   const title = tmdbText(i18n.language, { 'zh-Hant': card.title, en: card.title_en })
   // 還沒進 Jellyfin 的那幾格是 TMDB 的海報，兩輪不同（票 11）；在 Jellyfin 裡的兩輪同一張。
   const poster = tmdbText(i18n.language, { 'zh-Hant': card.poster_url, en: card.poster_url_en })
-  const titleId = useId()
   const tracking = card.tracking
+  const factsId = useId()
 
   const body = (
     <>
       <ArtSlot url={poster} shape="poster" />
       <div className="grid content-start gap-1 px-3 py-2.5">
         {/* 狀態貼在標識帶上，不壓在海報上（The Paint Needs A Painted Ground Rule）。 */}
-        <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
+        <p id={`${factsId}-kind`} className="flex flex-wrap items-center gap-x-2 gap-y-1">
           <span className="value text-xs text-ink-dim">
             {KIND_CODE[card.kind]} <Dot /> {card.year ?? '—'}
           </span>
@@ -79,16 +79,18 @@ export function InventoryTile({
           )}
           {tracking && <AuditChip count={tracking.audits} compact />}
         </p>
-        <h3 id={titleId} className="value line-clamp-2 min-h-10 text-sm leading-snug text-ink">
-          {title}
-        </h3>
+        <h3 className="value line-clamp-2 min-h-10 text-sm leading-snug text-ink">{title}</h3>
         {/* 還沒進 Jellyfin 的作品，第二行是檔名用的英文標題；EN 介面上它就是標題本身，不再印一次。 */}
         {card.title_en !== title && (
           <p className="value line-clamp-1 text-xs text-ink-dim">{card.title_en}</p>
         )}
         {/* 觀看狀態與盤點行。沒話說時是空的，但留著高度，基線才對得齊。 */}
-        <p className="value min-h-4 text-xs text-ink">{card.watch && watchLine(t, card.watch)}</p>
-        <p className="value min-h-4 text-xs text-ink">{tracking && <Count card={card} />}</p>
+        <p id={`${factsId}-watch`} className="value min-h-4 text-xs text-ink">
+          {card.watch && watchLine(t, card.watch)}
+        </p>
+        <p id={`${factsId}-count`} className="value min-h-4 text-xs text-ink">
+          {tracking && <Count card={card} />}
+        </p>
       </div>
     </>
   )
@@ -99,6 +101,10 @@ export function InventoryTile({
         <Link
           to="/media/$mediaId"
           params={{ mediaId: card.media_id }}
+          // 名字是作品名（票 13）：整格的字串起來是「無海報 TV 2022 …」，控制項清單裡每一條都從代號念起。
+          // 其餘的字（類型年份與狀態、看到哪、盤點）是描述。
+          aria-label={title}
+          aria-describedby={`${factsId}-kind ${factsId}-watch ${factsId}-count`}
           className="grid grid-rows-[auto_1fr]"
         >
           {body}
@@ -106,7 +112,7 @@ export function InventoryTile({
       ) : (
         <div className="grid grid-rows-[auto_1fr]">{body}</div>
       )}
-      <JellyfinLine card={card} web={web} titleId={titleId} libraryId={libraryId} />
+      <JellyfinLine card={card} web={web} title={title} libraryId={libraryId} />
     </article>
   )
 }
@@ -130,12 +136,13 @@ function Count({ card }: { card: InventoryCard }): ReactNode {
 function JellyfinLine({
   card,
   web,
-  titleId,
+  title,
   libraryId,
 }: {
   card: InventoryCard
   web: JellyfinWeb
-  titleId: string
+  /** 這一格的作品名，進這一行兩個控制項的名字（票 13）。 */
+  title: string
   libraryId: string
 }) {
   const { t } = useTranslation()
@@ -152,12 +159,11 @@ function JellyfinLine({
           href={url}
           target="_blank"
           rel="noreferrer"
-          // 每一格都有這一條：名字說「開 Jellyfin」，描述說是哪一部（WCAG 2.4.4）。
-          aria-describedby={titleId}
+          // 每一格都有這一條：名字帶上是哪一部（票 13），控制項清單裡才不是一整排同名的連結（WCAG 2.4.4）。
+          aria-label={t('inventory.jellyfin.openNamed', { title })}
           className="label inline-flex min-h-6 items-center text-ink underline decoration-rule-strong decoration-2 underline-offset-4 hover:decoration-ink"
         >
           {t('inventory.jellyfin.open')}
-          <span className="sr-only">{t('inventory.jellyfin.newTab')}</span>
         </a>
       ) : card.presence === 'found' ? (
         <span className="text-ink">{t('inventory.jellyfin.noAddress')}</span>
@@ -173,7 +179,7 @@ function JellyfinLine({
           itemId={card.jellyfin_item_id}
           target={card.kind === 'tv' ? 'series' : 'movie'}
           watch={card.watch}
-          describedBy={titleId}
+          subject={title}
           // 只改牆上那一格。上方的繼續觀看與下一集（票 07）**不在這裡重問**：它們一換，整面牆就在指標底下
           // 上下移動；它們沒有快取期限，下一次打開頁面或切回視窗時自己會重問。
           onWritten={(written) =>

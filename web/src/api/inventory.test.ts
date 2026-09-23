@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { ApiError } from './client'
+import { isInventoryFilter } from './inventory'
 import { retryUnlessRefused } from './jellyfin'
 
 describe('媒體庫查詢的重試', () => {
@@ -21,4 +22,17 @@ describe('媒體庫查詢的重試', () => {
     expect(retryUnlessRefused(3, offline)).toBe(false)
     expect(retryUnlessRefused(0, new TypeError('Failed to fetch'))).toBe(true)
   })
+})
+
+describe('isInventoryFilter（票 13）', () => {
+  it.each(['review', 'unmatched'])('認得 %s', (value) => {
+    expect(isInventoryFilter(value)).toBe(true)
+  })
+
+  it.each([['nonsense'], [''], ['Review'], [undefined], [1], [['review']]])(
+    '不認得 %j',
+    (value) => {
+      expect(isInventoryFilter(value)).toBe(false)
+    },
+  )
 })

@@ -16,7 +16,7 @@ import { Dot } from '../components/Dot'
 import { formatJellyfinEpisode } from '../components/episodes'
 import { KIND_CODE } from '../components/kind'
 import { SessionEnded } from '../components/SessionEnded'
-import { WALL_GRID, fitsOneRowFrom, oneRowOnly } from '../discover/wallGrid'
+import { WALL_GRID, fitsOneRowFrom, oneRowOnly } from '../components/wallGrid'
 import { jellyfinDetailsUrl } from '../inventory/jellyfinLink'
 
 /**
@@ -151,6 +151,16 @@ function WatchingTile({
   const { t } = useTranslation()
   const url = jellyfinDetailsUrl(web, card.item_id, window.location)
   const frame = 'grid h-full grid-rows-[auto_1fr] border-2 border-rule bg-well'
+  const progressId = useId()
+  const percent = progress ? card.progress : null
+  // 名字從作品名念起（票 13）：整格的字串起來是「無圖 S01E04 …」。集號與集名跟在後面，才分得出是哪一集。
+  const name = [
+    card.title,
+    card.kind === 'movie' ? '' : formatJellyfinEpisode(card),
+    card.episode_name ?? '',
+  ]
+    .filter(Boolean)
+    .join(' ')
 
   const body = (
     <>
@@ -165,25 +175,28 @@ function WatchingTile({
             formatJellyfinEpisode(card)
           )}
         </p>
-        <p className="value line-clamp-1 text-sm text-ink">{card.title}</p>
+        <h3 className="value line-clamp-1 text-sm text-ink">{card.title}</h3>
         <p className="value line-clamp-1 min-h-4 text-xs text-ink-dim">{card.episode_name}</p>
-        {progress && card.progress !== null && (
-          <p className="value text-xs text-ink">
-            {t('inventory.watch.progress', { progress: card.progress })}
+        {percent !== null && (
+          <p id={progressId} className="value text-xs text-ink">
+            {t('inventory.watch.progress', { progress: percent })}
           </p>
         )}
-        {url ? (
-          <span className="sr-only">{t('inventory.jellyfin.newTab')}</span>
-        ) : (
-          <p className="text-xs text-ink">{t('inventory.jellyfin.noAddress')}</p>
-        )}
+        {!url && <p className="text-xs text-ink">{t('inventory.jellyfin.noAddress')}</p>}
       </div>
     </>
   )
 
   if (!url) return <div className={frame}>{body}</div>
   return (
-    <a href={url} target="_blank" rel="noreferrer" className={`${frame} hover:border-rule-strong`}>
+    <a
+      href={url}
+      target="_blank"
+      rel="noreferrer"
+      aria-label={`${name}${t('inventory.jellyfin.newTab')}`}
+      aria-describedby={percent !== null ? progressId : undefined}
+      className={`${frame} hover:border-rule-strong`}
+    >
       {body}
     </a>
   )

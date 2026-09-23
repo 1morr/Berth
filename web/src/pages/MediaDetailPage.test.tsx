@@ -1324,8 +1324,13 @@ describe('觀看區（M1.5 票 08）', () => {
     const seasons = calls(api, 'GET', EPISODES(SEASON_TWO).slice(4)).length
     const areas = calls(api, 'GET', WATCH_PATH.slice(4)).length
 
-    const mark = within(tile('Episode 5')).getByRole('button', { name: '標為已看' })
-    expect(mark).toHaveAccessibleDescription('Episode 5')
+    const mark = within(tile('Episode 5')).getByRole('button', { name: /^標為已看/ })
+    // 每一格都有這一顆：名字帶上集號與集名（票 13），控制項清單裡分得出是哪一集。
+    expect(mark).toHaveAccessibleName(/^標為已看：S\d\dE05 Episode 5$/)
+    // 開 Jellyfin 的那一塊也是：沒有劇照的集，圖位的「無圖」不進名字，看到哪是描述。
+    const open = within(tile('Episode 5')).getByRole('link')
+    expect(open).toHaveAccessibleName(/^S\d\dE05 Episode 5（開新分頁）$/)
+    expect(open.closest('ul')?.tagName).toBe('UL')
     await userEvent.click(mark)
 
     expect(await within(tile('Episode 5')).findByText('已看')).toBeVisible()
@@ -1340,7 +1345,7 @@ describe('觀看區（M1.5 票 08）', () => {
     await screen.findByText('Episode 5')
     const resuming = tile('Episode 4')
 
-    await userEvent.click(within(resuming).getByRole('button', { name: '標為已看' }))
+    await userEvent.click(within(resuming).getByRole('button', { name: /^標為已看/ }))
 
     const confirm = within(resuming).getByRole('group')
     expect(confirm).toHaveAccessibleName(/18%.*位置.*找不回來/)
@@ -1379,7 +1384,7 @@ describe('觀看區（M1.5 票 08）', () => {
     const carryOn = await screen.findByRole('link', { name: /繼續看/ })
     expect(carryOn).toHaveAttribute('href', `http://jf.example:8096/web/#/details?id=${FILM}`)
     expect(carryOn).toHaveAccessibleDescription('看到 42%')
-    await userEvent.click(screen.getByRole('button', { name: '標為已看' }))
+    await userEvent.click(screen.getByRole('button', { name: /^標為已看/ }))
     expect(screen.getByRole('group', { name: /42%.*位置/ })).toHaveFocus()
     expect(screen.queryByRole('heading', { name: '觀看' })).not.toBeInTheDocument()
   })
@@ -1438,7 +1443,7 @@ describe('觀看區（M1.5 票 08）', () => {
     await screen.findByText('Episode 5')
     const watched = tile('Episode 3')
 
-    await userEvent.click(within(watched).getByRole('button', { name: '標為未看' }))
+    await userEvent.click(within(watched).getByRole('button', { name: /^標為未看/ }))
 
     const confirm = within(watched).getByRole('group')
     expect(confirm).toHaveAccessibleName(/這一集.*觀看次數.*最後觀看時間.*找不回來/)
@@ -1472,7 +1477,9 @@ describe('觀看區（M1.5 票 08）', () => {
     renderApp('/media/movie:1241982')
 
     expect(await screen.findByRole('link', { name: /在 Jellyfin 看/ })).toBeVisible()
-    expect(screen.getByRole('button', { name: '標為已看' })).not.toHaveAttribute('aria-describedby')
+    expect(screen.getByRole('button', { name: /^標為已看/ })).not.toHaveAttribute(
+      'aria-describedby',
+    )
   })
 
   it('帳號在 Jellyfin 被停用時送回登入頁', async () => {

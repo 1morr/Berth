@@ -11,7 +11,12 @@ import {
 import { meQueryOptions, type Me } from './api/auth'
 import { ApiError } from './api/client'
 import { healthQueryOptions } from './api/health'
-import { inventoriesQueryOptions, type WallSearch } from './api/inventory'
+import {
+  inventoriesQueryOptions,
+  isInventoryFilter,
+  type InventoryFilter,
+  type WallSearch,
+} from './api/inventory'
 import { destination } from './auth/destination'
 import { AppShell } from './AppShell'
 import { DiscoverPage } from './pages/DiscoverPage'
@@ -20,7 +25,7 @@ import { IssuesPage } from './pages/IssuesPage'
 import { ReviewPage } from './pages/ReviewPage'
 import { JobDetailPage } from './pages/JobDetailPage'
 import { JobsPage } from './pages/JobsPage'
-import { InventoryPage, type InventoryFilter } from './pages/InventoryPage'
+import { InventoryPage } from './pages/InventoryPage'
 import { InventoryPageRoute } from './pages/InventoryPageRoute'
 import { LoginPage } from './pages/LoginPage'
 import { MediaRoute } from './pages/MediaRoute'
@@ -267,19 +272,21 @@ const isYear = (item: unknown): item is number => Number.isInteger(item)
 const inventoryRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/library/$libraryId',
+  // **每一格都寫回去，驗不過的寫 `undefined`**：根路由不驗網址，子路由拿到的是根的原樣與這裡的結果合起來，
+  // 少寫一格那一格的原樣就漏到 `useSearch`（M1.5 票 11 實測 `filter="nonsense"`，票 13 修）。
   validateSearch: (search: Record<string, unknown>): InventorySearch => {
-    const parsed: InventorySearch = {}
     const page = Number(search.page)
-    if (Number.isInteger(page) && page > 1) parsed.page = page
-    if (search.filter === 'review' || search.filter === 'unmatched') parsed.filter = search.filter
-    // 排序鍵只認形狀：選單是每個媒體庫自己的，頁面拿到媒體庫之後才對（`wallQuery`）。
-    if (typeof search.sort === 'string' && search.sort !== '') parsed.sort = search.sort
-    if (search.order === 'Descending') parsed.order = search.order
     const genres = listOf(search.genres, isGenre)
-    if (genres.length > 0) parsed.genres = genres
     const years = listOf(search.years, isYear)
-    if (years.length > 0) parsed.years = years
-    return parsed
+    return {
+      page: Number.isInteger(page) && page > 1 ? page : undefined,
+      filter: isInventoryFilter(search.filter) ? search.filter : undefined,
+      // 排序鍵只認形狀：選單是每個媒體庫自己的，頁面拿到媒體庫之後才對（`wallQuery`）。
+      sort: typeof search.sort === 'string' && search.sort !== '' ? search.sort : undefined,
+      order: search.order === 'Descending' ? search.order : undefined,
+      genres: genres.length > 0 ? genres : undefined,
+      years: years.length > 0 ? years : undefined,
+    }
   },
   beforeLoad: async ({ context, location }) => {
     await requireSignedInPage(context.queryClient, location)

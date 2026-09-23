@@ -1,4 +1,4 @@
-import { screen, waitFor } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -142,6 +142,26 @@ describe('角色', () => {
     await router.navigate({ to: '/settings/routes' })
     await waitFor(() => expect(router.state.location.pathname).toBe('/settings/routes'))
     expect(screen.getByRole('link', { name: '設定' })).toHaveAttribute('aria-current', 'page')
+  })
+
+  it('當前頁只由 aria-current 與 data-status 說，不另外疊一組 class（票 13）', async () => {
+    // `activeProps` 的 class 是接在後面的：當前那一格同時帶 `border-rule` 與 `border-rule-strong`，
+    // 誰贏看 CSS 的產生順序。當前與否只該差在 TanStack 掛的兩個屬性上，漆由 `data-[status=active]:` 換。
+    stubApi({ [HEALTH]: DONE, [ME]: ADMIN, ...DISCOVER })
+
+    renderApp('/')
+
+    const nav = within(await screen.findByRole('navigation', { name: '主要導覽' }))
+    const current = nav.getByRole('link', { name: '探索' })
+    const other = nav.getByRole('link', { name: '下載' })
+
+    expect(current).toHaveAttribute('aria-current', 'page')
+    expect(other).not.toHaveAttribute('aria-current')
+    expect(current).toHaveAttribute('data-status', 'active')
+    // 多出來的只有 TanStack 預設的 `active` 標記（這裡沒有任何樣式掛在它上面）。
+    expect([...current.classList].filter((name) => !other.classList.contains(name))).toEqual([
+      'active',
+    ])
   })
 
   it('非 admin 看不到設定入口，但看得到自己是什麼角色（票 07 驗收）', async () => {

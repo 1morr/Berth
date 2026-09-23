@@ -4,7 +4,7 @@ import { Link, useNavigate } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 
 import { meQueryOptions, signOut } from './api/auth'
-import { GhostButton, NAV_BOX, NAV_BOX_ACTIVE } from './components/controls'
+import { GhostButton, NAV_LINK } from './components/controls'
 import { LanguageToggle } from './components/LanguageToggle'
 
 /**
@@ -57,8 +57,7 @@ function NavLink({
       to={to}
       // `/` 是每一條路徑的前綴，預設的模糊比對會讓探索永遠是「當前頁」。
       activeOptions={{ exact: to === '/' }}
-      className={`${NAV_BOX} px-4 py-2.5`}
-      activeProps={{ className: `${NAV_BOX_ACTIVE} px-4 py-2.5` }}
+      className={`${NAV_LINK} px-4 py-2.5`}
     >
       {children}
     </Link>

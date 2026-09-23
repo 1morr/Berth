@@ -3,8 +3,9 @@ import { useTranslation } from 'react-i18next'
 
 import type { Discover } from '../api/discover'
 import { TmdbNotice } from '../components/TmdbNotice'
-import { MediaTile, TilePlaceholder } from './MediaTile'
-import { WALL_GRID } from './wallGrid'
+import { TilePlaceholder } from '../components/TilePlaceholder'
+import { MediaTile } from './MediaTile'
+import { WALL_GRID } from '../components/wallGrid'
 
 /** 讀取中先畫幾格空位。夠填滿桌機第一屏，版面才不會在圖到齊時整個往下跳。 */
 const PLACEHOLDERS = 12
@@ -55,19 +56,22 @@ export function MediaWall({
       </div>
 
       {pending ? (
-        <Grid>
+        <div className={WALL_GRID}>
           {Array.from({ length: PLACEHOLDERS }, (_, index) => (
             <TilePlaceholder key={index} />
           ))}
-        </Grid>
+        </div>
       ) : result?.problem ? (
         <TmdbNotice problem={result.problem} detail={result.detail} onRetry={onRetry} />
       ) : result && result.items.length > 0 ? (
-        <Grid>
+        // 一面牆是一份清單（票 13）：螢幕閱讀器念得出「清單，40 項」，與接著看、媒體庫牆同一種。
+        <ul className={WALL_GRID}>
           {result.items.map((item) => (
-            <MediaTile key={item.id} item={item} />
+            <li key={item.id} className="grid">
+              <MediaTile item={item} />
+            </li>
           ))}
-        </Grid>
+        </ul>
       ) : (
         <div className="grid justify-items-start gap-3 py-2">
           <p className="max-w-prose text-sm text-ink-dim">{result ? empty : t('discover.off')}</p>
@@ -76,15 +80,4 @@ export function MediaWall({
       )}
     </section>
   )
-}
-
-/**
- * 貨櫃堆場的堆疊圖。窄版兩欄——一欄會讓一屏只看得到一部作品，而這一頁的工作是掃視。
- *
- * 線由每一格自己的 `border-2` 畫，**不是**把整塊網格塗成 `rule` 再用 `gap-px` 透出來
- * （泊位板是那樣做的）。理由是那塊板永遠是四格滿的，而這面牆的格數是 TMDB 給多少算多少：
- * 塗底的話，只搜到一部作品時整排空欄會變成一塊灰色的板子——實跑第一輪就是這個樣子。
- */
-function Grid({ children }: { children: React.ReactNode }) {
-  return <div className={WALL_GRID}>{children}</div>
 }

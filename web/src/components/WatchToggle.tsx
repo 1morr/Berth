@@ -31,13 +31,20 @@ export function WatchToggle({
   itemId,
   target,
   watch,
+  subject,
   describedBy,
   onWritten,
 }: {
   itemId: string
   target: WatchTarget
   watch: WatchState
-  /** 這一顆鍵屬於哪一格：牆與集卡上每一格都有同名的一顆，描述說是哪一部、哪一集（WCAG 2.4.6）。 */
+  /**
+   * 標的是哪一部、哪一集：牆與集卡上每一格都有一顆，**名字**帶上它（「標為已看：The Bear」，票 13、plan §11.3
+   * 的二選一）。只靠描述區分的話，螢幕閱讀器的控制項清單是一整排同名的「標為已看」（WCAG 2.4.6）。
+   * 看得見的字仍是名字的開頭（WCAG 2.5.3），語音操作說「標為已看」照樣按得到。
+   */
+  subject?: string
+  /** 補充說明（身分帶上電影那一顆：旁邊那一行看到哪了）。 */
   describedBy?: string
   onWritten: (written: WatchState) => void
 }) {
@@ -70,6 +77,12 @@ export function WatchToggle({
         ? t('inventory.watch.warningSeriesPlayed')
         : null
 
+  const action = mark.isPending
+    ? t('inventory.watch.pending')
+    : next
+      ? t('inventory.watch.markPlayed')
+      : t('inventory.watch.markUnplayed')
+
   return (
     <>
       {asked && warning ? (
@@ -99,6 +112,7 @@ export function WatchToggle({
         <button
           ref={trigger}
           type="button"
+          aria-label={subject ? t('inventory.watch.named', { action, subject }) : undefined}
           aria-describedby={describedBy}
           // 送出中不用 `disabled`：確認收起時焦點要回到這一顆，停用的鍵接不住焦點，鍵盤使用者會
           // 掉回 `body`（票 05 playwright 實跑抓到）。按鈕照常可按，這一下什麼都不做。
@@ -110,11 +124,7 @@ export function WatchToggle({
           }}
           className={COMPACT_BUTTON}
         >
-          {mark.isPending
-            ? t('inventory.watch.pending')
-            : next
-              ? t('inventory.watch.markPlayed')
-              : t('inventory.watch.markUnplayed')}
+          {action}
         </button>
       )}
       <p aria-live="polite" className="sr-only">

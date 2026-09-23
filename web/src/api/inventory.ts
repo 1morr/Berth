@@ -62,6 +62,17 @@ export interface WallQuery {
   years?: number[]
 }
 
+/** 網址上的篩選（`?filter=`）：待審、Unmatched。 */
+export type InventoryFilter = 'review' | 'unmatched'
+
+/**
+ * 網址上的值是不是認得的篩選。**兩個值各判一次**，不是「不是 review 就是 unmatched」：那種寫法讓不認得的值
+ * 落進 Unmatched，畫面顯示一份他沒有要的清單，三顆篩選鍵卻都不是當前（M1.5 票 11 的 critique 實測）。
+ */
+export function isInventoryFilter(value: unknown): value is InventoryFilter {
+  return value === 'review' || value === 'unmatched'
+}
+
 /** 網址讀出來、還沒對過排序選單的樣子（`routes.tsx` 的 `validateSearch` 只認得形狀）。 */
 export type WallSearch = Omit<WallQuery, 'sort'> & { sort?: string }
 

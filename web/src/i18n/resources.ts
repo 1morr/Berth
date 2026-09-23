@@ -581,6 +581,7 @@ const zhHant = {
     notInJellyfinCount_one: '{{count}} 部作品還沒進 Jellyfin',
     notInJellyfinCount_other: '{{count}} 部作品還沒進 Jellyfin',
     pages: '分頁',
+    pagesEnd: '牆底的分頁',
     previous: '上一頁',
     next: '下一頁',
     // 看得見的是「1–100 / 523」，聽得見的是這一句。
@@ -609,6 +610,7 @@ const zhHant = {
       markPlayed: '標為已看',
       markUnplayed: '標為未看',
       pending: '寫入中…',
+      named: '{{action}}：{{subject}}',
       // 寫入成功之後唸出來（票 11 的 audit，WCAG 2.1.3）。焦點這時已經回到那一顆鍵上，
       // 而它的名字是「剛剛換過的」——螢幕閱讀器不會為已經聚焦的元素重念新名字，所以要自己說。
       donePlayed: '已標為已看。',
@@ -631,6 +633,7 @@ const zhHant = {
     },
     jellyfin: {
       open: '在 Jellyfin 開啟',
+      openNamed: '在 Jellyfin 開啟：{{title}}（開新分頁）',
       // 看不見的那一半：連結會開新分頁。
       newTab: '（開新分頁）',
       searching: 'Jellyfin 還在掃描',
@@ -2476,6 +2479,7 @@ const en: Translations<typeof zhHant> = {
     notInJellyfinCount_one: '{{count}} title not in Jellyfin yet',
     notInJellyfinCount_other: '{{count}} titles not in Jellyfin yet',
     pages: 'Pages',
+    pagesEnd: 'Pages, end of wall',
     previous: 'Previous',
     next: 'Next',
     range: 'Titles {{first}}–{{last}} of {{total}}',
@@ -2499,6 +2503,7 @@ const en: Translations<typeof zhHant> = {
       markPlayed: 'Mark watched',
       markUnplayed: 'Mark unwatched',
       pending: 'Saving…',
+      named: '{{action}}: {{subject}}',
       donePlayed: 'Marked as watched.',
       doneUnplayed: 'Marked as unwatched.',
       warningMovie:
@@ -2520,6 +2525,7 @@ const en: Translations<typeof zhHant> = {
     },
     jellyfin: {
       open: 'Open in Jellyfin',
+      openNamed: 'Open in Jellyfin: {{title}} (opens in a new tab)',
       newTab: ' (opens in a new tab)',
       searching: 'Jellyfin is still scanning',
       lost: 'Jellyfin cannot find it',

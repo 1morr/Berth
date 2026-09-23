@@ -1,7 +1,7 @@
 import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 
-import { NAV_BOX, NAV_BOX_ACTIVE } from './controls'
+import { NAV_LINK } from './controls'
 
 /** 兩個設定頁，照子分頁列上的順序。 */
 const TABS = [
@@ -21,12 +21,7 @@ export function SettingsTabs() {
   return (
     <nav aria-label={t('settings.tabs.label')} className="flex flex-wrap gap-2">
       {TABS.map((tab) => (
-        <Link
-          key={tab.to}
-          to={tab.to}
-          className={`${NAV_BOX} px-3 py-2`}
-          activeProps={{ className: `${NAV_BOX_ACTIVE} px-3 py-2` }}
-        >
+        <Link key={tab.to} to={tab.to} className={`${NAV_LINK} px-3 py-2`}>
           {t(tab.label)}
         </Link>
       ))}

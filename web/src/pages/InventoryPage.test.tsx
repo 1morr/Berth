@@ -152,15 +152,24 @@ function render(
   })
 }
 
-/** 牆上的一格：以標題（每一格一個 heading）找到它所在的那一格。 */
+/**
+ * 牆上的一格：以標題找到它所在的那一格。接著看的格子也有 `h3`（票 13），但它們不是 `article`，所以只認
+ * 在 `article` 裡的那一個。
+ */
 function tile(title: string, within_: HTMLElement = document.body) {
-  return within(within_)
-    .getByRole('heading', { name: new RegExp(title) })
-    .closest('article')!
+  return wallTile(within(within_).getAllByRole('heading', { name: new RegExp(title) }))
 }
 
 async function findTile(title: string) {
-  return (await screen.findByRole('heading', { name: new RegExp(title) })).closest('article')!
+  return wallTile(await screen.findAllByRole('heading', { name: new RegExp(title) }))
+}
+
+function wallTile(headings: HTMLElement[]) {
+  const tiles = headings
+    .map((heading) => heading.closest('article'))
+    .filter((node) => node !== null)
+  expect(tiles).toHaveLength(1)
+  return tiles[0]!
 }
 
 function band() {
@@ -198,10 +207,25 @@ describe('媒體庫頁', () => {
       const alpha = await findTile('Alpha Show')
 
       expect(within(alpha).queryByText('部分')).not.toBeInTheDocument()
-      expect(within(alpha).getByRole('link', { name: /Alpha Show/ })).toHaveAttribute(
-        'href',
-        '/media/tv%3A1399',
-      )
+      const toMedia = within(alpha).getByRole('link', { name: 'Alpha Show' })
+      expect(toMedia).toHaveAttribute('href', '/media/tv%3A1399')
+      // 名字是作品名，圖位的「無海報」與類型年份不進名字（票 13）；類型年份是描述。
+      expect(toMedia).toHaveAccessibleDescription(/^TV\s+2022/)
+    })
+
+    it('牆是一份清單，每一格一個 h3 標題（票 13：與探索牆、接著看同一種語意）', async () => {
+      render()
+      renderApp(`/library/${TV}`)
+      await findTile('Alpha Show')
+
+      const list = within(screen.getByRole('region', { name: 'TV' })).getByRole('list')
+
+      expect(within(list).getAllByRole('listitem')).toHaveLength(3)
+      expect(
+        within(list)
+          .getAllByRole('heading', { level: 3 })
+          .map((heading) => heading.textContent),
+      ).toEqual(['Alpha Show', 'Hotel Show', 'The Bear'])
     })
 
     it('沒有 TMDB id 的作品只給 Jellyfin 深連結，開在瀏覽器自己的主機上', async () => {
@@ -212,8 +236,8 @@ describe('媒體庫頁', () => {
       const links = within(hotel).getAllByRole('link')
 
       expect(links).toHaveLength(1)
-      expect(links[0]).toHaveAccessibleName('在 Jellyfin 開啟（開新分頁）')
-      expect(links[0]).toHaveAccessibleDescription('Hotel Show')
+      // 每一格都有這一條：名字帶上是哪一部（票 13），看得見的「在 Jellyfin 開啟」仍是名字的開頭（WCAG 2.5.3）。
+      expect(links[0]).toHaveAccessibleName('在 Jellyfin 開啟：Hotel Show（開新分頁）')
       expect(links[0]).toHaveAttribute(
         'href',
         'http://localhost:8096/web/#/details?id=9ea3bb1459aa4795a5ebf54b94fe0cc9',
@@ -382,7 +406,7 @@ describe('媒體庫頁', () => {
       expect(within(hotel).queryByText('已看')).not.toBeInTheDocument()
       expect(hotel).not.toHaveTextContent(/看到|沒看/)
       // 沒看過的照樣標得了。
-      expect(within(hotel).getByRole('button', { name: '標為已看' })).toBeVisible()
+      expect(within(hotel).getByRole('button', { name: /^標為已看/ })).toBeVisible()
     })
 
     it('還沒進 Jellyfin 的作品沒有觀看狀態，也沒有切換鍵', async () => {
@@ -401,19 +425,19 @@ describe('媒體庫頁', () => {
       const alpha = await findTile('Alpha Show')
       const walls = sent(api, 'GET', `/api/inventory/${TV}`).length
 
-      const mark = within(alpha).getByRole('button', { name: '標為已看' })
-      // 每一格都有同名的這一顆：描述說是哪一部（WCAG 2.4.4）。
-      expect(mark).toHaveAccessibleDescription('Alpha Show')
+      const mark = within(alpha).getByRole('button', { name: /^標為已看/ })
+      // 每一格都有這一顆：名字帶上是哪一部（票 13），控制項清單裡不是一整排同名的鍵。
+      expect(mark).toHaveAccessibleName('標為已看：Alpha Show')
       await userEvent.click(mark)
       // 劇集的觀看紀錄看不出底下有沒有看到一半的集，所以一律先說（M1.5 票 08 使用者拍板）。
       const confirm = within(alpha).getByRole('group')
       expect(confirm).toHaveAccessibleName(/每一集.*看到一半.*歸零/)
       expect(sent(api, 'POST', PLAYED(ALPHA.jellyfin_item_id))).toHaveLength(0)
-      await userEvent.click(within(confirm).getByRole('button', { name: '標為已看' }))
+      await userEvent.click(within(confirm).getByRole('button', { name: /^標為已看/ }))
 
       expect(await within(alpha).findByText('已看')).toBeVisible()
       expect(within(alpha).queryByText('剩 4 集沒看')).not.toBeInTheDocument()
-      expect(within(alpha).getByRole('button', { name: '標為未看' })).toBeVisible()
+      expect(within(alpha).getByRole('button', { name: /^標為未看/ })).toBeVisible()
       // 成功也要唸得出來：焦點回到那一顆鍵時它的名字剛換過，螢幕閱讀器不會重念（票 11 的 audit）。
       expect(within(alpha).getByText('已標為已看。')).toHaveAttribute('aria-live', 'polite')
       expect(sent(api, 'POST', PLAYED(ALPHA.jellyfin_item_id))).toHaveLength(1)
@@ -427,12 +451,12 @@ describe('媒體庫頁', () => {
       renderApp(`/library/${TV}`)
       const echo = await findTile('Echo Movie')
 
-      await userEvent.click(within(echo).getByRole('button', { name: '標為已看' }))
+      await userEvent.click(within(echo).getByRole('button', { name: /^標為已看/ }))
 
       const confirm = within(echo).getByRole('group')
       expect(confirm).toHaveAccessibleName(/42%.*位置.*找不回來/)
       expect(confirm).toHaveFocus()
-      await userEvent.click(within(confirm).getByRole('button', { name: '標為已看' }))
+      await userEvent.click(within(confirm).getByRole('button', { name: /^標為已看/ }))
 
       expect(await within(echo).findByText('已看')).toBeVisible()
       expect(sent(api, 'POST', PLAYED(ECHO.jellyfin_item_id))).toHaveLength(1)
@@ -445,7 +469,7 @@ describe('媒體庫頁', () => {
       renderApp(`/library/${TV}`)
       const foxtrot = await findTile('Foxtrot Movie')
 
-      await userEvent.click(within(foxtrot).getByRole('button', { name: '標為已看' }))
+      await userEvent.click(within(foxtrot).getByRole('button', { name: /^標為已看/ }))
 
       expect(await within(foxtrot).findByText('已看')).toBeVisible()
       expect(within(foxtrot).queryByRole('group')).not.toBeInTheDocument()
@@ -457,7 +481,7 @@ describe('媒體庫頁', () => {
       renderApp(`/library/${TV}`)
       const golf = await findTile('Golf Movie')
 
-      await userEvent.click(within(golf).getByRole('button', { name: '標為未看' }))
+      await userEvent.click(within(golf).getByRole('button', { name: /^標為未看/ }))
 
       const confirm = within(golf).getByRole('group')
       expect(confirm).toHaveAccessibleName(/觀看次數.*最後觀看時間.*找不回來/)
@@ -467,7 +491,7 @@ describe('媒體庫頁', () => {
 
       await userEvent.click(within(golf).getByRole('button', { name: '取消' }))
 
-      expect(within(golf).getByRole('button', { name: '標為未看' })).toHaveFocus()
+      expect(within(golf).getByRole('button', { name: /^標為未看/ })).toHaveFocus()
       expect(within(golf).getByText('已看')).toBeVisible()
       expect(api.mock.calls.filter(([, init]) => init?.method === 'DELETE')).toHaveLength(0)
     })
@@ -481,12 +505,12 @@ describe('媒體庫頁', () => {
       renderApp(`/library/${TV}`)
       const bravo = await findTile('Bravo Show')
 
-      await userEvent.click(within(bravo).getByRole('button', { name: '標為未看' }))
+      await userEvent.click(within(bravo).getByRole('button', { name: /^標為未看/ }))
       const confirm = within(bravo).getByRole('group')
       expect(confirm).toHaveAccessibleName(/每一集.*觀看次數.*最後觀看時間/)
       expect(sent(api, 'DELETE', PLAYED(BRAVO.jellyfin_item_id))).toHaveLength(0)
 
-      await userEvent.click(within(confirm).getByRole('button', { name: '標為未看' }))
+      await userEvent.click(within(confirm).getByRole('button', { name: /^標為未看/ }))
 
       expect(await within(bravo).findByText('剩 2 集沒看')).toBeVisible()
       expect(within(bravo).queryByText('已看')).not.toBeInTheDocument()
@@ -499,13 +523,13 @@ describe('媒體庫頁', () => {
       })
       renderApp(`/library/${TV}`)
       const golf = await findTile('Golf Movie')
-      const unmark = within(golf).getByRole('button', { name: '標為未看' })
+      const unmark = within(golf).getByRole('button', { name: /^標為未看/ })
 
       unmark.focus()
       await userEvent.keyboard('{Enter}')
       expect(within(golf).getByRole('group')).toHaveFocus()
       await userEvent.keyboard('{Escape}')
-      expect(within(golf).getByRole('button', { name: '標為未看' })).toHaveFocus()
+      expect(within(golf).getByRole('button', { name: /^標為未看/ })).toHaveFocus()
 
       await userEvent.keyboard('{Enter}')
       await userEvent.tab()
@@ -514,7 +538,7 @@ describe('媒體庫頁', () => {
       await waitFor(() => expect(within(golf).queryByText('已看')).not.toBeInTheDocument())
       expect(sent(api, 'DELETE', PLAYED(GOLF.jellyfin_item_id))).toHaveLength(1)
       // 送出之後焦點回到同一顆鍵（現在是「標為已看」），不掉回頁首（playwright 實跑抓到）。
-      expect(within(golf).getByRole('button', { name: '標為已看' })).toHaveFocus()
+      expect(within(golf).getByRole('button', { name: /^標為已看/ })).toHaveFocus()
     })
 
     it('寫不進去時就在那一格說原因，狀態不變', async () => {
@@ -527,12 +551,12 @@ describe('媒體庫頁', () => {
       renderApp(`/library/${TV}`)
       const foxtrot = await findTile('Foxtrot Movie')
 
-      await userEvent.click(within(foxtrot).getByRole('button', { name: '標為已看' }))
+      await userEvent.click(within(foxtrot).getByRole('button', { name: /^標為已看/ }))
 
       expect(await within(foxtrot).findByRole('alert')).toHaveTextContent(
         '你在 Jellyfin 看不到這部作品，沒有寫入。',
       )
-      expect(within(foxtrot).getByRole('button', { name: '標為已看' })).toBeVisible()
+      expect(within(foxtrot).getByRole('button', { name: /^標為已看/ })).toBeVisible()
       expect(within(foxtrot).queryByText('已看')).not.toBeInTheDocument()
     })
 
@@ -551,9 +575,9 @@ describe('媒體庫頁', () => {
       renderApp(`/library/${TV}`)
       const golf = await findTile('Golf Movie')
 
-      await userEvent.click(within(golf).getByRole('button', { name: '標為未看' }))
+      await userEvent.click(within(golf).getByRole('button', { name: /^標為未看/ }))
       await userEvent.click(
-        within(within(golf).getByRole('group')).getByRole('button', { name: '標為未看' }),
+        within(within(golf).getByRole('group')).getByRole('button', { name: /^標為未看/ }),
       )
 
       expect(await within(golf).findByRole('alert')).toHaveTextContent(/問不到 Jellyfin.*健康頁/)
@@ -576,7 +600,7 @@ describe('媒體庫頁', () => {
       const { router } = renderApp(`/library/${TV}`)
 
       await userEvent.click(
-        within(await findTile('Foxtrot Movie')).getByRole('button', { name: '標為已看' }),
+        within(await findTile('Foxtrot Movie')).getByRole('button', { name: /^標為已看/ }),
       )
 
       await waitFor(() => expect(router.state.location.pathname).toBe('/login'))
@@ -672,6 +696,17 @@ describe('媒體庫頁', () => {
       expect(within(pager).getByText('上一頁')).toHaveAttribute('aria-disabled', 'true')
     })
 
+    it('牆上下兩組分頁是兩個名字不同的 landmark（票 13）', async () => {
+      render({ [`GET /api/inventory/${TV}`]: { body: big(1) } })
+      renderApp(`/library/${TV}`)
+
+      await screen.findByRole('heading', { name: 'Show on page 1' })
+
+      expect(
+        screen.getAllByRole('navigation').map((nav) => nav.getAttribute('aria-label')),
+      ).toEqual(['主要導覽', '媒體庫', '篩選', '分頁', '牆底的分頁'])
+    })
+
     it('換頁向後端要那一頁，最後一頁的下一頁按不了', async () => {
       const api = render({
         [`GET /api/inventory/${TV}`]: { body: big(1) },
@@ -732,6 +767,23 @@ describe('媒體庫頁', () => {
       expect(screen.getByText('顯示 1 部作品')).toHaveAttribute('aria-live', 'polite')
     })
 
+    it('選著的篩選是「當前的一個選項」而不是另一頁：不是連結，也不掛 aria-current="page"（票 13）', async () => {
+      render()
+      renderApp(`/library/${TV}?filter=review`)
+
+      const filters = within(await screen.findByRole('navigation', { name: '篩選' }))
+      await screen.findByRole('heading', { name: /SPY×FAMILY/ })
+
+      expect(filters.getByText('待審 1')).toHaveAttribute('aria-current', 'true')
+      expect(filters.queryByRole('link', { name: '待審 1' })).not.toBeInTheDocument()
+      expect(filters.getByRole('link', { name: '全部' })).not.toHaveAttribute('aria-current')
+      expect(filters.getByRole('link', { name: '對不到 1' })).not.toHaveAttribute('aria-current')
+      // 整頁只剩切換列上那一個「當前頁」。
+      expect(
+        [...document.querySelectorAll('[aria-current="page"]')].map((node) => node.textContent),
+      ).toEqual(['媒體庫', 'TV'])
+    })
+
     it('在第 2 頁換篩選不重抓，按回「全部」回到第 2 頁', async () => {
       const second = wall({ page: 2, total: 150 })
       const api = render({ [`GET /api/inventory/${TV}?page=2`]: { body: second } })
@@ -758,7 +810,7 @@ describe('媒體庫頁', () => {
       renderApp(`/library/${TV}?filter=unmatched`)
 
       // zh-Hant 的文案是「對不到」，不是名詞表裡的 `Unmatched`（票 11，使用者拍板）。
-      expect(await screen.findByRole('link', { name: '對不到 1' })).toBeVisible()
+      expect(await screen.findByText('對不到 1')).toHaveAttribute('aria-current', 'true')
       expect(screen.queryByRole('link', { name: /Unmatched/ })).not.toBeInTheDocument()
       expect(await screen.findByRole('heading', { name: 'The Bear' })).toBeVisible()
       expect(screen.queryByRole('heading', { name: /葬送的芙莉蓮/ })).not.toBeInTheDocument()
@@ -774,6 +826,20 @@ describe('媒體庫頁', () => {
       expect(await findTile('Alpha Show')).toBeVisible()
       expect(screen.getByText('1–3 / 3')).toBeVisible()
       expect(screen.queryByText('顯示 1 部作品')).not.toBeInTheDocument()
+    })
+
+    it.each([
+      ['不認得的篩選', '?filter=nonsense', { filter: undefined }],
+      ['不是數字的頁碼', '?page=abc', { page: undefined }],
+      ['空的排序', '?sort=', { sort: undefined }],
+    ])('路由交給頁面的網址參數擋得住%s（票 13）', async (_, search, expected) => {
+      // 根路由不驗網址，子路由拿到的是「根的原樣 + 自己驗過的」合起來：驗不過的那一格不寫回去的話，
+      // 原樣的值照樣漏到 `useSearch`（M1.5 票 11 實測 `filter="nonsense"`）。
+      render()
+      const { router } = renderApp(`/library/${TV}${search}`)
+      await findTile('Alpha Show')
+
+      expect(router.state.matches.at(-1)?.search).toMatchObject(expected)
     })
 
     it('篩完什麼都沒有時，給一條回到全部的路', async () => {
@@ -1166,7 +1232,7 @@ describe('媒體庫頁', () => {
       await findTile('Alpha Show')
 
       expect(
-        within(next).getByRole('link', { name: /S01E02.*Alpha Show.*The Second One/ }),
+        within(next).getByRole('link', { name: /^Alpha Show S01E02 The Second One/ }),
       ).toHaveAttribute('href', `http://localhost:8096/web/#/details?id=${EPISODE}`)
       // 沒有內容的繼續觀看那一列不畫。
       expect(screen.queryByRole('region', { name: '繼續觀看' })).not.toBeInTheDocument()
@@ -1243,9 +1309,9 @@ describe('媒體庫頁', () => {
       expect(asked(api)).toHaveLength(1)
 
       const tileOf = await findTile('Alpha Show')
-      await userEvent.click(within(tileOf).getByRole('button', { name: '標為已看' }))
+      await userEvent.click(within(tileOf).getByRole('button', { name: /^標為已看/ }))
       await userEvent.click(
-        within(within(tileOf).getByRole('group')).getByRole('button', { name: '標為已看' }),
+        within(within(tileOf).getByRole('group')).getByRole('button', { name: /^標為已看/ }),
       )
 
       expect(await within(await findTile('Alpha Show')).findByText('已看')).toBeVisible()

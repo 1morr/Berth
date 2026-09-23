@@ -1,3 +1,4 @@
+import { useId } from 'react'
 import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 
@@ -26,11 +27,15 @@ export function MediaTile({ item }: { item: DiscoverItem }) {
   const title = tmdbText(i18n.language, { 'zh-Hant': item.title, en: item.title_en })
   // 海報也分語言（票 11）：跟標題挑同一輪，中文標題配英文海報是兩個來源拼出來的東西。
   const poster = tmdbText(i18n.language, { 'zh-Hant': item.poster_url, en: item.poster_url_en })
+  const factsId = useId()
 
   return (
     <Link
       to="/media/$mediaId"
       params={{ mediaId: item.id }}
+      // 名字是作品名（票 13）：整格的字串起來是「無海報 TV 2022 …」，每一格都從代號念起。
+      aria-label={title}
+      aria-describedby={factsId}
       className="grid grid-rows-[auto_1fr] border-2 border-rule bg-well hover:border-rule-strong"
     >
       <ArtSlot url={poster} shape="poster" />
@@ -39,7 +44,7 @@ export function MediaTile({ item }: { item: DiscoverItem }) {
             深色的海報上幾乎消失（票 03 實測；DESIGN.md 的 The Paint Needs A Painted
             Ground Rule）。這裡的底是 `well`，量得出對比。
             「部分 / 完整 / 下載中」還沒有——那要等帳本（票 12）才推導得出來。 */}
-        <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
+        <p id={factsId} className="flex flex-wrap items-center gap-x-2 gap-y-1">
           <span className="value text-xs text-ink-dim">
             {KIND_CODE[item.kind]} <Dot /> {item.year ?? '—'}
           </span>
@@ -49,25 +54,13 @@ export function MediaTile({ item }: { item: DiscoverItem }) {
             <span className="label bg-deck px-1.5 py-0.5 text-ink">{t('discover.tracked')}</span>
           )}
         </p>
-        <p className="value line-clamp-2 min-h-10 text-sm leading-snug text-ink">{title}</p>
+        {/* 每一格的標題是 `h3`（牆的標題是 `h2`）：與媒體庫牆、接著看、集卡同一種語意（票 13）。 */}
+        <h3 className="value line-clamp-2 min-h-10 text-sm leading-snug text-ink">{title}</h3>
         {/* 第二行是檔名用的英文標題；EN 介面上它就是第一行，不再印一次。 */}
         {item.title_en !== title && (
           <p className="value line-clamp-1 text-xs text-ink-dim">{item.title_en}</p>
         )}
       </div>
     </Link>
-  )
-}
-
-/** 讀取中的格子：海報位留一個空位，標識帶留兩條線。**不會動**——這個世界沒有骨架屏動畫。 */
-export function TilePlaceholder() {
-  return (
-    <div className="grid grid-rows-[auto_1fr] border-2 border-rule bg-well" aria-hidden="true">
-      <div className="aspect-[2/3] bg-hull" />
-      <div className="grid content-start gap-2 px-3 py-3.5">
-        <span className="block h-2 w-12 bg-deck" />
-        <span className="block h-2 w-4/5 bg-deck" />
-      </div>
-    </div>
   )
 }
