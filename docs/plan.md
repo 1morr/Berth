@@ -628,12 +628,13 @@ WebUI\AuthSubnetWhitelist=172.28.0.2/32
 | 單元 | pytest | `parser/`、`naming/`、`domain/` 狀態機、`Tags.render`、sanitize；benchmark 是單元測試的一部分 |
 | adapter 契約 | pytest + respx | 每個 adapter 對錄製回應（`tests/fixtures/http/`）的解析；版本差異（qBittorrent 4.4 vs 5.x 的參數） |
 | 整合 | pytest + Fake adapters + 暫存 SQLite | services 與 pipeline：送單 → 完成 → planning → importing → ledger；重入與冪等；刪除範圍；reconciler 對三種人為破壞的偵測 |
-| 前端 | vitest | 元件與關鍵頁面。**沒有腳本化的 playwright e2e**（2026-09-22 承認，原文寫「playwright 對 Fake 後端跑精靈與 M1 流程」但從未寫過）：UI 的驗證是每張票用 playwright MCP 對 `scripts/fake_setup_server.py` 的演練情境實跑並把結果貼進票與 progress.md（CLAUDE.md 的規則）。要把它變成閘門是 M2 的一張候選票（對演練情境跑精靈與送單），沒做之前不當成既有閘門宣稱 |
+| 前端 | vitest | 元件與關鍵頁面 |
+| 前端 e2e | playwright（`web/e2e/`，CI 的 `web-e2e` job，每個 push） | 對 `scripts/fake_setup_server.py` 的演練情境跑四條流程（M2 票 15）：精靈八步走完（`bundled`）、送單到入庫（`import`，一個請求都不出網）、`/review` 確認一筆 audit（`review`）、`/issues` 修一條 `library_link_missing`（`issues`）。一條流程一台 server、不重試（替身有狀態）；失敗時截圖與 trace 上傳成 artifact。**只蓋這四條**：其餘頁面的 UI 驗證仍是每張票用 playwright MCP 對演練情境實跑並把結果貼進票與 progress.md（CLAUDE.md 的規則），新的一條流程要進閘門就在 `web/e2e/` 加一個 spec 與 `playwright.config.ts` 的一列 |
 | e2e | docker compose（GitHub Actions，`tests/e2e/`） | 真 qBittorrent + 真 Jellyfin + 這一份工作目錄 build 的 Berth + 真 TMDB（Prowlarr 起來讓精靈偵測，索引站那一步跳過，搜尋不在 e2e 裡）。**一次 compose、一次精靈、一次入庫，兩個模組共享**（fixture 在 `tests/e2e/conftest.py`，session scope）：<br>**M1**（`test_1_m1_pipeline.py`）用本地產生的 .torrent 與檔案（benchmark 語料的三包：美劇一季、動漫一季、電影），送單之後把位元組放進 qBittorrent 回報的下載路徑再 `recheck`，跑通 M1 驗收；驗證時間線依序走過各站、硬鏈接 inode、帳本逐檔的 Jellyfin item id（票 15 以 recheck 取代原本寫的 `seedMode`：那是 Web API 2.16 起才有、而且要由送單的 Berth 帶的參數）。<br>**M1.5**（`test_2_m15_library.py`，票 11）以 Jellyfin API 建一個只開放一個媒體庫的一般使用者，用它登入 Berth：看不到沒權限的媒體庫、直接請求也被拒；不經 Berth 放進那個媒體庫的作品照樣在牆上；某一集的 `item_id` 就是 Jellyfin 在帳本那條路徑上的 item；標為已看 / 未看之後**那個帳號自己的** `UserData` 真的變了；帳號被停用之後 Berth 的 session 結束。最後停掉 Jellyfin 容器，驗「問不到 Jellyfin」那一句（票 07 留給這一輪的） |
 | 部署腳本 | pytest + bash 替身 | `deploy/` 的 shell：preseed 的「缺鍵才補」規則、entrypoint 的擁有者接手。真的跑腳本，把 `chown` / `setpriv` 換成會記錄參數的替身；路徑用 `BERTH_*` 的測試 seam 覆寫 |
 | 實驗 | `scripts/experiments/` | brief §20.6，一次性但保留腳本，結果寫回 brief |
 
-- CI（GitHub Actions）：lint、type、unit + integration、benchmark 門檻、前端 build、image build；e2e 在 nightly、`v*` tag 與手動觸發時跑（`.github/workflows/e2e.yml`，TMDB 憑證是 repo secret）。
+- CI（GitHub Actions）：lint、type、unit + integration、benchmark 門檻、前端 build、前端 e2e、image build；e2e 在 nightly、`v*` tag 與手動觸發時跑（`.github/workflows/e2e.yml`，TMDB 憑證是 repo secret）。
 - 覆蓋率不設硬門檻，但 `parser/`、`naming/`、`services/` 的新程式碼必須有測試。
 
 ---
@@ -719,7 +720,7 @@ M1 帶過來的（票 15 的 critique，2026-09-17，使用者拍板交給這一
 | 11 | `/jobs/:hash` | 時間線、檔案清單與各檔決策、Plan 歷史、動作 | 決定 1 |
 | 12 | 前端品質（M1.5 audit P1 / P2） | 首頁 CLS 0.3553、媒體庫 0.1605（`WatchingRows` 讀取中回 `null`，資料回來後插在上方整頁下移 440px；改成 `MediaDetailPage` `Loading()` 那種不動的佔位——**實作時改成照上一次的形狀佔位**，見 progress.md 2026-09-24 偏差）；`activeProps` 讓 `border-rule` 與 `border-rule-strong` 同時出現（`AppShell.tsx`、`InventoryPage.tsx` 兩處、`SettingsTabs.tsx`，改走 TanStack 的 `data-status="active"`）；牆 1,621 個 DOM 節點與零 memoization（`page_size` 100 → 50 先做）；兩頁清單語意相反（媒體庫牆 `<h3>` 探索牆 `<p>`、容器 `<div>` 而繼續觀看是 `<ul>`）；重複控制項的名稱（上面的二選一）；同一頁兩個 `<nav aria-label="分頁">`；`ArtSlot` 寫死 342px 無 `srcset`；`Poster.tsx` 與 `ArtSlot.tsx` 合併（`ArtSlot` 多收 `className`）；`?filter=` 抽共用型別守衛（`validateSearch` 擋不住）；`i18n/tmdbText.ts` 改名（它從票 11 起也挑圖） | WCAG 2.2 AA 是 §7 的驗收 |
 | 13 | M1.5 critique 剩餘（P1 / P2） | 「待審 / 對不到」篩出來的卡片要說為什麼在這（`has_unmatched` 在 payload 裡卻沒畫）並且**做成一列一件事的清單而不是牆**（與票 05–07 的 `/review` 同一個元件）；媒體庫頁前置內容收成「接著看 N 項」；牆上按名字找（`WallQuery` 加 `q` → Jellyfin `SearchTerm`，寫進網址）；詳情頁四個集數系統至少在季表標題列說明是哪一份、集號欄用 `S01E09`；`InventoryTile` ↔ `EpisodeTile` 合併（只有這一對值得，`MediaTile` 是離群值） | 其中清單那一件是票 05 的 shape 輸入，拆票時看要不要提前 |
-| 14 | 前端 e2e 閘門（候選） | 把 playwright 對演練情境跑精靈與送單腳本化進 CI（§10）；不做就維持 §10 現在的實話 | 可延後 |
+| 14 | 前端 e2e 閘門 | 把 playwright 對演練情境跑精靈與送單腳本化進 CI（§10）。**已做（票 15，2026-09-24）** | 可延後 |
 | 15 | M2 驗收 | e2e 覆蓋三種破壞 + 一鍵重建 + `user` 越權；里程碑收尾；critique / audit / polish | — |
 
 **遺留清單的歸屬**（M0 票 11、M1 票 15、M1.5 票 11 收尾時逐條過完的；2026-09-22 再審一次，過時的已刪、重複的已併）：

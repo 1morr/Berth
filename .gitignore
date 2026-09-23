@@ -29,6 +29,9 @@ web/dist/
 
 # 工具產物
 .playwright-mcp/
+# `pnpm e2e` 的失敗證據（trace、截圖）與 HTML 報告
+web/test-results/
+web/playwright-report/
 # `pnpm gen:api` 的中間產物；進版控的是它產出的 web/src/api/schema.d.ts（票 02）
 web/openapi.json
 

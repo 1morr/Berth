@@ -255,6 +255,7 @@ pnpm -C web lint            # eslint
 pnpm -C web format          # prettier（CI 用 format:check）
 pnpm -C web typecheck       # tsc（strict）；build 已含，這是單獨跑的快捷
 pnpm -C web gen:api         # 重新產生 API 型別（見下）
+pnpm -C web e2e             # playwright 對演練情境跑四條流程（先 build，見〈前端 e2e〉）
 ```
 
 ### API 型別
@@ -334,6 +335,33 @@ docker compose -f deploy/docker-compose.yml -f tests/e2e/compose.yml --env-file 
 - GitHub Actions 的 `.github/workflows/e2e.yml` 在 nightly、`v*` tag 與手動觸發時跑同一組指令，
   TMDB 憑證是 repo secret `TMDB_API_KEY`。
 
+### 前端 e2e
+
+`web/e2e/` 以 playwright 對〈UI 的 Fake 後端〉的演練情境跑四條流程，一條流程一台 server、各佔一個 port
+（`web/playwright.config.ts` 自己起、跑完收掉）：
+
+| 流程 | 情境 | port |
+| --- | --- | --- |
+| 精靈八步走完，之後以同一組帳密登入 | `bundled` | 8491 |
+| 從作品頁送單，一路走到已入庫 | `import` | 8492 |
+| `/review` 確認一筆 audit | `review` | 8493 |
+| `/issues` 修一條 `library_link_missing` | `issues` | 8494 |
+
+```bash
+pnpm -C web build                                          # server 發的是 web/dist
+pnpm -C web exec playwright install chromium               # 第一次
+pnpm -C web e2e                                            # 約 20 秒
+pnpm -C web e2e --project issues                           # 只跑一條
+pnpm -C web exec playwright show-trace web/test-results/<那一條>/trace.zip   # 失敗時看 trace
+```
+
+- **不重試、不接手已經在跑的 server**：替身是有狀態的，重跑一次面對的是被上一次改過的替身。四個 port 上
+  有東西在聽時先停掉它。
+- 選擇器寫的是 zh-Hant 文案（瀏覽器語系 `zh-TW`），改文案要跟著改腳本。
+- 失敗時 `web/test-results/` 留截圖與 trace、`web/playwright-report/` 是 HTML 報告；CI 的 `web-e2e` job 把兩者
+  上傳成 artifact `playwright-evidence`（留 14 天）。
+- 與上一節的 e2e 是兩回事：那一套對真的服務、nightly 跑；這一套全是替身、每個 push 都跑。
+
 ### UI 的 Fake 後端
 
 精靈與健康頁的 UI 不必真的有四個容器也能實跑：`scripts/fake_setup_server.py` 起一台真的 Berth
@@ -370,6 +398,7 @@ uv run python scripts/fake_setup_server.py --port 8383     # 換 port（索引�
 | `search` | Media 詳情頁的搜尋結果表：TMDB 與**索引站都打真的**。索引站位址從 `BERTH_INDEXER_URL` / `BERTH_INDEXER_KEY` 讀，沒設就退回替身（結果表是空的，那本身也是要驗的畫面）。一次搜尋 35–85 秒 |
 | `submit` | 送單與下載列表 `/jobs`：TMDB 打真的，索引站給三筆磁力連結的替身結果（形狀取自真的那一輪）。送單、解析、Job 與時間線走的都是產品自己的程式碼，只有 qBittorrent 是替身 |
 | `submit-failing` | 同上，但 qBittorrent 收不下：送單失敗那一列、服務回的原文，以及「重新送單」 |
+| `import` | 送單到入庫整條走完、**一個請求都不出網**（M2 票 15 的前端 e2e 用它）：同 `plan` 那一包對得上的批次，但 TMDB 是替身（與 `issues` 同一部 SPY×FAMILY，`/media/tv:120089`）。送到 Anime 之後幾秒就是「已入庫」，詳情頁的「檔案與版本」列出五個檔案 |
 | `plan` | 下載完成 → **Import Plan**（票 11）：索引站給兩包替身結果——一包對得上的批次（自動入庫）與一包對不到任何一集的 OST（停在待審核）。qBittorrent 是替身，但它會把那幾個檔案**真的寫進 save path** 並報成 100%，所以 poller 走完狀態機、planner 算出真的 Plan：解析、命名、mediainfo、TMDB 快照全是產品自己的程式碼 |
 | `inventory` | Media 詳情的「檔案與版本」與送單到入庫的媒體庫（票 13）：同 `plan` 的兩包，加上一台會「掃到」入庫檔案的替身 Jellyfin。送單之後那一部先在媒體庫頁的「還沒進 Jellyfin」那一條，約 30 秒後 resolver 反查、替身「掃到」它，它就換到牆上；OST 那一包是「待審」篩選要找到的那一格。深連結指向瀏覽器主機名的 8096，那台 Jellyfin 不存在——Jellyfin 那一端要用真的一套驗 |
 | `long-lists` | 長清單的收合（M1.5 票 09）：同 `inventory`，但索引站只給 benchmark 語料裡葬送的芙莉蓮 `[7³ACG]` BD 合集（39 個檔案：S01 28 集、S00 11 集）。在芙莉蓮的詳情頁（`/media/tv:209867`）送到 Anime，計劃、入庫與替身 Jellyfin 的反查約一分鐘走完，之後看「檔案與版本」與 `/jobs` 那一列的計劃；名偵探柯南（`/media/tv:30983`，TMDB 併成一季 1216 集）不必送單，打開就是那張季表。需要 `TMDB_API_KEY`。**Windows 上加 `--config-root` 指一個短路徑**（例如 `C:/Users/<你>/t9`）：預設的暫存目錄太深，S00 那 11 個檔案的目標路徑會超過 260 字元而入庫失敗 |

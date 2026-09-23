@@ -578,6 +578,11 @@ Berth 入庫的作品照樣瀏覽得到。這六件事現在是 nightly e2e 的�
 - **媒體庫牆上按名字找**（M2 票 14）：`GET /inventory/{id}?q=` 轉成 Jellyfin 的 `searchTerm`（名字裡的任一段、
   不分大小寫，12.1.0 實測），寫進網址 `?q=`；邊打邊搜、停手 500ms 才換網址（與探索頁同一個間隔），換網址用
   replace、回第 1 頁。搜不到時說搜了什麼，名字與類型年份各一條清除的路。
+- **前端 e2e 閘門**（M2 票 15，plan §10）：`pnpm -C web e2e` 以 playwright 對演練情境跑四條流程——精靈八步走完、
+  從作品頁送單到已入庫、`/review` 確認一筆 audit、`/issues` 修一條 `library_link_missing`。一條流程一台
+  `scripts/fake_setup_server.py`（替身都在程序裡，不打真的索引站與 TMDB），CI 的 `web-e2e` job 每個 push 都跑，
+  失敗時截圖、trace 與 HTML 報告上傳成 artifact `playwright-evidence`。演練情境多一個 `import`：送單到入庫整條
+  走完、一個請求都不出網。
 
 ### Changed
 
@@ -844,6 +849,11 @@ Berth 入庫的作品照樣瀏覽得到。這六件事現在是 nightly e2e 的�
   卡片牆篩選，換成審核佇列的清單之後沒有人讀它們。
 
 ### Fixed
+
+- **精靈第 5 步加站還在跑時按「測試 TMDB」，TMDB 的結果不再被蓋掉**（M2 票 15 的 e2e 抓到）：兩支命令都是「讀
+  `settings.setup`、打網路、整份寫回」，後寫完的那一支把對方剛寫的那一半蓋回去——畫面說 TMDB 已完成，精靈卻卡在
+  第 6 步。反過來（TMDB 先送出、加站先寫完）則是逐站結果消失。三支命令（加預設站、測既有索引站、測 TMDB）改在
+  寫鎖裡重讀、只改自己那一半（`services/settings.update_settings`）。
 
 - **網址上認不得的 `?filter=` / `?page=` / `?sort=` 不再原樣漏到媒體庫頁**（M2 票 13）：根路由不驗網址，子路由拿到的
   是兩者合起來，驗不過的那一格沒寫回去就照原樣留著。守衛收成一份 `isInventoryFilter`，頁面那一道拿掉。

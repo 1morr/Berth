@@ -4,3 +4,7 @@ pnpm-lock.yaml
 # 產出的檔案（pnpm gen:api）
 openapi.json
 src/api/schema.d.ts
+
+# `pnpm e2e` 的失敗證據與報告
+test-results
+playwright-report

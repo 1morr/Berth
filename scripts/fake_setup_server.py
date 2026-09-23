@@ -701,6 +701,18 @@ def plan_scenario() -> Scenario:
     return _planning(discover(), {PLAN_RELEASE: PLAN_FILES, STRAY_RELEASE: STRAY_FILES})
 
 
+def import_scenario() -> Scenario:
+    """送單到入庫整條走完、**一個請求都不出網**（M2 票 15 的前端 e2e）。
+
+    同 `plan` 那一包對得上的批次，但 TMDB 是替身（與 `issues` 同一部 SPY×FAMILY）：CI 上沒有
+    憑證、也不該去打真的 TMDB。索引站與 qBittorrent 本來就是替身，下載連結指回這台 server。
+    """
+    scenario = _planning(healthy(), {PLAN_RELEASE: PLAN_FILES})
+    scenario.tmdb_credential = "00000000000000000000000000000010"
+    scenario.tmdb = demo_tmdb()
+    return scenario
+
+
 def _planning(scenario: Scenario, packs: dict[str, tuple[tuple[str, int], ...]]) -> Scenario:
     """索引站給這幾包、qBittorrent 收下就當場完成（`PlanningQbittorrent`）。"""
     scenario.qbittorrent = PlanningQbittorrent(
@@ -896,6 +908,7 @@ SCENARIOS = {
     "discover": discover,
     "search": search,
     "plan": plan_scenario,
+    "import": import_scenario,
     "inventory": inventory_scenario,
     "long-lists": long_lists_scenario,
     "library": library_scenario,

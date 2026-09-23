@@ -4,6 +4,8 @@ on:
   push:
     branches: [main]
   pull_request:
+  # 在任一分支上手動跑一次（例如故意改壞一個選擇器，看 web-e2e 紅得起來、證據撿得到）。
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -53,6 +55,49 @@ jobs:
       - run: pnpm format:check
       - run: pnpm test
       - run: pnpm build
+
+  web-e2e:
+    name: web-e2e
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v10.0.1
+        with:
+          enable-cache: true
+
+      - uses: pnpm/action-setup@v6
+        with:
+          package_json_file: web/package.json
+          cache: true
+          cache_dependency_path: web/pnpm-lock.yaml
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - run: uv sync --locked
+      - run: pnpm install --frozen-lockfile
+        working-directory: web
+      - run: pnpm exec playwright install --with-deps chromium
+        working-directory: web
+
+      # plan §10 的「前端 e2e」：playwright 對演練情境（scripts/fake_setup_server.py）跑四條流程。
+      # 替身全在程序裡，不打真的索引站與 TMDB，所以每個 push 都跑得起。server 發的是 web/dist。
+      - run: pnpm build
+        working-directory: web
+      - run: pnpm e2e
+        working-directory: web
+
+      - if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-evidence
+          # 失敗那一條的截圖、trace（`pnpm exec playwright show-trace <zip>`）與 HTML 報告。
+          path: |
+            web/test-results/
+            web/playwright-report/
+          retention-days: 14
 
   api-types:
     name: api-types

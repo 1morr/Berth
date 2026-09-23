@@ -13,6 +13,8 @@ export default defineConfig({
   },
   test: {
     environment: 'jsdom',
+    // `e2e/` 是 playwright 的（`pnpm e2e`），不是 vitest 的。
+    include: ['src/**/*.test.{ts,tsx}'],
     setupFiles: ['./src/setupTests.ts'],
     css: false,
     // 預設 5 s。放寬的代價只有「真的壞掉的測試要多等幾秒才紅」；不放寬的代價是機器忙的時候
