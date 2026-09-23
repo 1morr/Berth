@@ -18,43 +18,43 @@ colors:
   secured-ink: "oklch(0.76 0.16 150)"
 typography:
   app-name:
-    fontFamily: "ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace"
+    fontFamily: "ui-monospace, 'Cascadia Mono', 'Cascadia Code', 'SF Mono', Menlo, Consolas, 'DejaVu Sans Mono', monospace"
     fontSize: "1.125rem"
     fontWeight: 600
     letterSpacing: "-0.015em"
   berth-name:
-    fontFamily: "ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace"
+    fontFamily: "ui-monospace, 'Cascadia Mono', 'Cascadia Code', 'SF Mono', Menlo, Consolas, 'DejaVu Sans Mono', monospace"
     fontSize: "1rem"
     fontWeight: 600
     fontFeature: "tabular-nums"
   label:
-    fontFamily: "ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace"
+    fontFamily: "ui-monospace, 'Cascadia Mono', 'Cascadia Code', 'SF Mono', Menlo, Consolas, 'DejaVu Sans Mono', monospace"
     fontSize: "0.6875rem"
     fontWeight: 600
     lineHeight: 1
     letterSpacing: "0.18em"
   label-zh-hant:
-    fontFamily: "system-ui, -apple-system, 'Segoe UI', 'Noto Sans TC', 'PingFang TC', sans-serif"
+    fontFamily: "system-ui, -apple-system, 'Segoe UI', 'Noto Sans TC', 'PingFang TC', 'Microsoft JhengHei', 'Microsoft YaHei', sans-serif"
     fontSize: "0.6875rem"
     fontWeight: 600
     lineHeight: 1
     letterSpacing: "0.05em"
   value:
-    fontFamily: "ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace"
+    fontFamily: "ui-monospace, 'Cascadia Mono', 'Cascadia Code', 'SF Mono', Menlo, Consolas, 'DejaVu Sans Mono', monospace"
     fontSize: "0.875rem"
     fontWeight: 400
     fontFeature: "tabular-nums"
   value-small:
-    fontFamily: "ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace"
+    fontFamily: "ui-monospace, 'Cascadia Mono', 'Cascadia Code', 'SF Mono', Menlo, Consolas, 'DejaVu Sans Mono', monospace"
     fontSize: "0.75rem"
     fontWeight: 400
     fontFeature: "tabular-nums"
   body:
-    fontFamily: "system-ui, -apple-system, 'Segoe UI', 'Noto Sans TC', 'PingFang TC', sans-serif"
+    fontFamily: "system-ui, -apple-system, 'Segoe UI', 'Noto Sans TC', 'PingFang TC', 'Microsoft JhengHei', 'Microsoft YaHei', sans-serif"
     fontSize: "0.875rem"
     lineHeight: 1.5
   body-small:
-    fontFamily: "system-ui, -apple-system, 'Segoe UI', 'Noto Sans TC', 'PingFang TC', sans-serif"
+    fontFamily: "system-ui, -apple-system, 'Segoe UI', 'Noto Sans TC', 'PingFang TC', 'Microsoft JhengHei', 'Microsoft YaHei', sans-serif"
     fontSize: "0.75rem"
     lineHeight: 1.5
 rounded:
@@ -318,7 +318,7 @@ primary、uptime 儀表板的折線圖與綠色勾勾牆、訊息塊左緣的粗
 
 ## Typography
 
-**Display Font:** 無。這個系統沒有 display 級別的字，最大的字是 1.125rem 的應用名。
+**Display Font:** 無。這個系統沒有 display 級別的字，最大的字是 Media 詳情的作品名（1.25rem，下面的例外），其次是 1.125rem 的應用名。
 **Body Font:** 系統無襯線堆疊（`system-ui`、`Segoe UI`、`Noto Sans TC`、`PingFang TC`），只用於散文。
 **Label / Value Font:** 系統等寬堆疊（`ui-monospace`、`Cascadia Mono`、`SF Mono`、`Menlo`、`Consolas`）。
 
