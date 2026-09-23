@@ -12,11 +12,12 @@
 from __future__ import annotations
 
 import asyncio
+import time
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import replace
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 
 import pytest
 from fastapi.testclient import TestClient
@@ -202,6 +203,21 @@ class TestPressingAButton:
         assert response.status_code == 422
 
 
+def finished_run(client: TestClient) -> dict[str, Any] | None:
+    """等背景那一輪跑完再回它（`GET /reconcile` 的 `last`）；10 秒內沒跑完回 `None`。
+
+    202 只說收下了：那一輪在另一個 task 上跑，POST 回來的那一刻它可能還沒開始
+    （本機剛好都來得及，CI 上不一定——M2 票 15 推上去的第一輪就紅在這裡）。
+    """
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline:
+        state = client.get("/api/reconcile").json()
+        if state["current"] is None and state["last"] is not None:
+            return cast(dict[str, Any], state["last"])
+        time.sleep(0.05)
+    return None
+
+
 class TestReconciling:
     def test_pressing_it_is_202_with_the_id_of_this_run(self, client: TestClient) -> None:
         """**202 不是 200**：那一輪在背景跑，回的是「收下了，這一輪是第幾號」。"""
@@ -217,7 +233,7 @@ class TestReconciling:
         sign_in(client)
         client.post("/api/reconcile", headers=BROWSER)
 
-        last = client.get("/api/reconcile").json()["last"]
+        last = finished_run(client)
 
         assert last is not None
         assert last["finished_at"] is not None
