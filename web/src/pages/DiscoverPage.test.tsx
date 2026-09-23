@@ -203,7 +203,8 @@ describe('探索頁', () => {
     render()
     renderApp('/')
 
-    expect(await screen.findByAltText('TMDB')).toBeInTheDocument()
+    // 標誌的替代文字走 i18n（票 13）：三頁原本各硬寫一次 `alt="TMDB"`。
+    expect(await screen.findByRole('img', { name: 'TMDB 標誌' })).toBeInTheDocument()
     expect(screen.getByText(/未經 TMDB 認可或認證/)).toBeInTheDocument()
   })
 })

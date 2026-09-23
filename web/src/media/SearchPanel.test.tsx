@@ -344,6 +344,25 @@ describe('搜尋 torrent 與結果表', () => {
     expect(within(panel()).queryByRole('table')).not.toBeInTheDocument()
   })
 
+  it('索引站沒接時按下去之前就說，按了之後同一件事只說一次（票 13）', async () => {
+    render({
+      [QUERIES_PATH]: { body: { queries: ['SPY x FAMILY'], problem: 'not_configured' } },
+      [SEARCH_PATH]: {
+        body: results({ rows: [], total: 0, attempts: [], problem: 'not_configured' }),
+      },
+    })
+    renderApp('/media/tv:120089')
+
+    // 還沒按：一個索引站都沒打，畫面已經說得出下一步。
+    expect(await screen.findByText(/設定精靈的第 5 步跳過了索引站/)).toBeVisible()
+    expect(within(panel()).getByRole('link', { name: '前往設定精靈' })).toBeVisible()
+
+    await userEvent.click(screen.getByRole('button', { name: '搜尋' }))
+
+    expect(await screen.findByText('找到 0 筆，0 個關鍵字沒問到。')).toBeInTheDocument()
+    expect(screen.getAllByText(/設定精靈的第 5 步跳過了索引站/)).toHaveLength(1)
+  })
+
   it('一般使用者看到的是「請管理員…」而不是一條進不去的連結', async () => {
     render(
       {

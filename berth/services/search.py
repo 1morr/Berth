@@ -118,6 +118,15 @@ class SearchView:
     detail: str = ""
 
 
+@dataclass(frozen=True, slots=True)
+class QueryPlan:
+    """按下搜尋之前畫面要說的：會問哪幾個名字，以及不必問索引站就知道的問題。"""
+
+    queries: tuple[str, ...]
+    #: 只有 `NOT_CONFIGURED`（M2 票 13）：預覽不打索引站，連不上、憑證錯要按下去才知道。
+    problem: IndexerProblem | None = None
+
+
 async def plan_queries(
     session: AsyncSession,
     factory: ServiceClientFactory,
@@ -125,7 +134,7 @@ async def plan_queries(
     media_id: str,
     missing: bool = False,
     season: int | None = None,
-) -> tuple[str, ...]:
+) -> QueryPlan:
     """按下搜尋之前，Berth 會拿哪幾個名字去問（PRODUCT 原則 2：動手前先給看）。
 
     存在的理由是**這條規則只能有一份實作**：`search_titles` 要看快照的標題集合與季數，前端重算
@@ -133,9 +142,23 @@ async def plan_queries(
 
     `missing` 是缺集一鍵搜（M1.5 票 10）：預覽與真的送出去的那幾個查詢走同一個 `_texts`，
     所以畫面上寫的就是待會兒問出去的。
+
+    **沒接索引站時先說**（M2 票 13）：與 `search_torrents` 同一個判準（`_indexer`）。名字照樣列——
+    接上之後會問的就是這幾個。
     """
     snapshot = await read_snapshot(session, factory, media_id)
-    return await _texts(session, factory, media_id, snapshot, missing=missing, season=season)
+    queries = await _texts(session, factory, media_id, snapshot, missing=missing, season=season)
+    ready = await _indexer(session) is not None
+    return QueryPlan(queries, None if ready else IndexerProblem.NOT_CONFIGURED)
+
+
+async def _indexer(session: AsyncSession) -> IndexerSettings | None:
+    """接好的索引站設定；精靈第 5 步跳過了或位址是空的時是 `None`。"""
+    settings = await read_settings(session, IndexerSettings)
+    setup = await read_settings(session, SetupSettings)
+    if not settings.base_url or setup.indexer.skipped:
+        return None
+    return settings
 
 
 async def _texts(
@@ -173,9 +196,8 @@ async def search_torrents(
 
     `missing` 是從季表的缺集開始搜（M1.5 票 10），`season` 再把範圍收到那一季。
     """
-    settings = await read_settings(session, IndexerSettings)
-    setup = await read_settings(session, SetupSettings)
-    if not settings.base_url or setup.indexer.skipped:
+    settings = await _indexer(session)
+    if settings is None:
         return _blank(IndexerProblem.NOT_CONFIGURED)
 
     snapshot = await read_snapshot(session, factory, media_id)

@@ -572,7 +572,7 @@ class TestMissingEpisodes:
         indexer = FakeIndexerSearch()
         factory = FakeClientFactory(indexer_search=indexer)
 
-        preview = await plan_queries(session, factory, media_id=spy.id, missing=True)
+        preview = (await plan_queries(session, factory, media_id=spy.id, missing=True)).queries
         await search_torrents(session, factory, media_id=spy.id, missing=True)
 
         assert list(preview) == [query.text for query in indexer.queries]

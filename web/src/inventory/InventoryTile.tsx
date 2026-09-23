@@ -12,7 +12,7 @@ import { KIND_CODE } from '../components/kind'
 import { SIGNAL_FILL, type Signal } from '../components/signal'
 import { WatchToggle } from '../components/WatchToggle'
 import { watchLine } from '../components/watchLine'
-import { tmdbText } from '../i18n/tmdbText'
+import { displayRound } from '../i18n/displayRound'
 import { jellyfinDetailsUrl } from './jellyfinLink'
 
 /**
@@ -57,9 +57,9 @@ export function InventoryTile({
 }) {
   const { t, i18n } = useTranslation()
   // 在 Jellyfin 裡的作品兩輪是同一個名稱，所以這一步不必分兩種卡片。
-  const title = tmdbText(i18n.language, { 'zh-Hant': card.title, en: card.title_en })
+  const title = displayRound(i18n.language, { 'zh-Hant': card.title, en: card.title_en })
   // 還沒進 Jellyfin 的那幾格是 TMDB 的海報，兩輪不同（票 11）；在 Jellyfin 裡的兩輪同一張。
-  const poster = tmdbText(i18n.language, { 'zh-Hant': card.poster_url, en: card.poster_url_en })
+  const poster = displayRound(i18n.language, { 'zh-Hant': card.poster_url, en: card.poster_url_en })
   const tracking = card.tracking
   const factsId = useId()
 

@@ -13,7 +13,7 @@ import { TmdbNotice } from '../components/TmdbNotice'
 import { SEARCH_DEBOUNCE_MS, useDebounced } from '../components/useDebounced'
 import { MediaWall } from '../discover/MediaWall'
 import { HomeWatching } from '../watching/WatchingRows'
-import tmdbLogo from '../assets/tmdb.svg'
+import { TmdbAttribution } from '../components/TmdbAttribution'
 
 /**
  * 探索頁 `/`（票 03、`.scratch/m1/discover-shape.md`）。上方是這個人的繼續觀看與下一集（M1.5 票 07）。
@@ -102,11 +102,7 @@ export function DiscoverPage() {
         </>
       )}
 
-      {/* TMDB 的條款要求顯示標誌與這一句（brief §20.3）。它是法定聲明，不是頁尾裝飾。 */}
-      <footer className="flex flex-wrap items-center gap-x-3 gap-y-2 border-t-2 border-rule pt-4">
-        <img src={tmdbLogo} alt="TMDB" height={16} className="h-4 w-auto" />
-        <p className="max-w-prose text-xs text-ink-dim">{t('discover.attribution')}</p>
-      </footer>
+      <TmdbAttribution />
     </div>
   )
 

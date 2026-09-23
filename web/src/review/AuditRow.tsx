@@ -15,7 +15,7 @@ import { formatEpisode } from '../components/episodes'
 import { DetailLine, QueueRow } from '../components/QueueRow'
 import { JobLink } from '../jobs/JobLink'
 import { fileName, whenText } from '../components/queueText'
-import { tmdbText } from '../i18n/tmdbText'
+import { displayRound } from '../i18n/displayRound'
 import { Reasons } from '../plans/Reasons'
 
 /**
@@ -58,7 +58,7 @@ export function AuditRow({ row, onDone }: { row: AuditReviewRow; onDone: (said: 
   })
 
   const busy = act.isPending
-  const title = tmdbText(i18n.language, { 'zh-Hant': row.title, en: row.title_en })
+  const title = displayRound(i18n.language, { 'zh-Hant': row.title, en: row.title_en })
   const episode = formatEpisode(row)
 
   return (

@@ -14,7 +14,7 @@ import { formatEpisode } from '../components/episodes'
 import { DetailLine, QueueRow } from '../components/QueueRow'
 import { JobLink } from '../jobs/JobLink'
 import { fileName, whenText } from '../components/queueText'
-import { tmdbText } from '../i18n/tmdbText'
+import { displayRound } from '../i18n/displayRound'
 
 /**
  * 規劃時與媒體庫裡已有的一份重複、自動模式先略過的檔案（brief §7.8、M2 票 08）。
@@ -56,7 +56,7 @@ export function DuplicateRow({
   })
 
   const busy = decide.isPending
-  const title = tmdbText(i18n.language, { 'zh-Hant': row.title, en: row.title_en })
+  const title = displayRound(i18n.language, { 'zh-Hant': row.title, en: row.title_en })
   const episode = formatEpisode(row)
   const known = formatEpisode({
     season: row.known_season,

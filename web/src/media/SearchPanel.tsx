@@ -80,6 +80,7 @@ export function SearchPanel({ media, ref }: { media: Media; ref: Ref<SearchHandl
 
   const results = search.data
   const rows = results ? sortRows(results.rows, sort) : []
+  const problem = results ? results.problem : planned.data?.problem
 
   return (
     <section className="grid gap-4" aria-labelledby={headingId}>
@@ -113,7 +114,12 @@ export function SearchPanel({ media, ref }: { media: Media; ref: Ref<SearchHandl
               id={keywordId}
               value={keyword}
               onChange={(event) => setKeyword(event.target.value)}
-              placeholder={t('search.keywordPlaceholder')}
+              // 從季表按進來之後留空問的是缺的集（票 13）：照舊說「作品的各個名字」就與底下的預覽相反。
+              placeholder={
+                missing === null
+                  ? t('search.keywordPlaceholder')
+                  : t('search.keywordPlaceholderMissing')
+              }
               className="value w-full border-2 border-rule bg-hull px-3 py-2.5 text-sm text-ink placeholder:text-ink-dim focus:border-rule-strong"
             />
           </p>
@@ -155,7 +161,9 @@ export function SearchPanel({ media, ref }: { media: Media; ref: Ref<SearchHandl
         results && results.attempts.length > 0 && <Cables attempts={results.attempts} />
       )}
 
-      {results?.problem && <IndexerNotice problem={results.problem} detail={results.detail} />}
+      {/* 沒接索引站在按下去之前就說（票 13，`/search/queries` 先帶 `problem`）：不然畫面一直說「會拿這幾個
+          名字去問」，按下去才知道根本沒有地方可問。搜過之後以那一次的結果為準，同一件事只說一次。 */}
+      {problem && <IndexerNotice problem={problem} detail={results?.detail ?? ''} />}
 
       {results && !results.problem && results.total === 0 && (
         <p className="max-w-prose text-sm text-ink-dim">

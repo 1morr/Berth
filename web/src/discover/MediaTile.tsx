@@ -6,7 +6,7 @@ import type { DiscoverItem } from '../api/discover'
 import { ArtSlot } from '../components/ArtSlot'
 import { Dot } from '../components/Dot'
 import { KIND_CODE } from '../components/kind'
-import { tmdbText } from '../i18n/tmdbText'
+import { displayRound } from '../i18n/displayRound'
 
 /**
  * 牆上的一格（`.scratch/m1/discover-shape.md` §3）。
@@ -24,9 +24,9 @@ import { tmdbText } from '../i18n/tmdbText'
  */
 export function MediaTile({ item }: { item: DiscoverItem }) {
   const { t, i18n } = useTranslation()
-  const title = tmdbText(i18n.language, { 'zh-Hant': item.title, en: item.title_en })
+  const title = displayRound(i18n.language, { 'zh-Hant': item.title, en: item.title_en })
   // 海報也分語言（票 11）：跟標題挑同一輪，中文標題配英文海報是兩個來源拼出來的東西。
-  const poster = tmdbText(i18n.language, { 'zh-Hant': item.poster_url, en: item.poster_url_en })
+  const poster = displayRound(i18n.language, { 'zh-Hant': item.poster_url, en: item.poster_url_en })
   const factsId = useId()
 
   return (

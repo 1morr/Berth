@@ -859,7 +859,27 @@ describe('媒體庫頁', () => {
     })
   })
 
+  it('頁尾有 TMDB 的標誌與聲明，標誌的替代文字走 i18n（票 13）', async () => {
+    render()
+    renderApp(`/library/${TV}`)
+
+    expect(await screen.findByRole('img', { name: 'TMDB 標誌' })).toBeInTheDocument()
+    expect(screen.getByText(/未經 TMDB 認可/)).toBeVisible()
+  })
+
   describe('排序與類型、年份（票 06）', () => {
+    it('方向那一個下拉有看得見的標籤，不是只有 aria-label（票 13）', async () => {
+      render()
+      renderApp(`/library/${TV}`)
+      await findTile('Alpha Show')
+
+      const order = screen.getByRole<HTMLSelectElement>('combobox', { name: '方向' })
+
+      expect(order).not.toHaveAttribute('aria-label')
+      expect(order.labels?.[0]).toHaveTextContent('方向')
+      expect(order.labels?.[0]).toBeVisible()
+    })
+
     /** 類型、年份的開關：展開之後的面板標題也叫這個名字。 */
     const findToggle = (label: string) =>
       screen.findByRole('button', { name: new RegExp(`^${label}`) })
@@ -910,7 +930,7 @@ describe('媒體庫頁', () => {
 
       await userEvent.selectOptions(await screen.findByLabelText('排序'), '社群評分')
       await waitFor(() => expect(router.state.location.search).toEqual({ sort: 'CommunityRating' }))
-      await userEvent.selectOptions(screen.getByLabelText('排序方向'), '遞減')
+      await userEvent.selectOptions(screen.getByRole('combobox', { name: '方向' }), '遞減')
 
       await waitFor(() =>
         expect(router.state.location.search).toEqual({
@@ -1002,7 +1022,7 @@ describe('媒體庫頁', () => {
       )
 
       expect(await screen.findByLabelText('排序')).toHaveValue('CommunityRating')
-      expect(screen.getByLabelText('排序方向')).toHaveValue('Descending')
+      expect(screen.getByRole('combobox', { name: '方向' })).toHaveValue('Descending')
       expect(await findToggle('類型')).toHaveAccessibleName(/^類型\s*已選 1 個$/)
       await waitFor(() =>
         expect(walls(api)).toEqual([
@@ -1293,6 +1313,33 @@ describe('媒體庫頁', () => {
 
       expect(await screen.findByRole('region', { name: '下一集' })).toBeInTheDocument()
       expect(document.querySelectorAll('[data-placeholder="watching"]')).toHaveLength(0)
+      localStorage.clear()
+    })
+
+    it('第 2 頁說得出兩列去了哪裡、給一條回第 1 頁的路；上一次沒東西可接著看就不說（票 13）', async () => {
+      const key = `berth.watching.skipper.library.${TV}`
+      const second = {
+        [`GET /api/inventory/${TV}?page=2&sort=CommunityRating`]: {
+          body: wall({ page: 2, total: 150 }),
+        },
+      }
+      localStorage.setItem(key, JSON.stringify({ resume: 0, nextUp: 1 }))
+      render({ [`GET ${WATCHING}`]: rows(), ...second })
+      const { unmount } = renderApp(`/library/${TV}?page=2&sort=CommunityRating`)
+      await findTile('Alpha Show')
+
+      expect(screen.getByText('繼續觀看與下一集只列在第 1 頁、沒有篩選的時候。')).toBeVisible()
+      // 回到會畫兩列的那一頁：頁碼與篩選拿掉，排序留著。
+      expect(screen.getByRole('link', { name: '到第 1 頁看' })).toHaveAttribute(
+        'href',
+        `/library/${TV}?sort=CommunityRating`,
+      )
+      unmount()
+
+      localStorage.setItem(key, JSON.stringify({ resume: 0, nextUp: 0 }))
+      renderApp(`/library/${TV}?page=2&sort=CommunityRating`)
+      await findTile('Alpha Show')
+      expect(screen.queryByText(/只列在第 1 頁/)).not.toBeInTheDocument()
       localStorage.clear()
     })
 

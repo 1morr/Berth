@@ -95,6 +95,8 @@ class SearchQueriesOut(BaseModel):
     """搜尋**之前**畫面要說的那句話：Berth 會拿這幾個名字去問。"""
 
     queries: list[str]
+    #: 不必問索引站就知道的問題：只有 `not_configured`（M2 票 13）。其餘要按下去才知道。
+    problem: IndexerProblem | None
 
 
 #: 缺集一鍵搜的兩個參數（M1.5 票 10）。預覽與搜尋收同一組，兩支才問得出同一件事。
@@ -118,11 +120,8 @@ async def get_queries(
 ) -> SearchQueriesOut:
     """不打索引站，只讀快照與這部作品的入庫狀態。"""
     _refuse_bare_season(missing, season)
-    return SearchQueriesOut(
-        queries=list(
-            await plan_queries(session, factory, media_id=media, missing=missing, season=season)
-        )
-    )
+    plan = await plan_queries(session, factory, media_id=media, missing=missing, season=season)
+    return SearchQueriesOut(queries=list(plan.queries), problem=plan.problem)
 
 
 @router.get("")

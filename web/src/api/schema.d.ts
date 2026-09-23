@@ -3246,6 +3246,7 @@ export interface components {
         SearchQueriesOut: {
             /** Queries */
             queries: string[];
+            problem: components["schemas"]["IndexerProblem"] | null;
         };
         /**
          * SearchResultOut

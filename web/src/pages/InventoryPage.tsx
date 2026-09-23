@@ -36,9 +36,9 @@ import { SessionEnded } from '../components/SessionEnded'
 import { TilePlaceholder } from '../components/TilePlaceholder'
 import { WALL_GRID_CONFIRMABLE } from '../components/wallGrid'
 import { InventoryTile } from '../inventory/InventoryTile'
-import { LibraryWatching } from '../watching/WatchingRows'
+import { LibraryWatching, WatchingElsewhere } from '../watching/WatchingRows'
 import { jellyfinLibrariesUrl } from '../inventory/jellyfinLink'
-import tmdbLogo from '../assets/tmdb.svg'
+import { TmdbAttribution } from '../components/TmdbAttribution'
 
 /** 讀取中先畫幾格空位，與探索牆同一個道理：版面不跳。 */
 const PLACEHOLDERS = 12
@@ -110,11 +110,24 @@ export function InventoryPage({
           {/* 接著看在「還沒進 Jellyfin」之前（票 07）。只在打開媒體庫的那一刻：翻頁與篩選是在堆場裡找東西，
               兩列不再把牆往下推，而且它們不照類型年份篩（使用者拍板）。排序不算——它不會讓哪一集不見。 */}
           {libraryId !== null &&
-            page === 1 &&
-            !filter &&
-            !narrowed({ genres: search.genres, years: search.years }) && (
+            (page === 1 && !filter && !narrowed({ genres: search.genres, years: search.years }) ? (
               <LibraryWatching libraryId={libraryId} />
-            )}
+            ) : (
+              <WatchingElsewhere libraryId={libraryId}>
+                {/* 回到會畫那兩列的樣子：第 1 頁、不篩；排序留著，它不會讓哪一集不見。 */}
+                <Link
+                  to="/library/$libraryId"
+                  params={{ libraryId }}
+                  search={wallQuery(
+                    { sort: search.sort, order: search.order },
+                    libraries.data.find((row) => row.id === libraryId),
+                  )}
+                  className="label inline-flex min-h-6 items-center text-ink underline decoration-rule-strong decoration-2 underline-offset-4 hover:decoration-ink"
+                >
+                  {t('watching.toFirst')}
+                </Link>
+              </WatchingElsewhere>
+            ))}
           {libraryId !== null && (
             <Wall
               libraryId={libraryId}
@@ -127,11 +140,7 @@ export function InventoryPage({
         </>
       )}
 
-      {/* 還沒進 Jellyfin 的卡片與詳情頁的資料來自 TMDB（brief §20.3）。它是法定聲明，不是頁尾裝飾。 */}
-      <footer className="flex flex-wrap items-center gap-x-3 gap-y-2 border-t-2 border-rule pt-4">
-        <img src={tmdbLogo} alt="TMDB" height={16} className="h-4 w-auto" />
-        <p className="max-w-prose text-xs text-ink-dim">{t('discover.attribution')}</p>
-      </footer>
+      <TmdbAttribution />
     </div>
   )
 }
@@ -296,6 +305,7 @@ function Arrange({
   const { t } = useTranslation()
   const rearrange = useRearrange(library)
   const sortId = useId()
+  const orderId = useId()
 
   return (
     <div className="flex min-w-0 flex-wrap items-center gap-2">
@@ -316,8 +326,12 @@ function Arrange({
           </option>
         ))}
       </select>
+      {/* 看得見的標籤（票 13）：只有 `aria-label` 的話，看得到畫面的人只能從選項猜這一個下拉在管什麼。 */}
+      <label htmlFor={orderId} className="label text-ink-dim">
+        {t('inventory.sort.order')}
+      </label>
       <select
-        aria-label={t('inventory.sort.order')}
+        id={orderId}
         value={query.order ?? ORDERS[0]}
         onChange={(event) => {
           const order = ORDERS.find((key) => key === event.target.value)

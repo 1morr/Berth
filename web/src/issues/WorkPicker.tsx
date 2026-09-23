@@ -7,7 +7,7 @@ import { ConfirmPanel } from '../components/ConfirmPanel'
 import { CONFIRM_ACTIONS, Field, GhostButton, PrimaryButton } from '../components/controls'
 import { SEARCH_DEBOUNCE_MS, useDebounced } from '../components/useDebounced'
 import { useInPlaceConfirm } from '../components/useInPlaceConfirm'
-import { tmdbText } from '../i18n/tmdbText'
+import { displayRound } from '../i18n/displayRound'
 
 /**
  * 認領類的兩顆（重新入庫、認領 torrent）按下去先選作品（M2 票 10，2026-09-23 使用者拍板）。
@@ -59,7 +59,7 @@ export function WorkPicker({
   }
 
   const titleOf = (item: DiscoverItem) =>
-    tmdbText(i18n.language, { 'zh-Hant': item.title, en: item.title_en }) || item.title_en
+    displayRound(i18n.language, { 'zh-Hant': item.title, en: item.title_en }) || item.title_en
   const items = found.data?.items ?? []
 
   return (

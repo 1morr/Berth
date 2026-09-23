@@ -8,7 +8,7 @@ import { ConfirmAction, PrimaryButton } from '../components/controls'
 import { DetailLine, QueueRow } from '../components/QueueRow'
 import { JobLink } from '../jobs/JobLink'
 import { whenText } from '../components/queueText'
-import { tmdbText } from '../i18n/tmdbText'
+import { displayRound } from '../i18n/displayRound'
 import { PlanEditor } from '../plans/PlanEditor'
 import { planRefusalText } from '../plans/planRefusal'
 
@@ -50,7 +50,7 @@ export function PlanRow({ row, onDone }: { row: PlanReviewRow; onDone: (said: st
   })
 
   const busy = decide.isPending
-  const title = tmdbText(i18n.language, { 'zh-Hant': row.title, en: row.title_en })
+  const title = displayRound(i18n.language, { 'zh-Hant': row.title, en: row.title_en })
 
   return (
     <QueueRow

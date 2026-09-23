@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from 'react'
+import { useEffect, useId, useState, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 
@@ -67,12 +67,40 @@ export function LibraryWatching({ libraryId }: { libraryId: string }) {
 }
 
 /**
- * 這個人在這一頁上一次的形狀，資料到了就記下這一次的。紀錄以登入的人區分：同一台瀏覽器換人登入，
- * 不拿上一個人的形狀佔位。
+ * 媒體庫頁翻頁、篩選時那兩列收起（使用者拍板，票 07）；這一行說它們去了哪裡、給一條回去的路（票 13）。
+ *
+ * **只在上一次真的有東西可接著看時說**：那兩列在這些時候不問 Jellyfin，所以只有上一次的形狀可依據——
+ * 從來沒看過任何東西的人翻到第 2 頁，不該多一行說一件與他無關的事。`children` 是回第 1 頁的連結。
  */
-function useRememberedRows(page: string, watching: Watching | undefined): RowShape | null {
+export function WatchingElsewhere({
+  libraryId,
+  children,
+}: {
+  libraryId: string
+  children: ReactNode
+}) {
+  const { t } = useTranslation()
+  const key = useRowsKey(`library.${libraryId}`)
+  const [shape] = useState(() => (key ? rememberedRows(key) : null))
+  if (!shape || shape.resume + shape.nextUp === 0) return null
+
+  return (
+    <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-dim">
+      <span>{t('watching.elsewhere')}</span>
+      {children}
+    </p>
+  )
+}
+
+/** 紀錄以登入的人區分：同一台瀏覽器換人登入，不拿上一個人的形狀。 */
+function useRowsKey(page: string): string | null {
   const me = useQuery(meQueryOptions)
-  const key = me.data ? `${me.data.name}.${page}` : null
+  return me.data ? `${me.data.name}.${page}` : null
+}
+
+/** 這個人在這一頁上一次的形狀，資料到了就記下這一次的。 */
+function useRememberedRows(page: string, watching: Watching | undefined): RowShape | null {
+  const key = useRowsKey(page)
 
   useEffect(() => {
     if (key && watching) rememberRows(key, watching)

@@ -500,6 +500,7 @@ const zhHant = {
       back: '回到趨勢',
     },
     attribution: '本產品使用 TMDB 的 API，但未經 TMDB 認可或認證。',
+    tmdbLogo: 'TMDB 標誌',
   },
   // 首頁與媒體庫頁上方的兩列（M1.5 票 07）。資料原樣來自 Jellyfin，名稱不是文案。
   watching: {
@@ -514,6 +515,9 @@ const zhHant = {
     noArt: '無圖',
     down: '問不到 Jellyfin，繼續觀看與下一集暫時看不到。',
     retry: '重試',
+    // 媒體庫頁翻頁或篩選時那兩列收起（票 13）：說得出它們去了哪裡。
+    elsewhere: '繼續觀看與下一集只列在第 1 頁、沒有篩選的時候。',
+    toFirst: '到第 1 頁看',
   },
   // 媒體庫頁（票 13、`.scratch/m1/library-shape.md`）。作品標題與 Route 名字不是文案，原樣顯示。
   inventory: {
@@ -531,7 +535,7 @@ const zhHant = {
     // 排序與類型、年份篩選（票 06）。選項照 jellyfin-web 的排序選單，兩種媒體庫各開哪幾個由後端說。
     sort: {
       label: '排序',
-      order: '排序方向',
+      order: '方向',
       Ascending: '遞增',
       Descending: '遞減',
       by: {
@@ -716,6 +720,7 @@ const zhHant = {
       absolute: '絕對',
       runtime: '片長',
       airDate: '播出',
+      caption: '{{season}} 的每一集',
       // 這一集在媒體庫裡的樣子（票 13，使用者拍板五種）。
       inLibrary: '入庫',
       state: {
@@ -823,6 +828,8 @@ const zhHant = {
     title: '搜尋 torrent',
     keyword: '關鍵字',
     keywordPlaceholder: '留空就用這部作品的各個名字',
+    // 從季表按進來之後（票 13）：留空問的是缺的那幾集，不是作品名。
+    keywordPlaceholderMissing: '留空就問缺的那幾集',
     submit: '搜尋',
     submitting: '搜尋中…',
     willAsk: 'Berth 會拿這幾個名字各問一次：',
@@ -2406,6 +2413,7 @@ const en: Translations<typeof zhHant> = {
       back: 'Back to trending',
     },
     attribution: 'This product uses the TMDB API but is not endorsed or certified by TMDB.',
+    tmdbLogo: 'TMDB logo',
   },
   watching: {
     resume: 'Continue watching',
@@ -2418,6 +2426,8 @@ const en: Translations<typeof zhHant> = {
     noArt: 'NO ART',
     down: "Berth can't reach Jellyfin, so Continue watching and Next up are unavailable for now.",
     retry: 'Retry',
+    elsewhere: 'Continue watching and Next up are listed on page 1, without filters.',
+    toFirst: 'See them on page 1',
   },
   inventory: {
     title: 'Library',
@@ -2432,7 +2442,7 @@ const en: Translations<typeof zhHant> = {
     },
     sort: {
       label: 'Sort',
-      order: 'Sort order',
+      order: 'Order',
       Ascending: 'Ascending',
       Descending: 'Descending',
       by: {
@@ -2601,6 +2611,7 @@ const en: Translations<typeof zhHant> = {
       absolute: 'Abs',
       runtime: 'Runtime',
       airDate: 'Aired',
+      caption: 'Episodes of {{season}}',
       inLibrary: 'In library',
       state: {
         imported: 'Imported',
@@ -2698,6 +2709,7 @@ const en: Translations<typeof zhHant> = {
     title: 'Search torrents',
     keyword: 'Keyword',
     keywordPlaceholder: "Leave empty to use the title's own names",
+    keywordPlaceholderMissing: 'Leave empty to ask for the missing episodes',
     submit: 'Search',
     submitting: 'Searching…',
     willAskMissing: 'Berth will ask for the episodes this title is missing:',

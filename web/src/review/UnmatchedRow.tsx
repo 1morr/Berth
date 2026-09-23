@@ -5,7 +5,7 @@ import { DetailLine, QueueRow } from '../components/QueueRow'
 import { JobLink } from '../jobs/JobLink'
 import { fileName, whenText } from '../components/queueText'
 import { RematchForm } from '../components/RematchForm'
-import { tmdbText } from '../i18n/tmdbText'
+import { displayRound } from '../i18n/displayRound'
 import { Reasons } from '../plans/Reasons'
 
 /**
@@ -23,7 +23,7 @@ export function UnmatchedRow({
   onDone: (said: string) => void
 }) {
   const { t, i18n } = useTranslation()
-  const title = tmdbText(i18n.language, { 'zh-Hant': row.title, en: row.title_en })
+  const title = displayRound(i18n.language, { 'zh-Hant': row.title, en: row.title_en })
 
   return (
     <QueueRow

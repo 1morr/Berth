@@ -13,12 +13,12 @@ import { KIND_CODE } from '../components/kind'
 import { SessionEnded } from '../components/SessionEnded'
 import { Timestamp } from '../components/Timestamp'
 import { TmdbNotice } from '../components/TmdbNotice'
-import { tmdbText } from '../i18n/tmdbText'
+import { displayRound } from '../i18n/displayRound'
 import { FilesPanel } from '../media/FilesPanel'
 import { SearchPanel, type SearchHandle } from '../media/SearchPanel'
 import { SeasonsPanel } from '../media/SeasonsPanel'
 import { CarryOn, WatchDown, WatchSection } from '../media/WatchArea'
-import tmdbLogo from '../assets/tmdb.svg'
+import { TmdbAttribution } from '../components/TmdbAttribution'
 import { ArtSlot } from '../components/ArtSlot'
 
 /**
@@ -121,11 +121,7 @@ export function MediaDetailPage({ id }: { id: string }) {
         </>
       )}
 
-      {/* TMDB 的條款要求顯示標誌與這一句（brief §20.3）。它是法定聲明，不是頁尾裝飾。 */}
-      <footer className="flex flex-wrap items-center gap-x-3 gap-y-2 border-t-2 border-rule pt-4">
-        <img src={tmdbLogo} alt="TMDB" height={16} className="h-4 w-auto" />
-        <p className="max-w-prose text-xs text-ink-dim">{t('discover.attribution')}</p>
-      </footer>
+      <TmdbAttribution />
     </div>
   )
 }
@@ -152,9 +148,12 @@ function IdentityBand({
   freshness: ReactNode
 }) {
   const { t, i18n } = useTranslation()
-  const title = tmdbText(i18n.language, { 'zh-Hant': media.title, en: media.title_en })
-  const overview = tmdbText(i18n.language, { 'zh-Hant': media.overview, en: media.overview_en })
-  const poster = tmdbText(i18n.language, { 'zh-Hant': media.poster_url, en: media.poster_url_en })
+  const title = displayRound(i18n.language, { 'zh-Hant': media.title, en: media.title_en })
+  const overview = displayRound(i18n.language, { 'zh-Hant': media.overview, en: media.overview_en })
+  const poster = displayRound(i18n.language, {
+    'zh-Hant': media.poster_url,
+    en: media.poster_url_en,
+  })
 
   return (
     <section className="grid grid-cols-[7rem_minmax(0,1fr)] gap-x-4 gap-y-5 border-b-2 border-rule-strong pb-8 sm:grid-cols-[11rem_minmax(0,1fr)] sm:gap-x-6">

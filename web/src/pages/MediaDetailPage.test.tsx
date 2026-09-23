@@ -259,6 +259,13 @@ describe('Media 詳情頁', () => {
     expect(poster).toHaveAttribute('sizes', '(min-width: 640px) 11rem, 7rem')
   })
 
+  it('頁尾有 TMDB 的標誌與聲明，標誌的替代文字走 i18n（票 13）', async () => {
+    render()
+    renderApp('/media/tv:120089')
+
+    expect(await screen.findByRole('img', { name: 'TMDB 標誌' })).toBeInTheDocument()
+  })
+
   it('海報載不下來時換成「無海報」，不留瀏覽器的破圖示（票 11 的 audit）', async () => {
     const poster = () =>
       document.querySelector<HTMLImageElement>('img[src^="https://image.tmdb.org/"]')
@@ -538,6 +545,19 @@ describe('Media 詳情頁', () => {
     const stuck = (await screen.findByText('FOLLOW MAMA AND PAPA')).closest('tr')!
     // 卡住的那一集要人去看是哪一筆下載停下來了。
     expect(within(stuck).getByRole('link', { name: '卡住' })).toHaveAttribute('href', '/jobs')
+  })
+
+  it('集表有自己的名字，窄版不畫的片長與播出收在集名那一格裡（票 13）', async () => {
+    render()
+    renderApp('/media/tv:120089')
+
+    await userEvent.click(await screen.findByText('Season 1'))
+    const table = await screen.findByRole('table', { name: 'S01 的每一集' })
+    const name = within(table).getByText('OPERATION STRIX').closest('td')!
+
+    // 640px 以下「片長」「播出」兩欄不畫；同樣的兩個值要在一個窄版也在的格子裡。
+    expect(within(name).getByText('片長 25 分')).toBeInTheDocument()
+    expect(within(name).getByText('播出 2022-04-09')).toBeInTheDocument()
   })
 
   it('季列說得出這一季播出的集數裡入庫了幾集', async () => {
@@ -858,6 +878,21 @@ describe('Media 詳情頁', () => {
       expect(asked(stub)).toContain('/api/search?media=tv%3A120089&missing=true')
       // 結果照舊畫在這一區塊裡，不在季表那邊另開一張表（shape §4）。
       expect(await within(panel()).findByText(/\[ANi\] SPY x FAMILY - 02/)).toBeVisible()
+    })
+
+    it('按下去之後關鍵字欄說留空問的是缺的集，回到作品名時換回來（票 13）', async () => {
+      gaps()
+      renderApp('/media/tv:120089')
+      const keyword = await within(
+        await screen.findByRole('region', { name: '搜尋 torrent' }),
+      ).findByRole('textbox')
+      expect(keyword).toHaveAttribute('placeholder', '留空就用這部作品的各個名字')
+
+      await userEvent.click(await screen.findByRole('button', { name: '搜這部作品缺的集' }))
+
+      expect(keyword).toHaveAttribute('placeholder', '留空就問缺的那幾集')
+      await userEvent.click(within(panel()).getByRole('button', { name: '改回作品名搜尋' }))
+      expect(keyword).toHaveAttribute('placeholder', '留空就用這部作品的各個名字')
     })
 
     it('按下去焦點落在搜尋區塊的標題上（結果畫在那裡，shape §4）', async () => {

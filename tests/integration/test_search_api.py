@@ -340,6 +340,28 @@ class TestProblems:
         assert body["problem"] == "not_configured"
         assert body["rows"] == []
 
+    def test_the_preview_already_says_the_indexer_was_skipped(
+        self, client: TestClient, indexer: FakeIndexerSearch
+    ) -> None:
+        """按下搜尋之前就說得出來（M2 票 13）：沒接索引站時，預覽仍列出會問的名字，但同時帶
+        `not_configured`——不然使用者按下去才知道，而畫面在那之前一直說「會拿這幾個名字去問」。"""
+        sign_in(client)
+        _skip_indexer(client)
+
+        body = client.get(f"/api/search/queries?media={SPY_ID}").json()
+
+        assert body["problem"] == "not_configured"
+        assert body["queries"][:2] == ["SPY x FAMILY", "SPY×FAMILY"]
+        assert indexer.queries == []
+
+    def test_a_configured_indexer_has_no_problem_in_the_preview(self, client: TestClient) -> None:
+        """預覽不打索引站，所以連不上、憑證錯這幾種要按下去才知道；它只說不必問就知道的那一種。"""
+        sign_in(client)
+
+        body = client.get(f"/api/search/queries?media={SPY_ID}").json()
+
+        assert body["problem"] is None
+
     def test_the_kind_that_was_set_up_is_the_one_that_gets_built(
         self, client: TestClient, factory: FakeClientFactory
     ) -> None:

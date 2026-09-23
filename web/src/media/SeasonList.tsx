@@ -6,6 +6,7 @@ import { CollapsibleRow } from '../components/CollapsibleRow'
 import { COMPACT_BUTTON } from '../components/controls'
 import { episodeCode, seasonCode } from '../components/episodes'
 import { SIGNAL_FILL } from '../components/signal'
+import { Dot } from '../components/Dot'
 import { missingOf } from './missing'
 
 /**
@@ -136,9 +137,14 @@ function SeasonBody({
     // 集表過寬時由**它自己**橫向捲動，不是整頁（shape brief §7）。
     // 欄序是**集號 → 絕對編號 → 入庫 → 集名**：絕對編號貼著集號（shape §8），而「入庫」
     // 是這張表在這一頁存在的理由——它原本排在最後，390px 上整欄在捲動範圍外（票 15）。
-    // 片長與播出日窄版不畫，表就不必比畫面寬。
+    // 片長與播出日窄版不畫，表就不必比畫面寬；兩個值收進集名底下一行（`EpisodeRow`）。
     <div className="overflow-x-auto">
       <table className="w-full border-collapse text-left sm:min-w-[36rem]">
+        {/* 表的名字（票 13）：看得見的是上面那一列季摘要，但它在 `<summary>` 裡、不是這張表的一部分。
+            表格導覽跳進來時要念得出這是哪一季。 */}
+        <caption className="sr-only">
+          {t('media.episode.caption', { season: seasonCode(season.season_number) })}
+        </caption>
         <thead>
           <tr className="border-b-2 border-rule">
             <th scope="col" className="label px-4 py-2 whitespace-nowrap text-ink-dim">
@@ -181,6 +187,8 @@ function SeasonBody({
 
 function EpisodeRow({ episode, absolute }: { episode: Episode; absolute: boolean }) {
   const { t } = useTranslation()
+  const runtime =
+    episode.runtime === null ? null : t('media.minutesShort', { count: episode.runtime })
 
   return (
     <tr>
@@ -197,9 +205,19 @@ function EpisodeRow({ episode, absolute }: { episode: Episode; absolute: boolean
       <td className="px-4 py-2 whitespace-nowrap">
         <EpisodeState status={episode.status} />
       </td>
-      <td className="px-4 py-2 text-sm break-words text-ink">{episode.name}</td>
+      <td className="px-4 py-2 text-sm break-words text-ink">
+        {episode.name}
+        {/* 窄版的片長與播出（票 13）：那兩欄在 640px 以下不畫，同樣的值在這裡；寬版這一行不畫，不重複念。 */}
+        {(runtime || episode.air_date) && (
+          <span className="value mt-0.5 flex flex-wrap gap-x-2 text-xs text-ink-dim sm:hidden">
+            {runtime && <span>{`${t('media.episode.runtime')} ${runtime}`}</span>}
+            {runtime && episode.air_date && <Dot />}
+            {episode.air_date && <span>{`${t('media.episode.airDate')} ${episode.air_date}`}</span>}
+          </span>
+        )}
+      </td>
       <td className="value hidden px-4 py-2 text-right text-xs text-ink-dim sm:table-cell">
-        {episode.runtime === null ? '—' : t('media.minutesShort', { count: episode.runtime })}
+        {runtime ?? '—'}
       </td>
       <td className="value hidden px-4 py-2 text-right text-xs text-ink-dim sm:table-cell">
         {episode.air_date ?? '—'}

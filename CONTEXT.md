@@ -17,7 +17,7 @@ _Avoid_: subscribed media, library item
 **Display Round**（顯示用那一輪；沒有 UI 文案）:
 TMDB 對同一部 Media 回的兩輪資料裡，畫面照 UI 語言挑的那一輪：`zh-Hant` 取 `zh-TW`、`en` 取 `en-US`
 （brief §7.5）。成對的欄位一律是 `x` / `x_en`——`title`、`overview`、`poster_url`（M1.5 票 11 起海報也成對，
-TMDB 的海報分語言），下載列是 `media_title`。**後端不知道 UI 語言**：兩輪都送，前端 `i18n/tmdbText.ts` 挑一個，
+TMDB 的海報分語言），下載列是 `media_title`。**後端不知道 UI 語言**：兩輪都送，前端 `i18n/displayRound.ts` 挑一個，
 換語言當場換、不重抓。`title_en` 同時是檔名與比對用的那一個，不跟 UI 語言走（brief §7.5、§5）。
 _Avoid_: locale, translation（那是 TMDB `translations` 端點）, localized title
 
