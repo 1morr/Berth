@@ -161,6 +161,21 @@ EDITABLE_ACTIONS: dict[FileKind, tuple[PlanAction, ...]] = {
     FileKind.OTHER: (PlanAction.SKIP,),
 }
 
+#: 一個已經在 complete 裡的檔案**事後**改得成哪幾種處置（brief §7.4、§9.4 的 rematch，M2 票 08）：
+#: 指派為某一集（`import`）、標記為 extra、忽略（`skip`）。依分類，與 `EDITABLE_ACTIONS`
+#: 同一個道理。
+#:
+#: **字幕只能忽略**（2026-09-23 使用者拍板）：字幕要掛在某一個影片版本旁邊，一集有好幾個版本時
+#: 掛哪一個是另一道題。光碟結構第一階段不拆，也只能忽略。
+REMATCH_ACTIONS: dict[FileKind, tuple[PlanAction, ...]] = {
+    kind: (
+        (PlanAction.IMPORT, PlanAction.EXTRA, PlanAction.SKIP)
+        if kind in (FileKind.VIDEO, FileKind.EXTRA)
+        else (PlanAction.SKIP,)
+    )
+    for kind in FileKind
+}
+
 
 class ReasonCode(StrEnum):
     """Plan Item 的一條理由是哪一種（brief §6.5 的 `reasons[]`，M2 票 07）。
@@ -258,6 +273,8 @@ class ReasonCode(StrEnum):
     SPAN_CLASH = "span_clash"
     #: 媒體庫已經有 `{known}`，從同一集開始、範圍不同（同上，比的是帳本）。
     LIBRARY_SPAN_CLASH = "library_span_clash"
+    #: 媒體庫已經有 `{known}`：同一集、同一組 Tags（brief §7.8 的重複版本）。
+    SAME_VERSION = "same_version"
     #: 這一包把 `{files}` 個檔案對進第 `{season}` 季，TMDB 說那一季有 `{episodes}` 集。
     TOO_MANY_FILES = "too_many_files"
     #: 這一包其餘的檔案以 `{strategy}`（`MappingStrategy`）讀出來，這一個不是。
@@ -315,6 +332,7 @@ REASON_PARAMS: dict[ReasonCode, frozenset[str]] = {
     _C.TARGET_CONTESTED: frozenset({"target"}),
     _C.SPAN_CLASH: frozenset(),
     _C.LIBRARY_SPAN_CLASH: frozenset({"known"}),
+    _C.SAME_VERSION: frozenset({"known"}),
     _C.TOO_MANY_FILES: frozenset({"files", "season", "episodes"}),
     _C.STRATEGY_OUTLIER: frozenset({"strategy"}),
     _C.SEASON_COMPLETE: frozenset({"season"}),

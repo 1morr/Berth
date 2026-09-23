@@ -69,7 +69,7 @@ from berth.services.jobs import (
     transition,
 )
 from berth.services.media import snapshot_for_planning
-from berth.services.plan_view import PlanView, dump_reasons, read_plan
+from berth.services.plan_view import PlanView, dump_reasons, dump_tags, read_plan
 
 logger = logging.getLogger(__name__)
 
@@ -239,14 +239,23 @@ async def _plan(
     snapshot = await _snapshot(session, factory, job)
     contents = await _contents(session, job)
     entries = await _measure(session, job, contents)
-    items = await _against_ledger(
+    items, duplicates = await _against_ledger(
         session,
         job,
         route,
         _apply_policy(decide(job.name, entries, _context(route, snapshot)), route),
     )
-    status, reason = _verdict(items, route)
-    row = await _store(session, job, contents, items, status=status, reason=reason, now=now)
+    status, reason = _verdict(items, route, duplicates)
+    row = await _store(
+        session,
+        job,
+        contents,
+        items,
+        status=status,
+        reason=reason,
+        now=now,
+        duplicates=duplicates,
+    )
 
     landed = JobState.IMPORTING if status is PlanStatus.AUTO else JobState.REVIEW
     if not await transition(session, job, landed, expected=JobState.PLANNING):
@@ -254,6 +263,14 @@ async def _plan(
         await session.rollback()
         return 0
     await _announce(session, job, row, status, reason)
+    if duplicates:
+        await record_event(
+            session,
+            job,
+            EventType.DUPLICATE_SKIPPED,
+            actor=actor_of(None),
+            payload={"plan": row.id, "files": sorted(duplicates)},
+        )
     await session.commit()
     # 推播在 commit 之後（票 10 實跑抓到的那一條）：反過來的話前端收到提示就立刻重問，
     # 而那一次讀到的是還沒 commit 的舊狀態。
@@ -280,7 +297,7 @@ async def _preplan(session: AsyncSession, hub: EventHub, job_hash: str, now: dat
     entries = contents.entries()
     if not entries:
         return 0
-    items = await _against_ledger(
+    items, duplicates = await _against_ledger(
         session,
         job,
         route,
@@ -288,9 +305,16 @@ async def _preplan(session: AsyncSession, hub: EventHub, job_hash: str, now: dat
             decide(job.name, entries, _context(route, await _stored(session, job))), route
         ),
     )
-    _, reason = _verdict(items, route)
+    _, reason = _verdict(items, route, duplicates)
     row = await _store(
-        session, job, contents, items, status=PlanStatus.PREPLAN, reason=reason, now=now
+        session,
+        job,
+        contents,
+        items,
+        status=PlanStatus.PREPLAN,
+        reason=reason,
+        now=now,
+        duplicates=duplicates,
     )
     await record_event(
         session,
@@ -474,54 +498,131 @@ async def _against_ledger(
     job: Job,
     route: Route | None,
     items: Sequence[PlannedFile],
-) -> tuple[PlannedFile, ...]:
-    """媒體庫裡已經有、起始集相同而結束集不同的正片 → 這一列送 review（brief §7.8、§20.9）。
+) -> tuple[tuple[PlannedFile, ...], dict[str, int]]:
+    """與帳本上既有的正片比：重複的那幾列略過，回 `rel_path → 帳本那一列`（brief §7.8）。
 
-    解析器只看得見這一包裡的檔案，同一條規則在 `parser/planner.py`（純函式，benchmark 量它）；
-    上一批入庫的那一集在帳本裡，而帳本要 session 才讀得到，所以這一半住在 services。
+    解析器只看得見這一包裡的檔案，同一包之內的那一半在 `parser/planner.py`（純函式，benchmark
+    量它）；上一批入庫的那一集在帳本裡，而帳本要 session 才讀得到，所以這一半住在 services。
+    兩種都算重複：
 
-    比的是**同一個資料夾裡**、同一季、同一個起始集——那正是 Jellyfin 12 的版本分組鍵（同一個
-    季資料夾、同一個 `S/E`，它不看結束集）。`S01E03-E04` 與 `S01E03` 於是被併成同一集的兩個
-    版本，第 4 集從集列表上消失。**資料夾是判準的一部分**：同一部作品可以有兩條 Route（兩個
-    Jellyfin 媒體庫、兩個資料夾），那是兩個條目，跨資料夾不會被併（`inventory._versions`
+    - **同一個起始集、結束集不同**（2026-09-15 拍板）：Jellyfin 12 的版本分組鍵只有季號與集號，
+      `S01E03-E04` 與 `S01E03` 會被併成同一集的兩個版本，第 4 集從集列表上消失（§20.9）。
+    - **同一集、同一組 Tags**：與媒體庫裡那一份是同一個版本。**不比這一筆自己入庫過的**——重新
+      規劃會看到自己上一輪的鏈接，那不是重複，importer 比 inode 就認得出來（plan §3.3）。
+      **範圍衝突那一種照樣比自己的**（刻意不對稱）：同一個來源這一次讀成另一段範圍，不是
+      importer 認得出的「同一條鏈接」——它會多鏈一條而舊的留著，Jellyfin 把兩條併掉。交給人決定，
+      「取代舊版」正好把它搬到新的範圍。
+
+    **自動模式略過並記事件**（2026-09-23 使用者拍板），不把整份 Plan 擋在 review：一包 12 集裡
+    一集重複，其餘 11 集照樣入庫，那一集在 Review Queue 上是一列 `duplicate`（取代舊版 / 保留
+    兩者 / 跳過）。季集與 Tags 留著，決定的時候照它們算路徑；跟著它的字幕一起略過。
+
+    比的是**同一個資料夾裡**的——那正是 Jellyfin 12 的版本分組範圍。同一部作品可以有兩條 Route
+    （兩個 Jellyfin 媒體庫、兩個資料夾），那是兩個條目，跨資料夾不會被併（`inventory._versions`
     的版本分組同一個道理）。
     """
     if job.media_id is None or route is None:
-        return tuple(items)
+        return tuple(items), {}
     root = PurePosixPath(route.target_path)
-    ends: dict[tuple[str, int, int], set[int]] = {}
-    for entry in await session.scalars(
-        select(LedgerEntry).where(
-            LedgerEntry.media_id == job.media_id, LedgerEntry.action == PlanAction.IMPORT
+    known = list(
+        await session.scalars(
+            select(LedgerEntry)
+            .where(LedgerEntry.media_id == job.media_id, LedgerEntry.action == PlanAction.IMPORT)
+            .order_by(LedgerEntry.id)
         )
-    ):
-        if entry.season is None or entry.episode_start is None:
+    )
+    duplicates: dict[str, int] = {}
+    decided: list[PlannedFile] = []
+    for item in items:
+        found = _duplicate_of(item, root, known, job.hash)
+        if found is None:
+            decided.append(item)
             continue
-        folder = str(PurePosixPath(entry.target_path).parent)
-        ends.setdefault((folder, entry.season, entry.episode_start), set()).add(
-            entry.episode_end or entry.episode_start
+        entry, reason = found
+        duplicates[item.rel_path] = entry.id
+        decided.append(
+            item.model_copy(
+                update={
+                    "action": PlanAction.SKIP,
+                    "target_path": "",
+                    "reasons": (*item.reasons, reason),
+                }
+            )
         )
-    return tuple(_against(item, root, ends) for item in items)
+    return _unfollowed(decided, duplicates), duplicates
 
 
-def _against(
-    item: PlannedFile, root: PurePosixPath, ends: dict[tuple[str, int, int], set[int]]
-) -> PlannedFile:
-    """判準與同一包裡那一半共用（`parser.episode_span`）：分岔了就會有兩個答案。"""
-    span = episode_span(item)
-    if span is None or not item.target_path:
-        return item
-    season, start, end = span
+def _duplicate_of(
+    item: PlannedFile, root: PurePosixPath, known: Sequence[LedgerEntry], job_hash: str
+) -> tuple[LedgerEntry, ItemReason] | None:
+    """這一列與帳本上的哪一列重複、為什麼。判準與同一包那一半共用（`parser.episode_span`）。"""
+    if item.action is not PlanAction.IMPORT or not item.target_path:
+        return None
     folder = str((root / item.target_path).parent)
-    others = ends.get((folder, season, start), set()) - {end}
-    if not others:
-        return item
-    return item.model_copy(
-        update={
-            "action": PlanAction.REVIEW,
-            "confidence": Confidence.LOW,
-            "reasons": (*item.reasons, _span_clash(season, start, others)),
-        }
+    here = [entry for entry in known if str(PurePosixPath(entry.target_path).parent) == folder]
+    span = episode_span(item)
+    if span is not None:
+        season, start, end = span
+        clashing = [
+            entry
+            for entry in here
+            if (entry.season, entry.episode_start) == (season, start)
+            and (entry.episode_end or entry.episode_start) != end
+        ]
+        if clashing:
+            others = {entry.episode_end or start for entry in clashing}
+            return clashing[0], _span_clash(season, start, others)
+        same = [
+            entry
+            for entry in here
+            if (entry.season, entry.episode_start, entry.episode_end or entry.episode_start)
+            == (season, start, end)
+        ]
+    elif item.season is None:
+        # 電影：一個資料夾就是一部片，沒有季集可比（brief §7.8 的「季、集」兩格都是空的）。
+        same = [entry for entry in here if entry.season is None]
+    else:
+        return None
+    for entry in same:
+        if entry.job_hash != job_hash and Tags.model_validate(entry.tags_json or {}) == item.tags:
+            return entry, why(Code.SAME_VERSION, known=PurePosixPath(entry.target_path).name)
+    return None
+
+
+def _unfollowed(
+    items: Sequence[PlannedFile], duplicates: dict[str, int]
+) -> tuple[PlannedFile, ...]:
+    """跟著一個被略過的影片的字幕也略過：它的路徑是照那個影片算的，而那條路徑上多半已經是
+    舊版本的字幕（importer 會把它當成別人的檔案停下來）。與 `parser.planner._FOLLOWS` 同一個道理。
+    """
+    if not duplicates:
+        return tuple(items)
+    return tuple(
+        item.model_copy(
+            update={
+                "action": PlanAction.SKIP,
+                "target_path": "",
+                "reasons": (
+                    *item.reasons,
+                    why(Code.VIDEO_NOT_IMPORTED, action=PlanAction.SKIP.value),
+                ),
+            }
+        )
+        if item.action is PlanAction.SUBTITLE and follows(item) in duplicates
+        else item
+        for item in items
+    )
+
+
+def follows(item: PlannedFile) -> str | None:
+    """字幕跟著哪一個影片（`subtitle_follows` 那一條理由的參數）。沒配到影片的是 `None`。"""
+    return next(
+        (
+            str(reason.params["video"])
+            for reason in item.reasons
+            if reason.code is Code.SUBTITLE_FOLLOWS
+        ),
+        None,
     )
 
 
@@ -532,7 +633,7 @@ def _span_clash(season: int, start: int, others: set[int]) -> ItemReason:
 
 
 def _verdict(
-    items: Sequence[PlannedFile], route: Route | None
+    items: Sequence[PlannedFile], route: Route | None, duplicates: dict[str, int]
 ) -> tuple[PlanStatus, ReviewReason | None]:
     """全 high / medium 且 Route 允許 → `auto`，否則 `pending_review`（plan §3.1）。
 
@@ -552,8 +653,10 @@ def _verdict(
     if held:
         # 只剩下被 Route 擋下的那幾個 medium——它們的季集是算得出來的，只差一句話。
         return PlanStatus.PENDING_REVIEW, ReviewReason.MEDIUM_NOT_ALLOWED
-    if not any(item.action in WRITTEN for item in items):
+    if not any(item.action in WRITTEN for item in items) and not duplicates:
         # 整包都是「不用管」的檔案。那不是低信心，是送錯了 torrent（brief §5.1）。
+        # **全是重複的那一包不在這裡**（M2 票 08）：它不是送錯，是媒體庫裡已經有了——那幾列
+        # 各自在佇列上等人決定，這一份本身沒有什麼要問的。
         return PlanStatus.PENDING_REVIEW, ReviewReason.NOTHING_TO_IMPORT
     return PlanStatus.AUTO, None
 
@@ -587,6 +690,7 @@ async def _store(
     status: PlanStatus,
     reason: ReviewReason | None,
     now: datetime,
+    duplicates: dict[str, int] | None = None,
 ) -> Plan:
     """把這一輪的決定寫下來，**整份換掉**上一輪的（`models/plan.py`）。
 
@@ -621,11 +725,12 @@ async def _store(
                 season=item.season,
                 episode_start=item.episode_start,
                 episode_end=item.episode_end,
-                tags_json=_tags(item.tags),
+                tags_json=dump_tags(item.tags),
                 target_path=item.target_path,
                 confidence=item.confidence,
                 reasons_json=dump_reasons(item.reasons),
                 audit=_audit(item, status),
+                duplicate_of=(duplicates or {}).get(item.rel_path),
             )
         )
     await session.flush()
@@ -643,9 +748,3 @@ def _audit(item: PlannedFile, status: PlanStatus) -> bool:
         and item.confidence is Confidence.MEDIUM
         and item.action in WRITTEN
     )
-
-
-def _tags(tags: Tags) -> dict[str, object] | None:
-    """空的 tag 不佔一格 JSON：分類就決定得了處置的那些檔案本來就沒有版本可言。"""
-    dumped: dict[str, object] = tags.model_dump(mode="json")
-    return dumped if tags.render() else None

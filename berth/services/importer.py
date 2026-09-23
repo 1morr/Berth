@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import logging
 from collections import Counter
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path, PurePosixPath
@@ -32,6 +33,7 @@ from berth.domain import (
     EventType,
     JellyfinRequest,
     JobState,
+    LedgerStatus,
     PlanAction,
     PlanStatus,
     PlanSummary,
@@ -175,19 +177,12 @@ async def _place(
         await _link_failed(session, job, item, target_text, None, "no file of this job backs it")
         return
     source = fs.under(job.save_path, source_row.rel_path)
-    target = Path(target_text)
     try:
-        try:
-            fs.link(source, target, roots=roots)
-        except FileExistsError:
-            if not fs.same_inode(source, target):
-                item.error = UNMANAGED_TARGET
-                logger.warning("another file sits at the target", extra={"target": target_text})
-                return
-            # 上一次鏈接了、帳本還沒寫就被關掉：視為已完成，下面補上帳本（plan §3.3）。
-        source_facts, target_facts = fs.stat(source), fs.stat(target)
-        if source_facts != target_facts:
-            raise OSError(f"{source} and {target} are not the same inode after link()")
+        facts = link_into(source, Path(target_text), roots=roots)
+    except TargetTakenError:
+        item.error = UNMANAGED_TARGET
+        logger.warning("another file sits at the target", extra={"target": target_text})
+        return
     except (OSError, fs.PathEscapeError) as exc:
         await _link_failed(
             session, job, item, target_text, getattr(exc, "errno", None), message(exc)
@@ -198,28 +193,18 @@ async def _place(
         select(LedgerEntry.id).where(LedgerEntry.target_path == target_text)
     )
     if known is None:
-        session.add(
-            LedgerEntry(
-                job_hash=job.hash,
-                source_rel_path=source_row.rel_path,
-                source_abs_path=str(source),
-                source_inode=str(source_facts.inode),
-                source_dev=str(source_facts.device),
-                target_path=target_text,
-                target_inode=str(target_facts.inode),
-                media_id=item.media_id,
-                season=item.season,
-                episode_start=item.episode_start,
-                episode_end=item.episode_end,
-                tags_json=item.tags_json,
-                plan_item_id=item.id,
-                action=item.action,
-                audit=item.audit,
-                created_at=now,
-                # 只有正片在 Jellyfin 裡是一個自己查得到的 item；字幕是串流、特典掛在作品底下。
-                resolve_after=first_resolve_at(now) if item.action is PlanAction.IMPORT else None,
-            )
+        entry = LedgerEntry()
+        record_link(
+            entry,
+            job_hash=job.hash,
+            source_rel_path=source_row.rel_path,
+            source=source,
+            target=target_text,
+            facts=facts,
+            item=item,
+            now=now,
         )
+        session.add(entry)
         await record_event(
             session,
             job,
@@ -227,12 +212,78 @@ async def _place(
             actor=actor_of(None),
             payload={"file": item.rel_path, "target": target_text},
         )
-        await _restate_versions(session, item, target_text, now)
+        await restate_versions(session, item, target_text, now)
     item.applied_at = now
     item.error = ""
 
 
-async def _restate_versions(
+class TargetTakenError(Exception):
+    """目標路徑上已經有一個**別的**檔案（inode 不同，plan §3.3）。Berth 不覆寫它（brief §5.3）。"""
+
+
+def link_into(
+    source: Path, target: Path, *, roots: Sequence[Path]
+) -> tuple[fs.PathFacts, fs.PathFacts]:
+    """把一個來源鏈接到媒體庫的一條路徑，回兩邊的 `stat`（importer 與 rematch 共用，M2 票 08）。
+
+    目標已經存在時比 inode：同一個 inode 是「上次鏈接了、帳本還沒寫」，視為已完成（plan §3.3）；
+    不同就丟 `TargetTakenError`。判定交給 `link()` 自己丟的 `FileExistsError`，不先 `exists()`
+    再鏈接——那樣兩步之間有一條縫，而且守衛會被繞過。其餘失敗（`OSError`、
+    `fs.PathEscapeError`）原樣往上丟：原文是「哪個掛載少了」唯一的證據。
+    """
+    try:
+        fs.link(source, target, roots=roots)
+    except FileExistsError:
+        if not fs.same_inode(source, target):
+            raise TargetTakenError(str(target)) from None
+    source_facts, target_facts = fs.stat(source), fs.stat(target)
+    if source_facts != target_facts:
+        raise OSError(f"{source} and {target} are not the same inode after link()")
+    return source_facts, target_facts
+
+
+def record_link(
+    entry: LedgerEntry,
+    *,
+    job_hash: str | None,
+    source_rel_path: str,
+    source: Path,
+    target: str,
+    facts: tuple[fs.PathFacts, fs.PathFacts],
+    item: PlanItem,
+    now: datetime,
+) -> None:
+    """帳本那一列說出「這一條鏈接現在是什麼」（importer 寫新的一列，rematch 改寫既有的一列）。
+
+    **Jellyfin 那幾格一起歸零**：換了來源或換了路徑，上一次反查到的 item 就不再是它——只有正片在
+    Jellyfin 裡是一個自己查得到的 item，字幕是串流、特典掛在作品底下，所以只有正片排反查。
+    """
+    source_facts, target_facts = facts
+    entry.job_hash = job_hash
+    entry.source_rel_path = source_rel_path
+    entry.source_abs_path = str(source)
+    entry.source_inode = str(source_facts.inode)
+    entry.source_dev = str(source_facts.device)
+    entry.target_path = target
+    entry.target_inode = str(target_facts.inode)
+    entry.media_id = item.media_id
+    entry.season = item.season
+    entry.episode_start = item.episode_start
+    entry.episode_end = item.episode_end
+    entry.tags_json = item.tags_json
+    entry.plan_item_id = item.id
+    entry.action = item.action
+    entry.audit = item.audit
+    entry.status = LedgerStatus.OK
+    entry.created_at = now
+    entry.jellyfin_item_id = ""
+    entry.jellyfin_series_id = ""
+    entry.jellyfin_version_name = ""
+    entry.resolve_attempts = 0
+    entry.resolve_after = first_resolve_at(now) if item.action is PlanAction.IMPORT else None
+
+
+async def restate_versions(
     session: AsyncSession, item: PlanItem, target: str, now: datetime
 ) -> None:
     """同一個資料夾裡其他正片重新排一次反查（票 14b）。
@@ -360,9 +411,7 @@ async def _hold(session: AsyncSession, hub: EventHub, job: Job, plan: Plan) -> J
 
 
 async def _notify(session: AsyncSession, factory: ServiceClientFactory, job: Job) -> None:
-    """`POST /Library/Media/Updated`（plan §8.2）。**失敗只記事件**（plan §3.3）。
-
-    通知的是這一筆 Job 在帳本裡的**每一條**目標，不只是這一輪鏈接的那幾個：重試時前一輪已經
+    """通知的是這一筆 Job 在帳本裡的**每一條**目標，不只是這一輪鏈接的那幾個：重試時前一輪已經
     鏈接好的檔案，那時整筆還沒走到 `imported`，一次都沒通知過。
     """
     paths = list(
@@ -372,6 +421,18 @@ async def _notify(session: AsyncSession, factory: ServiceClientFactory, job: Job
             .order_by(LedgerEntry.id)
         )
     )
+    await notify_jellyfin(session, factory, job, paths)
+
+
+async def notify_jellyfin(
+    session: AsyncSession, factory: ServiceClientFactory, job: Job | None, paths: Sequence[str]
+) -> None:
+    """`POST /Library/Media/Updated`（plan §8.2）。**失敗只記事件**（plan §3.3）。
+
+    rematch 也走它（M2 票 08），連同**拆掉的**那幾條：Jellyfin 對每一條路徑一律
+    `ReportFileSystemChanged`，不看 `UpdateType`（brief §20.1），所以一條已經不在的路徑一樣會讓它
+    重讀那個資料夾。沒有 Job 的時候（重新入庫的帳本）照樣通知，只是沒有時間線可寫。
+    """
     if not paths:
         return
     settings = await read_settings(session, JellyfinSettings)
@@ -379,24 +440,26 @@ async def _notify(session: AsyncSession, factory: ServiceClientFactory, job: Job
     try:
         await client.notify_paths(paths)
     except ServiceError as exc:
-        await record_event(
-            session,
-            job,
-            EventType.JELLYFIN_REQUEST_FAILED,
-            actor=actor_of(None),
-            payload={"request": JellyfinRequest.SCAN.value, "error": message(exc)},
-        )
-        logger.warning("jellyfin was not told about the import", extra={"error": message(exc)})
+        if job is not None:
+            await record_event(
+                session,
+                job,
+                EventType.JELLYFIN_REQUEST_FAILED,
+                actor=actor_of(None),
+                payload={"request": JellyfinRequest.SCAN.value, "error": message(exc)},
+            )
+        logger.warning("jellyfin was not told about the change", extra={"error": message(exc)})
         return
     finally:
         await client.aclose()
-    await record_event(
-        session,
-        job,
-        EventType.JELLYFIN_SCAN_REQUESTED,
-        actor=actor_of(None),
-        payload={"count": len(paths), "paths": paths},
-    )
+    if job is not None:
+        await record_event(
+            session,
+            job,
+            EventType.JELLYFIN_SCAN_REQUESTED,
+            actor=actor_of(None),
+            payload={"count": len(paths), "paths": list(paths)},
+        )
 
 
 def _publish(hub: EventHub, job: Job) -> None:

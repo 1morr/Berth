@@ -36,6 +36,7 @@ from fastapi import FastAPI
 from fastapi.routing import APIRoute, iter_route_contexts
 
 import berth.api
+from berth.api import files as files_api
 from berth.api import issues as issues_api
 from berth.api import jellyfin as jellyfin_api
 from berth.api import jobs as jobs_api
@@ -74,6 +75,7 @@ STATUS_TABLES: dict[str, dict[Any, int]] = {
     "IssueRefusal": issues_api._STATUS,
     "ReviewRefusal": review_api._STATUS,
     "PlanRefusal": plans_api._STATUS,
+    "RematchRefusal": files_api._STATUS,
 }
 
 #: 拒絕的形狀（`{reason, detail}` 與 Route 多的那兩格）與 SSE 的推播。前端直接取這幾個
@@ -85,6 +87,7 @@ MODELS = (
     "IssueRefusalOut",
     "ReviewRefusalOut",
     "PlanRefusalOut",
+    "RematchRefusalOut",
     "JobSignalOut",
 )
 
@@ -458,6 +461,7 @@ class TestDeclaringWhatEachEndpointRefuses:
             "issue_refusal": "IssueRefusalOut",
             "review_refusal": "ReviewRefusalOut",
             "plan_refusal": "PlanRefusalOut",
+            "rematch_refusal": "RematchRefusalOut",
             "_refuse": "JobRefusalOut",
         }
 

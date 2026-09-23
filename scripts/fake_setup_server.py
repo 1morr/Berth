@@ -72,12 +72,14 @@ from berth.domain import (
     Confidence,
     DetectionReason,
     EpisodeSnapshot,
+    FileEntry,
     HealthStatus,
     IndexerKind,
     JobState,
     JobTrigger,
     MediaKind,
     MediaSnapshot,
+    ParseContext,
     PlanAction,
     PlanStatus,
     PlanSummary,
@@ -110,6 +112,7 @@ from berth.models import (
     TmdbSettings,
     media_id,
 )
+from berth.parser import plan as decide
 from berth.services.clients import SetupProbes
 from berth.services.health import check_health
 from berth.services.routes import build_routes
@@ -379,6 +382,8 @@ def review_scenario() -> Scenario:
     SPY×FAMILY 第二季的兩集只寫了絕對集號，累計換算成 S02E01、S02E02，信心 medium，
     所以自動入庫並掛 audit。兩個鏈接都是真的，撤銷真的會把它從媒體庫拿掉。另外一筆 `- 05`
     下載完成、由規劃器算成低信心而停在 review（`_seed_held_plan`，票 07）：逐列改、核准、拒絕。
+    再一筆 S01E03 + OVA（`_seed_twin`，票 08）：S01E03 與媒體庫裡已有的一份一模一樣（重複），
+    OVA 對不到任何一集——規劃器略過前者、後者留在原位，兩個都在佇列上等人。
     """
     scenario = issues_scenario()
     scenario.review_demo = True
@@ -849,6 +854,9 @@ REVIEW_HASH = "6d2e1b8c3e4f5061728394b5c6d7e8f9a0b1c2d3"
 
 #: `review` 情境那一筆停在 review 的低信心下載（M2 票 07）。
 HELD_HASH = "7e3f2c9d4f5061728394a5b6c7d8e9f0a1b2c3d4"
+
+#: `review` 情境那一筆帶著一個重複版本與一個對不到的 OVA 的下載（M2 票 08）。
+TWIN_HASH = "8f403d0e5061728394a5b6c7d8e9f0a1b2c3d4e5"
 
 SCENARIOS = {
     "bundled": bundled,
@@ -1375,6 +1383,7 @@ async def _seed_review(session: AsyncSession, paths: PathSettings) -> None:
         )
     await session.commit()
     await _seed_held_plan(session, route, source_dir.parent)
+    await _seed_twin(session, route, source_dir.parent)
 
 
 async def _seed_held_plan(session: AsyncSession, route: Route, save_path: Path) -> None:
@@ -1410,6 +1419,78 @@ async def _seed_held_plan(session: AsyncSession, route: Route, save_path: Path) 
         [
             JobFile(job_hash=HELD_HASH, rel_path=f"{release}/{name}", size=len(name), priority=1)
             for name in files
+        ]
+    )
+    await session.commit()
+
+
+async def _seed_twin(session: AsyncSession, route: Route, save_path: Path) -> None:
+    """一筆下載完成、還沒規劃的 S01E03 + OVA（M2 票 08）。**Plan 由產品自己的規劃器算**。
+
+    媒體庫裡先放一份 S01E03：路徑與 Tags 用**解析器自己算的那一份**（對這個發佈名跑一次
+    `berth.parser.plan`），來源是另一個資料夾裡的另一個檔案——所以規劃器比帳本時它是同一集、
+    同一組 Tags 的重複，自動模式略過，佇列上一列 `duplicate`（取代 / 保留兩者 / 跳過）。
+    OVA 2 是字幕組自己編號的特典，對不到任何一集，留在原位，佇列上一列 `unmatched`。
+    兩個鏈接與來源都是真的：取代真的換掉媒體庫裡那個名字，指派真的建一條硬鏈接。
+    """
+    release = "[Group] SPY×FAMILY S01E03 + OVA [1080p][CHT]"
+    names = ("[Group] SPY×FAMILY S01E03 [1080p][CHT].mkv", "[Group] SPY×FAMILY OVA 2 [1080p].mkv")
+    folder = save_path / release
+    folder.mkdir(parents=True, exist_ok=True)
+    for name in names:
+        (folder / name).write_bytes(f"new {name}".encode())
+
+    tv = media_id(MediaKind.TV, 120089)
+    spy = await session.get(Media, tv)
+    assert spy is not None
+    snapshot = spy.stored_snapshot()
+    assert snapshot is not None
+    entries = tuple(FileEntry(rel_path=name, size=1_000_000_000) for name in names)
+    context = ParseContext(media=snapshot, route_collection_type=route.collection_type)
+    third = next(item for item in decide(release, entries, context) if item.episode_start == 3)
+    old = save_path / "[Old] SPY×FAMILY S01E03" / names[0]
+    old.parent.mkdir(parents=True, exist_ok=True)
+    old.write_bytes(b"old copy of S01E03")
+    target = Path(route.target_path) / third.target_path
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.unlink(missing_ok=True)
+    os.link(old, target)
+    facts = target.stat()
+    session.add(
+        LedgerEntry(
+            job_hash=None,
+            source_rel_path=f"{old.parent.name}/{old.name}",
+            source_abs_path=str(old).replace("\\", "/"),
+            source_inode=str(facts.st_ino),
+            source_dev=str(facts.st_dev),
+            target_path=str(target).replace("\\", "/"),
+            target_inode=str(facts.st_ino),
+            media_id=tv,
+            season=1,
+            episode_start=3,
+            tags_json=third.tags.model_dump(mode="json"),
+            action=PlanAction.IMPORT,
+        )
+    )
+    session.add(
+        Job(
+            hash=TWIN_HASH,
+            name=release,
+            source_url="",
+            trigger=JobTrigger.MANUAL,
+            media_id=tv,
+            route_id=route.id,
+            state=JobState.COMPLETED,
+            save_path=str(save_path).replace("\\", "/"),
+            content_path=str(folder).replace("\\", "/"),
+            progress=1.0,
+            completed_at=datetime.now(UTC),
+        )
+    )
+    session.add_all(
+        [
+            JobFile(job_hash=TWIN_HASH, rel_path=f"{release}/{name}", size=len(name), priority=1)
+            for name in names
         ]
     )
     await session.commit()

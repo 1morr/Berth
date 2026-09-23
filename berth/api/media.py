@@ -120,6 +120,9 @@ class LedgerFileOut(BaseModel):
     resolve_after: datetime | None
     resolve_attempts: int
     job_hash: str | None
+    #: 「修正」改得成哪幾種（`POST /files/rematch` 帶這一列的 `id` 當 `ledger_id`）。字幕跟著它的
+    #: 影片走，是空的。只有 admin 看得到那個入口（plan §6），清單本身誰都讀得到。
+    actions: list[PlanAction]
 
 
 class UnmatchedFileOut(BaseModel):
@@ -132,6 +135,11 @@ class UnmatchedFileOut(BaseModel):
     job_hash: str
     #: 發佈名，原樣——使用者在下載列表上認得出那一筆的東西。
     job_name: str
+    #: `POST /files/rematch` 的 `job_file_id`，與 `/review` 的 `unmatched` 列指向同一個東西。
+    job_file_id: int | None
+    #: 改得成哪幾種：`import`（指派；電影就是入庫）、`extra`、`skip`（忽略）。那一份 Plan 還在
+    #: 等審核時是空的——那時候改它是 Plan 編輯的事。
+    actions: list[PlanAction]
 
 
 class VersionOut(BaseModel):

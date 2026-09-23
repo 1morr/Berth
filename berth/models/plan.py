@@ -88,6 +88,13 @@ class PlanItem(Base):
     #: medium 信心自動入庫時掛的旗標（CONTEXT.md 的 Audit、brief §6.5）。
     #: M2 的 Review Queue 以「已入庫待確認」列出它們，一鍵撤銷或確認。
     audit: Mapped[bool] = mapped_column(default=False)
+    #: 這一列與帳本上既有的哪一列重複（brief §7.8，M2 票 08）。規劃時比帳本寫下的：同一集
+    #: 同一組 Tags，或同一個起始集而結束集不同。自動模式略過它（`action = skip`），
+    #: Review Queue 上它是一列 `duplicate`，管理員決定之後清掉。那一列帳本不在了就跟著變
+    #: `None`，這一列也就不再等人。
+    duplicate_of: Mapped[int | None] = mapped_column(
+        ForeignKey("ledger.id", ondelete="SET NULL"), default=None
+    )
     #: importer 真的鏈接完的時間（票 12）。
     applied_at: Mapped[datetime | None] = mapped_column(UtcDateTime, default=None)
     error: Mapped[str] = mapped_column(Text, default="")

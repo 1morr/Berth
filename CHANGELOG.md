@@ -502,6 +502,25 @@ Berth 入庫的作品照樣瀏覽得到。這六件事現在是 nightly e2e 的�
   排在「要你決定」那一段，逐列表格就地展開——要人看的列攤在最前，其餘照 `/jobs` 的分組收著；
   逐列「改 → 套用」當場換成後端給的新路徑，核准一顆主要動作，拒絕就地確認。`/jobs` 上停在待審核的
   那一筆，admin 展開看到一條到 `/review` 的路。演練情境 `review` 多一筆由規劃器算成低信心的 `- 05`。
+- **修正一個檔案：`POST /files/rematch`**（M2 票 08，brief §7.4、§9.4、plan §6 files 群組）：已入庫的檔案
+  （帶 `ledger_id`）與對不到、留在 complete 原位的檔案（帶 `job_file_id`）改成「指派到某一集」「標記為特典」
+  「忽略」。一律經過 Plan：內部建一份 `job_hash = NULL`、`engine = user` 的單列 Plan 並立刻套用，走 importer
+  的同一步（建新鏈接 → 拆舊鏈接 → 改帳本 → 通知 Jellyfin，拆掉的路徑也通知）；帳本那一列改寫而不是刪了再建，
+  字幕跟著它的影片走（改指派時改名跟過去，標記特典或忽略時一起拿掉）。拆不掉或鏈不起來時什麼都不改，
+  拒絕是 14 種封閉集合（`RematchRefusal`）。時間線多一種 `rematched`，說得出誰把什麼改成什麼。`files/*`
+  只有 admin。
+- **重複版本**（M2 票 08，brief §7.8）：規劃時與帳本比，同一集同一組 Tags、或同一個起始集而結束集不同
+  （`S01E03-E04` 對 `S01E03`）的那一列**自動模式略過並記事件**（`duplicate_skipped`），其餘照常入庫；
+  `plan_items.duplicate_of` 記著撞上的是帳本哪一列（新 migration）。Review Queue 上它是一列 `duplicate`，
+  三顆：取代舊版（同一條路徑一步換過去，舊版本的字幕一起拿掉、新版本的字幕跟著進來）、保留兩者
+  （完全相同的那一種新檔名多一個 `[2]` 序號標籤）、跳過。`POST /review/duplicate/{item_id}/{decision}`，
+  時間線多一種 `duplicate_decided`。
+- **Review Queue 的 `unmatched` 與 `duplicate` 兩類**（M2 票 08）：對不到的檔案在「要你決定」那一段，
+  修正表單直接攤在列上；重複版本在「已入庫，等你看一眼」，句子說得出後果（範圍不同的那一種：Jellyfin 12
+  會把它們併成同一集的兩個版本，後面那一集從集列表消失），取代與「範圍不同時仍然保留兩者」就地確認。
+- **Media 詳情的修正入口**（M2 票 08）：Unmatched 區每一列一顆「修正」，檔案清單每一列展開後一顆
+  （字幕沒有——它跟著影片走），與 `/review` 同一個表單、打同一支；已入庫的先就地確認。只有 admin 看得到。
+  演練情境 `review` 多一筆 S01E03 + OVA：一個重複版本、一個對不到的特典。
 - **刪除對話框是一個元件**（M2 票 04，plan §7）：`/jobs` 的展開區與 Media 詳情的版本清單共用，
   票 11 的 `/jobs/:hash` 掛的也是它。就地展開而不是 dialog（The Failure Expands In Place Rule）——
   「哪一筆正在被刪」正是這個動作最怕搞錯的事。取消「移除 torrent」會把「刪除檔案」一起收掉，
@@ -708,6 +727,9 @@ Berth 入庫的作品照樣瀏覽得到。這六件事現在是 nightly e2e 的�
   票 02 留下的「沒有閘門」補成 `TestDeclaringWhatEachEndpointRefuses`：走訪每一條路由，比對它
   `responses` 上宣告的拒絕**形狀**與 handler 語法樹丟得出來的，漏宣告與多宣告都紅。
 
+- **媒體庫已有的集，起始集相同而結束集不同時不再把整份 Plan 擋在待審核**（M2 票 08）：那一列略過、
+  成為佇列上的一列重複版本，同一包其餘的集照常自動入庫（M1 票 14b 的規則不變，處置改了）。同一包之內
+  互撞的那一種照舊送 review。
 - **Plan Item 的理由改成封閉集合的 code + 參數**（M2 票 07）：`reasons` 從解析器拼好的英文句子
   變成 `[{code, params}]`（`domain.ReasonCode`，42 種），句子在前端、zh-Hant 與 en 兩份都有。參數是
   檔名、季集、日期這種不翻譯的事實；每一種 code 帶哪幾個參數寫死在 `REASON_PARAMS`，`why()` 組的那一刻

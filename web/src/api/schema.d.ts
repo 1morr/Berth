@@ -132,6 +132,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/files/rematch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Rematch
+         * @description 建新鏈接 → 拆舊鏈接 → 改帳本 → 通知掃描，一律經過 Plan（brief §9.4）。
+         */
+        post: operations["post_rematch_api_files_rematch_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/health": {
         parameters: {
             query?: never;
@@ -787,6 +807,27 @@ export interface paths {
          * @description 「它是錯的」：拆掉硬鏈接、刪掉帳本那一列、Job 回 `review`（`audit_undone`）。
          */
         post: operations["post_undo_api_review_audit__ledger_id__undo_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/review/duplicate/{item_id}/{decision}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Duplicate
+         * @description 取代舊版 / 保留兩者 / 跳過（brief §7.8）。前兩顆走 rematch 的同一條路：建新鏈接 → 拆舊鏈接
+         *     → 改帳本 → 通知掃描，一律經過 Plan。
+         */
+        post: operations["post_duplicate_api_review_duplicate__item_id___decision__post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1619,6 +1660,87 @@ export interface components {
             detail: string;
         };
         /**
+         * DuplicateDecidedOut
+         * @description 決定完之後：記下這一次的單列 Plan，與新的那一份落在哪裡（跳過時兩格都是空的）。
+         */
+        DuplicateDecidedOut: {
+            /** Plan Id */
+            plan_id: number | null;
+            /** Target Path */
+            target_path: string;
+        };
+        /**
+         * DuplicateDecision
+         * @description `duplicate` 那一類按得了的三顆（brief §7.8）。
+         * @enum {string}
+         */
+        DuplicateDecision: "replace" | "keep_both" | "skip";
+        /**
+         * DuplicateReason
+         * @description `duplicate` 那一類為什麼停下來（brief §7.8）。兩種的後果不一樣，畫面各說各的。
+         * @enum {string}
+         */
+        DuplicateReason: "same_version" | "span_clash";
+        /**
+         * DuplicateReasonOut
+         * @description `duplicate` 那一列的理由：同一個版本，或起始集相同而結束集不同（brief §7.8）。
+         */
+        DuplicateReasonOut: {
+            code: components["schemas"]["DuplicateReason"];
+            /** Params */
+            params: {
+                [key: string]: unknown;
+            };
+        };
+        /**
+         * DuplicateRowOut
+         * @description 規劃時與帳本重複而被略過的一個檔案。`ref` 是 Plan Item 的 id，三顆打
+         *     `POST /review/duplicate/{ref}/{decision}`。
+         */
+        DuplicateRowOut: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "duplicate";
+            /** Ref */
+            ref: number;
+            reason: components["schemas"]["DuplicateReasonOut"];
+            /** Actions */
+            actions: components["schemas"]["DuplicateDecision"][];
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /** Media Id */
+            media_id: string | null;
+            /** Title */
+            title: string;
+            /** Title En */
+            title_en: string;
+            /** Job Hash */
+            job_hash: string;
+            /** Job Name */
+            job_name: string;
+            /** Path */
+            path: string;
+            /** Season */
+            season: number | null;
+            /** Episode Start */
+            episode_start: number | null;
+            /** Episode End */
+            episode_end: number | null;
+            /** Known Path */
+            known_path: string;
+            /** Known Season */
+            known_season: number | null;
+            /** Known Episode Start */
+            known_episode_start: number | null;
+            /** Known Episode End */
+            known_episode_end: number | null;
+        };
+        /**
          * EpisodeOut
          * @description 一集。
          */
@@ -2303,6 +2425,8 @@ export interface components {
             resolve_attempts: number;
             /** Job Hash */
             job_hash: string | null;
+            /** Actions */
+            actions: components["schemas"]["PlanAction"][];
         };
         /**
          * LedgerStatus
@@ -2765,7 +2889,7 @@ export interface components {
          *     依來源分段：季號從哪裡來、集號怎麼換算、為什麼信心被壓下來、字幕跟著誰、整包一起看的結果。
          * @enum {string}
          */
-        ReasonCode: "movie" | "media_by_title" | "title_exact" | "title_contained" | "title_partial" | "year_matches" | "year_differs" | "title_mismatch" | "no_media" | "season_from_job" | "season_from_release" | "season_from_folder" | "season_from_arc" | "final_season" | "single_season" | "absolute_group" | "absolute_cumulative" | "cour_offset" | "air_date_run" | "episode_not_on_tmdb" | "absolute_within_first_season" | "air_date_unknown" | "air_date_mismatch" | "range_spans_seasons" | "specials_numbering" | "classified" | "disc_structure" | "own_numbered_special" | "no_episode" | "subtitle_orphan" | "subtitle_same_name" | "subtitle_folder_episode" | "subtitle_follows" | "video_not_imported" | "target_contested" | "span_clash" | "library_span_clash" | "too_many_files" | "strategy_outlier" | "season_complete" | "medium_held_by_route" | "set_by_user";
+        ReasonCode: "movie" | "media_by_title" | "title_exact" | "title_contained" | "title_partial" | "year_matches" | "year_differs" | "title_mismatch" | "no_media" | "season_from_job" | "season_from_release" | "season_from_folder" | "season_from_arc" | "final_season" | "single_season" | "absolute_group" | "absolute_cumulative" | "cour_offset" | "air_date_run" | "episode_not_on_tmdb" | "absolute_within_first_season" | "air_date_unknown" | "air_date_mismatch" | "range_spans_seasons" | "specials_numbering" | "classified" | "disc_structure" | "own_numbered_special" | "no_episode" | "subtitle_orphan" | "subtitle_same_name" | "subtitle_folder_episode" | "subtitle_follows" | "video_not_imported" | "target_contested" | "span_clash" | "library_span_clash" | "same_version" | "too_many_files" | "strategy_outlier" | "season_complete" | "medium_held_by_route" | "set_by_user";
         /**
          * ReconcileRunOut
          * @description 一輪對帳。`finished_at` 是 `null` 就是還在跑。
@@ -2809,12 +2933,60 @@ export interface components {
             last: components["schemas"]["ReconcileRunOut"] | null;
         };
         /**
+         * RematchIn
+         * @description 哪一個檔案、改成什麼。`ledger_id`（已入庫）與 `job_file_id`（對不到的）**恰好帶一個**。
+         *
+         *     季集只屬於劇集的入庫，其餘處置三格都不帶（帶了是 `episode_not_allowed`）。
+         */
+        RematchIn: {
+            /** Ledger Id */
+            ledger_id?: number | null;
+            /** Job File Id */
+            job_file_id?: number | null;
+            action: components["schemas"]["PlanAction"];
+            /** Season */
+            season?: number | null;
+            /** Episode Start */
+            episode_start?: number | null;
+            /** Episode End */
+            episode_end?: number | null;
+        };
+        /**
+         * RematchOut
+         * @description 改完之後。
+         */
+        RematchOut: {
+            /** Plan Id */
+            plan_id: number;
+            /** Target Path */
+            target_path: string;
+        };
+        /**
+         * RematchRefusal
+         * @description 改一個檔案的處置（`POST /files/rematch`）或決定一個重複版本時，在改任何東西之前停下來了
+         *     （M2 票 08）。
+         *
+         *     `link_failed` / `unlink_failed` 是例外，理由同 `ReviewRefusal.UNLINK_FAILED`：要真的碰了磁碟才
+         *     知道成不成，而那時**什麼紀錄都還沒改**——先鏈接、成了才拆舊的、都成了才寫帳本。
+         * @enum {string}
+         */
+        RematchRefusal: "ledger_missing" | "file_missing" | "not_unmatched" | "plan_pending" | "not_duplicate" | "action_not_allowed" | "episode_required" | "episode_range_reversed" | "episode_not_allowed" | "media_missing" | "route_missing" | "target_taken" | "link_failed" | "unlink_failed";
+        /**
+         * RematchRefusalOut
+         * @description 改不下去時回的那一份。`reason` 給畫面挑句子，`detail` 是檔名、路徑或系統原文，不翻譯。
+         */
+        RematchRefusalOut: {
+            reason: components["schemas"]["RematchRefusal"];
+            /** Detail */
+            detail: string;
+        };
+        /**
          * ReviewQueueOut
          * @description 整份佇列。**不分頁**（plan §6）：`rows` 最多 200 列，`total` 是全部幾件。
          */
         ReviewQueueOut: {
             /** Rows */
-            rows: (components["schemas"]["PlanRowOut"] | components["schemas"]["AuditRowOut"] | components["schemas"]["IssueRowOut"])[];
+            rows: (components["schemas"]["PlanRowOut"] | components["schemas"]["AuditRowOut"] | components["schemas"]["UnmatchedRowOut"] | components["schemas"]["DuplicateRowOut"] | components["schemas"]["IssueRowOut"])[];
             /** Total */
             total: number;
         };
@@ -3277,6 +3449,68 @@ export interface components {
             job_hash: string;
             /** Job Name */
             job_name: string;
+            /** Job File Id */
+            job_file_id: number | null;
+            /** Actions */
+            actions: components["schemas"]["PlanAction"][];
+        };
+        /**
+         * UnmatchedReason
+         * @description `unmatched` 那一類的理由（`GET /review` 每一列的 `reason.code`，M2 票 08）。
+         *
+         *     **只有一種**（同 `AuditReason`）：為什麼對不到是那一列 Plan Item 的理由（`reasons`），這一格只說
+         *     這一列在等什麼——它留在 complete 原位，等人指派、標記或忽略（brief §7.4）。
+         * @enum {string}
+         */
+        UnmatchedReason: "left_in_place";
+        /**
+         * UnmatchedReasonOut
+         * @description `unmatched` 那一列的理由：它留在 complete 原位等人決定。為什麼對不到在 `reasons`。
+         */
+        UnmatchedReasonOut: {
+            code: components["schemas"]["UnmatchedReason"];
+            /** Params */
+            params: {
+                [key: string]: unknown;
+            };
+        };
+        /**
+         * UnmatchedRowOut
+         * @description 一個對不到、留在 complete 原位的檔案（brief §7.4）。`ref` 是 `job_files` 那一列的 id：
+         *     三個動作打 `POST /files/rematch` 帶 `job_file_id`，與 Media 詳情的 Unmatched 區同一支。
+         */
+        UnmatchedRowOut: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "unmatched";
+            /** Ref */
+            ref: number;
+            reason: components["schemas"]["UnmatchedReasonOut"];
+            /** Actions */
+            actions: components["schemas"]["PlanAction"][];
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /** Media Id */
+            media_id: string | null;
+            media_kind: components["schemas"]["MediaKind"] | null;
+            /** Title */
+            title: string;
+            /** Title En */
+            title_en: string;
+            /** Job Hash */
+            job_hash: string;
+            /** Job Name */
+            job_name: string;
+            /** Path */
+            path: string;
+            file_kind: components["schemas"]["FileKind"];
+            /** Reasons */
+            reasons: components["schemas"]["ItemReasonOut"][];
         };
         /** ValidationError */
         ValidationError: {
@@ -3589,6 +3823,57 @@ export interface operations {
                 };
                 content: {
                     "text/event-stream": components["schemas"]["JobSignalOut"];
+                };
+            };
+        };
+    };
+    post_rematch_api_files_rematch_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RematchIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RematchOut"];
+                };
+            };
+            /** @description `ledger_missing` · `file_missing` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RematchRefusalOut"];
+                };
+            };
+            /** @description `not_unmatched` · `plan_pending` · `route_missing` · `target_taken` · `link_failed` · `unlink_failed` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RematchRefusalOut"];
+                };
+            };
+            /** @description `action_not_allowed` · `episode_required` · `episode_range_reversed` · `episode_not_allowed` · `media_missing` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RematchRefusalOut"];
                 };
             };
         };
@@ -5042,6 +5327,47 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_duplicate_api_review_duplicate__item_id___decision__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: number;
+                decision: components["schemas"]["DuplicateDecision"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DuplicateDecidedOut"];
+                };
+            };
+            /** @description `not_duplicate` · `route_missing` · `target_taken` · `link_failed` · `unlink_failed` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RematchRefusalOut"];
+                };
+            };
+            /** @description `media_missing` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RematchRefusalOut"];
                 };
             };
         };

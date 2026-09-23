@@ -9,6 +9,7 @@ from berth.api import (
     auth,
     discover,
     events,
+    files,
     health,
     inventory,
     issues,
@@ -28,6 +29,7 @@ router = APIRouter()
 router.include_router(auth.router)
 router.include_router(discover.router)
 router.include_router(events.router)
+router.include_router(files.router)
 router.include_router(health.router)
 router.include_router(inventory.router)
 router.include_router(issues.router)

@@ -2,8 +2,11 @@
 
 **這一支只回答「現在有哪幾件事在等管理員」**，不自己偵測任何東西：`plan` 是停在 review 的
 那幾份 Plan（票 07），`audit` 來自帳本上的旗標（importer 抄過去的），`issue` 來自
-`services/issues`。票 08 把 `unmatched`、`duplicate` 填進來時，只多一個 `_Producer`，
-排序與上限不動。Plan 的三支命令（逐列改、核准、拒絕）在 `services/plan_review.py`。
+`services/issues`；票 08 填進 `unmatched`（Job 那一份定案了的 Plan 裡對不到的檔案）與
+`duplicate`（規劃時與帳本重複而被略過的那幾列，`plan_items.duplicate_of`）。各自一個
+`_Producer`，排序與上限不動。Plan 的三支命令（逐列改、核准、拒絕）在
+`services/plan_review.py`，rematch 在 `services/rematch.py`，重複版本的三顆在
+`services/duplicates.py`。
 
 排序是 plan §6 定的：**需要人動手的排前面**（`REVIEW_PRIORITY`），同一級之內舊的在前——
 等得最久的那一件最該先看。**不分頁**：超過 `QUEUE_LIMIT` 列時回前面那幾列並帶 `total`，
@@ -30,18 +33,24 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
-from sqlalchemy import Select, func, select
+from sqlalchemy import Select, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from berth.adapters import fs
 from berth.domain import (
+    REMATCH_ACTIONS,
     REVIEW_PRIORITY,
+    SETTLED_PLANS,
     AuditAction,
     AuditReason,
+    DuplicateDecision,
+    DuplicateReason,
     EventType,
+    FileKind,
     IssueStatus,
     ItemReason,
     JobState,
+    MediaKind,
     PlanAction,
     PlanDecision,
     PlanStatus,
@@ -49,9 +58,11 @@ from berth.domain import (
     ReviewKind,
     ReviewReason,
     ReviewRefusal,
+    UnmatchedReason,
 )
+from berth.domain import ReasonCode as Code
 from berth.logs import job_context
-from berth.models import Issue, Job, LedgerEntry, Media, Plan, PlanItem
+from berth.models import Issue, Job, JobFile, LedgerEntry, Media, Plan, PlanItem
 from berth.services.deletion import remove_one, route_targets
 from berth.services.issues import IssueView, list_issues
 from berth.services.jobs import job_lock, record_event, transition
@@ -137,7 +148,72 @@ class PlanRow:
         return ReviewKind.PLAN
 
 
-ReviewRow = PlanRow | AuditRow | IssueRow
+@dataclass(frozen=True, slots=True)
+class UnmatchedRow:
+    """一個對不到、留在 complete 原位的檔案（brief §7.4）。指向它的是 `job_files` 那一列——
+    `POST /files/rematch` 的 `job_file_id`，與 Media 詳情的 Unmatched 區打同一支。"""
+
+    job_file_id: int
+    #: 它開始等人的那一刻：那一份 Plan 算出來的時間。
+    at: datetime
+    media_id: str | None
+    #: 劇集或電影：劇集的指派要季集，電影的「指派」就是入庫。沒有作品時是 `None`。
+    media_kind: MediaKind | None
+    title: str
+    title_en: str
+    job_hash: str
+    job_name: str
+    #: 相對 `jobs.save_path`（與 `job_files.rel_path` 同形）。
+    rel_path: str
+    #: complete 裡的完整路徑。
+    source_path: str
+    file_kind: FileKind
+    #: 解析器為什麼對不到（那一列 Plan Item 的理由）。
+    reasons: tuple[ItemReason, ...]
+    #: 改得成哪幾種（`REMATCH_ACTIONS`，依分類）：影片是指派 / 標記 extra / 忽略，字幕只能忽略。
+    actions: tuple[PlanAction, ...]
+    reason: UnmatchedReason = UnmatchedReason.LEFT_IN_PLACE
+
+    @property
+    def kind(self) -> ReviewKind:
+        return ReviewKind.UNMATCHED
+
+
+@dataclass(frozen=True, slots=True)
+class DuplicateRow:
+    """規劃時與帳本重複而被略過的一個檔案（brief §7.8）。指向它的是 Job 那一份 Plan 的那一列。"""
+
+    item_id: int
+    at: datetime
+    media_id: str | None
+    title: str
+    title_en: str
+    job_hash: str
+    job_name: str
+    #: 新的那一份：來源與它蓋到的集。
+    rel_path: str
+    source_path: str
+    season: int | None
+    episode_start: int | None
+    episode_end: int | None
+    reason: DuplicateReason
+    #: 媒體庫裡已經有的那一份（帳本那一列）。
+    known_path: str
+    known_season: int | None
+    known_episode_start: int | None
+    known_episode_end: int | None
+    actions: tuple[DuplicateDecision, ...] = (
+        DuplicateDecision.REPLACE,
+        DuplicateDecision.KEEP_BOTH,
+        DuplicateDecision.SKIP,
+    )
+
+    @property
+    def kind(self) -> ReviewKind:
+        return ReviewKind.DUPLICATE
+
+
+ReviewRow = PlanRow | AuditRow | UnmatchedRow | DuplicateRow | IssueRow
 
 
 @dataclass(frozen=True, slots=True)
@@ -398,8 +474,130 @@ async def _fetch_issues(session: AsyncSession, limit: int) -> list[IssueRow]:
     return [IssueRow(issue=view) for view in views]
 
 
+def _unmatched() -> Select[tuple[PlanItem, Plan, Job, JobFile, Media]]:
+    """Job 那一份**定案了**的 Plan 裡對不到的檔案（`SETTLED_PLANS`：預估與等審核的那幾份裡，它們是
+    Plan 編輯的一列）。下載被刪掉（`removed`）的那幾筆不算：檔案多半已經不在了。
+
+    **光碟結構不列**：整包光碟的每一個檔案都是 `disc`（brief §6.2），一包 BDMV 會把佇列塞滿幾百列
+    而它們只能忽略——第一階段不拆光碟。它們仍在 Media 詳情的 Unmatched 區。
+    """
+    return (
+        select(PlanItem, Plan, Job, JobFile, Media)
+        .join(Plan, Plan.id == PlanItem.plan_id)
+        .join(Job, Job.hash == Plan.job_hash)
+        .join(JobFile, JobFile.id == PlanItem.job_file_id)
+        .outerjoin(Media, Media.id == Job.media_id)
+        .where(
+            PlanItem.action == PlanAction.UNMATCHED,
+            Plan.status.in_(SETTLED_PLANS),
+            Job.state != JobState.REMOVED,
+            or_(JobFile.kind.is_(None), JobFile.kind != FileKind.DISC),
+        )
+    )
+
+
+async def _count_unmatched(session: AsyncSession) -> int:
+    counted = select(func.count()).select_from(_unmatched().subquery())
+    return int(await session.scalar(counted) or 0)
+
+
+async def _fetch_unmatched(session: AsyncSession, limit: int) -> list[UnmatchedRow]:
+    found = await session.execute(_unmatched().order_by(Plan.created_at, PlanItem.id).limit(limit))
+    return [_unmatched_row(*row) for row in found.tuples()]
+
+
+def _unmatched_row(
+    item: PlanItem, plan: Plan, job: Job, row: JobFile, media: Media | None
+) -> UnmatchedRow:
+    kind = row.kind or FileKind.OTHER
+    return UnmatchedRow(
+        job_file_id=row.id,
+        at=plan.created_at,
+        media_id=job.media_id,
+        media_kind=media.kind if media is not None else None,
+        title=media.snapshot().title if media is not None else "",
+        title_en=media.title_en if media is not None else "",
+        job_hash=job.hash,
+        job_name=job.name,
+        rel_path=row.rel_path,
+        source_path=str(fs.under(job.save_path, row.rel_path)),
+        file_kind=kind,
+        reasons=reasons_of(item),
+        actions=REMATCH_ACTIONS[kind],
+    )
+
+
+def _duplicates() -> Select[tuple[PlanItem, Plan, Job, LedgerEntry, Media]]:
+    """規劃時被略過、還沒有人決定的重複版本（`plan_items.duplicate_of`）。範圍同 `_unmatched`。"""
+    return (
+        select(PlanItem, Plan, Job, LedgerEntry, Media)
+        .join(Plan, Plan.id == PlanItem.plan_id)
+        .join(Job, Job.hash == Plan.job_hash)
+        .join(LedgerEntry, LedgerEntry.id == PlanItem.duplicate_of)
+        .outerjoin(Media, Media.id == Job.media_id)
+        .where(
+            PlanItem.action == PlanAction.SKIP,
+            Plan.status.in_(SETTLED_PLANS),
+            Job.state != JobState.REMOVED,
+        )
+    )
+
+
+async def _count_duplicates(session: AsyncSession) -> int:
+    counted = select(func.count()).select_from(_duplicates().subquery())
+    return int(await session.scalar(counted) or 0)
+
+
+async def _fetch_duplicates(session: AsyncSession, limit: int) -> list[DuplicateRow]:
+    found = await session.execute(_duplicates().order_by(Plan.created_at, PlanItem.id).limit(limit))
+    rows = list(found.tuples())
+    files = {
+        file.id: file
+        for file in await session.scalars(
+            select(JobFile).where(
+                JobFile.id.in_([item.job_file_id for item, *_ in rows if item.job_file_id])
+            )
+        )
+    }
+    return [_duplicate_row(*row, files) for row in rows]
+
+
+def _duplicate_row(
+    item: PlanItem,
+    plan: Plan,
+    job: Job,
+    known: LedgerEntry,
+    media: Media | None,
+    files: dict[int, JobFile],
+) -> DuplicateRow:
+    source = files.get(item.job_file_id) if item.job_file_id is not None else None
+    rel = source.rel_path if source is not None else item.rel_path
+    clash = any(reason.code is Code.LIBRARY_SPAN_CLASH for reason in reasons_of(item))
+    return DuplicateRow(
+        item_id=item.id,
+        at=plan.created_at,
+        media_id=job.media_id,
+        title=media.snapshot().title if media is not None else "",
+        title_en=media.title_en if media is not None else "",
+        job_hash=job.hash,
+        job_name=job.name,
+        rel_path=rel,
+        source_path=str(fs.under(job.save_path, rel)),
+        season=item.season,
+        episode_start=item.episode_start,
+        episode_end=item.episode_end,
+        reason=DuplicateReason.SPAN_CLASH if clash else DuplicateReason.SAME_VERSION,
+        known_path=known.target_path,
+        known_season=known.season,
+        known_episode_start=known.episode_start,
+        known_episode_end=known.episode_end,
+    )
+
+
 _PRODUCERS: dict[ReviewKind, _Producer] = {
     ReviewKind.PLAN: _Producer(count=_count_plans, fetch=_fetch_plans),
+    ReviewKind.UNMATCHED: _Producer(count=_count_unmatched, fetch=_fetch_unmatched),
     ReviewKind.AUDIT: _Producer(count=_count_audits, fetch=_fetch_audits),
+    ReviewKind.DUPLICATE: _Producer(count=_count_duplicates, fetch=_fetch_duplicates),
     ReviewKind.ISSUE: _Producer(count=_count_issues, fetch=_fetch_issues),
 }

@@ -38,14 +38,14 @@ export function QueueRow({
   /** 已經翻好的「偵測於 / 入庫於 …」。 */
   when: string
   /**
-   * 這一列的工作本身，**不收在展開裡**：Plan 那一類的逐列表格（M2 票 07）——那張表就是要人做的事，
-   * 收起來等於多一次點擊。其餘幾類沒有。
+   * 這一列的工作本身，**不收在展開裡**：Plan 那一類的逐列表格（M2 票 07）、對不到那一類的修正表單
+   * （票 08）——那就是要人做的事，收起來等於多一次點擊。其餘幾類沒有。
    */
   body?: ReactNode
   details: ReactNode
   refusal: string | null
-  /** 動作列。順序照後端給的 `actions`。 */
-  children: ReactNode
+  /** 動作列。順序照後端給的 `actions`。工作本身就是表單（`body`）的那一類沒有另外的動作列。 */
+  children?: ReactNode
 }) {
   const { t } = useTranslation()
   const Heading = heading
@@ -78,7 +78,7 @@ export function QueueRow({
         </Notice>
       )}
 
-      <div className="flex flex-wrap items-start gap-2">{children}</div>
+      {children && <div className="flex flex-wrap items-start gap-2">{children}</div>}
     </article>
   )
 }

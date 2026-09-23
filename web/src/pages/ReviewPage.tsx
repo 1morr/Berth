@@ -6,7 +6,9 @@ import { reviewQueryOptions, type ReviewKind, type ReviewRow } from '../api/revi
 import { PAGE_TITLE } from '../components/controls'
 import { IssueRow } from '../issues/IssueRow'
 import { AuditRow } from '../review/AuditRow'
+import { DuplicateRow } from '../review/DuplicateRow'
 import { PlanRow } from '../review/PlanRow'
+import { UnmatchedRow } from '../review/UnmatchedRow'
 
 /**
  * 審核佇列 `/review`（`.scratch/m2/review-shape.md`，M2 票 06）。
@@ -80,13 +82,17 @@ export function ReviewPage() {
   )
 }
 
-/** 一列畫成哪個元件。**窮舉**：票 08 把新的 `kind` 加進聯集時，少一支是 `tsc` 的事。 */
+/** 一列畫成哪個元件。**窮舉**：後端把新的 `kind` 加進聯集時，少一支是 `tsc` 的事。 */
 function Row({ row, onDone }: { row: ReviewRow; onDone: (said: string) => void }) {
   switch (row.kind) {
     case 'plan':
       return <PlanRow row={row} onDone={onDone} />
     case 'audit':
       return <AuditRow row={row} onDone={onDone} />
+    case 'unmatched':
+      return <UnmatchedRow row={row} onDone={onDone} />
+    case 'duplicate':
+      return <DuplicateRow row={row} onDone={onDone} />
     case 'issue':
       return <IssueRow issue={row.issue} heading="h3" onDone={onDone} />
   }
@@ -96,12 +102,14 @@ type SectionName = 'decide' | 'look' | 'outside'
 
 /**
  * 每一類落在哪一段（plan §6 的 `REVIEW_PRIORITY` 三級）。`plan` / `unmatched` 在「要你決定」、
- * `audit` / `duplicate` 在「等你看一眼」、`issue` 在「外面發生的事」。鍵是**現在會出現**的幾類，
- * 所以票 08 加 `unmatched` 時這張表會紅。
+ * `audit` / `duplicate` 在「等你看一眼」、`issue` 在「外面發生的事」。鍵取自列的聯集，所以後端多一類
+ * 而這裡沒寫那一格時是 `tsc` 的事。
  */
 const SECTION_OF: Record<ReviewKind, SectionName> = {
   plan: 'decide',
+  unmatched: 'decide',
   audit: 'look',
+  duplicate: 'look',
   issue: 'outside',
 }
 

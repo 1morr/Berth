@@ -354,9 +354,9 @@ NCOP/NCED、PV、CM、Menu、預告、花絮等**可辨識**的非正片內容�
 
 ### 7.8 重複版本
 
-新 Plan item 與帳本既有 Entry 的（Media, 季, 集, tags）完全相同 → `duplicate`。自動模式預設 **跳過並記事件**；review 提供「取代舊版」「保留兩者（加 `[v2]` 類 tag 者本來就不同）」「跳過」。
+新 Plan item 與帳本既有 Entry 的（Media, 季, 集, tags）完全相同 → `duplicate`。自動模式預設 **跳過並記事件**；review 提供「取代舊版」「保留兩者（加 `[v2]` 類 tag 者本來就不同）」「跳過」。**保留兩者時新的那一份檔名多一個序號標籤**（`[2]`、`[3]`…，存在 Tags 的 `edition`，2026-09-23 使用者拍板）：Tags 完全相同的兩份檔名一模一樣，不改名就放不進同一個資料夾；Jellyfin 12 把它們當同一集的兩個版本。判斷在**規劃時**（比帳本，M2 票 08），不在入庫時。
 
-**多集檔與同起始集的單集**（2026-09-15 使用者拍板）：新 Plan item 的正片與同一季的帳本既有 Entry、或同一份 Plan 的其他正片**起始集相同、結束集不同**（`S01E03-E04` 對 `S01E03`）→ 送 review，不自動入庫，理由要說出後果。Jellyfin 12 的版本分組鍵只有季號與集號，會把它們併成同一集的兩個版本，後面那一集從集列表消失（§20.9）。規則不分 Jellyfin 版本：同一集有兩份涵蓋範圍不同的正片，本來就該由人決定留哪一份。
+**多集檔與同起始集的單集**（2026-09-15 使用者拍板）：新 Plan item 的正片與同一季的帳本既有 Entry、或同一份 Plan 的其他正片**起始集相同、結束集不同**（`S01E03-E04` 對 `S01E03`）→ 送 review，不自動入庫，理由要說出後果。與帳本撞的那一種 M2 票 08 起走上面那一條（略過那一列、Review Queue 上一列 `duplicate`，同一包其餘照常入庫）；同一包之內互撞的照舊整份送 review。Jellyfin 12 的版本分組鍵只有季號與集號，會把它們併成同一集的兩個版本，後面那一集從集列表消失（§20.9）。規則不分 Jellyfin 版本：同一集有兩份涵蓋範圍不同的正片，本來就該由人決定留哪一份。
 
 ### 7.9 是否必須在資料庫記錄檔案？
 
@@ -701,7 +701,7 @@ M1.5 拆票前的四條待決，2026-09-15 已全數照推薦拍板（上表「M
 **API**
 
 - `GET /Library/VirtualFolders` 回傳 `Name`、`Locations[]`、`CollectionType`（movies / tvshows / music / mixed …）、`ItemId`、`LibraryOptions`（含 `TypeOptions[].MetadataFetchers`，可用來偵測 TVDB 插件）。
-- 觸發掃描：`POST /Library/Media/Updated` 帶 `{Updates:[{Path, UpdateType: Created|Modified|Deleted}]}` 做路徑級通知；`POST /Library/Refresh` 是全庫掃描。沒有「掃描單一資料夾」的專用端點。
+- 觸發掃描：`POST /Library/Media/Updated` 帶 `{Updates:[{Path, UpdateType: Created|Modified|Deleted}]}` 做路徑級通知；`POST /Library/Refresh` 是全庫掃描。沒有「掃描單一資料夾」的專用端點。**`UpdateType` 不影響行為**：`LibraryController.PostUpdatedMedia` 對每一條都呼叫 `ILibraryMonitor.ReportFileSystemChanged(path)`，不看型別（2026-09-23 讀 jellyfin master 的原始碼，<https://github.com/jellyfin/jellyfin/blob/master/Jellyfin.Api/Controllers/LibraryController.cs>）。所以 rematch 拆掉的舊路徑照樣以 `Created` 通知（M2 票 08）。【原始碼】
 - **路徑通知對「從來沒掃到過內容」的媒體庫無效**（2026-09-15 對 `lscr.io/linuxserver/jellyfin:latest` = **12.0.0** 實測，並查核 master 的 [`FileRefresher.GetAffectedBaseItem`](https://github.com/jellyfin/jellyfin/blob/master/Emby.Server.Implementations/IO/FileRefresher.cs)）：等 `LibraryMonitorDelay`（預設 60 秒）之後，它從通知的路徑往上找第一個已存在的 item；初次掃描時是空的媒體庫資料夾不會成為 item（log：`Library folder "/data/library/tv" is inaccessible or empty, skipping`），於是找不到、**不做事也不寫 log**，而 `POST` 照樣回 204。套件內的媒體庫一開始一定是空的，所以**第一次入庫一定踩到**。實測三個媒體庫送了三輪通知，四分鐘後仍是 0 個 item。這條與 `EnableRealtimeMonitor` 無關——`ReportFileSystemChanged` 不看它（同日查核 [`LibraryMonitor`](https://github.com/jellyfin/jellyfin/blob/master/Emby.Server.Implementations/IO/LibraryMonitor.cs)）。
 - `POST /Items/{id}/Refresh` 在 master 上**沒有 `Recursive` 參數**（[`ItemRefreshController`](https://github.com/jellyfin/jellyfin/blob/master/Jellyfin.Api/Controllers/ItemRefreshController.cs)），對媒體庫 id 呼叫只刷新那一個 item 的中繼資料、不找新的子資料夾（實測 204，兩分鐘後仍是 0 個 item）。`POST /Library/Refresh` 在請求裡**等整次掃描做完**（[`LibraryController.RefreshLibrary`](https://github.com/jellyfin/jellyfin/blob/master/Jellyfin.Api/Controllers/LibraryController.cs) `await ValidateMediaLibrary`）。要「現在掃」又不把呼叫端卡住，用內建排程任務 **`RefreshLibrary`**（「Scan Media Library」／「重新掃描媒體庫」）：`POST /ScheduledTasks/Running/{id}` 收下就回；id 從 `GET /ScheduledTasks` 以 `Key` 找（12.0.0 實測 `7738148ffcd07979c7ceb148e06b3aed`）。
 - `GET /Items` **沒有 `path` 篩選**。反查方式：以 `parentId=<library>&includeItemTypes=Series&fields=ProviderIds,Path` 找 Series（比對 tmdb id 或路徑），再取集並用 `Path` 比對。（[ItemsController.cs](https://github.com/jellyfin/jellyfin/blob/master/Jellyfin.Api/Controllers/ItemsController.cs)）**注意**：取集時不要用 `parentId=<series>` —— 10.11 在第一次掃描後對「已被 provider 認出來的」Series 會回 0 筆，`/Shows/{id}/Episodes` 同樣回 0，要再掃一次才正常；改用 `parentId=<library>&recursive=true` 再照 `Path` 前綴篩選，四種情況都對（2026-09-07 實測，§20.6）。12.0.0 沒有重現（2026-09-15，§20.8）。

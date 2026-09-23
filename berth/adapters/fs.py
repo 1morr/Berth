@@ -171,6 +171,26 @@ def link(source: Path, target: Path, *, roots: Sequence[Path]) -> None:
         raise OSError(errno.EXDEV, f"{reason}: {where}", str(source), None, str(target)) from exc
 
 
+def replace_link(source: Path, target: Path, *, roots: Sequence[Path]) -> None:
+    """讓 `target` 這個名字改指 `source`，**一步換過去**（M2 票 08 的「取代舊版」）。
+
+    同一條路徑上舊的換新的：先拆再鏈的話中間有一段那一集不存在，而鏈接失敗時舊的已經沒了。
+    所以先在同一個資料夾裡鏈一個臨時名字，再 `Path.replace`（`os.replace`）蓋過去——同一個
+    檔案系統上的 rename 是原子的，任何時刻那個名字底下都是一個完整的檔案。失敗時臨時名字
+    收掉，舊的不動。
+    臨時名字點開頭（同 `PROBE_PREFIX`），Jellyfin 不會在那一瞬間把它當成媒體。
+    """
+    _guard(target, roots)
+    staged = target.with_name(f"{PROBE_PREFIX}{uuid.uuid4().hex}{target.suffix}")
+    link(source, staged, roots=roots)
+    try:
+        staged.replace(target)
+    except OSError:
+        with contextlib.suppress(OSError):
+            staged.unlink()
+        raise
+
+
 def mount_point(path: Path) -> Path:
     """這條路徑落在哪一個掛載上。
 

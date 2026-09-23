@@ -777,7 +777,9 @@ const zhHant = {
       },
       unmatched: {
         title: '對不到的檔案',
-        note: '解析器對不到任何一集，所以這些檔案留在 complete 原位，不入庫。',
+        note: '解析器對不到任何一集，所以這些檔案留在 complete 原位，不入庫。可以指派到某一集、標記為特典或忽略。',
+        // 那一份計劃還在等審核：這時候改它是審核佇列的事。
+        pending: '這筆下載的計劃還在等審核，到審核佇列決定。',
         toJobs: '看下載列表',
       },
     },
@@ -1061,6 +1063,99 @@ const zhHant = {
       confirmed: '已確認，這一列從佇列上收掉了。',
       undone: '已撤銷，這一筆下載回到待審核。',
     },
+    // unmatched 那一類（brief §7.4、M2 票 08）：對不到、留在 complete 原位的檔案。三個動作打的是
+    // `POST /files/rematch`，與 Media 詳情的 Unmatched 區同一支、同一個表單（`RematchForm`）。
+    unmatched: {
+      label: '對不到',
+      reason: {
+        left_in_place: '對不到任何一集，留在 complete 原位',
+      },
+      waitingSince: '規劃於 {{value}}',
+      path: '來源路徑',
+      job: '下載',
+      reasons: '解析器的理由',
+    },
+    // duplicate 那一類（brief §7.8）：規劃時與媒體庫裡已有的一份重複，自動模式先略過。
+    duplicate: {
+      label: '重複',
+      // 兩種的後果不一樣，句子各說各的（原則 4：說出下一步會怎樣）。
+      reason: {
+        same_version: '媒體庫已經有同一集、同一組 Tags 的一份',
+        span_clash:
+          '媒體庫已經有從同一集開始、範圍不同的一份。兩份都留的話，Jellyfin 12 會把它們併成同一集的兩個版本，後面那一集會從集列表消失',
+      },
+      skippedAt: '略過於 {{value}}',
+      path: '新的一份',
+      known: '媒體庫裡的',
+      job: '下載',
+      action: {
+        replace: '取代舊版',
+        keep_both: '保留兩者',
+        skip: '跳過',
+      },
+      confirmReplace:
+        '媒體庫裡舊的那一份會被拿掉，換成這一份；舊版本旁邊的字幕一起拿掉。complete 裡的檔案都不動。',
+      confirmReplaceAction: '確定取代',
+      confirmKeepClash:
+        '兩份都會留在媒體庫：Jellyfin 12 會把它們併成同一集的兩個版本，後面那一集會從集列表消失。',
+      confirmKeepClashAction: '仍然保留兩者',
+      // 完全相同的那一種：新的檔名會多一個序號標籤（2026-09-23 使用者拍板）。
+      keepBothHint:
+        '保留兩者時，新的一份檔名會多一個序號標籤（[2]），在 Jellyfin 裡是同一集的另一個版本。',
+      working: '處理中…',
+      failed: '沒有成功。Berth 自己的 API 沒有回應，先確認它還活著。',
+      done: {
+        replace: '已取代，媒體庫裡換成新的一份了。',
+        keep_both: '兩份都留在媒體庫了。',
+        skip: '已跳過，這一份留在 complete 原位。',
+      },
+    },
+  },
+  // 修正一個檔案（brief §9.4、M2 票 08）：`/review` 的對不到那一列與 Media 詳情共用同一個表單。
+  rematch: {
+    fix: '修正',
+    field: {
+      action: '改成',
+      season: '季',
+      start: '起集',
+      end: '迄集',
+    },
+    endHint: '單集留空',
+    action: {
+      import: '指派到某一集',
+      importMovie: '入庫',
+      extra: '標記為特典',
+      skip: '忽略',
+    },
+    apply: '套用',
+    cancel: '取消',
+    working: '處理中…',
+    // 已入庫的檔案：改完它就不在原本那條路徑了（原則 2：破壞性動作說清楚）。
+    confirmMove:
+      '媒體庫裡現在這一條會被拿掉、換到新的位置；旁邊的字幕跟著走。complete 裡的檔案不動。',
+    confirmExtra:
+      '它會搬到特典資料夾；特典旁邊不掛字幕，旁邊的字幕一起拿掉。complete 裡的檔案不動。',
+    confirmDrop: '這會從媒體庫拿掉它，旁邊的字幕一起拿掉。complete 裡的檔案不動。',
+    confirmAction: '確定修正',
+    done: '已修正。',
+    failed: '沒有成功。Berth 自己的 API 沒有回應，先確認它還活著。',
+    // 十四種擋下來的理由，各一個下一步。`detail`（檔名、路徑或系統原文）接在後面。
+    refusal: {
+      ledger_missing: '這個檔案的帳本已經不在了，多半是另一個分頁先改了。',
+      file_missing: '這個檔案已經不在這筆下載裡了。',
+      not_unmatched: '這個檔案已經不是「對不到」了，多半是另一個分頁先決定了。',
+      plan_pending: '這筆下載的計劃還在等審核，先到審核佇列改那一列。',
+      not_duplicate: '這一列已經不在等人了，多半是另一個分頁先決定了。',
+      action_not_allowed: '這個處置與檔案的分類矛盾。',
+      episode_required: '指派到某一集要填季與起集。',
+      episode_range_reversed: '迄集比起集小。',
+      episode_not_allowed: '只有指派到某一集才有季集可填。',
+      media_missing: '這個檔案沒有作品資料，算不出寫到哪裡。',
+      route_missing: '收這部作品的 Route 不在了。',
+      target_taken: '目標位置上已經有別的檔案，Berth 不覆寫它：',
+      link_failed: '鏈接建不起來，所以什麼都沒改：',
+      unlink_failed: '媒體庫裡舊的那一條拿不掉，所以什麼都沒改：',
+    },
   },
   reconcile: {
     start: '立刻對帳',
@@ -1157,6 +1252,9 @@ const zhHant = {
       deleted: '已刪除',
       audit_confirmed: '已確認',
       audit_undone: '已撤銷入庫',
+      rematched: '已修正',
+      duplicate_skipped: '略過重複',
+      duplicate_decided: '重複已決定',
     },
     timeline: {
       loading: '讀取時間線…',
@@ -1197,6 +1295,17 @@ const zhHant = {
       auditUndone: '管理員撤銷了這個檔案的入庫，這一筆回到待審核',
       auditUndoneGone:
         '管理員撤銷了這個檔案的入庫（它在那之前已經不在媒體庫裡了），這一筆回到待審核',
+      // rematch 與重複版本（M2 票 08）。「從什麼改成什麼」由處置與季集組成，路徑是機器字串，另起一行。
+      rematched: '管理員改了這個檔案：{{from}} → {{to}}',
+      notInLibrary: '不在媒體庫',
+      duplicateSkipped_one: '{{count}} 個檔案與媒體庫裡已有的一份重複，先略過，等你在審核佇列決定',
+      duplicateSkipped_other:
+        '{{count}} 個檔案與媒體庫裡已有的一份重複，先略過，等你在審核佇列決定',
+      duplicateDecided: {
+        replace: '管理員用這一份取代了媒體庫裡的舊版本',
+        keep_both: '管理員讓兩個版本都留在媒體庫',
+        skip: '管理員決定不要這一份重複的檔案，它留在 complete 原位',
+      },
       // 刪除範圍那一筆（M2 票 04）。說的是**真的**做掉了什麼，不是勾了哪幾個。
       deletedLinks_one: '移除 {{count}} 個鏈接',
       deletedLinks_other: '移除 {{count}} 個鏈接',
@@ -1322,6 +1431,7 @@ const zhHant = {
         season_complete: '這一包從頭到尾蓋滿第 {{season}} 季',
         medium_held_by_route: '這條 Route 不讓中信心的檔案自己入庫',
         set_by_user: '管理員改過這一列',
+        same_version: '媒體庫已經有 {{known}}：同一集、同一組 Tags',
       },
       // 理由裡的 `strategy`（`domain.MappingStrategy`）：季集是靠什麼讀出來的。
       strategy: {
@@ -2418,7 +2528,8 @@ const en: Translations<typeof zhHant> = {
       },
       unmatched: {
         title: 'Unmatched files',
-        note: 'The parser could not tie these to any episode, so they stay where they are in complete and are not imported.',
+        note: 'The parser could not tie these to any episode, so they stay where they are in complete and are not imported. You can assign one to an episode, mark it as an extra or ignore it.',
+        pending: 'This download’s plan is still waiting for review; decide it in the review queue.',
         toJobs: 'See downloads',
       },
     },
@@ -2683,6 +2794,94 @@ const en: Translations<typeof zhHant> = {
       confirmed: 'Confirmed; it is off the queue.',
       undone: 'Undone; the download is back in review.',
     },
+    unmatched: {
+      label: 'UNMATCHED',
+      reason: {
+        left_in_place: 'Matches no episode; left in place under complete',
+      },
+      waitingSince: 'Planned {{value}}',
+      path: 'Source path',
+      job: 'Download',
+      reasons: 'Parser reasons',
+    },
+    duplicate: {
+      label: 'DUPLICATE',
+      reason: {
+        same_version: 'The library already has this episode with the same tags',
+        span_clash:
+          'The library already has a file that starts at the same episode but covers a different range. Keeping both lets Jellyfin 12 fold them into two versions of one episode, and the later episode disappears from the list',
+      },
+      skippedAt: 'Skipped {{value}}',
+      path: 'New file',
+      known: 'In the library',
+      job: 'Download',
+      action: {
+        replace: 'Replace the old one',
+        keep_both: 'Keep both',
+        skip: 'Skip',
+      },
+      confirmReplace:
+        'The version in the library comes out and this one takes its place; the old version’s subtitles go with it. Nothing under complete is touched.',
+      confirmReplaceAction: 'Replace it',
+      confirmKeepClash:
+        'Both stay in the library: Jellyfin 12 folds them into two versions of one episode, and the later episode disappears from the list.',
+      confirmKeepClashAction: 'Keep both anyway',
+      keepBothHint:
+        'Keeping both adds a number tag ([2]) to the new file name; Jellyfin shows it as another version of the same episode.',
+      working: 'Working…',
+      failed:
+        'That did not go through. Berth’s own API did not answer — check that it is still running.',
+      done: {
+        replace: 'Replaced; the library now has the new one.',
+        keep_both: 'Both are in the library now.',
+        skip: 'Skipped; this one stays under complete.',
+      },
+    },
+  },
+  rematch: {
+    fix: 'Fix',
+    field: {
+      action: 'Change to',
+      season: 'Season',
+      start: 'First episode',
+      end: 'Last episode',
+    },
+    endHint: 'Leave empty for one episode',
+    action: {
+      import: 'Assign to an episode',
+      importMovie: 'Import',
+      extra: 'Mark as extra',
+      skip: 'Ignore',
+    },
+    apply: 'Apply',
+    cancel: 'Cancel',
+    working: 'Working…',
+    confirmMove:
+      'The file leaves its current place in the library and moves to the new one; its subtitles follow. Nothing under complete is touched.',
+    confirmExtra:
+      'It moves to the extras folder; extras carry no subtitles, so its subtitles come out. Nothing under complete is touched.',
+    confirmDrop:
+      'This takes it out of the library along with its subtitles. Nothing under complete is touched.',
+    confirmAction: 'Apply the fix',
+    done: 'Fixed.',
+    failed:
+      'That did not go through. Berth’s own API did not answer — check that it is still running.',
+    refusal: {
+      ledger_missing: 'This file’s ledger row is gone — most likely changed from another tab.',
+      file_missing: 'This file is no longer part of that download.',
+      not_unmatched: 'This file is no longer unmatched — most likely decided from another tab.',
+      plan_pending: 'This download’s plan is still waiting for review; change the row there first.',
+      not_duplicate: 'This row is no longer waiting — most likely decided from another tab.',
+      action_not_allowed: 'That decision contradicts what kind of file this is.',
+      episode_required: 'To assign it, fill in the season and the first episode.',
+      episode_range_reversed: 'The last episode comes before the first.',
+      episode_not_allowed: 'Only an episode assignment has a season and episode to fill in.',
+      media_missing: 'This file has no title data, so there is nowhere to write it.',
+      route_missing: 'The library route for this title is gone.',
+      target_taken: 'Another file already sits at the target, and Berth does not overwrite it:',
+      link_failed: 'The link could not be made, so nothing changed:',
+      unlink_failed: 'The old link in the library could not be removed, so nothing changed:',
+    },
   },
   reconcile: {
     start: 'Reconcile now',
@@ -2773,6 +2972,9 @@ const en: Translations<typeof zhHant> = {
       deleted: 'Deleted',
       audit_confirmed: 'Confirmed',
       audit_undone: 'Import undone',
+      rematched: 'Rematched',
+      duplicate_skipped: 'Duplicate skipped',
+      duplicate_decided: 'Duplicate decided',
     },
     timeline: {
       loading: 'Reading the timeline…',
@@ -2809,6 +3011,17 @@ const en: Translations<typeof zhHant> = {
       auditUndone: 'An administrator undid this file’s import; the job is back in review',
       auditUndoneGone:
         'An administrator undid this file’s import (it had already left the library); the job is back in review',
+      rematched: 'An administrator changed this file: {{from}} → {{to}}',
+      notInLibrary: 'not in the library',
+      duplicateSkipped_one:
+        '{{count}} file duplicates one already in the library; skipped until you decide in the review queue',
+      duplicateSkipped_other:
+        '{{count}} files duplicate ones already in the library; skipped until you decide in the review queue',
+      duplicateDecided: {
+        replace: 'An administrator replaced the version in the library with this one',
+        keep_both: 'An administrator kept both versions in the library',
+        skip: 'An administrator passed on this duplicate; it stays under complete',
+      },
       deletedLinks_one: 'removed {{count}} link',
       deletedLinks_other: 'removed {{count}} links',
       deletedSources_one: 'deleted {{count}} downloaded file',
@@ -2929,6 +3142,7 @@ const en: Translations<typeof zhHant> = {
         season_complete: 'This download covers season {{season}} end to end',
         medium_held_by_route: 'This library route does not import medium confidence by itself',
         set_by_user: 'An administrator set this row',
+        same_version: 'The library already has {{known}}: the same episode with the same tags',
       },
       strategy: {
         explicit: 'the name itself',

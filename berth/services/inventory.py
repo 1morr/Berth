@@ -29,8 +29,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from berth.adapters.jellyfin import JellyfinItem
 from berth.domain import (
+    REMATCH_ACTIONS,
+    SETTLED_PLANS,
     EpisodeSnapshot,
     EpisodeStatus,
+    FileKind,
     InventoryStatus,
     JellyfinPresence,
     JobState,
@@ -41,7 +44,7 @@ from berth.domain import (
     PlanStatus,
     Tags,
 )
-from berth.models import Job, LedgerEntry, Media, Plan, PlanItem, Route, media_id
+from berth.models import Job, JobFile, LedgerEntry, Media, Plan, PlanItem, Route, media_id
 from berth.models.types import utcnow
 from berth.services.jellyfin_access import (
     BrowsableLibrary,
@@ -207,6 +210,9 @@ class LedgerFileView:
     resolve_after: datetime | None
     resolve_attempts: int
     job_hash: str | None
+    #: 「修正」改得成哪幾種（brief §9.4，M2 票 08）：正片與特典是改指派 / 標記 extra / 忽略；
+    #: 字幕跟著它的影片走，自己沒有修正入口（空的）。
+    actions: tuple[PlanAction, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -216,6 +222,11 @@ class UnmatchedFileView:
     rel_path: str
     job_hash: str
     job_name: str
+    #: `POST /files/rematch` 的 `job_file_id`——與 Review Queue 的 `unmatched` 列指向同一個東西。
+    job_file_id: int | None
+    #: 改得成哪幾種（`REMATCH_ACTIONS`，依分類）。那一份 Plan 還沒定案（等審核）時是空的：
+    #: 那時候改它是 Plan 編輯的事。
+    actions: tuple[PlanAction, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -334,13 +345,18 @@ async def read_holdings(session: AsyncSession, media: Media, snapshot: MediaSnap
         plan.id: plan
         for plan in await session.scalars(select(Plan).where(Plan.job_hash.in_(list(jobs))))
     }
-    items = await session.scalars(
-        select(PlanItem).where(PlanItem.plan_id.in_(list(plans))).order_by(PlanItem.id)
+    items = list(
+        await session.scalars(
+            select(PlanItem).where(PlanItem.plan_id.in_(list(plans))).order_by(PlanItem.id)
+        )
     )
 
     stuck: set[tuple[int, int]] = set()
     under_way: set[tuple[int, int]] = set()
     unmatched: list[UnmatchedFileView] = []
+    kinds = await _file_kinds(
+        session, [item.job_file_id for item in items if item.action is PlanAction.UNMATCHED]
+    )
     for item in items:
         plan = plans[item.plan_id]
         job = jobs.get(plan.job_hash or "")
@@ -348,8 +364,23 @@ async def read_holdings(session: AsyncSession, media: Media, snapshot: MediaSnap
             continue
         # 預估沒讀過檔案本身（brief §5.1），下載完成之後會重算一份。
         if item.action is PlanAction.UNMATCHED and plan.status is not PlanStatus.PREPLAN:
+            decidable = (
+                item.job_file_id is not None
+                and plan.status in SETTLED_PLANS
+                and job.state is not JobState.REMOVED
+            )
             unmatched.append(
-                UnmatchedFileView(rel_path=item.rel_path, job_hash=job.hash, job_name=job.name)
+                UnmatchedFileView(
+                    rel_path=item.rel_path,
+                    job_hash=job.hash,
+                    job_name=job.name,
+                    job_file_id=item.job_file_id,
+                    actions=(
+                        REMATCH_ACTIONS[kinds.get(item.job_file_id, FileKind.OTHER)]
+                        if decidable
+                        else ()
+                    ),
+                )
             )
         if item.action not in _CLAIMING:
             continue
@@ -688,7 +719,28 @@ def _file(entry: LedgerEntry) -> LedgerFileView:
         resolve_after=entry.resolve_after,
         resolve_attempts=entry.resolve_attempts,
         job_hash=entry.job_hash,
+        actions=_LINKED_ACTIONS.get(entry.action, ()),
     )
+
+
+#: 已入庫的檔案「修正」得成哪幾種（依它現在的處置）。正片與特典都是一個影片檔（`REMATCH_ACTIONS`
+#: 對影片的那一格）；字幕跟著它的影片走（`services/rematch._sidecars`），自己沒有入口。
+_LINKED_ACTIONS: dict[PlanAction, tuple[PlanAction, ...]] = {
+    PlanAction.IMPORT: REMATCH_ACTIONS[FileKind.VIDEO],
+    PlanAction.EXTRA: REMATCH_ACTIONS[FileKind.VIDEO],
+}
+
+
+async def _file_kinds(
+    session: AsyncSession, ids: Sequence[int | None]
+) -> dict[int | None, FileKind]:
+    """`job_files` 上的分類（規劃時寫回去的）。沒有的當 `other`：寧可少一個選項，也不要讓一個
+    不知道是什麼的檔案被指派成一集（同 `plan_view._kinds`）。"""
+    wanted = [file_id for file_id in ids if file_id is not None]
+    if not wanted:
+        return {}
+    found = await session.execute(select(JobFile.id, JobFile.kind).where(JobFile.id.in_(wanted)))
+    return {file_id: kind for file_id, kind in found.tuples() if kind is not None}
 
 
 def _file_presence(entry: LedgerEntry) -> JellyfinPresence:

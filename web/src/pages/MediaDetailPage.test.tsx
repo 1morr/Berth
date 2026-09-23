@@ -102,6 +102,7 @@ function ledgerFile(overrides: Partial<LedgerFile> = {}): LedgerFile {
     resolve_after: null,
     resolve_attempts: 0,
     job_hash: '4bd0f6ef1d3b1e3cbb1e1b6b6c2a9c7d8e5f0a1b',
+    actions: ['import', 'extra', 'skip'],
     ...overrides,
   }
 }
@@ -1049,7 +1050,15 @@ describe('Media 詳情頁', () => {
     render({
       [SPY_PATH]: {
         body: media({
-          unmatched: [{ rel_path: 'SP01.mkv', job_hash: 'a'.repeat(40), job_name: 'release' }],
+          unmatched: [
+            {
+              rel_path: 'SP01.mkv',
+              job_hash: 'a'.repeat(40),
+              job_name: 'release',
+              job_file_id: 7,
+              actions: ['import', 'extra', 'skip'],
+            },
+          ],
         }),
       },
     })
@@ -1079,6 +1088,8 @@ describe('Media 詳情頁', () => {
               rel_path: '[Group] SPY×FAMILY/[Group] SPY×FAMILY [SP][01] [1080p].mkv',
               job_hash: '4bd0f6ef1d3b1e3cbb1e1b6b6c2a9c7d8e5f0a1b',
               job_name: '[Group] SPY×FAMILY S01 [01-25][1080p][CHT]',
+              job_file_id: 7,
+              actions: ['import', 'extra', 'skip'],
             },
           ],
         }),
@@ -1506,5 +1517,113 @@ describe('停在待審核的下載（M2 票 06）', () => {
 
     await screen.findByRole('heading', { level: 1 })
     expect(screen.queryByText(/等管理員審核/)).not.toBeInTheDocument()
+  })
+})
+
+describe('修正一個檔案（M2 票 08）', () => {
+  const UNMATCHED = {
+    rel_path: '[Group] SPY×FAMILY/[Group] SPY×FAMILY OVA 2 [1080p].mkv',
+    job_hash: '4bd0f6ef1d3b1e3cbb1e1b6b6c2a9c7d8e5f0a1b',
+    job_name: '[Group] SPY×FAMILY S01 [01-25][1080p][CHT]',
+    job_file_id: 7,
+    actions: ['import', 'extra', 'skip'] as LedgerFile['actions'],
+  }
+
+  /** 電影不分組，檔案列直接在外面；點檔名就展開那一列。 */
+  const FILE_NAME = 'SPY x FAMILY (2022) - S01E01 - OPERATION STRIX [WEB][1080p][Lilith-Raws].mkv'
+
+  function bodyOf(stub: ReturnType<typeof render>, url: string): unknown {
+    const call = stub.mock.calls.find(([called]) => called === url)
+    return call ? JSON.parse(String(call[1]?.body)) : undefined
+  }
+
+  it('對不到的檔案：「修正」展開與審核佇列同一個表單，打同一支（帶 job_file_id）', async () => {
+    const stub = render({
+      [SPY_PATH]: { body: media({ unmatched: [UNMATCHED] }) },
+      'POST /api/files/rematch': { body: { plan_id: 3, target_path: '/x/S00E02.mkv' } },
+    })
+    renderApp('/media/tv:120089')
+    const files = await screen.findByRole('region', { name: '檔案與版本' })
+
+    await userEvent.click(within(files).getByRole('button', { name: `修正 ${UNMATCHED.rel_path}` }))
+    await userEvent.type(within(files).getByRole('spinbutton', { name: '季' }), '0')
+    await userEvent.type(within(files).getByRole('spinbutton', { name: '起集' }), '2')
+    await userEvent.click(within(files).getByRole('button', { name: '套用' }))
+
+    await waitFor(() =>
+      expect(bodyOf(stub, '/api/files/rematch')).toEqual({
+        job_file_id: 7,
+        action: 'import',
+        season: 0,
+        episode_start: 2,
+        episode_end: null,
+      }),
+    )
+    expect(await within(files).findByText('已修正。')).toBeInTheDocument()
+  })
+
+  it('已入庫的檔案：「修正」收在展開區，改指派先就地確認再送（帶 ledger_id）', async () => {
+    const stub = render({
+      [SPY_PATH]: { body: media({ kind: 'movie', files: [ledgerFile({ id: 42 })] }) },
+      'POST /api/files/rematch': { body: { plan_id: 3, target_path: '' } },
+    })
+    renderApp('/media/tv:120089')
+    const files = await screen.findByRole('region', { name: '檔案與版本' })
+
+    await userEvent.click(within(files).getByText(FILE_NAME))
+    await userEvent.click(within(files).getByRole('button', { name: /^修正 / }))
+    await userEvent.selectOptions(within(files).getByRole('combobox', { name: '改成' }), 'skip')
+    await userEvent.click(within(files).getByRole('button', { name: '套用' }))
+
+    // 還沒送：它在媒體庫裡，拿掉之前先說清楚。
+    expect(stub.mock.calls.some(([url]) => url === '/api/files/rematch')).toBe(false)
+    expect(within(files).getByText(/這會從媒體庫拿掉它/)).toBeInTheDocument()
+    await userEvent.click(within(files).getByRole('button', { name: '確定修正' }))
+
+    await waitFor(() =>
+      expect(bodyOf(stub, '/api/files/rematch')).toMatchObject({ ledger_id: 42, action: 'skip' }),
+    )
+  })
+
+  it('字幕沒有自己的修正入口：它跟著它的影片走', async () => {
+    render({
+      [SPY_PATH]: {
+        body: media({ kind: 'movie', files: [ledgerFile({ action: 'subtitle', actions: [] })] }),
+      },
+    })
+    renderApp('/media/tv:120089')
+    const files = await screen.findByRole('region', { name: '檔案與版本' })
+
+    await userEvent.click(within(files).getByText(FILE_NAME))
+
+    expect(within(files).queryByRole('button', { name: /^修正 / })).toBeNull()
+  })
+
+  it('一般使用者看不到修正入口（票上那一條驗收）', async () => {
+    // **前端隱藏不是安全機制**：擋住的那一條在門禁上（`/files/*` 回 403）。
+    render(
+      {
+        [SPY_PATH]: {
+          body: media({ kind: 'movie', unmatched: [UNMATCHED], files: [ledgerFile()] }),
+        },
+      },
+      'user',
+    )
+    renderApp('/media/tv:120089')
+    const files = await screen.findByRole('region', { name: '檔案與版本' })
+
+    await userEvent.click(within(files).getByText(FILE_NAME))
+
+    expect(within(files).getByText('對不到的檔案')).toBeVisible()
+    expect(within(files).queryByRole('button', { name: /^修正/ })).toBeNull()
+  })
+
+  it('那一份計劃還在等審核時不給修正，說一句去哪裡', async () => {
+    render({ [SPY_PATH]: { body: media({ unmatched: [{ ...UNMATCHED, actions: [] }] }) } })
+    renderApp('/media/tv:120089')
+    const files = await screen.findByRole('region', { name: '檔案與版本' })
+
+    expect(within(files).queryByRole('button', { name: /^修正/ })).toBeNull()
+    expect(within(files).getByText(/到審核佇列決定/)).toBeVisible()
   })
 })

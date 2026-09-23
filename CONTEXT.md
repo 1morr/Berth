@@ -240,8 +240,12 @@ _Avoid_: unknown, orphan（Orphan 是對帳用語）
 _Avoid_: inbox, pending list, interactive import
 
 **Rematch**:
-把已入庫或 Unmatched 的檔案改指派到另一季集、標為 Extra 或忽略；一律經過 Plan。
+把已入庫或 Unmatched 的檔案改指派到另一季集、標為 Extra 或忽略；一律經過 Plan（一份 `job_hash = NULL`、`engine = user` 的單列 Plan，立刻套用）。字幕不單獨 rematch，跟著它的影片走。UI 上的按鈕叫「修正」。
 _Avoid_: fix, remap, move
+
+**Duplicate**（重複版本）:
+新的 Plan Item 與帳本上既有的一份撞上：同一集同一組 Tags，或同一個起始集而結束集不同（Jellyfin 12 會把後者併成同一集）。規劃時略過、記 `plan_items.duplicate_of`，Review Queue 上等人決定：取代舊版、保留兩者、跳過。
+_Avoid_: conflict, collision（那是同一包裡兩列寫到同一條路徑，`target_contested`）
 
 **Reimport**:
 以 complete 下的目錄為 Import Source 重新入庫。

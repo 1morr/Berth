@@ -1,4 +1,4 @@
-import { useId } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import type { TFunction } from 'i18next'
@@ -7,15 +7,25 @@ import { useTranslation } from 'react-i18next'
 import { meQueryOptions } from '../api/auth'
 import type { Media } from '../api/media'
 import { CollapsibleRow } from '../components/CollapsibleRow'
-import { GHOST_LINK } from '../components/controls'
+import { COMPACT_BUTTON, GHOST_LINK } from '../components/controls'
 import { Dot } from '../components/Dot'
 import { formatCoverage, formatEpisode } from '../components/episodes'
 import { FileEntry } from '../components/FileEntry'
+import { RematchForm } from '../components/RematchForm'
 import { groupRows, type RowGroup } from '../components/rowGroups'
 import { Timestamp } from '../components/Timestamp'
 import { JobDelete } from '../jobs/JobDelete'
 
 type LedgerFile = Media['files'][number]
+
+/**
+ * 修正入口要的東西（brief §9.4、M2 票 08）。**只有 admin 拿得到**（plan §6，後端同時回 403）：
+ * 不是 admin 時整個是 `null`，一路傳下去的每一層都不畫那顆鍵。
+ */
+interface Rematching {
+  mediaKind: Media['kind']
+  onDone: (said: string) => void
+}
 
 /**
  * 檔案與版本（`.scratch/m1/library-shape.md` §5，Media 詳情區塊序列的第 4 塊）。
@@ -32,8 +42,11 @@ export function FilesPanel({ media }: { media: Media }) {
   const { t } = useTranslation()
   const headingId = useId()
   const hasFeature = media.files.some((file) => file.action === 'import')
-  // 刪除只有 admin 按得到（plan §6，後端同時回 403）。前端隱藏不是安全機制。
+  // 刪除與修正只有 admin 按得到（plan §6，後端同時回 403）。前端隱藏不是安全機制。
   const isAdmin = useQuery(meQueryOptions).data?.role === 'admin'
+  // 修正完那一列可能整個換了位置（對不到的那一列會消失）——結果給看不見畫面的人另外說一次。
+  const [said, setSaid] = useState('')
+  const rematching: Rematching | null = isAdmin ? { mediaKind: media.kind, onDone: setSaid } : null
 
   return (
     <section aria-labelledby={headingId} className="grid gap-4">
@@ -50,6 +63,10 @@ export function FilesPanel({ media }: { media: Media }) {
         )}
       </div>
 
+      <p aria-live="polite" className="sr-only">
+        {said}
+      </p>
+
       {media.files.length === 0 && (
         <p className="max-w-prose text-sm text-ink-dim">{t('media.files.none')}</p>
       )}
@@ -57,12 +74,12 @@ export function FilesPanel({ media }: { media: Media }) {
       {media.files.length > 0 &&
         (media.kind === 'movie' ? (
           <div className="border-2 border-rule bg-well px-4 py-3">
-            <FileList files={media.files} summarised={false} />
+            <FileList files={media.files} summarised={false} rematching={rematching} />
           </div>
         ) : (
           <div className="grid gap-px bg-rule">
             {byDecision(media.files).map((group) => (
-              <FileGroup key={group.key} group={group} />
+              <FileGroup key={group.key} group={group} rematching={rematching} />
             ))}
           </div>
         ))}
@@ -128,10 +145,27 @@ export function FilesPanel({ media }: { media: Media }) {
               // 需要人知道的那幾列線變重，不是變紅（The One Meaning Rule，與 `JobPlan` 同一種）。
               <li
                 key={`${row.job_hash}-${row.rel_path}`}
-                className="grid min-w-0 gap-0.5 border-l-2 border-rule-strong pl-3"
+                className="grid min-w-0 gap-1.5 border-l-2 border-rule-strong pl-3"
               >
-                <p className="value text-xs wrap-anywhere text-ink">{row.rel_path}</p>
-                <p className="value text-xs wrap-anywhere text-ink-dim">{row.job_name}</p>
+                <div className="flex min-w-0 flex-wrap items-start gap-x-2 gap-y-1">
+                  <div className="grid min-w-0 flex-1 basis-48 gap-0.5">
+                    <p className="value text-xs wrap-anywhere text-ink">{row.rel_path}</p>
+                    <p className="value text-xs wrap-anywhere text-ink-dim">{row.job_name}</p>
+                  </div>
+                  {rematching && row.job_file_id !== null && row.actions.length > 0 && (
+                    <RematchEntry
+                      name={row.rel_path}
+                      subject={{ job_file_id: row.job_file_id }}
+                      actions={row.actions}
+                      linked={false}
+                      rematching={rematching}
+                    />
+                  )}
+                </div>
+                {/* 那一份計劃還在等審核：這時候改它是審核佇列的事，這裡說一句去哪裡。 */}
+                {rematching && row.actions.length === 0 && (
+                  <p className="text-xs text-ink-dim">{t('media.files.unmatched.pending')}</p>
+                )}
               </li>
             ))}
           </ul>
@@ -150,7 +184,13 @@ export function FilesPanel({ media }: { media: Media }) {
  * 帳本與 Jellyfin 是這一組的**計數**：常態說一句「帳本對得上」「Jellyfin 已收錄 28」，例外說幾個（是 0 的不說）。
  * Jellyfin 那一格只算正片——字幕與特典不查（`presence` 是 `none`），整組都不查時那一格不畫。
  */
-function FileGroup({ group }: { group: RowGroup<LedgerFile> }) {
+function FileGroup({
+  group,
+  rematching,
+}: {
+  group: RowGroup<LedgerFile>
+  rematching: Rematching | null
+}) {
   const { t } = useTranslation()
   const [first] = group.rows
   const coverage = formatCoverage(first.season, group.rows)
@@ -186,7 +226,7 @@ function FileGroup({ group }: { group: RowGroup<LedgerFile> }) {
     >
       {() => (
         <div className="px-4 py-3">
-          <FileList files={group.rows} summarised />
+          <FileList files={group.rows} summarised rematching={rematching} />
         </div>
       )}
     </CollapsibleRow>
@@ -201,11 +241,19 @@ function actionLabel(t: TFunction, file: LedgerFile): string {
 }
 
 /** `summarised`：上面有一行組摘要說過處置、帳本與 Jellyfin 了嗎？電影不分組，所以是 `false`。 */
-function FileList({ files, summarised }: { files: readonly LedgerFile[]; summarised: boolean }) {
+function FileList({
+  files,
+  summarised,
+  rematching,
+}: {
+  files: readonly LedgerFile[]
+  summarised: boolean
+  rematching: Rematching | null
+}) {
   return (
     <ol className="grid min-w-0 gap-3">
       {files.map((file) => (
-        <FileRow key={file.id} file={file} summarised={summarised} />
+        <FileRow key={file.id} file={file} summarised={summarised} rematching={rematching} />
       ))}
     </ol>
   )
@@ -220,7 +268,15 @@ function FileList({ files, summarised }: { files: readonly LedgerFile[]; summari
  *
  * 資料夾整組共用，外面只留檔名——那一段才是這一筆與隔壁那一筆不同的地方。
  */
-function FileRow({ file, summarised }: { file: LedgerFile; summarised: boolean }) {
+function FileRow({
+  file,
+  summarised,
+  rematching,
+}: {
+  file: LedgerFile
+  summarised: boolean
+  rematching: Rematching | null
+}) {
   const { t } = useTranslation()
   const episode = formatEpisode(file)
 
@@ -241,6 +297,18 @@ function FileRow({ file, summarised }: { file: LedgerFile; summarised: boolean }
     >
       <Labelled label={t('media.files.tags')} value={file.tags} />
       <Labelled label={t('media.files.target')} value={file.target_path} />
+      {/* 修正收在展開區裡（2026-09-23 使用者拍板）：掃視時不該每一列都多一顆鍵，要改的時候才打開。
+          字幕沒有入口——它跟著它的影片走（`actions` 是空的）。 */}
+      {rematching && file.actions.length > 0 && (
+        <RematchEntry
+          name={baseName(file)}
+          subject={{ ledger_id: file.id }}
+          actions={file.actions}
+          linked
+          initial={file}
+          rematching={rematching}
+        />
+      )}
     </FileEntry>
   )
 }
@@ -266,6 +334,76 @@ function Facts({ file, summarised }: { file: LedgerFile; summarised: boolean }) 
       )}
       <Presence file={file} summarised={summarised} />
     </span>
+  )
+}
+
+/**
+ * 「修正」那一顆與它就地展開的表單（`RematchForm`，與 `/review` 的對不到那一列同一個）。
+ *
+ * 表單收起之後焦點回到「修正」（取消與成功都是，同 `PlanEditor` 的「改」）：否則它落在一個已經
+ * 不在的元素上，回到頁首。成功之後那一列多半整個換了（對不到的那一列消失），那時沒有「修正」
+ * 可回，結果由上面那一句 `aria-live` 說。
+ */
+function RematchEntry({
+  name,
+  subject,
+  actions,
+  linked,
+  initial,
+  rematching,
+}: {
+  name: string
+  subject: { ledger_id: number } | { job_file_id: number }
+  actions: readonly LedgerFile['actions'][number][]
+  linked: boolean
+  initial?: Pick<LedgerFile, 'season' | 'episode_start' | 'episode_end'>
+  rematching: Rematching
+}) {
+  const { t } = useTranslation()
+  const [editing, setEditing] = useState(false)
+  const trigger = useRef<HTMLButtonElement>(null)
+  const returning = useRef(false)
+
+  useEffect(() => {
+    if (!editing && returning.current) {
+      returning.current = false
+      trigger.current?.focus()
+    }
+  }, [editing])
+
+  function close() {
+    returning.current = true
+    setEditing(false)
+  }
+
+  if (!editing) {
+    return (
+      <button
+        ref={trigger}
+        type="button"
+        className={COMPACT_BUTTON}
+        aria-label={`${t('rematch.fix')} ${name}`}
+        onClick={() => setEditing(true)}
+      >
+        {t('rematch.fix')}
+      </button>
+    )
+  }
+  return (
+    <div className="w-full min-w-0">
+      <RematchForm
+        subject={subject}
+        actions={actions}
+        mediaKind={rematching.mediaKind}
+        linked={linked}
+        initial={initial}
+        onCancel={close}
+        onDone={(said) => {
+          close()
+          rematching.onDone(said)
+        }}
+      />
+    </div>
   )
 }
 

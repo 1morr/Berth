@@ -148,6 +148,16 @@ class EventType(StrEnum):
     #: 硬鏈接與帳本那一列都沒了，這一筆回到 `review`。`unlinked` 是**真的**移掉了沒有——
     #: 撤銷之前有人已經在 Jellyfin 裡刪掉它的話是 `false`。
     AUDIT_UNDONE = "audit_undone"
+    #: 管理員改了一個檔案的處置（M2 票 08 的 rematch，brief §9.4）：`plan` 是記下這次修正的那一份
+    #: 單列 Plan，`file` 是來源，`from` / `to` 各是 `{action, season, episode_start, episode_end,
+    #: target}`——說得出從什麼改成什麼。`target` 空字串是「不在媒體庫裡」。
+    REMATCHED = "rematched"
+    #: 規劃時有檔案與帳本上既有的一份重複，自動模式略過它們（brief §7.8）：`files` 是這一包裡
+    #: 被略過的那幾個（來源路徑）。它們各自在 Review Queue 上是一列 `duplicate`。
+    DUPLICATE_SKIPPED = "duplicate_skipped"
+    #: 管理員決定了一個重複版本（`decision` 是 `DuplicateDecision`、`file`、`target` 是新的那一份
+    #: 落在哪裡、`replaced` 是被取代的那一條；M2 票 08）。
+    DUPLICATE_DECIDED = "duplicate_decided"
 
 
 class JellyfinRequest(StrEnum):
@@ -635,6 +645,14 @@ class PlanStatus(StrEnum):
     FAILED = "failed"
 
 
+#: 一份 Plan 的決定**已經定案**的那幾種狀態：自動入庫、核准過、套用完或套用失敗。其餘三種
+#: （預估、等審核、被拒絕正要重算）裡的每一列都還會變——那時候改一個檔案是 Plan 編輯的事，
+#: 佇列上的 `unmatched` 與 `duplicate`、Media 詳情的修正入口也只給定案了的那些（M2 票 08）。
+SETTLED_PLANS: frozenset[PlanStatus] = frozenset(
+    {PlanStatus.AUTO, PlanStatus.APPROVED, PlanStatus.APPLIED, PlanStatus.FAILED}
+)
+
+
 class PlanEngine(StrEnum):
     """這一份 Plan 是誰算的（plan §2.3 的 `plans.engine`、brief §5.2）。"""
 
@@ -707,6 +725,38 @@ class AuditReason(StrEnum):
 
     #: 信心是 medium，而這條 Route 允許 medium 自動入庫（brief §6.5）。
     MEDIUM_AUTO_IMPORTED = "medium_auto_imported"
+
+
+class UnmatchedReason(StrEnum):
+    """`unmatched` 那一類的理由（`GET /review` 每一列的 `reason.code`，M2 票 08）。
+
+    **只有一種**（同 `AuditReason`）：為什麼對不到是那一列 Plan Item 的理由（`reasons`），這一格只說
+    這一列在等什麼——它留在 complete 原位，等人指派、標記或忽略（brief §7.4）。
+    """
+
+    #: 對不到任何一集，沒有入庫，留在 complete 原位。
+    LEFT_IN_PLACE = "left_in_place"
+
+
+class DuplicateReason(StrEnum):
+    """`duplicate` 那一類為什麼停下來（brief §7.8）。兩種的後果不一樣，畫面各說各的。"""
+
+    #: 同一集、同一組 Tags：與媒體庫裡那一份是同一個版本。
+    SAME_VERSION = "same_version"
+    #: 同一個起始集、結束集不同（`S01E03-E04` 對 `S01E03`）。Jellyfin 12 的版本分組鍵只有季號與
+    #: 集號，會把兩者併成同一集的兩個版本，後面那一集從集列表消失（brief §20.9）。
+    SPAN_CLASH = "span_clash"
+
+
+class DuplicateDecision(StrEnum):
+    """`duplicate` 那一類按得了的三顆（brief §7.8）。"""
+
+    #: 新的那一份進媒體庫，舊的那一條鏈接拆掉、帳本那一列改指新的來源。
+    REPLACE = "replace"
+    #: 兩份都留著。完全相同的那一種，新的檔名多一個序號標籤（`[2]`，2026-09-23 使用者拍板）。
+    KEEP_BOTH = "keep_both"
+    #: 不要新的那一份：它留在 complete 原位，這一列從佇列上消失。
+    SKIP = "skip"
 
 
 class AuditAction(StrEnum):
@@ -869,6 +919,44 @@ class PlanRefusal(StrEnum):
     TARGET_CLASH = "target_clash"
     #: 核准時還有列沒有決定：沒有提案的待審核列（光碟、推不出季集）。`detail` 是那幾個檔名。
     UNDECIDED = "undecided"
+
+
+class RematchRefusal(StrEnum):
+    """改一個檔案的處置（`POST /files/rematch`）或決定一個重複版本時，在改任何東西之前停下來了
+    （M2 票 08）。
+
+    `link_failed` / `unlink_failed` 是例外，理由同 `ReviewRefusal.UNLINK_FAILED`：要真的碰了磁碟才
+    知道成不成，而那時**什麼紀錄都還沒改**——先鏈接、成了才拆舊的、都成了才寫帳本。
+    """
+
+    #: 沒有這一列帳本（多半是另一個分頁先改掉或撤銷了）。
+    LEDGER_MISSING = "ledger_missing"
+    #: 沒有這一個 Job 檔案。
+    FILE_MISSING = "file_missing"
+    #: 這個檔案現在不是「對不到」（另一個分頁先指派了，或它本來就入庫了——那要帶 `ledger_id`）。
+    NOT_UNMATCHED = "not_unmatched"
+    #: 這一筆的 Plan 還在等審核：那時候改它是 Plan 編輯的事（`PUT /plans/{id}/items`）。
+    PLAN_PENDING = "plan_pending"
+    #: 沒有這一列 Plan Item，或它不是（或已經不是）一個待決定的重複版本。
+    NOT_DUPLICATE = "not_duplicate"
+    #: 處置與檔案分類矛盾（`REMATCH_ACTIONS`）。
+    ACTION_NOT_ALLOWED = "action_not_allowed"
+    #: 劇集的指派要季號與起始集。
+    EPISODE_REQUIRED = "episode_required"
+    #: 結束集比起始集小。
+    EPISODE_RANGE_REVERSED = "episode_range_reversed"
+    #: 帶了季集，而這個處置（或這部電影）沒有季集可言。
+    EPISODE_NOT_ALLOWED = "episode_not_allowed"
+    #: 這個檔案不屬於任何一部作品，或那一部的快照不在了——算不出目標路徑。
+    MEDIA_MISSING = "media_missing"
+    #: 收它的 Route 不在了。
+    ROUTE_MISSING = "route_missing"
+    #: 目標路徑上已經有一個別的檔案（另一個來源的鏈接，或不是 Berth 放的）。Berth 不覆寫它。
+    TARGET_TAKEN = "target_taken"
+    #: 來源檔案不在了，或硬鏈接建不起來。`detail` 是系統原文。
+    LINK_FAILED = "link_failed"
+    #: 舊的那一條鏈接拆不掉。`detail` 是系統原文；新的那一條已經收回，帳本沒改。
+    UNLINK_FAILED = "unlink_failed"
 
 
 class ReviewRefusal(StrEnum):

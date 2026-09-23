@@ -24,6 +24,7 @@ from berth.adapters.fs import (
     probe_file,
     prune_empty_parents,
     remove,
+    replace_link,
     root_of,
     same_inode,
     stat,
@@ -254,6 +255,52 @@ class TestLink:
 
         with pytest.raises(FileNotFoundError):
             link(tmp_path / "missing.mkv", library / "a.mkv", roots=[library])
+
+
+class TestReplaceLink:
+    """「取代舊版」：同一條路徑上換成另一個來源，中間沒有一刻是空的（M2 票 08）。"""
+
+    def _setup(self, tmp_path: Path) -> tuple[Path, Path, Path, Path]:
+        complete, library = tmp_path / "complete", tmp_path / "library"
+        ensure_directory(complete)
+        ensure_directory(library)
+        old, new = complete / "old.mkv", complete / "new.mkv"
+        old.write_bytes(b"old")
+        new.write_bytes(b"new")
+        target = library / "Show" / "a.mkv"
+        link(old, target, roots=[library])
+        return library, old, new, target
+
+    def test_the_name_now_points_at_the_new_source(self, tmp_path: Path) -> None:
+        library, old, new, target = self._setup(tmp_path)
+
+        replace_link(new, target, roots=[library])
+
+        assert same_inode(new, target) is True
+        # 舊的來源還在 complete 裡：換掉的是媒體庫裡那一個名字，不是檔案本身。
+        assert old.read_bytes() == b"old"
+
+    def test_no_staging_name_is_left_behind(self, tmp_path: Path) -> None:
+        library, _, new, target = self._setup(tmp_path)
+
+        replace_link(new, target, roots=[library])
+
+        assert sorted(path.name for path in target.parent.iterdir()) == ["a.mkv"]
+
+    def test_a_failed_link_leaves_the_old_one_in_place(self, tmp_path: Path) -> None:
+        library, old, _, target = self._setup(tmp_path)
+
+        with pytest.raises(FileNotFoundError):
+            replace_link(tmp_path / "missing.mkv", target, roots=[library])
+
+        assert same_inode(old, target) is True
+        assert sorted(path.name for path in target.parent.iterdir()) == ["a.mkv"]
+
+    def test_refuses_a_target_outside_every_root(self, tmp_path: Path) -> None:
+        library, _, new, _ = self._setup(tmp_path)
+
+        with pytest.raises(PathEscapeError):
+            replace_link(new, tmp_path / "elsewhere.mkv", roots=[library])
 
 
 class TestMountPoint:

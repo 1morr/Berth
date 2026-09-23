@@ -15,7 +15,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path, PurePosixPath
 
 import pytest
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from berth.db import create_session_factory
@@ -45,7 +45,7 @@ from berth.pipeline import PlannerRunner
 from berth.services.events import EventHub, JobSignal
 from berth.services.hints import JobHints
 from berth.services.plan import plan_id_of, replan_job, sweep_plans
-from berth.services.plan_view import read_plan
+from berth.services.plan_view import read_plan, reasons_of
 from berth.services.setup import complete_setup
 from tests.integration.arrange import arrange, factory_for
 from tests.integration.factories import FakeClientFactory
@@ -280,10 +280,38 @@ async def events_of(session: AsyncSession, job_hash: str = HASH) -> list[Event]:
 class TestEpisodeSpans:
     """媒體庫裡已經有的那一份（brief §7.8、§20.9）。同一包裡的那一半在 `test_parser_planner.py`。"""
 
-    async def test_a_new_file_clashing_with_the_library_waits_for_a_human(
+    async def test_a_new_file_clashing_with_the_library_is_skipped_and_waits_for_a_human(
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
-        """帳本上已經有 S01E01-E02，新的 S01E01 不能自己進去（Jellyfin 12 會把第 2 集併掉）。"""
+        """帳本上已經有 S01E01-E02，新的 S01E01 不能自己進去（Jellyfin 12 會把第 2 集併掉）。
+
+        **略過那一列、其餘照常自動入庫**（M2 票 08，2026-09-23 拍板）：它記著撞上的是帳本哪一列，
+        在 Review Queue 上是一列 `duplicate`，不再把整份 Plan 擋在 review。
+        """
+        media, route, factory = await ready(session, roots)
+        await already_in_the_library(
+            session, media, route, season=1, episode_start=1, episode_end=2
+        )
+        (known,) = await session.scalars(select(LedgerEntry))
+        await downloaded_job(session, media, route, roots)
+
+        await run(session, factory)
+
+        plan = await read_plan(session, await _plan_id(session))
+        assert plan is not None
+        first = next(item for item in plan.items if item.episode_start == 1)
+        assert first.action is PlanAction.SKIP
+        assert first.target_path == ""
+        assert why(ReasonCode.LIBRARY_SPAN_CLASH, known="S01E01-E02") in first.reasons
+        assert plan.status is PlanStatus.AUTO
+        row = next(item for item in await items_of(session) if item.id == first.id)
+        assert row.duplicate_of == known.id
+
+    async def test_the_subtitle_following_a_skipped_file_is_skipped_too(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """S01E01 的字幕是照那一集的路徑算的：影片略過了，它也略過（否則 importer 會撞上
+        舊的那份）。"""
         media, route, factory = await ready(session, roots)
         await already_in_the_library(
             session, media, route, season=1, episode_start=1, episode_end=2
@@ -292,12 +320,24 @@ class TestEpisodeSpans:
 
         await run(session, factory)
 
-        plan = await read_plan(session, await _plan_id(session))
-        assert plan is not None
-        first = next(item for item in plan.items if item.episode_start == 1)
-        assert first.action is PlanAction.REVIEW
-        assert why(ReasonCode.LIBRARY_SPAN_CLASH, known="S01E01-E02") in first.reasons
-        assert plan.status is PlanStatus.PENDING_REVIEW
+        subtitle = next(item for item in await items_of(session) if item.rel_path.endswith(".ass"))
+        assert subtitle.action is PlanAction.SKIP
+        assert subtitle.target_path == ""
+        assert subtitle.duplicate_of is None
+
+    async def test_the_timeline_says_which_files_were_skipped(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        media, route, factory = await ready(session, roots)
+        await already_in_the_library(
+            session, media, route, season=1, episode_start=1, episode_end=2
+        )
+        await downloaded_job(session, media, route, roots)
+
+        await run(session, factory)
+
+        (event,) = [e for e in await events_of(session) if e.type == EventType.DUPLICATE_SKIPPED]
+        assert (event.payload_json or {})["files"] == [BATCH_FILES[0][0].split("/", 1)[1]]
 
     async def test_the_other_episodes_of_the_batch_keep_their_verdict(
         self, session: AsyncSession, roots: dict[str, Path]
@@ -333,6 +373,98 @@ class TestEpisodeSpans:
         assert plan is not None
         first = next(item for item in plan.items if item.episode_start == 1)
         assert first.action is PlanAction.IMPORT
+
+
+class TestSameVersion:
+    """同一集、同一組 Tags：與媒體庫裡那一份是同一個版本（brief §7.8）。"""
+
+    async def _known(
+        self, session: AsyncSession, media: Media, route: Route, *, tags: Tags, job_hash: str | None
+    ) -> LedgerEntry:
+        snapshot = MediaSnapshot.model_validate(media.tmdb_snapshot_json)
+        relative = episode_target(snapshot, season=1, episode=2, tags=tags, ext=".mkv")
+        entry = LedgerEntry(
+            job_hash=job_hash,
+            source_rel_path="old/S01E02.mkv",
+            source_abs_path="/data/torrent/complete/anime/old/S01E02.mkv",
+            source_inode="1",
+            source_dev="1",
+            target_path=str(PurePosixPath(route.target_path) / relative),
+            target_inode="1",
+            media_id=media.id,
+            season=1,
+            episode_start=2,
+            action=PlanAction.IMPORT,
+            tags_json=tags.model_dump(mode="json"),
+        )
+        session.add(entry)
+        await session.commit()
+        return entry
+
+    async def test_the_same_episode_with_the_same_tags_is_skipped(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        media, route, factory = await ready(session, roots)
+        await downloaded_job(session, media, route, roots)
+        await run(session, factory)
+        second = next(item for item in await items_of(session) if item.episode_start == 2)
+        tags = Tags.model_validate(second.tags_json or {})
+        await session.execute(delete(PlanItem))
+        await session.execute(delete(Plan))
+        job = await session.get(Job, HASH)
+        assert job is not None
+        job.state = JobState.COMPLETED
+        await session.commit()
+        known = await self._known(session, media, route, tags=tags, job_hash="other")
+
+        await run(session, factory)
+
+        row = next(item for item in await items_of(session) if item.episode_start == 2)
+        assert row.action is PlanAction.SKIP
+        assert row.duplicate_of == known.id
+        assert why(ReasonCode.SAME_VERSION, known=PurePosixPath(known.target_path).name) in (
+            reasons_of(row)
+        )
+        # 季集與 Tags 留著：決定「取代」或「保留兩者」時照它們算路徑。
+        assert (row.season, row.episode_start) == (1, 2)
+        assert (await plan_of(session)).status is PlanStatus.AUTO
+
+    async def test_other_tags_are_a_second_version_not_a_duplicate(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """Tags 不同就是多版本並存（brief §7.7）。"""
+        media, route, factory = await ready(session, roots)
+        await self._known(
+            session, media, route, tags=Tags(resolution="720p", group="Old"), job_hash="other"
+        )
+        await downloaded_job(session, media, route, roots)
+
+        await run(session, factory)
+
+        row = next(item for item in await items_of(session) if item.episode_start == 2)
+        assert row.action is PlanAction.IMPORT
+        assert row.duplicate_of is None
+
+    async def test_its_own_earlier_link_is_not_a_duplicate(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """重新規劃看得到自己上一輪的鏈接：那不是重複，importer 比 inode 就認得出來。"""
+        media, route, factory = await ready(session, roots)
+        await downloaded_job(session, media, route, roots)
+        await run(session, factory)
+        second = next(item for item in await items_of(session) if item.episode_start == 2)
+        tags = Tags.model_validate(second.tags_json or {})
+        job = await session.get(Job, HASH)
+        assert job is not None
+        job.state = JobState.COMPLETED
+        await session.commit()
+        await self._known(session, media, route, tags=tags, job_hash=HASH)
+
+        await run(session, factory)
+
+        row = next(item for item in await items_of(session) if item.episode_start == 2)
+        assert row.action is PlanAction.IMPORT
+        assert row.duplicate_of is None
 
 
 async def _plan_id(session: AsyncSession) -> int:

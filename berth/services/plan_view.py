@@ -192,6 +192,13 @@ def dump_reasons(reasons: Sequence[ItemReason]) -> list[dict[str, object]]:
     return [reason.model_dump(mode="json") for reason in reasons]
 
 
+def dump_tags(tags: Tags) -> dict[str, object] | None:
+    """`plan_items.tags_json`。空的 tag 不佔一格 JSON：分類就決定得了處置的那些檔案本來就沒有
+    版本可言。"""
+    dumped: dict[str, object] = tags.model_dump(mode="json")
+    return dumped if tags.render() else None
+
+
 async def _kinds(session: AsyncSession, rows: Sequence[PlanItem]) -> dict[int | None, FileKind]:
     ids = [row.job_file_id for row in rows if row.job_file_id is not None]
     if not ids:

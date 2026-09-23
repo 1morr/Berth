@@ -57,6 +57,7 @@ SETUP_PREFIX = "/setup"
 #: `/jellyfin` 只收媒體庫清單那一支：之後掛在它底下的端點照預設規則（登入即可）另外決定。
 #:
 #: `issues` 與 `reconcile` 從 M2 票 05 起也在這裡：修正與對帳是管理員的事（plan §6、brief §11）。
+#: `files`（rematch，M2 票 08）同一個理由：改一個檔案的處置會拆掉或建起媒體庫裡的鏈接。
 #: `/reconcile` 沒有子路徑，前綴比對對它就是完全比對——`_under_any` 的第一個條件。
 ADMIN_PREFIXES = (
     "/settings",
@@ -65,6 +66,7 @@ ADMIN_PREFIXES = (
     "/issues",
     "/reconcile",
     "/review",
+    "/files",
 )
 
 #: 只有管理員做得了的**單一方法**（M2 票 04）。`(方法, 路徑樣式)`，樣式裡的 `*` 配一段。

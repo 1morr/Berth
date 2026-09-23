@@ -5,7 +5,8 @@ import { useTranslation } from 'react-i18next'
 import type { JobEvent } from '../api/jobs'
 import type { Signal } from '../components/signal'
 import { Timestamp } from '../components/Timestamp'
-import type { ReviewReason } from '../api/plans'
+import type { PlanAction, ReviewReason } from '../api/plans'
+import { formatEpisode } from '../components/episodes'
 import { formatSize } from '../media/searchResult'
 import { JOB_SIGNAL, formatPercent } from './jobState'
 
@@ -110,6 +111,9 @@ const EVENT_TYPES = [
   'deleted',
   'audit_confirmed',
   'audit_undone',
+  'rematched',
+  'duplicate_skipped',
+  'duplicate_decided',
 ] as const
 
 type KnownEvent = (typeof EVENT_TYPES)[number]
@@ -286,6 +290,89 @@ const FACTS: Record<KnownEvent, (facing: Facing) => ReactNode> = {
       <Row>{text(payload.target)}</Row>
     </>
   ),
+  // rematch（M2 票 08）：誰改的在列上（actor），這一行說從什麼改成什麼——處置加季集，路徑是機器
+  // 字串，舊的與新的各一行。不在媒體庫裡的那一邊沒有路徑可印。
+  rematched: ({ t, payload }) => {
+    const from = stateOf(payload.from)
+    const to = stateOf(payload.to)
+    return (
+      <>
+        <p className="max-w-prose text-xs text-ink-dim">
+          {t('jobs.timeline.rematched', { from: describe(t, from), to: describe(t, to) })}
+        </p>
+        <Row>{text(payload.file)}</Row>
+        <Row>{from.target && `${from.target} →`}</Row>
+        <Row>{to.target}</Row>
+      </>
+    )
+  },
+  // 規劃時略過的重複版本（brief §7.8）。每一個在審核佇列上是一列，這裡只說有幾個、是哪幾個。
+  duplicate_skipped: ({ t, payload }) => {
+    const files = Array.isArray(payload.files) ? payload.files.map(text).filter(Boolean) : []
+    return (
+      <>
+        <p className="max-w-prose text-xs text-ink-dim">
+          {t('jobs.timeline.duplicateSkipped', { count: files.length })}
+        </p>
+        {files.map((file) => (
+          <Row key={file}>{file}</Row>
+        ))}
+      </>
+    )
+  },
+  duplicate_decided: ({ t, payload }) => {
+    const decision = DUPLICATE_DECISIONS.find((known) => known === payload.decision)
+    return (
+      <>
+        {decision && (
+          <p className="max-w-prose text-xs text-ink-dim">
+            {t(`jobs.timeline.duplicateDecided.${decision}`)}
+          </p>
+        )}
+        <Row>{text(payload.target) || text(payload.file)}</Row>
+      </>
+    )
+  },
+}
+
+/** `domain.DuplicateDecision`。認不得的不畫那一句——它可能是後端加的，而前端還沒有那句話。 */
+const DUPLICATE_DECISIONS = ['replace', 'keep_both', 'skip'] as const
+
+/** `domain.PlanAction`：rematch 那一行的處置。 */
+const PLAN_ACTIONS: readonly PlanAction[] = [
+  'import',
+  'extra',
+  'subtitle',
+  'skip',
+  'unmatched',
+  'review',
+]
+
+interface FileState {
+  action: PlanAction | null
+  season: number | null
+  episode_start: number | null
+  episode_end: number | null
+  target: string
+}
+
+/** rematch 那一筆的 `from` / `to`（`{action, season, episode_start, episode_end, target}`）。 */
+function stateOf(value: unknown): FileState {
+  const row = (typeof value === 'object' && value !== null ? value : {}) as Record<string, unknown>
+  const count = (key: string) => (typeof row[key] === 'number' ? (row[key] as number) : null)
+  return {
+    action: PLAN_ACTIONS.find((known) => known === row.action) ?? null,
+    season: count('season'),
+    episode_start: count('episode_start'),
+    episode_end: count('episode_end'),
+    target: text(row.target),
+  }
+}
+
+/** 「特典」「正片 S00E03」「略過」：處置的名字加它蓋到的集（與計劃那一塊同一套詞）。 */
+function describe(t: Translate, state: FileState): string {
+  const action = state.action ? t(`jobs.plan.action.${state.action}`) : ''
+  return [action, formatEpisode(state)].filter(Boolean).join(' ') || t('jobs.timeline.notInLibrary')
 }
 
 /** `domain.JellyfinRequest`。認不得的只印原文——它可能是後端加的，而前端還沒有那句話。 */
@@ -338,7 +425,7 @@ const ISSUES = [
   'jellyfin_item_unresolved',
 ] as const
 
-function Row({ children }: { children: string }) {
+function Row({ children }: { children: string | false }) {
   if (!children) return null
   return <p className="value text-xs wrap-anywhere text-ink-dim">{children}</p>
 }

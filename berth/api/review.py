@@ -7,7 +7,9 @@
 **一支端點、一份清單、一列一件事**（plan §11.3 決定 6）。每一列以 `kind` 區分形狀：共同的是
 指向它的物件（`ref`）、一句封閉集合的理由（`reason`，code + 參數，前端翻譯）、這一列能按的動作
 與它開始等人的時間；各類自己的欄位跟在後面。`issue` 那一類的動作打的是 `issues/*` 的那兩支，
-這裡只有 audit 的兩顆；`plan` 那一類的核准與拒絕打的是 `plans/*`（`api/plans.py`）。
+`plan` 那一類的核准與拒絕打的是 `plans/*`（`api/plans.py`），`unmatched` 那一類打的是
+`POST /files/rematch`（`api/files.py`，與 Media 詳情同一支）；這裡是 audit 的兩顆與重複版本的
+三顆（M2 票 08）。
 """
 
 from __future__ import annotations
@@ -18,29 +20,41 @@ from typing import Annotated, Any, Literal
 from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel, Field
 
-from berth.api.deps import SessionDep
+from berth.api.deps import ClientFactoryDep, SessionDep
 from berth.api.errors import refusal_responses
+from berth.api.files import LANDING_REFUSALS, rematch_refusal, rematch_responses
 from berth.api.gate import current_user
 from berth.api.issues import IssueOut, issue_out
 from berth.api.plans import ItemReasonOut
 from berth.domain import (
     AuditAction,
     AuditReason,
+    DuplicateDecision,
+    DuplicateReason,
+    FileKind,
     IssueAction,
     IssueType,
+    MediaKind,
+    PlanAction,
     PlanDecision,
     PlanSummary,
+    RematchRefusal,
     ReviewKind,
     ReviewReason,
     ReviewRefusal,
+    UnmatchedReason,
 )
+from berth.services.duplicates import decide_duplicate
 from berth.services.jobs import actor_of
+from berth.services.rematch import RematchRejectedError
 from berth.services.review import (
     AuditRow,
+    DuplicateRow,
     IssueRow,
     PlanRow,
     ReviewRejectedError,
     ReviewRow,
+    UnmatchedRow,
     confirm_audit,
     review_queue,
     undo_audit,
@@ -76,6 +90,10 @@ CONFIRM_RESPONSES = _refusals(ReviewRefusal.LEDGER_MISSING, ReviewRefusal.NOT_AU
 UNDO_RESPONSES = _refusals(
     ReviewRefusal.LEDGER_MISSING, ReviewRefusal.NOT_AUDITED, ReviewRefusal.UNLINK_FAILED
 )
+
+
+#: 重複版本的三顆：這一列還在不在等人，加上磁碟那一步（與 rematch 同一條路）。
+DUPLICATE_RESPONSES = rematch_responses(RematchRefusal.NOT_DUPLICATE, *LANDING_REFUSALS)
 
 
 class AuditReasonOut(BaseModel):
@@ -164,7 +182,83 @@ class IssueRowOut(BaseModel):
     issue: IssueOut
 
 
-ReviewRowOut = Annotated[PlanRowOut | AuditRowOut | IssueRowOut, Field(discriminator="kind")]
+class UnmatchedReasonOut(BaseModel):
+    """`unmatched` 那一列的理由：它留在 complete 原位等人決定。為什麼對不到在 `reasons`。"""
+
+    code: UnmatchedReason
+    params: dict[str, Any]
+
+
+class UnmatchedRowOut(BaseModel):
+    """一個對不到、留在 complete 原位的檔案（brief §7.4）。`ref` 是 `job_files` 那一列的 id：
+    三個動作打 `POST /files/rematch` 帶 `job_file_id`，與 Media 詳情的 Unmatched 區同一支。"""
+
+    kind: Literal[ReviewKind.UNMATCHED]
+    ref: int
+    reason: UnmatchedReasonOut
+    #: 改得成哪幾種（依分類）：`import`（指派；電影就是入庫）、`extra`、`skip`（忽略）。
+    actions: list[PlanAction]
+    #: 它開始等人的那一刻：那一份 Plan 算出來的時間。
+    at: datetime
+    media_id: str | None
+    #: 劇集的指派要季集，電影的不要。沒有作品時是 `null`（那時只能忽略）。
+    media_kind: MediaKind | None
+    title: str
+    title_en: str
+    job_hash: str
+    job_name: str
+    #: complete 裡的完整路徑。
+    path: str
+    file_kind: FileKind
+    #: 解析器為什麼對不到（那一列 Plan Item 的理由）。
+    reasons: list[ItemReasonOut]
+
+
+class DuplicateReasonOut(BaseModel):
+    """`duplicate` 那一列的理由：同一個版本，或起始集相同而結束集不同（brief §7.8）。"""
+
+    code: DuplicateReason
+    params: dict[str, Any]
+
+
+class DuplicateRowOut(BaseModel):
+    """規劃時與帳本重複而被略過的一個檔案。`ref` 是 Plan Item 的 id，三顆打
+    `POST /review/duplicate/{ref}/{decision}`。"""
+
+    kind: Literal[ReviewKind.DUPLICATE]
+    ref: int
+    reason: DuplicateReasonOut
+    #: 取代舊版、保留兩者、跳過，順序就是畫面上的順序。
+    actions: list[DuplicateDecision]
+    at: datetime
+    media_id: str | None
+    title: str
+    title_en: str
+    job_hash: str
+    job_name: str
+    #: 新的那一份：complete 裡的完整路徑，與它蓋到的集。
+    path: str
+    season: int | None
+    episode_start: int | None
+    episode_end: int | None
+    #: 媒體庫裡已經有的那一份。
+    known_path: str
+    known_season: int | None
+    known_episode_start: int | None
+    known_episode_end: int | None
+
+
+class DuplicateDecidedOut(BaseModel):
+    """決定完之後：記下這一次的單列 Plan，與新的那一份落在哪裡（跳過時兩格都是空的）。"""
+
+    plan_id: int | None
+    target_path: str
+
+
+ReviewRowOut = Annotated[
+    PlanRowOut | AuditRowOut | UnmatchedRowOut | DuplicateRowOut | IssueRowOut,
+    Field(discriminator="kind"),
+]
 
 
 class ReviewQueueOut(BaseModel):
@@ -214,9 +308,41 @@ async def post_undo(session: SessionDep, request: Request, ledger_id: int) -> No
         raise review_refusal(refusal) from refusal
 
 
-def _row_out(row: ReviewRow) -> PlanRowOut | AuditRowOut | IssueRowOut:
+@router.post("/duplicate/{item_id}/{decision}", responses=DUPLICATE_RESPONSES)
+async def post_duplicate(
+    session: SessionDep,
+    factory: ClientFactoryDep,
+    request: Request,
+    item_id: int,
+    decision: DuplicateDecision,
+) -> DuplicateDecidedOut:
+    """取代舊版 / 保留兩者 / 跳過（brief §7.8）。前兩顆走 rematch 的同一條路：建新鏈接 → 拆舊鏈接
+    → 改帳本 → 通知掃描，一律經過 Plan。"""
+    user = current_user(request)
+    try:
+        outcome = await decide_duplicate(
+            session,
+            factory,
+            item_id,
+            decision,
+            actor=actor_of(user.id if user is not None else None),
+        )
+    except RematchRejectedError as refusal:
+        raise rematch_refusal(refusal) from refusal
+    if outcome is None:
+        return DuplicateDecidedOut(plan_id=None, target_path="")
+    return DuplicateDecidedOut(plan_id=outcome.plan_id, target_path=outcome.target_path)
+
+
+def _row_out(
+    row: ReviewRow,
+) -> PlanRowOut | AuditRowOut | UnmatchedRowOut | DuplicateRowOut | IssueRowOut:
     if isinstance(row, PlanRow):
         return _plan_out(row)
+    if isinstance(row, UnmatchedRow):
+        return _unmatched_out(row)
+    if isinstance(row, DuplicateRow):
+        return _duplicate_out(row)
     if isinstance(row, IssueRow):
         view = row.issue
         return IssueRowOut(
@@ -268,6 +394,48 @@ def _audit_out(row: AuditRow) -> AuditRowOut:
         episode_start=row.episode_start,
         episode_end=row.episode_end,
         reasons=[ItemReasonOut.model_validate(reason) for reason in row.reasons],
+    )
+
+
+def _unmatched_out(row: UnmatchedRow) -> UnmatchedRowOut:
+    return UnmatchedRowOut(
+        kind=ReviewKind.UNMATCHED,
+        ref=row.job_file_id,
+        reason=UnmatchedReasonOut(code=row.reason, params={}),
+        actions=list(row.actions),
+        at=row.at,
+        media_id=row.media_id,
+        media_kind=row.media_kind,
+        title=row.title,
+        title_en=row.title_en,
+        job_hash=row.job_hash,
+        job_name=row.job_name,
+        path=row.source_path,
+        file_kind=row.file_kind,
+        reasons=[ItemReasonOut.model_validate(reason) for reason in row.reasons],
+    )
+
+
+def _duplicate_out(row: DuplicateRow) -> DuplicateRowOut:
+    return DuplicateRowOut(
+        kind=ReviewKind.DUPLICATE,
+        ref=row.item_id,
+        reason=DuplicateReasonOut(code=row.reason, params={}),
+        actions=list(row.actions),
+        at=row.at,
+        media_id=row.media_id,
+        title=row.title,
+        title_en=row.title_en,
+        job_hash=row.job_hash,
+        job_name=row.job_name,
+        path=row.source_path,
+        season=row.season,
+        episode_start=row.episode_start,
+        episode_end=row.episode_end,
+        known_path=row.known_path,
+        known_season=row.known_season,
+        known_episode_start=row.known_episode_start,
+        known_episode_end=row.known_episode_end,
     )
 
 

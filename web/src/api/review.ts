@@ -7,10 +7,7 @@ import type { Schemas } from './schemas'
 /** 整份佇列（`berth/api/review.py` 的 `ReviewQueueOut`）。`rows` 最多 200 列，`total` 是全部幾件。 */
 export type ReviewQueue = Schemas['ReviewQueueOut']
 
-/**
- * 佇列上的一列。**以 `kind` 區分形狀**：比對 `row.kind === 'audit'` 之後 TS 就知道它有哪幾格。
- * 五種的其餘兩種（`unmatched`、`duplicate`）由票 08 加進這個聯集。
- */
+/** 佇列上的一列。**以 `kind` 區分形狀**：比對 `row.kind === 'audit'` 之後 TS 就知道它有哪幾格。 */
 export type ReviewRow = ReviewQueue['rows'][number]
 
 export type PlanReviewRow = Schemas['PlanRowOut']
@@ -18,6 +15,18 @@ export type PlanReviewRow = Schemas['PlanRowOut']
 export type AuditReviewRow = Schemas['AuditRowOut']
 
 export type IssueReviewRow = Schemas['IssueRowOut']
+
+/** 對不到、留在 complete 原位的檔案。三個動作打 `api/files.ts` 的 `rematch`（帶 `job_file_id`）。 */
+export type UnmatchedReviewRow = Schemas['UnmatchedRowOut']
+
+/** 規劃時與媒體庫裡已有的一份重複而被略過的檔案（brief §7.8）。 */
+export type DuplicateReviewRow = Schemas['DuplicateRowOut']
+
+/** duplicate 那一列的三顆：取代舊版、保留兩者、跳過。 */
+export type DuplicateDecision = Schemas['DuplicateDecision']
+
+/** 決定完之後：新的一份落在哪裡（跳過時是空字串）。 */
+export type DuplicateDecided = Schemas['DuplicateDecidedOut']
 
 /**
  * 佇列上**現在會出現**的幾種（`domain.ReviewKind` 的子集）。取自列的聯集而不是那個 enum：
@@ -59,4 +68,9 @@ export async function confirmAudit(ledgerId: number) {
 /** 「它是錯的」：拆掉那個硬鏈接、刪掉帳本那一列，那一筆下載回到待審核。 */
 export async function undoAudit(ledgerId: number) {
   return apiPost<void>(`/review/audit/${ledgerId}/undo`)
+}
+
+/** 重複版本的一顆。拒絕的形狀與 rematch 相同（`api/files.ts` 的 `rematchRefusalText`）。 */
+export async function decideDuplicate(itemId: number, decision: DuplicateDecision) {
+  return apiPost<DuplicateDecided>(`/review/duplicate/${itemId}/${decision}`)
 }

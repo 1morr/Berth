@@ -271,4 +271,56 @@ describe('Job 時間線', () => {
 
     expect(line.getByText(/Jellyfin 一直沒有列出/)).toBeInTheDocument()
   })
+
+  it('修正那一筆說得出從什麼改成什麼（M2 票 08）', () => {
+    const line = render([
+      event({
+        type: 'rematched',
+        actor: '7',
+        payload: {
+          plan: 5,
+          file: 'batch/OVA 2.mkv',
+          from: {
+            action: 'unmatched',
+            season: null,
+            episode_start: null,
+            episode_end: null,
+            target: '',
+          },
+          to: {
+            action: 'import',
+            season: 0,
+            episode_start: 3,
+            episode_end: null,
+            target: '/lib/x - S00E03.mkv',
+          },
+        },
+      }),
+    ])
+
+    expect(line.getByText('已修正')).toBeInTheDocument()
+    expect(line.getByText(/管理員改了這個檔案：.+ → .+ S00E03/)).toBeInTheDocument()
+    expect(line.getByText('batch/OVA 2.mkv')).toBeInTheDocument()
+    expect(line.getByText('/lib/x - S00E03.mkv')).toBeInTheDocument()
+  })
+
+  it('重複版本：略過的那一筆說有幾個、決定的那一筆說決定了什麼', () => {
+    const line = render([
+      event({ id: 1, type: 'duplicate_skipped', payload: { plan: 2, files: ['a.mkv', 'b.mkv'] } }),
+      event({
+        id: 2,
+        type: 'duplicate_decided',
+        payload: {
+          decision: 'replace',
+          file: 'a.mkv',
+          target: '/lib/a.mkv',
+          replaced: '/lib/a.mkv',
+        },
+      }),
+    ])
+
+    expect(line.getByText(/2 個檔案與媒體庫裡已有的一份重複/)).toBeInTheDocument()
+    expect(line.getByText('管理員用這一份取代了媒體庫裡的舊版本')).toBeInTheDocument()
+    expect(line.getByText('/lib/a.mkv')).toBeInTheDocument()
+  })
 })
