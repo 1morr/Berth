@@ -282,10 +282,9 @@ class IssueAction(StrEnum):
 
     **「忽略」不在這裡**：它對每一種型別都按得了，而且不碰磁碟也不碰帳本（`ignore_issue`）。
 
-    brief §9.1 那一欄還有三顆「認領」類的——`orphan_complete` 的重新入庫、`unknown_torrent` 的
-    認領、`unmanaged_library_file` 的認領進帳本——**在票 10**（2026-09-23 使用者拍板）：它們用的
-    正是那一張票的原語（目錄版 `reimport` 與 `rebuild-ledger` 的反查），先做一份會變成兩條入庫
-    路徑。管線那三種（`missing_files` / `client_error` / `client_removed`）的動作是票 09c 加的。
+    「認領」類的三顆（`adopt` / `claim_torrent` / `claim_file`）是票 10 加的：它們用的正是那一張
+    票的原語（目錄版 `reimport` 與 `rebuild-ledger` 的反查），不另開入庫的路。管線那三種
+    （`missing_files` / `client_error` / `client_removed`）的動作是票 09c 加的。
     """
 
     #: 重新鏈接：來源還在 complete，照帳本那一列再硬鏈接一次。
@@ -324,13 +323,21 @@ class IssueAction(StrEnum):
     RESUBMIT = "resubmit"
     #: 承認移除：torrent 是使用者自己在 qBittorrent 上拿掉的。與 `accept_loss` 同一個做法。
     ACCEPT_REMOVAL = "accept_removal"
+    #: 重新入庫（adopt）：complete 裡那個沒人認領的目錄當成一筆重新入庫的 Job，走目錄版
+    #: `reimport`。**要帶作品**（管理員按下去時選，2026-09-23 拍板）：沒有作品的 Plan 只會停在
+    #: review 而且核准不了。
+    ADOPT = "adopt"
+    #: 認領（建 Job 並解析）：替 qBittorrent 上那一筆建 Job，交給 poller 與規劃器。同樣要帶作品。
+    CLAIM_TORRENT = "claim_torrent"
+    #: 認領進帳本：單一檔案的 `rebuild-ledger`——配得上的長回一列，配不到的拒絕、那一件照舊開著。
+    CLAIM_FILE = "claim_file"
 
 
 #: 逐型別按得了哪幾顆，**順序就是畫面上的順序**（第一顆是 brief §9.1 的預設建議動作）。
 #:
 #: **要涵蓋整個 `IssueType`**（`tests/unit/test_issue_types.py` 守著）。空 tuple 是誠實的
-#: 答案：那一種現在只按得了「忽略」——認領類的在票 10；健康檢查那兩種永遠是空的，它們的修法
-#: 不在 Berth 裡，條件解除時由系統收掉（票 09c）。
+#: 答案：那一種只按得了「忽略」——健康檢查那兩種永遠是空的，它們的修法不在 Berth 裡，條件解除時
+#: 由系統收掉（票 09c）。
 ISSUE_ACTIONS: dict[IssueType, tuple[IssueAction, ...]] = {
     IssueType.LIBRARY_LINK_MISSING: (
         IssueAction.RELINK,
@@ -340,11 +347,12 @@ ISSUE_ACTIONS: dict[IssueType, tuple[IssueAction, ...]] = {
     IssueType.SOURCE_MISSING: (IssueAction.MARK_SOURCELESS,),
     # 「否則列出等人決定」（brief §9.1）：大小不同時這一顆不給，由 `_actions` 看 `same_size`。
     IssueType.INODE_MISMATCH: (IssueAction.REPLACE_WITH_LINK,),
-    IssueType.ORPHAN_COMPLETE: (IssueAction.DELETE_ORPHAN,),
-    IssueType.UNKNOWN_TORRENT: (),
+    # 重新入庫排第二：brief §9.1 那一欄的順序是「刪除 / 重新入庫」。
+    IssueType.ORPHAN_COMPLETE: (IssueAction.DELETE_ORPHAN, IssueAction.ADOPT),
+    IssueType.UNKNOWN_TORRENT: (IssueAction.CLAIM_TORRENT,),
     # **永不刪**（brief §9.1）。`ACTION_DELETES` 與 `test_issue_types.py` 守著這一格裡沒有
     # 任何一顆會刪東西。
-    IssueType.UNMANAGED_LIBRARY_FILE: (),
+    IssueType.UNMANAGED_LIBRARY_FILE: (IssueAction.CLAIM_FILE,),
     IssueType.JOB_WITHOUT_FILES: (IssueAction.REPLAN,),
     IssueType.MISSING_FILES: (IssueAction.RECHECK, IssueAction.ACCEPT_LOSS),
     IssueType.CLIENT_ERROR: (IssueAction.RETRY,),
@@ -374,7 +382,32 @@ ACTION_DELETES: dict[IssueAction, bool] = {
     IssueAction.RETRY: False,
     IssueAction.RESUBMIT: False,
     IssueAction.ACCEPT_REMOVAL: False,
+    # 認領類三顆只加東西：新的 Job、新的鏈接、新的帳本列。
+    IssueAction.ADOPT: False,
+    IssueAction.CLAIM_TORRENT: False,
+    IssueAction.CLAIM_FILE: False,
 }
+
+#: 這幾顆要管理員選一部作品才按得下去（`POST /issues/{id}/resolve` 的 `media`，票 10）。
+#: 沒有作品的 Job 進規劃器只會整份停在 review（`no_media`），而 Review Queue 核准不了它。
+NEEDS_MEDIA: frozenset[IssueAction] = frozenset({IssueAction.ADOPT, IssueAction.CLAIM_TORRENT})
+
+
+class ClaimMiss(StrEnum):
+    """媒體庫裡的一個檔案**配不上**帳本的理由（`rebuild-ledger` 與「認領進帳本」，M2 票 10）。
+
+    配不上的一律不猜（plan §11.3 決定 9）：變成一件 `unmanaged_library_file`，理由寫在
+    `detail_json.reason`，畫面照它說下一步。宣告順序就是檢查的順序。
+    """
+
+    #: 不在任何一條 Route 的目標底下——Berth 沒有資格說它是誰的。
+    OUTSIDE_ROUTES = "outside_routes"
+    #: complete 裡沒有一個檔案與它同一個 inode：它是一份複製品，或來源早就刪了。
+    NO_SOURCE = "no_source"
+    #: 作品資料夾名說不出是 TMDB 上的哪一部（沒有 `[tmdbid-…]`，或 TMDB 問不到）。
+    UNKNOWN_WORK = "unknown_work"
+    #: 路徑照命名模板讀不回來（`naming.read_target`）：不是 Berth 寫的名字，或那一集的名字改過了。
+    NOT_BERTH_NAMING = "not_berth_naming"
 
 
 class ReconcileSide(StrEnum):
@@ -893,6 +926,12 @@ class JobRefusal(StrEnum):
     #: 檔案在 torrent 底下被抽走時 qBittorrent 會報 `missingFiles`，而它下一次重新檢查就把
     #: 那幾個檔案再抓一遍——刪了等於沒刪，只多繞了一圈流量。
     DELETE_FILES_REQUIRES_REMOVE_TORRENT = "delete_files_requires_remove_torrent"
+    #: 這個狀態不能重新入庫（`REIMPORTABLE`）：還在下載、還在規劃或入庫中的那一份不能從頭再來，
+    #: 而送單都還沒成的那一筆 complete 裡什麼都沒有（M2 票 10）。
+    NOT_REIMPORTABLE = "not_reimportable"
+    #: 重新入庫的 Import Source（complete 裡那一包）不在了，或裡面一個檔案都沒有。
+    #: 什麼都還沒動：沒有檔案可以規劃，退回 `completed` 只會得到一份空的 Plan（M2 票 10）。
+    CONTENT_MISSING = "content_missing"
 
 
 class RouteRefusal(StrEnum):
@@ -981,8 +1020,12 @@ class IssueRefusal(StrEnum):
     #: 那一筆現在是 `submit_failed`，這一件仍然開著、再按一次就是再送一次。
     RESUBMIT_FAILED = "resubmit_failed"
     #: 重新送單時那一筆的 Route 用不了（被刪了、停用了、紅著、改收別種作品）：送出去也入不了庫。
-    #: 與第一次送單同一組前提（`services/jobs._check_route`）。
+    #: 與第一次送單同一組前提（`services/jobs.check_route`）。
     ROUTE_UNUSABLE = "route_unusable"
+    #: 認領類的兩顆要帶一部作品，而這一次沒帶、或 Berth 在 TMDB 上找不到它（票 10）。
+    MEDIA_REQUIRED = "media_required"
+    #: 「認領進帳本」配不上（`ClaimMiss`，`detail` 是那一種的值）。那一件照舊開著（票 10）。
+    UNCLAIMABLE = "unclaimable"
 
 
 class PlanRefusal(StrEnum):

@@ -454,6 +454,7 @@ function join(parts: readonly string[]): string {
 function retriedText(payload: Record<string, unknown>) {
   if (payload.action === 'recheck') return 'jobs.timeline.retriedRecheck'
   if (payload.action === 'retry') return 'jobs.timeline.retriedRestart'
+  if (payload.action === 'reimport') return 'jobs.timeline.retriedReimport'
   if (payload.state === 'importing') return 'jobs.timeline.retriedImport'
   if (payload.state === 'completed') return 'jobs.timeline.retriedReplan'
   return 'jobs.timeline.retried'

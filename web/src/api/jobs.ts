@@ -43,6 +43,8 @@ const REASONS: ReasonSet<JobRefusal> = {
   not_replannable: true,
   client_unreachable: true,
   delete_files_requires_remove_torrent: true,
+  not_reimportable: true,
+  content_missing: true,
 }
 
 /** 這一次失敗是「後端說不行」還是「網路壞了」。判定與另外兩組共用（`api/refusal.ts`）。 */
@@ -84,6 +86,14 @@ export async function submitJob(body: JobCreate) {
 /** `submit_failed` → `requested` → 再送一次（plan §3.1）。 */
 export async function retryJob(hash: string) {
   return apiPost<Job>(`/jobs/${encodeURIComponent(hash)}/retry`)
+}
+
+/**
+ * 以 complete 裡那一包重新入庫（CONTEXT.md 的 Reimport、brief §9.3、M2 票 10）。回的是退回
+ * `completed` 的那一筆；規劃與鏈接是背景迴圈照常的一輪。只有 admin 按得到（門禁）。
+ */
+export async function reimportJob(hash: string) {
+  return apiPost<Job>(`/jobs/${encodeURIComponent(hash)}/reimport`)
 }
 
 /**

@@ -81,6 +81,8 @@ ADMIN_PREFIXES = (
 ADMIN_ROUTES: tuple[tuple[str, str], ...] = (
     ("DELETE", "/jobs/*"),
     ("GET", "/jobs/*/deletion"),
+    # 重新入庫會動媒體庫（M2 票 10）；`POST /jobs` 與重試不是——`user` 送單之後要按得到重試。
+    ("POST", "/jobs/*/reimport"),
     # 審核是 admin 的事（M2 票 07）；`GET /plans/*` 不是——`user` 看得到自己那筆為什麼停下來。
     ("PUT", "/plans/*/items"),
     ("POST", "/plans/*/approve"),

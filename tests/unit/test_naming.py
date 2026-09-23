@@ -8,21 +8,27 @@ from __future__ import annotations
 
 from datetime import date
 
+import pytest
+
 from berth.domain import (
     EpisodeSnapshot,
+    FileKind,
     Lang,
     MediaKind,
     MediaSnapshot,
+    PlanAction,
     SeasonSnapshot,
     Source,
     Tags,
 )
 from berth.naming import (
+    Reading,
     episode_target,
     extension,
     extras_target,
     folder_name,
     movie_target,
+    read_target,
     sanitize,
     season_folder,
     subtitle_target,
@@ -438,3 +444,168 @@ class TestPunctuationInsideNames:
     def test_a_name_with_nothing_after_it_still_loses_its_trailing_dot(self) -> None:
         """資料夾名後面沒有副檔名。Windows 上以 `.` 結尾的目錄建得起來也開不了。"""
         assert sanitize("Dr. Strangelove.") == "Dr. Strangelove"
+
+
+# --- 反解（M2 票 10） -----------------------------------------------------------------
+
+#: 往返要走過的 Tags。每一格都有出現過，也有「只有發佈組」「只有版本名」「兩者都有」三種，
+#: 因為 `render()` 對它們不是一對一的，讀法要選定正規的那一種（`read_target`）。
+ROUND_TRIP_TAGS = (
+    Tags(),
+    Tags(resolution="1080p"),
+    Tags(source=Source.BD, resolution="1080p", subs=(Lang.CHS, Lang.CHT), group="VCB-Studio"),
+    Tags(source=Source.WEB, resolution="2160p", hardsub=True, group="ANi", version="v2"),
+    Tags(subs=(Lang.JP,), group="Old", edition="2"),
+    Tags(resolution="720p", version="v3", edition="Director's Cut"),
+    Tags(source=Source.REMUX, subs=(Lang.CHT, Lang.JP, Lang.EN)),
+)
+
+
+def titled() -> MediaSnapshot:
+    """集名在檔名中間，而且其中一集自己以方括號結尾——那一格最容易被當成 Tags。"""
+    return snapshot(
+        seasons=(
+            SeasonSnapshot(
+                season_number=1,
+                episodes=(
+                    EpisodeSnapshot(episode_number=1, name="Operation Strix"),
+                    EpisodeSnapshot(episode_number=2, name="Secure a Wife [Part 1]"),
+                    EpisodeSnapshot(episode_number=3, name="Episode 3"),
+                ),
+            ),
+        )
+    )
+
+
+class TestReadingAPathBack:
+    """`read_target` 是命名模板的反函式（plan §11.3 決定 9）：**同一份規則往返**。"""
+
+    @pytest.mark.parametrize("tags", ROUND_TRIP_TAGS)
+    @pytest.mark.parametrize(("episode", "end"), [(1, None), (2, None), (3, None), (1, 2)])
+    def test_an_episode_reads_back_as_what_wrote_it(
+        self, tags: Tags, episode: int, end: int | None
+    ) -> None:
+        media = titled()
+        path = episode_target(
+            media, season=1, episode=episode, episode_end=end, tags=tags, ext=".mkv"
+        )
+
+        reading = read_target(media, path, kind=FileKind.VIDEO)
+
+        assert reading == Reading(
+            PlanAction.IMPORT,
+            season=1,
+            episode_start=episode,
+            episode_end=end,
+            tags=tags,
+        )
+        assert reading is not None
+        assert (
+            episode_target(
+                media,
+                season=1,
+                episode=episode,
+                episode_end=reading.episode_end,
+                tags=reading.tags,
+                ext=".mkv",
+            )
+            == path
+        )
+
+    @pytest.mark.parametrize("tags", ROUND_TRIP_TAGS)
+    def test_a_film_reads_back_as_what_wrote_it(self, tags: Tags) -> None:
+        film = snapshot(tmdb_id=1241982, kind=MediaKind.MOVIE, title_en="Moana 2", year=2024)
+        path = movie_target(film, tags=tags, ext=".mkv")
+
+        assert read_target(film, path, kind=FileKind.VIDEO) == Reading(PlanAction.IMPORT, tags=tags)
+
+    @pytest.mark.parametrize(
+        "langs", [(), (Lang.CHT,), (Lang.CHS, Lang.CHT), (Lang.JP,), (Lang.EN,)]
+    )
+    def test_a_subtitle_reads_back_as_the_episode_it_follows(self, langs: tuple[Lang, ...]) -> None:
+        media = titled()
+        tags = Tags(resolution="1080p", group="Group")
+        video = episode_target(media, season=1, episode=1, tags=tags, ext=".mkv")
+        path = subtitle_target(video, langs=langs, ext=".ass")
+
+        reading = read_target(media, path, kind=FileKind.SUBTITLE, siblings=[video, path])
+
+        assert reading == Reading(
+            PlanAction.SUBTITLE, season=1, episode_start=1, episode_end=None, tags=tags
+        )
+
+    def test_an_extra_reads_back_by_its_folder(self) -> None:
+        media = titled()
+        path = extras_target(media, "[Group] SPY×FAMILY NCOP [1080p].mkv")
+
+        assert read_target(media, path, kind=FileKind.VIDEO) == Reading(PlanAction.EXTRA)
+
+
+class TestWhatDoesNotReadBack:
+    """讀不出來就是沒有：**一筆都不猜**（決定 9）。每一條都是差一點就像的那種。"""
+
+    def test_a_file_someone_dropped_in_the_season_folder(self) -> None:
+        media = titled()
+        folder = episode_target(media, season=1, episode=1, tags=Tags(), ext=".mkv").rsplit("/", 1)[
+            0
+        ]
+
+        assert (
+            read_target(media, f"{folder}/[Other] Spy x Family - 01.mkv", kind=FileKind.VIDEO)
+            is None
+        )
+
+    def test_another_works_folder(self) -> None:
+        other = snapshot(tmdb_id=1, title_en="Other")
+        path = episode_target(other, season=1, episode=1, tags=Tags(), ext=".mkv")
+
+        assert read_target(titled(), path, kind=FileKind.VIDEO) is None
+
+    def test_the_wrong_season_folder(self) -> None:
+        media = titled()
+        path = episode_target(media, season=1, episode=1, tags=Tags(), ext=".mkv")
+
+        assert (
+            read_target(media, path.replace("Season 01", "Season 02"), kind=FileKind.VIDEO) is None
+        )
+
+    def test_an_episode_title_that_is_not_the_one_in_the_snapshot(self) -> None:
+        """TMDB 改過集名之後寫的那一條與現在的快照對不上：不猜是哪一集的哪一個版本。"""
+        media = titled()
+        path = episode_target(media, season=1, episode=1, tags=Tags(), ext=".mkv")
+
+        assert (
+            read_target(
+                media, path.replace("Operation Strix", "Something Else"), kind=FileKind.VIDEO
+            )
+            is None
+        )
+
+    def test_more_tags_than_the_template_has_room_for(self) -> None:
+        """三個沒有形狀的 token：發佈組、版本名之後沒有第三格。模板寫不出這一條。"""
+        media = titled()
+        path = episode_target(media, season=1, episode=3, tags=Tags(), ext=".mkv")
+
+        assert (
+            read_target(media, path.replace(".mkv", " [A][B][C].mkv"), kind=FileKind.VIDEO) is None
+        )
+
+    def test_a_subtitle_without_its_video(self) -> None:
+        media = titled()
+        video = episode_target(media, season=1, episode=1, tags=Tags(), ext=".mkv")
+        path = subtitle_target(video, langs=(Lang.CHT,), ext=".ass")
+
+        assert read_target(media, path, kind=FileKind.SUBTITLE, siblings=[path]) is None
+
+    def test_a_font_is_never_a_target(self) -> None:
+        media = titled()
+        path = episode_target(media, season=1, episode=1, tags=Tags(), ext=".ttf")
+
+        assert read_target(media, path, kind=FileKind.FONT) is None
+
+    def test_a_film_whose_tags_the_template_would_write_differently(self) -> None:
+        """`[CHT+CHS]` 讀得出兩種語言，但模板寫的是 `[CHS+CHT]`：重算對不上就不是 Berth 寫的。"""
+        film = snapshot(tmdb_id=1241982, kind=MediaKind.MOVIE, title_en="Moana 2", year=2024)
+        path = movie_target(film, tags=Tags(subs=(Lang.CHS, Lang.CHT)), ext=".mkv")
+
+        assert read_target(film, path.replace("CHS+CHT", "CHT+CHS"), kind=FileKind.VIDEO) is None

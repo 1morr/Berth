@@ -41,7 +41,7 @@ from berth.services.hints import JobHints
 from berth.services.importer import UNMANAGED_TARGET, ImportOutcome, sweep_imports
 from berth.services.jobs import retry_job
 from berth.services.plan import sweep_plans
-from berth.services.resolver import RESOLVE_DELAYS
+from berth.services.resolve_schedule import RESOLVE_DELAYS
 from berth.services.setup import complete_setup
 from tests.integration.factories import FakeClientFactory
 from tests.integration.test_plan import (

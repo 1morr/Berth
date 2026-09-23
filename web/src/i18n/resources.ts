@@ -968,6 +968,10 @@ const zhHant = {
       retry: '重試',
       resubmit: '重新送單',
       accept_removal: '承認移除',
+      // 認領類的三顆（M2 票 10）。前兩顆按下去先選作品。
+      adopt: '重新入庫',
+      claim_torrent: '認領並建立下載',
+      claim_file: '認領進帳本',
       ignore: '忽略',
     },
     working: '處理中…',
@@ -1004,6 +1008,32 @@ const zhHant = {
       resubmit_failed: '送了，qBittorrent 不收。修好之後再按一次就是再送一次。',
       route_unusable:
         '這一筆的 Route 現在用不了（被刪了、停用了或紅著），送出去也入不了庫。先到媒體庫路徑設定看那一條。',
+      media_required: '先選它是哪一部作品。沒有作品的下載算不出任何一條目標路徑。',
+      unclaimable: '配不上帳本，所以什麼都沒有寫。',
+    },
+    // 媒體庫裡一個檔案配不上帳本的理由（`ClaimMiss`，`rebuild-ledger` 與「認領進帳本」）。
+    // 配不上的一律不猜，所以每一句都說得出下一步。
+    claimMiss: {
+      outside_routes: '它不在任何一條 Route 的目標底下。',
+      no_source:
+        'complete 裡沒有一個檔案與它是同一份資料：它是一份複製品，或者來源早就刪了。要入庫就重新下載一次。',
+      unknown_work: '作品資料夾名說不出是 TMDB 上的哪一部（沒有 [tmdbid-…]，或 TMDB 問不到）。',
+      not_berth_naming:
+        '它的名字不是 Berth 的命名模板寫得出來的（被改過名，或那一集在 TMDB 上的名字變了）。要它進帳本就從 complete 重新入庫。',
+    },
+    // `unmanaged_library_file` 那一列：上一次 `rebuild-ledger` 為什麼沒配上。
+    unclaimedBecause: '沒配上的理由',
+    // 認領時選作品（M2 票 10）：搜 TMDB，選一部，再按一次確認。
+    pick: {
+      label: '這是哪一部作品',
+      placeholder: '輸入作品名搜尋 TMDB',
+      searching: '搜尋中…',
+      none: '沒有找到。換一個名字試試。',
+      off: '搜不到 TMDB。先到健康頁確認 TMDB 的憑證還能用。',
+      confirm: '入庫到《{{title}}》',
+      cancel: '取消',
+      tv: '劇集',
+      movie: '電影',
     },
     failed: '沒有成功。Berth 自己的 API 沒有回應，先確認它還活著。',
   },
@@ -1249,6 +1279,11 @@ const zhHant = {
     retryingImport: '入庫中…',
     retried: '已重試，現在是{{state}}。',
     retryOff: '重試沒有送出去。Berth 自己的 API 沒有回應，先確認它還活著。',
+    // CONTEXT.md 的 Reimport：以 complete 裡那一包重新入庫，不必 torrent 還在（brief §9.3）。
+    reimport: '重新入庫',
+    reimporting: '重新入庫中…',
+    reimportOff: '重新入庫沒有送出去。Berth 自己的 API 沒有回應，先確認它還活著。',
+    reimported: '已排進重新入庫，現在是{{state}}。',
     // 停在待審核的那一列：`user` 按不了審核，只能等（brief §11）。
     waitingForAdmin: '等管理員審核',
     // admin 在停在 review 的那一列看到的是去處理它的路，不是「等」（M2 票 07）。
@@ -1314,6 +1349,8 @@ const zhHant = {
       retriedRecheck: '請 qBittorrent 重新校驗並接著下載。',
       retriedRestart: '請 qBittorrent 重新開始這一筆。',
       retriedReplan: '狀態退回「下載完成」，重新規劃一次。',
+      // 重新入庫（M2 票 10）：以 complete 裡那一包為來源，照現在的檔案重新規劃與入庫。
+      retriedReimport: '重新入庫：照 complete 裡現在的檔案重新規劃一次。',
       linkedFiles_one: '{{count}} 個檔案',
       linkedFiles_other: '{{count}} 個檔案',
       linkedTargets: '列出目標路徑',
@@ -1533,6 +1570,10 @@ const zhHant = {
       client_unreachable: '連不上 qBittorrent，所以什麼都沒有刪。先確認它還活著，再按一次。',
       delete_files_requires_remove_torrent:
         '要刪下載目錄裡的檔案，得同時從 qBittorrent 移除這個 torrent——否則它會在下一次重新檢查時把整包再抓一遍。',
+      not_reimportable:
+        '這一筆現在不能重新入庫——它還在下載、規劃或入庫中。重新整理看看它現在的狀態。',
+      content_missing:
+        'complete 裡已經沒有這一包了（或裡面一個檔案都沒有），所以什麼都沒有動。要入庫就重新下載一次。',
     },
     // 刪除範圍（brief §9.2、M2 票 04）。四個旗標各自說出後果，預設全不勾。
     delete: {
@@ -2766,6 +2807,9 @@ const en: Translations<typeof zhHant> = {
       retry: 'Retry',
       resubmit: 'Send it again',
       accept_removal: 'Accept the removal',
+      adopt: 'Import it again',
+      claim_torrent: 'Claim it as a download',
+      claim_file: 'Claim it into the ledger',
       ignore: 'Ignore',
     },
     working: 'Working…',
@@ -2802,6 +2846,30 @@ const en: Translations<typeof zhHant> = {
         'It was sent, and qBittorrent refused it. Once that is fixed, pressing again sends it again.',
       route_unusable:
         'This download’s route cannot be used right now (deleted, disabled or failing), so it could not be imported anyway. Check that route in the library path settings first.',
+      media_required:
+        'Pick which title this is first. A download without a title has no target path to go to.',
+      unclaimable: 'It does not match the ledger, so nothing was written.',
+    },
+    claimMiss: {
+      outside_routes: 'It is not under any route’s target.',
+      no_source:
+        'No file in complete is the same data as this one: it is a copy, or its source was deleted long ago. Download it again to import it.',
+      unknown_work:
+        'The title folder does not say which TMDB title it is (no [tmdbid-…], or TMDB could not be asked).',
+      not_berth_naming:
+        'Its name is not one Berth’s naming templates would write (it was renamed, or the episode’s TMDB name changed). Import it again from complete to get it into the ledger.',
+    },
+    unclaimedBecause: 'Why it did not match',
+    pick: {
+      label: 'Which title is this',
+      placeholder: 'Type a title to search TMDB',
+      searching: 'Searching…',
+      none: 'Nothing found. Try another name.',
+      off: 'TMDB could not be searched. Check on the health page that its credential still works.',
+      confirm: 'Import into {{title}}',
+      cancel: 'Cancel',
+      tv: 'Series',
+      movie: 'Film',
     },
     failed:
       'That did not go through. Berth’s own API did not answer — check that it is still running.',
@@ -3035,6 +3103,11 @@ const en: Translations<typeof zhHant> = {
     retried: 'Retried; it is now {{state}}.',
     retryOff:
       'The retry was not sent. Berth’s own API did not answer — check that it is still running.',
+    reimport: 'Import again',
+    reimporting: 'Importing again…',
+    reimportOff:
+      'The reimport was not sent. Berth’s own API did not answer — check that it is still running.',
+    reimported: 'Queued to import again; it is now {{state}}.',
     waitingForAdmin: 'Waiting for an administrator to review',
     toReview: 'Handle it in the review queue',
     state: {
@@ -3095,6 +3168,7 @@ const en: Translations<typeof zhHant> = {
       retriedRecheck: 'qBittorrent was asked to recheck the files and carry on downloading.',
       retriedRestart: 'qBittorrent was asked to start this one again.',
       retriedReplan: 'Back to downloaded, to be planned again.',
+      retriedReimport: 'Reimported: planned again from the files in complete as they are now.',
       linkedFiles_one: '{{count}} file',
       linkedFiles_other: '{{count}} files',
       linkedTargets: 'List the targets',
@@ -3307,6 +3381,10 @@ const en: Translations<typeof zhHant> = {
         'qBittorrent could not be reached, so nothing was deleted. Check that it is up, then try again.',
       delete_files_requires_remove_torrent:
         'To delete the downloaded files, remove the torrent from qBittorrent at the same time — otherwise it fetches the whole thing again on its next recheck.',
+      not_reimportable:
+        'This one cannot be imported again right now — it is still downloading, planning or importing. Reload to see where it stands now.',
+      content_missing:
+        'This download is no longer in complete (or it has no files left), so nothing was touched. Download it again to import it.',
     },
     delete: {
       label: 'Delete',

@@ -295,6 +295,18 @@ def top_level_under(path: Path, roots: Sequence[Path]) -> Path | None:
     return None
 
 
+def files_under(root: Path) -> list[Path]:
+    """這個根底下的每一個檔案，排序過。探測檔不算（`probe_file`）。讀不到就丟 `OSError`。
+
+    對帳走媒體庫與 `rebuild-ledger` 走媒體庫、complete 是同一件事，所以只有這一份。
+    """
+    return [
+        path
+        for path in sorted(root.rglob("*"))
+        if not path.name.startswith(PROBE_PREFIX) and path.is_file()
+    ]
+
+
 def path_key(path: Path | str) -> str:
     """比兩條路徑是不是同一條時用的鍵。
 

@@ -13,6 +13,7 @@ from __future__ import annotations
 from berth.domain import (
     ACTION_DELETES,
     ISSUE_ACTIONS,
+    NEEDS_MEDIA,
     SUBJECT_OF,
     IssueAction,
     IssueSubject,
@@ -111,11 +112,11 @@ class TestWhatEachTypeCanBeResolvedWith:
     def test_every_type_says_what_can_be_pressed_on_it(self) -> None:
         assert set(ISSUE_ACTIONS) == set(IssueType)
 
-    def test_what_each_type_offers_this_round(self) -> None:
-        """brief §9.1 那一欄，扣掉還沒做的（M2 票 09 / 09c）。
+    def test_what_each_type_offers(self) -> None:
+        """brief §9.1 那一欄，全部做完了（票 10 補上認領類的三顆）。
 
-        這一條是**刻意會過期的**：票 10 補認領類的三顆時它要跟著改，而改它的人正好會看到
-        「新的那一顆也要回答它會不會刪東西」（`ACTION_DELETES`）。
+        照舊逐格列出：加一顆的人會在這裡看到「新的那一顆也要回答它會不會刪東西」
+        （`ACTION_DELETES`）與「它要不要帶作品」（`NEEDS_MEDIA`）。
         """
         assert {kind: actions for kind, actions in ISSUE_ACTIONS.items() if actions} == {
             IssueType.LIBRARY_LINK_MISSING: (
@@ -125,7 +126,9 @@ class TestWhatEachTypeCanBeResolvedWith:
             ),
             IssueType.SOURCE_MISSING: (IssueAction.MARK_SOURCELESS,),
             IssueType.INODE_MISMATCH: (IssueAction.REPLACE_WITH_LINK,),
-            IssueType.ORPHAN_COMPLETE: (IssueAction.DELETE_ORPHAN,),
+            IssueType.ORPHAN_COMPLETE: (IssueAction.DELETE_ORPHAN, IssueAction.ADOPT),
+            IssueType.UNKNOWN_TORRENT: (IssueAction.CLAIM_TORRENT,),
+            IssueType.UNMANAGED_LIBRARY_FILE: (IssueAction.CLAIM_FILE,),
             IssueType.JOB_WITHOUT_FILES: (IssueAction.REPLAN,),
             IssueType.MISSING_FILES: (IssueAction.RECHECK, IssueAction.ACCEPT_LOSS),
             IssueType.CLIENT_ERROR: (IssueAction.RETRY,),
@@ -191,3 +194,34 @@ class TestTheUnmanagedFileIsNeverDeleted:
         mutated = {**ISSUE_ACTIONS, IssueType.UNMANAGED_LIBRARY_FILE: (IssueAction.RELOOK,)}
 
         assert deleting(mutated, IssueType.UNMANAGED_LIBRARY_FILE) == []
+
+
+def asks_for_a_work(table: dict[IssueType, tuple[IssueAction, ...]], kind: IssueType) -> bool:
+    """`kind` 按得了的那幾顆裡，有沒有一顆要管理員先選作品（`NEEDS_MEDIA`）。"""
+    return any(action in NEEDS_MEDIA for action in table[kind])
+
+
+class TestWhichClaimsNeedAWork:
+    """認領類裡要先選作品的那兩顆（M2 票 10，2026-09-23 使用者拍板）。
+
+    沒有作品的 Job 規劃出來整份停在 review，而 Review Queue 核准不了它——少了這一步的按鈕
+    按下去就是死路。`unmanaged_library_file` 不要：作品資料夾名自己說得出是哪一部。
+    """
+
+    def test_the_two_that_create_a_job_need_one(self) -> None:
+        assert {IssueAction.ADOPT, IssueAction.CLAIM_TORRENT} == NEEDS_MEDIA
+
+    def test_claiming_a_library_file_does_not(self) -> None:
+        assert not asks_for_a_work(ISSUE_ACTIONS, IssueType.UNMANAGED_LIBRARY_FILE)
+
+    def test_the_rule_turns_red_when_a_file_claim_asks_for_a_work(self) -> None:
+        """變異：認領進帳本被誤標成要選作品——它會多一步沒有意義的搜尋。"""
+        mutated = {**ISSUE_ACTIONS, IssueType.UNMANAGED_LIBRARY_FILE: (IssueAction.ADOPT,)}
+
+        assert asks_for_a_work(mutated, IssueType.UNMANAGED_LIBRARY_FILE)
+
+    def test_the_rule_stays_green_for_an_unrelated_change(self) -> None:
+        """變異：同一種換一顆不要作品的按鈕，規則不該紅。"""
+        mutated = {**ISSUE_ACTIONS, IssueType.UNMANAGED_LIBRARY_FILE: (IssueAction.RELOOK,)}
+
+        assert not asks_for_a_work(mutated, IssueType.UNMANAGED_LIBRARY_FILE)

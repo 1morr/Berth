@@ -52,6 +52,8 @@ const REASONS: ReasonSet<IssueRefusal> = {
   source_unavailable: true,
   resubmit_failed: true,
   route_unusable: true,
+  media_required: true,
+  unclaimable: true,
 }
 
 /** 這一次失敗是「後端說不行」還是「網路壞了」。認不得的理由回 `null`。 */
@@ -82,9 +84,16 @@ export async function startReconcile() {
   return apiPost<ReconcileRun>('/reconcile')
 }
 
-/** 按下那一顆。做得到才會回一個 `resolved` 的它。 */
-export async function resolveIssue(id: number, action: IssueAction) {
-  return apiPost<Issue>(`/issues/${id}/resolve`, { action })
+/**
+ * 按下那一顆。做得到才會回一個 `resolved` 的它。
+ *
+ * `media` 只有認領類的兩顆要（重新入庫、認領 torrent，M2 票 10）：管理員選的那一部作品。
+ */
+export async function resolveIssue(id: number, action: IssueAction, media = '') {
+  return apiPost<Issue>(`/issues/${id}/resolve`, {
+    action,
+    media,
+  } satisfies Schemas['IssueResolveIn'])
 }
 
 /** 「我知道了，不用管它」。那個檔案仍然不在，所以下一輪對帳會再開一筆新的。 */

@@ -40,6 +40,7 @@ function job(overrides: Partial<Job> = {}): Job {
     imported_at: null,
     retryable: false,
     replannable: false,
+    reimportable: false,
     plan_id: null,
     audits: 0,
     ...overrides,
@@ -423,6 +424,59 @@ describe('刪除入口只給管理員（M2 票 04 驗收）', () => {
     // 時間線畫出來了才代表展開區真的開了——否則這一條在任何情況下都會綠。
     await screen.findByText('info hash')
     expect(screen.queryByRole('button', { name: '刪除' })).toBeNull()
+  })
+})
+
+describe('重新入庫（M2 票 10）', () => {
+  const IMPORTED = job({ state: 'imported', reimportable: true })
+
+  it('admin 在入庫完的那一筆看得到它，按下去打那一支並說出現在的狀態', async () => {
+    const stub = render({
+      [JOBS]: { body: [IMPORTED] },
+      [`POST /api/jobs/${HASH}/reimport`]: { body: { ...IMPORTED, state: 'completed' } },
+    })
+    renderApp('/jobs')
+
+    await userEvent.click(await screen.findByText(/SPY×FAMILY - 13/))
+    await userEvent.click(await screen.findByRole('button', { name: '重新入庫' }))
+
+    await waitFor(() =>
+      expect(
+        stub.mock.calls.some(
+          ([input, init]) =>
+            init?.method === 'POST' && String(input) === `/api/jobs/${HASH}/reimport`,
+        ),
+      ).toBe(true),
+    )
+  })
+
+  it('一般使用者看不到它（門禁同時回 403）', async () => {
+    render({
+      'GET /api/auth/me': { body: { name: 'deckhand', role: 'user' } },
+      [JOBS]: { body: [IMPORTED] },
+    })
+    renderApp('/jobs')
+
+    await userEvent.click(await screen.findByText(/SPY×FAMILY - 13/))
+
+    await screen.findByText('info hash')
+    expect(screen.queryByRole('button', { name: '重新入庫' })).toBeNull()
+  })
+
+  it('後端說還不能重新入庫時照那個理由說', async () => {
+    render({
+      [JOBS]: { body: [IMPORTED] },
+      [`POST /api/jobs/${HASH}/reimport`]: {
+        status: 409,
+        body: { detail: { reason: 'content_missing', detail: '/data/torrent/complete/anime/x' } },
+      },
+    })
+    renderApp('/jobs')
+
+    await userEvent.click(await screen.findByText(/SPY×FAMILY - 13/))
+    await userEvent.click(await screen.findByRole('button', { name: '重新入庫' }))
+
+    expect(await screen.findByText(/complete 裡已經沒有這一包了/)).toBeInTheDocument()
   })
 })
 

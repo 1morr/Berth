@@ -368,7 +368,7 @@ async def update_route(
 
     每一次修改都重跑五條纜繩（票 14 驗收）。**從停用到啟用**要那一輪全綠，否則拒絕並留在停用；
     名稱照樣存下。已經啟用的 Route 這一輪變紅不會被停掉——它的紅燈本來就擋得住
-    送單（`jobs._check_route`），默默替人停用反而是另一種隱式的改動。
+    送單（`jobs.check_route`），默默替人停用反而是另一種隱式的改動。
     """
     route = await _find_route(session, route_id)
     paths = await read_settings(session, PathSettings)

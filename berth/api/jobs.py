@@ -16,7 +16,13 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel, ConfigDict, Field
 
-from berth.api.deps import ClientFactoryDep, EventHubDep, ImportHintsDep, SessionDep
+from berth.api.deps import (
+    ClientFactoryDep,
+    EventHubDep,
+    ImportHintsDep,
+    PlanHintsDep,
+    SessionDep,
+)
 from berth.api.errors import refusal_responses
 from berth.api.gate import current_user
 from berth.domain import JobRefusal, JobState, JobTrigger
@@ -33,6 +39,7 @@ from berth.services.jobs import (
     retry_job,
 )
 from berth.services.plan import replan_job
+from berth.services.reimport import reimport_job
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 
@@ -54,6 +61,10 @@ _STATUS: dict[JobRefusal, int] = {
     # 勾錯組合是 422：請求本身說不通（brief §9.2），不是「現在做不了」。
     JobRefusal.DELETE_FILES_REQUIRES_REMOVE_TORRENT: status.HTTP_422_UNPROCESSABLE_CONTENT,
     JobRefusal.CLIENT_UNREACHABLE: status.HTTP_502_BAD_GATEWAY,
+    # 還在下載、還在入庫的那一筆是**現在**不能從頭再來，等它停下來同一個請求就會成功。
+    JobRefusal.NOT_REIMPORTABLE: status.HTTP_409_CONFLICT,
+    # 那一包不在 complete 裡了：請求本身沒錯，是磁碟上的事實變了（brief §9.3）。
+    JobRefusal.CONTENT_MISSING: status.HTTP_409_CONFLICT,
 }
 
 
@@ -97,6 +108,11 @@ RETRY_RESPONSES = _refusals(
 
 #: 重新規劃只看這一筆自己（`services/plan.replan_job`），碰不到 Route 與索引站。
 REPLAN_RESPONSES = _refusals(JobRefusal.JOB_MISSING, JobRefusal.NOT_REPLANNABLE)
+
+#: 重新入庫只看這一筆與磁碟上那一包（`services/reimport.reimport_job`），不碰 qBittorrent。
+REIMPORT_RESPONSES = _refusals(
+    JobRefusal.JOB_MISSING, JobRefusal.NOT_REIMPORTABLE, JobRefusal.CONTENT_MISSING
+)
 
 #: 刪除：沒有這一筆、勾錯組合，以及要移除 torrent 而 qBittorrent 問不到
 #: （`services/deletion.delete_job`）。
@@ -178,6 +194,8 @@ class JobOut(BaseModel):
     retryable: bool
     #: 這一筆現在按得了重新規劃嗎（票 11）。規則在後端算，前端不重算一份。
     replannable: bool
+    #: 這一筆現在按得了重新入庫嗎（M2 票 10）。只有 admin 看得到那一顆（門禁），旗標誰都拿得到。
+    reimportable: bool
     #: 這一筆現在那一份 Import Plan 的 id（票 11）。還沒算過就是 `null`——畫面照它決定
     #: 要不要去要那一份逐檔的決定，而不是先打一次 404。
     plan_id: int | None
@@ -317,6 +335,26 @@ async def post_replan(
     job = await read_job(session, job_hash)
     if job is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="no such job")
+    return JobOut.model_validate(job)
+
+
+@router.post("/{job_hash}/reimport", responses=REIMPORT_RESPONSES)
+async def post_reimport(
+    session: SessionDep, plans: PlanHintsDep, request: Request, job_hash: str
+) -> JobOut:
+    """以那一筆的 complete 目錄重新入庫（brief §9.3、M2 票 10）。**只有 admin**（門禁）。
+
+    回的是退回 `completed` 的那一筆；算與鏈是規劃器與 importer 照常的一輪，所以這裡叫醒規劃器
+    而不是自己算——不另開一條入庫的路。
+    """
+    user = current_user(request)
+    try:
+        job = await reimport_job(
+            session, job_hash, actor=actor_of(user.id if user is not None else None)
+        )
+    except JobRejectedError as refusal:
+        raise _refuse(refusal) from refusal
+    plans.nudge()
     return JobOut.model_validate(job)
 
 

@@ -47,21 +47,12 @@ from berth.models.types import utcnow
 from berth.services.clients import ServiceClientFactory
 from berth.services.issues import record_issue
 from berth.services.jobs import actor_of, record_event
+from berth.services.resolve_schedule import RESOLVE_DELAYS
 from berth.services.routes import owning_route
 from berth.services.settings import read_settings
 from berth.services.steps import message
 
 logger = logging.getLogger(__name__)
-
-#: 第 n 次反查之前要等多久（plan §3.2）。長度就是總次數：6 次。
-RESOLVE_DELAYS: tuple[timedelta, ...] = (
-    timedelta(seconds=30),
-    timedelta(minutes=2),
-    timedelta(minutes=10),
-    timedelta(hours=1),
-    timedelta(hours=1),
-    timedelta(hours=1),
-)
 
 #: 沒找到幾次之後改請 Jellyfin 掃描媒體庫（brief §20.1）。第一次沒找到多半只是路徑通知的 60 秒延遲
 #: 還沒過；第二次還沒有，就是通知沒起作用——從來沒掃到過內容的媒體庫，通知往上找不到任何 item，
@@ -71,11 +62,6 @@ SCAN_AFTER_MISSES = 2
 #: 請 Jellyfin 掃描之後，下一次最晚多久再看。原本的間隔到後面是一小時，那是在等它自己的排程；
 #: 已經開口請它掃了，就不必等那麼久。
 SCAN_SETTLE = timedelta(minutes=10)
-
-
-def first_resolve_at(now: datetime) -> datetime:
-    """一筆剛寫下的帳本第一次反查的時間。importer 寫帳本時用它。"""
-    return now + RESOLVE_DELAYS[0]
 
 
 @dataclass(frozen=True, slots=True)

@@ -314,7 +314,7 @@ async def _ask_library(session: AsyncSession, survey: _Survey) -> SideReport:
             )
             continue
         try:
-            walked = _files_under(root)
+            walked = fs.files_under(root)
         except OSError as exc:
             # 走到一半讀不到：這一條整條跳過。只比走到的那一半的話，沒走到的檔案會被報成
             # 「不見了」，而它們的帳本列會被當成沒人認的鏈接。
@@ -381,15 +381,6 @@ async def _ask_jellyfin(
     if changed:
         logger.info("reconcile refreshed jellyfin items", extra={"count": changed})
     return SideReport(side=ReconcileSide.JELLYFIN, counted=len(resolved))
-
-
-def _files_under(root: Path) -> list[Path]:
-    """這個根底下的每一個檔案。探測檔不算（`fs.probe_file`）。讀不到就丟 `OSError`。"""
-    return [
-        path
-        for path in sorted(root.rglob("*"))
-        if not path.name.startswith(fs.PROBE_PREFIX) and path.is_file()
-    ]
 
 
 async def _categories(session: AsyncSession) -> set[str]:

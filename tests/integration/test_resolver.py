@@ -22,7 +22,8 @@ from berth.models import LedgerEntry, Route
 from berth.pipeline import JellyfinResolver
 from berth.services.events import EventHub
 from berth.services.importer import sweep_imports
-from berth.services.resolver import RESOLVE_DELAYS, ResolveOutcome, locate, sweep_resolutions
+from berth.services.resolve_schedule import RESOLVE_DELAYS
+from berth.services.resolver import ResolveOutcome, locate, sweep_resolutions
 from tests.integration.factories import FakeClientFactory
 from tests.integration.test_importer import importing, ledger_of
 from tests.integration.test_plan import NOW, events_of

@@ -15,6 +15,7 @@ import { ConfirmAction, GhostButton } from '../components/controls'
 import { DetailLine, QueueRow } from '../components/QueueRow'
 import { fileName, whenText } from '../components/queueText'
 import { formatSize } from '../media/searchResult'
+import { WorkPicker } from './WorkPicker'
 
 /**
  * 待處理清單上的一列（`.scratch/m2/issues-shape.md`，M2 票 05）。
@@ -49,8 +50,8 @@ export function IssueRow({
     void queryClient.invalidateQueries({ queryKey: reviewQueryOptions().queryKey })
   }
   const act = useMutation({
-    mutationFn: (action: IssueAction | 'ignore') =>
-      action === 'ignore' ? ignoreIssue(issue.id) : resolveIssue(issue.id, action),
+    mutationFn: ({ action, media = '' }: { action: IssueAction | 'ignore'; media?: string }) =>
+      action === 'ignore' ? ignoreIssue(issue.id) : resolveIssue(issue.id, action, media),
     onMutate: () => setRefusal(null),
     // 決定過的那一件從清單上消失（兩份都只列 `open`），而對帳的摘要數字不變——
     // 它說的是「那一輪發現了什麼」，不是「現在還剩幾件」。
@@ -101,6 +102,17 @@ export function IssueRow({
     >
       {issue.actions.map((action) => {
         const confirm = CONFIRM[action]
+        if (confirm === 'work') {
+          return (
+            <WorkPicker
+              key={action}
+              label={t(`issues.action.${action}`)}
+              pending={busy}
+              pendingLabel={t('issues.working')}
+              onPick={(media) => act.mutate({ action, media })}
+            />
+          )
+        }
         return confirm !== null ? (
           <ConfirmAction
             key={action}
@@ -109,21 +121,21 @@ export function IssueRow({
             warning={t(confirm.warning)}
             pending={busy}
             pendingLabel={t('issues.working')}
-            onConfirm={() => act.mutate(action)}
+            onConfirm={() => act.mutate({ action })}
           />
         ) : (
           <GhostButton
             key={action}
             type="button"
             disabled={busy}
-            onClick={() => act.mutate(action)}
+            onClick={() => act.mutate({ action })}
           >
             {busy ? t('issues.working') : t(`issues.action.${action}`)}
           </GhostButton>
         )
       })}
       {/* 忽略永遠在：一件按不了任何一顆的 Issue 仍然要能從清單上收掉。 */}
-      <GhostButton type="button" disabled={busy} onClick={() => act.mutate('ignore')}>
+      <GhostButton type="button" disabled={busy} onClick={() => act.mutate({ action: 'ignore' })}>
         {busy ? t('issues.working') : t('issues.action.ignore')}
       </GhostButton>
     </QueueRow>
@@ -138,6 +150,9 @@ export function IssueRow({
  *   對話框：那四個旗標是這一顆自己寫死的。
  * - 「刪除這個目錄」刪的是 complete 底下一整棵，後端按下去那一刻會再確認它仍然沒有主。
  * - 「以硬鏈接取代」會讓媒體庫那一份複製品消失——一樣大，但它可能是別人改過的版本。
+ *
+ * `'work'` 是認領類的兩顆（後端的 `NEEDS_MEDIA`，M2 票 10）：按下去先選作品，選好之後的主動作
+ * 本身就是第二次確認。它們一個位元組都不刪。
  */
 const CONFIRM = {
   relink: null,
@@ -155,7 +170,11 @@ const CONFIRM = {
   retry: null,
   resubmit: null,
   accept_removal: null,
-} as const satisfies Record<IssueAction, { warning: string; action: string } | null>
+  adopt: 'work',
+  claim_torrent: 'work',
+  // 認領進帳本只多一列帳本，配不上就是拒絕，什麼都不寫。
+  claim_file: null,
+} as const satisfies Record<IssueAction, { warning: string; action: string } | 'work' | null>
 
 /** 路徑那一欄叫什麼。沒列的是媒體庫裡的路徑（帳本的目標、Route 的目標）。 */
 const PATH_TERM: Partial<Record<Issue['type'], 'issues.completePath' | 'issues.measuredPath'>> = {
@@ -179,6 +198,14 @@ function Measured({ issue }: { issue: Issue }) {
       </>
     )
   }
+  if (issue.type === 'unmanaged_library_file' && isClaimMiss(issue.detail.reason)) {
+    // `rebuild-ledger` 開的那幾件帶著理由（`ClaimMiss`）；對帳開的沒有，那時不畫這一行。
+    return (
+      <DetailLine term={t('issues.unclaimedBecause')}>
+        {t(`issues.claimMiss.${issue.detail.reason}`)}
+      </DetailLine>
+    )
+  }
   if (issue.type === 'low_disk_space') {
     const size = (value: unknown) =>
       typeof value === 'number' ? formatSize(value, i18n.language) : ''
@@ -193,6 +220,13 @@ function Measured({ issue }: { issue: Issue }) {
   return null
 }
 
+/** 配不上帳本的四種理由（後端的 `ClaimMiss`）。`unclaimable` 拒絕的 `detail` 也是它。 */
+const CLAIM_MISSES = ['outside_routes', 'no_source', 'unknown_work', 'not_berth_naming'] as const
+
+function isClaimMiss(value: unknown): value is (typeof CLAIM_MISSES)[number] {
+  return CLAIM_MISSES.some((miss) => miss === value)
+}
+
 function text(value: unknown): string {
   return typeof value === 'string' ? value : ''
 }
@@ -204,5 +238,8 @@ function refusalText(
   detail: string,
 ) {
   const said = t(`issues.refusal.${reason}`)
+  // 配不上帳本的那一種，原文是 `ClaimMiss` 的值：換成說得出下一步的那一句。
+  if (reason === 'unclaimable' && isClaimMiss(detail))
+    return `${said} ${t(`issues.claimMiss.${detail}`)}`
   return detail === '' ? said : `${said} ${detail}`
 }

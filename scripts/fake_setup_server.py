@@ -59,7 +59,7 @@ from berth.adapters.qbittorrent import (
 )
 from berth.adapters.qbittorrent.client import HttpQbittorrentClient
 from berth.adapters.qbittorrent.fake import FakeQbittorrentClient
-from berth.adapters.tmdb import TmdbClient
+from berth.adapters.tmdb import TmdbClient, TmdbEntry
 from berth.adapters.tmdb.client import HttpTmdbClient
 from berth.adapters.tmdb.fake import FakeTmdbClient
 from berth.adapters.torrent import HttpTorrentFetcher, TorrentFetcher, magnet_info_hash
@@ -128,6 +128,10 @@ from lib import Torrent, make_torrent
 # 這條規則 e2e 已經有一份（它只用標準庫）。repo 根目錄進 `sys.path` 才 import 得到 `tests.`。
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from tests.e2e.payload import info_name
+
+# 替身 TMDB 的 SPY×FAMILY（詳情、季、絕對編號）與整合測試同一份：`issues` 情境的認領與反解
+# 要的正是測試裡那一部，另抄一份的話兩邊的季集遲早對不上（M2 票 10）。
+from tests.integration.test_media import tmdb as demo_tmdb
 
 #: 這台 demo server 自己聽在哪個 port。索引站給的下載連結指回它自己（送單時 Berth 真的會去抓），
 #: 所以 `--port` 一改這一份要跟著改——寫死的話換 port 就只會拿到 `source_unavailable`。
@@ -374,6 +378,10 @@ def issues_scenario() -> Scenario:
     scenario = healthy()
     scenario.qbittorrent = RecoveringQbittorrent()
     scenario.issues_demo = True
+    # 認領類的兩顆要選作品、「認領進帳本」要 SPY×FAMILY 的季集（M2 票 10）：替身 TMDB 答得出
+    # 搜尋與詳情，憑證是一串不打外面的假值。
+    scenario.tmdb_credential = "00000000000000000000000000000010"
+    scenario.tmdb = demo_tmdb(search={"spy": [SPY_ENTRY], "SPY": [SPY_ENTRY]})
     return scenario
 
 
@@ -1216,6 +1224,7 @@ async def _moor(
     if scenario.issues_demo:
         await _seed_issues(session, paths)
         await _seed_pipeline_issues(session, scenario, factory)
+        await _seed_claims(session, scenario, paths)
     if scenario.review_demo:
         await _seed_review(session, paths)
 
@@ -1388,6 +1397,61 @@ async def _seed_pipeline_issues(
         for row in scenario.jellyfin.libraries_
     ]
     await watch_conditions(session, factory)
+
+
+#: `issues` 情境裡那一筆無主 torrent（M2 票 10）：掛著 Anime 的 category，Berth 沒有它的 Job。
+STRAY_HASH = "cd84713294051627b8e9f0a1b2c3d4e5f6071829"
+
+#: 替身 TMDB 搜尋 SPY×FAMILY 時回的那一筆。
+SPY_ENTRY = TmdbEntry(
+    tmdb_id=120089,
+    kind=MediaKind.TV,
+    title="SPY x FAMILY",
+    original_title="SPY×FAMILY",
+    year=2022,
+    poster_path="",
+)
+
+
+async def _seed_claims(session: AsyncSession, scenario: Scenario, paths: PathSettings) -> None:
+    """認領類三顆的材料（M2 票 10）。與 `_seed_issues` 同一包、同一個作品。
+
+    - 第四集：來源在 complete、媒體庫那一份是真的硬鏈接、名字照命名模板寫的，**帳本上沒有它**
+      ——`unmanaged_library_file`，按「認領進帳本」真的長回一列（`Hand Placed` 那一件配不上，
+      按下去說出為什麼）。
+    - qBittorrent 上一筆掛著 Anime category、沒有 Job 的 torrent：`unknown_torrent`，按「認領並
+      建立下載」選 SPY×FAMILY，下載列表多一筆。
+    - complete 裡那個 `[Old] Forgotten Batch`（`_seed_issues` 造的）按「重新入庫」選作品，
+      下載列表多一筆 `重新入庫` 的 Job，規劃器接手。
+    """
+    route = await session.scalar(select(Route).where(Route.slug == "anime"))
+    assert route is not None
+    show = "SPY x FAMILY (2022) [tmdbid-120089]"
+    source = Path(f"{paths.complete_root}/anime/{show}/[ANi] SPY×FAMILY - 04.mkv")
+    source.write_bytes(b"episode 4")
+    target = Path(
+        f"{route.target_path}/{show}/Season 01/SPY x FAMILY (2022) - S01E04 [1080p][CHT][ANi].mkv"
+    )
+    target.unlink(missing_ok=True)
+    os.link(source, target)
+    now = int(datetime.now(UTC).timestamp())
+    scenario.qbittorrent.torrents = (
+        *scenario.qbittorrent.torrents,
+        TorrentStatus(
+            hash=STRAY_HASH,
+            name="[Sub] SPY×FAMILY - 07 [1080P]",
+            state="stalledUP",
+            category=route.category,
+            tags=("berth",),
+            progress=1.0,
+            completion_on=now,
+            last_activity=now,
+            added_on=now,
+            save_path=f"{paths.complete_root}/anime",
+            content_path=f"{paths.complete_root}/anime/[Sub] SPY×FAMILY - 07 [1080P]",
+            total_size=1_400_000_000,
+        ),
+    )
 
 
 async def _seed_review(session: AsyncSession, paths: PathSettings) -> None:

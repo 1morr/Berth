@@ -7,7 +7,7 @@
 什麼都沒有。斷言貼著磁碟：「Issue 變成 resolved」本身不算修好。
 
 認領類的三顆（`orphan_complete` 的重新入庫、`unknown_torrent` 的認領、`unmanaged_library_file`
-的認領進帳本）在票 10；管線那三種的按鈕在票 09c。
+的認領進帳本）在 `test_claims.py`（票 10）；管線那三種的按鈕在票 09c。
 """
 
 from __future__ import annotations
@@ -407,7 +407,7 @@ class TestRescan:
 
 
 class TestUnmanagedIsNeverDeleted:
-    """**只列出，永不自動刪**（brief §9.1）。認領進帳本在票 10。"""
+    """**只列出，永不自動刪**（brief §9.1）。票 10 的「認領進帳本」配不上時也是拒絕、不動檔案。"""
 
     async def test_no_button_it_offers_deletes_anything(self) -> None:
         offered = ISSUE_ACTIONS[IssueType.UNMANAGED_LIBRARY_FILE]

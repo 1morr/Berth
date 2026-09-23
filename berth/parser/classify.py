@@ -115,8 +115,17 @@ def _is_disc(files: Sequence[FileEntry]) -> bool:
     )
 
 
+def kind_by_extension(name: str) -> FileKind:
+    """只看副檔名的那一層分類，不看鄰居與關鍵字。
+
+    `rebuild-ledger` 讀媒體庫裡的一個檔案時要它（M2 票 10）：那裡的檔名是 Berth 自己寫的，
+    集名裡的 `Preview` 不是特典的證據，而正片或字幕的形狀由命名模板重算來確認。
+    """
+    return _BY_EXTENSION.get(extension(name), FileKind.OTHER)
+
+
 def _kind_of(entry: FileEntry, reference_video: int) -> FileKind:
-    kind = _BY_EXTENSION.get(extension(entry.name), FileKind.OTHER)
+    kind = kind_by_extension(entry.name)
     if kind is not FileKind.VIDEO:
         return kind
     if _is_sample(entry, reference_video):

@@ -11,10 +11,14 @@ import json
 import sys
 from collections.abc import Callable, Sequence
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import uvicorn
 
-from berth.config import PACKAGE_NAME, VERSION, load_config
+from berth.config import PACKAGE_NAME, VERSION, Config, load_config
+
+if TYPE_CHECKING:
+    from berth.services.ledger_rebuild import RebuildReport
 
 PROGRAM_NAME = PACKAGE_NAME
 
@@ -68,6 +72,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="Write the current numbers to the baseline. Say why in the commit message.",
     )
     bench.set_defaults(handler=_bench)
+
+    rebuild = subcommands.add_parser(
+        "rebuild-ledger",
+        help=(
+            "Grow the ledger back from the library: every file the ledger does not know is"
+            " matched to complete by inode and read back through the naming templates."
+            " Files that do not match become unmanaged_library_file issues. Deletes nothing."
+        ),
+    )
+    rebuild.set_defaults(handler=_rebuild_ledger)
 
     return parser
 
@@ -133,6 +147,41 @@ def _bench(args: argparse.Namespace) -> int:
     for problem in problems:
         print(f"bench: {problem}", file=sys.stderr)
     return 1 if problems else 0
+
+
+def _rebuild_ledger(args: argparse.Namespace) -> int:
+    """`berth rebuild-ledger`（plan §11.3 決定 9、M2 票 10）。
+
+    與服務共用同一個資料庫（WAL，服務開著也能跑），所以先把 schema 升到最新——CLI 可能比
+    服務早一步跑在新版本上。**只加不減**：配不上的檔案變成 Issue，一個位元組都不刪。
+    離開碼 1 是有 Route 的目標目錄讀不到：那幾條根本沒有比到，不能說成「全部配好了」。
+    """
+    import asyncio
+
+    report = asyncio.run(_run_rebuild(load_config()))
+    lines = [
+        f"already in the ledger: {report.known}",
+        f"grown back: {report.claimed}",
+        *(f"unmatched ({reason.value}): {count}" for reason, count in report.unmatched.items()),
+        *(f"skipped route: {line}" for line in report.skipped),
+    ]
+    # 路徑可能是中文，與 `openapi` 同一個理由一律寫 UTF-8 位元組。
+    sys.stdout.buffer.write(("\n".join(lines) + "\n").encode("utf-8"))
+    return 1 if report.skipped else 0
+
+
+async def _run_rebuild(config: Config) -> RebuildReport:
+    from berth.db import create_engine, create_session_factory, upgrade_to_head
+    from berth.services.clients import HttpServiceClientFactory
+    from berth.services.ledger_rebuild import rebuild_ledger
+
+    engine = create_engine(config)
+    try:
+        await upgrade_to_head(engine)
+        async with create_session_factory(engine)() as session:
+            return await rebuild_ledger(session, HttpServiceClientFactory())
+    finally:
+        await engine.dispose()
 
 
 def _serve(args: argparse.Namespace) -> int:

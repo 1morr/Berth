@@ -10,9 +10,10 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Sequence
+from collections.abc import Callable, Iterator, Sequence
+from dataclasses import dataclass, field
 
-from berth.domain import Lang, MediaSnapshot, Tags, sort_langs
+from berth.domain import FileKind, Lang, MediaSnapshot, PlanAction, Source, Tags, sort_langs
 
 #: 作品資料夾（plan §5）。劇集與電影同一個模板。
 FOLDER_TEMPLATE = "{title} ({year}) [tmdbid-{tmdb_id}]"
@@ -292,3 +293,189 @@ def _clip(name: str, limit: int) -> str:
         return name
     # `errors="ignore"` 把切在中間的那一個字整個丟掉，而不是留下半個位元組。
     return encoded[:limit].decode("utf-8", errors="ignore").rstrip()
+
+
+# --- 反解（M2 票 10） -----------------------------------------------------------------
+
+
+@dataclass(frozen=True, slots=True)
+class Reading:
+    """一條媒體庫路徑照命名模板讀回來的樣子：它是哪一種處置、哪一季哪一集、哪一組 Tags。
+
+    `berth rebuild-ledger` 靠它把帳本長回來（plan §11.3 決定 9）。**不是另一套規則**：讀的方法是
+    「從路徑取出候選 → 用上面同一組模板重算一次 → 一字不差才算」，所以讀得出來的每一條都保證是
+    這些模板會寫出來的那一條，讀不出來的就是沒有，呼叫端不猜。
+    """
+
+    action: PlanAction
+    season: int | None = None
+    episode_start: int | None = None
+    episode_end: int | None = None
+    tags: Tags = field(default_factory=Tags)
+
+
+def read_target(
+    media: MediaSnapshot, relative: str, *, kind: FileKind, siblings: Sequence[str] = ()
+) -> Reading | None:
+    """`relative`（相對 Route 目標路徑、以 `/` 分段）是不是這部作品的某一條目標路徑。
+
+    `kind` 是那個檔案的分類（`parser.classify`，呼叫端算）：同一個檔名形狀的 `.ass` 與 `.mkv`
+    一個是字幕一個是正片，這一層不認副檔名。字幕靠 `siblings`（同一個資料夾裡的其他檔案）找到它
+    跟著的那個影片，因為字幕的檔名就是影片的主幹加一段語言（`subtitle_target`）。
+
+    **Tags 的讀法是正規的那一種**：`render()` 不是一對一的——`[X]` 可能是發佈組也可能是版本名。
+    這裡把沒有形狀的 token 依序放進發佈組、再放進版本名，而形狀固定的（來源、解析度、語言、
+    `Hardsub`、`v2`）放進它們自己的那一格。重算出來一字不差，所以檔名上說的事一件都沒丟。
+    """
+    parts = relative.split("/")
+    if not parts or parts[0] != folder_name(media):
+        return None
+    if len(parts) == 3 and parts[1] == EXTRAS_DIR:
+        return Reading(PlanAction.EXTRA) if extras_target(media, parts[2]) == relative else None
+    if kind is FileKind.SUBTITLE:
+        return _read_subtitle(media, relative, siblings)
+    if kind is not FileKind.VIDEO:
+        return None
+    return _read_video(media, relative)
+
+
+def _read_video(media: MediaSnapshot, relative: str) -> Reading | None:
+    """正片：劇集是 `Season NN/{前綴} - SxxEyy…`，電影是作品資料夾底下那一個檔案。"""
+    parts = relative.split("/")
+    name = parts[-1]
+    ext = extension(name)
+    body = name[: -len(ext)] if ext else name
+    if len(parts) == 2:
+        found = {
+            tags
+            for tags in _tag_readings(
+                body, lead=f"{folder_name(media)} - ", bare=folder_name(media)
+            )
+            if movie_target(media, tags=tags, ext=ext) == relative
+        }
+        return Reading(PlanAction.IMPORT, tags=found.pop()) if len(found) == 1 else None
+    if len(parts) != 3:
+        return None
+    head = _EPISODE_HEAD.match(body[len(_series_prefix(media)) :])
+    if not body.startswith(_series_prefix(media)) or head is None:
+        return None
+    season, start = int(head["season"]), int(head["episode"])
+    end = int(head["end"]) if head["end"] else None
+    if parts[1] != season_folder(season):
+        return None
+    found = {
+        tags
+        for tags in _tag_readings(body, lead=" ", bare=body)
+        if episode_target(media, season=season, episode=start, episode_end=end, tags=tags, ext=ext)
+        == relative
+    }
+    if len(found) != 1:
+        return None
+    return Reading(
+        PlanAction.IMPORT,
+        season=season,
+        episode_start=start,
+        # 單集是 `None`，與解析器寫的一樣（`domain.PlanItem`）：帳本比重複時靠它。
+        episode_end=end,
+        tags=found.pop(),
+    )
+
+
+def _read_subtitle(media: MediaSnapshot, relative: str, siblings: Sequence[str]) -> Reading | None:
+    """字幕：`{影片主幹}.{SUBTOKEN}.{lang}.{ext}`。季集與 Tags 是它跟著的那個影片的。"""
+    folder, _, name = relative.rpartition("/")
+    ext = extension(name)
+    for sibling in siblings:
+        sibling_folder, _, sibling_name = sibling.rpartition("/")
+        video_stem = stem(sibling_name)
+        if sibling_folder != folder or sibling == relative or not name.startswith(f"{video_stem}."):
+            continue
+        video = _read_video(media, sibling)
+        langs = _langs_of(name[len(video_stem) : len(name) - len(ext)])
+        if video is None or langs is None:
+            continue
+        if subtitle_target(sibling, langs=langs, ext=ext) == relative:
+            return Reading(
+                PlanAction.SUBTITLE,
+                season=video.season,
+                episode_start=video.episode_start,
+                episode_end=video.episode_end,
+                tags=video.tags,
+            )
+    return None
+
+
+def _langs_of(suffix: str) -> tuple[Lang, ...] | None:
+    """`.CHT.zh` / `.CHS+CHT.zh` / `.ja` / `.en` / 空字串 → 語言。讀不懂是 `None`。"""
+    if not suffix:
+        return ()
+    segments = suffix[1:].split(".")
+    by_code = {code: lang for lang, code in _LANGUAGE_CODE.items() if code != CHINESE}
+    if len(segments) == 1 and segments[0] in by_code:
+        return (by_code[segments[0]],)
+    if len(segments) == 2 and segments[1] == CHINESE:
+        tokens = segments[0].split("+")
+        if all(token in Lang.__members__ for token in tokens):
+            return tuple(Lang(token) for token in tokens)
+    return None
+
+
+#: 劇集檔名在前綴之後的那一段：` - S01E01` 或 ` - S01E01-E02`。
+_EPISODE_HEAD = re.compile(r" - S(?P<season>\d{2,})E(?P<episode>\d{2,})(?:-E(?P<end>\d{2,}))?")
+
+#: 檔名結尾那一串 `[..][..]`，前面接的是 `lead`。
+_TRAILING_TAGS = re.compile(r"((?:\[[^\[\]]*\])+)$")
+_TOKEN = re.compile(r"\[([^\[\]]*)\]")
+
+_RESOLUTION = re.compile(r"^(?:\d{3,4}[pi]|\dK)$", re.IGNORECASE)
+_VERSION = re.compile(r"^v\d+$")
+
+
+def _tag_readings(body: str, *, lead: str, bare: str) -> Iterator[Tags]:
+    """這個主幹可能帶著的 Tags：一個都沒有、或結尾那一串方括號。
+
+    兩種都給，由呼叫端重算比對：集名自己也可能以方括號結尾（`Foo [Bar]`），這時候「沒有 Tags」
+    那一種才是對的。`bare` 是沒有 Tags 時主幹該有的樣子（電影），劇集不限定（集名在中間）。
+    """
+    if body == bare or lead == " ":
+        yield Tags()
+    found = _TRAILING_TAGS.search(body)
+    if found is None or not body[: found.start()].endswith(lead):
+        return
+    tags = _slotted(_TOKEN.findall(found.group(1)))
+    if tags is not None:
+        yield tags
+
+
+#: `Tags.render()` 的順序，每一格收得下哪一種 token。發佈組不收 `v2` 那種形狀：那是版本。
+_SLOTS: tuple[tuple[str, Callable[[str], bool]], ...] = (
+    ("source", lambda token: token in Source.__members__),
+    ("resolution", lambda token: bool(_RESOLUTION.match(token))),
+    ("subs", lambda token: all(part in Lang.__members__ for part in token.split("+"))),
+    ("hardsub", lambda token: token == "Hardsub"),
+    ("group", lambda token: bool(token) and not _VERSION.match(token)),
+    ("version", lambda token: bool(_VERSION.match(token))),
+    ("edition", lambda token: bool(token)),
+)
+
+
+def _slotted(tokens: Sequence[str]) -> Tags | None:
+    """依 `render()` 的順序把 token 放進第一個收得下它的格子。放不下（順序不對、太多）是 `None`。"""
+    values: dict[str, object] = {}
+    slot = 0
+    for token in tokens:
+        while slot < len(_SLOTS) and not _SLOTS[slot][1](token):
+            slot += 1
+        if slot == len(_SLOTS):
+            return None
+        field = _SLOTS[slot][0]
+        if field == "source":
+            values[field] = Source(token)
+        elif field == "subs":
+            values[field] = tuple(Lang(part) for part in token.split("+"))
+        elif field == "hardsub":
+            values[field] = True
+        else:
+            values[field] = token
+        slot += 1
+    return Tags(**values)  # type: ignore[arg-type]  # 鍵是 `_SLOTS` 的欄位名，型別逐格換過了

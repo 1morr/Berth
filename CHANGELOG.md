@@ -544,6 +544,14 @@ Berth 入庫的作品照樣瀏覽得到。這六件事現在是 nightly e2e 的�
   系統自己收掉（`resolved_by = system`），問不到不算解除；它們的「忽略」在條件持續期間有效。十一種變十三種。
 - **磁碟空間門檻 `GET|POST /settings/disk`**（M2 票 09c）與服務設定頁上的一個欄位：`min_free_gb`，預設 10，`0` 是不量。
   形狀照 Sonarr 的 Minimum Free Space（一個全域數字），單位是 GB。存完立刻重量一次。新的設定分組 `settings.disk`。
+- **重新入庫 `POST /jobs/{hash}/reimport`**（M2 票 10，brief §9.3）：以那一筆的 complete 目錄重新走
+  planning → importing，torrent 不在客戶端也行；`job_files` 照磁碟上現在的樣子重寫。只有 admin（門禁），
+  `/jobs` 展開區多一顆「重新入庫」（`JobOut.reimportable`）。新的拒絕理由 `not_reimportable`、`content_missing`。
+- **`berth rebuild-ledger`**（M2 票 10，plan §11.3 決定 9）：從媒體庫的 inode 反查 complete，季集與 Tags
+  由命名模板反解（`naming.read_target`）；配不上的一律變成 `unmanaged_library_file`，理由在 `detail.reason`。
+- **三顆認領**（M2 票 10）：`orphan_complete` 的「重新入庫」、`unknown_torrent` 的「認領並建立下載」
+  （兩顆都在列上就地選作品，`POST /issues/{id}/resolve` 多帶 `media`）、`unmanaged_library_file` 的
+  「認領進帳本」。三顆都不刪東西。新的拒絕理由 `media_required`、`unclaimable`。
 - **刪除對話框是一個元件**（M2 票 04，plan §7）：`/jobs` 的展開區與 Media 詳情的版本清單共用，
   票 11 的 `/jobs/:hash` 掛的也是它。就地展開而不是 dialog（The Failure Expands In Place Rule）——
   「哪一筆正在被刪」正是這個動作最怕搞錯的事。取消「移除 torrent」會把「刪除檔案」一起收掉，
@@ -551,6 +559,10 @@ Berth 入庫的作品照樣瀏覽得到。這六件事現在是 nightly e2e 的�
   `job_hash`）：多版本並存時要拿掉的是其中一個。
 
 ### Changed
+
+- **帳本以來源冪等**（M2 票 10）：importer 先以目標路徑、再以「同一筆 Job 的同一個來源」找那一列帳本。
+  TMDB 改了集名之後重新入庫，那一列換到新的路徑、舊的那條鏈接（同 inode 才算自己的）被收掉，
+  而不是多長一列、讓 Jellyfin 多一個同一集的版本。
 
 - **管線 Issue 的那一列以下載的名字認**（M2 票 09c）：`missing_files` / `client_error` / `client_removed` 的
   `detail` 多帶 `name`，清單上不再是一串 hash。時間線上 `retried` 那一筆分得出是哪一顆（重新校驗、重試、重新規劃），

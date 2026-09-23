@@ -26,7 +26,7 @@ Issue，而使用者剛剛才決定過它。
 from __future__ import annotations
 
 import logging
-from collections.abc import Sequence
+from collections.abc import Coroutine, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -40,6 +40,7 @@ from berth.adapters.http import ServiceError
 from berth.adapters.jellyfin import scan_libraries
 from berth.domain import (
     ISSUE_ACTIONS,
+    NEEDS_MEDIA,
     EventType,
     IssueAction,
     IssueRefusal,
@@ -60,7 +61,7 @@ from berth.models import (
     subject_of,
 )
 from berth.models.types import utcnow
-from berth.services import complete
+from berth.services import claims, complete
 from berth.services.clients import ServiceClientFactory
 from berth.services.deletion import DeleteScope, delete_job
 from berth.services.hints import JobHints
@@ -226,13 +227,16 @@ async def resolve_issue(
     *,
     actor: str,
     plans: JobHints | None = None,
+    media: str = "",
 ) -> IssueView:
     """按下那一顆（brief §9.1 的「預設建議動作」那一欄）。
+
+    `media` 只有認領類的兩顆要（`NEEDS_MEDIA`）：管理員選的那一部作品（`tv:<tmdb>`）。
 
     **做得到才記成 resolved**：重新鏈接失敗時那一筆仍然是 `open`，清單上還看得到它。
     反過來的話畫面會說「修好了」，而媒體庫裡什麼都沒變。
 
-    `plans` 是規劃器的喚醒訊號（「重新規劃」那一顆用）。沒給也修得好：規劃器每 60 秒自己
+    `plans` 是規劃器的喚醒訊號（「重新規劃」與「重新入庫」用）。沒給也修得好：規劃器每 60 秒自己
     掃一次 `completed`（plan §3.2），給了只是早一點。
     """
     row = await _open_issue(session, issue_id)
@@ -242,6 +246,8 @@ async def resolve_issue(
             IssueRefusal.ACTION_NOT_AVAILABLE,
             f"{row.type.value} cannot be resolved with {action.value} right now",
         )
+    if action in NEEDS_MEDIA and not media:
+        raise IssueRejectedError(IssueRefusal.MEDIA_REQUIRED, "pick the work this belongs to")
 
     if action is IssueAction.RELINK:
         await _relink(session, row)
@@ -267,6 +273,14 @@ async def resolve_issue(
         await _accept(session, factory, row, actor=actor)
     elif action is IssueAction.RESUBMIT:
         await _resubmit(session, factory, row, actor=actor)
+    elif action is IssueAction.ADOPT:
+        await _claimed(claims.reimport_folder(session, factory, Path(row.path), media, actor=actor))
+    elif action is IssueAction.CLAIM_TORRENT:
+        await _claimed(
+            claims.claim_torrent(session, factory, row.job_hash or "", media, actor=actor)
+        )
+    elif action is IssueAction.CLAIM_FILE:
+        await _claim_file(session, factory, row, actor=actor)
     else:
         # 加一顆新的而沒有接到這裡，mypy 在這一行紅——不會靜靜跑到別顆的實作。
         assert_never(action)
@@ -276,7 +290,7 @@ async def resolve_issue(
     row.resolved_by = actor
     row.detail_json = {**(row.detail_json or {}), "action": action.value}
     await session.commit()
-    if action is IssueAction.REPLAN and plans is not None:
+    if action in _WAKES_PLANNER and plans is not None:
         # commit 之後才叫醒：規劃器那一輪讀的是資料庫，早叫它只會看到還是 `imported` 的那一列。
         plans.nudge()
     logger.info(
@@ -606,6 +620,31 @@ async def _resubmit(
         raise IssueRejectedError(IssueRefusal.RESUBMIT_FAILED, view.error)
 
 
+async def _claimed(work: Coroutine[Any, Any, Job]) -> None:
+    """重新入庫（孤兒目錄）或認領 torrent：建一筆 Job，交給管線照常的一輪（`services/claims`）。
+
+    兩顆都是「什麼都還沒動就拒絕」，說法直接是 `IssueRefusal`，這裡只換例外的型別。
+    """
+    try:
+        await work
+    except claims.ClaimRejectedError as refusal:
+        raise IssueRejectedError(refusal.reason, refusal.detail) from refusal
+
+
+async def _claim_file(
+    session: AsyncSession, factory: ServiceClientFactory, row: Issue, *, actor: str
+) -> None:
+    """認領進帳本：單一檔案的 `rebuild-ledger`。配不上的拒絕，那一件照舊開著
+    （brief §9.1「只列出」）。
+
+    **不刪任何東西**：配得上的只是多一列帳本；配不上的連帳本都不寫。
+    """
+    try:
+        await claims.claim_file(session, factory, Path(row.path), actor=actor)
+    except claims.UnclaimedError as miss:
+        raise IssueRejectedError(IssueRefusal.UNCLAIMABLE, miss.reason.value) from miss
+
+
 async def _broken_job(session: AsyncSession, row: Issue) -> Job:
     job = await session.get(Job, row.job_hash) if row.job_hash else None
     if job is None:
@@ -737,6 +776,9 @@ def _actions(row: Issue, job_state: JobState | None) -> tuple[IssueAction, ...]:
         usable.append(action)
     return tuple(usable)
 
+
+#: 按完之後叫醒規劃器：這幾顆都把一筆 Job 放在 `completed`，接下來是規劃器的事。
+_WAKES_PLANNER = frozenset({IssueAction.REPLAN, IssueAction.ADOPT})
 
 #: 這幾顆動的是帳本那一列，指不到它就按不了。
 _ON_THE_LEDGER_ROW = frozenset(

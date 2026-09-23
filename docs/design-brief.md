@@ -412,6 +412,8 @@ NCOP/NCED、PV、CM、Menu、預告、花絮等**可辨識**的非正片內容�
 
 中間四種是管線自己發現的（M1 以 `issue_detected` 事件記著，M2 起與對帳的七種共用 `issues` 表與同一個封閉集合，plan §2.4，2026-09-22 定）；最後兩種是 `health_checker` 每 5 分鐘量出來的（M2 票 09c，使用者拍板由健康檢查偵測而不是對帳），十三種共用一個集合。`ledger.status` 的 `target_missing` / `source_missing` / `inode_mismatch` 是帳本那一列的現況，Issue 是「要有人決定」的那一件——同一件事的兩個角度，resolve 之後帳本那一欄跟著改。
 
+**認領類三顆（M2 票 10 做完）**：都走既有的入庫路線、都不刪東西。「重新入庫」與「認領」**由管理員在列上選作品**（2026-09-23 使用者拍板：沒有作品的 Job 規劃出來只會整份停在 review 而且核准不了）；孤兒目錄建一筆 `trigger = reimport` 的 Job 停在 `completed`，無主 torrent 建一筆停在 `submitted`（Route 由它的 category 決定，只掛 `berth` tag 的說不出要入庫到哪裡，拒絕）。「認領進帳本」是單一檔案的 `berth rebuild-ledger`：inode 反查 complete、路徑照命名模板反解，配不上的拒絕、那一件開著。
+
 2026-09-23（M2 票 09 開工時使用者拍板）：「認領」類的三顆——`orphan_complete` 的重新入庫、`unknown_torrent` 的認領、`unmanaged_library_file` 的認領進帳本——在**票 10** 與 `reimport` / `rebuild-ledger` 一起做（同一組原語，先做一份會變成兩條入庫路徑）；管線那三種（`missing_files` / `client_error` / `client_removed`）的動作在**票 09c** 做完：重新校驗與重試讓 Job 回到檔案清單到手之後那一站（還沒有清單的回 `submitted`），由 poller 照常往前推；重新送單照存下來的下載連結再加一次，**先問過 Route、連結與 qBittorrent 才動 Job**；兩顆「承認」走刪除範圍四個旗標全不勾（Job 進 `removed`，磁碟與 qBittorrent 都不動，使用者 2026-09-23 拍板）。它們只在 Job 還停在那個壞掉的狀態時按得了。
 
 健康檢查那兩種**沒有 Berth 按得了的修法**，所以條件解除時系統自己收掉（`resolved_by = system`）；問不到 Jellyfin、量不到那個目錄不算解除。它們的**「忽略」在條件持續期間有效**（2026-09-23 使用者拍板）：其餘幾種忽略之後下一次偵測就開新的一筆，對 5 分鐘量一次的東西那等於忽略無效，而故意掛 TVDB 的使用者會被一直問。條件解除過一次、之後再發生才重開。會刪東西的按鈕（連 complete 一起刪、刪除孤兒目錄、以硬鏈接取代）按下去之前再確認一次世界：偵測在早上，按下去在下午。`job_without_files` 的判定有兩個例外（票 09）：那一份 Plan 本來就沒有要鏈的檔案（全是重複的那一包自動落地，§7.8）不算；使用者對那一筆按過「承認刪除並清帳本」的不算——帳本是他自己清的，再問他要不要重新規劃等於讓剛決定過的事自己回來。
@@ -434,6 +436,10 @@ NCOP/NCED、PV、CM、Menu、預告、花絮等**可辨識**的非正片內容�
 ### 9.3 重新入庫
 
 Import Source 可以是「complete 內任一資料夾」，不要求 torrent 仍存在。流程與正常入庫相同（planning → review/importing），帳本以來源相對路徑冪等，所以「刪了 library、保留 complete、再重新入庫」是一鍵動作。
+
+實作（M2 票 10）：兩個入口——Job 頁的 `POST /jobs/{hash}/reimport`（那一筆的 complete 目錄），與 `orphan_complete` 的「重新入庫」（沒有 Job 的目錄，建一筆 `trigger = reimport` 的 Job）。**Import Source 是磁碟上那一包**：`job_files` 照資料夾裡現在的樣子重寫，少了一集就少規劃一集，而不是照 torrent 的清單在 importer 那一步失敗。帳本冪等的鍵是「Job + 來源相對路徑」，所以 TMDB 在兩次之間改了集名時，那一列換到新路徑、舊的鏈接被收掉，Jellyfin 不會多一個同一集的版本。
+
+帳本本身沒了的時候（還原舊備份、手動清掉）是 `berth rebuild-ledger`：媒體庫裡帳本不認得的檔案，complete 裡有同一個 inode 的來源、而且路徑照命名模板讀得回季集與 Tags 才長回一列；**配不上的一律變成 `unmanaged_library_file`，不猜**（plan §11.3 決定 9）。
 
 ### 9.4 重新匹配（Rematch）
 

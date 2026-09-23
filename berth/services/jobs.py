@@ -84,6 +84,14 @@ RETRYABLE = frozenset({JobState.SUBMIT_FAILED, JobState.IMPORT_FAILED})
 #: 就在同一塊展開區裡。規則分兩個模組寫的話，其中一份遲早會漏掉一個狀態。
 REPLANNABLE = frozenset({JobState.COMPLETED, JobState.PLANNING, JobState.REVIEW})
 
+#: 重新入庫得了的狀態（brief §9.3、M2 票 10）：那一包**下載完成過**、而且現在沒有人正照著它
+#: 動檔案。`client_removed` 在裡面是 plan §3.1 那一列說的「可 reimport 若 complete 檔案仍在」；
+#: `removed` 在裡面是「刪了 library、保留 complete」那一條——刪除範圍只勾移除鏈接時落在那裡。
+#: 規劃中、入庫中、等審核的那幾個不在：重算走 `REPLANNABLE`，那一份計劃還沒被丟掉。
+REIMPORTABLE = frozenset(
+    {JobState.IMPORTED, JobState.IMPORT_FAILED, JobState.REMOVED, JobState.CLIENT_REMOVED}
+)
+
 
 class _JobLocks:
     """一個 job 一把程序內的鎖（plan §3.1、brief §5.3「同一時間一個 Job 只有一個 worker」）。
@@ -198,6 +206,8 @@ class JobView:
     retryable: bool
     #: 這一筆現在按得了「重新規劃」嗎（票 11）。與 `retryable` 同一個道理：規則在後端算。
     replannable: bool
+    #: 這一筆現在按得了「重新入庫」嗎（M2 票 10）。同上，規則在後端算。
+    reimportable: bool
     #: 這一筆現在那一份 Import Plan 的 id（票 11），沒算過就是 `None`。
     #:
     #: **是 id 而不是整份 Plan**：下載列表一次畫幾十列，而逐檔的決定只有展開那一列時才要
@@ -326,7 +336,7 @@ async def retry_job(session: AsyncSession, factory: ServiceClientFactory, job_ha
     # **與第一次送單同一組前提**：那條 Route 可能在中間被停用、被改成收別種作品，或紅了。
     # 只檢查健康的話「第一次送不出去、重試卻送得出去」——同一個決定兩種答案。
     subject = await session.get(Media, job.media_id) if job.media_id is not None else None
-    _check_route(route, subject)
+    check_route(route, subject)
 
     with job_context(job.hash):
         # poller 也會寫這一列（票 10），所以重試與迴圈排隊——CAS 保證不寫壞，鎖保證不做兩次。
@@ -387,7 +397,7 @@ async def resubmit_job(
     if route is None:
         raise JobRejectedError(JobRefusal.ROUTE_MISSING, str(job.route_id))
     subject = await session.get(Media, job.media_id) if job.media_id is not None else None
-    _check_route(route, subject)
+    check_route(route, subject)
 
     torrent = await _resolve(factory, job.source_url)
     if torrent.info_hash != job.hash:
@@ -504,11 +514,11 @@ async def _preconditions(
     route = await session.get(Route, route_id)
     if route is None:
         raise JobRejectedError(JobRefusal.ROUTE_MISSING, str(route_id))
-    _check_route(route, media)
+    check_route(route, media)
     return media, route
 
 
-def _check_route(route: Route, media: Media | None) -> None:
+def check_route(route: Route, media: Media | None) -> None:
     """這條 Route 現在收得下這一次送單嗎。**第一次送單與重試走同一支。**
 
     紅的 Route 送單一定失敗（brief §4.4）——硬鏈接或路徑有一條斷了，檔案下載完也進不了庫。
@@ -556,7 +566,7 @@ async def _finish(
     """
     await _submit(session, factory, job, route, torrent, actor=actor)
     if job.state is JobState.SUBMITTED and media is not None:
-        _freeze(media, route)
+        freeze(media, route)
     await session.commit()
 
 
@@ -638,7 +648,7 @@ async def _fail(session: AsyncSession, job: Job, detail: str, *, actor: str) -> 
     logger.warning("job submission failed", extra={"state": job.state.value, "error": detail})
 
 
-def _freeze(media: Media, route: Route) -> None:
+def freeze(media: Media, route: Route) -> None:
     """送單成功那一刻：資料夾名定死，Route 成為「上次用的」（plan §2.2、brief §4.5）。
 
     **已經凍結過的不重凍**：第二次送單時 TMDB 可能已經改了標題，而磁碟上的資料夾還是
@@ -830,6 +840,7 @@ def _view(job: Job, related: _Related) -> JobView:
         imported_at=job.imported_at,
         retryable=job.state in RETRYABLE,
         replannable=job.state in REPLANNABLE,
+        reimportable=job.state in REIMPORTABLE,
         plan_id=plan_id,
         audits=audits,
     )

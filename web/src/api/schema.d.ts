@@ -569,6 +569,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/jobs/{job_hash}/reimport": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Reimport
+         * @description 以那一筆的 complete 目錄重新入庫（brief §9.3、M2 票 10）。**只有 admin**（門禁）。
+         *
+         *     回的是退回 `completed` 的那一筆；算與鏈是規劃器與 importer 照常的一輪，所以這裡叫醒規劃器
+         *     而不是自己算——不另開一條入庫的路。
+         */
+        post: operations["post_reimport_api_jobs__job_hash__reimport_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/jobs/{job_hash}/retry": {
         parameters: {
             query?: never;
@@ -2013,13 +2036,12 @@ export interface components {
          *
          *     **「忽略」不在這裡**：它對每一種型別都按得了，而且不碰磁碟也不碰帳本（`ignore_issue`）。
          *
-         *     brief §9.1 那一欄還有三顆「認領」類的——`orphan_complete` 的重新入庫、`unknown_torrent` 的
-         *     認領、`unmanaged_library_file` 的認領進帳本——**在票 10**（2026-09-23 使用者拍板）：它們用的
-         *     正是那一張票的原語（目錄版 `reimport` 與 `rebuild-ledger` 的反查），先做一份會變成兩條入庫
-         *     路徑。管線那三種（`missing_files` / `client_error` / `client_removed`）的動作是票 09c 加的。
+         *     「認領」類的三顆（`adopt` / `claim_torrent` / `claim_file`）是票 10 加的：它們用的正是那一張
+         *     票的原語（目錄版 `reimport` 與 `rebuild-ledger` 的反查），不另開入庫的路。管線那三種
+         *     （`missing_files` / `client_error` / `client_removed`）的動作是票 09c 加的。
          * @enum {string}
          */
-        IssueAction: "relink" | "forget" | "delete_complete" | "mark_sourceless" | "replace_with_link" | "delete_orphan" | "replan" | "relook" | "rescan" | "recheck" | "accept_loss" | "retry" | "resubmit" | "accept_removal";
+        IssueAction: "relink" | "forget" | "delete_complete" | "mark_sourceless" | "replace_with_link" | "delete_orphan" | "replan" | "relook" | "rescan" | "recheck" | "accept_loss" | "retry" | "resubmit" | "accept_removal" | "adopt" | "claim_torrent" | "claim_file";
         /**
          * IssueOut
          * @description 清單上的一列（`services/issues.IssueView` 的對外形狀）。
@@ -2073,7 +2095,7 @@ export interface components {
          *     （plan §8.6）。其餘每一種都是「還沒開始就停住」。
          * @enum {string}
          */
-        IssueRefusal: "issue_missing" | "issue_not_open" | "action_not_available" | "source_missing" | "relink_failed" | "client_unreachable" | "reconcile_running" | "in_use" | "size_differs" | "jellyfin_unreachable" | "delete_failed" | "source_unavailable" | "resubmit_failed" | "route_unusable";
+        IssueRefusal: "issue_missing" | "issue_not_open" | "action_not_available" | "source_missing" | "relink_failed" | "client_unreachable" | "reconcile_running" | "in_use" | "size_differs" | "jellyfin_unreachable" | "delete_failed" | "source_unavailable" | "resubmit_failed" | "route_unusable" | "media_required" | "unclaimable";
         /**
          * IssueRefusalOut
          * @description 做不了的時候回的那一份。`reason` 給畫面挑句子，`detail` 是原文，不翻譯。
@@ -2092,6 +2114,11 @@ export interface components {
          */
         IssueResolveIn: {
             action: components["schemas"]["IssueAction"];
+            /**
+             * Media
+             * @default
+             */
+            media?: string;
         };
         /**
          * IssueRowOut
@@ -2357,6 +2384,8 @@ export interface components {
             retryable: boolean;
             /** Replannable */
             replannable: boolean;
+            /** Reimportable */
+            reimportable: boolean;
             /** Plan Id */
             plan_id: number | null;
             /** Audits */
@@ -2370,7 +2399,7 @@ export interface components {
          *     列上有一顆重試（plan §3.1）。這裡的每一種都是「還沒開始就停住」。
          * @enum {string}
          */
-        JobRefusal: "media_missing" | "route_missing" | "route_kind_mismatch" | "route_disabled" | "route_unhealthy" | "source_unavailable" | "job_missing" | "not_retryable" | "not_replannable" | "client_unreachable" | "delete_files_requires_remove_torrent";
+        JobRefusal: "media_missing" | "route_missing" | "route_kind_mismatch" | "route_disabled" | "route_unhealthy" | "source_unavailable" | "job_missing" | "not_retryable" | "not_replannable" | "client_unreachable" | "delete_files_requires_remove_torrent" | "not_reimportable" | "content_missing";
         /**
          * JobRefusalOut
          * @description 做不了的時候回的那一份。`reason` 給畫面挑句子、挑下一步，`detail` 是原文，不翻譯。
@@ -4247,7 +4276,7 @@ export interface operations {
                     "application/json": components["schemas"]["IssueRefusalOut"];
                 };
             };
-            /** @description `issue_not_open` · `source_missing` · `relink_failed` · `in_use` · `size_differs` · `delete_failed` · `resubmit_failed` · `route_unusable` */
+            /** @description `issue_not_open` · `source_missing` · `relink_failed` · `in_use` · `size_differs` · `delete_failed` · `resubmit_failed` · `route_unusable` · `unclaimable` */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -4256,7 +4285,7 @@ export interface operations {
                     "application/json": components["schemas"]["IssueRefusalOut"];
                 };
             };
-            /** @description `action_not_available` */
+            /** @description `action_not_available` · `media_required` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -4856,6 +4885,55 @@ export interface operations {
                 };
             };
             /** @description `not_replannable` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobRefusalOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_reimport_api_jobs__job_hash__reimport_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_hash: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobOut"];
+                };
+            };
+            /** @description `job_missing` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobRefusalOut"];
+                };
+            };
+            /** @description `not_reimportable` · `content_missing` */
             409: {
                 headers: {
                     [name: string]: unknown;

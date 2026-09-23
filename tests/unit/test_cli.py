@@ -198,3 +198,23 @@ class TestBench:
         )
         assert (written["auto_correct"], written["auto_wrong"]) == (0, 0)
         assert main(["bench"]) == 0
+
+
+class TestRebuildLedger:
+    """`berth rebuild-ledger` 的接線。反查與反解本身在 `tests/integration/test_claims.py`。"""
+
+    def test_an_empty_install_has_nothing_to_grow_back(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """全新的資料庫（schema 由 CLI 自己升）、沒有 Route：什麼都沒有配，離開碼 0。"""
+        monkeypatch.setenv("CONFIG_ROOT", str(tmp_path / "config"))
+        monkeypatch.setenv("DATA_ROOT", str(tmp_path / "data"))
+        (tmp_path / "config").mkdir()
+
+        assert main(["rebuild-ledger"]) == 0
+        out = capsys.readouterr().out
+        assert "already in the ledger: 0" in out
+        assert "grown back: 0" in out

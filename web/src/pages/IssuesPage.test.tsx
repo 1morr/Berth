@@ -407,6 +407,94 @@ describe('待處理頁', () => {
     expect(within(row).getByText('門檻')).toBeInTheDocument()
   })
 
+  it('重新入庫先選作品，送出去的是選的那一部（M2 票 10）', async () => {
+    const FOLDER = '/data/torrent/complete/anime/[Group] SPY×FAMILY S01'
+    const stub = render({
+      [ISSUES]: {
+        body: [
+          issue({
+            type: 'orphan_complete',
+            subject: FOLDER,
+            path: FOLDER,
+            job_hash: '',
+            ledger_id: null,
+            detail: { folder: true },
+            actions: ['delete_orphan', 'adopt'],
+          }),
+        ],
+      },
+      'GET /api/discover/search?q=spy': {
+        body: {
+          items: [
+            {
+              id: 'tv:120089',
+              tmdb_id: 120089,
+              kind: 'tv',
+              title: 'SPY×FAMILY 間諜家家酒',
+              title_en: 'SPY x FAMILY',
+              year: 2022,
+              poster_url: '',
+              poster_url_en: '',
+              tracked: true,
+            },
+          ],
+          problem: null,
+          detail: '',
+        },
+      },
+      'POST /api/issues/1/resolve': { body: issue({ status: 'resolved', actions: [] }) },
+    })
+    renderApp('/issues')
+    const row = await screen.findByRole('article')
+
+    await userEvent.click(within(row).getByRole('button', { name: '重新入庫' }))
+    // 沒選作品時沒有主動作可按：按下去才被拒的按鈕不該畫出來。
+    expect(within(row).queryByRole('button', { name: /入庫到/ })).not.toBeInTheDocument()
+    await userEvent.type(within(row).getByRole('searchbox'), 'spy')
+    await userEvent.click(await within(row).findByRole('button', { name: /SPY×FAMILY 間諜家家酒/ }))
+    await userEvent.click(
+      within(row).getByRole('button', { name: '入庫到《SPY×FAMILY 間諜家家酒》' }),
+    )
+
+    await waitFor(() => expect(sent(stub, 'POST /api/issues/1/resolve')).toBe(1))
+    const [, init] = stub.mock.calls.find(([input]) => String(input) === '/api/issues/1/resolve')!
+    expect(JSON.parse(String(init?.body))).toEqual({ action: 'adopt', media: 'tv:120089' })
+  })
+
+  it('認領進帳本配不上時那一列留著，並說出是哪一種配不上', async () => {
+    render({
+      [ISSUES]: {
+        body: [
+          issue({
+            type: 'unmanaged_library_file',
+            job_hash: '',
+            ledger_id: null,
+            detail: { reason: 'not_berth_naming' },
+            actions: ['claim_file'],
+          }),
+        ],
+      },
+      'POST /api/issues/1/resolve': {
+        status: 409,
+        body: { detail: { reason: 'unclaimable', detail: 'no_source' } },
+      },
+    })
+    renderApp('/issues')
+    const row = await screen.findByRole('article')
+
+    // `rebuild-ledger` 開的那一件帶著上一次沒配上的理由。
+    await userEvent.click(within(row).getByText('展開'))
+    expect(within(row).getByText(/不是 Berth 的命名模板寫得出來的/)).toBeInTheDocument()
+
+    await userEvent.click(within(row).getByRole('button', { name: '認領進帳本' }))
+
+    expect(
+      await within(row).findByText(
+        /配不上帳本，所以什麼都沒有寫。 complete 裡沒有一個檔案與它是同一份資料/,
+      ),
+    ).toBeInTheDocument()
+  })
+
   it('空的時候說的是「都對得上」，不是「沒有資料」', async () => {
     render({ [RECONCILE]: { body: finished() } })
     renderApp('/issues')

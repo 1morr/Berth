@@ -42,10 +42,11 @@ from berth.domain import (
 from berth.models import JellyfinSettings, Job, JobFile, LedgerEntry, Plan, PlanItem, Route
 from berth.models.types import utcnow
 from berth.services.clients import ServiceClientFactory
+from berth.services.deletion import remove_one
 from berth.services.events import EventHub, JobSignal
 from berth.services.jobs import actor_of, guarded, record_event, transition
 from berth.services.plan import WRITTEN, plan_counts
-from berth.services.resolver import first_resolve_at
+from berth.services.resolve_schedule import first_resolve_at
 from berth.services.settings import read_settings
 from berth.services.steps import message
 
@@ -177,6 +178,8 @@ async def _place(
         await _link_failed(session, job, item, target_text, None, "no file of this job backs it")
         return
     source = fs.under(job.save_path, source_row.rel_path)
+    # 只拿來決定帳本要不要重寫，不拿來決定要不要鏈接（那一步交給 `link()` 自己丟的例外）。
+    existed = Path(target_text).exists()
     try:
         facts = link_into(source, Path(target_text), roots=roots)
     except TargetTakenError:
@@ -189,11 +192,18 @@ async def _place(
         )
         return
 
-    known = await session.scalar(
-        select(LedgerEntry.id).where(LedgerEntry.target_path == target_text)
-    )
-    if known is None:
-        entry = LedgerEntry()
+    entry, stale = await _ledger_rows(session, job.hash, source_row.rel_path, target_text)
+    moved_from = [Path(row.target_path) for row in stale]
+    if entry is not None and entry.target_path != target_text:
+        moved_from.append(Path(entry.target_path))
+    if (
+        entry is None
+        or not existed
+        or not _current(entry, job.hash, source_row.rel_path, target_text)
+    ):
+        if entry is None:
+            entry = LedgerEntry()
+            session.add(entry)
         record_link(
             entry,
             job_hash=job.hash,
@@ -204,7 +214,6 @@ async def _place(
             item=item,
             now=now,
         )
-        session.add(entry)
         await record_event(
             session,
             job,
@@ -213,8 +222,70 @@ async def _place(
             payload={"file": item.rel_path, "target": target_text},
         )
         await restate_versions(session, item, target_text, now)
+    for row in stale:
+        await session.delete(row)
+    for old in moved_from:
+        _take_back_old(old, source, roots)
     item.applied_at = now
     item.error = ""
+
+
+async def _ledger_rows(
+    session: AsyncSession, job_hash: str, source_rel_path: str, target: str
+) -> tuple[LedgerEntry | None, list[LedgerEntry]]:
+    """這一條鏈接在帳本上該是哪一列，以及同一個來源還指著別處、該收掉的舊列。
+
+    **帳本以來源冪等**（brief §9.3）：同一個來源重新入庫一次還是同一列。只以目標路徑認的話，
+    TMDB 在兩次之間改了集名就會多長一列，而舊的那條鏈接留在媒體庫裡變成同一集的第二個版本。
+    目標路徑上已經有一列時仍然用它（`target_path` 是 unique，plan §3.3）——那是重新規劃看到
+    自己上一輪的鏈接，或 `rebuild-ledger` 長回來、還沒掛上 Job 的那一列。
+    """
+    at_target = await session.scalar(select(LedgerEntry).where(LedgerEntry.target_path == target))
+    elsewhere = list(
+        await session.scalars(
+            select(LedgerEntry)
+            .where(
+                LedgerEntry.job_hash == job_hash,
+                LedgerEntry.source_rel_path == source_rel_path,
+                LedgerEntry.target_path != target,
+            )
+            .order_by(LedgerEntry.id)
+        )
+    )
+    if at_target is None and elsewhere:
+        return elsewhere[0], elsewhere[1:]
+    return at_target, elsewhere
+
+
+def _current(entry: LedgerEntry, job_hash: str, source_rel_path: str, target: str) -> bool:
+    """帳本那一列已經說的是這一條鏈接的現況。是的話（而且鏈接本來就在）什麼都不改——上一次
+    反查到的 Jellyfin item 還算數，重寫一次只會讓 `jellyfin_resolver` 從頭再找一遍。
+
+    鏈接是這一次才新建的就不算現況，即使帳本還說 `ok`：媒體庫被刪掉而對帳還沒跑過的那一刻正是
+    這樣，而那個檔案在 Jellyfin 裡已經消失過一次，要重新反查、時間線也要記得它被鏈接回來。"""
+    return (
+        entry.status is LedgerStatus.OK
+        and entry.job_hash == job_hash
+        and entry.source_rel_path == source_rel_path
+        and entry.target_path == target
+    )
+
+
+def _take_back_old(old: Path, source: Path, roots: Sequence[Path]) -> None:
+    """同一個來源換了落點之後，收掉舊的那一條。**只收自己的**：與來源同一個 inode 才是 Berth
+    鏈出去的那一條；別的檔案（使用者放回去的一份複製品）不碰，下一輪對帳會把它列出來。
+
+    收不掉只留一行 log：新的那一條已經在了，這一集看得到；舊的那一條下一輪對帳是
+    `unmanaged_library_file`，而那一種永遠不自動刪（brief §9.1）。
+    """
+    try:
+        if not fs.same_inode(source, old):
+            return
+        remove_one(old, roots=roots)
+    except (OSError, fs.PathEscapeError) as exc:
+        logger.warning(
+            "the old link was left in place", extra={"target": str(old), "error": message(exc)}
+        )
 
 
 class TargetTakenError(Exception):

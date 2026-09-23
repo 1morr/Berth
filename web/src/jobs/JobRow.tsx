@@ -9,7 +9,7 @@ import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 
 import { meQueryOptions } from '../api/auth'
-import { jobEventsQueryOptions, retryJob, refusalOf, type Job } from '../api/jobs'
+import { jobEventsQueryOptions, reimportJob, retryJob, refusalOf, type Job } from '../api/jobs'
 import { planQueryOptions, replanJob } from '../api/plans'
 import { CopyLine, GHOST_LINK, GhostButton } from '../components/controls'
 import { AuditChip } from '../components/AuditChip'
@@ -55,6 +55,12 @@ export function JobRow({ job }: { job: Job }) {
   })
   const replan = useMutation({
     mutationFn: () => replanJob(job.hash),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['jobs'] })
+    },
+  })
+  const reimport = useMutation({
+    mutationFn: () => reimportJob(job.hash),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['jobs'] })
     },
@@ -163,6 +169,16 @@ export function JobRow({ job }: { job: Job }) {
             off={t('jobs.retryOff')}
           />
         )}
+        {/* 重新入庫會動媒體庫，只有 admin（M2 票 10，門禁同時擋）。以 complete 裡那一包為來源，
+            torrent 不在了也按得了——那正是它存在的理由（brief §9.3）。 */}
+        {job.reimportable && me.data?.role === 'admin' && (
+          <Action
+            run={reimport}
+            idle={t('jobs.reimport')}
+            busy={t('jobs.reimporting')}
+            off={t('jobs.reimportOff')}
+          />
+        )}
         {/* 刪除排在最後：它是這一塊裡唯一不可回復的動作，而重試與重新規劃是常用的那兩顆。
             展開區已經在 `<details>` 裡，所以刪除的二次確認也就地展開（不是 dialog）。 */}
         {open && me.data?.role === 'admin' && <JobDelete hash={job.hash} />}
@@ -172,6 +188,7 @@ export function JobRow({ job }: { job: Job }) {
           {replan.isSuccess
             ? t('jobs.plan.replanned', { state: t(`jobs.state.${job.state}`) })
             : ''}
+          {reimport.isSuccess ? t('jobs.reimported', { state: t(`jobs.state.${job.state}`) }) : ''}
         </p>
       </div>
     </details>

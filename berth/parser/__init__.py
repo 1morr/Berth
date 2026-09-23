@@ -4,7 +4,7 @@
 """
 
 from berth.parser.cjk import langs_in, normalize_cjk
-from berth.parser.classify import SAMPLE_RATIO, SHORT_FEATURE, classify
+from berth.parser.classify import SAMPLE_RATIO, SHORT_FEATURE, classify, kind_by_extension
 from berth.parser.mapping import VIRTUAL_SEASON_GAP, map_episode
 from berth.parser.planner import episode_span, plan, promote, revise
 from berth.parser.release import merge_release, parse_release, tags_of
@@ -21,6 +21,7 @@ __all__ = [
     "SubtitleMatch",
     "classify",
     "episode_span",
+    "kind_by_extension",
     "langs_in",
     "map_episode",
     "match_media",

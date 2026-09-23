@@ -248,7 +248,7 @@ _Avoid_: fix, remap, move
 _Avoid_: conflict, collision（那是同一包裡兩列寫到同一條路徑，`target_contested`）
 
 **Reimport**:
-以 complete 下的目錄為 Import Source 重新入庫。
+以 complete 下的目錄為 Import Source 重新入庫：Job 退回 `completed`，規劃器與 importer 照常的一輪接手，不要求 torrent 仍在客戶端。帳本以來源冪等（同一個來源永遠是同一列）。沒有 Job 的孤兒目錄按「重新入庫」時建一筆 `trigger = reimport` 的 Job。UI 上叫「重新入庫」。
 _Avoid_: re-run, resync
 
 ### 修復
@@ -264,6 +264,10 @@ _Avoid_: error, problem, orphan（僅作 Issue 型別名的一部分）
 **Unmanaged**:
 library 內不是 Berth 建立的檔案；只列出，永不刪除。
 _Avoid_: foreign, external, legacy
+
+**Claim**（認領）:
+把 Berth 不認得、但磁碟或 qBittorrent 上確實存在的東西收回來，不另開入庫的路：孤兒目錄 → Reimport、無主 torrent → 建一筆停在 `submitted` 的 Job、Unmanaged 檔案 → 帳本長回一列（inode 反查 complete、路徑照命名模板反解；配不上的不猜）。前兩種由管理員選作品。`berth rebuild-ledger` 是對整個媒體庫做第三種。
+_Avoid_: adopt（只當 `IssueAction.ADOPT` 這個按鈕值，函式一律叫 reimport）, import（那是 importer 的事）
 
 **Delete Scope**:
 刪除時可組合的四個旗標：移除 library 鏈接（`unlink`）、從 qBittorrent 移除 torrent（`remove_torrent`）、刪除 complete 檔案（`delete_files`）、清除帳本與 Job 紀錄（`purge`）。預設全不勾。

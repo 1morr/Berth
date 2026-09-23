@@ -406,3 +406,39 @@ class TestDeleteScope:
         assert client.delete(f"/api/jobs/{MAGNET_HASH}", headers=BROWSER).status_code == 403
         assert client.get(f"/api/jobs/{MAGNET_HASH}/deletion").status_code == 403
         assert client.get("/api/jobs").status_code == 200
+
+
+class TestReimport:
+    """`POST /jobs/{hash}/reimport`（M2 票 10）。流程本身在 `test_reimport.py`，
+    這裡只看門與形狀。"""
+
+    def test_an_ordinary_user_cannot_reimport_but_still_reads_the_list(
+        self, client: TestClient
+    ) -> None:
+        """驗收：`user` 登入時是 403，而 `GET /jobs` 照常（plan §6、brief §11）。"""
+        sign_in(client, ADMIN)
+        submit(client)
+        client.post("/api/auth/logout", headers=BROWSER)
+        sign_in(client, CREW)
+
+        assert client.post(f"/api/jobs/{MAGNET_HASH}/reimport", headers=BROWSER).status_code == 403
+        assert client.get("/api/jobs").status_code == 200
+
+    def test_a_job_still_in_the_client_is_not_reimportable(self, client: TestClient) -> None:
+        """剛送出去的那一筆還在下載：409，而且列上的旗標事先就說了不行。"""
+        sign_in(client)
+        submit(client)
+
+        response = client.post(f"/api/jobs/{MAGNET_HASH}/reimport", headers=BROWSER)
+
+        assert response.status_code == 409
+        assert response.json()["detail"]["reason"] == "not_reimportable"
+        assert [row["reimportable"] for row in client.get("/api/jobs").json()] == [False]
+
+    def test_a_job_that_is_not_there_is_404(self, client: TestClient) -> None:
+        sign_in(client)
+
+        response = client.post(f"/api/jobs/{MAGNET_HASH}/reimport", headers=BROWSER)
+
+        assert response.status_code == 404
+        assert response.json()["detail"]["reason"] == "job_missing"

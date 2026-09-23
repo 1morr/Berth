@@ -106,6 +106,7 @@ function job(): Job {
     imported_at: null,
     retryable: false,
     replannable: false,
+    reimportable: false,
     plan_id: null,
     audits: 0,
   }
