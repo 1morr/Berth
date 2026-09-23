@@ -208,8 +208,10 @@ class TestUndo:
 
         assert response.status_code == 204
         assert not Path(target).exists()
-        assert client.get("/api/review").json()["total"] == 0
+        # audit 那一列走了；回到 review 的那份 Plan 換成 `plan` 那一類等人（票 07）。
+        rows = client.get("/api/review").json()["rows"]
         job = client.get(f"/api/jobs/{HASH}").json()
+        assert [(row["kind"], row["ref"]) for row in rows] == [("plan", job["plan_id"])]
         assert job["state"] == "review"
         plan = client.get(f"/api/plans/{job['plan_id']}").json()
         assert plan["status"] == "pending_review"

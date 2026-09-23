@@ -16,7 +16,9 @@ from berth.domain import (
     ParseContext,
     PlanAction,
     PlanItem,
+    ReasonCode,
     SeasonSnapshot,
+    why,
 )
 from berth.parser import plan
 from berth.parser.score import Decision, score
@@ -74,7 +76,7 @@ class TestTooManyFiles:
 
         items = score(rows, context(episode_count=12))
 
-        assert any("15 files into season 1" in reason for reason in items[0].reasons)
+        assert why(ReasonCode.TOO_MANY_FILES, files=15, season=1, episodes=12) in items[0].reasons
 
     def test_exactly_the_season_is_fine(self) -> None:
         rows = [imported(number) for number in range(1, 13)]
@@ -122,14 +124,19 @@ class TestCompleteSeason:
 
         items = score(rows, context(episode_count=12))
 
-        assert all(any("end to end" in reason for reason in item.reasons) for item in items)
+        assert all(
+            any(reason.code is ReasonCode.SEASON_COMPLETE for reason in item.reasons)
+            for item in items
+        )
 
     def test_a_partial_batch_says_nothing(self) -> None:
         rows = [imported(number) for number in range(1, 6)]
 
         items = score(rows, context(episode_count=12))
 
-        assert not any("end to end" in reason for item in items for reason in item.reasons)
+        assert not any(
+            reason.code is ReasonCode.SEASON_COMPLETE for item in items for reason in item.reasons
+        )
 
     def test_a_batch_that_does_not_add_up_says_nothing(self) -> None:
         """十二集的季收到十三個檔案——那不是「數量吻合」。"""
@@ -137,7 +144,9 @@ class TestCompleteSeason:
 
         items = score(rows, context(episode_count=12))
 
-        assert not any("end to end" in reason for item in items for reason in item.reasons)
+        assert not any(
+            reason.code is ReasonCode.SEASON_COMPLETE for item in items for reason in item.reasons
+        )
 
 
 class TestThroughThePlanner:

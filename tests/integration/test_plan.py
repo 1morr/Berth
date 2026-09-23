@@ -32,9 +32,11 @@ from berth.domain import (
     PlanAction,
     PlanEngine,
     PlanStatus,
+    ReasonCode,
     ReviewReason,
     SeasonSnapshot,
     Tags,
+    why,
 )
 from berth.models import Event, Job, JobFile, LedgerEntry, Media, Plan, PlanItem, Route
 from berth.naming import episode_target, folder_name
@@ -42,7 +44,8 @@ from berth.parser import plan as decide
 from berth.pipeline import PlannerRunner
 from berth.services.events import EventHub, JobSignal
 from berth.services.hints import JobHints
-from berth.services.plan import plan_id_of, read_plan, replan_job, sweep_plans
+from berth.services.plan import plan_id_of, replan_job, sweep_plans
+from berth.services.plan_view import read_plan
 from berth.services.setup import complete_setup
 from tests.integration.arrange import arrange, factory_for
 from tests.integration.factories import FakeClientFactory
@@ -293,7 +296,7 @@ class TestEpisodeSpans:
         assert plan is not None
         first = next(item for item in plan.items if item.episode_start == 1)
         assert first.action is PlanAction.REVIEW
-        assert any("disappear from the season" in reason for reason in first.reasons)
+        assert why(ReasonCode.LIBRARY_SPAN_CLASH, known="S01E01-E02") in first.reasons
         assert plan.status is PlanStatus.PENDING_REVIEW
 
     async def test_the_other_episodes_of_the_batch_keep_their_verdict(

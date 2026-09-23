@@ -1,6 +1,6 @@
 # 07 — Review Queue ⅔：低信心 Plan 逐列編輯 + 批次核准
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Blocked by:** 06（佇列端點、清單元件與 `/review` 頁）
 
@@ -31,18 +31,31 @@ M2 最重的一張。低信心的 Plan 停在 `review`，M1 給的是**一份唯
 
 ## 驗收
 
-- [ ] Plan item 的理由是封閉集合的 code + 參數，zh-Hant 與 en 兩份都有；後端拼句子的舊路徑刪掉
+- [x] Plan item 的理由是封閉集合的 code + 參數，zh-Hant 與 en 兩份都有；後端拼句子的舊路徑刪掉
       （不留相容層）
-- [ ] 逐列改季集之後，那一列當場顯示新的目標路徑，且與 `apply_plan` 真的寫出來的一致
+- [x] 逐列改季集之後，那一列當場顯示新的目標路徑，且與 `apply_plan` 真的寫出來的一致
       （同一份命名函式，測試斷言兩者相同）
-- [ ] `PUT /plans/{id}/items` 對不合法的改動是拒絕而不是默默接受（至少：集數範圍反了、
+- [x] `PUT /plans/{id}/items` 對不合法的改動是拒絕而不是默默接受（至少：集數範圍反了、
       動作與檔案分類矛盾）
-- [ ] 核准 → Job 進 `importing` → 檔案真的入庫（整合測試走完整條）；拒絕 → 照 §3.1 的出邊
-- [ ] 批次核准與逐列改過之後的核准是同一條路徑（不是兩套）
-- [ ] `/review` 的 `plan` 那一類的列出現在最前面那一組（票 06 定的排序）
-- [ ] `user` 登入時 `/plans/{id}/items`、`approve`、`reject` 全是 403
-- [ ] `/impeccable shape` 產出留在 `.scratch/m2/`；窄版（390px）走得完整條審核，playwright 實跑
+- [x] 核准 → Job 進 `importing` → 檔案真的入庫（整合測試走完整條）；拒絕 → 照 §3.1 的出邊
+- [x] 批次核准與逐列改過之後的核准是同一條路徑（不是兩套）
+- [x] `/review` 的 `plan` 那一類的列出現在最前面那一組（票 06 定的排序）
+- [x] `user` 登入時 `/plans/{id}/items`、`approve`、`reject` 全是 403
+- [x] `/impeccable shape` 產出留在 `.scratch/m2/`；窄版（390px）走得完整條審核，playwright 實跑
       附截圖或文字結果
-- [ ] lint、type、test 綠燈
+- [x] lint、type、test 綠燈
 
 ## Comments
+
+- 2026-09-23 code-review（Standards）：`PlanEditor` 的 `heavy` prop 名稱讀不出「置頂那幾列用粗左框」——
+  **沿用**：`FileEntry` 早就用 `heavy` 表示同一件事（「這一列要人看一眼」，線變重不是變紅），換名字等於兩個詞說一件事。
+- 2026-09-23 code-review（Standards）：`review_decided` 的 payload 用 `PlanStatus` 的值（`approved` / `rejected`），
+  而按鈕的 enum 是 `PlanDecision`（`approve` / `reject`）——**不改**：事件是過去式的紀錄，說的是 Plan 變成了什麼狀態；
+  前端的時間線以 `approved` 判斷。要換成事件自己的字面值時兩端一起改。
+- 2026-09-23 code-review（Spec）：`target_exists` 的 Plan 不改那一列就核准會再撞一次、再停回 review——**不擋**：
+  把媒體庫裡那個不是 Berth 鏈接的檔案移走之後原樣核准正是合法的下一步（計劃區那一句就這樣說）。
+  要擋的話得先知道那個檔案還在不在，那是一次磁碟讀取，留給有 repro 的時候。
+- 2026-09-23 code-review（Spec）：使用者略過的字幕，影片改回入庫時不會自動跟回來（要手動改回「字幕」）——刻意的
+  （`parser.revise` 的註解）：人說略過就是略過。
+- 2026-09-23 Plan 的 `summary_json` 在 audit 撤銷之後沒有重算（票 06 的 `_back_to_review` 只換 `review_reason`），
+  佇列那一列的「要入庫 N 個 / 低 N」會比表格舊一格，逐列改一次就重算。沒有 repro 要修，記一行。

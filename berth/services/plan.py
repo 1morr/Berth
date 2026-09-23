@@ -36,6 +36,7 @@ from berth.domain import (
     EventType,
     FileEntry,
     FileKind,
+    ItemReason,
     JobRefusal,
     JobState,
     MediaSnapshot,
@@ -46,12 +47,15 @@ from berth.domain import (
     PlanSummary,
     ReviewReason,
     Tags,
+    episode_label,
+    why,
 )
 from berth.domain import PlanItem as PlannedFile
+from berth.domain import ReasonCode as Code
 from berth.logs import job_context
 from berth.models import Job, JobFile, LedgerEntry, Media, Plan, PlanItem, Route
 from berth.models.types import utcnow
-from berth.parser import SPAN_CLASH_CONSEQUENCE, classify, episode_span
+from berth.parser import classify, episode_span
 from berth.parser import plan as decide
 from berth.services.clients import ServiceClientFactory
 from berth.services.events import EventHub, JobSignal
@@ -65,6 +69,7 @@ from berth.services.jobs import (
     transition,
 )
 from berth.services.media import snapshot_for_planning
+from berth.services.plan_view import PlanView, dump_reasons, read_plan
 
 logger = logging.getLogger(__name__)
 
@@ -121,40 +126,6 @@ class PlanOutcome:
     preplanned: int
 
 
-@dataclass(frozen=True, slots=True)
-class PlanItemView:
-    """Plan 表格上的一列（brief §6.5：決定、信心與理由）。"""
-
-    id: int
-    rel_path: str
-    action: PlanAction
-    media_id: str | None
-    season: int | None
-    episode_start: int | None
-    episode_end: int | None
-    #: 相對於 Route 目標的位置。`review` 與 `unmatched` 多半是空的。
-    target_path: str
-    confidence: Confidence
-    reasons: tuple[str, ...]
-    #: medium 自動入庫掛的旗標（CONTEXT.md 的 Audit）。
-    audit: bool
-    error: str
-
-
-@dataclass(frozen=True, slots=True)
-class PlanView:
-    """一份 Plan 的一整份（`GET /api/plans/{id}`）。"""
-
-    id: int
-    job_hash: str | None
-    status: PlanStatus
-    engine: PlanEngine
-    engine_version: str
-    created_at: datetime
-    summary: PlanSummary
-    items: tuple[PlanItemView, ...]
-
-
 async def sweep_plans(
     session: AsyncSession,
     factory: ServiceClientFactory,
@@ -207,41 +178,6 @@ async def replan_job(
     if view is None:
         raise JobRejectedError(JobRefusal.NOT_REPLANNABLE, job.state.value)
     return view
-
-
-async def read_plan(session: AsyncSession, plan_id: int) -> PlanView | None:
-    row = await session.get(Plan, plan_id)
-    if row is None:
-        return None
-    items = await session.scalars(
-        select(PlanItem).where(PlanItem.plan_id == row.id).order_by(PlanItem.id)
-    )
-    return PlanView(
-        id=row.id,
-        job_hash=row.job_hash,
-        status=row.status,
-        engine=row.engine,
-        engine_version=row.engine_version,
-        created_at=row.created_at,
-        summary=PlanSummary.model_validate(row.summary_json or {}),
-        items=tuple(
-            PlanItemView(
-                id=item.id,
-                rel_path=item.rel_path,
-                action=item.action,
-                media_id=item.media_id,
-                season=item.season,
-                episode_start=item.episode_start,
-                episode_end=item.episode_end,
-                target_path=item.target_path,
-                confidence=item.confidence,
-                reasons=tuple(item.reasons_json or ()),
-                audit=item.audit,
-                error=item.error,
-            )
-            for item in items
-        ),
-    )
 
 
 async def plan_id_of(session: AsyncSession, job_hash: str) -> int | None:
@@ -524,10 +460,7 @@ def _apply_policy(items: Sequence[PlannedFile], route: Route | None) -> tuple[Pl
         item.model_copy(
             update={
                 "action": PlanAction.REVIEW,
-                "reasons": (
-                    *item.reasons,
-                    "this route does not import medium confidence by itself",
-                ),
+                "reasons": (*item.reasons, why(Code.MEDIUM_HELD_BY_ROUTE)),
             }
         )
         if item.action in WRITTEN and item.confidence is Confidence.MEDIUM
@@ -592,16 +525,10 @@ def _against(
     )
 
 
-def _span_clash(season: int, start: int, others: set[int]) -> str:
-    """開頭說得出媒體庫裡已經有哪一段，後果接解析器那一句（同一個後果只有一份字）。"""
-    known = ", ".join(
-        f"S{season:02d}E{start:02d}" + (f"-E{end:02d}" if end != start else "")
-        for end in sorted(others)
-    )
-    return (
-        f"the library already has {known}, which starts at the same episode but covers a "
-        f"different range; {SPAN_CLASH_CONSEQUENCE}"
-    )
+def _span_clash(season: int, start: int, others: set[int]) -> ItemReason:
+    """說得出媒體庫裡已經有哪一段；後果那半句與同一包那一條（`span_clash`）由畫面共用。"""
+    known = ", ".join(episode_label(season, start, end) for end in sorted(others))
+    return why(Code.LIBRARY_SPAN_CLASH, known=known)
 
 
 def _verdict(
@@ -631,7 +558,7 @@ def _verdict(
     return PlanStatus.AUTO, None
 
 
-def _summarise(items: Sequence[PlannedFile], reason: ReviewReason | None) -> PlanSummary:
+def summarise(items: Sequence[PlannedFile], reason: ReviewReason | None) -> PlanSummary:
     """一份 Plan 的一句話（`plans.summary_json`）。
 
     信心只數**不是 skip 的那些**：字型與海報雙方都同意可以忽略，把它們算進 high 會讓
@@ -676,7 +603,7 @@ async def _store(
     row.status = status
     row.engine = PlanEngine.RULES
     row.engine_version = VERSION
-    row.summary_json = _summarise(items, reason).model_dump(mode="json")
+    row.summary_json = summarise(items, reason).model_dump(mode="json")
     # 這一列永遠是「現在的計劃」，所以它的時間就是**算出它**的時間；上一份留在時間線上。
     row.created_at = now
 
@@ -697,7 +624,7 @@ async def _store(
                 tags_json=_tags(item.tags),
                 target_path=item.target_path,
                 confidence=item.confidence,
-                reasons_json=list(item.reasons),
+                reasons_json=dump_reasons(item.reasons),
                 audit=_audit(item, status),
             )
         )

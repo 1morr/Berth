@@ -125,10 +125,20 @@ describe('Job 時間線', () => {
   })
 
   it('認不得的事件型別原樣顯示——它仍然是一件真的發生過的事', () => {
-    // `review_decided` 是票 06 的審核才會寫的那一種（brief §5.2）。
-    const line = render([event({ type: 'review_decided' })])
+    // 後端跑在前面、前端還沒有那一句時的樣子（brief §5.2 的事件是開放的）。
+    const line = render([event({ type: 'from_the_future' })])
 
-    expect(line.getByText('review_decided')).toBeInTheDocument()
+    expect(line.getByText('from_the_future')).toBeInTheDocument()
+  })
+
+  it('核准與拒絕各說誰決定了什麼（M2 票 07）', () => {
+    const line = render([
+      event({ id: 1, type: 'review_decided', payload: { decision: 'approved', files: 2 } }),
+      event({ id: 2, type: 'review_decided', payload: { decision: 'rejected' } }),
+    ])
+
+    expect(line.getByText('管理員核准了，2 個檔案要入庫')).toBeInTheDocument()
+    expect(line.getByText('管理員拒絕了這份計劃，Berth 重新規劃')).toBeInTheDocument()
   })
 
   it('刪除那一筆說得出真的刪了哪幾樣、空出多少', () => {

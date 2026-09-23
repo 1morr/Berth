@@ -10,6 +10,7 @@ function item(overrides: Partial<PlanItem> = {}): PlanItem {
   return {
     id: 1,
     rel_path: '[Group] SPY×FAMILY S01E01 [1080p][CHT].mkv',
+    kind: 'video',
     action: 'import',
     media_id: 'tv:120089',
     season: 1,
@@ -18,8 +19,10 @@ function item(overrides: Partial<PlanItem> = {}): PlanItem {
     target_path:
       'SPY x FAMILY (2022) [tmdbid-120089]/Season 01/SPY x FAMILY (2022) - S01E01 - Episode 1 [WEB][1080p][CHT][Group].mkv',
     confidence: 'high',
-    reasons: ['the filename says S01E01'],
+    reasons: [{ code: 'season_from_release', params: { season: 1 } }],
     audit: false,
+    applied: false,
+    actions: [],
     error: '',
     ...overrides,
   }
@@ -33,6 +36,7 @@ function plan(overrides: Partial<Plan> = {}): Plan {
     engine: 'rules',
     engine_version: '0.1.0',
     created_at: '2026-09-11T12:00:00Z',
+    media_kind: 'tv',
     summary: { files: 1, high: 1, medium: 0, low: 0, actions: { import: 1 }, review_reason: null },
     items: [item()],
     ...overrides,
@@ -160,12 +164,13 @@ describe('匯入計劃', () => {
     expect(list.queryByText('高信心')).not.toBeInTheDocument()
     // 長的那兩段收起來，展開才有。
     expect(list.getByText(/Season 01/)).not.toBeVisible()
-    expect(list.getByText('the filename says S01E01')).not.toBeVisible()
+    expect(list.getByText('發佈名寫了第 1 季')).not.toBeVisible()
 
     await userEvent.click(list.getByText('[Group] SPY×FAMILY S01E01 [1080p][CHT].mkv'))
 
     expect(list.getByText(/Season 01/)).toBeVisible()
-    expect(list.getByText('the filename says S01E01')).toBeVisible()
+    // 理由是 code + 參數，句子由前端翻（M2 票 07）。
+    expect(list.getByText('發佈名寫了第 1 季')).toBeVisible()
   })
 
   it('略過的檔案也有一列——「沒有動它」與「沒看到它」是兩件事', async () => {
@@ -231,7 +236,7 @@ describe('匯入計劃', () => {
 
     // 計劃自己與那一組都說「待審核」：一個說整份停下來了，一個說是哪幾個檔案讓它停的。
     expect(screen.getAllByText('待審核')).toHaveLength(2)
-    expect(screen.getByText(/不讓 medium 信心的檔案自動入庫/)).toBeInTheDocument()
+    expect(screen.getByText(/不讓中信心的檔案自己入庫/)).toBeInTheDocument()
   })
 
   it('下載中的那一份說得出它只是預估', () => {

@@ -187,11 +187,15 @@ _Avoid_: mapping, import job, rename plan
 _Avoid_: draft plan, preview
 
 **Review Reason**（停下來的理由）:
-一份 Plan 停在 review 的四種理由：`low_confidence`、`medium_not_allowed`、`nothing_to_import`，以及入庫途中目標上已經有別人的檔案的 `target_exists`。四種的下一步不同，所以是封閉集合而不是一句話。
+一份 Plan 停在 review 的五種理由：`low_confidence`、`medium_not_allowed`、`nothing_to_import`、入庫途中目標上已經有別人的檔案的 `target_exists`，以及管理員撤銷了一個 Audit 的 `audit_undone`。五種的下一步不同，所以是封閉集合而不是一句話。停在 review 的 Plan 由管理員**核准**（照提案入庫）或**拒絕**（丟掉這一份、重新規劃）。
 _Avoid_: error, message
 
+**Landing**（核准後的落點）:
+一份停在 review 的 Plan 上每一列「核准的話會寫到哪裡」：待審核的列照提案算、字幕跟著影片，與核准時真的寫進 Plan 的是同一次計算，所以畫面上看到的就是 importer 待會兒鏈接的那一條。還沒有提案或不會進媒體庫的列沒有落點。
+_Avoid_: preview path, target preview
+
 **Plan Item**:
-Plan 中一個檔案的決定，`action` 為 import / extra / subtitle / skip / unmatched / review。
+Plan 中一個檔案的決定，`action` 為 import / extra / subtitle / skip / unmatched / review。它的理由是封閉集合的 code 加參數（`ReasonCode`），句子在畫面上翻。
 _Avoid_: entry, row
 
 **Confidence**:
@@ -199,7 +203,7 @@ Plan Item 的三級信心：high、medium、low。high 與 medium 自動入庫�
 _Avoid_: score, probability
 
 **Audit**:
-medium 信心自動入庫後掛的旗標（`plan_items.audit` 與 `ledger.audit` 各一份，importer 抄過去），在 Review Queue 顯示為「已入庫待確認」。**確認**清掉兩處旗標並記 event；**撤銷**刪掉硬鏈接與那一列帳本，Job 回 review（`review_reason = audit_undone`）。
+medium 信心自動入庫後掛的旗標（`plan_items.audit` 與 `ledger.audit` 各一份，importer 抄過去），在 Review Queue 顯示為「已入庫待確認」。**確認**清掉兩處旗標並記 event；**撤銷**刪掉硬鏈接與那一列帳本，Job 回 review（`review_reason = audit_undone`），那一列 Plan Item 回到沒有提案——撤銷說的是「這一集不對」，原樣再核准不行。
 _Avoid_: pending, provisional
 
 **Folder Name**（資料夾名）:

@@ -13,9 +13,11 @@ from berth.domain import (
     MediaSnapshot,
     ParseContext,
     PlanAction,
+    ReasonCode,
     SeasonSnapshot,
+    why,
 )
-from berth.parser import plan
+from berth.parser import plan, promote, revise
 
 
 def overlord() -> ParseContext:
@@ -112,7 +114,8 @@ class TestEpisodeSpans:
 
         reasons = [reason for item in plan(TORRENT, files, overlord()) for reason in item.reasons]
 
-        assert any("disappear from the season" in reason for reason in reasons)
+        # 後果那半句由畫面照 code 說（`web` 的 `span_clash` 句子），這裡釘的是 code。
+        assert why(ReasonCode.SPAN_CLASH) in reasons
 
     def test_the_target_path_is_kept_so_the_choice_is_visible(self) -> None:
         """兩個檔案各有各的路徑，都寫得出去——停下來只是因為該由人挑一份。"""
@@ -256,7 +259,12 @@ class TestConflicts:
             "CD2/[DBD-Raws][不死者之王 第二季][03][1080P][BDRip][FLAC].mkv",
         )
 
-        assert any("S02E03" in reason for reason in plan(TORRENT, files, overlord())[0].reasons)
+        contested = [
+            reason
+            for reason in plan(TORRENT, files, overlord())[0].reasons
+            if reason.code is ReasonCode.TARGET_CONTESTED
+        ]
+        assert contested and "S02E03" in str(contested[0].params["target"])
 
     def test_the_rest_of_the_torrent_is_untouched(self) -> None:
         files = entries(
@@ -300,3 +308,94 @@ class TestMovies:
             "Oppenheimer (2023) [tmdbid-872585]/"
             "Oppenheimer (2023) [tmdbid-872585] - [BD][1080p][YTS.MX].mp4"
         )
+
+
+VIDEO = "[DBD-Raws][不死者之王 第二季][03][1080P][BDRip][FLAC].mkv"
+SIDECAR = "[DBD-Raws][不死者之王 第二季][03][1080P][BDRip][FLAC].tc.ass"
+
+
+class TestRevising:
+    """人在 Review Queue 改過之後（M2 票 07）：路徑與字幕由同一份規則重算。"""
+
+    def test_moving_a_video_moves_its_target_and_its_sidecar_follows(self) -> None:
+        context = overlord()
+        video, sidecar = plan(TORRENT, entries(VIDEO, SIDECAR), context)
+
+        moved = video.model_copy(update={"season": 1, "episode_start": 5})
+        revised = revise((moved, sidecar), context.media)
+
+        assert revised[0].target_path == (
+            "Overlord [tmdbid-64196]/Season 01/Overlord - S01E05 [BD][1080p][CHS+CHT][DBD-Raws].mkv"
+        )
+        assert revised[1].target_path == (
+            "Overlord [tmdbid-64196]/Season 01/"
+            "Overlord - S01E05 [BD][1080p][CHS+CHT][DBD-Raws].CHT.zh.ass"
+        )
+
+    def test_revising_an_untouched_plan_changes_nothing(self) -> None:
+        """同一份規則：沒改過的 Plan 重算一次必須一字不差，否則畫面與 importer 會分岔。"""
+        context = overlord()
+        items = plan(TORRENT, entries(VIDEO, SIDECAR), context)
+
+        assert revise(items, context.media) == items
+
+    def test_a_settled_file_keeps_the_path_it_was_linked_at(self) -> None:
+        """已經鏈接進去的那一列，路徑是磁碟上的事實（brief §7.1：不自動改名）。"""
+        context = overlord()
+        (video,) = plan(TORRENT, entries(VIDEO), context)
+        linked = video.model_copy(update={"target_path": "somewhere/already.mkv"})
+
+        (kept,) = revise((linked,), context.media, settled={VIDEO})
+
+        assert kept.target_path == "somewhere/already.mkv"
+
+    def test_skipping_a_video_skips_its_sidecar(self) -> None:
+        """字幕留在 review 的話，一份人已經決定完的 Plan 會被它擋住。"""
+        context = overlord()
+        video, sidecar = plan(TORRENT, entries(VIDEO, SIDECAR), context)
+
+        skipped = video.model_copy(update={"action": PlanAction.SKIP})
+        revised = revise((skipped, sidecar), context.media)
+
+        assert [item.action for item in revised] == [PlanAction.SKIP, PlanAction.SKIP]
+        assert [item.target_path for item in revised] == ["", ""]
+
+    def test_a_sidecar_someone_skipped_stays_skipped(self) -> None:
+        context = overlord()
+        video, sidecar = plan(TORRENT, entries(VIDEO, SIDECAR), context)
+        dropped = sidecar.model_copy(update={"action": PlanAction.SKIP, "target_path": ""})
+
+        revised = revise((video, dropped), context.media)
+
+        assert (revised[1].action, revised[1].target_path) == (PlanAction.SKIP, "")
+
+
+class TestPromoting:
+    """核准＝照提案入庫（2026-09-23 使用者拍板）。"""
+
+    def test_a_held_row_with_a_proposal_becomes_an_import(self) -> None:
+        context = overlord()
+        (video,) = plan(TORRENT, entries(VIDEO), context)
+        held = video.model_copy(update={"action": PlanAction.REVIEW, "target_path": ""})
+
+        (promoted,) = revise(promote((held,), context.media), context.media)
+
+        assert promoted.action is PlanAction.IMPORT
+        assert promoted.target_path == video.target_path
+
+    def test_a_row_without_a_season_and_episode_stays_held(self) -> None:
+        context = overlord()
+        (video,) = plan(TORRENT, entries(VIDEO), context)
+        held = video.model_copy(
+            update={"action": PlanAction.REVIEW, "season": None, "episode_start": None}
+        )
+
+        assert promote((held,), context.media) == (held,)
+
+    def test_a_disc_structure_is_never_promoted(self) -> None:
+        """電影的路徑不需要季集，但光碟結構第一階段不拆（brief §6.2）。"""
+        context = oppenheimer()
+        (disc,) = plan("Oppenheimer.2023.BluRay", entries("BDMV/STREAM/00001.m2ts"), context)
+
+        assert disc.action is PlanAction.REVIEW
+        assert promote((disc,), context.media) == (disc,)

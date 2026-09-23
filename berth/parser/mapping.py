@@ -24,6 +24,7 @@ from berth.domain import (
     Candidate,
     Confidence,
     EpisodeSnapshot,
+    ItemReason,
     MappingStrategy,
     MediaKind,
     MediaSnapshot,
@@ -32,7 +33,10 @@ from berth.domain import (
     SeasonSnapshot,
     SpecialKind,
     at_most,
+    episode_label,
+    why,
 )
+from berth.domain import ReasonCode as Code
 from berth.parser.structure import StructureHints
 from berth.parser.title import match_media, matches, normalize_title
 
@@ -64,7 +68,7 @@ class _Hint:
     season: int
     strategy: MappingStrategy
     confidence: Confidence
-    reason: str
+    reason: ItemReason
 
 
 @dataclass(frozen=True, slots=True)
@@ -83,7 +87,7 @@ class _Check:
     """
 
     ceiling: Confidence
-    reasons: tuple[str, ...] = ()
+    reasons: tuple[ItemReason, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -93,7 +97,7 @@ class _Mapped:
     season: int
     start: int
     end: int | None
-    why: str
+    why: ItemReason
 
 
 def map_episode(
@@ -121,7 +125,7 @@ def map_episode(
                 None,
                 MappingStrategy.MOVIE,
                 Confidence.HIGH,
-                ("the job points at a movie, which has no season or episode",),
+                (why(Code.MOVIE),),
                 check,
             ),
         )
@@ -157,21 +161,21 @@ def _hint(
             context.season_hint,
             MappingStrategy.CONTEXT,
             Confidence.HIGH,
-            "the job names the season",
+            why(Code.SEASON_FROM_JOB, season=context.season_hint),
         )
     if info.season is not None:
         return _Hint(
             info.season,
             MappingStrategy.EXPLICIT,
             Confidence.HIGH,
-            f"the release name says season {info.season}",
+            why(Code.SEASON_FROM_RELEASE, season=info.season),
         )
     if structure.season is not None:
         return _Hint(
             structure.season,
             MappingStrategy.FOLDER,
             Confidence.HIGH,
-            f"the folder says season {structure.season}",
+            why(Code.SEASON_FROM_FOLDER, season=structure.season),
         )
     return _arc(media, text)
 
@@ -202,7 +206,7 @@ def _arc(media: MediaSnapshot, text: str) -> _Hint | None:
             best[1],
             MappingStrategy.ARC_NAME,
             Confidence.MEDIUM,
-            f"the release name carries the arc {best[2]!r}",
+            why(Code.SEASON_FROM_ARC, arc=best[2], season=best[1]),
         )
     return _final_season(media, haystack)
 
@@ -217,7 +221,7 @@ def _final_season(media: MediaSnapshot, haystack: str) -> _Hint | None:
         last,
         MappingStrategy.ARC_NAME,
         Confidence.MEDIUM,
-        f"the release name says final season; the last season is {last}",
+        why(Code.FINAL_SEASON, season=last),
     )
 
 
@@ -265,9 +269,12 @@ def _from_hint(
             )
 
     known = _exists(season, span.start) and _exists(season, span.end)
-    reasons: tuple[str, ...] = (hint.reason,)
+    reasons: tuple[ItemReason, ...] = (hint.reason,)
     if not known:
-        reasons = (*reasons, f"TMDB has no episode {span.start} in season {season.season_number}")
+        reasons = (
+            *reasons,
+            why(Code.EPISODE_NOT_ON_TMDB, season=season.season_number, number=span.start),
+        )
     return (
         _candidate(
             season.season_number,
@@ -298,9 +305,14 @@ def _cour(season: SeasonSnapshot, part: int, span: _Span) -> _Mapped | None:
         season=season.season_number,
         start=rows[span.start - 1].episode_number,
         end=_end_of(rows, span.end),
-        why=f"part {part} of season {season.season_number} starts at episode "
-        f"{rows[0].episode_number}, so its episode {span.start} is episode "
-        f"{rows[span.start - 1].episode_number}",
+        why=why(
+            Code.COUR_OFFSET,
+            part=part,
+            season=season.season_number,
+            first=rows[0].episode_number,
+            number=span.start,
+            episode=episode_label(season.season_number, rows[span.start - 1].episode_number),
+        ),
     )
 
 
@@ -325,9 +337,12 @@ def _virtual(
         season=season.season_number,
         start=rows[span.start - 1].episode_number,
         end=_end_of(rows, span.end),
-        why=f"TMDB has no season {hint.season}; air dates split its seasons into "
-        f"{len(cours)} runs and run {hint.season} starts at "
-        f"S{season.season_number:02d}E{rows[0].episode_number:02d}",
+        why=why(
+            Code.AIR_DATE_RUN,
+            season=hint.season,
+            runs=len(cours),
+            episode=episode_label(season.season_number, rows[0].episode_number),
+        ),
     )
     return (
         _from_mapped(
@@ -378,7 +393,7 @@ def _from_number(
                 span.end,
                 MappingStrategy.SINGLE_SEASON,
                 Confidence.MEDIUM,
-                ("the release only numbers episodes and TMDB has one season",),
+                (why(Code.SINGLE_SEASON),),
                 check,
             ),
         )
@@ -400,7 +415,7 @@ def _from_number(
 
 def _doubts(
     media: MediaSnapshot, info: ReleaseInfo, span: _Span, found: _Mapped
-) -> tuple[str, ...]:
+) -> tuple[ItemReason, ...]:
     """絕對編號換算不該自動入庫的理由（brief §6.4、§6.5，M1 票 14d）。沒有理由就是空的。
 
     1. **集號沒超過第一季的集數**：這個數字同時讀得成「第一季第 N 集」與「後面某季從 01
@@ -411,27 +426,33 @@ def _doubts(
        **沒有容忍範圍**——日播的劇差一集就是差一天；TMDB 沒有那一集的播出日也算對不上，
        因為沒有東西證實它。
     """
-    doubts: list[str] = []
+    doubts: list[ItemReason] = []
     first = _regular(media)[0]
     length = _length(first)
     if span.start <= length:
         doubts.append(
-            f"#{span.start} does not go past the {length} episodes of season "
-            f"{first.season_number}, so it could also be episode {span.start} of a later "
-            f"season that numbers from 01 again"
+            why(
+                Code.ABSOLUTE_WITHIN_FIRST_SEASON,
+                number=span.start,
+                episodes=length,
+                season=first.season_number,
+            )
         )
     if info.air_date is not None:
-        label = f"S{found.season:02d}E{found.start:02d}"
+        label = episode_label(found.season, found.start)
         aired = _aired(media, found.season, found.start)
         if aired is None:
             doubts.append(
-                f"the release says it aired on {info.air_date.isoformat()}, "
-                f"but TMDB has no air date for {label}"
+                why(Code.AIR_DATE_UNKNOWN, aired=info.air_date.isoformat(), episode=label)
             )
         elif aired != info.air_date:
             doubts.append(
-                f"the release says it aired on {info.air_date.isoformat()}, "
-                f"but TMDB says {label} aired on {aired.isoformat()}"
+                why(
+                    Code.AIR_DATE_MISMATCH,
+                    aired=info.air_date.isoformat(),
+                    episode=label,
+                    tmdb_aired=aired.isoformat(),
+                )
             )
     return tuple(doubts)
 
@@ -450,7 +471,7 @@ def _from_mapped(
     confidence: Confidence,
     span: _Span,
     check: _Check,
-    aside: tuple[str, ...] = (),
+    aside: tuple[ItemReason, ...] = (),
 ) -> Candidate:
     """換算結果 → Candidate。**區間的尾巴算不出來時降到 low**。
 
@@ -468,10 +489,7 @@ def _from_mapped(
             mapped.why,
             *aside,
             *(
-                (
-                    f"the release covers {span.start}-{span.end} but that range does not fit "
-                    f"one season",
-                )
+                (why(Code.RANGE_SPANS_SEASONS, start=span.start, end=span.end or span.start),)
                 if lost
                 else ()
             ),
@@ -502,8 +520,11 @@ def _absolute_group(seasons: tuple[SeasonSnapshot, ...], span: _Span) -> _Mapped
                 season=season.season_number,
                 start=row.episode_number,
                 end=end,
-                why=f"TMDB's absolute episode group puts #{span.start} at "
-                f"S{season.season_number:02d}E{row.episode_number:02d}",
+                why=why(
+                    Code.ABSOLUTE_GROUP,
+                    number=span.start,
+                    episode=episode_label(season.season_number, row.episode_number),
+                ),
             )
     return None
 
@@ -520,8 +541,11 @@ def _cumulative(seasons: tuple[SeasonSnapshot, ...], span: _Span) -> _Mapped | N
                 season=season.season_number,
                 start=start,
                 end=end if end is not None and end <= count else None,
-                why=f"counting seasons in order puts #{span.start} at "
-                f"S{season.season_number:02d}E{start:02d}",
+                why=why(
+                    Code.ABSOLUTE_CUMULATIVE,
+                    number=span.start,
+                    episode=episode_label(season.season_number, start),
+                ),
             )
         offset += count
     return None
@@ -565,10 +589,7 @@ def _resolve(info: ReleaseInfo, context: ParseContext) -> tuple[MediaSnapshot | 
     return found.media, _Check(
         # 「標題 + 年份精確命中」才配得上 high（brief §6.5）。
         ceiling=Confidence.HIGH if found.exact else Confidence.MEDIUM,
-        reasons=(
-            f"the job carries no media; {found.media.title_en!r} matched by title",
-            *found.reasons,
-        ),
+        reasons=(why(Code.MEDIA_BY_TITLE, title=found.media.title_en), *found.reasons),
     )
 
 
@@ -585,8 +606,11 @@ def _title_check(info: ReleaseInfo, media: MediaSnapshot) -> _Check:
         return _Check(
             ceiling=Confidence.MEDIUM,
             reasons=(
-                f"the release title {info.title_candidates[0]!r} does not look like "
-                f"{media.title_en!r}",
+                why(
+                    Code.TITLE_MISMATCH,
+                    release_title=info.title_candidates[0],
+                    title=media.title_en,
+                ),
             ),
         )
     return _Check(ceiling=Confidence.HIGH)
@@ -598,7 +622,7 @@ def _specials(season_number: int, check: _Check) -> _Check:
         return check
     return _Check(
         ceiling=at_most(check.ceiling, Confidence.MEDIUM),
-        reasons=(*check.reasons, "TMDB numbers its specials differently from most releases"),
+        reasons=(*check.reasons, why(Code.SPECIALS_NUMBERING)),
     )
 
 
@@ -608,7 +632,7 @@ def _candidate(
     end: int | None,
     strategy: MappingStrategy,
     confidence: Confidence,
-    reasons: tuple[str, ...],
+    reasons: tuple[ItemReason, ...],
     check: _Check,
 ) -> Candidate:
     """組一個 Candidate。標題覆核的上限與它那一句理由在這裡一次併進去。"""
@@ -618,7 +642,7 @@ def _candidate(
         episode_end=end,
         strategy=strategy,
         confidence=at_most(confidence, check.ceiling),
-        reasons=tuple(reason for reason in (*reasons, *check.reasons) if reason),
+        reasons=(*reasons, *check.reasons),
     )
 
 

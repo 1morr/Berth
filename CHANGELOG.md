@@ -490,6 +490,18 @@ Berth 入庫的作品照樣瀏覽得到。這六件事現在是 nightly e2e 的�
 - **`user` 看得到「等管理員審核」**（M2 票 06，brief §11）：`/jobs` 上停在待審核的那一列、Media 詳情
   （`MediaOut.awaiting_review`）各一句；admin 不畫。
 - **演練情境 `review`**（M2 票 06）：`issues` 加上兩集真的硬鏈接、掛 audit 的 medium 自動入庫。
+- **低信心 Plan 逐列改、核准、拒絕**（M2 票 07，plan §3.1 `review` 的出邊、§6 plans 群組）：
+  `PUT /plans/{id}/items`（改處置與季集，回改完的整份——新的目標路徑與跟著搬的字幕都在裡面）、
+  `POST /plans/{id}/approve`（`review → importing`，叫醒 importer）、`POST /plans/{id}/reject`
+  （`review → completed`，叫醒規劃器整份重算）。三支只有 admin（門禁的 `ADMIN_ROUTES`），`GET` 照舊誰都讀得到。
+  **核准＝照提案入庫**：待審核的列季集完整就入庫，寫下的路徑就是 `pending_review` 的 Plan 在畫面上
+  顯示的那一條（`services/plan_view.landing`）；沒有提案的列與撞同一條路徑的兩列擋住核准。不合法的
+  改動是 11 種封閉集合的拒絕（`PlanRefusal`：集數範圍反了、動作與檔案分類矛盾、已經入庫的列…），
+  整批不寫。每一列改得成哪幾種處置由後端依分類給（`EDITABLE_ACTIONS`）。時間線多一種 `review_decided`。
+- **Review Queue 的 `plan` 那一類**（M2 票 07，`.scratch/m2/plan-edit-shape.md`）：停在 review 的 Plan
+  排在「要你決定」那一段，逐列表格就地展開——要人看的列攤在最前，其餘照 `/jobs` 的分組收著；
+  逐列「改 → 套用」當場換成後端給的新路徑，核准一顆主要動作，拒絕就地確認。`/jobs` 上停在待審核的
+  那一筆，admin 展開看到一條到 `/review` 的路。演練情境 `review` 多一筆由規劃器算成低信心的 `- 05`。
 - **刪除對話框是一個元件**（M2 票 04，plan §7）：`/jobs` 的展開區與 Media 詳情的版本清單共用，
   票 11 的 `/jobs/:hash` 掛的也是它。就地展開而不是 dialog（The Failure Expands In Place Rule）——
   「哪一筆正在被刪」正是這個動作最怕搞錯的事。取消「移除 torrent」會把「刪除檔案」一起收掉，
@@ -696,6 +708,13 @@ Berth 入庫的作品照樣瀏覽得到。這六件事現在是 nightly e2e 的�
   票 02 留下的「沒有閘門」補成 `TestDeclaringWhatEachEndpointRefuses`：走訪每一條路由，比對它
   `responses` 上宣告的拒絕**形狀**與 handler 語法樹丟得出來的，漏宣告與多宣告都紅。
 
+- **Plan Item 的理由改成封閉集合的 code + 參數**（M2 票 07）：`reasons` 從解析器拼好的英文句子
+  變成 `[{code, params}]`（`domain.ReasonCode`，42 種），句子在前端、zh-Hant 與 en 兩份都有。參數是
+  檔名、季集、日期這種不翻譯的事實；每一種 code 帶哪幾個參數寫死在 `REASON_PARAMS`，`why()` 組的那一刻
+  核對，兩份語言的佔位符由 `tests/unit/test_reason_codes.py` 逐句比對。`/review` audit 列的 `notes`
+  （英文原文）改成同一套 `reasons`。**既有 `plan_items.reasons_json` 的英文句子由 migration 清空**
+  （使用者拍板不轉換）；重新規劃就用新格式重算。`/jobs` 計劃區那幾句「M1 還沒有審核佇列」改成指向審核佇列。
+
 ### Removed
 
 - Route 的 profile 選擇（票 14e）：精靈泊位 4、設定 →「媒體庫路徑」的新增與修改都不再問「命名 profile」，
@@ -704,6 +723,13 @@ Berth 入庫的作品照樣瀏覽得到。這六件事現在是 nightly e2e 的�
   `docs/research/profile-effect.md` 留著當紀錄。
 
 ### Fixed
+
+- **拒絕之後重算出來的那一筆「待審核」不再被時間線吞掉**（M2 票 07）：事件一分鐘內同內容只寫一次，
+  界線原本只有使用者按的重試；拒絕之後重算的 `review_required` 與第一份一字不差，於是時間線停在「已拒絕」
+  而那一筆已經又停回待審核。審核決定（`review_decided`）現在也是界線。
+- **撤銷一個 audit 之後不能原樣再核准**（M2 票 07 code-review）：撤銷的那一列 Plan Item 回到沒有提案
+  （`review`、季集與路徑清空），核准被 `undecided` 擋到管理員改那一列為止——否則按一次核准就把剛拆掉
+  的鏈接鏈回同一條路徑。同一次 `PUT /plans/{id}/items` 裡同一列出現兩次是 422，不再後者蓋前者。
 
 - **同一個新使用者兩次登入同時進來不再是 500**（M2 票 01）：`services/auth.py` 的鏡像使用者撞上
   `users.jellyfin_user_id` 的唯一索引時重讀那一列，兩條都拿到同一個鏡像使用者。

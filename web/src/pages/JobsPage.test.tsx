@@ -295,6 +295,7 @@ describe('下載列表頁', () => {
           engine: 'rules',
           engine_version: '0.1.0',
           created_at: '2026-09-11T12:00:00Z',
+          media_kind: 'tv',
           summary: {
             files: 0,
             high: 0,
@@ -307,6 +308,7 @@ describe('下載列表頁', () => {
             {
               id: 1,
               rel_path: 'Disc 1/theme.mkv',
+              kind: 'video',
               action: 'review',
               media_id: 'tv:120089',
               season: null,
@@ -314,8 +316,10 @@ describe('下載列表頁', () => {
               episode_end: null,
               target_path: '',
               confidence: 'low',
-              reasons: ['no season and episode could be worked out'],
+              reasons: [{ code: 'no_episode', params: {} }],
               audit: false,
+              applied: false,
+              actions: [],
               error: '',
             },
           ],
@@ -335,8 +339,8 @@ describe('下載列表頁', () => {
       await userEvent.click(await screen.findByText('1 個檔案'))
 
       expect(await screen.findByText('Disc 1/theme.mkv')).toBeInTheDocument()
-      expect(screen.getByText('no season and episode could be worked out')).toBeInTheDocument()
-      expect(screen.getByText(/M1 還沒有審核佇列/)).toBeInTheDocument()
+      expect(screen.getByText('推不出季集')).toBeInTheDocument()
+      expect(screen.getByText(/管理員在審核佇列逐列確認季集之後核准/)).toBeInTheDocument()
     })
 
     it('還沒算過的那一筆連問都不問——`plan_id` 是空的就是答案', async () => {
@@ -439,6 +443,31 @@ describe('停在待審核的那一筆（M2 票 06）', () => {
 
     await screen.findByText(/SPY×FAMILY - 13/)
     expect(screen.queryByText('等管理員審核')).not.toBeInTheDocument()
+  })
+
+  it('admin 展開那一筆看到的是去處理它的路（M2 票 07）', async () => {
+    render({ [JOBS]: { body: [job({ state: 'review' })] } })
+    renderApp('/jobs')
+
+    await userEvent.click(await screen.findByText(/SPY×FAMILY - 13/))
+
+    expect(await screen.findByRole('link', { name: '到審核佇列處理' })).toHaveAttribute(
+      'href',
+      '/review',
+    )
+  })
+
+  it('一般使用者展開那一筆沒有那條路', async () => {
+    render({
+      'GET /api/auth/me': { body: { name: 'deckhand', role: 'user' } },
+      [JOBS]: { body: [job({ state: 'review' })] },
+    })
+    renderApp('/jobs')
+
+    await userEvent.click(await screen.findByText(/SPY×FAMILY - 13/))
+
+    await screen.findByText('info hash')
+    expect(screen.queryByRole('link', { name: '到審核佇列處理' })).toBeNull()
   })
 
   it('不是待審核的那一筆什麼都不說', async () => {

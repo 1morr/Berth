@@ -619,15 +619,17 @@ async def record_event(
     會把同一件事再做一次；時間線上同一件事出現兩次，讀起來就是發生了兩次。比的是 payload
     的**內容**（鍵排序後的 JSON），不是 dict 恰好的鍵順序。
 
-    **使用者按下的重試是界線**：它是一次新的嘗試，之後發生的事就算與之前一模一樣，也是真的
-    又發生了一次。不設界線的話，重試之後又同樣失敗的那一筆會被吞掉，時間線停在「重試」而
-    狀態是失敗（code-review 抓到）。
+    **使用者按下的重試與審核決定是界線**（`DEDUP_BOUNDARIES`）：它們之後發生的事就算與之前
+    一模一樣，也是真的又發生了一次。不設界線的話，重試之後又同樣失敗的那一筆會被吞掉，時間線
+    停在「重試」而狀態是失敗（code-review 抓到）；拒絕之後重算出來、一字不差的那一筆
+    `review_required` 也會被吞掉，時間線停在「已拒絕」而那一筆又停回待審核（M2 票 07 抓到）。
     """
     now = utcnow()
     fingerprint = _fingerprint(payload)
-    last_retry = await session.scalar(
+    last_boundary = await session.scalar(
         select(func.max(Event.id)).where(
-            Event.job_hash == job.hash, Event.type == EventType.RETRIED.value
+            Event.job_hash == job.hash,
+            Event.type.in_([boundary.value for boundary in DEDUP_BOUNDARIES]),
         )
     )
     recent = await session.scalars(
@@ -635,7 +637,7 @@ async def record_event(
             Event.job_hash == job.hash,
             Event.type == event.value,
             Event.created_at >= now - EVENT_DEDUP_WINDOW,
-            Event.id > (last_retry or 0),
+            Event.id > (last_boundary or 0),
         )
     )
     if any(_fingerprint(row or {}) == fingerprint for row in recent):
@@ -656,6 +658,9 @@ async def record_event(
 
 #: 事件去重的窗口（plan §3.3）。
 EVENT_DEDUP_WINDOW = timedelta(minutes=1)
+
+#: 使用者的決定：它們之後的事件不與之前的比去重（`record_event`）。
+DEDUP_BOUNDARIES = (EventType.RETRIED, EventType.REVIEW_DECIDED)
 
 
 def _fingerprint(payload: dict[str, Any]) -> str:

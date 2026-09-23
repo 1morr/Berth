@@ -14,7 +14,8 @@ import unicodedata
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from berth.domain import MediaSnapshot, ReleaseInfo
+from berth.domain import ItemReason, MediaSnapshot, ReleaseInfo, why
+from berth.domain import ReasonCode as Code
 
 #: 正規化之後留下來的字：字母、數字與 CJK。分隔符、括號、`×`、`:` 全部丟掉——
 #: 同一部作品在不同發佈裡的差別幾乎都在這些字元上。
@@ -50,7 +51,7 @@ class MediaMatch:
 
     media: MediaSnapshot
     score: float
-    reasons: tuple[str, ...]
+    reasons: tuple[ItemReason, ...]
 
     @property
     def exact(self) -> bool:
@@ -103,7 +104,7 @@ def mentions(release_name: str, media: MediaSnapshot) -> bool:
 
 
 def _score(info: ReleaseInfo, media: MediaSnapshot) -> MediaMatch:
-    reasons: list[str] = []
+    reasons: list[ItemReason] = []
     score = 0.0
     for known in _known_titles(media):
         matched = _compare(info, known)
@@ -113,10 +114,10 @@ def _score(info: ReleaseInfo, media: MediaSnapshot) -> MediaMatch:
     if score and info.year is not None and media.year is not None:
         if info.year == media.year:
             score += _YEAR_BONUS
-            reasons.append(f"year {info.year} matches")
+            reasons.append(why(Code.YEAR_MATCHES, year=info.year))
         else:
             score -= _YEAR_PENALTY
-            reasons.append(f"year {info.year} is not {media.year}")
+            reasons.append(why(Code.YEAR_DIFFERS, year=info.year, expected=media.year))
     return MediaMatch(media=media, score=score, reasons=tuple(reasons))
 
 
@@ -158,9 +159,9 @@ def _known_titles(media: MediaSnapshot) -> tuple[str, ...]:
     return (media.title, media.title_en, media.title_original, *media.titles)
 
 
-def _reason(score: float, known: str) -> str:
+def _reason(score: float, known: str) -> ItemReason:
     if score == _EXACT:
-        return f"title matches {known!r}"
+        return why(Code.TITLE_EXACT, title=known)
     if score == _CONTAINED:
-        return f"release name contains {known!r}"
-    return f"release name carries most of {known!r}"
+        return why(Code.TITLE_CONTAINED, title=known)
+    return why(Code.TITLE_PARTIAL, title=known)

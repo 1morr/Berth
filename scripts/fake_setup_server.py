@@ -81,17 +81,21 @@ from berth.domain import (
     PlanAction,
     PlanStatus,
     PlanSummary,
+    ReasonCode,
     SeasonSnapshot,
     ServiceKind,
     ServiceOrigin,
     Source,
     Tags,
+    episode_label,
+    why,
 )
 from berth.main import create_app
 from berth.models import (
     IndexerSettings,
     JellyfinSettings,
     Job,
+    JobFile,
     LedgerEntry,
     Media,
     PathSettings,
@@ -373,7 +377,8 @@ def review_scenario() -> Scenario:
 
     同 `issues`（一件 `library_link_missing` 要先按「立刻對帳」才出現），加上 `_seed_review`：
     SPY×FAMILY 第二季的兩集只寫了絕對集號，累計換算成 S02E01、S02E02，信心 medium，
-    所以自動入庫並掛 audit。兩個鏈接都是真的，撤銷真的會把它從媒體庫拿掉。
+    所以自動入庫並掛 audit。兩個鏈接都是真的，撤銷真的會把它從媒體庫拿掉。另外一筆 `- 05`
+    下載完成、由規劃器算成低信心而停在 review（`_seed_held_plan`，票 07）：逐列改、核准、拒絕。
     """
     scenario = issues_scenario()
     scenario.review_demo = True
@@ -841,6 +846,9 @@ ISSUES_HASH = "5c1f0a7b2d3e4f60718293a4b5c6d7e8f9a0b1c2"
 
 #: `review` 情境那兩集 medium 自動入庫的下載。
 REVIEW_HASH = "6d2e1b8c3e4f5061728394b5c6d7e8f9a0b1c2d3"
+
+#: `review` 情境那一筆停在 review 的低信心下載（M2 票 07）。
+HELD_HASH = "7e3f2c9d4f5061728394a5b6c7d8e9f0a1b2c3d4"
 
 SCENARIOS = {
     "bundled": bundled,
@@ -1337,8 +1345,11 @@ async def _seed_review(session: AsyncSession, paths: PathSettings) -> None:
             target_path=f"{show}/Season 02/{target.name}",
             confidence=Confidence.MEDIUM,
             reasons_json=[
-                f"episode {absolute} is past season 1's 25 episodes",
-                f"absolute episode {absolute} is S02E{episode:02d} by the cumulative count",
+                why(
+                    ReasonCode.ABSOLUTE_CUMULATIVE,
+                    number=absolute,
+                    episode=episode_label(2, episode),
+                ).model_dump(mode="json")
             ],
             audit=True,
             applied_at=datetime.now(UTC),
@@ -1362,6 +1373,45 @@ async def _seed_review(session: AsyncSession, paths: PathSettings) -> None:
                 audit=True,
             )
         )
+    await session.commit()
+    await _seed_held_plan(session, route, source_dir.parent)
+
+
+async def _seed_held_plan(session: AsyncSession, route: Route, save_path: Path) -> None:
+    """一筆下載完成、還沒規劃的 SPY×FAMILY `- 05`（M2 票 07）。
+
+    **只放檔案與 `completed`，Plan 由產品自己的規劃器算**：伺服器起來之後 `planner_runner` 第一輪
+    就掃到它。`- 05` 只寫了集號、沒超過第一季的 25 集，讀得成 S01E05，也讀得成後面某季重新從
+    01 數的第 5 集——所以是 low，整份停在 review，提案 S01E05。同名的外掛字幕跟著影片走，字型略過。
+    在 `/review` 改那一列的季集、看路徑當場換掉，再核准，檔案真的硬鏈接進媒體庫。
+    """
+    release = "[ANi] SPY×FAMILY - 05 [1080P][WEB-DL][AAC AVC][CHT]"
+    folder = save_path / release
+    (folder / "fonts").mkdir(parents=True, exist_ok=True)
+    files = (f"{release}.mkv", f"{release}.cht.ass", "fonts/SourceHanSans.ttf")
+    for name in files:
+        (folder / name).write_bytes(name.encode())
+    session.add(
+        Job(
+            hash=HELD_HASH,
+            name=release,
+            source_url="",
+            trigger=JobTrigger.MANUAL,
+            media_id=media_id(MediaKind.TV, 120089),
+            route_id=route.id,
+            state=JobState.COMPLETED,
+            save_path=str(save_path).replace("\\", "/"),
+            content_path=str(folder).replace("\\", "/"),
+            progress=1.0,
+            completed_at=datetime.now(UTC),
+        )
+    )
+    session.add_all(
+        [
+            JobFile(job_hash=HELD_HASH, rel_path=f"{release}/{name}", size=len(name), priority=1)
+            for name in files
+        ]
+    )
     await session.commit()
 
 

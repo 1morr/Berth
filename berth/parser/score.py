@@ -16,12 +16,15 @@ from dataclasses import dataclass
 
 from berth.domain import (
     Confidence,
+    ItemReason,
     MappingStrategy,
     ParseContext,
     PlanAction,
     PlanItem,
     at_most,
+    why,
 )
+from berth.domain import ReasonCode as Code
 
 
 @dataclass(frozen=True, slots=True)
@@ -50,7 +53,7 @@ def _counts(row: Decision) -> bool:
     return row.item.action is PlanAction.IMPORT and row.item.episode_start is not None
 
 
-def _contradicted(rows: Sequence[Decision], context: ParseContext) -> dict[str, str]:
+def _contradicted(rows: Sequence[Decision], context: ParseContext) -> dict[str, ItemReason]:
     """互相矛盾、因此誰都不該自動入庫的檔案 → 說得出口的理由（brief §6.4 第 4 點、§6.5）。
 
     **「兩個檔案同一集」不在這裡**（票 07）：同一集的兩個版本本來就該並存（brief §7.7），
@@ -60,7 +63,7 @@ def _contradicted(rows: Sequence[Decision], context: ParseContext) -> dict[str, 
     return _overrun(rows, context)
 
 
-def _overrun(rows: Sequence[Decision], context: ParseContext) -> dict[str, str]:
+def _overrun(rows: Sequence[Decision], context: ParseContext) -> dict[str, ItemReason]:
     """影片數量明顯超過 TMDB 那一季的集數（brief §6.5 的 low）。
 
     一季十二集卻對出二十個檔案，表示這一包裡有東西被讀錯了——但**是哪一個檔案讀錯了
@@ -72,8 +75,9 @@ def _overrun(rows: Sequence[Decision], context: ParseContext) -> dict[str, str]:
         if row.item.season is not None:
             per_season[row.item.season].append(row)
     return {
-        row.item.rel_path: f"this torrent maps {len(found)} files into season {season}, "
-        f"which TMDB says has {counts[season]} episodes"
+        row.item.rel_path: why(
+            Code.TOO_MANY_FILES, files=len(found), season=season, episodes=counts[season]
+        )
         for season, found in per_season.items()
         if counts.get(season, 0) and len(found) > counts[season]
         for row in found
@@ -118,7 +122,7 @@ def _episode_counts(context: ParseContext) -> dict[int, int]:
 
 def _adjust(
     row: Decision,
-    contradicted: dict[str, str],
+    contradicted: dict[str, ItemReason],
     dominant: MappingStrategy | None,
     complete: frozenset[int],
 ) -> PlanItem:
@@ -136,16 +140,13 @@ def _adjust(
         return item.model_copy(
             update={
                 "confidence": at_most(item.confidence, Confidence.MEDIUM),
-                "reasons": (
-                    *item.reasons,
-                    f"the rest of this torrent was read as {dominant.value}, this file was not",
-                ),
+                "reasons": (*item.reasons, why(Code.STRATEGY_OUTLIER, strategy=dominant.value)),
             }
         )
     if _counts(row) and item.season in complete:
         return item.model_copy(
             update={
-                "reasons": (*item.reasons, f"this torrent covers season {item.season} end to end"),
+                "reasons": (*item.reasons, why(Code.SEASON_COMPLETE, season=item.season)),
             }
         )
     return item

@@ -6,6 +6,7 @@ import { Dot } from '../components/Dot'
 import { formatCoverage, formatEpisode } from '../components/episodes'
 import { FileEntry } from '../components/FileEntry'
 import { groupRows, type RowGroup } from '../components/rowGroups'
+import { Reasons } from '../plans/Reasons'
 
 /**
  * 一筆 Job 的 Import Plan（brief §6.5、票 11）。
@@ -158,17 +159,8 @@ function PlanRow({ item }: { item: PlanItem }) {
         </p>
       )}
 
-      {item.reasons.length > 0 && (
-        // 理由是**解析器自己產生的英文句子**（brief §6.3：`matched_tokens` 與規則名），
-        // 不走 i18n；`lang` 標出來，螢幕閱讀器才會用對的語音念它們。
-        <ul lang="en" className="grid gap-0.5">
-          {item.reasons.map((reason) => (
-            <li key={reason} className="value text-xs wrap-anywhere text-ink-dim">
-              {reason}
-            </li>
-          ))}
-        </ul>
-      )}
+      {/* 理由是封閉集合的 code + 參數，句子在前端（M2 票 07，`plans/reasonText.ts`）。 */}
+      <Reasons reasons={item.reasons} />
     </FileEntry>
   )
 }

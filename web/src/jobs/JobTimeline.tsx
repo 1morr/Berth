@@ -101,6 +101,7 @@ const EVENT_TYPES = [
   'preplan',
   'plan_generated',
   'review_required',
+  'review_decided',
   'linked',
   'link_failed',
   'jellyfin_scan_requested',
@@ -207,6 +208,15 @@ const FACTS: Record<KnownEvent, (facing: Facing) => ReactNode> = {
       <Row>{join([planned(t, payload), reason ? t(`jobs.timeline.review.${reason}`) : ''])}</Row>
     )
   },
+  // 核准或拒絕（M2 票 07）。拒絕之後規劃器整份重算，所以緊接著的就是新的那一份的 `review_required`
+  // 或 `plan_generated`——這一行只要說出誰決定了什麼。
+  review_decided: ({ t, payload }) => (
+    <p className="max-w-prose text-xs text-ink-dim">
+      {payload.decision === 'approved'
+        ? t('jobs.timeline.reviewApproved', { count: number(payload.files) })
+        : t('jobs.timeline.reviewRejected')}
+    </p>
+  ),
   // 入庫那幾筆（票 12）。一個檔案一筆 `linked`，所以它只帶**目標**——來源檔名在計劃那一塊，
   // 同一行印兩條長路徑會讓一季的時間線寬到讀不動。
   linked: ({ payload }) => <Row>{text(payload.target)}</Row>,

@@ -14,21 +14,26 @@ benchmark 量的就是這一支（`services/bench.py`）。
 from __future__ import annotations
 
 from collections import Counter
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 
 from berth.domain import (
     AUTO_APPLIED,
+    EDITABLE_ACTIONS,
     Candidate,
     Confidence,
     FileEntry,
     FileKind,
+    ItemReason,
     MediaKind,
     MediaSnapshot,
     ParseContext,
     PlanAction,
     PlanItem,
     ReleaseInfo,
+    Tags,
+    why,
 )
+from berth.domain import ReasonCode as Code
 from berth.naming import episode_target, extension, extras_target, movie_target, subtitle_target
 from berth.parser.classify import classify
 from berth.parser.mapping import map_episode, own_numbering
@@ -79,12 +84,12 @@ def _decide(
     info = merge_release(parse_release(entry.name), torrent)
 
     if (ignored := _IGNORED.get(entry.kind)) is not None:
-        return _plain(entry, info, ignored, Confidence.HIGH, f"classified as {entry.kind.value}")
+        return _plain(
+            entry, info, ignored, Confidence.HIGH, why(Code.CLASSIFIED, kind=entry.kind.value)
+        )
     if entry.kind is FileKind.DISC:
         # `BDMV/` 整包標記為需人工（brief §6.2）。第一階段不拆光碟結構。
-        return _plain(
-            entry, info, PlanAction.REVIEW, Confidence.LOW, "disc structure needs a human"
-        )
+        return _plain(entry, info, PlanAction.REVIEW, Confidence.LOW, why(Code.DISC_STRUCTURE))
 
     structure = structure_hints(entry.rel_path)
     candidates = map_episode(info, structure, context, release_name=torrent_name)
@@ -120,18 +125,16 @@ def _unmapped(
     就結案了；review 是「我連它是什麼都還沒想清楚」。
     """
     if context.media is None:
-        return _plain(entry, info, PlanAction.REVIEW, Confidence.LOW, "the job carries no media")
+        return _plain(entry, info, PlanAction.REVIEW, Confidence.LOW, why(Code.NO_MEDIA))
     if own_numbering(info, structure):
         return _plain(
             entry,
             info,
             PlanAction.UNMATCHED,
             Confidence.LOW,
-            "a special numbered by the release itself; TMDB numbers its specials differently",
+            why(Code.OWN_NUMBERED_SPECIAL),
         )
-    return _plain(
-        entry, info, PlanAction.REVIEW, Confidence.LOW, "no season and episode could be worked out"
-    )
+    return _plain(entry, info, PlanAction.REVIEW, Confidence.LOW, why(Code.NO_EPISODE))
 
 
 def _plain(
@@ -139,7 +142,7 @@ def _plain(
     info: ReleaseInfo,
     action: PlanAction,
     confidence: Confidence,
-    reason: str,
+    reason: ItemReason,
 ) -> Decision:
     return Decision(
         item=PlanItem(
@@ -214,23 +217,21 @@ def _attach(
                     info,
                     PlanAction.UNMATCHED,
                     Confidence.LOW,
-                    "no video in this torrent carries this subtitle",
+                    why(Code.SUBTITLE_ORPHAN),
                 ).item
             )
         else:
-            decided.append(_subtitle(entry, info, videos[found.video], found))
+            decided.append(_subtitle(entry, tags_of(info), videos[found.video], found))
     return tuple(decided)
 
 
-def _subtitle(
-    entry: FileEntry, info: ReleaseInfo, video: PlanItem, found: SubtitleMatch
-) -> PlanItem:
+def _subtitle(entry: FileEntry, tags: Tags, video: PlanItem, found: SubtitleMatch) -> PlanItem:
     """一個配到影片的字幕檔。
 
-    語言由字幕自己的檔名與資料夾決定（`match_subtitle`），`info` 的 tag 才用 torrent 名補
+    語言由字幕自己的檔名與資料夾決定（`match_subtitle`），`tags` 的語言才用 torrent 名補
     ——`附官方日英简繁中字幕` 說的是這一包有四種字幕，不是這一個檔案有四種。
     """
-    reasons = (*found.reasons, f"it follows {video.rel_path!r}")
+    reasons = (*found.reasons, why(Code.SUBTITLE_FOLLOWS, video=video.rel_path))
     if video.action is PlanAction.IMPORT and video.target_path:
         return PlanItem(
             rel_path=entry.rel_path,
@@ -239,7 +240,7 @@ def _subtitle(
             season=video.season,
             episode_start=video.episode_start,
             episode_end=video.episode_end,
-            tags=tags_of(info),
+            tags=tags,
             confidence=video.confidence,
             target_path=subtitle_target(
                 video.target_path, langs=found.langs, ext=extension(entry.name)
@@ -247,15 +248,99 @@ def _subtitle(
             reasons=reasons,
         )
     # 影片沒有入庫，字幕就沒有地方掛。跟著它走，人在 review 裡看到的才是一對。
-    action = PlanAction.UNMATCHED if video.action is PlanAction.UNMATCHED else PlanAction.REVIEW
     return PlanItem(
         rel_path=entry.rel_path,
         kind=entry.kind,
-        action=action,
-        tags=tags_of(info),
+        action=_FOLLOWS.get(video.action, PlanAction.REVIEW),
+        tags=tags,
         confidence=Confidence.LOW,
-        reasons=(*reasons, f"that video is {video.action.value}"),
+        reasons=(*reasons, why(Code.VIDEO_NOT_IMPORTED, action=video.action.value)),
     )
+
+
+#: 影片沒有入庫時字幕跟著它去哪裡。影片還在等人決定時字幕也等（`review`）；影片被人略過或改成
+#: 特典時字幕跟著略過——特典旁邊不掛字幕，而留在 review 會擋住一份已經決定完的 Plan。
+#: 解析器自己產不出略過或特典的影片（分類成 extra 的不在影片那一堆裡），那兩格只在人改過之後用到。
+_FOLLOWS: dict[PlanAction, PlanAction] = {
+    PlanAction.UNMATCHED: PlanAction.UNMATCHED,
+    PlanAction.SKIP: PlanAction.SKIP,
+    PlanAction.EXTRA: PlanAction.SKIP,
+}
+
+
+# --- 人改過之後（M2 票 07） ---------------------------------------------------------------
+
+
+def promote(items: Sequence[PlanItem], media: MediaSnapshot | None) -> tuple[PlanItem, ...]:
+    """核准＝照提案入庫（2026-09-23 使用者拍板）：待審核的列季集完整就變成 `import`。
+
+    「完整」的判準就是**算得出目標路徑**——與 importer 要的是同一件事，所以不另外寫一份
+    「季集夠不夠」的規則。只有分類上能入庫的列才升（`EDITABLE_ACTIONS`）：光碟結構算得出一條
+    電影路徑也不行。字幕不在這裡升，它在 `revise` 裡跟著影片走。
+    """
+    if media is None:
+        return tuple(items)
+    promoted: list[PlanItem] = []
+    for item in items:
+        candidate = item.model_copy(update={"action": PlanAction.IMPORT})
+        ready = (
+            item.action is PlanAction.REVIEW
+            and PlanAction.IMPORT in EDITABLE_ACTIONS[item.kind]
+            and _target_of(candidate, media)
+        )
+        promoted.append(candidate if ready else item)
+    return tuple(promoted)
+
+
+def revise(
+    items: Sequence[PlanItem],
+    media: MediaSnapshot | None,
+    *,
+    settled: Collection[str] = (),
+) -> tuple[PlanItem, ...]:
+    """人改過之後重算目標路徑與字幕的附掛。**與規劃時同一份 `_target_of` 與 `_subtitle`**，
+    所以畫面上那一條路徑就是 importer 待會兒寫的那一條（票 07 的驗收）。
+
+    `settled` 是已經鏈接進媒體庫的那幾列（rel_path）：它們的路徑是磁碟上的事實，不重算——
+    快照後來補上的集標題會讓同一集算出另一個檔名（brief §7.1：不自動改名）。字幕照樣可以
+    跟著它們走。**不偵測衝突**：兩列寫到同一條路徑時規劃是把兩列都送 review，而這裡是人剛做的
+    決定，要拒絕並說出來（`services/plan_review.py`），不是默默改回去。
+    """
+    retargeted = tuple(
+        item
+        if item.rel_path in settled or item.kind is FileKind.SUBTITLE
+        else item.model_copy(
+            update={"target_path": _target_of(item, media) if media is not None else ""}
+        )
+        for item in items
+    )
+    videos = [item for item in retargeted if item.kind is FileKind.VIDEO]
+    return tuple(
+        _refollow(item, videos, media)
+        if item.kind is FileKind.SUBTITLE
+        and item.rel_path not in settled
+        and item.action is not PlanAction.SKIP
+        else item
+        for item in retargeted
+    )
+
+
+def _refollow(item: PlanItem, videos: Sequence[PlanItem], media: MediaSnapshot | None) -> PlanItem:
+    """一個字幕重新找它的影片。配不到的照規劃時的那一句（`subtitle_orphan`）。"""
+    # `size` 是必填欄位而字幕配對不看它（只看檔名與資料夾），存下來的 Plan Item 也沒有這一格。
+    entry = FileEntry(rel_path=item.rel_path, size=0, kind=FileKind.SUBTITLE)
+    found = match_subtitle(entry, videos)
+    if found is None or media is None:
+        return item.model_copy(
+            update={
+                "action": PlanAction.UNMATCHED,
+                "target_path": "",
+                "confidence": Confidence.LOW,
+                "reasons": (why(Code.SUBTITLE_ORPHAN),),
+            }
+        )
+    video = next(video for video in videos if video.rel_path == found.video)
+    return _subtitle(entry, item.tags, video, found)
 
 
 # --- 衝突（brief §6.4 第 5 點） ---------------------------------------------------------
@@ -276,29 +361,12 @@ def _contested(item: PlanItem) -> PlanItem:
             "action": PlanAction.REVIEW,
             "confidence": Confidence.LOW,
             "target_path": "",
-            "reasons": (
-                *item.reasons,
-                f"another file in this torrent would be written to {item.target_path!r}",
-            ),
+            "reasons": (*item.reasons, why(Code.TARGET_CONTESTED, target=item.target_path)),
         }
     )
 
 
 # --- 涵蓋範圍衝突（brief §7.8、§20.9） ---------------------------------------------------
-
-
-#: **後果**那一句。使用者看到的不是「檔案重複」，而是一集會從 Jellyfin 的集列表上消失。
-#: 比帳本的那一半（`services/plan.py`）接的是同一句——同一個後果不該有兩份字。
-SPAN_CLASH_CONSEQUENCE = (
-    "Jellyfin 12 groups files by season and episode only, so it would fold them into one "
-    "episode and the later ones would disappear from the season"
-)
-
-#: 同一包裡撞上的那一句。帳本那一邊的開頭不同（它說得出媒體庫裡已經有哪一段），後果共用。
-SPAN_CLASH = (
-    "another feature file starts at the same episode but covers a different range; "
-    + SPAN_CLASH_CONSEQUENCE
-)
 
 
 def _spans(items: Sequence[PlanItem]) -> tuple[PlanItem, ...]:
@@ -326,7 +394,7 @@ def _clashing(item: PlanItem, ends: dict[tuple[int, int], set[int]]) -> PlanItem
         update={
             "action": PlanAction.REVIEW,
             "confidence": Confidence.LOW,
-            "reasons": (*item.reasons, SPAN_CLASH),
+            "reasons": (*item.reasons, why(Code.SPAN_CLASH)),
         }
     )
 

@@ -99,7 +99,7 @@ class TestTheQueue:
         assert row.title_en == "SPY x FAMILY"
         assert row.actions == (AuditAction.CONFIRM, AuditAction.UNDO)
         # 解析器的理由是英文原文，給人判斷的證據。至少要有一句——medium 從來不是沒有原因的。
-        assert row.notes
+        assert row.reasons
 
     async def test_an_open_issue_is_on_it_with_the_buttons_issues_worked_out(
         self, session: AsyncSession, roots: dict[str, Path]

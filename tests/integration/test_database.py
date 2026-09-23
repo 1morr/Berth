@@ -179,6 +179,44 @@ def _pointers_at_route(database_path: Path) -> tuple[int | None, int | None]:
     return job, media
 
 
+#: 票 07 把 `plan_items.reasons_json` 從英文句子改成 `{code, params}` 的那一版，與它的前一版。
+REASON_CODES = "b58e3d1f7a20"
+BEFORE_REASON_CODES = "a71c4e08b5d2"
+
+
+async def test_old_reason_sentences_are_cleared_and_coded_ones_are_kept(config: Config) -> None:
+    """票 07：舊格式的英文句子清成空清單（使用者拍板不轉換），新格式與空值不動。"""
+    config.config_root.mkdir(parents=True, exist_ok=True)
+    engine = create_engine(config)
+    coded = '[{"code": "single_season", "params": {}}]'
+    try:
+        async with engine.begin() as connection:
+            await connection.run_sync(_upgrade_to, BEFORE_REASON_CODES)
+        with _sqlite(config.database_path) as db:
+            db.execute(
+                "INSERT INTO plans (id, source_path, engine, engine_version, status, created_at,"
+                " decided_by) VALUES (1, '/x', 'rules', '', 'pending_review',"
+                " '2026-09-23T00:00:00.000000+00:00', '')"
+            )
+            for item, reasons in ((1, '["the job names the season"]'), (2, coded), (3, None)):
+                db.execute(
+                    "INSERT INTO plan_items (id, plan_id, rel_path, action, target_path,"
+                    " confidence, reasons_json, audit, error)"
+                    " VALUES (?, 1, 'a.mkv', 'review', '', 'low', ?, 0, '')",
+                    (item, reasons),
+                )
+            db.commit()
+
+        async with engine.begin() as connection:
+            await connection.run_sync(_upgrade_to, REASON_CODES)
+        with _sqlite(config.database_path) as db:
+            rows = dict(db.execute("SELECT id, reasons_json FROM plan_items").fetchall())
+    finally:
+        await engine.dispose()
+
+    assert rows == {1: "[]", 2: coded, 3: None}
+
+
 async def test_alembic_records_the_head_revision(config: Config) -> None:
     await migrate(config)
 

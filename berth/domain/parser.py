@@ -142,6 +142,219 @@ class PlanAction(StrEnum):
     REVIEW = "review"
 
 
+#: 一個檔案在 Review Queue 上改得成哪幾種處置，依它的分類（M2 票 07）。**動作與分類矛盾的
+#: 改動一律拒絕**：字型不會變成一集、字幕只能跟著它的影片走或被略過。
+#:
+#: 影片與特典可以互換——mediainfo 把短的正片降成 extra（brief §6.2），而 NCOP 偶爾被當成正片。
+#: 光碟結構第一階段不拆（brief §6.2），只能留在原位或略過。`review` 不在任何一格裡：它是
+#: 「還沒決定」，而這裡的每一次改動都是一個決定。
+EDITABLE_ACTIONS: dict[FileKind, tuple[PlanAction, ...]] = {
+    FileKind.VIDEO: (PlanAction.IMPORT, PlanAction.EXTRA, PlanAction.UNMATCHED, PlanAction.SKIP),
+    FileKind.EXTRA: (PlanAction.EXTRA, PlanAction.IMPORT, PlanAction.UNMATCHED, PlanAction.SKIP),
+    FileKind.SUBTITLE: (PlanAction.SUBTITLE, PlanAction.SKIP),
+    FileKind.DISC: (PlanAction.UNMATCHED, PlanAction.SKIP),
+    FileKind.FONT: (PlanAction.SKIP,),
+    FileKind.AUDIO: (PlanAction.SKIP,),
+    FileKind.IMAGE: (PlanAction.SKIP,),
+    FileKind.ARCHIVE: (PlanAction.SKIP,),
+    FileKind.SAMPLE: (PlanAction.SKIP,),
+    FileKind.OTHER: (PlanAction.SKIP,),
+}
+
+
+class ReasonCode(StrEnum):
+    """Plan Item 的一條理由是哪一種（brief §6.5 的 `reasons[]`，M2 票 07）。
+
+    **封閉集合加參數，不是後端拼好的句子**：句子由前端照 code 挑、以 zh-Hant 與 en 各寫一份，
+    參數是檔名、季集、日期這種**不翻譯**的事實。拼好的英文句子翻不了譯，測試也只能比子字串。
+
+    依來源分段：季號從哪裡來、集號怎麼換算、為什麼信心被壓下來、字幕跟著誰、整包一起看的結果。
+    """
+
+    # --- 作品 -------------------------------------------------------------------------
+    #: Job 指向一部電影，電影沒有季集。
+    MOVIE = "movie"
+    #: Job 沒有帶作品，`{title}` 是從候選裡以標題認出來的（brief §6.4 第 2 點）。
+    MEDIA_BY_TITLE = "media_by_title"
+    #: 發佈標題與 `{title}` 完全相同。
+    TITLE_EXACT = "title_exact"
+    #: 發佈名裡整串出現 `{title}`。
+    TITLE_CONTAINED = "title_contained"
+    #: 發佈名帶著 `{title}` 的大部分詞。
+    TITLE_PARTIAL = "title_partial"
+    #: 發佈寫的年份 `{year}` 對上了。
+    YEAR_MATCHES = "year_matches"
+    #: 發佈寫的是 `{year}`，作品是 `{expected}`。
+    YEAR_DIFFERS = "year_differs"
+    #: 發佈標題 `{release_title}` 看起來不像 `{title}`（信心上限 medium）。
+    TITLE_MISMATCH = "title_mismatch"
+    #: Job 沒有帶作品，所以沒有季集可以對照。
+    NO_MEDIA = "no_media"
+
+    # --- 季號從哪裡來 -----------------------------------------------------------------
+    #: Job 或 Rule 指定了第 `{season}` 季。
+    SEASON_FROM_JOB = "season_from_job"
+    #: 發佈名寫了第 `{season}` 季。
+    SEASON_FROM_RELEASE = "season_from_release"
+    #: 資料夾寫了第 `{season}` 季。
+    SEASON_FROM_FOLDER = "season_from_folder"
+    #: 發佈名帶著篇章名 `{arc}`，那是第 `{season}` 季的名字（plan §4.4）。
+    SEASON_FROM_ARC = "season_from_arc"
+    #: 發佈名說最終季，而最後一季是第 `{season}` 季。
+    FINAL_SEASON = "final_season"
+
+    # --- 集號怎麼來的 -----------------------------------------------------------------
+    #: 只有集號，而 TMDB 上這部作品只有一季。
+    SINGLE_SEASON = "single_season"
+    #: TMDB 的絕對編號分組把 `#{number}` 放在 `{episode}`。
+    ABSOLUTE_GROUP = "absolute_group"
+    #: 各季集數累加，`#{number}` 落在 `{episode}`。
+    ABSOLUTE_CUMULATIVE = "absolute_cumulative"
+    #: 第 `{season}` 季的第 `{part}` 部分從第 `{first}` 集開始，
+    #: 所以它的第 `{number}` 集是 `{episode}`。
+    COUR_OFFSET = "cour_offset"
+    #: TMDB 沒有第 `{season}` 季；播出日把各季切成 `{runs}` 輪，
+    #: 第 `{season}` 輪從 `{episode}` 開始。
+    AIR_DATE_RUN = "air_date_run"
+
+    # --- 信心被壓下來 -----------------------------------------------------------------
+    #: TMDB 第 `{season}` 季沒有第 `{number}` 集。
+    EPISODE_NOT_ON_TMDB = "episode_not_on_tmdb"
+    #: `#{number}` 沒有超過第 `{season}` 季的 `{episodes}` 集，也可能是後面某季重新從 01 數的。
+    ABSOLUTE_WITHIN_FIRST_SEASON = "absolute_within_first_season"
+    #: 發佈說它在 `{aired}` 播出，TMDB 沒有 `{episode}` 的播出日。
+    AIR_DATE_UNKNOWN = "air_date_unknown"
+    #: 發佈說它在 `{aired}` 播出，TMDB 說 `{episode}` 在 `{tmdb_aired}`。
+    AIR_DATE_MISMATCH = "air_date_mismatch"
+    #: 發佈涵蓋 `{start}`–`{end}`，但那一段放不進同一季。
+    RANGE_SPANS_SEASONS = "range_spans_seasons"
+    #: 字幕組的特典編號與 TMDB 的 S00 不保證一致。
+    SPECIALS_NUMBERING = "specials_numbering"
+
+    # --- 處置 -------------------------------------------------------------------------
+    #: 分類就決定了處置：它是 `{kind}`（`FileKind`）。
+    CLASSIFIED = "classified"
+    #: 光碟結構，第一階段不拆（brief §6.2）。
+    DISC_STRUCTURE = "disc_structure"
+    #: 字幕組自己編號的特典，TMDB 的特典編號不同（brief §7.6）。
+    OWN_NUMBERED_SPECIAL = "own_numbered_special"
+    #: 推不出季集。
+    NO_EPISODE = "no_episode"
+    #: 這一包裡沒有影片配得上這個字幕。
+    SUBTITLE_ORPHAN = "subtitle_orphan"
+    #: 字幕與影片同名。
+    SUBTITLE_SAME_NAME = "subtitle_same_name"
+    #: 字幕在字幕資料夾裡、寫著第 `{number}` 集。
+    SUBTITLE_FOLDER_EPISODE = "subtitle_folder_episode"
+    #: 它跟著 `{video}` 走。
+    SUBTITLE_FOLLOWS = "subtitle_follows"
+    #: 它跟著的影片的處置是 `{action}`（`PlanAction`），所以它也沒有地方掛。
+    VIDEO_NOT_IMPORTED = "video_not_imported"
+
+    # --- 整包一起看 -------------------------------------------------------------------
+    #: 這一包裡另一個檔案也會寫到 `{target}`（brief §6.4 第 5 點）。
+    TARGET_CONTESTED = "target_contested"
+    #: 同一包裡另一個正片從同一集開始、涵蓋的範圍不同；Jellyfin 12 會把它們併成一集（brief §7.8）。
+    SPAN_CLASH = "span_clash"
+    #: 媒體庫已經有 `{known}`，從同一集開始、範圍不同（同上，比的是帳本）。
+    LIBRARY_SPAN_CLASH = "library_span_clash"
+    #: 這一包把 `{files}` 個檔案對進第 `{season}` 季，TMDB 說那一季有 `{episodes}` 集。
+    TOO_MANY_FILES = "too_many_files"
+    #: 這一包其餘的檔案以 `{strategy}`（`MappingStrategy`）讀出來，這一個不是。
+    STRATEGY_OUTLIER = "strategy_outlier"
+    #: 這一包從頭到尾蓋滿第 `{season}` 季。
+    SEASON_COMPLETE = "season_complete"
+    #: 這條 Route 不讓 medium 自己入庫（brief §6.5）。
+    MEDIUM_HELD_BY_ROUTE = "medium_held_by_route"
+
+    # --- 人 ---------------------------------------------------------------------------
+    #: 管理員在 Review Queue 改過這一列（M2 票 07）。
+    SET_BY_USER = "set_by_user"
+
+
+_C = ReasonCode
+
+#: 每一種理由帶哪幾個參數。**句子裡的佔位符就是這幾個**：`why()` 在組的那一刻核對，前端兩份語言的
+#: `jobs.plan.why.*` 由 `tests/unit/test_reason_codes.py` 逐句比對——參數改了名而句子沒跟上，
+#: 畫面上就會印出一個 `{{season}}`。
+REASON_PARAMS: dict[ReasonCode, frozenset[str]] = {
+    _C.MOVIE: frozenset(),
+    _C.MEDIA_BY_TITLE: frozenset({"title"}),
+    _C.TITLE_EXACT: frozenset({"title"}),
+    _C.TITLE_CONTAINED: frozenset({"title"}),
+    _C.TITLE_PARTIAL: frozenset({"title"}),
+    _C.YEAR_MATCHES: frozenset({"year"}),
+    _C.YEAR_DIFFERS: frozenset({"year", "expected"}),
+    _C.TITLE_MISMATCH: frozenset({"release_title", "title"}),
+    _C.NO_MEDIA: frozenset(),
+    _C.SEASON_FROM_JOB: frozenset({"season"}),
+    _C.SEASON_FROM_RELEASE: frozenset({"season"}),
+    _C.SEASON_FROM_FOLDER: frozenset({"season"}),
+    _C.SEASON_FROM_ARC: frozenset({"arc", "season"}),
+    _C.FINAL_SEASON: frozenset({"season"}),
+    _C.SINGLE_SEASON: frozenset(),
+    _C.ABSOLUTE_GROUP: frozenset({"number", "episode"}),
+    _C.ABSOLUTE_CUMULATIVE: frozenset({"number", "episode"}),
+    _C.COUR_OFFSET: frozenset({"part", "season", "first", "number", "episode"}),
+    _C.AIR_DATE_RUN: frozenset({"season", "runs", "episode"}),
+    _C.EPISODE_NOT_ON_TMDB: frozenset({"season", "number"}),
+    _C.ABSOLUTE_WITHIN_FIRST_SEASON: frozenset({"number", "episodes", "season"}),
+    _C.AIR_DATE_UNKNOWN: frozenset({"aired", "episode"}),
+    _C.AIR_DATE_MISMATCH: frozenset({"aired", "episode", "tmdb_aired"}),
+    _C.RANGE_SPANS_SEASONS: frozenset({"start", "end"}),
+    _C.SPECIALS_NUMBERING: frozenset(),
+    _C.CLASSIFIED: frozenset({"kind"}),
+    _C.DISC_STRUCTURE: frozenset(),
+    _C.OWN_NUMBERED_SPECIAL: frozenset(),
+    _C.NO_EPISODE: frozenset(),
+    _C.SUBTITLE_ORPHAN: frozenset(),
+    _C.SUBTITLE_SAME_NAME: frozenset(),
+    _C.SUBTITLE_FOLDER_EPISODE: frozenset({"number"}),
+    _C.SUBTITLE_FOLLOWS: frozenset({"video"}),
+    _C.VIDEO_NOT_IMPORTED: frozenset({"action"}),
+    _C.TARGET_CONTESTED: frozenset({"target"}),
+    _C.SPAN_CLASH: frozenset(),
+    _C.LIBRARY_SPAN_CLASH: frozenset({"known"}),
+    _C.TOO_MANY_FILES: frozenset({"files", "season", "episodes"}),
+    _C.STRATEGY_OUTLIER: frozenset({"strategy"}),
+    _C.SEASON_COMPLETE: frozenset({"season"}),
+    _C.MEDIUM_HELD_BY_ROUTE: frozenset(),
+    _C.SET_BY_USER: frozenset(),
+}
+
+#: 一條理由的參數：檔名、季集標記、日期、數字。**原文，不翻譯**——只有 `kind`、`action`、
+#: `strategy` 三個鍵是封閉集合的值，畫面自己翻（`web/src/plans/reasonText.ts`）。**沒有叫
+#: `count` 的鍵**（`REASON_PARAMS` 裡沒有，測試守著）：i18next 看到 `count` 就去找單複數那一對鍵。
+ReasonParams = dict[str, str | int]
+
+
+class ItemReason(BaseModel):
+    """Plan Item 的一條理由：`code` 加上它的參數（M2 票 07）。"""
+
+    model_config = ConfigDict(frozen=True)
+
+    code: ReasonCode
+    params: ReasonParams = {}
+
+
+def why(code: ReasonCode, **params: str | int) -> ItemReason:
+    """組一條理由。解析器每一處說理由的地方都走這裡，參數因此一眼看得出是哪幾格。
+
+    **參數要剛好是 `REASON_PARAMS` 那幾個**，多一個少一個都丟 `ValueError`：句子由前端照
+    code 挑，少一個參數的話畫面印出來的是 `{{season}}`。在組的那一刻就炸，benchmark 與解析器的
+    單元測試走過的每一條路因此都核對過一次。
+    """
+    if frozenset(params) != REASON_PARAMS[code]:
+        raise ValueError(f"{code.value} takes {sorted(REASON_PARAMS[code])}, got {sorted(params)}")
+    return ItemReason(code=code, params=params)
+
+
+def episode_label(season: int, episode: int, episode_end: int | None = None) -> str:
+    """`S01E05` / `S01E05-E06`：季集的機器字串，理由的參數與畫面都寫這個形狀。"""
+    label = f"S{season:02d}E{episode:02d}"
+    return label if episode_end is None or episode_end == episode else f"{label}-E{episode_end:02d}"
+
+
 class FileEntry(BaseModel):
     """torrent 裡的一個檔案（plan §4.2、§2.3 的 `job_files`）。
 
@@ -353,7 +566,7 @@ class Candidate(BaseModel):
     episode_end: int | None = None
     strategy: MappingStrategy
     confidence: Confidence
-    reasons: tuple[str, ...] = ()
+    reasons: tuple[ItemReason, ...] = ()
 
 
 class ParseContext(BaseModel):
@@ -399,8 +612,8 @@ class PlanItem(BaseModel):
     #: 相對於 Route 目標路徑的位置（plan §5）。**只有真的會被寫出去的檔案有值**：
     #: unmatched 留在 complete 原位（brief §7.4），review 還沒有決定，兩者都是空字串。
     target_path: str = ""
-    #: 為什麼是這個決定。UI 逐條顯示，review 時看得到（brief §6.5）。
-    reasons: tuple[str, ...] = ()
+    #: 為什麼是這個決定。UI 逐條翻譯顯示，review 時看得到（brief §6.5）。
+    reasons: tuple[ItemReason, ...] = ()
 
     @property
     def name(self) -> str:

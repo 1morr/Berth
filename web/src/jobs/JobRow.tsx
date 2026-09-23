@@ -11,7 +11,7 @@ import { useTranslation } from 'react-i18next'
 import { meQueryOptions } from '../api/auth'
 import { jobEventsQueryOptions, retryJob, refusalOf, type Job } from '../api/jobs'
 import { planQueryOptions, replanJob } from '../api/plans'
-import { CopyLine, GhostButton } from '../components/controls'
+import { CopyLine, GHOST_LINK, GhostButton } from '../components/controls'
 import { AuditChip } from '../components/AuditChip'
 import { Dot } from '../components/Dot'
 import { ExpandHint } from '../components/ExpandHint'
@@ -113,6 +113,13 @@ export function JobRow({ job }: { job: Job }) {
               {mediaTitle}
             </Link>
           </p>
+        )}
+
+        {/* admin 在停下來的那一筆看到的是去處理它的路（M2 票 07）；`user` 那一側的「等」在摘要列。 */}
+        {job.state === 'review' && me.data?.role === 'admin' && (
+          <Link to="/review" className={GHOST_LINK}>
+            {t('jobs.toReview')}
+          </Link>
         )}
 
         {/* **先問有沒有 `plan_id`**：停用的 query 在 TanStack 眼裡永遠是 `pending`，

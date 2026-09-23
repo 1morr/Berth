@@ -122,6 +122,9 @@ class EventType(StrEnum):
     PLAN_GENERATED = "plan_generated"
     #: 這一份 Plan 要人看過才動（`reason` 是 `ReviewReason`）。
     REVIEW_REQUIRED = "review_required"
+    #: 管理員核准或拒絕了停在 review 的那一份 Plan（plan、`decision` 是 `approved` /
+    #: `rejected`、核准時另帶 `files`：要寫進媒體庫的檔案數；M2 票 07）。
+    REVIEW_DECIDED = "review_decided"
     #: 一個檔案硬鏈接進媒體庫了（file、target）。**一個檔案一筆**（brief §5.2、plan §3.1 的 ×N）。
     LINKED = "linked"
     #: 一個檔案沒鏈接成（file、target、errno、error）。原文不翻譯：它是「哪個掛載少了」的證據。
@@ -715,6 +718,15 @@ class AuditAction(StrEnum):
     UNDO = "undo"
 
 
+class PlanDecision(StrEnum):
+    """`plan` 那一類按得了的兩顆（plan §3.1 `review` 的兩條出邊，M2 票 07）。"""
+
+    #: 照提案入庫（逐列改過的照改過的）：`review → importing`。
+    APPROVE = "approve"
+    #: 丟掉這一份、重新規劃：`review → completed`，規劃器整份重算。
+    REJECT = "reject"
+
+
 # 以下三組是 `{reason, detail}` 那一格的 `reason`（plan §6）：理由翻譯、原文不翻譯。
 #
 # **它們是 enum 而不是字串字面值**，因為前端要照每一種說出自己的下一步（PRODUCT 原則 4），
@@ -826,6 +838,37 @@ class IssueRefusal(StrEnum):
     CLIENT_UNREACHABLE = "client_unreachable"
     #: 上一輪對帳還在跑。**不排隊**：排隊的那一輪看到的會是同一份磁碟（plan §3.2）。
     RECONCILE_RUNNING = "reconcile_running"
+
+
+class PlanRefusal(StrEnum):
+    """逐列改 Plan、核准或拒絕時，在做出任何改變之前就停下來了（M2 票 07）。
+
+    **改動不合法是拒絕，不是默默接受**（票面驗收）：集數範圍反了、動作與檔案分類矛盾，後端都
+    說得出是哪一種，畫面照它說下一步。`detail` 是那一列的檔名或那條撞上的路徑，不翻譯。
+    """
+
+    #: 沒有這個 id 的 Plan（多半是重新規劃把它換掉了，或那筆下載被刪了）。
+    PLAN_MISSING = "plan_missing"
+    #: 這一份已經不在等人了：另一個分頁先核准或拒絕了，或那筆下載已經離開 `review`。
+    NOT_PENDING = "not_pending"
+    #: 這份 Plan 裡沒有這個 id 的列。
+    ITEM_MISSING = "item_missing"
+    #: 這一列已經鏈接進媒體庫了；改它要拆舊鏈接，那是重新匹配的事（票 08）。
+    ITEM_APPLIED = "item_applied"
+    #: 這個處置與檔案的分類矛盾（`EDITABLE_ACTIONS`）：字型不會變成一集。
+    ACTION_NOT_ALLOWED = "action_not_allowed"
+    #: 劇集的一列要入庫，就要有季與起始集。
+    EPISODE_REQUIRED = "episode_required"
+    #: 迄集比起集小。
+    EPISODE_RANGE_REVERSED = "episode_range_reversed"
+    #: 季集只屬於劇集的入庫：電影、特典、略過、對不到都沒有季集可填。
+    EPISODE_NOT_ALLOWED = "episode_not_allowed"
+    #: 這份 Plan 沒有作品快照，算不出任何目標路徑，所以沒有東西寫得進媒體庫。
+    MEDIA_MISSING = "media_missing"
+    #: 兩列會寫到同一條路徑（brief §6.4 第 5 點）。`detail` 是那條路徑。
+    TARGET_CLASH = "target_clash"
+    #: 核准時還有列沒有決定：沒有提案的待審核列（光碟、推不出季集）。`detail` 是那幾個檔名。
+    UNDECIDED = "undecided"
 
 
 class ReviewRefusal(StrEnum):

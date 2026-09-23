@@ -10,7 +10,7 @@ from datetime import date
 
 import pytest
 
-from berth.domain import MediaKind, MediaSnapshot
+from berth.domain import MediaKind, MediaSnapshot, ReasonCode, why
 from berth.parser import match_media, normalize_title, parse_release
 
 
@@ -109,7 +109,9 @@ class TestMatch:
         found = match_media(info, [titan])
 
         assert found is not None
-        assert any("carries most of" in reason for reason in found.reasons)
+        assert (
+            why(ReasonCode.TITLE_PARTIAL, title="Attack on Titan: THE LAST ATTACK") in found.reasons
+        )
 
     def test_it_says_why(self) -> None:
         info = parse_release("The.Bear.S03E01.1080p.WEB.H264-SuccessfulCrab.mkv")

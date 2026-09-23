@@ -34,7 +34,7 @@ function audit(overrides: Partial<AuditReviewRow> = {}): AuditReviewRow {
     season: 2,
     episode_start: 1,
     episode_end: null,
-    notes: ['absolute episode 26 is S02E01 by the cumulative count'],
+    reasons: [{ code: 'absolute_cumulative', params: { number: 26, episode: 'S02E01' } }],
     ...overrides,
   }
 }
@@ -91,7 +91,7 @@ describe('審核佇列', () => {
     expect(within(row).getByRole('button', { name: '撤銷' })).toBeInTheDocument()
   })
 
-  it('展開之後看得到兩條路徑與解析器的原文', async () => {
+  it('展開之後看得到兩條路徑與解析器的理由（翻譯過的句子）', async () => {
     render({ [QUEUE]: queue([audit()]) })
     renderApp('/review')
     const row = await screen.findByRole('article')
@@ -100,9 +100,7 @@ describe('審核佇列', () => {
 
     expect(within(row).getByText(TARGET)).toBeInTheDocument()
     expect(within(row).getByText(SOURCE)).toBeInTheDocument()
-    expect(
-      within(row).getByText('absolute episode 26 is S02E01 by the cumulative count'),
-    ).toBeInTheDocument()
+    expect(within(row).getByText('各季集數依序累加，#26 落在 S02E01')).toBeInTheDocument()
   })
 
   it('需要人動手的排前面：兩類各在自己那一段，順序照後端', async () => {

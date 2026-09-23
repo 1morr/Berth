@@ -79,6 +79,10 @@ ADMIN_PREFIXES = (
 ADMIN_ROUTES: tuple[tuple[str, str], ...] = (
     ("DELETE", "/jobs/*"),
     ("GET", "/jobs/*/deletion"),
+    # 審核是 admin 的事（M2 票 07）；`GET /plans/*` 不是——`user` 看得到自己那筆為什麼停下來。
+    ("PUT", "/plans/*/items"),
+    ("POST", "/plans/*/approve"),
+    ("POST", "/plans/*/reject"),
 )
 
 #: `/api` 底下的每一個回應都帶它。

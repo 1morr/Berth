@@ -9,9 +9,11 @@ export type ReviewQueue = Schemas['ReviewQueueOut']
 
 /**
  * 佇列上的一列。**以 `kind` 區分形狀**：比對 `row.kind === 'audit'` 之後 TS 就知道它有哪幾格。
- * 五種的其餘三種（`plan`、`unmatched`、`duplicate`）由票 07、08 加進這個聯集。
+ * 五種的其餘兩種（`unmatched`、`duplicate`）由票 08 加進這個聯集。
  */
 export type ReviewRow = ReviewQueue['rows'][number]
+
+export type PlanReviewRow = Schemas['PlanRowOut']
 
 export type AuditReviewRow = Schemas['AuditRowOut']
 
@@ -22,6 +24,9 @@ export type IssueReviewRow = Schemas['IssueRowOut']
  * 畫面的分段表以它為鍵，票 07 把 `plan` 加進聯集時，少寫那一格是 `tsc` 的事。
  */
 export type ReviewKind = ReviewRow['kind']
+
+/** plan 那一列的兩顆：核准、拒絕（打的是 `api/plans.ts`）。 */
+export type PlanDecision = Schemas['PlanDecision']
 
 /** audit 那一列的兩顆。 */
 export type AuditAction = Schemas['AuditAction']

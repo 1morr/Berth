@@ -39,6 +39,7 @@ import berth.api
 from berth.api import issues as issues_api
 from berth.api import jellyfin as jellyfin_api
 from berth.api import jobs as jobs_api
+from berth.api import plans as plans_api
 from berth.api import review as review_api
 from berth.api import routes as routes_api
 from berth.api.routes import route_refusal, route_responses
@@ -72,6 +73,7 @@ STATUS_TABLES: dict[str, dict[Any, int]] = {
     "AccessRefusal": jellyfin_api._STATUS,
     "IssueRefusal": issues_api._STATUS,
     "ReviewRefusal": review_api._STATUS,
+    "PlanRefusal": plans_api._STATUS,
 }
 
 #: 拒絕的形狀（`{reason, detail}` 與 Route 多的那兩格）與 SSE 的推播。前端直接取這幾個
@@ -82,6 +84,7 @@ MODELS = (
     "AccessRefusalOut",
     "IssueRefusalOut",
     "ReviewRefusalOut",
+    "PlanRefusalOut",
     "JobSignalOut",
 )
 
@@ -454,6 +457,7 @@ class TestDeclaringWhatEachEndpointRefuses:
             "access_refusal": "AccessRefusalOut",
             "issue_refusal": "IssueRefusalOut",
             "review_refusal": "ReviewRefusalOut",
+            "plan_refusal": "PlanRefusalOut",
             "_refuse": "JobRefusalOut",
         }
 

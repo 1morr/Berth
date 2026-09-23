@@ -1,8 +1,9 @@
 """Review Queue：一份清單、一列一件事（plan §6 review 群組、brief §6.5、M2 票 06）。
 
-**這一支只回答「現在有哪幾件事在等管理員」**，不自己偵測任何東西：`audit` 來自帳本上的
-旗標（importer 抄過去的），`issue` 來自 `services/issues`。票 07、08 把 `plan`、`unmatched`、
-`duplicate` 三類填進來時，只多一個 `_Producer`，排序與上限不動。
+**這一支只回答「現在有哪幾件事在等管理員」**，不自己偵測任何東西：`plan` 是停在 review 的
+那幾份 Plan（票 07），`audit` 來自帳本上的旗標（importer 抄過去的），`issue` 來自
+`services/issues`。票 08 把 `unmatched`、`duplicate` 填進來時，只多一個 `_Producer`，
+排序與上限不動。Plan 的三支命令（逐列改、核准、拒絕）在 `services/plan_review.py`。
 
 排序是 plan §6 定的：**需要人動手的排前面**（`REVIEW_PRIORITY`），同一級之內舊的在前——
 等得最久的那一件最該先看。**不分頁**：超過 `QUEUE_LIMIT` 列時回前面那幾列並帶 `total`，
@@ -29,7 +30,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
-from sqlalchemy import func, select
+from sqlalchemy import Select, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from berth.adapters import fs
@@ -39,7 +40,10 @@ from berth.domain import (
     AuditReason,
     EventType,
     IssueStatus,
+    ItemReason,
     JobState,
+    PlanAction,
+    PlanDecision,
     PlanStatus,
     PlanSummary,
     ReviewKind,
@@ -51,6 +55,7 @@ from berth.models import Issue, Job, LedgerEntry, Media, Plan, PlanItem
 from berth.services.deletion import remove_one, route_targets
 from berth.services.issues import IssueView, list_issues
 from berth.services.jobs import job_lock, record_event, transition
+from berth.services.plan_view import reasons_of
 
 logger = logging.getLogger(__name__)
 
@@ -89,9 +94,8 @@ class AuditRow:
     season: int | None
     episode_start: int | None
     episode_end: int | None
-    #: 解析器為什麼給 medium（`plan_items.reasons_json`）。**英文原文，不翻譯**：它是給人判斷
-    #: 對不對的證據，與 `detail` 同一個規矩。
-    notes: tuple[str, ...]
+    #: 解析器為什麼給 medium（那一列 Plan Item 的理由，code + 參數，畫面翻譯）。
+    reasons: tuple[ItemReason, ...]
     reason: AuditReason = AuditReason.MEDIUM_AUTO_IMPORTED
     actions: tuple[AuditAction, ...] = (AuditAction.CONFIRM, AuditAction.UNDO)
 
@@ -111,7 +115,29 @@ class IssueRow:
         return ReviewKind.ISSUE
 
 
-ReviewRow = AuditRow | IssueRow
+@dataclass(frozen=True, slots=True)
+class PlanRow:
+    """一份停在 review 的 Plan（M2 票 07）。逐列的內容由 `GET /plans/{id}` 另外給——一包 39 個
+    檔案的逐列理由塞進佇列的每一列，佇列本身就讀不動了。"""
+
+    plan_id: int
+    #: 這一份算出來的那一刻。重新規劃會換掉它，所以它說的是「這一份」等了多久。
+    at: datetime
+    media_id: str | None
+    title: str
+    title_en: str
+    job_hash: str
+    job_name: str
+    reason: ReviewReason
+    summary: PlanSummary
+    actions: tuple[PlanDecision, ...] = (PlanDecision.APPROVE, PlanDecision.REJECT)
+
+    @property
+    def kind(self) -> ReviewKind:
+        return ReviewKind.PLAN
+
+
+ReviewRow = PlanRow | AuditRow | IssueRow
 
 
 @dataclass(frozen=True, slots=True)
@@ -244,6 +270,11 @@ async def _clear_item(session: AsyncSession, entry: LedgerEntry, *, unapply: boo
 
     撤銷時連 `applied_at` 一起清：那個檔案已經不在媒體庫裡了，Plan 上不該再說它套用過——
     下載列表那一列的「N 個待確認」數的也是這一格。
+
+    **那一列同時回到「沒有提案」**（`review`、季集與路徑清空，M2 票 07 code-review）：撤銷說的是
+    「這一集不對」，而核准是照提案入庫——提案留著的話，原樣按一次核准就把剛拆掉的鏈接鏈回同一條
+    路徑（`ReviewReason.AUDIT_UNDONE`：下一步是改季集或駁回，不是再點一次頭）。解析器當時的理由
+    留著，那是它為什麼這樣猜的證據。
     """
     if entry.plan_item_id is None:
         return
@@ -253,6 +284,9 @@ async def _clear_item(session: AsyncSession, entry: LedgerEntry, *, unapply: boo
     item.audit = False
     if unapply:
         item.applied_at = None
+        item.action = PlanAction.REVIEW
+        item.season = item.episode_start = item.episode_end = None
+        item.target_path = ""
 
 
 async def _audited(session: AsyncSession, ledger_id: int) -> LedgerEntry:
@@ -306,7 +340,49 @@ def _audit_row(
         season=entry.season,
         episode_start=entry.episode_start,
         episode_end=entry.episode_end,
-        notes=tuple(item.reasons_json or ()) if item is not None else (),
+        reasons=reasons_of(item) if item is not None else (),
+    )
+
+
+def _held_plans() -> Select[tuple[Plan, Job, Media]]:
+    """停在 review 的 Plan：Plan 在等人、**那筆 Job 也還在 `review`**。
+
+    Media 是外連接，可能是 `None`（型別照 SQLAlchemy 的推導寫，讀的那一端當可空處理）。
+
+    兩件事都要成立：`importing` 途中停下來的那一刻 Plan 先變 `pending_review`，Job 的轉換在
+    同一個交易裡，但只看其中一邊的話，一份被重新規劃換掉之前的舊狀態也會被算進來。
+    """
+    return (
+        select(Plan, Job, Media)
+        .join(Job, Job.hash == Plan.job_hash)
+        .outerjoin(Media, Media.id == Job.media_id)
+        .where(Plan.status == PlanStatus.PENDING_REVIEW, Job.state == JobState.REVIEW)
+    )
+
+
+async def _count_plans(session: AsyncSession) -> int:
+    counted = select(func.count()).select_from(_held_plans().subquery())
+    return int(await session.scalar(counted) or 0)
+
+
+async def _fetch_plans(session: AsyncSession, limit: int) -> list[PlanRow]:
+    found = await session.execute(_held_plans().order_by(Plan.created_at, Plan.id).limit(limit))
+    return [_plan_row(*row) for row in found.tuples()]
+
+
+def _plan_row(plan: Plan, job: Job, media: Media | None) -> PlanRow:
+    summary = PlanSummary.model_validate(plan.summary_json or {})
+    return PlanRow(
+        plan_id=plan.id,
+        at=plan.created_at,
+        media_id=job.media_id,
+        title=media.snapshot().title if media is not None else "",
+        title_en=media.title_en if media is not None else "",
+        job_hash=job.hash,
+        job_name=job.name,
+        # 停在 review 的 Plan 一定帶著理由；舊資料沒有時退回最常見的那一種。
+        reason=summary.review_reason or ReviewReason.LOW_CONFIDENCE,
+        summary=summary,
     )
 
 
@@ -323,6 +399,7 @@ async def _fetch_issues(session: AsyncSession, limit: int) -> list[IssueRow]:
 
 
 _PRODUCERS: dict[ReviewKind, _Producer] = {
+    ReviewKind.PLAN: _Producer(count=_count_plans, fetch=_fetch_plans),
     ReviewKind.AUDIT: _Producer(count=_count_audits, fetch=_fetch_audits),
     ReviewKind.ISSUE: _Producer(count=_count_issues, fetch=_fetch_issues),
 }

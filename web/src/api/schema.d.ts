@@ -671,6 +671,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/plans/{plan_id}/items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Put Items
+         * @description 逐列改處置與季集，回改完的整份：改過那一列的新目標路徑就在裡面（M2 票 07）。
+         */
+        put: operations["put_items_api_plans__plan_id__items_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/plans/{plan_id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Approve
+         * @description 核准＝照提案入庫：`review → importing`，然後叫醒 importer（plan §3.1）。
+         */
+        post: operations["post_approve_api_plans__plan_id__approve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/plans/{plan_id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Reject
+         * @description 拒絕：`review → completed`，規劃器整份重算（plan §3.1）。204：這一份馬上會被換掉。
+         */
+        post: operations["post_reject_api_plans__plan_id__reject_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/review": {
         parameters: {
             query?: never;
@@ -1443,8 +1503,8 @@ export interface components {
             episode_start: number | null;
             /** Episode End */
             episode_end: number | null;
-            /** Notes */
-            notes: string[];
+            /** Reasons */
+            reasons: components["schemas"]["ItemReasonOut"][];
         };
         /**
          * CollectionType
@@ -1585,6 +1645,12 @@ export interface components {
          * @enum {string}
          */
         EpisodeStatus: "imported" | "stuck" | "downloading" | "missing" | "unaired";
+        /**
+         * FileKind
+         * @description 檔案分類（brief §6.2）。第一層，決定這個檔案還要不要往下走。
+         * @enum {string}
+         */
+        FileKind: "video" | "subtitle" | "font" | "audio" | "image" | "archive" | "sample" | "disc" | "extra" | "other";
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -1917,6 +1983,43 @@ export interface components {
          * @enum {string}
          */
         IssueType: "missing_files" | "client_error" | "client_removed" | "unknown_torrent" | "jellyfin_item_unresolved" | "library_link_missing" | "source_missing" | "inode_mismatch" | "orphan_complete" | "unmanaged_library_file" | "job_without_files";
+        /**
+         * ItemEditIn
+         * @description 一列要改成什麼。季集只屬於劇集的入庫，其餘處置三格都不帶（帶了是 `episode_not_allowed`）。
+         */
+        ItemEditIn: {
+            /** Id */
+            id: number;
+            action: components["schemas"]["PlanAction"];
+            /** Season */
+            season?: number | null;
+            /** Episode Start */
+            episode_start?: number | null;
+            /** Episode End */
+            episode_end?: number | null;
+        };
+        /**
+         * ItemEditsIn
+         * @description 一次送幾列都行，**整批成立或整批拒絕**。畫面逐列套用，所以通常是一列。
+         */
+        ItemEditsIn: {
+            /** Items */
+            items: components["schemas"]["ItemEditIn"][];
+        };
+        /**
+         * ItemReasonOut
+         * @description Plan Item 的一條理由：封閉集合的 code 加參數，句子由前端照 code 挑（M2 票 07）。
+         *
+         *     參數是檔名、季集標記、日期這種**不翻譯**的事實；`kind`、`action`、`strategy` 三個鍵的值是
+         *     封閉集合，畫面自己翻。
+         */
+        ItemReasonOut: {
+            code: components["schemas"]["ReasonCode"];
+            /** Params */
+            params: {
+                [key: string]: string | number;
+            };
+        };
         /** JellyfinAddressIn */
         JellyfinAddressIn: {
             /**
@@ -2415,6 +2518,12 @@ export interface components {
          */
         PlanAction: "import" | "extra" | "subtitle" | "skip" | "unmatched" | "review";
         /**
+         * PlanDecision
+         * @description `plan` 那一類按得了的兩顆（plan §3.1 `review` 的兩條出邊，M2 票 07）。
+         * @enum {string}
+         */
+        PlanDecision: "approve" | "reject";
+        /**
          * PlanEngine
          * @description 這一份 Plan 是誰算的（plan §2.3 的 `plans.engine`、brief §5.2）。
          * @enum {string}
@@ -2429,6 +2538,7 @@ export interface components {
             id: number;
             /** Rel Path */
             rel_path: string;
+            kind: components["schemas"]["FileKind"];
             action: components["schemas"]["PlanAction"];
             /** Media Id */
             media_id: string | null;
@@ -2442,9 +2552,13 @@ export interface components {
             target_path: string;
             confidence: components["schemas"]["Confidence"];
             /** Reasons */
-            reasons: string[];
+            reasons: components["schemas"]["ItemReasonOut"][];
             /** Audit */
             audit: boolean;
+            /** Applied */
+            applied: boolean;
+            /** Actions */
+            actions: components["schemas"]["PlanAction"][];
             /** Error */
             error: string;
         };
@@ -2466,9 +2580,73 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+            media_kind: components["schemas"]["MediaKind"] | null;
             summary: components["schemas"]["PlanSummary"];
             /** Items */
             items: components["schemas"]["PlanItemOut"][];
+        };
+        /**
+         * PlanReasonOut
+         * @description `plan` 那一列的理由：為什麼這一份停下來（`ReviewReason`），參數是它的計數。
+         */
+        PlanReasonOut: {
+            code: components["schemas"]["ReviewReason"];
+            /** Params */
+            params: {
+                [key: string]: unknown;
+            };
+        };
+        /**
+         * PlanRefusal
+         * @description 逐列改 Plan、核准或拒絕時，在做出任何改變之前就停下來了（M2 票 07）。
+         *
+         *     **改動不合法是拒絕，不是默默接受**（票面驗收）：集數範圍反了、動作與檔案分類矛盾，後端都
+         *     說得出是哪一種，畫面照它說下一步。`detail` 是那一列的檔名或那條撞上的路徑，不翻譯。
+         * @enum {string}
+         */
+        PlanRefusal: "plan_missing" | "not_pending" | "item_missing" | "item_applied" | "action_not_allowed" | "episode_required" | "episode_range_reversed" | "episode_not_allowed" | "media_missing" | "target_clash" | "undecided";
+        /**
+         * PlanRefusalOut
+         * @description 改不下去、核准不了時回的那一份。`reason` 給畫面挑句子，`detail` 是檔名或路徑，不翻譯。
+         */
+        PlanRefusalOut: {
+            reason: components["schemas"]["PlanRefusal"];
+            /** Detail */
+            detail: string;
+        };
+        /**
+         * PlanRowOut
+         * @description 一份停在 review 的 Plan（M2 票 07）。`ref` 是 Plan 的 id，逐列的內容打 `GET /plans/{ref}`。
+         *
+         *     逐列不跟著來：一包 39 個檔案的理由塞進佇列的每一列，佇列本身就讀不動了；畫面展開那一列時才要。
+         */
+        PlanRowOut: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "plan";
+            /** Ref */
+            ref: number;
+            reason: components["schemas"]["PlanReasonOut"];
+            /** Actions */
+            actions: components["schemas"]["PlanDecision"][];
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /** Media Id */
+            media_id: string | null;
+            /** Title */
+            title: string;
+            /** Title En */
+            title_en: string;
+            /** Job Hash */
+            job_hash: string;
+            /** Job Name */
+            job_name: string;
+            summary: components["schemas"]["PlanSummary"];
         };
         /**
          * PlanStatus
@@ -2578,6 +2756,17 @@ export interface components {
             error: string;
         };
         /**
+         * ReasonCode
+         * @description Plan Item 的一條理由是哪一種（brief §6.5 的 `reasons[]`，M2 票 07）。
+         *
+         *     **封閉集合加參數，不是後端拼好的句子**：句子由前端照 code 挑、以 zh-Hant 與 en 各寫一份，
+         *     參數是檔名、季集、日期這種**不翻譯**的事實。拼好的英文句子翻不了譯，測試也只能比子字串。
+         *
+         *     依來源分段：季號從哪裡來、集號怎麼換算、為什麼信心被壓下來、字幕跟著誰、整包一起看的結果。
+         * @enum {string}
+         */
+        ReasonCode: "movie" | "media_by_title" | "title_exact" | "title_contained" | "title_partial" | "year_matches" | "year_differs" | "title_mismatch" | "no_media" | "season_from_job" | "season_from_release" | "season_from_folder" | "season_from_arc" | "final_season" | "single_season" | "absolute_group" | "absolute_cumulative" | "cour_offset" | "air_date_run" | "episode_not_on_tmdb" | "absolute_within_first_season" | "air_date_unknown" | "air_date_mismatch" | "range_spans_seasons" | "specials_numbering" | "classified" | "disc_structure" | "own_numbered_special" | "no_episode" | "subtitle_orphan" | "subtitle_same_name" | "subtitle_folder_episode" | "subtitle_follows" | "video_not_imported" | "target_contested" | "span_clash" | "library_span_clash" | "too_many_files" | "strategy_outlier" | "season_complete" | "medium_held_by_route" | "set_by_user";
+        /**
          * ReconcileRunOut
          * @description 一輪對帳。`finished_at` 是 `null` 就是還在跑。
          */
@@ -2625,7 +2814,7 @@ export interface components {
          */
         ReviewQueueOut: {
             /** Rows */
-            rows: (components["schemas"]["AuditRowOut"] | components["schemas"]["IssueRowOut"])[];
+            rows: (components["schemas"]["PlanRowOut"] | components["schemas"]["AuditRowOut"] | components["schemas"]["IssueRowOut"])[];
             /** Total */
             total: number;
         };
@@ -4581,6 +4770,155 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PlanOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_items_api_plans__plan_id__items_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ItemEditsIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanOut"];
+                };
+            };
+            /** @description `plan_missing` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanRefusalOut"];
+                };
+            };
+            /** @description `not_pending` · `item_applied` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanRefusalOut"];
+                };
+            };
+            /** @description `item_missing` · `action_not_allowed` · `episode_required` · `episode_range_reversed` · `episode_not_allowed` · `media_missing` · `target_clash` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanRefusalOut"];
+                };
+            };
+        };
+    };
+    post_approve_api_plans__plan_id__approve_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanOut"];
+                };
+            };
+            /** @description `plan_missing` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanRefusalOut"];
+                };
+            };
+            /** @description `not_pending` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanRefusalOut"];
+                };
+            };
+            /** @description `undecided` · `target_clash` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanRefusalOut"];
+                };
+            };
+        };
+    };
+    post_reject_api_plans__plan_id__reject_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `plan_missing` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanRefusalOut"];
+                };
+            };
+            /** @description `not_pending` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanRefusalOut"];
                 };
             };
             /** @description Validation Error */

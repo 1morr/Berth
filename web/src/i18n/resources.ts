@@ -974,6 +974,64 @@ const zhHant = {
       look: '已入庫，等你看一眼',
       outside: '外面發生的事',
     },
+    // plan 那一類（M2 票 07，`.scratch/m2/plan-edit-shape.md`）：一份停在 review 的計劃，逐列可改。
+    plan: {
+      label: '待審核',
+      // 為什麼停下來，**下一步**那一種（PRODUCT 原則 4）。
+      reason: {
+        low_confidence: '有檔案的季集要你確認',
+        medium_not_allowed: '這條 Route 不讓中信心自己入庫，等你點頭',
+        nothing_to_import: '這一包沒有東西會進媒體庫，多半送錯了 torrent',
+        target_exists: '媒體庫的目標位置上已經有別的檔案',
+        audit_undone: '有一個自動入庫的檔案被撤銷了，那一列要重新決定',
+      },
+      waitingSince: '等候於 {{value}}',
+      job: '下載',
+      loading: '讀取計劃…',
+      off: '讀不到這一份計劃。',
+      held_one: '{{count}} 列要你看',
+      held_other: '{{count}} 列要你看',
+      rest_one: '其餘 {{count}} 個檔案',
+      rest_other: '其餘 {{count}} 個檔案',
+      // 目標那一行。待審核的列說的是「核准的話」。
+      lands: '核准後寫到',
+      landed: '已在媒體庫',
+      nowhere: '核准後不會寫進媒體庫',
+      noProposal: '還沒有季集，先改這一列',
+      edit: '改',
+      apply: '套用',
+      cancel: '取消',
+      field: {
+        action: '處置',
+        season: '季',
+        start: '起集',
+        end: '迄集',
+      },
+      endHint: '單集留空',
+      applied: '已套用，目標路徑更新了。',
+      approve: '核准並入庫',
+      reject: '拒絕',
+      confirmReject: '丟掉這份計劃（包括逐列改過的），Berth 會重新規劃一次。檔案不動。',
+      confirmRejectAction: '確定拒絕',
+      working: '處理中…',
+      approved: '已核准，開始入庫。',
+      rejected: '已拒絕，Berth 重新規劃中。',
+      failed: '沒有成功。Berth 自己的 API 沒有回應，先確認它還活著。',
+      // 十一種擋下來的理由，各一個下一步。`detail`（檔名或路徑）接在後面。
+      refusal: {
+        plan_missing: '這份計劃已經不在了，多半是重新規劃把它換掉了。',
+        not_pending: '這份計劃已經不在等人了，多半是另一個分頁先核准或拒絕了。',
+        item_missing: '這一列已經不在這份計劃裡了。',
+        item_applied: '這一列已經在媒體庫裡；要改它得用重新匹配。',
+        action_not_allowed: '這個處置與檔案的分類矛盾。',
+        episode_required: '入庫的話要填季與起集。',
+        episode_range_reversed: '迄集比起集小。',
+        episode_not_allowed: '只有入庫的劇集才有季集可填。',
+        media_missing: '這份計劃沒有作品資料，算不出寫到哪裡。',
+        target_clash: '兩列會寫到同一條路徑，先改其中一列：',
+        undecided: '還有列沒有決定，先改成入庫、略過或對不到：',
+      },
+    },
     // audit 那一列（CONTEXT.md 的 Audit）。
     audit: {
       label: '待確認',
@@ -984,8 +1042,7 @@ const zhHant = {
       target: '媒體庫路徑',
       source: '來源路徑',
       job: '下載',
-      // 解析器的理由是英文原文，不翻譯。
-      notes: '解析器的理由（原文）',
+      reasons: '解析器的理由',
       action: {
         confirm: '確認',
         undo: '撤銷',
@@ -1051,6 +1108,8 @@ const zhHant = {
     retryOff: '重試沒有送出去。Berth 自己的 API 沒有回應，先確認它還活著。',
     // 停在待審核的那一列：`user` 按不了審核，只能等（brief §11）。
     waitingForAdmin: '等管理員審核',
+    // admin 在停在 review 的那一列看到的是去處理它的路，不是「等」（M2 票 07）。
+    toReview: '到審核佇列處理',
     // 十六個狀態一次定義完（`domain.JobState`）：M1 票 09 只走得到前三個，
     // 其餘由票 10 起的迴圈驅動，而它們是同一個封閉集合。
     state: {
@@ -1089,6 +1148,7 @@ const zhHant = {
       preplan: '預估計劃',
       plan_generated: '計劃',
       review_required: '待審核',
+      review_decided: '已審核',
       linked: '已鏈接',
       link_failed: '鏈接失敗',
       jellyfin_scan_requested: '已通知 Jellyfin',
@@ -1128,6 +1188,10 @@ const zhHant = {
         target_exists: '目標位置上已經有別的檔案',
         audit_undone: '有一個自動入庫的檔案被撤銷了',
       },
+      // 核准與拒絕（M2 票 07）。拒絕之後規劃器整份重算，所以下一筆就是新的那一份。
+      reviewApproved_one: '管理員核准了，{{count}} 個檔案要入庫',
+      reviewApproved_other: '管理員核准了，{{count}} 個檔案要入庫',
+      reviewRejected: '管理員拒絕了這份計劃，Berth 重新規劃',
       // audit 的兩顆（M2 票 06）。目標路徑是機器字串，接在後面。
       auditConfirmed: '管理員看過這個 medium 自動入庫的檔案，說它是對的',
       auditUndone: '管理員撤銷了這個檔案的入庫，這一筆回到待審核',
@@ -1182,12 +1246,12 @@ const zhHant = {
       // 使用者現在真的做得到的那一步。
       reason: {
         low_confidence:
-          '有檔案的季集推不出來，或這一包的數量與 TMDB 對不上。M1 還沒有審核佇列——改好 Route 或等 TMDB 補上季集之後按「重新規劃」。',
+          '有檔案的季集推不出來，或這一包的數量與 TMDB 對不上。管理員在審核佇列逐列確認季集之後核准；TMDB 剛補上季集的話也可以按「重新規劃」。',
         medium_not_allowed:
-          '這條 Route 不讓 medium 信心的檔案自動入庫，所以整份計劃停下來等人看。逐檔確認要等審核佇列；現在能做的是看過下面每一列的理由。',
+          '這條 Route 不讓中信心的檔案自己入庫，所以整份計劃停下來等人看。管理員在審核佇列看過每一列之後核准就會入庫。',
         nothing_to_import: '這一包裡沒有任何一個檔案會進媒體庫。多半是送錯了 torrent。',
         target_exists:
-          '媒體庫裡這個位置已經有一個不是 Berth 鏈接的檔案，Berth 不會覆寫它；其餘檔案已經入庫了。M1 還沒有審核佇列——把那個檔案移走之後按「重新規劃」。',
+          '媒體庫裡這個位置已經有一個不是 Berth 鏈接的檔案，Berth 不會覆寫它；其餘檔案已經入庫了。把那個檔案移走，或在審核佇列把那一列改成略過，再核准。',
         audit_undone:
           '管理員從審核佇列撤銷了一個 medium 自動入庫的檔案：那個檔案已經不在媒體庫裡，complete 裡的來源還在。這份計劃回來等人決定那一列該是哪一集。',
       },
@@ -1207,6 +1271,84 @@ const zhHant = {
       // 逐檔那一列的標籤。目標路徑相對 Route 的媒體庫目錄。
       target: '目標',
       audit: '已入庫待確認',
+      // 逐檔的理由（`domain.ReasonCode`，M2 票 07）：code 加參數，句子在這裡。參數是檔名、
+      // 季集、日期這種不翻譯的事實；`kind`、`action`、`strategy` 先翻好再帶進來（`plans/reasonText.ts`）。
+      why: {
+        movie: '這是一部電影，沒有季集',
+        media_by_title: '下載沒有帶作品，以標題認出是 {{title}}',
+        title_exact: '發佈標題與 {{title}} 完全相同',
+        title_contained: '發佈名裡有整串 {{title}}',
+        title_partial: '發佈名帶著 {{title}} 的大部分詞',
+        year_matches: '年份 {{year}} 對得上',
+        year_differs: '發佈寫的是 {{year}}，這部作品是 {{expected}}',
+        title_mismatch: '發佈標題 {{release_title}} 看起來不像 {{title}}',
+        no_media: '下載沒有帶作品，沒有季集可以對照',
+        season_from_job: '下載指定了第 {{season}} 季',
+        season_from_release: '發佈名寫了第 {{season}} 季',
+        season_from_folder: '資料夾寫了第 {{season}} 季',
+        season_from_arc: '發佈名帶著篇章名 {{arc}}，那是第 {{season}} 季',
+        final_season: '發佈名說最終季，最後一季是第 {{season}} 季',
+        single_season: '只有集號，而 TMDB 上這部作品只有一季',
+        absolute_group: 'TMDB 的絕對編號把 #{{number}} 放在 {{episode}}',
+        absolute_cumulative: '各季集數依序累加，#{{number}} 落在 {{episode}}',
+        cour_offset:
+          '第 {{season}} 季的第 {{part}} 部分從第 {{first}} 集開始，所以它的第 {{number}} 集是 {{episode}}',
+        air_date_run:
+          'TMDB 沒有第 {{season}} 季；依播出日切成 {{runs}} 輪，第 {{season}} 輪從 {{episode}} 開始',
+        episode_not_on_tmdb: 'TMDB 第 {{season}} 季沒有第 {{number}} 集',
+        absolute_within_first_season:
+          '#{{number}} 沒有超過第 {{season}} 季的 {{episodes}} 集，也可能是後面某季重新從 01 數的第 {{number}} 集',
+        air_date_unknown: '發佈說它在 {{aired}} 播出，但 TMDB 沒有 {{episode}} 的播出日',
+        air_date_mismatch: '發佈說它在 {{aired}} 播出，TMDB 說 {{episode}} 在 {{tmdb_aired}}',
+        range_spans_seasons: '發佈涵蓋 {{start}}–{{end}}，但那一段放不進同一季',
+        specials_numbering: '字幕組的特典編號與 TMDB 的 S00 不一定一致',
+        classified: '分類是{{kind}}，不需要人看',
+        disc_structure: '光碟結構，Berth 不拆',
+        own_numbered_special: '字幕組自己編號的特典，TMDB 的特典編號不同',
+        no_episode: '推不出季集',
+        subtitle_orphan: '這一包裡沒有影片配得上這個字幕',
+        subtitle_same_name: '字幕與影片同名',
+        subtitle_folder_episode: '字幕在字幕資料夾裡，寫著第 {{number}} 集',
+        subtitle_follows: '跟著 {{video}}',
+        video_not_imported: '它的影片是「{{action}}」，字幕跟著走',
+        target_contested: '這一包裡另一個檔案也會寫到 {{target}}',
+        span_clash:
+          '同一包裡另一個正片從同一集開始、範圍不同；Jellyfin 12 只看季與集，會把它們併成一集，後面那幾集會從集列表上消失',
+        library_span_clash:
+          '媒體庫已經有 {{known}}，從同一集開始、範圍不同；Jellyfin 12 會把它們併成一集，後面那幾集會從集列表上消失',
+        too_many_files:
+          '這一包把 {{files}} 個檔案對進第 {{season}} 季，TMDB 說那一季只有 {{episodes}} 集',
+        strategy_outlier: '這一包其餘的檔案是靠{{strategy}}讀出來的，這一個不是',
+        season_complete: '這一包從頭到尾蓋滿第 {{season}} 季',
+        medium_held_by_route: '這條 Route 不讓中信心的檔案自己入庫',
+        set_by_user: '管理員改過這一列',
+      },
+      // 理由裡的 `strategy`（`domain.MappingStrategy`）：季集是靠什麼讀出來的。
+      strategy: {
+        explicit: '檔名明寫',
+        folder: '資料夾',
+        context: '下載指定',
+        arc_name: '篇章名',
+        single_season: '單季',
+        absolute_group: 'TMDB 絕對編號',
+        absolute_cumulative: '累計集數',
+        air_date_offset: '播出日',
+        cour_offset: '分部',
+        movie: '電影',
+      },
+      // 檔案分類（`domain.FileKind`，brief §6.2）。
+      kind: {
+        video: '影片',
+        subtitle: '字幕',
+        font: '字型',
+        audio: '音訊',
+        image: '圖片',
+        archive: '壓縮檔',
+        sample: '樣片',
+        disc: '光碟結構',
+        extra: '特典',
+        other: '其他',
+      },
       replan: '重新規劃',
       replanning: '規劃中…',
       replanOff: '重新規劃沒有送出去。Berth 自己的 API 沒有回應，先確認它還活著。',
@@ -2456,6 +2598,63 @@ const en: Translations<typeof zhHant> = {
       look: 'In the library, awaiting a look',
       outside: 'Happened outside Berth',
     },
+    plan: {
+      label: 'NEEDS REVIEW',
+      reason: {
+        low_confidence: 'Some files need you to confirm their season and episode',
+        medium_not_allowed: 'This library route holds medium confidence for your nod',
+        nothing_to_import: 'Nothing here would reach the library — most likely the wrong torrent',
+        target_exists: 'Another file already sits at a target in the library',
+        audit_undone: 'An auto-imported file was undone; that row needs a new decision',
+      },
+      waitingSince: 'Waiting since {{value}}',
+      job: 'Download',
+      loading: 'Reading the plan…',
+      off: 'Could not read this plan.',
+      held_one: '{{count}} row needs you',
+      held_other: '{{count}} rows need you',
+      rest_one: 'The other {{count}} file',
+      rest_other: 'The other {{count}} files',
+      lands: 'On approval, lands at',
+      landed: 'Already in the library',
+      nowhere: 'Stays out of the library on approval',
+      noProposal: 'No season or episode yet — change this row first',
+      edit: 'Change',
+      apply: 'Apply',
+      cancel: 'Cancel',
+      field: {
+        action: 'Decision',
+        season: 'Season',
+        start: 'From episode',
+        end: 'To episode',
+      },
+      endHint: 'Empty for one episode',
+      applied: 'Applied; the target path is updated.',
+      approve: 'Approve and import',
+      reject: 'Reject',
+      confirmReject:
+        'This throws the plan away, including rows you changed, and Berth plans it again. No file is touched.',
+      confirmRejectAction: 'Reject it',
+      working: 'Working…',
+      approved: 'Approved; importing now.',
+      rejected: 'Rejected; Berth is planning it again.',
+      failed:
+        'That did not go through. Berth’s own API did not answer — check that it is still running.',
+      refusal: {
+        plan_missing: 'This plan is gone — most likely a replan replaced it.',
+        not_pending:
+          'This plan is no longer waiting — most likely another tab approved or rejected it.',
+        item_missing: 'That row is no longer in this plan.',
+        item_applied: 'That row is already in the library; changing it takes a rematch.',
+        action_not_allowed: 'That decision contradicts what kind of file this is.',
+        episode_required: 'To import it, fill in the season and the first episode.',
+        episode_range_reversed: 'The last episode comes before the first.',
+        episode_not_allowed: 'Only an imported episode has a season and episode to fill in.',
+        media_missing: 'This plan has no title data, so there is nowhere to write it.',
+        target_clash: 'Two rows would be written to one path; change one of them first:',
+        undecided: 'Some rows are still undecided — import, skip or unmatch them first:',
+      },
+    },
     audit: {
       label: 'UNCONFIRMED',
       reason: {
@@ -2465,7 +2664,7 @@ const en: Translations<typeof zhHant> = {
       target: 'Library path',
       source: 'Source path',
       job: 'Download',
-      notes: 'Parser reasons (verbatim)',
+      reasons: 'Parser reasons',
       action: {
         confirm: 'Confirm',
         undo: 'Undo',
@@ -2528,6 +2727,7 @@ const en: Translations<typeof zhHant> = {
     retryOff:
       'The retry was not sent. Berth’s own API did not answer — check that it is still running.',
     waitingForAdmin: 'Waiting for an administrator to review',
+    toReview: 'Handle it in the review queue',
     state: {
       requested: 'Created',
       submitted: 'Sent',
@@ -2564,6 +2764,7 @@ const en: Translations<typeof zhHant> = {
       preplan: 'Estimate',
       plan_generated: 'Plan',
       review_required: 'Needs review',
+      review_decided: 'Reviewed',
       linked: 'Linked',
       link_failed: 'Link failed',
       jellyfin_scan_requested: 'Jellyfin told',
@@ -2601,6 +2802,9 @@ const en: Translations<typeof zhHant> = {
         target_exists: 'another file already sits at the target',
         audit_undone: 'an auto-imported file was undone',
       },
+      reviewApproved_one: 'An administrator approved it; {{count}} file will be imported',
+      reviewApproved_other: 'An administrator approved it; {{count}} files will be imported',
+      reviewRejected: 'An administrator rejected this plan; Berth plans it again',
       auditConfirmed: 'An administrator looked at this medium-confidence import and confirmed it',
       auditUndone: 'An administrator undid this file’s import; the job is back in review',
       auditUndoneGone:
@@ -2646,13 +2850,13 @@ const en: Translations<typeof zhHant> = {
       },
       reason: {
         low_confidence:
-          'Some files could not be placed in a season and episode, or the count does not match TMDB. There is no review queue yet in M1 — fix the route or wait for TMDB, then press replan.',
+          'Some files could not be placed in a season and episode, or the count does not match TMDB. An administrator confirms the rows in the review queue and approves; if TMDB has just caught up, plan it again.',
         medium_not_allowed:
-          'This library route does not auto-import medium-confidence files, so the whole plan stopped for a person to look at. Confirming file by file comes with the review queue; for now, read the reason on each row below.',
+          'This library route does not import medium-confidence files by itself, so the whole plan stopped for a person to look at. Once an administrator approves it in the review queue, it imports.',
         nothing_to_import:
           'Nothing in this torrent would reach the library. Most likely the wrong torrent was sent.',
         target_exists:
-          'A file Berth did not link already sits at this spot in the library, and Berth will not overwrite it; the other files are already in. There is no review queue yet in M1 — move that file away, then press replan.',
+          'A file Berth did not link already sits at this spot in the library, and Berth will not overwrite it; the other files are already in. Move that file away, or skip that row in the review queue, then approve.',
         audit_undone:
           'An administrator undid a medium-confidence import from the review queue: that file has left the library, and its source under complete is untouched. The plan is back, waiting for someone to decide which episode that row really is.',
       },
@@ -2671,6 +2875,85 @@ const en: Translations<typeof zhHant> = {
       },
       target: 'Target',
       audit: 'imported, awaiting confirmation',
+      why: {
+        movie: 'This is a film; it has no season or episode',
+        media_by_title: 'The download named no title; recognised {{title}} by its name',
+        title_exact: 'The release title is exactly {{title}}',
+        title_contained: 'The release name contains {{title}}',
+        title_partial: 'The release name carries most of {{title}}',
+        year_matches: 'The year {{year}} matches',
+        year_differs: 'The release says {{year}}; this title is from {{expected}}',
+        title_mismatch: 'The release title {{release_title}} does not look like {{title}}',
+        no_media: 'The download named no title, so there are no seasons to check against',
+        season_from_job: 'The download names season {{season}}',
+        season_from_release: 'The release name says season {{season}}',
+        season_from_folder: 'The folder says season {{season}}',
+        season_from_arc: 'The release carries the arc {{arc}}, which is season {{season}}',
+        final_season: 'The release says final season; the last season is {{season}}',
+        single_season: 'Only an episode number, and TMDB has one season',
+        absolute_group: 'TMDB’s absolute order puts #{{number}} at {{episode}}',
+        absolute_cumulative: 'Counting seasons in order puts #{{number}} at {{episode}}',
+        cour_offset:
+          'Part {{part}} of season {{season}} starts at episode {{first}}, so its episode {{number}} is {{episode}}',
+        air_date_run:
+          'TMDB has no season {{season}}; air dates split it into {{runs}} runs, and run {{season}} starts at {{episode}}',
+        episode_not_on_tmdb: 'TMDB has no episode {{number}} in season {{season}}',
+        absolute_within_first_season:
+          '#{{number}} does not go past the {{episodes}} episodes of season {{season}}; it could be episode {{number}} of a later season that counts from 01 again',
+        air_date_unknown:
+          'The release says it aired on {{aired}}, but TMDB has no air date for {{episode}}',
+        air_date_mismatch:
+          'The release says it aired on {{aired}}; TMDB says {{episode}} aired on {{tmdb_aired}}',
+        range_spans_seasons:
+          'The release covers {{start}}–{{end}}, which does not fit in one season',
+        specials_numbering: 'Release groups number specials differently from TMDB’s season 0',
+        classified: 'Classified as {{kind}}; nothing to decide',
+        disc_structure: 'A disc structure; Berth does not unpack those',
+        own_numbered_special:
+          'A special the release numbers itself; TMDB numbers its specials differently',
+        no_episode: 'No season and episode could be worked out',
+        subtitle_orphan: 'No video in this download goes with this subtitle',
+        subtitle_same_name: 'The subtitle and the video share a name',
+        subtitle_folder_episode:
+          'The subtitle sits in a subtitle folder and names episode {{number}}',
+        subtitle_follows: 'It goes with {{video}}',
+        video_not_imported: 'Its video is “{{action}}”, so the subtitle follows',
+        target_contested: 'Another file in this download would be written to {{target}}',
+        span_clash:
+          'Another episode file here starts at the same episode but covers a different range; Jellyfin 12 groups by season and episode only, so it would fold them into one and the later episodes would disappear',
+        library_span_clash:
+          'The library already has {{known}}, which starts at the same episode but covers a different range; Jellyfin 12 would fold them into one and the later episodes would disappear',
+        too_many_files:
+          'This download maps {{files}} files into season {{season}}, which TMDB says has {{episodes}} episodes',
+        strategy_outlier: 'The rest of this download was read by {{strategy}}; this file was not',
+        season_complete: 'This download covers season {{season}} end to end',
+        medium_held_by_route: 'This library route does not import medium confidence by itself',
+        set_by_user: 'An administrator set this row',
+      },
+      strategy: {
+        explicit: 'the name itself',
+        folder: 'the folder',
+        context: 'the download',
+        arc_name: 'the arc name',
+        single_season: 'the single season',
+        absolute_group: 'TMDB’s absolute order',
+        absolute_cumulative: 'counting seasons',
+        air_date_offset: 'air dates',
+        cour_offset: 'the part number',
+        movie: 'film',
+      },
+      kind: {
+        video: 'video',
+        subtitle: 'subtitle',
+        font: 'font',
+        audio: 'audio',
+        image: 'image',
+        archive: 'archive',
+        sample: 'sample',
+        disc: 'disc structure',
+        extra: 'extra',
+        other: 'other',
+      },
       replan: 'Plan it again',
       replanning: 'Planning…',
       replanOff:

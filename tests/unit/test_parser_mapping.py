@@ -21,7 +21,9 @@ from berth.domain import (
     MediaKind,
     MediaSnapshot,
     ParseContext,
+    ReasonCode,
     SeasonSnapshot,
+    why,
 )
 from berth.parser import map_episode, parse_release, structure_hints
 
@@ -393,7 +395,10 @@ class TestAbsoluteNumbers:
 
         assert best(candidates) == (1, 25, MappingStrategy.ABSOLUTE_CUMULATIVE)
         assert all(item.confidence is Confidence.LOW for item in candidates)
-        assert any("later season" in reason for reason in candidates[0].reasons)
+        assert (
+            why(ReasonCode.ABSOLUTE_WITHIN_FIRST_SEASON, number=25, episodes=25, season=1)
+            in candidates[0].reasons
+        )
 
 
 class TestAbsoluteNumbersAgainstTheAirDate:
@@ -422,7 +427,15 @@ class TestAbsoluteNumbersAgainstTheAirDate:
 
         assert best(candidates) == (2, 1, MappingStrategy.ABSOLUTE_CUMULATIVE)
         assert candidates[0].confidence is Confidence.LOW
-        assert any("2021-01-04" in reason for reason in candidates[0].reasons)
+        assert (
+            why(
+                ReasonCode.AIR_DATE_MISMATCH,
+                aired="2021-01-04",
+                episode="S02E01",
+                tmdb_aired="2021-01-03",
+            )
+            in candidates[0].reasons
+        )
 
     def test_an_episode_tmdb_has_no_air_date_for_is_only_reviewed(self) -> None:
         """發佈明說了日期，而 TMDB 沒有東西證實它——這不是「對得上」。"""

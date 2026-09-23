@@ -82,8 +82,9 @@ class PlanItem(Base):
     #: 相對於 Route 目標路徑的位置。**只有真的會被寫出去的檔案有值**（plan §4.2）。
     target_path: Mapped[str] = mapped_column(Text, default="")
     confidence: Mapped[Confidence] = mapped_column(enum_column(Confidence))
-    #: 為什麼是這個決定。UI 逐條顯示（brief §6.5）。
-    reasons_json: Mapped[list[str] | None] = mapped_column(JsonText, default=None)
+    #: 為什麼是這個決定：`domain.ItemReason` 的 JSON（`{code, params}`），UI 逐條翻譯（brief §6.5、
+    #: M2 票 07）。讀寫都走 `services/plan_view.py` 的 `reasons_of` / `dump_reasons`。
+    reasons_json: Mapped[list[dict[str, Any]] | None] = mapped_column(JsonText, default=None)
     #: medium 信心自動入庫時掛的旗標（CONTEXT.md 的 Audit、brief §6.5）。
     #: M2 的 Review Queue 以「已入庫待確認」列出它們，一鍵撤銷或確認。
     audit: Mapped[bool] = mapped_column(default=False)

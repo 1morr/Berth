@@ -9,7 +9,7 @@ import { Dot } from './Dot'
  * （`.scratch/m2/review-shape.md`）。
  *
  * 票 05 刻意不抽它，等手上有兩個真實案例（`IssueRow`、`AuditRow`）——用一個案例猜介面會猜錯。
- * 兩個案例共用的就是這四格，由上到下：
+ * 共用的是這四格，由上到下（`PlanRow` 在第 2、3 格之間多一塊 `body`）：
  *
  * 1. **識別**：中性色塊的類別標籤＋標題。**不塗信號色**：清單上每一列都「在等人」，塗漆不區分
  *    任何東西（The Role Is Not A State Rule）；不看顏色也讀得出來靠的是那幾個模板字。
@@ -26,6 +26,7 @@ export function QueueRow({
   heading = 'h2',
   sentence,
   when,
+  body,
   details,
   refusal,
   children,
@@ -36,6 +37,11 @@ export function QueueRow({
   sentence: string
   /** 已經翻好的「偵測於 / 入庫於 …」。 */
   when: string
+  /**
+   * 這一列的工作本身，**不收在展開裡**：Plan 那一類的逐列表格（M2 票 07）——那張表就是要人做的事，
+   * 收起來等於多一次點擊。其餘幾類沒有。
+   */
+  body?: ReactNode
   details: ReactNode
   refusal: string | null
   /** 動作列。順序照後端給的 `actions`。 */
@@ -56,6 +62,8 @@ export function QueueRow({
         <Dot />
         <span className="value text-xs">{when}</span>
       </p>
+
+      {body}
 
       <details className="group">
         <summary className="label w-fit cursor-pointer text-ink-dim hover:text-ink">

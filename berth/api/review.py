@@ -7,7 +7,7 @@
 **一支端點、一份清單、一列一件事**（plan §11.3 決定 6）。每一列以 `kind` 區分形狀：共同的是
 指向它的物件（`ref`）、一句封閉集合的理由（`reason`，code + 參數，前端翻譯）、這一列能按的動作
 與它開始等人的時間；各類自己的欄位跟在後面。`issue` 那一類的動作打的是 `issues/*` 的那兩支，
-這裡只有 audit 的兩顆。
+這裡只有 audit 的兩顆；`plan` 那一類的核准與拒絕打的是 `plans/*`（`api/plans.py`）。
 """
 
 from __future__ import annotations
@@ -22,18 +22,23 @@ from berth.api.deps import SessionDep
 from berth.api.errors import refusal_responses
 from berth.api.gate import current_user
 from berth.api.issues import IssueOut, issue_out
+from berth.api.plans import ItemReasonOut
 from berth.domain import (
     AuditAction,
     AuditReason,
     IssueAction,
     IssueType,
+    PlanDecision,
+    PlanSummary,
     ReviewKind,
+    ReviewReason,
     ReviewRefusal,
 )
 from berth.services.jobs import actor_of
 from berth.services.review import (
     AuditRow,
     IssueRow,
+    PlanRow,
     ReviewRejectedError,
     ReviewRow,
     confirm_audit,
@@ -87,6 +92,35 @@ class IssueReasonOut(BaseModel):
     params: dict[str, Any]
 
 
+class PlanReasonOut(BaseModel):
+    """`plan` 那一列的理由：為什麼這一份停下來（`ReviewReason`），參數是它的計數。"""
+
+    code: ReviewReason
+    params: dict[str, Any]
+
+
+class PlanRowOut(BaseModel):
+    """一份停在 review 的 Plan（M2 票 07）。`ref` 是 Plan 的 id，逐列的內容打 `GET /plans/{ref}`。
+
+    逐列不跟著來：一包 39 個檔案的理由塞進佇列的每一列，佇列本身就讀不動了；畫面展開那一列時才要。
+    """
+
+    kind: Literal[ReviewKind.PLAN]
+    ref: int
+    reason: PlanReasonOut
+    #: 核准、拒絕，順序就是畫面上的順序。
+    actions: list[PlanDecision]
+    #: 這一份算出來的那一刻。
+    at: datetime
+    media_id: str | None
+    #: 作品名的兩輪（brief §7.5），畫面照 UI 語言挑。沒有作品時都是空字串。
+    title: str
+    title_en: str
+    job_hash: str
+    job_name: str
+    summary: PlanSummary
+
+
 class AuditRowOut(BaseModel):
     """一個 medium 自動入庫、等人看一眼的檔案（CONTEXT.md 的 Audit）。`ref` 是帳本那一列的 id。"""
 
@@ -109,8 +143,8 @@ class AuditRowOut(BaseModel):
     season: int | None
     episode_start: int | None
     episode_end: int | None
-    #: 解析器為什麼給 medium。**英文原文，不翻譯**（與 `detail` 同一個規矩）。
-    notes: list[str]
+    #: 解析器為什麼給 medium（那一列 Plan Item 的理由）。
+    reasons: list[ItemReasonOut]
 
 
 class IssueRowOut(BaseModel):
@@ -130,7 +164,7 @@ class IssueRowOut(BaseModel):
     issue: IssueOut
 
 
-ReviewRowOut = Annotated[AuditRowOut | IssueRowOut, Field(discriminator="kind")]
+ReviewRowOut = Annotated[PlanRowOut | AuditRowOut | IssueRowOut, Field(discriminator="kind")]
 
 
 class ReviewQueueOut(BaseModel):
@@ -180,7 +214,9 @@ async def post_undo(session: SessionDep, request: Request, ledger_id: int) -> No
         raise review_refusal(refusal) from refusal
 
 
-def _row_out(row: ReviewRow) -> AuditRowOut | IssueRowOut:
+def _row_out(row: ReviewRow) -> PlanRowOut | AuditRowOut | IssueRowOut:
+    if isinstance(row, PlanRow):
+        return _plan_out(row)
     if isinstance(row, IssueRow):
         view = row.issue
         return IssueRowOut(
@@ -192,6 +228,26 @@ def _row_out(row: ReviewRow) -> AuditRowOut | IssueRowOut:
             issue=issue_out(view),
         )
     return _audit_out(row)
+
+
+def _plan_out(row: PlanRow) -> PlanRowOut:
+    summary = row.summary
+    return PlanRowOut(
+        kind=ReviewKind.PLAN,
+        ref=row.plan_id,
+        reason=PlanReasonOut(
+            code=row.reason,
+            params={"files": summary.files, "low": summary.low, "medium": summary.medium},
+        ),
+        actions=list(row.actions),
+        at=row.at,
+        media_id=row.media_id,
+        title=row.title,
+        title_en=row.title_en,
+        job_hash=row.job_hash,
+        job_name=row.job_name,
+        summary=summary,
+    )
 
 
 def _audit_out(row: AuditRow) -> AuditRowOut:
@@ -211,7 +267,7 @@ def _audit_out(row: AuditRow) -> AuditRowOut:
         season=row.season,
         episode_start=row.episode_start,
         episode_end=row.episode_end,
-        notes=list(row.notes),
+        reasons=[ItemReasonOut.model_validate(reason) for reason in row.reasons],
     )
 
 

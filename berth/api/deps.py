@@ -67,6 +67,12 @@ def get_import_hints(request: Request) -> JobHints:
     return hints
 
 
+def get_plan_hints(request: Request) -> JobHints:
+    """規劃器的喚醒訊號。拒絕一份 Plan 之後它要整份重算（M2 票 07）。"""
+    hints: JobHints = request.app.state.plan_hints
+    return hints
+
+
 def get_access_cache(request: Request) -> AccessCache:
     """允許清單與 `Policy` 的快取（`create_app` 放進 `app.state`）：一個程序一份，每個請求共用。"""
     cache: AccessCache = request.app.state.jellyfin_access
@@ -98,6 +104,7 @@ ClientFactoryDep = Annotated[ServiceClientFactory, Depends(get_client_factory)]
 AccessCacheDep = Annotated[AccessCache, Depends(get_access_cache)]
 EventHubDep = Annotated[EventHub, Depends(get_event_hub)]
 ImportHintsDep = Annotated[JobHints, Depends(get_import_hints)]
+PlanHintsDep = Annotated[JobHints, Depends(get_plan_hints)]
 ConfigDep = Annotated[Config, Depends(get_config)]
 ReconcilerDep = Annotated[ReconcileRunner, Depends(get_reconciler)]
 SetupProbesDep = Annotated[SetupProbes, Depends(get_setup_probes)]

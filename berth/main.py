@@ -122,8 +122,9 @@ def _lifespan(config: Config) -> Lifespan[FastAPI]:
         # 正在忙的那一個清掉訊號時，另一個就漏掉了它（`asyncio.Event` 是大家一起清的）。
         plans = JobHints()
         imports = JobHints()
-        # 入庫重試的端點也要叫醒 importer（`api/deps.py`）。
+        # 入庫重試與核准的端點也要叫醒 importer，拒絕要叫醒規劃器（`api/deps.py`）。
         app.state.import_hints = imports
+        app.state.plan_hints = plans
         sessions = app.state.session_factory
         clients = app.state.clients
         checker = HealthChecker(sessions, clients)

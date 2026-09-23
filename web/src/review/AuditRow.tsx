@@ -16,6 +16,7 @@ import { formatEpisode } from '../components/episodes'
 import { DetailLine, QueueRow } from '../components/QueueRow'
 import { fileName, whenText } from '../components/queueText'
 import { tmdbText } from '../i18n/tmdbText'
+import { Reasons } from '../plans/Reasons'
 
 /**
  * 一個 medium 自動入庫、等人看一眼的檔案（CONTEXT.md 的 Audit、`.scratch/m2/review-shape.md`）。
@@ -84,14 +85,10 @@ export function AuditRow({ row, onDone }: { row: AuditReviewRow; onDone: (said: 
               </Link>
             </DetailLine>
           )}
-          {row.notes.length > 0 && (
-            <DetailLine term={t('review.audit.notes')}>
-              {/* 解析器的原文，不翻譯（與 `detail` 同一個規矩）：它是判斷對不對的證據。 */}
-              <span lang="en" className="grid gap-0.5">
-                {row.notes.map((note) => (
-                  <span key={note}>{note}</span>
-                ))}
-              </span>
+          {row.reasons.length > 0 && (
+            <DetailLine term={t('review.audit.reasons')}>
+              {/* 判斷對不對的證據：為什麼是 medium。code + 參數，句子在前端（M2 票 07）。 */}
+              <Reasons reasons={row.reasons} />
             </DetailLine>
           )}
         </>

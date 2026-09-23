@@ -6,6 +6,7 @@ import { reviewQueryOptions, type ReviewKind, type ReviewRow } from '../api/revi
 import { PAGE_TITLE } from '../components/controls'
 import { IssueRow } from '../issues/IssueRow'
 import { AuditRow } from '../review/AuditRow'
+import { PlanRow } from '../review/PlanRow'
 
 /**
  * 審核佇列 `/review`（`.scratch/m2/review-shape.md`，M2 票 06）。
@@ -79,9 +80,11 @@ export function ReviewPage() {
   )
 }
 
-/** 一列畫成哪個元件。**窮舉**：票 07、08 把新的 `kind` 加進聯集時，少一支是 `tsc` 的事。 */
+/** 一列畫成哪個元件。**窮舉**：票 08 把新的 `kind` 加進聯集時，少一支是 `tsc` 的事。 */
 function Row({ row, onDone }: { row: ReviewRow; onDone: (said: string) => void }) {
   switch (row.kind) {
+    case 'plan':
+      return <PlanRow row={row} onDone={onDone} />
     case 'audit':
       return <AuditRow row={row} onDone={onDone} />
     case 'issue':
@@ -94,9 +97,10 @@ type SectionName = 'decide' | 'look' | 'outside'
 /**
  * 每一類落在哪一段（plan §6 的 `REVIEW_PRIORITY` 三級）。`plan` / `unmatched` 在「要你決定」、
  * `audit` / `duplicate` 在「等你看一眼」、`issue` 在「外面發生的事」。鍵是**現在會出現**的幾類，
- * 所以票 07 加 `plan` 時這張表會紅。
+ * 所以票 08 加 `unmatched` 時這張表會紅。
  */
 const SECTION_OF: Record<ReviewKind, SectionName> = {
+  plan: 'decide',
   audit: 'look',
   issue: 'outside',
 }

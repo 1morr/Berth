@@ -12,7 +12,8 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from berth.domain import FileEntry, Lang, PlanItem, sort_langs
+from berth.domain import FileEntry, ItemReason, Lang, PlanItem, sort_langs, why
+from berth.domain import ReasonCode as Code
 from berth.naming import stem
 from berth.parser.cjk import langs_in
 from berth.parser.release import parse_release
@@ -53,7 +54,7 @@ class SubtitleMatch:
     #: 影片的 `rel_path`（torrent 內），不是目標路徑——目標路徑由 `naming` 算。
     video: str
     langs: tuple[Lang, ...]
-    reasons: tuple[str, ...] = ()
+    reasons: tuple[ItemReason, ...] = ()
 
 
 def match_subtitle(entry: FileEntry, videos: Sequence[PlanItem]) -> SubtitleMatch | None:
@@ -70,7 +71,7 @@ def match_subtitle(entry: FileEntry, videos: Sequence[PlanItem]) -> SubtitleMatc
             return SubtitleMatch(
                 video=item.rel_path,
                 langs=langs,
-                reasons=("the subtitle and the video share a file name",),
+                reasons=(why(Code.SUBTITLE_SAME_NAME),),
             )
 
     return _by_episode(entry, videos, langs)
@@ -106,7 +107,7 @@ def _by_episode(
     return SubtitleMatch(
         video=found[0].rel_path,
         langs=langs,
-        reasons=(f"the subtitle sits in a subtitle folder and names episode {info.episode}",),
+        reasons=(why(Code.SUBTITLE_FOLDER_EPISODE, number=info.episode),),
     )
 
 
