@@ -29,6 +29,7 @@ ffmpeg 產種子檔），那只影響「造測試素材」這一步，不影響 
 | `anime_episode_source.py` | M1 票 01：字幕組編號換算到 TMDB 季集 / TVDB aired / TVDB absolute 的失敗率 |
 | `anime_sample.json` | 上一支的樣本：10 部動漫、挑選理由、Mikan 的番組 id |
 | `qbittorrent_poller.py` | M1 票 10：`sync/maindata` 的 rid 增量形狀、`torrents/files` 的相對基準（多檔）、三種處境下的 `state` / `progress` / `completion_on`，以及**連續登入失敗之後的 403 與帳密錯差在哪裡**。最後一項會封住來源 IP，所以它一定跑在最後 |
+| `qbittorrent_recovery.py` | M2 票 09c：`torrents/recheck` 與 `torrents/start`（4.x 叫 `resume`）兩版回什麼、刪資料再重啟之後 torrent 是不是 `missingFiles`、救回來時 recheck 與 start 誰先誰後有沒有差。會 `docker restart` 那個容器，並重錄 `tests/fixtures/http/qbittorrent/` 的五份 fixture |
 | `absolute_rule_cost.py` | M1 票 14d：「集號 ≤ 第一季集數就送審核」擋下的是對的多還是錯的多，以及「標題有認不出的多餘字」分不分得開。正解借 `anime_episode_source.py` 的校準，Berth 的讀法是把每筆 Mikan 發佈丟進 `plan`。只印 stdout |
 | `jellyfin_permissions.py` | M1.5 票 01：伺服器 API key 代讀某位使用者時，Jellyfin 哪些端點套用他的媒體庫權限（研究 §2 的表逐列，API key 與使用者 token 各一次）；`/Items` 的過濾、排序、分頁是不是真的有作用；由 TMDB id 找作品；Series / Season 標記遞迴；停用帳號。自己起停一次性容器，`--record` 重錄 `tests/fixtures/http/jellyfin/` 的權限 fixture，也錄媒體庫牆、排序篩選與繼續觀看 / 下一集（票 03–07）、Media 詳情觀看區（由 TMDB id 找作品、`/Items/{id}`、這部劇的下一集，票 08）的回應 |
 | `jellyfin_images.py` | M1.5 票 04：Jellyfin 的圖經 Berth 代理要不要在 Berth 端另存一份。縮圖參數與格式協商、Jellyfin 自己的縮圖快取（冷熱延遲）、6 條並行下直連與經過 Berth（`berth serve` 子程序）各多少毫秒。自己起停一次性容器 |
@@ -36,6 +37,10 @@ ffmpeg 產種子檔），那只影響「造測試素材」這一步，不影響 
 
 ## 幾個不明顯的地方
 
+- **`compose.yml` 的子網 `172.29.0.0/16` 可能與這台機器上別的 docker network 撞**（`Pool overlaps`，
+  2026-09-23 撞過）。不要去刪別人的網路：複製一份 compose 改子網，`prepare_qbittorrent.py --compose <那一份>`
+  讓白名單跟著換，再以 `EXP_ROOT=<repo>/.local/experiments docker compose -f <那一份> up -d` 起來
+  （複製出去之後相對路徑的預設值就不對了）。
 - **媒體樹裡有兩組作品是故意的。** `Berth Test Show (2020) [tmdbid-1399]` 會被 TMDB 認出來，標題
   整個被遠端覆寫；`Qwxzyv Berth Probe (2099)` 對不上任何 provider，名稱完全由 Jellyfin 自己的檔名
   解析器決定。方括號 tag 有沒有滲進劇名或集名，只有在後者看得出來。

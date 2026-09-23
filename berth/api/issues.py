@@ -50,6 +50,10 @@ _STATUS: dict[IssueRefusal, int] = {
     IssueRefusal.SIZE_DIFFERS: status.HTTP_409_CONFLICT,
     IssueRefusal.DELETE_FAILED: status.HTTP_409_CONFLICT,
     IssueRefusal.JELLYFIN_UNREACHABLE: status.HTTP_502_BAD_GATEWAY,
+    # 同 `POST /jobs`：索引站那一頭給不出同一個 torrent，是上游的事（`JobRefusal` 同一種）。
+    IssueRefusal.SOURCE_UNAVAILABLE: status.HTTP_502_BAD_GATEWAY,
+    IssueRefusal.RESUBMIT_FAILED: status.HTTP_409_CONFLICT,
+    IssueRefusal.ROUTE_UNUSABLE: status.HTTP_409_CONFLICT,
 }
 
 
@@ -70,8 +74,9 @@ def _refusals(*reasons: IssueRefusal) -> dict[int | str, dict[str, Any]]:
 
 #: 按下任何一顆都到得了的：這一件不在了、已經被決定過了、那一顆按不了。其餘各自屬於幾顆：
 #: 來源不在（重新鏈接、以硬鏈接取代）、鏈接沒成（同兩顆）、問不到 qBittorrent（兩顆會刪
-#: complete 的）、目錄有主了與刪不掉（刪除孤兒）、大小變了（以硬鏈接取代）、問不到 Jellyfin
-#: （重新掃描媒體庫）。
+#: complete 的，與管線那三種的重新 recheck / 重試 / 重新送單）、目錄有主了與刪不掉（刪除孤兒）、
+#: 大小變了（以硬鏈接取代）、問不到 Jellyfin（重新掃描媒體庫）、下載連結給不出同一個 torrent、
+#: qBittorrent 不收、Route 用不了（重新送單）。
 RESOLVE_RESPONSES = _refusals(
     IssueRefusal.ISSUE_MISSING,
     IssueRefusal.ISSUE_NOT_OPEN,
@@ -83,6 +88,9 @@ RESOLVE_RESPONSES = _refusals(
     IssueRefusal.SIZE_DIFFERS,
     IssueRefusal.DELETE_FAILED,
     IssueRefusal.JELLYFIN_UNREACHABLE,
+    IssueRefusal.SOURCE_UNAVAILABLE,
+    IssueRefusal.RESUBMIT_FAILED,
+    IssueRefusal.ROUTE_UNUSABLE,
 )
 
 #: 忽略不碰磁碟也不碰服務，所以只有這一件本身的兩種。

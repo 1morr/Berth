@@ -548,7 +548,11 @@ async def _issue(
         return 0
     payload = {"type": kind.value, "client_state": job.client_state, **(detail or {})}
     await record_event(session, job, EventType.ISSUE_DETECTED, actor=SYSTEM, payload=payload)
-    await record_issue(session, kind, path=path, job_hash=job.hash, detail=payload)
+    # Issue 多帶一個名字：清單上那一列沒有路徑可以認，只剩 hash 的話使用者分不出是哪一筆
+    # （時間線不需要——它就掛在那一筆 Job 底下）。與 `unknown_torrent` 同一個鍵。
+    await record_issue(
+        session, kind, path=path, job_hash=job.hash, detail={**payload, "name": job.name}
+    )
     logger.warning("job issue detected", extra={"issue": kind.value, "state": state.value})
     return 1
 

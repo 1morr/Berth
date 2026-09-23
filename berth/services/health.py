@@ -8,6 +8,9 @@
 4. **Route**：五條纜繩重跑一次——category、兩邊回報的路徑、跨服務可見性、真的 `link()`
    一次比 inode（plan §9.5）。與精靈第 7 步是同一組檢查、同一個欄位。
 
+四項之後再量兩件會變成 Issue 的事（M2 票 09c）：Route 的媒體庫掛不掛 TVDB、磁碟剩的空間夠不夠
+（`services/health_issues.py`）。它們不是紅燈——服務都還連得上——而是要有人決定的事。
+
 **每一項都獨立**：一個服務掛掉只會讓它自己那一項變紅，例外在它那一格就被接住
 （`_run`），另外三項照跑。Route 那一項是唯一有依賴的——它的檢查要問 qBittorrent 與
 Jellyfin，所以那兩台掛掉時 Route 一起紅，那是事實不是連坐。
@@ -42,6 +45,7 @@ from berth.models import (
 )
 from berth.services.clients import ServiceClientFactory
 from berth.services.downloads import ACTIVE_INTERVAL
+from berth.services.health_issues import watch_conditions
 from berth.services.indexer import probe_indexer
 from berth.services.qbittorrent import drifted_keys
 from berth.services.routes import RouteView, check_routes, read_route_status, routes_health
@@ -198,6 +202,7 @@ async def check_health(
     health.checked_at = moment
     await write_settings(session, health)
     await session.commit()
+    await _watch_conditions(session, factory, moment)
     return await read_health(session)
 
 
@@ -294,6 +299,20 @@ async def _check_routes(session: AsyncSession, factory: ServiceClientFactory) ->
         logger.exception("route health checks failed unexpectedly")
         return HealthStatus.FAILED
     return await routes_health(session)
+
+
+async def _watch_conditions(
+    session: AsyncSession, factory: ServiceClientFactory, moment: datetime
+) -> None:
+    """TVDB 與磁碟空間兩種 Issue（`services/health_issues.py`，M2 票 09c）。
+
+    排在四項之後、各自的結果都 commit 了之後：它炸了不該弄丟那四項。
+    """
+    try:
+        await watch_conditions(session, factory, now=moment)
+    except Exception:  # 同 `_check_routes`：一個沒預料到的 bug 不該讓整輪的紀錄消失
+        await session.rollback()
+        logger.exception("TVDB and disk space checks failed unexpectedly")
 
 
 # --- 逐項檢查 -----------------------------------------------------------

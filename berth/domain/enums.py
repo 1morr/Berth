@@ -174,10 +174,11 @@ class JellyfinRequest(StrEnum):
 class IssueType(StrEnum):
     """一件「要有人決定」的事是哪一種（brief §9.1、plan §2.4）。
 
-    **十一種的聯集，一個封閉集合**（2026-09-22 定，M2 票 05）：前五種是管線自己在路上
-    發現的（M1 起寫 `issue_detected` 事件，M2 起同時寫一列 `issues`），後六種是對帳比完
-    四方之後才知道的。兩邊共用同一個集合，所以加一種型別而沒替它決定 `subject` 取哪一欄、
-    或沒給它動作，紅的會是 `SUBJECT_OF` 與 `ISSUE_ACTIONS` 那兩條閘門。
+    **十三種的聯集，一個封閉集合**（2026-09-22 定，M2 票 05；票 09c 加上最後兩種）：前五種
+    是管線自己在路上發現的（M1 起寫 `issue_detected` 事件，M2 起同時寫一列 `issues`），中間
+    六種是對帳比完四方之後才知道的，最後兩種是 `health_checker` 每 5 分鐘量出來的。三邊共用
+    同一個集合，所以加一種型別而沒替它決定 `subject` 取哪一欄、或沒給它動作，紅的會是
+    `SUBJECT_OF` 與 `ISSUE_ACTIONS` 那兩條閘門。
 
     `unknown_torrent` 在 brief §9.1 的表上算對帳的七種，但**今天寫它的是 `qbit_poller`**
     （plan §3.2）——票 09 讓對帳也走到它之後，兩個生產者寫的是同一個 `(type, subject)`，
@@ -209,6 +210,13 @@ class IssueType(StrEnum):
     UNMANAGED_LIBRARY_FILE = "unmanaged_library_file"
     #: Job 已經 `imported`，帳本上卻一列都沒有。
     JOB_WITHOUT_FILES = "job_without_files"
+    #: 一條 Route 的 Jellyfin 媒體庫掛著 TVDB 的 metadata fetcher（brief §16.4 的警告）。
+    #: Berth 照 TMDB 命名，TVDB 的季集編排可能與它不同（brief §10）。**`health_checker` 偵測**，
+    #: 修法在 Jellyfin 的媒體庫設定裡，拿掉之後下一輪自己收掉。
+    LIBRARY_USES_TVDB = "library_uses_tvdb"
+    #: incomplete 或 complete 根目錄所在的檔案系統剩下的空間低於 `DiskSettings.min_free_gb`。
+    #: 硬鏈接入庫不佔空間，會把磁碟吃滿的是下載。同上，空出來之後下一輪自己收掉。
+    LOW_DISK_SPACE = "low_disk_space"
 
 
 class IssueStatus(StrEnum):
@@ -261,6 +269,11 @@ SUBJECT_OF: dict[IssueType, IssueSubject] = {
     IssueType.MISSING_FILES: IssueSubject.JOB_HASH,
     # 反查用完是**那一列帳本**的事：同一筆 Job 的兩集各自反查，各自放棄。
     IssueType.JELLYFIN_ITEM_UNRESOLVED: IssueSubject.LEDGER_ID,
+    # **一條 Route 一件**（2026-09-23 使用者拍板）：用它的目標路徑。一個媒體庫掛兩條 Route 時
+    # 會有兩件，但 Route 才是 Berth 管的東西，畫面也說得出是哪一條。
+    IssueType.LIBRARY_USES_TVDB: IssueSubject.PATH,
+    # 量的那個根目錄（incomplete 或 complete）。兩者在同一個檔案系統上時只量一次，只有一件。
+    IssueType.LOW_DISK_SPACE: IssueSubject.PATH,
 }
 
 
@@ -272,7 +285,7 @@ class IssueAction(StrEnum):
     brief §9.1 那一欄還有三顆「認領」類的——`orphan_complete` 的重新入庫、`unknown_torrent` 的
     認領、`unmanaged_library_file` 的認領進帳本——**在票 10**（2026-09-23 使用者拍板）：它們用的
     正是那一張票的原語（目錄版 `reimport` 與 `rebuild-ledger` 的反查），先做一份會變成兩條入庫
-    路徑。管線那三種（`missing_files` / `client_error` / `client_removed`）的動作在票 09c。
+    路徑。管線那三種（`missing_files` / `client_error` / `client_removed`）的動作是票 09c 加的。
     """
 
     #: 重新鏈接：來源還在 complete，照帳本那一列再硬鏈接一次。
@@ -298,12 +311,26 @@ class IssueAction(StrEnum):
     #: 重新掃描媒體庫：先請 Jellyfin 跑「重新掃描媒體庫」，再重新反查（brief §20.1：路徑通知
     #: 對從沒掃到過內容的媒體庫無效）。
     RESCAN = "rescan"
+    #: 重新 recheck：請 qBittorrent 重新校驗那一包並接著下載（`torrents/recheck` + `start`），
+    #: Job 回到 metadata 到手之後那一站，由 poller 照常往前推（plan §3.1）。
+    RECHECK = "recheck"
+    #: 承認遺失：那一包的檔案就是沒了。Job 走刪除範圍四個旗標**全不勾**進 `removed`
+    #: （2026-09-23 使用者拍板）——磁碟與 qBittorrent 都不動，時間線一筆 `deleted`。
+    ACCEPT_LOSS = "accept_loss"
+    #: 重試：請 qBittorrent 重新開始那一包（`torrents/start`，4.x 叫 `resume`），它會清掉錯誤
+    #: 狀態。Job 同 `recheck` 回到 metadata 到手之後那一站。
+    RETRY = "retry"
+    #: 重新送單：照存下來的下載連結再加一次（同 `submit_failed` 的重試，plan §3.1）。
+    RESUBMIT = "resubmit"
+    #: 承認移除：torrent 是使用者自己在 qBittorrent 上拿掉的。與 `accept_loss` 同一個做法。
+    ACCEPT_REMOVAL = "accept_removal"
 
 
 #: 逐型別按得了哪幾顆，**順序就是畫面上的順序**（第一顆是 brief §9.1 的預設建議動作）。
 #:
 #: **要涵蓋整個 `IssueType`**（`tests/unit/test_issue_types.py` 守著）。空 tuple 是誠實的
-#: 答案：那一種現在只按得了「忽略」——認領類的在票 10，管線那三種在票 09c。
+#: 答案：那一種現在只按得了「忽略」——認領類的在票 10；健康檢查那兩種永遠是空的，它們的修法
+#: 不在 Berth 裡，條件解除時由系統收掉（票 09c）。
 ISSUE_ACTIONS: dict[IssueType, tuple[IssueAction, ...]] = {
     IssueType.LIBRARY_LINK_MISSING: (
         IssueAction.RELINK,
@@ -319,10 +346,12 @@ ISSUE_ACTIONS: dict[IssueType, tuple[IssueAction, ...]] = {
     # 任何一顆會刪東西。
     IssueType.UNMANAGED_LIBRARY_FILE: (),
     IssueType.JOB_WITHOUT_FILES: (IssueAction.REPLAN,),
-    IssueType.MISSING_FILES: (),
-    IssueType.CLIENT_ERROR: (),
-    IssueType.CLIENT_REMOVED: (),
+    IssueType.MISSING_FILES: (IssueAction.RECHECK, IssueAction.ACCEPT_LOSS),
+    IssueType.CLIENT_ERROR: (IssueAction.RETRY,),
+    IssueType.CLIENT_REMOVED: (IssueAction.RESUBMIT, IssueAction.ACCEPT_REMOVAL),
     IssueType.JELLYFIN_ITEM_UNRESOLVED: (IssueAction.RELOOK, IssueAction.RESCAN),
+    IssueType.LIBRARY_USES_TVDB: (),
+    IssueType.LOW_DISK_SPACE: (),
 }
 
 #: 按下去會不會刪掉磁碟上的東西。**要涵蓋整個 `IssueAction`**（`test_issue_types.py` 守著）：
@@ -339,6 +368,12 @@ ACTION_DELETES: dict[IssueAction, bool] = {
     IssueAction.REPLAN: False,
     IssueAction.RELOOK: False,
     IssueAction.RESCAN: False,
+    IssueAction.RECHECK: False,
+    # 兩顆「承認」讓那一筆下載結束，但刪除範圍的四個旗標全不勾：一個位元組都不動。
+    IssueAction.ACCEPT_LOSS: False,
+    IssueAction.RETRY: False,
+    IssueAction.RESUBMIT: False,
+    IssueAction.ACCEPT_REMOVAL: False,
 }
 
 
@@ -939,6 +974,15 @@ class IssueRefusal(StrEnum):
     JELLYFIN_UNREACHABLE = "jellyfin_unreachable"
     #: 刪除真的做了但沒成（權限、唯讀掛載）。同 `relink_failed`，`detail` 是系統原文。
     DELETE_FAILED = "delete_failed"
+    #: 重新送單時，存下來的下載連結拿不回同一個 torrent（索引站的代理連結過期了、或它現在
+    #: 給的是另一個 hash）。什麼都還沒動。
+    SOURCE_UNAVAILABLE = "source_unavailable"
+    #: 重新送單真的送了，qBittorrent 不收（409 / 415）。同 `relink_failed`，`detail` 是原文；
+    #: 那一筆現在是 `submit_failed`，這一件仍然開著、再按一次就是再送一次。
+    RESUBMIT_FAILED = "resubmit_failed"
+    #: 重新送單時那一筆的 Route 用不了（被刪了、停用了、紅著、改收別種作品）：送出去也入不了庫。
+    #: 與第一次送單同一組前提（`services/jobs._check_route`）。
+    ROUTE_UNUSABLE = "route_unusable"
 
 
 class PlanRefusal(StrEnum):

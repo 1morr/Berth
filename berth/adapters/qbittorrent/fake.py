@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
+from dataclasses import replace
 from typing import Any
 
 from berth.adapters.qbittorrent import (
@@ -70,6 +71,10 @@ class FakeQbittorrentClient:
         self.torrents: tuple[TorrentStatus, ...] = torrents
         self.files_by_hash: dict[str, tuple[TorrentFile, ...]] = dict(files or {})
         self.sync_error = sync_error
+        #: 每一次 `torrents/recheck` 與 `start` 收到的 hash。Issue 的按鈕斷言的是它們：
+        #: 「重新 recheck」與「重試」送出去的是不同的請求。
+        self.rechecked: list[str] = []
+        self.started: list[str] = []
         #: `sync()` 被呼叫過幾次。「一輪只問一次」由它守著。
         self.syncs = 0
 
@@ -125,6 +130,33 @@ class FakeQbittorrentClient:
             raise self.error
         self.deleted.append((info_hash, delete_files))
         self.torrents = tuple(row for row in self.torrents if row.hash != info_hash)
+
+    async def recheck(self, info_hash: str) -> None:
+        """有狀態：那一筆進 `checkingDL`、進度歸零，與真的那一台校驗一開始的樣子相同。
+
+        校驗完之後是什麼樣子由測試換掉 `torrents` 決定——那是 qBittorrent 看了磁碟之後的答案，
+        替身不猜。不認得的 hash 不是錯誤（brief §20.2）。
+        """
+        if self.error is not None:
+            raise self.error
+        self.rechecked.append(info_hash)
+        self._restate(info_hash, lambda row: replace(row, state="checkingDL", progress=0.0))
+
+    async def start(self, info_hash: str) -> None:
+        """有狀態：`error` 與停住的那幾種回到 `downloading`（重新開始會清掉錯誤）。"""
+        if self.error is not None:
+            raise self.error
+        self.started.append(info_hash)
+        stopped = {"error", "stoppedDL", "pausedDL"}
+        self._restate(
+            info_hash,
+            lambda row: replace(row, state="downloading") if row.state in stopped else row,
+        )
+
+    def _restate(self, info_hash: str, change: Callable[[TorrentStatus], TorrentStatus]) -> None:
+        self.torrents = tuple(
+            change(row) if row.hash == info_hash else row for row in self.torrents
+        )
 
     async def sync(self) -> tuple[TorrentStatus, ...]:
         """替身直接回「現在有哪些」——合併本來就發生在真 client 的 `MaindataCursor` 裡，

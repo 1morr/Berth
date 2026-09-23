@@ -62,7 +62,7 @@ from berth.adapters.qbittorrent.fake import FakeQbittorrentClient
 from berth.adapters.tmdb import TmdbClient
 from berth.adapters.tmdb.client import HttpTmdbClient
 from berth.adapters.tmdb.fake import FakeTmdbClient
-from berth.adapters.torrent import HttpTorrentFetcher, TorrentFetcher
+from berth.adapters.torrent import HttpTorrentFetcher, TorrentFetcher, magnet_info_hash
 from berth.adapters.torznab import TorznabClient
 from berth.adapters.torznab.fake import FakeTorznabClient
 from berth.api.deps import get_client_factory, get_setup_probes
@@ -115,6 +115,7 @@ from berth.models import (
 from berth.parser import plan as decide
 from berth.services.clients import SetupProbes
 from berth.services.health import check_health
+from berth.services.health_issues import watch_conditions
 from berth.services.routes import build_routes
 from berth.services.settings import read_settings, write_settings
 
@@ -371,8 +372,32 @@ def issues_scenario() -> Scenario:
     四方、真的寫下一件 Issue；按下「重新鏈接」會真的 `os.link` 把它接回來。
     """
     scenario = healthy()
+    scenario.qbittorrent = RecoveringQbittorrent()
     scenario.issues_demo = True
     return scenario
+
+
+class RecoveringQbittorrent(FakeQbittorrentClient):
+    """`issues` 情境的 qBittorrent（M2 票 09c）：按下管線那三顆之後，它照真的那一台回應。
+
+    - 重新送單的那一筆**真的回到清單上**（磁力連結的 hash 就是 Job 的 hash），否則下一輪 poller
+      又會把它判成被移除。
+    - 重新開始之後是 `downloading`：資料不在的那一包在真的那一台上是 `stalledDL`
+      （2026-09-23 實測），演練裡讓它往前走，畫面上看得到它離開了壞掉的狀態。
+    """
+
+    async def add_torrent(self, request: TorrentAdd) -> None:
+        await super().add_torrent(request)
+        info_hash = magnet_info_hash(request.magnet)
+        if info_hash:
+            self.torrents = (*self.torrents, _pipeline_torrent(info_hash, "downloading"))
+
+    async def start(self, info_hash: str) -> None:
+        await super().start(info_hash)
+        self.torrents = tuple(
+            replace(row, state="downloading") if row.hash == info_hash else row
+            for row in self.torrents
+        )
 
 
 def review_scenario() -> Scenario:
@@ -1190,6 +1215,7 @@ async def _moor(
         await _seed_library(session, scenario, paths)
     if scenario.issues_demo:
         await _seed_issues(session, paths)
+        await _seed_pipeline_issues(session, scenario, factory)
     if scenario.review_demo:
         await _seed_review(session, paths)
 
@@ -1281,6 +1307,87 @@ async def _seed_issues(session: AsyncSession, paths: PathSettings) -> None:
     stray = Path(f"{route.target_path}/Hand Placed (2020)/Hand Placed (2020).mkv")
     stray.parent.mkdir(parents=True, exist_ok=True)
     stray.write_bytes(b"put here by hand")
+
+
+#: `issues` 情境裡壞掉的三筆下載（M2 票 09c）：hash → (名字, qBittorrent 報的 state)。
+#: state 是空字串的那一筆不在 qBittorrent 上（`client_removed`）。
+PIPELINE_BROKEN = {
+    "9a514e1f6172839405b6c7d8e9f0a1b2c3d4e5f6": ("[ANi] SPY×FAMILY - 04 [1080P]", "missingFiles"),
+    "ab625f207283940516c7d8e9f0a1b2c3d4e5f607": ("[ANi] SPY×FAMILY - 05 [1080P]", "error"),
+    "bc73602183940516a7d8e9f0a1b2c3d4e5f60718": ("[ANi] SPY×FAMILY - 06 [1080P]", ""),
+}
+
+
+def _pipeline_torrent(info_hash: str, state: str) -> TorrentStatus:
+    name = PIPELINE_BROKEN[info_hash][0]
+    now = int(datetime.now(UTC).timestamp())
+    return TorrentStatus(
+        hash=info_hash,
+        name=name,
+        state=state,
+        category="berth-anime",
+        tags=("berth",),
+        progress=0.4,
+        completion_on=-1,
+        last_activity=now,
+        added_on=now,
+        save_path="/data/torrent/complete/anime",
+        content_path=f"/data/torrent/complete/anime/{name}",
+        total_size=1_400_000_000,
+    )
+
+
+async def _seed_pipeline_issues(
+    session: AsyncSession, scenario: Scenario, factory: FakeClientFactory
+) -> None:
+    """管線那三種與健康檢查那兩種之一（M2 票 09c），都由產品自己的迴圈偵測：
+
+    - 三筆下載到一半的 Job，qBittorrent 替身說一筆 `missingFiles`、一筆 `error`、一筆已經不在。
+      啟動之後 `qbit_poller` 的第一輪就把它們寫成三件 Issue，按鈕照 Job 的狀態給。
+    - Anime 媒體庫掛上 TVDB 的 metadata fetcher，然後照 `health_checker` 那一步量一次。
+
+    磁碟空間那一種不預先造：這台機器剩多少不是演練決定的。到服務設定把門檻調到比它大，
+    `/issues` 當場就多一件（改了立刻重量）。
+    """
+    route = await session.scalar(select(Route).where(Route.slug == "anime"))
+    assert route is not None
+    for info_hash, (name, state) in PIPELINE_BROKEN.items():
+        session.add(
+            Job(
+                hash=info_hash,
+                name=name,
+                source_url=f"magnet:?xt=urn:btih:{info_hash}",
+                trigger=JobTrigger.MANUAL,
+                media_id=media_id(MediaKind.TV, 120089),
+                route_id=route.id,
+                state=JobState.DOWNLOADING,
+            )
+        )
+        await session.flush()
+        session.add(JobFile(job_hash=info_hash, rel_path=f"{name}/{name}.mkv", size=1_400_000_000))
+        if state:
+            scenario.qbittorrent.torrents = (
+                *scenario.qbittorrent.torrents,
+                _pipeline_torrent(info_hash, state),
+            )
+    await session.commit()
+
+    scenario.jellyfin.libraries_ = [
+        replace(
+            row,
+            type_options=(
+                TypeOption(
+                    type="Series",
+                    metadata_fetchers=("TheMovieDb", "TheTVDB"),
+                    image_fetchers=("TheMovieDb",),
+                ),
+            ),
+        )
+        if row.name == "Anime"
+        else row
+        for row in scenario.jellyfin.libraries_
+    ]
+    await watch_conditions(session, factory)
 
 
 async def _seed_review(session: AsyncSession, paths: PathSettings) -> None:

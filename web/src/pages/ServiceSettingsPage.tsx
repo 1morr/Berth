@@ -8,10 +8,14 @@ import { ApiError } from '../api/client'
 import { healthDetailQueryOptions, healthQueryOptions, type HealthDetail } from '../api/health'
 import type { JellyfinWeb } from '../api/jellyfin'
 import type { QbittorrentSetup, ServiceKind } from '../api/schemas'
+import { issuesQueryOptions } from '../api/issues'
+import { reviewQueryOptions } from '../api/review'
 import {
+  diskQueryOptions,
   jellyfinAddressQueryOptions,
   qbittorrentDriftQueryOptions,
   restoreQbittorrent,
+  saveDisk,
   saveJellyfinAddress,
   servicesQueryOptions,
   testService,
@@ -25,11 +29,12 @@ import { ServiceCard } from '../health/ServiceCard'
 /**
  * 服務設定頁 `/settings/services`（票 10、`.scratch/m0/health-shape.md`）。只有 admin 進得來。
  *
- * 這一頁只有兩件事，因為**位址與憑證仍然在精靈裡改**——精靈跑完之後它就是設定入口
- * （plan §6），複製四份連線表單只會讓兩份規則分岔：
+ * **位址與憑證仍然在精靈裡改**——精靈跑完之後它就是設定入口（plan §6），複製四份連線表單
+ * 只會讓兩份規則分岔。這一頁是維運動作與兩個不是連線資訊的欄位：
  *
  * 1. 逐服務「測試連線」：立刻重測那一個，結果就是健康頁上那一列。
- * 2. qBittorrent 的「還原建議設定」：關鍵設定漂移時把它們寫回去（brief §16.3）。
+ * 2. Jellyfin 的對外網址（票 13）與磁碟空間門檻（M2 票 09c）。
+ * 3. qBittorrent 的「還原建議設定」：關鍵設定漂移時把它們寫回去（brief §16.3）。
  */
 export function ServiceSettingsPage() {
   const { t } = useTranslation()
@@ -118,6 +123,8 @@ export function ServiceSettingsPage() {
 
       <JellyfinAddress />
 
+      <DiskThreshold />
+
       <Drift
         drift={drift.data}
         pending={drift.isPending}
@@ -190,6 +197,75 @@ function JellyfinAddress() {
         {save.isError && !rejected && (
           <Notice signal="blocked" label={t('common.failed')}>
             {t('settings.jellyfin.failed')}
+          </Notice>
+        )}
+      </form>
+    </section>
+  )
+}
+
+/**
+ * 磁碟空間門檻（M2 票 09c，2026-09-23 使用者拍板）。形狀照 Sonarr 的 Minimum Free Space（一個
+ * 全域數字），單位是 GB：Berth 以硬鏈接入庫不佔空間，吃空間的是下載。
+ *
+ * 後端存完**立刻重量一次**，所以待處理清單與審核佇列一起重問——改完門檻的那一刻 `/issues`
+ * 就是新的答案。不是 0 以上整數的值由欄位自己說不行，不送出去。
+ */
+function DiskThreshold() {
+  const { t } = useTranslation()
+  const queryClient = useQueryClient()
+  const current = useQuery(diskQueryOptions)
+  const [draft, setDraft] = useState<string | null>(null)
+  const value = draft ?? (current.data ? String(current.data.min_free_gb) : '')
+  const valid = /^\d+$/.test(value.trim())
+
+  const save = useMutation({
+    mutationFn: () => saveDisk(Number(value.trim())),
+    onSuccess: (fresh) => {
+      queryClient.setQueryData(diskQueryOptions.queryKey, fresh)
+      void queryClient.invalidateQueries({ queryKey: issuesQueryOptions().queryKey })
+      void queryClient.invalidateQueries({ queryKey: reviewQueryOptions().queryKey })
+      setDraft(null)
+    },
+  })
+  const invalid =
+    (draft !== null && !valid) || (save.error instanceof ApiError && save.error.status === 422)
+
+  return (
+    <section className="mt-8" aria-labelledby="settings-disk">
+      <h3 id="settings-disk" className="value text-sm font-semibold text-ink">
+        {t('settings.disk.title')}
+      </h3>
+      <p className="mt-2 max-w-prose text-xs text-ink-dim">{t('settings.disk.lede')}</p>
+
+      <form
+        noValidate
+        className="mt-3 grid gap-3 sm:max-w-xs"
+        onSubmit={(event) => {
+          event.preventDefault()
+          if (valid) save.mutate()
+        }}
+      >
+        <Field
+          label={t('settings.disk.label')}
+          type="text"
+          inputMode="numeric"
+          value={value}
+          onChange={(event) => setDraft(event.target.value)}
+          hint={t('settings.disk.hint')}
+          error={invalid ? t('settings.disk.invalid') : undefined}
+        />
+        <div className="flex flex-wrap items-center gap-3">
+          <GhostButton type="submit" disabled={save.isPending}>
+            {save.isPending ? t('settings.disk.saving') : t('settings.disk.save')}
+          </GhostButton>
+          <p aria-live="polite" className="text-xs text-ink-dim">
+            {save.isSuccess ? t('settings.disk.saved') : ''}
+          </p>
+        </div>
+        {save.isError && !invalid && (
+          <Notice signal="blocked" label={t('common.failed')}>
+            {t('settings.disk.failed')}
           </Notice>
         )}
       </form>

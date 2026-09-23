@@ -162,6 +162,21 @@ curl -s -H "Authorization: Bearer $TOKEN"   "https://api.themoviedb.org/3/trendi
 session，`rid` 永遠回不到增量（每一輪都 `full_update: true`）。錄製腳本因此裝了 cookie jar，
 而產品這一側靠的是 httpx client 自己的 cookie——所以 `Downloader` 把 client 握著不放。
 
+2026-09-23（M2 票 09c），對同樣那兩個版本錄的（`scripts/experiments/qbittorrent_recovery.py`）。
+四包做種中的 torrent 刪掉資料、重啟容器之後一起變成 `missingFiles`，再逐一救回來——Issue
+`missing_files` 的「重新校驗」與 `client_error` 的「重試」打的就是這兩支：
+
+| 檔案 | 來源 |
+| --- | --- |
+| `qbittorrent/torrents-recheck.ok.{4.4.5,5.2.3}.txt` | `POST /api/v2/torrents/recheck`（`hashes=<missingFiles 的那一包>`）：**兩版都是 `200` + 空 body**。WebAPI changelog 說 2.15.0 起空結果回 204，實測 5.2.3 這一支仍是 200 |
+| `qbittorrent/torrents-recheck.unknown.{4.4.5,5.2.3}.txt` | 同一支，`hashes` 是 40 個 `0`：**不認得的 hash 也是 `200` + 空 body**（原始碼 `applyToTorrents` 直接跳過） |
+| `qbittorrent/torrents-resume.ok.4.4.5.txt` | 4.4.5 的 `POST /api/v2/torrents/resume`：`200` + 空 body |
+| `qbittorrent/torrents-start.ok.5.2.3.txt` | 5.2.3 的 `POST /api/v2/torrents/start`：`200` + 空 body |
+| `qbittorrent/torrents-resume.not-found.5.2.3.txt` | 5.2.3 打舊名字 `torrents/resume`：**`404` + `Endpoint does not exist`**。5.0 改名時沒有留別名 |
+
+同一輪量到但沒有存檔的：5.2.3 的 `GET /api/v2/torrents/recheck` 是 `405 Method Not Allowed`（4.4.5 是 200）、
+少了 `hashes` 兩版都是 `400`。救回來的樣子（`recheck` → `start` 與 `start` → `recheck` 兩種順序）見 brief §20.2。
+
 2026-09-15（票 12），對 `lscr.io/linuxserver/jellyfin:latest`（**12.0.0**）錄的。那一台是 M1 驗收時
 Berth 自己入庫三部作品（The Bear S03、Frieren S01、Oppenheimer）、Jellyfin 掃完之後的狀態，憑證是
 Berth 在精靈第 3 步建的 API key，**不帶 `userId`**：

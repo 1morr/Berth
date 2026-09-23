@@ -373,6 +373,69 @@ async def test_qbittorrent_delete_of_a_torrent_it_does_not_have_is_not_an_error(
 
 @respx.mock
 @pytest.mark.asyncio
+@pytest.mark.parametrize("release", QBITTORRENT_RELEASES)
+@pytest.mark.parametrize("state", ["ok", "unknown"])
+async def test_qbittorrent_recheck_posts_the_hash(release: str, state: str) -> None:
+    """`torrents/recheck`（2026-09-23 對兩版實測，M2 票 09c）：兩版都是 `200` + 空 body，
+    **不認得的 hash 也一樣**——那一筆在這中間被人拿掉的話，下一輪 poller 自己看得到。
+    **用 POST**：5.2.3 的 GET 是 405（同一輪實測）。
+    """
+    route = respx.post(f"{QBITTORRENT_URL}/api/v2/torrents/recheck").respond(
+        200, text=read_fixture(f"http/qbittorrent/torrents-recheck.{state}.{release}.txt")
+    )
+
+    client = HttpQbittorrentClient(QBITTORRENT_URL)
+    try:
+        await client.recheck("abc123")
+    finally:
+        await client.aclose()
+
+    assert dict(parse_qsl(route.calls.last.request.content.decode())) == {"hashes": "abc123"}
+
+
+@respx.mock
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("release", "endpoint"), [("4.4.5", "resume"), ("5.2.3", "start")])
+async def test_qbittorrent_start_uses_the_name_of_its_version(release: str, endpoint: str) -> None:
+    """5.0（Web API 2.11）把 `torrents/resume` 改名 `torrents/start`，**沒有留別名**：
+    5.2.3 上打舊名字是 `404 Endpoint does not exist`（2026-09-23 實測）。與 `paused` /
+    `stopped` 同一次改名，所以同一個版本閘門（`QbittorrentVersion.start_endpoint`）。
+    """
+    mock_qbittorrent_version(release)
+    route = respx.post(f"{QBITTORRENT_URL}/api/v2/torrents/{endpoint}").respond(
+        200, text=read_fixture(f"http/qbittorrent/torrents-{endpoint}.ok.{release}.txt")
+    )
+
+    client = HttpQbittorrentClient(QBITTORRENT_URL)
+    try:
+        await client.start("abc123")
+    finally:
+        await client.aclose()
+
+    assert dict(parse_qsl(route.calls.last.request.content.decode())) == {"hashes": "abc123"}
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_qbittorrent_5_never_hears_the_old_name() -> None:
+    """變異的那一半：版本閘門寫反的話，5.x 上每一次「重試」都是這個錄下來的 404。"""
+    mock_qbittorrent_version("5.2.3")
+    old = respx.post(f"{QBITTORRENT_URL}/api/v2/torrents/resume").respond(
+        404, text=read_fixture("http/qbittorrent/torrents-resume.not-found.5.2.3.txt")
+    )
+    respx.post(f"{QBITTORRENT_URL}/api/v2/torrents/start").respond(200, text="")
+
+    client = HttpQbittorrentClient(QBITTORRENT_URL)
+    try:
+        await client.start("abc123")
+    finally:
+        await client.aclose()
+
+    assert not old.called
+
+
+@respx.mock
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("release", "save_path", "temp_path"),
     [

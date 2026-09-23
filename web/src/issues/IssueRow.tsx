@@ -14,6 +14,7 @@ import { reviewQueryOptions } from '../api/review'
 import { ConfirmAction, GhostButton } from '../components/controls'
 import { DetailLine, QueueRow } from '../components/QueueRow'
 import { fileName, whenText } from '../components/queueText'
+import { formatSize } from '../media/searchResult'
 
 /**
  * 待處理清單上的一列（`.scratch/m2/issues-shape.md`，M2 票 05）。
@@ -66,14 +67,19 @@ export function IssueRow({
   })
 
   const busy = act.isPending
-  const source = typeof issue.detail.source === 'string' ? issue.detail.source : ''
+  const source = text(issue.detail.source)
   // 沒有路徑的那幾種（無主 torrent、帳本為空）以 torrent 的名字認，最後才退回冪等鍵。
-  const name = typeof issue.detail.name === 'string' ? issue.detail.name : ''
+  // TVDB 那一種以 Route 的名字認：它的路徑是 Route 的目標，檔名那一段只是一個 slug。
+  const name = text(issue.detail.route) || text(issue.detail.name)
 
   return (
     <QueueRow
       label={t(`issues.typeLabel.${issue.type}`)}
-      title={fileName(issue.path) || name || issue.subject}
+      title={
+        issue.type === 'library_uses_tvdb'
+          ? name || issue.subject
+          : fileName(issue.path) || name || issue.subject
+      }
       heading={heading}
       sentence={t(`issues.type.${issue.type}`)}
       when={t('issues.detectedAt', { value: whenText(issue.detected_at) })}
@@ -83,18 +89,13 @@ export function IssueRow({
         // 是「決定」不是「讀路徑」。
         <>
           {issue.path !== '' && (
-            <DetailLine
-              term={
-                issue.type === 'orphan_complete' ? t('issues.completePath') : t('issues.target')
-              }
-            >
-              {issue.path}
-            </DetailLine>
+            <DetailLine term={t(PATH_TERM[issue.type] ?? 'issues.target')}>{issue.path}</DetailLine>
           )}
           {source !== '' && <DetailLine term={t('issues.source')}>{source}</DetailLine>}
           {issue.job_hash !== '' && (
             <DetailLine term={t('issues.job')}>{issue.job_hash}</DetailLine>
           )}
+          <Measured issue={issue} />
         </>
       }
     >
@@ -148,7 +149,53 @@ const CONFIRM = {
   replan: null,
   relook: null,
   rescan: null,
+  // 管線那三種一顆都不刪東西：兩顆「承認」讓那一筆下載結束，磁碟與 qBittorrent 都不動。
+  recheck: null,
+  accept_loss: null,
+  retry: null,
+  resubmit: null,
+  accept_removal: null,
 } as const satisfies Record<IssueAction, { warning: string; action: string } | null>
+
+/** 路徑那一欄叫什麼。沒列的是媒體庫裡的路徑（帳本的目標、Route 的目標）。 */
+const PATH_TERM: Partial<Record<Issue['type'], 'issues.completePath' | 'issues.measuredPath'>> = {
+  orphan_complete: 'issues.completePath',
+  low_disk_space: 'issues.measuredPath',
+}
+
+/**
+ * 健康檢查那兩種的實測值與下一步（M2 票 09c）。它們沒有 Berth 按得了的修法，所以列上要說得出
+ * 去哪裡修、修好之後會怎樣（PRODUCT 原則 4）——只剩一顆「忽略」的列不能只有一句型別。
+ */
+function Measured({ issue }: { issue: Issue }) {
+  const { t, i18n } = useTranslation()
+  if (issue.type === 'library_uses_tvdb') {
+    const fetchers = Array.isArray(issue.detail.fetchers) ? issue.detail.fetchers.map(text) : []
+    return (
+      <>
+        <DetailLine term={t('issues.library')}>{text(issue.detail.library)}</DetailLine>
+        <DetailLine term={t('issues.fetchers')}>{fetchers.join(', ')}</DetailLine>
+        <DetailLine term={t('issues.next')}>{t('issues.nextTvdb')}</DetailLine>
+      </>
+    )
+  }
+  if (issue.type === 'low_disk_space') {
+    const size = (value: unknown) =>
+      typeof value === 'number' ? formatSize(value, i18n.language) : ''
+    return (
+      <>
+        <DetailLine term={t('issues.free')}>{size(issue.detail.free)}</DetailLine>
+        <DetailLine term={t('issues.minFree')}>{size(issue.detail.min_free)}</DetailLine>
+        <DetailLine term={t('issues.next')}>{t('issues.nextDisk')}</DetailLine>
+      </>
+    )
+  }
+  return null
+}
+
+function text(value: unknown): string {
+  return typeof value === 'string' ? value : ''
+}
 
 /** `relink_failed` 的原文是 errno 與「哪兩個掛載」（plan §8.6），所以它接在那一句後面。 */
 function refusalText(

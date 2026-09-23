@@ -258,6 +258,19 @@ describe('Job 時間線', () => {
     expect(line.queryByText(/退回「已建立」/)).not.toBeInTheDocument()
   })
 
+  it('待處理上按的那幾顆各說各的站，不是一律「退回已建立」（M2 票 09c）', () => {
+    const line = render([
+      event({ id: 1, type: 'retried', payload: { state: 'metadata_ready', action: 'recheck' } }),
+      event({ id: 2, type: 'retried', payload: { state: 'metadata_ready', action: 'retry' } }),
+      event({ id: 3, type: 'retried', payload: { state: 'completed' } }),
+    ])
+
+    expect(line.getByText(/重新校驗並接著下載/)).toBeInTheDocument()
+    expect(line.getByText(/重新開始這一筆/)).toBeInTheDocument()
+    expect(line.getByText(/退回「下載完成」/)).toBeInTheDocument()
+    expect(line.queryByText(/退回「已建立」/)).not.toBeInTheDocument()
+  })
+
   it('目標上有別人的檔案時，停下來那一筆說得出來', () => {
     const line = render([event({ type: 'review_required', payload: { reason: 'target_exists' } })])
 

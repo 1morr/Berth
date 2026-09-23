@@ -911,7 +911,18 @@ const zhHant = {
     completePath: 'complete 路徑',
     source: '來源路徑',
     job: '下載',
-    // 十一種型別各一句（brief §9.1）。
+    // `low_disk_space` 的路徑是量的那個根目錄，不在媒體庫裡。
+    measuredPath: '量的目錄',
+    library: 'Jellyfin 媒體庫',
+    fetchers: 'TVDB fetcher',
+    free: '剩下',
+    minFree: '門檻',
+    // 健康檢查那兩種沒有 Berth 按得了的修法，所以把下一步寫在列上（PRODUCT 原則 4）。
+    next: '下一步',
+    nextTvdb:
+      '到 Jellyfin 的媒體庫設定把 TVDB 的 metadata fetcher 拿掉。Berth 照 TMDB 命名，TVDB 的季集編排可能對不上。拿掉之後下一輪健康檢查（最多 5 分鐘）這一件會自己收掉；是故意掛的就按忽略，之後不會再問。',
+    nextDisk: '清出空間，或到服務設定調整門檻。空間回來之後下一輪健康檢查這一件會自己收掉。',
+    // 十三種型別各一句（brief §9.1）。
     type: {
       library_link_missing: '媒體庫裡少了這個檔案',
       source_missing: 'complete 裡的來源檔不見了',
@@ -924,6 +935,8 @@ const zhHant = {
       client_error: 'qBittorrent 報錯',
       client_removed: 'torrent 已經不在 qBittorrent 上',
       jellyfin_item_unresolved: 'Jellyfin 一直沒有收錄這個檔案',
+      library_uses_tvdb: '這條 Route 的媒體庫掛著 TVDB',
+      low_disk_space: '磁碟剩下的空間低於門檻',
     },
     typeLabel: {
       library_link_missing: '鏈接遺失',
@@ -937,6 +950,8 @@ const zhHant = {
       client_error: '客戶端錯誤',
       client_removed: '已被移除',
       jellyfin_item_unresolved: '反查失敗',
+      library_uses_tvdb: 'TVDB',
+      low_disk_space: '空間不足',
     },
     action: {
       relink: '重新鏈接',
@@ -948,6 +963,11 @@ const zhHant = {
       replan: '重新規劃',
       relook: '重新反查',
       rescan: '重新掃描媒體庫',
+      recheck: '重新校驗',
+      accept_loss: '承認遺失',
+      retry: '重試',
+      resubmit: '重新送單',
+      accept_removal: '承認移除',
       ignore: '忽略',
     },
     working: '處理中…',
@@ -966,11 +986,12 @@ const zhHant = {
     refusal: {
       issue_missing: '這一件已經不在了。重新整理看看。',
       issue_not_open: '這一件已經被處理過了，多半是另一個分頁先按了。',
-      action_not_available: '這一顆對這一件按不了：它指不到帳本那一列，或者那一筆下載已經不在。',
+      action_not_available:
+        '這一顆對這一件按不了：它指不到帳本那一列，或者那一筆下載已經不在、已經不是這一件說的狀態了。',
       source_missing:
         'complete 裡的來源檔也不在了，所以鏈接不回來。要嘛承認刪除並清帳本，要嘛重新下載一次。',
       relink_failed: '鏈接沒有成功。',
-      client_unreachable: '問不到 qBittorrent，所以整次刪除沒有做。先確認它還活著。',
+      client_unreachable: '問不到 qBittorrent，所以什麼都沒有做。先確認它還活著。',
       reconcile_running: '上一輪對帳還在跑。等它跑完再按。',
       in_use:
         '這個目錄現在有主了（qBittorrent 上有 torrent 指著它，或 Berth 認得它），所以沒有刪。',
@@ -978,6 +999,11 @@ const zhHant = {
       jellyfin_unreachable:
         '沒有請到 Jellyfin 掃描，這一列也沒有重新排進反查。先到健康頁確認 Jellyfin 還在。',
       delete_failed: '刪除沒有成功。',
+      source_unavailable:
+        '存下來的下載連結拿不回同一個 torrent（索引站的連結多半過期了），所以沒有送。到作品頁重新搜一次。',
+      resubmit_failed: '送了，qBittorrent 不收。修好之後再按一次就是再送一次。',
+      route_unusable:
+        '這一筆的 Route 現在用不了（被刪了、停用了或紅著），送出去也入不了庫。先到媒體庫路徑設定看那一條。',
     },
     failed: '沒有成功。Berth 自己的 API 沒有回應，先確認它還活著。',
   },
@@ -1284,6 +1310,10 @@ const zhHant = {
       off: '讀不到時間線。',
       retried: '狀態退回「已建立」，接著再送一次。',
       retriedImport: '狀態退回「入庫中」，從還沒鏈接的檔案接著做。',
+      // 待處理上那幾顆（M2 票 09、09c）。`action` 是後端寫的，不是前端猜的。
+      retriedRecheck: '請 qBittorrent 重新校驗並接著下載。',
+      retriedRestart: '請 qBittorrent 重新開始這一筆。',
+      retriedReplan: '狀態退回「下載完成」，重新規劃一次。',
       linkedFiles_one: '{{count}} 個檔案',
       linkedFiles_other: '{{count}} 個檔案',
       linkedTargets: '列出目標路徑',
@@ -1636,7 +1666,7 @@ const zhHant = {
   },
   settings: {
     title: '服務設定',
-    lede: '位址與憑證在設定精靈改。這一頁做三件事：重測連線、把被改掉的建議設定還原，以及 Jellyfin 的對外網址。',
+    lede: '位址與憑證在設定精靈改。這一頁做四件事：重測連線、Jellyfin 的對外網址、磁碟空間門檻，以及把被改掉的建議設定還原。',
     test: '測試連線',
     testing: '測試中…',
     testFailed: '測試沒有走完。Berth 後端可能沒在跑——確認容器狀態後再按一次。',
@@ -1661,6 +1691,19 @@ const zhHant = {
       saving: '儲存中…',
       saved: '已儲存。',
       invalid: '要是一個 http:// 或 https:// 開頭的網址。',
+      failed: '沒有存進去。Berth 自己的 API 沒有回應，先確認它還活著。',
+    },
+    // 磁碟空間門檻（M2 票 09c）。形狀照 Sonarr 的 Minimum Free Space，單位不同。
+    disk: {
+      title: '磁碟空間門檻',
+      lede: 'incomplete 或 complete 所在的磁碟剩下的空間低於這個值，就在待處理開一件；空間回來之後它自己收掉。Berth 以硬鏈接入庫不佔空間，吃空間的是下載，所以單位是 GB。',
+      label: '最少剩下（GB）',
+      hint: '0 是不量。',
+      // 與上面那一區的「儲存」不同字：同一頁兩顆同名的按鈕，螢幕閱讀器分不出是哪一顆。
+      save: '儲存門檻',
+      saving: '儲存中…',
+      saved: '已儲存，並且立刻重量了一次。',
+      invalid: '要是 0 或更大的整數。',
       failed: '沒有存進去。Berth 自己的 API 沒有回應，先確認它還活著。',
     },
     drift: {
@@ -2668,6 +2711,16 @@ const en: Translations<typeof zhHant> = {
     completePath: 'Complete path',
     source: 'Source path',
     job: 'Download',
+    measuredPath: 'Measured folder',
+    library: 'Jellyfin library',
+    fetchers: 'TVDB fetcher',
+    free: 'Free',
+    minFree: 'Threshold',
+    next: 'Next step',
+    nextTvdb:
+      'Remove the TVDB metadata fetcher in the Jellyfin library settings. Berth names files after TMDB, and TVDB may number seasons and episodes differently. Once it is gone, the next health check (within 5 minutes) closes this on its own; if you use TVDB on purpose, press Ignore and it will not ask again.',
+    nextDisk:
+      'Free up space, or change the threshold in the service settings. Once there is room again, the next health check closes this on its own.',
     type: {
       library_link_missing: 'This file is missing from the library',
       source_missing: 'The source file under complete is gone',
@@ -2680,6 +2733,8 @@ const en: Translations<typeof zhHant> = {
       client_error: 'qBittorrent reports an error',
       client_removed: 'The torrent is no longer in qBittorrent',
       jellyfin_item_unresolved: 'Jellyfin never picked this file up',
+      library_uses_tvdb: 'This route’s library uses TVDB',
+      low_disk_space: 'Free disk space is below the threshold',
     },
     typeLabel: {
       library_link_missing: 'LINK MISSING',
@@ -2693,6 +2748,8 @@ const en: Translations<typeof zhHant> = {
       client_error: 'CLIENT ERROR',
       client_removed: 'REMOVED',
       jellyfin_item_unresolved: 'NOT IN JELLYFIN',
+      library_uses_tvdb: 'TVDB',
+      low_disk_space: 'LOW DISK',
     },
     action: {
       relink: 'Link it again',
@@ -2704,6 +2761,11 @@ const en: Translations<typeof zhHant> = {
       replan: 'Plan it again',
       relook: 'Look it up again',
       rescan: 'Scan the libraries',
+      recheck: 'Recheck',
+      accept_loss: 'Accept the loss',
+      retry: 'Retry',
+      resubmit: 'Send it again',
+      accept_removal: 'Accept the removal',
       ignore: 'Ignore',
     },
     working: 'Working…',
@@ -2720,12 +2782,12 @@ const en: Translations<typeof zhHant> = {
       issue_missing: 'This issue is no longer there. Reload the page.',
       issue_not_open: 'This one has already been dealt with — most likely from another tab.',
       action_not_available:
-        'That button does not apply here: this issue no longer points at a ledger row, or its download is gone.',
+        'That button does not apply here: this issue no longer points at a ledger row, or its download is gone or no longer in the state this issue describes.',
       source_missing:
         'The source under complete is gone too, so there is nothing to link. Either accept the deletion or download it again.',
       relink_failed: 'The link was not created.',
       client_unreachable:
-        'qBittorrent did not answer, so nothing was deleted. Check that it is still running.',
+        'qBittorrent did not answer, so nothing was done. Check that it is still running.',
       reconcile_running: 'A reconcile run is still going. Wait for it to finish.',
       in_use:
         'This folder has an owner now (a torrent in qBittorrent points at it, or Berth knows it), so it was not deleted.',
@@ -2734,6 +2796,12 @@ const en: Translations<typeof zhHant> = {
       jellyfin_unreachable:
         'Jellyfin was not asked to scan, and this file was not queued for another lookup. Check on the health page that Jellyfin is still there.',
       delete_failed: 'The folder was not deleted.',
+      source_unavailable:
+        'The saved download link no longer gives the same torrent (the indexer link has most likely expired), so nothing was sent. Search for it again from the media page.',
+      resubmit_failed:
+        'It was sent, and qBittorrent refused it. Once that is fixed, pressing again sends it again.',
+      route_unusable:
+        'This download’s route cannot be used right now (deleted, disabled or failing), so it could not be imported anyway. Check that route in the library path settings first.',
     },
     failed:
       'That did not go through. Berth’s own API did not answer — check that it is still running.',
@@ -3024,6 +3092,9 @@ const en: Translations<typeof zhHant> = {
       off: 'Could not read the timeline.',
       retried: 'Back to created, then sent again.',
       retriedImport: 'Back to importing; it picks up from the files not linked yet.',
+      retriedRecheck: 'qBittorrent was asked to recheck the files and carry on downloading.',
+      retriedRestart: 'qBittorrent was asked to start this one again.',
+      retriedReplan: 'Back to downloaded, to be planned again.',
       linkedFiles_one: '{{count}} file',
       linkedFiles_other: '{{count}} files',
       linkedTargets: 'List the targets',
@@ -3369,7 +3440,7 @@ const en: Translations<typeof zhHant> = {
   },
   settings: {
     title: 'Service settings',
-    lede: 'Addresses and credentials are edited in the setup wizard. This page does three things: re-test a connection, restore recommended settings that were changed, and set Jellyfin’s public address.',
+    lede: 'Addresses and credentials are edited in the setup wizard. This page does four things: re-test a connection, set Jellyfin’s public address, set the disk space threshold, and restore recommended settings that were changed.',
     test: 'Test connection',
     testing: 'Testing…',
     testFailed:
@@ -3393,6 +3464,17 @@ const en: Translations<typeof zhHant> = {
       saving: 'Saving…',
       saved: 'Saved.',
       invalid: 'This needs to be an address starting with http:// or https://.',
+      failed: 'It was not saved. Berth’s own API did not answer — check that it is still running.',
+    },
+    disk: {
+      title: 'Disk space threshold',
+      lede: 'When the disk holding incomplete or complete has less free space than this, an issue opens; it closes on its own once there is room again. Berth imports with hard links, which take no space — downloads do — so the unit is GB.',
+      label: 'Keep at least (GB)',
+      hint: '0 turns the check off.',
+      save: 'Save threshold',
+      saving: 'Saving…',
+      saved: 'Saved, and measured again right away.',
+      invalid: 'It has to be a whole number, 0 or more.',
       failed: 'It was not saved. Berth’s own API did not answer — check that it is still running.',
     },
     drift: {

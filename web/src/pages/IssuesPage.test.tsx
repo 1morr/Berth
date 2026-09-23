@@ -295,6 +295,118 @@ describe('待處理頁', () => {
     expect(within(row).queryByText('媒體庫路徑')).not.toBeInTheDocument()
   })
 
+  it('管線那三種的按鈕照後端給的畫，不刪東西的按下去就送出（M2 票 09c）', async () => {
+    const stub = render({
+      [ISSUES]: {
+        body: [
+          issue({
+            type: 'missing_files',
+            subject: HASH,
+            path: '',
+            ledger_id: null,
+            detail: { name: '[ANi] SPY×FAMILY - 13', client_state: 'missingFiles' },
+            actions: ['recheck', 'accept_loss'],
+          }),
+        ],
+      },
+      'POST /api/issues/1/resolve': { body: issue({ status: 'resolved', actions: [] }) },
+    })
+    renderApp('/issues')
+    const row = await screen.findByRole('article')
+
+    expect(within(row).getByRole('button', { name: '承認遺失' })).toBeInTheDocument()
+    await userEvent.click(within(row).getByRole('button', { name: '重新校驗' }))
+
+    await waitFor(() => expect(sent(stub, 'POST /api/issues/1/resolve')).toBe(1))
+  })
+
+  it('問不到 qBittorrent 時那一列留著，並說出為什麼', async () => {
+    render({
+      [ISSUES]: {
+        body: [
+          issue({
+            type: 'client_removed',
+            subject: HASH,
+            path: '',
+            ledger_id: null,
+            detail: { name: '[ANi] SPY×FAMILY - 13' },
+            actions: ['resubmit', 'accept_removal'],
+          }),
+        ],
+      },
+      'POST /api/issues/1/resolve': {
+        status: 502,
+        body: { detail: { reason: 'client_unreachable', detail: 'connection refused' } },
+      },
+    })
+    renderApp('/issues')
+    const row = await screen.findByRole('article')
+
+    await userEvent.click(within(row).getByRole('button', { name: '重新送單' }))
+
+    expect(
+      await within(row).findByText(
+        '問不到 qBittorrent，所以什麼都沒有做。先確認它還活著。 connection refused',
+      ),
+    ).toBeInTheDocument()
+  })
+
+  it('TVDB 那一件以 Route 認，並說得出去 Jellyfin 哪裡修', async () => {
+    render({
+      [ISSUES]: {
+        body: [
+          issue({
+            type: 'library_uses_tvdb',
+            subject: '/data/library/anime',
+            path: '/data/library/anime',
+            job_hash: '',
+            ledger_id: null,
+            detail: { route: 'Anime', library: '動畫', fetchers: ['TheTVDB'] },
+            actions: [],
+          }),
+        ],
+      },
+    })
+    renderApp('/issues')
+    const row = await screen.findByRole('article')
+
+    expect(within(row).getByRole('heading', { name: 'Anime' })).toBeInTheDocument()
+    await userEvent.click(within(row).getByText('Anime'))
+    expect(within(row).getByText('TheTVDB')).toBeInTheDocument()
+    expect(within(row).getByText(/到 Jellyfin 的媒體庫設定把 TVDB/)).toBeInTheDocument()
+    // 沒有 Berth 按得了的修法：只剩忽略。
+    expect(
+      within(row)
+        .getAllByRole('button')
+        .map((button) => button.textContent),
+    ).toEqual(['忽略'])
+  })
+
+  it('磁碟空間那一件說出剩多少、門檻多少，路徑叫量的目錄', async () => {
+    render({
+      [ISSUES]: {
+        body: [
+          issue({
+            type: 'low_disk_space',
+            subject: '/data/torrent/complete',
+            path: '/data/torrent/complete',
+            job_hash: '',
+            ledger_id: null,
+            detail: { free: 3 * 1024 ** 3, min_free: 10 * 1024 ** 3 },
+            actions: [],
+          }),
+        ],
+      },
+    })
+    renderApp('/issues')
+    const row = await screen.findByRole('article')
+
+    expect(within(row).getByText('量的目錄')).toBeInTheDocument()
+    expect(within(row).queryByText('媒體庫路徑')).not.toBeInTheDocument()
+    expect(within(row).getByText('剩下')).toBeInTheDocument()
+    expect(within(row).getByText('門檻')).toBeInTheDocument()
+  })
+
   it('空的時候說的是「都對得上」，不是「沒有資料」', async () => {
     render({ [RECONCILE]: { body: finished() } })
     renderApp('/issues')

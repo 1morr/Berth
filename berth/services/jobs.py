@@ -357,6 +357,75 @@ async def _resubmit(
     return await _view_one(session, job)
 
 
+async def resubmit_job(
+    session: AsyncSession,
+    factory: ServiceClientFactory,
+    job_hash: str,
+    *,
+    expected: frozenset[JobState],
+    actor: str,
+) -> JobView:
+    """把一筆從客戶端消失的下載再送一次（Issue `client_removed` 的「重新送單」，M2 票 09c）。
+
+    與 `retry_job` 同一段收尾（`_finish`），差在**先把會失敗的都問過才動那一列**：Route 的前提、
+    存下來的下載連結拿不拿得回**同一個** torrent、qBittorrent 在不在。`retry_job` 反過來先進
+    `requested` 再試，那是因為它的起點本來就是 `submit_failed`，失敗了只是回到原地；這一支的
+    起點是 `client_removed`，問不到 qBittorrent 就讓它變成 `submit_failed` 等於換掉使用者手上
+    那一件 Issue 說的事。
+
+    連結給的是另一個 hash 時不送：Job 的主鍵就是 info hash（plan §2.3），送出去的會是另一筆
+    沒有 Job 的 torrent（下一輪的 `unknown_torrent`）。
+
+    送了而 qBittorrent 不收的那一次照舊落在 `submit_failed`（`_finish`），呼叫端看 `state`。
+    """
+    job = await session.get(Job, job_hash)
+    if job is None:
+        raise JobRejectedError(JobRefusal.JOB_MISSING, job_hash)
+    if job.state not in expected:
+        raise JobRejectedError(JobRefusal.NOT_RETRYABLE, job.state.value)
+    route = await session.get(Route, job.route_id) if job.route_id is not None else None
+    if route is None:
+        raise JobRejectedError(JobRefusal.ROUTE_MISSING, str(job.route_id))
+    subject = await session.get(Media, job.media_id) if job.media_id is not None else None
+    _check_route(route, subject)
+
+    torrent = await _resolve(factory, job.source_url)
+    if torrent.info_hash != job.hash:
+        raise JobRejectedError(
+            JobRefusal.SOURCE_UNAVAILABLE,
+            f"the saved link now gives {torrent.info_hash}, not {job.hash}",
+        )
+    await _reachable(session, factory)
+
+    with job_context(job.hash):
+        async with job_lock(job.hash):
+            if not await transition(session, job, JobState.REQUESTED, expected=job.state):
+                raise JobRejectedError(JobRefusal.NOT_RETRYABLE, job.state.value)
+            await record_event(
+                session,
+                job,
+                EventType.RETRIED,
+                actor=actor,
+                payload={"state": JobState.REQUESTED.value},
+            )
+            logger.info("job resubmitted", extra={"state": job.state.value})
+            await _finish(session, factory, job, route, torrent, subject, actor=actor)
+    return await _view_one(session, job)
+
+
+async def _reachable(session: AsyncSession, factory: ServiceClientFactory) -> None:
+    """qBittorrent 現在答不答話。答不了是 `client_unreachable`，而且什麼都還沒動。"""
+    settings = await read_settings(session, QbittorrentSettings)
+    client = factory.qbittorrent(settings.base_url)
+    try:
+        await sign_in(client, settings)
+        await client.version()
+    except ServiceError as exc:
+        raise JobRejectedError(JobRefusal.CLIENT_UNREACHABLE, message(exc)) from exc
+    finally:
+        await client.aclose()
+
+
 async def _resume_import(session: AsyncSession, job: Job) -> JobView:
     """`import_failed` → `importing`（plan §3.1）。
 

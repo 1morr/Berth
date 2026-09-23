@@ -69,6 +69,20 @@ DEFAULT_METADATA_FETCHER = "TheMovieDb"
 TVDB_MARKER = "tvdb"
 
 
+def tvdb_fetchers(library: JellyfinLibrary) -> tuple[str, ...]:
+    """這個媒體庫掛著的 TVDB metadata fetcher（逐型別攤平、去重，順序照 Jellyfin 回報的）。
+
+    空的就是沒掛。Route 設定頁的那一行字與 `health_checker` 的 Issue 問的是同一件事（票 09c）。
+    """
+    found = (
+        fetcher
+        for option in library.type_options
+        for fetcher in option.metadata_fetchers
+        if TVDB_MARKER in fetcher.lower()
+    )
+    return tuple(dict.fromkeys(found))
+
+
 class StepFailedError(Exception):
     """這一步做不下去，而且原因不是外部服務丟出來的例外。
 

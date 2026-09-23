@@ -21,11 +21,13 @@ from typing import cast
 import pytest
 from fastapi.testclient import TestClient
 
+from berth.adapters.http import ServiceUnavailableError
 from berth.api.deps import get_client_factory
 from berth.api.gate import CSRF_HEADER
 from berth.config import Config
-from berth.domain import IssueType
+from berth.domain import IssueType, JobState, JobTrigger
 from berth.main import create_app
+from berth.models import Job
 from berth.services.issues import record_issue
 from berth.services.reconcile import ReconcileRunner
 from berth.services.routes import build_routes
@@ -38,6 +40,7 @@ ADMIN = {"username": "skipper", "password": "harbour"}
 CREW = {"username": "deckhand", "password": "rope"}
 
 TARGET = "/data/library/tv/Show (2020)/Season 01/Show - S01E01.mkv"
+HASH = "4bd0f6ef1d3b1e3cbb1e1b6b6c2a9c7d8e5f0a1b"
 
 
 @pytest.fixture
@@ -268,3 +271,72 @@ class _NeverDone:
 
     def done(self) -> bool:
         return False
+
+
+class TestTheDiskThreshold:
+    """磁碟空間門檻在設定裡（M2 票 09c），改了立刻重量一次。"""
+
+    def test_it_starts_at_ten_gigabytes(self, client: TestClient) -> None:
+        sign_in(client)
+
+        assert client.get("/api/settings/disk").json() == {"min_free_gb": 10}
+
+    def test_raising_it_past_the_free_space_opens_an_issue_right_away(
+        self, client: TestClient
+    ) -> None:
+        sign_in(client)
+
+        saved = client.post("/api/settings/disk", json={"min_free_gb": 1_000_000}, headers=BROWSER)
+
+        assert saved.json() == {"min_free_gb": 1_000_000}
+        assert [row["type"] for row in client.get("/api/issues").json()] == ["low_disk_space"]
+
+    def test_a_negative_threshold_is_refused(self, client: TestClient) -> None:
+        sign_in(client)
+
+        assert (
+            client.post("/api/settings/disk", json={"min_free_gb": -1}, headers=BROWSER).status_code
+            == 422
+        )
+
+    def test_an_ordinary_user_cannot_change_it(self, client: TestClient) -> None:
+        sign_in(client, CREW)
+
+        assert (
+            client.post("/api/settings/disk", json={"min_free_gb": 0}, headers=BROWSER).status_code
+            == 403
+        )
+
+
+class TestAPipelineButtonThatCannotReachTheClient:
+    """驗收：問不到 qBittorrent 時按鈕說得出為什麼（502 `client_unreachable`），Issue 留著。"""
+
+    def test_it_is_a_502_with_the_reason_and_the_issue_stays(
+        self, client: TestClient, factory: FakeClientFactory
+    ) -> None:
+        async def run() -> int:
+            sessions = client.app.state.session_factory  # type: ignore[attr-defined]  # app.state 是 Starlette 的動態屬性
+            async with sessions() as session:
+                session.add(
+                    Job(
+                        hash=HASH,
+                        name="broken",
+                        trigger=JobTrigger.MANUAL,
+                        state=JobState.CLIENT_ERROR,
+                    )
+                )
+                recorded = await record_issue(session, IssueType.CLIENT_ERROR, job_hash=HASH)
+                await session.commit()
+                return int(recorded.issue.id)
+
+        issue_id = asyncio.run(run())
+        factory.qbittorrent_.error = ServiceUnavailableError("connection refused")
+        sign_in(client)
+
+        pressed = client.post(
+            f"/api/issues/{issue_id}/resolve", json={"action": "retry"}, headers=BROWSER
+        )
+
+        assert pressed.status_code == 502
+        assert pressed.json()["detail"]["reason"] == "client_unreachable"
+        assert [row["id"] for row in client.get("/api/issues").json()] == [issue_id]

@@ -3,7 +3,7 @@
 三件事在這裡：**寫下一件**（`record_issue`，冪等）、**攤給畫面**（`list_issues`）、
 **按下去**（`resolve_issue` / `ignore_issue`）。偵測本身不在這裡——對帳在
 `services/reconcile.py`，管線那四種在 `services/downloads.py` 與 `services/resolver.py`，
-它們都只呼叫 `record_issue`。
+健康檢查那兩種在 `services/health_issues.py`，它們都只呼叫 `record_issue`。
 
 **冪等是這一支的全部重點**。`qbit_poller` 每 5 秒醒一次、對帳每天跑一輪，同一件事會被說很多
 遍；清單上要是一件一列，不是一天一萬七千列。所以寫入是「同一個 `(type, subject)` 只有一筆
@@ -53,6 +53,7 @@ from berth.models import (
     Issue,
     JellyfinSettings,
     Job,
+    JobFile,
     LedgerEntry,
     QbittorrentSettings,
     Route,
@@ -63,7 +64,13 @@ from berth.services import complete
 from berth.services.clients import ServiceClientFactory
 from berth.services.deletion import DeleteScope, delete_job
 from berth.services.hints import JobHints
-from berth.services.jobs import JobRejectedError, job_lock, record_event, transition
+from berth.services.jobs import (
+    JobRejectedError,
+    job_lock,
+    record_event,
+    resubmit_job,
+    transition,
+)
 from berth.services.qbittorrent import sign_in
 from berth.services.settings import read_settings
 from berth.services.steps import message
@@ -74,8 +81,11 @@ logger = logging.getLogger(__name__)
 class IssueRejectedError(Exception):
     """按不下去，而且**還沒動任何東西**（`domain.IssueRefusal`）。
 
-    `relink_failed` 是唯一的例外：鏈接要真的碰了磁碟才知道成不成。那一次失敗沒有留下
+    `relink_failed` 是一個例外：鏈接要真的碰了磁碟才知道成不成。那一次失敗沒有留下
     半個檔案（`fs.link` 自己保證），所以它仍然是「這一次什麼都沒改」。
+
+    `resubmit_failed` 是另一個（票 09c）：送了才知道 qBittorrent 收不收，而不收的那一次 Job
+    照送單的規矩落在 `submit_failed`。這一件仍然開著、再按一次就是再送一次。
     """
 
     def __init__(self, reason: IssueRefusal, detail: str) -> None:
@@ -189,7 +199,7 @@ async def list_issues(
         )
     )
     jobs = await _live_jobs(session, rows)
-    return [_view(row, has_job=row.job_hash in jobs) for row in rows]
+    return [_view(row, jobs) for row in rows]
 
 
 async def ignore_issue(session: AsyncSession, issue_id: int, *, actor: str) -> IssueView:
@@ -251,6 +261,12 @@ async def resolve_issue(
         await _relook(session, row)
     elif action is IssueAction.RESCAN:
         await _rescan(session, factory, row)
+    elif action is IssueAction.RECHECK or action is IssueAction.RETRY:
+        await _restart(session, factory, row, action, actor=actor)
+    elif action is IssueAction.ACCEPT_LOSS or action is IssueAction.ACCEPT_REMOVAL:
+        await _accept(session, factory, row, actor=actor)
+    elif action is IssueAction.RESUBMIT:
+        await _resubmit(session, factory, row, actor=actor)
     else:
         # 加一顆新的而沒有接到這裡，mypy 在這一行紅——不會靜靜跑到別顆的實作。
         assert_never(action)
@@ -499,6 +515,104 @@ async def _rescan(session: AsyncSession, factory: ServiceClientFactory, row: Iss
     await session.flush()
 
 
+async def _restart(
+    session: AsyncSession,
+    factory: ServiceClientFactory,
+    row: Issue,
+    action: IssueAction,
+    *,
+    actor: str,
+) -> None:
+    """重新 recheck（`missing_files`）或重試（`client_error`）：請 qBittorrent 動手，Job 回到
+    poller 接得住的那一站（plan §3.1）。
+
+    **qBittorrent 那一半**（brief §20.2，2026-09-23 對 4.4.5 與 5.2.3 實測）：recheck 是重新校驗
+    磁碟上的資料，`start`（4.x 的 `resume`）讓它重新開始，而重新開始本身就會清掉客戶端的錯誤
+    （原始碼 `clear_error()`）。所以重試只送 `start`——錯誤不是資料的問題，重新校驗一次幾十 GB
+    只是讓它晚一點回來。recheck 之後**一定接 `start`**：原始碼裡 5.x 對停住的 torrent recheck 完
+    會再停下來；實測資料回來之後兩版都是做種中，資料不在的話兩版都是 `stalledDL`。
+
+    **Job 那一半**：檔案清單早就到手的回 `metadata_ready`，還沒有的回 `submitted`——兩站的下一步
+    poller 本來就會走（完成判定、等清單），這一顆不另外判斷 qBittorrent 校驗的結果。校驗完仍然
+    缺檔的話，下一輪 poller 會照常再開一件（壞掉優先，plan §3.1）。
+
+    **先問 qBittorrent 才動 Job**：問不到的話那一列一步都不動，這一件留著 `open`。
+    """
+    job = await _broken_job(session, row)
+    async with job_lock(job.hash):
+        broken = job.state
+        settings = await read_settings(session, QbittorrentSettings)
+        client = factory.qbittorrent(settings.base_url)
+        try:
+            await sign_in(client, settings)
+            if action is IssueAction.RECHECK:
+                await client.recheck(job.hash)
+            await client.start(job.hash)
+        except ServiceError as exc:
+            raise IssueRejectedError(IssueRefusal.CLIENT_UNREACHABLE, message(exc)) from exc
+        finally:
+            await client.aclose()
+
+        listed = await session.scalar(
+            select(JobFile.id).where(JobFile.job_hash == job.hash).limit(1)
+        )
+        back = JobState.METADATA_READY if listed is not None else JobState.SUBMITTED
+        if not await transition(session, job, back, expected=broken):
+            raise IssueRejectedError(IssueRefusal.ACTION_NOT_AVAILABLE, job.state.value)
+        # `retried` 是事件去重的界線（plan §3.3）：之後又壞一次時那一筆 `issue_detected` 與
+        # 第一次一字不差，沒有界線會被吞掉。`action` 讓時間線分得出是哪一顆。
+        await record_event(
+            session,
+            job,
+            EventType.RETRIED,
+            actor=actor,
+            payload={"state": back.value, "action": action.value},
+        )
+
+
+async def _accept(
+    session: AsyncSession, factory: ServiceClientFactory, row: Issue, *, actor: str
+) -> None:
+    """承認遺失 / 承認移除：那一筆下載到此為止（2026-09-23 使用者拍板）。
+
+    **走 `delete_job`、四個旗標全不勾**：Job 進 `removed`、時間線一筆 `deleted`，磁碟與
+    qBittorrent 一個位元組都不動（`ACTION_DELETES` 是 False）。要刪東西的人去 Job 頁的刪除範圍，
+    那裡四個旗標逐一說清楚；這一顆只說「別再等它了」。torrent 還在 qBittorrent 上的話它仍然有
+    Job，所以不會變成 `unknown_torrent`。
+    """
+    job = await _broken_job(session, row)
+    try:
+        await delete_job(session, factory, job.hash, DeleteScope(), actor=actor)
+    except JobRejectedError as refusal:
+        raise IssueRejectedError(_REFUSAL_OF[refusal.reason], refusal.detail) from refusal
+
+
+async def _resubmit(
+    session: AsyncSession, factory: ServiceClientFactory, row: Issue, *, actor: str
+) -> None:
+    """重新送單：照存下來的下載連結再加一次（`services/jobs.resubmit_job`）。
+
+    **送了而 qBittorrent 不收**（409 / 415）時 Job 落在 `submit_failed`，這一件仍然開著：
+    修好之後再按一次就是再送一次（所以 `submit_failed` 也在這一顆的 `_BROKEN_BY` 裡）。
+    """
+    job = await _broken_job(session, row)
+    try:
+        view = await resubmit_job(
+            session, factory, job.hash, expected=_BROKEN_BY[IssueAction.RESUBMIT], actor=actor
+        )
+    except JobRejectedError as refusal:
+        raise IssueRejectedError(_REFUSAL_OF[refusal.reason], refusal.detail) from refusal
+    if view.state is JobState.SUBMIT_FAILED:
+        raise IssueRejectedError(IssueRefusal.RESUBMIT_FAILED, view.error)
+
+
+async def _broken_job(session: AsyncSession, row: Issue) -> Job:
+    job = await session.get(Job, row.job_hash) if row.job_hash else None
+    if job is None:
+        raise IssueRejectedError(IssueRefusal.ACTION_NOT_AVAILABLE, "the download is gone")
+    return job
+
+
 async def _close_siblings(session: AsyncSession, row: Issue, *, actor: str) -> None:
     """同一筆 Job 底下其餘還開著的 Issue 跟著收掉。
 
@@ -525,15 +639,21 @@ async def _close_siblings(session: AsyncSession, row: Issue, *, actor: str) -> N
 
 # --- 內部 ---------------------------------------------------------------
 
-#: `delete_job` 丟得出來的拒絕 → Issue 這一層的說法（`tests/unit/test_issue_types.py` 守著
-#: 這張表涵蓋了那一顆按鈕真的走得到的每一種）。
+#: `delete_job` 與 `resubmit_job` 丟得出來的拒絕 → Issue 這一層的說法。**只列走得到的那幾種**：
+#: 漏一種是一個帶著 repro 的 `KeyError`，而不是一句說錯了下一步的話。
 #:
-#: 四個旗標是這一顆自己寫死的，所以勾錯組合那一種走不到；其餘三種各自對得上一句話：
-#: Job 在按下去之前被刪掉了＝這一顆現在按不了，qBittorrent 問不到＝去修那一台。
+#: 刪除的四個旗標是按鈕自己寫死的，所以勾錯組合那一種走不到；Job 在按下去之前被刪掉或動過了
+#: ＝這一顆現在按不了，qBittorrent 問不到＝去修那一台，Route 用不了＝送出去也入不了庫。
 _REFUSAL_OF: dict[JobRefusal, IssueRefusal] = {
     JobRefusal.JOB_MISSING: IssueRefusal.ACTION_NOT_AVAILABLE,
+    JobRefusal.NOT_RETRYABLE: IssueRefusal.ACTION_NOT_AVAILABLE,
     JobRefusal.CLIENT_UNREACHABLE: IssueRefusal.CLIENT_UNREACHABLE,
     JobRefusal.DELETE_FILES_REQUIRES_REMOVE_TORRENT: IssueRefusal.ACTION_NOT_AVAILABLE,
+    JobRefusal.SOURCE_UNAVAILABLE: IssueRefusal.SOURCE_UNAVAILABLE,
+    JobRefusal.ROUTE_MISSING: IssueRefusal.ROUTE_UNUSABLE,
+    JobRefusal.ROUTE_DISABLED: IssueRefusal.ROUTE_UNUSABLE,
+    JobRefusal.ROUTE_UNHEALTHY: IssueRefusal.ROUTE_UNUSABLE,
+    JobRefusal.ROUTE_KIND_MISMATCH: IssueRefusal.ROUTE_UNUSABLE,
 }
 
 
@@ -557,23 +677,23 @@ async def _open_issue(session: AsyncSession, issue_id: int) -> Issue:
 
 
 async def _reread(session: AsyncSession, row: Issue) -> IssueView:
-    jobs = await _live_jobs(session, [row])
-    return _view(row, has_job=row.job_hash in jobs)
+    return _view(row, await _live_jobs(session, [row]))
 
 
-async def _live_jobs(session: AsyncSession, rows: Sequence[Issue]) -> set[str]:
-    """這幾列指著的 Job 裡，還真的在的那幾個。
+async def _live_jobs(session: AsyncSession, rows: Sequence[Issue]) -> dict[str, JobState]:
+    """這幾列指著的 Job 裡還真的在的那幾個，各自現在是什麼狀態。
 
     一次問完而不是逐列 `session.get`：清單上兩百列就是兩百次查詢（票 01 才剛把 `list_jobs`
-    的同一個毛病改掉）。
+    的同一個毛病改掉）。狀態是管線那三種要的：Job 已經離開那個壞掉的狀態時它們的按鈕不畫。
     """
     hashes = {row.job_hash for row in rows if row.job_hash}
     if not hashes:
-        return set()
-    return set(await session.scalars(select(Job.hash).where(Job.hash.in_(hashes))))
+        return {}
+    found = await session.execute(select(Job.hash, Job.state).where(Job.hash.in_(hashes)))
+    return dict(found.tuples().all())
 
 
-def _view(row: Issue, *, has_job: bool) -> IssueView:
+def _view(row: Issue, jobs: dict[str, JobState]) -> IssueView:
     return IssueView(
         id=row.id,
         type=row.type,
@@ -586,16 +706,17 @@ def _view(row: Issue, *, has_job: bool) -> IssueView:
         detected_at=row.detected_at,
         resolved_at=row.resolved_at,
         resolved_by=row.resolved_by,
-        actions=_actions(row, has_job=has_job),
+        actions=_actions(row, jobs.get(row.job_hash or "")),
     )
 
 
-def _actions(row: Issue, *, has_job: bool) -> tuple[IssueAction, ...]:
+def _actions(row: Issue, job_state: JobState | None) -> tuple[IssueAction, ...]:
     """這一列**現在**按得了哪幾顆。
 
     型別決定有哪幾顆（`ISSUE_ACTIONS`），這一筆的資料決定其中哪幾顆按得下去：決定過的
-    一顆都沒有，指不到帳本的按不了動帳本的那幾顆，沒有 Job 的按不了動 Job 的那兩顆，
-    大小不同的 `inode_mismatch` 沒有「以硬鏈接取代」。
+    一顆都沒有，指不到帳本的按不了動帳本的那幾顆，沒有 Job 的按不了動 Job 的那幾顆，
+    Job 已經離開那個壞掉狀態的管線 Issue 按不了它的按鈕（`_BROKEN_BY`），大小不同的
+    `inode_mismatch` 沒有「以硬鏈接取代」。
 
     **在後端算而不是讓畫面猜**：按下去會被拒絕的按鈕不該畫出來。
     """
@@ -605,7 +726,9 @@ def _actions(row: Issue, *, has_job: bool) -> tuple[IssueAction, ...]:
     for action in ISSUE_ACTIONS[row.type]:
         if action in _ON_THE_LEDGER_ROW and row.ledger_id is None:
             continue
-        if action in _ON_THE_JOB and not has_job:
+        if action in _ON_THE_JOB and job_state is None:
+            continue
+        if action in _BROKEN_BY and job_state not in _BROKEN_BY[action]:
             continue
         # 「否則列出等人決定」（brief §9.1）：大小不同時不給這一顆。
         same_size = (row.detail_json or {}).get("same_size")
@@ -627,4 +750,26 @@ _ON_THE_LEDGER_ROW = frozenset(
     }
 )
 #: 這幾顆動的是那一筆 Job。帳本的 `job_hash` 是弱引用，重新入庫建出來的那幾列就沒有。
-_ON_THE_JOB = frozenset({IssueAction.DELETE_COMPLETE, IssueAction.REPLAN})
+_ON_THE_JOB = frozenset(
+    {
+        IssueAction.DELETE_COMPLETE,
+        IssueAction.REPLAN,
+        IssueAction.RECHECK,
+        IssueAction.ACCEPT_LOSS,
+        IssueAction.RETRY,
+        IssueAction.RESUBMIT,
+        IssueAction.ACCEPT_REMOVAL,
+    }
+)
+#: 管線那三種的按鈕只在 Job **還在那個壞掉的狀態**時按得了（plan §3.1 的出邊）。
+#:
+#: Job 自己往前走了（另一個分頁按過、Job 頁上重試成功、它被刪了）的話，那一件說的事已經不是
+#: 現況，按下去會把一筆好好的下載拉回去。重新送單多收一個 `submit_failed`：上一次重新送單被
+#: qBittorrent 拒絕的那一筆落在那裡，這一件仍然開著，再按一次就是再送一次。
+_BROKEN_BY: dict[IssueAction, frozenset[JobState]] = {
+    IssueAction.RECHECK: frozenset({JobState.MISSING_FILES}),
+    IssueAction.ACCEPT_LOSS: frozenset({JobState.MISSING_FILES}),
+    IssueAction.RETRY: frozenset({JobState.CLIENT_ERROR}),
+    IssueAction.RESUBMIT: frozenset({JobState.CLIENT_REMOVED, JobState.SUBMIT_FAILED}),
+    IssueAction.ACCEPT_REMOVAL: frozenset({JobState.CLIENT_REMOVED, JobState.SUBMIT_FAILED}),
+}

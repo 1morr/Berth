@@ -118,6 +118,7 @@ def test_every_settings_group_has_a_distinct_key() -> None:
     keys = [group.KEY for group in SETTINGS_GROUPS]
 
     assert sorted(keys) == [
+        "disk",
         "health",
         "paths",
         # 兩個背景迴圈各寫自己那一列：整組覆寫是 `write_settings` 的常態，共用一列會互相蓋掉。

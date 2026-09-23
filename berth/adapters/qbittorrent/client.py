@@ -180,6 +180,19 @@ class HttpQbittorrentClient:
             data={"hashes": info_hash, "deleteFiles": "true" if delete_files else "false"},
         )
 
+    async def recheck(self, info_hash: str) -> None:
+        """`torrents/recheck`。一律 POST，成功是 200 + 空 body，不認得的 hash 靜默成功
+        （brief §20.2）。"""
+        await self._session.request("POST", "/api/v2/torrents/recheck", data={"hashes": info_hash})
+
+    async def start(self, info_hash: str) -> None:
+        """`torrents/start`（Web API 2.11 起）或 `torrents/resume`（之前）。形狀與 `recheck`
+        相同（brief §20.2）。送錯那一支是 404，所以要先問版本，與 `add_torrent` 同一個理由。"""
+        version = await self.version()
+        await self._session.request(
+            "POST", f"/api/v2/{version.start_endpoint}", data={"hashes": info_hash}
+        )
+
     async def sync(self) -> tuple[TorrentStatus, ...]:
         """`sync/maindata?rid=N`。合併由 `MaindataCursor` 做，這裡只負責問與檢查形狀。"""
         path = f"/api/v2/sync/maindata?rid={self._cursor.rid}"

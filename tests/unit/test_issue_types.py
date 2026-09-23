@@ -1,4 +1,4 @@
-"""十一種 Issue 的封閉集合，以及掛在它上面的兩張表（plan §2.4、brief §9.1、M2 票 05）。
+"""十三種 Issue 的封閉集合，以及掛在它上面的兩張表（plan §2.4、brief §9.1、M2 票 05 / 09c）。
 
 `IssueType` 有兩個呼叫端：管線寫 `issue_detected` 事件時用它，對帳寫 `issues` 表時也用它。
 **共用一個集合**是票 05 的驗收條件之一，而共用的代價是「加一種型別」要回答兩個問題——
@@ -40,17 +40,25 @@ FROM_THE_PIPELINE = {
     IssueType.JELLYFIN_ITEM_UNRESOLVED,
 }
 
+#: `health_checker` 每 5 分鐘量的那兩種（M2 票 09c）。條件解除時由系統自己收掉。
+FROM_HEALTH_CHECKS = {
+    IssueType.LIBRARY_USES_TVDB,
+    IssueType.LOW_DISK_SPACE,
+}
+
 
 class TestTheClosedSet:
-    def test_it_is_the_union_of_the_seven_and_the_four(self) -> None:
-        """十一種＝對帳的七種 ∪ 管線的四種（plan §2.4，2026-09-22 定）。
+    def test_it_is_the_union_of_the_three_producers(self) -> None:
+        """十三種＝對帳的七種 ∪ 管線的四種 ∪ 健康檢查的兩種（plan §2.4）。
 
-        分別列一次而不是數 11：多一種而兩邊都沒登記它時，說得出少的是哪一種。
+        分別列一次而不是數 13：多一種而三邊都沒登記它時，說得出少的是哪一種。
         """
-        assert set(IssueType) == FROM_RECONCILING | FROM_THE_PIPELINE
+        assert set(IssueType) == FROM_RECONCILING | FROM_THE_PIPELINE | FROM_HEALTH_CHECKS
 
-    def test_the_two_halves_do_not_overlap(self) -> None:
+    def test_the_three_groups_do_not_overlap(self) -> None:
         assert not FROM_RECONCILING & FROM_THE_PIPELINE
+        assert not FROM_RECONCILING & FROM_HEALTH_CHECKS
+        assert not FROM_THE_PIPELINE & FROM_HEALTH_CHECKS
 
 
 class TestTheIdempotencyKey:
@@ -69,6 +77,9 @@ class TestTheIdempotencyKey:
             IssueType.INODE_MISMATCH,
             IssueType.UNMANAGED_LIBRARY_FILE,
             IssueType.ORPHAN_COMPLETE,
+            # 健康檢查那兩種也是一條路徑：TVDB 是那條 Route 的目標，磁碟是量的那個根目錄。
+            IssueType.LIBRARY_USES_TVDB,
+            IssueType.LOW_DISK_SPACE,
         }
 
     def test_the_client_ones_use_the_job_hash(self) -> None:
@@ -101,10 +112,10 @@ class TestWhatEachTypeCanBeResolvedWith:
         assert set(ISSUE_ACTIONS) == set(IssueType)
 
     def test_what_each_type_offers_this_round(self) -> None:
-        """brief §9.1 那一欄，扣掉還沒做的（M2 票 09）。
+        """brief §9.1 那一欄，扣掉還沒做的（M2 票 09 / 09c）。
 
-        這一條是**刻意會過期的**：票 10 補認領類的三顆、票 09c 補管線那三種時它要跟著改，
-        而改它的人正好會看到「新的那一顆也要回答它會不會刪東西」（`ACTION_DELETES`）。
+        這一條是**刻意會過期的**：票 10 補認領類的三顆時它要跟著改，而改它的人正好會看到
+        「新的那一顆也要回答它會不會刪東西」（`ACTION_DELETES`）。
         """
         assert {kind: actions for kind, actions in ISSUE_ACTIONS.items() if actions} == {
             IssueType.LIBRARY_LINK_MISSING: (
@@ -116,8 +127,26 @@ class TestWhatEachTypeCanBeResolvedWith:
             IssueType.INODE_MISMATCH: (IssueAction.REPLACE_WITH_LINK,),
             IssueType.ORPHAN_COMPLETE: (IssueAction.DELETE_ORPHAN,),
             IssueType.JOB_WITHOUT_FILES: (IssueAction.REPLAN,),
+            IssueType.MISSING_FILES: (IssueAction.RECHECK, IssueAction.ACCEPT_LOSS),
+            IssueType.CLIENT_ERROR: (IssueAction.RETRY,),
+            IssueType.CLIENT_REMOVED: (IssueAction.RESUBMIT, IssueAction.ACCEPT_REMOVAL),
             IssueType.JELLYFIN_ITEM_UNRESOLVED: (IssueAction.RELOOK, IssueAction.RESCAN),
         }
+
+    def test_the_health_ones_have_nothing_berth_can_press(self) -> None:
+        """TVDB 插件與磁碟空間的修法在 Jellyfin 與磁碟上，不在 Berth 裡（票 09c）。
+
+        所以它們只有「忽略」，而條件解除時由 `health_checker` 自己收掉（`resolved_by = system`）。
+        """
+        offered = {kind: ISSUE_ACTIONS[kind] for kind in FROM_HEALTH_CHECKS}
+
+        assert offered == dict.fromkeys(FROM_HEALTH_CHECKS, ())
+
+    def test_none_of_the_pipeline_actions_deletes(self) -> None:
+        """「承認遺失」「承認移除」讓那一筆下載結束，但磁碟與 qBittorrent 一樣都不動（票 09c）：
+        要刪東西走 Job 頁的刪除範圍，那裡四個旗標逐一說清楚。"""
+        for kind in FROM_THE_PIPELINE:
+            assert deleting(ISSUE_ACTIONS, kind) == [], kind
 
     def test_the_missing_link_offers_the_three_from_the_brief(self) -> None:
         """重新鏈接 / 承認刪除並清帳本 / 連 complete 一起刪，**順序就是畫面上的順序**：

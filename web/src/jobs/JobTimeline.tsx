@@ -147,14 +147,11 @@ const FACTS: Record<KnownEvent, (facing: Facing) => ReactNode> = {
   submit_failed: ({ payload }) => (
     <p className="value text-xs wrap-anywhere text-blocked-ink">{text(payload.error)}</p>
   ),
-  // 兩種重試回到的站不同：送單的重試退回「已建立」再送一次，入庫的重試退回「入庫中」
-  // 從沒鏈接的檔案接著做（票 12）。`state` 是後端寫的，不是前端猜的。
+  // 重試回到的站不同：送單的重試退回「已建立」再送一次，入庫的重試退回「入庫中」從沒鏈接的
+  // 檔案接著做（票 12）；待處理上的幾顆各有自己的一句（M2 票 09、09c）。`state` 與 `action`
+  // 是後端寫的，不是前端猜的。
   retried: ({ t, payload }) => (
-    <p className="max-w-prose text-xs text-ink-dim">
-      {payload.state === 'importing'
-        ? t('jobs.timeline.retriedImport')
-        : t('jobs.timeline.retried')}
-    </p>
+    <p className="max-w-prose text-xs text-ink-dim">{t(retriedText(payload))}</p>
   ),
   metadata_received: ({ t, locale, payload }) => (
     <Row>
@@ -452,4 +449,12 @@ function number(value: unknown): number {
  */
 function join(parts: readonly string[]): string {
   return parts.filter(Boolean).join(' · ')
+}
+
+function retriedText(payload: Record<string, unknown>) {
+  if (payload.action === 'recheck') return 'jobs.timeline.retriedRecheck'
+  if (payload.action === 'retry') return 'jobs.timeline.retriedRestart'
+  if (payload.state === 'importing') return 'jobs.timeline.retriedImport'
+  if (payload.state === 'completed') return 'jobs.timeline.retriedReplan'
+  return 'jobs.timeline.retried'
 }

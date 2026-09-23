@@ -533,6 +533,17 @@ Berth 入庫的作品照樣瀏覽得到。這六件事現在是 nightly e2e 的�
 - **對帳的第五方 Jellyfin**（M2 票 09，brief §20.9）：`GET /reconcile` 的 `sides` 多一方 `jellyfin`。它不開 Issue，
   只把反查過的正片照 Jellyfin 現在的樣子重對一次——票 13 之前反查完的劇集補上 Series id（媒體庫卡片不再一直說
   「還在掃描」），Jellyfin 12 合併之後不再是主條目的 item id 換成主條目。
+- **管線三種 Issue 的五顆按鈕**（M2 票 09c，brief §9.1、plan §3.1）：`missing_files` 的重新校驗 / 承認遺失、
+  `client_error` 的重試、`client_removed` 的重新送單 / 承認移除。重新校驗與重試向 qBittorrent 送
+  `torrents/recheck` + `torrents/start`（4.x 是 `torrents/resume`，照 Web API 版本挑），Job 回到檔案清單到手之後那一站，
+  poller 照常往前推；重新送單先問過 Route、下載連結（要拿回同一個 hash）與 qBittorrent 才動 Job；兩顆承認讓 Job 進
+  `removed`，磁碟與 qBittorrent 都不動。按鈕只在 Job 還停在那個壞掉的狀態時給。新的拒絕理由 `source_unavailable`、
+  `resubmit_failed`、`route_unusable`。
+- **兩種新的 Issue：`library_uses_tvdb` 與 `low_disk_space`**（M2 票 09c）。`health_checker` 每一輪在四項之後量：
+  每條 Route 的 Jellyfin 媒體庫掛不掛 TVDB 的 metadata fetcher、incomplete / complete 剩的空間夠不夠。條件解除時
+  系統自己收掉（`resolved_by = system`），問不到不算解除；它們的「忽略」在條件持續期間有效。十一種變十三種。
+- **磁碟空間門檻 `GET|POST /settings/disk`**（M2 票 09c）與服務設定頁上的一個欄位：`min_free_gb`，預設 10，`0` 是不量。
+  形狀照 Sonarr 的 Minimum Free Space（一個全域數字），單位是 GB。存完立刻重量一次。新的設定分組 `settings.disk`。
 - **刪除對話框是一個元件**（M2 票 04，plan §7）：`/jobs` 的展開區與 Media 詳情的版本清單共用，
   票 11 的 `/jobs/:hash` 掛的也是它。就地展開而不是 dialog（The Failure Expands In Place Rule）——
   「哪一筆正在被刪」正是這個動作最怕搞錯的事。取消「移除 torrent」會把「刪除檔案」一起收掉，
@@ -541,6 +552,9 @@ Berth 入庫的作品照樣瀏覽得到。這六件事現在是 nightly e2e 的�
 
 ### Changed
 
+- **管線 Issue 的那一列以下載的名字認**（M2 票 09c）：`missing_files` / `client_error` / `client_removed` 的
+  `detail` 多帶 `name`，清單上不再是一串 hash。時間線上 `retried` 那一筆分得出是哪一顆（重新校驗、重試、重新規劃），
+  不再一律說「退回已建立」。
 - **管線發現的那四種 Issue 從此兩邊都寫**（M2 票 05，plan §2.4）。`missing_files` /
   `client_error` / `client_removed` / `unknown_torrent` / `jellyfin_item_unresolved` 原本只有
   一筆 `issue_detected` 事件（`issues` 表要到 M2 才有），現在同時寫一列 `issues`：**事件是歷史**

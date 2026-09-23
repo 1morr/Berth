@@ -49,6 +49,9 @@ const REASONS: ReasonSet<IssueRefusal> = {
   size_differs: true,
   jellyfin_unreachable: true,
   delete_failed: true,
+  source_unavailable: true,
+  resubmit_failed: true,
+  route_unusable: true,
 }
 
 /** 這一次失敗是「後端說不行」還是「網路壞了」。認不得的理由回 `null`。 */

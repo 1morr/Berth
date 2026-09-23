@@ -241,6 +241,22 @@ class ServiceHealth(BaseModel):
     unsupported: bool = False
 
 
+class DiskSettings(SettingsGroup):
+    """磁碟空間門檻（M2 票 09c，2026-09-23 使用者拍板）。
+
+    **形狀照 Sonarr 的 Minimum Free Space**（一個全域數字，servarr wiki 的 Media Management），
+    **單位與預設不同**：Sonarr 擋的是入庫時複製檔案，預設 100 MB；Berth 用硬鏈接入庫不佔空間，
+    會把磁碟吃滿的是下載，一集就是好幾 GB，所以單位是 GB、預設 10。
+
+    量的是 incomplete 與 complete 兩個根目錄（同一個檔案系統只量一次，`services/health_issues`）。
+    `0` 是不量。
+    """
+
+    KEY = "disk"
+
+    min_free_gb: int = 10
+
+
 class HealthSettings(SettingsGroup):
     """`health_checker` 上一輪的結果（plan §3.2）。
 
@@ -322,4 +338,5 @@ SETTINGS_GROUPS: tuple[type[SettingsGroup], ...] = (
     SetupSettings,
     HealthSettings,
     PollerSettings,
+    DiskSettings,
 )

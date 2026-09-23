@@ -69,6 +69,15 @@ class QbittorrentVersion:
         """加入 torrent 時要送的那個「先別下載」參數。"""
         return "stopped" if _parse(self.webapi) >= STOPPED_SINCE_WEBAPI else "paused"
 
+    @property
+    def start_endpoint(self) -> str:
+        """讓一個 torrent 重新開始的那一支。**同一次改名**：5.0（Web API 2.11）把
+        `torrents/resume` 改成 `torrents/start`，與 `paused` → `stopped` 是同一版（brief §20.2）。
+        """
+        return (
+            "torrents/start" if _parse(self.webapi) >= STOPPED_SINCE_WEBAPI else "torrents/resume"
+        )
+
 
 #: 每一筆 Berth 送出去的 torrent 都掛這個 tag（plan §8.1）。它讓使用者在 qBittorrent 自己的
 #: 介面上分得出「這是 Berth 放的」，也讓票 10 的 poller 有一個 category 之外的第二道篩子。
@@ -326,6 +335,22 @@ class QbittorrentClient(Protocol):
 
         **它沒有這個 hash 也是成功**（實測原始碼 `applyToTorrents` 直接跳過，brief §20.2）：
         torrent 早就被人在 qBittorrent 介面上刪掉的那一筆，這裡照樣走得完。
+        """
+        ...
+
+    async def recheck(self, info_hash: str) -> None:
+        """`torrents/recheck`：重新校驗磁碟上的資料（`missing_files` 的「重新 recheck」）。
+
+        **不認得的 hash 也是成功**（brief §20.2）：那一筆在這中間被人拿掉的話，下一輪
+        poller 看到的就是 `client_removed`，不必在這裡先問一次。
+        """
+        ...
+
+    async def start(self, info_hash: str) -> None:
+        """讓一個 torrent 重新開始（4.x 的 `torrents/resume`、5.x 的 `torrents/start`）。
+
+        它也清掉客戶端自己的錯誤狀態（`client_error` 的「重試」）。版本判斷在實作裡，同
+        `add_torrent`。
         """
         ...
 

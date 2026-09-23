@@ -407,10 +407,14 @@ NCOP/NCED、PV、CM、Menu、預告、花絮等**可辨識**的非正片內容�
 | `client_error` | 管線：torrent 在 qBittorrent 進入 error 狀態 | 重試 / 忽略 |
 | `client_removed` | 管線：Job 還沒完成，torrent 已不在 qBittorrent | 重新送單 / 承認移除 |
 | `jellyfin_item_unresolved` | 管線：入庫後六次反查都沒在 Jellyfin 找到那個檔案 | 重新反查 / 重新掃描媒體庫 |
+| `library_uses_tvdb` | 健康檢查：一條 Route 的 Jellyfin 媒體庫掛著 TVDB 的 metadata fetcher（§16.4 的警告） | 只列出；在 Jellyfin 拿掉之後系統自己收掉 |
+| `low_disk_space` | 健康檢查：incomplete 或 complete 所在的檔案系統剩下的空間低於門檻（設定裡，預設 10 GB） | 只列出；空間回來之後系統自己收掉 |
 
-後四種是管線自己發現的（M1 以 `issue_detected` 事件記著，M2 起與對帳的七種共用 `issues` 表與同一個封閉集合，plan §2.4，2026-09-22 定）。`ledger.status` 的 `target_missing` / `source_missing` / `inode_mismatch` 是帳本那一列的現況，Issue 是「要有人決定」的那一件——同一件事的兩個角度，resolve 之後帳本那一欄跟著改。
+中間四種是管線自己發現的（M1 以 `issue_detected` 事件記著，M2 起與對帳的七種共用 `issues` 表與同一個封閉集合，plan §2.4，2026-09-22 定）；最後兩種是 `health_checker` 每 5 分鐘量出來的（M2 票 09c，使用者拍板由健康檢查偵測而不是對帳），十三種共用一個集合。`ledger.status` 的 `target_missing` / `source_missing` / `inode_mismatch` 是帳本那一列的現況，Issue 是「要有人決定」的那一件——同一件事的兩個角度，resolve 之後帳本那一欄跟著改。
 
-2026-09-23（M2 票 09 開工時使用者拍板）：「認領」類的三顆——`orphan_complete` 的重新入庫、`unknown_torrent` 的認領、`unmanaged_library_file` 的認領進帳本——在**票 10** 與 `reimport` / `rebuild-ledger` 一起做（同一組原語，先做一份會變成兩條入庫路徑）；管線那三種（`missing_files` / `client_error` / `client_removed`）的動作在**票 09c**。那之前它們只按得了「忽略」。會刪東西的按鈕（連 complete 一起刪、刪除孤兒目錄、以硬鏈接取代）按下去之前再確認一次世界：偵測在早上，按下去在下午。`job_without_files` 的判定有兩個例外（票 09）：那一份 Plan 本來就沒有要鏈的檔案（全是重複的那一包自動落地，§7.8）不算；使用者對那一筆按過「承認刪除並清帳本」的不算——帳本是他自己清的，再問他要不要重新規劃等於讓剛決定過的事自己回來。
+2026-09-23（M2 票 09 開工時使用者拍板）：「認領」類的三顆——`orphan_complete` 的重新入庫、`unknown_torrent` 的認領、`unmanaged_library_file` 的認領進帳本——在**票 10** 與 `reimport` / `rebuild-ledger` 一起做（同一組原語，先做一份會變成兩條入庫路徑）；管線那三種（`missing_files` / `client_error` / `client_removed`）的動作在**票 09c** 做完：重新校驗與重試讓 Job 回到檔案清單到手之後那一站（還沒有清單的回 `submitted`），由 poller 照常往前推；重新送單照存下來的下載連結再加一次，**先問過 Route、連結與 qBittorrent 才動 Job**；兩顆「承認」走刪除範圍四個旗標全不勾（Job 進 `removed`，磁碟與 qBittorrent 都不動，使用者 2026-09-23 拍板）。它們只在 Job 還停在那個壞掉的狀態時按得了。
+
+健康檢查那兩種**沒有 Berth 按得了的修法**，所以條件解除時系統自己收掉（`resolved_by = system`）；問不到 Jellyfin、量不到那個目錄不算解除。它們的**「忽略」在條件持續期間有效**（2026-09-23 使用者拍板）：其餘幾種忽略之後下一次偵測就開新的一筆，對 5 分鐘量一次的東西那等於忽略無效，而故意掛 TVDB 的使用者會被一直問。條件解除過一次、之後再發生才重開。會刪東西的按鈕（連 complete 一起刪、刪除孤兒目錄、以硬鏈接取代）按下去之前再確認一次世界：偵測在早上，按下去在下午。`job_without_files` 的判定有兩個例外（票 09）：那一份 Plan 本來就沒有要鏈的檔案（全是重複的那一包自動落地，§7.8）不算；使用者對那一筆按過「承認刪除並清帳本」的不算——帳本是他自己清的，再問他要不要重新規劃等於讓剛決定過的事自己回來。
 
 ### 9.2 刪除範圍【決定】
 
@@ -588,7 +592,7 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 - **唯一的硬規則**：Berth、qBittorrent、Jellyfin 三個容器把同一個宿主父目錄掛在**相同的容器路徑**，且下載目錄與媒體庫目錄都在它底下。路徑字串不必是 `/data`（`/volume1/media` 掛成 `/volume1/media` 也可以）；Berth 的 incomplete / complete 根目錄可設定，媒體庫路徑讀自 Jellyfin。
 - **既有 Jellyfin 不搬媒體庫**：Jellyfin 的項目 ID 由路徑算出，改路徑等於全部變成新項目、觀看紀錄歸零。做法是用 Jellyfin 的「一個媒體庫多個路徑」：Berth 按鈕以 `POST /Library/VirtualFolders/Paths` 為既有媒體庫**加**一個 Berth 用的路徑（§20.7），Route 指向新路徑；舊媒體原地不動，在 Berth 只是 unmanaged 檔案。
 - **既有 qBittorrent 不搬舊種**：使用者多加一個掛載，Berth 用自己的 `berth-*` category 與新的 save path；舊 torrent 留在原目錄，Berth 忽略非自己分類的 torrent。全域 autoTMM 關閉也無妨，Berth 送單時逐個 torrent 指定 `autoTMM=true`。temp path 未啟用只給警告，不阻擋。
-- **健康檢查會擋下的情況**：qBittorrent 回報的 save path 在 Berth 看不到；Jellyfin 的媒體庫路徑在 Berth 看不到；兩者在 Berth 內是不同掛載（`link()` 回 `EXDEV`）；qBittorrent 低於 4.4；Jellyfin 低於 12.0（說出目前版本，附升級注意：先完整備份、移除第三方插件、升級後完整掃描、不能降級，§20.9）；媒體庫掛 TVDB 插件（警告）。每項附「哪個容器少了哪個掛載」的 compose 修正片段。
+- **健康檢查會擋下的情況**：qBittorrent 回報的 save path 在 Berth 看不到；Jellyfin 的媒體庫路徑在 Berth 看不到；兩者在 Berth 內是不同掛載（`link()` 回 `EXDEV`）；qBittorrent 低於 4.4；Jellyfin 低於 12.0（說出目前版本，附升級注意：先完整備份、移除第三方插件、升級後完整掃描、不能降級，§20.9）；媒體庫掛 TVDB 插件（警告，M2 票 09c 起是一件 `library_uses_tvdb` Issue，§9.1）。每項附「哪個容器少了哪個掛載」的 compose 修正片段。
 - **跨主機驗證**：Berth 在 Route 目標寫一個探測檔，再以 `POST /Environment/ValidatePath` 請 Jellyfin 確認看得到同一路徑（§20.7）；Jellyfin 在別台機器而路徑不一致會立刻現形。
 - **不支援**：Jellyfin 10.x（2026-09-15 起只支援 12 以上，§19）；Berth 與 qBittorrent 不在存放媒體的同一台機器（硬鏈接做不到）；remote path mapping（第一階段不做，見 §18）。
 
@@ -757,6 +761,23 @@ M1.5 拆票前的四條待決，2026-09-15 已全數照推薦拍板（上表「M
   5.0.0 的內部重構（`deleteTorrent` → `removeTorrent`）沒有改動對外的參數與回應。Berth 據此
   **不用 `deleteFiles=true` 刪檔**：那一筆 torrent 可能早就不在客戶端了（`client_removed`），
   而刪除範圍仍然要刪得掉磁碟上的東西、數得出刪了幾個、空出多少（§9.2、`services/deletion.py`）。
+- **`torrents/recheck` 與「重新開始」**（2026-09-23 M2 票 09c：原始碼對 `release-4.4.5` / `release-5.2.3` 逐行核對，
+  再對兩版容器實測，`scripts/experiments/qbittorrent_recovery.py`，錄製在 `tests/fixtures/http/qbittorrent/`）：
+
+  | 項目 | 4.4.5（Web API 2.8.5） | 5.2.3（Web API 2.15.1） |
+  | --- | --- | --- |
+  | 重新開始的端點 | `torrents/resume` | `torrents/start`；**`torrents/resume` 是 `404 Endpoint does not exist`**，沒有別名。改名在 5.0.0（Web API 2.11.x，與 `paused` → `stopped` 同一次，[discussion #21554](https://github.com/qbittorrent/qBittorrent/discussions/21554)） |
+  | 參數 | `hashes`（`\|` 分隔、`all`），必填，少了是 400 | 同左 |
+  | 方法 | GET 也行（4.4.5 的 POST 白名單只有 `add` 那幾支，[`webapplication.h`](https://github.com/qbittorrent/qBittorrent/blob/release-4.4.5/src/webui/webapplication.h)） | **只收 POST**，`recheck` / `start` / `stop` 都在白名單上，GET 是 405（[`webapplication.h`](https://github.com/qbittorrent/qBittorrent/blob/release-5.2.3/src/webui/webapplication.h)） |
+  | 成功 | `200` + 空 body（兩支都是） | `200` + 空 body（實測；changelog 說 2.15.0 起空結果回 204，這兩支沒有） |
+  | 不認得的 hash | 靜默成功（`applyToTorrents` 跳過） | 同左 |
+  | recheck 之後 | state 先是 `checkingDL` / `checkingUP`；停住的 torrent 校驗完會**再停下來**（`stop_when_ready`） | 同左，機制換成 `StopCondition::FilesChecked`（[`torrentimpl.cpp`](https://github.com/qbittorrent/qBittorrent/blob/release-5.2.3/src/base/bittorrent/torrentimpl.cpp)） |
+  | 重新開始對壞掉的 torrent | 有錯誤先 `clear_error()`；缺檔的先 `reload()` | 同左 |
+
+  **資料被刪掉、容器重啟之後，那個 torrent 就是 `missingFiles`**（兩版實測）。救回來兩種順序都成立：資料放回去之後
+  recheck → start 與 start → recheck 兩版都回到做種中（`stalledUP`、progress 1）；資料不在的話兩種都是 `stalledDL`、
+  progress 0（在等 peer 重新下載）。Berth 用 **recheck → start**（`missing_files` 的「重新校驗」），`client_error` 的
+  「重試」只送 start——錯誤不是資料的問題，重新校驗一次幾十 GB 只是讓它晚一點回來。
 - **沒有 webhook**；`sync/maindata` 以 `rid` 做增量輪詢。`autorun_enabled` / `autorun_program`（完成時執行外部程式，可帶 `%f` `%n`）可作為「喚醒輪詢」的加速手段，非必要。
 - **`rid` 的狀態掛在 session（SID cookie）上**（2026-09-10 票 10 對 4.4.5 與 5.2.3 實測）：不帶 cookie 的話每一次請求都是新 session，回的永遠是 `full_update: true`。所以輪詢那一側必須把 HTTP client 握著不放（Berth 的 `Downloader`）。
 - **增量那一輪的 `torrents[hash]` 只帶變動的欄位**（實測有的只剩 `{"num_leechs", "time_active"}`），所以呼叫端一定要把它併回上一份完整快照再讀——照字面讀會得到一個沒有 category、沒有 state 的空殼。被刪掉的 torrent 在 `torrents_removed`（hash 陣列）。

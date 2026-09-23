@@ -1,6 +1,6 @@
 # 09c — 管線三種 Issue 的動作 + TVDB / 磁碟門檻變成 Issue
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Blocked by:** 09（十一種的動作表、`ACTION_DELETES`、Issue 列的確認總表）
 
@@ -38,12 +38,23 @@ Web API）、§16.4（TVDB 警告）；plan §3.1（`missing_files` / `client_er
 
 ## 驗收
 
-- [ ] 三種管線 Issue 的每一顆 resolve 動作按下去真的修好（各一個整合測試，對 qBittorrent 替身）
-- [ ] qBittorrent 新端點的版本差異寫進 brief §20.2，附來源；adapter 契約測試對錄下來的回應
-- [ ] TVDB 插件警告與磁碟空間門檻是 Issue 而不是健康頁上的一行字；門檻值寫在設定裡而不是常數
-- [ ] 兩種新型別的條件解除時 Issue 自動收掉（整合測試）
-- [ ] 十三種型別在 plan §2.4、brief §9.1、CONTEXT.md 的 Issue 詞條一致
-- [ ] 問不到 qBittorrent / Jellyfin 時按鈕說得出為什麼，Issue 留著 `open`
-- [ ] lint、type、test 綠燈
+- [x] 三種管線 Issue 的每一顆 resolve 動作按下去真的修好（各一個整合測試，對 qBittorrent 替身）
+- [x] qBittorrent 新端點的版本差異寫進 brief §20.2，附來源；adapter 契約測試對錄下來的回應
+- [x] TVDB 插件警告與磁碟空間門檻是 Issue 而不是健康頁上的一行字；門檻值寫在設定裡而不是常數
+- [x] 兩種新型別的條件解除時 Issue 自動收掉（整合測試）
+- [x] 十三種型別在 plan §2.4、brief §9.1、CONTEXT.md 的 Issue 詞條一致
+- [x] 問不到 qBittorrent / Jellyfin 時按鈕說得出為什麼，Issue 留著 `open`
+- [x] lint、type、test 綠燈
 
 ## Comments
+
+- 2026-09-23 code-review 未處理的發現：
+  - Spec：Job 被別的路徑推走之後（Job 頁上重試成功、另一個分頁按過），那件管線 Issue 會停在 `open`、
+    按鈕歸零、只剩「忽略」。票只要求健康檢查那兩種自動收；要不要讓 poller 在 Job 離開壞掉狀態時一起收掉，
+    留給之後有 repro 的時候決定。
+  - Standards（判斷題）：`IssueRow.tsx` 對 `issue.type` 的分支散在四處（標題三元、`PATH_TERM`、`Measured`、
+    `CONFIRM`）；`services/jobs._reachable` 與 `services/issues._restart` 的「sign_in → 呼叫 → aclose」形狀重複。
+    都只有兩三處，沒有收。
+  - 沒有實測到的：5.x 上對**停住的** torrent recheck → start 會不會被 `FilesChecked` 再停下來（實驗四包都是
+    `missingFiles` 而不是停住的）。`client_error` 的重試只送 start，不受影響。
+

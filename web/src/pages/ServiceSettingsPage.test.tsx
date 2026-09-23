@@ -16,6 +16,8 @@ const APPLY = 'POST /api/settings/qbittorrent/apply'
 const TEST_QBIT = 'POST /api/settings/services/qbittorrent/test'
 const JELLYFIN = 'GET /api/settings/jellyfin'
 const SAVE_JELLYFIN = 'POST /api/settings/jellyfin'
+const DISK = 'GET /api/settings/disk'
+const SAVE_DISK = 'POST /api/settings/disk'
 
 /** 建議值全部一致的那一台：沒有漂移，所以不該出現還原按鈕。 */
 const CLEAN = qbittorrentSetup({
@@ -33,6 +35,8 @@ function render(routes: Record<string, StubRoute | (() => StubRoute)>) {
     [DRIFT]: { body: CLEAN },
     // 套件內的 Jellyfin、對外網址沒填：深連結開在瀏覽器的主機名上。
     [JELLYFIN]: { body: { public_url: '', url: '', port: 8096 } },
+    [DISK]: { body: { min_free_gb: 10 } },
+    'GET /api/issues': { body: [] },
     ...routes,
   })
 }
@@ -181,5 +185,40 @@ describe('服務設定頁', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(
       '要是一個 http:// 或 https:// 開頭的網址。',
     )
+  })
+
+  it('磁碟空間門檻在設定裡，改了就存（M2 票 09c）', async () => {
+    const stub = render({ [SAVE_DISK]: { body: { min_free_gb: 50 } } })
+    renderApp('/settings/services')
+
+    const field = await screen.findByLabelText('最少剩下（GB）')
+    await waitFor(() => expect(field).toHaveValue('10'))
+    await userEvent.clear(field)
+    await userEvent.type(field, '50')
+    await userEvent.click(screen.getByRole('button', { name: '儲存門檻' }))
+
+    expect(await screen.findByText('已儲存，並且立刻重量了一次。')).toBeInTheDocument()
+    const call = stub.mock.calls.find(
+      ([url, init]) => url === '/api/settings/disk' && init?.method === 'POST',
+    )
+    expect(JSON.parse(String(call?.[1]?.body))).toEqual({ min_free_gb: 50 })
+  })
+
+  it('不是 0 以上的整數，欄位自己說不行，也不送出去', async () => {
+    const stub = render({})
+    renderApp('/settings/services')
+
+    const field = await screen.findByLabelText('最少剩下（GB）')
+    await waitFor(() => expect(field).toHaveValue('10'))
+    await userEvent.clear(field)
+    await userEvent.type(field, '-1')
+    await userEvent.click(screen.getByRole('button', { name: '儲存門檻' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('要是 0 或更大的整數。')
+    expect(
+      stub.mock.calls.some(
+        ([url, init]) => url === '/api/settings/disk' && init?.method === 'POST',
+      ),
+    ).toBe(false)
   })
 })

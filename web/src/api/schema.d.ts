@@ -1061,6 +1061,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/settings/disk": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Disk
+         * @description 磁碟空間門檻（`DiskSettings`）。
+         */
+        get: operations["get_disk_api_settings_disk_get"];
+        put?: never;
+        /**
+         * Post Disk
+         * @description 改門檻，並立刻重量一次：量磁碟不連任何服務，改完的那一刻 `/issues` 就是新的答案。
+         */
+        post: operations["post_disk_api_settings_disk_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/setup/status": {
         parameters: {
             query?: never;
@@ -1659,6 +1683,16 @@ export interface components {
             /** Detail */
             detail: string;
         };
+        /** DiskIn */
+        DiskIn: {
+            /** Min Free Gb */
+            min_free_gb: number;
+        };
+        /** DiskOut */
+        DiskOut: {
+            /** Min Free Gb */
+            min_free_gb: number;
+        };
         /**
          * DuplicateDecidedOut
          * @description 決定完之後：記下這一次的單列 Plan，與新的那一份落在哪裡（跳過時兩格都是空的）。
@@ -1982,10 +2016,10 @@ export interface components {
          *     brief §9.1 那一欄還有三顆「認領」類的——`orphan_complete` 的重新入庫、`unknown_torrent` 的
          *     認領、`unmanaged_library_file` 的認領進帳本——**在票 10**（2026-09-23 使用者拍板）：它們用的
          *     正是那一張票的原語（目錄版 `reimport` 與 `rebuild-ledger` 的反查），先做一份會變成兩條入庫
-         *     路徑。管線那三種（`missing_files` / `client_error` / `client_removed`）的動作在票 09c。
+         *     路徑。管線那三種（`missing_files` / `client_error` / `client_removed`）的動作是票 09c 加的。
          * @enum {string}
          */
-        IssueAction: "relink" | "forget" | "delete_complete" | "mark_sourceless" | "replace_with_link" | "delete_orphan" | "replan" | "relook" | "rescan";
+        IssueAction: "relink" | "forget" | "delete_complete" | "mark_sourceless" | "replace_with_link" | "delete_orphan" | "replan" | "relook" | "rescan" | "recheck" | "accept_loss" | "retry" | "resubmit" | "accept_removal";
         /**
          * IssueOut
          * @description 清單上的一列（`services/issues.IssueView` 的對外形狀）。
@@ -2039,7 +2073,7 @@ export interface components {
          *     （plan §8.6）。其餘每一種都是「還沒開始就停住」。
          * @enum {string}
          */
-        IssueRefusal: "issue_missing" | "issue_not_open" | "action_not_available" | "source_missing" | "relink_failed" | "client_unreachable" | "reconcile_running" | "in_use" | "size_differs" | "jellyfin_unreachable" | "delete_failed";
+        IssueRefusal: "issue_missing" | "issue_not_open" | "action_not_available" | "source_missing" | "relink_failed" | "client_unreachable" | "reconcile_running" | "in_use" | "size_differs" | "jellyfin_unreachable" | "delete_failed" | "source_unavailable" | "resubmit_failed" | "route_unusable";
         /**
          * IssueRefusalOut
          * @description 做不了的時候回的那一份。`reason` 給畫面挑句子，`detail` 是原文，不翻譯。
@@ -2097,17 +2131,18 @@ export interface components {
          * IssueType
          * @description 一件「要有人決定」的事是哪一種（brief §9.1、plan §2.4）。
          *
-         *     **十一種的聯集，一個封閉集合**（2026-09-22 定，M2 票 05）：前五種是管線自己在路上
-         *     發現的（M1 起寫 `issue_detected` 事件，M2 起同時寫一列 `issues`），後六種是對帳比完
-         *     四方之後才知道的。兩邊共用同一個集合，所以加一種型別而沒替它決定 `subject` 取哪一欄、
-         *     或沒給它動作，紅的會是 `SUBJECT_OF` 與 `ISSUE_ACTIONS` 那兩條閘門。
+         *     **十三種的聯集，一個封閉集合**（2026-09-22 定，M2 票 05；票 09c 加上最後兩種）：前五種
+         *     是管線自己在路上發現的（M1 起寫 `issue_detected` 事件，M2 起同時寫一列 `issues`），中間
+         *     六種是對帳比完四方之後才知道的，最後兩種是 `health_checker` 每 5 分鐘量出來的。三邊共用
+         *     同一個集合，所以加一種型別而沒替它決定 `subject` 取哪一欄、或沒給它動作，紅的會是
+         *     `SUBJECT_OF` 與 `ISSUE_ACTIONS` 那兩條閘門。
          *
          *     `unknown_torrent` 在 brief §9.1 的表上算對帳的七種，但**今天寫它的是 `qbit_poller`**
          *     （plan §3.2）——票 09 讓對帳也走到它之後，兩個生產者寫的是同一個 `(type, subject)`，
          *     而冪等鍵會把它們收成一筆。
          * @enum {string}
          */
-        IssueType: "missing_files" | "client_error" | "client_removed" | "unknown_torrent" | "jellyfin_item_unresolved" | "library_link_missing" | "source_missing" | "inode_mismatch" | "orphan_complete" | "unmanaged_library_file" | "job_without_files";
+        IssueType: "missing_files" | "client_error" | "client_removed" | "unknown_torrent" | "jellyfin_item_unresolved" | "library_link_missing" | "source_missing" | "inode_mismatch" | "orphan_complete" | "unmanaged_library_file" | "job_without_files" | "library_uses_tvdb" | "low_disk_space";
         /**
          * ItemEditIn
          * @description 一列要改成什麼。季集只屬於劇集的入庫，其餘處置三格都不帶（帶了是 `episode_not_allowed`）。
@@ -4212,7 +4247,7 @@ export interface operations {
                     "application/json": components["schemas"]["IssueRefusalOut"];
                 };
             };
-            /** @description `issue_not_open` · `source_missing` · `relink_failed` · `in_use` · `size_differs` · `delete_failed` */
+            /** @description `issue_not_open` · `source_missing` · `relink_failed` · `in_use` · `size_differs` · `delete_failed` · `resubmit_failed` · `route_unusable` */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -4230,7 +4265,7 @@ export interface operations {
                     "application/json": components["schemas"]["IssueRefusalOut"];
                 };
             };
-            /** @description `client_unreachable` · `jellyfin_unreachable` */
+            /** @description `client_unreachable` · `jellyfin_unreachable` · `source_unavailable` */
             502: {
                 headers: {
                     [name: string]: unknown;
@@ -5892,6 +5927,59 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["JellyfinWebOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_disk_api_settings_disk_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiskOut"];
+                };
+            };
+        };
+    };
+    post_disk_api_settings_disk_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DiskIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiskOut"];
                 };
             };
             /** @description Validation Error */

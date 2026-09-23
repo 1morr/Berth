@@ -66,7 +66,13 @@ from berth.models import (
 )
 from berth.models.types import utcnow
 from berth.services.clients import BUNDLED_QBITTORRENT_URL, ServiceClientFactory
-from berth.services.jellyfin import BUNDLED_LIBRARIES, TVDB_MARKER, berth_path, library_slug
+from berth.services.jellyfin import (
+    BUNDLED_LIBRARIES,
+    TVDB_MARKER,
+    berth_path,
+    library_slug,
+    tvdb_fetchers,
+)
 from berth.services.qbittorrent import sign_in
 from berth.services.settings import read_settings
 from berth.services.steps import StepView, message, step_views
@@ -468,11 +474,7 @@ async def list_libraries(
                 LibraryPath(path=path, route_name=holders.get(path)) for path in library.locations
             ),
             supported=library.collection_type in SUPPORTED_TYPES,
-            uses_tvdb=any(
-                TVDB_MARKER in fetcher.lower()
-                for option in library.type_options
-                for fetcher in option.metadata_fetchers
-            ),
+            uses_tvdb=bool(tvdb_fetchers(library)),
         )
         for library in libraries
     )

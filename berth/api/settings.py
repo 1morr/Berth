@@ -7,6 +7,7 @@
 - 「還原建議設定」：qBittorrent 的建議偏好被改掉時把它們寫回去（brief §16.3）。
 - Jellyfin 的**對外網址**（票 13）：瀏覽器開深連結用的那一個，不是 Berth 自己連過去的那一條。
   它不是連線資訊——精靈用不到它，填錯也不會讓任何服務斷線——所以住在這裡而不是精靈。
+- **磁碟空間門檻**（M2 票 09c）：低於它就開一件 `low_disk_space`。同上，它不是連線資訊。
 
 只有管理員進得來，規則在門禁（`api/gate.py`）而不是這裡的相依：新增端點什麼都不做就
 已經在同一道門後面。
@@ -15,13 +16,14 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from berth.api.deps import ClientFactoryDep, SessionDep
 from berth.api.schemas import HealthDetailOut, JellyfinWebOut, QbittorrentOut, health_detail
 from berth.domain import ServiceKind
 from berth.services.deeplink import PublicUrlRejectedError, jellyfin_web, set_public_url
 from berth.services.health import check_service, read_health
+from berth.services.health_issues import read_min_free, set_min_free
 from berth.services.qbittorrent import apply_qbittorrent, read_qbittorrent_diff
 
 router = APIRouter(prefix="/settings", tags=["settings"])
@@ -30,6 +32,15 @@ router = APIRouter(prefix="/settings", tags=["settings"])
 class JellyfinAddressIn(BaseModel):
     #: `https://jellyfin.example.com`。空白就是清掉，回到推導（`services/deeplink.py`）。
     public_url: str = ""
+
+
+class DiskIn(BaseModel):
+    #: GB。`0` 是不量。上限只是擋手滑（多打了幾個 0），不是任何磁碟的大小。
+    min_free_gb: int = Field(ge=0, le=1_000_000)
+
+
+class DiskOut(BaseModel):
+    min_free_gb: int
 
 
 @router.get("/services")
@@ -77,3 +88,15 @@ async def post_jellyfin(session: SessionDep, body: JellyfinAddressIn) -> Jellyfi
     except PublicUrlRejectedError as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
     return JellyfinWebOut.model_validate(web)
+
+
+@router.get("/disk")
+async def get_disk(session: SessionDep) -> DiskOut:
+    """磁碟空間門檻（`DiskSettings`）。"""
+    return DiskOut(min_free_gb=await read_min_free(session))
+
+
+@router.post("/disk")
+async def post_disk(session: SessionDep, body: DiskIn) -> DiskOut:
+    """改門檻，並立刻重量一次：量磁碟不連任何服務，改完的那一刻 `/issues` 就是新的答案。"""
+    return DiskOut(min_free_gb=await set_min_free(session, body.min_free_gb))
