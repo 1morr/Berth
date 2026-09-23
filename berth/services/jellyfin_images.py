@@ -32,6 +32,9 @@ IMAGE_SIZES: dict[ImageSize, tuple[int, int]] = {
     ImageSize.POSTER: (342, 513),
     # 16:9、與海報同寬：繼續觀看與下一集的格子與牆共用同一份欄數（票 07）。
     ImageSize.WIDE: (342, 192),
+    # 兩倍寬的那一張（M2 票 13）：前端的 `srcset` 讓瀏覽器照格子寬與螢幕密度挑，比例不變。
+    ImageSize.POSTER_LARGE: (684, 1026),
+    ImageSize.WIDE_LARGE: (684, 384),
 }
 
 #: Jellyfin 的 `quality`。90 是 96（jellyfin-web 的值）的一半大小（研究 §6.1）。

@@ -9,6 +9,13 @@
 export const WALL_GRID = 'grid grid-cols-2 gap-0 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6'
 
 /**
+ * 牆上一格在版面上多寬，給 `<img sizes>`（票 13）：與上面的斷點一一對應，**改一邊就要改另一邊**。
+ * 最寬的那一檔以頁面的 `max-w-[110rem]`（1760px）六欄計，再寬也不會超過。
+ */
+export const WALL_SIZES =
+  '(min-width: 1280px) min(17vw, 294px), (min-width: 1024px) 25vw, (min-width: 640px) 34vw, 50vw'
+
+/**
  * 媒體庫牆再加這一個：**卡片裡有就地確認**（`WatchToggle`）的只有那一面牆，展開時同排的每一格
  * 會被 grid 預設的 `stretch` 一起拉長——390px 上量到同排多出約 300px 空白，而位移正好發生在
  * 使用者要決定一個清掉就回不來的動作時（The Failure Expands In Place Rule，票 11 的 critique）。

@@ -530,8 +530,12 @@ class ImageSize(StrEnum):
 
     #: 2:3 的海報，牆上一格。
     POSTER = "poster"
+    #: 同一張海報、兩倍寬：`srcset` 的第二個寬度，給高密度螢幕與手機兩欄的格子（M2 票 13）。
+    POSTER_LARGE = "poster_large"
     #: 16:9 的橫圖，繼續觀看與下一集的一格（票 07）。
     WIDE = "wide"
+    #: 同一張橫圖、兩倍寬（M2 票 13）。
+    WIDE_LARGE = "wide_large"
 
 
 class LibrarySort(StrEnum):

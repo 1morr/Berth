@@ -1,7 +1,8 @@
-import { useId, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 
+import { meQueryOptions } from '../api/auth'
 import { ApiError } from '../api/client'
 import { accessRefusal, type JellyfinWeb } from '../api/jellyfin'
 import {
@@ -16,21 +17,26 @@ import { Dot } from '../components/Dot'
 import { formatJellyfinEpisode } from '../components/episodes'
 import { KIND_CODE } from '../components/kind'
 import { SessionEnded } from '../components/SessionEnded'
+import { PlaceholderLine } from '../components/TilePlaceholder'
 import { WALL_GRID, fitsOneRowFrom, oneRowOnly } from '../components/wallGrid'
 import { jellyfinDetailsUrl } from '../inventory/jellyfinLink'
+import { rememberRows, rememberedRows, type RowShape } from './rememberedRows'
 
 /**
  * 首頁上方的兩列（M1.5 票 07、`.scratch/m1.5/watching-shape.md`）：這個人整個帳號的繼續觀看與下一集。
  *
- * 讀取中不畫、沒有內容的那一列不畫（多數時候是空的，先畫格子再整列消失比晚一點出現更跳）。問不到 Jellyfin
- * 時說一行、給重試，不用紅色 Notice 搶探索的位置；Berth 自己沒回應時不說話，探索牆會說。
+ * 沒有內容的那一列不畫。**讀取中照上一次的形狀佔位**（M2 票 13，推翻 watching-shape 的「讀取中不畫」：
+ * 資料回來才插進來，下面整頁往下推 440px，CLS 0.35）；第一次來沒有紀錄，不佔位（`rememberedRows`）。
+ * 問不到 Jellyfin 時說一行、給重試，不用紅色 Notice 搶探索的位置；Berth 自己沒回應時不說話，探索牆會說。
  */
 export function HomeWatching() {
   const { t } = useTranslation()
   const watching = useQuery(homeWatchingQueryOptions)
   const refusal = accessRefusal(watching.error)
+  const shape = useRememberedRows('home', watching.data)
 
   if (watching.data) return <WatchingRows watching={watching.data} />
+  if (watching.isPending) return <WatchingPlaceholder shape={shape} />
   if (watching.error instanceof ApiError && watching.error.status === 401) {
     return <SessionEnded pending={null} />
   }
@@ -54,7 +60,90 @@ export function HomeWatching() {
  */
 export function LibraryWatching({ libraryId }: { libraryId: string }) {
   const watching = useQuery(libraryWatchingQueryOptions(libraryId))
-  return watching.data ? <WatchingRows watching={watching.data} /> : null
+  const shape = useRememberedRows(`library.${libraryId}`, watching.data)
+
+  if (watching.data) return <WatchingRows watching={watching.data} />
+  return watching.isPending ? <WatchingPlaceholder shape={shape} /> : null
+}
+
+/**
+ * 這個人在這一頁上一次的形狀，資料到了就記下這一次的。紀錄以登入的人區分：同一台瀏覽器換人登入，
+ * 不拿上一個人的形狀佔位。
+ */
+function useRememberedRows(page: string, watching: Watching | undefined): RowShape | null {
+  const me = useQuery(meQueryOptions)
+  const key = me.data ? `${me.data.name}.${page}` : null
+
+  useEffect(() => {
+    if (key && watching) rememberRows(key, watching)
+  }, [key, watching])
+
+  // 只在第一次畫的那一刻讀：之後這一頁自己就知道形狀了。
+  const [shape] = useState(() => (key ? rememberedRows(key) : null))
+  return shape
+}
+
+/**
+ * 讀取中：照上一次的形狀，每一列一個標題列與一行不動的空位格（`MediaDetailPage` 的 `Loading()` 那一種，
+ * 不是骨架屏動畫）。**高度與真的那一列一樣**：標題列的「全部 N 項」照上一次的格數決定畫不畫（看不見但佔位），
+ * 空位格照 `WatchingTile` 的每一行抄。整塊不在無障礙樹上——標題是真的，但底下什麼都還沒有。
+ */
+function WatchingPlaceholder({ shape }: { shape: RowShape | null }) {
+  const { t } = useTranslation()
+  if (!shape) return null
+
+  return (
+    <>
+      {shape.resume > 0 && (
+        <RowPlaceholder title={t('watching.resume')} count={shape.resume} progress />
+      )}
+      {shape.nextUp > 0 && <RowPlaceholder title={t('watching.nextUp')} count={shape.nextUp} />}
+    </>
+  )
+}
+
+function RowPlaceholder({
+  title,
+  count,
+  progress = false,
+}: {
+  title: string
+  count: number
+  progress?: boolean
+}) {
+  const { t } = useTranslation()
+  const fits = fitsOneRowFrom(count)
+
+  return (
+    <div aria-hidden="true" data-placeholder="watching" className="grid gap-3">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b-2 border-rule-strong pb-2">
+        <p className="label text-ink">{title}</p>
+        {/* 數字還不知道，但它那一行撐著標題列的高度。 */}
+        <p className="value invisible text-xs">{count}</p>
+        {fits !== null && (
+          <span className={`${COMPACT_BUTTON} invisible ms-auto ${fits}`}>
+            {t('watching.showAll', { count })}
+          </span>
+        )}
+      </div>
+      <div className={WALL_GRID}>
+        {Array.from({ length: Math.min(count, 6) }, (_, index) => (
+          <div
+            key={index}
+            className={`grid grid-rows-[auto_1fr] border-2 border-rule bg-well ${oneRowOnly(index)}`}
+          >
+            <div className="aspect-video bg-hull" />
+            <div className="grid content-start gap-1 px-3 py-2.5">
+              <PlaceholderLine className="h-4 w-12" />
+              <PlaceholderLine className="h-5 w-4/5" />
+              <PlaceholderLine className="h-4 w-1/2" />
+              {progress && <PlaceholderLine className="h-4 w-1/3" />}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
 }
 
 function WatchingRows({ watching }: { watching: Watching }) {

@@ -1882,7 +1882,7 @@ export interface components {
          *     所以只收幾個名字（TMDB `w342` 那種具名尺寸的做法），名字照形狀取。
          * @enum {string}
          */
-        ImageSize: "poster" | "wide";
+        ImageSize: "poster" | "poster_large" | "wide" | "wide_large";
         /** IndexerApplyIn */
         IndexerApplyIn: {
             /**

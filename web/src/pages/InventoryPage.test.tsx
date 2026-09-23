@@ -124,7 +124,7 @@ function wall(overrides: Partial<Inventory> = {}): Inventory {
     // 套件內的 Jellyfin：主機名要由瀏覽器補上（jsdom 是 `http://localhost`）。
     jellyfin: { public_url: '', url: '', port: 8096 },
     page: 1,
-    page_size: 100,
+    page_size: 50,
     total: 3,
     titles: [jellyfinCard(), HOTEL, BEAR],
     tracked: [BEAR, FRIEREN, SPY],
@@ -259,6 +259,11 @@ describe('媒體庫頁', () => {
 
       // `alt=""`：標題就在下面那一行，所以海報不在無障礙樹上，只能從元素找。
       expect(alpha.querySelector('img')).toHaveAttribute('src', poster)
+      // 同一張圖的兩個寬度（票 13）：手機兩欄與高密度螢幕挑大的那一張。
+      expect(alpha.querySelector('img')).toHaveAttribute(
+        'srcset',
+        `${poster} 342w, ${poster.replace('size=poster', 'size=poster_large')} 684w`,
+      )
       expect(within(alpha).queryByText('無海報')).not.toBeInTheDocument()
       // Jellyfin 真的沒有圖的那一部，說「無海報」是真話。
       expect(within(tile('Hotel Show')).getByText('無海報')).toBeVisible()
@@ -684,8 +689,8 @@ describe('媒體庫頁', () => {
 
       const pager = (await screen.findAllByRole('navigation', { name: '分頁' }))[0]!
 
-      expect(within(pager).getByText('1–100 / 250')).toBeVisible()
-      expect(within(pager).getByText('第 1–100 部，共 250 部')).toHaveAttribute(
+      expect(within(pager).getByText('1–50 / 250')).toBeVisible()
+      expect(within(pager).getByText('第 1–50 部，共 250 部')).toHaveAttribute(
         'aria-live',
         'polite',
       )
@@ -710,21 +715,21 @@ describe('媒體庫頁', () => {
     it('換頁向後端要那一頁，最後一頁的下一頁按不了', async () => {
       const api = render({
         [`GET /api/inventory/${TV}`]: { body: big(1) },
-        [`GET /api/inventory/${TV}?page=3`]: { body: big(3) },
+        [`GET /api/inventory/${TV}?page=5`]: { body: big(5) },
       })
-      renderApp(`/library/${TV}?page=3`)
+      renderApp(`/library/${TV}?page=5`)
 
-      expect(await screen.findByRole('heading', { name: 'Show on page 3' })).toBeVisible()
+      expect(await screen.findByRole('heading', { name: 'Show on page 5' })).toBeVisible()
       const pager = screen.getAllByRole('navigation', { name: '分頁' })[0]!
 
       expect(within(pager).getByText('201–250 / 250')).toBeVisible()
       expect(within(pager).getByRole('link', { name: '上一頁' })).toHaveAttribute(
         'href',
-        `/library/${TV}?page=2`,
+        `/library/${TV}?page=4`,
       )
       expect(within(pager).getByText('下一頁')).toHaveAttribute('aria-disabled', 'true')
       expect(api.mock.calls.map(([input]) => String(input))).toContain(
-        `/api/inventory/${TV}?page=3`,
+        `/api/inventory/${TV}?page=5`,
       )
     })
 
@@ -1266,6 +1271,29 @@ describe('媒體庫頁', () => {
 
       expect(screen.queryByRole('region', { name: '下一集' })).not.toBeInTheDocument()
       expect(asked(api)).toEqual([])
+    })
+
+    it('讀取中照這個媒體庫上一次的形狀佔位，讀到之後換成真的那一列（票 13：CLS）', async () => {
+      const key = `berth.watching.skipper.library.${TV}`
+      localStorage.setItem(key, JSON.stringify({ resume: 0, nextUp: 1 }))
+      let answer: (response: Response) => void = () => {}
+      const api = render({ [`GET ${WATCHING}`]: rows() })
+      vi.stubGlobal('fetch', (input: RequestInfo | URL, init?: RequestInit) =>
+        String(input) === WATCHING
+          ? new Promise<Response>((resolve) => (answer = resolve))
+          : api(input, init),
+      )
+      renderApp(`/library/${TV}`)
+      await findTile('Alpha Show')
+
+      expect(document.querySelectorAll('[data-placeholder="watching"]')).toHaveLength(1)
+      expect(screen.queryByRole('region', { name: '下一集' })).not.toBeInTheDocument()
+
+      answer(new Response(JSON.stringify(rows().body)))
+
+      expect(await screen.findByRole('region', { name: '下一集' })).toBeInTheDocument()
+      expect(document.querySelectorAll('[data-placeholder="watching"]')).toHaveLength(0)
+      localStorage.clear()
     })
 
     it('只換排序照樣畫：排序不會讓哪一集不見', async () => {

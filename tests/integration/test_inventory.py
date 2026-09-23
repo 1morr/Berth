@@ -393,7 +393,9 @@ class TestJellyfinWall:
         second = await wall(session, "tv", items, page=2)
 
         assert (len(first.titles), first.total) == (PAGE_SIZE, PAGE_SIZE + 3)
-        assert [row.title for row in second.titles] == ["Show 100", "Show 101", "Show 102"]
+        assert [row.title for row in second.titles] == [
+            f"Show {index:03d}" for index in range(PAGE_SIZE, PAGE_SIZE + 3)
+        ]
         assert (second.page, second.total) == (2, PAGE_SIZE + 3)
 
     async def test_a_page_past_the_end_is_empty_not_an_error(self, session: AsyncSession) -> None:

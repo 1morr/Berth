@@ -461,6 +461,88 @@ describe('首頁上方的繼續觀看與下一集（M1.5 票 07）', () => {
     }
   }
 
+  describe('讀取中的佔位（票 13：CLS）', () => {
+    const KEY = 'berth.watching.skipper.home'
+
+    /** 接著看那一支一直不回：畫面停在讀取中。其餘照 `render` 的替身。 */
+    function stalled() {
+      const api = render()
+      vi.stubGlobal('fetch', (input: RequestInfo | URL, init?: RequestInit) =>
+        String(input).endsWith('/jellyfin/watching') ? new Promise(() => {}) : api(input, init),
+      )
+    }
+
+    function placeholders() {
+      return document.querySelectorAll('[data-placeholder="watching"]')
+    }
+
+    afterEach(() => {
+      localStorage.clear()
+      vi.restoreAllMocks()
+    })
+
+    it('讀到之後記下這一次兩列各幾格', async () => {
+      render({ [WATCHING]: watching() })
+      renderApp('/')
+
+      await screen.findByRole('region', { name: '繼續觀看' })
+
+      await waitFor(() =>
+        expect(JSON.parse(localStorage.getItem(KEY) ?? 'null')).toEqual({ resume: 2, nextUp: 1 }),
+      )
+    })
+
+    it('下一次讀取中照上一次的形狀佔位，而且佔位不在無障礙樹上', async () => {
+      localStorage.setItem(KEY, JSON.stringify({ resume: 2, nextUp: 1 }))
+      stalled()
+      renderApp('/')
+
+      await screen.findByRole('region', { name: '本週趨勢' })
+
+      expect(placeholders()).toHaveLength(2)
+      expect(screen.queryByRole('region', { name: '繼續觀看' })).not.toBeInTheDocument()
+      expect(screen.queryByRole('heading', { name: '繼續觀看' })).not.toBeInTheDocument()
+    })
+
+    it('上一次只有下一集就只佔那一列；兩列都空就不佔', async () => {
+      localStorage.setItem(KEY, JSON.stringify({ resume: 0, nextUp: 3 }))
+      stalled()
+      const { unmount } = renderApp('/')
+      await screen.findByRole('region', { name: '本週趨勢' })
+      expect(placeholders()).toHaveLength(1)
+      unmount()
+
+      localStorage.setItem(KEY, JSON.stringify({ resume: 0, nextUp: 0 }))
+      renderApp('/')
+      await screen.findByRole('region', { name: '本週趨勢' })
+      expect(placeholders()).toHaveLength(0)
+    })
+
+    it.each([
+      ['第一次來（沒有紀錄）', () => {}],
+      ['紀錄是壞的', () => localStorage.setItem(KEY, '{"resume":-1}')],
+      [
+        '別人的紀錄',
+        () => localStorage.setItem('berth.watching.deckhand.home', '{"resume":1,"nextUp":1}'),
+      ],
+      [
+        '瀏覽器不給讀',
+        () =>
+          vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+            throw new DOMException('denied', 'SecurityError')
+          }),
+      ],
+    ])('%s時不佔位，頁面照畫', async (_, arrange) => {
+      arrange()
+      stalled()
+      renderApp('/')
+
+      await screen.findByRole('region', { name: '本週趨勢' })
+
+      expect(placeholders()).toHaveLength(0)
+    })
+  })
+
   it('兩列在探索牆上方，卡片說得出作品、季集、集名與看到哪，點下去開 Jellyfin 的那一集', async () => {
     render({ [WATCHING]: watching() })
     renderApp('/')

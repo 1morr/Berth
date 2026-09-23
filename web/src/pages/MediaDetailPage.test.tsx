@@ -243,6 +243,22 @@ describe('Media 詳情頁', () => {
     expect(poster()).toHaveAttribute('src', 'https://image.tmdb.org/t/p/w342/spy-en.jpg')
   })
 
+  it('身分帶的海報與牆上是同一份 ArtSlot：srcset 給 TMDB 的四個寬度，sizes 照身分帶那一欄（票 13）', async () => {
+    render()
+    renderApp('/media/tv:120089')
+    await screen.findByRole('heading', { level: 1, name: 'SPY×FAMILY 間諜家家酒' })
+
+    const poster = document.querySelector('img[src="https://image.tmdb.org/t/p/w342/spy.jpg"]')
+
+    expect(poster?.getAttribute('srcset')?.split(', ')).toEqual([
+      'https://image.tmdb.org/t/p/w185/spy.jpg 185w',
+      'https://image.tmdb.org/t/p/w342/spy.jpg 342w',
+      'https://image.tmdb.org/t/p/w500/spy.jpg 500w',
+      'https://image.tmdb.org/t/p/w780/spy.jpg 780w',
+    ])
+    expect(poster).toHaveAttribute('sizes', '(min-width: 640px) 11rem, 7rem')
+  })
+
   it('海報載不下來時換成「無海報」，不留瀏覽器的破圖示（票 11 的 audit）', async () => {
     const poster = () =>
       document.querySelector<HTMLImageElement>('img[src^="https://image.tmdb.org/"]')

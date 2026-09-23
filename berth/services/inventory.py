@@ -88,8 +88,10 @@ _CLAIMING: frozenset[PlanAction] = frozenset({PlanAction.IMPORT, PlanAction.REVI
 
 # --- 一個 Jellyfin 媒體庫的牆 -------------------------------------------------
 
-#: 牆一頁幾部。jellyfin-web 的預設 `libraryPageSize`（研究 library-browsing.md §7）；前端不能指定。
-PAGE_SIZE = 100
+#: 牆一頁幾部；前端不能指定。原本照 jellyfin-web 的預設 `libraryPageSize` 取 100
+#: （研究 library-browsing.md §7），M2 票 13 減半：100 格的牆量到 1,700 個 DOM 節點、
+#: 222 個 Tab 停留點，而每一格帶著兩三個控制項。
+PAGE_SIZE = 50
 
 
 @dataclass(frozen=True, slots=True)

@@ -57,7 +57,7 @@ const SELECT =
 /**
  * 媒體庫頁 `/library/:libraryId`（M1.5 票 03、`.scratch/m1.5/library-shape.md`）。
  *
- * 堆場全景加一條待卸貨的碼頭邊：Jellyfin 的牆是已經進倉的整座堆場（一頁 100 箱，照 Jellyfin 的順序），
+ * 堆場全景加一條待卸貨的碼頭邊：Jellyfin 的牆是已經進倉的整座堆場（一頁 50 箱，照 Jellyfin 的順序），
  * 上方那一條是 Berth 經手、還沒進倉的貨。使用者在兩個時刻打開它——「我想看那部片」與「怎麼那部還沒好」。
  *
  * 一個媒體庫一個網址，頁碼、篩選、排序與類型年份也在網址上：重新整理、分享與上一頁都留得住。「待審」
@@ -213,7 +213,7 @@ function Wall({
             )}
           </div>
           {flagged ? (
-            // 牆換掉了要說得出來——螢幕閱讀器看不到格子從 100 格變成 2 格。
+            // 牆換掉了要說得出來——螢幕閱讀器看不到格子從 50 格變成 2 格。
             <p aria-live="polite" className="value text-xs text-ink-dim">
               {t('inventory.showing', { count: flagged.cards.length })}
             </p>
@@ -560,7 +560,7 @@ function Filters({
 }
 
 /**
- * `1–100 / 523` 加上一頁 / 下一頁（jellyfin-web 的分頁，使用者拍板）。看得見的是數字，聽得見的是
+ * `1–50 / 523` 加上一頁 / 下一頁（jellyfin-web 的分頁，使用者拍板）。看得見的是數字，聽得見的是
  * 帶單位的那一句（DESIGN.md 的區塊標題規則）；牆上方那一組把它放進 `aria-live`，換頁時念得出來。
  *
  * 牆上下各一組，**兩個 landmark 名字不同**（`end`，票 13）：地標清單裡兩個同名的「分頁」分不出哪個是哪個

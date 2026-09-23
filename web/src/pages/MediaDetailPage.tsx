@@ -15,11 +15,11 @@ import { Timestamp } from '../components/Timestamp'
 import { TmdbNotice } from '../components/TmdbNotice'
 import { tmdbText } from '../i18n/tmdbText'
 import { FilesPanel } from '../media/FilesPanel'
-import { Poster } from '../media/Poster'
 import { SearchPanel, type SearchHandle } from '../media/SearchPanel'
 import { SeasonsPanel } from '../media/SeasonsPanel'
 import { CarryOn, WatchDown, WatchSection } from '../media/WatchArea'
 import tmdbLogo from '../assets/tmdb.svg'
+import { ArtSlot } from '../components/ArtSlot'
 
 /**
  * Media 詳情頁 `/media/:id`（票 04、M1.5 票 08、`.scratch/m1.5/media-detail-shape.md`）。
@@ -139,6 +139,9 @@ export function MediaDetailPage({ id }: { id: string }) {
  * **主按鈕在簡介之前**：簡介再長，它都在第一屏（shape §3）。窄版海報與標題並排，主按鈕、簡介、新鮮度改成整寬
  * ——擠在海報旁那一條窄欄裡的簡介，曾把搜尋推到 390px 的第三屏。
  */
+/** 身分帶那一格海報的寬：與 `IdentityBand` 的兩欄（`7rem` / `sm:11rem`）同一份。 */
+const DETAIL_POSTER_SIZES = '(min-width: 640px) 11rem, 7rem'
+
 function IdentityBand({
   media,
   carryOn,
@@ -155,7 +158,12 @@ function IdentityBand({
 
   return (
     <section className="grid grid-cols-[7rem_minmax(0,1fr)] gap-x-4 gap-y-5 border-b-2 border-rule-strong pb-8 sm:grid-cols-[11rem_minmax(0,1fr)] sm:gap-x-6">
-      <Poster url={poster} className="sm:row-span-2" />
+      <ArtSlot
+        url={poster}
+        shape="poster"
+        sizes={DETAIL_POSTER_SIZES}
+        className="shrink-0 border-2 border-rule sm:row-span-2"
+      />
       <div className="grid content-start gap-2">
         {/* 中性色塊：「Berth 為它做過事」是一個事實，不是四個信號色裡的任何一個狀態
             （The Role Is Not A State Rule）。推導出來的，不是一顆按鈕（票 04b）。 */}
@@ -273,7 +281,7 @@ function Loading() {
   return (
     <div className="mx-auto grid w-full max-w-[80rem] gap-8 px-6 py-8" aria-hidden="true">
       <div className="grid grid-cols-[7rem_minmax(0,1fr)] gap-4 sm:grid-cols-[11rem_minmax(0,1fr)] sm:gap-6">
-        <div className="aspect-[2/3] border-2 border-rule bg-well" />
+        <div className="aspect-[2/3] border-2 border-rule bg-hull" />
         <div className="grid content-start gap-3 pt-1">
           <span className="block h-4 w-3/5 bg-deck" />
           <span className="block h-3 w-2/5 bg-deck" />

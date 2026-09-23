@@ -10,12 +10,12 @@ export function TilePlaceholder({ inventory = false }: { inventory?: boolean }) 
     <div className="grid grid-rows-[auto_1fr] border-2 border-rule bg-well" aria-hidden="true">
       <div className="aspect-[2/3] bg-hull" />
       <div className="grid content-start gap-1 px-3 py-2.5">
-        <Line className="h-4 w-12" />
-        <Line className="h-10 w-4/5" />
+        <PlaceholderLine className="h-4 w-12" />
+        <PlaceholderLine className="h-10 w-4/5" />
         {inventory && (
           <>
-            <Line className="h-4 w-1/2" />
-            <Line className="h-4 w-1/3" />
+            <PlaceholderLine className="h-4 w-1/2" />
+            <PlaceholderLine className="h-4 w-1/3" />
           </>
         )}
       </div>
@@ -24,8 +24,11 @@ export function TilePlaceholder({ inventory = false }: { inventory?: boolean }) 
   )
 }
 
-/** 一行字的位置：線本身細，畫在與那一行同高的格子頂端。 */
-function Line({ className }: { className: string }) {
+/**
+ * 一行字的位置：線本身細，畫在與那一行同高的格子頂端。高度由呼叫端給（`h-4` 是 `text-xs` 的一行、`h-5` 是
+ * `text-sm` 的一行），空位格才與真的那一格一樣高。
+ */
+export function PlaceholderLine({ className }: { className: string }) {
   return (
     <span className={`block ${className}`}>
       <span className="mt-1 block h-2 w-full bg-deck" />

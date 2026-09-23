@@ -346,7 +346,8 @@ class TestInventory:
 
         assert body["library"]["id"] == TV
         assert body["jellyfin"] == {"public_url": "", "url": "", "port": 8096}
-        assert (body["page"], body["page_size"], body["total"]) == (1, 100, 2)
+        # 50 部一頁（M2 票 13）：100 部的牆量到 1,700 個 DOM 節點與 222 個 Tab 停留點。
+        assert (body["page"], body["page_size"], body["total"]) == (1, 50, 2)
         assert (body["review"], body["unmatched"]) == (0, 0)
         tracking = {
             "status": "partial",
@@ -612,6 +613,26 @@ class TestImages:
         # **這幾個數字（與 adapter 的 `format=Webp`）不在網址裡**，而瀏覽器把網址快取一年、
         # `immutable`：改了它們就要換 `ImageSize` 的值，看過的瀏覽器才會拿到新圖。
         assert jellyfin.image_queries == [(SPY, "Primary", SPY_POSTER, 342, 513, 90)]
+
+    @pytest.mark.parametrize(
+        ("size", "fill"),
+        [
+            pytest.param("poster_large", (684, 1026), id="poster"),
+            pytest.param("wide", (342, 192), id="wide"),
+            pytest.param("wide_large", (684, 384), id="wide-large"),
+        ],
+    )
+    def test_each_shape_has_a_second_size_twice_as_wide_for_srcset(
+        self, client: TestClient, jellyfin: FakeJellyfinClient, size: str, fill: tuple[int, int]
+    ) -> None:
+        """前端的 `srcset` 給瀏覽器兩個寬度挑（票 13）：高密度螢幕與手機兩欄的格子要 684 寬才不糊。
+        比例與原本那一種一樣，所以同一個 `<img>` 換哪一張版面都不動。"""
+        sign_in(client)
+
+        response = client.get(IMAGE, params={**POSTER_QUERY, "size": size})
+
+        assert response.status_code == 200
+        assert jellyfin.image_queries == [(SPY, "Primary", SPY_POSTER, *fill, 90)]
 
     def test_a_poster_is_cached_for_good_and_everything_else_is_not(
         self, client: TestClient

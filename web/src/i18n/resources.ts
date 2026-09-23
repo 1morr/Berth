@@ -584,7 +584,7 @@ const zhHant = {
     pagesEnd: '牆底的分頁',
     previous: '上一頁',
     next: '下一頁',
-    // 看得見的是「1–100 / 523」，聽得見的是這一句。
+    // 看得見的是「1–50 / 523」，聽得見的是這一句。
     range: '第 {{first}}–{{last}} 部，共 {{total}} 部',
     rangeBeyond: '這一頁超出範圍，共 {{total}} 部',
     // 依序取第一個成立的（`InventoryStatus`）：需要人的那一件排前面。
