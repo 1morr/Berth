@@ -34,6 +34,7 @@ from berth.services.clients import HttpServiceClientFactory, ServiceClientFactor
 from berth.services.events import EventHub
 from berth.services.hints import JobHints
 from berth.services.jellyfin_access import AccessCache
+from berth.services.jobs import fail_interrupted
 from berth.services.reconcile import ReconcileRunner
 
 logger = logging.getLogger(__name__)
@@ -113,6 +114,9 @@ def _lifespan(config: Config) -> Lifespan[FastAPI]:
         await upgrade_to_head(engine)
         # 相依（api/deps.py）從 app.state 取，這樣 router 不必知道 engine 是怎麼建的。
         app.state.session_factory = create_session_factory(engine)
+        # 迴圈與 API 起來之前：停在 `requested` 的是上一次程序被打斷的送單（M3 票 02）。
+        async with app.state.session_factory() as session:
+            await fail_interrupted(session)
         # 迴圈之間的提示（票 11）：poller 動了什麼就叫醒 `planner_runner`。**在這裡建而不是
         # 在 `create_app`**：它裡面是一個 `asyncio.Event`，而 Event 認第一次 await 它的那個
         # 事件迴圈——同一個 app 起兩次（測試就是這樣跑的）會拿到「bound to a different

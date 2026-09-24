@@ -54,6 +54,7 @@ from berth.logs import job_context
 from berth.models import (
     Event,
     Job,
+    JobFile,
     Media,
     PathSettings,
     Plan,
@@ -477,10 +478,36 @@ async def guarded[T](
         async with job_lock(job_hash):
             try:
                 return await work
-            except Exception:
+            except Exception as failure:
                 await session.rollback()
                 logger.exception("this job's round failed; the rest of the round goes on")
+                await _note_round_failure(session, job_hash, failure)
                 return fallback
+
+
+async def _note_round_failure(session: AsyncSession, job_hash: str, failure: Exception) -> None:
+    """把爆掉的那一輪寫在那一筆身上：`Job.error` 與時間線各一筆（M3 票 02）。
+
+    只進 log 的話畫面上那一筆看起來是好的——停在「規劃中」，說不出為什麼。**型別也寫進去**：
+    非預期的例外多半是 `KeyError('x')` 這種，只留原文的話是一個看不出是什麼的 `'x'`。
+
+    **同一個錯誤只寫一次**：迴圈每 60 秒重試一次，而 `Job.error` 還是這一句就是同一件事
+    （成功的轉換會清掉它，`transition`）。寫它本身也可能失敗（資料庫就是那個錯誤）——
+    那時只剩 log，迴圈照樣不死。
+    """
+    detail = f"{type(failure).__name__}: {failure}"
+    try:
+        job = await session.get(Job, job_hash)
+        if job is None or job.error == detail:
+            return
+        job.error = detail
+        await record_event(
+            session, job, EventType.ROUND_FAILED, actor=actor_of(None), payload={"error": detail}
+        )
+        await session.commit()
+    except Exception:
+        await session.rollback()
+        logger.exception("could not record the failed round on the job")
 
 
 async def list_jobs(session: AsyncSession) -> tuple[JobView, ...]:
@@ -659,6 +686,41 @@ async def _fail(session: AsyncSession, job: Job, detail: str, *, actor: str) -> 
     logger.warning("job submission failed", extra={"state": job.state.value, "error": detail})
 
 
+#: 重啟時仍停在 `requested` 的那一筆的 `error`（M3 票 02）。英文，與服務回的原文同一欄。
+INTERRUPTED = "interrupted: Berth stopped before qBittorrent answered"
+
+
+async def fail_interrupted(session: AsyncSession) -> int:
+    """重啟的那一刻：停在 `requested` 的都落到 `submit_failed`（plan §3.1，M3 票 02）。回傳幾筆。
+
+    **只在啟動時跑**（`main.py` 的 lifespan，迴圈與 API 都還沒起來）：那一刻不可能有送單正在路上，
+    所以停在 `requested` 的一定是被打斷的那一次——`add_download` 在打 qBittorrent 之前就 commit 了
+    那一列。平常跑的話它會把使用者正在送的那一筆判成失敗。
+
+    **落到 `submit_failed` 而不是重送**：qBittorrent 可能已經收下了（被打斷的正是等回應的那一段），
+    那一種由 poller 在客戶端看到同一個 hash 時認回來；沒收下的那一種與任何一次送單失敗一樣，
+    等人按重試。重送要重抓一次下載連結、qBittorrent 在啟動那一刻多半也還沒起來（compose 的啟動
+    順序），失敗了一樣落在這裡，多繞一圈而已。
+    """
+    moved = 0
+    for job in list(await session.scalars(select(Job).where(Job.state == JobState.REQUESTED))):
+        with job_context(job.hash):
+            await _fail(session, job, INTERRUPTED, actor=actor_of(None))
+        moved += job.state is JobState.SUBMIT_FAILED
+    await session.commit()
+    return moved
+
+
+async def restart_state(session: AsyncSession, job: Job) -> JobState:
+    """壞掉的一筆接回 poller 的主幹時落在哪一站（plan §3.1）：檔案清單早就到手的回
+    `metadata_ready`，還沒有的回 `submitted`。兩站的下一步 poller 本來就會走。
+
+    Issue 的「重新校驗」/「重試」與 poller 自己的接回（M3 票 02）問的是同一題。
+    """
+    listed = await session.scalar(select(JobFile.id).where(JobFile.job_hash == job.hash).limit(1))
+    return JobState.METADATA_READY if listed is not None else JobState.SUBMITTED
+
+
 def freeze(media: Media, route: Route) -> None:
     """送單成功那一刻：資料夾名定死，Route 成為「上次用的」（plan §2.2、brief §4.5）。
 
@@ -749,8 +811,9 @@ async def record_event(
 #: 事件去重的窗口（plan §3.3）。
 EVENT_DEDUP_WINDOW = timedelta(minutes=1)
 
-#: 使用者的決定：它們之後的事件不與之前的比去重（`record_event`）。
-DEDUP_BOUNDARIES = (EventType.RETRIED, EventType.REVIEW_DECIDED)
+#: 使用者的決定與 poller 的接回：它們之後的事件不與之前的比去重（`record_event`）。接回之後
+#: 一分鐘內又壞一次的那一筆 `issue_detected` 與第一次一字不差，而它是真的又壞了一次（M3 票 02）。
+DEDUP_BOUNDARIES = (EventType.RETRIED, EventType.REVIEW_DECIDED, EventType.RECOVERED)
 
 
 def _fingerprint(payload: dict[str, Any]) -> str:

@@ -1019,6 +1019,16 @@ Issue、修正、對帳、刪除與重新入庫的每一條端點都是 403，�
   `unlinked`（新的 `LedgerStatus`）而不是 `target_missing`，同「標記為已無來源」的先例。
 - **兩個分頁同時刪同一筆下載，後到的那一個回 409 `moved_on`**（M3 票 01）：原本它讀的是鎖外的舊狀態、
   compare-and-set 輸了只記一行 log，回報「刪好了」並在時間線多寫一筆 `deleted`。
+- **送單失敗而 qBittorrent 其實收下了的那一筆，poller 認回來**（M3 票 02）：`torrents/add` 逾時或回應讀到一半
+  斷線時 Job 停在 `submit_failed`，而 torrent 照樣在下載。poller 在客戶端看到同一個 hash 就接回 `submitted`
+  （補上凍結資料夾名），之後照常走；時間線多一種事件 `recovered`。
+- **程序在送單途中掛掉，重啟後那一筆不再永遠停在「已建立」**（M3 票 02）：啟動時停在 `requested` 的一律落到
+  `submit_failed`（`error` 是 `interrupted: …`），qBittorrent 收下了的由上一條認回，沒收下的等人重試。
+- **使用者在 qBittorrent 裡自己修好的下載，Berth 跟著接回來**（M3 票 02）：`missing_files` / `client_error` /
+  `client_removed` 的 Job 在客戶端看到它好好的（自己 recheck、重新開始、把 torrent 加回去）就回到主幹，而
+  Job 不在那個壞掉狀態的管線 Issue 由系統收掉（`resolved_by = system`），不再停在只剩「忽略」的那一列。
+- **規劃器與 importer 處理某一筆時爆掉，畫面說得出來**（M3 票 02）：原本只進 log，那一筆看起來停在「規劃中」
+  卻說不出為什麼。現在寫進 `Job.error` 與時間線（新事件 `round_failed`，同一個錯誤不重寫）。
 
 ### Security
 

@@ -1026,6 +1026,7 @@ def main(argv: list[str] | None = None) -> int:
         _mount_demo_torrent(app, scenario.demo_releases)
     if scenario.library_demo:
         _mount_demo_accounts(app, scenario.jellyfin)
+    _mount_demo_qbittorrent(app, scenario.qbittorrent)
 
     print(f"scenario={args.scenario} config_root={config_root}", file=sys.stderr)
     uvicorn.run(app, host="127.0.0.1", port=args.port, log_level="warning")
@@ -1076,6 +1077,34 @@ def _mount_demo_accounts(app: FastAPI, jellyfin: FakeJellyfinClient) -> None:
     app.router.routes.insert(
         0, StarletteRoute("/demo/jellyfin/{action:str}", endpoint, methods=["POST"])
     )
+
+
+def _mount_demo_qbittorrent(app: FastAPI, qbittorrent: FakeQbittorrentClient) -> None:
+    """`POST /demo/qbittorrent/fix?hash=`：使用者在 qBittorrent 裡自己把那一筆修好（M3 票 02）。
+
+    替身上的那一筆回到 `downloading`；不在替身上的（`issues` 情境裡 `client_removed` 那一筆）
+    照原樣加回去。之後的事全是產品自己的：poller 下一輪把 Job 接回主幹、系統收掉那一件 Issue。
+    插在最前面的理由同 `_mount_demo_torrent`。
+    """
+
+    async def endpoint(request: Request) -> Response:
+        info_hash = request.query_params.get("hash", "")
+        known = {row.hash for row in qbittorrent.torrents}
+        if info_hash in known:
+            qbittorrent.torrents = tuple(
+                replace(row, state="downloading") if row.hash == info_hash else row
+                for row in qbittorrent.torrents
+            )
+        elif info_hash in PIPELINE_BROKEN:
+            qbittorrent.torrents = (
+                *qbittorrent.torrents,
+                _pipeline_torrent(info_hash, "downloading"),
+            )
+        else:
+            return Response(status_code=404)
+        return Response(status_code=204)
+
+    app.router.routes.insert(0, StarletteRoute("/demo/qbittorrent/fix", endpoint, methods=["POST"]))
 
 
 def demo_torrent(release: str) -> Torrent:

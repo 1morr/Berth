@@ -158,6 +158,14 @@ class EventType(StrEnum):
     #: 管理員決定了一個重複版本（`decision` 是 `DuplicateDecision`、`file`、`target` 是新的那一份
     #: 落在哪裡、`replaced` 是被取代的那一條；M2 票 08）。
     DUPLICATE_DECIDED = "duplicate_decided"
+    #: poller 在客戶端看到這一筆好好的，把它從一個壞掉或失敗的狀態接回主幹（M3 票 02）：
+    #: `from` 是原本的狀態（`submit_failed` / `missing_files` / `client_error` /
+    #: `client_removed`），`state` 是接回的那一站，`client_state` 是 qBittorrent 當下怎麼說。
+    #: 沒有人按按鈕——使用者在 qBittorrent 裡自己修好，或 `torrents/add` 逾時而其實收下了。
+    RECOVERED = "recovered"
+    #: 背景迴圈處理這一筆時撞到非預期的例外（`error` 是型別加原文；M3 票 02）。那一輪放棄、
+    #: 下一輪再試；同一個錯誤不重寫——`Job.error` 還是它的話就是同一件事。
+    ROUND_FAILED = "round_failed"
 
 
 class JellyfinRequest(StrEnum):

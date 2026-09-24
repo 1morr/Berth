@@ -1393,6 +1393,8 @@ const zhHant = {
       rematched: '已修正',
       duplicate_skipped: '略過重複',
       duplicate_decided: '重複已決定',
+      recovered: '已接回',
+      round_failed: '處理時出錯',
     },
     timeline: {
       loading: '讀取時間線…',
@@ -1468,6 +1470,14 @@ const zhHant = {
       freed: '空出 {{size}}',
       // 硬鏈接的另一半還在時一個位元組都沒回到磁碟。時間線照實說，不說「已釋放 0 B」。
       freedNothing: '沒有空出空間：還有別的名字指著同一份資料。',
+      // poller 自己接回主幹的那一筆（M3 票 02）：說是哪一邊好了。
+      recovered: {
+        submit_failed: 'qBittorrent 其實收下了這一筆，接著下載。',
+        missing_files: 'qBittorrent 裡的檔案回來了，接著下載。',
+        client_error: 'qBittorrent 的錯誤解除了，接著下載。',
+        client_removed: '這一筆又回到 qBittorrent 裡了，接著下載。',
+      },
+      roundFailed: 'Berth 處理這一筆時出錯，下一輪會再試：',
       // 理由翻譯，原文不翻譯：後面接的 `client_state` 是 qBittorrent 的機器字串。
       issue: {
         missing_files: 'qBittorrent 說檔案不見了。到它的介面上重新檢查那一筆。',
@@ -3273,6 +3283,8 @@ const en: Translations<typeof zhHant> = {
       rematched: 'Rematched',
       duplicate_skipped: 'Duplicate skipped',
       duplicate_decided: 'Duplicate decided',
+      recovered: 'Picked back up',
+      round_failed: 'Failed to process',
     },
     timeline: {
       loading: 'Reading the timeline…',
@@ -3340,6 +3352,13 @@ const en: Translations<typeof zhHant> = {
       deletedPurged: 'records cleared',
       freed: 'freed {{size}}',
       freedNothing: 'Nothing was freed: another name still points at the same data.',
+      recovered: {
+        submit_failed: 'qBittorrent had taken this one after all; downloading carries on.',
+        missing_files: 'The files are back in qBittorrent; downloading carries on.',
+        client_error: 'The error in qBittorrent cleared; downloading carries on.',
+        client_removed: 'This one is back in qBittorrent; downloading carries on.',
+      },
+      roundFailed: 'Berth failed while processing this one and will try again next round:',
       issue: {
         missing_files: 'qBittorrent says the files are gone. Force a recheck in its own UI.',
         client_error: 'qBittorrent reported an error of its own. Its UI or log says which one.',

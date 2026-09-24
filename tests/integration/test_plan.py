@@ -15,7 +15,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path, PurePosixPath
 
 import pytest
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from berth.db import create_session_factory
@@ -1175,3 +1175,61 @@ class TestRoundIsolation:
         # 壞掉的那一筆停在 `planning`，下一輪會再試一次；好的那一筆照樣走完。
         assert broken.state is JobState.PLANNING
         assert good.state is JobState.IMPORTING
+
+    async def test_the_failure_lands_on_the_job_and_its_timeline(
+        self, session: AsyncSession, roots: dict[str, Path], monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """只進 log 的話畫面上那一筆看起來是好的：停在「規劃中」，說不出為什麼（M3 票 02）。
+
+        同一個錯誤下一輪再撞一次不再寫一筆：它每 60 秒重試一次，一天就是一千四百筆一模一樣的事。
+        """
+        media, route, factory = await ready(session, roots)
+        job = await downloaded_job(session, media, route, roots)
+
+        def explode(*args: object, **kwargs: object) -> object:
+            raise ValueError("guessit fell over on this one")
+
+        monkeypatch.setattr("berth.services.plan.decide", explode)
+
+        await run(session, factory)
+        # 下一輪是一分鐘以後：事件本身的一分鐘去重（plan §3.3）擋不到它，擋得到的只有 `Job.error`。
+        await session.execute(
+            update(Event)
+            .where(Event.job_hash == job.hash)
+            .values(created_at=datetime.now(UTC) - timedelta(minutes=2))
+        )
+        await session.commit()
+        await run(session, factory)
+
+        await session.refresh(job)
+        assert job.state is JobState.PLANNING
+        assert job.error == "ValueError: guessit fell over on this one"
+        failed = list(
+            await session.scalars(
+                select(Event).where(
+                    Event.job_hash == job.hash, Event.type == EventType.ROUND_FAILED.value
+                )
+            )
+        )
+        assert [row.payload_json for row in failed] == [
+            {"error": "ValueError: guessit fell over on this one"}
+        ]
+
+    async def test_the_next_good_round_clears_the_error(
+        self, session: AsyncSession, roots: dict[str, Path], monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        media, route, factory = await ready(session, roots)
+        job = await downloaded_job(session, media, route, roots)
+
+        def explode(*args: object, **kwargs: object) -> object:
+            raise ValueError("guessit fell over on this one")
+
+        monkeypatch.setattr("berth.services.plan.decide", explode)
+        await run(session, factory)
+        monkeypatch.undo()
+
+        await run(session, factory)
+
+        await session.refresh(job)
+        assert job.state is JobState.IMPORTING
+        assert job.error == ""

@@ -44,16 +44,18 @@ from berth.models import (
     Event,
     Job,
     JobFile,
+    Media,
     PollerSettings,
     QbittorrentSettings,
+    Route,
     UnknownTorrent,
 )
 from berth.models.types import utcnow
 from berth.services.clients import ServiceClientFactory
 from berth.services.events import EventHub, JobSignal
 from berth.services.hints import JobHints
-from berth.services.issues import record_issue
-from berth.services.jobs import job_lock, record_event, transition
+from berth.services.issues import close_settled, record_issue
+from berth.services.jobs import freeze, job_lock, record_event, restart_state, transition
 from berth.services.qbittorrent import unknown_torrent_detail, unknown_torrents
 from berth.services.settings import read_settings, write_settings
 
@@ -98,6 +100,24 @@ IN_CLIENT_STATES = frozenset(
         JobState.METADATA_READY,
         JobState.DOWNLOADING,
         JobState.STALLED,
+    }
+)
+
+#: 客戶端裡看到它好好的就接回主幹的幾個狀態（M3 票 02）。沒有人看著的時候（RSS 半夜送的單）
+#: 它們不該停在原地等人按：
+#:
+#: - `submit_failed`：`torrents/add` 逾時或回應讀到一半斷線，而 qBittorrent 其實收下了。它有
+#:   Job，所以不是 `unknown_torrent`；不看它的話它永遠停在「送單失敗」而 torrent 照樣在下載。
+#: - `missing_files` / `client_error` / `client_removed`：使用者在 qBittorrent 裡自己 recheck、
+#:   重新開始、把同一個 torrent 加回去。
+#:
+#: **不在客戶端裡就什麼都不做**：`submit_failed` 本來就不在那裡，另外三種的 Issue 已經開著。
+RECOVERABLE_STATES = frozenset(
+    {
+        JobState.SUBMIT_FAILED,
+        JobState.MISSING_FILES,
+        JobState.CLIENT_ERROR,
+        JobState.CLIENT_REMOVED,
     }
 )
 
@@ -172,7 +192,9 @@ async def poll_downloads(
 
     moved = 0
     signals: list[JobSignal] = []
-    jobs = await session.scalars(select(Job).where(Job.state.in_(IN_CLIENT_STATES)))
+    jobs = await session.scalars(
+        select(Job).where(Job.state.in_(IN_CLIENT_STATES | RECOVERABLE_STATES))
+    )
     for job in list(jobs):
         with job_context(job.hash):
             async with job_lock(job.hash):
@@ -181,6 +203,9 @@ async def poll_downloads(
                 )
 
     unknown = await _record_unknown(session, statuses, moment)
+    # 接回主幹的那幾筆（與被別的路徑推走的那幾筆）的管線 Issue 在同一個交易裡收掉：
+    # 畫面上不該有一刻是「Job 好了、Issue 還開著」（M3 票 02）。
+    await close_settled(session, moment)
     await _remember(session, moment, unknown)
     await session.commit()
 
@@ -286,6 +311,13 @@ async def _advance(
 
     要推播的那幾筆收進 `signals`，由 `poll_downloads` 在 commit 之後才發出去。
     """
+    if job.state in RECOVERABLE_STATES:
+        if status is None or not await _recover(session, job, status):
+            return 0
+        recovered = 1
+    else:
+        recovered = 0
+
     if status is None:
         # 客戶端裡沒有這一筆了。合併過的清單就是客戶端當下的完整內容（`MaindataCursor`），
         # 所以「不在裡面」不必等 `torrents_removed`——重啟後的第一輪（全量）也成立。
@@ -309,9 +341,55 @@ async def _advance(
     # **一筆 job 一輪最多一個訊號，而且只有真的變了才推。** 一份 40 筆的下載清單每 5 秒
     # 推 40 次的話，每個開著的分頁就每 5 秒重問一次整份清單——而那正是這條推播要取代的
     # 東西。轉換、進度、client state 三者任一動了才算變了。
-    if (job.state, job.progress, job.client_state) != was:
+    if (job.state, job.progress, job.client_state) != was or recovered:
         signals.append(JobSignal(hash=job.hash, state=job.state, progress=job.progress))
-    return steps
+    return steps + recovered
+
+
+async def _recover(session: AsyncSession, job: Job, status: TorrentStatus) -> bool:
+    """客戶端裡看得到它、而且好好的：接回主幹（M3 票 02）。回傳接回了沒有。
+
+    `submit_failed` 與 `client_removed` 看得到就接回——接回之後它若是壞的，下一步照常轉進
+    `missing_files` / `client_error`（壞掉優先），那是一件新的、說得對的事。另外兩種要**不再壞**
+    才接回：客戶端的狀態字串不是壞掉，而且它說做完了的話檔案真的在磁碟上。後一條是 Berth
+    自己發現的那一種 `missing_files`——客戶端說 `stalledUP`，只看字串的話它每一輪都會「恢復」
+    再壞一次，時間線與 Issue 清單一起來回翻。
+
+    `submit_failed` 接回 `submitted`，並補上送單成功那一刻該做的：凍結資料夾名、記下「上次用的
+    Route」（brief §4.5）——它其實送成功了。
+    """
+    broken = job.state
+    if broken in (JobState.MISSING_FILES, JobState.CLIENT_ERROR):
+        if status.state in BROKEN_STATES:
+            return False
+        missing = await _files_on_disk(session, job, status) if status.complete else []
+        if missing:
+            return False
+    back = (
+        JobState.SUBMITTED
+        if broken is JobState.SUBMIT_FAILED
+        else await restart_state(session, job)
+    )
+    if not await _to(session, job, back):
+        return False
+    if broken is JobState.SUBMIT_FAILED:
+        await _freeze(session, job)
+    await record_event(
+        session,
+        job,
+        EventType.RECOVERED,
+        actor=SYSTEM,
+        payload={"from": broken.value, "state": back.value, "client_state": status.state},
+    )
+    logger.info("job recovered", extra={"from": broken.value, "state": back.value})
+    return True
+
+
+async def _freeze(session: AsyncSession, job: Job) -> None:
+    media = await session.get(Media, job.media_id) if job.media_id is not None else None
+    route = await session.get(Route, job.route_id) if job.route_id is not None else None
+    if media is not None and route is not None:
+        freeze(media, route)
 
 
 def _refresh(job: Job, status: TorrentStatus, now: datetime) -> None:

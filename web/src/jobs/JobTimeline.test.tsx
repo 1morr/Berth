@@ -417,6 +417,42 @@ describe('Job 時間線', () => {
     expect(line.getByText('管理員用這一份取代了媒體庫裡的舊版本')).toBeInTheDocument()
     expect(line.getByText('/lib/a.mkv')).toBeInTheDocument()
   })
+
+  it('接回的那一筆說是哪一邊好了，客戶端狀態原樣接在後面（M3 票 02）', () => {
+    const line = render([
+      event({
+        id: 1,
+        type: 'recovered',
+        payload: { from: 'submit_failed', state: 'submitted', client_state: 'metaDL' },
+      }),
+      event({
+        id: 2,
+        type: 'recovered',
+        payload: { from: 'client_removed', state: 'metadata_ready', client_state: 'downloading' },
+      }),
+    ])
+
+    expect(line.getAllByText('已接回')).toHaveLength(2)
+    expect(line.getByText(/qBittorrent 其實收下了這一筆.*metaDL/)).toBeInTheDocument()
+    expect(line.getByText(/這一筆又回到 qBittorrent 裡了.*downloading/)).toBeInTheDocument()
+  })
+
+  it('認不得的接回起點只畫色塊，不印出一條 i18n key', () => {
+    const line = render([event({ type: 'recovered', payload: { from: 'something_new' } })])
+
+    expect(line.getByText('已接回')).toBeInTheDocument()
+    expect(line.queryByText(/jobs\.timeline\.recovered/)).not.toBeInTheDocument()
+  })
+
+  it('處理時出錯的那一筆帶著原文，紅字（M3 票 02）', () => {
+    const line = render([
+      event({ type: 'round_failed', payload: { error: 'ValueError: guessit fell over' } }),
+    ])
+
+    expect(line.getByText('處理時出錯')).toBeInTheDocument()
+    expect(line.getByText(/下一輪會再試/)).toBeInTheDocument()
+    expect(line.getByText('ValueError: guessit fell over')).toHaveClass('text-blocked-ink')
+  })
 })
 
 describe('時間線摘要（M2 票 12）', () => {

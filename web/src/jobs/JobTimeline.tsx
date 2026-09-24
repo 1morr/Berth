@@ -306,6 +306,24 @@ const FACTS: Record<KnownEvent, (facing: Facing) => ReactNode> = {
       </>
     )
   },
+  // poller 在客戶端看到它好好的，接回主幹（M3 票 02）。沒有人按按鈕，所以一句話說是**哪一邊**
+  // 好了：qBittorrent 其實收下了、使用者在 qBittorrent 裡修好了。客戶端狀態是機器字串，接在後面。
+  recovered: ({ t, payload }) => {
+    const from = RECOVERED_FROM.find((known) => known === payload.from)
+    return (
+      <p className="max-w-prose text-xs break-words text-ink-dim">
+        {join([from ? t(`jobs.timeline.recovered.${from}`) : '', text(payload.client_state)])}
+      </p>
+    )
+  },
+  // 背景迴圈處理這一筆時爆掉（M3 票 02）。原文不翻譯（型別加訊息），紅字：它擋住這一筆了——
+  // 下一輪會再試，但同一個錯誤多半會再撞一次。
+  round_failed: ({ t, payload }) => (
+    <>
+      <p className="max-w-prose text-xs text-ink-dim">{t('jobs.timeline.roundFailed')}</p>
+      <p className="value text-xs wrap-anywhere text-blocked-ink">{text(payload.error)}</p>
+    </>
+  ),
   duplicate_decided: ({ t, payload }) => {
     const decision = DUPLICATE_DECISIONS.find((known) => known === payload.decision)
     return (
@@ -320,6 +338,12 @@ const FACTS: Record<KnownEvent, (facing: Facing) => ReactNode> = {
     )
   },
 }
+
+/**
+ * poller 接回主幹的那幾個起點（M3 票 02，`services/downloads.RECOVERABLE_STATES`）。認不得的只畫
+ * 色塊——它可能是後端加的，而前端還沒有那句話。
+ */
+const RECOVERED_FROM = ['submit_failed', 'missing_files', 'client_error', 'client_removed'] as const
 
 /** `domain.DuplicateDecision`。認不得的不畫那一句——它可能是後端加的，而前端還沒有那句話。 */
 const DUPLICATE_DECISIONS = ['replace', 'keep_both', 'skip'] as const

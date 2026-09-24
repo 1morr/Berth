@@ -32,6 +32,8 @@ export const EVENT_TYPES = [
   'rematched',
   'duplicate_skipped',
   'duplicate_decided',
+  'recovered',
+  'round_failed',
 ] as const
 
 export type KnownEvent = (typeof EVENT_TYPES)[number]

@@ -34,7 +34,7 @@ from berth.domain import (
     PlanStatus,
     ReviewReason,
 )
-from berth.models import Job, JobFile, LedgerEntry, PlanItem, Route
+from berth.models import Event, Job, JobFile, LedgerEntry, PlanItem, Route
 from berth.pipeline import Importer, PlannerRunner
 from berth.services.events import EventHub, JobSignal
 from berth.services.hints import JobHints
@@ -485,6 +485,36 @@ class TestRunner:
 
         assert outcome is not None
         assert outcome.imported == 1
+
+    async def test_a_job_that_blows_up_says_so_and_the_loop_goes_on(
+        self,
+        session: AsyncSession,
+        roots: dict[str, Path],
+        engine: AsyncEngine,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """非預期的例外寫進那一筆的 `error` 與時間線（M3 票 02），迴圈照樣醒來再跑下一輪。"""
+        job, _, factory = await importing(session, roots)
+        await complete_setup(session)
+        await session.commit()
+
+        async def explode(*args: object, **kwargs: object) -> None:
+            raise RuntimeError("the disk went away mid-round")
+
+        monkeypatch.setattr("berth.services.importer._place", explode)
+        importer = Importer(create_session_factory(engine), factory, EventHub(), JobHints())
+
+        assert await importer.tick() is not None
+        assert await importer.tick() is not None
+
+        assert await state_of(session, job) is JobState.IMPORTING
+        assert job.error == "RuntimeError: the disk went away mid-round"
+        failed = [
+            row.payload_json
+            for row in await session.scalars(select(Event).where(Event.job_hash == job.hash))
+            if row.type == EventType.ROUND_FAILED.value
+        ]
+        assert failed == [{"error": "RuntimeError: the disk went away mid-round"}]
 
     async def test_a_plan_that_lands_in_importing_wakes_the_importer(
         self, session: AsyncSession, roots: dict[str, Path], engine: AsyncEngine

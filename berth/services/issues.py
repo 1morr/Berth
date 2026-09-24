@@ -54,7 +54,6 @@ from berth.models import (
     Issue,
     JellyfinSettings,
     Job,
-    JobFile,
     LedgerEntry,
     QbittorrentSettings,
     Route,
@@ -68,8 +67,10 @@ from berth.services.deletion import DeleteScope, delete_job
 from berth.services.hints import JobHints
 from berth.services.jobs import (
     JobRejectedError,
+    actor_of,
     job_lock,
     record_event,
+    restart_state,
     resubmit_job,
     transition,
 )
@@ -301,6 +302,40 @@ async def resolve_issue(
         extra={"issue_id": row.id, "issue": row.type.value, "action": action.value},
     )
     return await _reread(session, row)
+
+
+async def close_settled(session: AsyncSession, now: datetime) -> int:
+    """管線那三種裡、Job 已經不在那個壞掉狀態的，由系統收掉（`resolved_by = system`）。回傳幾件。
+
+    M2 票 09c 延後的那一條（失效條件在那張票上）：使用者在 qBittorrent 裡自己 recheck、把
+    torrent 加回去，poller 把 Job 接回主幹（`services/downloads.py`）；或 Job 被別的路徑推走
+    （Job 頁上重試成功）。那一件說的事已經不是現況，而它的按鈕也已經全部按不下去——留著只剩
+    「忽略」，清單上每一列都要是「按得了東西」的。Job 被刪掉（或整列清掉）的也收：同一個理由，
+    同 `_close_siblings` 的先例。
+
+    **Job 還在那個狀態就不收**，不論客戶端現在怎麼說——那是 poller 決定接不接回的事，這一支只看
+    Job。由 poller 每一輪叫：狀態是它推的，同一個交易收掉就沒有「Job 好了、Issue 還開著」的一刻。
+    **不 commit**。
+    """
+    rows = list(
+        await session.scalars(
+            select(Issue).where(Issue.type.in_(STANDS_WHILE), Issue.status == IssueStatus.OPEN)
+        )
+    )
+    if not rows:
+        return 0
+    jobs = await _live_jobs(session, rows)
+    closed = 0
+    for row in rows:
+        if jobs.get(row.job_hash or "") in STANDS_WHILE[row.type]:
+            continue
+        row.status = IssueStatus.RESOLVED
+        row.resolved_at = now
+        row.resolved_by = actor_of(None)
+        closed += 1
+        logger.info("issue cleared", extra={"issue": row.type.value, "subject": row.subject})
+    await session.flush()
+    return closed
 
 
 # --- 按鈕 -------------------------------------------------------------
@@ -570,10 +605,7 @@ async def _restart(
         finally:
             await client.aclose()
 
-        listed = await session.scalar(
-            select(JobFile.id).where(JobFile.job_hash == job.hash).limit(1)
-        )
-        back = JobState.METADATA_READY if listed is not None else JobState.SUBMITTED
+        back = await restart_state(session, job)
         if not await transition(session, job, back, expected=broken):
             raise IssueRejectedError(IssueRefusal.ACTION_NOT_AVAILABLE, job.state.value)
         # `retried` 是事件去重的界線（plan §3.3）：之後又壞一次時那一筆 `issue_detected` 與
@@ -816,15 +848,19 @@ _ON_THE_JOB = frozenset(
         IssueAction.ACCEPT_REMOVAL,
     }
 )
-#: 管線那三種的按鈕只在 Job **還在那個壞掉的狀態**時按得了（plan §3.1 的出邊）。
+#: 管線那三種 Issue 說的事**還是現況**的 Job 狀態（plan §3.1 的出邊）。一份定義兩個用途：
 #:
-#: Job 自己往前走了（另一個分頁按過、Job 頁上重試成功、它被刪了）的話，那一件說的事已經不是
-#: 現況，按下去會把一筆好好的下載拉回去。重新送單多收一個 `submit_failed`：上一次重新送單被
-#: qBittorrent 拒絕的那一筆落在那裡，這一件仍然開著，再按一次就是再送一次。
+#: - 按鈕只在這幾個狀態按得了（`_BROKEN_BY`）。Job 自己往前走了（另一個分頁按過、Job 頁上重試
+#:   成功、它被刪了）的話，按下去會把一筆好好的下載拉回去。
+#: - Job 離開這幾個狀態時由系統收掉（`close_settled`，M3 票 02）。
+#:
+#: `client_removed` 多收一個 `submit_failed`：上一次重新送單被 qBittorrent 拒絕的那一筆落在那裡，
+#: 這一件仍然開著，再按一次就是再送一次。
+STANDS_WHILE: dict[IssueType, frozenset[JobState]] = {
+    IssueType.MISSING_FILES: frozenset({JobState.MISSING_FILES}),
+    IssueType.CLIENT_ERROR: frozenset({JobState.CLIENT_ERROR}),
+    IssueType.CLIENT_REMOVED: frozenset({JobState.CLIENT_REMOVED, JobState.SUBMIT_FAILED}),
+}
 _BROKEN_BY: dict[IssueAction, frozenset[JobState]] = {
-    IssueAction.RECHECK: frozenset({JobState.MISSING_FILES}),
-    IssueAction.ACCEPT_LOSS: frozenset({JobState.MISSING_FILES}),
-    IssueAction.RETRY: frozenset({JobState.CLIENT_ERROR}),
-    IssueAction.RESUBMIT: frozenset({JobState.CLIENT_REMOVED, JobState.SUBMIT_FAILED}),
-    IssueAction.ACCEPT_REMOVAL: frozenset({JobState.CLIENT_REMOVED, JobState.SUBMIT_FAILED}),
+    action: states for kind, states in STANDS_WHILE.items() for action in ISSUE_ACTIONS[kind]
 }
