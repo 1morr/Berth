@@ -23,6 +23,13 @@ Windows Docker Desktop（NTFS bind mount）與 Linux（ext4）上各跑一次 `d
 Berth 入庫的作品照樣瀏覽得到。這六件事現在是 nightly e2e 的第二個模組（`tests/e2e/test_2_m15_library.py`），
 對真的 Jellyfin 12.1 跑。
 
+**M2（修正與對帳）在 2026-09-24 通過驗收**（brief §17、`.scratch/m2/issues/16-m2-acceptance.md`）：對真的
+qBittorrent 與 Jellyfin，三種人為破壞——在 Jellyfin 裡刪掉一集、用複製品取代硬鏈接、手動刪掉 complete 裡的
+來源——都由對帳偵測到、按 Issue 上的動作修好，下一輪不再問；整個媒體庫的內容刪光之後按一次「重新入庫」回到
+同樣的路徑、同一個 inode、同樣的帳本列。medium 自動入庫的檔案在審核佇列一鍵撤銷。以 `user` 登入時，審核、
+Issue、修正、對帳、刪除與重新入庫的每一條端點都是 403，畫面上也沒有入口。前兩件是 nightly e2e 的第三個模組
+（`tests/e2e/test_3_m2_repair.py`）。
+
 ### Added
 
 - Repo 骨架：uv 後端專案與 `berth` CLI（`--version`）、pnpm + Vite + React + TypeScript 前端。
@@ -583,6 +590,13 @@ Berth 入庫的作品照樣瀏覽得到。這六件事現在是 nightly e2e 的�
   `scripts/fake_setup_server.py`（替身都在程序裡，不打真的索引站與 TMDB），CI 的 `web-e2e` job 每個 push 都跑，
   失敗時截圖、trace 與 HTML 報告上傳成 artifact `playwright-evidence`。演練情境多一個 `import`：送單到入庫整條
   走完、一個請求都不出網。
+- **e2e 的 M2 模組**（M2 票 16，plan §10）：`tests/e2e/test_3_m2_repair.py` 疊在 M1 / M1.5 那一輪之上，對真的
+  qBittorrent 與 Jellyfin 造三種破壞（Jellyfin 的 `DELETE /Items/{id}`、複製品取代硬鏈接、手動刪來源）與一個
+  complete 裡沒人認領的目錄，各自對帳 → 按動作 → 再對帳確認不再開；再把整個 Anime 媒體庫的內容刪光、一次重新入庫。
+- **「每一條端點是誰的」有閘門了**（M2 票 16）：門禁的分類收成一支 `api/gate.access_of`（匿名 / 精靈 / 管理員 /
+  登入即可），`tests/integration/test_auth_api.py` 以一張涵蓋 app 上每一條路由的表逐條比對——新增端點而沒決定
+  它是誰的、修正類的端點忘了進門禁、一般使用者的端點被誤關，三種都會紅；admin 那幾條另以 `user` 真的打一次，
+  拿到 403。前端的導覽列逐角色列齊。
 
 ### Changed
 
@@ -837,6 +851,8 @@ Berth 入庫的作品照樣瀏覽得到。這六件事現在是 nightly e2e 的�
 - **媒體庫牆的卡片與觀看區的集卡共用一個外框**（M2 票 14，M1.5 critique）：`components/Tile.tsx`——圖、標識帶的
   節奏、一條連結與並排的底行只有一份，`InventoryTile` 與集卡只決定填什麼。探索牆的 `MediaTile` 不併（整格一條連結、
   沒有底行）。
+- **EN 的 Route 設定頁與精靈泊位 4 的標題改叫 `Routes`**（M2 票 16，票 03 留下的）：子分頁早就是 `Routes`，
+  頁標題還叫 `Library paths`，同一個東西兩個名字。zh-Hant 不變（「媒體庫路徑」）。
 
 ### Removed
 
@@ -987,6 +1003,11 @@ Berth 入庫的作品照樣瀏覽得到。這六件事現在是 nightly e2e 的�
   回太多，所以沒有做分段取，也沒有加快取（`docs/research/large-library.md`）。
 - **不存在的下載不再讓畫面等七秒**（M2 票 12 實跑）：`GET /jobs/{hash}` 的 404 是答案，查詢不重試；只有網路層
   失敗才照預設重試三次。
+- **審核佇列與待處理頁按完一列之後，焦點不再掉回頁首**（M2 票 16 的 critique）：按下去的那一顆跟著整列消失，
+  鍵盤使用者每清一件就要從頭 Tab 一次。焦點改落在接替那個位置的那一列，清空了落在頁標題
+  （`components/useFocusAfterRemoval.ts`，`/review`、`/issues` 與媒體庫的「待審 / 對不到」）。
+- **EN 介面的佇列時間不再印成「上午10:31:36」**（M2 票 16 的 critique）：`whenText` 跟的是瀏覽器語系，改成 UI 的語言
+  （同 `Timestamp`）。
 
 ### Security
 

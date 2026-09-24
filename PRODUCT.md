@@ -87,7 +87,7 @@ complete/incomplete 鏡像 library 結構、remote path mapping、TVDB / AniList
 | M0 骨架 | 實驗、compose 套件、設定精靈、Route 建立、健康檢查 |
 | M1 手動全流程 | 探索 → 搜尋 → 送單 → 輪詢 → 規則 planning → 硬鏈接 → 掃描 → 可播放 |
 | M1.5 媒體庫瀏覽 | 整個 Jellyfin 媒體庫疊上 Berth 狀態、繼續觀看、已看 / 未看、選季選集（**2026-09-19 完成**） |
-| M2 修正與對帳 | 審核佇列、Unmatched 指派、rematch、Reconciler、刪除範圍、重新入庫、`rebuild-ledger`、Job 詳情頁 |
+| M2 修正與對帳 | 審核佇列、Unmatched 指派、rematch、Reconciler、刪除範圍、重新入庫、`rebuild-ledger`、Job 詳情頁（**2026-09-24 完成**） |
 | M3 RSS | Mikan / Nyaa adapter、Rule、去重、一次性連結、dry-run |
 | M4 AI fallback | AI Plan、驗證、快取、預算、Event 記帳（fallback 解析器，不是 agent） |
 | M5 通知 | `events` 訂閱者、channel adapter（Telegram / Discord 擇一）、每人的訂閱設定 |
@@ -133,8 +133,8 @@ TanStack Router 與 Query、react-i18next。不用 shadcn/ui（2026-09-22 結案
 - `docs/research/m0-experiments.md` —— 對真實 Jellyfin 10.10 / 10.11 與 qBittorrent 4.4 / 5.2 的實測結果，
   命名模板與 API 行為以它為準；Jellyfin 12（Berth 支援的唯一版本線）與它不同的地方，以 `docs/research/jellyfin-12.md` 為準。
 
-**目前沒有、不可捏造**：使用者見證、使用者數、效能數據、任何「已有 N 人在用」的說法。Berth 做到 M1.5
-（手動全流程與媒體庫瀏覽），還沒有對帳與修正（M2），README 明說這件事。
+**目前沒有、不可捏造**：使用者見證、使用者數、效能數據、任何「已有 N 人在用」的說法。Berth 做到 M2
+（手動全流程、媒體庫瀏覽、修正與對帳），還沒有 RSS（M3），README 明說這件事。
 
 ## Product Principles
 

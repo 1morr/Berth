@@ -2,7 +2,7 @@
 
 自託管的媒體取得與入庫協調器：把索引站或 RSS 命中的 torrent 送到 qBittorrent，下載完成後解析、比對 TMDB，以硬鏈接入庫到 Jellyfin，並維護可修復的帳本。
 
-**M1（手動全流程）已完成**：探索 → 搜 torrent → 送單 → 下載 → 解析比對 → 硬鏈接入庫 → Jellyfin 找到它，一部美劇一季、一部動漫一季、一部電影都不經人工走完（nightly 的 e2e 對真的服務守著這一條）。**M1.5（媒體庫瀏覽）也已完成**：媒體庫是一個 Jellyfin 媒體庫一頁、瀏覽整個媒體庫（不只 Berth 經手的），繼續觀看與下一集、已看 / 未看與切換、依類型與年份排序篩選、Jellyfin 的圖由 Berth 代理，Media 詳情最上面是觀看區；權限一律由 Berth 自己對 Jellyfin 的允許清單擋，播放仍深連結到 Jellyfin。還沒有的：審核佇列、刪除、對帳與重新入庫（M2），RSS 自動追番（M3）。設計與決定見 `docs/design-brief.md`，架構與里程碑見 `docs/plan.md`，名詞表見 `CONTEXT.md`。
+**M1（手動全流程）已完成**：探索 → 搜 torrent → 送單 → 下載 → 解析比對 → 硬鏈接入庫 → Jellyfin 找到它，一部美劇一季、一部動漫一季、一部電影都不經人工走完（nightly 的 e2e 對真的服務守著這一條）。**M1.5（媒體庫瀏覽）也已完成**：媒體庫是一個 Jellyfin 媒體庫一頁、瀏覽整個媒體庫（不只 Berth 經手的），繼續觀看與下一集、已看 / 未看與切換、依類型與年份排序篩選、Jellyfin 的圖由 Berth 代理，Media 詳情最上面是觀看區；權限一律由 Berth 自己對 Jellyfin 的允許清單擋，播放仍深連結到 Jellyfin。**M2（修正與對帳）也已完成**：審核佇列（低信心的計劃逐列改後核准、medium 自動入庫的一鍵確認或撤銷、對不到的檔案指派、重複版本）、修正已入庫的檔案、可組合的刪除範圍、每日與手動的對帳（Jellyfin 裡刪掉的、complete 裡少了的、被複製品取代的硬鏈接都偵測得到並一鍵修）、重新入庫與 `berth rebuild-ledger`、Job 詳情頁；審核與修正只有管理員做得了。還沒有的：RSS 自動追番（M3）。設計與決定見 `docs/design-brief.md`，架構與里程碑見 `docs/plan.md`，名詞表見 `CONTEXT.md`。
 
 ## 部署
 
@@ -303,8 +303,8 @@ CI（`.github/workflows/ci.yml`）在 push 到 `main` 與所有 PR 上跑同一�
 
 ### e2e
 
-M1 的整條路徑與 M1.5 的權限、瀏覽對**真的** qBittorrent 與 Jellyfin 跑一遍（plan §10、`tests/e2e/`）。
-**一次 compose、一次精靈、一次入庫，兩個模組共享**（fixture 在 `tests/e2e/conftest.py`；檔名的數字就是執行順序）：
+M1 的整條路徑、M1.5 的權限與瀏覽、M2 的修正與對帳對**真的** qBittorrent 與 Jellyfin 跑一遍（plan §10、`tests/e2e/`）。
+**一次 compose、一次精靈、一次入庫，三個模組共享**（fixture 在 `tests/e2e/conftest.py`；檔名的數字就是執行順序）：
 
 - `test_1_m1_pipeline.py`：精靈八步只走 Berth 的 API，送一部美劇一季、一部動漫一季、一部電影，等它們不經人工、
   依序走過完成 → 規劃 → 入庫，再驗硬鏈接兩端同一個 inode、帳本逐檔記下的 item id 就是 Jellyfin 在那條路徑上的 item。
@@ -312,6 +312,9 @@ M1 的整條路徑與 M1.5 的權限、瀏覽對**真的** qBittorrent 與 Jelly
   媒體庫、直接請求也被拒；不經 Berth 放進那個媒體庫的作品照樣在牆上；某一集的 `item_id` 就是 Jellyfin 在帳本
   那條路徑上的 item；標為已看 / 未看之後那個帳號自己的觀看紀錄真的變了；帳號被停用之後 session 結束。
   最後停掉 Jellyfin 容器，驗「問不到 Jellyfin」那一句（跑完會把它起回來）。
+- `test_3_m2_repair.py`：三種人為破壞各造一次——在 Jellyfin 裡刪掉一集、用複製品取代硬鏈接、手動刪掉 complete
+  裡的來源（外加 complete 裡一個沒人認領的目錄）——手動對帳偵測到，按 Issue 上的動作修好，再對帳一次確認
+  那一件沒有再開；以及整個 Anime 媒體庫的內容刪光之後按一次「重新入庫」，回到同樣的路徑、同一個 inode、同樣的帳本列。
 
 Prowlarr 也會起來讓精靈偵測，但第 5 步跳過索引站、送單直接帶 `.torrent` 網址——搜尋不在 e2e 裡。套件內的媒體庫
 一開始是空的，反查要等 Berth 請 Jellyfin 掃描之後那一輪，所以一次**約 15 分鐘**，平常的 `uv run pytest` 不收它
