@@ -737,7 +737,7 @@ M1 帶過來的（票 15 的 critique，2026-09-17，使用者拍板交給這一
 
 ### 11.4 M3 RSS
 
-> 2026-09-24 拆成 21 張票，同日插入 06b、06c，共 23 張；編號與內容以 `.scratch/m3/issues/` 為準：01–06c 是下方「M3 之前先做的修補」與兩個頁面決定，07 起是 RSS（tracer 是 08）。
+> 2026-09-24 拆成 21 張票，同日插入 06b–06f，共 26 張；編號與內容以 `.scratch/m3/issues/` 為準：01–06f 是下方「M3 之前先做的修補」與兩個頁面決定，07 起是 RSS（tracer 是 08）。
 
 範圍（2026-09-24 依 brief §15 重寫）：Mikan、Nyaa、acg.rip adapter（先抓 fixture 定欄位）、feeds / series / items 資料流、`rss_poller`、RSS Series 自動綁定與待綁定清單、三層排除條件、去重、Mikan 的補舊集與每日補漏、新 Feed 的第一輪預覽、RSS Series 的季號與 offset（第一批審核、套用到整個 RSS Series 並重算）、一次性 RSS 連結、從 Media 頁訂閱；播出日比對、片長驗證與 Jellyfin 回驗（見下）；**已確認的 RSS Series 之後的 medium 入庫不再進 audit 清單**（2026-09-24 使用者拍板：第一批確認過之後改由回驗與每日檢查守著，出錯變成 Issue，不必每週打開 Berth 按確認）。
 驗收：一個 Mikan 聚合 feed 加一個 Nyaa 或 acg.rip 搜尋 feed 全自動追完；中途訂閱的一部補齊舊集，之後的新集自動入庫；同一集兩個字幕組、同組 v1 與 v2 都並存；合集被排除；一部 split-cour 在審核裡改正一次之後其餘集數跟著對；一筆發佈時間與換算出的那一集播出日對不上的不自動入庫；Jellyfin 認到的季集與帳本不同時開出 Issue；已確認的 RSS Series 的新集數不出現在 audit 清單。
@@ -762,6 +762,7 @@ M1 帶過來的（票 15 的 critique，2026-09-17，使用者拍板交給這一
 - 前端：逐列編輯有沒套用的改動時「核准並入庫」要擋；核准 / 撤銷 / 修 Issue 之後讓 `['media']` 失效；401 導回登入；動作鍵送出中不可再按。**M3 票 06 做完**：§7 的守衛、資料與送出中三條。
 - 部署：五個對外 port（Berth、Jellyfin、qBittorrent WebUI 與 BT、Prowlarr）進 `.env`；Jellyfin 的 port 同時交給 Berth 做深連結推導，qBittorrent 的 WebUI port 內外兩側一起換，Berth 的套件內位址跟著走（2026-09-24 使用者拍板，brief §19；票 06b）。其餘設定仍在精靈與設定頁。
 - 精靈第 1 步的「將會寫入」剖面照偵測結果說話：qBittorrent / Prowlarr 寫的是整組帳密而不是只有密碼；第 2 步偵測之前不斷定哪個服務會被寫入或建立管理員（2026-09-24 使用者重跑精靈時指出；票 06c）。
+- 精靈導覽與泊位（同日重跑精靈時使用者拍板，brief §19）：每個泊位做完停在結果上、上一個 / 下一個泊位、泊位板上走過的可點、回頭看時有出口（票 06d，開工前先 `/impeccable onboard` shape）；索引站與 TMDB 拆成兩個泊位（板變 5 格）、索引站顯示語言與說明、加入後可試搜與移除、預設清單拿掉已不存在的 AniDex（票 06e）；套件內 Jellyfin 的媒體庫由使用者命名與增刪（票 06f）。
 
 同一輪的兩個頁面決定（brief §19 同日）也排在 M3 之前：**探索頁不再放繼續觀看與下一集**，登入後預設落在媒體庫；**`/review` 不再列 Issue**，Issue 只在 `/issues`，`/review` 原位留一行「另有 N 件待處理」。兩條都做完（M3 票 06、05）；`GET /jellyfin/watching` 隨前者刪掉。
 
