@@ -74,6 +74,8 @@ class SetupStatusOut(BaseModel):
     current_step: int
     admin_created: bool
     admin_username: str
+    interface_username: str
+    jellyfin_owns_account: bool
     apply_to_services: bool
     services: list[ServiceDetectionOut]
     waited_seconds: int

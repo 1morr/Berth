@@ -72,6 +72,8 @@ class TestStatus:
             "current_step": 1,
             "admin_created": False,
             "admin_username": "",
+            "interface_username": "",
+            "jellyfin_owns_account": False,
             "apply_to_services": True,
             "services": [],
             "waited_seconds": 0,

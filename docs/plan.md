@@ -557,6 +557,8 @@ WebUI\AuthSubnetWhitelist=172.28.0.2/32
 每一步都是冪等的 `services/setup.py` 命令，之後在設定頁可重跑。**來源是逐服務判斷的**（brief §16.3）：每個服務不是「套件內」就是「既有」，三個服務可任意組合。
 
 1. **建立管理員**：帳號與密碼。套件內 Jellyfin 會以這組帳密建立管理員；既有 Jellyfin 則要求以其管理員帳密登入。勾選「同一組帳密也套用到 qBittorrent 與 Prowlarr 介面」（預設勾）則一併設定套件內的那兩者。
+   - **先建管理員、後偵測**（Jellyfin 啟動精靈、Home Assistant、Jellyseerr 的慣例；管理員不存在時精靈的 API 誰都呼叫得到），所以第 1 步還不知道哪個服務是套件內的。「將會寫入」剖面照 `status.services` 說話（`web/src/setup/adminCutaway.ts`，票 06c）：還沒偵測（含探測中、逾時）寫「第 2 步偵測到是套件內的才建立 / 寫入」，套件內寫「帳號 · 密碼同上」，既有寫「你自己的服務，不建立 / 不寫入」；畫面上從不出現密碼本身。
+   - **帳號交給 Jellyfin 之後只改得動介面那一組**（Seerr 的慣例：媒體伺服器的管理員就是帳號的主人，票 06c）：套件內 Jellyfin 的「建立管理員」有結論、或 Jellyfin 判為既有，`services.setup.jellyfin_owns_account` 就成立。Berth 改不了 Jellyfin 的密碼（初始精靈跑過之後 `_admin_user` 一律略過），覆寫帳號只會讓第 3 步與之後的登入拿著 Jellyfin 不認得的密碼。所以 `SetupAdmin` 存兩組：帳號本身（第 3 步用）與介面那一組（`interface_*`，第 4、5 步用；06c 之前的舊列由 migration `c3d8a6f1b240` 抄一份過去）；之後第 1 步只寫後者，畫面說出密碼在 Jellyfin 裡改、改完要回到第 4、5 步重新套用才生效。Prowlarr 讀回來的密碼是雜湊，重套時比的是 Berth 上一次寫下去的那一組（`SetupIndexer.login_password`）。
 2. **偵測服務**：逐一探測 compose 主機名 `jellyfin:8096` `/System/Info/Public`、`qbittorrent:${QBITTORRENT_WEBUI_PORT}` `/api/v2/app/version`（免密）、`prowlarr:9696` `/ping`；Jellyfin 未完成初始精靈、qBittorrent 免密可進、Prowlarr 讀得到 API key 且無索引站 → 該服務標為**套件內**；探不到或已設定過 → 標為**既有**，顯示位址與憑證表單，每項有「測試連線」。服務未就緒時輪詢至多 2 分鐘。
    - **「探不到」要分兩種**：主機名解不到（`socket.gaierror`）代表這個服務不在 compose 裡（使用者從 `COMPOSE_PROFILES` 拿掉了）→ 立刻判既有，不必等；主機名解得到但連不上 → 容器還在啟動 → 判**探測中**，繼續輪詢到 2 分鐘上限，逾時轉**逾時**並提供重試。逾時與既有都會展開連線表單，所以 DNS 會劫持 NXDOMAIN 的環境仍然走得下去。
    - **精靈的步驟由狀態導出，不存游標**：管理員未建立 → 第 1 步；有服務**還沒連得上** → 第 2 步；否則進第 3 步。存「走到第幾步」的游標會在偵測結果變回等待時說謊。

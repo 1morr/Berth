@@ -178,6 +178,27 @@ async def test_apply_sets_the_web_ui_password_when_the_admin_asked_for_it(
 
 
 @pytest.mark.asyncio
+async def test_new_interface_credentials_reach_qbittorrent_when_step_four_is_applied_again(
+    session: AsyncSession,
+) -> None:
+    """帳號屬於 Jellyfin 之後第 1 步只改得動介面那一組，回到第 4 步重新套用才生效（票 06c）。"""
+    await arrange(session)
+    client = FakeQbittorrentClient()
+    factory = FakeClientFactory(qbittorrent=client)
+    await apply_qbittorrent(session, factory)
+
+    await create_admin(session, username="deckhand", password="changed", apply_to_services=True)
+    await session.commit()
+    await apply_qbittorrent(session, factory)
+
+    assert client.writes[-1] == {"web_ui_username": "deckhand", "web_ui_password": "changed"}
+    settings = await read_settings(session, QbittorrentSettings)
+    assert (settings.username, settings.password) == ("deckhand", "changed")
+    # 帳號本身沒動：它屬於 Jellyfin。
+    assert (await read_status(session)).admin_username == "skipper"
+
+
+@pytest.mark.asyncio
 async def test_apply_leaves_the_password_alone_when_the_box_is_unchecked(
     session: AsyncSession,
 ) -> None:

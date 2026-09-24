@@ -342,6 +342,36 @@ async def test_retrying_after_a_failure_walks_the_rest_of_the_sequence(
 
 
 @pytest.mark.asyncio
+async def test_changing_step_one_after_jellyfin_took_the_account_keeps_step_three_working(
+    session: AsyncSession, tmp_path: Path
+) -> None:
+    """管理員建好之後那組帳號屬於 Jellyfin（票 06c，Seerr 的慣例）。
+
+    Berth 寫不進 Jellyfin 的密碼（初始精靈跑過之後 `_admin_user` 一律略過），所以第 1 步再改
+    帳密只能改 qBittorrent 與 Prowlarr 那一組；否則重跑第 3 步會拿新密碼去登入而被 401。
+    **序列要停在拿到 API key 之前**才測得出來：有了 key，`_authenticate` 用它而不用密碼。
+    同一組錯的帳密之後也擋在「用 Jellyfin 帳號登入 Berth」那一關，那一關沒有 key 可以墊。
+    """
+    blocked = tmp_path / "library"
+    blocked.write_text("not a directory", encoding="utf-8")
+    await seed(session, library_root=str(blocked))
+    jellyfin = FakeJellyfinClient()
+    factory = FakeClientFactory(jellyfin=jellyfin)
+    await bootstrap_jellyfin(session, factory)
+    await create_admin(session, username="deckhand", password="changed", apply_to_services=True)
+    await session.commit()
+    blocked.unlink()
+
+    status = await bootstrap_jellyfin(session, factory)
+
+    assert {row.status for row in status.steps} <= {StepStatus.OK, StepStatus.SKIPPED}
+    assert jellyfin.admin == ("skipper", "harbour")
+    admin = (await read_settings(session, SetupSettings)).admin
+    assert (admin.username, admin.password) == ("skipper", "harbour")
+    assert (admin.interface_username, admin.interface_password) == ("deckhand", "changed")
+
+
+@pytest.mark.asyncio
 async def test_bootstrap_without_an_administrator_says_so(
     session: AsyncSession, tmp_path: Path
 ) -> None:

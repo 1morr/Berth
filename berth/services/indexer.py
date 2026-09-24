@@ -157,6 +157,8 @@ async def apply_default_indexers(
     def record(latest: SetupSettings) -> None:
         latest.indexer.steps = steps
         latest.indexer.skipped = False
+        if steps[-1].key == PROWLARR_LOGIN_STEP and steps[-1].status is StepStatus.OK:
+            latest.indexer.login_password = setup.admin.interface_password
         _pin_probe(latest, origin)
 
     # 逐站加完要一分鐘上下，這段時間裡第 6 步可能已經寫進同一組設定（M2 票 15）。
@@ -240,40 +242,43 @@ async def _apply_password(
     *,
     sleep: Sleeper,
 ) -> SetupStep:
-    """套件內 Prowlarr 的介面登入用 Berth 管理員那一組帳密（brief §16.3）。
+    """套件內 Prowlarr 的介面登入用第 1 步的介面帳密（brief §16.3、票 06c）。
 
     `PUT config/host` 回 202 之後 Prowlarr **自行重啟**，所以要等它回來才算做完；
     整份物件都要送回去，少了 `passwordConfirmation` 會被拒（brief §20.7）。
     """
     key = PROWLARR_LOGIN_STEP
     admin = setup.admin
-    if origin is not ServiceOrigin.BUNDLED or not admin.apply_to_services or not admin.password:
+    username, password = admin.interface_username, admin.interface_password
+    if origin is not ServiceOrigin.BUNDLED or not admin.apply_to_services or not password:
         return SetupStep(key=key, status=StepStatus.SKIPPED)
 
     try:
         config = await client.host_config()
         if (
             config.get("authenticationMethod") == "forms"
-            and config.get("username") == admin.username
+            and config.get("username") == username
+            and setup.indexer.login_password == password
         ):
-            # 已經是這一組帳密了。密碼讀回來是雜湊，比不了，所以比的是帳號與方式。
-            return SetupStep(key=key, status=StepStatus.SKIPPED, detail=admin.username)
+            # 已經是這一組帳密了。密碼讀回來是雜湊，比不了，所以比的是 Berth 上一次寫下去的值
+            # ——只改密碼時帳號一樣，只比帳號會把新密碼略過（票 06c）。
+            return SetupStep(key=key, status=StepStatus.SKIPPED, detail=username)
 
         await client.set_host_config(
             {
                 **config,
                 "authenticationMethod": "forms",
                 "authenticationRequired": "enabled",
-                "username": admin.username,
-                "password": admin.password,
-                "passwordConfirmation": admin.password,
+                "username": username,
+                "password": password,
+                "passwordConfirmation": password,
             }
         )
         await _wait_for_restart(client, sleep=sleep)
     except ServiceError as exc:
         # 這一條失敗不該把前面十站的結果一起丟掉——它們已經加進去了，畫面必須說得出來。
         return SetupStep(key=key, status=StepStatus.FAILED, error=message(exc))
-    return SetupStep(key=key, status=StepStatus.OK, detail=admin.username)
+    return SetupStep(key=key, status=StepStatus.OK, detail=username)
 
 
 async def _wait_for_restart(client: ProwlarrClient, *, sleep: Sleeper) -> None:
@@ -399,7 +404,9 @@ def _view(
         steps=step_views(setup.indexer.steps),
         skipped=setup.indexer.skipped,
         sets_password=(
-            origin is ServiceOrigin.BUNDLED and admin.apply_to_services and bool(admin.password)
+            origin is ServiceOrigin.BUNDLED
+            and admin.apply_to_services
+            and bool(admin.interface_password)
         ),
         error=error,
     )

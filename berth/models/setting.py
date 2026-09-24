@@ -106,12 +106,20 @@ class SetupAdmin(BaseModel):
     密碼是明文的：第 3 步要拿它去建 Jellyfin 管理員，第 4 步要拿它設 qBittorrent 的 WebUI 密碼，
     雜湊做不到這兩件事。Berth 自己從不驗證這組密碼——登入一律走 Jellyfin（brief §11）。
     秘密只靠檔案權限保護，與其他 `settings.services.*` 的 key 與密碼一致（brief §16.2）。
+
+    **兩組帳密**（票 06c）：`username` / `password` 是帳號本身，套件內 Jellyfin 的管理員建好
+    之後它就是那個管理員，第 1 步不再改它（`services.setup.jellyfin_owns_account`）；既有
+    Jellyfin 從來不用它（Berth 的登入是那台自己的帳號），偵測出來之後同樣不再改。
+    `interface_*` 是套用到 qBittorrent 與 Prowlarr 介面的那一組，一直改得動。在帳號還沒
+    交給 Jellyfin 之前兩組相同。
     """
 
     model_config = ConfigDict(extra="ignore")
 
     username: str = ""
     password: str = ""
+    interface_username: str = ""
+    interface_password: str = ""
     #: 「同一組帳密也套用到 qBittorrent 與 Prowlarr 介面」，預設勾。
     apply_to_services: bool = True
 
@@ -197,6 +205,9 @@ class SetupIndexer(BaseModel):
     steps: list[SetupStep] = []
     #: 「之後再說」。可跳過的只有這一步，完成頁列出跳過了什麼（plan §9.3、票 02b）。
     skipped: bool = False
+    #: Berth 上一次寫進 Prowlarr `config/host` 的密碼。那邊讀回來是雜湊，重按時只有它比得出
+    #: 「使用者在第 1 步改了密碼」（票 06c）。
+    login_password: str = ""
 
 
 class SetupTmdb(BaseModel):

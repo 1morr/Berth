@@ -6,6 +6,7 @@ M1 的表由後續的 migration 增量加上去（progress.md 偏差與決定）
 
 from __future__ import annotations
 
+import json
 import sqlite3
 from collections.abc import Iterator
 from contextlib import closing, contextmanager
@@ -215,6 +216,54 @@ async def test_old_reason_sentences_are_cleared_and_coded_ones_are_kept(config: 
         await engine.dispose()
 
     assert rows == {1: "[]", 2: coded, 3: None}
+
+
+#: 票 06c 把第 1 步的帳密拆成帳號與介面兩組的那一版，與它的前一版。
+INTERFACE_PAIR = "c3d8a6f1b240"
+BEFORE_INTERFACE_PAIR = "f2a7c91d4e38"
+
+
+async def test_the_interface_pair_starts_as_the_account_pair(config: Config) -> None:
+    """票 06c：舊的 `setup` 列只有一組帳密，那一組就是介面那一組（兩組在交給 Jellyfin 前本來相同）。
+
+    沒有這一步，精靈跑到一半的舊資料重跑第 4、5 步會讀到空的介面帳密，悄悄不設密碼。
+    """
+    config.config_root.mkdir(parents=True, exist_ok=True)
+    engine = create_engine(config)
+    admin = '{"admin": {"username": "skipper", "password": "harbour", "apply_to_services": true}}'
+    try:
+        async with engine.begin() as connection:
+            await connection.run_sync(_upgrade_to, BEFORE_INTERFACE_PAIR)
+        with _sqlite(config.database_path) as db:
+            for key, value in (("setup", admin), ("paths", '{"library_root": "/data/library"}')):
+                db.execute(
+                    "INSERT INTO settings (key, value_json, updated_at)"
+                    " VALUES (?, ?, '2026-09-25T00:00:00.000000+00:00')",
+                    (key, value),
+                )
+            db.commit()
+
+        async with engine.begin() as connection:
+            await connection.run_sync(_upgrade_to, INTERFACE_PAIR)
+        with _sqlite(config.database_path) as db:
+            upgraded = dict(db.execute("SELECT key, value_json FROM settings").fetchall())
+
+        async with engine.begin() as connection:
+            await connection.run_sync(_downgrade_to, BEFORE_INTERFACE_PAIR)
+        with _sqlite(config.database_path) as db:
+            downgraded = dict(db.execute("SELECT key, value_json FROM settings").fetchall())
+    finally:
+        await engine.dispose()
+
+    assert json.loads(upgraded["setup"])["admin"] == {
+        "username": "skipper",
+        "password": "harbour",
+        "apply_to_services": True,
+        "interface_username": "skipper",
+        "interface_password": "harbour",
+    }
+    assert upgraded["paths"] == '{"library_root": "/data/library"}'
+    assert json.loads(downgraded["setup"]) == json.loads(admin)
 
 
 async def test_alembic_records_the_head_revision(config: Config) -> None:

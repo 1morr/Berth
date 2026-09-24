@@ -608,6 +608,16 @@ Issue、修正、對帳、刪除與重新入庫的每一條端點都是 403，�
   模組裡公開的 `async def` 都要有標記。
 
 ### Changed
+- **精靈第 1 步的「將會寫入」照第 2 步的判定說話**（M3 票 06c）：三個服務的標籤都是「帳密」、值寫
+  「帳號 · 密碼同上」（不顯示密碼）；偵測之前寫「第 2 步偵測到是套件內的才建立 / 寫入」，既有服務寫
+  「你自己的服務，不建立 / 不寫入」，Berth 那一列在既有 Jellyfin 時寫「用你 Jellyfin 的管理員登入」。
+  lede 與勾選框的提示不再在偵測前斷定 Jellyfin 會被建立管理員。
+- **帳號交給 Jellyfin 之後，第 1 步只改得動 qBittorrent 與 Prowlarr 介面那一組**（M3 票 06c，Seerr 的慣例）：
+  `GET /api/setup/status` 多了 `interface_username` 與 `jellyfin_owns_account`；套件內 Jellyfin 的管理員建好、
+  或 Jellyfin 判為既有之後，`POST /api/setup/admin` 只覆寫介面那一組，畫面說出密碼在 Jellyfin 裡改、改完要
+  回到第 4、5 步重新套用。`settings.setup.admin` 多了 `interface_username` / `interface_password`，
+  migration `c3d8a6f1b240` 從舊的那一組抄過去；`settings.setup.indexer.login_password` 記 Berth 上一次寫進
+  Prowlarr 的密碼。
 - **部署套件的五個對外 port 進 `.env`**（M3 票 06b，brief §19 2026-09-24）：`BERTH_PORT`、`JELLYFIN_PORT`、
   `QBITTORRENT_WEBUI_PORT`、`QBITTORRENT_BT_PORT`、`PROWLARR_PORT`，預設是原本的號碼，舊的 `.env` 照樣能用。
   qBittorrent 的兩個 port 內外兩側一起換（並設 `WEBUI_PORT` / `TORRENTING_PORT`），換 WebUI port 不再吃 401，
@@ -892,6 +902,10 @@ Issue、修正、對帳、刪除與重新入庫的每一條端點都是 403，�
 
 ### Fixed
 
+- **精靈第 1 步改了帳密之後，第 3 步不再用 Jellyfin 不認得的密碼登入**（M3 票 06c）：Berth 改不了 Jellyfin
+  的密碼，原本「改帳密」會把 Berth 記的那一組換掉，停在拿到 API key 之前的第 3 步重跑就被 401。
+- **只改密碼時，重新套用第 5 步會把新密碼寫進 Prowlarr**（M3 票 06c）：原本只比帳號與驗證方式，帳號沒變就
+  當成已經設好了。
 - **套件內 Jellyfin 發佈在別的 port 時，「在 Jellyfin 開啟」開到對的那一台**（M3 票 06b）：深連結推導的第 3 條
   原本取 `base_url` 的 port，也就是容器內的 8096；發佈成 `18096:8096` 時開到的是同一台機器上另一台 Jellyfin。
   現在用 `JELLYFIN_PORT`。

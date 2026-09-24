@@ -201,6 +201,35 @@ async def test_the_bundled_prowlarr_gets_the_admin_credentials(session: AsyncSes
 
 
 @pytest.mark.asyncio
+async def test_new_interface_credentials_reach_prowlarr_when_step_five_is_applied_again(
+    session: AsyncSession,
+) -> None:
+    """只改密碼也要重寫（票 06c）：Prowlarr 讀回來的密碼是雜湊，比的是 Berth 上次寫的那一組。"""
+    await arrange(session)
+    client = FakeProwlarrClient()
+    factory = FakeClientFactory(prowlarr=client)
+    await apply_default_indexers(session, factory, ["nyaasi"], sleep=_no_sleep)
+
+    await create_admin(session, username="skipper", password="changed", apply_to_services=True)
+    await session.commit()
+    status = await apply_default_indexers(session, factory, ["nyaasi"], sleep=_no_sleep)
+
+    config = await client.host_config()
+    assert (config["username"], config["password"]) == ("skipper", "changed")
+    assert client.restarts == 2
+    assert [row.status for row in status.steps if row.step == PROWLARR_LOGIN_STEP] == [
+        StepStatus.OK
+    ]
+
+    await create_admin(session, username="deckhand", password="changed", apply_to_services=True)
+    await session.commit()
+    await apply_default_indexers(session, factory, ["nyaasi"], sleep=_no_sleep)
+
+    assert (await client.host_config())["username"] == "deckhand"
+    assert client.restarts == 3
+
+
+@pytest.mark.asyncio
 async def test_an_unticked_box_leaves_the_prowlarr_interface_alone(
     session: AsyncSession,
 ) -> None:

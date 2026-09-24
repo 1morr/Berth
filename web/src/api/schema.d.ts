@@ -3377,6 +3377,10 @@ export interface components {
             admin_created: boolean;
             /** Admin Username */
             admin_username: string;
+            /** Interface Username */
+            interface_username: string;
+            /** Jellyfin Owns Account */
+            jellyfin_owns_account: boolean;
             /** Apply To Services */
             apply_to_services: boolean;
             /** Services */

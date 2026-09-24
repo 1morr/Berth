@@ -91,6 +91,10 @@ class SetupStatus:
     current_step: int
     admin_created: bool
     admin_username: str
+    #: 套用到 qBittorrent 與 Prowlarr 介面的那一組的帳號。帳號交給 Jellyfin 之前與上一欄相同。
+    interface_username: str
+    #: 帳號已經屬於 Jellyfin，第 1 步只改得動介面那一組（`jellyfin_owns_account`）。
+    jellyfin_owns_account: bool
     apply_to_services: bool
     services: tuple[ServiceDetection, ...]
     #: 本輪已等待的秒數與上限，UI 用來顯示等待狀態與逾時。
@@ -141,20 +145,50 @@ async def create_admin(
     password: str,
     apply_to_services: bool,
 ) -> SetupStatus:
-    """第 1 步。重跑就是覆寫同一組帳密。呼叫端負責 commit。"""
+    """第 1 步。重跑就是覆寫同一組帳密。呼叫端負責 commit。
+
+    **帳號交給 Jellyfin 之後只覆寫介面那一組**（`jellyfin_owns_account`，票 06c）：Berth 改不了
+    Jellyfin 的密碼，覆寫帳號只會讓第 3 步與之後的登入拿著 Jellyfin 不認得的密碼。
+    """
     if not username.strip():
         raise ValueError("username must not be blank")
     if not password:
         raise ValueError("password must not be blank")
 
     setup = await read_settings(session, SetupSettings)
+    owned = jellyfin_owns_account(setup)
     setup.admin = SetupAdmin(
-        username=username.strip(),
-        password=password,
+        username=setup.admin.username if owned else username.strip(),
+        password=setup.admin.password if owned else password,
+        interface_username=username.strip(),
+        interface_password=password,
         apply_to_services=apply_to_services,
     )
     await write_settings(session, setup)
     return await _read(session, now=_utcnow())
+
+
+def jellyfin_owns_account(setup: SetupSettings) -> bool:
+    """第 1 步的帳號是不是已經屬於 Jellyfin（票 06c）。
+
+    照 Seerr 的慣例：媒體伺服器的管理員就是帳號的主人。
+
+    套件內 Jellyfin 的「建立管理員」有結論就是（`ok` 是剛建、`skipped` 是早就建好）；
+    既有 Jellyfin 從來不用這組帳號，Berth 的登入就是它自己的帳號，偵測出來就是。
+    還沒偵測（探測中、逾時、沒有判定）時帳號還是第 1 步的。
+    """
+    probe = setup.services.get(ServiceKind.JELLYFIN)
+    if probe is None:
+        return False
+    if probe.origin is ServiceOrigin.EXISTING:
+        return True
+    if probe.origin is not ServiceOrigin.BUNDLED:
+        return False
+    return any(
+        row.key == JellyfinStep.ADMIN_USER.value
+        and row.status in (StepStatus.OK, StepStatus.SKIPPED)
+        for row in setup.jellyfin.steps
+    )
 
 
 async def detect_services(
@@ -527,6 +561,8 @@ def _status(setup: SetupSettings, *, now: datetime, routes: bool) -> SetupStatus
         current_step=_current_step(setup, routes=routes),
         admin_created=bool(setup.admin.username),
         admin_username=setup.admin.username,
+        interface_username=setup.admin.interface_username,
+        jellyfin_owns_account=jellyfin_owns_account(setup),
         apply_to_services=setup.admin.apply_to_services,
         services=tuple(
             ServiceDetection(

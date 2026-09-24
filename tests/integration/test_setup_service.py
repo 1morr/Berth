@@ -17,8 +17,8 @@ from berth.adapters.jellyfin.fake import FakeJellyfinClient
 from berth.adapters.prowlarr import ProwlarrIndexer
 from berth.adapters.prowlarr.fake import FakeProwlarrClient
 from berth.adapters.qbittorrent.fake import FakeQbittorrentClient
-from berth.domain import DetectionReason, ServiceKind, ServiceOrigin
-from berth.models import IndexerSettings, SetupSettings
+from berth.domain import DetectionReason, JellyfinStep, ServiceKind, ServiceOrigin, StepStatus
+from berth.models import IndexerSettings, ServiceProbe, SetupSettings, SetupStep
 from berth.services.clients import SetupProbes
 from berth.services.settings import read_settings, write_settings
 from berth.services.setup import (
@@ -26,6 +26,7 @@ from berth.services.setup import (
     SetupStatus,
     create_admin,
     detect_services,
+    jellyfin_owns_account,
     read_status,
 )
 
@@ -111,6 +112,55 @@ async def test_admin_password_is_kept_for_the_service_steps(session: AsyncSessio
     await create_admin(session, username="skipper", password="harbour", apply_to_services=True)
 
     assert (await read_settings(session, SetupSettings)).admin.password == "harbour"
+
+
+def owned(origin: ServiceOrigin | None, admin_user: StepStatus | None = None) -> bool:
+    setup = SetupSettings()
+    if origin is not None:
+        setup.services = {
+            ServiceKind.JELLYFIN: ServiceProbe(
+                origin=origin, reason=DetectionReason.SETUP_PENDING, checked_at=NOW
+            )
+        }
+    if admin_user is not None:
+        setup.jellyfin.steps = [SetupStep(key=JellyfinStep.ADMIN_USER.value, status=admin_user)]
+    return jellyfin_owns_account(setup)
+
+
+@pytest.mark.parametrize(
+    ("origin", "admin_user", "expected"),
+    [
+        # 還沒偵測：探測中、逾時、沒有判定都一樣，帳號還是第 1 步的。
+        (None, None, False),
+        (ServiceOrigin.PENDING, None, False),
+        (ServiceOrigin.TIMEOUT, None, False),
+        # 套件內：要等「建立管理員」那一步有結論。
+        (ServiceOrigin.BUNDLED, None, False),
+        (ServiceOrigin.BUNDLED, StepStatus.FAILED, False),
+        (ServiceOrigin.BUNDLED, StepStatus.OK, True),
+        (ServiceOrigin.BUNDLED, StepStatus.SKIPPED, True),
+        # 既有：Berth 的登入本來就是它自己的帳號。
+        (ServiceOrigin.EXISTING, None, True),
+    ],
+)
+def test_the_account_belongs_to_jellyfin_once_jellyfin_has_its_administrator(
+    origin: ServiceOrigin | None, admin_user: StepStatus | None, expected: bool
+) -> None:
+    assert owned(origin, admin_user) is expected
+
+
+@pytest.mark.asyncio
+async def test_before_jellyfin_owns_the_account_both_pairs_follow_step_one(
+    session: AsyncSession,
+) -> None:
+    await create_admin(session, username="first", password="one", apply_to_services=True)
+    await create_admin(session, username="second", password="two", apply_to_services=True)
+
+    admin = (await read_settings(session, SetupSettings)).admin
+    assert (admin.username, admin.password) == ("second", "two")
+    assert (admin.interface_username, admin.interface_password) == ("second", "two")
+    status = await read_status(session)
+    assert (status.interface_username, status.jellyfin_owns_account) == ("second", False)
 
 
 # --- 第 2 步：偵測服務 ---

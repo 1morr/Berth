@@ -42,8 +42,9 @@ describe('第 1 步：建立管理員', () => {
     renderWithProviders(<SetupPage />)
     await user.type(await screen.findByLabelText('帳號'), 'skipper')
 
-    // Berth 管理員、Jellyfin 管理員、qBittorrent、Prowlarr 四列都跟著顯示同一個帳號。
-    expect(screen.getAllByText('skipper')).toHaveLength(4)
+    // Berth 管理員一列、Jellyfin 與兩個介面三列都跟著顯示同一個帳號（逐狀態的文案在
+    // `AdminStep.test.tsx`）。
+    expect(screen.getAllByText(/^skipper/)).toHaveLength(4)
   })
 
   it('取消勾選之後 qBittorrent 與 Prowlarr 那兩列顯示不套用', async () => {

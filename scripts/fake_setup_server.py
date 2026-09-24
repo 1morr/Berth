@@ -1206,7 +1206,12 @@ async def _moor(
         )
 
     setup = await read_settings(session, SetupSettings)
-    setup.admin = SetupAdmin(username="skipper", password="harbour")
+    setup.admin = SetupAdmin(
+        username="skipper",
+        password="harbour",
+        interface_username="skipper",
+        interface_password="harbour",
+    )
     setup.services = {
         kind: ServiceProbe(
             origin=ServiceOrigin.BUNDLED,

@@ -233,34 +233,32 @@ async def _apply_password(
     settings: QbittorrentSettings,
     origin: ServiceOrigin,
 ) -> SetupStep:
-    """套件內的那一台另設 WebUI 密碼（plan §9.3 第 4 步）。
+    """套件內的那一台另設 WebUI 帳密：第 1 步的介面那一組（plan §9.3 第 4 步、票 06c）。
 
     設完之後**不能再被重探判成「既有」**：判定的規則是「免密進得去 → 套件內」，而現在它要
     密碼了——那個密碼還是 Berth 自己設的。所以連同判定一起釘住（`configured`）。
     """
-    admin = setup.admin
+    username, password = setup.admin.interface_username, setup.admin.interface_password
     if not _sets_password(setup, origin):
         return SetupStep(key=QbittorrentStep.PASSWORD.value, status=StepStatus.SKIPPED)
-    if (settings.username, settings.password) == (admin.username, admin.password):
+    if (settings.username, settings.password) == (username, password):
         # 已經是這一組帳密了。重按不必再寫一次密碼——那是這一步唯一沒辦法讀回來比對的鍵，
         # 所以比對的是 Berth 自己上一次寫下去的值。
         return SetupStep(
             key=QbittorrentStep.PASSWORD.value,
             status=StepStatus.SKIPPED,
-            detail=admin.username,
+            detail=username,
         )
 
     try:
-        await client.set_preferences(
-            {WEB_UI_USERNAME_KEY: admin.username, WEB_UI_PASSWORD_KEY: admin.password}
-        )
+        await client.set_preferences({WEB_UI_USERNAME_KEY: username, WEB_UI_PASSWORD_KEY: password})
     except ServiceError as exc:
         # 這一條失敗不該把前面五個鍵的結果一起丟掉——它們已經寫進去了。
         return SetupStep(
             key=QbittorrentStep.PASSWORD.value, status=StepStatus.FAILED, error=message(exc)
         )
-    settings.username = admin.username
-    settings.password = admin.password
+    settings.username = username
+    settings.password = password
     probe = setup.services.get(ServiceKind.QBITTORRENT)
     if probe is not None:
         setup.services = {
@@ -273,9 +271,7 @@ async def _apply_password(
                 }
             ),
         }
-    return SetupStep(
-        key=QbittorrentStep.PASSWORD.value, status=StepStatus.OK, detail=admin.username
-    )
+    return SetupStep(key=QbittorrentStep.PASSWORD.value, status=StepStatus.OK, detail=username)
 
 
 async def _connect(
@@ -366,8 +362,8 @@ def _sets_password(setup: SetupSettings, origin: ServiceOrigin) -> bool:
     return (
         origin is ServiceOrigin.BUNDLED
         and setup.admin.apply_to_services
-        and bool(setup.admin.username)
-        and bool(setup.admin.password)
+        and bool(setup.admin.interface_username)
+        and bool(setup.admin.interface_password)
     )
 
 
