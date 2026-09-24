@@ -18,6 +18,8 @@
 
 from __future__ import annotations
 
+from enum import StrEnum
+
 from fastapi import status
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from starlette.datastructures import MutableHeaders
@@ -100,6 +102,34 @@ ADMIN_ROUTES: tuple[tuple[str, str], ...] = (
 NO_STORE = "no-store"
 
 
+class Access(StrEnum):
+    """一個請求要過哪一道門。規則只寫在 `access_of` 一處，門禁照它放行或擋下。"""
+
+    #: 不必登入（`ANONYMOUS_PATHS`）。
+    ANONYMOUS = "anonymous"
+    #: 精靈：跑完之前匿名開放，之後只有管理員（`_setup_verdict`）。
+    SETUP = "setup"
+    #: 只有管理員（`ADMIN_PREFIXES`、`ADMIN_ROUTES`）。
+    ADMIN = "admin"
+    #: 登入就可以。沒被上面三種認領的路徑都落在這裡——預設拒絕的那一半是「要登入」。
+    SIGNED_IN = "signed_in"
+
+
+def access_of(method: str, path: str) -> Access:
+    """`path` 相對於 `/api`。只看方法與路徑，不看是誰——那是 `_verdict` 的事。
+
+    `tests/integration/test_auth_api.py` 的 `TestWhoEachEndpointIsFor` 拿它對 app 上的每一條路由
+    逐條比對一份寫死的分類表，新增端點而沒決定它是誰的，紅的是那一支。
+    """
+    if path in ANONYMOUS_PATHS:
+        return Access.ANONYMOUS
+    if _under_any(path, (SETUP_PREFIX,)):
+        return Access.SETUP
+    if _under_any(path, ADMIN_PREFIXES) or _is_admin_route(method, path):
+        return Access.ADMIN
+    return Access.SIGNED_IN
+
+
 class ApiGate:
     """`/api` 底下的每個請求都先過這裡。前端靜態檔不受影響。"""
 
@@ -137,16 +167,18 @@ class ApiGate:
         # 下游用同一份 scope 造出來的 Request 讀得到同一個字典。
         request.state.user = user
 
-        if path in ANONYMOUS_PATHS:
-            return None
-        if _under_any(path, (SETUP_PREFIX,)):
-            return await _setup_verdict(request, user)
-        if _under_any(path, ADMIN_PREFIXES) or _is_admin_route(request.method, path):
-            return _admin_verdict(user)
-        if user is None:
-            # 未知路徑也走這裡：401 早於 404，才不會讓人靠回應碼列舉端點。
-            return _refuse(status.HTTP_401_UNAUTHORIZED, "sign in to use this API")
-        return None
+        match access_of(request.method, path):
+            case Access.ANONYMOUS:
+                return None
+            case Access.SETUP:
+                return await _setup_verdict(request, user)
+            case Access.ADMIN:
+                return _admin_verdict(user)
+            case Access.SIGNED_IN:
+                if user is None:
+                    # 未知路徑也走這裡：401 早於 404，才不會讓人靠回應碼列舉端點。
+                    return _refuse(status.HTTP_401_UNAUTHORIZED, "sign in to use this API")
+                return None
 
     async def _resolve(self, request: Request) -> AuthenticatedUser | None:
         token = request.cookies.get(SESSION_COOKIE)
