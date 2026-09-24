@@ -2,7 +2,7 @@
 
 **Status:** ready-for-agent
 
-**Blocked by:** None — can start immediately（只動 `web/src/setup/AdminStep.tsx`、i18n 與它的測試）
+**Blocked by:** None — can start immediately（動 `web/src/setup/AdminStep.tsx`、i18n、`services/setup.create_admin` 的規則與它們的測試）
 
 **讀:** plan §9.3 第 1、2 步；brief §16.3（來源逐服務判斷）；`DESIGN.md` 的剖面（`Cutaway` / `CutawayRow`）；`web/src/setup/AdminStep.tsx`
 
@@ -27,6 +27,14 @@
 | 已偵測、既有 | 「你自己的服務：用它的管理員登入，不建立」 | 「你自己的服務，不寫入」 |
 | 沒勾選 | 照上面 | 「不套用」（現有的 `skipped`） |
 
+**3. 走過泊位 1 之後「改帳密」會讓 Berth 與 Jellyfin 對不上（使用者 2026-09-25 問「之後還能改嗎」時查到）。** `setup.create_admin` 只覆寫 Berth 存的那一組（「重跑就是覆寫同一組帳密」），而 Jellyfin 的初始精靈跑完之後，`jellyfin.py` 的 `_admin_user` 一律 `SKIPPED`——新密碼不會寫到 Jellyfin。之後任何拿這組帳密登入 Jellyfin 的步驟（`_libraries` 的 `_authenticate`、第 7 步換 API key）會失敗，精靈走完後用 Jellyfin 帳號登入 Berth 時照 Berth 記的那組也進不去。qBittorrent 重跑第 4 步時會套新帳密（`qbittorrent.py` 比對後重寫），Prowlarr 也會，只有 Jellyfin 不會。
+
+決定照 Seerr 的慣例：**媒體伺服器的管理員就是帳號的主人**。套件內 Jellyfin 的管理員建好之後，那組帳號屬於 Jellyfin：
+
+- 第 1 步回頭看時，帳號與密碼欄不再能改 Jellyfin 的那一組，說明「密碼在 Jellyfin 裡改；Berth 的登入就是 Jellyfin 帳號」。
+- 仍可改的只剩「套用到 qBittorrent 與 Prowlarr 介面」的那一組，而且說清楚要回到那兩個泊位重新套用才會生效（06d 的導覽）。
+- 既有 Jellyfin 本來就不用這組帳密建管理員，同樣處理。
+
 lede 改成條件句（「Jellyfin 是套件內的話，之後會用它建立 Jellyfin 管理員」）；勾選框的提示補上「第 2 步會判斷每個服務是套件內還是你自己的」。
 
 「已偵測」讀 `status.services` 裡該服務的判定：`origin` 是 `bundled` → 套件內，`existing` → 既有；`pending`、`timeout` 或清單裡沒有那個服務都當「還沒偵測」（`domain/enums.ServiceOrigin`）。判定到文案的對應是純函式，放在 `AdminStep.tsx` 旁邊。
@@ -36,6 +44,8 @@ lede 改成條件句（「Jellyfin 是套件內的話，之後會用它建立 Je
 - [ ] 剖面三個服務的標籤都是「帳密」，值是「帳號・密碼同上」，畫面上不出現密碼本身
 - [ ] 未偵測、套件內、既有、沒勾選四種狀態的剖面文案各有前端測試；對應函式有單元測試，涵蓋探測中與逾時當成未偵測
 - [ ] lede 與勾選框提示不再在偵測前斷定 Jellyfin 會被建立管理員
+- [ ] 紅燈先行：Jellyfin 管理員已建立之後改帳密，再跑一次第 3 步會登入失敗（整合測試，Fake Jellyfin，修正前紅）；修正後第 1 步不再接受改 Jellyfin 的那一組，並說出去哪裡改
+- [ ] 只改 qBittorrent / Prowlarr 那一組時，回到第 4、5 步重新套用後兩邊都生效（整合測試）
 - [ ] zh-Hant 與 en 並列
 - [ ] playwright 實跑：全新環境走到第 1 步（未偵測）一張；走完精靈回到第 1 步（已偵測）一張；1280 與 390。附結果
 - [ ] plan §9.3 第 1 步的敘述若與畫面不一致，同步改
