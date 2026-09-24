@@ -732,6 +732,8 @@ M1 帶過來的（票 15 的 critique，2026-09-17，使用者拍板交給這一
 
 ### 11.4 M3 RSS
 
+> 2026-09-24 拆成 21 張票，編號與內容以 `.scratch/m3/issues/` 為準：01–06 是下方「M3 之前先做的修補」與兩個頁面決定，07 起是 RSS（tracer 是 08）。
+
 範圍（2026-09-24 依 brief §15 重寫）：Mikan、Nyaa、acg.rip adapter（先抓 fixture 定欄位）、feeds / series / items 資料流、`rss_poller`、RSS Series 自動綁定與待綁定清單、三層排除條件、去重、Mikan 的補舊集與每日補漏、新 Feed 的第一輪預覽、RSS Series 的季號與 offset（第一批審核、套用到整個 RSS Series 並重算）、一次性 RSS 連結、從 Media 頁訂閱；播出日比對、片長驗證與 Jellyfin 回驗（見下）；**已確認的 RSS Series 之後的 medium 入庫不再進 audit 清單**（2026-09-24 使用者拍板：第一批確認過之後改由回驗與每日檢查守著，出錯變成 Issue，不必每週打開 Berth 按確認）。
 驗收：一個 Mikan 聚合 feed 加一個 Nyaa 或 acg.rip 搜尋 feed 全自動追完；中途訂閱的一部補齊舊集，之後的新集自動入庫；同一集兩個字幕組、同組 v1 與 v2 都並存；合集被排除；一部 split-cour 在審核裡改正一次之後其餘集數跟著對；一筆發佈時間與換算出的那一集播出日對不上的不自動入庫；Jellyfin 認到的季集與帳本不同時開出 Issue；已確認的 RSS Series 的新集數不出現在 audit 清單。
 
