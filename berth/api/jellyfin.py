@@ -177,11 +177,15 @@ async def get_image(
     )
 
 
-async def watching_out(session: SessionDep, watching: Watching) -> WatchingOut:
+async def watching_out(
+    session: SessionDep, watching: Watching, *, published_port: int
+) -> WatchingOut:
     """媒體庫頁繼續觀看與下一集的形狀（`berth/api/inventory.py`）。圖片網址在這一層組：
     services 只知道 Jellyfin 的 tag。"""
     return WatchingOut(
-        jellyfin=JellyfinWebOut.model_validate(await jellyfin_web(session)),
+        jellyfin=JellyfinWebOut.model_validate(
+            await jellyfin_web(session, published_port=published_port)
+        ),
         resume=[_watching_card(card) for card in watching.resume],
         next_up=[_watching_card(card) for card in watching.next_up],
     )

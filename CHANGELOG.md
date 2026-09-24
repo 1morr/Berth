@@ -608,6 +608,12 @@ Issue、修正、對帳、刪除與重新入庫的每一條端點都是 403，�
   模組裡公開的 `async def` 都要有標記。
 
 ### Changed
+- **部署套件的五個對外 port 進 `.env`**（M3 票 06b，brief §19 2026-09-24）：`BERTH_PORT`、`JELLYFIN_PORT`、
+  `QBITTORRENT_WEBUI_PORT`、`QBITTORRENT_BT_PORT`、`PROWLARR_PORT`，預設是原本的號碼，舊的 `.env` 照樣能用。
+  qBittorrent 的兩個 port 內外兩側一起換（並設 `WEBUI_PORT` / `TORRENTING_PORT`），換 WebUI port 不再吃 401，
+  也不靠 `WebUI\HostHeaderValidation=false`。`JELLYFIN_PORT` 與 `QBITTORRENT_WEBUI_PORT` 同時傳給 Berth
+  （新的同名環境變數，`berth/config.py`）：精靈探 `http://qbittorrent:<QBITTORRENT_WEBUI_PORT>`，第 4 步與
+  Route 檢查連判定記下的那一條。
 - **`/review` 不再列 Issue**（M3 票 05，brief §19 2026-09-24）：Issue 只在 `/issues`，`/review` 原位一行
   「另有 N 件待處理」連過去（`GET /review` 多一格 `issues_open`，`kind` 少了 `issue`，`total` 與 `queue_total`
   不再算 Issue）。處理完一件 Issue 的那一句朗讀搬到 `/issues`。
@@ -886,6 +892,9 @@ Issue、修正、對帳、刪除與重新入庫的每一條端點都是 403，�
 
 ### Fixed
 
+- **套件內 Jellyfin 發佈在別的 port 時，「在 Jellyfin 開啟」開到對的那一台**（M3 票 06b）：深連結推導的第 3 條
+  原本取 `base_url` 的 port，也就是容器內的 8096；發佈成 `18096:8096` 時開到的是同一台機器上另一台 Jellyfin。
+  現在用 `JELLYFIN_PORT`。
 - **精靈第 5 步加站還在跑時按「測試 TMDB」，TMDB 的結果不再被蓋掉**（M2 票 15 的 e2e 抓到）：兩支命令都是「讀
   `settings.setup`、打網路、整份寫回」，後寫完的那一支把對方剛寫的那一半蓋回去——畫面說 TMDB 已完成，精靈卻卡在
   第 6 步。反過來（TMDB 先送出、加站先寫完）則是逐站結果消失。三支命令（加預設站、測既有索引站、測 TMDB）改在

@@ -10,7 +10,7 @@
 
 ```bash
 cd deploy
-cp .env.example .env        # 改 DATA_ROOT 與 CONFIG_ROOT
+cp .env.example .env        # 改 DATA_ROOT 與 CONFIG_ROOT；port 撞到了再改五個 *_PORT
 docker compose up -d
 ```
 
@@ -46,12 +46,18 @@ docker compose up -d
 
 > **compose 範本 pin 的 `ghcr.io/1morr/berth:latest` 還是空的。** GHCR 上目前只有預發佈的 `0.1.0-rc1`（`:latest` 要等第一個正式版本 tag），所以現在要跑 compose 得先在 repo 根目錄自己 build 一份：見下面的〈自己 build image〉。
 
-| 服務 | Port | 備註 |
+| 服務 | `.env` 變數（預設） | 備註 |
 | --- | --- | --- |
-| Berth | 8383 | 唯一需要開的介面 |
-| qBittorrent | 8080（WebUI）、6881（BT） | WebUI 要密碼，密碼在精靈裡設定 |
-| Jellyfin | 8096 | |
-| Prowlarr | 9696 | |
+| Berth | `BERTH_PORT`（8383） | 唯一需要開的介面 |
+| qBittorrent | `QBITTORRENT_WEBUI_PORT`（8080）、`QBITTORRENT_BT_PORT`（6881） | WebUI 要密碼，密碼在精靈裡設定。兩個 port 都是容器內外同一個號碼 |
+| Jellyfin | `JELLYFIN_PORT`（8096） | 「在 Jellyfin 開啟」開的就是這個 port |
+| Prowlarr | `PROWLARR_PORT`（9696） | |
+
+port 跟這台機器上別的東西撞到時（同一台還跑著另一套 Berth、開發環境），改 `.env` 的這五個變數再
+`docker compose up -d`，**不要改 compose 檔**。`.env` 只放這五個 Berth 在容器裡看不到的宿主端事實；
+服務位址與憑證、下載目錄、媒體庫路徑都在精靈與設定頁裡改（brief §19）。
+**`QBITTORRENT_WEBUI_PORT` 要在跑精靈之前定下來**：Berth 連套件內 qBittorrent 的位址是精靈第 2 步探到、
+第 4 步存下的那一條，之後再改這個變數不會跟著走。
 
 已經有其中某個服務的人，把它從 `.env` 的 `COMPOSE_PROFILES` 拿掉，精靈會改用「既有服務」的表單接入；`berth` 沒有 profile，永遠會啟動。變數清單見 `deploy/.env.example`，裡面沒有任何秘密欄位。
 
@@ -118,11 +124,14 @@ docker compose exec berth python -c \
   "import urllib.request; print(urllib.request.urlopen('http://qbittorrent:8080/api/v2/app/version').read())"
 ```
 
-**不要改 qBittorrent 的發佈 port 號碼。** qBittorrent 的 Host 檢查除了網域還會比對 port，
-而且 `WebUI\ServerDomains=*` 也不放過 port 不符的請求。把 compose 的 `8080:8080` 改成
-`18080:8080` 之類的偏移之後，瀏覽器開 `http://localhost:18080` 只會看到 `Unauthorized`，
-真正的原因（`Invalid Host header, port mismatch`）只寫在 `docker compose logs qbittorrent` 裡。
-要換 port 的話，`WEBUI_PORT` 與發佈 port 兩邊要一起改成同一個號碼。
+（8080 換成你的 `QBITTORRENT_WEBUI_PORT`。）
+
+**qBittorrent 的 WebUI 回 `Unauthorized`：改 `QBITTORRENT_WEBUI_PORT`，不要手改 compose 檔。**
+qBittorrent 的 Host 檢查除了網域還會比對 port，而且 `WebUI\ServerDomains=*` 也不放過 port 不符的請求。
+手動把 compose 的發佈 port 改成 `18080:8080` 之類的偏移之後，瀏覽器開 `http://localhost:18080` 只會看到
+`Unauthorized`，真正的原因（`Invalid Host header, port mismatch`）只寫在 `docker compose logs qbittorrent`
+裡。`QBITTORRENT_WEBUI_PORT` 會把容器內外兩側與 qBittorrent 自己的 `WEBUI_PORT` 一起換成同一個號碼。
+**不要**用 `WebUI\HostHeaderValidation=false` 繞過：那是 qBittorrent 防 DNS rebinding 的那一道。
 
 ## 環境需求
 
@@ -169,6 +178,8 @@ pnpm -C web dev                                     # 前端，開 Vite 印出�
 | `CONFIG_ROOT` | `/config` | `berth.db`、設定與 log。啟動時自動建立並套用 migration |
 | `DATA_ROOT` | `/data` | 媒體根：incomplete、complete 與媒體庫路徑都在它底下 |
 | `PORT` | `8383` | 對外的唯一 port |
+| `JELLYFIN_PORT` | `8096` | 套件內 Jellyfin 在宿主上發佈的 port；「在 Jellyfin 開啟」沒填對外網址時開這個 port。compose 從 `deploy/.env` 的同名變數傳進來 |
+| `QBITTORRENT_WEBUI_PORT` | `8080` | 套件內 qBittorrent 的 WebUI port（容器內外同一個號碼）；精靈第 2 步探 `http://qbittorrent:<它>`。compose 從 `deploy/.env` 的同名變數傳進來 |
 | `WEB_ROOT` | `<repo>/web/dist` | 前端 build 產物。找不到時只提供 API |
 | `EXT_ROOT` | `/ext` | 其他服務唯讀掛進來的設定目錄。目前只讀 `${EXT_ROOT}/prowlarr/config.xml` 的 `<ApiKey>` |
 | `PROWLARR__AUTH__APIKEY` | 無 | Prowlarr 的 API key。用這個環境變數部署 Prowlarr 的人把同一個值也給 Berth，就不必唯讀掛它的設定目錄；有值時蓋過 `config.xml` |

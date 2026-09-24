@@ -15,7 +15,7 @@ from typing import Annotated
 from fastapi import APIRouter, Query, Request
 from pydantic import BaseModel, ConfigDict
 
-from berth.api.deps import AccessCacheDep, ClientFactoryDep, SessionDep
+from berth.api.deps import AccessCacheDep, ClientFactoryDep, ConfigDep, SessionDep
 from berth.api.jellyfin import (
     access_refusal,
     access_responses,
@@ -175,6 +175,7 @@ async def get_inventory(
     session: SessionDep,
     factory: ClientFactoryDep,
     cache: AccessCacheDep,
+    config: ConfigDep,
     request: Request,
     library_id: str,
     page: Annotated[int, Query(ge=1)] = 1,
@@ -210,7 +211,9 @@ async def get_inventory(
     )
     return InventoryOut(
         library=InventoryLibraryOut.model_validate(wall.library),
-        jellyfin=JellyfinWebOut.model_validate(await jellyfin_web(session)),
+        jellyfin=JellyfinWebOut.model_validate(
+            await jellyfin_web(session, published_port=config.jellyfin_port)
+        ),
         page=wall.page,
         page_size=wall.page_size,
         total=wall.total,
@@ -247,6 +250,7 @@ async def get_inventory_watching(
     session: SessionDep,
     factory: ClientFactoryDep,
     cache: AccessCacheDep,
+    config: ConfigDep,
     request: Request,
     library_id: str,
 ) -> WatchingOut:
@@ -257,7 +261,7 @@ async def get_inventory_watching(
             watching = await read_watching(access, library_id)
     except _LIBRARY_REFUSALS as refusal:
         raise access_refusal(refusal) from refusal
-    return await watching_out(session, watching)
+    return await watching_out(session, watching, published_port=config.jellyfin_port)
 
 
 def _card(card: InventoryCard) -> InventoryCardOut:

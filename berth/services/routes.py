@@ -65,7 +65,7 @@ from berth.models import (
     SetupStep,
 )
 from berth.models.types import utcnow
-from berth.services.clients import BUNDLED_QBITTORRENT_URL, ServiceClientFactory
+from berth.services.clients import ServiceClientFactory
 from berth.services.jellyfin import (
     BUNDLED_LIBRARIES,
     TVDB_MARKER,
@@ -73,7 +73,7 @@ from berth.services.jellyfin import (
     library_slug,
     tvdb_fetchers,
 )
-from berth.services.qbittorrent import sign_in
+from berth.services.qbittorrent import qbittorrent_target, sign_in
 from berth.services.settings import read_settings
 from berth.services.steps import StepView, message, step_views
 
@@ -647,7 +647,9 @@ async def _run_checks(
     moment = utcnow()
     qbittorrent_settings = await read_settings(session, QbittorrentSettings)
     jellyfin_settings = await read_settings(session, JellyfinSettings)
-    qbittorrent = factory.qbittorrent(qbittorrent_settings.base_url or BUNDLED_QBITTORRENT_URL)
+    setup = await read_settings(session, SetupSettings)
+    _, qbittorrent_url = qbittorrent_target(setup, qbittorrent_settings)
+    qbittorrent = factory.qbittorrent(qbittorrent_url)
     jellyfin = factory.jellyfin(jellyfin_settings.base_url, token=jellyfin_settings.api_key)
     try:
         await sign_in(qbittorrent, qbittorrent_settings)

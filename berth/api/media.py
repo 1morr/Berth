@@ -18,7 +18,7 @@ from datetime import date, datetime
 from fastapi import APIRouter, Request
 from pydantic import BaseModel, ConfigDict
 
-from berth.api.deps import AccessCacheDep, ClientFactoryDep, SessionDep
+from berth.api.deps import AccessCacheDep, ClientFactoryDep, ConfigDep, SessionDep
 from berth.api.jellyfin import (
     access_refusal,
     access_responses,
@@ -279,6 +279,7 @@ async def get_watch(
     session: SessionDep,
     factory: ClientFactoryDep,
     cache: AccessCacheDep,
+    config: ConfigDep,
     request: Request,
     media_id: str,
 ) -> WatchAreaOut | None:
@@ -297,5 +298,7 @@ async def get_watch(
         watch=WatchStateOut.model_validate(area.watch),
         carry_on=None if area.carry_on is None else watch_episode_out(area.carry_on),
         seasons=[WatchSeasonOut.model_validate(season) for season in area.seasons],
-        jellyfin=JellyfinWebOut.model_validate(await jellyfin_web(session)),
+        jellyfin=JellyfinWebOut.model_validate(
+            await jellyfin_web(session, published_port=config.jellyfin_port)
+        ),
     )

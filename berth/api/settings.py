@@ -18,7 +18,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
 
-from berth.api.deps import ClientFactoryDep, SessionDep
+from berth.api.deps import ClientFactoryDep, ConfigDep, SessionDep
 from berth.api.schemas import HealthDetailOut, JellyfinWebOut, QbittorrentOut, health_detail
 from berth.domain import ServiceKind
 from berth.services.deeplink import PublicUrlRejectedError, jellyfin_web, set_public_url
@@ -76,15 +76,19 @@ async def post_qbittorrent_apply(session: SessionDep, factory: ClientFactoryDep)
 
 
 @router.get("/jellyfin")
-async def get_jellyfin(session: SessionDep) -> JellyfinWebOut:
+async def get_jellyfin(session: SessionDep, config: ConfigDep) -> JellyfinWebOut:
     """對外網址，與它沒填時推導出來的樣子——欄位旁邊要說得出「空著的話會開在哪」。"""
-    return JellyfinWebOut.model_validate(await jellyfin_web(session))
+    return JellyfinWebOut.model_validate(
+        await jellyfin_web(session, published_port=config.jellyfin_port)
+    )
 
 
 @router.post("/jellyfin")
-async def post_jellyfin(session: SessionDep, body: JellyfinAddressIn) -> JellyfinWebOut:
+async def post_jellyfin(
+    session: SessionDep, config: ConfigDep, body: JellyfinAddressIn
+) -> JellyfinWebOut:
     try:
-        web = await set_public_url(session, body.public_url)
+        web = await set_public_url(session, body.public_url, published_port=config.jellyfin_port)
     except PublicUrlRejectedError as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
     return JellyfinWebOut.model_validate(web)

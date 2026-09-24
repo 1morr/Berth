@@ -503,7 +503,7 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 
 ## 12. 播放【決定】
 
-第一階段 **深連結到 Jellyfin** 該項目的詳情頁（帳本存有 Jellyfin item id；劇集連 Series，電影連 Movie）。格式原本沿用 Seerr 來源碼的 `{externalUrl}/web/index.html#!/details?id={itemId}&serverId={serverId}`；**實作用 `{對外網址}/web/#/details?id={itemId}`**——客戶端自己的 `#/` 形式（M0 票 04 實測），不帶 `serverId`（2026-09-15 對 12.0.0 實測開到同一頁，§20.1）。主機是選填的「Jellyfin 對外網址」，沒填時推導（票 13，Seerr 的 `externalHostname` 慣例）。Jellyfin 沒有「直接開始播放」的穩定 URL。不做內嵌播放器：播放器牽涉轉碼協商、字幕（動漫的 ASS 與字型）、播放進度回報，是最大工作量且與本系統核心無關；而且多數人在電視與手機上用 Jellyfin 的 app 看，網頁播放器取代不了它們。
+第一階段 **深連結到 Jellyfin** 該項目的詳情頁（帳本存有 Jellyfin item id；劇集連 Series，電影連 Movie）。格式原本沿用 Seerr 來源碼的 `{externalUrl}/web/index.html#!/details?id={itemId}&serverId={serverId}`；**實作用 `{對外網址}/web/#/details?id={itemId}`**——客戶端自己的 `#/` 形式（M0 票 04 實測），不帶 `serverId`（2026-09-15 對 12.0.0 實測開到同一頁，§20.1）。主機是選填的「Jellyfin 對外網址」，沒填時推導（票 13，Seerr 的 `externalHostname` 慣例；套件內的 Jellyfin 用瀏覽器的主機名 + `JELLYFIN_PORT`，M3 票 06b）。Jellyfin 沒有「直接開始播放」的穩定 URL。不做內嵌播放器：播放器牽涉轉碼協商、字幕（動漫的 ASS 與字型）、播放進度回報，是最大工作量且與本系統核心無關；而且多數人在電視與手機上用 Jellyfin 的 app 看，網頁播放器取代不了它們。
 
 **瀏覽由 Berth 取代**（2026-09-15 使用者拍板，推翻原本的「媒體庫頁的價值在『狀態與修正』，不在『取代 Jellyfin 播放』」；M1.5）：媒體庫頁與 Media 詳情像 Jellyfin 那樣呈現整個 Jellyfin 媒體庫——繼續觀看、下一集、已看 / 未看（可切換，寫回 Jellyfin 該使用者的紀錄）、依類型或年份排序、Jellyfin 的圖、選季選集——並疊上本系統的入庫狀態。按下播放或某一集時才深連結到 Jellyfin 的那一項（Jellyfin 沒有直接開始播放的網址，使用者在那一集的詳細頁再按一次播放）。可行性已查（§20.8）：伺服器 API key 可以代讀代寫每位使用者的觀看資料，但 Jellyfin 這時只套用一部分媒體庫權限，**媒體庫存取權限要由 Berth 自己擋**——`userId` 一律取自 session，媒體庫對 Jellyfin 的 `UserViews` 允許清單驗證。
 
@@ -1222,7 +1222,7 @@ thepiratebay / yts，fixture 在 `tests/fixtures/http/prowlarr/search.*.json` �
 - **`torrents/files[].name` 相對 `save_path`**（多檔會含 torrent 根目錄那一層），四種 `contentLayout` 組合都成立；`content_path` = save_path + 根目錄，單檔時指向檔案、多檔時指向目錄。單檔 + `Subfolder` 的子資料夾名是去掉副檔名的 torrent 名。**`save_path` 的尾斜線兩版不同**（4.4.5 `/downloads/`、5.2.3 `/downloads`），組路徑前要正規化。
 - `torrents/files` 的鍵兩版相同：`index`、`name`、`size`、`progress`、`priority`、`is_seed`、`piece_range`、`availability`。
 - **`torrents/categories` 兩版都回 `savePath`**（駝峰），沒有出現 `save_path`；5.2.3 另有 `download_path`、`ratio_limit`、`seeding_time_limit`、`inactive_seeding_time_limit`、`share_limit_action`。
-- **Host 檢查除了網域還比對 port**：`ServerDomains=*` 也擋 port 不符的 Host（實測 `Host: localhost:18080` → 401，容器 log 寫 `Invalid Host header, port mismatch`）。設成 `qbittorrent` 之後 `localhost:8080` 與 `127.0.0.1:8080` 全被擋。沒有 port 的 Host 一律放行。偏好鍵是 `web_ui_host_header_validation_enabled`（兩版都有）。實驗改的是 Web API 的 runtime 偏好 `web_ui_domain_list`，它對應設定檔的 `WebUI\ServerDomains`（同一個設定的兩種寫法），沒有另外測「預置 ini 鍵」那條路徑。→ compose 的 qBittorrent **不可以把發佈 port 改成別的號碼**，否則使用者開不了 WebUI。
+- **Host 檢查除了網域還比對 port**：`ServerDomains=*` 也擋 port 不符的 Host（實測 `Host: localhost:18080` → 401，容器 log 寫 `Invalid Host header, port mismatch`）。設成 `qbittorrent` 之後 `localhost:8080` 與 `127.0.0.1:8080` 全被擋。沒有 port 的 Host 一律放行。偏好鍵是 `web_ui_host_header_validation_enabled`（兩版都有）。實驗改的是 Web API 的 runtime 偏好 `web_ui_domain_list`，它對應設定檔的 `WebUI\ServerDomains`（同一個設定的兩種寫法），沒有另外測「預置 ini 鍵」那條路徑。→ compose 的 qBittorrent **發佈 port 只能內外兩側一起改**（只改外側，使用者就開不了 WebUI）：M3 票 06b 以 `QBITTORRENT_WEBUI_PORT` 同時設兩側與 `WEBUI_PORT`（plan §9.2）。
 - **CSRF**：送了 `Origin`/`Referer` 就必須與 Host 一致（不一致 → 401），完全不送則放行。兩版相同。
 
 **Prowlarr `config/host`**（2026-09-07，票 04；Prowlarr 2.5.2.5491）

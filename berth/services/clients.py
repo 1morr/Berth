@@ -75,20 +75,23 @@ class SetupProbes:
     prowlarr_api_key: str
 
 
-#: 套件內服務的位址就是 compose 的服務名（plan §9.1）。
-#: qBittorrent 的發佈 port 不可以改號碼——Host 檢查連 port 都比對（brief §20.7）。
+#: 套件內服務的位址就是 compose 的服務名（plan §9.1）。qBittorrent 不在這裡：它的 WebUI port
+#: 內外兩側一起換（Host 檢查連 port 都比對，brief §20.7），號碼是設定值（`build_setup_probes`）。
 BUNDLED_JELLYFIN_URL = "http://jellyfin:8096"
-BUNDLED_QBITTORRENT_URL = "http://qbittorrent:8080"
 BUNDLED_PROWLARR_URL = "http://prowlarr:9696"
 
 
 def build_setup_probes(config: Config, environ: Mapping[str, str] | None = None) -> SetupProbes:
-    """精靈第 2 步用的三個 client。探測的是 compose 主機名，不是使用者填的位址。"""
+    """精靈第 2 步用的三個 client。探測的是 compose 主機名，不是使用者填的位址。
+
+    判成套件內時，這裡的位址會記進判定（`ServiceProbe.base_url`）；之後的步驟連的是那一條，
+    不再自己組一次。
+    """
     env = os.environ if environ is None else environ
     api_key = read_api_key(config.prowlarr_config_path, env)
     return SetupProbes(
         jellyfin=HttpJellyfinClient(BUNDLED_JELLYFIN_URL),
-        qbittorrent=HttpQbittorrentClient(BUNDLED_QBITTORRENT_URL),
+        qbittorrent=HttpQbittorrentClient(f"http://qbittorrent:{config.qbittorrent_webui_port}"),
         prowlarr=HttpProwlarrClient(BUNDLED_PROWLARR_URL, api_key),
         prowlarr_api_key=api_key,
     )

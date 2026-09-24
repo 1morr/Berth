@@ -37,7 +37,7 @@ from berth.domain import (
 )
 from berth.models import Job, PathSettings, QbittorrentSettings, Route, SetupSettings, SetupStep
 from berth.models.types import utcnow
-from berth.services.clients import BUNDLED_QBITTORRENT_URL, ServiceClientFactory
+from berth.services.clients import ServiceClientFactory
 from berth.services.settings import read_settings, write_settings
 from berth.services.steps import StepView, message, step_views
 
@@ -155,7 +155,7 @@ async def read_qbittorrent_diff(
     setup = await read_settings(session, SetupSettings)
     settings = await read_settings(session, QbittorrentSettings)
     paths = await read_settings(session, PathSettings)
-    origin, base_url = _target(setup, settings)
+    origin, base_url = qbittorrent_target(setup, settings)
 
     client = factory.qbittorrent(base_url)
     try:
@@ -182,7 +182,7 @@ async def apply_qbittorrent(
     setup = await read_settings(session, SetupSettings)
     settings = await read_settings(session, QbittorrentSettings)
     paths = await read_settings(session, PathSettings)
-    origin, base_url = _target(setup, settings)
+    origin, base_url = qbittorrent_target(setup, settings)
 
     client = factory.qbittorrent(base_url)
     try:
@@ -290,14 +290,18 @@ async def _connect(
     return (version, dict(await client.preferences()))
 
 
-def _target(setup: SetupSettings, settings: QbittorrentSettings) -> tuple[ServiceOrigin, str]:
-    """要連哪一台：使用者填過位址就用它，否則是 compose 的服務名。"""
+def qbittorrent_target(
+    setup: SetupSettings, settings: QbittorrentSettings
+) -> tuple[ServiceOrigin, str]:
+    """要連哪一台：存過位址就用它，否則是第 2 步探到的那一台。
+
+    套件內那一台的位址不在這裡組：它的 port 是部署的設定值（`QBITTORRENT_WEBUI_PORT`），
+    偵測照設定敲到之後記在判定上（`clients.build_setup_probes`）。還沒偵測過就沒有位址，
+    連線會以連不上收場。
+    """
     probe = setup.services.get(ServiceKind.QBITTORRENT)
     origin = probe.origin if probe is not None else ServiceOrigin.BUNDLED
-    return (
-        origin,
-        settings.base_url or (probe.base_url if probe else "") or BUNDLED_QBITTORRENT_URL,
-    )
+    return (origin, settings.base_url or (probe.base_url if probe else ""))
 
 
 def drifted_keys(preferences: Mapping[str, Any], paths: PathSettings) -> tuple[str, ...]:

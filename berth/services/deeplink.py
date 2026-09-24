@@ -8,8 +8,10 @@
 
 1. 管理員填了對外網址就用它——反向代理、另一個網域，只有人知道。
 2. 既有的 Jellyfin 用使用者自己填的 `base_url`：那是他打得出來的位址，瀏覽器多半也到得了。
-3. 套件內的 Jellyfin 用**瀏覽器現在的主機名** + `base_url` 的 port：compose 把 8096 發佈在
-   跑 Berth 的同一台機器上。主機名只有前端知道，所以這一步回「用哪個 port」，由前端補完。
+3. 套件內的 Jellyfin 用**瀏覽器現在的主機名** + 它在宿主上發佈的 port（`JELLYFIN_PORT`，
+   compose 傳給 Berth）：compose 把它發佈在跑 Berth 的同一台機器上。主機名只有前端知道，所以
+   這一步回「用哪個 port」，由前端補完。**不從 `base_url` 取 port**——那是容器內的 8096，
+   發佈成 `18096:8096` 時開過去的是同一台機器上的另一台 Jellyfin（票 06b）。
 """
 
 from __future__ import annotations
@@ -38,7 +40,8 @@ class PublicUrlRejectedError(ValueError):
     """填進來的對外網址不是一個 http(s) 位址。原文照樣帶著，畫面貼在欄位下面。"""
 
 
-async def jellyfin_web(session: AsyncSession) -> JellyfinWeb:
+async def jellyfin_web(session: AsyncSession, *, published_port: int) -> JellyfinWeb:
+    """`published_port` 是 `Config.jellyfin_port`：只有第 3 條用得到它。"""
     settings = await read_settings(session, JellyfinSettings)
     if settings.public_url:
         return JellyfinWeb(public_url=settings.public_url, url=settings.public_url, port=None)
@@ -47,11 +50,10 @@ async def jellyfin_web(session: AsyncSession) -> JellyfinWeb:
     # 沒有判定紀錄就當既有：與健康頁的 `_origin` 同一條規則。
     if probe is None or probe.origin is not ServiceOrigin.BUNDLED:
         return JellyfinWeb(public_url="", url=settings.base_url.rstrip("/"), port=None)
-    parts = urlsplit(settings.base_url)
-    return JellyfinWeb(public_url="", url="", port=_port(parts.scheme, parts.netloc))
+    return JellyfinWeb(public_url="", url="", port=published_port)
 
 
-async def set_public_url(session: AsyncSession, value: str) -> JellyfinWeb:
+async def set_public_url(session: AsyncSession, value: str, *, published_port: int) -> JellyfinWeb:
     """存下對外網址。空白就是清掉，回到推導。尾巴的斜線拿掉——網址是接著 `/web/` 組的。"""
     text = value.strip().rstrip("/")
     if text:
@@ -62,12 +64,4 @@ async def set_public_url(session: AsyncSession, value: str) -> JellyfinWeb:
     settings.public_url = text
     await write_settings(session, settings)
     await session.commit()
-    return await jellyfin_web(session)
-
-
-def _port(scheme: str, netloc: str) -> int:
-    try:
-        explicit = urlsplit(f"{scheme}://{netloc}").port
-    except ValueError:
-        explicit = None
-    return explicit or (443 if scheme == "https" else 80)
+    return await jellyfin_web(session, published_port=published_port)

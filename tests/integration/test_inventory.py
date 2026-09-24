@@ -946,9 +946,9 @@ class TestJellyfinAddress:
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
         await arrange(session, roots)
-        await set_public_url(session, "https://jellyfin.example.com/")
+        await set_public_url(session, "https://jellyfin.example.com/", published_port=8096)
 
-        web = await jellyfin_web(session)
+        web = await jellyfin_web(session, published_port=8096)
 
         assert (web.url, web.port) == ("https://jellyfin.example.com", None)
 
@@ -961,7 +961,7 @@ class TestJellyfinAddress:
         await write_settings(session, settings)
         await session.commit()
 
-        web = await jellyfin_web(session)
+        web = await jellyfin_web(session, published_port=8096)
 
         assert (web.url, web.port) == ("http://nas.local:8096", None)
 
@@ -971,19 +971,30 @@ class TestJellyfinAddress:
         """`http://jellyfin:8096` 是 compose 內網的名字，瀏覽器解不到它；主機名只有前端知道。"""
         await arrange(session, roots)
 
-        web = await jellyfin_web(session)
+        web = await jellyfin_web(session, published_port=8096)
 
         assert (web.url, web.port) == ("", 8096)
+
+    async def test_a_bundled_jellyfin_is_reached_on_the_port_it_is_published_on(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """`JELLYFIN_PORT=18096` 發佈成 `18096:8096`：`base_url` 裡的 8096 是容器內的 port，
+        瀏覽器開那一個會開到同一台機器上另一台 Jellyfin（票 06b 的起因）。"""
+        await arrange(session, roots)
+
+        web = await jellyfin_web(session, published_port=18096)
+
+        assert (web.url, web.port) == ("", 18096)
 
     async def test_clearing_the_address_goes_back_to_working_it_out(
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
         await arrange(session, roots)
-        await set_public_url(session, "https://jellyfin.example.com")
+        await set_public_url(session, "https://jellyfin.example.com", published_port=8096)
 
-        await set_public_url(session, "  ")
+        await set_public_url(session, "  ", published_port=8096)
 
-        assert (await jellyfin_web(session)).port == 8096
+        assert (await jellyfin_web(session, published_port=8096)).port == 8096
 
     async def test_an_address_that_is_not_http_is_refused(
         self, session: AsyncSession, roots: dict[str, Path]
@@ -991,4 +1002,4 @@ class TestJellyfinAddress:
         await arrange(session, roots)
 
         with pytest.raises(PublicUrlRejectedError):
-            await set_public_url(session, "jellyfin.example.com")
+            await set_public_url(session, "jellyfin.example.com", published_port=8096)

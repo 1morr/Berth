@@ -1,6 +1,6 @@
 # Berth 的部署套件（plan §9.1）。Linux 與 Windows 共用這一份。
 #
-#   cp .env.example .env   # 改 DATA_ROOT / CONFIG_ROOT
+#   cp .env.example .env   # 改 DATA_ROOT / CONFIG_ROOT；port 撞到了再改那五個 *_PORT
 #   docker compose up -d   # 之後所有設定都在 http://localhost:8383 的精靈裡完成
 #
 # 已經有 Jellyfin / qBittorrent / Prowlarr 的人，把它從 .env 的 COMPOSE_PROFILES 拿掉，
@@ -19,6 +19,9 @@ x-ids: &ids
   PGID: ${PGID:-1000}
   UMASK: ${UMASK:-022}
   TZ: ${TZ:-Etc/UTC}
+
+# 五個對外 port 都從 .env 讀（票 06b）；省略時是套件原本的號碼，舊的 .env 照樣能用。
+# 只有 Berth 在容器裡看不到的宿主端事實放這裡，其餘設定都在精靈與設定頁（brief §19）。
 
 # 三個外部服務的 image 自己沒有 HEALTHCHECK，這裡補上；berth 的在它的 Dockerfile 裡。
 x-healthcheck: &healthcheck
@@ -41,14 +44,19 @@ services:
     image: ghcr.io/1morr/berth:latest
     container_name: berth
     restart: unless-stopped
-    environment: *ids
+    environment:
+      <<: *ids
+      # 深連結開套件內 Jellyfin 用的是宿主上的 port，不是容器內的 8096（services/deeplink.py）。
+      JELLYFIN_PORT: ${JELLYFIN_PORT:-8096}
+      # 套件內 qBittorrent 在 compose 內網上也是這一個號碼（見 qbittorrent 服務）。
+      QBITTORRENT_WEBUI_PORT: ${QBITTORRENT_WEBUI_PORT:-8080}
     volumes:
       - ${CONFIG_ROOT:?請在 .env 設定 CONFIG_ROOT}/berth:/config
       - ${DATA_ROOT:?請在 .env 設定 DATA_ROOT}:/data
       # 唯讀掛 Prowlarr 的設定目錄，精靈才讀得到它自動產生的 API key（plan §9.2）。
       - ${CONFIG_ROOT}/prowlarr:/ext/prowlarr:ro
     ports:
-      - 8383:8383
+      - ${BERTH_PORT:-8383}:8383
     networks:
       default:
         ipv4_address: *berth-ip
@@ -60,8 +68,10 @@ services:
     profiles: [qbittorrent]
     environment:
       <<: *ids
-      WEBUI_PORT: 8080
-      TORRENTING_PORT: 6881
+      # 兩個 port 都是內外兩側同一個號碼：WebUI 的 Host 檢查連 port 都比對，`18080:8080` 會讓
+      # 瀏覽器開 localhost:18080 吃 401（plan §9.2）；BT 對外公告的 port 要與連得進來的一致。
+      WEBUI_PORT: ${QBITTORRENT_WEBUI_PORT:-8080}
+      TORRENTING_PORT: ${QBITTORRENT_BT_PORT:-6881}
       BERTH_IP: *berth-ip
     volumes:
       - ${CONFIG_ROOT}/qbittorrent:/config
@@ -69,13 +79,13 @@ services:
       # 在服務啟動前補上 compose 內網的免密白名單，Berth 才進得去 API（plan §9.2）。
       - ./preseed/qbittorrent:/custom-cont-init.d:ro
     ports:
-      - 8080:8080
-      - 6881:6881
-      - 6881:6881/udp
+      - ${QBITTORRENT_WEBUI_PORT:-8080}:${QBITTORRENT_WEBUI_PORT:-8080}
+      - ${QBITTORRENT_BT_PORT:-6881}:${QBITTORRENT_BT_PORT:-6881}
+      - ${QBITTORRENT_BT_PORT:-6881}:${QBITTORRENT_BT_PORT:-6881}/udp
     healthcheck:
       # /api/v2/* 要驗證，登入頁不用；這裡只確認 WebUI 活著。
       <<: *healthcheck
-      test: [CMD-SHELL, "curl -fsS http://localhost:8080/ >/dev/null"]
+      test: [CMD-SHELL, "curl -fsS http://localhost:${QBITTORRENT_WEBUI_PORT:-8080}/ >/dev/null"]
 
   jellyfin:
     # 釘在 12.1 這條線（brief §19、plan §9.1）：跟得上 12.1 的修正與重建，但 `docker compose pull`
@@ -90,7 +100,7 @@ services:
       - ${CONFIG_ROOT}/jellyfin:/config
       - ${DATA_ROOT}:/data
     ports:
-      - 8096:8096
+      - ${JELLYFIN_PORT:-8096}:8096
     healthcheck:
       <<: *healthcheck
       test: [CMD-SHELL, "curl -fsS http://localhost:8096/health >/dev/null"]
@@ -104,7 +114,7 @@ services:
     volumes:
       - ${CONFIG_ROOT}/prowlarr:/config
     ports:
-      - 9696:9696
+      - ${PROWLARR_PORT:-9696}:9696
     healthcheck:
       <<: *healthcheck
       test: [CMD-SHELL, "curl -fsS http://localhost:9696/ping >/dev/null"]
