@@ -26,6 +26,7 @@ M3 的端到端最小版。**一條 Mikan 聚合 feed 走到 Jellyfin**，中間
 
 - [ ] 用票 07 的 Mikan fixture 當替身：加 feed → 輪詢一輪 → 長出 RSS Series，而且在待綁定清單 → 綁定作品與 Route → item 送單 → Fake qBittorrent 做完 → 規劃 → 入庫，帳本有那幾集（整合測試走完整條）
 - [ ] 同一個 feed 輪詢兩次，不會多出 item 或 Job（GUID 去重）
+- [ ] Mikan item 的發佈時間讀 `<torrent><pubDate>`（`https://mikanani.me/0.1/` 命名空間），不帶時區的值當 UTC+8，存成 UTC（單元測試，用票 07 能對照時區的那一筆；brief §20.11）
 - [ ] 綁定當下凍結 `folder_name`；綁定之前的 item 不送單
 - [ ] RSS Series 帶季號與 offset 時，規劃結果用的是它（單元或整合測試，雙向）
 - [ ] `rss/*` 全部 admin；`test_auth_api` 的整張表同步

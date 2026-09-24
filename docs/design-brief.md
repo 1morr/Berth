@@ -695,7 +695,7 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 | AI native（2026-09-24） | 目標是出錯幾乎不需要人工處理：規則層 → AI → 人的三層漏斗；**AI 對可撤銷的命令通過驗證後自己執行**，不可撤銷的永遠要人（推翻 2026-09-22「改狀態的命令一律先提案」）；每種任務先影子模式、看一致率再切自動；AI 活動頁的逐筆撤銷（「Jellyfin 回驗」的角色同日更正，見「沒有 AI 時把人工降到最少」那一列）；每日程式檢查 + 每週巡檢；里程碑重排為 M4 巡檢與通知 → M5 AI 核心 → M6 Issue 與側面板 → M7 外部對話與 MCP（同日「沒有 AI 也完整可用」之後再把通知排到 AI 之前）；M3 起新命令先標副作用等級與反向命令，命令登錄表本身在 M5 開頭做。AI 解析保留，是 M5 的第一種任務 | §6.10、§14、§17、plan §4.5、§11.5–§11.8 |
 | 沒有 AI 也完整可用（2026-09-24） | AI 只替代人在審核與待處理頁上的手動操作；Berth 平常不必打開（看片用 Jellyfin App，只在加新作品時開）。不靠 AI 的檢查與通知是核心功能，每種 AI 任務都有人工版本 | §14 |
 | 部署的 port 進 `.env`（2026-09-24） | 使用者試跑時，套件的預設 port 與開發環境相撞：手改 compose 之後，深連結仍開到容器內的 8096，qBittorrent 的 WebUI 也回 401。**只有 Berth 在容器裡看不到的主機端事實進 `.env`**，也就是五個對外 port；Jellyfin 的 port 同時交給 Berth 推導深連結，qBittorrent 的 WebUI port 內外兩側一起換。**其餘設定不搬進 `.env`**：同一個值有兩個來源時必須選邊（Immich 設了 `IMMICH_CONFIG_FILE` 就把 UI 整個鎖住，[文件](https://docs.immich.app/install/config-file)；Servarr 只把少數 key 開放成 `APP__SECTION__KEY` 環境變數）；Route 是動態的；`.env` 不放秘密（秘密在 DB，§16.2）；精靈「打開 8383 就能設定完」的價值要留著 | §12、§16.3、plan §9.1–§9.2、§11.4、M3 票 06b |
-| 沒有 AI 時把人工降到最少（2026-09-24） | 播出日比對、片長驗證與 Jellyfin 回驗放進 M3（不需要 AI；同日更正：抓集數算錯的是播出日比對，Jellyfin 回驗抓不到——它認集數靠 Berth 取的檔名）；里程碑改為 **M4 巡檢與通知 → M5 AI 核心**；審核頁加同一個 Job / RSS Series 的批次確認（M3 前的修補）；已確認的 RSS Series 之後的 medium 入庫不再進 audit 清單，改由回驗與每日檢查守著 | §14、§15、plan §11.4–§11.6 |
+| 沒有 AI 時把人工降到最少（2026-09-24） | 播出日比對、片長驗證與 Jellyfin 回驗放進 M3（不需要 AI；同日更正：抓集數算錯的是播出日比對，Jellyfin 回驗抓不到——它認集數靠 Berth 取的檔名）；里程碑改為 **M4 巡檢與通知 → M5 AI 核心**；審核頁加同一個 Job / RSS Series 的批次確認，以及 audit 段的整段確認（M3 前的修補；整段確認是同日試跑時加的）；已確認的 RSS Series 之後的 medium 入庫不再進 audit 清單，改由回驗與每日檢查守著 | §14、§15、plan §11.4–§11.6 |
 | 前端沒有 shadcn/ui、沒有腳本化的 playwright e2e（2026-09-22 結案） | plan §1.4 / §7 原本寫 shadcn/ui 為元件基礎，M0 票 05 起沒有引入、三個里程碑沒有一個元件需要它，plan 已改；plan §10 原本寫「playwright 對 Fake 後端跑精靈與 M1 流程」但從未寫過，UI 驗證是每張票用 playwright 實跑演練情境並貼結果，plan 已改成實話，腳本化是 M2 的候選票 | plan §1.4、§7、§10、§11.3 |
 
 M1.5 拆票前的四條待決，2026-09-15 已全數照推薦拍板（上表「M1.5 拆票前的四條」那一列），這裡留著當時的理由：
@@ -1272,3 +1272,13 @@ thepiratebay / yts，fixture 在 `tests/fixtures/http/prowlarr/search.*.json` �
   - 舊 tag 會保留，另有跟著同一版號重建的 `version-12.1ubu2604`。所以 `m0-experiments.md` 當時寫的「只保留最新 tag，釘不了版本」不成立。
   - Dockerfile、`/config`、8096、`PUID` / `PGID` 都不變。
   - 【實測 + 原始碼】
+
+### 20.11 發佈時間：索引站與 RSS（2026-09-24 查證）
+
+播出日比對（M3 票 14）與之後可能的「發佈離播出多近」都要一個發佈時間。試跑環境（Prowlarr 預設公開站）實測：
+
+- **Prowlarr 搜尋結果每一筆都有 `publishDate`**（ISO 8601、UTC）：搜「Kamiina Botan」534 筆，Mikan 261、Anime Tosho 100、dmhy 80、The Pirate Bay 63、ACG.RIP 30，缺值 0。Berth 兩個 adapter 已經解析成 `published_at`（`adapters/indexer/prowlarr.py`、`torznab.py`，Torznab 的 `pubDate` 是 RFC 822），但**之後沒有任何地方用到**：不在搜尋結果的 API 裡，送單也沒存。【實測】
+- **ACG.RIP 的 RSS** 是標準的 `<item><pubDate>`，RFC 822 帶時區（`Thu, 24 Sep 2026 06:01:00 -0700`）。【實測 `https://acg.rip/.xml`】
+- **Mikan 的 RSS 沒有標準的 `<item><pubDate>`**：日期在 `https://mikanani.me/0.1/` 命名空間的 `<torrent><pubDate>`，ISO 8601 **不帶時區**（`2026-09-24T21:01:00.760219`）。同一個發佈在 ACG.RIP 是 13:01 UTC，所以 Mikan 的值是 **UTC+8**；當成 UTC 讀會差 8 小時。【實測 `https://mikanani.me/RSS/Classic`，與 ACG.RIP 同一筆對照】
+- Nyaa 的 RSS 從試跑機器連不上（連線失敗），沒有量到。
+- **發佈時間是「這一筆條目」貼出的時間，不是這一集的首發**：重新上傳、合集、聚合站晚收錄都會讓它偏晚（Anime Tosho 上 SubsPlease 同一包的 01 與 12 兩個單集檔相隔 4 分鐘）。它只保證「那一集在它之前已經播出」，所以適合當下限（規則一：早於播出日就一定算錯），不適合量「多新」。SubsPlease《上伊那牡丹》01–12 合集在 Anime Tosho 是 2026-08-15，TMDB 第一季末集 2026-06-27。【實測】

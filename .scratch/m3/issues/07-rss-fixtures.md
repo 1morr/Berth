@@ -10,6 +10,8 @@
 
 `mattpocock-skills:research`：先把欄位弄清楚，adapter 才寫得出來（plan §11.4「先抓 fixture 定欄位」）。輸出放 `docs/research/rss-sources.md`，結論摘進 brief §20 並附來源；§20.6 那一條劃掉。
 
+**已知的地雷**（brief §20.11，2026-09-24 試跑時量到）：Mikan 的發佈時間不在標準的 `<item><pubDate>`，在 `https://mikanani.me/0.1/` 命名空間的 `<torrent><pubDate>`，而且不帶時區、實際是 UTC+8。fixture 要各站留一筆能對照時區的（同一個發佈在 ACG.RIP 帶 `-0700`），票 14 的播出日比對靠它。
+
 要錄的 fixture（放測試 fixture 目錄，**去掉個人 token**）：
 
 - **Mikan**：`/RSS/MyBangumi?token=` 聚合 feed、`/RSS/Bangumi?bangumiId=&subgroupid=` 單一 feed、一個單集頁（上面有單一 feed 的連結，是反查番組 id 與字幕組 id 的來源）、一個番組頁（中文標題、開播日期、bgm.tv 連結，票 09 的自動綁定靠它）。
