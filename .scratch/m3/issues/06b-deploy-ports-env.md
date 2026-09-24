@@ -42,3 +42,4 @@
 ## Comments
 
 - 觸發這張票的試跑環境在 `C:\Users\Roxy\berth-trial\`（repo 外），它的 qBittorrent 目前靠手動加的 `WebUI\HostHeaderValidation=false` 才打得開 18080，違反 plan §9.2。這張票做完後，改用新的 compose 與 `.env` 重起，並拿掉那一行。
+- 2026-09-24 補：那一行也寫進了試跑目錄的 preseed 副本（`C:\Users\Roxy\berth-trial\preseed\qbittorrent\10-berth.sh` 的 `KEYS`），重置環境時會自動加回去。驗收「不靠 `HostHeaderValidation=false`」那一條要連這一份一起拿掉，或直接改用 repo 的 `deploy/preseed/`。
