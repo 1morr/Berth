@@ -192,3 +192,48 @@ describe('角色', () => {
     await waitFor(() => expect(router.state.location.pathname).toBe('/login'))
   })
 })
+
+/**
+ * M2 驗收第四條的前端那一半（票 16）：以 `user` 登入時**看不到**審核、修正與刪除的入口。後端那一半
+ * （每一條端點是誰的、`user` 打過去是 403）在 `tests/integration/test_auth_api.py` 的
+ * `TestWhoEachEndpointIsFor`。
+ *
+ * 六組的入口在哪裡、由誰守著：
+ *
+ * - 審核、待處理（含「立刻對帳」，它只住在 `/issues`）：導覽列與路由守衛——這一組；
+ * - 修正（rematch）與版本清單的刪除：`MediaDetailPage.test.tsx` 的「一般使用者看不到修正入口」
+ *   與版本清單那一條；
+ * - 刪除下載、重新入庫：`JobDetailPage.test.tsx` 的 user 那一條（同一條也證明重試仍按得到）。
+ *
+ * 導覽列**逐角色列齊**：多掛一個入口而沒決定誰看得到，兩條都會紅。
+ */
+describe('一般使用者看不到修正與對帳的入口', () => {
+  const NAV = {
+    admin: ['探索', '媒體庫', '下載', '審核', '待處理', '健康', '設定'],
+    user: ['探索', '媒體庫', '下載', '健康'],
+  }
+
+  it.each([
+    ['admin', ADMIN],
+    ['user', USER],
+  ] as const)('%s 的導覽列剛好是這幾格', async (role, me) => {
+    stubApi({ [HEALTH]: DONE, [ME]: me, ...DISCOVER })
+
+    renderApp('/')
+
+    const nav = within(await screen.findByRole('navigation', { name: '主要導覽' }))
+    expect(nav.getAllByRole('link').map((link) => link.textContent)).toEqual(NAV[role])
+  })
+
+  it.each(['/review', '/issues', '/settings/routes', '/settings/services'])(
+    'user 直接開 %s 會被送到健康頁並說他被擋下來了',
+    async (path) => {
+      stubApi({ [HEALTH]: DONE, [ME]: USER, ...DISCOVER })
+
+      const { router } = renderApp(path)
+
+      await waitFor(() => expect(router.state.location.pathname).toBe('/health'))
+      expect(router.state.location.search).toEqual({ denied: true })
+    },
+  )
+})
