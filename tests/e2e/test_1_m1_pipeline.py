@@ -23,7 +23,7 @@ from collections import Counter
 import httpx
 import pytest
 
-from tests.e2e.harness import Json, Submitted, imports_of, in_container, ok
+from tests.e2e.harness import Json, Submitted, imports_of, in_container, ok, stat_each
 from tests.e2e.payload import PACKS
 
 pytestmark = pytest.mark.e2e
@@ -31,12 +31,6 @@ pytestmark = pytest.mark.e2e
 #: 送單那兩筆記的是按下去的人；之後每一筆都該是 Berth 自己（`actor == "system"`）——
 #: 重試、重新規劃都會以使用者的名義留在時間線上。
 SUBMISSION_EVENTS = {"created", "submitted"}
-
-#: 容器裡逐一 `stat` 參數裡的路徑，印出 `[[dev, ino, nlink], …]`。
-STAT_EACH = (
-    "import json, os, sys; "
-    "print(json.dumps([(s.st_dev, s.st_ino, s.st_nlink) for s in map(os.stat, sys.argv[1:])]))"
-)
 
 #: 時間線上一定依序出現的站（中間可以夾別的，例如 `preplan`、`progress`）。狀態欄位只看得到終點，
 #: 這一串才說得出它真的走過完成 → 規劃 → 入庫 → 通知 Jellyfin（票 15 的 code-review）。
@@ -97,15 +91,7 @@ def test_imports_are_hard_links_of_the_downloaded_files(
         root = jobs[job.info_hash]["content_path"]
         sources = [f"{root}/{path}" for path in job.imports]
         targets = [row["target_path"] for row in imports_of(berth, job)]
-        stats = json.loads(
-            in_container(
-                "python",
-                "-c",
-                STAT_EACH,
-                *sources,
-                *targets,
-            )
-        )
+        stats = stat_each(*sources, *targets)
         source_stats, target_stats = stats[: len(sources)], stats[len(sources) :]
         assert all(links >= 2 for _, _, links in stats), stats
         assert sorted((dev, ino) for dev, ino, _ in source_stats) == sorted(

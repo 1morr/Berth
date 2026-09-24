@@ -1,8 +1,10 @@
-"""e2e 的共用 fixture：**一次 compose、一次精靈、一次入庫**，兩個測試模組共享。
+"""e2e 的共用 fixture：**一次 compose、一次精靈、一次入庫**，三個測試模組共享。
 
 所以全部是 `scope="session"`：`test_1_m1_pipeline.py` 走完 M1 的整條路徑（約 13 分鐘），
-`test_2_m15_library.py` 接著拿那三部作品當媒體庫裡的東西，驗 M1.5 的權限與瀏覽。**檔名的數字就是
-執行順序**（pytest 照檔名收集）：M1.5 最後一條會把 Jellyfin 停掉再起來，它要是全場最後一條。
+`test_2_m15_library.py` 接著拿那三部作品當媒體庫裡的東西，驗 M1.5 的權限與瀏覽，
+`test_3_m2_repair.py` 最後把它們弄壞再修好。**檔名的數字就是執行順序**（pytest 照檔名收集）：
+M2 那一組會拆掉、換掉媒體庫裡的檔案，所以排在只讀它們的 M1.5 之後；M1.5 最後一條把 Jellyfin
+停掉再起來，等它回來才結束。
 
 前提是 `tests/e2e/compose.yml` 那一套已經起來（指令在 README〈e2e〉）。
 """

@@ -110,6 +110,49 @@ def in_container(*command: str, container: str = TORRENTS_CONTAINER) -> str:
     return result.stdout
 
 
+#: 容器裡逐一 `stat` 參數裡的路徑，印出 `[[dev, ino, nlink], …]`。
+_STAT_EACH = (
+    "import json, os, sys; "
+    "print(json.dumps([(s.st_dev, s.st_ino, s.st_nlink) for s in map(os.stat, sys.argv[1:])]))"
+)
+
+#: 帳本裡一筆 Job 的正片。API 不給來源路徑與 item id（畫面用不到），所以直接在 berth 容器裡讀。
+_LEDGER_OF = (
+    "import json, sqlite3, sys; "
+    "db = sqlite3.connect('/config/berth.db'); db.row_factory = sqlite3.Row; "
+    'rows = db.execute("select id, target_path, source_abs_path, jellyfin_item_id from ledger '
+    "where action = 'import' and job_hash = ? order by target_path\", sys.argv[1:]).fetchall(); "
+    "print(json.dumps([dict(row) for row in rows]))"
+)
+
+
+def stat_each(*paths: str) -> list[tuple[int, int, int]]:
+    """在 `torrents` 容器裡 `stat`：`(device, inode, 鏈接數)`，順序同參數。"""
+    rows: list[list[int]] = json.loads(in_container("python", "-c", _STAT_EACH, *paths))
+    return [(dev, ino, links) for dev, ino, links in rows]
+
+
+def same_file(first: str, second: str) -> bool:
+    """同一個 device 上的同一個 inode：硬鏈接，不是複製。"""
+    (dev_a, ino_a, _), (dev_b, ino_b, _) = stat_each(first, second)
+    return (dev_a, ino_a) == (dev_b, ino_b)
+
+
+def exists(path: str) -> bool:
+    """在 `torrents` 容器裡看那條路徑在不在（檔案或目錄都算）。"""
+    return (
+        in_container("sh", "-c", 'test -e "$1" && echo yes || echo no', "sh", path).strip() == "yes"
+    )
+
+
+def ledger_of(job_hash: str) -> list[Json]:
+    """這一筆 Job 在帳本上的正片：`id`、`target_path`、`source_abs_path`、`jellyfin_item_id`。"""
+    rows: list[Json] = json.loads(
+        in_container("python", "-c", _LEDGER_OF, job_hash, container="berth")
+    )
+    return rows
+
+
 def jellyfin_client(username: str, password: str) -> httpx.Client:
     """以這個帳號自己的 token 問 Jellyfin。API key 代讀只套一部分權限（brief §20.8），所以
     「這個人看不看得到」一律拿他自己的 token 問。
