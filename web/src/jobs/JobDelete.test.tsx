@@ -24,8 +24,16 @@ function estimate(overrides: Record<string, number> = {}) {
 }
 
 /** 一次刪除的結果。 */
-function outcome(overrides: Record<string, number | boolean> = {}) {
-  return { links: 5, sources: 0, torrent: false, purged: false, freed: 0, ...overrides }
+function outcome(overrides: Record<string, number | boolean | string[]> = {}) {
+  return {
+    links: 5,
+    sources: 0,
+    torrent: false,
+    purged: false,
+    freed: 0,
+    unmanaged: [],
+    ...overrides,
+  }
 }
 
 function mount(routes: Record<string, StubRoute | (() => StubRoute)> = {}) {
@@ -173,6 +181,33 @@ describe('JobDelete', () => {
     expect(
       await screen.findByText('已移除 0 個鏈接、刪掉 0 個檔案，沒有空出空間。'),
     ).toBeInTheDocument()
+  })
+
+  it('媒體庫裡有檔案已經不是 Berth 放的那一個時，多說一句沒有刪它（M3 票 01）', async () => {
+    mount({
+      [`DELETE /api/jobs/${HASH}?unlink=true&remove_torrent=false&delete_files=false&purge=false`]:
+        { body: outcome({ links: 4, unmanaged: ['/lib/Show/Show - S01E01.mkv'] }) },
+    })
+    await open()
+    await tick('移除媒體庫裡的硬鏈接')
+
+    await userEvent.click(screen.getByRole('button', { name: '確認刪除' }))
+
+    expect(
+      await screen.findByText('1 個媒體庫檔案已經不是 Berth 放的那一個，沒有刪。'),
+    ).toBeInTheDocument()
+  })
+
+  it('被別的分頁先刪了時說的是這件事，不是「刪好了」（M3 票 01）', async () => {
+    mount({
+      [`DELETE /api/jobs/${HASH}?unlink=false&remove_torrent=false&delete_files=false&purge=false`]:
+        { status: 409, body: { detail: { reason: 'moved_on', detail: 'removed' } } },
+    })
+    await open()
+
+    await userEvent.click(screen.getByRole('button', { name: '確認刪除' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/已經被別處改過了/)
   })
 
   it('被拒絕時說的是那個封閉集合的理由，不是一句通用的話', async () => {

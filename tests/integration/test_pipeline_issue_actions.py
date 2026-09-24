@@ -219,6 +219,7 @@ class TestAcceptTheLoss:
             "torrent": False,
             "purged": False,
             "freed": 0,
+            "unmanaged": [],
         }
         # 那個 torrent 還在 qBittorrent 上，但它有 Job：不是無主的，下一輪什麼都不開。
         await run(session, client)

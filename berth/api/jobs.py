@@ -65,6 +65,8 @@ _STATUS: dict[JobRefusal, int] = {
     JobRefusal.NOT_REIMPORTABLE: status.HTTP_409_CONFLICT,
     # 那一包不在 complete 裡了：請求本身沒錯，是磁碟上的事實變了（brief §9.3）。
     JobRefusal.CONTENT_MISSING: status.HTTP_409_CONFLICT,
+    # 另一個分頁先刪了、背景迴圈先推進了：重新看一次那一筆，同一個請求可能就成立。
+    JobRefusal.MOVED_ON: status.HTTP_409_CONFLICT,
 }
 
 
@@ -114,11 +116,12 @@ REIMPORT_RESPONSES = _refusals(
     JobRefusal.JOB_MISSING, JobRefusal.NOT_REIMPORTABLE, JobRefusal.CONTENT_MISSING
 )
 
-#: 刪除：沒有這一筆、勾錯組合，以及要移除 torrent 而 qBittorrent 問不到
-#: （`services/deletion.delete_job`）。
+#: 刪除：沒有這一筆、勾錯組合、按下去之後它被別處改過了，以及要移除 torrent 而 qBittorrent
+#: 問不到（`services/deletion.delete_job`）。
 DELETE_RESPONSES = _refusals(
     JobRefusal.JOB_MISSING,
     JobRefusal.DELETE_FILES_REQUIRES_REMOVE_TORRENT,
+    JobRefusal.MOVED_ON,
     JobRefusal.CLIENT_UNREACHABLE,
 )
 
@@ -253,6 +256,9 @@ class JobDeletedOut(BaseModel):
     purged: bool
     #: 真的空出來的位元組。只有來源與所有鏈接都刪掉時才不是 0。
     freed: int
+    #: 沒有拆的媒體庫路徑：那裡的檔案已經不是 Berth 放的那一個（使用者換成了自己的一份，
+    #: CONTEXT.md 的 Unmanaged）。帳本那一列留給下一輪對帳（M3 票 01）。
+    unmanaged: list[str]
 
 
 class JobEventOut(BaseModel):

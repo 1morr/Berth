@@ -787,6 +787,7 @@ const zhHant = {
         target_missing: '媒體庫裡的檔案不見了',
         source_missing: 'complete 裡的來源不見了',
         inode_mismatch: '兩邊不再是同一個 inode',
+        unlinked: '刪除時從媒體庫移除了',
       },
       jellyfin: {
         found: 'Jellyfin 已收錄',
@@ -1173,6 +1174,8 @@ const zhHant = {
       // 動作結果給看不見畫面的人（那一列會直接消失）。
       confirmed: '已確認，這一列從佇列上收掉了。',
       undone: '已撤銷，這一筆下載回到待審核。',
+      undoneUnmanaged:
+        '已撤銷，這一筆下載回到待審核。媒體庫裡那個檔案已經不是 Berth 放的那一個，所以沒有刪。',
     },
     // unmatched 那一類（brief §7.4、M2 票 08）：對不到、留在 complete 原位的檔案。三個動作打的是
     // `POST /files/rematch`，與 Media 詳情的 Unmatched 區同一支、同一個表單（`RematchForm`）。
@@ -1439,6 +1442,11 @@ const zhHant = {
       auditUndone: '管理員撤銷了這個檔案的入庫，這一筆回到待審核',
       auditUndoneGone:
         '管理員撤銷了這個檔案的入庫（它在那之前已經不在媒體庫裡了），這一筆回到待審核',
+      // 那條路徑上的已經不是 Berth 放的那一個（M3 票 01、CONTEXT.md 的 Unmanaged）：Berth 沒有刪它。
+      auditUndoneUnmanaged:
+        '管理員撤銷了這個檔案的入庫，這一筆回到待審核。媒體庫裡那個檔案已經不是 Berth 放的那一個，所以沒有刪',
+      keptUnmanaged_one: '{{count}} 個媒體庫檔案已經不是 Berth 放的那一個，沒有刪：',
+      keptUnmanaged_other: '{{count}} 個媒體庫檔案已經不是 Berth 放的那一個，沒有刪：',
       // rematch 與重複版本（M2 票 08）。「從什麼改成什麼」由處置與季集組成，路徑是機器字串，另起一行。
       rematched: '管理員改了這個檔案：{{from}} → {{to}}',
       notInLibrary: '不在媒體庫',
@@ -1629,6 +1637,8 @@ const zhHant = {
         '這一筆現在不能重新入庫——它還在下載、規劃或入庫中，或者它從來沒有下載完（complete 裡只有殘件）。重新整理看看它現在的狀態。',
       content_missing:
         'complete 裡已經沒有這一包了（或裡面一個檔案都沒有），所以什麼都沒有動。要入庫就重新下載一次。',
+      moved_on:
+        '你按下去之後，這一筆已經被別處改過了（可能是另一個分頁剛刪掉它），所以什麼都沒有動。重新整理看看它現在的狀態。',
     },
     // 刪除範圍（brief §9.2、M2 票 04）。四個旗標各自說出後果，預設全不勾。
     delete: {
@@ -1667,6 +1677,9 @@ const zhHant = {
       },
       done: '已移除 {{links}} 個鏈接、刪掉 {{sources}} 個檔案，空出 {{size}}。',
       doneNothing: '已移除 {{links}} 個鏈接、刪掉 {{sources}} 個檔案，沒有空出空間。',
+      // 時間線上那一筆列得出是哪幾個；這裡只說有幾個（M3 票 01）。
+      kept_one: '{{count}} 個媒體庫檔案已經不是 Berth 放的那一個，沒有刪。',
+      kept_other: '{{count}} 個媒體庫檔案已經不是 Berth 放的那一個，沒有刪。',
       off: '刪除沒有送出去。Berth 自己的 API 沒有回應，先確認它還活著。',
     },
   },
@@ -2692,6 +2705,7 @@ const en: Translations<typeof zhHant> = {
         target_missing: 'The library file is gone',
         source_missing: 'The source in complete is gone',
         inode_mismatch: 'No longer the same inode',
+        unlinked: 'Removed from the library when deleted',
       },
       jellyfin: {
         found: 'In Jellyfin',
@@ -3052,6 +3066,8 @@ const en: Translations<typeof zhHant> = {
         'That did not go through. Berth’s own API did not answer — check that it is still running.',
       confirmed: 'Confirmed; it is off the queue.',
       undone: 'Undone; the download is back in review.',
+      undoneUnmanaged:
+        'Undone; the download is back in review. The file in the library is no longer the one Berth put there, so it was not deleted.',
     },
     unmatched: {
       label: 'UNMATCHED',
@@ -3299,6 +3315,12 @@ const en: Translations<typeof zhHant> = {
       auditUndone: 'An administrator undid this file’s import; the job is back in review',
       auditUndoneGone:
         'An administrator undid this file’s import (it had already left the library); the job is back in review',
+      auditUndoneUnmanaged:
+        'An administrator undid this file’s import; the job is back in review. The file in the library is no longer the one Berth put there, so it was not deleted',
+      keptUnmanaged_one:
+        '{{count}} library file is no longer the one Berth put there and was not deleted:',
+      keptUnmanaged_other:
+        '{{count}} library files are no longer the ones Berth put there and were not deleted:',
       rematched: 'An administrator changed this file: {{from}} → {{to}}',
       notInLibrary: 'not in the library',
       duplicateSkipped_one:
@@ -3486,6 +3508,8 @@ const en: Translations<typeof zhHant> = {
         'This one cannot be imported again right now — it is still downloading, planning or importing, or it never finished downloading (complete holds only a partial copy). Reload to see where it stands now.',
       content_missing:
         'This download is no longer in complete (or it has no files left), so nothing was touched. Download it again to import it.',
+      moved_on:
+        'Something else changed this download after you pressed the button (another tab may have just deleted it), so nothing was touched. Reload to see where it stands now.',
     },
     delete: {
       label: 'Delete',
@@ -3519,6 +3543,9 @@ const en: Translations<typeof zhHant> = {
       },
       done: 'Removed {{links}} links, deleted {{sources}} files, freed {{size}}.',
       doneNothing: 'Removed {{links}} links, deleted {{sources}} files. Nothing was freed.',
+      kept_one: '{{count}} library file is no longer the one Berth put there and was not deleted.',
+      kept_other:
+        '{{count}} library files are no longer the ones Berth put there and were not deleted.',
       off: 'The delete did not go out. Berth’s own API did not answer — check that it is up.',
     },
   },

@@ -861,6 +861,8 @@ Issue、修正、對帳、刪除與重新入庫的每一條端點都是 403，�
 - `scripts/experiments/profile_effect.py`（票 14e）：它量的東西不存在了。研究文件
   `docs/research/profile-effect.md` 留著當紀錄。
 
+- `job_files.release_info_json`（M3 票 01，migration `f2a7c91d4e38`）：M1 起就沒有人寫它。RSS 要的那一份在
+  `rss_items` 自己那一欄。
 - `InventoryOut` 卡片上的 `tracking.needs_review` 與 `tracking.has_unmatched`（M2 票 14）：唯一的消費點是舊的
   卡片牆篩選，換成審核佇列的清單之後沒有人讀它們。
 
@@ -1008,6 +1010,15 @@ Issue、修正、對帳、刪除與重新入庫的每一條端點都是 403，�
   （`components/useFocusAfterRemoval.ts`，`/review`、`/issues` 與媒體庫的「待審 / 對不到」）。
 - **EN 介面的佇列時間不再印成「上午10:31:36」**（M2 票 16 的 critique）：`whenText` 跟的是瀏覽器語系，改成 UI 的語言
   （同 `Timestamp`）。
+- **Berth 不再刪掉使用者換進媒體庫的檔案**（M3 票 01）：把硬鏈接換成自己的一份（複製品、重新壓制的版本）之後，
+  刪除範圍的「移除鏈接」、audit 撤銷與 rematch 拆舊鏈接都照路徑把它刪了。三條現在共用一個判斷——目標的 inode
+  等於帳本記的或來源現在的才是 Berth 放的——都不等就不刪，`DELETE /jobs/{hash}` 與 `POST /files/rematch` 的回應
+  多一格 `unmanaged`（沒刪的路徑）、`POST /review/audit/{id}/undo` 從 204 改成回 `{unlinked, unmanaged}`，時間線
+  那一筆說得出是哪幾個。
+- **只勾「移除鏈接」刪掉的下載，對帳不再每一輪為那幾個檔案開「鏈接遺失」**（M3 票 01）：帳本那幾列寫
+  `unlinked`（新的 `LedgerStatus`）而不是 `target_missing`，同「標記為已無來源」的先例。
+- **兩個分頁同時刪同一筆下載，後到的那一個回 409 `moved_on`**（M3 票 01）：原本它讀的是鎖外的舊狀態、
+  compare-and-set 輸了只記一行 log，回報「刪好了」並在時間線多寫一筆 `deleted`。
 
 ### Security
 

@@ -88,6 +88,5 @@ class JobFile(Base):
     #: qBittorrent 的檔案優先序。`0` 是「不下載」，那種檔案不進 Plan（brief §5.1）。
     priority: Mapped[int] = mapped_column(default=1)
     kind: Mapped[FileKind | None] = mapped_column(enum_column(FileKind), default=None)
-    release_info_json: Mapped[dict[str, Any] | None] = mapped_column(JsonText, default=None)
     mediainfo_json: Mapped[dict[str, Any] | None] = mapped_column(JsonText, default=None)
     updated_at: Mapped[datetime] = mapped_column(UtcDateTime, default=utcnow)

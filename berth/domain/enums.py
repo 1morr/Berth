@@ -435,13 +435,18 @@ class ReconcileSide(StrEnum):
 class LedgerStatus(StrEnum):
     """一筆帳本現在與磁碟對不對得起來（plan §2.3 的 `ledger.status`、brief §9.1）。
 
-    importer 寫下的一律是 `ok`；其餘三種是 M2 的 Reconciler 比對之後寫的。
+    importer 寫下的一律是 `ok`。`target_missing` 與 `inode_mismatch` 是 Reconciler 比對之後寫的；
+    `source_missing` 與 `unlinked` 是**使用者決定過的現況**（刪除範圍、「標記為已無來源」），
+    對帳看到它們就不再為那一列開 Issue——偵測時寫的話，「忽略」之後下一輪就再也不會問了。
     """
 
     OK = "ok"
     TARGET_MISSING = "target_missing"
     SOURCE_MISSING = "source_missing"
     INODE_MISMATCH = "inode_mismatch"
+    #: 刪除範圍的「移除鏈接」拆掉的（M3 票 01）。磁碟上與 `target_missing` 一樣是目標不在，
+    #: 差別只在有人決定過：對帳不再為它開 `library_link_missing`。
+    UNLINKED = "unlinked"
 
 
 class InventoryStatus(StrEnum):
@@ -937,6 +942,9 @@ class JobRefusal(StrEnum):
     #: 重新入庫的 Import Source（complete 裡那一包）不在了，或裡面一個檔案都沒有。
     #: 什麼都還沒動：沒有檔案可以規劃，退回 `completed` 只會得到一份空的 Plan（M2 票 10）。
     CONTENT_MISSING = "content_missing"
+    #: 按下去之後這一筆被別處改過了（另一個分頁剛刪掉它、背景迴圈剛推進它）：它按下去時看到的
+    #: 狀態已經不是現在的狀態，compare-and-set 輸了。什麼都還沒動，重新看一次再決定（M3 票 01）。
+    MOVED_ON = "moved_on"
 
 
 class RouteRefusal(StrEnum):

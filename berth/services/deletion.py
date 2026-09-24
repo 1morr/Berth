@@ -21,6 +21,11 @@ torrent 可能早就不在客戶端了（`client_removed`），而 Berth 仍然�
 系統。所以這裡先把要刪的路徑按 `(device, inode)` 分組，一組的路徑數等於它的 `st_nlink`
 時才算進「真的會釋放」，少一個就是有別人（Jellyfin 外的第二條 Route、使用者自己的鏈接）
 還握著它。
+
+**媒體庫那一側只拆 Berth 放下去的那一個**（M3 票 01）：使用者可能把硬鏈接換成了自己的檔案
+（一份複製品、一個重新壓制的版本），那時候那條路徑上的是 Unmanaged（CONTEXT.md），永不刪。
+會拆媒體庫鏈接的每一條路——這裡的「移除鏈接」、audit 撤銷、rematch 拆舊鏈接——都走
+`remove_one`，判斷只有 `Placed.holds` 一份。
 """
 
 from __future__ import annotations
@@ -30,6 +35,7 @@ import os
 from collections import defaultdict
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import Path
 
 from sqlalchemy import delete as sql_delete
@@ -107,6 +113,8 @@ class DeleteOutcome:
     torrent: bool
     purged: bool
     freed: int
+    #: 沒有拆的媒體庫路徑：那裡的檔案已經不是 Berth 放的那一個（`Placed`）。
+    unmanaged: tuple[str, ...] = ()
 
 
 async def estimate_deletion(session: AsyncSession, job_hash: str) -> DeletionEstimate:
@@ -114,15 +122,17 @@ async def estimate_deletion(session: AsyncSession, job_hash: str) -> DeletionEst
 
     慢是刻意的：逐一 `stat` 每一個來源與目標，不用 qBittorrent 報的 `total_size` 去猜——
     那是 torrent 的大小，而磁碟上可能只下載了一部分、可能有人手動刪過幾個檔案。
+    媒體庫那一側不是 Berth 放的那幾個不會被刪，也就不算。
     """
     job = await _job(session, job_hash)
     paths = await _scope_paths(session, job)
-    facts = _measure(paths.links + paths.sources)
-    links = _measure(paths.links)
+    placed = _ours(paths.links)
+    facts = _measure(placed + paths.sources)
+    links = _measure(placed)
     sources = _measure(paths.sources)
     return DeletionEstimate(
         links=len(links.found),
-        links_missing=len(paths.links) - len(links.found),
+        links_missing=len(placed) - len(links.found),
         link_bytes=links.bytes,
         sources=len(sources.found),
         sources_missing=len(paths.sources) - len(sources.found),
@@ -142,20 +152,38 @@ async def delete_job(
 ) -> DeleteOutcome:
     """照 `scope` 刪掉這一筆的東西，Job 進 `removed`（plan §3.1 的最後一列）。
 
-    **拒絕都在前面**：做不了的那兩種（沒有這個 Job、勾錯組合）在碰任何東西之前就停下來，
-    向 qBittorrent 移除那一步也排在動磁碟之前——刪到一半才失敗是最難收拾的結果。
+    **拒絕都在前面**：做不了的那幾種（沒有這個 Job、勾錯組合、按下去之後它被別處改過了）在碰
+    任何東西之前就停下來，向 qBittorrent 移除那一步也排在動磁碟之前——刪到一半才失敗是最難
+    收拾的結果。
+
+    **轉換是鎖裡的第一件事**（M3 票 01）：CAS 的 `expected` 是這個請求進來時讀到的狀態，也就是
+    使用者按下去時看到的那一個。兩個分頁同時刪同一筆時，後拿到鎖的那一個輸掉 CAS、得到
+    `moved_on`，而不是對著剛刪過的 Job 再刪一次、回報「刪好了」。先到的那一個勾了清除紀錄的話
+    這一列已經不在了，後到的那一個是 `job_missing`。
     """
-    job = await _job(session, job_hash)
+    seen = (await _job(session, job_hash)).state
     if scope.delete_files and not scope.remove_torrent:
         raise JobRejectedError(
             JobRefusal.DELETE_FILES_REQUIRES_REMOVE_TORRENT,
             "qBittorrent would fetch the files again on its next recheck",
         )
 
-    with job_context(job.hash):
+    with job_context(job_hash):
         # poller 與 importer 也寫這一列，而這一支會把它們腳下的檔案抽走。
-        async with job_lock(job.hash):
-            return await _apply(session, factory, job, scope, actor=actor)
+        async with job_lock(job_hash):
+            # 鎖外那一次讀只為了知道使用者看到了什麼；鎖裡這一次（`populate_existing`）才算數。
+            job = await session.get(Job, job_hash, populate_existing=True)
+            if job is None:
+                raise JobRejectedError(JobRefusal.JOB_MISSING, job_hash)
+            if not await transition(session, job, JobState.REMOVED, expected=seen):
+                raise JobRejectedError(JobRefusal.MOVED_ON, job.state.value)
+            try:
+                return await _apply(session, factory, job, scope, actor=actor)
+            except JobRejectedError:
+                # 拒絕的意思是「什麼都還沒動」：問不到 qBittorrent 時上面那一次轉換也要收回，
+                # 不能留給呼叫端的 session 決定要不要 commit。
+                await session.rollback()
+                raise
 
 
 async def _apply(
@@ -166,26 +194,27 @@ async def _apply(
     *,
     actor: str,
 ) -> DeleteOutcome:
-    """鎖裡面的那一段。抽出來是為了讓 `job_lock` 包得住整段而不必再縮排一層。"""
+    """鎖裡面、轉換之後的那一段。抽出來是為了讓 `job_lock` 包得住整段而不必再縮排一層。"""
     paths = await _scope_paths(session, job)
     # **先量再刪**：`st_nlink` 在刪掉第一個名字之後就變了，事後算不出「這一次空出多少」。
     before = _measure(
-        (paths.links if scope.unlink else []) + (paths.sources if scope.delete_files else [])
+        (_ours(paths.links) if scope.unlink else []) + (paths.sources if scope.delete_files else [])
     )
 
     if scope.remove_torrent:
         await _remove_torrent(session, factory, job)
 
-    links = _remove_all(paths.links, roots=paths.route_targets) if scope.unlink else 0
+    unlinked = _unlink_all(paths.links, roots=paths.route_targets) if scope.unlink else {}
     sources = _remove_all(paths.sources, roots=[paths.complete_root]) if scope.delete_files else 0
-    await _restate_ledger(session, job, scope)
+    await _restate_ledger(session, job, scope, unlinked)
 
     outcome = DeleteOutcome(
-        links=links,
+        links=sum(result is Unlink.REMOVED for result in unlinked.values()),
         sources=sources,
         torrent=scope.remove_torrent,
         purged=scope.purge,
         freed=before.reclaimable,
+        unmanaged=tuple(path for path, result in unlinked.items() if result is Unlink.UNMANAGED),
     )
     await _record(session, job, outcome, actor=actor)
     if scope.purge:
@@ -193,7 +222,13 @@ async def _apply(
     await session.commit()
     logger.info(
         "job deleted",
-        extra={"links": links, "sources": sources, "purged": scope.purge, "freed": outcome.freed},
+        extra={
+            "links": outcome.links,
+            "sources": sources,
+            "purged": scope.purge,
+            "freed": outcome.freed,
+            "unmanaged": len(outcome.unmanaged),
+        },
     )
     return outcome
 
@@ -217,9 +252,13 @@ async def _remove_torrent(session: AsyncSession, factory: ServiceClientFactory, 
 
 @dataclass(frozen=True, slots=True)
 class _ScopePaths:
-    """這一筆在磁碟上佔著的每一條路徑，加上刪除守衛用的兩組根。"""
+    """這一筆在磁碟上佔著的每一條路徑，加上刪除守衛用的兩組根。
 
-    links: list[Path]
+    媒體庫那一側以帳本的 `target_path` 為鍵、帶著「Berth 放的是誰」：那條路徑上現在的檔案
+    不一定還是它。
+    """
+
+    links: dict[str, Placed]
     sources: list[Path]
     route_targets: list[Path]
     complete_root: Path
@@ -238,7 +277,7 @@ async def _scope_paths(session: AsyncSession, job: Job) -> _ScopePaths:
     files = list(await session.scalars(select(JobFile).where(JobFile.job_hash == job.hash)))
     paths = await read_settings(session, PathSettings)
     return _ScopePaths(
-        links=_unique(Path(row.target_path) for row in entries),
+        links={row.target_path: Placed.of(row) for row in entries},
         sources=_unique(
             [Path(row.source_abs_path) for row in entries]
             + [fs.under(job.save_path, row.rel_path) for row in files if job.save_path]
@@ -291,17 +330,110 @@ def _measure(paths: Sequence[Path]) -> _Measured:
     )
 
 
-def _remove_all(paths: Sequence[Path], *, roots: Sequence[Path]) -> int:
-    """逐條刪，回傳真的刪掉幾個。空掉的目錄跟著收。
+class Unlink(StrEnum):
+    """拆一條媒體庫鏈接的結果（`remove_one`）。"""
+
+    #: 拆掉了。
+    REMOVED = "removed"
+    #: 本來就不在（有人在 Jellyfin 或檔案總管裡先刪了）。要做的事已經成立。
+    GONE = "gone"
+    #: 那條路徑上的已經不是 Berth 放的那一個，沒有碰（CONTEXT.md 的 Unmanaged）。
+    UNMANAGED = "unmanaged"
+
+
+@dataclass(frozen=True, slots=True)
+class Placed:
+    """Berth 在一條媒體庫路徑上放下去的是誰（M3 票 01）。**會拆媒體庫鏈接的每一條路共用這一份。**
+
+    兩個認法，對上一個就是：
+
+    - **帳本記的** `(device, inode)`：鏈接當下量的那一個（`importer.record_link`）。來源後來被
+      qBittorrent 重新下載、換了 inode 時，媒體庫那一份仍然是 Berth 當時放的。
+    - **來源現在的**：與來源同一份資料的那個名字，刪了也不會少掉任何資料；importer 收掉換了
+      落點的舊鏈接時手上也只有來源。
+
+    兩者都對不上，那個檔案就是使用者自己的（換成了一份複製品、一個重新壓制的版本）。
+    device 與 inode 以字串比（`models/ledger.py`：Windows 的 `st_dev` 超過 SQLite INTEGER）。
+    """
+
+    recorded: tuple[str, str] | None
+    source: Path | None
+
+    @classmethod
+    def of(cls, entry: LedgerEntry) -> Placed:
+        """帳本那一列：它記的目標，與它的來源。"""
+        return cls(
+            recorded=(entry.source_dev, entry.target_inode), source=Path(entry.source_abs_path)
+        )
+
+    @classmethod
+    def linked(cls, facts: fs.PathFacts) -> Placed:
+        """剛剛鏈接出來、量過的那一個（rematch 收回自己剛建的鏈接）。"""
+        return cls(recorded=_identity(facts), source=None)
+
+    @classmethod
+    def sharing(cls, source: Path) -> Placed:
+        """與這個來源同一份資料的那一個（importer 收掉換了落點的舊鏈接）。"""
+        return cls(recorded=None, source=source)
+
+    def holds(self, facts: fs.PathFacts) -> bool:
+        """`facts` 說的那個檔案是不是 Berth 放的那一個。"""
+        if self.recorded == _identity(facts):
+            return True
+        if self.source is None:
+            return False
+        try:
+            return _identity(fs.stat(self.source)) == _identity(facts)
+        except OSError:
+            return False
+
+
+def _identity(facts: fs.PathFacts) -> tuple[str, str]:
+    return str(facts.device), str(facts.inode)
+
+
+def _ours(links: dict[str, Placed]) -> list[Path]:
+    """會被拆的那幾條：Berth 放的，或已經不在的。估算與「空出多少」只算它們。"""
+    kept = []
+    for text, placed in links.items():
+        path = Path(text)
+        try:
+            facts = fs.stat(path)
+        except OSError:
+            kept.append(path)
+            continue
+        if placed.holds(facts):
+            kept.append(path)
+    return kept
+
+
+def _unlink_all(links: dict[str, Placed], *, roots: Sequence[Path]) -> dict[str, Unlink]:
+    """媒體庫那一側逐條拆，回每一條的結果（鍵是帳本的 `target_path`）。
 
     **一條失敗不讓整次刪除停住**：帳本被改壞、指到媒體庫外面的那一條（`PathEscapeError`）
-    或權限不足的那一條，記一行 log 之後換下一條——其餘四條照樣要刪得完，而剩下的那一條
-    由對帳（brief §9.1）當成 Issue 處理。
+    或權限不足的那一條，記一行 log 之後換下一條——其餘照樣要拆得完。它沒有結果，帳本那一列
+    也就不改，由對帳（brief §9.1）當成 Issue 處理。
+    """
+    results: dict[str, Unlink] = {}
+    for text, placed in links.items():
+        try:
+            results[text] = remove_one(Path(text), roots=roots, placed=placed)
+        except (OSError, fs.PathEscapeError) as exc:
+            logger.warning("this path was left alone", extra={"path": text, "error": str(exc)})
+    return results
+
+
+def _remove_all(paths: Sequence[Path], *, roots: Sequence[Path]) -> int:
+    """complete 那一側逐條刪，回傳真的刪掉幾個。空掉的目錄跟著收。失敗的那一條同 `_unlink_all`。
+
+    這一側不認人：complete 是 Berth 的下載目錄，不是使用者會換檔案的地方（brief §5.3）。
     """
     removed = 0
     for path in paths:
         try:
-            gone = remove_one(path, roots=roots)
+            root = fs.root_of(path, roots)
+            gone = fs.remove(path, roots=roots)
+            fs.prune_empty_parents(path, root=root)
         except (OSError, fs.PathEscapeError) as exc:
             logger.warning("this path was left alone", extra={"path": str(path), "error": str(exc)})
             continue
@@ -310,17 +442,28 @@ def _remove_all(paths: Sequence[Path], *, roots: Sequence[Path]) -> int:
     return removed
 
 
-def remove_one(path: Path, *, roots: Sequence[Path]) -> bool:
-    """刪一條路徑，空掉的目錄跟著收。回傳它原本在不在。
+def remove_one(path: Path, *, roots: Sequence[Path], placed: Placed) -> Unlink:
+    """拆一條媒體庫鏈接，空掉的目錄跟著收——**只拆 Berth 放下去的那一個**（`Placed`）。
 
-    **一條一條的那一步**，`_remove_all` 與 audit 撤銷（`services/review.py`，M2 票 06）都走它：
-    撤銷只拆一個檔案，而且拆不掉時要停下來、什麼紀錄都不改——所以失敗照樣丟出去
-    （`OSError` / `fs.PathEscapeError`），吞不吞由呼叫端決定。
+    **一條一條的那一步**，會拆媒體庫鏈接的每一條路都走它：刪除範圍的「移除鏈接」、audit 撤銷
+    （`services/review.py`）、rematch 拆舊鏈接與收回剛建的鏈接（`services/rematch.py`）、importer
+    收掉換了落點的舊鏈接。撤銷只拆一個檔案，而且拆不掉時要停下來、什麼紀錄都不改——所以失敗
+    照樣丟出去（`OSError` / `fs.PathEscapeError`），吞不吞由呼叫端決定。
+
+    守衛在認人之前：指到媒體庫外面的那一條連 `stat` 都不做。認完到刪之間有一條縫（使用者剛好在
+    這一瞬間換掉檔案）；`unlink` 沒有「inode 還是它才刪」的原子版本。
     """
     root = fs.root_of(path, roots)
+    try:
+        facts = fs.stat(path)
+    except FileNotFoundError:
+        fs.prune_empty_parents(path, root=root)
+        return Unlink.GONE
+    if not placed.holds(facts):
+        return Unlink.UNMANAGED
     gone = fs.remove(path, roots=roots)
     fs.prune_empty_parents(path, root=root)
-    return gone
+    return Unlink.REMOVED if gone else Unlink.GONE
 
 
 async def route_targets(session: AsyncSession) -> list[Path]:
@@ -328,29 +471,30 @@ async def route_targets(session: AsyncSession) -> list[Path]:
     return [Path(row.target_path) for row in await session.scalars(select(Route))]
 
 
-async def _restate_ledger(session: AsyncSession, job: Job, scope: DeleteScope) -> None:
+async def _restate_ledger(
+    session: AsyncSession, job: Job, scope: DeleteScope, unlinked: dict[str, Unlink]
+) -> None:
     """帳本那幾列說得出現況（brief §9.1 的 `ledger.status`）。
 
     **不跟著刪掉**：清除帳本是另一個旗標，而留下來的那幾列正是「這個媒體庫檔案原本來自
-    哪個 torrent」的唯一答案。來源與目標都被刪掉時記的是 `target_missing`——那一列上更要人
-    知道的是媒體庫裡少了什麼。
+    哪個 torrent」的唯一答案。
+
+    寫下的兩種都是**使用者決定過的現況**，對帳看到就不再為那一列開 Issue（`source_missing` 的
+    先例，plan §2.4）：拆掉了的是 `unlinked`，只刪了來源的是 `source_missing`。來源與目標都刪掉
+    時記 `unlinked`——那一列上更要人知道的是媒體庫裡少了什麼。沒拆的那幾條（不是 Berth 放的、
+    拆不掉的）目標還在，只在刪了來源時改；其餘的現況交給下一輪對帳。
     """
     if not (scope.unlink or scope.delete_files) or scope.purge:
         return
-    status = LedgerStatus.TARGET_MISSING if scope.unlink else LedgerStatus.SOURCE_MISSING
     for entry in await session.scalars(select(LedgerEntry).where(LedgerEntry.job_hash == job.hash)):
-        entry.status = status
+        if unlinked.get(entry.target_path) in (Unlink.REMOVED, Unlink.GONE):
+            entry.status = LedgerStatus.UNLINKED
+        elif scope.delete_files:
+            entry.status = LedgerStatus.SOURCE_MISSING
 
 
 async def _record(session: AsyncSession, job: Job, outcome: DeleteOutcome, *, actor: str) -> None:
-    """`removed` + 一筆 `deleted`（plan §3.1 的最後一列）。
-
-    CAS 的 `expected` 是讀進來的那個狀態：磁碟上的事已經做完了，所以輸掉的那一次只記一行
-    log——覆寫別人剛寫下的狀態比停在這裡更糟。`job_lock` 已經把迴圈擋在外面，走到這裡的
-    多半是使用者的第二個分頁。
-    """
-    if not await transition(session, job, JobState.REMOVED, expected=job.state):
-        logger.warning("job moved on before it could be marked removed")
+    """一筆 `deleted`（plan §3.1 的最後一列）。`removed` 是鎖裡的第一件事（`delete_job`）。"""
     await record_event(
         session,
         job,
@@ -362,6 +506,7 @@ async def _record(session: AsyncSession, job: Job, outcome: DeleteOutcome, *, ac
             "torrent": outcome.torrent,
             "purged": outcome.purged,
             "freed": outcome.freed,
+            "unmanaged": list(outcome.unmanaged),
         },
     )
 

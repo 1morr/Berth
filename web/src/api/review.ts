@@ -27,6 +27,8 @@ export type DuplicateDecision = Schemas['DuplicateDecision']
 
 /** 決定完之後：新的一份落在哪裡（跳過時是空字串）。 */
 export type DuplicateDecided = Schemas['DuplicateDecidedOut']
+/** 撤銷之後媒體庫裡那個檔案怎麼了：拆掉了，或那裡的已經不是 Berth 放的那一個（M3 票 01）。 */
+export type AuditUndone = Schemas['AuditUndoneOut']
 
 /**
  * 佇列上**現在會出現**的幾種（`domain.ReviewKind` 的子集）。取自列的聯集而不是那個 enum：
@@ -81,7 +83,7 @@ export async function confirmAudit(ledgerId: number) {
 
 /** 「它是錯的」：拆掉那個硬鏈接、刪掉帳本那一列，那一筆下載回到待審核。 */
 export async function undoAudit(ledgerId: number) {
-  return apiPost<void>(`/review/audit/${ledgerId}/undo`)
+  return apiPost<AuditUndone>(`/review/audit/${ledgerId}/undo`)
 }
 
 /** 重複版本的一顆。拒絕的形狀與 rematch 相同（`api/files.ts` 的 `rematchRefusalText`）。 */

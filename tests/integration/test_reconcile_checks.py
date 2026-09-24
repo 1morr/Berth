@@ -32,6 +32,7 @@ from berth.domain import (
     ReconcileSide,
 )
 from berth.models import Issue, Job, LedgerEntry, Plan, PlanItem, Route
+from berth.services.deletion import DeleteScope, delete_job
 from berth.services.reconcile import reconcile_once
 from tests.integration.factories import FakeClientFactory
 from tests.integration.test_deletion import imported
@@ -148,6 +149,36 @@ class TestSourceMissing:
         await reconcile_once(session, factory, now=NOW)
 
         assert await issues_of(session) == []
+
+
+class TestLinksTheUserRemoved:
+    """刪除範圍只勾「移除鏈接」之後（M3 票 01）：同 `source_missing` 的先例，是使用者決定過的現況。
+
+    帳本那幾列留著當歷史，說的是 `unlinked` 而不是對帳自己看到的 `target_missing`——
+    兩者在磁碟上長得一樣（目標不在），差別只在「有沒有人決定過」。
+    """
+
+    async def test_the_rows_it_unlinked_open_no_missing_link(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        job, _, factory = await imported(session, roots)
+        await delete_job(session, factory, job.hash, DeleteScope(unlink=True), actor="user")
+
+        await reconcile_once(session, factory, now=NOW)
+
+        assert await open_of(session, IssueType.LIBRARY_LINK_MISSING) == []
+        assert {row.status for row in await ledger_of(session)} == {LedgerStatus.UNLINKED}
+
+    async def test_a_link_deleted_by_hand_is_still_asked_about(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """對照組：沒有人透過 Berth 決定過的那一條照樣開。"""
+        _, _, factory = await imported(session, roots)
+        Path((await ledger_of(session))[0].target_path).unlink()
+
+        await reconcile_once(session, factory, now=NOW)
+
+        assert len(await open_of(session, IssueType.LIBRARY_LINK_MISSING)) == 1
 
 
 class TestInodeMismatch:

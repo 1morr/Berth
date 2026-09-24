@@ -330,6 +330,7 @@ class TestDeleteScope:
             "torrent": False,
             "purged": False,
             "freed": 0,
+            "unmanaged": [],
         }
 
     def test_deleting_files_without_removing_the_torrent_is_422_with_a_reason(

@@ -1,7 +1,7 @@
 """解析器的核心型別（plan §4.2、brief §6.2、§6.3、§6.8）。
 
 住在 `domain/` 的理由與 `MediaSnapshot` 一樣：`parser` 產生它們、`naming` 消費它們、
-`models` 拿它們當 `job_files.release_info_json` 與 `plan_items.tags_json` 的型別，
+`models` 拿它們當 `plan_items.tags_json` 的型別，
 而前兩層依契約只 import `domain`（plan §1.3）。
 
 全部是**純資料**：沒有 IO，也不知道 TMDB 或 qBittorrent 的存在。

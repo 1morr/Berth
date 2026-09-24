@@ -245,7 +245,9 @@ describe('詳情頁的動作', () => {
       [`DELETE /api/jobs/${HASH}?unlink=false&remove_torrent=false&delete_files=false&purge=true`]:
         () => {
           gone = true
-          return { body: { links: 0, sources: 0, torrent: false, purged: true, freed: 0 } }
+          return {
+            body: { links: 0, sources: 0, torrent: false, purged: true, freed: 0, unmanaged: [] },
+          }
         },
     })
     renderApp(`/jobs/${HASH}`)
@@ -264,7 +266,9 @@ describe('詳情頁的動作', () => {
       [`DELETE /api/jobs/${HASH}?unlink=true&remove_torrent=false&delete_files=false&purge=false`]:
         () => {
           removed = true
-          return { body: { links: 1, sources: 0, torrent: false, purged: false, freed: 0 } }
+          return {
+            body: { links: 1, sources: 0, torrent: false, purged: false, freed: 0, unmanaged: [] },
+          }
         },
     })
     renderApp(`/jobs/${HASH}`)

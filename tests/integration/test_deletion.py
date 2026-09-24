@@ -11,17 +11,19 @@ Job，五個硬鏈接真的在媒體庫裡。
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 
 import pytest
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from berth.adapters import fs
 from berth.adapters.http import ServiceUnavailableError
+from berth.db import create_session_factory
 from berth.domain import EventType, JobRefusal, JobState, LedgerStatus
 from berth.models import Event, Job, JobFile, LedgerEntry, Plan, Route
-from berth.services.deletion import DeleteScope, delete_job, estimate_deletion
+from berth.services.deletion import DeleteOutcome, DeleteScope, delete_job, estimate_deletion
 from berth.services.jobs import JobRejectedError
 from tests.integration.factories import FakeClientFactory
 from tests.integration.test_importer import importing, ledger_of, run, state_of
@@ -136,17 +138,18 @@ class TestEachFlagDoesOnlyItsOwnThing:
         assert len(alive(await sources(session))) == SOURCES
         assert client.deleted == []
 
-    async def test_unlink_leaves_the_ledger_as_history_saying_the_target_is_gone(
+    async def test_unlink_leaves_the_ledger_as_history_saying_it_was_unlinked(
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
-        """帳本不跟著消失（brief §9.2：清除帳本是**另一個**旗標），但它說得出現況。"""
+        """帳本不跟著消失（brief §9.2：清除帳本是**另一個**旗標），但它說得出現況：是使用者
+        拆掉的（`unlinked`），不是對帳自己看到的 `target_missing`（M3 票 01）。"""
         job, _, factory = await imported(session, roots)
 
         await delete_job(session, factory, job.hash, DeleteScope(unlink=True), actor="user")
 
         rows = await ledger_of(session)
         assert len(rows) == LINKS
-        assert {row.status for row in rows} == {LedgerStatus.TARGET_MISSING}
+        assert {row.status for row in rows} == {LedgerStatus.UNLINKED}
 
     async def test_unlink_takes_the_folders_it_emptied_with_it(
         self, session: AsyncSession, roots: dict[str, Path]
@@ -409,6 +412,39 @@ class TestWhenQbittorrentCannotBeReached:
         assert len(alive(await targets(session))) == LINKS
         assert len(alive(await sources(session))) == SOURCES
         assert await state_of(session, job) is JobState.IMPORTED
+
+
+class TestTwoTabs:
+    """兩個分頁同時刪同一筆（M3 票 01）。後拿到鎖的那一個讀到的是先到的那一個的結果：
+    它按下去時看到的狀態已經不是現在的狀態，compare-and-set 輸了就是**失敗**——不是回報
+    「刪好了、0 個鏈接」，也不是在時間線上多寫一筆 `deleted`。"""
+
+    @pytest.mark.parametrize("purge", [False, True])
+    async def test_the_second_one_is_refused(
+        self,
+        session: AsyncSession,
+        roots: dict[str, Path],
+        engine: AsyncEngine,
+        purge: bool,
+    ) -> None:
+        job, _, factory = await imported(session, roots)
+        sessions = create_session_factory(engine)
+        scope = DeleteScope(unlink=True, purge=purge)
+
+        async def press() -> DeleteOutcome:
+            async with sessions() as own:
+                return await delete_job(own, factory, job.hash, scope, actor="user")
+
+        results = await asyncio.gather(press(), press(), return_exceptions=True)
+
+        refused = [row for row in results if isinstance(row, BaseException)]
+        assert len(refused) == 1, results
+        assert isinstance(refused[0], JobRejectedError), results
+        # 勾了清除紀錄的話先到的那一個連這一列都收走了，後到的那一個讀不到它。
+        assert refused[0].reason is (JobRefusal.JOB_MISSING if purge else JobRefusal.MOVED_ON)
+        assert len(alive(await targets(session))) == 0
+        if not purge:
+            await deleted_event(session)
 
 
 class TestTheEstimate:

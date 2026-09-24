@@ -5,7 +5,8 @@ torrent」「這個 torrent 入庫到哪」「哪些鏈接斷了」。所以這�
 站得住**，不靠別的表活著：
 
 - **`job_hash` 是弱引用**（與 `events` 相同）：刪除範圍的四個旗標裡「清除帳本」是獨立的
-  一個（brief §9.2），刪掉 Job 不可以順手把帳本帶走。M2 的重新入庫沒有 Job，那時是 `None`。
+  一個（brief §9.2），刪掉 Job 不可以順手把帳本帶走。`berth rebuild-ledger` 與「認領進帳本」
+  長回來的列，來源不屬於任何 Job 時是 `None`（重新入庫自 M2 票 10 起有自己的 Job）。
 - **`action`、季集與 Tags 抄一份進來**，不是只記 `plan_item_id`：review 之後重新規劃會把
   `plan_items` 整份換掉（`models/plan.py`），而帳本記的是**當時真的鏈接了什麼**。
   `plan_item_id` 因此是 `SET NULL`，只是一條「從哪一份決定來的」線索。

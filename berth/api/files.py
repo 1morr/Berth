@@ -106,6 +106,8 @@ class RematchOut(BaseModel):
     plan_id: int
     #: 這個檔案現在在媒體庫的哪裡；不在媒體庫裡（忽略）是空字串。
     target_path: str
+    #: 沒有拆的舊路徑：那裡的檔案已經不是 Berth 放的那一個（使用者換成了自己的一份，M3 票 01）。
+    unmanaged: list[str]
 
 
 @router.post("/rematch", responses=REMATCH_RESPONSES)
@@ -130,7 +132,11 @@ async def post_rematch(
         )
     except RematchRejectedError as refusal:
         raise rematch_refusal(refusal) from refusal
-    return RematchOut(plan_id=outcome.plan_id, target_path=outcome.target_path)
+    return RematchOut(
+        plan_id=outcome.plan_id,
+        target_path=outcome.target_path,
+        unmanaged=list(outcome.unmanaged),
+    )
 
 
 def rematch_refusal(refusal: RematchRejectedError) -> HTTPException:

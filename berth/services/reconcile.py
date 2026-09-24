@@ -407,8 +407,11 @@ async def _check_library(
         try:
             target = fs.stat(Path(entry.target_path))
         except OSError:
-            entry.status = LedgerStatus.TARGET_MISSING
-            tally.add(await _record_entry(session, IssueType.LIBRARY_LINK_MISSING, entry, now))
+            # **`unlinked` 是使用者決定過的現況**（同下面的 `source_missing`）：刪除範圍的「移除
+            # 鏈接」拆掉的那幾列留著當歷史，不再問他要不要重新鏈接（M3 票 01）。
+            if entry.status is not LedgerStatus.UNLINKED:
+                entry.status = LedgerStatus.TARGET_MISSING
+                tally.add(await _record_entry(session, IssueType.LIBRARY_LINK_MISSING, entry, now))
             continue
         try:
             source = fs.stat(Path(entry.source_abs_path))

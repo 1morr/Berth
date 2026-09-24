@@ -6,9 +6,9 @@
 重跑之後多一份重複的決定（票上「重跑不產生重複的 plan item」那一條驗收）。上一份計劃
 在時間線上（`events`），它本來就是紀錄該待的地方。
 
-`job_hash` 仍然可以是 `None`：M2 的重新入庫以 complete 底下的一個目錄為 Import Source
-（`source_path`），那時候沒有 Job。SQLite 的 unique 容得下多個 NULL，所以同一個約束同時
-成立於兩種來源。
+`job_hash` 仍然可以是 `None`：rematch 與重複版本的決定各記一份單列 Plan（`services/rematch.py`，
+`engine = user`），它們不是任何一筆 Job「現在的那一份」，以 `source_path` 說是哪個檔案。SQLite
+的 unique 容得下多個 NULL，所以同一個約束同時成立於兩種。（重新入庫自 M2 票 10 起有自己的 Job。）
 """
 
 from __future__ import annotations
@@ -31,7 +31,7 @@ class Plan(Base):
     __table_args__ = (Index("ix_plans_job_hash", "job_hash", unique=True),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    #: 哪一個 Job。M2 的重新入庫沒有 Job，那時是 `None` 而 `source_path` 有值。
+    #: 哪一個 Job。rematch 的單列 Plan 是 `None`，那時 `source_path` 有值。
     job_hash: Mapped[str | None] = mapped_column(
         ForeignKey("jobs.hash", ondelete="CASCADE"), default=None
     )
@@ -63,7 +63,7 @@ class PlanItem(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     plan_id: Mapped[int] = mapped_column(ForeignKey("plans.id", ondelete="CASCADE"))
-    #: 對應的 `job_files` 那一列。重新入庫時沒有 Job，那時是 `None`。
+    #: 對應的 `job_files` 那一列。來源不屬於任何 Job 時（`rebuild-ledger` 長回的帳本）是 `None`。
     job_file_id: Mapped[int | None] = mapped_column(
         ForeignKey("job_files.id", ondelete="SET NULL"), default=None
     )

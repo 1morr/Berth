@@ -55,7 +55,7 @@ from berth.models import Job, JobFile, LedgerEntry, Media, Plan, PlanItem, Route
 from berth.models.types import utcnow
 from berth.parser import revise
 from berth.services.clients import ServiceClientFactory
-from berth.services.deletion import remove_one, route_targets
+from berth.services.deletion import Placed, Unlink, remove_one, route_targets
 from berth.services.importer import (
     TargetTakenError,
     link_into,
@@ -98,6 +98,8 @@ class RematchOutcome:
     plan_id: int
     #: 這個檔案現在在媒體庫的哪裡（容器裡的完整路徑）；不在媒體庫裡是空字串。
     target_path: str
+    #: 沒有拆的舊路徑：那裡的檔案已經不是 Berth 放的那一個（它與跟著走的字幕）。
+    unmanaged: tuple[str, ...] = ()
 
 
 @dataclass(slots=True)
@@ -122,6 +124,8 @@ class Move:
     error: str = ""
     #: 這一步拆掉的舊路徑（通知 Jellyfin 用）。
     removed: str = ""
+    #: 舊路徑上的已經不是 Berth 放的那一個，沒有拆（M3 票 01、CONTEXT.md 的 Unmanaged）。
+    unmanaged: str = ""
 
 
 @dataclass(slots=True)
@@ -157,6 +161,7 @@ async def rematch_file(
         main.planned = _decided(main.planned, kind, to, landing)
         landing.moves.extend(await _sidecars(session, landing, main))
         plan = await land(session, landing, actor=actor)
+        unmanaged = [move.unmanaged for move in landing.moves if move.unmanaged]
         if landing.job is not None:
             await record_event(
                 session,
@@ -168,12 +173,17 @@ async def rematch_file(
                     "file": main.source_rel,
                     "from": before,
                     "to": _state(main.planned, full_path(landing.root, main.planned)),
+                    "unmanaged": unmanaged,
                 },
             )
         await session.commit()
     await announce(session, factory, landing)
     logger.info("file rematched", extra={"plan": plan.id, "action": to.action.value})
-    return RematchOutcome(plan_id=plan.id, target_path=full_path(landing.root, main.planned))
+    return RematchOutcome(
+        plan_id=plan.id,
+        target_path=full_path(landing.root, main.planned),
+        unmanaged=tuple(unmanaged),
+    )
 
 
 # --- 主角是誰 -------------------------------------------------------------
@@ -200,8 +210,9 @@ async def locked(*job_hashes: str | None) -> AsyncIterator[None]:
 
     **取代舊版要兩把**（code-review 抓到）：它拆的是另一筆 Job 的鏈接、改的是那一筆的帳本，只鎖
     新的那一筆的話，舊的那一筆上同時按下的撤銷會拆到剛換上去的新鏈接。多把時照 hash 排序依序拿，
-    兩個方向同時取代的兩個分頁才不會互等。重新入庫建出來的帳本沒有 Job（`models/ledger.py`），
-    那一份沒有鎖可拿。例外離開時由呼叫端的 session 收拾：拒絕都在寫入之前丟出來。
+    兩個方向同時取代的兩個分頁才不會互等。`rebuild-ledger` 長回來的帳本可能沒有 Job
+    （`models/ledger.py`），那一份沒有鎖可拿。例外離開時由呼叫端的 session 收拾：拒絕都在寫入
+    之前丟出來。
     """
     wanted = sorted({job_hash for job_hash in job_hashes if job_hash is not None})
     async with AsyncExitStack() as stack:
@@ -524,19 +535,25 @@ async def _carry_out(
     except (OSError, fs.PathEscapeError) as exc:
         raise RematchRejectedError(RematchRefusal.LINK_FAILED, message(exc)) from exc
     if old and old != new:
+        assert move.old is not None  # 有舊路徑就有它那一列帳本
         try:
-            remove_one(Path(old), roots=roots)
+            result = remove_one(Path(old), roots=roots, placed=Placed.of(move.old))
         except (OSError, fs.PathEscapeError) as exc:
-            if created:
-                _take_back(Path(new), roots)
+            if created and move.facts is not None:
+                _take_back(Path(new), move.facts[1], roots)
             raise RematchRejectedError(RematchRefusal.UNLINK_FAILED, message(exc)) from exc
-        move.removed = old
+        # 不是 Berth 放的那一個留在原地：新的照樣鏈好、帳本照樣搬走，舊路徑上的那一份下一輪對帳
+        # 是 `unmanaged_library_file`。Jellyfin 那邊沒有東西少掉，不必為它重讀。
+        if result is Unlink.UNMANAGED:
+            move.unmanaged = old
+        else:
+            move.removed = old
 
 
-def _take_back(path: Path, roots: Sequence[Path]) -> None:
+def _take_back(path: Path, linked: fs.PathFacts, roots: Sequence[Path]) -> None:
     """拆舊的失敗時收回剛建的那一條。收不回只留一行 log：它與來源同一個 inode，下一輪對帳看得到。"""
     try:
-        remove_one(path, roots=roots)
+        remove_one(path, roots=roots, placed=Placed.linked(linked))
     except (OSError, fs.PathEscapeError):
         logger.warning("a new link could not be taken back", extra={"target": str(path)})
 

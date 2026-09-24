@@ -250,6 +250,15 @@ class DuplicateRowOut(BaseModel):
     known_episode_end: int | None
 
 
+class AuditUndoneOut(BaseModel):
+    """撤銷之後媒體庫裡那個檔案怎麼了（`services/review.AuditUndone`，時間線上那一筆說的是同一組）。"""
+
+    #: 真的拆掉了。撤銷之前有人已經在 Jellyfin 裡刪掉它的話是 false。
+    unlinked: bool
+    #: 那條路徑上的已經不是 Berth 放的那一個（使用者換成了自己的一份），所以沒有拆（M3 票 01）。
+    unmanaged: bool
+
+
 class DuplicateDecidedOut(BaseModel):
     """決定完之後：記下這一次的單列 Plan，與新的那一份落在哪裡（跳過時兩格都是空的）。"""
 
@@ -310,18 +319,21 @@ async def post_confirm(session: SessionDep, request: Request, ledger_id: int) ->
         raise review_refusal(refusal) from refusal
 
 
-@router.post(
-    "/audit/{ledger_id}/undo",
-    status_code=status.HTTP_204_NO_CONTENT,
-    responses=UNDO_RESPONSES,
-)
-async def post_undo(session: SessionDep, request: Request, ledger_id: int) -> None:
-    """「它是錯的」：拆掉硬鏈接、刪掉帳本那一列、Job 回 `review`（`audit_undone`）。"""
+@router.post("/audit/{ledger_id}/undo", responses=UNDO_RESPONSES)
+async def post_undo(session: SessionDep, request: Request, ledger_id: int) -> AuditUndoneOut:
+    """「它是錯的」：拆掉硬鏈接、刪掉帳本那一列、Job 回 `review`（`audit_undone`）。
+
+    回的是**那個檔案怎麼了**而不是 204（M3 票 01）：那條路徑上的已經不是 Berth 放的那一個時
+    不拆它，畫面要說得出「那個檔案沒有動」。
+    """
     user = current_user(request)
     try:
-        await undo_audit(session, ledger_id, actor=actor_of(user.id if user is not None else None))
+        undone = await undo_audit(
+            session, ledger_id, actor=actor_of(user.id if user is not None else None)
+        )
     except ReviewRejectedError as refusal:
         raise review_refusal(refusal) from refusal
+    return AuditUndoneOut(unlinked=undone.unlinked, unmanaged=undone.unmanaged)
 
 
 @router.post("/duplicate/{item_id}/{decision}", responses=DUPLICATE_RESPONSES)

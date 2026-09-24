@@ -832,6 +832,9 @@ export interface paths {
         /**
          * Post Undo
          * @description 「它是錯的」：拆掉硬鏈接、刪掉帳本那一列、Job 回 `review`（`audit_undone`）。
+         *
+         *     回的是**那個檔案怎麼了**而不是 204（M3 票 01）：那條路徑上的已經不是 Berth 放的那一個時
+         *     不拆它，畫面要說得出「那個檔案沒有動」。
          */
         post: operations["post_undo_api_review_audit__ledger_id__undo_post"];
         delete?: never;
@@ -1599,6 +1602,16 @@ export interface components {
             reasons: components["schemas"]["ItemReasonOut"][];
         };
         /**
+         * AuditUndoneOut
+         * @description 撤銷之後媒體庫裡那個檔案怎麼了（`services/review.AuditUndone`，時間線上那一筆說的是同一組）。
+         */
+        AuditUndoneOut: {
+            /** Unlinked */
+            unlinked: boolean;
+            /** Unmanaged */
+            unmanaged: boolean;
+        };
+        /**
          * CollectionType
          * @description Jellyfin 媒體庫的類型；沿用 Jellyfin 的字串（brief §4.3）。
          * @enum {string}
@@ -2314,6 +2327,8 @@ export interface components {
             purged: boolean;
             /** Freed */
             freed: number;
+            /** Unmanaged */
+            unmanaged: string[];
         };
         /**
          * JobEventOut
@@ -2405,7 +2420,7 @@ export interface components {
          *     列上有一顆重試（plan §3.1）。這裡的每一種都是「還沒開始就停住」。
          * @enum {string}
          */
-        JobRefusal: "media_missing" | "route_missing" | "route_kind_mismatch" | "route_disabled" | "route_unhealthy" | "source_unavailable" | "job_missing" | "not_retryable" | "not_replannable" | "client_unreachable" | "delete_files_requires_remove_torrent" | "not_reimportable" | "content_missing";
+        JobRefusal: "media_missing" | "route_missing" | "route_kind_mismatch" | "route_disabled" | "route_unhealthy" | "source_unavailable" | "job_missing" | "not_retryable" | "not_replannable" | "client_unreachable" | "delete_files_requires_remove_torrent" | "not_reimportable" | "content_missing" | "moved_on";
         /**
          * JobRefusalOut
          * @description 做不了的時候回的那一份。`reason` 給畫面挑句子、挑下一步，`detail` 是原文，不翻譯。
@@ -2505,10 +2520,12 @@ export interface components {
          * LedgerStatus
          * @description 一筆帳本現在與磁碟對不對得起來（plan §2.3 的 `ledger.status`、brief §9.1）。
          *
-         *     importer 寫下的一律是 `ok`；其餘三種是 M2 的 Reconciler 比對之後寫的。
+         *     importer 寫下的一律是 `ok`。`target_missing` 與 `inode_mismatch` 是 Reconciler 比對之後寫的；
+         *     `source_missing` 與 `unlinked` 是**使用者決定過的現況**（刪除範圍、「標記為已無來源」），
+         *     對帳看到它們就不再為那一列開 Issue——偵測時寫的話，「忽略」之後下一輪就再也不會問了。
          * @enum {string}
          */
-        LedgerStatus: "ok" | "target_missing" | "source_missing" | "inode_mismatch";
+        LedgerStatus: "ok" | "target_missing" | "source_missing" | "inode_mismatch" | "unlinked";
         /** LibraryChoiceOut */
         LibraryChoiceOut: {
             /** Name */
@@ -3033,6 +3050,8 @@ export interface components {
             plan_id: number;
             /** Target Path */
             target_path: string;
+            /** Unmanaged */
+            unmanaged: string[];
         };
         /**
          * RematchRefusal
@@ -4810,6 +4829,15 @@ export interface operations {
                     "application/json": components["schemas"]["JobRefusalOut"];
                 };
             };
+            /** @description `moved_on` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobRefusalOut"];
+                };
+            };
             /** @description `delete_files_requires_remove_torrent` */
             422: {
                 headers: {
@@ -5429,11 +5457,13 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Successful Response */
-            204: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AuditUndoneOut"];
+                };
             };
             /** @description `ledger_missing` */
             404: {

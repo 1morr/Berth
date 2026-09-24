@@ -152,7 +152,9 @@ importing  ─► import_failed（可重試）
 
 每個 Job 的所有轉換都寫 Event，至少包含：
 
-`created(trigger, user, media, route)`、`submitted(client, category, save_path)`、`metadata_received(file_count, total_size)`、`preplan(result, confidence)`、`progress(每 25% 一筆)`、`completed`、`plan_generated(engine=rules|ai, confidence, model, tokens, cost)`、`review_required(reason)`、`review_decided(user, changes)`、`linked(file, target)`、`link_failed(file, error)`、`jellyfin_scan_requested(paths)`、`jellyfin_item_resolved(item_id)`、`issue_detected(type)`、`deleted(scope, user)`。
+`created(trigger, user, media, route)`、`submitted(client, category, save_path)`、`metadata_received(file_count, total_size)`、`preplan(result, confidence)`、`progress(每 25% 一筆)`、`completed`、`plan_generated(engine=rules|ai, confidence, model, tokens, cost)`、`review_required(reason)`、`review_decided(user, changes)`、`linked(file, target)`、`link_failed(file, error)`、`jellyfin_scan_requested(paths)`、`jellyfin_item_resolved(count)`、`issue_detected(type)`、`deleted(links, sources, torrent, purged, freed, unmanaged)`。
+
+`jellyfin_item_resolved` 是**一筆 Job 一行、說找到了幾個**（`count`），不是逐檔帶 item id：一季 24 集的時間線不該被 24 行「找到了」淹沒，而 item id 已經寫在帳本那幾列上（`services/resolver.py`，M3 票 01 照程式碼更正）。`deleted` 說的是真的做掉了什麼而不是勾了哪幾格（§9.2），誰按的在事件的 `actor`。
 
 Event 是 Job 頁時間線的資料來源，也是未來 AI 理解「發生了什麼」的介面。
 
@@ -413,7 +415,7 @@ NCOP/NCED、PV、CM、Menu、預告、花絮等**可辨識**的非正片內容�
 | `library_uses_tvdb` | 健康檢查：一條 Route 的 Jellyfin 媒體庫掛著 TVDB 的 metadata fetcher（§16.4 的警告） | 只列出；在 Jellyfin 拿掉之後系統自己收掉 |
 | `low_disk_space` | 健康檢查：incomplete 或 complete 所在的檔案系統剩下的空間低於門檻（設定裡，預設 10 GB） | 只列出；空間回來之後系統自己收掉 |
 
-中間四種是管線自己發現的（M1 以 `issue_detected` 事件記著，M2 起與對帳的七種共用 `issues` 表與同一個封閉集合，plan §2.4，2026-09-22 定）；最後兩種是 `health_checker` 每 5 分鐘量出來的（M2 票 09c，使用者拍板由健康檢查偵測而不是對帳），十三種共用一個集合。`ledger.status` 的 `target_missing` / `source_missing` / `inode_mismatch` 是帳本那一列的現況，Issue 是「要有人決定」的那一件——同一件事的兩個角度，resolve 之後帳本那一欄跟著改。
+中間四種是管線自己發現的（M1 以 `issue_detected` 事件記著，M2 起與對帳的七種共用 `issues` 表與同一個封閉集合，plan §2.4，2026-09-22 定）；最後兩種是 `health_checker` 每 5 分鐘量出來的（M2 票 09c，使用者拍板由健康檢查偵測而不是對帳），十三種共用一個集合。`ledger.status` 的 `target_missing` / `source_missing` / `inode_mismatch` 是帳本那一列的現況，Issue 是「要有人決定」的那一件——同一件事的兩個角度，resolve 之後帳本那一欄跟著改。`source_missing` 與 `unlinked`（刪除範圍拆掉的鏈接，M3 票 01）是**使用者決定過的**現況，對帳看到就不再開 Issue。
 
 **認領類三顆（M2 票 10 做完）**：都走既有的入庫路線、都不刪東西。「重新入庫」與「認領」**由管理員在列上選作品**（2026-09-23 使用者拍板：沒有作品的 Job 規劃出來只會整份停在 review 而且核准不了）；孤兒目錄建一筆 `trigger = reimport` 的 Job 停在 `completed`，無主 torrent 建一筆停在 `submitted`（Route 由它的 category 決定，只掛 `berth` tag 的說不出要入庫到哪裡，拒絕）。「認領進帳本」是單一檔案的 `berth rebuild-ledger`：inode 反查 complete、路徑照命名模板反解，配不上的拒絕、那一件開著。
 
@@ -432,7 +434,9 @@ NCOP/NCED、PV、CM、Menu、預告、花絮等**可辨識**的非正片內容�
 
 顯示「預估可釋放空間」：只有當來源與所有鏈接都刪掉時才真的釋放，UI 要說清楚。
 
-實作（M2 票 04，`services/deletion.py`）：順序是**移除 torrent → 移除鏈接 → 刪來源 → 清紀錄**，移除 torrent 排第一是因為它是唯一可能失敗的一步，問不到那一台時整次刪除不做而不是刪到一半才發現；`unlink` / `delete_files` 之後帳本那幾列留著當歷史（清帳本是另一個旗標），只把 `status` 改成 `target_missing` / `source_missing`；空掉的目錄跟著收（留著 `Show/Season 01/` 兩層空目錄的話 Jellyfin 的牆上那部作品還在）；刪除與鏈接**同一道路徑守衛**（plan §8.6），帳本被改壞、指到媒體庫外面的那一條不刪而其餘照樣做完。
+實作（M2 票 04，`services/deletion.py`）：順序是**移除 torrent → 移除鏈接 → 刪來源 → 清紀錄**，移除 torrent 排第一是因為它是唯一可能失敗的一步，問不到那一台時整次刪除不做而不是刪到一半才發現；`unlink` / `delete_files` 之後帳本那幾列留著當歷史（清帳本是另一個旗標），只把 `status` 改成 `unlinked` / `source_missing`（M3 票 01 之前是 `target_missing`，見下）；空掉的目錄跟著收（留著 `Show/Season 01/` 兩層空目錄的話 Jellyfin 的牆上那部作品還在）；刪除與鏈接**同一道路徑守衛**（plan §8.6），帳本被改壞、指到媒體庫外面的那一條不刪而其餘照樣做完。
+
+2026-09-24（M3 票 01，M2 後的審查找到）：**媒體庫裡只拆 Berth 放下去的那一個**。使用者把硬鏈接換成自己的檔案之後（一份複製品、一個重新壓制的版本），那條路徑上的是 Unmanaged，§5.3 的不變量說它永不刪——而「移除鏈接」、audit 撤銷、rematch 拆舊鏈接三條路原本都照路徑刪。三條現在共用一個判斷（`deletion.Placed.holds`）：目標的 inode 等於帳本記的、或等於來源現在的，才是 Berth 放的；都不等就不刪，回應與時間線列出沒刪的那幾個（`unmanaged`），帳本那一列的現況交給下一輪對帳（`inode_mismatch`）。撤銷與 rematch 其餘照做（帳本那一列照樣移走、Job 照樣回 review），那個檔案下一輪對帳是 `unmanaged_library_file`——它本來就是。只勾「移除鏈接」拆掉的那幾列寫 `unlinked` 而不是 `target_missing`：同 `source_missing` 的先例（§9.1），那是使用者決定過的現況，對帳不再為它開 `library_link_missing`。兩個分頁同時刪同一筆時後到的那一個是 409 `moved_on`，不是回報成功（plan §3.1）。
 
 2026-09-22 定：四個旗標**預設全不勾**——Sonarr 的對話框預設勾「同時刪除檔案」，但這裡的刪除以 Job 為單位而不是作品，預設刪檔會誤刪還在做種的東西；空間估算**同步 `stat` 每一個來源與目標**（慢而準，畫面上說「正在算」），不用來源大小去猜；對話框住在 Job 詳情頁與 Media 詳情的版本清單，同一個元件；對帳發現的 `library_link_missing` 選「連 complete 一起刪」時走同一組旗標。
 
@@ -510,7 +514,7 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 | 設定精靈 | 首次啟動 | 建立管理員 → 偵測套件內的 Jellyfin / qBittorrent / Prowlarr 並一鍵設定，或連接既有服務 → 路徑 → 建立 Route → 健康檢查（§16.3） |
 | 探索（首頁 `/`） | 找東西、接著看 | 上方是這位使用者的繼續觀看與下一集（M1.5，沒有內容就不出現，點下去深連結到 Jellyfin 的那一集）；趨勢 / 熱門 / 搜尋；卡片顯示狀態（未追蹤 / 部分 / 完整 / 下載中，**四種都由 Job 與帳本推導**，所以卡片上的狀態要等 M1 票 09 才畫得出來） |
 | Media 詳情 | 決策中心與觀看入口 | 探索與媒體庫點進的是**同一頁**（2026-09-15 使用者拍板，不另建媒體庫詳情頁）。作品已在 Jellyfin 裡時最上面是**觀看區**（M1.5）：繼續看 / 下一集的深連結、選季選集、各集劇照與已看標記。其下：TMDB 資訊、各季各集入庫狀態、**搜尋 torrent**（結果表：大小、做種、來源、解析出的 tags、預估匹配；作品已入庫時收合）、選 Route 送單、RSS 訂閱、檔案清單（含 Unmatched 與 rematch）、版本並存清單 |
-| 媒體庫 | 瀏覽與修正 | 像 Jellyfin 那樣瀏覽**整個 Jellyfin 媒體庫**（M1.5，不只 Berth 經手的）：一個 Jellyfin 媒體庫一頁、只列這位使用者在 Jellyfin 看得到的；繼續觀看、下一集、卡片牆附已看 / 未看、依類型或年份排序；Berth 經手的作品疊上入庫狀態，還沒進 Jellyfin 的（下載中、待審）也在牆上；篩選：有 Issue / 有 Unmatched / 有待審。M1（票 13）是依 Route 分頁、只列 Berth 經手的作品＋深連結 |
+| 媒體庫 | 瀏覽與修正 | 像 Jellyfin 那樣瀏覽**整個 Jellyfin 媒體庫**（M1.5，不只 Berth 經手的）：一個 Jellyfin 媒體庫一頁、只列這位使用者在 Jellyfin 看得到的；繼續觀看、下一集、卡片牆附已看 / 未看、依類型或年份排序；Berth 經手的作品疊上入庫狀態，還沒進 Jellyfin 的（下載中、待審）也在牆上；篩選：待審 / 對不到（只給 admin，M2 票 14）。原本還有一個「有 Issue」，2026-09-24 使用者拍板拿掉：`/issues` 已經是獨立頁（M3 票 01）。M1（票 13）是依 Route 分頁、只列 Berth 經手的作品＋深連結 |
 | 下載與活動 | 全域狀態 | 所有 Job 列表：狀態、進度、Route、trigger；點入 Job 頁 |
 | Job 詳情 | 可觀測性 | **獨立頁 `/jobs/:hash`**（M2，2026-09-22 定；M1 只有 `/jobs` 的就地展開區）：**時間線**（§5.2）、檔案清單與各檔決策、Plan 歷史、動作（重新解析、重新入庫、刪除範圍） |
 | 審核佇列 | 人工介入 | 低信心 Plan（逐檔可改）、已入庫待確認（medium 自動入庫的 audit 清單，可一鍵撤銷）、Unmatched、重複版本、Issue；批次核准。**一列一件事的清單，不是牆**（2026-09-22 定，M1.5 的 critique：篩出來常常只有一兩件，卡片牆說不出「有幾件事在等你」）；只有 admin 進得來 |

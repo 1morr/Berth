@@ -53,7 +53,7 @@ from berth.models import (
 )
 from berth.models.types import utcnow
 from berth.services.clients import ServiceClientFactory
-from berth.services.deletion import remove_one
+from berth.services.deletion import Placed, remove_one
 from berth.services.events import EventHub, JobSignal
 from berth.services.jobs import actor_of, guarded, record_event, transition
 from berth.services.plan import WRITTEN, plan_counts
@@ -318,9 +318,7 @@ def _take_back_old(old: Path, source: Path, roots: Sequence[Path]) -> None:
     `unmanaged_library_file`，而那一種永遠不自動刪（brief §9.1）。
     """
     try:
-        if not fs.same_inode(source, old):
-            return
-        remove_one(old, roots=roots)
+        remove_one(old, roots=roots, placed=Placed.sharing(source))
     except (OSError, fs.PathEscapeError) as exc:
         logger.warning(
             "the old link was left in place", extra={"target": str(old), "error": message(exc)}

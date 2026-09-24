@@ -251,10 +251,12 @@ const FACTS: Record<KnownEvent, (facing: Facing) => ReactNode> = {
           ? t('jobs.timeline.freed', { size: formatSize(number(payload.freed), locale) })
           : t('jobs.timeline.freedNothing')}
       </Row>
+      <Kept t={t} paths={payload.unmanaged} />
     </>
   ),
   // audit 的兩顆（M2 票 06）。句子說誰做了什麼，目標路徑是機器字串，另起一行。撤銷那一句照
-  // `unlinked` 說**真的**拆到了沒——撤銷之前有人已經在 Jellyfin 裡刪掉它的話，沒有東西可拆。
+  // `unlinked` 說**真的**拆到了沒——撤銷之前有人已經在 Jellyfin 裡刪掉它的話，沒有東西可拆；
+  // `unmanaged` 是那裡的檔案已經不是 Berth 放的那一個，所以沒有拆（M3 票 01）。
   audit_confirmed: ({ t, payload }) => (
     <>
       <p className="max-w-prose text-xs text-ink-dim">{t('jobs.timeline.auditConfirmed')}</p>
@@ -264,9 +266,11 @@ const FACTS: Record<KnownEvent, (facing: Facing) => ReactNode> = {
   audit_undone: ({ t, payload }) => (
     <>
       <p className="max-w-prose text-xs text-ink-dim">
-        {payload.unlinked === false
-          ? t('jobs.timeline.auditUndoneGone')
-          : t('jobs.timeline.auditUndone')}
+        {payload.unmanaged === true
+          ? t('jobs.timeline.auditUndoneUnmanaged')
+          : payload.unlinked === false
+            ? t('jobs.timeline.auditUndoneGone')
+            : t('jobs.timeline.auditUndone')}
       </p>
       <Row>{text(payload.target)}</Row>
     </>
@@ -284,6 +288,7 @@ const FACTS: Record<KnownEvent, (facing: Facing) => ReactNode> = {
         <Row>{text(payload.file)}</Row>
         <Row>{from.target && `${from.target} →`}</Row>
         <Row>{to.target}</Row>
+        <Kept t={t} paths={payload.unmanaged} />
       </>
     )
   },
@@ -409,6 +414,26 @@ const ISSUES = [
 function Row({ children }: { children: string | false }) {
   if (!children) return null
   return <p className="value text-xs wrap-anywhere text-ink-dim">{children}</p>
+}
+
+/**
+ * 刪除與 rematch 沒有拆的那幾條（M3 票 01）：那裡的檔案已經不是 Berth 放的那一個。一句話說有幾個，
+ * 路徑是機器字串、一條一行。**不是紅字**：沒刪使用者自己的檔案是對的結果，不是阻擋。
+ * 早於票 01 的事件沒有這一格，什麼都不畫。
+ */
+function Kept({ t, paths }: { t: Translate; paths: unknown }) {
+  const kept = Array.isArray(paths) ? paths.map(text).filter(Boolean) : []
+  if (kept.length === 0) return null
+  return (
+    <>
+      <p className="max-w-prose text-xs text-ink-dim">
+        {t('jobs.timeline.keptUnmanaged', { count: kept.length })}
+      </p>
+      {kept.map((path) => (
+        <Row key={path}>{path}</Row>
+      ))}
+    </>
+  )
 }
 
 /**

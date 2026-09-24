@@ -189,7 +189,7 @@ describe('審核佇列', () => {
       [QUEUE]: () => queue(rows),
       'POST /api/review/audit/7/undo': () => {
         rows = []
-        return { status: 204, body: null }
+        return { body: { unlinked: true, unmanaged: false } }
       },
     })
     renderApp('/review')
@@ -205,6 +205,28 @@ describe('審核佇列', () => {
 
     await waitFor(() => expect(screen.queryByRole('article')).not.toBeInTheDocument())
     expect(stub.mock.calls.some(([url]) => url === '/api/review/audit/7/undo')).toBe(true)
+  })
+
+  it('撤銷時媒體庫裡那個檔案不是 Berth 放的，結果那一句說沒有刪它（M3 票 01）', async () => {
+    let rows: ReviewQueue['rows'] = [audit()]
+    render({
+      [QUEUE]: () => queue(rows),
+      'POST /api/review/audit/7/undo': () => {
+        rows = []
+        return { body: { unlinked: false, unmanaged: true } }
+      },
+    })
+    renderApp('/review')
+    const row = await screen.findByRole('article')
+
+    await userEvent.click(within(row).getByRole('button', { name: '撤銷' }))
+    await userEvent.click(within(row).getByRole('button', { name: '確定撤銷' }))
+
+    expect(
+      await screen.findByText(
+        '已撤銷，這一筆下載回到待審核。媒體庫裡那個檔案已經不是 Berth 放的那一個，所以沒有刪。',
+      ),
+    ).toBeInTheDocument()
   })
 
   it('撤銷失敗時那一列留著，說出理由與原文', async () => {

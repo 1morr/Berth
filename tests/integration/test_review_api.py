@@ -206,7 +206,8 @@ class TestUndo:
 
         response = client.post(f"/api/review/audit/{ledger_id}/undo", headers=BROWSER)
 
-        assert response.status_code == 204
+        assert response.status_code == 200
+        assert response.json() == {"unlinked": True, "unmanaged": False}
         assert not Path(target).exists()
         # audit 那一列走了；回到 review 的那份 Plan 換成 `plan` 那一類等人（票 07）。
         rows = client.get("/api/review").json()["rows"]

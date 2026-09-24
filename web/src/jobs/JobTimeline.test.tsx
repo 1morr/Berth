@@ -168,6 +168,48 @@ describe('Job 時間線', () => {
     expect(line.getByText(/沒有空出空間/)).toBeInTheDocument()
   })
 
+  it('沒有刪的那幾個說得出是哪幾個：那裡的檔案已經不是 Berth 放的（M3 票 01）', () => {
+    const line = render([
+      event({
+        type: 'deleted',
+        payload: {
+          links: 4,
+          sources: 0,
+          torrent: false,
+          purged: false,
+          freed: 0,
+          unmanaged: ['/lib/Show/Season 01/Show - S01E01.mkv'],
+        },
+      }),
+    ])
+
+    expect(line.getByText(/1 個媒體庫檔案已經不是 Berth 放的那一個，沒有刪/)).toBeInTheDocument()
+    expect(line.getByText('/lib/Show/Season 01/Show - S01E01.mkv')).toBeInTheDocument()
+  })
+
+  it('早於票 01 的刪除事件沒有那一格，什麼都不多畫', () => {
+    const line = render([
+      event({
+        type: 'deleted',
+        payload: { links: 5, sources: 0, torrent: false, purged: false, freed: 0 },
+      }),
+    ])
+
+    expect(line.queryByText(/不是 Berth 放的/)).not.toBeInTheDocument()
+  })
+
+  it('撤銷那一筆在檔案不是 Berth 放的時候說沒有刪它（M3 票 01）', () => {
+    const line = render([
+      event({
+        type: 'audit_undone',
+        payload: { ledger: 3, target: '/lib/x.mkv', unlinked: false, unmanaged: true },
+      }),
+    ])
+
+    expect(line.getByText(/已經不是 Berth 放的那一個，所以沒有刪/)).toBeInTheDocument()
+    expect(line.queryByText(/它在那之前已經不在媒體庫裡了/)).not.toBeInTheDocument()
+  })
+
   it('鏈接那一筆說得出檔案進了媒體庫的哪裡', () => {
     const target = '/data/library/anime/SPY x FAMILY (2022) [tmdbid-120089]/Season 01/E01.mkv'
     const line = render([event({ type: 'linked', payload: { file: 'E01.mkv', target } })])
@@ -324,6 +366,36 @@ describe('Job 時間線', () => {
     expect(line.getByText(/管理員改了這個檔案：.+ → .+ S00E03/)).toBeInTheDocument()
     expect(line.getByText('batch/OVA 2.mkv')).toBeInTheDocument()
     expect(line.getByText('/lib/x - S00E03.mkv')).toBeInTheDocument()
+  })
+
+  it('修正時舊路徑上的檔案不是 Berth 放的，那一筆說它沒有被拆（M3 票 01）', () => {
+    const line = render([
+      event({
+        type: 'rematched',
+        payload: {
+          plan: 6,
+          file: 'batch/E03.mkv',
+          from: {
+            action: 'import',
+            season: 1,
+            episode_start: 3,
+            episode_end: null,
+            target: '/lib/x - S01E03.mkv',
+          },
+          to: {
+            action: 'import',
+            season: 1,
+            episode_start: 5,
+            episode_end: null,
+            target: '/lib/x - S01E05.mkv',
+          },
+          unmanaged: ['/lib/x - S01E03.mkv'],
+        },
+      }),
+    ])
+
+    expect(line.getByText(/1 個媒體庫檔案已經不是 Berth 放的那一個，沒有刪/)).toBeInTheDocument()
+    expect(line.getByText('/lib/x - S01E03.mkv')).toBeInTheDocument()
   })
 
   it('重複版本：略過的那一筆說有幾個、決定的那一筆說決定了什麼', () => {

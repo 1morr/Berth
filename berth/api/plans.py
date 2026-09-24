@@ -141,7 +141,7 @@ class PlanOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
-    #: 哪一個 Job。重新入庫（M2）沒有 Job，那時是 `null`。
+    #: 哪一個 Job。rematch 與重複版本的單列 Plan 是 `null`。
     job_hash: str | None
     status: PlanStatus
     engine: PlanEngine

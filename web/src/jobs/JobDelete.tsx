@@ -72,9 +72,17 @@ export function JobDelete({ hash }: { hash: string }) {
         </GhostButton>
         {/* 刪完了而這一筆還留著（沒勾「清除紀錄」）：它就在畫面上，所以只要一句結果。 */}
         {remove.isSuccess && (
-          <p aria-live="polite" className="max-w-prose text-xs text-ink-dim">
-            {done(t, i18n.language, remove.data)}
-          </p>
+          <div aria-live="polite" className="grid gap-1">
+            <p className="max-w-prose text-xs text-ink-dim">
+              {done(t, i18n.language, remove.data)}
+            </p>
+            {/* 媒體庫裡有檔案已經不是 Berth 放的那一個（M3 票 01）：沒有刪它。是哪幾個在時間線上。 */}
+            {remove.data.unmanaged.length > 0 && (
+              <p className="max-w-prose text-xs text-ink-dim">
+                {t('jobs.delete.kept', { count: remove.data.unmanaged.length })}
+              </p>
+            )}
+          </div>
         )}
       </div>
     )

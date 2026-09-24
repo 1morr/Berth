@@ -68,7 +68,7 @@ from berth.domain import (
 from berth.domain import ReasonCode as Code
 from berth.logs import job_context
 from berth.models import Issue, Job, JobFile, LedgerEntry, Media, Plan, PlanItem, Route
-from berth.services.deletion import remove_one, route_targets
+from berth.services.deletion import Placed, Unlink, remove_one, route_targets
 from berth.services.issues import IssueView, list_issues
 from berth.services.jobs import job_lock, record_event, transition
 from berth.services.plan_view import reasons_of
@@ -90,6 +90,16 @@ class ReviewRejectedError(Exception):
         super().__init__(f"{reason.value}: {detail}")
         self.reason = reason
         self.detail = detail
+
+
+@dataclass(frozen=True, slots=True)
+class AuditUndone:
+    """撤銷之後媒體庫裡那個檔案怎麼了（時間線上那一筆 `audit_undone` 說的是同一組）。"""
+
+    #: 真的拆掉了。撤銷之前有人已經在 Jellyfin 裡刪掉它的話沒有東西可拆。
+    unlinked: bool
+    #: 那條路徑上的已經不是 Berth 放的那一個，沒有碰（M3 票 01、CONTEXT.md 的 Unmanaged）。
+    unmanaged: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -301,10 +311,15 @@ async def confirm_audit(session: AsyncSession, ledger_id: int, *, actor: str) ->
     logger.info("audit confirmed", extra={"ledger": ledger_id})
 
 
-async def undo_audit(session: AsyncSession, ledger_id: int, *, actor: str) -> None:
-    """「它是錯的」：拆鏈接 → 刪帳本那一列 → Job 回 `review`（CONTEXT.md 的 Audit）。"""
+async def undo_audit(session: AsyncSession, ledger_id: int, *, actor: str) -> AuditUndone:
+    """「它是錯的」：拆鏈接 → 刪帳本那一列 → Job 回 `review`（CONTEXT.md 的 Audit）。
+
+    那條路徑上的已經不是 Berth 放的那一個時（使用者換成了自己的一份）不拆它，其餘照做：撤銷說的
+    是「這一個入庫是錯的」，帳本那一列與 Job 照樣處理，而那個檔案下一輪對帳是
+    `unmanaged_library_file`——它本來就是（M3 票 01）。
+    """
     async with _deciding(session, ledger_id) as (entry, job):
-        await _undo(session, entry, job, actor=actor)
+        return await _undo(session, entry, job, actor=actor)
 
 
 @asynccontextmanager
@@ -321,7 +336,8 @@ async def _deciding(
     """
     job_hash = (await _audited(session, ledger_id)).job_hash
     if job_hash is None:
-        # 重新入庫建出來的帳本沒有 Job（`models/ledger.py`），沒有鎖可拿，也沒有時間線可寫。
+        # `rebuild-ledger` 與「認領進帳本」長回來的列可能沒有 Job（`models/ledger.py`），沒有鎖
+        # 可拿，也沒有時間線可寫。
         yield await _audited(session, ledger_id), None
         return
     with job_context(job_hash):
@@ -330,13 +346,16 @@ async def _deciding(
             yield entry, await session.get(Job, job_hash)
 
 
-async def _undo(session: AsyncSession, entry: LedgerEntry, job: Job | None, *, actor: str) -> None:
+async def _undo(
+    session: AsyncSession, entry: LedgerEntry, job: Job | None, *, actor: str
+) -> AuditUndone:
     target = Path(entry.target_path)
     try:
-        unlinked = remove_one(target, roots=await route_targets(session))
+        result = remove_one(target, roots=await route_targets(session), placed=Placed.of(entry))
     except (OSError, fs.PathEscapeError) as exc:
         # **拆不掉就什麼都不改**：帳本那一列還在，佇列上它也還在，旁邊多一句為什麼。
         raise ReviewRejectedError(ReviewRefusal.UNLINK_FAILED, str(exc)) from exc
+    undone = AuditUndone(unlinked=result is Unlink.REMOVED, unmanaged=result is Unlink.UNMANAGED)
 
     await _clear_item(session, entry, unapply=True)
     await session.delete(entry)
@@ -347,10 +366,16 @@ async def _undo(session: AsyncSession, entry: LedgerEntry, job: Job | None, *, a
             job,
             EventType.AUDIT_UNDONE,
             actor=actor,
-            payload={"ledger": entry.id, "target": entry.target_path, "unlinked": unlinked},
+            payload={
+                "ledger": entry.id,
+                "target": entry.target_path,
+                "unlinked": undone.unlinked,
+                "unmanaged": undone.unmanaged,
+            },
         )
     await session.commit()
-    logger.info("audit undone", extra={"ledger": entry.id, "unlinked": unlinked})
+    logger.info("audit undone", extra={"ledger": entry.id, "result": result.value})
+    return undone
 
 
 async def _back_to_review(session: AsyncSession, job: Job) -> None:

@@ -9,6 +9,7 @@ import {
   undoAudit,
   type AuditAction,
   type AuditReviewRow,
+  type AuditUndone,
 } from '../api/review'
 import { ConfirmAction, GhostButton } from '../components/controls'
 import { formatEpisode } from '../components/episodes'
@@ -36,11 +37,21 @@ export function AuditRow({ row, onDone }: { row: AuditReviewRow; onDone: (said: 
   const [refusal, setRefusal] = useState<string | null>(null)
 
   const act = useMutation({
-    mutationFn: (action: AuditAction) =>
-      action === 'confirm' ? confirmAudit(row.ref) : undoAudit(row.ref),
+    mutationFn: async (action: AuditAction): Promise<AuditUndone | null> => {
+      if (action === 'undo') return undoAudit(row.ref)
+      await confirmAudit(row.ref)
+      return null
+    },
     onMutate: () => setRefusal(null),
-    onSuccess: (_, action) => {
-      onDone(action === 'confirm' ? t('review.audit.confirmed') : t('review.audit.undone'))
+    onSuccess: (undone, action) => {
+      // 媒體庫裡那個檔案已經不是 Berth 放的那一個時沒有刪它（M3 票 01），結果那一句要說出來。
+      onDone(
+        action === 'confirm'
+          ? t('review.audit.confirmed')
+          : undone?.unmanaged
+            ? t('review.audit.undoneUnmanaged')
+            : t('review.audit.undone'),
+      )
       void queryClient.invalidateQueries({ queryKey: reviewQueryOptions().queryKey })
       // 撤銷把那一筆送回待審核：下載列表那一列的狀態與「N 個待確認」都變了。
       void queryClient.invalidateQueries({ queryKey: ['jobs'] })

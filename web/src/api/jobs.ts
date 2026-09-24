@@ -45,6 +45,7 @@ const REASONS: ReasonSet<JobRefusal> = {
   delete_files_requires_remove_torrent: true,
   not_reimportable: true,
   content_missing: true,
+  moved_on: true,
 }
 
 /** 這一次失敗是「後端說不行」還是「網路壞了」。判定與另外兩組共用（`api/refusal.ts`）。 */

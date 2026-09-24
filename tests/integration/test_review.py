@@ -325,7 +325,12 @@ class TestUndo:
 
         (event,) = [row for row in await events_of(session) if row.type == "audit_undone"]
         assert event.actor == ACTOR
-        assert event.payload_json == {"ledger": ledger_id, "target": target, "unlinked": True}
+        assert event.payload_json == {
+            "ledger": ledger_id,
+            "target": target,
+            "unlinked": True,
+            "unmanaged": False,
+        }
 
     async def test_a_link_someone_already_deleted_is_still_undone(
         self, session: AsyncSession, roots: dict[str, Path]
