@@ -1,6 +1,6 @@
 # 16 — M2 驗收
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Blocked by:** 01–15 全部
 
@@ -27,16 +27,16 @@
 
 ## 驗收
 
-- [ ] e2e 覆蓋三種破壞：各造一次、對帳偵測到、按動作修好，全程自動化（貼 CI run 連結與輸出）
-- [ ] 刪掉 library 後一鍵重建在 e2e 裡走得完（票 10 的整合測試之外，這裡是真環境）
-- [ ] medium 自動入庫的一筆在佇列中一鍵撤銷（e2e 或整合測試，貼輸出）
-- [ ] 以 `user` 登入：`/review/*`、`/issues/*`、`/files/*`、`/reconcile`、`DELETE /jobs/{hash}`、
+- [x] e2e 覆蓋三種破壞：各造一次、對帳偵測到、按動作修好，全程自動化（貼 CI run 連結與輸出）
+- [x] 刪掉 library 後一鍵重建在 e2e 裡走得完（票 10 的整合測試之外，這裡是真環境）
+- [x] medium 自動入庫的一筆在佇列中一鍵撤銷（e2e 或整合測試，貼輸出）
+- [x] 以 `user` 登入：`/review/*`、`/issues/*`、`/files/*`、`/reconcile`、`DELETE /jobs/{hash}`、
       `POST /jobs/{hash}/reimport` 全是 403，前端看不到入口（一份把六條列齊的測試，新增 admin
       端點卻忘了加進去會紅）
-- [ ] `/impeccable critique`、`audit`、`polish` 各一輪，分數與處理結果記在票裡
-- [ ] 票 01–15 的 Comments 逐條有歸屬
-- [ ] `docs/progress.md`、`docs/plan.md`、`docs/design-brief.md`、CHANGELOG、README 與 repo 一致
-- [ ] lint、type、test、e2e 全綠（貼指令輸出）
+- [x] `/impeccable critique`、`audit`、`polish` 各一輪，分數與處理結果記在票裡
+- [x] 票 01–15 的 Comments 逐條有歸屬
+- [x] `docs/progress.md`、`docs/plan.md`、`docs/design-brief.md`、CHANGELOG、README 與 repo 一致
+- [x] lint、type、test、e2e 全綠（貼指令輸出）
 
 ## Comments
 
@@ -84,3 +84,10 @@
 **Standards**：兩條硬性違規修掉——`gate.access_of` 的 docstring 指到不存在的 `test_admin_surface.py`；sidecar 的 Input Field 描述仍說 `border-2 rule`。媒體庫子集清單的焦點補了測試。判斷題不改、記下：七處欄位的 class 字串手寫（這一輪換邊框色就改了七處，下一次再改時收成一個常量）；`whenText` 與 `Timestamp` 各自格式化時間；`test_auth_api.py` 從 unit 測試模組 import `api_endpoints`；輸入框的 `rule-strong` 規則沒有閘門。
 
 **Spec**：e2e 的重建原本只刪一部作品的資料夾，票 10 的原文是「刪掉整個 library 目錄」——改成把 Anime 媒體庫底下的東西全部刪光（目錄本身留著：它是 Jellyfin 的媒體庫資料夾與 Route 的寫入目標）。前端那一半不是「一份列齊六條的測試」：導覽列與 admin 頁的導向在 `router.test.tsx` 列齊，頁內的按鈕（修正、刪除、重新入庫）各在 `MediaDetailPage.test.tsx` 與 `JobDetailPage.test.tsx`——頁內新增一顆 admin 按鈕而忘了擋，前端沒有測試會紅（後端那一半會：端點本身是 403）。`orphan_complete` 是額外覆蓋，不是「手動刪檔」的第二份證據。
+
+### 驗收的證據
+
+- **e2e 三種破壞 + 一鍵重建**：GitHub Actions [run 35955289637](https://github.com/1morr/Berth/actions/runs/35955289637)（`workflow_dispatch`，`5aa2bca`）**15 passed in 872.26s**，`test_3_m2_repair.py` 五條全過；本機三輪 15 passed（14:57–15:08），最後一輪就是推上去的版本。
+- **medium 撤銷**：`uv run pytest tests/integration/test_review_api.py tests/integration/test_review.py -k Undo` → **13 passed**（`TestUndo::test_the_whole_way_through` 走 HTTP：硬鏈接沒了、帳本列沒了、Job 回 `review`、Plan `pending_review` + `audit_undone`、時間線 `audit_undone`）。
+- **`user` 403 與看不到入口**：`test_auth_api.py` 74 passed（`TestWhoEachEndpointIsFor` + 檔內的雙向變異 `TestTheSurfaceCheckItself`）；`router.test.tsx` 21 passed，把「待處理」開給所有人會紅（實跑過）。
+- **閘門**：ruff / ruff format / mypy（272 files）/ lint-imports（6 kept, 0 broken）綠燈，pytest **2271 passed**；eslint / tsc / prettier 綠燈，vitest **656 passed**；`pnpm -C web e2e` **4 passed**。CI [run 35955289470](https://github.com/1morr/Berth/actions/runs/35955289470)：backend、web、web-e2e、api-types、image 綠，**hygiene 紅**——critique 快照檔（工具產生）的行尾空白，本機跑 `pre-commit --all-files` 時它還沒被追蹤所以沒抓到；收尾 commit 修掉，推上去之後的那一輪見 progress.md。
