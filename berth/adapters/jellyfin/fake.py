@@ -198,9 +198,9 @@ class FakeJellyfinClient:
         self.image_queries: list[tuple[str, str, str, int, int, int]] = []
         #: 每一次 `mark_played` 收到的 `(user_id, item_id, played)`，被 404 擋下的也記。
         self.played_queries: list[tuple[str, str, bool]] = []
-        #: 每一次 `resume` / `next_up` 收到的 `("resume" | "next_up", user_id, library_id)`。
-        #: 首頁那兩支不帶 `parentId`（`library_id` 是 `None`）靠它斷言。
-        self.watching_queries: list[tuple[str, str, str | None]] = []
+        #: 每一次 `resume` / `next_up` 收到的 `("resume" | "next_up", user_id, library_id)`，
+        #: 帶了哪個 `parentId` 靠它斷言。
+        self.watching_queries: list[tuple[str, str, str]] = []
         #: 每一次 `next_up` 收到的 `nextUpDateCutoff`。
         self.next_up_cutoffs: list[datetime] = []
         #: Media 詳情的觀看區（M1.5 票 08）每一次問的 `(方法名, user_id, 對象)`：`tmdb_index`
@@ -501,7 +501,7 @@ class FakeJellyfinClient:
         return self._user_data(name, item)
 
     async def resume(
-        self, *, user_id: str, library_id: str | None, limit: int
+        self, *, user_id: str, library_id: str, limit: int
     ) -> tuple[JellyfinItem, ...]:
         self._checkpoint(always=True)
         self.watching_queries.append(("resume", user_id, library_id))
@@ -519,7 +519,7 @@ class FakeJellyfinClient:
         )[:limit]
 
     async def next_up(
-        self, *, user_id: str, library_id: str | None, limit: int, cutoff: datetime
+        self, *, user_id: str, library_id: str, limit: int, cutoff: datetime
     ) -> tuple[JellyfinItem, ...]:
         self._checkpoint(always=True)
         self.watching_queries.append(("next_up", user_id, library_id))
@@ -624,10 +624,8 @@ class FakeJellyfinClient:
             return None
         return candidate
 
-    def _in_scope(self, name: str, item: JellyfinItem, library_id: str | None) -> bool:
-        """不帶 `parentId` 照這個帳號的權限；帶了只看路徑，**不看權限**（研究 §2）。"""
-        if library_id is None:
-            return self._visible(name, item)
+    def _in_scope(self, name: str, item: JellyfinItem, library_id: str) -> bool:
+        """帶了 `parentId` 只看路徑，**不看權限**（研究 §2）。"""
         library = next((row for row in self.libraries_ if row.item_id == library_id), None)
         return library is not None and _under(item, library)
 

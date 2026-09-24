@@ -8,8 +8,8 @@
   它只從 session 來（`services/jellyfin_access.py`）。回寫入之後的觀看狀態，前端拿它改牆上那一格，
   不必重抓整面牆（jellyfin-web 收到 `UserDataChanged` 也是就地改卡片）。
 
-- **繼續觀看與下一集**（`GET /watching`，票 07）：首頁上方的兩列，這個人的整個帳號。媒體庫頁那兩列是
-  `GET /inventory/{id}/watching`，形狀相同（`watching_out`）。
+- **繼續觀看與下一集**（票 07）：媒體庫頁上方的兩列，`GET /inventory/{id}/watching`
+  （`berth/api/inventory.py`），形狀在這裡組（`watching_out`）。
 - **選季選集的一季**（`GET /shows/{id}/episodes?season_id=`，票 08）：Media 詳情的觀看區換季時
   問。整個觀看區是 `GET /media/{id}/watch`（`api/media.py`）。
 
@@ -49,7 +49,7 @@ from berth.services.jellyfin_access import (
 )
 from berth.services.jellyfin_images import ImageMissingError, read_image
 from berth.services.watch_area import WatchEpisode, read_episodes
-from berth.services.watching import Watching, WatchingCard, read_watching
+from berth.services.watching import Watching, WatchingCard
 
 router = APIRouter(prefix="/jellyfin", tags=["jellyfin"])
 
@@ -120,9 +120,6 @@ def access_responses(*errors: type[Exception]) -> dict[int | str, dict[str, Any]
     return refusal_responses(AccessRefusalOut, picked)
 
 
-#: 整個帳號的那兩列碰不到媒體庫（不帶 `parentId`），所以只有這兩種。
-WATCHING_REFUSALS = (AccountDisabledError, JellyfinUnreachableError)
-
 #: 一季的集：劇與季的可見性由 Jellyfin 查，看不到是 `item_not_visible`。
 EPISODES_REFUSALS = (AccountDisabledError, ItemNotVisibleError, JellyfinUnreachableError)
 
@@ -180,24 +177,9 @@ async def get_image(
     )
 
 
-@router.get(
-    "/watching",
-    responses=access_responses(*WATCHING_REFUSALS),
-)
-async def get_watching(
-    session: SessionDep, factory: ClientFactoryDep, cache: AccessCacheDep, request: Request
-) -> WatchingOut:
-    """首頁上方的繼續觀看與下一集：這個人整個帳號的（不帶媒體庫，Jellyfin 才照他的權限限縮）。"""
-    try:
-        async with jellyfin_access(session, factory, cache, session_user(request)) as access:
-            watching = await read_watching(access, None)
-    except WATCHING_REFUSALS as refusal:
-        raise access_refusal(refusal) from refusal
-    return await watching_out(session, watching)
-
-
 async def watching_out(session: SessionDep, watching: Watching) -> WatchingOut:
-    """首頁與媒體庫頁共用的形狀。圖片網址在這一層組：services 只知道 Jellyfin 的 tag。"""
+    """媒體庫頁繼續觀看與下一集的形狀（`berth/api/inventory.py`）。圖片網址在這一層組：
+    services 只知道 Jellyfin 的 tag。"""
     return WatchingOut(
         jellyfin=JellyfinWebOut.model_validate(await jellyfin_web(session)),
         resume=[_watching_card(card) for card in watching.resume],

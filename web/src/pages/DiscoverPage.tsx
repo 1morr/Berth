@@ -12,14 +12,13 @@ import { Field, GhostButton } from '../components/controls'
 import { TmdbNotice } from '../components/TmdbNotice'
 import { SEARCH_DEBOUNCE_MS, useDebounced } from '../components/useDebounced'
 import { MediaWall } from '../discover/MediaWall'
-import { HomeWatching } from '../watching/WatchingRows'
 import { TmdbAttribution } from '../components/TmdbAttribution'
 
 /**
- * 探索頁 `/`（票 03、`.scratch/m1/discover-shape.md`）。上方是這個人的繼續觀看與下一集（M1.5 票 07）。
+ * 探索頁 `/`（票 03、`.scratch/m1/discover-shape.md`）。**只放 TMDB 牆**（brief §19，M3 票 06）：繼續觀看與下一集
+ * 只在媒體庫頁，登入後落在那裡；M1.5 票 07 放在這裡上方的那兩列拿掉了。
  *
- * 這是精靈跑完、登入之後看到的第一個畫面，而它是**找東西的地方**，不是「看它有沒有壞」的地方
- * ——健康頁留在導覽列上。整頁只有一個工作：辨認出一部作品。
+ * 它是**找東西的地方**，不是「看它有沒有壞」的地方——健康頁留在導覽列上。整頁只有一個工作：辨認出一部作品。
  *
  * 搜尋有結果時**接管整面牆**，趨勢與熱門收起來；清空搜尋框就回來。一屏只有一面牆，
  * 手機上才不必捲過兩百格才看得到搜尋結果。
@@ -49,8 +48,6 @@ export function DiscoverPage() {
     <div className="mx-auto grid w-full max-w-[110rem] gap-8 px-6 py-8">
       {/* 這一頁的視覺標題是兩面牆自己的抬頭；h1 給看不見畫面的人一個「我在哪一頁」（票 15 audit）。 */}
       <h1 className="sr-only">{t('nav.discover')}</h1>
-      {/* 接著看在找片之上（brief §19）。搜尋時不收起：收起的話，打字時輸入框會往上跳。 */}
-      <HomeWatching />
       <div className="flex flex-wrap items-end gap-x-6 gap-y-2">
         <div className="min-w-0 flex-1 sm:max-w-[28rem]">
           <Field

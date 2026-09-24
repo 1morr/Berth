@@ -121,10 +121,10 @@ export function CompleteStep({
         )}
 
         <div className={`mt-6 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] ${STICKY_ACTION}`}>
-          <PrimaryButton type="button" disabled={completing} onClick={onComplete}>
+          <PrimaryButton type="button" busy={completing} onClick={onComplete}>
             {completing ? t('complete.completing') : t('complete.submit')}
           </PrimaryButton>
-          <GhostButton type="button" disabled={completing} onClick={onRevisit}>
+          <GhostButton type="button" busy={completing} onClick={onRevisit}>
             {t('complete.back')}
           </GhostButton>
         </div>

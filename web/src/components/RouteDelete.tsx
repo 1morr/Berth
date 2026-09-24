@@ -67,11 +67,7 @@ export function RouteDelete({
         </p>
         {route.enabled && onDisable && (
           <div>
-            <GhostButton
-              type="button"
-              disabled={disable.isPending}
-              onClick={() => disable.mutate()}
-            >
+            <GhostButton type="button" busy={disable.isPending} onClick={() => disable.mutate()}>
               {disable.isPending
                 ? t('routeSettings.disable.pending')
                 : t('routeSettings.disable.label')}

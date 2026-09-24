@@ -837,21 +837,18 @@ class TestJellyfinAddress:
 SPY_BACKDROP = "0b7a3c5d9e1f2a4b6c8d0e2f4a6b8c0d"
 FILM = "3c1b0a9f8e7d6c5b4a39281706f5e4d2"
 FILM_THUMB = "9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d"
-HOME_WATCHING = "/api/jellyfin/watching"
 
 
 class TestWatching:
-    """繼續觀看與下一集：首頁 `GET /api/jellyfin/watching`，媒體庫頁
-    `GET /api/inventory/{id}/watching`。
+    """繼續觀看與下一集：媒體庫頁 `GET /api/inventory/{id}/watching`（M1.5 票 07）。
 
-    Resume 與 NextUp **不帶** `parentId` 時 Jellyfin 才照這個人的媒體庫限縮（研究 §2）：首頁那一支
-    絕不帶，媒體庫那一支對不在允許清單上的媒體庫被拒、而且沒有轉發給 Jellyfin。
+    Resume 與 NextUp 帶了 `parentId` 就不套這個人的媒體庫權限（研究 §2）：不在允許清單上的媒體庫在
+    Berth 這一層就被拒、不會轉發給 Jellyfin。
     """
 
     @pytest.fixture(autouse=True)
     def watched(self, jellyfin: FakeJellyfinClient) -> None:
-        """`deckhand` 看完 SPY×FAMILY 第一集、Movies 上一部片看到 42%；Anime 那部他看不到的劇，
-        `skipper` 看到一半。"""
+        """`deckhand` 看完 SPY×FAMILY 第一集、Movies 上一部片看到 42%。"""
         movies = jellyfin.libraries_[0].locations[0]
         jellyfin.items_ = [
             replace(
@@ -877,54 +874,8 @@ class TestWatching:
             )
         )
         jellyfin.played = {CREW["username"]: {SPY_EPISODES[0]}}
-        jellyfin.positions = {CREW["username"]: {FILM: 42.0}, ADMIN["username"]: {FRIEREN: 10.0}}
+        jellyfin.positions = {CREW["username"]: {FILM: 42.0}}
         jellyfin.images[(FILM, "Thumb")] = POSTER
-
-    def test_the_home_rows_are_this_users_whole_account_asked_without_a_library(
-        self, client: TestClient, jellyfin: FakeJellyfinClient
-    ) -> None:
-        sign_in(client, CREW)
-
-        response = client.get(HOME_WATCHING)
-
-        assert response.status_code == 200
-        crew = jellyfin_id(client, CREW)
-        assert sorted(jellyfin.watching_queries) == [
-            ("next_up", crew, None),
-            ("resume", crew, None),
-        ]
-        body = response.json()
-        assert body["jellyfin"] == {"public_url": "", "url": "", "port": 8096}
-        assert body["resume"] == [
-            {
-                "item_id": FILM,
-                "kind": "movie",
-                "title": "Oppenheimer",
-                "episode_name": "",
-                "season": None,
-                "episode_start": None,
-                "episode_end": None,
-                "year": 2023,
-                "progress": 42,
-                "image_url": f"/api/jellyfin/items/{FILM}/images/Thumb?size=wide&tag={FILM_THUMB}",
-            }
-        ]
-        [following] = body["next_up"]
-        assert (
-            following["item_id"],
-            following["title"],
-            following["season"],
-            following["episode_start"],
-        ) == (
-            SPY_EPISODES[1],
-            "SPY×FAMILY",
-            1,
-            2,
-        )
-        # 集沒有自己的橫圖，借劇的 Backdrop（jellyfin-web 的順序，`services/watching.landscape`）。
-        assert following["image_url"] == (
-            f"/api/jellyfin/items/{SPY}/images/Backdrop?size=wide&tag={SPY_BACKDROP}"
-        )
 
     def test_a_librarys_rows_are_asked_with_that_library_only(
         self, client: TestClient, jellyfin: FakeJellyfinClient
@@ -959,22 +910,15 @@ class TestWatching:
         crew, admin = jellyfin_id(client, CREW), jellyfin_id(client, ADMIN)
         smuggled = {"userId": admin, "user_id": admin, "parentId": ANIME, "library": ANIME}
 
-        home = client.get(HOME_WATCHING, params=smuggled)
-        library = client.get(f"/api/inventory/{TV}/watching", params=smuggled)
+        response = client.get(f"/api/inventory/{TV}/watching", params=smuggled)
 
-        assert home.status_code == library.status_code == 200
-        # `skipper` 在 Anime 上看到一半的那一部不會跑進 `deckhand` 的首頁。
-        assert FRIEREN not in {card["item_id"] for card in home.json()["resume"]}
-        assert {(user, scope) for _, user, scope in jellyfin.watching_queries} == {
-            (crew, None),
-            (crew, TV),
-        }
+        assert response.status_code == 200
+        assert {(user, scope) for _, user, scope in jellyfin.watching_queries} == {(crew, TV)}
 
-    @pytest.mark.parametrize("path", [HOME_WATCHING, f"/api/inventory/{TV}/watching"])
     def test_signed_out_is_refused_before_jellyfin_is_asked(
-        self, client: TestClient, jellyfin: FakeJellyfinClient, path: str
+        self, client: TestClient, jellyfin: FakeJellyfinClient
     ) -> None:
-        response = client.get(path)
+        response = client.get(f"/api/inventory/{TV}/watching")
 
         assert response.status_code == 401
         assert jellyfin.watching_queries == []
@@ -985,21 +929,20 @@ class TestWatching:
         sign_in(client, CREW)
         jellyfin.disabled.add(CREW["username"])
 
-        ended = client.get(HOME_WATCHING)
+        ended = client.get(f"/api/inventory/{TV}/watching")
 
         assert ended.status_code == 401
         assert ended.json()["detail"]["reason"] == "account_disabled"
         assert jellyfin.watching_queries == []
         assert client.get("/api/auth/me").status_code == 401
 
-    @pytest.mark.parametrize("path", [HOME_WATCHING, f"/api/inventory/{TV}/watching"])
     def test_jellyfin_not_answering_says_so_with_its_own_words(
-        self, client: TestClient, jellyfin: FakeJellyfinClient, path: str
+        self, client: TestClient, jellyfin: FakeJellyfinClient
     ) -> None:
         sign_in(client, CREW)
         jellyfin.error = ServiceUnavailableError("GET /UserViews: connection refused")
 
-        response = client.get(path)
+        response = client.get(f"/api/inventory/{TV}/watching")
 
         assert response.status_code == 503
         assert response.json()["detail"] == {
@@ -1011,7 +954,7 @@ class TestWatching:
         self, client: TestClient, jellyfin: FakeJellyfinClient
     ) -> None:
         sign_in(client, CREW)
-        [card] = client.get(HOME_WATCHING).json()["resume"]
+        [card] = client.get(f"/api/inventory/{MOVIES}/watching").json()["resume"]
 
         response = client.get(card["image_url"])
 

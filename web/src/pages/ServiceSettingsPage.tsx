@@ -93,7 +93,7 @@ export function ServiceSettingsPage() {
               <>
                 <GhostButton
                   type="button"
-                  disabled={test.isPending}
+                  busy={test.isPending}
                   onClick={() => test.mutate(row.kind)}
                 >
                   {test.isPending && test.variables === row.kind
@@ -187,7 +187,7 @@ function JellyfinAddress() {
           error={rejected ? t('settings.jellyfin.invalid') : undefined}
         />
         <div className="flex flex-wrap items-center gap-3">
-          <GhostButton type="submit">
+          <GhostButton type="submit" busy={save.isPending}>
             {save.isPending ? t('settings.jellyfin.saving') : t('settings.jellyfin.save')}
           </GhostButton>
           <p aria-live="polite" className="text-xs text-ink-dim">
@@ -256,7 +256,7 @@ function DiskThreshold() {
           error={invalid ? t('settings.disk.invalid') : undefined}
         />
         <div className="flex flex-wrap items-center gap-3">
-          <GhostButton type="submit" disabled={save.isPending}>
+          <GhostButton type="submit" busy={save.isPending}>
             {save.isPending ? t('settings.disk.saving') : t('settings.disk.save')}
           </GhostButton>
           <p aria-live="polite" className="text-xs text-ink-dim">
@@ -371,7 +371,7 @@ function Drift({
 
           {changed.length > 0 && (
             <div className="mt-4 grid gap-3 sm:max-w-xs">
-              <PrimaryButton type="button" disabled={restoring} onClick={onRestore}>
+              <PrimaryButton type="button" busy={restoring} onClick={onRestore}>
                 {restoring ? t('settings.drift.restoring') : t('settings.drift.restore')}
               </PrimaryButton>
             </div>

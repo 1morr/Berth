@@ -362,13 +362,13 @@ class HttpJellyfinClient:
         return _user_data(payload)
 
     async def resume(
-        self, *, user_id: str, library_id: str | None, limit: int
+        self, *, user_id: str, library_id: str, limit: int
     ) -> tuple[JellyfinItem, ...]:
         params = {**_watching(user_id, library_id, limit), "mediaTypes": "Video"}
         return _items(await self._get("/UserItems/Resume", params=params))
 
     async def next_up(
-        self, *, user_id: str, library_id: str | None, limit: int, cutoff: datetime
+        self, *, user_id: str, library_id: str, limit: int, cutoff: datetime
     ) -> tuple[JellyfinItem, ...]:
         params = {
             **_watching(user_id, library_id, limit),
@@ -546,23 +546,21 @@ def _season(row: dict[str, Any]) -> JellyfinSeason:
     )
 
 
-def _watching(user_id: str, library_id: str | None, limit: int) -> dict[str, str]:
-    """繼續觀看與下一集共用的參數（jellyfin-web 首頁那兩列，研究 §7.2）。
+def _watching(user_id: str, library_id: str, limit: int) -> dict[str, str]:
+    """繼續觀看與下一集共用的參數（jellyfin-web 媒體庫頁那兩列，研究 §7.2）。
 
-    **`library_id` 是 `None` 時不帶 `parentId`**：Jellyfin 只在不帶的時候照這個人的媒體庫限縮。
-    圖只開那兩列要的三種——不開的類型連上層借來的那幾格（`ParentThumb*`、`ParentBackdrop*`）都不會回
-    （v12.0 `DtoService` 照 `GetImageLimit` 收錄）。
+    一律帶 `parentId`：媒體庫頁的 `library_id` 先驗過允許清單才會到這裡
+    （`services/jellyfin_access.py`）。圖只開那兩列要的三種——不開的類型連上層借來的那幾格
+    （`ParentThumb*`、`ParentBackdrop*`）都不會回（v12.0 `DtoService` 照 `GetImageLimit` 收錄）。
     """
-    params = {
+    return {
         "userId": user_id,
         "limit": str(limit),
         "imageTypeLimit": "1",
         "enableImageTypes": "Primary,Backdrop,Thumb",
         "enableTotalRecordCount": "false",
+        "parentId": library_id,
     }
-    if library_id is not None:
-        params["parentId"] = library_id
-    return params
 
 
 def _number(value: Any) -> int | None:

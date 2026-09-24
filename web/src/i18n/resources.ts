@@ -516,8 +516,6 @@ const zhHant = {
     carryOn_other: '接著看 {{count}} 項',
     // 16:9 的那一塊：這裡沒有海報可說。
     noArt: '無圖',
-    down: '問不到 Jellyfin，繼續觀看與下一集暫時看不到。',
-    retry: '重試',
     // 媒體庫頁翻頁或篩選時那兩列收起（票 13）：說得出它們去了哪裡。
     elsewhere: '繼續觀看與下一集只列在第 1 頁、沒有篩選的時候。',
     toFirst: '到第 1 頁看',
@@ -1125,6 +1123,8 @@ const zhHant = {
       },
       endHint: '單集留空',
       applied: '已套用，目標路徑更新了。',
+      // 核准不帶表單上的值：改到一半的列擋住核准（M3 票 06）。`files` 是那幾列的檔名（`Intl.ListFormat` 串好）。
+      unapplied: '還有改動沒有套用，先按「{{apply}}」或「{{cancel}}」：{{files}}',
       approve: '核准並入庫',
       reject: '拒絕',
       confirmReject: '丟掉這份計劃（包括逐列改過的），Berth 會重新規劃一次。檔案不動。',
@@ -2518,8 +2518,6 @@ const en: Translations<typeof zhHant> = {
     carryOn_one: 'Keep watching: {{count}}',
     carryOn_other: 'Keep watching: {{count}}',
     noArt: 'NO ART',
-    down: "Berth can't reach Jellyfin, so Continue watching and Next up are unavailable for now.",
-    retry: 'Retry',
     elsewhere: 'Continue watching and Next up are listed on page 1, without filters.',
     toFirst: 'See them on page 1',
   },
@@ -3069,6 +3067,8 @@ const en: Translations<typeof zhHant> = {
       },
       endHint: 'Empty for one episode',
       applied: 'Applied; the target path is updated.',
+      unapplied:
+        'Some changes aren’t applied yet — press “{{apply}}” or “{{cancel}}” first: {{files}}',
       approve: 'Approve and import',
       reject: 'Reject',
       confirmReject:

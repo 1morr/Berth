@@ -1639,6 +1639,8 @@ describe('修正一個檔案（M2 票 08）', () => {
     const files = await screen.findByRole('region', { name: '檔案與版本' })
 
     await userEvent.click(within(files).getByRole('button', { name: `修正 ${UNMATCHED.rel_path}` }))
+    // 打開之後焦點進到表單的第一格：否則它留在一顆已經不在的按鈕上（M2 票 16 audit P2，M3 票 06）。
+    expect(within(files).getByRole('combobox', { name: '改成' })).toHaveFocus()
     await userEvent.type(within(files).getByRole('spinbutton', { name: '季' }), '0')
     await userEvent.type(within(files).getByRole('spinbutton', { name: '起集' }), '2')
     await userEvent.click(within(files).getByRole('button', { name: '套用' }))

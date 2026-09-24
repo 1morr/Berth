@@ -12,6 +12,7 @@ from pathlib import Path, PurePath
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException
+from starlette.middleware.gzip import GZipMiddleware
 from starlette.responses import Response
 from starlette.staticfiles import StaticFiles
 from starlette.types import Lifespan, Scope
@@ -100,6 +101,11 @@ def create_app(
     app.state.jellyfin_access = AccessCache()
     # 門禁包住整個 `/api`，所以它要在路由之外（票 07）。
     app.add_middleware(ApiGate, prefix=API_PREFIX)
+    # 前端一整包 JS 七百多 KB、壓縮後約兩百，而 Berth 自己送靜態檔、前面不一定有代理替它壓
+    # （M3 票 06）。
+    # SSE 不壓——壓縮器會把事件收在緩衝裡，Starlette 預設就跳過 `text/event-stream`
+    # （`test_events_api.py` 守著）；已經壓過的圖也跳過。
+    app.add_middleware(GZipMiddleware)
     app.add_exception_handler(RequestValidationError, validation_error)
     app.include_router(api_router, prefix=API_PREFIX)
     _mount_frontend(app, resolved.web_root)

@@ -26,7 +26,16 @@ import { Reasons } from './Reasons'
  * **每一列的目標路徑是後端給的**（plan §5：命名是純函式）：待審核那幾列是「核准的話」會落在哪裡，
  * 改完一列的回應就帶著新的路徑——前端不重算任何一條。改得成哪幾種處置也是後端給的（依檔案分類）。
  */
-export function PlanEditor({ plan, hash }: { plan: Plan; hash: string }) {
+export function PlanEditor({
+  plan,
+  hash,
+  onUnapplied,
+}: {
+  plan: Plan
+  hash: string
+  /** 某一列的表單改了還沒套用（或不再是）。核准要先擋住它（`PlanRow`）；**要是穩定的函式**，表單靠它回報。 */
+  onUnapplied: Unapplied
+}) {
   const { t } = useTranslation()
   // 套用成功時那一列收回、畫面上變的是一條路徑——看不見畫面的人要另外聽到。
   const [said, setSaid] = useState('')
@@ -50,6 +59,7 @@ export function PlanEditor({ plan, hash }: { plan: Plan; hash: string }) {
                 hash={hash}
                 heavy
                 onApplied={setSaid}
+                onUnapplied={onUnapplied}
               />
             ))}
           </ol>
@@ -95,6 +105,7 @@ export function PlanEditor({ plan, hash }: { plan: Plan; hash: string }) {
                           plan={plan}
                           hash={hash}
                           onApplied={setSaid}
+                          onUnapplied={onUnapplied}
                         />
                       ))}
                     </ol>
@@ -108,6 +119,9 @@ export function PlanEditor({ plan, hash }: { plan: Plan; hash: string }) {
     </div>
   )
 }
+
+/** 一列的表單「改了還沒套用」的狀態變了：`dirty` 是 false 時那一列不再算。 */
+export type Unapplied = (item: PlanItem, dirty: boolean) => void
 
 /** 要人看的那幾列：還沒決定的、對不到的、出過錯的，以及人改過的（改完不該跳走、讓人找不到剛改的那一列）。 */
 function needsYou(item: PlanItem): boolean {
@@ -140,12 +154,14 @@ function EditableItem({
   hash,
   heavy = false,
   onApplied,
+  onUnapplied,
 }: {
   item: PlanItem
   plan: Plan
   hash: string
   heavy?: boolean
   onApplied: (said: string) => void
+  onUnapplied: Unapplied
 }) {
   const { t } = useTranslation()
   const [editing, setEditing] = useState(false)
@@ -172,10 +188,9 @@ function EditableItem({
     >
       <div className="flex min-w-0 flex-wrap items-start gap-x-2 gap-y-1">
         <span className="value text-xs text-ink">{episode || '—'}</span>
-        {/* 來源檔名整條換行，不截斷：它是使用者認得出這個檔案的東西。 */}
-        <span className="value min-w-0 flex-1 basis-48 text-xs wrap-anywhere text-ink">
-          {item.rel_path}
-        </span>
+        {/* 來源檔名整條換行，不截斷：它是使用者認得出這個檔案的東西。**不撐滿那一行**：撐滿的話「改」在桌機上
+            離檔名一千多 px（M2 票 16 critique），看不出它改的是哪一列。 */}
+        <span className="value min-w-0 text-xs wrap-anywhere text-ink">{item.rel_path}</span>
         {item.actions.length > 0 && !editing && (
           <button
             ref={trigger}
@@ -205,6 +220,7 @@ function EditableItem({
           item={item}
           plan={plan}
           hash={hash}
+          onUnapplied={onUnapplied}
           onCancel={close}
           onApplied={(said) => {
             close()
@@ -247,12 +263,14 @@ function ItemForm({
   item,
   plan,
   hash,
+  onUnapplied,
   onCancel,
   onApplied,
 }: {
   item: PlanItem
   plan: Plan
   hash: string
+  onUnapplied: Unapplied
   onCancel: () => void
   onApplied: (said: string) => void
 }) {
@@ -260,11 +278,28 @@ function ItemForm({
   const queryClient = useQueryClient()
   const selectId = useId()
   const refusalId = useId()
-  const [action, setAction] = useState<PlanAction>(initialAction(item))
-  const [season, setSeason] = useState(numberText(item.season))
-  const [start, setStart] = useState(numberText(item.episode_start))
-  const [end, setEnd] = useState(numberText(item.episode_end))
+  // 打開那一刻的值。與它不同才算「改了」：只是打開看一眼不擋核准。
+  const [opened] = useState(() => ({
+    action: initialAction(item),
+    season: numberText(item.season),
+    start: numberText(item.episode_start),
+    end: numberText(item.episode_end),
+  }))
+  const [action, setAction] = useState<PlanAction>(opened.action)
+  const [season, setSeason] = useState(opened.season)
+  const [start, setStart] = useState(opened.start)
+  const [end, setEnd] = useState(opened.end)
   const numbered = action === 'import' && plan.media_kind === 'tv'
+  const dirty =
+    action !== opened.action ||
+    season !== opened.season ||
+    start !== opened.start ||
+    end !== opened.end
+
+  // 核准不帶表單上的值（`approve` 核准的是已經存下來的那一份），所以改到一半的列要讓 `PlanRow` 擋住核准（M3 票 06）。
+  useEffect(() => onUnapplied(item, dirty), [item, dirty, onUnapplied])
+  // 收起（取消、套用成功、整組收合）之後這一列不再算。
+  useEffect(() => () => onUnapplied(item, false), [item, onUnapplied])
 
   const apply = useMutation({
     mutationFn: () =>
@@ -302,8 +337,10 @@ function ItemForm({
           <label htmlFor={selectId} className="label text-ink-dim">
             {t('review.plan.field.action')}
           </label>
+          {/* 表單是按「改」打開的：焦點跟著進來，否則它留在一顆已經不在的按鈕上（M2 票 16 audit P2）。 */}
           <select
             id={selectId}
+            autoFocus
             value={action}
             onChange={(event) => setAction(event.target.value as PlanAction)}
             className="value w-full border-2 border-rule-strong bg-hull px-3 py-2.5 text-sm text-ink focus:border-ink"
@@ -357,7 +394,7 @@ function ItemForm({
       )}
 
       <div className="flex flex-wrap gap-2">
-        <GhostButton type="submit" disabled={apply.isPending}>
+        <GhostButton type="submit" busy={apply.isPending}>
           {apply.isPending ? t('review.plan.working') : t('review.plan.apply')}
         </GhostButton>
         <GhostButton type="button" onClick={onCancel}>

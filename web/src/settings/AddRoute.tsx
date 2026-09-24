@@ -212,7 +212,7 @@ function AddRouteForm({
             </div>
 
             <div className={CONFIRM_ACTIONS}>
-              <PrimaryButton type="submit" disabled={create.isPending || noTarget}>
+              <PrimaryButton type="submit" busy={create.isPending} disabled={noTarget}>
                 {create.isPending
                   ? t('routeSettings.add.submitting')
                   : t('routeSettings.add.submit')}

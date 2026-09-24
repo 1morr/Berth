@@ -405,26 +405,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/jellyfin/watching": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Watching
-         * @description 首頁上方的繼續觀看與下一集：這個人整個帳號的（不帶媒體庫，Jellyfin 才照他的權限限縮）。
-         */
-        get: operations["get_watching_api_jellyfin_watching_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/jellyfin/shows/{series_id}/episodes": {
         parameters: {
             query?: never;
@@ -4476,44 +4456,6 @@ export interface operations {
                 };
             };
             /** @description `jellyfin_unreachable`：問不到 Jellyfin */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AccessRefusalOut"];
-                };
-            };
-        };
-    };
-    get_watching_api_jellyfin_watching_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["WatchingOut"];
-                };
-            };
-            /** @description `account_disabled` */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AccessRefusalOut"];
-                };
-            };
-            /** @description `jellyfin_unreachable` */
             503: {
                 headers: {
                     [name: string]: unknown;

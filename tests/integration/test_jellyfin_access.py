@@ -560,37 +560,16 @@ class TestMarkPlayed:
 
 
 class TestWatching:
-    """繼續觀看與下一集（M1.5 票 07）。Resume 與 NextUp **不帶** `parentId` 時 Jellyfin 照這個人的
-    媒體庫限縮，帶了就不限縮（研究 §2，12.1.0 實測）：首頁那兩支一定不帶，媒體庫頁先對允許清單
-    驗過才帶。"""
+    """繼續觀看與下一集（M1.5 票 07）。Resume 與 NextUp 帶了 `parentId` 就不套這個人的媒體庫權限
+    （研究 §2，12.1.0 實測）：媒體庫頁的 id 先對允許清單驗過才帶。"""
 
     @pytest.fixture(autouse=True)
     def watched(self, jellyfin: FakeJellyfinClient) -> None:
         """`deckhand` 看完 The Bear 第一集、Oppenheimer 看到一半；Anime 那部他看不到的劇在 `skipper`
-        帳號上看到一半——替身照 Jellyfin 的規矩，不帶 `parentId` 時不會把它交給 `deckhand`。"""
+        帳號上看到一半——替身照 Jellyfin 的規矩，帶 `parentId` 時不會把它交給 `deckhand`。"""
         jellyfin.items_ = list(watchable())
         jellyfin.played = {"deckhand": {FIRST}}
         jellyfin.positions = {"deckhand": {FILM: 42.0}}
-
-    async def test_the_home_rows_are_asked_for_the_whole_account_without_a_library(
-        self,
-        session: AsyncSession,
-        factory: FakeClientFactory,
-        jellyfin: FakeJellyfinClient,
-        cache: AccessCache,
-    ) -> None:
-        user, _ = await signed_in(session, factory, "deckhand", "rope")
-
-        async with jellyfin_access(session, factory, cache, user) as access:
-            watching = await read_watching(access, None)
-
-        assert sorted(jellyfin.watching_queries) == [
-            ("next_up", user.jellyfin_user_id, None),
-            ("resume", user.jellyfin_user_id, None),
-        ]
-        assert jellyfin.browse_queries == []
-        assert [(card.item_id, card.progress) for card in watching.resume] == [(FILM, 42)]
-        assert [card.item_id for card in watching.next_up] == [SECOND]
 
     async def test_a_library_on_the_list_is_asked_with_its_id(
         self,
@@ -643,7 +622,7 @@ class TestWatching:
         before = datetime.now(UTC)
 
         async with jellyfin_access(session, factory, cache, user) as access:
-            await read_watching(access, None)
+            await read_watching(access, TV)
 
         [cutoff] = jellyfin.next_up_cutoffs
         assert before - timedelta(days=365, seconds=5) < cutoff <= before - timedelta(days=364)
@@ -660,7 +639,7 @@ class TestWatching:
         async with jellyfin_access(session, factory, cache, user) as access:
             jellyfin.error = ServiceUnavailableError("GET /UserItems/Resume: connection refused")
             with pytest.raises(JellyfinUnreachableError) as refused:
-                await read_watching(access, None)
+                await read_watching(access, TV)
 
         assert refused.value.detail == "GET /UserItems/Resume: connection refused"
 

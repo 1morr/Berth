@@ -88,8 +88,14 @@ export function ReviewPage() {
                   id={`review-${section.name}`}
                   className="flex flex-wrap items-baseline gap-x-2 self-center"
                 >
-                  <span className="label text-ink">{t(`review.section.${section.name}`)}</span>
-                  <span className="value text-xs text-ink-dim">{section.rows.length}</span>
+                  <span className="label text-ink">{t(`review.section.${section.name}`)}</span>{' '}
+                  {/* 光一個數字念出來沒有意義：看得見的是數字，聽得見的是帶單位的那一句（同 `WatchingRow`）。 */}
+                  <span aria-hidden="true" className="value text-xs text-ink-dim">
+                    {section.rows.length}
+                  </span>
+                  <span className="sr-only">
+                    {t('review.count', { count: section.rows.length })}
+                  </span>
                 </h2>
                 {/* 整段確認只在它比一組多做了事的時候給：audit 全在同一組裡時，那一組的鍵就是它。 */}
                 {audits.length > 1 && auditEntries(entries) > 1 && (

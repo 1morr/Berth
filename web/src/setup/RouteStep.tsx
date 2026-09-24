@@ -150,7 +150,8 @@ export function RouteStep({
         <div className={`mt-6 ${STICKY_ACTION}`}>
           <PrimaryButton
             type="button"
-            disabled={building || (fresh === 0 && setup.routes.length === 0)}
+            busy={building}
+            disabled={fresh === 0 && setup.routes.length === 0}
             onClick={() => onBuild(bundled ? [] : selections)}
           >
             {building
@@ -342,7 +343,7 @@ function LibraryPicker({
                     <div>
                       <GhostButton
                         type="button"
-                        disabled={addingPath !== null}
+                        busy={addingPath !== null}
                         onClick={() => onAddPath(library)}
                       >
                         {addingPath === library.name

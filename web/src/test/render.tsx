@@ -28,6 +28,7 @@ export function renderApp(initialPath = '/') {
 
   return {
     router,
+    queryClient,
     ...render(
       <QueryClientProvider client={queryClient}>
         <RouterProvider router={router} />

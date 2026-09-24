@@ -32,8 +32,9 @@ export function useConfirmAudits(onDone: Said) {
         true,
       )
       void queryClient.invalidateQueries({ queryKey: reviewQueryOptions().queryKey })
-      // 下載列表那一列的「N 個待確認」數的是同一組旗標。
+      // 下載列表那一列的「N 個待確認」數的是同一組旗標，Media 詳情的也是（M3 票 06）。
       void queryClient.invalidateQueries({ queryKey: ['jobs'] })
+      void queryClient.invalidateQueries({ queryKey: ['media'] })
     },
     onError: () => {
       setFailed(t('review.audit.failed'))

@@ -28,7 +28,7 @@ export function TilePlaceholder({ inventory = false }: { inventory?: boolean }) 
  * 一行字的位置：線本身細，畫在與那一行同高的格子頂端。高度由呼叫端給（`h-4` 是 `text-xs` 的一行、`h-5` 是
  * `text-sm` 的一行），空位格才與真的那一格一樣高。
  */
-export function PlaceholderLine({ className }: { className: string }) {
+function PlaceholderLine({ className }: { className: string }) {
   return (
     <span className={`block ${className}`}>
       <span className="mt-1 block h-2 w-full bg-deck" />

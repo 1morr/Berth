@@ -55,11 +55,78 @@ export function JobDelete({ hash }: { hash: string }) {
   })
   const refusal = refusalOf(remove.error)
 
-  if (!asked) {
-    return (
-      <div className="grid justify-items-start gap-2">
-        {/* 打開時重設而不是收起時：收起有「取消」、Esc、刪完三條路，打開只有這一條（票 16 的 audit
-            抓到 Esc 繞過了重設）。 */}
+  return (
+    <div>
+      {asked ? (
+        <ConfirmPanel panelRef={panel} onKeyDown={onKeyDown} labelledBy={titleId}>
+          <div className="grid gap-1">
+            <p id={titleId} className="label text-ink">
+              {t('jobs.delete.title')}
+            </p>
+            <p className="max-w-prose text-xs text-ink-dim">{t('jobs.delete.lede')}</p>
+          </div>
+
+          <div className="grid gap-3">
+            <Checkbox
+              label={t('jobs.delete.unlink')}
+              hint={t('jobs.delete.unlinkHint')}
+              checked={scope.unlink}
+              onChange={(checked) => setScope({ ...scope, unlink: checked })}
+            />
+            <Checkbox
+              label={t('jobs.delete.removeTorrent')}
+              hint={t('jobs.delete.removeTorrentHint')}
+              checked={scope.removeTorrent}
+              onChange={(checked) =>
+                // 取消「移除 torrent」時把「刪除檔案」一起收掉：留著一個送出去一定被 422 擋下來
+                // 的勾，等於讓使用者按一顆註定失敗的按鈕（後端那一條在 `services/deletion.py`）。
+                setScope({
+                  ...scope,
+                  removeTorrent: checked,
+                  deleteFiles: checked && scope.deleteFiles,
+                })
+              }
+            />
+            <Checkbox
+              label={t('jobs.delete.deleteFiles')}
+              // 鎖住的控制項要說得出為什麼（PRODUCT 原則 4），所以提示跟著換成解鎖的方法。
+              hint={
+                scope.removeTorrent
+                  ? t('jobs.delete.deleteFilesHint')
+                  : t('jobs.delete.deleteFilesLocked')
+              }
+              checked={scope.deleteFiles}
+              disabled={!scope.removeTorrent}
+              onChange={(checked) => setScope({ ...scope, deleteFiles: checked })}
+            />
+            <Checkbox
+              label={t('jobs.delete.purge')}
+              hint={t('jobs.delete.purgeHint')}
+              checked={scope.purge}
+              onChange={(checked) => setScope({ ...scope, purge: checked })}
+            />
+          </div>
+
+          <Estimate estimate={estimate.data} pending={estimate.isPending} scope={scope} />
+
+          <div className={CONFIRM_ACTIONS}>
+            <PrimaryButton type="button" busy={remove.isPending} onClick={() => remove.mutate()}>
+              {remove.isPending ? t('jobs.delete.pending') : t('jobs.delete.confirm')}
+            </PrimaryButton>
+            <GhostButton type="button" onClick={close}>
+              {t('common.cancel')}
+            </GhostButton>
+          </div>
+
+          {remove.isError && (
+            <p role="alert" className="max-w-prose text-xs text-blocked-ink">
+              {refusal ? t(`jobs.refusal.${refusal.reason}`) : t('jobs.delete.off')}
+            </p>
+          )}
+        </ConfirmPanel>
+      ) : (
+        /* 打開時重設而不是收起時：收起有「取消」、Esc、刪完三條路，打開只有這一條（票 16 的 audit
+           抓到 Esc 繞過了重設）。 */
         <GhostButton
           ref={trigger}
           type="button"
@@ -70,9 +137,12 @@ export function JobDelete({ hash }: { hash: string }) {
         >
           {t('jobs.delete.label')}
         </GhostButton>
-        {/* 刪完了而這一筆還留著（沒勾「清除紀錄」）：它就在畫面上，所以只要一句結果。 */}
+      )}
+      {/* 刪完了而這一筆還留著（沒勾「清除紀錄」）：它就在畫面上，所以只要一句結果。**這一格一直掛著**
+          （M2 票 16 audit P2）：跟著結果一起掛上去的 live region 多數螢幕閱讀器不念。空的時候不佔間距。 */}
+      <div role="status" className="mt-2 grid gap-1 empty:mt-0">
         {remove.isSuccess && (
-          <div aria-live="polite" className="grid gap-1">
+          <>
             <p className="max-w-prose text-xs text-ink-dim">
               {done(t, i18n.language, remove.data)}
             </p>
@@ -82,79 +152,10 @@ export function JobDelete({ hash }: { hash: string }) {
                 {t('jobs.delete.kept', { count: remove.data.unmanaged.length })}
               </p>
             )}
-          </div>
+          </>
         )}
       </div>
-    )
-  }
-
-  return (
-    <ConfirmPanel panelRef={panel} onKeyDown={onKeyDown} labelledBy={titleId}>
-      <div className="grid gap-1">
-        <p id={titleId} className="label text-ink">
-          {t('jobs.delete.title')}
-        </p>
-        <p className="max-w-prose text-xs text-ink-dim">{t('jobs.delete.lede')}</p>
-      </div>
-
-      <div className="grid gap-3">
-        <Checkbox
-          label={t('jobs.delete.unlink')}
-          hint={t('jobs.delete.unlinkHint')}
-          checked={scope.unlink}
-          onChange={(checked) => setScope({ ...scope, unlink: checked })}
-        />
-        <Checkbox
-          label={t('jobs.delete.removeTorrent')}
-          hint={t('jobs.delete.removeTorrentHint')}
-          checked={scope.removeTorrent}
-          onChange={(checked) =>
-            // 取消「移除 torrent」時把「刪除檔案」一起收掉：留著一個送出去一定被 422 擋下來
-            // 的勾，等於讓使用者按一顆註定失敗的按鈕（後端那一條在 `services/deletion.py`）。
-            setScope({
-              ...scope,
-              removeTorrent: checked,
-              deleteFiles: checked && scope.deleteFiles,
-            })
-          }
-        />
-        <Checkbox
-          label={t('jobs.delete.deleteFiles')}
-          // 鎖住的控制項要說得出為什麼（PRODUCT 原則 4），所以提示跟著換成解鎖的方法。
-          hint={
-            scope.removeTorrent
-              ? t('jobs.delete.deleteFilesHint')
-              : t('jobs.delete.deleteFilesLocked')
-          }
-          checked={scope.deleteFiles}
-          disabled={!scope.removeTorrent}
-          onChange={(checked) => setScope({ ...scope, deleteFiles: checked })}
-        />
-        <Checkbox
-          label={t('jobs.delete.purge')}
-          hint={t('jobs.delete.purgeHint')}
-          checked={scope.purge}
-          onChange={(checked) => setScope({ ...scope, purge: checked })}
-        />
-      </div>
-
-      <Estimate estimate={estimate.data} pending={estimate.isPending} scope={scope} />
-
-      <div className={CONFIRM_ACTIONS}>
-        <PrimaryButton type="button" disabled={remove.isPending} onClick={() => remove.mutate()}>
-          {remove.isPending ? t('jobs.delete.pending') : t('jobs.delete.confirm')}
-        </PrimaryButton>
-        <GhostButton type="button" onClick={close}>
-          {t('common.cancel')}
-        </GhostButton>
-      </div>
-
-      {remove.isError && (
-        <p role="alert" className="max-w-prose text-xs text-blocked-ink">
-          {refusal ? t(`jobs.refusal.${refusal.reason}`) : t('jobs.delete.off')}
-        </p>
-      )}
-    </ConfirmPanel>
+    </div>
   )
 }
 

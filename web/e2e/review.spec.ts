@@ -9,11 +9,9 @@ test('/review 一組 audit 全部確認', async ({ page }) => {
   await signIn(page, '/review')
 
   const audited = page.getByRole('region', { name: /^已入庫，等你看一眼/ })
-  const group = audited
-    .getByRole('listitem')
-    .filter({
-      has: page.getByRole('heading', { level: 3, name: 'SPY×FAMILY 間諜家家酒', exact: true }),
-    })
+  const group = audited.getByRole('listitem').filter({
+    has: page.getByRole('heading', { level: 3, name: 'SPY×FAMILY 間諜家家酒', exact: true }),
+  })
   await expect(group).toContainText('2 個檔案，信心 medium：集號是換算的（各季集數累加）')
 
   await group.getByText('展開').first().click()

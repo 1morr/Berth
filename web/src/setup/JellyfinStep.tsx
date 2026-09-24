@@ -187,11 +187,11 @@ function BootstrapSequence({
 
       <div className={`mt-6 ${STICKY_ACTION}`}>
         {done ? (
-          <GhostButton type="button" disabled={running} onClick={onBootstrap}>
+          <GhostButton type="button" busy={running} onClick={onBootstrap}>
             {t('jellyfin.bundled.rerun')}
           </GhostButton>
         ) : (
-          <PrimaryButton type="button" disabled={running} onClick={onBootstrap}>
+          <PrimaryButton type="button" busy={running} onClick={onBootstrap}>
             {running
               ? t('jellyfin.bundled.running')
               : t(broke ? 'jellyfin.bundled.retry' : 'jellyfin.bundled.run')}

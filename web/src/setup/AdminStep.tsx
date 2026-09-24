@@ -94,7 +94,7 @@ export function AdminStep({
             onChange={setApplyToServices}
           />
           <div className={STICKY_ACTION}>
-            <PrimaryButton type="submit" disabled={pending}>
+            <PrimaryButton type="submit" busy={pending}>
               {pending ? t('admin.submitting') : t('admin.submit')}
             </PrimaryButton>
           </div>

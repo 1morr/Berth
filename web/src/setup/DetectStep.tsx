@@ -87,25 +87,25 @@ export function DetectStep({
 
         <div className={`mt-6 ${STICKY_ACTION}`}>
           {!probed ? (
-            <PrimaryButton type="button" disabled={probing} onClick={() => onDetect(false)}>
+            <PrimaryButton type="button" busy={probing} onClick={() => onDetect(false)}>
               {probing ? t('detect.running') : t('detect.run')}
             </PrimaryButton>
           ) : resolved ? (
             // 判定全部出來了才前進，而且是使用者自己按——不然他根本看不到逐條纜繩的結果。
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,18rem)_auto] sm:items-center">
-              <PrimaryButton type="button" disabled={probing} onClick={onContinue}>
+              <PrimaryButton type="button" busy={probing} onClick={onContinue}>
                 {t('detect.continue')}
               </PrimaryButton>
-              <GhostButton type="button" disabled={probing} onClick={() => onDetect(false)}>
+              <GhostButton type="button" busy={probing} onClick={() => onDetect(false)}>
                 {probing ? t('detect.running') : t('detect.rerun')}
               </GhostButton>
             </div>
           ) : timedOut ? (
-            <PrimaryButton type="button" disabled={probing} onClick={() => onDetect(true)}>
+            <PrimaryButton type="button" busy={probing} onClick={() => onDetect(true)}>
               {probing ? t('detect.running') : t('detect.retry')}
             </PrimaryButton>
           ) : (
-            <GhostButton type="button" disabled={probing} onClick={() => onDetect(false)}>
+            <GhostButton type="button" busy={probing} onClick={() => onDetect(false)}>
               {probing ? t('detect.running') : t('detect.rerun')}
             </GhostButton>
           )}

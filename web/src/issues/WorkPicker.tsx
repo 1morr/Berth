@@ -52,7 +52,7 @@ export function WorkPicker({
 
   if (!asked) {
     return (
-      <GhostButton ref={trigger} type="button" disabled={pending} onClick={open}>
+      <GhostButton ref={trigger} type="button" busy={pending} onClick={open}>
         {pending ? pendingLabel : label}
       </GhostButton>
     )
@@ -112,7 +112,7 @@ export function WorkPicker({
         {picked ? (
           <PrimaryButton
             type="button"
-            disabled={pending}
+            busy={pending}
             onClick={() => {
               close()
               onPick(picked.id)

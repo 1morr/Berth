@@ -1,4 +1,4 @@
-import { apiDelete, apiPost } from './client'
+import { apiDelete, apiPost, signedOut } from './client'
 import { parseRefusal, type ReasonSet } from './refusal'
 import type { Schemas } from './schemas'
 
@@ -46,7 +46,7 @@ export function accessRefusal(error: unknown): AccessRefusal | null {
  * 會晚七秒才出現，被停用的帳號也要等同樣久才被送回登入頁（票 03 實跑量到）。其餘錯誤照預設。
  */
 export function retryUnlessRefused(failures: number, error: Error): boolean {
-  return accessRefusal(error) === null && failures < 3
+  return accessRefusal(error) === null && !signedOut(error) && failures < 3
 }
 
 /**

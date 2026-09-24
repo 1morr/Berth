@@ -205,14 +205,15 @@ function DefaultIndexers({
       <div className={`mt-6 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] ${STICKY_ACTION}`}>
         <PrimaryButton
           type="button"
-          disabled={applying || selected.length === 0}
+          busy={applying}
+          disabled={selected.length === 0}
           onClick={() => onApply(selected)}
         >
           {applying
             ? t('source.indexers.applying')
             : t('source.indexers.apply', { sites: selected.length })}
         </PrimaryButton>
-        <GhostButton type="button" disabled={applying} onClick={onSkip}>
+        <GhostButton type="button" busy={applying} onClick={onSkip}>
           {t('source.skip')}
         </GhostButton>
       </div>
@@ -318,10 +319,10 @@ function ExistingIndexer({
           onChange={(event) => setApiKey(event.target.value)}
         />
         <div className={`grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] ${STICKY_ACTION}`}>
-          <PrimaryButton type="submit" disabled={connecting}>
+          <PrimaryButton type="submit" busy={connecting}>
             {connecting ? t('source.existing.testing') : t('source.existing.test')}
           </PrimaryButton>
-          <GhostButton type="button" disabled={connecting} onClick={onSkip}>
+          <GhostButton type="button" busy={connecting} onClick={onSkip}>
             {t('source.skip')}
           </GhostButton>
         </div>
@@ -424,7 +425,7 @@ function Tmdb({
           }}
         />
         <div className={`grid gap-3 ${STICKY_ACTION}`}>
-          <PrimaryButton type="submit" disabled={testing}>
+          <PrimaryButton type="submit" busy={testing}>
             {testing ? t('source.tmdb.testing') : t('source.tmdb.test')}
           </PrimaryButton>
         </div>

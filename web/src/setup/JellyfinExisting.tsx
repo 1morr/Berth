@@ -118,7 +118,7 @@ function SignInForm({
         </Notice>
       )}
       <div className={STICKY_ACTION}>
-        <PrimaryButton type="submit" disabled={connecting}>
+        <PrimaryButton type="submit" busy={connecting}>
           {connecting
             ? t('jellyfin.existing.signingIn')
             : t(signedIn ? 'jellyfin.existing.signInAgain' : 'jellyfin.existing.signIn')}

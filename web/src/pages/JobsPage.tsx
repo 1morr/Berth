@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next'
 
 import { useJobStream } from '../api/events'
 import { jobsQueryOptions } from '../api/jobs'
-import { GHOST_LINK } from '../components/controls'
+import { GHOST_LINK, PAGE_TITLE } from '../components/controls'
 import { JobRow } from '../jobs/JobRow'
 
 /**
@@ -32,7 +32,7 @@ export function JobsPage() {
   return (
     <div className="mx-auto grid w-full max-w-[80rem] gap-4 px-6 py-8">
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b-2 border-rule-strong pb-2">
-        <h1 className="label text-ink">{t('jobs.title')}</h1>
+        <h1 className={PAGE_TITLE}>{t('jobs.title')}</h1>
         {jobs.data && jobs.data.length > 0 && (
           <p className="value text-xs text-ink-dim">
             {t('jobs.count', { count: jobs.data.length })}

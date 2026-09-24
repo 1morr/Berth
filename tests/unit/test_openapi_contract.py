@@ -29,11 +29,11 @@ from collections.abc import Callable
 from enum import StrEnum
 from pathlib import Path
 from types import ModuleType
-from typing import Any, NamedTuple
+from typing import Any
 
 import pytest
 from fastapi import FastAPI
-from fastapi.routing import APIRoute, iter_route_contexts
+from fastapi.routing import APIRoute
 
 import berth.api
 from berth.api import files as files_api
@@ -48,6 +48,7 @@ from berth.domain import RouteRefusal, enums
 from berth.main import create_app
 from berth.services import jellyfin_access
 from berth.services.routes import RouteRejectedError
+from tests.endpoints import Endpoint, api_endpoints
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -405,33 +406,6 @@ def declared_models(route: APIRoute) -> set[str]:
         and "model" in response
         and response["model"].__name__ in REFUSAL_MODELS
     }
-
-
-class Endpoint(NamedTuple):
-    """一條 API 路由，連它掛進 app 之後的完整路徑。"""
-
-    path: str
-    methods: frozenset[str]
-    route: APIRoute
-
-
-def api_endpoints(app: FastAPI) -> list[Endpoint]:
-    """這個 app 上的每一條 API 路由。
-
-    走 `iter_route_contexts`（FastAPI 自己產 OpenAPI 時攤平路由用的那一支）而不是讀
-    `app.routes`：`include_router` 的結果從 0.141 起包在 `_IncludedRouter` 裡，直接讀
-    `app.routes` 一條 `APIRoute` 都拿不到——而**空的 `parametrize` 是會通過的**（票 02a
-    第一版就是這樣「綠燈」的）。`test_it_walks_every_operation_in_the_document` 釘著這件事。
-    """
-    found: list[Endpoint] = []
-    for context in iter_route_contexts(app.routes):
-        route = context.route
-        if not isinstance(route, APIRoute):
-            continue
-        # `APIRoute` 一定有路徑與方法；`RouteContext` 的型別替 Mount 那種留了 `None`。
-        assert context.path is not None
-        found.append(Endpoint(context.path, frozenset(context.methods or ()), route))
-    return found
 
 
 ENDPOINTS = api_endpoints(create_app())

@@ -3,62 +3,21 @@ import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 
 import { meQueryOptions } from '../api/auth'
-import { ApiError } from '../api/client'
-import { accessRefusal, type JellyfinWeb } from '../api/jellyfin'
-import {
-  homeWatchingQueryOptions,
-  libraryWatchingQueryOptions,
-  type Watching,
-  type WatchingCard,
-} from '../api/watching'
+import type { JellyfinWeb } from '../api/jellyfin'
+import { libraryWatchingQueryOptions, type Watching, type WatchingCard } from '../api/watching'
 import { ArtSlot } from '../components/ArtSlot'
-import { COMPACT_BUTTON, GhostButton, NAV_BOX } from '../components/controls'
+import { COMPACT_BUTTON, NAV_BOX } from '../components/controls'
 import { Dot } from '../components/Dot'
 import { formatJellyfinEpisode } from '../components/episodes'
 import { KIND_CODE } from '../components/kind'
-import { SessionEnded } from '../components/SessionEnded'
-import { PlaceholderLine } from '../components/TilePlaceholder'
 import { WALL_GRID, fitsOneRowFrom, oneRowOnly } from '../components/wallGrid'
 import { jellyfinDetailsUrl } from '../inventory/jellyfinLink'
 import { rememberRows, rememberedRows, type RowShape } from './rememberedRows'
 
 /**
- * 首頁上方的兩列（M1.5 票 07、`.scratch/m1.5/watching-shape.md`）：這個人整個帳號的繼續觀看與下一集。
- *
- * 沒有內容的那一列不畫。**讀取中照上一次的形狀佔位**（M2 票 13，推翻 watching-shape 的「讀取中不畫」：
- * 資料回來才插進來，下面整頁往下推 440px，CLS 0.35）；第一次來沒有紀錄，不佔位（`rememberedRows`）。
- * 問不到 Jellyfin 時說一行、給重試，不用紅色 Notice 搶探索的位置；Berth 自己沒回應時不說話，探索牆會說。
- */
-export function HomeWatching() {
-  const { t } = useTranslation()
-  const watching = useQuery(homeWatchingQueryOptions)
-  const refusal = accessRefusal(watching.error)
-  const shape = useRememberedRows('home', watching.data)
-
-  if (watching.data) return <WatchingRows watching={watching.data} />
-  if (watching.isPending) return <WatchingPlaceholder shape={shape} />
-  if (watching.error instanceof ApiError && watching.error.status === 401) {
-    return <SessionEnded pending={null} />
-  }
-  if (refusal?.reason !== 'jellyfin_unreachable') return null
-
-  return (
-    <div className="grid justify-items-start gap-2">
-      <p className="max-w-prose text-sm text-ink-dim">{t('watching.down')}</p>
-      {refusal.detail && (
-        <p className="value text-xs wrap-anywhere text-ink-dim">{refusal.detail}</p>
-      )}
-      <GhostButton type="button" onClick={() => void watching.refetch()}>
-        {t('watching.retry')}
-      </GhostButton>
-    </div>
-  )
-}
-
-/**
- * 媒體庫頁上方的兩列：只含這個媒體庫的，**收成一行「接著看 N 項」、就地展開**（M2 票 14，2026-09-22 拍板的
- * 二選一；M1.5 critique P1：兩列把 390px 上的第一張卡推到 y=889，而這一頁的工作是瀏覽媒體庫）。首頁不收：
- * 那裡的兩列本來就是主角（plan §11.2b）。
+ * 媒體庫頁上方的繼續觀看與下一集（M1.5 票 07、`.scratch/m1.5/watching-shape.md`）：只含這個媒體庫的，**收成一行
+ * 「接著看 N 項」、就地展開**（M2 票 14，2026-09-22 拍板的二選一；M1.5 critique P1：兩列把 390px 上的第一張卡推到
+ * y=889，而這一頁的工作是瀏覽媒體庫）。這兩列只在媒體庫頁：探索頁只放 TMDB 牆（brief §19，M3 票 06）。
  *
  * 拒絕與錯誤一律不畫——牆那一塊會說原因，同一件事不說兩次。
  */
@@ -169,69 +128,6 @@ function useRememberedRows(page: string, watching: Watching | undefined): RowSha
 function useLastShape(key: string | null): RowShape | null {
   const [shape] = useState(() => (key ? rememberedRows(key) : null))
   return shape
-}
-
-/**
- * 讀取中：照上一次的形狀，每一列一個標題列與一行不動的空位格（`MediaDetailPage` 的 `Loading()` 那一種，
- * 不是骨架屏動畫）。**高度與真的那一列一樣**：標題列的「全部 N 項」照上一次的格數決定畫不畫（看不見但佔位），
- * 空位格照 `WatchingTile` 的每一行抄。整塊不在無障礙樹上——標題是真的，但底下什麼都還沒有。
- */
-function WatchingPlaceholder({ shape }: { shape: RowShape | null }) {
-  const { t } = useTranslation()
-  if (!shape) return null
-
-  return (
-    <>
-      {shape.resume > 0 && (
-        <RowPlaceholder title={t('watching.resume')} count={shape.resume} progress />
-      )}
-      {shape.nextUp > 0 && <RowPlaceholder title={t('watching.nextUp')} count={shape.nextUp} />}
-    </>
-  )
-}
-
-function RowPlaceholder({
-  title,
-  count,
-  progress = false,
-}: {
-  title: string
-  count: number
-  progress?: boolean
-}) {
-  const { t } = useTranslation()
-  const fits = fitsOneRowFrom(count)
-
-  return (
-    <div aria-hidden="true" data-placeholder="watching" className="grid gap-3">
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b-2 border-rule-strong pb-2">
-        <p className="label text-ink">{title}</p>
-        {/* 數字還不知道，但它那一行撐著標題列的高度。 */}
-        <p className="value invisible text-xs">{count}</p>
-        {fits !== null && (
-          <span className={`${COMPACT_BUTTON} invisible ms-auto ${fits}`}>
-            {t('watching.showAll', { count })}
-          </span>
-        )}
-      </div>
-      <div className={WALL_GRID}>
-        {Array.from({ length: Math.min(count, 6) }, (_, index) => (
-          <div
-            key={index}
-            className={`grid grid-rows-[auto_1fr] border-2 border-rule bg-well ${oneRowOnly(index)}`}
-          >
-            <div className="aspect-video bg-hull" />
-            <div className="grid content-start gap-1 px-3 py-2.5">
-              <PlaceholderLine className="h-4 w-12" />
-              <PlaceholderLine className="h-5 w-4/5" />
-              <PlaceholderLine className="h-4 w-1/2" />
-              {progress && <PlaceholderLine className="h-4 w-1/3" />}
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  )
 }
 
 function WatchingRows({ watching }: { watching: Watching }) {

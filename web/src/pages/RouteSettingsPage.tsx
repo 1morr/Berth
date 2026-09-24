@@ -172,7 +172,7 @@ function RouteChecks({ route }: { route: RouteView }) {
     <div className="grid gap-3">
       <RouteCheckList route={route} busy={recheck.isPending} />
       <div>
-        <GhostButton type="button" disabled={recheck.isPending} onClick={() => recheck.mutate()}>
+        <GhostButton type="button" busy={recheck.isPending} onClick={() => recheck.mutate()}>
           {recheck.isPending ? t('routeSettings.rechecking') : t('routeSettings.recheck')}
         </GhostButton>
       </div>
@@ -252,7 +252,7 @@ function RouteEditor({ route }: { route: RouteView }) {
       <p className="max-w-prose text-xs text-ink-dim">{t('routeSettings.edit.identity')}</p>
 
       <div className="grid gap-3 sm:max-w-xs">
-        <PrimaryButton type="submit" disabled={save.isPending || !dirty}>
+        <PrimaryButton type="submit" busy={save.isPending} disabled={!dirty}>
           {save.isPending ? t('routeSettings.edit.saving') : t('routeSettings.edit.save')}
         </PrimaryButton>
         {/* 按下去會做的事要先說出來：五條纜繩會重跑一次（票 03 第 1 條）。 */}

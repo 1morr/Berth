@@ -83,7 +83,7 @@ export function JobActions({ job, isAdmin }: { job: Job; isAdmin: boolean }) {
  * 一顆次要動作按鈕，加上它失敗時那一句話。
  *
  * 重試、重新規劃與重新入庫的形狀一模一樣，所以它們是同一個元件：**按鈕永遠按得下去，只換文字**
- * （票 02b），失敗時說的是那個封閉集合的理由而不是一句通用的話（PRODUCT 原則 4），
+ * （票 02b；送出中按了不再送，M3 票 06），失敗時說的是那個封閉集合的理由而不是一句通用的話（PRODUCT 原則 4），
  * 認不得的理由才落回 `off`。
  */
 function Action({
@@ -102,7 +102,7 @@ function Action({
 
   return (
     <div className="grid justify-items-start gap-2">
-      <GhostButton type="button" onClick={() => run.mutate()}>
+      <GhostButton type="button" busy={run.isPending} onClick={() => run.mutate()}>
         {run.isPending ? busy : idle}
       </GhostButton>
       {run.isError && (

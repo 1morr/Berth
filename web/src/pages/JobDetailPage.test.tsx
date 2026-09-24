@@ -118,7 +118,7 @@ const ESTIMATE = {
 const ADMIN = { body: { name: 'skipper', role: 'admin' } }
 const USER = { body: { name: 'deckhand', role: 'user' } }
 
-function render(routes: Record<string, StubRoute | (() => StubRoute)> = {}) {
+function render(routes: Record<string, StubRoute | (() => StubRoute | Promise<StubRoute>)> = {}) {
   return stubApi({
     'GET /api/health': { body: HEALTHY },
     'GET /api/auth/me': ADMIN,
@@ -303,6 +303,27 @@ describe('詳情頁的動作', () => {
     await userEvent.click(screen.getByRole('button', { name: '重新送單' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/那條 Route 現在是紅的/)
+  })
+
+  // M3 票 06：送出中再按一次會再送一次。停用的鍵接不住焦點（M1.5 票 05），所以是 `aria-disabled`、焦點留在原地。
+  it('送出中再按不會再送一次，焦點留在那一顆上', async () => {
+    let answer: (route: StubRoute) => void = () => {}
+    const stub = render({
+      [JOB]: { body: job({ state: 'submit_failed', retryable: true, plan_id: null }) },
+      [EVENTS]: { body: [] },
+      [`POST /api/jobs/${HASH}/retry`]: () => new Promise((resolve) => (answer = resolve)),
+    })
+    renderApp(`/jobs/${HASH}`)
+
+    await userEvent.click(await screen.findByRole('button', { name: '重新送單' }))
+    const pending = await screen.findByRole('button', { name: '送單中…' })
+    await userEvent.click(pending)
+    await userEvent.keyboard('{Enter}')
+
+    expect(pending).toHaveAttribute('aria-disabled', 'true')
+    expect(pending).toHaveFocus()
+    expect(stub.mock.calls.filter(([url]) => url === `/api/jobs/${HASH}/retry`)).toHaveLength(1)
+    answer({ body: job({ state: 'submitted' }) })
   })
 
   it('入庫失敗那一筆的重試說的是「再試一次入庫」', async () => {

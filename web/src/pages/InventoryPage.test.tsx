@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { Inventory, InventoryCard, InventoryLibrary } from '../api/inventory'
 import type { PlanReviewRow, ReviewQueue, UnmatchedReviewRow } from '../api/review'
-import type { Watching } from '../api/watching'
+import type { Watching, WatchingCard } from '../api/watching'
 import { HEALTHY, session, stubApi, type StubRoute } from '../test/fetch'
 import { expectCurrentByStateOnly } from '../test/navState'
 import { renderApp } from '../test/render'
@@ -1674,6 +1674,163 @@ describe('媒體庫頁', () => {
 
       expect(await screen.findByText(/找不到這個媒體庫/)).toBeVisible()
       expect(screen.queryByRole('button', { name: /^接著看/ })).not.toBeInTheDocument()
+    })
+
+    /**
+     * 展開之後那兩列本身（M1.5 票 07）。原本在首頁上測，探索頁只放 TMDB 牆之後（M3 票 06）搬到這裡：
+     * 這一頁是那兩列唯一的家。
+     */
+    describe('展開之後的兩列', () => {
+      function card(overrides: Partial<WatchingCard> = {}): WatchingCard {
+        return {
+          item_id: '99701a68c9a746b2f3a2d31d0b6c49f2',
+          kind: 'tv',
+          title: '葬送的芙莉蓮',
+          episode_name: '冒險結束',
+          season: 1,
+          episode_start: 5,
+          episode_end: null,
+          year: null,
+          progress: 42,
+          image_url:
+            '/api/jellyfin/items/02c06be72a8c11102b98e17665c9fef2/images/Backdrop?size=wide&tag=609790cd6a30bf8277a008ba2fecb77f',
+          ...overrides,
+        }
+      }
+
+      const FILM = card({
+        item_id: 'aaad8034da2f8c4db82f7aa3e26a4e3e',
+        kind: 'movie',
+        title: 'Oppenheimer',
+        episode_name: '',
+        season: null,
+        episode_start: null,
+        year: 2023,
+        progress: 18,
+        image_url: '',
+      })
+
+      function watching(overrides: Partial<Watching> = {}): StubRoute {
+        return {
+          body: {
+            // 套件內的 Jellyfin：主機名由瀏覽器補上（jsdom 是 `http://localhost`）。
+            jellyfin: { public_url: '', url: '', port: 8096 },
+            resume: [card(), FILM],
+            next_up: [card({ item_id: 'cd2f059cd4fdef1da23617e86514232e', progress: null })],
+            ...overrides,
+          } satisfies Watching,
+        }
+      }
+
+      async function expanded(rows: StubRoute) {
+        render({ [`GET ${WATCHING}`]: rows })
+        renderApp(`/library/${TV}`)
+        await userEvent.click(await findCarryOn())
+      }
+
+      it('卡片說得出作品、季集、集名與看到哪，點下去開 Jellyfin 的那一集', async () => {
+        await expanded(watching())
+
+        const resume = screen.getByRole('region', { name: '繼續觀看' })
+        const next = screen.getByRole('region', { name: '下一集' })
+        const episode = within(resume).getByRole('link', { name: /葬送的芙莉蓮/ })
+        // 名字從作品名念起（票 13），看到幾 % 是描述。
+        expect(episode).toHaveAccessibleName(/^葬送的芙莉蓮 S01E05 冒險結束.*（開新分頁）$/)
+        expect(episode).toHaveAccessibleDescription('看到 42%')
+        expect(episode).toHaveAttribute(
+          'href',
+          'http://localhost:8096/web/#/details?id=99701a68c9a746b2f3a2d31d0b6c49f2',
+        )
+        expect(episode).toHaveAttribute('target', '_blank')
+        expect(episode.querySelector('img')).toHaveAttribute('src', card().image_url)
+        // 下一集那一列沒有看到幾 %。
+        expect(within(next).getByRole('link', { name: /葬送的芙莉蓮/ })).not.toHaveTextContent(
+          /看到/,
+        )
+      })
+
+      it('電影說類型代號與年份，沒有橫圖時同一塊印「無圖」', async () => {
+        await expanded(watching())
+
+        const film = within(screen.getByRole('region', { name: '繼續觀看' })).getByRole('link', {
+          name: /Oppenheimer/,
+        })
+
+        expect(film).toHaveTextContent('MOVIE')
+        expect(film).toHaveTextContent('2023')
+        expect(film).toHaveTextContent('看到 18%')
+        expect(within(film).getByText('無圖')).toBeInTheDocument()
+        expect(film.querySelector('img')).toBeNull()
+      })
+
+      it('一行放不下時多的收起來，「全部 N 項」就地展開、再按收起', async () => {
+        const many = Array.from({ length: 8 }, (_, index) =>
+          card({ item_id: `${index}`.padStart(32, '0'), title: `劇 ${index + 1}`, progress: null }),
+        )
+        await expanded(watching({ resume: [], next_up: many }))
+
+        const next = screen.getByRole('region', { name: '下一集' })
+        const toggle = within(next).getByRole('button', { name: '全部 8 項' })
+        const rows = within(next).getAllByRole('listitem')
+
+        expect(toggle).toHaveAttribute('aria-expanded', 'false')
+        expect(toggle).toHaveAttribute('aria-controls', within(next).getByRole('list').id)
+        // 收起時每一格帶著「哪個寬度以上才出現」：窄版 2、sm 3、lg 4、xl 6 格，與牆同一份欄數。
+        expect(rows.map((row) => row.className)).toEqual([
+          '',
+          '',
+          'hidden sm:block',
+          'hidden lg:block',
+          'hidden xl:block',
+          'hidden xl:block',
+          'hidden',
+          'hidden',
+        ])
+
+        await userEvent.click(toggle)
+
+        expect(toggle).toHaveAttribute('aria-expanded', 'true')
+        expect(toggle).toHaveAccessibleName('收起')
+        expect(toggle).toHaveFocus()
+        expect(
+          within(next)
+            .getAllByRole('listitem')
+            .every((row) => row.className === ''),
+        ).toBe(true)
+      })
+
+      it.each([
+        [2, null],
+        [3, 'sm:hidden'],
+        [4, 'lg:hidden'],
+        [6, 'xl:hidden'],
+        [7, ''],
+      ])('%i 格時「全部」鍵只在一行放不下的寬度出現', async (count, shown) => {
+        const cards = Array.from({ length: count }, (_, index) =>
+          card({ item_id: `${index}`.padStart(32, '0'), title: `劇 ${index + 1}` }),
+        )
+        await expanded(watching({ resume: cards, next_up: [] }))
+
+        const resume = screen.getByRole('region', { name: '繼續觀看' })
+        const toggle = within(resume).queryByRole('button', { name: `全部 ${count} 項` })
+
+        if (shown === null) {
+          expect(toggle).not.toBeInTheDocument()
+        } else {
+          expect(toggle?.className.split(' ').filter((name) => name.endsWith('hidden'))).toEqual(
+            shown ? [shown] : [],
+          )
+        }
+      })
+
+      it('主機推不出來時卡片不是連結，說不知道 Jellyfin 開在哪裡', async () => {
+        await expanded(watching({ jellyfin: { public_url: '', url: '', port: null }, next_up: [] }))
+
+        const resume = screen.getByRole('region', { name: '繼續觀看' })
+
+        expect(within(resume).queryByRole('link')).not.toBeInTheDocument()
+        expect(within(resume).getAllByText('不知道 Jellyfin 開在哪裡')).toHaveLength(2)
+      })
     })
 
     it('在牆上標為已看之後兩列不當場重問：它們一換，牆就在指標底下移動', async () => {

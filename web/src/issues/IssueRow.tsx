@@ -58,6 +58,8 @@ export function IssueRow({
     onSuccess: () => {
       onDone(t('issues.done'))
       refresh()
+      // 修好的是媒體庫裡的檔案：Media 詳情的入庫狀態跟著變，那一份 5 分鐘內不重抓（M3 票 06）。
+      void queryClient.invalidateQueries({ queryKey: ['media'] })
     },
     onError: (error) => {
       const said = parseIssueRefusal(error)
@@ -134,7 +136,7 @@ export function IssueRow({
           <GhostButton
             key={action}
             type="button"
-            disabled={busy}
+            busy={busy}
             onClick={() => act.mutate({ action })}
           >
             {busy ? t('issues.working') : t(`issues.action.${action}`)}
@@ -142,7 +144,7 @@ export function IssueRow({
         )
       })}
       {/* 忽略永遠在：一件按不了任何一顆的 Issue 仍然要能從清單上收掉。 */}
-      <GhostButton type="button" disabled={busy} onClick={() => act.mutate({ action: 'ignore' })}>
+      <GhostButton type="button" busy={busy} onClick={() => act.mutate({ action: 'ignore' })}>
         {busy ? t('issues.working') : t('issues.action.ignore')}
       </GhostButton>
     </QueueRow>

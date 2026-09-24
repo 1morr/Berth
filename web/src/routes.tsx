@@ -103,7 +103,10 @@ async function requireSession(
     return null
   }
   if (me === null) {
-    const search: LoginSearch = { redirect: location.href }
+    // 打開 Berth 的網址本身就是 `/`，那不是「要回探索頁」，登入後照預設落在媒體庫（`destination`）。
+    // 用到一半被踢出來的不一樣：他原本就在那一頁，登入後回去。
+    const search: LoginSearch =
+      wasSignedIn || location.href !== '/' ? { redirect: location.href } : {}
     if (wasSignedIn) search.expired = true
     throw redirect({ to: '/login', search })
   }

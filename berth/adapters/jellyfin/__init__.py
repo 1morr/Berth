@@ -501,18 +501,18 @@ class JellyfinClient(Protocol):
         ...
 
     async def resume(
-        self, *, user_id: str, library_id: str | None, limit: int
+        self, *, user_id: str, library_id: str, limit: int
     ) -> tuple[JellyfinItem, ...]:
         """`GET /UserItems/Resume`：看到一半的集與電影，最近看的在前。帶 `mediaTypes=Video`
         （研究 §1.2：不帶會混進 Season 與 Series）。
 
-        **`library_id` 是 `None` 時不帶 `parentId`**，Jellyfin 才照這個人的媒體庫限縮；帶了就不限縮
-        （研究 §2）——同一條「`library_id` 必須先驗過」的規矩。
+        一律帶 `parentId`：帶了 Jellyfin 就不套這個人的媒體庫權限（研究 §2），`library_id` 必須
+        先驗過允許清單才會傳進來。
         """
         ...
 
     async def next_up(
-        self, *, user_id: str, library_id: str | None, limit: int, cutoff: datetime
+        self, *, user_id: str, library_id: str, limit: int, cutoff: datetime
     ) -> tuple[JellyfinItem, ...]:
         """`GET /Shows/NextUp`：每部看過的劇的下一集，劇最後看過的日期新的在前。只算 `cutoff`
         之後看過的劇；看到一半的集不算（`enableResumable=false`，它們在 `resume`）。

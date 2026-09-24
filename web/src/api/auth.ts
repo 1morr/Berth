@@ -22,6 +22,12 @@ export const meQueryOptions = queryOptions({
   staleTime: 0,
 })
 
+/**
+ * 登入那一個 mutation 的鍵。它的 401 是帳密不對，不是 session 結束——「401 就導回登入頁」
+ * （`router.ts`）靠它認出這一支。
+ */
+export const SIGN_IN_KEY = ['auth', 'login'] as const
+
 export function signIn(body: Credentials): Promise<Me> {
   return apiPost<Me>('/auth/login', body)
 }

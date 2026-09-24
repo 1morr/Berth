@@ -35,7 +35,6 @@ import {
   Notice,
 } from '../components/controls'
 import { Dot } from '../components/Dot'
-import { SessionEnded } from '../components/SessionEnded'
 import { TilePlaceholder } from '../components/TilePlaceholder'
 import { SEARCH_DEBOUNCE_MS } from '../components/useDebounced'
 import { useFocusAfterRemoval } from '../components/useFocusAfterRemoval'
@@ -982,13 +981,16 @@ function UnknownLibrary({ first }: { first: InventoryLibrary | undefined }) {
   )
 }
 
-/** 讀不到東西的三種樣子：session 被結束、Jellyfin 問不到、Berth 自己沒回應。 */
+/**
+ * 讀不到東西的三種樣子：session 被結束、Jellyfin 問不到、Berth 自己沒回應。session 被結束（帳號在 Jellyfin 被停用，
+ * 401 `account_disabled`）時 `router.ts` 已經在把人送回登入頁，這裡只畫送走之前那一瞬間的佔位。
+ */
 function Trouble({ error, retry }: { error: Error | null; retry: () => void }) {
   const { t } = useTranslation()
   const refusal = accessRefusal(error)
 
   if (error instanceof ApiError && error.status === 401) {
-    return <SessionEnded pending={<Placeholders />} />
+    return <Placeholders />
   }
   if (refusal?.reason === 'jellyfin_unreachable') {
     return (

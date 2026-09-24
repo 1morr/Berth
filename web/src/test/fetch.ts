@@ -19,13 +19,16 @@ export interface StubRoute {
  * 依路徑分派的 fetch 替身。精靈一頁會打好幾支 API，一份固定回應不夠用。
  * key 是 `GET /api/setup/status` 這種 `<method> <path>`；找不到就回 404。
  */
-export function stubApi(routes: Record<string, StubRoute | (() => StubRoute)>) {
+export function stubApi(
+  routes: Record<string, StubRoute | (() => StubRoute | Promise<StubRoute>)>,
+) {
   const stub = vi.fn<typeof fetch>(async (input, init) => {
     const method = init?.method ?? 'GET'
     const path = typeof input === 'string' ? input : String(input)
     const route = routes[`${method} ${path}`]
     if (!route) return new Response(JSON.stringify({ detail: 'Not Found' }), { status: 404 })
-    const resolved = typeof route === 'function' ? route() : route
+    // 回 Promise 的替身讓請求停在半路：測「送出中」那一段用得到。
+    const resolved = typeof route === 'function' ? await route() : route
     const status = resolved.status ?? 200
     // 204 不能帶 body：`new Response('null', { status: 204 })` 會丟 TypeError，替身自己炸掉、
     // 呼叫端走進失敗分支——票 14 的刪除測試因此從來沒看到過「刪掉了」（票 14a）。

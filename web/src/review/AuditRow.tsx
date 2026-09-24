@@ -68,8 +68,10 @@ export function AuditRow({
             : t('review.audit.undone'),
       )
       void queryClient.invalidateQueries({ queryKey: reviewQueryOptions().queryKey })
-      // 撤銷把那一筆送回待審核：下載列表那一列的狀態與「N 個待確認」都變了。
+      // 撤銷把那一筆送回待審核：下載列表那一列的狀態與「N 個待確認」都變了，Media 詳情的入庫狀態也是
+      // （那一份 5 分鐘內不重抓，M3 票 06）。
       void queryClient.invalidateQueries({ queryKey: ['jobs'] })
+      void queryClient.invalidateQueries({ queryKey: ['media'] })
     },
     onError: (error) => {
       const said = parseReviewRefusal(error)
@@ -140,12 +142,7 @@ export function AuditRow({
             onConfirm={() => act.mutate(action)}
           />
         ) : (
-          <GhostButton
-            key={action}
-            type="button"
-            disabled={busy}
-            onClick={() => act.mutate(action)}
-          >
+          <GhostButton key={action} type="button" busy={busy} onClick={() => act.mutate(action)}>
             {busy ? t('review.audit.working') : t(`review.audit.action.${action}`)}
           </GhostButton>
         ),

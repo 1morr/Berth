@@ -183,6 +183,20 @@ describe('JobDelete', () => {
     ).toBeInTheDocument()
   })
 
+  // M2 票 16 audit P2（M3 票 06）：結果那一句所在的 live region 要在結果出現之前就掛著，螢幕閱讀器才會念。
+  // 跟著結果一起掛上去的 region 多數閱讀器不念（它們只聽已經在的 region 裡的變化）。
+  it('結果那一句說在刪之前就已經在的 live region 裡', async () => {
+    mount()
+    await open()
+    const region = screen.getByRole('status')
+    expect(region).toBeEmptyDOMElement()
+
+    await userEvent.click(screen.getByRole('button', { name: '確認刪除' }))
+
+    await waitFor(() => expect(region).toHaveTextContent('已移除 0 個鏈接'))
+    expect(screen.getByRole('status')).toBe(region)
+  })
+
   it('媒體庫裡有檔案已經不是 Berth 放的那一個時，多說一句沒有刪它（M3 票 01）', async () => {
     mount({
       [`DELETE /api/jobs/${HASH}?unlink=true&remove_torrent=false&delete_files=false&purge=false`]:

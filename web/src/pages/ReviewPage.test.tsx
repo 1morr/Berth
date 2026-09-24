@@ -5,7 +5,7 @@ import i18next from 'i18next'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { AuditReviewRow, DuplicateReviewRow, ReviewQueue } from '../api/review'
-import { HEALTHY, stubApi, type StubRoute } from '../test/fetch'
+import { HEALTHY, UNAUTHORIZED, session, stubApi, type StubRoute } from '../test/fetch'
 import { renderApp } from '../test/render'
 
 afterEach(() => {
@@ -98,6 +98,19 @@ describe('審核佇列', () => {
     expect(within(row).getByRole('button', { name: '撤銷' })).toBeInTheDocument()
   })
 
+  // M2 票 16 critique P2（M3 票 06）：每一列的「展開」原本都只叫「展開」，一頁五件就是五顆同名的鍵。
+  it('每一列的「展開」說得出是哪一件', async () => {
+    render({ [QUEUE]: queue([audit(), duplicate()]) })
+    renderApp('/review')
+
+    const [first, second] = await screen.findAllByRole('article')
+    const summaryOf = (row: HTMLElement) => within(row).getByText('展開').closest('summary')
+
+    expect(summaryOf(first)).toHaveAccessibleName('展開 SPY×FAMILY 間諜家家酒 S02E01')
+    expect(summaryOf(second)).toHaveAccessibleName(/^展開 SPY×FAMILY 間諜家家酒/)
+    expect(summaryOf(second)).not.toHaveAccessibleName(summaryOf(first)?.textContent ?? '')
+  })
+
   it('展開之後看得到兩條路徑與解析器的理由（翻譯過的句子）', async () => {
     render({ [QUEUE]: queue([audit()]) })
     renderApp('/review')
@@ -128,9 +141,11 @@ describe('審核佇列', () => {
     renderApp('/review')
 
     await screen.findAllByRole('article')
-    const headings = screen.getAllByRole('heading', { level: 2 }).map((node) => node.textContent)
+    const headings = screen.getAllByRole('heading', { level: 2 })
 
-    expect(headings).toEqual(['已入庫，等你看一眼2'])
+    // 光一個數字念出來沒有意義：聽得見的是帶單位的那一句（M2 票 16 audit P3，M3 票 06）。
+    expect(headings).toHaveLength(1)
+    expect(headings[0]).toHaveAccessibleName('已入庫，等你看一眼 2 件')
     expect(screen.queryByText('要你決定')).not.toBeInTheDocument()
   })
 
@@ -540,5 +555,117 @@ describe('誰看得到審核佇列', () => {
 
     await waitFor(() => expect(router.state.location.pathname).toBe('/health'))
     expect(screen.queryByRole('link', { name: '審核' })).not.toBeInTheDocument()
+  })
+})
+
+/**
+ * 審核之後 Media 詳情的入庫狀態要跟著變（M3 票 06）：那一份快取 5 分鐘內不重抓（`api/media.ts`），
+ * 不讓它失效的話，從審核頁走回詳情頁看到的是按之前的樣子。
+ */
+describe('按完之後詳情頁不停在舊的入庫狀態', () => {
+  const MEDIA = ['media', 'tv:120089']
+
+  it.each([
+    ['確認', 'POST /api/review/audit/7/confirm', { status: 204, body: null }, []],
+    [
+      '撤銷',
+      'POST /api/review/audit/7/undo',
+      { body: { unlinked: true, unmanaged: false } },
+      ['確定撤銷'],
+    ],
+  ] as const)('%s', async (button, endpoint, reply, confirm) => {
+    let rows: ReviewQueue['rows'] = [audit()]
+    render({
+      [QUEUE]: () => queue(rows),
+      [endpoint]: () => {
+        rows = []
+        return reply
+      },
+    })
+    const { queryClient } = renderApp('/review')
+    queryClient.setQueryData(MEDIA, { id: 'tv:120089' })
+    const row = await screen.findByRole('article')
+
+    await userEvent.click(within(row).getByRole('button', { name: button }))
+    for (const name of confirm) await userEvent.click(within(row).getByRole('button', { name }))
+
+    await waitFor(() => expect(queryClient.getQueryState(MEDIA)?.isInvalidated).toBe(true))
+  })
+
+  it('整組確認', async () => {
+    let rows: ReviewQueue['rows'] = [audit(), audit({ ref: 8, episode_start: 2 })]
+    render({
+      [QUEUE]: () => queue(rows),
+      'POST /api/review/audit/confirm': () => {
+        rows = []
+        return { body: { confirmed: 2, skipped: 0 } }
+      },
+    })
+    const { queryClient } = renderApp('/review')
+    queryClient.setQueryData(MEDIA, { id: 'tv:120089' })
+
+    await userEvent.click(await screen.findByRole('button', { name: '全部確認' }))
+
+    await waitFor(() => expect(queryClient.getQueryState(MEDIA)?.isInvalidated).toBe(true))
+  })
+})
+
+/**
+ * 任何請求回 401 就導回登入頁、登入後回到原本那一頁（M3 票 06）。之前只有路由守衛會問 `GET /auth/me`：
+ * session 在頁面上失效之後，讀資料與按鈕各自說「失敗了」，人卡在一頁什麼都做不了的畫面上。
+ */
+describe('session 在頁面上失效', () => {
+  function signedIn() {
+    const backend = session({ name: 'skipper', role: 'admin' })
+    return {
+      backend,
+      routes: {
+        'GET /api/health': { body: HEALTHY },
+        'GET /api/auth/me': () => backend.me(),
+        'POST /api/auth/login': backend.signIn({ name: 'skipper', role: 'admin' }),
+      },
+    }
+  }
+
+  it('讀資料回 401：導到登入頁並說已過期，登入之後回到這一頁', async () => {
+    const { backend, routes } = signedIn()
+    stubApi({
+      ...routes,
+      [QUEUE]: () => (backend.me().status === 401 ? UNAUTHORIZED : queue([audit()])),
+    })
+    const { router, queryClient } = renderApp('/review')
+    await screen.findByRole('article')
+
+    backend.signOut()
+    await queryClient.invalidateQueries({ queryKey: ['review'] })
+
+    await waitFor(() => expect(router.state.location.pathname).toBe('/login'))
+    expect(router.state.location.search).toEqual({ redirect: '/review', expired: true })
+
+    await userEvent.type(await screen.findByLabelText('帳號'), 'skipper')
+    await userEvent.type(screen.getByLabelText('密碼'), 'harbour')
+    await userEvent.click(screen.getByRole('button', { name: '登入' }))
+
+    await waitFor(() => expect(router.state.location.pathname).toBe('/review'))
+    expect(await screen.findByRole('article')).toBeInTheDocument()
+  })
+
+  it('按鈕回 401：一樣導到登入頁', async () => {
+    const { backend, routes } = signedIn()
+    stubApi({
+      ...routes,
+      [QUEUE]: queue([audit()]),
+      'POST /api/review/audit/7/confirm': () => {
+        backend.signOut()
+        return UNAUTHORIZED
+      },
+    })
+    const { router } = renderApp('/review')
+    const row = await screen.findByRole('article')
+
+    await userEvent.click(within(row).getByRole('button', { name: '確認' }))
+
+    await waitFor(() => expect(router.state.location.pathname).toBe('/login'))
+    expect(router.state.location.search).toEqual({ redirect: '/review', expired: true })
   })
 })

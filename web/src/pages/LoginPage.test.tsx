@@ -14,6 +14,13 @@ const ME = 'GET /api/auth/me'
 const LOGIN = 'POST /api/auth/login'
 const DONE = { body: HEALTHY }
 const ADMIN = { name: 'skipper', role: 'admin' } as const
+const LIBRARY = 'f137a2dd21bbc1b99aa5c0f6bf02a805'
+/** `/library` 落在第一個媒體庫；那一頁本身打的其他 API 這裡不在乎。 */
+const LIBRARIES = {
+  'GET /api/inventory': {
+    body: [{ id: LIBRARY, name: 'Anime', collection_type: 'tvshows', sorts: [] }],
+  },
+}
 
 /** 沒有人登入的一台；`signIn` 之後 `GET /auth/me` 才回得出人來。 */
 function signedOut() {
@@ -33,14 +40,15 @@ async function fillIn(username: string, password: string) {
 }
 
 describe('登入頁', () => {
-  it('打完帳密送出後落到首頁（票 03 起是探索頁）', async () => {
+  // 探索頁只放 TMDB 牆之後（brief §19，M3 票 06），登入後第一個畫面是媒體庫：接著看的兩列在那裡。
+  it('打完帳密送出後落到媒體庫', async () => {
     const { backend, routes } = signedOut()
-    const stub = stubApi({ ...routes, [LOGIN]: backend.signIn(ADMIN) })
+    const stub = stubApi({ ...routes, [LOGIN]: backend.signIn(ADMIN), ...LIBRARIES })
     const { router } = renderApp('/login')
 
     await fillIn('skipper', 'harbour')
 
-    await waitFor(() => expect(router.state.location.pathname).toBe('/'))
+    await waitFor(() => expect(router.state.location.pathname).toBe(`/library/${LIBRARY}`))
     const login = stub.mock.calls.find((call) => call[1]?.method === 'POST')
     expect(bodyOf(login!)).toEqual({ username: 'skipper', password: 'harbour' })
   })
@@ -57,12 +65,12 @@ describe('登入頁', () => {
 
   it('外部網址不算「原本要去的那一頁」', async () => {
     const { backend, routes } = signedOut()
-    stubApi({ ...routes, [LOGIN]: backend.signIn(ADMIN) })
+    stubApi({ ...routes, [LOGIN]: backend.signIn(ADMIN), ...LIBRARIES })
     const { router } = renderApp('/login?redirect=https%3A%2F%2Fevil.example')
 
     await fillIn('skipper', 'harbour')
 
-    await waitFor(() => expect(router.state.location.pathname).toBe('/'))
+    await waitFor(() => expect(router.state.location.pathname).toBe(`/library/${LIBRARY}`))
   })
 
   it('帳密不對時說的是同一句話，不指名是哪一個錯了', async () => {

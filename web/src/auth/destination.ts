@@ -1,6 +1,12 @@
 const PROTOCOL_RELATIVE = ['//', '/\\']
 
 /**
+ * 沒有指定去處時登入後落在媒體庫（brief §19，M3 票 06）：接著看的兩列只在那裡，探索頁只放 TMDB 牆。
+ * `/library` 自己再落到這個人的第一個媒體庫。
+ */
+const HOME = '/library'
+
+/**
  * 登入後要去哪裡。`?redirect=` 來自網址列，所以只收站內路徑——少了這道檢查，一條
  * `?redirect=https://…` 的連結就能把剛登入的人送到別人的網站去。開頭是 `//` 或 `/\`
  * 的字串瀏覽器都當成通訊協定相對網址，兩種都要擋。
@@ -9,6 +15,6 @@ const PROTOCOL_RELATIVE = ['//', '/\\']
  * search 參數原樣往下傳，子路由的驗證結果只是疊在上面，刪不掉它（實測 1.171）。
  */
 export function destination(redirect: string | undefined): string {
-  if (redirect === undefined || !redirect.startsWith('/')) return '/'
-  return PROTOCOL_RELATIVE.some((prefix) => redirect.startsWith(prefix)) ? '/' : redirect
+  if (redirect === undefined || !redirect.startsWith('/')) return HOME
+  return PROTOCOL_RELATIVE.some((prefix) => redirect.startsWith(prefix)) ? HOME : redirect
 }

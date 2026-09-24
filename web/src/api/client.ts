@@ -22,6 +22,14 @@ export class ApiError extends Error {
 }
 
 /**
+ * session 已經結束（沒登入、過期、帳號在 Jellyfin 被停用）。登入那一支的 401 是帳密不對，由呼叫端自己分。
+ * 這種失敗重試不會好：`router.ts` 的預設重試與 `retryUnlessRefused` 都跳過它，401 就導回登入頁（M3 票 06）。
+ */
+export function signedOut(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 401
+}
+
+/**
  * `T` 一律是 `pnpm gen:api` 從 OpenAPI 產出的型別（plan §6）；`api/*.ts` 那一層只是
  * 把後端的類別名換成前端在講的名字，沒有一個形狀是手寫的。
  *

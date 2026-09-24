@@ -1,9 +1,7 @@
 import { useId, useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
-import { useRouter } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 
-import { ApiError } from '../api/client'
 import { accessRefusal, markPlayed, type WatchState } from '../api/jellyfin'
 import { ConfirmPanel } from './ConfirmPanel'
 import { COMPACT_BUTTON, GhostButton, Notice, PrimaryButton } from './controls'
@@ -49,7 +47,6 @@ export function WatchToggle({
   onWritten: (written: WatchState) => void
 }) {
   const { t } = useTranslation()
-  const router = useRouter()
   const { asked, open, close, trigger, panel, onKeyDown } = useInPlaceConfirm()
   const warningId = useId()
   const [announced, setAnnounced] = useState('')
@@ -60,10 +57,6 @@ export function WatchToggle({
         written.played ? t('inventory.watch.donePlayed') : t('inventory.watch.doneUnplayed'),
       )
       onWritten(written)
-    },
-    onError: (error) => {
-      // 帳號在 Jellyfin 被停用：後端已經結束 session，重跑守衛把人送回登入頁（與牆那一支同一條路）。
-      if (error instanceof ApiError && error.status === 401) void router.invalidate()
     },
   })
   const refusal = accessRefusal(mark.error)

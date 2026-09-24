@@ -3,14 +3,12 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 
-import { ApiError } from '../api/client'
 import { accessRefusal } from '../api/jellyfin'
 import { meQueryOptions } from '../api/auth'
 import { mediaQueryOptions, refresh, watchQueryOptions, type Media } from '../api/media'
 import { GHOST_LINK, GhostButton, Notice } from '../components/controls'
 import { Dot } from '../components/Dot'
 import { KIND_CODE } from '../components/kind'
-import { SessionEnded } from '../components/SessionEnded'
 import { Timestamp } from '../components/Timestamp'
 import { TmdbNotice } from '../components/TmdbNotice'
 import { displayRound } from '../i18n/displayRound'
@@ -64,10 +62,6 @@ export function MediaDetailPage({ id }: { id: string }) {
 
   return (
     <div className="mx-auto grid w-full max-w-[80rem] gap-8 px-6 py-8">
-      {/* 帳號在 Jellyfin 被停用：後端已經結束 session，送回登入頁（首頁那兩列同一條路）。 */}
-      {watch.error instanceof ApiError && watch.error.status === 401 && (
-        <SessionEnded pending={null} />
-      )}
       {blank ? (
         <section className="grid gap-4">
           <h1 className="value text-lg font-semibold text-ink">{found.id}</h1>
@@ -268,7 +262,7 @@ function Freshness({
         <p className="text-xs text-ink-dim">
           {t('media.fetchedAt')} <Timestamp at={media.fetched_at} />
         </p>
-        <GhostButton type="button" onClick={onRefresh}>
+        <GhostButton type="button" busy={pending} onClick={onRefresh}>
           {pending ? t('media.refreshing') : t('media.refresh')}
         </GhostButton>
       </div>

@@ -53,13 +53,18 @@ export function ReconcileBanner() {
   // 掛在 `useEffect` 而不是寫在 render 裡：render 期間 invalidate 會讓 refetch → 重繪 →
   // 條件仍然成立 → 再 invalidate，一直打 `/issues`。認的是「`last` 換了一輪」而不是
   // 「剛剛按過」——每日 04:00 那一輪沒有人按，它開出來的東西一樣要出現。
-  const seen = useRef<number | null>(null)
+  //
+  // **第一次讀到的那一輪只記下來**（M2 票 16 audit P3）：進頁時清單本來就是那一輪之後的樣子，
+  // 再問一次只是同一份打兩遍。`undefined` 是「還沒讀到」，`null` 是「讀到了、從來沒跑過」。
+  const seen = useRef<number | null | undefined>(undefined)
+  const loaded = state.data !== undefined
   const finished = last?.id ?? null
   useEffect(() => {
-    if (finished === null || seen.current === finished) return
+    if (!loaded || seen.current === finished) return
+    const first = seen.current === undefined
     seen.current = finished
-    void queryClient.invalidateQueries({ queryKey: issuesQueryOptions().queryKey })
-  }, [finished, queryClient])
+    if (!first) void queryClient.invalidateQueries({ queryKey: issuesQueryOptions().queryKey })
+  }, [loaded, finished, queryClient])
 
   return (
     <div className="grid gap-2">

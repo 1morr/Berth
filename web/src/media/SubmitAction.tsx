@@ -117,8 +117,8 @@ export function SubmitAction({
       </div>
 
       <div className={CONFIRM_ACTIONS}>
-        {/* 按鈕永遠按得下去（票 02b）：沒選 Route 時說不行的是上面那句話與下拉本身。 */}
-        <PrimaryButton type="button" onClick={() => submit.mutate()}>
+        {/* 按鈕永遠按得下去（票 02b）：沒選 Route 時說不行的是上面那句話與下拉本身。送出中按了不再送（M3 票 06）。 */}
+        <PrimaryButton type="button" busy={submit.isPending} onClick={() => submit.mutate()}>
           {submit.isPending ? t('submit.submitting') : t('submit.submit')}
         </PrimaryButton>
         <GhostButton type="button" onClick={close}>

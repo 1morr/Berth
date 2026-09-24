@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { approvePlan, planQueryOptions, rejectPlan } from '../api/plans'
@@ -9,7 +9,7 @@ import { DetailLine, QueueRow } from '../components/QueueRow'
 import { JobLink } from '../jobs/JobLink'
 import { whenText } from '../components/queueText'
 import { displayRound } from '../i18n/displayRound'
-import { PlanEditor } from '../plans/PlanEditor'
+import { PlanEditor, type Unapplied } from '../plans/PlanEditor'
 import { planRefusalText } from '../plans/planRefusal'
 
 /**
@@ -21,7 +21,8 @@ import { planRefusalText } from '../plans/planRefusal'
  * 兩顆按鈕：
  *
  * - **核准並入庫**是主要動作，不另外確認：每一列會落在哪裡已經在表上了（原則 2 的「先給看」）。
- *   **批次核准與改過之後的核准是同一顆**，打的是同一支 `approve`。
+ *   **批次核准與改過之後的核准是同一顆**，打的是同一支 `approve`。還有列改了沒套用時不送出、說出是哪幾列
+ *   （M3 票 06）：`approve` 核准的是已經存下來的那一份，表單上的值不會跟著去。
  * - **拒絕**就地確認：它丟掉這份計劃連同改過的列、讓 Berth 重新規劃（plan §3.1）。
  */
 export function PlanRow({ row, onDone }: { row: PlanReviewRow; onDone: (said: string) => void }) {
@@ -29,18 +30,35 @@ export function PlanRow({ row, onDone }: { row: PlanReviewRow; onDone: (said: st
   const queryClient = useQueryClient()
   const plan = useQuery(planQueryOptions(row.job_hash, row.ref))
   const [refusal, setRefusal] = useState<string | null>(null)
+  // 表單改了還沒套用的那幾列（id → 檔名），與「核准被它們擋下來了」。擋下來那一句在它們都收起之後自己消失。
+  const [unapplied, setUnapplied] = useState<ReadonlyMap<number, string>>(new Map())
+  const [held, setHeld] = useState(false)
+  const markUnapplied = useCallback<Unapplied>((item, dirty) => {
+    setUnapplied((was) => {
+      if (was.has(item.id) === dirty) return was
+      const next = new Map(was)
+      if (dirty) next.set(item.id, item.rel_path)
+      else next.delete(item.id)
+      return next
+    })
+  }, [])
 
   const decide = useMutation({
     mutationFn: async (decision: PlanDecision) => {
       // 核准回的那一份用不到：它一核准就離開佇列了，畫面要的是重問。
       await (decision === 'approve' ? approvePlan(row.ref) : rejectPlan(row.ref))
     },
-    onMutate: () => setRefusal(null),
+    onMutate: () => {
+      setRefusal(null)
+      setHeld(false)
+    },
     onSuccess: (_, decision) => {
       onDone(decision === 'approve' ? t('review.plan.approved') : t('review.plan.rejected'))
       void queryClient.invalidateQueries({ queryKey: reviewQueryOptions().queryKey })
       // 那一筆的狀態變了（入庫中 / 重新規劃），下載列表與它的計劃都要重問。
       void queryClient.invalidateQueries({ queryKey: ['jobs'] })
+      // Media 詳情的入庫狀態也變了；那一份 5 分鐘內不重抓（`api/media.ts`），不讓它失效就停在核准之前（M3 票 06）。
+      void queryClient.invalidateQueries({ queryKey: ['media'] })
     },
     onError: (error) => {
       setRefusal(planRefusalText(t, error))
@@ -50,6 +68,21 @@ export function PlanRow({ row, onDone }: { row: PlanReviewRow; onDone: (said: st
   })
 
   const busy = decide.isPending
+  const edits = [...unapplied.values()]
+  const said =
+    held && edits.length > 0
+      ? t('review.plan.unapplied', {
+          apply: t('review.plan.apply'),
+          cancel: t('review.plan.cancel'),
+          files: new Intl.ListFormat(i18n.language).format(edits),
+        })
+      : refusal
+
+  function approve() {
+    if (edits.length === 0) return decide.mutate('approve')
+    setRefusal(null)
+    setHeld(true)
+  }
   const title = displayRound(i18n.language, { 'zh-Hant': row.title, en: row.title_en })
 
   return (
@@ -60,13 +93,13 @@ export function PlanRow({ row, onDone }: { row: PlanReviewRow; onDone: (said: st
       title={title || row.job_name}
       sentence={t(`review.plan.reason.${row.reason.code}`)}
       when={t('review.plan.waitingSince', { value: whenText(row.at, i18n.language) })}
-      refusal={refusal}
+      refusal={said}
       body={
         plan.isPending ? (
           // 靜態佔位，沒有動畫（同 `/issues` 的 `Loading()`）；高度接近兩列，避免資料回來時整頁往下推。
           <div aria-hidden="true" className="h-28 border-2 border-rule bg-hull" />
         ) : plan.data ? (
-          <PlanEditor plan={plan.data} hash={row.job_hash} />
+          <PlanEditor plan={plan.data} hash={row.job_hash} onUnapplied={markUnapplied} />
         ) : (
           <p className="text-xs text-ink-dim">{t('review.plan.off')}</p>
         )
@@ -93,7 +126,7 @@ export function PlanRow({ row, onDone }: { row: PlanReviewRow; onDone: (said: st
         action === 'approve' ? (
           // 主要動作在窄版滿版、桌機固定寬（同 `CONFIRM_ACTIONS` 的 14rem）。
           <div key={action} className="w-full sm:w-56">
-            <PrimaryButton type="button" disabled={busy} onClick={() => decide.mutate(action)}>
+            <PrimaryButton type="button" busy={busy} onClick={approve}>
               {busy ? t('review.plan.working') : t('review.plan.approve')}
             </PrimaryButton>
           </div>

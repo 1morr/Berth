@@ -58,6 +58,7 @@ export function QueueRow({
   const { t } = useTranslation()
   const Heading = heading
   const headingId = useId()
+  const hintId = useId()
   // 「展開 / 收起」照這一列自己的開合，不用 `group-open:`：一組的成員長在組的 `<details>` 裡，
   // CSS 那一種會跟著外面那一層一起說「收起」（同 `CollapsibleRow`）。
   const [open, setOpen] = useState(false)
@@ -92,8 +93,15 @@ export function QueueRow({
       <details onToggle={(event) => setOpen(event.currentTarget.open)}>
         {/* marker 拿掉、字跟著開合換（DESIGN.md 的 The Summary Is One Button Rule，同其他可展開列）：原本留著原生
             ▸ 又寫著「展開」，打開之後仍然說「展開」（M2 票 16 的 critique）。 */}
-        <summary className="w-fit cursor-pointer marker:content-none">
-          <ExpandHint open={open} />
+        {/* `min-h-6`：只有一行 `.label` 字時命中區 11px 高（M2 票 16 audit，2.5.8 靠間距例外才過）。
+            名字接上這一件的標題：一頁幾件就有幾顆「展開」，只叫「展開」分不出是哪一件（M2 票 16 critique）。 */}
+        <summary
+          aria-labelledby={`${hintId} ${headingId}`}
+          className="flex min-h-6 w-fit cursor-pointer items-center marker:content-none"
+        >
+          <span id={hintId}>
+            <ExpandHint open={open} />
+          </span>
         </summary>
         <dl className="mt-2 grid gap-1 border-2 border-rule bg-hull px-3 py-2">{details}</dl>
         {members}

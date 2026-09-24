@@ -75,11 +75,7 @@ export function HealthPage() {
               <span className="label">{t('health.lastChecked')}</span>{' '}
               <Timestamp at={report.checked_at} />
             </span>
-            <GhostButton
-              type="button"
-              disabled={recheck.isPending}
-              onClick={() => recheck.mutate()}
-            >
+            <GhostButton type="button" busy={recheck.isPending} onClick={() => recheck.mutate()}>
               {recheck.isPending ? t('health.rechecking') : t('health.recheck')}
             </GhostButton>
           </span>

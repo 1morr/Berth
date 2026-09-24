@@ -3,7 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useSearch } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 
-import { meQueryOptions, signIn, type Credentials, type Me } from '../api/auth'
+import { meQueryOptions, SIGN_IN_KEY, signIn, type Credentials, type Me } from '../api/auth'
 import { ApiError } from '../api/client'
 import { destination } from '../auth/destination'
 import { CopyLine, Field, Notice, PasswordField, PrimaryButton } from '../components/controls'
@@ -22,6 +22,7 @@ export function LoginPage() {
   const password = useRef<HTMLInputElement>(null)
 
   const login = useMutation({
+    mutationKey: SIGN_IN_KEY,
     mutationFn: signIn,
     onSuccess: (me: Me) => {
       queryClient.setQueryData(meQueryOptions.queryKey, me)
@@ -94,7 +95,7 @@ export function LoginPage() {
                 }
               />
 
-              <PrimaryButton type="submit" disabled={login.isPending}>
+              <PrimaryButton type="submit" busy={login.isPending}>
                 {login.isPending ? t('login.submitting') : t('login.submit')}
               </PrimaryButton>
             </form>

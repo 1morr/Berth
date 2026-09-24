@@ -10,8 +10,8 @@ library-browsing.md §2、§9）。所以「這個人看得到什麼」由 Berth
   而且**在問 Jellyfin 之前**。`parentId` 只放驗過的媒體庫 id：劇或季當 `parentId` 連使用者自己的
   token 都擋不住，所以這裡根本不收它們。牆（`page`）、整份清單（`index`）與類型年份清單（`filters`，
   票 06）都走這一道。排序鍵不在這種媒體庫的選單上也在這裡拒絕（`SortNotOfferedError`）。
-- **繼續觀看與下一集**（`resume` / `next_up`，票 07）：首頁要的是整個帳號，**不帶 `parentId`**——
-  Jellyfin 只在不帶的時候照這個人的媒體庫限縮；媒體庫頁的 id 同樣先驗過才帶。
+- **繼續觀看與下一集**（`resume` / `next_up`，票 07）：媒體庫頁要的那個 id 同樣先驗過允許清單才帶
+  `parentId`——帶了 Jellyfin 就不套這個人的媒體庫權限，所以驗證得由這裡做。
 - **允許清單與 `Policy` 同一份短時間快取**（`AccessCache`）。帳號被停用或刪除（M2 票 11）就結束
   這個人的每一張 Berth session，而不是縮短 session 的效期（brief §19）。
 - **寫入只有標記已看 / 未看**（`JellyfinAccess.mark_played`，票 05）。它不先查可見性：
@@ -281,27 +281,24 @@ class JellyfinAccess:
                 user_id=self._user_id, library_id=library.id, item_type=library.item_type
             )
 
-    def resume(self, library_id: str | None, *, limit: int) -> Awaitable[tuple[JellyfinItem, ...]]:
-        """看到一半的集與電影。`library_id` 是 `None` 時是整個帳號；否則先驗過、在呼叫的當下就拒絕
+    def resume(self, library_id: str, *, limit: int) -> Awaitable[tuple[JellyfinItem, ...]]:
+        """這個媒體庫看到一半的集與電影。先驗媒體庫、在呼叫的當下就拒絕
         （與 `page` 同一個理由：繼續觀看與下一集是同時問的）。"""
-        scope = self._scope(library_id)
+        library = self.library(library_id)
         return self._reachable(
-            self._client.resume(user_id=self._user_id, library_id=scope, limit=limit)
+            self._client.resume(user_id=self._user_id, library_id=library.id, limit=limit)
         )
 
     def next_up(
-        self, library_id: str | None, *, limit: int, cutoff: datetime
+        self, library_id: str, *, limit: int, cutoff: datetime
     ) -> Awaitable[tuple[JellyfinItem, ...]]:
-        """每部看過的劇的下一集，只算 `cutoff` 之後看過的劇。`library_id` 同 `resume`。"""
-        scope = self._scope(library_id)
+        """這個媒體庫每部看過的劇的下一集，只算 `cutoff` 之後看過的劇。`library_id` 同 `resume`。"""
+        library = self.library(library_id)
         return self._reachable(
             self._client.next_up(
-                user_id=self._user_id, library_id=scope, limit=limit, cutoff=cutoff
+                user_id=self._user_id, library_id=library.id, limit=limit, cutoff=cutoff
             )
         )
-
-    def _scope(self, library_id: str | None) -> str | None:
-        return None if library_id is None else self.library(library_id).id
 
     @staticmethod
     async def _reachable[T](request: Awaitable[T]) -> T:

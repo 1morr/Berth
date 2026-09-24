@@ -187,8 +187,9 @@ describe('審核佇列的 plan 那一類（M2 票 07）', () => {
     const row = await screen.findByRole('article')
 
     await userEvent.click(await within(row).findByRole('button', { name: `改 ${RELEASE}.mkv` }))
-    // 待審核的列打開時預選「入庫」：多半就是要照提案入庫。
+    // 待審核的列打開時預選「入庫」：多半就是要照提案入庫。焦點進到那一格（M2 票 16 audit P2，M3 票 06）。
     expect(within(row).getByLabelText('處置')).toHaveValue('import')
+    expect(within(row).getByLabelText('處置')).toHaveFocus()
     const season = within(row).getByLabelText('季')
     await userEvent.clear(season)
     await userEvent.type(season, '2')
@@ -283,6 +284,66 @@ describe('審核佇列的 plan 那一類（M2 票 07）', () => {
 
     expect(await within(row).findByRole('alert')).toHaveTextContent(
       '還有列沒有決定，先改成入庫、略過或對不到： theme.mkv',
+    )
+  })
+
+  // M3 票 06：改到一半的列不會隨核准送出去（`approve` 不帶表單上的值），照原樣核准的是改之前的那一份。
+  it('逐列改了還沒套用時，核准被擋下、說出是哪一列，不送出', async () => {
+    const stub = render({ 'POST /api/plans/11/approve': { body: plan({ status: 'approved' }) } })
+    renderApp('/review')
+    const row = await screen.findByRole('article')
+
+    await userEvent.click(await within(row).findByRole('button', { name: `改 ${RELEASE}.mkv` }))
+    const season = within(row).getByLabelText('季')
+    await userEvent.clear(season)
+    await userEvent.type(season, '2')
+    await userEvent.click(within(row).getByRole('button', { name: '核准並入庫' }))
+
+    expect(await within(row).findByRole('alert')).toHaveTextContent(
+      `還有改動沒有套用，先按「套用」或「取消」：${RELEASE}.mkv`,
+    )
+    expect(stub.mock.calls.some(([url]) => url === '/api/plans/11/approve')).toBe(false)
+  })
+
+  it('打開表單但沒改任何東西，不擋核准', async () => {
+    const stub = render({ 'POST /api/plans/11/approve': { body: plan({ status: 'approved' }) } })
+    renderApp('/review')
+    const row = await screen.findByRole('article')
+
+    await userEvent.click(await within(row).findByRole('button', { name: `改 ${RELEASE}.mkv` }))
+    await userEvent.click(within(row).getByRole('button', { name: '核准並入庫' }))
+
+    await waitFor(() =>
+      expect(stub.mock.calls.some(([url]) => url === '/api/plans/11/approve')).toBe(true),
+    )
+  })
+
+  it('取消之後就不再擋', async () => {
+    const stub = render({ 'POST /api/plans/11/approve': { body: plan({ status: 'approved' }) } })
+    renderApp('/review')
+    const row = await screen.findByRole('article')
+
+    await userEvent.click(await within(row).findByRole('button', { name: `改 ${RELEASE}.mkv` }))
+    await userEvent.type(within(row).getByLabelText('迄集'), '6')
+    await userEvent.click(within(row).getByRole('button', { name: '取消' }))
+    await userEvent.click(within(row).getByRole('button', { name: '核准並入庫' }))
+
+    await waitFor(() =>
+      expect(stub.mock.calls.some(([url]) => url === '/api/plans/11/approve')).toBe(true),
+    )
+  })
+
+  // M3 票 06：Media 詳情那一份快取 5 分鐘內不重抓，不讓它失效的話回到詳情頁看到的是核准之前的入庫狀態。
+  it('核准之後詳情頁那一份要重問', async () => {
+    render({ 'POST /api/plans/11/approve': { body: plan({ status: 'approved' }) } })
+    const { queryClient } = renderApp('/review')
+    queryClient.setQueryData(['media', 'tv:120089'], { id: 'tv:120089' })
+    const row = await screen.findByRole('article')
+
+    await userEvent.click(within(row).getByRole('button', { name: '核准並入庫' }))
+
+    await waitFor(() =>
+      expect(queryClient.getQueryState(['media', 'tv:120089'])?.isInvalidated).toBe(true),
     )
   })
 

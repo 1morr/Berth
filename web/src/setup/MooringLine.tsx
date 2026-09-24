@@ -163,7 +163,7 @@ function ConnectPanel({
           </>
         )}
         <div>
-          <GhostButton type="submit" disabled={connecting}>
+          <GhostButton type="submit" busy={connecting}>
             {connecting ? t('connect.submitting') : t('connect.submit')}
           </GhostButton>
         </div>

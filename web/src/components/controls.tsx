@@ -1,4 +1,4 @@
-import { useId, useState, type ComponentPropsWithRef, type ReactNode } from 'react'
+import { useId, useState, type ComponentPropsWithRef, type MouseEvent, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { SIGNAL_FILL, type Signal } from './signal'
@@ -121,18 +121,39 @@ export function Checkbox({
   )
 }
 
+type ButtonProps = ComponentPropsWithRef<'button'> & {
+  children: ReactNode
+  type?: 'button' | 'submit'
+  /**
+   * 送出中：按了不再送（M3 票 06）。**不用 `disabled`**：停用的鍵接不住焦點，按下去的那一刻鍵盤使用者就掉回
+   * `body`（M1.5 票 05 的切換鍵先踩到）；`aria-disabled` 留在 Tab 順序與焦點上，念得出「不可用」。
+   * `disabled` 留給「現在不成立」的那一種（表單沒改過、沒選東西），那時本來就沒有人剛按下它。
+   */
+  busy?: boolean
+}
+
+/**
+ * `busy` 時吞掉點擊：`preventDefault` 連 `type="submit"` 的送出也擋住——在欄位裡按 Enter 送出表單走的也是
+ * 預設按鈕的點擊（HTML 的隱式送出），所以表單不必自己再判一次。
+ */
+function busyProps(busy: boolean | undefined, onClick: ButtonProps['onClick']) {
+  if (!busy) return { onClick }
+  return {
+    'aria-disabled': true,
+    onClick: (event: MouseEvent<HTMLButtonElement>) => event.preventDefault(),
+  } as const
+}
+
 /** 主要動作：hi-vis 塗裝色塊。這塊板子上沒有藍色 primary 按鈕。
 
  邊框不是裝飾：亮色主題下黃漆對紙白只有 1.36:1，沒有邊的話按鈕的輪廓看不出來
  （WCAG 2.2 的非文字對比要 3:1）。`rule-strong` 深色 3.33–4.51:1、亮色 6.46:1（DESIGN.md「重橫線」）。 */
-export function PrimaryButton({
-  children,
-  ...button
-}: ComponentPropsWithRef<'button'> & { children: ReactNode; type?: 'button' | 'submit' }) {
+export function PrimaryButton({ children, busy, ...button }: ButtonProps) {
   return (
     <button
       {...button}
-      className="label w-full border-2 border-rule-strong bg-assigned px-4 py-3.5 text-on-signal disabled:cursor-not-allowed disabled:bg-deck disabled:text-ink-dim"
+      {...busyProps(busy, button.onClick)}
+      className="label w-full border-2 border-rule-strong bg-assigned px-4 py-3.5 text-on-signal disabled:cursor-not-allowed disabled:bg-deck disabled:text-ink-dim aria-disabled:cursor-not-allowed aria-disabled:bg-deck aria-disabled:text-ink-dim"
     >
       {children}
     </button>
@@ -147,14 +168,12 @@ export const PRIMARY_LINK =
   'label inline-flex min-h-12 items-center justify-center border-2 border-rule-strong bg-assigned px-4 py-3.5 text-center text-on-signal'
 
 /** 次要動作：只有外框，不搶主要動作的位置。 */
-export function GhostButton({
-  children,
-  ...button
-}: ComponentPropsWithRef<'button'> & { children: ReactNode; type?: 'button' | 'submit' }) {
+export function GhostButton({ children, busy, ...button }: ButtonProps) {
   return (
     <button
       {...button}
-      className="label border-2 border-rule px-4 py-2.5 text-ink hover:border-rule-strong disabled:cursor-not-allowed disabled:text-ink-dim"
+      {...busyProps(busy, button.onClick)}
+      className="label border-2 border-rule px-4 py-2.5 text-ink hover:border-rule-strong disabled:cursor-not-allowed disabled:text-ink-dim aria-disabled:cursor-not-allowed aria-disabled:text-ink-dim"
     >
       {children}
     </button>
@@ -312,7 +331,7 @@ export function ConfirmAction({
       <GhostButton
         ref={trigger}
         type="button"
-        disabled={pending}
+        busy={pending}
         onClick={() => {
           onOpen?.()
           open()
@@ -331,7 +350,7 @@ export function ConfirmAction({
       <div className={CONFIRM_ACTIONS}>
         <PrimaryButton
           type="button"
-          disabled={pending}
+          busy={pending}
           onClick={() => {
             close()
             onConfirm()

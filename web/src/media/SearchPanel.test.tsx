@@ -125,7 +125,7 @@ function results(overrides: Partial<SearchResults> = {}): SearchResults {
 }
 
 function render(
-  routes: Record<string, StubRoute | (() => StubRoute)> = {},
+  routes: Record<string, StubRoute | (() => StubRoute | Promise<StubRoute>)> = {},
   role: 'admin' | 'user' = 'admin',
 ) {
   return stubApi({
@@ -473,7 +473,9 @@ describe('搜尋 torrent 與結果表', () => {
 
   describe('送單（票 09）', () => {
     /** 搜一次，回一列結果。送單那顆鍵掛在那一列上。 */
-    async function searched(routes: Record<string, StubRoute | (() => StubRoute)> = {}) {
+    async function searched(
+      routes: Record<string, StubRoute | (() => StubRoute | Promise<StubRoute>)> = {},
+    ) {
       const stub = render({ [SEARCH_PATH]: { body: results() }, ...routes })
       renderApp('/media/tv:120089')
       await userEvent.selectOptions(await screen.findByLabelText('入庫到'), 'TV')
@@ -521,6 +523,25 @@ describe('搜尋 torrent 與結果表', () => {
         media: 'tv:120089',
         route: 1,
       })
+    })
+
+    // M3 票 06：送出中再按一次會多建一次（後端冪等，但第二次回「已經在了」會蓋掉「已送出」）。
+    it('送出中再按不會再送一次，焦點留在那一顆上', async () => {
+      let answer: (route: StubRoute) => void = () => {}
+      const stub = await searched({
+        'POST /api/jobs': () => new Promise((resolve) => (answer = resolve)),
+      })
+
+      await userEvent.click(screen.getByRole('button', { name: '送單' }))
+      await userEvent.click(screen.getByRole('button', { name: '確認送單' }))
+      const pending = await screen.findByRole('button', { name: '送單中…' })
+      await userEvent.click(pending)
+
+      expect(pending).toHaveAttribute('aria-disabled', 'true')
+      expect(pending).toHaveFocus()
+      expect(stub.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(1)
+      answer({ body: { job: job(), created: true } })
+      expect(await screen.findByText('已送出')).toBeVisible()
     })
 
     it('同一筆再送一次時說的是「這一個已經在了」，不是一則錯誤（plan §3.3）', async () => {

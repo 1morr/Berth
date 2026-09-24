@@ -1,9 +1,9 @@
-"""繼續觀看與下一集：首頁與媒體庫頁上方的兩列（M1.5 票 07、brief §13、§19）。
+"""繼續觀看與下一集：媒體庫頁上方的兩列（M1.5 票 07、brief §13、§19）。
 
 資料原樣來自 Jellyfin——`/UserItems/Resume` 與 `/Shows/NextUp`，參數照 jellyfin-web 首頁
 （研究 library-browsing.md §7）——Berth 不疊入庫狀態，只替每一項挑一張橫圖、說出它是哪一集、看到哪。
-讀 Jellyfin 一律經過權限閘門（`services/jellyfin_access.py`）：首頁那兩支不帶 `parentId`，
-Jellyfin 才照這個人的媒體庫限縮；媒體庫頁的媒體庫 id 先對允許清單驗過。
+讀 Jellyfin 一律經過權限閘門（`services/jellyfin_access.py`）：媒體庫的 id 先對允許清單驗過才帶
+`parentId`。
 """
 
 from __future__ import annotations
@@ -67,9 +67,9 @@ class Watching:
     next_up: tuple[WatchingCard, ...]
 
 
-async def read_watching(access: JellyfinAccess, library_id: str | None) -> Watching:
-    """這個人的繼續觀看與下一集。`library_id` 是 `None` 時是整個帳號（首頁），否則只含那個媒體庫的；
-    不在允許清單上丟 `LibraryNotVisibleError`，兩支都不會送出去。"""
+async def read_watching(access: JellyfinAccess, library_id: str) -> Watching:
+    """這個人在這個媒體庫的繼續觀看與下一集。不在允許清單上丟 `LibraryNotVisibleError`，
+    兩支都不會送出去。"""
     cutoff = utcnow() - NEXT_UP_WINDOW
     resume, next_up = await asyncio.gather(
         access.resume(library_id, limit=RESUME_LIMIT),
@@ -80,7 +80,7 @@ async def read_watching(access: JellyfinAccess, library_id: str | None) -> Watch
 
 def watching_cards(items: Iterable[JellyfinItem]) -> tuple[WatchingCard, ...]:
     """只收集與電影：卡片的第一行是季集代號或 `MOVIE` 與年份，別的型別說不出自己是什麼。
-    `mediaTypes=Video` 仍可能回家庭影片與音樂錄影帶（首頁不分媒體庫，混合型媒體庫裡的也會來）。"""
+    `mediaTypes=Video` 仍可能回家庭影片與音樂錄影帶（混合型媒體庫裡的也會來）。"""
     return tuple(card(item) for item in items if (card := _CARDS.get(item.type)))
 
 

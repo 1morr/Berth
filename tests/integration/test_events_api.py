@@ -101,6 +101,28 @@ def test_a_signed_in_page_reads_the_job_signals(client: TestClient) -> None:
     assert json.loads(data) == {"hash": "abc", "state": "downloading", "progress": 0.25}
 
 
+def test_the_stream_is_never_compressed(client: TestClient) -> None:
+    """gzip 會把事件收在壓縮器的緩衝裡，前端要等到湊滿一塊才看得到（M3 票 06 加壓縮時）。
+
+    Starlette 的 `GZipMiddleware` 預設就跳過 `text/event-stream`；這一條守的是換掉它或改參數的
+    那一天。
+    """
+    client.post("/api/auth/login", json=ADMIN, headers=BROWSER)
+    hub = hub_of(client)
+
+    _, headers, body = asyncio.run(
+        _stream_once(
+            client,
+            hub,
+            JobSignal(hash="abc", state=JobState.DOWNLOADING, progress=0.25),
+            accept_encoding="gzip",
+        )
+    )
+
+    assert b"content-encoding" not in headers
+    assert f"event: {JOB_EVENT}".encode() in body
+
+
 def test_closing_the_page_takes_the_subscription_with_it(client: TestClient) -> None:
     """一條沒人讀的佇列會在每一輪輪詢時被寫進去，永遠不會有人清掉它。"""
     client.post("/api/auth/login", json=ADMIN, headers=BROWSER)
@@ -114,7 +136,7 @@ def test_closing_the_page_takes_the_subscription_with_it(client: TestClient) -> 
 
 
 async def _stream_once(
-    client: TestClient, hub: EventHub, signal: JobSignal
+    client: TestClient, hub: EventHub, signal: JobSignal, *, accept_encoding: str = ""
 ) -> tuple[int, dict[bytes, bytes], bytes]:
     """把 SSE 端點拉到第一筆事件為止，然後掛斷。
 
@@ -131,7 +153,11 @@ async def _stream_once(
         "raw_path": STREAM.encode(),
         "query_string": b"",
         "root_path": "",
-        "headers": [(b"cookie", _cookie(client).encode()), (b"host", b"testserver")],
+        "headers": [
+            (b"cookie", _cookie(client).encode()),
+            (b"host", b"testserver"),
+            *([(b"accept-encoding", accept_encoding.encode())] if accept_encoding else []),
+        ],
         "client": ("127.0.0.1", 1234),
         "server": ("testserver", 80),
     }

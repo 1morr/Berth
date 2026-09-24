@@ -124,9 +124,10 @@ export function SearchPanel({ media, ref }: { media: Media; ref: Ref<SearchHandl
             />
           </p>
           <RoutePicker media={media} value={chosen} onChange={setRoute} />
-          {/* 按鈕不停用（票 02b 的規則：按鈕永遠按得下去），只換文字。 */}
+          {/* 按鈕不停用（票 02b 的規則：按鈕永遠按得下去），只換文字；問著的時候按了不再問一次（M3 票 06：一輪
+              35–85 秒、打的是公開站，重按就是整輪查詢再打一次）。 */}
           <span className="lg:w-40">
-            <PrimaryButton type="submit">
+            <PrimaryButton type="submit" busy={search.isPending}>
               {search.isPending ? t('search.submitting') : t('search.submit')}
             </PrimaryButton>
           </span>

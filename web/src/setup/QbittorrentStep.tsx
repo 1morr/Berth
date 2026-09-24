@@ -222,11 +222,11 @@ function ApplySequence({
 
       <div className={`mt-6 ${STICKY_ACTION}`}>
         {done ? (
-          <GhostButton type="button" disabled={applying} onClick={onApply}>
+          <GhostButton type="button" busy={applying} onClick={onApply}>
             {t('qbittorrent.rerun')}
           </GhostButton>
         ) : (
-          <PrimaryButton type="button" disabled={applying} onClick={onApply}>
+          <PrimaryButton type="button" busy={applying} onClick={onApply}>
             {applying ? t('qbittorrent.applying') : t('qbittorrent.apply', { keys: pending })}
           </PrimaryButton>
         )}

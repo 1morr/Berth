@@ -148,7 +148,8 @@ export function FilesPanel({ media }: { media: Media }) {
                 className="grid min-w-0 gap-1.5 border-l-2 border-rule-strong pl-3"
               >
                 <div className="flex min-w-0 flex-wrap items-start gap-x-2 gap-y-1">
-                  <div className="grid min-w-0 flex-1 basis-48 gap-0.5">
+                  {/* 不撐滿那一行：「修正」緊跟著它改的那個檔名（同 `PlanEditor` 的「改」，M2 票 16 critique）。 */}
+                  <div className="grid min-w-0 gap-0.5">
                     <p className="value text-xs wrap-anywhere text-ink">{row.rel_path}</p>
                     <p className="value text-xs wrap-anywhere text-ink-dim">{row.job_name}</p>
                   </div>
@@ -397,6 +398,7 @@ function RematchEntry({
         mediaKind={rematching.mediaKind}
         linked={linked}
         initial={initial}
+        autoFocus
         onCancel={close}
         onDone={(said) => {
           close()

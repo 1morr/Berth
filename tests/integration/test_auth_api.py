@@ -28,7 +28,7 @@ from berth.config import Config
 from berth.main import create_app
 from berth.models import JellyfinSettings, SetupSettings
 from berth.services.settings import read_settings, write_settings
-from tests.unit.test_openapi_contract import api_endpoints
+from tests.endpoints import api_endpoints
 
 JELLYFIN_URL = "http://jellyfin:8096"
 BROWSER = {CSRF_HEADER: "XMLHttpRequest"}
@@ -414,7 +414,6 @@ ACCESS: dict[tuple[str, str], Access] = {
     ("DELETE", "/jellyfin/items/*/played"): Access.SIGNED_IN,
     ("POST", "/jellyfin/items/*/played"): Access.SIGNED_IN,
     ("GET", "/jellyfin/shows/*/episodes"): Access.SIGNED_IN,
-    ("GET", "/jellyfin/watching"): Access.SIGNED_IN,
     ("GET", "/jobs"): Access.SIGNED_IN,
     ("POST", "/jobs"): Access.SIGNED_IN,
     ("GET", "/jobs/*"): Access.SIGNED_IN,

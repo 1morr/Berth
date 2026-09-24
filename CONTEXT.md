@@ -50,7 +50,7 @@ _Avoid_: seen, history, played state
 
 **Resume**（UI 顯示「繼續觀看」）:
 一位使用者在 Jellyfin 看到一半的集與電影（Jellyfin `/UserItems/Resume`），最近看的在前；卡片說的是看到幾 %，看過又重看
-到一半的片也算。首頁上方是整個帳號的，Inventory 頁上方只含那個 Jellyfin Library 的（M1.5 票 07）。
+到一半的片也算。只在 Inventory 頁上方，只含那個 Jellyfin Library 的（M1.5 票 07；首頁那一份整個帳號的，M3 票 06 隨探索頁只放 TMDB 牆拿掉）。
 _Avoid_: continue, in progress, recently watched
 
 **Next Up**（UI 顯示「下一集」）:
@@ -67,7 +67,7 @@ _Avoid_: player, playback area, library detail
 
 **Carry On**（UI 在主按鈕上：「繼續看」「看下一集」「從 S01E01 開始看」）:
 這位使用者接下來看這部劇的哪一集：Jellyfin 的 NextUp 帶 `seriesId`——看到一半的那一集也算、沒看過是第一集、看完了就沒有。
-與 **Next Up** 不同：那是首頁一整列、每部看過的劇一格，看到一半的不算、沒看過的劇不列。電影沒有 Carry On，主按鈕開那一部。
+與 **Next Up** 不同：那是 Inventory 頁上方一整列、每部看過的劇一格，看到一半的不算、沒看過的劇不列。電影沒有 Carry On，主按鈕開那一部。
 _Avoid_: next up（指這一顆時）, resume point, up next
 
 **Jellyfin Library**（UI 顯示「Jellyfin 媒體庫」）:

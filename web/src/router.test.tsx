@@ -1,10 +1,13 @@
-import { screen, waitFor, within } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
+import { QueryClientProvider } from '@tanstack/react-query'
+import { RouterProvider, createMemoryHistory } from '@tanstack/react-router'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { HEALTHY, UNAUTHORIZED, UNCONFIGURED, session, stubApi } from './test/fetch'
 import { expectCurrentByStateOnly } from './test/navState'
 import { renderApp } from './test/render'
+import { createAppRouter, createQueryClient } from './router'
 import { discoverWall, setupStatus } from './test/fixtures'
 
 afterEach(() => {
@@ -67,13 +70,23 @@ describe('路由', () => {
 })
 
 describe('門禁', () => {
-  it('沒登入就開 / 會被導向登入頁，並記下原本要去的地方', async () => {
+  it('沒登入就開某一頁會被導向登入頁，並記下原本要去的地方', async () => {
+    stubApi({ [HEALTH]: DONE, [ME]: UNAUTHORIZED })
+
+    const { router } = renderApp('/jobs')
+
+    await waitFor(() => expect(router.state.location.pathname).toBe('/login'))
+    expect(router.state.location.search).toEqual({ redirect: '/jobs' })
+  })
+
+  // 打開 Berth 的網址本身就是 `/`，那不是「原本要去探索頁」；登入後落在媒體庫（brief §19，M3 票 06）。
+  it('沒登入就開 / 不記下 /：登入後落在預設的媒體庫', async () => {
     stubApi({ [HEALTH]: DONE, [ME]: UNAUTHORIZED })
 
     const { router } = renderApp('/')
 
     await waitFor(() => expect(router.state.location.pathname).toBe('/login'))
-    expect(router.state.location.search).toEqual({ redirect: '/' })
+    expect(router.state.location.search).toEqual({})
   })
 
   it('第一次被擋下來時不說「已過期」', async () => {
@@ -236,4 +249,32 @@ describe('一般使用者看不到修正與對帳的入口', () => {
       expect(router.state.location.search).toEqual({ denied: true })
     },
   )
+})
+
+/**
+ * 正式的 QueryClient（M3 票 06 code-review 抓到）：預設重試三次（1、2、4 秒），401 也照樣重試的話，
+ * 「導回登入頁」要等七秒。`renderApp` 關了重試，所以這一條用正式的那一個。
+ */
+describe('正式設定下的 401', () => {
+  it('不重試：頁面讀資料回 401 就立刻導回登入頁', async () => {
+    const backend = session({ name: 'skipper', role: 'admin' })
+    const api = stubApi({
+      [HEALTH]: DONE,
+      [ME]: () => backend.me(),
+      'GET /api/jobs': () => {
+        backend.signOut()
+        return UNAUTHORIZED
+      },
+    })
+    const queryClient = createQueryClient()
+    const router = createAppRouter(queryClient, createMemoryHistory({ initialEntries: ['/jobs'] }))
+    render(
+      <QueryClientProvider client={queryClient}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    )
+
+    await waitFor(() => expect(router.state.location.pathname).toBe('/login'))
+    expect(api.mock.calls.filter(([url]) => url === '/api/jobs')).toHaveLength(1)
+  })
 })

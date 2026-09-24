@@ -30,6 +30,7 @@ export function RematchForm({
   mediaKind,
   linked,
   initial,
+  autoFocus = false,
   onCancel,
   onDone,
 }: {
@@ -41,6 +42,11 @@ export function RematchForm({
   /** 它現在在媒體庫裡嗎（決定要不要先確認）。 */
   linked: boolean
   initial?: { season: number | null; episode_start: number | null; episode_end: number | null }
+  /**
+   * 按一顆鍵才打開的（Media 詳情的「修正」）：焦點進到第一格，否則它留在一顆已經不在的按鈕上（M2 票 16 audit P2）。
+   * 攤在列上的那一種（`/review` 的對不到）不要：進頁就把焦點搶走。
+   */
+  autoFocus?: boolean
   onCancel?: () => void
   onDone: (said: string) => void
 }) {
@@ -96,6 +102,7 @@ export function RematchForm({
           </label>
           <select
             id={selectId}
+            autoFocus={autoFocus}
             value={action}
             onChange={(event) => setAction(event.target.value as RematchAction)}
             className="value w-full border-2 border-rule-strong bg-hull px-3 py-2.5 text-sm text-ink focus:border-ink"
@@ -158,7 +165,7 @@ export function RematchForm({
           <div className={CONFIRM_ACTIONS}>
             <PrimaryButton
               type="button"
-              disabled={busy}
+              busy={busy}
               onClick={() => {
                 close()
                 apply.mutate()
@@ -173,7 +180,7 @@ export function RematchForm({
         </ConfirmPanel>
       ) : (
         <div className="flex flex-wrap gap-2">
-          <GhostButton ref={trigger} type="submit" disabled={busy}>
+          <GhostButton ref={trigger} type="submit" busy={busy}>
             {busy ? t('rematch.working') : t('rematch.apply')}
           </GhostButton>
           {onCancel && (

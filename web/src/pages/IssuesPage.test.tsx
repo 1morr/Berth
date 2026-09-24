@@ -2,7 +2,7 @@ import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import type { Issue, ReconcileStatus } from '../api/issues'
+import { reconcileQueryOptions, type Issue, type ReconcileStatus } from '../api/issues'
 import { HEALTHY, stubApi, type StubRoute } from '../test/fetch'
 import { renderApp } from '../test/render'
 
@@ -187,6 +187,27 @@ describe('待處理頁', () => {
     await userEvent.click(within(row).getByRole('button', { name: '重新鏈接' }))
 
     await waitFor(() => expect(screen.queryByRole('article')).not.toBeInTheDocument())
+  })
+
+  // M3 票 06：修好之後 Media 詳情的入庫狀態要跟著變；那一份快取 5 分鐘內不重抓。
+  it('修好之後詳情頁那一份要重問', async () => {
+    let listed = [issue()]
+    render({
+      [ISSUES]: () => ({ body: listed }),
+      'POST /api/issues/1/resolve': () => {
+        listed = []
+        return { body: issue({ status: 'resolved', actions: [] }) }
+      },
+    })
+    const { queryClient } = renderApp('/issues')
+    queryClient.setQueryData(['media', 'tv:120089'], { id: 'tv:120089' })
+    const row = await screen.findByRole('article')
+
+    await userEvent.click(within(row).getByRole('button', { name: '重新鏈接' }))
+
+    await waitFor(() =>
+      expect(queryClient.getQueryState(['media', 'tv:120089'])?.isInvalidated).toBe(true),
+    )
   })
 
   it('修不好的時候那一列留著，並說出為什麼', async () => {
@@ -717,6 +738,27 @@ describe('對帳橫幅', () => {
 
     await waitFor(() => expect(sent(stub, START)).toBe(1))
     expect(await screen.findByRole('button', { name: '對帳中…' })).toBeInTheDocument()
+  })
+
+  // M2 票 16 audit P3（M3 票 06）：上一輪早就跑完了，進頁時不必因為「看到一輪」再問一次清單。
+  it('進頁時清單只問一次', async () => {
+    const stub = render({ [RECONCILE]: { body: finished() } })
+    renderApp('/issues')
+
+    await screen.findByText(/帳本與磁碟對得上/)
+    await new Promise((resolve) => setTimeout(resolve, 50))
+
+    expect(sent(stub, ISSUES)).toBe(1)
+  })
+
+  it('看著的時候跑完一輪，清單重問一次：那一輪開出來的要出現在下面', async () => {
+    const stub = render({ [RECONCILE]: { body: finished() } })
+    const { queryClient } = renderApp('/issues')
+    await screen.findByText(/帳本與磁碟對得上/)
+
+    queryClient.setQueryData(reconcileQueryOptions().queryKey, finished({ id: 2 }))
+
+    await waitFor(() => expect(sent(stub, ISSUES)).toBe(2))
   })
 
   it('上一輪還在跑的時候說得出來', async () => {

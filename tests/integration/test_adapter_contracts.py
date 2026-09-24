@@ -2888,7 +2888,8 @@ def test_tmdb_absolute_numbers_follow_the_order_field_even_with_gaps() -> None:
 # 參數另有一份拿掉或換值的錄製，兩份不同才證明得了伺服器真的照它過濾——`/Items` 那一族會靜默忽略
 # 不認得的參數。
 
-#: `useritems-resume.watching.json` 錄製時的查詢（首頁：不帶 `parentId`）。
+#: `useritems-resume.watching.json` 錄製時的查詢（不帶 `parentId` 的那一輪；契約測試轉呼叫時
+#: 另外補上 `parentId`，respx 只認路徑，fixture 內容照樣用）。
 RESUME_QUERY = {
     "userId": RESTRICTED_USER,
     "limit": "12",
@@ -2905,7 +2906,7 @@ BRAVO_SHOW = "6d616414836b339f17e139c3b00fd2ae"
 CUTOFF = datetime(2025, 9, 17, 14, 39, 58, 123000, tzinfo=UTC)
 
 
-async def resume(library_id: str | None) -> tuple[JellyfinItem, ...]:
+async def resume(library_id: str) -> tuple[JellyfinItem, ...]:
     client = jellyfin_client("key")
     try:
         return await client.resume(user_id=RESTRICTED_USER, library_id=library_id, limit=12)
@@ -2913,7 +2914,7 @@ async def resume(library_id: str | None) -> tuple[JellyfinItem, ...]:
         await client.aclose()
 
 
-async def next_up(library_id: str | None, cutoff: datetime = CUTOFF) -> tuple[JellyfinItem, ...]:
+async def next_up(library_id: str, cutoff: datetime = CUTOFF) -> tuple[JellyfinItem, ...]:
     client = jellyfin_client("key")
     try:
         return await client.next_up(
@@ -2925,23 +2926,6 @@ async def next_up(library_id: str | None, cutoff: datetime = CUTOFF) -> tuple[Je
 
 @respx.mock
 @pytest.mark.asyncio
-async def test_jellyfin_resume_for_the_whole_account_carries_no_parent_id() -> None:
-    """不帶 `parentId` 時 Jellyfin 照這個人的媒體庫限縮（研究 §2）：Anime 裡看到一半的那集不在。"""
-    route = respx.get(f"{JELLYFIN_URL}/UserItems/Resume").respond(
-        200, text=read_fixture("http/jellyfin/useritems-resume.watching.json")
-    )
-
-    items = await resume(None)
-
-    assert dict(route.calls.last.request.url.params) == RESUME_QUERY
-    assert [(item.id, item.type) for item in items] == [
-        (FRIEREN_EPISODE, "Episode"),
-        (FOXTROT_MOVIE, "Movie"),
-    ]
-
-
-@respx.mock
-@pytest.mark.asyncio
 async def test_jellyfin_resume_with_video_only_has_no_seasons_or_series() -> None:
     """`mediaTypes=Video`：不帶它時 Resume 混進三季與三部劇（研究 §1.2，12.1.0 同樣）。"""
     route = respx.get(f"{JELLYFIN_URL}/UserItems/Resume").respond(
@@ -2949,7 +2933,7 @@ async def test_jellyfin_resume_with_video_only_has_no_seasons_or_series() -> Non
     )
     mixed = json.loads(read_fixture("http/jellyfin/useritems-resume.watching.mixed.json"))["Items"]
 
-    items = await resume(None)
+    items = await resume(TV_LIBRARY)
 
     assert route.calls.last.request.url.params["mediaTypes"] == "Video"
     assert {item.type for item in items} == {"Episode", "Movie"}
@@ -2978,7 +2962,7 @@ async def test_jellyfin_an_episode_under_way_reads_as_the_show_the_numbers_and_h
         200, text=read_fixture("http/jellyfin/useritems-resume.watching.json")
     )
 
-    frieren, foxtrot = await resume(None)
+    frieren, foxtrot = await resume(TV_LIBRARY)
 
     # dummy 媒體樹的集沒有 NFO，Jellyfin 拿劇名當集名。
     assert (frieren.series_name, frieren.name, frieren.season, frieren.episode_start) == (
@@ -3008,15 +2992,15 @@ async def test_jellyfin_an_episode_under_way_reads_as_the_show_the_numbers_and_h
 
 @respx.mock
 @pytest.mark.asyncio
-async def test_jellyfin_next_up_for_the_whole_account_follows_jellyfin_web() -> None:
-    """不帶 `parentId` / `seriesId`（研究 §2）；`enableResumable=false`：看到一半的集只在
+async def test_jellyfin_next_up_follows_jellyfin_web() -> None:
+    """不帶 `seriesId`（研究 §2）；`enableResumable=false`：看到一半的集只在
     繼續觀看那一列（v12.0 `TVSeriesManager.DetermineNextEpisode`，原始碼）。順序是劇最後看過的
-    日期，新的在前。"""
+    日期，新的在前。`parentId=<TV>`：這個媒體庫的 id 先對允許清單驗過才帶。"""
     route = respx.get(f"{JELLYFIN_URL}/Shows/NextUp").respond(
         200, text=read_fixture("http/jellyfin/shows-nextup.watching.json")
     )
 
-    items = await next_up(None)
+    items = await next_up(TV_LIBRARY)
 
     assert dict(route.calls.last.request.url.params) == {
         "userId": RESTRICTED_USER,
@@ -3027,6 +3011,7 @@ async def test_jellyfin_next_up_for_the_whole_account_follows_jellyfin_web() -> 
         "enableResumable": "false",
         # jellyfin-web 送 `Date.toISOString()` 的形狀。
         "nextUpDateCutoff": "2025-09-17T14:39:58.123Z",
+        "parentId": TV_LIBRARY,
     }
     assert [(item.series_name, item.season, item.episode_start) for item in items] == [
         ("Bravo Show", 1, 2),
@@ -3053,7 +3038,7 @@ async def test_jellyfin_next_up_leaves_out_shows_last_watched_before_the_cutoff(
         200, text=read_fixture("http/jellyfin/shows-nextup.watching.cutoff.json")
     )
 
-    items = await next_up(None, cutoff=datetime(2026, 2, 15, tzinfo=UTC))
+    items = await next_up(TV_LIBRARY, cutoff=datetime(2026, 2, 15, tzinfo=UTC))
 
     assert route.calls.last.request.url.params["nextUpDateCutoff"] == "2026-02-15T00:00:00.000Z"
     assert [item.series_name for item in items] == ["Bravo Show"]
@@ -3079,7 +3064,7 @@ async def test_jellyfin_next_up_without_an_items_array_is_not_jellyfin() -> None
     respx.get(f"{JELLYFIN_URL}/Shows/NextUp").respond(200, json={"Nothing": []})
 
     with pytest.raises(ProtocolMismatchError):
-        await next_up(None)
+        await next_up(TV_LIBRARY)
 
 
 # --- M1.5 票 08：Media 詳情的觀看區（研究 library-browsing.md §2、§4.1、§10）-------------

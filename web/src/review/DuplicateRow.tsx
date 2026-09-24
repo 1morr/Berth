@@ -114,7 +114,7 @@ export function DuplicateRow({
           <GhostButton
             key={decision}
             type="button"
-            disabled={busy}
+            busy={busy}
             onClick={() => decide.mutate(decision)}
           >
             {busy ? t('review.duplicate.working') : t(`review.duplicate.action.${decision}`)}

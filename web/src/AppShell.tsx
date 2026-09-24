@@ -106,7 +106,7 @@ function Identity() {
         {/* 連 `/settings` 而不是第一個分頁：前綴比對讓它在兩個設定頁上都是當前頁（票 14a）。 */}
         {me.data.role === 'admin' && <NavLink to="/settings">{t('nav.settings')}</NavLink>}
       </nav>
-      <GhostButton type="button" disabled={leave.isPending} onClick={() => leave.mutate()}>
+      <GhostButton type="button" busy={leave.isPending} onClick={() => leave.mutate()}>
         {leave.isPending ? t('nav.signingOut') : t('nav.signOut')}
       </GhostButton>
       <LanguageToggle />

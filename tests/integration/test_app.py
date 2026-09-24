@@ -114,6 +114,36 @@ class TestFrontend:
         assert json.loads(response.text)["detail"]
 
 
+class TestCompression:
+    """前端的 JS 一整包七百多 KB，壓縮後約兩百（M2 票 16 audit，M3 票 06）。
+
+    Berth 自己送靜態檔，前面不一定有代理替它壓。
+    """
+
+    @pytest.fixture
+    def bundle(self, web_root: Path) -> str:
+        text = "export const words = " + json.dumps(["berth"] * 2000)
+        (web_root / "assets" / "bundle.js").write_text(text, encoding="utf-8")
+        return text
+
+    def test_the_frontend_bundle_is_sent_gzipped(self, client: TestClient, bundle: str) -> None:
+        with client:
+            response = client.get("/assets/bundle.js", headers={"Accept-Encoding": "gzip"})
+
+        assert response.headers["content-encoding"] == "gzip"
+        assert int(response.headers["content-length"]) < len(bundle) // 5
+        assert response.text == bundle
+
+    def test_a_client_that_cannot_unzip_gets_it_plain(
+        self, client: TestClient, bundle: str
+    ) -> None:
+        with client:
+            response = client.get("/assets/bundle.js", headers={"Accept-Encoding": "identity"})
+
+        assert "content-encoding" not in response.headers
+        assert response.text == bundle
+
+
 class TestApiCaching:
     """`/api` 底下的回應一律 `no-store`（票 10）。
 

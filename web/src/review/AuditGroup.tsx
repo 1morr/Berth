@@ -60,11 +60,7 @@ export function AuditGroup({ rows, onDone }: { rows: readonly AuditReviewRow[]; 
         </ul>
       }
     >
-      <GhostButton
-        type="button"
-        disabled={pending}
-        onClick={() => confirm(rows.map((row) => row.ref))}
-      >
+      <GhostButton type="button" busy={pending} onClick={() => confirm(rows.map((row) => row.ref))}>
         {pending ? t('review.audit.working') : t('review.audit.confirmAll')}
       </GhostButton>
     </QueueRow>
