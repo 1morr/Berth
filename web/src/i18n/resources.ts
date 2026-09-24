@@ -2279,7 +2279,7 @@ const en: Translations<typeof zhHant> = {
     },
   },
   routes: {
-    title: 'Library paths',
+    title: 'Routes',
     lede: {
       bundled:
         'Each of the three libraries Berth created becomes a route: finished downloads are hard-linked into its write target. Pressing this creates the qBittorrent categories and links a real file, proving all three containers see one file system.',
@@ -2318,7 +2318,7 @@ const en: Translations<typeof zhHant> = {
       tvdb: 'This library has a TVDB metadata fetcher. Berth follows TMDB, and the two number seasons and episodes differently.',
       noPath: 'This library has no path on Jellyfin.',
       routed:
-        'Already has a route: the wizard only adds, it never changes or deletes one. If it was a mistake, use the delete under that route below; once setup is done, manage routes under Settings → Library paths.',
+        'Already has a route: the wizard only adds, it never changes or deletes one. If it was a mistake, use the delete under that route below; once setup is done, manage routes under Settings → Routes.',
       addBerthPath: 'Add a Berth path',
       adding: 'Adding…',
       addHint:
@@ -3591,7 +3591,7 @@ const en: Translations<typeof zhHant> = {
       },
     },
     routes: {
-      title: 'Library paths',
+      title: 'Routes',
       count_one: '{{count}} route',
       count_other: '{{count}} routes',
       expand: 'Show checks',
@@ -3673,7 +3673,7 @@ const en: Translations<typeof zhHant> = {
     },
   },
   routeSettings: {
-    title: 'Library paths',
+    title: 'Routes',
     lede: 'Each route is one Jellyfin library plus one write target, and a library can have several — one per disk, say. A disabled route takes no new downloads; a route that downloads or imported files still point at cannot be deleted.',
     empty:
       'No routes yet. Create them in the last berth of the setup wizard, so Berth has somewhere to write.',
