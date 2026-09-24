@@ -282,8 +282,8 @@ primary、uptime 儀表板的折線圖與綠色勾勾牆、訊息塊左緣的粗
 - **甲板 `deck`**：抬起一階的中性面——面板抬頭列、中性色塊、複製鍵、當前導覽項。
 - **艙井 `well`**：下沉一階的中性面——所有面板、卡片、纜繩列、訊息塊的內部底色。
 - **橫線 `rule`**：一般分隔線與靜態邊框（`border-2`）。
-- **重橫線 `rule-strong`**：分區的重線、失敗時的邊框、主要按鈕的輪廓。對兩個主題的底色都有 6.4:1，
-  滿足 WCAG 2.2 非文字對比 3:1。
+- **重橫線 `rule-strong`**：分區的重線、失敗時的邊框、主要按鈕的輪廓、輸入框的邊框。深色對 `deck` / `hull` / `well` 是 3.33 / 3.95 / 4.51:1，
+  亮色 6.46:1（M2 票 16 的 audit 重量；之前寫的「兩個主題都 6.4:1」只對亮色），都滿足 WCAG 2.2 非文字對比 3:1。
 - **字 `ink` / 弱字 `ink-dim`**：主要與次要文字。`ink-dim` 用在標籤、端點、提示，不用在必須讀清楚的值。
 
 ### Named Rules
@@ -429,6 +429,14 @@ flex / grid 子項的最小寬度，一串沒有空格的發佈名在 390px 上�
 重新 Tab 一遍（票 15 實測）。確認裡要重述會被寫死的東西：送單的確認印出 Route 名與資料夾名，
 因為選 Route 的下拉早就捲出畫面了。
 
+**The Focus Takes The Next Row Rule（列消失，焦點落在接替的那一列）。** 工作清單上處理完的那一列會消失，按下去的
+那一顆跟著它一起走——`useInPlaceConfirm` 只管得到「取消」那條路，成功之後觸發鍵已經不在了。所以會讓列消失的清單，
+在**不會跟著清單消失的那一層**掛 `useFocusAfterRemoval` 的 callback ref：焦點掉回 `body` 時，改落在接替那個位置的
+那一列（列是 `<article tabIndex={-1}>`）；一列都不剩時落在那一層裡的 `<h1 tabIndex={-1}>`，沒有 `<h1>` 的（媒體庫的
+子集）落在那一層自己（`tabIndex={-1}`）。只在焦點**真的掉了**時動手：使用者自己點到別處、或確認收起時焦點回到觸發鍵，
+都不會被搶走。畫面上已經沒有東西說「成了」，所以同一層另有一行 `sr-only` 的 `aria-live` 說結果。沒有這一步，
+清一件就要從頁首重新 Tab 一次（M2 票 16 的 critique）。
+
 **The Needs-You Floats Up Rule（需要你的事浮到摘要層）。** 需要人處理的事不能藏在展開之後才看得到。
 一筆已入庫、卻有 medium 自動入庫檔案待人看一眼的 Job，狀態色塊照樣是綠的「已入庫」，旁邊另塗一塊
 `assigned` 的「N 個待確認」——兩件事各一塊，同樣出現在媒體庫牆的標識帶上。Route 設定頁的紅燈與停用列
@@ -550,9 +558,11 @@ hover 與焦點也是同一個語彙（牆卡片、Ghost 按鈕、導覽方塊�
 
 ### Inputs / Fields
 
-- **Style:** `hull` 底 + `border-2 border-rule` + `.value` 等寬字，`padding: 0.625rem 0.75rem`。
-  標籤在上方，`.label text-ink-dim`。
-- **Focus:** 邊框換 `rule-strong`，外加全域雙環。
+- **Style:** `hull` 底 + `border-2 border-rule-strong` + `.value` 等寬字，`padding: 0.625rem 0.75rem`。
+  標籤在上方，`.label text-ink-dim`。**邊框是 `rule-strong` 不是 `rule`**：欄位常放在同樣是 `hull` 的
+  展開區裡，邊框是「這裡可以輸入」的唯一線索，而 `rule` 對 `hull` 只有 2:1，低於 WCAG 1.4.11 的 3:1
+  （M2 票 16 的 audit 量到的；`rule-strong` 深色 3.95:1、淺色 6.46:1）。
+- **Focus:** 邊框換 `ink`，外加全域雙環。
 - **Error:** 邊框換 `blocked`，`aria-invalid`，錯誤訊息以 `role="alert"` + `aria-describedby` 掛在欄位下方，
   文字用 `blocked-ink`。
 - **Disabled:** `well` 底 + `ink-dim` 字。
@@ -595,7 +605,7 @@ ISO 6346 標識在哪個語言都是同一串字母數字）、狀態標籤（`.
 其餘已繫上的纜繩不動。精靈第 7 步與健康頁跑的是同一組檢查、用同一個元件，所以
 「精靈當時是綠的、現在紅了」在畫面上是同一種東西。搜尋 torrent 時每個關鍵字也是一條纜繩。
 
-### 牆卡片（`MediaTile` / `InventoryTile`）
+### 牆卡片（`MediaTile` / `InventoryTile`，底行外框 `Tile`）
 
 一格是一個貨櫃：上方 2:3 海報是塗裝，下方標識帶是噴在箱體上的編號——同一個語彙，不是「圖片加說明文字」。
 - **框:** 每一格自己的 `border-2 border-rule` + `well` 底；hover / focus 時框換 `rule-strong`。不用整塊塗底再透 `gap-px`。
@@ -740,8 +750,9 @@ Thumb / Backdrop / 劇照），下方同一條標識帶，框與底同牆卡片�
   上面一句「較早的 N 筆事件在詳情頁」）→ 整串 hash 的 `CopyLine` → 「下載詳情」`GHOST_LINK`。時間線展開時才請求。
   **計劃與動作不在這裡**（M2 票 12）：它們只在 `/jobs/:hash`。
 - **Job 詳情頁 `/jobs/:hash`（M2 票 12）:** `max-w-[80rem]`。回下載列表（`GHOST_LINK`）→ 身分帶（狀態色塊 + 待確認色塊、
-  `h1` 是發佈名（`PAGE_TITLE` + `wrap-anywhere`）、同一行實測值（作品在這裡是連結）、`dl` 的送單的人 / 服務原文 /
-  hash，底下一條 `border-b-2 border-rule-strong`）→ 動作（Ghost 一排；刪除自己一行、確認區 `max-w-3xl`、就地展開在
+  `h1` 是發佈名（`PAGE_TITLE` + `wrap-anywhere`）、同一行實測值（作品在這裡是連結）、待審核時一條到 `/review` 的
+  `GHOST_LINK`（不是管理員時換成一行 `ink-dim` 說在等管理員）、`dl` 的送單的人 / 服務原文（`blocked-ink`）/
+  hash（`CopyLine`），每一格是工作清單列的那個 `DetailLine`，底下一條 `border-b-2 border-rule-strong`）→ 動作（Ghost 一排；刪除自己一行、確認區 `max-w-3xl`、就地展開在
   身分帶正下方）→ `lg` 以上 `7fr / 5fr` 兩欄：左「檔案與決策」（`JobPlan`）+「計劃歷史」，右「時間線」；窄版照同一順序
   疊成單欄。每一段的 `h2` 是 `.label` 壓在 `border-b-2 border-rule-strong` 上。
 - **計劃（`JobPlan`）:** 抬頭是計劃狀態中性小色塊 + 「N 個檔案 · 高 / 中 / 低」計數；預估與「為什麼停下來」只在成立時出現。
@@ -788,11 +799,42 @@ Thumb / Backdrop / 劇照），下方同一條標識帶，框與底同牆卡片�
 - **刪除:** 被引用的 Route **不給刪除鍵**，直接說「刪不得、為什麼」，還啟用著就旁邊給一顆 Ghost「停用」當出路。
   沒被引用時是 `ConfirmAction` 就地確認。刪掉的那一列會卸載，所以「已刪除」由頁面那一層宣告。
 
+### 工作清單列（`QueueRow` / `DetailLine`）
+
+`/review` 的每一類（計劃、對不到、重複、待確認）、`/issues`，以及媒體庫的「待審 / 對不到」子集是**同一種列、同一份元件**
+（`components/QueueRow.tsx`），各頁只給內容。等到手上有兩個真實案例（`IssueRow`、`AuditRow`）才抽出來。
+- **外殼:** `<article tabIndex={-1}>`，`well` 底 + `border-2 border-rule` + `px-4 py-3`，列之間 `gap-3`。**不塗信號色**：
+  清單上每一列都在等人，塗漆不區分任何東西（The Role Is Not A State Rule）；不看顏色也讀得出來靠類別標籤的模板字。
+- **由上到下四格:** ① 識別：中性色塊的類別標籤（`.label` + `deck`）+ 標題（`.value wrap-anywhere`）；② 一句話：理由翻成的
+  句子 `Dot` 「多久以前」（`text-sm ink-dim`）；③ 展開：機器字串收在原生 `<details>`（摘要只有 `.label`「展開」），裡面是
+  `hull` 底的 `dl`，每一格一條 `DetailLine`（`.label` 欄名 + `.value text-xs wrap-anywhere` 值，`sm` 以上 `10rem` 欄名兩欄，
+  The Machine String Rule）；④ 動作列（`flex-wrap`，順序照後端給的）。**工作本身就是一張表或一個表單的那一類**
+  （計劃的逐列表、對不到的修正表單）以 `body` 插在 ② 與 ③ 之間、不收進展開——收起來等於多一次點擊——也不另有動作列。
+- **失敗時這一列留著**，動作列上方就地多一塊 `blocked` 的 `Notice` 說為什麼（The Failure Expands In Place Rule）。
+- **列不知道自己在哪一段：** 分段是頁面的事（`/review` 分段，段標題是 `.label` + 計數壓在 `border-b-2 border-rule-strong` 上；
+  媒體庫的子集不分段），標題層級由呼叫端給——分段底下 `h3`，不分段 `h2`。
+- **處理完就消失：** 清單外層掛 `useFocusAfterRemoval`（The Focus Takes The Next Row Rule）。
+
 ### 就地確認（`ConfirmAction` / `useInPlaceConfirm` / `ConfirmPanel`）
 
-觸發鍵是 Ghost；展開後是 `well` 底 + `border-2 border-rule-strong` + `0.75rem` 內距的區塊：一段
-`body-small` 的後果說明，底下主要鍵（`minmax(0,14rem)`）與取消鍵，窄版疊成一欄。焦點與 `Esc` 的行為見
-The Focus Follows The Confirm Rule。送單確認（`SubmitAction`）是同一個 hook、同一個外殼（`ConfirmPanel`）。
+觸發鍵是 Ghost；展開後是 `well` 底 + `border-2 border-rule-strong` + `0.75rem` 內距、`gap-3` 的區塊，最後一排是
+`CONFIRM_ACTIONS`：主要鍵（`minmax(0,14rem)`）與取消鍵，窄版疊成一欄。焦點與 `Esc` 的行為見
+The Focus Follows The Confirm Rule。**外殼只有一份（`ConfirmPanel`），裝的內容有四種形狀**，`aria-labelledby` 一律指向
+說明「按下去會怎樣」的那一句：
+- **一句後果**（`ConfirmAction`、`WatchToggle`、`RematchForm`）：一段 `text-xs` 的後果說明，接兩顆鍵。
+- **重述會被寫死的值**（`SubmitAction`）：後果之外，把 Route 名與資料夾名（`.value wrap-anywhere`）再印一次。
+- **先選再確認**（`WorkPicker`，`/issues` 的認領類動作）：`.label` 標題 + 搜尋欄 + 最多八個候選（整行的按鈕、`aria-pressed`，
+  選中的重線 + `deck` 底）。**沒選之前主要鍵不畫**（那一格留空，取消鍵不移位）——按下去才被拒的鍵不該畫出來；
+  選了之後主要鍵說出選的是哪一部。
+- **範圍 + 即時估算**（`JobDelete`，一個元件掛在 `/jobs/:hash` 的動作區與 Media 詳情的版本清單，確認區 `max-w-3xl`）：
+  `.label text-ink` 標題 + `text-xs ink-dim` 導言 → 一疊原生 `Checkbox`（每個帶一行提示，**預設全不勾**）→ 估算塊 → 兩顆鍵。
+  互相依賴的勾選框鎖住時照樣畫出來，提示換成解鎖的方法；取消上游時下游一起取消，不留一個送出去必被拒的勾。
+  估算塊是 `border-l-2 border-rule pl-3` 的內縮段、`aria-live="polite"`，**展開那一刻才問**（逐一量過，慢而準）：等的時候
+  是一句說得出正在量什麼的話，不是轉圈；**主要鍵不等估算**——估算是參考，不是前提，算不出來照樣刪得下去。
+  數量行是 `.value text-xs`；「會空出多少」跟著勾選即時重算，只勾一半就是 0，不是一半。
+  拒絕以 `role="alert"` 的 `blocked-ink` 留在區塊裡；成功時區塊收起，觸發鍵下方一行 `aria-live` 說**後端回報真的做掉了什麼**，
+  不是勾選的回聲。
+
 可展開列摘要上的「展開 / 收起」是 `ExpandHint`，「N 個待確認」是 `AuditChip`——各一份，不在列元件裡各抄。
 
 ### 訊息塊（`Notice`）
@@ -840,6 +882,7 @@ The Focus Follows The Confirm Rule。送單確認（`SubmitAction`）是同一�
 - **Do** 讓需要注意的列把線換成 `rule-strong`，紅色只留給狀態色塊（The Heavier Line Rule）。
 - **Do** 讓每個就地確認走 `useInPlaceConfirm` 與 `ConfirmPanel`：展開時焦點進去、收起時回觸發鍵、`Esc` 只收起確認
   （The Focus Follows The Confirm Rule）。
+- **Do** 讓處理完就消失的清單列把焦點交給接替的那一列，清單空了交給頁面的 `h1`（The Focus Takes The Next Row Rule）。
 - **Do** 把「需要你」的計數塗在摘要層，不要只放在展開區裡（The Needs-You Floats Up Rule）。
 - **Do** 讓窄版少掉的欄收成一行帶標籤的 `Dot` 分隔值，一份 DOM 兩種版面。
 - **Do** 讓 `Cutaway` 的 `level` 跟著它所在頁面的標題層級，不跳級。
@@ -883,7 +926,7 @@ The Focus Follows The Confirm Rule。送單確認（`SubmitAction`）是同一�
   `web-src-pages-healthpage-tsx.md` 已不再有這句話；setup 那份尚未更新。
 
 - 實測對比下限（2026-09-17，探索、下載、Media 詳情、媒體庫、Route 設定五頁，深淺兩主題 × 1280 / 390 全部量過）：
-  **深色最低 6.53:1、亮色最低 5.71:1**；`rule-strong` 對兩個底色 6.4:1。
+  **深色最低 6.53:1、亮色最低 5.71:1**；`rule-strong` 見上面「重橫線」那一條（深色 3.33–4.51:1、亮色 6.46:1）。
   這些是**現況的最低值**，不是目標值；新畫面仍以 AA 數值為驗收條件。
 
 - **媒體庫牆的格子跟著自己的內容長，同排下緣不再對齊**（M1.5 票 11）。牆卡片那一節說
