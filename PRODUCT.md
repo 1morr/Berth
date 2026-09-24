@@ -59,7 +59,7 @@ Jellyfin 正確顯示」。長期指標是解析 benchmark 的**誤自動入庫�
 
 明確不做（brief §18）：品質自動升級替換、內嵌播放器、多人審批、非影片媒體、
 complete/incomplete 鏡像 library 結構、remote path mapping、TVDB / AniList 以外的多 provider、
-字型安裝與字幕解壓、BDMV 原盤處理。通知與 AI 助理（側面板、外部對話）不是不做，是 M5–M7（brief §14、§17）。
+字型安裝與字幕解壓、BDMV 原盤處理。巡檢與通知、AI 核心、側面板與外部對話不是不做，是 M4–M7（brief §14、§17）。**沒有 AI 也完整可用**：AI 只替人按審核與待處理頁上的按鈕；平常看片用 Jellyfin App，Berth 只在加新作品或收到「等你處理」時打開。
 
 ## Operating Context
 
@@ -88,11 +88,11 @@ complete/incomplete 鏡像 library 結構、remote path mapping、TVDB / AniList
 | M1 手動全流程 | 探索 → 搜尋 → 送單 → 輪詢 → 規則 planning → 硬鏈接 → 掃描 → 可播放 |
 | M1.5 媒體庫瀏覽 | 整個 Jellyfin 媒體庫疊上 Berth 狀態、繼續觀看、已看 / 未看、選季選集（**2026-09-19 完成**） |
 | M2 修正與對帳 | 審核佇列、Unmatched 指派、rematch、Reconciler、刪除範圍、重新入庫、`rebuild-ledger`、Job 詳情頁（**2026-09-24 完成**） |
-| M3 RSS | Mikan / Nyaa adapter、Rule、去重、一次性連結、dry-run |
-| M4 AI fallback | AI Plan、驗證、快取、預算、Event 記帳（fallback 解析器，不是 agent） |
-| M5 通知 | `events` 訂閱者、channel adapter（Telegram / Discord 擇一）、每人的訂閱設定 |
-| M6 AI 助理 | agent 核心、提案、審核佇列的 AI 模式、側面板、工具權限模型 |
-| M7 外部對話 | 聊天軟體裡與助理對話，提案卡帶按鈕，個人 API token |
+| M3 RSS | Mikan / Nyaa / acg.rip adapter、RSS Series 自動綁定、排除條件、去重、補舊集、一次性連結（2026-09-24 重新設計） |
+| M4 巡檢與通知 | 每日程式檢查、每週週報；「可以看了」「有 N 件等你處理」；`events` 訂閱者、channel adapter（Telegram / Discord 擇一）、每人的訂閱設定（不需要 AI） |
+| M5 AI 核心 | 規則層 → AI → 人的三層漏斗；AI 替人按審核頁的按鈕：可逆的通過驗證後自己做、不可逆的要人；影子模式、AI 活動與撤銷（2026-09-24 改） |
+| M6 Issue 與側面板 | Issue 交給 AI、側面板對話、不可逆的動作以提案確認 |
+| M7 外部對話與 MCP | 聊天軟體裡與助理對話，提案卡帶按鈕，個人 API token；MCP server |
 
 **技術限制**：
 

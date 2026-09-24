@@ -132,13 +132,13 @@ adapters ──► domain                  （不 import services、models；回
   **帳本自己站得住**（票 12）：`job_hash` 是弱引用（刪 Job 與清帳本是刪除範圍裡兩個獨立的旗標）；`action`、季集與 Tags 抄一份進來，因為 review 之後重新規劃會把 `plan_items` 整份換掉，`plan_item_id` 因此是 `SET NULL`。`resolve_attempts` / `resolve_after` 是 `jellyfin_resolver` 的排程（§3.2），要活過重啟所以落在這一列；`None` 代表沒有要反查的事（找到了、用完了，或本來就不是一個 item——字幕與特典）。**inode 與 device 存 TEXT**：Windows 的 `st_dev` 實測 `11550084160259632778`，超過 SQLite INTEGER 的有號上限，而這兩欄只比相等。`target_path` 是容器裡的 POSIX 路徑，也就是 Jellyfin 回報 `Path` 的形狀。
   `jellyfin_series_id`（票 13）是劇集正片那一集所屬的 Series item：媒體庫的深連結開的是作品而不是某一集，而反查時 `/Items` 的 Episode 自己帶 `SeriesId`，所以與 item id 一起寫下，讀頁面時不必再問 Jellyfin。
   `jellyfin_version_name`（票 14b）是同一個道理：Jellyfin 12 起劇集也原生合併多版本，而版本選單上的名字是**它算的**（去掉各版本檔名的共同前綴，12.0 與 12.1 的算法還不一樣）。反查那一刻 `MediaSources[].Name` 就在手上，抄下來就不必自己重算，也不必為了一行字再問一次（brief §7.7、§20.9）。空字串＝還沒收錄。
-- `events`：`id`、`job_hash`（nullable）、`media_id`（nullable）、`type`、`actor`（user id / `system` / `rss:<rule>` / `ai`）、`payload_json`、`created_at`。索引 `(job_hash, created_at)`。
+- `events`：`id`、`job_hash`（nullable）、`media_id`（nullable）、`type`、`actor`（user id / `system` / `rss:<series>` / `ai`）、`payload_json`、`created_at`。索引 `(job_hash, created_at)`。
 
 ### 2.4 RSS 與問題
 
-- `rss_feeds`：`id`、`name`、`url`、`kind`（`mikan` / `nyaa` / `generic`）、`interval_sec`、`enabled`、`last_polled_at`、`last_error`
-- `rss_rules`：`id`、`feed_id`（nullable = 所有 feed）、`media_id`、`route_id`、`include_regex`、`exclude_regex`、`groups_json`（白名單與優先序）、`resolution`、`subtitle_pref`、`season`、`episode_offset`、`policy`（`all_new` / `fill_missing`）、`enabled`、`created_at`
-- `rss_items`：`id`、`feed_id`、`guid`（與 feed 合併 unique）、`title`、`link`、`torrent_url`、`info_hash`、`published_at`、`seen_at`、`release_info_json`、`matched_rule_id`、`job_hash`、`status`（`new` / `matched` / `downloaded` / `ignored` / `unmatched`）
+- `rss_feeds`：`id`、`name`、`url`、`kind`（`mikan` / `nyaa` / `acgrip` / `generic`）、`interval_sec`、`exclude_json`、`enabled`、`last_polled_at`、`last_error`、`primed_at`（第一輪預覽決定過了沒，brief §15）
+- `rss_series`（2026-09-24 取代 `rss_rules`，brief §15）：`id`、`key`（Mikan 是 `mikan:<番組 id>:<字幕組 id>`，其他是標題骨幹 + 字幕組；unique）、`mikan_bangumi_id`、`mikan_subgroup_id`、`title_raw`、`group`、`media_id`（nullable = 待綁定）、`route_id`、`season`、`episode_offset`、`exclude_json`、`confirmed`（第一批審核確認過了沒）、`bound_by`（`system` / 使用者）、`backfilled_at`、`enabled`、`created_at`
+- `rss_items`：`id`、`feed_id`、`guid`（與 feed 合併 unique）、`title`、`link`、`torrent_url`、`info_hash`、`published_at`、`seen_at`、`release_info_json`、`series_id`、`job_hash`、`status`（`new` / `matched` / `downloaded` / `excluded` / `unbound`）
 - `issues`：`id`、`type`（**十三種**，2026-09-22 定十一種、M2 票 09c 加兩種：brief §9.1 對帳的七種 `library_link_missing` / `source_missing` / `inode_mismatch` / `orphan_complete` / `unknown_torrent` / `unmanaged_library_file` / `job_without_files`，管線自己發現的四種 `missing_files` / `client_error` / `client_removed` / `jellyfin_item_unresolved`——M1 `issue_detected` 事件已經在用的 `IssueType`——與 `health_checker` 量出來的兩種 `library_uses_tvdb` / `low_disk_space`；`issues.type` 與事件共用同一個封閉集合）、`job_hash`、`ledger_id`、`path`、`detail_json`、`status`（`open` / `resolved` / `ignored`）、`detected_at`、`resolved_at`、`resolved_by`。 條件自己解除的由系統收（`resolved_by = system`）：健康檢查那兩種；importer 接回帳本某一列時掛在那一列（`ledger_id`）上的 `library_link_missing` / `source_missing` / `inode_mismatch`，與入庫長回帳本時那一筆的 `job_without_files`（M2 票 10）。
   **冪等鍵**是 `(type, subject)`，`subject` 依型別取：有路徑的用 `path`（`library_link_missing` / `source_missing` / `inode_mismatch` / `unmanaged_library_file` 用帳本或檔案的路徑，`orphan_complete` 用目錄路徑）、`unknown_torrent` 與 `client_*` 用 `job_hash` 或 info hash、`job_without_files` 與 `jellyfin_item_unresolved` 用 `job_hash` / `ledger_id`，`library_uses_tvdb` 用那條 Route 的目標路徑（一條 Route 一件，使用者 2026-09-23 拍板），`low_disk_space` 用量的那個根目錄（同一個檔案系統只量一次，complete 先）。**`missing_files` 用 `job_hash`**（2026-09-22 票 05 實作時改判，原本列在「用路徑」那一組）：它有兩條偵測路徑，而 qBittorrent 報 `missingFiles` 的那一條手上一條路徑都沒有——多半正是因為它看不到那個掛載；而它的下一步（重新 recheck / 承認遺失）本來就是整包 torrent 的事。少了哪幾個放在 `detail_json.missing`。**`subject` 是一個存下來的欄位**（票 05）：取出來的值要落在某處，資料庫的 partial unique index 才守得住它（只蓋 `status = 'open'`，決定過的留著當歷史）——同一個 `(type, subject)` 只有一筆 `open`，再偵測到就更新 `detail_json` 與 `detected_at`。`ledger.status.target_missing` 與 Issue 的 `library_link_missing` 是同一件事的兩個角度：帳本那一欄是這一列的現況，Issue 是「要有人決定」的那一件，resolve 之後把帳本那一欄改回 `ok` 或刪掉那一列。**`source_missing` 反過來**（M2 票 09）：帳本那一欄是**按下「標記為已無來源」之後**才改，改了之後對帳就不再為它開 Issue——它是使用者決定過的現況（同刪除範圍只勾「刪 complete 檔案」的結果）；偵測時就改的話，「忽略」之後下一輪就再也不會問了。
 
@@ -269,7 +269,7 @@ files ─► classify ─► (video | subtitle | font | audio | image | archive 
 
 ### 4.4 Offset 偵測與季號來源【決定】
 
-移植 AutoBangumi `offset_detector.py` 的想法：以季內各集 `air_date` 的間隔 > 180 天切出「虛擬季」，若檔名的季/集落在某個虛擬季內，換算為 TMDB 的實際季/集，Candidate 標 `strategy = air_date_offset`、confidence 至多 medium。RSS Rule 的 `episode_offset` 若有值則優先且信心可為 high。
+移植 AutoBangumi `offset_detector.py` 的想法：以季內各集 `air_date` 的間隔 > 180 天切出「虛擬季」，若檔名的季/集落在某個虛擬季內，換算為 TMDB 的實際季/集，Candidate 標 `strategy = air_date_offset`、confidence 至多 medium。RSS Series 的 `episode_offset` 若有值則優先（brief §15：新 RSS Series 的第一批一律進審核，確認過之後才照信心走）。
 
 **180 天這個門檻已被量測支持，不要調小**（M1 票 01，7,833 筆真實釋出）：180 天時整體換算失敗率 8.0%，改成 60 天會惡化到 9.7%。原因是一季內分割兩 cour 的間隔常常不到 180 天，門檻調小會把一季切成兩個虛擬季，季號提示就對不上了（`docs/research/anime-episode-source.md` §6.4）。
 
@@ -286,9 +286,9 @@ files ─► classify ─► (video | subtitle | font | audio | image | archive 
 - **絕對編號換算**：TMDB 沒有 absolute 欄位，只能數播出序位，而 TMDB 與 TVDB 收錄的集數不一定一致（航海王 1181 vs 1177）。這條只影響 16% 的釋出、失敗率 4.4%，維持現況即可，但要標 confidence 至多 medium。**降到 low 看證據，不看 Route**（M1 票 14d，`mapping._doubts`，brief §6.4）：集號 ≤ 第一個正規季的集數（也讀得成後面某季從 01 重數），或檔名的播出日（`ReleaseInfo.air_date`；guessit 開 `date_year_first`，韓國電視台的 `150524` 才讀得成 2015-05-24）與換算出的那一集的 `air_date` 不是同一天（不容忍），兩條各自附一句理由。前一條收窄成「而且標題有認不出的多餘字」量過不成立（`docs/research/profile-effect.md` §6.1.1）。**三種換算不在同一個分支**（M1 票 06）：`absolute_group` 與 `absolute_cumulative` 是「只有集號」時的兩條路，而虛擬季換算要有一個季號才索引得到那一輪播出（`第二季` 對不到任何一季時才輪到它）。brief §6.4 另外提的「以**發佈時間**推測虛擬季」需要索引站給的發佈時間，解析器在 M1 拿不到（票 08 起才有 `published_at`），沒有它就只是換一種猜法，所以沒有做。
 - **數量明顯不符就交給人**（brief §6.5 的 low，M1 票 06）：一季十二集卻對出二十個檔案時，是哪一個檔案讀錯了看不出來，所以整季一起進 review 而不是挑一個代罪的。
 
-### 4.5 AI fallback（M4）
+### 4.5 AI 解析（M5 的第一種 AI 任務）
 
-介面在 M1 就定好：`AiPlanner.propose(context, files, rules_plan) -> Plan | None`，M1 的實作是 `NullAiPlanner`。輸入壓縮（同模式檔案只送樣本 + 數量）、schema 驗證、快取鍵、預算檢查都在 `services/plan.py`，與 provider 無關。
+介面在 M1 就定好：`AiPlanner.propose(context, files, rules_plan) -> Plan | None`（`adapters/ai.py`），M1 的實作是 `NullAiPlanner`，**至今沒有呼叫端**。2026-09-24 起它不再是 `services/plan.py` 裡同步呼叫、結果一律進 review 的 fallback，而是 M5 的 AI 任務「規則層 low 的 Plan」的核心（brief §6.10、§11.6）：planner 判出 low 時開任務，`ai_worker` 叫 `propose`，驗證通過後依任務模式（影子 / 自動）記錄或套用。輸入壓縮（同模式檔案只送樣本 + 數量）、schema 驗證、快取鍵、預算檢查與 provider 無關，住在 services。M3 準備度評估（2026-09-24）點出的缺口開工時要補：`propose` 要能把 tokens 與費用交回給 Event 記帳；理由除了封閉的 `ReasonCode` 還要一欄自由文字；「猜作品」是另一個方法（`PlanItem` 沒有 `media_id`）。
 
 ### 4.6 Benchmark【決定】
 
@@ -728,38 +728,77 @@ M1 帶過來的（票 15 的 critique，2026-09-17，使用者拍板交給這一
 - **A. 跟著上表某張票做**：`duplicate`（07）、Plan item 理由改 code（06）、`list_jobs` 批次（01）、`/jobs/:hash`（11）、`jellyfin_series_id` 回填與「還在掃描」不自更新（08，同一件事）、合併後主條目（08）、`MediaSources` 成本（10，只列一次）、兩個 500（01）、`Season 3 - 46`（01）、M0 的 TVDB 警告與磁碟門檻（08）、大媒體庫三件與篩選後的觀看狀態與刪除帳號（10）、`?filter=` 守衛（12）、P3 九條（02：季表沒 `<caption>`；篩選連結掛 `aria-current="page"`；排序方向 `<select>` 只有 `aria-label`；`ExpandHint` 的字進可存取名稱而 `Dot` 不進；集表「片長」「播出」在 <640px 沒有替代路徑；庫存回應 53 KB `no-store` 無 `ETag`；`TilePlaceholder` 跨目錄 import 且內距差 4px；`routes.cutaway.category` 的 zh-Hant 值是英文；三處硬寫 `alt="TMDB"`）。
 - **B. 開工收尾票 02 的小項**：Route 設定頁表單沒改過時「儲存」仍亮且會重跑五條檢查卻沒說；所有路徑被佔用時「建立並檢查」仍是主動作；確認區「取消」比主動作寬；EN 文案 `Already so` → `Already there`、`Moored` → `Ready`（2026-09-22 使用者改判：`Moored` 只出現在兩個健康標籤上，`Imported` 早已是「已入庫」那一格的字）、`10 of 46 episodes in` → `10 of 46 episodes imported`（驗收是這三句）；EN 子分頁 `Library paths` 改 `Routes`；語言鍵選中態的 `assigned` 黃漆改中性（收掉 DESIGN.md 那條矛盾）；信心在同一塊展開區兩套詞（`信心 high` 與「高信心」）統一；沒接索引站時 `queries` 端點先帶 `problem`；通過 TMDB 閘門後 BTH 3 的詳情列不動；TMDB 與索引站 API key 三處一起改 `PasswordField`；`complete.failed` 缺憑證時錯怪後端；勾選表標出已被佔用的路徑；`HealthPage` / `ServiceSettingsPage` / `SetupPage` 補 `<h1>` 並統一三頁 `h1` 的大小與可見性；非 admin 開 `/settings/*` 靜默 `redirect` 改成帶一句訊息（`routes.tsx` 兩處）；`<summary>` 在無障礙樹是 `generic` 不是 `button[expanded]`（全站 `<details>` 的共同問題，查一次能不能用 `role` 補）；窄版 Route 列截掉路徑尾巴讓三條看起來一樣；健康頁全綠一千像素同一顆綠章重複八次；精靈每一步左欄剖面與右欄纜繩列是同一份清單（重構，可再延）；缺集搜之後關鍵字欄的 placeholder 仍說「留空就用這部作品的各個名字」；`?page=2` 不畫兩列但畫面沒說；電影牆 222 個 Tab 停留點；M1.5 票 01 的 `useritems-resume.restricted.json` / `shows-nextup.restricted.json` 沒有測試引用（補引用或刪）。
 - **C. 延後**：缺集散在六季以上只退回作品名——分批的節奏與 M3 的輪詢預算是同一件事，**移到 §11.4**；頁首不 sticky、`/` 聚焦搜尋之類的快捷鍵、探索頁手機上兩面牆沒有跳轉、「說明散在各處沒有通往文件的出口」——票 15 就判「不排里程碑」，沒有新證據，**不進 M2**；記在這裡是為了不再逐輪重審。
-- **D. M2 收尾（票 16）過完票 01–15 的 Comments 之後延後的**，都不屬 M3 / M4 的範圍，**不排里程碑**，有 repro 或使用者要求再開票：`ROUTE_CHECKS` 仍是手寫字面聯集（收緊要先替 Route 檢查另開 `RouteCheckOut`，票 02 / 02a）；精靈左欄剖面與右欄纜繩列兩份實作（上面 B 組那一條，票 03 仍沒做）；對不到的**字幕**只能忽略、不能指派到某一集（票 08，rematch 的延伸）；`issues.detail_json.action` 一鍵兩義——偵測時是 `PlanAction`、resolve 時被覆寫成按了哪一顆（票 09，改鍵名要動前端）；qBittorrent 5.x 對停住的 torrent `recheck` → `start` 沒實測過（票 09c，下一次有真的 5.x 時量）；`AccountDisabledError` 也涵蓋「帳號被刪掉」，名實不符（票 11，對外的 `account_disabled` 不動）；`.impeccable/design.json` 沒有閘門、跟不上 `DESIGN.md` 已經第四次（票 13，一條比對測試守得住）。
+- **D. M2 收尾（票 16）過完票 01–15 的 Comments 之後延後的**，都不屬 M3 / M5 AI 的範圍，**不排里程碑**，有 repro 或使用者要求再開票：`ROUTE_CHECKS` 仍是手寫字面聯集（收緊要先替 Route 檢查另開 `RouteCheckOut`，票 02 / 02a）；精靈左欄剖面與右欄纜繩列兩份實作（上面 B 組那一條，票 03 仍沒做）；對不到的**字幕**只能忽略、不能指派到某一集（票 08，rematch 的延伸）；`issues.detail_json.action` 一鍵兩義——偵測時是 `PlanAction`、resolve 時被覆寫成按了哪一顆（票 09，改鍵名要動前端）；qBittorrent 5.x 對停住的 torrent `recheck` → `start` 沒實測過（票 09c，下一次有真的 5.x 時量）；`AccountDisabledError` 也涵蓋「帳號被刪掉」，名實不符（票 11，對外的 `account_disabled` 不動）；`.impeccable/design.json` 沒有閘門、跟不上 `DESIGN.md` 已經第四次（票 13，一條比對測試守得住）。
 
 ### 11.4 M3 RSS
 
-範圍：Mikan 與 Nyaa adapter（先抓 fixture 定欄位）、feeds / rules / items 資料流、`rss_poller`、去重、Rule 從 Media 頁建立並即時預覽、一次性 RSS 連結、未匹配 item 綁定 Media、offset 預填。
-驗收：一個當季動漫分別以 Mikan 與 Nyaa feed 全自動追完，含 v2 取代與合集排除。
+範圍（2026-09-24 依 brief §15 重寫）：Mikan、Nyaa、acg.rip adapter（先抓 fixture 定欄位）、feeds / series / items 資料流、`rss_poller`、RSS Series 自動綁定與待綁定清單、三層排除條件、去重、Mikan 的補舊集與每日補漏、新 Feed 的第一輪預覽、RSS Series 的季號與 offset（第一批審核、套用到整個 RSS Series 並重算）、一次性 RSS 連結、從 Media 頁訂閱；播出日比對、片長驗證與 Jellyfin 回驗（見下）；**已確認的 RSS Series 之後的 medium 入庫不再進 audit 清單**（2026-09-24 使用者拍板：第一批確認過之後改由回驗與每日檢查守著，出錯變成 Issue，不必每週打開 Berth 按確認）。
+驗收：一個 Mikan 聚合 feed 加一個 Nyaa 或 acg.rip 搜尋 feed 全自動追完；中途訂閱的一部補齊舊集，之後的新集自動入庫；同一集兩個字幕組、同組 v1 與 v2 都並存；合集被排除；一部 split-cour 在審核裡改正一次之後其餘集數跟著對；一筆發佈時間與換算出的那一集播出日對不上的不自動入庫；Jellyfin 認到的季集與帳本不同時開出 Issue；已確認的 RSS Series 的新集數不出現在 audit 清單。
+
+**入庫前後的三道程式檢查**（2026-09-24 使用者拍板，不需要 AI）：① **播出日比對**——Feed Item 的發佈時間對換算出的那一集的 TMDB 播出日：發佈早於播出日（容忍兩天）一定算錯；連載中的 RSS Series 對到的那一集比同作品最近播出的一集早很多也算可疑。這是抓 split-cour offset 算錯的主要一道：Jellyfin 認集數靠 Berth 取的檔名，Berth 算錯的集數會原樣抄進 Jellyfin，回驗看不出來。可疑的不自動入庫、送審核；BD 版晚幾個月才發會落在這裡，可以接受。與 §11.4 開頭「以發佈時間推測虛擬季」用同一份資料，但驗證比推測簡單可靠。② **片長驗證**——mediainfo 的片長對 TMDB 那一集的片長，差太多不自動入庫；抓的是分類錯誤（預告、NCOP、SP / OVA、兩集合併檔被當成一集正片），抓不到同一季裡算錯的集號；TMDB 沒有那一集片長時跳過。③ **Jellyfin 回驗**——入庫後 Jellyfin 認到的季集、所屬 Series 的 `ProviderIds.Tmdb` 與帳本不同就開 Issue；抓的是 Jellyfin 那邊的意外（兩份涵蓋範圍不同的正片被合成一集、檔案沒被認成正片），是便宜的保險而不是主力——資料夾名帶 `[tmdbid-…]`、檔名格式 M0 實測過（resolver 現在只用路徑找 item，沒有比季集）。
+
+**v2 並存，不取代**（2026-09-24 使用者拍板，brief §19）：同一字幕組同一集的 v1 與 v2 tags 不同（`version`），兩份都入庫、在 Jellyfin 是同一集的兩個版本，使用者播放時自己選；不拆 v1 的鏈接。與 brief §7.7、§18「品質升級自動替換不做」一致——這一行原本寫「v2 取代」，與它們矛盾。所以 RSS 的去重鍵要把 `version` 算進去：同組同集的 v2 不是重複。
+
+**開工前的兩題已定**（2026-09-24，brief §15、§19）：不做字幕組白名單——字幕組是使用者在 Mikan 或 feed 網址上挑的，Berth 全部接受、只提供排除；季號與 offset 放在 RSS Series 上、規劃時讀。
+
+**M3 之前先做的修補**（2026-09-24 M2 後的全面審查，使用者拍板「先修再開 M3」；審查紀錄見 progress.md 同日）：RSS 無人值守，下面幾條會從偶發變成每週發生；批次確認是「沒有 AI 也要把人工降到最少」（brief §14）。拆票時排在 M3 的 tracer bullet 之前。
+
+- 會刪檔的三條路刪之前比 inode：刪除範圍的「移除鏈接」（`services/deletion.py`）、audit 撤銷（`services/review.py`）、rematch 拆舊鏈接（`services/rematch.py`）。使用者把硬鏈接換成自己的檔案之後，三者都會刪掉它。
+- `POST /jobs/*/replan` 在 `review` 狀態要 admin（`api/gate.py` 的 `ADMIN_ROUTES`）：`user` 重算會推翻 admin 的撤銷。
+- 卡死的 Job：`submit_failed` 在 qBittorrent 其實收下時要能被 poller 認回；`requested` 在程序中途掛掉時要有出路；`guarded` 吞掉的非預期例外要寫進 `Job.error` 與時間線。
+- 刪除只勾「移除鏈接」之後，對帳不再為那幾列重開 `library_link_missing`（同 `source_missing` 的處理）。
+- 刪除在鎖內讀 Job 狀態，compare-and-set 輸了回報失敗而不是成功。
+- 管線 Issue（`missing_files` / `client_error` / `client_removed`）在 Job 被別處修好之後由系統收掉（M2 票 09c 的延後項，失效條件票上已有）。
+- `add_download` 送單前看磁碟門檻（現在只開 `low_disk_space` Issue，不擋送單）；刪除過、沒清紀錄的 Job 不能再下載同一個 hash。
+- qBittorrent 5.x 停住的 torrent `recheck` → `start` 補量（§11.3 D 組第 5 條延後的前提不成立：compose 預設就是 5.x）。
+- 審核頁的**批次確認**：同一個 Job 或同一個 RSS Series 的 audit 一組一顆「全部確認」（2026-09-24 使用者拍板；e2e 那一包芙莉蓮的 11 個特典目前要逐一按）。
+- 前端：逐列編輯有沒套用的改動時「核准並入庫」要擋；核准 / 撤銷 / 修 Issue 之後讓 `['media']` 失效；401 導回登入；動作鍵送出中不可再按。
+
+同一輪的兩個頁面決定（brief §19 同日）也排在 M3 之前：**探索頁不再放繼續觀看與下一集**，登入後預設落在媒體庫；**`/review` 不再列 Issue**，Issue 只在 `/issues`，`/review` 原位留一行「另有 N 件待處理」。
 
 M1 帶過來的一條（票 15）：brief §6.4 的「以**發佈時間**推測虛擬季」票 06 刻意沒做——解析器那時拿不到發佈時間。RSS item 一定帶著它，接上之後回頭補，要有自己的語料與一輪 `berth bench`。
 
 M1.5 帶過來的一條（票 10，2026-09-22 從 §11.3 移來）：缺集散在六季以上時只退回作品名，不分批問——一次搜尋的查詢數上限是為了不把公開站打到封 IP（§8.4）。分批的節奏與 RSS 輪詢的預算是同一個決定，在這裡一起定。
 
-### 11.5 M4 AI fallback
+### 11.5 M4 巡檢與通知
 
-範圍：`AiPlanner` 的 Anthropic 實作（provider 介面保留給其他家）、輸入壓縮、schema 驗證、快取、月預算、Event 記帳、RSS 未匹配 item 的 Media 建議、設定頁開關。
-驗收：benchmark 上 low 信心案例的 review 比例下降，`auto_wrong` 不升；每次呼叫的 tokens 與費用可在 Job 時間線看到。
+2026-09-24 排到 AI 之前（使用者拍板，brief §14、§19）：Berth 平常不必打開——看片用 Jellyfin App，只在加新作品時開——前提是**有事需要人的時候它會說**。這一輪不需要 AI；M5 起 AI 只是讓要人處理的事變少。
 
-**M4 是 brief §6.10 的 fallback 解析器，不是 agent**：`AiPlanner.propose(context, files, rules_plan) -> Plan | None`（§4.5），只在規則層信心 low 且使用者開啟時被 `services/plan.py` 呼叫，產出的 Plan 一律進 review。它留下的三樣東西是 M6 / M7 的地基：provider 介面與設定頁的憑證、月預算與每次呼叫的 Event 記帳、`settings.ai` 這一組。
+**巡檢**：每天一次程式檢查（不花 token）：RSS Series 缺號、同一集意外多份（播出日比對與片長驗證漏掉的在這裡事後抓）、Jellyfin 回驗不一致、卡住的 Job、一直失敗的 Feed、等人處理的事放太久。每週一次週報：這週入庫了什麼、修了什麼、還有什麼等人（頁面 + 通知）。M5 起完整巡檢把標出來的交給 AI 任務。
 
-### 11.6 M5 通知
+**通知**（2026-09-22 使用者拍板加入，brief §14、§17、§19）：`events` 表上的**訂閱者**——哪些事件型別要送出去（第一批：一集或一部入庫並在 Jellyfin 反查到（「可以看了」）、RSS 命中並送單、**有 N 件等你處理**（連結直接開到那一件）、週報、Issue 新增）、送到哪一個**管道**（`adapters/notify/` 的 channel adapter 介面 + 第一個實作，Telegram 或 Discord 擇一，拆票時定）、每位使用者自己的訂閱與管道設定（`settings.notify` 或 `users` 上的欄位，拆票時定）、送出的紀錄與失敗重試、設定頁的測試按鈕。**不是**推播給瀏覽器（SSE 已經有），是人不在 Berth 頁面上時的那一條。
 
-2026-09-22 使用者拍板加入（brief §14、§17、§19）。範圍：`events` 表上的**訂閱者**——哪些事件型別要送出去（第一批：一集或一部入庫並在 Jellyfin 反查到、RSS 規則命中並送單、Job 停在 review、Issue 新增）、送到哪一個**管道**（`adapters/notify/` 的 channel adapter 介面 + 第一個實作，Telegram 或 Discord 擇一，拆票時定）、每位使用者自己的訂閱與管道設定（`settings.notify` 或 `users` 上的欄位，拆票時定）、送出的紀錄與失敗重試、設定頁的測試按鈕。**不是**推播給瀏覽器（SSE 已經有），是人不在 Berth 頁面上時的那一條。
-驗收：一個 RSS 規則命中 → 下載 → 入庫 → Jellyfin 可見的全程，使用者的手機收到「正在下載」與「可以看了」兩則，內容說得出作品、季集與 Route；管道掛掉時 Berth 不阻塞任何管線、健康頁說得出來。
+驗收：一個 RSS 命中 → 下載 → 入庫 → Jellyfin 可見的全程，使用者的手機收到「正在下載」與「可以看了」兩則，內容說得出作品、季集與 Route；一件進審核的事推出「等你處理」並連到那一件；週報說得出這週入庫、修了什麼、還有什麼等人；管道掛掉時 Berth 不阻塞任何管線、健康頁說得出來。
 
-### 11.7 M6 AI 助理
+### 11.6 M5 AI 核心
 
-範圍：一個 **agent 核心**（`services/assistant.py`：對話 → 挑 services 命令 → 產生**提案** → 等人確認 → 執行，工具就是 brief §14 那一份命令清單，schema 直接沿用 pydantic model）、**提案**這個實體（`proposals` 表：命令名、參數、AI 的理由、狀態 `proposed` / `approved` / `rejected` / `applied` / `failed`、誰決定的；讀取類命令不需要提案，改狀態的一律要，除非使用者在設定頁對某一類開了自動）、兩個介面：**Review Queue 的 AI 模式**（開關打開後佇列裡每一件先由 AI 跑一次、提案掛在那一列上，人只按確認 / 拒絕）與**側面板**（每一頁都開得到的對話區，提案以卡片顯示在對話裡，卡片上確認 / 拒絕，執行結果回到同一張卡）、工具權限模型（哪些命令 AI 永遠不能自動、預算與速率、每一次呼叫記 Event）。走 M4 的 provider 與預算。
-驗收：把一個 low 信心 Job 交給 AI 模式，佇列上出現一張說得出理由的提案，人按確認之後入庫；側面板裡說「把這一集標成已看」「這部作品缺的集搜一下」能做到並先給看；AI 不能在沒有確認的情況下動任何檔案（整合測試）。
+2026-09-24 重排（brief §6.10、§14、§19）：**AI 只替人按審核頁、待處理頁上的那些按鈕**——可撤銷的 AI 自己做，不可撤銷的與 AI 沒把握的交給人。規則層仍是主力；**沒有 AI 時 Berth 完整可用**，每一種 AI 任務都有同一個命令的人工版本，關掉 AI 或超出預算時退回 M4 的行為。
 
-### 11.8 M7 外部對話
+範圍：
 
-範圍：把 M5 的管道接上 M6 的核心——同一個 Telegram / Discord bot 既推通知也收訊息；訊息的身分對到 Berth 的使用者（個人 API token，brief §16.2）並帶著他的角色；提案卡在外部管道上是一則帶按鈕的訊息，確認 / 拒絕回到同一個 `proposals` 列；每個管道自己的訊息長度與按鈕限制在 adapter 裡吸收。與側面板共用核心與提案，只多一個介面。
-驗收：在手機的聊天軟體裡收到「S02E05 正在下載」，回一句「下好了通知我並標成已看」，Berth 在入庫後推第二則並附一張提案卡，按下確認之後那一集在 Jellyfin 是已看；`user` 角色在外部管道上碰到的是同一道門禁。
+- provider（Anthropic 實作，介面保留給其他家）、`settings.ai`（憑證、月預算、各任務型別的模式）、每次呼叫記 Event（model、tokens、費用）、快取鍵。模型與價格開工時查當時的官方資料。
+- **命令登錄表**：services 命令逐一登錄 pydantic 輸入、結果與拒絕理由、副作用等級（`read` / `reversible` / `irreversible`）與反向命令。AI 的工具只從這裡來；M7 的 MCP server 包的也是它。**M3 起新增的命令先標好等級與反向命令**，表本身在這裡開頭做。
+- **AI 任務**（`ai_tasks` 表）與 `ai_worker` 迴圈：事件觸發，一個任務一件事，帶資料包、允許的工具與預算上限，結果是「已處理」或「交給人（附理由）」——交給人的走 M4 的「等你處理」通知。
+- **自主權看可逆性**：`reversible` 通過驗證後自動執行；`irreversible` 一律做成 Proposal（`proposals` 表）等人。刪 complete、移除 torrent、purge、改設定與 Route 永遠要人；「忽略 Issue」也做成 Proposal。
+- **驗證**：M3 的三道程式檢查（播出日比對、片長驗證、Jellyfin 回驗）加上集在 TMDB 存在、不撞目標路徑、季集範圍，AI 的結果照樣走一遍；不通過的不套用、交給人。
+- **影子模式**：每種任務型別先影子（只記錄 AI 會怎麼做，照舊由人決定，統計一致率），使用者看數字切自動，可隨時切回。
+- **AI 活動**頁：做了什麼、理由、花費，逐筆撤銷。審核頁每一件附 AI 交上來的理由。
+- 第一批任務型別：規則層 low 的 Plan（§4.5）；Unmatched 檔案與待綁定 RSS Series 猜作品；RSS Series 的季號與 offset 修正（寫回 RSS Series、重算未確認的集數）；audit 的確認或撤銷；三道程式檢查標出的可疑入庫。
+- 修正回流：寫回 RSS Series、標題別名、排除條件；改正過的案例進 benchmark 候選語料。
+
+驗收：第一批每種任務在影子模式跑一週真實資料、與人的決定一致率達標（門檻拆票時定）；benchmark 上 `auto_wrong` 不升、review 比例下降；AI 不能在沒人確認下執行任何 `irreversible` 命令（整合測試）；每次呼叫的 tokens 與費用在 Job 時間線與 AI 活動看得到；關掉 AI 時行為與 M4 相同。
+
+### 11.7 M6 Issue 與側面板
+
+範圍：Issue 的各型別變成 AI 任務（重新鏈接、recheck、rematch 這些可逆的自動；刪 complete、移除 torrent 這些不可逆的做成 Proposal）；**側面板**（每一頁都開得到的對話區，工具是同一份命令登錄表）——使用者在場時自己要求的可逆動作直接執行並給撤銷，不可逆的以 Proposal 卡確認；工具權限（哪些命令 AI 永遠不能自動、預算與速率、每一次呼叫記 Event）沿用 M5。
+
+驗收：一件 `library_link_missing` 不經人修好；側面板裡說「把這一集標成已看」「這部作品缺的集搜一下」做得到；「把這部的 complete 刪掉」停在 Proposal，人按確認才執行（整合測試）。
+
+### 11.8 M7 外部對話與 MCP
+
+範圍：把 M4 的管道接上同一個核心——同一個 Telegram / Discord bot 既推通知也收訊息；訊息的身分對到 Berth 的使用者（個人 API token，brief §16.2）並帶著他的角色；Proposal 在外部管道上是一則帶按鈕的訊息，確認 / 拒絕回到同一個 `proposals` 列；每個管道自己的訊息長度與按鈕限制在 adapter 裡吸收。**命令登錄表另外包成 MCP server**（同一組個人 API token 與門禁），讓使用者用 Claude Code / Claude Desktop 直接查與操作 Berth。
+
+驗收：在手機的聊天軟體裡收到「S02E05 正在下載」，回一句「下好了通知我並標成已看」，Berth 在入庫後推第二則並標成已看；`user` 角色在外部管道與 MCP 上碰到的是同一道門禁；Claude Code 經 MCP 查得到本週入庫。
 
 ---
 
@@ -772,7 +811,7 @@ M1.5 帶過來的一條（票 10，2026-09-22 從 §11.3 移來）：缺集散�
 | Jellyfin 首次啟動較慢，精靈第 3 步呼叫 `/Startup/*` 時服務尚未就緒 | 精靈失敗 | 精靈第 2 步輪詢至就緒（上限 2 分鐘）再前進；每步可重試 |
 | 既有 Jellyfin 使用者把媒體庫搬到新路徑而不是加路徑 | 觀看紀錄歸零 | 精靈只提供「加入路徑」，文件明說不要搬；健康檢查不會建議改既有路徑 |
 | 既有服務的容器路徑各不相同（`/downloads`、`/tv`、`/movies` 分開掛） | 硬鏈接 `EXDEV` | 檢查訊息附 compose 修正片段；README 用 NAS 範例說明「加一個父目錄掛載」 |
-| TMDB 與字幕組的動漫季編號不一致 | medium 誤入庫 | benchmark 分開報告 medium 錯誤率；offset 偵測；M3 的 Rule offset；後續接 anime-lists |
+| TMDB 與字幕組的動漫季編號不一致 | medium 誤入庫 | benchmark 分開報告 medium 錯誤率；offset 偵測；M3 的 RSS Series offset 與第一批審核；後續接 anime-lists |
 | Jellyfin 的大版本再跳一次（12 → 13）：版本分組、版本名算法或 `/Startup/*` 那幾支 deprecated 端點被移除 | 多版本顯示、精靈第 3 步 | 支援下限寫在一處（`adapters/jellyfin.MIN_VERSION`）；版本名讀 Jellyfin 回的而不是自己算；`/Startup/*` 在 13.0 前要換成設定端點（brief §20.9） |
 | Mikan / Nyaa feed 欄位與假設不同 | M3 | 先抓 fixture 再寫 adapter |
 | qBittorrent 版本差異（`paused` / `stopped`、`save_path` 鍵名） | 送單失敗 | 契約測試涵蓋 4.4 與 5.x |

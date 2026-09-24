@@ -128,7 +128,7 @@ _Avoid_: stage, section, panel
 _Avoid_: torrent（指 Job 時）, download, task
 
 **Trigger**:
-Job 的來源：`manual`、`rss:<rule>`、`reimport`。
+Job 的來源：`manual`、`rss`（`trigger_ref` 是 RSS Series id）、`reimport`。
 _Avoid_: source, origin
 
 **Indexer Result**:
@@ -296,18 +296,18 @@ _Avoid_: log, activity, history
 ### RSS
 
 **Feed**:
-一個 RSS 來源（Mikan、Nyaa、generic），有輪詢間隔。
+一個 RSS 來源（Mikan、Nyaa、acg.rip、generic），有輪詢間隔與排除條件。Mikan 的 `MyBangumi` 聚合 feed 是主要用法。
 _Avoid_: subscription（Subscription 是 UI 上「訂閱一部作品」的動作）, source
 
-**Rule**:
-綁定 Media 與 Route 的自動下載規則：包含 / 排除條件、字幕組、解析度、字幕偏好、季與集 offset、策略。
-_Avoid_: filter, subscription rule, watch
+**RSS Series**:
+一部作品 × 一個來源（Mikan 的番組 + 字幕組，或標題骨幹 + 字幕組），由 Feed Item 自動長出，綁到 Media 與 Route，帶季號、offset、排除條件。2026-09-24 取代 Rule：字幕組是使用者在來源端挑的，Berth 不再挑一次。
+_Avoid_: rule, subscription, follow（`follows` 是字幕跟著影片的那個函式）
 
 **Feed Item**:
-Feed 中的一筆項目及其解析與比對結果（new / matched / downloaded / ignored / unmatched）。
+Feed 中的一筆項目及其解析與比對結果（new / matched / downloaded / excluded / unbound）。
 _Avoid_: entry, post
 
-### AI 與通知（M5–M7，2026-09-22 定名）
+### AI 與通知（M4–M7，2026-09-22 定名、09-24 改）
 
 **Notification**（通知）:
 `events` 的一則事件送到人不在 Berth 頁面上時看得到的地方（聊天軟體）。不是 SSE 推給瀏覽器的那一種。
@@ -317,14 +317,30 @@ _Avoid_: alert, push（push 是瀏覽器推播）
 送通知與收訊息的外部服務（Telegram、Discord…），一個 `adapters/notify/` 的 adapter。同一個管道在 M7 也收使用者的話。
 _Avoid_: integration, webhook（webhook 是別人打進來的那一種）
 
+**AI Task**（AI 任務）:
+交給 AI 的一件事：規則層 low 的 Plan、Unmatched 檔案、待綁定的 RSS Series、offset 修正、audit、程式檢查標出的可疑入庫、Issue、巡檢標出的項目。帶資料包、允許的工具與預算，結果是「已處理」或「交給人（附理由）」。M5 起；每一種都有同一個命令的人工版本。
+_Avoid_: job（Job 是一包 torrent）, ticket
+
+**Command Registry**（命令登錄表）:
+services 命令的清單：輸入、結果與拒絕理由、副作用等級（`read` / `reversible` / `irreversible`）與反向命令。AI 的工具、M7 的 MCP server 都只從這裡來。
+_Avoid_: tool list, API list
+
+**Shadow Mode**（影子模式）:
+一種 AI 任務型別的試用狀態：AI 照跑，只記錄它會怎麼做，照舊由人決定，統計與人的一致率。使用者看數字後切成自動。
+_Avoid_: dry-run（dry-run 是 RSS 的預覽）, test mode
+
+**AI Activity**（AI 活動）:
+AI 做過的每一件事、理由、花費，逐筆可撤銷。
+_Avoid_: log, history
+
+**Sweep**（巡檢）:
+每天一次只跑程式檢查（不花 token）、每週一次產出週報。M4 起，不需要 AI；M5 起標出來的交給 AI 任務。
+_Avoid_: audit（audit 是 medium 自動入庫的確認）, reconcile（對帳比的是帳本與磁碟）
+
 **Assistant**（助理）:
-M6 的 agent 核心：對話 → 挑一個 services 命令 → 提出 Proposal → 人確認 → 執行。它的工具就是 services 的命令，沒有自己的路徑。
+AI 核心對人的介面：M6 的側面板、M7 的外部管道。工具是 Command Registry，可逆的直接做並給撤銷，不可逆的提出 Proposal。
 _Avoid_: agent（對外的說法用助理）, bot（bot 是管道那一端的帳號）, copilot
 
 **Proposal**（提案）:
-Assistant 想叫的一個命令：命令名、參數、理由、狀態（proposed / approved / rejected / applied / failed）、誰決定的。改狀態的命令一律先提案；讀取類不用。畫面上是一張卡，外部管道上是一則帶按鈕的訊息。
+AI 想做但**不可逆**或沒把握的一個命令：命令名、參數、理由、狀態（proposed / approved / rejected / applied / failed）、誰決定的。人確認才執行。畫面上是一張卡，外部管道上是一則帶按鈕的訊息。2026-09-24 起只用在這兩種情況，可逆的 AI 自己做。
 _Avoid_: suggestion, action, task
-
-**AI Mode**（Review Queue 的 AI 模式）:
-開關打開後佇列裡每一件先由 Assistant 跑一次，Proposal 掛在那一列上，人只按確認或拒絕。
-_Avoid_: auto-review, autopilot
