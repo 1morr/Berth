@@ -391,8 +391,13 @@ class TestProbeFile:
             probe.unlink()
 
 
+#: 兩次量測之間別的程序照樣在寫磁碟（整套測試並行跑時固定有），所以比的是「同一個檔案系統的量級」
+#: 而不是一個位元組都不差（M2 票 01 Comments 記過它偶發紅）。
+FREE_SPACE_DRIFT = 256 * 1024 * 1024
+
+
 def test_free_space_reports_the_target_file_system(tmp_path: Path) -> None:
-    assert free_space(tmp_path) == shutil.disk_usage(tmp_path).free
+    assert abs(free_space(tmp_path) - shutil.disk_usage(tmp_path).free) < FREE_SPACE_DRIFT
 
 
 class TestRemove:
