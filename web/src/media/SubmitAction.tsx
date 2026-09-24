@@ -10,6 +10,7 @@ import { CONFIRM_ACTIONS, GhostButton, PrimaryButton } from '../components/contr
 import { SIGNAL_FILL } from '../components/signal'
 import { ConfirmPanel } from '../components/ConfirmPanel'
 import { useInPlaceConfirm } from '../components/useInPlaceConfirm'
+import { JobLink } from '../jobs/JobLink'
 
 /**
  * 結果表一列上的送單（票 09、`.scratch/m1/search-results-shape.md` §4 留的位置）。
@@ -139,9 +140,12 @@ class NoRouteError extends Error {}
 /**
  * 被擋下來的理由。
  *
- * 八種各有各的下一步（PRODUCT 原則 4）——「這條 Route 是紅的」要人去健康頁，
+ * 每一種各有各的下一步（PRODUCT 原則 4）——「這條 Route 是紅的」要人去健康頁，
  * 「索引站給不出這份 torrent」只能換一列再試。認不得的理由落回一句誠實的通用訊息，
  * 而不是一條 i18n key。
+ *
+ * `job_removed` 的 `detail` 是那一筆的 hash（M3 票 04）：下一步在那一筆的詳情頁上，所以原文換成
+ * 一條過去的連結，不把 40 個十六進位字貼在畫面上。
  */
 function Refusal({ error }: { error: unknown }) {
   const { t } = useTranslation()
@@ -156,9 +160,15 @@ function Refusal({ error }: { error: unknown }) {
             ? t(`jobs.refusal.${refusal.reason}`)
             : t('submit.off')}
       </p>
-      {/* 服務回的原文，不翻譯（與精靈的纜繩同一個規矩）。 */}
-      {refusal?.detail && (
-        <p className="value text-xs wrap-anywhere text-ink-dim">{refusal.detail}</p>
+      {refusal?.reason === 'job_removed' ? (
+        <p className="text-xs">
+          <JobLink hash={refusal.detail}>{t('submit.toRemovedJob')}</JobLink>
+        </p>
+      ) : (
+        // 服務回的原文，不翻譯（與精靈的纜繩同一個規矩）。
+        refusal?.detail && (
+          <p className="value text-xs wrap-anywhere text-ink-dim">{refusal.detail}</p>
+        )
       )}
     </div>
   )

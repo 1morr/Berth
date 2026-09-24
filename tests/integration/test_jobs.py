@@ -20,6 +20,7 @@ import pytest
 from sqlalchemy import delete, event, select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
+from berth.adapters import fs
 from berth.adapters.http import AuthFailedError, ServiceUnavailableError
 from berth.adapters.qbittorrent import QbittorrentCategory
 from berth.adapters.torrent import NotATorrentError, TorrentSource
@@ -38,7 +39,17 @@ from berth.domain import (
     Role,
 )
 from berth.logs import JOB_FIELD, configure_logging, json_line
-from berth.models import Job, Media, Plan, PlanItem, Route, User
+from berth.models import (
+    DiskSettings,
+    Event,
+    Job,
+    Media,
+    PathSettings,
+    Plan,
+    PlanItem,
+    Route,
+    User,
+)
 from berth.services.jobs import (
     JobRejectedError,
     JobSource,
@@ -48,6 +59,7 @@ from berth.services.jobs import (
     read_job_events,
     retry_job,
 )
+from berth.services.settings import read_settings, write_settings
 from berth.services.tracking import is_tracked
 from tests.integration.arrange import applied_qbittorrent, arrange, factory_for
 from tests.integration.factories import FakeClientFactory
@@ -719,6 +731,188 @@ class TestSubmitFailed:
             await retry_job(session, factory, MAGNET_HASH)
 
         assert failure.value.reason == "not_retryable"
+
+
+#: 比任何一台機器的磁碟都大的門檻（GB）。量出來的一定低於它，所以這一個數字就是「磁碟不夠」。
+HUGE = 10**9
+
+
+async def _threshold(session: AsyncSession, gigabytes: int) -> None:
+    await write_settings(session, DiskSettings(min_free_gb=gigabytes))
+    await session.commit()
+
+
+class TestTheDiskGate:
+    """送單前看磁碟門檻（M3 票 04）。RSS 送單沒有人按確認，所以原本只開一件 `low_disk_space`
+    Issue 的那個門檻改成擋送單；手動與 RSS 走同一支 `add_download`，所以是同一個判斷。"""
+
+    async def test_below_the_threshold_nothing_is_fetched_created_or_sent(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        media, route, factory = await _ready(session, roots)
+        await _threshold(session, HUGE)
+
+        with pytest.raises(JobRejectedError) as failure:
+            await add_download(
+                session,
+                factory,
+                source=_source(),
+                media_id=media.id,
+                route_id=route.id,
+                user_id=None,
+            )
+
+        assert failure.value.reason == "low_disk_space"
+        assert str(roots["incomplete"]) in failure.value.detail
+        assert factory.torrent_.requested == []
+        assert factory.qbittorrent_.added == []
+        assert await session.scalar(select(Job)) is None
+
+    async def test_a_threshold_of_zero_does_not_measure(
+        self, session: AsyncSession, roots: dict[str, Path], monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """`0` 是不量（`DiskSettings`）：量這一步自己爆掉也不影響送單。"""
+        media, route, factory = await _ready(session, roots)
+        await _threshold(session, 0)
+
+        def unmeasurable(path: Path) -> int:
+            raise AssertionError(f"measured {path} with the gate off")
+
+        monkeypatch.setattr(fs, "free_space", unmeasurable)
+
+        outcome = await add_download(
+            session, factory, source=_source(), media_id=media.id, route_id=route.id, user_id=None
+        )
+
+        assert outcome.job.state is JobState.SUBMITTED
+
+    async def test_an_incomplete_root_it_cannot_see_does_not_block(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """看不到不是「空間不夠」：那是 `download_path` 纜繩要報的事，擋下來只會讓每一次送單
+        都說錯理由。"""
+        media, route, factory = await _ready(session, roots)
+        paths = await read_settings(session, PathSettings)
+        paths.incomplete_root = str(roots["incomplete"] / "not-mounted")
+        await write_settings(session, paths)
+        await _threshold(session, HUGE)
+
+        outcome = await add_download(
+            session, factory, source=_source(), media_id=media.id, route_id=route.id, user_id=None
+        )
+
+        assert outcome.job.state is JobState.SUBMITTED
+
+    async def test_a_retry_is_held_to_the_same_threshold(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """重試與第一次送單同一組前提：否則「第一次送不出去、重試卻送得出去」。"""
+        await arrange(session, roots)
+        media = await _media(session)
+        route = await _route(session, roots)
+        qbittorrent = applied_qbittorrent(roots, add_error=ServiceUnavailableError("down"))
+        factory = factory_for(roots, qbittorrent=qbittorrent)
+        await add_download(
+            session, factory, source=_source(), media_id=media.id, route_id=route.id, user_id=None
+        )
+        qbittorrent.add_error = None
+        await _threshold(session, HUGE)
+
+        with pytest.raises(JobRejectedError) as failure:
+            await retry_job(session, factory, MAGNET_HASH)
+
+        assert failure.value.reason == "low_disk_space"
+        job = await read_job(session, MAGNET_HASH)
+        assert job is not None
+        assert job.state is JobState.SUBMIT_FAILED
+
+
+class TestARemovedHash:
+    """刪除過、沒清紀錄的 Job 不能再下載同一個 hash（M3 票 04、plan §3.3）。
+
+    「同 hash 回傳既有 Job」對一筆 `removed` 的來說是錯的答案：送單的人以為成功了，而 RSS 下一輪
+    看到同一筆會再送一次、再拿回同一列。那一筆紀錄還在就是還沒決定要不要再下載——拒絕並說出理由。
+    """
+
+    async def _removed(self, session: AsyncSession, roots: dict[str, Path]) -> FakeClientFactory:
+        media, route, factory = await _ready(session, roots)
+        await add_download(
+            session, factory, source=_source(), media_id=media.id, route_id=route.id, user_id=None
+        )
+        job = await session.get(Job, MAGNET_HASH)
+        assert job is not None
+        job.state = JobState.REMOVED
+        await session.commit()
+        factory.qbittorrent_.added.clear()
+        return factory
+
+    async def test_the_same_hash_is_refused_with_the_job_it_belongs_to(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        factory = await self._removed(session, roots)
+
+        with pytest.raises(JobRejectedError) as failure:
+            await add_download(
+                session,
+                factory,
+                source=_source(),
+                media_id="tv:120089",
+                route_id=await _route_id(session),
+                user_id=None,
+            )
+
+        assert failure.value.reason == "job_removed"
+        assert failure.value.detail == MAGNET_HASH
+        assert factory.qbittorrent_.added == []
+        job = await read_job(session, MAGNET_HASH)
+        assert job is not None
+        assert job.state is JobState.REMOVED
+
+    async def test_a_hash_the_indexer_reported_is_refused_before_anything_is_fetched(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        factory = await self._removed(session, roots)
+        factory.torrent_.requested.clear()
+
+        with pytest.raises(JobRejectedError) as failure:
+            await add_download(
+                session,
+                factory,
+                source=_source(info_hash=MAGNET_HASH),
+                media_id="tv:120089",
+                route_id=await _route_id(session),
+                user_id=None,
+            )
+
+        assert failure.value.reason == "job_removed"
+        assert factory.torrent_.requested == []
+
+    async def test_once_the_record_is_purged_it_downloads_again(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """清掉紀錄就是決定了：那時候同一個 hash 是一筆新的下載。"""
+        factory = await self._removed(session, roots)
+        await session.execute(delete(Event))
+        await session.execute(delete(Job))
+        await session.commit()
+
+        outcome = await add_download(
+            session,
+            factory,
+            source=_source(),
+            media_id="tv:120089",
+            route_id=await _route_id(session),
+            user_id=None,
+        )
+
+        assert outcome.created is True
+        assert outcome.job.state is JobState.SUBMITTED
+
+
+async def _route_id(session: AsyncSession) -> int:
+    route = await session.scalar(select(Route))
+    assert route is not None
+    return route.id
 
 
 class TestTheJobSurvivesTheSubmission:

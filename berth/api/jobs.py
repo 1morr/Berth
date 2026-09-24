@@ -10,6 +10,7 @@ feed，其中一個垮掉時另外幾個還要畫得出來。這一支只做一�
 
 from __future__ import annotations
 
+from dataclasses import asdict
 from datetime import datetime
 from typing import Any
 
@@ -25,17 +26,19 @@ from berth.api.deps import (
 )
 from berth.api.errors import refusal_responses
 from berth.api.gate import current_user
-from berth.domain import JobRefusal, JobState, JobTrigger
+from berth.domain import JobRefusal, JobState, JobTrigger, Role
 from berth.services import deletion
 from berth.services.deletion import DeleteScope
 from berth.services.jobs import (
     JobRejectedError,
     JobSource,
+    JobView,
     actor_of,
     add_download,
     list_jobs,
     read_job,
     read_job_events,
+    replannable,
     retry_job,
 )
 from berth.services.plan import replan_job
@@ -67,6 +70,12 @@ _STATUS: dict[JobRefusal, int] = {
     JobRefusal.CONTENT_MISSING: status.HTTP_409_CONFLICT,
     # 另一個分頁先刪了、背景迴圈先推進了：重新看一次那一筆，同一個請求可能就成立。
     JobRefusal.MOVED_ON: status.HTTP_409_CONFLICT,
+    # 請求本身沒問題，空出空間（或調低門檻）之後同一個請求就會成功。
+    JobRefusal.LOW_DISK_SPACE: status.HTTP_409_CONFLICT,
+    # 那一筆紀錄還在：重新入庫或連紀錄一起刪掉之後，同一個請求就會成功。
+    JobRefusal.JOB_REMOVED: status.HTTP_409_CONFLICT,
+    # 門禁的 403 是「這整支不是你的」，這一個是「這一筆現在不是你的」——同一種身分問題。
+    JobRefusal.REVIEW_NEEDS_ADMIN: status.HTTP_403_FORBIDDEN,
 }
 
 
@@ -87,18 +96,22 @@ def _refusals(*reasons: JobRefusal) -> dict[int | str, dict[str, Any]]:
     return refusal_responses(JobRefusalOut, {reason: _STATUS[reason] for reason in reasons})
 
 
-#: 送單：Route 的四種前提、作品不在、索引站給不出那一份 torrent（`services/jobs.add_download`）。
+#: 送單：Route 的四種前提、作品不在、磁碟不夠、索引站給不出那一份 torrent、同一個 hash 刪除過
+#: 而紀錄還在（`services/jobs.add_download`）。
 SUBMIT_RESPONSES = _refusals(
     JobRefusal.MEDIA_MISSING,
     JobRefusal.ROUTE_MISSING,
     JobRefusal.ROUTE_KIND_MISMATCH,
     JobRefusal.ROUTE_DISABLED,
     JobRefusal.ROUTE_UNHEALTHY,
+    JobRefusal.LOW_DISK_SPACE,
     JobRefusal.SOURCE_UNAVAILABLE,
+    JobRefusal.JOB_REMOVED,
 )
 
-#: 重試：**與第一次送單同一組 Route 前提**（`services/jobs.retry_job`），加上這一筆本身的兩種。
-#: 沒有 `source_unavailable`——重試時索引站給不出來不是拒絕，那一筆會變成 `submit_failed`。
+#: 重試：**與第一次送單同一組前提**（Route 與磁碟門檻，`services/jobs.retry_job`），加上這一筆
+#: 本身的兩種。沒有 `source_unavailable`——重試時索引站給不出來不是拒絕，那一筆會變成
+#: `submit_failed`。
 RETRY_RESPONSES = _refusals(
     JobRefusal.JOB_MISSING,
     JobRefusal.NOT_RETRYABLE,
@@ -106,10 +119,14 @@ RETRY_RESPONSES = _refusals(
     JobRefusal.ROUTE_KIND_MISMATCH,
     JobRefusal.ROUTE_DISABLED,
     JobRefusal.ROUTE_UNHEALTHY,
+    JobRefusal.LOW_DISK_SPACE,
 )
 
-#: 重新規劃只看這一筆自己（`services/plan.replan_job`），碰不到 Route 與索引站。
-REPLAN_RESPONSES = _refusals(JobRefusal.JOB_MISSING, JobRefusal.NOT_REPLANNABLE)
+#: 重新規劃只看這一筆自己（`services/plan.replan_job`），碰不到 Route 與索引站；停在 review 的
+#: 那一筆只有 admin 按得了（M3 票 04）。
+REPLAN_RESPONSES = _refusals(
+    JobRefusal.JOB_MISSING, JobRefusal.NOT_REPLANNABLE, JobRefusal.REVIEW_NEEDS_ADMIN
+)
 
 #: 重新入庫只看這一筆與磁碟上那一包（`services/reimport.reimport_job`），不碰 qBittorrent。
 REIMPORT_RESPONSES = _refusals(
@@ -195,7 +212,8 @@ class JobOut(BaseModel):
     imported_at: datetime | None
     #: 這一筆現在按得了重試嗎（plan §3.1）。規則在後端算，前端不重算一份。
     retryable: bool
-    #: 這一筆現在按得了重新規劃嗎（票 11）。規則在後端算，前端不重算一份。
+    #: **這個人**現在按得了重新規劃嗎（票 11）。規則在後端算，前端不重算一份：停在 review 的那一筆
+    #: 只有 admin 是 `true`（`services/jobs.replannable`，M3 票 04），所以同一筆對兩種人不一樣。
     replannable: bool
     #: 這一筆現在按得了重新入庫嗎（M2 票 10）。只有 admin 看得到那一顆（門禁），旗標誰都拿得到。
     reimportable: bool
@@ -301,21 +319,21 @@ async def post_job(
         )
     except JobRejectedError as refusal:
         raise _refuse(refusal) from refusal
-    return JobCreatedOut(job=JobOut.model_validate(outcome.job), created=outcome.created)
+    return JobCreatedOut(job=_out(outcome.job, request), created=outcome.created)
 
 
 @router.get("")
-async def get_jobs(session: SessionDep) -> list[JobOut]:
+async def get_jobs(session: SessionDep, request: Request) -> list[JobOut]:
     """下載列表，最新的在前面。"""
-    return [JobOut.model_validate(row) for row in await list_jobs(session)]
+    return [_out(row, request) for row in await list_jobs(session)]
 
 
 @router.get("/{job_hash}")
-async def get_job(session: SessionDep, job_hash: str) -> JobOut:
+async def get_job(session: SessionDep, request: Request, job_hash: str) -> JobOut:
     job = await read_job(session, job_hash)
     if job is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="no such job")
-    return JobOut.model_validate(job)
+    return _out(job, request)
 
 
 @router.get("/{job_hash}/events")
@@ -326,7 +344,11 @@ async def get_job_events(session: SessionDep, job_hash: str) -> list[JobEventOut
 
 @router.post("/{job_hash}/replan", responses=REPLAN_RESPONSES)
 async def post_replan(
-    session: SessionDep, factory: ClientFactoryDep, hub: EventHubDep, job_hash: str
+    session: SessionDep,
+    factory: ClientFactoryDep,
+    hub: EventHubDep,
+    request: Request,
+    job_hash: str,
 ) -> JobOut:
     """重新算一份 Plan（plan §6 jobs 群組、票 11）。
 
@@ -335,13 +357,13 @@ async def post_replan(
     要重畫的是那一列。
     """
     try:
-        await replan_job(session, factory, hub, job_hash)
+        await replan_job(session, factory, hub, job_hash, role=_role(request))
     except JobRejectedError as refusal:
         raise _refuse(refusal) from refusal
     job = await read_job(session, job_hash)
     if job is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="no such job")
-    return JobOut.model_validate(job)
+    return _out(job, request)
 
 
 @router.post("/{job_hash}/reimport", responses=REIMPORT_RESPONSES)
@@ -361,12 +383,16 @@ async def post_reimport(
     except JobRejectedError as refusal:
         raise _refuse(refusal) from refusal
     plans.nudge()
-    return JobOut.model_validate(job)
+    return _out(job, request)
 
 
 @router.post("/{job_hash}/retry", responses=RETRY_RESPONSES)
 async def post_retry(
-    session: SessionDep, factory: ClientFactoryDep, imports: ImportHintsDep, job_hash: str
+    session: SessionDep,
+    factory: ClientFactoryDep,
+    imports: ImportHintsDep,
+    request: Request,
+    job_hash: str,
 ) -> JobOut:
     """`submit_failed` → `requested` → 再送一次；`import_failed` → `importing`（plan §3.1）。"""
     try:
@@ -376,7 +402,7 @@ async def post_retry(
     if job.state is JobState.IMPORTING:
         # importer 平常 60 秒才醒一次，而按下重試的人要的是現在。
         imports.nudge()
-    return JobOut.model_validate(job)
+    return _out(job, request)
 
 
 @router.get("/{job_hash}/deletion", responses=ESTIMATE_RESPONSES)
@@ -431,6 +457,19 @@ async def delete_job(
     except JobRejectedError as refusal:
         raise _refuse(refusal) from refusal
     return JobDeletedOut.model_validate(outcome, from_attributes=True)
+
+
+def _role(request: Request) -> Role:
+    """按的人是誰。門禁保證 `/jobs` 一定有人登入，沒有的話照最小權限算。"""
+    user = current_user(request)
+    return user.role if user is not None else Role.USER
+
+
+def _out(view: JobView, request: Request) -> JobOut:
+    """一筆 Job 的對外形狀。`replannable` 看的是**按的人**（M3 票 04），所以在這一層才算得出來。"""
+    return JobOut.model_validate(
+        asdict(view) | {"replannable": replannable(view.state, _role(request))}
+    )
 
 
 def _refuse(refusal: JobRejectedError) -> HTTPException:

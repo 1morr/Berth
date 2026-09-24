@@ -46,6 +46,7 @@ from berth.domain import (
     PlanStatus,
     PlanSummary,
     ReviewReason,
+    Role,
     Tags,
     episode_label,
     why,
@@ -66,6 +67,7 @@ from berth.services.jobs import (
     guarded,
     job_lock,
     record_event,
+    replannable,
     transition,
 )
 from berth.services.media import snapshot_for_planning
@@ -154,12 +156,20 @@ async def sweep_plans(
 
 
 async def replan_job(
-    session: AsyncSession, factory: ServiceClientFactory, hub: EventHub, job_hash: str
+    session: AsyncSession,
+    factory: ServiceClientFactory,
+    hub: EventHub,
+    job_hash: str,
+    *,
+    role: Role,
 ) -> PlanView:
     """手動重跑一次（`POST /api/jobs/{hash}/replan`、plan §6 jobs 群組）。
 
     使用者按它的時刻是：Plan 停在 review 而他改了 Route 的設定、或 TMDB 那邊剛補上正確的
     季集。`review` 先退回 `completed` 再算——那正是 plan §3.1 的「使用者拒絕」那一條。
+
+    **`review` 的那一次只有 admin**（`jobs.replannable`，M3 票 04）：門禁看不到狀態，所以守在這裡——
+    與退回 `completed` 的 CAS 同一把鎖、同一個讀到的狀態。
     """
     job = await session.get(Job, job_hash)
     if job is None:
@@ -168,6 +178,8 @@ async def replan_job(
         raise JobRejectedError(JobRefusal.NOT_REPLANNABLE, job.state.value)
     with job_context(job_hash):
         async with job_lock(job_hash):
+            if not replannable(job.state, role):
+                raise JobRejectedError(JobRefusal.REVIEW_NEEDS_ADMIN, job.state.value)
             if job.state is JobState.REVIEW and not await transition(
                 session, job, JobState.COMPLETED, expected=JobState.REVIEW
             ):

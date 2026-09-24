@@ -2420,7 +2420,7 @@ export interface components {
          *     列上有一顆重試（plan §3.1）。這裡的每一種都是「還沒開始就停住」。
          * @enum {string}
          */
-        JobRefusal: "media_missing" | "route_missing" | "route_kind_mismatch" | "route_disabled" | "route_unhealthy" | "source_unavailable" | "job_missing" | "not_retryable" | "not_replannable" | "client_unreachable" | "delete_files_requires_remove_torrent" | "not_reimportable" | "content_missing" | "moved_on";
+        JobRefusal: "media_missing" | "route_missing" | "route_kind_mismatch" | "route_disabled" | "route_unhealthy" | "source_unavailable" | "job_missing" | "not_retryable" | "not_replannable" | "client_unreachable" | "delete_files_requires_remove_torrent" | "not_reimportable" | "content_missing" | "moved_on" | "low_disk_space" | "job_removed" | "review_needs_admin";
         /**
          * JobRefusalOut
          * @description 做不了的時候回的那一份。`reason` 給畫面挑句子、挑下一步，`detail` 是原文，不翻譯。
@@ -4735,7 +4735,7 @@ export interface operations {
                     "application/json": components["schemas"]["JobCreatedOut"];
                 };
             };
-            /** @description `route_disabled` · `route_unhealthy` */
+            /** @description `route_disabled` · `route_unhealthy` · `low_disk_space` · `job_removed` */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -4909,6 +4909,15 @@ export interface operations {
                     "application/json": components["schemas"]["JobOut"];
                 };
             };
+            /** @description `review_needs_admin` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobRefusalOut"];
+                };
+            };
             /** @description `job_missing` */
             404: {
                 headers: {
@@ -5016,7 +5025,7 @@ export interface operations {
                     "application/json": components["schemas"]["JobRefusalOut"];
                 };
             };
-            /** @description `not_retryable` · `route_disabled` · `route_unhealthy` */
+            /** @description `not_retryable` · `route_disabled` · `route_unhealthy` · `low_disk_space` */
             409: {
                 headers: {
                     [name: string]: unknown;

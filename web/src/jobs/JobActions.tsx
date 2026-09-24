@@ -11,8 +11,9 @@ import { JobDelete } from './JobDelete'
  *
  * **只住在詳情頁**（`.scratch/m2/job-detail-shape.md`，使用者拍板）：`/jobs` 的展開區只剩狀態與時間線
  * 摘要，一筆 Job 的動作只有一個家。哪一顆出現由後端的旗標決定（`retryable`、`replannable`、
- * `reimportable`），前端不重算規則；重新入庫與刪除另外只給 admin——**前端隱藏不是安全機制**，
- * 擋住的那一條在門禁上（`api/gate.py` 的 `ADMIN_ROUTES`）。
+ * `reimportable`），前端不重算規則——`replannable` 已經依按的人算過（停在審核的那一筆只有 admin，
+ * M3 票 04）；重新入庫與刪除另外只給 admin——**前端隱藏不是安全機制**，擋住的那一條在門禁上
+ * （`api/gate.py` 的 `ADMIN_ROUTES`）。
  *
  * 刪除排在最後、自己一整行：它是這一塊裡唯一不可回復的動作，確認區就地展開在身分帶正下方，
  * 展開時畫面上方就是這一筆的名字。它是票 04 的那一個元件，Media 詳情的版本清單掛的也是它。

@@ -394,7 +394,10 @@ ACCESS: dict[tuple[str, str], Access] = {
     ("POST", "/routes/*/check"): Access.ADMIN,
     ("GET", "/jellyfin/libraries"): Access.ADMIN,
     # 一般使用者：探索、送單、看自己的 Job、瀏覽媒體庫（brief §11）。重試與重新規劃是送單的
-    # 人自己按得到的——它們只讓這一筆往前走，不拆也不改媒體庫裡已經有的東西。
+    # 人自己按得到的——它們只讓這一筆往前走，不拆也不改媒體庫裡已經有的東西。**例外是停在
+    # review 的那一筆的重新規劃**（M3 票 04）：它會丟掉 admin 審過的那一份，所以只有 admin。
+    # 門禁只看方法與路徑，這一條要看狀態，所以守在命令裡（403 `review_needs_admin`，
+    # `test_plans_api.py` 的 `TestReplanInReviewIsAdmins`）；這張表上它仍然是 SIGNED_IN。
     ("GET", "/auth/me"): Access.SIGNED_IN,
     ("GET", "/discover/popular"): Access.SIGNED_IN,
     ("GET", "/discover/search"): Access.SIGNED_IN,

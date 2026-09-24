@@ -45,8 +45,6 @@ logger = logging.getLogger(__name__)
 #: 條件解除時收掉那一件的人（plan §2.4 的 `resolved_by`，與 poller 的事件同一個字）。
 SYSTEM = "system"
 
-GIGABYTE = 1024**3
-
 
 @dataclass(frozen=True, slots=True)
 class Finding:
@@ -137,7 +135,7 @@ async def _disk(session: AsyncSession) -> Finding:
 
     Route 的目標不另外量：它與 complete 在同一個檔案系統上（`hardlink` 纜繩就在驗這件事）。
     """
-    threshold = (await read_settings(session, DiskSettings)).min_free_gb * GIGABYTE
+    threshold = (await read_settings(session, DiskSettings)).min_free_bytes
     paths = await read_settings(session, PathSettings)
     flagged: dict[str, dict[str, Any]] = {}
     unknown: set[str] = set()

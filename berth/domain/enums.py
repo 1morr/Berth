@@ -953,6 +953,15 @@ class JobRefusal(StrEnum):
     #: 按下去之後這一筆被別處改過了（另一個分頁剛刪掉它、背景迴圈剛推進它）：它按下去時看到的
     #: 狀態已經不是現在的狀態，compare-and-set 輸了。什麼都還沒動，重新看一次再決定（M3 票 01）。
     MOVED_ON = "moved_on"
+    #: incomplete 根目錄所在的檔案系統剩下的空間低於 `DiskSettings.min_free_gb`（M3 票 04）。
+    #: RSS 送單沒有人按確認，所以這個門檻不只開 `low_disk_space` Issue，也擋送單；`0` 是不量。
+    LOW_DISK_SPACE = "low_disk_space"
+    #: 這個 hash 有一筆刪除過、紀錄還在的 Job（`removed`，M3 票 04）。`detail` 是那一筆的 hash。
+    #: 紀錄還在就是還沒決定要不要再下載：重新入庫或連紀錄一起刪掉之後再送，都要管理員。
+    JOB_REMOVED = "job_removed"
+    #: 這一筆停在審核，而按的人不是管理員（M3 票 04）。在 `review` 重算會丟掉管理員逐列改過、
+    #: 撤銷過的那一份，而審核本來就是管理員的事（plan §6）。其他狀態的重算照舊誰都按得了。
+    REVIEW_NEEDS_ADMIN = "review_needs_admin"
 
 
 class RouteRefusal(StrEnum):

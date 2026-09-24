@@ -398,6 +398,20 @@ describe('一般使用者進得來，但刪除與重新入庫不是給他的（b
     expect(screen.getByRole('button', { name: '重新規劃' })).toBeInTheDocument()
   })
 
+  it('停在待審核的那一筆沒有重新規劃：那會推翻管理員的審核（M3 票 04）', async () => {
+    // 後端對一般使用者回 `replannable: false`，按下去也是 403 `review_needs_admin`
+    // （`tests/integration/test_plans_api.py` 的 `TestReplanInReviewIsAdmins`）。
+    render({
+      'GET /api/auth/me': USER,
+      [JOB]: { body: job({ state: 'review', replannable: false }) },
+    })
+    renderApp(`/jobs/${HASH}`)
+
+    await within(await section('時間線')).findByText('已送出')
+    expect(screen.getByText('等管理員審核')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '重新規劃' })).toBeNull()
+  })
+
   it('停在待審核時說「等管理員審核」，沒有去審核佇列的路', async () => {
     render({ 'GET /api/auth/me': USER, [JOB]: { body: job({ state: 'review' }) } })
     renderApp(`/jobs/${HASH}`)

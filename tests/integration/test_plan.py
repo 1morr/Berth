@@ -34,6 +34,7 @@ from berth.domain import (
     PlanStatus,
     ReasonCode,
     ReviewReason,
+    Role,
     SeasonSnapshot,
     Tags,
     why,
@@ -969,7 +970,7 @@ class TestReplan:
         await run(session, factory)
         first = await plan_of(session)
 
-        view = await replan_job(session, factory, EventHub(), HASH)
+        view = await replan_job(session, factory, EventHub(), HASH, role=Role.ADMIN)
 
         assert view.id == first.id
         assert len(await items_of(session)) == len(STRAY_FILES)
@@ -1003,7 +1004,7 @@ class TestReplan:
         await run(session, factory)
 
         with pytest.raises(JobRejectedError) as refusal:
-            await replan_job(session, factory, EventHub(), HASH)
+            await replan_job(session, factory, EventHub(), HASH, role=Role.ADMIN)
 
         assert refusal.value.reason == "not_replannable"
 
@@ -1016,7 +1017,7 @@ class TestReplan:
         await run(session, factory)
         assert job.state is JobState.REVIEW
 
-        await replan_job(session, factory, EventHub(), HASH)
+        await replan_job(session, factory, EventHub(), HASH, role=Role.ADMIN)
 
         await session.refresh(job)
         assert job.state is JobState.REVIEW
@@ -1031,7 +1032,7 @@ class TestReplan:
         await downloaded_job(session, media, route, roots, state=JobState.DOWNLOADING)
 
         with pytest.raises(JobRejectedError) as refusal:
-            await replan_job(session, factory, EventHub(), HASH)
+            await replan_job(session, factory, EventHub(), HASH, role=Role.ADMIN)
 
         assert refusal.value.reason == "not_replannable"
 

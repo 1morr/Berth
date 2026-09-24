@@ -6,10 +6,12 @@
 
 一次送單的順序不能換：
 
-1. **驗前提**（作品、Route、Route 的健康）。不成立就一個 Job 都不建——紅的 Route 送單一定
-   失敗（brief §4.4），而一列註定失敗的 Job 只是下載列表上要人去清掉的垃圾。
+1. **驗前提**（作品、Route、Route 的健康、incomplete 那一側的磁碟門檻）。不成立就一個 Job 都
+   不建——紅的 Route 送單一定失敗（brief §4.4），而一列註定失敗的 Job 只是下載列表上要人去
+   清掉的垃圾。
 2. **拿到 torrent 本身**（`adapters/torrent.py`）。`jobs.hash` 是主鍵，所以在知道是哪一個
    torrent 之前沒有 Job 可建。索引站報得出 hash 時先查一次重複，那一步連請求都不必發。
+   重複的那一筆是 `removed` 時拒絕（`job_removed`），不回傳它（plan §3.3，M3 票 04）。
 3. **建 Job（`requested`）+ event**。從這裡開始失敗都記在 Job 上，因為現在有地方記了。
 4. **ensure_category → `torrents/add`**。成功是 `submitted`，失敗是 `submit_failed` 加原文，
    而 `submit_failed` 可以手動重試回 `requested`（plan §3.1）。
@@ -32,6 +34,7 @@ from collections.abc import AsyncIterator, Coroutine, Sequence
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Any
 
 from sqlalchemy import func, select, update
@@ -39,6 +42,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import InstrumentedAttribute
 
+from berth.adapters import fs
 from berth.adapters.http import ServiceError
 from berth.adapters.qbittorrent import TorrentAdd, ensure_category
 from berth.adapters.torrent import TorrentSource
@@ -48,10 +52,12 @@ from berth.domain import (
     JobRefusal,
     JobState,
     JobTrigger,
+    Role,
     collection_type_for,
 )
 from berth.logs import job_context
 from berth.models import (
+    DiskSettings,
     Event,
     Job,
     JobFile,
@@ -84,6 +90,16 @@ RETRYABLE = frozenset({JobState.SUBMIT_FAILED, JobState.IMPORT_FAILED})
 #: **與 `RETRYABLE` 放在一起**：兩個都在回答「這一筆現在按得了什麼」，而畫面上那兩顆按鈕
 #: 就在同一塊展開區裡。規則分兩個模組寫的話，其中一份遲早會漏掉一個狀態。
 REPLANNABLE = frozenset({JobState.COMPLETED, JobState.PLANNING, JobState.REVIEW})
+
+
+def replannable(state: JobState, role: Role) -> bool:
+    """這個人現在按得了這一筆的重新規劃嗎。畫面上那顆按鈕與命令本身問的是這同一份規則。
+
+    **停在 `review` 的那一筆只有 admin**（M3 票 04）：在那裡重算丟掉的是 admin 逐列改過、撤銷過
+    的那一份，而審核是 admin 的事（plan §6）。門禁只看方法與路徑，看不到狀態，所以規則在這裡。
+    """
+    return state in REPLANNABLE and (state is not JobState.REVIEW or role is Role.ADMIN)
+
 
 #: 重新入庫得了的狀態（brief §9.3、M2 票 10）：那一包**下載完成過**、而且現在沒有人正照著它
 #: 動檔案。`client_removed` 在裡面是 plan §3.1 那一列說的「可 reimport 若 complete 檔案仍在」；
@@ -216,8 +232,6 @@ class JobView:
     #: 這一筆現在按得了「重試」嗎（plan §3.1 的 `submit_failed` → `requested`）。
     #: 規則在後端算好：前端重算一份的話，票 10 加進來的其他可重試狀態會漏掉一邊。
     retryable: bool
-    #: 這一筆現在按得了「重新規劃」嗎（票 11）。與 `retryable` 同一個道理：規則在後端算。
-    replannable: bool
     #: 這一筆現在按得了「重新入庫」嗎（M2 票 10）。同上，規則在後端算。
     reimportable: bool
     #: 這一筆現在那一份 Import Plan 的 id（票 11），沒算過就是 `None`。
@@ -246,7 +260,8 @@ class AddDownloadOutcome:
     """一次送單的結果。
 
     `created` 分得出「送出去了」與「這一個本來就在了」（plan §3.3）。兩者都是成功——
-    使用者按第二次時要看到的是那一筆既有的 Job，不是一則錯誤。
+    使用者按第二次時要看到的是那一筆既有的 Job，不是一則錯誤。**`removed` 的那一筆除外**
+    （`_existing_outcome`）：它不是「本來就在了」，是刪掉過。
     """
 
     job: JobView
@@ -264,18 +279,24 @@ async def add_download(
     trigger: JobTrigger = JobTrigger.MANUAL,
     trigger_ref: str = "",
 ) -> AddDownloadOutcome:
-    """把一個 torrent 送進 qBittorrent，並替它建一筆 Job（plan §3.1）。"""
+    """把一個 torrent 送進 qBittorrent，並替它建一筆 Job（plan §3.1）。
+
+    磁碟門檻在要 torrent **之前**看：RSS 每一輪都會把還沒送出去的那幾筆再送一次，磁碟滿著的
+    那段時間每一筆都去索引站要一次 torrent 只是白打。代價是索引站不報 hash 的那一筆重複送單
+    在磁碟不夠時說的是 `low_disk_space` 而不是「本來就在了」——兩者都沒有下載任何東西。
+    """
     media, route = await _preconditions(session, media_id, route_id)
 
     if source.info_hash:
         existing = await session.get(Job, source.info_hash)
         if existing is not None:
-            return AddDownloadOutcome(job=await _view_one(session, existing), created=False)
+            return await _existing_outcome(session, existing)
 
+    await check_disk(session)
     torrent = await _resolve(factory, source.url)
     existing = await session.get(Job, torrent.info_hash)
     if existing is not None:
-        return AddDownloadOutcome(job=await _view_one(session, existing), created=False)
+        return await _existing_outcome(session, existing)
 
     with job_context(torrent.info_hash):
         job = Job(
@@ -314,7 +335,7 @@ async def add_download(
             # 兩個分頁同時送同一筆：主鍵擋下第二個。回既有的那一列，不是 500（plan §3.3）。
             duplicate = await session.get(Job, torrent.info_hash)
             if duplicate is not None:
-                return AddDownloadOutcome(job=await _view_one(session, duplicate), created=False)
+                return await _existing_outcome(session, duplicate)
             # 前提查過之後 Route 在 Route 設定頁被刪掉了：外鍵擋下這一列（票 14a）。
             # 用參數的 id 而不是 `route.id`——rollback 之後那個物件已經過期，讀它要再打一次資料庫。
             if await session.get(Route, route_id) is None:
@@ -349,6 +370,7 @@ async def retry_job(session: AsyncSession, factory: ServiceClientFactory, job_ha
     # 只檢查健康的話「第一次送不出去、重試卻送得出去」——同一個決定兩種答案。
     subject = await session.get(Media, job.media_id) if job.media_id is not None else None
     check_route(route, subject)
+    await check_disk(session)
 
     with job_context(job.hash):
         # poller 也會寫這一列（票 10），所以重試與迴圈排隊——CAS 保證不寫壞，鎖保證不做兩次。
@@ -571,6 +593,46 @@ def check_route(route: Route, media: Media | None) -> None:
         )
     if route.health_status is HealthStatus.FAILED:
         raise JobRejectedError(JobRefusal.ROUTE_UNHEALTHY, route.slug)
+
+
+async def _existing_outcome(session: AsyncSession, job: Job) -> AddDownloadOutcome:
+    """同一個 hash 已經有 Job 了（plan §3.3）：回傳那一筆，**`removed` 的除外**（M3 票 04）。
+
+    刪除過、紀錄還在的那一筆回傳回去的話，送單的人看到的是「本來就在了」而其實什麼都沒有，
+    RSS 下一輪看到同一個條目就再送一次、再拿回同一列。拒絕並帶著那一筆的 hash：重新入庫或
+    連紀錄一起刪掉之後再送，是看過那一筆的人的決定。
+    """
+    if job.state is JobState.REMOVED:
+        raise JobRejectedError(JobRefusal.JOB_REMOVED, job.hash)
+    return AddDownloadOutcome(job=await _view_one(session, job), created=False)
+
+
+async def check_disk(session: AsyncSession) -> None:
+    """incomplete 那一側剩下的空間夠不夠再開一個下載（`DiskSettings`，M3 票 04）。
+
+    只看 incomplete：下載落在那裡、長在那裡（qBittorrent 的 temp path），complete 是它下載完
+    才搬過去的地方，那一側由健康檢查的 `low_disk_space` 看著。門檻 `0` 是不量；**看不到那個
+    目錄不擋**——那是 `download_path` 纜繩要報的事，擋下來只會讓每一次送單都說錯理由。
+    """
+    disk = await read_settings(session, DiskSettings)
+    if not disk.min_free_gb:
+        return
+    root = (await read_settings(session, PathSettings)).incomplete_root
+    if not root:
+        return
+    try:
+        free = fs.free_space(Path(root))
+    except OSError as exc:
+        logger.warning(
+            "could not measure the incomplete root; submitting anyway",
+            extra={"path": root, "error": str(exc)},
+        )
+        return
+    if free < disk.min_free_bytes:
+        raise JobRejectedError(
+            JobRefusal.LOW_DISK_SPACE,
+            f"{root}: {free / 1024**3:.1f} GiB free, below {disk.min_free_gb} GiB",
+        )
 
 
 async def _resolve(factory: ServiceClientFactory, url: str) -> TorrentSource:
@@ -913,7 +975,6 @@ def _view(job: Job, related: _Related) -> JobView:
         completed_at=job.completed_at,
         imported_at=job.imported_at,
         retryable=job.state in RETRYABLE,
-        replannable=job.state in REPLANNABLE,
         reimportable=reimportable(job),
         plan_id=plan_id,
         audits=audits,

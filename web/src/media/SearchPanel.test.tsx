@@ -549,6 +549,49 @@ describe('搜尋 torrent 與結果表', () => {
       expect(alert).toHaveTextContent('tv')
     })
 
+    it('磁碟不夠時說的是那個理由與下一步，量到的數字貼在旁邊（M3 票 04）', async () => {
+      await searched({
+        'POST /api/jobs': {
+          status: 409,
+          body: {
+            detail: {
+              reason: 'low_disk_space',
+              detail: '/data/torrent/incomplete: 3.2 GiB free, below 10 GiB',
+            },
+          },
+        },
+      })
+
+      await userEvent.click(screen.getByRole('button', { name: '送單' }))
+      await userEvent.click(screen.getByRole('button', { name: '確認送單' }))
+
+      const alert = await screen.findByRole('alert')
+      expect(alert).toHaveTextContent(/下載目錄的磁碟空間低於門檻/)
+      expect(alert).toHaveTextContent('3.2 GiB free')
+    })
+
+    it('刪除過、紀錄還在的那一個被擋下來時，給得出去那一筆的路（M3 票 04）', async () => {
+      const hash = 'a'.repeat(40)
+      await searched({
+        'POST /api/jobs': {
+          status: 409,
+          body: { detail: { reason: 'job_removed', detail: hash } },
+        },
+      })
+
+      await userEvent.click(screen.getByRole('button', { name: '送單' }))
+      await userEvent.click(screen.getByRole('button', { name: '確認送單' }))
+
+      const alert = await screen.findByRole('alert')
+      expect(alert).toHaveTextContent(/之前下載過、後來刪除了/)
+      expect(within(alert).getByRole('link', { name: '看那一筆下載' })).toHaveAttribute(
+        'href',
+        `/jobs/${hash}`,
+      )
+      // hash 已經在連結裡了，不再另外貼一次原文。
+      expect(alert).not.toHaveTextContent(hash)
+    })
+
     it('還沒選 Route 時按鈕照樣按得下去，說不行的是那句話（票 02b）', async () => {
       // 兩條 Route 都收得下這部作品，所以下拉不會自動選一條。
       const stub = render({ [`${SEARCH_PATH}`]: { body: results() } })

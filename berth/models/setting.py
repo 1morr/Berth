@@ -248,13 +248,18 @@ class DiskSettings(SettingsGroup):
     **單位與預設不同**：Sonarr 擋的是入庫時複製檔案，預設 100 MB；Berth 用硬鏈接入庫不佔空間，
     會把磁碟吃滿的是下載，一集就是好幾 GB，所以單位是 GB、預設 10。
 
-    量的是 incomplete 與 complete 兩個根目錄（同一個檔案系統只量一次，`services/health_issues`）。
-    `0` 是不量。
+    量的是 incomplete 與 complete 兩個根目錄（同一個檔案系統只量一次，`services/health_issues`）；
+    送單前另外看 incomplete 那一側，低於門檻就不送（M3 票 04，`services/jobs`）。`0` 是不量。
     """
 
     KEY = "disk"
 
     min_free_gb: int = 10
+
+    @property
+    def min_free_bytes(self) -> int:
+        """門檻換成位元組：健康檢查與送單前（`services/jobs`）比的是同一個數字。"""
+        return self.min_free_gb * 1024**3
 
 
 class HealthSettings(SettingsGroup):

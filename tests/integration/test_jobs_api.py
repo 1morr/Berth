@@ -120,6 +120,12 @@ def make_route_red(client: TestClient, slug: str = "tv") -> None:
     asyncio.run(run())
 
 
+def set_threshold(client: TestClient, gigabytes: int) -> None:
+    """服務設定頁的那一格（`POST /settings/disk`），與使用者改它走同一條路。"""
+    response = client.post("/api/settings/disk", json={"min_free_gb": gigabytes}, headers=BROWSER)
+    assert response.status_code == 200, response.text
+
+
 def body(client: TestClient, **overrides: object) -> dict[str, object]:
     payload: dict[str, object] = {
         "source": {"url": MAGNET, "title": RELEASE, "info_hash": ""},
@@ -260,6 +266,36 @@ class TestRefusals:
         assert response.status_code == 502
         assert response.json()["detail"]["reason"] == "source_unavailable"
         assert "text/html" in response.json()["detail"]["detail"]
+
+    def test_a_disk_below_the_threshold_is_a_conflict_with_a_reason(
+        self, client: TestClient
+    ) -> None:
+        """M3 票 04：409，空出空間之後同一個請求就會成功。門檻是 `0` 時同一個請求照常送出。"""
+        sign_in(client)
+        set_threshold(client, 1_000_000)  # 上限：1 PB，比任何一台機器的磁碟都大
+
+        refused = submit(client)
+
+        assert refused.status_code == 409
+        assert refused.json()["detail"]["reason"] == "low_disk_space"
+        assert client.get("/api/jobs").json() == []
+
+        set_threshold(client, 0)
+
+        assert submit(client).json()["job"]["state"] == "submitted"
+
+    def test_a_hash_deleted_without_its_record_is_refused_with_that_job(
+        self, client: TestClient
+    ) -> None:
+        """M3 票 04、plan §3.3：刪除過、紀錄還在的那一筆不當成「本來就在了」回傳。"""
+        sign_in(client)
+        submit(client)
+        assert client.delete(f"/api/jobs/{MAGNET_HASH}", headers=BROWSER).status_code == 200
+
+        response = submit(client)
+
+        assert response.status_code == 409
+        assert response.json()["detail"] == {"reason": "job_removed", "detail": MAGNET_HASH}
 
     def test_a_missing_job_is_a_404(self, client: TestClient) -> None:
         sign_in(client)

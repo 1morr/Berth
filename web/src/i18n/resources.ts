@@ -1649,6 +1649,12 @@ const zhHant = {
         'complete 裡已經沒有這一包了（或裡面一個檔案都沒有），所以什麼都沒有動。要入庫就重新下載一次。',
       moved_on:
         '你按下去之後，這一筆已經被別處改過了（可能是另一個分頁剛刪掉它），所以什麼都沒有動。重新整理看看它現在的狀態。',
+      low_disk_space:
+        '下載目錄的磁碟空間低於門檻，所以沒有送出去。空出空間，或在服務設定裡調低門檻，再送一次。',
+      job_removed:
+        '這個 torrent 之前下載過、後來刪除了，那一筆紀錄還在，所以不會再下載一次。到那一筆決定：complete 裡還有檔案就重新入庫，要重新下載就先連紀錄一起刪掉（兩者都要管理員）。',
+      review_needs_admin:
+        '這一筆停在審核，重新規劃會丟掉管理員審過的那一份，所以只有管理員按得了。',
     },
     // 刪除範圍（brief §9.2、M2 票 04）。四個旗標各自說出後果，預設全不勾。
     delete: {
@@ -1707,6 +1713,7 @@ const zhHant = {
     done: '已送出',
     already: '這一個已經在了',
     toJobs: '看下載列表',
+    toRemovedJob: '看那一筆下載',
     off: '送單沒有送出去。Berth 自己的 API 沒有回應，先確認它還活著。',
   },
   // 向 TMDB 要東西沒要到的四種樣子。探索頁與 Media 詳情頁共用同一塊 `TmdbNotice`，
@@ -3529,6 +3536,12 @@ const en: Translations<typeof zhHant> = {
         'This download is no longer in complete (or it has no files left), so nothing was touched. Download it again to import it.',
       moved_on:
         'Something else changed this download after you pressed the button (another tab may have just deleted it), so nothing was touched. Reload to see where it stands now.',
+      low_disk_space:
+        'The download folder has less free space than the threshold, so nothing was sent. Free up some space, or lower the threshold in service settings, then send it again.',
+      job_removed:
+        'This torrent was downloaded before and then deleted. Its record is still kept, so it will not be downloaded again. Open that download to decide: import it again if complete still holds the files, or delete it together with its record to download it afresh (both need an administrator).',
+      review_needs_admin:
+        'This one is waiting for review. Planning it again would throw away what an administrator reviewed, so only an administrator can do it.',
     },
     delete: {
       label: 'Delete',
@@ -3582,6 +3595,7 @@ const en: Translations<typeof zhHant> = {
     done: 'Sent',
     already: 'Already here',
     toJobs: 'See downloads',
+    toRemovedJob: 'See that download',
     off: 'The submission was not sent. Berth’s own API did not answer — check that it is still running.',
   },
   tmdb: {

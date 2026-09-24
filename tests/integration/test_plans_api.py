@@ -197,6 +197,71 @@ class TestReplan:
         assert response.json()["detail"]["reason"] == "not_replannable"
 
 
+def _stray(client: TestClient, roots: dict[str, Path]) -> None:
+    """換成一包規劃器認不出來的：重算一次就停在 review。"""
+
+    async def run() -> None:
+        sessions = client.app.state.session_factory  # type: ignore[attr-defined]
+        async with sessions() as session:
+            job = await session.get(Job, HASH)
+            assert job is not None
+            await session.delete(job)
+            await session.commit()
+            await _job(session, roots, name=STRAY, files=STRAY_FILES)
+
+    asyncio.run(run())
+
+
+class TestReplanInReviewIsAdmins:
+    """`review` 狀態的重算只有 admin（M3 票 04）。
+
+    在 `review` 重算會丟掉那一份——連同 admin 逐列改過的、撤銷之後退回來的——而審核本來就是
+    admin 的事（plan §6）。門禁只看方法與路徑，這一條要看狀態，所以守在命令裡（鎖內讀到的
+    狀態）；其他狀態的重算照舊是送單的人自己按得到的。
+    """
+
+    def test_an_ordinary_user_is_refused_while_it_waits_for_review(
+        self, client: TestClient, roots: dict[str, Path]
+    ) -> None:
+        _stray(client, roots)
+        sign_in(client)
+        assert replan(client).json()["state"] == "review"
+        client.post("/api/auth/logout", headers=BROWSER)
+        sign_in(client, CREW)
+
+        response = replan(client)
+
+        assert response.status_code == 403
+        assert response.json()["detail"]["reason"] == "review_needs_admin"
+        job = client.get(f"/api/jobs/{HASH}").json()
+        assert job["state"] == "review"
+        # 按鈕與命令問的是同一份規則：對這個人，這一筆沒有那一顆。
+        assert job["replannable"] is False
+
+    def test_an_administrator_still_replans_it(
+        self, client: TestClient, roots: dict[str, Path]
+    ) -> None:
+        _stray(client, roots)
+        sign_in(client)
+        replan(client)
+
+        assert client.get(f"/api/jobs/{HASH}").json()["replannable"] is True
+
+        response = replan(client)
+
+        assert response.status_code == 200
+        assert response.json()["state"] == "review"
+
+    def test_an_ordinary_user_still_replans_a_completed_job(self, client: TestClient) -> None:
+        sign_in(client, CREW)
+        assert client.get("/api/jobs").json()[0]["replannable"] is True
+
+        response = replan(client)
+
+        assert response.status_code == 200
+        assert response.json()["state"] == "importing"
+
+
 class TestReading:
     def test_a_plan_reads_as_the_decision_the_confidence_and_the_reasons(
         self, client: TestClient

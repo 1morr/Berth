@@ -46,6 +46,9 @@ const REASONS: ReasonSet<JobRefusal> = {
   not_reimportable: true,
   content_missing: true,
   moved_on: true,
+  low_disk_space: true,
+  job_removed: true,
+  review_needs_admin: true,
 }
 
 /** 這一次失敗是「後端說不行」還是「網路壞了」。判定與另外兩組共用（`api/refusal.ts`）。 */
