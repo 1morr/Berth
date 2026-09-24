@@ -25,6 +25,8 @@
 - 既有 Torznab 的那條路同樣可以試搜（打它自己的 `t=search`）。
 - 試搜是新的 `services` 命令，標副作用等級 `read`（票 05 的標記）；它不寫任何東西。`setup` 的其他端點同樣只有 admin 進得來。
 
+**元件要能搬到設定頁**（使用者 2026-09-25 拍板，票 06i）：精靈跑完之後，索引站的加站、移除、試搜與 TMDB 的重貼 key 住在設定頁，重用這張票做的元件。所以兩格的元件不要依賴精靈的頁面狀態（`SetupPage` 的覆寫、泊位板），資料與動作從 props 進來。
+
 **預設清單拿掉 AniDex**：Prowlarr 2.5.2 的 `indexer/schema` 已經沒有它（2026-09-24 實測，十個預設站只找到九個）。`services/indexer.py` 的 `DEFAULT_INDEXERS`、plan §9.3 第 5 步、README 同步；brief §20.7 記一筆。
 
 ## 驗收
