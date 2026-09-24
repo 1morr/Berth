@@ -812,7 +812,14 @@ Thumb / Backdrop / 劇照），下方同一條標識帶，框與底同牆卡片�
   （計劃的逐列表、對不到的修正表單）以 `body` 插在 ② 與 ③ 之間、不收進展開——收起來等於多一次點擊——也不另有動作列。
 - **失敗時這一列留著**，動作列上方就地多一塊 `blocked` 的 `Notice` 說為什麼（The Failure Expands In Place Rule）。
 - **列不知道自己在哪一段：** 分段是頁面的事（`/review` 分段，段標題是 `.label` + 計數壓在 `border-b-2 border-rule-strong` 上；
-  媒體庫的子集不分段），標題層級由呼叫端給——分段底下 `h3`，不分段 `h2`。
+  媒體庫的子集不分段），標題層級由呼叫端給——分段底下 `h3`，不分段 `h2`，一組裡的成員 `h4`。
+- **一組也是一列**（`AuditGroup`，M3 票 05）：同一個 Job 的 audit 收成一列，標題是作品，一句話說整組為什麼是 medium
+  （原因相同說一次，不同就說不只一種），動作列一顆 Ghost「全部確認」——同單列的「確認」，不就地確認。成員（完整的
+  `AuditRow`，標題只剩季集）收在展開裡、接在下載那一格之後；組說過的那一句成員不再說（`sentence` 省略，只剩時間）。
+  「展開 / 收起」走受控的 `ExpandHint open`，成員長在組的 `<details>` 裡，`group-open:` 會跟著外層亮。
+- **整段的動作掛在段標題列右側**（`/review` 的「已入庫，等你看一眼」：`AuditSectionConfirm`）：標題與它 `flex-wrap`
+  共用那條 `border-b-2`，窄版換到下一行。它橫跨好幾筆下載，所以就地確認並說出件數；只在畫面上多於一格 audit 時給
+  （全在同一組裡時，那一組的鍵就是它）。整組或整段一次消失好幾列，結果那一行（`aria-live`）改成看得見的 `text-sm`。
 - **處理完就消失：** 清單外層掛 `useFocusAfterRemoval`（The Focus Takes The Next Row Rule）。
 
 ### 就地確認（`ConfirmAction` / `useInPlaceConfirm` / `ConfirmPanel`）

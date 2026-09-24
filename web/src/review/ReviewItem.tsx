@@ -1,5 +1,4 @@
 import type { ReviewRow } from '../api/review'
-import { IssueRow } from '../issues/IssueRow'
 import { AuditRow } from './AuditRow'
 import { DuplicateRow } from './DuplicateRow'
 import { PlanRow } from './PlanRow'
@@ -21,7 +20,5 @@ export function ReviewItem({ row, onDone }: { row: ReviewRow; onDone: (said: str
       return <UnmatchedRow row={row} onDone={onDone} />
     case 'duplicate':
       return <DuplicateRow row={row} onDone={onDone} />
-    case 'issue':
-      return <IssueRow issue={row.issue} heading="h3" onDone={onDone} />
   }
 }

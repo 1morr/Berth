@@ -238,7 +238,7 @@ _Avoid_: bonus, specials（Specials 指 TMDB season 0）
 _Avoid_: unknown, orphan（Orphan 是對帳用語）
 
 **Review Queue**:
-需要人工處理的統一清單：低信心 Plan、Audit、Unmatched、重複版本、Issue。一列一件事、需要人動手的排前面；不是一面牆。只有 admin。
+需要人決定入庫的統一清單：低信心 Plan、Audit、Unmatched、重複版本。一列一件事、需要人動手的排前面；不是一面牆。只有 admin。Issue 不在裡面（M3 票 05），它只在 `/issues`。
 Inventory 的「待審」「Unmatched」兩個 filter 是它在一個媒體庫上的子集（M2 票 14）：`plan` 與 `unmatched` 兩類、Job 的 Route
 指向那個媒體庫的，列與 `/review` 同一個元件。
 _Avoid_: inbox, pending list, interactive import

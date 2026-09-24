@@ -32,7 +32,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, assert_never
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from berth.adapters import fs
@@ -63,6 +63,7 @@ from berth.models.types import utcnow
 from berth.parser import parse_release
 from berth.services import claims, complete
 from berth.services.clients import ServiceClientFactory
+from berth.services.commands import Effect, command
 from berth.services.deletion import DeleteScope, delete_job
 from berth.services.hints import JobHints
 from berth.services.jobs import (
@@ -182,29 +183,29 @@ async def record_issue(
     return Recorded(issue=row, opened=True)
 
 
-async def list_issues(
-    session: AsyncSession, *, oldest_first: bool = False, limit: int | None = None
-) -> list[IssueView]:
-    """還沒有人決定的那幾件，預設最近偵測到的在前面。
+async def list_issues(session: AsyncSession) -> list[IssueView]:
+    """還沒有人決定的那幾件，最近偵測到的在前面。
 
     **只有 `open`**：這是一份工作清單，不是歷史。決定過的留在資料庫裡（`resolved_by` 與
     `detail_json.action` 說得出當時按了哪一顆），但它們不該再佔著使用者的注意力。
-
-    `oldest_first` 與 `limit` 是 Review Queue 的（`services/review.py`）：那一份是「等得最久
-    的先看」並且有上限，`/issues` 這一頁是「剛發生的先看」、不設上限。
     """
-    order = (
-        (Issue.detected_at, Issue.id)
-        if oldest_first
-        else (Issue.detected_at.desc(), Issue.id.desc())
-    )
     rows = list(
         await session.scalars(
-            select(Issue).where(Issue.status == IssueStatus.OPEN).order_by(*order).limit(limit)
+            select(Issue)
+            .where(Issue.status == IssueStatus.OPEN)
+            .order_by(Issue.detected_at.desc(), Issue.id.desc())
         )
     )
     jobs = await _live_jobs(session, rows)
     return [_view(row, jobs) for row in rows]
+
+
+@command(Effect.READ)
+async def count_open(session: AsyncSession) -> int:
+    """還開著幾件。`/review` 原位那一行「另有 N 件待處理」要它（M3 票 05）：Issue 只在
+    `/issues`。"""
+    counted = select(func.count(Issue.id)).where(Issue.status == IssueStatus.OPEN)
+    return int(await session.scalar(counted) or 0)
 
 
 async def ignore_issue(session: AsyncSession, issue_id: int, *, actor: str) -> IssueView:

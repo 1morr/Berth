@@ -18,6 +18,7 @@ import { JobLink } from '../jobs/JobLink'
 import { fileName, whenText } from '../components/queueText'
 import { displayRound } from '../i18n/displayRound'
 import { Reasons } from '../plans/Reasons'
+import { leadReason, leadText } from './leadReason'
 
 /**
  * 一個 medium 自動入庫、等人看一眼的檔案（CONTEXT.md 的 Audit、`.scratch/m2/review-shape.md`）。
@@ -29,9 +30,23 @@ import { Reasons } from '../plans/Reasons'
  *   待審核——PRODUCT 原則 2 說的破壞性動作。那一句後果要說出「complete 裡的檔案不動」，
  *   否則使用者會以為撤銷等於刪掉下載。
  *
+ * **收起時說出主要原因**（M3 票 05）：「信心 medium：季號是推論的（TMDB 只有一季）」，挑哪一條見
+ * `leadReason`；完整理由仍在展開裡。沒有降級理由時照舊說「信心 medium，已自動入庫」。
+ *
+ * 在一組（同一個 Job，`AuditGroup`）裡時是組的成員（`member`）：標題只剩季集或檔名，組已經說過的
+ * 那一句不再說（`quiet`）。
+ *
  * 成功之後那一列從佇列上消失（重問佇列），所以結果要給看不見畫面的人另外說一次（`onDone`）。
  */
-export function AuditRow({ row, onDone }: { row: AuditReviewRow; onDone: (said: string) => void }) {
+export function AuditRow({
+  row,
+  onDone,
+  member,
+}: {
+  row: AuditReviewRow
+  onDone: (said: string) => void
+  member?: { quiet: boolean }
+}) {
   const { t, i18n } = useTranslation()
   const queryClient = useQueryClient()
   const [refusal, setRefusal] = useState<string | null>(null)
@@ -71,14 +86,28 @@ export function AuditRow({ row, onDone }: { row: AuditReviewRow; onDone: (said: 
   const busy = act.isPending
   const title = displayRound(i18n.language, { 'zh-Hant': row.title, en: row.title_en })
   const episode = formatEpisode(row)
+  const lead = leadReason(row.reasons)
 
   return (
     <QueueRow
       label={t('review.audit.label')}
-      heading="h3"
+      heading={member ? 'h4' : 'h3'}
       // 作品名跟著 UI 語言走（brief §7.5）；沒有作品時退回檔名，它仍然是使用者認得出的東西。
-      title={title ? [title, episode].filter(Boolean).join(' ') : fileName(row.path)}
-      sentence={t(`review.audit.reason.${row.reason.code}`)}
+      // 組裡的成員不再說作品名：組的標題說過了。
+      title={
+        member
+          ? episode || fileName(row.path)
+          : title
+            ? [title, episode].filter(Boolean).join(' ')
+            : fileName(row.path)
+      }
+      sentence={
+        member?.quiet
+          ? undefined
+          : lead
+            ? t('review.audit.because', { lead: leadText(t, lead) })
+            : t(`review.audit.reason.${row.reason.code}`)
+      }
       when={t('review.audit.importedAt', { value: whenText(row.at, i18n.language) })}
       refusal={refusal}
       details={

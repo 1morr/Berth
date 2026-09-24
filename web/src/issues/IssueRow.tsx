@@ -22,7 +22,8 @@ import { WorkPicker } from './WorkPicker'
  * 待處理清單上的一列（`.scratch/m2/issues-shape.md`，M2 票 05）。
  *
  * **一列一件事**：一個型別色塊、一句話、一組按得下去的動作。骨架是 `QueueRow`（票 06 抽出來的，
- * 那時手上有這一列與 `AuditRow` 兩個真實案例）；`/issues` 與 `/review` 畫的是同一個元件。
+ * 那時手上有這一列與 `AuditRow` 兩個真實案例）。M3 票 05 起只在 `/issues`：`/review` 不再列 Issue，
+ * 只帶一個數字（它的佇列裡的 `issues_open`）。
  *
  * **按鈕照後端給的 `actions` 畫**，前端不重算一份規則：按得了什麼要看型別**與**這一筆的資料
  * （指不到帳本的按不了重新鏈接，沒有 Job 的按不了「連 complete 一起刪」）。那個判斷在
@@ -33,19 +34,17 @@ import { WorkPicker } from './WorkPicker'
  */
 export function IssueRow({
   issue,
-  heading = 'h2',
   onDone,
 }: {
   issue: Issue
-  heading?: 'h2' | 'h3'
-  /** 按成之後那一列會從清單上消失，這一句給看不見畫面的人（`/review` 的 `aria-live`）。 */
-  onDone?: (said: string) => void
+  /** 按成之後那一列會從清單上消失，這一句給看不見畫面的人（`/issues` 的 `aria-live`）。 */
+  onDone: (said: string) => void
 }) {
   const { t, i18n } = useTranslation()
   const queryClient = useQueryClient()
   const [refusal, setRefusal] = useState<string | null>(null)
 
-  // 同一件事住在兩份清單上（`/issues` 與 `/review`），按完兩份都要重問，另一頁才不會還列著它。
+  // `/review` 原位那一行「另有 N 件待處理」數的是同一份，按完兩份都要重問。
   const refresh = () => {
     void queryClient.invalidateQueries({ queryKey: issuesQueryOptions().queryKey })
     void queryClient.invalidateQueries({ queryKey: reviewQueryOptions().queryKey })
@@ -57,7 +56,7 @@ export function IssueRow({
     // 決定過的那一件從清單上消失（兩份都只列 `open`），而對帳的摘要數字不變——
     // 它說的是「那一輪發現了什麼」，不是「現在還剩幾件」。
     onSuccess: () => {
-      onDone?.(t('issues.done'))
+      onDone(t('issues.done'))
       refresh()
     },
     onError: (error) => {
@@ -82,7 +81,6 @@ export function IssueRow({
           ? name || issue.subject
           : fileName(issue.path) || name || issue.subject
       }
-      heading={heading}
       sentence={t(`issues.type.${issue.type}`)}
       when={t('issues.detectedAt', { value: whenText(issue.detected_at, i18n.language) })}
       refusal={refusal}

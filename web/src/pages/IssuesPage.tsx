@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { issuesQueryOptions, reconcileQueryOptions } from '../api/issues'
@@ -24,6 +25,9 @@ export function IssuesPage() {
   const issues = useQuery(issuesQueryOptions())
   const reconcile = useQuery(reconcileQueryOptions())
   const frame = useFocusAfterRemoval()
+  // 按完那一件就從清單上消失了（The Focus Takes The Next Row Rule）：這一句給看不見畫面的人。
+  // M3 票 05 之前它住在 `/review`，Issue 只留在這一頁之後搬過來。
+  const [said, setSaid] = useState('')
 
   return (
     <div ref={frame} className="mx-auto grid w-full max-w-[80rem] gap-4 px-6 py-8">
@@ -40,6 +44,10 @@ export function IssuesPage() {
 
       <ReconcileBanner />
 
+      <p aria-live="polite" className="sr-only">
+        {said}
+      </p>
+
       {issues.isPending ? (
         <Loading />
       ) : !issues.data ? (
@@ -52,7 +60,7 @@ export function IssuesPage() {
         <ul className="grid gap-3">
           {issues.data.map((issue) => (
             <li key={issue.id} className="min-w-0">
-              <IssueRow issue={issue} />
+              <IssueRow issue={issue} onDone={setSaid} />
             </li>
           ))}
         </ul>

@@ -797,6 +797,7 @@ describe('媒體庫頁', () => {
       rows: [HELD, stray(21, 'The.Bear.Special.mkv'), stray(22, 'The.Bear.Extra.mkv')],
       total: 3,
       queue_total: 7,
+      issues_open: 0,
     }
     const COUNTED = wall({ review: 1, unmatched: 2 })
 

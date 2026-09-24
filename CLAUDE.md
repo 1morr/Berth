@@ -38,7 +38,7 @@
 ## 架構規則（細節在 plan §1）
 
 - 依賴方向 `api → services → domain / parser / naming / adapters / models`；`pipeline → services`；`parser` 與 `naming` 是純函式；`adapters` 不 import `services`。import-linter 強制。
-- 改狀態的操作都是 `services` 內的命令函式；API 與 pipeline 只呼叫 services。
+- 改狀態的操作都是 `services` 內的命令函式；API 與 pipeline 只呼叫 services。M3 起新增的 service 模組裡，公開的 `async def` 都要標 `@command(Effect..., inverse=...)`（brief §14，M5 的命令登錄表讀它；`tests/unit/test_command_marks.py` 守著；M3 之前就在的模組列在它的豁免表，新模組不必登記就被守）。
 - 解析器改動必跑 `berth bench`，`auto_wrong` 不得上升。
 - 檔名 token、log、識別符英文；UI 文案一律走 i18n key，zh-Hant 與 en 並列（plan §7、`PRODUCT.md`）。
 

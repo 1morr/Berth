@@ -102,6 +102,10 @@ class TestWhoGetsIn:
         for action in ("confirm", "undo"):
             response = client.post(f"/api/review/audit/{ledger_id}/{action}", headers=BROWSER)
             assert response.status_code == 403
+        many = client.post(
+            "/api/review/audit/confirm", json={"ledger_ids": [ledger_id]}, headers=BROWSER
+        )
+        assert many.status_code == 403
 
     def test_anonymous_is_401_not_403(self, client: TestClient, roots: dict[str, Path]) -> None:
         seed_audit(client, roots)
@@ -131,33 +135,65 @@ class TestTheQueue:
         assert row["actions"] == ["confirm", "undo"]
         assert (row["path"], row["job_hash"]) == (target, HASH)
 
-    def test_an_issue_row_carries_its_type_and_the_issue_itself(
+    def test_issues_are_not_rows_only_a_count(
         self, client: TestClient, roots: dict[str, Path]
     ) -> None:
+        """acceptance：`/review` 沒有 Issue 列，原位那一行「另有 N 件待處理」要的是 `issues_open`。
+        它不算在 `total` 裡——Issue 只在 `/issues`（brief §19，2026-09-24）。"""
         seed_audit(client, roots)
-        issue_id = seed_issue(client)
+        seed_issue(client)
         sign_in(client)
 
-        rows = client.get("/api/review").json()["rows"]
+        body = client.get("/api/review").json()
 
-        assert [row["kind"] for row in rows] == ["audit", "issue"]
-        issue = rows[1]
-        assert issue["ref"] == issue_id
-        assert issue["reason"]["code"] == "library_link_missing"
-        # 同一件事在 `/issues` 與這裡是同一份形狀，畫面畫的是同一個元件。
-        assert issue["issue"] == client.get("/api/issues").json()[0]
+        assert [row["kind"] for row in body["rows"]] == ["audit"]
+        assert (body["total"], body["queue_total"], body["issues_open"]) == (1, 1, 1)
 
-    def test_an_issue_is_acted_on_in_place_and_leaves_the_queue(
+    def test_an_issue_acted_on_leaves_the_count(
         self, client: TestClient, roots: dict[str, Path]
     ) -> None:
-        """acceptance：`issue` 那一類就地按（打 `issues/*`），按完那一列從佇列消失。"""
         seed_audit(client, roots)
         issue_id = seed_issue(client)
         sign_in(client)
 
         assert client.post(f"/api/issues/{issue_id}/ignore", headers=BROWSER).status_code == 200
 
-        assert [row["kind"] for row in client.get("/api/review").json()["rows"]] == ["audit"]
+        assert client.get("/api/review").json()["issues_open"] == 0
+
+
+class TestConfirmMany:
+    """「全部確認」（M3 票 05）：同一個 Job 一組、audit 段整段，都打這一支。"""
+
+    def test_every_row_sent_leaves_the_queue(
+        self, client: TestClient, roots: dict[str, Path]
+    ) -> None:
+        ledger_id, _ = seed_audit(client, roots)
+        sign_in(client)
+
+        response = client.post(
+            "/api/review/audit/confirm", json={"ledger_ids": [ledger_id]}, headers=BROWSER
+        )
+
+        assert response.status_code == 200
+        assert response.json() == {"confirmed": 1, "skipped": 0}
+        assert client.get("/api/review").json()["rows"] == []
+        events = [row["type"] for row in client.get(f"/api/jobs/{HASH}/events").json()]
+        assert "audit_confirmed" in events
+
+    def test_a_row_already_decided_is_skipped_not_a_conflict(
+        self, client: TestClient, roots: dict[str, Path]
+    ) -> None:
+        """另一個分頁先撤銷了其中一列：照樣 200，說出跳過了幾列。"""
+        ledger_id, _ = seed_audit(client, roots)
+        sign_in(client)
+        client.post(f"/api/review/audit/{ledger_id}/undo", headers=BROWSER)
+
+        response = client.post(
+            "/api/review/audit/confirm", json={"ledger_ids": [ledger_id, 404]}, headers=BROWSER
+        )
+
+        assert response.status_code == 200
+        assert response.json() == {"confirmed": 0, "skipped": 2}
 
 
 class TestConfirm:
@@ -171,7 +207,12 @@ class TestConfirm:
         response = client.post(f"/api/review/audit/{ledger_id}/confirm", headers=BROWSER)
 
         assert response.status_code == 204
-        assert client.get("/api/review").json() == {"rows": [], "total": 0, "queue_total": 0}
+        assert client.get("/api/review").json() == {
+            "rows": [],
+            "total": 0,
+            "queue_total": 0,
+            "issues_open": 0,
+        }
         events = [row["type"] for row in client.get(f"/api/jobs/{HASH}/events").json()]
         assert "audit_confirmed" in events
 
@@ -248,9 +289,10 @@ class TestOneLibrary:
         body = client.get("/api/review", params={"library": "item-2"}).json()
 
         assert [row["kind"] for row in body["rows"]] == ["plan"]
-        assert (body["total"], body["queue_total"]) == (1, 2)
+        # 整份佇列只剩那一份 Plan：Issue 不在佇列上（M3 票 05），它是另一個數字。
+        assert (body["total"], body["queue_total"], body["issues_open"]) == (1, 1, 1)
         elsewhere = client.get("/api/review", params={"library": "item-9"}).json()
-        assert (elsewhere["rows"], elsewhere["total"], elsewhere["queue_total"]) == ([], 0, 2)
+        assert (elsewhere["rows"], elsewhere["total"], elsewhere["queue_total"]) == ([], 0, 1)
 
     def test_without_it_the_two_totals_are_the_same(
         self, client: TestClient, roots: dict[str, Path]
@@ -261,7 +303,7 @@ class TestOneLibrary:
 
         body = client.get("/api/review").json()
 
-        assert (body["total"], body["queue_total"]) == (2, 2)
+        assert (body["total"], body["queue_total"]) == (1, 1)
 
     def test_an_ordinary_user_is_still_refused(
         self, client: TestClient, roots: dict[str, Path]

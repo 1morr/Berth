@@ -364,6 +364,7 @@ ACCESS: dict[tuple[str, str], Access] = {
     # M2 驗收第四條點名的六組（plan §11.3、票 16）：審核、Issue、rematch、對帳、刪除、重新入庫。
     ("GET", "/review"): Access.ADMIN,
     ("POST", "/review/audit/*/confirm"): Access.ADMIN,
+    ("POST", "/review/audit/confirm"): Access.ADMIN,
     ("POST", "/review/audit/*/undo"): Access.ADMIN,
     ("POST", "/review/duplicate/*/*"): Access.ADMIN,
     ("GET", "/issues"): Access.ADMIN,
@@ -484,8 +485,8 @@ class TestWhoEachEndpointIsFor:
         """從 app 上的路由算，不從表上抄：`/review` 底下新掛一支，它也在這一組裡。"""
         named = {route for route in APP_ROUTES if named_by_m2(route)}
 
-        # review 4 + issues 3 + files 1 + reconcile 2 + jobs 上的 2。新掛一支就是 13，有人得看一眼。
-        assert len(named) == 12, sorted(named)
+        # review 5 + issues 3 + files 1 + reconcile 2 + jobs 上的 2。新掛一支就是 14，有人得看一眼。
+        assert len(named) == 13, sorted(named)
         assert {route: ACCESS[route] for route in named} == dict.fromkeys(named, Access.ADMIN)
 
     @pytest.mark.parametrize(

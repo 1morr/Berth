@@ -1082,12 +1082,14 @@ const zhHant = {
     // 這一頁最好的狀態是沒有東西。
     empty: '沒有事在等你。',
     off: '讀不到審核佇列。Berth 自己的 API 沒有回應，先確認它還活著。',
-    // 三段：需要人動手的排前面（`.scratch/m2/review-shape.md`）。
+    // 兩段：需要人動手的排前面（`.scratch/m2/review-shape.md`）。Issue 不在這一頁（M3 票 05），
+    // 原位一行連到 `/issues`，0 件時不出現。
     section: {
       decide: '要你決定',
       look: '已入庫，等你看一眼',
-      outside: '外面發生的事',
     },
+    issues_one: '另有 {{count}} 件待處理',
+    issues_other: '另有 {{count}} 件待處理',
     // plan 那一類（M2 票 07，`.scratch/m2/plan-edit-shape.md`）：一份停在 review 的計劃，逐列可改。
     plan: {
       label: '待審核',
@@ -1152,6 +1154,41 @@ const zhHant = {
       reason: {
         medium_auto_imported: '信心 medium，已自動入庫',
       },
+      // 收起時說出主要原因（M3 票 05，`review/leadReason.ts`）：使用者不必展開就知道要看什麼。
+      because: '信心 medium：{{lead}}',
+      lead: {
+        title_mismatch: '發佈標題看起來不像這部作品',
+        strategy_outlier: '這一包其餘的檔案是靠{{strategy}}讀出季集的，這一個不是',
+        single_season: '季號是推論的（TMDB 只有一季）',
+        season_from_arc: '季號是從篇章名推論的',
+        final_season: '季號是推論的（「最終季」當成最後一季）',
+        air_date_run: '季號是換算的（依播出日切成幾輪）',
+        cour_offset: '集號是換算的（這一季的後半部）',
+        absolute_group: '集號是換算的（TMDB 的絕對編號）',
+        absolute_cumulative: '集號是換算的（各季集數累加）',
+        specials_numbering: '字幕組的特典編號不一定與 TMDB 一致',
+      },
+      // 同一個 Job 的那一組（M3 票 05）。原因相同就在這裡說一次，組裡的每一列不再重複。
+      group: {
+        same_one: '{{count}} 個檔案，信心 medium：{{lead}}',
+        same_other: '{{count}} 個檔案，信心 medium：{{lead}}',
+        none_one: '{{count}} 個檔案信心 medium，已自動入庫',
+        none_other: '{{count}} 個檔案信心 medium，已自動入庫',
+        mixed_one: '{{count}} 個檔案信心 medium，原因不只一種，展開看每一個',
+        mixed_other: '{{count}} 個檔案信心 medium，原因不只一種，展開看每一個',
+      },
+      confirmAll: '全部確認',
+      // 整段的「全部確認」就地確認並說出件數；範圍是畫面上列出的那些。
+      confirmSection_one:
+        '這一段列出的 {{count}} 個已入庫檔案都會記成「對的」，檔案不動。按下之後才進來的不算在內。',
+      confirmSection_other:
+        '這一段列出的 {{count}} 個已入庫檔案都會記成「對的」，檔案不動。按下之後才進來的不算在內。',
+      confirmSectionAction_one: '確認這 {{count}} 個',
+      confirmSectionAction_other: '確認這 {{count}} 個',
+      confirmedMany_one: '已確認 {{count}} 個，從佇列上收掉了。',
+      confirmedMany_other: '已確認 {{count}} 個，從佇列上收掉了。',
+      skipped_one: '{{count}} 個已經在別處確認或撤銷過，跳過了。',
+      skipped_other: '{{count}} 個已經在別處確認或撤銷過，跳過了。',
       importedAt: '入庫於 {{value}}',
       target: '媒體庫路徑',
       source: '來源路徑',
@@ -2997,8 +3034,9 @@ const en: Translations<typeof zhHant> = {
     section: {
       decide: 'Needs a decision',
       look: 'In the library, awaiting a look',
-      outside: 'Happened outside Berth',
     },
+    issues_one: '{{count}} more issue is waiting',
+    issues_other: '{{count}} more issues are waiting',
     plan: {
       label: 'NEEDS REVIEW',
       reason: {
@@ -3061,6 +3099,40 @@ const en: Translations<typeof zhHant> = {
       reason: {
         medium_auto_imported: 'Medium confidence, imported automatically',
       },
+      because: 'Medium confidence: {{lead}}',
+      lead: {
+        title_mismatch: 'the release title does not look like this title',
+        strategy_outlier: 'the rest of this batch was read by {{strategy}}, this one was not',
+        single_season: 'the season was inferred (TMDB has only one season)',
+        season_from_arc: 'the season was inferred from an arc name',
+        final_season: 'the season was inferred (“final season” taken as the last one)',
+        air_date_run: 'the season was worked out by splitting air dates into runs',
+        cour_offset: 'the episode was worked out (a later part of the season)',
+        absolute_group: 'the episode was worked out (TMDB absolute numbering)',
+        absolute_cumulative: 'the episode was worked out (season lengths added up)',
+        specials_numbering: 'the group’s special numbering may not match TMDB',
+      },
+      group: {
+        same_one: '{{count}} file, medium confidence: {{lead}}',
+        same_other: '{{count}} files, medium confidence: {{lead}}',
+        none_one: '{{count}} file at medium confidence, imported automatically',
+        none_other: '{{count}} files at medium confidence, imported automatically',
+        mixed_one:
+          '{{count}} file at medium confidence for more than one reason — expand to see each',
+        mixed_other:
+          '{{count}} files at medium confidence for more than one reason — expand to see each',
+      },
+      confirmAll: 'Confirm all',
+      confirmSection_one:
+        'The {{count}} imported file listed in this section is marked as right; no file is touched. Anything that arrives after you press this is not included.',
+      confirmSection_other:
+        'The {{count}} imported files listed in this section are marked as right; no file is touched. Anything that arrives after you press this is not included.',
+      confirmSectionAction_one: 'Confirm {{count}} file',
+      confirmSectionAction_other: 'Confirm {{count}} files',
+      confirmedMany_one: 'Confirmed {{count}} file; it is off the queue.',
+      confirmedMany_other: 'Confirmed {{count}} files; they are off the queue.',
+      skipped_one: '{{count}} had already been confirmed or undone elsewhere and was skipped.',
+      skipped_other: '{{count}} had already been confirmed or undone elsewhere and were skipped.',
       importedAt: 'Imported {{value}}',
       target: 'Library path',
       source: 'Source path',

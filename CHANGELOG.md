@@ -597,8 +597,20 @@ Issue、修正、對帳、刪除與重新入庫的每一條端點都是 403，�
   登入即可），`tests/integration/test_auth_api.py` 以一張涵蓋 app 上每一條路由的表逐條比對——新增端點而沒決定
   它是誰的、修正類的端點忘了進門禁、一般使用者的端點被誤關，三種都會紅；admin 那幾條另以 `user` 真的打一次，
   拿到 403。前端的導覽列逐角色列齊。
+- **審核頁的「全部確認」**（M3 票 05）：同一個 Job 的 audit 收成一組、一顆「全部確認」；「已入庫，等你看一眼」
+  那一段的標題列另有一顆整段的，先就地確認並說出件數，只確認畫面上列出的那些。後端一支
+  `POST /review/audit/confirm`（`{ledger_ids}` → `{confirmed, skipped}`），已經被別處確認或撤銷的列跳過、
+  不算失敗。
+- **收起的 audit 列說得出為什麼是 medium**（M3 票 05）：「信心 medium：季號是推論的（TMDB 只有一季）」，
+  整組原因相同時說一次；完整理由仍在展開裡。
+- **命令的副作用標記**（M3 票 05，brief §14）：`services/commands.command(Effect, inverse=...)`，只帶 metadata，
+  M5 的命令登錄表讀它；`tests/unit/test_command_marks.py` 守著反向命令必須是已標記的命令，M3 起新增的 service
+  模組裡公開的 `async def` 都要有標記。
 
 ### Changed
+- **`/review` 不再列 Issue**（M3 票 05，brief §19 2026-09-24）：Issue 只在 `/issues`，`/review` 原位一行
+  「另有 N 件待處理」連過去（`GET /review` 多一格 `issues_open`，`kind` 少了 `issue`，`total` 與 `queue_total`
+  不再算 Issue）。處理完一件 Issue 的那一句朗讀搬到 `/issues`。
 
 - **媒體庫牆一頁 50 部**（M2 票 13，原本照 jellyfin-web 的 100）：100 部的牆量到 1,732 個 DOM 節點、222 個 Tab 停留點；
   減半之後 931 個、121 個，`GET /api/inventory/{id}` 的回應 53.7 KB → 27.6 KB（`--scenario library` 的 Movies）。

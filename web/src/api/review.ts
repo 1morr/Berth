@@ -14,8 +14,6 @@ export type PlanReviewRow = Schemas['PlanRowOut']
 
 export type AuditReviewRow = Schemas['AuditRowOut']
 
-export type IssueReviewRow = Schemas['IssueRowOut']
-
 /** 對不到、留在 complete 原位的檔案。三個動作打 `api/files.ts` 的 `rematch`（帶 `job_file_id`）。 */
 export type UnmatchedReviewRow = Schemas['UnmatchedRowOut']
 
@@ -29,6 +27,9 @@ export type DuplicateDecision = Schemas['DuplicateDecision']
 export type DuplicateDecided = Schemas['DuplicateDecidedOut']
 /** 撤銷之後媒體庫裡那個檔案怎麼了：拆掉了，或那裡的已經不是 Berth 放的那一個（M3 票 01）。 */
 export type AuditUndone = Schemas['AuditUndoneOut']
+
+/** 「全部確認」之後：確認了幾列、跳過了幾列（已經被別處確認或撤銷的）。 */
+export type AuditsConfirmed = Schemas['AuditsConfirmedOut']
 
 /**
  * 佇列上**現在會出現**的幾種（`domain.ReviewKind` 的子集）。取自列的聯集而不是那個 enum：
@@ -79,6 +80,14 @@ export function libraryReviewQueryOptions(libraryId: string) {
 /** 「它是對的」：清掉兩處 audit 旗標，檔案不動。 */
 export async function confirmAudit(ledgerId: number) {
   return apiPost<void>(`/review/audit/${ledgerId}/confirm`)
+}
+
+/**
+ * 「全部確認」（M3 票 05）：同一個 Job 一組，或 audit 段整段。送的是**畫面上列出的**那幾個帳本 id，
+ * 按下之後才進來的 audit 不會被順手確認掉。已經被別處決定過的列後端跳過，不是失敗。
+ */
+export async function confirmAudits(ledgerIds: readonly number[]) {
+  return apiPost<AuditsConfirmed>('/review/audit/confirm', { ledger_ids: ledgerIds })
 }
 
 /** 「它是錯的」：拆掉那個硬鏈接、刪掉帳本那一列，那一筆下載回到待審核。 */

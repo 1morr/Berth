@@ -820,6 +820,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/review/audit/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Confirm Many
+         * @description 「全部確認」：同一個 Job 一組、或 audit 段整段（M3 票 05）。等於逐列按確認一次做完。
+         *
+         *     已經被別處確認或撤銷的列跳過、算進 `skipped`，不是 409：按下去的人要的是「這幾列不再等我」，
+         *     而它們已經不等了。所以這一支沒有拒絕的回應。
+         */
+        post: operations["post_confirm_many_api_review_audit_confirm_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/review/audit/{ledger_id}/undo": {
         parameters: {
             query?: never;
@@ -1612,6 +1635,16 @@ export interface components {
             unmanaged: boolean;
         };
         /**
+         * AuditsConfirmedOut
+         * @description 確認了幾列、跳過了幾列（已經被別處確認或撤銷的，不算失敗）。
+         */
+        AuditsConfirmedOut: {
+            /** Confirmed */
+            confirmed: number;
+            /** Skipped */
+            skipped: number;
+        };
+        /**
          * CollectionType
          * @description Jellyfin 媒體庫的類型；沿用 Jellyfin 的字串（brief §4.3）。
          * @enum {string}
@@ -1623,6 +1656,14 @@ export interface components {
          * @enum {string}
          */
         Confidence: "high" | "medium" | "low";
+        /**
+         * ConfirmAuditsIn
+         * @description 「全部確認」送的那幾列：畫面上列出的帳本 id，不是伺服器端的「全部」（M3 票 05）。
+         */
+        ConfirmAuditsIn: {
+            /** Ledger Ids */
+            ledger_ids: number[];
+        };
         /**
          * ConnectIn
          * @description 既有服務的連線表單。每個服務只用得到其中幾個欄位。
@@ -2095,17 +2136,6 @@ export interface components {
             query: string;
         };
         /**
-         * IssueReasonOut
-         * @description `issue` 那一列的理由：code 是 Issue 的型別，參數是它逐型別不同的那幾格。
-         */
-        IssueReasonOut: {
-            code: components["schemas"]["IssueType"];
-            /** Params */
-            params: {
-                [key: string]: unknown;
-            };
-        };
-        /**
          * IssueRefusal
          * @description 對一件 Issue 動手或按下對帳時，在做出任何改變之前就停下來了（M2 票 05）。
          *
@@ -2138,31 +2168,6 @@ export interface components {
              * @default
              */
             media?: string;
-        };
-        /**
-         * IssueRowOut
-         * @description 一件還開著的 Issue。`ref` 是 Issue 的 id，動作打 `POST /issues/{ref}/resolve`。
-         *
-         *     **整件 `IssueOut` 跟著來**：同一件事在 `/issues` 與這裡畫的是同一個元件，而它要的每一格
-         *     （來源路徑、按得了哪幾顆）都在那一份裡——在這裡另外攤一份，兩頁就會各說各的。
-         */
-        IssueRowOut: {
-            /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
-             */
-            kind: "issue";
-            /** Ref */
-            ref: number;
-            reason: components["schemas"]["IssueReasonOut"];
-            /** Actions */
-            actions: components["schemas"]["IssueAction"][];
-            /**
-             * At
-             * Format: date-time
-             */
-            at: string;
-            issue: components["schemas"]["IssueOut"];
         };
         /**
          * IssueStatus
@@ -3078,11 +3083,13 @@ export interface components {
          */
         ReviewQueueOut: {
             /** Rows */
-            rows: (components["schemas"]["PlanRowOut"] | components["schemas"]["AuditRowOut"] | components["schemas"]["UnmatchedRowOut"] | components["schemas"]["DuplicateRowOut"] | components["schemas"]["IssueRowOut"])[];
+            rows: (components["schemas"]["PlanRowOut"] | components["schemas"]["AuditRowOut"] | components["schemas"]["UnmatchedRowOut"] | components["schemas"]["DuplicateRowOut"])[];
             /** Total */
             total: number;
             /** Queue Total */
             queue_total: number;
+            /** Issues Open */
+            issues_open: number;
         };
         /**
          * ReviewReason
@@ -5441,6 +5448,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ReviewRefusalOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_confirm_many_api_review_audit_confirm_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfirmAuditsIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditsConfirmedOut"];
                 };
             };
             /** @description Validation Error */

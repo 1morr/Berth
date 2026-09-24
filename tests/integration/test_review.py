@@ -34,13 +34,13 @@ from berth.domain import (
 from berth.models import Job, LedgerEntry, PlanItem
 from berth.services.events import EventHub
 from berth.services.importer import sweep_imports
-from berth.services.issues import record_issue
+from berth.services.issues import count_open, record_issue
 from berth.services.plan import sweep_plans
 from berth.services.review import (
     AuditRow,
-    IssueRow,
     ReviewRejectedError,
     confirm_audit,
+    confirm_audits,
     review_queue,
     undo_audit,
 )
@@ -78,6 +78,30 @@ async def audited(session: AsyncSession, roots: dict[str, Path]) -> tuple[Job, L
     return job, entry
 
 
+#: 同一包三集，都只寫了絕對集號（同 `SINGLE`）：累計換算成 S02E01–E03，三個都是 medium、都自動
+#: 入庫掛 audit。批次確認要的就是「同一個 Job 好幾列」。
+PACK = "[ANi] SPY×FAMILY 26-28 [1080P][WEB-DL][AAC AVC][CHT]"
+PACK_FILES = tuple(
+    (f"{PACK}/[ANi] SPY×FAMILY - {number} [1080P][WEB-DL][AAC AVC][CHT].mkv", 1_400_000_000)
+    for number in (26, 27, 28)
+)
+
+
+async def audited_pack(
+    session: AsyncSession, roots: dict[str, Path]
+) -> tuple[Job, list[LedgerEntry]]:
+    """一筆三個檔案都 medium 自動入庫的 Job：三條硬鏈接、三列帳本都掛著 `audit`。"""
+    media, route, factory = await ready(session, roots)
+    job = await downloaded_job(session, media, route, roots, name=PACK, files=PACK_FILES)
+    await sweep_plans(session, factory, EventHub(), now=NOW)
+    _put_on_disk(roots, PACK_FILES)
+    await sweep_imports(session, factory, EventHub(), now=NOW)
+    assert await state_of(session, job) is JobState.IMPORTED
+    entries = await ledger_of(session)
+    assert [entry.audit for entry in entries] == [True, True, True]
+    return job, entries
+
+
 async def audit_rows(session: AsyncSession) -> list[AuditRow]:
     return [row for row in (await review_queue(session)).rows if isinstance(row, AuditRow)]
 
@@ -101,95 +125,21 @@ class TestTheQueue:
         # 解析器的理由是英文原文，給人判斷的證據。至少要有一句——medium 從來不是沒有原因的。
         assert row.reasons
 
-    async def test_an_open_issue_is_on_it_with_the_buttons_issues_worked_out(
+    async def test_an_open_issue_is_not_on_it(
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
+        """Issue 只在 `/issues`（brief §19，2026-09-24）：`/review` 是「入庫要人決定」，Issue 是
+        「Berth 與外界對不上」。佇列上只剩一個數字（`count_open`），畫面連過去。"""
         await ready(session, roots)
         await record_issue(session, IssueType.LIBRARY_LINK_MISSING, path="/lib/a.mkv")
-        await session.commit()
-
-        (row,) = (await review_queue(session)).rows
-
-        assert isinstance(row, IssueRow)
-        assert row.kind is ReviewKind.ISSUE
-        assert row.issue.type is IssueType.LIBRARY_LINK_MISSING
-        # 沒有帳本也沒有 Job 的那一件只剩「忽略」——與 `/issues` 同一份判斷。
-        assert row.issue.actions == ()
-
-    async def test_the_work_that_needs_a_hand_comes_first(
-        self, session: AsyncSession, roots: dict[str, Path]
-    ) -> None:
-        """audit 排在 issue 前面，**即使那一件 Issue 比較舊**：類別先於時間（plan §6）。"""
-        _, entry = await audited(session, roots)
-        await record_issue(
-            session,
-            IssueType.LIBRARY_LINK_MISSING,
-            path="/lib/old.mkv",
-            now=entry.created_at - timedelta(days=30),
-        )
-        await session.commit()
-
-        kinds = [row.kind for row in (await review_queue(session)).rows]
-
-        assert kinds == [ReviewKind.AUDIT, ReviewKind.ISSUE]
-
-    async def test_within_a_kind_the_oldest_comes_first(
-        self, session: AsyncSession, roots: dict[str, Path]
-    ) -> None:
-        """同一類之內是「等得最久的先看」——與 `/issues` 那一頁（剛發生的在前）相反。"""
-        await ready(session, roots)
-        for days, name in ((1, "new"), (9, "old"), (5, "middle")):
-            await record_issue(
-                session,
-                IssueType.LIBRARY_LINK_MISSING,
-                path=f"/lib/{name}.mkv",
-                now=NOW - timedelta(days=days),
-            )
-        await session.commit()
-
-        rows = (await review_queue(session)).rows
-        paths = [row.issue.path for row in rows if isinstance(row, IssueRow)]
-
-        assert paths == ["/lib/old.mkv", "/lib/middle.mkv", "/lib/new.mkv"]
-
-    async def test_past_the_limit_it_returns_the_first_ones_and_the_total(
-        self, session: AsyncSession, roots: dict[str, Path]
-    ) -> None:
-        """acceptance：造 201 列，回前 200 並帶 `total`。**不分頁**（plan §6）。"""
-        await ready(session, roots)
-        for index in range(201):
-            await record_issue(
-                session,
-                IssueType.LIBRARY_LINK_MISSING,
-                path=f"/lib/{index:03d}.mkv",
-                now=NOW + timedelta(minutes=index),
-            )
         await session.commit()
 
         queue = await review_queue(session)
 
-        assert queue.total == 201
-        assert len(queue.rows) == 200
-        # 截掉的是最新的那一件，不是隨便一件。
-        last = queue.rows[-1]
-        assert isinstance(last, IssueRow)
-        assert last.issue.path == "/lib/199.mkv"
+        assert (queue.rows, queue.total) == ([], 0)
+        assert await count_open(session) == 1
 
-    async def test_the_limit_counts_across_kinds(
-        self, session: AsyncSession, roots: dict[str, Path]
-    ) -> None:
-        """前面那一類吃掉的格子，後面那一類就少那幾格；`total` 仍然是兩類加起來。"""
-        await audited(session, roots)
-        await record_issue(session, IssueType.LIBRARY_LINK_MISSING, path="/lib/a.mkv")
-        await record_issue(session, IssueType.LIBRARY_LINK_MISSING, path="/lib/b.mkv")
-        await session.commit()
-
-        queue = await review_queue(session, limit=2)
-
-        assert queue.total == 3
-        assert [row.kind for row in queue.rows] == [ReviewKind.AUDIT, ReviewKind.ISSUE]
-
-    async def test_a_decided_issue_is_not_on_it(
+    async def test_a_decided_issue_is_not_counted(
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
         await ready(session, roots)
@@ -197,7 +147,48 @@ class TestTheQueue:
         recorded.issue.status = IssueStatus.IGNORED
         await session.commit()
 
-        assert (await review_queue(session)).total == 0
+        assert await count_open(session) == 0
+
+    async def test_within_a_kind_the_oldest_comes_first(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """同一類之內是「等得最久的先看」——與 `/issues` 那一頁（剛發生的在前）相反。"""
+        _, entries = await audited_pack(session, roots)
+        for days, entry in zip((1, 9, 5), entries, strict=True):
+            entry.created_at = NOW - timedelta(days=days)
+        await session.commit()
+
+        order = [row.ledger_id for row in await audit_rows(session)]
+
+        assert order == [entries[1].id, entries[2].id, entries[0].id]
+
+    async def test_past_the_limit_it_returns_the_first_ones_and_the_total(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """超過上限回前面那幾列並帶 `total`。**不分頁**（plan §6）。"""
+        _, entries = await audited_pack(session, roots)
+
+        queue = await review_queue(session, limit=2)
+
+        assert queue.total == 3
+        assert [row.kind for row in queue.rows] == [ReviewKind.AUDIT, ReviewKind.AUDIT]
+        # 截掉的是最新的那一件，不是隨便一件。
+        assert entries[-1].id not in {
+            row.ledger_id for row in queue.rows if isinstance(row, AuditRow)
+        }
+
+    async def test_the_limit_counts_across_kinds(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """前面那一類吃掉的格子，後面那一類就少那幾格；`total` 仍然是各類加起來。撤銷一列讓那一筆
+        回到 review：`plan` 排在 `audit` 前面，**即使那兩個 audit 比較舊**——類別先於時間。"""
+        _, entries = await audited_pack(session, roots)
+        await undo_audit(session, entries[0].id, actor=ACTOR)
+
+        queue = await review_queue(session, limit=2)
+
+        assert queue.total == 3
+        assert [row.kind for row in queue.rows] == [ReviewKind.PLAN, ReviewKind.AUDIT]
 
 
 class TestConfirm:
@@ -259,6 +250,99 @@ class TestConfirm:
             await confirm_audit(session, 404, actor=ACTOR)
 
         assert refused.value.reason is ReviewRefusal.LEDGER_MISSING
+
+
+class TestConfirmMany:
+    """「全部確認」：同一個 Job 一組一顆、audit 段整段一顆，後端是同一個命令（M3 票 05）。
+
+    按下去等於逐列按確認、一次做完；已經被別處撤銷或確認的列跳過，不算失敗。範圍是**送來的那幾個
+    id**——畫面上列出的那些，不是伺服器端的「全部」。
+    """
+
+    async def test_every_row_leaves_the_queue_and_both_flags_are_cleared(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        _, entries = await audited_pack(session, roots)
+
+        outcome = await confirm_audits(session, [entry.id for entry in entries], actor=ACTOR)
+
+        assert (outcome.confirmed, outcome.skipped) == (3, 0)
+        assert await audit_rows(session) == []
+        for entry in entries:
+            await session.refresh(entry)
+        assert [entry.audit for entry in entries] == [False, False, False]
+        assert [item.audit for item in await items_of(session)] == [False, False, False]
+
+    async def test_each_row_gets_its_own_line_on_the_timeline(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """逐列按確認的語意：時間線上一列一筆 `audit_confirmed`，不是一筆「確認了三個」。"""
+        _, entries = await audited_pack(session, roots)
+
+        await confirm_audits(session, [entry.id for entry in entries], actor=ACTOR)
+
+        confirmed = [row for row in await events_of(session) if row.type == "audit_confirmed"]
+        assert [(row.actor, (row.payload_json or {})["ledger"]) for row in confirmed] == [
+            (ACTOR, entry.id) for entry in entries
+        ]
+
+    async def test_a_row_undone_elsewhere_is_skipped_not_a_failure(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """acceptance：中途有一列已被撤銷（另一個分頁）時照樣成功，並說出跳過幾列。"""
+        _, entries = await audited_pack(session, roots)
+        ids = [entry.id for entry in entries]
+        await undo_audit(session, ids[1], actor=ACTOR)
+
+        outcome = await confirm_audits(session, ids, actor=ACTOR)
+
+        assert (outcome.confirmed, outcome.skipped) == (2, 1)
+        assert await audit_rows(session) == []
+
+    async def test_a_row_confirmed_elsewhere_is_skipped_too(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        _, entries = await audited_pack(session, roots)
+        ids = [entry.id for entry in entries]
+        await confirm_audit(session, ids[0], actor=ACTOR)
+
+        outcome = await confirm_audits(session, ids, actor=ACTOR)
+
+        assert (outcome.confirmed, outcome.skipped) == (2, 1)
+        # 跳過的那一列不寫第二筆事件。
+        confirmed = [row for row in await events_of(session) if row.type == "audit_confirmed"]
+        assert len(confirmed) == 3
+
+    async def test_only_the_ids_sent_are_confirmed(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """acceptance：按下前一刻才出現的 audit 留在清單上——前端送的是它看到的那幾個 id。"""
+        _, entries = await audited_pack(session, roots)
+        seen, arrived = [entry.id for entry in entries[:2]], entries[2].id
+
+        outcome = await confirm_audits(session, seen, actor=ACTOR)
+
+        assert (outcome.confirmed, outcome.skipped) == (2, 0)
+        assert [row.ledger_id for row in await audit_rows(session)] == [arrived]
+
+    async def test_the_same_id_twice_counts_once(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        _, entries = await audited_pack(session, roots)
+
+        outcome = await confirm_audits(session, [entries[0].id, entries[0].id], actor=ACTOR)
+
+        assert (outcome.confirmed, outcome.skipped) == (1, 0)
+
+    async def test_nothing_sent_is_nothing_done(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        await audited_pack(session, roots)
+
+        outcome = await confirm_audits(session, [], actor=ACTOR)
+
+        assert (outcome.confirmed, outcome.skipped) == (0, 0)
+        assert len(await audit_rows(session)) == 3
 
 
 class TestUndo:

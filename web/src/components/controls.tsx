@@ -291,6 +291,7 @@ export function ConfirmAction({
   warning,
   pending = false,
   pendingLabel,
+  onOpen,
   onConfirm,
 }: {
   label: string
@@ -298,6 +299,8 @@ export function ConfirmAction({
   warning: ReactNode
   pending?: boolean
   pendingLabel: string
+  /** 確認展開的那一刻。範圍要在使用者讀到後果時就定下來的（整段確認的那幾個 id）在這裡凍結。 */
+  onOpen?: () => void
   onConfirm: () => void
 }) {
   const { t } = useTranslation()
@@ -306,7 +309,15 @@ export function ConfirmAction({
 
   if (!asked) {
     return (
-      <GhostButton ref={trigger} type="button" disabled={pending} onClick={open}>
+      <GhostButton
+        ref={trigger}
+        type="button"
+        disabled={pending}
+        onClick={() => {
+          onOpen?.()
+          open()
+        }}
+      >
         {pending ? pendingLabel : label}
       </GhostButton>
     )

@@ -1,9 +1,10 @@
+import { focusManager } from '@tanstack/react-query'
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import i18next from 'i18next'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import type { Issue } from '../api/issues'
-import type { AuditReviewRow, IssueReviewRow, ReviewQueue } from '../api/review'
+import type { AuditReviewRow, DuplicateReviewRow, ReviewQueue } from '../api/review'
 import { HEALTHY, stubApi, type StubRoute } from '../test/fetch'
 import { renderApp } from '../test/render'
 
@@ -16,6 +17,7 @@ const TARGET =
   '/data/library/anime/SPY x FAMILY (2022) [tmdbid-120089]/Season 02/SPY x FAMILY (2022) - S02E01.mkv'
 const SOURCE = '/data/torrent/complete/anime/[ANi] SPY×FAMILY - 26.mkv'
 const HASH = '4bd0f6ef1d3b1e3cbb1e1b6b6c2a9c7d8e5f0a1b'
+const OTHER = 'aa11bb22cc33dd44ee55ff66aa77bb88cc99dd00'
 
 function audit(overrides: Partial<AuditReviewRow> = {}): AuditReviewRow {
   return {
@@ -39,33 +41,31 @@ function audit(overrides: Partial<AuditReviewRow> = {}): AuditReviewRow {
   }
 }
 
-function issueRow(overrides: Partial<Issue> = {}): IssueReviewRow {
-  const issue: Issue = {
-    id: 3,
-    type: 'library_link_missing',
-    subject: TARGET,
-    job_hash: HASH,
-    ledger_id: 9,
-    path: '/data/library/anime/Show/Season 01/Show - S01E02.mkv',
-    detail: {},
-    status: 'open',
-    detected_at: '2026-09-21T04:00:00Z',
-    actions: ['forget'],
-    query: '',
-    ...overrides,
-  }
+function duplicate(): DuplicateReviewRow {
   return {
-    kind: 'issue',
-    ref: issue.id,
-    reason: { code: issue.type, params: issue.detail },
-    actions: issue.actions,
-    at: issue.detected_at,
-    issue,
+    kind: 'duplicate',
+    ref: 40,
+    reason: { code: 'same_version', params: {} },
+    actions: ['replace', 'keep_both', 'skip'],
+    at: '2026-09-22T05:00:00Z',
+    media_id: 'tv:120089',
+    title: 'SPY×FAMILY 間諜家家酒',
+    title_en: 'SPY x FAMILY',
+    job_hash: OTHER,
+    job_name: '[Group] SPY×FAMILY S01E03',
+    path: '/data/torrent/complete/anime/[Group] SPY×FAMILY S01E03.mkv',
+    season: 1,
+    episode_start: 3,
+    episode_end: null,
+    known_path: '/data/library/anime/SPY x FAMILY/Season 01/SPY x FAMILY - S01E03.mkv',
+    known_season: 1,
+    known_episode_start: 3,
+    known_episode_end: null,
   }
 }
 
-function queue(rows: ReviewQueue['rows'], total = rows.length): StubRoute {
-  return { body: { rows, total } }
+function queue(rows: ReviewQueue['rows'], total = rows.length, issuesOpen = 0): StubRoute {
+  return { body: { rows, total, queue_total: total, issues_open: issuesOpen } }
 }
 
 function render(routes: Record<string, StubRoute | (() => StubRoute)> = {}) {
@@ -77,6 +77,12 @@ function render(routes: Record<string, StubRoute | (() => StubRoute)> = {}) {
   })
 }
 
+/** `POST /api/review/audit/confirm` 送出去的那幾個 id；還沒送是 `null`。 */
+function sentIds(stub: ReturnType<typeof render>) {
+  const call = stub.mock.calls.find(([url]) => url === '/api/review/audit/confirm')
+  return call ? (JSON.parse(String(call[1]?.body)) as { ledger_ids: number[] }).ledger_ids : null
+}
+
 describe('審核佇列', () => {
   it('audit 那一列說得出是哪一集、為什麼在這裡、按得了什麼', async () => {
     render({ [QUEUE]: queue([audit()]) })
@@ -85,8 +91,8 @@ describe('審核佇列', () => {
     const row = await screen.findByRole('article')
 
     expect(within(row).getByRole('heading')).toHaveTextContent('SPY×FAMILY 間諜家家酒 S02E01')
-    // 理由是 code，句子是前端翻的（票上那一條驗收）。
-    expect(within(row).getByText(/信心 medium，已自動入庫/)).toBeInTheDocument()
+    // 理由是 code，句子是前端翻的；收起時就說出主要原因，不必展開（M3 票 05）。
+    expect(within(row).getByText(/信心 medium：集號是換算的（各季集數累加）/)).toBeInTheDocument()
     expect(within(row).getByText('待確認')).toBeInTheDocument()
     expect(within(row).getByRole('button', { name: '確認' })).toBeInTheDocument()
     expect(within(row).getByRole('button', { name: '撤銷' })).toBeInTheDocument()
@@ -117,15 +123,14 @@ describe('審核佇列', () => {
     )
   })
 
-  it('需要人動手的排前面：兩類各在自己那一段，順序照後端', async () => {
-    render({ [QUEUE]: queue([audit(), issueRow()]) })
+  it('audit 與重複版本在同一段，空的段不畫', async () => {
+    render({ [QUEUE]: queue([audit(), duplicate()]) })
     renderApp('/review')
 
     await screen.findAllByRole('article')
     const headings = screen.getAllByRole('heading', { level: 2 }).map((node) => node.textContent)
 
-    expect(headings).toEqual(['已入庫，等你看一眼1', '外面發生的事1'])
-    // 空的段不畫：這一票還沒有 plan 那一類。
+    expect(headings).toEqual(['已入庫，等你看一眼2'])
     expect(screen.queryByText('要你決定')).not.toBeInTheDocument()
   })
 
@@ -152,7 +157,8 @@ describe('審核佇列', () => {
   // M2 票 16 的 critique：按下去的那一顆跟著整列消失，焦點掉回 `body`——鍵盤使用者清一件佇列就要
   // 從頁首重新 Tab 一次。焦點改落在接替那一格的那一列；清空了就落在頁標題。
   it('按完那一列消失之後，焦點落在接著的那一列，清空了落在頁標題', async () => {
-    let rows: ReviewQueue['rows'] = [audit(), audit({ ref: 8, episode_start: 2 })]
+    // 兩筆不同的下載：同一筆的會收成一組（下面「同一個 Job」那幾條）。
+    let rows: ReviewQueue['rows'] = [audit(), audit({ ref: 8, episode_start: 2, job_hash: OTHER })]
     render({
       [QUEUE]: () => queue(rows),
       'POST /api/review/audit/7/confirm': () => {
@@ -248,25 +254,30 @@ describe('審核佇列', () => {
     )
   })
 
-  it('issue 那一類就地按，按完那一列從佇列消失、不跳頁', async () => {
-    let rows: ReviewQueue['rows'] = [issueRow()]
-    render({
-      [QUEUE]: () => queue(rows),
-      'GET /api/issues': { body: [] },
-      'POST /api/issues/3/resolve': () => {
-        rows = []
-        return { body: { ...issueRow().issue, status: 'resolved', actions: [] } }
-      },
-    })
-    const { router } = renderApp('/review')
-    const row = await screen.findByRole('article')
+  it('沒有 Issue 列，原位一行「另有 N 件待處理」連到 /issues（M3 票 05）', async () => {
+    render({ [QUEUE]: queue([audit()], 1, 2) })
+    renderApp('/review')
 
-    await userEvent.click(within(row).getByRole('button', { name: '承認刪除並清帳本' }))
+    const link = await screen.findByRole('link', { name: '另有 2 件待處理' })
 
-    await waitFor(() => expect(screen.queryByRole('article')).not.toBeInTheDocument())
-    expect(router.state.location.pathname).toBe('/review')
-    // 那一列消失了，結果要給看不見畫面的人另外說一次（code-review Standards 軸）。
-    expect(screen.getByText('已處理，這一件從清單上收掉了。')).toBeInTheDocument()
+    expect(link).toHaveAttribute('href', '/issues')
+    expect(screen.getAllByRole('heading', { level: 2 })).toHaveLength(1)
+  })
+
+  it('佇列空了也照樣說還有幾件待處理', async () => {
+    render({ [QUEUE]: queue([], 0, 1) })
+    renderApp('/review')
+
+    expect(await screen.findByText('沒有事在等你。')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '另有 1 件待處理' })).toBeInTheDocument()
+  })
+
+  it('沒有 Issue 時那一行不出現', async () => {
+    render({ [QUEUE]: queue([audit()]) })
+    renderApp('/review')
+
+    await screen.findByRole('article')
+    expect(screen.queryByText(/件待處理/)).not.toBeInTheDocument()
   })
 
   it('超過上限時說出只列了前幾件', async () => {
@@ -281,6 +292,237 @@ describe('審核佇列', () => {
     renderApp('/review')
 
     expect(await screen.findByText('沒有事在等你。')).toBeInTheDocument()
+  })
+})
+
+describe('收起時說出為什麼是 medium（M3 票 05）', () => {
+  it('沒有降級理由時照舊說已自動入庫', async () => {
+    render({
+      [QUEUE]: queue([
+        audit({ reasons: [{ code: 'season_from_release', params: { season: 2 } }] }),
+      ]),
+    })
+    renderApp('/review')
+
+    const row = await screen.findByRole('article')
+
+    expect(within(row).getByText(/信心 medium，已自動入庫/)).toBeInTheDocument()
+  })
+
+  it('en 也說得出主要原因，參數照樣翻', async () => {
+    await i18next.changeLanguage('en')
+    try {
+      render({
+        [QUEUE]: queue([
+          audit({ reasons: [{ code: 'strategy_outlier', params: { strategy: 'explicit' } }] }),
+        ]),
+      })
+      renderApp('/review')
+
+      const row = await screen.findByRole('article')
+
+      expect(
+        within(row).getByText(
+          /Medium confidence: the rest of this batch was read by the name itself, this one was not/,
+        ),
+      ).toBeInTheDocument()
+    } finally {
+      await i18next.changeLanguage('zh-Hant')
+    }
+  })
+})
+
+describe('同一個 Job 一組一顆「全部確認」（M3 票 05）', () => {
+  const pack = (): ReviewQueue['rows'] => [
+    audit(),
+    audit({ ref: 8, episode_start: 2 }),
+    audit({ ref: 9, episode_start: 3 }),
+  ]
+
+  it('收成一列：作品是標題，組內原因相同就說一次，成員收在展開裡', async () => {
+    render({ [QUEUE]: queue(pack()) })
+    renderApp('/review')
+
+    const [group] = await screen.findAllByRole('article')
+
+    expect(screen.getAllByRole('heading', { level: 3 })).toHaveLength(1)
+    expect(within(group).getByRole('heading', { level: 3 })).toHaveTextContent(
+      'SPY×FAMILY 間諜家家酒',
+    )
+    expect(
+      within(group).getByText(/3 個檔案，信心 medium：集號是換算的（各季集數累加）/),
+    ).toBeInTheDocument()
+    // 整段那一顆不出現：audit 全在這一組裡，這一組的鍵就是它。
+    expect(screen.getAllByRole('button', { name: '全部確認' })).toHaveLength(1)
+
+    await userEvent.click(within(group).getAllByText('展開')[0])
+
+    const members = within(group).getAllByRole('heading', { level: 4 })
+    expect(members.map((node) => node.textContent)).toEqual(['S02E01', 'S02E02', 'S02E03'])
+    // 組已經說過的那一句，成員不再說。
+    expect(within(group).getAllByText(/集號是換算的/)).toHaveLength(1)
+  })
+
+  it('組內原因不同時說不只一種，每一個成員說自己的', async () => {
+    render({
+      [QUEUE]: queue([
+        audit(),
+        audit({ ref: 8, episode_start: 2, reasons: [{ code: 'single_season', params: {} }] }),
+      ]),
+    })
+    renderApp('/review')
+
+    const [group] = await screen.findAllByRole('article')
+
+    expect(
+      within(group).getByText(/2 個檔案信心 medium，原因不只一種，展開看每一個/),
+    ).toBeInTheDocument()
+    await userEvent.click(within(group).getAllByText('展開')[0])
+    expect(within(group).getByText(/季號是推論的（TMDB 只有一季）/)).toBeInTheDocument()
+  })
+
+  it('按下去整組消失，送的是這一組的 id，看得見確認了幾個', async () => {
+    let rows = pack()
+    const stub = render({
+      [QUEUE]: () => queue(rows),
+      'POST /api/review/audit/confirm': () => {
+        rows = []
+        return { body: { confirmed: 3, skipped: 0 } }
+      },
+    })
+    renderApp('/review')
+    const [group] = await screen.findAllByRole('article')
+
+    await userEvent.click(within(group).getByRole('button', { name: '全部確認' }))
+
+    await waitFor(() => expect(screen.queryByRole('article')).not.toBeInTheDocument())
+    expect(sentIds(stub)).toEqual([7, 8, 9])
+    expect(screen.getByText('已確認 3 個，從佇列上收掉了。')).toBeVisible()
+  })
+
+  it('中途有一列已被撤銷時照樣成功，並說出跳過幾列', async () => {
+    let rows = pack()
+    render({
+      [QUEUE]: () => queue(rows),
+      'POST /api/review/audit/confirm': () => {
+        rows = []
+        return { body: { confirmed: 2, skipped: 1 } }
+      },
+    })
+    renderApp('/review')
+    const [group] = await screen.findAllByRole('article')
+
+    await userEvent.click(within(group).getByRole('button', { name: '全部確認' }))
+
+    expect(
+      await screen.findByText('已確認 2 個，從佇列上收掉了。 1 個已經在別處確認或撤銷過，跳過了。'),
+    ).toBeVisible()
+  })
+
+  it('成員仍然能單獨撤銷', async () => {
+    const stub = render({
+      [QUEUE]: queue(pack()),
+      'POST /api/review/audit/8/undo': { body: { unlinked: true, unmanaged: false } },
+    })
+    renderApp('/review')
+    const [group] = await screen.findAllByRole('article')
+    await userEvent.click(within(group).getAllByText('展開')[0])
+    const member = within(group).getAllByRole('article')[1]
+
+    await userEvent.click(within(member).getByRole('button', { name: '撤銷' }))
+    await userEvent.click(within(member).getByRole('button', { name: '確定撤銷' }))
+
+    await waitFor(() =>
+      expect(stub.mock.calls.some(([url]) => url === '/api/review/audit/8/undo')).toBe(true),
+    )
+  })
+})
+
+describe('audit 段整段的「全部確認」（M3 票 05）', () => {
+  const twoJobs = (): ReviewQueue['rows'] => [
+    audit(),
+    audit({ ref: 8, episode_start: 2, job_hash: OTHER, job_name: 'another' }),
+    duplicate(),
+  ]
+
+  it('先就地確認並說出件數，只算 audit、不算重複版本', async () => {
+    const stub = render({ [QUEUE]: queue(twoJobs()) })
+    renderApp('/review')
+    const section = await screen.findByRole('region', { name: /已入庫，等你看一眼/ })
+    const buttons = within(section).getAllByRole('button', { name: '全部確認' })
+
+    // 兩列 audit 各自一筆下載：不成組，整段那一顆是唯一的一顆。
+    expect(buttons).toHaveLength(1)
+    await userEvent.click(buttons[0])
+
+    expect(within(section).getByText(/這一段列出的 2 個已入庫檔案都會記成「對的」/)).toBeVisible()
+    expect(sentIds(stub)).toBeNull()
+    expect(within(section).getByRole('button', { name: '確認這 2 個' })).toBeInTheDocument()
+  })
+
+  it('只確認送出的那些 id，按下之後才進來的 audit 留在清單上', async () => {
+    const arrived = audit({
+      ref: 11,
+      episode_start: 5,
+      job_hash: 'c'.repeat(40),
+      job_name: 'late',
+    })
+    let rows = twoJobs()
+    const stub = render({
+      [QUEUE]: () => queue(rows),
+      'POST /api/review/audit/confirm': () => {
+        // 畫面列出之後伺服器那一側又進來一個：確認完只剩它與那一件重複版本。
+        rows = [arrived, duplicate()]
+        return { body: { confirmed: 2, skipped: 0 } }
+      },
+    })
+    renderApp('/review')
+    const section = await screen.findByRole('region', { name: /已入庫，等你看一眼/ })
+
+    await userEvent.click(within(section).getByRole('button', { name: '全部確認' }))
+    await userEvent.click(within(section).getByRole('button', { name: '確認這 2 個' }))
+
+    expect(await screen.findByText('已確認 2 個，從佇列上收掉了。')).toBeVisible()
+    expect(sentIds(stub)).toEqual([7, 8])
+    expect(
+      await screen.findByRole('heading', { name: 'SPY×FAMILY 間諜家家酒 S02E05' }),
+    ).toBeVisible()
+  })
+
+  it('確認展開之後佇列才重問進來的 audit，不算在內、件數也不變', async () => {
+    const arrived = audit({ ref: 11, episode_start: 5, job_hash: 'c'.repeat(40) })
+    let rows = twoJobs()
+    const stub = render({
+      [QUEUE]: () => queue(rows),
+      'POST /api/review/audit/confirm': () => {
+        rows = [arrived, duplicate()]
+        return { body: { confirmed: 2, skipped: 0 } }
+      },
+    })
+    renderApp('/review')
+    const section = await screen.findByRole('region', { name: /已入庫，等你看一眼/ })
+    await userEvent.click(within(section).getByRole('button', { name: '全部確認' }))
+
+    // 使用者讀著「這 2 個」的時候切回視窗，佇列重問，多了一個。
+    rows = [...twoJobs().slice(0, 2), arrived, duplicate()]
+    focusManager.setFocused(false)
+    focusManager.setFocused(true)
+    await within(section).findByRole('heading', { name: 'SPY×FAMILY 間諜家家酒 S02E05' })
+
+    expect(within(section).getByText(/這一段列出的 2 個已入庫檔案/)).toBeVisible()
+    await userEvent.click(within(section).getByRole('button', { name: '確認這 2 個' }))
+
+    await waitFor(() => expect(sentIds(stub)).toEqual([7, 8]))
+    focusManager.setFocused(undefined)
+  })
+
+  it('只有一列 audit 時不給整段的鍵', async () => {
+    render({ [QUEUE]: queue([audit(), duplicate()]) })
+    renderApp('/review')
+
+    await screen.findAllByRole('article')
+
+    expect(screen.queryByRole('button', { name: '全部確認' })).not.toBeInTheDocument()
   })
 })
 

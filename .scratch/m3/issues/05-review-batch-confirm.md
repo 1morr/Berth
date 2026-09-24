@@ -1,6 +1,6 @@
 # 05 — 審核頁：同一個 Job 一顆「全部確認」、`/review` 不再列 Issue、命令副作用標記
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Blocked by:** None — can start immediately
 
@@ -25,11 +25,21 @@
 
 ## 驗收
 
-- [ ] 同一個 Job 的 audit 在 `/review` 是一組，按「全部確認」之後整組消失、帳本的 `audit` 旗標都清掉；中途有一列已被撤銷時照樣成功，並說明跳過幾列（整合測試 + 前端測試）
-- [ ] audit 段的「全部確認」先就地確認並說出件數；只確認送出的那些 id，按下前一刻才出現的 audit 留在清單上（整合測試 + 前端測試）
-- [ ] audit 列與整組收起時說出主要原因，zh-Hant 與 en；挑選函式有單元測試（推論季號、批次一致性部分通過、沒有降級理由三種）
-- [ ] `/review` 沒有 Issue 列，原位有「另有 N 件待處理」並連到 `/issues`；N 是 0 時不出現
-- [ ] 命令標記與閘門就位，閘門測試在檔內做過雙向變異；做法寫進專案 CLAUDE.md 的架構規則（一行）
-- [ ] plan §6、§7、brief §13 同步
-- [ ] playwright 對 `--scenario review` 實跑一次批次確認，1280 與 390 各一張，附結果
-- [ ] lint、type、test 綠燈
+- [x] 同一個 Job 的 audit 在 `/review` 是一組，按「全部確認」之後整組消失、帳本的 `audit` 旗標都清掉；中途有一列已被撤銷時照樣成功，並說明跳過幾列（整合測試 + 前端測試）
+- [x] audit 段的「全部確認」先就地確認並說出件數；只確認送出的那些 id，按下前一刻才出現的 audit 留在清單上（整合測試 + 前端測試）
+- [x] audit 列與整組收起時說出主要原因，zh-Hant 與 en；挑選函式有單元測試（推論季號、批次一致性部分通過、沒有降級理由三種）
+- [x] `/review` 沒有 Issue 列，原位有「另有 N 件待處理」並連到 `/issues`；N 是 0 時不出現
+- [x] 命令標記與閘門就位，閘門測試在檔內做過雙向變異；做法寫進專案 CLAUDE.md 的架構規則（一行）
+- [x] plan §6、§7、brief §13 同步
+- [x] playwright 對 `--scenario review` 實跑一次批次確認，1280 與 390 各一張，附結果
+- [x] lint、type、test 綠燈
+
+## Comments
+
+2026-09-25 收尾 code-review 未處理的發現（Standards 與 Spec 兩軸；已修的是 README 的舊句子、plan §6 開頭、CLAUDE.md 沒有閘門的「只減不加」宣稱、整段確認的 id 改成展開確認時凍結）：
+
+- **`confirm_audit(s)` 的反向命令標成 `review.undo_audit`，照票面寫的，但語意對不上**：`undo_audit` 拆掉的是入庫，不是「取消確認」，而且它拒絕已經確認過的列（`not_audited`）。M5 做登錄表時要決定：另立一個「取消確認」（把旗標掛回去），或把確認標成 `inverse=None`。
+- **主要原因認不出「以標題認出作品但不精確」那一支**：`MEDIA_BY_TITLE` 在精確與不精確兩種情形都會出現（`parser/mapping._resolve`），只看 code 分不出哪一次把信心壓到 medium，所以不在 `LEADS` 裡；RSS 那一路（Job 不帶作品）落在這裡時收起的列仍說「信心 medium，已自動入庫」。票 08 之後有真的 RSS 資料再看要不要給它一個自己的 code。
+- `LEADS` 與解析器「哪些理由會壓到 medium」之間沒有閘門連著；新增一種壓到 medium 的理由時要記得回來加。
+- 判斷題、沒改：`auditGroups.ts` 兩個迴圈各算一次分組鍵；帶 `library` 時 `GET /review` 也問一次 `count_open`；`services/issues` 在豁免表裡卻有一個 `count_open` 已標記（半標）；API handler 叫 `post_confirm_many`、service 叫 `confirm_audits`。
+- 前端 e2e 的 `review` 曾時好時壞，已修：組標題的 heading 以子字串比對，規劃器第一輪算出「重複 SPY×FAMILY 間諜家家酒 S01E03」之後配到兩列（strict mode）；改成 `exact: true` 之後連跑三次綠。

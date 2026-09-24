@@ -18,9 +18,7 @@ from fastapi.testclient import TestClient
 
 from berth.api.deps import get_client_factory
 from berth.config import Config
-from berth.domain import IssueType
 from berth.main import create_app
-from berth.services.issues import record_issue
 from berth.services.setup import complete_setup
 from tests.integration.arrange import bundled_libraries, factory_for, fake_jellyfin
 from tests.integration.factories import FakeClientFactory
@@ -51,17 +49,13 @@ def client(
         yield running
 
 
-def seed_held(client: TestClient, roots: dict[str, Path], *, with_issue: bool = False) -> int:
+def seed_held(client: TestClient, roots: dict[str, Path]) -> int:
     """一份停在 review 的低信心 Plan（`test_plan_review.held`），回 Plan 的 id。"""
 
     async def run() -> int:
         # `app.state` 是 Starlette 的動態屬性，型別上看不到 lifespan 掛上去的 session factory。
         sessions = client.app.state.session_factory  # type: ignore[attr-defined]
         async with sessions() as session:
-            if with_issue:
-                await record_issue(
-                    session, IssueType.LIBRARY_LINK_MISSING, path="/data/library/tv/a.mkv"
-                )
             _, _, _, plan_id = await held(session, roots)
             await complete_setup(session)
             await session.commit()
@@ -124,17 +118,14 @@ class TestWhoGetsIn:
 
 
 class TestTheQueue:
-    def test_a_held_plan_comes_first_and_carries_a_code(
-        self, client: TestClient, roots: dict[str, Path]
-    ) -> None:
-        """票 06 定的排序：`plan` 在「要你決定」那一組，排在 Issue 前面——即使 Issue 比較舊。"""
-        plan_id = seed_held(client, roots, with_issue=True)
+    def test_a_held_plan_carries_a_code(self, client: TestClient, roots: dict[str, Path]) -> None:
+        """`plan` 那一列的理由是封閉集合的 code 加計數。排在 Issue 前面那一半在 M3 票 05 拿掉了：
+        Issue 不在佇列上。"""
+        plan_id = seed_held(client, roots)
         sign_in(client)
 
-        rows = client.get("/api/review").json()["rows"]
+        (plan,) = client.get("/api/review").json()["rows"]
 
-        assert [row["kind"] for row in rows] == ["plan", "issue"]
-        plan = rows[0]
         assert plan["ref"] == plan_id
         assert plan["reason"] == {
             "code": "low_confidence",

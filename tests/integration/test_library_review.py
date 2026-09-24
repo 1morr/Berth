@@ -47,10 +47,10 @@ class TestOneLibrary:
         # 列就是佇列上那一列：同一份形狀、同一個判定。
         assert row == (await review_queue(session)).rows[0]
 
-    async def test_an_unmatched_file_is_on_it_and_the_rest_of_the_queue_is_not(
+    async def test_an_unmatched_file_is_on_it_and_an_issue_is_on_neither(
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
-        """整份佇列上還有別類（這裡是一件 Issue）；媒體庫只收要你決定的那兩類。"""
+        """媒體庫只收要你決定的那兩類。Issue 連整份佇列都不在（M3 票 05）：它只在 `/issues`。"""
         await imported(session, roots)
         await record_issue(session, IssueType.LIBRARY_LINK_MISSING, path="/lib/a.mkv")
         await session.commit()
@@ -61,7 +61,7 @@ class TestOneLibrary:
         assert isinstance(row, UnmatchedRow)
         assert row.rel_path == OVA
         assert queue.total == 1
-        assert (await review_queue(session)).total == 2
+        assert (await review_queue(session)).total == 1
 
     async def test_a_route_into_another_library_keeps_its_work_off_this_one(
         self, session: AsyncSession, roots: dict[str, Path]

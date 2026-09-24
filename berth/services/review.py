@@ -1,10 +1,11 @@
 """Review Queue：一份清單、一列一件事（plan §6 review 群組、brief §6.5、M2 票 06）。
 
-**這一支只回答「現在有哪幾件事在等管理員」**，不自己偵測任何東西：`plan` 是停在 review 的
-那幾份 Plan（票 07），`audit` 來自帳本上的旗標（importer 抄過去的），`issue` 來自
-`services/issues`；票 08 填進 `unmatched`（Job 那一份定案了的 Plan 裡對不到的檔案）與
-`duplicate`（規劃時與帳本重複而被略過的那幾列，`plan_items.duplicate_of`）。各自一個
-`_Producer`，排序與上限不動。Plan 的三支命令（逐列改、核准、拒絕）在
+**這一支只回答「現在有哪幾件事在等管理員決定入庫」**，不自己偵測任何東西：`plan` 是停在
+review 的那幾份 Plan（票 07），`audit` 來自帳本上的旗標（importer 抄過去的）；票 08 填進
+`unmatched`（Job 那一份定案了的 Plan 裡對不到的檔案）與 `duplicate`（規劃時與帳本重複而被略過
+的那幾列，`plan_items.duplicate_of`）。各自一個 `_Producer`，排序與上限不動。**Issue 不在這裡**
+（M3 票 05，brief §19 2026-09-24）：它只在 `/issues`，這一頁原位只留一個數字
+（`services/issues.count_open`）。Plan 的三支命令（逐列改、核准、拒絕）在
 `services/plan_review.py`，rematch 在 `services/rematch.py`，重複版本的三顆在
 `services/duplicates.py`。
 
@@ -18,7 +19,9 @@ Route 指向那個 Jellyfin 媒體庫的（`library_queue`）。同一支查詢�
 
 audit 的兩顆按鈕也在這裡（CONTEXT.md 的 Audit）：
 
-- **確認**只改旗標——`ledger.audit` 與那一列 Plan Item 的一起清，檔案不動。
+- **確認**只改旗標——`ledger.audit` 與那一列 Plan Item 的一起清，檔案不動。**「全部確認」**
+  （同一個 Job 一組一顆、audit 段整段一顆，M3 票 05）是同一件事逐列做一次：送來的是畫面上
+  列出的那幾個 id，已經被別處確認或撤銷的跳過（`confirm_audits`）。
 - **撤銷**先拆那一條硬鏈接（與刪除範圍的 `unlink` 同一步，`deletion.remove_one`），**拆成了**
   才刪帳本那一列、把 Job 送回 `review`。反過來的話拆不掉的那一次會留下一個沒有帳本的
   媒體庫檔案——下一輪對帳的 `unmanaged_library_file`，而使用者以為已經撤銷了。
@@ -52,7 +55,6 @@ from berth.domain import (
     DuplicateReason,
     EventType,
     FileKind,
-    IssueStatus,
     ItemReason,
     JobState,
     MediaKind,
@@ -67,9 +69,9 @@ from berth.domain import (
 )
 from berth.domain import ReasonCode as Code
 from berth.logs import job_context
-from berth.models import Issue, Job, JobFile, LedgerEntry, Media, Plan, PlanItem, Route
+from berth.models import Job, JobFile, LedgerEntry, Media, Plan, PlanItem, Route
+from berth.services.commands import Effect, command
 from berth.services.deletion import Placed, Unlink, remove_one, route_targets
-from berth.services.issues import IssueView, list_issues
 from berth.services.jobs import job_lock, record_event, transition
 from berth.services.plan_view import reasons_of
 
@@ -81,6 +83,9 @@ QUEUE_LIMIT = 200
 #: 撤銷之後 Job 可以回 `review` 的那幾種狀態。其餘（`removed`，或下載還在跑的那幾種）
 #: 不動它的狀態：`removed` 的那一筆已經被人決定過了，而還沒下載完的那一筆不會有 audit。
 _RETURNS_TO_REVIEW = frozenset({JobState.IMPORTED, JobState.IMPORT_FAILED, JobState.REVIEW})
+
+#: 「全部確認」跳過的兩種拒絕：那一列已經被別處決定過了，不再等人。
+_ALREADY_DECIDED = frozenset({ReviewRefusal.LEDGER_MISSING, ReviewRefusal.NOT_AUDITED})
 
 
 class ReviewRejectedError(Exception):
@@ -100,6 +105,14 @@ class AuditUndone:
     unlinked: bool
     #: 那條路徑上的已經不是 Berth 放的那一個，沒有碰（M3 票 01、CONTEXT.md 的 Unmanaged）。
     unmanaged: bool
+
+
+@dataclass(frozen=True, slots=True)
+class AuditsConfirmed:
+    """「全部確認」之後：確認了幾列、跳過了幾列（已經被別處確認或撤銷的）。"""
+
+    confirmed: int
+    skipped: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -128,17 +141,6 @@ class AuditRow:
     @property
     def kind(self) -> ReviewKind:
         return ReviewKind.AUDIT
-
-
-@dataclass(frozen=True, slots=True)
-class IssueRow:
-    """一件還開著的 Issue。**就是 `/issues` 的那一列**，按鈕由 `services/issues` 算。"""
-
-    issue: IssueView
-
-    @property
-    def kind(self) -> ReviewKind:
-        return ReviewKind.ISSUE
 
 
 @dataclass(frozen=True, slots=True)
@@ -228,7 +230,7 @@ class DuplicateRow:
         return ReviewKind.DUPLICATE
 
 
-ReviewRow = PlanRow | AuditRow | UnmatchedRow | DuplicateRow | IssueRow
+ReviewRow = PlanRow | AuditRow | UnmatchedRow | DuplicateRow
 
 
 @dataclass(frozen=True, slots=True)
@@ -247,16 +249,19 @@ class _Producer:
     fetch: Callable[[AsyncSession, int], Awaitable[Sequence[ReviewRow]]]
 
 
+@command(Effect.READ)
 async def review_queue(session: AsyncSession, *, limit: int = QUEUE_LIMIT) -> ReviewQueue:
     """整份佇列，排好、截好（plan §6）。"""
     return await _collect(session, _PRODUCERS, limit)
 
 
+@command(Effect.READ)
 async def review_total(session: AsyncSession) -> int:
     """整份佇列幾件，不拿任何一列。"""
     return sum([await producer.count(session) for producer in _PRODUCERS.values()])
 
 
+@command(Effect.READ)
 async def library_queue(
     session: AsyncSession, library_id: str, *, limit: int = QUEUE_LIMIT
 ) -> ReviewQueue:
@@ -269,6 +274,7 @@ async def library_queue(
     return await _collect(session, _in_library(library_id), limit)
 
 
+@command(Effect.READ)
 async def library_counts(session: AsyncSession, library_id: str) -> dict[ReviewKind, int]:
     """`library_queue` 每一類有幾件：媒體庫牆上兩個篩選鍵的數字。"""
     return {
@@ -294,6 +300,7 @@ async def _collect(
     return ReviewQueue(rows=rows, total=total)
 
 
+@command(Effect.REVERSIBLE, inverse="review.undo_audit")
 async def confirm_audit(session: AsyncSession, ledger_id: int, *, actor: str) -> None:
     """「它是對的」：兩處旗標一起清，時間線寫一筆 `audit_confirmed`。檔案不動。"""
     async with _deciding(session, ledger_id) as (entry, job):
@@ -311,6 +318,33 @@ async def confirm_audit(session: AsyncSession, ledger_id: int, *, actor: str) ->
     logger.info("audit confirmed", extra={"ledger": ledger_id})
 
 
+@command(Effect.REVERSIBLE, inverse="review.undo_audit")
+async def confirm_audits(
+    session: AsyncSession, ledger_ids: Sequence[int], *, actor: str
+) -> AuditsConfirmed:
+    """「全部確認」：送來的每一列各按一次確認（M3 票 05）。
+
+    **語意就是逐列按**：一列一個鎖、一次提交、一筆 `audit_confirmed`，所以中途失敗時前面確認過的
+    就是確認過了，與一列一列按到一半沒有兩樣。已經被別處確認（`not_audited`）或撤銷
+    （`ledger_missing`）的列跳過、不算失敗——按下去的人要的是「這幾列都不再等我」，而它們已經不等了。
+
+    範圍只有送來的 id：畫面列出的那些，不是伺服器端的「全部」，按下之後才進來的 audit 不會被順手
+    確認掉。反向是逐列撤銷（`undo_audit`）。
+    """
+    confirmed = skipped = 0
+    for ledger_id in dict.fromkeys(ledger_ids):
+        try:
+            await confirm_audit(session, ledger_id, actor=actor)
+        except ReviewRejectedError as refused:
+            if refused.reason not in _ALREADY_DECIDED:
+                raise
+            skipped += 1
+        else:
+            confirmed += 1
+    return AuditsConfirmed(confirmed=confirmed, skipped=skipped)
+
+
+@command(Effect.REVERSIBLE)
 async def undo_audit(session: AsyncSession, ledger_id: int, *, actor: str) -> AuditUndone:
     """「它是錯的」：拆鏈接 → 刪帳本那一列 → Job 回 `review`（CONTEXT.md 的 Audit）。
 
@@ -531,18 +565,6 @@ def _plan_row(plan: Plan, job: Job, media: Media | None) -> PlanRow:
     )
 
 
-async def _count_issues(session: AsyncSession) -> int:
-    return int(
-        await session.scalar(select(func.count(Issue.id)).where(Issue.status == IssueStatus.OPEN))
-        or 0
-    )
-
-
-async def _fetch_issues(session: AsyncSession, limit: int) -> list[IssueRow]:
-    views = await list_issues(session, oldest_first=True, limit=limit)
-    return [IssueRow(issue=view) for view in views]
-
-
 def _unmatched(
     library_id: str | None = None,
 ) -> Select[tuple[PlanItem, Plan, Job, JobFile, Media]]:
@@ -675,7 +697,6 @@ _PRODUCERS: dict[ReviewKind, _Producer] = {
     ReviewKind.UNMATCHED: _Producer(count=_count_unmatched, fetch=_fetch_unmatched),
     ReviewKind.AUDIT: _Producer(count=_count_audits, fetch=_fetch_audits),
     ReviewKind.DUPLICATE: _Producer(count=_count_duplicates, fetch=_fetch_duplicates),
-    ReviewKind.ISSUE: _Producer(count=_count_issues, fetch=_fetch_issues),
 }
 
 

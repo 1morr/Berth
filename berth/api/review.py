@@ -6,10 +6,10 @@
 
 **一支端點、一份清單、一列一件事**（plan §11.3 決定 6）。每一列以 `kind` 區分形狀：共同的是
 指向它的物件（`ref`）、一句封閉集合的理由（`reason`，code + 參數，前端翻譯）、這一列能按的動作
-與它開始等人的時間；各類自己的欄位跟在後面。`issue` 那一類的動作打的是 `issues/*` 的那兩支，
-`plan` 那一類的核准與拒絕打的是 `plans/*`（`api/plans.py`），`unmatched` 那一類打的是
-`POST /files/rematch`（`api/files.py`，與 Media 詳情同一支）；這裡是 audit 的兩顆與重複版本的
-三顆（M2 票 08）。
+與它開始等人的時間；各類自己的欄位跟在後面。`plan` 那一類的核准與拒絕打的是 `plans/*`
+（`api/plans.py`），`unmatched` 那一類打的是 `POST /files/rematch`（`api/files.py`，與 Media 詳情
+同一支）；這裡是 audit 的兩顆、它的「全部確認」（M3 票 05）與重複版本的三顆（M2 票 08）。
+Issue 不在佇列上（M3 票 05）：只帶一個 `issues_open`，畫面原位連到 `/issues`。
 """
 
 from __future__ import annotations
@@ -24,7 +24,6 @@ from berth.api.deps import ClientFactoryDep, SessionDep
 from berth.api.errors import refusal_responses
 from berth.api.files import LANDING_REFUSALS, rematch_refusal, rematch_responses
 from berth.api.gate import current_user
-from berth.api.issues import IssueOut, issue_out
 from berth.api.plans import ItemReasonOut
 from berth.domain import (
     AuditAction,
@@ -32,8 +31,6 @@ from berth.domain import (
     DuplicateDecision,
     DuplicateReason,
     FileKind,
-    IssueAction,
-    IssueType,
     MediaKind,
     PlanAction,
     PlanDecision,
@@ -45,17 +42,18 @@ from berth.domain import (
     UnmatchedReason,
 )
 from berth.services.duplicates import decide_duplicate
+from berth.services.issues import count_open
 from berth.services.jobs import actor_of
 from berth.services.rematch import RematchRejectedError
 from berth.services.review import (
     AuditRow,
     DuplicateRow,
-    IssueRow,
     PlanRow,
     ReviewRejectedError,
     ReviewRow,
     UnmatchedRow,
     confirm_audit,
+    confirm_audits,
     library_queue,
     review_queue,
     review_total,
@@ -102,13 +100,6 @@ class AuditReasonOut(BaseModel):
     """`audit` 那一列的理由：封閉集合的 code 加參數，句子由前端照 code 挑（M2 票 06）。"""
 
     code: AuditReason
-    params: dict[str, Any]
-
-
-class IssueReasonOut(BaseModel):
-    """`issue` 那一列的理由：code 是 Issue 的型別，參數是它逐型別不同的那幾格。"""
-
-    code: IssueType
     params: dict[str, Any]
 
 
@@ -165,23 +156,6 @@ class AuditRowOut(BaseModel):
     episode_end: int | None
     #: 解析器為什麼給 medium（那一列 Plan Item 的理由）。
     reasons: list[ItemReasonOut]
-
-
-class IssueRowOut(BaseModel):
-    """一件還開著的 Issue。`ref` 是 Issue 的 id，動作打 `POST /issues/{ref}/resolve`。
-
-    **整件 `IssueOut` 跟著來**：同一件事在 `/issues` 與這裡畫的是同一個元件，而它要的每一格
-    （來源路徑、按得了哪幾顆）都在那一份裡——在這裡另外攤一份，兩頁就會各說各的。
-    """
-
-    kind: Literal[ReviewKind.ISSUE]
-    ref: int
-    reason: IssueReasonOut
-    #: 按得了哪幾顆，順序就是畫面上的順序。空的代表只剩「忽略」（同 `IssueOut.actions`）。
-    actions: list[IssueAction]
-    #: 它開始等人的那一刻：偵測到的時間。
-    at: datetime
-    issue: IssueOut
 
 
 class UnmatchedReasonOut(BaseModel):
@@ -266,8 +240,21 @@ class DuplicateDecidedOut(BaseModel):
     target_path: str
 
 
+class ConfirmAuditsIn(BaseModel):
+    """「全部確認」送的那幾列：畫面上列出的帳本 id，不是伺服器端的「全部」（M3 票 05）。"""
+
+    ledger_ids: list[int]
+
+
+class AuditsConfirmedOut(BaseModel):
+    """確認了幾列、跳過了幾列（已經被別處確認或撤銷的，不算失敗）。"""
+
+    confirmed: int
+    skipped: int
+
+
 ReviewRowOut = Annotated[
-    PlanRowOut | AuditRowOut | UnmatchedRowOut | DuplicateRowOut | IssueRowOut,
+    PlanRowOut | AuditRowOut | UnmatchedRowOut | DuplicateRowOut,
     Field(discriminator="kind"),
 ]
 
@@ -280,6 +267,9 @@ class ReviewQueueOut(BaseModel):
     #: 整份佇列幾件。帶 `library` 時 `total` 只算那個媒體庫的兩類，這一格仍是整份——媒體庫頁清單
     #: 底下那一句「審核佇列裡還有 N 件」要它（M2 票 14）；不帶時與 `total` 相同。
     queue_total: int
+    #: 還開著幾件 Issue。**不算在 `total` 裡**：Issue 只在 `/issues`，這一頁原位那一行
+    #: 「另有 N 件待處理」連過去（M3 票 05）。
+    issues_open: int
 
 
 @router.get("")
@@ -296,7 +286,10 @@ async def get_review(session: SessionDep, library: str | None = None) -> ReviewQ
         queue = await library_queue(session, library)
         queue_total = await review_total(session)
     return ReviewQueueOut(
-        rows=[_row_out(row) for row in queue.rows], total=queue.total, queue_total=queue_total
+        rows=[_row_out(row) for row in queue.rows],
+        total=queue.total,
+        queue_total=queue_total,
+        issues_open=await count_open(session),
     )
 
 
@@ -317,6 +310,22 @@ async def post_confirm(session: SessionDep, request: Request, ledger_id: int) ->
         )
     except ReviewRejectedError as refusal:
         raise review_refusal(refusal) from refusal
+
+
+@router.post("/audit/confirm")
+async def post_confirm_many(
+    session: SessionDep, request: Request, body: ConfirmAuditsIn
+) -> AuditsConfirmedOut:
+    """「全部確認」：同一個 Job 一組、或 audit 段整段（M3 票 05）。等於逐列按確認一次做完。
+
+    已經被別處確認或撤銷的列跳過、算進 `skipped`，不是 409：按下去的人要的是「這幾列不再等我」，
+    而它們已經不等了。所以這一支沒有拒絕的回應。
+    """
+    user = current_user(request)
+    outcome = await confirm_audits(
+        session, body.ledger_ids, actor=actor_of(user.id if user is not None else None)
+    )
+    return AuditsConfirmedOut(confirmed=outcome.confirmed, skipped=outcome.skipped)
 
 
 @router.post("/audit/{ledger_id}/undo", responses=UNDO_RESPONSES)
@@ -362,25 +371,13 @@ async def post_duplicate(
     return DuplicateDecidedOut(plan_id=outcome.plan_id, target_path=outcome.target_path)
 
 
-def _row_out(
-    row: ReviewRow,
-) -> PlanRowOut | AuditRowOut | UnmatchedRowOut | DuplicateRowOut | IssueRowOut:
+def _row_out(row: ReviewRow) -> PlanRowOut | AuditRowOut | UnmatchedRowOut | DuplicateRowOut:
     if isinstance(row, PlanRow):
         return _plan_out(row)
     if isinstance(row, UnmatchedRow):
         return _unmatched_out(row)
     if isinstance(row, DuplicateRow):
         return _duplicate_out(row)
-    if isinstance(row, IssueRow):
-        view = row.issue
-        return IssueRowOut(
-            kind=ReviewKind.ISSUE,
-            ref=view.id,
-            reason=IssueReasonOut(code=view.type, params=view.detail),
-            actions=list(view.actions),
-            at=view.detected_at,
-            issue=issue_out(view),
-        )
     return _audit_out(row)
 
 

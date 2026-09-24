@@ -56,12 +56,20 @@ function member<R extends string>(set: ReasonSet<R>, value: unknown): value is R
  * zh-Hant 與 en 的鍵樹又是同一棵（`resources.ts` 的 `Translations`），兩份語言一起被守著。
  */
 export function reasonText(t: TFunction, reason: ItemReason): string {
+  // `as never`：鍵是逐 code 的聯集，i18next 的型別因此要求**每一句**的參數同時都在（交集）。
+  // 參數逐 code 不同，形狀由後端的 `ReasonCode` 定；鍵本身仍然被型別檢查。
+  return t(`jobs.plan.why.${reason.code}`, reasonParams(t, reason) as never)
+}
+
+/**
+ * 一條理由的參數，三個封閉集合的鍵換成翻好的字。審核頁收起時那一句主要原因（`review/leadReason.ts`）
+ * 用的是另一組句子，參數同一份。
+ */
+export function reasonParams(t: TFunction, reason: ItemReason): Record<string, string | number> {
   const params: Record<string, string | number> = { ...reason.params }
   if (member(KINDS, params.kind)) params.kind = t(`jobs.plan.kind.${params.kind}`)
   if (member(ACTIONS, params.action)) params.action = t(`jobs.plan.action.${params.action}`)
   if (member(STRATEGIES, params.strategy))
     params.strategy = t(`jobs.plan.strategy.${params.strategy}`)
-  // `as never`：鍵是逐 code 的聯集，i18next 的型別因此要求**每一句**的參數同時都在（交集）。
-  // 參數逐 code 不同，形狀由後端的 `ReasonCode` 定；鍵本身仍然被型別檢查。
-  return t(`jobs.plan.why.${reason.code}`, params as never)
+  return params
 }

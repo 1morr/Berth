@@ -815,8 +815,9 @@ class ReviewReason(StrEnum):
 class ReviewKind(StrEnum):
     """Review Queue 上一列是哪一種事（plan §6 review 群組，2026-09-22 定）。
 
-    **五種一開始就在**，雖然 M2 票 06 只填 `audit` 與 `issue`：佇列的排序與畫面的分組都照
-    這五種定（`REVIEW_PRIORITY`），後面兩票只是把列填進去，不改形狀。
+    M2 開頭定了五種，雖然票 06 只填 `audit` 與 `issue`：佇列的排序與畫面的分組都照這幾種定
+    （`REVIEW_PRIORITY`），後面兩票只是把列填進去，不改形狀。**`issue` 在 M3 票 05 拿掉**（brief
+    §19 2026-09-24）：Issue 只在 `/issues`，這一頁是「入庫要人決定」的那幾種。
     """
 
     #: 低信心的 Plan，逐檔可改（票 07）。
@@ -827,19 +828,15 @@ class ReviewKind(StrEnum):
     UNMATCHED = "unmatched"
     #: Tags 完全相同的兩個版本（票 08）。
     DUPLICATE = "duplicate"
-    #: 一件還開著的 Issue（brief §9.1）。
-    ISSUE = "issue"
 
 
 #: 佇列的排序鍵：**需要人動手的排前面**（plan §6）。`plan` 與 `unmatched` 不處理就卡著一筆
-#: 下載；`audit` 與 `duplicate` 已經在媒體庫裡，只是等人看一眼；`issue` 多半是外面發生的事
-#: （有人在 Jellyfin 裡刪了東西），它的一顆按鈕就是全部的工作。同一級之內舊的在前。
+#: 下載；`audit` 與 `duplicate` 已經在媒體庫裡，只是等人看一眼。同一級之內舊的在前。
 REVIEW_PRIORITY: dict[ReviewKind, int] = {
     ReviewKind.PLAN: 0,
     ReviewKind.UNMATCHED: 0,
     ReviewKind.AUDIT: 1,
     ReviewKind.DUPLICATE: 1,
-    ReviewKind.ISSUE: 2,
 }
 
 
