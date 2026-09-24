@@ -578,11 +578,12 @@ async def _restart(
     """重新 recheck（`missing_files`）或重試（`client_error`）：請 qBittorrent 動手，Job 回到
     poller 接得住的那一站（plan §3.1）。
 
-    **qBittorrent 那一半**（brief §20.2，2026-09-23 對 4.4.5 與 5.2.3 實測）：recheck 是重新校驗
+    **qBittorrent 那一半**（brief §20.2，對 4.4.5 與 5.2.3 實測）：recheck 是重新校驗
     磁碟上的資料，`start`（4.x 的 `resume`）讓它重新開始，而重新開始本身就會清掉客戶端的錯誤
     （原始碼 `clear_error()`）。所以重試只送 `start`——錯誤不是資料的問題，重新校驗一次幾十 GB
-    只是讓它晚一點回來。recheck 之後**一定接 `start`**：原始碼裡 5.x 對停住的 torrent recheck 完
-    會再停下來；實測資料回來之後兩版都是做種中，資料不在的話兩版都是 `stalledDL`。
+    只是讓它晚一點回來。重新校驗是**先 `start` 再 recheck**（M3 票 03）：5.x 對停住的 torrent
+    recheck 時自己先開起來、再掛「校驗完就停」，校驗中送到的 `start` 清不掉它，校驗完又停住——
+    缺檔的那一包就停在 `stoppedDL`，poller 永遠等不到它動。先 start 的話 recheck 時它已經在跑。
 
     **Job 那一半**：檔案清單早就到手的回 `metadata_ready`，還沒有的回 `submitted`——兩站的下一步
     poller 本來就會走（完成判定、等清單），這一顆不另外判斷 qBittorrent 校驗的結果。校驗完仍然
@@ -597,9 +598,9 @@ async def _restart(
         client = factory.qbittorrent(settings.base_url)
         try:
             await sign_in(client, settings)
+            await client.start(job.hash)
             if action is IssueAction.RECHECK:
                 await client.recheck(job.hash)
-            await client.start(job.hash)
         except ServiceError as exc:
             raise IssueRejectedError(IssueRefusal.CLIENT_UNREACHABLE, message(exc)) from exc
         finally:

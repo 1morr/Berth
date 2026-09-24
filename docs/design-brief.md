@@ -808,8 +808,37 @@ M1.5 拆票前的四條待決，2026-09-15 已全數照推薦拍板（上表「M
 
   **資料被刪掉、容器重啟之後，那個 torrent 就是 `missingFiles`**（兩版實測）。救回來兩種順序都成立：資料放回去之後
   recheck → start 與 start → recheck 兩版都回到做種中（`stalledUP`、progress 1）；資料不在的話兩種都是 `stalledDL`、
-  progress 0（在等 peer 重新下載）。Berth 用 **recheck → start**（`missing_files` 的「重新校驗」），`client_error` 的
-  「重試」只送 start——錯誤不是資料的問題，重新校驗一次幾十 GB 只是讓它晚一點回來。
+  progress 0（在等 peer 重新下載）。`client_error` 的「重試」只送 start——錯誤不是資料的問題，重新校驗一次幾十 GB
+  只是讓它晚一點回來。
+- **停住的 torrent 做 recheck：5.x 上 recheck → start 救不回來**（2026-09-24 M3 票 03，
+  `scripts/experiments/qbittorrent_stopped_recheck.py`；每包兩個全零稀疏檔共 8 GiB，校驗約 14–21 秒，兩支請求
+  之間 < 0.1 秒。版本：`5.2.3`（`lscr.io/linuxserver/qbittorrent:5.2.3`，Web API 2.15.1），當天的 `:latest` 就是
+  同一版（`5.2.3_v2.0.14-ls476`），兩次結果一致；`4.4.5`（Web API 2.8.5）作對照。上一條的四包都是重啟前在跑的
+  `missingFiles`，量不到這一種）。每包先做種到完成，再照情境停住、刪掉第二個檔：
+
+  | 前置 → 動作 | 5.2.3 的 state 序列 | 4.4.5 的 state 序列 |
+  | --- | --- | --- |
+  | 停住 → recheck | `stoppedUP` → `checkingUP` → `stoppedUP`（不會自己開始） | `pausedUP` → `checkingUP` → `pausedUP` |
+  | 停住 → recheck → start | `stoppedUP` → `checkingUP` → **`stoppedUP`** | `pausedUP` → `checkingUP` → `stalledUP` |
+  | 停住 → start → recheck | `stoppedUP` → `checkingUP` → `stalledUP` | 同左 |
+  | 停住、缺一檔 → recheck | `stoppedUP` → `checkingUP` → `stoppedDL`（progress 0.5） | `pausedUP` → `checkingUP` → `pausedDL`（0.5） |
+  | 停住、缺一檔 → recheck → start | `stoppedUP` → `checkingUP` → **`stoppedDL`**（0.5） | `pausedUP` → `checkingUP` → `stalledDL`（0.5） |
+  | 停住、缺一檔 → start → recheck | `stoppedUP` → `checkingUP` → `stalledDL`（0.5） | 同左 |
+  | 做種中、缺一檔 → recheck → start | `stalledUP` → `checkingUP` → `stalledDL`（0.5） | 同左 |
+  | 做種中、缺一檔 → start → recheck | 同上 | 同左 |
+
+  原因在原始碼：5.2.3 的 `forceRecheck()` 對停住的 torrent **自己先呼叫 `start()`**（`m_isStopped` 變假）再掛
+  `StopCondition::FilesChecked`；校驗中送到的 `start()` 看它沒停就什麼都不做，條件留著，校驗完
+  `handleTorrentChecked` 照樣 `stop()`（[`torrentimpl.cpp`](https://github.com/qbittorrent/qBittorrent/blob/release-5.2.3/src/base/bittorrent/torrentimpl.cpp)）。
+  4.4.5 的 `forceRecheck` 只掛 `stop_when_ready`、不改 `m_isStopped`，`resume()` 看到還停著就把旗標清掉
+  （[`torrentimpl.cpp`](https://github.com/qbittorrent/qBittorrent/blob/release-4.4.5/src/base/bittorrent/torrentimpl.cpp)）。
+  start 若晚到校驗做完之後就又生效——所以是一個跟校驗長度賽跑的窗口，幾十 GB 的真實下載一定落在裡面。
+
+  對 Berth 的後果：資料都回來的那一種停在 `stoppedUP`、progress 1，poller 照樣判完成並入庫，只是不做種；**缺檔的
+  那一種停在 `stoppedDL`**，Job 回到 `metadata_ready` 之後進 `downloading` 就永遠不動——`stoppedDL` 不是
+  `stalledDL`（不會轉 `stalled`），也不是壞掉的狀態（不會再開 Issue），畫面上看不出任何事。
+  **Berth 用 start → recheck**（`missing_files` 的「重新校驗」）：先開起來，recheck 時它已經在跑，不掛條件；兩版、
+  停住與否、資料回不回來都落在做種中或 `stalledDL`，poller 都接得住（上一條的 `missingFiles` 兩種順序也都成立）。
 - **沒有 webhook**；`sync/maindata` 以 `rid` 做增量輪詢。`autorun_enabled` / `autorun_program`（完成時執行外部程式，可帶 `%f` `%n`）可作為「喚醒輪詢」的加速手段，非必要。
 - **`rid` 的狀態掛在 session（SID cookie）上**（2026-09-10 票 10 對 4.4.5 與 5.2.3 實測）：不帶 cookie 的話每一次請求都是新 session，回的永遠是 `full_update: true`。所以輪詢那一側必須把 HTTP client 握著不放（Berth 的 `Downloader`）。
 - **增量那一輪的 `torrents[hash]` 只帶變動的欄位**（實測有的只剩 `{"num_leechs", "time_active"}`），所以呼叫端一定要把它併回上一份完整快照再讀——照字面讀會得到一個沒有 category、沒有 state 的空殼。被刪掉的 torrent 在 `torrents_removed`（hash 陣列）。

@@ -318,8 +318,8 @@ class IssueAction(StrEnum):
     #: 重新掃描媒體庫：先請 Jellyfin 跑「重新掃描媒體庫」，再重新反查（brief §20.1：路徑通知
     #: 對從沒掃到過內容的媒體庫無效）。
     RESCAN = "rescan"
-    #: 重新 recheck：請 qBittorrent 重新校驗那一包並接著下載（`torrents/recheck` + `start`），
-    #: Job 回到 metadata 到手之後那一站，由 poller 照常往前推（plan §3.1）。
+    #: 重新 recheck：請 qBittorrent 重新開始並重新校驗那一包（`start` 在前、`recheck` 在後，
+    #: brief §20.2），Job 回到 metadata 到手之後那一站，由 poller 照常往前推（plan §3.1）。
     RECHECK = "recheck"
     #: 承認遺失：那一包的檔案就是沒了。Job 走刪除範圍四個旗標**全不勾**進 `removed`
     #: （2026-09-23 使用者拍板）——磁碟與 qBittorrent 都不動，時間線一筆 `deleted`。

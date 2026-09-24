@@ -71,10 +71,10 @@ class FakeQbittorrentClient:
         self.torrents: tuple[TorrentStatus, ...] = torrents
         self.files_by_hash: dict[str, tuple[TorrentFile, ...]] = dict(files or {})
         self.sync_error = sync_error
-        #: 每一次 `torrents/recheck` 與 `start` 收到的 hash。Issue 的按鈕斷言的是它們：
-        #: 「重新 recheck」與「重試」送出去的是不同的請求。
-        self.rechecked: list[str] = []
-        self.started: list[str] = []
+        #: 每一次 `torrents/recheck` 與 `start` 依到達順序記下 `(端點, hash)`。Issue 的按鈕斷言的是
+        #: 它：「重新 recheck」與「重試」送出去的是不同的請求，而**兩支的先後**在 5.x 上決定
+        #: 停住的 torrent 校驗完會不會又停下來（brief §20.2，M3 票 03）。
+        self.restarts: list[tuple[str, str]] = []
         #: `sync()` 被呼叫過幾次。「一輪只問一次」由它守著。
         self.syncs = 0
 
@@ -139,14 +139,14 @@ class FakeQbittorrentClient:
         """
         if self.error is not None:
             raise self.error
-        self.rechecked.append(info_hash)
+        self.restarts.append(("recheck", info_hash))
         self._restate(info_hash, lambda row: replace(row, state="checkingDL", progress=0.0))
 
     async def start(self, info_hash: str) -> None:
         """有狀態：`error` 與停住的那幾種回到 `downloading`（重新開始會清掉錯誤）。"""
         if self.error is not None:
             raise self.error
-        self.started.append(info_hash)
+        self.restarts.append(("start", info_hash))
         stopped = {"error", "stoppedDL", "pausedDL"}
         self._restate(
             info_hash,

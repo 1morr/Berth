@@ -121,10 +121,13 @@ class TestRecheck:
             IssueAction.ACCEPT_LOSS,
         )
 
-    async def test_it_rechecks_restarts_and_the_poller_takes_it_from_there(
+    async def test_it_restarts_rechecks_and_the_poller_takes_it_from_there(
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
-        """recheck → start（2026-09-23 對 4.4.5 與 5.2.3 實測：資料回來了就是做種中）。
+        """**start 在前、recheck 在後**（brief §20.2，M3 票 03 對 5.2.3 實測）：5.x 對停住的
+        torrent recheck 時自己先把它開起來、再掛「校驗完就停」，之後送到的 start 清不掉那個條件，
+        校驗完又是 `stoppedUP` / `stoppedDL`——缺檔的那一種 poller 永遠等不到它動。先 start 的話
+        recheck 時它已經在跑，不掛條件。
 
         Job 回到 `metadata_ready`：檔案清單早就到手了，從這一站起完成判定照常走。
         """
@@ -134,8 +137,7 @@ class TestRecheck:
         await press(session, factory, issue, IssueAction.RECHECK)
 
         client = client_of(factory)
-        assert client.rechecked == [HASH]
-        assert client.started == [HASH]
+        assert client.restarts == [("start", HASH), ("recheck", HASH)]
         await session.refresh(job)
         assert job.state is JobState.METADATA_READY
         await session.refresh(issue)
@@ -190,7 +192,7 @@ class TestRecheck:
         assert await refused(session, factory, issue, IssueAction.RECHECK) is (
             IssueRefusal.ACTION_NOT_AVAILABLE
         )
-        assert client_of(factory).rechecked == []
+        assert client_of(factory).restarts == []
 
 
 class TestAcceptTheLoss:
@@ -211,7 +213,7 @@ class TestAcceptTheLoss:
         await session.refresh(job)
         assert job.state is JobState.REMOVED
         client = client_of(factory)
-        assert (client.deleted, client.rechecked, client.started) == ([], [], [])
+        assert (client.deleted, client.restarts) == ([], [])
         deleted = [row for row in await events_of(session) if row.type == EventType.DELETED.value]
         assert deleted[-1].payload_json == {
             "links": 0,
@@ -242,7 +244,7 @@ class TestRetry:
         await press(session, factory, issue, IssueAction.RETRY)
 
         client = client_of(factory)
-        assert (client.started, client.rechecked) == ([HASH], [])
+        assert client.restarts == [("start", HASH)]
         await session.refresh(job)
         assert job.state is JobState.METADATA_READY
         await session.refresh(issue)

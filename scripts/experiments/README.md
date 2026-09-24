@@ -1,6 +1,6 @@
 # 實驗腳本
 
-M0 票 04、M1 票 01（brief §20.6）、M1 票 14d、M1.5 票 01 與 04、M2 票 09c 與 11 的實驗。**指令在根目錄的 [README](../../README.md#實驗腳本)**（那份是本專案
+M0 票 04、M1 票 01（brief §20.6）、M1 票 14d、M1.5 票 01 與 04、M2 票 09c 與 11、M3 票 03 的實驗。**指令在根目錄的 [README](../../README.md#實驗腳本)**（那份是本專案
 指令的單一來源）；這裡寫的是每個腳本在回答什麼、為什麼這樣寫、有哪些坑。
 
 結論在 [`docs/research/m0-experiments.md`](../../docs/research/m0-experiments.md)、
@@ -32,6 +32,7 @@ ffmpeg 產種子檔），那只影響「造測試素材」這一步，不影響 
 | `anime_sample.json` | 上一支的樣本：10 部動漫、挑選理由、Mikan 的番組 id |
 | `qbittorrent_poller.py` | M1 票 10：`sync/maindata` 的 rid 增量形狀、`torrents/files` 的相對基準（多檔）、三種處境下的 `state` / `progress` / `completion_on`，以及**連續登入失敗之後的 403 與帳密錯差在哪裡**。最後一項會封住來源 IP，所以它一定跑在最後 |
 | `qbittorrent_recovery.py` | M2 票 09c：`torrents/recheck` 與 `torrents/start`（4.x 叫 `resume`）兩版回什麼、刪資料再重啟之後 torrent 是不是 `missingFiles`、救回來時 recheck 與 start 誰先誰後有沒有差。會 `docker restart` 那個容器，並重錄 `tests/fixtures/http/qbittorrent/` 的五份 fixture |
+| `qbittorrent_stopped_recheck.py` | M3 票 03：**停住的** torrent（使用者或分享比率停的）送 recheck、recheck → start、start → recheck 之後的 state 序列，完整的與缺一個檔的各一組，另加做種中缺檔的兩種順序。自己起停一次性容器；上一支的四包都是 `missingFiles`，量不到這一種 |
 | `absolute_rule_cost.py` | M1 票 14d：「集號 ≤ 第一季集數就送審核」擋下的是對的多還是錯的多，以及「標題有認不出的多餘字」分不分得開。正解借 `anime_episode_source.py` 的校準，Berth 的讀法是把每筆 Mikan 發佈丟進 `plan`。只印 stdout |
 | `jellyfin_permissions.py` | M1.5 票 01：伺服器 API key 代讀某位使用者時，Jellyfin 哪些端點套用他的媒體庫權限（研究 §2 的表逐列，API key 與使用者 token 各一次）；`/Items` 的過濾、排序、分頁是不是真的有作用；由 TMDB id 找作品；Series / Season 標記遞迴；停用帳號。自己起停一次性容器，`--record` 重錄 `tests/fixtures/http/jellyfin/` 的權限 fixture，也錄媒體庫牆、排序篩選與繼續觀看 / 下一集（票 03–07）、Media 詳情觀看區（由 TMDB id 找作品、`/Items/{id}`、這部劇的下一集，票 08）、牆上按名字找（`searchTerm`，M2 票 14）的回應 |
 | `jellyfin_images.py` | M1.5 票 04：Jellyfin 的圖經 Berth 代理要不要在 Berth 端另存一份。縮圖參數與格式協商、Jellyfin 自己的縮圖快取（冷熱延遲）、6 條並行下直連與經過 Berth（`berth serve` 子程序）各多少毫秒。自己起停一次性容器 |
@@ -104,3 +105,10 @@ ffmpeg 產種子檔），那只影響「造測試素材」這一步，不影響 
   有 `segfault at 0 ip 0`、崩在 `libpython` 與 `libc`，沒有 OOM）。所以容器裡的 Python 帶 `-X faulthandler`，
   Jellyfin 被 s6 無聲拉起來的次數由宿主數 `docker logs` 裡的 `Startup complete` 寫進報告，斷線的請求重打一次、不計入延遲。
   在別台機器上重量時先看 `jellyfin_startups` 是不是 1、`dropped_connections` 是不是空的。
+- **`qbittorrent_stopped_recheck.py` 的 start 一定要在校驗還沒做完時送到**：5.x 的問題只發生在這個窗口裡，
+  校驗一瞬間就做完的話 start 會落在「已經又停住」之後、照常生效，量出來是一片正常。所以每包預設 8 GiB
+  （`--size-gib`），用 `truncate` 造稀疏的全零檔：宿主不寫任何資料、piece 雜湊只算一次，而 qBittorrent 照樣
+  要讀完、雜湊完（這台機器上約 17 秒）。報告裡的 `first_check_seconds` 是加入時那一次校驗的長度，看它是不是
+  遠大於 `requests_seconds`（兩支請求之間隔多久）。
+- **Host 標頭帶的是容器裡的 port（`localhost:8080`），不是宿主發佈的 18093**：qBittorrent 比對 Host 的 port 與它
+  自己聽的那一個，對不上時 log 是 `Invalid Host header, port mismatch`、回應是 401（不是 403）。

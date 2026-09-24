@@ -536,6 +536,17 @@ python scripts/experiments/large_library.py --keep           # 留著環境；�
 python scripts/experiments/large_library.py --reuse --keep --stages inventory   # 段落：jellyfin,inventory,reconcile
 ```
 
+停住的 torrent 送 recheck 與重新開始之後狀態怎麼走（M3 票 03，brief §20.2）：自己起停一次性的 qBittorrent
+（network、兩個 volume、容器，前綴 `berth-exp-recheck`，只發佈在 `127.0.0.1:18093`），資料是稀疏的全零檔，
+一個版本約 5 分鐘，跑完印出 `docker ps -a` / `docker volume ls` 的過濾結果：
+
+```bash
+python scripts/experiments/qbittorrent_stopped_recheck.py      # 5.2.3；報告寫到 .local/experiments/results/qbittorrent-stopped-recheck-<版本>.json
+python scripts/experiments/qbittorrent_stopped_recheck.py --image lscr.io/linuxserver/qbittorrent:latest   # compose 預設的那一個
+python scripts/experiments/qbittorrent_stopped_recheck.py --image lscr.io/linuxserver/qbittorrent:4.4.5    # 對照組
+python scripts/experiments/qbittorrent_stopped_recheck.py --only stopped_recheck_start --keep            # 只跑一個情境，留著容器
+```
+
 `jellyfin_naming.py` 必須從乾淨的 `/config` 跑（Jellyfin 的 DB 會留住舊掃描結果，插件裝過
 就在了，量不到「未裝插件」的基準）：
 

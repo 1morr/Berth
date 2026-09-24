@@ -1,6 +1,6 @@
 # 03 — 【研究】qBittorrent 5.x 停住的 torrent 做 `recheck` → `start`
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Blocked by:** None — can start immediately
 
@@ -20,8 +20,21 @@ M2 票 09c 的「重新校驗」對 qBittorrent 送 `recheck` + `start`，**只�
 
 ## 驗收
 
-- [ ] 腳本在 `scripts/experiments/`，可以重跑，README 或腳本開頭寫明怎麼跑
-- [ ] brief §20.2 有 5.x 的實測結果（版本號、三種情境各自的狀態序列）
-- [ ] plan §11.3 D 組第 5 條已處理
-- [ ] 若行為與假設不同：修正附紅 → 綠的測試；若相同：票的 Comments 寫明「照舊」
-- [ ] 一次性容器與 volume 已刪（貼過濾結果）
+- [x] 腳本在 `scripts/experiments/`，可以重跑，README 或腳本開頭寫明怎麼跑
+- [x] brief §20.2 有 5.x 的實測結果（版本號、三種情境各自的狀態序列）
+- [x] plan §11.3 D 組第 5 條已處理
+- [x] 若行為與假設不同：修正附紅 → 綠的測試；若相同：票的 Comments 寫明「照舊」
+- [x] 一次性容器與 volume 已刪（貼過濾結果）
+
+## Comments
+
+- 2026-09-24：**行為與 09c 的假設不同，同一票修了**。5.2.3（當天的 `:latest` 也是它）上停住的 torrent
+  recheck → start 校驗完又停住：資料齊的停在 `stoppedUP`，缺檔的停在 `stoppedDL`，Job 卡在「下載中」、
+  不開 Issue。4.4.5 兩種順序都成立。`services/issues._restart` 改成 start → recheck，紅 → 綠的是
+  `test_pipeline_issue_actions.py::TestRecheck::test_it_restarts_rechecks_and_the_poller_takes_it_from_there`
+  （替身的 `rechecked` / `started` 合成一條依到達順序的 `restarts`）。八種情境的序列在 brief §20.2。
+- 一次性容器與 volume 的過濾結果（三輪最後一輪之後，另有一輪重構後的冒煙）：
+  `docker ps -a --filter name=berth-exp-recheck: []`、`docker volume ls --filter name=berth-exp-recheck: []`、
+  `docker network ls --filter name=berth-exp-recheck: []`。
+- code-review 未處理：新腳本的 `docker()` 是 experiments 目錄裡第三份近拷貝（`jellyfin_permissions.py`、
+  `large_library.py`），只有這一份要 `stdin`。下一支再要時收進 `lib.py`。

@@ -1029,6 +1029,9 @@ Issue、修正、對帳、刪除與重新入庫的每一條端點都是 403，�
   Job 不在那個壞掉狀態的管線 Issue 由系統收掉（`resolved_by = system`），不再停在只剩「忽略」的那一列。
 - **規劃器與 importer 處理某一筆時爆掉，畫面說得出來**（M3 票 02）：原本只進 log，那一筆看起來停在「規劃中」
   卻說不出為什麼。現在寫進 `Job.error` 與時間線（新事件 `round_failed`，同一個錯誤不重寫）。
+- **「重新校驗」在 qBittorrent 5.x 上對停住的 torrent 有作用了**（M3 票 03）：原本送 recheck 再送 start，5.x 校驗完
+  又把它停下來——缺檔的那一包停在 `stoppedDL`，Job 卡在「下載中」、沒有 Issue、畫面上看不出任何事。現在先 start
+  再 recheck（4.4 兩種順序都成立，實測見 brief §20.2）。
 
 ### Security
 
