@@ -43,7 +43,7 @@ export function Field({ label, hint, error, ...input }: FieldProps) {
         aria-invalid={error ? true : undefined}
         aria-describedby={described || undefined}
         className={`value w-full border-2 bg-hull px-3 py-2.5 text-sm text-ink placeholder:text-ink-dim disabled:bg-well disabled:text-ink-dim ${
-          error ? 'border-blocked' : 'border-rule focus:border-rule-strong'
+          error ? 'border-blocked' : 'border-rule-strong focus:border-ink'
         }`}
       />
       {hint && (
@@ -93,12 +93,15 @@ export function Checkbox({
   onChange: (checked: boolean) => void
 }) {
   const id = useId()
+  const hintId = `${id}-hint`
 
   return (
     <div className="grid gap-2">
       <div className="flex items-start gap-3">
         <input
           id={id}
+          // 說明是這一格的後果或鎖住的理由：Tab 到它的螢幕閱讀器要念得到（M2 票 16 的 audit，同 `Field`）。
+          aria-describedby={hint ? hintId : undefined}
           type="checkbox"
           checked={checked}
           disabled={disabled}
@@ -109,7 +112,11 @@ export function Checkbox({
           {label}
         </label>
       </div>
-      {hint && <p className="pl-7 text-xs text-ink-dim">{hint}</p>}
+      {hint && (
+        <p id={hintId} className="pl-7 text-xs text-ink-dim">
+          {hint}
+        </p>
+      )}
     </div>
   )
 }
@@ -117,7 +124,7 @@ export function Checkbox({
 /** 主要動作：hi-vis 塗裝色塊。這塊板子上沒有藍色 primary 按鈕。
 
  邊框不是裝飾：亮色主題下黃漆對紙白只有 1.36:1，沒有邊的話按鈕的輪廓看不出來
- （WCAG 2.2 的非文字對比要 3:1）。`rule-strong` 對兩個底色都有 6.4:1。 */
+ （WCAG 2.2 的非文字對比要 3:1）。`rule-strong` 深色 3.33–4.51:1、亮色 6.46:1（DESIGN.md「重橫線」）。 */
 export function PrimaryButton({
   children,
   ...button

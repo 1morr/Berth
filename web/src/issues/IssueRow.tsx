@@ -41,7 +41,7 @@ export function IssueRow({
   /** 按成之後那一列會從清單上消失，這一句給看不見畫面的人（`/review` 的 `aria-live`）。 */
   onDone?: (said: string) => void
 }) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const queryClient = useQueryClient()
   const [refusal, setRefusal] = useState<string | null>(null)
 
@@ -84,7 +84,7 @@ export function IssueRow({
       }
       heading={heading}
       sentence={t(`issues.type.${issue.type}`)}
-      when={t('issues.detectedAt', { value: whenText(issue.detected_at) })}
+      when={t('issues.detectedAt', { value: whenText(issue.detected_at, i18n.language) })}
       refusal={refusal}
       details={
         // 完整路徑與來源。掃視的時候只看得到檔名——路徑會把一列撐成三行，而這一頁的工作

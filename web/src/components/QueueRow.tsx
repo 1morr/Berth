@@ -1,8 +1,9 @@
-import type { ReactNode } from 'react'
+import { useId, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Notice } from './controls'
 import { Dot } from './Dot'
+import { ExpandHint } from './ExpandHint'
 
 /**
  * 工作清單上的一列：`/review` 的每一類、`/issues`，以及票 14 媒體庫的「待審 / 對不到」
@@ -49,25 +50,35 @@ export function QueueRow({
 }) {
   const { t } = useTranslation()
   const Heading = heading
+  const headingId = useId()
 
   return (
-    <article className="grid gap-2 border-2 border-rule bg-well px-4 py-3">
+    // `tabIndex={-1}`：按完上一列、那一列消失時焦點落在這一列（`useFocusAfterRemoval`），`aria-labelledby` 讓螢幕
+    // 閱讀器那時念得出是哪一件。
+    <article
+      tabIndex={-1}
+      aria-labelledby={headingId}
+      className="grid gap-2 border-2 border-rule bg-well px-4 py-3"
+    >
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
         <span className="label bg-deck px-2 py-1.5 text-ink">{label}</span>
-        <Heading className="value min-w-0 wrap-anywhere text-ink">{title}</Heading>
+        <Heading id={headingId} className="value min-w-0 wrap-anywhere text-ink">
+          {title}
+        </Heading>
       </div>
 
       <p className="text-sm text-ink-dim">
-        {sentence}
-        <Dot />
-        <span className="value text-xs">{when}</span>
+        {/* `Dot` 在這裡是行內字，前後的空白要自己給——JSX 換行會把它吞掉（M2 票 16 的 audit：「…集·偵測於」）。 */}
+        {sentence} <Dot /> <span className="value text-xs">{when}</span>
       </p>
 
       {body}
 
       <details className="group">
-        <summary className="label w-fit cursor-pointer text-ink-dim hover:text-ink">
-          {t('common.expand')}
+        {/* marker 拿掉、字跟著開合換（DESIGN.md 的 The Summary Is One Button Rule，同其他可展開列）：原本留著原生
+            ▸ 又寫著「展開」，打開之後仍然說「展開」（M2 票 16 的 critique）。 */}
+        <summary className="w-fit cursor-pointer marker:content-none">
+          <ExpandHint />
         </summary>
         <dl className="mt-2 grid gap-1 border-2 border-rule bg-hull px-3 py-2">{details}</dl>
       </details>

@@ -306,7 +306,7 @@ function ItemForm({
             id={selectId}
             value={action}
             onChange={(event) => setAction(event.target.value as PlanAction)}
-            className="value w-full border-2 border-rule bg-hull px-3 py-2.5 text-sm text-ink focus:border-rule-strong"
+            className="value w-full border-2 border-rule-strong bg-hull px-3 py-2.5 text-sm text-ink focus:border-ink"
           >
             {item.actions.map((choice) => (
               <option key={choice} value={choice}>

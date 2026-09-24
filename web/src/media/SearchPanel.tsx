@@ -120,7 +120,7 @@ export function SearchPanel({ media, ref }: { media: Media; ref: Ref<SearchHandl
                   ? t('search.keywordPlaceholder')
                   : t('search.keywordPlaceholderMissing')
               }
-              className="value w-full border-2 border-rule bg-hull px-3 py-2.5 text-sm text-ink placeholder:text-ink-dim focus:border-rule-strong"
+              className="value w-full border-2 border-rule-strong bg-hull px-3 py-2.5 text-sm text-ink placeholder:text-ink-dim focus:border-ink"
             />
           </p>
           <RoutePicker media={media} value={chosen} onChange={setRoute} />
@@ -192,7 +192,7 @@ export function SearchPanel({ media, ref }: { media: Media; ref: Ref<SearchHandl
               id={sortId}
               value={sort}
               onChange={(event) => setSort(event.target.value as SortKey)}
-              className="value min-w-0 flex-1 border-2 border-rule bg-hull px-3 py-2 text-sm text-ink focus:border-rule-strong"
+              className="value min-w-0 flex-1 border-2 border-rule-strong bg-hull px-3 py-2 text-sm text-ink focus:border-ink"
             >
               <option value="seeders">{t('search.column.seeders')}</option>
               <option value="size">{t('search.column.size')}</option>

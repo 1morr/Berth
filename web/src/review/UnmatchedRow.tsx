@@ -32,7 +32,7 @@ export function UnmatchedRow({
       // 檔名是使用者認得出這一個檔案的東西；作品名在前面說它屬於哪一部。
       title={[title, fileName(row.path)].filter(Boolean).join(' · ')}
       sentence={t(`review.unmatched.reason.${row.reason.code}`)}
-      when={t('review.unmatched.waitingSince', { value: whenText(row.at) })}
+      when={t('review.unmatched.waitingSince', { value: whenText(row.at, i18n.language) })}
       refusal={null}
       body={
         <RematchForm

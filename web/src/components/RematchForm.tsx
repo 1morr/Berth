@@ -98,7 +98,7 @@ export function RematchForm({
             id={selectId}
             value={action}
             onChange={(event) => setAction(event.target.value as RematchAction)}
-            className="value w-full border-2 border-rule bg-hull px-3 py-2.5 text-sm text-ink focus:border-rule-strong"
+            className="value w-full border-2 border-rule-strong bg-hull px-3 py-2.5 text-sm text-ink focus:border-ink"
           >
             {offered.map((choice) => (
               <option key={choice} value={choice}>

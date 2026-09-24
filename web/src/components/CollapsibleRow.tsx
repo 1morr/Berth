@@ -1,4 +1,4 @@
-import { useRef, useState, type ReactNode } from 'react'
+import { useRef, useState, type FocusEvent, type ReactNode } from 'react'
 import { flushSync } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 
@@ -20,6 +20,9 @@ import { ExpandHint } from './ExpandHint'
  * Button Rule）。「展開 / 收起」把狀態交給 `ExpandHint`，**不用它的 `group-open:` 那一種**：下載列本身是一個帶
  * `group` 的 `<details>`，計劃的一組長在它裡面，`group-open:` 會跟著外面那一層亮。
  */
+/** 露出來的欄位與摘要列之間留的那一點，與焦點環（2px + 2px）同寬。 */
+const UNCOVER_GAP = 8
+
 export function CollapsibleRow({
   name,
   summary,
@@ -41,6 +44,19 @@ export function CollapsibleRow({
     const element = head.current
     if (element && element.getBoundingClientRect().top < 0)
       element.scrollIntoView({ block: 'start' })
+  }
+
+  /**
+   * 焦點落在黏頂的摘要列底下時，把畫面往回捲到露出它（WCAG 2.2 2.4.11）。`scroll-margin` 管不到這一種：
+   * 那個欄位本來就在畫面內，瀏覽器根本不捲動——390px 上反向 Tab 回到「改成」那一格時它正好在
+   * y 52–94，而摘要列佔著 y 0–113（M2 票 16 的 audit 實測）。
+   */
+  function uncover(event: FocusEvent<HTMLDivElement>) {
+    const summary = head.current
+    if (!summary) return
+    const covered =
+      summary.getBoundingClientRect().bottom - event.target.getBoundingClientRect().top
+    if (covered > 0) window.scrollBy({ top: -(covered + UNCOVER_GAP) })
   }
 
   // `flushSync`：要在收起**之後**才量得到摘要列的新位置、把焦點送回它身上，而 `setOpen` 自己是非同步的。
@@ -72,9 +88,12 @@ export function CollapsibleRow({
         <ExpandHint open={open} className="ml-auto" />
       </summary>
       {open && (
-        // 反向 Tab 回到這一段裡的連結時，瀏覽器會把它捲到畫面頂端——那裡是黏頂的摘要列。`scroll-margin` 讓它停在
-        // 摘要列下面（WCAG 2.2 2.4.11；窄版摘要列約 90px）。
-        <div className="grid bg-hull [&_:is(a,button)]:scroll-mt-32 [&>*]:min-w-0">
+        // 反向 Tab 回到這一段裡的控制項時，瀏覽器會把它捲到畫面頂端——那裡是黏頂的摘要列。`scroll-margin` 讓它停在
+        // 摘要列下面（WCAG 2.2 2.4.11；窄版摘要列約 90px）；瀏覽器不捲動的那一種由 `uncover` 接。
+        <div
+          onFocus={uncover}
+          className="grid bg-hull [&_:is(a,button,summary,select,input,textarea)]:scroll-mt-32 [&>*]:min-w-0"
+        >
           {children()}
           <p className="border-t-2 border-rule px-4 py-2">
             <button type="button" onClick={collapse} className={COMPACT_BUTTON}>

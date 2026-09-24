@@ -913,8 +913,11 @@ describe('媒體庫頁', () => {
 
       await userEvent.click(within(list).getByRole('button', { name: '核准並入庫' }))
 
-      expect(await screen.findByText('這個媒體庫沒有待審核的下載。')).toBeVisible()
+      const empty = await screen.findByText('這個媒體庫沒有待審核的下載。')
+      expect(empty).toBeVisible()
       expect(await screen.findByText('待審 0')).toHaveAttribute('aria-current', 'true')
+      // 按下去的那一顆跟著那一列走了：焦點落在清單那一層，不掉回頁首（M2 票 16，同 `/review`）。
+      await waitFor(() => expect(empty.closest('[tabindex="-1"]')).toHaveFocus())
     })
 
     it('一般使用者沒有這兩個篩選：那是管理員的工作佇列，網址上帶著也照畫整面牆', async () => {

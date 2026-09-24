@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 
 import { issuesQueryOptions, reconcileQueryOptions } from '../api/issues'
 import { PAGE_TITLE } from '../components/controls'
+import { useFocusAfterRemoval } from '../components/useFocusAfterRemoval'
 import { IssueRow } from '../issues/IssueRow'
 import { ReconcileBanner } from '../issues/ReconcileBanner'
 
@@ -22,11 +23,14 @@ export function IssuesPage() {
   const { t } = useTranslation()
   const issues = useQuery(issuesQueryOptions())
   const reconcile = useQuery(reconcileQueryOptions())
+  const frame = useFocusAfterRemoval()
 
   return (
-    <div className="mx-auto grid w-full max-w-[80rem] gap-4 px-6 py-8">
+    <div ref={frame} className="mx-auto grid w-full max-w-[80rem] gap-4 px-6 py-8">
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b-2 border-rule-strong pb-2">
-        <h1 className={PAGE_TITLE}>{t('issues.title')}</h1>
+        <h1 tabIndex={-1} className={PAGE_TITLE}>
+          {t('issues.title')}
+        </h1>
         {issues.data && issues.data.length > 0 && (
           <p className="value text-xs text-ink-dim">
             {t('issues.count', { count: issues.data.length })}

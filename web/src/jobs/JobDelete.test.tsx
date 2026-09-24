@@ -122,8 +122,10 @@ describe('JobDelete', () => {
 
     await open()
 
-    expect(screen.getByRole('checkbox', { name: '刪除下載目錄裡的檔案' })).toBeDisabled()
-    expect(screen.getByText('先勾上面那一格才選得了。')).toBeInTheDocument()
+    const locked = screen.getByRole('checkbox', { name: '刪除下載目錄裡的檔案' })
+    expect(locked).toBeDisabled()
+    // 說明掛在勾選框上（`aria-describedby`），Tab 到它的螢幕閱讀器才念得到為什麼鎖著（M2 票 16 的 audit）。
+    expect(locked).toHaveAccessibleDescription('先勾上面那一格才選得了。')
   })
 
   it('取消移除 torrent 會把刪檔那一格一起收掉', async () => {
@@ -203,6 +205,18 @@ describe('JobDelete', () => {
     await tick('移除媒體庫裡的硬鏈接')
 
     await userEvent.click(screen.getByRole('button', { name: '取消' }))
+    await open()
+
+    for (const box of screen.getAllByRole('checkbox')) expect(box).not.toBeChecked()
+  })
+
+  // M2 票 16 的 audit：Esc 走的是 hook 的 `close()`，繞過了「取消」那一顆的重設。
+  it('按 Esc 收起也一樣，下一次打開全不勾', async () => {
+    mount()
+    await open()
+    await tick('移除媒體庫裡的硬鏈接')
+
+    await userEvent.keyboard('{Escape}')
     await open()
 
     for (const box of screen.getAllByRole('checkbox')) expect(box).not.toBeChecked()

@@ -94,13 +94,12 @@ export function ReconcileBanner() {
 }
 
 function Summary({ run }: { run: ReconcileRun }) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   return (
     <>
-      {t('reconcile.lastRun', { time: whenText(run.started_at) })}
-      <Dot />
-      {t('reconcile.opened', { count: run.opened })}
-      <Dot />
+      {/* 行內的 `Dot` 前後空白要自己給，JSX 換行會吞掉它（同 `QueueRow`）。 */}
+      {t('reconcile.lastRun', { time: whenText(run.started_at, i18n.language) })} <Dot />{' '}
+      {t('reconcile.opened', { count: run.opened })} <Dot />{' '}
       {t('reconcile.updated', { count: run.updated })}
     </>
   )

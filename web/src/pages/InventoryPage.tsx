@@ -38,6 +38,7 @@ import { Dot } from '../components/Dot'
 import { SessionEnded } from '../components/SessionEnded'
 import { TilePlaceholder } from '../components/TilePlaceholder'
 import { SEARCH_DEBOUNCE_MS } from '../components/useDebounced'
+import { useFocusAfterRemoval } from '../components/useFocusAfterRemoval'
 import { WALL_GRID_CONFIRMABLE } from '../components/wallGrid'
 import { InventoryTile } from '../inventory/InventoryTile'
 import { LibraryWatching, WatchingElsewhere } from '../watching/WatchingRows'
@@ -57,7 +58,7 @@ const FILTER_ACTIVE = `${NAV_BOX_ACTIVE} inline-flex items-center px-3 py-1.5`
 const PAGE_KEY = 'label inline-flex min-h-6 items-center border-2 px-3 py-1.5'
 /** 排序的兩個下拉：輸入框那一套外觀（DESIGN.md Inputs），高度與篩選列的方塊對齊。 */
 const SELECT =
-  'value max-w-full border-2 border-rule bg-hull px-2 py-1 text-sm text-ink focus:border-rule-strong'
+  'value max-w-full border-2 border-rule-strong bg-hull px-2 py-1 text-sm text-ink focus:border-ink'
 
 /**
  * 媒體庫頁 `/library/:libraryId`（M1.5 票 03、`.scratch/m1.5/library-shape.md`）。
@@ -614,6 +615,7 @@ function LibraryQueue({
   const { queue, rows } = useLibraryQueue(library.id, filter)
   // 按完那一列就消失了，焦點與畫面上都不剩任何東西說「成了」——這一句給看不見畫面的人（同 `/review`）。
   const [said, setSaid] = useState('')
+  const frame = useFocusAfterRemoval()
 
   if (queue.isPending) return <QueueLoading />
   if (!queue.data) return <p className="max-w-prose text-sm text-ink-dim">{t('review.off')}</p>
@@ -625,7 +627,8 @@ function LibraryQueue({
   }
 
   return (
-    <div className="grid max-w-[80rem] gap-3">
+    // 按完最後一列、清單換成空的那一句時，焦點落在這一層（`useFocusAfterRemoval`）。
+    <div ref={frame} tabIndex={-1} className="grid max-w-[80rem] gap-3">
       <p aria-live="polite" className="sr-only">
         {said}
       </p>

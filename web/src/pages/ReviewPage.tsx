@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 
 import { reviewQueryOptions, type ReviewKind, type ReviewRow } from '../api/review'
 import { PAGE_TITLE } from '../components/controls'
+import { useFocusAfterRemoval } from '../components/useFocusAfterRemoval'
 import { ReviewItem } from '../review/ReviewItem'
 
 /**
@@ -20,12 +21,15 @@ export function ReviewPage() {
   const queue = useQuery(reviewQueryOptions())
   // 按完那一列就消失了，焦點與畫面上都不剩任何東西說「成了」——這一句給看不見畫面的人。
   const [said, setSaid] = useState('')
+  const frame = useFocusAfterRemoval()
 
   return (
-    <div className="mx-auto grid w-full max-w-[80rem] gap-6 px-6 py-8">
+    <div ref={frame} className="mx-auto grid w-full max-w-[80rem] gap-6 px-6 py-8">
       <div className="grid gap-1 border-b-2 border-rule-strong pb-2">
         <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-          <h1 className={PAGE_TITLE}>{t('review.title')}</h1>
+          <h1 tabIndex={-1} className={PAGE_TITLE}>
+            {t('review.title')}
+          </h1>
           {queue.data && queue.data.total > 0 && (
             <p className="value text-xs text-ink-dim">
               {t('review.count', { count: queue.data.total })}

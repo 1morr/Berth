@@ -70,7 +70,7 @@ export function DuplicateRow({
       heading="h3"
       title={title ? [title, episode].filter(Boolean).join(' ') : fileName(row.path)}
       sentence={t(`review.duplicate.reason.${row.reason.code}`)}
-      when={t('review.duplicate.skippedAt', { value: whenText(row.at) })}
+      when={t('review.duplicate.skippedAt', { value: whenText(row.at, i18n.language) })}
       refusal={refusal}
       details={
         <>

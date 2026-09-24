@@ -43,7 +43,7 @@ export function RoutePicker({
         onChange={(event) =>
           onChange(event.target.value === '' ? null : Number(event.target.value))
         }
-        className="value w-full border-2 border-rule bg-hull px-3 py-2.5 text-sm text-ink focus:border-rule-strong"
+        className="value w-full border-2 border-rule-strong bg-hull px-3 py-2.5 text-sm text-ink focus:border-ink"
       >
         <option value="">{t('media.route.none')}</option>
         {media.routes.map((route) => (

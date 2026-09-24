@@ -70,6 +70,27 @@ function render(routes: Record<string, StubRoute | (() => StubRoute)> = {}) {
 }
 
 describe('待處理頁', () => {
+  // M2 票 16 的 critique：按下去的那一顆跟著整列消失，焦點不能掉回 `body`（同 `/review`）。
+  it('按完那一件消失之後，焦點落在下一件', async () => {
+    let open = [issue(), issue({ id: 2, path: `${TARGET}.2`, subject: `${TARGET}.2` })]
+    render({
+      [ISSUES]: () => ({ body: open }),
+      'POST /api/issues/1/ignore': () => {
+        const [first] = open
+        open = open.slice(1)
+        return { body: { ...first, status: 'ignored' } }
+      },
+    })
+    renderApp('/issues')
+    const [first] = await screen.findAllByRole('article')
+
+    within(first).getByRole('button', { name: '忽略' }).focus()
+    await userEvent.keyboard('{Enter}')
+
+    await waitFor(() => expect(screen.getAllByRole('article')).toHaveLength(1))
+    await waitFor(() => expect(screen.getByRole('article')).toHaveFocus())
+  })
+
   it('一列說出它是什麼、按得了什麼', async () => {
     render({ [ISSUES]: { body: [issue()] } })
     renderApp('/issues')

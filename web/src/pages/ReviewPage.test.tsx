@@ -149,6 +149,40 @@ describe('審核佇列', () => {
     expect(stub.mock.calls.some(([url]) => url === '/api/review/audit/7/confirm')).toBe(true)
   })
 
+  // M2 票 16 的 critique：按下去的那一顆跟著整列消失，焦點掉回 `body`——鍵盤使用者清一件佇列就要
+  // 從頁首重新 Tab 一次。焦點改落在接替那一格的那一列；清空了就落在頁標題。
+  it('按完那一列消失之後，焦點落在接著的那一列，清空了落在頁標題', async () => {
+    let rows: ReviewQueue['rows'] = [audit(), audit({ ref: 8, episode_start: 2 })]
+    render({
+      [QUEUE]: () => queue(rows),
+      'POST /api/review/audit/7/confirm': () => {
+        rows = rows.filter((row) => row.ref !== 7)
+        return { status: 204, body: null }
+      },
+      'POST /api/review/audit/8/confirm': () => {
+        rows = []
+        return { status: 204, body: null }
+      },
+    })
+    renderApp('/review')
+    const [first] = await screen.findAllByRole('article')
+
+    within(first).getByRole('button', { name: '確認' }).focus()
+    await userEvent.keyboard('{Enter}')
+
+    await waitFor(() => expect(screen.getAllByRole('article')).toHaveLength(1))
+    const [next] = screen.getAllByRole('article')
+    await waitFor(() => expect(next).toHaveFocus())
+    // 焦點落到那一列時念得出是哪一件。
+    expect(next).toHaveAccessibleName('SPY×FAMILY 間諜家家酒 S02E02')
+
+    within(next).getByRole('button', { name: '確認' }).focus()
+    await userEvent.keyboard('{Enter}')
+
+    await waitFor(() => expect(screen.queryByRole('article')).not.toBeInTheDocument())
+    await waitFor(() => expect(screen.getByRole('heading', { level: 1 })).toHaveFocus())
+  })
+
   it('撤銷要就地確認一次，說出後果之後才送出', async () => {
     let rows: ReviewQueue['rows'] = [audit()]
     const stub = render({

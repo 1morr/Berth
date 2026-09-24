@@ -44,7 +44,6 @@ export function JobDelete({ hash }: { hash: string }) {
     mutationFn: () => deleteJob(hash, scope),
     onSuccess: async () => {
       close()
-      setScope(NOTHING_TICKED)
       // **兩個掛點各要重畫一次**：那一筆 Job（勾了「清除紀錄」詳情頁就變成「找不到這筆下載」，沒勾就換成
       // 「已刪除」），以及 Media 詳情——剛刪掉的那個版本與那幾個檔案都是 `['media', id]`
       // 讀出來的，只失效 `['jobs']` 的話版本清單上那一條會留在畫面上（票 04 code-review 抓到）。
@@ -59,7 +58,16 @@ export function JobDelete({ hash }: { hash: string }) {
   if (!asked) {
     return (
       <div className="grid justify-items-start gap-2">
-        <GhostButton ref={trigger} type="button" onClick={open}>
+        {/* 打開時重設而不是收起時：收起有「取消」、Esc、刪完三條路，打開只有這一條（票 16 的 audit
+            抓到 Esc 繞過了重設）。 */}
+        <GhostButton
+          ref={trigger}
+          type="button"
+          onClick={() => {
+            setScope(NOTHING_TICKED)
+            open()
+          }}
+        >
           {t('jobs.delete.label')}
         </GhostButton>
         {/* 刪完了而這一筆還留著（沒勾「清除紀錄」）：它就在畫面上，所以只要一句結果。 */}
@@ -128,13 +136,7 @@ export function JobDelete({ hash }: { hash: string }) {
         <PrimaryButton type="button" disabled={remove.isPending} onClick={() => remove.mutate()}>
           {remove.isPending ? t('jobs.delete.pending') : t('jobs.delete.confirm')}
         </PrimaryButton>
-        <GhostButton
-          type="button"
-          onClick={() => {
-            setScope(NOTHING_TICKED)
-            close()
-          }}
-        >
+        <GhostButton type="button" onClick={close}>
           {t('common.cancel')}
         </GhostButton>
       </div>

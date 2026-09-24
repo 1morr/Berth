@@ -6,8 +6,11 @@ export function fileName(path: string) {
   return parts[parts.length - 1] ?? ''
 }
 
-/** 絕對時間，照瀏覽器的語系。認不得的原樣印出——它仍然是後端說的那一個值。 */
-export function whenText(value: string) {
+/**
+ * 絕對時間，照 **UI 的語言**（`i18n.language`，同 `Timestamp`）而不是瀏覽器的——後者讓 EN 介面印出
+ * 「上午10:31:36」。認不得的原樣印出：它仍然是後端說的那一個值。
+ */
+export function whenText(value: string, language: string) {
   const at = new Date(value)
-  return Number.isNaN(at.getTime()) ? value : at.toLocaleString()
+  return Number.isNaN(at.getTime()) ? value : at.toLocaleString(language)
 }

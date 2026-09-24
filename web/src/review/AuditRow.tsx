@@ -68,7 +68,7 @@ export function AuditRow({ row, onDone }: { row: AuditReviewRow; onDone: (said: 
       // 作品名跟著 UI 語言走（brief §7.5）；沒有作品時退回檔名，它仍然是使用者認得出的東西。
       title={title ? [title, episode].filter(Boolean).join(' ') : fileName(row.path)}
       sentence={t(`review.audit.reason.${row.reason.code}`)}
-      when={t('review.audit.importedAt', { value: whenText(row.at) })}
+      when={t('review.audit.importedAt', { value: whenText(row.at, i18n.language) })}
       refusal={refusal}
       details={
         <>

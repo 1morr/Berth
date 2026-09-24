@@ -59,7 +59,7 @@ export function PlanRow({ row, onDone }: { row: PlanReviewRow; onDone: (said: st
       // 作品名跟著 UI 語言走（brief §7.5）；沒有作品時退回發佈名，它仍然是使用者認得出的東西。
       title={title || row.job_name}
       sentence={t(`review.plan.reason.${row.reason.code}`)}
-      when={t('review.plan.waitingSince', { value: whenText(row.at) })}
+      when={t('review.plan.waitingSince', { value: whenText(row.at, i18n.language) })}
       refusal={refusal}
       body={
         plan.isPending ? (
