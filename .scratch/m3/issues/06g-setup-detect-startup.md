@@ -1,6 +1,6 @@
 # 06g — 精靈偵測：服務還在啟動時的暫時錯誤當成「探測中」，不是 500、不是既有
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Blocked by:** None — can start immediately（只動 `services/setup.py` 的判定、前端的輪詢條件與它們的測試）
 
@@ -33,10 +33,38 @@
 
 ## 驗收
 
-- [ ] 紅燈先行：Fake Jellyfin 丟 `ServiceBusyError` 時 `detect_services` 回 `pending` / `starting` 而不是冒例外（整合測試，修正前紅）
-- [ ] `protocol_mismatch` 在視窗內是 `pending`、過了視窗是 `existing`（單元測試用注入的 `now`，雙向）；三個服務各一條
-- [ ] `ServiceBusyError` 在視窗結束時轉 `timeout`（單元測試）
-- [ ] 前端：探測回 500 時照樣排下一次輪詢（前端測試，修正前紅）
-- [ ] 實跑：重置試跑環境、同時起四個容器，從精靈第 1 步照常操作，第 2 步不必按「重新探測」就全部判定完成；附時間線
-- [ ] 新 `DetectionReason` 的 zh-Hant 與 en；plan §9.3 第 2 步補上「啟動中」這一種
-- [ ] lint、type、test 綠燈
+- [x] 紅燈先行：Fake Jellyfin 丟 `ServiceBusyError` 時 `detect_services` 回 `pending` / `starting` 而不是冒例外（整合測試，修正前紅）
+- [x] `protocol_mismatch` 在視窗內是 `pending`、過了視窗是 `existing`（單元測試用注入的 `now`，雙向）；三個服務各一條
+- [x] `ServiceBusyError` 在視窗結束時轉 `timeout`（單元測試）
+- [x] 前端：探測回 500 時照樣排下一次輪詢（前端測試，修正前紅）
+- [x] 實跑：重置試跑環境、同時起四個容器，從精靈第 1 步照常操作，第 2 步不必按「重新探測」就全部判定完成；附時間線
+- [x] 新 `DetectionReason` 的 zh-Hant 與 en；plan §9.3 第 2 步補上「啟動中」這一種
+- [x] lint、type、test 綠燈
+
+## Comments
+
+**做法**：`_classified` 多接 `ServiceBusyError` → `pending` / `starting`（新的 `DetectionReason`，進 OpenAPI、zh-Hant / en、`signals.ts`）；`ProtocolMismatchError` 改回 `pending` / `protocol_mismatch`，由 `_settled` 過了視窗判既有（其餘 `pending` 照舊判逾時）。三個 `_verdict_*` 都走 `_classified`，所以同一條規則。使用者自己填的位址（`_probe_connection`）照舊把 `pending` 當場轉既有；`starting` 進 `UNRESOLVED_REASONS`，否則「既有 · 還在啟動」會被當成接好了。前端 `SetupPage.tsx`：探測失敗時從第一次失敗起算（`failingSince`）、在 `window_seconds` 內每 3 秒再探，視窗內的失敗顯示成「探測中…」、不掛「探測沒跑完」；過了才停下來等人按。使用者自己按與單一服務重探成功都重算這個視窗。
+
+**紅燈與變異**：後端整合 8 條（503 → `starting`、`starting` 逾時、`protocol_mismatch` 視窗內 / 外各三個服務、自填位址的兩種不給視窗），前端 3 條（500 之後照排、一直失敗到上限停、放棄後單一重探恢復輪詢）。變異：拿掉 `UNRESOLVED_REASONS` 的 `STARTING`、`_settled` 的協定不符改回逾時，各自轉紅後還原。**驗收寫「單元測試」，實際放在 `tests/integration/test_setup_service.py`**：與同檔的 `pending` / 逾時測試同一層，走 `detect_services` 加注入的 `now`，不直接測 `_settled`。
+
+**實跑（隔離副本，使用者拍板不重置 `berth-trial`）**：repo 的 `deploy/docker-compose.yml` + 這一票工作樹 build 的 `berth:06g`，project `berth-06g`、port 28xxx，`config/` 與 `data/` 全新，四個容器一次 `up -d`；playwright 在 Berth 回 health 的那一刻照常填第 1 步、按「開始探測」，之後什麼都不按。時間從 `up` 起算：
+
+| 時間 | 事件 / Jellyfin | Prowlarr | qBittorrent |
+| --- | --- | --- | --- |
+| 8.8 s | Berth `/api/health` 200 | | |
+| 9.0 s | 第 1 步送出 | | |
+| 9.8 s | 按「開始探測」 | | |
+| 10.4 s | `pending` / **`protocol_mismatch`** | `pending` / `unreachable` | `bundled` |
+| 13.4 s | `pending` / **`starting`** | `pending` / `unreachable` | `bundled` |
+| 16.5 s | `bundled` / `setup_pending` | `pending` / `unreachable` | `bundled` |
+| 19.5–22.5 s | `bundled` | `pending` / `unreachable` | `bundled` |
+| 25.7 s | `bundled` | `bundled` / `no_indexers` | `bundled` |
+| 26.0 s | 「前往泊位 1」出現；單一服務重探 0 次 | | |
+
+六次 `POST /setup/detect` 全是 200，Berth log 沒有 traceback；兩種新的「還在啟動」都真的出現。截圖 `.local/screens/m3-06g/step2-done.png`（不進版控）。跑完 `down`、刪目錄與 image；`berth-trial` 一直沒動。
+
+**code-review 未處理的發現**：
+- 後端視窗沒重算時指名重探一台剛起來的服務（另一台停在 `timeout`，`probe_started_at` 不會清），`protocol_mismatch` 會立刻判既有、`starting` 立刻判逾時，不再等一個視窗。`unreachable` 本來就是這樣；按「重新探測」整輪重試（`restart`）會重算。
+- 視窗內那一列寫「探測中 · 連得上，但回的東西不是這個服務」加倒數：理由照實說看到的東西，等待提示寫「容器還在啟動」。票面說「先當還在啟動」，沒有改理由，因為過了視窗要靠它判既有。
+- `windowMs` 在 status 還沒載入時是 0，第一次失敗就算放棄；走得到第 2 步時 status 一定已經載入。
+- `failingSince` 在兩處歸零（探到了、使用者按了新的一輪）：兩個不同的理由，沒有合併。

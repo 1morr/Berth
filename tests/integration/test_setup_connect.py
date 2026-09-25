@@ -7,6 +7,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from berth.adapters.http import (
     AuthFailedError,
+    ProtocolMismatchError,
+    ServiceBusyError,
     ServiceNotDeployedError,
     ServiceUnavailableError,
 )
@@ -239,6 +241,29 @@ async def test_a_failed_test_still_keeps_what_the_user_typed(session: AsyncSessi
         DetectionReason.UNREACHABLE,
     )
     assert (await read_settings(session, JellyfinSettings)).base_url == "http://typo:8096"
+
+
+@pytest.mark.parametrize(
+    ("error", "reason"),
+    [
+        (ServiceBusyError("503 still loading"), DetectionReason.STARTING),
+        (ProtocolMismatchError("not jellyfin"), DetectionReason.PROTOCOL_MISMATCH),
+    ],
+)
+@pytest.mark.asyncio
+async def test_a_typed_address_is_not_given_the_startup_window(
+    session: AsyncSession, error: Exception, reason: DetectionReason
+) -> None:
+    """票 06g 的「先等」只給 compose 主機名：使用者自己填的位址當場給結論，而且還沒接好。"""
+    factory = FakeClientFactory(jellyfin=FakeJellyfinClient(error=error))
+
+    status = await connect_service(
+        session, ServiceKind.JELLYFIN, ServiceConnection(base_url="http://nas:8096"), factory
+    )
+
+    assert verdict(status, ServiceKind.JELLYFIN) == (ServiceOrigin.EXISTING, reason)
+    row = next(r for r in status.services if r.kind is ServiceKind.JELLYFIN)
+    assert row.resolved is False
 
 
 @pytest.mark.asyncio

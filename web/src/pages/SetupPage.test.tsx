@@ -9,6 +9,7 @@ import { SetupPage } from './SetupPage'
 
 afterEach(() => {
   vi.unstubAllGlobals()
+  vi.useRealTimers()
 })
 
 const STATUS = 'GET /api/setup/status'
@@ -292,6 +293,106 @@ describe('第 2 步：偵測服務', () => {
     const line = within(sequence).getAllByRole('listitem')[1]
     expect(await within(line).findByText('12 / 120 秒')).toBeInTheDocument()
     expect(within(line).getByText('探測中')).toBeInTheDocument()
+  })
+
+  /**
+   * 票 06g：四個容器同時起來時，探測本身會失敗（Jellyfin 啟動中的 503 冒成 500）。
+   * 那時候還沒有任何判定，只看「有沒有服務在等」的話永遠不會再探，畫面停在「探測沒跑完」。
+   */
+  it('探測本身失敗時照樣排下一次，不必按重新探測', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    let calls = 0
+    const fetchStub = stubApi({
+      [STATUS]: { body: AT_STEP_TWO },
+      [DETECT]: () => {
+        calls += 1
+        return calls === 1
+          ? { status: 500, body: { detail: 'Internal Server Error' } }
+          : { body: setupStatus({ ...AT_STEP_TWO, services: ALL_BUNDLED }) }
+      },
+    })
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+
+    renderWithProviders(<SetupPage />)
+    await user.click(await screen.findByRole('button', { name: '開始探測' }))
+    await waitFor(() =>
+      expect(fetchStub.mock.calls.some(([url]) => url === '/api/setup/detect')).toBe(true),
+    )
+    // 視窗內的失敗是「還在探測」，不是一句要人去查後端的失敗。
+    expect(screen.getByRole('button', { name: '探測中…' })).toBeInTheDocument()
+    expect(screen.queryByText(/探測沒跑完/)).not.toBeInTheDocument()
+    await vi.advanceTimersByTimeAsync(3000)
+
+    expect(await screen.findByRole('button', { name: '前往泊位 1' })).toBeInTheDocument()
+    const detects = fetchStub.mock.calls.filter(([url]) => url === '/api/setup/detect')
+    expect(detects).toHaveLength(2)
+  })
+
+  it('探測一直失敗，過了輪詢上限就停下來等人按', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    const fetchStub = stubApi({
+      [STATUS]: { body: AT_STEP_TWO },
+      [DETECT]: { status: 500, body: { detail: 'Internal Server Error' } },
+    })
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+
+    renderWithProviders(<SetupPage />)
+    await user.click(await screen.findByRole('button', { name: '開始探測' }))
+    await vi.advanceTimersByTimeAsync(AT_STEP_TWO.window_seconds * 1000 + 10_000)
+    const stopped = fetchStub.mock.calls.filter(([url]) => url === '/api/setup/detect').length
+    await vi.advanceTimersByTimeAsync(30_000)
+
+    expect(fetchStub.mock.calls.filter(([url]) => url === '/api/setup/detect')).toHaveLength(
+      stopped,
+    )
+    expect(stopped).toBeGreaterThan(2)
+    expect(screen.getByText(/探測沒跑完/)).toBeInTheDocument()
+  })
+
+  /** 票 06g code review：放棄之後 `detect` 的失敗還掛著，不能蓋掉單一服務重探拿回來的新判定。 */
+  it('放棄之後重新偵測一個服務拿回探測中，輪詢照樣恢復', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    const timedOut = [
+      ALL_BUNDLED[0],
+      detection({
+        kind: 'qbittorrent',
+        origin: 'timeout',
+        reason: 'starting',
+        detail: '',
+        resolved: false,
+      }),
+      ALL_BUNDLED[2],
+    ]
+    const starting = timedOut.map((row) =>
+      row.kind === 'qbittorrent' ? { ...row, origin: 'pending' as const } : row,
+    )
+    const fetchStub = stubApi({
+      [STATUS]: { body: setupStatus({ ...AT_STEP_TWO, services: timedOut }) },
+      [DETECT]: { status: 500, body: { detail: 'Internal Server Error' } },
+    })
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    renderWithProviders(<SetupPage />)
+    await user.click(await screen.findByRole('button', { name: '重試' }))
+    await vi.advanceTimersByTimeAsync(AT_STEP_TWO.window_seconds * 1000 + 10_000)
+    expect(await screen.findByText(/探測沒跑完/)).toBeInTheDocument()
+    // 使用者只重探 qBittorrent：它回探測中，之後的整輪探測也好了。
+    let polled = 0
+    fetchStub.mockImplementation(async (input, init) => {
+      const url = String(input)
+      if (init?.method === 'POST' && url === '/api/setup/detect') {
+        const body = JSON.parse(String(init.body)) as { kind?: string }
+        if (!body.kind) polled += 1
+        const services = body.kind ? starting : ALL_BUNDLED
+        return new Response(JSON.stringify(setupStatus({ ...AT_STEP_TWO, services })))
+      }
+      return new Response(JSON.stringify(setupStatus({ ...AT_STEP_TWO, services: timedOut })))
+    })
+
+    await user.click(screen.getByRole('button', { name: '重新偵測這個服務（qBittorrent）' }))
+    await vi.advanceTimersByTimeAsync(3000)
+
+    await waitFor(() => expect(polled).toBeGreaterThan(0))
+    expect(screen.queryByText(/探測沒跑完/)).not.toBeInTheDocument()
   })
 
   it('逾時之後給重試與可複製的診斷指令', async () => {

@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from berth.adapters.http import (
     AuthFailedError,
     ProtocolMismatchError,
+    ServiceBusyError,
     ServiceNotDeployedError,
     ServiceUnavailableError,
 )
@@ -231,7 +232,7 @@ async def detect_services(
             continue
         origin, reason, detail, base_url = await _probe(each, probes)
         probed[each] = ServiceProbe(
-            origin=_settled(origin, waited),
+            origin=_settled(origin, reason, waited),
             reason=reason,
             detail=detail,
             base_url=base_url,
@@ -332,8 +333,8 @@ async def _probe_connection(
 ) -> _Verdict:
     """用使用者填的位址與憑證跑一次判定，規則與探測 compose 主機名時完全相同。
 
-    唯一的差別是「連不上」的意思：探 compose 主機名時代表容器還在啟動，該等；
-    使用者自己填的位址連不上就是連不上，不該給他一個永遠不會好的倒數。
+    唯一的差別是「探測中」的意思：探 compose 主機名時連不上、還在載入、回的不像它自己，都代表
+    容器還在啟動，該等（票 06g）；使用者自己填的位址當場就給結論，不該給他一個永遠不會好的倒數。
     """
     origin, reason, detail, base_url = await _connection_verdict(kind, connection, factory)
     if origin is ServiceOrigin.PENDING:
@@ -373,6 +374,7 @@ UNRESOLVED_REASONS = frozenset(
     {
         DetectionReason.NOT_DEPLOYED,
         DetectionReason.UNREACHABLE,
+        DetectionReason.STARTING,
         DetectionReason.AUTH_REQUIRED,
         DetectionReason.PROTOCOL_MISMATCH,
         DetectionReason.API_KEY_MISSING,
@@ -402,11 +404,16 @@ def _detect_done(setup: SetupSettings) -> bool:
     )
 
 
-def _settled(origin: ServiceOrigin, waited: timedelta) -> ServiceOrigin:
-    """還在等的服務超過輪詢上限就轉成逾時，讓 UI 給出重試而不是無限等待。"""
-    if origin is ServiceOrigin.PENDING and waited > DETECT_WINDOW:
-        return ServiceOrigin.TIMEOUT
-    return origin
+def _settled(origin: ServiceOrigin, reason: DetectionReason, waited: timedelta) -> ServiceOrigin:
+    """還在等的服務超過輪詢上限就轉成逾時，讓 UI 給出重試而不是無限等待。
+
+    協定不符例外：過了視窗還是它，就是主機名上真的是別的東西，判既有、展開表單（票 06g）。
+    """
+    if origin is not ServiceOrigin.PENDING or waited <= DETECT_WINDOW:
+        return origin
+    if reason is DetectionReason.PROTOCOL_MISMATCH:
+        return ServiceOrigin.EXISTING
+    return ServiceOrigin.TIMEOUT
 
 
 _Verdict = tuple[ServiceOrigin, DetectionReason, str, str]
@@ -474,17 +481,24 @@ def _version_detail(version: QbittorrentVersion) -> str:
 
 
 async def _classified(probe: Callable[[], Awaitable[_Verdict]], base_url: str) -> _Verdict:
-    """把 adapter 的四種錯誤翻成判定。
+    """把 adapter 的錯誤翻成判定。
 
     連不上與解不到必須分開：解不到代表這個服務被從 `COMPOSE_PROFILES` 拿掉了，該立刻顯示
     既有服務的表單；連不上只是容器還在啟動，該繼續等到輪詢上限。
+
+    **協定不符也先等**（票 06g）：啟動途中的服務會回不像它自己的東西（實測 Jellyfin 起來後
+    第 11 秒），判成既有就會在它真的起來前把表單攤開。它在視窗內是 `pending`，過了視窗才由
+    `_settled` 判既有；使用者自己填的位址不等（`_probe_connection`）。
     """
     try:
         return await probe()
     except ServiceNotDeployedError:
         return _existing(DetectionReason.NOT_DEPLOYED, "", base_url)
     except ServiceUnavailableError:
-        return (ServiceOrigin.PENDING, DetectionReason.UNREACHABLE, "", base_url)
+        return _pending(DetectionReason.UNREACHABLE, base_url)
+    except ServiceBusyError:
+        # 連得上、是對的服務，但還在載入（Jellyfin 的 503）：與連不上一樣等到輪詢上限。
+        return _pending(DetectionReason.STARTING, base_url)
     except IpBannedError:
         # `AuthFailedError` 的子類，所以**一定要排在它前面**——被封的那一台會照樣回 403，
         # 而「要帳密」與「被封了」的下一步完全不同（票 10、plan T1.9 第四條）。
@@ -492,11 +506,15 @@ async def _classified(probe: Callable[[], Awaitable[_Verdict]], base_url: str) -
     except AuthFailedError:
         return _existing(DetectionReason.AUTH_REQUIRED, "", base_url)
     except ProtocolMismatchError:
-        return _existing(DetectionReason.PROTOCOL_MISMATCH, "", base_url)
+        return _pending(DetectionReason.PROTOCOL_MISMATCH, base_url)
 
 
 def _existing(reason: DetectionReason, detail: str, base_url: str) -> _Verdict:
     return (ServiceOrigin.EXISTING, reason, detail, base_url)
+
+
+def _pending(reason: DetectionReason, base_url: str) -> _Verdict:
+    return (ServiceOrigin.PENDING, reason, "", base_url)
 
 
 def _current_step(setup: SetupSettings, *, routes: bool) -> int:

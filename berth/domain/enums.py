@@ -745,6 +745,8 @@ class DetectionReason(StrEnum):
     NOT_DEPLOYED = "not_deployed"
     #: 主機名解得到但連不上，通常是容器還在啟動。
     UNREACHABLE = "unreachable"
+    #: 連得上、是對的服務，但它說自己還在載入（Jellyfin 啟動中的 503，票 06g）。
+    STARTING = "starting"
     #: 連得上但回的東西不是預期的服務。
     PROTOCOL_MISMATCH = "protocol_mismatch"
     #: 使用者填的既有服務連線資訊測試通過。

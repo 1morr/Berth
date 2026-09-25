@@ -1816,7 +1816,7 @@ export interface components {
          * @description 判定的理由。UI 逐服務顯示，所以是封閉集合而不是自由文字。
          * @enum {string}
          */
-        DetectionReason: "setup_pending" | "setup_completed" | "anonymous_ok" | "auth_required" | "ip_banned" | "no_indexers" | "has_indexers" | "api_key_missing" | "not_deployed" | "unreachable" | "protocol_mismatch" | "connected";
+        DetectionReason: "setup_pending" | "setup_completed" | "anonymous_ok" | "auth_required" | "ip_banned" | "no_indexers" | "has_indexers" | "api_key_missing" | "not_deployed" | "unreachable" | "starting" | "protocol_mismatch" | "connected";
         /**
          * DiscoverItemOut
          * @description 牆上的一格。

@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from berth.adapters.http import (
     AuthFailedError,
     ProtocolMismatchError,
+    ServiceBusyError,
     ServiceNotDeployedError,
     ServiceUnavailableError,
 )
@@ -327,15 +328,71 @@ async def test_retry_restarts_the_polling_window(session: AsyncSession) -> None:
 
 
 @pytest.mark.asyncio
-async def test_a_service_answering_with_something_else_is_existing(session: AsyncSession) -> None:
-    wrong = FakeJellyfinClient(error=ProtocolMismatchError("not jellyfin"))
+async def test_jellyfin_still_loading_is_pending_not_an_error(session: AsyncSession) -> None:
+    """Jellyfin 啟動中每一支端點都回 503（票 06g）：那是「還在啟動」，不是 500、也不是既有。"""
+    await create_admin(session, username="skipper", password="harbour", apply_to_services=True)
+    loading = FakeJellyfinClient(error=ServiceBusyError("503 still loading"))
 
-    status = await detect_services(session, probes(jellyfin=wrong), now=NOW)
+    status = await detect_services(session, probes(jellyfin=loading), now=NOW)
 
     assert verdict(status, ServiceKind.JELLYFIN) == (
-        ServiceOrigin.EXISTING,
-        DetectionReason.PROTOCOL_MISMATCH,
+        ServiceOrigin.PENDING,
+        DetectionReason.STARTING,
     )
+    assert status.current_step == 2
+
+
+@pytest.mark.asyncio
+async def test_still_loading_becomes_timeout_after_the_polling_window(
+    session: AsyncSession,
+) -> None:
+    loading = FakeJellyfinClient(error=ServiceBusyError("503 still loading"))
+    later = NOW + DETECT_WINDOW + timedelta(seconds=1)
+
+    await detect_services(session, probes(jellyfin=loading), now=NOW)
+    status = await detect_services(session, probes(jellyfin=loading), now=later)
+
+    assert verdict(status, ServiceKind.JELLYFIN) == (
+        ServiceOrigin.TIMEOUT,
+        DetectionReason.STARTING,
+    )
+
+
+def answering_with_something_else(kind: ServiceKind) -> SetupProbes:
+    wrong = ProtocolMismatchError("not the expected service")
+    if kind is ServiceKind.JELLYFIN:
+        return probes(jellyfin=FakeJellyfinClient(error=wrong))
+    if kind is ServiceKind.QBITTORRENT:
+        return probes(qbittorrent=FakeQbittorrentClient(error=wrong))
+    return probes(prowlarr=FakeProwlarrClient(ping_error=wrong))
+
+
+@pytest.mark.parametrize("kind", list(ServiceKind))
+@pytest.mark.asyncio
+async def test_something_else_answering_inside_the_window_is_still_pending(
+    session: AsyncSession, kind: ServiceKind
+) -> None:
+    """啟動途中的服務會回不像它自己的東西（票 06g 量到 Jellyfin 11 秒時這樣）：視窗內先等。"""
+    wrong = answering_with_something_else(kind)
+
+    await detect_services(session, wrong, now=NOW)
+    status = await detect_services(session, wrong, now=NOW + DETECT_WINDOW)
+
+    assert verdict(status, kind) == (ServiceOrigin.PENDING, DetectionReason.PROTOCOL_MISMATCH)
+
+
+@pytest.mark.parametrize("kind", list(ServiceKind))
+@pytest.mark.asyncio
+async def test_something_else_answering_past_the_window_is_existing(
+    session: AsyncSession, kind: ServiceKind
+) -> None:
+    """過了視窗還是別的東西：主機名上真的不是它，展開既有服務的表單（不是逾時）。"""
+    wrong = answering_with_something_else(kind)
+
+    await detect_services(session, wrong, now=NOW)
+    status = await detect_services(session, wrong, now=NOW + DETECT_WINDOW + timedelta(seconds=1))
+
+    assert verdict(status, kind) == (ServiceOrigin.EXISTING, DetectionReason.PROTOCOL_MISMATCH)
 
 
 @pytest.mark.asyncio

@@ -55,6 +55,7 @@ export const REASON_LABEL = {
   api_key_missing: 'reason.api_key_missing',
   not_deployed: 'reason.not_deployed',
   unreachable: 'reason.unreachable',
+  starting: 'reason.starting',
   protocol_mismatch: 'reason.protocol_mismatch',
   connected: 'reason.connected',
 } as const satisfies Record<DetectionReason, string>

@@ -148,11 +148,23 @@ export function SetupPage({
       setPinned(null)
     },
   })
+  // 探測本身連續失敗的起點（票 06g）。後端沒回判定就沒有 `waited_seconds`，視窗由前端自己量；
+  // 還在視窗內的失敗算「還在探測」，過了才說失敗、等人按。
+  const failingSince = useRef<number | null>(null)
+  const [failingInWindow, setFailingInWindow] = useState(false)
+  const windowMs = (status.data?.window_seconds ?? 0) * 1000
   // 背景輪詢也走這一支，所以釘住畫面的是按鍵那一刻（`onDetect`），不是這裡：輪詢若也釘，
   // 在泊位頁上重新偵測、服務還在啟動的那幾秒會把畫面釘回第 2 步，判定出來之後回不去原本那一頁。
   const detect = useMutation({
     mutationFn: (restart: boolean) => detectServices(restart),
-    onSuccess: absorb,
+    onSuccess: (next) => {
+      failingSince.current = null
+      absorb(next)
+    },
+    onError: () => {
+      failingSince.current ??= Date.now()
+      setFailingInWindow(Date.now() - failingSince.current < windowMs)
+    },
   })
   // 「重新偵測這個服務」（票 06d）：只探那一個，然後泊位的狀態也重讀——連不上的通常是它。
   // 不重啟輪詢窗口：其他服務的等待不該因為這一個被重算（整輪重試才重啟，`restart`）。
@@ -160,6 +172,10 @@ export function SetupPage({
     mutationFn: (kind: ServiceKind) => detectServices(false, kind),
     onMutate: hold,
     onSuccess: (next) => {
+      // 拿到新的判定，上一輪整輪探測的失敗就是舊的了：不清掉的話它會蓋掉新判定的「探測中」，
+      // 輪詢不會恢復（票 06g code review）。
+      failingSince.current = null
+      detect.reset()
       absorb(next)
       for (const options of [
         jellyfinSetupQueryOptions,
@@ -276,11 +292,17 @@ export function SetupPage({
   const tmdb = useQuery({ ...tmdbSetupQueryOptions, enabled: backend >= STEP.tmdb })
 
   // 服務還在啟動就繼續探，直到有結論或後端判逾時（plan §9.3 第 2 步）。
+  // 探測本身失敗（非 2xx）也照樣排下一次（票 06g）：四個容器同時起來時探測會在拿到任何判定
+  // 之前就失敗，那時沒有 `pending` 可看。失敗時不看上一份判定——它是舊的——只看從第一次失敗
+  // 起算有沒有過輪詢上限；過了就停在「探測沒跑完」等人按。
+  const probing = detect.isPending || (detect.isError && failingInWindow)
+  const failed = detect.isError && !failingInWindow
   useEffect(() => {
-    if (!waiting || detect.isPending || redetect.isPending) return
+    if (detect.isPending || redetect.isPending) return
+    if (detect.isError ? !failingInWindow : !waiting) return
     const timer = window.setTimeout(() => detect.mutate(false), POLL_INTERVAL_MS)
     return () => window.clearTimeout(timer)
-  }, [waiting, detect, redetect.isPending])
+  }, [waiting, detect, redetect.isPending, failingInWindow])
 
   // 套件內的媒體庫路徑沒有要選的東西：第一次走到這一格就自動建 Route、跑五條檢查（票 06d）。
   // 只在「後端正停在這一步、一條 Route 都還沒有」時跑一次；回頭看不重跑，要重跑有按鈕。
@@ -370,12 +392,14 @@ export function SetupPage({
       ) : step === STEP.detect ? (
         <DetectStep
           status={current}
-          probing={detect.isPending}
+          probing={probing}
           connectingKind={connect.isPending ? connect.variables.kind : null}
           redetectingKind={redetect.isPending ? redetect.variables : null}
-          failed={detect.isError}
+          failed={failed}
           onDetect={(restart) => {
             hold()
+            // 使用者自己按的是新的一輪：失敗的視窗重新算。
+            failingSince.current = null
             detect.mutate(restart)
           }}
           onConnect={(kind, input) => connect.mutate({ kind, input })}
