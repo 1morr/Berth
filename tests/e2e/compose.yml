@@ -24,11 +24,10 @@ services:
     # 與另外三個容器同一個擁有者：qBittorrent 要搬得動這些檔案，而 Linux 的 protected_hardlinks
     # 不讓 uid 1000 鏈接別人擁有的檔案。
     user: "1000:1000"
+    # 不寫 `depends_on: berth: service_healthy`：那會讓 `up -d` 卡到 Berth 的第一次健康檢查
+    # （30 秒）才回來，測試開始時外部服務早就起來了。空的 /data 要先由 Berth 的入口腳本接手
+    # 擁有者，所以 payload.py 自己等 Berth 回應了才開始寫（`wait_for_berth`）。
     command: [python, /e2e/payload.py]
-    depends_on:
-      # 空的 /data 由 Berth 的入口腳本接手擁有者；這台先寫進去的話那一步就不會發生。
-      berth:
-        condition: service_healthy
     volumes:
       - ${DATA_ROOT}:/data
       - ../tests/e2e:/e2e:ro

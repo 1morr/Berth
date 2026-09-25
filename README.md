@@ -339,11 +339,14 @@ Prowlarr 也會起來讓精靈偵測，但第 6 步跳過索引站、送單直�
 # CONFIG_ROOT 是宿主上的空目錄；/data 是 named volume（tests/e2e/e2e.env），
 # 因為發佈名很長，Windows bind mount 的 260 字元路徑放不下。
 export CONFIG_ROOT="$PWD/.local/e2e-config"          # PowerShell: $env:CONFIG_ROOT = "$PWD/.local/e2e-config"
-docker compose -f deploy/docker-compose.yml -f tests/e2e/compose.yml --env-file tests/e2e/e2e.env up -d --build --wait
+docker compose -f deploy/docker-compose.yml -f tests/e2e/compose.yml --env-file tests/e2e/e2e.env up -d --build
 uv run --env-file .env pytest -m e2e tests/e2e -rA     # 要 .env 裡的 TMDB_API_KEY：精靈第 7 步是閘門
 docker compose -f deploy/docker-compose.yml -f tests/e2e/compose.yml --env-file tests/e2e/e2e.env down --volumes
 ```
 
+- **不加 `--wait`，`up` 完馬上跑測試**：這是冷啟動閘門（票 06h）。精靈在 Jellyfin 與 Prowlarr 還在啟動時就開始，
+  照常輪詢到三個服務都判定完成、不按重新探測；第一輪探測就全部判定完成的話測試會失敗，因為那一輪沒碰到啟動中的
+  那幾秒。所以 `up` 之前先 `build`（與拉 image），不要讓 `up` 之後還有東西要等。
 - **一次 `up` 只跑得了一次**：精靈走完就不能再走一遍，重跑前先 `down --volumes`。
 - 容器名、網路名與 port 與正式部署相同（qBittorrent 的免密白名單認的是 berth 的固定 IP），
   所以同一台機器上正式的那一套要先停下來。

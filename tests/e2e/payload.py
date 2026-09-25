@@ -23,6 +23,8 @@ import http.server
 import json
 import re
 import shutil
+import time
+import urllib.request
 from dataclasses import dataclass
 from functools import partial
 from pathlib import Path, PurePosixPath
@@ -34,6 +36,8 @@ WORK = PurePosixPath("/data/e2e")
 STAGING = WORK / "staging"
 TORRENTS = WORK / "torrents"
 PORT = 8000
+#: compose 網路裡 Berth 的健康端點。它回應了，入口腳本就已經接手了 /data 的擁有者。
+BERTH_HEALTH = "http://berth:8383/api/health"
 
 PIECE_LENGTH = 1 << 18
 VIDEO_SUFFIXES = (".mkv", ".mp4")
@@ -118,11 +122,28 @@ def build(fixtures: Path, staging: Path, torrents: Path) -> None:
         print(f"{pack.route_slug}: {len(files)} files, {len(joined)} bytes, {digest}", flush=True)
 
 
+def wait_for_berth(seconds: float = 300) -> None:
+    """空的 /data 由 Berth 的入口腳本接手擁有者；這台先寫進去的話那一步就不會發生。
+
+    compose 不替我們等（`tests/e2e/compose.yml` 說了為什麼不用 `depends_on`）。
+    """
+    deadline = time.monotonic() + seconds
+    while True:
+        try:
+            with urllib.request.urlopen(BERTH_HEALTH, timeout=5):
+                return
+        except OSError:
+            if time.monotonic() > deadline:
+                raise
+            time.sleep(1)
+
+
 def serve(directory: Path) -> None:
     handler = partial(http.server.SimpleHTTPRequestHandler, directory=str(directory))
     http.server.ThreadingHTTPServer(("", PORT), handler).serve_forever()
 
 
 if __name__ == "__main__":
+    wait_for_berth()
     build(Path(FIXTURES), Path(STAGING), Path(TORRENTS))
     serve(Path(TORRENTS))

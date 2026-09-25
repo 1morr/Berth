@@ -37,7 +37,12 @@ jobs:
       # compose 的 CONFIG_ROOT 是宿主上的目錄；runner.temp 在 job 層級的 env 裡還讀不到。
       - run: echo "CONFIG_ROOT=$RUNNER_TEMP/berth-e2e-config" >> "$GITHUB_ENV"
 
-      - run: docker compose up --detach --build --wait --wait-timeout 600
+      # 先 build、先把 image 拉下來，`up` 才是四個容器同時從零啟動。
+      - run: docker compose build && docker compose pull --ignore-buildable
+
+      # **冷啟動閘門（票 06h）：不加 `--wait`。** 測試在 Berth 一回應就開始精靈，這時 Jellyfin 與
+      # Prowlarr 還在啟動；`--wait` 會等到四個都健康，精靈就永遠碰不到那幾秒（票 06g 的缺陷）。
+      - run: docker compose up --detach
 
       - run: uv run pytest -m e2e tests/e2e -rA
         env:

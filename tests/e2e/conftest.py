@@ -12,6 +12,7 @@ M2 那一組會拆掉、換掉媒體庫裡的檔案，所以排在只讀它們�
 from __future__ import annotations
 
 import os
+import time
 from collections import Counter
 from collections.abc import Iterator
 from contextlib import closing
@@ -25,10 +26,12 @@ from tests.e2e.harness import (
     PASSWORD,
     QBITTORRENT,
     TORRENTS,
+    TORRENTS_CONTAINER,
     Json,
     Submitted,
     berth_client,
     corpus,
+    docker,
     in_container,
     jellyfin_client,
     ok,
@@ -58,26 +61,37 @@ def _healthy(client: httpx.Client) -> bool | None:
 @pytest.fixture(scope="session")
 def berth() -> Iterator[httpx.Client]:
     with berth_client() as client:
-        wait("Berth", 180, lambda: _healthy(client))
+        # 每秒問一次：冷啟動閘門（`configured`）要在外部服務起來之前就開始精靈。
+        wait("Berth", 180, lambda: _healthy(client), every=1)
         yield client
 
 
 @pytest.fixture(scope="session")
 def configured(berth: httpx.Client) -> None:
-    """精靈八步，順序照 `api/setup.py`。"""
+    """精靈八步，順序照 `api/setup.py`。
+
+    **第 2 步是冷啟動閘門**（票 06h）：compose 不加 `--wait`，Berth 一回應就開始精靈，這時
+    Jellyfin 與 Prowlarr 還在啟動（Jellyfin 會回 503、會回不像它自己的東西，票 06g）。
+    照常輪詢到三個都判定完成，**不按重新探測**——使用者也不必按。第一輪就全部判定完成的話，
+    代表這一輪沒有碰到啟動中的那幾秒，閘門等於沒守，所以那樣也算失敗。
+    """
     tmdb_key = os.environ.get("TMDB_API_KEY", "").strip()
     assert tmdb_key, "set TMDB_API_KEY: step 7 of the wizard is a gate (ticket 02b)"
 
     ok(berth.post("/setup/admin", json={"username": ADMIN, "password": PASSWORD}))
 
+    started = time.monotonic()
+    rounds: list[list[Json]] = []
+
     def detected() -> bool | None:
-        status = ok(berth.post("/setup/detect", json={"restart": False}))
-        services = status["services"]
-        if any(row["origin"] == "timeout" for row in services):
-            ok(berth.post("/setup/detect", json={"restart": True}))
+        services: list[Json] = ok(berth.post("/setup/detect", json={"restart": False}))["services"]
+        rounds.append(services)
+        verdicts = ", ".join(f"{row['kind']}={row['origin']}/{row['reason']}" for row in services)
+        print(f"detect +{time.monotonic() - started:5.1f}s {verdicts}")
         return True if services and all(row["resolved"] for row in services) else None
 
-    wait("the three bundled services to be detected", 300, detected)
+    wait("the three bundled services to be detected", 300, detected, every=2)
+    assert len(rounds) > 1, ("services were already up: the cold start was not exercised", rounds)
 
     jellyfin = ok(berth.post("/setup/jellyfin/bootstrap", timeout=1200))
     failed = [row for row in jellyfin["steps"] if row["status"] == "failed"]
@@ -96,6 +110,12 @@ def configured(berth: httpx.Client) -> None:
 
 @pytest.fixture(scope="session")
 def submitted(berth: httpx.Client, configured: None) -> tuple[Submitted, ...]:
+    # 送單時 Berth 去 `torrents` 那台抓 `.torrent`。compose 不再等它（冷啟動閘門），這裡等。
+    def payload_ready() -> bool | None:
+        health = docker("inspect", "--format", "{{.State.Health.Status}}", TORRENTS_CONTAINER)
+        return True if health.strip() == "healthy" else None
+
+    wait("the torrents payload", 300, payload_ready)
     out = []
     for pack in PACKS:
         spec = corpus(pack)
