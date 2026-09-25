@@ -28,6 +28,7 @@ const FLOWS = [
   { name: 'review', spec: 'review', scenario: 'review', port: 8493 },
   { name: 'issues', spec: 'issues', scenario: 'issues', port: 8494 },
   { name: 'rss', spec: 'rss', scenario: 'rss', port: 8498 },
+  { name: 'rss-auto-bind', spec: 'rss-auto-bind', scenario: 'rss', port: 8516 },
   { name: 'rss-390', spec: 'rss', scenario: 'rss', port: 8508, viewport: NARROW },
   { name: 'rss-exclusions', spec: 'rss-exclusions', scenario: 'rss', port: 8499 },
   {

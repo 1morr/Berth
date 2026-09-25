@@ -16,6 +16,27 @@ services:
     build:
       context: ..
       dockerfile: deploy/Dockerfile
+    environment:
+      # 系統的 CA 清單加上 e2e 的測試 CA（`ca-bundle` 寫的）：Berth 的 httpx 讀這個變數，真的 TMDB
+      # 與冒充的 Mikan / acg.rip 都驗得過（M3 票 21，`tests/e2e/make_tls.py`）。**檔案不在時 Berth
+      # 建不出任何 HTTP client**（連 Jellyfin 的偵測都是），所以它先寫好、Berth 才起來。
+      SSL_CERT_FILE: /tls/bundle.pem
+    volumes:
+      - berth-e2e-tls:/tls:ro
+    depends_on:
+      ca-bundle:
+        condition: service_completed_successfully
+
+  ca-bundle:
+    image: python:3.13-alpine
+    container_name: berth-e2e-ca-bundle
+    command:
+      - sh
+      - -c
+      - cat /etc/ssl/certs/ca-certificates.crt /fixtures/e2e/tls/ca.pem > /tls/bundle.pem
+    volumes:
+      - berth-e2e-tls:/tls
+      - ../tests/fixtures:/fixtures:ro
 
   torrents:
     # 只用標準庫（`payload.py`），不必等 Berth 的 image build 完。
@@ -40,7 +61,30 @@ services:
       start_period: 60s
       retries: 3
 
+  sites:
+    # 公開 RSS 站的替身（M3 票 21，`tests/e2e/sites.py`）：Berth 對這三個主機名的請求都到這一台，
+    # 講 HTTPS。同 `torrents`，只用標準庫、uid 1000、先等 Berth 接手 /data 的擁有者。443 是特權
+    # port，但 Docker 把容器的 `ip_unprivileged_port_start` 設成 0，uid 1000 聽得了。
+    image: python:3.13-alpine
+    container_name: berth-e2e-sites
+    user: "1000:1000"
+    command: [python, /e2e/sites.py]
+    volumes:
+      - ${DATA_ROOT}:/data
+      - ../tests/e2e:/e2e:ro
+      - ../tests/fixtures:/fixtures:ro
+    networks:
+      default:
+        aliases: [mikanani.me, nyaa.si, acg.rip]
+    healthcheck:
+      test: [CMD, test, -f, /data/e2e/m3/ready]
+      interval: 5s
+      timeout: 5s
+      start_period: 60s
+      retries: 3
+
 volumes:
   # e2e.env 的 DATA_ROOT。named volume 而不是 bind mount：發佈名很長，Windows 宿主的 260 字元
   # 路徑上限放不下（票 12 實測）；而 Docker Desktop VM 的 ext4 與 CI 上的 Linux 是同一種檔案系統。
   berth-e2e-data: {}
+  berth-e2e-tls: {}

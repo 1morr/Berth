@@ -16,6 +16,7 @@ const CODES: ReasonSet<BindReasonCode> = {
   premiere_near: true,
   release_near: true,
   only_route: true,
+  feed_route: true,
   no_candidate: true,
   premiere_far: true,
   several_candidates: true,

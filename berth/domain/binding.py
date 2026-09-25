@@ -29,6 +29,8 @@ class BindReasonCode(StrEnum):
     RELEASE_NEAR = "release_near"
     #: 收得下這種作品的啟用中 Route 只有 `{route}`。
     ONLY_ROUTE = "only_route"
+    #: 收得下這種作品的 Route 不只一條，長出它的 Feed 說送進 `{route}`（M3 票 21）。
+    FEED_ROUTE = "feed_route"
 
     # --- 為什麼沒綁 -------------------------------------------------------------------
     #: TMDB 搜不到標題相同的作品。
@@ -62,6 +64,7 @@ BIND_PARAMS: dict[BindReasonCode, frozenset[str]] = {
     _C.PREMIERE_NEAR: frozenset({"premiere", "season", "aired"}),
     _C.RELEASE_NEAR: frozenset({"premiere", "aired"}),
     _C.ONLY_ROUTE: frozenset({"route"}),
+    _C.FEED_ROUTE: frozenset({"route"}),
     _C.NO_CANDIDATE: frozenset(),
     _C.PREMIERE_FAR: frozenset({"title", "premiere"}),
     _C.SEVERAL_CANDIDATES: frozenset({"number"}),

@@ -21,9 +21,24 @@ from berth.adapters.rss.fake import FakeFeedFetcher
 from berth.adapters.rss.mikan import bangumi_url
 from berth.adapters.tmdb import TmdbDetail, TmdbEntry, TmdbEpisode, TmdbSeason, TmdbSeasonEntry
 from berth.adapters.tmdb.fake import FakeTmdbClient
-from berth.domain import BindReason, BindReasonCode, EventType, JobTrigger, MediaKind
-from berth.models import Event, Job, LedgerEntry, Route, TmdbSettings
-from berth.services.rss import add_feed, bind_series, list_series, poll_feed, unbind_series
+from berth.domain import (
+    BindReason,
+    BindReasonCode,
+    CollectionType,
+    EventType,
+    JobTrigger,
+    MediaKind,
+    RssRefusal,
+)
+from berth.models import Event, Job, LedgerEntry, Route, RssFeed, TmdbSettings
+from berth.services.rss import (
+    RssRejectedError,
+    add_feed,
+    bind_series,
+    list_series,
+    poll_feed,
+    unbind_series,
+)
 from berth.services.settings import write_settings
 from tests.conftest import TMDB_API_KEY
 from tests.integration.arrange import arrange, factory_for
@@ -293,6 +308,78 @@ class TestPending:
         assert view.media_id is None
         assert codes(view.reasons) == [BindReasonCode.PREMIERE_FAR]
         assert [one.id for one in view.candidates] == [KIMI_ID]
+
+
+class TestFeedRoute:
+    """Feed 帶一條 Route（M3 票 21，使用者拍板，照 Sonarr Import List 的 Root Folder）：同類型的
+    Route 不只一條時，自動綁定送進 Feed 說的那一條。預設安裝就是 TV 與 Anime 兩條。"""
+
+    async def test_two_routes_of_that_kind_bind_to_the_feeds_route(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        route, factory = await moored(session, roots)
+        await anime_route(
+            session, roots, slug="tv", name="TV", jellyfin_library_id="item-1", category="berth-tv"
+        )
+        feed = await add_feed(session, url=FEED_URL, name="Mikan", route_id=route.id)
+
+        polled = await poll_feed(session, factory, feed.id, now=NOW)
+
+        assert (polled.bound, polled.submitted) == (1, 2)
+        view = next(row for row in await list_series(session) if row.key == KIMI_KEY)
+        assert (view.media_id, view.route_id, view.bound_by) == (KIMI_ID, route.id, "system")
+        assert codes(view.reasons)[-1] is BindReasonCode.FEED_ROUTE
+        assert view.reasons[-1].params == {"route": "Anime"}
+
+    async def test_a_feed_route_of_another_kind_falls_back_to_the_routes_of_that_kind(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """Feed 的 Route 收電影、認出來的是劇集：照原本的規則挑（這裡只有一條 anime Route）。"""
+        route, factory = await moored(session, roots)
+        movies = await anime_route(
+            session,
+            roots,
+            slug="movies",
+            name="Movies",
+            jellyfin_library_id="item-3",
+            collection_type=CollectionType.MOVIES,
+            category="berth-movies",
+        )
+        feed = await add_feed(session, url=FEED_URL, name="Mikan", route_id=movies.id)
+
+        await poll_feed(session, factory, feed.id, now=NOW)
+
+        view = next(row for row in await list_series(session) if row.key == KIMI_KEY)
+        assert view.route_id == route.id
+        assert codes(view.reasons)[-1] is BindReasonCode.ONLY_ROUTE
+
+    async def test_a_disabled_feed_route_does_not_count(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        route, factory = await moored(session, roots)
+        await anime_route(
+            session, roots, slug="tv", name="TV", jellyfin_library_id="item-1", category="berth-tv"
+        )
+        feed = await add_feed(session, url=FEED_URL, name="Mikan", route_id=route.id)
+        route.enabled = False
+        await session.commit()
+
+        await poll_feed(session, factory, feed.id, now=NOW)
+
+        view = next(row for row in await list_series(session) if row.key == KIMI_KEY)
+        assert view.route_id != route.id
+        assert codes(view.reasons)[-1] is BindReasonCode.ONLY_ROUTE
+
+    async def test_a_missing_route_is_refused(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        await moored(session, roots)
+
+        with pytest.raises(RssRejectedError) as refused:
+            await add_feed(session, url=FEED_URL, name="Mikan", route_id=999)
+
+        assert refused.value.reason is RssRefusal.ROUTE_MISSING
+        assert await count(session, RssFeed) == 0
 
 
 class TestUnbinding:

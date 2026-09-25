@@ -181,8 +181,8 @@ export function primeFeed(id: number, mode: PrimeMode) {
   return apiPost<PrimeOutcome>(`/rss/feeds/${id}/prime`, { mode })
 }
 
-export function addFeed(url: string, name: string) {
-  return apiPost<Feed>('/rss/feeds', { url, name })
+export function addFeed(url: string, name: string, route: number | null) {
+  return apiPost<Feed>('/rss/feeds', { url, name, route })
 }
 
 export function deleteFeed(id: number) {

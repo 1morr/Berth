@@ -162,6 +162,8 @@ class FeedView:
     exclusions: tuple[str, ...]
     #: 第一輪預覽選過的那一刻；`None` 是還沒選，這個 Feed 一筆都不送。
     primed_at: datetime | None
+    #: 自動綁定送進的 Route（M3 票 21）；從 Media 頁建的搜尋 feed 是它預先綁定的 Route。
+    route_id: int | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -287,19 +289,28 @@ async def list_feeds(session: AsyncSession) -> tuple[FeedView, ...]:
 
 
 @command(Effect.REVERSIBLE, inverse="rss.delete_feed")
-async def add_feed(session: AsyncSession, *, url: str, name: str = "") -> FeedView:
-    """加一個 Feed。不當場輪詢——畫面上那一顆「立即輪詢」與背景迴圈會做，這一支只記下來。"""
+async def add_feed(
+    session: AsyncSession, *, url: str, name: str = "", route_id: int | None = None
+) -> FeedView:
+    """加一個 Feed。不當場輪詢——畫面上那一顆「立即輪詢」與背景迴圈會做，這一支只記下來。
+
+    `route_id` 是自動綁定送進的 Route（M3 票 21，照 Sonarr Import List 的 Root Folder）：
+    收得下那部作品的 Route 不只一條時才用得到它（`_auto_bind`）。
+    """
     url = url.strip()
     kind = kind_of(url)
     if kind is None:
         raise RssRejectedError(RssRefusal.FEED_UNSUPPORTED, url)
     if await session.scalar(select(RssFeed.id).where(RssFeed.url == url)) is not None:
         raise RssRejectedError(RssRefusal.FEED_DUPLICATE, url)
+    if route_id is not None and await session.get(Route, route_id) is None:
+        raise RssRejectedError(RssRefusal.ROUTE_MISSING, str(route_id))
     row = RssFeed(
         name=name.strip() or _default_name(url),
         url=url,
         kind=kind,
         primed_at=utcnow() if kind in _NO_PREVIEW else None,
+        route_id=route_id,
     )
     session.add(row)
     try:
@@ -347,6 +358,7 @@ def _feed_view(row: RssFeed, items: int) -> FeedView:
         items=items,
         exclusions=tuple(row.exclude_json),
         primed_at=row.primed_at,
+        route_id=row.route_id,
     )
 
 
@@ -530,7 +542,7 @@ async def poll_feed(
         for series_id in grown:
             sent = await _prebind(session, factory, feed_id, series_id, moment)
             if sent is None:
-                sent = await _auto_bind(session, factory, fetcher, series_id, moment)
+                sent = await _auto_bind(session, factory, fetcher, feed, series_id, moment)
             if sent is not None:
                 bound += 1
                 submitted += sent
@@ -544,7 +556,7 @@ async def poll_feed(
         # 上一輪被請求預算擋下、還沒認的（M3 票 20）：只有它們在長出來之後的輪詢裡重認。這一輪
         # 才長出來的剛認過，不再撞一次。
         for series_id in await _deferred_lookups(session, feed_id, skip=grown):
-            sent = await _auto_bind(session, factory, fetcher, series_id, moment)
+            sent = await _auto_bind(session, factory, fetcher, feed, series_id, moment)
             if sent is not None:
                 bound += 1
                 submitted += sent
@@ -1195,6 +1207,7 @@ async def _auto_bind(
     session: AsyncSession,
     factory: ServiceClientFactory,
     fetcher: FeedFetcher,
+    feed: RssFeed,
     series_id: int,
     moment: datetime,
 ) -> int | None:
@@ -1205,7 +1218,8 @@ async def _auto_bind(
     `lookup_failed`，人手上有搜尋。人拆掉的自動綁定也因此不會被下一輪綁回去。
 
     有把握與否是 `parser.binding.judge` 的事；Route 在這裡挑：TMDB 的類型推得出電影或劇集，
-    同類型只有一條啟用中的 Route 才自動選，否則留在待綁定、作品預填成候選。
+    同類型只有一條啟用中的 Route 就是它；不只一條時用 `feed` 的 Route（它得是其中一條，M3 票
+    21）；否則留在待綁定、作品預填成候選。
     """
     series = await session.get(RssSeries, series_id)
     if series is None or series.media_id is not None:
@@ -1232,16 +1246,12 @@ async def _auto_bind(
         await _note(session, series_id, verdict.reasons, ids)
         return None
     routes = await _routes_for(session, verdict.media.kind)
-    if len(routes) != 1:
+    chosen = _chosen_route(routes, feed.route_id)
+    if chosen is None:
         await _note(session, series_id, (*verdict.reasons, _route_reason(routes)), ids)
         return None
-    route = routes[0]
-    await _note(
-        session,
-        series_id,
-        (*verdict.reasons, because(BindReasonCode.ONLY_ROUTE, route=route.name)),
-        ids,
-    )
+    route, ground = chosen
+    await _note(session, series_id, (*verdict.reasons, ground), ids)
     try:
         # 自動綁定照預設補舊集（brief §15）。
         bound = await bind_series(
@@ -1317,6 +1327,16 @@ async def _routes_for(session: AsyncSession, kind: MediaKind) -> list[Route]:
         .order_by(Route.name, Route.id)
     )
     return list(rows)
+
+
+def _chosen_route(routes: list[Route], feed_route: int | None) -> tuple[Route, BindReason] | None:
+    """收得下的 Route 裡挑一條，連同依據。"""
+    if len(routes) == 1:
+        return routes[0], because(BindReasonCode.ONLY_ROUTE, route=routes[0].name)
+    for route in routes:
+        if route.id == feed_route:
+            return route, because(BindReasonCode.FEED_ROUTE, route=route.name)
+    return None
 
 
 def _route_reason(routes: list[Route]) -> BindReason:

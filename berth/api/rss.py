@@ -117,6 +117,8 @@ class FeedOut(BaseModel):
     #: 第一輪預覽選過的那一刻。`null` 是還沒選：這個 Feed 一筆都不送，畫面列出預覽（票 11）。
     #: Mikan 加的那一刻就有值。
     primed_at: datetime | None
+    #: 自動綁定送進的 Route：收得下那部作品的 Route 不只一條時用它（M3 票 21）。`null` 是沒選。
+    route_id: int | None
 
 
 class FeedIn(BaseModel):
@@ -125,6 +127,9 @@ class FeedIn(BaseModel):
     url: str = Field(min_length=1)
     #: 選填，空的就用網址的主機名。
     name: str = ""
+    #: 選填：自動綁定送進的 Route（照 Sonarr Import List 的 Root Folder）。收得下那部作品的
+    #: Route 只有一條時用不到它；不只一條又沒選，那部就留在待綁定（`route_ambiguous`）。
+    route: int | None = None
 
 
 class FeedDeletedOut(BaseModel):
@@ -361,12 +366,15 @@ async def get_feeds(session: SessionDep) -> list[FeedOut]:
 @router.post(
     "/feeds",
     status_code=status.HTTP_201_CREATED,
-    responses=_responses(RssRefusal.FEED_UNSUPPORTED, RssRefusal.FEED_DUPLICATE),
+    responses=_responses(
+        RssRefusal.FEED_UNSUPPORTED, RssRefusal.FEED_DUPLICATE, RssRefusal.ROUTE_MISSING
+    ),
 )
 async def post_feed(session: SessionDep, body: FeedIn) -> FeedOut:
     """記下這個 Feed。不當場輪詢——背景迴圈在半分鐘內輪到它，畫面上也有「立即輪詢」。"""
     try:
-        return FeedOut.model_validate(await add_feed(session, url=body.url, name=body.name))
+        view = await add_feed(session, url=body.url, name=body.name, route_id=body.route)
+        return FeedOut.model_validate(view)
     except RssRejectedError as refusal:
         raise rss_refusal(refusal) from refusal
 

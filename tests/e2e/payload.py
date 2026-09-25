@@ -23,6 +23,7 @@ import http.server
 import json
 import re
 import shutil
+import struct
 import time
 import urllib.request
 from dataclasses import dataclass
@@ -41,6 +42,10 @@ BERTH_HEALTH = "http://berth:8383/api/health"
 
 PIECE_LENGTH = 1 << 18
 VIDEO_SUFFIXES = (".mkv", ".mp4")
+#: 種子本身的片長（`tests/fixtures/e2e/README.md`）。
+SEED_SECONDS = 330
+#: Matroska Segment Info 的 Duration（EBML id `0x4489`）、8 位元組浮點數：`lasting()` 改的那一格。
+_DURATION = bytes.fromhex("448988")
 #: 不是影片的檔案（`.txt`、`.jpg`）只要存在：分類器看副檔名，它們一律略過。
 FILLER = b"berth e2e\n"
 #: 沒有 tracker 會回應；qBittorrent 收 torrent 時只要這一欄的形狀對。
@@ -87,6 +92,43 @@ def bencode(value: object) -> bytes:
     raise TypeError(f"cannot bencode {type(value).__name__}")
 
 
+def lasting(seed: bytes, seconds: int) -> bytes:
+    """同一支 Matroska 種子，標頭的 Segment Duration 改成 `seconds`。
+
+    片長驗證（M3 票 15）拿 mediainfo 量到的片長對 TMDB 那一集：330 秒的種子對一集半小時的劇
+    是「差太多」，整包會停在審核。libmediainfo 的 General 片長讀的就是這一格（實測），所以不必
+    真的有那麼多格畫面。只改 `.mkv`：MP4 只用在電影，電影不比片長。
+    """
+    at = seed.find(_DURATION)
+    assert at >= 0, "the seed has no 8-byte Segment Duration"
+    start = at + len(_DURATION)
+    return seed[:start] + struct.pack(">d", seconds * 1000.0) + seed[start + 8 :]
+
+
+def runtimes(fixtures: Path, media: str) -> dict[tuple[int, int], int]:
+    """語料那一部作品的 TMDB 快照裡每一集的片長（秒）。電影與沒有快照的是空的。"""
+    snapshot = fixtures / "tmdb" / (media.replace(":", "-") + ".json")
+    if not media.startswith("tv:") or not snapshot.exists():
+        return {}
+    data = json.loads(snapshot.read_text(encoding="utf-8"))
+    return {
+        (season["season_number"], episode["episode_number"]): episode["runtime"] * 60
+        for season in data["seasons"]
+        for episode in season["episodes"]
+        if episode.get("runtime")
+    }
+
+
+def video(seeds: dict[str, bytes], path: str, seconds: int | None) -> bytes:
+    """一支影片的位元組：種子（片長照 TMDB，只拉長不縮短——短於五分鐘的正片會被分類器降成
+    特典，而 330 秒對幾分鐘的特典在容忍之內）加上檔名當尾巴，逐檔內容不同。"""
+    suffix = Path(path).suffix.lower()
+    head = seeds.get(suffix, FILLER)
+    if suffix == ".mkv" and seconds is not None and seconds > SEED_SECONDS:
+        head = lasting(head, seconds)
+    return head + path.encode()
+
+
 def build(fixtures: Path, staging: Path, torrents: Path) -> None:
     shutil.rmtree(staging, ignore_errors=True)
     torrents.mkdir(parents=True, exist_ok=True)
@@ -94,11 +136,17 @@ def build(fixtures: Path, staging: Path, torrents: Path) -> None:
     for pack in PACKS:
         spec = json.loads((fixtures / "parser" / pack.fixture).read_text(encoding="utf-8"))
         name = info_name(spec["torrent_name"])
+        lengths = runtimes(fixtures, spec["context"]["media"])
+        episodes = {
+            row["path"]: (row["season"], row["episode"])
+            for row in spec["expected"]
+            if row["action"] == "import" and row.get("episode") is not None
+        }
         files: list[tuple[str, bytes]] = []
         for row in spec["files"]:
             path: str = row["path"]
-            head = seeds.get(Path(path).suffix.lower(), FILLER)
-            content = head + path.encode()
+            episode = episodes.get(path)
+            content = video(seeds, path, lengths.get(episode) if episode else None)
             target = staging / pack.route_slug / name / path
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes(content)

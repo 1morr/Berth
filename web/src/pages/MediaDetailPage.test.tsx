@@ -1988,6 +1988,7 @@ describe('詳情頁的 RSS 訂閱（M3 票 19）', () => {
       items: 1,
       exclusions: [],
       primed_at: null,
+      route_id: 2,
     }
     const stub = render({
       [SPY_PATH]: { body: media({ default_route_id: 2 }) },

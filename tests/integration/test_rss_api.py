@@ -104,6 +104,7 @@ class TestThePageFlow:
         assert added.status_code == 201, added.text
         feed = added.json()
         assert (feed["kind"], feed["name"], feed["items"]) == ("mikan", "mikanani.me", 0)
+        assert feed["route_id"] is None
 
         polled = client.post(f"/api/rss/feeds/{feed['id']}/poll", headers=BROWSER)
         assert polled.json() == {"items": 12, "series": 11, "bound": 0, "submitted": 0}
@@ -161,6 +162,20 @@ class TestRefusals:
             "reason": "feed_unsupported",
             "detail": "https://example.com/feed",
         }
+
+    def test_a_feed_route_that_does_not_exist_is_422(
+        self, client: TestClient, roots: dict[str, Path]
+    ) -> None:
+        seed(client, roots)
+        sign_in(client)
+
+        refused = client.post(
+            "/api/rss/feeds", json={"url": FEED_URL, "route": 999}, headers=BROWSER
+        )
+
+        assert refused.status_code == 422
+        assert refused.json()["detail"] == {"reason": "route_missing", "detail": "999"}
+        assert client.get("/api/rss/feeds").json() == []
 
     def test_binding_a_missing_series_is_404(
         self, client: TestClient, roots: dict[str, Path]

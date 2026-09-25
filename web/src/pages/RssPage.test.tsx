@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { Media } from '../api/media'
 import type { Feed, FeedItem, OneshotItem, RssSeries } from '../api/rss'
+import type { ManagedRoute } from '../api/routes'
 import { HEALTHY, stubApi, type StubRoute } from '../test/fetch'
 import { renderApp } from '../test/render'
 
@@ -27,6 +28,7 @@ function feed(overrides: Partial<Feed> = {}): Feed {
     items: 12,
     exclusions: [],
     primed_at: '2026-09-25T11:00:00Z',
+    route_id: null,
     ...overrides,
   }
 }
@@ -114,6 +116,7 @@ function render(routes: Record<string, StubRoute | (() => StubRoute)> = {}) {
     'GET /api/rss/series': { body: [series()] },
     'GET /api/rss/items': { body: [item()] },
     'GET /api/rss/exclusions': { body: { not_single: true, rules: [] } },
+    'GET /api/routes': { body: [] },
     ...routes,
   })
 }
@@ -532,6 +535,38 @@ describe('RSS 頁', () => {
     await userEvent.click(screen.getByRole('button', { name: '加入' }))
 
     expect(await screen.findByText(/這一版收 Mikan/)).toBeInTheDocument()
+  })
+
+  it('兩條以上的 Route：加 Feed 時選自動綁定送進哪一條，Feed 那一列說出它（票 21）', async () => {
+    const route = (id: number, name: string, enabled = true) =>
+      ({ route: { id, name, enabled }, jobs: 0, ledger_entries: 0, in_use: false }) as ManagedRoute
+    const stub = render({
+      'GET /api/routes': { body: [route(3, 'Anime'), route(4, 'TV'), route(5, 'Old', false)] },
+      'GET /api/rss/feeds': { body: [feed({ route_id: 3 })] },
+      'POST /api/rss/feeds': { status: 201, body: feed({ id: 2, route_id: 4 }) },
+    })
+    renderApp('/rss')
+
+    const row = await screen.findByRole('article', { name: 'Mikan' })
+    expect(await within(row).findByText('Anime')).toBeInTheDocument()
+    const picker = await screen.findByLabelText('自動綁定送進')
+    // 停用的那一條自動綁定本來就不看，不列。
+    expect(within(picker).queryByRole('option', { name: 'Old' })).not.toBeInTheDocument()
+    await userEvent.type(screen.getByLabelText(/RSS 網址/), FEED_URL)
+    await userEvent.selectOptions(picker, 'TV')
+    await userEvent.click(screen.getByRole('button', { name: '加入' }))
+
+    await waitFor(() => expect(sent(stub, 'POST', '/api/rss/feeds')).toHaveLength(1))
+    const [[, init]] = sent(stub, 'POST', '/api/rss/feeds')
+    expect(JSON.parse(String(init?.body))).toEqual({ url: FEED_URL, name: '', route: 4 })
+  })
+
+  it('只有一條啟用中的 Route 時不問送進哪一條', async () => {
+    render()
+    renderApp('/rss')
+
+    await screen.findByRole('article', { name: 'Mikan' })
+    expect(screen.queryByLabelText('自動綁定送進')).not.toBeInTheDocument()
   })
 
   it('送不出去的那一筆塗阻擋色，帶著原文', async () => {

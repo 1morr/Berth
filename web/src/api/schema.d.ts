@@ -2123,7 +2123,7 @@ export interface components {
          * @description 一條綁定理由是哪一種。
          * @enum {string}
          */
-        BindReasonCode: "title_equal" | "premiere_near" | "release_near" | "only_route" | "no_candidate" | "premiere_far" | "several_candidates" | "no_premiere" | "no_show_page" | "lookup_failed" | "lookup_deferred" | "route_ambiguous" | "no_route";
+        BindReasonCode: "title_equal" | "premiere_near" | "release_near" | "only_route" | "feed_route" | "no_candidate" | "premiere_far" | "several_candidates" | "no_premiere" | "no_show_page" | "lookup_failed" | "lookup_deferred" | "route_ambiguous" | "no_route";
         /**
          * BindReasonOut
          * @description 自動綁定的一條理由：封閉集合的 code 加參數，句子由前端照 code 挑（`rss.grounds.*`，票 09）。
@@ -2520,6 +2520,8 @@ export interface components {
              * @default
              */
             name?: string;
+            /** Route */
+            route?: number | null;
         };
         /**
          * FeedItemStatus
@@ -2560,6 +2562,8 @@ export interface components {
             exclusions: string[];
             /** Primed At */
             primed_at: string | null;
+            /** Route Id */
+            route_id: number | null;
         };
         /**
          * FileKind
@@ -7101,7 +7105,7 @@ export interface operations {
                     "application/json": components["schemas"]["RssRefusalOut"];
                 };
             };
-            /** @description `feed_unsupported` */
+            /** @description `feed_unsupported` · `route_missing` */
             422: {
                 headers: {
                     [name: string]: unknown;
