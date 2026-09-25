@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import type {
   IndexerConnectInput,
   IndexerKind,
+  IndexerOption,
   IndexerSetup,
   SiteSearch,
   TrialSearchResult,
@@ -33,7 +34,7 @@ import { languageName } from './languageName'
  * Prowlarr 只搜得到已經加進來的站，所以流程是「加入 → 試搜 → 移除」，不是加入前試搜。
  * 既有：Prowlarr 位址 + key，或任意 Torznab 端點 + key；接上之後同樣可以試搜，但不移除別人的站。
  *
- * **資料與動作全部從 props 進來**：精靈跑完之後設定頁接手（票 06i），重用這裡的區塊。
+ * **資料與動作全部從 props 進來**：精靈跑完之後設定頁接手（票 06i），重用 `IndexerActions`。
  */
 export function IndexerStep({
   indexers,
@@ -64,9 +65,6 @@ export function IndexerStep({
 }) {
   const { t } = useTranslation()
   const bundled = indexers.origin === 'bundled' && indexers.reachable
-  const connected = indexers.steps.some(
-    (row) => row.step === indexers.kind && (row.status === 'ok' || row.status === 'skipped'),
-  )
 
   return (
     <div className="grid flex-1 gap-px bg-rule lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
@@ -81,38 +79,83 @@ export function IndexerStep({
         <p className="mt-2 max-w-prose text-sm text-ink-dim">{t('indexer.lede')}</p>
         {note}
 
-        {bundled ? (
-          <>
-            <DefaultIndexers
-              indexers={indexers}
-              applying={applying}
-              onApply={onApply}
-              onSkip={onSkip}
-            />
-            {indexers.options.some((row) => row.present) && (
-              <TrialSearch {...trial} sites={presentSites(indexers)} />
-            )}
-          </>
-        ) : (
-          <>
-            {/* 套件內的那台連不上：說清楚，然後照樣給表單——他總得有辦法往下走。 */}
-            {indexers.origin === 'bundled' && (
-              <Unreachable indexers={indexers} redetect={redetect} />
-            )}
-            <ExistingIndexer
-              indexers={indexers}
-              connecting={connecting}
-              onConnect={onConnect}
-              onSkip={onSkip}
-            />
-            {/* 既有的站是使用者自己的，Berth 不移除（brief §16.4），所以不給 `onRemove`。 */}
-            {connected && <TrialSearch {...trial} sites={[]} onRemove={undefined} />}
-          </>
-        )}
+        <IndexerActions
+          indexers={indexers}
+          applying={applying}
+          connecting={connecting}
+          onApply={onApply}
+          onConnect={onConnect}
+          onSkip={onSkip}
+          trial={trial}
+          redetect={redetect}
+        />
 
         {nav}
       </div>
     </div>
+  )
+}
+
+/**
+ * 這個泊位能做的事：套件內是勾預設站 + 試搜 + 移除，既有是填位址與 key + 試搜。
+ * 精靈與設定的索引站那一頁共用這一塊（票 06i）；設定頁不給 `onSkip`——那裡不是第一次，
+ * 沒有「之後再說」。
+ */
+export function IndexerActions({
+  indexers,
+  applying,
+  connecting,
+  onApply,
+  onConnect,
+  onSkip,
+  trial,
+  redetect,
+}: {
+  indexers: IndexerSetup
+  applying: boolean
+  connecting: boolean
+  onApply: (selected: string[]) => void
+  onConnect: (input: IndexerConnectInput) => void
+  /** 「之後再說」。只有精靈給。 */
+  onSkip?: () => void
+  trial: Omit<TrialSearchProps, 'sites'>
+  /** 套件內的 Prowlarr 連不上時的「重新偵測這個服務」。 */
+  redetect?: ReactNode
+}) {
+  const bundled = indexers.origin === 'bundled' && indexers.reachable
+  const connected = indexers.steps.some(
+    (row) => row.step === indexers.kind && (row.status === 'ok' || row.status === 'skipped'),
+  )
+
+  if (bundled) {
+    return (
+      <>
+        <DefaultIndexers
+          indexers={indexers}
+          applying={applying}
+          onApply={onApply}
+          onSkip={onSkip}
+        />
+        {indexers.options.some((row) => row.present) && (
+          <TrialSearch {...trial} sites={presentSites(indexers)} />
+        )}
+      </>
+    )
+  }
+
+  return (
+    <>
+      {/* 套件內的那台連不上：說清楚，然後照樣給表單——他總得有辦法往下走。 */}
+      {indexers.origin === 'bundled' && <Unreachable indexers={indexers} redetect={redetect} />}
+      <ExistingIndexer
+        indexers={indexers}
+        connecting={connecting}
+        onConnect={onConnect}
+        onSkip={onSkip}
+      />
+      {/* 既有的站是使用者自己的，Berth 不移除（brief §16.4），所以不給 `onRemove`。 */}
+      {connected && <TrialSearch {...trial} sites={[]} onRemove={undefined} />}
+    </>
   )
 }
 
@@ -159,8 +202,14 @@ function IndexerCutaway({ indexers, bundled }: { indexers: IndexerSetup; bundled
   )
 }
 
-/** 套件內 Prowlarr：預設公開站，預設全勾（plan §9.3 第 6 步）。 */
-export function DefaultIndexers({
+/**
+ * 套件內 Prowlarr 的預設公開站（plan §9.3 第 6 步）。
+ *
+ * **勾選的起點是 Prowlarr 現在的樣子**（票 06i）：一站都還沒加時預設全勾，加過之後勾的是在的那幾站。
+ * 按「加入」只加不刪，所以起點若一律全勾，試搜時移除的站會在下一次加站時被默默加回來。
+ * 使用者自己動過的那幾格照他的意思，不跟著後端變。
+ */
+function DefaultIndexers({
   indexers,
   applying,
   onApply,
@@ -169,24 +218,19 @@ export function DefaultIndexers({
   indexers: IndexerSetup
   applying: boolean
   onApply: (selected: string[]) => void
-  onSkip: () => void
+  onSkip?: () => void
 }) {
   const { t, i18n } = useTranslation()
-  const [unticked, setUnticked] = useState<ReadonlySet<string>>(new Set())
-  const selected = indexers.options
-    .map((row) => row.definition_name)
-    .filter((name) => !unticked.has(name))
+  const [touched, setTouched] = useState<ReadonlyMap<string, boolean>>(new Map())
+  const fresh = !indexers.options.some((row) => row.present)
+  const ticked = (row: IndexerOption) => touched.get(row.definition_name) ?? (fresh || row.present)
+  const selected = indexers.options.filter(ticked).map((row) => row.definition_name)
   const byStep = new Map(indexers.steps.map((row) => [row.step, row]))
   //: 與後端的 `PROWLARR_LOGIN_STEP` 同一個字串——那一條不是站，不能混進站的清單裡。
   const login = byStep.get('prowlarr_login')
 
-  function toggle(name: string, ticked: boolean) {
-    setUnticked((was) => {
-      const next = new Set(was)
-      if (ticked) next.delete(name)
-      else next.add(name)
-      return next
-    })
+  function toggle(name: string, value: boolean) {
+    setTouched((was) => new Map(was).set(name, value))
   }
 
   return (
@@ -221,8 +265,8 @@ export function DefaultIndexers({
               ]
                 .filter(Boolean)
                 .join(' · ')}
-              checked={!unticked.has(option.definition_name)}
-              onChange={(ticked) => toggle(option.definition_name, ticked)}
+              checked={ticked(option)}
+              onChange={(value) => toggle(option.definition_name, value)}
             />
           ))}
         </div>
@@ -239,9 +283,11 @@ export function DefaultIndexers({
             ? t('indexer.defaults.applying')
             : t('indexer.defaults.apply', { sites: selected.length })}
         </PrimaryButton>
-        <GhostButton type="button" busy={applying} onClick={onSkip}>
-          {t('indexer.skip')}
-        </GhostButton>
+        {onSkip && (
+          <GhostButton type="button" busy={applying} onClick={onSkip}>
+            {t('indexer.skip')}
+          </GhostButton>
+        )}
       </div>
 
       {indexers.steps.length > 0 && (
@@ -506,7 +552,7 @@ function TrialRow({
 }
 
 /** 既有：Prowlarr 位址 + key，或任意 Torznab 端點 + key。兩者都有「測試」。 */
-export function ExistingIndexer({
+function ExistingIndexer({
   indexers,
   connecting,
   onConnect,
@@ -515,7 +561,7 @@ export function ExistingIndexer({
   indexers: IndexerSetup
   connecting: boolean
   onConnect: (input: IndexerConnectInput) => void
-  onSkip: () => void
+  onSkip?: () => void
 }) {
   const { t } = useTranslation()
   const [kind, setKind] = useState<IndexerKind>(indexers.kind)
@@ -577,9 +623,11 @@ export function ExistingIndexer({
           <PrimaryButton type="submit" busy={connecting}>
             {connecting ? t('indexer.existing.testing') : t('indexer.existing.test')}
           </PrimaryButton>
-          <GhostButton type="button" busy={connecting} onClick={onSkip}>
-            {t('indexer.skip')}
-          </GhostButton>
+          {onSkip && (
+            <GhostButton type="button" busy={connecting} onClick={onSkip}>
+              {t('indexer.skip')}
+            </GhostButton>
+          )}
         </div>
       </form>
 

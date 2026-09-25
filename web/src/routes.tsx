@@ -27,11 +27,14 @@ import { JobDetailPage } from './pages/JobDetailPage'
 import { JobsPage } from './pages/JobsPage'
 import { InventoryPage } from './pages/InventoryPage'
 import { InventoryPageRoute } from './pages/InventoryPageRoute'
+import { IndexerSettingsPage } from './pages/IndexerSettingsPage'
+import { JellyfinSettingsPage } from './pages/JellyfinSettingsPage'
 import { LoginPage } from './pages/LoginPage'
 import { MediaRoute } from './pages/MediaRoute'
+import { QbittorrentSettingsPage } from './pages/QbittorrentSettingsPage'
 import { RouteSettingsPage } from './pages/RouteSettingsPage'
-import { ServiceSettingsPage } from './pages/ServiceSettingsPage'
-import { SetupRoute } from './pages/SetupRoute'
+import { SetupPage } from './pages/SetupPage'
+import { TmdbSettingsPage } from './pages/TmdbSettingsPage'
 
 export interface RouterContext {
   queryClient: QueryClient
@@ -143,31 +146,20 @@ interface HealthSearch {
   denied?: boolean
 }
 
-interface SetupSearch {
-  /**
-   * 直接跳到某一個泊位（1–4）。設定跑完之後精靈就是設定入口（plan §6），
-   * 而「我的 qBittorrent 密碼改了」的人要的是泊位 2，不是從第 1 步重走。
-   */
-  berth?: number
-}
-
 const setupRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/setup',
-  validateSearch: (search: Record<string, unknown>): SetupSearch => {
-    const berth = Number(search.berth)
-    return Number.isInteger(berth) && berth >= 1 && berth <= 4 ? { berth } : {}
-  },
   /**
-   * 精靈跑完之前匿名開放——那時候還沒有人登入得了。跑完之後它就是設定入口，
-   * 只有管理員進得來（票 07，後端同時回 403）。
+   * 精靈跑完之前匿名開放——那時候還沒有人登入得了。**精靈只管第一次**（票 06i，使用者拍板）：
+   * 跑完之後打開它的管理員被帶到設定頁，改東西在那裡；一般使用者回首頁。
    */
   beforeLoad: async ({ context, location }) => {
     if (!(await isSetupComplete(context.queryClient))) return
     const me = await requireSession(context.queryClient, location)
     if (me !== null && me.role !== 'admin') throw redirect({ to: '/' })
+    throw redirect({ to: '/settings' })
   },
-  component: SetupRoute,
+  component: SetupPage,
 })
 
 const loginRoute = createRoute({
@@ -389,7 +381,7 @@ const healthRoute = createRoute({
   path: '/health',
   validateSearch: (search: Record<string, unknown>): HealthSearch =>
     search.denied === true || search.denied === 'true' ? { denied: true } : {},
-  /** 診斷是唯讀資訊，一般使用者也看得到（brief §11）。動作在 `/settings/services`。 */
+  /** 診斷是唯讀資訊，一般使用者也看得到（brief §11）。動作在 `/settings/*`。 */
   beforeLoad: async ({ context, location }) => {
     await requireSignedInPage(context.queryClient, location)
   },
@@ -401,51 +393,44 @@ const healthRoute = createRoute({
 })
 
 /**
- * `/settings` 本身沒有頁面，落在第一個分頁（票 14a）。頁首的「設定」連到這裡，所以兩個設定頁上
- * 它都是當前頁；守衛由目的地那一頁自己做。
+ * `/settings` 本身沒有頁面，落在第一個分頁（票 14a；票 06i 起第一個是 Jellyfin，照泊位板的順序）。
+ * 頁首的「設定」連到這裡，所以每個設定頁上它都是當前頁；守衛由目的地那一頁自己做。
  */
 const settingsIndexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/settings',
   beforeLoad: () => {
-    throw redirect({ to: '/settings/services' })
+    throw redirect({ to: '/settings/jellyfin' })
   },
-})
-
-const serviceSettingsRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/settings/services',
-  /** 改設定是管理員的事（brief §11，後端同時回 403）。 */
-  beforeLoad: async ({ context, location }) => {
-    const me = await requireSignedInPage(context.queryClient, location)
-    if (me !== null && me.role !== 'admin')
-      throw redirect({ to: '/health', search: { denied: true } })
-  },
-  component: () => (
-    <AppShell>
-      <ServiceSettingsPage />
-    </AppShell>
-  ),
 })
 
 /**
- * Route 設定頁（票 14）。改 Route 是管理員的事（brief §11）；後端的規則在門禁，
- * 這裡的導向只是讓一般使用者不必看到一頁 403。
+ * 改設定是管理員的事（brief §11，後端同時回 403）；這裡的導向只是讓一般使用者不必看到一頁 403。
+ * 五個分頁同一道門（票 06i），所以寫一次。
  */
-const routeSettingsRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/settings/routes',
-  beforeLoad: async ({ context, location }) => {
-    const me = await requireSignedInPage(context.queryClient, location)
-    if (me !== null && me.role !== 'admin')
-      throw redirect({ to: '/health', search: { denied: true } })
-  },
-  component: () => (
-    <AppShell>
-      <RouteSettingsPage />
-    </AppShell>
-  ),
-})
+function settingsRoute(path: `/settings/${string}`, Page: () => React.JSX.Element) {
+  return createRoute({
+    getParentRoute: () => rootRoute,
+    path,
+    beforeLoad: async ({ context, location }) => {
+      const me = await requireSignedInPage(context.queryClient, location)
+      if (me !== null && me.role !== 'admin')
+        throw redirect({ to: '/health', search: { denied: true } })
+    },
+    component: () => (
+      <AppShell>
+        <Page />
+      </AppShell>
+    ),
+  })
+}
+
+const jellyfinSettingsRoute = settingsRoute('/settings/jellyfin', JellyfinSettingsPage)
+const qbittorrentSettingsRoute = settingsRoute('/settings/qbittorrent', QbittorrentSettingsPage)
+/** Route 設定頁（票 14）。 */
+const routeSettingsRoute = settingsRoute('/settings/routes', RouteSettingsPage)
+const indexerSettingsRoute = settingsRoute('/settings/indexers', IndexerSettingsPage)
+const tmdbSettingsRoute = settingsRoute('/settings/tmdb', TmdbSettingsPage)
 
 export const routeTree = rootRoute.addChildren([
   indexRoute,
@@ -458,8 +443,11 @@ export const routeTree = rootRoute.addChildren([
   inventoryRoute,
   loginRoute,
   mediaRoute,
+  jellyfinSettingsRoute,
+  qbittorrentSettingsRoute,
   routeSettingsRoute,
-  serviceSettingsRoute,
+  indexerSettingsRoute,
+  tmdbSettingsRoute,
   settingsIndexRoute,
   setupRoute,
 ])

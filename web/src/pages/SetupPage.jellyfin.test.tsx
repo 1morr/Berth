@@ -297,7 +297,9 @@ describe('泊位 1：套件內 Jellyfin 的媒體庫清單（票 06f）', () => 
     })
 
     // 精靈已經走到第 4 步；從泊位板回頭看泊位 1。
-    renderWithProviders(<SetupPage berth={1} />)
+    renderWithProviders(<SetupPage />)
+    const board = await screen.findByRole('region', { name: '泊位板' })
+    await userEvent.click(await within(board).findByRole('button', { name: /BTH 1/ }))
     const list = (await screen.findByRole('heading', { name: '要建的媒體庫' })).closest('section')!
 
     expect(within(list).getAllByText('已建立')).toHaveLength(2)

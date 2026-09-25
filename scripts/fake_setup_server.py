@@ -210,7 +210,7 @@ class Scenario:
     connect_indexers: list[ProwlarrIndexer] = field(default_factory=list)
     #: 精靈已經跑完：整個 API 進門禁，畫面從登入頁開始（票 07）。
     setup_completed: bool = False
-    #: 連三條 Route 與第一輪健康檢查都跑過：健康頁與服務設定頁的起點（票 10）。
+    #: 連三條 Route 與第一輪健康檢查都跑過：健康頁與設定頁的起點（票 10、06i）。
     moored: bool = False
     #: 第一輪檢查跑完之後才把索引站弄掉。這樣畫面上「最後成功」有值，看得出「剛剛還好好的」。
     indexer_down: bool = False
@@ -373,7 +373,7 @@ def healthy() -> Scenario:
     """精靈跑完、三條 Route 綠燈、四項健康檢查全綠（票 10）。
 
     `skipper` / `harbour` 是管理員，`deckhand` / `rope` 是普通使用者——後者看得到健康頁，
-    但看不到服務設定的入口，直接打 `/api/settings/*` 也會被回 403。
+    但看不到設定的入口，直接打 `/api/settings/*` 也會被回 403。
     """
     scenario = bundled()
     scenario.jellyfin = FakeJellyfinClient(
@@ -466,7 +466,7 @@ def degraded() -> Scenario:
 
 
 def drifted() -> Scenario:
-    """有人把 qBittorrent 的建議設定改掉了：服務設定頁的差異表與「還原建議設定」。
+    """有人把 qBittorrent 的建議設定改掉了：設定的 qBittorrent 那一頁的差異表與「還原建議設定」。
 
     這**不是紅燈**——那台服務好好的（brief §16.3）。
     """
@@ -1427,8 +1427,8 @@ async def _seed_pipeline_issues(
       啟動之後 `qbit_poller` 的第一輪就把它們寫成三件 Issue，按鈕照 Job 的狀態給。
     - Anime 媒體庫掛上 TVDB 的 metadata fetcher，然後照 `health_checker` 那一步量一次。
 
-    磁碟空間那一種不預先造：這台機器剩多少不是演練決定的。到服務設定把門檻調到比它大，
-    `/issues` 當場就多一件（改了立刻重量）。
+    磁碟空間那一種不預先造：這台機器剩多少不是演練決定的。到設定的 qBittorrent 那一頁
+    把門檻調到比它大，`/issues` 當場就多一件（改了立刻重量）。
     """
     route = await session.scalar(select(Route).where(Route.slug == "anime"))
     assert route is not None

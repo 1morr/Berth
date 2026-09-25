@@ -336,9 +336,9 @@ describe('探索頁拿不到 TMDB 時', () => {
     renderApp('/')
 
     expect(await screen.findByText(/Berth 還沒有 TMDB 憑證/)).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: '前往設定精靈' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: '前往設定：TMDB' })).toHaveAttribute(
       'href',
-      '/setup?berth=5',
+      '/settings/tmdb',
     )
   })
 
@@ -346,8 +346,8 @@ describe('探索頁拿不到 TMDB 時', () => {
     render({ [TRENDING]: missing }, 'user')
     renderApp('/')
 
-    expect(await screen.findByText(/請管理員到設定精靈補上/)).toBeInTheDocument()
-    expect(screen.queryByRole('link', { name: '前往設定精靈' })).not.toBeInTheDocument()
+    expect(await screen.findByText(/請管理員到設定補上/)).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: '前往設定：TMDB' })).not.toBeInTheDocument()
   })
 
   it('連不上 TMDB 是另一種：附原文與重試，不連到精靈', async () => {
@@ -365,7 +365,7 @@ describe('探索頁拿不到 TMDB 時', () => {
     expect(await screen.findByText(/連不上 TMDB/)).toBeInTheDocument()
     expect(screen.getByText('GET /trending/tv/week: connection refused')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '重試' })).toBeInTheDocument()
-    expect(screen.queryByRole('link', { name: '前往設定精靈' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: '前往設定：TMDB' })).not.toBeInTheDocument()
   })
 
   it('兩個 feed 同一個理由時整頁只說一次，不是逐個 feed 各說一次', async () => {

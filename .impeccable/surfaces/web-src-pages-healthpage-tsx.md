@@ -2,12 +2,12 @@
 version: 1
 slug: "web-src-pages-healthpage-tsx"
 primary_target: "web/src/pages/HealthPage.tsx"
-related_targets: ["web/src/pages/ServiceSettingsPage.tsx","web/src/health"]
+related_targets: ["web/src/pages/JellyfinSettingsPage.tsx","web/src/pages/QbittorrentSettingsPage.tsx","web/src/settings","web/src/health"]
 ---
 
 ## Scope
 
-健康頁 `/health` 與服務設定頁 `/settings/services`。**Visitor mode: Operate。** 完整規格
+健康頁 `/health` 與設定頁 `/settings/*`（票 06i 起一格泊位一頁，見 `.scratch/m3/settings-shape.md`）。**Visitor mode: Operate。** 完整規格
 （讀者、狀態、量級、修正建議、開放決定）在 `.scratch/m0/health-shape.md`，不在此重複。
 票 10 建這兩頁；M2 的 Reconciler 結果與 Issue 清單會接在健康頁下方。
 
@@ -56,12 +56,12 @@ React 19 + TS + Vite + Tailwind v4 + TanStack Router / Query + react-i18next。W
 
 - **兩個路由而不是一頁兩區塊**（使用者決定）。頁首因此長出導覽（`健康` / `設定`），
   `設定` 只對 admin 顯示；`/` 先導向 `/health`，M1 的探索頁接手之前不留兩個網址畫同一頁。
-- **位址與憑證不在設定頁改**：精靈跑完之後它就是設定入口（plan §6），複製四份連線表單只會讓
-  兩份規則分岔。設定頁對每個服務給一條「改位址或憑證」的連結指回精靈。
+- ~~位址與憑證不在設定頁改~~（票 06i 推翻）：**精靈只管第一次，設定頁接手**。設定頁重用精靈的
+  連線表單（同一個元件、同一支 `setup/*` 命令），所以「兩份規則分岔」的顧慮仍然被避開。
 - **Route 綠燈收起、紅燈就地展開**（使用者決定）。`display: flex` 會吃掉 `<summary>` 的三角形，
   所以展開與否用模板字自己說出來（`展開檢查` / `收起`），否則收起來的那一列看不出它按得開。
 - **漂移的說明不自己指路**：同一張卡片同時出現在健康頁與設定頁，「到服務設定頁看差異」那句話
-  在設定頁上是錯的。指路是頁面的事，所以健康頁的漂移卡片多一顆「到服務設定」，設定頁沒有。
+  在設定頁上是錯的。指路是頁面的事，所以健康頁的漂移卡片多一顆「前往設定：qBittorrent」，設定頁沒有。
 - **差異表讓長路徑換行**，不橫向捲動——被切掉的建議值等於沒顯示（實測暫存目錄的長路徑）。
 - **時間點兩種都給**：相對說法（`3 分鐘前`）給人掃視，絕對時間留在 `<time datetime>` 與 `title`。
   維運頁面上「三分鐘前」與「三小時前」是兩件事，而 ISO 字串沒有人在掃視時算得出來。

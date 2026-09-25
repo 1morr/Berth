@@ -6,10 +6,11 @@ import type { JellyfinWeb } from './jellyfin'
 import type { QbittorrentSetup, Schemas, ServiceKind } from './schemas'
 
 /**
- * 服務設定頁（`/settings/services`，只有 admin）。
+ * `settings/*`：設定頁上**不屬於精靈**的那幾件事（只有 admin）——重新檢查、qBittorrent 建議設定的
+ * 還原、Jellyfin 對外網址、磁碟空間門檻。
  *
- * 這一頁是**維運動作**，不是連線表單：位址與憑證仍然在精靈裡改（精靈跑完之後它就是設定
- * 入口，plan §6），所以這裡沒有 `PUT`。對外網址與磁碟空間門檻兩個欄位不是連線資訊，住在這裡。
+ * 位址、憑證、索引站與 TMDB key 也在設定頁上改（票 06i），但送的是精靈的同一批 `setup/*` 命令
+ * （`api/setup.ts`）：一份命令、一份端點，精靈跑完之後那一組只有 admin 打得到。
  */
 
 /** 與健康頁同一份形狀——同一件事不該有兩種說法。 */
@@ -18,7 +19,7 @@ export const servicesQueryOptions = queryOptions({
   queryFn: () => apiGet<HealthDetail>('/settings/services'),
 })
 
-/** 「測試連線」：只重測這一個服務，其餘的結果留著。 */
+/** 「重新檢查」：只重測這一個服務，其餘的結果留著。 */
 export function testService(kind: ServiceKind): Promise<HealthDetail> {
   return apiPost<HealthDetail>(`/settings/services/${kind}/test`)
 }

@@ -430,13 +430,16 @@ describe('Route 設定頁', () => {
     expect(await row('TV')).toBeInTheDocument()
   })
 
-  it('與服務設定頁共用一條子分頁列，當前頁標出來（shape brief 的決定 1）', async () => {
+  it('與其他設定頁共用一條子分頁列，當前頁標出來（shape brief 的決定 1）', async () => {
     render()
     renderApp('/settings/routes')
 
     const tabs = within(await screen.findByRole('navigation', { name: '設定' }))
     expect(tabs.getByRole('link', { name: '媒體庫路徑' })).toHaveAttribute('aria-current', 'page')
-    expect(tabs.getByRole('link', { name: '服務' })).toHaveAttribute('href', '/settings/services')
+    expect(tabs.getByRole('link', { name: 'Jellyfin' })).toHaveAttribute(
+      'href',
+      '/settings/jellyfin',
+    )
   })
 
   it('只有 admin 進得來：一般使用者被帶回健康頁', async () => {

@@ -2,8 +2,7 @@ import { useId } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import type { Media } from '../api/media'
-import { berthNumberOf } from '../components/berths'
-import { SetupHint } from '../components/SetupHint'
+import { SettingsHint } from '../components/SettingsHint'
 
 /**
  * 「入庫到哪裡」那一行（票 04b、`.scratch/m1/search-results-shape.md` §4）。
@@ -59,7 +58,7 @@ export function RoutePicker({
 /**
  * 一條相符的 Route 都沒有：說得出下一步，而不是給一個空的下拉。
  *
- * 精靈跑完之後只有 admin 進得去（後端同時回 403），所以那條連結也只給 admin——
+ * 設定頁只有 admin 進得去（後端同時回 403），所以那條連結也只給 admin——
  * 對一般使用者它是死路，而他要的是「去叫管理員」（票 10 code-review 的同一條）。
  */
 function NoRoutes({ kind }: { kind: Media['kind'] }) {
@@ -68,12 +67,8 @@ function NoRoutes({ kind }: { kind: Media['kind'] }) {
   return (
     <div className="grid gap-3 border-2 border-rule bg-well px-3 py-3">
       <p className="max-w-prose text-sm text-ink">{t(`media.route.missing.${kind}`)}</p>
-      {/* 泊位 3 是媒體庫路徑——Route 就是在那一步建的。 */}
-      <SetupHint
-        berth={berthNumberOf('library')}
-        label={t('media.route.toSetup')}
-        fallback={t('media.route.askAdmin')}
-      />
+      {/* 媒體庫路徑那一頁：Route 在那裡新增。 */}
+      <SettingsHint slot="library" fallback={t('media.route.askAdmin')} />
     </div>
   )
 }

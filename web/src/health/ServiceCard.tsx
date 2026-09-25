@@ -1,10 +1,10 @@
 import type { ReactNode } from 'react'
-import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 
 import type { ServiceHealth } from '../api/health'
 import { CopyLine } from '../components/controls'
 import { SERVICE_LABEL, detailLabel } from '../components/services'
+import { SettingsHint } from '../components/SettingsHint'
 import { UNPAINTED_FILL } from '../components/signal'
 import { Timestamp } from '../components/Timestamp'
 import { STATE_LABEL, STATE_SIGNAL, composeCommands, serviceFix, serviceState } from './signals'
@@ -16,7 +16,19 @@ import { STATE_LABEL, STATE_SIGNAL, composeCommands, serviceFix, serviceState } 
  * 該做什麼，其餘服務的區塊不動——那是票 10 的驗收，也是精靈那條「失敗就地展開」的
  * 同一個規矩。
  */
-export function ServiceCard({ row, actions }: { row: ServiceHealth; actions?: ReactNode }) {
+export function ServiceCard({
+  row,
+  actions,
+  settingsLink = true,
+}: {
+  row: ServiceHealth
+  actions?: ReactNode
+  /**
+   * 紅燈時給不給「前往設定」（票 06i）。設定頁上的那一張不給：人已經在那一頁上了，
+   * 連到自己的連結按了什麼都不會發生。
+   */
+  settingsLink?: boolean
+}) {
   const { t } = useTranslation()
   const state = serviceState(row)
   const failed = state === 'failed'
@@ -76,7 +88,7 @@ export function ServiceCard({ row, actions }: { row: ServiceHealth; actions?: Re
                （brief §16.4、§20.9）。 */
             <p className="mt-3 max-w-prose text-xs text-ink">{t('health.fix.unsupported')}</p>
           ) : (
-            <Fix row={row} />
+            <Fix row={row} settingsLink={settingsLink} />
           )}
         </div>
       )}
@@ -110,8 +122,8 @@ const FIX_LABEL = {
   unconfigured: 'health.fix.unconfigured',
 } as const
 
-/** 紅燈時該做什麼。套件內給指令，既有給「回精靈改連線」。 */
-function Fix({ row }: { row: ServiceHealth }) {
+/** 紅燈時該做什麼。套件內給指令，既有給「到設定頁改連線」。 */
+function Fix({ row, settingsLink }: { row: ServiceHealth; settingsLink: boolean }) {
   const { t } = useTranslation()
   const kind = serviceFix(row)
 
@@ -126,13 +138,11 @@ function Fix({ row }: { row: ServiceHealth }) {
           ))}
         </div>
       )}
-      {kind !== 'bundled' && (
-        <Link
-          to="/setup"
-          className="label mt-3 inline-block border-2 border-rule px-4 py-2.5 hover:border-rule-strong"
-        >
-          {t('health.toSetup')}
-        </Link>
+      {kind !== 'bundled' && settingsLink && (
+        <div className="mt-3 grid">
+          {/* Prowlarr 的設定在索引站那一頁（`components/berths.ts` 的 slot 就是服務名）。 */}
+          <SettingsHint slot={row.kind} fallback={t('health.fix.askAdmin')} />
+        </div>
       )}
     </>
   )

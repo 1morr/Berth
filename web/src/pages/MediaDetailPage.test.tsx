@@ -510,7 +510,10 @@ describe('Media 詳情頁', () => {
     renderApp('/media/tv:120089')
 
     expect(await screen.findByText(/還沒有任何一條收劇集的 Route/)).toBeVisible()
-    expect(screen.getByRole('link', { name: '到設定精靈建 Route' })).toBeVisible()
+    expect(screen.getByRole('link', { name: '前往設定：媒體庫路徑' })).toHaveAttribute(
+      'href',
+      '/settings/routes',
+    )
   })
 
   it('一般使用者看到的是「請管理員」，不是一條進不去的連結', async () => {
@@ -518,7 +521,7 @@ describe('Media 詳情頁', () => {
     renderApp('/media/tv:120089')
 
     expect(await screen.findByText(/請管理員建一條/)).toBeVisible()
-    expect(screen.queryByRole('link', { name: '到設定精靈建 Route' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: '前往設定：媒體庫路徑' })).not.toBeInTheDocument()
   })
 
   it('快照過期而 TMDB 連不上時，季集照樣畫得出來（shape brief §5）', async () => {
@@ -1227,8 +1230,8 @@ describe('Media 詳情頁', () => {
     })
     renderApp('/media/tv:120089')
 
-    const link = await screen.findByRole('link', { name: '前往設定精靈' })
-    expect(link).toHaveAttribute('href', '/setup?berth=5')
+    const link = await screen.findByRole('link', { name: '前往設定：TMDB' })
+    expect(link).toHaveAttribute('href', '/settings/tmdb')
   })
 })
 

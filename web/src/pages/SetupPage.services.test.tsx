@@ -174,42 +174,6 @@ describe('泊位 2：qBittorrent', () => {
   })
 })
 
-describe('設定跑完之後再進來', () => {
-  it('深連結 ?berth=2 直接停在 qBittorrent 那一步，而不是從第 1 步重走', async () => {
-    // 設定頁的「改位址或憑證」以前三張卡片都連到裸 `/setup`，於是不管按哪一張都落在
-    // 第 3 步「接手這台 Jellyfin」（票 11 的 critique，P0）。
-    stubApi({
-      [STATUS]: {
-        body: setupStatus({ current_step: 8, admin_created: true, services: ALL_BUNDLED }),
-      },
-      [DIFF]: { body: qbittorrentSetup() },
-      [INDEXERS]: { body: indexerSetup() },
-      [TMDB]: { body: tmdbSetup() },
-    })
-
-    renderWithProviders(<SetupPage berth={2} />)
-
-    expect(
-      await screen.findByRole('heading', { name: '套用建議的 qBittorrent 設定' }),
-    ).toBeVisible()
-  })
-
-  it('深連結 ?berth=5 停在 TMDB：探索頁「憑證缺失」連過來的就是這一格（票 06e）', async () => {
-    stubApi({
-      [STATUS]: {
-        body: setupStatus({ current_step: 8, admin_created: true, services: ALL_BUNDLED }),
-      },
-      [INDEXERS]: { body: indexerSetup() },
-      [TMDB]: { body: tmdbSetup() },
-    })
-
-    renderWithProviders(<SetupPage berth={5} />)
-
-    expect(await screen.findByLabelText('你的 TMDB API key')).toBeVisible()
-    expect(screen.queryByText('要加入哪些站')).not.toBeInTheDocument()
-  })
-})
-
 describe('泊位 4：索引站', () => {
   it('預設站預設全勾，按鈕說得出會加幾個', async () => {
     stubApi({ [STATUS]: { body: AT_INDEXER }, [INDEXERS]: { body: indexerSetup() } })

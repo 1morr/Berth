@@ -6,6 +6,7 @@ import { meQueryOptions } from '../api/auth'
 import { healthDetailQueryOptions, healthQueryOptions, runHealthCheck } from '../api/health'
 import type { RouteView } from '../api/schemas'
 import { PAGE_TITLE, GhostButton, Notice } from '../components/controls'
+import { berthOf } from '../components/berths'
 import { ROUTE_HEALTH_LABEL, ROUTE_SIGNAL } from '../components/routeChecks'
 import { RouteCheckList } from '../components/RouteCheckList'
 import { RouteIdentity } from '../components/RouteIdentity'
@@ -105,11 +106,12 @@ export function HealthPage() {
               // 漂移是這一頁唯一「有東西可以按」的狀態，而按鈕住在設定頁。
               actions={
                 row.drift.length > 0 && me.data?.role === 'admin' ? (
+                  // 漂移只有 qBittorrent 會有：它的建議設定住在 qBittorrent 那一頁。
                   <Link
-                    to="/settings/services"
+                    to={berthOf('qbittorrent').settings}
                     className="label border-2 border-rule px-4 py-2.5 hover:border-rule-strong"
                   >
-                    {t('health.toSettings')}
+                    {t('settings.go', { place: t(berthOf('qbittorrent').nameKey) })}
                   </Link>
                 ) : undefined
               }

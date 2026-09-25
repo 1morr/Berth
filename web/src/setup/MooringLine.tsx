@@ -163,9 +163,9 @@ function ConnectPanel({
 
   return (
     <div className="border-t-2 border-rule bg-hull px-4 py-4">
-      <h4 className="text-sm font-semibold text-ink">
+      <h3 className="text-sm font-semibold text-ink">
         {t('connect.title', { service: t(SERVICE_LABEL[kind]) })}
-      </h4>
+      </h3>
       <p className="mt-1 max-w-prose text-xs text-ink-dim">{t(`connect.hint.${kind}`)}</p>
 
       <form onSubmit={submit} noValidate className="mt-4 grid gap-4">

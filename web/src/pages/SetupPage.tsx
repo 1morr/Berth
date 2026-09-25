@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Link, useNavigate } from '@tanstack/react-router'
+import { useNavigate } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 
 import { ApiError } from '../api/client'
@@ -67,7 +67,7 @@ import {
   shownStep,
   straying,
 } from '../setup/navigation'
-import { PAGE_TITLE, GhostButton, NAV_BOX, NAV_BOX_ACTIVE, Notice } from '../components/controls'
+import { PAGE_TITLE, GhostButton, NAV_BOX, NAV_BOX_ACTIVE } from '../components/controls'
 import { type Signal } from '../components/signal'
 import { isSettled } from '../components/steps'
 import { signalOf } from '../setup/signals'
@@ -87,28 +87,17 @@ const PROGRESS_INTERVAL_MS = 1500
  *
  * 導覽的規則（停在結果上、上一個 / 下一個、點得到哪幾格）在 `setup/navigation.ts`，是純函式；
  * 這一頁只把它接到按鈕上（票 06d）。
+ *
+ * **精靈只管第一次**（票 06i）：跑完之後 `/setup` 導向設定頁（`routes.tsx`），改東西在那裡，
+ * 所以這一頁沒有「從外面直接跳到某個泊位」或「跑完之後再回來」的分支。
  */
-export function SetupPage({
-  berth,
-}: {
-  /**
-   * 直接停在哪一個泊位（1 起算）。從網址來，但由路由讀了再傳進來——這個元件的測試刻意
-   * 不掛 router（`test/render.tsx` 的 `renderWithProviders`），而路由的知識本來就該
-   * 留在 `routes.tsx`。
-   */
-  berth?: number
-}) {
+export function SetupPage() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const status = useQuery(setupStatusQueryOptions)
   // 步驟是由狀態導出的（plan §9.3），所以「停在結果上」與「回頭看」都靠這個覆寫，不是靠改狀態。
-  const [pinned, setPinned] = useState<number | null>(() => {
-    const slot = berth ? BERTHS[berth - 1]?.slot : undefined
-    return slot ? BERTH_STEP[slot] : null
-  })
-  // 精靈跑完之後再進來的人：他是來改一個設定的，不是來重跑一次的。
-  const revisited = useQuery(healthQueryOptions).data?.setup_completed ?? false
+  const [pinned, setPinned] = useState<number | null>(null)
 
   const current = status.data
   const backend = current?.current_step ?? STEP.admin
@@ -360,7 +349,6 @@ export function SetupPage({
   const shell = {
     step,
     backend,
-    revisited,
     status: current,
     indexers: indexers.data,
     tmdb: tmdb.data,
@@ -658,7 +646,6 @@ function Shell({
   signals,
   indexers,
   tmdb,
-  revisited = false,
   onGo,
   onReturn,
   children,
@@ -673,11 +660,6 @@ function Shell({
   indexers?: IndexerSetup
   /** TMDB 那一格的詳情列（憑證驗過了沒）。第 7 步起才問得到。 */
   tmdb?: TmdbSetup
-  /**
-   * 精靈已經跑完過。這時候它是設定入口而不是 onboarding，所以要有出口——
-   * 否則從設定頁點「改位址或憑證」進來的人，只剩瀏覽器的上一頁可按。（票 06i 刪掉這條路。）
-   */
-  revisited?: boolean
   onGo?: (step: number) => void
   /** 回到目前這一步：解除覆寫。 */
   onReturn?: () => void
@@ -699,11 +681,6 @@ function Shell({
             : t(step === STEP.complete ? 'setup.stage.final' : 'setup.stage.pre')}{' '}
           · {t('setup.step', { current: step, total: TOTAL_STEPS })}
         </p>
-        {revisited && (
-          <Link to="/health" className="label text-ink-dim underline hover:text-ink">
-            {t('setup.exit')}
-          </Link>
-        )}
         <LanguageToggle />
       </header>
 
@@ -721,14 +698,6 @@ function Shell({
 
       {onReturn && straying(step, backend) && (
         <StrayBand step={step} backend={backend} code={code} onReturn={onReturn} />
-      )}
-
-      {revisited && (
-        <div className="border-b-2 border-rule px-6 py-3">
-          <Notice signal="assigned" label={t('status.ok')}>
-            {t('setup.revisited')}
-          </Notice>
-        </div>
       )}
 
       <main className="flex flex-1 flex-col">{children}</main>

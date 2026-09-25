@@ -120,7 +120,7 @@ describe('健康頁', () => {
     expect(within(board).getAllByText('已繫上')).toHaveLength(3)
   })
 
-  it('既有服務的修正是回精靈改連線，不是 docker 指令', async () => {
+  it('既有服務的修正是到那個服務的設定頁改連線，不是 docker 指令（票 06i）', async () => {
     render({
       body: withFailedService('jellyfin', 'GET /System/Info/Public: connection refused', {
         origin: 'existing',
@@ -128,8 +128,26 @@ describe('健康頁', () => {
     })
     renderApp('/health')
 
-    expect(await screen.findByRole('link', { name: '到設定精靈' })).toBeInTheDocument()
+    expect(await screen.findByRole('link', { name: '前往設定：Jellyfin' })).toHaveAttribute(
+      'href',
+      '/settings/jellyfin',
+    )
     expect(screen.queryByText('docker compose up -d jellyfin')).not.toBeInTheDocument()
+  })
+
+  it('一般使用者看到的是「請管理員來看」，不是一條進不去的設定連結', async () => {
+    render(
+      {
+        body: withFailedService('jellyfin', 'GET /System/Info/Public: connection refused', {
+          origin: 'existing',
+        }),
+      },
+      { 'GET /api/auth/me': { body: { name: 'deckhand', role: 'user' } } },
+    )
+    renderApp('/health')
+
+    expect(await screen.findByText('設定頁只有管理員進得去，請管理員來看。')).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /前往設定/ })).not.toBeInTheDocument()
   })
 
   it('連續失敗次數看得見——「剛剛壞的」與「壞了一整天」不是同一件事', async () => {
@@ -165,15 +183,17 @@ describe('健康頁', () => {
     expect(card('qBittorrent').getByText('auto_tmm_enabled')).toBeInTheDocument()
     expect(card('qBittorrent').queryByText('阻擋')).not.toBeInTheDocument()
     // 漂移是這一頁唯一有東西可以按的狀態，而按鈕住在設定頁。
-    expect(card('qBittorrent').getByRole('link', { name: '到服務設定' })).toBeInTheDocument()
-    expect(card('Jellyfin').queryByRole('link', { name: '到服務設定' })).not.toBeInTheDocument()
+    expect(
+      card('qBittorrent').getByRole('link', { name: '前往設定：qBittorrent' }),
+    ).toHaveAttribute('href', '/settings/qbittorrent')
+    expect(card('Jellyfin').queryByRole('link', { name: /前往設定/ })).not.toBeInTheDocument()
   })
 
   /**
    * 票 03 第 14 條。原本是靜默 `redirect` 到 `/health`：一般使用者按下深連結之後
    * 換了一頁，而畫面一個字都沒說為什麼（PRODUCT.md 原則 4）。
    */
-  it.each(['/settings/services', '/settings/routes'])(
+  it.each(['/settings/qbittorrent', '/settings/routes'])(
     '一般使用者開 %s 被送到健康頁時，畫面說得出為什麼',
     async (path) => {
       render(
@@ -205,7 +225,7 @@ describe('健康頁', () => {
     await screen.findByRole('region', { name: 'qBittorrent' })
 
     expect(card('qBittorrent').getByText('設定被改過')).toBeInTheDocument()
-    expect(screen.queryByRole('link', { name: '到服務設定' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /前往設定/ })).not.toBeInTheDocument()
   })
 
   it('Route 區塊給 admin 一條到 Route 設定的連結，一般使用者沒有（票 14）', async () => {

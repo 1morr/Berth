@@ -46,7 +46,7 @@ docker compose up -d
 | 下載 `/jobs` | 送單之後的每一筆，狀態與進度即時更新；展開看時間線與匯入計劃（逐檔的處置、信心、目標路徑與理由），送單失敗、入庫失敗、待審各有自己的下一步 |
 | 媒體庫 `/library/:library` | 一個 Jellyfin 媒體庫一頁，只列你在 Jellyfin 看得到的：整庫 50 部一頁（不是 Berth 入庫的也在，海報是 Jellyfin 的、經 Berth 轉給瀏覽器），Berth 經手的疊上入庫了幾集、哪一部在等人；每一格說得出你看到哪了（已看、看到幾 %、剩幾集沒看），可標為已看 / 未看（寫回你在 Jellyfin 的紀錄，標為未看先確認）；還沒進 Jellyfin 的另列一條；「在 Jellyfin 開啟」；「待審」「Unmatched」兩個篩選 |
 | 健康 `/health` | 四項健康檢查與下載迴圈；一般使用者也看得到 |
-| 設定 `/settings/services`、`/settings/routes` | 只有管理員：服務位址與建議設定的差異；Route 的新增（同一個 Jellyfin 媒體庫可以有第二條）、改名、停用、重新檢查與刪除 |
+| 設定 `/settings/*` | 只有管理員。精靈只管第一次，跑完之後改東西都在這裡，一格泊位一頁：**Jellyfin**（健康與重新檢查、既有那一台的位址與重新登入、對外網址）、**qBittorrent**（健康、既有那一台的位址與帳密、建議設定的差異與還原、磁碟空間門檻）、**媒體庫路徑**（Route 的新增——同一個 Jellyfin 媒體庫可以有第二條——改名、停用、重新檢查與刪除）、**索引站**（加站、試搜、移除；既有 Prowlarr / Torznab 換網址或 key）、**TMDB**（換 key 並測試）。精靈跑完之後打開 `/setup` 會被帶到這裡 |
 
 > **compose 範本 pin 的 `ghcr.io/1morr/berth:latest` 還是空的。** GHCR 上目前只有預發佈的 `0.1.0-rc1`（`:latest` 要等第一個正式版本 tag），所以現在要跑 compose 得先在 repo 根目錄自己 build 一份：見下面的〈自己 build image〉。
 
@@ -78,7 +78,7 @@ Berth **不內建任何 provider 的 API key**，TMDB 的憑證要你自己申�
    (v4 auth)** 是很長的一串 JWT。**兩種 Berth 都收**，貼哪一把都成立（v4 走標頭，不會落在
    任何一行 log 裡）。
 4. 精靈第 7 步貼上去按「測試 TMDB」，綠燈才走得到下一個泊位。之後要換一把就在
-   「設定 → 來源」重貼。
+   「設定 → TMDB」重貼：新的那一把測得過才換掉舊的，測不過的話舊的照舊在用。
 
 TMDB 的條款限非商業使用；歸屬聲明見〈[授權與歸屬](#授權與歸屬)〉。
 
@@ -105,7 +105,7 @@ TMDB 的條款限非商業使用；歸屬聲明見〈[授權與歸屬](#授權�
   - **套件內的 Jellyfin 釘在 `version-12.1ubu2604`**：`docker compose pull` 只會拿到 12.1 這條線的重建，不會默默跨到下一個大版本。要升級時先備份上面那個目錄，再改 `deploy/docker-compose.yml` 的 tag 並 `docker compose up -d jellyfin`。
 - **Prowlarr**：不預置任何東西，Berth 唯讀掛載它的設定目錄以讀取它自動產生的 API key。
 - **TMDB**：要你自己申請一把 API key（上面那一節），Berth 不內建。憑證存在 Berth 自己的資料庫裡，
-  精靈第 7 步或「設定 → 來源」都改得了。
+  精靈第 7 步或「設定 → TMDB」都改得了。
 
 ### 秘密與備份
 
@@ -405,12 +405,12 @@ uv run python scripts/fake_setup_server.py --port 8383     # 換 port（索引�
 | `old-jellyfin` | 既有 Jellyfin 還停在 10.11（其餘兩個服務照 `bundled`，擋路的只留一個）：泊位 1 紅燈，說出目前版本、為什麼要 12，以及升級前後要做的事；健康頁上同一台也是紅的 |
 | `signed-out` | 精靈已跑完，畫面從登入頁開始。`skipper` / `harbour` 是管理員，`deckhand` / `rope` 是普通使用者（看不到設定入口） |
 | `unmounted` | Jellyfin 少了媒體庫目錄的掛載：泊位 4 的第四條纜繩失敗，看「哪個容器少了哪個掛載」與 compose 修正片段 |
-| `healthy` | 精靈已跑完、三條 Route 綠燈、四項健康檢查全綠：健康頁 `/health` 與服務設定頁 `/settings/services` 的起點。帳號同 `signed-out` |
+| `healthy` | 精靈已跑完、三條 Route 綠燈、四項健康檢查全綠：健康頁 `/health` 與設定頁 `/settings/*`（五個分頁：換 TMDB key、加站試搜移除都在這裡演得出來）的起點。帳號同 `signed-out` |
 | `degraded` | 同上，但索引站在第一輪檢查之後掛掉：按「立即重測」就會看到那一項變紅、其餘三項不動，以及「最後成功」還留著 |
-| `drifted` | 同上，但有人把 qBittorrent 的 `auto_tmm_enabled` 改掉了：看設定頁的逐鍵差異表與「還原建議設定」 |
+| `drifted` | 同上，但有人把 qBittorrent 的 `auto_tmm_enabled` 改掉了：看設定的 qBittorrent 那一頁的逐鍵差異表與「還原建議設定」 |
 | `review` | 審核佇列 `/review`（M2 票 06）：同 `issues`，另外 SPY×FAMILY 第二季兩集（只寫絕對集號 26、27，累計換算成 S02E01、S02E02，信心 medium）真的硬鏈接進媒體庫、帳本與 Plan Item 都掛 audit。按「確認」清旗標；按「撤銷」真的把那一條鏈接拆掉，那一筆下載回到待審核——之後以 `deckhand` / `rope` 登入，`/jobs` 與 SPY×FAMILY 的詳情頁說「等管理員審核」。這兩集是同一筆下載，收成一組、收起時說出為什麼是 medium，按「全部確認」一次清掉（M3 票 05）。Issue 不在這一頁（M3 票 05），頁尾一行「另有 N 件待處理」連到 `/issues`。另有一筆 `- 05` 下載完成（M2 票 07）：只寫集號、沒超過第一季的 25 集，規劃器算成低信心、提案 S01E05，停在「要你決定」那一段——逐列改季集看目標路徑當場換掉，按「核准並入庫」真的硬鏈接進媒體庫；按「拒絕」就重新規劃。再一筆 S01E03 + OVA 下載完成（M2 票 08）：媒體庫裡已經有一份一模一樣的 S01E03（路徑與 Tags 照解析器算），所以規劃器略過它、佇列上一列「重複」（取代 / 保留兩者 / 跳過，都真的動磁碟）；OVA 2 對不到任何一集，佇列上一列「對不到」，指派到 S00E02 真的建硬鏈接。伺服器起來約 60 秒後規劃器第一輪才算出這兩列 |
 | `routes` | Route 設定頁 `/settings/routes`（票 14）：同 `healthy`，另外 TV 媒體庫在 Jellyfin 上多掛一顆碟（新增第二條 Route 會全綠）、Movies 多一條沒掛進 Berth 的路徑（在那裡建 Route 會紅、維持停用），TV 那條 Route 有一筆已入庫的下載（刪除鍵換成「刪不得」與一鍵停用）；新增時選 Anime 沒有空路徑，給一條到 Jellyfin 媒體庫設定的連結 |
-| `issues` | 待處理頁 `/issues` 與對帳（M2 票 05）：同 `healthy`，另外真的入庫一包三集的動漫（來源在 complete、媒體庫那一份是真的硬鏈接），並把其中第二集的媒體庫檔案刪掉——使用者在 Jellyfin 按刪除之後就是這樣。按「立刻對帳」真的比四方並寫下一件 Issue，按「重新鏈接」真的 `os.link` 把它接回來。另外三種破壞（M2 票 09）：第三集被一份一樣大的複製品取代（「以硬鏈接取代」真的換回硬鏈接）、complete 裡一個沒人認領的目錄（「刪除這個目錄」真的整棵刪掉）、媒體庫裡一個手放的檔案（只列出，沒有會刪的按鈕）。管線與健康檢查那幾種（M2 票 09c）：三筆下載到一半的 SPY×FAMILY，替身 qBittorrent 說一筆 `missingFiles`、一筆 `error`、一筆已經不在——起來之後 poller 第一輪就開出三件，「重新校驗」「重試」「重新送單」各自讓它們離開壞掉的狀態；或者 `curl -X POST 'http://127.0.0.1:8484/demo/qbittorrent/fix?hash=<hash>'` 演使用者在 qBittorrent 裡自己修好那一筆（M3 票 02），poller 下一輪（至多 30 秒）把 Job 接回、那一件由系統收掉，時間線多一筆「已接回」；Anime 媒體庫掛著 TVDB，所以一開始就有一件 TVDB（只有「忽略」，按了之後「立即重測」也不會再開）。磁碟空間那一件要到服務設定把門檻調到比這台機器剩的還大，`/issues` 當場多一件，調回來當場收掉。認領類三顆（M2 票 10，替身 TMDB 搜得到 `spy`）：媒體庫裡第四集是真的硬鏈接但帳本上沒有它——「認領進帳本」長回一列，`Hand Placed` 那一件按下去說出配不上的理由；qBittorrent 上一筆 `[Sub] SPY×FAMILY - 07` 沒有 Job——「認領並建立下載」選作品，下載列表多一筆；`[Old] Forgotten Batch` 按「重新入庫」選作品，規劃器接手。`/jobs` 上入庫完的那一筆，在它的詳情頁（展開那一列 → 「下載詳情」）有「重新入庫」 |
+| `issues` | 待處理頁 `/issues` 與對帳（M2 票 05）：同 `healthy`，另外真的入庫一包三集的動漫（來源在 complete、媒體庫那一份是真的硬鏈接），並把其中第二集的媒體庫檔案刪掉——使用者在 Jellyfin 按刪除之後就是這樣。按「立刻對帳」真的比四方並寫下一件 Issue，按「重新鏈接」真的 `os.link` 把它接回來。另外三種破壞（M2 票 09）：第三集被一份一樣大的複製品取代（「以硬鏈接取代」真的換回硬鏈接）、complete 裡一個沒人認領的目錄（「刪除這個目錄」真的整棵刪掉）、媒體庫裡一個手放的檔案（只列出，沒有會刪的按鈕）。管線與健康檢查那幾種（M2 票 09c）：三筆下載到一半的 SPY×FAMILY，替身 qBittorrent 說一筆 `missingFiles`、一筆 `error`、一筆已經不在——起來之後 poller 第一輪就開出三件，「重新校驗」「重試」「重新送單」各自讓它們離開壞掉的狀態；或者 `curl -X POST 'http://127.0.0.1:8484/demo/qbittorrent/fix?hash=<hash>'` 演使用者在 qBittorrent 裡自己修好那一筆（M3 票 02），poller 下一輪（至多 30 秒）把 Job 接回、那一件由系統收掉，時間線多一筆「已接回」；Anime 媒體庫掛著 TVDB，所以一開始就有一件 TVDB（只有「忽略」，按了之後「立即重測」也不會再開）。磁碟空間那一件要到設定的 qBittorrent 那一頁把門檻調到比這台機器剩的還大，`/issues` 當場多一件，調回來當場收掉。認領類三顆（M2 票 10，替身 TMDB 搜得到 `spy`）：媒體庫裡第四集是真的硬鏈接但帳本上沒有它——「認領進帳本」長回一列，`Hand Placed` 那一件按下去說出配不上的理由；qBittorrent 上一筆 `[Sub] SPY×FAMILY - 07` 沒有 Job——「認領並建立下載」選作品，下載列表多一筆；`[Old] Forgotten Batch` 按「重新入庫」選作品，規劃器接手。`/jobs` 上入庫完的那一筆，在它的詳情頁（展開那一列 → 「下載詳情」）有「重新入庫」 |
 | `discover` | 探索頁 `/`：三個外部服務仍是替身，但 TMDB 打**真的** `api.themoviedb.org`。憑證從環境變數 `TMDB_API_KEY` 讀（v3 key 或 v4 read access token 都收），沒設就變成「憑證缺失」那個畫面 |
 | `tmdb-down` | 憑證有、TMDB 連不上：探索頁的每個 feed 各自顯示服務回的原文與「重試」，而不是一片空白 |
 | `search` | Media 詳情頁的搜尋結果表：TMDB 與**索引站都打真的**。索引站位址從 `BERTH_INDEXER_URL` / `BERTH_INDEXER_KEY` 讀，沒設就退回替身（結果表是空的，那本身也是要驗的畫面）。一次搜尋 35–85 秒 |

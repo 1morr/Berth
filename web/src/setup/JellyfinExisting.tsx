@@ -34,18 +34,55 @@ export function JellyfinExisting({
   onConnect: (input: JellyfinConnectInput) => void
   onAddPath: (library: string) => void
 }) {
-  const { t } = useTranslation()
-  const signedIn = setup.api_key_present
-  const apiKeyStep = setup.steps.find((row) => row.step === 'api_key')
   const libraryStep = setup.steps.find((row) => row.step === 'libraries')
+
+  return (
+    <>
+      <JellyfinSignIn
+        setup={setup}
+        connecting={connecting}
+        failed={signInFailed}
+        onConnect={onConnect}
+      />
+
+      {setup.api_key_present && (
+        <Libraries
+          libraries={setup.libraries}
+          addingPath={addingPath}
+          failure={libraryStep?.status === 'failed' ? libraryStep : undefined}
+          baseUrl={setup.base_url}
+          onAddPath={onAddPath}
+        />
+      )}
+    </>
+  )
+}
+
+/**
+ * 管理員登入換一把 API key，與這一次換 key 的結果。設定的 Jellyfin 那一頁重用它（票 06i）：
+ * 使用者在 Jellyfin 撤掉了 Berth 那一把、或換了一台 Jellyfin，都是重新登入一次。
+ */
+export function JellyfinSignIn({
+  setup,
+  connecting,
+  failed,
+  onConnect,
+}: {
+  setup: JellyfinSetup
+  connecting: boolean
+  failed: boolean
+  onConnect: (input: JellyfinConnectInput) => void
+}) {
+  const { t } = useTranslation()
+  const apiKeyStep = setup.steps.find((row) => row.step === 'api_key')
 
   return (
     <>
       <SignInForm
         connecting={connecting}
-        failed={signInFailed}
+        failed={failed}
         onConnect={onConnect}
-        signedIn={signedIn}
+        signedIn={setup.api_key_present}
       />
 
       {apiKeyStep?.status === 'failed' && (
@@ -54,16 +91,6 @@ export function JellyfinExisting({
             <span className="value wrap-anywhere">{apiKeyStep.error}</span>
           </Notice>
         </div>
-      )}
-
-      {signedIn && (
-        <Libraries
-          libraries={setup.libraries}
-          addingPath={addingPath}
-          failure={libraryStep?.status === 'failed' ? libraryStep : undefined}
-          baseUrl={setup.base_url}
-          onAddPath={onAddPath}
-        />
       )}
     </>
   )

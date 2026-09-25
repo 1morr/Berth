@@ -340,7 +340,10 @@ describe('搜尋 torrent 與結果表', () => {
     await userEvent.click(await screen.findByRole('button', { name: '搜尋' }))
 
     expect(await screen.findByText(/設定精靈的第 6 步跳過了索引站/)).toBeVisible()
-    expect(screen.getByRole('link', { name: '前往設定精靈' })).toBeVisible()
+    expect(screen.getByRole('link', { name: '前往設定：索引站' })).toHaveAttribute(
+      'href',
+      '/settings/indexers',
+    )
     expect(within(panel()).queryByRole('table')).not.toBeInTheDocument()
   })
 
@@ -355,7 +358,7 @@ describe('搜尋 torrent 與結果表', () => {
 
     // 還沒按：一個索引站都沒打，畫面已經說得出下一步。
     expect(await screen.findByText(/設定精靈的第 6 步跳過了索引站/)).toBeVisible()
-    expect(within(panel()).getByRole('link', { name: '前往設定精靈' })).toBeVisible()
+    expect(within(panel()).getByRole('link', { name: '前往設定：索引站' })).toBeVisible()
 
     await userEvent.click(screen.getByRole('button', { name: '搜尋' }))
 
@@ -376,8 +379,8 @@ describe('搜尋 torrent 與結果表', () => {
 
     await userEvent.click(await screen.findByRole('button', { name: '搜尋' }))
 
-    expect(await screen.findByText('請管理員到設定精靈接上索引站。')).toBeVisible()
-    expect(screen.queryByRole('link', { name: '前往設定精靈' })).not.toBeInTheDocument()
+    expect(await screen.findByText('請管理員到設定接上索引站。')).toBeVisible()
+    expect(screen.queryByRole('link', { name: '前往設定：索引站' })).not.toBeInTheDocument()
   })
 
   it('連不上索引站時也給得出「去哪裡改位址」', async () => {
@@ -398,7 +401,7 @@ describe('搜尋 torrent 與結果表', () => {
 
     expect(await screen.findByText(/連不上索引站/)).toBeVisible()
     expect(screen.getByText('GET /api/v1/search: connection refused')).toBeVisible()
-    expect(screen.getByRole('link', { name: '前往設定精靈' })).toBeVisible()
+    expect(screen.getByRole('link', { name: '前往設定：索引站' })).toBeVisible()
   })
 
   it('搜到但一筆都沒有不是錯誤', async () => {

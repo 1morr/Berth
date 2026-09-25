@@ -206,7 +206,7 @@ export const GHOST_LINK =
 
 /**
  * 每一頁唯一的 `<h1>`（票 03 第 13 條）。四頁本來各長各的——`/settings/routes` 有 h1，
- * `/health` 與 `/settings/services` 從 `<h2>` 開起，精靈一個標題都沒有。大小與可見性
+ * `/health` 與原本的服務設定頁從 `<h2>` 開起，精靈一個標題都沒有。大小與可見性
  * 在這裡定一次，**外距由呼叫端給**（同 `NAV_BOX` 的理由：同一個元素上誰贏看 CSS 先後）。
  */
 export const PAGE_TITLE = 'value text-lg font-semibold text-ink'

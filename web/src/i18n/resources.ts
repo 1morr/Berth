@@ -38,9 +38,6 @@ const zhHant = {
     },
     step: '第 {{current}} 步，共 {{total}} 步',
     resumed: '進度已保留，關掉瀏覽器再回來會回到這一步。',
-    exit: '回到 Berth',
-    revisited:
-      'Berth 已經設定好了。這裡改的是連線設定，不會重跑一次靠泊；每一步都可以只做你要改的那一個。',
     prelude: '前置',
     place: {
       admin: '建立管理員',
@@ -212,7 +209,7 @@ const zhHant = {
       password: '密碼',
     },
     hint: {
-      jellyfin: '管理員登入與 API key 在第 3 步；這裡只確認位址連得到。',
+      jellyfin: '這裡只確認位址連得到；管理員登入與 API key 是另一件事。',
       qbittorrent: '免密的話帳密留空。',
       prowlarr: '在 Prowlarr 的「設定 → 一般 → 安全性」找得到 API key。',
     },
@@ -577,8 +574,7 @@ const zhHant = {
       indexers: '索引站',
     },
     where: {
-      indexers:
-        '索引站還沒接。之後回到設定精靈的泊位 BTH 4（索引站）補上，補之前搜尋不到任何東西。',
+      indexers: '索引站還沒接。之後在「設定 → 索引站」補上，補之前搜尋不到任何東西。',
     },
   },
   login: {
@@ -956,7 +952,6 @@ const zhHant = {
     route: {
       label: '入庫到',
       none: '尚未指定',
-      toSetup: '到設定精靈建 Route',
       askAdmin: '請管理員建一條收得下它的 Route。',
       missing: {
         tv: '還沒有任何一條收劇集的 Route。沒有它，下載完了也沒有地方可以入庫。',
@@ -1062,8 +1057,7 @@ const zhHant = {
         label: '連不上',
         body: '連不上索引站。可能是那個容器沒起來，或位址填錯了。',
       },
-      toSetup: '前往設定精靈',
-      askAdmin: '請管理員到設定精靈接上索引站。',
+      askAdmin: '請管理員到設定接上索引站。',
     },
   },
   // 下載列表頁與送單（票 09、`.scratch/m1/jobs-shape.md`）。發佈名、hash、路徑、category
@@ -1896,12 +1890,11 @@ const zhHant = {
   tmdb: {
     problem: {
       credential_missing:
-        'Berth 還沒有 TMDB 憑證。它不內建任何一把，要你自己去 themoviedb.org 申請並填進設定精靈。',
+        'Berth 還沒有 TMDB 憑證。它不內建任何一把，要你自己去 themoviedb.org 申請，再填進「設定 → TMDB」。',
       credential_rejected: 'TMDB 不接受這把憑證。它可能被撤銷了，或貼進來時少了幾個字。',
       unreachable: '連不上 TMDB。可能是這台機器沒有對外網路，或 TMDB 正在維護。',
       not_found: 'TMDB 上沒有這部作品。它可能已經被合併或刪除了——回探索頁重新找一次。',
-      toSetup: '前往設定精靈',
-      askAdmin: '請管理員到設定精靈補上 TMDB 憑證。',
+      askAdmin: '請管理員到設定補上 TMDB 憑證。',
       retry: '重試',
     },
   },
@@ -1946,7 +1939,7 @@ const zhHant = {
       count_other: '{{count}} 條 Route',
       expand: '展開檢查',
       collapse: '收起',
-      empty: '還沒有 Route。在設定精靈的最後一個泊位建立它們，Berth 才有地方寫入。',
+      empty: '還沒有 Route。到設定的「媒體庫路徑」新增一條，Berth 才有地方寫入。',
     },
     fix: {
       title: '修正',
@@ -1955,27 +1948,55 @@ const zhHant = {
       bundled:
         '這個服務是這套 compose 起的，所以先確認那個容器還在跑。三條指令的順序就是排查順序：還在嗎、把它起來、它自己說了什麼。',
       existing:
-        '這是你自己的服務，Berth 只知道它現在回不出東西。位址或憑證變了的話回設定精靈重新填一次。',
-      unconfigured: '這個服務還沒接上。到設定精靈接它——沒接上的話它負責的那件事一律不會發生。',
+        '這是你自己的服務，Berth 只知道它現在回不出東西。位址或憑證變了的話到它的設定頁重新填一次。',
+      unconfigured: '這個服務還沒接上。到它的設定頁接它——沒接上的話它負責的那件事一律不會發生。',
+      askAdmin: '設定頁只有管理員進得去，請管理員來看。',
       unsupported:
         'Berth 需要 Jellyfin 12.0 以上（12.0 就是原本的 10.12）。升級前先把 Jellyfin 的 /config 完整備份 —— 12 改了資料庫，降不回去；再移除第三方插件，10.11 的插件在 12 載入不了。升級後完整掃描一次媒體庫。',
       drift:
         'Berth 的建議設定被改掉了（{{keys}}）。服務本身還在動，但下載路徑或自動管理一旦不對，入庫遲早會失敗。',
     },
-    toSetup: '到設定精靈',
-    toSettings: '到服務設定',
   },
+  // 設定頁（票 06i）：一格泊位一頁，精靈跑完之後改東西都在這裡。
   settings: {
-    title: '服務設定',
-    lede: '位址與憑證在設定精靈改。這一頁做四件事：重測連線、Jellyfin 的對外網址、磁碟空間門檻，以及把被改掉的建議設定還原。',
-    test: '測試連線',
-    testing: '測試中…',
-    testFailed: '測試沒有走完。Berth 後端可能沒在跑——確認容器狀態後再按一次。',
-    editHint: '改位址或憑證',
+    // 各處「去設定」的連結：說出會落在哪一頁（`SettingsHint`）。
+    go: '前往設定：{{place}}',
+    check: '重新檢查',
+    checking: '檢查中…',
+    checkFailed: '檢查沒有走完。Berth 後端可能沒在跑——確認容器狀態後再按一次。',
+    health: '健康',
     tabs: {
       label: '設定',
-      services: '服務',
-      routes: '媒體庫路徑',
+    },
+    connection: {
+      title: '位址與憑證',
+      lede: '與設定精靈第 2 步是同一張表單：按下去就存，然後真的連一次。上面那張卡會跟著重新檢查。',
+      bundled:
+        '這個服務是這一套 compose 起的：位址由 compose 決定，Berth 在設定精靈裡已經接好它，這裡沒有要填的東西。壞了的話照上面那張卡的修正步驟。',
+      failed: '沒有存進去。Berth 後端可能沒在跑——確認容器狀態後再按一次。',
+    },
+    jellyfinPage: {
+      title: 'Jellyfin 設定',
+      lede: '這一台 Jellyfin 還連得上嗎、位址或 API key 要不要換，以及媒體庫上「在 Jellyfin 開啟」開在哪裡。',
+      signIn: {
+        title: '管理員登入',
+        lede: 'Berth 用一把自己的 API key 跟 Jellyfin 說話。那把 key 被撤掉了、或換了一台 Jellyfin，就用管理員重新登入一次換一把新的。',
+      },
+    },
+    qbittorrentPage: {
+      title: 'qBittorrent 設定',
+      lede: '這一台 qBittorrent 還連得上嗎、位址或帳密要不要換、Berth 的建議設定有沒有被改掉，以及下載磁碟剩多少時開始擋送單。',
+    },
+    indexerPage: {
+      sites: '站',
+      title: '索引站設定',
+      lede: '加站、試搜、移除；接的是你自己的 Prowlarr 或 Torznab 端點時，在這裡換網址或 key。',
+    },
+    tmdbPage: {
+      title: 'TMDB 設定',
+      lede: '換一把 TMDB API key。新的那一把測得過才換掉舊的；測不過的話舊的照舊在用，探索與入庫不受影響。',
+      kept: '這一把測不過，沒有換掉——探索與入庫照舊用原本那一把。',
+      failed: '測試沒有走完。Berth 後端可能沒在跑——確認容器狀態後再按一次。',
     },
     // 深連結的主機（票 13）。它不是連線資訊，所以住在這裡而不是精靈。
     jellyfin: {
@@ -2026,7 +2047,7 @@ const zhHant = {
   routeSettings: {
     title: '媒體庫路徑',
     lede: '每條 Route 是一個 Jellyfin 媒體庫加上一條寫入目標；同一個媒體庫可以有好幾條，例如兩顆碟各一條。停用的 Route 不收新的送單；還有下載或入庫檔案指著它時，它刪不得。',
-    empty: '還沒有 Route。在設定精靈的最後一個泊位建立它們，Berth 才有地方寫入。',
+    empty: '還沒有 Route。用下面的「新增 Route」建一條，Berth 才有地方寫入。',
     disabled: '停用',
     manage: '管理',
     collapse: '收起',
@@ -2159,9 +2180,6 @@ const en: Translations<typeof zhHant> = {
     },
     step: 'Step {{current}} of {{total}}',
     resumed: 'Progress is saved. Close the browser and you come back to this step.',
-    exit: 'Back to Berth',
-    revisited:
-      'Berth is already set up. This changes connection settings; it does not moor everything again, and each step does only what you ask it to.',
     prelude: 'Pre-berth',
     place: {
       admin: 'Create admin',
@@ -2341,7 +2359,8 @@ const en: Translations<typeof zhHant> = {
       password: 'Password',
     },
     hint: {
-      jellyfin: 'Admin login and API key come in step 3; this only confirms the address answers.',
+      jellyfin:
+        'This only confirms the address answers; the admin login and API key are a separate step.',
       qbittorrent: 'Leave the credentials empty if the WebUI has no password.',
       prowlarr: 'The API key is under Settings → General → Security in Prowlarr.',
     },
@@ -2734,7 +2753,7 @@ const en: Translations<typeof zhHant> = {
     },
     where: {
       indexers:
-        'No indexer yet. Add one later at berth BTH 4 (Indexers) in the setup wizard; until then searches return nothing.',
+        'No indexer yet. Add one later under Settings → Indexers; until then searches return nothing.',
     },
   },
   login: {
@@ -3078,7 +3097,6 @@ const en: Translations<typeof zhHant> = {
     route: {
       label: 'Import into',
       none: 'Not chosen',
-      toSetup: 'Create a route in the setup wizard',
       askAdmin: 'Ask an administrator to create a route that can take it.',
       missing: {
         tv: 'No route accepts series yet. Without one a finished download has nowhere to land.',
@@ -3173,8 +3191,7 @@ const en: Translations<typeof zhHant> = {
         label: 'Unreachable',
         body: 'Cannot reach the indexer. Either its container is not running, or the address is wrong.',
       },
-      toSetup: 'Open the setup wizard',
-      askAdmin: 'Ask an administrator to connect an indexer in the setup wizard.',
+      askAdmin: 'Ask an administrator to connect an indexer in Settings.',
     },
   },
   issues: {
@@ -3962,15 +3979,14 @@ const en: Translations<typeof zhHant> = {
   tmdb: {
     problem: {
       credential_missing:
-        'Berth has no TMDB credential. It ships without one: get your own key at themoviedb.org and paste it into the setup wizard.',
+        'Berth has no TMDB credential. It ships without one: get your own key at themoviedb.org and paste it under Settings → TMDB.',
       credential_rejected:
         'TMDB rejected this credential. It may have been revoked, or lost a few characters on the way in.',
       unreachable:
         'Cannot reach TMDB. Either this machine has no outbound network, or TMDB is down.',
       not_found:
         'TMDB has no such title. It may have been merged or removed — go back to Discover and look it up again.',
-      toSetup: 'Open the setup wizard',
-      askAdmin: 'Ask an administrator to add the TMDB credential in the setup wizard.',
+      askAdmin: 'Ask an administrator to add the TMDB credential in Settings.',
       retry: 'Retry',
     },
   },
@@ -4018,7 +4034,7 @@ const en: Translations<typeof zhHant> = {
       expand: 'Show checks',
       collapse: 'Hide',
       empty:
-        'No routes yet. Create them in the last berth of the setup wizard — until then Berth has nowhere to write.',
+        'No routes yet. Add one under Settings → Library paths — until then Berth has nowhere to write.',
     },
     fix: {
       title: 'Fix',
@@ -4027,29 +4043,57 @@ const en: Translations<typeof zhHant> = {
       bundled:
         'This service comes from the bundled compose file, so start by checking that its container is still running. The three commands are in triage order: is it there, bring it up, what did it say.',
       existing:
-        'This is your own service, and all Berth knows is that it stopped answering. If its address or credentials changed, fill them in again in the setup wizard.',
+        'This is your own service, and all Berth knows is that it stopped answering. If its address or credentials changed, fill them in again on its settings page.',
       unconfigured:
-        'This service is not connected yet. Connect it in the setup wizard — until then, whatever it is responsible for simply will not happen.',
+        'This service is not connected yet. Connect it on its settings page — until then, whatever it is responsible for simply will not happen.',
+      askAdmin: 'Only administrators can open Settings — ask one to take a look.',
       unsupported:
         'Berth needs Jellyfin 12.0 or newer (12.0 is what would have been 10.12). Before upgrading, back up Jellyfin’s /config in full — 12 changes the database and there is no way back — and remove third-party plugins, which cannot load on 12. Run one full library scan afterwards.',
       drift:
         "Berth's recommended settings were changed ({{keys}}). The service itself is still running, but once the download paths or automatic management are wrong, imports will fail sooner or later.",
     },
-    toSetup: 'Open the setup wizard',
-    toSettings: 'Open service settings',
   },
   settings: {
-    title: 'Service settings',
-    lede: 'Addresses and credentials are edited in the setup wizard. This page does four things: re-test a connection, set Jellyfin’s public address, set the disk space threshold, and restore recommended settings that were changed.',
-    test: 'Test connection',
-    testing: 'Testing…',
-    testFailed:
-      'The test did not go through. The Berth backend may be down — check the container, then try again.',
-    editHint: 'Change address or credentials',
+    go: 'Open {{place}} settings',
+    check: 'Check again',
+    checking: 'Checking…',
+    checkFailed:
+      'The check did not go through. The Berth backend may be down — check the container, then try again.',
+    health: 'Health',
     tabs: {
       label: 'Settings',
-      services: 'Services',
-      routes: 'Routes',
+    },
+    connection: {
+      title: 'Address and credentials',
+      lede: 'The same form as step 2 of the setup wizard: submitting saves it, then really connects once. The card above checks again right after.',
+      bundled:
+        'This service comes from the bundled compose file: compose decides its address and the setup wizard already connected it, so there is nothing to fill in here. If it breaks, follow the fix on the card above.',
+      failed:
+        'It was not saved. The Berth backend may be down — check the container, then try again.',
+    },
+    jellyfinPage: {
+      title: 'Jellyfin settings',
+      lede: 'Whether this Jellyfin still answers, whether its address or API key needs changing, and where “Open in Jellyfin” on the library page opens.',
+      signIn: {
+        title: 'Administrator sign-in',
+        lede: 'Berth talks to Jellyfin with an API key of its own. If that key was revoked, or you moved to another Jellyfin, sign in as an administrator once more to get a new one.',
+      },
+    },
+    qbittorrentPage: {
+      title: 'qBittorrent settings',
+      lede: 'Whether this qBittorrent still answers, whether its address or credentials need changing, whether Berth’s recommended settings were changed, and how little free disk space stops new downloads.',
+    },
+    indexerPage: {
+      sites: 'Sites',
+      title: 'Indexer settings',
+      lede: 'Add sites, try a search, remove what you do not want; when you run your own Prowlarr or Torznab endpoint, change its address or key here.',
+    },
+    tmdbPage: {
+      title: 'TMDB settings',
+      lede: 'Swap in another TMDB API key. The new key replaces the old one only once it passes the test; if it fails, the old key stays in use and browsing and imports carry on.',
+      kept: 'This key failed the test and was not saved — browsing and imports keep using the one you had.',
+      failed:
+        'The test did not go through. The Berth backend may be down — check the container, then try again.',
     },
     jellyfin: {
       title: 'Jellyfin public address',
@@ -4096,8 +4140,7 @@ const en: Translations<typeof zhHant> = {
   routeSettings: {
     title: 'Routes',
     lede: 'Each route is one Jellyfin library plus one write target, and a library can have several — one per disk, say. A disabled route takes no new downloads; a route that downloads or imported files still point at cannot be deleted.',
-    empty:
-      'No routes yet. Create them in the last berth of the setup wizard, so Berth has somewhere to write.',
+    empty: 'No routes yet. Create one with “Add route” below, so Berth has somewhere to write.',
     disabled: 'Disabled',
     manage: 'Manage',
     collapse: 'Collapse',

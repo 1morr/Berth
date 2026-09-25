@@ -55,6 +55,7 @@ from berth.services.tmdb import read_tmdb_status, verify_tmdb
 
 #: 誰進得來這一組由門禁決定（`api/gate.py`）：精靈跑完之前匿名開放，跑完之後只有管理員。
 #: 規則放在那裡而不是這裡的相依，是為了「忘記掛相依」不會變成一個沒人守的洞。
+#: 精靈跑完之後設定頁呼叫的也是這一組（票 06i）：命令冪等，一份命令、一份端點。
 router = APIRouter(prefix="/setup", tags=["setup"])
 
 

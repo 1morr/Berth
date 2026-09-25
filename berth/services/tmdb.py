@@ -49,14 +49,23 @@ async def read_tmdb_status(session: AsyncSession) -> TmdbSetupStatus:
 async def verify_tmdb(
     session: AsyncSession, factory: ServiceClientFactory, *, api_key: str
 ) -> TmdbSetupStatus:
-    """先存再測（與其他連線表單同一個規矩）：測不過也存，使用者才能改一個字再按一次。"""
+    """先存再測（與其他連線表單同一個規矩）：測不過也存，使用者才能改一個字再按一次。
+
+    **例外是已經有一把驗過的在用**（票 06i，使用者拍板）：設定頁換 key 時，新的測不過就不換，
+    這一次的紅燈照樣回給畫面，但不存——貼錯一把就讓探索與入庫停擺，代價不對稱。
+    """
+    working = tmdb_verified(await read_settings(session, SetupSettings))
     settings = await read_settings(session, TmdbSettings)
     settings.api_key = api_key.strip()
 
     step, image_base_url = await _test(factory, settings)
+    if working and step.status is not StepStatus.OK:
+        # 不寫回：資料庫裡仍是舊的那一把與它那一條綠燈，這一次的紅燈只回給畫面。
+        return TmdbSetupStatus(api_key_present=True, verified=True, steps=step_views([step]))
+
     # 圖片基底順手存下來：它對同一把憑證是常數，而探索頁（票 03）每一張卡都要它。
     settings.image_base_url = image_base_url or settings.image_base_url
-    # 測不過也存，使用者才能改一個字再按一次（與其他連線表單同一個規矩）。
+    # 還沒有能用的 key 時測不過也存，使用者才能改一個字再按一次（與其他連線表單同一個規矩）。
     await write_settings(session, settings)
 
     def record(latest: SetupSettings) -> None:

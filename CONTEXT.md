@@ -288,7 +288,7 @@ _Avoid_: diagnostics, status check
 **Drift（設定漂移）**:
 Berth 建議的 qBittorrent 偏好被改成別的值。**不是紅燈**——那台服務還在動，只是下載路徑或
 自動管理一旦不對，入庫遲早會失敗；畫面用 `assigned`（需要你）而不是 `blocked`，
-並在服務設定頁給逐鍵差異與「還原建議設定」。
+並在設定的 qBittorrent 那一頁給逐鍵差異與「還原建議設定」。
 _Avoid_: mismatch, out of sync, misconfiguration
 
 **Event**:

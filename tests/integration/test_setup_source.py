@@ -444,6 +444,34 @@ async def test_a_rejected_tmdb_key_is_a_failed_line_not_a_500(session: AsyncSess
     assert (await read_settings(session, TmdbSettings)).api_key.endswith("dead")
 
 
+@pytest.mark.asyncio
+async def test_a_failing_key_does_not_replace_one_that_already_works(
+    session: AsyncSession,
+) -> None:
+    """設定頁換 key（票 06i，使用者拍板）：已經驗過的那一把在用，新的測不過就不換掉它。
+
+    先存再測只對「還沒有能用的 key」成立——那時存下來讓人改一個字再按；已經有一把能用的時候，
+    貼錯一把就讓探索與入庫停擺，代價不對稱。
+    """
+    await arrange(session)
+    working = FakeClientFactory(tmdb=FakeTmdbClient())
+    await verify_tmdb(session, working, api_key=TMDB_API_KEY)
+    rejecting = FakeClientFactory(
+        tmdb=FakeTmdbClient(error=AuthFailedError("GET /configuration: 401"))
+    )
+
+    status = await verify_tmdb(session, rejecting, api_key="0000000000000000000000000000dead")
+
+    # 這一次的結果照樣說出來……
+    assert [(row.status, row.error) for row in status.steps] == [
+        (StepStatus.FAILED, "GET /configuration: 401")
+    ]
+    # ……但舊的那一把照舊在用，閘門也還是綠的。
+    assert status.verified is True
+    assert (await read_settings(session, TmdbSettings)).api_key == TMDB_API_KEY
+    assert (await read_tmdb_status(session)).verified is True
+
+
 async def _no_sleep(_seconds: float) -> None:
     """Prowlarr 重啟的輪詢在測試裡不真的等。"""
     return None

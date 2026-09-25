@@ -618,6 +618,16 @@ Issue、修正、對帳、刪除與重新入庫的每一條端點都是 403，�
   Jellyfin），新加的列重跑時才建；第 5 步替每一個建出來的媒體庫建一條 Route。
 
 ### Changed
+- **精靈只管第一次，設定頁接手之後的修改**（M3 票 06i）：設定分五頁，照泊位板的順序——
+  `/settings/jellyfin`、`/settings/qbittorrent`、`/settings/routes`、`/settings/indexers`、`/settings/tmdb`
+  （`/settings` 落在 Jellyfin）。每一頁重用精靈那一格的元件、送精靈的同一批 `setup/*` 命令：既有服務換位址或
+  帳密、既有 Jellyfin 重新登入換 API key、加站 / 試搜 / 移除、換 TMDB key；每一頁頂端是那個服務的健康卡與
+  「重新檢查」。套件內的服務沒有位址表單。Jellyfin 對外網址住 Jellyfin 頁，建議設定的還原與磁碟空間門檻住
+  qBittorrent 頁。精靈跑完之後打開 `/setup` 會被帶到設定頁；探索頁、詳情頁、搜尋結果與健康頁的「去補上」
+  連結一律指設定頁的那一頁（「前往設定：TMDB」），一般使用者看到的是「請管理員…」。索引站的勾選清單改從
+  Prowlarr 現在有的那幾站勾起，移除的站不會在下一次加站時被加回來。
+- **已經有一把驗過的 TMDB key 時，新的測不過就不換**（M3 票 06i）：`POST /api/setup/tmdb/test` 照樣回這一次的
+  紅燈，但不存、`verified` 仍是 `true`；還沒有驗過的 key 時照舊先存再測。設定頁說出「沒有換掉」。
 - **索引站與 TMDB 拆成兩個泊位，泊位板變五格**（M3 票 06e）：BTH 4 索引站（第 6 步）、BTH 5 TMDB（第 7 步），
   精靈與健康頁都是；`?berth=5` 是 TMDB（探索頁與詳情頁「憑證缺失」的連結跟著改），`?berth=4` 仍是索引站。
   索引站那一格的詳情列說出接上的是哪一種（Prowlarr / Torznab）與站數，還沒加站時寫「Prowlarr · 尚未加入索引站」；
@@ -913,6 +923,9 @@ Issue、修正、對帳、刪除與重新入庫的每一條端點都是 403，�
   依內容類型落回 TMDB（目前電影與劇集都是 `TheMovieDb`）；已經存了三列 `movies` / `tv` / `anime` 的設定照舊有效。
 
 ### Removed
+- **服務設定頁 `/settings/services` 與精靈的 `?berth=` 深連結**（M3 票 06i）：前者拆進設定的各分頁，後者連同
+  「改位址或憑證」與精靈跑完之後的「回到 Berth」一起拿掉——精靈跑完之後不再是設定入口。後端的
+  `GET /api/settings/services` 照舊（設定頁的健康卡讀它）。
 
 - 精靈完成頁的「回媒體庫路徑」（M3 票 06d）：它是唯一一顆「上一步」、按了之後出不去；由「上一個泊位」取代。
 

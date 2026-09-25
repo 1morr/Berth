@@ -1,9 +1,8 @@
 import { useTranslation } from 'react-i18next'
 
 import type { IndexerProblem } from '../api/search'
-import { berthNumberOf } from '../components/berths'
 import { Notice } from '../components/controls'
-import { SetupHint } from '../components/SetupHint'
+import { SettingsHint } from '../components/SettingsHint'
 
 /**
  * 索引站那邊沒搜到東西時畫面說什麼（票 08 驗收：可行動的說明，不是空清單）。
@@ -15,9 +14,9 @@ import { SetupHint } from '../components/SetupHint'
 export function IndexerNotice({ problem, detail }: { problem: IndexerProblem; detail: string }) {
   const { t } = useTranslation()
   const pending = problem === 'not_configured'
-  // 位址與憑證都在精靈的第 6 步改，所以四種索引站的問題都連得過去；`no_query` 例外——
-  // 那是這部作品的 TMDB 快照還沒抓到，與索引站無關，去精靈也修不了。
-  const toSetup = problem !== 'no_query'
+  // 位址與憑證都在設定的索引站那一頁改，所以四種索引站的問題都連得過去；`no_query` 例外——
+  // 那是這部作品的 TMDB 快照還沒抓到，與索引站無關，去設定也修不了。
+  const toSettings = problem !== 'no_query'
 
   return (
     <div className="grid max-w-prose gap-3">
@@ -28,14 +27,7 @@ export function IndexerNotice({ problem, detail }: { problem: IndexerProblem; de
         {t(`search.problem.${problem}.body`)}
       </Notice>
       {detail && <p className="value text-xs wrap-anywhere text-ink-dim">{detail}</p>}
-      {toSetup && (
-        // 索引站那一格（票 06e 起 TMDB 是自己的一格）。
-        <SetupHint
-          berth={berthNumberOf('prowlarr')}
-          label={t('search.problem.toSetup')}
-          fallback={t('search.problem.askAdmin')}
-        />
-      )}
+      {toSettings && <SettingsHint slot="prowlarr" fallback={t('search.problem.askAdmin')} />}
     </div>
   )
 }

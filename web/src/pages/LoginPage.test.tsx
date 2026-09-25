@@ -55,12 +55,12 @@ describe('登入頁', () => {
 
   it('回到原本要去的那一頁，而不是一律回首頁', async () => {
     const { backend, routes } = signedOut()
-    stubApi({ ...routes, [LOGIN]: backend.signIn(ADMIN), 'GET /api/setup/status': { body: {} } })
-    const { router } = renderApp('/login?redirect=%2Fsetup')
+    stubApi({ ...routes, [LOGIN]: backend.signIn(ADMIN) })
+    const { router } = renderApp('/login?redirect=%2Fsettings%2Ftmdb')
 
     await fillIn('skipper', 'harbour')
 
-    await waitFor(() => expect(router.state.location.pathname).toBe('/setup'))
+    await waitFor(() => expect(router.state.location.pathname).toBe('/settings/tmdb'))
   })
 
   it('外部網址不算「原本要去的那一頁」', async () => {

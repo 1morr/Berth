@@ -844,9 +844,13 @@ class TestRoutes:
         assert client.get("/api/health").json()["setup_completed"] is False
 
     def test_completing_needs_a_tmdb_credential_first(self, client: TestClient) -> None:
-        """第 7 步是閘門，第 8 步也擋一次（票 02b）：使用者可以回頭把 key 清掉。"""
+        """第 7 步是閘門，第 8 步也擋一次（票 02b）：完成看的是存下來的那一條綠燈。
+
+        回頭貼一把測不過的 key 已經不會蓋掉驗過的那一把（票 06i），所以直接把狀態推到
+        「沒有驗過的 key」——這一條驗的是完成的閘門，不是怎麼走到那裡。
+        """
         client.post("/api/setup/routes", json={})
-        client.post("/api/setup/tmdb/test", json={"api_key": ""})
+        _forget_tmdb(client)
 
         refused = client.post("/api/setup/complete")
 
@@ -866,6 +870,26 @@ class TestRoutes:
         assert client.get("/api/setup/status").status_code == 401
         assert client.get("/api/setup/routes").status_code == 401
         assert client.post("/api/setup/complete").status_code == 401
+
+
+def _forget_tmdb(client: TestClient) -> None:
+    """把第 7 步推回「沒有驗過的 key」。"""
+    import asyncio
+
+    from berth.models import SetupSettings, TmdbSettings
+    from berth.services.settings import read_settings, write_settings
+
+    async def forget() -> None:
+        # `TestClient.app` 是 Starlette 的 `ASGIApp`，型別上沒有 `state`（實際是 FastAPI）。
+        factory = client.app.state.session_factory  # type: ignore[attr-defined]
+        async with factory() as session:
+            setup = await read_settings(session, SetupSettings)
+            setup.tmdb.steps = []
+            await write_settings(session, setup)
+            await write_settings(session, TmdbSettings())
+            await session.commit()
+
+    asyncio.run(forget())
 
 
 def _mark_jellyfin_existing(client: TestClient) -> None:

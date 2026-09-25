@@ -195,7 +195,10 @@ class ApiGate:
 
 
 async def _setup_verdict(request: Request, user: AuthenticatedUser | None) -> JSONResponse | None:
-    """精靈跑完之前整組匿名開放；跑完之後它就是設定入口，只有管理員進得來。
+    """精靈跑完之前整組匿名開放；跑完之後只有管理員進得來。
+
+    跑完之後這一組是**設定頁的寫入端點**（票 06i）：設定的 Jellyfin / qBittorrent / 索引站 / TMDB
+    那幾頁呼叫的就是精靈的同一批命令，不另開 `settings/*` 的一份。
 
     精靈是唯一能在沒有任何帳號時就跑的東西——它跑完之前根本還沒有人登入得了
     （plan §6）。跑完之後角色跟著 Jellyfin 的 `Policy.IsAdministrator`（brief §11）。

@@ -102,15 +102,15 @@ describe('門禁', () => {
     // 這一條釘住的是「門禁每次都真的問後端」。拿快取放行的話，session 死了以後
     // 前端會若無其事地繼續走下去。
     const backend = session({ name: 'skipper', role: 'admin' })
-    stubApi({ [HEALTH]: DONE, [ME]: () => backend.me(), [STATUS]: WIZARD })
-    const { router } = renderApp('/setup')
-    await waitFor(() => expect(router.state.location.pathname).toBe('/setup'))
+    stubApi({ [HEALTH]: DONE, [ME]: () => backend.me(), ...DISCOVER })
+    const { router } = renderApp('/')
+    await waitFor(() => expect(router.state.location.pathname).toBe('/'))
 
     backend.signOut()
-    await router.navigate({ to: '/' })
+    await router.navigate({ to: '/health' })
 
     await waitFor(() => expect(router.state.location.pathname).toBe('/login'))
-    expect(router.state.location.search).toEqual({ redirect: '/', expired: true })
+    expect(router.state.location.search).toEqual({ redirect: '/health', expired: true })
     expect(await screen.findByText('工作階段已過期，請重新登入。')).toBeInTheDocument()
   })
 
@@ -143,12 +143,12 @@ describe('角色', () => {
     expect(screen.getByText('skipper')).toBeInTheDocument()
   })
 
-  it('/settings 轉到服務設定；頁首的「設定」在兩個設定頁都標成當前頁（票 14a）', async () => {
+  it('/settings 轉到第一個分頁 Jellyfin；頁首的「設定」在每個設定頁都標成當前頁（票 14a、06i）', async () => {
     stubApi({ [HEALTH]: DONE, [ME]: ADMIN, 'GET /api/routes': { body: [] } })
 
     const { router } = renderApp('/settings')
 
-    await waitFor(() => expect(router.state.location.pathname).toBe('/settings/services'))
+    await waitFor(() => expect(router.state.location.pathname).toBe('/settings/jellyfin'))
     expect(await screen.findByRole('link', { name: '設定' })).toHaveAttribute(
       'aria-current',
       'page',
@@ -180,6 +180,14 @@ describe('角色', () => {
     expect(await screen.findByText('deckhand')).toBeInTheDocument()
     expect(screen.getByText('使用者')).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: '設定' })).not.toBeInTheDocument()
+  })
+
+  it('精靈跑完之後管理員打開 /setup 被帶到設定頁：精靈只管第一次（票 06i）', async () => {
+    stubApi({ [HEALTH]: DONE, [ME]: ADMIN, [STATUS]: WIZARD })
+
+    const { router } = renderApp('/setup')
+
+    await waitFor(() => expect(router.state.location.pathname).toBe('/settings/jellyfin'))
   })
 
   it('非 admin 直接打 /setup 會被送回首頁', async () => {
@@ -238,17 +246,22 @@ describe('一般使用者看不到修正與對帳的入口', () => {
     expect(nav.getAllByRole('link').map((link) => link.textContent)).toEqual(NAV[role])
   })
 
-  it.each(['/review', '/issues', '/settings/routes', '/settings/services'])(
-    'user 直接開 %s 會被送到健康頁並說他被擋下來了',
-    async (path) => {
-      stubApi({ [HEALTH]: DONE, [ME]: USER, ...DISCOVER })
+  it.each([
+    '/review',
+    '/issues',
+    '/settings/jellyfin',
+    '/settings/qbittorrent',
+    '/settings/routes',
+    '/settings/indexers',
+    '/settings/tmdb',
+  ])('user 直接開 %s 會被送到健康頁並說他被擋下來了', async (path) => {
+    stubApi({ [HEALTH]: DONE, [ME]: USER, ...DISCOVER })
 
-      const { router } = renderApp(path)
+    const { router } = renderApp(path)
 
-      await waitFor(() => expect(router.state.location.pathname).toBe('/health'))
-      expect(router.state.location.search).toEqual({ denied: true })
-    },
-  )
+    await waitFor(() => expect(router.state.location.pathname).toBe('/health'))
+    expect(router.state.location.search).toEqual({ denied: true })
+  })
 })
 
 /**
