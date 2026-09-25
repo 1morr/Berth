@@ -92,6 +92,7 @@ function plan(overrides: Partial<Plan> = {}): Plan {
         actions: ['skip'],
       }),
     ],
+    series: null,
     ...overrides,
   }
 }
@@ -114,6 +115,8 @@ function audit(): AuditReviewRow {
     episode_start: 1,
     episode_end: null,
     reasons: [],
+    action: 'import',
+    series: null,
   }
 }
 

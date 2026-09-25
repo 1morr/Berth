@@ -13,6 +13,9 @@ export type RematchBody = Schemas['RematchIn']
 /** 改完之後：記下這一次修正的單列 Plan，與它現在在媒體庫的哪裡（忽略時是空字串）。 */
 export type RematchResult = Schemas['RematchOut']
 
+/** 套用到 RSS Series 之後（M3 票 13）：Series 現在的季號與偏移，與其餘還沒確認的集數怎麼了。 */
+export type SeriesCorrected = Schemas['SeriesCorrectedOut']
+
 /** 擋下來的理由（`domain.RematchRefusal`）。重複版本的三顆也回這一種。 */
 export type RematchRefusal = Schemas['RematchRefusal']
 
@@ -32,6 +35,8 @@ const REASONS: ReasonSet<RematchRefusal> = {
   target_taken: true,
   link_failed: true,
   unlink_failed: true,
+  not_from_series: true,
+  no_episode_number: true,
 }
 
 /** 這一次失敗是「後端說不行」還是「網路壞了」。認不得的理由回 `null`。 */

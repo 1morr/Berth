@@ -41,7 +41,7 @@ from datetime import datetime
 from functools import partial
 from pathlib import Path
 
-from sqlalchemy import ColumnElement, Select, func, or_, select
+from sqlalchemy import ColumnElement, Integer, Select, and_, cast, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from berth.adapters import fs
@@ -57,6 +57,7 @@ from berth.domain import (
     FileKind,
     ItemReason,
     JobState,
+    JobTrigger,
     MediaKind,
     PlanAction,
     PlanDecision,
@@ -69,7 +70,7 @@ from berth.domain import (
 )
 from berth.domain import ReasonCode as Code
 from berth.logs import job_context
-from berth.models import Job, JobFile, LedgerEntry, Media, Plan, PlanItem, Route
+from berth.models import Job, JobFile, LedgerEntry, Media, Plan, PlanItem, Route, RssSeries
 from berth.services.commands import Effect, command
 from berth.services.deletion import Placed, Unlink, remove_one, route_targets
 from berth.services.jobs import job_lock, record_event, transition
@@ -116,8 +117,21 @@ class AuditsConfirmed:
 
 
 @dataclass(frozen=True, slots=True)
+class AuditSeries:
+    """送出這個檔案的 RSS Series（M3 票 13）：佇列以它分組，組上一顆「全部確認」確認整個 Series。"""
+
+    id: int
+    #: 長出它的那一筆 Item 的標題（`rss_series.title_raw`）：看得出是哪一個字幕組。
+    name: str
+    #: 第一批確認過了沒。還沒的話這一列是第一批（`AuditReason.FIRST_BATCH`）。
+    confirmed: bool
+    season: int | None
+    episode_offset: int | None
+
+
+@dataclass(frozen=True, slots=True)
 class AuditRow:
-    """一個 medium 自動入庫、等人看一眼的檔案。指向它的是帳本那一列。"""
+    """一個自動入庫、等人看一眼的檔案：medium，或 RSS Series 的第一批。指向它的是帳本那一列。"""
 
     ledger_id: int
     #: 入庫的那一刻——它從那時起就在等人看。
@@ -130,12 +144,16 @@ class AuditRow:
     job_name: str
     target_path: str
     source_path: str
+    #: 正片、字幕或特典（帳本那一列的處置）。只有正片改得了季集（票 13 的「改正並套用」）。
+    action: PlanAction
     season: int | None
     episode_start: int | None
     episode_end: int | None
     #: 解析器為什麼給 medium（那一列 Plan Item 的理由，code + 參數，畫面翻譯）。
     reasons: tuple[ItemReason, ...]
     reason: AuditReason = AuditReason.MEDIUM_AUTO_IMPORTED
+    #: RSS 送的那一筆的 RSS Series；手動送單、或那個 Series 不在了是 `None`。
+    series: AuditSeries | None = None
     actions: tuple[AuditAction, ...] = (AuditAction.CONFIRM, AuditAction.UNDO)
 
     @property
@@ -480,10 +498,16 @@ async def _fetch_audits(session: AsyncSession, limit: int) -> list[AuditRow]:
     """最舊的 `limit` 個 audit，連同作品、Job 與那一列 Plan Item 一次問完。"""
     found = (
         await session.execute(
-            select(LedgerEntry, Media, Job, PlanItem)
+            select(LedgerEntry, Media, Job, PlanItem, RssSeries)
             .outerjoin(Media, Media.id == LedgerEntry.media_id)
             .outerjoin(Job, Job.hash == LedgerEntry.job_hash)
             .outerjoin(PlanItem, PlanItem.id == LedgerEntry.plan_item_id)
+            # `trigger_ref` 是 RSS Series 的 id（`plan.series_of` 同一條）；重新入庫那種是路徑，
+            # 轉不成數字時是 0，不會配到任何一列。
+            .outerjoin(
+                RssSeries,
+                and_(Job.trigger == JobTrigger.RSS, RssSeries.id == cast(Job.trigger_ref, Integer)),
+            )
             .where(LedgerEntry.audit)
             .order_by(LedgerEntry.created_at, LedgerEntry.id)
             .limit(limit)
@@ -493,9 +517,19 @@ async def _fetch_audits(session: AsyncSession, limit: int) -> list[AuditRow]:
 
 
 def _audit_row(
-    entry: LedgerEntry, media: Media | None, job: Job | None, item: PlanItem | None
+    entry: LedgerEntry,
+    media: Media | None,
+    job: Job | None,
+    item: PlanItem | None,
+    series: RssSeries | None,
 ) -> AuditRow:
-    """外連接的三格都可能是 `None`：作品被刪、Job 被清掉、Plan 重新規劃過（`SET NULL`）。"""
+    """外連接的四格都可能是 `None`：作品被刪、Job 被清掉、Plan 重新規劃過（`SET NULL`）、
+    不是 RSS 送的。
+
+    第一批的理由看的是**現在** Series 確認了沒：確認過之後還留著的（按下「全部確認」之後才進來的）
+    就只是 medium 那一種。
+    """
+    first = series is not None and not series.confirmed
     return AuditRow(
         ledger_id=entry.id,
         at=entry.created_at,
@@ -506,10 +540,21 @@ def _audit_row(
         job_name=job.name if job is not None else "",
         target_path=entry.target_path,
         source_path=entry.source_abs_path,
+        action=entry.action,
         season=entry.season,
         episode_start=entry.episode_start,
         episode_end=entry.episode_end,
         reasons=reasons_of(item) if item is not None else (),
+        reason=AuditReason.FIRST_BATCH if first else AuditReason.MEDIUM_AUTO_IMPORTED,
+        series=None
+        if series is None
+        else AuditSeries(
+            id=series.id,
+            name=series.title_raw,
+            confirmed=series.confirmed,
+            season=series.season,
+            episode_offset=series.episode_offset,
+        ),
     )
 
 

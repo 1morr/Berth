@@ -1,0 +1,144 @@
+"""RSS Series 的第一批審核走 API（M3 票 13）：佇列上的 Series、整組確認、改正並套用、Plan 上的值。
+
+命令本身在 `test_series_review.py`；這裡驗的是形狀、狀態碼與「誰進得來」（`review/*`、`files/*`
+只有 admin）。
+"""
+
+from __future__ import annotations
+
+import asyncio
+from pathlib import Path
+
+from fastapi.testclient import TestClient
+from sqlalchemy import select
+
+from berth.models import LedgerEntry, Plan
+from berth.services.setup import complete_setup
+from tests.integration.test_review_api import BROWSER, CREW, client, factory, sign_in
+from tests.integration.test_series_review import delivered, split_cour
+
+__all__ = ["client", "factory"]  # pytest fixture，從 review API 的測試借來
+
+
+def seed(client: TestClient, roots: dict[str, Path]) -> tuple[int, list[int], list[int]]:
+    """split-cour 的第一批入庫完：回 Series id、帳本 id（照集號）、兩份 Plan 的 id。"""
+
+    async def run() -> tuple[int, list[int], list[int]]:
+        # `app.state` 是 Starlette 的動態屬性，型別上看不到 lifespan 掛上去的 session factory。
+        sessions = client.app.state.session_factory  # type: ignore[attr-defined]
+        async with sessions() as session:
+            series, _ = await delivered(session, roots, snapshot=split_cour())
+            await complete_setup(session)
+            await session.commit()
+            entries = await session.scalars(
+                select(LedgerEntry.id).order_by(LedgerEntry.source_rel_path)
+            )
+            plans = await session.scalars(select(Plan.id).where(Plan.job_hash.is_not(None)))
+            return series.id, list(entries), list(plans)
+
+    return asyncio.run(run())
+
+
+def test_audit_rows_carry_their_series(client: TestClient, roots: dict[str, Path]) -> None:
+    series_id, _, _ = seed(client, roots)
+    sign_in(client)
+
+    rows = client.get("/api/review").json()["rows"]
+
+    assert {row["reason"]["code"] for row in rows} == {"first_batch"}
+    assert {row["series"]["id"] for row in rows} == {series_id}
+    assert {row["series"]["confirmed"] for row in rows} == {False}
+
+
+def test_the_plan_says_which_values_it_used(client: TestClient, roots: dict[str, Path]) -> None:
+    series_id, _, plans = seed(client, roots)
+    sign_in(client)
+
+    body = client.get(f"/api/plans/{plans[0]}").json()
+
+    assert body["series"] == {"id": series_id, "season": None, "episode_offset": None}
+
+
+def test_confirming_a_series_empties_its_group(client: TestClient, roots: dict[str, Path]) -> None:
+    series_id, entries, _ = seed(client, roots)
+    sign_in(client)
+
+    response = client.post(
+        f"/api/review/series/{series_id}/confirm", json={"ledger_ids": entries}, headers=BROWSER
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"confirmed": 2, "skipped": 0}
+    assert client.get("/api/review").json()["rows"] == []
+
+
+def test_a_correction_applied_to_the_series_says_what_followed(
+    client: TestClient, roots: dict[str, Path]
+) -> None:
+    series_id, (eleven, _), _ = seed(client, roots)
+    sign_in(client)
+
+    response = client.post(
+        "/api/files/rematch",
+        json={
+            "ledger_id": eleven,
+            "action": "import",
+            "season": 1,
+            "episode_start": 23,
+            "apply_to_series": True,
+        },
+        headers=BROWSER,
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["series"] == {
+        "season": 1,
+        "episode_offset": 12,
+        "moved": 1,
+        "replanned": 0,
+        "left": 0,
+    }
+    rows = client.get("/api/review").json()["rows"]
+    assert [(row["season"], row["episode_start"]) for row in rows] == [(1, 24)]
+    assert rows[0]["series"] == {
+        "id": series_id,
+        "name": rows[0]["series"]["name"],
+        "confirmed": False,
+        "season": 1,
+        "episode_offset": 12,
+    }
+    assert [reason["code"] for reason in rows[0]["reasons"]] == ["series_corrected"]
+
+
+def test_applying_to_a_series_needs_a_file_in_the_library(
+    client: TestClient, roots: dict[str, Path]
+) -> None:
+    seed(client, roots)
+    sign_in(client)
+
+    response = client.post(
+        "/api/files/rematch",
+        json={
+            "job_file_id": 1,
+            "action": "import",
+            "season": 1,
+            "episode_start": 1,
+            "apply_to_series": True,
+        },
+        headers=BROWSER,
+    )
+
+    assert response.status_code == 422
+
+
+def test_an_ordinary_user_cannot_confirm_a_series(
+    client: TestClient, roots: dict[str, Path]
+) -> None:
+    series_id, entries, _ = seed(client, roots)
+    sign_in(client, CREW)
+
+    response = client.post(
+        f"/api/review/series/{series_id}/confirm", json={"ledger_ids": entries}, headers=BROWSER
+    )
+
+    assert response.status_code == 403

@@ -42,6 +42,12 @@ class Plan(Base):
     engine_version: Mapped[str] = mapped_column(Text, default="")
     status: Mapped[PlanStatus] = mapped_column(enum_column(PlanStatus))
     summary_json: Mapped[dict[str, Any] | None] = mapped_column(JsonText, default=None)
+    #: 算這一份時交給解析器的 RSS Series 與它的季號、集號 offset（brief §15，票 13）。值是規劃時
+    #: 從 RSS Series 讀的，所以同一個 Series 前後兩份計劃可能不同——這裡說的是**這一份**用了什麼。
+    #: 不是 RSS 送的（或那個 Series 已經不在）三格都是 `None`。弱引用：刪 Series 不回頭改這一列。
+    rss_series_id: Mapped[int | None] = mapped_column(default=None)
+    season_hint: Mapped[int | None] = mapped_column(default=None)
+    episode_offset: Mapped[int | None] = mapped_column(default=None)
     #: **算出這一份的時間**。這一列永遠是「現在的計劃」，重跑會把它整份換掉，
     #: 所以時間也跟著換；上一份留在時間線上。
     created_at: Mapped[datetime] = mapped_column(UtcDateTime, default=utcnow)

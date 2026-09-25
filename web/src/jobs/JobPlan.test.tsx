@@ -39,6 +39,7 @@ function plan(overrides: Partial<Plan> = {}): Plan {
     media_kind: 'tv',
     summary: { files: 1, high: 1, medium: 0, low: 0, actions: { import: 1 }, review_reason: null },
     items: [item()],
+    series: null,
     ...overrides,
   }
 }
@@ -252,5 +253,43 @@ describe('匯入計劃', () => {
     expect(screen.getByText('自動入庫')).toBeInTheDocument()
     expect(screen.getByText(/1 個檔案要入庫/)).toBeInTheDocument()
     expect(screen.queryByText(/M1 還沒有審核佇列/)).not.toBeInTheDocument()
+  })
+})
+
+// 同一個 RSS Series 前後兩份計劃可能用了不同的值（M3 票 13）：這一份說它當時用了什麼。
+describe('RSS Series 的季號與偏移', () => {
+  it('說出這一份照的是哪一季、偏移多少', () => {
+    renderWithProviders(
+      <JobPlan plan={plan({ series: { id: 3, season: 1, episode_offset: 12 } })} />,
+    )
+
+    expect(screen.getByText('照 RSS Series：第 1 季、集號偏移 +12')).toBeInTheDocument()
+  })
+
+  it('Series 兩格都沒設時說由解析器判斷', () => {
+    renderWithProviders(
+      <JobPlan plan={plan({ series: { id: 3, season: null, episode_offset: null } })} />,
+    )
+
+    expect(screen.getByText('RSS Series 沒有設季號與集號偏移，由解析器判斷')).toBeInTheDocument()
+  })
+
+  it('只設了季號時說集號不偏移，負的偏移帶著減號', () => {
+    const { unmount } = renderWithProviders(
+      <JobPlan plan={plan({ series: { id: 3, season: 2, episode_offset: null } })} />,
+    )
+    expect(screen.getByText('照 RSS Series：第 2 季，集號不偏移')).toBeInTheDocument()
+    unmount()
+
+    renderWithProviders(
+      <JobPlan plan={plan({ series: { id: 3, season: 2, episode_offset: -12 } })} />,
+    )
+    expect(screen.getByText('照 RSS Series：第 2 季、集號偏移 -12')).toBeInTheDocument()
+  })
+
+  it('不是 RSS 送的那一份沒有這一行', () => {
+    renderWithProviders(<JobPlan plan={plan()} />)
+
+    expect(screen.queryByText(/RSS Series/)).not.toBeInTheDocument()
   })
 })

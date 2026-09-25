@@ -7,7 +7,7 @@ Series。所以刪 Feed 連它的 Item 一起刪（`CASCADE`），Series 與它�
 
 欄位只建用得到的（M3 票 08 起）：排除條件（`exclude_json`）與跳過理由（`skip_json`）在票 10；
 第一輪預覽（`primed_at`）與大小（`size`）在票 11；補舊集（`backfilled_at`）在票 12；第一批確認
-（`confirmed`，票 13）等到用它的那一票再加。
+（`confirmed`）在票 13。
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import ForeignKey, Index, Text, UniqueConstraint
+from sqlalchemy import ForeignKey, Index, Text, UniqueConstraint, false
 from sqlalchemy.orm import Mapped, mapped_column
 
 from berth.domain import FeedItemStatus, FeedKind
@@ -68,9 +68,13 @@ class RssSeries(Base):
     route_id: Mapped[int | None] = mapped_column(
         ForeignKey("routes.id", ondelete="SET NULL"), default=None
     )
-    #: 規劃時交給解析器的季號與集號偏移（brief §15、plan §4.3）。改正與重算在票 13。
+    #: 規劃時交給解析器的季號與集號偏移（brief §15、plan §4.3）。在審核裡改正一集並「套用到這個
+    #: RSS Series」時寫回（`services/series_review.correct_series`，票 13）。
     season: Mapped[int | None] = mapped_column(default=None)
     episode_offset: Mapped[int | None] = mapped_column(default=None)
+    #: 第一批確認過了沒（brief §15，票 13）。`False` 的期間它送的每一集入庫之後都等人看一眼（high 也
+    #: 掛 audit）；確認過之後 medium 入庫也不再進 audit 清單，改由播出日比對、片長驗證與回驗守著。
+    confirmed: Mapped[bool] = mapped_column(default=False, server_default=false())
     #: 誰綁的：`system`（票 09 的自動綁定）或使用者 id（`events.actor` 的形狀）。沒綁是空字串。
     bound_by: Mapped[str] = mapped_column(Text, default="")
     #: 第一次見到它時自動綁定查到的結果（票 09）：`domain.BindReason` 的 JSON。綁上了是依據，

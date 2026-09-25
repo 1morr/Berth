@@ -53,6 +53,14 @@ const FLOWS = [
     port: 8489,
     viewport: NARROW,
   },
+  { name: 'series-offset', spec: 'series-offset', scenario: 'rss-split-cour', port: 8484 },
+  {
+    name: 'series-offset-390',
+    spec: 'series-offset',
+    scenario: 'rss-split-cour',
+    port: 8485,
+    viewport: NARROW,
+  },
 ] as const satisfies readonly {
   name: string
   spec: string

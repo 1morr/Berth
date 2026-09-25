@@ -6,7 +6,7 @@
 from berth.parser.cjk import langs_in, normalize_cjk
 from berth.parser.classify import SAMPLE_RATIO, SHORT_FEATURE, classify, kind_by_extension
 from berth.parser.mapping import VIRTUAL_SEASON_GAP, map_episode
-from berth.parser.planner import episode_span, plan, promote, revise
+from berth.parser.planner import episode_span, plan, promote, revise, written_episode
 from berth.parser.release import merge_release, parse_release, tags_of
 from berth.parser.structure import StructureHints, structure_hints
 from berth.parser.subtitles import SubtitleMatch, match_subtitle
@@ -37,4 +37,5 @@ __all__ = [
     "revise",
     "structure_hints",
     "tags_of",
+    "written_episode",
 ]

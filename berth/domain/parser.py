@@ -287,6 +287,9 @@ class ReasonCode(StrEnum):
     # --- 人 ---------------------------------------------------------------------------
     #: 管理員在 Review Queue 改過這一列（M2 票 07）。
     SET_BY_USER = "set_by_user"
+    #: 管理員改正同一個 RSS Series 的另一集並套用到整個 Series，這一列照新的第 `{season}` 季、集號
+    #: offset `{offset}` 重算（M3 票 13）。`offset` 帶正負號（`+12`）。
+    SERIES_CORRECTED = "series_corrected"
 
 
 _C = ReasonCode
@@ -338,6 +341,7 @@ REASON_PARAMS: dict[ReasonCode, frozenset[str]] = {
     _C.SEASON_COMPLETE: frozenset({"season"}),
     _C.MEDIUM_HELD_BY_ROUTE: frozenset(),
     _C.SET_BY_USER: frozenset(),
+    _C.SERIES_CORRECTED: frozenset({"season", "offset"}),
 }
 
 #: 一條理由的參數：檔名、季集標記、日期、數字。**原文，不翻譯**——只有 `kind`、`action`、

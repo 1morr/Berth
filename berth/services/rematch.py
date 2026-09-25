@@ -39,6 +39,7 @@ from berth.domain import (
     Confidence,
     EventType,
     FileKind,
+    ItemReason,
     MediaKind,
     MediaSnapshot,
     PlanAction,
@@ -88,6 +89,12 @@ class Assignment:
     season: int | None = None
     episode_start: int | None = None
     episode_end: int | None = None
+    #: 為什麼是這個樣子，記在新的那一列與 Job 那一份 Plan 的那一列上。人親手改的是 `set_by_user`；
+    #: 改正同一個 RSS Series 的另一集之後跟著重算的是 `series_corrected`（M3 票 13）。
+    because: ItemReason = field(default_factory=lambda: why(Code.SET_BY_USER))
+    #: 搬過去之後仍等人看一眼：跟著 RSS Series 重算的那幾集還沒有人確認過（票 13）。人親手改的
+    #: 那一列是人決定的，旗標清掉。
+    audit: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -138,6 +145,9 @@ class Landing:
     #: Route 的目標路徑；不寫進媒體庫的修正（忽略）不需要它。
     root: str | None
     moves: list[Move] = field(default_factory=list)
+    #: 這一次修正的理由與旗標（`Assignment.because` / `audit`）；跟著走的字幕也帶同一組。
+    because: ItemReason = field(default_factory=lambda: why(Code.SET_BY_USER))
+    audit: bool = False
 
 
 async def rematch_file(
@@ -158,6 +168,7 @@ async def rematch_file(
             assert job_file_id is not None  # 二選一由呼叫端（API 的 model）保證
             landing, kind, before = await _unmatched(session, job_file_id)
         main = landing.moves[0]
+        landing.because, landing.audit = to.because, to.audit
         main.planned = _decided(main.planned, kind, to, landing)
         landing.moves.extend(await _sidecars(session, landing, main))
         plan = await land(session, landing, actor=actor)
@@ -184,6 +195,16 @@ async def rematch_file(
         target_path=full_path(landing.root, main.planned),
         unmanaged=tuple(unmanaged),
     )
+
+
+async def destination(session: AsyncSession, ledger_id: int, to: Assignment) -> str:
+    """`rematch_file` 會把這一列帳本放到哪裡（容器裡的完整路徑），**不動任何東西**。
+
+    拒絕與 `rematch_file` 的前半段相同（處置、季集、作品、Route）。套用到 RSS Series 時先問它：
+    人要的那一格上是誰，決定要等它搬走還是當場拒絕（M3 票 13）。
+    """
+    landing, kind, _ = await _linked(session, ledger_id)
+    return full_path(landing.root, _decided(landing.moves[0].planned, kind, to, landing))
 
 
 # --- 主角是誰 -------------------------------------------------------------
@@ -412,6 +433,7 @@ def _decided(planned: PlannedFile, kind: FileKind, to: Assignment, landing: Land
             "season": to.season,
             "episode_start": to.episode_start,
             "episode_end": end,
+            "reasons": (to.because,),
         }
     )
     (landed,) = revise((decided,), media)
@@ -436,7 +458,7 @@ async def _sidecars(session: AsyncSession, landing: Landing, main: Move) -> list
     new_stem = str(PurePosixPath(main.planned.target_path).with_suffix("")) if following else ""
     for entry in await sidecars_of(session, old):
         tail = entry.target_path[len(stem) :]
-        reasons = (why(Code.SUBTITLE_FOLLOWS, video=main.source_rel), why(Code.SET_BY_USER))
+        reasons = (why(Code.SUBTITLE_FOLLOWS, video=main.source_rel), landing.because)
         planned = PlannedFile(
             rel_path=entry.source_rel_path,
             kind=FileKind.SUBTITLE,
@@ -594,6 +616,7 @@ async def _record(session: AsyncSession, landing: Landing, *, actor: str, now: d
             target_path=planned.target_path,
             confidence=planned.confidence,
             reasons_json=dump_reasons(planned.reasons),
+            audit=landing.audit and written,
             applied_at=now if written else None,
             error=move.error,
         )
@@ -620,7 +643,7 @@ async def _record(session: AsyncSession, landing: Landing, *, actor: str, now: d
         elif move.old is not None:
             await session.delete(move.old)
         if move.mirror is not None:
-            _mirror(move.mirror, item)
+            _mirror(move.mirror, item, landing.because)
             mirrored.add(move.mirror.plan_id)
         if move.displaced is not None:
             _displace(move.displaced)
@@ -631,8 +654,9 @@ async def _record(session: AsyncSession, landing: Landing, *, actor: str, now: d
     return plan
 
 
-def _mirror(row: PlanItem, landed: PlanItem) -> None:
-    """Job 那一份 Plan 的那一列改成現況。人說了算，所以理由多一條 `set_by_user`、清掉錯誤與旗標。"""
+def _mirror(row: PlanItem, landed: PlanItem, marked: ItemReason) -> None:
+    """Job 那一份 Plan 的那一列改成現況。人說了算，所以理由多一條 `marked`（`set_by_user`，或跟著
+    RSS Series 重算的 `series_corrected`）、清掉錯誤；旗標照新的那一列。"""
     row.action = landed.action
     row.season = landed.season
     row.episode_start = landed.episode_start
@@ -641,9 +665,8 @@ def _mirror(row: PlanItem, landed: PlanItem) -> None:
     row.confidence = landed.confidence
     row.applied_at = landed.applied_at
     row.error = ""
-    row.audit = False
+    row.audit = landed.audit
     row.duplicate_of = None
-    marked = why(Code.SET_BY_USER)
     reasons = reasons_of(row)
     row.reasons_json = dump_reasons(reasons if marked in reasons else (*reasons, marked))
 

@@ -845,12 +845,14 @@ REVIEW_PRIORITY: dict[ReviewKind, int] = {
 class AuditReason(StrEnum):
     """`audit` 那一類的理由（`GET /review` 每一列的 `reason.code`）。
 
-    **只有一種，仍然是封閉集合**（同 `JellyfinRequest`）：理由是給畫面挑句子的 code，不是後端
+    **封閉集合**（同 `JellyfinRequest`）：理由是給畫面挑句子的 code，不是後端
     拼好的一句話（M2 票 06）。解析器那幾句英文的 `reasons` 是原文，放在列上的 `notes`。
     """
 
     #: 信心是 medium，而這條 Route 允許 medium 自動入庫（brief §6.5）。
     MEDIUM_AUTO_IMPORTED = "medium_auto_imported"
+    #: RSS Series 的第一批：信心不論高低都等人看一眼季號與集數（brief §15，M3 票 13）。
+    FIRST_BATCH = "first_batch"
 
 
 class UnmatchedReason(StrEnum):
@@ -1147,6 +1149,11 @@ class RematchRefusal(StrEnum):
     LINK_FAILED = "link_failed"
     #: 舊的那一條鏈接拆不掉。`detail` 是系統原文；新的那一條已經收回，帳本沒改。
     UNLINK_FAILED = "unlink_failed"
+    #: 要「套用到這個 RSS Series」，而這個檔案不是 RSS Series 送的（或那個 Series 不在了）。
+    #: M3 票 13。
+    NOT_FROM_SERIES = "not_from_series"
+    #: 要套用到 RSS Series，而檔名讀不出集號：沒有原本的集號就算不出 offset。`detail` 是檔名。
+    NO_EPISODE_NUMBER = "no_episode_number"
 
 
 class ReviewRefusal(StrEnum):

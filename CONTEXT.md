@@ -206,7 +206,7 @@ Plan Item 的三級信心：high、medium、low。high 與 medium 自動入庫�
 _Avoid_: score, probability
 
 **Audit**:
-medium 信心自動入庫後掛的旗標（`plan_items.audit` 與 `ledger.audit` 各一份，importer 抄過去），在 Review Queue 顯示為「已入庫待確認」。**確認**清掉兩處旗標並記 event；**撤銷**刪掉硬鏈接與那一列帳本，Job 回 review（`review_reason = audit_undone`），那一列 Plan Item 回到沒有提案——撤銷說的是「這一集不對」，原樣再核准不行。
+medium 信心自動入庫後掛的旗標（`plan_items.audit` 與 `ledger.audit` 各一份，importer 抄過去），在 Review Queue 顯示為「已入庫待確認」。RSS Series 送的另有一條：**第一批**確認之前 high 也掛，確認之後 medium 也不掛（M3 票 13）。**確認**清掉兩處旗標並記 event；**撤銷**刪掉硬鏈接與那一列帳本，Job 回 review（`review_reason = audit_undone`），那一列 Plan Item 回到沒有提案——撤銷說的是「這一集不對」，原樣再核准不行。
 _Avoid_: pending, provisional
 
 **Folder Name**（資料夾名）:
@@ -304,6 +304,10 @@ _Avoid_: subscription（Subscription 是 UI 上「訂閱一部作品」的動作
 **RSS Series**:
 一部作品 × 一個來源（Mikan 的番組 + 字幕組，或標題骨幹 + 字幕組），由 Feed Item 自動長出，綁到 Media 與 Route，帶季號、offset、排除條件。還沒綁到 Media 的是**待綁定**（unbound）：它的 Feed Item 留著不送，綁定那一刻凍結資料夾名並送出。長出來的那一輪先**自動綁定**（`bound_by = system`）：名字相等、開播日期對得上、只有一部、Route 只有一條才綁；沒綁上的記下理由與**候選**（認得出、留給人一鍵選的作品）。不屬於任何一個 Feed。2026-09-24 取代 Rule：字幕組是使用者在來源端挑的，Berth 不再挑一次。
 _Avoid_: rule, subscription, follow（`follows` 是字幕跟著影片的那個函式）
+
+**第一批**（first batch）:
+一個 RSS Series 在 `confirmed = false` 期間送進來的集數：入庫之後不論信心都掛 Audit，在 Review Queue 以 RSS Series 分組，一組一顆「全部確認」——按了之後 Series `confirmed = true`，之後它的 medium 入庫不再進 audit 清單。第一批裡改正一集時可以**套用到這個 RSS Series**：由那一集算出季號與 offset 寫回 Series，還沒確認的集數跟著重算（已入庫的走 rematch 搬過去、仍留在第一批；停在 review 的重新規劃）。
+_Avoid_: initial batch, pilot
 
 **Feed Item**:
 Feed 中的一筆項目及其結果：unbound（待綁定）/ matched（綁好還沒送成）/ downloaded（送出去了）/ excluded（**排除條件**擋下）/ duplicate（去重擋下：同一個 torrent 已經送過，或媒體庫已有同一個版本）/ passed（新 Feed 的**第一輪預覽**選了「只追之後的」時已經在 feed 裡的；或綁定時取消**補舊集**、那一刻之前發佈的舊集）。擋下的都不是錯誤，帶著「為什麼沒下載」的理由。

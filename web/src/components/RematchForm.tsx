@@ -5,8 +5,9 @@ import { useTranslation } from 'react-i18next'
 import { rematch, rematchRefusalText, type RematchBody } from '../api/files'
 import { reviewQueryOptions } from '../api/review'
 import type { PlanAction } from '../api/plans'
+import { seriesCorrectedText } from '../rss/seriesValues'
 import { ConfirmPanel } from './ConfirmPanel'
-import { CONFIRM_ACTIONS, Field, GhostButton, Notice, PrimaryButton } from './controls'
+import { Checkbox, CONFIRM_ACTIONS, Field, GhostButton, Notice, PrimaryButton } from './controls'
 import { useInPlaceConfirm } from './useInPlaceConfirm'
 
 /** 修正得成的那三種（`domain.REMATCH_ACTIONS`）：指派到某一集、標記為特典、忽略。 */
@@ -23,6 +24,10 @@ const CHOICES: readonly RematchAction[] = ['import', 'extra', 'skip']
  *
  * **已入庫的檔案先就地確認**（PRODUCT 原則 2）：改指派會拆掉媒體庫裡現在那一條，標記特典與忽略
  * 會連旁邊的字幕一起拿掉——按之前說清楚。對不到的檔案不在媒體庫裡，沒有東西會被拿掉，直接套用。
+ *
+ * **RSS Series 送的檔案多一格「套用到這個 RSS Series」**（`series`，M3 票 13），預設勾選：一集錯多半整批
+ * 一起錯。勾著時同一支多帶 `apply_to_series`，後端寫回季號與偏移、重算其餘還沒確認的集數；按之前的那一句
+ * 後果改說搬的不只這一集，成功之後說出 Series 現在的值與其餘的集數怎麼了（`seriesCorrectedText`）。
  */
 export function RematchForm({
   subject,
@@ -31,6 +36,7 @@ export function RematchForm({
   linked,
   initial,
   autoFocus = false,
+  series = false,
   onCancel,
   onDone,
 }: {
@@ -47,8 +53,11 @@ export function RematchForm({
    * 攤在列上的那一種（`/review` 的對不到）不要：進頁就把焦點搶走。
    */
   autoFocus?: boolean
+  /** 這個檔案是 RSS Series 送的（只對帶 `ledger_id` 的有意義）：多一格「套用到這個 RSS Series」。 */
+  series?: boolean
   onCancel?: () => void
-  onDone: (said: string) => void
+  /** `shown`：套用到 Series 時一次動了好幾列，結果要看得見，不只念出來（同 `review/useConfirmAudits` 的 `Said`）。 */
+  onDone: (said: string, shown?: boolean) => void
 }) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
@@ -60,8 +69,12 @@ export function RematchForm({
   const [season, setSeason] = useState(numberText(initial?.season ?? null))
   const [start, setStart] = useState(numberText(initial?.episode_start ?? null))
   const [end, setEnd] = useState(numberText(initial?.episode_end ?? null))
+  const [toSeries, setToSeries] = useState(true)
   const { asked, open, close, trigger, panel, onKeyDown } = useInPlaceConfirm()
   const numbered = action === 'import' && mediaKind === 'tv'
+  // 套用到 Series 要的是季集：只有指派到某一集才有（後端對其餘兩種回 `action_not_allowed`）。
+  const offersSeries = series && numbered
+  const applying = offersSeries && toSeries
 
   const apply = useMutation({
     mutationFn: () =>
@@ -71,13 +84,15 @@ export function RematchForm({
         season: numbered ? numberOf(season) : null,
         episode_start: numbered ? numberOf(start) : null,
         episode_end: numbered ? numberOf(end) : null,
+        ...(applying ? { apply_to_series: true } : {}),
       }),
-    onSuccess: () => {
+    onSuccess: (result) => {
       // 佇列那一列消失、Media 詳情的檔案清單與 Unmatched 區換了、下載列表的計數也變了。
       void queryClient.invalidateQueries({ queryKey: reviewQueryOptions().queryKey })
       void queryClient.invalidateQueries({ queryKey: ['media'] })
       void queryClient.invalidateQueries({ queryKey: ['jobs'] })
-      onDone(t('rematch.done'))
+      if (result.series) onDone(seriesCorrectedText(t, result.series), true)
+      else onDone(t('rematch.done'))
     },
   })
   const refused = apply.isError ? rematchRefusalText(t, apply.error) : null
@@ -149,6 +164,15 @@ export function RematchForm({
         )}
       </div>
 
+      {offersSeries && (
+        <Checkbox
+          label={t('rematch.applyToSeries')}
+          hint={t('rematch.applyToSeriesHint')}
+          checked={toSeries}
+          onChange={setToSeries}
+        />
+      )}
+
       {refused !== null && (
         <div id={refusalId}>
           <Notice signal="blocked" label={t('common.failed')}>
@@ -160,7 +184,7 @@ export function RematchForm({
       {asked ? (
         <ConfirmPanel panelRef={panel} onKeyDown={onKeyDown} labelledBy={warningId}>
           <p id={warningId} className="max-w-prose text-xs text-ink">
-            {t(CONSEQUENCE[action])}
+            {t(applying ? 'rematch.confirmMoveSeries' : CONSEQUENCE[action])}
           </p>
           <div className={CONFIRM_ACTIONS}>
             <PrimaryButton

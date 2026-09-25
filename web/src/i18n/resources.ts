@@ -1290,6 +1290,8 @@ const zhHant = {
       label: '待確認',
       reason: {
         medium_auto_imported: '信心 medium，已自動入庫',
+        // RSS Series 還沒確認：信心 high 的也在這裡（M3 票 13），要看的是季號與集數。
+        first_batch: 'RSS Series 的第一批：看一眼季號與集數對不對',
       },
       // 收起時說出主要原因（M3 票 05，`review/leadReason.ts`）：使用者不必展開就知道要看什麼。
       because: '信心 medium：{{lead}}',
@@ -1314,12 +1316,25 @@ const zhHant = {
         mixed_one: '{{count}} 個檔案信心 medium，原因不只一種，展開看每一個',
         mixed_other: '{{count}} 個檔案信心 medium，原因不只一種，展開看每一個',
       },
+      // 同一個 RSS Series 的那一組（M3 票 13）。季號與偏移是 Series 現在的值（`rss.values`）。
+      series: {
+        firstBatch_one: 'RSS Series 的第一批：{{count}} 個檔案等你看一眼季號與集數對不對',
+        firstBatch_other: 'RSS Series 的第一批：{{count}} 個檔案等你看一眼季號與集數對不對',
+        name: 'RSS Series',
+        values: '季號與偏移',
+        unset: '沒有設，由解析器判斷',
+      },
       confirmAll: '全部確認',
       // 整段的「全部確認」就地確認並說出件數；範圍是畫面上列出的那些。
       confirmSection_one:
         '這一段列出的 {{count}} 個已入庫檔案都會記成「對的」，檔案不動。按下之後才進來的不算在內。',
       confirmSection_other:
         '這一段列出的 {{count}} 個已入庫檔案都會記成「對的」，檔案不動。按下之後才進來的不算在內。',
+      // 範圍裡有還沒確認的 RSS Series 時多說一句：它們的第一批一起確認，之後的 medium 不再進來。
+      confirmSectionSeries_one:
+        '其中 {{count}} 個 RSS Series 的第一批一起確認，之後它的 medium 入庫不再進這裡。',
+      confirmSectionSeries_other:
+        '其中 {{count}} 個 RSS Series 的第一批一起確認，之後它們的 medium 入庫不再進這裡。',
       confirmSectionAction_one: '確認這 {{count}} 個',
       confirmSectionAction_other: '確認這 {{count}} 個',
       confirmedMany_one: '已確認 {{count}} 個，從佇列上收掉了。',
@@ -1335,6 +1350,8 @@ const zhHant = {
         confirm: '確認',
         undo: '撤銷',
       },
+      // 改這一集的季集（`RematchForm`，M3 票 13）：只有正片有。
+      correct: '改季集',
       confirmUndo:
         '這會從媒體庫拿掉這一集，Jellyfin 下次掃描就看不到它；complete 裡的檔案不動，這一筆下載回到待審核。',
       confirmUndoAction: '確定撤銷',
@@ -1424,8 +1441,24 @@ const zhHant = {
     confirmExtra:
       '它會搬到特典資料夾；特典旁邊不掛字幕，旁邊的字幕一起拿掉。complete 裡的檔案不動。',
     confirmDrop: '這會從媒體庫拿掉它，旁邊的字幕一起拿掉。complete 裡的檔案不動。',
+    // 套用到 RSS Series（M3 票 13）：搬的不只這一集。
+    confirmMoveSeries:
+      '媒體庫裡現在這一條會被拿掉、換到新的位置；這個 RSS Series 還沒確認的其他集數也照新的季號與偏移搬過去。complete 裡的檔案不動。',
     confirmAction: '確定修正',
     done: '已修正。',
+    applyToSeries: '套用到這個 RSS Series',
+    applyToSeriesHint: '寫回季號與集號偏移，重算這個 Series 還沒確認的集數。',
+    // 套用之後說出 Series 現在的值，與其餘的集數怎麼了；是 0 的那幾句不說。
+    series: {
+      set: '已修正，這個 RSS Series 改成{{values}}。',
+      moved_one: '其餘 {{count}} 集跟著搬過去了。',
+      moved_other: '其餘 {{count}} 集跟著搬過去了。',
+      replanned_one: '{{count}} 筆等審核的下載照新的值重新規劃了。',
+      replanned_other: '{{count}} 筆等審核的下載照新的值重新規劃了。',
+      left_one: '{{count}} 集搬不過去，留在原處等你看。',
+      left_other: '{{count}} 集搬不過去，留在原處等你看。',
+      nothingElse: '沒有其他還沒確認的集數要跟著改。',
+    },
     failed: '沒有成功。Berth 自己的 API 沒有回應，先確認它還活著。',
     // 十四種擋下來的理由，各一個下一步。`detail`（檔名、路徑或系統原文）接在後面。
     refusal: {
@@ -1443,6 +1476,10 @@ const zhHant = {
       target_taken: '目標位置上已經有別的檔案，Berth 不覆寫它：',
       link_failed: '鏈接建不起來，所以什麼都沒改：',
       unlink_failed: '媒體庫裡舊的那一條拿不掉，所以什麼都沒改：',
+      not_from_series:
+        '這個檔案不是 RSS Series 送的，沒有 Series 可以套用。取消勾選「套用到這個 RSS Series」再試一次：',
+      no_episode_number:
+        '檔名讀不出集號，算不出集號偏移。取消勾選「套用到這個 RSS Series」，只改這一集：',
     },
   },
   reconcile: {
@@ -1680,6 +1717,9 @@ const zhHant = {
       files_other: '{{count}} 個檔案',
       levels: '信心 高 {{high}} / 中 {{medium}} / 低 {{low}}',
       estimate: '這是下載中的預估，沒有讀過檔案本身；下載完成之後會重算一份。',
+      // 算這一份時用的 RSS Series 值（M3 票 13）：之後改了 Series，這一份仍說它當時用了什麼。
+      series: '照 RSS Series：{{values}}',
+      seriesUnset: 'RSS Series 沒有設季號與集號偏移，由解析器判斷',
       status: {
         preplan: '預估',
         auto: '自動入庫',
@@ -1770,6 +1810,8 @@ const zhHant = {
         medium_held_by_route: '這條 Route 不讓中信心的檔案自己入庫',
         set_by_user: '管理員改過這一列',
         same_version: '媒體庫已經有 {{known}}：同一集、同一組 Tags',
+        series_corrected:
+          '同一個 RSS Series 改正過另一集，照第 {{season}} 季、集號偏移 {{offset}} 重算',
       },
       // 理由裡的 `strategy`（`domain.MappingStrategy`）：季集是靠什麼讀出來的。
       strategy: {
@@ -2141,6 +2183,12 @@ const zhHant = {
   rss: {
     title: 'RSS',
     off: '讀不到 RSS 的清單。Berth 自己的 API 沒有回應，先確認它還活著。',
+    // 一個 RSS Series 的季號與集號偏移（`rss/seriesValues.ts`）：審核的組、計劃、改正之後的那一句共用。
+    values: {
+      both: '第 {{season}} 季、集號偏移 {{offset}}',
+      season: '第 {{season}} 季，集號不偏移',
+      offset: '集號偏移 {{offset}}，季號由解析器判斷',
+    },
     failed: '沒有做成。重新整理這一頁再試一次；還是不行的話看健康頁。',
     kind: { mikan: 'MIKAN', nyaa: 'NYAA', acgrip: 'ACG.RIP' },
     // `RssRefusal` 十種，各一句。原文另外印在下面（`detail`）。
@@ -3645,6 +3693,7 @@ const en: Translations<typeof zhHant> = {
       label: 'UNCONFIRMED',
       reason: {
         medium_auto_imported: 'Medium confidence, imported automatically',
+        first_batch: 'First batch of an RSS Series: check the season and episode numbers',
       },
       because: 'Medium confidence: {{lead}}',
       lead: {
@@ -3669,11 +3718,24 @@ const en: Translations<typeof zhHant> = {
         mixed_other:
           '{{count}} files at medium confidence for more than one reason — expand to see each',
       },
+      series: {
+        firstBatch_one:
+          'First batch of an RSS Series: {{count}} file waiting for a look at its season and episode',
+        firstBatch_other:
+          'First batch of an RSS Series: {{count}} files waiting for a look at their seasons and episodes',
+        name: 'RSS Series',
+        values: 'Season and offset',
+        unset: 'Not set; the parser decides',
+      },
       confirmAll: 'Confirm all',
       confirmSection_one:
         'The {{count}} imported file listed in this section is marked as right; no file is touched. Anything that arrives after you press this is not included.',
       confirmSection_other:
         'The {{count}} imported files listed in this section are marked as right; no file is touched. Anything that arrives after you press this is not included.',
+      confirmSectionSeries_one:
+        'This also confirms the first batch of {{count}} RSS Series; its later medium imports no longer come here.',
+      confirmSectionSeries_other:
+        'This also confirms the first batch of {{count}} RSS Series; their later medium imports no longer come here.',
       confirmSectionAction_one: 'Confirm {{count}} file',
       confirmSectionAction_other: 'Confirm {{count}} files',
       confirmedMany_one: 'Confirmed {{count}} file; it is off the queue.',
@@ -3689,6 +3751,7 @@ const en: Translations<typeof zhHant> = {
         confirm: 'Confirm',
         undo: 'Undo',
       },
+      correct: 'Fix episode',
       confirmUndo:
         'This takes the episode out of the library, so Jellyfin drops it on its next scan. The files under complete stay; the download goes back to review.',
       confirmUndoAction: 'Undo the import',
@@ -3773,8 +3836,24 @@ const en: Translations<typeof zhHant> = {
       'It moves to the extras folder; extras carry no subtitles, so its subtitles come out. Nothing under complete is touched.',
     confirmDrop:
       'This takes it out of the library along with its subtitles. Nothing under complete is touched.',
+    confirmMoveSeries:
+      'The file leaves its current place in the library and moves to the new one, and the other unconfirmed episodes of this RSS Series move by the new season and offset. Nothing under complete is touched.',
     confirmAction: 'Apply the fix',
     done: 'Fixed.',
+    applyToSeries: 'Apply to this RSS Series',
+    applyToSeriesHint:
+      'Writes the season and episode offset back and works out the Series’ unconfirmed episodes again.',
+    series: {
+      set: 'Fixed; this RSS Series now uses {{values}}.',
+      moved_one: 'One other episode followed.',
+      moved_other: 'The other {{count}} episodes followed.',
+      replanned_one: '{{count}} download waiting for review was planned again with the new values.',
+      replanned_other:
+        '{{count}} downloads waiting for review were planned again with the new values.',
+      left_one: '{{count}} episode could not be moved and stays where it is for you to check.',
+      left_other: '{{count}} episodes could not be moved and stay where they are for you to check.',
+      nothingElse: 'No other unconfirmed episodes needed to follow.',
+    },
     failed:
       'That did not go through. Berth’s own API did not answer — check that it is still running.',
     refusal: {
@@ -3792,6 +3871,10 @@ const en: Translations<typeof zhHant> = {
       target_taken: 'Another file already sits at the target, and Berth does not overwrite it:',
       link_failed: 'The link could not be made, so nothing changed:',
       unlink_failed: 'The old link in the library could not be removed, so nothing changed:',
+      not_from_series:
+        'This file was not sent by an RSS Series, so there is no Series to apply to. Untick “Apply to this RSS Series” and try again:',
+      no_episode_number:
+        'The file name carries no episode number, so no offset can be worked out. Untick “Apply to this RSS Series” to fix only this episode:',
     },
   },
   reconcile: {
@@ -4008,6 +4091,8 @@ const en: Translations<typeof zhHant> = {
       levels: 'Confidence high {{high}} / medium {{medium}} / low {{low}}',
       estimate:
         'An estimate made while the download runs — nothing has read the files themselves yet. Berth works it out again once the download finishes.',
+      series: 'Per the RSS Series: {{values}}',
+      seriesUnset: 'The RSS Series sets no season or episode offset; the parser decided',
       status: {
         preplan: 'Estimate',
         auto: 'Importing by itself',
@@ -4099,6 +4184,8 @@ const en: Translations<typeof zhHant> = {
         medium_held_by_route: 'This library route does not import medium confidence by itself',
         set_by_user: 'An administrator set this row',
         same_version: 'The library already has {{known}}: the same episode with the same tags',
+        series_corrected:
+          'Worked out again after another episode of this RSS Series was fixed: season {{season}}, episode offset {{offset}}',
       },
       strategy: {
         explicit: 'the name itself',
@@ -4481,6 +4568,11 @@ const en: Translations<typeof zhHant> = {
   rss: {
     title: 'RSS',
     off: "Can't read the RSS lists. Berth's own API isn't answering — check that it's still running.",
+    values: {
+      both: 'season {{season}}, episode offset {{offset}}',
+      season: 'season {{season}}, no episode offset',
+      offset: 'episode offset {{offset}}, season left to the parser',
+    },
     failed:
       "That didn't go through. Reload the page and try again; if it still fails, look at the health page.",
     kind: { mikan: 'MIKAN', nyaa: 'NYAA', acgrip: 'ACG.RIP' },

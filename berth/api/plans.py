@@ -135,6 +135,17 @@ class PlanItemOut(BaseModel):
     error: str
 
 
+class PlanSeriesOut(BaseModel):
+    """算這一份時用的 RSS Series 與它的季號、offset（M3 票 13）。兩格都是 `null` 是 Series 沒設，
+    解析器自己判斷。值是規劃那一刻讀的：之後改正並套用到 Series，這一份仍說它當時用了什麼。"""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    season: int | None
+    episode_offset: int | None
+
+
 class PlanOut(BaseModel):
     """一份 Plan。"""
 
@@ -153,6 +164,8 @@ class PlanOut(BaseModel):
     media_kind: MediaKind | None
     summary: PlanSummary
     items: list[PlanItemOut]
+    #: 不是 RSS 送的是 `null`。
+    series: PlanSeriesOut | None
 
 
 class ItemEditIn(BaseModel):

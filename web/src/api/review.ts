@@ -14,6 +14,9 @@ export type PlanReviewRow = Schemas['PlanRowOut']
 
 export type AuditReviewRow = Schemas['AuditRowOut']
 
+/** 送出那一列的 RSS Series（M3 票 13）：佇列以它分組；`confirmed = false` 時那一列是它的第一批。 */
+export type AuditSeries = Schemas['AuditSeriesOut']
+
 /** 對不到、留在 complete 原位的檔案。三個動作打 `api/files.ts` 的 `rematch`（帶 `job_file_id`）。 */
 export type UnmatchedReviewRow = Schemas['UnmatchedRowOut']
 
@@ -88,6 +91,14 @@ export async function confirmAudit(ledgerId: number) {
  */
 export async function confirmAudits(ledgerIds: readonly number[]) {
   return apiPost<AuditsConfirmed>('/review/audit/confirm', { ledger_ids: ledgerIds })
+}
+
+/**
+ * 一個 RSS Series 那一組的「全部確認」（M3 票 13）：送來的那幾列逐列確認（跳過規則同上），再把 Series
+ * 標成確認過——之後它的 medium 入庫不再進 audit 清單。
+ */
+export async function confirmSeries(seriesId: number, ledgerIds: readonly number[]) {
+  return apiPost<AuditsConfirmed>(`/review/series/${seriesId}/confirm`, { ledger_ids: ledgerIds })
 }
 
 /** 「它是錯的」：拆掉那個硬鏈接、刪掉帳本那一列，那一筆下載回到待審核。 */

@@ -17,7 +17,7 @@ from berth.domain import (
     SeasonSnapshot,
     why,
 )
-from berth.parser import plan, promote, revise
+from berth.parser import plan, promote, revise, written_episode
 
 
 def overlord() -> ParseContext:
@@ -399,3 +399,24 @@ class TestPromoting:
 
         assert disc.action is PlanAction.REVIEW
         assert promote((disc,), context.media) == (disc,)
+
+
+class TestWrittenEpisode:
+    """改正一集時 offset 的基準（M3 票 13）：檔名寫的集號，Series 的 offset 加上去之前。"""
+
+    def test_it_is_the_number_the_file_says(self) -> None:
+        assert written_episode(TORRENT, "Overlord II/[DBD-Raws][Overlord II][05][1080P].mkv") == 5
+
+    def test_it_reads_the_same_number_planning_would_shift(self) -> None:
+        """與規劃同一個讀法：offset 加在這個數字上，重算時才落在人說的那一集。"""
+        name = "[LoliHouse] Kimi ga Shinu made Koi wo Shitai - 11 [1080p].mkv"
+        written = written_episode("", name)
+        assert written == 11
+        shifted = ParseContext(media=overlord().media, season_hint=2, episode_offset=13 - written)
+
+        (item,) = plan("", entries(name), shifted)
+
+        assert (item.season, item.episode_start) == (2, 13)
+
+    def test_a_file_without_a_number_has_none(self) -> None:
+        assert written_episode("", "Overlord Movie [1080P].mkv") is None

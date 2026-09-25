@@ -193,6 +193,36 @@ async def replan_job(
     return view
 
 
+async def proposal(session: AsyncSession, job: Job) -> dict[str, PlannedFile]:
+    """這一筆**現在**會被規劃成什麼（`job_files.rel_path` → 那一列）。不寫、不動狀態。
+
+    改正一集並套用到 RSS Series 之後，已入庫的那幾集要搬到哪一集由它回答（票 13）：與當初那一份
+    只差 Series 的季號與 offset，所以快照用存下來的那一份、片長用規劃時量過的
+    （`job_files.mediainfo_json`），不重抓也不重量。搬家本身走 rematch，這一支只回答「該在哪」。
+    """
+    route = await session.get(Route, job.route_id) if job.route_id is not None else None
+    contents = await _contents(session, job)
+    entries = tuple(
+        entry.model_copy(update={"duration_s": _measured(contents.find(entry.rel_path))})
+        for entry in contents.entries()
+    )
+    items = _apply_policy(
+        decide(
+            job.name,
+            entries,
+            parse_context(route, await _stored(session, job), await series_of(session, job)),
+        ),
+        route,
+    )
+    return {f"{contents.root}{item.rel_path}": item for item in items}
+
+
+def _measured(row: JobFile | None) -> int | None:
+    """規劃那一輪 mediainfo 量到的片長（`_measure` 寫進去的那一份）。沒量過是 `None`。"""
+    found = (row.mediainfo_json or {}).get("duration_s") if row is not None else None
+    return found if isinstance(found, int) else None
+
+
 async def plan_id_of(session: AsyncSession, job_hash: str) -> int | None:
     """這個 Job 現在那一份計劃的 id。沒算過就是 `None`（下載列表照它決定畫不畫那一區）。"""
     found: int | None = await session.scalar(select(Plan.id).where(Plan.job_hash == job_hash))
@@ -252,17 +282,13 @@ async def _plan(
     snapshot = await _snapshot(session, factory, job)
     contents = await _contents(session, job)
     entries = await _measure(session, job, contents)
+    series = await series_of(session, job)
     items, duplicates = await _against_ledger(
         session,
         job,
         contents,
         route,
-        _apply_policy(
-            decide(
-                job.name, entries, parse_context(route, snapshot, await _series_of(session, job))
-            ),
-            route,
-        ),
+        _apply_policy(decide(job.name, entries, parse_context(route, snapshot, series)), route),
     )
     status, reason = _verdict(items, route, duplicates)
     row = await _store(
@@ -273,6 +299,7 @@ async def _plan(
         status=status,
         reason=reason,
         now=now,
+        series=series,
         duplicates=duplicates,
     )
 
@@ -316,17 +343,14 @@ async def _preplan(session: AsyncSession, hub: EventHub, job_hash: str, now: dat
     entries = contents.entries()
     if not entries:
         return 0
+    series = await series_of(session, job)
     items, duplicates = await _against_ledger(
         session,
         job,
         contents,
         route,
         _apply_policy(
-            decide(
-                job.name,
-                entries,
-                parse_context(route, await _stored(session, job), await _series_of(session, job)),
-            ),
+            decide(job.name, entries, parse_context(route, await _stored(session, job), series)),
             route,
         ),
     )
@@ -339,6 +363,7 @@ async def _preplan(session: AsyncSession, hub: EventHub, job_hash: str, now: dat
         status=PlanStatus.PREPLAN,
         reason=reason,
         now=now,
+        series=series,
         duplicates=duplicates,
     )
     await record_event(
@@ -432,10 +457,10 @@ def parse_context(
     )
 
 
-async def _series_of(session: AsyncSession, job: Job) -> RssSeries | None:
+async def series_of(session: AsyncSession, job: Job) -> RssSeries | None:
     """送出這一筆的 RSS Series（`trigger_ref` 是它的 id）。
 
-    不是 RSS 送的、或那一個不在了是 `None`。
+    不是 RSS 送的、或那一個不在了是 `None`。審核佇列與套用到 RSS Series（票 13）也認同一個。
     """
     if job.trigger is not JobTrigger.RSS or not job.trigger_ref.isdigit():
         return None
@@ -743,12 +768,16 @@ async def _store(
     status: PlanStatus,
     reason: ReviewReason | None,
     now: datetime,
+    series: RssSeries | None = None,
     duplicates: dict[str, int] | None = None,
 ) -> Plan:
     """把這一輪的決定寫下來，**整份換掉**上一輪的（`models/plan.py`）。
 
     順手把分類寫回 `job_files`：那一欄與 `plan_items.action` 是同一次計算的兩半，
     而分類是 mediainfo 修正過的那一份（brief §6.2），第一次建列時還不知道。
+
+    RSS Series 的季號與 offset 是規劃時讀的（brief §15），所以**這一份用了哪個值**跟著它存下來：
+    之後改正並套用到 Series 時，前後兩份計劃說得出各自用了什麼（票 13）。
     """
     row = await session.scalar(select(Plan).where(Plan.job_hash == job.hash))
     if row is None:
@@ -761,6 +790,9 @@ async def _store(
     row.engine = PlanEngine.RULES
     row.engine_version = VERSION
     row.summary_json = summarise(items, reason).model_dump(mode="json")
+    row.rss_series_id = series.id if series is not None else None
+    row.season_hint = series.season if series is not None else None
+    row.episode_offset = series.episode_offset if series is not None else None
     # 這一列永遠是「現在的計劃」，所以它的時間就是**算出它**的時間；上一份留在時間線上。
     row.created_at = now
 
@@ -782,7 +814,7 @@ async def _store(
                 target_path=item.target_path,
                 confidence=item.confidence,
                 reasons_json=dump_reasons(item.reasons),
-                audit=_audit(item, status),
+                audit=_audit(item, status, series),
                 duplicate_of=(duplicates or {}).get(item.rel_path),
             )
         )
@@ -790,14 +822,18 @@ async def _store(
     return row
 
 
-def _audit(item: PlannedFile, status: PlanStatus) -> bool:
+def _audit(item: PlannedFile, status: PlanStatus, series: RssSeries | None) -> bool:
     """medium **而且真的自動入庫了**才掛 audit（brief §6.5、CONTEXT.md）。
 
     停在 review 的那一份誰都還沒動過，那時候掛旗標會讓 Review Queue 把「已入庫待確認」
     與「還沒入庫」混成同一列。
+
+    RSS Series 送的另有一條（brief §15，票 13）：**第一批確認之前 high 也掛**——季號與 offset 錯了
+    是整季一起錯，而 Series 帶了季號時解析器給的正是 high（`strategy = context`）；**確認過之後
+    medium 也不掛**，改由播出日比對、片長驗證與 Jellyfin 回驗守著（2026-09-24 使用者拍板）。
     """
-    return (
-        status is PlanStatus.AUTO
-        and item.confidence is Confidence.MEDIUM
-        and item.action in WRITTEN
-    )
+    if status is not PlanStatus.AUTO or item.action not in WRITTEN:
+        return False
+    if series is not None:
+        return not series.confirmed
+    return item.confidence is Confidence.MEDIUM

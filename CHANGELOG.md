@@ -667,6 +667,16 @@ Issue、修正、對帳、刪除與重新入庫的每一條端點都是 403，�
   `backfilled_at` 與 `passed_before`（migration `e8a3d6c1f59b`；既有的已綁定 Mikan RSS Series 不在升級那一刻補整季，
   只補它出現之後被捲掉的）。
   `pnpm -C web e2e` 多 `rss-backfill` 一條（1280 與 390）。
+- **RSS Series 的第一批審核、改正並套用到整個 Series**（M3 票 13，brief §15「季號與 offset」）：新 RSS Series 送進來的
+  集數入庫之後不論信心都等人看一眼，`/review` 以 RSS Series 分組、一組一顆「全部確認」；確認之後這個 Series 的
+  medium 入庫不再進 audit 清單。第一批裡改一集的季集時可以勾「套用到這個 RSS Series」：由那一集算出季號與
+  offset 寫回 Series，還沒確認的集數跟著重算——已入庫的搬到正確路徑（仍留在第一批裡等確認），停在審核的重新
+  規劃；split-cour（TMDB 併成一季、字幕組每個 cour 從 01 重數）改一次就整季修好。每份計劃記下它用的季號與
+  offset，`/jobs/:hash` 看得到。新端點 `POST /review/series/{id}/confirm`；`POST /files/rematch` 多
+  `apply_to_series`（回應多 `series`，拒絕多 `not_from_series`、`no_episode_number`）；`GET /review` 的 audit 列多
+  `action` 與 `series`、理由多 `first_batch`；`GET /plans/{id}` 多 `series`。`rss_series` 多 `confirmed`、`plans`
+  多 `rss_series_id` / `season_hint` / `episode_offset`（migration `a4f7c2e9d168`；既有的 Series 算還沒確認，
+  既有的 Plan 不回填）。演練情境多 `rss-split-cour`。
 
 ### Changed
 - **標題自己寫了 `(Batch)`、`[Vol.1]` 的發佈算季包**（M3 票 11）：Nyaa 與 acg.rip 搜尋 feed 裡的 BD 單卷與季包

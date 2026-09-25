@@ -7,6 +7,7 @@ import { formatCoverage, formatEpisode } from '../components/episodes'
 import { FileEntry } from '../components/FileEntry'
 import { groupRows, type RowGroup } from '../components/rowGroups'
 import { Reasons } from '../plans/Reasons'
+import { seriesValuesText } from '../rss/seriesValues'
 
 /**
  * 一筆 Job 的 Import Plan（brief §6.5、票 11）。
@@ -27,6 +28,7 @@ import { Reasons } from '../plans/Reasons'
 export function JobPlan({ plan }: { plan: Plan }) {
   const { t } = useTranslation()
   const reason = plan.summary.review_reason
+  const seriesValues = plan.series ? seriesValuesText(t, plan.series) : null
 
   return (
     <section className="grid min-w-0 gap-2">
@@ -55,6 +57,15 @@ export function JobPlan({ plan }: { plan: Plan }) {
       )}
       {reason && (
         <p className="max-w-prose text-xs text-ink-dim">{t(`jobs.plan.reason.${reason}`)}</p>
+      )}
+      {/* RSS 送的那一份算的時候照了 Series 的季號與偏移（M3 票 13）：值是規劃那一刻讀的，之後改了
+          Series，這一份仍說它當時用了什麼——同一個 Series 前後兩份不一樣時看得出來。 */}
+      {plan.series && (
+        <p className="max-w-prose text-xs text-ink-dim">
+          {seriesValues !== null
+            ? t('jobs.plan.series', { values: seriesValues })
+            : t('jobs.plan.seriesUnset')}
+        </p>
       )}
 
       <div className="grid gap-px bg-rule">

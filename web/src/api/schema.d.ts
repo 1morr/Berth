@@ -144,6 +144,9 @@ export interface paths {
         /**
          * Post Rematch
          * @description 建新鏈接 → 拆舊鏈接 → 改帳本 → 通知掃描，一律經過 Plan（brief §9.4）。
+         *
+         *     帶 `apply_to_series` 時同一件事之後再寫回 RSS Series 並重算（`series_review.correct_series`）；
+         *     重新規劃過的那幾筆叫醒 importer——它平常 60 秒才醒一次，而按下去的人要的是現在。
          */
         post: operations["post_rematch_api_files_rematch_post"];
         delete?: never;
@@ -817,6 +820,27 @@ export interface paths {
          *     而它們已經不等了。所以這一支沒有拒絕的回應。
          */
         post: operations["post_confirm_many_api_review_audit_confirm_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/review/series/{series_id}/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Confirm Series
+         * @description 一個 RSS Series 的「全部確認」（M3 票 13）：送來的那幾列逐列確認，再把 Series 標成確認過——
+         *     之後它的 medium 入庫不再進 audit 清單。跳過規則同 `/audit/confirm`，所以同樣沒有拒絕的回應。
+         */
+        post: operations["post_confirm_series_api_review_series__series_id__confirm_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1836,11 +1860,11 @@ export interface components {
          * AuditReason
          * @description `audit` 那一類的理由（`GET /review` 每一列的 `reason.code`）。
          *
-         *     **只有一種，仍然是封閉集合**（同 `JellyfinRequest`）：理由是給畫面挑句子的 code，不是後端
+         *     **封閉集合**（同 `JellyfinRequest`）：理由是給畫面挑句子的 code，不是後端
          *     拼好的一句話（M2 票 06）。解析器那幾句英文的 `reasons` 是原文，放在列上的 `notes`。
          * @enum {string}
          */
-        AuditReason: "medium_auto_imported";
+        AuditReason: "medium_auto_imported" | "first_batch";
         /**
          * AuditReasonOut
          * @description `audit` 那一列的理由：封閉集合的 code 加參數，句子由前端照 code 挑（M2 票 06）。
@@ -1886,6 +1910,7 @@ export interface components {
             path: string;
             /** Source Path */
             source_path: string;
+            action: components["schemas"]["PlanAction"];
             /** Season */
             season: number | null;
             /** Episode Start */
@@ -1894,6 +1919,23 @@ export interface components {
             episode_end: number | null;
             /** Reasons */
             reasons: components["schemas"]["ItemReasonOut"][];
+            series: components["schemas"]["AuditSeriesOut"] | null;
+        };
+        /**
+         * AuditSeriesOut
+         * @description 一列 audit 的 RSS Series：它的第一批確認過了沒，與現在的季號、offset。
+         */
+        AuditSeriesOut: {
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /** Confirmed */
+            confirmed: boolean;
+            /** Season */
+            season: number | null;
+            /** Episode Offset */
+            episode_offset: number | null;
         };
         /**
          * AuditUndoneOut
@@ -3294,6 +3336,7 @@ export interface components {
             summary: components["schemas"]["PlanSummary"];
             /** Items */
             items: components["schemas"]["PlanItemOut"][];
+            series: components["schemas"]["PlanSeriesOut"] | null;
         };
         /**
          * PlanReasonOut
@@ -3357,6 +3400,19 @@ export interface components {
             /** Job Name */
             job_name: string;
             summary: components["schemas"]["PlanSummary"];
+        };
+        /**
+         * PlanSeriesOut
+         * @description 算這一份時用的 RSS Series 與它的季號、offset（M3 票 13）。兩格都是 `null` 是 Series 沒設，
+         *     解析器自己判斷。值是規劃那一刻讀的：之後改正並套用到 Series，這一份仍說它當時用了什麼。
+         */
+        PlanSeriesOut: {
+            /** Id */
+            id: number;
+            /** Season */
+            season: number | null;
+            /** Episode Offset */
+            episode_offset: number | null;
         };
         /**
          * PlanStatus
@@ -3509,7 +3565,7 @@ export interface components {
          *     依來源分段：季號從哪裡來、集號怎麼換算、為什麼信心被壓下來、字幕跟著誰、整包一起看的結果。
          * @enum {string}
          */
-        ReasonCode: "movie" | "media_by_title" | "title_exact" | "title_contained" | "title_partial" | "year_matches" | "year_differs" | "title_mismatch" | "no_media" | "season_from_job" | "season_from_release" | "season_from_folder" | "season_from_arc" | "final_season" | "single_season" | "absolute_group" | "absolute_cumulative" | "cour_offset" | "air_date_run" | "episode_not_on_tmdb" | "absolute_within_first_season" | "air_date_unknown" | "air_date_mismatch" | "range_spans_seasons" | "specials_numbering" | "classified" | "disc_structure" | "own_numbered_special" | "no_episode" | "subtitle_orphan" | "subtitle_same_name" | "subtitle_folder_episode" | "subtitle_follows" | "video_not_imported" | "target_contested" | "span_clash" | "library_span_clash" | "same_version" | "too_many_files" | "strategy_outlier" | "season_complete" | "medium_held_by_route" | "set_by_user";
+        ReasonCode: "movie" | "media_by_title" | "title_exact" | "title_contained" | "title_partial" | "year_matches" | "year_differs" | "title_mismatch" | "no_media" | "season_from_job" | "season_from_release" | "season_from_folder" | "season_from_arc" | "final_season" | "single_season" | "absolute_group" | "absolute_cumulative" | "cour_offset" | "air_date_run" | "episode_not_on_tmdb" | "absolute_within_first_season" | "air_date_unknown" | "air_date_mismatch" | "range_spans_seasons" | "specials_numbering" | "classified" | "disc_structure" | "own_numbered_special" | "no_episode" | "subtitle_orphan" | "subtitle_same_name" | "subtitle_folder_episode" | "subtitle_follows" | "video_not_imported" | "target_contested" | "span_clash" | "library_span_clash" | "same_version" | "too_many_files" | "strategy_outlier" | "season_complete" | "medium_held_by_route" | "set_by_user" | "series_corrected";
         /**
          * ReconcileRunOut
          * @description 一輪對帳。`finished_at` 是 `null` 就是還在跑。
@@ -3570,6 +3626,11 @@ export interface components {
             episode_start?: number | null;
             /** Episode End */
             episode_end?: number | null;
+            /**
+             * Apply To Series
+             * @default false
+             */
+            apply_to_series?: boolean;
         };
         /**
          * RematchOut
@@ -3577,11 +3638,12 @@ export interface components {
          */
         RematchOut: {
             /** Plan Id */
-            plan_id: number;
+            plan_id: number | null;
             /** Target Path */
             target_path: string;
             /** Unmanaged */
             unmanaged: string[];
+            series?: components["schemas"]["SeriesCorrectedOut"] | null;
         };
         /**
          * RematchRefusal
@@ -3592,7 +3654,7 @@ export interface components {
          *     知道成不成，而那時**什麼紀錄都還沒改**——先鏈接、成了才拆舊的、都成了才寫帳本。
          * @enum {string}
          */
-        RematchRefusal: "ledger_missing" | "file_missing" | "not_unmatched" | "plan_pending" | "not_duplicate" | "action_not_allowed" | "episode_required" | "episode_range_reversed" | "episode_not_allowed" | "media_missing" | "route_missing" | "target_taken" | "link_failed" | "unlink_failed";
+        RematchRefusal: "ledger_missing" | "file_missing" | "not_unmatched" | "plan_pending" | "not_duplicate" | "action_not_allowed" | "episode_required" | "episode_range_reversed" | "episode_not_allowed" | "media_missing" | "route_missing" | "target_taken" | "link_failed" | "unlink_failed" | "not_from_series" | "no_episode_number";
         /**
          * RematchRefusalOut
          * @description 改不下去時回的那一份。`reason` 給畫面挑句子，`detail` 是檔名、路徑或系統原文，不翻譯。
@@ -3882,6 +3944,22 @@ export interface components {
             aired: number;
             /** Episodes */
             episodes: components["schemas"]["EpisodeOut"][];
+        };
+        /**
+         * SeriesCorrectedOut
+         * @description 套用到 RSS Series 之後：Series 現在的值，與它底下還沒確認的集數怎麼了（M3 票 13）。
+         */
+        SeriesCorrectedOut: {
+            /** Season */
+            season: number;
+            /** Episode Offset */
+            episode_offset: number | null;
+            /** Moved */
+            moved: number;
+            /** Replanned */
+            replanned: number;
+            /** Left */
+            left: number;
         };
         /** SeriesOut */
         SeriesOut: {
@@ -4595,7 +4673,7 @@ export interface operations {
                     "application/json": components["schemas"]["RematchRefusalOut"];
                 };
             };
-            /** @description `action_not_allowed` · `episode_required` · `episode_range_reversed` · `episode_not_allowed` · `media_missing` */
+            /** @description `action_not_allowed` · `episode_required` · `episode_range_reversed` · `episode_not_allowed` · `not_from_series` · `no_episode_number` · `media_missing` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -6058,6 +6136,41 @@ export interface operations {
             query?: never;
             header?: never;
             path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfirmAuditsIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditsConfirmedOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_confirm_series_api_review_series__series_id__confirm_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                series_id: number;
+            };
             cookie?: never;
         };
         requestBody: {

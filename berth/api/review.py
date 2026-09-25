@@ -18,7 +18,7 @@ from datetime import datetime
 from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, HTTPException, Request, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from berth.api.deps import ClientFactoryDep, SessionDep
 from berth.api.errors import refusal_responses
@@ -59,6 +59,7 @@ from berth.services.review import (
     review_total,
     undo_audit,
 )
+from berth.services.series_review import confirm_series
 
 router = APIRouter(prefix="/review", tags=["review"])
 
@@ -132,6 +133,20 @@ class PlanRowOut(BaseModel):
     summary: PlanSummary
 
 
+class AuditSeriesOut(BaseModel):
+    """一列 audit 的 RSS Series：它的第一批確認過了沒，與現在的季號、offset。"""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    #: 長出它的那一筆 Item 的標題：看得出是哪一個字幕組。
+    name: str
+    #: `false` 時這一列是它的第一批（`reason.code = first_batch`）。
+    confirmed: bool
+    season: int | None
+    episode_offset: int | None
+
+
 class AuditRowOut(BaseModel):
     """一個 medium 自動入庫、等人看一眼的檔案（CONTEXT.md 的 Audit）。`ref` 是帳本那一列的 id。"""
 
@@ -151,11 +166,16 @@ class AuditRowOut(BaseModel):
     #: 媒體庫裡那個硬鏈接。
     path: str
     source_path: str
+    #: 正片（`import`）、字幕或特典。只有正片改得了季集（`POST /files/rematch`）。
+    action: PlanAction
     season: int | None
     episode_start: int | None
     episode_end: int | None
     #: 解析器為什麼給 medium（那一列 Plan Item 的理由）。
     reasons: list[ItemReasonOut]
+    #: 送出它的 RSS Series（M3 票 13）：佇列以它分組，組上的「全部確認」打
+    #: `POST /review/series/{id}/confirm`。手動送單的是 `null`。
+    series: AuditSeriesOut | None
 
 
 class UnmatchedReasonOut(BaseModel):
@@ -328,6 +348,20 @@ async def post_confirm_many(
     return AuditsConfirmedOut(confirmed=outcome.confirmed, skipped=outcome.skipped)
 
 
+@router.post("/series/{series_id}/confirm")
+async def post_confirm_series(
+    session: SessionDep, request: Request, series_id: int, body: ConfirmAuditsIn
+) -> AuditsConfirmedOut:
+    """一個 RSS Series 的「全部確認」（M3 票 13）：送來的那幾列逐列確認，再把 Series 標成確認過——
+    之後它的 medium 入庫不再進 audit 清單。跳過規則同 `/audit/confirm`，所以同樣沒有拒絕的回應。
+    """
+    user = current_user(request)
+    outcome = await confirm_series(
+        session, series_id, body.ledger_ids, actor=actor_of(user.id if user is not None else None)
+    )
+    return AuditsConfirmedOut(confirmed=outcome.confirmed, skipped=outcome.skipped)
+
+
 @router.post("/audit/{ledger_id}/undo", responses=UNDO_RESPONSES)
 async def post_undo(session: SessionDep, request: Request, ledger_id: int) -> AuditUndoneOut:
     """「它是錯的」：拆掉硬鏈接、刪掉帳本那一列、Job 回 `review`（`audit_undone`）。
@@ -415,10 +449,12 @@ def _audit_out(row: AuditRow) -> AuditRowOut:
         job_name=row.job_name,
         path=row.target_path,
         source_path=row.source_path,
+        action=row.action,
         season=row.season,
         episode_start=row.episode_start,
         episode_end=row.episode_end,
         reasons=[ItemReasonOut.model_validate(reason) for reason in row.reasons],
+        series=AuditSeriesOut.model_validate(row.series) if row.series is not None else None,
     )
 
 

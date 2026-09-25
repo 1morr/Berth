@@ -13,6 +13,9 @@ import { useConfirmAudits, type Said } from './useConfirmAudits'
  * 別的列按完）進來的 audit，不會被順手確認掉，那一句件數也不會悄悄改掉。先就地確認並說出件數（DESIGN.md
  * 就地確認）——它橫跨好幾筆下載，按之前要看得到自己在確認多少個。只作用於 audit：同一段的重複版本要逐件
  * 判斷，不在內。
+ *
+ * 範圍裡有還沒確認的 RSS Series 時，它們的第一批一起確認（`useConfirmAudits`），後果那一句多說一次：
+ * 之後那幾個 Series 的 medium 入庫不再進來（M3 票 13）。
  */
 export function AuditSectionConfirm({
   rows,
@@ -23,18 +26,28 @@ export function AuditSectionConfirm({
 }) {
   const { t } = useTranslation()
   const { confirm, pending, failed } = useConfirmAudits(onDone)
-  const [frozen, setFrozen] = useState<readonly number[]>([])
+  const [frozen, setFrozen] = useState<readonly AuditReviewRow[]>([])
   const count = frozen.length
+  const firstBatches = new Set(
+    frozen.flatMap((row) =>
+      row.series !== null && row.reason.code === 'first_batch' ? [row.series.id] : [],
+    ),
+  ).size
 
   return (
     <div className="grid justify-items-start gap-2">
       <ConfirmAction
         label={t('review.audit.confirmAll')}
         confirmLabel={t('review.audit.confirmSectionAction', { count })}
-        warning={t('review.audit.confirmSection', { count })}
+        warning={[
+          t('review.audit.confirmSection', { count }),
+          firstBatches > 0 ? t('review.audit.confirmSectionSeries', { count: firstBatches }) : '',
+        ]
+          .filter(Boolean)
+          .join(' ')}
         pending={pending}
         pendingLabel={t('review.audit.working')}
-        onOpen={() => setFrozen(rows.map((row) => row.ref))}
+        onOpen={() => setFrozen(rows)}
         onConfirm={() => confirm(frozen)}
       />
       {failed !== null && (

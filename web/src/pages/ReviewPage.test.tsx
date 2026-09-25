@@ -23,7 +23,12 @@ function audit(overrides: Partial<AuditReviewRow> = {}): AuditReviewRow {
   return {
     kind: 'audit',
     ref: 7,
-    reason: { code: 'medium_auto_imported', params: {} },
+    // 與後端同一條（`review._audit_row`）：還沒確認的 RSS Series 送的就是第一批。
+    reason: {
+      code:
+        overrides.series && !overrides.series.confirmed ? 'first_batch' : 'medium_auto_imported',
+      params: {},
+    },
     actions: ['confirm', 'undo'],
     at: '2026-09-22T04:00:00Z',
     media_id: 'tv:120089',
@@ -37,6 +42,8 @@ function audit(overrides: Partial<AuditReviewRow> = {}): AuditReviewRow {
     episode_start: 1,
     episode_end: null,
     reasons: [{ code: 'absolute_cumulative', params: { number: 26, episode: 'S02E01' } }],
+    action: 'import',
+    series: null,
     ...overrides,
   }
 }
@@ -538,6 +545,280 @@ describe('audit 段整段的「全部確認」（M3 票 05）', () => {
     await screen.findAllByRole('article')
 
     expect(screen.queryByRole('button', { name: '全部確認' })).not.toBeInTheDocument()
+  })
+})
+
+/** 送出那一列的 RSS Series：預設還沒確認、兩格都沒設（剛綁好、第一批）。 */
+function series(overrides: Partial<NonNullable<AuditReviewRow['series']>> = {}) {
+  return {
+    id: 3,
+    // 長出它的那一筆 Item 的標題（看得出字幕組），不是哪一筆下載的名字。
+    name: '[ANi] SPY×FAMILY 間諜家家酒 - 25 [1080P][Baha][WEB-DL]',
+    confirmed: false,
+    season: null,
+    episode_offset: null,
+    ...overrides,
+  }
+}
+
+/** 某一支 POST 送出去的 body；還沒送是 `undefined`。 */
+function bodyOf(stub: ReturnType<typeof render>, url: string): unknown {
+  const call = stub.mock.calls.find(([called]) => called === url)
+  return call ? JSON.parse(String(call[1]?.body)) : undefined
+}
+
+describe('RSS Series 的第一批（M3 票 13）', () => {
+  // 補舊集一次送好幾筆下載、一集一個 Job：以 Job 分組等於不分，這裡以 Series 分組。
+  const firstBatch = (): ReviewQueue['rows'] =>
+    [7, 8, 9].map((ref, index) =>
+      audit({
+        ref,
+        episode_start: index + 1,
+        job_hash: String(ref).repeat(40),
+        reason: { code: 'first_batch', params: {} },
+        series: series(),
+      }),
+    )
+
+  it('一個 Series 一組：說出是第一批，展開看得到 Series 與它現在的季號、偏移', async () => {
+    render({ [QUEUE]: queue(firstBatch()) })
+    renderApp('/review')
+
+    const [group] = await screen.findAllByRole('article')
+
+    expect(within(group).getByRole('heading', { level: 3 })).toHaveTextContent(
+      'SPY×FAMILY 間諜家家酒',
+    )
+    expect(
+      within(group).getByText(/RSS Series 的第一批：3 個檔案等你看一眼季號與集數對不對/),
+    ).toBeInTheDocument()
+
+    await userEvent.click(within(group).getAllByText('展開')[0])
+
+    expect(within(group).getByText(series().name)).toBeInTheDocument()
+    expect(within(group).getByText('沒有設，由解析器判斷')).toBeInTheDocument()
+    expect(
+      within(group)
+        .getAllByRole('heading', { level: 4 })
+        .map((node) => node.textContent),
+    ).toEqual(['S02E01', 'S02E02', 'S02E03'])
+    // 組說過的那一句，成員不再說。
+    expect(within(group).getAllByText(/RSS Series 的第一批/)).toHaveLength(1)
+  })
+
+  it('Series 設過季號與偏移時，展開說出現在的值', async () => {
+    const values = series({ season: 1, episode_offset: 12 })
+    render({ [QUEUE]: queue(firstBatch().map((row) => ({ ...row, series: values }))) })
+    renderApp('/review')
+    const [group] = await screen.findAllByRole('article')
+
+    await userEvent.click(within(group).getAllByText('展開')[0])
+
+    expect(within(group).getByText('第 1 季、集號偏移 +12')).toBeInTheDocument()
+  })
+
+  it('「全部確認」打 Series 那一支，送的是畫面上的 id', async () => {
+    let rows = firstBatch()
+    const stub = render({
+      [QUEUE]: () => queue(rows),
+      'POST /api/review/series/3/confirm': () => {
+        rows = []
+        return { body: { confirmed: 3, skipped: 0 } }
+      },
+    })
+    renderApp('/review')
+    const [group] = await screen.findAllByRole('article')
+
+    await userEvent.click(within(group).getByRole('button', { name: '全部確認' }))
+
+    await waitFor(() => expect(screen.queryByRole('article')).not.toBeInTheDocument())
+    expect(bodyOf(stub, '/api/review/series/3/confirm')).toEqual({ ledger_ids: [7, 8, 9] })
+    expect(sentIds(stub)).toBeNull()
+    expect(screen.getByText('已確認 3 個，從佇列上收掉了。')).toBeVisible()
+  })
+
+  it('第一批只有一集時仍是一組：組的鍵確認整個 Series，不只清那一列的旗標', async () => {
+    const stub = render({
+      [QUEUE]: queue(firstBatch().slice(0, 1)),
+      'POST /api/review/series/3/confirm': { body: { confirmed: 1, skipped: 0 } },
+    })
+    renderApp('/review')
+    const [group] = await screen.findAllByRole('article')
+
+    expect(within(group).getByText(/RSS Series 的第一批：1 個檔案/)).toBeInTheDocument()
+    await userEvent.click(within(group).getByRole('button', { name: '全部確認' }))
+
+    await waitFor(() =>
+      expect(bodyOf(stub, '/api/review/series/3/confirm')).toEqual({ ledger_ids: [7] }),
+    )
+  })
+
+  it('整段的「全部確認」：Series 的列送 Series 那一支、其餘送一般那一支，按之前說出第一批會一起確認', async () => {
+    const stub = render({
+      [QUEUE]: queue([...firstBatch(), audit({ ref: 20, job_hash: OTHER })]),
+      'POST /api/review/series/3/confirm': { body: { confirmed: 3, skipped: 0 } },
+      'POST /api/review/audit/confirm': { body: { confirmed: 1, skipped: 0 } },
+    })
+    renderApp('/review')
+    const section = await screen.findByRole('region', { name: /已入庫，等你看一眼/ })
+    const [sectionButton] = within(section).getAllByRole('button', { name: '全部確認' })
+
+    await userEvent.click(sectionButton)
+    expect(within(section).getByText(/其中 1 個 RSS Series 的第一批一起確認/)).toBeVisible()
+    await userEvent.click(within(section).getByRole('button', { name: '確認這 4 個' }))
+
+    expect(await screen.findByText('已確認 4 個，從佇列上收掉了。')).toBeVisible()
+    expect(bodyOf(stub, '/api/review/series/3/confirm')).toEqual({ ledger_ids: [7, 8, 9] })
+    expect(sentIds(stub)).toEqual([20])
+  })
+
+  it('確認過的 Series 只有一列時就是一列，沒有第一批那一句', async () => {
+    render({ [QUEUE]: queue([audit({ series: series({ confirmed: true }) })]) })
+    renderApp('/review')
+
+    const row = await screen.findByRole('article')
+
+    expect(within(row).getByRole('heading')).toHaveTextContent('SPY×FAMILY 間諜家家酒 S02E01')
+    expect(within(row).queryByText(/第一批/)).not.toBeInTheDocument()
+    expect(within(row).queryByRole('button', { name: '全部確認' })).not.toBeInTheDocument()
+  })
+})
+
+describe('改季集，並套用到這個 RSS Series（M3 票 13）', () => {
+  const REMATCH = 'POST /api/files/rematch'
+  const corrected = (moved: number): StubRoute => ({
+    body: {
+      plan_id: 30,
+      target_path: '/x/S01E13.mkv',
+      unmanaged: [],
+      series: { season: 1, episode_offset: 12, moved, replanned: 0, left: 0 },
+    },
+  })
+
+  /** 一個 Series 的第一批是一組：展開那一組，回第一個成員。 */
+  async function firstMember() {
+    const [group] = await screen.findAllByRole('article')
+    await userEvent.click(within(group).getAllByText('展開')[0])
+    return within(group).getAllByRole('article')[0]
+  }
+
+  /** 填季集、按「套用」（已入庫的檔案接著要就地確認）。 */
+  async function fill(row: HTMLElement, season: string, episode: string) {
+    const seasonField = within(row).getByRole('spinbutton', { name: '季' })
+    await userEvent.clear(seasonField)
+    await userEvent.type(seasonField, season)
+    const startField = within(row).getByRole('spinbutton', { name: '起集' })
+    await userEvent.clear(startField)
+    await userEvent.type(startField, episode)
+    await userEvent.click(within(row).getByRole('button', { name: '套用' }))
+  }
+
+  it('Series 送的正片：預設勾著套用，就地確認說搬的不只這一集，送 apply_to_series，看得見其餘跟著搬了幾集', async () => {
+    const stub = render({
+      [QUEUE]: queue([
+        audit({ reason: { code: 'first_batch', params: {} }, series: series() }),
+        audit({ ref: 8, episode_start: 2, job_hash: OTHER, series: series() }),
+      ]),
+      [REMATCH]: corrected(1),
+    })
+    renderApp('/review')
+    const row = await firstMember()
+
+    await userEvent.click(within(row).getByRole('button', { name: '改季集 S02E01' }))
+    const apply = within(row).getByRole('checkbox', { name: '套用到這個 RSS Series' })
+    expect(apply).toBeChecked()
+    expect(apply).toHaveAccessibleDescription(/重算這個 Series 還沒確認的集數/)
+
+    await fill(row, '1', '13')
+    expect(within(row).getByText(/還沒確認的其他集數也照新的季號與偏移搬過去/)).toBeVisible()
+    await userEvent.click(within(row).getByRole('button', { name: '確定修正' }))
+
+    expect(
+      await screen.findByText(
+        '已修正，這個 RSS Series 改成第 1 季、集號偏移 +12。 其餘 1 集跟著搬過去了。',
+      ),
+    ).toBeVisible()
+    expect(bodyOf(stub, '/api/files/rematch')).toEqual({
+      ledger_id: 7,
+      action: 'import',
+      season: 1,
+      episode_start: 13,
+      episode_end: null,
+      apply_to_series: true,
+    })
+  })
+
+  it('取消勾選時只改這一集：不帶 apply_to_series，就地確認照舊', async () => {
+    const stub = render({
+      [QUEUE]: queue([audit({ series: series() })]),
+      [REMATCH]: { body: { plan_id: 30, target_path: '/x.mkv', unmanaged: [], series: null } },
+    })
+    renderApp('/review')
+    const row = await firstMember()
+
+    await userEvent.click(within(row).getByRole('button', { name: /^改季集/ }))
+    await userEvent.click(within(row).getByRole('checkbox', { name: '套用到這個 RSS Series' }))
+    await fill(row, '2', '1')
+    expect(
+      within(row).getByText(/媒體庫裡現在這一條會被拿掉、換到新的位置；旁邊的字幕跟著走/),
+    ).toBeVisible()
+    await userEvent.click(within(row).getByRole('button', { name: '確定修正' }))
+
+    expect(await screen.findByText('已修正。')).toBeInTheDocument()
+    expect(bodyOf(stub, '/api/files/rematch')).not.toHaveProperty('apply_to_series')
+  })
+
+  it('不是 Series 送的正片也改得了季集，帶著現在的季集，但沒有套用那一格', async () => {
+    render({ [QUEUE]: queue([audit()]) })
+    renderApp('/review')
+    const row = await screen.findByRole('article')
+
+    await userEvent.click(within(row).getByRole('button', { name: '改季集 S02E01' }))
+
+    expect(within(row).getByRole('spinbutton', { name: '季' })).toHaveValue(2)
+    expect(within(row).getByRole('spinbutton', { name: '起集' })).toHaveValue(1)
+    expect(within(row).queryByRole('checkbox')).not.toBeInTheDocument()
+  })
+
+  it('再按一次「改季集」收起表單，焦點回到那顆鍵', async () => {
+    render({ [QUEUE]: queue([audit()]) })
+    renderApp('/review')
+    const row = await screen.findByRole('article')
+    const trigger = within(row).getByRole('button', { name: '改季集 S02E01' })
+
+    await userEvent.click(trigger)
+    expect(trigger).toHaveAttribute('aria-expanded', 'true')
+    await userEvent.click(within(row).getByRole('button', { name: '取消' }))
+
+    expect(within(row).queryByRole('spinbutton')).not.toBeInTheDocument()
+    expect(trigger).toHaveAttribute('aria-expanded', 'false')
+    expect(trigger).toHaveFocus()
+  })
+
+  it('字幕與特典沒有「改季集」', async () => {
+    render({ [QUEUE]: queue([audit({ action: 'subtitle' })]) })
+    renderApp('/review')
+    const row = await screen.findByRole('article')
+
+    expect(within(row).queryByRole('button', { name: /^改季集/ })).not.toBeInTheDocument()
+  })
+
+  it('算不出偏移時說得出下一步', async () => {
+    render({
+      [QUEUE]: queue([audit({ series: series() })]),
+      [REMATCH]: {
+        status: 422,
+        body: { detail: { reason: 'no_episode_number', detail: 'a.mkv' } },
+      },
+    })
+    renderApp('/review')
+    const row = await firstMember()
+
+    await userEvent.click(within(row).getByRole('button', { name: /^改季集/ }))
+    await fill(row, '1', '13')
+    await userEvent.click(within(row).getByRole('button', { name: '確定修正' }))
+
+    expect(await within(row).findByText(/檔名讀不出集號，算不出集號偏移。.*a\.mkv/)).toBeVisible()
   })
 })
 

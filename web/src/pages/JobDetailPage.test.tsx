@@ -99,6 +99,7 @@ function plan(overrides: Partial<Plan> = {}): Plan {
         error: '',
       },
     ],
+    series: null,
     ...overrides,
   }
 }

@@ -1075,7 +1075,7 @@ RSS_PACKS = dict(_rss_pack(item.title) for item in RSS_SEASON)
 DEMO_PACKS.update(RSS_PACKS)
 
 
-def rss_scenario() -> Scenario:
+def rss_scenario(detail: TmdbDetail = KIMI_DETAIL, season: TmdbSeason = KIMI_SEASON) -> Scenario:
     """`/rss`（M3 票 08）：Mikan 聚合 feed → 待綁定 → 綁定 → 送單 → 入庫，**一個請求都不出網**。
 
     同 `healthy`（三條 Route 綠燈），加上：Mikan 是替身（票 07 錄下來的聚合 feed，單集頁照
@@ -1101,8 +1101,8 @@ def rss_scenario() -> Scenario:
     scenario.indexer_results = ()
     scenario.tmdb_credential = "00000000000000000000000000000010"
     scenario.tmdb = FakeTmdbClient(
-        details=[KIMI_DETAIL],
-        seasons={KIMI_DETAIL.tmdb_id: [KIMI_SEASON]},
+        details=[detail],
+        seasons={detail.tmdb_id: [season]},
         search={
             query: (
                 TmdbEntry(
@@ -1139,6 +1139,48 @@ def rss_scenario() -> Scenario:
     return scenario
 
 
+#: split-cour（M3 票 13）：TMDB 把兩個 cour 併成一季 24 集——第一 cour 一月起、第二 cour 七月起。
+#: 字幕組的第二 cour 從 01 重數，所以 feed 上的 01–12 其實是 S01E13–E24。
+KIMI_SPLIT_COUR = TmdbSeason(
+    season_number=1,
+    name="Season 1",
+    air_date=date(2026, 1, 8),
+    episodes=tuple(
+        TmdbEpisode(
+            season_number=1,
+            episode_number=number,
+            name=f"Episode {number}",
+            air_date=(
+                date(2026, 1, 8) + timedelta(days=7 * (number - 1))
+                if number <= 12
+                else date(2026, 7, 2) + timedelta(days=7 * (number - 13))
+            ),
+            runtime=24,
+        )
+        for number in range(1, 25)
+    ),
+)
+
+
+def rss_split_cour_scenario() -> Scenario:
+    """改正並套用到 RSS Series（M3 票 13）：同 `rss`，但 TMDB 把《与你相恋》的兩個 cour 併成一季。
+
+    綁定時補舊集，12 集全部以「只有集號、TMDB 一季」落在 S01E01–E12（medium，錯的——字幕組的第二
+    cour 從 01 重數，正解是 S01E13–E24）。它們是這個 RSS Series 的第一批，在 `/review` 是一組；在
+    審核裡把第 1 集改成 S01E13 並「套用到這個 RSS Series」，其餘 11 集跟著搬到 14–24。
+    """
+    detail = replace(
+        KIMI_DETAIL,
+        first_air_date=KIMI_SPLIT_COUR.air_date,
+        seasons=(
+            TmdbSeasonEntry(
+                season_number=1, name="Season 1", episode_count=24, air_date=date(2026, 1, 8)
+            ),
+        ),
+    )
+    return rss_scenario(detail=detail, season=KIMI_SPLIT_COUR)
+
+
 SCENARIOS = {
     "bundled": bundled,
     "discover": discover,
@@ -1154,6 +1196,7 @@ SCENARIOS = {
     "tmdb-down": tmdb_down,
     "healthy": healthy,
     "rss": rss_scenario,
+    "rss-split-cour": rss_split_cour_scenario,
     "issues": issues_scenario,
     "review": review_scenario,
     "routes": routes_scenario,

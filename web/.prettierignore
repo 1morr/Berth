@@ -8,3 +8,6 @@ src/api/schema.d.ts
 # `pnpm e2e` 的失敗證據與報告
 test-results
 playwright-report
+
+# impeccable hook 的本機快取（`.git/info/exclude` 已排除）
+.impeccable

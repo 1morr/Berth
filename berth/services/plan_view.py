@@ -66,6 +66,15 @@ class PlanItemView:
 
 
 @dataclass(frozen=True, slots=True)
+class PlanSeries:
+    """算一份 Plan 時交給解析器的 RSS Series 與它當時的值（`plans.rss_series_id` 那三格）。"""
+
+    id: int
+    season: int | None
+    episode_offset: int | None
+
+
+@dataclass(frozen=True, slots=True)
 class PlanView:
     """一份 Plan 的一整份（`GET /api/plans/{id}`）。"""
 
@@ -79,6 +88,8 @@ class PlanView:
     media_kind: MediaKind | None
     summary: PlanSummary
     items: tuple[PlanItemView, ...]
+    #: 算這一份時交給解析器的 RSS Series 與它的值（M3 票 13）。不是 RSS 送的是 `None`。
+    series: PlanSeries | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -109,6 +120,11 @@ async def read_plan(session: AsyncSession, plan_id: int) -> PlanView | None:
         created_at=row.created_at,
         media_kind=loaded.media.kind if loaded.media is not None else None,
         summary=PlanSummary.model_validate(row.summary_json or {}),
+        series=None
+        if row.rss_series_id is None
+        else PlanSeries(
+            id=row.rss_series_id, season=row.season_hint, episode_offset=row.episode_offset
+        ),
         items=tuple(
             PlanItemView(
                 id=stored.id,

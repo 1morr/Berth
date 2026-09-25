@@ -77,11 +77,24 @@ def plan(
     return tuple(by_path[entry.rel_path] for entry in entries)
 
 
+def written_episode(torrent_name: str, rel_path: str) -> int | None:
+    """檔名自己寫的集號：RSS Series 的 offset 加上去之前的那一個（M3 票 13）。
+
+    改正一集並套用到 RSS Series 時，offset 就是「人說的集號減去它」。讀法與規劃同一條
+    （`_release_of`），不然算出來的 offset 下一次規劃時會差一截。
+    """
+    return _release_of(rel_path.rpartition("/")[2], parse_release(torrent_name)).episode
+
+
+def _release_of(file_name: str, torrent: ReleaseInfo) -> ReleaseInfo:
+    # 檔名說了算，torrent 名補空缺：字幕語言常常只寫在 torrent 名上（`简繁外挂`）。
+    return merge_release(parse_release(file_name), torrent)
+
+
 def _decide(
     entry: FileEntry, torrent: ReleaseInfo, context: ParseContext, torrent_name: str
 ) -> Decision:
-    # 檔名說了算，torrent 名補空缺：字幕語言常常只寫在 torrent 名上（`简繁外挂`）。
-    info = merge_release(parse_release(entry.name), torrent)
+    info = _release_of(entry.name, torrent)
 
     if (ignored := _IGNORED.get(entry.kind)) is not None:
         return _plain(
