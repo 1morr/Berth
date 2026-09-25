@@ -69,7 +69,7 @@ from berth.adapters.qbittorrent.fake import FakeQbittorrentClient
 from berth.adapters.rss import FeedFetcher
 from berth.adapters.rss.client import HttpFeedFetcher
 from berth.adapters.rss.fake import FakeFeedFetcher
-from berth.adapters.rss.mikan import bangumi_url
+from berth.adapters.rss.mikan import bangumi_url, parse_feed
 from berth.adapters.tmdb import (
     TmdbClient,
     TmdbDetail,
@@ -162,6 +162,8 @@ from tests.integration.test_rss import KIMI as RSS_KIMI
 from tests.integration.test_rss import KIMI_ID as RSS_KIMI_ID
 from tests.integration.test_rss import MIKAN as RSS_MIKAN
 from tests.integration.test_rss import episode_pages as rss_episode_pages
+from tests.integration.test_rss_screen import SINGLE as RSS_SINGLE
+from tests.integration.test_rss_screen import SINGLE_URL as RSS_SINGLE_URL
 
 #: 這台 demo server 自己聽在哪個 port。索引站給的下載連結指回它自己（送單時 Berth 真的會去抓），
 #: 所以 `--port` 一改這一份要跟著改——寫死的話換 port 就只會拿到 `source_unavailable`。
@@ -1080,6 +1082,10 @@ def rss_scenario() -> Scenario:
 
     票 09 起輪詢會自動綁定：這一部的番組頁在、TMDB 認得出它，但 TV 與 Anime 兩條 Route 都收劇集，
     所以留在待綁定、作品預填成候選——畫面走的是「一鍵選定」那一條。
+
+    票 10 起多一份錄下來的單一 feed（喵萌奶茶屋&LoliHouse 的《与你相恋》1–12 集，11、12 與聚合 feed
+    同一個 hash）：排除條件那一條流程加它，看得到重複與 RSS Series 那一層擋下的。它的單集頁都指向
+    同一個 RSS Series（4009 × 370）；1–10 集沒有 `.torrent`，那一條流程先用規則擋下它們。
     """
     scenario = _planning(healthy(), RSS_PACKS)
     scenario.indexer_results = ()
@@ -1107,7 +1113,12 @@ def rss_scenario() -> Scenario:
         **rss_episode_pages(),
         # 番組頁（票 09 的自動綁定讀它）：只有這一部的在，其餘十個查不到、留在待綁定。
         bangumi_url(4009): (RSS_MIKAN / "home-bangumi.4009.html").read_bytes(),
+        RSS_SINGLE_URL: RSS_SINGLE,
     }
+    for item in parse_feed(RSS_SINGLE):
+        scenario.feed_pages.setdefault(
+            item.link, b'<a href="/RSS/Bangumi?bangumiId=4009&subgroupid=370" class="mikan-rss">'
+        )
     scenario.torrent_sources = {
         item.torrent_url: TorrentSource(
             info_hash=demo_torrent(release).info_hash, content=demo_torrent(release).raw

@@ -12,7 +12,7 @@ test('加 Feed → 輪詢 → 待綁定的那一部一鍵選定候選 → 下載
   await shot(page, '1-empty')
 
   await page.getByLabel(/RSS 網址/).fill('https://mikanani.me/RSS/MyBangumi?token=REDACTED')
-  await page.getByRole('button', { name: '加入' }).click()
+  await page.getByRole('button', { name: '加入', exact: true }).click()
   const feed = page.getByRole('article', { name: 'mikanani.me' })
   // token 就是憑證：畫面上只留前四碼。
   await expect(feed).toContainText('token=REDA…')

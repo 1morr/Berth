@@ -162,3 +162,53 @@ class TestRefusals:
 
         assert refused.status_code == 404
         assert refused.json()["detail"]["reason"] == "series_missing"
+
+
+class TestExclusions:
+    """排除條件的三層（票 10）：存得進去、清單說得出為什麼沒下載、寫壞的存不進去。"""
+
+    def test_the_three_layers_round_trip_and_the_items_say_why(
+        self, client: TestClient, roots: dict[str, Path]
+    ) -> None:
+        seed(client, roots)
+        sign_in(client)
+        assert client.get("/api/rss/exclusions").json() == {"not_single": True, "rules": []}
+        saved = client.put(
+            "/api/rss/exclusions", json={"not_single": True, "rules": ["Baha"]}, headers=BROWSER
+        )
+        assert saved.json() == {"not_single": True, "rules": ["Baha"]}
+        feed = client.post("/api/rss/feeds", json={"url": FEED_URL}, headers=BROWSER).json()
+        ruled = client.put(
+            f"/api/rss/feeds/{feed['id']}/exclusions", json={"rules": [" 720p "]}, headers=BROWSER
+        )
+        assert ruled.json()["exclusions"] == ["720p"]
+
+        client.post(f"/api/rss/feeds/{feed['id']}/poll", headers=BROWSER)
+
+        series = next(row for row in client.get("/api/rss/series").json() if row["key"] == KIMI_KEY)
+        on_series = client.put(
+            f"/api/rss/series/{series['id']}/exclusions", json={"rules": ["/v2$/"]}, headers=BROWSER
+        )
+        assert on_series.json()["exclusions"] == ["/v2$/"]
+        baha = [row for row in client.get("/api/rss/items").json() if "Baha" in row["title"]]
+        assert baha
+        assert {row["status"] for row in baha} == {"excluded"}
+        assert {(row["skip"]["code"], row["skip"]["params"]["rule"]) for row in baha} == {
+            ("global_rule", "Baha")
+        }
+
+    def test_a_broken_regex_is_422_and_says_why(
+        self, client: TestClient, roots: dict[str, Path]
+    ) -> None:
+        seed(client, roots)
+        sign_in(client)
+
+        refused = client.put(
+            "/api/rss/exclusions", json={"not_single": True, "rules": ["/[简繁/"]}, headers=BROWSER
+        )
+
+        assert refused.status_code == 422
+        body = refused.json()["detail"]
+        assert body["reason"] == "rule_invalid"
+        assert body["detail"].startswith("/[简繁/: unterminated character set")
+        assert client.get("/api/rss/exclusions").json()["rules"] == []

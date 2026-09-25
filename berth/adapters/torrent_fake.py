@@ -25,7 +25,8 @@ class FakeTorrentFetcher:
         sources: dict[str, TorrentSource] | None = None,
         error: Exception | None = None,
     ) -> None:
-        self._sources = dict(sources or {})
+        #: 網址 → 來源。測試途中可以再加（合成的 feed 一輪多幾筆）。
+        self.sources = dict(sources or {})
         self.error = error
         #: 被要過的每一條網址，用來斷言「重複送單時一次都沒去要」。
         self.requested: list[str] = []
@@ -34,8 +35,8 @@ class FakeTorrentFetcher:
         self.requested.append(url)
         if self.error is not None:
             raise self.error
-        if url in self._sources:
-            return self._sources[url]
+        if url in self.sources:
+            return self.sources[url]
         info_hash = magnet_info_hash(url)
         if info_hash:
             return TorrentSource(info_hash=info_hash, magnet=url)

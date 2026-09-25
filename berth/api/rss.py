@@ -18,7 +18,14 @@ from pydantic import BaseModel, ConfigDict, Field
 from berth.api.deps import ClientFactoryDep, SessionDep
 from berth.api.errors import refusal_responses
 from berth.api.gate import current_user
-from berth.domain import BindReasonCode, FeedItemStatus, FeedKind, MediaKind, RssRefusal
+from berth.domain import (
+    BindReasonCode,
+    FeedItemStatus,
+    FeedKind,
+    MediaKind,
+    RssRefusal,
+    SkipCode,
+)
 from berth.services.rss import (
     RssRejectedError,
     add_feed,
@@ -28,6 +35,10 @@ from berth.services.rss import (
     list_items,
     list_series,
     poll_feed,
+    read_exclusions,
+    set_exclusions,
+    set_feed_exclusions,
+    set_series_exclusions,
     unbind_series,
 )
 
@@ -46,6 +57,8 @@ _STATUS: dict[RssRefusal, int] = {
     #: 與送單的 `route_disabled` 同一個判斷：Route 在，只是現在不收。
     RssRefusal.ROUTE_DISABLED: status.HTTP_409_CONFLICT,
     RssRefusal.ROUTE_KIND_MISMATCH: status.HTTP_422_UNPROCESSABLE_CONTENT,
+    #: 規則寫壞了：`detail` 是 `<規則>: <原因>`，什麼都沒存。
+    RssRefusal.RULE_INVALID: status.HTTP_422_UNPROCESSABLE_CONTENT,
 }
 
 
@@ -79,6 +92,8 @@ class FeedOut(BaseModel):
     last_error: str
     #: 這個 Feed 長出了幾筆 Item；刪除的確認說出會刪掉幾筆。
     items: int
+    #: 這一層的排除條件（一般字詞不分大小寫；`/…/` 是正則，`/…/i` 不分大小寫）。
+    exclusions: list[str]
 
 
 class FeedIn(BaseModel):
@@ -151,6 +166,8 @@ class SeriesOut(BaseModel):
     reasons: list[BindReasonOut]
     #: 給人一鍵選的作品，照 TMDB 搜尋結果的順序。
     candidates: list[CandidateOut]
+    #: 這一層的排除條件。
+    exclusions: list[str]
     #: 只有綁定回的那一份有值：這一次送出去了幾筆。
     submitted: int
 
@@ -160,6 +177,35 @@ class BindingIn(BaseModel):
 
     media: str = Field(min_length=1)
     route: int
+
+
+class SkipReasonOut(BaseModel):
+    """一筆 Item 為什麼沒送出去：code 加參數，句子由前端照 code 挑（`rss.skip.*`，票 10）。"""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    code: SkipCode
+    params: dict[str, str | int]
+
+
+class RulesIn(BaseModel):
+    """一層的排除條件，整組覆寫。寫壞的那一條讓整組都不存（422 `rule_invalid`）。"""
+
+    rules: list[str]
+
+
+class ExclusionsIn(RulesIn):
+    """全域那一層：規則加上合集預設。"""
+
+    #: 預設只排合集：不是單集的不自動下載。
+    not_single: bool
+
+
+class ExclusionsOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    not_single: bool
+    rules: list[str]
 
 
 class ItemOut(BaseModel):
@@ -176,6 +222,9 @@ class ItemOut(BaseModel):
     job_hash: str
     #: 上一次送單被拒的原文（`reason: detail`）。
     error: str
+    #: `excluded` / `duplicate` 的那一條理由；其他狀態是 `null`。重複的那一種連到的 Job 在
+    #: `job_hash`。
+    skip: SkipReasonOut | None
 
 
 @router.get("/feeds")
@@ -211,6 +260,34 @@ async def post_poll(session: SessionDep, factory: ClientFactoryDep, feed_id: int
         return PollOut.model_validate(await poll_feed(session, factory, feed_id))
     except RssRejectedError as refusal:
         raise rss_refusal(refusal) from refusal
+
+
+@router.put(
+    "/feeds/{feed_id}/exclusions",
+    responses=_responses(RssRefusal.FEED_MISSING, RssRefusal.RULE_INVALID),
+)
+async def put_feed_exclusions(session: SessionDep, feed_id: int, body: RulesIn) -> FeedOut:
+    """整組覆寫這個 Feed 的排除條件；它還沒送出去的 Item 照新規則再看一次。"""
+    try:
+        return FeedOut.model_validate(await set_feed_exclusions(session, feed_id, body.rules))
+    except RssRejectedError as refusal:
+        raise rss_refusal(refusal) from refusal
+
+
+@router.get("/exclusions")
+async def get_exclusions(session: SessionDep) -> ExclusionsOut:
+    """全域那一層。"""
+    return ExclusionsOut.model_validate(await read_exclusions(session))
+
+
+@router.put("/exclusions", responses=_responses(RssRefusal.RULE_INVALID))
+async def put_exclusions(session: SessionDep, body: ExclusionsIn) -> ExclusionsOut:
+    """整組覆寫全域那一層。放寬不把已經擋下的放回來（brief §15）。"""
+    try:
+        view = await set_exclusions(session, not_single=body.not_single, rules=body.rules)
+    except RssRejectedError as refusal:
+        raise rss_refusal(refusal) from refusal
+    return ExclusionsOut.model_validate(view)
 
 
 @router.get("/series")
@@ -257,6 +334,18 @@ async def put_binding(
 async def delete_binding(session: SessionDep, series_id: int) -> SeriesOut:
     try:
         return SeriesOut.model_validate(await unbind_series(session, series_id))
+    except RssRejectedError as refusal:
+        raise rss_refusal(refusal) from refusal
+
+
+@router.put(
+    "/series/{series_id}/exclusions",
+    responses=_responses(RssRefusal.SERIES_MISSING, RssRefusal.RULE_INVALID),
+)
+async def put_series_exclusions(session: SessionDep, series_id: int, body: RulesIn) -> SeriesOut:
+    """整組覆寫這個 RSS Series 的排除條件；它還沒送出去的 Item 照新規則再看一次。"""
+    try:
+        return SeriesOut.model_validate(await set_series_exclusions(session, series_id, body.rules))
     except RssRejectedError as refusal:
         raise rss_refusal(refusal) from refusal
 

@@ -2143,7 +2143,7 @@ const zhHant = {
     off: '讀不到 RSS 的清單。Berth 自己的 API 沒有回應，先確認它還活著。',
     failed: '沒有做成。重新整理這一頁再試一次；還是不行的話看健康頁。',
     kind: { mikan: 'MIKAN' },
-    // `RssRefusal` 九種，各一句。原文另外印在下面（`detail`）。
+    // `RssRefusal` 十種，各一句。原文另外印在下面（`detail`）。
     refusal: {
       feed_missing: '這個 Feed 已經不在了，多半是另一個分頁剛刪掉它。',
       feed_unsupported: '認不得這個網址。這一版只收 Mikan（mikanani.me）的 RSS 網址。',
@@ -2154,6 +2154,7 @@ const zhHant = {
       route_missing: '那條 Route 已經不在了。',
       route_disabled: '那條 Route 停用中。到設定的媒體庫路徑把它啟用，或換一條。',
       route_kind_mismatch: '那條 Route 收的不是這種作品（劇集只進得了劇集媒體庫）。',
+      rule_invalid: '這條排除條件寫壞了，什麼都沒存。',
     },
     feeds: {
       title: 'Feed',
@@ -2254,6 +2255,37 @@ const zhHant = {
       route_ambiguous: '作品認出來了，但 {{routes}} 都收得下它',
       no_route: '作品認出來了，但沒有啟用中的 Route 收得下它',
     },
+    // 排除條件（票 10）：三層共用一組字。
+    rules: {
+      title: '排除條件',
+      lede: 'Feed 裡的項目預設全部下載，只擋這裡寫的。全域、Feed、RSS Series 三層取聯集，放在哪一層都擋。改了之後只影響還沒送出去的；拿掉一條不會把之前被它擋下的放回來。',
+      notSingle: '不自動下載合集（不是單集的：合集、區間、季包）',
+      notSingleHint: '合集照樣可以從搜尋手動送單。',
+      none: '沒有排除條件。',
+      list: '排除條件',
+      add: '加一條排除條件',
+      hint: '一般字詞不分大小寫、比對整個標題；用 /…/ 包起來是正則（/…/i 不分大小寫）。',
+      addAction: '加入規則',
+      saving: '儲存中…',
+      remove: '拿掉「{{rule}}」',
+      suggestions: '建議',
+      suggest: '加入「{{rule}}」',
+      invalid: '存不進去：{{detail}}',
+      toggle_one: '排除條件（{{count}} 條）',
+      toggle_other: '排除條件（{{count}} 條）',
+      feedLede: '只對這個 Feed，與全域的規則一起算。',
+      seriesLede: '只對這個 RSS Series，與全域、Feed 的規則一起算。',
+    },
+    // 一筆 Item 為什麼沒下載（`domain.SkipCode`，票 10）。參數是原文，不翻譯；
+    // 佔位符由 `tests/unit/test_skip_reasons.py` 對後端的參數表逐句比對。
+    skip: {
+      not_single: '不是單集（合集、區間或季包），預設不自動下載',
+      global_rule: '全域的排除條件「{{rule}}」擋下',
+      feed_rule: '這個 Feed 的排除條件「{{rule}}」擋下',
+      series_rule: '這個 RSS Series 的排除條件「{{rule}}」擋下',
+      same_torrent: '同一個 torrent 已經送過了（另一個 Feed 或手動送單）',
+      in_library: '媒體庫裡已經有同一個版本：{{known}}',
+    },
     series: {
       key: '鍵',
       page: 'Mikan 番組頁',
@@ -2270,6 +2302,8 @@ const zhHant = {
         matched: '待送出',
         downloaded: '已送單',
         stuck: '送不出去',
+        excluded: '已排除',
+        duplicate: '重複',
       },
     },
   },
@@ -4405,6 +4439,7 @@ const en: Translations<typeof zhHant> = {
         'That route is disabled. Enable it under Settings → Library paths, or pick another.',
       route_kind_mismatch:
         "That route doesn't hold this kind of title (series only go into a TV library).",
+      rule_invalid: 'That exclusion rule is broken; nothing was saved.',
     },
     feeds: {
       title: 'Feeds',
@@ -4505,6 +4540,36 @@ const en: Translations<typeof zhHant> = {
       key: 'Key',
       page: 'Mikan show page',
     },
+    rules: {
+      title: 'Exclusions',
+      lede: 'Everything in a feed is downloaded unless a rule here blocks it. Global, feed and RSS Series rules add up: a rule blocks on whichever level it sits. Changes only reach items not sent yet; removing a rule does not bring back what it already blocked.',
+      notSingle:
+        "Don't download batches automatically (anything but a single episode: batches, ranges, season packs)",
+      notSingleHint: 'Batches can still be sent by hand from search.',
+      none: 'No exclusions.',
+      list: 'Exclusions',
+      add: 'Add an exclusion',
+      hint: 'Plain words match anywhere in the title, ignoring case; wrap in /…/ for a regex (/…/i ignores case).',
+      addAction: 'Add rule',
+      saving: 'Saving…',
+      remove: 'Remove “{{rule}}”',
+      suggestions: 'Suggestions',
+      suggest: 'Add “{{rule}}”',
+      invalid: 'Not saved: {{detail}}',
+      toggle_one: 'Exclusions ({{count}})',
+      toggle_other: 'Exclusions ({{count}})',
+      feedLede: 'For this feed only, on top of the global rules.',
+      seriesLede: 'For this RSS Series only, on top of the global and feed rules.',
+    },
+    skip: {
+      not_single:
+        'Not a single episode (a batch, range or season pack), so not downloaded automatically',
+      global_rule: 'Blocked by the global rule “{{rule}}”',
+      feed_rule: 'Blocked by this feed’s rule “{{rule}}”',
+      series_rule: 'Blocked by this RSS Series’ rule “{{rule}}”',
+      same_torrent: 'The same torrent was already sent (from another feed or by hand)',
+      in_library: 'The library already has this version: {{known}}',
+    },
     items: {
       title: 'Recent feed items',
       count_one: '{{count}} item',
@@ -4517,6 +4582,8 @@ const en: Translations<typeof zhHant> = {
         matched: 'To send',
         downloaded: 'Sent',
         stuck: "Can't send",
+        excluded: 'Excluded',
+        duplicate: 'Duplicate',
       },
     },
   },

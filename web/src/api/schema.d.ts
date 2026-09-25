@@ -1014,6 +1014,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/rss/feeds/{feed_id}/exclusions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Put Feed Exclusions
+         * @description 整組覆寫這個 Feed 的排除條件；它還沒送出去的 Item 照新規則再看一次。
+         */
+        put: operations["put_feed_exclusions_api_rss_feeds__feed_id__exclusions_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/rss/exclusions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Exclusions
+         * @description 全域那一層。
+         */
+        get: operations["get_exclusions_api_rss_exclusions_get"];
+        /**
+         * Put Exclusions
+         * @description 整組覆寫全域那一層。放寬不把已經擋下的放回來（brief §15）。
+         */
+        put: operations["put_exclusions_api_rss_exclusions_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/rss/series": {
         parameters: {
             query?: never;
@@ -1050,6 +1094,26 @@ export interface paths {
         post?: never;
         /** Delete Binding */
         delete: operations["delete_binding_api_rss_series__series_id__binding_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/rss/series/{series_id}/exclusions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Put Series Exclusions
+         * @description 整組覆寫這個 RSS Series 的排除條件；它還沒送出去的 Item 照新規則再看一次。
+         */
+        put: operations["put_series_exclusions_api_rss_series__series_id__exclusions_put"];
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -2136,6 +2200,23 @@ export interface components {
          * @enum {string}
          */
         EpisodeStatus: "imported" | "stuck" | "downloading" | "missing" | "unaired";
+        /**
+         * ExclusionsIn
+         * @description 全域那一層：規則加上合集預設。
+         */
+        ExclusionsIn: {
+            /** Rules */
+            rules: string[];
+            /** Not Single */
+            not_single: boolean;
+        };
+        /** ExclusionsOut */
+        ExclusionsOut: {
+            /** Not Single */
+            not_single: boolean;
+            /** Rules */
+            rules: string[];
+        };
         /** FeedDeletedOut */
         FeedDeletedOut: {
             /** Items */
@@ -2158,10 +2239,11 @@ export interface components {
          * FeedItemStatus
          * @description 一筆 Feed Item 走到哪了（`CONTEXT.md`、plan §2.4）。
          *
-         *     只列這一票用得到的三種；`new`（還沒比對）與 `excluded`（排除條件）在票 10 加。
+         *     `new`（還沒比對）沒有建：一筆 Item 寫下的那一刻就已經認出 RSS Series、看過排除條件，
+         *     沒有「還沒比對」這一段（M3 票 10）。
          * @enum {string}
          */
-        FeedItemStatus: "unbound" | "matched" | "downloaded";
+        FeedItemStatus: "unbound" | "matched" | "downloaded" | "excluded" | "duplicate";
         /**
          * FeedKind
          * @description Feed 是哪一站的 RSS（plan §2.4、§8.5）。每一種一個 adapter（`adapters/rss/`）。
@@ -2188,6 +2270,8 @@ export interface components {
             last_error: string;
             /** Items */
             items: number;
+            /** Exclusions */
+            exclusions: string[];
         };
         /**
          * FileKind
@@ -2565,6 +2649,7 @@ export interface components {
             job_hash: string;
             /** Error */
             error: string;
+            skip: components["schemas"]["SkipReasonOut"] | null;
         };
         /**
          * ItemReasonOut
@@ -3623,7 +3708,7 @@ export interface components {
          *     下一輪輪詢再送（`.scratch/m3/rss-shape.md` §3）。
          * @enum {string}
          */
-        RssRefusal: "feed_missing" | "feed_unsupported" | "feed_duplicate" | "series_missing" | "series_bound" | "media_missing" | "route_missing" | "route_disabled" | "route_kind_mismatch";
+        RssRefusal: "feed_missing" | "feed_unsupported" | "feed_duplicate" | "series_missing" | "series_bound" | "media_missing" | "route_missing" | "route_disabled" | "route_kind_mismatch" | "rule_invalid";
         /**
          * RssRefusalOut
          * @description 與其他群組的拒絕同形：`reason` 挑句子，`detail` 是原文或那一個 id。
@@ -3632,6 +3717,14 @@ export interface components {
             reason: components["schemas"]["RssRefusal"];
             /** Detail */
             detail: string;
+        };
+        /**
+         * RulesIn
+         * @description 一層的排除條件，整組覆寫。寫壞的那一條讓整組都不存（422 `rule_invalid`）。
+         */
+        RulesIn: {
+            /** Rules */
+            rules: string[];
         };
         /**
          * SearchOut
@@ -3748,6 +3841,8 @@ export interface components {
             reasons: components["schemas"]["BindReasonOut"][];
             /** Candidates */
             candidates: components["schemas"]["CandidateOut"][];
+            /** Exclusions */
+            exclusions: string[];
             /** Submitted */
             submitted: number;
         };
@@ -3861,6 +3956,12 @@ export interface components {
             /** Error */
             error: string;
         };
+        /**
+         * SkipCode
+         * @description 一筆 Feed Item 被擋下的原因。
+         * @enum {string}
+         */
+        SkipCode: "not_single" | "global_rule" | "feed_rule" | "series_rule" | "same_torrent" | "in_library";
         /** SkipIn */
         SkipIn: {
             /**
@@ -3868,6 +3969,17 @@ export interface components {
              * @default true
              */
             skipped?: boolean;
+        };
+        /**
+         * SkipReasonOut
+         * @description 一筆 Item 為什麼沒送出去：code 加參數，句子由前端照 code 挑（`rss.skip.*`，票 10）。
+         */
+        SkipReasonOut: {
+            code: components["schemas"]["SkipCode"];
+            /** Params */
+            params: {
+                [key: string]: string | number;
+            };
         };
         /**
          * SortOrder
@@ -6442,6 +6554,103 @@ export interface operations {
             };
         };
     };
+    put_feed_exclusions_api_rss_feeds__feed_id__exclusions_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                feed_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RulesIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeedOut"];
+                };
+            };
+            /** @description `feed_missing` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RssRefusalOut"];
+                };
+            };
+            /** @description `rule_invalid` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RssRefusalOut"];
+                };
+            };
+        };
+    };
+    get_exclusions_api_rss_exclusions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExclusionsOut"];
+                };
+            };
+        };
+    };
+    put_exclusions_api_rss_exclusions_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExclusionsIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExclusionsOut"];
+                };
+            };
+            /** @description `rule_invalid` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RssRefusalOut"];
+                };
+            };
+        };
+    };
     get_series_api_rss_series_get: {
         parameters: {
             query?: never;
@@ -6551,6 +6760,50 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_series_exclusions_api_rss_series__series_id__exclusions_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                series_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RulesIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SeriesOut"];
+                };
+            };
+            /** @description `series_missing` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RssRefusalOut"];
+                };
+            };
+            /** @description `rule_invalid` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RssRefusalOut"];
                 };
             };
         };

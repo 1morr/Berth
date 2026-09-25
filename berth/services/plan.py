@@ -258,7 +258,9 @@ async def _plan(
         contents,
         route,
         _apply_policy(
-            decide(job.name, entries, _context(route, snapshot, await _series_of(session, job))),
+            decide(
+                job.name, entries, parse_context(route, snapshot, await _series_of(session, job))
+            ),
             route,
         ),
     )
@@ -323,7 +325,7 @@ async def _preplan(session: AsyncSession, hub: EventHub, job_hash: str, now: dat
             decide(
                 job.name,
                 entries,
-                _context(route, await _stored(session, job), await _series_of(session, job)),
+                parse_context(route, await _stored(session, job), await _series_of(session, job)),
             ),
             route,
         ),
@@ -413,13 +415,14 @@ async def _stored(session: AsyncSession, job: Job) -> MediaSnapshot | None:
     return row.stored_snapshot() if row is not None else None
 
 
-def _context(
+def parse_context(
     route: Route | None, snapshot: MediaSnapshot | None, series: RssSeries | None
 ) -> ParseContext:
     """解析器看得到的東西（plan §4.3）。
 
     `season_hint` 與 `episode_offset` 是 RSS Series 帶進來的（brief §15：放在 RSS Series 上、
-    規劃時讀，M3 票 08）；手動送單的 Job 沒有它們。
+    規劃時讀，M3 票 08）；手動送單的 Job 沒有它們。RSS 送單前比帳本也用它
+    （`services/rss._in_library`，票 10）：同一份上下文，送單前猜的季集才會與規劃時算的一樣。
     """
     return ParseContext(
         media=snapshot,

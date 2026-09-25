@@ -3,9 +3,11 @@ import { useId, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import {
+  exclusionsQueryOptions,
   feedsQueryOptions,
   itemsQueryOptions,
   RSS_KEY,
+  saveSeriesExclusions,
   seriesQueryOptions,
   unbindSeries,
   type FeedItem,
@@ -19,16 +21,19 @@ import { SIGNAL_FILL } from '../components/signal'
 import { useFocusAfterRemoval } from '../components/useFocusAfterRemoval'
 import { displayRound } from '../i18n/displayRound'
 import { JobLink } from '../jobs/JobLink'
+import { ExclusionsSection } from '../rss/ExclusionsSection'
 import { FeedSection } from '../rss/FeedSection'
 import { Grounds } from '../rss/GroundsList'
+import { RulesToggle } from '../rss/RulesEditor'
 import { SectionHeading } from '../rss/SectionHeading'
 import { SeriesBinder } from '../rss/SeriesBinder'
+import { skipText } from '../rss/skip'
 
 /**
  * RSS `/rss`（`.scratch/m3/rss-shape.md`，M3 票 08）。只有 admin。
  *
- * 單頁堆疊，由上而下：**待綁定**（有才出現，需要你的事浮到最上面）→ Feed → 綁好的 RSS Series →
- * 最近的 Feed Item。平常它在背景輪詢，人只在有新的 RSS Series 等綁定時回來——所以第一個
+ * 單頁堆疊，由上而下：**待綁定**（有才出現，需要你的事浮到最上面）→ Feed → 全域的排除條件
+ * （票 10）→ 綁好的 RSS Series → 最近的 Feed Item。平常它在背景輪詢，人只在有新的 RSS Series 等綁定時回來——所以第一個
  * viewport 回答的是「有沒有要我綁的」。
  */
 export function RssPage() {
@@ -36,14 +41,15 @@ export function RssPage() {
   const feeds = useQuery(feedsQueryOptions())
   const series = useQuery(seriesQueryOptions())
   const items = useQuery(itemsQueryOptions())
+  const exclusions = useQuery(exclusionsQueryOptions())
   const frame = useFocusAfterRemoval()
   // 綁完那一列會離開待綁定段（The Focus Takes The Next Row Rule）：這一句給看不見畫面的人。
   const [said, setSaid] = useState('')
 
   const pending = (series.data ?? []).filter((row) => row.media_id === null)
   const bound = (series.data ?? []).filter((row) => row.media_id !== null)
-  const loading = feeds.isPending || series.isPending || items.isPending
-  const off = !loading && (!feeds.data || !series.data || !items.data)
+  const loading = feeds.isPending || series.isPending || items.isPending || exclusions.isPending
+  const off = !loading && (!feeds.data || !series.data || !items.data || !exclusions.data)
 
   return (
     <div ref={frame} className="mx-auto grid w-full max-w-[80rem] gap-8 px-6 py-8">
@@ -65,6 +71,7 @@ export function RssPage() {
         <>
           {pending.length > 0 && <Pending rows={pending} onDone={setSaid} />}
           <FeedSection feeds={feeds.data ?? []} />
+          {exclusions.data && <ExclusionsSection exclusions={exclusions.data} />}
           {bound.length > 0 && <Bound rows={bound} onDone={setSaid} />}
           {/* 沒有 Feed 時整頁只有 Feed 段（shape §5）：還不會有任何 Item。 */}
           {(feeds.data ?? []).length > 0 && <Items rows={items.data ?? []} />}
@@ -101,7 +108,12 @@ function Pending({ rows, onDone }: { rows: RssSeries[]; onDone: (said: string) =
               sentence={t('rss.pending.waiting', { count: row.waiting })}
               when={sourceOf(row)}
               // 自動綁定查過、沒綁上的理由（票 09）。它回答「為什麼要我來綁」，所以不收進展開區。
-              body={<Grounds lead={t('rss.pending.why')} reasons={row.reasons} />}
+              body={
+                <>
+                  <Grounds lead={t('rss.pending.why')} reasons={row.reasons} />
+                  <SeriesRules row={row} />
+                </>
+              }
               refusal={null}
               details={<SeriesDetails row={row} />}
             >
@@ -186,6 +198,7 @@ function BoundRow({ row, onDone }: { row: RssSeries; onDone: (said: string) => v
       </p>
       {/* 沒有人選過這一部：綁好的那一列要說得出憑什麼（票 09）。 */}
       {automatic && <Grounds lead={t('rss.bound.grounds')} reasons={row.reasons} />}
+      <SeriesRules row={row} />
       {unbind.isError && (
         <Notice signal="blocked" label={t('common.failed')}>
           {t('rss.failed')}
@@ -202,6 +215,18 @@ function BoundRow({ row, onDone }: { row: RssSeries; onDone: (said: string) => v
         />
       </div>
     </article>
+  )
+}
+
+/** 這個 RSS Series 那一層的排除條件（票 10）。待綁定的也有：綁定之前就擋得下不要的那幾集。 */
+function SeriesRules({ row }: { row: RssSeries }) {
+  const { t } = useTranslation()
+  return (
+    <RulesToggle
+      rules={row.exclusions}
+      save={(rules) => saveSeriesExclusions(row.id, rules)}
+      lede={t('rss.rules.seriesLede')}
+    />
   )
 }
 
@@ -267,6 +292,12 @@ function Items({ rows }: { rows: FeedItem[] }) {
                   </>
                 )}
               </p>
+              {/* 排除與去重擋下的都不是錯誤（票 10）：一句「為什麼沒下載」，不塗漆。 */}
+              {row.skip && (
+                <p className="max-w-prose text-xs wrap-anywhere text-ink-dim">
+                  {skipText(t, row.skip)}
+                </p>
+              )}
               {row.error && <p className="value text-xs wrap-anywhere text-ink">{row.error}</p>}
             </li>
           ))}
@@ -277,7 +308,8 @@ function Items({ rows }: { rows: FeedItem[] }) {
 }
 
 /**
- * 一筆 Item 的狀態色塊。**常態不塗漆**：待綁定已經在第一段塗過了，已送單是沒事；只有送不出去
+ * 一筆 Item 的狀態色塊。**常態不塗漆**：待綁定已經在第一段塗過了，已送單是沒事，已排除與重複是
+ * 照使用者的規則與帳本擋下的（票 10，不是錯誤）；只有送不出去
  * （`matched` 帶著原文）塗 `assigned`——卡住了、下一輪會再送，但原因（Route 紅燈、磁碟門檻）
  * 多半要人去修（DESIGN.md：卡住是 `assigned`，`blocked` 留給失敗）。
  */

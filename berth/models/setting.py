@@ -61,6 +61,17 @@ class JellyfinSettings(SettingsGroup):
     metadata_fetchers: dict[str, list[str]] = {}
 
 
+class RssSettings(SettingsGroup):
+    """RSS 的全域那一層（brief §15「全部接受，只排除」、M3 票 10）。"""
+
+    KEY = "rss"
+
+    #: 預設只排合集：不是單集的（`release_kind != single`）不自動下載。一次性連結與搜尋仍可手動送。
+    exclude_not_single: bool = True
+    #: 全域的排除條件（`parser.exclusion` 的格式），與 Feed、RSS Series 那兩層取聯集。
+    exclude: list[str] = []
+
+
 class QbittorrentSettings(SettingsGroup):
     KEY = "services.qbittorrent"
 

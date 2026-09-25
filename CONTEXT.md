@@ -306,7 +306,11 @@ _Avoid_: subscription（Subscription 是 UI 上「訂閱一部作品」的動作
 _Avoid_: rule, subscription, follow（`follows` 是字幕跟著影片的那個函式）
 
 **Feed Item**:
-Feed 中的一筆項目及其解析與比對結果（new / matched / downloaded / excluded / unbound）。
+Feed 中的一筆項目及其結果：unbound（待綁定）/ matched（綁好還沒送成）/ downloaded（送出去了）/ excluded（**排除條件**擋下）/ duplicate（去重擋下：同一個 torrent 已經送過，或媒體庫已有同一個版本）。擋下的都不是錯誤，帶著「為什麼沒下載」的理由。
+
+**排除條件**（exclusion rule）:
+Feed Item 不自動下載的條件：一條關鍵字或正則（Sonarr 的格式），比對整個標題。分全域、Feed、RSS Series 三層，三層取聯集；全域另有「不自動下載合集」的開關，預設開。Berth 全部接受、只排除（brief §15），沒有白名單。
+_Avoid_: filter（「篩選」是清單上的顯示操作）, blacklist
 _Avoid_: entry, post
 
 ### AI 與通知（M4–M7，2026-09-22 定名、09-24 改）

@@ -640,9 +640,22 @@ Issue、修正、對帳、刪除與重新入庫的每一條端點都是 403，�
   認得出的作品列成候選、一鍵選定就接到 Route 與確認。`rss_series` 多 `reasons_json`、`candidates_json`（migration
   `a9c4e2f7b315`）；`POST /rss/feeds/{id}/poll` 多回 `bound`，`GET /rss/series` 每一列多 `reasons` 與 `candidates`。
   量測腳本 `scripts/experiments/rss_auto_bind.py`。
+- **RSS 的排除條件三層與去重**（M3 票 10，brief §15「全部接受，只排除」「處理」）：Feed 裡的項目預設全部下載，
+  只擋排除條件寫的——全域（`/rss` 的「排除條件」段，存在 `settings.rss`）、每一個 Feed、每一個 RSS Series 三層取
+  聯集。規則格式照 Sonarr 的 release profile：一般字詞不分大小寫、比對整個標題，`/…/` 是正則（`/…/i` 不分大小寫）；
+  寫壞的存不進去（422 `rule_invalid`，說出 Python `re` 的原因）。**預設不自動下載合集**（不是單集的：合集、區間、季包），
+  可以關掉；720p、简体這類是一鍵加入的建議項。規則收緊時還沒送出去的 Item 照新規則再看一次，放寬不把已經擋下的放回來。
+  去重：同一個 info hash（另一個 Feed、手動送過、刪掉過）與帳本已有同一部作品、同一季集、同一組 Tags 的不再送；
+  v2 的 Tags 不同，同一集的 v1 與 v2、兩個字幕組的版本都入庫並存。擋下的 Item 是 `excluded` / `duplicate`，`/rss`
+  的清單說出是哪一層的哪一條、或重複了哪一筆。新端點 `GET/PUT /rss/exclusions`、`PUT /rss/feeds/{id}/exclusions`、
+  `PUT /rss/series/{id}/exclusions`；`rss_feeds` 與 `rss_series` 多 `exclude_json`、`rss_items` 多 `skip_json`
+  （migration `d5b8e1a3c702`）。`pnpm -C web e2e` 多 `rss-exclusions` 一條（1280 與 390）。
 
 ### Changed
 - **RSS 送出的下載，時間線上的建立者是 `rss:<RSS Series id>`**（M3 票 08，plan §2.3）：原本一律寫 `system`。
+- **同一個 torrent 已經由別的 Feed、手動送單送過（或刪掉過）時，RSS 的那一筆記成「重複」而不是「已送單」**
+  （M3 票 10）：連到原本那一筆下載；刪除過的那一筆不再讓 RSS 每一輪撞一次 `job_removed`。同一個 RSS Series 自己
+  送過的（刪掉 Feed 再加回來、送單中途程序中斷）照舊認回成已送單。
 - **精靈每一步的工作面排在剖面前面**（M3 票 06h）：窄版第一屏就是這一步的標題與動作（390 寬時原本要捲到
   800–1500px），桌機看起來不變；套件內 Jellyfin 要建的媒體庫清單從剖面搬進工作面、排在「開始靠泊」之前。換步時
   焦點給新一步的標題，按下的鍵做完被換掉時接到「前往下一個泊位」；窄版捲動時底部留出固定動作列的高度。
@@ -964,8 +977,8 @@ Issue、修正、對帳、刪除與重新入庫的每一條端點都是 403，�
 - `scripts/experiments/profile_effect.py`（票 14e）：它量的東西不存在了。研究文件
   `docs/research/profile-effect.md` 留著當紀錄。
 
-- `job_files.release_info_json`（M3 票 01，migration `f2a7c91d4e38`）：M1 起就沒有人寫它。RSS 要的那一份在
-  `rss_items` 自己那一欄。
+- `job_files.release_info_json`（M3 票 01，migration `f2a7c91d4e38`）：M1 起就沒有人寫它。RSS 要的時候直接解析
+  Item 的標題（純函式，M3 票 10），不另存一欄。
 - `InventoryOut` 卡片上的 `tracking.needs_review` 與 `tracking.has_unmatched`（M2 票 14）：唯一的消費點是舊的
   卡片牆篩選，換成審核佇列的清單之後沒有人讀它們。
 - `GET /api/jellyfin/watching`（M3 票 06）：整個帳號的繼續觀看與下一集，唯一的消費點是探索頁上方那兩列。

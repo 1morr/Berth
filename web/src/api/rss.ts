@@ -22,6 +22,15 @@ export type Candidate = Schemas['CandidateOut']
 /** 一筆 Feed Item。 */
 export type FeedItem = Schemas['ItemOut']
 
+/** 一筆 Item 為什麼沒送出去（`domain.SkipReason`，票 10）：code 加不翻譯的參數。 */
+export type SkipReason = Schemas['SkipReasonOut']
+
+/** `domain.SkipCode`。 */
+export type SkipCode = Schemas['SkipCode']
+
+/** 全域那一層的排除條件（`settings.rss`）。 */
+export type Exclusions = Schemas['ExclusionsOut']
+
 /** 一輪輪詢的結果。 */
 export type PollOutcome = Schemas['PollOut']
 
@@ -39,6 +48,7 @@ const REASONS: ReasonSet<RssRefusal> = {
   route_missing: true,
   route_disabled: true,
   route_kind_mismatch: true,
+  rule_invalid: true,
 }
 
 export function parseRssRefusal(error: unknown) {
@@ -47,6 +57,13 @@ export function parseRssRefusal(error: unknown) {
 
 /** `/rss` 上三份清單共用的前綴：一個動作之後三份一起重問（綁定會改 Series 也會改 Item）。 */
 export const RSS_KEY = ['rss'] as const
+
+export function exclusionsQueryOptions() {
+  return queryOptions({
+    queryKey: [...RSS_KEY, 'exclusions'],
+    queryFn: () => apiGet<Exclusions>('/rss/exclusions'),
+  })
+}
 
 export function feedsQueryOptions() {
   return queryOptions({
@@ -87,4 +104,17 @@ export function bindSeries(id: number, media: string, route: number) {
 
 export function unbindSeries(id: number) {
   return apiDelete<RssSeries>(`/rss/series/${id}/binding`)
+}
+
+/** 三層的排除條件都是整組覆寫；寫壞的那一條讓整組不存（422 `rule_invalid`）。 */
+export function saveExclusions(notSingle: boolean, rules: string[]) {
+  return apiPut<Exclusions>('/rss/exclusions', { not_single: notSingle, rules })
+}
+
+export function saveFeedExclusions(id: number, rules: string[]) {
+  return apiPut<Feed>(`/rss/feeds/${id}/exclusions`, { rules })
+}
+
+export function saveSeriesExclusions(id: number, rules: string[]) {
+  return apiPut<RssSeries>(`/rss/series/${id}/exclusions`, { rules })
 }

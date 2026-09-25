@@ -8,6 +8,7 @@ import {
   parseRssRefusal,
   pollFeed,
   RSS_KEY,
+  saveFeedExclusions,
   type Feed,
   type PollOutcome,
 } from '../api/rss'
@@ -22,12 +23,14 @@ import {
 import { Dot } from '../components/Dot'
 import { Timestamp } from '../components/Timestamp'
 import { maskToken } from './maskToken'
+import { RulesToggle } from './RulesEditor'
 import { SectionHeading } from './SectionHeading'
 
 /**
  * Feed 段（`.scratch/m3/rss-shape.md` §2 第 2 段）：新增表單與每一個 Feed。
  *
- * 間隔不在表單上（預設 15 分鐘，plan §3.2）；編輯與停用沒有消費者就不做（shape §6）。
+ * 間隔不在表單上（預設 15 分鐘，plan §3.2）；編輯與停用沒有消費者就不做（shape §6）。每一列有這個 Feed
+ * 那一層的排除條件（票 10）。
  */
 export function FeedSection({ feeds }: { feeds: Feed[] }) {
   const { t } = useTranslation()
@@ -171,6 +174,11 @@ function FeedRow({ feed }: { feed: Feed }) {
           {t('rss.failed')}
         </Notice>
       )}
+      <RulesToggle
+        rules={feed.exclusions}
+        save={(rules) => saveFeedExclusions(feed.id, rules)}
+        lede={t('rss.rules.feedLede')}
+      />
       <div className="flex flex-wrap items-start gap-2">
         <GhostButton type="button" busy={poll.isPending} onClick={() => poll.mutate()}>
           {poll.isPending ? t('rss.feeds.polling') : t('rss.feeds.poll')}

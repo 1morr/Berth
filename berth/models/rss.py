@@ -5,8 +5,9 @@
 Series。所以刪 Feed 連它的 Item 一起刪（`CASCADE`），Series 與它的綁定留著
 （`.scratch/m3/rss-shape.md` §4）。
 
-欄位只建這一票用得到的（M3 票 08）：排除條件（票 10）、第一輪預覽（`primed_at`，票 11）、
-第一批確認（`confirmed`，票 13）、補舊集（`backfilled_at`，票 12）等到用它的那一票再加。
+欄位只建用得到的（M3 票 08 起）：排除條件（`exclude_json`）與跳過理由（`skip_json`）在票 10；
+第一輪預覽（`primed_at`，票 11）、第一批確認（`confirmed`，票 13）、補舊集（`backfilled_at`，
+票 12）等到用它的那一票再加。
 """
 
 from __future__ import annotations
@@ -40,6 +41,8 @@ class RssFeed(Base):
     last_polled_at: Mapped[datetime | None] = mapped_column(UtcDateTime, default=None)
     #: 上一輪失敗的原文（英文）。成功的那一輪清空。
     last_error: Mapped[str] = mapped_column(Text, default="")
+    #: 這一層的排除條件（`parser.exclusion` 的格式），與全域、RSS Series 那兩層取聯集（brief §15）。
+    exclude_json: Mapped[list[str]] = mapped_column(JsonText, default=list, server_default="[]")
     created_at: Mapped[datetime] = mapped_column(UtcDateTime, default=utcnow)
 
 
@@ -71,6 +74,8 @@ class RssSeries(Base):
     reasons_json: Mapped[list[dict[str, Any]] | None] = mapped_column(JsonText, default=None)
     #: 給人一鍵選的作品 id（`tv:<tmdb>`），照搜尋結果的順序。
     candidates_json: Mapped[list[str] | None] = mapped_column(JsonText, default=None)
+    #: 這一層的排除條件（與 Feed 那一欄同一個格式）。
+    exclude_json: Mapped[list[str]] = mapped_column(JsonText, default=list, server_default="[]")
     created_at: Mapped[datetime] = mapped_column(UtcDateTime, default=utcnow)
 
 
@@ -106,3 +111,5 @@ class RssItem(Base):
     )
     #: 上一次送單被拒的原文（`reason: detail`）。送成了清空。
     error: Mapped[str] = mapped_column(Text, default="")
+    #: `excluded` / `duplicate` 的那一條理由（`domain.SkipReason` 的 JSON）；其他狀態是 `None`。
+    skip_json: Mapped[dict[str, Any] | None] = mapped_column(JsonText, default=None)

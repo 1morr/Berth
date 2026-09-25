@@ -25,6 +25,7 @@ function feed(overrides: Partial<Feed> = {}): Feed {
     last_polled_at: '2026-09-25T12:00:00Z',
     last_error: '',
     items: 12,
+    exclusions: [],
     ...overrides,
   }
 }
@@ -47,6 +48,7 @@ function series(overrides: Partial<RssSeries> = {}): RssSeries {
     waiting: 2,
     reasons: [],
     candidates: [],
+    exclusions: [],
     submitted: 0,
     ...overrides,
   }
@@ -64,6 +66,7 @@ function item(overrides: Partial<FeedItem> = {}): FeedItem {
     status: 'unbound',
     job_hash: '',
     error: '',
+    skip: null,
     ...overrides,
   }
 }
@@ -103,6 +106,7 @@ function render(routes: Record<string, StubRoute | (() => StubRoute)> = {}) {
     'GET /api/rss/feeds': { body: [feed()] },
     'GET /api/rss/series': { body: [series()] },
     'GET /api/rss/items': { body: [item()] },
+    'GET /api/rss/exclusions': { body: { not_single: true, rules: [] } },
     ...routes,
   })
 }
@@ -322,5 +326,136 @@ describe('RSS 頁', () => {
 
     expect(await screen.findByText('送不出去')).toBeInTheDocument()
     expect(screen.getByText('low_disk_space: /data: 2.0 GiB free')).toBeInTheDocument()
+  })
+
+  it('排除與重複的那一筆說出為什麼沒下載，不塗漆；重複的連到那一筆下載', async () => {
+    render({
+      'GET /api/rss/series': { body: [] },
+      'GET /api/rss/items': {
+        body: [
+          item({
+            id: 1,
+            status: 'excluded',
+            skip: { code: 'feed_rule', params: { rule: '720p' } },
+          }),
+          item({
+            id: 2,
+            status: 'duplicate',
+            job_hash: 'a'.repeat(40),
+            skip: { code: 'same_torrent', params: {} },
+          }),
+          item({
+            id: 3,
+            status: 'duplicate',
+            skip: { code: 'in_library', params: { known: 'Kimi (2026) - S01E12 [1080p].mkv' } },
+          }),
+        ],
+      },
+    })
+    renderApp('/rss')
+
+    const list = await screen.findByRole('region', { name: /最近的 Feed Item/ })
+    expect(within(list).getByText('已排除')).toBeInTheDocument()
+    expect(within(list).getByText('這個 Feed 的排除條件「720p」擋下')).toBeInTheDocument()
+    expect(within(list).getAllByText('重複')).toHaveLength(2)
+    expect(within(list).getByText(/同一個 torrent 已經送過了/)).toBeInTheDocument()
+    expect(
+      within(list).getByText('媒體庫裡已經有同一個版本：Kimi (2026) - S01E12 [1080p].mkv'),
+    ).toBeInTheDocument()
+    expect(within(list).getAllByRole('link', { name: '看這一筆下載' })).toHaveLength(1)
+  })
+
+  it('全域：建議項一鍵加入，合集預設可以關掉', async () => {
+    const stub = render({
+      'PUT /api/rss/exclusions': { body: { not_single: true, rules: ['720p'] } },
+    })
+    renderApp('/rss')
+
+    const section = await screen.findByRole('region', { name: '排除條件' })
+    expect(within(section).getByText('沒有排除條件。')).toBeInTheDocument()
+    const collections = within(section).getByRole('checkbox', { name: /不自動下載合集/ })
+    expect(collections).toBeChecked()
+
+    await userEvent.click(within(section).getByRole('button', { name: '加入「720p」' }))
+    await waitFor(() => expect(sent(stub, 'PUT', '/api/rss/exclusions')).toHaveLength(1))
+    expect(JSON.parse(String(sent(stub, 'PUT', '/api/rss/exclusions')[0][1]?.body))).toEqual({
+      not_single: true,
+      rules: ['720p'],
+    })
+
+    await userEvent.click(collections)
+    await waitFor(() => expect(sent(stub, 'PUT', '/api/rss/exclusions')).toHaveLength(2))
+    expect(JSON.parse(String(sent(stub, 'PUT', '/api/rss/exclusions')[1][1]?.body))).toEqual({
+      not_single: false,
+      rules: [],
+    })
+  })
+
+  it('正則寫壞時在欄位下說出原因，打的字留著', async () => {
+    render({
+      'PUT /api/rss/exclusions': {
+        status: 422,
+        body: {
+          detail: {
+            reason: 'rule_invalid',
+            detail: '/[简繁/: unterminated character set at position 0',
+          },
+        },
+      },
+    })
+    renderApp('/rss')
+
+    const section = await screen.findByRole('region', { name: '排除條件' })
+    const field = within(section).getByLabelText('加一條排除條件')
+    // user-event 的 `[` 是按鍵描述的開頭，`[[` 才是字面上的一個。
+    await userEvent.type(field, '/[[简繁/')
+    await userEvent.click(within(section).getByRole('button', { name: '加入規則' }))
+
+    expect(
+      await within(section).findByText(
+        '存不進去：/[简繁/: unterminated character set at position 0',
+      ),
+    ).toBeInTheDocument()
+    expect(field).toHaveValue('/[简繁/')
+    expect(field).toHaveAttribute('aria-invalid', 'true')
+  })
+
+  it('Feed 那一層：展開才編輯，拿掉一條之後焦點回到加入欄', async () => {
+    const stub = render({
+      'GET /api/rss/feeds': { body: [feed({ exclusions: ['720p', '/v2$/i'] })] },
+      'PUT /api/rss/feeds/1/exclusions': { body: feed({ exclusions: ['/v2$/i'] }) },
+    })
+    renderApp('/rss')
+
+    const row = await screen.findByRole('article', { name: 'Mikan' })
+    const toggle = within(row).getByRole('button', { name: /排除條件（2 條）/ })
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    await userEvent.click(toggle)
+    expect(toggle).toHaveAttribute('aria-expanded', 'true')
+
+    await userEvent.click(within(row).getByRole('button', { name: '拿掉「720p」' }))
+
+    await waitFor(() => expect(sent(stub, 'PUT', '/api/rss/feeds/1/exclusions')).toHaveLength(1))
+    expect(
+      JSON.parse(String(sent(stub, 'PUT', '/api/rss/feeds/1/exclusions')[0][1]?.body)),
+    ).toEqual({ rules: ['/v2$/i'] })
+    await waitFor(() => expect(within(row).getByLabelText('加一條排除條件')).toHaveFocus())
+  })
+
+  it('RSS Series 那一層：待綁定的也編得到', async () => {
+    const stub = render({
+      'PUT /api/rss/series/7/exclusions': { body: series({ exclusions: ['简体'] }) },
+    })
+    renderApp('/rss')
+
+    const pending = await screen.findByRole('region', { name: '待綁定' })
+    await userEvent.click(within(pending).getByRole('button', { name: /排除條件（0 條）/ }))
+    await userEvent.type(within(pending).getByLabelText('加一條排除條件'), ' 简体 ')
+    await userEvent.click(within(pending).getByRole('button', { name: '加入規則' }))
+
+    await waitFor(() => expect(sent(stub, 'PUT', '/api/rss/series/7/exclusions')).toHaveLength(1))
+    expect(
+      JSON.parse(String(sent(stub, 'PUT', '/api/rss/series/7/exclusions')[0][1]?.body)),
+    ).toEqual({ rules: ['简体'] })
   })
 })

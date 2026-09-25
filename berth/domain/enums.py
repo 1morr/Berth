@@ -1178,7 +1178,8 @@ class FeedKind(StrEnum):
 class FeedItemStatus(StrEnum):
     """一筆 Feed Item 走到哪了（`CONTEXT.md`、plan §2.4）。
 
-    只列這一票用得到的三種；`new`（還沒比對）與 `excluded`（排除條件）在票 10 加。
+    `new`（還沒比對）沒有建：一筆 Item 寫下的那一刻就已經認出 RSS Series、看過排除條件，
+    沒有「還沒比對」這一段（M3 票 10）。
     """
 
     #: 它的 RSS Series 還沒綁到作品：留著不送，綁定之後才送（brief §15）。
@@ -1187,6 +1188,11 @@ class FeedItemStatus(StrEnum):
     MATCHED = "matched"
     #: 送出去了，`job_hash` 是那一筆。
     DOWNLOADED = "downloaded"
+    #: 排除條件擋下了（`skip_json` 說哪一層的哪一條）。寫下的那一刻看，或規則收緊時看還沒送的
+    #: 那幾筆；放寬規則不把它放回來（brief §15）。
+    EXCLUDED = "excluded"
+    #: 去重擋下了：同一個 torrent 已經送過、或帳本已有同一個版本（`skip_json` 說是哪一種）。
+    DUPLICATE = "duplicate"
 
 
 class RssRefusal(StrEnum):
@@ -1215,3 +1221,6 @@ class RssRefusal(StrEnum):
     ROUTE_DISABLED = "route_disabled"
     #: 劇集只進得了 tvshows 媒體庫、電影只進得了 movies（`collection_type_for`）。
     ROUTE_KIND_MISMATCH = "route_kind_mismatch"
+    #: 一條排除條件寫壞了（空白、正則編譯不過、不認得的旗標）。`detail` 是 `<規則>: <原因>`，
+    #: 原因是 Python `re` 的原文。儲存時就擋，不等到輪詢時才炸（M3 票 10）。
+    RULE_INVALID = "rule_invalid"

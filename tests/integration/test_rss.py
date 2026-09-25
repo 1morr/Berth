@@ -561,7 +561,10 @@ class TestFeeds:
     async def test_re_adding_a_deleted_feed_does_not_send_twice(
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
-        """`delete_feed` 標 reversible 的根據：加回來之後以 info hash 認回同一筆 Job。"""
+        """`delete_feed` 標 reversible 的根據：加回來之後以 info hash 認回同一筆 Job。
+
+        那一筆 Job 就是這個 RSS Series 送的，所以重新長出的 Item 認回成已送單，不是重複（票 10）。
+        """
         media, route, factory = await harbour(session, roots)
         feed = await add_feed(session, url=FEED_URL, name="Mikan")
         await poll_feed(session, factory, feed.id, now=NOW)
@@ -577,7 +580,8 @@ class TestFeeds:
         assert await count(session, Job) == 2
         assert len(factory.qbittorrent_.added) == 2
         kimi_items = [row for row in await list_items(session) if row.series_id == series.id]
-        assert {row.status for row in kimi_items} == {FeedItemStatus.DOWNLOADED}
+        assert {(row.status, row.skip) for row in kimi_items} == {(FeedItemStatus.DOWNLOADED, None)}
+        assert {row.job_hash for row in kimi_items} == {item.info_hash for item in KIMI}
 
     async def test_a_feed_that_cannot_be_fetched_says_why_on_its_own_row(
         self, session: AsyncSession, roots: dict[str, Path]

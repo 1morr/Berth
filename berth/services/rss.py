@@ -13,8 +13,15 @@
 **送單被拒不擋綁定**：綁定本身成立，那幾筆 Item 留在 `matched` 帶著原文，下一輪輪詢再送。
 Route 紅燈、磁碟門檻這些是「現在送不了」，不是「綁錯了」。
 
-這一票只做同一個 Feed 內的 GUID 去重（`(feed_id, guid)` 唯一）；跨 Feed 的 info hash 與帳本那一層
-在票 10。同一個 torrent 從兩條路來時 `add_download` 本身以 info hash 認回同一筆 Job（plan §3.3）。
+**全部接受，只排除**（brief §15、票 10）：一筆 Item 寫下的那一刻看排除條件（全域、Feed、RSS Series
+三層取聯集，規則在 `parser.exclusion`），擋下的是 `excluded`、記下哪一層的哪一條。規則收緊時，還沒
+送出去的那幾筆照新規則再看一次；放寬不把擋下的放回來——拿掉一條規則不該讓幾個月前被它擋下的一次
+全部下載。
+
+**去重**依序：同一個 Feed 的 GUID（`(feed_id, guid)` 唯一，寫下時）→ 同一個 info hash（送單時：
+Job 已經在了、或另一筆已經送過）→ 帳本已有同 Media / 季 / 集 / Tags（送單時，`_in_library`）。
+擋下的是 `duplicate`。v2 的 Tags 不同（`version`），不是重複（brief §7.7）。排除與去重擋下的都
+不是錯誤，理由（`domain.SkipReason`）存在 `skip_json`，Feed Item 清單照它說話。
 """
 
 from __future__ import annotations
@@ -23,6 +30,8 @@ import logging
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
+from pathlib import PurePosixPath
+from typing import Any
 from urllib.parse import urlsplit
 
 from sqlalchemy import delete, func, or_, select
@@ -37,22 +46,35 @@ from berth.domain import (
     BindReasonCode,
     FeedItemStatus,
     FeedKind,
+    FileEntry,
+    JobState,
     JobTrigger,
     MediaKind,
     MediaSnapshot,
+    PlanAction,
     RssRefusal,
+    SkipCode,
+    SkipReason,
+    Tags,
     because,
     collection_type_for,
+    skipped,
 )
-from berth.models import Media, Route, RssFeed, RssItem, RssSeries
+from berth.models import Job, LedgerEntry, Media, Route, RssFeed, RssItem, RssSeries, RssSettings
 from berth.models import media_id as build_media_id
 from berth.models.types import utcnow
+from berth.parser import plan as decide
 from berth.parser.binding import SeriesClues, could_be, judge, search_terms
+from berth.parser.exclusion import Layer, RuleError, normalize_rules, screen
+from berth.parser.planner import episode_span
+from berth.parser.release import parse_release, tags_of
 from berth.services.clients import ServiceClientFactory
 from berth.services.commands import Effect, command
 from berth.services.discover import search_media
 from berth.services.jobs import JobRejectedError, JobSource, actor_of, add_download, freeze
 from berth.services.media import read_snapshot
+from berth.services.plan import parse_context
+from berth.services.settings import read_settings, update_settings
 from berth.services.steps import message
 
 logger = logging.getLogger(__name__)
@@ -66,6 +88,12 @@ SEARCH_DEPTH = 3
 
 #: 自動綁定的 `bound_by`（`events.actor` 的 `system`）。
 SYSTEM = actor_of(None)
+
+#: 帳本那一層猜季集時那一個（中性的）檔案的大小：夠大才不會被分類成 sample（`parser.classify`）。
+_EPISODE_SIZE = 1 << 30
+
+#: 還沒送出去的兩種：規則收緊時照新規則再看一次的就是它們。
+_WAITING = (FeedItemStatus.UNBOUND, FeedItemStatus.MATCHED)
 
 #: 認得的來源：主機名 → 種類。這一票只認 Mikan 本站（shape §5）；Nyaa 與 acg.rip 在票 11。
 _HOSTS: dict[str, FeedKind] = {"mikanani.me": FeedKind.MIKAN}
@@ -91,6 +119,8 @@ class FeedView:
     last_error: str
     #: 這個 Feed 長出了幾筆 Item。刪除的確認要說出會刪掉幾筆（shape §4）。
     items: int
+    #: 這一層的排除條件。
+    exclusions: tuple[str, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -128,6 +158,8 @@ class SeriesView:
     reasons: tuple[BindReason, ...]
     #: 給人一鍵選的作品，照搜尋結果的順序。
     candidates: tuple[CandidateView, ...]
+    #: 這一層的排除條件。
+    exclusions: tuple[str, ...]
     #: 這一次呼叫送出去了幾筆。只有 `bind_series` 回的那一份有意義，清單上一律是 0。
     submitted: int = 0
 
@@ -144,6 +176,17 @@ class ItemView:
     status: FeedItemStatus
     job_hash: str
     error: str
+    #: `excluded` / `duplicate` 的那一條理由；其他狀態是 `None`。
+    skip: SkipReason | None
+
+
+@dataclass(frozen=True, slots=True)
+class ExclusionsView:
+    """全域那一層（`settings.rss`）。"""
+
+    #: 預設只排合集：不是單集的不自動下載。
+    not_single: bool
+    rules: tuple[str, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -231,6 +274,7 @@ def _feed_view(row: RssFeed, items: int) -> FeedView:
         last_polled_at=row.last_polled_at,
         last_error=row.last_error,
         items=items,
+        exclusions=tuple(row.exclude_json),
     )
 
 
@@ -344,18 +388,20 @@ async def _record(
     )
     items = 0
     grown: list[int] = []
-    skipped: list[str] = []
+    unkeyed: list[str] = []
+    settings = await read_settings(session, RssSettings)
     for item in reversed(found):
         if item.guid in seen:
             continue
         try:
             key = await _series_key(fetcher, feed.kind, item)
-        except _UnkeyedError as unkeyed:
-            skipped.append(str(unkeyed))
+        except _UnkeyedError as failed:
+            unkeyed.append(str(failed))
             continue
         series, created = await _series(session, key, item)
         if created:
             grown.append(series.id)
+        skip = _screen(settings, feed, series, item.title)
         session.add(
             RssItem(
                 feed_id=feed.id,
@@ -367,16 +413,22 @@ async def _record(
                 published_at=item.published_at,
                 seen_at=moment,
                 series_id=series.id,
-                status=FeedItemStatus.UNBOUND
-                if series.media_id is None
-                else FeedItemStatus.MATCHED,
+                status=_arriving(series, skip),
+                skip_json=_dump(skip),
             )
         )
         seen.add(item.guid)
         items += 1
     await session.flush()
-    detail = f"{len(skipped)} item(s) skipped: {skipped[0]}" if skipped else ""
+    detail = f"{len(unkeyed)} item(s) skipped: {unkeyed[0]}" if unkeyed else ""
     return items, grown, detail
+
+
+def _arriving(series: RssSeries, skip: SkipReason | None) -> FeedItemStatus:
+    """剛寫下的那一筆從哪一個狀態起步。"""
+    if skip is not None:
+        return FeedItemStatus.EXCLUDED
+    return FeedItemStatus.UNBOUND if series.media_id is None else FeedItemStatus.MATCHED
 
 
 class _UnkeyedError(Exception):
@@ -444,6 +496,14 @@ async def _submit(session: AsyncSession, factory: ServiceClientFactory, item: Rs
         item.error = f"{RssRefusal.ROUTE_MISSING}: the series has no route"
         await session.commit()
         return 0
+    mine = await _sent_before(session, item, series)
+    if mine is not None:
+        await _mark_sent(session, item, mine)
+        return 0
+    held = await _held_back(session, item, series)
+    if held is not None:
+        await _mark_duplicate(session, item, *held)
+        return 0
     try:
         outcome = await add_download(
             session,
@@ -467,11 +527,249 @@ async def _submit(session: AsyncSession, factory: ServiceClientFactory, item: Rs
     row = await session.get(RssItem, item_id)
     if row is None:
         return 0
-    row.status = FeedItemStatus.DOWNLOADED
-    row.job_hash = outcome.job.hash
-    row.error = ""
-    await session.commit()
+    # 來源不報 hash（acg.rip）時，送單算出來的寫回來：之後別的 Feed 帶同一個 hash 來時才比得到它
+    # （plan §8.5）。
+    row.info_hash = row.info_hash or outcome.job.hash
+    if not outcome.created:
+        # 要了 torrent 才知道是同一個：Job 本來就在了。
+        await _mark_duplicate(session, row, skipped(SkipCode.SAME_TORRENT), outcome.job.hash)
+        return 0
+    await _mark_sent(session, row, outcome.job.hash)
     return 1
+
+
+async def _mark_sent(session: AsyncSession, item: RssItem, job_hash: str) -> None:
+    item.status = FeedItemStatus.DOWNLOADED
+    item.job_hash = job_hash
+    item.skip_json = None
+    item.error = ""
+    await session.commit()
+
+
+async def _sent_before(session: AsyncSession, item: RssItem, series: RssSeries) -> str | None:
+    """這一筆自己之前就送出去了嗎：回那一筆 Job 的 hash，不是是 `None`。
+
+    Job commit 之後、Item 改狀態之前程序中斷，或綁定與輪詢同時送同一筆時，下一次看到的是「Job 已經
+    在了」——而它就是這個 RSS Series 送的。認回成已送單，不能記成它自己的重複。另一筆 Item 已經認領
+    那一筆 Job 的（兩個 Feed 帶同一個 hash），這一筆才是重複；刪掉過的（`removed`）也不認回。
+    """
+    if not item.info_hash:
+        return None
+    job = await session.get(Job, item.info_hash)
+    if (
+        job is None
+        or job.state is JobState.REMOVED
+        or job.trigger is not JobTrigger.RSS
+        or job.trigger_ref != str(series.id)
+    ):
+        return None
+    claimed = await session.scalar(
+        select(RssItem.id).where(
+            RssItem.job_hash == job.hash,
+            RssItem.id != item.id,
+            RssItem.status == FeedItemStatus.DOWNLOADED,
+        )
+    )
+    return job.hash if claimed is None else None
+
+
+async def _mark_duplicate(
+    session: AsyncSession, item: RssItem, skip: SkipReason, job_hash: str
+) -> None:
+    item.status = FeedItemStatus.DUPLICATE
+    item.skip_json = _dump(skip)
+    item.job_hash = job_hash
+    item.error = ""
+    await session.commit()
+    logger.info("rss item is a duplicate", extra={"item": item.id, "reason": skip.code.value})
+
+
+async def _held_back(
+    session: AsyncSession, item: RssItem, series: RssSeries
+) -> tuple[SkipReason, str] | None:
+    """去重（brief §15「處理」）：擋下的回（理由, 連到的那一筆 Job 的 hash），沒擋是 `None`。
+
+    同一個 torrent 看兩處：Job 在不在（另一個 Feed 送過、手動送過、刪掉過——刪掉過的讓 `add_download`
+    每一輪回一次 `job_removed` 沒有意義），與另一筆 Item 送過沒有（Job 連同紀錄一起清掉之後，使用者
+    刪掉的東西不該從另一個 Feed 被抓回來）。
+    """
+    if item.info_hash:
+        if await session.get(Job, item.info_hash) is not None:
+            return skipped(SkipCode.SAME_TORRENT), item.info_hash
+        sent = await session.scalar(
+            select(RssItem.job_hash).where(
+                RssItem.info_hash == item.info_hash,
+                RssItem.id != item.id,
+                RssItem.status == FeedItemStatus.DOWNLOADED,
+            )
+        )
+        if sent is not None:
+            # 那一筆送出去時的 Job（`.torrent` 算出的 hash 可能與來源報的不同）；清掉了就不連。
+            alive = sent and await session.get(Job, sent) is not None
+            return skipped(SkipCode.SAME_TORRENT), sent if alive else ""
+    known = await _in_library(session, item, series)
+    if known is not None:
+        return skipped(SkipCode.IN_LIBRARY, known=known), ""
+    return None
+
+
+async def _in_library(session: AsyncSession, item: RssItem, series: RssSeries) -> str | None:
+    """帳本已有同 Media / 季 / 集 / Tags 的那一份：回它在媒體庫裡的檔名，沒有是 `None`。
+
+    季集照規劃時的算法猜（同一份 `parse_context`、同一支 `plan`，發佈名當 torrent 名、配一個中性的
+    檔名）；猜不到、或信心不夠自動入庫的不擋——規劃時那一層（`services/plan._against_ledger`）照樣
+    會比，漏在這裡只是多下載一次，擋錯了卻是少一集。比的範圍與那一層相同：同一個資料夾。
+
+    **Tags 比兩處**：帳本那一列的 Tags 是從 torrent 裡的**檔名**讀的，字幕組常在檔名寫另一個組名
+    （發佈名 `[喵萌奶茶屋&LoliHouse]`、檔名 `[LoliHouse]`），只比它的話同一個發佈換個 hash
+    重新上傳就認不出來。所以也拿那一列的 Job 的發佈名算一次 Tags——標題對標題。**讀不出字幕組的
+    標題不比這一半**：兩邊的 Tags 都可能是空的，空對空不是同一個版本。
+    """
+    media = await session.get(Media, series.media_id) if series.media_id is not None else None
+    route = await session.get(Route, series.route_id) if series.route_id is not None else None
+    snapshot = media.stored_snapshot() if media is not None else None
+    if media is None or route is None or snapshot is None:
+        return None
+    (guess,) = decide(
+        item.title,
+        [FileEntry(rel_path="episode.mkv", size=_EPISODE_SIZE)],
+        parse_context(route, snapshot, series),
+    )
+    span = episode_span(guess)
+    if span is None or not guess.target_path:
+        return None
+    season, start, end = span
+    folder = str((PurePosixPath(route.target_path) / guess.target_path).parent)
+    by_title = tags_of(parse_release(item.title))
+    rows = await session.execute(
+        select(LedgerEntry, Job.name)
+        .outerjoin(Job, Job.hash == LedgerEntry.job_hash)
+        .where(
+            LedgerEntry.media_id == media.id,
+            LedgerEntry.action == PlanAction.IMPORT,
+            LedgerEntry.season == season,
+            LedgerEntry.episode_start == start,
+        )
+        .order_by(LedgerEntry.id)
+    )
+    for entry, released in rows.tuples():
+        if str(PurePosixPath(entry.target_path).parent) != folder:
+            continue
+        if (entry.episode_end or entry.episode_start) != end:
+            continue
+        if Tags.model_validate(entry.tags_json or {}) == guess.tags or (
+            # 外接：沒有 Job 的那一列（`rebuild-ledger` 長回來的）是 `None`，型別上看不出來。
+            released and by_title.group and tags_of(parse_release(released)) == by_title
+        ):
+            return PurePosixPath(entry.target_path).name
+    return None
+
+
+# --- 排除條件 -----------------------------------------------------------
+#
+# 三支都是可逆但**沒有單一反向命令**：規則本身用同一支帶回原本的值就還原了，但收緊時擋下的 Item
+# 不會因此放回來（只往前看，brief §15）。沒有東西被下載或刪掉，擋下的那一集仍可從搜尋手動送。
+
+
+@command(Effect.READ)
+async def read_exclusions(session: AsyncSession) -> ExclusionsView:
+    """全域那一層。"""
+    settings = await read_settings(session, RssSettings)
+    return ExclusionsView(not_single=settings.exclude_not_single, rules=tuple(settings.exclude))
+
+
+@command(Effect.REVERSIBLE)
+async def set_exclusions(
+    session: AsyncSession, *, not_single: bool, rules: Sequence[str]
+) -> ExclusionsView:
+    """整組覆寫全域那一層。反向是同一支帶回原本的值：收緊時擋下的那幾筆本來就還沒下載。"""
+    kept = _normalized_rules(rules)
+
+    def change(value: RssSettings) -> None:
+        value.exclude_not_single = not_single
+        value.exclude = list(kept)
+
+    saved = await update_settings(session, RssSettings, change)
+    await _rescreen(session, None)
+    return ExclusionsView(not_single=saved.exclude_not_single, rules=tuple(saved.exclude))
+
+
+@command(Effect.REVERSIBLE)
+async def set_feed_exclusions(
+    session: AsyncSession, feed_id: int, rules: Sequence[str]
+) -> FeedView:
+    """整組覆寫這個 Feed 的排除條件。"""
+    row = await session.get(RssFeed, feed_id)
+    if row is None:
+        raise RssRejectedError(RssRefusal.FEED_MISSING, str(feed_id))
+    row.exclude_json = list(_normalized_rules(rules))
+    await session.commit()
+    await _rescreen(session, RssItem.feed_id == feed_id)
+    items = await session.scalar(
+        select(func.count()).select_from(RssItem).where(RssItem.feed_id == feed_id)
+    )
+    return _feed_view(row, int(items or 0))
+
+
+@command(Effect.REVERSIBLE)
+async def set_series_exclusions(
+    session: AsyncSession, series_id: int, rules: Sequence[str]
+) -> SeriesView:
+    """整組覆寫這個 RSS Series 的排除條件。"""
+    row = await session.get(RssSeries, series_id)
+    if row is None:
+        raise RssRejectedError(RssRefusal.SERIES_MISSING, str(series_id))
+    row.exclude_json = list(_normalized_rules(rules))
+    await session.commit()
+    await _rescreen(session, RssItem.series_id == series_id)
+    return await _series_view(session, row)
+
+
+def _normalized_rules(rules: Sequence[str]) -> tuple[str, ...]:
+    """存之前就擋寫壞的規則（票 10：不等到輪詢時才炸）。"""
+    try:
+        return normalize_rules(rules)
+    except RuleError as broken:
+        raise RssRejectedError(RssRefusal.RULE_INVALID, str(broken)) from broken
+
+
+def _screen(
+    settings: RssSettings, feed: RssFeed, series: RssSeries, title: str
+) -> SkipReason | None:
+    """這一筆過不過三層排除條件。層的順序就是理由要先說的順序：全域、Feed、RSS Series。"""
+    layers: tuple[Layer, ...] = (
+        (SkipCode.GLOBAL_RULE, settings.exclude),
+        (SkipCode.FEED_RULE, feed.exclude_json),
+        (SkipCode.SERIES_RULE, series.exclude_json),
+    )
+    return screen(title, not_single=settings.exclude_not_single, layers=layers)
+
+
+async def _rescreen(session: AsyncSession, scope: ColumnElement[bool] | None) -> None:
+    """規則改了之後，`scope` 裡還沒送出去的那幾筆照新規則再看一次。**只收緊**：擋下的不放回來。"""
+    settings = await read_settings(session, RssSettings)
+    query = select(RssItem).where(RssItem.status.in_(_WAITING))
+    if scope is not None:
+        query = query.where(scope)
+    for item in list(await session.scalars(query)):
+        feed = await session.get(RssFeed, item.feed_id)
+        series = await session.get(RssSeries, item.series_id) if item.series_id else None
+        if feed is None or series is None:
+            continue
+        skip = _screen(settings, feed, series, item.title)
+        if skip is not None:
+            item.status = FeedItemStatus.EXCLUDED
+            item.skip_json = _dump(skip)
+            item.error = ""
+    await session.commit()
+
+
+def _dump(skip: SkipReason | None) -> dict[str, Any] | None:
+    return skip.model_dump(mode="json") if skip is not None else None
+
+
+def _skip_of(row: RssItem) -> SkipReason | None:
+    return SkipReason.model_validate(row.skip_json) if row.skip_json is not None else None
 
 
 # --- 自動綁定 -----------------------------------------------------------
@@ -700,6 +998,16 @@ async def unbind_series(session: AsyncSession, series_id: int) -> SeriesView:
     for item in held:
         item.status = FeedItemStatus.UNBOUND
         item.error = ""
+    # 「媒體庫裡已經有」是對綁上的那一部作品說的：綁錯的話改綁之後要重新判斷。
+    for item in await session.scalars(
+        select(RssItem).where(
+            RssItem.series_id == series.id, RssItem.status == FeedItemStatus.DUPLICATE
+        )
+    ):
+        skip = _skip_of(item)
+        if skip is not None and skip.code is SkipCode.IN_LIBRARY:
+            item.status = FeedItemStatus.UNBOUND
+            item.skip_json = None
     await session.commit()
     return await _series_view(session, series)
 
@@ -735,6 +1043,7 @@ async def _series_view(session: AsyncSession, row: RssSeries) -> SeriesView:
         waiting=int(waiting or 0),
         reasons=_reasons(row),
         candidates=await _candidate_views(session, row.candidates_json or ()),
+        exclusions=tuple(row.exclude_json),
     )
 
 
@@ -777,6 +1086,7 @@ async def list_items(session: AsyncSession) -> tuple[ItemView, ...]:
             status=row.status,
             job_hash=row.job_hash,
             error=row.error,
+            skip=_skip_of(row),
         )
         for row in rows
     )
