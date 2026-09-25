@@ -34,6 +34,12 @@ export type Exclusions = Schemas['ExclusionsOut']
 /** 一輪輪詢的結果。 */
 export type PollOutcome = Schemas['PollOut']
 
+/** 新 Feed 第一輪選了哪一個（票 11）。 */
+export type PrimeMode = Schemas['PrimeMode']
+
+/** 選完第一輪的結果。 */
+export type PrimeOutcome = Schemas['PrimeOut']
+
 /** `berth/domain/enums.py` 的 `RssRefusal`。 */
 export type RssRefusal = Schemas['RssRefusal']
 
@@ -49,6 +55,9 @@ const REASONS: ReasonSet<RssRefusal> = {
   route_disabled: true,
   route_kind_mismatch: true,
   rule_invalid: true,
+  feed_primed: true,
+  feed_unreachable: true,
+  feed_unread: true,
 }
 
 export function parseRssRefusal(error: unknown) {
@@ -84,6 +93,18 @@ export function itemsQueryOptions() {
     queryKey: [...RSS_KEY, 'items'],
     queryFn: () => apiGet<FeedItem[]>('/rss/items'),
   })
+}
+
+/** 還沒選第一輪的 Feed 的每一筆，說出各自會怎樣（票 11）。 */
+export function previewQueryOptions(id: number) {
+  return queryOptions({
+    queryKey: [...RSS_KEY, 'preview', id],
+    queryFn: () => apiGet<FeedItem[]>(`/rss/feeds/${id}/preview`),
+  })
+}
+
+export function primeFeed(id: number, mode: PrimeMode) {
+  return apiPost<PrimeOutcome>(`/rss/feeds/${id}/prime`, { mode })
 }
 
 export function addFeed(url: string, name: string) {

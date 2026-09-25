@@ -23,6 +23,8 @@ from datetime import date, timedelta
 
 from berth.domain import BindReason, MediaKind, MediaSnapshot, because
 from berth.domain import BindReasonCode as Code
+from berth.parser.cjk import normalize_cjk, undecorate
+from berth.parser.release import parse_release
 from berth.parser.title import normalize_title
 
 #: 開播日期要落在 TMDB 那一季首播的前後幾天內。起點 14 天：Mikan 寫的多半是日本首播，TMDB 也是，
@@ -33,10 +35,22 @@ PREMIERE_WINDOW = timedelta(days=14)
 #: 一個新 Series 最多搜幾次 TMDB。番組名、骨幹的最後一段（英文或羅馬字）通常就夠了。
 MAX_SEARCHES = 3
 
-#: 開頭的組名 `[喵萌奶茶屋&LoliHouse] `（可能不只一段）。
-_GROUPS = re.compile(r"^\s*(?:\[[^\]]*\]\s*)+")
-#: ` - 12`：集號以後都不是標題。
-_EPISODE = re.compile(r"\s+-\s+\d")
+#: 標題到這裡為止：方括號與圓括號（集號與 tags）、` - 12` / ` - S01E10` / ` - 第12话` /
+#: ` - [01-12]`，與沒有破折號的 `S01E12`、`EP12`、`01-12`、`第12话`。**季號不在這裡**：
+#: `Season 3`、`第三季` 是標題的一部分，第三季是另一個 RSS Series——所以區間的 `-` 兩側不許有空白，
+#: `Season 3 - 08` 不是區間。
+_TITLE_END = re.compile(
+    r"[\[(]"
+    r"|\s+-\s+(?=\d|S\d|EP?\d|第|\[)"
+    r"|(?<![A-Za-z0-9])(?:S\d{1,2}E\d{1,4}|EP\d{1,4})(?![A-Za-z0-9])"
+    r"|(?<![A-Za-z0-9])\d{1,4}(?:-|\s*~\s*)\d{1,4}(?![A-Za-z0-9])"
+    r"|第\s*\d{1,4}\s*(?:-\s*\d{1,4}\s*)?[话話集]",
+    re.IGNORECASE,
+)
+#: 一個發佈名裡的幾個名字之間：` / `（兩側要有空白：`Fate/Zero` 是一個名字）。
+_NAMES = re.compile(r"\s+/\s+")
+#: 名字前後的分隔符殘渣（`[Doomdos] - Botan…` 的破折號）。
+_EDGES = " -_|~"
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,6 +63,8 @@ class SeriesClues:
     premiere: date | None
     #: 長出這個 Series 的那一筆 Feed Item 的標題。
     release_title: str
+    #: 線索裡有沒有番組頁。Nyaa、acg.rip 沒有（票 11）：年份一律無從確認，候選只從標題來。
+    show_page: bool = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -63,13 +79,53 @@ class BindVerdict:
 
 
 def skeleton(release_title: str) -> tuple[str, ...]:
-    """發佈名的標題骨幹：去掉開頭的組名與 ` - 集號` 之後的一切，` / ` 分開的每一個名字都留。
+    """發佈名的標題骨幹：去掉字幕組、集號與 tags，` / ` 分開的每一個名字都留（brief §15）。
 
     `[組名] 中文名 / 英文或羅馬字名 - 12 [tags…]` 是字幕組最常見的寫法（`web/src/rss/searchTerm.ts`
-    挑的是最後一段，這裡每一段都要：哪一段與 TMDB 相等事先不知道）。
+    挑的是最後一段，這裡每一段都要：哪一段與 TMDB 相等事先不知道）。組名去掉之後以方括號開頭的，
+    標題就是那一格（`[千夏字幕組][中文名_Romaji][第12話]`、
+    `【喵萌奶茶屋】★07月新番★[名 / 名][12]`）。
+    組名與播出檔期的認法是解析器的（`parser.cjk`），不另寫一份。
     """
-    name = _EPISODE.split(_GROUPS.sub("", release_title), maxsplit=1)[0]
-    return tuple(part for part in (piece.strip() for piece in name.split(" / ")) if part)
+    text = undecorate(release_title)
+    group = normalize_cjk(release_title)[1].group
+    if group:
+        text = text.replace(f"[{group}]", " ", 1)
+    text = text.strip()
+    # 開頭的方括號：後面緊接另一格括號（或什麼都沒有）時標題就是它；後面還接著字時它是 tag
+    # （`[Group] [Other] Title - 01`），剝掉再看下一格。破折號只在判斷時略過：`- 12` 是集號。
+    while text.lstrip(_EDGES).startswith("[") and "]" in text:
+        rest = text.lstrip(_EDGES)[1:].split("]", 1)[1].strip()
+        if not rest or rest.startswith(("[", "(")) or _TITLE_END.match(f" {rest}"):
+            break
+        text = rest
+    if text.lstrip(_EDGES).startswith("["):
+        name = text.lstrip(_EDGES)[1:].split("]", 1)[0]
+    else:
+        # 前面補一格空白：`[Group] - 12` 去掉組名之後是 `- 12`，那也是集號。
+        text = f" {text}"
+        found = _TITLE_END.search(text)
+        name = text[: found.start()] if found is not None else text
+    return tuple(
+        part for part in (piece.strip(_EDGES + " ") for piece in _NAMES.split(name)) if part
+    )
+
+
+def title_key(release_title: str) -> str | None:
+    """非 Mikan 來源的 RSS Series 鍵（plan §2.4）：`title:<骨幹>:<字幕組>`，已正規化。
+
+    骨幹挑**羅馬字那一個名字**（有的話，取最後一個）：同一組的简日、繁日發佈中文名常常不同
+    （`与你相恋到生命尽头` / `與妳相戀到生命盡頭`），羅馬字那一段相同——它們是同一個 Series。
+    沒有羅馬字的名字時整串一起用。組名照解析器讀（開頭的方括號，或結尾的 `-GROUP`），讀不出是空的。
+    什麼都不剩（只有組名與集號）是 `None`。
+    """
+    names = [normalize_title(name) for name in skeleton(release_title)]
+    names = [name for name in names if name]
+    if not names:
+        return None
+    latin = [name for name in names if name.isascii()]
+    title = latin[-1] if latin else "".join(names)
+    return f"title:{title}:{normalize_title(parse_release(release_title).group)}"
 
 
 def search_terms(clues: SeriesClues) -> tuple[str, ...]:
@@ -104,7 +160,8 @@ def judge(clues: SeriesClues, candidates: Sequence[MediaSnapshot]) -> BindVerdic
         return BindVerdict(media=None, candidates=(), reasons=(because(Code.NO_CANDIDATE),))
     titled = tuple(_unique(shot for shot, _ in named))
     if clues.premiere is None:
-        return BindVerdict(media=None, candidates=titled, reasons=(because(Code.NO_PREMIERE),))
+        blind = Code.NO_PREMIERE if clues.show_page else Code.NO_SHOW_PAGE
+        return BindVerdict(media=None, candidates=titled, reasons=(because(blind),))
 
     near = [
         (shot, title_reason, dated)

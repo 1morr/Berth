@@ -176,6 +176,14 @@ def normalize_cjk(name: str) -> tuple[str, CjkHints]:
     return _clean(text, group, name), hints
 
 
+def undecorate(name: str) -> str:
+    """括號轉半形，剝掉播出檔期與招募廣告。組名與 RSS 的標題骨幹（`parser.binding`）都從這裡讀起。
+
+    `[7月新番]` 這種檔期格會被當成組名，所以先剝。
+    """
+    return _RECRUIT.sub(" ", _PREFIX.sub(" ", name.translate(_BRACKETS)))
+
+
 def _take(text: str, pattern: re.Pattern[str], matched: list[str]) -> bool:
     """有沒有命中，順便把命中的原文記進 `matched_tokens`。"""
     found = pattern.search(text)
@@ -192,7 +200,7 @@ def _take_group(text: str) -> str:
     開頭那個不像組名時往後看一格——`[合集]女神降临…` 與 `[7月新番][愛戀字幕社]`
     都是真實語料，前者的第一格是發佈形態、後者是播出檔期。
     """
-    stripped = _RECRUIT.sub(" ", _PREFIX.sub(" ", text)).lstrip()
+    stripped = undecorate(text).lstrip()
     while True:
         found = re.match(r"\[([^\]]*)\]\s*", stripped)
         if found is None:

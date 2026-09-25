@@ -40,6 +40,8 @@ class BindReasonCode(StrEnum):
     SEVERAL_CANDIDATES = "several_candidates"
     #: Mikan 的番組頁讀不到開播日期，年份無從確認。
     NO_PREMIERE = "no_premiere"
+    #: Nyaa、acg.rip 這種來源沒有番組頁，開播日期無從確認：候選只從標題來，一律留給人（票 11）。
+    NO_SHOW_PAGE = "no_show_page"
     #: 番組頁或 TMDB 這一次查不到（`{detail}` 是原文）。
     LOOKUP_FAILED = "lookup_failed"
     #: 作品認出來了，但收得下它的 Route 有好幾條（`{routes}`），要人選。
@@ -61,6 +63,7 @@ BIND_PARAMS: dict[BindReasonCode, frozenset[str]] = {
     _C.PREMIERE_FAR: frozenset({"title", "premiere"}),
     _C.SEVERAL_CANDIDATES: frozenset({"number"}),
     _C.NO_PREMIERE: frozenset(),
+    _C.NO_SHOW_PAGE: frozenset(),
     _C.LOOKUP_FAILED: frozenset({"detail"}),
     _C.ROUTE_AMBIGUOUS: frozenset({"routes"}),
     _C.NO_ROUTE: frozenset(),

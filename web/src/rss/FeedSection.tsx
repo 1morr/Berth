@@ -155,6 +155,8 @@ function FeedRow({ feed }: { feed: Feed }) {
         {t('rss.feeds.polled')} <Timestamp at={feed.last_polled_at} /> <Dot />{' '}
         <span className="value">{t('rss.feeds.items', { count: feed.items })}</span>
       </p>
+      {/* 第一輪還沒選：決定在頁首那一段（票 11），這裡只說一聲為什麼一筆都沒送。 */}
+      {feed.primed_at === null && <p className="text-xs text-ink">{t('rss.feeds.undecided')}</p>}
       {feed.last_error && (
         <Notice signal="assigned" label={t('rss.feeds.failed')}>
           <span className="value text-xs wrap-anywhere">{feed.last_error}</span>

@@ -26,6 +26,7 @@ function feed(overrides: Partial<Feed> = {}): Feed {
     last_error: '',
     items: 12,
     exclusions: [],
+    primed_at: '2026-09-25T11:00:00Z',
     ...overrides,
   }
 }
@@ -67,6 +68,7 @@ function item(overrides: Partial<FeedItem> = {}): FeedItem {
     job_hash: '',
     error: '',
     skip: null,
+    size: null,
     ...overrides,
   }
 }
@@ -116,6 +118,159 @@ function sent(stub: ReturnType<typeof stubApi>, method: string, path: string) {
     ([input, init]) => String(input) === path && (init?.method ?? 'GET') === method,
   )
 }
+
+const ACGRIP = feed({
+  id: 2,
+  name: 'acg.rip',
+  url: 'https://acg.rip/.xml?term=Kamiina+Botan',
+  kind: 'acgrip',
+  items: 4,
+  primed_at: null,
+})
+
+/** 還沒選第一輪的 acg.rip feed 的預覽：綁好一筆、待綁定一筆、一個合集、一筆重複。 */
+const PREVIEW: FeedItem[] = [
+  item({
+    id: 11,
+    feed_id: 2,
+    title: '[喵萌奶茶屋&LoliHouse] Kamiina - 12',
+    status: 'matched',
+    size: 500_000_000,
+  }),
+  item({ id: 12, feed_id: 2, title: '[北宇治字幕组] Kamiina [12]', status: 'unbound' }),
+  item({
+    id: 13,
+    feed_id: 2,
+    title: '[千夏字幕組][Kamiina][第01-12話][合集]',
+    status: 'excluded',
+    skip: { code: 'not_single', params: {} },
+  }),
+  item({
+    id: 14,
+    feed_id: 2,
+    title: '[ANi] Kamiina - 11',
+    status: 'duplicate',
+    skip: { code: 'same_torrent', params: {} },
+    job_hash: 'a'.repeat(40),
+  }),
+]
+
+/** 頁首那一段裡的 acg.rip 那一塊（Feed 段也有一個同名的 `article`）。 */
+async function firstRound() {
+  const region = await screen.findByRole('region', { name: /等你決定/ })
+  return within(region).getByRole('article', { name: 'acg.rip' })
+}
+
+describe('RSS 頁：新 Feed 的第一輪（票 11）', () => {
+  it('還沒選的 Feed 浮到最上面，摘要與分組說出全部下載會下什麼', async () => {
+    render({
+      'GET /api/rss/feeds': { body: [feed(), ACGRIP] },
+      'GET /api/rss/feeds/2/preview': { body: PREVIEW },
+    })
+    renderApp('/rss')
+
+    const [first] = await screen.findAllByRole('region')
+    expect(within(first).getByRole('heading', { level: 2 })).toHaveTextContent('等你決定')
+    expect(within(first).getByText('1 個等你決定')).toBeInTheDocument()
+    const block = within(first).getByRole('article', { name: 'acg.rip' })
+    await waitFor(() => expect(block).toHaveTextContent(/會送出 1.*綁定之後送 1.*排除 1.*重複 1/))
+    // 會下載的兩組攤開，不會下載的兩組收起。
+    expect(within(block).getByText('[喵萌奶茶屋&LoliHouse] Kamiina - 12')).toBeInTheDocument()
+    expect(within(block).getByText('[北宇治字幕组] Kamiina [12]')).toBeInTheDocument()
+    expect(
+      within(block).queryByText('[千夏字幕組][Kamiina][第01-12話][合集]'),
+    ).not.toBeInTheDocument()
+    await userEvent.click(within(block).getByRole('button', { name: '看排除（1 筆）' }))
+    expect(within(block).getByText('[千夏字幕組][Kamiina][第01-12話][合集]')).toBeInTheDocument()
+    expect(within(block).getByText(/不是單集/)).toBeInTheDocument()
+  })
+
+  it('只追之後的：送出選擇，那一塊消失，說出略過幾筆', async () => {
+    let feeds = [feed(), ACGRIP]
+    const stub = render({
+      'GET /api/rss/feeds': () => ({ body: feeds }),
+      'GET /api/rss/feeds/2/preview': { body: PREVIEW },
+      'POST /api/rss/feeds/2/prime': () => {
+        feeds = [feed(), { ...ACGRIP, primed_at: '2026-09-25T12:00:00Z' }]
+        return { body: { feed: feeds[1], submitted: 0, passed: 3, excluded: 1 } }
+      },
+    })
+    renderApp('/rss')
+    const block = await firstRound()
+
+    await userEvent.click(await within(block).findByRole('button', { name: '只追之後的' }))
+
+    await waitFor(() => expect(sent(stub, 'POST', '/api/rss/feeds/2/prime')).toHaveLength(1))
+    const [[, init]] = sent(stub, 'POST', '/api/rss/feeds/2/prime')
+    expect(JSON.parse(String(init?.body))).toEqual({ mode: 'later' })
+    await waitFor(() =>
+      expect(screen.queryByRole('heading', { name: /等你決定/ })).not.toBeInTheDocument(),
+    )
+    expect(screen.getByText('《acg.rip》：只追之後的，略過 3 筆。')).toBeInTheDocument()
+  })
+
+  it('全部下載要就地確認，確認區塊說出送幾筆、幾筆等綁定', async () => {
+    const stub = render({
+      'GET /api/rss/feeds': { body: [feed(), ACGRIP] },
+      'GET /api/rss/feeds/2/preview': { body: PREVIEW },
+      'POST /api/rss/feeds/2/prime': {
+        body: { feed: ACGRIP, submitted: 1, passed: 0, excluded: 1 },
+      },
+    })
+    renderApp('/rss')
+    const block = await firstRound()
+
+    await userEvent.click(await within(block).findByRole('button', { name: '全部下載' }))
+    expect(within(block).getByText(/會送出 1 筆到 qBittorrent，另外 1 筆/)).toBeInTheDocument()
+    expect(sent(stub, 'POST', '/api/rss/feeds/2/prime')).toHaveLength(0)
+    await userEvent.click(within(block).getByRole('button', { name: '全部下載' }))
+
+    await waitFor(() => expect(sent(stub, 'POST', '/api/rss/feeds/2/prime')).toHaveLength(1))
+    const [[, init]] = sent(stub, 'POST', '/api/rss/feeds/2/prime')
+    expect(JSON.parse(String(init?.body))).toEqual({ mode: 'all' })
+  })
+
+  it('讀不到 feed 時說出原文，什麼都沒改', async () => {
+    render({
+      'GET /api/rss/feeds': { body: [feed(), ACGRIP] },
+      'GET /api/rss/feeds/2/preview': { body: PREVIEW },
+      'POST /api/rss/feeds/2/prime': {
+        status: 502,
+        body: { detail: { reason: 'feed_unreachable', detail: 'acg.rip: connection refused' } },
+      },
+    })
+    renderApp('/rss')
+    const block = await firstRound()
+
+    await userEvent.click(await within(block).findByRole('button', { name: '只追之後的' }))
+
+    expect(await within(block).findByText('acg.rip: connection refused')).toBeInTheDocument()
+    expect(within(block).getByRole('alert')).toHaveTextContent(/不知道「之前」是哪幾筆/)
+  })
+
+  it('還沒讀過的 Feed 不給選', async () => {
+    const stub = render({
+      'GET /api/rss/feeds': { body: [feed(), { ...ACGRIP, last_polled_at: null, items: 0 }] },
+    })
+    renderApp('/rss')
+    const block = await firstRound()
+
+    expect(within(block).getByText(/第一輪還沒輪到/)).toBeInTheDocument()
+    expect(within(block).queryByRole('button', { name: '只追之後的' })).not.toBeInTheDocument()
+    expect(sent(stub, 'GET', '/api/rss/feeds/2/preview')).toHaveLength(0)
+  })
+
+  it('Feed 段那一列說一聲第一輪還沒決定', async () => {
+    render({
+      'GET /api/rss/feeds': { body: [ACGRIP] },
+      'GET /api/rss/feeds/2/preview': { body: PREVIEW },
+    })
+    renderApp('/rss')
+
+    const feeds = await screen.findByRole('region', { name: /^Feed/ })
+    expect(within(feeds).getByText(/第一輪還沒決定，一筆都不送/)).toBeInTheDocument()
+  })
+})
 
 describe('RSS 頁', () => {
   it('待綁定排在最上面，塗一塊說出有幾個', async () => {
@@ -312,7 +467,7 @@ describe('RSS 頁', () => {
     await userEvent.type(await screen.findByLabelText(/RSS 網址/), 'https://example.com/rss')
     await userEvent.click(screen.getByRole('button', { name: '加入' }))
 
-    expect(await screen.findByText(/這一版只收 Mikan/)).toBeInTheDocument()
+    expect(await screen.findByText(/這一版收 Mikan/)).toBeInTheDocument()
   })
 
   it('送不出去的那一筆塗阻擋色，帶著原文', async () => {

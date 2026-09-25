@@ -1014,6 +1014,49 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/rss/feeds/{feed_id}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Preview
+         * @description 這個 Feed 的每一筆，新的在前，說出各自會怎樣：待綁定、會送出、排除、重複（票 11）。
+         *
+         *     重複是當場看的（只讀）；送單時還會再看一次。
+         */
+        get: operations["get_preview_api_rss_feeds__feed_id__preview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/rss/feeds/{feed_id}/prime": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Prime
+         * @description 選第一輪。`later` 當場再讀一次 feed（讀不到是 502 `feed_unreachable`，什麼都沒改）；
+         *     還沒讀過的 Feed 不收 `all`（409 `feed_unread`）。
+         */
+        post: operations["post_prime_api_rss_feeds__feed_id__prime_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/rss/feeds/{feed_id}/exclusions": {
         parameters: {
             query?: never;
@@ -1876,7 +1919,7 @@ export interface components {
          * @description 一條綁定理由是哪一種。
          * @enum {string}
          */
-        BindReasonCode: "title_equal" | "premiere_near" | "release_near" | "only_route" | "no_candidate" | "premiere_far" | "several_candidates" | "no_premiere" | "lookup_failed" | "route_ambiguous" | "no_route";
+        BindReasonCode: "title_equal" | "premiere_near" | "release_near" | "only_route" | "no_candidate" | "premiere_far" | "several_candidates" | "no_premiere" | "no_show_page" | "lookup_failed" | "route_ambiguous" | "no_route";
         /**
          * BindReasonOut
          * @description 自動綁定的一條理由：封閉集合的 code 加參數，句子由前端照 code 挑（`rss.grounds.*`，票 09）。
@@ -2224,7 +2267,7 @@ export interface components {
         };
         /**
          * FeedIn
-         * @description 加一個 Feed。來源種類由網址的主機認出來（這一票只認 Mikan）。
+         * @description 加一個 Feed。來源種類由網址的主機認出來：Mikan、Nyaa、acg.rip。
          */
         FeedIn: {
             /** Url */
@@ -2243,16 +2286,16 @@ export interface components {
          *     沒有「還沒比對」這一段（M3 票 10）。
          * @enum {string}
          */
-        FeedItemStatus: "unbound" | "matched" | "downloaded" | "excluded" | "duplicate";
+        FeedItemStatus: "unbound" | "matched" | "downloaded" | "excluded" | "duplicate" | "passed";
         /**
          * FeedKind
          * @description Feed 是哪一站的 RSS（plan §2.4、§8.5）。每一種一個 adapter（`adapters/rss/`）。
          *
-         *     只列**已經有 adapter** 的那幾種：Nyaa 與 acg.rip 在 M3 票 11，generic 之後。加 Feed 時由網址的
-         *     主機認出來（`services/rss.kind_of`），認不出來的是 `feed_unsupported`。
+         *     只列**已經有 adapter** 的那幾種（generic 之後）。加 Feed 時由網址的主機認出來
+         *     （`services/rss.kind_of`），認不出來的是 `feed_unsupported`。
          * @enum {string}
          */
-        FeedKind: "mikan";
+        FeedKind: "mikan" | "nyaa" | "acgrip";
         /** FeedOut */
         FeedOut: {
             /** Id */
@@ -2272,6 +2315,8 @@ export interface components {
             items: number;
             /** Exclusions */
             exclusions: string[];
+            /** Primed At */
+            primed_at: string | null;
         };
         /**
          * FileKind
@@ -2650,6 +2695,8 @@ export interface components {
             /** Error */
             error: string;
             skip: components["schemas"]["SkipReasonOut"] | null;
+            /** Size */
+            size: number | null;
         };
         /**
          * ItemReasonOut
@@ -3395,6 +3442,29 @@ export interface components {
             differs: boolean;
         };
         /**
+         * PrimeIn
+         * @description 第一輪預覽選哪一個：`all` 全部下載、`later` 只追之後的。
+         */
+        PrimeIn: {
+            mode: components["schemas"]["PrimeMode"];
+        };
+        /**
+         * PrimeMode
+         * @description 新 Feed 的第一輪預覽選了哪一個（brief §15「補舊集」最後一句、M3 票 11）。
+         * @enum {string}
+         */
+        PrimeMode: "all" | "later";
+        /** PrimeOut */
+        PrimeOut: {
+            feed: components["schemas"]["FeedOut"];
+            /** Submitted */
+            submitted: number;
+            /** Passed */
+            passed: number;
+            /** Excluded */
+            excluded: number;
+        };
+        /**
          * QbittorrentOut
          * @description 精靈第 4 步與設定頁的漂移還原共用（brief §16.3）。
          */
@@ -3708,7 +3778,7 @@ export interface components {
          *     下一輪輪詢再送（`.scratch/m3/rss-shape.md` §3）。
          * @enum {string}
          */
-        RssRefusal: "feed_missing" | "feed_unsupported" | "feed_duplicate" | "series_missing" | "series_bound" | "media_missing" | "route_missing" | "route_disabled" | "route_kind_mismatch" | "rule_invalid";
+        RssRefusal: "feed_missing" | "feed_unsupported" | "feed_duplicate" | "series_missing" | "series_bound" | "media_missing" | "route_missing" | "route_disabled" | "route_kind_mismatch" | "rule_invalid" | "feed_primed" | "feed_unreachable" | "feed_unread";
         /**
          * RssRefusalOut
          * @description 與其他群組的拒絕同形：`reason` 挑句子，`detail` 是原文或那一個 id。
@@ -6550,6 +6620,108 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_preview_api_rss_feeds__feed_id__preview_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                feed_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemOut"][];
+                };
+            };
+            /** @description `feed_missing` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RssRefusalOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_prime_api_rss_feeds__feed_id__prime_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                feed_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PrimeIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PrimeOut"];
+                };
+            };
+            /** @description `feed_missing` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RssRefusalOut"];
+                };
+            };
+            /** @description `feed_primed` · `feed_unread` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RssRefusalOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description `feed_unreachable` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RssRefusalOut"];
                 };
             };
         };

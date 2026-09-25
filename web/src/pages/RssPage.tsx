@@ -23,6 +23,7 @@ import { displayRound } from '../i18n/displayRound'
 import { JobLink } from '../jobs/JobLink'
 import { ExclusionsSection } from '../rss/ExclusionsSection'
 import { FeedSection } from '../rss/FeedSection'
+import { FirstRoundSection } from '../rss/FirstRoundSection'
 import { Grounds } from '../rss/GroundsList'
 import { RulesToggle } from '../rss/RulesEditor'
 import { SectionHeading } from '../rss/SectionHeading'
@@ -32,7 +33,8 @@ import { skipText } from '../rss/skip'
 /**
  * RSS `/rss`（`.scratch/m3/rss-shape.md`，M3 票 08）。只有 admin。
  *
- * 單頁堆疊，由上而下：**待綁定**（有才出現，需要你的事浮到最上面）→ Feed → 全域的排除條件
+ * 單頁堆疊，由上而下：**等你決定**（新搜尋 feed 的第一輪，票 11）與**待綁定**（有才出現，需要你的事
+ * 浮到最上面）→ Feed → 全域的排除條件
  * （票 10）→ 綁好的 RSS Series → 最近的 Feed Item。平常它在背景輪詢，人只在有新的 RSS Series 等綁定時回來——所以第一個
  * viewport 回答的是「有沒有要我綁的」。
  */
@@ -46,6 +48,7 @@ export function RssPage() {
   // 綁完那一列會離開待綁定段（The Focus Takes The Next Row Rule）：這一句給看不見畫面的人。
   const [said, setSaid] = useState('')
 
+  const undecided = (feeds.data ?? []).filter((feed) => feed.primed_at === null)
   const pending = (series.data ?? []).filter((row) => row.media_id === null)
   const bound = (series.data ?? []).filter((row) => row.media_id !== null)
   const loading = feeds.isPending || series.isPending || items.isPending || exclusions.isPending
@@ -69,6 +72,7 @@ export function RssPage() {
         <p className="max-w-prose text-sm text-ink-dim">{t('rss.off')}</p>
       ) : (
         <>
+          {undecided.length > 0 && <FirstRoundSection feeds={undecided} onDone={setSaid} />}
           {pending.length > 0 && <Pending rows={pending} onDone={setSaid} />}
           <FeedSection feeds={feeds.data ?? []} />
           {exclusions.data && <ExclusionsSection exclusions={exclusions.data} />}

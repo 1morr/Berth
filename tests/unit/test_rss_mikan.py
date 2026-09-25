@@ -52,6 +52,13 @@ class TestTheAggregatedFeed:
         assert first.torrent_url == (f"https://mikanani.me/Download/20260924/{EP12_HASH}.torrent")
         assert first.link == f"https://mikanani.me/Home/Episode/{EP12_HASH}"
 
+    def test_the_size_comes_from_the_description_not_the_content_length(self) -> None:
+        """`contentLength` 不是位元組（研究檔 §2.4）；描述結尾的 `[518.65 MB]` 是十進位的 MB。"""
+        first = parse_feed(mybangumi())[0]
+
+        assert first.size == int(518.65 * 1000**2)
+        assert first.magnet == ""
+
     def test_every_hash_is_lower_case_hex(self) -> None:
         assert all(len(item.info_hash) == 40 for item in parse_feed(mybangumi()))
         assert all(item.info_hash == item.info_hash.lower() for item in parse_feed(mybangumi()))

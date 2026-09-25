@@ -402,6 +402,8 @@ ACCESS: dict[tuple[str, str], Access] = {
     ("POST", "/rss/feeds"): Access.ADMIN,
     ("DELETE", "/rss/feeds/*"): Access.ADMIN,
     ("POST", "/rss/feeds/*/poll"): Access.ADMIN,
+    ("GET", "/rss/feeds/*/preview"): Access.ADMIN,
+    ("POST", "/rss/feeds/*/prime"): Access.ADMIN,
     ("GET", "/rss/series"): Access.ADMIN,
     ("PUT", "/rss/series/*/binding"): Access.ADMIN,
     ("DELETE", "/rss/series/*/binding"): Access.ADMIN,

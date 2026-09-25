@@ -37,6 +37,14 @@ const FLOWS = [
     port: 8509,
     viewport: NARROW,
   },
+  { name: 'rss-preview', spec: 'rss-preview', scenario: 'rss', port: 8488 },
+  {
+    name: 'rss-preview-390',
+    spec: 'rss-preview',
+    scenario: 'rss',
+    port: 8489,
+    viewport: NARROW,
+  },
 ] as const satisfies readonly {
   name: string
   spec: string

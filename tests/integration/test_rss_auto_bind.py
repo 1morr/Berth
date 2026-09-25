@@ -43,6 +43,7 @@ from tests.integration.test_rss import (
     series_by_key,
     torrents,
 )
+from tests.integration.test_rss_preview import ACGRIP, ACGRIP_URL, LOLIHOUSE_KEY
 
 pytestmark = pytest.mark.asyncio
 
@@ -308,3 +309,24 @@ class TestUnbinding:
         assert [one.id for one in undone.candidates] == [KIMI_ID]
         await session.refresh(series)
         assert series.media_id is None
+
+
+class TestWithoutAShowPage:
+    """Nyaa、acg.rip 沒有番組頁（票 11）：候選只從標題來，年份無從確認，一律留給人一鍵選。"""
+
+    async def test_an_acgrip_series_is_offered_its_candidate_and_left_to_you(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        _, factory = await moored(session, roots)
+        factory.rss_.pages[ACGRIP_URL] = ACGRIP
+        feed = await add_feed(session, url=ACGRIP_URL, name="")
+
+        polled = await poll_feed(session, factory, feed.id, now=NOW)
+
+        assert polled.bound == 0
+        view = next(row for row in await list_series(session) if row.key == LOLIHOUSE_KEY)
+        assert view.media_id is None
+        assert codes(view.reasons) == [BindReasonCode.NO_SHOW_PAGE]
+        assert [one.id for one in view.candidates] == [KIMI_ID]
+        # 沒有番組頁可抓：除了 feed 本身，沒有別的請求。
+        assert factory.rss_.requested == [ACGRIP_URL]

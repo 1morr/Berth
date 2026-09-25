@@ -19,11 +19,8 @@ from html.parser import HTMLParser
 from typing import Any
 from urllib.parse import parse_qs, urljoin, urlsplit
 
-# feedparser 沒有型別存根（不在 typeshed，也沒隨附 py.typed）；這裡只讀它回的 dict。
-import feedparser  # type: ignore[import-untyped]
-
-from berth.adapters.http import ProtocolMismatchError
-from berth.adapters.rss import FeedItem
+from berth.adapters.rss import FeedItem, approx_bytes
+from berth.adapters.rss.feed import enclosure, entries
 
 logger = logging.getLogger(__name__)
 
@@ -34,20 +31,12 @@ MIKAN_BASE = "https://mikanani.me/"
 MIKAN_TZ = timezone(timedelta(hours=8))
 
 _HASH = re.compile(r"^[0-9a-fA-F]{40}$")
-_TORRENT_TYPE = "application/x-bittorrent"
 
 
 def parse_feed(content: bytes) -> tuple[FeedItem, ...]:
-    """一份 Mikan RSS 的原文 → Feed Item，照 feed 的順序（新的在前）。
-
-    連到的不是 feed（登入頁、錯誤頁）時 feedparser 回一份空的 `entries`，那一刻說不出「這個
-    番組這週沒更新」與「網址錯了」的差別，所以認不出 feed 格式（`version` 是空的）就當成協定不符。
-    """
-    parsed: Any = feedparser.parse(content)
-    if not parsed.get("version"):
-        raise ProtocolMismatchError("the response is not an RSS feed")
+    """一份 Mikan RSS 的原文 → Feed Item，照 feed 的順序（新的在前）。"""
     found: list[FeedItem] = []
-    for entry in parsed.entries:
+    for entry in entries(content):
         item = _item(entry)
         if item is None:
             logger.warning(
@@ -68,17 +57,22 @@ def _item(entry: Any) -> FeedItem | None:
         guid=info_hash.lower(),
         title=str(entry.get("title", "")),
         link=link,
-        torrent_url=_enclosure(entry),
+        torrent_url=enclosure(entry),
+        magnet="",
         info_hash=info_hash.lower(),
+        size=_size(str(entry.get("summary", ""))),
         published_at=published_at(entry.get("published")),
     )
 
 
-def _enclosure(entry: Any) -> str:
-    for enclosure in entry.get("enclosures", ()):
-        if enclosure.get("type") == _TORRENT_TYPE and enclosure.get("href"):
-            return str(enclosure["href"])
-    return ""
+#: 描述結尾的 `[518.65 MB]`。
+_SIZE_SUFFIX = re.compile(r"\[([^\[\]]+)\]\s*$")
+
+
+def _size(description: str) -> int | None:
+    """描述結尾的大小，十進位。**不讀 `contentLength`**：它不是位元組數（研究檔 §2.4）。"""
+    found = _SIZE_SUFFIX.search(description)
+    return approx_bytes(found.group(1)) if found is not None else None
 
 
 def published_at(raw: object) -> datetime | None:

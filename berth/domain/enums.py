@@ -1168,11 +1168,15 @@ class ReviewRefusal(StrEnum):
 class FeedKind(StrEnum):
     """Feed 是哪一站的 RSS（plan §2.4、§8.5）。每一種一個 adapter（`adapters/rss/`）。
 
-    只列**已經有 adapter** 的那幾種：Nyaa 與 acg.rip 在 M3 票 11，generic 之後。加 Feed 時由網址的
-    主機認出來（`services/rss.kind_of`），認不出來的是 `feed_unsupported`。
+    只列**已經有 adapter** 的那幾種（generic 之後）。加 Feed 時由網址的主機認出來
+    （`services/rss.kind_of`），認不出來的是 `feed_unsupported`。
     """
 
     MIKAN = "mikan"
+    #: 搜尋 feed 與使用者 feed（M3 票 11）。
+    NYAA = "nyaa"
+    #: 搜尋 feed（M3 票 11）。
+    ACGRIP = "acgrip"
 
 
 class FeedItemStatus(StrEnum):
@@ -1193,6 +1197,17 @@ class FeedItemStatus(StrEnum):
     EXCLUDED = "excluded"
     #: 去重擋下了：同一個 torrent 已經送過、或帳本已有同一個版本（`skip_json` 說是哪一種）。
     DUPLICATE = "duplicate"
+    #: 新 Feed 的第一輪選了「只追之後的」：選的那一刻已經在 feed 裡的，不送（brief §15、M3 票 11）。
+    PASSED = "passed"
+
+
+class PrimeMode(StrEnum):
+    """新 Feed 的第一輪預覽選了哪一個（brief §15「補舊集」最後一句、M3 票 11）。"""
+
+    #: 全部下載：第一輪留著的照一般規則送（綁好的當場送，待綁定的綁定之後送）。
+    ALL = "all"
+    #: 只追之後的：選的那一刻已經在 feed 裡的都不送，之後才出現的照一般規則送。
+    LATER = "later"
 
 
 class RssRefusal(StrEnum):
@@ -1204,7 +1219,7 @@ class RssRefusal(StrEnum):
 
     #: 沒有這個 id 的 Feed。多半是另一個分頁先刪了。
     FEED_MISSING = "feed_missing"
-    #: 網址不是認得的來源（這一票只認 `mikanani.me`），或根本不是 http(s) 網址。
+    #: 網址不是認得的來源（`mikanani.me`、`nyaa.si`、`acg.rip`），或根本不是 http(s) 網址。
     FEED_UNSUPPORTED = "feed_unsupported"
     #: 同一個網址已經是一個 Feed 了。
     FEED_DUPLICATE = "feed_duplicate"
@@ -1224,3 +1239,9 @@ class RssRefusal(StrEnum):
     #: 一條排除條件寫壞了（空白、正則編譯不過、不認得的旗標）。`detail` 是 `<規則>: <原因>`，
     #: 原因是 Python `re` 的原文。儲存時就擋，不等到輪詢時才炸（M3 票 10）。
     RULE_INVALID = "rule_invalid"
+    #: 這個 Feed 的第一輪已經選過了（另一個分頁先選了）。
+    FEED_PRIMED = "feed_primed"
+    #: 「只追之後的」當場讀不到 feed：不知道「之前」是哪幾筆，就不決定。`detail` 是原文。
+    FEED_UNREACHABLE = "feed_unreachable"
+    #: 這個 Feed 還沒讀過，不收「全部下載」：沒看過的東西不讓人選（M3 票 11）。
+    FEED_UNREAD = "feed_unread"

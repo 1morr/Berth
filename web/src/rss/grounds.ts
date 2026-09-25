@@ -20,6 +20,7 @@ const CODES: ReasonSet<BindReasonCode> = {
   premiere_far: true,
   several_candidates: true,
   no_premiere: true,
+  no_show_page: true,
   lookup_failed: true,
   route_ambiguous: true,
   no_route: true,

@@ -19,7 +19,10 @@ from berth.parser.binding import (
     judge,
     search_terms,
     skeleton,
+    title_key,
 )
+from berth.parser.release import parse_release
+from tests.conftest import FIXTURES
 
 KIMI_RELEASE = (
     "[喵萌奶茶屋&LoliHouse] 与你相恋到生命尽头 / Kimi ga Shinu made Koi wo Shitai - 12 "
@@ -77,8 +80,53 @@ class TestTheSkeleton:
                 "[ANi] Otome Kaijuu Carameliser /  少女怪兽焦糖恋心 - 12 [1080P][Baha]",
                 ("Otome Kaijuu Carameliser", "少女怪兽焦糖恋心"),
             ),
-            # 讀不出 ` - 集號` 時整段都是骨幹（只去掉開頭的組名）。
-            ("[Group] Some Movie [1080p]", ("Some Movie [1080p]",)),
+            # 組名之後的方括號後面還接著字：那一格是 tag，標題是後面那一段。
+            ("[Group] [Other] Title - 01 [1080p]", ("Title",)),
+            # 讀不出集號時到第一個括號為止：tags 不是標題（票 11）。
+            ("[Group] Some Movie [1080p]", ("Some Movie",)),
+            # 集號在方括號裡（acg.rip 的真實標題）。
+            (
+                "[北宇治字幕组] 與妳相戀到生命盡頭 / Kimi ga Shinu made Koi wo Shitai "
+                "[12][WebRip][HEVC_AAC][繁日內嵌]",
+                ("與妳相戀到生命盡頭", "Kimi ga Shinu made Koi wo Shitai"),
+            ),
+            # 標題本身在方括號裡，組名在全形括號、前面還有播出檔期。
+            (
+                "【喵萌奶茶屋】★07月新番★[與妳相戀到生命盡頭 / きみが死ぬまで恋をしたい / "
+                "Kimi ga Shinu made Koi wo Shitai][12][1080p][繁日雙語]",
+                (
+                    "與妳相戀到生命盡頭",
+                    "きみが死ぬまで恋をしたい",
+                    "Kimi ga Shinu made Koi wo Shitai",
+                ),
+            ),
+            (
+                "[千夏字幕組][上伊那牡丹，醉姿如百合_Kamiina Botan, Yoeru Sugata wa Yuri no Hana]"
+                "[第12話][1080p_AVC][繁體]",
+                ("上伊那牡丹，醉姿如百合_Kamiina Botan, Yoeru Sugata wa Yuri no Hana",),
+            ),
+            # Nyaa 的真實標題：組名後面接破折號、中文集號、`S01E10`、括號裡的解析度。
+            (
+                "[Doomdos] - Botan Kamiina Fully Blossoms When Drunk - 第12话 - "
+                "[1080p BILIBILI COM WEB-DL]",
+                ("Botan Kamiina Fully Blossoms When Drunk",),
+            ),
+            (
+                "[sgt] Botan Kamiina Fully Blossoms When Drunk - S01E10 (WEB 1080p HEVC) | "
+                "Kamiina Botan, Yoeru Sugata wa Yuri no Hana",
+                ("Botan Kamiina Fully Blossoms When Drunk",),
+            ),
+            (
+                "[SubsPlease] Kamiina Botan, Yoeru Sugata wa Yuri no Hana - 12 (1080p) "
+                "[79C53144].mkv",
+                ("Kamiina Botan, Yoeru Sugata wa Yuri no Hana",),
+            ),
+            # 季號是標題的一部分：第三季是另一個 RSS Series。
+            (
+                "[黒ネズミたち] 时光代理人 第三季 / Link Click Season 3 - 08 "
+                "(CR 1920x1080 AVC AAC MKV)",
+                ("时光代理人 第三季", "Link Click Season 3"),
+            ),
         ],
     )
     def test_the_group_and_the_episode_are_cut_and_every_name_is_kept(
@@ -94,6 +142,85 @@ class TestTheSkeleton:
         clues = SeriesClues(title="甲", premiere=None, release_title="[G] 乙 / 丙 / 丁 / 戊 - 01")
 
         assert len(search_terms(clues)) == 3
+
+
+def fixture_feeds() -> dict[str, list[str]]:
+    """Nyaa 與 acg.rip 的四份 fixture：`<站>/<檔名>` → 每一筆的標題。一份是一部作品的搜尋結果。"""
+    import feedparser  # type: ignore[import-untyped]  # 沒有型別存根，同 adapters/rss/feed.py
+
+    paths = sorted((FIXTURES / "http" / "nyaa").glob("*.xml")) + sorted(
+        (FIXTURES / "http" / "acgrip").glob("*.xml")
+    )
+    return {
+        f"{path.parent.name}/{path.name}": [
+            str(entry.title) for entry in feedparser.parse(path.read_bytes()).entries
+        ]
+        for path in paths
+    }
+
+
+class TestTheTitleKey:
+    """非 Mikan 的 RSS Series 鍵：標題骨幹 + 字幕組（brief §15，AutoBangumi 的做法，票 11）。"""
+
+    def test_the_episodes_of_one_group_share_one_key(self) -> None:
+        episodes = [
+            f"[喵萌奶茶屋&LoliHouse] 上伊那牡丹，醉姿如百合 / Kamiina Botan, Yoeru Sugata wa Yuri "
+            f"no Hana - {number:02d} [WebRip 1080p HEVC-10bit AAC]"
+            for number in (9, 10, 11, 12)
+        ]
+
+        assert len({title_key(title) for title in episodes}) == 1
+
+    def test_two_groups_on_one_work_are_two_keys(self) -> None:
+        lolihouse = (
+            "[喵萌奶茶屋&LoliHouse] 与你相恋到生命尽头 / Kimi ga Shinu made Koi wo Shitai - 12 "
+            "[WebRip 1080p HEVC-10bit AAC][简繁日内封字幕]"
+        )
+        ani = "[ANi] Kimi ga Shinu made Koi wo Shitai /  與妳相戀到生命盡頭 - 12 [1080P][Baha]"
+
+        assert title_key(lolihouse) != title_key(ani)
+
+    def test_the_simplified_and_traditional_releases_of_one_group_share_the_latin_name(
+        self,
+    ) -> None:
+        """北宇治的简日、繁日、简繁三種發佈中文名各不同，羅馬字那一段相同：是同一個 Series。"""
+        variants = [
+            "[北宇治字幕组] 與妳相戀到生命盡頭 / Kimi ga Shinu made Koi wo Shitai "
+            "[12][WebRip][HEVC_AAC][繁日內嵌]",
+            "[北宇治字幕组] 与你相恋到生命尽头 / Kimi ga Shinu made Koi wo Shitai "
+            "[12][WebRip][HEVC_AAC][简日内嵌]",
+            "[北宇治字幕组] 与你相恋到生命尽头 / 與妳相戀到生命盡頭 / "
+            "Kimi ga Shinu made Koi wo Shitai [11][WebRip][HEVC_AAC][简繁日内封]",
+        ]
+
+        assert len({title_key(title) for title in variants}) == 1
+
+    def test_a_batch_joins_the_series_of_its_group(self) -> None:
+        """合集照樣長在同一個 Series 上，由排除條件擋下，而不是另長一個。"""
+        batch = "[SubsPlease] Kamiina Botan, Yoeru Sugata wa Yuri no Hana (01-12) (1080p) [Batch]"
+        single = (
+            "[SubsPlease] Kamiina Botan, Yoeru Sugata wa Yuri no Hana - 12 (720p) [E91B4570].mkv"
+        )
+
+        assert title_key(batch) == title_key(single)
+
+    @pytest.mark.parametrize("feed", sorted(fixture_feeds()))
+    def test_every_group_in_a_real_feed_is_one_key_and_the_groups_are_apart(
+        self, feed: str
+    ) -> None:
+        """一份真實的搜尋 feed 是一部作品：同一個組名的每一筆（各集、各解析度、合集）同一個鍵，
+        不同組名的鍵不同。"""
+        by_group: dict[str, set[str | None]] = {}
+        for title in fixture_feeds()[feed]:
+            by_group.setdefault(parse_release(title).group, set()).add(title_key(title))
+
+        assert all(len(keys) == 1 for keys in by_group.values()), by_group
+        keys = [next(iter(keys)) for keys in by_group.values()]
+        assert None not in keys
+        assert len(set(keys)) == len(keys)
+
+    def test_a_title_with_nothing_left_has_no_key(self) -> None:
+        assert title_key("[Group] - 12 [1080p]") is None
 
 
 class TestConfident:
@@ -204,6 +331,16 @@ class TestPending:
 
         assert found.media is None
         assert codes(found) == [BindReasonCode.NO_PREMIERE]
+        assert [shot.tmdb_id for shot in found.candidates] == [262000]
+
+    def test_a_source_without_a_show_page_offers_candidates_from_the_title_only(self) -> None:
+        """Nyaa、acg.rip 沒有番組頁（票 11）：標題相等的列成候選，理由說的是「沒有番組頁」。"""
+        titled = SeriesClues(title="", premiere=None, release_title=KIMI_RELEASE, show_page=False)
+
+        found = judge(titled, [show(262000)])
+
+        assert found.media is None
+        assert codes(found) == [BindReasonCode.NO_SHOW_PAGE]
         assert [shot.tmdb_id for shot in found.candidates] == [262000]
 
     def test_the_reasons_are_distinct_for_the_three_cases(self) -> None:

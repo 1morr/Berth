@@ -32,6 +32,7 @@ from tests.integration.test_rss import (
     kimi,
     torrents,
 )
+from tests.integration.test_rss_preview import ACGRIP, ACGRIP_URL
 
 BROWSER = {CSRF_HEADER: "XMLHttpRequest"}
 ADMIN = {"username": "skipper", "password": "harbour"}
@@ -162,6 +163,54 @@ class TestRefusals:
 
         assert refused.status_code == 404
         assert refused.json()["detail"]["reason"] == "series_missing"
+
+
+class TestTheFirstRound:
+    """新搜尋 feed 的第一輪預覽（票 11）：預覽 → 選「只追之後的」→ 再選一次是 409。"""
+
+    def test_preview_then_follow_from_now(
+        self, client: TestClient, roots: dict[str, Path], factory: FakeClientFactory
+    ) -> None:
+        seed(client, roots)
+        sign_in(client)
+        factory.rss_.pages[ACGRIP_URL] = ACGRIP
+
+        added = client.post("/api/rss/feeds", json={"url": ACGRIP_URL}, headers=BROWSER).json()
+        assert (added["kind"], added["primed_at"]) == ("acgrip", None)
+        feed = added["id"]
+        assert client.post(f"/api/rss/feeds/{feed}/poll", headers=BROWSER).status_code == 200
+
+        preview = client.get(f"/api/rss/feeds/{feed}/preview")
+        assert preview.status_code == 200
+        assert len(preview.json()) == 30
+        assert {row["status"] for row in preview.json()} == {"unbound"}
+        assert all(row["size"] for row in preview.json())
+
+        primed = client.post(
+            f"/api/rss/feeds/{feed}/prime", json={"mode": "later"}, headers=BROWSER
+        )
+        assert primed.status_code == 200, primed.text
+        assert primed.json()["passed"] == 30
+        assert primed.json()["feed"]["primed_at"] is not None
+
+        again = client.post(f"/api/rss/feeds/{feed}/prime", json={"mode": "all"}, headers=BROWSER)
+        assert again.status_code == 409
+        assert again.json()["detail"]["reason"] == "feed_primed"
+
+    def test_follow_from_now_on_a_feed_that_cannot_be_read_is_502(
+        self, client: TestClient, roots: dict[str, Path]
+    ) -> None:
+        seed(client, roots)
+        sign_in(client)
+        feed = client.post("/api/rss/feeds", json={"url": ACGRIP_URL}, headers=BROWSER).json()
+
+        refused = client.post(
+            f"/api/rss/feeds/{feed['id']}/prime", json={"mode": "later"}, headers=BROWSER
+        )
+
+        assert refused.status_code == 502
+        assert refused.json()["detail"]["reason"] == "feed_unreachable"
+        assert client.get("/api/rss/feeds").json()[0]["primed_at"] is None
 
 
 class TestExclusions:

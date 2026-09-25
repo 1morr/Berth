@@ -650,8 +650,19 @@ Issue、修正、對帳、刪除與重新入庫的每一條端點都是 403，�
   的清單說出是哪一層的哪一條、或重複了哪一筆。新端點 `GET/PUT /rss/exclusions`、`PUT /rss/feeds/{id}/exclusions`、
   `PUT /rss/series/{id}/exclusions`；`rss_feeds` 與 `rss_series` 多 `exclude_json`、`rss_items` 多 `skip_json`
   （migration `d5b8e1a3c702`）。`pnpm -C web e2e` 多 `rss-exclusions` 一條（1280 與 390）。
+- **Nyaa 與 acg.rip 的 Feed**（M3 票 11，brief §15）：`/rss` 收 `nyaa.si`（搜尋與使用者 feed，magnet 模式也收）
+  與 `acg.rip`（搜尋 feed）的 RSS 網址。這兩站的 RSS Series 以標題骨幹 + 字幕組認出來（同一組的简日、繁日發佈
+  是同一個）；沒有番組頁，自動綁定只列候選、留給你選。
+- **新 Feed 的第一輪預覽**（M3 票 11）：搜尋 feed 第一輪就帶著幾個月的歷史，所以選過之前一筆都不送——`/rss`
+  頁首的「等你決定」列出每一筆會送出、綁定之後送、被排除（合集在這裡）或重複，選「只追之後的」或「全部下載」。
+  Mikan 的 Feed 不走預覽。新端點 `GET /rss/feeds/{id}/preview`、`POST /rss/feeds/{id}/prime`；Feed 多 `primed_at`、
+  Item 多 `size` 與 `passed` 狀態（migration `c3e9a7f1b204`，既有的 Feed 算選過）。`pnpm -C web e2e` 多
+  `rss-preview` 一條（1280 與 390）。
 
 ### Changed
+- **標題自己寫了 `(Batch)`、`[Vol.1]` 的發佈算季包**（M3 票 11）：Nyaa 與 acg.rip 搜尋 feed 裡的 BD 單卷與季包
+  原本被當成單集、會被 RSS 自動下載；現在「不自動下載合集」擋得下它們。只認自己一格括號的寫法，標題裡的
+  `The Bad Batch`、`Vol. 2` 不算。
 - **RSS 送出的下載，時間線上的建立者是 `rss:<RSS Series id>`**（M3 票 08，plan §2.3）：原本一律寫 `system`。
 - **同一個 torrent 已經由別的 Feed、手動送單送過（或刪掉過）時，RSS 的那一筆記成「重複」而不是「已送單」**
   （M3 票 10）：連到原本那一筆下載；刪除過的那一筆不再讓 RSS 每一輪撞一次 `job_removed`。同一個 RSS Series 自己

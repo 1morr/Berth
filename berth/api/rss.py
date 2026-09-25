@@ -23,6 +23,7 @@ from berth.domain import (
     FeedItemStatus,
     FeedKind,
     MediaKind,
+    PrimeMode,
     RssRefusal,
     SkipCode,
 )
@@ -35,6 +36,8 @@ from berth.services.rss import (
     list_items,
     list_series,
     poll_feed,
+    preview_feed,
+    prime_feed,
     read_exclusions,
     set_exclusions,
     set_feed_exclusions,
@@ -59,6 +62,12 @@ _STATUS: dict[RssRefusal, int] = {
     RssRefusal.ROUTE_KIND_MISMATCH: status.HTTP_422_UNPROCESSABLE_CONTENT,
     #: 規則寫壞了：`detail` 是 `<規則>: <原因>`，什麼都沒存。
     RssRefusal.RULE_INVALID: status.HTTP_422_UNPROCESSABLE_CONTENT,
+    #: 另一個分頁先選了。重讀清單就看得到選了哪一個。
+    RssRefusal.FEED_PRIMED: status.HTTP_409_CONFLICT,
+    #: 與送單的 `source_unavailable` 同一個判斷：上游那一站這一刻讀不到。
+    RssRefusal.FEED_UNREACHABLE: status.HTTP_502_BAD_GATEWAY,
+    #: 先輪詢一次（背景半分鐘內，或「立即輪詢」）再選。
+    RssRefusal.FEED_UNREAD: status.HTTP_409_CONFLICT,
 }
 
 
@@ -94,10 +103,13 @@ class FeedOut(BaseModel):
     items: int
     #: 這一層的排除條件（一般字詞不分大小寫；`/…/` 是正則，`/…/i` 不分大小寫）。
     exclusions: list[str]
+    #: 第一輪預覽選過的那一刻。`null` 是還沒選：這個 Feed 一筆都不送，畫面列出預覽（票 11）。
+    #: Mikan 加的那一刻就有值。
+    primed_at: datetime | None
 
 
 class FeedIn(BaseModel):
-    """加一個 Feed。來源種類由網址的主機認出來（這一票只認 Mikan）。"""
+    """加一個 Feed。來源種類由網址的主機認出來：Mikan、Nyaa、acg.rip。"""
 
     url: str = Field(min_length=1)
     #: 選填，空的就用網址的主機名。
@@ -117,6 +129,24 @@ class PollOut(BaseModel):
     #: 新長出的 Series 裡自動綁上的（票 09）。
     bound: int
     submitted: int
+
+
+class PrimeIn(BaseModel):
+    """第一輪預覽選哪一個：`all` 全部下載、`later` 只追之後的。"""
+
+    mode: PrimeMode
+
+
+class PrimeOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    feed: FeedOut
+    #: 這一次送出去的（`all` 時綁好的那幾筆）。
+    submitted: int
+    #: `later` 略過的。
+    passed: int
+    #: 第一輪被排除條件擋下的（兩個選項都不動它們）。
+    excluded: int
 
 
 class BindReasonOut(BaseModel):
@@ -225,6 +255,8 @@ class ItemOut(BaseModel):
     #: `excluded` / `duplicate` 的那一條理由；其他狀態是 `null`。重複的那一種連到的 Job 在
     #: `job_hash`。
     skip: SkipReasonOut | None
+    #: 近似的位元組數，只供顯示（三站都不準）；來源不報時 `null`。
+    size: int | None
 
 
 @router.get("/feeds")
@@ -258,6 +290,38 @@ async def post_poll(session: SessionDep, factory: ClientFactoryDep, feed_id: int
     """立刻輪這一個。抓不到 Feed 仍是 200：失敗記在那一列的 `last_error`，畫面重讀清單就看得到。"""
     try:
         return PollOut.model_validate(await poll_feed(session, factory, feed_id))
+    except RssRejectedError as refusal:
+        raise rss_refusal(refusal) from refusal
+
+
+@router.get("/feeds/{feed_id}/preview", responses=_responses(RssRefusal.FEED_MISSING))
+async def get_preview(session: SessionDep, feed_id: int) -> list[ItemOut]:
+    """這個 Feed 的每一筆，新的在前，說出各自會怎樣：待綁定、會送出、排除、重複（票 11）。
+
+    重複是當場看的（只讀）；送單時還會再看一次。
+    """
+    try:
+        return [ItemOut.model_validate(row) for row in await preview_feed(session, feed_id)]
+    except RssRejectedError as refusal:
+        raise rss_refusal(refusal) from refusal
+
+
+@router.post(
+    "/feeds/{feed_id}/prime",
+    responses=_responses(
+        RssRefusal.FEED_MISSING,
+        RssRefusal.FEED_PRIMED,
+        RssRefusal.FEED_UNREACHABLE,
+        RssRefusal.FEED_UNREAD,
+    ),
+)
+async def post_prime(
+    session: SessionDep, factory: ClientFactoryDep, feed_id: int, body: PrimeIn
+) -> PrimeOut:
+    """選第一輪。`later` 當場再讀一次 feed（讀不到是 502 `feed_unreachable`，什麼都沒改）；
+    還沒讀過的 Feed 不收 `all`（409 `feed_unread`）。"""
+    try:
+        return PrimeOut.model_validate(await prime_feed(session, factory, feed_id, mode=body.mode))
     except RssRejectedError as refusal:
         raise rss_refusal(refusal) from refusal
 

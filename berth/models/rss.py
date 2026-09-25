@@ -6,8 +6,8 @@ Series。所以刪 Feed 連它的 Item 一起刪（`CASCADE`），Series 與它�
 （`.scratch/m3/rss-shape.md` §4）。
 
 欄位只建用得到的（M3 票 08 起）：排除條件（`exclude_json`）與跳過理由（`skip_json`）在票 10；
-第一輪預覽（`primed_at`，票 11）、第一批確認（`confirmed`，票 13）、補舊集（`backfilled_at`，
-票 12）等到用它的那一票再加。
+第一輪預覽（`primed_at`）與大小（`size`）在票 11；第一批確認（`confirmed`，票 13）、補舊集
+（`backfilled_at`，票 12）等到用它的那一票再加。
 """
 
 from __future__ import annotations
@@ -43,6 +43,9 @@ class RssFeed(Base):
     last_error: Mapped[str] = mapped_column(Text, default="")
     #: 這一層的排除條件（`parser.exclusion` 的格式），與全域、RSS Series 那兩層取聯集（brief §15）。
     exclude_json: Mapped[list[str]] = mapped_column(JsonText, default=list, server_default="[]")
+    #: 第一輪預覽選過的那一刻（brief §15）。`None` 是還沒選：這個 Feed 的 Item 一筆都不送。
+    #: Mikan 加的那一刻就寫（聚合 feed 只有最近的集數，沒有歷史要選）。
+    primed_at: Mapped[datetime | None] = mapped_column(UtcDateTime, default=None)
     created_at: Mapped[datetime] = mapped_column(UtcDateTime, default=utcnow)
 
 
@@ -52,7 +55,8 @@ class RssSeries(Base):
     __tablename__ = "rss_series"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    #: Mikan 是 `mikan:<番組 id>:<字幕組 id>`（plan §2.4）。其他來源在票 11 定。
+    #: Mikan 是 `mikan:<番組 id>:<字幕組 id>`，其他是 `title:<骨幹>:<字幕組>`（plan §2.4、
+    #: `parser.binding.title_key`）。
     key: Mapped[str] = mapped_column(Text, unique=True)
     mikan_bangumi_id: Mapped[int | None] = mapped_column(default=None)
     mikan_subgroup_id: Mapped[int | None] = mapped_column(default=None)
@@ -96,9 +100,12 @@ class RssItem(Base):
     title: Mapped[str] = mapped_column(Text)
     #: 單集頁。
     link: Mapped[str] = mapped_column(Text, default="")
+    #: `.torrent` 的網址，或來源只給 magnet 時的 magnet（Nyaa 的 `&m`）：送單兩種都收。
     torrent_url: Mapped[str] = mapped_column(Text, default="")
     #: 小寫十六進位；來源不報時空字串（acg.rip，票 11）。
     info_hash: Mapped[str] = mapped_column(Text, default="")
+    #: 近似的位元組數，只供預覽顯示（`FeedItem.size`）。來源不報時 `None`。
+    size: Mapped[int | None] = mapped_column(default=None)
     published_at: Mapped[datetime | None] = mapped_column(UtcDateTime, default=None)
     seen_at: Mapped[datetime] = mapped_column(UtcDateTime, default=utcnow)
     series_id: Mapped[int | None] = mapped_column(

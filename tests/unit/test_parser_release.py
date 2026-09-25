@@ -201,6 +201,33 @@ class TestReleaseKind:
 
         assert info.release_kind is ReleaseKind.COLLECTION
 
+    @pytest.mark.parametrize(
+        "name",
+        [
+            # Nyaa 與 acg.rip 搜尋 feed 裡的真實標題（研究檔 `rss-sources.md` §6，M3 票 11）：
+            # 沒有集號區間、也沒有「合集」字樣，名字自己說了這是一整包。
+            "[LinRip] Kamiina Botan, Yoeru Sugata wa Yuri no Hana 上伊那ぼたん、酔へる姿は百合の花 "
+            "[Vol.1][BDRemux 1080p AVC FLAC]",
+            "[Judas] Kamiina Botan, Yoeru Sugata wa Yuri no Hana (Botan Kamiina Fully Blossoms "
+            "When Drunk) (Season 01) [1080p][HEVC x265 10bit][Multi-Subs] (Batch)",
+            "[Trix] Botan Kamiina Fully Blossoms When Drunk S01 (Batch) [WEBRip 1080p AV1 Opus] "
+            "(Multi Subs, VOSTFR) | Yoeru Sugata wa Yuri no Hana Season S1",
+        ],
+    )
+    def test_a_name_that_says_batch_or_volume_is_a_batch(self, name: str) -> None:
+        assert parse_release(name).release_kind is ReleaseKind.BATCH
+
+    @pytest.mark.parametrize(
+        "name",
+        [
+            # 標題裡的字不算：只有自己一格括號的 `Batch` / `Vol.N` 才是發佈形態。
+            "Star.Wars.The.Bad.Batch.S03E01.1080p.WEB.H264-GROUP.mkv",
+            "Guardians of the Galaxy Vol. 2 (2017) 1080p BluRay x264.mkv",
+        ],
+    )
+    def test_the_words_inside_a_title_are_not_a_batch(self, name: str) -> None:
+        assert parse_release(name).release_kind is not ReleaseKind.BATCH
+
 
 class TestFields:
     @pytest.mark.parametrize(

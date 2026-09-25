@@ -162,6 +162,8 @@ from tests.integration.test_rss import KIMI as RSS_KIMI
 from tests.integration.test_rss import KIMI_ID as RSS_KIMI_ID
 from tests.integration.test_rss import MIKAN as RSS_MIKAN
 from tests.integration.test_rss import episode_pages as rss_episode_pages
+from tests.integration.test_rss_preview import KAMIINA as RSS_KAMIINA
+from tests.integration.test_rss_preview import KAMIINA_URL as RSS_KAMIINA_URL
 from tests.integration.test_rss_screen import SINGLE as RSS_SINGLE
 from tests.integration.test_rss_screen import SINGLE_URL as RSS_SINGLE_URL
 
@@ -1086,6 +1088,9 @@ def rss_scenario() -> Scenario:
     票 10 起多一份錄下來的單一 feed（喵萌奶茶屋&LoliHouse 的《与你相恋》1–12 集，11、12 與聚合 feed
     同一個 hash）：排除條件那一條流程加它，看得到重複與 RSS Series 那一層擋下的。它的單集頁都指向
     同一個 RSS Series（4009 × 370）；1–10 集沒有 `.torrent`，那一條流程先用規則擋下它們。
+
+    票 11 起多一份錄下來的 acg.rip 搜尋 feed（《上伊那牡丹》30 筆，夾著 8 筆合集）：第一輪預覽那一條
+    流程加它，看得到合集被排除、選「只追之後的」之後整份歷史略過。
     """
     scenario = _planning(healthy(), RSS_PACKS)
     scenario.indexer_results = ()
@@ -1114,6 +1119,7 @@ def rss_scenario() -> Scenario:
         # 番組頁（票 09 的自動綁定讀它）：只有這一部的在，其餘十個查不到、留在待綁定。
         bangumi_url(4009): (RSS_MIKAN / "home-bangumi.4009.html").read_bytes(),
         RSS_SINGLE_URL: RSS_SINGLE,
+        RSS_KAMIINA_URL: RSS_KAMIINA,
     }
     for item in parse_feed(RSS_SINGLE):
         scenario.feed_pages.setdefault(

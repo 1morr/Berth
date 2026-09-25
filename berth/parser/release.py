@@ -77,6 +77,10 @@ _SEASON_DASH_EPISODE = re.compile(
 #: 沒有方括號的集號區間：`S01 | 01-28+SPx11`、`True Beauty 01-16`。
 _LOOSE_RANGE = re.compile(r"(?<![0-9A-Za-z])([0-9]{1,4})\s*[-~]\s*([0-9]{1,4})(?![0-9A-Za-z])")
 
+#: 名字自己說這是一整包：自己一格括號的 `(Batch)` / `[Batch]`、`[Vol.1]`（BD 單卷，也是多集）。
+#: 要括號：`The Bad Batch`、`Guardians of the Galaxy Vol. 2` 是標題的一部分。
+_BATCH = re.compile(r"[\[(]\s*(?:batch|vol\.?\s*[0-9]{1,2})\s*[\])]", re.IGNORECASE)
+
 #: 年份長得像集號，所以四位數的 19xx / 20xx 不當集號用。
 _YEAR_RANGE = range(1900, 2100)
 
@@ -120,7 +124,7 @@ def parse_release(name: str) -> ReleaseInfo:
         year=_int(guess.get("year")),
         air_date=_date(guess.get("date")),
         special_kind=hints.special or (SpecialKind.MOVIE if hints.movie else None),
-        release_kind=_release_kind(hints, episode_end, guess),
+        release_kind=_release_kind(cleaned, hints, episode_end, guess),
         matched_tokens=hints.matched,
     )
 
@@ -238,16 +242,21 @@ def _episode_from_range(cleaned: str) -> tuple[int | None, int | None]:
     return None, None
 
 
-def _release_kind(hints: CjkHints, episode_end: int | None, guess: dict[str, Any]) -> ReleaseKind:
+def _release_kind(
+    name: str, hints: CjkHints, episode_end: int | None, guess: dict[str, Any]
+) -> ReleaseKind:
     """`single | range | batch | collection`（brief §6.3）。
 
-    `batch` 不在這裡：一個名字看不出「這包有很多集但沒寫成區間」，那要數檔案，
-    是呼叫端的事（plan §4.1 的 `plan` 階段）。
+    `batch` 只認名字**自己說了**的：自己一格括號的 `(Batch)`、`[Vol.1]`（Nyaa 與 acg.rip 搜尋
+    feed 的真實寫法，M3 票 11）。沒說的季包看不出來——那要數檔案，是呼叫端的事（plan §4.1 的
+    `plan` 階段）。
     """
     if hints.collection:
         return ReleaseKind.COLLECTION
     if episode_end is not None or isinstance(guess.get("episode"), list):
         return ReleaseKind.RANGE
+    if _BATCH.search(name):
+        return ReleaseKind.BATCH
     return ReleaseKind.SINGLE
 
 

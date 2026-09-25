@@ -22,6 +22,12 @@ Route 紅燈、磁碟門檻這些是「現在送不了」，不是「綁錯了�
 Job 已經在了、或另一筆已經送過）→ 帳本已有同 Media / 季 / 集 / Tags（送單時，`_in_library`）。
 擋下的是 `duplicate`。v2 的 Tags 不同（`version`），不是重複（brief §7.7）。排除與去重擋下的都
 不是錯誤，理由（`domain.SkipReason`）存在 `skip_json`，Feed Item 清單照它說話。
+
+**新 Feed 的第一輪預覽**（brief §15「補舊集」最後一句、票 11）：搜尋類 feed（Nyaa、acg.rip）第一輪就
+帶著幾個月的歷史，所以 `primed_at` 還是 `NULL` 的 Feed 一筆都不送——照樣寫 Item、長 Series、看排除
+條件，停在預覽（`preview_feed`）等使用者選「全部下載」或「只追之後的」（`prime_feed`）。擋在送單
+那一頭（`_submit_waiting` 只看選過的 Feed），所以輪詢、綁定、自動綁定三條送單的路一起擋住。Mikan
+聚合 feed 只有最近的集數，加的那一刻就寫 `primed_at`。
 """
 
 from __future__ import annotations
@@ -34,13 +40,13 @@ from pathlib import PurePosixPath
 from typing import Any
 from urllib.parse import urlsplit
 
-from sqlalchemy import delete, func, or_, select
+from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import ColumnElement
 
 from berth.adapters.http import ServiceError
-from berth.adapters.rss import FeedFetcher, FeedItem, mikan
+from berth.adapters.rss import FeedFetcher, FeedItem, acgrip, mikan, nyaa
 from berth.domain import (
     BindReason,
     BindReasonCode,
@@ -52,6 +58,7 @@ from berth.domain import (
     MediaKind,
     MediaSnapshot,
     PlanAction,
+    PrimeMode,
     RssRefusal,
     SkipCode,
     SkipReason,
@@ -64,7 +71,7 @@ from berth.models import Job, LedgerEntry, Media, Route, RssFeed, RssItem, RssSe
 from berth.models import media_id as build_media_id
 from berth.models.types import utcnow
 from berth.parser import plan as decide
-from berth.parser.binding import SeriesClues, could_be, judge, search_terms
+from berth.parser.binding import SeriesClues, could_be, judge, search_terms, title_key
 from berth.parser.exclusion import Layer, RuleError, normalize_rules, screen
 from berth.parser.planner import episode_span
 from berth.parser.release import parse_release, tags_of
@@ -95,8 +102,15 @@ _EPISODE_SIZE = 1 << 30
 #: 還沒送出去的兩種：規則收緊時照新規則再看一次的就是它們。
 _WAITING = (FeedItemStatus.UNBOUND, FeedItemStatus.MATCHED)
 
-#: 認得的來源：主機名 → 種類。這一票只認 Mikan 本站（shape §5）；Nyaa 與 acg.rip 在票 11。
-_HOSTS: dict[str, FeedKind] = {"mikanani.me": FeedKind.MIKAN}
+#: 認得的來源：主機名 → 種類（`www.` 先去掉）。
+_HOSTS: dict[str, FeedKind] = {
+    "mikanani.me": FeedKind.MIKAN,
+    "nyaa.si": FeedKind.NYAA,
+    "acg.rip": FeedKind.ACGRIP,
+}
+
+#: 加的那一刻就算選過第一輪的來源：Mikan 聚合 feed 只有最近的集數（brief §15），沒有歷史要選。
+_NO_PREVIEW = frozenset({FeedKind.MIKAN})
 
 
 class RssRejectedError(Exception):
@@ -121,6 +135,8 @@ class FeedView:
     items: int
     #: 這一層的排除條件。
     exclusions: tuple[str, ...]
+    #: 第一輪預覽選過的那一刻；`None` 是還沒選，這個 Feed 一筆都不送。
+    primed_at: datetime | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -178,6 +194,8 @@ class ItemView:
     error: str
     #: `excluded` / `duplicate` 的那一條理由；其他狀態是 `None`。
     skip: SkipReason | None
+    #: 近似的位元組數（只供顯示）；來源不報時 `None`。
+    size: int | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -199,6 +217,19 @@ class PollOutcome:
     bound: int
     #: 這一輪送出去的。
     submitted: int
+    #: Feed 本身抓不到時的原文（也寫進那一列的 `last_error`）；抓到了是空字串。
+    failed: str = ""
+
+
+@dataclass(frozen=True, slots=True)
+class PrimeOutcome:
+    feed: FeedView
+    #: 這一次送出去的（「全部下載」時綁好的那幾筆）。
+    submitted: int
+    #: 「只追之後的」略過的。
+    passed: int
+    #: 第一輪被排除條件擋下的（兩個選項都不改它們）。
+    excluded: int
 
 
 def kind_of(url: str) -> FeedKind | None:
@@ -230,7 +261,12 @@ async def add_feed(session: AsyncSession, *, url: str, name: str = "") -> FeedVi
         raise RssRejectedError(RssRefusal.FEED_UNSUPPORTED, url)
     if await session.scalar(select(RssFeed.id).where(RssFeed.url == url)) is not None:
         raise RssRejectedError(RssRefusal.FEED_DUPLICATE, url)
-    row = RssFeed(name=name.strip() or _default_name(url), url=url, kind=kind)
+    row = RssFeed(
+        name=name.strip() or _default_name(url),
+        url=url,
+        kind=kind,
+        primed_at=utcnow() if kind in _NO_PREVIEW else None,
+    )
     session.add(row)
     try:
         await session.commit()
@@ -261,7 +297,8 @@ async def delete_feed(session: AsyncSession, feed_id: int) -> int:
 
 
 def _default_name(url: str) -> str:
-    return urlsplit(url).hostname or url
+    host = urlsplit(url).hostname
+    return host.removeprefix("www.") if host else url
 
 
 def _feed_view(row: RssFeed, items: int) -> FeedView:
@@ -275,6 +312,113 @@ def _feed_view(row: RssFeed, items: int) -> FeedView:
         last_error=row.last_error,
         items=items,
         exclusions=tuple(row.exclude_json),
+        primed_at=row.primed_at,
+    )
+
+
+# --- 第一輪預覽 ---------------------------------------------------------
+
+
+@command(Effect.READ)
+async def preview_feed(session: AsyncSession, feed_id: int) -> tuple[ItemView, ...]:
+    """這個 Feed 的每一筆，新的在前，說出各自會怎樣（brief §15、票 11）。
+
+    排除條件在寫下的那一刻就看過了（`excluded`）。還沒送的那幾筆當場看一次去重（`_held_back`，
+    **只讀**）：重複的照 `duplicate` 說出理由、不寫回——真的送單時還會再看一次，那時的帳本才算數。
+    """
+    if await session.get(RssFeed, feed_id) is None:
+        raise RssRejectedError(RssRefusal.FEED_MISSING, str(feed_id))
+    rows = list(
+        await session.scalars(
+            select(RssItem)
+            .where(RssItem.feed_id == feed_id)
+            .order_by(RssItem.published_at.desc(), RssItem.id.desc())
+        )
+    )
+    views: list[ItemView] = []
+    for row in rows:
+        view = _item_view(row)
+        series = await session.get(RssSeries, row.series_id) if row.series_id else None
+        if row.status in _WAITING and series is not None:
+            held = await _held_back(session, row, series)
+            if held is not None:
+                skip, job_hash = held
+                view = replace(view, status=FeedItemStatus.DUPLICATE, skip=skip, job_hash=job_hash)
+        views.append(view)
+    return tuple(views)
+
+
+@command(Effect.IRREVERSIBLE)
+async def prime_feed(
+    session: AsyncSession,
+    factory: ServiceClientFactory,
+    feed_id: int,
+    *,
+    mode: PrimeMode,
+    now: datetime | None = None,
+) -> PrimeOutcome:
+    """新 Feed 的第一輪選「全部下載」或「只追之後的」，寫下 `primed_at`（brief §15、票 11）。
+
+    **「只追之後的」當場再讀一次 feed**：「之前」是選的那一刻已經在 feed 裡的每一筆。只看已經寫下的
+    Item 的話，第一輪沒讀到 feed（連不上）或預覽之後才出現的那幾筆，下一輪就會被當成新的整批送出。
+    讀不到就不決定（`feed_unreachable`）。「全部下載」不必讀：留著的照一般規則送，綁好的當場送、
+    待綁定的綁定之後送；**還沒讀過的 Feed 不收「全部下載」**（`feed_unread`）——沒看過的東西不讓人選
+    （shape §2），畫面不給按，命令本身也不收。排除條件擋下的兩個選項都不動。
+
+    **不可逆**：選完就定了（shape §6），`passed` 放不回來，「全部下載」一次送出整份歷史。所以 M5 的
+    AI 不自己選，做成 Proposal 等人。
+
+    **寫 `primed_at` 是條件式的**（`WHERE primed_at IS NULL`）：「只追之後的」重讀 feed 的那幾秒裡
+    另一個分頁可能先選了，後到的這一個是 `feed_primed`、什麼都不改。
+    """
+    feed = await session.get(RssFeed, feed_id)
+    if feed is None:
+        raise RssRejectedError(RssRefusal.FEED_MISSING, str(feed_id))
+    if feed.primed_at is not None:
+        raise RssRejectedError(RssRefusal.FEED_PRIMED, feed.primed_at.isoformat())
+    if mode is PrimeMode.ALL and feed.last_polled_at is None:
+        raise RssRejectedError(RssRefusal.FEED_UNREAD, str(feed_id))
+    if mode is PrimeMode.LATER:
+        polled = await poll_feed(session, factory, feed_id, now=now)
+        if polled.failed:
+            raise RssRejectedError(RssRefusal.FEED_UNREACHABLE, polled.failed)
+    won = await session.execute(
+        update(RssFeed)
+        .where(RssFeed.id == feed_id, RssFeed.primed_at.is_(None))
+        .values(primed_at=now or utcnow())
+    )
+    if won.rowcount == 0:  # type: ignore[attr-defined]  # `execute(update)` 回 CursorResult，型別只說 Result
+        await session.rollback()
+        raise RssRejectedError(RssRefusal.FEED_PRIMED, str(feed_id))
+    passed = 0
+    if mode is PrimeMode.LATER:
+        for row in await session.scalars(
+            select(RssItem).where(RssItem.feed_id == feed_id, RssItem.status.in_(_WAITING))
+        ):
+            row.status = FeedItemStatus.PASSED
+            row.error = ""
+            passed += 1
+    await session.commit()
+    logger.info("rss feed primed", extra={"feed": feed_id, "mode": mode.value, "passed": passed})
+
+    submitted = 0
+    if mode is PrimeMode.ALL:
+        submitted = await _submit_waiting(session, factory, RssItem.feed_id == feed_id)
+    excluded = await session.scalar(
+        select(func.count())
+        .select_from(RssItem)
+        .where(RssItem.feed_id == feed_id, RssItem.status == FeedItemStatus.EXCLUDED)
+    )
+    items = await session.scalar(
+        select(func.count()).select_from(RssItem).where(RssItem.feed_id == feed_id)
+    )
+    saved = await session.get(RssFeed, feed_id, populate_existing=True)
+    assert saved is not None
+    return PrimeOutcome(
+        feed=_feed_view(saved, int(items or 0)),
+        submitted=submitted,
+        passed=passed,
+        excluded=int(excluded or 0),
     )
 
 
@@ -343,7 +487,7 @@ async def poll_feed(
             logger.warning(
                 "rss feed could not be fetched", extra={"feed": feed.id, "error": feed.last_error}
             )
-            return PollOutcome(items=0, series=0, bound=0, submitted=0)
+            return PollOutcome(items=0, series=0, bound=0, submitted=0, failed=feed.last_error)
         items, grown, skipped = await _record(session, fetcher, feed, found, moment)
         feed.last_polled_at = moment
         feed.last_error = skipped
@@ -365,6 +509,10 @@ def _parse(kind: FeedKind, content: bytes) -> tuple[FeedItem, ...]:
     match kind:
         case FeedKind.MIKAN:
             return mikan.parse_feed(content)
+        case FeedKind.NYAA:
+            return nyaa.parse_feed(content)
+        case FeedKind.ACGRIP:
+            return acgrip.parse_feed(content)
 
 
 async def _record(
@@ -408,8 +556,9 @@ async def _record(
                 guid=item.guid,
                 title=item.title,
                 link=item.link,
-                torrent_url=item.torrent_url,
+                torrent_url=item.torrent_url or item.magnet,
                 info_hash=item.info_hash,
+                size=item.size,
                 published_at=item.published_at,
                 seen_at=moment,
                 series_id=series.id,
@@ -438,9 +587,17 @@ class _UnkeyedError(Exception):
 async def _series_key(fetcher: FeedFetcher, kind: FeedKind, item: FeedItem) -> str:
     """這一筆屬於哪一個 RSS Series 的鍵（plan §2.4）。認不出來丟 `_UnkeyedError`。
 
-    Mikan 的鍵（番組 id, 字幕組 id）不在 feed 裡，要抓單集頁（brief §20.12）。
+    Mikan 的鍵（番組 id, 字幕組 id）不在 feed 裡，要抓單集頁（brief §20.12）。其他來源沒有番組這種
+    東西，鍵是標題骨幹 + 字幕組（`parser.binding.title_key`，AutoBangumi 的做法）。
     """
     match kind:
+        case FeedKind.NYAA | FeedKind.ACGRIP:
+            key = title_key(item.title)
+            if key is None:
+                raise _UnkeyedError(
+                    f"no title left once the group and episode are cut: {item.title}"
+                )
+            return key
         case FeedKind.MIKAN:
             try:
                 page = await fetcher.fetch(item.link)
@@ -457,13 +614,11 @@ async def _series(session: AsyncSession, key: str, item: FeedItem) -> tuple[RssS
     row = await session.scalar(select(RssSeries).where(RssSeries.key == key))
     if row is not None:
         return row, False
-    _, bangumi, subgroup = key.split(":")
-    row = RssSeries(
-        key=key,
-        mikan_bangumi_id=int(bangumi),
-        mikan_subgroup_id=int(subgroup),
-        title_raw=item.title,
-    )
+    row = RssSeries(key=key, title_raw=item.title)
+    if key.startswith("mikan:"):
+        _, bangumi, subgroup = key.split(":")
+        row.mikan_bangumi_id = int(bangumi)
+        row.mikan_subgroup_id = int(subgroup)
     session.add(row)
     await session.flush()
     return row, True
@@ -472,11 +627,16 @@ async def _series(session: AsyncSession, key: str, item: FeedItem) -> tuple[RssS
 async def _submit_waiting(
     session: AsyncSession, factory: ServiceClientFactory, scope: ColumnElement[bool]
 ) -> int:
-    """把 `scope` 裡綁好而還沒送的 Item（`matched`）送出去，舊的先。回送成了幾筆。"""
+    """把 `scope` 裡綁好而還沒送的 Item（`matched`）送出去，舊的先。回送成了幾筆。
+
+    **第一輪還沒選過的 Feed 不送**（`primed_at` 是 `NULL`）：三條送單的路（輪詢、綁定、自動綁定）
+    都經過這裡，擋一處就擋住全部。
+    """
     rows = list(
         await session.scalars(
             select(RssItem)
-            .where(RssItem.status == FeedItemStatus.MATCHED, scope)
+            .join(RssFeed, RssFeed.id == RssItem.feed_id)
+            .where(RssItem.status == FeedItemStatus.MATCHED, RssFeed.primed_at.is_not(None), scope)
             .order_by(RssItem.published_at, RssItem.id)
         )
     )
@@ -839,9 +999,13 @@ async def _auto_bind(
 
 
 async def _clues(fetcher: FeedFetcher, series: RssSeries) -> SeriesClues:
-    """番組頁的中文名與開播日期 + 長出它的那一筆發佈名。"""
+    """番組頁的中文名與開播日期 + 長出它的那一筆發佈名。
+
+    不是 Mikan 的（Nyaa、acg.rip）沒有番組頁：線索只有發佈名，`judge` 列出候選、一律留給人
+    （票 11）。
+    """
     if series.mikan_bangumi_id is None:
-        raise _LookupError("the series has no Mikan bangumi id")
+        return SeriesClues(title="", premiere=None, release_title=series.title_raw, show_page=False)
     try:
         page = await fetcher.fetch(mikan.bangumi_url(series.mikan_bangumi_id))
     except ServiceError as exc:
@@ -1074,19 +1238,21 @@ async def list_items(session: AsyncSession) -> tuple[ItemView, ...]:
     rows = await session.scalars(
         select(RssItem).order_by(RssItem.seen_at.desc(), RssItem.id.desc()).limit(RECENT_ITEMS)
     )
-    return tuple(
-        ItemView(
-            id=row.id,
-            feed_id=row.feed_id,
-            title=row.title,
-            link=row.link,
-            published_at=row.published_at,
-            seen_at=row.seen_at,
-            series_id=row.series_id,
-            status=row.status,
-            job_hash=row.job_hash,
-            error=row.error,
-            skip=_skip_of(row),
-        )
-        for row in rows
+    return tuple(_item_view(row) for row in rows)
+
+
+def _item_view(row: RssItem) -> ItemView:
+    return ItemView(
+        id=row.id,
+        feed_id=row.feed_id,
+        title=row.title,
+        link=row.link,
+        published_at=row.published_at,
+        seen_at=row.seen_at,
+        series_id=row.series_id,
+        status=row.status,
+        job_hash=row.job_hash,
+        error=row.error,
+        skip=_skip_of(row),
+        size=row.size,
     )

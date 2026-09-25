@@ -2142,11 +2142,12 @@ const zhHant = {
     title: 'RSS',
     off: '讀不到 RSS 的清單。Berth 自己的 API 沒有回應，先確認它還活著。',
     failed: '沒有做成。重新整理這一頁再試一次；還是不行的話看健康頁。',
-    kind: { mikan: 'MIKAN' },
+    kind: { mikan: 'MIKAN', nyaa: 'NYAA', acgrip: 'ACG.RIP' },
     // `RssRefusal` 十種，各一句。原文另外印在下面（`detail`）。
     refusal: {
       feed_missing: '這個 Feed 已經不在了，多半是另一個分頁剛刪掉它。',
-      feed_unsupported: '認不得這個網址。這一版只收 Mikan（mikanani.me）的 RSS 網址。',
+      feed_unsupported:
+        '認不得這個網址。這一版收 Mikan（mikanani.me）、Nyaa（nyaa.si）與 acg.rip 的 RSS 網址。',
       feed_duplicate: '這個網址已經是一個 Feed 了。',
       series_missing: '這個 RSS Series 已經不在了。重新整理這一頁。',
       series_bound: '這個 RSS Series 已經綁好了，多半是另一個分頁剛綁的。要換作品先解除綁定。',
@@ -2155,6 +2156,10 @@ const zhHant = {
       route_disabled: '那條 Route 停用中。到設定的媒體庫路徑把它啟用，或換一條。',
       route_kind_mismatch: '那條 Route 收的不是這種作品（劇集只進得了劇集媒體庫）。',
       rule_invalid: '這條排除條件寫壞了，什麼都沒存。',
+      feed_primed: '這個 Feed 的第一輪已經選過了，多半是另一個分頁剛選的。',
+      feed_unreachable:
+        '現在讀不到這個 feed，所以不知道「之前」是哪幾筆，什麼都沒改。等一下再選一次。原文：',
+      feed_unread: '這個 Feed 還沒讀過。先按「立即輪詢」看過第一輪再選。',
     },
     feeds: {
       title: 'Feed',
@@ -2162,7 +2167,8 @@ const zhHant = {
         '還沒有 Feed。到 Mikan 登入、訂閱想追的番組與字幕組，把「我的番組」頁上的 RSS 網址貼在下面。',
       add: '加一個 Feed',
       url: 'RSS 網址',
-      urlHint: 'Mikan「我的番組」的 RSS（/RSS/MyBangumi?token=…）或單一番組的 RSS。',
+      urlHint:
+        'Mikan「我的番組」的 RSS（/RSS/MyBangumi?token=…）或單一番組的 RSS；Nyaa 或 acg.rip 的搜尋 RSS。',
       name: '名稱（選填）',
       nameHint: '空著就用網址的主機名。',
       addAction: '加入',
@@ -2176,6 +2182,7 @@ const zhHant = {
       items_other: '{{count}} 筆',
       // 上一輪抓不到 Feed，或有幾筆的單集頁抓不到（那幾筆下一輪再試）。
       failed: '上一輪有問題',
+      undecided: '第一輪還沒決定，一筆都不送：在頁首選「只追之後的」或「全部下載」。',
       polledNow:
         '這一輪：新 {{items}} 筆、長出 {{series}} 個 RSS Series（自動綁定 {{bound}} 個）、送出 {{sent}} 筆。',
       poll: '立即輪詢',
@@ -2251,6 +2258,7 @@ const zhHant = {
       premiere_far: '同名的 {{title}} 沒有一季在 {{premiere}}（Mikan 寫的開播日）前後首播',
       several_candidates: '同名、開播日期也對得上的有 {{number}} 部',
       no_premiere: 'Mikan 的番組頁沒寫開播日期，年份無從確認',
+      no_show_page: '這個來源沒有番組頁，年份無從確認：候選只從標題來，要你確認',
       lookup_failed: 'Mikan 番組頁或 TMDB 這一次查不到（{{detail}}）',
       route_ambiguous: '作品認出來了，但 {{routes}} 都收得下它',
       no_route: '作品認出來了，但沒有啟用中的 Route 收得下它',
@@ -2286,6 +2294,49 @@ const zhHant = {
       same_torrent: '同一個 torrent 已經送過了（另一個 Feed 或手動送單）',
       in_library: '媒體庫裡已經有同一個版本：{{known}}',
     },
+    // 新 Feed 的第一輪（票 11，`.scratch/m3/preview-shape.md`）。
+    first: {
+      title: '等你決定：新 Feed 的第一輪',
+      chip_one: '{{count}} 個等你決定',
+      chip_other: '{{count}} 個等你決定',
+      lede: '搜尋 feed 第一輪就帶著好幾個月的歷史。選完之前，這個 Feed 一筆都不送。',
+      unread:
+        '第一輪還沒輪到：背景會在半分鐘內讀它，或在下方 Feed 段按「立即輪詢」。讀到之後這裡會列出每一筆。',
+      tally: {
+        send_one: '會送出 {{count}}',
+        send_other: '會送出 {{count}}',
+        bind_one: '綁定之後送 {{count}}',
+        bind_other: '綁定之後送 {{count}}',
+        excluded_one: '排除 {{count}}',
+        excluded_other: '排除 {{count}}',
+        duplicate_one: '重複 {{count}}',
+        duplicate_other: '重複 {{count}}',
+      },
+      group: {
+        send_one: '會送出（{{count}} 筆）',
+        send_other: '會送出（{{count}} 筆）',
+        bind_one: '綁定之後送（{{count}} 筆）',
+        bind_other: '綁定之後送（{{count}} 筆）',
+        excluded_one: '排除（{{count}} 筆）',
+        excluded_other: '排除（{{count}} 筆）',
+        duplicate_one: '重複（{{count}} 筆）',
+        duplicate_other: '重複（{{count}} 筆）',
+      },
+      show: '看{{name}}',
+      bindHint: '它們的 RSS Series 在下方待綁定段，綁好之後才送。',
+      later: '只追之後的',
+      laterHint:
+        '「只追之後的」會當場再讀一次 feed，現在已經在裡面的都略過，之後才出現的照常送。選完就定了；要重來得刪掉 Feed 再加一次。',
+      all: '全部下載',
+      allConfirm: '全部下載',
+      allWarning:
+        '會送出 {{send}} 筆到 qBittorrent，另外 {{bind}} 筆等它們的 RSS Series 綁好之後送。排除與重複的不送。',
+      priming: '決定中…',
+      donePassed_one: '《{{name}}》：只追之後的，略過 {{count}} 筆。',
+      donePassed_other: '《{{name}}》：只追之後的，略過 {{count}} 筆。',
+      doneSent_one: '《{{name}}》：全部下載，送出 {{count}} 筆。',
+      doneSent_other: '《{{name}}》：全部下載，送出 {{count}} 筆。',
+    },
     series: {
       key: '鍵',
       page: 'Mikan 番組頁',
@@ -2304,7 +2355,9 @@ const zhHant = {
         stuck: '送不出去',
         excluded: '已排除',
         duplicate: '重複',
+        passed: '略過',
       },
+      passed: '新 Feed 的第一輪選了「只追之後的」：這一筆在那之前就在了。',
     },
   },
   common: {
@@ -4423,11 +4476,11 @@ const en: Translations<typeof zhHant> = {
     off: "Can't read the RSS lists. Berth's own API isn't answering — check that it's still running.",
     failed:
       "That didn't go through. Reload the page and try again; if it still fails, look at the health page.",
-    kind: { mikan: 'MIKAN' },
+    kind: { mikan: 'MIKAN', nyaa: 'NYAA', acgrip: 'ACG.RIP' },
     refusal: {
       feed_missing: 'This feed is gone — another tab probably just deleted it.',
       feed_unsupported:
-        "Berth doesn't recognise this address. This version only takes Mikan (mikanani.me) RSS addresses.",
+        "Berth doesn't recognise this address. This version takes Mikan (mikanani.me), Nyaa (nyaa.si) and acg.rip RSS addresses.",
       feed_duplicate: 'This address is already a feed.',
       series_missing: 'This RSS Series is gone. Reload the page.',
       series_bound:
@@ -4440,6 +4493,11 @@ const en: Translations<typeof zhHant> = {
       route_kind_mismatch:
         "That route doesn't hold this kind of title (series only go into a TV library).",
       rule_invalid: 'That exclusion rule is broken; nothing was saved.',
+      feed_primed: "This feed's first round has already been decided — probably from another tab.",
+      feed_unreachable:
+        "Can't read this feed right now, so there's no telling which items came before; nothing was changed. Try again in a moment. Original error:",
+      feed_unread:
+        "This feed hasn't been read yet. Press Poll now to see its first round before choosing.",
     },
     feeds: {
       title: 'Feeds',
@@ -4447,7 +4505,8 @@ const en: Translations<typeof zhHant> = {
         'No feeds yet. Sign in to Mikan, subscribe to the shows and fansub groups you follow, and paste the RSS address from the My Bangumi page below.',
       add: 'Add a feed',
       url: 'RSS address',
-      urlHint: "Mikan's My Bangumi RSS (/RSS/MyBangumi?token=…) or a single show's RSS.",
+      urlHint:
+        "Mikan's My Bangumi RSS (/RSS/MyBangumi?token=…) or a single show's RSS; a Nyaa or acg.rip search RSS.",
       name: 'Name (optional)',
       nameHint: "Left blank, the address's host name is used.",
       addAction: 'Add',
@@ -4460,6 +4519,8 @@ const en: Translations<typeof zhHant> = {
       items_one: '{{count}} item',
       items_other: '{{count}} items',
       failed: 'Last round had problems',
+      undecided:
+        "The first round isn't decided yet, so nothing is sent: choose Only what comes next or Download everything at the top of the page.",
       polledNow:
         'This round: {{items}} new items, {{series}} new RSS Series ({{bound}} bound automatically), {{sent}} sent.',
       poll: 'Poll now',
@@ -4532,9 +4593,53 @@ const en: Translations<typeof zhHant> = {
         '{{title}} has the same name, but none of its seasons premiered near {{premiere}} (the start date on Mikan)',
       several_candidates: '{{number}} titles have the same name and a matching start date',
       no_premiere: 'the Mikan show page has no start date, so the year cannot be checked',
+      no_show_page:
+        'this source has no show page, so the year cannot be checked: the candidates come from the title alone and need you to confirm',
       lookup_failed: 'the Mikan show page or TMDB could not be read this time ({{detail}})',
       route_ambiguous: 'the title was recognised, but {{routes}} can all take it',
       no_route: 'the title was recognised, but no enabled route takes it',
+    },
+    first: {
+      title: 'Your call: first round of a new feed',
+      chip_one: '{{count}} to decide',
+      chip_other: '{{count}} to decide',
+      lede: 'A search feed brings months of history in its first round. Until you choose, nothing from this feed is sent.',
+      unread:
+        "The first round hasn't run yet: the background poll reads it within half a minute, or press Poll now in the Feeds section below. Every item shows up here once it's read.",
+      tally: {
+        send_one: '{{count}} to send',
+        send_other: '{{count}} to send',
+        bind_one: '{{count}} after binding',
+        bind_other: '{{count}} after binding',
+        excluded_one: '{{count}} excluded',
+        excluded_other: '{{count}} excluded',
+        duplicate_one: '{{count}} duplicate',
+        duplicate_other: '{{count}} duplicates',
+      },
+      group: {
+        send_one: 'To send ({{count}} item)',
+        send_other: 'To send ({{count}} items)',
+        bind_one: 'Sent after binding ({{count}} item)',
+        bind_other: 'Sent after binding ({{count}} items)',
+        excluded_one: 'Excluded ({{count}} item)',
+        excluded_other: 'Excluded ({{count}} items)',
+        duplicate_one: 'Duplicate ({{count}} item)',
+        duplicate_other: 'Duplicates ({{count}} items)',
+      },
+      show: 'Show {{name}}',
+      bindHint: 'Their RSS Series wait in the To bind section below; they are sent once bound.',
+      later: 'Only what comes next',
+      laterHint:
+        'Only what comes next reads the feed once more right now and passes over everything already in it; items that show up later are sent as usual. The choice is final: to start over, delete the feed and add it again.',
+      all: 'Download everything',
+      allConfirm: 'Download everything',
+      allWarning:
+        'Sends {{send}} items to qBittorrent now; {{bind}} more are sent once their RSS Series are bound. Excluded and duplicate items are not sent.',
+      priming: 'Deciding…',
+      donePassed_one: '{{name}}: only what comes next, {{count}} item passed over.',
+      donePassed_other: '{{name}}: only what comes next, {{count}} items passed over.',
+      doneSent_one: '{{name}}: download everything, {{count}} item sent.',
+      doneSent_other: '{{name}}: download everything, {{count}} items sent.',
     },
     series: {
       key: 'Key',
@@ -4584,7 +4689,10 @@ const en: Translations<typeof zhHant> = {
         stuck: "Can't send",
         excluded: 'Excluded',
         duplicate: 'Duplicate',
+        passed: 'Passed over',
       },
+      passed:
+        'The feed was new and you chose to follow only what comes next: this item was already in it.',
     },
   },
   common: {
