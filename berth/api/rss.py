@@ -77,6 +77,8 @@ _STATUS: dict[RssRefusal, int] = {
     RssRefusal.FEED_UNREAD: status.HTTP_409_CONFLICT,
     #: 上游回了東西，但不是 RSS：與 `feed_unreachable` 同樣是上游那一頭的事。
     RssRefusal.FEED_NOT_RSS: status.HTTP_502_BAD_GATEWAY,
+    #: 請求預算用完（M3 票 20）：不是上游的錯，是 Berth 自己先停手；等 `detail` 說的時刻再試。
+    RssRefusal.BUDGET_EXHAUSTED: status.HTTP_429_TOO_MANY_REQUESTS,
 }
 
 
@@ -330,6 +332,7 @@ class OneshotOut(BaseModel):
         RssRefusal.FEED_UNSUPPORTED,
         RssRefusal.FEED_UNREACHABLE,
         RssRefusal.FEED_NOT_RSS,
+        RssRefusal.BUDGET_EXHAUSTED,
         RssRefusal.MEDIA_MISSING,
         RssRefusal.ROUTE_MISSING,
     ),
@@ -587,7 +590,10 @@ _BINDING_REFUSALS = (
 )
 
 
-@router.get("/mikan/search", responses=_responses(RssRefusal.FEED_UNREACHABLE))
+@router.get(
+    "/mikan/search",
+    responses=_responses(RssRefusal.FEED_UNREACHABLE, RssRefusal.BUDGET_EXHAUSTED),
+)
 async def get_mikan_search(
     factory: ClientFactoryDep, q: str = Query(min_length=1)
 ) -> list[BangumiHitOut]:
@@ -598,7 +604,10 @@ async def get_mikan_search(
         raise rss_refusal(refusal) from refusal
 
 
-@router.get("/mikan/bangumi/{bangumi_id}", responses=_responses(RssRefusal.FEED_UNREACHABLE))
+@router.get(
+    "/mikan/bangumi/{bangumi_id}",
+    responses=_responses(RssRefusal.FEED_UNREACHABLE, RssRefusal.BUDGET_EXHAUSTED),
+)
 async def get_mikan_bangumi(
     session: SessionDep, factory: ClientFactoryDep, bangumi_id: int
 ) -> BangumiOut:
@@ -616,6 +625,7 @@ async def get_mikan_bangumi(
         RssRefusal.SERIES_BOUND,
         RssRefusal.FEED_DUPLICATE,
         RssRefusal.FEED_UNREACHABLE,
+        RssRefusal.BUDGET_EXHAUSTED,
         *_BINDING_REFUSALS,
     ),
 )

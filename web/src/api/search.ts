@@ -12,8 +12,11 @@ export type SearchResult = Schemas['SearchResultOut']
 /** 會進檔名的那幾格（brief §6.8）。 */
 export type Tags = Schemas['TagsOut']
 
-/** 索引站那邊沒搜到東西的五種樣子。與 `TmdbProblem` 一樣，五種的下一步都不同。 */
+/** 索引站那邊沒搜到東西的幾種樣子。與 `TmdbProblem` 一樣，每一種的下一步都不同。 */
 export type IndexerProblem = NonNullable<Schemas['IndexerProblem']>
+
+/** 缺集搜尋的這一批（M3 票 20）：問了哪幾季、下一批是哪幾季、請求預算何時放得下它。 */
+export type Batch = Schemas['BatchOut']
 
 /**
  * 索引站搜尋。**這一支很慢**——實測 35–85 秒，因為 Prowlarr 收到請求之後要現場去連它認得的
@@ -35,17 +38,21 @@ export async function searchTorrents({
 
 /**
  * 從季表的缺集開始搜（M1.5 票 10）：`season` 是 `null` 時整部作品，有值時只有那一季。
+ * `fromSeason` 是分批時這一批從哪一季起（M3 票 20）：季記號放不下一批時後端把缺的季分批問，下一批
+ * 以季定位（上一批回的 `next_seasons[0]`），不以序號——送過單之後季表就變了。
  *
  * 查詢長什麼樣子**由後端決定**——這裡送的是範圍，不是關鍵字。
  */
 export interface MissingScope {
   season: number | null
+  fromSeason: number
 }
 
 function missingParams(params: URLSearchParams, missing: MissingScope | null) {
   if (missing) {
     params.set('missing', 'true')
     if (missing.season !== null) params.set('season', String(missing.season))
+    if (missing.fromSeason > 0) params.set('from_season', String(missing.fromSeason))
   }
   return params
 }
@@ -60,7 +67,13 @@ export function queriesQueryOptions(media: string, missing: MissingScope | null 
   const params = missingParams(new URLSearchParams({ media }), missing)
 
   return queryOptions({
-    queryKey: ['search', 'queries', media, missing ? (missing.season ?? 'all') : 'titles'],
+    queryKey: [
+      'search',
+      'queries',
+      media,
+      missing ? (missing.season ?? 'all') : 'titles',
+      missing?.fromSeason ?? 0,
+    ],
     queryFn: () => apiGet<Schemas['SearchQueriesOut']>(`/search/queries?${params}`),
     staleTime: 5 * 60 * 1000,
   })

@@ -3,6 +3,9 @@
 季表已經知道缺哪幾集，所以搜尋不必再從作品名開始。**規則只能有一份實作**：畫面上的預覽
 （`GET /search/queries`）與真的送出去的那幾個查詢走同一個函式，前端不重算。
 
+記號放不下 `MAX_QUERIES` 時**分批**（M3 票 20）：每一批是一組季、最多五個查詢，照請求預算
+一批一批問，不再退回作品名。
+
 輸入是純資料（快照 + 季表那一份 `SeasonView`），所以這裡不碰資料庫也不打索引站。
 """
 
@@ -10,7 +13,7 @@ from __future__ import annotations
 
 from berth.domain import EpisodeStatus, MediaKind, MediaSnapshot, SeasonSnapshot
 from berth.services.inventory import EpisodeView, SeasonView
-from berth.services.search import missing_queries
+from berth.services.search import QueryBatch, missing_batches
 
 BEAR = MediaSnapshot(
     tmdb_id=136315,
@@ -34,8 +37,7 @@ SPY = MediaSnapshot(
 )
 
 
-#: 六季都有缺的作品：季記號也放不下的那一種。快照的季與下面的季表對得起來，
-#: 退回去的那一份才是這部作品真的會問的名字（含季號變體）。
+#: 七季都有缺的作品：季記號也放不下一批的那一種（M3 票 20 的驗收）。
 LONG = MediaSnapshot(
     tmdb_id=1,
     kind=MediaKind.TV,
@@ -43,7 +45,7 @@ LONG = MediaSnapshot(
     title_en="Long Show",
     title_original="Long Show",
     titles=("Long Show", "長劇"),
-    seasons=tuple(SeasonSnapshot(season_number=number) for number in range(1, 7)),
+    seasons=tuple(SeasonSnapshot(season_number=number) for number in range(1, 8)),
 )
 
 
@@ -56,6 +58,17 @@ def episode(number: int, status: EpisodeStatus, absolute: int | None = None) -> 
         absolute_number=absolute,
         status=status,
     )
+
+
+def missing_queries(
+    snapshot: MediaSnapshot, seasons: tuple[SeasonView, ...], *, season: int | None = None
+) -> tuple[str, ...]:
+    """放得下一批時的那幾個查詢。沒有缺集是空的。"""
+    batches = missing_batches(snapshot, seasons, season=season)
+    if not batches:
+        return ()
+    (only,) = batches
+    return only.queries
 
 
 def season(number: int, *episodes: EpisodeView) -> SeasonView:
@@ -161,20 +174,44 @@ def test_too_many_gaps_to_ask_one_by_one_fall_back_to_the_season() -> None:
     assert missing_queries(BEAR, seasons) == ("The Bear S03", "熊家餐館 S03")
 
 
-def test_gaps_in_more_seasons_than_the_budget_fall_back_to_the_title_search() -> None:
-    """連季記號都放不下（六季以上有缺）就沒有東西收窄得了——退回今天的作品名搜尋，
-    而預覽照實顯示那幾個名字，不假裝有逐集。"""
+def test_gaps_in_more_seasons_than_one_batch_are_asked_in_batches() -> None:
+    """連季記號都放不下一批（七季都有缺）：**分批問完每一季**，不退回作品名（M3 票 20）。
+
+    每一批是一組季，第一批先填滿五個；一批裡照舊是標題優先，第一個標題先問完這一批的每一季。
+    """
     seasons = tuple(
         season(number, episode(1, EpisodeStatus.MISSING), episode(2, EpisodeStatus.IMPORTED))
-        for number in range(1, 7)
+        for number in range(1, 8)
     )
 
-    assert missing_queries(LONG, seasons) == (
-        "Long Show",
-        "長劇",
-        "Long Show Season 6",
-        "長劇 第6季",
+    assert missing_batches(LONG, seasons) == (
+        QueryBatch(
+            queries=(
+                "Long Show S01",
+                "Long Show S02",
+                "Long Show S03",
+                "Long Show S04",
+                "Long Show S05",
+            ),
+            seasons=(1, 2, 3, 4, 5),
+        ),
+        QueryBatch(
+            queries=("Long Show S06", "Long Show S07", "長劇 S06", "長劇 S07"),
+            seasons=(6, 7),
+        ),
     )
+
+
+def test_one_batch_names_the_seasons_it_asks_for() -> None:
+    """畫面要說得出「這一批問了哪幾季」：逐集的記號也歸到它的季。"""
+    seasons = (
+        season(1, episode(1, EpisodeStatus.MISSING), episode(2, EpisodeStatus.IMPORTED)),
+        season(3, episode(1, EpisodeStatus.MISSING), episode(2, EpisodeStatus.MISSING)),
+    )
+
+    (batch,) = missing_batches(BEAR, seasons)
+
+    assert batch.seasons == (1, 3)
 
 
 def test_asking_for_one_season_leaves_the_other_seasons_alone() -> None:
@@ -194,5 +231,5 @@ def test_nothing_missing_asks_nothing() -> None:
     """
     seasons = (season(1, episode(1, EpisodeStatus.IMPORTED), episode(2, EpisodeStatus.UNAIRED)),)
 
-    assert missing_queries(BEAR, seasons) == ()
-    assert missing_queries(BEAR, ()) == ()
+    assert missing_batches(BEAR, seasons) == ()
+    assert missing_batches(BEAR, ()) == ()

@@ -31,6 +31,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.routing import Route as StarletteRoute
 
 from berth.adapters import mediainfo
+from berth.adapters.budget import RequestBudget
 from berth.adapters.http import (
     AuthFailedError,
     ProtocolMismatchError,
@@ -305,6 +306,10 @@ class Scenario:
     #: mediainfo 的替身（M3 票 15）：檔名含 ` - <集號> ` 的影片量到幾秒。演練寫到磁碟上的不是真的
     #: 影片，真的 libmediainfo 一律說不出片長；空的話走真的那一支。
     measured: dict[str, int] = field(default_factory=dict)
+    #: 一個站一份請求預算的上限（M3 票 20）。`None` 是正式的那一份（每站每小時 60 個）。
+    budget_limit: int | None = None
+    #: 替身索引站的一個查詢打到哪幾站（請求預算的鍵）。空的話不記帳。
+    indexer_sites: frozenset[str] = frozenset()
 
     def probes(self) -> SetupProbes:
         return SetupProbes(
@@ -1105,7 +1110,9 @@ KIMI_MIKAN_SEARCH = (
 KIMI_ACGRIP = (RSS_MIKAN.parent / "acgrip" / "rss-search.kimi-ga-shinu.xml").read_bytes()
 
 
-def rss_scenario(detail: TmdbDetail = KIMI_DETAIL, season: TmdbSeason = KIMI_SEASON) -> Scenario:
+def rss_scenario(
+    detail: TmdbDetail = KIMI_DETAIL, seasons: tuple[TmdbSeason, ...] = (KIMI_SEASON,)
+) -> Scenario:
     """`/rss`（M3 票 08）：Mikan 聚合 feed → 待綁定 → 綁定 → 送單 → 入庫，**一個請求都不出網**。
 
     同 `healthy`（三條 Route 綠燈），加上：Mikan 是替身（票 07 錄下來的聚合 feed，單集頁照
@@ -1138,7 +1145,7 @@ def rss_scenario(detail: TmdbDetail = KIMI_DETAIL, season: TmdbSeason = KIMI_SEA
     scenario.tmdb_credential = "00000000000000000000000000000010"
     scenario.tmdb = FakeTmdbClient(
         details=[detail],
-        seasons={detail.tmdb_id: [season]},
+        seasons={detail.tmdb_id: seasons},
         search={
             query: (
                 TmdbEntry(
@@ -1243,6 +1250,62 @@ def rss_runtime_scenario() -> Scenario:
     return scenario
 
 
+def budget_scenario() -> Scenario:
+    """一個站一份請求預算（M3 票 20）：同 `rss`，但 Mikan 的預算只有 6 個，索引站背後也是 Mikan。
+
+    TMDB 上《与你相恋》有七季、每季兩集都播完了，媒體庫一集都沒有：詳情頁按「搜這部作品缺的集」，
+    季記號放不下一批，分兩批（S01–S05、S06–S07）。第一批用掉 5 個，下一批也是 5 個（兩季 ×
+    前三個標題）放不下——那一行說出何時放得下，照樣按「問下一批」是「等請求預算」。之後到
+    `/rss` 加 Mikan 聚合 feed、按「立即輪詢」：Feed 本身用掉最後一個，單集頁全部被擋、下一輪
+    再試；健康頁的「請求預算」列出 mikanani.me 6 / 6、搜尋與輪詢各用了幾個、被延後的是哪幾種。
+    """
+    seasons = tuple(
+        TmdbSeason(
+            season_number=number,
+            name=f"Season {number}",
+            air_date=date(2018 + number, 1, 5),
+            episodes=tuple(
+                TmdbEpisode(
+                    season_number=number,
+                    episode_number=episode,
+                    name=f"Episode {episode}",
+                    air_date=date(2018 + number, 1, 5) + timedelta(days=7 * (episode - 1)),
+                    runtime=24,
+                )
+                for episode in (1, 2)
+            ),
+        )
+        for number in range(1, 8)
+    )
+    detail = replace(
+        KIMI_DETAIL,
+        first_air_date=seasons[0].air_date,
+        seasons=tuple(
+            TmdbSeasonEntry(
+                season_number=season.season_number,
+                name=season.name,
+                episode_count=len(season.episodes),
+                air_date=season.air_date,
+            )
+            for season in seasons
+        ),
+    )
+    scenario = rss_scenario(detail=detail, seasons=seasons)
+    scenario.budget_limit = 6
+    scenario.indexer_sites = frozenset({"mikanani.me"})
+    scenario.indexer_results = tuple(
+        IndexerResult(
+            title=f"[LoliHouse] Kimi ga Shinu made Koi wo Shitai S{number:02d} [1080p]",
+            indexer="Mikan",
+            size=4000,
+            seeders=3,
+            download_url=demo_url(f"/demo/torrent?release=s{number:02d}"),
+        )
+        for number in range(1, 8)
+    )
+    return scenario
+
+
 def _split_cour_scenario(season: TmdbSeason) -> Scenario:
     assert season.air_date is not None
     detail = replace(
@@ -1254,7 +1317,7 @@ def _split_cour_scenario(season: TmdbSeason) -> Scenario:
             ),
         ),
     )
-    return rss_scenario(detail=detail, season=season)
+    return rss_scenario(detail=detail, seasons=(season,))
 
 
 SCENARIOS = {
@@ -1275,6 +1338,7 @@ SCENARIOS = {
     "rss-split-cour": rss_split_cour_scenario,
     "rss-split-cour-airing": rss_split_cour_airing_scenario,
     "rss-runtime": rss_runtime_scenario,
+    "budget": budget_scenario,
     "issues": issues_scenario,
     "review": review_scenario,
     "routes": routes_scenario,
@@ -1299,6 +1363,8 @@ class FakeClientFactory:
 
     def __init__(self, scenario: Scenario) -> None:
         self._scenario = scenario
+        limit = scenario.budget_limit
+        self.budget = RequestBudget() if limit is None else RequestBudget(limit=limit)
 
     def jellyfin(self, base_url: str, token: str = "") -> JellyfinClient:
         if self._scenario.jellyfin.error is not None:
@@ -1341,7 +1407,11 @@ class FakeClientFactory:
             return ProwlarrSearch(self._scenario.indexer_url, self._scenario.indexer_key)
         if not self._scenario.indexer_results and kind is IndexerKind.PROWLARR:
             return trial_search(self._scenario.prowlarr, base_url)
-        return FakeIndexerSearch(base_url=base_url, results=self._scenario.indexer_results)
+        return FakeIndexerSearch(
+            base_url=base_url,
+            results=self._scenario.indexer_results,
+            sites=self._scenario.indexer_sites,
+        )
 
     def torrent(self) -> TorrentFetcher:
         """送單前把下載連結換成 info hash 與要交出去的那一份（票 09）。

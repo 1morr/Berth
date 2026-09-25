@@ -93,6 +93,27 @@ class SearchOut(BaseModel):
     problem: IndexerProblem | None
     #: 失敗時服務回的原文（英文），與精靈的纜繩同一個規矩。
     detail: str
+    #: `budget_exhausted` 時請求預算放得下這一批的時刻（M3 票 20）；永遠放不下是 `null`。
+    retry_at: datetime | None
+    #: 缺集搜尋的這一批。作品名與自己打的關鍵字沒有批次。
+    batch: BatchOut | None
+
+
+class BatchOut(BaseModel):
+    """缺集搜尋分批時的這一批（M3 票 20）：「這一批問了哪幾季，下一批何時問」。
+
+    下一批以季定位：帶 `from_season=<next_seasons[0]>` 再問一次，照那一刻的季表重切。
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    seasons: list[int]
+    #: 這一批之後還有幾批。
+    later: int
+    #: 下一批問哪幾季；最後一批是空的。
+    next_seasons: list[int]
+    #: 請求預算放得下下一批的時刻。預覽、最後一批是 `null`。
+    next_at: datetime | None
 
 
 class SearchQueriesOut(BaseModel):
@@ -101,6 +122,8 @@ class SearchQueriesOut(BaseModel):
     queries: list[str]
     #: 不必問索引站就知道的問題：只有 `not_configured`（M2 票 13）。其餘要按下去才知道。
     problem: IndexerProblem | None
+    #: 缺集搜尋時要問的這一批（M3 票 20）。
+    batch: BatchOut | None
 
 
 #: 缺集一鍵搜的兩個參數（M1.5 票 10）。預覽與搜尋收同一組，兩支才問得出同一件事。
@@ -112,6 +135,13 @@ SeasonParam = Annotated[
     int | None,
     Query(ge=0, description="把缺集搜尋收到這一季。只在 `missing=true` 時有意義。"),
 ]
+FromSeasonParam = Annotated[
+    int,
+    Query(
+        ge=0,
+        description="缺集搜尋分批時，這一批從哪一季起（M3 票 20）。只在 `missing=true` 時有意義。",
+    ),
+]
 
 
 @router.get("/queries")
@@ -121,11 +151,18 @@ async def get_queries(
     media: Annotated[str, Query(description="`tv:<tmdb>` / `movie:<tmdb>`。")],
     missing: MissingParam = False,
     season: SeasonParam = None,
+    from_season: FromSeasonParam = 0,
 ) -> SearchQueriesOut:
     """不打索引站，只讀快照與這部作品的入庫狀態。"""
-    _refuse_bare_season(missing, season)
-    plan = await plan_queries(session, factory, media_id=media, missing=missing, season=season)
-    return SearchQueriesOut(queries=list(plan.queries), problem=plan.problem)
+    _refuse_bare_scope(missing, season, from_season)
+    plan = await plan_queries(
+        session, factory, media_id=media, missing=missing, season=season, from_season=from_season
+    )
+    return SearchQueriesOut(
+        queries=list(plan.queries),
+        problem=plan.problem,
+        batch=BatchOut.model_validate(plan.batch) if plan.batch is not None else None,
+    )
 
 
 @router.get("")
@@ -138,17 +175,24 @@ async def get_search(
     ] = "",
     missing: MissingParam = False,
     season: SeasonParam = None,
+    from_season: FromSeasonParam = 0,
 ) -> SearchOut:
-    _refuse_bare_season(missing, season)
+    _refuse_bare_scope(missing, season, from_season)
     return _out(
         await search_torrents(
-            session, factory, media_id=media, query=q, missing=missing, season=season
+            session,
+            factory,
+            media_id=media,
+            query=q,
+            missing=missing,
+            season=season,
+            from_season=from_season,
         )
     )
 
 
-def _refuse_bare_season(missing: bool, season: int | None) -> None:
-    """`season` 單獨帶著沒有意義——它是「缺集搜尋收到那一季」的參數。
+def _refuse_bare_scope(missing: bool, season: int | None, from_season: int) -> None:
+    """`season` 與 `from_season` 單獨帶著沒有意義——它們是缺集搜尋的參數。
 
     默默當成整部作品搜的話，手改網址的人會拿到他沒有要的那一份，而畫面上沒有任何地方說得出
     差別。照實拒絕，形狀與其餘的拒絕一樣（`{reason, detail}`）。
@@ -157,6 +201,11 @@ def _refuse_bare_season(missing: bool, season: int | None) -> None:
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_CONTENT,
             {"reason": "season_without_missing", "detail": "season needs missing=true"},
+        )
+    if from_season and not missing:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            {"reason": "from_season_without_missing", "detail": "from_season needs missing=true"},
         )
 
 
@@ -168,4 +217,6 @@ def _out(view: SearchView) -> SearchOut:
         attempts=[StepOut.model_validate(attempt) for attempt in view.attempts],
         problem=view.problem,
         detail=view.detail,
+        retry_at=view.retry_at,
+        batch=BatchOut.model_validate(view.batch) if view.batch is not None else None,
     )

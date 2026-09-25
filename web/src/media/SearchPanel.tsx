@@ -1,14 +1,16 @@
 import { useId, useImperativeHandle, useRef, useState, type Ref } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
+import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
 
 import type { Media } from '../api/media'
-import { queriesQueryOptions, searchTorrents, type MissingScope } from '../api/search'
+import { queriesQueryOptions, searchTorrents, type Batch, type MissingScope } from '../api/search'
 import { COMPACT_BUTTON, Notice, PrimaryButton } from '../components/controls'
 import { seasonCode } from '../components/episodes'
 import type { SetupStep } from '../api/schemas'
 import { ExpandHint } from '../components/ExpandHint'
 import { StepLine } from '../components/StepLine'
+import { Timestamp } from '../components/Timestamp'
 import { IndexerNotice } from './IndexerNotice'
 import { RoutePicker } from './RoutePicker'
 import { SearchResults } from './SearchResults'
@@ -40,6 +42,9 @@ export interface SearchHandle {
  *
  * 季表上的缺集也從這裡搜（M1.5 票 10）：那兩顆按鈕呼叫 `SearchHandle.searchMissing`，結果照舊畫在這一區塊，
  * 照舊送單。**查詢仍然由後端產生**——換成缺的那幾集之後，預覽與真的送出去的那幾個還是同一份。
+ *
+ * 缺的季放不下一批時**分批問**（M3 票 20）：一批問完，`BatchLine` 說這一批問了哪幾季、下一批是哪幾季、
+ * 請求預算何時放得下它，「問下一批」由人按——結果要人挑，背景自己問完也沒有人看。
  */
 export function SearchPanel({ media, ref }: { media: Media; ref: Ref<SearchHandle> }) {
   const { t } = useTranslation()
@@ -70,8 +75,9 @@ export function SearchPanel({ media, ref }: { media: Media; ref: Ref<SearchHandl
   useImperativeHandle(ref, () => ({
     searchMissing(season) {
       setKeyword('')
-      setMissing({ season })
-      search.mutate({ q: '', scope: { season } })
+      const scope = { season, fromSeason: 0 }
+      setMissing(scope)
+      search.mutate({ q: '', scope })
       // 結果畫在這一區塊裡，所以焦點也要到這裡來——季表在下面好幾屏（shape §4）。
       // 瀏覽器會把拿到焦點的元素捲進畫面，所以不必自己捲一次。
       heading.current?.focus()
@@ -136,6 +142,7 @@ export function SearchPanel({ media, ref }: { media: Media; ref: Ref<SearchHandl
         <QueryPreview
           keyword={keyword}
           planned={planned.data?.queries}
+          batch={planned.data?.batch ?? null}
           missing={missing}
           onTitles={() => setMissing(null)}
         />
@@ -164,7 +171,26 @@ export function SearchPanel({ media, ref }: { media: Media; ref: Ref<SearchHandl
 
       {/* 沒接索引站在按下去之前就說（票 13，`/search/queries` 先帶 `problem`）：不然畫面一直說「會拿這幾個
           名字去問」，按下去才知道根本沒有地方可問。搜過之後以那一次的結果為準，同一件事只說一次。 */}
-      {problem && <IndexerNotice problem={problem} detail={results?.detail ?? ''} />}
+      {problem && (
+        <IndexerNotice
+          problem={problem}
+          detail={results?.detail ?? ''}
+          retryAt={results?.retry_at ?? null}
+        />
+      )}
+
+      {results?.batch && isBatched(results.batch, missing) && missing && (
+        <BatchLine
+          key={missing.fromSeason}
+          batch={results.batch}
+          refused={results.problem === 'budget_exhausted'}
+          onNext={(fromSeason) => {
+            const scope = { ...missing, fromSeason }
+            setMissing(scope)
+            search.mutate({ q: '', scope })
+          }}
+        />
+      )}
 
       {results && !results.problem && results.total === 0 && (
         <p className="max-w-prose text-sm text-ink-dim">
@@ -224,11 +250,13 @@ export function SearchPanel({ media, ref }: { media: Media; ref: Ref<SearchHandl
 function QueryPreview({
   keyword,
   planned,
+  batch,
   missing,
   onTitles,
 }: {
   keyword: string
   planned: string[] | undefined
+  batch: Batch | null
   missing: MissingScope | null
   onTitles: () => void
 }) {
@@ -253,6 +281,12 @@ function QueryPreview({
           </button>
         )}
       </p>
+      {!typed && batch && isBatched(batch, missing) && (
+        <p className="max-w-prose text-xs text-ink-dim">
+          {t('search.batch.preview', { seasons: seasonList(t, batch.seasons) })}
+          {batch.later > 0 ? t('search.batch.laterPreview', { later: batch.later }) : ''}
+        </p>
+      )}
       {/* 關鍵字是機器字串（送出去的就是它），走 `.value`。 */}
       <p className="value max-w-prose text-xs wrap-anywhere text-ink">
         {typed || (planned ?? []).join(' · ') || '—'}
@@ -260,6 +294,73 @@ function QueryPreview({
       <p className="max-w-prose text-xs text-ink-dim">{t('search.slow')}</p>
     </div>
   )
+}
+
+/**
+ * 缺集搜尋分批時，問完一批之後的那一行（M3 票 20）：這一批問了哪幾季、下一批是哪幾季、何時放得下。
+ *
+ * 「問下一批」**永遠按得下去**（票 02b）：預算還放不下時後端照實拒絕（`budget_exhausted`），那一句話由
+ * `IndexerNotice` 說；這裡先把時間說在前面，免得人按了才知道。被拒的那一批（`refused`）只說它要問
+ * 哪幾季——它一個都還沒問。
+ */
+function BatchLine({
+  batch,
+  refused,
+  onNext,
+}: {
+  batch: Batch
+  refused: boolean
+  onNext: (fromSeason: number) => void
+}) {
+  const { t } = useTranslation()
+  // 這一行畫出來的那一刻（每一批各掛一次，`key` 是批次）：`next_at` 在它之後才是「要等」。
+  const [shownAt] = useState(() => Date.now())
+  const waiting = batch.next_at !== null && new Date(batch.next_at).getTime() > shownAt
+  const seasons = seasonList(t, batch.seasons)
+
+  if (refused) {
+    return <p className="max-w-prose text-sm text-ink">{t('search.batch.pending', { seasons })}</p>
+  }
+
+  return (
+    <div className="grid max-w-prose gap-1">
+      <p className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <span className="text-sm text-ink">
+          {t('search.batch.asked', { seasons })}
+          {batch.next_seasons.length > 0
+            ? t('search.batch.next', {
+                later: batch.later,
+                seasons: seasonList(t, batch.next_seasons),
+              })
+            : t('search.batch.last')}
+        </span>
+        {batch.next_seasons.length > 0 && (
+          <button
+            type="button"
+            onClick={() => onNext(batch.next_seasons[0])}
+            className={COMPACT_BUTTON}
+          >
+            {t('search.batch.ask')}
+          </button>
+        )}
+      </p>
+      {waiting && (
+        <p className="text-xs text-ink-dim">
+          {t('search.batch.wait')} <Timestamp at={batch.next_at} />
+        </p>
+      )}
+    </div>
+  )
+}
+
+/** 真的分了批：之後還有，或這一批本來就不是第一批。只有一批的缺集搜尋不說「批」。 */
+function isBatched(batch: Batch, missing: MissingScope | null): boolean {
+  return batch.later > 0 || (missing?.fromSeason ?? 0) > 0
+}
+
+/** `S01、S02、S03`：季號是機器字串，連接詞跟著語言走。 */
+function seasonList(t: TFunction, seasons: readonly number[]): string {
+  return seasons.map(seasonCode).join(t('search.batch.join'))
 }
 
 /**

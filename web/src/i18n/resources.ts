@@ -1041,6 +1041,18 @@ const zhHant = {
       unknown: '判斷不出來',
       movie: '電影',
     },
+    // 缺集分批（M3 票 20）：季號是機器字串，連接詞跟著語言走。
+    batch: {
+      preview: '分批問：這一批問 {{seasons}}。',
+      laterPreview: '之後還有 {{later}} 批。',
+      asked: '這一批問了 {{seasons}}。',
+      next: '還有 {{later}} 批，下一批問 {{seasons}}。',
+      last: '這是最後一批。',
+      pending: '這一批要問 {{seasons}}，一個都還沒問。',
+      ask: '問下一批',
+      wait: '請求預算要到這時候才放得下它：',
+      join: '、',
+    },
     // 五種樣子，五種下一步。索引站是精靈裡唯一可以跳過的一步，所以「沒接」不是失敗。
     problem: {
       not_configured: {
@@ -1063,6 +1075,12 @@ const zhHant = {
         label: '連不上',
         body: '連不上索引站。可能是那個容器沒起來，或位址填錯了。',
       },
+      // M3 票 20：不是壞了，是 Berth 自己先停手。等得到，所以不塗紅。
+      budget_exhausted: {
+        label: '等請求預算',
+        body: '索引站背後的站這一小時的請求預算放不下這一批，一個關鍵字都沒問。RSS 輪詢、每日補漏與搜尋共用這一份，為的是不替你把公開站打到封 IP。',
+      },
+      retryAt: '放得下的時間：',
       askAdmin: '請管理員到設定接上索引站。',
     },
   },
@@ -2008,6 +2026,17 @@ const zhHant = {
       unknown: '尚未檢查',
       unconfigured: '尚未接上',
     },
+    // M3 票 20：一個站一份，三個使用者共用。延後不是壞了，所以不用「錯誤」的字。
+    budget: {
+      title: '請求預算',
+      help: '每一站每小時最多 {{limit}} 個請求：RSS 輪詢、每日補漏與搜尋共用這一份，為的是不替你把公開站打到封 IP。重啟 Berth 會歸零。',
+      idle: '這一小時還沒有問過任何站。',
+      useCount: '{{use}} {{value}}',
+      use: { poll: 'RSS 輪詢', backfill: '每日補漏', search: '搜尋', manual: '手動讀取' },
+      deferred: '延後：{{use}}（擋下 {{value}} 個請求）',
+      until: '放得下：',
+      never: '一次要的比整份預算還多，放不下。',
+    },
     poller: {
       title: '下載迴圈',
       lastRound: '上次輪詢',
@@ -2297,6 +2326,8 @@ const zhHant = {
       feed_unread: '這個 Feed 還沒讀過。先按「立即輪詢」看過第一輪再選。',
       feed_not_rss:
         '讀到了，但那不是 RSS。多半是貼了網頁的網址：到站上找它的 RSS 連結（Mikan 番組頁字幕組旁的 RSS 圖示、Nyaa 搜尋結果頁的 RSS 鍵）。',
+      budget_exhausted:
+        '那一站這一小時的請求預算用完了，這一次沒有送出去。等預算放得下再試（健康頁看得到何時）。原文：',
     },
     feeds: {
       title: 'Feed',
@@ -2404,6 +2435,7 @@ const zhHant = {
       no_premiere: 'Mikan 的番組頁沒寫開播日期，年份無從確認',
       no_show_page: '這個來源沒有番組頁，年份無從確認：候選只從標題來，要你確認',
       lookup_failed: 'Mikan 番組頁或 TMDB 這一次查不到（{{detail}}）',
+      lookup_deferred: '{{site}} 這一小時的請求預算用完了，番組頁下一輪再讀',
       route_ambiguous: '作品認出來了，但 {{routes}} 都收得下它',
       no_route: '作品認出來了，但沒有啟用中的 Route 收得下它',
     },
@@ -3581,6 +3613,17 @@ const en: Translations<typeof zhHant> = {
       unknown: 'Cannot tell',
       movie: 'Film',
     },
+    batch: {
+      preview: 'Asked in batches: this batch asks for {{seasons}}.',
+      laterPreview: ' {{later}} more to go after it.',
+      asked: 'This batch asked for {{seasons}}.',
+      next: ' {{later}} more to go; the next asks for {{seasons}}.',
+      last: ' This was the last batch.',
+      pending: 'This batch asks for {{seasons}}; nothing has been asked yet.',
+      ask: 'Ask the next batch',
+      wait: 'The request budget has room for it again:',
+      join: ', ',
+    },
     problem: {
       not_configured: {
         label: 'Not connected',
@@ -3602,6 +3645,11 @@ const en: Translations<typeof zhHant> = {
         label: 'Unreachable',
         body: 'Cannot reach the indexer. Either its container is not running, or the address is wrong.',
       },
+      budget_exhausted: {
+        label: 'Waiting for the budget',
+        body: "This hour's request budget for the sites behind the indexer can't fit this batch, so not a single keyword was asked. RSS polling, the daily backfill and search share it, so Berth doesn't get your IP banned from public sites.",
+      },
+      retryAt: 'It fits again:',
       askAdmin: 'Ask an administrator to connect an indexer in Settings.',
     },
   },
@@ -4504,6 +4552,21 @@ const en: Translations<typeof zhHant> = {
       unknown: 'Not checked',
       unconfigured: 'Not connected',
     },
+    budget: {
+      title: 'Request budget',
+      help: "At most {{limit}} requests per site per hour. RSS polling, the daily backfill and search share it, so Berth doesn't get your IP banned from public sites. Restarting Berth resets it.",
+      idle: 'No site has been asked this hour.',
+      useCount: '{{use}} {{value}}',
+      use: {
+        poll: 'RSS polling',
+        backfill: 'Daily backfill',
+        search: 'Search',
+        manual: 'Manual reads',
+      },
+      deferred: 'Deferred: {{use}} ({{value}} requests held back)',
+      until: 'Fits again:',
+      never: 'It asks for more than the whole budget, so it never fits.',
+    },
     poller: {
       title: 'Download loop',
       lastRound: 'Last poll',
@@ -4811,6 +4874,8 @@ const en: Translations<typeof zhHant> = {
         "This feed hasn't been read yet. Press Poll now to see its first round before choosing.",
       feed_not_rss:
         "Got an answer, but it isn't RSS. This is usually a web page address: find the site's RSS link instead (the RSS icon next to a fansub on a Mikan show page, the RSS button on a Nyaa search).",
+      budget_exhausted:
+        "This hour's request budget for that site is used up, so nothing was sent. Try again once it has room (the health page says when). Original error:",
     },
     feeds: {
       title: 'Feeds',
@@ -4916,6 +4981,8 @@ const en: Translations<typeof zhHant> = {
       no_show_page:
         'this source has no show page, so the year cannot be checked: the candidates come from the title alone and need you to confirm',
       lookup_failed: 'the Mikan show page or TMDB could not be read this time ({{detail}})',
+      lookup_deferred:
+        'the request budget for {{site}} is used up for this hour; the show page is read next round',
       route_ambiguous: 'the title was recognised, but {{routes}} can all take it',
       no_route: 'the title was recognised, but no enabled route takes it',
     },

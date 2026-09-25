@@ -16,6 +16,7 @@ from xml.etree import ElementTree
 
 import httpx
 
+from berth.adapters.budget import site_of
 from berth.adapters.http import ProtocolMismatchError
 from berth.adapters.indexer import (
     IndexerResult,
@@ -53,6 +54,11 @@ class TorznabSearch:
 
     async def capabilities(self) -> SearchCapability:
         return capability_of(parse_caps((await self._get({"t": "caps"})).text))
+
+    async def sites(self) -> frozenset[str]:
+        """端點背後是哪一站 Berth 看不到（Jackett 的聚合網址、Prowlarr 的單站網址都是那台
+        管理器自己的主機），所以記在端點的主機上（plan §8.4）。不發請求。"""
+        return frozenset({site_of(self._base_url)})
 
     async def search(self, query: SearchQuery) -> tuple[IndexerResult, ...]:
         """`query.tmdb_id` 有值就用 id 問，否則用關鍵字。

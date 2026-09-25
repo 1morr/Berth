@@ -332,6 +332,31 @@ class TestMissingEpisodes:
         assert refusal.status_code == 422
         assert refusal.json()["detail"]["reason"] == "season_without_missing"
 
+    def test_a_from_season_without_the_missing_flag_is_refused(self, client: TestClient) -> None:
+        """`from_season` 也是缺集搜尋的參數（M3 票 20），同一個規矩。"""
+        sign_in(client)
+
+        refusal = client.get(f"/api/search?media={SPY_ID}&from_season=6")
+
+        assert refusal.status_code == 422
+        assert refusal.json()["detail"]["reason"] == "from_season_without_missing"
+
+    def test_the_search_says_which_batch_it_asked(
+        self, client: TestClient, indexer: FakeIndexerSearch
+    ) -> None:
+        """三季都缺、放得下一批：一共一批，沒有下一批（M3 票 20）。"""
+        sign_in(client)
+
+        body = client.get(f"/api/search?media={SPY_ID}&missing=true").json()
+
+        assert body["batch"] == {
+            "seasons": [0, 1, 2],
+            "later": 0,
+            "next_seasons": [],
+            "next_at": None,
+        }
+        assert body["retry_at"] is None
+
 
 class TestProblems:
     def test_an_indexer_that_was_skipped_is_not_an_error(

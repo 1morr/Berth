@@ -11,6 +11,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Protocol
 
+from berth.adapters.budget import BudgetedFetcher, RequestBudget
 from berth.adapters.indexer import IndexerSearch
 from berth.adapters.indexer.prowlarr import ProwlarrSearch
 from berth.adapters.indexer.torznab import TorznabSearch
@@ -29,11 +30,14 @@ from berth.adapters.torrent import HttpTorrentFetcher, TorrentFetcher
 from berth.adapters.torznab import TorznabClient
 from berth.adapters.torznab.client import HttpTorznabClient
 from berth.config import Config
-from berth.domain import IndexerKind, ServiceKind
+from berth.domain import BudgetUse, IndexerKind, ServiceKind
 
 
 class ServiceClientFactory(Protocol):
     """依位址造 client。探測套件內服務用的是固定主機名，不走這裡。"""
+
+    #: 一個站一份請求預算（M3 票 20）。一個程序一份：它造的每一個 client 都打同一批公開站。
+    budget: RequestBudget
 
     def jellyfin(self, base_url: str, token: str = "") -> JellyfinClient: ...
 
@@ -58,7 +62,11 @@ class ServiceClientFactory(Protocol):
         ...
 
     def rss(self) -> FeedFetcher:
-        """抓 RSS Feed 與 Mikan 單集頁（M3 票 08）。沒有位址參數：網址是 Feed 與 Item 自己帶的。"""
+        """抓 RSS Feed 與 Mikan 單集頁（M3 票 08）。沒有位址參數：網址是 Feed 與 Item 自己帶的。
+
+        **命令模組不直接呼叫它**，走 `feed_fetcher`：每一個請求要先在那一站的預算裡佔一格
+        （`tests/unit/test_feed_fetcher_gate.py` 守著）。
+        """
         ...
 
     def indexer_search(self, kind: IndexerKind, base_url: str, api_key: str) -> IndexerSearch:
@@ -121,8 +129,16 @@ async def close_setup_probes(probes: SetupProbes) -> None:
     await probes.prowlarr.aclose()
 
 
+def feed_fetcher(factory: ServiceClientFactory, use: BudgetUse) -> FeedFetcher:
+    """抓 RSS 一律走這一支：每一個請求先在那一站的預算裡佔一格，記下是誰用的（M3 票 20）。"""
+    return BudgetedFetcher(factory.rss(), factory.budget, use)
+
+
 class HttpServiceClientFactory:
     """既有服務用：位址由使用者填，不是 compose 主機名。"""
+
+    def __init__(self) -> None:
+        self.budget = RequestBudget()
 
     def jellyfin(self, base_url: str, token: str = "") -> JellyfinClient:
         return HttpJellyfinClient(base_url, token=token)

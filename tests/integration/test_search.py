@@ -11,8 +11,10 @@ from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 import pytest
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from berth.adapters.budget import RequestBudget
 from berth.adapters.http import AuthFailedError, ServiceUnavailableError
 from berth.adapters.indexer import IndexerResult, SearchCapability
 from berth.adapters.indexer.fake import FakeIndexerSearch
@@ -23,7 +25,7 @@ from berth.domain import (
     Source,
     StepStatus,
 )
-from berth.models import IndexerSettings, Media
+from berth.models import IndexerSettings, Media, Route
 from berth.models import media_id as build_media_id
 from berth.services.search import RESULT_LIMIT, plan_queries, search_torrents
 from berth.services.settings import write_settings
@@ -666,3 +668,100 @@ class TestMissingEpisodes:
 
         assert [query.text for query in indexer.queries] == ["SPY x FAMILY S01E02"]
         assert [query.tmdb_id for query in indexer.queries] == [None]
+
+    @pytest.mark.asyncio
+    async def test_gaps_in_seven_seasons_are_asked_batch_by_batch(
+        self, session: AsyncSession
+    ) -> None:
+        """M3 票 20 驗收第二條：七季都有缺，季記號放不下一批——**分批問完每一季**，一次也不退回
+        作品名。每一批說得出問了哪幾季、下一批是哪幾季、預算何時放得下它。"""
+        long = await seven_seasons(session)
+        indexer = FakeIndexerSearch(sites=frozenset({"mikanani.me"}))
+        clock = datetime(2026, 9, 26, 12, 0, tzinfo=UTC)
+        factory = FakeClientFactory(
+            indexer_search=indexer, budget=RequestBudget(limit=60, now=lambda: clock)
+        )
+
+        first = await search_torrents(session, factory, media_id=long.id, missing=True)
+        assert first.batch is not None
+        second = await search_torrents(
+            session,
+            factory,
+            media_id=long.id,
+            missing=True,
+            from_season=first.batch.next_seasons[0],
+        )
+
+        asked = [query.text for query in indexer.queries]
+        assert asked[:5] == [f"SPY x FAMILY S{number:02d}" for number in range(1, 6)]
+        # 第二批只剩兩季、兩集缺：記號放得下逐集，就問那兩集（收成季記號只在放不下時才做）。
+        assert asked[5:7] == ["SPY x FAMILY S06E02", "SPY x FAMILY S07E02"]
+        assert "SPY x FAMILY" not in asked
+        assert (first.batch.seasons, first.batch.later) == ((1, 2, 3, 4, 5), 1)
+        assert first.batch.next_seasons == (6, 7)
+        # 預算還寬：下一批現在就問得（這一批用掉 5 格，60 格還剩很多）。
+        assert first.batch.next_at == clock
+        assert second.batch is not None
+        assert (second.batch.seasons, second.batch.later, second.batch.next_seasons) == (
+            (6, 7),
+            0,
+            (),
+        )
+        assert second.batch.next_at is None
+
+    @pytest.mark.asyncio
+    async def test_the_next_batch_still_asks_its_seasons_after_some_were_sent(
+        self, session: AsyncSession
+    ) -> None:
+        """問完第一批、從結果送了幾季之後季表就變了：下一批照季定位，S06、S07 照樣問得到
+        （以序號定位時 S02 補上之後第二批只剩 S07，code review 抓到）。"""
+        long = await seven_seasons(session)
+        indexer = FakeIndexerSearch()
+        factory = FakeClientFactory(indexer_search=indexer)
+        first = await search_torrents(session, factory, media_id=long.id, missing=True)
+        assert first.batch is not None
+        tv = await session.scalar(select(Route).where(Route.slug == "tv"))
+        assert tv is not None
+        await linked(session, long, tv, season_number=2, episode=2)
+        indexer.queries.clear()
+
+        await search_torrents(
+            session,
+            factory,
+            media_id=long.id,
+            missing=True,
+            from_season=first.batch.next_seasons[0],
+        )
+
+        assert [query.text for query in indexer.queries][:2] == [
+            "SPY x FAMILY S06E02",
+            "SPY x FAMILY S07E02",
+        ]
+
+    @pytest.mark.asyncio
+    async def test_the_preview_names_the_batch_it_will_ask(self, session: AsyncSession) -> None:
+        """預覽與搜尋同一份：第二批的預覽就是第二批真的問出去的那幾個。"""
+        long = await seven_seasons(session)
+        indexer = FakeIndexerSearch()
+        factory = FakeClientFactory(indexer_search=indexer)
+
+        preview = await plan_queries(
+            session, factory, media_id=long.id, missing=True, from_season=6
+        )
+        await search_torrents(session, factory, media_id=long.id, missing=True, from_season=6)
+
+        assert list(preview.queries) == [query.text for query in indexer.queries]
+        assert preview.batch is not None
+        assert (preview.batch.seasons, preview.batch.later) == ((6, 7), 0)
+
+
+async def seven_seasons(session: AsyncSession) -> Media:
+    """七季、每季播了兩集、每季只入庫第一集：七個季都缺一集，季記號放不下一批。"""
+    tv = await route(session)
+    long = await title(
+        session, seasons=tuple(season_snapshot(number, aired=2) for number in range(1, 8))
+    )
+    for number in range(1, 8):
+        await linked(session, long, tv, season_number=number, episode=1)
+    await arrange_indexer(session)
+    return long

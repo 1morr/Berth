@@ -23,15 +23,17 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Iterable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from itertools import zip_longest
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from berth.adapters.budget import BudgetExhaustedError
 from berth.adapters.http import AuthFailedError, ServiceError
 from berth.adapters.indexer import IndexerResult, IndexerSearch, SearchQuery
 from berth.domain import (
+    BudgetUse,
     EpisodeStatus,
     IndexerKind,
     IndexerProblem,
@@ -120,6 +122,29 @@ class SearchView:
     problem: IndexerProblem | None = None
     #: 失敗時服務回的原文（英文），與精靈的纜繩同一個規矩。
     detail: str = ""
+    #: `BUDGET_EXHAUSTED` 時預算放得下這一批的時刻（M3 票 20）。
+    retry_at: datetime | None = None
+    #: 缺集搜尋時問的這一批。作品名與自己打的關鍵字沒有批次，是 `None`。
+    batch: BatchView | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class BatchView:
+    """缺集搜尋的這一批（M3 票 20）：畫面說得出「這一批問了哪幾季，下一批何時問」。
+
+    **批次以季定位，不以序號**：下一批是「從 `next_seasons[0]` 那一季起還缺的」，照那一刻的
+    季表重切。以序號定位的話，問完第一批、從結果送了幾季之後季表就變了，第二批會落到別的季、甚至漏掉一季
+    （code review 抓到）。
+    """
+
+    seasons: tuple[int, ...]
+    #: 這一批之後還有幾批（照現在的季表算）。
+    later: int = 0
+    #: 下一批問哪幾季；這是最後一批時是空的。
+    next_seasons: tuple[int, ...] = ()
+    #: 請求預算放得下下一批的時刻。只有問完這一批才算得出（要知道索引站背後是哪幾站）；
+    #: 預覽、最後一批、下一批比整份預算還大時是 `None`。
+    next_at: datetime | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -129,6 +154,8 @@ class QueryPlan:
     queries: tuple[str, ...]
     #: 只有 `NOT_CONFIGURED`（M2 票 13）：預覽不打索引站，連不上、憑證錯要按下去才知道。
     problem: IndexerProblem | None = None
+    #: 缺集搜尋時要問的這一批（M3 票 20）。
+    batch: BatchView | None = None
 
 
 async def plan_queries(
@@ -138,6 +165,7 @@ async def plan_queries(
     media_id: str,
     missing: bool = False,
     season: int | None = None,
+    from_season: int = 0,
 ) -> QueryPlan:
     """按下搜尋之前，Berth 會拿哪幾個名字去問（PRODUCT 原則 2：動手前先給看）。
 
@@ -151,9 +179,13 @@ async def plan_queries(
     接上之後會問的就是這幾個。
     """
     snapshot = await read_snapshot(session, factory, media_id)
-    queries = await _texts(session, factory, media_id, snapshot, missing=missing, season=season)
+    if missing:
+        batches = await _missing(session, factory, media_id, snapshot, season, from_season)
+        queries, view = (batches[0].queries if batches else ()), _batch(batches)
+    else:
+        queries, view = search_titles(snapshot), None
     ready = await _indexer(session) is not None
-    return QueryPlan(queries, None if ready else IndexerProblem.NOT_CONFIGURED)
+    return QueryPlan(queries, None if ready else IndexerProblem.NOT_CONFIGURED, view)
 
 
 async def _indexer(session: AsyncSession) -> IndexerSettings | None:
@@ -165,25 +197,38 @@ async def _indexer(session: AsyncSession) -> IndexerSettings | None:
     return settings
 
 
-async def _texts(
+async def _missing(
     session: AsyncSession,
     factory: ServiceClientFactory,
     media_id: str,
     snapshot: MediaSnapshot | None,
-    *,
-    missing: bool,
     season: int | None,
-) -> tuple[str, ...]:
-    """這一次要問的那幾個關鍵字。預覽與搜尋共用**一份**（票 10）。
+    from_season: int,
+) -> tuple[QueryBatch, ...]:
+    """從 `from_season` 那一季起的每一批，第一個就是這一次要問的。預覽與搜尋共用**一份**（票 10）。
+
+    記號照那幾季重算：只剩兩三季時缺的集可能放得下逐集問，下一批就比預告的「S06、S07」問得更窄，
+    季還是那幾季。
 
     缺集那一種要的是現在的帳本與 Job 說了什麼（`read_media` 的季表），不是快照上的季集——
     快照只知道 TMDB 有幾集，缺哪幾集是這一台機器上的事。
     """
-    if not missing:
-        return search_titles(snapshot)
     # 快照由呼叫端讀過了（那一趟已經套過 24 小時的規則），所以這一趟只讀資料庫，不打 TMDB。
     view = await read_media(session, factory, media_id)
-    return missing_queries(snapshot, view.seasons, season=season)
+    later = [row for row in view.seasons if row.season_number >= from_season]
+    return missing_batches(snapshot, later, season=season)
+
+
+def _batch(batches: tuple[QueryBatch, ...], next_at: datetime | None = None) -> BatchView | None:
+    """畫面上那一行：這一批（第一個）問哪幾季、之後還有幾批、下一批是哪幾季。"""
+    if not batches:
+        return None
+    return BatchView(
+        seasons=batches[0].seasons,
+        later=len(batches) - 1,
+        next_seasons=batches[1].seasons if len(batches) > 1 else (),
+        next_at=next_at if len(batches) > 1 else None,
+    )
 
 
 async def search_torrents(
@@ -194,11 +239,16 @@ async def search_torrents(
     query: str = "",
     missing: bool = False,
     season: int | None = None,
+    from_season: int = 0,
     timeout: float = QUERY_TIMEOUT_SECONDS,
 ) -> SearchView:
     """一部作品現在有哪些發佈可以下載。
 
-    `missing` 是從季表的缺集開始搜（M1.5 票 10），`season` 再把範圍收到那一季。
+    `missing` 是從季表的缺集開始搜（M1.5 票 10），`season` 再把範圍收到那一季，`from_season` 是
+    分批時這一批從哪一季起（M3 票 20，`BatchView`）。
+
+    **問之前先在請求預算裡佔位**（M3 票 20）：一個查詢打到索引站背後的每一個站，所以一批是在每一站
+    各佔 `len(queries)` 格；有一站放不下就一個都不問，回 `BUDGET_EXHAUSTED` 與放得下的時刻。
     """
     settings = await _indexer(session)
     if settings is None:
@@ -207,11 +257,14 @@ async def search_torrents(
     snapshot = await read_snapshot(session, factory, media_id)
     typed = query.strip()
     narrowed = missing and not typed
-    texts = (
-        (typed,)
-        if typed
-        else await _texts(session, factory, media_id, snapshot, missing=missing, season=season)
-    )
+    batches: tuple[QueryBatch, ...] = ()
+    if typed:
+        texts: tuple[str, ...] = (typed,)
+    elif missing:
+        batches = await _missing(session, factory, media_id, snapshot, season, from_season)
+        texts = batches[0].queries if batches else ()
+    else:
+        texts = search_titles(snapshot)
     if not texts:
         return _blank(IndexerProblem.NO_QUERY)
 
@@ -223,6 +276,15 @@ async def search_torrents(
         # 缺集搜尋不走 id 那條路：id 找的是**整部作品**，收窄到缺的那幾集就沒了，
         # 而預覽已經告訴使用者要問那幾集（票 10）。
         queries = _queries(texts, snapshot, frozenset() if narrowed else capability.tmdb_id)
+        sites = await client.sites()
+        try:
+            factory.budget.take(sites, len(queries), BudgetUse.SEARCH)
+        except BudgetExhaustedError as refused:
+            return replace(
+                _blank(IndexerProblem.BUDGET_EXHAUSTED, message(refused)),
+                retry_at=refused.until,
+                batch=_batch(batches),
+            )
         outcomes = await asyncio.gather(
             *(_attempt(client, item, timeout) for item in queries), return_exceptions=False
         )
@@ -233,6 +295,8 @@ async def search_torrents(
     finally:
         await client.aclose()
 
+    after = batches[1].queries if len(batches) > 1 else ()
+    next_at = factory.budget.ready_at(sites, len(after)) if after else None
     found = _dedupe(row for _, rows in outcomes for row in rows)
     # 自己打了關鍵字時不篩：他要的就是那一串字，不是這部作品（票 08）。
     results = found if query.strip() else [row for row in found if _about(row, snapshot)]
@@ -241,6 +305,7 @@ async def search_torrents(
         total=len(results),
         discarded=len(found) - len(results),
         attempts=tuple(attempt for attempt, _ in outcomes),
+        batch=_batch(batches, next_at),
     )
 
 
@@ -298,10 +363,19 @@ def search_titles(snapshot: MediaSnapshot | None) -> tuple[str, ...]:
     return _unique([*titles[: MAX_QUERIES - len(variants)], *variants])
 
 
-def missing_queries(
+@dataclass(frozen=True, slots=True)
+class QueryBatch:
+    """缺集搜尋的一批：一次按下去問出去的那幾個查詢，與它們問的是哪幾季（M3 票 20）。"""
+
+    queries: tuple[str, ...]
+    #: 這一批的記號歸到哪幾季。畫面用它說「這一批問了 S01–S05」。
+    seasons: tuple[int, ...]
+
+
+def missing_batches(
     snapshot: MediaSnapshot | None, seasons: Sequence[SeasonView], *, season: int | None = None
-) -> tuple[str, ...]:
-    """季表上缺的那幾集要拿哪幾個名字去問（M1.5 票 10、plan §6）。
+) -> tuple[QueryBatch, ...]:
+    """季表上缺的那幾集要拿哪幾個名字去問，分成幾批（M1.5 票 10、M3 票 20、plan §6、§8.4）。
 
     季表已經知道缺哪幾集，所以搜尋不必再從作品名開始。查詢是**標題 × 記號**，記號由缺的形狀
     決定（使用者 2026-09-19 拍板）：
@@ -310,10 +384,11 @@ def missing_queries(
     - **缺幾集 / 缺一集** → 一集一個記號：TMDB 給了絕對編號就用它（兩位數補零，照 Sonarr 的
       動漫查詢），否則 `S03E05`。有絕對編號的作品，發佈就是照絕對編號編的——`S02E01` 在那些
       站上一筆都搜不到；反過來也一樣，所以**一集只有一個記號**，兩種都送會讓記號數加倍。
-    - 記號放不下 `MAX_QUERIES` 時逐級退：先整批收成季記號，季記號也放不下就退回作品名
-      （`search_titles`，今天的行為）。
+    - 記號放不下 `MAX_QUERIES` 時先整批收成季記號；季記號也放不下就**分批**（M3 票 20）：
+      每一批是一組季、最多 `MAX_QUERIES` 個查詢，第一批先填滿。何時問下一批由請求預算決定
+      （`adapters/budget.py`），不再退回作品名——退回去的話第六季以後的缺集一次都問不到。
 
-    展開成查詢時**標題優先**：第一個標題先問完它的每一個記號，缺的每一集才至少都被問過一次。
+    一批裡**標題優先**：第一個標題先問完這一批的每一個記號，缺的每一集才至少都被問過一次。
     `season` 有值時只看那一季（展開區那一顆按鈕）。沒有缺集就回空的——不退回作品名，
     使用者按的是「搜缺的集」。
     """
@@ -321,17 +396,25 @@ def missing_queries(
         return ()
     if season is not None:
         seasons = [row for row in seasons if row.season_number == season]
-    tokens = tuple(token for row in seasons for token in _season_tokens(row))
+    tokens = tuple((row.season_number, token) for row in seasons for token in _season_tokens(row))
     if len(tokens) > MAX_QUERIES:
         # 逐集放不下就整批收成季記號：問前五集等於默默漏掉其餘那幾集，而使用者按的是
         # 「搜缺的集」。收窄到季之後那一季的發佈都回得來，逐集交給結果表的預估去分。
-        tokens = tuple(f"S{row.season_number:02d}" for row in seasons if _gaps(row))
-    if len(tokens) > MAX_QUERIES:
-        # 連季記號都放不下（六季以上有缺）：沒有東西收窄得了，退回作品名。
-        return search_titles(snapshot)
-    return _unique(f"{title} {token}" for title in _title_order(snapshot) for token in tokens)[
-        :MAX_QUERIES
-    ]
+        tokens = tuple(
+            (row.season_number, f"S{row.season_number:02d}") for row in seasons if _gaps(row)
+        )
+    titles = _title_order(snapshot)
+    return tuple(
+        QueryBatch(
+            queries=_unique(f"{title} {token}" for title in titles for _, token in chunk)[
+                :MAX_QUERIES
+            ],
+            seasons=tuple(dict.fromkeys(number for number, _ in chunk)),
+        )
+        for chunk in (
+            tokens[start : start + MAX_QUERIES] for start in range(0, len(tokens), MAX_QUERIES)
+        )
+    )
 
 
 def _season_tokens(season: SeasonView) -> tuple[str, ...]:

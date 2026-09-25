@@ -44,6 +44,9 @@ class BindReasonCode(StrEnum):
     NO_SHOW_PAGE = "no_show_page"
     #: 番組頁或 TMDB 這一次查不到（`{detail}` 是原文）。
     LOOKUP_FAILED = "lookup_failed"
+    #: `{site}` 這一小時的請求預算用完了，番組頁下一輪再讀（M3 票 20）。不是查不到：
+    #: 只有它會在之後的輪詢裡重認。
+    LOOKUP_DEFERRED = "lookup_deferred"
     #: 作品認出來了，但收得下它的 Route 有好幾條（`{routes}`），要人選。
     ROUTE_AMBIGUOUS = "route_ambiguous"
     #: 作品認出來了，但沒有一條啟用中的 Route 收得下它。
@@ -65,6 +68,7 @@ BIND_PARAMS: dict[BindReasonCode, frozenset[str]] = {
     _C.NO_PREMIERE: frozenset(),
     _C.NO_SHOW_PAGE: frozenset(),
     _C.LOOKUP_FAILED: frozenset({"detail"}),
+    _C.LOOKUP_DEFERRED: frozenset({"site"}),
     _C.ROUTE_AMBIGUOUS: frozenset({"routes"}),
     _C.NO_ROUTE: frozenset(),
 }

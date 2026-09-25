@@ -77,6 +77,7 @@ const REASONS: ReasonSet<RssRefusal> = {
   feed_unreachable: true,
   feed_unread: true,
   feed_not_rss: true,
+  budget_exhausted: true,
 }
 
 export function parseRssRefusal(error: unknown) {

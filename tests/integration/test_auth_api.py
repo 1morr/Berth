@@ -432,6 +432,7 @@ ACCESS: dict[tuple[str, str], Access] = {
     ("GET", "/events/stream"): Access.SIGNED_IN,
     ("POST", "/health/check"): Access.SIGNED_IN,
     ("GET", "/health/detail"): Access.SIGNED_IN,
+    ("GET", "/health/budget"): Access.SIGNED_IN,
     ("GET", "/inventory"): Access.SIGNED_IN,
     ("GET", "/inventory/*"): Access.SIGNED_IN,
     ("GET", "/inventory/*/filters"): Access.SIGNED_IN,

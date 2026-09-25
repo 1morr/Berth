@@ -22,12 +22,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from berth.adapters.http import ProtocolMismatchError, ServiceError
 from berth.adapters.rss import FeedItem
-from berth.domain import FeedKind, MappingStrategy, ReleaseKind, RssRefusal, Tags
+from berth.domain import BudgetUse, FeedKind, MappingStrategy, ReleaseKind, RssRefusal, Tags
 from berth.models import Job, Media, Route
 from berth.parser import parse_release, tags_of
-from berth.services.clients import ServiceClientFactory
+from berth.services.clients import ServiceClientFactory, feed_fetcher
 from berth.services.commands import Effect, command
-from berth.services.rss import RssRejectedError, kind_of, library_copy, parse_items
+from berth.services.rss import RssRejectedError, kind_of, library_copy, parse_items, unread
 from berth.services.search import estimate
 from berth.services.steps import message
 
@@ -89,13 +89,13 @@ async def read_oneshot(
         raise RssRejectedError(RssRefusal.FEED_UNSUPPORTED, url)
     media = await _media(session, media_id)
     route = await _route(session, route_id)
-    fetcher = factory.rss()
+    fetcher = feed_fetcher(factory, BudgetUse.MANUAL)
     try:
         found = parse_items(kind, await fetcher.fetch(url.strip()))
     except ProtocolMismatchError as exc:
         raise RssRejectedError(RssRefusal.FEED_NOT_RSS, message(exc)) from exc
     except ServiceError as exc:
-        raise RssRejectedError(RssRefusal.FEED_UNREACHABLE, message(exc)) from exc
+        raise unread(exc) from exc
     finally:
         await fetcher.aclose()
     hashes = [item.info_hash for item in found if item.info_hash]

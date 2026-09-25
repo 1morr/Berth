@@ -52,11 +52,13 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import ColumnElement
 
+from berth.adapters.budget import BudgetExhaustedError
 from berth.adapters.http import ServiceError
 from berth.adapters.rss import FeedFetcher, FeedItem, acgrip, mikan, nyaa
 from berth.domain import (
     BindReason,
     BindReasonCode,
+    BudgetUse,
     FeedItemStatus,
     FeedKind,
     FileEntry,
@@ -82,7 +84,7 @@ from berth.parser.binding import SeriesClues, could_be, judge, search_terms, tit
 from berth.parser.exclusion import Layer, RuleError, normalize_rules, screen
 from berth.parser.planner import episode_span
 from berth.parser.release import parse_release, tags_of
-from berth.services.clients import ServiceClientFactory
+from berth.services.clients import ServiceClientFactory, feed_fetcher
 from berth.services.commands import Effect, command
 from berth.services.discover import search_media
 from berth.services.jobs import JobRejectedError, JobSource, actor_of, add_download, freeze
@@ -131,6 +133,18 @@ class RssRejectedError(Exception):
         super().__init__(f"{reason}: {detail}" if detail else reason)
         self.reason = reason
         self.detail = detail
+
+
+def unread(exc: ServiceError) -> RssRejectedError:
+    """人在畫面上按的讀取沒讀到：請求預算用完（`budget_exhausted`，等一下）與那一站讀不到
+    （`feed_unreachable`）是兩件事（M3 票 20）。`BudgetExhaustedError` 是 `ServiceError`，
+    所以一律經過這裡分，不在每一個呼叫端各排一次 `except` 的順序。"""
+    reason = (
+        RssRefusal.BUDGET_EXHAUSTED
+        if isinstance(exc, BudgetExhaustedError)
+        else RssRefusal.FEED_UNREACHABLE
+    )
+    return RssRejectedError(reason, message(exc))
 
 
 @dataclass(frozen=True, slots=True)
@@ -495,7 +509,7 @@ async def poll_feed(
     feed = await session.get(RssFeed, feed_id)
     if feed is None:
         raise RssRejectedError(RssRefusal.FEED_MISSING, str(feed_id))
-    fetcher = factory.rss()
+    fetcher = feed_fetcher(factory, BudgetUse.POLL)
     bound = submitted = 0
     try:
         try:
@@ -527,9 +541,16 @@ async def poll_feed(
             if sent is not None:
                 bound += 1
                 submitted += sent
-        await _backfill_due(session, fetcher, feed_id, moment)
+        # 上一輪被請求預算擋下、還沒認的（M3 票 20）：只有它們在長出來之後的輪詢裡重認。這一輪
+        # 才長出來的剛認過，不再撞一次。
+        for series_id in await _deferred_lookups(session, feed_id, skip=grown):
+            sent = await _auto_bind(session, factory, fetcher, series_id, moment)
+            if sent is not None:
+                bound += 1
+                submitted += sent
     finally:
         await fetcher.aclose()
+    await _backfill_due(session, factory, feed_id, moment)
     submitted += await _submit_waiting(session, factory, RssItem.feed_id == feed_id)
     return PollOutcome(items=items, series=len(grown), bound=bound, submitted=submitted)
 
@@ -693,7 +714,7 @@ async def _home_feed(session: AsyncSession, series: RssSeries) -> RssFeed | None
 
 async def _backfill(
     session: AsyncSession,
-    fetcher: FeedFetcher,
+    factory: ServiceClientFactory,
     home: RssFeed,
     series: RssSeries,
     moment: datetime,
@@ -704,21 +725,25 @@ async def _backfill(
     """
     assert series.mikan_bangumi_id is not None and series.mikan_subgroup_id is not None
     url = mikan.bangumi_feed_url(series.mikan_bangumi_id, series.mikan_subgroup_id)
+    fetcher = feed_fetcher(factory, BudgetUse.BACKFILL)
     try:
-        season = mikan.parse_feed(await fetcher.fetch(url))
-    except ServiceError as exc:
-        logger.warning(
-            "rss backfill could not read the single feed; the next round tries again",
-            extra={"series": series.id, "error": message(exc)},
-        )
-        return message(exc)
-    await _record(session, fetcher, home, season, moment, known=series)
+        try:
+            season = mikan.parse_feed(await fetcher.fetch(url))
+        except ServiceError as exc:
+            logger.warning(
+                "rss backfill could not read the single feed; the next round tries again",
+                extra={"series": series.id, "error": message(exc)},
+            )
+            return message(exc)
+        await _record(session, fetcher, home, season, moment, known=series)
+    finally:
+        await fetcher.aclose()
     series.backfilled_at = moment
     return ""
 
 
 async def _backfill_due(
-    session: AsyncSession, fetcher: FeedFetcher, feed_id: int, moment: datetime
+    session: AsyncSession, factory: ServiceClientFactory, feed_id: int, moment: datetime
 ) -> None:
     """每日補漏：這個 Feed 是 home 的、綁好的 Mikan RSS Series，上次補過滿一天（或還沒補過）的各讀
     一次單一 feed（plan §3.2）。
@@ -747,7 +772,7 @@ async def _backfill_due(
         home = await _home_feed(session, series)
         if home is None or home.id != feed_id:
             continue
-        failed = await _backfill(session, fetcher, feed, series, moment)
+        failed = await _backfill(session, factory, feed, series, moment)
         if failed:
             failures.append(f"backfill {series.key}: {failed}")
         await session.commit()
@@ -1146,6 +1171,26 @@ class _LookupError(Exception):
     """番組頁或 TMDB 這一次查不到。訊息是原文（英文），進 `lookup_failed` 的 `detail`。"""
 
 
+async def _deferred_lookups(
+    session: AsyncSession, feed_id: int, *, skip: Sequence[int] = ()
+) -> list[int]:
+    """這個 Feed 帶到、上一次被請求預算擋下還沒認的 RSS Series（`lookup_deferred`，M3 票 20）。"""
+    rows = await session.scalars(
+        select(RssSeries)
+        .where(
+            RssSeries.media_id.is_(None),
+            RssSeries.id.in_(select(RssItem.series_id).where(RssItem.feed_id == feed_id)),
+        )
+        .order_by(RssSeries.id)
+    )
+    return [
+        row.id
+        for row in rows
+        if row.id not in skip
+        and any(reason.code is BindReasonCode.LOOKUP_DEFERRED for reason in _reasons(row))
+    ]
+
+
 async def _auto_bind(
     session: AsyncSession,
     factory: ServiceClientFactory,
@@ -1168,6 +1213,12 @@ async def _auto_bind(
     try:
         clues = await _clues(fetcher, series)
         shots = await _candidates(session, factory, clues)
+    except BudgetExhaustedError as refused:
+        # 預算擋下的不是「查不到」：記成延後，下一輪輪到這個 Feed 時再認（`_deferred_lookups`）。
+        await _note(
+            session, series_id, (because(BindReasonCode.LOOKUP_DEFERRED, site=refused.site),)
+        )
+        return None
     except _LookupError as failed:
         logger.info("rss series lookup failed", extra={"series": series_id, "error": str(failed)})
         await _note(
@@ -1226,6 +1277,8 @@ async def _clues(fetcher: FeedFetcher, series: RssSeries) -> SeriesClues:
         return SeriesClues(title="", premiere=None, release_title=series.title_raw, show_page=False)
     try:
         page = await fetcher.fetch(mikan.bangumi_url(series.mikan_bangumi_id))
+    except BudgetExhaustedError:
+        raise
     except ServiceError as exc:
         raise _LookupError(f"bangumi page: {message(exc)}") from exc
     found = mikan.bangumi_page(page.decode("utf-8", errors="replace"))
@@ -1367,11 +1420,7 @@ async def bind_series(
             )
             for item in passed:
                 item.status = FeedItemStatus.MATCHED
-        fetcher = factory.rss()
-        try:
-            await _backfill(session, fetcher, home, series, moment)
-        finally:
-            await fetcher.aclose()
+        await _backfill(session, factory, home, series, moment)
     await session.commit()
     await _rescreen(session, RssItem.series_id == series_id)
     logger.info("rss series bound", extra={"series": series_id, "media": media_id})
@@ -1561,12 +1610,12 @@ async def subscribe_mikan(
     url = mikan.bangumi_feed_url(bangumi_id, subgroup_id)
     if await session.scalar(select(RssFeed.id).where(RssFeed.url == url)) is not None:
         raise RssRejectedError(RssRefusal.FEED_DUPLICATE, url)
-    fetcher = factory.rss()
+    fetcher = feed_fetcher(factory, BudgetUse.MANUAL)
     try:
         try:
             season = mikan.parse_feed(await fetcher.fetch(url))
         except ServiceError as exc:
-            raise RssRejectedError(RssRefusal.FEED_UNREACHABLE, message(exc)) from exc
+            raise unread(exc) from exc
         feed = RssFeed(
             name=name.strip() or _default_name(url),
             url=url,

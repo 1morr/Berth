@@ -15,6 +15,7 @@ import pytest_asyncio
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
+from berth.adapters.budget import RequestBudget
 from berth.adapters.http import ServiceUnavailableError
 from berth.adapters.indexer import IndexerSearch
 from berth.adapters.jellyfin.fake import FakeJellyfinClient
@@ -51,6 +52,7 @@ class OneJellyfin:
     def __init__(self, jellyfin: FakeJellyfinClient) -> None:
         self._jellyfin = jellyfin
         self.asked: list[str] = []
+        self.budget = RequestBudget()
 
     def jellyfin(self, base_url: str, token: str = "") -> FakeJellyfinClient:
         self.asked.append(base_url)

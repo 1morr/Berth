@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { Media, WatchArea, WatchEpisode } from '../api/media'
 import type { Bangumi, Feed, RssSeries } from '../api/rss'
-import type { SearchResults } from '../api/search'
+import type { Batch, SearchResults } from '../api/search'
 import { HEALTHY, session, stubApi, type StubRoute } from '../test/fetch'
 import { renderApp } from '../test/render'
 
@@ -862,6 +862,8 @@ describe('Media 詳情頁', () => {
         attempts: [{ step: 'SPY x FAMILY S01E02', status: 'ok', detail: '1', error: '' }],
         problem: null,
         detail: '',
+        retry_at: null,
+        batch: null,
       }
     }
 
@@ -987,6 +989,120 @@ describe('Media 詳情頁', () => {
 
       expect(await within(panel()).findByText('SPY x FAMILY')).toBeVisible()
       expect(screen.queryByRole('button', { name: '改回作品名搜尋' })).not.toBeInTheDocument()
+    })
+
+    describe('分批（M3 票 20）', () => {
+      const FIRST: Batch = {
+        seasons: [1, 2, 3, 4, 5],
+        later: 1,
+        next_seasons: [6, 7],
+        next_at: '2026-09-26T12:00:00Z',
+      }
+      const LAST: Batch = { seasons: [6, 7], later: 0, next_seasons: [], next_at: null }
+
+      function batched(nextAt: string | null) {
+        return gaps({
+          [MISSING_QUERIES]: {
+            body: { queries: ['SPY x FAMILY S01'], problem: null, batch: FIRST },
+          },
+          [MISSING_SEARCH]: {
+            body: { ...found('[ANi] SPY x FAMILY - 02'), batch: { ...FIRST, next_at: nextAt } },
+          },
+          'GET /api/search/queries?media=tv%3A120089&missing=true&from_season=6': {
+            body: { queries: ['SPY x FAMILY S06', 'SPY x FAMILY S07'], problem: null, batch: LAST },
+          },
+          'GET /api/search?media=tv%3A120089&missing=true&from_season=6': {
+            body: { ...found('[ANi] SPY x FAMILY - 70'), batch: LAST },
+          },
+        })
+      }
+
+      it('預覽說得出這一批問哪幾季、之後還有幾批', async () => {
+        batched(null)
+        renderApp('/media/tv:120089')
+
+        await userEvent.click(await screen.findByRole('button', { name: '搜這部作品缺的集' }))
+
+        expect(
+          await within(panel()).findByText(
+            '分批問：這一批問 S01、S02、S03、S04、S05。之後還有 1 批。',
+          ),
+        ).toBeVisible()
+      })
+
+      it('問完一批說出問了哪幾季、下一批是哪幾季；「問下一批」從下一批的第一季問起（票 20 驗收）', async () => {
+        const stub = batched('2026-09-26T12:00:00Z')
+        renderApp('/media/tv:120089')
+        await userEvent.click(await screen.findByRole('button', { name: '搜這部作品缺的集' }))
+
+        expect(
+          await within(panel()).findByText(
+            '這一批問了 S01、S02、S03、S04、S05。還有 1 批，下一批問 S06、S07。',
+          ),
+        ).toBeVisible()
+        await userEvent.click(within(panel()).getByRole('button', { name: '問下一批' }))
+
+        expect(asked(stub)).toContain('/api/search?media=tv%3A120089&missing=true&from_season=6')
+        expect(
+          await within(panel()).findByText('這一批問了 S06、S07。這是最後一批。'),
+        ).toBeVisible()
+        expect(within(panel()).queryByRole('button', { name: '問下一批' })).not.toBeInTheDocument()
+      })
+
+      it('下一批要等預算時說出何時放得下；按鈕照樣按得下去（票 02b）', async () => {
+        const later = new Date(Date.now() + 25 * 60 * 1000).toISOString()
+        batched(later)
+        renderApp('/media/tv:120089')
+        await userEvent.click(await screen.findByRole('button', { name: '搜這部作品缺的集' }))
+
+        expect(await within(panel()).findByText(/請求預算要到/)).toBeVisible()
+        expect(within(panel()).getByText('25 分鐘後')).toBeVisible()
+        expect(within(panel()).getByRole('button', { name: '問下一批' })).toBeEnabled()
+      })
+
+      it('預算放不下這一批時一個關鍵字都沒問，說得出是哪幾季、何時放得下（票 20 驗收）', async () => {
+        const later = new Date(Date.now() + 40 * 60 * 1000).toISOString()
+        gaps({
+          [MISSING_SEARCH]: {
+            body: {
+              ...found(''),
+              rows: [],
+              total: 0,
+              attempts: [],
+              problem: 'budget_exhausted',
+              detail: 'request budget for mikanani.me is used up',
+              retry_at: later,
+              batch: FIRST,
+            },
+          },
+        })
+        renderApp('/media/tv:120089')
+
+        await userEvent.click(await screen.findByRole('button', { name: '搜這部作品缺的集' }))
+
+        expect(await within(panel()).findByText('等請求預算')).toBeVisible()
+        expect(within(panel()).getByText('40 分鐘後')).toBeVisible()
+        expect(
+          within(panel()).getByText('這一批要問 S01、S02、S03、S04、S05，一個都還沒問。'),
+        ).toBeVisible()
+      })
+
+      it('只有一批時不說「批」', async () => {
+        gaps({
+          [MISSING_SEARCH]: {
+            body: {
+              ...found('[ANi] SPY x FAMILY - 02'),
+              batch: { seasons: [1], later: 0, next_seasons: [], next_at: null },
+            },
+          },
+        })
+        renderApp('/media/tv:120089')
+
+        await userEvent.click(await screen.findByRole('button', { name: '搜這部作品缺的集' }))
+
+        expect(await within(panel()).findByText(/\[ANi\] SPY x FAMILY - 02/)).toBeVisible()
+        expect(within(panel()).queryByText(/這一批/)).not.toBeInTheDocument()
+      })
     })
   })
 

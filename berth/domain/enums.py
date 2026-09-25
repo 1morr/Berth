@@ -624,6 +624,22 @@ class IndexerProblem(StrEnum):
     CREDENTIAL_REJECTED = "credential_rejected"
     #: 連不上、逾時，或回的東西不像索引站。
     UNREACHABLE = "unreachable"
+    #: 索引站背後某一站這一小時的請求預算放不下這一批（M3 票 20）。一個查詢都沒問；
+    #: 何時放得下在 `retry_at`。
+    BUDGET_EXHAUSTED = "budget_exhausted"
+
+
+class BudgetUse(StrEnum):
+    """誰用掉一個站的請求預算（M3 票 20、plan §3.2）。健康頁照它拆「這一小時是誰問的」。"""
+
+    #: `rss_poller` 的一輪：Feed 本身、Mikan 的單集頁與番組頁。
+    POLL = "poll"
+    #: 讀 Mikan 的單一 feed：綁定時補舊集與每日補漏。
+    BACKFILL = "backfill"
+    #: 索引站搜尋（作品名與缺集），一個查詢打到索引站背後的每一個站。
+    SEARCH = "search"
+    #: 人在畫面上按的：一次性 RSS 連結、Mikan 代搜、從 Media 頁訂閱。
+    MANUAL = "manual"
 
 
 class HealthStatus(StrEnum):
@@ -1279,3 +1295,6 @@ class RssRefusal(StrEnum):
     #: 讀得到，但回的不是 RSS（站上的網頁、登入頁、Cloudflare 的錯誤頁）。多半是貼了頁面的網址而
     #: 不是它的 RSS 連結。`detail` 是原文（M3 票 18）。
     FEED_NOT_RSS = "feed_not_rss"
+    #: 那一站這一小時的請求預算用完了，這一次沒有打出去（M3 票 20）。`detail` 是原文，
+    #: 含放得下的時刻。
+    BUDGET_EXHAUSTED = "budget_exhausted"

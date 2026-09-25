@@ -424,6 +424,91 @@ describe('健康頁', () => {
     })
   })
 
+  describe('請求預算（M3 票 20）', () => {
+    const BUDGET = 'GET /api/health/budget'
+
+    it('每一站這一小時用了多少、誰用的；輪詢、補漏、搜尋共用一份', async () => {
+      render(
+        { body: healthDetail() },
+        {
+          [BUDGET]: {
+            body: {
+              limit: 60,
+              window_seconds: 3600,
+              sites: [
+                {
+                  site: 'mikanani.me',
+                  used: 10,
+                  by_use: [
+                    { use: 'poll', count: 4 },
+                    { use: 'backfill', count: 1 },
+                    { use: 'search', count: 5 },
+                  ],
+                  frees_at: null,
+                  deferred: [],
+                },
+              ],
+            },
+          },
+        },
+      )
+      renderApp('/health')
+
+      const budget = within(await screen.findByRole('region', { name: '請求預算' }))
+      expect(budget.getByText('mikanani.me')).toBeInTheDocument()
+      expect(budget.getByText('10 / 60')).toBeInTheDocument()
+      expect(budget.getByText('RSS 輪詢 4 · 每日補漏 1 · 搜尋 5')).toBeInTheDocument()
+      expect(budget.queryByText(/延後/)).not.toBeInTheDocument()
+    })
+
+    it('用完時被延後的工作說得出來：哪一種、擋了幾個請求、何時放得下（票 20 驗收）', async () => {
+      const later = new Date(Date.now() + 30 * 60 * 1000).toISOString()
+      render(
+        { body: healthDetail() },
+        {
+          [BUDGET]: {
+            body: {
+              limit: 10,
+              window_seconds: 3600,
+              sites: [
+                {
+                  site: 'mikanani.me',
+                  used: 10,
+                  by_use: [{ use: 'poll', count: 10 }],
+                  frees_at: later,
+                  deferred: [
+                    {
+                      use: 'backfill',
+                      refused: 3,
+                      since: new Date().toISOString(),
+                      until: later,
+                    },
+                  ],
+                },
+              ],
+            },
+          },
+        },
+      )
+      renderApp('/health')
+
+      const budget = within(await screen.findByRole('region', { name: '請求預算' }))
+      expect(budget.getByText('延後：每日補漏（擋下 3 個請求）')).toBeInTheDocument()
+      expect(budget.getByText('30 分鐘後')).toBeInTheDocument()
+    })
+
+    it('這一小時還沒問過任何站時說一句話，不畫空表', async () => {
+      render(
+        { body: healthDetail() },
+        { [BUDGET]: { body: { limit: 60, window_seconds: 3600, sites: [] } } },
+      )
+      renderApp('/health')
+
+      const budget = within(await screen.findByRole('region', { name: '請求預算' }))
+      expect(budget.getByText('這一小時還沒有問過任何站。')).toBeInTheDocument()
+    })
+  })
+
   it('後端連不上時說得出來，而不是一片空白', async () => {
     render({ status: 500, body: { detail: 'boom' } })
     renderApp('/health')

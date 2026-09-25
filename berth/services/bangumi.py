@@ -15,12 +15,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from berth.adapters.http import ServiceError
 from berth.adapters.rss import mikan
-from berth.domain import RssRefusal
+from berth.domain import BudgetUse
 from berth.models import RssSeries
-from berth.services.clients import ServiceClientFactory
+from berth.services.clients import ServiceClientFactory, feed_fetcher
 from berth.services.commands import Effect, command
-from berth.services.rss import RssRejectedError
-from berth.services.steps import message
+from berth.services.rss import unread
 
 
 @dataclass(frozen=True, slots=True)
@@ -81,10 +80,10 @@ async def read_bangumi(
 
 
 async def _fetch(factory: ServiceClientFactory, url: str) -> str:
-    fetcher = factory.rss()
+    fetcher = feed_fetcher(factory, BudgetUse.MANUAL)
     try:
         return (await fetcher.fetch(url)).decode("utf-8", errors="replace")
     except ServiceError as exc:
-        raise RssRejectedError(RssRefusal.FEED_UNREACHABLE, message(exc)) from exc
+        raise unread(exc) from exc
     finally:
         await fetcher.aclose()

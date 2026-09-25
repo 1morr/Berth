@@ -12,6 +12,7 @@ from pathlib import Path
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from berth.adapters.budget import RequestBudget
 from berth.adapters.rss.mikan import BangumiHit, bangumi_url, search_url
 from berth.domain import RssRefusal
 from berth.services.bangumi import read_bangumi, search_bangumi
@@ -46,6 +47,22 @@ async def test_an_unreachable_mikan_is_a_refusal(
         await search_bangumi(factory, "Frieren")
 
     assert refused.value.reason is RssRefusal.FEED_UNREACHABLE
+
+
+async def test_a_used_up_request_budget_is_its_own_refusal(
+    session: AsyncSession, roots: dict[str, Path]
+) -> None:
+    """人按的讀取也吃 Mikan 的請求預算（M3 票 20）；用完時說的是預算，不是「讀不到」——
+    一個是等一下，一個是那一站出事了。一個請求都沒出去。"""
+    _, _, factory, _, _ = await subscribed(session, roots)
+    factory.rss_.pages[search_url("Frieren")] = (MIKAN / "home-search.frieren.html").read_bytes()
+    factory.budget = RequestBudget(limit=0)
+
+    with pytest.raises(RssRejectedError) as refused:
+        await search_bangumi(factory, "Frieren")
+
+    assert refused.value.reason is RssRefusal.BUDGET_EXHAUSTED
+    assert search_url("Frieren") not in factory.rss_.requested
 
 
 async def test_a_bangumi_lists_its_subgroups_and_which_are_bound(

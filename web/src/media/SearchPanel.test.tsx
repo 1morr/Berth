@@ -122,6 +122,8 @@ function results(overrides: Partial<SearchResults> = {}): SearchResults {
     attempts: [{ step: 'SPY x FAMILY', status: 'ok', detail: '1', error: '' }],
     problem: null,
     detail: '',
+    retry_at: null,
+    batch: null,
     ...overrides,
   }
 }

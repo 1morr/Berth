@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from berth.adapters.budget import RequestBudget
 from berth.adapters.http import (
     AuthFailedError,
     ProtocolMismatchError,
@@ -43,6 +44,7 @@ class FakeClientFactory:
         self._qbittorrent = qbittorrent or FakeQbittorrentClient()
         self._prowlarr = prowlarr or FakeProwlarrClient()
         self.asked: list[tuple[str, str]] = []
+        self.budget = RequestBudget()
 
     def jellyfin(self, base_url: str, token: str = "") -> JellyfinClient:
         self.asked.append(("jellyfin", base_url))

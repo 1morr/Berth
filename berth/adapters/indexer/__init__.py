@@ -106,6 +106,11 @@ class IndexerSearch(Protocol):
         """一個查詢 → 一串結果。搜不到東西是空的 tuple，不是例外。"""
         ...
 
+    async def sites(self) -> frozenset[str]:
+        """一個查詢會打到哪幾個站（主機名，`adapters.budget.site_of`）。請求預算照它記帳
+        （M3 票 20）：Prowlarr 預設的 Mikan、Nyaa、ACG.RIP 與 RSS 是同一批站。"""
+        ...
+
     async def aclose(self) -> None: ...
 
 

@@ -710,8 +710,10 @@ Issue、修正、對帳、刪除與重新入庫的每一條端點都是 403，�
   **不建 Feed、不長 RSS Series**，之後的集數不追；排除條件只管自動下載，合集這裡照樣送得出去。新端點
   `POST /rss/oneshot`（只讀）；網址認不出、讀不到、讀到的不是 RSS 各有自己的理由（新的 `feed_not_rss`）。
 - **詳情頁的「RSS 訂閱」**（M3 票 19，只有 admin）：列出綁在這部作品上的 RSS Series；新增訂閱時 Mikan 由 Berth 代搜番組、選字幕組、建單一 feed 並綁上（預設補齊整季），Nyaa / acg.rip 以作品的標題建搜尋 feed、長出的字幕組都預先綁到這部作品，第一輪就地預覽。新端點 `GET /api/rss/mikan/search`、`GET /api/rss/mikan/bangumi/{id}`、`POST /api/rss/subscriptions/mikan`、`POST /api/rss/subscriptions/search`；`GET /api/rss/series` 多 `?media=` 與五個欄位；`rss_feeds` 多三欄（migration `f4b9d2e6a157`）。
+- **一個站一份請求預算**（M3 票 20，plan §3.2）：RSS 輪詢、補舊集與每日補漏、索引站搜尋與 `/rss` 上人按的讀取共用一份，以主機名為鍵、每站每小時 60 個（滾動窗，形狀照 Prowlarr 的 Query Limit）；用完的那一個不送，被擋下的工作照原本的退路下一輪再試。健康頁多一塊「請求預算」，新端點 `GET /api/health/budget`；搜尋放不下時回 `problem = budget_exhausted` 與 `retry_at`，`/rss` 的讀取回 429 `budget_exhausted`；自動綁定被擋下的理由是新的 `lookup_deferred`、之後的輪詢再認。
 
 ### Changed
+- **缺集一鍵搜分批問完**（M3 票 20，plan §8.4）：季記號放不下一次搜尋的五個查詢時不再退回作品名，而是分批——每一批一組季，搜尋區塊說出這一批問了哪幾季、下一批是哪幾季、請求預算何時放得下，「問下一批」由人按。`GET /api/search` 與 `/search/queries` 多 `from_season=` 參數（下一批從哪一季起）與 `batch` 回應欄位（`from_season` 單獨帶著是 422 `from_season_without_missing`）。
 - **從審核裡套用到 RSS Series**（M3 票 14b，brief §15）：連載中的 split-cour 第一批會被播出日比對整批擋在
   `/review`、一集都沒入庫，現在停在審核的計劃列也有「套用到這個 RSS Series」（`PUT /plans/{id}/items` 的
   `apply_to_series`，只配一列）。那一列照人說的、那一份仍等你核准；同一份裡沒人碰過的列、同一個 Series 其餘

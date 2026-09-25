@@ -21,6 +21,15 @@ export const healthDetailQueryOptions = queryOptions({
   queryFn: () => apiGet<HealthDetail>('/health/detail'),
 })
 
+/** `GET /api/health/budget`：一個站一份請求預算的現況（M3 票 20）。 */
+export type RequestBudget = Schemas['BudgetOut']
+export type SiteBudget = Schemas['SiteBudgetOut']
+
+export const budgetQueryOptions = queryOptions({
+  queryKey: ['health', 'budget'],
+  queryFn: () => apiGet<RequestBudget>('/health/budget'),
+})
+
 /**
  * 立刻重跑四項檢查（plan §3.2 的「+ 手動」）。
  *
