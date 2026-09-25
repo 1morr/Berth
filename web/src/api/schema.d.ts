@@ -3194,7 +3194,7 @@ export interface components {
          *     哪一條在賠錢」，而信心的上限也是逐條策略定的（brief §6.5）。
          * @enum {string}
          */
-        MappingStrategy: "explicit" | "folder" | "context" | "arc_name" | "single_season" | "absolute_group" | "absolute_cumulative" | "air_date_offset" | "cour_offset" | "movie";
+        MappingStrategy: "explicit" | "folder" | "context" | "arc_name" | "single_season" | "absolute_group" | "absolute_cumulative" | "air_date_offset" | "cour_offset" | "published_run" | "movie";
         /**
          * MeOut
          * @description 使用者可見的身分。id 與 Jellyfin user id 都不外流——UI 用不到。
@@ -3601,7 +3601,7 @@ export interface components {
          *     依來源分段：季號從哪裡來、集號怎麼換算、為什麼信心被壓下來、字幕跟著誰、整包一起看的結果。
          * @enum {string}
          */
-        ReasonCode: "movie" | "media_by_title" | "title_exact" | "title_contained" | "title_partial" | "year_matches" | "year_differs" | "title_mismatch" | "no_media" | "season_from_job" | "season_from_release" | "season_from_folder" | "season_from_arc" | "final_season" | "single_season" | "absolute_group" | "absolute_cumulative" | "cour_offset" | "air_date_run" | "episode_not_on_tmdb" | "absolute_within_first_season" | "air_date_unknown" | "air_date_mismatch" | "range_spans_seasons" | "specials_numbering" | "released_before_airing" | "behind_latest_episode" | "air_date_missing" | "published_missing" | "runtime_mismatch" | "runtime_missing" | "classified" | "disc_structure" | "own_numbered_special" | "no_episode" | "subtitle_orphan" | "subtitle_same_name" | "subtitle_folder_episode" | "subtitle_follows" | "video_not_imported" | "target_contested" | "span_clash" | "library_span_clash" | "same_version" | "too_many_files" | "strategy_outlier" | "season_complete" | "medium_held_by_route" | "set_by_user" | "series_corrected";
+        ReasonCode: "movie" | "media_by_title" | "title_exact" | "title_contained" | "title_partial" | "year_matches" | "year_differs" | "title_mismatch" | "no_media" | "season_from_job" | "season_from_release" | "season_from_folder" | "season_from_arc" | "final_season" | "single_season" | "absolute_group" | "absolute_cumulative" | "cour_offset" | "air_date_run" | "published_in_run" | "episode_not_on_tmdb" | "absolute_within_first_season" | "air_date_unknown" | "air_date_mismatch" | "range_spans_seasons" | "specials_numbering" | "released_before_airing" | "behind_latest_episode" | "air_date_missing" | "published_missing" | "runtime_mismatch" | "runtime_missing" | "classified" | "disc_structure" | "own_numbered_special" | "no_episode" | "subtitle_orphan" | "subtitle_same_name" | "subtitle_folder_episode" | "subtitle_follows" | "video_not_imported" | "target_contested" | "span_clash" | "library_span_clash" | "same_version" | "too_many_files" | "strategy_outlier" | "season_complete" | "medium_held_by_route" | "set_by_user" | "series_corrected";
         /**
          * ReconcileRunOut
          * @description 一輪對帳。`finished_at` 是 `null` 就是還在跑。

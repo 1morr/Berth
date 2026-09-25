@@ -1311,6 +1311,7 @@ const zhHant = {
         season_from_arc: '季號是從篇章名推論的',
         final_season: '季號是推論的（「最終季」當成最後一季）',
         air_date_run: '季號是換算的（依播出日切成幾輪）',
+        published_in_run: '季號是推測的（依發佈時間在播的那一輪）',
         cour_offset: '集號是換算的（這一季的後半部）',
         absolute_group: '集號是換算的（TMDB 的絕對編號）',
         absolute_cumulative: '集號是換算的（各季集數累加）',
@@ -1797,6 +1798,8 @@ const zhHant = {
           '第 {{season}} 季的第 {{part}} 部分從第 {{first}} 集開始，所以它的第 {{number}} 集是 {{episode}}',
         air_date_run:
           'TMDB 沒有第 {{season}} 季；依播出日切成 {{runs}} 輪，第 {{season}} 輪從 {{episode}} 開始',
+        published_in_run:
+          '只有集號；發佈於 {{published}}，那時在播的是 {{runs}} 輪裡的第 {{run}} 輪（從 {{episode}} 開始），集號照那一輪從 01 數',
         episode_not_on_tmdb: 'TMDB 第 {{season}} 季沒有第 {{number}} 集',
         absolute_within_first_season:
           '#{{number}} 沒有超過第 {{season}} 季的 {{episodes}} 集，也可能是後面某季重新從 01 數的第 {{number}} 集',
@@ -1848,6 +1851,7 @@ const zhHant = {
         absolute_cumulative: '累計集數',
         air_date_offset: '播出日',
         cour_offset: '分部',
+        published_run: '發佈時間',
         movie: '電影',
       },
       // 檔案分類（`domain.FileKind`，brief §6.2）。
@@ -3737,6 +3741,7 @@ const en: Translations<typeof zhHant> = {
         season_from_arc: 'the season was inferred from an arc name',
         final_season: 'the season was inferred (“final season” taken as the last one)',
         air_date_run: 'the season was worked out by splitting air dates into runs',
+        published_in_run: 'the season was inferred from the run on air when it was released',
         cour_offset: 'the episode was worked out (a later part of the season)',
         absolute_group: 'the episode was worked out (TMDB absolute numbering)',
         absolute_cumulative: 'the episode was worked out (season lengths added up)',
@@ -4191,6 +4196,8 @@ const en: Translations<typeof zhHant> = {
           'Part {{part}} of season {{season}} starts at episode {{first}}, so its episode {{number}} is {{episode}}',
         air_date_run:
           'TMDB has no season {{season}}; air dates split it into {{runs}} runs, and run {{season}} starts at {{episode}}',
+        published_in_run:
+          'Only an episode number; released on {{published}}, when run {{run}} of {{runs}} was on air (it starts at {{episode}}), so the number counts from 01 within that run',
         episode_not_on_tmdb: 'TMDB has no episode {{number}} in season {{season}}',
         absolute_within_first_season:
           '#{{number}} does not go past the {{episodes}} episodes of season {{season}}; it could be episode {{number}} of a later season that counts from 01 again',
@@ -4247,6 +4254,7 @@ const en: Translations<typeof zhHant> = {
         absolute_cumulative: 'counting seasons',
         air_date_offset: 'air dates',
         cour_offset: 'the part number',
+        published_run: 'the release date',
         movie: 'film',
       },
       kind: {

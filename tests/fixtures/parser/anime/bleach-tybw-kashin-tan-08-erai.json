@@ -1,0 +1,14 @@
+{
+  "id": "anime/bleach-tybw-kashin-tan-08-erai",
+  "source_url": "https://nyaa.si/view/2160377",
+  "torrent_name": "[Erai-raws] Bleach: Sennen Kessen Hen - Kashin Tan - 08 [1080p DSNP WEB-DL AVC AAC][MultiSub][AD986D29]",
+  "published_at": "2026-09-12T19:12:14+00:00",
+  "tmdb": "tv-30984",
+  "context": {"media": "tv:30984", "season_hint": null, "episode_offset": null},
+  "files": [
+    {"path": "[Erai-raws] Bleach - Sennen Kessen Hen - Kashin Tan - 08 [1080p DSNP WEB-DL AVC AAC][MultiSub][AD986D29].mkv", "size": 999149368}
+  ],
+  "expected": [
+    {"path": "[Erai-raws] Bleach - Sennen Kessen Hen - Kashin Tan - 08 [1080p DSNP WEB-DL AVC AAC][MultiSub][AD986D29].mkv", "kind": "video", "action": "import", "season": 2, "episode": 48, "tags": {"source": "WEB", "resolution": "1080p", "group": "Erai-raws"}, "target": "Bleach (2004) [tmdbid-30984]/Season 02/Bleach (2004) - S02E48 - THE END TWO WORLD [WEB][1080p][Erai-raws].mkv"}
+  ]
+}

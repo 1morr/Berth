@@ -9,7 +9,7 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict
@@ -231,6 +231,9 @@ class ReasonCode(StrEnum):
     #: TMDB 沒有第 `{season}` 季；播出日把各季切成 `{runs}` 輪，
     #: 第 `{season}` 輪從 `{episode}` 開始。
     AIR_DATE_RUN = "air_date_run"
+    #: 發佈於 `{published}`，那時在播的是 `{runs}` 輪裡的第 `{run}` 輪（從 `{episode}` 開始），
+    #: 集號照那一輪從 01 數。
+    PUBLISHED_IN_RUN = "published_in_run"
 
     # --- 信心被壓下來 -----------------------------------------------------------------
     #: TMDB 第 `{season}` 季沒有第 `{number}` 集。
@@ -336,6 +339,7 @@ REASON_PARAMS: dict[ReasonCode, frozenset[str]] = {
     _C.ABSOLUTE_CUMULATIVE: frozenset({"number", "episode"}),
     _C.COUR_OFFSET: frozenset({"part", "season", "first", "number", "episode"}),
     _C.AIR_DATE_RUN: frozenset({"season", "runs", "episode"}),
+    _C.PUBLISHED_IN_RUN: frozenset({"published", "run", "runs", "episode"}),
     _C.EPISODE_NOT_ON_TMDB: frozenset({"season", "number"}),
     _C.ABSOLUTE_WITHIN_FIRST_SEASON: frozenset({"number", "episodes", "season"}),
     _C.AIR_DATE_UNKNOWN: frozenset({"aired", "episode"}),
@@ -594,6 +598,8 @@ class MappingStrategy(StrEnum):
     AIR_DATE_OFFSET = "air_date_offset"
     #: `Part.2` / `第二部分`：同季前面幾個 cour 的長度加上去（plan §4.4）。
     COUR_OFFSET = "cour_offset"
+    #: 只有集號，發佈時間落在哪一輪播出就照那一輪從 01 數（plan §4.4，M3 票 16）。
+    PUBLISHED_RUN = "published_run"
     #: 電影沒有季集。有這個值是為了讓「為什麼沒有季集」也說得出口。
     MOVIE = "movie"
 
@@ -636,6 +642,9 @@ class ParseContext(BaseModel):
     episode_offset: int | None = None
     #: 這個 Job 要進哪一種媒體庫。劇集不能進 movies（`domain.collection_type_for`）。
     route_collection_type: CollectionType | None = None
+    #: 索引站給的發佈時間（`jobs.published_at`，M3 票 14）。只有集號時拿它推測是哪一輪播出
+    #: （plan §4.4，M3 票 16）；`None` = 來源沒給，或根本沒有來源（認領、重新入庫）。
+    published_at: datetime | None = None
 
 
 class PlanItem(BaseModel):

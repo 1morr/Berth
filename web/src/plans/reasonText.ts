@@ -41,6 +41,7 @@ const STRATEGIES: ReasonSet<Strategy> = {
   absolute_cumulative: true,
   air_date_offset: true,
   cour_offset: true,
+  published_run: true,
   movie: true,
 }
 

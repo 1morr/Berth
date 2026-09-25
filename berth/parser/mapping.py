@@ -37,6 +37,7 @@ from berth.domain import (
     why,
 )
 from berth.domain import ReasonCode as Code
+from berth.parser.publishing import BEHIND_LATEST, RELEASE_TOLERANCE
 from berth.parser.structure import StructureHints
 from berth.parser.title import match_media, matches, normalize_title
 
@@ -99,6 +100,14 @@ class _Mapped:
     end: int | None
     why: ItemReason
 
+    @property
+    def target(self) -> _Target:
+        return (self.season, self.start, self.end)
+
+
+#: 一種讀法換算出的（季, 第一集, 最後一集）。單集檔的最後一集是 `None`，與 `Candidate` 一樣。
+_Target = tuple[int | None, int | None, int | None]
+
 
 def map_episode(
     info: ReleaseInfo,
@@ -141,8 +150,8 @@ def map_episode(
     text = f"{info.raw_title} {release_name}"
     hint = _hint(info, structure, context, media, text)
     if hint is not None:
-        return _from_hint(hint, media, info, structure, span, check)
-    return _from_number(media, info, span, check)
+        return _from_hint(hint, media, info, structure, span, check, context)
+    return _from_number(media, info, span, check, context)
 
 
 # --- 季號的來源 ------------------------------------------------------------------------
@@ -246,6 +255,7 @@ def _from_hint(
     structure: StructureHints,
     span: _Span,
     check: _Check,
+    context: ParseContext,
 ) -> tuple[Candidate, ...]:
     season = _season(media, hint.season)
     if season is None:
@@ -267,6 +277,11 @@ def _from_hint(
                     (hint.reason,),
                 ),
             )
+
+    # 明說了分部的（`Part.1` 也算）不推測：分部說的就是哪一輪。
+    restarted = _restarted_within(season, hint, media, span, context) if part is None else None
+    if restarted is not None:
+        return (_guessed(restarted, media, info, span, check, (hint.reason,)),)
 
     known = _exists(season, span.start) and _exists(season, span.end)
     reasons: tuple[ItemReason, ...] = (hint.reason,)
@@ -299,12 +314,13 @@ def _cour(season: SeasonSnapshot, part: int, span: _Span) -> _Mapped | None:
     if part > len(cours):
         return None
     rows = cours[part - 1]
-    if span.start > len(rows):
+    counted = _counted_in(rows, span)
+    if counted is None:
         return None
     return _Mapped(
         season=season.season_number,
-        start=rows[span.start - 1].episode_number,
-        end=_end_of(rows, span.end),
+        start=counted[0],
+        end=counted[1],
         why=why(
             Code.COUR_OFFSET,
             part=part,
@@ -314,6 +330,14 @@ def _cour(season: SeasonSnapshot, part: int, span: _Span) -> _Mapped | None:
             episode=episode_label(season.season_number, rows[span.start - 1].episode_number),
         ),
     )
+
+
+def _counted_in(rows: tuple[EpisodeSnapshot, ...], span: _Span) -> tuple[int, int | None] | None:
+    """集號從這一輪的 01 數起是哪幾集：（第一集, 最後一集）。第一集不在這一輪裡時是 `None`——
+    包括 `00`，它不是任何一輪從 01 數的集數。"""
+    if not 1 <= span.start <= len(rows):
+        return None
+    return rows[span.start - 1].episode_number, _end_of(rows, span.end)
 
 
 def _end_of(rows: tuple[EpisodeSnapshot, ...], episode_end: int | None) -> int | None:
@@ -327,21 +351,23 @@ def _virtual(
     media: MediaSnapshot, hint: _Hint, span: _Span, check: _Check
 ) -> tuple[Candidate, ...]:
     """檔名的季號對不到任何一季時，用 `air_date` 切出來的虛擬季換算（plan §4.4）。"""
-    cours = [(season, rows) for season in _regular(media) for rows in _cours(season)]
-    if hint.season > len(cours) or hint.season < 1:
+    runs = _runs(media)
+    if hint.season > len(runs) or hint.season < 1:
         return ()
-    season, rows = cours[hint.season - 1]
-    if span.start > len(rows):
+    run = runs[hint.season - 1]
+    counted = _counted_in(run.rows, span)
+    if counted is None:
         return ()
+    number = run.season.season_number
     mapped = _Mapped(
-        season=season.season_number,
-        start=rows[span.start - 1].episode_number,
-        end=_end_of(rows, span.end),
+        season=number,
+        start=counted[0],
+        end=counted[1],
         why=why(
             Code.AIR_DATE_RUN,
             season=hint.season,
-            runs=len(cours),
-            episode=episode_label(season.season_number, rows[0].episode_number),
+            runs=len(runs),
+            episode=episode_label(number, run.rows[0].episode_number),
         ),
     )
     return (
@@ -372,17 +398,32 @@ def _cours(season: SeasonSnapshot) -> tuple[tuple[EpisodeSnapshot, ...], ...]:
 
 
 def _from_number(
-    media: MediaSnapshot, info: ReleaseInfo, span: _Span, check: _Check
+    media: MediaSnapshot, info: ReleaseInfo, span: _Span, check: _Check, context: ParseContext
 ) -> tuple[Candidate, ...]:
     """沒有任何季號提示（brief §6.4 的第四條）。
 
-    **虛擬季換算不在這裡**：它要有一個季號才索引得到那一輪播出（`_virtual`），而這條路上
-    連季號都沒有。brief §6.4 另外提到的「以發佈時間推測」需要索引站給的發佈時間，
-    解析器現在拿不到它（票 08 才有），沒有它就只是換一種猜法。
+    **發佈時間說得出話時它先說**（M3 票 16，`_published_run`）：它挑出的那一輪就是答案，其餘的
+    讀法不再產生——它分得開的正是它們分不開的那兩種（`_doubts` 的第一條）。說不出話時照舊：
+    只有一季就是那一季，否則是絕對編號。
 
     絕對編號換算的信心**只看證據，不看 Route 是不是動漫**（M1 票 14c 量過，「是不是動漫」
     預測不了換算對錯）：預設 medium，`_doubts` 說得出理由時降到 low。
     """
+    readings = _by_number(media, info, span, check)
+    day = _published_day(context)
+    if day is None:
+        return readings
+    literal = tuple((item.season, item.episode_start, item.episode_end) for item in readings)
+    restarted = _published_run(media, span, day, _runs(media), literal)
+    if restarted is None:
+        return readings
+    return (_guessed(restarted, media, info, span, check),)
+
+
+def _by_number(
+    media: MediaSnapshot, info: ReleaseInfo, span: _Span, check: _Check
+) -> tuple[Candidate, ...]:
+    """只看集號的讀法：只有一季就是那一季，否則是絕對編號的各種換算。"""
     regular = _regular(media)
     if len(regular) == 1 and _exists(regular[0], span.start) and _exists(regular[0], span.end):
         only = regular[0]
@@ -438,23 +479,153 @@ def _doubts(
                 season=first.season_number,
             )
         )
-    if info.air_date is not None:
-        label = episode_label(found.season, found.start)
-        aired = _aired(media, found.season, found.start)
-        if aired is None:
-            doubts.append(
-                why(Code.AIR_DATE_UNKNOWN, aired=info.air_date.isoformat(), episode=label)
-            )
-        elif aired != info.air_date:
-            doubts.append(
-                why(
-                    Code.AIR_DATE_MISMATCH,
-                    aired=info.air_date.isoformat(),
-                    episode=label,
-                    tmdb_aired=aired.isoformat(),
-                )
-            )
-    return tuple(doubts)
+    return (*doubts, *_date_doubt(media, info, found))
+
+
+def _date_doubt(media: MediaSnapshot, info: ReleaseInfo, found: _Mapped) -> tuple[ItemReason, ...]:
+    """檔名的播出日不是換算出的那一集的播出日（`_doubts` 的第二條）。檔名沒寫日期時是空的。
+
+    推測虛擬季也吃它：檔名的日期是明說的，發佈時間推測出的那一輪是推論的。
+    """
+    if info.air_date is None:
+        return ()
+    label = episode_label(found.season, found.start)
+    aired = _aired(media, found.season, found.start)
+    if aired is None:
+        return (why(Code.AIR_DATE_UNKNOWN, aired=info.air_date.isoformat(), episode=label),)
+    if aired != info.air_date:
+        return (
+            why(
+                Code.AIR_DATE_MISMATCH,
+                aired=info.air_date.isoformat(),
+                episode=label,
+                tmdb_aired=aired.isoformat(),
+            ),
+        )
+    return ()
+
+
+@dataclass(frozen=True, slots=True)
+class _Run:
+    """一輪播出：某一季按播出間隔切出的一段（CONTEXT.md 的 Cour；那一季是 TMDB 併起來的時候
+    就是 Virtual season）。`number` 是它在全部正片的季裡依序的編號，從 1 起。"""
+
+    number: int
+    season: SeasonSnapshot
+    rows: tuple[EpisodeSnapshot, ...]
+
+
+def _runs(media: MediaSnapshot) -> tuple[_Run, ...]:
+    """全部正片的季各自按播出間隔切開，依序編號。"""
+    cours = ((season, rows) for season in _regular(media) for rows in _cours(season))
+    return tuple(_Run(number, season, rows) for number, (season, rows) in enumerate(cours, start=1))
+
+
+def _published_day(context: ParseContext) -> date | None:
+    """推測虛擬季要用的發佈日。RSS Series 的 offset 是人說的，有值就不推測（plan §4.4）。"""
+    if context.published_at is None or context.episode_offset is not None:
+        return None
+    return context.published_at.date()
+
+
+def _restarted_within(
+    season: SeasonSnapshot, hint: _Hint, media: MediaSnapshot, span: _Span, context: ParseContext
+) -> _Mapped | None:
+    """季號來自篇章名，而那一季裡有好幾輪播出時，集號是不是那一季後面某輪從 01 重數的（M3 票 16）。
+
+    《死神》千年血戰篇的形狀：篇章名說了第 2 季，TMDB 把四輪播出都放在第 2 季，字幕組每輪從 01 數。
+    字面讀法（這一季第 N 集）與第一輪重數是同一個答案，所以候選只有後面幾輪。**只有篇章名**：
+    篇章名說的是「哪一部分的故事」，不是字幕組怎麼編號；明說的季號（`S02E08`、`第二季`）、資料夾與
+    RSS Series 的季號是發佈或人照自己的編號寫的，照字面採用（brief §6.4）。
+    """
+    day = _published_day(context)
+    if day is None or hint.strategy is not MappingStrategy.ARC_NAME:
+        return None
+    same = tuple(run for run in _runs(media) if run.season.season_number == season.season_number)
+    literal = ((season.season_number, span.start, span.end),)
+    return _published_run(media, span, day, same[1:], literal)
+
+
+def _published_run(
+    media: MediaSnapshot,
+    span: _Span,
+    day: date,
+    runs: tuple[_Run, ...],
+    literal: tuple[_Target, ...],
+) -> _Mapped | None:
+    """發佈時間挑得出的那一輪：集號照那一輪從 01 數（brief §6.4、plan §4.4，M3 票 16）。
+
+    AutoBangumi v3.2 的做法，用來分開 `profile-effect.md` §4 的兩種讀法：`- 05` 是照字面讀的那一集
+    （`literal`，第一季第 5 集或絕對編號），還是後面某輪從 01 重數的第 5 集。檔名分不出來，
+    發佈時間分得出來：**新的發佈，發的是剛播的那一集**。
+
+    每一種讀法換算出的那一集（區間取最後一集）有沒有「剛播」——播出日落在發佈日往前 `BEHIND_LATEST`
+    到往後 `RELEASE_TOLERANCE` 之間，兩個門檻與播出日比對同一組。**剛好一種讀法剛播，而它是某一輪的
+    重數**才算數。沒有一種剛播（BD、補檔、重播、慢很多的字幕組）或不只一種（前一季剛播完、下一季就
+    開播）都是分不開，照舊。至多 medium，推測出的集數照樣過播出日比對（`parser.airing`）。
+    """
+    total = len(_runs(media))
+    restarts = (_restart(run, span, day, total) for run in runs)
+    fresh: dict[_Target, _Mapped] = {
+        mapped.target: mapped
+        for mapped in restarts
+        if mapped is not None and _just_aired(media, mapped.target, day)
+    }
+    targets = set(fresh) | {target for target in literal if _just_aired(media, target, day)}
+    if len(targets) != 1:
+        return None
+    return fresh.get(targets.pop())
+
+
+def _restart(run: _Run, span: _Span, day: date, total: int) -> _Mapped | None:
+    """集號照這一輪從 01 數是哪一集。這一輪沒有那麼多集、或集號是 00 時是 `None`。
+
+    區間要整段落在這一輪裡：推測只在它說得清楚的時候說話，跨出這一輪的交給原本的讀法。
+    """
+    counted = _counted_in(run.rows, span)
+    if counted is None or (span.end or span.start) > len(run.rows):
+        return None
+    return _Mapped(
+        season=run.season.season_number,
+        start=counted[0],
+        end=counted[1],
+        why=why(
+            Code.PUBLISHED_IN_RUN,
+            published=day.isoformat(),
+            run=run.number,
+            runs=total,
+            episode=episode_label(run.season.season_number, run.rows[0].episode_number),
+        ),
+    )
+
+
+def _just_aired(media: MediaSnapshot, target: _Target, day: date) -> bool:
+    """那一集（區間取最後一集）是不是剛播：發佈前 `BEHIND_LATEST` 到發佈後 `RELEASE_TOLERANCE`。"""
+    season, start, end = target
+    if season is None or start is None:
+        return False
+    aired = _aired(media, season, end or start)
+    return aired is not None and -BEHIND_LATEST <= aired - day <= RELEASE_TOLERANCE
+
+
+def _guessed(
+    mapped: _Mapped,
+    media: MediaSnapshot,
+    info: ReleaseInfo,
+    span: _Span,
+    check: _Check,
+    aside: tuple[ItemReason, ...] = (),
+) -> Candidate:
+    """推測出的那一輪 → Candidate：至多 medium，檔名明說的播出日對不上時 low（`_date_doubt`）。"""
+    doubt = _date_doubt(media, info, mapped)
+    return _from_mapped(
+        mapped,
+        MappingStrategy.PUBLISHED_RUN,
+        Confidence.LOW if doubt else Confidence.MEDIUM,
+        span,
+        check,
+        (*aside, *doubt),
+    )
 
 
 def _aired(media: MediaSnapshot, season: int, episode: int) -> date | None:

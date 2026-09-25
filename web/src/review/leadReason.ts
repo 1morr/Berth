@@ -20,6 +20,7 @@ const LEADS = [
   'season_from_arc',
   'final_season',
   'air_date_run',
+  'published_in_run',
   'cour_offset',
   'absolute_group',
   'absolute_cumulative',

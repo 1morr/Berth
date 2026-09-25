@@ -20,7 +20,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 
 from berth.domain import (
     MediaSnapshot,
@@ -30,22 +30,13 @@ from berth.domain import (
 )
 from berth.domain import ReasonCode as Code
 from berth.parser.planner import episode_span, hold, note
+from berth.parser.publishing import BEHIND_LATEST, RELEASE_TOLERANCE
 
 #: 播出日比對把一列送審核時留下的理由。規劃器看到其中一條就把整份 Plan 的理由說成
 #: `ReviewReason.AIR_DATE_CONFLICT`（`services/plan._verdict`）。
 HELD_BY_AIRING: frozenset[Code] = frozenset(
     {Code.RELEASED_BEFORE_AIRING, Code.BEHIND_LATEST_EPISODE}
 )
-
-#: 發佈可以比 TMDB 的播出日早多少（使用者 2026-09-24 拍板）。TMDB 寫的是當地的播出日，發佈時間是
-#: UTC：日本深夜檔在 UTC 是前一天，對岸平台與日本同步時也差一天。
-RELEASE_TOLERANCE = timedelta(days=2)
-
-#: 規則二的「早很多」，同時是「還在連載」的窗口。量測（`scripts/experiments/air_date_lag.py`，
-#: 票 07 的三站 fixture 149 集 + 真的 TMDB）：28–56 天之間每一個門檻都只擋下同一筆慢發的補檔，
-#: 而 split-cour 從 01 重數時對到的那一集至少落後一整個 cour（每週一集就是 10–13 週）。
-#: 6 週落在兩者之間，慢幾週的字幕組不會被擋。
-BEHIND_LATEST = timedelta(weeks=6)
 
 
 def check_airing(

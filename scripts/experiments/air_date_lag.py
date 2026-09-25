@@ -450,10 +450,12 @@ def _print_real_rule_check(measurements: list[Measurement]) -> None:
     print(
         "\n--- BEHIND_LATEST 門檻掃描（規則二；monkeypatch berth.parser.airing.BEHIND_LATEST） ---"
     )
-    original = airing.BEHIND_LATEST
+    # 門檻自 M3 票 16 起住在 `parser.publishing`；`check_airing` 讀的是 airing 自己
+    # import 進來的那個名字，所以換 airing 模組裡的那一個（`vars()`：它不是公開屬性）。
+    original = BEHIND_LATEST
     try:
         for days in _REAL_RULE_THRESHOLDS_DAYS:
-            airing.BEHIND_LATEST = timedelta(days=days)
+            vars(airing)["BEHIND_LATEST"] = timedelta(days=days)
             flagged: list[tuple[Measurement, PlanItem]] = []
             for m in measurements:
                 (checked,) = check_airing(
@@ -477,7 +479,7 @@ def _print_real_rule_check(measurements: list[Measurement]) -> None:
                     f"pub={m.pub}"
                 )
     finally:
-        airing.BEHIND_LATEST = original
+        vars(airing)["BEHIND_LATEST"] = original
 
 
 def _cour_boundary(episodes: Sequence[EpisodeSnapshot]) -> tuple[int, int] | None:

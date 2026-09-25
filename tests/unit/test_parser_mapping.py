@@ -9,7 +9,7 @@
 
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 import pytest
 
@@ -92,14 +92,24 @@ def run(
     torrent: str = "",
     season_hint: int | None = None,
     episode_offset: int | None = None,
+    published: date | None = None,
 ) -> tuple[Candidate, ...]:
-    context = ParseContext(media=media, season_hint=season_hint, episode_offset=episode_offset)
+    context = ParseContext(
+        media=media,
+        season_hint=season_hint,
+        episode_offset=episode_offset,
+        published_at=at_noon(published) if published is not None else None,
+    )
     return map_episode(
         parse_release(name),
         structure_hints(path or name),
         context,
         release_name=torrent,
     )
+
+
+def at_noon(day: date) -> datetime:
+    return datetime(day.year, day.month, day.day, 12, tzinfo=UTC)
 
 
 def best(candidates: tuple[Candidate, ...]) -> tuple[int | None, int | None, MappingStrategy]:
@@ -310,6 +320,13 @@ class TestCourOffset:
 
         assert best(candidates) == (3, 13, MappingStrategy.EXPLICIT)
 
+    def test_an_episode_zero_in_part_two_is_not_the_last_episode_of_the_cour(self) -> None:
+        candidates = run(
+            "[Erai-raws] Shingeki no Kyojin Season 3 Part 2 - 00 [1080p].mkv", self.split_season()
+        )
+
+        assert all(item.strategy is not MappingStrategy.COUR_OFFSET for item in candidates)
+
     def test_part_one_is_the_plain_reading(self) -> None:
         candidates = run(
             "[Erai-raws] Shingeki no Kyojin Season 3 Part 1 - 05 [1080p].mkv", self.split_season()
@@ -500,6 +517,12 @@ class TestVirtualSeasons:
 
         assert candidates[0].confidence is Confidence.MEDIUM
 
+    def test_an_episode_zero_is_not_the_run_s_last_episode(self) -> None:
+        """`第二季 - 00` 曾經取到第二輪的最後一集（M3 票 16 的 code review 順手抓到）。"""
+        candidates = run("[LoliHouse] Re Zero 第二季 - 00 [WebRip 1080p].mkv", self.rezero())
+
+        assert candidates == ()
+
     def test_a_gap_under_the_threshold_does_not_split_a_season(self) -> None:
         """一季分兩 cour 只隔四個月是常態——切開的話季號提示就對不上了（研究 §6.4）。"""
         first = episodes(13, start=date(2020, 7, 8))
@@ -516,6 +539,283 @@ class TestVirtualSeasons:
         candidates = run("[Group] Show 第二季 - 05 [1080p].mkv", split)
 
         assert candidates == () or candidates[0].strategy is not MappingStrategy.AIR_DATE_OFFSET
+
+
+class TestPublishedRun:
+    """發佈時間挑得出是哪一輪時，集號照那一輪從 01 數（brief §6.4、plan §4.4，M3 票 16）。
+
+    分的是 `profile-effect.md` §4 的兩種讀法：照字面讀的那一集與「後面某輪從 01 重數的第 N 集」。
+    檔名分不出來，發佈時間分得出來——新的發佈發的是剛播的那一集。只有一種讀法是剛播的、
+    而它是重數的讀法，才算數。
+    """
+
+    #: Re:Zero 的形狀：TMDB 只有一季，裡面是三輪播出。第二輪的第 1 集是 S01E26（2020-07-08）。
+    def rezero(self) -> MediaSnapshot:
+        return TestVirtualSeasons().rezero()
+
+    #: 《死神》的形狀：第一季很長，第二季是隔了一年多的兩輪。第二季第二輪從 S02E14 開始。
+    bleach = show(
+        season(1, 50, start=date(2004, 10, 5)),
+        SeasonSnapshot(
+            season_number=2,
+            name="Thousand-Year Blood War",
+            episode_count=26,
+            air_date=date(2022, 10, 11),
+            episodes=episodes(13, start=date(2022, 10, 11))
+            + episodes(13, start=date(2023, 7, 8), first=14),
+        ),
+        title="Bleach",
+    )
+
+    def test_a_restart_in_a_merged_season_lands_in_the_run_being_aired(self) -> None:
+        """第二輪第 5 集播於 2020-08-05，兩天後發佈的 `- 05` 是 S01E30，不是 S01E05。"""
+        candidates = run(
+            "[Group] Re Zero - 05 [1080p].mkv", self.rezero(), published=date(2020, 8, 7)
+        )
+
+        assert best(candidates) == (1, 30, MappingStrategy.PUBLISHED_RUN)
+        assert candidates[0].confidence is Confidence.MEDIUM
+        assert (
+            why(
+                ReasonCode.PUBLISHED_IN_RUN,
+                published="2020-08-07",
+                run=2,
+                runs=3,
+                episode="S01E26",
+            )
+            in candidates[0].reasons
+        )
+
+    def test_without_a_publish_time_the_only_season_still_wins(self) -> None:
+        """沒有發佈時間就沒有證據：照舊讀成唯一那一季的第 5 集（手動匯入、認領）。"""
+        candidates = run("[Group] Re Zero - 05 [1080p].mkv", self.rezero())
+
+        assert best(candidates) == (1, 5, MappingStrategy.SINGLE_SEASON)
+
+    def test_a_restart_in_a_later_season_is_no_longer_only_reviewed(self) -> None:
+        """《死神》相剋譚的形狀：篇章名對不上季名，集號沒超過第一季——發佈時間分得開。"""
+        candidates = run(
+            "[Erai-raws] Bleach - Sennen Kessen Hen - Ketsubetsu Tan - 03 [1080p].mkv",
+            self.bleach,
+            published=date(2023, 7, 23),
+        )
+
+        assert best(candidates) == (2, 16, MappingStrategy.PUBLISHED_RUN)
+        assert candidates[0].confidence is Confidence.MEDIUM
+
+    def test_the_first_run_reads_the_number_as_it_is(self) -> None:
+        """第一季播出時發的 `- 05` 就是第一季第 5 集：兩種讀法在這裡是同一個答案。"""
+        candidates = run(
+            "[SubsPlease] Bleach - 05 (1080p).mkv", self.bleach, published=date(2004, 11, 3)
+        )
+
+        assert best(candidates) == (1, 5, MappingStrategy.PUBLISHED_RUN)
+        assert candidates[0].confidence is Confidence.MEDIUM
+
+    def test_a_batch_after_the_finale_maps_the_whole_range(self) -> None:
+        """整輪的合集在最後一集播出後不久發佈：頭尾都照那一輪換算。"""
+        candidates = run(
+            "[Erai-raws] Bleach - Sennen Kessen Hen - Ketsubetsu Tan - 01 ~ 13 [1080p].mkv",
+            self.bleach,
+            published=date(2023, 10, 20),
+        )
+
+        first = candidates[0]
+        assert (first.season, first.episode_start, first.episode_end) == (2, 14, 26)
+        assert first.strategy is MappingStrategy.PUBLISHED_RUN
+
+    def test_an_episode_the_run_has_not_aired_yet_is_not_that_run(self) -> None:
+        """第二輪才播到第 2 集時發的 `- 10`：重數的讀法不可能，照舊讀（第一季的舊集補檔）。"""
+        candidates = run(
+            "[Group] Re Zero - 10 [1080p].mkv", self.rezero(), published=date(2020, 7, 16)
+        )
+
+        assert best(candidates) == (1, 10, MappingStrategy.SINGLE_SEASON)
+
+    def test_long_after_every_run_there_is_no_telling(self) -> None:
+        """播完很久之後才發的（BD、補檔）：兩種讀法都說得通，照舊送審核。"""
+        candidates = run(
+            "[Group] Bleach - 03 [BD 1080p].mkv", self.bleach, published=date(2025, 5, 1)
+        )
+
+        assert best(candidates) == (1, 3, MappingStrategy.ABSOLUTE_CUMULATIVE)
+        assert candidates[0].confidence is Confidence.LOW
+
+    def test_a_season_that_just_ended_does_not_hide_the_next_one(self) -> None:
+        """前一季三週前播完、下一季上週開播：`- 02` 剛播的只有第二季的第 2 集。"""
+        back_to_back = show(
+            season(1, 12, start=date(2020, 1, 5)),
+            season(2, 12, start=date(2020, 4, 5)),
+        )
+
+        candidates = run("[Group] Show - 02 [1080p].mkv", back_to_back, published=date(2020, 4, 14))
+
+        assert best(candidates) == (2, 2, MappingStrategy.PUBLISHED_RUN)
+
+    def test_two_readings_that_both_just_aired_are_not_told_apart(self) -> None:
+        """三集的第一季剛播完、第二季就開播：兩個第 2 集都是這幾週播的，不猜。"""
+        crowded = show(
+            season(1, 3, start=date(2020, 1, 5)),
+            season(2, 12, start=date(2020, 2, 9)),
+        )
+
+        candidates = run("[Group] Show - 02 [1080p].mkv", crowded, published=date(2020, 2, 17))
+
+        assert best(candidates) == (1, 2, MappingStrategy.ABSOLUTE_CUMULATIVE)
+        assert candidates[0].confidence is Confidence.LOW
+
+    def test_a_late_first_episode_after_the_run_is_not_guessed(self) -> None:
+        """第三輪播完兩週才發的 `- 01`：那一輪的第 1 集八個月前就播了，多半是重播或補檔，不猜。
+
+        真實的例子是 shincaps 在第三輪播完之後錄的 `Re Zero kara Hajimeru Isekai Seikatsu - 01`
+        （nyaa 1957100），大小與片長像第一季第 1 集，不像第三輪那一集 91 分鐘的首播。
+        """
+        candidates = run(
+            "[shincaps] Re Zero kara Hajimeru Isekai Seikatsu - 01 (DISNEY 1440x1080).ts",
+            self.rezero(),
+            published=date(2025, 6, 9),
+        )
+
+        assert best(candidates) == (1, 1, MappingStrategy.SINGLE_SEASON)
+
+    def test_a_group_far_behind_the_run_is_not_guessed(self) -> None:
+        """第二輪的第 3 集七週前就播了：慢那麼多的發佈不算「剛播」，照舊讀，交給播出日比對。"""
+        candidates = run(
+            "[Group] Re Zero - 03 [1080p].mkv", self.rezero(), published=date(2020, 9, 10)
+        )
+
+        assert best(candidates) == (1, 3, MappingStrategy.SINGLE_SEASON)
+
+    def test_an_absolute_number_that_just_aired_is_left_to_the_absolute_reading(self) -> None:
+        """接著往下數的 `- 30`（第二輪第 5 集）：剛播的是字面那一集，不是任何一輪的重數。"""
+        candidates = run(
+            "[Group] Re Zero - 30 [1080p].mkv", self.rezero(), published=date(2020, 8, 7)
+        )
+
+        assert best(candidates) == (1, 30, MappingStrategy.SINGLE_SEASON)
+
+    def test_an_episode_zero_is_not_a_run_s_last_episode(self) -> None:
+        """`- 00` 不是任何一輪從 01 數的集數（code review 抓到：曾經取到那一輪的最後一集）。"""
+        candidates = run(
+            "[Group] Bleach - Sennen Kessen Hen - Ketsubetsu Tan - 00 [1080p].mkv",
+            self.bleach,
+            published=date(2023, 10, 3),
+        )
+
+        assert all(item.strategy is not MappingStrategy.PUBLISHED_RUN for item in candidates)
+
+    def test_a_date_in_the_file_name_still_has_the_last_word(self) -> None:
+        """檔名明說的播出日對不上推測出的那一集：推論輸給明說的，送審核。"""
+        candidates = run(
+            "Re.Zero.E05.2020-08-01.1080p.WEB.mkv", self.rezero(), published=date(2020, 8, 7)
+        )
+
+        assert best(candidates) == (1, 30, MappingStrategy.PUBLISHED_RUN)
+        assert candidates[0].confidence is Confidence.LOW
+        assert (
+            why(
+                ReasonCode.AIR_DATE_MISMATCH,
+                aired="2020-08-01",
+                episode="S01E30",
+                tmdb_aired="2020-08-05",
+            )
+            in candidates[0].reasons
+        )
+
+    def test_a_series_offset_is_not_second_guessed(self) -> None:
+        """RSS Series 的 offset 是人說的（plan §4.4「若有值則優先」）。"""
+        candidates = run(
+            "[Group] Re Zero - 05 [1080p].mkv",
+            self.rezero(),
+            episode_offset=50,
+            published=date(2020, 8, 7),
+        )
+
+        assert best(candidates)[2] is not MappingStrategy.PUBLISHED_RUN
+
+    def test_a_season_marker_still_beats_the_publish_time(self) -> None:
+        """明說的贏推論的：`第二季` 走虛擬季換算，不看發佈時間。"""
+        candidates = run(
+            "[LoliHouse] Re Zero 第二季 - 05 [WebRip 1080p].mkv",
+            self.rezero(),
+            published=date(2024, 11, 1),
+        )
+
+        assert best(candidates) == (1, 30, MappingStrategy.AIR_DATE_OFFSET)
+
+    def test_a_season_the_series_was_told_is_not_second_guessed(self) -> None:
+        """RSS Series 改正過的季號連 offset 一起說了（票 13）：`context` 的季號不推測。"""
+        candidates = run(
+            "[Group] Bleach - 03 [1080p].mkv",
+            self.bleach,
+            season_hint=2,
+            published=date(2023, 7, 23),
+        )
+
+        assert best(candidates) == (2, 3, MappingStrategy.CONTEXT)
+
+
+class TestPublishedRunWithinASeason:
+    """季號認得出來，但 TMDB 把那一季的好幾輪播出放在一起（M3 票 16）。
+
+    《死神》千年血戰篇：篇章名 `千年血战篇` 對到第 2 季，而第 2 季是四輪播出、字幕組每輪從 01 數。
+    桜都字幕组的禍進譚 `[08]` 發佈於第四輪第 8 集（S02E48）播出一週後——照字面讀是 S02E08。
+    """
+
+    bleach = TestPublishedRun.bleach
+
+    def test_a_restart_in_a_later_run_of_the_season(self) -> None:
+        candidates = run(
+            "[桜都字幕组] 死神 千年血战篇 / Bleach Thousand-Year Blood War [03][1080P].mkv",
+            self.bleach,
+            published=date(2023, 7, 23),
+        )
+
+        assert best(candidates) == (2, 16, MappingStrategy.PUBLISHED_RUN)
+        assert candidates[0].confidence is Confidence.MEDIUM
+        assert (
+            why(ReasonCode.SEASON_FROM_ARC, arc="Thousand-Year Blood War", season=2)
+            in candidates[0].reasons
+        )
+
+    def test_the_first_run_of_the_season_is_read_as_written(self) -> None:
+        """第一輪播出時的 `[03]`：字面讀法本來就是剛播的那一集，季號的來源照舊說話。"""
+        candidates = run(
+            "[桜都字幕组] 死神 千年血战篇 / Bleach Thousand-Year Blood War [03][1080P].mkv",
+            self.bleach,
+            published=date(2022, 10, 26),
+        )
+
+        assert best(candidates) == (2, 3, MappingStrategy.ARC_NAME)
+
+    def test_a_part_marker_says_which_run_it_is(self) -> None:
+        """`Part 1` 明說了是第一輪：發佈時間不推翻它。"""
+        candidates = run(
+            "[Group] Bleach Thousand-Year Blood War Part 1 - 03 [1080p].mkv",
+            self.bleach,
+            published=date(2023, 7, 23),
+        )
+
+        assert best(candidates)[:2] == (2, 3)
+        assert best(candidates)[2] is not MappingStrategy.PUBLISHED_RUN
+
+    def test_an_explicit_season_and_episode_are_taken_as_written(self) -> None:
+        """`S02E08` 明說了季與集（brief §6.4「顯式 `SxxEyy` → 直接採用」）：只有篇章名才推測。"""
+        candidates = run(
+            "[Group] Bleach S02E08 [1080p].mkv", self.bleach, published=date(2023, 8, 27)
+        )
+
+        assert best(candidates) == (2, 8, MappingStrategy.EXPLICIT)
+        assert candidates[0].confidence is Confidence.HIGH
+
+    def test_an_explicit_season_with_a_single_run_is_left_alone(self) -> None:
+        """那一季只有一輪時沒有別的讀法可以挑，明說的季號照舊 high。"""
+        candidates = run(
+            "[Group] Bleach S01 - 05 [1080p].mkv", self.bleach, published=date(2004, 11, 3)
+        )
+
+        assert best(candidates) == (1, 5, MappingStrategy.EXPLICIT)
+        assert candidates[0].confidence is Confidence.HIGH
 
 
 class TestSpecials:

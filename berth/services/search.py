@@ -236,9 +236,8 @@ async def search_torrents(
     found = _dedupe(row for _, rows in outcomes for row in rows)
     # 自己打了關鍵字時不篩：他要的就是那一串字，不是這部作品（票 08）。
     results = found if query.strip() else [row for row in found if _about(row, snapshot)]
-    context = _context(snapshot)
     return SearchView(
-        rows=tuple(_row(result, snapshot, context) for result in _take(results, RESULT_LIMIT)),
+        rows=tuple(_row(result, snapshot) for result in _take(results, RESULT_LIMIT)),
         total=len(results),
         discarded=len(found) - len(results),
         attempts=tuple(attempt for attempt, _ in outcomes),
@@ -447,16 +446,16 @@ def _dedupe(results: Iterable[IndexerResult]) -> list[IndexerResult]:
     )
 
 
-def _context(snapshot: MediaSnapshot | None) -> ParseContext:
+def _context(snapshot: MediaSnapshot | None, result: IndexerResult) -> ParseContext:
+    """發佈時間跟著每一列走：送單之後規劃也拿同一個時間推測虛擬季（M3 票 16）。"""
     return ParseContext(
         media=snapshot,
         route_collection_type=collection_type_for(snapshot.kind) if snapshot is not None else None,
+        published_at=result.published_at,
     )
 
 
-def _row(
-    result: IndexerResult, snapshot: MediaSnapshot | None, context: ParseContext
-) -> SearchResult:
+def _row(result: IndexerResult, snapshot: MediaSnapshot | None) -> SearchResult:
     """索引站回的一列 → 結果表的一列。
 
     解析只看發佈名：這時候還沒有 torrent 的檔案清單（那要等送單之後 qBittorrent 才報得出
@@ -464,7 +463,9 @@ def _row(
     而那正是它叫「預估」的理由。
     """
     info = parse_release(result.title)
-    candidates = map_episode(info, StructureHints(), context, release_name=result.title)
+    candidates = map_episode(
+        info, StructureHints(), _context(snapshot, result), release_name=result.title
+    )
     best = candidates[0] if candidates else None
     season = best.season if best is not None else None
     start = best.episode_start if best is not None else None

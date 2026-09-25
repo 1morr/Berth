@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, fields, replace
+from datetime import datetime
 from enum import StrEnum
 from pathlib import Path
 from typing import Any
@@ -93,6 +94,9 @@ class Fixture:
     episode_offset: int | None
     files: tuple[FileEntry, ...]
     expected: tuple[Expected, ...]
+    #: 索引站上的發佈時間（M3 票 16 起）。只有集號時解析器拿它推測是哪一輪播出；舊語料沒有它，
+    #: 等於來源沒給（手動匯入、認領）。
+    published_at: datetime | None = None
 
     def context(self, snapshot: MediaSnapshot) -> ParseContext:
         """解析器看得到的東西。快照是凍結的那一份，所以 benchmark 不連線。"""
@@ -100,6 +104,7 @@ class Fixture:
             media=snapshot,
             season_hint=self.season_hint,
             episode_offset=self.episode_offset,
+            published_at=self.published_at,
         )
 
     @property
@@ -295,7 +300,19 @@ def _fixture(raw: dict[str, Any]) -> Fixture:
         episode_offset=context.get("episode_offset"),
         files=tuple(FileEntry(rel_path=row["path"], size=row["size"]) for row in raw["files"]),
         expected=tuple(_expected(row) for row in raw["expected"]),
+        published_at=_published(raw["id"], raw.get("published_at")),
     )
+
+
+def _published(fixture_id: str, raw: str | None) -> datetime | None:
+    """語料的發佈時間一定要帶時區：索引站各有各的時區（Mikan 是 UTC+8、Nyaa 是 UTC），
+    沒寫時區的話推測虛擬季會安靜地差出一天（brief §20.12）。"""
+    if raw is None:
+        return None
+    found = datetime.fromisoformat(raw)
+    if found.tzinfo is None:
+        raise ValueError(f"{fixture_id}: published_at {raw!r} has no time zone")
+    return found
 
 
 def _expected(raw: dict[str, Any]) -> Expected:

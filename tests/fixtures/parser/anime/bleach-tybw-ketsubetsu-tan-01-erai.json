@@ -1,0 +1,14 @@
+{
+  "id": "anime/bleach-tybw-ketsubetsu-tan-01-erai",
+  "source_url": "https://nyaa.si/view/1692786",
+  "torrent_name": "[Erai-raws] Bleach - Sennen Kessen Hen - Ketsubetsu Tan - 01 [1080p][Multiple Subtitle] [ENG][POR-BR][SPA-LA][FRE][GER][ITA]",
+  "published_at": "2023-07-14T17:21:08+00:00",
+  "tmdb": "tv-30984",
+  "context": {"media": "tv:30984", "season_hint": null, "episode_offset": null},
+  "files": [
+    {"path": "[Erai-raws] Bleach - Sennen Kessen Hen - Ketsubetsu Tan - 01 [1080p][Multiple Subtitle][CA541793].mkv", "size": 1198999033}
+  ],
+  "expected": [
+    {"path": "[Erai-raws] Bleach - Sennen Kessen Hen - Ketsubetsu Tan - 01 [1080p][Multiple Subtitle][CA541793].mkv", "kind": "video", "action": "import", "season": 2, "episode": 14, "tags": {"resolution": "1080p", "subs": ["EN"], "group": "Erai-raws"}, "target": "Bleach (2004) [tmdbid-30984]/Season 02/Bleach (2004) - S02E14 - The Last 9 Days [1080p][EN][Erai-raws].mkv"}
+  ]
+}

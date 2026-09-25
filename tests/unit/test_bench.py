@@ -6,7 +6,9 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import fields
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -43,8 +45,9 @@ TARGET = "Show (2020) [tmdbid-1]/Season 01/Show (2020) - S01E02.mkv"
 #: 票 14c 補了「只有集號、TMDB 上多季」的動漫三筆、劇集兩筆（brief §20.4）；
 #: 票 14d 補了「集號 ≤ 第一季集數」兩個方向的動漫各一筆（每 cour 重數、第一季的無季號發佈）；
 #: 票 14f 補了「季號剛好等於方括號集號」的動漫兩筆（TMDB 一季、多季各一）；
-#: M2 票 01 補了「`Season 3 - 50` 的破折號集號」的動漫兩筆（guessit 各錯一種寫法）。
-CORPUS_SHAPE = {"anime": 20, "tv": 10, "movie": 4}
+#: M2 票 01 補了「`Season 3 - 50` 的破折號集號」的動漫兩筆（guessit 各錯一種寫法）；
+#: M3 票 16 補了「每輪從 01 重數、發佈時間說得出是哪一輪」的動漫四筆。
+CORPUS_SHAPE = {"anime": 24, "tv": 10, "movie": 4}
 
 
 @pytest.fixture(scope="module")
@@ -95,6 +98,29 @@ class TestCorpus:
         """
         for fixture in load_corpus(CORPUS_ROOT):
             assert load_snapshot(SNAPSHOT_ROOT, fixture.tmdb).tmdb_id > 0
+
+    def test_the_publish_time_reaches_the_parser(self, tmp_path: Path) -> None:
+        """M3 票 16：只有集號時解析器拿發佈時間推測是哪一輪播出，語料要帶得進去。"""
+        _write_fixture(tmp_path, published_at="2024-12-30T02:15:00+08:00")
+
+        (fixture,) = load_corpus(tmp_path)
+        context = fixture.context(load_snapshot(SNAPSHOT_ROOT, "tv-30984"))
+
+        assert context.published_at == datetime(2024, 12, 29, 18, 15, tzinfo=UTC)
+
+    def test_a_fixture_without_a_publish_time_has_none(self, tmp_path: Path) -> None:
+        _write_fixture(tmp_path)
+
+        (fixture,) = load_corpus(tmp_path)
+
+        assert fixture.published_at is None
+
+    def test_a_publish_time_without_a_time_zone_is_refused(self, tmp_path: Path) -> None:
+        """Mikan 寫 UTC+8、Nyaa 寫 UTC：沒寫時區的話推測會安靜地差出一天。"""
+        _write_fixture(tmp_path, published_at="2024-12-30T02:15:00")
+
+        with pytest.raises(ValueError, match="no time zone"):
+            load_corpus(tmp_path)
 
 
 class TestReport:
@@ -276,6 +302,20 @@ class TestScoring:
         item = _item(PlanAction.IMPORT, 1, 2, confidence=Confidence.MEDIUM)
 
         assert bucket(expected, item) is Bucket.AUTO_CORRECT
+
+
+def _write_fixture(root: Path, **extra: str) -> None:
+    raw = {
+        "id": "anime/example",
+        "source_url": "https://example.org/1",
+        "torrent_name": "[Group] Bleach - 01",
+        "tmdb": "tv-30984",
+        "context": {"media": "tv:30984"},
+        "files": [{"path": "[Group] Bleach - 01.mkv", "size": 1}],
+        "expected": [],
+        **extra,
+    }
+    (root / "example.json").write_text(json.dumps(raw), encoding="utf-8")
 
 
 def _baseline(**overrides: int) -> Baseline:

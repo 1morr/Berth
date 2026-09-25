@@ -912,7 +912,7 @@ async def _in_library(session: AsyncSession, item: RssItem, series: RssSeries) -
     (guess,) = decide(
         item.title,
         [FileEntry(rel_path="episode.mkv", size=_EPISODE_SIZE)],
-        parse_context(route, snapshot, series),
+        parse_context(route, snapshot, series, published=item.published_at),
     )
     span = episode_span(guess)
     if span is None or not guess.target_path:

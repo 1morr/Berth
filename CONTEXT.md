@@ -165,7 +165,7 @@ _Avoid_: match, guess
 
 **Mapping Strategy**（簡稱 Strategy）:
 Candidate 的季集是怎麼決定的：explicit / folder / context / arc_name / single_season /
-absolute_group / absolute_cumulative / air_date_offset / cour_offset / movie。
+absolute_group / absolute_cumulative / air_date_offset / cour_offset / published_run / movie。
 _Avoid_: method, rule, source
 
 **Arc name**（篇章名）:

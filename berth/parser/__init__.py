@@ -3,11 +3,12 @@
 沒有 IO，也不 import 任何會做 IO 的東西——benchmark 因此可以離線跑（plan §4）。
 """
 
-from berth.parser.airing import BEHIND_LATEST, HELD_BY_AIRING, RELEASE_TOLERANCE, check_airing
+from berth.parser.airing import HELD_BY_AIRING, check_airing
 from berth.parser.cjk import langs_in, normalize_cjk
 from berth.parser.classify import SAMPLE_RATIO, SHORT_FEATURE, classify, kind_by_extension
 from berth.parser.mapping import VIRTUAL_SEASON_GAP, map_episode
 from berth.parser.planner import episode_span, plan, promote, revise, written_episode
+from berth.parser.publishing import BEHIND_LATEST, RELEASE_TOLERANCE
 from berth.parser.release import merge_release, parse_release, tags_of
 from berth.parser.runtime import HELD_BY_RUNTIME, RUNTIME_RATIO, RUNTIME_SLACK, check_runtime
 from berth.parser.structure import StructureHints, structure_hints

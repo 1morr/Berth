@@ -1,0 +1,14 @@
+{
+  "id": "anime/bleach-tybw-kashin-tan-08-sakurato",
+  "source_url": "https://mikanani.me/Home/Episode/e1ccef77859a11f74bd69f55ebc0d263b10bd2fa",
+  "torrent_name": "[桜都字幕组] 死神 千年血战篇-祸进谭- / Bleach： Sennen Kessen Hen - Kashin Tan [08][1080P][简繁内封]",
+  "published_at": "2026-09-19T19:29:13+00:00",
+  "tmdb": "tv-30984",
+  "context": {"media": "tv:30984", "season_hint": null, "episode_offset": null},
+  "files": [
+    {"path": "[Sakurato] Bleach： Sennen Kessen Hen - Kashin Tan [08][HEVC-10bit 1080P AAC][CHS&CHT].mkv", "size": 715600580}
+  ],
+  "expected": [
+    {"path": "[Sakurato] Bleach： Sennen Kessen Hen - Kashin Tan [08][HEVC-10bit 1080P AAC][CHS&CHT].mkv", "kind": "video", "action": "import", "season": 2, "episode": 48, "tags": {"resolution": "1080p", "subs": ["CHS", "CHT"], "group": "Sakurato"}, "target": "Bleach (2004) [tmdbid-30984]/Season 02/Bleach (2004) - S02E48 - THE END TWO WORLD [1080p][CHS+CHT][Sakurato].mkv"}
+  ]
+}

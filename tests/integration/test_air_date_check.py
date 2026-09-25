@@ -7,6 +7,9 @@
 - 還沒播到：同一部晚兩個月開播，發佈早於換算出的那一集的播出日（規則一）；
 - 連載中的 split-cour：TMDB 併成一季，第二 cour 正在播，字幕組從 01 重數而 offset 沒設（規則二）。
 
+RSS Series 沒設季號時，解析器先拿發佈時間推測是哪一輪播出（M3 票 16，`TestPublishedRun`）：
+推測出的集數照樣過這一道比對。
+
 手動送單走同一個 torrent，只是發佈時間來自索引站的 `publishDate`（`JobSource.published_at`）。
 """
 
@@ -23,19 +26,22 @@ from berth.adapters.rss.fake import FakeFeedFetcher
 from berth.domain import (
     EpisodeSnapshot,
     EventType,
+    FeedItemStatus,
     JobState,
     JobTrigger,
     MediaSnapshot,
     PlanAction,
     ReasonCode,
     ReviewReason,
+    SkipCode,
     why,
 )
-from berth.models import Event, Job, LedgerEntry, PlanItem
+from berth.models import Event, Job, LedgerEntry, PlanItem, RssItem
 from berth.services.jobs import JobSource, add_download
 from berth.services.review import PlanRow, review_queue
 from berth.services.rss import add_feed, bind_series, poll_feed
 from tests.integration.arrange import arrange, factory_for
+from tests.integration.factories import FakeClientFactory
 from tests.integration.test_rss import (
     FEED,
     FEED_URL,
@@ -51,6 +57,7 @@ from tests.integration.test_rss import (
     series_by_key,
     torrents,
 )
+from tests.integration.test_rss_screen import Release, reason, serve
 
 pytestmark = pytest.mark.asyncio
 
@@ -108,9 +115,13 @@ def airing_split_cour() -> MediaSnapshot:
 
 
 async def delivered_by_rss(
-    session: AsyncSession, roots: dict[str, Path], snapshot: MediaSnapshot
-) -> None:
-    """feed 輪一次 → 綁定（第一季、確認過，排除第一批的 audit）→ 兩集下載完、規劃、入庫。"""
+    session: AsyncSession,
+    roots: dict[str, Path],
+    snapshot: MediaSnapshot,
+    *,
+    season: int | None = 1,
+) -> FakeClientFactory:
+    """feed 輪一次 → 綁定（預設第一季、確認過，排除第一批的 audit）→ 兩集下載完、規劃、入庫。"""
     await arrange(session, roots)
     media = await kimi(session, snapshot=snapshot)
     route = await anime_route(session, roots)
@@ -120,11 +131,12 @@ async def delivered_by_rss(
     feed = await add_feed(session, url=FEED_URL, name="Mikan")
     await poll_feed(session, factory, feed.id, now=NOW)
     series = await series_by_key(session, KIMI_KEY)
-    series.season = 1
+    series.season = season
     series.confirmed = True
     await session.commit()
     await bind_series(session, factory, series.id, media_id=media.id, route_id=route.id, user_id=1)
     await run_pipeline(session, factory, roots)
+    return factory
 
 
 async def jobs(session: AsyncSession) -> list[Job]:
@@ -202,6 +214,112 @@ class TestRss:
             aired="2026-03-19",
             latest="S01E24",
             latest_aired="2026-09-17",
+        ).model_dump(mode="json")
+
+
+def weekly(first: date, episodes: int) -> tuple[date, ...]:
+    return tuple(first + timedelta(days=7 * index) for index in range(episodes))
+
+
+def two_runs(first: date, second: tuple[date, ...]) -> MediaSnapshot:
+    """TMDB 併成一季的兩輪播出：12 集從 `first` 起每週一集，第二輪照 `second` 的日期播。
+
+    兩輪隔超過 180 天（plan §4.4 的虛擬季），所以解析器看得出這是兩輪。
+    """
+    season = kimi_snapshot().seasons[0]
+    dates = (*weekly(first, 12), *second)
+    episodes = tuple(
+        EpisodeSnapshot(episode_number=number, name=f"Episode {number}", air_date=aired)
+        for number, aired in enumerate(dates, start=1)
+    )
+    return kimi_snapshot().model_copy(
+        update={
+            "first_air_date": first,
+            "seasons": (
+                season.model_copy(
+                    update={
+                        "air_date": first,
+                        "episode_count": len(episodes),
+                        "episodes": episodes,
+                    }
+                ),
+            ),
+        }
+    )
+
+
+class TestPublishedRun:
+    """RSS Series 沒設季號，字幕組的 11、12 是第二輪從 01 重數的（M3 票 16）。
+
+    推測與驗證同時在：推測換算出第二輪的集數，播出日比對照樣比它（沒有被繞過）。推測只收剛播的
+    讀法，所以比對只在邊角擋得下它：最近播出的一集在發佈後兩天內才播、
+    而且晚了六週以上（plan §4.4）。
+    """
+
+    async def test_the_run_on_air_is_where_a_restart_lands(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """第二輪七月開播，11、12 在 09-10、09-17 播出：一週後發佈的就是 S01E23、E24。"""
+        await delivered_by_rss(
+            session,
+            roots,
+            two_runs(date(2025, 7, 3), weekly(date(2026, 7, 2), 12)),
+            season=None,
+        )
+
+        assert {job.state for job in await jobs(session)} == {JobState.IMPORTED}
+        entries = await session.scalars(select(LedgerEntry).order_by(LedgerEntry.episode_start))
+        assert [(row.season, row.episode_start) for row in entries] == [(1, 23), (1, 24)]
+        items = await session.scalars(select(PlanItem).where(PlanItem.action == PlanAction.IMPORT))
+        codes = [[reason["code"] for reason in row.reasons_json or []] for row in items]
+        assert all(ReasonCode.PUBLISHED_IN_RUN.value in row for row in codes)
+
+    async def test_a_reupload_of_a_guessed_episode_is_known_before_sending(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """送單前比帳本（`rss._in_library`）與規劃用同一個發佈時間：換了 hash 重新上傳的 12
+        認得出就是帳本上的 S01E24，不會照字面猜成 S01E12 而再下載一次。"""
+        factory = await delivered_by_rss(
+            session,
+            roots,
+            two_runs(date(2025, 7, 3), weekly(date(2026, 7, 2), 12)),
+            season=None,
+        )
+        again = Release(370, KIMI[0].title)
+        assert again.hash != KIMI[0].info_hash
+        serve(factory, FEED_URL + "&again=1", [again])
+        feed = await add_feed(session, url=FEED_URL + "&again=1", name="Again")
+
+        await poll_feed(session, factory, feed.id, now=NOW + timedelta(hours=1))
+
+        (row,) = list(await session.scalars(select(RssItem).where(RssItem.feed_id == feed.id)))
+        assert row.status is FeedItemStatus.DUPLICATE
+        skip = reason(row)
+        assert skip is not None and skip.code is SkipCode.IN_LIBRARY
+        assert "S01E24" in str(skip.params["known"])
+
+    async def test_a_guessed_episode_far_behind_the_latest_still_waits_in_review(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """第二輪的第 11 集 08-11 播出、之後停播六週，第 12 集 09-24 才播。
+
+        11 在 09-22 發佈：離它播出剛好六週，推測得出 S01E23；但發佈當時最近播出的已經是
+        S01E24，比它晚了 44 天，播出日比對的規則二擋下它。12 照常入庫。
+        """
+        second = (*weekly(date(2026, 6, 2), 11), date(2026, 9, 24))
+        await delivered_by_rss(session, roots, two_runs(date(2025, 7, 3), second), season=None)
+
+        assert {job.state for job in await jobs(session)} == {JobState.REVIEW, JobState.IMPORTED}
+        entries = await session.scalars(select(LedgerEntry))
+        assert [(row.season, row.episode_start) for row in entries] == [(1, 24)]
+        (held,) = await held_reasons(session)
+        assert held[0]["code"] == ReasonCode.PUBLISHED_IN_RUN.value
+        assert held[-1] == why(
+            ReasonCode.BEHIND_LATEST_EPISODE,
+            episode="S01E23",
+            aired="2026-08-11",
+            latest="S01E24",
+            latest_aired="2026-09-24",
         ).model_dump(mode="json")
 
 

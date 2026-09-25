@@ -175,6 +175,36 @@ Mikan 下載 `.torrent` 解出檔案清單（單檔 torrent，infohash 與 Mikan
 - 集名裡的 `|` 進不了檔名（`naming.sanitize`），所以 `target` 上是
   `Austin's Troubles A Normal Mixer Moon Landing`。
 
+## v6 補的四筆（2026-09-26，M3 票 16）
+
+**每一輪播出從 01 重數，而發佈時間說得出是哪一輪**（plan §4.4「以發佈時間推測虛擬季」）。四筆都是
+《死神 千年血戰篇》：TMDB 把 2022–2026 的四輪併成第 2 季（S02E01–E50，輪與輪之間都隔了超過 180 天）。
+前三筆的篇章名（`Ketsubetsu Tan` / `Kashin Tan`）對不到季名，票 16 之前掉進絕對編號換算，被「集號 ≤
+第一季集數」送審核（與 v3 的相剋譚同一個形狀）；第四筆的篇章名對得到第 2 季，卻照字面讀成 S02E08，
+**票 16 之前以 medium 自動入錯**（`auto_wrong` 1，這一票的紅燈）。前三筆從 nyaa 下載 `.torrent`、第四筆從
+Mikan 下載，解出檔案清單（都是單檔 torrent，infohash 與來源頁一致）；語料變成動漫 24、劇集 10、電影 4。
+
+| id | 為什麼是它 |
+| --- | --- |
+| `anime/bleach-tybw-ketsubetsu-tan-01-erai` | 第二輪（訣別譚）的 `- 01`。正確答案 **S02E14** `The Last 9 Days`（2023-07-08 播出）。Erai-raws 晚了 6 天才發（2023-07-14）——發佈時間不必與播出同一天 |
+| `anime/bleach-tybw-kashin-tan-08-erai` | 第四輪（禍進譚）的 `- 08`。正確答案 **S02E48** `THE END TWO WORLD`（2026-09-12 播出，發佈是同一天 UTC 19:12）。這一輪還沒播完：S02E49 排在 2026-10-20 |
+| `anime/bleach-tybw-kashin-tan-08-shincaps` | 同一集的 AT-X 錄製：篇章名用波浪號包住（`~Kashin-tan~`）、`.ts`。AT-X 晚播，發佈在 2026-09-25，離 S02E48 首播 13 天 |
+| `anime/bleach-tybw-kashin-tan-08-sakurato` | **季號認得出、季內每輪重數**：`死神 千年血战篇-祸进谭- … [08]`，`千年血战篇` 就是 TMDB 第 2 季的簡體季名，照字面讀是 S02E08（2022 年播的）。正確答案 **S02E48**：Mikan 發佈於 2026-09-19（`pubDate` 是 UTC+8，換算後寫上 offset），S02E48 一週前播出 |
+
+- **`published_at` 是新的選填頂層欄位**（放在 `torrent_name` 後面）：索引站上這個 torrent 的發佈時間，
+  ISO 8601 且**一定帶時區**——Mikan 的 `pubDate` 是沒寫時區的 UTC+8，換算後寫上 offset；nyaa 與
+  AnimeTosho 是 UTC。解析器用它推測虛擬季；舊語料沒有它，等於來源沒給（手動匯入、認領）。
+- 正確答案是 TMDB 快照裡那一集的播出日與集名對上發佈時間，**不是**從新規則推出來的。
+- 四筆都沒有 `min_confidence`：與 v2 / v3 同一個理由，推測出來的該不該自動入庫正是它們要量的問題。
+- **兩筆舊語料補上了 `published_at`**：`spy-x-family-05-subsplease`（nyaa 1525282，2022-05-07，S01E05
+  當天播出——發佈時間說得出這是第一輪，review → 自動入庫）與 `bleach-tybw-soukoku-tan-erai`（nyaa
+  1950688 / AnimeTosho，2025-03-21：整輪合集在最後一集播出 82 天後才發，不算「剛播」，**照舊送審核**）。
+- 找過但沒收：Re:Zero 與芙莉蓮第二輪以後的發佈，Mikan 與 nyaa 上重數的全都帶季號（`第二季`、`S2`、
+  `2nd Season`、`3rd season`…），接續編號的（`- 51`、`[29]`）本來就對——「TMDB 併成一季、重數又沒有
+  季號」這個形狀沒找到真實樣本（由 `tests/unit/test_parser_mapping.py` 的 Re:Zero 形狀守著）。
+  shincaps 在 Re:Zero 第三輪播完兩週後錄的 `- 01`（nyaa 1957100）大小與片長像第一季第 1 集的重播，
+  查不到播出表所以不收；它是「只有剛播的讀法才算數」這條邊界的來由。
+
 ## 外掛字幕怎麼算（票 07 的決定）
 
 字幕檔的 `target` 是**它那個影片的目標路徑**換上字幕的副檔名與語言段（plan §5）。所以：

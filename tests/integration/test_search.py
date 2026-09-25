@@ -7,7 +7,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 import pytest
@@ -18,6 +18,7 @@ from berth.adapters.indexer import IndexerResult, SearchCapability
 from berth.adapters.indexer.fake import FakeIndexerSearch
 from berth.domain import (
     IndexerProblem,
+    MappingStrategy,
     MediaKind,
     Source,
     StepStatus,
@@ -293,6 +294,47 @@ async def test_each_row_carries_the_parser_verdict(session: AsyncSession) -> Non
     assert row.tags.group == "桜都字幕组"
     assert (row.season, row.episode_start, row.episode_end) == (3, 5, 5)
     assert row.whole_season is False
+
+
+@pytest.mark.asyncio
+async def test_the_estimate_reads_the_publish_time_like_planning_does(
+    session: AsyncSession,
+) -> None:
+    """M3 票 16：只有集號時，預估與送單之後的規劃一樣拿發佈時間推測是哪一輪播出。"""
+    await arrange_media(session)
+    await arrange_indexer(session)
+    first, second = date(2022, 4, 9), date(2026, 7, 4)
+    aired = [first + timedelta(weeks=n) for n in range(12)]
+    aired += [second + timedelta(weeks=n) for n in range(12)]
+    await restyle(
+        session,
+        seasons=[
+            {
+                "season_number": 1,
+                "name": "Season 1",
+                "episode_count": 24,
+                "episodes": [
+                    {"episode_number": n, "name": f"E{n}", "air_date": day.isoformat()}
+                    for n, day in enumerate(aired, start=1)
+                ],
+            }
+        ],
+    )
+    indexer = FakeIndexerSearch(
+        results=(
+            result(
+                "[Group] Spy x Family - 05 [1080p]",
+                info_hash="d" * 40,
+                published_at=datetime(2026, 8, 3, 15, tzinfo=UTC),
+            ),
+        )
+    )
+    factory = FakeClientFactory(indexer_search=indexer)
+
+    view = await search_torrents(session, factory, media_id=SPY)
+
+    row = view.rows[0]
+    assert (row.season, row.episode_start, row.strategy) == (1, 17, MappingStrategy.PUBLISHED_RUN)
 
 
 @pytest.mark.asyncio

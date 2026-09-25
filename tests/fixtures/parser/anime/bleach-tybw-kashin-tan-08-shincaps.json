@@ -1,0 +1,14 @@
+{
+  "id": "anime/bleach-tybw-kashin-tan-08-shincaps",
+  "source_url": "https://nyaa.si/view/2165985",
+  "torrent_name": "[shincaps] BLEACH Sennen Kessen-hen ~Kashin-tan~ - 08 (AT-X 1440x1080 MPEG2 AAC).ts",
+  "published_at": "2026-09-25T13:00:28+00:00",
+  "tmdb": "tv-30984",
+  "context": {"media": "tv:30984", "season_hint": null, "episode_offset": null},
+  "files": [
+    {"path": "[shincaps] BLEACH Sennen Kessen-hen ~Kashin-tan~ - 08 (AT-X 1440x1080 MPEG2 AAC).ts", "size": 2848175372}
+  ],
+  "expected": [
+    {"path": "[shincaps] BLEACH Sennen Kessen-hen ~Kashin-tan~ - 08 (AT-X 1440x1080 MPEG2 AAC).ts", "kind": "video", "action": "import", "season": 2, "episode": 48, "tags": {"resolution": "1080p", "group": "shincaps"}, "target": "Bleach (2004) [tmdbid-30984]/Season 02/Bleach (2004) - S02E48 - THE END TWO WORLD [1080p][shincaps].ts"}
+  ]
+}

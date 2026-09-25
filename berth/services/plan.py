@@ -208,7 +208,8 @@ async def proposal(session: AsyncSession, job: Job) -> dict[str, PlannedFile]:
     （`job_files.mediainfo_json`），不重抓也不重量。搬家本身走 rematch，這一支只回答「該在哪」。
     """
     contents, entries, route, snapshot, series = await _stored_facts(session, job)
-    items = _apply_policy(decide(job.name, entries, parse_context(route, snapshot, series)), route)
+    context = parse_context(route, snapshot, series, published=job.published_at)
+    items = _apply_policy(decide(job.name, entries, context), route)
     return {f"{contents.root}{item.rel_path}": item for item in items}
 
 
@@ -224,7 +225,7 @@ async def held_proposal(
     **程式檢查照常跑**：這幾列還沒入庫，新的值對不上播出日或片長的話要繼續擋著。
     """
     _, entries, route, snapshot, series = await _stored_facts(session, job)
-    context = parse_context(route, snapshot, series).model_copy(
+    context = parse_context(route, snapshot, series, published=job.published_at).model_copy(
         update={"season_hint": season, "episode_offset": offset}
     )
     decided = decide(job.name, entries, context)
@@ -459,12 +460,17 @@ async def _stored(session: AsyncSession, job: Job) -> MediaSnapshot | None:
 
 
 def parse_context(
-    route: Route | None, snapshot: MediaSnapshot | None, series: RssSeries | None
+    route: Route | None,
+    snapshot: MediaSnapshot | None,
+    series: RssSeries | None,
+    *,
+    published: datetime | None,
 ) -> ParseContext:
     """解析器看得到的東西（plan §4.3）。
 
     `season_hint` 與 `episode_offset` 是 RSS Series 帶進來的（brief §15：放在 RSS Series 上、
-    規劃時讀，M3 票 08）；手動送單的 Job 沒有它們。RSS 送單前比帳本也用它
+    規劃時讀，M3 票 08）；手動送單的 Job 沒有它們。`published` 是索引站給的發佈時間，只有集號
+    時解析器拿它推測是哪一輪播出（M3 票 16）。RSS 送單前比帳本也用它
     （`services/rss._in_library`，票 10）：同一份上下文，送單前猜的季集才會與規劃時算的一樣。
     """
     return ParseContext(
@@ -472,6 +478,7 @@ def parse_context(
         season_hint=series.season if series is not None else None,
         episode_offset=series.episode_offset if series is not None else None,
         route_collection_type=route.collection_type if route is not None else None,
+        published_at=published,
     )
 
 
@@ -559,7 +566,9 @@ def _decided(
     series: RssSeries | None,
 ) -> tuple[PlannedFile, ...]:
     """解析器的答案，再過程式檢查與 Route 的政策。正式那一份與 pre-plan 走同一條。"""
-    decided = decide(job.name, entries, parse_context(route, snapshot, series))
+    decided = decide(
+        job.name, entries, parse_context(route, snapshot, series, published=job.published_at)
+    )
     return _apply_policy(_program_checks(job, decided, entries, snapshot, series), route)
 
 
