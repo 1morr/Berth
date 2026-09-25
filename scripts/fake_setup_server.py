@@ -30,7 +30,13 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.routing import Route as StarletteRoute
 
-from berth.adapters.http import AuthFailedError, ServiceNotDeployedError, ServiceUnavailableError
+from berth.adapters.http import (
+    AuthFailedError,
+    ProtocolMismatchError,
+    ServiceBusyError,
+    ServiceNotDeployedError,
+    ServiceUnavailableError,
+)
 from berth.adapters.indexer import IndexerResult, IndexerSearch
 from berth.adapters.indexer.fake import FakeIndexerSearch
 from berth.adapters.indexer.prowlarr import ProwlarrSearch
@@ -43,6 +49,7 @@ from berth.adapters.jellyfin import (
     JellyfinImage,
     JellyfinItem,
     JellyfinLibrary,
+    JellyfinPublicInfo,
     JellyfinSource,
     ParentImage,
     TypeOption,
@@ -157,33 +164,40 @@ BLOCKED_SITES = {
     "animetosho-xyz": "Unable to connect to indexer, check the log above the ValidationFailure.",
 }
 
-#: 使用者自己那台 Jellyfin 的媒體庫。Anime 那個掛了 TVDB，用來看警告長什麼樣。
-NAS_LIBRARIES = (
-    JellyfinLibrary(
-        name="電影",
-        item_id="a1",
-        collection_type="movies",
-        locations=("/volume1/media/movies",),
-        type_options=(
-            TypeOption(
-                type="Movie", metadata_fetchers=("TheMovieDb",), image_fetchers=("TheMovieDb",)
+#: 使用者那台 NAS 上既有媒體庫的根目錄。`main()` 換成暫存目錄底下真的存在的一層：Route 的
+#: 第三條纜繩會 `stat()` 媒體庫的每一條路徑，寫死 `/volume1` 的話 `mixed` 的第 5 步在這台
+#: 機器上永遠紅，既有服務那條路就走不完（票 06h）。
+NAS_ROOT = "/volume1/media"
+
+
+def nas_libraries() -> tuple[JellyfinLibrary, ...]:
+    """使用者自己那台 Jellyfin 的媒體庫。Anime 那個掛了 TVDB，用來看警告長什麼樣。"""
+    return (
+        JellyfinLibrary(
+            name="電影",
+            item_id="a1",
+            collection_type="movies",
+            locations=(f"{NAS_ROOT}/movies",),
+            type_options=(
+                TypeOption(
+                    type="Movie", metadata_fetchers=("TheMovieDb",), image_fetchers=("TheMovieDb",)
+                ),
             ),
         ),
-    ),
-    JellyfinLibrary(
-        name="Anime",
-        item_id="a2",
-        collection_type="tvshows",
-        locations=("/volume1/media/anime",),
-        type_options=(
-            TypeOption(
-                type="Series",
-                metadata_fetchers=("TheTVDB", "TheMovieDb"),
-                image_fetchers=("TheTVDB",),
+        JellyfinLibrary(
+            name="Anime",
+            item_id="a2",
+            collection_type="tvshows",
+            locations=(f"{NAS_ROOT}/anime",),
+            type_options=(
+                TypeOption(
+                    type="Series",
+                    metadata_fetchers=("TheTVDB", "TheMovieDb"),
+                    image_fetchers=("TheTVDB",),
+                ),
             ),
         ),
-    ),
-)
+    )
 
 
 def nas_jellyfin(**overrides: object) -> FakeJellyfinClient:
@@ -193,7 +207,7 @@ def nas_jellyfin(**overrides: object) -> FakeJellyfinClient:
         "version": "12.0.0",
         "startup_wizard_completed": True,
         "admin": ("owner", "s3cret"),
-        "libraries": NAS_LIBRARIES,
+        "libraries": nas_libraries(),
     }
     return FakeJellyfinClient(**{**defaults, **overrides})  # type: ignore[arg-type]
 
@@ -316,14 +330,71 @@ def mixed() -> Scenario:
     )
 
 
+class StartingJellyfin(FakeJellyfinClient):
+    """還在啟動的 Jellyfin：前幾次 `public_info` 丟 `startup` 裡的錯，之後照常回答。"""
+
+    def __init__(self, *startup: Exception) -> None:
+        super().__init__()
+        self.startup = list(startup)
+
+    async def public_info(self) -> JellyfinPublicInfo:
+        if self.startup:
+            raise self.startup.pop(0)
+        return await super().public_info()
+
+
+class StartingQbittorrent(FakeQbittorrentClient):
+    """還在啟動的 qBittorrent：前幾次 `version` 丟 `startup` 裡的錯。"""
+
+    def __init__(self, *startup: Exception) -> None:
+        super().__init__()
+        self.startup = list(startup)
+
+    async def version(self) -> QbittorrentVersion:
+        if self.startup:
+            raise self.startup.pop(0)
+        return await super().version()
+
+
+class StartingProwlarr(FakeProwlarrClient):
+    """還在啟動的 Prowlarr：前幾次 `ping` 丟 `startup` 裡的錯。"""
+
+    def __init__(self, *startup: Exception, rejects: dict[str, str]) -> None:
+        super().__init__(rejects=rejects)
+        self.startup = list(startup)
+
+    async def ping(self) -> None:
+        if self.startup:
+            raise self.startup.pop(0)
+        await super().ping()
+
+
 def starting() -> Scenario:
-    """容器還在啟動：qBittorrent 連不上，其餘兩個已就緒。"""
+    """四個容器同時起來（票 06g 量到的時間線，票 06h 的冷啟動演練）。
+
+    照探測的次數演，不照秒數：前端每 3 秒探一次，所以 Jellyfin 約 9 秒、Prowlarr 約 15 秒
+    才起來。Jellyfin 先回不像它自己的東西、再回兩次 503「還在載入」；qBittorrent 第一次連不上；
+    Prowlarr 連不上五次。之後三個都是乾淨的套件內，與 `bundled` 一樣走得完——不必按重新探測。
+    """
+    refused = ServiceUnavailableError("connection refused")
+    loading = ServiceBusyError("GET /System/Info/Public: 503 still loading")
     return Scenario(
-        jellyfin=FakeJellyfinClient(),
-        qbittorrent=FakeQbittorrentClient(error=ServiceUnavailableError("connection refused")),
-        prowlarr=FakeProwlarrClient(),
-        prowlarr_api_key="",
+        jellyfin=StartingJellyfin(
+            ProtocolMismatchError("/System/Info/Public: not a Jellyfin public info payload"),
+            loading,
+            loading,
+        ),
+        qbittorrent=StartingQbittorrent(refused),
+        prowlarr=StartingProwlarr(*[refused] * 5, rejects=BLOCKED_SITES),
+        prowlarr_api_key="00000000000000000000000000000001",
     )
+
+
+def key_missing() -> Scenario:
+    """Prowlarr 的設定目錄沒有唯讀掛進 Berth：讀不到 API key，第 2 步要使用者貼上。"""
+    scenario = bundled()
+    scenario.prowlarr_api_key = ""
+    return scenario
 
 
 def absent() -> Scenario:
@@ -947,6 +1018,7 @@ SCENARIOS = {
     "signed-out": signed_out,
     "mixed": mixed,
     "starting": starting,
+    "key-missing": key_missing,
     "absent": absent,
     "old-jellyfin": old_jellyfin,
     "unmounted": unmounted,
@@ -1030,8 +1102,12 @@ def main(argv: list[str] | None = None) -> int:
     config = load_config({"CONFIG_ROOT": str(config_root), "DATA_ROOT": str(config_root / "data")})
 
     # 情境裡的下載連結指回這台 server 自己，所以 port 要在建情境之前就定下來。
-    global DEMO_PORT
+    global DEMO_PORT, NAS_ROOT
     DEMO_PORT = args.port
+    # 既有 Jellyfin 的媒體庫路徑也是：要真的存在，Route 的檢查才看得到它。
+    NAS_ROOT = (config_root / "nas").as_posix()
+    for folder in ("movies", "anime"):
+        (config_root / "nas" / folder).mkdir(parents=True, exist_ok=True)
 
     scenario = SCENARIOS[args.scenario]()
     factory = FakeClientFactory(scenario)
