@@ -1808,6 +1808,25 @@ export interface components {
             skipped: number;
         };
         /**
+         * BindReasonCode
+         * @description 一條綁定理由是哪一種。
+         * @enum {string}
+         */
+        BindReasonCode: "title_equal" | "premiere_near" | "release_near" | "only_route" | "no_candidate" | "premiere_far" | "several_candidates" | "no_premiere" | "lookup_failed" | "route_ambiguous" | "no_route";
+        /**
+         * BindReasonOut
+         * @description 自動綁定的一條理由：封閉集合的 code 加參數，句子由前端照 code 挑（`rss.grounds.*`，票 09）。
+         *
+         *     參數是標題、日期、Route 名這種**不翻譯**的事實（`ItemReasonOut` 同一個形狀）。
+         */
+        BindReasonOut: {
+            code: components["schemas"]["BindReasonCode"];
+            /** Params */
+            params: {
+                [key: string]: string | number;
+            };
+        };
+        /**
          * BindingIn
          * @description 綁到哪一部作品、入庫到哪一條 Route。作品要先打過 `GET /media/{id}`（它才有那一列）。
          */
@@ -1862,6 +1881,21 @@ export interface components {
             detail: string;
             /** Row */
             row?: number | null;
+        };
+        /**
+         * CandidateOut
+         * @description 待綁定那一列給人一鍵選的作品。
+         */
+        CandidateOut: {
+            /** Id */
+            id: string;
+            kind: components["schemas"]["MediaKind"];
+            /** Title */
+            title: string;
+            /** Title En */
+            title_en: string;
+            /** Year */
+            year: number | null;
         };
         /**
          * CollectionType
@@ -3243,6 +3277,8 @@ export interface components {
             items: number;
             /** Series */
             series: number;
+            /** Bound */
+            bound: number;
             /** Submitted */
             submitted: number;
         };
@@ -3708,6 +3744,10 @@ export interface components {
             bound_by: string;
             /** Waiting */
             waiting: number;
+            /** Reasons */
+            reasons: components["schemas"]["BindReasonOut"][];
+            /** Candidates */
+            candidates: components["schemas"]["CandidateOut"][];
             /** Submitted */
             submitted: number;
         };

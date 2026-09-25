@@ -13,7 +13,8 @@ from __future__ import annotations
 
 import logging
 import re
-from datetime import UTC, datetime, timedelta, timezone
+from dataclasses import dataclass
+from datetime import UTC, date, datetime, timedelta, timezone
 from html.parser import HTMLParser
 from typing import Any
 from urllib.parse import parse_qs, urljoin, urlsplit
@@ -25,6 +26,9 @@ from berth.adapters.http import ProtocolMismatchError
 from berth.adapters.rss import FeedItem
 
 logger = logging.getLogger(__name__)
+
+#: Mikan 本站。番組頁的網址由它與番組 id 組出來（`bangumi_url`）。
+MIKAN_BASE = "https://mikanani.me/"
 
 #: Mikan 的發佈時間所在的時區（brief §20.11）。
 MIKAN_TZ = timezone(timedelta(hours=8))
@@ -123,3 +127,69 @@ class _RssLink(HTMLParser):
         found = dict(attrs)
         if "mikan-rss" in (found.get("class") or "").split() and found.get("href"):
             self.hrefs.append(str(found["href"]))
+
+
+@dataclass(frozen=True, slots=True)
+class MikanBangumi:
+    """番組頁上自動綁定用得到的兩格（研究檔 §2.7、brief §15「綁定」）。"""
+
+    #: 中文名（多半是簡體）。讀不到是空字串。
+    title: str
+    #: 「放送开始」。讀不到是 `None`。
+    premiere: date | None
+
+
+#: 「放送开始：7/7/2026」。**M/D/YYYY**：番組頁同時寫的星期只對得上這種讀法（研究檔 §2.7）。
+_PREMIERE = re.compile(r"放送开始：\s*(\d{1,2})/(\d{1,2})/(\d{4})")
+
+
+def bangumi_url(bangumi_id: int) -> str:
+    return urljoin(MIKAN_BASE, f"/Home/Bangumi/{bangumi_id}")
+
+
+def bangumi_page(page: str) -> MikanBangumi:
+    """番組頁 → 中文名與開播日期。
+
+    中文名是第一個 `p.bangumi-title` 的文字（桌面版在前；裡面那顆 RSS 的 `<a>` 不算）。
+    頁上的中文字是數字字元參照，`HTMLParser` 預設就解開（`convert_charrefs`）。
+    """
+    finder = _BangumiTitle()
+    finder.feed(page)
+    found = _PREMIERE.search(page)
+    premiere: date | None = None
+    if found is not None:
+        month, day, year = (int(part) for part in found.groups())
+        try:
+            premiere = date(year, month, day)
+        except ValueError:
+            premiere = None
+    return MikanBangumi(title=" ".join("".join(finder.text).split()), premiere=premiere)
+
+
+class _BangumiTitle(HTMLParser):
+    """第一個 `class` 裡有 `bangumi-title` 的 `<p>` 的直屬文字（子元素裡的字不收）。"""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.text: list[str] = []
+        self._depth = 0
+        self._done = False
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if self._done:
+            return
+        if self._depth:
+            self._depth += 1
+        elif tag == "p" and "bangumi-title" in (dict(attrs).get("class") or "").split():
+            self._depth = 1
+
+    def handle_endtag(self, tag: str) -> None:
+        if not self._depth:
+            return
+        self._depth -= 1
+        if not self._depth:
+            self._done = True
+
+    def handle_data(self, data: str) -> None:
+        if self._depth == 1:
+            self.text.append(data)

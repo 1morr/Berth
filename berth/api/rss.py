@@ -18,7 +18,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from berth.api.deps import ClientFactoryDep, SessionDep
 from berth.api.errors import refusal_responses
 from berth.api.gate import current_user
-from berth.domain import FeedItemStatus, FeedKind, RssRefusal
+from berth.domain import BindReasonCode, FeedItemStatus, FeedKind, MediaKind, RssRefusal
 from berth.services.rss import (
     RssRejectedError,
     add_feed,
@@ -99,7 +99,33 @@ class PollOut(BaseModel):
 
     items: int
     series: int
+    #: 新長出的 Series 裡自動綁上的（票 09）。
+    bound: int
     submitted: int
+
+
+class BindReasonOut(BaseModel):
+    """自動綁定的一條理由：封閉集合的 code 加參數，句子由前端照 code 挑（`rss.grounds.*`，票 09）。
+
+    參數是標題、日期、Route 名這種**不翻譯**的事實（`ItemReasonOut` 同一個形狀）。
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    code: BindReasonCode
+    params: dict[str, str | int]
+
+
+class CandidateOut(BaseModel):
+    """待綁定那一列給人一鍵選的作品。"""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    kind: MediaKind
+    title: str
+    title_en: str
+    year: int | None
 
 
 class SeriesOut(BaseModel):
@@ -121,6 +147,10 @@ class SeriesOut(BaseModel):
     bound_by: str
     #: 還沒送出去的 Item：待綁定時是綁定之後會送出的那幾筆（確認區塊的「將送出 N 集」）。
     waiting: int
+    #: 自動綁定查到的結果：`bound_by` 是 `system` 時是依據，待綁定時是為什麼沒綁。沒查過是空的。
+    reasons: list[BindReasonOut]
+    #: 給人一鍵選的作品，照 TMDB 搜尋結果的順序。
+    candidates: list[CandidateOut]
     #: 只有綁定回的那一份有值：這一次送出去了幾筆。
     submitted: int
 

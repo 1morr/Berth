@@ -45,6 +45,8 @@ function series(overrides: Partial<RssSeries> = {}): RssSeries {
     episode_offset: null,
     bound_by: '',
     waiting: 2,
+    reasons: [],
+    candidates: [],
     submitted: 0,
     ...overrides,
   }
@@ -159,6 +161,128 @@ describe('RSS 頁', () => {
     await waitFor(() =>
       expect(screen.queryByRole('heading', { name: '待綁定' })).not.toBeInTheDocument(),
     )
+  })
+
+  it('自動綁定沒綁上的那一列說出為什麼，候選一鍵選定就走同一支綁定', async () => {
+    const TWO_ROUTES = {
+      ...KIMI,
+      routes: [
+        { id: 3, name: 'Anime', slug: 'anime', collection_type: 'tvshows' },
+        { id: 4, name: 'TV', slug: 'tv', collection_type: 'tvshows' },
+      ],
+    } as Media
+    const stub = render({
+      'GET /api/rss/series': {
+        body: [
+          series({
+            reasons: [
+              {
+                code: 'title_equal',
+                params: { clue: '与你相恋到生命尽头', title: '与你相恋到生命尽头' },
+              },
+              {
+                code: 'premiere_near',
+                params: { premiere: '2026-07-07', season: 1, aired: '2026-07-08' },
+              },
+              { code: 'route_ambiguous', params: { routes: 'Anime, TV' } },
+            ],
+            candidates: [
+              {
+                id: 'tv:262000',
+                kind: 'tv',
+                title: '與妳相戀到生命盡頭',
+                title_en: 'Kimishinu',
+                year: 2026,
+              },
+            ],
+          }),
+        ],
+      },
+      'GET /api/discover/search?q=Kimi%20ga%20Shinu%20made%20Koi%20wo%20Shitai': { body: FOUND },
+      'GET /api/media/tv%3A262000': { body: TWO_ROUTES },
+      'PUT /api/rss/series/7/binding': { body: { ...series(), submitted: 2 } },
+    })
+    renderApp('/rss')
+    const row = await screen.findByRole('article', { name: TITLE })
+
+    expect(within(row).getByText('沒有自動綁定：')).toBeInTheDocument()
+    expect(within(row).getByText('作品認出來了，但 Anime, TV 都收得下它')).toBeInTheDocument()
+    expect(
+      within(row).getByText('Mikan 寫 2026-07-07 開播，TMDB 第 1 季 2026-07-08 首播'),
+    ).toBeInTheDocument()
+
+    await userEvent.click(within(row).getByRole('button', { name: /選《與妳相戀到生命盡頭》/ }))
+
+    // 候選是按下的樣子；兩條 Route 不預選，選了才出現確認鍵。
+    const choices = within(row).getByRole('list', { name: '候選' })
+    expect(within(choices).getByRole('button', { name: /與妳相戀到生命盡頭/ })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+    expect(await within(row).findByText(KIMI.folder_name)).toBeInTheDocument()
+    // 搜尋回的就是候選那一部：不再列一次，也不說「沒有找到」。
+    expect(within(row).queryByRole('list', { name: '搜尋結果' })).not.toBeInTheDocument()
+    expect(within(row).queryByText(/沒有找到/)).not.toBeInTheDocument()
+    expect(within(row).queryByRole('button', { name: '綁定並送出 2 集' })).not.toBeInTheDocument()
+    await userEvent.selectOptions(within(row).getByRole('combobox'), '3')
+    await userEvent.click(within(row).getByRole('button', { name: '綁定並送出 2 集' }))
+
+    await waitFor(() => expect(sent(stub, 'PUT', '/api/rss/series/7/binding')).toHaveLength(1))
+    const [[, init]] = sent(stub, 'PUT', '/api/rss/series/7/binding')
+    expect(JSON.parse(String(init?.body))).toEqual({ media: 'tv:262000', route: 3 })
+  })
+
+  it('自動綁好的那一列說出依據', async () => {
+    render({
+      'GET /api/rss/series': {
+        body: [
+          series({
+            media_id: 'tv:262000',
+            media_title: '與妳相戀到生命盡頭',
+            route_id: 3,
+            route_name: 'Anime',
+            bound_by: 'system',
+            waiting: 0,
+            reasons: [
+              {
+                code: 'title_equal',
+                params: { clue: '与你相恋到生命尽头', title: '与你相恋到生命尽头' },
+              },
+              { code: 'only_route', params: { route: 'Anime' } },
+            ],
+          }),
+        ],
+      },
+    })
+    renderApp('/rss')
+
+    const row = await screen.findByRole('article', { name: '與妳相戀到生命盡頭' })
+    expect(within(row).getByText(/自動綁定/)).toBeInTheDocument()
+    expect(within(row).getByText('依據：')).toBeInTheDocument()
+    expect(within(row).getByText('收得下它的 Route 只有 Anime')).toBeInTheDocument()
+  })
+
+  it('人綁的那一列不說依據', async () => {
+    render({
+      'GET /api/rss/series': {
+        body: [
+          series({
+            media_id: 'tv:262000',
+            media_title: '與妳相戀到生命盡頭',
+            route_id: 3,
+            route_name: 'Anime',
+            bound_by: '1',
+            waiting: 0,
+            reasons: [{ code: 'several_candidates', params: { number: 2 } }],
+          }),
+        ],
+      },
+    })
+    renderApp('/rss')
+
+    const row = await screen.findByRole('article', { name: '與妳相戀到生命盡頭' })
+    expect(within(row).queryByText('依據：')).not.toBeInTheDocument()
+    expect(within(row).queryByText(/自動綁定/)).not.toBeInTheDocument()
   })
 
   it('聚合 feed 的 token 不整串印出來', async () => {

@@ -12,13 +12,14 @@ Series。所以刪 Feed 連它的 Item 一起刪（`CASCADE`），Series 與它�
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any
 
 from sqlalchemy import ForeignKey, Index, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from berth.domain import FeedItemStatus, FeedKind
 from berth.models.base import Base
-from berth.models.types import UtcDateTime, enum_column, utcnow
+from berth.models.types import JsonText, UtcDateTime, enum_column, utcnow
 
 #: 一個 Feed 預設多久輪詢一次（plan §3.2）。
 DEFAULT_INTERVAL_SEC = 15 * 60
@@ -65,6 +66,11 @@ class RssSeries(Base):
     episode_offset: Mapped[int | None] = mapped_column(default=None)
     #: 誰綁的：`system`（票 09 的自動綁定）或使用者 id（`events.actor` 的形狀）。沒綁是空字串。
     bound_by: Mapped[str] = mapped_column(Text, default="")
+    #: 第一次見到它時自動綁定查到的結果（票 09）：`domain.BindReason` 的 JSON。綁上了是依據，
+    #: 留在待綁定是為什麼。`None` 是沒查過（票 09 之前長出來的）。
+    reasons_json: Mapped[list[dict[str, Any]] | None] = mapped_column(JsonText, default=None)
+    #: 給人一鍵選的作品 id（`tv:<tmdb>`），照搜尋結果的順序。
+    candidates_json: Mapped[list[str] | None] = mapped_column(JsonText, default=None)
     created_at: Mapped[datetime] = mapped_column(UtcDateTime, default=utcnow)
 
 

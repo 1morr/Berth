@@ -69,6 +69,7 @@ from berth.adapters.qbittorrent.fake import FakeQbittorrentClient
 from berth.adapters.rss import FeedFetcher
 from berth.adapters.rss.client import HttpFeedFetcher
 from berth.adapters.rss.fake import FakeFeedFetcher
+from berth.adapters.rss.mikan import bangumi_url
 from berth.adapters.tmdb import (
     TmdbClient,
     TmdbDetail,
@@ -159,6 +160,7 @@ from tests.integration.test_rss import FEED as RSS_FEED
 from tests.integration.test_rss import FEED_URL as RSS_FEED_URL
 from tests.integration.test_rss import KIMI as RSS_KIMI
 from tests.integration.test_rss import KIMI_ID as RSS_KIMI_ID
+from tests.integration.test_rss import MIKAN as RSS_MIKAN
 from tests.integration.test_rss import episode_pages as rss_episode_pages
 
 #: 這台 demo server 自己聽在哪個 port。索引站給的下載連結指回它自己（送單時 Berth 真的會去抓），
@@ -1075,6 +1077,9 @@ def rss_scenario() -> Scenario:
     「Kimi ga Shinu made Koi wo Shitai」或「与你相恋到生命尽头」找得到那一部；那兩集的 `.torrent`
     換成這台自己生的，qBittorrent 收下就當場完成（`PlanningQbittorrent`），所以綁定之後幾秒
     `/jobs` 上就有兩筆、接著規劃與入庫。
+
+    票 09 起輪詢會自動綁定：這一部的番組頁在、TMDB 認得出它，但 TV 與 Anime 兩條 Route 都收劇集，
+    所以留在待綁定、作品預填成候選——畫面走的是「一鍵選定」那一條。
     """
     scenario = _planning(healthy(), RSS_PACKS)
     scenario.indexer_results = ()
@@ -1097,7 +1102,12 @@ def rss_scenario() -> Scenario:
         },
         translations={KIMI_DETAIL.tmdb_id: "與妳相戀到生命盡頭"},
     )
-    scenario.feed_pages = {RSS_FEED_URL: RSS_FEED, **rss_episode_pages()}
+    scenario.feed_pages = {
+        RSS_FEED_URL: RSS_FEED,
+        **rss_episode_pages(),
+        # 番組頁（票 09 的自動綁定讀它）：只有這一部的在，其餘十個查不到、留在待綁定。
+        bangumi_url(4009): (RSS_MIKAN / "home-bangumi.4009.html").read_bytes(),
+    }
     scenario.torrent_sources = {
         item.torrent_url: TorrentSource(
             info_hash=demo_torrent(release).info_hash, content=demo_torrent(release).raw

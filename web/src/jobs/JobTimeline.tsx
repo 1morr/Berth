@@ -8,6 +8,8 @@ import { Timestamp } from '../components/Timestamp'
 import type { PlanAction, ReviewReason } from '../api/plans'
 import { formatEpisode } from '../components/episodes'
 import { formatSize } from '../media/searchResult'
+import { Grounds } from '../rss/GroundsList'
+import { parseGrounds } from '../rss/grounds'
 import { EVENT_TYPES, type KnownEvent } from './eventTypes'
 import { JOB_SIGNAL, formatPercent } from './jobState'
 
@@ -119,7 +121,13 @@ interface Facing {
 const FACTS: Record<KnownEvent, (facing: Facing) => ReactNode> = {
   // trigger **不重覆**：它已經是列上的那塊中性色塊，而 payload 裡是未翻譯的原值。
   // 留下的是 route 的 slug——它與下一筆的 `berth-<slug>` 是同一個字，兩行讀得起來。
-  created: ({ payload }) => <Row>{text(payload.route) && `route=${text(payload.route)}`}</Row>,
+  // RSS 自動綁定送出的那一筆多一段依據（M3 票 09）：沒有人選作品，時間線要說得出憑什麼認的。
+  created: ({ t, payload }) => (
+    <>
+      <Row>{text(payload.route) && `route=${text(payload.route)}`}</Row>
+      <Grounds lead={t('jobs.timeline.grounds')} reasons={parseGrounds(payload.grounds)} />
+    </>
+  ),
   submitted: ({ payload }) => (
     <>
       <Row>{text(payload.category)}</Row>

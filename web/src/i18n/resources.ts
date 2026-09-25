@@ -1596,6 +1596,8 @@ const zhHant = {
       jellyfin: {
         scan: '通知沒送到。Jellyfin 自己的排程掃描會補上。',
       },
+      // RSS 自動綁定送出的那一筆（票 09）：沒有人選作品，時間線說出是憑什麼認的。
+      grounds: '自動綁定，依據：',
       files_one: '{{count}} 個檔案 · {{size}}',
       files_other: '{{count}} 個檔案 · {{size}}',
       resumed: '又動起來了',
@@ -2173,7 +2175,8 @@ const zhHant = {
       items_other: '{{count}} 筆',
       // 上一輪抓不到 Feed，或有幾筆的單集頁抓不到（那幾筆下一輪再試）。
       failed: '上一輪有問題',
-      polledNow: '這一輪：新 {{items}} 筆、長出 {{series}} 個 RSS Series、送出 {{sent}} 筆。',
+      polledNow:
+        '這一輪：新 {{items}} 筆、長出 {{series}} 個 RSS Series（自動綁定 {{bound}} 個）、送出 {{sent}} 筆。',
       poll: '立即輪詢',
       polling: '輪詢中…',
       delete: '刪除',
@@ -2192,6 +2195,8 @@ const zhHant = {
       label: '待綁定',
       waiting_one: '留著 {{count}} 集，綁定之後送出',
       waiting_other: '留著 {{count}} 集，綁定之後送出',
+      // 自動綁定查過、沒有綁上的那一列（票 09）。下面接 `rss.grounds.*` 的句子。
+      why: '沒有自動綁定：',
     },
     bind: {
       start: '綁定',
@@ -2213,6 +2218,9 @@ const zhHant = {
       kind: { tv: '劇集', movie: '電影' },
       done_one: '綁好了，送出 {{count}} 集。',
       done_other: '綁好了，送出 {{count}} 集。',
+      // 自動綁定認出來、留給人選的作品（票 09）：按一下就選定它，接著挑 Route、確認。
+      candidates: '候選',
+      pick: '選《{{title}}》',
     },
     bound: {
       title: 'RSS Series',
@@ -2227,6 +2235,24 @@ const zhHant = {
         '還沒送出去的集數回到待綁定；已經送出的下載與資料夾名不動。之後新出的集數會等你再綁一次。',
       unbinding: '解除中…',
       unbound: '已解除綁定。',
+      // `bound_by = system`（票 09）：畫面說得出為什麼是這一部。
+      automatic: '自動綁定',
+      grounds: '依據：',
+    },
+    // 自動綁定的理由（`domain.BindReasonCode`，票 09）。參數是原文，不翻譯；
+    // 佔位符由 `tests/unit/test_bind_reasons.py` 對後端的參數表逐句比對。
+    grounds: {
+      title_equal: '「{{clue}}」與 TMDB 的「{{title}}」同名',
+      premiere_near: 'Mikan 寫 {{premiere}} 開播，TMDB 第 {{season}} 季 {{aired}} 首播',
+      release_near: 'Mikan 寫 {{premiere}}，TMDB 的上映日是 {{aired}}',
+      only_route: '收得下它的 Route 只有 {{route}}',
+      no_candidate: 'TMDB 搜不到同名的作品',
+      premiere_far: '同名的 {{title}} 沒有一季在 {{premiere}}（Mikan 寫的開播日）前後首播',
+      several_candidates: '同名、開播日期也對得上的有 {{number}} 部',
+      no_premiere: 'Mikan 的番組頁沒寫開播日期，年份無從確認',
+      lookup_failed: 'Mikan 番組頁或 TMDB 這一次查不到（{{detail}}）',
+      route_ambiguous: '作品認出來了，但 {{routes}} 都收得下它',
+      no_route: '作品認出來了，但沒有啟用中的 Route 收得下它',
     },
     series: {
       key: '鍵',
@@ -3811,6 +3837,7 @@ const en: Translations<typeof zhHant> = {
       scanRequested_other: 'told about {{count}} file paths',
       resolved_one: 'found {{count}} file in Jellyfin',
       resolved_other: 'found {{count}} files in Jellyfin',
+      grounds: 'Bound automatically, because:',
       jellyfin: {
         scan: 'The notice did not get through. Jellyfin’s own scheduled scan will catch up.',
       },
@@ -4398,7 +4425,8 @@ const en: Translations<typeof zhHant> = {
       items_one: '{{count}} item',
       items_other: '{{count}} items',
       failed: 'Last round had problems',
-      polledNow: 'This round: {{items}} new items, {{series}} new RSS Series, {{sent}} sent.',
+      polledNow:
+        'This round: {{items}} new items, {{series}} new RSS Series ({{bound}} bound automatically), {{sent}} sent.',
       poll: 'Poll now',
       polling: 'Polling…',
       delete: 'Delete',
@@ -4417,6 +4445,7 @@ const en: Translations<typeof zhHant> = {
       label: 'To bind',
       waiting_one: 'Holding {{count}} episode until it is bound',
       waiting_other: 'Holding {{count}} episodes until it is bound',
+      why: 'Not bound automatically:',
     },
     bind: {
       start: 'Bind',
@@ -4438,6 +4467,8 @@ const en: Translations<typeof zhHant> = {
       kind: { tv: 'Series', movie: 'Film' },
       done_one: 'Bound. {{count}} episode sent.',
       done_other: 'Bound. {{count}} episodes sent.',
+      candidates: 'Candidates',
+      pick: 'Pick {{title}}',
     },
     bound: {
       title: 'RSS Series',
@@ -4452,6 +4483,23 @@ const en: Translations<typeof zhHant> = {
         'Episodes not yet sent go back to waiting; downloads already sent and the folder name stay. New episodes wait until you bind it again.',
       unbinding: 'Unbinding…',
       unbound: 'Unbound.',
+      automatic: 'Bound automatically',
+      grounds: 'Because:',
+    },
+    grounds: {
+      title_equal: '“{{clue}}” has the same name as “{{title}}” on TMDB',
+      premiere_near:
+        'Mikan says it started on {{premiere}}; TMDB season {{season}} premiered on {{aired}}',
+      release_near: 'Mikan says {{premiere}}; TMDB has it released on {{aired}}',
+      only_route: 'the only route that takes it is {{route}}',
+      no_candidate: 'nothing on TMDB has the same name',
+      premiere_far:
+        '{{title}} has the same name, but none of its seasons premiered near {{premiere}} (the start date on Mikan)',
+      several_candidates: '{{number}} titles have the same name and a matching start date',
+      no_premiere: 'the Mikan show page has no start date, so the year cannot be checked',
+      lookup_failed: 'the Mikan show page or TMDB could not be read this time ({{detail}})',
+      route_ambiguous: 'the title was recognised, but {{routes}} can all take it',
+      no_route: 'the title was recognised, but no enabled route takes it',
     },
     series: {
       key: 'Key',

@@ -92,11 +92,14 @@ class TestThePageFlow:
         assert (feed["kind"], feed["name"], feed["items"]) == ("mikan", "mikanani.me", 0)
 
         polled = client.post(f"/api/rss/feeds/{feed['id']}/poll", headers=BROWSER)
-        assert polled.json() == {"items": 12, "series": 11, "submitted": 0}
+        assert polled.json() == {"items": 12, "series": 11, "bound": 0, "submitted": 0}
 
         series = client.get("/api/rss/series").json()
         pending = next(row for row in series if row["key"] == KIMI_KEY)
         assert (pending["media_id"], pending["waiting"]) == (None, 2)
+        # 番組頁不在替身裡：自動綁定查不到，理由照封閉集合的形狀送出去（票 09）。
+        assert [reason["code"] for reason in pending["reasons"]] == ["lookup_failed"]
+        assert pending["candidates"] == []
 
         bound = client.put(
             f"/api/rss/series/{pending['id']}/binding",

@@ -10,6 +10,15 @@ export type Feed = Schemas['FeedOut']
 /** 一個 RSS Series。`media_id` 是 `null` 就是待綁定。 */
 export type RssSeries = Schemas['SeriesOut']
 
+/** 自動綁定的一條理由（`domain.BindReason`，票 09）：code 加不翻譯的參數。 */
+export type BindReason = Schemas['BindReasonOut']
+
+/** `domain.BindReasonCode`。 */
+export type BindReasonCode = Schemas['BindReasonCode']
+
+/** 待綁定那一列給人一鍵選的作品。 */
+export type Candidate = Schemas['CandidateOut']
+
 /** 一筆 Feed Item。 */
 export type FeedItem = Schemas['ItemOut']
 

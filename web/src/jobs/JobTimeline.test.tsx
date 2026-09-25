@@ -30,6 +30,46 @@ function render(rows: JobEvent[]) {
 }
 
 describe('Job 時間線', () => {
+  it('RSS 自動綁定送出的那一筆說出認作品的依據（M3 票 09）', () => {
+    renderWithProviders(
+      <JobTimeline
+        events={[
+          event({
+            actor: 'rss:7',
+            payload: {
+              trigger: 'rss',
+              route: 'anime',
+              grounds: [
+                {
+                  code: 'title_equal',
+                  params: { clue: '与你相恋到生命尽头', title: '与你相恋到生命尽头' },
+                },
+                { code: 'only_route', params: { route: 'Anime' } },
+                // 後端跑在前面時多出來的 code：少一句話，不印一條沒翻譯的 key。
+                { code: 'from_the_future', params: {} },
+              ],
+            },
+          }),
+        ]}
+      />,
+    )
+
+    // 外面那一串是時間線，裡面那一串是依據。
+    const [, grounds] = screen.getAllByRole('list')
+    expect(screen.getByText('自動綁定，依據：')).toBeInTheDocument()
+    expect(
+      within(grounds).getByText('「与你相恋到生命尽头」與 TMDB 的「与你相恋到生命尽头」同名'),
+    ).toBeInTheDocument()
+    expect(within(grounds).getByText('收得下它的 Route 只有 Anime')).toBeInTheDocument()
+    expect(within(grounds).getAllByRole('listitem')).toHaveLength(2)
+  })
+
+  it('有人選的作品不說依據', () => {
+    const line = render([event({ payload: { trigger: 'manual', route: 'anime' } })])
+
+    expect(line.queryByText('自動綁定，依據：')).not.toBeInTheDocument()
+  })
+
   it('檔案清單那一筆說得出幾個檔案與總大小', () => {
     const line = render([
       event({ type: 'metadata_received', payload: { file_count: 13, total_size: 1_400_000_000 } }),

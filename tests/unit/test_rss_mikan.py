@@ -5,13 +5,20 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from email.utils import parsedate_to_datetime
 
 import pytest
 
 from berth.adapters.http import ProtocolMismatchError
-from berth.adapters.rss.mikan import parse_feed, published_at, series_key
+from berth.adapters.rss.mikan import (
+    MikanBangumi,
+    bangumi_page,
+    bangumi_url,
+    parse_feed,
+    published_at,
+    series_key,
+)
 from tests.conftest import FIXTURES, read_fixture
 
 MIKAN = FIXTURES / "http" / "mikan"
@@ -127,3 +134,37 @@ class TestSeriesKey:
         )
 
         assert series_key(page) == (4009, 370)
+
+
+class TestBangumiPage:
+    """番組頁的中文名與「放送开始」（研究檔 §2.7，票 09 自動綁定的線索）。"""
+
+    def test_the_title_and_the_premiere_come_from_the_desktop_block(self) -> None:
+        page = read_fixture("http/mikan/home-bangumi.4009.html")
+
+        assert bangumi_page(page) == MikanBangumi(
+            title="与你相恋到生命尽头", premiere=date(2026, 7, 7)
+        )
+
+    def test_the_premiere_is_month_first(self) -> None:
+        """`7/6/2026` 是 7 月 6 日：番組頁寫的星期對得上 M/D，對不上 D/M（研究檔 §2.7）。"""
+        page = '<p class="bangumi-title">X</p><p class="bangumi-info">放送开始：7/6/2026</p>'
+
+        assert bangumi_page(page).premiere == date(2026, 7, 6)
+
+    @pytest.mark.parametrize(
+        "info",
+        [
+            "",
+            '<p class="bangumi-info">放送开始：</p>',
+            '<p class="bangumi-info">放送开始：13/40/2026</p>',
+        ],
+    )
+    def test_a_missing_or_unreadable_premiere_is_none(self, info: str) -> None:
+        assert bangumi_page(f'<p class="bangumi-title">X</p>{info}').premiere is None
+
+    def test_a_page_without_a_title_gives_an_empty_title(self) -> None:
+        assert bangumi_page("<html></html>") == MikanBangumi(title="", premiere=None)
+
+    def test_the_page_address_is_built_from_the_bangumi_id(self) -> None:
+        assert bangumi_url(4009) == "https://mikanani.me/Home/Bangumi/4009"

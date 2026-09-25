@@ -47,6 +47,7 @@ from berth.adapters.http import ServiceError
 from berth.adapters.qbittorrent import TorrentAdd, ensure_category
 from berth.adapters.torrent import TorrentSource
 from berth.domain import (
+    BindReason,
     EventType,
     HealthStatus,
     JobRefusal,
@@ -278,8 +279,12 @@ async def add_download(
     user_id: int | None,
     trigger: JobTrigger = JobTrigger.MANUAL,
     trigger_ref: str = "",
+    grounds: Sequence[BindReason] = (),
 ) -> AddDownloadOutcome:
     """把一個 torrent 送進 qBittorrent，並替它建一筆 Job（plan §3.1）。
+
+    `grounds` 是**沒有人選作品**時認出它的依據（RSS Series 自動綁定，M3 票 09）：寫進 `created`
+    事件，時間線說得出「為什麼是這一部」。有人選的（手動送單、人綁的 Series）不帶。
 
     磁碟門檻在要 torrent **之前**看：RSS 每一輪都會把還沒送出去的那幾筆再送一次，磁碟滿著的
     那段時間每一筆都去索引站要一次 torrent 只是白打。代價是索引站不報 hash 的那一筆重複送單
@@ -328,6 +333,11 @@ async def add_download(
                     "media": media.id,
                     "route": route.slug,
                     "name": source.title,
+                    **(
+                        {"grounds": [ground.model_dump(mode="json") for ground in grounds]}
+                        if grounds
+                        else {}
+                    ),
                 },
             )
             await session.commit()

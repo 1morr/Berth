@@ -162,6 +162,7 @@ function FeedRow({ feed }: { feed: Feed }) {
           t('rss.feeds.polledNow', {
             items: polled.items,
             series: polled.series,
+            bound: polled.bound,
             sent: polled.submitted,
           })}
       </p>

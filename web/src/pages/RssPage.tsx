@@ -20,6 +20,7 @@ import { useFocusAfterRemoval } from '../components/useFocusAfterRemoval'
 import { displayRound } from '../i18n/displayRound'
 import { JobLink } from '../jobs/JobLink'
 import { FeedSection } from '../rss/FeedSection'
+import { Grounds } from '../rss/GroundsList'
 import { SectionHeading } from '../rss/SectionHeading'
 import { SeriesBinder } from '../rss/SeriesBinder'
 
@@ -99,6 +100,8 @@ function Pending({ rows, onDone }: { rows: RssSeries[]; onDone: (said: string) =
               heading="h3"
               sentence={t('rss.pending.waiting', { count: row.waiting })}
               when={sourceOf(row)}
+              // 自動綁定查過、沒綁上的理由（票 09）。它回答「為什麼要我來綁」，所以不收進展開區。
+              body={<Grounds lead={t('rss.pending.why')} reasons={row.reasons} />}
               refusal={null}
               details={<SeriesDetails row={row} />}
             >
@@ -147,6 +150,7 @@ function BoundRow({ row, onDone }: { row: RssSeries; onDone: (said: string) => v
   const title =
     displayRound(i18n.language, { 'zh-Hant': row.media_title, en: row.media_title_en }) ||
     row.media_id
+  const automatic = row.bound_by === 'system'
 
   return (
     <article
@@ -159,6 +163,11 @@ function BoundRow({ row, onDone }: { row: RssSeries; onDone: (said: string) => v
       </h3>
       <p className="value text-xs wrap-anywhere text-ink-dim">{row.title_raw}</p>
       <p className="text-xs text-ink-dim">
+        {automatic && (
+          <>
+            {t('rss.bound.automatic')} <Dot />{' '}
+          </>
+        )}
         {t('rss.bound.route', { route: row.route_name || '—' })} <Dot />{' '}
         <span className="value">{sourceOf(row)}</span>
         {row.season !== null && (
@@ -175,6 +184,8 @@ function BoundRow({ row, onDone }: { row: RssSeries; onDone: (said: string) => v
           </>
         )}
       </p>
+      {/* 沒有人選過這一部：綁好的那一列要說得出憑什麼（票 09）。 */}
+      {automatic && <Grounds lead={t('rss.bound.grounds')} reasons={row.reasons} />}
       {unbind.isError && (
         <Notice signal="blocked" label={t('common.failed')}>
           {t('rss.failed')}

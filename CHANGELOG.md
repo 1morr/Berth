@@ -633,6 +633,13 @@ Issue、修正、對帳、刪除與重新入庫的每一條端點都是 403，�
   綁定留著。新表 `rss_feeds`、`rss_series`、`rss_items`（migration `b7e2c4d9a813`），新依賴 `feedparser`。
   規劃時讀 RSS Series 上的季號與集號偏移（改正與重算在票 13）。演練情境 `--scenario rss`，`pnpm -C web e2e` 多
   `rss` 一條（1280 與 390）。
+- **RSS Series 自動綁定**（M3 票 09，brief §15「綁定」）：新長出的 RSS Series 在那一輪就去認作品——讀 Mikan 番組頁的
+  中文名與「放送开始」，加上發佈名的標題骨幹去搜 TMDB。名字相同、開播日期落在 TMDB 某一季首播前後 14 天內、而且只有
+  一部這樣的作品，**同時**收得下它的啟用中 Route 只有一條，就以 `system` 身分綁上並送單；時間線的「已建立」與 `/rss`
+  綁好的那一列說出依據。其餘留在待綁定，那一列寫出為什麼（沒有候選、同名不同年、兩部都對得上、Route 不只一條……），
+  認得出的作品列成候選、一鍵選定就接到 Route 與確認。`rss_series` 多 `reasons_json`、`candidates_json`（migration
+  `a9c4e2f7b315`）；`POST /rss/feeds/{id}/poll` 多回 `bound`，`GET /rss/series` 每一列多 `reasons` 與 `candidates`。
+  量測腳本 `scripts/experiments/rss_auto_bind.py`。
 
 ### Changed
 - **RSS 送出的下載，時間線上的建立者是 `rss:<RSS Series id>`**（M3 票 08，plan §2.3）：原本一律寫 `system`。

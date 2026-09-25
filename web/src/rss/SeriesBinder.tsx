@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next'
 
 import { MIN_QUERY_LENGTH, searchQueryOptions, type DiscoverItem } from '../api/discover'
 import { mediaQueryOptions, type Media } from '../api/media'
-import { bindSeries, parseRssRefusal, RSS_KEY, type RssSeries } from '../api/rss'
+import { bindSeries, parseRssRefusal, RSS_KEY, type Candidate, type RssSeries } from '../api/rss'
 import { ConfirmPanel } from '../components/ConfirmPanel'
 import { CONFIRM_ACTIONS, Field, GhostButton, Notice, PrimaryButton } from '../components/controls'
 import { SEARCH_DEBOUNCE_MS, useDebounced } from '../components/useDebounced'
@@ -23,6 +23,10 @@ import { searchTerm } from './searchTerm'
  * 最後一句：確認裡要重述會被寫死的東西）。
  *
  * 送單被拒不讓綁定失敗（Route 紅燈、磁碟門檻）：綁好之後那幾筆留在 Feed Item 清單上帶著原文。
+ *
+ * **候選**（票 09）：自動綁定認出來、留給人選的作品（同名不同年、兩部都對得上、Route 不只一條）。
+ * 收起時每一部一顆鍵，按一下就展開並選定它——跳過搜尋，直接到 Route 與確認；展開後它們排在搜尋
+ * 框上面，選定的那一顆是按下的樣子。確認照舊要按：資料夾名在那一刻定死。
  */
 export function SeriesBinder({
   series,
@@ -36,7 +40,7 @@ export function SeriesBinder({
   const queryClient = useQueryClient()
   const { asked, open, close, trigger, panel, onKeyDown } = useInPlaceConfirm()
   const [query, setQuery] = useState(() => searchTerm(series.title_raw))
-  const [picked, setPicked] = useState<DiscoverItem | null>(null)
+  const [picked, setPicked] = useState<Pickable | null>(null)
   // `undefined` 是「還沒選過」：那時用預選（`preselect`）；選了「不選」是 `null`。
   const [chosen, setChosen] = useState<number | null | undefined>(undefined)
   const search = useRef<HTMLInputElement>(null)
@@ -71,18 +75,44 @@ export function SeriesBinder({
 
   const detail = media.data
   const route = chosen === undefined ? preselect(detail) : chosen
+  const candidates = series.candidates
+  const pick = (item: Pickable) => {
+    setPicked(item)
+    setChosen(undefined)
+  }
+  const titleOf = (item: Pickable) =>
+    displayRound(i18n.language, { 'zh-Hant': item.title, en: item.title_en }) || item.title_en
+  const aboutOf = (item: Pickable) =>
+    [item.year, t(`rss.bind.kind.${item.kind}`)].filter(Boolean).join(' · ')
 
   if (!asked) {
     return (
-      <GhostButton ref={trigger} type="button" onClick={open}>
-        {t('rss.bind.start')}
-      </GhostButton>
+      <>
+        {candidates.map((item) => (
+          <GhostButton
+            key={item.id}
+            type="button"
+            onClick={() => {
+              pick(item)
+              open()
+            }}
+          >
+            {/* 動詞寫在鍵上：只有片名的話看不出按下去會做什麼。 */}
+            {t('rss.bind.pick', { title: titleOf(item) })}
+            <span className="ml-2 text-xs text-ink-dim">{aboutOf(item)}</span>
+          </GhostButton>
+        ))}
+        <GhostButton ref={trigger} type="button" onClick={open}>
+          {t('rss.bind.start')}
+        </GhostButton>
+      </>
     )
   }
 
-  const titleOf = (item: DiscoverItem) =>
-    displayRound(i18n.language, { 'zh-Hant': item.title, en: item.title_en }) || item.title_en
-  const items = found.data?.items ?? []
+  // 候選已經列在上面了，搜尋結果裡的同一部不再列一次。
+  const items = (found.data?.items ?? []).filter(
+    (item) => !candidates.some((one) => one.id === item.id),
+  )
   const refusal = bind.isError ? parseRssRefusal(bind.error) : null
 
   return (
@@ -90,6 +120,16 @@ export function SeriesBinder({
       <p id={headingId} className="label text-ink-dim">
         {t('rss.bind.label')}
       </p>
+      {candidates.length > 0 && (
+        <Choices
+          label={t('rss.bind.candidates')}
+          items={candidates}
+          picked={picked}
+          onPick={pick}
+          titleOf={titleOf}
+          aboutOf={aboutOf}
+        />
+      )}
       <Field
         ref={search}
         label={t('rss.bind.search')}
@@ -106,34 +146,18 @@ export function SeriesBinder({
         <p role="alert" className="max-w-prose text-xs text-blocked-ink">
           {t('rss.bind.off')}
         </p>
-      ) : found.data && items.length === 0 ? (
+      ) : found.data && found.data.items.length === 0 ? (
         <p className="text-xs text-ink-dim">{t('rss.bind.none')}</p>
       ) : null}
       {items.length > 0 && (
-        <ul className="grid gap-1" aria-label={t('rss.bind.results')}>
-          {items.slice(0, 8).map((item) => (
-            <li key={item.id}>
-              <button
-                type="button"
-                aria-pressed={picked?.id === item.id}
-                onClick={() => {
-                  setPicked(item)
-                  setChosen(undefined)
-                }}
-                className={`value flex min-h-6 w-full flex-wrap items-baseline gap-x-2 border-2 px-3 py-2 text-left text-sm text-ink ${
-                  picked?.id === item.id
-                    ? 'border-rule-strong bg-deck'
-                    : 'border-rule hover:border-rule-strong'
-                }`}
-              >
-                <span className="wrap-anywhere">{titleOf(item)}</span>
-                <span className="text-xs text-ink-dim">
-                  {[item.year, t(`rss.bind.kind.${item.kind}`)].filter(Boolean).join(' · ')}
-                </span>
-              </button>
-            </li>
-          ))}
-        </ul>
+        <Choices
+          label={t('rss.bind.results')}
+          items={items.slice(0, 8)}
+          picked={picked}
+          onPick={pick}
+          titleOf={titleOf}
+          aboutOf={aboutOf}
+        />
       )}
 
       {picked !== null && media.isPending && (
@@ -182,6 +206,54 @@ export function SeriesBinder({
         </Notice>
       )}
     </ConfirmPanel>
+  )
+}
+
+/** 選得了的一部作品：搜尋結果（`DiscoverItem`）與自動綁定的候選（`Candidate`）共有的那幾格。 */
+type Pickable = Pick<DiscoverItem | Candidate, 'id' | 'kind' | 'title' | 'title_en' | 'year'>
+
+/** 一串可選的作品，一部一顆鍵；選定的那一顆是按下的樣子。 */
+function Choices({
+  label,
+  items,
+  picked,
+  onPick,
+  titleOf,
+  aboutOf,
+}: {
+  label: string
+  items: readonly Pickable[]
+  picked: Pickable | null
+  onPick: (item: Pickable) => void
+  titleOf: (item: Pickable) => string
+  aboutOf: (item: Pickable) => string
+}) {
+  const labelId = useId()
+  return (
+    <div className="grid gap-1">
+      <p id={labelId} className="label text-ink-dim">
+        {label}
+      </p>
+      <ul className="grid gap-1" aria-labelledby={labelId}>
+        {items.map((item) => (
+          <li key={item.id}>
+            <button
+              type="button"
+              aria-pressed={picked?.id === item.id}
+              onClick={() => onPick(item)}
+              className={`value flex min-h-6 w-full flex-wrap items-baseline gap-x-2 border-2 px-3 py-2 text-left text-sm text-ink ${
+                picked?.id === item.id
+                  ? 'border-rule-strong bg-deck'
+                  : 'border-rule hover:border-rule-strong'
+              }`}
+            >
+              <span className="wrap-anywhere">{titleOf(item)}</span>
+              <span className="text-xs text-ink-dim">{aboutOf(item)}</span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
   )
 }
 

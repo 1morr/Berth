@@ -551,6 +551,14 @@ Jellyfin 的圖經 Berth 代理要不要另存一份（M1.5 票 04）：同樣�
 uv run python scripts/experiments/jellyfin_images.py   # 報告寫到 .local/experiments/results/jellyfin-images.json
 ```
 
+RSS Series 自動綁定的規則門檻（M3 票 09）：對票 07 錄下的 Mikan 聚合 feed，真的抓 Mikan 單集頁與番組頁、真的打
+TMDB，走 Berth 自己的判定、只印不綁。憑證讀環境變數，資料庫是暫時目錄裡的新的一份。結果見
+[`docs/research/rss-sources.md`](docs/research/rss-sources.md) §2.8：
+
+```bash
+uv run --env-file .env python scripts/experiments/rss_auto_bind.py   # 要 .env 裡的 TMDB_API_KEY；會連 Mikan 與 TMDB
+```
+
 1,000 部的媒體庫上量 Berth（M2 票 11，plan §11.3 決定 2 的門檻）：自己 build Berth 的 image（只有 backend 那一層）、
 起一次性的 Jellyfin 與 qBittorrent、造 1,000 部 × 12 集的媒體樹（掃描約 6 分鐘），量完連容器、volume、network、image
 一起刪。宿主只要 Python 標準庫與 docker；量測本身在 Berth 的 image 裡跑。結果見

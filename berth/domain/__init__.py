@@ -1,5 +1,6 @@
 """純資料型別與狀態機，無 IO（plan §1.2）。"""
 
+from berth.domain.binding import BIND_PARAMS, BindReason, BindReasonCode, because
 from berth.domain.enums import (
     ACTION_DELETES,
     ISSUE_ACTIONS,
@@ -102,6 +103,7 @@ from berth.domain.parser import (
 __all__ = [
     "ACTION_DELETES",
     "AUTO_APPLIED",
+    "BIND_PARAMS",
     "CONFIDENCE_ORDER",
     "EDITABLE_ACTIONS",
     "ISSUE_ACTIONS",
@@ -116,6 +118,8 @@ __all__ = [
     "AccessRefusal",
     "AuditAction",
     "AuditReason",
+    "BindReason",
+    "BindReasonCode",
     "BundledLibraryRefusal",
     "Candidate",
     "CjkHints",
@@ -193,6 +197,7 @@ __all__ = [
     "UnmatchedReason",
     "at_least",
     "at_most",
+    "because",
     "collection_type_for",
     "episode_label",
     "sort_langs",
