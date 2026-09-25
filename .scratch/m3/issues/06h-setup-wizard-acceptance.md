@@ -1,6 +1,6 @@
 # 06h — 精靈驗收：冷啟動閘門、兩條完整路徑、impeccable 收尾
 
-**Status:** ready-for-human（剩第 6 條：使用者在試跑環境實走）
+**Status:** done
 
 **Blocked by:** 06b、06c、06d、06e、06f、06g、06i（全部做完才驗）
 
@@ -35,7 +35,7 @@
 - [x] playwright：套件內、既有、冷啟動、走完之後從設定頁修改四條，1280 與 390 截圖附在票上
 - [x] `/impeccable critique`、`audit`、`polish` 各一輪，分數與處理結果記在票上
 - [x] README、plan §9.3、`wizard-shape.md`、CONTEXT.md、`.env.example` 與畫面一致
-- [ ] 使用者在試跑環境重置後走完一次，沒有用到 `HostHeaderValidation=false`，也沒有按重新探測；結果記在 Comments
+- [x] 使用者在試跑環境重置後走完一次，沒有用到 `HostHeaderValidation=false`，也沒有按重新探測；結果記在 Comments
 - [x] lint、type、test、e2e 全綠（貼指令輸出）
 
 ## Comments
@@ -83,4 +83,29 @@
 - CI 綠：<https://github.com/1morr/Berth/actions/runs/36101576757>（backend、web、web-e2e、api-types、image、hygiene 全 success；前一輪 hygiene 紅在 critique 存檔的行尾空白，已修）。
 - 本機：`ruff check` / `ruff format --check` / `mypy`（284 files）/ `lint-imports`（6 kept）綠，`pytest` 2462 passed；`tsc -b` / `eslint` / `prettier --check` 綠，`pnpm test` 52 files 831 passed，`pnpm e2e` 11 passed（52.1 s）。
 
-**第 6 條（待使用者實走）**：`C:\Users\Roxy\berth-trial` 先整份備份到 `C:\Users\Roxy\berth-trial-backup-20260925`（舊 compose、config、data、preseed），再清掉 `config/`、`data/`，換成 repo 的 `deploy/docker-compose.yml`、`deploy/preseed/`（沒有 `WebUI\HostHeaderValidation=false`）、由 `deploy/.env.example` 抄的 `.env`（五個 port 換成 18383 / 18096 / 18080 / 16881 / 19696），以及只換 image 的 `docker-compose.override.yml`（`berth:trial-06h`，這一票的程式碼 build）。三個外部 image 已經拉好，容器還沒起：由使用者 `docker compose up -d` 冷啟動、馬上開 <http://localhost:18383> 從第 1 步走完。
+**第 6 條的準備**：`C:\Users\Roxy\berth-trial` 先整份備份到 `C:\Users\Roxy\berth-trial-backup-20260925`（舊 compose、config、data、preseed），再清掉 `config/`、`data/`，換成 repo 的 `deploy/docker-compose.yml`、`deploy/preseed/`（沒有 `WebUI\HostHeaderValidation=false`）、由 `deploy/.env.example` 抄的 `.env`（五個 port 換成 18383 / 18096 / 18080 / 16881 / 19696），以及只換 image 的 `docker-compose.override.yml`（`berth:trial-06h`，這一票的程式碼 build）。三個外部 image 已經拉好，容器還沒起：由使用者 `docker compose up -d` 冷啟動、馬上開 <http://localhost:18383> 從第 1 步走完。
+
+**第 6 條實走（2026-09-25 14:33，由 agent 代走，使用者授權）**：試跑環境照上一段準備好之後，`cd C:\Users\Roxy\berth-trial` 同一刻起 `docker compose up -d`（6.6 s 回來）與一支 playwright 腳本（真 Chromium、1280 × 900、`zh-TW`；腳本在 session 的 scratchpad，不進 repo）。腳本等到 Berth 回應才開瀏覽器，之後照畫面按：第 1 步建管理員 **`skipper` / `Harbour-06h-trial`**（也是精靈第 3 步替 Jellyfin 建的管理員），第 2 步只按「開始探測」，之後預設清單靠泊、套用 qBittorrent、Route 自動建、加入九個預設站並試搜、貼 repo `.env` 的 TMDB key、完成、以同一組帳密登入。每一次 `POST /setup/detect` 都記下判定與有沒有帶 `restart`。時間從 `up -d` 起算：
+
+| 時間 | 事件 |
+| --- | --- |
+| 8.4 s | Berth `/api/health` 200，開瀏覽器 |
+| 9.5 s | 第 1 步送出；按「開始探測」 |
+| 12.1 s | detect #1：Jellyfin `pending/starting`、qBittorrent `bundled/anonymous_ok`、Prowlarr `pending/unreachable` |
+| 15.1 s | detect #2：Jellyfin `pending/protocol_mismatch` |
+| 18.2 s | detect #3：Jellyfin `pending/starting` |
+| 21.2 s | detect #4：Jellyfin `bundled/setup_pending`（Prowlarr 仍 `unreachable`，#5、#6 同） |
+| 30.5 s | detect #7：Prowlarr `bundled/no_indexers`，三個都判定完成 |
+| 30.9 s | 「前往泊位 1」出現；**7 次探測，`restart: true` 0 次**，沒有按重新探測 |
+| 38.0 s | 泊位 1 Jellyfin 靠泊完成（3 個媒體庫、API key） |
+| 38.4 s | 泊位 2 qBittorrent 套用完成 |
+| 39.3 s | 泊位 3 三條 Route 自動建好、五條纜繩全綠 |
+| 60.0 s | 泊位 4 加入預設站有結論（板上「Prowlarr · 6 個索引站」），63.4 s 試搜有結果 |
+| 64.5 s | 泊位 5 TMDB 驗過 |
+| 64.6 s | 完成設定 → 登入頁；66.4 s 以 `skipper` 登入，落在 `/library` |
+| 67.5 s | playwright 開 `http://localhost:18080/`：HTTP 200、title「qBittorrent WebUI」 |
+
+- 06g 量到的兩種啟動中樣子（503 `starting` 與 `protocol_mismatch`）在真環境又各出現一次，畫面都是「探測中」；第 2 步的剖面與纜繩寫的是 `qbittorrent:18080/api/v2/app/version`（`probe_targets`，06b 的遺留在真環境也修掉了）。
+- **qBittorrent 從宿主開得到，不靠 `HostHeaderValidation=false`**：curl `http://localhost:18080/` 200，未登入打 `/api/v2/app/version` 是 403（免密白名單只有 Berth 的固定 IP，`WebUI\AuthSubnetWhitelist=172.28.0.2/32`）；`config/qbittorrent` 與 `preseed/` 裡都搜不到 `HostHeaderValidation`。
+- **「在 Jellyfin 開啟」指向 18096**：新建的媒體庫是空的，所以放一支測試影片（`tests/fixtures/e2e/seed.mkv` → `data/library/movies/Big Buck Bunny (2008)/`），以 `skipper` 登入 Jellyfin 的 API 叫 `POST /Library/Refresh`，Jellyfin 掃到之後 Berth 的 Movies 媒體庫頁那一格的連結是 `http://localhost:18096/web/#/details?id=56f1a2a0…`；點下去開新分頁到 `http://localhost:18096/web/#/login?…&url=/details?id=…`（那個瀏覽器還沒登入過 Jellyfin）。
+- 截圖 `.local/screens/m3-06h/trial/`（`1-admin` … `9-signed-in`、`10-qbittorrent`、`11-library-deeplink`、`12-jellyfin-opened`，不進版控）。試跑環境留著在跑（`berth:trial-06h`），舊的那一份在 `C:\Users\Roxy\berth-trial-backup-20260925`。
