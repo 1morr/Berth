@@ -2,7 +2,7 @@
 
 自託管的媒體取得與入庫協調器：把索引站或 RSS 命中的 torrent 送到 qBittorrent，下載完成後解析、比對 TMDB，以硬鏈接入庫到 Jellyfin，並維護可修復的帳本。
 
-**M1（手動全流程）已完成**：探索 → 搜 torrent → 送單 → 下載 → 解析比對 → 硬鏈接入庫 → Jellyfin 找到它，一部美劇一季、一部動漫一季、一部電影都不經人工走完（nightly 的 e2e 對真的服務守著這一條）。**M1.5（媒體庫瀏覽）也已完成**：媒體庫是一個 Jellyfin 媒體庫一頁、瀏覽整個媒體庫（不只 Berth 經手的），繼續觀看與下一集、已看 / 未看與切換、依類型與年份排序篩選、Jellyfin 的圖由 Berth 代理，Media 詳情最上面是觀看區；權限一律由 Berth 自己對 Jellyfin 的允許清單擋，播放仍深連結到 Jellyfin。**M2（修正與對帳）也已完成**：審核佇列（低信心的計劃逐列改後核准、medium 自動入庫的一鍵確認或撤銷、對不到的檔案指派、重複版本）、修正已入庫的檔案、可組合的刪除範圍、每日與手動的對帳（Jellyfin 裡刪掉的、complete 裡少了的、被複製品取代的硬鏈接都偵測得到並一鍵修）、重新入庫與 `berth rebuild-ledger`、Job 詳情頁；審核與修正只有管理員做得了。還沒有的：RSS 自動追番（M3）。設計與決定見 `docs/design-brief.md`，架構與里程碑見 `docs/plan.md`，名詞表見 `CONTEXT.md`。
+**M1（手動全流程）已完成**：探索 → 搜 torrent → 送單 → 下載 → 解析比對 → 硬鏈接入庫 → Jellyfin 找到它，一部美劇一季、一部動漫一季、一部電影都不經人工走完（nightly 的 e2e 對真的服務守著這一條）。**M1.5（媒體庫瀏覽）也已完成**：媒體庫是一個 Jellyfin 媒體庫一頁、瀏覽整個媒體庫（不只 Berth 經手的），繼續觀看與下一集、已看 / 未看與切換、依類型與年份排序篩選、Jellyfin 的圖由 Berth 代理，Media 詳情最上面是觀看區；權限一律由 Berth 自己對 Jellyfin 的允許清單擋，播放仍深連結到 Jellyfin。**M2（修正與對帳）也已完成**：審核佇列（低信心的計劃逐列改後核准、medium 自動入庫的一鍵確認或撤銷、對不到的檔案指派、重複版本）、修正已入庫的檔案、可組合的刪除範圍、每日與手動的對帳（Jellyfin 裡刪掉的、complete 裡少了的、被複製品取代的硬鏈接都偵測得到並一鍵修）、重新入庫與 `berth rebuild-ledger`、Job 詳情頁；審核與修正只有管理員做得了。RSS 自動追番（M3）做到第一段：`/rss` 加 Mikan 的聚合 feed、把新出現的作品 × 字幕組綁到作品與 Route，之後的新集自動送單入庫；自動綁定、排除條件、補舊集與其他來源還沒有。設計與決定見 `docs/design-brief.md`，架構與里程碑見 `docs/plan.md`，名詞表見 `CONTEXT.md`。
 
 ## 部署
 
@@ -270,7 +270,7 @@ pnpm -C web lint            # eslint
 pnpm -C web format          # prettier（CI 用 format:check）
 pnpm -C web typecheck       # tsc（strict）；build 已含，這是單獨跑的快捷
 pnpm -C web gen:api         # 重新產生 API 型別（見下）
-pnpm -C web e2e             # playwright 對演練情境跑七條流程（先 build，見〈前端 e2e〉）
+pnpm -C web e2e             # playwright 對演練情境跑八條流程（先 build，見〈前端 e2e〉）
 ```
 
 ### API 型別
@@ -358,7 +358,7 @@ docker compose -f deploy/docker-compose.yml -f tests/e2e/compose.yml --env-file 
 
 ### 前端 e2e
 
-`web/e2e/` 以 playwright 對〈UI 的 Fake 後端〉的演練情境跑七條流程（精靈與設定頁那四條各有 1280 與 390 兩份，共十一個 project），一條流程一台 server、各佔一個 port
+`web/e2e/` 以 playwright 對〈UI 的 Fake 後端〉的演練情境跑八條流程（精靈、設定頁與 RSS 那五條各有 1280 與 390 兩份，共十三個 project），一條流程一台 server、各佔一個 port
 （`web/playwright.config.ts` 自己起、跑完收掉）：
 
 | 流程 | 情境 | port（1280 / 390） |
@@ -370,14 +370,15 @@ docker compose -f deploy/docker-compose.yml -f tests/e2e/compose.yml --env-file 
 | 從作品頁送單，一路走到已入庫 | `import` | 8492 |
 | `/review` 確認一筆 audit | `review` | 8493 |
 | `/issues` 修一條 `library_link_missing` | `issues` | 8494 |
+| `/rss` 加 Mikan feed、輪詢、綁定待綁定的那一部，下載列表上兩集都已入庫 | `rss` | 8498 / 8508 |
 
-精靈與設定頁那四條在兩種寬度各走一次（`playwright.config.ts` 的 `NARROW`），每一格都留一張整頁截圖在
+精靈、設定頁與 RSS 那五條在兩種寬度各走一次（`playwright.config.ts` 的 `NARROW`），每一格都留一張整頁截圖在
 `web/test-results/<那一條>/`，通過的那一輪也留著。
 
 ```bash
 pnpm -C web build                                          # server 發的是 web/dist
 pnpm -C web exec playwright install chromium               # 第一次
-pnpm -C web e2e                                            # 約 1 分鐘（十一台替身）
+pnpm -C web e2e                                            # 約 1 分鐘（十三台替身）
 pnpm -C web e2e --project issues                           # 只跑一條
 pnpm -C web exec playwright show-trace web/test-results/<那一條>/trace.zip   # 失敗時看 trace
 ```
@@ -415,6 +416,7 @@ uv run python scripts/fake_setup_server.py --port 8383     # 換 port（索引�
 | `old-jellyfin` | 既有 Jellyfin 還停在 10.11（其餘兩個服務照 `bundled`，擋路的只留一個）：泊位 1 紅燈，說出目前版本、為什麼要 12，以及升級前後要做的事；健康頁上同一台也是紅的 |
 | `signed-out` | 精靈已跑完，畫面從登入頁開始。`skipper` / `harbour` 是管理員，`deckhand` / `rope` 是普通使用者（看不到設定入口） |
 | `unmounted` | Jellyfin 少了媒體庫目錄的掛載：泊位 4 的第四條纜繩失敗，看「哪個容器少了哪個掛載」與 compose 修正片段 |
+| `rss` | RSS 頁 `/rss`（M3 票 08）：同 `healthy`，一個請求都不出網。Mikan 是替身：加 `https://mikanani.me/RSS/MyBangumi?token=REDACTED`（任何 token 都一樣，替身只認這一條網址）、按「立即輪詢」，票 07 錄下來的聚合 feed 12 筆長出 11 個待綁定的 RSS Series（單集頁照 `tests/integration/test_rss.py` 合成）。TMDB 也是替身，搜「Kimi ga Shinu made Koi wo Shitai」或「与你相恋到生命尽头」找得到那一部；在《与你相恋到生命尽头》那一列綁到它與 Anime，兩集的 `.torrent` 換成這台自己生的，qBittorrent 收下就當場完成，幾秒後 `/jobs` 上兩筆都已入庫。帳號同 `signed-out` |
 | `healthy` | 精靈已跑完、三條 Route 綠燈、四項健康檢查全綠：健康頁 `/health` 與設定頁 `/settings/*`（五個分頁：換 TMDB key、加站試搜移除都在這裡演得出來）的起點。帳號同 `signed-out` |
 | `degraded` | 同上，但索引站在第一輪檢查之後掛掉：按「立即重測」就會看到那一項變紅、其餘三項不動，以及「最後成功」還留著 |
 | `drifted` | 同上，但有人把 qBittorrent 的 `auto_tmm_enabled` 改掉了：看設定的 qBittorrent 那一頁的逐鍵差異表與「還原建議設定」 |

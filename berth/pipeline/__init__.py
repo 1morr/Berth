@@ -6,6 +6,7 @@ from berth.pipeline.importing import Importer
 from berth.pipeline.planning import PlannerRunner
 from berth.pipeline.reconciling import Reconciler
 from berth.pipeline.resolving import JellyfinResolver
+from berth.pipeline.rss import RssPoller
 
 __all__ = [
     "TICK",
@@ -15,4 +16,5 @@ __all__ = [
     "PlannerRunner",
     "QbitPoller",
     "Reconciler",
+    "RssPoller",
 ]

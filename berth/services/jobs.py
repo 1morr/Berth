@@ -286,6 +286,7 @@ async def add_download(
     在磁碟不夠時說的是 `low_disk_space` 而不是「本來就在了」——兩者都沒有下載任何東西。
     """
     media, route = await _preconditions(session, media_id, route_id)
+    actor = f"rss:{trigger_ref}" if trigger is JobTrigger.RSS else actor_of(user_id)
 
     if source.info_hash:
         existing = await session.get(Job, source.info_hash)
@@ -321,7 +322,7 @@ async def add_download(
                 session,
                 job,
                 EventType.CREATED,
-                actor=actor_of(user_id),
+                actor=actor,
                 payload={
                     "trigger": trigger.value,
                     "media": media.id,
@@ -344,7 +345,7 @@ async def add_download(
         logger.info("job created", extra={"state": job.state.value, "route": route.slug})
         # 從這裡開始 poller 也看得到這一列（它已經 commit 了），所以送單與迴圈要排隊。
         async with job_lock(job.hash):
-            await _finish(session, factory, job, route, torrent, media, actor=actor_of(user_id))
+            await _finish(session, factory, job, route, torrent, media, actor=actor)
         return AddDownloadOutcome(job=await _view_one(session, job), created=True)
 
 
@@ -883,7 +884,8 @@ def _fingerprint(payload: dict[str, Any]) -> str:
 
 
 def actor_of(user_id: int | None) -> str:
-    """`events.actor`：user id、`system`、`rss:<rule>` 或 `ai`（plan §2.3）。"""
+    """`events.actor` 的 user id 或 `system`（plan §2.3）。RSS 送的那一種（`rss:<series>`）由
+    `add_download` 照 `trigger_ref` 組，`ai` 在 M5。"""
     return str(user_id) if user_id is not None else "system"
 
 

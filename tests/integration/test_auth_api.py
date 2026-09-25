@@ -397,6 +397,15 @@ ACCESS: dict[tuple[str, str], Access] = {
     ("PUT", "/routes/*"): Access.ADMIN,
     ("POST", "/routes/*/check"): Access.ADMIN,
     ("GET", "/jellyfin/libraries"): Access.ADMIN,
+    # RSS（M3 票 08）：整組 admin——聚合 feed 的網址帶 token，綁定會替整個家送單。
+    ("GET", "/rss/feeds"): Access.ADMIN,
+    ("POST", "/rss/feeds"): Access.ADMIN,
+    ("DELETE", "/rss/feeds/*"): Access.ADMIN,
+    ("POST", "/rss/feeds/*/poll"): Access.ADMIN,
+    ("GET", "/rss/series"): Access.ADMIN,
+    ("PUT", "/rss/series/*/binding"): Access.ADMIN,
+    ("DELETE", "/rss/series/*/binding"): Access.ADMIN,
+    ("GET", "/rss/items"): Access.ADMIN,
     # 一般使用者：探索、送單、看自己的 Job、瀏覽媒體庫（brief §11）。重試與重新規劃是送單的
     # 人自己按得到的——它們只讓這一筆往前走，不拆也不改媒體庫裡已經有的東西。**例外是停在
     # review 的那一筆的重新規劃**（M3 票 04）：它會丟掉 admin 審過的那一份，所以只有 admin。

@@ -35,7 +35,7 @@ class Job(Base):
     #: 每次搜尋都不一樣（brief §20.7），重新搜一次不會給出同一條。
     source_url: Mapped[str] = mapped_column(Text, default="")
     trigger: Mapped[JobTrigger] = mapped_column(enum_column(JobTrigger))
-    #: rule id 或 import source 路徑。`manual` 時是空字串。
+    #: RSS Series 的 id 或 import source 路徑。`manual` 時是空字串。
     trigger_ref: Mapped[str] = mapped_column(Text, default="")
     #: 誰按的。RSS 與重新入庫沒有人在場，那時是 `None`。
     user_id: Mapped[int | None] = mapped_column(

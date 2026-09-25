@@ -20,6 +20,7 @@ from berth.adapters.indexer import IndexerSearch
 from berth.adapters.jellyfin.fake import FakeJellyfinClient
 from berth.adapters.prowlarr.fake import FakeProwlarrClient
 from berth.adapters.qbittorrent.fake import FakeQbittorrentClient
+from berth.adapters.rss import FeedFetcher
 from berth.adapters.tmdb.fake import FakeTmdbClient
 from berth.adapters.torrent import TorrentFetcher
 from berth.adapters.torznab.fake import FakeTorznabClient
@@ -66,6 +67,9 @@ class OneJellyfin:
 
     def torrent(self) -> TorrentFetcher:
         raise AssertionError("login never fetches a torrent")
+
+    def rss(self) -> FeedFetcher:
+        raise AssertionError("login never fetches a feed")
 
     def torznab(self, base_url: str, api_key: str) -> FakeTorznabClient:
         raise AssertionError("login never talks to a Torznab endpoint")

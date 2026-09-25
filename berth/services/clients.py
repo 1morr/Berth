@@ -21,6 +21,8 @@ from berth.adapters.prowlarr.client import HttpProwlarrClient
 from berth.adapters.prowlarr.config_file import read_api_key
 from berth.adapters.qbittorrent import QbittorrentClient
 from berth.adapters.qbittorrent.client import HttpQbittorrentClient
+from berth.adapters.rss import FeedFetcher
+from berth.adapters.rss.client import HttpFeedFetcher
 from berth.adapters.tmdb import TmdbClient
 from berth.adapters.tmdb.client import HttpTmdbClient
 from berth.adapters.torrent import HttpTorrentFetcher, TorrentFetcher
@@ -53,6 +55,10 @@ class ServiceClientFactory(Protocol):
         沒有位址參數：那條網址是搜尋結果自己帶的，而且**每次請求都不一樣**
         （Prowlarr 的代理連結帶 nonce，brief §20.7），所以它是呼叫時才有的東西。
         """
+        ...
+
+    def rss(self) -> FeedFetcher:
+        """抓 RSS Feed 與 Mikan 單集頁（M3 票 08）。沒有位址參數：網址是 Feed 與 Item 自己帶的。"""
         ...
 
     def indexer_search(self, kind: IndexerKind, base_url: str, api_key: str) -> IndexerSearch:
@@ -135,6 +141,9 @@ class HttpServiceClientFactory:
 
     def torrent(self) -> TorrentFetcher:
         return HttpTorrentFetcher()
+
+    def rss(self) -> FeedFetcher:
+        return HttpFeedFetcher()
 
     def indexer_search(self, kind: IndexerKind, base_url: str, api_key: str) -> IndexerSearch:
         if kind is IndexerKind.TORZNAB:

@@ -302,7 +302,7 @@ _Avoid_: log, activity, history
 _Avoid_: subscription（Subscription 是 UI 上「訂閱一部作品」的動作）, source
 
 **RSS Series**:
-一部作品 × 一個來源（Mikan 的番組 + 字幕組，或標題骨幹 + 字幕組），由 Feed Item 自動長出，綁到 Media 與 Route，帶季號、offset、排除條件。2026-09-24 取代 Rule：字幕組是使用者在來源端挑的，Berth 不再挑一次。
+一部作品 × 一個來源（Mikan 的番組 + 字幕組，或標題骨幹 + 字幕組），由 Feed Item 自動長出，綁到 Media 與 Route，帶季號、offset、排除條件。還沒綁到 Media 的是**待綁定**（unbound）：它的 Feed Item 留著不送，綁定那一刻凍結資料夾名並送出。不屬於任何一個 Feed。2026-09-24 取代 Rule：字幕組是使用者在來源端挑的，Berth 不再挑一次。
 _Avoid_: rule, subscription, follow（`follows` 是字幕跟著影片的那個函式）
 
 **Feed Item**:

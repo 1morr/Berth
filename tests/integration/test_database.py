@@ -30,7 +30,9 @@ M0_TABLES = {"users", "sessions", "settings", "routes", "events"}
 M1_TABLES = {"media", "tmdb_cache", "jobs", "job_files", "plans", "plan_items", "ledger"}
 #: M2 票 05 加的一張（plan §2.4）。
 M2_TABLES = {"issues"}
-EXPECTED_TABLES = M0_TABLES | M1_TABLES | M2_TABLES
+#: M3 票 08 加的三張（plan §2.4）。
+M3_TABLES = {"rss_feeds", "rss_series", "rss_items"}
+EXPECTED_TABLES = M0_TABLES | M1_TABLES | M2_TABLES | M3_TABLES
 
 
 @contextmanager

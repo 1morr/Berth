@@ -39,6 +39,7 @@ from berth.domain import (
     ItemReason,
     JobRefusal,
     JobState,
+    JobTrigger,
     MediaSnapshot,
     ParseContext,
     PlanAction,
@@ -54,7 +55,7 @@ from berth.domain import (
 from berth.domain import PlanItem as PlannedFile
 from berth.domain import ReasonCode as Code
 from berth.logs import job_context
-from berth.models import Job, JobFile, LedgerEntry, Media, Plan, PlanItem, Route
+from berth.models import Job, JobFile, LedgerEntry, Media, Plan, PlanItem, Route, RssSeries
 from berth.models.types import utcnow
 from berth.parser import classify, episode_span
 from berth.parser import plan as decide
@@ -256,7 +257,10 @@ async def _plan(
         job,
         contents,
         route,
-        _apply_policy(decide(job.name, entries, _context(route, snapshot)), route),
+        _apply_policy(
+            decide(job.name, entries, _context(route, snapshot, await _series_of(session, job))),
+            route,
+        ),
     )
     status, reason = _verdict(items, route, duplicates)
     row = await _store(
@@ -316,7 +320,12 @@ async def _preplan(session: AsyncSession, hub: EventHub, job_hash: str, now: dat
         contents,
         route,
         _apply_policy(
-            decide(job.name, entries, _context(route, await _stored(session, job))), route
+            decide(
+                job.name,
+                entries,
+                _context(route, await _stored(session, job), await _series_of(session, job)),
+            ),
+            route,
         ),
     )
     _, reason = _verdict(items, route, duplicates)
@@ -404,16 +413,30 @@ async def _stored(session: AsyncSession, job: Job) -> MediaSnapshot | None:
     return row.stored_snapshot() if row is not None else None
 
 
-def _context(route: Route | None, snapshot: MediaSnapshot | None) -> ParseContext:
+def _context(
+    route: Route | None, snapshot: MediaSnapshot | None, series: RssSeries | None
+) -> ParseContext:
     """解析器看得到的東西（plan §4.3）。
 
-    `season_hint` 與 `episode_offset` 留空：那兩個是 RSS Rule 帶進來的（M3），
-    手動送單的 Job 沒有它們。
+    `season_hint` 與 `episode_offset` 是 RSS Series 帶進來的（brief §15：放在 RSS Series 上、
+    規劃時讀，M3 票 08）；手動送單的 Job 沒有它們。
     """
     return ParseContext(
         media=snapshot,
+        season_hint=series.season if series is not None else None,
+        episode_offset=series.episode_offset if series is not None else None,
         route_collection_type=route.collection_type if route is not None else None,
     )
+
+
+async def _series_of(session: AsyncSession, job: Job) -> RssSeries | None:
+    """送出這一筆的 RSS Series（`trigger_ref` 是它的 id）。
+
+    不是 RSS 送的、或那一個不在了是 `None`。
+    """
+    if job.trigger is not JobTrigger.RSS or not job.trigger_ref.isdigit():
+        return None
+    return await session.get(RssSeries, int(job.trigger_ref))
 
 
 async def _contents(session: AsyncSession, job: Job) -> Contents:

@@ -1163,3 +1163,55 @@ class ReviewRefusal(StrEnum):
     NOT_AUDITED = "not_audited"
     #: 硬鏈接拆不掉。`detail` 是系統原文。
     UNLINK_FAILED = "unlink_failed"
+
+
+class FeedKind(StrEnum):
+    """Feed 是哪一站的 RSS（plan §2.4、§8.5）。每一種一個 adapter（`adapters/rss/`）。
+
+    只列**已經有 adapter** 的那幾種：Nyaa 與 acg.rip 在 M3 票 11，generic 之後。加 Feed 時由網址的
+    主機認出來（`services/rss.kind_of`），認不出來的是 `feed_unsupported`。
+    """
+
+    MIKAN = "mikan"
+
+
+class FeedItemStatus(StrEnum):
+    """一筆 Feed Item 走到哪了（`CONTEXT.md`、plan §2.4）。
+
+    只列這一票用得到的三種；`new`（還沒比對）與 `excluded`（排除條件）在票 10 加。
+    """
+
+    #: 它的 RSS Series 還沒綁到作品：留著不送，綁定之後才送（brief §15）。
+    UNBOUND = "unbound"
+    #: Series 綁好了，還沒送成（上一次送單被拒時 `error` 是原文，下一輪再送）。
+    MATCHED = "matched"
+    #: 送出去了，`job_hash` 是那一筆。
+    DOWNLOADED = "downloaded"
+
+
+class RssRefusal(StrEnum):
+    """`/rss` 的一個命令在做出任何改變之前就停下來了（`services/rss.py`、M3 票 08）。
+
+    綁定之後的送單被拒**不在這裡**：綁定本身成立，那幾筆 Feed Item 留在 `matched` 帶著原文，
+    下一輪輪詢再送（`.scratch/m3/rss-shape.md` §3）。
+    """
+
+    #: 沒有這個 id 的 Feed。多半是另一個分頁先刪了。
+    FEED_MISSING = "feed_missing"
+    #: 網址不是認得的來源（這一票只認 `mikanani.me`），或根本不是 http(s) 網址。
+    FEED_UNSUPPORTED = "feed_unsupported"
+    #: 同一個網址已經是一個 Feed 了。
+    FEED_DUPLICATE = "feed_duplicate"
+    #: 沒有這個 id 的 RSS Series。
+    SERIES_MISSING = "series_missing"
+    #: 這個 RSS Series 已經綁在一部作品上。要換作品先解除綁定。
+    SERIES_BOUND = "series_bound"
+    #: `tv:<tmdb>` / `movie:<tmdb>` 在 Berth 手上沒有對應的 Media（畫面先打 `GET /media/{id}`
+    #: 讓它長出來，資料夾名才有得預覽）。
+    MEDIA_MISSING = "media_missing"
+    #: 指定的 Route 不在了。
+    ROUTE_MISSING = "route_missing"
+    #: Route 停用中。
+    ROUTE_DISABLED = "route_disabled"
+    #: 劇集只進得了 tvshows 媒體庫、電影只進得了 movies（`collection_type_for`）。
+    ROUTE_KIND_MISMATCH = "route_kind_mismatch"

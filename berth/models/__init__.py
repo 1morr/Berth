@@ -20,6 +20,7 @@ from berth.models.media import (
 )
 from berth.models.plan import Plan, PlanItem
 from berth.models.route import Route, RouteHealth
+from berth.models.rss import DEFAULT_INTERVAL_SEC, RssFeed, RssItem, RssSeries
 from berth.models.setting import (
     DEFAULT_BUNDLED_LIBRARIES,
     SETTINGS_GROUPS,
@@ -49,6 +50,7 @@ from berth.models.setting import (
 
 __all__ = [
     "DEFAULT_BUNDLED_LIBRARIES",
+    "DEFAULT_INTERVAL_SEC",
     "HARDLINK",
     "SETTINGS_GROUPS",
     "Base",
@@ -71,6 +73,9 @@ __all__ = [
     "QbittorrentSettings",
     "Route",
     "RouteHealth",
+    "RssFeed",
+    "RssItem",
+    "RssSeries",
     "ServiceHealth",
     "ServiceProbe",
     "Setting",

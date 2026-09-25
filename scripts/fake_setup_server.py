@@ -19,7 +19,7 @@ import sys
 import tempfile
 from collections.abc import AsyncIterator, Sequence
 from dataclasses import dataclass, field, replace
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, timedelta
 from html import escape
 from pathlib import Path, PurePosixPath
 from urllib.parse import quote
@@ -66,10 +66,26 @@ from berth.adapters.qbittorrent import (
 )
 from berth.adapters.qbittorrent.client import HttpQbittorrentClient
 from berth.adapters.qbittorrent.fake import FakeQbittorrentClient
-from berth.adapters.tmdb import TmdbClient, TmdbEntry
+from berth.adapters.rss import FeedFetcher
+from berth.adapters.rss.client import HttpFeedFetcher
+from berth.adapters.rss.fake import FakeFeedFetcher
+from berth.adapters.tmdb import (
+    TmdbClient,
+    TmdbDetail,
+    TmdbEntry,
+    TmdbEpisode,
+    TmdbSeason,
+    TmdbSeasonEntry,
+)
 from berth.adapters.tmdb.client import HttpTmdbClient
 from berth.adapters.tmdb.fake import FakeTmdbClient
-from berth.adapters.torrent import HttpTorrentFetcher, TorrentFetcher, magnet_info_hash
+from berth.adapters.torrent import (
+    HttpTorrentFetcher,
+    TorrentFetcher,
+    TorrentSource,
+    magnet_info_hash,
+)
+from berth.adapters.torrent_fake import FakeTorrentFetcher
 from berth.adapters.torznab import TorznabClient
 from berth.adapters.torznab.fake import FakeTorznabClient
 from berth.api.deps import get_client_factory, get_setup_probes
@@ -139,6 +155,11 @@ from tests.e2e.payload import info_name
 # 替身 TMDB 的 SPY×FAMILY（詳情、季、絕對編號）與整合測試同一份：`issues` 情境的認領與反解
 # 要的正是測試裡那一部，另抄一份的話兩邊的季集遲早對不上（M2 票 10）。
 from tests.integration.test_media import tmdb as demo_tmdb
+from tests.integration.test_rss import FEED as RSS_FEED
+from tests.integration.test_rss import FEED_URL as RSS_FEED_URL
+from tests.integration.test_rss import KIMI as RSS_KIMI
+from tests.integration.test_rss import KIMI_ID as RSS_KIMI_ID
+from tests.integration.test_rss import episode_pages as rss_episode_pages
 
 #: 這台 demo server 自己聽在哪個 port。索引站給的下載連結指回它自己（送單時 Berth 真的會去抓），
 #: 所以 `--port` 一改這一份要跟著改——寫死的話換 port 就只會拿到 `source_unavailable`。
@@ -268,6 +289,11 @@ class Scenario:
     #: 審核佇列（M2 票 06）。見 `_seed_review`：兩個 medium 自動入庫的檔案真的硬鏈接在媒體庫裡，
     #: 帳本與 Plan Item 都掛著 audit——按「確認」清旗標，按「撤銷」真的把鏈接拆掉。
     review_demo: bool = False
+    #: RSS 演練（M3 票 08）：`FeedFetcher` 替身查的「網址 → 原文」。空的話走真的那一支。
+    feed_pages: dict[str, bytes] = field(default_factory=dict)
+    #: 送單時「下載連結 → torrent」的查表。RSS 的 `.torrent` 網址是 Mikan 的，演練不出網，
+    #: 所以換成這台自己生的那幾份。空的話走真的那一支。
+    torrent_sources: dict[str, TorrentSource] = field(default_factory=dict)
 
     def probes(self) -> SetupProbes:
         return SetupProbes(
@@ -995,6 +1021,92 @@ HELD_HASH = "7e3f2c9d4f5061728394a5b6c7d8e9f0a1b2c3d4"
 #: `review` 情境那一筆帶著一個重複版本與一個對不到的 OVA 的下載（M2 票 08）。
 TWIN_HASH = "8f403d0e5061728394a5b6c7d8e9f0a1b2c3d4e5"
 
+#: `rss` 情境的那一部：喵萌奶茶屋&LoliHouse 的《与你相恋到生命尽头》，聚合 feed 裡有它的 11、12 集。
+KIMI_DETAIL = TmdbDetail(
+    tmdb_id=int(RSS_KIMI_ID.removeprefix("tv:")),
+    kind=MediaKind.TV,
+    title="Kimi ga Shinu made Koi wo Shitai",
+    original_title="君が死ぬまで恋をしたい",
+    year=2026,
+    first_air_date=date(2026, 7, 2),
+    overview="A girl who trains assassins falls for one of them.",
+    poster_path="",
+    titles=("Kimi ga Shinu made Koi wo Shitai", "与你相恋到生命尽头", "與妳相戀到生命盡頭"),
+    seasons=(
+        TmdbSeasonEntry(
+            season_number=1, name="Season 1", episode_count=12, air_date=date(2026, 7, 2)
+        ),
+    ),
+)
+
+KIMI_SEASON = TmdbSeason(
+    season_number=1,
+    name="Season 1",
+    air_date=date(2026, 7, 2),
+    episodes=tuple(
+        TmdbEpisode(
+            season_number=1,
+            episode_number=number,
+            name=f"Episode {number}",
+            air_date=date(2026, 7, 2) + timedelta(days=7 * (number - 1)),
+            runtime=24,
+        )
+        for number in range(1, 13)
+    ),
+)
+
+
+def _rss_pack(title: str) -> tuple[str, tuple[tuple[str, int], ...]]:
+    """聚合 feed 的一筆 → 一包演練用的發佈：一個資料夾、一集影片。發佈名是檔名那一種英文寫法。"""
+    episode = title.split(" - ")[1].split(" ")[0]
+    release = f"[LoliHouse] Kimi ga Shinu made Koi wo Shitai - {episode} [1080p]"
+    return release, ((f"{release}/{release}.mkv", 4000),)
+
+
+RSS_PACKS = dict(_rss_pack(item.title) for item in RSS_KIMI)
+DEMO_PACKS.update(RSS_PACKS)
+
+
+def rss_scenario() -> Scenario:
+    """`/rss`（M3 票 08）：Mikan 聚合 feed → 待綁定 → 綁定 → 送單 → 入庫，**一個請求都不出網**。
+
+    同 `healthy`（三條 Route 綠燈），加上：Mikan 是替身（票 07 錄下來的聚合 feed，單集頁照
+    `tests/integration/test_rss.py` 合成，12 筆長出 11 個 RSS Series）；TMDB 是替身，搜
+    「Kimi ga Shinu made Koi wo Shitai」或「与你相恋到生命尽头」找得到那一部；那兩集的 `.torrent`
+    換成這台自己生的，qBittorrent 收下就當場完成（`PlanningQbittorrent`），所以綁定之後幾秒
+    `/jobs` 上就有兩筆、接著規劃與入庫。
+    """
+    scenario = _planning(healthy(), RSS_PACKS)
+    scenario.indexer_results = ()
+    scenario.tmdb_credential = "00000000000000000000000000000010"
+    scenario.tmdb = FakeTmdbClient(
+        details=[KIMI_DETAIL],
+        seasons={KIMI_DETAIL.tmdb_id: [KIMI_SEASON]},
+        search={
+            query: (
+                TmdbEntry(
+                    tmdb_id=KIMI_DETAIL.tmdb_id,
+                    kind=MediaKind.TV,
+                    title=KIMI_DETAIL.title,
+                    original_title=KIMI_DETAIL.original_title,
+                    year=2026,
+                    poster_path="",
+                ),
+            )
+            for query in ("kimi ga shinu made koi wo shitai", "与你相恋到生命尽头")
+        },
+        translations={KIMI_DETAIL.tmdb_id: "與妳相戀到生命盡頭"},
+    )
+    scenario.feed_pages = {RSS_FEED_URL: RSS_FEED, **rss_episode_pages()}
+    scenario.torrent_sources = {
+        item.torrent_url: TorrentSource(
+            info_hash=demo_torrent(release).info_hash, content=demo_torrent(release).raw
+        )
+        for item, release in zip(RSS_KIMI, RSS_PACKS, strict=True)
+    }
+    return scenario
+
+
 SCENARIOS = {
     "bundled": bundled,
     "discover": discover,
@@ -1009,6 +1121,7 @@ SCENARIOS = {
     "submit-failing": submit_failing,
     "tmdb-down": tmdb_down,
     "healthy": healthy,
+    "rss": rss_scenario,
     "issues": issues_scenario,
     "review": review_scenario,
     "routes": routes_scenario,
@@ -1083,7 +1196,15 @@ class FakeClientFactory:
         **走真的那一支**：演練用的結果給的是磁力連結，而磁力那條路徑連請求都不必發
         （hash 就寫在連結裡）。所以這裡跑的是產品自己的程式碼，只是沒有網路。
         """
+        if self._scenario.torrent_sources:
+            return FakeTorrentFetcher(sources=self._scenario.torrent_sources)
         return HttpTorrentFetcher()
+
+    def rss(self) -> FeedFetcher:
+        """RSS 演練讀錄下來的 Mikan feed 與合成的單集頁（`rss` 情境）；其餘情境打真的。"""
+        if self._scenario.feed_pages:
+            return FakeFeedFetcher(self._scenario.feed_pages)
+        return HttpFeedFetcher()
 
 
 def main(argv: list[str] | None = None) -> int:

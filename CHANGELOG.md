@@ -624,8 +624,18 @@ Issue、修正、對帳、刪除與重新入庫的每一條端點都是 403，�
   設定頁（`healthy`）三條，精靈與設定頁的四條在 1280 與 390 各走一次、每一格留一張截圖。替身的 `starting` 照
   探測次數演四個容器同時起來的時間線（Jellyfin 回不像它的東西、兩次 503），原本「讀不到 Prowlarr 的 API key」
   拆成 `key-missing`；`mixed` 的舊媒體庫路徑是真的存在的暫存目錄，精靈走得完。
+- **RSS：Mikan 聚合 feed → 待綁定 → 綁定 → 入庫**（M3 票 08，brief §15、plan §2.4、§3.2、§8.5）：新頁 `/rss`
+  （只有管理員）。貼上 Mikan「我的番組」的 RSS 網址加一個 Feed，背景迴圈 `rss_poller` 照每個 Feed 自己的間隔
+  （預設 15 分鐘）輪詢；每一筆第一次出現時讀它的單集頁，認出是哪一部 × 哪一個字幕組（RSS Series），新的一律待綁定、
+  它的集數留著不送。在待綁定那一列搜 TMDB、選作品與 Route，確認時說出會定下來的資料夾名與要送出的集數，按下去
+  就綁好並送單（`trigger = rss`）；之後同一個 RSS Series 的新集數每一輪自動送。同一個 Feed 輪兩次不會多出 Item 或
+  下載（GUID 去重）；Mikan 的發佈時間讀 `<torrent><pubDate>` 當 UTC+8。刪 Feed 連它的 Item 一起刪、RSS Series 與
+  綁定留著。新表 `rss_feeds`、`rss_series`、`rss_items`（migration `b7e2c4d9a813`），新依賴 `feedparser`。
+  規劃時讀 RSS Series 上的季號與集號偏移（改正與重算在票 13）。演練情境 `--scenario rss`，`pnpm -C web e2e` 多
+  `rss` 一條（1280 與 390）。
 
 ### Changed
+- **RSS 送出的下載，時間線上的建立者是 `rss:<RSS Series id>`**（M3 票 08，plan §2.3）：原本一律寫 `system`。
 - **精靈每一步的工作面排在剖面前面**（M3 票 06h）：窄版第一屏就是這一步的標題與動作（390 寬時原本要捲到
   800–1500px），桌機看起來不變；套件內 Jellyfin 要建的媒體庫清單從剖面搬進工作面、排在「開始靠泊」之前。換步時
   焦點給新一步的標題，按下的鍵做完被換掉時接到「前往下一個泊位」；窄版捲動時底部留出固定動作列的高度。

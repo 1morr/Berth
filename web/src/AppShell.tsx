@@ -49,7 +49,7 @@ function NavLink({
   to,
   children,
 }: {
-  to: '/' | '/library' | '/jobs' | '/review' | '/issues' | '/health' | '/settings'
+  to: '/' | '/library' | '/jobs' | '/review' | '/issues' | '/rss' | '/health' | '/settings'
   children: ReactNode
 }) {
   return (
@@ -102,6 +102,8 @@ function Identity() {
         {/* 審核、待處理與設定同一個規則：審核與修正是 admin 的事（plan §6），後端同時回 403。 */}
         {me.data.role === 'admin' && <NavLink to="/review">{t('nav.review')}</NavLink>}
         {me.data.role === 'admin' && <NavLink to="/issues">{t('nav.issues')}</NavLink>}
+        {/* RSS 同一個規則（M3 票 08）：聚合 feed 的網址帶 token，綁定會替整個家送單。 */}
+        {me.data.role === 'admin' && <NavLink to="/rss">{t('nav.rss')}</NavLink>}
         <NavLink to="/health">{t('nav.health')}</NavLink>
         {/* 連 `/settings` 而不是第一個分頁：前綴比對讓它在兩個設定頁上都是當前頁（票 14a）。 */}
         {me.data.role === 'admin' && <NavLink to="/settings">{t('nav.settings')}</NavLink>}

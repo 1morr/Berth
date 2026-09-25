@@ -43,6 +43,7 @@ from berth.api import jobs as jobs_api
 from berth.api import plans as plans_api
 from berth.api import review as review_api
 from berth.api import routes as routes_api
+from berth.api import rss as rss_api
 from berth.api import setup as setup_api
 from berth.api.routes import route_refusal, route_responses
 from berth.domain import RouteRefusal, enums
@@ -78,6 +79,7 @@ STATUS_TABLES: dict[str, dict[Any, int]] = {
     "ReviewRefusal": review_api._STATUS,
     "PlanRefusal": plans_api._STATUS,
     "RematchRefusal": files_api._STATUS,
+    "RssRefusal": rss_api._STATUS,
     "BundledLibraryRefusal": setup_api._BUNDLED_STATUS,
 }
 
@@ -440,6 +442,7 @@ class TestDeclaringWhatEachEndpointRefuses:
             "plan_refusal": "PlanRefusalOut",
             "rematch_refusal": "RematchRefusalOut",
             "bundled_refusal": "BundledLibraryRefusalOut",
+            "rss_refusal": "RssRefusalOut",
             "_refuse": "JobRefusalOut",
         }
 

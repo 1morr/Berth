@@ -33,6 +33,7 @@ import { LoginPage } from './pages/LoginPage'
 import { MediaRoute } from './pages/MediaRoute'
 import { QbittorrentSettingsPage } from './pages/QbittorrentSettingsPage'
 import { RouteSettingsPage } from './pages/RouteSettingsPage'
+import { RssPage } from './pages/RssPage'
 import { SetupPage } from './pages/SetupPage'
 import { TmdbSettingsPage } from './pages/TmdbSettingsPage'
 
@@ -376,6 +377,25 @@ const reviewRoute = createRoute({
   ),
 })
 
+/**
+ * RSS `/rss`（M3 票 08，`.scratch/m3/rss-shape.md`）。與 `/issues` 同一個規則：**只有管理員**
+ * （後端 `ADMIN_PREFIXES` 的 `/rss`）——聚合 feed 的網址帶 token，綁定會替整個家送單。
+ */
+const rssRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/rss',
+  beforeLoad: async ({ context, location }) => {
+    const me = await requireSignedInPage(context.queryClient, location)
+    if (me !== null && me.role !== 'admin')
+      throw redirect({ to: '/health', search: { denied: true } })
+  },
+  component: () => (
+    <AppShell>
+      <RssPage />
+    </AppShell>
+  ),
+})
+
 const healthRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/health',
@@ -437,6 +457,7 @@ export const routeTree = rootRoute.addChildren([
   healthRoute,
   issuesRoute,
   reviewRoute,
+  rssRoute,
   jobsRoute,
   jobDetailRoute,
   inventoryIndexRoute,

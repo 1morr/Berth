@@ -19,6 +19,7 @@ from berth.adapters.prowlarr import ProwlarrClient, ProwlarrIndexer
 from berth.adapters.prowlarr.fake import FakeProwlarrClient
 from berth.adapters.qbittorrent import QbittorrentClient
 from berth.adapters.qbittorrent.fake import FakeQbittorrentClient
+from berth.adapters.rss import FeedFetcher
 from berth.adapters.tmdb import TmdbClient
 from berth.adapters.torrent import TorrentFetcher
 from berth.adapters.torznab import TorznabClient
@@ -60,6 +61,9 @@ class FakeClientFactory:
 
     def torrent(self) -> TorrentFetcher:
         raise AssertionError("the connection form never fetches a torrent")
+
+    def rss(self) -> FeedFetcher:
+        raise AssertionError("the connection form never fetches a feed")
 
     def torznab(self, base_url: str, api_key: str) -> TorznabClient:
         raise AssertionError("the connection form never talks to a Torznab endpoint")

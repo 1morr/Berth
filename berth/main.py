@@ -30,6 +30,7 @@ from berth.pipeline import (
     PlannerRunner,
     QbitPoller,
     Reconciler,
+    RssPoller,
 )
 from berth.services.clients import HttpServiceClientFactory, ServiceClientFactory
 from berth.services.events import EventHub
@@ -49,6 +50,7 @@ PLANNER_RUNNER_TASK = "planner_runner"
 IMPORTER_TASK = "importer"
 JELLYFIN_RESOLVER_TASK = "jellyfin_resolver"
 RECONCILER_TASK = "reconciler"
+RSS_POLLER_TASK = "rss_poller"
 
 #: mount 掛在 `/`，所以 StaticFiles 收到的 path 沒有開頭的斜線。
 _API_SEGMENT = API_PREFIX.lstrip("/")
@@ -148,6 +150,7 @@ def _lifespan(config: Config) -> Lifespan[FastAPI]:
         runner = ReconcileRunner(sessions, clients)
         app.state.reconciler = runner
         reconciler = Reconciler(sessions, runner)
+        rss = RssPoller(sessions, clients)
         # 背景迴圈（plan §3.2）。每一個都先睡一個間隔，所以啟動本身不會慢。
         tasks = [
             asyncio.create_task(checker.run(), name=HEALTH_CHECKER_TASK),
@@ -156,6 +159,7 @@ def _lifespan(config: Config) -> Lifespan[FastAPI]:
             asyncio.create_task(importer.run(), name=IMPORTER_TASK),
             asyncio.create_task(resolver.run(), name=JELLYFIN_RESOLVER_TASK),
             asyncio.create_task(reconciler.run(), name=RECONCILER_TASK),
+            asyncio.create_task(rss.run(), name=RSS_POLLER_TASK),
         ]
         try:
             yield

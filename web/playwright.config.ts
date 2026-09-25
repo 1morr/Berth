@@ -27,6 +27,8 @@ const FLOWS = [
   { name: 'submit', spec: 'submit', scenario: 'import', port: 8492 },
   { name: 'review', spec: 'review', scenario: 'review', port: 8493 },
   { name: 'issues', spec: 'issues', scenario: 'issues', port: 8494 },
+  { name: 'rss', spec: 'rss', scenario: 'rss', port: 8498 },
+  { name: 'rss-390', spec: 'rss', scenario: 'rss', port: 8508, viewport: NARROW },
 ] as const satisfies readonly {
   name: string
   spec: string

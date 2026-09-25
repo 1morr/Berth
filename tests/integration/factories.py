@@ -13,6 +13,8 @@ from berth.adapters.prowlarr import ProwlarrClient
 from berth.adapters.prowlarr.fake import FakeProwlarrClient
 from berth.adapters.qbittorrent import QbittorrentClient
 from berth.adapters.qbittorrent.fake import FakeQbittorrentClient
+from berth.adapters.rss import FeedFetcher
+from berth.adapters.rss.fake import FakeFeedFetcher
 from berth.adapters.tmdb import TmdbClient
 from berth.adapters.tmdb.fake import FakeTmdbClient
 from berth.adapters.torrent import TorrentFetcher
@@ -33,6 +35,7 @@ class FakeClientFactory:
         torznab: FakeTorznabClient | None = None,
         indexer_search: FakeIndexerSearch | None = None,
         torrent: FakeTorrentFetcher | None = None,
+        rss: FakeFeedFetcher | None = None,
     ) -> None:
         self.jellyfin_ = jellyfin or FakeJellyfinClient()
         self.qbittorrent_ = qbittorrent or FakeQbittorrentClient()
@@ -41,6 +44,7 @@ class FakeClientFactory:
         self.torznab_ = torznab or FakeTorznabClient()
         self.indexer_search_ = indexer_search or FakeIndexerSearch()
         self.torrent_ = torrent or FakeTorrentFetcher()
+        self.rss_ = rss or FakeFeedFetcher()
         #: 每次拿 client 時收到的憑證，用來斷言「用的是存下來的那一把」。
         self.tokens: list[str] = []
         self.api_keys: list[str] = []
@@ -73,6 +77,9 @@ class FakeClientFactory:
 
     def torrent(self) -> TorrentFetcher:
         return self.torrent_
+
+    def rss(self) -> FeedFetcher:
+        return self.rss_
 
     def indexer_search(self, kind: IndexerKind, base_url: str, api_key: str) -> IndexerSearch:
         self.api_keys.append(api_key)

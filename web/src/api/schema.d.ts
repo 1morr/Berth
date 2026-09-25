@@ -956,6 +956,125 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/rss/feeds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Feeds */
+        get: operations["get_feeds_api_rss_feeds_get"];
+        put?: never;
+        /**
+         * Post Feed
+         * @description 記下這個 Feed。不當場輪詢——背景迴圈在半分鐘內輪到它，畫面上也有「立即輪詢」。
+         */
+        post: operations["post_feed_api_rss_feeds_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/rss/feeds/{feed_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete One Feed */
+        delete: operations["delete_one_feed_api_rss_feeds__feed_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/rss/feeds/{feed_id}/poll": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Poll
+         * @description 立刻輪這一個。抓不到 Feed 仍是 200：失敗記在那一列的 `last_error`，畫面重讀清單就看得到。
+         */
+        post: operations["post_poll_api_rss_feeds__feed_id__poll_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/rss/series": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Series
+         * @description 待綁定的排前面。
+         */
+        get: operations["get_series_api_rss_series_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/rss/series/{series_id}/binding": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Put Binding
+         * @description 綁定並把留著的 Item 送出去。送單被拒的那幾筆不讓這一支失敗：它們留在 `matched` 帶著原文。
+         */
+        put: operations["put_binding_api_rss_series__series_id__binding_put"];
+        post?: never;
+        /** Delete Binding */
+        delete: operations["delete_binding_api_rss_series__series_id__binding_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/rss/items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Items
+         * @description 最近看到的 50 筆，新的在前。
+         */
+        get: operations["get_items_api_rss_items_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/search/queries": {
         parameters: {
             query?: never;
@@ -1688,6 +1807,16 @@ export interface components {
             /** Skipped */
             skipped: number;
         };
+        /**
+         * BindingIn
+         * @description 綁到哪一部作品、入庫到哪一條 Route。作品要先打過 `GET /media/{id}`（它才有那一列）。
+         */
+        BindingIn: {
+            /** Media */
+            media: string;
+            /** Route */
+            route: number;
+        };
         /** BundledLibrariesIn */
         BundledLibrariesIn: {
             /** Libraries */
@@ -1973,6 +2102,59 @@ export interface components {
          * @enum {string}
          */
         EpisodeStatus: "imported" | "stuck" | "downloading" | "missing" | "unaired";
+        /** FeedDeletedOut */
+        FeedDeletedOut: {
+            /** Items */
+            items: number;
+        };
+        /**
+         * FeedIn
+         * @description 加一個 Feed。來源種類由網址的主機認出來（這一票只認 Mikan）。
+         */
+        FeedIn: {
+            /** Url */
+            url: string;
+            /**
+             * Name
+             * @default
+             */
+            name?: string;
+        };
+        /**
+         * FeedItemStatus
+         * @description 一筆 Feed Item 走到哪了（`CONTEXT.md`、plan §2.4）。
+         *
+         *     只列這一票用得到的三種；`new`（還沒比對）與 `excluded`（排除條件）在票 10 加。
+         * @enum {string}
+         */
+        FeedItemStatus: "unbound" | "matched" | "downloaded";
+        /**
+         * FeedKind
+         * @description Feed 是哪一站的 RSS（plan §2.4、§8.5）。每一種一個 adapter（`adapters/rss/`）。
+         *
+         *     只列**已經有 adapter** 的那幾種：Nyaa 與 acg.rip 在 M3 票 11，generic 之後。加 Feed 時由網址的
+         *     主機認出來（`services/rss.kind_of`），認不出來的是 `feed_unsupported`。
+         * @enum {string}
+         */
+        FeedKind: "mikan";
+        /** FeedOut */
+        FeedOut: {
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /** Url */
+            url: string;
+            kind: components["schemas"]["FeedKind"];
+            /** Interval Sec */
+            interval_sec: number;
+            /** Last Polled At */
+            last_polled_at: string | null;
+            /** Last Error */
+            last_error: string;
+            /** Items */
+            items: number;
+        };
         /**
          * FileKind
          * @description 檔案分類（brief §6.2）。第一層，決定這個檔案還要不要往下走。
@@ -2324,6 +2506,31 @@ export interface components {
         ItemEditsIn: {
             /** Items */
             items: components["schemas"]["ItemEditIn"][];
+        };
+        /** ItemOut */
+        ItemOut: {
+            /** Id */
+            id: number;
+            /** Feed Id */
+            feed_id: number;
+            /** Title */
+            title: string;
+            /** Link */
+            link: string;
+            /** Published At */
+            published_at: string | null;
+            /**
+             * Seen At
+             * Format: date-time
+             */
+            seen_at: string;
+            /** Series Id */
+            series_id: number | null;
+            status: components["schemas"]["FeedItemStatus"];
+            /** Job Hash */
+            job_hash: string;
+            /** Error */
+            error: string;
         };
         /**
          * ItemReasonOut
@@ -3030,6 +3237,15 @@ export interface components {
             };
             review_reason?: components["schemas"]["ReviewReason"] | null;
         };
+        /** PollOut */
+        PollOut: {
+            /** Items */
+            items: number;
+            /** Series */
+            series: number;
+            /** Submitted */
+            submitted: number;
+        };
         /**
          * PollerOut
          * @description 下載迴圈上一輪的結果（plan §3.2）。
@@ -3364,6 +3580,24 @@ export interface components {
             selections?: components["schemas"]["RouteSelectionIn"][];
         };
         /**
+         * RssRefusal
+         * @description `/rss` 的一個命令在做出任何改變之前就停下來了（`services/rss.py`、M3 票 08）。
+         *
+         *     綁定之後的送單被拒**不在這裡**：綁定本身成立，那幾筆 Feed Item 留在 `matched` 帶著原文，
+         *     下一輪輪詢再送（`.scratch/m3/rss-shape.md` §3）。
+         * @enum {string}
+         */
+        RssRefusal: "feed_missing" | "feed_unsupported" | "feed_duplicate" | "series_missing" | "series_bound" | "media_missing" | "route_missing" | "route_disabled" | "route_kind_mismatch";
+        /**
+         * RssRefusalOut
+         * @description 與其他群組的拒絕同形：`reason` 挑句子，`detail` 是原文或那一個 id。
+         */
+        RssRefusalOut: {
+            reason: components["schemas"]["RssRefusal"];
+            /** Detail */
+            detail: string;
+        };
+        /**
          * SearchOut
          * @description 一次搜尋的回應。
          *
@@ -3443,6 +3677,39 @@ export interface components {
             aired: number;
             /** Episodes */
             episodes: components["schemas"]["EpisodeOut"][];
+        };
+        /** SeriesOut */
+        SeriesOut: {
+            /** Id */
+            id: number;
+            /** Key */
+            key: string;
+            /** Title Raw */
+            title_raw: string;
+            /** Mikan Bangumi Id */
+            mikan_bangumi_id: number | null;
+            /** Mikan Subgroup Id */
+            mikan_subgroup_id: number | null;
+            /** Media Id */
+            media_id: string | null;
+            /** Media Title */
+            media_title: string;
+            /** Media Title En */
+            media_title_en: string;
+            /** Route Id */
+            route_id: number | null;
+            /** Route Name */
+            route_name: string;
+            /** Season */
+            season: number | null;
+            /** Episode Offset */
+            episode_offset: number | null;
+            /** Bound By */
+            bound_by: string;
+            /** Waiting */
+            waiting: number;
+            /** Submitted */
+            submitted: number;
         };
         /** ServiceDetectionOut */
         ServiceDetectionOut: {
@@ -5989,6 +6256,281 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RouteRefusalOut"];
+                };
+            };
+        };
+    };
+    get_feeds_api_rss_feeds_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeedOut"][];
+                };
+            };
+        };
+    };
+    post_feed_api_rss_feeds_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FeedIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeedOut"];
+                };
+            };
+            /** @description `feed_duplicate` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RssRefusalOut"];
+                };
+            };
+            /** @description `feed_unsupported` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RssRefusalOut"];
+                };
+            };
+        };
+    };
+    delete_one_feed_api_rss_feeds__feed_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                feed_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeedDeletedOut"];
+                };
+            };
+            /** @description `feed_missing` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RssRefusalOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_poll_api_rss_feeds__feed_id__poll_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                feed_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PollOut"];
+                };
+            };
+            /** @description `feed_missing` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RssRefusalOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_series_api_rss_series_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SeriesOut"][];
+                };
+            };
+        };
+    };
+    put_binding_api_rss_series__series_id__binding_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                series_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BindingIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SeriesOut"];
+                };
+            };
+            /** @description `series_missing` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RssRefusalOut"];
+                };
+            };
+            /** @description `series_bound` · `route_disabled` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RssRefusalOut"];
+                };
+            };
+            /** @description `media_missing` · `route_missing` · `route_kind_mismatch` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RssRefusalOut"];
+                };
+            };
+        };
+    };
+    delete_binding_api_rss_series__series_id__binding_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                series_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SeriesOut"];
+                };
+            };
+            /** @description `series_missing` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RssRefusalOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_items_api_rss_items_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemOut"][];
                 };
             };
         };
