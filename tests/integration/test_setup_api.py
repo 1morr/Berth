@@ -78,7 +78,24 @@ class TestStatus:
             "services": [],
             "waited_seconds": 0,
             "window_seconds": 120,
+            "probe_targets": {
+                "jellyfin": "http://jellyfin:8096",
+                "qbittorrent": "http://qbittorrent:8080",
+                "prowlarr": "http://prowlarr:9696",
+            },
         }
+
+    def test_the_probe_targets_follow_the_qbittorrent_port_in_env(
+        self, config: Config, tmp_path: Path
+    ) -> None:
+        """票 06h：第 2 步寫死 `qbittorrent:8080`，`.env` 換了 port 畫面就說錯（06b 的遺留）。"""
+        app = create_app(
+            replace(config, web_root=tmp_path / "never-built", qbittorrent_webui_port=18080)
+        )
+        with TestClient(app, headers=BROWSER) as running:
+            targets = running.get("/api/setup/status").json()["probe_targets"]
+
+        assert targets["qbittorrent"] == "http://qbittorrent:18080"
 
 
 class TestAdmin:

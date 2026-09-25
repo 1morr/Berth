@@ -217,6 +217,38 @@ class TestBundled:
 
 class TestExisting:
     @pytest.mark.asyncio
+    async def test_the_berth_path_is_the_preselected_target_once_it_is_added(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """票 06h：泊位 1 加了 Berth 路徑之後，泊位 3 反而什麼都沒預選。
+
+        那條路徑正是為 Berth 加的；其餘路徑是使用者自己的。
+        """
+        old = roots["library"] / "old-tv"
+        berth = berth_path(roots, "影集")
+        await arrange(
+            session, roots, origin=ServiceOrigin.EXISTING, libraries=(existing_library(old, berth),)
+        )
+
+        status = await read_route_status(session)
+
+        assert [row.target_path for row in status.libraries] == [berth]
+
+    @pytest.mark.asyncio
+    async def test_a_single_path_is_preselected_as_the_brief_says(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """brief §4.3：只有一條路徑時自動選定。"""
+        old = roots["library"] / "old-tv"
+        await arrange(
+            session, roots, origin=ServiceOrigin.EXISTING, libraries=(existing_library(old),)
+        )
+
+        status = await read_route_status(session)
+
+        assert [row.target_path for row in status.libraries] == [str(old)]
+
+    @pytest.mark.asyncio
     async def test_builds_a_route_for_each_selected_library(
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:

@@ -1067,12 +1067,18 @@ def _library_choice(library: SetupLibrary, library_root: str, route: Route | Non
         uses_tvdb=any(TVDB_MARKER in name.lower() for name in library.metadata_fetchers),
         supported=library.collection_type in SUPPORTED_TYPES,
         has_route=route is not None,
-        target_path=route.target_path if route is not None else _default_target(library),
+        target_path=route.target_path if route is not None else _default_target(library, path),
     )
 
 
-def _default_target(library: SetupLibrary) -> str:
-    """還沒選過的媒體庫預選哪一條：只有一條就是它（brief §4.3「自動選定」）。"""
+def _default_target(library: SetupLibrary, berth: str) -> str:
+    """還沒選過的媒體庫預選哪一條。
+
+    加過 Berth 路徑的就是它：那一條本來就是為 Berth 加的，其餘路徑是使用者自己的（票 06h）。
+    否則只有一條就是它（brief §4.3「自動選定」），多條留給使用者選。
+    """
+    if berth in library.locations:
+        return berth
     return library.locations[0] if len(library.locations) == 1 else ""
 
 

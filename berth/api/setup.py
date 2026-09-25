@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+from dataclasses import asdict
+
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field
 
-from berth.api.deps import ClientFactoryDep, SessionDep, SetupProbesDep
+from berth.api.deps import ClientFactoryDep, ConfigDep, SessionDep, SetupProbesDep
 from berth.api.errors import refusal_responses
 from berth.api.routes import route_refusal, route_responses
 from berth.api.schemas import QbittorrentOut, RouteOut, StepOut
+from berth.config import Config
 from berth.domain import (
     BundledLibraryRefusal,
     CollectionType,
@@ -18,6 +21,7 @@ from berth.domain import (
     ServiceKind,
     ServiceOrigin,
 )
+from berth.services.clients import bundled_targets
 from berth.services.indexer import (
     apply_default_indexers,
     connect_indexer,
@@ -88,6 +92,9 @@ class SetupStatusOut(BaseModel):
     services: list[ServiceDetectionOut]
     waited_seconds: int
     window_seconds: int
+    #: 第 2 步探的三個 compose 位址（`bundled_targets`）。畫面的「將會探測」照它說，
+    #: 不在前端寫死 port（票 06h）。
+    probe_targets: dict[ServiceKind, str]
 
 
 class AdminIn(BaseModel):
@@ -116,12 +123,12 @@ class DetectIn(BaseModel):
 
 
 @router.get("/status")
-async def get_status(session: SessionDep) -> SetupStatusOut:
-    return _out(await read_status(session))
+async def get_status(session: SessionDep, config: ConfigDep) -> SetupStatusOut:
+    return _out(await read_status(session), config)
 
 
 @router.post("/admin")
-async def post_admin(session: SessionDep, body: AdminIn) -> SetupStatusOut:
+async def post_admin(session: SessionDep, config: ConfigDep, body: AdminIn) -> SetupStatusOut:
     try:
         result = await create_admin(
             session,
@@ -131,20 +138,23 @@ async def post_admin(session: SessionDep, body: AdminIn) -> SetupStatusOut:
         )
     except ValueError as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
-    return _out(result)
+    return _out(result, config)
 
 
 @router.post("/detect")
 async def post_detect(
-    session: SessionDep, probes: SetupProbesDep, body: DetectIn | None = None
+    session: SessionDep, config: ConfigDep, probes: SetupProbesDep, body: DetectIn | None = None
 ) -> SetupStatusOut:
     request = body or DetectIn()
-    return _out(await detect_services(session, probes, restart=request.restart, kind=request.kind))
+    return _out(
+        await detect_services(session, probes, restart=request.restart, kind=request.kind), config
+    )
 
 
 @router.post("/services/{kind}")
 async def post_service(
     session: SessionDep,
+    config: ConfigDep,
     factory: ClientFactoryDep,
     kind: ServiceKind,
     body: ConnectIn,
@@ -161,12 +171,15 @@ async def post_service(
                 password=body.password,
             ),
             factory,
-        )
+        ),
+        config,
     )
 
 
-def _out(result: SetupStatus) -> SetupStatusOut:
-    return SetupStatusOut.model_validate(result)
+def _out(result: SetupStatus, config: Config) -> SetupStatusOut:
+    return SetupStatusOut.model_validate(
+        {**asdict(result), "probe_targets": bundled_targets(config)}
+    )
 
 
 # --- 第 3 步：Jellyfin（plan §9.4、§9.5）---
@@ -604,9 +617,9 @@ async def delete_setup_route(session: SessionDep, route_id: int) -> None:
 
 
 @router.post("/complete")
-async def post_complete(session: SessionDep) -> SetupStatusOut:
+async def post_complete(session: SessionDep, config: ConfigDep) -> SetupStatusOut:
     """第 8 步：寫下 `settings.setup.completed`。**寫完這一支就要登入才進得來**（票 07）。"""
     try:
-        return _out(await complete_setup(session))
+        return _out(await complete_setup(session), config)
     except ValueError as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc

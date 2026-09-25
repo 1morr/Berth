@@ -27,7 +27,7 @@ from berth.adapters.torrent import HttpTorrentFetcher, TorrentFetcher
 from berth.adapters.torznab import TorznabClient
 from berth.adapters.torznab.client import HttpTorznabClient
 from berth.config import Config
-from berth.domain import IndexerKind
+from berth.domain import IndexerKind, ServiceKind
 
 
 class ServiceClientFactory(Protocol):
@@ -81,6 +81,17 @@ BUNDLED_JELLYFIN_URL = "http://jellyfin:8096"
 BUNDLED_PROWLARR_URL = "http://prowlarr:9696"
 
 
+def bundled_targets(config: Config) -> dict[ServiceKind, str]:
+    """精靈第 2 步探的三個 compose 位址。探測照它連，畫面照它說「將會探測」哪裡（票 06h：
+    原本前端寫死 `qbittorrent:8080`，`.env` 換了 port 就說錯）。
+    """
+    return {
+        ServiceKind.JELLYFIN: BUNDLED_JELLYFIN_URL,
+        ServiceKind.QBITTORRENT: f"http://qbittorrent:{config.qbittorrent_webui_port}",
+        ServiceKind.PROWLARR: BUNDLED_PROWLARR_URL,
+    }
+
+
 def build_setup_probes(config: Config, environ: Mapping[str, str] | None = None) -> SetupProbes:
     """精靈第 2 步用的三個 client。探測的是 compose 主機名，不是使用者填的位址。
 
@@ -89,10 +100,11 @@ def build_setup_probes(config: Config, environ: Mapping[str, str] | None = None)
     """
     env = os.environ if environ is None else environ
     api_key = read_api_key(config.prowlarr_config_path, env)
+    targets = bundled_targets(config)
     return SetupProbes(
-        jellyfin=HttpJellyfinClient(BUNDLED_JELLYFIN_URL),
-        qbittorrent=HttpQbittorrentClient(f"http://qbittorrent:{config.qbittorrent_webui_port}"),
-        prowlarr=HttpProwlarrClient(BUNDLED_PROWLARR_URL, api_key),
+        jellyfin=HttpJellyfinClient(targets[ServiceKind.JELLYFIN]),
+        qbittorrent=HttpQbittorrentClient(targets[ServiceKind.QBITTORRENT]),
+        prowlarr=HttpProwlarrClient(targets[ServiceKind.PROWLARR], api_key),
         prowlarr_api_key=api_key,
     )
 
