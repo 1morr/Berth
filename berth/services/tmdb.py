@@ -1,7 +1,7 @@
-"""精靈第 6 步：TMDB（plan §9.3 第 6 步、§8.3、brief §16.3）。
+"""精靈第 7 步：TMDB（plan §9.3 第 7 步、§8.3、brief §16.3）。
 
 **憑證由使用者自備，而且是必填的閘門**（票 02b）：Berth 不內建任何 provider 的 API key，
-使用者要先去 themoviedb.org 申請一把貼進來，測得過才走得到第 7 步。沒有它，探索、季集快照
+使用者要先去 themoviedb.org 申請一把貼進來，測得過才走得到第 8 步。沒有它，探索、季集快照
 與命名全部停擺——所以這一步與可跳過的索引站不同級。
 
 「測試」打的是 `configuration`——那一支不需要任何參數，回得出來就證明這把憑證有效。
@@ -62,7 +62,7 @@ async def verify_tmdb(
     def record(latest: SetupSettings) -> None:
         latest.tmdb.steps = [step]
 
-    # 測試在路上的那幾秒裡，第 5 步可能已經寫進同一組設定（M2 票 15）。
+    # 測試在路上的那幾秒裡，第 6 步可能已經寫進同一組設定（M2 票 15）。
     setup = await update_settings(session, SetupSettings, record)
     return _view(setup, settings)
 
@@ -93,7 +93,7 @@ def credential(settings: TmdbSettings) -> str:
 
 
 def tmdb_verified(setup: SetupSettings) -> bool:
-    """第 6 步做完了沒。步序（`services/setup.py`）與這一步自己的狀態讀同一條規則。"""
+    """第 7 步做完了沒。步序（`services/setup.py`）與這一步自己的狀態讀同一條規則。"""
     return any(row.status is StepStatus.OK for row in setup.tmdb.steps)
 
 

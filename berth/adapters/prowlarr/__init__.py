@@ -1,4 +1,4 @@
-"""Prowlarr adapter（plan §8.4、§9.2、§9.3 第 5 步）。"""
+"""Prowlarr adapter（plan §8.4、§9.2、§9.3 第 6 步）。"""
 
 from __future__ import annotations
 

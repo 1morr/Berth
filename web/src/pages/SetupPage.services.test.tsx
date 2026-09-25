@@ -37,8 +37,8 @@ const AT_BERTH_TWO = setupStatus({
   services: ALL_BUNDLED,
 })
 
-/** 泊位 2 也接好了，精靈在泊位 3。 */
-const AT_BERTH_THREE = setupStatus({ ...AT_BERTH_TWO, current_step: 5 })
+/** 媒體庫路徑也接好了，精靈在「來源」（第 6 步，票 06d 之後是泊位 4）。 */
+const AT_SOURCE = setupStatus({ ...AT_BERTH_TWO, current_step: 6 })
 
 describe('泊位 2：qBittorrent', () => {
   it('剖面在按之前就逐鍵列出現值與建議值', async () => {
@@ -172,10 +172,10 @@ describe('設定跑完之後再進來', () => {
   })
 })
 
-describe('泊位 3：來源', () => {
+describe('泊位 4：來源', () => {
   it('十個預設站預設全勾，按鈕說得出會加幾個', async () => {
     stubApi({
-      [STATUS]: { body: AT_BERTH_THREE },
+      [STATUS]: { body: AT_SOURCE },
       [INDEXERS]: { body: indexerSetup() },
       [TMDB]: { body: tmdbSetup() },
     })
@@ -191,7 +191,7 @@ describe('泊位 3：來源', () => {
 
   it('取消勾選的站不會被送出去', async () => {
     const fetchStub = stubApi({
-      [STATUS]: { body: AT_BERTH_THREE },
+      [STATUS]: { body: AT_SOURCE },
       [INDEXERS]: { body: indexerSetup() },
       [TMDB]: { body: tmdbSetup() },
       [ADD_INDEXERS]: { body: indexerSetup({ steps: [step('nyaasi', 'ok')] }) },
@@ -210,7 +210,7 @@ describe('泊位 3：來源', () => {
 
   it('逐站顯示成敗：連不上的變紅並展開手動步驟，其餘照樣繫上', async () => {
     stubApi({
-      [STATUS]: { body: AT_BERTH_THREE },
+      [STATUS]: { body: AT_SOURCE },
       [INDEXERS]: {
         body: indexerSetup({
           steps: [
@@ -242,7 +242,7 @@ describe('泊位 3：來源', () => {
     const fetchStub = stubApi({
       [STATUS]: {
         body: setupStatus({
-          ...AT_BERTH_THREE,
+          ...AT_SOURCE,
           services: [
             ...ALL_BUNDLED.slice(0, 2),
             detection({
@@ -287,7 +287,7 @@ describe('泊位 3：來源', () => {
     // 這一條原本只驗「請求送出去了」，於是「送出去了但畫面沒變」一直沒被抓到：
     // TMDB 那一節有徽章，索引站那一節沒有，按了像壞掉（票 11 的 critique）。
     const fetchStub = stubApi({
-      [STATUS]: { body: AT_BERTH_THREE },
+      [STATUS]: { body: AT_SOURCE },
       [INDEXERS]: { body: indexerSetup() },
       [TMDB]: { body: tmdbSetup() },
       [SKIP_INDEXERS]: { body: indexerSetup({ skipped: true }) },
@@ -314,7 +314,7 @@ describe('泊位 3：來源', () => {
     // 第 6 步是閘門（票 02b）：第一次來的人手上還沒有 key，所以畫面要先說去哪裡申請。
     // 按鈕**不停用**——票 11 的 critique 抓過「按不動的控制項讀起來像壞掉」。
     const fetchStub = stubApi({
-      [STATUS]: { body: AT_BERTH_THREE },
+      [STATUS]: { body: AT_SOURCE },
       [INDEXERS]: { body: indexerSetup() },
       [TMDB]: { body: tmdbSetup() },
     })
@@ -339,7 +339,7 @@ describe('泊位 3：來源', () => {
     // 「key 打錯了」與「連不到 api.themoviedb.org」是兩件事，畫面要兩條都給
     // （PRODUCT.md 原則 4；image 裡沒有 curl，所以連線那條走 python）。
     stubApi({
-      [STATUS]: { body: AT_BERTH_THREE },
+      [STATUS]: { body: AT_SOURCE },
       [INDEXERS]: { body: indexerSetup() },
       [TMDB]: {
         body: tmdbSetup({
@@ -360,7 +360,7 @@ describe('泊位 3：來源', () => {
 
   it('貼上自己的 key 測過之後，留下 TMDB 自己報的值', async () => {
     const fetchStub = stubApi({
-      [STATUS]: { body: AT_BERTH_THREE },
+      [STATUS]: { body: AT_SOURCE },
       [INDEXERS]: { body: indexerSetup() },
       [TMDB]: { body: tmdbSetup() },
       [TEST_TMDB]: {
@@ -397,7 +397,7 @@ describe('泊位 3：來源', () => {
    */
   it('索引站與 TMDB 的 API key 都是遮著的，且看得見', async () => {
     stubApi({
-      [STATUS]: { body: AT_BERTH_THREE },
+      [STATUS]: { body: AT_SOURCE },
       [INDEXERS]: { body: indexerSetup({ origin: 'existing', api_key_present: false }) },
       [TMDB]: { body: tmdbSetup() },
     })
@@ -419,12 +419,12 @@ describe('泊位 3：來源', () => {
   })
 
   /**
-   * 票 03 第 4 條。BTH 3 的詳情列本來只讀服務判定（索引站數），而 TMDB 是這一格的閘門——
+   * 票 03 第 4 條。「來源」那一格的詳情列本來只讀服務判定（索引站數），而 TMDB 是這一格的閘門——
    * 閘門過了，板上那一格卻一個字都不會動。
    */
-  it('通過 TMDB 閘門之後，BTH 3 的詳情列跟著換', async () => {
+  it('通過 TMDB 閘門之後，「來源」那一格的詳情列跟著換', async () => {
     stubApi({
-      [STATUS]: { body: AT_BERTH_THREE },
+      [STATUS]: { body: AT_SOURCE },
       [INDEXERS]: { body: indexerSetup() },
       [TMDB]: { body: tmdbSetup({ api_key_present: true }) },
       [TEST_TMDB]: { body: tmdbSetup({ api_key_present: true, verified: true, steps: [] }) },
@@ -432,7 +432,7 @@ describe('泊位 3：來源', () => {
     const user = userEvent.setup()
 
     renderWithProviders(<SetupPage />)
-    const berth = within((await screen.findByText('BTH 3')).closest('li')!)
+    const berth = within((await screen.findByText('BTH 4')).closest('li')!)
     expect(await berth.findByText('待驗證')).toBeInTheDocument()
 
     await user.type(await screen.findByLabelText('你的 TMDB API key'), '0'.repeat(32))

@@ -31,7 +31,7 @@ from berth.services.qbittorrent import (
     read_qbittorrent_diff,
 )
 from berth.services.settings import read_settings, write_settings
-from berth.services.setup import STEP_INDEXER, STEP_QBITTORRENT, create_admin, read_status
+from berth.services.setup import STEP_QBITTORRENT, STEP_ROUTES, create_admin, read_status
 from tests.integration.factories import FakeClientFactory
 
 NOW = datetime(2026, 9, 8, 12, 0, tzinfo=UTC)
@@ -293,7 +293,8 @@ async def test_the_wizard_moves_on_once_the_preferences_are_applied(
 
     await apply_qbittorrent(session, FakeClientFactory(qbittorrent=FakeQbittorrentClient()))
 
-    assert (await read_status(session)).current_step == STEP_INDEXER
+    # 下一步是媒體庫路徑（票 06d 移到 qBittorrent 之後）。
+    assert (await read_status(session)).current_step == STEP_ROUTES
 
 
 @pytest.mark.asyncio

@@ -49,13 +49,15 @@ DETECT_WINDOW = timedelta(minutes=2)
 
 #: 精靈的步序（plan §9.3）。第 1 步建管理員，第 2 步偵測，第 3 步起是各服務。
 #: 每一步「做完了沒」由它自己的狀態導出（`_current_step`），不存游標。
+#: Route 排在 qBittorrent 之後、索引站之前（票 06d）：它只依賴 Jellyfin 與 qBittorrent，
+#: 而掛載設錯是最常卡住的地方，越早知道越好。
 STEP_ADMIN = 1
 STEP_DETECT = 2
 STEP_JELLYFIN = 3
 STEP_QBITTORRENT = 4
-STEP_INDEXER = 5
-STEP_TMDB = 6
-STEP_ROUTES = 7
+STEP_ROUTES = 5
+STEP_INDEXER = 6
+STEP_TMDB = 7
 STEP_COMPLETE = 8
 
 
@@ -118,14 +120,15 @@ async def complete_setup(session: AsyncSession) -> SetupStatus:
     """第 8 步：寫下 `settings.setup.completed`，精靈結束（plan §9.3 第 8 步）。
 
     **這個位元就是門禁的開關**：寫下去之後 `setup/*` 只有管理員進得來，`/` 也不再導向精靈
-    （票 07）。所以在寫之前要確定不可跳的那幾步真的做完了——第 3、4、6、7 步不可跳
-    （plan §9.3、票 02b）。第 6 步在這裡再擋一次，因為使用者回得去把 key 清掉。
+    （票 07）。所以在寫之前要確定不可跳的那幾步真的做完了——第 3、4、5、7 步不可跳
+    （plan §9.3、票 02b）。第 7 步在這裡再擋一次，因為使用者回得去把 key 清掉。
     """
     setup = await read_settings(session, SetupSettings)
-    if not tmdb_verified(setup):
-        raise ValueError("finish step 6 first: TMDB needs a credential that passes its test")
+    # 照步驟的順序問：兩步都沒做完時，先把人送回前面那一步。
     if not await routes_ready(session):
-        raise ValueError("finish step 7 first: every library route has to pass its checks")
+        raise ValueError("finish step 5 first: every library route has to pass its checks")
+    if not tmdb_verified(setup):
+        raise ValueError("finish step 7 first: TMDB needs a credential that passes its test")
     setup.completed = True
     await write_settings(session, setup)
     await session.commit()
@@ -133,7 +136,7 @@ async def complete_setup(session: AsyncSession) -> SetupStatus:
 
 
 async def _read(session: AsyncSession, *, now: datetime) -> SetupStatus:
-    """整份狀態。步驟是導出的，而第 7 步的依據在 `routes` 表，所以要多讀一次它。"""
+    """整份狀態。步驟是導出的，而第 5 步的依據在 `routes` 表，所以要多讀一次它。"""
     setup = await read_settings(session, SetupSettings)
     return _status(setup, now=now, routes=await routes_ready(session))
 
@@ -196,16 +199,18 @@ async def detect_services(
     probes: SetupProbes,
     *,
     restart: bool = False,
+    kind: ServiceKind | None = None,
     now: datetime | None = None,
 ) -> SetupStatus:
     """第 2 步：逐一探測三個 compose 主機名並記下判定（plan §9.3、brief §16.3）。
 
-    `restart=True` 是使用者按「重試」，重新開始 2 分鐘的輪詢窗口。
+    `restart=True` 是使用者按「重試」，重新開始 2 分鐘的輪詢窗口。給了 `kind` 就只探那一個
+    （精靈的「重新偵測這個服務」，票 06d），其他服務的判定原封不動。
 
     **已經手動接好的服務不重探**：它根本不在 compose 主機名上，再探一次只會把使用者剛填好的
     連線判回「探不到」。前端在有服務還在啟動時每 3 秒自動探一次，沒有這條保護的話，
     「Jellyfin 從 `COMPOSE_PROFILES` 拿掉 + qBittorrent 還在啟動」這個組合會在填完表單三秒後被清掉。
-    要重測那一個服務，用它自己的「測試連線」（`connect_service`）。
+    要重測這種服務，用它自己的「測試連線」（`connect_service`）；`kind` 指名它也一樣不重探。
     """
     moment = now or _utcnow()
     setup = await read_settings(session, SetupSettings)
@@ -214,13 +219,18 @@ async def detect_services(
 
     waited = moment - setup.probe_started_at
     probed: dict[ServiceKind, ServiceProbe] = {}
-    for kind in ServiceKind:
-        configured = setup.services.get(kind)
-        if configured is not None and configured.configured:
-            probed[kind] = configured
+    for each in ServiceKind:
+        known = setup.services.get(each)
+        # 指名重探別的服務：這一個的判定原封不動。
+        if known is not None and kind is not None and each is not kind:
+            probed[each] = known
             continue
-        origin, reason, detail, base_url = await _probe(kind, probes)
-        probed[kind] = ServiceProbe(
+        # 已經手動接好或被 Berth 釘住的：指名也不重探（見上）。
+        if known is not None and known.configured:
+            probed[each] = known
+            continue
+        origin, reason, detail, base_url = await _probe(each, probes)
+        probed[each] = ServiceProbe(
             origin=_settled(origin, waited),
             reason=reason,
             detail=detail,
@@ -242,7 +252,7 @@ async def _remember_bundled_indexer(
 ) -> None:
     """套件內 Prowlarr 的 API key 讀自唯讀掛載，探測是唯一讀得到它的地方。
 
-    存進 `settings.services.indexer` 之後，第 5 步與 M1 的搜尋都從同一個地方拿憑證，不必再各自
+    存進 `settings.services.indexer` 之後，第 6 步與 M1 的搜尋都從同一個地方拿憑證，不必再各自
     去翻那個檔案；使用者自己貼過的值優先，不會被掛載讀到的蓋掉。
     """
     probe = probed.get(ServiceKind.PROWLARR)
@@ -493,7 +503,7 @@ def _current_step(setup: SetupSettings, *, routes: bool) -> int:
     """步驟由狀態導出，不存游標。
 
     精靈可以續行也可以重跑，存「走到第幾步」的游標會在偵測結果變回等待時說謊。
-    第 7 步的依據不在設定裡而在 `routes` 表（`routes_ready`），所以它由參數帶進來。
+    第 5 步（Route）的依據不在設定裡而在 `routes` 表（`routes_ready`），所以它由參數帶進來。
     """
     if not setup.admin.username:
         return STEP_ADMIN
@@ -503,12 +513,12 @@ def _current_step(setup: SetupSettings, *, routes: bool) -> int:
         return STEP_JELLYFIN
     if not _qbittorrent_secured(setup):
         return STEP_QBITTORRENT
+    if not routes:
+        return STEP_ROUTES
     if not _indexer_settled(setup):
         return STEP_INDEXER
     if not tmdb_verified(setup):
         return STEP_TMDB
-    if not routes:
-        return STEP_ROUTES
     return STEP_COMPLETE
 
 
@@ -541,7 +551,7 @@ def _qbittorrent_secured(setup: SetupSettings) -> bool:
 
 
 def _indexer_settled(setup: SetupSettings) -> bool:
-    """第 5 步可跳過（plan §9.3），所以「有結論」包含「使用者說之後再說」。
+    """第 6 步可跳過（plan §9.3），所以「有結論」包含「使用者說之後再說」。
 
     逐站失敗不擋：十個公開站裡有幾個連不上是常態，只要接上了一個就走得下去。
     **替 Prowlarr 介面設登入那一條不算**——它與站接不接得上無關，而且不勾「同一組帳密」時

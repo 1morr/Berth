@@ -1,6 +1,6 @@
 """把資料庫與假服務推到「精靈某一步剛做完」的狀態（票 09、票 10 共用）。
 
-第 7 步的檢查與健康頁的 Route 檢查是同一組（plan §9.5），兩邊的測試因此需要同一個
+第 5 步的檢查與健康頁的 Route 檢查是同一組（plan §9.5），兩邊的測試因此需要同一個
 起點：三層路徑真的存在、Jellyfin 真的報得出媒體庫、qBittorrent 報的 save path 就是
 Berth 的 complete root。安排寫兩份的話，一邊改了另一邊會悄悄測到別的東西。
 """
@@ -116,7 +116,7 @@ async def arrange(
 
 def bundled_libraries(library_root: Path) -> tuple[SetupLibrary, ...]:
     """Jellyfin 回報的三個媒體庫。目錄由第 3 步的 Berth 建好（plan §9.4 第 4 步），所以這裡
-    也真的建出來——第 7 步的檢查問的就是「這條路徑在 Berth 內看得到嗎」。
+    也真的建出來——第 5 步的檢查問的就是「這條路徑在 Berth 內看得到嗎」。
     """
     rows = []
     for index, (name, collection_type) in enumerate(BUNDLED):
@@ -173,7 +173,7 @@ def existing_library(*locations: Path | str) -> SetupLibrary:
 def applied_qbittorrent(roots: dict[str, Path], **overrides: object) -> FakeQbittorrentClient:
     """第 4 步套用過建議偏好之後的那一台：全域 save path 就是 Berth 的 complete root。
 
-    第 7 步的檢查一問的是「qBittorrent 報的路徑 Berth 看得到嗎」，所以它報什麼很重要。
+    第 5 步的檢查一問的是「qBittorrent 報的路徑 Berth 看得到嗎」，所以它報什麼很重要。
     """
     preferences = {
         "save_path": str(roots["complete"]),

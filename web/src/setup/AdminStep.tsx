@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useState, type FormEvent, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import type { AdminInput, SetupStatus } from '../api/setup'
@@ -27,11 +27,14 @@ export function AdminStep({
   pending,
   failed,
   onSubmit,
+  nav,
 }: {
   status: SetupStatus
   pending: boolean
   failed: boolean
   onSubmit: (input: AdminInput) => void
+  /** 回頭看第 1 步時的「前往下一個泊位」（`BerthNav`）。 */
+  nav?: ReactNode
 }) {
   const { t } = useTranslation()
   const owned = status.jellyfin_owns_account
@@ -129,7 +132,8 @@ export function AdminStep({
             checked={applyToServices}
             onChange={setApplyToServices}
           />
-          <div className={STICKY_ACTION}>
+          {/* 回頭看的時候「前往下一個泊位」才是主要動作，底部的位置讓給它。 */}
+          <div className={nav ? '' : STICKY_ACTION}>
             <PrimaryButton type="submit" busy={pending}>
               {words.submit}
             </PrimaryButton>
@@ -140,6 +144,7 @@ export function AdminStep({
             </Notice>
           )}
         </form>
+        {nav}
       </div>
     </div>
   )

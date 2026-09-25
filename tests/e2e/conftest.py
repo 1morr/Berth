@@ -66,7 +66,7 @@ def berth() -> Iterator[httpx.Client]:
 def configured(berth: httpx.Client) -> None:
     """精靈八步，順序照 `api/setup.py`。"""
     tmdb_key = os.environ.get("TMDB_API_KEY", "").strip()
-    assert tmdb_key, "set TMDB_API_KEY: step 6 of the wizard is a gate (ticket 02b)"
+    assert tmdb_key, "set TMDB_API_KEY: step 7 of the wizard is a gate (ticket 02b)"
 
     ok(berth.post("/setup/admin", json={"username": ADMIN, "password": PASSWORD}))
 

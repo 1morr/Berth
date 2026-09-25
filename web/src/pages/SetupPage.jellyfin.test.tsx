@@ -154,7 +154,8 @@ describe('泊位 1：套件內 Jellyfin', () => {
     const board = await screen.findByRole('region', { name: '泊位板' })
 
     await waitFor(() =>
-      expect(within(board).getByText('BTH 1').closest('li')).toHaveClass('bg-secured'),
+      // 走過的那一格是按鈕（票 06d），漆塗在按鈕上。
+      expect(within(board).getByText('BTH 1').closest('button')).toHaveClass('bg-secured'),
     )
   })
 })

@@ -68,7 +68,7 @@ function NoRoutes({ kind }: { kind: Media['kind'] }) {
   return (
     <div className="grid gap-3 border-2 border-rule bg-well px-3 py-3">
       <p className="max-w-prose text-sm text-ink">{t(`media.route.missing.${kind}`)}</p>
-      {/* 泊位 4 是媒體庫路徑——Route 就是在那一步建的。 */}
+      {/* 泊位 3 是媒體庫路徑——Route 就是在那一步建的。 */}
       <SetupHint
         berth={berthNumberOf('library')}
         label={t('media.route.toSetup')}

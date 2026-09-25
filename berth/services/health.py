@@ -6,7 +6,7 @@
 2. **qBittorrent**：連得上、Web API 夠新，而且建議偏好沒有被改掉（漂移，brief §16.3）。
 3. **索引站**：Prowlarr 或使用者自己貼的 Torznab 端點還搜得動（plan §8.4）。
 4. **Route**：五條纜繩重跑一次——category、兩邊回報的路徑、跨服務可見性、真的 `link()`
-   一次比 inode（plan §9.5）。與精靈第 7 步是同一組檢查、同一個欄位。
+   一次比 inode（plan §9.5）。與精靈第 5 步是同一組檢查、同一個欄位。
 
 四項之後再量兩件會變成 Issue 的事（M2 票 09c）：Route 的媒體庫掛不掛 TVDB、磁碟剩的空間夠不夠
 （`services/health_issues.py`）。它們不是紅燈——服務都還連得上——而是要有人決定的事。
@@ -216,7 +216,7 @@ async def check_service(
     """設定頁的「測試連線」：只重測這一個服務（票 10）。
 
     **不順便重跑 Route 的檢查**：那一組會在 qBittorrent 上建 category、在媒體庫裡寫探測檔，
-    使用者按的是「測一下這台連不連得上」，不是「再跑一次第 7 步」。
+    使用者按的是「測一下這台連不連得上」，不是「再跑一次第 5 步」。
     """
     await _record(session, kind, await _run(kind, session, factory), now or _utcnow())
     await session.commit()
@@ -248,7 +248,7 @@ async def _record(
 ) -> None:
     """把這一次的結果併進上一次的紀錄，然後就地 commit。
 
-    逐項 commit 的理由與精靈第 7 步一樣：第二項炸了，第一項的結果仍然留得下來。
+    逐項 commit 的理由與精靈第 5 步一樣：第二項炸了，第一項的結果仍然留得下來。
     """
     health = await read_settings(session, HealthSettings)
     previous = health.services.get(kind)
@@ -388,7 +388,7 @@ async def _check_qbittorrent(session: AsyncSession, factory: ServiceClientFactor
 
 
 async def _check_indexer(session: AsyncSession, factory: ServiceClientFactory) -> _Outcome:
-    """索引站還搜得動。第 5 步可以跳過，所以沒填位址是 `unknown` 而不是紅燈。"""
+    """索引站還搜得動。第 6 步可以跳過，所以沒填位址是 `unknown` 而不是紅燈。"""
     settings = await read_settings(session, IndexerSettings)
     if not settings.base_url:
         return _Outcome(HealthStatus.UNKNOWN, configured=False)

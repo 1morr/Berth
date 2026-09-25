@@ -1,4 +1,4 @@
-"""精靈第 7–8 步的 services 命令（plan §9.3 第 7–8 步、§9.5、brief §4、§16.4、票 09）。
+"""精靈第 5 步（Route）與第 8 步的 services 命令（plan §9.3、§9.5、brief §4、§16.4、票 09）。
 
 驗的是票 09 的驗收條件：套件內自動建三個 Route、既有由使用者勾選、每個 Route 建 category
 並跑三項檢查、失敗說得出是哪個容器少了哪個掛載、重跑不長出重複列、全綠才寫得下
@@ -52,6 +52,7 @@ from berth.services.routes import (
 from berth.services.settings import read_settings, write_settings
 from berth.services.setup import (
     STEP_COMPLETE,
+    STEP_INDEXER,
     STEP_ROUTES,
     complete_setup,
     read_status,
@@ -210,7 +211,7 @@ class TestExisting:
     async def test_leaving_a_library_unticked_on_a_rerun_keeps_its_route(
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
-        """重跑第 7 步**不再隱式刪掉**沒勾的 Route（票 14）：Job 與帳本從票 09 起就引用它。
+        """重跑第 5 步**不再隱式刪掉**沒勾的 Route（票 14）：Job 與帳本從票 09 起就引用它。
         刪除是 Route 設定頁上一個明確、要二次確認的動作。"""
         await arrange(session, roots, origin=ServiceOrigin.EXISTING)
         factory = factory_for(roots)
@@ -467,13 +468,31 @@ class TestChecks:
 
 class TestCompletion:
     @pytest.mark.asyncio
-    async def test_the_wizard_stays_on_step_seven_until_a_route_is_green(
+    async def test_the_wizard_stays_on_step_five_until_a_route_is_green(
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
         await arrange(session, roots, origin=ServiceOrigin.EXISTING)
 
         assert (await read_status(session)).current_step == STEP_ROUTES
         assert await routes_ready(session) is False
+
+    @pytest.mark.asyncio
+    async def test_routes_come_right_after_qbittorrent(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """Route 只依賴 Jellyfin 與 qBittorrent，所以排在索引站與 TMDB 之前（票 06d）：
+        掛載設錯的人在第 5 步就知道，不必先去申請一把 TMDB key。"""
+        await arrange(session, roots)
+        setup = await read_settings(session, SetupSettings)
+        setup.indexer.steps = []
+        setup.tmdb.steps = []
+        await write_settings(session, setup)
+
+        assert (await read_status(session)).current_step == STEP_ROUTES == 5
+
+        await build_routes(session, factory_for(roots), ())
+
+        assert (await read_status(session)).current_step == STEP_INDEXER == 6
 
     @pytest.mark.asyncio
     async def test_a_green_route_moves_the_wizard_to_the_last_step(
@@ -501,7 +520,7 @@ class TestCompletion:
     async def test_after_setup_a_rerun_keeps_a_new_red_route_disabled(
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
-        """精靈跑完之後重跑第 7 步，已經沒有完成條件擋著，所以與設定頁同一條規則：紅的不給啟用。
+        """精靈跑完之後重跑第 5 步，已經沒有完成條件擋著，所以與設定頁同一條規則：紅的不給啟用。
 
         跑完之前建的 Route 仍然直接啟用——它紅著就擋完成
         （`test_a_broken_route_holds_the_wizard_back`）。
@@ -588,7 +607,7 @@ class TestCompletion:
     async def test_completing_is_refused_while_no_route_is_green(
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
-        """第 7 步不可跳（plan §9.3）。"""
+        """第 5 步不可跳（plan §9.3）。"""
         await arrange(session, roots)
 
         with pytest.raises(ValueError, match="route"):

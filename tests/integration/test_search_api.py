@@ -331,7 +331,7 @@ class TestProblems:
     def test_an_indexer_that_was_skipped_is_not_an_error(
         self, client: TestClient, factory: FakeClientFactory
     ) -> None:
-        """第 5 步跳過時結果表要說得出下一步，不是一張空清單（票 08 驗收）。"""
+        """第 6 步跳過時結果表要說得出下一步，不是一張空清單（票 08 驗收）。"""
         sign_in(client)
         _skip_indexer(client)
 

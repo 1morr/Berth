@@ -103,6 +103,8 @@ class ConnectIn(BaseModel):
 class DetectIn(BaseModel):
     #: 使用者按「重試」，重新開始 2 分鐘的輪詢窗口。
     restart: bool = False
+    #: 只重探這一個服務（精靈的「重新偵測這個服務」，票 06d）。沒給就是整輪。
+    kind: ServiceKind | None = None
 
 
 @router.get("/status")
@@ -128,7 +130,8 @@ async def post_admin(session: SessionDep, body: AdminIn) -> SetupStatusOut:
 async def post_detect(
     session: SessionDep, probes: SetupProbesDep, body: DetectIn | None = None
 ) -> SetupStatusOut:
-    return _out(await detect_services(session, probes, restart=(body or DetectIn()).restart))
+    request = body or DetectIn()
+    return _out(await detect_services(session, probes, restart=request.restart, kind=request.kind))
 
 
 @router.post("/services/{kind}")
@@ -251,7 +254,7 @@ async def post_qbittorrent_apply(session: SessionDep, factory: ClientFactoryDep)
     return QbittorrentOut.model_validate(await apply_qbittorrent(session, factory))
 
 
-# --- 第 5 步：索引站（plan §9.3 第 5 步、§8.4）---
+# --- 第 6 步：索引站（plan §9.3 第 6 步、§8.4）---
 
 
 class IndexerOptionOut(BaseModel):
@@ -292,7 +295,7 @@ class IndexerConnectIn(BaseModel):
 
 
 class SkipIn(BaseModel):
-    #: 第 5 步可跳過，也可以再取消跳過（plan §9.3）。第 6 步不行（票 02b）。
+    #: 第 6 步可跳過，也可以再取消跳過（plan §9.3）。第 7 步不行（票 02b）。
     skipped: bool = True
 
 
@@ -341,7 +344,7 @@ async def post_indexers_skip(
     )
 
 
-# --- 第 6 步：TMDB（plan §9.3 第 6 步、§8.3）。憑證使用者自備、必填（票 02b）---
+# --- 第 7 步：TMDB（plan §9.3 第 7 步、§8.3）。憑證使用者自備、必填（票 02b）---
 
 
 class TmdbSetupOut(BaseModel):
@@ -368,12 +371,12 @@ async def post_tmdb_test(
 ) -> TmdbSetupOut:
     """先存再測。`configuration` 回得出來就證明這把憑證有效。
 
-    **沒有 `/tmdb/skip`**：這一步是閘門，測不過就走不到第 7 步（票 02b）。
+    **沒有 `/tmdb/skip`**：這一步是閘門，測不過就走不到第 8 步（票 02b）。
     """
     return TmdbSetupOut.model_validate(await verify_tmdb(session, factory, api_key=body.api_key))
 
 
-# --- 第 7–8 步：媒體庫 → Route 與完成（plan §9.3 第 7–8 步、§9.5）---
+# --- 第 5 步、第 8 步：媒體庫 → Route 與完成（plan §9.3 第 5 步、第 8 步、§9.5）---
 
 
 class LibraryChoiceOut(BaseModel):
@@ -414,7 +417,7 @@ class RouteSelectionIn(BaseModel):
 
 
 class RoutesIn(BaseModel):
-    #: 套件內 Jellyfin 忽略這個欄位：三個 Route 由它自己的三個媒體庫導出（plan §9.3 第 7 步）。
+    #: 套件內 Jellyfin 忽略這個欄位：三個 Route 由它自己的三個媒體庫導出（plan §9.3 第 5 步）。
     selections: list[RouteSelectionIn] = []
 
 
@@ -464,7 +467,7 @@ async def post_routes(
     responses=_DELETE_RESPONSES,
 )
 async def delete_setup_route(session: SessionDep, route_id: int) -> None:
-    """第 7 步每條 Route 底下的「刪除」（票 14a）。
+    """第 5 步每條 Route 底下的「刪除」（票 14a）。
 
     與 Route 設定頁同一個命令、同一種拒絕（404 `route_missing`、409 `route_in_use`），只是跟著
     `setup/*` 的門禁：精靈跑完之前還沒有人登入得了，而 `/routes/*` 永遠只有管理員。

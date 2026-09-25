@@ -37,6 +37,47 @@ const zhHant = {
     exit: '回到 Berth',
     revisited:
       'Berth 已經設定好了。這裡改的是連線設定，不會重跑一次靠泊；每一步都可以只做你要改的那一個。',
+    prelude: '前置',
+    place: {
+      admin: '建立管理員',
+      detect: '偵測服務',
+    },
+    nav: {
+      label: '泊位導覽',
+      previous: '上一個泊位',
+      next: '前往下一個泊位',
+    },
+    stray: {
+      where: '回頭看：{{place}}',
+      current: '目前走到第 {{current}} 步',
+      back: '回到目前這一步',
+    },
+    revisit: {
+      label: '回頭看',
+      can: '這裡能做',
+      elsewhere: '不在這裡做',
+      detect: {
+        can: '重新探測還沒接好的服務，或改既有服務的位址與憑證再測一次。',
+        elsewhere:
+          '已經接好的服務（設過密碼、加過站）不再重探——判定規則看的正是 Berth 自己做掉的事，重探會說錯；要重測就到它自己的泊位。',
+      },
+      jellyfin: {
+        can: '重跑靠泊序列：每一步都是冪等的，做過的標「已經是這樣」。既有 Jellyfin 可以重新登入、替媒體庫加入 Berth 路徑。',
+        elsewhere: '媒體庫的改名、刪除與換路徑在 Jellyfin 自己的介面上做，Berth 建好的三個也一樣。',
+      },
+      qbittorrent: {
+        can: '重新檢查並套用建議設定：已經是建議值的鍵標「已經是這樣」，不會再寫一次。',
+        elsewhere: '這五個鍵以外的偏好在 qBittorrent 自己的介面上改，Berth 不碰。',
+      },
+      routes: {
+        can: '精靈只新增：補上新勾的媒體庫，並重驗每一條 Route 的五條檢查。選錯的那一條在它底下刪掉。',
+        elsewhere: 'Route 的改名與停用在精靈跑完之後的「設定 → 媒體庫路徑」。',
+      },
+      source: {
+        can: '加更多站、重貼並重新測試 TMDB key。加過的站不會被加第二次。',
+        elsewhere: '移除已經加入的站，目前要在 Prowlarr 自己的介面上做。',
+      },
+    },
   },
   admin: {
     title: '建立 Berth 管理員',
@@ -46,7 +87,7 @@ const zhHant = {
       berth: 'Berth 管理員',
       jellyfin: 'Jellyfin 管理員帳密（第 3 步）',
       qbittorrent: 'qBittorrent WebUI 帳密（第 4 步）',
-      prowlarr: 'Prowlarr 介面帳密（第 5 步）',
+      prowlarr: 'Prowlarr 介面帳密（第 6 步）',
       skipped: '不套用',
       value: {
         account: '{{account}}',
@@ -81,9 +122,7 @@ const zhHant = {
     },
     submit: '建立管理員',
     submitting: '建立中…',
-    chip: '已建立',
     saved: '管理員已建立：{{username}}',
-    change: '改帳密',
     error: {
       blank: '帳號與密碼都要填。',
       failed: '存不進去。Berth 後端可能沒在跑——確認容器狀態後再試一次。',
@@ -104,6 +143,8 @@ const zhHant = {
     running: '探測中…',
     retry: '重試',
     continue: '前往泊位 1',
+    redetect: '重新偵測這個服務（{{service}}）',
+    redetecting: '偵測中…',
     waitingLabel: '等待中',
     waiting: '{{waited}} / {{window}} 秒',
     waitingHint: '容器還在啟動。Berth 會持續探測到上限為止。',
@@ -375,7 +416,7 @@ const zhHant = {
     title: '媒體庫路徑',
     lede: {
       bundled:
-        'Berth 替你建的三個媒體庫各成為一條 Route：下載完成後檔案硬鏈接到它的寫入目標。按下去會在 qBittorrent 建好分類，並實際鏈接一個檔案，確認三個容器看到的是同一個檔案系統。',
+        'Berth 替你建的三個媒體庫各成為一條 Route：下載完成後檔案硬鏈接到它的寫入目標。這一步會在 qBittorrent 建好分類，並實際鏈接一個檔案，確認三個容器看到的是同一個檔案系統。',
       existing:
         '勾選要交給 Berth 寫入的媒體庫，每個選一條寫入目標。舊路徑不會被動到——它們仍然唯讀，Berth 只往你選的那一條寫。',
     },
@@ -383,6 +424,7 @@ const zhHant = {
       '這台 Jellyfin 一個媒體庫都沒有。先在 Jellyfin 建一個再回來，Berth 才有地方寫入。Berth 不會替你的伺服器建媒體庫。',
     unreachable: '讀不到媒體庫清單。Berth 後端可能沒在跑——確認容器狀態後重新整理。',
     building: '建立中…',
+    automatic: '建立 Route 並跑五條檢查中…套件內的媒體庫沒有要選的東西，走到這一格就自動跑。',
     build_one: '建立 {{count}} 條 Route 並檢查',
     build_other: '建立 {{count}} 條 Route 並檢查',
     recheck_one: '重新檢查 {{count}} 條 Route',
@@ -444,11 +486,10 @@ const zhHant = {
     lede: '四個泊位都繫上了。按下完成之後精靈就關閉，之後要用 Jellyfin 帳號登入才進得來設定。',
     submit: '完成設定',
     completing: '完成中…',
-    back: '回媒體庫路徑',
     failed: '寫不進去。Berth 後端可能沒在跑——確認容器狀態後再按一次。',
     needTmdb:
-      '第 6 步還沒完成：TMDB 要一把測得過的 key。沒有它，探索、季集快照與命名全部停擺，所以這一步不能跳。',
-    needRoutes: '第 7 步還沒完成：每一條 Route 的五條纜繩都要綠燈。紅著的那一條，送單一定失敗。',
+      '第 7 步還沒完成：TMDB 要一把測得過的 key。沒有它，探索、季集快照與命名全部停擺，所以這一步不能跳。',
+    needRoutes: '第 5 步還沒完成：每一條 Route 的五條纜繩都要綠燈。紅著的那一條，送單一定失敗。',
     unfinished: '還有一步沒做完，但這一頁看不出是哪一步。回上一步逐格看一次，紅的那一格就是。',
     fixTmdb: '回去填 TMDB key',
     signInHint: '完成後會回到首頁，那裡會請你用剛才建立的 Jellyfin 管理員帳號登入。',
@@ -930,7 +971,7 @@ const zhHant = {
     problem: {
       not_configured: {
         label: '還沒接',
-        body: '設定精靈的第 5 步跳過了索引站，所以 Berth 沒有地方可以搜。接上 Prowlarr 或任意 Torznab 端點之後這一區塊就會動。',
+        body: '設定精靈的第 6 步跳過了索引站，所以 Berth 沒有地方可以搜。接上 Prowlarr 或任意 Torznab 端點之後這一區塊就會動。',
       },
       no_query: {
         label: '無法搜尋',
@@ -2044,6 +2085,50 @@ const en: Translations<typeof zhHant> = {
     exit: 'Back to Berth',
     revisited:
       'Berth is already set up. This changes connection settings; it does not moor everything again, and each step does only what you ask it to.',
+    prelude: 'Pre-berth',
+    place: {
+      admin: 'Create admin',
+      detect: 'Detect services',
+    },
+    nav: {
+      label: 'Berth navigation',
+      previous: 'Previous berth',
+      next: 'Next berth',
+    },
+    stray: {
+      where: 'Looking back: {{place}}',
+      current: 'You are up to step {{current}}',
+      back: 'Back to the current step',
+    },
+    revisit: {
+      label: 'Looking back',
+      can: 'You can do here',
+      elsewhere: 'Not here',
+      detect: {
+        can: 'Probe the services that are not connected yet, or change an existing service’s address and credentials and test again.',
+        elsewhere:
+          'Services already set up (password set, indexers added) are not probed again — the rules look at exactly what Berth itself did, so a new probe would get them wrong. Retest one on its own berth.',
+      },
+      jellyfin: {
+        can: 'Run the mooring sequence again: every step is idempotent, and what is already done shows as “already so”. An existing Jellyfin can sign in again or get a Berth path on a library.',
+        elsewhere:
+          'Rename, remove or repath libraries in Jellyfin itself — including the three Berth created.',
+      },
+      qbittorrent: {
+        can: 'Check and apply the recommended settings again: keys already at the recommended value show as “already so” and are not written again.',
+        elsewhere:
+          'Preferences other than these five keys are changed in qBittorrent itself; Berth leaves them alone.',
+      },
+      routes: {
+        can: 'The wizard only adds: newly ticked libraries get a route, and every route’s five checks run again. Delete a wrong one underneath it.',
+        elsewhere:
+          'Renaming and disabling routes happens in Settings → Library paths once the wizard is finished.',
+      },
+      source: {
+        can: 'Add more indexers, or paste and test the TMDB key again. Indexers already added are not added twice.',
+        elsewhere: 'Removing an indexer that was added is done in Prowlarr itself for now.',
+      },
+    },
   },
   admin: {
     title: 'Create the Berth administrator',
@@ -2053,7 +2138,7 @@ const en: Translations<typeof zhHant> = {
       berth: 'Berth administrator',
       jellyfin: 'Jellyfin administrator credentials (step 3)',
       qbittorrent: 'qBittorrent WebUI credentials (step 4)',
-      prowlarr: 'Prowlarr interface credentials (step 5)',
+      prowlarr: 'Prowlarr interface credentials (step 6)',
       skipped: 'Not applied',
       value: {
         account: '{{account}}',
@@ -2091,9 +2176,7 @@ const en: Translations<typeof zhHant> = {
     },
     submit: 'Create administrator',
     submitting: 'Creating…',
-    chip: 'Created',
     saved: 'Administrator created: {{username}}',
-    change: 'Change credentials',
     error: {
       blank: 'Username and password are both required.',
       failed:
@@ -2115,6 +2198,8 @@ const en: Translations<typeof zhHant> = {
     running: 'Probing…',
     retry: 'Retry',
     continue: 'Go to Berth 1',
+    redetect: 'Detect this service again ({{service}})',
+    redetecting: 'Detecting…',
     waitingLabel: 'Waiting',
     waiting: '{{waited}} of {{window}} seconds',
     waitingHint: 'Containers are still starting. Berth keeps probing until the limit.',
@@ -2400,7 +2485,7 @@ const en: Translations<typeof zhHant> = {
     title: 'Routes',
     lede: {
       bundled:
-        'Each of the three libraries Berth created becomes a route: finished downloads are hard-linked into its write target. Pressing this creates the qBittorrent categories and links a real file, proving all three containers see one file system.',
+        'Each of the three libraries Berth created becomes a route: finished downloads are hard-linked into its write target. This step creates the qBittorrent categories and links a real file, proving all three containers see one file system.',
       existing:
         'Tick the libraries Berth may write into and pick one write target for each. Your existing paths are left alone: they stay read-only, and Berth writes only to the path you pick.',
     },
@@ -2409,6 +2494,8 @@ const en: Translations<typeof zhHant> = {
     unreachable:
       'Could not read the library list. The Berth backend may be down — check the container, then reload.',
     building: 'Building…',
+    automatic:
+      'Creating routes and running the five checks… The bundled libraries leave nothing to choose, so this runs as soon as you arrive.',
     build_one: 'Build {{count}} route and check',
     build_other: 'Build {{count}} routes and check',
     recheck_one: 'Check {{count}} route again',
@@ -2472,12 +2559,11 @@ const en: Translations<typeof zhHant> = {
     lede: 'All four berths are moored. Finishing closes the wizard; after that you sign in with a Jellyfin account to reach the settings.',
     submit: 'Finish setup',
     completing: 'Finishing…',
-    back: 'Back to library paths',
     failed: 'Could not save. The Berth backend may be down — check the container and press again.',
     needTmdb:
-      'Step 6 is not finished: TMDB needs an API key that passes its test. Without it discovery, episode snapshots and naming all stop, so this step cannot be skipped.',
+      'Step 7 is not finished: TMDB needs an API key that passes its test. Without it discovery, episode snapshots and naming all stop, so this step cannot be skipped.',
     needRoutes:
-      'Step 7 is not finished: all five checks have to pass on every route. Submitting to a red one always fails.',
+      'Step 5 is not finished: all five checks have to pass on every route. Submitting to a red one always fails.',
     unfinished:
       'A step is still unfinished, but this page cannot tell which. Go back a step and look at each berth — the red one is it.',
     fixTmdb: 'Go back and enter the TMDB key',
@@ -2917,7 +3003,7 @@ const en: Translations<typeof zhHant> = {
     problem: {
       not_configured: {
         label: 'Not connected',
-        body: 'Step 5 of the setup wizard skipped the indexer, so Berth has nowhere to search. Connect Prowlarr or any Torznab endpoint and this section comes alive.',
+        body: 'Step 6 of the setup wizard skipped the indexer, so Berth has nowhere to search. Connect Prowlarr or any Torznab endpoint and this section comes alive.',
       },
       no_query: {
         label: 'Nothing to ask',

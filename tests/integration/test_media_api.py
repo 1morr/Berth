@@ -80,7 +80,7 @@ def client(
 
 
 def _seed(client: TestClient, roots: dict[str, Path], factory: FakeClientFactory) -> None:
-    """精靈跑完（含第 6 步的憑證）、三條 Route 都在。"""
+    """精靈跑完（含第 7 步的憑證）、三條 Route 都在。"""
 
     async def run() -> None:
         # `TestClient.app` 是 Starlette 的 `ASGIApp`，型別上沒有 `state`（實際是 FastAPI）。

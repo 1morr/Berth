@@ -338,7 +338,7 @@ describe('探索頁拿不到 TMDB 時', () => {
     expect(await screen.findByText(/Berth 還沒有 TMDB 憑證/)).toBeInTheDocument()
     expect(screen.getByRole('link', { name: '前往設定精靈' })).toHaveAttribute(
       'href',
-      '/setup?berth=3',
+      '/setup?berth=4',
     )
   })
 

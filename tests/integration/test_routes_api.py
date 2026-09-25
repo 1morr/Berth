@@ -2,7 +2,7 @@
 
 命令本身的規則在 `test_routes.py`；這裡驗的是形狀、每種拒絕理由對到哪個狀態碼，以及誰進得來。
 誰進得來的規則在門禁（`api/gate.py`），不在 router 的相依：與 `settings/*` 一樣永遠只有管理員
-（票 14a）。精靈第 7 步的刪除走自己的 `DELETE /setup/routes/{id}`，跟著 `setup/*` 的規則。
+（票 14a）。精靈第 5 步的刪除走自己的 `DELETE /setup/routes/{id}`，跟著 `setup/*` 的規則。
 """
 
 from __future__ import annotations
@@ -63,7 +63,7 @@ def client(
 def wizard(
     config: Config, tmp_path: Path, roots: dict[str, Path], factory: FakeClientFactory
 ) -> Iterator[TestClient]:
-    """停在第 7 步的一台：三條 Route 建好了，精靈還沒按完成。"""
+    """停在第 5 步的一台：三條 Route 建好了，精靈還沒按完成。"""
     with _running(config, tmp_path, factory) as running:
         _seed(running, roots, factory, complete=False)
         yield running
@@ -166,7 +166,7 @@ class TestWhoGetsIn:
     def test_before_setup_completes_the_wizard_deletes_through_its_own_endpoint(
         self, wizard: TestClient
     ) -> None:
-        """精靈第 7 步的刪除走 `DELETE /setup/routes/{id}`，跟著 `setup/*` 的規則。"""
+        """精靈第 5 步的刪除走 `DELETE /setup/routes/{id}`，跟著 `setup/*` 的規則。"""
         movies = setup_route_id(wizard, "movies")
 
         assert wizard.delete(f"/api/setup/routes/{movies}").status_code == 204

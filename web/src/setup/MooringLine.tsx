@@ -25,7 +25,9 @@ export function MooringLine({
   waitedSeconds,
   windowSeconds,
   connecting,
+  redetecting,
   onConnect,
+  onRedetect,
 }: {
   kind: ServiceKind
   detection: ServiceDetection | undefined
@@ -35,11 +37,18 @@ export function MooringLine({
   waitedSeconds: number
   windowSeconds: number
   connecting: boolean
+  /** 這一條正在重新偵測（`onRedetect` 送出去還沒回來）。 */
+  redetecting: boolean
   onConnect: (kind: ServiceKind, input: ConnectInput) => void
+  /** 只重新探這一個服務（票 06d）。全部重新探測留在第 2 步的主要動作上。 */
+  onRedetect: (kind: ServiceKind) => void
 }) {
   const { t } = useTranslation()
   const signal = tying ? 'working' : signalOf(detection)
   const showForm = !tying && needsConnectionForm(detection)
+  // 還沒解決的那一條才給：逾時、探不到、要帳密。還在探的由輪詢接手，不必人按。
+  const redetectable =
+    !tying && detection !== undefined && !detection.resolved && detection.origin !== 'pending'
 
   return (
     <li className={`min-w-0 border-2 ${showForm ? 'border-rule-strong' : 'border-rule'} bg-well`}>
@@ -82,6 +91,12 @@ export function MooringLine({
         </dl>
       )}
 
+      {redetectable && (
+        <div className="border-t-2 border-rule px-4 py-3">
+          <RedetectButton kind={kind} busy={redetecting} onRedetect={onRedetect} />
+        </div>
+      )}
+
       {showForm && detection && (
         <ConnectPanel
           kind={kind}
@@ -91,6 +106,29 @@ export function MooringLine({
         />
       )}
     </li>
+  )
+}
+
+/**
+ * 重新偵測這一個服務（票 06d）：放在出問題的那一格旁邊，不是每頁頂部。啟動中的暫時錯誤由
+ * 輪詢接手（06g），這顆鍵是給「使用者自己改了東西之後」——改了 `COMPOSE_PROFILES`、port、
+ * 把容器叫起來。泊位頁連不上的時候也用同一顆。
+ */
+export function RedetectButton({
+  kind,
+  busy,
+  onRedetect,
+}: {
+  kind: ServiceKind
+  busy: boolean
+  onRedetect: (kind: ServiceKind) => void
+}) {
+  const { t } = useTranslation()
+
+  return (
+    <GhostButton type="button" busy={busy} onClick={() => onRedetect(kind)}>
+      {busy ? t('detect.redetecting') : t('detect.redetect', { service: t(SERVICE_LABEL[kind]) })}
+    </GhostButton>
   )
 }
 

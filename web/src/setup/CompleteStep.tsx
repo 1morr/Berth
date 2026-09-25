@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import type { IndexerSetup, RouteSetup } from '../api/setup'
@@ -10,14 +11,14 @@ import { Cutaway, CutawayRow } from '../components/Cutaway'
  * 第 8 步：完成（plan §9.3 第 8 步）。
  *
  * 兩件事：把跑出來的結果攤出來（幾條 Route、各自寫到哪裡），以及**說出跳過了什麼與在哪裡補**
- * ——可以「之後再說」的只有第 5 步（票 02b），完成頁是他最後一次看到那件事的地方。
+ * ——可以「之後再說」的只有第 6 步（票 02b），完成頁是他最後一次看到那件事的地方。
  *
  * 按下去之後 `settings.setup.completed` 就寫下去了，`setup/*` 從此要登入（票 07），
  * 所以按鈕文案講的是「完成設定」而不是「下一步」。
  */
 /**
  * 按下完成之後失敗的原因。後端的 422 說的是「不可跳的那幾步還沒做完」
- * （`services/setup.py`：第 6 步的 TMDB 與第 7 步的 Route），那不是後端出了錯——
+ * （`services/setup.py`：第 7 步的 TMDB 與第 5 步的 Route），那不是後端出了錯——
  * 把兩者都講成「後端可能沒在跑」會把使用者送去看容器 log，而真正要做的事在精靈裡面
  * （票 03 第 5 條；PRODUCT.md 原則 4：失敗要說得出下一步）。
  *
@@ -39,17 +40,21 @@ export function CompleteStep({
   completing,
   failure,
   onComplete,
-  onRevisit,
   onFixTmdb,
+  nav,
 }: {
   routes: RouteSetup
   indexers: IndexerSetup | undefined
   completing: boolean
   failure?: CompleteFailure
   onComplete: () => void
-  onRevisit: () => void
-  /** 回到第 6 步（TMDB 閘門）。缺憑證時真正的出路。 */
+  /** 回到第 7 步（TMDB 閘門）。缺憑證時真正的出路。 */
   onFixTmdb: () => void
+  /**
+   * 上一個泊位（`BerthNav`）。取代原本的「回媒體庫路徑」（票 06d）：那是唯一一顆
+   * 「上一步」，名字卻像一個功能，而且按了之後出不去。
+   */
+  nav: ReactNode
 }) {
   const { t } = useTranslation()
   const skippedIndexers = indexers?.skipped ?? false
@@ -120,16 +125,14 @@ export function CompleteStep({
           </div>
         )}
 
-        <div className={`mt-6 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] ${STICKY_ACTION}`}>
+        <div className={`mt-6 ${STICKY_ACTION}`}>
           <PrimaryButton type="button" busy={completing} onClick={onComplete}>
             {completing ? t('complete.completing') : t('complete.submit')}
           </PrimaryButton>
-          <GhostButton type="button" busy={completing} onClick={onRevisit}>
-            {t('complete.back')}
-          </GhostButton>
         </div>
 
         <p className="mt-4 max-w-prose text-xs text-ink-dim">{t('complete.signInHint')}</p>
+        {nav}
       </div>
     </div>
   )

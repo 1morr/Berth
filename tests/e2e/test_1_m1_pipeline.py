@@ -11,7 +11,7 @@
 套件內的媒體庫一開始是空的，所以反查要等 resolver 請 Jellyfin 掃描之後那一輪（`services/resolver.py`
 的 `SCAN_AFTER_MISSES`）。
 
-**Prowlarr 在跑但沒被測到**：精靈偵測得到它，第 5 步按「之後再說」，送單直接帶 `.torrent` 的網址。
+**Prowlarr 在跑但沒被測到**：精靈偵測得到它，第 6 步按「之後再說」，送單直接帶 `.torrent` 的網址。
 索引站搜尋有自己的契約測試（`tests/integration/test_indexer_search.py`）。
 """
 

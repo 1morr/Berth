@@ -80,7 +80,7 @@ async def arrange_media(session: AsyncSession) -> None:
 
 
 async def arrange_indexer(session: AsyncSession) -> None:
-    """精靈第 5 步接好的樣子：有位址、有 key。"""
+    """精靈第 6 步接好的樣子：有位址、有 key。"""
     await write_settings(
         session, IndexerSettings(kind="prowlarr", base_url="http://prowlarr:9696", api_key="k")
     )
@@ -246,7 +246,7 @@ async def test_one_failing_query_does_not_sink_the_others(session: AsyncSession)
 
 @pytest.mark.asyncio
 async def test_an_indexer_that_was_never_set_up_says_so(session: AsyncSession) -> None:
-    """精靈第 5 步是唯一可以跳過的一步，所以「沒接」不是失敗，是還沒接（票 08 驗收）。"""
+    """精靈第 6 步是唯一可以跳過的一步，所以「沒接」不是失敗，是還沒接（票 08 驗收）。"""
     await arrange_media(session)
     factory = FakeClientFactory(indexer_search=FakeIndexerSearch())
 

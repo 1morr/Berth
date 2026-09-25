@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { type ConnectInput, type SetupStatus } from '../api/setup'
@@ -21,18 +21,27 @@ export function DetectStep({
   status,
   probing,
   connectingKind,
+  redetectingKind,
   failed,
   onDetect,
   onConnect,
+  onRedetect,
   onContinue,
+  nav,
 }: {
   status: SetupStatus
   probing: boolean
   connectingKind: ServiceKind | null
+  /** 只重探一個服務時是哪一個（票 06d）。 */
+  redetectingKind: ServiceKind | null
   failed: boolean
   onDetect: (restart: boolean) => void
   onConnect: (kind: ServiceKind, input: ConnectInput) => void
+  onRedetect: (kind: ServiceKind) => void
+  /** 前往泊位 1。判定全部出來了才有，而且是使用者自己按（票 06d：停在結果上）。 */
   onContinue: () => void
+  /** 上一個泊位（`BerthNav`）。 */
+  nav: ReactNode
 }) {
   const { t } = useTranslation()
   const byKind = new Map(status.services.map((row) => [row.kind, row]))
@@ -74,7 +83,9 @@ export function DetectStep({
           waitedSeconds={status.waited_seconds}
           windowSeconds={status.window_seconds}
           connectingKind={connectingKind}
+          redetectingKind={redetectingKind}
           onConnect={onConnect}
+          onRedetect={onRedetect}
         />
 
         {failed && (
@@ -110,6 +121,7 @@ export function DetectStep({
             </GhostButton>
           )}
         </div>
+        {nav}
       </div>
     </div>
   )
@@ -126,7 +138,9 @@ function MooringSequence({
   waitedSeconds,
   windowSeconds,
   connectingKind,
+  redetectingKind,
   onConnect,
+  onRedetect,
 }: {
   probing: boolean
   probed: boolean
@@ -134,7 +148,9 @@ function MooringSequence({
   waitedSeconds: number
   windowSeconds: number
   connectingKind: ServiceKind | null
+  redetectingKind: ServiceKind | null
   onConnect: (kind: ServiceKind, input: ConnectInput) => void
+  onRedetect: (kind: ServiceKind) => void
 }) {
   const total = SERVICE_KINDS.length
   const [revealed, setRevealed] = useState(() => (prefersReducedMotion() ? total : 0))
@@ -163,7 +179,9 @@ function MooringSequence({
           waitedSeconds={waitedSeconds}
           windowSeconds={windowSeconds}
           connecting={connectingKind === kind}
+          redetecting={redetectingKind === kind}
           onConnect={onConnect}
+          onRedetect={onRedetect}
         />
       ))}
     </ol>

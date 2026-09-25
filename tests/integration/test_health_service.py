@@ -3,7 +3,7 @@
 驗的是票 10 的驗收：四項各自獨立、失敗說得出原因、最後成功時間留得住、服務回來就自動
 變綠、Route 的結果寫回 `routes` 表。
 
-檔案系統與第 7 步一樣是**真的**：Route 的五項檢查會真的建目錄、寫探測檔、`link()` 再比
+檔案系統與第 5 步一樣是**真的**：Route 的五項檢查會真的建目錄、寫探測檔、`link()` 再比
 inode（`tests/integration/arrange.py`）。
 """
 
@@ -218,7 +218,7 @@ class TestNotConfigured:
     async def test_a_skipped_indexer_is_unknown_rather_than_red(
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
-        """第 5 步可以跳過（plan §9.3），跳過的人不該永遠看到一盞紅燈。"""
+        """第 6 步可以跳過（plan §9.3），跳過的人不該永遠看到一盞紅燈。"""
         factory = await ready(session, roots)
         await write_settings(session, IndexerSettings())
         await session.commit()
@@ -278,7 +278,7 @@ class TestRoutes:
     async def test_the_route_row_is_written_back(
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
-        """健康頁與精靈第 7 步寫的是同一個欄位（票 10 驗收）。"""
+        """健康頁與精靈第 5 步寫的是同一個欄位（票 10 驗收）。"""
         factory = await ready(session, roots)
         factory.jellyfin_.visible_roots = ("/somewhere-else",)
 

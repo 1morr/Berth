@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useState, type FormEvent, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import type { IndexerConnectInput, IndexerKind, IndexerSetup, TmdbSetup } from '../api/setup'
@@ -23,7 +23,7 @@ const TMDB_API_SETTINGS = 'https://www.themoviedb.org/settings/api'
 const REACHABILITY_PROBE = `docker compose exec berth python -c "import socket; socket.create_connection(('api.themoviedb.org', 443), 5); print('reachable')"`
 
 /**
- * 泊位 3：來源（plan §9.3 第 5–6 步）。同一個泊位的兩條纜繩——索引站與 TMDB。
+ * 泊位 4：來源（plan §9.3 第 6–7 步）。同一個泊位的兩條纜繩——索引站與 TMDB。
  *
  * 套件內 Prowlarr：勾十個公開站，一站一條纜繩。**逐站的成敗是 Prowlarr 自己連過那個站的結果**：
  * 十個裡有幾個連不上是常態，失敗的變紅，其餘照樣繫上（brief §20.7）。
@@ -39,6 +39,9 @@ export function SourceStep({
   onConnect,
   onSkipIndexers,
   onTestTmdb,
+  note,
+  nav,
+  redetect,
 }: {
   indexers: IndexerSetup
   tmdb: TmdbSetup
@@ -49,6 +52,12 @@ export function SourceStep({
   onConnect: (input: IndexerConnectInput) => void
   onSkipIndexers: () => void
   onTestTmdb: (apiKey: string) => void
+  /** 回頭看的說明（`RevisitNote`），這一頁做完了才有。 */
+  note?: ReactNode
+  /** 上一個 / 下一個泊位（`BerthNav`）。 */
+  nav?: ReactNode
+  /** 套件內的 Prowlarr 連不上時的「重新偵測這個服務」（票 06d）。 */
+  redetect?: ReactNode
 }) {
   const { t } = useTranslation()
   const bundled = indexers.origin === 'bundled' && indexers.reachable
@@ -64,6 +73,7 @@ export function SourceStep({
       <div className="min-w-0 bg-hull p-6">
         <h2 className="text-lg font-semibold text-ink">{t('source.title')}</h2>
         <p className="mt-2 max-w-prose text-sm text-ink-dim">{t('source.lede')}</p>
+        {note}
 
         {bundled ? (
           <DefaultIndexers
@@ -75,7 +85,9 @@ export function SourceStep({
         ) : (
           <>
             {/* 套件內的那台連不上：說清楚，然後照樣給表單——他總得有辦法往下走。 */}
-            {indexers.origin === 'bundled' && <Unreachable indexers={indexers} />}
+            {indexers.origin === 'bundled' && (
+              <Unreachable indexers={indexers} redetect={redetect} />
+            )}
             <ExistingIndexer
               indexers={indexers}
               connecting={connecting}
@@ -86,6 +98,7 @@ export function SourceStep({
         )}
 
         <Tmdb tmdb={tmdb} testing={testingTmdb} onTest={onTestTmdb} />
+        {nav}
       </div>
     </div>
   )
@@ -138,7 +151,7 @@ function SourceCutaway({
   )
 }
 
-/** 套件內 Prowlarr：十個預設公開站，預設全勾（plan §9.3 第 5 步）。 */
+/** 套件內 Prowlarr：十個預設公開站，預設全勾（plan §9.3 第 6 步）。 */
 function DefaultIndexers({
   indexers,
   applying,
@@ -343,9 +356,9 @@ function ExistingIndexer({
 }
 
 /**
- * 第 6 步：使用者自備的 TMDB 憑證，必填（plan §9.3 第 6 步、票 02b）。
+ * 第 7 步：使用者自備的 TMDB 憑證，必填（plan §9.3 第 7 步、票 02b）。
  *
- * **這一步是閘門**，所以沒有「之後再說」：測得過才走得到泊位 4。第一次來的人手上還沒有
+ * **這一步是閘門**，所以沒有「之後再說」：測得過才走得到完成。第一次來的人手上還沒有
  * key，畫面因此要先說去哪裡拿，而不是只說「必填」。
  */
 function Tmdb({
@@ -447,7 +460,7 @@ function Tmdb({
 }
 
 /** 連不上套件內的 Prowlarr 時，畫面仍然要說得出下一步。 */
-function Unreachable({ indexers }: { indexers: IndexerSetup }) {
+function Unreachable({ indexers, redetect }: { indexers: IndexerSetup; redetect?: ReactNode }) {
   const { t } = useTranslation()
 
   return (
@@ -464,6 +477,7 @@ function Unreachable({ indexers }: { indexers: IndexerSetup }) {
         <CopyLine command="docker compose ps prowlarr" />
         <CopyLine command="docker compose logs --tail 50 prowlarr" />
       </div>
+      {redetect && <div>{redetect}</div>}
     </div>
   )
 }

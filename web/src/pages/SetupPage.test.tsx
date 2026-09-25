@@ -325,12 +325,13 @@ describe('第 2 步：偵測服務', () => {
     })
   })
 
+  /** 前置列的管理員那一格就是回第 1 步的入口（票 06d：「改帳密」回到第 1 步上）。 */
   it('可以回頭改管理員帳密', async () => {
     stubApi({ [STATUS]: { body: AT_STEP_TWO } })
     const user = userEvent.setup()
 
     renderWithProviders(<SetupPage />)
-    await user.click(await screen.findByRole('button', { name: '改帳密' }))
+    await user.click(await screen.findByRole('button', { name: /管理員已建立：skipper/ }))
 
     expect(screen.getByRole('button', { name: '建立管理員' })).toBeInTheDocument()
   })

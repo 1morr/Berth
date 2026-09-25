@@ -153,7 +153,7 @@ async def _feed(
     settings = await read_settings(session, TmdbSettings)
     key_in_hand = credential(settings)
     if not key_in_hand:
-        # 憑證是精靈第 6 步的必填閘門（票 02b），所以「沒有 key」有一句自己的話。
+        # 憑證是精靈第 7 步的必填閘門（票 02b），所以「沒有 key」有一句自己的話。
         return DiscoverResult((), TmdbProblem.CREDENTIAL_MISSING, MISSING_CREDENTIAL)
 
     client = factory.tmdb(key_in_hand)
@@ -222,7 +222,7 @@ def _interleave(*lists: tuple[MediaCard, ...]) -> tuple[MediaCard, ...]:
 async def image_base(session: AsyncSession, client: TmdbClient) -> str:
     """圖片基底對同一把憑證是常數，所以存起來，只在還沒有的時候問。
 
-    精靈第 6 步驗憑證時就會寫下它；這裡的 fallback 是給**在這個欄位存在之前就跑完精靈**
+    精靈第 7 步驗憑證時就會寫下它；這裡的 fallback 是給**在這個欄位存在之前就跑完精靈**
     的資料庫用的——那些人不會再跑一次精靈。
 
     探索牆與 Media 詳情（票 04）共用這一支：兩邊組的是同一種海報網址，

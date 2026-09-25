@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { QBITTORRENT_STEPS, type QbittorrentStep as QbittorrentStepKey } from '../api/setup'
@@ -19,12 +20,21 @@ export function QbittorrentStep({
   applying,
   requestFailed,
   onApply,
+  note,
+  nav,
+  redetect,
 }: {
   setup: QbittorrentSetup
   applying: boolean
   /** 請求本身沒跑完。逐鍵的失敗在 `setup.steps` 裡，各自貼在它那一行。 */
   requestFailed: boolean
   onApply: () => void
+  /** 回頭看的說明（`RevisitNote`），這一頁做完了才有。 */
+  note?: ReactNode
+  /** 上一個 / 下一個泊位（`BerthNav`）。 */
+  nav?: ReactNode
+  /** 連不上時的「重新偵測這個服務」（票 06d）。 */
+  redetect?: ReactNode
 }) {
   const { t } = useTranslation()
 
@@ -41,9 +51,10 @@ export function QbittorrentStep({
         <p className="mt-2 max-w-prose text-sm text-ink-dim">
           {t(setup.origin === 'bundled' ? 'qbittorrent.lede.bundled' : 'qbittorrent.lede.existing')}
         </p>
+        {note}
 
         {setup.blocked ? (
-          <Blocked setup={setup} />
+          <Blocked setup={setup} redetect={redetect} />
         ) : (
           <ApplySequence
             setup={setup}
@@ -52,6 +63,7 @@ export function QbittorrentStep({
             onApply={onApply}
           />
         )}
+        {nav}
       </div>
     </div>
   )
@@ -131,7 +143,7 @@ function DiffCutaway({ setup }: { setup: QbittorrentSetup }) {
 }
 
 /** 版本太舊或連不上：這一步做不下去，畫面給的是升級 / 排查的路，不是一顆按不動的按鈕。 */
-function Blocked({ setup }: { setup: QbittorrentSetup }) {
+function Blocked({ setup, redetect }: { setup: QbittorrentSetup; redetect?: ReactNode }) {
   const { t } = useTranslation()
   const tooOld = !setup.supported && setup.reachable
 
@@ -161,6 +173,8 @@ function Blocked({ setup }: { setup: QbittorrentSetup }) {
           ))}
         </div>
       </div>
+      {/* 連不上的那一種：改好 compose、把容器叫起來之後，在這一格就地重探。 */}
+      {!tooOld && redetect && <div>{redetect}</div>}
     </div>
   )
 }
@@ -220,7 +234,7 @@ function ApplySequence({
         </div>
       )}
 
-      <div className={`mt-6 ${STICKY_ACTION}`}>
+      <div className={`mt-6 ${done ? '' : STICKY_ACTION}`}>
         {done ? (
           <GhostButton type="button" busy={applying} onClick={onApply}>
             {t('qbittorrent.rerun')}

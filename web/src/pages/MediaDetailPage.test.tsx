@@ -1214,7 +1214,7 @@ describe('Media 詳情頁', () => {
     expect(within(files).queryByRole('button', { name: '刪除' })).toBeNull()
   })
 
-  it('憑證缺失時連到精靈的泊位 3，與探索頁同一塊', async () => {
+  it('憑證缺失時連到精靈的來源泊位（BTH 4），與探索頁同一塊', async () => {
     render({
       [SPY_PATH]: {
         body: media({
@@ -1228,7 +1228,7 @@ describe('Media 詳情頁', () => {
     renderApp('/media/tv:120089')
 
     const link = await screen.findByRole('link', { name: '前往設定精靈' })
-    expect(link).toHaveAttribute('href', '/setup?berth=3')
+    expect(link).toHaveAttribute('href', '/setup?berth=4')
   })
 })
 

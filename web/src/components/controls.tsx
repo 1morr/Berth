@@ -88,7 +88,7 @@ export function Checkbox({
   label: string
   hint?: string
   checked: boolean
-  /** 鎖住但照樣顯示（票 14：精靈泊位 4 上已經有 Route 的媒體庫）。 */
+  /** 鎖住但照樣顯示（票 14：精靈泊位 3 上已經有 Route 的媒體庫）。 */
   disabled?: boolean
   onChange: (checked: boolean) => void
 }) {

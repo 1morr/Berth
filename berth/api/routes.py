@@ -1,6 +1,6 @@
 """Route 設定頁的端點（plan §6 routes 群組、brief §4.3、票 14）。
 
-誰進得來由門禁決定（`api/gate.py`）：與 `settings/*` 一樣永遠只有管理員（票 14a）。精靈第 7 步的
+誰進得來由門禁決定（`api/gate.py`）：與 `settings/*` 一樣永遠只有管理員（票 14a）。精靈第 5 步的
 「刪除」走自己的 `DELETE /setup/routes/{id}`（`api/setup.py`），跟著 `setup/*` 的規則。規則不掛在
 這裡的相依上：新掛的端點什麼都不做就已經在門後。
 """
@@ -144,7 +144,7 @@ async def get_routes(session: SessionDep) -> list[ManagedRouteOut]:
 @router.post("/routes", responses=REFUSAL_RESPONSES)
 async def post_route(session: SessionDep, factory: ClientFactoryDep, body: RouteIn) -> RouteOut:
     """新增，並立刻跑五條纜繩。**檢查紅燈不是 4xx**：Route 照樣建立、維持停用，紅的那一條
-    回在 `checks` 裡——與精靈第 7 步同一個規矩。"""
+    回在 `checks` 裡——與精靈第 5 步同一個規矩。"""
     try:
         view = await create_route(
             session,

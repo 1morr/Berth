@@ -153,7 +153,7 @@ async def plan_queries(
 
 
 async def _indexer(session: AsyncSession) -> IndexerSettings | None:
-    """接好的索引站設定；精靈第 5 步跳過了或位址是空的時是 `None`。"""
+    """接好的索引站設定；精靈第 6 步跳過了或位址是空的時是 `None`。"""
     settings = await read_settings(session, IndexerSettings)
     setup = await read_settings(session, SetupSettings)
     if not settings.base_url or setup.indexer.skipped:
@@ -510,7 +510,7 @@ def _known_episodes(season: SeasonSnapshot) -> int:
 
 
 def _problem(exc: ServiceError) -> IndexerProblem:
-    """憑證被拒與連不上的下一步不同：前者去精靈第 5 步改 key，後者只能等或查網路。"""
+    """憑證被拒與連不上的下一步不同：前者去精靈第 6 步改 key，後者只能等或查網路。"""
     return (
         IndexerProblem.CREDENTIAL_REJECTED
         if isinstance(exc, AuthFailedError)

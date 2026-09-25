@@ -1,4 +1,4 @@
-"""精靈第 7 步：媒體庫 → Library Route 與跨服務檢查（plan §9.3 第 7 步、§9.5、brief §4）。
+"""精靈第 5 步：媒體庫 → Library Route 與跨服務檢查（plan §9.3 第 5 步、§9.5、brief §4）。
 
 一個 Route 是「一個 Jellyfin 媒體庫 + 一條寫入目標路徑 + 一個 qBittorrent category」
 （CONTEXT.md）。這一步做兩件事：
@@ -147,7 +147,7 @@ class RouteView:
 
 @dataclass(frozen=True, slots=True)
 class LibraryChoice:
-    """第 7 步的一列：一個 Jellyfin 媒體庫，以及它現在被選成什麼。"""
+    """第 5 步的一列：一個 Jellyfin 媒體庫，以及它現在被選成什麼。"""
 
     name: str
     collection_type: str
@@ -225,7 +225,7 @@ async def routes_health(session: AsyncSession) -> HealthStatus:
 
 
 async def routes_ready(session: AsyncSession) -> bool:
-    """第 7 步做完了沒：至少一條啟用中的 Route，而且每一條啟用中的都通過了檢查。
+    """第 5 步做完了沒：至少一條啟用中的 Route，而且每一條啟用中的都通過了檢查。
 
     **不是「至少一個綠的」**：紅的那個 Route 送單會失敗（brief §4.4），把精靈放行等於讓
     使用者帶著一個已知壞掉的目的地開始用。停用的 Route 不是目的地，所以不算（票 14）。
@@ -239,7 +239,7 @@ async def build_routes(
     factory: ServiceClientFactory,
     selections: Sequence[RouteSelection],
 ) -> RouteSetupStatus:
-    """替還沒有 Route 的媒體庫建 Route，然後重跑**每一條** Route 的檢查（plan §9.3 第 7 步）。
+    """替還沒有 Route 的媒體庫建 Route，然後重跑**每一條** Route 的檢查（plan §9.3 第 5 步）。
 
     **只新增、不改不刪**（票 14，使用者拍板）。票 09 之後 Job 引用 `route_id`、帳本以
     `target_path` 認 Route，所以重跑時取消勾選就刪掉、換個目標就覆寫，都會讓已經發生的事
@@ -276,7 +276,7 @@ async def check_routes(
 ) -> tuple[RouteView, ...]:
     """重跑每個既有 Route 的五項檢查（票 10 的第四項健康檢查）。
 
-    與精靈第 7 步跑的是**同一組檢查、寫的是同一個欄位**（plan §9.5）：起點不同而已——那裡
+    與精靈第 5 步跑的是**同一組檢查、寫的是同一個欄位**（plan §9.5）：起點不同而已——那裡
     的起點是使用者的勾選，這裡是 `routes` 表現有的列。所以「精靈當時是綠的、現在紅了」
     在畫面上是同一種東西。
     """
@@ -761,7 +761,7 @@ def _plan(
 
 
 def _bundled_selections(libraries: Mapping[str, SetupLibrary]) -> tuple[RouteSelection, ...]:
-    """套件內：三個媒體庫各一個 Route（plan §9.3 第 7 步）。
+    """套件內：三個媒體庫各一個 Route（plan §9.3 第 5 步）。
 
     目標路徑取自 **Jellyfin 回報的** `locations`，不是自己算一遍——第 3 步建立時的路徑與
     這裡算出來的路徑一旦分岔，錯的那個要到入庫時才會被發現。

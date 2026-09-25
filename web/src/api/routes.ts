@@ -61,7 +61,7 @@ export function routeRefusalOf(error: unknown): RouteRefusalDetail | null {
 /**
  * Route 設定頁（`/settings/routes`，票 14、`.scratch/m1/route-settings-shape.md`）。
  *
- * 誰進得來由後端門禁決定：永遠只有 admin（票 14a）。精靈第 7 步的「刪除」不打這裡，
+ * 誰進得來由後端門禁決定：永遠只有 admin（票 14a）。精靈第 5 步的「刪除」不打這裡，
  * 它走 `deleteSetupRoute`（`api/setup.ts`），跟著精靈的門禁。
  */
 

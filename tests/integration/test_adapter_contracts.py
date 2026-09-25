@@ -2122,7 +2122,7 @@ async def test_jellyfin_an_image_that_is_not_an_image_is_not_jellyfin() -> None:
 @respx.mock
 @pytest.mark.asyncio
 async def test_prowlarr_schema_carries_the_ten_default_indexers() -> None:
-    """精靈第 5 步預設勾的十個公開站都要在這台 Prowlarr 的定義清單裡（plan §9.3 第 5 步）。
+    """精靈第 6 步預設勾的十個公開站都要在這台 Prowlarr 的定義清單裡（plan §9.3 第 6 步）。
 
     釘的是 `definitionName`——站名 Prowlarr 自己會改（`Anidex` 與文件寫的 `AniDex`），
     機器名不會。
@@ -2152,7 +2152,7 @@ async def test_prowlarr_schema_outlasts_a_cold_prowlarr() -> None:
 
     容器剛起來的第一次呼叫，Prowlarr 要把 627 份 Cardigann 定義從 `/config` 讀進來再組出
     5.6 MB 的回應：Windows 的 9p bind mount 上量到 **9.42 秒**，同一支端點第二次只要 0.34 秒。
-    5 秒的探測逾時因此讓精靈第 5 步在乾淨的部署上直接失敗，而慢的儲存（NAS）只會更糟。
+    5 秒的探測逾時因此讓精靈第 6 步在乾淨的部署上直接失敗，而慢的儲存（NAS）只會更糟。
     """
     route = respx.get(f"{PROWLARR_URL}/api/v1/indexer/schema").respond(
         200, text=read_fixture("http/prowlarr/indexer-schema.defaults.json")

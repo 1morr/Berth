@@ -1,6 +1,6 @@
 """Route 設定頁的 services 命令（plan §6 routes 群組、brief §4.3、票 14）。
 
-精靈第 7 步只新增（`test_setup_routes.py`）；逐條管理在這裡：同一個媒體庫的第二條 Route、
+精靈第 5 步只新增（`test_setup_routes.py`）；逐條管理在這裡：同一個媒體庫的第二條 Route、
 紅燈不給啟用、刪除是明確動作而被引用時拒絕。
 
 與精靈同一個起點（`arrange`）、同一組**真的**檔案系統檢查——一條 Route 綠不綠，問的永遠是
@@ -540,7 +540,7 @@ class TestRaces:
         """修改與重新檢查在鎖外打網路；那幾秒裡另一個分頁刪掉了這一條。寫回時 0 列被改到
         （`StaleDataError`），那就是 `route_missing`（404），不是 500。
 
-        `check_all` 是**整組重跑**那一支（`check_routes`，精靈第 7 步與健康迴圈走它）：同一件事
+        `check_all` 是**整組重跑**那一支（`check_routes`，精靈第 5 步與健康迴圈走它）：同一件事
         在那裡曾經裸奔成 500（票 01）。"""
         route_id, _ = await red_second_route(session, roots)
         libraries, _ = with_second_disk(roots)
@@ -698,7 +698,7 @@ class TestDisabledRoutes:
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
         """停用是「被引用、刪不得」時的出路（票 14）。停用的 Route 不是目的地：它紅著不該讓
-        精靈的第 7 步退回未完成，也不該讓健康頁永遠是 degraded。"""
+        精靈的第 5 步退回未完成，也不該讓健康頁永遠是 degraded。"""
         await red_second_route(session, roots)
 
         assert await routes_ready(session) is True

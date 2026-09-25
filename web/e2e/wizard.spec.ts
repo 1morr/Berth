@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test'
 
 import { ADMIN, signIn } from './login.ts'
 
-// `bundled`：乾淨的 compose，三個服務都判為套件內（plan §9.3）。八步走完、關掉精靈，
+// `bundled`：乾淨的 compose，三個服務都判為套件內（plan §9.3）。八步走完、中途回頭再往前、關掉精靈，
 // 再以第 1 步那組帳密登入——那組帳密是精靈第 3 步替 Jellyfin 建的管理員。
 test('精靈八步走完，之後以同一組帳密登入', async ({ page }) => {
   await page.goto('/')
@@ -18,23 +18,39 @@ test('精靈八步走完，之後以同一組帳密登入', async ({ page }) => 
   await page.getByRole('button', { name: '前往泊位 1' }).click()
   await expect(page.getByText('3 個服務已判定')).toBeVisible()
 
-  // 3. Jellyfin 全自動接手
+  // 3. Jellyfin 全自動接手。每一個泊位做完都停在結果上，按了才走（票 06d）。
   await expect(page.getByRole('heading', { name: '接手這台 Jellyfin' })).toBeVisible()
   await page.getByRole('button', { name: '開始靠泊' }).click()
+  await page.getByRole('button', { name: '前往下一個泊位' }).click()
 
   // 4. qBittorrent
   await expect(page.getByRole('heading', { name: '套用建議的 qBittorrent 設定' })).toBeVisible()
   await page.getByRole('button', { name: /^套用這 \d+ 個鍵$/ }).click()
+  await page.getByRole('button', { name: '前往下一個泊位' }).click()
 
-  // 5 / 6. 索引站（十個裡有五個連不上是常態）與 TMDB（替身認得任何一把 key）
+  // 5. 媒體庫路徑：套件內走到就自動建三條 Route、跑五條檢查（票 06d），沒有要按的鍵。
+  //    後端要每一條的五條纜繩都綠才把步驟推到 6（plan §9.3），所以「前往下一個泊位」出現就是全綠。
+  await expect(page.getByRole('heading', { name: '媒體庫路徑' })).toBeVisible()
+  await expect(page.getByRole('button', { name: '重新檢查 3 條 Route' })).toBeVisible()
+  await page.getByRole('button', { name: '前往下一個泊位' }).click()
+
+  // 6 / 7. 索引站（十個裡有五個連不上是常態）與 TMDB（替身認得任何一把 key）
   await expect(page.getByRole('heading', { name: '接上抓取來源' })).toBeVisible()
   await page.getByRole('button', { name: '加入這 10 個站' }).click()
   await page.getByRole('textbox', { name: '你的 TMDB API key' }).fill('0'.repeat(31) + '1')
   await page.getByRole('button', { name: '測試 TMDB' }).click()
+  await page.getByRole('button', { name: '前往下一個泊位' }).click()
 
-  // 7. 三個媒體庫各成一條 Route。後端要每一條的五條纜繩都綠才把步驟推到 8（plan §9.3），
-  //    所以下面看得到「完成設定」就是全綠。
-  await page.getByRole('button', { name: '建立 3 條 Route 並檢查' }).click()
+  // 中途回頭再往前：板上點回泊位 1，一顆鍵回到目前這一步；上一個泊位、再前往下一個也回得來。
+  await expect(page.getByRole('heading', { name: '完成設定' })).toBeVisible()
+  const board = page.getByRole('region', { name: '泊位板' })
+  await board.getByRole('button', { name: /BTH 1/ }).click()
+  await expect(page.getByRole('heading', { name: '接手這台 Jellyfin' })).toBeVisible()
+  await page.getByRole('button', { name: '回到目前這一步' }).click()
+  await expect(page.getByRole('heading', { name: '完成設定' })).toBeVisible()
+  await page.getByRole('button', { name: '上一個泊位' }).click()
+  await expect(page.getByRole('heading', { name: '接上抓取來源' })).toBeVisible()
+  await page.getByRole('button', { name: '前往下一個泊位' }).click()
 
   // 8. 完成
   await expect(page.getByRole('heading', { name: '完成設定' })).toBeVisible()

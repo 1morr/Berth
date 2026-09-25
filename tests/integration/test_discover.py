@@ -69,7 +69,7 @@ def tmdb(**kwargs: object) -> FakeTmdbClient:
 
 
 async def credentialled(session: AsyncSession, client: FakeTmdbClient) -> FakeClientFactory:
-    """精靈第 6 步做完的樣子：憑證存下來了（票 02b 之後它是必填閘門）。"""
+    """精靈第 7 步做完的樣子：憑證存下來了（票 02b 之後它是必填閘門）。"""
     await write_settings(session, TmdbSettings(api_key=TMDB_API_KEY))
     await session.commit()
     return FakeClientFactory(tmdb=client)

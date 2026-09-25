@@ -8,11 +8,11 @@ import { SetupHint } from './SetupHint'
 /**
  * 拿不到 TMDB 時畫面說什麼（票 03 驗收：可行動的錯誤，不是空白畫面）。
  *
- * 四種理由的**下一步不同**，所以不共用一句話：憑證的兩種要人去精靈第 6 步，連不上只能重試，
+ * 四種理由的**下一步不同**，所以不共用一句話：憑證的兩種要人去精靈第 7 步，連不上只能重試，
  * `not_found` 連重試都沒有意義。把它們合成「TMDB 錯誤」等於把使用者丟回去自己猜。
  *
  * 探索頁（票 03）與 Media 詳情頁（票 04）共用這一塊：兩頁問的是同一台服務，
- * 而「憑證缺失要連到泊位 3、而且只對 admin 連」這條規則各寫一份遲早會走樣。
+ * 而「憑證缺失要連到來源那一格、而且只對 admin 連」這條規則各寫一份遲早會走樣。
  */
 export function TmdbNotice({
   problem,
@@ -33,8 +33,8 @@ export function TmdbNotice({
       </Notice>
       {detail && <p className="value text-xs wrap-anywhere text-ink-dim">{detail}</p>}
       {credential ? (
-        // 泊位 3 是**來源**（索引站 + TMDB 兩步），`BERTHS` 的 slot 沿用 `prowlarr`
-        // 只是因為那一格的服務判定來自 Prowlarr；TMDB 的第 6 步也在同一格。
+        // 「來源」那一格（索引站 + TMDB 兩步），`BERTHS` 的 slot 沿用 `prowlarr`
+        // 只是因為那一格的服務判定來自 Prowlarr；TMDB 的第 7 步也在同一格。
         <SetupHint
           berth={berthNumberOf('prowlarr')}
           label={t('tmdb.problem.toSetup')}

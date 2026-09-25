@@ -11,12 +11,13 @@ import type { ServiceKind } from '../api/schemas'
 export const BERTHS = [
   { code: 'BTH 1', nameKey: 'board.jellyfin', slot: 'jellyfin' },
   { code: 'BTH 2', nameKey: 'board.qbittorrent', slot: 'qbittorrent' },
-  { code: 'BTH 3', nameKey: 'board.source', slot: 'prowlarr' },
-  // 第 4 格沒有服務判定：它的狀態來自 Route 自己的跨服務檢查。
-  { code: 'BTH 4', nameKey: 'board.library', slot: 'library' },
+  // 媒體庫路徑排在來源之前（票 06d）：它只依賴前兩格，掛載設錯的人越早知道越好。
+  // 這一格沒有服務判定：它的狀態來自 Route 自己的跨服務檢查。
+  { code: 'BTH 3', nameKey: 'board.library', slot: 'library' },
+  { code: 'BTH 4', nameKey: 'board.source', slot: 'prowlarr' },
 ] as const satisfies readonly { code: string; nameKey: string; slot: BerthSlot }[]
 
-/** 一格對到的東西：三個外部服務，或第 4 格的 Route。 */
+/** 一格對到的東西：三個外部服務，或媒體庫路徑那一格的 Route。 */
 export type BerthSlot = ServiceKind | 'library'
 
 /**

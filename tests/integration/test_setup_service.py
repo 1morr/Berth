@@ -362,10 +362,56 @@ async def test_detection_is_rerunnable_and_can_change_its_mind(session: AsyncSes
 
 
 @pytest.mark.asyncio
+async def test_redetecting_one_service_leaves_the_others_as_they_were(
+    session: AsyncSession,
+) -> None:
+    """「重新偵測這個服務」只探那一個（票 06d）：其他服務的判定原封不動，連探都不探。"""
+    starting = FakeQbittorrentClient(error=ServiceUnavailableError("connection refused"))
+    later = NOW + DETECT_WINDOW + timedelta(seconds=1)
+    await detect_services(session, probes(qbittorrent=starting), now=NOW)
+    await detect_services(session, probes(qbittorrent=starting), now=later)
+    # 其他兩個這時候已經探不到了——只探 qBittorrent 的話，它們的判定不會跟著變。
+    gone = probes(
+        jellyfin=FakeJellyfinClient(error=ServiceNotDeployedError("jellyfin")),
+        prowlarr=FakeProwlarrClient(ping_error=ServiceNotDeployedError("prowlarr")),
+    )
+
+    status = await detect_services(
+        session, gone, now=later, restart=True, kind=ServiceKind.QBITTORRENT
+    )
+
+    assert verdict(status, ServiceKind.QBITTORRENT) == (
+        ServiceOrigin.BUNDLED,
+        DetectionReason.ANONYMOUS_OK,
+    )
+    assert verdict(status, ServiceKind.JELLYFIN)[0] is ServiceOrigin.BUNDLED
+    assert verdict(status, ServiceKind.PROWLARR)[0] is ServiceOrigin.BUNDLED
+
+
+@pytest.mark.asyncio
+async def test_redetecting_a_pinned_service_does_not_probe_it_again(
+    session: AsyncSession,
+) -> None:
+    """釘住的服務（Berth 自己設過密碼、加過站）指名重探也不探：判定規則看的正是 Berth 做掉的事。"""
+    await create_admin(session, username="skipper", password="harbour", apply_to_services=True)
+    await detect_services(session, probes(), now=NOW)
+    setup = await read_settings(session, SetupSettings)
+    setup.services[ServiceKind.QBITTORRENT].configured = True
+    await write_settings(session, setup)
+    locked = FakeQbittorrentClient(error=AuthFailedError("403"))
+
+    status = await detect_services(
+        session, probes(qbittorrent=locked), now=NOW, restart=True, kind=ServiceKind.QBITTORRENT
+    )
+
+    assert verdict(status, ServiceKind.QBITTORRENT)[0] is ServiceOrigin.BUNDLED
+
+
+@pytest.mark.asyncio
 async def test_the_bundled_prowlarr_api_key_is_remembered_for_the_later_steps(
     session: AsyncSession,
 ) -> None:
-    """套件內 Prowlarr 的 key 只有探測讀得到（唯讀掛載），第 5 步與 M1 都要用它。"""
+    """套件內 Prowlarr 的 key 只有探測讀得到（唯讀掛載），第 6 步與 M1 都要用它。"""
     await detect_services(session, probes(prowlarr_api_key="0" * 31 + "1"))
 
     indexer = await read_settings(session, IndexerSettings)

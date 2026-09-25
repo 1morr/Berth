@@ -2,7 +2,7 @@ import type { HealthStatus, RouteCheck } from '../api/schemas'
 import type { Signal } from './signal'
 
 /**
- * 泊位 4 的五條纜繩：標題、它打的端點、失敗時的說法（plan §9.5）。
+ * 泊位 3（媒體庫路徑）的五條纜繩：標題、它打的端點、失敗時的說法（plan §9.5）。
  *
  * 失敗的說法要指出**哪個容器少了哪個掛載**（brief §16.4）——只說「路徑找不到」等於把
  * 唯一有用的訊息丟掉。所以每一條纜繩對應一個容器：Berth 看不到 qBittorrent / Jellyfin 報的

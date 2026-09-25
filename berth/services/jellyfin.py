@@ -548,7 +548,7 @@ _UNSAFE_IN_PATH = re.compile(r'[<>:"/\\|?*\x00-\x1f]+')
 def library_slug(library_name: str) -> str:
     """媒體庫名 → 路徑與 category 用的 slug。中日文照留（brief §4.5）。
 
-    第 7 步的 Route 用同一支：Route 的 complete 子目錄、qBittorrent category 與這個媒體庫的
+    第 5 步的 Route 用同一支：Route 的 complete 子目錄、qBittorrent category 與這個媒體庫的
     Berth 路徑要對得起來，兩套算法遲早會分岔。
     """
     return _UNSAFE_IN_PATH.sub("-", library_name).strip(" .-").lower() or "berth"
@@ -557,7 +557,7 @@ def library_slug(library_name: str) -> str:
 def berth_path(library_name: str, library_root: str) -> str:
     """「加入 Berth 路徑」加的那一條：`<library root>/<slug>`（CONTEXT.md）。
 
-    第 7 步的 Route 也用這一支決定「這個媒體庫的 Berth 路徑是哪一條」，兩邊算出來的字串
+    第 5 步的 Route 也用這一支決定「這個媒體庫的 Berth 路徑是哪一條」，兩邊算出來的字串
     必須一模一樣，否則畫面會對 Berth 自己建的路徑說「還沒有 Berth 路徑」。
     """
     return f"{library_root.rstrip('/')}/{library_slug(library_name)}"

@@ -51,7 +51,7 @@ class Pack:
 
     #: `tests/fixtures/parser/` 底下的相對路徑。
     fixture: str
-    #: 套件內 Jellyfin 的三條 Route 之一（plan §9.3 第 7 步）。也是 `.torrent` 的檔名。
+    #: 套件內 Jellyfin 的三條 Route 之一（plan §9.3 第 5 步）。也是 `.torrent` 的檔名。
     route_slug: str
 
 

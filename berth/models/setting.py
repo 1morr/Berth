@@ -73,7 +73,7 @@ class QbittorrentSettings(SettingsGroup):
 class IndexerSettings(SettingsGroup):
     KEY = "services.indexer"
 
-    #: Prowlarr 或任意 Torznab 端點（Jackett 之類，plan §9.3 第 5 步）。
+    #: Prowlarr 或任意 Torznab 端點（Jackett 之類，plan §9.3 第 6 步）。
     kind: Literal["prowlarr", "torznab"] = "prowlarr"
     base_url: str = ""
     api_key: str = ""
@@ -158,7 +158,7 @@ class SetupStep(BaseModel):
 
 
 class SetupLibrary(BaseModel):
-    """Jellyfin 回報的一個媒體庫（plan §8.2）。第 7 步從這裡建 Route。"""
+    """Jellyfin 回報的一個媒體庫（plan §8.2）。第 5 步從這裡建 Route。"""
 
     model_config = ConfigDict(extra="ignore")
 
@@ -196,7 +196,7 @@ class SetupQbittorrent(BaseModel):
 
 
 class SetupIndexer(BaseModel):
-    """精靈第 5 步的狀態（plan §9.3 第 5 步、§8.4）。"""
+    """精靈第 6 步的狀態（plan §9.3 第 6 步、§8.4）。"""
 
     model_config = ConfigDict(extra="ignore")
 
@@ -211,7 +211,7 @@ class SetupIndexer(BaseModel):
 
 
 class SetupTmdb(BaseModel):
-    """精靈第 6 步的狀態（plan §9.3 第 6 步、§8.3）。
+    """精靈第 7 步的狀態（plan §9.3 第 7 步、§8.3）。
 
     **沒有 `skipped`**：憑證由使用者自備而且必填，這一步是閘門不是「之後再說」（票 02b）。
     """

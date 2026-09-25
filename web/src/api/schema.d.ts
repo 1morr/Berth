@@ -883,7 +883,7 @@ export interface paths {
         /**
          * Post Route
          * @description 新增，並立刻跑五條纜繩。**檢查紅燈不是 4xx**：Route 照樣建立、維持停用，紅的那一條
-         *     回在 `checks` 裡——與精靈第 7 步同一個規矩。
+         *     回在 `checks` 裡——與精靈第 5 步同一個規矩。
          */
         post: operations["post_route_api_routes_post"];
         delete?: never;
@@ -1417,7 +1417,7 @@ export interface paths {
          * Post Tmdb Test
          * @description 先存再測。`configuration` 回得出來就證明這把憑證有效。
          *
-         *     **沒有 `/tmdb/skip`**：這一步是閘門，測不過就走不到第 7 步（票 02b）。
+         *     **沒有 `/tmdb/skip`**：這一步是閘門，測不過就走不到第 8 步（票 02b）。
          */
         post: operations["post_tmdb_test_api_setup_tmdb_test_post"];
         delete?: never;
@@ -1466,7 +1466,7 @@ export interface paths {
         post?: never;
         /**
          * Delete Setup Route
-         * @description 第 7 步每條 Route 底下的「刪除」（票 14a）。
+         * @description 第 5 步每條 Route 底下的「刪除」（票 14a）。
          *
          *     與 Route 設定頁同一個命令、同一種拒絕（404 `route_missing`、409 `route_in_use`），只是跟著
          *     `setup/*` 的門禁：精靈跑完之前還沒有人登入得了，而 `/routes/*` 永遠只有管理員。
@@ -1699,6 +1699,7 @@ export interface components {
              * @default false
              */
             restart?: boolean;
+            kind?: components["schemas"]["ServiceKind"] | null;
         };
         /**
          * DetectionReason
@@ -1945,7 +1946,7 @@ export interface components {
         };
         /**
          * IndexerKind
-         * @description 第 5 步接索引站的兩種方式（plan §8.4、§9.3 第 5 步）。
+         * @description 第 6 步接索引站的兩種方式（plan §8.4、§9.3 第 6 步）。
          * @enum {string}
          */
         IndexerKind: "prowlarr" | "torznab";
@@ -1966,7 +1967,7 @@ export interface components {
          *
          *     與 `TmdbProblem` 同一個道理：分成五種而不是一句錯誤訊息，是因為**下一步不同**。
          *     索引站是精靈裡唯一可以跳過的一步，所以 `not_configured` 不是失敗而是「還沒接」——
-         *     畫面要把人送回泊位 5，不是叫他重試。
+         *     畫面要把人送回泊位 6，不是叫他重試。
          * @enum {string}
          */
         IndexerProblem: "not_configured" | "no_query" | "no_search" | "credential_rejected" | "unreachable";
@@ -3175,7 +3176,7 @@ export interface components {
         };
         /**
          * RouteRefusal
-         * @description Route 設定頁與精靈第 7 步的一個命令做不下去（`services/routes.py`、票 14、14a）。
+         * @description Route 設定頁與精靈第 5 步的一個命令做不下去（`services/routes.py`、票 14、14a）。
          *
          *     前五種發生在建立的路上（媒體庫與路徑向 Jellyfin 現查），後四種是對既有的那一條動手時。
          * @enum {string}
@@ -3468,7 +3469,7 @@ export interface components {
          * TmdbProblem
          * @description 向 TMDB 要東西沒要到的四種樣子（票 03 的探索頁、票 04 的 Media 詳情）。
          *
-         *     分成四種而不是一句錯誤訊息，是因為**下一步不同**：前兩種要使用者去精靈第 6 步處理憑證，
+         *     分成四種而不是一句錯誤訊息，是因為**下一步不同**：前兩種要使用者去精靈第 7 步處理憑證，
          *     `unreachable` 只能等或查網路，`not_found` 則是那個 id 本身不存在——重試一百次也一樣。
          *     封閉集合讓 UI 說得出那一步，而不是丟一個空畫面。
          *

@@ -199,7 +199,7 @@ class TestGate:
 def _complete_setup(client: TestClient) -> None:
     """直接寫 settings 造出「已完成」的狀態。
 
-    只給**不關心第 7 步**的測試用：`POST /setup/complete` 要每個 Route 都綠燈才寫得下去
+    只給**不關心第 5 步**的測試用：`POST /setup/complete` 要每個 Route 都綠燈才寫得下去
     （票 09），而這些測試連 Route 都還沒有。走那一支的路徑在 `TestRoutes`。
     """
     import asyncio
@@ -532,7 +532,7 @@ class TestQbittorrent:
 
 
 class TestSource:
-    """第 5–6 步的端點（plan §9.3 第 5–6 步、票 08）。"""
+    """第 6–7 步的端點（plan §9.3 第 6–7 步、票 08）。"""
 
     @pytest.fixture
     def prowlarr(self) -> FakeProwlarrClient:
@@ -640,7 +640,7 @@ class TestSource:
 
 
 class TestRoutes:
-    """第 7–8 步的三支端點（plan §9.3 第 7–8 步、§9.5、票 09）。
+    """第 5 步、第 8 步的三支端點（plan §9.3 第 5 步、第 8 步、§9.5、票 09）。
 
     這一組是**整個精靈跑一遍**：管理員 → 偵測 → Jellyfin → qBittorrent → 跳過來源 →
     建 Route → 完成。檔案系統是真的（`tmp_path`），所以硬鏈接檢查也是真的。
@@ -682,10 +682,10 @@ class TestRoutes:
             running.post("/api/setup/tmdb/test", json={"api_key": "the-users-key"})
             yield running
 
-    def test_the_wizard_arrives_at_step_seven_with_three_libraries_to_route(
+    def test_the_wizard_arrives_at_step_five_with_three_libraries_to_route(
         self, client: TestClient
     ) -> None:
-        assert client.get("/api/setup/status").json()["current_step"] == 7
+        assert client.get("/api/setup/status").json()["current_step"] == 5
 
         body = client.get("/api/setup/routes").json()
 
@@ -716,7 +716,7 @@ class TestRoutes:
         ]
         assert body["ready"] is True
         assert body["routes"][1]["category"] == "berth-tv"
-        # 目標路徑是 **Jellyfin 回報的** 那一條，不是 Berth 再算一次的（plan §9.3 第 7 步）。
+        # 目標路徑是 **Jellyfin 回報的** 那一條，不是 Berth 再算一次的（plan §9.3 第 5 步）。
         assert body["routes"][1]["target_path"] == f"{tmp_path / 'library'}/tv"
 
     def test_a_target_that_is_not_a_library_path_is_refused(self, client: TestClient) -> None:
@@ -738,7 +738,7 @@ class TestRoutes:
     def test_a_route_deleted_while_the_step_rechecks_is_a_404_not_a_crash(
         self, client: TestClient, qbittorrent: FakeQbittorrentClient
     ) -> None:
-        """第 7 步重跑時在鎖外打網路，那幾秒裡另一個分頁把某一條刪掉了（票 01）。
+        """第 5 步重跑時在鎖外打網路，那幾秒裡另一個分頁把某一條刪掉了（票 01）。
 
         寫回時 0 列被改到，那是 `routes/*` 早就定好的 404 `route_missing`（票 14、14a），
         不是 500——`api/setup.py` 從前只接 `ValueError`，`StaleDataError` 因此裸奔。
@@ -761,7 +761,7 @@ class TestRoutes:
         assert client.get("/api/health").json()["setup_completed"] is False
 
     def test_completing_needs_a_tmdb_credential_first(self, client: TestClient) -> None:
-        """第 6 步是閘門，第 8 步也擋一次（票 02b）：使用者可以回頭把 key 清掉。"""
+        """第 7 步是閘門，第 8 步也擋一次（票 02b）：使用者可以回頭把 key 清掉。"""
         client.post("/api/setup/routes", json={})
         client.post("/api/setup/tmdb/test", json={"api_key": ""})
 

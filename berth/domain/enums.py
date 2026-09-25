@@ -27,7 +27,7 @@ class MediaKind(StrEnum):
 class TmdbProblem(StrEnum):
     """向 TMDB 要東西沒要到的四種樣子（票 03 的探索頁、票 04 的 Media 詳情）。
 
-    分成四種而不是一句錯誤訊息，是因為**下一步不同**：前兩種要使用者去精靈第 6 步處理憑證，
+    分成四種而不是一句錯誤訊息，是因為**下一步不同**：前兩種要使用者去精靈第 7 步處理憑證，
     `unreachable` 只能等或查網路，`not_found` 則是那個 id 本身不存在——重試一百次也一樣。
     封閉集合讓 UI 說得出那一步，而不是丟一個空畫面。
 
@@ -598,10 +598,10 @@ class IndexerProblem(StrEnum):
 
     與 `TmdbProblem` 同一個道理：分成五種而不是一句錯誤訊息，是因為**下一步不同**。
     索引站是精靈裡唯一可以跳過的一步，所以 `not_configured` 不是失敗而是「還沒接」——
-    畫面要把人送回泊位 5，不是叫他重試。
+    畫面要把人送回精靈第 6 步（「來源」那一格），不是叫他重試。
     """
 
-    #: 精靈第 5 步跳過了，或連線資訊是空的。一個請求都不必發（plan §9.3 第 5 步）。
+    #: 精靈第 6 步跳過了，或連線資訊是空的。一個請求都不必發（plan §9.3 第 6 步）。
     NOT_CONFIGURED = "not_configured"
     #: 有位址，但這部作品連一個查得出去的關鍵字都沒有（快照還沒抓到，使用者也沒自己打）。
     NO_QUERY = "no_query"
@@ -673,7 +673,7 @@ class JellyfinStep(StrEnum):
 
 
 class RouteCheck(StrEnum):
-    """精靈第 7 步對一個 Route 跑的檢查（plan §9.5、brief §4.4）。順序即宣告順序，
+    """精靈第 5 步對一個 Route 跑的檢查（plan §9.5、brief §4.4）。順序即宣告順序，
     前一條斷了就不跑下一條——後面的檢查測的會是錯的路徑。
 
     健康頁的 Route 檢查用同一組（`health_checker`，票 10）。
@@ -706,14 +706,14 @@ class QbittorrentStep(StrEnum):
     PASSWORD = "web_ui_password"
 
 
-#: 精靈第 5 步「替 Prowlarr 介面設登入」那一條纜繩的 key（plan §9.3 第 5 步）。
+#: 精靈第 6 步「替 Prowlarr 介面設登入」那一條纜繩的 key（plan §9.3 第 6 步）。
 #: **不與 `IndexerKind.PROWLARR` 同名**：那一條與站接不接得上無關，混在一起會讓「這一步
 #: 做完了沒」把一條永遠存在的憑證步驟當成「至少接上了一個站」。
 PROWLARR_LOGIN_STEP = "prowlarr_login"
 
 
 class IndexerKind(StrEnum):
-    """第 5 步接索引站的兩種方式（plan §8.4、§9.3 第 5 步）。"""
+    """第 6 步接索引站的兩種方式（plan §8.4、§9.3 第 6 步）。"""
 
     PROWLARR = "prowlarr"
     #: 任意 Torznab 端點（Jackett 的聚合網址或單站）。
@@ -962,7 +962,7 @@ class JobRefusal(StrEnum):
 
 
 class RouteRefusal(StrEnum):
-    """Route 設定頁與精靈第 7 步的一個命令做不下去（`services/routes.py`、票 14、14a）。
+    """Route 設定頁與精靈第 5 步的一個命令做不下去（`services/routes.py`、票 14、14a）。
 
     前五種發生在建立的路上（媒體庫與路徑向 Jellyfin 現查），後四種是對既有的那一條動手時。
     """

@@ -1,4 +1,4 @@
-"""精靈第 5 步：索引站（plan §9.3 第 5 步、§8.4、brief §16.3）。
+"""精靈第 6 步：索引站（plan §9.3 第 6 步、§8.4、brief §16.3）。
 
 兩條路徑，同一份狀態形狀（`SetupIndexer`）：
 
@@ -40,7 +40,7 @@ from berth.services.clients import BUNDLED_PROWLARR_URL, ServiceClientFactory
 from berth.services.settings import read_settings, update_settings, write_settings
 from berth.services.steps import StepView, message, step_views
 
-#: 預設勾的十個公開站（plan §9.3 第 5 步、brief §16.3）。值是 Prowlarr 的 `definitionName`：
+#: 預設勾的十個公開站（plan §9.3 第 6 步、brief §16.3）。值是 Prowlarr 的 `definitionName`：
 #: 顯示用的站名 Prowlarr 自己會改（實測是 `Anidex` 不是文件寫的 `AniDex`），機器名不會。
 DEFAULT_INDEXERS: tuple[str, ...] = (
     "nyaasi",
@@ -121,7 +121,7 @@ async def apply_default_indexers(
     *,
     sleep: Sleeper = asyncio.sleep,
 ) -> IndexerSetupStatus:
-    """勾起來的站逐個加進套件內的 Prowlarr（plan §9.3 第 5 步）。
+    """勾起來的站逐個加進套件內的 Prowlarr（plan §9.3 第 6 步）。
 
     一站一條纜繩：新增成功 `ok`、已經在了就改用 `indexer/test` 驗一次（通過是 `skipped`），
     連不上是 `failed` 加上 Prowlarr 回的原文。整批不會因為一個站失敗就停下來——十個公開站裡
@@ -161,7 +161,7 @@ async def apply_default_indexers(
             latest.indexer.login_password = setup.admin.interface_password
         _pin_probe(latest, origin)
 
-    # 逐站加完要一分鐘上下，這段時間裡第 6 步可能已經寫進同一組設定（M2 票 15）。
+    # 逐站加完要一分鐘上下，這段時間裡第 7 步可能已經寫進同一組設定（M2 票 15）。
     await update_settings(session, SetupSettings, record)
     return await read_indexer_status(session, factory)
 
@@ -187,7 +187,7 @@ async def connect_indexer(
         latest.indexer.steps = [step]
         latest.indexer.skipped = False
 
-    # 測試在路上的那幾秒裡，第 6 步可能已經寫進同一組設定（M2 票 15）。
+    # 測試在路上的那幾秒裡，第 7 步可能已經寫進同一組設定（M2 票 15）。
     setup = await update_settings(session, SetupSettings, record)
     origin, _ = _target(setup, settings)
     return _view(setup, settings, origin, base_url, options=(), reachable=True, error="")
@@ -300,7 +300,7 @@ async def probe_indexer(
 ) -> SetupStep:
     """那個索引站位址現在回得出什麼。
 
-    精靈第 5 步的既有路徑與健康檢查的第三項用的是同一支：兩者問的都是「這個端點還能不能
+    精靈第 6 步的既有路徑與健康檢查的第三項用的是同一支：兩者問的都是「這個端點還能不能
     搜」，分成兩份實作只會讓其中一份先過期（票 10）。
     """
     if kind is IndexerKind.TORZNAB:

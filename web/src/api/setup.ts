@@ -24,8 +24,12 @@ export function createAdmin(body: AdminInput): Promise<SetupStatus> {
   return apiPost<SetupStatus>('/setup/admin', body)
 }
 
-export function detectServices(restart = false): Promise<SetupStatus> {
-  return apiPost<SetupStatus>('/setup/detect', { restart } satisfies Schemas['DetectIn'])
+/**
+ * 第 2 步的探測。給了 `kind` 就只重探那一個服務（票 06d 的「重新偵測這個服務」）；
+ * 沒給就是整輪。
+ */
+export function detectServices(restart = false, kind?: ServiceKind): Promise<SetupStatus> {
+  return apiPost<SetupStatus>('/setup/detect', { restart, kind } satisfies Schemas['DetectIn'])
 }
 
 export function connectService(kind: ServiceKind, body: ConnectInput): Promise<SetupStatus> {
@@ -135,7 +139,7 @@ export function skipIndexers(skipped: boolean): Promise<IndexerSetup> {
   return apiPost<IndexerSetup>('/setup/indexers/skip', { skipped } satisfies Schemas['SkipIn'])
 }
 
-/** 第 6 步沒有 `skip`：憑證是使用者自備的必填項，測得過才走得到第 7 步（票 02b）。 */
+/** 第 7 步沒有 `skip`：憑證是使用者自備的必填項，測得過才走得到完成（票 02b）。 */
 export function testTmdb(api_key: string): Promise<TmdbSetup> {
   return apiPost<TmdbSetup>('/setup/tmdb/test', { api_key } satisfies Schemas['TmdbTestIn'])
 }
@@ -158,7 +162,7 @@ export function buildRoutes(selections: RouteSelectionInput[]): Promise<RouteSet
 }
 
 /**
- * 第 7 步每條 Route 底下的刪除（票 14a）。與設定頁的 `deleteRoute` 同一個命令、同一種拒絕，
+ * 第 5 步每條 Route 底下的刪除（票 14a）。與設定頁的 `deleteRoute` 同一個命令、同一種拒絕，
  * 只是跟著精靈的門禁：精靈跑完之前還沒有人登入得了，而 `/routes/*` 永遠只有 admin。
  */
 export function deleteSetupRoute(id: number): Promise<void> {

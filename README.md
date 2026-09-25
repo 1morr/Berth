@@ -24,12 +24,15 @@ docker compose up -d
 | — | 1–2 建立 Berth 管理員、逐服務探測 | 探到 compose 主機名就是套件內 | 探不到就填位址，就地測連線 |
 | BTH 1 | 3 Jellyfin | 確認版本 ≥ 12.0、建管理員、Movies / TV / Anime 三個媒體庫、API key | 只做檢查；「加入 Berth 路徑」是一顆要確認的按鈕 |
 | BTH 2 | 4 qBittorrent | 套用五個建議鍵、設 WebUI 密碼 | 先顯示逐鍵差異再問要不要套用 |
-| BTH 3 | 5–6 索引站與 TMDB | 加十個預設公開站 | 填既有 Prowlarr 或任一 Torznab 網址 |
-| BTH 4 | 7–8 媒體庫路徑 | 自動建三條 Route | 勾選媒體庫與寫入目標 |
+| BTH 3 | 5 媒體庫路徑 | 走到就自動建三條 Route、跑五條檢查 | 勾選媒體庫與寫入目標 |
+| BTH 4 | 6–7 索引站與 TMDB | 加十個預設公開站 | 填既有 Prowlarr 或任一 Torznab 網址 |
+| — | 8 完成 | 說出跳過了什麼、在哪裡補 | 同左 |
 
-索引站那一步可以按「之後再說」（沒接只是搜尋不到東西）；**TMDB 那一步不行** —— 沒有一把測得過的憑證就沒有標題、季集與封面，精靈停在第 6 步。
+索引站那一步可以按「之後再說」（沒接只是搜尋不到東西）；**TMDB 那一步不行** —— 沒有一把測得過的憑證就沒有標題、季集與封面，精靈停在第 7 步。
 
-每條 Route 建立時都會**真的建一個硬鏈接再比對 inode**，三個容器看到的不是同一個檔案系統就當場失敗，並指出是哪個容器少了哪個掛載。全部綠燈才走得到最後一步。
+每條 Route 建立時都會**真的建一個硬鏈接再比對 inode**，三個容器看到的不是同一個檔案系統就當場失敗，並指出是哪個容器少了哪個掛載。全部綠燈才走得到下一個泊位——所以掛載設錯在第 5 步就會知道，不必先去申請 TMDB key。
+
+每個泊位做完都停在結果上，按「前往下一個泊位」才走；泊位板上走過的格子點得回去，每一頁都有「上一個泊位」。
 
 設定完成後精靈關閉，之後用 Jellyfin 的帳號登入；健康頁 `/health` 每 5 分鐘重跑同一組檢查。
 
@@ -65,7 +68,7 @@ port 跟這台機器上別的東西撞到時（同一台還跑著另一套 Berth
 
 Berth **不內建任何 provider 的 API key**，TMDB 的憑證要你自己申請 —— 專案不替所有使用者背一把
 共用憑證。它是必要的：作品標題、季集結構與封面全部來自 TMDB，沒有它精靈走不完。
-**這台機器也要連得到 `api.themoviedb.org`**：第 6 步真的打一次 TMDB 驗憑證，被防火牆擋住的話精靈同樣走不完。
+**這台機器也要連得到 `api.themoviedb.org`**：第 7 步真的打一次 TMDB 驗憑證，被防火牆擋住的話精靈同樣走不完。
 
 1. 在 <https://www.themoviedb.org/signup> 註冊一個免費帳號（要收驗證信）。
 2. 開 <https://www.themoviedb.org/settings/api>，申請 API key，用途（Type of Use）選
@@ -73,7 +76,7 @@ Berth **不內建任何 provider 的 API key**，TMDB 的憑證要你自己申�
 3. 那一頁同時給兩把東西：**API Key (v3 auth)** 是 32 個十六進位字元，**API Read Access Token
    (v4 auth)** 是很長的一串 JWT。**兩種 Berth 都收**，貼哪一把都成立（v4 走標頭，不會落在
    任何一行 log 裡）。
-4. 精靈第 6 步貼上去按「測試 TMDB」，綠燈才走得到下一個泊位。之後要換一把就在
+4. 精靈第 7 步貼上去按「測試 TMDB」，綠燈才走得到下一個泊位。之後要換一把就在
    「設定 → 來源」重貼。
 
 TMDB 的條款限非商業使用；歸屬聲明見〈[授權與歸屬](#授權與歸屬)〉。
@@ -101,7 +104,7 @@ TMDB 的條款限非商業使用；歸屬聲明見〈[授權與歸屬](#授權�
   - **套件內的 Jellyfin 釘在 `version-12.1ubu2604`**：`docker compose pull` 只會拿到 12.1 這條線的重建，不會默默跨到下一個大版本。要升級時先備份上面那個目錄，再改 `deploy/docker-compose.yml` 的 tag 並 `docker compose up -d jellyfin`。
 - **Prowlarr**：不預置任何東西，Berth 唯讀掛載它的設定目錄以讀取它自動產生的 API key。
 - **TMDB**：要你自己申請一把 API key（上面那一節），Berth 不內建。憑證存在 Berth 自己的資料庫裡，
-  精靈第 6 步或「設定 → 來源」都改得了。
+  精靈第 7 步或「設定 → 來源」都改得了。
 
 ### 秘密與備份
 
@@ -327,7 +330,7 @@ M1 的整條路徑、M1.5 的權限與瀏覽、M2 的修正與對帳對**真的*
   裡的來源（外加 complete 裡一個沒人認領的目錄）——手動對帳偵測到，按 Issue 上的動作修好，再對帳一次確認
   那一件沒有再開；以及整個 Anime 媒體庫的內容刪光之後按一次「重新入庫」，回到同樣的路徑、同一個 inode、同樣的帳本列。
 
-Prowlarr 也會起來讓精靈偵測，但第 5 步跳過索引站、送單直接帶 `.torrent` 網址——搜尋不在 e2e 裡。套件內的媒體庫
+Prowlarr 也會起來讓精靈偵測，但第 6 步跳過索引站、送單直接帶 `.torrent` 網址——搜尋不在 e2e 裡。套件內的媒體庫
 一開始是空的，反查要等 Berth 請 Jellyfin 掃描之後那一輪，所以一次**約 15 分鐘**，平常的 `uv run pytest` 不收它
 （`-m 'not e2e'`）。
 
@@ -336,7 +339,7 @@ Prowlarr 也會起來讓精靈偵測，但第 5 步跳過索引站、送單直�
 # 因為發佈名很長，Windows bind mount 的 260 字元路徑放不下。
 export CONFIG_ROOT="$PWD/.local/e2e-config"          # PowerShell: $env:CONFIG_ROOT = "$PWD/.local/e2e-config"
 docker compose -f deploy/docker-compose.yml -f tests/e2e/compose.yml --env-file tests/e2e/e2e.env up -d --build --wait
-uv run --env-file .env pytest -m e2e tests/e2e -rA     # 要 .env 裡的 TMDB_API_KEY：精靈第 6 步是閘門
+uv run --env-file .env pytest -m e2e tests/e2e -rA     # 要 .env 裡的 TMDB_API_KEY：精靈第 7 步是閘門
 docker compose -f deploy/docker-compose.yml -f tests/e2e/compose.yml --env-file tests/e2e/e2e.env down --volumes
 ```
 
@@ -478,7 +481,7 @@ Fake 是**有狀態**的，每個情境只有一份，所以第 3 步真的會�
 重按也真的會標成「已經是這樣」。
 
 每次啟動都用一個新的暫存 `CONFIG_ROOT`，所以永遠是乾淨環境；`--config-root` 可指定成固定目錄
-以便跨次保留進度。精靈第 7 步（媒體庫路徑）會**真的**建目錄、寫探測檔並呼叫 `link()`，所以三層
+以便跨次保留進度。精靈第 5 步（媒體庫路徑）會**真的**建目錄、寫探測檔並呼叫 `link()`，所以三層
 路徑（`settings.paths`）由這支腳本指到該次的暫存 `DATA_ROOT` 底下，不會碰到容器裡的 `/data`。
 
 `healthy` / `degraded` / `drifted` 三個情境在啟動時就真的跑過一輪 `build_routes` 與健康檢查，

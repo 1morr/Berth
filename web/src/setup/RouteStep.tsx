@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import {
@@ -17,11 +17,12 @@ import { Cutaway, CutawayRow } from '../components/Cutaway'
 import { RouteDelete } from '../components/RouteDelete'
 
 /**
- * 泊位 4：媒體庫路徑 → Library Route（plan §9.3 第 7 步、§9.5）。
+ * 泊位 3：媒體庫路徑 → Library Route（plan §9.3 第 5 步、§9.5）。
  *
  * 套件內 Jellyfin 的三個媒體庫直接導出三個 Route，沒有可選的東西——剖面列的就是將建立的
- * 那三條。既有 Jellyfin 由使用者勾選媒體庫，並從**那個媒體庫自己回報的路徑**裡選寫入目標；
- * 想要一條乾淨的 Berth 路徑就用「加入 Berth 路徑」（第 3 步的同一支端點，舊路徑原地不動）。
+ * 那三條，而且第一次走到這一格就自動跑（`SetupPage`，票 06d），沒有要按的鍵。既有 Jellyfin
+ * 由使用者勾選媒體庫，並從**那個媒體庫自己回報的路徑**裡選寫入目標；想要一條乾淨的
+ * Berth 路徑就用「加入 Berth 路徑」（第 3 步的同一支端點，舊路徑原地不動）。
  *
  * 每個 Route 五條纜繩，最後一條真的鏈接一次檔案再比 inode（brief §4.4）。失敗就地展開
  * 那個容器的 compose `volumes:` 片段——這是「哪個容器少了哪個掛載」唯一有用的回答。
@@ -42,6 +43,9 @@ export function RouteStep({
   onBuild,
   onAddPath,
   onRouteDeleted,
+  autoBuilding,
+  note,
+  nav,
 }: {
   setup: RouteSetup
   building: boolean
@@ -55,6 +59,15 @@ export function RouteStep({
   onAddPath: (library: string) => void
   /** 一條 Route 被明確地刪掉了（票 14）：這一步的清單要重讀。 */
   onRouteDeleted: () => void
+  /**
+   * 套件內的自動建立還沒送出或正在跑（票 06d）。跑過之後又把 Route 全刪光的人要拿得到鍵，
+   * 所以「一條都沒有」本身不代表自動建立會接手。
+   */
+  autoBuilding: boolean
+  /** 回頭看的說明（`RevisitNote`），這一頁做完了才有。 */
+  note?: ReactNode
+  /** 上一個 / 下一個泊位（`BerthNav`）。 */
+  nav?: ReactNode
 }) {
   const { t } = useTranslation()
   const bundled = setup.origin === 'bundled'
@@ -77,7 +90,7 @@ export function RouteStep({
   }
 
   /**
-   * 這條路徑已經被誰拿去當寫入目標了（票 03 第 6 條）。兩個來源與 plan §9.3 第 7 步
+   * 這條路徑已經被誰拿去當寫入目標了（票 03 第 6 條）。兩個來源與 plan §9.3 第 5 步
    * 的略過規則一致：已經存在的 Route，以及**同一批裡前面已經選走它**的別的媒體庫。
    * 自己選的那一條不算佔用，否則勾完就再也改不回來。
    */
@@ -105,10 +118,13 @@ export function RouteStep({
       )
     })
     .map((library) => ({ library: library.name, target_path: pickOf(library).target }))
-  // 按下去會新建幾條。沒有新的時候這一顆就是「全部重驗」——重跑第 7 步只剩這個意思。
+  // 按下去會新建幾條。沒有新的時候這一顆就是「全部重驗」——重跑第 5 步只剩這個意思。
   const fresh = bundled
     ? routable.filter((library) => !library.has_route).length
     : selections.length
+  // 套件內第一次走到這一格是自動跑的（票 06d）：沒有要選的東西，那一顆鍵只是儀式。
+  // 請求沒走完時才把鍵還給他——那時候總得有辦法再試一次。
+  const automatic = bundled && setup.routes.length === 0 && !requestFailed && autoBuilding
 
   return (
     <div className="grid flex-1 gap-px bg-rule lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
@@ -123,6 +139,7 @@ export function RouteStep({
         <p className="mt-2 max-w-prose text-sm text-ink-dim">
           {t(bundled ? 'routes.lede.bundled' : 'routes.lede.existing')}
         </p>
+        {note}
 
         {!bundled &&
           (setup.libraries.length === 0 ? (
@@ -147,20 +164,39 @@ export function RouteStep({
             />
           ))}
 
-        <div className={`mt-6 ${STICKY_ACTION}`}>
-          <PrimaryButton
-            type="button"
-            busy={building}
-            disabled={fresh === 0 && setup.routes.length === 0}
-            onClick={() => onBuild(bundled ? [] : selections)}
-          >
-            {building
-              ? t('routes.building')
-              : fresh > 0 || setup.routes.length === 0
-                ? t('routes.build', { count: fresh })
+        {automatic ? (
+          <p aria-live="polite" className="value mt-6 text-sm text-ink-dim">
+            {t('routes.automatic')}
+          </p>
+        ) : fresh === 0 && setup.ready ? (
+          // 全綠、沒有新的可建：這一顆只剩「全部重驗」，是次要的——主要動作是前往下一個泊位。
+          <div className="mt-6">
+            <GhostButton
+              type="button"
+              busy={building}
+              onClick={() => onBuild(bundled ? [] : selections)}
+            >
+              {building
+                ? t('routes.building')
                 : t('routes.recheck', { count: setup.routes.length })}
-          </PrimaryButton>
-        </div>
+            </GhostButton>
+          </div>
+        ) : (
+          <div className={`mt-6 ${STICKY_ACTION}`}>
+            <PrimaryButton
+              type="button"
+              busy={building}
+              disabled={fresh === 0 && setup.routes.length === 0}
+              onClick={() => onBuild(bundled ? [] : selections)}
+            >
+              {building
+                ? t('routes.building')
+                : fresh > 0 || setup.routes.length === 0
+                  ? t('routes.build', { count: fresh })
+                  : t('routes.recheck', { count: setup.routes.length })}
+            </PrimaryButton>
+          </div>
+        )}
 
         {requestFailed && (
           <div className="mt-4">
@@ -191,6 +227,7 @@ export function RouteStep({
             }}
           />
         ))}
+        {nav}
       </div>
     </div>
   )
@@ -369,7 +406,7 @@ function LibraryPicker({
  * 這個媒體庫回報的路徑，選一條當寫入目標。其他的仍然唯讀（brief §4.3）。
  *
  * **已經被佔用的選不了**（票 03 第 6 條）：同一個目標兩條 Route，帳本就認不出檔案是誰的，
- * 所以後端本來就會擋（plan §9.3 第 7 步：被別的 Route 或同一批前面的選擇佔走的一律略過）。
+ * 所以後端本來就會擋（plan §9.3 第 5 步：被別的 Route 或同一批前面的選擇佔走的一律略過）。
  * 在按下去之前就說出來——`/settings/routes` 的新增表是同一個做法。
  */
 function Targets({

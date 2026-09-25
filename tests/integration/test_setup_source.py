@@ -1,4 +1,4 @@
-"""精靈第 5–6 步的 services 命令（plan §9.3 第 5–6 步、§8.3、§8.4、票 08）。
+"""精靈第 6–7 步的 services 命令（plan §9.3 第 6–7 步、§8.3、§8.4、票 08）。
 
 驗的是票 08 的驗收條件：十個預設站逐站顯示成敗、重按不會重複新增、既有 Prowlarr 與任意
 Torznab 各有測試；TMDB 那一半改由票 02b 定義——憑證使用者自備、必填，測得過才走得下去。
@@ -21,7 +21,9 @@ from berth.adapters.torznab.fake import FakeTorznabClient
 from berth.db import create_session_factory
 from berth.domain import (
     PROWLARR_LOGIN_STEP,
+    CollectionType,
     DetectionReason,
+    HealthStatus,
     IndexerKind,
     JellyfinStep,
     QbittorrentStep,
@@ -29,7 +31,14 @@ from berth.domain import (
     ServiceOrigin,
     StepStatus,
 )
-from berth.models import IndexerSettings, ServiceProbe, SetupSettings, SetupStep, TmdbSettings
+from berth.models import (
+    IndexerSettings,
+    Route,
+    ServiceProbe,
+    SetupSettings,
+    SetupStep,
+    TmdbSettings,
+)
 from berth.services.indexer import (
     DEFAULT_INDEXERS,
     apply_default_indexers,
@@ -38,7 +47,7 @@ from berth.services.indexer import (
     skip_indexers,
 )
 from berth.services.settings import read_settings, write_settings
-from berth.services.setup import STEP_INDEXER, STEP_ROUTES, STEP_TMDB, create_admin, read_status
+from berth.services.setup import STEP_COMPLETE, STEP_INDEXER, STEP_TMDB, create_admin, read_status
 from berth.services.tmdb import read_tmdb_status, verify_tmdb
 from tests.conftest import TMDB_API_KEY
 from tests.integration.factories import FakeClientFactory
@@ -58,7 +67,10 @@ async def arrange(
     origin: ServiceOrigin = ServiceOrigin.BUNDLED,
     apply_to_services: bool = True,
 ) -> None:
-    """把資料庫推到「前三個泊位都接好、輪到來源」的狀態。"""
+    """把資料庫推到「Jellyfin、qBittorrent、媒體庫路徑都接好、輪到來源」的狀態。
+
+    媒體庫路徑排在來源之前（票 06d），所以這裡要有一條綠的 Route，否則精靈停在第 5 步。
+    """
     await create_admin(
         session, username="skipper", password="harbour", apply_to_services=apply_to_services
     )
@@ -101,6 +113,18 @@ async def arrange(
     settings = await read_settings(session, IndexerSettings)
     settings.api_key = "0" * 31 + "1"
     await write_settings(session, settings)
+    session.add(
+        Route(
+            slug="tv",
+            name="TV",
+            jellyfin_library_id="item-tv",
+            jellyfin_library_name="TV",
+            collection_type=CollectionType.TVSHOWS,
+            target_path="/data/library/tv",
+            category="berth-tv",
+            health_status=HealthStatus.OK,
+        )
+    )
     await session.commit()
 
 
@@ -201,7 +225,7 @@ async def test_the_bundled_prowlarr_gets_the_admin_credentials(session: AsyncSes
 
 
 @pytest.mark.asyncio
-async def test_new_interface_credentials_reach_prowlarr_when_step_five_is_applied_again(
+async def test_new_interface_credentials_reach_prowlarr_when_step_six_is_applied_again(
     session: AsyncSession,
 ) -> None:
     """只改密碼也要重寫（票 06c）：Prowlarr 讀回來的密碼是雜湊，比的是 Berth 上次寫的那一組。"""
@@ -332,10 +356,10 @@ async def test_a_failing_endpoint_is_saved_anyway_so_one_field_can_be_fixed(
 async def test_only_the_indexer_half_of_the_source_berth_can_be_skipped(
     session: AsyncSession,
 ) -> None:
-    """第 5 步可跳過，第 6 步不行（票 02b）。
+    """第 6 步可跳過，第 7 步不行（票 02b）。
 
     沒有索引站只是搜尋不到東西，Berth 其餘功能還在；沒有 TMDB 則探索、季集快照、命名
-    全部停擺，所以第 6 步是閘門而不是「之後再說」。
+    全部停擺，所以第 7 步是閘門而不是「之後再說」。
     """
     await arrange(session)
     assert (await read_status(session)).current_step == STEP_INDEXER
@@ -344,11 +368,11 @@ async def test_only_the_indexer_half_of_the_source_berth_can_be_skipped(
     assert (await read_status(session)).current_step == STEP_TMDB
 
     await verify_tmdb(session, FakeClientFactory(), api_key=TMDB_API_KEY)
-    assert (await read_status(session)).current_step == STEP_ROUTES
+    assert (await read_status(session)).current_step == STEP_COMPLETE
 
 
 @pytest.mark.asyncio
-async def test_a_rejected_credential_leaves_the_wizard_on_step_six(session: AsyncSession) -> None:
+async def test_a_rejected_credential_leaves_the_wizard_on_step_seven(session: AsyncSession) -> None:
     """測失敗與沒測過一樣走不下去——閘門看的是綠燈，不是「按過了」。"""
     await arrange(session)
     await skip_indexers(session, FakeClientFactory())
@@ -473,7 +497,7 @@ async def test_berth_never_adds_sites_to_an_existing_indexer(session: AsyncSessi
 class _TmdbPressedMeanwhile(FakeProwlarrClient):
     """加第一個站的那幾秒裡，使用者在同一頁按了「測試 TMDB」（M2 票 15 的 e2e 抓到的）。
 
-    真的 Prowlarr 逐站連線再加上重啟要一分鐘上下，而第 5、6 步在同一頁上，所以這不是假想。
+    真的 Prowlarr 逐站連線再加上重啟要一分鐘上下，而第 6、7 步在同一頁上，所以這不是假想。
     """
 
     def __init__(self, engine: AsyncEngine) -> None:
@@ -514,7 +538,7 @@ async def test_sites_being_added_do_not_erase_a_tmdb_check_made_meanwhile(
     await apply_default_indexers(session, factory, ["nyaasi"], sleep=_no_sleep)
 
     assert (await read_tmdb_status(session)).verified is True
-    assert (await read_status(session)).current_step == STEP_ROUTES
+    assert (await read_status(session)).current_step == STEP_COMPLETE
 
 
 @pytest.mark.asyncio
@@ -528,4 +552,4 @@ async def test_a_tmdb_check_does_not_erase_sites_added_meanwhile(
 
     status = await read_indexer_status(session, FakeClientFactory())
     assert [row.step for row in status.steps if row.status is StepStatus.OK][:1] == ["nyaasi"]
-    assert (await read_status(session)).current_step == STEP_ROUTES
+    assert (await read_status(session)).current_step == STEP_COMPLETE

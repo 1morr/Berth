@@ -117,7 +117,7 @@ def tmdb(**kwargs: object) -> FakeTmdbClient:
 
 
 async def credentialled(session: AsyncSession, client: FakeTmdbClient) -> FakeClientFactory:
-    """精靈第 6 步做完的樣子：憑證存下來了（票 02b 之後它是必填閘門）。"""
+    """精靈第 7 步做完的樣子：憑證存下來了（票 02b 之後它是必填閘門）。"""
     await write_settings(session, TmdbSettings(api_key=TMDB_API_KEY))
     await session.commit()
     return FakeClientFactory(tmdb=client)
@@ -405,7 +405,7 @@ class TestRouteChoices:
 
 class TestProblems:
     async def test_it_says_when_the_credential_is_missing(self, session: AsyncSession) -> None:
-        """憑證是精靈第 6 步的必填閘門（票 02b），所以「沒有 key」有一句自己的話。"""
+        """憑證是精靈第 7 步的必填閘門（票 02b），所以「沒有 key」有一句自己的話。"""
         factory = FakeClientFactory(tmdb=tmdb())
 
         view = await read_media(session, factory, SPY_ID)

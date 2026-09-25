@@ -21,7 +21,7 @@ function usageCounts(t: TFunction, usage: RouteUsage) {
 }
 
 /**
- * 刪除一條 Route：明確、要二次確認的動作（票 14）。Route 設定頁與精靈泊位 4 共用。
+ * 刪除一條 Route：明確、要二次確認的動作（票 14）。Route 設定頁與精靈泊位 3 共用。
  *
  * **打哪一支由呼叫端注入**（票 14a）：設定頁是 `/routes/{id}`（永遠只有 admin），精靈是
  * `/setup/routes/{id}`（跟著精靈的門禁）。兩支是同一個命令、同一種拒絕。

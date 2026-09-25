@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { JELLYFIN_STEPS, type JellyfinConnectInput, type JellyfinSetup } from '../api/setup'
@@ -25,6 +26,9 @@ export function JellyfinStep({
   onAddPath,
   connecting,
   addingPath,
+  note,
+  nav,
+  redetect,
 }: {
   setup: JellyfinSetup
   running: boolean
@@ -36,6 +40,12 @@ export function JellyfinStep({
   onAddPath: (library: string) => void
   connecting: boolean
   addingPath: string | null
+  /** 回頭看的說明（`RevisitNote`），這一頁做完了才有。 */
+  note?: ReactNode
+  /** 上一個 / 下一個泊位（`BerthNav`）。 */
+  nav?: ReactNode
+  /** 請求沒走完（多半是連不上）時的「重新偵測這個服務」（票 06d）。 */
+  redetect?: ReactNode
 }) {
   const { t } = useTranslation()
   const bundled = setup.origin === 'bundled'
@@ -55,6 +65,7 @@ export function JellyfinStep({
         <p className="mt-2 max-w-prose text-sm text-ink-dim">
           {t(bundled ? 'jellyfin.bundled.lede' : 'jellyfin.existing.lede')}
         </p>
+        {note}
 
         {!setup.version_supported && <VersionNotice version={setup.version} />}
 
@@ -64,6 +75,7 @@ export function JellyfinStep({
             running={running}
             failed={bootstrapFailed}
             onBootstrap={onBootstrap}
+            redetect={redetect}
           />
         ) : (
           <JellyfinExisting
@@ -75,6 +87,7 @@ export function JellyfinStep({
             onAddPath={onAddPath}
           />
         )}
+        {nav}
       </div>
     </div>
   )
@@ -143,11 +156,13 @@ function BootstrapSequence({
   running,
   failed,
   onBootstrap,
+  redetect,
 }: {
   setup: JellyfinSetup
   running: boolean
   failed: boolean
   onBootstrap: () => void
+  redetect?: ReactNode
 }) {
   const { t } = useTranslation()
   const byStep = new Map(setup.steps.map((row) => [row.step, row]))
@@ -182,10 +197,12 @@ function BootstrapSequence({
           <Notice signal="blocked" label={t('common.failed')}>
             {t('jellyfin.bundled.requestFailed')}
           </Notice>
+          {redetect && <div className="mt-3">{redetect}</div>}
         </div>
       )}
 
-      <div className={`mt-6 ${STICKY_ACTION}`}>
+      {/* 做完了，「前往下一個泊位」接手主要動作與底部的位置（`BerthNav`）。 */}
+      <div className={`mt-6 ${done ? '' : STICKY_ACTION}`}>
         {done ? (
           <GhostButton type="button" busy={running} onClick={onBootstrap}>
             {t('jellyfin.bundled.rerun')}

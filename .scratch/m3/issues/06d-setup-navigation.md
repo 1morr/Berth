@@ -1,6 +1,6 @@
 # 06d — 精靈導覽：每個泊位停在結果上、上一個 / 下一個泊位、泊位板可點、出得去
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Blocked by:** None — can start immediately。**開工前先 `/impeccable onboard` 做一輪 shape**（專案 CLAUDE.md：設定精靈走 onboard），06e 的泊位從 4 格變 5 格也在同一輪 shape 裡定；shape 的結論寫回 `.scratch/m0/wizard-shape.md`
 
@@ -32,18 +32,34 @@
 
 ## 驗收
 
-- [ ] `/impeccable onboard` shape 做完，結論寫回 `.scratch/m0/wizard-shape.md`，使用者確認過畫面
-- [ ] 第 3–7 步每一步做完都停在結果上，按「前往下一個泊位」才前進（前端測試逐步各一條）
-- [ ] 泊位板：走過的與目前的可點、未到的不可點且不是按鈕；健康頁的板不可點（前端測試 + 無障礙名稱）
-- [ ] 「上一個泊位」在第 3 步之後每一步都有
-- [ ] 完成頁按「回媒體庫路徑」之後有路回到完成頁（bug repro 先寫成紅燈測試）
-- [ ] 走完的精靈按「重新探測」再按前往泊位 1 的那顆鍵，落在泊位 1（或按鍵改名後說得出落在哪；bug repro 先紅燈）
-- [ ] `WizardTrail` 不再在每一步帶「重新探測」；未解決或逾時的那一格旁邊有「重新偵測這個服務」（前端測試）
-- [ ] 回頭看每一格都說得出能改什麼、不能改的去哪裡改（前端測試逐格）
-- [ ] 完成頁沒有「回媒體庫路徑」，改由「上一個泊位」回去
-- [ ] 套件內走到 Route 那一格就自動建 Route、跑五條檢查並停在結果上，沒有要按的鍵；回頭看不重跑；既有 Jellyfin 仍是勾選（前端測試兩種來源各一條）
-- [ ] Route 那一步的位置在 shape 定案，plan §9.3 的步驟順序與 `.scratch/m0/wizard-shape.md` 同步
-- [ ] 導航純函式有單元測試（覆寫進出、可點範圍）
-- [ ] playwright 實跑一次全新精靈（中途回頭再往前），1280 與 390，附結果
-- [ ] plan §9.3 同步（前端覆寫的規則）
-- [ ] lint、type、test 綠燈
+- [x] `/impeccable onboard` shape 做完，結論寫回 `.scratch/m0/wizard-shape.md`，使用者確認過畫面
+- [x] 第 3–7 步每一步做完都停在結果上，按「前往下一個泊位」才前進（前端測試逐步各一條）
+- [x] 泊位板：走過的與目前的可點、未到的不可點且不是按鈕；健康頁的板不可點（前端測試 + 無障礙名稱）
+- [x] 「上一個泊位」在第 3 步之後每一步都有
+- [x] 完成頁按「回媒體庫路徑」之後有路回到完成頁（bug repro 先寫成紅燈測試）
+- [x] 走完的精靈按「重新探測」再按前往泊位 1 的那顆鍵，落在泊位 1（或按鍵改名後說得出落在哪；bug repro 先紅燈）
+- [x] `WizardTrail` 不再在每一步帶「重新探測」；未解決或逾時的那一格旁邊有「重新偵測這個服務」（前端測試）
+- [x] 回頭看每一格都說得出能改什麼、不能改的去哪裡改（前端測試逐格）
+- [x] 完成頁沒有「回媒體庫路徑」，改由「上一個泊位」回去
+- [x] 套件內走到 Route 那一格就自動建 Route、跑五條檢查並停在結果上，沒有要按的鍵；回頭看不重跑；既有 Jellyfin 仍是勾選（前端測試兩種來源各一條）
+- [x] Route 那一步的位置在 shape 定案，plan §9.3 的步驟順序與 `.scratch/m0/wizard-shape.md` 同步
+- [x] 導航純函式有單元測試（覆寫進出、可點範圍）
+- [x] playwright 實跑一次全新精靈（中途回頭再往前），1280 與 390，附結果
+- [x] plan §9.3 同步（前端覆寫的規則）
+- [x] lint、type、test 綠燈
+
+## Comments
+
+**shape（2026-09-25，`/impeccable onboard`，使用者在 AskUserQuestion 的畫面預覽上四題都選建議）**：Route 移到 qBittorrent 之後（第 5 步、BTH 3）；前置兩步住板上方的前置列；板下回頭看帶 + 工作面底部導覽；5 格板在 390 排 2+2+1。結論在 `.scratch/m0/wizard-shape.md` §8、plan §9.3〈前端的導覽〉。
+
+**紅燈先行**：`web/src/setup/navigation.test.ts` 在純函式存在之前寫好（兩個 bug 各一條：完成頁回頭之後一路走得回來、第 2 步前往下一個落在泊位 1）；頁面層的 `SetupPage.navigation.test.tsx` 也先寫，舊版沒有「上一個泊位」與前置列按鈕，所以是以「找不到出口」紅。後端 `test_routes_come_right_after_qbittorrent`、兩條 `test_redetecting_*` 先紅再綠。code review 抓到的「輪詢把畫面釘回第 2 步」補了一條測試，把舊的 `onMutate: hold` 放回去確認會紅。
+
+**playwright 實跑（fake `bundled`，全新精靈）**：
+- 1280：建管理員 → 探測 → 前往泊位 1 → 靠泊（停在序列上，出現「前往下一個泊位」）→ qBittorrent 套用（停）→ 媒體庫路徑自動建三條、五條檢查全綠、沒有建立鍵 → 加站、測 TMDB（停）→ 完成頁；板上點 BTH 1 → 帶子「回頭看：BTH 1 Jellyfin · 目前走到第 8 步」→ 回到目前這一步 → 完成頁 → 上一個泊位 → 來源頁有回頭看說明（這裡能做 / 不在這裡做）→ 前往下一個泊位 → 完成頁。完成頁沒有「回媒體庫路徑」、沒有橫向捲動。
+- 390：同一條路走一次，四個停點橫向溢出都是 0（量 `scrollWidth - innerWidth`，負值是捲軸寬）；前置列兩格換行、板 2×2 全在畫面內；固定在底部的導覽原本兩顆疊成兩列（約 130px），改成同一列（77px）。
+- `pnpm -C web e2e wizard` 改成新的走法（含中途回頭再往前），passed。
+
+**code review 未處理的發現**（Standards 的判斷題與 Spec 的一條）：
+- `SetupPage.tsx` 十個 mutation 各寫一次 `onMutate: hold`（Duplicated Code）；`note` / `nav` / `redetect` 三個 slot 一起進五個步驟元件（Data Clumps）；「步驟 → 頁 / 泊位」散在 `pageOf`、`BERTH_STEP`、`REVISIT_PAGE`、`REVISIT` 四處，泊位以 `code` 字串來回轉（`Shell` → `StrayBand`、`setup/BerthBoard` 的 `slotOf`）。06e 拆泊位時會動到同一批，那時一起收。
+- 只重探一個服務時若它仍在啟動（`pending`），前端的整輪輪詢會連帶重探其他還沒手動接好的服務，已逾時的會回到探測中。影響只在「重新偵測的那一個還在啟動」的那幾秒，沒有 repro 到錯誤結果，先不改。
+- 手動接好（`configured`）的服務不給「重新偵測這個服務」：後端本來就不重探它，給了是一顆按了沒反應的鍵；那種服務改位址或帳密在第 2 步的連線表單。
