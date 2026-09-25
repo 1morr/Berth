@@ -486,9 +486,20 @@ Session 以 httpOnly cookie（`berth_session`）承載，`SameSite=Strict`、`Pa
   等多久。新增與驗證索引站要真的連上那個站，用 120 秒；`indexer/schema` 用 60 秒——容器剛起來的第一次呼叫要讀進 627 份定義再組出 5.6 MB 回應，實測 9.42 秒（brief §20.7）。其餘端點用共用的 5 秒探測逾時。
 ### 8.5 RSS adapter
 
-- `feedparser` 解析；每種來源一個小型 mapper 產 `FeedItem{guid, title, link, torrent_url, magnet, info_hash, size, published_at}`。
-- Mikan：`enclosure` 為 `.torrent`，`link` 為集頁；Nyaa：`nyaa:` 命名空間欄位（實際欄位名以 M3 抓的 fixture 為準，brief §20.6）。
-- 去重鍵：`(feed_id, guid)`；跨 feed 以 `info_hash` 去重（Mikan 的 torrent URL 可先下載解析 info hash，M3 決定是否做）。
+- `feedparser`（6.0.14）解析；每種來源一個小型 mapper 產 `FeedItem{guid, title, link, torrent_url, magnet, info_hash, size, published_at}`。欄位從哪裡取（M3 票 07 對 fixture 實跑定下，brief §20.12；逐欄理由見 `docs/research/rss-sources.md` §9，`e` 是 feedparser 的 entry）：
+
+  | 欄位 | Mikan | Nyaa | acg.rip |
+  | --- | --- | --- | --- |
+  | `guid` | `e.link` 末段的 40 hex（**不用** `<guid>`：它是標題，改標題就變） | `e.id`（`https://nyaa.si/view/<id>`） | `e.id`（`https://acg.rip/t/<id>`） |
+  | `link`（單集頁） | `e.link` | **`e.id`**（`e.link` 是下載連結） | `e.link` |
+  | `torrent_url` | `e.enclosures[0].href` | `e.link`，不以 `magnet:` 開頭時 | `e.enclosures[0].href` |
+  | `magnet` | 無 | `e.link`，以 `magnet:` 開頭時 | 無 |
+  | `info_hash`（可空） | `e.link` 末段 | `e.nyaa_infohash.lower()` | `None` |
+  | `size`（近似，只供顯示） | 描述後綴 `[N UNIT]` → N × 1000^k（**不用** `contentlength`：不是位元組） | `e.nyaa_size` → N × 1024^k | `int(e.torrent_contentlength)` |
+  | `published_at`（aware UTC） | `fromisoformat(e.published)` 補 **UTC+8**（`published_parsed` 當 UTC 讀，差 8 小時） | `e.published_parsed`（UTC） | `e.published_parsed` |
+
+  Mikan 的 RSS Series 鍵（番組 id, 字幕組 id）不在 feed 裡：單一 feed 的 URL 帶著；聚合 feed 的每一筆第一次出現時抓一次單集頁，讀 `a.mikan-rss` 的 `href`。Nyaa 的做種數（`nyaa_seeders` 等）不進 `FeedItem`，沒有消費者。
+- 去重鍵：`(feed_id, guid)`；**跨 feed 以 `info_hash` 去重，做**（票 07 結論）：Mikan 與 Nyaa 在輪詢時就有 hash，比對 `rss_items.info_hash` 與 `jobs.hash`；acg.rip 不在輪詢時預抓 `.torrent`——送單時 `TorrentFetcher` 本來就要下載並算 hash，`jobs.hash` 是主鍵，算出來之後寫回 `rss_items.info_hash`，Job 已存在就標成重複。所以不多發請求。同一個發佈在兩站是不是同一個 hash 沒有證實，不同時由帳本「同 Media / 季 / 集 / Tags」那一層擋。
 
 ### 8.6 fs adapter
 

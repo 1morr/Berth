@@ -237,3 +237,21 @@ Alpha Show 與 Bravo Show 看過第一集、Frieren（TV）第一集看到 3 分
 | `jellyfin/shows-episodes.forbidden.json` | `GET /Shows/{無權的劇}/Episodes?userId=U` 的 **404**。body 是**一個 JSON 字串** `"Series not found"`，不是 problem details——解析 404 不能假設是物件 |
 | `jellyfin/userplayeditems.forbidden.json` | `POST /UserPlayedItems/{無權的集}?userId=U` 的 **404**，problem details；打完立刻讀回（`ids=` 不檢查權限）確認沒有寫入 |
 | `jellyfin/items.parent-forbidden.json` | `GET /Items?userId=U&parentId=<Anime>&recursive=true` 的 **200**：Anime 的劇、季、集與一個 `Folder` 共 10 筆。**這是洩漏的證據**，不是正常回應——API key 帶 `parentId` 時 Jellyfin 不套權限，所以 Berth 要先對 `UserViews` 驗 `parentId` |
+
+2026-09-25（M3 票 07）。三個 RSS 來源的原文，欄位的解讀在 `docs/research/rss-sources.md`。
+Mikan 與 acg.rip 從開發機匿名 curl；Nyaa 從開發機連不上，是在 playwright 瀏覽器裡開 nyaa.si 之後頁內 `fetch()` 取得的。
+**不含個人資訊**：聚合 feed 的 channel `<link>` 帶使用者的 token，換成 `token=REDACTED`；Mikan 兩個 HTML 頁的
+`__RequestVerificationToken`（匿名 session 的防偽值）換成同長度的 `CfDJ8xxx…`。其餘原樣：
+
+| 檔案 | 來源 |
+| --- | --- |
+| `mikan/rss-mybangumi.xml` | `GET https://mikanani.me/RSS/MyBangumi?token=…`（使用者的聚合 feed，使用者自己下載）。12 筆，各番只有最近一集 |
+| `mikan/rss-bangumi.4009-370.xml` | `GET https://mikanani.me/RSS/Bangumi?bangumiId=4009&subgroupid=370`：單一 feed（与你相恋到生命尽头 × 喵萌奶茶屋&LoliHouse），整季 |
+| `mikan/rss-classic.xml` | `GET https://mikanani.me/RSS/Classic`：全站最新 |
+| `mikan/home-episode.85c93c23.html` | `GET https://mikanani.me/Home/Episode/85c93c23143bbeb98f9c0895d31ab18ceeed4090`：單集頁，上面有單一 feed 的連結（反查番組 id 與字幕組 id） |
+| `mikan/home-bangumi.4009.html` | `GET https://mikanani.me/Home/Bangumi/4009`：番組頁（中文標題、放送開始、bgm.tv 連結） |
+| `mikan/download.85c93c23.torrent` | 上面那一集的 enclosure。info dict 的 SHA-1 就是單集頁網址的末段 |
+| `nyaa/rss-search.kamiina-botan.xml` | `GET https://nyaa.si/?page=rss&q=Kamiina+Botan&c=1_0&f=0`：搜尋 feed |
+| `nyaa/rss-user.subsplease.kamiina-botan.xml` | `GET https://nyaa.si/?page=rss&u=subsplease&q=Kamiina+Botan`：使用者 feed，夾著 `[Batch]` 合集 |
+| `acgrip/rss-search.kimi-ga-shinu.xml` | `GET https://acg.rip/.xml?term=Kimi+ga+Shinu+made+Koi+wo+Shitai`：與 Mikan 單一 feed 同一個發佈（第 12 集），對照時區 |
+| `acgrip/rss-search.kamiina-botan.xml` | `GET https://acg.rip/.xml?term=Kamiina+Botan`：夾著「01-12 合集」的搜尋 feed |

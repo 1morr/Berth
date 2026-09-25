@@ -559,7 +559,7 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 
 **2026-09-24 重寫**（§19）：原本以「Rule 先綁一部作品，再挑字幕組白名單與優先序」為中心，與實際用法不合——使用者在 Mikan 上選好作品與字幕組，聚合 feed 裡出現的就是要的（Mikan 的 `MyBangumi` 實測：同一部作品訂兩個字幕組是常態）。Berth 的工作因此是**認出每一筆是哪部作品**，而不是再挑一次。
 
-- **Feed**：URL、輪詢間隔、來源類型、排除條件。【決定】第一批支援 **Mikan**（`/RSS/MyBangumi?token=` 聚合 feed、`/RSS/Bangumi?bangumiId=&subgroupid=` 單一 feed）、**Nyaa**（搜尋 feed、使用者 feed）與 **acg.rip**（搜尋 feed）；之後加 dmhy 與 generic。每種來源一個 adapter，負責解析該站的 RSS 擴充欄位並輸出統一的 Feed Item；欄位名在實作時對照實際 feed 確認（§20.6）。
+- **Feed**：URL、輪詢間隔、來源類型、排除條件。【決定】第一批支援 **Mikan**（`/RSS/MyBangumi?token=` 聚合 feed、`/RSS/Bangumi?bangumiId=&subgroupid=` 單一 feed）、**Nyaa**（搜尋 feed、使用者 feed）與 **acg.rip**（搜尋 feed）；之後加 dmhy 與 generic。每種來源一個 adapter，負責解析該站的 RSS 擴充欄位並輸出統一的 Feed Item；各站的欄位與取法見 §20.12。
 - **RSS Series**（取代原本的 Rule）：一部作品 × 一個來源，由 Feed Item **自動長出**。鍵：Mikan 用（番組 id, 字幕組 id）——item 的 `link` 是單集頁，單集頁上有 `/RSS/Bangumi?bangumiId=…&subgroupid=…`；其他來源用標題骨幹（去掉字幕組、集號、tags）+ 字幕組（AutoBangumi 的做法）。帶著 Media、Route、季號、集號 offset、排除條件、是否已確認。
 - **全部接受，只排除**：Feed 裡的項目預設全部下載，Berth 不再問字幕組。排除條件是關鍵字或正則、比對整個標題，分全域、Feed、RSS Series 三層；預設只排除合集（`release_kind != single`；搜尋 feed 常夾著「01-13 合集」），720p、简体等做成一鍵加入的建議項、不預設勾。**合集不是不能解析，只是不自動下載**，使用者仍可從一次性 RSS 或搜尋手動送單。同一集多個字幕組、同組的 v2 都入庫並存（§7.7，2026-09-24 使用者拍板）。
 - **綁定**：第一次見到的 RSS Series 去 TMDB 找作品（Mikan 的番組頁有中文標題、開播日期、bgm.tv 連結）；有把握就自動綁定（2026-09-24 使用者拍板），沒把握的進「待綁定」清單，它的項目留著，綁定之後再送。
@@ -1080,8 +1080,9 @@ M1.5 拆票前的四條待決，2026-09-15 已全數照推薦拍板（上表「M
   `localhost:8080` 進不了 WebUI，所以維持不預置（§20.7、plan §9.2）。
 - ~~Prowlarr `config/host` 設定 Forms 帳密的欄位名~~ **完成**，見 §20.7「Prowlarr」。
 - 建立 20 筆真實 torrent fixture（動漫 8、美劇/韓劇 8、電影 4）作為 benchmark v0。→ M1 解析器票。
-- 抓一份 Mikan（我的訂閱、單作品 + 字幕組）與 Nyaa（搜尋）的實際 RSS，確認擴充欄位名
-  （infoHash、大小、做種數、enclosure、發佈時間），寫成 adapter 的 fixture。→ M3 RSS 票。
+- ~~抓一份 Mikan（我的訂閱、單作品 + 字幕組）與 Nyaa（搜尋）的實際 RSS，確認擴充欄位名
+  （infoHash、大小、做種數、enclosure、發佈時間），寫成 adapter 的 fixture。~~ **完成（2026-09-25，M3 票 07）**，
+  連 acg.rip 一起，見 §20.12。
 - ~~抽 10 部動漫，量化**字幕組編號**對三種來源的換算失敗率：TMDB 季集、TVDB default(aired) season、TVDB absolute~~ **完成（2026-09-09，M1 票 01）**：7,833 筆真實釋出，TMDB 8.0% / TVDB aired 7.6% / TVDB absolute 7.6%。§10 的【研究】據此結案為**維持 TMDB**，完整結果與方法在 [`docs/research/anime-episode-source.md`](research/anime-episode-source.md)，腳本 `scripts/experiments/anime_episode_source.py` 可重跑。順帶推翻兩件事：§20.3 的合併政策比原記載更激進（TMDB 連**獨立的連續季**也在併，咒術 3 季→1 季、Re:Zero 4 季→1 季），以及 **TVDB 的 absolute 會把 OVA 與劇場版也編號**（SPY×FAMILY 的 CODE: White 佔掉 absolute 38），所以 absolute ≠ 正篇第幾集。
 
 ### 20.7 開箱即用所需的 API 與 Windows Docker 事實
@@ -1321,5 +1322,35 @@ thepiratebay / yts，fixture 在 `tests/fixtures/http/prowlarr/search.*.json` �
 - **Prowlarr 搜尋結果每一筆都有 `publishDate`**（ISO 8601、UTC）：搜「Kamiina Botan」534 筆，Mikan 261、Anime Tosho 100、dmhy 80、The Pirate Bay 63、ACG.RIP 30，缺值 0。Berth 兩個 adapter 已經解析成 `published_at`（`adapters/indexer/prowlarr.py`、`torznab.py`，Torznab 的 `pubDate` 是 RFC 822），但**之後沒有任何地方用到**：不在搜尋結果的 API 裡，送單也沒存。【實測】
 - **ACG.RIP 的 RSS** 是標準的 `<item><pubDate>`，RFC 822 帶時區（`Thu, 24 Sep 2026 06:01:00 -0700`）。【實測 `https://acg.rip/.xml`】
 - **Mikan 的 RSS 沒有標準的 `<item><pubDate>`**：日期在 `https://mikanani.me/0.1/` 命名空間的 `<torrent><pubDate>`，ISO 8601 **不帶時區**（`2026-09-24T21:01:00.760219`）。同一個發佈在 ACG.RIP 是 13:01 UTC，所以 Mikan 的值是 **UTC+8**；當成 UTC 讀會差 8 小時。【實測 `https://mikanani.me/RSS/Classic`，與 ACG.RIP 同一筆對照】
-- Nyaa 的 RSS 從試跑機器連不上（連線失敗），沒有量到。
+- Nyaa 的 RSS 從試跑機器連不上（連線失敗），沒有量到。**2026-09-25 補量**（§20.12）：`<pubDate>` 是 RFC 822 的 `-0000`，即 UTC。
 - **發佈時間是「這一筆條目」貼出的時間，不是這一集的首發**：重新上傳、合集、聚合站晚收錄都會讓它偏晚（Anime Tosho 上 SubsPlease 同一包的 01 與 12 兩個單集檔相隔 4 分鐘）。它只保證「那一集在它之前已經播出」，所以適合當下限（規則一：早於播出日就一定算錯），不適合量「多新」。SubsPlease《上伊那牡丹》01–12 合集在 Anime Tosho 是 2026-08-15，TMDB 第一季末集 2026-06-27。【實測】
+
+### 20.12 RSS 來源的欄位（2026-09-25 查證，M3 票 07）
+
+完整的欄位表、範例原文與逐條來源在 [`docs/research/rss-sources.md`](research/rss-sources.md)；
+fixture 在 `tests/fixtures/http/{mikan,nyaa,acgrip}/`（來源網址與去掉 token 的方式見同目錄 README）。
+
+**2026-09-24 試跑時的五條實測**（當時是使用者與 agent 的觀察，2026-09-25 的 fixture 都重現了）：
+
+- **Mikan 聚合 feed（`/RSS/MyBangumi?token=`）只有最近的集數**：12 筆、跨 6.6 天，同一部作品 × 字幕組只剩最近兩集。上限是筆數還是時間窗，一份樣本分不出來。【實測 fixture `rss-mybangumi.xml`】
+- **單集頁反查得到番組 id 與字幕組 id**：`/Home/Episode/<hash>` 頁上的 `a.mikan-rss` 就是 `/RSS/Bangumi?bangumiId=…&subgroupid=…`。feed 本身不帶這兩個 id，所以聚合 feed 的每一筆第一次出現都要多抓一次單集頁。【實測】
+- **單一 feed（`/RSS/Bangumi?bangumiId=&subgroupid=`）有整季**：4009 × 370 的 01–12 都在。【實測】
+- **acg.rip 的搜尋 feed 夾合集**：搜「Kamiina Botan」30 筆裡 8 筆；Nyaa 的搜尋 feed 同樣（75 筆裡 14 筆）。**三站都沒有標示合集的欄位**，只能看標題（`[01-12 合集]`、`(01-12) … [Batch]`、`[Vol.1][BDRemux]`…）。【實測】
+- **Nyaa 從開發機連不上**：TLS 握手失敗（curl 報 `SEC_E_INVALID_TOKEN`，Python 與 Node 報 `WRONG_VERSION_NUMBER`）；同時 Mikan 與 acg.rip 回 200。瀏覽器（playwright）連得上，fixture 是在頁內 `fetch()` 取得的。部署環境連不連得上取決於使用者的網路。【實測】
+
+**三站的欄位**：
+
+| | Mikan | Nyaa | acg.rip |
+| --- | --- | --- | --- |
+| guid | `<guid isPermaLink="false">` **就是標題**，改標題會跟著變 | `https://nyaa.si/view/<id>` | `https://acg.rip/t/<id>` |
+| info hash | `link`（`/Home/Episode/<40 hex>`）與 enclosure 檔名的末段就是 info hash（124/124 筆一致，抽一個 `.torrent` 算 info dict 的 SHA-1 相同） | `nyaa:infoHash` | **沒有**（feed 與單集頁都沒有），只能下載 `.torrent` 算 |
+| torrent / magnet | `<enclosure type="application/x-bittorrent">`；沒有 magnet | **沒有 enclosure**，`<link>` 是 `.torrent`（`&m` 參數時換成 magnet）；單集頁在 `<guid>` | `<enclosure type="application/x-bittorrent">`（沒有 `length`）；沒有 magnet |
+| 大小 | `contentLength` 與 enclosure `length` **不是位元組**（描述裡十進位 MB 的數字乘 1024^k，多出約 5%）；描述後綴 `[518.65 MB]` 比較準 | `nyaa:size` 是人類可讀字串（`240.5 MiB`，1024 進位） | `torrent:contentLength` 是位元組 |
+| 發佈時間 | `https://mikanani.me/0.1/` 命名空間的 `<torrent><pubDate>`，ISO 8601 **不帶時區、實際是 UTC+8**（同一筆在 acg.rip 對照差 +7:59:59），小數秒 0、3、6 位都有 | `<pubDate>` RFC 822 `-0000`（UTC） | `<pubDate>` RFC 822 `-0700` |
+| 做種數 | 沒有 | `nyaa:seeders` / `leechers` / `downloads` | 沒有 |
+
+**feedparser 6.0.14**（2026-07-30，PyPI 最新）三站都讀得動、不丟欄位，但 Mikan 有兩處會安靜地讀錯：`published_parsed` 把不帶時區的 `<torrent><pubDate>` 當 UTC（差 8 小時，要讀 `published` 字串自己補 UTC+8）；`<torrent>` 的命名空間被抹掉（`pubDate` → `published`、`contentLength` → `contentlength`、`link` 變成第二個 `links`），哪天 Mikan 加上標準的 `<item><pubDate>` 會撞名。Nyaa 的欄位是 `nyaa_infohash` 這種 key，前綴取自 feed 自己宣告的 `xmlns:nyaa`。【實測 fixture；context7 `/kurtmckee/feedparser`】
+
+**Mikan 的番組頁**（`/Home/Bangumi/<id>`）有中文標題、「放送开始」（`M/D/YYYY`）與 bgm.tv 連結，選擇器在研究檔 §2.7。字幕組 id（`subgroupid=370`）與單集頁上的發佈組 id 不是同一套編號。
+
+**跨 feed 以 info hash 去重：做，不多發請求**（plan §8.5）。Mikan 與 Nyaa 在輪詢時就有 hash；acg.rip 不在輪詢時預抓 `.torrent`，送單時 `TorrentFetcher` 本來就要下載並算 hash，`jobs.hash` 是主鍵。**未證實**：同一個發佈在 Mikan 與 acg.rip 是不是同一個 info hash（時間差不到 1 秒、大小對得上，但沒有下載 acg.rip 的 `.torrent` 算）；不同的話由帳本「同 Media / 季 / 集 / Tags」那一層擋。
