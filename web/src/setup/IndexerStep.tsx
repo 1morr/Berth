@@ -25,6 +25,7 @@ import { Cutaway, CutawayRow } from '../components/Cutaway'
 import { StepLine } from '../components/StepLine'
 import { useFocusAfterRemoval } from '../components/useFocusAfterRemoval'
 import { languageName } from './languageName'
+import { StepFrame } from './StepFrame'
 
 /**
  * 泊位 4：索引站（plan §9.3 第 6 步）。票 06e 從「來源」拆出來，TMDB 是下一個泊位。
@@ -67,32 +68,24 @@ export function IndexerStep({
   const bundled = indexers.origin === 'bundled' && indexers.reachable
 
   return (
-    <div className="grid flex-1 gap-px bg-rule lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
-      <div className="min-w-0 bg-hull p-6">
-        <div className="lg:sticky lg:top-6">
-          <IndexerCutaway indexers={indexers} bundled={bundled} />
-        </div>
-      </div>
+    <StepFrame cutaway={<IndexerCutaway indexers={indexers} bundled={bundled} />}>
+      <h2 className="text-lg font-semibold text-ink">{t('indexer.title')}</h2>
+      <p className="mt-2 max-w-prose text-sm text-ink-dim">{t('indexer.lede')}</p>
+      {note}
 
-      <div className="min-w-0 bg-hull p-6">
-        <h2 className="text-lg font-semibold text-ink">{t('indexer.title')}</h2>
-        <p className="mt-2 max-w-prose text-sm text-ink-dim">{t('indexer.lede')}</p>
-        {note}
+      <IndexerActions
+        indexers={indexers}
+        applying={applying}
+        connecting={connecting}
+        onApply={onApply}
+        onConnect={onConnect}
+        onSkip={onSkip}
+        trial={trial}
+        redetect={redetect}
+      />
 
-        <IndexerActions
-          indexers={indexers}
-          applying={applying}
-          connecting={connecting}
-          onApply={onApply}
-          onConnect={onConnect}
-          onSkip={onSkip}
-          trial={trial}
-          redetect={redetect}
-        />
-
-        {nav}
-      </div>
-    </div>
+      {nav}
+    </StepFrame>
   )
 }
 

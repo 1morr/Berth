@@ -12,6 +12,7 @@ import {
 import { SIGNAL_FILL } from '../components/signal'
 import { Cutaway, CutawayRow } from '../components/Cutaway'
 import { StepLine } from '../components/StepLine'
+import { StepFrame } from './StepFrame'
 
 /** 使用者去申請 key 的那一頁。連結與可複製的網址用的是同一個字串。 */
 const TMDB_API_SETTINGS = 'https://www.themoviedb.org/settings/api'
@@ -45,37 +46,33 @@ export function TmdbStep({
   const { t } = useTranslation()
 
   return (
-    <div className="grid flex-1 gap-px bg-rule lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
-      <div className="min-w-0 bg-hull p-6">
-        <div className="lg:sticky lg:top-6">
-          <Cutaway title={t('tmdbStep.cutaway.title')}>
-            <CutawayRow
-              term={t('tmdbStep.cutaway.credential')}
-              value={t(tmdb.api_key_present ? 'tmdbStep.held' : 'tmdbStep.absent')}
-              muted={!tmdb.api_key_present}
-            />
-            <CutawayRow term={t('tmdbStep.cutaway.endpoint')} value="GET /3/configuration" />
-          </Cutaway>
-        </div>
+    <StepFrame
+      cutaway={
+        <Cutaway title={t('tmdbStep.cutaway.title')}>
+          <CutawayRow
+            term={t('tmdbStep.cutaway.credential')}
+            value={t(tmdb.api_key_present ? 'tmdbStep.held' : 'tmdbStep.absent')}
+            muted={!tmdb.api_key_present}
+          />
+          <CutawayRow term={t('tmdbStep.cutaway.endpoint')} value="GET /3/configuration" />
+        </Cutaway>
+      }
+    >
+      <div className="flex flex-wrap items-center gap-3">
+        <h2 className="text-lg font-semibold text-ink">{t('tmdbStep.title')}</h2>
+        <span
+          data-testid="tmdb-required"
+          className={`label px-2 py-1.5 ${tmdb.verified ? SIGNAL_FILL.secured : SIGNAL_FILL.assigned}`}
+        >
+          {t(tmdb.verified ? 'status.ok' : 'tmdbStep.required')}
+        </span>
       </div>
+      <p className="mt-2 max-w-prose text-sm text-ink-dim">{t('tmdbStep.lede')}</p>
+      {note}
 
-      <div className="min-w-0 bg-hull p-6">
-        <div className="flex flex-wrap items-center gap-3">
-          <h2 className="text-lg font-semibold text-ink">{t('tmdbStep.title')}</h2>
-          <span
-            data-testid="tmdb-required"
-            className={`label px-2 py-1.5 ${tmdb.verified ? SIGNAL_FILL.secured : SIGNAL_FILL.assigned}`}
-          >
-            {t(tmdb.verified ? 'status.ok' : 'tmdbStep.required')}
-          </span>
-        </div>
-        <p className="mt-2 max-w-prose text-sm text-ink-dim">{t('tmdbStep.lede')}</p>
-        {note}
-
-        <TmdbKey tmdb={tmdb} testing={testing} onTest={onTest} />
-        {nav}
-      </div>
-    </div>
+      <TmdbKey tmdb={tmdb} testing={testing} onTest={onTest} inWizard />
+      {nav}
+    </StepFrame>
   )
 }
 
@@ -84,10 +81,13 @@ export function TmdbKey({
   tmdb,
   testing,
   onTest,
+  inWizard = false,
 }: {
   tmdb: TmdbSetup
   testing: boolean
   onTest: (apiKey: string) => void
+  /** 精靈裡才說「進度存下來了，回來還在這一步」；設定頁沒有這回事（票 06h）。 */
+  inWizard?: boolean
 }) {
   const { t } = useTranslation()
   const [apiKey, setApiKey] = useState('')
@@ -101,7 +101,9 @@ export function TmdbKey({
       {!tmdb.verified && (
         <div className="grid gap-3">
           <Notice signal="assigned" label={t('tmdbStep.whereLabel')}>
-            {t('tmdbStep.where')}
+            {inWizard
+              ? t('tmdbStep.whereWizard', { where: t('tmdbStep.where') })
+              : t('tmdbStep.where')}
           </Notice>
           <div className="grid gap-3 sm:grid-cols-[auto_minmax(0,1fr)] sm:items-center">
             {/* 外框方塊的形狀出自 DESIGN.md 的 Navigation（`.label` + `border-2 border-rule`），
@@ -152,8 +154,14 @@ export function TmdbKey({
         </div>
       </form>
 
-      {row && (
-        <ol aria-live="polite" aria-busy={testing} className="mt-4 grid gap-3" data-testid="tmdb">
+      {/* live region 常駐、結果放進去（票 06h 的 audit）：跟結果同一次掛上的話不會被念出來。 */}
+      <ol
+        aria-live="polite"
+        aria-busy={testing}
+        className={row ? 'mt-4 grid gap-3' : undefined}
+        data-testid="tmdb"
+      >
+        {row && (
           <StepLine
             label={t('tmdbStep.line')}
             endpoint="GET /3/configuration"
@@ -161,8 +169,8 @@ export function TmdbKey({
             fix={t('tmdbStep.fix')}
             commands={[TMDB_API_SETTINGS, REACHABILITY_PROBE]}
           />
-        </ol>
-      )}
+        )}
+      </ol>
     </section>
   )
 }

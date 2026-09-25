@@ -462,6 +462,10 @@ describe('泊位 5：TMDB', () => {
     const berth = within(screen.getByText('BTH 5').closest('li')!)
     expect(berth.getByText('TMDB')).toBeInTheDocument()
     expect(berth.getByRole('button')).toHaveAttribute('aria-current', 'step')
+    // 精靈裡的「去哪裡拿」多一句進度會留著（設定頁沒有這一句，票 06h），兩句之間中文不加空格。
+    expect(
+      screen.getByText(/不必等審核。現在就去申請也沒關係——精靈的進度已經存下來了/),
+    ).toBeVisible()
   })
 
   it('沒填 key 就按下去會被欄位擋住，畫面說得出去哪裡拿一把', async () => {

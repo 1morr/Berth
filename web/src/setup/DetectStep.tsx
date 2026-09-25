@@ -6,7 +6,8 @@ import { SERVICE_KINDS, type ServiceKind } from '../api/schemas'
 import { Cutaway, CutawayRow } from '../components/Cutaway'
 import { MooringLine } from './MooringLine'
 import { STICKY_ACTION, GhostButton, Notice, PrimaryButton } from '../components/controls'
-import { PROBE_ENDPOINT } from './signals'
+import { probeEndpoint } from './signals'
+import { StepFrame } from './StepFrame'
 
 /** 逐條纜繩繫上的節拍。整份結果是一次回來的，這裡只是揭露的節奏。 */
 const REVEAL_STEP_MS = 140
@@ -55,31 +56,32 @@ export function DetectStep({
     : status.services.map((row) => `${row.kind}:${row.origin}:${row.reason}`).join('|')
 
   return (
-    <div className="grid flex-1 gap-px bg-rule lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
-      <div className="min-w-0 bg-hull p-6">
-        <div className="lg:sticky lg:top-6">
-          <Cutaway title={t('detect.cutaway.title')}>
-            {SERVICE_KINDS.map((kind) => (
-              <CutawayRow
-                key={kind}
-                code
-                term={PROBE_ENDPOINT[kind]}
-                value={t(`detect.cutaway.${kind}`)}
-              />
-            ))}
-          </Cutaway>
-        </div>
-      </div>
+    <StepFrame
+      cutaway={
+        <Cutaway title={t('detect.cutaway.title')}>
+          {SERVICE_KINDS.map((kind) => (
+            <CutawayRow
+              key={kind}
+              code
+              term={probeEndpoint(status, kind)}
+              value={t(`detect.cutaway.${kind}`)}
+            />
+          ))}
+        </Cutaway>
+      }
+    >
+      <h2 className="text-lg font-semibold text-ink">{t('detect.title')}</h2>
+      <p className="mt-2 max-w-prose text-sm text-ink-dim">{t('detect.lede')}</p>
 
-      <div className="min-w-0 bg-hull p-6">
-        <h2 className="text-lg font-semibold text-ink">{t('detect.title')}</h2>
-        <p className="mt-2 max-w-prose text-sm text-ink-dim">{t('detect.lede')}</p>
-
+      {/* live region 在換 key 重掛的那一層外面（票 06h 的 audit）：每一輪結果換一份新的清單，
+          掛在清單上的 aria-live 會跟著新內容一起出現，那一輪就不會被念出來。 */}
+      <div aria-live="polite" aria-busy={probing}>
         <MooringSequence
           key={revealKey}
           probing={probing}
           probed={probed}
           byKind={byKind}
+          endpointOf={(kind) => probeEndpoint(status, kind)}
           waitedSeconds={status.waited_seconds}
           windowSeconds={status.window_seconds}
           connectingKind={connectingKind}
@@ -87,43 +89,44 @@ export function DetectStep({
           onConnect={onConnect}
           onRedetect={onRedetect}
         />
+      </div>
 
-        {failed && (
-          <div className="mt-4">
-            <Notice signal="blocked" label={t('common.failed')}>
-              {t('detect.failed')}
-            </Notice>
-          </div>
-        )}
+      {failed && (
+        <div className="mt-4">
+          <Notice signal="blocked" label={t('common.failed')}>
+            {t('detect.failed')}
+          </Notice>
+        </div>
+      )}
 
-        <div className={`mt-6 ${STICKY_ACTION}`}>
-          {!probed ? (
-            <PrimaryButton type="button" busy={probing} onClick={() => onDetect(false)}>
-              {probing ? t('detect.running') : t('detect.run')}
+      <div className={`mt-6 ${STICKY_ACTION}`}>
+        {!probed ? (
+          <PrimaryButton type="button" busy={probing} onClick={() => onDetect(false)}>
+            {probing ? t('detect.running') : t('detect.run')}
+          </PrimaryButton>
+        ) : resolved ? (
+          // 判定全部出來了才前進，而且是使用者自己按——不然他根本看不到逐條纜繩的結果。
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,18rem)_auto] sm:items-center">
+            // 探測做完、「開始探測」換掉之後，焦點接到這一顆（`StepFrame`，票 06h）。
+            <PrimaryButton type="button" busy={probing} data-berth-next onClick={onContinue}>
+              {t('detect.continue')}
             </PrimaryButton>
-          ) : resolved ? (
-            // 判定全部出來了才前進，而且是使用者自己按——不然他根本看不到逐條纜繩的結果。
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,18rem)_auto] sm:items-center">
-              <PrimaryButton type="button" busy={probing} onClick={onContinue}>
-                {t('detect.continue')}
-              </PrimaryButton>
-              <GhostButton type="button" busy={probing} onClick={() => onDetect(false)}>
-                {probing ? t('detect.running') : t('detect.rerun')}
-              </GhostButton>
-            </div>
-          ) : timedOut ? (
-            <PrimaryButton type="button" busy={probing} onClick={() => onDetect(true)}>
-              {probing ? t('detect.running') : t('detect.retry')}
-            </PrimaryButton>
-          ) : (
             <GhostButton type="button" busy={probing} onClick={() => onDetect(false)}>
               {probing ? t('detect.running') : t('detect.rerun')}
             </GhostButton>
-          )}
-        </div>
-        {nav}
+          </div>
+        ) : timedOut ? (
+          <PrimaryButton type="button" busy={probing} onClick={() => onDetect(true)}>
+            {probing ? t('detect.running') : t('detect.retry')}
+          </PrimaryButton>
+        ) : (
+          <GhostButton type="button" busy={probing} onClick={() => onDetect(false)}>
+            {probing ? t('detect.running') : t('detect.rerun')}
+          </GhostButton>
+        )}
       </div>
-    </div>
+      {nav}
+    </StepFrame>
   )
 }
 
@@ -135,6 +138,7 @@ function MooringSequence({
   probing,
   probed,
   byKind,
+  endpointOf,
   waitedSeconds,
   windowSeconds,
   connectingKind,
@@ -145,6 +149,7 @@ function MooringSequence({
   probing: boolean
   probed: boolean
   byKind: Map<ServiceKind, SetupStatus['services'][number]>
+  endpointOf: (kind: ServiceKind) => string
   waitedSeconds: number
   windowSeconds: number
   connectingKind: ServiceKind | null
@@ -164,16 +169,12 @@ function MooringSequence({
   }, [probing, probed, total])
 
   return (
-    <ol
-      aria-live="polite"
-      aria-busy={probing}
-      className="mt-6 grid gap-3"
-      data-testid="mooring-sequence"
-    >
+    <ol className="mt-6 grid gap-3" data-testid="mooring-sequence">
       {SERVICE_KINDS.map((kind, index) => (
         <MooringLine
           key={kind}
           kind={kind}
+          endpoint={endpointOf(kind)}
           detection={probed ? byKind.get(kind) : undefined}
           tying={probing || (probed && index >= revealed)}
           waitedSeconds={waitedSeconds}

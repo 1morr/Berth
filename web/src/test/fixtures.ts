@@ -37,6 +37,11 @@ export function setupStatus(overrides: Partial<SetupStatus> = {}): SetupStatus {
     services: [],
     waited_seconds: 0,
     window_seconds: 120,
+    probe_targets: {
+      jellyfin: 'http://jellyfin:8096',
+      qbittorrent: 'http://qbittorrent:8080',
+      prowlarr: 'http://prowlarr:9696',
+    },
     ...overrides,
   }
 }

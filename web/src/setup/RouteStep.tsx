@@ -9,12 +9,20 @@ import {
 } from '../api/setup'
 import { type RouteRefusalDetail } from '../api/routes'
 import { type RouteView } from '../api/schemas'
-import { STICKY_ACTION, Checkbox, GhostButton, Notice, PrimaryButton } from '../components/controls'
+import {
+  STICKY_ACTION,
+  Checkbox,
+  ConfirmAction,
+  GhostButton,
+  Notice,
+  PrimaryButton,
+} from '../components/controls'
 import { ROUTE_HEALTH_LABEL, ROUTE_SIGNAL } from '../components/routeChecks'
 import { RouteCheckList } from '../components/RouteCheckList'
 import { SIGNAL_FILL } from '../components/signal'
 import { Cutaway, CutawayRow } from '../components/Cutaway'
 import { RouteDelete } from '../components/RouteDelete'
+import { StepFrame } from './StepFrame'
 
 /**
  * 泊位 3：媒體庫路徑 → Library Route（plan §9.3 第 5 步、§9.5）。
@@ -127,109 +135,99 @@ export function RouteStep({
   const automatic = bundled && setup.routes.length === 0 && !requestFailed && autoBuilding
 
   return (
-    <div className="grid flex-1 gap-px bg-rule lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
-      <div className="min-w-0 bg-hull p-6">
-        <div className="lg:sticky lg:top-6">
-          <RouteCutaway setup={setup} planned={bundled ? undefined : selections} />
-        </div>
-      </div>
+    <StepFrame cutaway={<RouteCutaway setup={setup} planned={bundled ? undefined : selections} />}>
+      <h2 className="text-lg font-semibold text-ink">{t('routes.title')}</h2>
+      <p className="mt-2 max-w-prose text-sm text-ink-dim">
+        {t(bundled ? 'routes.lede.bundled' : 'routes.lede.existing')}
+      </p>
+      {note}
 
-      <div className="min-w-0 bg-hull p-6">
-        <h2 className="text-lg font-semibold text-ink">{t('routes.title')}</h2>
-        <p className="mt-2 max-w-prose text-sm text-ink-dim">
-          {t(bundled ? 'routes.lede.bundled' : 'routes.lede.existing')}
-        </p>
-        {note}
-
-        {!bundled &&
-          (setup.libraries.length === 0 ? (
-            <div className="mt-6">
-              {/* Berth 不替既有伺服器建媒體庫（brief §16.4 的紅線），所以這裡沒有動作。 */}
-              <Notice signal="assigned" label={t('common.warning')}>
-                {t('routes.empty')}
-              </Notice>
-            </div>
-          ) : (
-            <LibraryPicker
-              libraries={setup.libraries}
-              pickOf={pickOf}
-              takenBy={takenBy}
-              addingPath={addingPath}
-              onChange={change}
-              onAddPath={(library) => {
-                // 按了就是要寫在那裡：路徑加完之後它就是這個媒體庫的寫入目標。
-                change(library, { selected: true, target: library.berth_path })
-                onAddPath(library.name)
-              }}
-            />
-          ))}
-
-        {automatic ? (
-          <p aria-live="polite" className="value mt-6 text-sm text-ink-dim">
-            {t('routes.automatic')}
-          </p>
-        ) : fresh === 0 && setup.ready ? (
-          // 全綠、沒有新的可建：這一顆只剩「全部重驗」，是次要的——主要動作是前往下一個泊位。
+      {!bundled &&
+        (setup.libraries.length === 0 ? (
           <div className="mt-6">
-            <GhostButton
-              type="button"
-              busy={building}
-              onClick={() => onBuild(bundled ? [] : selections)}
-            >
-              {building
-                ? t('routes.building')
-                : t('routes.recheck', { count: setup.routes.length })}
-            </GhostButton>
-          </div>
-        ) : (
-          <div className={`mt-6 ${STICKY_ACTION}`}>
-            <PrimaryButton
-              type="button"
-              busy={building}
-              disabled={fresh === 0 && setup.routes.length === 0}
-              onClick={() => onBuild(bundled ? [] : selections)}
-            >
-              {building
-                ? t('routes.building')
-                : fresh > 0 || setup.routes.length === 0
-                  ? t('routes.build', { count: fresh })
-                  : t('routes.recheck', { count: setup.routes.length })}
-            </PrimaryButton>
-          </div>
-        )}
-
-        {requestFailed && (
-          <div className="mt-4">
-            <Notice signal="blocked" label={t('common.failed')}>
-              {/* 後端說得出原因的那一種就說原因與下一步（PRODUCT 原則 4），與設定頁上的
-                  三處同一個形狀（`RouteDelete`、`AddRoute`、`RouteSettingsPage`）。這一步
-                  順帶重跑既有 Route 的檢查，所以 `route_missing` 到得了這裡（M2 票 01）。 */}
-              {refusal?.reason === 'route_missing'
-                ? t('routes.routeMissing')
-                : t('routes.requestFailed')}
+            {/* Berth 不替既有伺服器建媒體庫（brief §16.4 的紅線），所以這裡沒有動作。 */}
+            <Notice signal="assigned" label={t('common.warning')}>
+              {t('routes.empty')}
             </Notice>
           </div>
-        )}
-
-        {/* 先在畫面上、內容再換：`aria-live` 區塊要在變化之前就存在，螢幕閱讀器才念得到。 */}
-        <p aria-live="polite" className="mt-4 max-w-prose text-sm text-ink">
-          {announcement}
-        </p>
-
-        {setup.routes.map((route) => (
-          <RouteSequence
-            key={route.slug}
-            route={route}
-            building={building}
-            onDeleted={() => {
-              setAnnouncement(t('routeSettings.delete.done', { name: route.name }))
-              onRouteDeleted()
+        ) : (
+          <LibraryPicker
+            libraries={setup.libraries}
+            pickOf={pickOf}
+            takenBy={takenBy}
+            addingPath={addingPath}
+            onChange={change}
+            onAddPath={(library) => {
+              // 按了就是要寫在那裡：路徑加完之後它就是這個媒體庫的寫入目標。
+              change(library, { selected: true, target: library.berth_path })
+              onAddPath(library.name)
             }}
           />
         ))}
-        {nav}
-      </div>
-    </div>
+
+      {automatic ? (
+        <p aria-live="polite" className="value mt-6 text-sm text-ink-dim">
+          {t('routes.automatic')}
+        </p>
+      ) : fresh === 0 && setup.ready ? (
+        // 全綠、沒有新的可建：這一顆只剩「全部重驗」，是次要的——主要動作是前往下一個泊位。
+        <div className="mt-6">
+          <GhostButton
+            type="button"
+            busy={building}
+            onClick={() => onBuild(bundled ? [] : selections)}
+          >
+            {building ? t('routes.building') : t('routes.recheck', { count: setup.routes.length })}
+          </GhostButton>
+        </div>
+      ) : (
+        <div className={`mt-6 ${STICKY_ACTION}`}>
+          <PrimaryButton
+            type="button"
+            busy={building}
+            disabled={fresh === 0 && setup.routes.length === 0}
+            onClick={() => onBuild(bundled ? [] : selections)}
+          >
+            {building
+              ? t('routes.building')
+              : fresh > 0 || setup.routes.length === 0
+                ? t('routes.build', { count: fresh })
+                : t('routes.recheck', { count: setup.routes.length })}
+          </PrimaryButton>
+        </div>
+      )}
+
+      {requestFailed && (
+        <div className="mt-4">
+          <Notice signal="blocked" label={t('common.failed')}>
+            {/* 後端說得出原因的那一種就說原因與下一步（PRODUCT 原則 4），與設定頁上的
+                  三處同一個形狀（`RouteDelete`、`AddRoute`、`RouteSettingsPage`）。這一步
+                  順帶重跑既有 Route 的檢查，所以 `route_missing` 到得了這裡（M2 票 01）。 */}
+            {refusal?.reason === 'route_missing'
+              ? t('routes.routeMissing')
+              : t('routes.requestFailed')}
+          </Notice>
+        </div>
+      )}
+
+      {/* 先在畫面上、內容再換：`aria-live` 區塊要在變化之前就存在，螢幕閱讀器才念得到。 */}
+      <p aria-live="polite" className="mt-4 max-w-prose text-sm text-ink">
+        {announcement}
+      </p>
+
+      {setup.routes.map((route) => (
+        <RouteSequence
+          key={route.slug}
+          route={route}
+          building={building}
+          onDeleted={() => {
+            setAnnouncement(t('routeSettings.delete.done', { name: route.name }))
+            onRouteDeleted()
+          }}
+        />
+      ))}
+      {nav}
+    </StepFrame>
   )
 }
 
@@ -378,15 +376,19 @@ function LibraryPicker({
                   />
                   {!library.has_berth_path && (
                     <div>
-                      <GhostButton
-                        type="button"
-                        busy={addingPath !== null}
-                        onClick={() => onAddPath(library)}
-                      >
-                        {addingPath === library.name
-                          ? t('routes.picker.adding')
-                          : t('routes.picker.addBerthPath')}
-                      </GhostButton>
+                      {/* 動的是使用者自己那台 Jellyfin：與泊位 1 同一顆就地確認、同一句後果
+                          （票 06h 的 critique：原本這裡按了就加）。 */}
+                      <ConfirmAction
+                        label={t('routes.picker.addBerthPath')}
+                        confirmLabel={t('jellyfin.libraries.addConfirm')}
+                        warning={t('jellyfin.libraries.addWarning', {
+                          library: library.name,
+                          path: library.berth_path,
+                        })}
+                        pending={addingPath === library.name}
+                        pendingLabel={t('routes.picker.adding')}
+                        onConfirm={() => onAddPath(library)}
+                      />
                       <p className="mt-2 max-w-prose text-xs text-ink-dim">
                         {t('routes.picker.addHint', { path: library.berth_path })}
                       </p>

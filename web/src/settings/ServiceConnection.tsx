@@ -11,7 +11,7 @@ import {
 } from '../api/setup'
 import { Notice } from '../components/controls'
 import { MooringLine } from '../setup/MooringLine'
-import { needsConnectionForm } from '../setup/signals'
+import { needsConnectionForm, probeEndpoint } from '../setup/signals'
 import { SettingsSection } from './SettingsFrame'
 
 /**
@@ -69,6 +69,7 @@ export function ServiceConnection({
         <ul className="grid">
           <MooringLine
             kind={kind}
+            endpoint={probeEndpoint(status.data, kind)}
             detection={detection}
             tying={false}
             waitedSeconds={status.data.waited_seconds}

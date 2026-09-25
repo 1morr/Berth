@@ -304,6 +304,35 @@ describe('泊位板與前置列', () => {
     await user.click(screen.getByRole('button', { name: /3 個服務已判定/ }))
     expect(await heading()).toHaveTextContent('偵測服務')
   })
+
+  /** 票 06h 的冷啟動演練抓到：探測中的也被算成「已判定」，前置列說 3 個、清單上還有兩個在等。 */
+  it('前置列只算判定完成的服務，探測中的不算', async () => {
+    stubApi({
+      'GET /api/setup/status': {
+        body: setupStatus({
+          current_step: 2,
+          admin_created: true,
+          admin_username: 'skipper',
+          services: [
+            detection({ origin: 'pending', reason: 'starting', resolved: false }),
+            ALL_BUNDLED[1]!,
+            detection({
+              kind: 'prowlarr',
+              origin: 'pending',
+              reason: 'unreachable',
+              resolved: false,
+            }),
+          ],
+        }),
+      },
+      'POST /api/setup/detect': () => new Promise(() => {}),
+    })
+    renderWithProviders(<SetupPage />)
+    await heading()
+
+    expect(screen.getByRole('button', { name: /1 個服務已判定/ })).toBeVisible()
+    expect(screen.queryByRole('button', { name: /3 個服務已判定/ })).not.toBeInTheDocument()
+  })
 })
 
 describe('回頭看的泊位說出能改什麼', () => {
@@ -474,5 +503,35 @@ describe('第 2 步之後的每一格都有結果可看', () => {
     renderWithProviders(<SetupPage />)
 
     expect(await screen.findByText(/inode=8162774324533690/)).toBeVisible()
+  })
+})
+
+/**
+ * 票 06h 的 audit：按下動作之後那顆鍵被換掉、換步之後舊的一頁整個卸下，焦點都掉回 `body`
+ * （WCAG 2.4.3）。鍵盤與螢幕閱讀器的人從頁首重新 Tab。
+ */
+describe('焦點不掉回 body', () => {
+  it('前往下一個泊位之後，焦點在新一步的標題上', async () => {
+    wizard(4)
+    const user = userEvent.setup()
+    renderWithProviders(<SetupPage />)
+
+    await user.click(await screen.findByRole('button', { name: /^套用這/ }))
+    await user.click(await screen.findByRole('button', { name: '前往下一個泊位' }))
+
+    const next = await heading()
+    expect(next).toHaveTextContent('媒體庫路徑')
+    await waitFor(() => expect(next).toHaveFocus())
+  })
+
+  it('做完這一步、按的那顆鍵換掉之後，焦點落在「前往下一個泊位」', async () => {
+    wizard(3)
+    const user = userEvent.setup()
+    renderWithProviders(<SetupPage />)
+
+    await user.click(await screen.findByRole('button', { name: '開始靠泊' }))
+
+    const next = await screen.findByRole('button', { name: '前往下一個泊位' })
+    await waitFor(() => expect(next).toHaveFocus())
   })
 })

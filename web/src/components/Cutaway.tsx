@@ -48,7 +48,7 @@ export function CutawayRow({
     <div className="grid grid-cols-1 gap-1 px-4 py-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] sm:gap-4">
       <dt
         className={`min-w-0 self-center leading-[1.4] text-ink-dim ${
-          code ? 'value text-xs' : 'label'
+          code ? 'value text-xs wrap-anywhere' : 'label'
         }`}
       >
         {term}

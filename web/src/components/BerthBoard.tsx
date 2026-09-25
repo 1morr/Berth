@@ -93,14 +93,17 @@ export function BerthBoard({
 }
 
 function Cell({ slot }: { slot: BoardSlot }) {
+  // 次要字在漆上退一階。沒塗漆的格子字本來就是 `ink-dim`，再淡一層在淺色主題只剩 3.73:1
+  // （票 06h 的 audit，WCAG 1.4.3），所以只對塗了漆的格子退。
+  const secondary = slot.filled === false ? '' : 'opacity-80'
   return (
     <>
       <div className="flex items-baseline justify-between gap-2">
         <span className="value text-xs font-semibold">{slot.code}</span>
-        <span className="label opacity-80">{slot.status}</span>
+        <span className={`label ${secondary}`}>{slot.status}</span>
       </div>
       <p className="value mt-2 truncate text-base font-semibold">{slot.name}</p>
-      <p className="value mt-1 h-4 truncate text-xs opacity-80">{slot.detail || '—'}</p>
+      <p className={`value mt-1 h-4 truncate text-xs ${secondary}`}>{slot.detail || '—'}</p>
     </>
   )
 }

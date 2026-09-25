@@ -154,6 +154,53 @@ describe('第 2 步：偵測服務', () => {
     expect(screen.getByRole('button', { name: '前往泊位 1' })).toBeInTheDocument()
   })
 
+  /** 票 06h 的 audit（WCAG 4.1.3）：清單每一輪換 key 重掛，live region 要在它外面才念得出結果。 */
+  it('探測結果落在按下之前就在的同一個 live region 裡', async () => {
+    stubApi({
+      [STATUS]: { body: AT_STEP_TWO },
+      [DETECT]: { body: setupStatus({ ...AT_STEP_TWO, current_step: 3, services: ALL_BUNDLED }) },
+    })
+    const user = userEvent.setup()
+
+    renderWithProviders(<SetupPage />)
+    const region = (await screen.findByTestId('mooring-sequence')).parentElement!
+    expect(region).toHaveAttribute('aria-live', 'polite')
+    await user.click(screen.getByRole('button', { name: '開始探測' }))
+
+    await waitFor(() => expect(within(region).getAllByText('套件內')).toHaveLength(3))
+    expect(region).toBeInTheDocument()
+  })
+
+  /** 票 06h 的 audit（WCAG 2.4.3）：「開始探測」在結果回來時換掉，焦點原本掉回 `body`。 */
+  it('探測做完、「開始探測」換掉之後，焦點落在「前往泊位 1」', async () => {
+    stubApi({
+      [STATUS]: { body: AT_STEP_TWO },
+      [DETECT]: { body: setupStatus({ ...AT_STEP_TWO, current_step: 3, services: ALL_BUNDLED }) },
+    })
+    const user = userEvent.setup()
+
+    renderWithProviders(<SetupPage />)
+    await user.click(await screen.findByRole('button', { name: '開始探測' }))
+
+    const next = await screen.findByRole('button', { name: '前往泊位 1' })
+    await waitFor(() => expect(next).toHaveFocus())
+  })
+
+  /** 票 06h：`.env` 換了 `QBITTORRENT_WEBUI_PORT`，畫面原本照樣寫 `qbittorrent:8080`（06b 的遺留）。 */
+  it('將會探測的位址照後端說的寫，不寫死 port', async () => {
+    const targets = {
+      ...setupStatus().probe_targets,
+      qbittorrent: 'http://qbittorrent:18080',
+    }
+    stubApi({ [STATUS]: { body: setupStatus({ ...AT_STEP_TWO, probe_targets: targets }) } })
+
+    renderWithProviders(<SetupPage />)
+
+    const cutaway = (await screen.findByText('將會探測')).closest('section')!
+    expect(within(cutaway).getByText('qbittorrent:18080/api/v2/app/version')).toBeInTheDocument()
+    expect(screen.queryByText(/qbittorrent:8080/)).not.toBeInTheDocument()
+  })
+
   it('判定理由逐服務寫出來，不是「連線失敗」了事', async () => {
     stubApi({
       [STATUS]: { body: AT_STEP_TWO },
@@ -236,6 +283,10 @@ describe('第 2 步：偵測服務', () => {
     // 兩條都給表單（票 05 驗收：既有就顯示連線表單）。
     expect(within(lines[0]).getByRole('button', { name: '測試連線' })).toBeInTheDocument()
     expect(within(lines[1]).getByRole('button', { name: '測試連線' })).toBeInTheDocument()
+    // 位址的範例是那個服務自己的 port，不是三個都寫 Jellyfin 的 8096（票 06h）。
+    const address = (line: HTMLElement) => within(line).getByRole('textbox', { name: '位址' })
+    expect(address(lines[0])).toHaveAttribute('placeholder', 'http://192.168.1.10:8096')
+    expect(address(lines[1])).toHaveAttribute('placeholder', 'http://192.168.1.10:8080')
   })
 
   it('貼上的 Prowlarr API key 送到 connect 端點', async () => {

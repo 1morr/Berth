@@ -470,7 +470,9 @@ const zhHant = {
     absent: '還沒填',
     whereLabel: '去哪裡拿',
     where:
-      '在 themoviedb.org 註冊一個免費帳號，開「設定 → API」申請，用途選 Personal / Education，申請表要填一個網址與用途摘要。核發是即時的，不必等審核。現在就去申請也沒關係——精靈的進度已經存下來了，回來時還在這一步。',
+      '在 themoviedb.org 註冊一個免費帳號，開「設定 → API」申請，用途選 Personal / Education，申請表要填一個網址與用途摘要。核發是即時的，不必等審核。',
+    // 精靈裡多一句（`TmdbKey` 的 `inWizard`）：前半是同一段，用插值接上，不抄兩份。
+    whereWizard: '{{where}}現在就去申請也沒關係——精靈的進度已經存下來了，回來時還在這一步。',
     open: '開啟 TMDB 的 API 設定',
     blank: '這一步要一把 key 才走得下去。貼上你在 themoviedb.org 拿到的那一把再按一次。',
     field: '你的 TMDB API key',
@@ -487,7 +489,7 @@ const zhHant = {
       bundled:
         'Berth 替你建的每一個媒體庫各成為一條 Route：下載完成後檔案硬鏈接到它的寫入目標。這一步會在 qBittorrent 建好分類，並實際鏈接一個檔案，確認三個容器看到的是同一個檔案系統。',
       existing:
-        '勾選要交給 Berth 寫入的媒體庫，每個選一條寫入目標。舊路徑不會被動到——它們仍然唯讀，Berth 只往你選的那一條寫。',
+        '勾選要交給 Berth 寫入的媒體庫，每個選一條寫入目標。Berth 只往你選的那一條寫，同一個媒體庫的其他路徑維持唯讀；不想讓它寫進你既有的資料夾，先加一條 Berth 路徑再選它。',
     },
     empty:
       '這台 Jellyfin 一個媒體庫都沒有。先在 Jellyfin 建一個再回來，Berth 才有地方寫入。Berth 不會替你的伺服器建媒體庫。',
@@ -552,7 +554,7 @@ const zhHant = {
   },
   complete: {
     title: '完成設定',
-    lede: '四個泊位都繫上了。按下完成之後精靈就關閉，之後要用 Jellyfin 帳號登入才進得來設定。',
+    lede: '五個泊位都走過了。按下完成之後精靈就關閉，之後要用 Jellyfin 帳號登入才進得來設定。',
     submit: '完成設定',
     completing: '完成中…',
     failed: '寫不進去。Berth 後端可能沒在跑——確認容器狀態後再按一次。',
@@ -562,6 +564,8 @@ const zhHant = {
     unfinished: '還有一步沒做完，但這一頁看不出是哪一步。回上一步逐格看一次，紅的那一格就是。',
     fixTmdb: '回去填 TMDB key',
     signInHint: '完成後會回到首頁，那裡會請你用剛才建立的 Jellyfin 管理員帳號登入。',
+    signInHintExisting:
+      '完成後會回到首頁，那裡會請你用你那台 Jellyfin 的帳號登入；是那台的管理員才進得來設定。',
     savePath: 'complete 目錄',
     skippedTitle: '跳過的步驟',
     cutaway: {
@@ -2640,7 +2644,9 @@ const en: Translations<typeof zhHant> = {
     absent: 'Not set yet',
     whereLabel: 'Where to get one',
     where:
-      'Sign up for a free account on themoviedb.org, then open Settings → API and request a key for Personal / Education use; the form asks for a URL and a short summary of what you are building. The key is issued immediately, with no review to wait for. Going to get one now is fine — the wizard keeps its progress and comes back to this step.',
+      'Sign up for a free account on themoviedb.org, then open Settings → API and request a key for Personal / Education use; the form asks for a URL and a short summary of what you are building. The key is issued immediately, with no review to wait for.',
+    whereWizard:
+      '{{where}} Going to get one now is fine — the wizard keeps its progress and comes back to this step.',
     open: "Open TMDB's API settings",
     blank:
       'This step needs a key to go on. Paste the one you got from themoviedb.org and press again.',
@@ -2658,7 +2664,7 @@ const en: Translations<typeof zhHant> = {
       bundled:
         'Each library Berth created becomes a route: finished downloads are hard-linked into its write target. This step creates the qBittorrent categories and links a real file, proving all three containers see one file system.',
       existing:
-        'Tick the libraries Berth may write into and pick one write target for each. Your existing paths are left alone: they stay read-only, and Berth writes only to the path you pick.',
+        'Tick the libraries Berth may write into and pick one write target for each. Berth writes only to the path you pick; the library’s other paths stay read-only. To keep Berth out of your existing folders, add a Berth path first and pick that.',
     },
     empty:
       'This Jellyfin has no libraries. Create one in Jellyfin and come back, so Berth has somewhere to write. Berth does not create libraries on your server.',
@@ -2727,7 +2733,7 @@ const en: Translations<typeof zhHant> = {
   },
   complete: {
     title: 'Finish setup',
-    lede: 'All four berths are moored. Finishing closes the wizard; after that you sign in with a Jellyfin account to reach the settings.',
+    lede: 'All five berths have been visited. Finishing closes the wizard; after that you sign in with a Jellyfin account to reach the settings.',
     submit: 'Finish setup',
     completing: 'Finishing…',
     failed: 'Could not save. The Berth backend may be down — check the container and press again.',
@@ -2740,6 +2746,8 @@ const en: Translations<typeof zhHant> = {
     fixTmdb: 'Go back and enter the TMDB key',
     signInHint:
       'You land on the home page, which asks you to sign in with the Jellyfin administrator you just created.',
+    signInHintExisting:
+      'You land on the home page, which asks you to sign in with an account on your Jellyfin; only its administrators reach the settings.',
     savePath: 'Complete directory',
     skippedTitle: 'Skipped steps',
     cutaway: {

@@ -1,4 +1,4 @@
-import type { DetectionReason, ServiceDetection } from '../api/setup'
+import type { DetectionReason, ServiceDetection, SetupStatus } from '../api/setup'
 import type { ServiceKind } from '../api/schemas'
 import type { Signal } from '../components/signal'
 
@@ -30,6 +30,13 @@ export function needsConnectionForm(detection: ServiceDetection | undefined): bo
   return detection.origin === 'existing' || detection.origin === 'timeout'
 }
 
+/** 連線表單的位址範例：區網上的一台，port 是那個服務的預設（不是三個都寫 Jellyfin 的）。 */
+export const EXAMPLE_ADDRESS: Record<ServiceKind, string> = {
+  jellyfin: 'http://192.168.1.10:8096',
+  qbittorrent: 'http://192.168.1.10:8080',
+  prowlarr: 'http://192.168.1.10:9696',
+}
+
 /** 只有位址是每個服務都要填的；其餘欄位逐服務不同。 */
 export function connectFields(kind: ServiceKind): ReadonlyArray<'apiKey' | 'credentials'> {
   if (kind === 'prowlarr') return ['apiKey']
@@ -37,11 +44,20 @@ export function connectFields(kind: ServiceKind): ReadonlyArray<'apiKey' | 'cred
   return []
 }
 
-/** 探測的端點，剖面裡逐條列出來（plan §9.3 第 2 步）。 */
-export const PROBE_ENDPOINT: Record<ServiceKind, string> = {
-  jellyfin: 'jellyfin:8096/System/Info/Public',
-  qbittorrent: 'qbittorrent:8080/api/v2/app/version',
-  prowlarr: 'prowlarr:9696/ping',
+/** 探測打的那一支（plan §9.3 第 2 步）。主機與 port 是後端給的，見 `probeEndpoint`。 */
+const PROBE_PATH: Record<ServiceKind, string> = {
+  jellyfin: '/System/Info/Public',
+  qbittorrent: '/api/v2/app/version',
+  prowlarr: '/ping',
+}
+
+/**
+ * 剖面與纜繩上寫的「探哪裡」：`主機:port/路徑`。主機與 port 照後端的 `probe_targets`——
+ * qBittorrent 的 port 是 `.env` 的 `QBITTORRENT_WEBUI_PORT`，寫死的話換了 port 就說錯（票 06h）。
+ */
+export function probeEndpoint(status: SetupStatus, kind: ServiceKind): string {
+  // OpenAPI 把 dict 寫成任意鍵；後端三個服務一定都給（`services/clients.bundled_targets`）。
+  return status.probe_targets[kind]!.replace(/^https?:\/\//, '') + PROBE_PATH[kind]
 }
 
 export const REASON_LABEL = {

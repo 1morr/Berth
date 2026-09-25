@@ -16,6 +16,7 @@ import { useLibraryDraft, type LibraryDraftState } from './useLibraryDraft'
 import { StepLine } from '../components/StepLine'
 import { isSettled } from '../components/steps'
 import { STEP_ENDPOINT, STEP_FIX, STEP_LABEL, isJellyfinStep, manualSteps } from './jellyfinSteps'
+import { StepFrame } from './StepFrame'
 
 /**
  * 泊位 1：Jellyfin（plan §9.3 第 3 步）。兩條路徑由第 2 步的判定決定，使用者不必自己選。
@@ -70,59 +71,52 @@ export function JellyfinStep({
   const draft = useLibraryDraft(setup, onSaveLibraries)
 
   return (
-    <div className="grid flex-1 gap-px bg-rule lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
-      <div className="min-w-0 bg-hull p-6">
-        <div className="lg:sticky lg:top-6">
-          {bundled ? (
-            <div className="grid gap-6">
-              <BundledLibraries
-                draft={draft}
-                libraryRoot={setup.library_root}
-                locked={running}
-                saving={savingLibraries}
-                saveFailed={saveLibrariesFailed}
-              />
-              <SequenceCutaway />
-            </div>
-          ) : (
-            <ServerCutaway setup={setup} />
-          )}
-        </div>
-      </div>
+    <StepFrame cutaway={bundled ? <SequenceCutaway /> : <ServerCutaway setup={setup} />}>
+      <h2 className="text-lg font-semibold text-ink">
+        {t(bundled ? 'jellyfin.bundled.title' : 'jellyfin.existing.title')}
+      </h2>
+      <p className="mt-2 max-w-prose text-sm text-ink-dim">
+        {t(bundled ? 'jellyfin.bundled.lede' : 'jellyfin.existing.lede')}
+      </p>
+      {note}
 
-      <div className="min-w-0 bg-hull p-6">
-        <h2 className="text-lg font-semibold text-ink">
-          {t(bundled ? 'jellyfin.bundled.title' : 'jellyfin.existing.title')}
-        </h2>
-        <p className="mt-2 max-w-prose text-sm text-ink-dim">
-          {t(bundled ? 'jellyfin.bundled.lede' : 'jellyfin.existing.lede')}
-        </p>
-        {note}
+      {!setup.version_supported && <VersionNotice version={setup.version} />}
 
-        {!setup.version_supported && <VersionNotice version={setup.version} />}
-
-        {bundled ? (
-          <BootstrapSequence
-            setup={setup}
+      {/* 清單是這一步的輸入，排在「開始靠泊」之前（票 06h：原本在左欄剖面，工作面搬到 DOM
+          前面之後，Tab 會先到右欄的鍵、再回頭到清單）。 */}
+      {bundled && (
+        <div className="mt-6">
+          <BundledLibraries
             draft={draft}
-            running={running}
-            failed={bootstrapFailed}
-            onBootstrap={onBootstrap}
-            redetect={redetect}
+            libraryRoot={setup.library_root}
+            locked={running}
+            saving={savingLibraries}
+            saveFailed={saveLibrariesFailed}
           />
-        ) : (
-          <JellyfinExisting
-            setup={setup}
-            signInFailed={signInFailed}
-            connecting={connecting}
-            addingPath={addingPath}
-            onConnect={onConnect}
-            onAddPath={onAddPath}
-          />
-        )}
-        {nav}
-      </div>
-    </div>
+        </div>
+      )}
+
+      {bundled ? (
+        <BootstrapSequence
+          setup={setup}
+          draft={draft}
+          running={running}
+          failed={bootstrapFailed}
+          onBootstrap={onBootstrap}
+          redetect={redetect}
+        />
+      ) : (
+        <JellyfinExisting
+          setup={setup}
+          signInFailed={signInFailed}
+          connecting={connecting}
+          addingPath={addingPath}
+          onConnect={onConnect}
+          onAddPath={onAddPath}
+        />
+      )}
+      {nav}
+    </StepFrame>
   )
 }
 

@@ -12,6 +12,7 @@ import {
   PasswordField,
   PrimaryButton,
 } from '../components/controls'
+import { StepFrame } from './StepFrame'
 
 /**
  * 第 1 步：建立 Berth 管理員（plan §9.3）。
@@ -82,70 +83,66 @@ export function AdminStep({
   }
 
   return (
-    <div className="grid flex-1 gap-px bg-rule lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
-      <div className="min-w-0 bg-hull p-6">
-        <div className="lg:sticky lg:top-6">
-          <Cutaway title={t('admin.cutaway.title')}>
-            {(['berth', 'jellyfin', 'qbittorrent', 'prowlarr'] as const).map((row) => (
-              <CutawayRow
-                key={row}
-                term={t(`admin.cutaway.${row}`)}
-                value={sentence(rows[row])}
-                muted={rows[row].muted}
-              />
-            ))}
-          </Cutaway>
+    <StepFrame
+      cutaway={
+        <Cutaway title={t('admin.cutaway.title')}>
+          {(['berth', 'jellyfin', 'qbittorrent', 'prowlarr'] as const).map((row) => (
+            <CutawayRow
+              key={row}
+              term={t(`admin.cutaway.${row}`)}
+              value={sentence(rows[row])}
+              muted={rows[row].muted}
+            />
+          ))}
+        </Cutaway>
+      }
+    >
+      <h2 className="text-lg font-semibold text-ink">{words.title}</h2>
+      <p className="mt-2 max-w-prose text-sm text-ink-dim">{words.lede}</p>
+      {owned && (
+        <div className="mt-4 max-w-prose">
+          <Notice signal="secured" label={t('admin.owned.label')}>
+            {detectedOrigin(status.services, 'jellyfin') === 'existing'
+              ? t('admin.owned.existing')
+              : t('admin.owned.bundled', { account: status.admin_username })}
+          </Notice>
         </div>
-      </div>
+      )}
 
-      <div className="min-w-0 bg-hull p-6">
-        <h2 className="text-lg font-semibold text-ink">{words.title}</h2>
-        <p className="mt-2 max-w-prose text-sm text-ink-dim">{words.lede}</p>
-        {owned && (
-          <div className="mt-4 max-w-prose">
-            <Notice signal="secured" label={t('admin.owned.label')}>
-              {detectedOrigin(status.services, 'jellyfin') === 'existing'
-                ? t('admin.owned.existing')
-                : t('admin.owned.bundled', { account: status.admin_username })}
-            </Notice>
-          </div>
+      <form onSubmit={submit} noValidate className="mt-6 grid gap-5">
+        <Field
+          label={words.username}
+          value={username}
+          autoComplete="username"
+          onChange={(event) => setUsername(event.target.value)}
+          error={blank && !username.trim() ? t('admin.error.blank') : undefined}
+        />
+        <PasswordField
+          label={words.password}
+          value={password}
+          autoComplete="new-password"
+          onChange={(event) => setPassword(event.target.value)}
+          error={blank && !password ? t('admin.error.blank') : undefined}
+        />
+        <Checkbox
+          label={t('admin.field.apply')}
+          hint={words.applyHint}
+          checked={applyToServices}
+          onChange={setApplyToServices}
+        />
+        {/* 回頭看的時候「前往下一個泊位」才是主要動作，底部的位置讓給它。 */}
+        <div className={nav ? '' : STICKY_ACTION}>
+          <PrimaryButton type="submit" busy={pending}>
+            {words.submit}
+          </PrimaryButton>
+        </div>
+        {failed && (
+          <Notice signal="blocked" label={t('common.failed')}>
+            {t('admin.error.failed')}
+          </Notice>
         )}
-
-        <form onSubmit={submit} noValidate className="mt-6 grid gap-5">
-          <Field
-            label={words.username}
-            value={username}
-            autoComplete="username"
-            onChange={(event) => setUsername(event.target.value)}
-            error={blank && !username.trim() ? t('admin.error.blank') : undefined}
-          />
-          <PasswordField
-            label={words.password}
-            value={password}
-            autoComplete="new-password"
-            onChange={(event) => setPassword(event.target.value)}
-            error={blank && !password ? t('admin.error.blank') : undefined}
-          />
-          <Checkbox
-            label={t('admin.field.apply')}
-            hint={words.applyHint}
-            checked={applyToServices}
-            onChange={setApplyToServices}
-          />
-          {/* 回頭看的時候「前往下一個泊位」才是主要動作，底部的位置讓給它。 */}
-          <div className={nav ? '' : STICKY_ACTION}>
-            <PrimaryButton type="submit" busy={pending}>
-              {words.submit}
-            </PrimaryButton>
-          </div>
-          {failed && (
-            <Notice signal="blocked" label={t('common.failed')}>
-              {t('admin.error.failed')}
-            </Notice>
-          )}
-        </form>
-        {nav}
-      </div>
-    </div>
+      </form>
+      {nav}
+    </StepFrame>
   )
 }

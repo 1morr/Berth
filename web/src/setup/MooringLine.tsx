@@ -7,7 +7,7 @@ import { CopyLine, Field, GhostButton, PasswordField } from '../components/contr
 import { ORIGIN_LABEL, SERVICE_LABEL, detailLabel } from '../components/services'
 import { SIGNAL_FILL } from '../components/signal'
 import {
-  PROBE_ENDPOINT,
+  EXAMPLE_ADDRESS,
   REASON_LABEL,
   connectFields,
   needsConnectionForm,
@@ -20,6 +20,7 @@ import {
  */
 export function MooringLine({
   kind,
+  endpoint,
   detection,
   tying,
   waitedSeconds,
@@ -30,6 +31,8 @@ export function MooringLine({
   onRedetect,
 }: {
   kind: ServiceKind
+  /** 探哪裡（`probeEndpoint`）。 */
+  endpoint: string
   detection: ServiceDetection | undefined
   /** 還在探測（或還沒輪到這一條繫上）。 */
   tying: boolean
@@ -61,9 +64,7 @@ export function MooringLine({
               : t('detect.empty')}
         </span>
         <span className="value text-sm font-semibold text-ink">{t(SERVICE_LABEL[kind])}</span>
-        <span className="value ml-auto min-w-0 truncate text-xs text-ink-dim">
-          {PROBE_ENDPOINT[kind]}
-        </span>
+        <span className="value ml-auto min-w-0 truncate text-xs text-ink-dim">{endpoint}</span>
       </div>
 
       {!tying && detection && (
@@ -173,7 +174,7 @@ function ConnectPanel({
           label={t('connect.field.baseUrl')}
           value={baseUrl}
           inputMode="url"
-          placeholder="http://192.168.1.10:8096"
+          placeholder={EXAMPLE_ADDRESS[kind]}
           onChange={(event) => setBaseUrl(event.target.value)}
         />
         {fields.includes('apiKey') && (

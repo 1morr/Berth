@@ -30,7 +30,8 @@ export function BerthNav({ onPrevious, onNext }: { onPrevious?: () => void; onNe
         <span aria-hidden />
       )}
       {onNext && (
-        <PrimaryButton type="button" onClick={onNext}>
+        // `StepFrame` 在焦點掉回 body 時把它接到這一顆（票 06h）。
+        <PrimaryButton type="button" data-berth-next onClick={onNext}>
           {t('setup.nav.next')}
         </PrimaryButton>
       )}

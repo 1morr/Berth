@@ -466,6 +466,9 @@ export function SetupPage() {
           <CompleteStep
             routes={routes.data}
             indexers={indexers.data}
+            bundledJellyfin={
+              current.services.find((row) => row.kind === 'jellyfin')?.origin === 'bundled'
+            }
             completing={finish.isPending}
             failure={completeFailure(finish.error, tmdb.data, routes.data)}
             onComplete={() => finish.mutate()}
@@ -724,7 +727,10 @@ function Prelude({
   onGo: (step: number) => void
 }) {
   const { t } = useTranslation()
-  const detected = status.services.length
+  // 探測中與逾時的還沒有判定（票 06h：冷啟動時說成「3 個已判定」，清單上卻還有兩個在等）。
+  const detected = status.services.filter(
+    (row) => row.origin === 'bundled' || row.origin === 'existing',
+  ).length
   const items = [
     { step: STEP.admin, text: t('admin.saved', { username: status.admin_username }) },
     {

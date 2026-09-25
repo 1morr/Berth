@@ -6,6 +6,7 @@ import { STICKY_ACTION, GhostButton, Notice, PrimaryButton } from '../components
 import { SIGNAL_FILL } from '../components/signal'
 import { ROUTE_SIGNAL } from '../components/routeChecks'
 import { Cutaway, CutawayRow } from '../components/Cutaway'
+import { StepFrame } from './StepFrame'
 
 /**
  * 第 8 步：完成（plan §9.3 第 8 步）。
@@ -37,6 +38,7 @@ const FAILURE_MESSAGE = {
 export function CompleteStep({
   routes,
   indexers,
+  bundledJellyfin,
   completing,
   failure,
   onComplete,
@@ -45,6 +47,11 @@ export function CompleteStep({
 }: {
   routes: RouteSetup
   indexers: IndexerSetup | undefined
+  /**
+   * 登入要用哪一組帳密：套件內的 Jellyfin 管理員是精靈第 3 步用第 1 步那組建的，既有的那台
+   * 是使用者自己的帳號（票 06h 實走 `mixed` 時抓到原本一律說「剛才建立的」）。
+   */
+  bundledJellyfin: boolean
   completing: boolean
   failure?: CompleteFailure
   onComplete: () => void
@@ -60,80 +67,78 @@ export function CompleteStep({
   const skippedIndexers = indexers?.skipped ?? false
 
   return (
-    <div className="grid flex-1 gap-px bg-rule lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
-      <div className="min-w-0 bg-hull p-6">
-        <div className="lg:sticky lg:top-6">
-          <Cutaway title={t('complete.cutaway.title')}>
-            <CutawayRow term={t('routes.cutaway.libraryRoot')} value={routes.library_root} />
-            <CutawayRow term={t('routes.cutaway.completeRoot')} value={routes.complete_root} />
-            <CutawayRow term={t('complete.cutaway.routes')} value={String(routes.routes.length)} />
-            <CutawayRow
-              term={t('complete.cutaway.skipped')}
-              value={t(skippedIndexers ? 'complete.skipped.indexers' : 'complete.cutaway.nothing')}
-              muted={!skippedIndexers}
-            />
-          </Cutaway>
+    <StepFrame
+      cutaway={
+        <Cutaway title={t('complete.cutaway.title')}>
+          <CutawayRow term={t('routes.cutaway.libraryRoot')} value={routes.library_root} />
+          <CutawayRow term={t('routes.cutaway.completeRoot')} value={routes.complete_root} />
+          <CutawayRow term={t('complete.cutaway.routes')} value={String(routes.routes.length)} />
+          <CutawayRow
+            term={t('complete.cutaway.skipped')}
+            value={t(skippedIndexers ? 'complete.skipped.indexers' : 'complete.cutaway.nothing')}
+            muted={!skippedIndexers}
+          />
+        </Cutaway>
+      }
+    >
+      <h2 className="text-lg font-semibold text-ink">{t('complete.title')}</h2>
+      <p className="mt-2 max-w-prose text-sm text-ink-dim">{t('complete.lede')}</p>
+
+      <ul className="mt-6 grid gap-3">
+        {routes.routes.map((route) => (
+          <li key={route.slug} className="min-w-0 border-2 border-rule bg-well px-4 py-3">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+              {/* 狀態讀的是那條 Route 自己的健康，不是「這一頁只會在全綠時出現」的假設。 */}
+              <span className={`label px-2 py-1.5 ${SIGNAL_FILL[ROUTE_SIGNAL[route.health]]}`}>
+                {t(`routes.health.${route.health}`)}
+              </span>
+              <span className="value text-sm font-semibold text-ink">{route.name}</span>
+              <span className="value text-xs text-ink-dim">{route.category}</span>
+            </div>
+            <dl className="mt-2 grid gap-x-4 gap-y-1 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
+              <dt className="label self-center text-ink-dim">{t('routes.cutaway.target')}</dt>
+              <dd className="value text-xs wrap-anywhere text-ink">{route.target_path}</dd>
+              <dt className="label self-center text-ink-dim">{t('complete.savePath')}</dt>
+              <dd className="value text-xs wrap-anywhere text-ink">{route.save_path}</dd>
+            </dl>
+          </li>
+        ))}
+      </ul>
+
+      {skippedIndexers && (
+        <section className="mt-6 grid gap-3">
+          <h3 className="label text-ink-dim">{t('complete.skippedTitle')}</h3>
+          <Notice signal="assigned" label={t('indexer.skip')}>
+            {t('complete.where.indexers')}
+          </Notice>
+        </section>
+      )}
+
+      {failure && (
+        <div className="mt-6 grid gap-3">
+          <Notice signal="blocked" label={t('common.failed')}>
+            {t(FAILURE_MESSAGE[failure])}
+          </Notice>
+          {failure === 'tmdb' && (
+            <div>
+              <GhostButton type="button" onClick={onFixTmdb}>
+                {t('complete.fixTmdb')}
+              </GhostButton>
+            </div>
+          )}
         </div>
+      )}
+
+      <div className={`mt-6 ${STICKY_ACTION}`}>
+        <PrimaryButton type="button" busy={completing} onClick={onComplete}>
+          {completing ? t('complete.completing') : t('complete.submit')}
+        </PrimaryButton>
       </div>
 
-      <div className="min-w-0 bg-hull p-6">
-        <h2 className="text-lg font-semibold text-ink">{t('complete.title')}</h2>
-        <p className="mt-2 max-w-prose text-sm text-ink-dim">{t('complete.lede')}</p>
-
-        <ul className="mt-6 grid gap-3">
-          {routes.routes.map((route) => (
-            <li key={route.slug} className="min-w-0 border-2 border-rule bg-well px-4 py-3">
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-                {/* 狀態讀的是那條 Route 自己的健康，不是「這一頁只會在全綠時出現」的假設。 */}
-                <span className={`label px-2 py-1.5 ${SIGNAL_FILL[ROUTE_SIGNAL[route.health]]}`}>
-                  {t(`routes.health.${route.health}`)}
-                </span>
-                <span className="value text-sm font-semibold text-ink">{route.name}</span>
-                <span className="value text-xs text-ink-dim">{route.category}</span>
-              </div>
-              <dl className="mt-2 grid gap-x-4 gap-y-1 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
-                <dt className="label self-center text-ink-dim">{t('routes.cutaway.target')}</dt>
-                <dd className="value text-xs wrap-anywhere text-ink">{route.target_path}</dd>
-                <dt className="label self-center text-ink-dim">{t('complete.savePath')}</dt>
-                <dd className="value text-xs wrap-anywhere text-ink">{route.save_path}</dd>
-              </dl>
-            </li>
-          ))}
-        </ul>
-
-        {skippedIndexers && (
-          <section className="mt-6 grid gap-3">
-            <h3 className="label text-ink-dim">{t('complete.skippedTitle')}</h3>
-            <Notice signal="assigned" label={t('indexer.skip')}>
-              {t('complete.where.indexers')}
-            </Notice>
-          </section>
-        )}
-
-        {failure && (
-          <div className="mt-6 grid gap-3">
-            <Notice signal="blocked" label={t('common.failed')}>
-              {t(FAILURE_MESSAGE[failure])}
-            </Notice>
-            {failure === 'tmdb' && (
-              <div>
-                <GhostButton type="button" onClick={onFixTmdb}>
-                  {t('complete.fixTmdb')}
-                </GhostButton>
-              </div>
-            )}
-          </div>
-        )}
-
-        <div className={`mt-6 ${STICKY_ACTION}`}>
-          <PrimaryButton type="button" busy={completing} onClick={onComplete}>
-            {completing ? t('complete.completing') : t('complete.submit')}
-          </PrimaryButton>
-        </div>
-
-        <p className="mt-4 max-w-prose text-xs text-ink-dim">{t('complete.signInHint')}</p>
-        {nav}
-      </div>
-    </div>
+      <p className="mt-4 max-w-prose text-xs text-ink-dim">
+        {t(bundledJellyfin ? 'complete.signInHint' : 'complete.signInHintExisting')}
+      </p>
+      {nav}
+    </StepFrame>
   )
 }

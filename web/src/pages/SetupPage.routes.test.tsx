@@ -442,6 +442,10 @@ describe('泊位 3：媒體庫路徑（既有 Jellyfin）', () => {
     renderWithProviders(<SetupPage />)
     await userEvent.click(await screen.findByRole('checkbox', { name: '影集' }))
     await userEvent.click(screen.getByRole('button', { name: '加入 Berth 路徑' }))
+    // 動的是使用者自己那台 Jellyfin：與泊位 1 同一顆就地確認（票 06h 的 critique）。
+    expect(fetch.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false)
+    expect(screen.getByText(/舊路徑不動/)).toBeVisible()
+    await userEvent.click(screen.getByRole('button', { name: '確認加入' }))
 
     await waitFor(() => {
       const call = fetch.mock.calls.find(
@@ -516,6 +520,33 @@ describe('第 8 步：完成', () => {
     expect(await screen.findByRole('button', { name: '完成設定' })).toBeInTheDocument()
     expect(screen.getByText('/data/torrent/complete/tv')).toBeInTheDocument()
     expect(screen.getByText(/索引站還沒接/)).toBeInTheDocument()
+    expect(screen.getByText(/五個泊位/)).toBeInTheDocument()
+    expect(screen.getByText(/剛才建立的 Jellyfin 管理員帳號/)).toBeInTheDocument()
+  })
+
+  /** 票 06h 實走 `mixed` 時抓到：既有 Jellyfin 的管理員不是精靈建的，登入要用他自己那台的帳號。 */
+  it('既有 Jellyfin 時，登入的提示說的是那台 Jellyfin 自己的帳號', async () => {
+    stubApi({
+      [STATUS]: {
+        body: setupStatus({
+          ...AT_THE_END,
+          services: ALL_BUNDLED.map((row) =>
+            row.kind === 'jellyfin'
+              ? { ...row, origin: 'existing', reason: 'setup_completed' }
+              : row,
+          ),
+        }),
+      },
+      [ROUTES]: { body: BUILT },
+      [INDEXERS]: { body: indexerSetup() },
+      [TMDB]: { body: tmdbSetup() },
+    })
+
+    renderWithProviders(<SetupPage />)
+
+    expect(await screen.findByRole('button', { name: '完成設定' })).toBeInTheDocument()
+    expect(screen.queryByText(/剛才建立/)).not.toBeInTheDocument()
+    expect(screen.getByText(/你那台 Jellyfin 的帳號/)).toBeInTheDocument()
   })
 
   /**

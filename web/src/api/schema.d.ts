@@ -3521,6 +3521,10 @@ export interface components {
             waited_seconds: number;
             /** Window Seconds */
             window_seconds: number;
+            /** Probe Targets */
+            probe_targets: {
+                [key: string]: string;
+            };
         };
         /**
          * SideOut

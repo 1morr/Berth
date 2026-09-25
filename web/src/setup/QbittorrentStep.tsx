@@ -8,6 +8,7 @@ import { Cutaway, CutawayRow } from '../components/Cutaway'
 import { StepLine } from '../components/StepLine'
 import { isSettled } from '../components/steps'
 import { STEP_FIX, STEP_LABEL } from './qbittorrentSteps'
+import { StepFrame } from './StepFrame'
 
 /**
  * 泊位 2：qBittorrent（plan §9.3 第 4 步）。
@@ -39,33 +40,25 @@ export function QbittorrentStep({
   const { t } = useTranslation()
 
   return (
-    <div className="grid flex-1 gap-px bg-rule lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
-      <div className="min-w-0 bg-hull p-6">
-        <div className="lg:sticky lg:top-6">
-          <DiffCutaway setup={setup} />
-        </div>
-      </div>
+    <StepFrame cutaway={<DiffCutaway setup={setup} />}>
+      <h2 className="text-lg font-semibold text-ink">{t('qbittorrent.title')}</h2>
+      <p className="mt-2 max-w-prose text-sm text-ink-dim">
+        {t(setup.origin === 'bundled' ? 'qbittorrent.lede.bundled' : 'qbittorrent.lede.existing')}
+      </p>
+      {note}
 
-      <div className="min-w-0 bg-hull p-6">
-        <h2 className="text-lg font-semibold text-ink">{t('qbittorrent.title')}</h2>
-        <p className="mt-2 max-w-prose text-sm text-ink-dim">
-          {t(setup.origin === 'bundled' ? 'qbittorrent.lede.bundled' : 'qbittorrent.lede.existing')}
-        </p>
-        {note}
-
-        {setup.blocked ? (
-          <Blocked setup={setup} redetect={redetect} />
-        ) : (
-          <ApplySequence
-            setup={setup}
-            applying={applying}
-            requestFailed={requestFailed}
-            onApply={onApply}
-          />
-        )}
-        {nav}
-      </div>
-    </div>
+      {setup.blocked ? (
+        <Blocked setup={setup} redetect={redetect} />
+      ) : (
+        <ApplySequence
+          setup={setup}
+          applying={applying}
+          requestFailed={requestFailed}
+          onApply={onApply}
+        />
+      )}
+      {nav}
+    </StepFrame>
   )
 }
 
