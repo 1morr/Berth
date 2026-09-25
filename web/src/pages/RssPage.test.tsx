@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { Media } from '../api/media'
-import type { Feed, FeedItem, RssSeries } from '../api/rss'
+import type { Feed, FeedItem, OneshotItem, RssSeries } from '../api/rss'
 import { HEALTHY, stubApi, type StubRoute } from '../test/fetch'
 import { renderApp } from '../test/render'
 
@@ -671,5 +671,216 @@ describe('RSS 頁', () => {
     expect(
       JSON.parse(String(sent(stub, 'PUT', '/api/rss/series/7/exclusions')[0][1]?.body)),
     ).toEqual({ rules: ['简体'] })
+  })
+})
+
+const SINGLE_URL = 'https://mikanani.me/RSS/Bangumi?bangumiId=4009&subgroupid=370'
+const KIMI_RELEASE = '[喵萌奶茶屋&LoliHouse] 与你相恋到生命尽头 / Kimi ga Shinu made Koi wo Shitai'
+const KIMI_SEARCH = 'GET /api/discover/search?q=Kimi%20ga%20Shinu%20made%20Koi%20wo%20Shitai'
+
+function oneshotItem(guid: string, overrides: Partial<OneshotItem> = {}): OneshotItem {
+  return {
+    guid,
+    title: `${KIMI_RELEASE} - ${guid} [WebRip 1080p]`,
+    link: `https://mikanani.me/Home/Episode/${guid}`,
+    url: `https://mikanani.me/Download/20260924/${guid}.torrent`,
+    info_hash: guid.padStart(40, '0'),
+    size: 500_000_000,
+    published_at: '2026-09-24T08:08:01Z',
+    release_kind: 'single',
+    tags: {
+      source: 'WEB',
+      resolution: '1080p',
+      subs: [],
+      hardsub: false,
+      group: '喵萌奶茶屋&LoliHouse',
+      version: '',
+      edition: '',
+    },
+    season: null,
+    episode_start: Number(guid),
+    episode_end: Number(guid),
+    whole_season: false,
+    strategy: null,
+    job_hash: '',
+    known: null,
+    ...overrides,
+  }
+}
+
+/** feed 的順序（新的在前）：03 已經有下載、02、01，再一個 01–12 的合集。 */
+const ONESHOT: OneshotItem[] = [
+  oneshotItem('03', { job_hash: '03'.padStart(40, '0') }),
+  oneshotItem('02'),
+  oneshotItem('01'),
+  oneshotItem('batch', {
+    title: `[LoliHouse] ${KIMI_RELEASE} [01-12 合集][WebRip 1080p]`,
+    release_kind: 'collection',
+    episode_start: 1,
+    episode_end: 12,
+  }),
+]
+
+/** 送單替身：照順序一次回一個。 */
+function answers(...replies: StubRoute[]) {
+  let next = 0
+  return () => replies[Math.min(next++, replies.length - 1)]
+}
+
+function created(hash: string, fresh = true): StubRoute {
+  return { body: { job: { hash }, created: fresh } }
+}
+
+async function readLink() {
+  const region = await screen.findByRole('region', { name: '一次性 RSS 連結' })
+  await userEvent.type(within(region).getByLabelText(/要讀的網址/), SINGLE_URL)
+  await userEvent.click(within(region).getByRole('button', { name: '讀取' }))
+  return region
+}
+
+function bodies(stub: ReturnType<typeof stubApi>, method: string, path: string) {
+  return sent(stub, method, path).map(([, init]) => JSON.parse(String(init?.body)))
+}
+
+function episodeBox(list: HTMLElement, episode: string) {
+  return within(list).getByRole('checkbox', { name: `${KIMI_RELEASE} - ${episode} [WebRip 1080p]` })
+}
+
+describe('RSS 頁：一次性 RSS 連結（票 18）', () => {
+  it('讀、選作品與 Route、勾三筆：舊的先，逐筆走一般的送單', async () => {
+    const stub = render({
+      'POST /api/rss/oneshot': { body: { kind: 'mikan', items: ONESHOT } },
+      [KIMI_SEARCH]: { body: FOUND },
+      'GET /api/media/tv%3A262000': { body: KIMI },
+      'POST /api/jobs': answers(
+        created('a'.repeat(40)),
+        created('b'.repeat(40)),
+        created('c'.repeat(40), false),
+      ),
+    })
+    renderApp('/rss')
+    const region = await readLink()
+
+    const list = await within(region).findByRole('list', { name: '勾選要送出的' })
+    expect(within(list).getAllByRole('checkbox')).toHaveLength(4)
+    // 合集只標示、不擋；已經有下載的那一筆說一聲。沒選作品時季集是發佈名寫的。
+    expect(within(list).getByText('合集')).toBeInTheDocument()
+    expect(within(list).getByText('這一筆已經有下載了。')).toBeInTheDocument()
+    expect(within(list).getByText('E02')).toBeInTheDocument()
+    expect(within(region).getByText(/選好作品與 Route 才送得出去/)).toBeInTheDocument()
+    expect(bodies(stub, 'POST', '/api/rss/oneshot')).toEqual([
+      { url: SINGLE_URL, media: null, route: null },
+    ])
+
+    // 搜尋框預填第一筆的作品名；唯一的 Route 預選好，清單照那部作品重讀一次。
+    expect(within(region).getByRole('searchbox')).toHaveValue('Kimi ga Shinu made Koi wo Shitai')
+    await userEvent.click(await within(region).findByRole('button', { name: /與妳相戀到生命盡頭/ }))
+    expect(await within(region).findByText(KIMI.folder_name)).toBeInTheDocument()
+    await waitFor(() =>
+      expect(bodies(stub, 'POST', '/api/rss/oneshot').at(-1)).toEqual({
+        url: SINGLE_URL,
+        media: 'tv:262000',
+        route: 3,
+      }),
+    )
+
+    // 「勾選全部單集」不勾合集、不勾已經有下載的；合集另外勾。
+    await userEvent.click(within(region).getByRole('button', { name: '勾選全部單集（2 筆）' }))
+    await userEvent.click(within(list).getByRole('checkbox', { name: /01-12 合集/ }))
+    await userEvent.click(within(region).getByRole('button', { name: '送出 3 筆' }))
+
+    await waitFor(() => expect(sent(stub, 'POST', '/api/jobs')).toHaveLength(3))
+    const jobs = bodies(stub, 'POST', '/api/jobs')
+    expect(jobs.map((body) => body.source.url)).toEqual([
+      ONESHOT[3].url,
+      ONESHOT[2].url,
+      ONESHOT[1].url,
+    ])
+    expect(jobs[0]).toEqual({
+      source: {
+        url: ONESHOT[3].url,
+        title: ONESHOT[3].title,
+        info_hash: ONESHOT[3].info_hash,
+        published_at: ONESHOT[3].published_at,
+      },
+      media: 'tv:262000',
+      route: 3,
+    })
+    expect(
+      await within(region).findByText('送出 2 筆；1 筆本來就在了；0 筆沒有送出。'),
+    ).toBeInTheDocument()
+    expect(within(list).getAllByText('已送出')).toHaveLength(2)
+    expect(within(list).getByText('本來就在了')).toBeInTheDocument()
+  })
+
+  it('一筆被拒不擋下一筆，那一列說出理由、還勾著', async () => {
+    const stub = render({
+      'POST /api/rss/oneshot': { body: { kind: 'mikan', items: ONESHOT } },
+      [KIMI_SEARCH]: { body: FOUND },
+      'GET /api/media/tv%3A262000': { body: KIMI },
+      'POST /api/jobs': answers(
+        { status: 422, body: { detail: { reason: 'source_unavailable', detail: 'HTTP 404' } } },
+        created('b'.repeat(40)),
+      ),
+    })
+    renderApp('/rss')
+    const region = await readLink()
+    await userEvent.click(await within(region).findByRole('button', { name: /與妳相戀到生命盡頭/ }))
+    await within(region).findByText(KIMI.folder_name)
+    const list = within(region).getByRole('list', { name: '勾選要送出的' })
+    await userEvent.click(episodeBox(list, '01'))
+    await userEvent.click(episodeBox(list, '02'))
+    await userEvent.click(within(region).getByRole('button', { name: '送出 2 筆' }))
+
+    expect(
+      await within(region).findByText('送出 1 筆；0 筆本來就在了；1 筆沒有送出。'),
+    ).toBeInTheDocument()
+    expect(sent(stub, 'POST', '/api/jobs')).toHaveLength(2)
+    expect(within(list).getByText('HTTP 404')).toBeInTheDocument()
+    expect(episodeBox(list, '01')).toBeChecked()
+    expect(within(region).getByRole('button', { name: '送出 1 筆' })).toBeEnabled()
+  })
+
+  it('讀到的不是 RSS 時在欄位下說出是哪一種失敗，附上原文', async () => {
+    render({
+      'POST /api/rss/oneshot': {
+        status: 502,
+        body: { detail: { reason: 'feed_not_rss', detail: 'the response is not an RSS feed' } },
+      },
+    })
+    renderApp('/rss')
+    const region = await readLink()
+
+    expect(await within(region).findByText(/讀到了，但那不是 RSS/)).toBeInTheDocument()
+    expect(within(region).getByText('the response is not an RSS feed')).toBeInTheDocument()
+    expect(within(region).queryByRole('list', { name: '勾選要送出的' })).not.toBeInTheDocument()
+  })
+
+  it('讀不到之後同一條網址再按一次「讀取」就重讀', async () => {
+    const stub = render({
+      'POST /api/rss/oneshot': answers(
+        {
+          status: 502,
+          body: { detail: { reason: 'feed_unreachable', detail: 'GET: connection refused' } },
+        },
+        { body: { kind: 'mikan', items: ONESHOT } },
+      ),
+    })
+    renderApp('/rss')
+    const region = await readLink()
+    expect(await within(region).findByText(/現在讀不到這個網址/)).toBeInTheDocument()
+
+    await userEvent.click(within(region).getByRole('button', { name: '讀取' }))
+
+    expect(await within(region).findByRole('list', { name: '勾選要送出的' })).toBeInTheDocument()
+    expect(sent(stub, 'POST', '/api/rss/oneshot')).toHaveLength(2)
+    expect(within(region).queryByText(/現在讀不到這個網址/)).not.toBeInTheDocument()
+  })
+
+  it('沒有 Feed 時也在：它不建 Feed', async () => {
+    render({ 'GET /api/rss/feeds': { body: [] } })
+    renderApp('/rss')
+
+    expect(await screen.findByRole('region', { name: '一次性 RSS 連結' })).toBeInTheDocument()
   })
 })

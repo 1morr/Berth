@@ -1276,3 +1276,6 @@ class RssRefusal(StrEnum):
     FEED_UNREACHABLE = "feed_unreachable"
     #: 這個 Feed 還沒讀過，不收「全部下載」：沒看過的東西不讓人選（M3 票 11）。
     FEED_UNREAD = "feed_unread"
+    #: 讀得到，但回的不是 RSS（站上的網頁、登入頁、Cloudflare 的錯誤頁）。多半是貼了頁面的網址而
+    #: 不是它的 RSS 連結。`detail` 是原文（M3 票 18）。
+    FEED_NOT_RSS = "feed_not_rss"

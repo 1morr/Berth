@@ -2,9 +2,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useId, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { MIN_QUERY_LENGTH, searchQueryOptions, type DiscoverItem } from '../api/discover'
-import { mediaQueryOptions, type Media } from '../api/media'
-import { bindSeries, parseRssRefusal, RSS_KEY, type Candidate, type RssSeries } from '../api/rss'
+import { MIN_QUERY_LENGTH, searchQueryOptions } from '../api/discover'
+import { mediaQueryOptions } from '../api/media'
+import { bindSeries, parseRssRefusal, RSS_KEY, type RssSeries } from '../api/rss'
 import { ConfirmPanel } from '../components/ConfirmPanel'
 import {
   Checkbox,
@@ -19,6 +19,8 @@ import { useInPlaceConfirm } from '../components/useInPlaceConfirm'
 import { displayRound } from '../i18n/displayRound'
 import { RoutePicker } from '../media/RoutePicker'
 import { searchTerm } from './searchTerm'
+import { preselect } from './preselect'
+import { Choices, type Pickable } from './WorkChoices'
 
 /**
  * 待綁定那一列的「綁定」（`.scratch/m3/rss-shape.md` §3）：就地展開，不是 dialog。
@@ -232,61 +234,4 @@ export function SeriesBinder({
       )}
     </ConfirmPanel>
   )
-}
-
-/** 選得了的一部作品：搜尋結果（`DiscoverItem`）與自動綁定的候選（`Candidate`）共有的那幾格。 */
-type Pickable = Pick<DiscoverItem | Candidate, 'id' | 'kind' | 'title' | 'title_en' | 'year'>
-
-/** 一串可選的作品，一部一顆鍵；選定的那一顆是按下的樣子。 */
-function Choices({
-  label,
-  items,
-  picked,
-  onPick,
-  titleOf,
-  aboutOf,
-}: {
-  label: string
-  items: readonly Pickable[]
-  picked: Pickable | null
-  onPick: (item: Pickable) => void
-  titleOf: (item: Pickable) => string
-  aboutOf: (item: Pickable) => string
-}) {
-  const labelId = useId()
-  return (
-    <div className="grid gap-1">
-      <p id={labelId} className="label text-ink-dim">
-        {label}
-      </p>
-      <ul className="grid gap-1" aria-labelledby={labelId}>
-        {items.map((item) => (
-          <li key={item.id}>
-            <button
-              type="button"
-              aria-pressed={picked?.id === item.id}
-              onClick={() => onPick(item)}
-              className={`value flex min-h-6 w-full flex-wrap items-baseline gap-x-2 border-2 px-3 py-2 text-left text-sm text-ink ${
-                picked?.id === item.id
-                  ? 'border-rule-strong bg-deck'
-                  : 'border-rule hover:border-rule-strong'
-              }`}
-            >
-              <span className="wrap-anywhere">{titleOf(item)}</span>
-              <span className="text-xs text-ink-dim">{aboutOf(item)}</span>
-            </button>
-          </li>
-        ))}
-      </ul>
-    </div>
-  )
-}
-
-/** 詳情一到就預選：上次用的 Route，沒有就是唯一的那一條。兩條以上而從沒送過單時留給人選。 */
-function preselect(detail: Media | undefined): number | null {
-  if (!detail) return null
-  const choices = detail.routes.map((row) => row.id)
-  if (detail.default_route_id !== null && choices.includes(detail.default_route_id))
-    return detail.default_route_id
-  return choices.length === 1 ? choices[0] : null
 }

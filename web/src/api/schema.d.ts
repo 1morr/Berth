@@ -983,6 +983,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/rss/oneshot": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Oneshot
+         * @description 讀一條 RSS 網址的每一筆。**只讀**：不建 Feed、不長 RSS Series，勾好的那幾筆走 `POST /jobs`。
+         *
+         *     `POST` 是因為網址放在 body，不是因為它改了什麼。
+         */
+        post: operations["post_oneshot_api_rss_oneshot_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/rss/feeds": {
         parameters: {
             query?: never;
@@ -3275,6 +3297,56 @@ export interface components {
             awaiting_review: number;
         };
         /**
+         * OneshotIn
+         * @description 一次性 RSS 連結（票 18）。網址放在 body：Mikan 聚合 feed 的網址帶 token，不進 query。
+         */
+        OneshotIn: {
+            /** Url */
+            url: string;
+            /** Media */
+            media?: string | null;
+            /** Route */
+            route?: number | null;
+        };
+        /** OneshotItemOut */
+        OneshotItemOut: {
+            /** Guid */
+            guid: string;
+            /** Title */
+            title: string;
+            /** Link */
+            link: string;
+            /** Url */
+            url: string;
+            /** Info Hash */
+            info_hash: string;
+            /** Size */
+            size: number | null;
+            /** Published At */
+            published_at: string | null;
+            release_kind: components["schemas"]["ReleaseKind"];
+            tags: components["schemas"]["TagsOut"];
+            /** Season */
+            season: number | null;
+            /** Episode Start */
+            episode_start: number | null;
+            /** Episode End */
+            episode_end: number | null;
+            /** Whole Season */
+            whole_season: boolean;
+            strategy: components["schemas"]["MappingStrategy"] | null;
+            /** Job Hash */
+            job_hash: string;
+            /** Known */
+            known: string | null;
+        };
+        /** OneshotOut */
+        OneshotOut: {
+            kind: components["schemas"]["FeedKind"];
+            /** Items */
+            items: components["schemas"]["OneshotItemOut"][];
+        };
+        /**
          * PlanAction
          * @description 一個檔案的處置（plan §2.3 的 `plan_items.action`）。
          * @enum {string}
@@ -3646,6 +3718,12 @@ export interface components {
             last: components["schemas"]["ReconcileRunOut"] | null;
         };
         /**
+         * ReleaseKind
+         * @description 一個發佈涵蓋幾集（brief §6.3，對齊 AutoBangumi 的 `release_kind`）。
+         * @enum {string}
+         */
+        ReleaseKind: "single" | "range" | "batch" | "collection";
+        /**
          * RematchIn
          * @description 哪一個檔案、改成什麼。`ledger_id`（已入庫）與 `job_file_id`（對不到的）**恰好帶一個**。
          *
@@ -3883,7 +3961,7 @@ export interface components {
          *     下一輪輪詢再送（`.scratch/m3/rss-shape.md` §3）。
          * @enum {string}
          */
-        RssRefusal: "feed_missing" | "feed_unsupported" | "feed_duplicate" | "series_missing" | "series_bound" | "media_missing" | "route_missing" | "route_disabled" | "route_kind_mismatch" | "rule_invalid" | "feed_primed" | "feed_unreachable" | "feed_unread";
+        RssRefusal: "feed_missing" | "feed_unsupported" | "feed_duplicate" | "series_missing" | "series_bound" | "media_missing" | "route_missing" | "route_disabled" | "route_kind_mismatch" | "rule_invalid" | "feed_primed" | "feed_unreachable" | "feed_unread" | "feed_not_rss";
         /**
          * RssRefusalOut
          * @description 與其他群組的拒絕同形：`reason` 挑句子，`detail` 是原文或那一個 id。
@@ -6638,6 +6716,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RouteRefusalOut"];
+                };
+            };
+        };
+    };
+    post_oneshot_api_rss_oneshot_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OneshotIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OneshotOut"];
+                };
+            };
+            /** @description `feed_unsupported` · `media_missing` · `route_missing` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RssRefusalOut"];
+                };
+            };
+            /** @description `feed_unreachable` · `feed_not_rss` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RssRefusalOut"];
                 };
             };
         };

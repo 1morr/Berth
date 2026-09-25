@@ -332,6 +332,10 @@ _Avoid_: dry-run, backfill（backfill 是 Mikan 的補舊集）
 Mikan 的 RSS Series 綁定時讀它的**單一 feed**（番組 × 字幕組的 `/RSS/Bangumi?bangumiId=&subgroupid=`，整季都在），聚合 feed 沒帶到的舊集寫成 Feed Item 一起送，預設勾選；之後每天再讀一次，叫**每日補漏**，接住停機期間被聚合 feed 捲掉的集數。補下來的與一般 Feed Item 走同一條路（排除條件、去重、`trigger = rss`）。取消勾選記在 RSS Series 上（`passed_before`）。
 _Avoid_: catch-up, sync（sync 是 qBittorrent 的 `sync/maindata`）
 
+**一次性 RSS 連結**（one-shot link）:
+貼一條 RSS 網址讀一次、勾幾筆送出去：送的是手動的 Job（`trigger = manual`），不建 Feed、不長 RSS Series、不寫 Feed Item，之後的集數不追。排除條件不擋它。
+_Avoid_: import feed, quick feed（它不是 Feed）
+
 **排除條件**（exclusion rule）:
 Feed Item 不自動下載的條件：一條關鍵字或正則（Sonarr 的格式），比對整個標題。分全域、Feed、RSS Series 三層，三層取聯集；全域另有「不自動下載合集」的開關，預設開。Berth 全部接受、只排除（brief §15），沒有白名單。
 _Avoid_: filter（「篩選」是清單上的顯示操作）, blacklist

@@ -67,6 +67,14 @@ const FLOWS = [
     scenario: 'rss-split-cour-airing',
     port: 8510,
   },
+  { name: 'rss-oneshot', spec: 'rss-oneshot', scenario: 'rss', port: 8512 },
+  {
+    name: 'rss-oneshot-390',
+    spec: 'rss-oneshot',
+    scenario: 'rss',
+    port: 8513,
+    viewport: NARROW,
+  },
   {
     name: 'series-offset-held-390',
     spec: 'series-offset-held',

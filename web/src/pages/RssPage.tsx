@@ -24,6 +24,7 @@ import { JobLink } from '../jobs/JobLink'
 import { ExclusionsSection } from '../rss/ExclusionsSection'
 import { FeedSection } from '../rss/FeedSection'
 import { FirstRoundSection } from '../rss/FirstRoundSection'
+import { OneshotSection } from '../rss/OneshotSection'
 import { Grounds } from '../rss/GroundsList'
 import { RulesToggle } from '../rss/RulesEditor'
 import { SectionHeading } from '../rss/SectionHeading'
@@ -34,7 +35,7 @@ import { skipText } from '../rss/skip'
  * RSS `/rss`（`.scratch/m3/rss-shape.md`，M3 票 08）。只有 admin。
  *
  * 單頁堆疊，由上而下：**等你決定**（新搜尋 feed 的第一輪，票 11）與**待綁定**（有才出現，需要你的事
- * 浮到最上面）→ Feed → 全域的排除條件
+ * 浮到最上面）→ Feed → 一次性 RSS 連結（票 18，不建 Feed，所以沒有 Feed 時也在）→ 全域的排除條件
  * （票 10）→ 綁好的 RSS Series → 最近的 Feed Item。平常它在背景輪詢，人只在有新的 RSS Series 等綁定時回來——所以第一個
  * viewport 回答的是「有沒有要我綁的」。
  */
@@ -75,6 +76,7 @@ export function RssPage() {
           {undecided.length > 0 && <FirstRoundSection feeds={undecided} onDone={setSaid} />}
           {pending.length > 0 && <Pending rows={pending} onDone={setSaid} />}
           <FeedSection feeds={feeds.data ?? []} />
+          <OneshotSection />
           {exclusions.data && <ExclusionsSection exclusions={exclusions.data} />}
           {bound.length > 0 && <Bound rows={bound} onDone={setSaid} />}
           {/* 沒有 Feed 時整頁只有 Feed 段（shape §5）：還不會有任何 Item。 */}

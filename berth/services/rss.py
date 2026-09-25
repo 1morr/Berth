@@ -490,7 +490,7 @@ async def poll_feed(
     bound = submitted = 0
     try:
         try:
-            found = _parse(feed.kind, await fetcher.fetch(feed.url))
+            found = parse_items(feed.kind, await fetcher.fetch(feed.url))
         except ServiceError as exc:
             feed.last_polled_at = moment
             feed.last_error = message(exc)
@@ -516,8 +516,8 @@ async def poll_feed(
     return PollOutcome(items=items, series=len(grown), bound=bound, submitted=submitted)
 
 
-def _parse(kind: FeedKind, content: bytes) -> tuple[FeedItem, ...]:
-    """種類 → 那一站的 mapper。"""
+def parse_items(kind: FeedKind, content: bytes) -> tuple[FeedItem, ...]:
+    """種類 → 那一站的 mapper。認不出 feed 格式丟 `ProtocolMismatchError`（`rss/feed.py`）。"""
     match kind:
         case FeedKind.MIKAN:
             return mikan.parse_feed(content)
@@ -893,7 +893,30 @@ async def _held_back(
 
 
 async def _in_library(session: AsyncSession, item: RssItem, series: RssSeries) -> str | None:
+    """帳本已有這一筆的同一個版本：回它在媒體庫裡的檔名，沒有是 `None`（`library_copy`）。"""
+    media = await session.get(Media, series.media_id) if series.media_id is not None else None
+    route = await session.get(Route, series.route_id) if series.route_id is not None else None
+    if media is None or route is None:
+        return None
+    return await library_copy(
+        session, item.title, item.published_at, media=media, route=route, series=series
+    )
+
+
+@command(Effect.READ)
+async def library_copy(
+    session: AsyncSession,
+    title: str,
+    published: datetime | None,
+    *,
+    media: Media,
+    route: Route,
+    series: RssSeries | None,
+) -> str | None:
     """帳本已有同 Media / 季 / 集 / Tags 的那一份：回它在媒體庫裡的檔名，沒有是 `None`。
+
+    RSS 送單前（`_in_library`）與一次性 RSS 連結（`services/oneshot`，M3 票 18）共用；後者沒有
+    RSS Series——它送的是手動的 Job，規劃時也不讀季號與 offset。
 
     季集照規劃時的算法猜（同一份 `parse_context`、同一支 `plan`，發佈名當 torrent 名、配一個中性的
     檔名）；猜不到、或信心不夠自動入庫的不擋——規劃時那一層（`services/plan._against_ledger`）照樣
@@ -904,22 +927,20 @@ async def _in_library(session: AsyncSession, item: RssItem, series: RssSeries) -
     重新上傳就認不出來。所以也拿那一列的 Job 的發佈名算一次 Tags——標題對標題。**讀不出字幕組的
     標題不比這一半**：兩邊的 Tags 都可能是空的，空對空不是同一個版本。
     """
-    media = await session.get(Media, series.media_id) if series.media_id is not None else None
-    route = await session.get(Route, series.route_id) if series.route_id is not None else None
-    snapshot = media.stored_snapshot() if media is not None else None
-    if media is None or route is None or snapshot is None:
+    snapshot = media.stored_snapshot()
+    if snapshot is None:
         return None
     (guess,) = decide(
-        item.title,
+        title,
         [FileEntry(rel_path="episode.mkv", size=_EPISODE_SIZE)],
-        parse_context(route, snapshot, series, published=item.published_at),
+        parse_context(route, snapshot, series, published=published),
     )
     span = episode_span(guess)
     if span is None or not guess.target_path:
         return None
     season, start, end = span
     folder = str((PurePosixPath(route.target_path) / guess.target_path).parent)
-    by_title = tags_of(parse_release(item.title))
+    by_title = tags_of(parse_release(title))
     rows = await session.execute(
         select(LedgerEntry, Job.name)
         .outerjoin(Job, Job.hash == LedgerEntry.job_hash)

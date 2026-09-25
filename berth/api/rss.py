@@ -18,15 +18,19 @@ from pydantic import BaseModel, ConfigDict, Field
 from berth.api.deps import ClientFactoryDep, SessionDep
 from berth.api.errors import refusal_responses
 from berth.api.gate import current_user
+from berth.api.search import TagsOut
 from berth.domain import (
     BindReasonCode,
     FeedItemStatus,
     FeedKind,
+    MappingStrategy,
     MediaKind,
     PrimeMode,
+    ReleaseKind,
     RssRefusal,
     SkipCode,
 )
+from berth.services.oneshot import read_oneshot
 from berth.services.rss import (
     RssRejectedError,
     add_feed,
@@ -68,6 +72,8 @@ _STATUS: dict[RssRefusal, int] = {
     RssRefusal.FEED_UNREACHABLE: status.HTTP_502_BAD_GATEWAY,
     #: 先輪詢一次（背景半分鐘內，或「立即輪詢」）再選。
     RssRefusal.FEED_UNREAD: status.HTTP_409_CONFLICT,
+    #: 上游回了東西，但不是 RSS：與 `feed_unreachable` 同樣是上游那一頭的事。
+    RssRefusal.FEED_NOT_RSS: status.HTTP_502_BAD_GATEWAY,
 }
 
 
@@ -260,6 +266,76 @@ class ItemOut(BaseModel):
     skip: SkipReasonOut | None
     #: 近似的位元組數，只供顯示（三站都不準）；來源不報時 `null`。
     size: int | None
+
+
+class OneshotIn(BaseModel):
+    """一次性 RSS 連結（票 18）。網址放在 body：Mikan 聚合 feed 的網址帶 token，不進 query。"""
+
+    url: str = Field(min_length=1)
+    #: 選了作品之後才給：季集照它的 TMDB 快照換算。作品要先打過 `GET /media/{id}`。
+    media: str | None = None
+    #: 與 `media` 一起給時比帳本（同一個資料夾裡有沒有同一個版本）。
+    route: int | None = None
+
+
+class OneshotItemOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    guid: str
+    title: str
+    link: str
+    #: 送單時放進 `POST /jobs` 的 `source.url`：`.torrent` 網址，或站只給的 magnet。
+    url: str
+    info_hash: str
+    size: int | None
+    published_at: datetime | None
+    #: 合集、區間也照樣勾得了：排除條件只作用在自動下載（brief §15）。
+    release_kind: ReleaseKind
+    tags: TagsOut
+    #: 選了作品時是照它換算的預估（搜尋結果表同一個算法），沒選時是發佈名寫的。
+    season: int | None
+    episode_start: int | None
+    episode_end: int | None
+    whole_season: bool
+    strategy: MappingStrategy | None
+    #: 同一個 info hash 的 Job 已經在了；沒有是空字串。
+    job_hash: str
+    #: 帳本已有同一個版本：媒體庫裡的檔名。沒給作品與 Route 時是 `null`。
+    known: str | None
+
+
+class OneshotOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    kind: FeedKind
+    #: 照 feed 的順序（新的在前）。
+    items: list[OneshotItemOut]
+
+
+@router.post(
+    "/oneshot",
+    responses=_responses(
+        RssRefusal.FEED_UNSUPPORTED,
+        RssRefusal.FEED_UNREACHABLE,
+        RssRefusal.FEED_NOT_RSS,
+        RssRefusal.MEDIA_MISSING,
+        RssRefusal.ROUTE_MISSING,
+    ),
+)
+async def post_oneshot(
+    session: SessionDep, factory: ClientFactoryDep, body: OneshotIn
+) -> OneshotOut:
+    """讀一條 RSS 網址的每一筆。**只讀**：不建 Feed、不長 RSS Series，勾好的那幾筆走 `POST /jobs`。
+
+    `POST` 是因為網址放在 body，不是因為它改了什麼。
+    """
+    try:
+        view = await read_oneshot(
+            session, factory, body.url, media_id=body.media, route_id=body.route
+        )
+    except RssRejectedError as refusal:
+        raise rss_refusal(refusal) from refusal
+    return OneshotOut.model_validate(view)
 
 
 @router.get("/feeds")

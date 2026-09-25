@@ -40,6 +40,12 @@ export type PrimeMode = Schemas['PrimeMode']
 /** 選完第一輪的結果。 */
 export type PrimeOutcome = Schemas['PrimeOut']
 
+/** 一次性 RSS 連結讀到的那一份（票 18）。 */
+export type Oneshot = Schemas['OneshotOut']
+
+/** 一次性 RSS 連結的一筆：送單要的那幾格，加上解析結果與「已經有了」。 */
+export type OneshotItem = Schemas['OneshotItemOut']
+
 /** `berth/domain/enums.py` 的 `RssRefusal`。 */
 export type RssRefusal = Schemas['RssRefusal']
 
@@ -58,6 +64,7 @@ const REASONS: ReasonSet<RssRefusal> = {
   feed_primed: true,
   feed_unreachable: true,
   feed_unread: true,
+  feed_not_rss: true,
 }
 
 export function parseRssRefusal(error: unknown) {
@@ -66,6 +73,9 @@ export function parseRssRefusal(error: unknown) {
 
 /** `/rss` 上三份清單共用的前綴：一個動作之後三份一起重問（綁定會改 Series 也會改 Item）。 */
 export const RSS_KEY = ['rss'] as const
+
+/** 一次性 RSS 連結（`oneshotQueryOptions`）。`queryKey[1]` 是網址。 */
+export const ONESHOT_KEY = ['rss-oneshot'] as const
 
 export function exclusionsQueryOptions() {
   return queryOptions({
@@ -100,6 +110,26 @@ export function previewQueryOptions(id: number) {
   return queryOptions({
     queryKey: [...RSS_KEY, 'preview', id],
     queryFn: () => apiGet<FeedItem[]>(`/rss/feeds/${id}/preview`),
+  })
+}
+
+/**
+ * 讀一次那一條網址（票 18）。**只讀**：不建 Feed；勾好的那幾筆走一般的 `POST /jobs`。
+ *
+ * 是查詢不是 mutation：選了作品與 Route 之後換成照它們算的季集與「帳本已有」，送單之後 `ONESHOT_KEY`
+ * 失效時重讀一次、說出哪幾筆已經有下載了。**不重試、不自己重抓**：讀不到是上游的答案（502 帶原文），
+ * 換頁回來就再打一次 Mikan 也沒有意義。網址放在 body（聚合 feed 的網址帶 token）。
+ *
+ * **不在 `RSS_KEY` 底下**：頁上其他區塊的動作（輪詢、存排除條件、綁定）都讓 `RSS_KEY` 整個失效，掛在
+ * 底下的話每按一次就重打一次上游。
+ */
+export function oneshotQueryOptions(url: string, media: string | null, route: number | null) {
+  return queryOptions({
+    queryKey: [...ONESHOT_KEY, url, media, route],
+    queryFn: () => apiPost<Oneshot>('/rss/oneshot', { url, media, route }),
+    retry: false,
+    staleTime: Infinity,
+    refetchOnWindowFocus: false,
   })
 }
 

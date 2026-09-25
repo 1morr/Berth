@@ -2230,7 +2230,7 @@ const zhHant = {
     },
     failed: '沒有做成。重新整理這一頁再試一次；還是不行的話看健康頁。',
     kind: { mikan: 'MIKAN', nyaa: 'NYAA', acgrip: 'ACG.RIP' },
-    // `RssRefusal` 十種，各一句。原文另外印在下面（`detail`）。
+    // `RssRefusal` 每一種各一句。原文另外印在下面（`detail`）。
     refusal: {
       feed_missing: '這個 Feed 已經不在了，多半是另一個分頁剛刪掉它。',
       feed_unsupported:
@@ -2247,6 +2247,8 @@ const zhHant = {
       feed_unreachable:
         '現在讀不到這個 feed，所以不知道「之前」是哪幾筆，什麼都沒改。等一下再選一次。原文：',
       feed_unread: '這個 Feed 還沒讀過。先按「立即輪詢」看過第一輪再選。',
+      feed_not_rss:
+        '讀到了，但那不是 RSS。多半是貼了網頁的網址：到站上找它的 RSS 連結（Mikan 番組頁字幕組旁的 RSS 圖示、Nyaa 搜尋結果頁的 RSS 鍵）。',
     },
     feeds: {
       title: 'Feed',
@@ -2362,7 +2364,7 @@ const zhHant = {
       title: '排除條件',
       lede: 'Feed 裡的項目預設全部下載，只擋這裡寫的。全域、Feed、RSS Series 三層取聯集，放在哪一層都擋。改了之後只影響還沒送出去的；拿掉一條不會把之前被它擋下的放回來。',
       notSingle: '不自動下載合集（不是單集的：合集、區間、季包）',
-      notSingleHint: '合集照樣可以從搜尋手動送單。',
+      notSingleHint: '合集照樣可以從搜尋或一次性 RSS 連結手動送單。',
       none: '沒有排除條件。',
       list: '排除條件',
       add: '加一條排除條件',
@@ -2430,6 +2432,38 @@ const zhHant = {
       donePassed_other: '《{{name}}》：只追之後的，略過 {{count}} 筆。',
       doneSent_one: '《{{name}}》：全部下載，送出 {{count}} 筆。',
       doneSent_other: '《{{name}}》：全部下載，送出 {{count}} 筆。',
+    },
+    // 一次性 RSS 連結（票 18）：讀一次、勾幾筆走一般的送單，不建 Feed。
+    oneshot: {
+      title: '一次性 RSS 連結',
+      lede: '貼一條 RSS 網址，讀一次、勾幾筆送出去。不會建立 Feed，之後出的集數不會自動下載。排除條件只管自動下載，這裡不擋：合集照樣勾得了。',
+      url: '要讀的網址',
+      urlHint: 'Mikan 單一番組的 RSS（/RSS/Bangumi?bangumiId=…），或 Nyaa、acg.rip 的搜尋 RSS。',
+      read: '讀取',
+      reading: '讀取中…',
+      unreachable: '現在讀不到這個網址，等一下再按一次「讀取」。原文在下面。',
+      empty: '這個 feed 裡一筆都沒有。',
+      count_one: '讀到 {{count}} 筆',
+      count_other: '讀到 {{count}} 筆',
+      work: '送到哪一部作品',
+      list: '勾選要送出的',
+      pickAll_one: '勾選全部單集（{{count}} 筆）',
+      pickAll_other: '勾選全部單集（{{count}} 筆）',
+      pickNone: '全部取消',
+      kind: { range: '區間', batch: '季包', collection: '合集' },
+      hasJob: '這一筆已經有下載了。',
+      known: '媒體庫裡已經有同一個版本：{{known}}',
+      needWork:
+        '選好作品與 Route 才送得出去；選了之後清單會照那部作品換算季集，並標出媒體庫已經有的。',
+      willFreeze: '第一次送出時資料夾名就定下來，之後 TMDB 改標題也不會動它：',
+      pickFirst: '勾幾筆再送出',
+      send_one: '送出 {{count}} 筆',
+      send_other: '送出 {{count}} 筆',
+      sending: '送出中… {{done}}/{{total}}',
+      stopped:
+        '送到一半停下來了（已處理 {{done}} 筆）：Berth 沒有回應。沒送出的那幾筆還勾著，等一下再按一次。',
+      done: '送出 {{sent}} 筆；{{already}} 筆本來就在了；{{refused}} 筆沒有送出。',
+      outcome: { sent: '已送出', already: '本來就在了' },
     },
     series: {
       key: '鍵',
@@ -4676,6 +4710,8 @@ const en: Translations<typeof zhHant> = {
         "Can't read this feed right now, so there's no telling which items came before; nothing was changed. Try again in a moment. Original error:",
       feed_unread:
         "This feed hasn't been read yet. Press Poll now to see its first round before choosing.",
+      feed_not_rss:
+        "Got an answer, but it isn't RSS. This is usually a web page address: find the site's RSS link instead (the RSS icon next to a fansub on a Mikan show page, the RSS button on a Nyaa search).",
     },
     feeds: {
       title: 'Feeds',
@@ -4826,6 +4862,40 @@ const en: Translations<typeof zhHant> = {
       doneSent_one: '{{name}}: download everything, {{count}} item sent.',
       doneSent_other: '{{name}}: download everything, {{count}} items sent.',
     },
+    oneshot: {
+      title: 'One-off RSS link',
+      lede: "Paste an RSS address, read it once and send the items you tick. No feed is created, so later episodes won't download on their own. Exclusions only apply to automatic downloads, so they don't block anything here: batches can be ticked too.",
+      url: 'Address to read',
+      urlHint:
+        'A Mikan single-show RSS (/RSS/Bangumi?bangumiId=…), or a Nyaa or acg.rip search RSS.',
+      read: 'Read',
+      reading: 'Reading…',
+      unreachable:
+        "Can't read this address right now. Press Read again in a moment. The original error is below.",
+      empty: 'This feed has no items.',
+      count_one: '{{count}} item read',
+      count_other: '{{count}} items read',
+      work: 'Send to which title',
+      list: 'Tick what to send',
+      pickAll_one: 'Tick every single episode ({{count}})',
+      pickAll_other: 'Tick every single episode ({{count}})',
+      pickNone: 'Untick all',
+      kind: { range: 'Range', batch: 'Season pack', collection: 'Batch' },
+      hasJob: 'This one is already downloading or downloaded.',
+      known: 'The library already has this version: {{known}}',
+      needWork:
+        'Pick a title and a route to send. Once picked, the list maps episodes against that title and marks what the library already has.',
+      willFreeze:
+        "The folder name is fixed the first time something is sent, and later TMDB title changes won't touch it:",
+      pickFirst: 'Tick something to send',
+      send_one: 'Send {{count}} item',
+      send_other: 'Send {{count}} items',
+      sending: 'Sending… {{done}}/{{total}}',
+      stopped:
+        "Stopped part way ({{done}} handled): Berth didn't answer. The ones not sent are still ticked; try again in a moment.",
+      done: '{{sent}} sent; {{already}} already there; {{refused}} not sent.',
+      outcome: { sent: 'Sent', already: 'Already there' },
+    },
     series: {
       key: 'Key',
       page: 'Mikan show page',
@@ -4835,7 +4905,7 @@ const en: Translations<typeof zhHant> = {
       lede: 'Everything in a feed is downloaded unless a rule here blocks it. Global, feed and RSS Series rules add up: a rule blocks on whichever level it sits. Changes only reach items not sent yet; removing a rule does not bring back what it already blocked.',
       notSingle:
         "Don't download batches automatically (anything but a single episode: batches, ranges, season packs)",
-      notSingleHint: 'Batches can still be sent by hand from search.',
+      notSingleHint: 'Batches can still be sent by hand from search or a one-off RSS link.',
       none: 'No exclusions.',
       list: 'Exclusions',
       add: 'Add an exclusion',

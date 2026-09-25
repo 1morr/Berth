@@ -446,32 +446,48 @@ def _dedupe(results: Iterable[IndexerResult]) -> list[IndexerResult]:
     )
 
 
-def _context(snapshot: MediaSnapshot | None, result: IndexerResult) -> ParseContext:
-    """發佈時間跟著每一列走：送單之後規劃也拿同一個時間推測虛擬季（M3 票 16）。"""
-    return ParseContext(
-        media=snapshot,
-        route_collection_type=collection_type_for(snapshot.kind) if snapshot is not None else None,
-        published_at=result.published_at,
-    )
+@dataclass(frozen=True, slots=True)
+class Estimate:
+    """只看發佈名估的季集（`SearchResult` 那幾格的意思）。三者皆 `None` = 判斷不出來。"""
+
+    season: int | None
+    episode_start: int | None
+    episode_end: int | None
+    whole_season: bool
+    strategy: MappingStrategy | None
 
 
-def _row(result: IndexerResult, snapshot: MediaSnapshot | None) -> SearchResult:
-    """索引站回的一列 → 結果表的一列。
+def estimate(title: str, published_at: datetime | None, snapshot: MediaSnapshot | None) -> Estimate:
+    """一個發佈名 → 預估季集。結果表與一次性 RSS 連結（M3 票 18）共用。
 
     解析只看發佈名：這時候還沒有 torrent 的檔案清單（那要等送單之後 qBittorrent 才報得出
     內容），所以 `StructureHints` 是空的——路徑上一句話都還沒說。預估因此比入庫時的判斷粗，
-    而那正是它叫「預估」的理由。
+    而那正是它叫「預估」的理由。發佈時間跟著走：送單之後規劃也拿同一個時間推測虛擬季（M3 票 16）。
     """
-    info = parse_release(result.title)
-    candidates = map_episode(
-        info, StructureHints(), _context(snapshot, result), release_name=result.title
+    context = ParseContext(
+        media=snapshot,
+        route_collection_type=collection_type_for(snapshot.kind) if snapshot is not None else None,
+        published_at=published_at,
     )
+    candidates = map_episode(parse_release(title), StructureHints(), context, release_name=title)
     best = candidates[0] if candidates else None
     season = best.season if best is not None else None
     start = best.episode_start if best is not None else None
     # `map_episode` 的 `episode_end` 只在區間時有值，單集是 `None`。這裡補成與 `start` 相同：
     # 畫面要分的是「單集 / 區間 / 判斷不出來」，而 `None` 在這裡同時代表後兩者。
     end = (best.episode_end or start) if best is not None else None
+    return Estimate(
+        season=season,
+        episode_start=start,
+        episode_end=end,
+        whole_season=_whole_season(snapshot, season, start, end),
+        strategy=best.strategy if best is not None else None,
+    )
+
+
+def _row(result: IndexerResult, snapshot: MediaSnapshot | None) -> SearchResult:
+    """索引站回的一列 → 結果表的一列。"""
+    guess = estimate(result.title, result.published_at, snapshot)
     return SearchResult(
         title=result.title,
         indexer=result.indexer,
@@ -481,12 +497,12 @@ def _row(result: IndexerResult, snapshot: MediaSnapshot | None) -> SearchResult:
         download_url=result.download_url,
         key=result.key,
         info_hash=result.info_hash,
-        tags=tags_of(info),
-        season=season,
-        episode_start=start,
-        episode_end=end,
-        whole_season=_whole_season(snapshot, season, start, end),
-        strategy=best.strategy if best is not None else None,
+        tags=tags_of(parse_release(result.title)),
+        season=guess.season,
+        episode_start=guess.episode_start,
+        episode_end=guess.episode_end,
+        whole_season=guess.whole_season,
+        strategy=guess.strategy,
         published_at=result.published_at,
     )
 

@@ -10,15 +10,18 @@ import asyncio
 from collections.abc import Iterator
 from dataclasses import replace
 from pathlib import Path
+from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
 
+from berth.adapters.rss.mikan import parse_feed
 from berth.api.deps import get_client_factory
 from berth.api.gate import CSRF_HEADER
 from berth.config import Config
+from berth.domain import JobState, JobTrigger, PlanAction, Tags
 from berth.main import create_app
-from berth.models import Route
+from berth.models import Job, LedgerEntry, Media, Route
 from tests.integration.arrange import arrange, bundled_libraries, factory_for, fake_jellyfin
 from tests.integration.factories import FakeClientFactory
 from tests.integration.test_rss import (
@@ -33,6 +36,14 @@ from tests.integration.test_rss import (
     torrents,
 )
 from tests.integration.test_rss_preview import ACGRIP, ACGRIP_URL
+from tests.integration.test_rss_screen import (
+    KIMI_NAME,
+    SINGLE,
+    SINGLE_URL,
+    Release,
+    serve,
+    serve_single,
+)
 
 BROWSER = {CSRF_HEADER: "XMLHttpRequest"}
 ADMIN = {"username": "skipper", "password": "harbour"}
@@ -280,3 +291,173 @@ class TestExclusions:
         assert body["reason"] == "rule_invalid"
         assert body["detail"].startswith("/[简繁/: unterminated character set")
         assert client.get("/api/rss/exclusions").json()["rules"] == []
+
+
+def picked_job(row: dict[str, Any], route_id: int) -> dict[str, Any]:
+    """一次性清單的一列 → 一般送單的 body（畫面送的就是這一份）。"""
+    return {
+        "source": {
+            "url": row["url"],
+            "title": row["title"],
+            "info_hash": row["info_hash"],
+            "published_at": row["published_at"],
+        },
+        "media": KIMI_ID,
+        "route": route_id,
+    }
+
+
+class TestOneshot:
+    """一次性 RSS 連結（票 18、brief §15）：讀一條網址、挑幾筆走一般的送單，不建 Feed。"""
+
+    def test_a_single_feed_lists_the_season_and_three_picks_are_three_jobs(
+        self, client: TestClient, roots: dict[str, Path], factory: FakeClientFactory
+    ) -> None:
+        route_id = seed(client, roots)
+        sign_in(client)
+        serve_single(factory)
+
+        read = client.post("/api/rss/oneshot", json={"url": SINGLE_URL}, headers=BROWSER)
+
+        assert read.status_code == 200, read.text
+        body = read.json()
+        assert body["kind"] == "mikan"
+        rows = body["items"]
+        # 沒選作品時季集是發佈名寫的那一個；新的在前，照 feed 的順序。
+        assert [row["episode_start"] for row in rows] == list(range(12, 0, -1))
+        assert {row["release_kind"] for row in rows} == {"single"}
+        assert {row["tags"]["group"] for row in rows} == {"喵萌奶茶屋&LoliHouse"}
+        assert all(row["known"] is None and row["job_hash"] == "" for row in rows)
+
+        picked = [row for row in rows if row["episode_start"] in (1, 2, 3)]
+        for row in picked:
+            sent = client.post("/api/jobs", json=picked_job(row, route_id), headers=BROWSER)
+            assert sent.status_code == 200, sent.text
+            assert sent.json()["created"] is True
+
+        jobs = client.get("/api/jobs").json()
+        assert {row["hash"] for row in jobs} == {row["info_hash"] for row in picked}
+        assert {(row["trigger"], row["media_id"]) for row in jobs} == {("manual", KIMI_ID)}
+        # 不建 Feed、不長 RSS Series、不寫 Feed Item。
+        assert client.get("/api/rss/feeds").json() == []
+        assert client.get("/api/rss/series").json() == []
+        assert client.get("/api/rss/items").json() == []
+
+    def test_a_collection_is_marked_and_can_be_sent(
+        self, client: TestClient, roots: dict[str, Path], factory: FakeClientFactory
+    ) -> None:
+        """排除條件的合集預設只管自動下載：這裡標出來，照樣送得出去。"""
+        route_id = seed(client, roots)
+        sign_in(client)
+        batch = Release(370, f"[LoliHouse] {KIMI_NAME} [01-12 合集][WebRip 1080p HEVC-10bit AAC]")
+        url = "https://mikanani.me/RSS/Bangumi?bangumiId=4009&subgroupid=1"
+        serve(factory, url, [batch])
+
+        read = client.post(
+            "/api/rss/oneshot",
+            json={"url": url, "media": KIMI_ID, "route": route_id},
+            headers=BROWSER,
+        )
+
+        (row,) = read.json()["items"]
+        assert row["release_kind"] == "collection"
+        assert (row["season"], row["episode_start"], row["episode_end"]) == (1, 1, 12)
+        assert row["whole_season"] is True
+        sent = client.post("/api/jobs", json=picked_job(row, route_id), headers=BROWSER)
+        assert sent.status_code == 200, sent.text
+        assert sent.json()["job"]["hash"] == batch.hash
+
+    def test_with_a_work_it_says_what_the_ledger_and_the_jobs_already_have(
+        self, client: TestClient, roots: dict[str, Path], factory: FakeClientFactory
+    ) -> None:
+        """選了作品與 Route：第 3 集已經有 Job、第 5 集帳本已有同一個版本（另一個 hash）。"""
+        route_id = seed(client, roots)
+        sign_in(client)
+        serve_single(factory)
+        season = tuple(reversed(parse_feed(SINGLE)))
+        rows = client.post("/api/rss/oneshot", json={"url": SINGLE_URL}, headers=BROWSER).json()
+        third = next(one for one in rows["items"] if one["episode_start"] == 3)
+        sent = client.post("/api/jobs", json=picked_job(third, route_id), headers=BROWSER)
+        assert sent.is_success
+        name = "Kimishinu - S01E05 [LoliHouse][1080p].mkv"
+        library(client, route_id, season[4].title, name)
+
+        read = client.post(
+            "/api/rss/oneshot",
+            json={"url": SINGLE_URL, "media": KIMI_ID, "route": route_id},
+            headers=BROWSER,
+        )
+
+        assert read.status_code == 200, read.text
+        by_episode = {row["episode_start"]: row for row in read.json()["items"]}
+        assert by_episode[3]["job_hash"] == season[2].info_hash
+        assert by_episode[5]["known"] == name
+        assert [number for number, row in by_episode.items() if row["known"]] == [5]
+        assert {row["season"] for row in by_episode.values()} == {1}
+
+    def test_each_failure_says_which_kind_it_is(
+        self, client: TestClient, roots: dict[str, Path], factory: FakeClientFactory
+    ) -> None:
+        route_id = seed(client, roots)
+        sign_in(client)
+        page = "https://nyaa.si/?q=Kamiina+Botan"
+        factory.rss_.pages[page] = b"<!DOCTYPE html><html><body>Nyaa</body></html>"
+        serve_single(factory)
+
+        def refused(body: dict[str, Any]) -> tuple[int, str]:
+            answer = client.post("/api/rss/oneshot", json=body, headers=BROWSER)
+            return answer.status_code, answer.json()["detail"]["reason"]
+
+        assert refused({"url": "https://example.com/feed"}) == (422, "feed_unsupported")
+        assert refused({"url": "https://acg.rip/.xml?term=nothing"}) == (502, "feed_unreachable")
+        assert refused({"url": page}) == (502, "feed_not_rss")
+        assert refused({"url": SINGLE_URL, "media": "tv:1", "route": route_id}) == (
+            422,
+            "media_missing",
+        )
+        assert refused({"url": SINGLE_URL, "media": KIMI_ID, "route": 999}) == (
+            422,
+            "route_missing",
+        )
+
+
+def library(client: TestClient, route_id: int, title: str, name: str) -> None:
+    """帳本有 `title` 那一集：已入庫的一筆 Job，hash 與 feed 上的不同（同一個版本換 hash 重傳）。"""
+
+    async def run() -> None:
+        sessions = client.app.state.session_factory  # type: ignore[attr-defined]
+        async with sessions() as session:
+            route = await session.get(Route, route_id)
+            media = await session.get(Media, KIMI_ID)
+            assert route is not None and media is not None
+            reupload = "e" * 40
+            session.add(
+                Job(
+                    hash=reupload,
+                    name=title,
+                    source_url="",
+                    media_id=media.id,
+                    route_id=route.id,
+                    state=JobState.IMPORTED,
+                    trigger=JobTrigger.MANUAL,
+                )
+            )
+            session.add(
+                LedgerEntry(
+                    job_hash=reupload,
+                    source_rel_path=name,
+                    source_abs_path=f"/data/torrent/complete/anime/{name}",
+                    source_inode="1",
+                    source_dev="1",
+                    target_path=f"{route.target_path}/{media.folder_name}/Season 01/{name}",
+                    target_inode="1",
+                    media_id=media.id,
+                    season=1,
+                    episode_start=5,
+                    tags_json=Tags(resolution="1080p", group="LoliHouse").model_dump(mode="json"),
+                    action=PlanAction.IMPORT,
+                )
+            )
+            await session.commit()
+
+    asyncio.run(run())

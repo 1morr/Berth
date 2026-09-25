@@ -44,13 +44,16 @@ export function formatCount(count: number | null, locale: string): string {
 }
 
 /**
- * 預估季集的三種說法（票 08）：`S03 全季` / `S03E13` / 判斷不出來。
+ * 預估季集的三種說法（票 08）：`S03 全季` / `S03E13` / 判斷不出來。一次性 RSS 連結的清單也用它
+ * （M3 票 18，同一組欄位）。
  *
  * `code` 是機器字串（`S03E13`，與季集清單同一個語域，不走 i18n、不走 `.label`）；
  * `noteKey` 是要翻譯的那一個詞。兩者都可能是空的——只有 `code` 是單集或區間，
  * 只有 `noteKey` 是電影或判斷不出來。
  */
-export function estimate(row: SearchResult): { code: string; noteKey: EstimateNote } {
+export function estimate(
+  row: Pick<SearchResult, 'strategy' | 'season' | 'episode_start' | 'episode_end' | 'whole_season'>,
+): { code: string; noteKey: EstimateNote } {
   if (row.strategy === 'movie') return { code: '', noteKey: 'search.estimate.movie' }
   if (row.season === null && row.episode_start === null) {
     return { code: '', noteKey: 'search.estimate.unknown' }

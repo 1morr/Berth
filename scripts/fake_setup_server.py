@@ -1112,6 +1112,8 @@ def rss_scenario(detail: TmdbDetail = KIMI_DETAIL, season: TmdbSeason = KIMI_SEA
 
     票 11 起多一份錄下來的 acg.rip 搜尋 feed（《上伊那牡丹》30 筆，夾著 8 筆合集）：第一輪預覽那一條
     流程加它，看得到合集被排除、選「只追之後的」之後整份歷史略過。
+
+    票 18 的一次性 RSS 連結讀同兩份（單一 feed 勾三集送單、acg.rip 那一份標出合集），不另加頁面。
     """
     scenario = _planning(healthy(), RSS_PACKS)
     scenario.indexer_results = ()
