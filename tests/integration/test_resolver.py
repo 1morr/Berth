@@ -76,6 +76,10 @@ async def scanned(session: AsyncSession, route: Route, factory: FakeClientFactor
                     ),
                 ),
                 series_id="series-1",
+                # Jellyfin 從檔名的 `SxxEyy` 讀出來的，與帳本一致（回驗不開 Issue，票 17）。
+                season=entry.season,
+                episode_start=entry.episode_start,
+                episode_end=entry.episode_end,
             )
             for entry in episodes
         ),

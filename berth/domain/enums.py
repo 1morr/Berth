@@ -182,11 +182,12 @@ class JellyfinRequest(StrEnum):
 class IssueType(StrEnum):
     """一件「要有人決定」的事是哪一種（brief §9.1、plan §2.4）。
 
-    **十三種的聯集，一個封閉集合**（2026-09-22 定，M2 票 05；票 09c 加上最後兩種）：前五種
-    是管線自己在路上發現的（M1 起寫 `issue_detected` 事件，M2 起同時寫一列 `issues`），中間
-    六種是對帳比完四方之後才知道的，最後兩種是 `health_checker` 每 5 分鐘量出來的。三邊共用
-    同一個集合，所以加一種型別而沒替它決定 `subject` 取哪一欄、或沒給它動作，紅的會是
-    `SUBJECT_OF` 與 `ISSUE_ACTIONS` 那兩條閘門。
+    **十四種的聯集，一個封閉集合**（2026-09-22 定，M2 票 05；票 09c 加兩種，M3 票 17 加一種）：
+    前五種是管線自己在路上發現的（M1 起寫 `issue_detected` 事件，M2 起同時寫一列 `issues`），
+    中間六種是對帳比完四方之後才知道的，再兩種是 `health_checker` 每 5 分鐘量出來的，最後一種
+    是 Jellyfin 回驗（反查與對帳的 Jellyfin 那一方共用一份比對，只寫 `issues`）。各邊共用同一個
+    集合，所以加一種型別而沒替它決定 `subject` 取哪一欄、或沒給它動作，紅的會是 `SUBJECT_OF`
+    與 `ISSUE_ACTIONS` 那兩條閘門。
 
     `unknown_torrent` 在 brief §9.1 的表上算對帳的七種，但**今天寫它的是 `qbit_poller`**
     （plan §3.2）——票 09 讓對帳也走到它之後，兩個生產者寫的是同一個 `(type, subject)`，
@@ -225,6 +226,11 @@ class IssueType(StrEnum):
     #: incomplete 或 complete 根目錄所在的檔案系統剩下的空間低於 `DiskSettings.min_free_gb`。
     #: 硬鏈接入庫不佔空間，會把磁碟吃滿的是下載。同上，空出來之後下一輪自己收掉。
     LOW_DISK_SPACE = "low_disk_space"
+    #: Jellyfin 回驗（plan §11.4 ③、M3 票 17）：反查到的 item，Jellyfin 認的季號、集號（多集檔是
+    #: 範圍）或所屬作品的 `ProviderIds.Tmdb` 與帳本不同。抓的是 **Jellyfin 那邊的意外**——兩份
+    #: 涵蓋範圍不同的正片被併成一集（brief §7.8、§20.9）、作品被認成別的；Berth 自己算錯的集數
+    #: 它抓不到（檔名就是 Berth 取的，brief §6.10）。下一次比到一致時系統收掉。
+    JELLYFIN_ITEM_MISMATCH = "jellyfin_item_mismatch"
 
 
 class IssueStatus(StrEnum):
@@ -277,6 +283,9 @@ SUBJECT_OF: dict[IssueType, IssueSubject] = {
     IssueType.MISSING_FILES: IssueSubject.JOB_HASH,
     # 反查用完是**那一列帳本**的事：同一筆 Job 的兩集各自反查，各自放棄。
     IssueType.JELLYFIN_ITEM_UNRESOLVED: IssueSubject.LEDGER_ID,
+    # 回驗也是**那一列帳本**的事：同一個 Series 被認成別的作品時，它底下每一集各一件——
+    # 使用者在 Jellyfin 修好一集、按那一集的「重新反查」，其餘各自等下一次比對。
+    IssueType.JELLYFIN_ITEM_MISMATCH: IssueSubject.LEDGER_ID,
     # **一條 Route 一件**（2026-09-23 使用者拍板）：用它的目標路徑。一個媒體庫掛兩條 Route 時
     # 會有兩件，但 Route 才是 Berth 管的東西，畫面也說得出是哪一條。
     IssueType.LIBRARY_USES_TVDB: IssueSubject.PATH,
@@ -366,6 +375,10 @@ ISSUE_ACTIONS: dict[IssueType, tuple[IssueAction, ...]] = {
     IssueType.CLIENT_ERROR: (IssueAction.RETRY,),
     IssueType.CLIENT_REMOVED: (IssueAction.RESUBMIT, IssueAction.ACCEPT_REMOVAL),
     IssueType.JELLYFIN_ITEM_UNRESOLVED: (IssueAction.RELOOK, IssueAction.RESCAN),
+    # 修法在 Jellyfin 裡（識別成對的作品、拆開被併的版本），Berth 這邊只有「修好了，再比一次」。
+    # 沒有「照帳本 rematch」：帳本是對的那一邊，rematch 改的是 Berth 的命名。也沒有「重新掃描」：
+    # 掃描找的是新檔案，不會重認已經認錯的那一個。
+    IssueType.JELLYFIN_ITEM_MISMATCH: (IssueAction.RELOOK,),
     IssueType.LIBRARY_USES_TVDB: (),
     IssueType.LOW_DISK_SPACE: (),
 }

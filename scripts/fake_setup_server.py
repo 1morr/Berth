@@ -871,6 +871,10 @@ VIDEO_SUFFIXES = frozenset({".mkv", ".mp4"})
 #: 作品資料夾名裡的 TMDB id（plan §5 的命名模板）。Jellyfin 靠它把 Series 認成那一部作品。
 TMDB_TAG = re.compile(r"\[tmdbid-(\d+)\]")
 
+#: 檔名裡的 `S01E03` / `S01E03-E04`：Jellyfin 從它讀季號與集號（brief §20.6 實測）。讀出來的與
+#: 帳本一致，回驗不開 Issue（票 17）。
+EPISODE_TAG = re.compile(r"S(\d+)E(\d+)(?:-E(\d+))?")
+
 
 class ScanningJellyfin(FakeJellyfinClient):
     """被通知過的路徑，下一次 `items()` 就「掃到了」（`inventory` 情境，票 13）。
@@ -914,6 +918,7 @@ class ScanningJellyfin(FakeJellyfinClient):
                 path=folder,
                 tmdb_id=tmdb_id,
             )
+            numbers = EPISODE_TAG.search(name)
             grown[path] = JellyfinItem(
                 id=_scanned_id(path),
                 type=ITEM_EPISODE,
@@ -923,6 +928,9 @@ class ScanningJellyfin(FakeJellyfinClient):
                 # 單一版本時 Jellyfin 的版本名就是整個檔名主幹（12.0.0 / 12.1.0 實測）。
                 sources=(JellyfinSource(path=path, name=name),),
                 series_id=_scanned_id(folder),
+                season=int(numbers.group(1)) if numbers else None,
+                episode_start=int(numbers.group(2)) if numbers else None,
+                episode_end=int(numbers.group(3)) if numbers and numbers.group(3) else None,
             )
         return list(grown.values())
 
@@ -1626,6 +1634,7 @@ async def _moor(
         await _seed_library(session, scenario, paths)
     if scenario.issues_demo:
         await _seed_issues(session, paths)
+        await _seed_jellyfin_mismatch(session, scenario)
         await _seed_pipeline_issues(session, scenario, factory)
         await _seed_claims(session, scenario, paths)
     if scenario.review_demo:
@@ -1721,6 +1730,47 @@ async def _seed_issues(session: AsyncSession, paths: PathSettings) -> None:
     stray = Path(f"{route.target_path}/Hand Placed (2020)/Hand Placed (2020).mkv")
     stray.parent.mkdir(parents=True, exist_ok=True)
     stray.write_bytes(b"put here by hand")
+
+
+async def _seed_jellyfin_mismatch(session: AsyncSession, scenario: Scenario) -> None:
+    """Jellyfin 回驗不符（M3 票 17）：第一集反查過了，Jellyfin 卻把它認成 `S01E01-E02`。
+
+    兩份涵蓋範圍不同的正片被併成一集就是這個樣子（brief §7.8、§20.9）。帳本那一列帶著 item id，
+    所以「立刻對帳」的 Jellyfin 那一方會比到它、開出一件 `jellyfin_item_mismatch`——比對與寫下
+    都是產品自己的，這裡只擺 Jellyfin「認成了什麼」。
+    """
+    first = await session.scalar(
+        select(LedgerEntry).where(
+            LedgerEntry.job_hash == ISSUES_HASH, LedgerEntry.episode_start == 1
+        )
+    )
+    assert first is not None
+    first.jellyfin_item_id = "demo-mismatch-episode"
+    first.jellyfin_series_id = "demo-mismatch-series"
+    await session.commit()
+    folder = str(PurePosixPath(first.target_path).parent.parent)
+    scenario.jellyfin.items_ = [
+        *scenario.jellyfin.items_,
+        JellyfinItem(
+            id="demo-mismatch-series",
+            type=ITEM_SERIES,
+            name="SPY x FAMILY",
+            path=folder,
+            tmdb_id="120089",
+        ),
+        JellyfinItem(
+            id="demo-mismatch-episode",
+            type=ITEM_EPISODE,
+            name="Operation Strix",
+            path=first.target_path,
+            tmdb_id="",
+            sources=(JellyfinSource(path=first.target_path, name="S01E01 [1080p][CHT][ANi]"),),
+            series_id="demo-mismatch-series",
+            season=1,
+            episode_start=1,
+            episode_end=2,
+        ),
+    ]
 
 
 #: `issues` 情境裡壞掉的三筆下載（M2 票 09c）：hash → (名字, qBittorrent 報的 state)。

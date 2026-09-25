@@ -49,3 +49,19 @@ test('/issues 修一條 library_link_missing', async ({ page }) => {
   await expect(page.getByRole('heading', { name: /S01E03/ })).toBeVisible()
   await expect(missing).toHaveCount(0)
 })
+
+// Jellyfin 回驗（M3 票 17）：第一集反查過了，替身 Jellyfin 把它認成 `S01E01-E02`（兩份不同範圍
+// 的正片被併成一集）。對帳的 Jellyfin 那一方比到它，開出一件回驗不符，列上並排兩邊的讀法。
+test('/issues 畫出 jellyfin_item_mismatch 並按得到重新反查', async ({ page }) => {
+  await signIn(page, '/issues')
+
+  const mismatch = page.getByRole('listitem').filter({ hasText: '回驗不符' })
+  await reconcile(page)
+  await expect(mismatch).toHaveCount(1)
+  await mismatch.getByText('展開').click()
+  await expect(mismatch.getByText('S01E01 · TMDB 120089')).toBeVisible()
+  await expect(mismatch.getByText('S01E01-E02 · TMDB 120089')).toBeVisible()
+
+  await mismatch.getByRole('button', { name: '重新反查' }).click()
+  await expect(mismatch).toHaveCount(0)
+})

@@ -19,10 +19,12 @@
 complete 兩方都問到（問不到 qBittorrent 的那一刻，每一個目錄看起來都沒有主），
 `unknown_torrent` 要 qBittorrent，媒體庫那四種逐 Route，`job_without_files` 只看帳本。
 
-**第五方是 Jellyfin**（票 09）：它不開 Issue，只把帳本記著的 item 換成 Jellyfin 現在的樣子
+**第五方是 Jellyfin**（票 09）：把帳本記著的 item 換成 Jellyfin 現在的樣子
 （`resolver.refresh_resolved`：補上票 13 之前沒有的 Series id、換掉合併之後不再是主條目的
 item id）。放進同一輪而不是另一個迴圈，是因為它與其餘四方一樣「定期比一次、問不到就說」，
-而畫面上逐方說的那一行本來就是給這種事的。
+而畫面上逐方說的那一行本來就是給這種事的。**M3 票 17 起它也回驗**：找得到的那幾條與反查
+用同一份比對（`resolver.disagreement`），不一致開 `jellyfin_item_mismatch`、一致了收掉——入庫
+之後才出的意外（Jellyfin 重掃時把兩個版本併成一集、有人在 Jellyfin 裡改認作品）在這裡抓到。
 """
 
 from __future__ import annotations
@@ -74,7 +76,7 @@ from berth.services.qbittorrent import (
     unknown_torrent_detail,
     unknown_torrents,
 )
-from berth.services.resolver import refresh_resolved
+from berth.services.resolver import Verdict, refresh_resolved, settle_verdicts
 from berth.services.settings import read_settings
 from berth.services.steps import message
 
@@ -131,6 +133,9 @@ class _Survey:
     complete_folders: list[Path] = field(default_factory=list)
     #: 那幾個子目錄底下的每一項（一個 torrent 的內容根）。`None` 是 complete 讀不到。
     complete_items: list[Path] | None = None
+    #: Jellyfin 那一方找得到的每一條正片與它比完的結果（`resolver.disagreement`，M3 票 17）。
+    #: 問不到 Jellyfin 時是空的——比不到的一件都不收。
+    verdicts: tuple[Verdict, ...] = ()
     reports: list[SideReport] = field(default_factory=list)
 
 
@@ -181,6 +186,8 @@ async def reconcile_once(
     await _check_complete(session, survey, started, tally)
     await _check_unknown_torrents(session, survey, started, tally)
     await _check_jobs(session, survey, started, tally)
+    for recorded in await settle_verdicts(session, survey.verdicts, started):
+        tally.add(recorded)
     await session.commit()
 
     finished = ReconcileReport(
@@ -368,7 +375,7 @@ async def _ask_jellyfin(
     settings = await read_settings(session, JellyfinSettings)
     client = factory.jellyfin(settings.base_url, token=settings.api_key)
     try:
-        changed = await refresh_resolved(session, client, resolved)
+        refreshed = await refresh_resolved(session, client, resolved)
     except ServiceError as exc:
         logger.warning("reconcile could not ask jellyfin", extra={"error": message(exc)})
         return SideReport(
@@ -378,8 +385,9 @@ async def _ask_jellyfin(
         )
     finally:
         await client.aclose()
-    if changed:
-        logger.info("reconcile refreshed jellyfin items", extra={"count": changed})
+    if refreshed.changed:
+        logger.info("reconcile refreshed jellyfin items", extra={"count": refreshed.changed})
+    survey.verdicts = refreshed.verdicts
     return SideReport(side=ReconcileSide.JELLYFIN, counted=len(resolved))
 
 

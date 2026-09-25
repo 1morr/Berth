@@ -326,6 +326,43 @@ describe('待處理頁', () => {
     await waitFor(() => expect(sent(stub, 'POST /api/issues/1/resolve')).toBe(1))
   })
 
+  it('回驗不符說出兩邊各自認成什麼、差在哪，並給重新反查（M3 票 17）', async () => {
+    const stub = render({
+      [ISSUES]: {
+        body: [
+          issue({
+            type: 'jellyfin_item_mismatch',
+            detail: {
+              differs: ['episode'],
+              ledger: { season: 1, episode_start: 3, episode_end: 4, tmdb: '120089' },
+              jellyfin: {
+                season: 1,
+                episode_start: 3,
+                episode_end: null,
+                tmdb: '120089',
+                item: 'abc',
+                name: 'Episode 3',
+              },
+            },
+            actions: ['relook'],
+          }),
+        ],
+      },
+      'POST /api/issues/1/resolve': { body: issue({ status: 'resolved', actions: [] }) },
+    })
+    renderApp('/issues')
+    const row = await screen.findByRole('article')
+
+    expect(within(row).getByText('回驗不符')).toBeInTheDocument()
+    expect(within(row).getByText('S01E03-E04 · TMDB 120089')).toBeInTheDocument()
+    expect(within(row).getByText('S01E03 · TMDB 120089')).toBeInTheDocument()
+    expect(within(row).getByText('集號')).toBeInTheDocument()
+    expect(within(row).queryByRole('button', { name: '重新掃描媒體庫' })).not.toBeInTheDocument()
+
+    await userEvent.click(within(row).getByRole('button', { name: '重新反查' }))
+    await waitFor(() => expect(sent(stub, 'POST /api/issues/1/resolve')).toBe(1))
+  })
+
   it('complete 底下的路徑不叫媒體庫路徑', async () => {
     const folder = '/data/torrent/complete/anime/Someone Else'
     render({

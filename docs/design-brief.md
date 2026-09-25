@@ -414,8 +414,9 @@ NCOP/NCED、PV、CM、Menu、預告、花絮等**可辨識**的非正片內容�
 | `jellyfin_item_unresolved` | 管線：入庫後六次反查都沒在 Jellyfin 找到那個檔案 | 重新反查 / 重新掃描媒體庫 |
 | `library_uses_tvdb` | 健康檢查：一條 Route 的 Jellyfin 媒體庫掛著 TVDB 的 metadata fetcher（§16.4 的警告） | 只列出；在 Jellyfin 拿掉之後系統自己收掉 |
 | `low_disk_space` | 健康檢查：incomplete 或 complete 所在的檔案系統剩下的空間低於門檻（設定裡，預設 10 GB） | 只列出；空間回來之後系統自己收掉 |
+| `jellyfin_item_mismatch` | Jellyfin 回驗（M3 票 17）：反查或對帳找到的 item，Jellyfin 認的季號、集號（多集檔是範圍）或所屬作品的 TMDB id 與帳本不同 | 重新反查（在 Jellyfin 修好之後）；下一次比到一致時系統自己收掉 |
 
-中間四種是管線自己發現的（M1 以 `issue_detected` 事件記著，M2 起與對帳的七種共用 `issues` 表與同一個封閉集合，plan §2.4，2026-09-22 定）；最後兩種是 `health_checker` 每 5 分鐘量出來的（M2 票 09c，使用者拍板由健康檢查偵測而不是對帳），十三種共用一個集合。`ledger.status` 的 `target_missing` / `source_missing` / `inode_mismatch` 是帳本那一列的現況，Issue 是「要有人決定」的那一件——同一件事的兩個角度，resolve 之後帳本那一欄跟著改。`source_missing` 與 `unlinked`（刪除範圍拆掉的鏈接，M3 票 01）是**使用者決定過的**現況，對帳看到就不再開 Issue。
+中間四種是管線自己發現的（M1 以 `issue_detected` 事件記著，M2 起與對帳的七種共用 `issues` 表與同一個封閉集合，plan §2.4，2026-09-22 定）；再兩種是 `health_checker` 每 5 分鐘量出來的（M2 票 09c，使用者拍板由健康檢查偵測而不是對帳），最後一種是 Jellyfin 回驗（M3 票 17，反查與對帳的 Jellyfin 那一方比同一份），十四種共用一個集合。`ledger.status` 的 `target_missing` / `source_missing` / `inode_mismatch` 是帳本那一列的現況，Issue 是「要有人決定」的那一件——同一件事的兩個角度，resolve 之後帳本那一欄跟著改。`source_missing` 與 `unlinked`（刪除範圍拆掉的鏈接，M3 票 01）是**使用者決定過的**現況，對帳看到就不再開 Issue。
 
 **認領類三顆（M2 票 10 做完）**：都走既有的入庫路線、都不刪東西。「重新入庫」與「認領」**由管理員在列上選作品**（2026-09-23 使用者拍板：沒有作品的 Job 規劃出來只會整份停在 review 而且核准不了）；孤兒目錄建一筆 `trigger = reimport` 的 Job 停在 `completed`，無主 torrent 建一筆停在 `submitted`（Route 由它的 category 決定，只掛 `berth` tag 的說不出要入庫到哪裡，拒絕）。「認領進帳本」是單一檔案的 `berth rebuild-ledger`：inode 反查 complete、路徑照命名模板反解，配不上的拒絕、那一件開著。
 

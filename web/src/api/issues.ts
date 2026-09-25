@@ -7,7 +7,7 @@ import type { Schemas } from './schemas'
 /** 清單上的一件（`berth/api/issues.py` 的 `IssueOut`）。 */
 export type Issue = Schemas['IssueOut']
 
-/** 十一種型別的封閉集合（brief §9.1）。畫面逐種說一句話。 */
+/** 十四種型別的封閉集合（brief §9.1）。畫面逐種說一句話。 */
 export type IssueType = Issue['type']
 
 /**

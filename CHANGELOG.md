@@ -698,6 +698,12 @@ Issue、修正、對帳、刪除與重新入庫的每一條端點都是 403，�
   medium，推測出的集數照樣過播出日比對；沒有一種讀法剛播（BD、補檔、重播）或不只一種時照舊。規劃、RSS 送單前的
   去重與搜尋結果的季集預估都用它。新的策略 `published_run` 與逐列理由 `published_in_run`；benchmark 語料多了選填的
   `published_at`（帶時區）與四筆《死神》，`auto_correct` 172 → 177，其中一筆原本自動入錯。
+- **Jellyfin 回驗**（M3 票 17，plan §11.4「三道程式檢查」③）：反查找到 item 之後，Jellyfin 認到的季號、集號
+  （多集檔是範圍）與所屬作品的 TMDB id 要與帳本一致，不一致就開一件新型別的 Issue `jellyfin_item_mismatch`
+  （一列帳本一件），`/issues` 上並排說出帳本與 Jellyfin 各自認成什麼、差在哪，動作是「重新反查」；下一次比到
+  一致時系統收掉。每日對帳的 Jellyfin 那一方比同一份，入庫之後才出的意外（重掃時兩份不同範圍的正片被併成一集、
+  有人在 Jellyfin 裡改認作品）也抓得到。它是便宜的保險：Berth 自己算錯的集數抓不到——Jellyfin 認集數靠的就是
+  Berth 取的檔名。
 
 ### Changed
 - **從審核裡套用到 RSS Series**（M3 票 14b，brief §15）：連載中的 split-cour 第一批會被播出日比對整批擋在

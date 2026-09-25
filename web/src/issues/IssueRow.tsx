@@ -14,6 +14,7 @@ import { reviewQueryOptions } from '../api/review'
 import { ConfirmAction, GhostButton } from '../components/controls'
 import { DetailLine, QueueRow } from '../components/QueueRow'
 import { JobLink } from '../jobs/JobLink'
+import { formatJellyfinEpisode } from '../components/episodes'
 import { fileName, whenText } from '../components/queueText'
 import { formatSize } from '../media/searchResult'
 import { WorkPicker } from './WorkPicker'
@@ -192,8 +193,8 @@ const PATH_TERM: Partial<Record<Issue['type'], 'issues.completePath' | 'issues.m
 }
 
 /**
- * 健康檢查那兩種的實測值與下一步（M2 票 09c）。它們沒有 Berth 按得了的修法，所以列上要說得出
- * 去哪裡修、修好之後會怎樣（PRODUCT 原則 4）——只剩一顆「忽略」的列不能只有一句型別。
+ * 健康檢查那兩種與回驗不符（M2 票 09c、M3 票 17）的實測值與下一步。它們的修法不在 Berth 裡，
+ * 所以列上要說得出去哪裡修、修好之後會怎樣（PRODUCT 原則 4）——不能只有一句型別。
  */
 function Measured({ issue }: { issue: Issue }) {
   const { t, i18n } = useTranslation()
@@ -213,6 +214,33 @@ function Measured({ issue }: { issue: Issue }) {
       <DetailLine term={t('issues.unclaimedBecause')}>
         {t(`issues.claimMiss.${issue.detail.reason}`)}
       </DetailLine>
+    )
+  }
+  if (issue.type === 'jellyfin_item_mismatch') {
+    // Jellyfin 回驗（M3 票 17）：兩邊各自認成什麼，並排著讓人一眼看出差在哪。修法在 Jellyfin 裡，
+    // 所以下一步也寫在列上。
+    const differs = Array.isArray(issue.detail.differs)
+      ? issue.detail.differs.filter(isDiffer).map((what) => t(`issues.differsWhat.${what}`))
+      : []
+    const reads = (value: unknown) => {
+      const side = record(value)
+      const episode = formatJellyfinEpisode({
+        season: numeric(side.season),
+        episode_start: numeric(side.episode_start),
+        episode_end: numeric(side.episode_end),
+      })
+      const tmdb = text(side.tmdb)
+      return [episode, tmdb === '' ? t('issues.noTmdb') : `TMDB ${tmdb}`]
+        .filter(Boolean)
+        .join(' · ')
+    }
+    return (
+      <>
+        <DetailLine term={t('issues.differs')}>{differs.join(t('issues.differsJoin'))}</DetailLine>
+        <DetailLine term={t('issues.ledgerReads')}>{reads(issue.detail.ledger)}</DetailLine>
+        <DetailLine term={t('issues.jellyfinReads')}>{reads(issue.detail.jellyfin)}</DetailLine>
+        <DetailLine term={t('issues.next')}>{t('issues.nextMismatch')}</DetailLine>
+      </>
     )
   }
   if (issue.type === 'low_disk_space') {
@@ -236,8 +264,23 @@ function isClaimMiss(value: unknown): value is (typeof CLAIM_MISSES)[number] {
   return CLAIM_MISSES.some((miss) => miss === value)
 }
 
+/** 回驗比的三件事（後端 `resolver.disagreement` 的 `differs`）。 */
+const DIFFERS = ['season', 'episode', 'tmdb'] as const
+
+function isDiffer(value: unknown): value is (typeof DIFFERS)[number] {
+  return DIFFERS.some((what) => what === value)
+}
+
 function text(value: unknown): string {
   return typeof value === 'string' ? value : ''
+}
+
+function numeric(value: unknown): number | null {
+  return typeof value === 'number' ? value : null
+}
+
+function record(value: unknown): Record<string, unknown> {
+  return typeof value === 'object' && value !== null ? { ...value } : {}
 }
 
 /** `relink_failed` 的原文是 errno 與「哪兩個掛載」（plan §8.6），所以它接在那一句後面。 */

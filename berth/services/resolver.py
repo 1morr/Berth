@@ -19,15 +19,23 @@
 **找到的那一刻順手記下版本名**（brief §7.7）：12.0 起劇集也原生合併，而版本選單上的名字是
 Jellyfin 自己算的（去掉各版本檔名的共同前綴，算法連 12.0 與 12.1 都不一樣）。存進帳本之後，
 詳情頁不必為了一行字再問一次 Jellyfin，也不必追著三種算法跑。
+
+**找到之後比三件事**（Jellyfin 回驗，plan §11.4 ③、M3 票 17）：Jellyfin 認的季號、集號（多集檔
+是範圍）、所屬作品的 `ProviderIds.Tmdb`，都要與帳本一致，不一致就是一件
+`jellyfin_item_mismatch`，下一次比到一致由系統收掉。它是**便宜的保險**：抓的是 Jellyfin 那邊的
+意外（兩份涵蓋範圍不同的正片被併成一集、作品被認成別的），Berth 自己算錯的集數它抓不到——
+Jellyfin 認集數靠的就是 Berth 取的檔名（brief §6.10）。反查與對帳的 Jellyfin 那一方
+（`refresh_resolved`）比的是同一份（`disagreement`），寫下與收掉也是同一支（`settle_verdicts`）。
 """
 
 from __future__ import annotations
 
 import logging
-from collections.abc import Sequence
-from dataclasses import dataclass
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import PurePosixPath
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -41,11 +49,11 @@ from berth.adapters.jellyfin import (
     JellyfinItem,
     scan_libraries,
 )
-from berth.domain import CollectionType, EventType, IssueType
-from berth.models import JellyfinSettings, Job, LedgerEntry, Media, Route
+from berth.domain import CollectionType, EventType, IssueStatus, IssueType
+from berth.models import Issue, JellyfinSettings, Job, LedgerEntry, Media, Route
 from berth.models.types import utcnow
 from berth.services.clients import ServiceClientFactory
-from berth.services.issues import record_issue
+from berth.services.issues import Recorded, clear_by_system, record_issue
 from berth.services.jobs import actor_of, record_event
 from berth.services.resolve_schedule import RESOLVE_DELAYS
 from berth.services.routes import owning_route
@@ -62,6 +70,26 @@ SCAN_AFTER_MISSES = 2
 #: 請 Jellyfin 掃描之後，下一次最晚多久再看。原本的間隔到後面是一小時，那是在等它自己的排程；
 #: 已經開口請它掃了，就不必等那麼久。
 SCAN_SETTLE = timedelta(minutes=10)
+
+
+@dataclass(frozen=True, slots=True)
+class Verdict:
+    """一列帳本與它在 Jellyfin 裡的 item 比完的結果。`detail` 是 `None` 時一致。"""
+
+    entry: LedgerEntry
+    detail: dict[str, Any] | None
+
+
+@dataclass(frozen=True, slots=True)
+class Refreshed:
+    """`refresh_resolved` 的結果：改了幾條，與找得到的那幾條各自比完的樣子。
+
+    比完**不在那裡寫 Issue**：對帳是「先把各方問完，再寫 Issue」（`services/reconcile.py`），
+    寫下的件數要算進那一輪的結果。
+    """
+
+    changed: int
+    verdicts: tuple[Verdict, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -98,15 +126,17 @@ async def sweep_resolutions(
     found: list[LedgerEntry] = []
     waiting: list[LedgerEntry] = []
     given_up: list[LedgerEntry] = []
+    verdicts: list[Verdict] = []
     try:
         for route, entries in _by_route(due, routes):
-            items = await _look_up(session, client, route, entries)
+            lookup = await _look_up(session, client, route, entries)
             for entry in entries:
-                item = locate(entry.target_path, items)
+                item = locate(entry.target_path, lookup.items)
                 if item is not None:
                     _remember(entry, item)
                     entry.resolve_after = None
                     found.append(entry)
+                    verdicts.append(lookup.verdict(entry, item))
                 elif _reschedule(entry, moment):
                     given_up.append(entry)
                 else:
@@ -116,6 +146,7 @@ async def sweep_resolutions(
                 if entry.resolve_after is not None:
                     entry.resolve_after = min(entry.resolve_after, moment + SCAN_SETTLE)
         await _announce(session, found, given_up)
+        await settle_verdicts(session, verdicts, moment)
     finally:
         await client.aclose()
     await session.commit()
@@ -124,8 +155,8 @@ async def sweep_resolutions(
 
 async def refresh_resolved(
     session: AsyncSession, client: JellyfinClient, entries: Sequence[LedgerEntry]
-) -> int:
-    """反查過的那幾條，照 Jellyfin **現在**的樣子重對一次。回傳改了幾條（M2 票 09）。
+) -> Refreshed:
+    """反查過的那幾條，照 Jellyfin **現在**的樣子重對一次（M2 票 09），順手回驗（M3 票 17）。
 
     兩件事都是「當時對的、現在不對了」，所以同一支：
 
@@ -143,14 +174,16 @@ async def refresh_resolved(
     """
     routes = list(await session.scalars(select(Route)))
     changed = 0
+    verdicts: list[Verdict] = []
     for route, group in _by_route(entries, routes):
         if route is None:
             continue
-        items = await _items_for(session, client, route, group)
+        lookup = await _items_for(session, client, route, group)
         for entry in group:
-            item = locate(entry.target_path, items)
+            item = locate(entry.target_path, lookup.items)
             if item is None:
                 continue
+            verdicts.append(lookup.verdict(entry, item))
             before = (
                 entry.jellyfin_item_id,
                 entry.jellyfin_series_id,
@@ -163,7 +196,86 @@ async def refresh_resolved(
                 entry.jellyfin_version_name,
             ):
                 changed += 1
-    return changed
+    return Refreshed(changed=changed, verdicts=tuple(verdicts))
+
+
+def disagreement(
+    entry: LedgerEntry, item: JellyfinItem, *, ledger_tmdb: str, jellyfin_tmdb: str
+) -> dict[str, Any] | None:
+    """帳本那一列與 Jellyfin 認到的 item 哪裡不同；一致時回 `None`（Jellyfin 回驗，M3 票 17）。
+
+    三件事：季號、集號範圍、作品的 TMDB id（Episode 是它所屬 Series 的，Movie 是它自己的）。
+    **單集檔的結束集兩邊寫法不一定相同**（帳本可能是 `None` 或等於起始集，Jellyfin 的
+    `IndexNumberEnd` 只有多集檔才有），所以都補成起始集再比。Jellyfin 認不出編號（`None`）
+    就是不一致——那正是「沒被認成正片」的樣子。帳本說不出作品（Media 被刪了）時不比作品：
+    拿空字串去比只會讓每一列都不一致。
+
+    回傳的是 `issues.detail_json`：哪幾件不同（`differs`，畫面照它挑要強調哪一格），與兩邊
+    各自是什麼。
+    """
+    our_episodes = (entry.episode_start, entry.episode_end or entry.episode_start)
+    their_episodes = (item.episode_start, item.episode_end or item.episode_start)
+    differs = []
+    if entry.season != item.season:
+        differs.append("season")
+    if our_episodes != their_episodes:
+        differs.append("episode")
+    if ledger_tmdb and ledger_tmdb != jellyfin_tmdb:
+        differs.append("tmdb")
+    if not differs:
+        return None
+    return {
+        "differs": differs,
+        "ledger": {
+            "season": entry.season,
+            "episode_start": entry.episode_start,
+            "episode_end": entry.episode_end,
+            "tmdb": ledger_tmdb,
+        },
+        "jellyfin": {
+            "season": item.season,
+            "episode_start": item.episode_start,
+            "episode_end": item.episode_end,
+            "tmdb": jellyfin_tmdb,
+            "item": item.id,
+            "name": item.name,
+        },
+    }
+
+
+async def settle_verdicts(
+    session: AsyncSession, verdicts: Sequence[Verdict], now: datetime
+) -> list[Recorded]:
+    """不一致的寫下（冪等鍵是帳本那一列），一致的那幾列上開著的由系統收掉。回傳寫下了什麼。
+
+    **只看這一次比到的**：找不到 item 的那幾列不在 `verdicts` 裡，它們開著的那一件照舊——
+    Jellyfin 可能正在重掃，「沒列出來」不是「一致了」。**不 commit**。
+    """
+    recorded = [
+        await record_issue(
+            session,
+            IssueType.JELLYFIN_ITEM_MISMATCH,
+            path=verdict.entry.target_path,
+            job_hash=verdict.entry.job_hash,
+            ledger_id=verdict.entry.id,
+            detail=verdict.detail,
+            now=now,
+        )
+        for verdict in verdicts
+        if verdict.detail is not None
+    ]
+    agreed = [verdict.entry.id for verdict in verdicts if verdict.detail is None]
+    if agreed:
+        cleared = await session.scalars(
+            select(Issue).where(
+                Issue.type == IssueType.JELLYFIN_ITEM_MISMATCH,
+                Issue.status == IssueStatus.OPEN,
+                Issue.ledger_id.in_(agreed),
+            )
+        )
+        clear_by_system(list(cleared), now)
+    await session.flush()
+    return recorded
 
 
 def _remember(entry: LedgerEntry, item: JellyfinItem) -> None:
@@ -213,14 +325,14 @@ async def _look_up(
     client: JellyfinClient,
     route: Route | None,
     entries: Sequence[LedgerEntry],
-) -> tuple[JellyfinItem, ...]:
-    """這一批帳本可能對得到的那些 item（brief §20.1 的兩段查詢）。
+) -> _Lookup:
+    """這一批帳本可能對得到的那些 item 與兩邊各自認的作品（brief §20.1 的兩段查詢）。
 
     Jellyfin 連不上時回空的：那一次照樣算一次沒找到。服務掛了一小時的話 6 次會用掉幾次，
     而那正是「多次失敗記為 Issue」要讓人看見的事。
     """
     if route is None:
-        return ()
+        return _Lookup()
     try:
         return await _items_for(session, client, route, entries)
     except ServiceError as exc:
@@ -228,7 +340,7 @@ async def _look_up(
             "jellyfin lookup failed; it counts as one try",
             extra={"route": route.slug, "error": message(exc)},
         )
-        return ()
+        return _Lookup()
 
 
 async def _items_for(
@@ -236,25 +348,67 @@ async def _items_for(
     client: JellyfinClient,
     route: Route,
     entries: Sequence[LedgerEntry],
-) -> tuple[JellyfinItem, ...]:
-    """brief §20.1 的兩段查詢本身。問不到就丟 `ServiceError`，要不要吞掉是呼叫端的事。"""
+) -> _Lookup:
+    """brief §20.1 的兩段查詢本身，加上回驗要的兩邊作品（帳本讀 Media，Jellyfin 讀 Series）。
+
+    問不到就丟 `ServiceError`，要不要吞掉是呼叫端的事。
+    """
+    works = await _ledger_tmdb(session, entries)
     if route.collection_type is CollectionType.MOVIES:
-        return await client.items(route.jellyfin_library_id, (ITEM_MOVIE,))
+        movies = await client.items(route.jellyfin_library_id, (ITEM_MOVIE,))
+        return _Lookup(items=movies, ledger_tmdb=works)
     series = await client.items(route.jellyfin_library_id, (ITEM_SERIES,))
-    folders = await _scanned_folders(session, route, entries, series)
+    folders = _scanned_folders(route, entries, series, set(works.values()))
     if not folders:
-        return ()
+        return _Lookup(ledger_tmdb=works)
     episodes = await client.items(route.jellyfin_library_id, (ITEM_EPISODE,))
-    return tuple(
-        item for item in episodes if any(item.path.startswith(f"{folder}/") for folder in folders)
+    return _Lookup(
+        items=tuple(
+            item
+            for item in episodes
+            if any(item.path.startswith(f"{folder}/") for folder in folders)
+        ),
+        series_tmdb={item.id: item.tmdb_id for item in series},
+        ledger_tmdb=works,
     )
 
 
-async def _scanned_folders(
-    session: AsyncSession,
+@dataclass(frozen=True, slots=True)
+class _Lookup:
+    """一條 Route、一批帳本問一次 Jellyfin 的結果：對得到的 item，與兩邊各自認的作品。"""
+
+    items: tuple[JellyfinItem, ...] = ()
+    #: Jellyfin 那一邊：Series item id → `ProviderIds.Tmdb`。Episode 自己不帶作品的 TMDB id，
+    #: 它的作品是 `SeriesId` 指的那一個（brief §20.1）。
+    series_tmdb: Mapping[str, str] = field(default_factory=dict)
+    #: 帳本那一邊：media id → TMDB id。
+    ledger_tmdb: Mapping[str, str] = field(default_factory=dict)
+
+    def verdict(self, entry: LedgerEntry, item: JellyfinItem) -> Verdict:
+        work = (
+            self.series_tmdb.get(item.series_id, "") if item.type == ITEM_EPISODE else item.tmdb_id
+        )
+        detail = disagreement(
+            entry,
+            item,
+            ledger_tmdb=self.ledger_tmdb.get(entry.media_id or "", ""),
+            jellyfin_tmdb=work,
+        )
+        return Verdict(entry=entry, detail=detail)
+
+
+async def _ledger_tmdb(session: AsyncSession, entries: Sequence[LedgerEntry]) -> dict[str, str]:
+    """這一批帳本的作品各自是 TMDB 上的哪一部（media id → TMDB id 字串，同 `ProviderIds`）。"""
+    media_ids = {entry.media_id for entry in entries if entry.media_id is not None}
+    rows = await session.execute(select(Media.id, Media.tmdb_id).where(Media.id.in_(media_ids)))
+    return {media_id: str(tmdb_id) for media_id, tmdb_id in rows.tuples()}
+
+
+def _scanned_folders(
     route: Route,
     entries: Sequence[LedgerEntry],
     series: Sequence[JellyfinItem],
+    tmdb_ids: set[str],
 ) -> set[str]:
     """已經是一個 Series 的作品資料夾：路徑對得上，或 `ProviderIds.Tmdb` 對得上（brief §5.1）。"""
     root = PurePosixPath(route.target_path)
@@ -266,11 +420,6 @@ async def _scanned_folders(
             # `_route_of` 比的是正規化之後的路徑（大小寫、`..`），這裡是逐字的。對不上的那一筆
             # 只剩 tmdb id 認得出來——而不能讓它丟出去：整輪回滾的話，這一批永遠用不完那 6 次。
             continue
-    media_ids = {entry.media_id for entry in entries if entry.media_id is not None}
-    tmdb_ids = {
-        str(row.tmdb_id)
-        for row in await session.scalars(select(Media).where(Media.id.in_(media_ids)))
-    }
     return {
         item.path.rstrip("/")
         for item in series

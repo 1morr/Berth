@@ -499,6 +499,9 @@ def scanned(route: Route, entries: list[LedgerEntry], *, tmdb_id: str = "") -> l
                 tmdb_id="",
                 sources=(JellyfinSource(path=entry.target_path, name="1080p"),),
                 series_id="series-1",
+                season=entry.season,
+                episode_start=entry.episode_start,
+                episode_end=entry.episode_end,
             )
             for entry in entries
         ),

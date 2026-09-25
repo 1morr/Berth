@@ -267,12 +267,16 @@ _Avoid_: re-run, resync
 ### 修復
 
 **Reconciler**:
-比對帳本、qBittorrent、complete 目錄、library 目錄四方一致性的排程工作；同一輪也把反查過的 Jellyfin item 換成 Jellyfin 現在的樣子（第五方，不開 Issue）。
+比對帳本、qBittorrent、complete 目錄、library 目錄四方一致性的排程工作；同一輪也把反查過的 Jellyfin item 換成 Jellyfin 現在的樣子（第五方），順手做 **Jellyfin 回驗**。
 _Avoid_: scanner, sync, health check（Health Check 指服務與 Route 連線）
 
 **Issue**:
-Reconciler、管線或健康檢查發現、要有人決定的事，有固定型別——對帳的七種（library_link_missing、source_missing、inode_mismatch、orphan_complete、unknown_torrent、unmanaged_library_file、job_without_files）、管線的四種（missing_files、client_error、client_removed、jellyfin_item_unresolved）與健康檢查的兩種（library_uses_tvdb、low_disk_space）；`issues.type` 與 `issue_detected` 事件共用這十三種。同一個 `(type, subject)` 只有一筆 open。健康檢查那兩種條件解除時由系統收掉。
+Reconciler、管線或健康檢查發現、要有人決定的事，有固定型別——對帳的七種（library_link_missing、source_missing、inode_mismatch、orphan_complete、unknown_torrent、unmanaged_library_file、job_without_files）、管線的四種（missing_files、client_error、client_removed、jellyfin_item_unresolved）健康檢查的兩種（library_uses_tvdb、low_disk_space）與 Jellyfin 回驗的一種（jellyfin_item_mismatch）；`issues.type` 與 `issue_detected` 事件共用這十四種。同一個 `(type, subject)` 只有一筆 open。健康檢查那兩種與回驗那一種條件解除時由系統收掉。
 _Avoid_: error, problem, orphan（僅作 Issue 型別名的一部分）
+
+**Jellyfin 回驗**:
+反查或對帳找到入庫檔案的 Jellyfin item 之後，比 Jellyfin 認到的季號、集號（多集檔是範圍）與所屬作品的 TMDB id 是否與帳本一致；不一致是一件 `jellyfin_item_mismatch`。抓的是 Jellyfin 那邊的意外，抓不到 Berth 自己算錯的集數。
+_Avoid_: verify, validation（單說「驗證」會和播出日比對、片長驗證混在一起）
 
 **Unmanaged**:
 library 內不是 Berth 建立的檔案；只列出，永不刪除。

@@ -1094,7 +1094,16 @@ const zhHant = {
     nextTvdb:
       '到 Jellyfin 的媒體庫設定把 TVDB 的 metadata fetcher 拿掉。Berth 照 TMDB 命名，TVDB 的季集編排可能對不上。拿掉之後下一輪健康檢查（最多 5 分鐘）這一件會自己收掉；是故意掛的就按忽略，之後不會再問。',
     nextDisk: '清出空間，或到服務設定調整門檻。空間回來之後下一輪健康檢查這一件會自己收掉。',
-    // 十三種型別各一句（brief §9.1）。
+    // Jellyfin 回驗（M3 票 17）：兩邊各自認成什麼。季集與 TMDB id 是機器字串，原樣顯示。
+    differs: '不同的是',
+    differsJoin: '、',
+    differsWhat: { season: '季號', episode: '集號', tmdb: '作品' },
+    ledgerReads: '帳本',
+    jellyfinReads: 'Jellyfin 認成',
+    noTmdb: '沒有 TMDB id',
+    nextMismatch:
+      '到 Jellyfin 修正它：作品認錯了用「識別」選回帳本那一部，兩份不同範圍的正片被併成一集就把其中一份移出去。修好之後按「重新反查」；下一次對帳比到一致時這一件也會自己收掉。',
+    // 十四種型別各一句（brief §9.1）。
     type: {
       library_link_missing: '媒體庫裡少了這個檔案',
       source_missing: 'complete 裡的來源檔不見了',
@@ -1107,6 +1116,7 @@ const zhHant = {
       client_error: 'qBittorrent 報錯',
       client_removed: 'torrent 已經不在 qBittorrent 上',
       jellyfin_item_unresolved: 'Jellyfin 一直沒有收錄這個檔案',
+      jellyfin_item_mismatch: 'Jellyfin 認到的季集或作品與帳本不同',
       library_uses_tvdb: '這條 Route 的媒體庫掛著 TVDB',
       low_disk_space: '磁碟剩下的空間低於門檻',
     },
@@ -1122,6 +1132,7 @@ const zhHant = {
       client_error: '客戶端錯誤',
       client_removed: '已被移除',
       jellyfin_item_unresolved: '反查失敗',
+      jellyfin_item_mismatch: '回驗不符',
       library_uses_tvdb: 'TVDB',
       low_disk_space: '空間不足',
     },
@@ -3534,6 +3545,14 @@ const en: Translations<typeof zhHant> = {
       'Remove the TVDB metadata fetcher in the Jellyfin library settings. Berth names files after TMDB, and TVDB may number seasons and episodes differently. Once it is gone, the next health check (within 5 minutes) closes this on its own; if you use TVDB on purpose, press Ignore and it will not ask again.',
     nextDisk:
       'Free up space, or change the threshold in the service settings. Once there is room again, the next health check closes this on its own.',
+    differs: 'What differs',
+    differsJoin: ', ',
+    differsWhat: { season: 'season', episode: 'episode', tmdb: 'title' },
+    ledgerReads: 'Ledger',
+    jellyfinReads: 'Jellyfin reads',
+    noTmdb: 'no TMDB id',
+    nextMismatch:
+      'Fix it in Jellyfin: if it matched the wrong title, use Identify to pick the one the ledger has; if two files covering different episodes were merged into one, move one of them out. Then press Look it up again; the next reconcile also closes this on its own once they agree.',
     type: {
       library_link_missing: 'This file is missing from the library',
       source_missing: 'The source file under complete is gone',
@@ -3546,6 +3565,7 @@ const en: Translations<typeof zhHant> = {
       client_error: 'qBittorrent reports an error',
       client_removed: 'The torrent is no longer in qBittorrent',
       jellyfin_item_unresolved: 'Jellyfin never picked this file up',
+      jellyfin_item_mismatch: 'Jellyfin reads a different episode or title than the ledger',
       library_uses_tvdb: 'This route’s library uses TVDB',
       low_disk_space: 'Free disk space is below the threshold',
     },
@@ -3561,6 +3581,7 @@ const en: Translations<typeof zhHant> = {
       client_error: 'CLIENT ERROR',
       client_removed: 'REMOVED',
       jellyfin_item_unresolved: 'NOT IN JELLYFIN',
+      jellyfin_item_mismatch: 'JELLYFIN DISAGREES',
       library_uses_tvdb: 'TVDB',
       low_disk_space: 'LOW DISK',
     },

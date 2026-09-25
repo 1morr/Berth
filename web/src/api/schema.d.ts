@@ -2686,18 +2686,19 @@ export interface components {
          * IssueType
          * @description 一件「要有人決定」的事是哪一種（brief §9.1、plan §2.4）。
          *
-         *     **十三種的聯集，一個封閉集合**（2026-09-22 定，M2 票 05；票 09c 加上最後兩種）：前五種
-         *     是管線自己在路上發現的（M1 起寫 `issue_detected` 事件，M2 起同時寫一列 `issues`），中間
-         *     六種是對帳比完四方之後才知道的，最後兩種是 `health_checker` 每 5 分鐘量出來的。三邊共用
-         *     同一個集合，所以加一種型別而沒替它決定 `subject` 取哪一欄、或沒給它動作，紅的會是
-         *     `SUBJECT_OF` 與 `ISSUE_ACTIONS` 那兩條閘門。
+         *     **十四種的聯集，一個封閉集合**（2026-09-22 定，M2 票 05；票 09c 加兩種，M3 票 17 加一種）：
+         *     前五種是管線自己在路上發現的（M1 起寫 `issue_detected` 事件，M2 起同時寫一列 `issues`），
+         *     中間六種是對帳比完四方之後才知道的，再兩種是 `health_checker` 每 5 分鐘量出來的，最後一種
+         *     是 Jellyfin 回驗（反查與對帳的 Jellyfin 那一方共用一份比對，只寫 `issues`）。各邊共用同一個
+         *     集合，所以加一種型別而沒替它決定 `subject` 取哪一欄、或沒給它動作，紅的會是 `SUBJECT_OF`
+         *     與 `ISSUE_ACTIONS` 那兩條閘門。
          *
          *     `unknown_torrent` 在 brief §9.1 的表上算對帳的七種，但**今天寫它的是 `qbit_poller`**
          *     （plan §3.2）——票 09 讓對帳也走到它之後，兩個生產者寫的是同一個 `(type, subject)`，
          *     而冪等鍵會把它們收成一筆。
          * @enum {string}
          */
-        IssueType: "missing_files" | "client_error" | "client_removed" | "unknown_torrent" | "jellyfin_item_unresolved" | "library_link_missing" | "source_missing" | "inode_mismatch" | "orphan_complete" | "unmanaged_library_file" | "job_without_files" | "library_uses_tvdb" | "low_disk_space";
+        IssueType: "missing_files" | "client_error" | "client_removed" | "unknown_torrent" | "jellyfin_item_unresolved" | "library_link_missing" | "source_missing" | "inode_mismatch" | "orphan_complete" | "unmanaged_library_file" | "job_without_files" | "library_uses_tvdb" | "low_disk_space" | "jellyfin_item_mismatch";
         /**
          * ItemEditIn
          * @description 一列要改成什麼。季集只屬於劇集的入庫，其餘處置三格都不帶（帶了是 `episode_not_allowed`）。

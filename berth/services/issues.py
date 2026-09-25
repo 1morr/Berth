@@ -326,17 +326,23 @@ async def close_settled(session: AsyncSession, now: datetime) -> int:
     if not rows:
         return 0
     jobs = await _live_jobs(session, rows)
-    closed = 0
+    settled = [row for row in rows if jobs.get(row.job_hash or "") not in STANDS_WHILE[row.type]]
+    clear_by_system(settled, now)
+    await session.flush()
+    return len(settled)
+
+
+def clear_by_system(rows: Sequence[Issue], now: datetime) -> None:
+    """這幾件說的事已經不是現況：由系統收掉（`resolved_by = system`）。不 flush、不 commit。
+
+    `close_settled` 與 Jellyfin 回驗（`resolver.settle_verdicts`）共用。`importer._close` 那一份
+    import 不了這個模組（`jobs` → `importer` 會繞回來），所以它自己留一份。
+    """
     for row in rows:
-        if jobs.get(row.job_hash or "") in STANDS_WHILE[row.type]:
-            continue
         row.status = IssueStatus.RESOLVED
         row.resolved_at = now
         row.resolved_by = actor_of(None)
-        closed += 1
         logger.info("issue cleared", extra={"issue": row.type.value, "subject": row.subject})
-    await session.flush()
-    return closed
 
 
 # --- 按鈕 -------------------------------------------------------------
