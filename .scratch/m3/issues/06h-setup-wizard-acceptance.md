@@ -30,13 +30,13 @@
 
 ## 驗收
 
-- [ ] 冷啟動 e2e 在 CI 綠燈：精靈在外部服務還沒健康時就開始，`configured` 不再按 `restart`（貼 CI run 連結與輸出）；把 06g 的修正拿掉時這一條會紅（在 PR 描述或票的 Comments 記下實跑結果）
+- [x] 冷啟動 e2e 在 CI 綠燈：精靈在外部服務還沒健康時就開始，`configured` 不再按 `restart`（貼 CI run 連結與輸出）；把 06g 的修正拿掉時這一條會紅（在 PR 描述或票的 Comments 記下實跑結果）
 - [x] 替身 `starting` 有 Jellyfin 的 503 與半啟動，README 的情境表同步
 - [x] playwright：套件內、既有、冷啟動、走完之後從設定頁修改四條，1280 與 390 截圖附在票上
 - [x] `/impeccable critique`、`audit`、`polish` 各一輪，分數與處理結果記在票上
 - [x] README、plan §9.3、`wizard-shape.md`、CONTEXT.md、`.env.example` 與畫面一致
 - [ ] 使用者在試跑環境重置後走完一次，沒有用到 `HostHeaderValidation=false`，也沒有按重新探測；結果記在 Comments
-- [ ] lint、type、test、e2e 全綠（貼指令輸出）
+- [x] lint、type、test、e2e 全綠（貼指令輸出）
 
 ## Comments
 
@@ -77,3 +77,10 @@
 - 泊位 1 套件內的剖面「將會做什麼」與右欄序列同 7 列（plan §11.3 D 組已經記過，可再延）；泊位板一格寫來源（套件內 / 既有）不寫狀態。
 - 「套用這 5 個鍵」下面列 6 列；qBittorrent 套用後「建議值」欄變「已經是這樣」看不到原值；Route 建好之後剖面「這一輪要建的 Route 0」；Prowlarr key 的位置兩處寫法不同（設定 → 一般 → 安全性 / 設定 → 一般）；第 2 步的「上一個泊位」回到的是管理員；既有 Jellyfin 做完「重新登入」仍是黃色主要鍵；qBittorrent 分類 `berth-電影` 中文進了機器 token；冷啟動第一秒寫「連得上，但回的東西不是這個服務」會嚇人；管理員欄位留空時錯誤念兩次；設定頁 Jellyfin 健康卡的「3 libraries」是英文（後端 detail 字串）。
 - 術語：「開始靠泊」「冪等」「complete 根目錄」「dev= / inode=」對第一次架設的人是黑話。
+
+**最後的程式碼再跑一次（分支 `m3-06h-cold-start`）**：
+- 後端 docker e2e 綠：<https://github.com/1morr/Berth/actions/runs/36101293785>，15 passed in 891 s，時間線 `+1.8s jellyfin=pending/protocol_mismatch` → `+3.8s pending/starting` → `+5.8s bundled/setup_pending`。
+- CI 綠：<https://github.com/1morr/Berth/actions/runs/36101576757>（backend、web、web-e2e、api-types、image、hygiene 全 success；前一輪 hygiene 紅在 critique 存檔的行尾空白，已修）。
+- 本機：`ruff check` / `ruff format --check` / `mypy`（284 files）/ `lint-imports`（6 kept）綠，`pytest` 2462 passed；`tsc -b` / `eslint` / `prettier --check` 綠，`pnpm test` 52 files 831 passed，`pnpm e2e` 11 passed（52.1 s）。
+
+**第 6 條（待使用者實走）**：`C:\Users\Roxy\berth-trial` 先整份備份到 `C:\Users\Roxy\berth-trial-backup-20260925`（舊 compose、config、data、preseed），再清掉 `config/`、`data/`，換成 repo 的 `deploy/docker-compose.yml`、`deploy/preseed/`（沒有 `WebUI\HostHeaderValidation=false`）、由 `deploy/.env.example` 抄的 `.env`（五個 port 換成 18383 / 18096 / 18080 / 16881 / 19696），以及只換 image 的 `docker-compose.override.yml`（`berth:trial-06h`，這一票的程式碼 build）。三個外部 image 已經拉好，容器還沒起：由使用者 `docker compose up -d` 冷啟動、馬上開 <http://localhost:18383> 從第 1 步走完。
