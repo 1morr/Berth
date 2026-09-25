@@ -251,6 +251,8 @@ Mikan 與 acg.rip 從開發機匿名 curl；Nyaa 從開發機連不上，是在 
 | `mikan/home-episode.85c93c23.html` | `GET https://mikanani.me/Home/Episode/85c93c23143bbeb98f9c0895d31ab18ceeed4090`：單集頁，上面有單一 feed 的連結（反查番組 id 與字幕組 id） |
 | `mikan/home-bangumi.4009.html` | `GET https://mikanani.me/Home/Bangumi/4009`：番組頁（中文標題、放送開始、bgm.tv 連結） |
 | `mikan/download.85c93c23.torrent` | 上面那一集的 enclosure。info dict 的 SHA-1 就是單集頁網址的末段 |
+| `mikan/home-search.frieren.html` | 2026-09-26（M3 票 19）`GET https://mikanani.me/Home/Search?searchstr=Frieren`：兩個番組（3141、3821）。**裁過**：頁上附的 1000 筆發佈（桌面表格與手機清單）從 `<div class="episode-table">` 到頁尾之前換成一行註解，原頁 4.3 MB；防偽值同上換掉 |
+| `mikan/home-search.none.html` | 同日 `GET https://mikanani.me/Home/Search?searchstr=qqzzxxberth`：沒有結果的一頁，原樣（防偽值同上） |
 | `nyaa/rss-search.kamiina-botan.xml` | `GET https://nyaa.si/?page=rss&q=Kamiina+Botan&c=1_0&f=0`：搜尋 feed |
 | `nyaa/rss-user.subsplease.kamiina-botan.xml` | `GET https://nyaa.si/?page=rss&u=subsplease&q=Kamiina+Botan`：使用者 feed，夾著 `[Batch]` 合集 |
 | `acgrip/rss-search.kimi-ga-shinu.xml` | `GET https://acg.rip/.xml?term=Kimi+ga+Shinu+made+Koi+wo+Shitai`：與 Mikan 單一 feed 同一個發佈（第 12 集），對照時區 |

@@ -10,7 +10,7 @@ from datetime import UTC, datetime
 import pytest
 
 from berth.adapters.http import ProtocolMismatchError
-from berth.adapters.rss.acgrip import parse_feed
+from berth.adapters.rss.acgrip import parse_feed, search_url
 from tests.conftest import FIXTURES
 
 ACGRIP = FIXTURES / "http" / "acgrip"
@@ -53,3 +53,8 @@ class TestNotAFeed:
     def test_an_html_page_is_a_protocol_mismatch(self) -> None:
         with pytest.raises(ProtocolMismatchError):
             parse_feed(b"<html><body>502</body></html>")
+
+
+def test_the_search_feed_address_is_the_recorded_one() -> None:
+    """從 Media 頁建搜尋 feed 時組的網址（M3 票 19），與錄 fixture 的那一條同形。"""
+    assert search_url("Kamiina Botan") == "https://acg.rip/.xml?term=Kamiina+Botan"

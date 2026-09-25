@@ -187,6 +187,15 @@ class SeriesView:
     candidates: tuple[CandidateView, ...]
     #: 這一層的排除條件。
     exclusions: tuple[str, ...]
+    #: 第一批確認過了沒（票 13）。
+    confirmed: bool
+    #: 從哪一站來的：Mikan 看鍵，其他看最近一筆的 Feed。一筆都沒有時是 `None`。
+    source: FeedKind | None
+    #: 發佈名讀出的字幕組（Mikan 的字幕組名稱 Berth 沒有存）。
+    group: str
+    #: 最近的一筆（照發佈時間，排除條件擋下的不算）：詳情頁的「最近一集」（票 19）。沒有是空字串。
+    latest_title: str
+    latest_at: datetime | None
     #: 這一次呼叫送出去了幾筆。只有 `bind_series` 回的那一份有意義，清單上一律是 0。
     submitted: int = 0
 
@@ -505,7 +514,16 @@ async def poll_feed(
         await session.commit()
         # 番組頁要同一個 fetcher 抓，所以在它關掉之前認。
         for series_id in grown:
-            sent = await _auto_bind(session, factory, fetcher, series_id, moment)
+            sent = await _prebind(session, factory, feed_id, series_id, moment)
+            if sent is None:
+                sent = await _auto_bind(session, factory, fetcher, series_id, moment)
+            if sent is not None:
+                bound += 1
+                submitted += sent
+        # 從 Media 頁建的 Feed 也帶到別的 Feed 先長出、還在待綁定的 Series（同一個字幕組）：
+        # 一樣綁上。
+        for series_id in await _waiting_series(session, feed_id):
+            sent = await _prebind(session, factory, feed_id, series_id, moment)
             if sent is not None:
                 bound += 1
                 submitted += sent
@@ -1075,6 +1093,55 @@ def _skip_of(row: RssItem) -> SkipReason | None:
 # --- 自動綁定 -----------------------------------------------------------
 
 
+async def _prebind(
+    session: AsyncSession,
+    factory: ServiceClientFactory,
+    feed_id: int,
+    series_id: int,
+    moment: datetime,
+) -> int | None:
+    """從 Media 頁建的搜尋 feed（票 19）帶著作品與 Route：人在建 Feed 時就說了「這是那一部」，
+    它帶到的 RSS Series 直接以他的身分綁，不去認。綁上了回送出幾筆；不是這種 Feed、或綁不上
+    （Route 之後停用了、作品被刪了）是 `None`，新長出的那一種照一般的路去認作品。
+    """
+    feed = await session.get(RssFeed, feed_id)
+    if feed is None or feed.media_id is None or feed.route_id is None:
+        return None
+    try:
+        bound = await bind_series(
+            session,
+            factory,
+            series_id,
+            media_id=feed.media_id,
+            route_id=feed.route_id,
+            user_id=feed.user_id,
+            now=moment,
+        )
+    except RssRejectedError as refusal:
+        logger.info(
+            "rss series not bound to its feed's work",
+            extra={"series": series_id, "reason": refusal.reason.value},
+        )
+        return None
+    return bound.submitted
+
+
+async def _waiting_series(session: AsyncSession, feed_id: int) -> list[int]:
+    """這個 Feed 帶到、還在待綁定的 RSS Series。只看預先綁定作品的 Feed，其他的留給人。"""
+    feed = await session.get(RssFeed, feed_id)
+    if feed is None or feed.media_id is None:
+        return []
+    rows = await session.scalars(
+        select(RssSeries.id)
+        .where(
+            RssSeries.media_id.is_(None),
+            RssSeries.id.in_(select(RssItem.series_id).where(RssItem.feed_id == feed_id)),
+        )
+        .order_by(RssSeries.id)
+    )
+    return list(rows)
+
+
 class _LookupError(Exception):
     """番組頁或 TMDB 這一次查不到。訊息是原文（英文），進 `lookup_failed` 的 `detail`。"""
 
@@ -1228,15 +1295,19 @@ def _reasons(row: RssSeries) -> tuple[BindReason, ...]:
 
 
 @command(Effect.READ)
-async def list_series(session: AsyncSession) -> tuple[SeriesView, ...]:
-    """待綁定的排前面（shape §2），同類之內新的在前。"""
-    rows = list(
-        await session.scalars(
-            select(RssSeries).order_by(
-                RssSeries.media_id.is_not(None), RssSeries.created_at.desc(), RssSeries.id.desc()
-            )
-        )
+async def list_series(
+    session: AsyncSession, *, media_id: str | None = None
+) -> tuple[SeriesView, ...]:
+    """待綁定的排前面（shape §2），同類之內新的在前。
+
+    給 `media_id` 時只列綁在那部作品上的（票 19 的詳情頁）。
+    """
+    query = select(RssSeries).order_by(
+        RssSeries.media_id.is_not(None), RssSeries.created_at.desc(), RssSeries.id.desc()
     )
+    if media_id is not None:
+        query = query.where(RssSeries.media_id == media_id)
+    rows = list(await session.scalars(query))
     return tuple([await _series_view(session, row) for row in rows])
 
 
@@ -1269,18 +1340,7 @@ async def bind_series(
         raise RssRejectedError(RssRefusal.SERIES_MISSING, str(series_id))
     if series.media_id is not None:
         raise RssRejectedError(RssRefusal.SERIES_BOUND, series.media_id)
-    media = await session.get(Media, media_id)
-    if media is None:
-        raise RssRejectedError(RssRefusal.MEDIA_MISSING, media_id)
-    route = await session.get(Route, route_id)
-    if route is None:
-        raise RssRejectedError(RssRefusal.ROUTE_MISSING, str(route_id))
-    if not route.enabled:
-        raise RssRejectedError(RssRefusal.ROUTE_DISABLED, route.slug)
-    if route.collection_type is not collection_type_for(media.kind):
-        raise RssRejectedError(
-            RssRefusal.ROUTE_KIND_MISMATCH, f"{route.slug} holds {route.collection_type.value}"
-        )
+    media, route = await _target(session, media_id, route_id)
 
     moment = now or utcnow()
     home = await _home_feed(session, series)
@@ -1320,6 +1380,23 @@ async def bind_series(
     row = await session.get(RssSeries, series_id)
     assert row is not None
     return replace(await _series_view(session, row), submitted=submitted)
+
+
+async def _target(session: AsyncSession, media_id: str, route_id: int) -> tuple[Media, Route]:
+    """綁定的目的地。停用與收錯種類是「綁錯了」，當場拒絕。"""
+    media = await session.get(Media, media_id)
+    if media is None:
+        raise RssRejectedError(RssRefusal.MEDIA_MISSING, media_id)
+    route = await session.get(Route, route_id)
+    if route is None:
+        raise RssRejectedError(RssRefusal.ROUTE_MISSING, str(route_id))
+    if not route.enabled:
+        raise RssRejectedError(RssRefusal.ROUTE_DISABLED, route.slug)
+    if route.collection_type is not collection_type_for(media.kind):
+        raise RssRejectedError(
+            RssRefusal.ROUTE_KIND_MISMATCH, f"{route.slug} holds {route.collection_type.value}"
+        )
+    return media, route
 
 
 @command(Effect.REVERSIBLE, inverse="rss.bind_series")
@@ -1370,6 +1447,14 @@ async def _series_view(session: AsyncSession, row: RssSeries) -> SeriesView:
             ),
         )
     )
+    latest = await session.scalar(
+        select(RssItem)
+        .where(RssItem.series_id == row.id, RssItem.status != FeedItemStatus.EXCLUDED)
+        .order_by(RssItem.published_at.desc(), RssItem.id.desc())
+        .limit(1)
+    )
+    feed = await session.get(RssFeed, latest.feed_id) if latest is not None else None
+    latest_kind = feed.kind if feed is not None else None
     return SeriesView(
         id=row.id,
         key=row.key,
@@ -1388,6 +1473,11 @@ async def _series_view(session: AsyncSession, row: RssSeries) -> SeriesView:
         reasons=_reasons(row),
         candidates=await _candidate_views(session, row.candidates_json or ()),
         exclusions=tuple(row.exclude_json),
+        confirmed=row.confirmed,
+        source=FeedKind.MIKAN if row.mikan_bangumi_id is not None else latest_kind,
+        group=parse_release(row.title_raw).group,
+        latest_title=latest.title if latest is not None else "",
+        latest_at=latest.published_at if latest is not None else None,
     )
 
 
@@ -1407,6 +1497,172 @@ async def _candidate_views(session: AsyncSession, ids: Sequence[str]) -> tuple[C
         for row in (rows.get(one) for one in ids)
         if row is not None
     )
+
+
+# --- 從 Media 頁訂閱 ----------------------------------------------------
+
+
+@dataclass(frozen=True, slots=True)
+class Subscription:
+    """訂閱 Mikan 番組 × 字幕組的結果：它所在的 Feed 與綁好的 RSS Series（`submitted` 含整季）。"""
+
+    feed: FeedView
+    series: SeriesView
+
+
+@command(Effect.REVERSIBLE)
+async def subscribe_mikan(
+    session: AsyncSession,
+    factory: ServiceClientFactory,
+    *,
+    bangumi_id: int,
+    subgroup_id: int,
+    media_id: str,
+    route_id: int,
+    user_id: int | None,
+    name: str = "",
+    backfill: bool = True,
+    now: datetime | None = None,
+) -> Subscription:
+    """從 Media 頁訂閱一個 Mikan 番組 × 字幕組（brief §15「從 Media 頁訂閱」、票 19）。
+
+    建它的單一 feed（`/RSS/Bangumi?bangumiId=&subgroupid=`）、當場長出那一個 RSS Series 並走
+    `bind_series` 綁上，讀到的整季寫成這個 Feed 的 Item 送出。**鍵從網址就知道**：單一 feed 只有一個
+    RSS Series，不必一筆一筆抓單集頁。補舊集照票 12：預設全補；`backfill = False` 時綁定之前發佈的
+    記成 `passed`（照 `passed_before`，與補舊集讀到的同一條規則）。
+
+    **那個 RSS Series 已經在待綁定**（聚合 feed 帶過）時就地綁它，不多開一條 Feed：補舊集由
+    `bind_series` 寫進它原本的 Feed。已經綁了是 `series_bound`。人在場，所以**讀不到單一 feed 就當場
+    拒絕**（`feed_unreachable`），不留下沒讀過的 Feed 與沒有名字的 Series。
+
+    **沒有單一的反向命令**：新建 Feed 那一條是 `delete_feed`（綁定留著），就地綁定那一條是
+    `unbind_series`——拿前者撤銷後者會刪掉使用者的聚合 feed。已經送出的 Job 有自己的刪除範圍。
+    """
+    await _target(session, media_id, route_id)
+    moment = now or utcnow()
+    key = f"mikan:{bangumi_id}:{subgroup_id}"
+    series = await session.scalar(select(RssSeries).where(RssSeries.key == key))
+    if series is not None and series.media_id is not None:
+        raise RssRejectedError(RssRefusal.SERIES_BOUND, series.media_id)
+    home = await _home_feed(session, series) if series is not None else None
+    if series is not None and home is not None:
+        bound = await bind_series(
+            session,
+            factory,
+            series.id,
+            media_id=media_id,
+            route_id=route_id,
+            user_id=user_id,
+            backfill=backfill,
+            now=moment,
+        )
+        return Subscription(feed=await _feed_view_of(session, home.id), series=bound)
+
+    url = mikan.bangumi_feed_url(bangumi_id, subgroup_id)
+    if await session.scalar(select(RssFeed.id).where(RssFeed.url == url)) is not None:
+        raise RssRejectedError(RssRefusal.FEED_DUPLICATE, url)
+    fetcher = factory.rss()
+    try:
+        try:
+            season = mikan.parse_feed(await fetcher.fetch(url))
+        except ServiceError as exc:
+            raise RssRejectedError(RssRefusal.FEED_UNREACHABLE, message(exc)) from exc
+        feed = RssFeed(
+            name=name.strip() or _default_name(url),
+            url=url,
+            kind=FeedKind.MIKAN,
+            primed_at=moment,
+            last_polled_at=moment,
+        )
+        session.add(feed)
+        if series is None:
+            series = RssSeries(
+                key=key,
+                title_raw=season[0].title if season else "",
+                mikan_bangumi_id=bangumi_id,
+                mikan_subgroup_id=subgroup_id,
+            )
+            session.add(series)
+        await session.flush()
+        try:
+            bound = await bind_series(
+                session,
+                factory,
+                series.id,
+                media_id=media_id,
+                route_id=route_id,
+                user_id=user_id,
+                backfill=backfill,
+                now=moment,
+            )
+        except RssRejectedError:
+            # 另一個分頁在這幾秒裡先綁了：剛加的 Feed 與 Series 都還沒 commit。
+            await session.rollback()
+            raise
+        # 單一 feed 就是整季：讀到的每一筆照補舊集的規矩寫下（`known`），這一次也算補過。
+        await _record(session, fetcher, feed, season, moment, known=series)
+        series.backfilled_at = moment
+        await session.commit()
+    finally:
+        await fetcher.aclose()
+    submitted = await _submit_waiting(session, factory, RssItem.feed_id == feed.id)
+    row = await session.get(RssSeries, series.id)
+    assert row is not None
+    return Subscription(
+        feed=await _feed_view_of(session, feed.id),
+        series=replace(await _series_view(session, row), submitted=bound.submitted + submitted),
+    )
+
+
+@command(Effect.REVERSIBLE, inverse="rss.delete_feed")
+async def subscribe_search(
+    session: AsyncSession,
+    factory: ServiceClientFactory,
+    *,
+    kind: FeedKind,
+    term: str,
+    media_id: str,
+    route_id: int,
+    user_id: int | None,
+    now: datetime | None = None,
+) -> FeedView:
+    """從 Media 頁以作品的標題建一條 Nyaa / acg.rip 搜尋 feed（brief §15、票 19）。
+
+    Feed 記下作品、Route 與這個人：它長出的每一個 RSS Series（一個字幕組一個）直接綁上
+    （`_bind_grown`）。**當場讀一輪**，第一輪預覽（票 11）馬上有東西可看；讀不到照一般 Feed 記在
+    `last_error`，之後的輪詢再讀。第一輪照樣等人選「全部下載」或「只追之後的」。
+    """
+    await _target(session, media_id, route_id)
+    match kind:
+        case FeedKind.NYAA:
+            url = nyaa.search_url(term.strip())
+        case FeedKind.ACGRIP:
+            url = acgrip.search_url(term.strip())
+        case FeedKind.MIKAN:
+            raise RssRejectedError(RssRefusal.FEED_UNSUPPORTED, "mikan has no search feed")
+    if await session.scalar(select(RssFeed.id).where(RssFeed.url == url)) is not None:
+        raise RssRejectedError(RssRefusal.FEED_DUPLICATE, url)
+    feed = RssFeed(
+        name=f"{_default_name(url)} · {term.strip()}",
+        url=url,
+        kind=kind,
+        media_id=media_id,
+        route_id=route_id,
+        user_id=user_id,
+    )
+    session.add(feed)
+    await session.commit()
+    await poll_feed(session, factory, feed.id, now=now)
+    return await _feed_view_of(session, feed.id)
+
+
+async def _feed_view_of(session: AsyncSession, feed_id: int) -> FeedView:
+    row = await session.get(RssFeed, feed_id, populate_existing=True)
+    assert row is not None
+    items = await session.scalar(
+        select(func.count()).select_from(RssItem).where(RssItem.feed_id == feed_id)
+    )
+    return _feed_view(row, int(items or 0))
 
 
 # --- Feed Item ----------------------------------------------------------

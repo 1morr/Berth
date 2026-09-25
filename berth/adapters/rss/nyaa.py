@@ -11,6 +11,7 @@ from __future__ import annotations
 import logging
 import re
 from typing import Any
+from urllib.parse import urlencode
 
 from berth.adapters.rss import FeedItem, approx_bytes
 from berth.adapters.rss.feed import entries, rfc822_published
@@ -52,3 +53,8 @@ def _item(entry: Any) -> FeedItem | None:
         size=approx_bytes(str(entry.get("nyaa_size", ""))),
         published_at=rfc822_published(entry),
     )
+
+
+def search_url(term: str) -> str:
+    """搜尋 feed：全部動畫分類（`c=1_0`）、不篩（`f=0`），與錄 fixture 的那一條同形（M3 票 19）。"""
+    return "https://nyaa.si/?" + urlencode({"page": "rss", "q": term, "c": "1_0", "f": "0"})

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 from typing import Any
+from urllib.parse import urlencode
 
 from berth.adapters.rss import FeedItem
 from berth.adapters.rss.feed import enclosure, entries, rfc822_published
@@ -44,3 +45,8 @@ def _size(entry: Any) -> int | None:
     """`torrent:contentLength`，位元組的整數（捨到 KiB，研究檔 §4）。"""
     raw = str(entry.get("torrent_contentlength", ""))
     return int(raw) if raw.isdigit() else None
+
+
+def search_url(term: str) -> str:
+    """搜尋 feed，與錄 fixture 的那一條同形（M3 票 19）。"""
+    return "https://acg.rip/.xml?" + urlencode({"term": term})

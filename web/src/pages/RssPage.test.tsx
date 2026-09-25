@@ -50,6 +50,11 @@ function series(overrides: Partial<RssSeries> = {}): RssSeries {
     reasons: [],
     candidates: [],
     exclusions: [],
+    confirmed: false,
+    source: 'mikan',
+    group: '喵萌奶茶屋&LoliHouse',
+    latest_title: TITLE,
+    latest_at: '2026-09-24T12:00:00Z',
     submitted: 0,
     ...overrides,
   }

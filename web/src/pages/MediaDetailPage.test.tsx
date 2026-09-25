@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { Media, WatchArea, WatchEpisode } from '../api/media'
+import type { Bangumi, Feed, RssSeries } from '../api/rss'
 import type { SearchResults } from '../api/search'
 import { HEALTHY, session, stubApi, type StubRoute } from '../test/fetch'
 import { renderApp } from '../test/render'
@@ -148,9 +149,13 @@ function render(
     [SPY_PATH]: { body: media() },
     // 票 08 的搜尋區塊待命時就會問一次「會用哪幾個關鍵字」（不打索引站，只讀快照）。
     'GET /api/search/queries?media=tv%3A120089': { body: { queries: ['SPY x FAMILY'] } },
+    // admin 才有的「RSS 訂閱」段（M3 票 19）一進頁面就問綁在這部作品上的 RSS Series。
+    [SERIES_PATH]: { body: [] },
     ...routes,
   })
 }
+
+const SERIES_PATH = 'GET /api/rss/series?media=tv%3A120089'
 
 describe('Media 詳情頁', () => {
   it('探索牆的卡片點得進詳情頁（票 03 留下的那條線由票 04 接手）', async () => {
@@ -1343,6 +1348,8 @@ describe('觀看區（M1.5 票 08）', () => {
     expect(screen.getAllByRole('heading', { level: 2 }).map((row) => row.textContent)).toEqual([
       '觀看',
       '搜尋 torrent',
+      // admin 才有（M3 票 19）；這一頁的測試預設是 admin。
+      'RSS 訂閱',
       '季集與入庫',
       '檔案與版本',
     ])
@@ -1357,6 +1364,8 @@ describe('觀看區（M1.5 票 08）', () => {
 
     expect(screen.getAllByRole('heading', { level: 2 }).map((row) => row.textContent)).toEqual([
       '搜尋 torrent',
+      // admin 才有（M3 票 19）；這一頁的測試預設是 admin。
+      'RSS 訂閱',
       '季集與入庫',
       '檔案與版本',
     ])
@@ -1724,5 +1733,189 @@ describe('修正一個檔案（M2 票 08）', () => {
 
     expect(within(files).queryByRole('button', { name: /^修正/ })).toBeNull()
     expect(within(files).getByText(/到審核佇列決定/)).toBeVisible()
+  })
+})
+
+function sent(stub: ReturnType<typeof stubApi>, method: string, path: string) {
+  return stub.mock.calls.filter(
+    ([input, init]) => String(input) === path && (init?.method ?? 'GET') === method,
+  )
+}
+
+const LOLI_TITLE = '[LoliHouse] SPY x FAMILY - 12 [WebRip 1080p HEVC-10bit AAC]'
+
+function boundSeries(overrides: Partial<RssSeries> = {}): RssSeries {
+  return {
+    id: 7,
+    key: 'mikan:1234:370',
+    title_raw: LOLI_TITLE,
+    mikan_bangumi_id: 1234,
+    mikan_subgroup_id: 370,
+    media_id: 'tv:120089',
+    media_title: 'SPY×FAMILY 間諜家家酒',
+    media_title_en: 'SPY x FAMILY',
+    route_id: 2,
+    route_name: 'Anime',
+    season: null,
+    episode_offset: null,
+    bound_by: '1',
+    waiting: 0,
+    reasons: [],
+    candidates: [],
+    exclusions: [],
+    confirmed: false,
+    source: 'mikan',
+    group: 'LoliHouse',
+    latest_title: LOLI_TITLE,
+    latest_at: '2026-09-24T12:00:00Z',
+    submitted: 0,
+    ...overrides,
+  }
+}
+
+const BANGUMI: Bangumi = {
+  id: 1234,
+  title: '间谍过家家',
+  premiere: '2022-04-09',
+  subgroups: [
+    {
+      id: 583,
+      name: 'ANi',
+      updated: '2026-09-24',
+      releases: 12,
+      latest: '[ANi] SPY x FAMILY - 12 [1080P][Baha][WEB-DL]',
+      bound_to: 'tv:999',
+    },
+    {
+      id: 370,
+      name: 'LoliHouse',
+      updated: '2026-09-23',
+      releases: 12,
+      latest: LOLI_TITLE,
+      bound_to: null,
+    },
+  ],
+}
+
+/** Mikan 的搜尋詞預填原文標題（`SPY×FAMILY`）。 */
+const MIKAN_SEARCH = 'GET /api/rss/mikan/search?q=SPY%C3%97FAMILY'
+
+describe('詳情頁的 RSS 訂閱（M3 票 19）', () => {
+  it('列出綁在這部作品上的 RSS Series：來源、字幕組、第一批、最近一集', async () => {
+    render({ [SERIES_PATH]: { body: [boundSeries()] } })
+    renderApp('/media/tv:120089')
+
+    const block = await screen.findByRole('region', { name: 'RSS 訂閱' })
+    expect(await within(block).findByText('MIKAN')).toBeVisible()
+    expect(within(block).getByText('LoliHouse')).toBeVisible()
+    expect(within(block).getByText('第一批待確認')).toBeVisible()
+    expect(within(block).getByText(LOLI_TITLE)).toBeVisible()
+    expect(within(block).getByRole('link', { name: '到 RSS 頁' })).toHaveAttribute('href', '/rss')
+  })
+
+  it('一般使用者看不到這一段，也不問 RSS 的清單', async () => {
+    const stub = render({}, 'user')
+    renderApp('/media/tv:120089')
+    await screen.findByRole('heading', { level: 1 })
+
+    expect(screen.queryByRole('region', { name: 'RSS 訂閱' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '新增訂閱' })).not.toBeInTheDocument()
+    expect(sent(stub, 'GET', '/api/rss/series?media=tv%3A120089')).toHaveLength(0)
+  })
+
+  it('Mikan：以原文標題搜番組 → 選字幕組（綁過的鎖住）→ 訂閱並補舊集', async () => {
+    const stub = render({
+      [MIKAN_SEARCH]: { body: [{ id: 1234, title: '间谍过家家' }] },
+      'GET /api/rss/mikan/bangumi/1234': { body: BANGUMI },
+      'POST /api/rss/subscriptions/mikan': {
+        status: 201,
+        body: { feed: {}, series: boundSeries({ submitted: 12 }) },
+      },
+    })
+    renderApp('/media/tv:120089')
+
+    const block = await screen.findByRole('region', { name: 'RSS 訂閱' })
+    await userEvent.click(within(block).getByRole('button', { name: '新增訂閱' }))
+    await userEvent.click(await within(block).findByRole('button', { name: '间谍过家家' }))
+    expect(await within(block).findByRole('button', { name: /ANi/ })).toBeDisabled()
+    expect(within(block).getByText('已經綁在另一部作品上（tv:999）')).toBeVisible()
+    await userEvent.click(within(block).getByRole('button', { name: /LoliHouse/ }))
+    // 兩條 Route、從沒送過單：要人選了才有確認鍵。
+    expect(within(block).queryByRole('button', { name: '訂閱並補舊集' })).not.toBeInTheDocument()
+    await userEvent.selectOptions(within(block).getByRole('combobox'), '2')
+    expect(within(block).getByText('SPY x FAMILY (2022) [tmdbid-120089]')).toBeVisible()
+
+    await userEvent.click(within(block).getByRole('button', { name: '訂閱並補舊集' }))
+
+    await waitFor(() => expect(sent(stub, 'POST', '/api/rss/subscriptions/mikan')).toHaveLength(1))
+    const [[, init]] = sent(stub, 'POST', '/api/rss/subscriptions/mikan')
+    expect(JSON.parse(String(init?.body))).toEqual({
+      media: 'tv:120089',
+      route: 2,
+      bangumi: 1234,
+      subgroup: 370,
+      name: '间谍过家家 · LoliHouse',
+      backfill: true,
+    })
+    expect(await within(block).findByText('已訂閱，送出 12 集。')).toBeVisible()
+  })
+
+  it('Nyaa：以標題集合的第一個建搜尋 feed，建好之後就地畫第一輪預覽', async () => {
+    const made: Feed = {
+      id: 5,
+      name: 'nyaa.si · SPY x FAMILY',
+      url: 'https://nyaa.si/?page=rss&q=SPY+x+FAMILY&c=1_0&f=0',
+      kind: 'nyaa',
+      interval_sec: 900,
+      last_polled_at: '2026-09-26T12:00:00Z',
+      last_error: '',
+      items: 1,
+      exclusions: [],
+      primed_at: null,
+    }
+    const stub = render({
+      [SPY_PATH]: { body: media({ default_route_id: 2 }) },
+      [MIKAN_SEARCH]: { body: [] },
+      'POST /api/rss/subscriptions/search': { status: 201, body: made },
+      'GET /api/rss/feeds/5/preview': {
+        body: [
+          {
+            id: 1,
+            feed_id: 5,
+            title: LOLI_TITLE,
+            link: 'https://nyaa.si/view/1',
+            published_at: '2026-09-24T12:00:00Z',
+            seen_at: '2026-09-26T12:00:00Z',
+            series_id: 7,
+            status: 'matched',
+            job_hash: '',
+            error: '',
+            skip: null,
+            size: null,
+          },
+        ],
+      },
+    })
+    renderApp('/media/tv:120089')
+
+    const block = await screen.findByRole('region', { name: 'RSS 訂閱' })
+    await userEvent.click(within(block).getByRole('button', { name: '新增訂閱' }))
+    await userEvent.click(within(block).getByRole('button', { name: /^NYAA/ }))
+    expect(within(block).getByRole('button', { name: 'SPY x FAMILY' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+    await userEvent.click(within(block).getByRole('button', { name: '建立搜尋 feed' }))
+
+    await waitFor(() => expect(sent(stub, 'POST', '/api/rss/subscriptions/search')).toHaveLength(1))
+    const [[, init]] = sent(stub, 'POST', '/api/rss/subscriptions/search')
+    expect(JSON.parse(String(init?.body))).toEqual({
+      media: 'tv:120089',
+      route: 2,
+      kind: 'nyaa',
+      term: 'SPY x FAMILY',
+    })
+    expect(await within(block).findByRole('button', { name: '只追之後的' })).toBeVisible()
+    expect(within(block).getByText(LOLI_TITLE)).toBeVisible()
   })
 })

@@ -9,10 +9,10 @@ plan 原本那一組 `rss/rules` 在 2026-09-24 改成 RSS Series（brief §15�
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Request, status
+from fastapi import APIRouter, HTTPException, Query, Request, status
 from pydantic import BaseModel, ConfigDict, Field
 
 from berth.api.deps import ClientFactoryDep, SessionDep
@@ -30,6 +30,7 @@ from berth.domain import (
     RssRefusal,
     SkipCode,
 )
+from berth.services.bangumi import read_bangumi, search_bangumi
 from berth.services.oneshot import read_oneshot
 from berth.services.rss import (
     RssRejectedError,
@@ -46,6 +47,8 @@ from berth.services.rss import (
     set_exclusions,
     set_feed_exclusions,
     set_series_exclusions,
+    subscribe_mikan,
+    subscribe_search,
     unbind_series,
 )
 
@@ -204,6 +207,15 @@ class SeriesOut(BaseModel):
     candidates: list[CandidateOut]
     #: 這一層的排除條件。
     exclusions: list[str]
+    #: 第一批確認過了沒（票 13）：還沒的期間每一集入庫之後都等人看一眼。
+    confirmed: bool
+    #: 從哪一站來的；一筆 Item 都沒有的非 Mikan Series 是 `null`。
+    source: FeedKind | None
+    #: 發佈名讀出的字幕組。
+    group: str
+    #: 最近的一筆（排除條件擋下的不算）；沒有是空字串與 `null`（票 19 的詳情頁）。
+    latest_title: str
+    latest_at: datetime | None
     #: 只有綁定回的那一份有值：這一次送出去了幾筆。
     submitted: int
 
@@ -434,9 +446,9 @@ async def put_exclusions(session: SessionDep, body: ExclusionsIn) -> ExclusionsO
 
 
 @router.get("/series")
-async def get_series(session: SessionDep) -> list[SeriesOut]:
-    """待綁定的排前面。"""
-    return [SeriesOut.model_validate(row) for row in await list_series(session)]
+async def get_series(session: SessionDep, media: str | None = None) -> list[SeriesOut]:
+    """待綁定的排前面。給 `media` 時只列綁在那部作品上的（詳情頁，票 19）。"""
+    return [SeriesOut.model_validate(row) for row in await list_series(session, media_id=media)]
 
 
 @router.put(
@@ -499,3 +511,160 @@ async def put_series_exclusions(session: SessionDep, series_id: int, body: Rules
 async def get_items(session: SessionDep) -> list[ItemOut]:
     """最近看到的 50 筆，新的在前。"""
     return [ItemOut.model_validate(row) for row in await list_items(session)]
+
+
+# --- 從 Media 頁訂閱（票 19） ---------------------------------------------
+
+
+class BangumiHitOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    #: Mikan 上的中文名（多半是簡體），原樣。
+    title: str
+
+
+class SubgroupOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    #: 最近一次發佈的日期；讀不到是 `null`。
+    updated: date | None
+    #: 這一組在這個番組下的發佈筆數。
+    releases: int
+    #: 最新一筆的發佈名（看得出語言、解析度）。
+    latest: str
+    #: 這一組的 RSS Series 已經綁在哪一部作品上；沒有是 `null`。
+    bound_to: str | None
+
+
+class BangumiOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    title: str
+    premiere: date | None
+    #: 照番組頁左欄的順序。
+    subgroups: list[SubgroupOut]
+
+
+class MikanSubscriptionIn(BaseModel):
+    """訂閱一個 Mikan 番組 × 字幕組並綁到這部作品。作品要先打過 `GET /media/{id}`。"""
+
+    media: str = Field(min_length=1)
+    route: int
+    bangumi: int
+    subgroup: int
+    #: Feed 的名字；空的就用網址的主機名。
+    name: str = ""
+    #: 補舊集（票 12）：`false` 時綁定之前發佈的記成略過。
+    backfill: bool = True
+
+
+class SubscriptionOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    feed: FeedOut
+    #: `submitted` 是這一次送出去的（整季）。
+    series: SeriesOut
+
+
+class SearchSubscriptionIn(BaseModel):
+    """以作品的一個標題建 Nyaa / acg.rip 搜尋 feed，它長出的 RSS Series 都綁到這部作品。"""
+
+    media: str = Field(min_length=1)
+    route: int
+    kind: FeedKind
+    term: str = Field(min_length=1)
+
+
+_BINDING_REFUSALS = (
+    RssRefusal.MEDIA_MISSING,
+    RssRefusal.ROUTE_MISSING,
+    RssRefusal.ROUTE_DISABLED,
+    RssRefusal.ROUTE_KIND_MISMATCH,
+)
+
+
+@router.get("/mikan/search", responses=_responses(RssRefusal.FEED_UNREACHABLE))
+async def get_mikan_search(
+    factory: ClientFactoryDep, q: str = Query(min_length=1)
+) -> list[BangumiHitOut]:
+    """Mikan 搜尋頁上的番組。英文、羅馬字、日文、繁中都搜得到（brief §20.12）。"""
+    try:
+        return [BangumiHitOut.model_validate(hit) for hit in await search_bangumi(factory, q)]
+    except RssRejectedError as refusal:
+        raise rss_refusal(refusal) from refusal
+
+
+@router.get("/mikan/bangumi/{bangumi_id}", responses=_responses(RssRefusal.FEED_UNREACHABLE))
+async def get_mikan_bangumi(
+    session: SessionDep, factory: ClientFactoryDep, bangumi_id: int
+) -> BangumiOut:
+    """一個番組的字幕組，每一組說出是不是已經綁在某部作品上。"""
+    try:
+        return BangumiOut.model_validate(await read_bangumi(session, factory, bangumi_id))
+    except RssRejectedError as refusal:
+        raise rss_refusal(refusal) from refusal
+
+
+@router.post(
+    "/subscriptions/mikan",
+    status_code=status.HTTP_201_CREATED,
+    responses=_responses(
+        RssRefusal.SERIES_BOUND,
+        RssRefusal.FEED_DUPLICATE,
+        RssRefusal.FEED_UNREACHABLE,
+        *_BINDING_REFUSALS,
+    ),
+)
+async def post_mikan_subscription(
+    session: SessionDep, factory: ClientFactoryDep, request: Request, body: MikanSubscriptionIn
+) -> SubscriptionOut:
+    """建單一 feed、綁上它的 RSS Series、送出整季（或只追之後的）。那個 Series 已經在待綁定時
+    就地綁它，不多開 Feed。讀不到單一 feed 是 502，什麼都沒加。"""
+    user = current_user(request)
+    try:
+        done = await subscribe_mikan(
+            session,
+            factory,
+            bangumi_id=body.bangumi,
+            subgroup_id=body.subgroup,
+            media_id=body.media,
+            route_id=body.route,
+            user_id=user.id if user is not None else None,
+            name=body.name,
+            backfill=body.backfill,
+        )
+    except RssRejectedError as refusal:
+        raise rss_refusal(refusal) from refusal
+    return SubscriptionOut.model_validate(done)
+
+
+@router.post(
+    "/subscriptions/search",
+    status_code=status.HTTP_201_CREATED,
+    responses=_responses(
+        RssRefusal.FEED_UNSUPPORTED, RssRefusal.FEED_DUPLICATE, *_BINDING_REFUSALS
+    ),
+)
+async def post_search_subscription(
+    session: SessionDep, factory: ClientFactoryDep, request: Request, body: SearchSubscriptionIn
+) -> FeedOut:
+    """建搜尋 feed 並當場讀一輪：第一輪預覽（`GET /rss/feeds/{id}/preview`）馬上有東西。讀不到
+    仍是 201，原文在 `last_error`。"""
+    user = current_user(request)
+    try:
+        feed = await subscribe_search(
+            session,
+            factory,
+            kind=body.kind,
+            term=body.term,
+            media_id=body.media,
+            route_id=body.route,
+            user_id=user.id if user is not None else None,
+        )
+    except RssRejectedError as refusal:
+        raise rss_refusal(refusal) from refusal
+    return FeedOut.model_validate(feed)

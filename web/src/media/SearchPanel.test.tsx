@@ -135,6 +135,8 @@ function render(
     'GET /api/auth/me': { body: { name: 'skipper', role } },
     [MEDIA_PATH]: { body: media() },
     [QUERIES_PATH]: { body: { queries: ['SPY x FAMILY', 'SPY×FAMILY', '間諜家家酒'] } },
+    // 同一頁 admin 才有的「RSS 訂閱」段（M3 票 19）。
+    'GET /api/rss/series?media=tv%3A120089': { body: [] },
     ...routes,
   })
 }

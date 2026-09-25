@@ -15,6 +15,7 @@ import { displayRound } from '../i18n/displayRound'
 import { FilesPanel } from '../media/FilesPanel'
 import { SearchPanel, type SearchHandle } from '../media/SearchPanel'
 import { SeasonsPanel } from '../media/SeasonsPanel'
+import { SubscribePanel } from '../media/SubscribePanel'
 import { CarryOn, WatchDown, WatchSection } from '../media/WatchArea'
 import { TmdbAttribution } from '../components/TmdbAttribution'
 import { ArtSlot } from '../components/ArtSlot'
@@ -27,7 +28,8 @@ import { ArtSlot } from '../components/ArtSlot'
  *
  * 1. **身分帶**：海報、標題、一行識別值、**主按鈕**（作品在 Jellyfin 裡時才有）、簡介、快照新鮮度。
  * 2. **觀看**：Jellyfin 的季與集（劇集在 Jellyfin 裡、這個人看得到時才有）。
- * 3. 以下是 Berth 的那一半，順序固定：**搜尋** → **季集與入庫** → **檔案與版本** → TMDB 標示。
+ * 3. 以下是 Berth 的那一半，順序固定：**搜尋** → **RSS 訂閱**（只有 admin，M3 票 19）→ **季集與入庫** →
+ *    **檔案與版本** → TMDB 標示。
  *
  * 不在 Jellyfin（或看不到）時少了主按鈕與觀看區，搜尋就排在身分帶正下方——原本的五列識別剖面把「搜尋」壓到
  * 1280×900 的 y=984（票 15 critique），現在收成一行、資料夾名搬進搜尋區塊（送單會寫死的就是它）。
@@ -94,6 +96,11 @@ export function MediaDetailPage({ id }: { id: string }) {
           )}
 
           <SearchPanel media={found} ref={search} />
+
+          {/* 次要入口的 RSS 訂閱（M3 票 19）：與搜尋同是「怎麼把它弄進來」，所以緊接在後。只有 admin。 */}
+          <AdminOnly>
+            <SubscribePanel media={found} />
+          </AdminOnly>
 
           {/* `user` 碰到停在待審核的下載只能等（brief §11、M2 票 06）。季表上那幾集是「卡住」，
               這一句說它卡在誰手上。admin 不畫：審核是他自己的事。 */}
@@ -293,6 +300,12 @@ function Offline() {
       <p className="max-w-prose text-sm text-ink-dim">{t('discover.off')}</p>
     </div>
   )
+}
+
+/** 只有 admin 畫的區塊（`/rss/*` 整組 admin，後端同時回 403）。角色還沒問到時先不畫。 */
+function AdminOnly({ children }: { children: ReactNode }) {
+  const me = useQuery(meQueryOptions)
+  return me.data?.role === 'admin' ? children : null
 }
 
 /**

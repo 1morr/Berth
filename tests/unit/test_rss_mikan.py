@@ -12,13 +12,18 @@ import pytest
 
 from berth.adapters.http import ProtocolMismatchError
 from berth.adapters.rss.mikan import (
+    BangumiHit,
     MikanBangumi,
+    Subgroup,
     bangumi_feed_url,
     bangumi_page,
     bangumi_url,
     parse_feed,
     published_at,
+    search_page,
+    search_url,
     series_key,
+    subgroups,
 )
 from tests.conftest import FIXTURES, read_fixture
 
@@ -187,3 +192,69 @@ class TestSingleFeed:
             bangumi_feed_url(4009, 370)
             == "https://mikanani.me/RSS/Bangumi?bangumiId=4009&subgroupid=370"
         )
+
+
+class TestSearch:
+    """番組搜尋頁（`/Home/Search?searchstr=`，M3 票 19）：從 Media 頁訂閱時由 Berth 代搜。"""
+
+    def test_the_address_carries_the_term_as_a_query(self) -> None:
+        assert (
+            search_url("Sousou no Frieren")
+            == "https://mikanani.me/Home/Search?searchstr=Sousou+no+Frieren"
+        )
+
+    def test_every_bangumi_on_the_page_comes_through_in_page_order(self) -> None:
+        page = (MIKAN / "home-search.frieren.html").read_text(encoding="utf-8")
+        assert search_page(page) == (
+            BangumiHit(id=3141, title="葬送的芙莉莲"),
+            BangumiHit(id=3821, title="葬送的芙莉莲 第二季"),
+        )
+
+    def test_a_page_without_hits_gives_nothing(self) -> None:
+        page = (MIKAN / "home-search.none.html").read_text(encoding="utf-8")
+        assert search_page(page) == ()
+
+    def test_bangumi_links_outside_the_hit_list_are_not_hits(self) -> None:
+        """單集頁、番組頁上也有 `/Home/Bangumi/` 的連結：只認搜尋結果那一格（`div.an-text`）。"""
+        page = (MIKAN / "home-bangumi.4009.html").read_text(encoding="utf-8")
+        assert search_page(page) == ()
+
+
+class TestSubgroups:
+    """番組頁左欄的字幕組列表與各組的發佈（M3 票 19：選字幕組）。"""
+
+    def page(self) -> str:
+        return (MIKAN / "home-bangumi.4009.html").read_text(encoding="utf-8")
+
+    def test_every_subgroup_comes_through_in_the_page_order(self) -> None:
+        found = subgroups(self.page())
+        assert [group.id for group in found] == [
+            1256,
+            583,
+            615,
+            370,
+            382,
+            611,
+            71,
+            1230,
+            12,
+            1236,
+            202,
+        ]
+        assert found[4].name == "喵萌奶茶屋"
+
+    def test_a_subgroup_carries_its_last_update_count_and_newest_release(self) -> None:
+        found = {group.id: group for group in subgroups(self.page())}
+        assert found[370] == Subgroup(
+            id=370,
+            name="LoliHouse",
+            updated=date(2026, 9, 24),
+            releases=12,
+            latest="[喵萌奶茶屋&LoliHouse] 与你相恋到生命尽头 / Kimi ga Shinu made Koi wo Shitai"
+            " - 12 [WebRip 1080p HEVC-10bit AAC][简繁日内封字幕]",
+        )
+        assert found[202].updated == date(2026, 7, 8)
+        assert found[202].releases == 3
+
+    def test_a_page_without_a_subgroup_list_gives_nothing(self) -> None:
+        assert subgroups("<html></html>") == ()

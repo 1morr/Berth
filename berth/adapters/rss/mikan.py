@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta, timezone
 from html.parser import HTMLParser
 from typing import Any
-from urllib.parse import parse_qs, urljoin, urlsplit
+from urllib.parse import parse_qs, urlencode, urljoin, urlsplit
 
 from berth.adapters.rss import FeedItem, approx_bytes
 from berth.adapters.rss.feed import enclosure, entries
@@ -155,14 +155,17 @@ def bangumi_page(page: str) -> MikanBangumi:
     finder = _BangumiTitle()
     finder.feed(page)
     found = _PREMIERE.search(page)
-    premiere: date | None = None
-    if found is not None:
-        month, day, year = (int(part) for part in found.groups())
-        try:
-            premiere = date(year, month, day)
-        except ValueError:
-            premiere = None
+    premiere = _mdy(found) if found is not None else None
     return MikanBangumi(title=" ".join("".join(finder.text).split()), premiere=premiere)
+
+
+def _mdy(found: re.Match[str]) -> date | None:
+    """M/D/YYYY 的三組 → 日期。不存在的日期（13/40）是 `None`。"""
+    month, day, year = (int(part) for part in found.groups())
+    try:
+        return date(year, month, day)
+    except ValueError:
+        return None
 
 
 class _BangumiTitle(HTMLParser):
@@ -192,3 +195,151 @@ class _BangumiTitle(HTMLParser):
     def handle_data(self, data: str) -> None:
         if self._depth == 1:
             self.text.append(data)
+
+
+# --- 從 Media 頁訂閱：搜番組、列字幕組（M3 票 19） ------------------------
+
+
+@dataclass(frozen=True, slots=True)
+class BangumiHit:
+    """搜尋頁上的一個番組。"""
+
+    id: int
+    #: 中文名（多半是簡體），原樣。
+    title: str
+
+
+def search_url(term: str) -> str:
+    """番組搜尋頁。英文、羅馬字、日文、繁中都搜得到（2026-09-26 實測，brief §20.12）。"""
+    return urljoin(MIKAN_BASE, "/Home/Search?" + urlencode({"searchstr": term}))
+
+
+_BANGUMI_HREF = re.compile(r"^/Home/Bangumi/(\d+)$")
+
+
+def search_page(page: str) -> tuple[BangumiHit, ...]:
+    """搜尋頁 → 番組，照頁上的順序。
+
+    認的是結果格子：連到 `/Home/Bangumi/<id>` 的 `<a>` 裡那一個 `div.an-text`，名字取它的 `title`
+    （格子裡的字會被 CSS 截斷，`title` 是全名）。頁上其他連到番組頁的連結不算。
+    """
+    finder = _BangumiHits()
+    finder.feed(page)
+    return tuple(finder.hits)
+
+
+class _BangumiHits(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__()
+        self.hits: list[BangumiHit] = []
+        self._bangumi: int | None = None
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        found = dict(attrs)
+        if tag == "a":
+            href = _BANGUMI_HREF.match(found.get("href") or "")
+            self._bangumi = int(href.group(1)) if href else None
+        elif (
+            tag == "div"
+            and self._bangumi is not None
+            and "an-text" in (found.get("class") or "").split()
+        ):
+            self.hits.append(BangumiHit(id=self._bangumi, title=(found.get("title") or "").strip()))
+            self._bangumi = None
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag == "a":
+            self._bangumi = None
+
+
+@dataclass(frozen=True, slots=True)
+class Subgroup:
+    """番組頁上的一個字幕組：`subgroupid` 與畫面上讓人挑的幾格。"""
+
+    id: int
+    name: str
+    #: 左欄那一格的日期（M/D/YYYY，最近一次發佈）。讀不到是 `None`。
+    updated: date | None
+    #: 這一組在這個番組下的發佈筆數。
+    releases: int
+    #: 最新的那一筆發佈名：看得出語言、解析度。沒有是空字串。
+    latest: str
+
+
+_SUBGROUP_CLASS = re.compile(r"^subgroup-(\d+)$")
+_DATE = re.compile(r"(\d{1,2})/(\d{1,2})/(\d{4})")
+
+
+def subgroups(page: str) -> tuple[Subgroup, ...]:
+    """番組頁 → 字幕組，照左欄的順序。
+
+    左欄的 `a.subgroup-name.subgroup-<id>` 是名字、緊接的 `span.date` 是最近更新；右邊每一組是
+    `div.subgroup-text#<id>` 帶一張發佈表（`a.magnet-link-wrap`，新的在前）。
+    """
+    finder = _Subgroups()
+    finder.feed(page)
+    return tuple(
+        Subgroup(
+            id=group,
+            name=name,
+            updated=finder.dates.get(group),
+            releases=len(finder.releases.get(group, ())),
+            latest=next(iter(finder.releases.get(group, ())), ""),
+        )
+        for group, name in finder.names.items()
+    )
+
+
+class _Subgroups(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__()
+        self.names: dict[int, str] = {}
+        self.dates: dict[int, date] = {}
+        self.releases: dict[int, list[str]] = {}
+        #: 正在讀的那一格：`("name" | "date" | "release", 字幕組 id)`。
+        self._reading: tuple[str, int] | None = None
+        self._text: list[str] = []
+        #: 左欄最後一個名字（它的日期緊接在後）、右邊目前在哪一組的發佈表裡。
+        self._named: int | None = None
+        self._section: int | None = None
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        found = dict(attrs)
+        classes = (found.get("class") or "").split()
+        if tag == "a" and "subgroup-name" in classes:
+            for one in classes:
+                matched = _SUBGROUP_CLASS.match(one)
+                if matched:
+                    self._named = int(matched.group(1))
+                    self._start("name", self._named)
+        elif tag == "span" and "date" in classes and self._named is not None:
+            self._start("date", self._named)
+        elif tag == "div" and "subgroup-text" in classes and (found.get("id") or "").isdigit():
+            self._section = int(found["id"] or 0)
+        elif tag == "a" and "magnet-link-wrap" in classes and self._section is not None:
+            self._start("release", self._section)
+
+    def _start(self, what: str, group: int) -> None:
+        self._reading = (what, group)
+        self._text = []
+
+    def handle_data(self, data: str) -> None:
+        if self._reading is not None:
+            self._text.append(data)
+
+    def handle_endtag(self, tag: str) -> None:
+        if self._reading is None or tag not in ("a", "span"):
+            return
+        what, group = self._reading
+        text = " ".join("".join(self._text).split())
+        self._reading = None
+        if what == "name":
+            self.names[group] = text
+        elif what == "date":
+            self._named = None
+            found = _DATE.search(text)
+            updated = _mdy(found) if found is not None else None
+            if updated is not None:
+                self.dates[group] = updated
+        else:
+            self.releases.setdefault(group, []).append(text)

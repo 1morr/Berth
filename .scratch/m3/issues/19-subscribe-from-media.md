@@ -1,6 +1,6 @@
 # 19 — 從 Media 頁訂閱
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Blocked by:** 11（三種來源）、12（Mikan 綁定時補舊集）
 
@@ -17,9 +17,28 @@
 
 ## 驗收
 
-- [ ] 從詳情頁訂閱一部 Mikan 作品 → Feed、RSS Series 已綁定、舊集已送單（整合測試）
-- [ ] 從詳情頁建 Nyaa 或 acg.rip 搜尋 feed → 出現第一輪預覽
-- [ ] 詳情頁列出已綁在這部作品上的 RSS Series
-- [ ] 只有 admin 看得到訂閱入口
-- [ ] playwright 實跑，1280 與 390，附結果
-- [ ] lint、type、test 綠燈
+- [x] 從詳情頁訂閱一部 Mikan 作品 → Feed、RSS Series 已綁定、舊集已送單（整合測試）
+- [x] 從詳情頁建 Nyaa 或 acg.rip 搜尋 feed → 出現第一輪預覽
+- [x] 詳情頁列出已綁在這部作品上的 RSS Series
+- [x] 只有 admin 看得到訂閱入口
+- [x] playwright 實跑，1280 與 390，附結果
+- [x] lint、type、test 綠燈
+
+## Comments
+
+2026-09-26 實作。playwright 實跑 `rss-subscribe`（1280）與 `rss-subscribe-390`：詳情頁以原文標題搜 Mikan →
+選番組 4009 → LoliHouse（370）→ 訂閱並補舊集，送出 12 集、列表多一列 `MIKAN · 喵萌奶茶屋&LoliHouse · 第一批待確認`；
+再以英文標題建 acg.rip 搜尋 feed，第一輪就地預覽「會送出 30 · 綁定之後送 0」，選「只追之後的」；`/jobs` 12 筆。
+兩種寬度各四張整頁截圖在 `web/test-results/rss-subscribe-*/`。
+
+code-review（Standards / Spec）處理了：`subscribe_mikan` 就地綁定那一條的反向命令不是 `delete_feed`（改成不宣告單一
+反向）；預先綁定漏了別的 Feed 先長出、還在待綁定的同鍵 Series（補測試與 `_waiting_series`）；完成那一句只給螢幕
+閱讀器（改成看得見）；鎖住的字幕組說出綁在哪一部（作品 id）；README 的 project 數；brief 補「讀不到就拒絕」。
+
+未處理（判斷題，留著）：
+- `media/SubscribePanel.tsx` 的 `Options<T>` 與 `rss/WorkChoices.tsx` 的 `Choices` 同形；泛型化 `Choices` 要動 `/rss`
+  兩處呼叫端，留到下一次再碰它時。
+- 「資料夾名將定下來」那兩行是第三份（`SeriesBinder`、`OneshotSection`、這裡），同上。
+- `_series_view` 每一列多兩個查詢（最近一筆 Item 與它的 Feed），`/rss` 的 Series 清單是 N+1；Series 數量是幾十個的量級。
+- `subscribe_search` 依 `FeedKind` 分派到 adapter 是 `rss.py` 第三處 `match kind`。
+- 預先綁定的 Feed 帶到**已經綁在別部作品上**的同鍵 Series 時不改綁：那是人或自動綁定做過的決定，Item 照它送。

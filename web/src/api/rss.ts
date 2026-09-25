@@ -46,6 +46,18 @@ export type Oneshot = Schemas['OneshotOut']
 /** 一次性 RSS 連結的一筆：送單要的那幾格，加上解析結果與「已經有了」。 */
 export type OneshotItem = Schemas['OneshotItemOut']
 
+/** Mikan 搜尋頁上的一個番組（票 19）。 */
+export type BangumiHit = Schemas['BangumiHitOut']
+
+/** 一個 Mikan 番組與它的字幕組（票 19）。 */
+export type Bangumi = Schemas['BangumiOut']
+
+/** 番組頁上的一個字幕組。 */
+export type Subgroup = Schemas['SubgroupOut']
+
+/** 訂閱 Mikan 番組 × 字幕組的結果：Feed 與綁好的 RSS Series。 */
+export type Subscription = Schemas['SubscriptionOut']
+
 /** `berth/domain/enums.py` 的 `RssRefusal`。 */
 export type RssRefusal = Schemas['RssRefusal']
 
@@ -95,6 +107,37 @@ export function seriesQueryOptions() {
   return queryOptions({
     queryKey: [...RSS_KEY, 'series'],
     queryFn: () => apiGet<RssSeries[]>('/rss/series'),
+  })
+}
+
+/** 綁在這部作品上的 RSS Series（詳情頁的「RSS 訂閱」，票 19）。 */
+export function workSeriesQueryOptions(media: string) {
+  return queryOptions({
+    queryKey: [...RSS_KEY, 'series', media],
+    queryFn: () => apiGet<RssSeries[]>(`/rss/series?${new URLSearchParams({ media })}`),
+  })
+}
+
+/**
+ * 在 Mikan 搜番組（票 19）。是查詢：打開訂閱區塊就以預填的標題搜一次，換詞再搜。**不在 `RSS_KEY`
+ * 底下**（理由同 `ONESHOT_KEY`：頁上別的動作讓 `RSS_KEY` 失效時不該再打一次上游），不重試。
+ */
+export function bangumiSearchQueryOptions(q: string) {
+  return queryOptions({
+    queryKey: ['mikan', 'search', q],
+    queryFn: () => apiGet<BangumiHit[]>(`/rss/mikan/search?${new URLSearchParams({ q })}`),
+    retry: false,
+    staleTime: 5 * 60 * 1000,
+  })
+}
+
+/** 一個番組的字幕組。「已經綁了」會因訂閱而變，所以訂閱之後讓 `['mikan']` 失效。 */
+export function bangumiQueryOptions(id: number) {
+  return queryOptions({
+    queryKey: ['mikan', 'bangumi', id],
+    queryFn: () => apiGet<Bangumi>(`/rss/mikan/bangumi/${id}`),
+    retry: false,
+    staleTime: 5 * 60 * 1000,
   })
 }
 
@@ -169,4 +212,14 @@ export function saveFeedExclusions(id: number, rules: string[]) {
 
 export function saveSeriesExclusions(id: number, rules: string[]) {
   return apiPut<RssSeries>(`/rss/series/${id}/exclusions`, { rules })
+}
+
+/** 訂閱 Mikan 番組 × 字幕組並綁到這部作品（票 19）。`backfill` 同綁定（票 12）。 */
+export function subscribeMikan(body: Schemas['MikanSubscriptionIn']) {
+  return apiPost<Subscription>('/rss/subscriptions/mikan', body)
+}
+
+/** 以作品的一個標題建 Nyaa / acg.rip 搜尋 feed，當場讀一輪；長出的 RSS Series 都綁到這部作品。 */
+export function subscribeSearch(body: Schemas['SearchSubscriptionIn']) {
+  return apiPost<Feed>('/rss/subscriptions/search', body)
 }

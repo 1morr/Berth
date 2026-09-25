@@ -15,13 +15,15 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
-from berth.adapters.rss.mikan import parse_feed
+from berth.adapters.rss import acgrip
+from berth.adapters.rss.mikan import bangumi_url, parse_feed, search_url
 from berth.api.deps import get_client_factory
 from berth.api.gate import CSRF_HEADER
 from berth.config import Config
 from berth.domain import JobState, JobTrigger, PlanAction, Tags
 from berth.main import create_app
 from berth.models import Job, LedgerEntry, Media, Route
+from tests.conftest import FIXTURES
 from tests.integration.arrange import arrange, bundled_libraries, factory_for, fake_jellyfin
 from tests.integration.factories import FakeClientFactory
 from tests.integration.test_rss import (
@@ -461,3 +463,93 @@ def library(client: TestClient, route_id: int, title: str, name: str) -> None:
             await session.commit()
 
     asyncio.run(run())
+
+
+class TestSubscribeFromTheDetailPage:
+    """詳情頁的「RSS 訂閱」（票 19）：搜番組 → 列字幕組 → 訂閱；以標題建搜尋 feed → 第一輪預覽。"""
+
+    def test_search_pick_a_subgroup_subscribe_and_list_the_series_of_the_work(
+        self, client: TestClient, roots: dict[str, Path], factory: FakeClientFactory
+    ) -> None:
+        route_id = seed(client, roots)
+        sign_in(client)
+        mikan = FIXTURES / "http" / "mikan"
+        factory.rss_.pages[search_url("Frieren")] = (
+            mikan / "home-search.frieren.html"
+        ).read_bytes()
+        factory.rss_.pages[bangumi_url(4009)] = (mikan / "home-bangumi.4009.html").read_bytes()
+        serve_single(factory)
+
+        hits = client.get("/api/rss/mikan/search", params={"q": "Frieren"})
+        assert hits.status_code == 200, hits.text
+        assert hits.json()[0] == {"id": 3141, "title": "葬送的芙莉莲"}
+        bangumi = client.get("/api/rss/mikan/bangumi/4009").json()
+        loli = next(group for group in bangumi["subgroups"] if group["id"] == 370)
+        assert (loli["name"], loli["updated"], loli["bound_to"]) == (
+            "LoliHouse",
+            "2026-09-24",
+            None,
+        )
+
+        done = client.post(
+            "/api/rss/subscriptions/mikan",
+            json={
+                "media": KIMI_ID,
+                "route": route_id,
+                "bangumi": 4009,
+                "subgroup": 370,
+                "name": "与你相恋到生命尽头 · LoliHouse",
+            },
+            headers=BROWSER,
+        )
+
+        assert done.status_code == 201, done.text
+        assert done.json()["feed"]["url"] == SINGLE_URL
+        assert done.json()["series"]["submitted"] == len(parse_feed(SINGLE))
+        (listed,) = client.get("/api/rss/series", params={"media": KIMI_ID}).json()
+        assert (listed["source"], listed["group"], listed["confirmed"]) == (
+            "mikan",
+            "喵萌奶茶屋&LoliHouse",
+            False,
+        )
+        assert listed["latest_title"] and listed["latest_at"]
+        assert client.get("/api/rss/series", params={"media": "tv:1"}).json() == []
+
+    def test_subscribing_twice_is_409(
+        self, client: TestClient, roots: dict[str, Path], factory: FakeClientFactory
+    ) -> None:
+        route_id = seed(client, roots)
+        sign_in(client)
+        serve_single(factory)
+        body = {"media": KIMI_ID, "route": route_id, "bangumi": 4009, "subgroup": 370}
+        client.post("/api/rss/subscriptions/mikan", json=body, headers=BROWSER)
+
+        again = client.post("/api/rss/subscriptions/mikan", json=body, headers=BROWSER)
+
+        assert again.status_code == 409
+        assert again.json()["detail"]["reason"] == "series_bound"
+
+    def test_a_title_search_feed_opens_its_first_round(
+        self, client: TestClient, roots: dict[str, Path], factory: FakeClientFactory
+    ) -> None:
+        route_id = seed(client, roots)
+        sign_in(client)
+        factory.rss_.pages[acgrip.search_url("Kimi ga Shinu made")] = ACGRIP
+
+        made = client.post(
+            "/api/rss/subscriptions/search",
+            json={
+                "media": KIMI_ID,
+                "route": route_id,
+                "kind": "acgrip",
+                "term": "Kimi ga Shinu made",
+            },
+            headers=BROWSER,
+        )
+
+        assert made.status_code == 201, made.text
+        feed = made.json()
+        assert (feed["url"], feed["primed_at"]) == (ACGRIP_URL, None)
+        preview = client.get(f"/api/rss/feeds/{feed['id']}/preview").json()
+        assert "matched" in {row["status"] for row in preview}
+        assert "unbound" not in {row["status"] for row in preview}

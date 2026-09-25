@@ -709,6 +709,7 @@ Issue、修正、對帳、刪除與重新入庫的每一條端點都是 403，�
   已經有同一個版本的那幾筆；勾幾筆（「勾選全部單集」不勾合集與已經有的）就逐筆走一般的手動送單，舊的先。
   **不建 Feed、不長 RSS Series**，之後的集數不追；排除條件只管自動下載，合集這裡照樣送得出去。新端點
   `POST /rss/oneshot`（只讀）；網址認不出、讀不到、讀到的不是 RSS 各有自己的理由（新的 `feed_not_rss`）。
+- **詳情頁的「RSS 訂閱」**（M3 票 19，只有 admin）：列出綁在這部作品上的 RSS Series；新增訂閱時 Mikan 由 Berth 代搜番組、選字幕組、建單一 feed 並綁上（預設補齊整季），Nyaa / acg.rip 以作品的標題建搜尋 feed、長出的字幕組都預先綁到這部作品，第一輪就地預覽。新端點 `GET /api/rss/mikan/search`、`GET /api/rss/mikan/bangumi/{id}`、`POST /api/rss/subscriptions/mikan`、`POST /api/rss/subscriptions/search`；`GET /api/rss/series` 多 `?media=` 與五個欄位；`rss_feeds` 多三欄（migration `f4b9d2e6a157`）。
 
 ### Changed
 - **從審核裡套用到 RSS Series**（M3 票 14b，brief §15）：連載中的 split-cour 第一批會被播出日比對整批擋在

@@ -67,10 +67,11 @@ from berth.adapters.qbittorrent import (
 )
 from berth.adapters.qbittorrent.client import HttpQbittorrentClient
 from berth.adapters.qbittorrent.fake import FakeQbittorrentClient
-from berth.adapters.rss import FeedFetcher
+from berth.adapters.rss import FeedFetcher, acgrip
 from berth.adapters.rss.client import HttpFeedFetcher
 from berth.adapters.rss.fake import FakeFeedFetcher
 from berth.adapters.rss.mikan import bangumi_url, parse_feed
+from berth.adapters.rss.mikan import search_url as mikan_search_url
 from berth.adapters.tmdb import (
     TmdbClient,
     TmdbDetail,
@@ -1091,6 +1092,19 @@ RSS_PACKS = dict(_rss_pack(item.title) for item in RSS_SEASON)
 DEMO_PACKS.update(RSS_PACKS)
 
 
+#: Mikan 搜尋頁裡搜尋結果那一格（票 19）：真的一頁上 MB，演練只要那一格（形狀照 fixture
+#: `home-search.frieren.html`）。
+KIMI_MIKAN_SEARCH = (
+    '<ul class="list-inline an-ul"><li><a href="/Home/Bangumi/4009" target="_blank">'
+    '<div class="an-info"><div class="an-info-group">'
+    '<div class="an-text" title="与你相恋到生命尽头">与你相恋到生命尽头</div>'
+    "</div></div></a></li></ul>"
+).encode()
+
+#: 錄下來的 acg.rip 搜尋 feed（《与你相恋》，票 07）。
+KIMI_ACGRIP = (RSS_MIKAN.parent / "acgrip" / "rss-search.kimi-ga-shinu.xml").read_bytes()
+
+
 def rss_scenario(detail: TmdbDetail = KIMI_DETAIL, season: TmdbSeason = KIMI_SEASON) -> Scenario:
     """`/rss`（M3 票 08）：Mikan 聚合 feed → 待綁定 → 綁定 → 送單 → 入庫，**一個請求都不出網**。
 
@@ -1114,6 +1128,10 @@ def rss_scenario(detail: TmdbDetail = KIMI_DETAIL, season: TmdbSeason = KIMI_SEA
     流程加它，看得到合集被排除、選「只追之後的」之後整份歷史略過。
 
     票 18 的一次性 RSS 連結讀同兩份（單一 feed 勾三集送單、acg.rip 那一份標出合集），不另加頁面。
+
+    票 19 從詳情頁（`/media/tv:262000`）訂閱：以這部作品的任何一個名字搜 Mikan 都是《与你相恋》
+    那一個番組（搜尋頁是合成的，只有結果那一格），番組頁與單一 feed 同上——訂閱喵萌奶茶屋&LoliHouse
+    就是整季 12 筆；以任何一個名字建 acg.rip 搜尋 feed 讀到的都是錄下來的《与你相恋》那一份。
     """
     scenario = _planning(healthy(), RSS_PACKS)
     scenario.indexer_results = ()
@@ -1148,6 +1166,9 @@ def rss_scenario(detail: TmdbDetail = KIMI_DETAIL, season: TmdbSeason = KIMI_SEA
         scenario.feed_pages.setdefault(
             item.link, b'<a href="/RSS/Bangumi?bangumiId=4009&subgroupid=370" class="mikan-rss">'
         )
+    for term in (detail.original_title, *detail.titles):
+        scenario.feed_pages[mikan_search_url(term)] = KIMI_MIKAN_SEARCH
+        scenario.feed_pages[acgrip.search_url(term)] = KIMI_ACGRIP
     scenario.torrent_sources = {
         item.torrent_url: TorrentSource(
             info_hash=demo_torrent(release).info_hash, content=demo_torrent(release).raw

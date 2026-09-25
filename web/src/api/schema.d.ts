@@ -1159,7 +1159,7 @@ export interface paths {
         };
         /**
          * Get Series
-         * @description 待綁定的排前面。
+         * @description 待綁定的排前面。給 `media` 時只列綁在那部作品上的（詳情頁，票 19）。
          */
         get: operations["get_series_api_rss_series_get"];
         put?: never;
@@ -1226,6 +1226,88 @@ export interface paths {
         get: operations["get_items_api_rss_items_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/rss/mikan/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Mikan Search
+         * @description Mikan 搜尋頁上的番組。英文、羅馬字、日文、繁中都搜得到（brief §20.12）。
+         */
+        get: operations["get_mikan_search_api_rss_mikan_search_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/rss/mikan/bangumi/{bangumi_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Mikan Bangumi
+         * @description 一個番組的字幕組，每一組說出是不是已經綁在某部作品上。
+         */
+        get: operations["get_mikan_bangumi_api_rss_mikan_bangumi__bangumi_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/rss/subscriptions/mikan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Mikan Subscription
+         * @description 建單一 feed、綁上它的 RSS Series、送出整季（或只追之後的）。那個 Series 已經在待綁定時
+         *     就地綁它，不多開 Feed。讀不到單一 feed 是 502，什麼都沒加。
+         */
+        post: operations["post_mikan_subscription_api_rss_subscriptions_mikan_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/rss/subscriptions/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Search Subscription
+         * @description 建搜尋 feed 並當場讀一輪：第一輪預覽（`GET /rss/feeds/{id}/preview`）馬上有東西。讀不到
+         *     仍是 201，原文在 `last_error`。
+         */
+        post: operations["post_search_subscription_api_rss_subscriptions_search_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1981,6 +2063,24 @@ export interface components {
             confirmed: number;
             /** Skipped */
             skipped: number;
+        };
+        /** BangumiHitOut */
+        BangumiHitOut: {
+            /** Id */
+            id: number;
+            /** Title */
+            title: string;
+        };
+        /** BangumiOut */
+        BangumiOut: {
+            /** Id */
+            id: number;
+            /** Title */
+            title: string;
+            /** Premiere */
+            premiere: string | null;
+            /** Subgroups */
+            subgroups: components["schemas"]["SubgroupOut"][];
         };
         /**
          * BindReasonCode
@@ -3297,6 +3397,30 @@ export interface components {
             awaiting_review: number;
         };
         /**
+         * MikanSubscriptionIn
+         * @description 訂閱一個 Mikan 番組 × 字幕組並綁到這部作品。作品要先打過 `GET /media/{id}`。
+         */
+        MikanSubscriptionIn: {
+            /** Media */
+            media: string;
+            /** Route */
+            route: number;
+            /** Bangumi */
+            bangumi: number;
+            /** Subgroup */
+            subgroup: number;
+            /**
+             * Name
+             * @default
+             */
+            name?: string;
+            /**
+             * Backfill
+             * @default true
+             */
+            backfill?: boolean;
+        };
+        /**
          * OneshotIn
          * @description 一次性 RSS 連結（票 18）。網址放在 body：Mikan 聚合 feed 的網址帶 token，不進 query。
          */
@@ -4043,6 +4167,19 @@ export interface components {
             published_at: string | null;
         };
         /**
+         * SearchSubscriptionIn
+         * @description 以作品的一個標題建 Nyaa / acg.rip 搜尋 feed，它長出的 RSS Series 都綁到這部作品。
+         */
+        SearchSubscriptionIn: {
+            /** Media */
+            media: string;
+            /** Route */
+            route: number;
+            kind: components["schemas"]["FeedKind"];
+            /** Term */
+            term: string;
+        };
+        /**
          * SeasonOut
          * @description 一季。`season_number: 0` 是 Specials。
          */
@@ -4116,6 +4253,15 @@ export interface components {
             candidates: components["schemas"]["CandidateOut"][];
             /** Exclusions */
             exclusions: string[];
+            /** Confirmed */
+            confirmed: boolean;
+            source: components["schemas"]["FeedKind"] | null;
+            /** Group */
+            group: string;
+            /** Latest Title */
+            latest_title: string;
+            /** Latest At */
+            latest_at: string | null;
             /** Submitted */
             submitted: number;
         };
@@ -4285,6 +4431,26 @@ export interface components {
          * @enum {string}
          */
         StepStatus: "ok" | "skipped" | "failed" | "running" | "pending";
+        /** SubgroupOut */
+        SubgroupOut: {
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /** Updated */
+            updated: string | null;
+            /** Releases */
+            releases: number;
+            /** Latest */
+            latest: string;
+            /** Bound To */
+            bound_to: string | null;
+        };
+        /** SubscriptionOut */
+        SubscriptionOut: {
+            feed: components["schemas"]["FeedOut"];
+            series: components["schemas"]["SeriesOut"];
+        };
         /**
          * TagsOut
          * @description 會進檔名的那幾格（brief §6.8）。
@@ -7105,7 +7271,9 @@ export interface operations {
     };
     get_series_api_rss_series_get: {
         parameters: {
-            query?: never;
+            query?: {
+                media?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -7119,6 +7287,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SeriesOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -7276,6 +7453,179 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ItemOut"][];
+                };
+            };
+        };
+    };
+    get_mikan_search_api_rss_mikan_search_get: {
+        parameters: {
+            query: {
+                q: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BangumiHitOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description `feed_unreachable` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RssRefusalOut"];
+                };
+            };
+        };
+    };
+    get_mikan_bangumi_api_rss_mikan_bangumi__bangumi_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                bangumi_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BangumiOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description `feed_unreachable` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RssRefusalOut"];
+                };
+            };
+        };
+    };
+    post_mikan_subscription_api_rss_subscriptions_mikan_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MikanSubscriptionIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubscriptionOut"];
+                };
+            };
+            /** @description `series_bound` · `feed_duplicate` · `route_disabled` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RssRefusalOut"];
+                };
+            };
+            /** @description `media_missing` · `route_missing` · `route_kind_mismatch` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RssRefusalOut"];
+                };
+            };
+            /** @description `feed_unreachable` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RssRefusalOut"];
+                };
+            };
+        };
+    };
+    post_search_subscription_api_rss_subscriptions_search_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SearchSubscriptionIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeedOut"];
+                };
+            };
+            /** @description `feed_duplicate` · `route_disabled` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RssRefusalOut"];
+                };
+            };
+            /** @description `feed_unsupported` · `media_missing` · `route_missing` · `route_kind_mismatch` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RssRefusalOut"];
                 };
             };
         };

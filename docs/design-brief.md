@@ -567,7 +567,7 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 - **處理**：item → RSS Series → 排除條件 → 去重（Feed 內的 GUID；跨 Feed 的 info hash；帳本已有同 Media/季/集/Tags）→ 建 Job（trigger = rss、帶 RSS Series id）。v2 版本號不同，不是重複。排除與去重擋下的都不是錯誤，Feed Item 清單說出是哪一層的哪一條、或重複了哪一筆（M3 票 10）；帳本那一層比不準的（季集猜不到、字幕組在檔名寫另一個組名）放行，由規劃時的重複版本判斷（§7.8）接住——漏擋只是多下載一次，擋錯卻是少一集。
 - **補舊集**：聚合 feed 只有最近的集數。Mikan 的 RSS Series 綁定時以它的單一 feed 列出整季，**預設勾選補下載**（2026-09-24 使用者拍板；帳本已有、已有 Job 的跳過，排除條件照樣看）；取消勾選時綁定之前發佈的舊集記成略過，這個決定記在 RSS Series 上——之後的補漏換了 Feed 也照它走（M3 票 12）；讀不到單一 feed 不擋綁定，下一輪再補。每天用同一個單一 feed 補漏一次，接住 Berth 停機期間聚合 feed 捲掉的集數（排程見 plan §3.2）。搜尋類 feed 第一輪就帶著歷史：新 Feed 的第一輪不直接下載，列成預覽讓使用者選「全部下載」或「只追之後的」（M3 票 11）。預覽依結果分成會送出、綁定之後送、排除、重複四組，排除與重複各說理由；「只追之後的」當場再讀一次 feed、讀不到就不決定，選的那一刻已經在 feed 裡的都略過。**Mikan 不走預覽**（2026-09-25 shape 拍板）：聚合 feed 只有最近的集數，單一 feed 的整季由上面的補舊集處理。
 - **季號與 offset**：放在 RSS Series 上，**規劃時讀**，每份計劃記下它用到的值（2026-09-24 使用者拍板）。大部分時候不必設——解析器的季名、篇章名、cour 標記與絕對編號換算先處理（§6.4、plan §4.4）。新 RSS Series 的第一批進審核（已入庫、等你看一眼），確認過一次之後照一般信心走，而且之後的 medium 入庫不再進 audit 清單（2026-09-24，由播出日比對、片長驗證與每日檢查守著）；算錯時在審核裡改正並「套用到這個 RSS Series」：寫回季號與 offset，並重算它底下還沒確認的集數（補舊集一次十幾集，第一集錯就全錯，改一次要全修好）。**M3 票 13 的做法**：第一批確認之前 high 也掛 audit（Series 帶了季號時解析器給的正是 high）；offset 是人說的集號減去檔名寫的集號；已入庫的未確認集數走 rematch 搬過去、**仍留在第一批裡**等「全部確認」（還沒有人看過它們），人親手改的那一集算確認過；停在 review 的走重新規劃；已確認的集數不動。**M3 票 14b**：連載中的 split-cour 第一批會被播出日比對整批擋在審核、一集都沒入庫，所以停在審核的計劃列也能「套用到這個 RSS Series」：人改的那一列照人說的、那一份仍等人核准，同一份裡沒人碰過的列與其餘停在審核的計劃照新的值重算，播出日比對照跑——offset 對了就放行、自動入庫（仍在第一批裡）；管理員逐列改過的其他計劃不動。
-- **從 Media 頁訂閱**（次要入口）：選一個來源建單一 feed，並預先綁定這部作品。
+- **從 Media 頁訂閱**（次要入口）：選一個來源建單一 feed，並預先綁定這部作品。**M3 票 19**（2026-09-26 使用者拍板兩題）：**Mikan 由 Berth 代搜番組**（`/Home/Search`，§20.12），選字幕組之後建它的單一 feed、當場長出那一個 RSS Series 以綁定的同一支命令綁上，整季照補舊集的規矩（預設全補）；人在場，所以讀不到單一 feed 就當場拒絕、什麼都不加（綁定時的補舊集是讀不到不擋、下一輪再補）；那個 Series 已經在待綁定時就地綁它、不多開 Feed。**Nyaa / acg.rip 以作品的標題建搜尋 feed，Feed 記下作品與 Route**，它長出的每一個 RSS Series（一個字幕組一個）直接以建它的人的身分綁上——第一輪預覽照樣要選；搜到別部作品的風險由預覽與 Series 第一批審核接住。詳情頁列出已綁在這部作品上的 RSS Series（來源、字幕組、第一批確認了沒、最近一集），整段只有 admin。
 - **一次性 RSS 連結**：貼上 URL → 解析全部 item → 勾選 → 送單，不建立 Feed。**M3 票 18**：選一部作品與一條 Route（同一批共用）之後季集照那部作品換算、標出帳本已有與已經有下載的；送單逐筆走一般的手動送單（`trigger = manual`），不是 RSS 的路；排除條件只作用在自動下載，這裡只標出合集、不擋。
 - **排序**：RSS 依賴解析器與管線，因此在 M3 而非 M1（§17）。
 
@@ -1351,6 +1351,8 @@ fixture 在 `tests/fixtures/http/{mikan,nyaa,acgrip}/`（來源網址與去掉 t
 | 做種數 | 沒有 | `nyaa:seeders` / `leechers` / `downloads` | 沒有 |
 
 **feedparser 6.0.14**（2026-07-30，PyPI 最新）三站都讀得動、不丟欄位，但 Mikan 有兩處會安靜地讀錯：`published_parsed` 把不帶時區的 `<torrent><pubDate>` 當 UTC（差 8 小時，要讀 `published` 字串自己補 UTC+8）；`<torrent>` 的命名空間被抹掉（`pubDate` → `published`、`contentLength` → `contentlength`、`link` 變成第二個 `links`），哪天 Mikan 加上標準的 `<item><pubDate>` 會撞名。Nyaa 的欄位是 `nyaa_infohash` 這種 key，前綴取自 feed 自己宣告的 `xmlns:nyaa`。【實測 fixture；context7 `/kurtmckee/feedparser`】
+
+**Mikan 的番組搜尋**（2026-09-26 查證，M3 票 19）：`/Home/Search?searchstr=<詞>` 回一整頁 HTML，搜尋結果那一格是 `ul.an-ul` 裡連到 `/Home/Bangumi/<id>` 的 `<a>`，番組名在 `div.an-text` 的 `title`（簡中全名）；同一頁底下另附最多 1000 筆發佈，整頁 1–4 MB、約 1.5 秒。**英文、羅馬字、日文、繁中都搜得到**：`Frieren`、`Sousou no Frieren`、`葬送のフリーレン`、`葬送的芙莉蓮` 四種寫法都回同樣兩個番組（3141、3821），`Kimi ga Shinu made Koi wo Shitai` 回 4009。番組頁左欄 `a.subgroup-name.subgroup-<字幕組 id>` 是字幕組名、緊接的 `span.date` 是最近一次發佈（M/D/YYYY）；右邊每一組是 `div.subgroup-text#<字幕組 id>` 帶一張發佈表（`a.magnet-link-wrap`，新的在前）。【實測 fixture `home-search.frieren.html`、`home-search.none.html`、`home-bangumi.4009.html`】
 
 **Mikan 的番組頁**（`/Home/Bangumi/<id>`）有中文標題、「放送开始」（`M/D/YYYY`）與 bgm.tv 連結，選擇器在研究檔 §2.7。字幕組 id（`subgroupid=370`）與單集頁上的發佈組 id 不是同一套編號。
 

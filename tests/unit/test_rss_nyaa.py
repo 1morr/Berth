@@ -10,7 +10,7 @@ from datetime import UTC, datetime
 import pytest
 
 from berth.adapters.http import ProtocolMismatchError
-from berth.adapters.rss.nyaa import parse_feed
+from berth.adapters.rss.nyaa import parse_feed, search_url
 from tests.conftest import FIXTURES
 
 NYAA = FIXTURES / "http" / "nyaa"
@@ -90,3 +90,8 @@ class TestNotAFeed:
     def test_an_html_page_is_a_protocol_mismatch(self) -> None:
         with pytest.raises(ProtocolMismatchError):
             parse_feed(b"<html><body>Cloudflare</body></html>")
+
+
+def test_the_search_feed_address_is_the_recorded_one() -> None:
+    """從 Media 頁建搜尋 feed 時組的網址（M3 票 19），與錄 fixture 的那一條同形。"""
+    assert search_url("Kamiina Botan") == "https://nyaa.si/?page=rss&q=Kamiina+Botan&c=1_0&f=0"
