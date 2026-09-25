@@ -72,7 +72,7 @@ _Avoid_: next up（指這一顆時）, resume point, up next
 
 **Jellyfin Library**（UI 顯示「Jellyfin 媒體庫」）:
 Jellyfin 那一端的 virtual folder：一個名字、一個 collection type、**一到多條**路徑。Berth 不擁有它——
-套件內的 Jellyfin 由 Berth 建三個（Movies / TV / Anime），既有的一律只讀，最多加一條路徑。
+套件內的 Jellyfin 由 Berth 建使用者在精靈列的那幾個（預設 Movies / TV / Anime，每個是內容類型 + 名稱 + `<library root>` 底下一層的資料夾），建好之後改名與刪除在 Jellyfin 做；既有的一律只讀，最多加一條路徑。
 一個 Library Route 指向它的其中一條路徑。程式碼中的 `library` 指的就是這個。
 _Avoid_: virtual folder（對使用者時）, folder, collection
 

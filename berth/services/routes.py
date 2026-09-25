@@ -3,7 +3,7 @@
 一個 Route 是「一個 Jellyfin 媒體庫 + 一條寫入目標路徑 + 一個 qBittorrent category」
 （CONTEXT.md）。這一步做兩件事：
 
-- **建 Route**。套件內由 Berth 自己建的三個媒體庫自動長出三個 Route；既有 Jellyfin 由使用者
+- **建 Route**。套件內由 Berth 自己建的每一個媒體庫自動長出一個 Route；既有 Jellyfin 由使用者
   勾選媒體庫，並從**那個媒體庫自己回報的路徑**裡選一條當寫入目標——路徑一律用選的，不用打的
   （brief §4.1），所以這裡也拒絕不在 `locations` 裡的目標。
 - **檢查**。每個 Route 立刻在 qBittorrent 建 category，然後跑 plan §9.5 的三項檢查。它們回答
@@ -67,7 +67,6 @@ from berth.models import (
 from berth.models.types import utcnow
 from berth.services.clients import ServiceClientFactory
 from berth.services.jellyfin import (
-    BUNDLED_LIBRARIES,
     TVDB_MARKER,
     berth_path,
     library_slug,
@@ -113,7 +112,7 @@ class RouteInUseError(RouteRejectedError):
 
 @dataclass(frozen=True, slots=True)
 class RouteSelection:
-    """使用者為一個媒體庫做的選擇（既有 Jellyfin）。套件內不用它，三個 Route 是導出的。"""
+    """使用者為一個媒體庫做的選擇（既有 Jellyfin）。套件內不用它，它的 Route 是導出的。"""
 
     library: str
     #: 寫入目標。必須是這個媒體庫回報的路徑之一（brief §4.1、§4.3）。
@@ -697,14 +696,14 @@ def _plan(
     selections: Sequence[RouteSelection],
     existing: Sequence[Route],
 ) -> tuple[_Planned, ...]:
-    """套件內導出三個 Route；既有用使用者的勾選。無效的選擇丟 `ValueError`（→ 422）。
+    """套件內由它的媒體庫導出；既有用使用者的勾選。無效的選擇丟 `ValueError`（→ 422）。
 
     已經有 Route 的媒體庫略過（精靈只新增，見 `build_routes`）；slug 與整張表比，不只與
     這一批比——Route 設定頁建的第二條（`tv-2`）也佔著名字。
 
     **目標已經被佔用的選擇也略過，不回 422**（票 14a，使用者拍板）。佔用者可以是既有的 Route，
     也可以是這一批前面的選擇。帳本以目標路徑認 Route，同一個目標兩條就分不出檔案是誰的；而這與
-    「已經有 Route 的媒體庫略過」是同一條只新增規則——套件內三個媒體庫自動全勾，舊 Route 的 key
+    「已經有 Route 的媒體庫略過」是同一條只新增規則——套件內的媒體庫自動全勾，舊 Route 的 key
     一旦對不上（沒有 `ItemId`、媒體庫又改了名），回 422 的話重跑就永遠卡在這一步。
     """
     libraries = {library.name: library for library in setup.jellyfin.libraries}
@@ -761,20 +760,23 @@ def _plan(
 
 
 def _bundled_selections(libraries: Mapping[str, SetupLibrary]) -> tuple[RouteSelection, ...]:
-    """套件內：三個媒體庫各一個 Route（plan §9.3 第 5 步）。
+    """套件內：Jellyfin 報的每一個電影或劇集媒體庫各一個 Route（plan §9.3 第 5 步）。
 
-    目標路徑取自 **Jellyfin 回報的** `locations`，不是自己算一遍——第 3 步建立時的路徑與
-    這裡算出來的路徑一旦分岔，錯的那個要到入庫時才會被發現。
+    讀的是第 3 步讀回來的媒體庫，不是使用者列的清單（票 06f）：清單上還沒建的那一列在
+    Jellyfin 上不存在，建不出 Route；精靈的剖面也是照這一份列「將建立」的。目標路徑取自
+    **Jellyfin 回報的** `locations`，不是自己算一遍——第 3 步建立時的路徑與這裡算出來的
+    路徑一旦分岔，錯的那個要到入庫時才會被發現。
     """
     chosen: list[RouteSelection] = []
-    for bundled in BUNDLED_LIBRARIES:
-        library = libraries.get(bundled.name)
-        if library is None or not library.locations:
+    for library in libraries.values():
+        if library.collection_type not in SUPPORTED_TYPES:
+            continue
+        if not library.locations:
             raise ValueError(
-                f"Jellyfin does not report a library named {bundled.name!r} with a path; "
+                f"Jellyfin reports the library {library.name!r} without a path; "
                 "rerun step 3 before building routes"
             )
-        chosen.append(RouteSelection(library=bundled.name, target_path=library.locations[0]))
+        chosen.append(RouteSelection(library=library.name, target_path=library.locations[0]))
     return tuple(chosen)
 
 

@@ -1229,6 +1229,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/setup/jellyfin/bundled": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Put Jellyfin Bundled
+         * @description 套件內路徑：存下要建的媒體庫（票 06f）。剖面改一次存一次，按「開始靠泊」之前也存一次。
+         */
+        put: operations["put_jellyfin_bundled_api_setup_jellyfin_bundled_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/setup/jellyfin/connect": {
         parameters: {
             query?: never;
@@ -1667,6 +1687,52 @@ export interface components {
             confirmed: number;
             /** Skipped */
             skipped: number;
+        };
+        /** BundledLibrariesIn */
+        BundledLibrariesIn: {
+            /** Libraries */
+            libraries: components["schemas"]["BundledLibraryIn"][];
+        };
+        /** BundledLibraryIn */
+        BundledLibraryIn: {
+            /** Name */
+            name: string;
+            collection_type: components["schemas"]["CollectionType"];
+            /** Folder */
+            folder: string;
+        };
+        /**
+         * BundledLibraryOut
+         * @description 套件內要建的一個媒體庫（票 06f）。
+         */
+        BundledLibraryOut: {
+            /** Name */
+            name: string;
+            collection_type: components["schemas"]["CollectionType"];
+            /** Folder */
+            folder: string;
+            /** Built */
+            built: boolean;
+        };
+        /**
+         * BundledLibraryRefusal
+         * @description 套件內 Jellyfin 的媒體庫清單存不下來（`services/jellyfin.py`、M3 票 06f）。
+         *
+         *     精靈的剖面在送出之前就用同一組規則擋（`web/src/setup/libraryRules.ts`），這裡是後端
+         *     那一份。每一種都指得出是哪一列（`row`），清單本身是空的那一種除外。
+         * @enum {string}
+         */
+        BundledLibraryRefusal: "empty" | "name_missing" | "name_taken" | "folder_missing" | "folder_taken" | "folder_outside_root" | "folder_characters" | "built_changed";
+        /**
+         * BundledLibraryRefusalOut
+         * @description 與其他拒絕同形（`reason` 挑句子、`detail` 是原文），多一格 `row`：是清單的第幾列。
+         */
+        BundledLibraryRefusalOut: {
+            reason: components["schemas"]["BundledLibraryRefusal"];
+            /** Detail */
+            detail: string;
+            /** Row */
+            row?: number | null;
         };
         /**
          * CollectionType
@@ -2323,6 +2389,10 @@ export interface components {
             version: string;
             /** Version Supported */
             version_supported: boolean;
+            /** Bundled */
+            bundled: components["schemas"]["BundledLibraryOut"][];
+            /** Library Root */
+            library_root: string;
         };
         /**
          * JellyfinWebOut
@@ -6347,6 +6417,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["JellyfinSetupOut"];
+                };
+            };
+        };
+    };
+    put_jellyfin_bundled_api_setup_jellyfin_bundled_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BundledLibrariesIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JellyfinSetupOut"];
+                };
+            };
+            /** @description `empty` · `name_missing` · `name_taken` · `folder_missing` · `folder_taken` · `folder_outside_root` · `folder_characters` · `built_changed` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BundledLibraryRefusalOut"];
                 };
             };
         };

@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -17,18 +18,28 @@ from berth.adapters.http import AuthFailedError, ServiceUnavailableError
 from berth.adapters.jellyfin import JellyfinApiKey, JellyfinLibrary, TypeOption
 from berth.adapters.jellyfin.fake import FakeJellyfinClient
 from berth.domain import (
+    BundledLibraryRefusal,
+    CollectionType,
     DetectionReason,
     JellyfinStep,
     ServiceKind,
     ServiceOrigin,
     StepStatus,
 )
-from berth.models import JellyfinSettings, PathSettings, ServiceProbe, SetupSettings
+from berth.models import (
+    BundledLibrary,
+    JellyfinSettings,
+    PathSettings,
+    ServiceProbe,
+    SetupSettings,
+)
 from berth.services.jellyfin import (
+    BundledLibraryRejectedError,
     JellyfinSetupStatus,
     add_berth_path,
     bootstrap_jellyfin,
     connect_jellyfin,
+    save_bundled_libraries,
 )
 from berth.services.settings import read_settings, write_settings
 from berth.services.setup import STEP_QBITTORRENT, create_admin, read_status
@@ -239,6 +250,142 @@ async def test_the_bundled_paths_match_what_the_berth_path_rule_computes(
         f"{root}/tv",
         f"{root}/anime",
     ]
+
+
+# --- 使用者列的媒體庫（票 06f）---
+
+#: 票 06f 的 playwright 情境：改一個名稱、加一個第四列、刪掉 Anime。
+EDITED = [
+    BundledLibrary(name="電影", collection_type=CollectionType.MOVIES, folder="films"),
+    BundledLibrary(name="TV", collection_type=CollectionType.TVSHOWS, folder="tv"),
+    BundledLibrary(name="電視劇（華語）", collection_type=CollectionType.TVSHOWS, folder="tv-zh"),
+]
+
+
+@pytest.mark.asyncio
+async def test_bootstrap_builds_the_libraries_on_the_list(
+    session: AsyncSession, tmp_path: Path
+) -> None:
+    """票 06f 驗收：依清單建，名稱、類型、資料夾都照使用者列的，不是照常數。"""
+    root = tmp_path / "library"
+    await seed(session, library_root=str(root))
+    await save_bundled_libraries(session, EDITED)
+    jellyfin = FakeJellyfinClient()
+
+    status = await bootstrap_jellyfin(session, FakeClientFactory(jellyfin=jellyfin))
+
+    assert [(row.name, row.collection_type, row.locations) for row in jellyfin.libraries_] == [
+        ("電影", "movies", (f"{root}/films",)),
+        ("TV", "tvshows", (f"{root}/tv",)),
+        ("電視劇（華語）", "tvshows", (f"{root}/tv-zh",)),
+    ]
+    assert sorted(p.name for p in root.iterdir()) == ["films", "tv", "tv-zh"]
+    assert detail(status, JellyfinStep.LIBRARIES) == "電影 · TV · 電視劇（華語）"
+    assert [row.built for row in status.bundled] == [True, True, True]
+
+
+@pytest.mark.asyncio
+async def test_new_libraries_get_the_fetchers_of_their_type_unless_their_folder_has_a_row(
+    session: AsyncSession, tmp_path: Path
+) -> None:
+    """`metadata_fetchers` 的鍵是資料夾（媒體庫 slug）；沒寫的依內容類型給預設（票 06f）。"""
+    await seed(session, library_root=str(tmp_path / "library"))
+    await save_bundled_libraries(session, EDITED)
+    settings = await read_settings(session, JellyfinSettings)
+    settings.metadata_fetchers = {"tv-zh": ["TheTVDB", "TheMovieDb"]}
+    await write_settings(session, settings)
+    await session.commit()
+    jellyfin = FakeJellyfinClient()
+
+    await bootstrap_jellyfin(session, FakeClientFactory(jellyfin=jellyfin))
+
+    fetchers = {
+        created.name: {option.metadata_fetchers for option in created.type_options}
+        for created in jellyfin.created
+    }
+    assert fetchers == {
+        "電影": {("TheMovieDb",)},
+        "TV": {("TheMovieDb",)},
+        "電視劇（華語）": {("TheTVDB", "TheMovieDb")},
+    }
+    # 類型照列上寫的：`AvailableOptions` 問的是那一種的型別清單。
+    assert [created.collection_type for created in jellyfin.created] == [
+        CollectionType.MOVIES,
+        CollectionType.TVSHOWS,
+        CollectionType.TVSHOWS,
+    ]
+
+
+@pytest.mark.asyncio
+async def test_a_row_added_after_docking_is_the_only_one_built_on_the_rerun(
+    session: AsyncSession, tmp_path: Path
+) -> None:
+    """冪等（票 06f 驗收）：同名的已經在就標「已經是這樣」，只建清單上新加的那一列。"""
+    await seed(session, library_root=str(tmp_path / "library"))
+    jellyfin = FakeJellyfinClient()
+    factory = FakeClientFactory(jellyfin=jellyfin)
+    first = await bootstrap_jellyfin(session, factory)
+    documentaries = BundledLibrary(
+        name="紀錄片", collection_type=CollectionType.MOVIES, folder="docs"
+    )
+    await save_bundled_libraries(
+        session,
+        [
+            BundledLibrary(name=row.name, collection_type=row.collection_type, folder=row.folder)
+            for row in first.bundled
+        ]
+        + [documentaries],
+    )
+
+    status = await bootstrap_jellyfin(session, factory)
+
+    assert [row.name for row in jellyfin.libraries_] == ["Movies", "TV", "Anime", "紀錄片"]
+    assert [created.name for created in jellyfin.created] == ["Movies", "TV", "Anime", "紀錄片"]
+    assert step(status, JellyfinStep.LIBRARIES) is StepStatus.OK
+    assert detail(status, JellyfinStep.LIBRARIES) == "紀錄片"
+
+    again = await bootstrap_jellyfin(session, factory)
+
+    assert step(again, JellyfinStep.LIBRARIES) is StepStatus.SKIPPED
+    assert len(jellyfin.libraries_) == 4
+
+
+@pytest.mark.asyncio
+async def test_a_built_library_is_locked_on_the_list(session: AsyncSession, tmp_path: Path) -> None:
+    """建好的那一列改名要去 Jellyfin：同名認得的規則下，這裡改了名重跑就是第二個媒體庫。"""
+    await seed(session, library_root=str(tmp_path / "library"))
+    await bootstrap_jellyfin(session, FakeClientFactory(jellyfin=FakeJellyfinClient()))
+
+    with pytest.raises(BundledLibraryRejectedError) as caught:
+        await save_bundled_libraries(session, EDITED)
+
+    assert caught.value.reason is BundledLibraryRefusal.BUILT_CHANGED
+    stored = await read_settings(session, SetupSettings)
+    assert [row.name for row in stored.jellyfin.bundled] == ["Movies", "TV", "Anime"]
+
+
+@pytest.mark.asyncio
+async def test_a_library_renamed_in_jellyfin_is_not_built_again(
+    session: AsyncSession, tmp_path: Path
+) -> None:
+    """code review 抓到：照畫面說的去 Jellyfin 改名之後，只比名稱就認不出它。
+
+    改名後重跑會再建一個 `Movies` 指向同一個資料夾——正是鎖住那一列要擋的重複。所以「已經在
+    Jellyfin 上」也認路徑：那個資料夾已經是某個媒體庫的路徑，那一列就是建好了。
+    """
+    root = tmp_path / "library"
+    await seed(session, library_root=str(root))
+    jellyfin = FakeJellyfinClient()
+    factory = FakeClientFactory(jellyfin=jellyfin)
+    await bootstrap_jellyfin(session, factory)
+    jellyfin.libraries_[0] = replace(jellyfin.libraries_[0], name="Films")
+
+    status = await bootstrap_jellyfin(session, factory)
+
+    assert [row.name for row in jellyfin.libraries_] == ["Films", "TV", "Anime"]
+    assert step(status, JellyfinStep.LIBRARIES) is StepStatus.SKIPPED
+    # 那一列照樣鎖著：它在 Jellyfin 上，只是換了名字。
+    assert [row.built for row in status.bundled] == [True, True, True]
 
 
 # --- 版本閘門（brief §16.4、§19、§20.9）---

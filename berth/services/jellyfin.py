@@ -21,9 +21,10 @@ Berth 只支援 12 以上，序列裡也不再有「裝插件」與「重啟」�
 from __future__ import annotations
 
 import re
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Protocol
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -37,11 +38,16 @@ from berth.adapters.jellyfin import (
     unsupported_message,
     version_supported,
 )
-from berth.domain import CollectionType, JellyfinStep, ServiceKind, ServiceOrigin, StepStatus
+from berth.domain import (
+    BundledLibraryRefusal,
+    CollectionType,
+    JellyfinStep,
+    ServiceKind,
+    ServiceOrigin,
+    StepStatus,
+)
 from berth.models import (
-    ANIME_SLUG,
-    MOVIES_SLUG,
-    TV_SLUG,
+    BundledLibrary,
     JellyfinSettings,
     PathSettings,
     SetupAdmin,
@@ -61,8 +67,12 @@ UI_CULTURE = "zh-TW"
 METADATA_LANGUAGE = "zh-TW"
 METADATA_COUNTRY = "TW"
 
-#: brief §10 的決定：第一階段只用 TMDB。設定裡沒寫的媒體庫落回這個。
-DEFAULT_METADATA_FETCHER = "TheMovieDb"
+#: 設定裡沒寫的媒體庫依內容類型落回這裡（票 06f）。brief §10 的決定：第一階段只用 TMDB，
+#: 所以兩種現在一樣；分開寫是因為切換點是按類型與按媒體庫，不是全域的。
+DEFAULT_METADATA_FETCHERS: dict[CollectionType, tuple[str, ...]] = {
+    CollectionType.MOVIES: ("TheMovieDb",),
+    CollectionType.TVSHOWS: ("TheMovieDb",),
+}
 
 #: 媒體庫掛了 TVDB 的 metadata fetcher 就警告（brief §16.4）。比對小寫子字串，因為名字由
 #: 插件自己決定（官方插件是 `TheTVDB`）。
@@ -95,20 +105,40 @@ class StepFailedError(Exception):
         self.detail = detail
 
 
-@dataclass(frozen=True, slots=True)
-class BundledLibrary:
-    """套件內固定建立的媒體庫（plan §9.4 第 4 步、brief §16.3）。"""
+class BundledLibraryRejectedError(Exception):
+    """媒體庫清單存不下來（票 06f）。`row` 是新清單裡的第幾列；說不出是哪一列時是 `None`。"""
 
-    slug: str
+    def __init__(self, reason: BundledLibraryRefusal, detail: str, *, row: int | None) -> None:
+        super().__init__(f"{reason}: {detail}")
+        self.reason = reason
+        self.detail = detail
+        self.row = row
+
+
+class LibraryDraft(Protocol):
+    """送來存的一列，`PUT /setup/jellyfin/bundled` 的 body 就長這樣。存下來時才變成
+    `BundledLibrary`。
+
+    api 不 import models（import-linter），所以這裡收一個形狀而不是那個 model。
+    """
+
+    @property
+    def name(self) -> str: ...
+    @property
+    def collection_type(self) -> CollectionType: ...
+    @property
+    def folder(self) -> str: ...
+
+
+@dataclass(frozen=True, slots=True)
+class BundledLibraryView:
+    """剖面上的一列：使用者列的一個媒體庫，以及它是不是已經在 Jellyfin 建好了。"""
+
     name: str
     collection_type: CollectionType
-
-
-BUNDLED_LIBRARIES: tuple[BundledLibrary, ...] = (
-    BundledLibrary(MOVIES_SLUG, "Movies", CollectionType.MOVIES),
-    BundledLibrary(TV_SLUG, "TV", CollectionType.TVSHOWS),
-    BundledLibrary(ANIME_SLUG, "Anime", CollectionType.TVSHOWS),
-)
+    folder: str
+    #: 建好的那一列在精靈裡鎖住，要改去 Jellyfin（票 06f）。
+    built: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -137,6 +167,10 @@ class JellyfinSetupStatus:
     version: str
     #: 版本夠不夠新（brief §16.4）。**還沒問過時是 `True`**：那一格是「尚未取得」而不是紅燈。
     version_supported: bool
+    #: 套件內路徑要建的媒體庫（票 06f）。既有路徑照樣帶著，只是畫面不讀它。
+    bundled: tuple[BundledLibraryView, ...]
+    #: 媒體庫資料夾的父目錄。剖面上每一列的完整路徑是 `<library_root>/<folder>`。
+    library_root: str
 
 
 async def read_jellyfin_status(session: AsyncSession) -> JellyfinSetupStatus:
@@ -146,6 +180,7 @@ async def read_jellyfin_status(session: AsyncSession) -> JellyfinSetupStatus:
     paths = await read_settings(session, PathSettings)
     origin, base_url = _target(setup, jellyfin)
     version = _measured_version(setup)
+    built = _on_jellyfin(setup, paths.library_root)
     return JellyfinSetupStatus(
         origin=origin,
         base_url=base_url,
@@ -154,7 +189,116 @@ async def read_jellyfin_status(session: AsyncSession) -> JellyfinSetupStatus:
         libraries=tuple(_library_view(row, paths.library_root) for row in setup.jellyfin.libraries),
         version=version,
         version_supported=not version or version_supported(version),
+        bundled=tuple(
+            BundledLibraryView(
+                name=row.name,
+                collection_type=row.collection_type,
+                folder=row.folder,
+                built=row in built,
+            )
+            for row in setup.jellyfin.bundled
+        ),
+        library_root=paths.library_root,
     )
+
+
+async def save_bundled_libraries(
+    session: AsyncSession, rows: Sequence[LibraryDraft]
+) -> JellyfinSetupStatus:
+    """存下套件內要建的媒體庫（票 06f）。按「開始靠泊」之前剖面每改一次就存一次。
+
+    規則見 `check_bundled_libraries`。**已經在 Jellyfin 建好的列改不得**：在這裡改了名，重跑
+    會多建一個指向同一個資料夾的；刪了 Berth 也不會去刪 Jellyfin 的（brief §16.4 的紅線對自己
+    建的也一樣）。改名與刪除要去 Jellyfin。
+    """
+    setup = await read_settings(session, SetupSettings)
+    paths = await read_settings(session, PathSettings)
+    built = _on_jellyfin(setup, paths.library_root)
+    setup.jellyfin.bundled = list(check_bundled_libraries(rows, built=built))
+    await write_settings(session, setup)
+    await session.commit()
+    return await read_jellyfin_status(session)
+
+
+def check_bundled_libraries(
+    rows: Sequence[LibraryDraft], *, built: Sequence[BundledLibrary]
+) -> tuple[BundledLibrary, ...]:
+    """媒體庫清單的規則（票 06f）。回修掉前後空白的清單；不成立就丟 `BundledLibraryRejectedError`。
+
+    精靈的剖面在送出之前用同一組規則擋（`web/src/setup/libraryRules.ts`）。名稱與資料夾
+    都不分大小寫比重複：Windows 與 macOS 的檔案系統不分，Jellyfin 的名稱比對也不可知。
+    `built` 是已經在 Jellyfin 建好的那幾列，它們要原樣留在清單裡。
+    """
+    if not rows:
+        raise BundledLibraryRejectedError(BundledLibraryRefusal.EMPTY, "no libraries", row=None)
+    cleaned = tuple(
+        BundledLibrary(
+            name=row.name.strip(), collection_type=row.collection_type, folder=row.folder.strip()
+        )
+        for row in rows
+    )
+    names: set[str] = set()
+    folders: set[str] = set()
+    for index, row in enumerate(cleaned):
+        reason = _row_problem(row, names, folders)
+        if reason is not None:
+            raise BundledLibraryRejectedError(reason, f"{row.name!r} → {row.folder!r}", row=index)
+        names.add(row.name.casefold())
+        folders.add(row.folder.casefold())
+    for kept in built:
+        if kept not in cleaned:
+            raise BundledLibraryRejectedError(
+                BundledLibraryRefusal.BUILT_CHANGED,
+                f"{kept.name!r} already exists on Jellyfin; rename or delete it there",
+                row=None,
+            )
+    return cleaned
+
+
+#: 資料夾要是 `library_root` 底下的一層（票 06f）：有分隔符號、或整個是 `.` / `..`，就跳出去
+#: 或往下鑽了。往下鑽也擋：`tv` 與 `tv/anime` 兩個媒體庫會重複掃到同一批檔案。
+_OUTSIDE_ROOT = re.compile(r"[/\\]|^\.{1,2}$")
+
+
+def _row_problem(
+    row: BundledLibrary, names: set[str], folders: set[str]
+) -> BundledLibraryRefusal | None:
+    if not row.name:
+        return BundledLibraryRefusal.NAME_MISSING
+    if not row.folder:
+        return BundledLibraryRefusal.FOLDER_MISSING
+    if _OUTSIDE_ROOT.search(row.folder):
+        return BundledLibraryRefusal.FOLDER_OUTSIDE_ROOT
+    if _UNSAFE_IN_PATH.search(row.folder):
+        return BundledLibraryRefusal.FOLDER_CHARACTERS
+    if row.name.casefold() in names:
+        return BundledLibraryRefusal.NAME_TAKEN
+    if row.folder.casefold() in folders:
+        return BundledLibraryRefusal.FOLDER_TAKEN
+    return None
+
+
+def _on_jellyfin(setup: SetupSettings, library_root: str) -> tuple[BundledLibrary, ...]:
+    """清單裡已經在 Jellyfin 建好的那幾列，對著第 3 步最後一次讀到的媒體庫（`_already_built`）。"""
+    names = {library.name for library in setup.jellyfin.libraries}
+    locations = {path for library in setup.jellyfin.libraries for path in library.locations}
+    return tuple(
+        row
+        for row in setup.jellyfin.bundled
+        if _already_built(row, library_root, names=names, locations=locations)
+    )
+
+
+def _already_built(
+    row: BundledLibrary, library_root: str, *, names: set[str], locations: set[str]
+) -> bool:
+    """這一列在 Jellyfin 上了嗎：同名的媒體庫在，或它的資料夾已經是某個媒體庫的路徑。
+
+    **兩個都認**：同名不會被拒，會長出 `Movies2`（實測，brief §20.7）；而使用者照畫面說的去
+    Jellyfin 改了名之後名稱就對不上了，只比名稱的話重跑會在同一個資料夾上再建一個（code review）。
+    bootstrap 與剖面的鎖讀的是同一條。
+    """
+    return row.name in names or bundled_path(row.folder, library_root) in locations
 
 
 async def bootstrap_jellyfin(
@@ -253,7 +397,7 @@ async def _run(
     _, base_url = _target(setup, jellyfin)
 
     client = factory.jellyfin(base_url, token=jellyfin.api_key)
-    runner = _Runner(client, setup.admin, jellyfin, paths)
+    runner = _Runner(client, setup.admin, jellyfin, paths, setup.jellyfin.bundled)
     if credentials is not None:
         runner.sign_in_as(*credentials)
     try:
@@ -328,10 +472,12 @@ class _Runner:
         admin: SetupAdmin,
         jellyfin: JellyfinSettings,
         paths: PathSettings,
+        bundled: Sequence[BundledLibrary],
     ) -> None:
         self._client = client
         self._jellyfin = jellyfin
         self._paths = paths
+        self._bundled = tuple(bundled)
         self._credentials = (admin.username, admin.password)
         self._token = jellyfin.api_key
         self._fresh = False
@@ -402,26 +548,26 @@ class _Runner:
         if not self._fresh:
             # 初始精靈跑完之後，`/Library/VirtualFolders` 就要管理員憑證了。
             await self._authenticate()
-        existing = {library.name for library in await self._client.libraries()}
+        libraries = await self._client.libraries()
+        names = {library.name for library in libraries}
+        locations = {path for library in libraries for path in library.locations}
+        root = self._paths.library_root
         created: list[str] = []
-        for bundled in BUNDLED_LIBRARIES:
-            # 與既有媒體庫的 Berth 路徑同一支函式：兩套算法遲早會分岔，而分岔的症狀是
-            # `has_berth_path` 對 Berth 自己建的路徑報 false（`test_bundled_paths_...` 釘住）。
-            path = berth_path(bundled.name, self._paths.library_root)
+        present: list[str] = []
+        for bundled in self._bundled:
+            path = bundled_path(bundled.folder, root)
             # 媒體庫目錄由 Berth 建（plan §9.1）；兩邊掛同一個宿主目錄，所以建完 Jellyfin
             # 立刻看得到。
             ensure_directory(Path(path))
-            if bundled.name in existing:
-                # 同名不會被拒，會長出 `Movies2` 指向同一個路徑（實測，brief §20.7）。
+            if _already_built(bundled, root, names=names, locations=locations):
+                present.append(bundled.name)
                 continue
             await self._client.create_library(await self._new_library(bundled, path))
             created.append(bundled.name)
         self.libraries = await self._client.libraries()
         if created:
             return StepStatus.OK, " · ".join(created)
-        return StepStatus.SKIPPED, " · ".join(
-            bundled.name for bundled in BUNDLED_LIBRARIES if bundled.name in existing
-        )
+        return StepStatus.SKIPPED, " · ".join(present)
 
     async def _remote_access(self) -> tuple[StepStatus, str]:
         if not self._fresh:
@@ -479,7 +625,9 @@ class _Runner:
 
     async def _new_library(self, bundled: BundledLibrary, path: str) -> NewLibrary:
         available = await self._client.available_type_options(bundled.collection_type)
-        fetchers = self._jellyfin.metadata_fetchers.get(bundled.slug) or [DEFAULT_METADATA_FETCHER]
+        fetchers = self._jellyfin.metadata_fetchers.get(
+            bundled.folder
+        ) or DEFAULT_METADATA_FETCHERS.get(bundled.collection_type, ())
         return NewLibrary(
             name=bundled.name,
             collection_type=bundled.collection_type,
@@ -552,6 +700,15 @@ def library_slug(library_name: str) -> str:
     Berth 路徑要對得起來，兩套算法遲早會分岔。
     """
     return _UNSAFE_IN_PATH.sub("-", library_name).strip(" .-").lower() or "berth"
+
+
+def bundled_path(folder: str, library_root: str) -> str:
+    """套件內媒體庫的路徑：`<library root>/<folder>`（票 06f）。
+
+    預設三列的資料夾就是 `library_slug(名稱)`，所以它們與 `berth_path` 算出來的一樣；使用者
+    自己取的資料夾不必。`has_berth_path` 只在既有路徑的畫面上讀（加路徑、勾選寫入目標）。
+    """
+    return f"{library_root.rstrip('/')}/{folder}"
 
 
 def berth_path(library_name: str, library_root: str) -> str:

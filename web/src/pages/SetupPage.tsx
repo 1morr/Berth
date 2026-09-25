@@ -9,6 +9,7 @@ import {
   applyIndexers,
   applyQbittorrent,
   bootstrapJellyfin,
+  bundledRefusalOf,
   buildRoutes,
   completeSetup,
   connectIndexer,
@@ -21,6 +22,7 @@ import {
   qbittorrentSetupQueryOptions,
   removeIndexer,
   routeSetupQueryOptions,
+  saveBundledLibraries,
   searchIndexers,
   setupStatusQueryOptions,
   skipIndexers,
@@ -30,6 +32,7 @@ import {
   type ConnectInput,
   type IndexerSetup,
   type JellyfinSetup,
+  type LibraryDraft,
   type RouteSelectionInput,
   type RouteSetup,
   type SetupStatus,
@@ -173,8 +176,17 @@ export function SetupPage({
     onMutate: hold,
     onSuccess: absorb,
   })
+  // 剖面上的媒體庫清單停手就存（票 06f）。不釘畫面、不重讀精靈狀態：存清單不會讓精靈前進。
+  const saveLibraries = useMutation({
+    mutationFn: saveBundledLibraries,
+    onSuccess: (next) => queryClient.setQueryData(jellyfinSetupQueryOptions.queryKey, next),
+  })
+  // 先存剖面上的那一份再跑：`bootstrap` 讀的是存下來的清單，而停手存檔可能還沒送出去。
   const bootstrap = useMutation({
-    mutationFn: bootstrapJellyfin,
+    mutationFn: async (libraries: LibraryDraft[]) => {
+      await saveBundledLibraries(libraries)
+      return bootstrapJellyfin()
+    },
     onMutate: hold,
     onSuccess: absorbJellyfin,
   })
@@ -245,6 +257,8 @@ export function SetupPage({
 
   const waiting = current?.services.some((row) => row.origin === 'pending') ?? false
   const inFlight = bootstrap.isPending
+  // 靠泊之前那一次存檔被擋下來：那不是「請求沒跑完」，由剖面自己說（`librariesFailure`）。
+  const bootstrapRefusal = bundledRefusalOf(bootstrap.error)
 
   const jellyfin = useQuery({
     ...jellyfinSetupQueryOptions,
@@ -309,6 +323,18 @@ export function SetupPage({
       />
     )
 
+  /** 媒體庫清單沒存下來的那一句：後端說得出是哪一列就說，說不出就是請求沒跑完（票 06f）。 */
+  function librariesFailure(): string | null {
+    // 停手存檔的失敗（任何一種）優先；靠泊之前那一次存檔被擋下來也算——那時 `bootstrap` 失敗的原因就是它。
+    const refusal = saveLibraries.isError ? bundledRefusalOf(saveLibraries.error) : bootstrapRefusal
+    if (saveLibraries.isError && !refusal) return t('jellyfin.bundled.list.saveFailed')
+    if (!refusal) return null
+    const reason = t(`jellyfin.bundled.list.problem.${refusal.reason}`)
+    return refusal.row === undefined
+      ? t('jellyfin.bundled.list.refused', { reason })
+      : t('jellyfin.bundled.list.refusedRow', { position: refusal.row + 1, reason })
+  }
+
   const shell = {
     step,
     backend,
@@ -362,11 +388,14 @@ export function SetupPage({
           <JellyfinStep
             setup={jellyfin.data}
             running={bootstrap.isPending}
-            bootstrapFailed={bootstrap.isError}
+            bootstrapFailed={bootstrap.isError && !bootstrapRefusal}
             signInFailed={signIn.isError}
             connecting={signIn.isPending}
             addingPath={addPath.isPending ? addPath.variables : null}
-            onBootstrap={() => bootstrap.mutate()}
+            onBootstrap={(libraries) => bootstrap.mutate(libraries)}
+            onSaveLibraries={(libraries) => saveLibraries.mutate(libraries)}
+            savingLibraries={saveLibraries.isPending}
+            saveLibrariesFailed={librariesFailure()}
             onConnect={(input) => signIn.mutate(input)}
             onAddPath={(library) => addPath.mutate(library)}
             note={note}

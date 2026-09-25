@@ -27,6 +27,7 @@ from berth.domain import (
     StepStatus,
 )
 from berth.models import (
+    DEFAULT_BUNDLED_LIBRARIES,
     IndexerSettings,
     JellyfinSettings,
     PathSettings,
@@ -36,7 +37,6 @@ from berth.models import (
     SetupSettings,
     SetupStep,
 )
-from berth.services.jellyfin import BUNDLED_LIBRARIES
 from berth.services.routes import delete_route
 from berth.services.settings import read_settings, write_settings
 from berth.services.setup import create_admin
@@ -44,8 +44,10 @@ from tests.integration.factories import FakeClientFactory
 
 NOW = datetime(2026, 9, 8, 12, 0, tzinfo=UTC)
 
-#: 套件內 Jellyfin 建好的三個媒體庫。名字與類型跟著 services 那一份走，不另抄一遍。
-BUNDLED = tuple((row.name, row.collection_type.value) for row in BUNDLED_LIBRARIES)
+#: 套件內 Jellyfin 照預設清單建好的三個媒體庫。名字、類型與資料夾跟著 models 那一份走，不另抄一遍。
+BUNDLED = tuple(
+    (row.name, row.collection_type.value, row.folder) for row in DEFAULT_BUNDLED_LIBRARIES
+)
 
 
 async def arrange(
@@ -119,8 +121,8 @@ def bundled_libraries(library_root: Path) -> tuple[SetupLibrary, ...]:
     也真的建出來——第 5 步的檢查問的就是「這條路徑在 Berth 內看得到嗎」。
     """
     rows = []
-    for index, (name, collection_type) in enumerate(BUNDLED):
-        path = library_root / name.lower()
+    for index, (name, collection_type, folder) in enumerate(BUNDLED):
+        path = library_root / folder
         path.mkdir(parents=True, exist_ok=True)
         rows.append(
             SetupLibrary(

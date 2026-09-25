@@ -76,6 +76,8 @@ function wizard(start: number, overrides: Record<string, StubRoute | (() => Stub
         api_key_present: current > 3,
       }),
     }),
+    // 按下靠泊之前先存剖面上的媒體庫清單（票 06f）。
+    'PUT /api/setup/jellyfin/bundled': () => ({ body: jellyfinSetup() }),
     'POST /api/setup/jellyfin/bootstrap': advance(4, jellyfinSetup({ steps: SEQUENCE_DONE })),
     'GET /api/setup/qbittorrent/diff': () => ({ body: qbittorrentSetup() }),
     'POST /api/setup/qbittorrent/apply': advance(

@@ -8,11 +8,18 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, ClassVar, Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import Text
 from sqlalchemy.orm import Mapped, mapped_column
 
-from berth.domain import DetectionReason, HealthStatus, ServiceKind, ServiceOrigin, StepStatus
+from berth.domain import (
+    CollectionType,
+    DetectionReason,
+    HealthStatus,
+    ServiceKind,
+    ServiceOrigin,
+    StepStatus,
+)
 from berth.models.base import Base
 from berth.models.types import JsonText, UtcDateTime, utcnow
 
@@ -34,12 +41,6 @@ class SettingsGroup(BaseModel):
     KEY: ClassVar[str]
 
 
-#: 套件內三個媒體庫的 slug（plan §9.4 第 4 步）。也是 `metadata_fetchers` 與媒體庫路徑的鍵。
-MOVIES_SLUG = "movies"
-TV_SLUG = "tv"
-ANIME_SLUG = "anime"
-
-
 class JellyfinSettings(SettingsGroup):
     KEY = "services.jellyfin"
 
@@ -51,15 +52,13 @@ class JellyfinSettings(SettingsGroup):
     public_url: str = ""
 
     #: 建立媒體庫時寫進 `LibraryOptions.TypeOptions[].MetadataFetchers` 的名字（plan §9.4）。
-    #: 鍵是媒體庫 slug，順序即優先序；名字是 Jellyfin 自己報的 fetcher 名
-    #: （`GET /Libraries/AvailableOptions`）。**anime 單獨一列就是那個切換點**：brief §10 的
-    #: TVDB【研究】定案時改這裡的值，不改程式。`ImageFetchers` 不在這裡——它跟著伺服器
-    #: 自己的可用清單走，寫死會讓沒對到 TMDB 的作品連縮圖都沒有（實測，brief §20.7）。
-    metadata_fetchers: dict[str, list[str]] = {
-        MOVIES_SLUG: ["TheMovieDb"],
-        TV_SLUG: ["TheMovieDb"],
-        ANIME_SLUG: ["TheMovieDb"],
-    }
+    #: 鍵是套件內媒體庫的資料夾名（`BundledLibrary.folder`，不是 Route 的 slug），順序即優先序；
+    #: 名字是 Jellyfin 自己報的 fetcher 名（`GET /Libraries/AvailableOptions`）。沒寫的媒體庫
+    #: 依內容類型落回 `services.jellyfin.DEFAULT_METADATA_FETCHERS`（票 06f）。**`anime` 單獨
+    #: 寫一列就是那個切換點**：brief §10 的 TVDB【研究】定案時改這裡的值，不改程式。
+    #: `ImageFetchers` 不在這裡——它跟著伺服器自己的可用清單走，寫死會讓沒對到 TMDB 的作品
+    #: 連縮圖都沒有（實測，brief §20.7）。
+    metadata_fetchers: dict[str, list[str]] = {}
 
 
 class QbittorrentSettings(SettingsGroup):
@@ -94,7 +93,7 @@ class PathSettings(SettingsGroup):
     #: qBittorrent 的全域 temp path 與 category save path 的根（brief §4.1）。
     incomplete_root: str = "/data/torrent/incomplete"
     complete_root: str = "/data/torrent/complete"
-    #: 套件內 Jellyfin 三個媒體庫的父目錄（plan §9.1）。既有 Jellyfin 的「加入 Berth 路徑」
+    #: 套件內 Jellyfin 媒體庫資料夾的父目錄（plan §9.1）。既有 Jellyfin 的「加入 Berth 路徑」
     #: 也落在它底下。Berth 與 Jellyfin 把同一個宿主目錄掛在同一個容器路徑，所以這一個字串
     #: 對兩邊都成立（brief §16.4 的硬規則）。
     library_root: str = "/data/library"
@@ -172,6 +171,30 @@ class SetupLibrary(BaseModel):
     metadata_fetchers: list[str] = []
 
 
+class BundledLibrary(BaseModel):
+    """套件內 Jellyfin 要建的一個媒體庫（plan §9.4 第 4 步、M3 票 06f）。
+
+    精靈第 3 步的剖面上一列：內容類型 + 顯示名稱 + 資料夾，照 Jellyfin 自己啟動精靈的
+    「新增媒體庫」。資料夾是 `library_root` 底下的一層，也是 `JellyfinSettings.metadata_fetchers`
+    的鍵（Route 的 slug 照舊由名稱算，兩者不必相同）。規則在
+    `services.jellyfin.check_bundled_libraries`。
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    name: str
+    collection_type: CollectionType
+    folder: str
+
+
+#: 沒有人動過清單時的那三列（brief §16.3）。資料夾就是原本的三個 slug。
+DEFAULT_BUNDLED_LIBRARIES: tuple[BundledLibrary, ...] = (
+    BundledLibrary(name="Movies", collection_type=CollectionType.MOVIES, folder="movies"),
+    BundledLibrary(name="TV", collection_type=CollectionType.TVSHOWS, folder="tv"),
+    BundledLibrary(name="Anime", collection_type=CollectionType.TVSHOWS, folder="anime"),
+)
+
+
 class SetupJellyfin(BaseModel):
     """精靈第 3 步的狀態（plan §9.4、§9.5）。兩條路徑共用同一份形狀。
 
@@ -184,6 +207,11 @@ class SetupJellyfin(BaseModel):
 
     steps: list[SetupStep] = []
     libraries: list[SetupLibrary] = []
+    #: 套件內路徑按「開始靠泊」之前使用者列的媒體庫（票 06f）。按之前就存在這裡，關掉瀏覽器
+    #: 回來還在；`bootstrap_jellyfin` 讀它。既有路徑用不到它。
+    bundled: list[BundledLibrary] = Field(
+        default_factory=lambda: [row.model_copy() for row in DEFAULT_BUNDLED_LIBRARIES]
+    )
 
 
 class SetupQbittorrent(BaseModel):

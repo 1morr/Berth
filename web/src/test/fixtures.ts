@@ -82,6 +82,12 @@ export function jellyfinSetup(overrides: Partial<JellyfinSetup> = {}): JellyfinS
     libraries: [],
     version: '',
     version_supported: true,
+    bundled: [
+      { name: 'Movies', collection_type: 'movies', folder: 'movies', built: false },
+      { name: 'TV', collection_type: 'tvshows', folder: 'tv', built: false },
+      { name: 'Anime', collection_type: 'tvshows', folder: 'anime', built: false },
+    ],
+    library_root: '/data/library',
     ...overrides,
   }
 }

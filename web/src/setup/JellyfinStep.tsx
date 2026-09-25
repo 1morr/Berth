@@ -1,11 +1,18 @@
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { JELLYFIN_STEPS, type JellyfinConnectInput, type JellyfinSetup } from '../api/setup'
+import {
+  JELLYFIN_STEPS,
+  type JellyfinConnectInput,
+  type JellyfinSetup,
+  type LibraryDraft,
+} from '../api/setup'
 import { type SetupStep } from '../api/schemas'
 import { STICKY_ACTION, GhostButton, Notice, PrimaryButton } from '../components/controls'
 import { Cutaway, CutawayRow } from '../components/Cutaway'
+import { BundledLibraries } from './BundledLibraries'
 import { JellyfinExisting } from './JellyfinExisting'
+import { useLibraryDraft, type LibraryDraftState } from './useLibraryDraft'
 import { StepLine } from '../components/StepLine'
 import { isSettled } from '../components/steps'
 import { STEP_ENDPOINT, STEP_FIX, STEP_LABEL, isJellyfinStep, manualSteps } from './jellyfinSteps'
@@ -13,7 +20,8 @@ import { STEP_ENDPOINT, STEP_FIX, STEP_LABEL, isJellyfinStep, manualSteps } from
 /**
  * 泊位 1：Jellyfin（plan §9.3 第 3 步）。兩條路徑由第 2 步的判定決定，使用者不必自己選。
  *
- * 套件內：一顆按鈕跑完 plan §9.4 的七步，畫面逐條纜繩顯示結果與實測值。
+ * 套件內：剖面是一張要建的媒體庫清單（票 06f），一顆按鈕跑完 plan §9.4 的七步，畫面逐條纜繩
+ * 顯示結果與實測值。
  * 既有：連線表單 + 媒體庫清單 + 一顆要二次確認的按鈕（`JellyfinExisting` 的「加入 Berth 路徑」）。
  */
 export function JellyfinStep({
@@ -22,6 +30,9 @@ export function JellyfinStep({
   bootstrapFailed,
   signInFailed,
   onBootstrap,
+  onSaveLibraries,
+  savingLibraries,
+  saveLibrariesFailed,
   onConnect,
   onAddPath,
   connecting,
@@ -35,7 +46,13 @@ export function JellyfinStep({
   /** 請求本身沒跑完（後端沒回應）。步驟自己的失敗在 `setup.steps` 裡，各自貼在它那一行。 */
   bootstrapFailed: boolean
   signInFailed: boolean
-  onBootstrap: () => void
+  /** 帶著剖面上的清單：先存它，再跑序列（`bootstrap` 讀的是存下來的那一份）。 */
+  onBootstrap: (libraries: LibraryDraft[]) => void
+  /** 剖面停手一會兒就存（票 06f）。 */
+  onSaveLibraries: (libraries: LibraryDraft[]) => void
+  savingLibraries: boolean
+  /** 清單存不下來的那一句，沒有就是 `null`。 */
+  saveLibrariesFailed: string | null
   onConnect: (input: JellyfinConnectInput) => void
   onAddPath: (library: string) => void
   connecting: boolean
@@ -49,12 +66,27 @@ export function JellyfinStep({
 }) {
   const { t } = useTranslation()
   const bundled = setup.origin === 'bundled'
+  // 既有路徑用不到它，但 hook 不能有條件地呼叫；它只在清單真的被改過時才存。
+  const draft = useLibraryDraft(setup, onSaveLibraries)
 
   return (
     <div className="grid flex-1 gap-px bg-rule lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
       <div className="min-w-0 bg-hull p-6">
         <div className="lg:sticky lg:top-6">
-          {bundled ? <SequenceCutaway /> : <ServerCutaway setup={setup} />}
+          {bundled ? (
+            <div className="grid gap-6">
+              <BundledLibraries
+                draft={draft}
+                libraryRoot={setup.library_root}
+                locked={running}
+                saving={savingLibraries}
+                saveFailed={saveLibrariesFailed}
+              />
+              <SequenceCutaway />
+            </div>
+          ) : (
+            <ServerCutaway setup={setup} />
+          )}
         </div>
       </div>
 
@@ -72,6 +104,7 @@ export function JellyfinStep({
         {bundled ? (
           <BootstrapSequence
             setup={setup}
+            draft={draft}
             running={running}
             failed={bootstrapFailed}
             onBootstrap={onBootstrap}
@@ -153,15 +186,17 @@ function ServerCutaway({ setup }: { setup: JellyfinSetup }) {
  */
 function BootstrapSequence({
   setup,
+  draft,
   running,
   failed,
   onBootstrap,
   redetect,
 }: {
   setup: JellyfinSetup
+  draft: LibraryDraftState
   running: boolean
   failed: boolean
-  onBootstrap: () => void
+  onBootstrap: (libraries: LibraryDraft[]) => void
   redetect?: ReactNode
 }) {
   const { t } = useTranslation()
@@ -169,6 +204,9 @@ function BootstrapSequence({
   const started = setup.steps.length > 0
   const broke = setup.steps.find((row) => row.status === 'failed')
   const done = started && !running && setup.steps.every((row) => isSettled(row.status))
+  // 清單還有標紅的格子就不靠泊：建出來的會是使用者沒打算要的那一份（票 06f）。
+  const blocked = draft.blocked && !running
+  const run = () => onBootstrap(draft.drafts)
 
   return (
     <>
@@ -187,7 +225,9 @@ function BootstrapSequence({
       {done && (
         <div className="mt-4">
           <Notice signal="secured" label={t('status.ok')}>
-            {t('jellyfin.bundled.done')}
+            {t('jellyfin.bundled.done', {
+              count: setup.bundled.filter((row) => row.built).length,
+            })}
           </Notice>
         </div>
       )}
@@ -203,12 +243,15 @@ function BootstrapSequence({
 
       {/* 做完了，「前往下一個泊位」接手主要動作與底部的位置（`BerthNav`）。 */}
       <div className={`mt-6 ${done ? '' : STICKY_ACTION}`}>
+        {blocked && (
+          <p className="mb-3 text-xs text-blocked-ink">{t('jellyfin.bundled.list.blocked')}</p>
+        )}
         {done ? (
-          <GhostButton type="button" busy={running} onClick={onBootstrap}>
+          <GhostButton type="button" busy={running} disabled={blocked} onClick={run}>
             {t('jellyfin.bundled.rerun')}
           </GhostButton>
         ) : (
-          <PrimaryButton type="button" busy={running} onClick={onBootstrap}>
+          <PrimaryButton type="button" busy={running} disabled={blocked} onClick={run}>
             {running
               ? t('jellyfin.bundled.running')
               : t(broke ? 'jellyfin.bundled.retry' : 'jellyfin.bundled.run')}

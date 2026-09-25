@@ -1,6 +1,7 @@
 import { queryOptions } from '@tanstack/react-query'
 
-import { apiDelete, apiGet, apiPost } from './client'
+import { ApiError, apiDelete, apiGet, apiPost, apiPut } from './client'
+import { parseRefusal, type ReasonSet, type Refusal } from './refusal'
 import type { QbittorrentSetup, Schemas, ServiceKind } from './schemas'
 
 /** `DetectionReason`：判定的理由，UI 逐服務顯示。 */
@@ -67,6 +68,51 @@ export const jellyfinSetupQueryOptions = queryOptions({
 
 export function bootstrapJellyfin(): Promise<JellyfinSetup> {
   return apiPost<JellyfinSetup>('/setup/jellyfin/bootstrap')
+}
+
+/** 套件內要建的一個媒體庫，以及它是不是已經在 Jellyfin 建好了（票 06f）。 */
+export type BundledLibrary = Schemas['BundledLibraryOut']
+
+/** 送去存的一列：內容類型 + 名稱 + 資料夾。 */
+export type LibraryDraft = Schemas['BundledLibraryIn']
+
+/**
+ * 存下套件內要建的媒體庫（票 06f）。剖面改一次存一次（關掉瀏覽器回來還在），按「開始靠泊」
+ * 之前也先存一次——`bootstrap` 讀的是存下來的那一份。
+ */
+export function saveBundledLibraries(libraries: LibraryDraft[]): Promise<JellyfinSetup> {
+  return apiPut<JellyfinSetup>('/setup/jellyfin/bundled', {
+    libraries,
+  } satisfies Schemas['BundledLibrariesIn'])
+}
+
+export type BundledLibraryRefusal = Schemas['BundledLibraryRefusal']
+
+/** 清單的拒絕，另帶是第幾列（0 起算）；空清單與「建好的那一列不見了」說不出是哪一列。 */
+export interface BundledRefusal extends Refusal<BundledLibraryRefusal> {
+  row?: number
+}
+
+/** 執行期認得的那幾種。少一種或多一種都是編譯錯誤。 */
+const BUNDLED_REASONS: ReasonSet<BundledLibraryRefusal> = {
+  empty: true,
+  name_missing: true,
+  name_taken: true,
+  folder_missing: true,
+  folder_taken: true,
+  folder_outside_root: true,
+  folder_characters: true,
+  built_changed: true,
+}
+
+/** 清單被後端擋下來的理由。剖面先用同一組規則擋過，所以到得了這裡的多半是另一個分頁改過了。 */
+export function bundledRefusalOf(error: unknown): BundledRefusal | null {
+  const refusal = parseRefusal(error, BUNDLED_REASONS)
+  // 第二個條件在 `parseRefusal` 回了東西之後永遠成立，寫出來是為了 TypeScript 的縮窄
+  // （`routeRefusalOf` 同一個寫法）。
+  if (refusal === null || !(error instanceof ApiError)) return refusal
+  const { row } = error.detail as Partial<Schemas['BundledLibraryRefusalOut']>
+  return typeof row === 'number' ? { ...refusal, row } : refusal
 }
 
 export function connectJellyfin(body: JellyfinConnectInput): Promise<JellyfinSetup> {

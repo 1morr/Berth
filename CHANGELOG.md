@@ -611,6 +611,11 @@ Issue、修正、對帳、刪除與重新入庫的每一條端點都是 403，�
   加完站之後的「試搜」逐站列出搜到幾筆與前三筆標題，一站失敗不影響其他站，留白就是問各站最新的發佈
   （`GET /api/setup/indexers/search?query=`，只讀）；每一站可以就地確認後移除（`DELETE /api/setup/indexers/{id}`，
   只對套件內的 Prowlarr）。既有 Prowlarr 或 Torznab 接上之後同樣可以試搜。
+- **套件內 Jellyfin 的媒體庫由你命名、增刪**（M3 票 06f）：泊位 1 的剖面在按「開始靠泊」之前是一張可編輯的
+  清單——內容類型（電影 / 劇集）、名稱、資料夾（`<library_root>` 底下一層，名稱是英文時自動帶出），預設仍是
+  Movies / TV / Anime。停手就存（`PUT /api/setup/jellyfin/bundled`，`GET /api/setup/jellyfin` 多 `bundled`、
+  `library_root`），重名、重複資料夾、跳出根目錄的資料夾與空清單各有說法。靠泊之後建好的列鎖住（改名與刪除去
+  Jellyfin），新加的列重跑時才建；第 5 步替每一個建出來的媒體庫建一條 Route。
 
 ### Changed
 - **索引站與 TMDB 拆成兩個泊位，泊位板變五格**（M3 票 06e）：BTH 4 索引站（第 6 步）、BTH 5 TMDB（第 7 步），
@@ -903,6 +908,9 @@ Issue、修正、對帳、刪除與重新入庫的每一條端點都是 403，�
   沒有底行）。
 - **EN 的 Route 設定頁與精靈泊位 4 的標題改叫 `Routes`**（M2 票 16，票 03 留下的）：子分頁早就是 `Routes`，
   頁標題還叫 `Library paths`，同一個東西兩個名字。zh-Hant 不變（「媒體庫路徑」）。
+
+- **`settings.services.jellyfin.metadata_fetchers` 的鍵是媒體庫的資料夾、預設是空的**（M3 票 06f）：沒寫的媒體庫
+  依內容類型落回 TMDB（目前電影與劇集都是 `TheMovieDb`）；已經存了三列 `movies` / `tv` / `anime` 的設定照舊有效。
 
 ### Removed
 

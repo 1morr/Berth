@@ -21,10 +21,9 @@ from berth.models.media import (
 from berth.models.plan import Plan, PlanItem
 from berth.models.route import Route, RouteHealth
 from berth.models.setting import (
-    ANIME_SLUG,
-    MOVIES_SLUG,
+    DEFAULT_BUNDLED_LIBRARIES,
     SETTINGS_GROUPS,
-    TV_SLUG,
+    BundledLibrary,
     DiskSettings,
     HealthSettings,
     IndexerSettings,
@@ -49,12 +48,11 @@ from berth.models.setting import (
 )
 
 __all__ = [
-    "ANIME_SLUG",
+    "DEFAULT_BUNDLED_LIBRARIES",
     "HARDLINK",
-    "MOVIES_SLUG",
     "SETTINGS_GROUPS",
-    "TV_SLUG",
     "Base",
+    "BundledLibrary",
     "DiskSettings",
     "Event",
     "HealthSettings",

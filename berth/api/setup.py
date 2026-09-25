@@ -6,9 +6,12 @@ from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field
 
 from berth.api.deps import ClientFactoryDep, SessionDep, SetupProbesDep
+from berth.api.errors import refusal_responses
 from berth.api.routes import route_refusal, route_responses
 from berth.api.schemas import QbittorrentOut, RouteOut, StepOut
 from berth.domain import (
+    BundledLibraryRefusal,
+    CollectionType,
     DetectionReason,
     IndexerKind,
     RouteRefusal,
@@ -24,10 +27,12 @@ from berth.services.indexer import (
     skip_indexers,
 )
 from berth.services.jellyfin import (
+    BundledLibraryRejectedError,
     add_berth_path,
     bootstrap_jellyfin,
     connect_jellyfin,
     read_jellyfin_status,
+    save_bundled_libraries,
 )
 from berth.services.qbittorrent import apply_qbittorrent, read_qbittorrent_diff
 from berth.services.routes import (
@@ -178,6 +183,18 @@ class LibraryOut(BaseModel):
     has_berth_path: bool
 
 
+class BundledLibraryOut(BaseModel):
+    """套件內要建的一個媒體庫（票 06f）。"""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    name: str
+    collection_type: CollectionType
+    folder: str
+    #: 已經在 Jellyfin 建好了：精靈裡鎖住，改名與刪除去 Jellyfin。
+    built: bool
+
+
 class JellyfinSetupOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -190,6 +207,10 @@ class JellyfinSetupOut(BaseModel):
     version: str
     #: 版本是不是 12.0 以上（brief §16.4）。還沒問過時是 `true`。
     version_supported: bool
+    #: 套件內路徑要建的媒體庫（票 06f）。
+    bundled: list[BundledLibraryOut]
+    #: 每一列的完整路徑是 `<library_root>/<folder>`。
+    library_root: str
 
 
 class JellyfinConnectIn(BaseModel):
@@ -197,6 +218,41 @@ class JellyfinConnectIn(BaseModel):
 
     username: str = Field(min_length=1)
     password: str = Field(min_length=1)
+
+
+class BundledLibraryIn(BaseModel):
+    name: str
+    #: Berth 只寫得了電影與劇集（`SUPPORTED_TYPES`）；別的類型 FastAPI 就擋在門口。
+    collection_type: CollectionType
+    #: `library_root` 底下的一層。規則在 `services.jellyfin.check_bundled_libraries`。
+    folder: str
+
+
+class BundledLibrariesIn(BaseModel):
+    libraries: list[BundledLibraryIn]
+
+
+#: 清單的每一種拒絕都是「這份清單本身不成立」，所以都是 422。表是 OpenAPI 宣告的來源。
+_BUNDLED_STATUS: dict[BundledLibraryRefusal, int] = dict.fromkeys(
+    BundledLibraryRefusal, status.HTTP_422_UNPROCESSABLE_CONTENT
+)
+
+
+class BundledLibraryRefusalOut(BaseModel):
+    """與其他拒絕同形（`reason` 挑句子、`detail` 是原文），多一格 `row`：是清單的第幾列。"""
+
+    reason: BundledLibraryRefusal
+    detail: str
+    #: 空清單與「已建好的那一列不見了」指不出是哪一列，就不送這一格。
+    row: int | None = None
+
+
+def bundled_refusal(refusal: BundledLibraryRejectedError) -> HTTPException:
+    body = BundledLibraryRefusalOut(reason=refusal.reason, detail=refusal.detail, row=refusal.row)
+    return HTTPException(
+        status_code=_BUNDLED_STATUS[refusal.reason],
+        detail=body.model_dump(mode="json", exclude_none=True),
+    )
 
 
 class LibraryPathIn(BaseModel):
@@ -216,6 +272,18 @@ async def post_jellyfin_bootstrap(
 ) -> JellyfinSetupOut:
     """套件內路徑：跑完 plan §9.4 的七步。重按只補做還沒做的那幾步。"""
     return JellyfinSetupOut.model_validate(await bootstrap_jellyfin(session, factory))
+
+
+@router.put(
+    "/jellyfin/bundled", responses=refusal_responses(BundledLibraryRefusalOut, _BUNDLED_STATUS)
+)
+async def put_jellyfin_bundled(session: SessionDep, body: BundledLibrariesIn) -> JellyfinSetupOut:
+    """套件內路徑：存下要建的媒體庫（票 06f）。剖面改一次存一次，按「開始靠泊」之前也存一次。"""
+    try:
+        result = await save_bundled_libraries(session, body.libraries)
+    except BundledLibraryRejectedError as refusal:
+        raise bundled_refusal(refusal) from refusal
+    return JellyfinSetupOut.model_validate(result)
 
 
 @router.post("/jellyfin/connect")
@@ -473,7 +541,7 @@ class RouteSelectionIn(BaseModel):
 
 
 class RoutesIn(BaseModel):
-    #: 套件內 Jellyfin 忽略這個欄位：三個 Route 由它自己的三個媒體庫導出（plan §9.3 第 5 步）。
+    #: 套件內 Jellyfin 忽略這個欄位：它的 Route 由它自己的媒體庫導出（plan §9.3 第 5 步）。
     selections: list[RouteSelectionIn] = []
 
 

@@ -352,6 +352,7 @@ ACCESS: dict[tuple[str, str], Access] = {
     ("DELETE", "/setup/indexers/*"): Access.SETUP,
     ("GET", "/setup/jellyfin"): Access.SETUP,
     ("POST", "/setup/jellyfin/bootstrap"): Access.SETUP,
+    ("PUT", "/setup/jellyfin/bundled"): Access.SETUP,
     ("POST", "/setup/jellyfin/connect"): Access.SETUP,
     ("POST", "/setup/jellyfin/libraries/paths"): Access.SETUP,
     ("POST", "/setup/qbittorrent/apply"): Access.SETUP,

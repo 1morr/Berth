@@ -66,8 +66,9 @@ const zhHant = {
           '已經接好的服務（設過密碼、加過站）不再重探——判定規則看的正是 Berth 自己做掉的事，重探會說錯；要重測就到它自己的泊位。',
       },
       jellyfin: {
-        can: '重跑靠泊序列：每一步都是冪等的，做過的標「已經是這樣」。既有 Jellyfin 可以重新登入、替媒體庫加入 Berth 路徑。',
-        elsewhere: '媒體庫的改名、刪除與換路徑在 Jellyfin 自己的介面上做，Berth 建好的三個也一樣。',
+        can: '重跑靠泊序列：每一步都是冪等的，做過的標「已經是這樣」。套件內可以在清單上加還沒建的媒體庫，重跑只建新加的；既有 Jellyfin 可以重新登入、替媒體庫加入 Berth 路徑。',
+        elsewhere:
+          '已經建好的媒體庫要改名、刪除或換路徑，在 Jellyfin 自己的介面上做，Berth 建的也一樣。',
       },
       qbittorrent: {
         can: '重新檢查並套用建議設定：已經是建議值的鍵標「已經是這樣」，不會再寫一次。',
@@ -243,7 +244,7 @@ const zhHant = {
       public_info: '確認版本與初始精靈還沒跑過',
       configuration: '語言與 metadata 地區',
       admin_user: '以 Berth 的帳密建立管理員',
-      libraries: '建立 Movies / TV / Anime 三個媒體庫',
+      libraries: '建立清單上的媒體庫',
       remote_access: '開啟遠端存取',
       complete: '結束初始精靈',
       api_key: '建立 Berth 專用的 API key',
@@ -255,8 +256,45 @@ const zhHant = {
       rerun: '重新跑一次',
       retry: '重試失敗的那一步',
       running: '進行中…',
-      done: '這個泊位的事做完了。Jellyfin 有 Berth 管理員、三個媒體庫與一把 Berth 專用的 API key。',
+      done_one:
+        '這個泊位的事做完了。Jellyfin 有 Berth 管理員、{{count}} 個媒體庫與一把 Berth 專用的 API key。',
+      done_other:
+        '這個泊位的事做完了。Jellyfin 有 Berth 管理員、{{count}} 個媒體庫與一把 Berth 專用的 API key。',
       requestFailed: '請求沒跑完。Berth 後端可能沒在跑——確認容器狀態後再試一次。',
+      list: {
+        title: '要建的媒體庫',
+        lede: '內容類型、名稱與資料夾，照 Jellyfin 自己「新增媒體庫」的那三格。每一個都會在「媒體庫路徑」那一步成為一條 Route。',
+        name: '名稱',
+        type: '內容類型',
+        types: {
+          movies: '電影',
+          tvshows: '劇集',
+        },
+        folder: '資料夾',
+        unnamed: '第 {{position}} 個媒體庫',
+        add: '加一個媒體庫',
+        remove: '移除',
+        removeNamed: '移除「{{name}}」',
+        built: '已建立',
+        builtHint:
+          '已經建好的媒體庫在這裡改不動：要改名、刪除或換路徑，到 Jellyfin 的「控制台 → 媒體庫」。這裡只加還沒建的，重跑只建新加的那幾個。',
+        saving: '儲存中…',
+        unsaved: '清單有標紅的格子，改好才會存下來。',
+        blocked: '清單有標紅的格子，改好才能靠泊。',
+        saveFailed: '清單沒存下來：請求沒跑完。確認 Berth 後端的狀態，再改一格試試。',
+        refused: '清單沒存下來：{{reason}}',
+        refusedRow: '清單沒存下來（第 {{position}} 個）：{{reason}}',
+        problem: {
+          empty: '至少要一個媒體庫。',
+          name_missing: '名稱要填。',
+          name_taken: '名稱重複了（不分大小寫）。',
+          folder_missing: '名稱不是英文字母時，資料夾要自己填。',
+          folder_taken: '資料夾重複了（不分大小寫）：兩個媒體庫會掃同一個目錄。',
+          folder_outside_root: '資料夾是媒體庫根目錄底下的一層：不能有 / 或 \\，也不能是 . 或 ..。',
+          folder_characters: '資料夾名不能有 < > : " | ? * 這些字元（Windows 不收）。',
+          built_changed: '已經建好的媒體庫被改了。要改名或刪除，到 Jellyfin 做。',
+        },
+      },
     },
     existing: {
       title: '接入你的 Jellyfin',
@@ -297,7 +335,7 @@ const zhHant = {
       configuration: '在 Jellyfin 自己的初始精靈把語言設成繁體中文、地區設成台灣：',
       admin_user: '在 Jellyfin 自己的初始精靈建立管理員，帳密要與這裡的第 1 步一致：',
       libraries:
-        '在 Jellyfin 的「媒體庫」手動建立 Movies、TV、Anime 三個媒體庫，關掉即時監控、Specials 顯示名稱填 Specials：',
+        '在 Jellyfin 的「媒體庫」手動建立清單上的媒體庫（名稱、類型與資料夾照左邊那一份），關掉即時監控、Specials 顯示名稱填 Specials：',
       remote_access: '在 Jellyfin 的初始精靈開啟遠端存取：',
       complete: '在 Jellyfin 自己的初始精靈按到最後一頁完成它：',
       api_key: '在 Jellyfin 的「API 金鑰」建立一把名為 Berth 的金鑰：',
@@ -449,7 +487,7 @@ const zhHant = {
     title: '媒體庫路徑',
     lede: {
       bundled:
-        'Berth 替你建的三個媒體庫各成為一條 Route：下載完成後檔案硬鏈接到它的寫入目標。這一步會在 qBittorrent 建好分類，並實際鏈接一個檔案，確認三個容器看到的是同一個檔案系統。',
+        'Berth 替你建的每一個媒體庫各成為一條 Route：下載完成後檔案硬鏈接到它的寫入目標。這一步會在 qBittorrent 建好分類，並實際鏈接一個檔案，確認三個容器看到的是同一個檔案系統。',
       existing:
         '勾選要交給 Berth 寫入的媒體庫，每個選一條寫入目標。舊路徑不會被動到——它們仍然唯讀，Berth 只往你選的那一條寫。',
     },
@@ -2148,9 +2186,9 @@ const en: Translations<typeof zhHant> = {
           'Services already set up (password set, indexers added) are not probed again — the rules look at exactly what Berth itself did, so a new probe would get them wrong. Retest one on its own berth.',
       },
       jellyfin: {
-        can: 'Run the mooring sequence again: every step is idempotent, and what is already done shows as “already so”. An existing Jellyfin can sign in again or get a Berth path on a library.',
+        can: 'Run the mooring sequence again: every step is idempotent, and what is already done shows as “already so”. A bundled Jellyfin can take more libraries on the list, and the rerun creates only the new ones; an existing Jellyfin can sign in again or get a Berth path on a library.',
         elsewhere:
-          'Rename, remove or repath libraries in Jellyfin itself — including the three Berth created.',
+          'Rename, remove or repath libraries that already exist in Jellyfin itself — including the ones Berth created.',
       },
       qbittorrent: {
         can: 'Check and apply the recommended settings again: keys already at the recommended value show as “already so” and are not written again.',
@@ -2336,7 +2374,7 @@ const en: Translations<typeof zhHant> = {
       public_info: 'Confirm the version and that the startup wizard has not run',
       configuration: 'Language and metadata region',
       admin_user: 'Create the administrator from the Berth credentials',
-      libraries: 'Create the Movies / TV / Anime libraries',
+      libraries: 'Create the libraries on the list',
       remote_access: 'Enable remote access',
       complete: 'Finish the startup wizard',
       api_key: 'Create an API key for Berth',
@@ -2348,9 +2386,50 @@ const en: Translations<typeof zhHant> = {
       rerun: 'Run it again',
       retry: 'Retry the failed step',
       running: 'Running…',
-      done: 'This berth is secured. Jellyfin has the Berth administrator, the three libraries and an API key for Berth.',
+      done_one:
+        'This berth is secured. Jellyfin has the Berth administrator, {{count}} library and an API key for Berth.',
+      done_other:
+        'This berth is secured. Jellyfin has the Berth administrator, {{count}} libraries and an API key for Berth.',
       requestFailed:
         'The request did not finish. The Berth backend may not be running — check it and retry.',
+      list: {
+        title: 'Libraries to create',
+        lede: 'Content type, name and folder — the same three fields as “Add media library” in Jellyfin itself. Each one becomes a route at the Routes step.',
+        name: 'Name',
+        type: 'Content type',
+        types: {
+          movies: 'Movies',
+          tvshows: 'Shows',
+        },
+        folder: 'Folder',
+        unnamed: 'Library {{position}}',
+        add: 'Add a library',
+        remove: 'Remove',
+        removeNamed: 'Remove “{{name}}”',
+        built: 'Created',
+        builtHint:
+          'Libraries that already exist cannot be changed here: rename, remove or repath them under Dashboard → Libraries in Jellyfin. Here you can only add new ones, and a rerun creates only those.',
+        saving: 'Saving…',
+        unsaved: 'Fix the fields marked in red and the list will be saved.',
+        blocked: 'Fix the fields marked in red before mooring.',
+        saveFailed:
+          'The list was not saved: the request did not finish. Check the Berth backend, then change a field to try again.',
+        refused: 'The list was not saved: {{reason}}',
+        refusedRow: 'The list was not saved (library {{position}}): {{reason}}',
+        problem: {
+          empty: 'Keep at least one library.',
+          name_missing: 'Give it a name.',
+          name_taken: 'That name is already on the list (case does not matter).',
+          folder_missing: 'When the name is not plain ASCII, fill in the folder yourself.',
+          folder_taken:
+            'That folder is already on the list (case does not matter): two libraries would scan one directory.',
+          folder_outside_root:
+            'The folder is one level under the library root: no / or \\, and not . or ..',
+          folder_characters: 'Folder names cannot contain < > : " | ? * (Windows refuses them).',
+          built_changed:
+            'A library that already exists was changed. Rename or remove it in Jellyfin.',
+        },
+      },
     },
     existing: {
       title: 'Connect your Jellyfin',
@@ -2394,7 +2473,7 @@ const en: Translations<typeof zhHant> = {
       admin_user:
         "Create the administrator in Jellyfin's own startup wizard, using the same credentials as step 1 here:",
       libraries:
-        "Create the Movies, TV and Anime libraries by hand under Jellyfin's Libraries, with real-time monitoring off and Specials as the season-zero name:",
+        "Create the libraries on the list by hand under Jellyfin's Libraries (names, types and folders as on the left), with real-time monitoring off and Specials as the season-zero name:",
       remote_access: "Enable remote access in Jellyfin's startup wizard:",
       complete: "Finish Jellyfin's own startup wizard through to the last page:",
       api_key: "Create an API key named Berth under Jellyfin's API Keys:",
@@ -2556,7 +2635,7 @@ const en: Translations<typeof zhHant> = {
     title: 'Routes',
     lede: {
       bundled:
-        'Each of the three libraries Berth created becomes a route: finished downloads are hard-linked into its write target. This step creates the qBittorrent categories and links a real file, proving all three containers see one file system.',
+        'Each library Berth created becomes a route: finished downloads are hard-linked into its write target. This step creates the qBittorrent categories and links a real file, proving all three containers see one file system.',
       existing:
         'Tick the libraries Berth may write into and pick one write target for each. Your existing paths are left alone: they stay read-only, and Berth writes only to the path you pick.',
     },

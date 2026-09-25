@@ -987,6 +987,29 @@ class RouteRefusal(StrEnum):
     ROUTE_CONFLICT = "route_conflict"
 
 
+class BundledLibraryRefusal(StrEnum):
+    """套件內 Jellyfin 的媒體庫清單存不下來（`services/jellyfin.py`、M3 票 06f）。
+
+    精靈的剖面在送出之前就用同一組規則擋（`web/src/setup/libraryRules.ts`），這裡是後端
+    那一份。每一種都指得出是哪一列（`row`），清單本身是空的那一種除外。
+    """
+
+    #: 一列都沒有：精靈要建至少一個媒體庫，第 5 步才有 Route 可建。
+    EMPTY = "empty"
+    NAME_MISSING = "name_missing"
+    #: 名稱重複（不分大小寫）。Jellyfin 不拒絕同名，會長出 `Movies2`（brief §20.7）。
+    NAME_TAKEN = "name_taken"
+    FOLDER_MISSING = "folder_missing"
+    #: 資料夾重複（不分大小寫：Windows 與 macOS 的檔案系統不分）。兩個媒體庫會掃同一個目錄。
+    FOLDER_TAKEN = "folder_taken"
+    #: 資料夾是 `library_root` 底下的一層：有 `/`、`\`、或是 `.`、`..` 就跳出去或往下鑽了。
+    FOLDER_OUTSIDE_ROOT = "folder_outside_root"
+    #: 資料夾裡有 Windows 不收的字元（`<>:"|?*`、控制字元，brief §4.5）。
+    FOLDER_CHARACTERS = "folder_characters"
+    #: 已經在 Jellyfin 建好的那一列被改了或刪了。那一列要去 Jellyfin 改（票 06f）。
+    BUILT_CHANGED = "built_changed"
+
+
 class AccessRefusal(StrEnum):
     """替 session 那個人讀寫 Jellyfin 時被擋下來（`services/jellyfin_access.py`，M1.5 票 03）。
 

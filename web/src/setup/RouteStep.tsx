@@ -19,8 +19,8 @@ import { RouteDelete } from '../components/RouteDelete'
 /**
  * 泊位 3：媒體庫路徑 → Library Route（plan §9.3 第 5 步、§9.5）。
  *
- * 套件內 Jellyfin 的三個媒體庫直接導出三個 Route，沒有可選的東西——剖面列的就是將建立的
- * 那三條，而且第一次走到這一格就自動跑（`SetupPage`，票 06d），沒有要按的鍵。既有 Jellyfin
+ * 套件內 Jellyfin 的每一個媒體庫直接導出一個 Route，沒有可選的東西——剖面列的就是將建立的
+ * 那幾條，而且第一次走到這一格就自動跑（`SetupPage`，票 06d），沒有要按的鍵。既有 Jellyfin
  * 由使用者勾選媒體庫，並從**那個媒體庫自己回報的路徑**裡選寫入目標；想要一條乾淨的
  * Berth 路徑就用「加入 Berth 路徑」（第 3 步的同一支端點，舊路徑原地不動）。
  *

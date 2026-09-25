@@ -43,6 +43,7 @@ from berth.api import jobs as jobs_api
 from berth.api import plans as plans_api
 from berth.api import review as review_api
 from berth.api import routes as routes_api
+from berth.api import setup as setup_api
 from berth.api.routes import route_refusal, route_responses
 from berth.domain import RouteRefusal, enums
 from berth.main import create_app
@@ -77,6 +78,7 @@ STATUS_TABLES: dict[str, dict[Any, int]] = {
     "ReviewRefusal": review_api._STATUS,
     "PlanRefusal": plans_api._STATUS,
     "RematchRefusal": files_api._STATUS,
+    "BundledLibraryRefusal": setup_api._BUNDLED_STATUS,
 }
 
 #: 拒絕的形狀（`{reason, detail}` 與 Route 多的那兩格）與 SSE 的推播。前端直接取這幾個
@@ -89,6 +91,7 @@ MODELS = (
     "ReviewRefusalOut",
     "PlanRefusalOut",
     "RematchRefusalOut",
+    "BundledLibraryRefusalOut",
     "JobSignalOut",
 )
 
@@ -436,6 +439,7 @@ class TestDeclaringWhatEachEndpointRefuses:
             "review_refusal": "ReviewRefusalOut",
             "plan_refusal": "PlanRefusalOut",
             "rematch_refusal": "RematchRefusalOut",
+            "bundled_refusal": "BundledLibraryRefusalOut",
             "_refuse": "JobRefusalOut",
         }
 

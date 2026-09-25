@@ -38,6 +38,7 @@ from berth.domain import (
 from berth.models import (
     QbittorrentSettings,
     Route,
+    SetupLibrary,
     SetupSettings,
 )
 from berth.services.routes import (
@@ -112,6 +113,45 @@ class TestBundled:
             "berth-anime",
         ]
         assert [row.library for row in status.routes] == ["Movies", "TV", "Anime"]
+
+    @pytest.mark.asyncio
+    async def test_builds_one_route_per_library_the_user_listed(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """票 06f 驗收：清單不是預設三列時也是每一個建出來的媒體庫一條 Route。
+
+        Movies 改名成「電影」、多一個「電視劇（華語）」、Anime 刪掉；使用者在 Jellyfin 自己加的
+        音樂庫 Berth 寫不了，略過而不是讓整步 422。
+        """
+        libraries = []
+        for index, (name, collection_type, folder) in enumerate(
+            [
+                ("電影", "movies", "films"),
+                ("TV", "tvshows", "tv"),
+                ("電視劇（華語）", "tvshows", "tv-zh"),
+                ("Music", "music", "music"),
+            ]
+        ):
+            path = roots["library"] / folder
+            path.mkdir(parents=True)
+            libraries.append(
+                SetupLibrary(
+                    name=name,
+                    item_id=f"item-{index}",
+                    collection_type=collection_type,
+                    locations=[str(path)],
+                )
+            )
+        await arrange(session, roots, libraries=tuple(libraries))
+
+        status = await build_routes(session, factory_for(roots, libraries=tuple(libraries)), ())
+
+        assert [(row.name, row.target_path, row.health) for row in status.routes] == [
+            ("電影", str(roots["library"] / "films"), HealthStatus.OK),
+            ("TV", str(roots["library"] / "tv"), HealthStatus.OK),
+            ("電視劇（華語）", str(roots["library"] / "tv-zh"), HealthStatus.OK),
+        ]
+        assert status.ready is True
 
     @pytest.mark.asyncio
     async def test_every_check_is_green_on_a_shared_mount(
@@ -216,8 +256,8 @@ class TestExisting:
         await arrange(session, roots, origin=ServiceOrigin.EXISTING)
         factory = factory_for(roots)
         picked = tuple(
-            RouteSelection(library=name, target_path=str(roots["library"] / name.lower()))
-            for name, _ in BUNDLED
+            RouteSelection(library=name, target_path=str(roots["library"] / folder))
+            for name, _, folder in BUNDLED
         )
         await build_routes(session, factory, picked)
 

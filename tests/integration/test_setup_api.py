@@ -245,7 +245,9 @@ class TestJellyfin:
             _set_paths(running, tmp_path)
             yield running
 
-    def test_before_anything_the_step_list_is_empty(self, client: TestClient) -> None:
+    def test_before_anything_the_step_list_is_empty(
+        self, client: TestClient, tmp_path: Path
+    ) -> None:
         response = client.get("/api/setup/jellyfin")
 
         assert response.status_code == 200
@@ -258,7 +260,68 @@ class TestJellyfin:
             "version": "",
             # 還沒問過就不是紅燈：那一格是「尚未取得」。
             "version_supported": True,
+            # 沒有人動過清單時就是預設三列（票 06f）。
+            "bundled": [
+                {"name": "Movies", "collection_type": "movies", "folder": "movies", "built": False},
+                {"name": "TV", "collection_type": "tvshows", "folder": "tv", "built": False},
+                {"name": "Anime", "collection_type": "tvshows", "folder": "anime", "built": False},
+            ],
+            "library_root": str(tmp_path / "library"),
         }
+
+    def test_the_library_list_is_still_there_on_the_next_visit(self, client: TestClient) -> None:
+        """票 06f 驗收：清單在按下之前存進精靈狀態，重新整理（下一個 GET）還在。"""
+        libraries = [
+            {"name": "電影", "collection_type": "movies", "folder": "films"},
+            {"name": "電視劇（華語）", "collection_type": "tvshows", "folder": "tv-zh"},
+        ]
+
+        saved = client.put("/api/setup/jellyfin/bundled", json={"libraries": libraries})
+        body = client.get("/api/setup/jellyfin").json()
+
+        assert saved.status_code == 200
+        assert body["bundled"] == [{**row, "built": False} for row in libraries]
+
+    @pytest.mark.parametrize(
+        ("libraries", "refusal"),
+        [
+            ([], {"reason": "empty"}),
+            (
+                [
+                    {"name": "TV", "collection_type": "tvshows", "folder": "tv"},
+                    {"name": "tv", "collection_type": "tvshows", "folder": "tv-2"},
+                ],
+                {"reason": "name_taken", "row": 1},
+            ),
+            (
+                [{"name": "TV", "collection_type": "tvshows", "folder": "../tv"}],
+                {"reason": "folder_outside_root", "row": 0},
+            ),
+        ],
+    )
+    def test_a_list_that_cannot_stand_is_refused_with_its_row(
+        self, client: TestClient, libraries: list[dict[str, str]], refusal: dict[str, object]
+    ) -> None:
+        response = client.put("/api/setup/jellyfin/bundled", json={"libraries": libraries})
+
+        assert response.status_code == 422
+        detail = response.json()["detail"]
+        assert {key: detail[key] for key in ("reason", "row") if key in detail} == refusal
+        # 存不下來就是沒存：下一次來看到的仍然是原本那份。
+        assert [row["name"] for row in client.get("/api/setup/jellyfin").json()["bundled"]] == [
+            "Movies",
+            "TV",
+            "Anime",
+        ]
+
+    def test_only_movies_and_shows_are_accepted(self, client: TestClient) -> None:
+        """Berth 寫不了音樂或書（`SUPPORTED_TYPES`），所以這兩種以外的類型根本進不來。"""
+        response = client.put(
+            "/api/setup/jellyfin/bundled",
+            json={"libraries": [{"name": "Music", "collection_type": "music", "folder": "music"}]},
+        )
+
+        assert response.status_code == 422
 
     def test_bootstrap_returns_every_step_with_its_measured_value(
         self, client: TestClient, jellyfin: FakeJellyfinClient
@@ -374,6 +437,7 @@ class TestJellyfin:
 
         assert client.get("/api/setup/jellyfin").status_code == 401
         assert client.post("/api/setup/jellyfin/bootstrap").status_code == 401
+        assert client.put("/api/setup/jellyfin/bundled", json={"libraries": []}).status_code == 401
         assert client.post(
             "/api/setup/jellyfin/libraries/paths", json={"library": "x"}
         ).status_code == (401)

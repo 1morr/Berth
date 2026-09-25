@@ -19,7 +19,7 @@ from contextlib import closing
 import httpx
 import pytest
 
-from berth.services.jellyfin import BUNDLED_LIBRARIES
+from berth.models import DEFAULT_BUNDLED_LIBRARIES
 from tests.e2e.harness import (
     ADMIN,
     PASSWORD,
@@ -197,10 +197,11 @@ def jellyfin(configured: None) -> Iterator[httpx.Client]:
 def libraries(jellyfin: httpx.Client, configured: None) -> dict[str, str]:
     """精靈建的三個媒體庫：Route 的 slug → Jellyfin 的媒體庫 id。
 
-    `BUNDLED_LIBRARIES` 是同一份對照的來源，這裡只把名稱換成 Jellyfin 真的發出來的 id。
+    `DEFAULT_BUNDLED_LIBRARIES` 是同一份對照的來源（資料夾就是 Route 的 slug），這裡只把名稱
+    換成 Jellyfin 真的發出來的 id。
     """
     folders = ok(jellyfin.get("/Library/VirtualFolders"))
     by_name = {row["Name"]: row["ItemId"] for row in folders}
-    found = {bundled.slug: by_name.get(bundled.name, "") for bundled in BUNDLED_LIBRARIES}
+    found = {bundled.folder: by_name.get(bundled.name, "") for bundled in DEFAULT_BUNDLED_LIBRARIES}
     assert all(found.values()), (found, sorted(by_name))
     return found
