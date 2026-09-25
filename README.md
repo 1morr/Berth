@@ -560,6 +560,7 @@ TMDB，走 Berth 自己的判定、只印不綁。憑證讀環境變數，資料
 
 ```bash
 uv run --env-file .env python scripts/experiments/rss_auto_bind.py   # 要 .env 裡的 TMDB_API_KEY；會連 Mikan 與 TMDB
+uv run --env-file .env python scripts/experiments/air_date_lag.py    # 同上；Windows 主控台加 PYTHONIOENCODING=utf-8
 ```
 
 1,000 部的媒體庫上量 Berth（M2 票 11，plan §11.3 決定 2 的門檻）：自己 build Berth 的 image（只有 backend 那一層）、

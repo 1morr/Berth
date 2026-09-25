@@ -1319,7 +1319,7 @@ thepiratebay / yts，fixture 在 `tests/fixtures/http/prowlarr/search.*.json` �
 
 播出日比對（M3 票 14）與之後可能的「發佈離播出多近」都要一個發佈時間。試跑環境（Prowlarr 預設公開站）實測：
 
-- **Prowlarr 搜尋結果每一筆都有 `publishDate`**（ISO 8601、UTC）：搜「Kamiina Botan」534 筆，Mikan 261、Anime Tosho 100、dmhy 80、The Pirate Bay 63、ACG.RIP 30，缺值 0。Berth 兩個 adapter 已經解析成 `published_at`（`adapters/indexer/prowlarr.py`、`torznab.py`，Torznab 的 `pubDate` 是 RFC 822），但**之後沒有任何地方用到**：不在搜尋結果的 API 裡，送單也沒存。【實測】
+- **Prowlarr 搜尋結果每一筆都有 `publishDate`**（ISO 8601、UTC）：搜「Kamiina Botan」534 筆，Mikan 261、Anime Tosho 100、dmhy 80、The Pirate Bay 63、ACG.RIP 30，缺值 0。Berth 兩個 adapter 已經解析成 `published_at`（`adapters/indexer/prowlarr.py`、`torznab.py`，Torznab 的 `pubDate` 是 RFC 822），但**之後沒有任何地方用到**：不在搜尋結果的 API 裡，送單也沒存。【實測】**M3 票 14 起接上**：搜尋結果帶 `published_at`、送單存進 `jobs.published_at`，規劃時做播出日比對（plan §4.4）。
 - **ACG.RIP 的 RSS** 是標準的 `<item><pubDate>`，RFC 822 帶時區（`Thu, 24 Sep 2026 06:01:00 -0700`）。【實測 `https://acg.rip/.xml`】
 - **Mikan 的 RSS 沒有標準的 `<item><pubDate>`**：日期在 `https://mikanani.me/0.1/` 命名空間的 `<torrent><pubDate>`，ISO 8601 **不帶時區**（`2026-09-24T21:01:00.760219`）。同一個發佈在 ACG.RIP 是 13:01 UTC，所以 Mikan 的值是 **UTC+8**；當成 UTC 讀會差 8 小時。【實測 `https://mikanani.me/RSS/Classic`，與 ACG.RIP 同一筆對照】
 - Nyaa 的 RSS 從試跑機器連不上（連線失敗），沒有量到。**2026-09-25 補量**（§20.12）：`<pubDate>` 是 RFC 822 的 `-0000`，即 UTC。

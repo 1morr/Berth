@@ -848,6 +848,7 @@ describe('Media 詳情頁', () => {
             episode_start: 2,
             episode_end: 2,
             whole_season: false,
+            published_at: null,
             strategy: 'explicit',
           },
         ],

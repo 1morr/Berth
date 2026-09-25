@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Iterator
 from dataclasses import replace
+from datetime import UTC, datetime
 from pathlib import Path
 
 import httpx
@@ -52,6 +53,7 @@ ANIME = IndexerResult(
     info_hash="a" * 40,
     info_url="https://acg.rip/t/344604",
     download_url="http://prowlarr:9696/2/download?apikey=k",
+    published_at=datetime(2026, 9, 24, 13, 1, tzinfo=UTC),
 )
 #: 同一部作品的西方 scene 命名（形狀抄自錄下來的 The Pirate Bay 那一筆；季號改成這份
 #: TMDB 替身有的那幾季）。
@@ -153,7 +155,7 @@ class TestGate:
 
 class TestResults:
     def test_a_row_carries_every_column_the_table_shows(self, client: TestClient) -> None:
-        """大小、做種、來源、Tags、預估——brief §13 列的那五樣。"""
+        """大小、做種、來源、Tags、預估——brief §13 列的那五樣，加上發佈時間（M3 票 14）。"""
         sign_in(client)
 
         body = client.get(f"/api/search?media={SPY_ID}").json()
@@ -168,6 +170,10 @@ class TestResults:
         # 絕對編號 26 換算成 S02E01（TMDB 的 absolute episode group，brief §20.3）。
         assert (row["season"], row["episode_start"], row["episode_end"]) == (2, 1, 1)
         assert row["whole_season"] is False
+        assert row["published_at"] == "2026-09-24T13:01:00Z"
+        # 站沒報的那一格是 null，畫面顯示 `—`。
+        scene = next(r for r in body["rows"] if r["indexer"] == "The Pirate Bay")
+        assert scene["published_at"] is None
         assert body["problem"] is None
 
     def test_both_naming_styles_come_back_with_their_tags(self, client: TestClient) -> None:

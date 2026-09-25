@@ -411,6 +411,57 @@ async def test_series_bound_before_backfill_do_not_fetch_a_whole_season(config: 
     assert rows == {"mikan:1:1": born, "mikan:2:1": None, "title:kimi:lolihouse": None}
 
 
+PUBLISHED = "c8d2f5a1e734"
+
+
+async def test_rss_jobs_take_their_published_time_from_the_feed_item(config: Config) -> None:
+    """票 14：升級之前送出的 RSS Job 從 `rss_items` 補上發佈時間（最早帶到它的那一筆），還沒入庫的
+    重新規劃時才比得到播出日。手動送單的沒有來源可以補，留空。"""
+    config.config_root.mkdir(parents=True, exist_ok=True)
+    engine = create_engine(config)
+    early, late = "2026-09-20T13:01:00.000000+00:00", "2026-09-21T02:00:00.000000+00:00"
+    try:
+        async with engine.begin() as connection:
+            await connection.run_sync(_upgrade_to, BEFORE_PUBLISHED)
+        with _sqlite(config.database_path) as db:
+            for job_hash, trigger in (("a" * 40, "rss"), ("b" * 40, "manual")):
+                db.execute(
+                    "INSERT INTO jobs (hash, name, source_url, trigger, trigger_ref, state, error,"
+                    " save_path, content_path, total_size, progress, client_state, added_at)"
+                    " VALUES (?, '', '', ?, '', 'submitted', '', '', '', 0, 0, '', ?)",
+                    (job_hash, trigger, early),
+                )
+            db.execute(
+                "INSERT INTO rss_feeds (id, name, url, kind, interval_sec, last_error, created_at)"
+                " VALUES (1, '', 'u', 'mikan', 1800, '', ?)",
+                (early,),
+            )
+            for guid, published, job_hash in (
+                ("1", late, "a" * 40),
+                ("2", early, "a" * 40),
+                ("3", early, "b" * 40),
+            ):
+                db.execute(
+                    "INSERT INTO rss_items (feed_id, guid, title, link, torrent_url, info_hash,"
+                    " published_at, seen_at, job_hash, status, error)"
+                    " VALUES (1, ?, '', '', '', '', ?, ?, ?, 'sent', '')",
+                    (guid, published, early, job_hash),
+                )
+            db.commit()
+
+        async with engine.begin() as connection:
+            await connection.run_sync(_upgrade_to, PUBLISHED)
+        with _sqlite(config.database_path) as db:
+            rows = dict(db.execute("SELECT hash, published_at FROM jobs").fetchall())
+    finally:
+        await engine.dispose()
+
+    assert rows == {"a" * 40: early, "b" * 40: None}
+
+
+BEFORE_PUBLISHED = "a4f7c2e9d168"
+
+
 def _upgrade_to(connection: Connection, revision: str) -> None:
     config = alembic_config()
     config.attributes["connection"] = connection

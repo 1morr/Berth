@@ -38,6 +38,7 @@ ffmpeg 產種子檔），那只影響「造測試素材」這一步，不影響 
 | `jellyfin_images.py` | M1.5 票 04：Jellyfin 的圖經 Berth 代理要不要在 Berth 端另存一份。縮圖參數與格式協商、Jellyfin 自己的縮圖快取（冷熱延遲）、6 條並行下直連與經過 Berth（`berth serve` 子程序）各多少毫秒。自己起停一次性容器 |
 | `large_library.py` | M2 票 11：1,000 部 × 12 集的媒體庫上，`GET /inventory/{id}` 的 p95 與對帳一輪各多久（plan §11.3 決定 2 的門檻），加上票上五件（整份清單、不帶 `parentId` 的 TMDB 反查、整份 `MediaSources`、篩選後的牆帶觀看狀態、被刪掉的帳號）。宿主那一半：起停 network、三個 volume、Jellyfin、qBittorrent 與 Berth 的 image |
 | `large_library_berth.py` | 上一支在 Berth 的 image 裡跑的那一半：`tree` 造媒體樹，`measure` 灌觀看紀錄、1,000 個 torrent、Berth 的資料庫之後分段量 |
+| `air_date_lag.py` | M3 票 14：字幕組發佈比 TMDB 播出日晚多久、播出日比對的規則二在真實 feed 上擋下幾筆，定 `BEHIND_LATEST`。import `berth`（直接呼叫 `parser.check_airing`），要用 `uv run`；會連網，TMDB 憑證讀 `TMDB_API_KEY`；結果記在 `.scratch/m3/issues/14-air-date-check.md` 的 Comments |
 | `rss_auto_bind.py` | M3 票 09：RSS Series 自動綁定的規則對真的 Mikan 與 TMDB 認得出幾部、錯幾部。import `berth`（量的就是它的判定），要用 `uv run`；會連網，TMDB 憑證讀 `TMDB_API_KEY`；`docs/research/rss-sources.md` §2.8 |
 | `rss_sources.py` | M3 票 07：Mikan / Nyaa / acg.rip 三個索引站的 RSS 欄位事實——feedparser 解析結果、bencode 核對 info hash、guid / hash / 大小 / 日期一致性、pubDate 時區偏移、合集標題掃描。不用容器、不連網，只讀 `tests/fixtures/http/`；`docs/research/rss-sources.md` §7.4 |
 | `lib.py` | 共用的 HTTP、輪詢、bencode、報告輸出 |

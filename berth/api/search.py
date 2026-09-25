@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query, status
@@ -70,6 +71,9 @@ class SearchResultOut(BaseModel):
     whole_season: bool
     #: 季集是怎麼算出來的。畫面只讀 `movie`——「這一格沒有季集是因為它是電影」。
     strategy: MappingStrategy | None
+    #: 索引站報的發佈時間（UTC）。結果表的「發佈」欄；送單時原樣帶回來
+    #: （`JobSourceIn.published_at`）。`null` = 那個站沒報，畫面顯示 `—`。
+    published_at: datetime | None
 
 
 class SearchOut(BaseModel):

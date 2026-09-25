@@ -183,6 +183,9 @@ class JobSource:
     #: 發佈名。`jobs.name`——使用者在下載列表上認得出這一列的東西。
     title: str
     info_hash: str = ""
+    #: 來源說它什麼時候發佈的（索引站的 `publishDate`、Feed Item 的發佈時間）。規劃時比播出日
+    #: （M3 票 14），所以跟著 Job 存下來——結果表那一輪之後就不在了。
+    published_at: datetime | None = None
 
 
 class JobRejectedError(Exception):
@@ -309,6 +312,7 @@ async def add_download(
             hash=torrent.info_hash,
             name=source.title,
             source_url=source.url,
+            published_at=source.published_at,
             trigger=trigger,
             trigger_ref=trigger_ref,
             user_id=user_id,

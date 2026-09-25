@@ -396,13 +396,14 @@ function describe(t: Translate, state: FileState): string {
 /** `domain.JellyfinRequest`。認不得的只印原文——它可能是後端加的，而前端還沒有那句話。 */
 const JELLYFIN_REQUESTS = ['scan'] as const
 
-/** `domain.ReviewReason` 的五種。認不得的不畫——它可能是後端加的，而前端還沒有那句話。 */
+/** `domain.ReviewReason` 的六種。認不得的不畫——它可能是後端加的，而前端還沒有那句話。 */
 const REVIEW_REASONS: readonly ReviewReason[] = [
   'low_confidence',
   'medium_not_allowed',
   'nothing_to_import',
   'target_exists',
   'audit_undone',
+  'air_date_conflict',
 ]
 
 /**

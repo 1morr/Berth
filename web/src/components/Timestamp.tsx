@@ -1,5 +1,7 @@
 import { useTranslation } from 'react-i18next'
 
+import { relative } from './relativeTime'
+
 /**
  * 一個時間點：相對說法給人讀，絕對時間留在 `title` 與 `datetime` 裡。
  *
@@ -19,23 +21,4 @@ export function Timestamp({ at }: { at: string | null }) {
       {relative(moment, i18n.language)}
     </time>
   )
-}
-
-const UNITS: ReadonlyArray<[Intl.RelativeTimeFormatUnit, number]> = [
-  ['second', 60],
-  ['minute', 60],
-  ['hour', 24],
-  ['day', 7],
-]
-
-/** `Intl.RelativeTimeFormat` 認得 `zh-Hant` 與 `en`，所以相對時間不必自己翻譯。 */
-function relative(moment: Date, language: string): string {
-  const format = new Intl.RelativeTimeFormat(language, { numeric: 'auto' })
-  let value = (moment.getTime() - Date.now()) / 1000
-
-  for (const [unit, span] of UNITS) {
-    if (Math.abs(value) < span) return format.format(Math.round(value), unit)
-    value /= span
-  }
-  return format.format(Math.round(value), 'week')
 }

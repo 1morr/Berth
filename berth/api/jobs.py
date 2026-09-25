@@ -15,7 +15,7 @@ from datetime import datetime
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request, status
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 
 from berth.api.deps import (
     ClientFactoryDep,
@@ -161,6 +161,9 @@ class JobSourceIn(BaseModel):
     #: 索引站報的 info hash。**可能沒有**（實測 ACG.RIP 不報）；有的話重複送單連下載
     #: 都不必發，沒有的話 Berth 從那份 torrent 自己算。
     info_hash: str = ""
+    #: 索引站報的發佈時間（`SearchResultOut.published_at`）。站沒報時是 `null`：規劃時照「來源沒給」
+    #: 跳過播出日比對（M3 票 14）。**要帶時區**：沒有時區就不知道是哪一天，存進去時也會炸。
+    published_at: AwareDatetime | None = None
 
 
 class JobCreateIn(BaseModel):
@@ -312,6 +315,7 @@ async def post_job(
                 url=body.source.url,
                 title=body.source.title,
                 info_hash=body.source.info_hash,
+                published_at=body.source.published_at,
             ),
             media_id=body.media,
             route_id=body.route,

@@ -55,8 +55,13 @@ ACTOR = "1"
 
 
 def split_cour() -> MediaSnapshot:
-    """TMDB 併成一季的 split-cour：第一 cour 1–12（一月起）、第二 cour 13–24（七月起）。"""
-    first, second = date(2026, 1, 8), date(2026, 7, 2)
+    """TMDB 併成一季的 split-cour：第一 cour 1–12（一月起）、第二 cour 13–24（七月起）。
+
+    **播完一年之後 feed 才帶到它**（feed 上的兩集發佈於 2026-09）：這一份測的是改正與套用，要第一批
+    真的照字面入庫錯。放在連載中的話，播出日比對的規則二會先把它擋進審核（票 14，
+    `test_air_date_check.py`）——那正是規則二要抓的東西。
+    """
+    first, second = date(2025, 1, 9), date(2025, 7, 3)
     episodes = tuple(
         EpisodeSnapshot(
             episode_number=number,

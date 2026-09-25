@@ -12,6 +12,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Iterator
 from dataclasses import replace
+from datetime import UTC, datetime
 from pathlib import Path
 
 import httpx
@@ -25,7 +26,7 @@ from berth.api.gate import CSRF_HEADER
 from berth.config import Config
 from berth.domain import HealthStatus
 from berth.main import create_app
-from berth.models import Route, TmdbSettings
+from berth.models import Job, Route, TmdbSettings
 from berth.services.routes import build_routes
 from berth.services.settings import write_settings
 from berth.services.setup import complete_setup
@@ -102,6 +103,17 @@ def route_id(client: TestClient, slug: str = "tv") -> int:
             row = await session.scalar(select(Route).where(Route.slug == slug))
             assert row is not None
             return int(row.id)
+
+    return asyncio.run(run())
+
+
+def stored_published_at(client: TestClient) -> datetime | None:
+    async def run() -> datetime | None:
+        sessions = client.app.state.session_factory  # type: ignore[attr-defined]  # app.state 是 Starlette 的動態屬性
+        async with sessions() as session:
+            job = await session.get(Job, MAGNET_HASH)
+            assert job is not None
+            return job.published_at
 
     return asyncio.run(run())
 
@@ -184,6 +196,30 @@ class TestSubmitting:
         )
         assert job["user_name"] == "skipper"
         assert job["retryable"] is False
+
+    def test_the_publish_date_from_the_indexer_is_kept_on_the_job(self, client: TestClient) -> None:
+        """結果表那一列的 `published_at` 跟著 Job 存下來，規劃時比播出日（M3 票 14）。"""
+        sign_in(client)
+        source = {"url": MAGNET, "title": RELEASE, "info_hash": ""}
+
+        submit(client, source=source | {"published_at": "2026-09-24T13:01:00Z"})
+
+        assert stored_published_at(client) == datetime(2026, 9, 24, 13, 1, tzinfo=UTC)
+
+    def test_a_publish_date_without_a_timezone_is_refused(self, client: TestClient) -> None:
+        """沒有時區就不知道是哪一天：422，不是存的那一刻才炸成 500。"""
+        sign_in(client)
+        source = {"url": MAGNET, "title": RELEASE, "info_hash": ""}
+
+        response = submit(client, source=source | {"published_at": "2026-09-24T13:01:00"})
+
+        assert response.status_code == 422
+
+    def test_a_row_without_a_publish_date_still_submits(self, client: TestClient) -> None:
+        sign_in(client)
+
+        assert submit(client).status_code == 200
+        assert stored_published_at(client) is None
 
     def test_the_same_torrent_twice_returns_the_same_job(self, client: TestClient) -> None:
         sign_in(client)

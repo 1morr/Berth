@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next'
 
 import { Dot } from '../components/Dot'
+import { Timestamp } from '../components/Timestamp'
 import type { Media } from '../api/media'
 import type { SearchResult } from '../api/search'
 import { estimate, formatCount, formatSize, tagTokens, type SortKey } from './searchResult'
@@ -9,7 +10,7 @@ import { SubmitAction } from './SubmitAction'
 /**
  * 一張裝船清單（`.scratch/m1/search-results-shape.md` §3）。
  *
- * **一份 DOM，兩種版面**：桌機是真表格，390px 上第 2–5 欄整欄不畫，那四個值改成發佈名底下
+ * **一份 DOM，兩種版面**：桌機是真表格，390px 上第 2–6 欄整欄不畫，那五個值改成發佈名底下
  * 的一行中點分隔（使用者 2026-09-10 拍板「窄版改成堆疊列」）。用 `hidden` 而不是兩份標記，
  * 是因為 `display: none` 的東西不進無障礙樹——螢幕閱讀器在任何寬度下都只會讀到一份。
  *
@@ -48,6 +49,9 @@ export function SearchResults({
           />
           <th scope="col" className="label px-4 py-2.5 text-ink-dim">
             {t('search.column.indexer')}
+          </th>
+          <th scope="col" className="label px-4 py-2.5 text-ink-dim">
+            {t('search.column.published')}
           </th>
           <th scope="col" className="label px-4 py-2.5 text-ink-dim">
             {t('search.column.estimate')}
@@ -118,7 +122,7 @@ function ResultRow({
         {/* 發佈名整行換行，不截斷：它是這一列的證據，解析器讀的就是同一串字。 */}
         <p className="value text-sm wrap-anywhere text-ink">{row.title}</p>
         <TagStrip row={row} />
-        {/* 窄版把另外四欄收成一行。桌機上它整行不畫，那四欄自己在右邊。 */}
+        {/* 窄版把另外五欄收成一行。桌機上它整行不畫，那五欄自己在右邊。 */}
         <p className="value mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ink-dim sm:hidden">
           <span>{size}</span>
           <Dot />
@@ -127,6 +131,12 @@ function ResultRow({
             <>
               <Dot />
               <IndexerLink row={row} />
+            </>
+          )}
+          {row.published_at && (
+            <>
+              <Dot />
+              <Published at={row.published_at} />
             </>
           )}
           <Dot />
@@ -146,6 +156,9 @@ function ResultRow({
       </td>
       <td className="value hidden px-4 py-3 align-top text-xs whitespace-nowrap text-ink-dim sm:table-cell">
         <IndexerLink row={row} />
+      </td>
+      <td className="hidden px-4 py-3 align-top text-xs whitespace-nowrap text-ink-dim sm:table-cell">
+        <Published at={row.published_at} />
       </td>
       <td className="hidden px-4 py-3 align-top whitespace-nowrap sm:table-cell">
         <Estimate row={row} />
@@ -196,6 +209,15 @@ function Estimate({ row }: { row: SearchResult }) {
         ))}
     </span>
   )
+}
+
+/**
+ * 索引站報的發佈時間（Sonarr / Radarr 手動搜尋的 Age 欄）：相對說法，完整日期在 `title`。
+ * 那個站沒報是 `—`，與大小同一種說法——不是「從未」，只是這一格沒有值。
+ */
+function Published({ at }: { at: string | null }) {
+  if (!at) return <span className="value">—</span>
+  return <Timestamp at={at} />
 }
 
 /** 來源站。有集頁就連過去——使用者常常要自己去看一眼檔案清單。 */

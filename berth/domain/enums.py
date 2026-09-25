@@ -812,6 +812,10 @@ class ReviewReason(StrEnum):
     #: 一個 medium 自動入庫的檔案被管理員從 Review Queue 撤銷了（CONTEXT.md 的 Audit）。
     #: 下一步是改那一列的季集或駁回，不是再點一次頭——這份 Plan 已經被說過一次「不對」。
     AUDIT_UNDONE = "audit_undone"
+    #: 發佈時間與換算出的那一集的播出日對不上（M3 票 14，`parser.airing`）：季號、offset 或絕對編號
+    #: 多半算錯了。下一步是改季集（從這裡套用到整個 RSS Series 在票 14b）；BD 版晚發這種對的也會
+    #: 落在這裡，那時核准就好。
+    AIR_DATE_CONFLICT = "air_date_conflict"
 
 
 class ReviewKind(StrEnum):

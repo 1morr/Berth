@@ -3004,6 +3004,8 @@ export interface components {
              * @default
              */
             info_hash?: string;
+            /** Published At */
+            published_at?: string | null;
         };
         /**
          * JobState
@@ -3565,7 +3567,7 @@ export interface components {
          *     依來源分段：季號從哪裡來、集號怎麼換算、為什麼信心被壓下來、字幕跟著誰、整包一起看的結果。
          * @enum {string}
          */
-        ReasonCode: "movie" | "media_by_title" | "title_exact" | "title_contained" | "title_partial" | "year_matches" | "year_differs" | "title_mismatch" | "no_media" | "season_from_job" | "season_from_release" | "season_from_folder" | "season_from_arc" | "final_season" | "single_season" | "absolute_group" | "absolute_cumulative" | "cour_offset" | "air_date_run" | "episode_not_on_tmdb" | "absolute_within_first_season" | "air_date_unknown" | "air_date_mismatch" | "range_spans_seasons" | "specials_numbering" | "classified" | "disc_structure" | "own_numbered_special" | "no_episode" | "subtitle_orphan" | "subtitle_same_name" | "subtitle_folder_episode" | "subtitle_follows" | "video_not_imported" | "target_contested" | "span_clash" | "library_span_clash" | "same_version" | "too_many_files" | "strategy_outlier" | "season_complete" | "medium_held_by_route" | "set_by_user" | "series_corrected";
+        ReasonCode: "movie" | "media_by_title" | "title_exact" | "title_contained" | "title_partial" | "year_matches" | "year_differs" | "title_mismatch" | "no_media" | "season_from_job" | "season_from_release" | "season_from_folder" | "season_from_arc" | "final_season" | "single_season" | "absolute_group" | "absolute_cumulative" | "cour_offset" | "air_date_run" | "episode_not_on_tmdb" | "absolute_within_first_season" | "air_date_unknown" | "air_date_mismatch" | "range_spans_seasons" | "specials_numbering" | "released_before_airing" | "behind_latest_episode" | "air_date_missing" | "published_missing" | "classified" | "disc_structure" | "own_numbered_special" | "no_episode" | "subtitle_orphan" | "subtitle_same_name" | "subtitle_folder_episode" | "subtitle_follows" | "video_not_imported" | "target_contested" | "span_clash" | "library_span_clash" | "same_version" | "too_many_files" | "strategy_outlier" | "season_complete" | "medium_held_by_route" | "set_by_user" | "series_corrected";
         /**
          * ReconcileRunOut
          * @description 一輪對帳。`finished_at` 是 `null` 就是還在跑。
@@ -3687,7 +3689,7 @@ export interface components {
          *     而「這一包沒有東西可以入庫」多半表示送錯了 torrent。
          * @enum {string}
          */
-        ReviewReason: "low_confidence" | "medium_not_allowed" | "nothing_to_import" | "target_exists" | "audit_undone";
+        ReviewReason: "low_confidence" | "medium_not_allowed" | "nothing_to_import" | "target_exists" | "audit_undone" | "air_date_conflict";
         /**
          * ReviewRefusal
          * @description 確認或撤銷一個 audit 時，在做出任何改變之前就停下來了（M2 票 06）。
@@ -3924,6 +3926,8 @@ export interface components {
             /** Whole Season */
             whole_season: boolean;
             strategy: components["schemas"]["MappingStrategy"] | null;
+            /** Published At */
+            published_at: string | null;
         };
         /**
          * SeasonOut

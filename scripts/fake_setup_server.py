@@ -609,7 +609,8 @@ def search() -> Scenario:
 
 
 #: 送單演練用的三筆結果。發佈名與磁力連結的形狀取自 2026-09-10 對真索引站錄下來的回應
-#: （`tests/fixtures/http/prowlarr/search.spy-x-family.json`）；hash 是形狀對的假值。
+#: （`tests/fixtures/http/prowlarr/search.spy-x-family.json`）；hash 是形狀對的假值。dmhy 那一筆
+#: 沒有發佈時間，結果表的「發佈」欄顯示 `—`（M3 票 14）。
 #:
 #: **download_url 是磁力連結**，因為公開中文站（dmhy、TPB）給的就是它（brief §20.7）。
 #: 那條路徑在 `adapters/torrent.py` 裡連請求都不必發——hash 就寫在連結裡——所以這個情境
@@ -624,6 +625,7 @@ SUBMIT_RESULTS = (
         info_url="https://acg.rip/t/344604",
         download_url="magnet:?xt=urn:btih:4bd0f6ef1d3b1e3cbb1e1b6b6c2a9c7d8e5f0a1b&dn=ANi.SPY",
         info_hash="4bd0f6ef1d3b1e3cbb1e1b6b6c2a9c7d8e5f0a1b",
+        published_at=datetime(2026, 9, 4, 13, 1, tzinfo=UTC),
     ),
     IndexerResult(
         title="SPY X FAMILY S02E01 1080p WEB H264-SKYANiME",
@@ -633,6 +635,7 @@ SUBMIT_RESULTS = (
         leechers=1,
         download_url="magnet:?xt=urn:btih:aa11bb22cc33dd44ee55ff66aa77bb88cc99dd00&dn=SKYANiME",
         info_hash="aa11bb22cc33dd44ee55ff66aa77bb88cc99dd00",
+        published_at=datetime(2025, 10, 11, 2, 30, tzinfo=UTC),
     ),
     IndexerResult(
         title="[Lilith-Raws] SPY x FAMILY - 25 [Baha][WEB-DL][1080p][AVC AAC][CHT][MKV]",
@@ -1141,19 +1144,23 @@ def rss_scenario(detail: TmdbDetail = KIMI_DETAIL, season: TmdbSeason = KIMI_SEA
 
 #: split-cour（M3 票 13）：TMDB 把兩個 cour 併成一季 24 集——第一 cour 一月起、第二 cour 七月起。
 #: 字幕組的第二 cour 從 01 重數，所以 feed 上的 01–12 其實是 S01E13–E24。
+#:
+#: **播完一年之後 feed 才帶到它**（feed 的發佈時間是 2026 年）：連載中的話，播出日比對的規則二會把
+#: 整批擋在審核裡（M3 票 14），而從審核中的計劃套用到 RSS Series 在票 14b——這個情境演的是票 13 的
+#: 「已入庫、改一集整季跟著搬」。
 KIMI_SPLIT_COUR = TmdbSeason(
     season_number=1,
     name="Season 1",
-    air_date=date(2026, 1, 8),
+    air_date=date(2025, 1, 9),
     episodes=tuple(
         TmdbEpisode(
             season_number=1,
             episode_number=number,
             name=f"Episode {number}",
             air_date=(
-                date(2026, 1, 8) + timedelta(days=7 * (number - 1))
+                date(2025, 1, 9) + timedelta(days=7 * (number - 1))
                 if number <= 12
-                else date(2026, 7, 2) + timedelta(days=7 * (number - 13))
+                else date(2025, 7, 3) + timedelta(days=7 * (number - 13))
             ),
             runtime=24,
         )
@@ -1174,7 +1181,7 @@ def rss_split_cour_scenario() -> Scenario:
         first_air_date=KIMI_SPLIT_COUR.air_date,
         seasons=(
             TmdbSeasonEntry(
-                season_number=1, name="Season 1", episode_count=24, air_date=date(2026, 1, 8)
+                season_number=1, name="Season 1", episode_count=24, air_date=date(2025, 1, 9)
             ),
         ),
     )

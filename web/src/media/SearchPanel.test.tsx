@@ -1,6 +1,7 @@
 import { screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import i18next from 'i18next'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { Job } from '../api/jobs'
 import type { Media } from '../api/media'
@@ -75,6 +76,7 @@ function row(overrides: Partial<SearchResult> = {}): SearchResult {
     episode_end: 13,
     whole_season: false,
     strategy: 'explicit',
+    published_at: null,
     ...overrides,
   }
 }
@@ -203,6 +205,62 @@ describe('搜尋 torrent 與結果表', () => {
       'https://acg.rip/t/344604',
     )
     expect(within(table).getAllByText('S03E13').length).toBeGreaterThan(0)
+  })
+
+  describe('發佈欄（M3 票 14）', () => {
+    // 替身的「現在」固定住，相對時間才是一個說得準的字串。
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-09-25T12:00:00Z') })
+    })
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    it('說相對時間，完整日期在 title；索引站沒報的是 —', async () => {
+      render({
+        [SEARCH_PATH]: {
+          body: results({
+            rows: [
+              row({ published_at: '2026-09-04T13:01:00Z' }),
+              row({ key: 'b'.repeat(40), title: '[Other] SPY x FAMILY - 51', published_at: null }),
+            ],
+            total: 2,
+          }),
+        },
+      })
+      renderApp('/media/tv:120089')
+
+      await userEvent.click(await screen.findByRole('button', { name: '搜尋' }))
+
+      const table = await within(panel()).findByRole('table')
+      expect(within(table).getByRole('columnheader', { name: '發佈' })).toBeInTheDocument()
+      const [known] = within(table).getAllByText('3 週前')
+      expect(known.closest('time')).toHaveAttribute('dateTime', '2026-09-04T13:01:00Z')
+      expect(known.closest('time')).toHaveAttribute(
+        'title',
+        new Date('2026-09-04T13:01:00Z').toLocaleString('zh-Hant'),
+      )
+      const rows = within(table).getAllByRole('row')
+      expect(within(rows[2]).getByText('—')).toBeInTheDocument()
+    })
+
+    it('英文介面同一欄叫 Published', async () => {
+      render({
+        [SEARCH_PATH]: { body: results({ rows: [row({ published_at: '2026-09-04T13:01:00Z' })] }) },
+      })
+      await i18next.changeLanguage('en')
+      try {
+        renderApp('/media/tv:120089')
+
+        await userEvent.click(await screen.findByRole('button', { name: 'Search' }))
+
+        const table = await screen.findByRole('table')
+        expect(within(table).getByRole('columnheader', { name: 'Published' })).toBeInTheDocument()
+        expect(within(table).getAllByText('3 weeks ago').length).toBeGreaterThan(0)
+      } finally {
+        await i18next.changeLanguage('zh-Hant')
+      }
+    })
   })
 
   it('Tags 逐格畫，內容與之後檔名裡的那一串一致（brief §6.8）', async () => {
@@ -522,6 +580,8 @@ describe('搜尋 torrent 與結果表', () => {
           title: '[ANi] SPY x FAMILY - 50 [1080P][Baha][WEB-DL][AAC AVC][CHT][MP4]',
           // 索引站報的那一個，不是 `key`——不報 hash 的站那一格是一條 guid。
           info_hash: 'a'.repeat(40),
+          // 規劃時比播出日（M3 票 14）：那一列的發佈時間原樣帶回去，沒報就是 null。
+          published_at: null,
         },
         media: 'tv:120089',
         route: 1,

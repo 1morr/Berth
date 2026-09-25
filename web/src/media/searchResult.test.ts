@@ -27,6 +27,7 @@ function row(overrides: Partial<SearchResult> = {}): SearchResult {
     episode_end: null,
     whole_season: false,
     strategy: null,
+    published_at: null,
     ...overrides,
   }
 }

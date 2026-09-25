@@ -60,6 +60,10 @@ class Job(Base):
     #: qBittorrent 自己的狀態字串（`stalledDL`、`pausedUP`…），原樣存。**不翻譯成
     #: `JobState`**：兩者回答的是不同的問題，而畫面要說得出「客戶端那邊現在是什麼樣子」。
     client_state: Mapped[str] = mapped_column(Text, default="")
+    #: 來源說它什麼時候發佈的：索引站結果的 `publishDate`、或 Feed Item 的發佈時間（M3 票 14）。
+    #: 規劃時拿它比換算出的那一集的播出日（`parser.airing`）。來源沒給、或這一筆不是從來源送的
+    #: （認領、重新入庫）是 `None`。
+    published_at: Mapped[datetime | None] = mapped_column(UtcDateTime, default=None)
     added_at: Mapped[datetime] = mapped_column(UtcDateTime, default=utcnow)
     completed_at: Mapped[datetime | None] = mapped_column(UtcDateTime, default=None)
     imported_at: Mapped[datetime | None] = mapped_column(UtcDateTime, default=None)

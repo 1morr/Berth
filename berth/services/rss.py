@@ -782,7 +782,12 @@ async def _submit(session: AsyncSession, factory: ServiceClientFactory, item: Rs
         outcome = await add_download(
             session,
             factory,
-            source=JobSource(url=item.torrent_url, title=item.title, info_hash=item.info_hash),
+            source=JobSource(
+                url=item.torrent_url,
+                title=item.title,
+                info_hash=item.info_hash,
+                published_at=item.published_at,
+            ),
             media_id=series.media_id,
             route_id=series.route_id,
             user_id=None,

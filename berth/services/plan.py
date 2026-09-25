@@ -57,7 +57,7 @@ from berth.domain import ReasonCode as Code
 from berth.logs import job_context
 from berth.models import Job, JobFile, LedgerEntry, Media, Plan, PlanItem, Route, RssSeries
 from berth.models.types import utcnow
-from berth.parser import classify, episode_span
+from berth.parser import HELD_BY_AIRING, check_airing, classify, episode_span
 from berth.parser import plan as decide
 from berth.services.clients import ServiceClientFactory
 from berth.services.events import EventHub, JobSignal
@@ -284,11 +284,7 @@ async def _plan(
     entries = await _measure(session, job, contents)
     series = await series_of(session, job)
     items, duplicates = await _against_ledger(
-        session,
-        job,
-        contents,
-        route,
-        _apply_policy(decide(job.name, entries, parse_context(route, snapshot, series)), route),
+        session, job, contents, route, _decided(job, entries, route, snapshot, series)
     )
     status, reason = _verdict(items, route, duplicates)
     row = await _store(
@@ -344,15 +340,9 @@ async def _preplan(session: AsyncSession, hub: EventHub, job_hash: str, now: dat
     if not entries:
         return 0
     series = await series_of(session, job)
+    snapshot = await _stored(session, job)
     items, duplicates = await _against_ledger(
-        session,
-        job,
-        contents,
-        route,
-        _apply_policy(
-            decide(job.name, entries, parse_context(route, await _stored(session, job), series)),
-            route,
-        ),
+        session, job, contents, route, _decided(job, entries, route, snapshot, series)
     )
     _, reason = _verdict(items, route, duplicates)
     row = await _store(
@@ -531,6 +521,37 @@ async def _measure(session: AsyncSession, job: Job, contents: Contents) -> tuple
 
 
 # --- 決定 ---------------------------------------------------------------
+
+
+def _decided(
+    job: Job,
+    entries: Sequence[FileEntry],
+    route: Route | None,
+    snapshot: MediaSnapshot | None,
+    series: RssSeries | None,
+) -> tuple[PlannedFile, ...]:
+    """解析器的答案，再過播出日比對與 Route 的政策。正式那一份與 pre-plan 走同一條。"""
+    decided = decide(job.name, entries, parse_context(route, snapshot, series))
+    return _apply_policy(_airing(job, decided, snapshot, series), route)
+
+
+def _airing(
+    job: Job,
+    items: Sequence[PlannedFile],
+    snapshot: MediaSnapshot | None,
+    series: RssSeries | None,
+) -> tuple[PlannedFile, ...]:
+    """播出日比對（M3 票 14、`parser.airing`）：發佈時間對換算出的那一集的播出日，可疑的送審核。
+
+    **在 Route 的政策之前**：被它擋下的那一列說的是「集數多半算錯了」，比「這條 Route 不讓 medium
+    自己入庫」更該先被看到。規則二（比最近播出的一集）只對 RSS Series。
+
+    沒有來源的 Job 不比（認領、從 complete 目錄重新入庫，`source_url` 是空的）：它們本來就沒有發佈
+    時間，逐列記一筆「來源沒給」只是雜訊。既有 Job 的重新入庫留著來源，照樣再比（plan §4.4）。
+    """
+    if not job.source_url:
+        return tuple(items)
+    return check_airing(items, snapshot, job.published_at, from_series=series is not None)
 
 
 def _apply_policy(items: Sequence[PlannedFile], route: Route | None) -> tuple[PlannedFile, ...]:
@@ -726,6 +747,9 @@ def _verdict(
     它仍然被數進 `summary.low`，所以畫面上看得見。
     """
     held = [item for item in items if item.action is PlanAction.REVIEW]
+    if any(reason.code in HELD_BY_AIRING for item in held for reason in item.reasons):
+        # 播出日比對擋下的那幾列信心仍是 high / medium，所以先問它：下一步是改季集，不是點頭。
+        return PlanStatus.PENDING_REVIEW, ReviewReason.AIR_DATE_CONFLICT
     if any(item.confidence is not Confidence.MEDIUM for item in held):
         return PlanStatus.PENDING_REVIEW, ReviewReason.LOW_CONFIDENCE
     if held:

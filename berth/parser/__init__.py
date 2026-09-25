@@ -3,6 +3,7 @@
 沒有 IO，也不 import 任何會做 IO 的東西——benchmark 因此可以離線跑（plan §4）。
 """
 
+from berth.parser.airing import BEHIND_LATEST, HELD_BY_AIRING, RELEASE_TOLERANCE, check_airing
 from berth.parser.cjk import langs_in, normalize_cjk
 from berth.parser.classify import SAMPLE_RATIO, SHORT_FEATURE, classify, kind_by_extension
 from berth.parser.mapping import VIRTUAL_SEASON_GAP, map_episode
@@ -13,12 +14,16 @@ from berth.parser.subtitles import SubtitleMatch, match_subtitle
 from berth.parser.title import MediaMatch, match_media, matches, mentions, normalize_title
 
 __all__ = [
+    "BEHIND_LATEST",
+    "HELD_BY_AIRING",
+    "RELEASE_TOLERANCE",
     "SAMPLE_RATIO",
     "SHORT_FEATURE",
     "VIRTUAL_SEASON_GAP",
     "MediaMatch",
     "StructureHints",
     "SubtitleMatch",
+    "check_airing",
     "classify",
     "episode_span",
     "kind_by_extension",

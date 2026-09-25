@@ -1028,6 +1028,7 @@ const zhHant = {
       seeders: '做種',
       indexer: '來源',
       estimate: '預估',
+      published: '發佈',
     },
     // 窄版把另外四欄收成一行，做種要自己帶標籤才知道那個數字是什麼。
     seedersInline_one: '做種 {{value}}',
@@ -1235,6 +1236,7 @@ const zhHant = {
         nothing_to_import: '這一包沒有東西會進媒體庫，多半送錯了 torrent',
         target_exists: '媒體庫的目標位置上已經有別的檔案',
         audit_undone: '有一個自動入庫的檔案被撤銷了，那一列要重新決定',
+        air_date_conflict: '發佈時間與換算出的集數的播出日對不上，季集多半算錯了',
       },
       waitingSince: '等候於 {{value}}',
       job: '下載',
@@ -1647,6 +1649,7 @@ const zhHant = {
         nothing_to_import: '沒有東西會進媒體庫',
         target_exists: '目標位置上已經有別的檔案',
         audit_undone: '有一個自動入庫的檔案被撤銷了',
+        air_date_conflict: '發佈時間與播出日對不上',
       },
       // 核准與拒絕（M2 票 07）。拒絕之後規劃器整份重算，所以下一筆就是新的那一份。
       reviewApproved_one: '管理員核准了，{{count}} 個檔案要入庫',
@@ -1741,6 +1744,8 @@ const zhHant = {
           '媒體庫裡這個位置已經有一個不是 Berth 鏈接的檔案，Berth 不會覆寫它；其餘檔案已經入庫了。把那個檔案移走，或在審核佇列把那一列改成略過，再核准。',
         audit_undone:
           '管理員從審核佇列撤銷了一個 medium 自動入庫的檔案：那個檔案已經不在媒體庫裡，complete 裡的來源還在。這份計劃回來等人決定那一列該是哪一集。',
+        air_date_conflict:
+          '有檔案的發佈時間與換算出的那一集的播出日對不上：發佈比播出早，或比這部作品正在播的集數早很多。季號、offset 或絕對編號多半算錯了。管理員在審核佇列逐列改正季集；晚幾個月才發的 BD 版這種其實沒錯的，核准就會照畫面上的位置入庫。',
       },
       action: {
         import: '入庫',
@@ -1789,6 +1794,12 @@ const zhHant = {
         air_date_mismatch: '發佈說它在 {{aired}} 播出，TMDB 說 {{episode}} 在 {{tmdb_aired}}',
         range_spans_seasons: '發佈涵蓋 {{start}}–{{end}}，但那一段放不進同一季',
         specials_numbering: '字幕組的特典編號與 TMDB 的 S00 不一定一致',
+        released_before_airing:
+          '發佈於 {{published}}，比 TMDB 上 {{episode}} 的播出日 {{aired}} 早了兩天以上：集數多半換算錯了',
+        behind_latest_episode:
+          '{{episode}} 在 {{aired}} 播出，而發佈當時這部作品最近播出的是 {{latest}}（{{latest_aired}}）：季號或 offset 多半錯了',
+        air_date_missing: 'TMDB 沒有 {{episode}} 的播出日，沒有比對發佈時間',
+        published_missing: '來源沒有給發佈時間，沒有比對播出日',
         classified: '分類是{{kind}}，不需要人看',
         disc_structure: '光碟結構，Berth 不拆',
         own_numbered_special: '字幕組自己編號的特典，TMDB 的特典編號不同',
@@ -3448,6 +3459,7 @@ const en: Translations<typeof zhHant> = {
       seeders: 'Seeders',
       indexer: 'Source',
       estimate: 'Estimate',
+      published: 'Published',
     },
     seedersInline_one: '{{value}} seeder',
     seedersInline_other: '{{value}} seeders',
@@ -3638,6 +3650,8 @@ const en: Translations<typeof zhHant> = {
         nothing_to_import: 'Nothing here would reach the library — most likely the wrong torrent',
         target_exists: 'Another file already sits at a target in the library',
         audit_undone: 'An auto-imported file was undone; that row needs a new decision',
+        air_date_conflict:
+          'The release date does not fit the air date of the episode it was mapped to; the episode is likely wrong',
       },
       waitingSince: 'Waiting since {{value}}',
       job: 'Download',
@@ -4029,6 +4043,7 @@ const en: Translations<typeof zhHant> = {
         nothing_to_import: 'nothing would reach the library',
         target_exists: 'another file already sits at the target',
         audit_undone: 'an auto-imported file was undone',
+        air_date_conflict: 'the release date does not fit the air date',
       },
       reviewApproved_one: 'An administrator approved it; {{count}} file will be imported',
       reviewApproved_other: 'An administrator approved it; {{count}} files will be imported',
@@ -4113,6 +4128,8 @@ const en: Translations<typeof zhHant> = {
           'A file Berth did not link already sits at this spot in the library, and Berth will not overwrite it; the other files are already in. Move that file away, or skip that row in the review queue, then approve.',
         audit_undone:
           'An administrator undid a medium-confidence import from the review queue: that file has left the library, and its source under complete is untouched. The plan is back, waiting for someone to decide which episode that row really is.',
+        air_date_conflict:
+          'A file’s release date does not fit the air date of the episode it was mapped to: it came out before that episode aired, or far behind the episode this title is airing now. The season, offset or absolute numbering is most likely wrong. An administrator corrects each row’s episode in the review queue; if it is actually right, such as a BD release months later, approving imports it where shown.',
       },
       action: {
         import: 'Import',
@@ -4161,6 +4178,13 @@ const en: Translations<typeof zhHant> = {
         range_spans_seasons:
           'The release covers {{start}}–{{end}}, which does not fit in one season',
         specials_numbering: 'Release groups number specials differently from TMDB’s season 0',
+        released_before_airing:
+          'released on {{published}}, more than two days before TMDB’s air date for {{episode}} ({{aired}}): the episode was most likely worked out wrong',
+        behind_latest_episode:
+          '{{episode}} aired on {{aired}}, but when this came out the title’s latest episode was {{latest}} ({{latest_aired}}): the season or offset is most likely wrong',
+        air_date_missing:
+          'TMDB has no air date for {{episode}}, so the release date was not checked',
+        published_missing: 'the source gave no release date, so the air date was not checked',
         classified: 'Classified as {{kind}}; nothing to decide',
         disc_structure: 'A disc structure; Berth does not unpack those',
         own_numbered_special:

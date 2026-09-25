@@ -24,6 +24,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
+from datetime import datetime
 from itertools import zip_longest
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -94,6 +95,9 @@ class SearchResult:
     whole_season: bool
     #: 季集是怎麼算出來的。電影靠它說得出「這一格沒有季集是因為它是電影」，而不是留白。
     strategy: MappingStrategy | None
+    #: 索引站報的發佈時間（brief §20.11）。結果表的「發佈」欄，送單時跟著 Job 存下來比播出日
+    #: （M3 票 14）。那個站沒報是 `None`。
+    published_at: datetime | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -482,6 +486,7 @@ def _row(
         episode_end=end,
         whole_season=_whole_season(snapshot, season, start, end),
         strategy=best.strategy if best is not None else None,
+        published_at=result.published_at,
     )
 
 

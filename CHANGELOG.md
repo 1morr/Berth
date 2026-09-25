@@ -677,6 +677,15 @@ Issue、修正、對帳、刪除與重新入庫的每一條端點都是 403，�
   `action` 與 `series`、理由多 `first_batch`；`GET /plans/{id}` 多 `series`。`rss_series` 多 `confirmed`、`plans`
   多 `rss_series_id` / `season_hint` / `episode_offset`（migration `a4f7c2e9d168`；既有的 Series 算還沒確認，
   既有的 Plan 不回填）。演練情境多 `rss-split-cour`。
+- **播出日比對**（M3 票 14，plan §4.4、§11.4「三道程式檢查」①）：規劃時拿來源的發佈時間比換算出的那一集的
+  TMDB 播出日，可疑的不自動入庫、停在 `/review`，理由說出兩個日期。兩條規則：發佈早於那一集的播出日超過兩天
+  （換算過頭，手動送單與 RSS 都套）；連載中的 RSS Series 對到的那一集比作品在發佈當時最近播出的一集早 6 週以上
+  （split-cour 從 01 重數而 offset 沒設）。被擋的那一列季集與路徑留著，BD 版晚發這種其實沒錯的核准就照畫面上的
+  位置入庫。來源沒給發佈時間、或 TMDB 沒有那一集的播出日時不擋，理由裡記一筆。新的審核理由 `air_date_conflict`
+  與四種逐列理由（`released_before_airing`、`behind_latest_episode`、`air_date_missing`、`published_missing`）。
+  發佈時間跟著 Job 存下來：`jobs.published_at`（migration `c8d2f5a1e734`；既有的 RSS Job 從 Feed Item 回填），
+  `POST /jobs` 的 `source` 多選填的 `published_at`；搜尋結果 `GET /search` 每一列多 `published_at`，結果表多一欄
+  「發佈」（相對時間，滑過去是完整日期；索引站沒給時 `—`）。
 
 ### Changed
 - **標題自己寫了 `(Batch)`、`[Vol.1]` 的發佈算季包**（M3 票 11）：Nyaa 與 acg.rip 搜尋 feed 裡的 BD 單卷與季包
