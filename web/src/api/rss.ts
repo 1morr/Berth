@@ -119,8 +119,9 @@ export function pollFeed(id: number) {
   return apiPost<PollOutcome>(`/rss/feeds/${id}/poll`)
 }
 
-export function bindSeries(id: number, media: string, route: number) {
-  return apiPut<RssSeries>(`/rss/series/${id}/binding`, { media, route })
+/** `backfill` 只對 Mikan 的 RSS Series 有作用（票 12）：讀單一 feed 補舊集；`false` 時舊集記成略過。 */
+export function bindSeries(id: number, media: string, route: number, backfill: boolean) {
+  return apiPut<RssSeries>(`/rss/series/${id}/binding`, { media, route, backfill })
 }
 
 export function unbindSeries(id: number) {

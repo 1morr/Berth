@@ -38,6 +38,14 @@ const FLOWS = [
     viewport: NARROW,
   },
   { name: 'rss-preview', spec: 'rss-preview', scenario: 'rss', port: 8488 },
+  { name: 'rss-backfill', spec: 'rss-backfill', scenario: 'rss', port: 8486 },
+  {
+    name: 'rss-backfill-390',
+    spec: 'rss-backfill',
+    scenario: 'rss',
+    port: 8487,
+    viewport: NARROW,
+  },
   {
     name: 'rss-preview-390',
     spec: 'rss-preview',

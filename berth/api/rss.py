@@ -207,6 +207,9 @@ class BindingIn(BaseModel):
 
     media: str = Field(min_length=1)
     route: int
+    #: Mikan 的 RSS Series 同時補舊集（票 12）：讀單一 feed，聚合 feed 沒帶到的那幾集一起送。
+    #: `false` 時綁定之前發佈的舊集記成略過（之後的每日補漏也是）。
+    backfill: bool = True
 
 
 class SkipReasonOut(BaseModel):
@@ -378,7 +381,8 @@ async def put_binding(
     series_id: int,
     body: BindingIn,
 ) -> SeriesOut:
-    """綁定並把留著的 Item 送出去。送單被拒的那幾筆不讓這一支失敗：它們留在 `matched` 帶著原文。"""
+    """綁定並把留著的 Item 送出去，Mikan 的同時補舊集。送單被拒的那幾筆不讓這一支失敗：它們留在
+    `matched` 帶著原文。"""
     user = current_user(request)
     try:
         view = await bind_series(
@@ -388,6 +392,7 @@ async def put_binding(
             media_id=body.media,
             route_id=body.route,
             user_id=user.id if user is not None else None,
+            backfill=body.backfill,
         )
     except RssRejectedError as refusal:
         raise rss_refusal(refusal) from refusal

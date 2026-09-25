@@ -141,6 +141,11 @@ def bangumi_url(bangumi_id: int) -> str:
     return urljoin(MIKAN_BASE, f"/Home/Bangumi/{bangumi_id}")
 
 
+def bangumi_feed_url(bangumi_id: int, subgroup_id: int) -> str:
+    """番組 × 字幕組的單一 feed：整季都在（brief §20.12），補舊集與每日補漏讀它（票 12）。"""
+    return urljoin(MIKAN_BASE, f"/RSS/Bangumi?bangumiId={bangumi_id}&subgroupid={subgroup_id}")
+
+
 def bangumi_page(page: str) -> MikanBangumi:
     """番組頁 → 中文名與開播日期。
 

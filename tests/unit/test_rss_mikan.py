@@ -13,6 +13,7 @@ import pytest
 from berth.adapters.http import ProtocolMismatchError
 from berth.adapters.rss.mikan import (
     MikanBangumi,
+    bangumi_feed_url,
     bangumi_page,
     bangumi_url,
     parse_feed,
@@ -175,3 +176,14 @@ class TestBangumiPage:
 
     def test_the_page_address_is_built_from_the_bangumi_id(self) -> None:
         assert bangumi_url(4009) == "https://mikanani.me/Home/Bangumi/4009"
+
+
+class TestSingleFeed:
+    def test_the_address_is_the_one_the_episode_page_links(self) -> None:
+        """補舊集讀的就是單集頁 `a.mikan-rss` 指的那一條（錄下來的單一 feed 的網址）。"""
+        page = (MIKAN / "home-episode.85c93c23.html").read_text(encoding="utf-8")
+        assert series_key(page) == (4009, 370)
+        assert (
+            bangumi_feed_url(4009, 370)
+            == "https://mikanani.me/RSS/Bangumi?bangumiId=4009&subgroupid=370"
+        )

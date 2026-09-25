@@ -658,6 +658,15 @@ Issue、修正、對帳、刪除與重新入庫的每一條端點都是 403，�
   Mikan 的 Feed 不走預覽。新端點 `GET /rss/feeds/{id}/preview`、`POST /rss/feeds/{id}/prime`；Feed 多 `primed_at`、
   Item 多 `size` 與 `passed` 狀態（migration `c3e9a7f1b204`，既有的 Feed 算選過）。`pnpm -C web e2e` 多
   `rss-preview` 一條（1280 與 390）。
+- **Mikan 的補舊集與每日補漏**（M3 票 12，brief §15「補舊集」）：聚合 feed 只有最近的集數，所以綁定 Mikan 的
+  RSS Series 時會讀它的單一 feed（`/RSS/Bangumi?bangumiId=&subgroupid=`），聚合 feed 沒帶到的舊集一起送；
+  媒體庫已經有、或已經下載過的跳過，合集照樣被排除條件擋下。綁定畫面多一格「同時補下載舊集」，預設勾選；
+  取消勾選時綁定之前發佈的舊集記成略過（之後的每日補漏、換到另一個 Feed 也一樣）。自動綁定照預設全補。之後每個
+  綁好的 Mikan RSS Series 每天再讀一次單一 feed，接住 Berth 停機期間被聚合 feed 捲掉的集數；讀不到寫在那個
+  Feed 的錯誤上、下一輪再試。`PUT /rss/series/{id}/binding` 多 `backfill`（預設 `true`）；`rss_series` 多
+  `backfilled_at` 與 `passed_before`（migration `e8a3d6c1f59b`；既有的已綁定 Mikan RSS Series 不在升級那一刻補整季，
+  只補它出現之後被捲掉的）。
+  `pnpm -C web e2e` 多 `rss-backfill` 一條（1280 與 390）。
 
 ### Changed
 - **標題自己寫了 `(Batch)`、`[Vol.1]` 的發佈算季包**（M3 票 11）：Nyaa 與 acg.rip 搜尋 feed 裡的 BD 單卷與季包

@@ -375,6 +375,42 @@ async def test_foreign_keys_are_enforced(config: Config) -> None:
     assert enabled == 1
 
 
+BACKFILL = "e8a3d6c1f59b"
+BEFORE_BACKFILL = "c3e9a7f1b204"
+
+
+async def test_series_bound_before_backfill_do_not_fetch_a_whole_season(config: Config) -> None:
+    """票 12：升級之前就綁好的 Mikan RSS Series 從沒被問過要不要補舊集，升級那一刻不替它們送出
+    整季——`passed_before` 補成它長出來的那一刻。待綁定的與不是 Mikan 的不動。"""
+    config.config_root.mkdir(parents=True, exist_ok=True)
+    engine = create_engine(config)
+    born = "2026-09-20T00:00:00.000000+00:00"
+    try:
+        async with engine.begin() as connection:
+            await connection.run_sync(_upgrade_to, BEFORE_BACKFILL)
+        with _sqlite(config.database_path) as db:
+            for key, media, bangumi in (
+                ("mikan:1:1", "tv:1", 1),
+                ("mikan:2:1", None, 2),
+                ("title:kimi:lolihouse", "tv:1", None),
+            ):
+                db.execute(
+                    "INSERT INTO rss_series (key, title_raw, media_id, mikan_bangumi_id,"
+                    " mikan_subgroup_id, bound_by, created_at) VALUES (?, '', ?, ?, ?, '', ?)",
+                    (key, media, bangumi, bangumi and 1, born),
+                )
+            db.commit()
+
+        async with engine.begin() as connection:
+            await connection.run_sync(_upgrade_to, BACKFILL)
+        with _sqlite(config.database_path) as db:
+            rows = dict(db.execute("SELECT key, passed_before FROM rss_series").fetchall())
+    finally:
+        await engine.dispose()
+
+    assert rows == {"mikan:1:1": born, "mikan:2:1": None, "title:kimi:lolihouse": None}
+
+
 def _upgrade_to(connection: Connection, revision: str) -> None:
     config = alembic_config()
     config.attributes["connection"] = connection

@@ -428,7 +428,9 @@ class TestSameTorrent:
     async def test_two_feeds_seen_before_binding_send_it_once(
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
-        """綁定那一刻兩份都還留著：先送的那一份建 Job，另一份是重複。"""
+        """綁定那一刻兩份都還留著：先送的那一份建 Job，另一份是重複。
+
+        票 12 起綁定也補舊集：單一 feed 的 01–10 同時寫進聚合 Feed，所以 12 集每一集都是兩份。"""
         media, route, factory = await harbour(session, roots)
         serve_single(factory)
         for url in (FEED_URL, SINGLE_URL):
@@ -445,7 +447,9 @@ class TestSameTorrent:
         duplicates = list(
             await session.scalars(select(RssItem).where(RssItem.status == FeedItemStatus.DUPLICATE))
         )
-        assert sorted(row.job_hash for row in duplicates) == sorted(item.info_hash for item in KIMI)
+        assert sorted(row.job_hash for row in duplicates) == sorted(
+            item.info_hash for item in parse_feed(SINGLE)
+        )
 
     async def test_a_job_cleared_with_its_records_is_not_fetched_again(
         self, session: AsyncSession, roots: dict[str, Path]

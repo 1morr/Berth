@@ -6,7 +6,14 @@ import { MIN_QUERY_LENGTH, searchQueryOptions, type DiscoverItem } from '../api/
 import { mediaQueryOptions, type Media } from '../api/media'
 import { bindSeries, parseRssRefusal, RSS_KEY, type Candidate, type RssSeries } from '../api/rss'
 import { ConfirmPanel } from '../components/ConfirmPanel'
-import { CONFIRM_ACTIONS, Field, GhostButton, Notice, PrimaryButton } from '../components/controls'
+import {
+  Checkbox,
+  CONFIRM_ACTIONS,
+  Field,
+  GhostButton,
+  Notice,
+  PrimaryButton,
+} from '../components/controls'
 import { SEARCH_DEBOUNCE_MS, useDebounced } from '../components/useDebounced'
 import { useInPlaceConfirm } from '../components/useInPlaceConfirm'
 import { displayRound } from '../i18n/displayRound'
@@ -27,6 +34,10 @@ import { searchTerm } from './searchTerm'
  * **候選**（票 09）：自動綁定認出來、留給人選的作品（同名不同年、兩部都對得上、Route 不只一條）。
  * 收起時每一部一顆鍵，按一下就展開並選定它——跳過搜尋，直接到 Route 與確認；展開後它們排在搜尋
  * 框上面，選定的那一顆是按下的樣子。確認照舊要按：資料夾名在那一刻定死。
+ *
+ * **補舊集**（票 12）：Mikan 的 RSS Series 多一格「同時補下載舊集」，預設勾選（brief §15）——綁定時
+ * 讀這個字幕組的單一 feed，聚合 feed 沒帶到的集數一起送。幾集要讀了才知道，所以勾著時確認鍵不說
+ * 總數，只說「並補舊集」；取消勾選時那幾集記成略過，之後的每日補漏也不送它們。
  */
 export function SeriesBinder({
   series,
@@ -43,6 +54,10 @@ export function SeriesBinder({
   const [picked, setPicked] = useState<Pickable | null>(null)
   // `undefined` 是「還沒選過」：那時用預選（`preselect`）；選了「不選」是 `null`。
   const [chosen, setChosen] = useState<number | null | undefined>(undefined)
+  const [backfill, setBackfill] = useState(true)
+  // 只有 Mikan 有單一 feed（番組 × 字幕組）；其他來源的新 Feed 第一輪就帶著歷史（票 11 的預覽）。
+  const mikan = series.mikan_bangumi_id !== null
+  const backfilling = mikan && backfill
   const search = useRef<HTMLInputElement>(null)
   const headingId = useId()
   const debounced = useDebounced(query.trim(), SEARCH_DEBOUNCE_MS)
@@ -54,7 +69,7 @@ export function SeriesBinder({
   const bind = useMutation({
     mutationFn: () => {
       if (picked === null || route === null) throw new Error('nothing picked')
-      return bindSeries(series.id, picked.id, route)
+      return bindSeries(series.id, picked.id, route, backfilling)
     },
     onSuccess: async (bound) => {
       close()
@@ -181,6 +196,14 @@ export function SeriesBinder({
               {t('rss.bind.willSend', { count: series.waiting })}
             </p>
           </div>
+          {mikan && (
+            <Checkbox
+              label={t('rss.bind.backfill')}
+              hint={t(backfill ? 'rss.bind.backfillOn' : 'rss.bind.backfillOff')}
+              checked={backfill}
+              onChange={setBackfill}
+            />
+          )}
         </div>
       )}
 
@@ -189,7 +212,9 @@ export function SeriesBinder({
           <PrimaryButton type="button" busy={bind.isPending} onClick={() => bind.mutate()}>
             {bind.isPending
               ? t('rss.bind.binding')
-              : t('rss.bind.confirm', { count: series.waiting })}
+              : t(backfilling ? 'rss.bind.confirmBackfill' : 'rss.bind.confirm', {
+                  count: series.waiting,
+                })}
           </PrimaryButton>
         ) : (
           <span />

@@ -6,8 +6,8 @@ Series。所以刪 Feed 連它的 Item 一起刪（`CASCADE`），Series 與它�
 （`.scratch/m3/rss-shape.md` §4）。
 
 欄位只建用得到的（M3 票 08 起）：排除條件（`exclude_json`）與跳過理由（`skip_json`）在票 10；
-第一輪預覽（`primed_at`）與大小（`size`）在票 11；第一批確認（`confirmed`，票 13）、補舊集
-（`backfilled_at`，票 12）等到用它的那一票再加。
+第一輪預覽（`primed_at`）與大小（`size`）在票 11；補舊集（`backfilled_at`）在票 12；第一批確認
+（`confirmed`，票 13）等到用它的那一票再加。
 """
 
 from __future__ import annotations
@@ -80,6 +80,13 @@ class RssSeries(Base):
     candidates_json: Mapped[list[str] | None] = mapped_column(JsonText, default=None)
     #: 這一層的排除條件（與 Feed 那一欄同一個格式）。
     exclude_json: Mapped[list[str]] = mapped_column(JsonText, default=list, server_default="[]")
+    #: 上一次讀 Mikan 單一 feed 補舊集或補漏的那一刻（票 12）。`None` 是還沒補過：綁好的 Mikan
+    #: RSS Series 下一輪輪詢就補；之後滿一天再補一次（plan §3.2）。
+    backfilled_at: Mapped[datetime | None] = mapped_column(UtcDateTime, default=None)
+    #: 綁定時取消勾選補舊集的那一刻（票 12）：補舊集與補漏讀到的、在這之前發佈的記成 `passed`。
+    #: 決定記在這裡而不是那幾筆 Item 上——Item 跟著 Feed 刪掉，同一個 RSS Series 也可能在另一個 Feed
+    #: 裡被補。`None` 是要整季。
+    passed_before: Mapped[datetime | None] = mapped_column(UtcDateTime, default=None)
     created_at: Mapped[datetime] = mapped_column(UtcDateTime, default=utcnow)
 
 

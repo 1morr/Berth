@@ -44,6 +44,7 @@ from tests.integration.test_rss import (
     torrents,
 )
 from tests.integration.test_rss_preview import ACGRIP, ACGRIP_URL, LOLIHOUSE_KEY
+from tests.integration.test_rss_screen import serve_single
 
 pytestmark = pytest.mark.asyncio
 
@@ -186,8 +187,11 @@ class TestConfident:
     async def test_a_series_is_looked_up_once(
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
-        """認作品只在它長出來的那一輪做：之後每 15 分鐘一輪，不再抓番組頁、不再搜 TMDB。"""
+        """認作品只在它長出來的那一輪做：之後每 15 分鐘一輪，不再抓番組頁、不再搜 TMDB。
+
+        綁上的那一輪也讀了單一 feed 補舊集（票 12）；不滿一天不再讀。"""
         _, factory = await moored(session, roots)
+        serve_single(factory)
         feed = await add_feed(session, url=FEED_URL, name="Mikan")
         await poll_feed(session, factory, feed.id, now=NOW)
         factory.rss_.requested.clear()

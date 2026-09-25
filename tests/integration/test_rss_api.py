@@ -164,6 +164,25 @@ class TestRefusals:
         assert refused.status_code == 404
         assert refused.json()["detail"]["reason"] == "series_missing"
 
+    def test_binding_without_backfill(self, client: TestClient, roots: dict[str, Path]) -> None:
+        """`backfill: false`（票 12）：只送聚合 feed 帶到的兩集；替身上沒有單一 feed 也照樣綁。"""
+        route_id = seed(client, roots)
+        sign_in(client)
+        feed = client.post("/api/rss/feeds", json={"url": FEED_URL}, headers=BROWSER).json()
+        client.post(f"/api/rss/feeds/{feed['id']}/poll", headers=BROWSER)
+        pending = next(
+            row for row in client.get("/api/rss/series").json() if row["key"] == "mikan:4009:370"
+        )
+
+        bound = client.put(
+            f"/api/rss/series/{pending['id']}/binding",
+            json={"media": KIMI_ID, "route": route_id, "backfill": False},
+            headers=BROWSER,
+        )
+
+        assert bound.status_code == 200, bound.text
+        assert bound.json()["submitted"] == 2
+
 
 class TestTheFirstRound:
     """新搜尋 feed 的第一輪預覽（票 11）：預覽 → 選「只追之後的」→ 再選一次是 409。"""

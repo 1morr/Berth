@@ -2222,6 +2222,13 @@ const zhHant = {
       willSend_other: '綁定之後會送出 {{count}} 集到 qBittorrent。',
       confirm_one: '綁定並送出 {{count}} 集',
       confirm_other: '綁定並送出 {{count}} 集',
+      // Mikan 的 RSS Series（票 12）：補幾集要讀了單一 feed 才知道，鍵上不說總數。
+      backfill: '同時補下載舊集',
+      backfillOn:
+        '讀這個字幕組在 Mikan 上的整季，Feed 沒帶到的集數一起送出；媒體庫已經有、或已經下載過的跳過。之後每天再補一次漏掉的。',
+      backfillOff: '只送 Feed 帶到的這幾集。更早的集數記成略過，之後每天的補漏也不會送它們。',
+      confirmBackfill_one: '綁定、送出 {{count}} 集並補舊集',
+      confirmBackfill_other: '綁定、送出 {{count}} 集並補舊集',
       binding: '綁定中…',
       kind: { tv: '劇集', movie: '電影' },
       done_one: '綁好了，送出 {{count}} 集。',
@@ -4559,6 +4566,13 @@ const en: Translations<typeof zhHant> = {
       willSend_other: 'Binding sends {{count}} episodes to qBittorrent.',
       confirm_one: 'Bind and send {{count}} episode',
       confirm_other: 'Bind and send {{count}} episodes',
+      backfill: 'Also download earlier episodes',
+      backfillOn:
+        "Reads this group's whole season on Mikan and sends the episodes the feed didn't carry; ones already in the library or already downloaded are skipped. Missed episodes are picked up once a day after that.",
+      backfillOff:
+        'Sends only the episodes the feed carried. Earlier ones are marked as passed, and the daily catch-up will not send them either.',
+      confirmBackfill_one: 'Bind, send {{count}} episode and catch up',
+      confirmBackfill_other: 'Bind, send {{count}} episodes and catch up',
       binding: 'Binding…',
       kind: { tv: 'Series', movie: 'Film' },
       done_one: 'Bound. {{count}} episode sent.',

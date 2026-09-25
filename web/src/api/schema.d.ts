@@ -1131,7 +1131,8 @@ export interface paths {
         get?: never;
         /**
          * Put Binding
-         * @description 綁定並把留著的 Item 送出去。送單被拒的那幾筆不讓這一支失敗：它們留在 `matched` 帶著原文。
+         * @description 綁定並把留著的 Item 送出去，Mikan 的同時補舊集。送單被拒的那幾筆不讓這一支失敗：它們留在
+         *     `matched` 帶著原文。
          */
         put: operations["put_binding_api_rss_series__series_id__binding_put"];
         post?: never;
@@ -1942,6 +1943,11 @@ export interface components {
             media: string;
             /** Route */
             route: number;
+            /**
+             * Backfill
+             * @default true
+             */
+            backfill?: boolean;
         };
         /** BundledLibrariesIn */
         BundledLibrariesIn: {

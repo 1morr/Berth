@@ -312,11 +312,17 @@ describe('RSS 頁', () => {
     // 唯一的那一條 Route 預選好；資料夾名是機器字串，原樣印出來。
     expect(await within(row).findByText(KIMI.folder_name)).toBeInTheDocument()
     expect(within(row).getByRole('combobox')).toHaveValue('3')
-    await userEvent.click(within(row).getByRole('button', { name: '綁定並送出 2 集' }))
+    // Mikan 的 RSS Series 預設補舊集（票 12）：幾集要讀了才知道，鍵上不說總數。
+    expect(within(row).getByRole('checkbox', { name: '同時補下載舊集' })).toBeChecked()
+    await userEvent.click(within(row).getByRole('button', { name: '綁定、送出 2 集並補舊集' }))
 
     await waitFor(() => expect(sent(stub, 'PUT', '/api/rss/series/7/binding')).toHaveLength(1))
     const [[, init]] = sent(stub, 'PUT', '/api/rss/series/7/binding')
-    expect(JSON.parse(String(init?.body))).toEqual({ media: 'tv:262000', route: 3 })
+    expect(JSON.parse(String(init?.body))).toEqual({
+      media: 'tv:262000',
+      route: 3,
+      backfill: true,
+    })
     await waitFor(() =>
       expect(screen.queryByRole('heading', { name: '待綁定' })).not.toBeInTheDocument(),
     )
@@ -382,13 +388,66 @@ describe('RSS 頁', () => {
     // 搜尋回的就是候選那一部：不再列一次，也不說「沒有找到」。
     expect(within(row).queryByRole('list', { name: '搜尋結果' })).not.toBeInTheDocument()
     expect(within(row).queryByText(/沒有找到/)).not.toBeInTheDocument()
-    expect(within(row).queryByRole('button', { name: '綁定並送出 2 集' })).not.toBeInTheDocument()
+    expect(
+      within(row).queryByRole('button', { name: '綁定、送出 2 集並補舊集' }),
+    ).not.toBeInTheDocument()
     await userEvent.selectOptions(within(row).getByRole('combobox'), '3')
+    await userEvent.click(within(row).getByRole('button', { name: '綁定、送出 2 集並補舊集' }))
+
+    await waitFor(() => expect(sent(stub, 'PUT', '/api/rss/series/7/binding')).toHaveLength(1))
+    const [[, init]] = sent(stub, 'PUT', '/api/rss/series/7/binding')
+    expect(JSON.parse(String(init?.body))).toEqual({
+      media: 'tv:262000',
+      route: 3,
+      backfill: true,
+    })
+  })
+
+  it('補舊集取消勾選：鍵說回送出幾集，送出 `backfill: false`', async () => {
+    const stub = render({
+      'GET /api/rss/series': { body: [series()] },
+      'GET /api/discover/search?q=Kimi%20ga%20Shinu%20made%20Koi%20wo%20Shitai': { body: FOUND },
+      'GET /api/media/tv%3A262000': { body: KIMI },
+      'PUT /api/rss/series/7/binding': { body: { ...series(), submitted: 2 } },
+    })
+    renderApp('/rss')
+    const row = await screen.findByRole('article', { name: TITLE })
+    await userEvent.click(within(row).getByRole('button', { name: '綁定' }))
+    await userEvent.click(await within(row).findByRole('button', { name: /與妳相戀到生命盡頭/ }))
+
+    const backfill = await within(row).findByRole('checkbox', { name: '同時補下載舊集' })
+    await userEvent.click(backfill)
+    // 說明跟著換成取消之後的後果。
+    expect(backfill).toHaveAccessibleDescription(/更早的集數記成略過/)
     await userEvent.click(within(row).getByRole('button', { name: '綁定並送出 2 集' }))
 
     await waitFor(() => expect(sent(stub, 'PUT', '/api/rss/series/7/binding')).toHaveLength(1))
     const [[, init]] = sent(stub, 'PUT', '/api/rss/series/7/binding')
-    expect(JSON.parse(String(init?.body))).toEqual({ media: 'tv:262000', route: 3 })
+    expect(JSON.parse(String(init?.body))).toMatchObject({ backfill: false })
+  })
+
+  it('不是 Mikan 的 RSS Series 沒有補舊集那一格', async () => {
+    const stub = render({
+      'GET /api/rss/series': {
+        body: [
+          series({ key: 'title:kimi:lolihouse', mikan_bangumi_id: null, mikan_subgroup_id: null }),
+        ],
+      },
+      'GET /api/discover/search?q=Kimi%20ga%20Shinu%20made%20Koi%20wo%20Shitai': { body: FOUND },
+      'GET /api/media/tv%3A262000': { body: KIMI },
+      'PUT /api/rss/series/7/binding': { body: { ...series(), submitted: 2 } },
+    })
+    renderApp('/rss')
+    const row = await screen.findByRole('article', { name: TITLE })
+    await userEvent.click(within(row).getByRole('button', { name: '綁定' }))
+    await userEvent.click(await within(row).findByRole('button', { name: /與妳相戀到生命盡頭/ }))
+
+    await userEvent.click(await within(row).findByRole('button', { name: '綁定並送出 2 集' }))
+
+    expect(within(row).queryByRole('checkbox', { name: '同時補下載舊集' })).not.toBeInTheDocument()
+    await waitFor(() => expect(sent(stub, 'PUT', '/api/rss/series/7/binding')).toHaveLength(1))
+    const [[, init]] = sent(stub, 'PUT', '/api/rss/series/7/binding')
+    expect(JSON.parse(String(init?.body))).toMatchObject({ backfill: false })
   })
 
   it('自動綁好的那一列說出依據', async () => {

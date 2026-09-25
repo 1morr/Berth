@@ -158,7 +158,6 @@ from tests.e2e.payload import info_name
 from tests.integration.test_media import tmdb as demo_tmdb
 from tests.integration.test_rss import FEED as RSS_FEED
 from tests.integration.test_rss import FEED_URL as RSS_FEED_URL
-from tests.integration.test_rss import KIMI as RSS_KIMI
 from tests.integration.test_rss import KIMI_ID as RSS_KIMI_ID
 from tests.integration.test_rss import MIKAN as RSS_MIKAN
 from tests.integration.test_rss import episode_pages as rss_episode_pages
@@ -1069,7 +1068,10 @@ def _rss_pack(title: str) -> tuple[str, tuple[tuple[str, int], ...]]:
     return release, ((f"{release}/{release}.mkv", 4000),)
 
 
-RSS_PACKS = dict(_rss_pack(item.title) for item in RSS_KIMI)
+#: 單一 feed 的 01–12（11、12 與聚合 feed 同一個 hash、同一個 `.torrent` 網址）：票 12 綁定時
+#: 補舊集，每一集都要送得出去、收得下。
+RSS_SEASON = parse_feed(RSS_SINGLE)
+RSS_PACKS = dict(_rss_pack(item.title) for item in RSS_SEASON)
 DEMO_PACKS.update(RSS_PACKS)
 
 
@@ -1087,7 +1089,10 @@ def rss_scenario() -> Scenario:
 
     票 10 起多一份錄下來的單一 feed（喵萌奶茶屋&LoliHouse 的《与你相恋》1–12 集，11、12 與聚合 feed
     同一個 hash）：排除條件那一條流程加它，看得到重複與 RSS Series 那一層擋下的。它的單集頁都指向
-    同一個 RSS Series（4009 × 370）；1–10 集沒有 `.torrent`，那一條流程先用規則擋下它們。
+    同一個 RSS Series（4009 × 370）；那一條流程綁定時取消補舊集，再用規則擋下 1–10 集。
+
+    票 12 起綁定《与你相恋》會讀這一份單一 feed 補舊集：12 集都有這台自己生的 `.torrent`，預設全補時
+    `/jobs` 上是 12 筆。
 
     票 11 起多一份錄下來的 acg.rip 搜尋 feed（《上伊那牡丹》30 筆，夾著 8 筆合集）：第一輪預覽那一條
     流程加它，看得到合集被排除、選「只追之後的」之後整份歷史略過。
@@ -1129,7 +1134,7 @@ def rss_scenario() -> Scenario:
         item.torrent_url: TorrentSource(
             info_hash=demo_torrent(release).info_hash, content=demo_torrent(release).raw
         )
-        for item, release in zip(RSS_KIMI, RSS_PACKS, strict=True)
+        for item, release in zip(RSS_SEASON, RSS_PACKS, strict=True)
     }
     return scenario
 
