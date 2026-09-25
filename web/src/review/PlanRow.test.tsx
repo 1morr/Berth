@@ -367,3 +367,74 @@ describe('審核佇列的 plan 那一類（M2 票 07）', () => {
     )
   })
 })
+
+describe('從審核裡套用到 RSS Series（M3 票 14b）', () => {
+  const SERIES = { id: 4, season: null, episode_offset: null }
+  const CORRECTED = { season: 1, episode_offset: 12, moved: 0, replanned: 1, left: 0 }
+
+  it('RSS Series 送的計劃多一格「套用到這個 RSS Series」、預設勾選，結果畫在頁上', async () => {
+    const edited = { ...plan({ series: { ...SERIES, season: 1, episode_offset: 12 } }) }
+    const stub = render({
+      [PLAN]: { body: plan({ series: SERIES }) },
+      'PUT /api/plans/11/items': { body: { ...edited, corrected: CORRECTED } },
+    })
+    renderApp('/review')
+    const row = await screen.findByRole('article')
+
+    await userEvent.click(await within(row).findByRole('button', { name: `改 ${RELEASE}.mkv` }))
+    expect(within(row).getByRole('checkbox', { name: /套用到這個 RSS Series/ })).toBeChecked()
+    const start = within(row).getByLabelText('起集')
+    await userEvent.clear(start)
+    await userEvent.type(start, '17')
+    await userEvent.click(within(row).getByRole('button', { name: '套用' }))
+
+    const said = await screen.findByText(
+      /^已修正，這個 RSS Series 改成第 1 季、集號偏移 \+12。 1 筆等審核的下載照新的值重新規劃了。 這一份照你改的留著/,
+    )
+    // 其餘的計劃從佇列上消失了：只念出來不夠，要看得見（`Said` 的 `shown`）。
+    expect(said).not.toHaveClass('sr-only')
+    expect(sent(stub, '/api/plans/11/items')).toEqual({
+      items: [{ id: 1, action: 'import', season: 1, episode_start: 17, episode_end: null }],
+      apply_to_series: true,
+    })
+  })
+
+  it('取消勾選就只改這一列', async () => {
+    const stub = render({
+      [PLAN]: { body: plan({ series: SERIES }) },
+      'PUT /api/plans/11/items': { body: { ...plan({ series: SERIES }), corrected: null } },
+    })
+    renderApp('/review')
+    const row = await screen.findByRole('article')
+
+    await userEvent.click(await within(row).findByRole('button', { name: `改 ${RELEASE}.mkv` }))
+    await userEvent.click(within(row).getByRole('checkbox', { name: /套用到這個 RSS Series/ }))
+    await userEvent.click(within(row).getByRole('button', { name: '套用' }))
+
+    expect(await screen.findByText('已套用，目標路徑更新了。')).toBeInTheDocument()
+    expect(sent(stub, '/api/plans/11/items')).toEqual({
+      items: [{ id: 1, action: 'import', season: 1, episode_start: 5, episode_end: null }],
+    })
+  })
+
+  it('不是指派到某一集就沒有那一格；不是 RSS Series 送的也沒有', async () => {
+    render({ [PLAN]: { body: plan({ series: SERIES }) } })
+    renderApp('/review')
+    const row = await screen.findByRole('article')
+
+    await userEvent.click(await within(row).findByRole('button', { name: `改 ${RELEASE}.mkv` }))
+    await userEvent.selectOptions(within(row).getByLabelText('處置'), 'skip')
+
+    expect(within(row).queryByRole('checkbox')).not.toBeInTheDocument()
+  })
+
+  it('一般的計劃沒有那一格', async () => {
+    render()
+    renderApp('/review')
+    const row = await screen.findByRole('article')
+
+    await userEvent.click(await within(row).findByRole('button', { name: `改 ${RELEASE}.mkv` }))
+
+    expect(within(row).queryByRole('checkbox')).not.toBeInTheDocument()
+  })
+})

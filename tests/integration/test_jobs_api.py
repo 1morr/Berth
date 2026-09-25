@@ -113,7 +113,8 @@ def stored_published_at(client: TestClient) -> datetime | None:
         async with sessions() as session:
             job = await session.get(Job, MAGNET_HASH)
             assert job is not None
-            return job.published_at
+            published: datetime | None = job.published_at
+            return published
 
     return asyncio.run(run())
 

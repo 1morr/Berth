@@ -1115,6 +1115,10 @@ class PlanRefusal(StrEnum):
     TARGET_CLASH = "target_clash"
     #: 核准時還有列沒有決定：沒有提案的待審核列（光碟、推不出季集）。`detail` 是那幾個檔名。
     UNDECIDED = "undecided"
+    #: 「套用到這個 RSS Series」而這一份不是 RSS Series 送的（或那個 Series 已經刪了，M3 票 14b）。
+    NOT_FROM_SERIES = "not_from_series"
+    #: 「套用到這個 RSS Series」而檔名讀不出集號：算不出 offset（同 `RematchRefusal` 的那一種）。
+    NO_EPISODE_NUMBER = "no_episode_number"
 
 
 class RematchRefusal(StrEnum):

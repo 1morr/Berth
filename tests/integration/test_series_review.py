@@ -20,21 +20,31 @@ from berth.domain import (
     AuditReason,
     EpisodeSnapshot,
     JobState,
+    JobTrigger,
     MediaSnapshot,
     PlanAction,
+    PlanEngine,
+    PlanRefusal,
     PlanStatus,
     RematchRefusal,
+    ReviewReason,
 )
 from berth.models import Job, LedgerEntry, Plan, PlanItem, RssSeries
 from berth.services.events import EventHub
 from berth.services.importer import sweep_imports
-from berth.services.plan_review import ItemEdit, edit_items
+from berth.services.plan_review import ItemEdit, PlanRejectedError, approve_plan, edit_items
 from berth.services.rematch import Assignment, RematchRejectedError
-from berth.services.review import AuditRow, review_queue, undo_audit
+from berth.services.review import AuditRow, PlanRow, review_queue, undo_audit
 from berth.services.rss import add_feed, bind_series, poll_feed
-from berth.services.series_review import confirm_series, correct_series
+from berth.services.series_review import (
+    confirm_series,
+    correct_series,
+    correct_series_from_plan,
+)
 from tests.integration.arrange import arrange, factory_for
 from tests.integration.factories import FakeClientFactory
+from tests.integration.test_air_date_check import airing_split_cour
+from tests.integration.test_plan_review import held
 from tests.integration.test_rss import (
     FEED,
     FEED_URL,
@@ -416,3 +426,190 @@ class TestApplyingToTheSeries:
         assert refused.value.reason is RematchRefusal.NOT_FROM_SERIES
         await session.refresh(series)
         assert (series.season, series.episode_offset) == (None, None)
+
+
+async def held_row(session: AsyncSession, episode: int) -> tuple[int, int]:
+    """停在 review 的那一集（檔名的 `- NN`）：回它那一份 Plan 的 id 與影片那一列的 id。"""
+    row = await session.scalar(
+        select(PlanItem).where(
+            PlanItem.rel_path.contains(f" - {episode:02d} "), PlanItem.rel_path.endswith(".mkv")
+        )
+    )
+    assert row is not None
+    return row.plan_id, row.id
+
+
+def edit_to(row_id: int, season: int, episode: int) -> ItemEdit:
+    return ItemEdit(id=row_id, action=PlanAction.IMPORT, season=season, episode_start=episode)
+
+
+class TestApplyingFromReview:
+    """連載中的 split-cour（M3 票 14b）：第一批被播出日比對整批擋在審核，一集都沒入庫——
+    改一列並套用到 Series，其餘各集重新規劃、通過比對、入庫（仍在第一批裡）。"""
+
+    async def test_one_row_corrected_in_review_lets_the_rest_through(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        series, factory = await delivered(session, roots, snapshot=airing_split_cour())
+        assert {job.state for job in await session.scalars(select(Job))} == {JobState.REVIEW}
+        queue = await review_queue(session)
+        assert {row.reason for row in queue.rows if isinstance(row, PlanRow)} == {
+            ReviewReason.AIR_DATE_CONFLICT
+        }
+        plan_id, row_id = await held_row(session, 11)
+
+        outcome = await correct_series_from_plan(
+            session, factory, EventHub(), plan_id, edit_to(row_id, 1, 23), actor=ACTOR
+        )
+
+        await session.refresh(series)
+        assert (series.season, series.episode_offset) == (1, 12)
+        assert (outcome.season, outcome.episode_offset) == (1, 12)
+        assert (outcome.moved, outcome.replanned, outcome.left) == (0, 1, 0)
+        # 人改的那一列照人說的；這一份仍等人核准（逐列改從來不代替核准）。
+        edited = next(item for item in outcome.plan.items if item.id == row_id)
+        assert (edited.action, edited.season, edited.episode_start) == (PlanAction.IMPORT, 1, 23)
+        assert outcome.plan.status is PlanStatus.PENDING_REVIEW
+        assert outcome.plan.series is not None
+        assert (outcome.plan.series.season, outcome.plan.series.episode_offset) == (1, 12)
+
+        # 另一集重新規劃：offset 對了，播出日比對放行、自動入庫——仍在第一批裡等「全部確認」。
+        other = await session.scalar(
+            select(Plan).where(Plan.id != plan_id, Plan.job_hash.is_not(None))
+        )
+        assert other is not None
+        assert (other.status, other.season_hint, other.episode_offset) == (PlanStatus.AUTO, 1, 12)
+        await sweep_imports(session, factory, EventHub(), now=NOW)
+        assert [(row.season, row.episode_start, row.audit) for row in await ledger(session)] == [
+            (1, 24, True)
+        ]
+
+        await approve_plan(session, EventHub(), plan_id, actor=ACTOR)
+        await sweep_imports(session, factory, EventHub(), now=NOW)
+        rows = await ledger(session)
+        assert [(row.season, row.episode_start) for row in rows] == [(1, 23), (1, 24)]
+        assert all(Path(row.target_path).exists() for row in rows)
+
+    async def test_a_held_plan_a_person_edited_is_not_planned_again(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        _, factory = await delivered(session, roots, snapshot=airing_split_cour())
+        other_plan, other_row = await held_row(session, 12)
+        await edit_items(session, other_plan, [edit_to(other_row, 1, 20)], actor=ACTOR)
+        plan_id, row_id = await held_row(session, 11)
+
+        outcome = await correct_series_from_plan(
+            session, factory, EventHub(), plan_id, edit_to(row_id, 1, 23), actor=ACTOR
+        )
+
+        assert outcome.replanned == 0
+        kept = await session.get(PlanItem, other_row, populate_existing=True)
+        assert kept is not None
+        assert (kept.season, kept.episode_start) == (1, 20)
+        plan = await session.get(Plan, other_plan, populate_existing=True)
+        assert plan is not None
+        assert (plan.status, plan.engine) == (PlanStatus.PENDING_REVIEW, PlanEngine.USER)
+
+    async def test_a_plan_not_sent_by_a_series_is_refused_before_anything(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        series, factory = await delivered(session, roots, snapshot=airing_split_cour())
+        plan_id, row_id = await held_row(session, 11)
+        plan = await session.get(Plan, plan_id)
+        assert plan is not None and plan.job_hash is not None
+        job = await session.get(Job, plan.job_hash)
+        assert job is not None
+        job.trigger_ref = "0"
+        await session.commit()
+
+        with pytest.raises(PlanRejectedError) as refused:
+            await correct_series_from_plan(
+                session, factory, EventHub(), plan_id, edit_to(row_id, 1, 23), actor=ACTOR
+            )
+
+        assert refused.value.reason is PlanRefusal.NOT_FROM_SERIES
+        await session.refresh(series)
+        assert (series.season, series.episode_offset) == (None, None)
+        row = await session.get(PlanItem, row_id, populate_existing=True)
+        assert row is not None
+        assert (row.action, row.season, row.episode_start) == (PlanAction.REVIEW, 1, 11)
+
+    async def test_a_refused_edit_leaves_the_series_as_it_was(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """改動本身不成立時（這裡是那一列不在這份 Plan 裡），Series 也不寫回。"""
+        series, factory = await delivered(session, roots, snapshot=airing_split_cour())
+        plan_id, _ = await held_row(session, 11)
+        _, elsewhere = await held_row(session, 12)
+
+        with pytest.raises(PlanRejectedError) as refused:
+            await correct_series_from_plan(
+                session, factory, EventHub(), plan_id, edit_to(elsewhere, 1, 23), actor=ACTOR
+            )
+
+        assert refused.value.reason is PlanRefusal.ITEM_MISSING
+        await session.refresh(series)
+        assert (series.season, series.episode_offset) == (None, None)
+
+    async def test_a_plan_decided_meanwhile_leaves_the_series_as_it_was(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """另一個分頁先核准了（在 Job 的鎖裡才讀得到的拒絕）：Series 與其餘的計劃都不動。"""
+        series, factory = await delivered(session, roots, snapshot=airing_split_cour())
+        plan_id, row_id = await held_row(session, 11)
+        await approve_plan(session, EventHub(), plan_id, actor=ACTOR)
+
+        with pytest.raises(PlanRejectedError) as refused:
+            await correct_series_from_plan(
+                session, factory, EventHub(), plan_id, edit_to(row_id, 1, 23), actor=ACTOR
+            )
+
+        assert refused.value.reason is PlanRefusal.NOT_PENDING
+        await session.refresh(series)
+        assert (series.season, series.episode_offset) == (None, None)
+        other = await session.scalar(
+            select(Plan).where(Plan.id != plan_id, Plan.job_hash.is_not(None))
+        )
+        assert other is not None
+        assert other.status is PlanStatus.PENDING_REVIEW
+
+
+#: 一包三集、只寫集號：讀得成第一季，也讀得成後面某季重新數的，所以停在 review（brief §6.4）。
+SPY_BATCH = "[ANi] SPY×FAMILY [01-03][1080P]"
+SPY_BATCH_FILES = tuple(
+    (f"{SPY_BATCH}/[ANi] SPY×FAMILY - {number:02d} [1080P][WEB-DL][CHT].mkv", 1_400_000_000)
+    for number in (1, 2, 3)
+)
+
+
+class TestTheCorrectedPlanItself:
+    """被改的那一份：人改的列照人說的，沒有人碰過的列跟著 Series 的新值重算（同票 13 的規則）。"""
+
+    async def test_untouched_rows_follow_and_rows_a_person_set_stay(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        job, route, factory, plan_id = await held(
+            session, roots, name=SPY_BATCH, files=SPY_BATCH_FILES
+        )
+        series = RssSeries(
+            key="title:spy-family:ani",
+            title_raw="SPY×FAMILY",
+            media_id=job.media_id,
+            route_id=route.id,
+        )
+        session.add(series)
+        await session.flush()
+        job.trigger, job.trigger_ref = JobTrigger.RSS, str(series.id)
+        await session.commit()
+        first, second, third = [(await held_row(session, number))[1] for number in (1, 2, 3)]
+        await edit_items(session, plan_id, [edit_to(third, 1, 10)], actor=ACTOR)
+
+        outcome = await correct_series_from_plan(
+            session, factory, EventHub(), plan_id, edit_to(first, 2, 1), actor=ACTOR
+        )
+
+        assert (outcome.season, outcome.episode_offset) == (2, None)
+        placed = {item.id: (item.season, item.episode_start) for item in outcome.plan.items}
+        assert placed == {first: (2, 1), second: (2, 2), third: (1, 10)}
+        followed = next(item for item in outcome.plan.items if item.id == second)
+        assert followed.action is PlanAction.IMPORT

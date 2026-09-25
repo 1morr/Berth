@@ -200,21 +200,41 @@ async def proposal(session: AsyncSession, job: Job) -> dict[str, PlannedFile]:
     只差 Series 的季號與 offset，所以快照用存下來的那一份、片長用規劃時量過的
     （`job_files.mediainfo_json`），不重抓也不重量。搬家本身走 rematch，這一支只回答「該在哪」。
     """
+    contents, entries, route, snapshot, series = await _stored_facts(session, job)
+    items = _apply_policy(decide(job.name, entries, parse_context(route, snapshot, series)), route)
+    return {f"{contents.root}{item.rel_path}": item for item in items}
+
+
+async def held_proposal(
+    session: AsyncSession, job: Job, *, season: int, offset: int | None
+) -> dict[str, PlannedFile]:
+    """停在 review 的那一份照 RSS Series **將要**用的季號與 offset 會被規劃成什麼（Plan Item 的
+    `rel_path` → 那一列）。不寫。
+
+    從審核裡改正一列並套用到 RSS Series 時，同一份裡沒有人碰過的列照它換（M3 票 14b）。值由呼叫端
+    帶進來而不是先改 Series：Series 要在那筆 Job 的鎖裡才寫（`plan_review.edit_items`），先改的話
+    這裡的查詢會把它 flush 出去，寫交易在等鎖之前就開了。與 `proposal` 同樣不重抓、不重量，差在
+    **播出日比對照常跑**：這幾列還沒入庫，新的值對不上播出日的話要繼續擋著。
+    """
+    _, entries, route, snapshot, series = await _stored_facts(session, job)
+    context = parse_context(route, snapshot, series).model_copy(
+        update={"season_hint": season, "episode_offset": offset}
+    )
+    items = _apply_policy(_airing(job, decide(job.name, entries, context), snapshot, series), route)
+    return {item.rel_path: item for item in items}
+
+
+async def _stored_facts(
+    session: AsyncSession, job: Job
+) -> tuple[Contents, tuple[FileEntry, ...], Route | None, MediaSnapshot | None, RssSeries | None]:
+    """重算一份提案要的事實，全用存下來的：快照不重抓、片長用規劃時量過的。"""
     route = await session.get(Route, job.route_id) if job.route_id is not None else None
     contents = await _contents(session, job)
     entries = tuple(
         entry.model_copy(update={"duration_s": _measured(contents.find(entry.rel_path))})
         for entry in contents.entries()
     )
-    items = _apply_policy(
-        decide(
-            job.name,
-            entries,
-            parse_context(route, await _stored(session, job), await series_of(session, job)),
-        ),
-        route,
-    )
-    return {f"{contents.root}{item.rel_path}": item for item in items}
+    return contents, entries, route, await _stored(session, job), await series_of(session, job)
 
 
 def _measured(row: JobFile | None) -> int | None:

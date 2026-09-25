@@ -709,6 +709,9 @@ export interface paths {
         /**
          * Put Items
          * @description 逐列改處置與季集，回改完的整份：改過那一列的新目標路徑就在裡面（M2 票 07）。
+         *
+         *     帶 `apply_to_series` 時走 `series_review.correct_series_from_plan`（票 14b）：重新規劃之後通過
+         *     播出日比對的那幾筆直接進入庫，所以叫醒 importer——它平常 60 秒才醒一次。
          */
         put: operations["put_items_api_plans__plan_id__items_put"];
         post?: never;
@@ -2717,6 +2720,11 @@ export interface components {
         ItemEditsIn: {
             /** Items */
             items: components["schemas"]["ItemEditIn"][];
+            /**
+             * Apply To Series
+             * @default false
+             */
+            apply_to_series?: boolean;
         };
         /** ItemOut */
         ItemOut: {
@@ -3278,6 +3286,31 @@ export interface components {
          */
         PlanDecision: "approve" | "reject";
         /**
+         * PlanEditedOut
+         * @description 改完的整份。帶了 `apply_to_series` 時多一格 `corrected`：Series 現在的值與其餘的集數怎麼了。
+         */
+        PlanEditedOut: {
+            /** Id */
+            id: number;
+            /** Job Hash */
+            job_hash: string | null;
+            status: components["schemas"]["PlanStatus"];
+            engine: components["schemas"]["PlanEngine"];
+            /** Engine Version */
+            engine_version: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            media_kind: components["schemas"]["MediaKind"] | null;
+            summary: components["schemas"]["PlanSummary"];
+            /** Items */
+            items: components["schemas"]["PlanItemOut"][];
+            series: components["schemas"]["PlanSeriesOut"] | null;
+            corrected?: components["schemas"]["SeriesCorrectedOut"] | null;
+        };
+        /**
          * PlanEngine
          * @description 這一份 Plan 是誰算的（plan §2.3 的 `plans.engine`、brief §5.2）。
          * @enum {string}
@@ -3359,7 +3392,7 @@ export interface components {
          *     說得出是哪一種，畫面照它說下一步。`detail` 是那一列的檔名或那條撞上的路徑，不翻譯。
          * @enum {string}
          */
-        PlanRefusal: "plan_missing" | "not_pending" | "item_missing" | "item_applied" | "action_not_allowed" | "episode_required" | "episode_range_reversed" | "episode_not_allowed" | "media_missing" | "target_clash" | "undecided";
+        PlanRefusal: "plan_missing" | "not_pending" | "item_missing" | "item_applied" | "action_not_allowed" | "episode_required" | "episode_range_reversed" | "episode_not_allowed" | "media_missing" | "target_clash" | "undecided" | "not_from_series" | "no_episode_number";
         /**
          * PlanRefusalOut
          * @description 改不下去、核准不了時回的那一份。`reason` 給畫面挑句子，`detail` 是檔名或路徑，不翻譯。
@@ -3952,6 +3985,8 @@ export interface components {
         /**
          * SeriesCorrectedOut
          * @description 套用到 RSS Series 之後：Series 現在的值，與它底下還沒確認的集數怎麼了（M3 票 13）。
+         *
+         *     從已入庫的改正（`POST /files/rematch`）與從審核裡的改正（`PUT /plans/{id}/items`，票 14b）共用。
          */
         SeriesCorrectedOut: {
             /** Season */
@@ -5929,7 +5964,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PlanOut"];
+                    "application/json": components["schemas"]["PlanEditedOut"];
                 };
             };
             /** @description `plan_missing` */
@@ -5950,7 +5985,7 @@ export interface operations {
                     "application/json": components["schemas"]["PlanRefusalOut"];
                 };
             };
-            /** @description `item_missing` · `action_not_allowed` · `episode_required` · `episode_range_reversed` · `episode_not_allowed` · `media_missing` · `target_clash` */
+            /** @description `item_missing` · `action_not_allowed` · `episode_required` · `episode_range_reversed` · `episode_not_allowed` · `media_missing` · `target_clash` · `not_from_series` · `no_episode_number` */
             422: {
                 headers: {
                     [name: string]: unknown;

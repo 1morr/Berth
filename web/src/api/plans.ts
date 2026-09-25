@@ -29,6 +29,9 @@ export type ItemReason = PlanItem['reasons'][number]
 /** 檔案分類（`domain.FileKind`，brief §6.2）。 */
 export type FileKind = PlanItem['kind']
 
+/** 逐列改完的整份（`PlanEditedOut`）：帶了「套用到這個 RSS Series」時多一格 `corrected`（M3 票 14b）。 */
+export type PlanEdited = Schemas['PlanEditedOut']
+
 /** 一列要改成什麼（`ItemEditIn`）。季集只屬於劇集的入庫，其餘處置三格都是 `null`。 */
 export type ItemEdit = Schemas['ItemEditIn']
 
@@ -48,6 +51,8 @@ const REASONS: ReasonSet<PlanRefusal> = {
   media_missing: true,
   target_clash: true,
   undecided: true,
+  not_from_series: true,
+  no_episode_number: true,
 }
 
 /** 這一次失敗是「後端說不行」還是「網路壞了」。認不得的理由回 `null`。 */
@@ -84,8 +89,12 @@ export async function replanJob(hash: string) {
  * 逐列改（M2 票 07）。回的是**改完的整份**：改過那一列的新目標路徑、跟著搬的字幕都在裡面，
  * 前端不重算任何一條路徑（命名是後端的純函式，plan §5）。
  */
-export async function editPlanItems(planId: number, items: ItemEdit[]) {
-  return apiPut<Plan>(`/plans/${planId}/items`, { items })
+export async function editPlanItems(planId: number, items: ItemEdit[], applyToSeries = false) {
+  // 套用到 RSS Series 只配一列（後端 422）：由那一列算出季號與偏移，同一份沒人碰過的列與其餘未確認的集數跟著重算。
+  return apiPut<PlanEdited>(
+    `/plans/${planId}/items`,
+    applyToSeries ? { items, apply_to_series: true } : { items },
+  )
 }
 
 /** 核准＝照提案入庫：`review → importing`。改過幾列都是這一支（批次核准不是另一條路）。 */

@@ -1272,7 +1272,7 @@ const zhHant = {
       approved: '已核准，開始入庫。',
       rejected: '已拒絕，Berth 重新規劃中。',
       failed: '沒有成功。Berth 自己的 API 沒有回應，先確認它還活著。',
-      // 十一種擋下來的理由，各一個下一步。`detail`（檔名或路徑）接在後面。
+      // 十三種擋下來的理由，各一個下一步。`detail`（檔名或路徑）接在後面。
       refusal: {
         plan_missing: '這份計劃已經不在了，多半是重新規劃把它換掉了。',
         not_pending: '這份計劃已經不在等人了，多半是另一個分頁先核准或拒絕了。',
@@ -1285,7 +1285,13 @@ const zhHant = {
         media_missing: '這份計劃沒有作品資料，算不出寫到哪裡。',
         target_clash: '兩列會寫到同一條路徑，先改其中一列：',
         undecided: '還有列沒有決定，先改成入庫、略過或對不到：',
+        not_from_series:
+          '這份計劃不是 RSS Series 送的，沒有 Series 可以套用。取消勾選「套用到這個 RSS Series」再試一次：',
+        no_episode_number:
+          '檔名讀不出集號，算不出集號偏移。取消勾選「套用到這個 RSS Series」，只改這一列：',
       },
+      // 從審核裡套用到 RSS Series 之後，接在 Series 那一句後面：改的這一份沒有跟著核准。
+      stillToApprove: '這一份照你改的留著，核准之後才入庫。',
     },
     // audit 那一列（CONTEXT.md 的 Audit）。
     audit: {
@@ -3701,7 +3707,12 @@ const en: Translations<typeof zhHant> = {
         media_missing: 'This plan has no title data, so there is nowhere to write it.',
         target_clash: 'Two rows would be written to one path; change one of them first:',
         undecided: 'Some rows are still undecided — import, skip or unmatch them first:',
+        not_from_series:
+          'This plan was not sent by an RSS Series, so there is no Series to apply to. Untick “Apply to this RSS Series” and try again:',
+        no_episode_number:
+          'The file name carries no episode number, so no offset can be worked out. Untick “Apply to this RSS Series” to change only this row:',
       },
+      stillToApprove: 'This plan keeps your change and imports once you approve it.',
     },
     audit: {
       label: 'UNCONFIRMED',

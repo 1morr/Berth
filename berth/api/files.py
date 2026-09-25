@@ -17,6 +17,7 @@ from pydantic import BaseModel, Field, model_validator
 from berth.api.deps import ClientFactoryDep, EventHubDep, ImportHintsDep, SessionDep
 from berth.api.errors import refusal_responses
 from berth.api.gate import current_user
+from berth.api.schemas import SeriesCorrectedOut
 from berth.domain import PlanAction, RematchRefusal
 from berth.services.jobs import actor_of
 from berth.services.rematch import (
@@ -112,20 +113,6 @@ class RematchIn(BaseModel):
         if self.apply_to_series and self.ledger_id is None:
             raise ValueError("apply_to_series needs a ledger_id")
         return self
-
-
-class SeriesCorrectedOut(BaseModel):
-    """套用到 RSS Series 之後：Series 現在的值，與它底下還沒確認的集數怎麼了（M3 票 13）。"""
-
-    season: int
-    #: `null` 是不用偏移。
-    episode_offset: int | None
-    #: 已入庫的集數裡跟著搬到新路徑的（不含這一集）。
-    moved: int
-    #: 停在審核、照新的值重新規劃的下載。
-    replanned: int
-    #: 照新的值落不到任何一集、或搬不過去的：留在原地，仍在第一批裡等人。
-    left: int
 
 
 class RematchOut(BaseModel):

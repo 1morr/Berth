@@ -1146,27 +1146,33 @@ def rss_scenario(detail: TmdbDetail = KIMI_DETAIL, season: TmdbSeason = KIMI_SEA
 #: 字幕組的第二 cour 從 01 重數，所以 feed 上的 01–12 其實是 S01E13–E24。
 #:
 #: **播完一年之後 feed 才帶到它**（feed 的發佈時間是 2026 年）：連載中的話，播出日比對的規則二會把
-#: 整批擋在審核裡（M3 票 14），而從審核中的計劃套用到 RSS Series 在票 14b——這個情境演的是票 13 的
+#: 整批擋在審核裡（M3 票 14）——那是 `rss-split-cour-airing`（票 14b）。這一份演的是票 13 的
 #: 「已入庫、改一集整季跟著搬」。
-KIMI_SPLIT_COUR = TmdbSeason(
-    season_number=1,
-    name="Season 1",
-    air_date=date(2025, 1, 9),
-    episodes=tuple(
-        TmdbEpisode(
-            season_number=1,
-            episode_number=number,
-            name=f"Episode {number}",
-            air_date=(
-                date(2025, 1, 9) + timedelta(days=7 * (number - 1))
-                if number <= 12
-                else date(2025, 7, 3) + timedelta(days=7 * (number - 13))
-            ),
-            runtime=24,
-        )
-        for number in range(1, 25)
-    ),
-)
+def _split_cour(first: date, second: date) -> TmdbSeason:
+    return TmdbSeason(
+        season_number=1,
+        name="Season 1",
+        air_date=first,
+        episodes=tuple(
+            TmdbEpisode(
+                season_number=1,
+                episode_number=number,
+                name=f"Episode {number}",
+                air_date=(
+                    first + timedelta(days=7 * (number - 1))
+                    if number <= 12
+                    else second + timedelta(days=7 * (number - 13))
+                ),
+                runtime=24,
+            )
+            for number in range(1, 25)
+        ),
+    )
+
+
+KIMI_SPLIT_COUR = _split_cour(date(2025, 1, 9), date(2025, 7, 3))
+#: 連載中的那一份（M3 票 14b）：第二 cour 2026-07-02 開播，正是 feed 發佈的那幾週。
+KIMI_SPLIT_COUR_AIRING = _split_cour(date(2026, 1, 8), date(2026, 7, 2))
 
 
 def rss_split_cour_scenario() -> Scenario:
@@ -1176,16 +1182,32 @@ def rss_split_cour_scenario() -> Scenario:
     cour 從 01 重數，正解是 S01E13–E24）。它們是這個 RSS Series 的第一批，在 `/review` 是一組；在
     審核裡把第 1 集改成 S01E13 並「套用到這個 RSS Series」，其餘 11 集跟著搬到 14–24。
     """
+    return _split_cour_scenario(KIMI_SPLIT_COUR)
+
+
+def rss_split_cour_airing_scenario() -> Scenario:
+    """從審核裡套用到 RSS Series（M3 票 14b）：同 `rss-split-cour`，但第二 cour 正在播。
+
+    綁定時補舊集，12 集照字面對到一月播出的 S01E01–E12，而發佈當時這部作品在播的是七月之後的
+    那幾集——播出日比對的規則二把 12 份計劃**整批擋在審核**、一集都沒入庫。在其中一份把第 1 集
+    改成 S01E13 並「套用到這個 RSS Series」，其餘 11 份重新規劃、通過比對、自動入庫（第一批）；
+    改的那一份等人核准。
+    """
+    return _split_cour_scenario(KIMI_SPLIT_COUR_AIRING)
+
+
+def _split_cour_scenario(season: TmdbSeason) -> Scenario:
+    assert season.air_date is not None
     detail = replace(
         KIMI_DETAIL,
-        first_air_date=KIMI_SPLIT_COUR.air_date,
+        first_air_date=season.air_date,
         seasons=(
             TmdbSeasonEntry(
-                season_number=1, name="Season 1", episode_count=24, air_date=date(2025, 1, 9)
+                season_number=1, name="Season 1", episode_count=24, air_date=season.air_date
             ),
         ),
     )
-    return rss_scenario(detail=detail, season=KIMI_SPLIT_COUR)
+    return rss_scenario(detail=detail, season=season)
 
 
 SCENARIOS = {
@@ -1204,6 +1226,7 @@ SCENARIOS = {
     "healthy": healthy,
     "rss": rss_scenario,
     "rss-split-cour": rss_split_cour_scenario,
+    "rss-split-cour-airing": rss_split_cour_airing_scenario,
     "issues": issues_scenario,
     "review": review_scenario,
     "routes": routes_scenario,

@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useId, useRef, useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import {
@@ -10,10 +10,12 @@ import {
   type PlanItem,
 } from '../api/plans'
 import { CollapsibleRow } from '../components/CollapsibleRow'
-import { COMPACT_BUTTON, Field, GhostButton, Notice } from '../components/controls'
+import { Checkbox, COMPACT_BUTTON, Field, GhostButton, Notice } from '../components/controls'
 import { Dot } from '../components/Dot'
 import { formatCoverage, formatEpisode } from '../components/episodes'
 import { groupRows } from '../components/rowGroups'
+import type { Said } from '../review/useConfirmAudits'
+import { seriesCorrectedText } from '../rss/seriesValues'
 import { planRefusalText } from './planRefusal'
 import { Reasons } from './Reasons'
 
@@ -25,20 +27,31 @@ import { Reasons } from './Reasons'
  *
  * **每一列的目標路徑是後端給的**（plan §5：命名是純函式）：待審核那幾列是「核准的話」會落在哪裡，
  * 改完一列的回應就帶著新的路徑——前端不重算任何一條。改得成哪幾種處置也是後端給的（依檔案分類）。
+ *
+ * **RSS Series 送的計劃，指派到某一集時多一格「套用到這個 RSS Series」**（M3 票 14b），與 audit 列上的那一格
+ * 同一個元件與文案（`RematchForm`）：連載中的 split-cour 第一批整批停在這裡，改一列就要全修好。
  */
 export function PlanEditor({
   plan,
   hash,
   onUnapplied,
+  onSeries,
 }: {
   plan: Plan
   hash: string
   /** 某一列的表單改了還沒套用（或不再是）。核准要先擋住它（`PlanRow`）；**要是穩定的函式**，表單靠它回報。 */
   onUnapplied: Unapplied
+  /** 套用到 RSS Series 之後那一句：其餘的計劃跟著動了、從佇列上消失，結果要看得見（`Said` 的 `shown`）。 */
+  onSeries: (said: string) => void
 }) {
   const { t } = useTranslation()
   // 套用成功時那一列收回、畫面上變的是一條路徑——看不見畫面的人要另外聽到。
   const [said, setSaid] = useState('')
+  // 一般的套用只念給看不見畫面的人；套用到 Series 那一句要看得見（`shown`），交給 `PlanRow` 畫在頁上。
+  const applied = useCallback<Said>(
+    (text, shown = false) => (shown ? onSeries(text) : setSaid(text)),
+    [onSeries],
+  )
   const held = plan.items.filter(needsYou)
   const rest = plan.items.filter((item) => !needsYou(item))
 
@@ -58,7 +71,7 @@ export function PlanEditor({
                 plan={plan}
                 hash={hash}
                 heavy
-                onApplied={setSaid}
+                onApplied={applied}
                 onUnapplied={onUnapplied}
               />
             ))}
@@ -104,7 +117,7 @@ export function PlanEditor({
                           item={item}
                           plan={plan}
                           hash={hash}
-                          onApplied={setSaid}
+                          onApplied={applied}
                           onUnapplied={onUnapplied}
                         />
                       ))}
@@ -160,7 +173,7 @@ function EditableItem({
   plan: Plan
   hash: string
   heavy?: boolean
-  onApplied: (said: string) => void
+  onApplied: Said
   onUnapplied: Unapplied
 }) {
   const { t } = useTranslation()
@@ -222,9 +235,9 @@ function EditableItem({
           hash={hash}
           onUnapplied={onUnapplied}
           onCancel={close}
-          onApplied={(said) => {
+          onApplied={(said, shown) => {
             close()
-            onApplied(said)
+            onApplied(said, shown)
           }}
         />
       )}
@@ -258,6 +271,9 @@ function Landing({ item }: { item: PlanItem }) {
  * 直接寫進快取——那一列（與跟著搬的字幕）當場換成新的路徑。
  *
  * 季集只屬於劇集的入庫：選了別的處置、或這是電影，那三格不畫（後端也拒絕帶著它們的改動）。
+ *
+ * 「套用到這個 RSS Series」預設勾選（同 `RematchForm`：一集錯多半整批一起錯）。勾著時同一支多帶
+ * `apply_to_series`：其餘停在審核的計劃跟著重新規劃、多半就此入庫，所以佇列、下載列表與作品頁都要重問。
  */
 function ItemForm({
   item,
@@ -272,7 +288,7 @@ function ItemForm({
   hash: string
   onUnapplied: Unapplied
   onCancel: () => void
-  onApplied: (said: string) => void
+  onApplied: Said
 }) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
@@ -289,7 +305,10 @@ function ItemForm({
   const [season, setSeason] = useState(opened.season)
   const [start, setStart] = useState(opened.start)
   const [end, setEnd] = useState(opened.end)
+  const [toSeries, setToSeries] = useState(true)
   const numbered = action === 'import' && plan.media_kind === 'tv'
+  // 套用到 Series 要的是季集：只有指派到某一集才有（後端對其餘處置回 `action_not_allowed`）。
+  const applying = plan.series !== null && numbered && toSeries
   const dirty =
     action !== opened.action ||
     season !== opened.season ||
@@ -303,20 +322,28 @@ function ItemForm({
 
   const apply = useMutation({
     mutationFn: () =>
-      editPlanItems(plan.id, [
-        {
-          id: item.id,
-          action,
-          season: numbered ? numberOf(season) : null,
-          episode_start: numbered ? numberOf(start) : null,
-          episode_end: numbered ? numberOf(end) : null,
-        },
-      ]),
-    onSuccess: (updated) => {
+      editPlanItems(
+        plan.id,
+        [
+          {
+            id: item.id,
+            action,
+            season: numbered ? numberOf(season) : null,
+            episode_start: numbered ? numberOf(start) : null,
+            episode_end: numbered ? numberOf(end) : null,
+          },
+        ],
+        applying,
+      ),
+    onSuccess: ({ corrected, ...updated }) => {
       queryClient.setQueryData(planQueryOptions(hash, plan.id).queryKey, updated)
       // 佇列那一列的計數（要入庫幾個、低信心幾個）跟著變了。
       void queryClient.invalidateQueries({ queryKey: ['review'] })
-      onApplied(t('review.plan.applied'))
+      if (!corrected) return onApplied(t('review.plan.applied'))
+      // 其餘的計劃重新規劃、入庫了：它們的下載與作品頁的入庫狀態都變了。
+      void queryClient.invalidateQueries({ queryKey: ['jobs'] })
+      void queryClient.invalidateQueries({ queryKey: ['media'] })
+      onApplied(`${seriesCorrectedText(t, corrected)} ${t('review.plan.stillToApprove')}`, true)
     },
   })
   const refused = apply.isError ? planRefusalText(t, apply.error) : null
@@ -384,6 +411,15 @@ function ItemForm({
           </>
         )}
       </div>
+
+      {plan.series !== null && numbered && (
+        <Checkbox
+          label={t('rematch.applyToSeries')}
+          hint={t('rematch.applyToSeriesHint')}
+          checked={toSeries}
+          onChange={setToSeries}
+        />
+      )}
 
       {refused !== null && (
         <div id={refusalId}>

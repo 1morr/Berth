@@ -15,6 +15,12 @@
 **跟著重算的那幾集留在第一批裡**（仍掛 audit）：還沒有人看過它們，改正之後的那一組正是要人按
 「全部確認」的東西；人親手改的那一集是人決定的，旗標清掉。已經確認過的集數不動——那是人說對的。
 
+**從審核裡改正**（`correct_series_from_plan`，M3 票 14b）：連載中的 split-cour 第一批會被播出日比對
+整批擋在審核、一集都沒入庫，所以同一件事也要能從停在 review 的計劃列發動。人改的那一列照逐列改
+（`plan_review.edit_items`）存下來、**那一份仍等人核准**（逐列改從來不代替核准）；同一份裡沒有人碰過
+的列跟著新的值重算（`plan.held_proposal`，播出日比對照跑）；其餘的與上面同一套——已入庫未確認的搬、
+停在 review 的重新規劃，offset 對了就通過比對、自動入庫（仍在第一批裡）。
+
 **搬家的順序**：offset 小於這一批的集數時，人要的那一格正被同一批的另一集佔著（01–12 放錯、
 正解 07–18，第 1 集要去的 E07 上是還沒搬的第 7 集）。所以動手之前先問人那一格上是誰
 （`rematch.destination`）：空的、或是同一批也要搬走的那一集才動手，否則當場拒絕、什麼都不動；
@@ -35,6 +41,7 @@ from berth.domain import (
     JobTrigger,
     PlanAction,
     PlanEngine,
+    PlanRefusal,
     RematchRefusal,
     Role,
     why,
@@ -47,7 +54,9 @@ from berth.services.clients import ServiceClientFactory
 from berth.services.commands import Effect, command
 from berth.services.events import EventHub
 from berth.services.jobs import JobRejectedError
-from berth.services.plan import proposal, replan_job, series_of
+from berth.services.plan import held_proposal, proposal, replan_job, series_of
+from berth.services.plan_review import Following, ItemEdit, PlanRejectedError, edit_items
+from berth.services.plan_view import PlanView, load_plan, read_plan
 from berth.services.rematch import (
     Assignment,
     RematchOutcome,
@@ -75,6 +84,23 @@ class SeriesCorrected:
     #: 停在 review、照新的值重新規劃的 Job。
     replanned: int
     #: 照新的值落不到任何一集、或搬不過去的已入庫集數：留在原地、仍在第一批裡等人。
+    left: int
+
+
+@dataclass(frozen=True, slots=True)
+class HeldSeriesCorrected:
+    """從審核裡改正並套用之後：改完的那一份計劃、Series 現在的值、其餘的集數怎麼了。"""
+
+    #: 人改的那一份，改過的列與跟著重算的列都在裡面；仍是 `pending_review`，等人核准。
+    plan: PlanView
+    season: int
+    #: `None` 是不用偏移。
+    episode_offset: int | None
+    #: 已入庫的集數裡跟著搬到新路徑的。
+    moved: int
+    #: 其餘停在 review、照新的值重新規劃的 Job（不含這一份）。
+    replanned: int
+    #: 照新的值落不到任何一集、或搬不過去的已入庫集數。
     left: int
 
 
@@ -167,24 +193,91 @@ async def correct_series(
     )
 
 
+@command(Effect.REVERSIBLE)
+async def correct_series_from_plan(
+    session: AsyncSession,
+    factory: ServiceClientFactory,
+    hub: EventHub,
+    plan_id: int,
+    edit: ItemEdit,
+    *,
+    actor: str,
+) -> HeldSeriesCorrected:
+    """從停在 review 的計劃改正一列並「套用到這個 RSS Series」（`PUT /plans/{id}/items` 的
+    `apply_to_series`，M3 票 14b）。
+
+    反向命令同 `correct_series`：沒有。Series 原本的值可能是「沒設」，跟著重新規劃、入庫的集數也不會
+    自己回去；改過的那一列逐列改得回來。
+
+    **拒絕都在寫入之前**：不是 RSS Series 送的（`not_from_series`）、不是指派到某一集
+    （`action_not_allowed` / `episode_required`）、檔名讀不出集號（`no_episode_number`），以及逐列改
+    自己的那幾種——後者發生時 Series 也不寫。那一份與 Series 在那筆 Job 的鎖裡同一次 commit，
+    之後其餘各集各自成敗。
+    """
+    loaded = await load_plan(session, plan_id)
+    if loaded is None:
+        raise PlanRejectedError(PlanRefusal.PLAN_MISSING, str(plan_id))
+    job = await session.get(Job, loaded.plan.job_hash) if loaded.plan.job_hash else None
+    series = await series_of(session, job) if job is not None else None
+    if job is None or series is None:
+        raise PlanRejectedError(PlanRefusal.NOT_FROM_SERIES, str(plan_id))
+    item = next(
+        (item for row, item in zip(loaded.rows, loaded.items, strict=True) if row.id == edit.id),
+        None,
+    )
+    if item is None:
+        raise PlanRejectedError(PlanRefusal.ITEM_MISSING, str(edit.id))
+    if edit.action is not PlanAction.IMPORT:
+        raise PlanRejectedError(PlanRefusal.ACTION_NOT_ALLOWED, item.name)
+    if edit.season is None or edit.episode_start is None:
+        raise PlanRejectedError(PlanRefusal.EPISODE_REQUIRED, item.name)
+    written = written_episode(job.name, item.rel_path)
+    if written is None:
+        raise PlanRejectedError(PlanRefusal.NO_EPISODE_NUMBER, item.name)
+
+    series_id = series.id
+    season, offset = edit.season, (edit.episode_start - written) or None
+    # **不先改 Series**（`correct_series` 那樣）：這一份的改動要在 Job 的鎖裡寫，先改的話之後的查詢
+    # 會把它 flush 出去、在等鎖之前就開了寫交易。值帶進去，Series 由 `edit_items` 在鎖裡一起寫。
+    items = await held_proposal(session, job, season=season, offset=offset)
+    following = Following(series_id=series_id, season=season, episode_offset=offset, items=items)
+    await edit_items(session, plan_id, [edit], actor=actor, following=following)
+    logger.info(
+        "rss series corrected from review",
+        extra={"series": series_id, "season": season, "offset": offset, "plan": plan_id},
+    )
+
+    followers, unplaceable = await _followers(session, series_id, season, offset, None)
+    done = await _carry(session, factory, followers, actor=actor)
+    replanned = await _replan_held(session, factory, hub, series_id)
+    fresh = await read_plan(session, plan_id)
+    assert fresh is not None
+    return HeldSeriesCorrected(
+        plan=fresh,
+        season=season,
+        episode_offset=offset,
+        moved=len(done),
+        replanned=replanned,
+        left=unplaceable + len(followers) - len(done),
+    )
+
+
 async def _followers(
-    session: AsyncSession, series_id: int, season: int, offset: int | None, edited: int
+    session: AsyncSession, series_id: int, season: int, offset: int | None, edited: int | None
 ) -> tuple[list[tuple[int, Assignment]], int]:
     """已入庫、還沒確認的其餘各集照新的值該去哪一集（`plan.proposal`）。回（要搬的, 落不到任何
-    一集的幾個）——後者是新的值在 TMDB 上沒有那一集，留在原地給人。已經在那裡的不動。"""
+    一集的幾個）——後者是新的值在 TMDB 上沒有那一集，留在原地給人。已經在那裡的不動。
+
+    `edited` 是人改的那一列帳本；從審核裡改正時人改的還沒入庫，是 `None`。"""
     because = why(Code.SERIES_CORRECTED, season=season, offset=f"{offset or 0:+d}")
-    entries = list(
-        await session.scalars(
-            select(LedgerEntry)
-            .where(
-                LedgerEntry.audit,
-                LedgerEntry.action == PlanAction.IMPORT,
-                LedgerEntry.job_hash.in_(_hashes_of(series_id)),
-                LedgerEntry.id != edited,
-            )
-            .order_by(LedgerEntry.id)
-        )
+    unconfirmed = select(LedgerEntry).where(
+        LedgerEntry.audit,
+        LedgerEntry.action == PlanAction.IMPORT,
+        LedgerEntry.job_hash.in_(_hashes_of(series_id)),
     )
+    if edited is not None:
+        unconfirmed = unconfirmed.where(LedgerEntry.id != edited)
+    entries = list(await session.scalars(unconfirmed.order_by(LedgerEntry.id)))
     proposals: dict[str, dict[str, PlannedFile]] = {}
     moves: list[tuple[int, Assignment]] = []
     unplaceable = 0

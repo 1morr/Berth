@@ -183,7 +183,7 @@ class TestRss:
         events = await session.scalars(
             select(Event).where(Event.type == EventType.REVIEW_REQUIRED.value)
         )
-        assert {event.payload_json["reason"] for event in events} == {"air_date_conflict"}
+        assert {(event.payload_json or {})["reason"] for event in events} == {"air_date_conflict"}
 
     async def test_a_split_cour_restart_on_an_airing_series_waits_in_review(
         self, session: AsyncSession, roots: dict[str, Path]

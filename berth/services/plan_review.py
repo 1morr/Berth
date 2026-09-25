@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import logging
 from collections import Counter
-from collections.abc import AsyncIterator, Sequence
+from collections.abc import AsyncIterator, Mapping, Sequence
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, replace
 
@@ -42,7 +42,7 @@ from berth.domain import (
 from berth.domain import PlanItem as PlannedFile
 from berth.domain import ReasonCode as Code
 from berth.logs import job_context
-from berth.models import Job
+from berth.models import Job, PlanItem, RssSeries
 from berth.models.types import utcnow
 from berth.parser import revise
 from berth.services.events import EventHub, JobSignal
@@ -73,6 +73,17 @@ class PlanRejectedError(Exception):
 
 
 @dataclass(frozen=True, slots=True)
+class Following:
+    """從審核裡套用到 RSS Series（M3 票 14b）：Series 的新值，與沒有人碰過的列照它重算的提案。"""
+
+    series_id: int
+    season: int
+    episode_offset: int | None
+    #: `rel_path` → 那一列（`plan.held_proposal`）。
+    items: Mapping[str, PlannedFile]
+
+
+@dataclass(frozen=True, slots=True)
 class ItemEdit:
     """一列要改成什麼。季集只屬於劇集的入庫，其餘處置三格都是 `None`。"""
 
@@ -84,12 +95,26 @@ class ItemEdit:
 
 
 async def edit_items(
-    session: AsyncSession, plan_id: int, edits: Sequence[ItemEdit], *, actor: str
+    session: AsyncSession,
+    plan_id: int,
+    edits: Sequence[ItemEdit],
+    *,
+    actor: str,
+    following: Following | None = None,
 ) -> PlanView:
-    """逐列改（`PUT /plans/{id}/items`），回改完之後的整份——畫面拿它畫新的目標路徑。"""
+    """逐列改（`PUT /plans/{id}/items`），回改完之後的整份——畫面拿它畫新的目標路徑。
+
+    `following` 是從審核裡套用到 RSS Series 時帶來的（M3 票 14b）：**沒有人碰過的列換成新的提案**，
+    人改過的（`set_by_user`）、已鏈接的、被判成重複版本的不動——人親手改的那一列照人說的，其餘跟著
+    Series 的新值（同票 13）。Series 與這一份記下的季號、offset **在同一把鎖裡、同一次 commit 寫**：
+    改動被拒絕時兩者都沒動，也不會在等鎖之前就開了寫交易。
+    """
     async with _deciding(session, plan_id) as (loaded, _):
         by_id = {row.id: index for index, row in enumerate(loaded.rows)}
-        items = list(loaded.items)
+        items = [
+            _followed(row, item, following.items if following else {})
+            for row, item in zip(loaded.rows, loaded.items, strict=True)
+        ]
         for edit in edits:
             index = by_id.get(edit.id)
             if index is None:
@@ -104,6 +129,8 @@ async def edit_items(
         edited = {by_id[edit.id] for edit in edits}
         _write(loaded, revised, edited=edited)
         loaded.plan.engine = PlanEngine.USER
+        if following is not None:
+            await _write_series(session, loaded, following)
         await session.commit()
     logger.info("plan items edited", extra={"plan": plan_id, "count": len(edits), "actor": actor})
     view = await read_plan(session, plan_id)
@@ -231,6 +258,31 @@ def _check(edit: ItemEdit, loaded: LoadedPlan, index: int) -> None:
         raise PlanRejectedError(PlanRefusal.EPISODE_REQUIRED, name)
     if edit.episode_end is not None and edit.episode_end < edit.episode_start:
         raise PlanRejectedError(PlanRefusal.EPISODE_RANGE_REVERSED, name)
+
+
+def _followed(
+    row: PlanItem, item: PlannedFile, following: Mapping[str, PlannedFile]
+) -> PlannedFile:
+    fresh = following.get(item.rel_path)
+    if (
+        fresh is None
+        or row.applied_at is not None
+        or row.duplicate_of is not None
+        or why(Code.SET_BY_USER) in item.reasons
+    ):
+        return item
+    return fresh
+
+
+async def _write_series(session: AsyncSession, loaded: LoadedPlan, following: Following) -> None:
+    """寫回 RSS Series，這一份也記下它現在用的值（沒有人碰過的列照它重算了，Job 頁說的要跟著）。"""
+    series = await session.get(RssSeries, following.series_id)
+    if series is None:
+        # 按下去之後另一個分頁把它刪了：沒有 Series 可以套用，這一份也不改。
+        raise PlanRejectedError(PlanRefusal.NOT_FROM_SERIES, str(following.series_id))
+    series.season, series.episode_offset = following.season, following.episode_offset
+    loaded.plan.season_hint = following.season
+    loaded.plan.episode_offset = following.episode_offset
 
 
 def _edited(item: PlannedFile, edit: ItemEdit) -> PlannedFile:

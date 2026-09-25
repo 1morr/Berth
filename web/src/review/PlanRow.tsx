@@ -11,6 +11,7 @@ import { whenText } from '../components/queueText'
 import { displayRound } from '../i18n/displayRound'
 import { PlanEditor, type Unapplied } from '../plans/PlanEditor'
 import { planRefusalText } from '../plans/planRefusal'
+import type { Said } from './useConfirmAudits'
 
 /**
  * 一份停在 review 的 Plan（M2 票 07、`.scratch/m2/plan-edit-shape.md`）。
@@ -25,7 +26,7 @@ import { planRefusalText } from '../plans/planRefusal'
  *   （M3 票 06）：`approve` 核准的是已經存下來的那一份，表單上的值不會跟著去。
  * - **拒絕**就地確認：它丟掉這份計劃連同改過的列、讓 Berth 重新規劃（plan §3.1）。
  */
-export function PlanRow({ row, onDone }: { row: PlanReviewRow; onDone: (said: string) => void }) {
+export function PlanRow({ row, onDone }: { row: PlanReviewRow; onDone: Said }) {
   const { t, i18n } = useTranslation()
   const queryClient = useQueryClient()
   const plan = useQuery(planQueryOptions(row.job_hash, row.ref))
@@ -99,7 +100,12 @@ export function PlanRow({ row, onDone }: { row: PlanReviewRow; onDone: (said: st
           // 靜態佔位，沒有動畫（同 `/issues` 的 `Loading()`）；高度接近兩列，避免資料回來時整頁往下推。
           <div aria-hidden="true" className="h-28 border-2 border-rule bg-hull" />
         ) : plan.data ? (
-          <PlanEditor plan={plan.data} hash={row.job_hash} onUnapplied={markUnapplied} />
+          <PlanEditor
+            plan={plan.data}
+            hash={row.job_hash}
+            onUnapplied={markUnapplied}
+            onSeries={(said) => onDone(said, true)}
+          />
         ) : (
           <p className="text-xs text-ink-dim">{t('review.plan.off')}</p>
         )

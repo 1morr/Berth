@@ -16,9 +16,16 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from berth.api.deps import EventHubDep, ImportHintsDep, PlanHintsDep, SessionDep
+from berth.api.deps import (
+    ClientFactoryDep,
+    EventHubDep,
+    ImportHintsDep,
+    PlanHintsDep,
+    SessionDep,
+)
 from berth.api.errors import refusal_responses
 from berth.api.gate import current_user
+from berth.api.schemas import SeriesCorrectedOut
 from berth.domain import (
     Confidence,
     FileKind,
@@ -39,6 +46,7 @@ from berth.services.plan_review import (
     reject_plan,
 )
 from berth.services.plan_view import read_plan
+from berth.services.series_review import correct_series_from_plan
 
 router = APIRouter(prefix="/plans", tags=["plans"])
 
@@ -57,6 +65,8 @@ _STATUS: dict[PlanRefusal, int] = {
     PlanRefusal.MEDIA_MISSING: status.HTTP_422_UNPROCESSABLE_CONTENT,
     PlanRefusal.TARGET_CLASH: status.HTTP_422_UNPROCESSABLE_CONTENT,
     PlanRefusal.UNDECIDED: status.HTTP_422_UNPROCESSABLE_CONTENT,
+    PlanRefusal.NOT_FROM_SERIES: status.HTTP_422_UNPROCESSABLE_CONTENT,
+    PlanRefusal.NO_EPISODE_NUMBER: status.HTTP_422_UNPROCESSABLE_CONTENT,
 }
 
 
@@ -84,6 +94,8 @@ EDIT_RESPONSES = _refusals(
     PlanRefusal.EPISODE_NOT_ALLOWED,
     PlanRefusal.MEDIA_MISSING,
     PlanRefusal.TARGET_CLASH,
+    PlanRefusal.NOT_FROM_SERIES,
+    PlanRefusal.NO_EPISODE_NUMBER,
 )
 APPROVE_RESPONSES = _refusals(*_GATE, PlanRefusal.UNDECIDED, PlanRefusal.TARGET_CLASH)
 REJECT_RESPONSES = _refusals(*_GATE)
@@ -182,6 +194,10 @@ class ItemEditsIn(BaseModel):
     """一次送幾列都行，**整批成立或整批拒絕**。畫面逐列套用，所以通常是一列。"""
 
     items: list[ItemEditIn] = Field(min_length=1)
+    #: 「套用到這個 RSS Series」（M3 票 14b，同 `POST /files/rematch` 的那一格）：由這一列算出季號與
+    #: offset 寫回送出它的 RSS Series，同一份裡沒有人碰過的列與其餘還沒確認的集數跟著重算。
+    #: 只配**一列**、指派到某一集。
+    apply_to_series: bool = False
 
     @model_validator(mode="after")
     def _each_row_once(self) -> ItemEditsIn:
@@ -189,7 +205,17 @@ class ItemEditsIn(BaseModel):
         ids = [edit.id for edit in self.items]
         if len(ids) != len(set(ids)):
             raise ValueError("each row may appear only once")
+        if self.apply_to_series and len(ids) != 1:
+            # offset 由「人說的集號減檔名寫的」算出來，兩列說的可能是兩個 offset。
+            raise ValueError("apply_to_series takes exactly one row")
         return self
+
+
+class PlanEditedOut(PlanOut):
+    """改完的整份。帶了 `apply_to_series` 時多一格 `corrected`：Series 現在的值，與其餘的集數
+    怎麼了。"""
+
+    corrected: SeriesCorrectedOut | None = None
 
 
 @router.get("/{plan_id}")
@@ -202,15 +228,40 @@ async def get_plan(session: SessionDep, plan_id: int) -> PlanOut:
 
 @router.put("/{plan_id}/items", responses=EDIT_RESPONSES)
 async def put_items(
-    session: SessionDep, request: Request, plan_id: int, body: ItemEditsIn
-) -> PlanOut:
-    """逐列改處置與季集，回改完的整份：改過那一列的新目標路徑就在裡面（M2 票 07）。"""
+    session: SessionDep,
+    factory: ClientFactoryDep,
+    hub: EventHubDep,
+    imports: ImportHintsDep,
+    request: Request,
+    plan_id: int,
+    body: ItemEditsIn,
+) -> PlanEditedOut:
+    """逐列改處置與季集，回改完的整份：改過那一列的新目標路徑就在裡面（M2 票 07）。
+
+    帶 `apply_to_series` 時走 `series_review.correct_series_from_plan`（票 14b）：重新規劃之後通過
+    播出日比對的那幾筆直接進入庫，所以叫醒 importer——它平常 60 秒才醒一次。
+    """
     edits = [ItemEdit(**edit.model_dump()) for edit in body.items]
     try:
-        view = await edit_items(session, plan_id, edits, actor=_actor(request))
+        if not body.apply_to_series:
+            view = await edit_items(session, plan_id, edits, actor=_actor(request))
+            return PlanEditedOut.model_validate(view)
+        corrected = await correct_series_from_plan(
+            session, factory, hub, plan_id, edits[0], actor=_actor(request)
+        )
     except PlanRejectedError as refusal:
         raise plan_refusal(refusal) from refusal
-    return PlanOut.model_validate(view)
+    if corrected.replanned:
+        imports.nudge()
+    out = PlanEditedOut.model_validate(corrected.plan)
+    out.corrected = SeriesCorrectedOut(
+        season=corrected.season,
+        episode_offset=corrected.episode_offset,
+        moved=corrected.moved,
+        replanned=corrected.replanned,
+        left=corrected.left,
+    )
+    return out
 
 
 @router.post("/{plan_id}/approve", responses=APPROVE_RESPONSES)

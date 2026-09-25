@@ -688,6 +688,12 @@ Issue、修正、對帳、刪除與重新入庫的每一條端點都是 403，�
   「發佈」（相對時間，滑過去是完整日期；索引站沒給時 `—`）。
 
 ### Changed
+- **從審核裡套用到 RSS Series**（M3 票 14b，brief §15）：連載中的 split-cour 第一批會被播出日比對整批擋在
+  `/review`、一集都沒入庫，現在停在審核的計劃列也有「套用到這個 RSS Series」（`PUT /plans/{id}/items` 的
+  `apply_to_series`，只配一列）。那一列照人說的、那一份仍等你核准；同一份裡沒人碰過的列、同一個 Series 其餘
+  停在審核的計劃照新的季號與偏移重算，播出日比對照跑，對了就自動入庫（仍在第一批裡）；管理員逐列改過的
+  其他計劃不動。回應多 `corrected`，拒絕多 `not_from_series`、`no_episode_number`。演練情境
+  `rss-split-cour-airing` 與 e2e `series-offset-held`。
 - **標題自己寫了 `(Batch)`、`[Vol.1]` 的發佈算季包**（M3 票 11）：Nyaa 與 acg.rip 搜尋 feed 裡的 BD 單卷與季包
   原本被當成單集、會被 RSS 自動下載；現在「不自動下載合集」擋得下它們。只認自己一格括號的寫法，標題裡的
   `The Bad Batch`、`Vol. 2` 不算。

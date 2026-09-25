@@ -263,3 +263,20 @@ class WatchEpisodeOut(BaseModel):
     watch: WatchStateOut
     #: Berth 代理的 16:9 劇照（集自己的 `Primary`）；沒有劇照時是空字串。
     still_url: str
+
+
+class SeriesCorrectedOut(BaseModel):
+    """套用到 RSS Series 之後：Series 現在的值，與它底下還沒確認的集數怎麼了（M3 票 13）。
+
+    從已入庫的改正（`POST /files/rematch`）與從審核裡的改正（`PUT /plans/{id}/items`，票 14b）共用。
+    """
+
+    season: int
+    #: `null` 是不用偏移。
+    episode_offset: int | None
+    #: 已入庫的集數裡跟著搬到新路徑的（不含這一集）。
+    moved: int
+    #: 停在審核、照新的值重新規劃的下載。
+    replanned: int
+    #: 照新的值落不到任何一集、或搬不過去的：留在原地，仍在第一批裡等人。
+    left: int
