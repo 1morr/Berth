@@ -53,4 +53,3 @@ code-review（兩軸，基準 dc40924）已修：
 - `RequestBudget` 放在 `adapters/`（與 TMDB 的 `TokenBucket` 同處）：它是對外請求的記帳，indexer adapter
   要用 `site_of`；若日後預算要讀設定或寫資料庫再搬。
 - 三者共用的整合測試用的是綁定時的補舊集；每日補漏被擋在另一條測試（`test_a_backfill_that_does_not_fit_...`）。
-

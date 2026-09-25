@@ -1369,4 +1369,3 @@ fixture 在 `tests/fixtures/http/{mikan,nyaa,acgrip}/`（來源網址與去掉 t
 - **輪詢間隔**：Sonarr 的 RSS Sync Interval 10–120 分鐘（預設值在文件與原始碼都找不到，社群慣用 15 分鐘）；AutoBangumi 的 `rss_time` 預設 900 秒，輪的是 Mikan 聚合 feed。
 - **出錯退避是另一回事**：Sonarr 的 `EscalationBackOff` 0 秒 → 1 分 → … → 24 小時逐級加重，與配額分開計時。
 - **三站都沒有公開的限速或封鎖事故紀錄**（Mikan、acg.rip 找不到；Nyaa 只有上面那 2 秒的間接證據）。預算的數字因此不是量出來的，是照 Berth 的用量推的（plan §3.2）。
-

@@ -10,10 +10,9 @@
 - Mikan 與 acg.rip 的 pubDate 時區偏移、日期字串的小數位數與 size 換算精度（研究檔 §5、§10）；
 - item 的元素樹形狀與「合集」標題掃描（研究檔 §6）。
 
-`feedparser` 不是本專案依賴（只在這支腳本用得到，不值得為它動 `pyproject.toml` / `uv.lock`），
-用 `uv run --no-project` 額外帶：
+票 07 寫這支時 `feedparser` 還不是專案依賴，票 08 起是（adapter 用它），直接跑：
 
-    uv run --no-project --python 3.13 --with feedparser python scripts/experiments/rss_sources.py
+    uv run python scripts/experiments/rss_sources.py
 
 只讀 fixture、只印 stdout，不連網、不寫檔。
 """
@@ -31,10 +30,10 @@ from email.utils import parsedate_to_datetime
 from pathlib import Path
 from typing import Any
 
-# feedparser 沒有型別存根（不在 typeshed，也沒隨附 py.typed），而且刻意不進專案依賴，
-# mypy 在專案環境裡本來就找不到它——上面的模組 docstring 已經說明只用 --with 帶。
-import feedparser  # type: ignore[import-not-found]
-from feedparser.datetimes import _parse_date  # type: ignore[import-not-found]
+# feedparser 沒有型別存根（不在 typeshed，也沒隨附 py.typed）；票 08 起它是專案依賴，
+# 所以 mypy 找得到模組、只是沒有型別（同 `berth/adapters/rss/feed.py`）。
+import feedparser  # type: ignore[import-untyped]
+from feedparser.datetimes import _parse_date  # type: ignore[import-untyped]
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 FIXTURES_ROOT = REPO_ROOT / "tests" / "fixtures" / "http"
