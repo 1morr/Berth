@@ -1,6 +1,6 @@
 # 06h — 精靈驗收：冷啟動閘門、兩條完整路徑、impeccable 收尾
 
-**Status:** ready-for-agent
+**Status:** ready-for-human（剩第 6 條：使用者在試跑環境實走）
 
 **Blocked by:** 06b、06c、06d、06e、06f、06g、06i（全部做完才驗）
 
@@ -31,9 +31,49 @@
 ## 驗收
 
 - [ ] 冷啟動 e2e 在 CI 綠燈：精靈在外部服務還沒健康時就開始，`configured` 不再按 `restart`（貼 CI run 連結與輸出）；把 06g 的修正拿掉時這一條會紅（在 PR 描述或票的 Comments 記下實跑結果）
-- [ ] 替身 `starting` 有 Jellyfin 的 503 與半啟動，README 的情境表同步
-- [ ] playwright：套件內、既有、冷啟動、走完之後從設定頁修改四條，1280 與 390 截圖附在票上
-- [ ] `/impeccable critique`、`audit`、`polish` 各一輪，分數與處理結果記在票上
-- [ ] README、plan §9.3、`wizard-shape.md`、CONTEXT.md、`.env.example` 與畫面一致
+- [x] 替身 `starting` 有 Jellyfin 的 503 與半啟動，README 的情境表同步
+- [x] playwright：套件內、既有、冷啟動、走完之後從設定頁修改四條，1280 與 390 截圖附在票上
+- [x] `/impeccable critique`、`audit`、`polish` 各一輪，分數與處理結果記在票上
+- [x] README、plan §9.3、`wizard-shape.md`、CONTEXT.md、`.env.example` 與畫面一致
 - [ ] 使用者在試跑環境重置後走完一次，沒有用到 `HostHeaderValidation=false`，也沒有按重新探測；結果記在 Comments
 - [ ] lint、type、test、e2e 全綠（貼指令輸出）
+
+## Comments
+
+**冷啟動閘門（後端 docker e2e）**：`.github/workflows/e2e.yml` 先 `build` 與拉 image，再 `docker compose up --detach`（不加 `--wait`）；`tests/e2e/compose.yml` 的 `torrents` 拿掉 `depends_on: berth: service_healthy`（它會讓 `up -d` 卡到 Berth 第一次健康檢查的 30 秒，那時外部服務早就起來了），改由 `payload.py` 自己等 Berth 回應再寫 `/data`；`submitted` 等 `torrents` 健康才送單。`conftest.configured` 拿掉逾時就 `restart` 的補救，每 2 秒輪詢、印出時間線；**第一輪就全部判定完成算失敗**（那一輪沒碰到啟動中的那幾秒，閘門等於沒守）。
+
+- 綠燈：<https://github.com/1morr/Berth/actions/runs/36095639574>（分支 `m3-06h-cold-start`，15 passed in 898 s）。時間線（從建完管理員起算）：`+1.8s jellyfin=pending/protocol_mismatch` → `+3.8s jellyfin=pending/starting` → `+5.9s jellyfin=bundled/setup_pending`（qBittorrent、Prowlarr 第一輪就是套件內）。06g 量到的兩種啟動中樣子都出現了，沒有按重新探測。
+- 拿掉 06g 的修正（`git show 63b87a8 -- berth/services/setup.py | git apply -R`，分支 `m3-06h-without-06g`）時紅：<https://github.com/1morr/Berth/actions/runs/36095657612>。第一輪 `jellyfin=existing/protocol_mismatch`（06g 的缺陷 2），下一輪 `POST /setup/detect: 500`（缺陷 1，Jellyfin 的 503 冒成 500）。
+
+**替身 `starting`**：改成照探測次數演 06g 量到的時間線（`StartingJellyfin` / `StartingQbittorrent` / `StartingProwlarr`）：Jellyfin 先丟 `ProtocolMismatchError`（回的東西不像 Jellyfin）、再丟兩次 `ServiceBusyError`（503 still loading），第 4 次探測起是套件內；qBittorrent 第一次連不上；Prowlarr 連不上五次。原本的「Prowlarr 讀不到 API key」搬到新情境 `key-missing`（它不是啟動中的暫時狀態，冷啟動時等不好）。`mixed` 的 NAS 媒體庫舊路徑改成暫存目錄底下真的存在的 `nas/movies`、`nas/anime`（原本 `/volume1/...` 在這台機器上 `stat()` 不到，第 5 步永遠紅，既有服務那條路走不完）。README 的情境表同步。
+
+**playwright 四條 × 兩種寬度**（`web/playwright.config.ts` 的 `NARROW`，每條一台替身）：`wizard`（bundled：改名 Movies → 電影並補資料夾、加「紀錄片」、刪 Anime、每一格停在結果上、泊位板點回 BTH 1、「回到目前這一步」、上一個泊位再往前、試搜並移除 YTS、Route 自動跑出 3 條含 `berth-紀錄片`、完成後同一組帳密登入）、`existing`（mixed：qBittorrent 帳密、既有 Jellyfin 登入並就地確認加 Berth 路徑、第 5 步勾「電影」選 Berth 路徑、貼 Prowlarr key 並試搜、以 `owner` 登入）、`cold-start`（starting：先看到「探測中」與「還在啟動」，不送任何 `restart: true` 就三個套件內）、`settings`（healthy：`/setup` → `/settings/*`、加 YTS 並試搜、換 TMDB key）。`pnpm -C web e2e` 11 條：一次全開時 `cold-start-390` 撞到 Chromium 180 秒啟動逾時（本機預設 worker 數讓十一條同時開瀏覽器），`playwright.config.ts` 把本機 worker 限成 4（CI 照預設）之後 11 passed（52.1 s）。每一格的整頁截圖在 `.local/screens/m3-06h/e2e/<那一條>/`（1280 與 390 共 38 張，不進版控；`web/test-results/` 每次都會重產）。
+
+**實走時抓到、當場修的（紅燈先行）**：
+- 完成頁寫「四個泊位都繫上了」→「五個泊位都走過了」；既有 Jellyfin 也說「用剛才建立的 Jellyfin 管理員帳號登入」→ 既有時說「你那台 Jellyfin 的帳號」（`CompleteStep` 的 `bundledJellyfin`）。
+- 前置列「N 個服務已判定」把探測中也算進去（冷啟動時寫 3 個、清單上還有兩個在等）→ 只算套件內與既有。
+- 第 2 步寫死 `qbittorrent:8080`（06b 的遺留）→ `GET /setup/status` 多 `probe_targets`（`services.clients.bundled_targets`，與 `build_setup_probes` 同一個來源），前端 `probeEndpoint` 照它寫；連線表單的範例位址三個服務都寫 `:8096` → 各自的 port。
+- 設定頁的 TMDB 說明還寫「精靈的進度已經存下來了」→ `tmdbStep.where` / `whereWizard` 兩個 key。
+
+**impeccable**（`.impeccable/critique/2026-09-25T05-30-59Z__web-src-pages-setuppage-tsx.md`，polish 之後已 close）：
+- critique（雙代理）**24/40**，P0 0、P1 3：既有服務的安全感、焦點管理、窄版第一屏只有剖面。偵測器 CLI 0 條；瀏覽器注入的 `skipped-heading`、第 2 步剖面溢出屬實，`em-dash`、`dark-glow` 誤報。
+- audit **13/20**（A11y 2、Performance 3、Responsive 2、Theming 3、Integrity 3），P1 4：焦點掉回 body、窄版固定列蓋住焦點（390 時 qBittorrent 位址 44/44px 被蓋）、live region 與內容同一次掛上、淺色主題未塗漆的泊位格 3.73:1。
+- polish（使用者拍板「DOM 改成工作面在前」「P1 全修，P2 記下」）：`web/src/setup/StepFrame.tsx`——DOM 工作面在前、桌機 grid 放回左欄（390 寬第 2 步標題 790 → 508 px、泊位 1 1550 → 508 px，標題順序 h2 → h3），套件內 Jellyfin 的媒體庫清單從剖面搬進工作面（它是輸入，Tab 順序才對）；換步時焦點給新一步的 h2，按下的鍵被換掉時接回「前往下一個泊位 / 前往泊位 1」，只在「最後有焦點的元素被拿掉」時動手（與 `useFocusAfterRemoval` 同一條規則，排在它之後）；TMDB 結果與偵測清單的 live region 常駐；窄版 `scroll-padding-bottom: 6rem`（實測 Tab 走過 390 寬第 2 步每一欄，0 個被蓋）；泊位格只有塗漆的才 `opacity-80`（淺色 3.73 → 5.71:1）；泊位 3「加入 Berth 路徑」改成與泊位 1 同一顆就地確認；既有媒體庫有 Berth 路徑時預選它（`routes._default_target`；只有一條時照 brief §4.3 預選那一條）；第 5 步 lede 改成「Berth 只往你選的那一條寫……不想讓它寫進你既有的資料夾，先加一條 Berth 路徑再選它」；剖面的端點 `wrap-anywhere`。
+
+**code-review（`/code-review 15a2cd4`）**：
+- Standards 硬性一條：CHANGELOG 沒寫 → 補（Added / Changed / Fixed 各一條）。判斷題裡照改的：`StepFrame` 的焦點接回原本靠「StepFrame 自己重繪時檢查」，換鍵只發生在子步驟自己的 state 裡時接不回來——`StepFrame.test.tsx` 先重現（兩個分支要不同 `key`，同一位置同一種元素 React 會重用節點、焦點根本沒掉），改成與 `useFocusAfterRemoval` 同一種 MutationObserver 做法；`where` / `whereWizard` 逐字重複 → `whereWizard` 用 `{{where}}` 插值，`resumable` 改名 `inWizard`。沒改、記在這裡的：`api/setup.py` 為了 `probe_targets` 六個 handler 各多一個 `ConfigDep`（放進 `SetupStatus` 要讓 `read_status` 等五個 service 函式都吃 config，更散）；替身的三個 `Starting*` 同形（各覆寫的是不同的探測方法，抽 helper 省不了幾行）；`bundledJellyfin` 在頁面層算成布林往下傳；`BerthBoard` 的 `filled === false` 判兩次。
+- Spec：README 與 plan §10 還寫「四條流程」→ 改成七條；`_default_target` 預選 Berth 路徑補進 brief §4.3 與 plan §9.3 第 5 步、`probe_targets` 補進 plan §9.3 第 2 步；第 6 項待使用者實走（預期中）。它提的兩個弱點照記：「每一格停在結果上」只由「前往下一個泊位」出現間接驗證（06d 的前端測試直接驗）；冷啟動那條的 `restart` 監聽掛在第一次探測之後（第一次是「開始探測」本身，之後任何一次按「重新探測」都會被記到）。
+
+**P2 與小觀察（這一輪不修，使用者拍板「P2 記下」）**：
+- 既有 Jellyfin 帳密錯只顯示「失敗 POST /Users/AuthenticateByName: 401」，該對成「帳號或密碼不對」（產品原則 4）。
+- 選填的索引站連不上塗成阻擋紅、每一站一個 `role=alert`（4 條同時念）；加完之後主要鍵仍是「加入這 N 個站」。
+- 同名控制項：索引站「移除」×5、「複製」×4；既有服務第 2 步「位址」「測試連線」各 ×3、「顯示」×2 且沒有 `aria-pressed`（`BundledLibraries` 已經用 `removeNamed` 帶名字）。
+- 標題跳號：纜繩列的手動步驟用 h5（`MooringLine`、`QbittorrentStep`、`StepLine`），跳過 h4。
+- 淺色主題錯誤狀態的輸入框邊框 `blocked` 對 `hull` 2.58:1（WCAG 1.4.11），比正常邊框還淡。
+- 精靈沒有路由切分（入口 800 KB / gzip 229 KB，M3 票 06 量過、決定不做）。
+- 觸控目標：ZH/EN 44×24、「顯示」39×24、Ghost 按鈕 35 px 高——過 2.5.8 的 24 px，沒到 44。
+- 移除媒體庫列之後焦點掉回 body（`BundledLibraries` 沒用 `useFocusAfterRemoval`；`StepFrame` 現在會接回 h2，不是下一列）。
+- `SetupPage.tsx` 的輪詢 effect 依賴每次 render 都是新物件的 `detect`，重繪會重設 3 秒計時器。
+- 泊位 1 套件內的剖面「將會做什麼」與右欄序列同 7 列（plan §11.3 D 組已經記過，可再延）；泊位板一格寫來源（套件內 / 既有）不寫狀態。
+- 「套用這 5 個鍵」下面列 6 列；qBittorrent 套用後「建議值」欄變「已經是這樣」看不到原值；Route 建好之後剖面「這一輪要建的 Route 0」；Prowlarr key 的位置兩處寫法不同（設定 → 一般 → 安全性 / 設定 → 一般）；第 2 步的「上一個泊位」回到的是管理員；既有 Jellyfin 做完「重新登入」仍是黃色主要鍵；qBittorrent 分類 `berth-電影` 中文進了機器 token；冷啟動第一秒寫「連得上，但回的東西不是這個服務」會嚇人；管理員欄位留空時錯誤念兩次；設定頁 Jellyfin 健康卡的「3 libraries」是英文（後端 detail 字串）。
+- 術語：「開始靠泊」「冪等」「complete 根目錄」「dev= / inode=」對第一次架設的人是黑話。

@@ -98,7 +98,7 @@ _Avoid_: integration, provider（Provider 專指 metadata provider）
 
 **Service Origin**:
 精靈對單一服務的判定：`bundled`（套件內，Berth 全自動接手）或 `existing`（既有，使用者自己的那一台）。
-逐服務判斷，沒有全局模式；探測中與逾時是輪詢期間的暫時值。**與 Trigger 的「來源」無關**。
+逐服務判斷，沒有全局模式；探測中與逾時是輪詢期間的暫時值（探測中包括容器還在啟動：連不上、回 503、回的東西不像它自己，M3 票 06g）。**與 Trigger 的「來源」無關**。
 _Avoid_: mode, service type
 
 **Bundled service**（UI 顯示「套件內」）:
@@ -119,7 +119,7 @@ _Avoid_: success/error（那是 HTTP 的詞）, done（`ok` 與 `skipped` 都算
 **Berth（泊位）**:
 設定精靈把八個步驟歸成的五格：Jellyfin、qBittorrent、媒體庫路徑、索引站（Prowlarr 或任一 Torznab 端點）、TMDB。
 一格一個服務（M3 票 06e 把原本的「來源」拆成索引站與 TMDB 兩格）。
-只在精靈與泊位板上用；與產品名 Berth 同字，指的是畫面上那一格。
+用在精靈、健康頁的泊位板與設定頁（一格一頁，同一個順序，M3 票 06i）；與產品名 Berth 同字，指的是畫面上那一格。
 _Avoid_: stage, section, panel
 
 ### 取得

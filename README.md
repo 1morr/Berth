@@ -21,7 +21,7 @@ docker compose up -d
 
 | 泊位 | 步驟 | 套件內的服務 | 你自己的服務 |
 | --- | --- | --- | --- |
-| — | 1–2 建立 Berth 管理員、逐服務探測 | 探到 compose 主機名就是套件內 | 探不到就填位址，就地測連線 |
+| — | 1–2 建立 Berth 管理員、逐服務探測 | 探到 compose 主機名就是套件內；還在啟動的顯示「探測中」，自己等到起來（上限 2 分鐘），不必按重新探測 | 探不到就填位址，就地測連線 |
 | BTH 1 | 3 Jellyfin | 確認版本 ≥ 12.0、建管理員、建清單上的媒體庫（預設 Movies / TV / Anime，可改名、增刪）、API key | 只做檢查；「加入 Berth 路徑」是一顆要確認的按鈕 |
 | BTH 2 | 4 qBittorrent | 套用五個建議鍵、設 WebUI 密碼 | 先顯示逐鍵差異再問要不要套用 |
 | BTH 3 | 5 媒體庫路徑 | 走到就替每個媒體庫自動建一條 Route、跑五條檢查 | 勾選媒體庫與寫入目標 |
@@ -270,7 +270,7 @@ pnpm -C web lint            # eslint
 pnpm -C web format          # prettier（CI 用 format:check）
 pnpm -C web typecheck       # tsc（strict）；build 已含，這是單獨跑的快捷
 pnpm -C web gen:api         # 重新產生 API 型別（見下）
-pnpm -C web e2e             # playwright 對演練情境跑四條流程（先 build，見〈前端 e2e〉）
+pnpm -C web e2e             # playwright 對演練情境跑七條流程（先 build，見〈前端 e2e〉）
 ```
 
 ### API 型別
@@ -358,25 +358,31 @@ docker compose -f deploy/docker-compose.yml -f tests/e2e/compose.yml --env-file 
 
 ### 前端 e2e
 
-`web/e2e/` 以 playwright 對〈UI 的 Fake 後端〉的演練情境跑四條流程，一條流程一台 server、各佔一個 port
+`web/e2e/` 以 playwright 對〈UI 的 Fake 後端〉的演練情境跑七條流程（精靈與設定頁那四條各有 1280 與 390 兩份，共十一個 project），一條流程一台 server、各佔一個 port
 （`web/playwright.config.ts` 自己起、跑完收掉）：
 
-| 流程 | 情境 | port |
+| 流程 | 情境 | port（1280 / 390） |
 | --- | --- | --- |
-| 精靈八步走完，之後以同一組帳密登入 | `bundled` | 8491 |
+| 精靈八步走完（改媒體庫清單、每一格停在結果上、回頭再往前、試搜與移除），之後以同一組帳密登入 | `bundled` | 8491 / 8501 |
+| 既有服務：填 qBittorrent 帳密、登入既有 Jellyfin 加 Berth 路徑並選它當寫入目標、貼 Prowlarr 的 key | `mixed` | 8495 / 8505 |
+| 冷啟動：服務還在啟動時開始精靈，不按重新探測就判定完成 | `starting` | 8496 / 8506 |
+| 精靈跑完之後：`/setup` 導向設定頁，加一個索引站並試搜、換 TMDB key | `healthy` | 8497 / 8507 |
 | 從作品頁送單，一路走到已入庫 | `import` | 8492 |
 | `/review` 確認一筆 audit | `review` | 8493 |
 | `/issues` 修一條 `library_link_missing` | `issues` | 8494 |
 
+精靈與設定頁那四條在兩種寬度各走一次（`playwright.config.ts` 的 `NARROW`），每一格都留一張整頁截圖在
+`web/test-results/<那一條>/`，通過的那一輪也留著。
+
 ```bash
 pnpm -C web build                                          # server 發的是 web/dist
 pnpm -C web exec playwright install chromium               # 第一次
-pnpm -C web e2e                                            # 約 20 秒
+pnpm -C web e2e                                            # 約 1 分鐘（十一台替身）
 pnpm -C web e2e --project issues                           # 只跑一條
 pnpm -C web exec playwright show-trace web/test-results/<那一條>/trace.zip   # 失敗時看 trace
 ```
 
-- **不重試、不接手已經在跑的 server**：替身是有狀態的，重跑一次面對的是被上一次改過的替身。四個 port 上
+- **不重試、不接手已經在跑的 server**：替身是有狀態的，重跑一次面對的是被上一次改過的替身。表上的 port
   有東西在聽時先停掉它。
 - 選擇器寫的是 zh-Hant 文案（瀏覽器語系 `zh-TW`），改文案要跟著改腳本。
 - 失敗時 `web/test-results/` 留截圖與 trace、`web/playwright-report/` 是 HTML 報告；CI 的 `web-e2e` job 把兩者
@@ -402,8 +408,9 @@ uv run python scripts/fake_setup_server.py --port 8383     # 換 port（索引�
 | --- | --- |
 | `bundled`（預設） | 乾淨的 compose：三個服務都判為套件內，泊位 1–3 全部走得完。九個預設索引站裡有四個連不上（訊息取自真的 Prowlarr 那一輪），逐站成敗看得到；加完之後試搜，Mikan 演「搜尋時連不上」，其餘站各回幾筆 |
 | `outdated` | qBittorrent 的 Web API 低於 2.8.4：第 4 步拒絕接入並給升級指令 |
-| `mixed` | NAS 的常見組合：既有 Jellyfin（跑過自己的精靈、兩個媒體庫，其中一個掛 TVDB）、qBittorrent 已設密碼、Prowlarr 已有索引站 |
-| `starting` | 容器還在啟動：qBittorrent 連不上，Prowlarr 讀不到 API key |
+| `mixed` | NAS 的常見組合：既有 Jellyfin（跑過自己的精靈、兩個媒體庫，其中一個掛 TVDB；管理員 `owner` / `s3cret`）、qBittorrent 已設密碼（任何帳密都測得過）、Prowlarr 已有索引站。兩個媒體庫的舊路徑是暫存目錄底下真的存在的 `nas/movies`、`nas/anime`，Route 的第三條纜繩才看得到它們，精靈走得完 |
+| `starting` | 四個容器同時起來（票 06g 量到的時間線，照探測次數演，前端每 3 秒一次）：Jellyfin 先回不像它自己的東西、再回兩次 503「還在載入」，約 9 秒後是套件內；qBittorrent 第一次連不上；Prowlarr 連不上五次，約 15 秒。第 2 步不必按重新探測就全部判定完成，之後與 `bundled` 一樣走得完 |
+| `key-missing` | 同 `bundled`，但 Prowlarr 的設定目錄沒有唯讀掛進 Berth：讀不到 API key，第 2 步要貼上 |
 | `absent` | Jellyfin 不在 `COMPOSE_PROFILES` 裡：探不到，要在第 2 步填自己那一台的位址 |
 | `old-jellyfin` | 既有 Jellyfin 還停在 10.11（其餘兩個服務照 `bundled`，擋路的只留一個）：泊位 1 紅燈，說出目前版本、為什麼要 12，以及升級前後要做的事；健康頁上同一台也是紅的 |
 | `signed-out` | 精靈已跑完，畫面從登入頁開始。`skipper` / `harbour` 是管理員，`deckhand` / `rope` 是普通使用者（看不到設定入口） |
