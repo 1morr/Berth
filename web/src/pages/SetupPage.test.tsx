@@ -168,7 +168,7 @@ describe('第 2 步：偵測服務', () => {
     expect(await screen.findByText(/一個索引站都沒有/)).toBeInTheDocument()
   })
 
-  it('泊位板把三個判定點亮，泊位 4 仍是未指派', async () => {
+  it('泊位板把三個判定點亮，沒有服務判定的兩格（媒體庫路徑、TMDB）仍是未指派', async () => {
     stubApi({
       [STATUS]: { body: setupStatus({ ...AT_STEP_TWO, services: ALL_BUNDLED }) },
     })
@@ -177,7 +177,7 @@ describe('第 2 步：偵測服務', () => {
     const board = await screen.findByRole('region', { name: '泊位板' })
 
     await waitFor(() => expect(within(board).getAllByText('套件內')).toHaveLength(3))
-    expect(within(board).getByText('未指派')).toBeInTheDocument()
+    expect(within(board).getAllByText('未指派')).toHaveLength(2)
   })
 
   it('既有服務就地展開連線表單', async () => {

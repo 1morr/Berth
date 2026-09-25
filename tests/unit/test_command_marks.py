@@ -45,7 +45,6 @@ BEFORE_M3 = frozenset(
         "health_issues",
         "hints",
         "importer",
-        "indexer",
         "inventory",
         "issues",
         "jellyfin",

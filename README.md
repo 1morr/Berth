@@ -17,7 +17,7 @@ docker compose up -d
 開 <http://localhost:8383>，之後所有設定都在 Berth 的精靈裡完成，不需要分別打開另外三個服務的介面。
 **唯一要離開 Berth 的一步是 TMDB 的 API key**，見下面的〈先申請一把 TMDB API key〉。
 
-精靈是八個步驟、四個泊位：
+精靈是八個步驟、五個泊位：
 
 | 泊位 | 步驟 | 套件內的服務 | 你自己的服務 |
 | --- | --- | --- | --- |
@@ -25,7 +25,8 @@ docker compose up -d
 | BTH 1 | 3 Jellyfin | 確認版本 ≥ 12.0、建管理員、Movies / TV / Anime 三個媒體庫、API key | 只做檢查；「加入 Berth 路徑」是一顆要確認的按鈕 |
 | BTH 2 | 4 qBittorrent | 套用五個建議鍵、設 WebUI 密碼 | 先顯示逐鍵差異再問要不要套用 |
 | BTH 3 | 5 媒體庫路徑 | 走到就自動建三條 Route、跑五條檢查 | 勾選媒體庫與寫入目標 |
-| BTH 4 | 6–7 索引站與 TMDB | 加十個預設公開站 | 填既有 Prowlarr 或任一 Torznab 網址 |
+| BTH 4 | 6 索引站 | 加九個預設公開站（每一站標出語言），加完試搜、不要的移除 | 填既有 Prowlarr 或任一 Torznab 網址，接上之後同樣可以試搜 |
+| BTH 5 | 7 TMDB | 貼你自己的 API key 並測試 | 同左 |
 | — | 8 完成 | 說出跳過了什麼、在哪裡補 | 同左 |
 
 索引站那一步可以按「之後再說」（沒接只是搜尋不到東西）；**TMDB 那一步不行** —— 沒有一把測得過的憑證就沒有標題、季集與封面，精靈停在第 7 步。
@@ -396,7 +397,7 @@ uv run python scripts/fake_setup_server.py --port 8383     # 換 port（索引�
 
 | `--scenario` | 演的是什麼 |
 | --- | --- |
-| `bundled`（預設） | 乾淨的 compose：三個服務都判為套件內，泊位 1–3 全部走得完。十個預設索引站裡有五個連不上（訊息取自真的 Prowlarr 那一輪），逐站成敗看得到 |
+| `bundled`（預設） | 乾淨的 compose：三個服務都判為套件內，泊位 1–3 全部走得完。九個預設索引站裡有四個連不上（訊息取自真的 Prowlarr 那一輪），逐站成敗看得到；加完之後試搜，Mikan 演「搜尋時連不上」，其餘站各回幾筆 |
 | `outdated` | qBittorrent 的 Web API 低於 2.8.4：第 4 步拒絕接入並給升級指令 |
 | `mixed` | NAS 的常見組合：既有 Jellyfin（跑過自己的精靈、兩個媒體庫，其中一個掛 TVDB）、qBittorrent 已設密碼、Prowlarr 已有索引站 |
 | `starting` | 容器還在啟動：qBittorrent 連不上，Prowlarr 讀不到 API key |

@@ -31,6 +31,10 @@ class IndexerDefinition:
     #: `public` / `semiPrivate` / `private`。精靈只預設勾公開站。
     privacy: str
     payload: Mapping[str, Any] = field(default_factory=dict)
+    #: BCP 47 代碼（`zh-TW`、`zh-CN`、`en-US`…）。畫面照 UI 語言換成語言名（票 06e）。
+    language: str = ""
+    #: 定義自帶的一句英文說明。畫面原樣顯示、不翻（同 Tags）。
+    description: str = ""
 
 
 class IndexerRejectedError(ServiceError):
@@ -66,6 +70,10 @@ class ProwlarrClient(Protocol):
 
     async def test_indexer(self, indexer: ProwlarrIndexer) -> None:
         """`POST /api/v1/indexer/test`：已經加進來的站現在還通不通。"""
+        ...
+
+    async def delete_indexer(self, indexer_id: int) -> None:
+        """`DELETE /api/v1/indexer/{id}`（Prowlarr 的 OpenAPI，票 06e）。"""
         ...
 
     async def host_config(self) -> Mapping[str, Any]:

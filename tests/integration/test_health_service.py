@@ -231,6 +231,20 @@ class TestNotConfigured:
         assert report.degraded is False
 
 
+class TestTmdb:
+    """健康頁的泊位板有 TMDB 那一格（票 06e）。它不在四項檢查裡——那四項量的是
+    Berth 連得上的服務，TMDB 的憑證只在精靈第 7 步測過——所以讀的是那一次的結果。"""
+
+    async def test_the_report_carries_whether_the_tmdb_credential_was_verified(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        assert (await read_health(session)).tmdb_verified is False
+
+        await ready(session, roots)
+
+        assert (await read_health(session)).tmdb_verified is True
+
+
 class TestQbittorrentDrift:
     async def test_a_changed_recommended_key_is_reported_as_drift(
         self, session: AsyncSession, roots: dict[str, Path]

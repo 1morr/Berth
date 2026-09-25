@@ -1,6 +1,6 @@
 """精靈第 6–7 步的 services 命令（plan §9.3 第 6–7 步、§8.3、§8.4、票 08）。
 
-驗的是票 08 的驗收條件：十個預設站逐站顯示成敗、重按不會重複新增、既有 Prowlarr 與任意
+驗的是票 08 的驗收條件：預設站逐站顯示成敗、重按不會重複新增、既有 Prowlarr 與任意
 Torznab 各有測試；TMDB 那一半改由票 02b 定義——憑證使用者自備、必填，測得過才走得下去。
 """
 
@@ -12,6 +12,8 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from berth.adapters.http import AuthFailedError, ServiceUnavailableError
+from berth.adapters.indexer import IndexerResult
+from berth.adapters.indexer.fake import FakeIndexerSearch
 from berth.adapters.prowlarr import IndexerDefinition, ProwlarrIndexer
 from berth.adapters.prowlarr.fake import FakeProwlarrClient
 from berth.adapters.tmdb import TmdbConfiguration
@@ -39,11 +41,14 @@ from berth.models import (
     SetupStep,
     TmdbSettings,
 )
+from berth.services.commands import CommandMark, Effect, mark_of
 from berth.services.indexer import (
     DEFAULT_INDEXERS,
     apply_default_indexers,
     connect_indexer,
     read_indexer_status,
+    remove_indexer,
+    search_indexers,
     skip_indexers,
 )
 from berth.services.settings import read_settings, write_settings
@@ -53,6 +58,8 @@ from tests.conftest import TMDB_API_KEY
 from tests.integration.factories import FakeClientFactory
 
 NOW = datetime(2026, 9, 8, 12, 0, tzinfo=UTC)
+
+TORZNAB = "http://jackett:9117/api/v2.0/indexers/all/results/torznab/api"
 
 #: 這台 Prowlarr 連不出去的那幾個站，訊息取自 2026-09-08 的實測（brief §20.7）。
 BLOCKED = {
@@ -129,7 +136,7 @@ async def arrange(
 
 
 @pytest.mark.asyncio
-async def test_the_ten_default_indexers_are_offered_with_their_real_names(
+async def test_the_default_indexers_are_offered_with_their_real_names(
     session: AsyncSession,
 ) -> None:
     await arrange(session)
@@ -138,7 +145,7 @@ async def test_the_ten_default_indexers_are_offered_with_their_real_names(
     status = await read_indexer_status(session, factory)
 
     assert [row.definition_name for row in status.options] == list(DEFAULT_INDEXERS)
-    assert [row.name for row in status.options][:3] == ["Nyaa.si", "dmhy", "Anidex"]
+    assert [row.name for row in status.options][:3] == ["Nyaa.si", "dmhy", "Anime Tosho"]
     # 站名是伺服器自己報的，privacy 也是——勾選清單靠它標出唯一不是公開的那一個。
     assert [row.privacy for row in status.options if row.definition_name == "animetosho-xyz"] == [
         "semiPrivate"
@@ -150,7 +157,7 @@ async def test_the_ten_default_indexers_are_offered_with_their_real_names(
 async def test_applying_the_defaults_reports_every_site_on_its_own_line(
     session: AsyncSession,
 ) -> None:
-    """十個公開站裡有幾個連不上是常態：失敗的那幾條變紅，其餘照樣繫上。"""
+    """公開站裡有幾個連不上是常態：失敗的那幾條變紅，其餘照樣繫上。"""
     await arrange(session, apply_to_services=False)
     client = FakeProwlarrClient(rejects=BLOCKED)
     factory = FakeClientFactory(prowlarr=client)
@@ -465,7 +472,7 @@ async def _never_comes_back() -> None:
 
 
 @pytest.mark.asyncio
-async def test_ten_failing_sites_do_not_let_the_wizard_move_on(session: AsyncSession) -> None:
+async def test_every_site_failing_does_not_let_the_wizard_move_on(session: AsyncSession) -> None:
     """一個站都沒接上就還沒做完。替 Prowlarr 介面設登入那一條不算——它與站無關。"""
     await arrange(session)
     every_site = dict.fromkeys(DEFAULT_INDEXERS, "Unable to connect to indexer.")
@@ -475,7 +482,7 @@ async def test_ten_failing_sites_do_not_let_the_wizard_move_on(session: AsyncSes
 
     assert [row.status for row in status.steps if row.step in DEFAULT_INDEXERS] == [
         StepStatus.FAILED
-    ] * 10
+    ] * len(DEFAULT_INDEXERS)
     assert [row.status for row in status.steps if row.step == PROWLARR_LOGIN_STEP] == [
         StepStatus.OK
     ]
@@ -553,3 +560,183 @@ async def test_a_tmdb_check_does_not_erase_sites_added_meanwhile(
     status = await read_indexer_status(session, FakeClientFactory())
     assert [row.step for row in status.steps if row.status is StepStatus.OK][:1] == ["nyaasi"]
     assert (await read_status(session)).current_step == STEP_COMPLETE
+
+
+# --- 票 06e：語言與說明、加入後試搜、逐站移除 ---
+
+
+def _results(indexer: str, count: int) -> tuple[IndexerResult, ...]:
+    return tuple(
+        IndexerResult(title=f"{indexer} release {n}", indexer=indexer) for n in range(count)
+    )
+
+
+@pytest.mark.asyncio
+async def test_anidex_is_not_offered_any_more(session: AsyncSession) -> None:
+    """anidex.info 從 09-08 起一直回 502（2026-09-25 實測），預設清單不再勾它（票 06e）。"""
+    await arrange(session)
+
+    status = await read_indexer_status(session, FakeClientFactory())
+
+    assert "Anidex" not in DEFAULT_INDEXERS
+    assert len(DEFAULT_INDEXERS) == 9
+    assert "Anidex" not in [row.definition_name for row in status.options]
+
+
+@pytest.mark.asyncio
+async def test_every_offered_site_says_its_language_and_what_it_is(session: AsyncSession) -> None:
+    await arrange(session)
+
+    status = await read_indexer_status(session, FakeClientFactory())
+
+    by_name = {row.definition_name: row for row in status.options}
+    assert (by_name["dmhy"].language, by_name["mikan"].language) == ("zh-TW", "zh-CN")
+    assert by_name["yts"].description.startswith("YTS is a Public torrent site")
+    # 還沒加進來的站沒有 id，所以也沒有「移除」可按。
+    assert by_name["dmhy"].indexer_id is None
+
+
+@pytest.mark.asyncio
+async def test_a_trial_search_reports_each_site_on_its_own(session: AsyncSession) -> None:
+    """加入之後試搜：逐站列出搜到幾筆與前三筆標題，一站失敗不影響其他站。"""
+    await arrange(session, apply_to_services=False)
+    prowlarr = FakeProwlarrClient()
+    search = FakeIndexerSearch(
+        by_indexer={1: _results("Nyaa.si", 5), 2: ()},
+        indexer_errors={3: ServiceUnavailableError("GET /api/v1/search: 502 Bad Gateway")},
+    )
+    factory = FakeClientFactory(prowlarr=prowlarr, indexer_search=search)
+    added = await apply_default_indexers(session, factory, ["nyaasi", "dmhy", "mikan"])
+    ids = {row.definition_name: row.indexer_id for row in added.options if row.present}
+
+    result = await search_indexers(session, factory, query="Frieren")
+
+    by_name = {row.definition_name: row for row in result.sites}
+    assert by_name["nyaasi"].indexer_id == ids["nyaasi"]
+    assert by_name["nyaasi"].count == 5
+    assert by_name["nyaasi"].titles == (
+        "Nyaa.si release 0",
+        "Nyaa.si release 1",
+        "Nyaa.si release 2",
+    )
+    assert (by_name["dmhy"].count, by_name["dmhy"].error) == (0, "")
+    assert by_name["mikan"].error.endswith("502 Bad Gateway")
+    assert by_name["mikan"].count == 0
+    # 一站一個查詢，每個都只問那一站。
+    assert sorted(query.indexer_ids for query in search.queries) == [(1,), (2,), (3,)]
+    assert {query.text for query in search.queries} == {"Frieren"}
+
+
+@pytest.mark.asyncio
+async def test_a_trial_search_writes_nothing(session: AsyncSession) -> None:
+    """試搜是 `read` 命令（票 05 的標記）：它不寫任何東西，所以也不會讓精靈前進或後退。"""
+    await arrange(session, apply_to_services=False)
+    factory = FakeClientFactory(indexer_search=FakeIndexerSearch(results=_results("x", 1)))
+    await apply_default_indexers(session, factory, ["nyaasi"])
+    before = (await read_settings(session, SetupSettings)).model_dump()
+
+    await search_indexers(session, factory, query="")
+
+    assert (await read_settings(session, SetupSettings)).model_dump() == before
+    assert mark_of(search_indexers) == CommandMark(Effect.READ)
+
+
+@pytest.mark.asyncio
+async def test_an_existing_torznab_endpoint_is_searched_on_its_own_endpoint(
+    session: AsyncSession,
+) -> None:
+    """既有 Torznab 同樣可以試搜：打它自己的 `t=search`，整個端點算一站。"""
+    await arrange(session, origin=ServiceOrigin.EXISTING)
+    search = FakeIndexerSearch(results=_results("Jackett", 2))
+    factory = FakeClientFactory(indexer_search=search)
+    await connect_indexer(
+        session, factory, kind=IndexerKind.TORZNAB, base_url=TORZNAB, api_key="the-key"
+    )
+
+    result = await search_indexers(session, factory, query="Frieren")
+
+    assert [(row.name, row.count, row.indexer_id) for row in result.sites] == [
+        ("jackett:9117", 2, None)
+    ]
+    assert factory.indexer_kinds[-1] is IndexerKind.TORZNAB
+    assert search.base_url == TORZNAB
+
+
+@pytest.mark.asyncio
+async def test_a_trial_search_that_cannot_list_the_sites_says_so(session: AsyncSession) -> None:
+    await arrange(session)
+    prowlarr = FakeProwlarrClient(indexers_error=ServiceUnavailableError("connection refused"))
+
+    result = await search_indexers(session, FakeClientFactory(prowlarr=prowlarr), query="x")
+
+    assert result.sites == ()
+    assert result.error == "connection refused"
+
+
+@pytest.mark.asyncio
+async def test_a_removed_site_is_gone_and_no_longer_searched(session: AsyncSession) -> None:
+    """每一站可以移除（Prowlarr `DELETE /api/v1/indexer/{id}`）；移除後試搜不再打它。"""
+    await arrange(session, apply_to_services=False)
+    prowlarr = FakeProwlarrClient()
+    search = FakeIndexerSearch()
+    factory = FakeClientFactory(prowlarr=prowlarr, indexer_search=search)
+    added = await apply_default_indexers(session, factory, ["nyaasi", "yts"])
+    yts = next(row.indexer_id for row in added.options if row.definition_name == "yts")
+    assert yts is not None
+
+    status = await remove_indexer(session, factory, yts)
+
+    assert prowlarr.deleted == [yts]
+    assert [row.definition_name for row in status.options if row.present] == ["nyaasi"]
+    # 那一站的「加入結果」一起拿掉：留著一條綠的「YTS」等於說它還在。
+    assert [row.step for row in status.steps] == ["nyaasi", PROWLARR_LOGIN_STEP]
+    await search_indexers(session, factory, query="")
+    assert [query.indexer_ids for query in search.queries] == [(1,)]
+    assert mark_of(remove_indexer) == CommandMark(
+        Effect.REVERSIBLE, inverse="indexer.apply_default_indexers"
+    )
+
+
+@pytest.mark.asyncio
+async def test_removing_the_last_site_sends_the_wizard_back_to_the_indexers(
+    session: AsyncSession,
+) -> None:
+    await arrange(session, apply_to_services=False)
+    factory = FakeClientFactory()
+    added = await apply_default_indexers(session, factory, ["nyaasi"])
+    assert (await read_status(session)).current_step == STEP_TMDB
+    (only,) = [row.indexer_id for row in added.options if row.present]
+    assert only is not None
+
+    await remove_indexer(session, factory, only)
+
+    assert (await read_status(session)).current_step == STEP_INDEXER
+
+
+@pytest.mark.asyncio
+async def test_berth_never_removes_sites_from_an_existing_indexer(session: AsyncSession) -> None:
+    """既有服務只做檢查（brief §16.4 的紅線），移除也一樣。"""
+    await arrange(session, origin=ServiceOrigin.EXISTING)
+    client = FakeProwlarrClient(
+        base_url="http://nas:9696",
+        indexers=[ProwlarrIndexer(id=4, name="dmhy", enabled=True, definition_name="dmhy")],
+    )
+
+    with pytest.raises(ValueError, match="existing service"):
+        await remove_indexer(session, FakeClientFactory(prowlarr=client), 4)
+
+    assert client.deleted == []
+
+
+@pytest.mark.asyncio
+async def test_a_site_the_user_added_in_prowlarr_is_not_removed(session: AsyncSession) -> None:
+    """只移除 Berth 提供的預設站：使用者自己加的（可能是帶帳號的私站）Berth 加不回去。"""
+    await arrange(session)
+    client = FakeProwlarrClient(
+        indexers=[ProwlarrIndexer(id=7, name="MyTracker", enabled=True, definition_name="private")]
+    )
+
+    with pytest.raises(ValueError, match="default sites"):
+        await remove_indexer(session, FakeClientFactory(prowlarr=client), 7)
+
+    assert client.deleted == []

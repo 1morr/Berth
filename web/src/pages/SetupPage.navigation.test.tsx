@@ -146,7 +146,7 @@ describe('每個泊位做完都停在結果上', () => {
     expect(screen.queryByRole('button', { name: /^建立/ })).not.toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: '前往下一個泊位' }))
-    expect(await heading()).toHaveTextContent('接上抓取來源')
+    expect(await heading()).toHaveTextContent('索引站')
   })
 
   it('泊位 3：回頭看已經建好的 Route 不重跑', async () => {
@@ -172,21 +172,34 @@ describe('每個泊位做完都停在結果上', () => {
     expect(fetchStub.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false)
   })
 
-  it('泊位 4：加完站、測過 TMDB，停在同一頁的結果上', async () => {
+  it('泊位 4：加完站停在逐站結果與試搜上，前往下一個是 TMDB', async () => {
     wizard(6)
     const user = userEvent.setup()
     renderWithProviders(<SetupPage />)
 
+    // TMDB 不在這一頁了（票 06e 拆成兩個泊位）。
+    expect(await heading()).toHaveTextContent('索引站')
+    expect(screen.queryByLabelText(/TMDB API key/)).not.toBeInTheDocument()
     await user.click(await screen.findByRole('button', { name: /^加入這/ }))
-    // 索引站做完了、TMDB 還沒：同一個泊位，還沒有下一個。
-    expect(await screen.findByLabelText(/TMDB API key/)).toBeVisible()
-    expect(screen.queryByRole('button', { name: '前往下一個泊位' })).not.toBeInTheDocument()
 
-    await user.type(screen.getByLabelText(/TMDB API key/), 'k'.repeat(32))
+    expect(await screen.findByRole('button', { name: '前往下一個泊位' })).toBeVisible()
+    expect(await heading()).toHaveTextContent('索引站')
+    expect(screen.getByRole('heading', { name: '試搜' })).toBeVisible()
+
+    await user.click(screen.getByRole('button', { name: '前往下一個泊位' }))
+    expect(await heading()).toHaveTextContent('TMDB')
+  })
+
+  it('泊位 5：測過 TMDB 停在結果上，前往下一個是完成頁', async () => {
+    wizard(7)
+    const user = userEvent.setup()
+    renderWithProviders(<SetupPage />)
+
+    await user.type(await screen.findByLabelText(/TMDB API key/), 'k'.repeat(32))
     await user.click(screen.getByRole('button', { name: '測試 TMDB' }))
 
     expect(await screen.findByRole('button', { name: '前往下一個泊位' })).toBeVisible()
-    expect(await heading()).toHaveTextContent('接上抓取來源')
+    expect(await heading()).toHaveTextContent('TMDB')
 
     await user.click(screen.getByRole('button', { name: '前往下一個泊位' }))
     expect(await heading()).toHaveTextContent('完成設定')
@@ -198,8 +211,9 @@ describe('上一個泊位', () => {
     [3, '接手這台 Jellyfin', '偵測服務'],
     [4, '套用建議的 qBittorrent 設定', '接手這台 Jellyfin'],
     [5, '媒體庫路徑', '套用建議的 qBittorrent 設定'],
-    [6, '接上抓取來源', '媒體庫路徑'],
-    [8, '完成設定', '接上抓取來源'],
+    [6, '索引站', '媒體庫路徑'],
+    [7, 'TMDB', '索引站'],
+    [8, '完成設定', 'TMDB'],
   ])('第 %i 步有上一個泊位', async (at, here, previous) => {
     wizard(at, at === 5 ? { 'GET /api/setup/routes': { body: ROUTES_DONE } } : {})
     const user = userEvent.setup()
@@ -222,7 +236,7 @@ describe('回頭看永遠有出口', () => {
     expect(await heading()).toHaveTextContent('完成設定')
     expect(screen.queryByRole('button', { name: '回媒體庫路徑' })).not.toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: '上一個泊位' }))
-    expect(await heading()).toHaveTextContent('接上抓取來源')
+    expect(await heading()).toHaveTextContent('TMDB')
 
     await user.click(screen.getByRole('button', { name: '前往下一個泊位' }))
     expect(await heading()).toHaveTextContent('完成設定')
@@ -267,8 +281,10 @@ describe('泊位板與前置列', () => {
       'aria-current',
       'step',
     )
-    expect(cells.queryByRole('button', { name: /BTH 4/ })).not.toBeInTheDocument()
-    expect(cells.getByText('BTH 4')).toBeVisible()
+    for (const code of ['BTH 4', 'BTH 5']) {
+      expect(cells.queryByRole('button', { name: new RegExp(code) })).not.toBeInTheDocument()
+      expect(cells.getByText(code)).toBeVisible()
+    }
   })
 
   it('前置列是證據也是入口：管理員回第 1 步、判定回第 2 步；沒有每頁的「重新探測」', async () => {
@@ -293,6 +309,7 @@ describe('回頭看的泊位說出能改什麼', () => {
     ['BTH 1', /重跑.*已經是這樣/, /媒體庫.*改名.*Jellyfin/],
     ['BTH 2', /套用建議設定.*已經是這樣/, /qBittorrent 自己的介面/],
     ['BTH 3', /只新增.*重驗/, /改名.*停用.*設定.*媒體庫路徑/],
+    ['BTH 4', /加.*站.*試搜.*移除/, /預設清單以外.*Prowlarr/],
   ])('%s', async (code, can, elsewhere) => {
     wizard(8)
     const user = userEvent.setup()
@@ -307,7 +324,7 @@ describe('回頭看的泊位說出能改什麼', () => {
     expect(note).toHaveTextContent(elsewhere)
   })
 
-  it('BTH 4', async () => {
+  it('BTH 5', async () => {
     wizard(8)
     const user = userEvent.setup()
     renderWithProviders(<SetupPage />)
@@ -317,8 +334,8 @@ describe('回頭看的泊位說出能改什麼', () => {
     await user.click(screen.getByRole('button', { name: '上一個泊位' }))
 
     const note = await screen.findByRole('note', { name: '回頭看' })
-    expect(note).toHaveTextContent(/加.*站.*重貼.*TMDB/)
-    expect(note).toHaveTextContent(/移除.*Prowlarr/)
+    expect(note).toHaveTextContent(/重貼.*key/)
+    expect(note).toHaveTextContent(/themoviedb\.org/)
   })
 
   it('目前這一步沒有回頭看的說明', async () => {

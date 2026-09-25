@@ -1,10 +1,10 @@
 import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
 
-import type { ServiceDetection, TmdbSetup } from '../api/setup'
+import type { IndexerSetup, ServiceDetection, TmdbSetup } from '../api/setup'
 import type { ServiceKind } from '../api/schemas'
 import { BerthBoard as Board, type BoardSlot } from '../components/BerthBoard'
-import { BERTHS, SOURCE_SLOT, type BerthSlot } from '../components/berths'
+import { BERTHS, type BerthSlot } from '../components/berths'
 import { ORIGIN_LABEL, detailLabel } from '../components/services'
 import type { Signal } from '../components/signal'
 import { signalOf } from './signals'
@@ -13,15 +13,15 @@ import { signalOf } from './signals'
  * 精靈的泊位板：版面在 `components/BerthBoard.tsx`（健康頁用同一塊），這裡只負責
  * 「一格裡要寫什麼」——判定（套件內 / 既有 / 探測中 / 逾時）與探到的實測值。
  *
- * 媒體庫路徑那一格沒有對應的服務判定——它的狀態來自 Route 自己的檢查，所以走
- * `signals.library`。
+ * 媒體庫路徑與 TMDB 兩格沒有對應的服務判定——前者的狀態來自 Route 自己的檢查，後者來自
+ * 第 7 步的憑證測試，所以走各自的 `signals`。
  */
 
-/** 每一格各自的信號。三個泊位對到服務，媒體庫路徑那一格對到 Route。 */
-export type BerthSignals = Partial<Record<ServiceKind | 'library', Signal>>
+/** 每一格各自的信號。三個泊位對到服務，另外兩格對到 Route 與 TMDB 憑證。 */
+export type BerthSignals = Partial<Record<BerthSlot, Signal>>
 
 /**
- * 沒有服務判定可顯示的那一格（媒體庫路徑）用信號本身當標籤。狀態仍然是三重編碼：
+ * 沒有服務判定可顯示的那兩格用信號本身當標籤。狀態仍然是三重編碼：
  * 色塊 + 這個字 + 泊位號，不看顏色也讀得出來。
  */
 const SIGNAL_LABEL = {
@@ -32,10 +32,14 @@ const SIGNAL_LABEL = {
   blocked: 'status.failed',
 } as const satisfies Record<Signal, string>
 
+/** 產品名不翻譯：詳情列說的是接上的是哪一種軟體。 */
+const INDEXER_PRODUCT = { prowlarr: 'Prowlarr', torznab: 'Torznab' } as const
+
 export function BerthBoard({
   services,
   signals = {},
   current,
+  indexers,
   tmdb,
   reachable,
   onSelect,
@@ -45,10 +49,9 @@ export function BerthBoard({
   signals?: BerthSignals
   /** 現在這一步屬於哪一格（`BERTHS` 的 `code`）。前置的兩步不屬於任何泊位。 */
   current?: string
-  /**
-   * 「來源」那一格的另一半。走到第 7 步之後才有值——在那之前這一格說的是索引站，
-   * 之後說的是閘門（見 `sourceDetail`）。
-   */
+  /** 第 6 步起才有：索引站那一格說出接上的是哪一種、加了幾站。 */
+  indexers?: IndexerSetup
+  /** 第 7 步起才有：TMDB 那一格說出憑證驗過了沒。 */
   tmdb?: TmdbSetup
   /** 點得到哪幾格：走過的與目前的（`setup/navigation.ts` 的 `reachable`）。 */
   reachable?: (slot: BerthSlot) => boolean
@@ -60,7 +63,7 @@ export function BerthBoard({
 
   const slots: BoardSlot[] = BERTHS.map((berth) => {
     const key = berth.slot
-    const service = key === 'library' ? undefined : key
+    const service = key === 'library' || key === 'tmdb' ? undefined : key
     const detection = service ? byKind.get(service) : undefined
     const own = signals[key]
 
@@ -69,7 +72,11 @@ export function BerthBoard({
       name: t(berth.nameKey),
       status: detection ? t(ORIGIN_LABEL[detection.origin]) : t(SIGNAL_LABEL[own ?? 'neutral']),
       detail:
-        key === SOURCE_SLOT && tmdb ? sourceDetail(t, tmdb) : serviceDetail(t, service, detection),
+        key === 'prowlarr'
+          ? indexerDetail(t, detection, indexers)
+          : key === 'tmdb'
+            ? tmdbDetail(t, tmdb)
+            : serviceDetail(t, service, detection),
       signal: own ?? signalOf(detection),
       filled: Boolean(detection) || Boolean(own && own !== 'neutral'),
       selectable: reachable?.(key) ?? false,
@@ -93,7 +100,7 @@ export function BerthBoard({
   )
 }
 
-/** 探到的實測值那一行：版本號或索引站數量，由服務決定（`detailLabel`）。 */
+/** 探到的實測值那一行：版本號，由服務決定（`detailLabel`）。 */
 function serviceDetail(
   t: TFunction,
   service: ServiceKind | undefined,
@@ -108,17 +115,51 @@ function serviceDetail(
 }
 
 /**
- * 「來源」那一格走到 TMDB 那一半之後的詳情列（票 03 第 4 條）。
+ * 索引站那一格的詳情列（票 06e）：接上的是哪一種（Prowlarr / Torznab，不寫死），加了幾站。
  *
- * 這一格是「來源」，它有兩半：索引站與 TMDB。索引站那一半連不上幾站是常態、不擋路，
- * TMDB 是**必填的閘門**（plan §9.3 第 7 步）——所以一旦拿得到 TMDB 的判定，這一格
- * 要說的就是閘門過了沒，而不是繼續停在索引站數。這一行只容得下一個短語（版面是
- * 一列 truncate），兩件事並列會把後面那件截掉，所以是換不是接。
+ * 套件內探測到、還沒加站時說「尚未加入索引站」，不是一條破折號——判定是「一個索引站都沒有」，
+ * 那正是這一格要人去做的事。站數優先讀第 6 步的清單（加完之後判定釘住不再重探，它的數字會過期），
+ * 讀不到才用探測時的數字（既有 Prowlarr 報的站數）。**兩者都沒有就不猜**：還在探、沒部署、缺 key 時
+ * 判定的詳情是空的，那不是「零站」，說「尚未加入」會把一台有站的 Prowlarr 說錯（票 06e 的 code review）。
+ * Torznab 端點沒有站數，說它是哪一台。
  */
-function sourceDetail(t: TFunction, tmdb: TmdbSetup) {
+function indexerDetail(
+  t: TFunction,
+  detection: ServiceDetection | undefined,
+  indexers: IndexerSetup | undefined,
+) {
+  if (!detection && !indexers) return null
+  const kind = indexers?.kind ?? 'prowlarr'
+  const product = INDEXER_PRODUCT[kind]
+  if (kind === 'torznab') return `${product} · ${hostOf(indexers?.base_url ?? '')}`
+  const count =
+    indexers?.origin === 'bundled' && indexers.reachable
+      ? indexers.options.filter((row) => row.present).length
+      : detection?.detail
+        ? Number(detection.detail)
+        : detection?.reason === 'no_indexers'
+          ? 0
+          : null
+  if (count === null) return null
+  return count > 0
+    ? t('board.indexerCount', { product, count })
+    : t('board.indexerNone', { product })
+}
+
+function hostOf(url: string): string {
+  try {
+    return new URL(url).host
+  } catch {
+    return url
+  }
+}
+
+/** TMDB 那一格的詳情列：憑證驗過了沒。第 7 步之前讀不到，就留破折號。 */
+function tmdbDetail(t: TFunction, tmdb: TmdbSetup | undefined) {
+  if (!tmdb) return null
   return (
     <>
-      <span className="label">{t('detail.tmdb')}</span>{' '}
+      <span className="label">{t('detail.credential')}</span>{' '}
       {t(tmdb.verified ? 'detail.verified' : 'detail.unverified')}
     </>
   )

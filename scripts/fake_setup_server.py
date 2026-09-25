@@ -154,7 +154,6 @@ BLOCKED_SITES = {
     ),
     "1337x": "Unable to access 1337x.to, blocked by CloudFlare Protection.",
     "eztv": "Unable to access eztvx.to, blocked by CloudFlare Protection.",
-    "Anidex": "Unable to connect to indexer, indexer's server is unavailable.",
     "animetosho-xyz": "Unable to connect to indexer, check the log above the ValidationFailure.",
 }
 
@@ -263,6 +262,28 @@ class Scenario:
             prowlarr=self.prowlarr,
             prowlarr_api_key=self.prowlarr_api_key,
         )
+
+
+#: 精靈試搜（票 06e）的演練：加進來的站逐站回幾筆假的最新發佈，這一站演「搜尋時連不上」——
+#: 加得進來不等於每次都搜得到，畫面要撐得住一站紅、其餘照常。
+TRIAL_FAILING_SITE = "mikan"
+
+
+def trial_search(prowlarr: FakeProwlarrClient, base_url: str) -> FakeIndexerSearch:
+    """照這台假 Prowlarr 現在有的站，逐站造出試搜的回答。"""
+    by_indexer: dict[int, tuple[IndexerResult, ...]] = {}
+    errors: dict[int, Exception] = {}
+    for site in prowlarr.present():
+        if site.definition_name == TRIAL_FAILING_SITE:
+            errors[site.id] = ServiceUnavailableError(
+                "GET /api/v1/search: 502 Bad Gateway (Mikan did not answer)"
+            )
+            continue
+        by_indexer[site.id] = tuple(
+            IndexerResult(title=f"[{site.name}] Sousou no Frieren - {episode:02d} [1080p]")
+            for episode in range(28, 28 - (site.id * 7) % 23, -1)
+        )
+    return FakeIndexerSearch(base_url=base_url, by_indexer=by_indexer, indexer_errors=errors)
 
 
 def bundled() -> Scenario:
@@ -980,6 +1001,8 @@ class FakeClientFactory:
     def indexer_search(self, kind: IndexerKind, base_url: str, api_key: str) -> IndexerSearch:
         if self._scenario.indexer_url:
             return ProwlarrSearch(self._scenario.indexer_url, self._scenario.indexer_key)
+        if not self._scenario.indexer_results and kind is IndexerKind.PROWLARR:
+            return trial_search(self._scenario.prowlarr, base_url)
         return FakeIndexerSearch(base_url=base_url, results=self._scenario.indexer_results)
 
     def torrent(self) -> TorrentFetcher:

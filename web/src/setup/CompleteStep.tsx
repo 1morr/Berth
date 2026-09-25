@@ -104,7 +104,7 @@ export function CompleteStep({
         {skippedIndexers && (
           <section className="mt-6 grid gap-3">
             <h3 className="label text-ink-dim">{t('complete.skippedTitle')}</h3>
-            <Notice signal="assigned" label={t('source.skip')}>
+            <Notice signal="assigned" label={t('indexer.skip')}>
               {t('complete.where.indexers')}
             </Notice>
           </section>

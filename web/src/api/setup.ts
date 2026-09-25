@@ -101,7 +101,7 @@ export function applyQbittorrent(): Promise<QbittorrentSetup> {
   return apiPost<QbittorrentSetup>('/setup/qbittorrent/apply')
 }
 
-/** --- 第 5–6 步：來源（plan §9.3 第 5–6 步、§8.3、§8.4）--- */
+/** --- 第 6、7 步：索引站與 TMDB（plan §9.3 第 6–7 步、§8.3、§8.4；票 06e 拆成兩個泊位）--- */
 
 /** `IndexerKind`：既有路徑的兩種接法。 */
 export type IndexerKind = Schemas['IndexerKind']
@@ -114,6 +114,11 @@ export type IndexerSetup = Schemas['IndexerSetupOut']
 export type IndexerConnectInput = Schemas['IndexerConnectIn']
 
 export type TmdbSetup = Schemas['TmdbSetupOut']
+
+/** 試搜的整份結果：逐站一列（票 06e）。 */
+export type TrialSearchResult = Schemas['IndexerSearchOut']
+
+export type SiteSearch = Schemas['SiteSearchOut']
 
 export const indexerSetupQueryOptions = queryOptions({
   queryKey: ['setup', 'indexers'],
@@ -139,12 +144,25 @@ export function skipIndexers(skipped: boolean): Promise<IndexerSetup> {
   return apiPost<IndexerSetup>('/setup/indexers/skip', { skipped } satisfies Schemas['SkipIn'])
 }
 
+/**
+ * 加入之後的試搜（票 06e）。只讀，但要 Prowlarr 現場去連每一個站，所以是按了才問，
+ * 不是開頁就問。空白的查詢回各站最新的發佈。
+ */
+export function searchIndexers(query: string): Promise<TrialSearchResult> {
+  return apiGet<TrialSearchResult>(`/setup/indexers/search?${new URLSearchParams({ query })}`)
+}
+
+/** 從套件內的 Prowlarr 移除一站（票 06e）。回的是整份索引站狀態：那一站與它的加入結果都不在了。 */
+export function removeIndexer(id: number): Promise<IndexerSetup> {
+  return apiDelete<IndexerSetup>(`/setup/indexers/${id}`)
+}
+
 /** 第 7 步沒有 `skip`：憑證是使用者自備的必填項，測得過才走得到完成（票 02b）。 */
 export function testTmdb(api_key: string): Promise<TmdbSetup> {
   return apiPost<TmdbSetup>('/setup/tmdb/test', { api_key } satisfies Schemas['TmdbTestIn'])
 }
 
-/** --- 第 7–8 步：媒體庫 → Route（plan §9.3 第 7–8 步、§9.5）--- */
+/** --- 第 5 步：媒體庫 → Route（plan §9.3 第 5 步、§9.5）--- */
 
 export type LibraryChoice = Schemas['LibraryChoiceOut']
 

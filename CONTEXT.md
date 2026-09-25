@@ -117,7 +117,8 @@ _Avoid_: external, remote, byo
 _Avoid_: success/error（那是 HTTP 的詞）, done（`ok` 與 `skipped` 都算做完）
 
 **Berth（泊位）**:
-設定精靈把八個步驟歸成的四格：Jellyfin、qBittorrent、來源（索引站與 RSS）、媒體庫路徑。
+設定精靈把八個步驟歸成的五格：Jellyfin、qBittorrent、媒體庫路徑、索引站（Prowlarr 或任一 Torznab 端點）、TMDB。
+一格一個服務（M3 票 06e 把原本的「來源」拆成索引站與 TMDB 兩格）。
 只在精靈與泊位板上用；與產品名 Berth 同字，指的是畫面上那一格。
 _Avoid_: stage, section, panel
 
@@ -279,7 +280,8 @@ _Avoid_: purge level, cleanup mode
 
 **Health Check**:
 對服務連線、版本、Route 硬鏈接與跨服務可見性的檢查，結果顯示在健康頁。**四項**：Jellyfin、
-qBittorrent、索引站、Route；前三項對應精靈的前三個泊位，第四項是所有 Route 的總結。
+qBittorrent、索引站、Route；三個服務與 Route 各對應精靈的一個泊位（BTH 1、2、4 與 BTH 3），第四項是所有 Route 的總結。
+TMDB 那一格（BTH 5）不是檢查：它讀精靈第 7 步那一次憑證測試的結果。
 背景迴圈每 5 分鐘跑一次，也可以在畫面上按「立即重測」。
 _Avoid_: diagnostics, status check
 

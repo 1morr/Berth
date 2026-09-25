@@ -565,7 +565,7 @@ class TestSource:
             running.post("/api/setup/detect")
             yield running
 
-    def test_the_ten_defaults_come_back_with_their_names(self, client: TestClient) -> None:
+    def test_the_defaults_come_back_with_their_names(self, client: TestClient) -> None:
         body = client.get("/api/setup/indexers").json()
 
         assert [row["definition_name"] for row in body["options"]] == list(DEFAULT_INDEXERS)
@@ -602,6 +602,25 @@ class TestSource:
         assert [(row["step"], row["status"]) for row in body["steps"]] == [("torznab", "ok")]
         # 尾斜線在存下來之前就削掉，之後組網址才不會出現兩條斜線。
         assert body["base_url"].endswith("/torznab/api")
+
+    def test_sites_can_be_searched_and_removed_after_they_are_added(
+        self, client: TestClient, prowlarr: FakeProwlarrClient
+    ) -> None:
+        """加入 → 試搜 → 不要的移除（票 06e）。試搜逐站回報，移除之後那一站不見。"""
+        added = client.post("/api/setup/indexers/apply", json={"indexers": ["dmhy", "yts"]}).json()
+        ids = {row["definition_name"]: row["indexer_id"] for row in added["options"]}
+        assert added["options"][1]["language"] == "zh-TW"
+
+        found = client.get("/api/setup/indexers/search", params={"query": " "}).json()
+        assert found["query"] == ""
+        assert [row["definition_name"] for row in found["sites"]] == ["dmhy", "yts"]
+
+        after = client.delete(f"/api/setup/indexers/{ids['yts']}")
+        assert after.status_code == 200
+        assert [row["definition_name"] for row in after.json()["options"] if row["present"]] == [
+            "dmhy"
+        ]
+        assert prowlarr.deleted == [ids["yts"]]
 
     def test_only_the_indexer_half_can_be_skipped_and_unskipped(self, client: TestClient) -> None:
         """跳過是可以反悔的。TMDB 那一半根本沒有這一支（票 02b）。"""

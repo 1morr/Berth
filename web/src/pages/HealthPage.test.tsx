@@ -52,13 +52,25 @@ describe('健康頁', () => {
     const painted = [...document.querySelectorAll<HTMLElement>('.bg-secured')].filter(
       (chip) => chip.closest('details:not([open])') === null,
     )
-    expect(painted).toHaveLength(4)
+    expect(painted).toHaveLength(5)
     for (const chip of painted) expect(board).toContainElement(chip)
 
     // 底下的服務卡照樣說得出「已繫上」，只是不再塗一次漆。
     const chip = card('Jellyfin').getByText('已繫上')
     expect(chip).toBeVisible()
     expect(chip.className).not.toMatch(/bg-secured/)
+  })
+
+  /** 票 06e：板是五格，TMDB 那一格讀精靈第 7 步那一次憑證測試的結果，不是第五項檢查。 */
+  it('TMDB 有自己的一格：憑證沒驗過就是紅的', async () => {
+    render({ body: healthDetail({ tmdb_verified: false }) })
+    renderApp('/health')
+
+    const board = await screen.findByRole('region', { name: '泊位板' })
+    const tmdb = within(within(board).getByText('BTH 5').closest('li')!)
+    expect(tmdb.getByText('TMDB')).toBeVisible()
+    expect(tmdb.getByText('待驗證')).toBeVisible()
+    expect(within(board).getByText('BTH 5').closest('li')!.className).toMatch(/bg-blocked/)
   })
 
   /** 票 03 第 15 條：`truncate` 會截掉路徑尾巴，而三條 Route 常常只差最後一段。 */

@@ -1370,6 +1370,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/setup/indexers/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Indexers Search
+         * @description 加入之後的試搜（票 06e）：逐站列出搜到幾筆與前三筆標題。空白查詢回各站最新的發佈。
+         *
+         *     只讀、不寫任何東西（`read` 命令），所以是 GET。一站失敗寫在那一站上，不是整支 5xx。
+         */
+        get: operations["get_indexers_search_api_setup_indexers_search_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/setup/indexers/{indexer_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Indexer
+         * @description 從套件內的 Prowlarr 移除一站（票 06e）。已經不在的站照樣回 200：結果就是它不在了。
+         *
+         *     對既有的索引站回 422，與 `/indexers/apply` 同一條紅線（brief §16.4）。
+         */
+        delete: operations["delete_indexer_api_setup_indexers__indexer_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/setup/indexers/skip": {
         parameters: {
             query?: never;
@@ -1906,6 +1950,8 @@ export interface components {
             /** Routes */
             routes: components["schemas"]["RouteOut"][];
             poller: components["schemas"]["PollerOut"];
+            /** Tmdb Verified */
+            tmdb_verified: boolean;
         };
         /**
          * HealthStatus
@@ -1960,6 +2006,12 @@ export interface components {
             privacy: string;
             /** Present */
             present: boolean;
+            /** Language */
+            language: string;
+            /** Description */
+            description: string;
+            /** Indexer Id */
+            indexer_id: number | null;
         };
         /**
          * IndexerProblem
@@ -1967,10 +2019,19 @@ export interface components {
          *
          *     與 `TmdbProblem` 同一個道理：分成五種而不是一句錯誤訊息，是因為**下一步不同**。
          *     索引站是精靈裡唯一可以跳過的一步，所以 `not_configured` 不是失敗而是「還沒接」——
-         *     畫面要把人送回泊位 6，不是叫他重試。
+         *     畫面要把人送回精靈第 6 步（「來源」那一格），不是叫他重試。
          * @enum {string}
          */
         IndexerProblem: "not_configured" | "no_query" | "no_search" | "credential_rejected" | "unreachable";
+        /** IndexerSearchOut */
+        IndexerSearchOut: {
+            /** Query */
+            query: string;
+            /** Sites */
+            sites: components["schemas"]["SiteSearchOut"][];
+            /** Error */
+            error: string;
+        };
         /** IndexerSetupOut */
         IndexerSetupOut: {
             origin: components["schemas"]["ServiceOrigin"];
@@ -3403,6 +3464,21 @@ export interface components {
             unavailable: string;
             /** Skipped */
             skipped: string[];
+        };
+        /** SiteSearchOut */
+        SiteSearchOut: {
+            /** Indexer Id */
+            indexer_id: number | null;
+            /** Definition Name */
+            definition_name: string;
+            /** Name */
+            name: string;
+            /** Count */
+            count: number;
+            /** Titles */
+            titles: string[];
+            /** Error */
+            error: string;
         };
         /** SkipIn */
         SkipIn: {
@@ -6446,6 +6522,68 @@ export interface operations {
                 "application/json": components["schemas"]["IndexerConnectIn"];
             };
         };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IndexerSetupOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_indexers_search_api_setup_indexers_search_get: {
+        parameters: {
+            query?: {
+                query?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IndexerSearchOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_indexer_api_setup_indexers__indexer_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                indexer_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {

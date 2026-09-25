@@ -603,7 +603,7 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 | --- | --- | --- | --- |
 | qBittorrent | **只預置「讓 Berth 進得去」**：只放行 Berth 容器固定 IP 的免密白名單（不是整個網段，理由見 §20.7）。原因是 4.6.1 起首次啟動的隨機密碼只印在容器 log，Berth 拿不到，沒有這一步按鈕就登不進去 | 套用建議偏好（temp path、save path、autoTMM）、依 Route 建立 category、設定 WebUI 密碼；按下前顯示差異 | 無 |
 | Jellyfin | 無 | 偵測「尚未完成初始精靈」→ 以 Berth 管理員帳密建立 Jellyfin 管理員 → 建立 Movies / TV / Anime 三個媒體庫（對應 `/data/library/{movies,tv,anime}`）→ 自動建立三個 Route | 無 |
-| Prowlarr | 無；Berth 唯讀掛載其設定目錄讀取 API key | 加入預設索引站清單（Nyaa.si、dmhy、AniDex、Anime Tosho、ACG.RIP、Mikan、1337x、YTS、EZTV、The Pirate Bay，可勾選）、以 Berth 管理員帳密設定介面登入 | 私有站的帳號 |
+| Prowlarr | 無；Berth 唯讀掛載其設定目錄讀取 API key | 加入預設索引站清單（Nyaa.si、dmhy、Anime Tosho、ACG.RIP、Mikan、1337x、YTS、EZTV、The Pirate Bay，可勾選；AniDex 於 2026-09-25 拿掉，§20.7）、以 Berth 管理員帳密設定介面登入 | 私有站的帳號 |
 | TMDB | 無 —— **Berth 不內建任何 provider 的 key**【決定 2026-09-09】 | 無 | **必要**：自己申請一把 API key 貼進精靈第 6 步（§20.7） |
 | 索引站 / RSS | 無 | Mikan、Nyaa feed 由使用者貼 URL | 貼自己的 Mikan 訂閱 URL |
 
@@ -1119,7 +1119,7 @@ M1.5 拆票前的四條待決，2026-09-15 已全數照推薦拍板（上表「M
 
 **Prowlarr**（[OpenAPI](https://raw.githubusercontent.com/Prowlarr/Prowlarr/develop/src/Prowlarr.Api.V1/openapi.json)、[supported-indexers](https://wiki.servarr.com/prowlarr/supported-indexers)、[environment-variables](https://wiki.servarr.com/prowlarr/environment-variables)）
 
-- `GET /api/v1/indexer/schema`、`GET/POST /api/v1/indexer`、`POST /api/v1/indexer/test`；`GET /api/v1/search?query=&indexerIds=&categories=&type=` 回 `ReleaseResource`（`title`、`size`、`seeders`、`leechers`、`downloadUrl`、`magnetUrl`、`infoHash`、`indexer`、`categories`、`publishDate`、`guid`、`infoUrl`、`tmdbId` …）。Prowlarr 明言**不提供跨站聚合 Torznab**，單站 Torznab 為 `/{id}/api?t=search&apikey=`。
+- `GET /api/v1/indexer/schema`、`GET/POST /api/v1/indexer`、`DELETE /api/v1/indexer/{id}`（回 200，OpenAPI）、`POST /api/v1/indexer/test`；`GET /api/v1/search?query=&indexerIds=&categories=&type=` 回 `ReleaseResource`（`title`、`size`、`seeders`、`leechers`、`downloadUrl`、`magnetUrl`、`infoHash`、`indexer`、`categories`、`publishDate`、`guid`、`infoUrl`、`tmdbId` …）。Prowlarr 明言**不提供跨站聚合 Torznab**，單站 Torznab 為 `/{id}/api?t=search&apikey=`。
 - **`indexer/schema` 的第一次呼叫很慢**（2026-09-08 票 11 M0 驗收實測）：容器剛起來時它要把 627 份 Cardigann 定義從 `/config` 讀進來再組出 **5.6 MB** 的回應，Windows Docker Desktop 的 9p bind mount 上量到 **9.42 秒**；同一支端點第二次 0.34 秒。慢的儲存（NAS）只會更久，所以這一支必須有自己的逾時，不能沿用探測用的 5 秒。**未量測**：成因是冷容器從 `/config` 讀那 627 份定義，不是回應大小，所以同一時刻的 `config/host` 理論上也慢；它目前仍用 5 秒，沒有數據支持那樣安全。
 - API key 在 `config.xml` 的 `<ApiKey>`，可用 `PROWLARR__AUTH__APIKEY` 預設。
 - 支援的公開索引站含：Nyaa.si、dmhy、AniDex、Anime Tosho、ACG.RIP、**Mikan**、1337x、YTS、EZTV、The Pirate Bay；TorrentGalaxy 目前不在清單。
@@ -1140,6 +1140,15 @@ M1.5 拆票前的四條待決，2026-09-15 已全數照推薦拍板（上表「M
   `animetosho-xyz` 連不上、`1337x` 與 `eztv` 被 CloudFlare 擋）。**幾個公開站連不上是常態**，UI 因此逐站顯示而不是整批成敗。
   另外：容器預設的憑證驗證會擋下 TLS 被攔截的環境（`config/host.certificateValidation`），那是使用者
   環境的事，Berth 不改它。
+- **每個定義帶 `language` 與 `description`**（2026-09-24 / 09-25 在 Prowlarr 2.5.2.5491 實測，OpenAPI 的
+  `IndexerResource` 兩者皆為 nullable string）：`language` 是 BCP 47（dmhy `zh-TW`、ACG.RIP / Mikan `zh-CN`、
+  其餘 `en-US`），`description` 是一句英文（「dmhy is a TAIWANESE Public magnet tracker for ANIME」）。
+- **AniDex 的定義還在、站連不上**（2026-09-25 實測，票 06e）：`Anidex` 是 C# 內建實作，2.5.2.5491 的
+  schema 照樣有它；拿它去 `indexer/test` 回 `Unable to connect to indexer ... [502:BadGateway]`，anidex.info
+  直接打也是 502（09-08 那一輪也連不上）。預設清單因此拿掉它，理由是站掛了，不是定義消失。
+- **空白查詢回各站最新的發佈**（2026-09-25 實測）：`GET /api/v1/search?query=&indexerIds=<id>&type=search`
+  對 dmhy 回 80 筆、YTS 96 筆，各約 1.3 秒。精靈的試搜（票 06e）以它當預設：不必先想一個標題也證明得了
+  那一站回得出東西。`indexerIds` 限定那一站，逐站各發一個才分得出哪一站失敗。
 - **TMDB 的兩種憑證都打得動 v3 端點**：v4 的 read access token 走 `Authorization: Bearer`（官方建議、
   不進網址），v3 的 32 字元 API key 走 `?api_key=`；key 不對回 401。Berth 認憑證的**形狀**，
   所以使用者貼哪一種都成立。

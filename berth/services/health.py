@@ -51,6 +51,7 @@ from berth.services.qbittorrent import drifted_keys
 from berth.services.routes import RouteView, check_routes, read_route_status, routes_health
 from berth.services.settings import read_settings, write_settings
 from berth.services.steps import message
+from berth.services.tmdb import tmdb_verified
 
 logger = logging.getLogger(__name__)
 
@@ -128,6 +129,9 @@ class HealthReport:
     #: 第四項：所有 Route 的總結。一條都沒有是 `unknown`。
     routes_status: HealthStatus
     poller: PollerView
+    #: 精靈第 7 步的 TMDB 憑證測過了沒（票 06e：健康頁的泊位板有 TMDB 那一格）。**不是第五項
+    #: 檢查**：不連 TMDB，讀的是那一次測試的結果——健康頁要看的是繫著沒，不是額度。
+    tmdb_verified: bool
 
 
 async def read_health(session: AsyncSession) -> HealthReport:
@@ -151,6 +155,7 @@ async def read_health(session: AsyncSession) -> HealthReport:
         routes=(await read_route_status(session)).routes,
         routes_status=health.routes,
         poller=await _poller(session),
+        tmdb_verified=tmdb_verified(setup),
     )
 
 

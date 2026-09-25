@@ -2137,12 +2137,49 @@ async def test_prowlarr_schema_carries_the_ten_default_indexers() -> None:
     finally:
         await client.aclose()
 
-    assert [row.definition_name for row in definitions] == list(DEFAULT_INDEXERS)
     by_name = {row.definition_name: row for row in definitions}
+    assert set(DEFAULT_INDEXERS) <= set(by_name)
     assert by_name["nyaasi"].name == "Nyaa.si"
     assert by_name["nyaasi"].privacy == "public"
     # Anime Tosho 是唯一不是 public 的那一個，勾選清單靠這個欄位標示出來。
     assert by_name["animetosho-xyz"].privacy == "semiPrivate"
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_prowlarr_schema_says_what_language_each_site_speaks() -> None:
+    """勾選清單每一列說出那個站的語言與一句說明（票 06e）。
+
+    語言是 BCP 47 代碼，畫面照 UI 語言換成語言名；說明是英文原文，不翻。
+    """
+    respx.get(f"{PROWLARR_URL}/api/v1/indexer/schema").respond(
+        200, text=read_fixture("http/prowlarr/indexer-schema.defaults.json")
+    )
+
+    client = HttpProwlarrClient(PROWLARR_URL, "key")
+    try:
+        by_name = {row.definition_name: row for row in await client.definitions()}
+    finally:
+        await client.aclose()
+
+    assert (by_name["dmhy"].language, by_name["acgrip"].language) == ("zh-TW", "zh-CN")
+    assert by_name["yts"].language == "en-US"
+    assert by_name["dmhy"].description == "dmhy is a TAIWANESE Public magnet tracker for ANIME"
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_prowlarr_removes_an_indexer_by_id() -> None:
+    """`DELETE /api/v1/indexer/{id}` 回 200（Prowlarr 的 OpenAPI，票 06e）。"""
+    route = respx.delete(f"{PROWLARR_URL}/api/v1/indexer/6").respond(200)
+
+    client = HttpProwlarrClient(PROWLARR_URL, "key")
+    try:
+        await client.delete_indexer(6)
+    finally:
+        await client.aclose()
+
+    assert route.called
 
 
 @respx.mock

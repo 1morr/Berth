@@ -54,7 +54,11 @@ class ProwlarrSearch:
             await self._session.request(
                 "GET",
                 "/api/v1/search",
-                params={"query": query.text, "type": "search"},
+                params={
+                    "query": query.text,
+                    "type": "search",
+                    "indexerIds": [str(each) for each in query.indexer_ids],
+                },
             )
         )
         if not isinstance(payload, list):

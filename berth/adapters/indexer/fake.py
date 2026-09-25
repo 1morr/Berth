@@ -22,6 +22,8 @@ class FakeIndexerSearch:
         capability: SearchCapability | None = None,
         error: Exception | None = None,
         errors: Mapping[str, Exception] | None = None,
+        by_indexer: Mapping[int, Sequence[IndexerResult]] | None = None,
+        indexer_errors: Mapping[int, Exception] | None = None,
     ) -> None:
         self.base_url = base_url
         self._results = tuple(results)
@@ -31,6 +33,10 @@ class FakeIndexerSearch:
         self.error = error
         #: 逐查詢的失敗。單一查詢垮掉不該把整次搜尋一起拖下水（票 08 驗收）。
         self._errors = dict(errors or {})
+        #: 逐站的回答與失敗（`SearchQuery.indexer_ids` 只有一個 id 時看它）。精靈的試搜逐站問，
+        #: 要驗的正是「一站失敗不影響其他站」（票 06e）。
+        self._by_indexer = {key: tuple(value) for key, value in (by_indexer or {}).items()}
+        self._indexer_errors = dict(indexer_errors or {})
         #: 收到過的查詢，順序即呼叫順序。
         self.queries: list[SearchQuery] = []
         self.closed = False
@@ -47,6 +53,12 @@ class FakeIndexerSearch:
         failure = self._errors.get(query.text)
         if failure is not None:
             raise failure
+        if len(query.indexer_ids) == 1:
+            (site,) = query.indexer_ids
+            if site in self._indexer_errors:
+                raise self._indexer_errors[site]
+            if site in self._by_indexer:
+                return self._by_indexer[site]
         return self._by_query.get(query.text, self._results)
 
     async def aclose(self) -> None:

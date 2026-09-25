@@ -67,6 +67,8 @@ class HttpProwlarrClient:
                 name=str(row.get("name", "")),
                 privacy=str(row.get("privacy", "")),
                 payload=row,
+                language=str(row.get("language") or ""),
+                description=str(row.get("description") or ""),
             )
             for row in payload
             if isinstance(row, dict) and row.get("definitionName")
@@ -103,6 +105,9 @@ class HttpProwlarrClient:
             raise IndexerRejectedError(
                 f"test {indexer.name}", messages=_reasons(json_body(response))
             )
+
+    async def delete_indexer(self, indexer_id: int) -> None:
+        await self._session.request("DELETE", f"/api/v1/indexer/{indexer_id}")
 
     async def host_config(self) -> Mapping[str, Any]:
         payload = json_body(await self._session.get("/api/v1/config/host"))

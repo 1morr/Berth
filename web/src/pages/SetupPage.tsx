@@ -19,7 +19,9 @@ import {
   indexerSetupQueryOptions,
   jellyfinSetupQueryOptions,
   qbittorrentSetupQueryOptions,
+  removeIndexer,
   routeSetupQueryOptions,
+  searchIndexers,
   setupStatusQueryOptions,
   skipIndexers,
   testTmdb,
@@ -40,14 +42,15 @@ import { BERTHS } from '../components/berths'
 import { LanguageToggle } from '../components/LanguageToggle'
 import { AdminStep } from '../setup/AdminStep'
 import { BerthBoard, type BerthSignals } from '../setup/BerthBoard'
-import { BerthNav, RevisitNote, type RevisitPage } from '../setup/BerthNav'
+import { BerthNav, RevisitNote } from '../setup/BerthNav'
 import { CompleteStep, type CompleteFailure } from '../setup/CompleteStep'
 import { DetectStep } from '../setup/DetectStep'
+import { IndexerStep } from '../setup/IndexerStep'
 import { JellyfinStep } from '../setup/JellyfinStep'
 import { RedetectButton } from '../setup/MooringLine'
 import { QbittorrentStep } from '../setup/QbittorrentStep'
 import { RouteStep } from '../setup/RouteStep'
-import { SourceStep } from '../setup/SourceStep'
+import { TmdbStep } from '../setup/TmdbStep'
 import {
   BERTH_STEP,
   STEP,
@@ -74,16 +77,6 @@ const POLL_INTERVAL_MS = 3000
  * 所以請求還在飛的時候讀 `GET /setup/jellyfin` 就看得到序列走到哪裡。
  */
 const PROGRESS_INTERVAL_MS = 1500
-
-/** 做完了、回頭看時那一頁說出能改什麼（`RevisitNote`）。前置的第 1 步由它自己的 lede 說。 */
-const REVISIT_PAGE: Partial<Record<number, RevisitPage>> = {
-  [STEP.detect]: 'detect',
-  [STEP.jellyfin]: 'jellyfin',
-  [STEP.qbittorrent]: 'qbittorrent',
-  [STEP.routes]: 'routes',
-  [STEP.indexer]: 'source',
-  [STEP.tmdb]: 'source',
-}
 
 /**
  * 設定精靈。方向見 `.impeccable/surfaces/web-src-pages-setuppage-tsx.md`：
@@ -219,6 +212,13 @@ export function SetupPage({
     onMutate: hold,
     onSuccess: (next) => absorbBerth(indexerSetupQueryOptions.queryKey, next),
   })
+  // 試搜只讀、不改後端的步驟，所以不釘畫面；移除最後一站會讓後端退回第 6 步，照樣停在這一頁。
+  const trialSearch = useMutation({ mutationFn: searchIndexers })
+  const removeSite = useMutation({
+    mutationFn: removeIndexer,
+    onMutate: hold,
+    onSuccess: (next) => absorbBerth(indexerSetupQueryOptions.queryKey, next),
+  })
   const tmdbTest = useMutation({
     mutationFn: testTmdb,
     onMutate: hold,
@@ -259,7 +259,7 @@ export function SetupPage({
   // 泊位板要畫得出走過的每一格，所以這三份跟著後端走到哪裡，不跟著畫面停在哪裡。
   const routes = useQuery({ ...routeSetupQueryOptions, enabled: backend >= STEP.routes })
   const indexers = useQuery({ ...indexerSetupQueryOptions, enabled: backend >= STEP.indexer })
-  const tmdb = useQuery({ ...tmdbSetupQueryOptions, enabled: backend >= STEP.indexer })
+  const tmdb = useQuery({ ...tmdbSetupQueryOptions, enabled: backend >= STEP.tmdb })
 
   // 服務還在啟動就繼續探，直到有結論或後端判逾時（plan §9.3 第 2 步）。
   useEffect(() => {
@@ -297,8 +297,7 @@ export function SetupPage({
       onNext={next !== null && advanced(step, backend) ? () => goTo(next) : undefined}
     />
   )
-  const revisitPage = REVISIT_PAGE[step]
-  const note = revisitPage && advanced(step, backend) ? <RevisitNote page={revisitPage} /> : null
+  const note = advanced(step, backend) ? <RevisitNote step={step} /> : null
   // 手動接好的服務後端不重探（它不在 compose 主機名上），給它這顆鍵等於一顆按了沒反應的鍵——
   // 那種服務改位址或帳密在第 2 步的連線表單上。
   const redetectButton = (kind: ServiceKind) =>
@@ -315,12 +314,18 @@ export function SetupPage({
     backend,
     revisited,
     status: current,
+    indexers: indexers.data,
     tmdb: tmdb.data,
     signals: {
       jellyfin: jellyfinSignal(current, jellyfin.data, inFlight),
       qbittorrent: qbittorrentSignal(current, qbittorrent.data, applyPreferences.isPending),
-      prowlarr: sourceSignal(current, indexers.data, tmdb.data, applySites.isPending),
       library: librarySignal(current, routes.data, build.isPending),
+      prowlarr: indexerSignal(
+        current,
+        indexers.data,
+        applySites.isPending || connectSource.isPending || removeSite.isPending,
+      ),
+      tmdb: tmdbSignal(current, tmdb.data, tmdbTest.isPending),
     } satisfies BerthSignals,
     onGo: goTo,
     onReturn: () => setPinned(null),
@@ -429,27 +434,41 @@ export function SetupPage({
         ) : (
           <Waiting failed={routes.isError} message={t('routes.unreachable')} nav={nav} />
         )
-      ) : indexers.data && tmdb.data ? (
-        <SourceStep
-          indexers={indexers.data}
+      ) : step === STEP.indexer ? (
+        indexers.data ? (
+          <IndexerStep
+            indexers={indexers.data}
+            applying={applySites.isPending}
+            connecting={connectSource.isPending}
+            onApply={(selected) => applySites.mutate(selected)}
+            onConnect={(input) => connectSource.mutate(input)}
+            onSkip={() => skipSites.mutate()}
+            trial={{
+              result: trialSearch.data,
+              searching: trialSearch.isPending,
+              failed: trialSearch.isError,
+              onSearch: (query) => trialSearch.mutate(query),
+              removing: removeSite.isPending ? removeSite.variables : null,
+              removeFailed: removeSite.isError,
+              onRemove: (id) => removeSite.mutate(id),
+            }}
+            note={note}
+            nav={nav}
+            redetect={redetectButton('prowlarr')}
+          />
+        ) : (
+          <Waiting failed={indexers.isError} message={t('indexer.unreachable')} nav={nav} />
+        )
+      ) : tmdb.data ? (
+        <TmdbStep
           tmdb={tmdb.data}
-          applying={applySites.isPending}
-          connecting={connectSource.isPending}
-          testingTmdb={tmdbTest.isPending}
-          onApply={(selected) => applySites.mutate(selected)}
-          onConnect={(input) => connectSource.mutate(input)}
-          onSkipIndexers={() => skipSites.mutate()}
-          onTestTmdb={(apiKey) => tmdbTest.mutate(apiKey)}
+          testing={tmdbTest.isPending}
+          onTest={(apiKey) => tmdbTest.mutate(apiKey)}
           note={note}
           nav={nav}
-          redetect={redetectButton('prowlarr')}
         />
       ) : (
-        <Waiting
-          failed={indexers.isError || tmdb.isError}
-          message={t('source.unreachable')}
-          nav={nav}
-        />
+        <Waiting failed={tmdb.isError} message={t('tmdbStep.unreachable')} nav={nav} />
       )}
     </Shell>
   )
@@ -509,23 +528,33 @@ function qbittorrentSignal(
 }
 
 /**
- * 「來源」那一格的信號。索引站逐站失敗**不算阻擋**：十個公開站裡有幾個連不上是常態，
- * 只要接上了一個就走得下去（後端的步驟判定用的是同一條規則）。TMDB 那一半沒有這個寬容——
- * 它是閘門，綠燈由後端的 `verified` 說了算（票 02b）。
+ * 索引站那一格的信號。逐站失敗**不算阻擋**：公開站裡有幾個連不上是常態，只要接上了一個
+ * 就走得下去（後端的步驟判定用的是同一條規則）。
  */
-function sourceSignal(
+function indexerSignal(
   status: SetupStatus,
   indexers: IndexerSetup | undefined,
-  tmdb: TmdbSetup | undefined,
-  applying: boolean,
+  busy: boolean,
 ): Signal {
   const detection = status.services.find((row) => row.kind === 'prowlarr')
-  if (applying) return 'working'
-  if (status.current_step > STEP.tmdb) return 'secured'
+  if (busy) return 'working'
+  if (status.current_step > STEP.indexer) return 'secured'
   const settled =
     (indexers?.skipped ?? false) || (indexers?.steps.some((row) => isSettled(row.status)) ?? false)
-  if (settled && tmdb?.verified) return 'secured'
+  if (settled) return 'secured'
   return signalOf(detection)
+}
+
+/**
+ * TMDB 那一格的信號。它是閘門，沒有索引站那種寬容：綠燈由後端的 `verified` 說了算（票 02b），
+ * 測過而不過是阻擋，走到了還沒測是待靠泊。
+ */
+function tmdbSignal(status: SetupStatus, tmdb: TmdbSetup | undefined, testing: boolean): Signal {
+  if (testing) return 'working'
+  if (tmdb?.verified) return 'secured'
+  if (tmdb?.steps.some((row) => row.status === 'failed')) return 'blocked'
+  if (status.current_step >= STEP.tmdb) return 'assigned'
+  return 'neutral'
 }
 
 /**
@@ -574,6 +603,7 @@ function Shell({
   backend = STEP.admin,
   status,
   signals,
+  indexers,
   tmdb,
   revisited = false,
   onGo,
@@ -586,7 +616,9 @@ function Shell({
   backend?: number
   status?: SetupStatus
   signals?: BerthSignals
-  /** 「來源」那一格的閘門那一半。第 7 步起才問得到，在那之前這一格說的是索引站。 */
+  /** 索引站那一格的詳情列（接上的是哪一種、幾站）。第 6 步起才問得到。 */
+  indexers?: IndexerSetup
+  /** TMDB 那一格的詳情列（憑證驗過了沒）。第 7 步起才問得到。 */
   tmdb?: TmdbSetup
   /**
    * 精靈已經跑完過。這時候它是設定入口而不是 onboarding，所以要有出口——
@@ -627,6 +659,7 @@ function Shell({
       <BerthBoard
         services={status?.services ?? []}
         signals={signals}
+        indexers={indexers}
         tmdb={tmdb}
         current={code}
         reachable={onGo && ((slot) => reachable(BERTH_STEP[slot], backend))}

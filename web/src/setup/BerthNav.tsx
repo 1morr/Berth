@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next'
 
 import { STICKY_ACTION, GhostButton, PrimaryButton } from '../components/controls'
+import { STEP } from './navigation'
 
 /**
  * 每一頁工作面底部的「上一個泊位 / 前往下一個泊位」（票 06d）。
@@ -37,27 +38,37 @@ export function BerthNav({ onPrevious, onNext }: { onPrevious?: () => void; onNe
   )
 }
 
-/** 回頭看的那一頁說出能改什麼、不能改的去哪裡改。查表：動態組 key 過不了 `strictKeyChecks`。 */
+/**
+ * 回頭看的那一步說出能改什麼、不能改的去哪裡改，以步驟號查（票 06e 把原本「步驟 → 頁名 → 字」
+ * 兩張表收成這一張）。查表：動態組 key 過不了 `strictKeyChecks`。前置的第 1 步由它自己的 lede 說。
+ */
 const REVISIT = {
-  detect: { can: 'setup.revisit.detect.can', elsewhere: 'setup.revisit.detect.elsewhere' },
-  jellyfin: { can: 'setup.revisit.jellyfin.can', elsewhere: 'setup.revisit.jellyfin.elsewhere' },
-  qbittorrent: {
+  [STEP.detect]: { can: 'setup.revisit.detect.can', elsewhere: 'setup.revisit.detect.elsewhere' },
+  [STEP.jellyfin]: {
+    can: 'setup.revisit.jellyfin.can',
+    elsewhere: 'setup.revisit.jellyfin.elsewhere',
+  },
+  [STEP.qbittorrent]: {
     can: 'setup.revisit.qbittorrent.can',
     elsewhere: 'setup.revisit.qbittorrent.elsewhere',
   },
-  routes: { can: 'setup.revisit.routes.can', elsewhere: 'setup.revisit.routes.elsewhere' },
-  source: { can: 'setup.revisit.source.can', elsewhere: 'setup.revisit.source.elsewhere' },
+  [STEP.routes]: { can: 'setup.revisit.routes.can', elsewhere: 'setup.revisit.routes.elsewhere' },
+  [STEP.indexer]: {
+    can: 'setup.revisit.indexer.can',
+    elsewhere: 'setup.revisit.indexer.elsewhere',
+  },
+  [STEP.tmdb]: { can: 'setup.revisit.tmdb.can', elsewhere: 'setup.revisit.tmdb.elsewhere' },
 } as const
-
-export type RevisitPage = keyof typeof REVISIT
 
 /**
  * 回頭看的說明（票 06d）：每一步都是冪等命令，回頭照樣重跑；這一格做不到的事去哪裡做。
  * 只在這一頁已經做完（後端過了它）時出現——目前這一步要做的事，lede 已經說了。
+ * 沒有說明的步驟（第 1 步、完成頁）什麼都不畫。
  */
-export function RevisitNote({ page }: { page: RevisitPage }) {
+export function RevisitNote({ step }: { step: number }) {
   const { t } = useTranslation()
-  const words = REVISIT[page]
+  const words = (REVISIT as Partial<Record<number, (typeof REVISIT)[keyof typeof REVISIT]>>)[step]
+  if (!words) return null
 
   return (
     <div

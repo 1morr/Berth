@@ -230,7 +230,7 @@ components:
 
 Berth 的介面是一塊船席調度板，不是儀表板也不是表單流程。碼頭的調度板用最少的材料回答一個問題——
 哪一格出事了——靠的是塗滿整格的漆、壓過整幅的重橫線、對得齊的等寬編號，以及 ISO 6346 貨櫃標識那種
-模板噴字。Berth 的泊位（Jellyfin / qBittorrent / 媒體庫路徑 / 來源）在精靈與健康頁上是同一塊板：
+模板噴字。Berth 的泊位（Jellyfin / qBittorrent / 媒體庫路徑 / 索引站 / TMDB）在精靈與健康頁上是同一塊板：
 精靈問「接上了沒」，健康頁問「還繫著嗎」，位置與意義完全不變。
 
 底色是鋼灰藍船體而不是近黑：`--color-hull` 的註釋寫明這是刻意迴避「近黑加單一霓虹」那種類別預設。
@@ -292,7 +292,7 @@ primary、uptime 儀表板的折線圖與綠色勾勾牆、訊息塊左緣的粗
 `assigned` 需要你、`working` 進行中、`secured` 已繫上、`blocked` 阻擋。新的語意要嘛映射到這四個之一，
 要嘛用中性色。紅色永遠只代表阻擋。
 
-**The Triple Encoding Rule（三重編碼）。** 任何狀態都同時由色塊、模板字標籤與位置（泊位號 `BTH 1`–`BTH 4`）
+**The Triple Encoding Rule（三重編碼）。** 任何狀態都同時由色塊、模板字標籤與位置（泊位號 `BTH 1`–`BTH 5`）
 表達。審計測試：把畫面轉成灰階，狀態仍然讀得出來，否則這個狀態沒做完。
 
 **The Paint Doesn't Swap Rule（漆不換色）。** 四個信號色與 `on-signal` 在深淺兩主題**共用同一組值**：
@@ -367,9 +367,9 @@ primary、uptime 儀表板的折線圖與綠色勾勾牆、訊息塊左緣的粗
 頁首之前有一條 skip link（平常 `sr-only`，拿到焦點才以 `deck` 底 + `rule-strong` 框浮在左上角），
 跳到 `main#main`（`tabIndex={-1}`，焦點真的落在內容上，下一個 Tab 才從內容開始）。
 
-**泊位板橫幅。** 四格等寬，格與格之間是 1px `gap-px`（底色 `rule-strong` 透出來當線，不是 border）。
-窄螢幕 `grid-cols-2`（2×2），`sm`（640px）以上 `grid-cols-4` 一列四格。欄數寫死，因為泊位就是那幾個。
-格數是奇數時最後一格橫跨整列（窄版 `col-span-2`；票 06d 的 shape：票 06e 的 5 格排成 2+2+1），不留一個空洞。
+**泊位板橫幅。** 五格等寬，格與格之間是 1px `gap-px`（底色 `rule-strong` 透出來當線，不是 border）。
+窄螢幕 `grid-cols-2`（2+2+1），`sm`（640px）以上 `grid-cols-5` 一列五格。欄數寫死，因為泊位就是那幾個。
+格數是奇數時最後一格橫跨整列（窄版 `col-span-2`；票 06d 的 shape），不留一個空洞。
 目前的那一格用 `aria-current="step"` 與一條 `inset 0 -3px currentColor` 的底線標出來——用 `currentColor`
 而不是第五個顏色，因為四塊漆上的字色本來就是為了在那塊漆上讀得出來而選的。
 
@@ -411,8 +411,8 @@ flex / grid 子項的最小寬度，一串沒有空格的發佈名在 390px 上�
 
 ### Named Rules
 
-**The Board Never Scrolls Rule（板不捲動）。** 泊位板永遠四格全在畫面內：窄版 2×2，桌機一列四格。
-不做橫向捲動的 carousel——BTH 3 與 BTH 4 捲到畫面外時，「一眼看出哪一格紅了」這塊板存在的理由就沒了，
+**The Board Never Scrolls Rule（板不捲動）。** 泊位板永遠五格全在畫面內：窄版 2+2+1，桌機一列五格。
+不做橫向捲動的 carousel——後面幾格捲到畫面外時，「一眼看出哪一格紅了」這塊板存在的理由就沒了，
 而且捲動容器會變成一個沒有名字的 Tab 停留點。
 
 **The Values Sit On Their Line Rule（值貼在它那一行）。** 實測值、端點、鍵名貼在它所屬的那一列，
@@ -596,9 +596,9 @@ hover 與焦點也是同一個語彙（牆卡片、Ghost 按鈕、導覽方塊�
 
 ### 泊位板（`BerthBoard`，署名元件）
 
-四格等寬的整寬橫幅，是整個系統的識別。每格四行：泊位碼（`BTH 1`，`.value` 且不走 i18n——
+五格等寬的整寬橫幅，是整個系統的識別。每格四行：泊位碼（`BTH 1`，`.value` 且不走 i18n——
 ISO 6346 標識在哪個語言都是同一串字母數字）、狀態標籤（`.label`）、服務名（`.value` 1rem）、
-實測值那一行（沒有值時留一條 `—`，四格高度才不會跳）。`filled === false` 的格子留在 `well` 中性底上
+實測值那一行（沒有值時留一條 `—`，每一格高度才不會跳）。`filled === false` 的格子留在 `well` 中性底上
 表示「還沒有任何結果」。精靈與健康頁共用同一個元件與同一份 `BERTHS`：兩邊講的是同一組泊位，
 各寫一份遲早會分岔。
 
@@ -617,7 +617,7 @@ ISO 6346 標識在哪個語言都是同一串字母數字）、狀態標籤（`.
 
 一條纜繩是一個步驟：狀態色塊 + `.label` 狀態字 + 名稱 + 實測值 + 它打的那支端點（靠右、`ink-dim`）。
 失敗時整列邊框換 `rule-strong`，下方就地展開 `role="alert"` 的服務原文、修正說明與 `CopyLine` 指令，
-其餘已繫上的纜繩不動。精靈第 7 步與健康頁跑的是同一組檢查、用同一個元件，所以
+其餘已繫上的纜繩不動。精靈第 5 步與健康頁跑的是同一組檢查、用同一個元件，所以
 「精靈當時是綠的、現在紅了」在畫面上是同一種東西。搜尋 torrent 時每個關鍵字也是一條纜繩。
 
 ### 牆卡片（`MediaTile` / `InventoryTile`，底行外框 `Tile`）
@@ -893,7 +893,7 @@ The Focus Follows The Confirm Rule。**外殼只有一份（`ConfirmPanel`），
   `border-b-2 border-rule-strong`（The Rule-Line Rule）。
 - **Do** 讓失敗在它自己那一列就地展開服務回的原文、修正說明與可複製指令。
 - **Do** 讓新增的互動元件被全域 `:focus-visible` 選擇器涵蓋（含 `summary`），並保持 24px 的命中/間距底線。
-- **Do** 在窄版把泊位板排成 2×2，讓四格同時在畫面內（The Board Never Scrolls Rule）。
+- **Do** 在窄版把泊位板排成 2+2+1，讓五格同時在畫面內（The Board Never Scrolls Rule）。
 - **Do** 讓長字串換行，不橫向捲動、不截斷：機器字串用 `wrap-anywhere`，散文用 `break-words`，
   flex / grid 子項加 `min-w-0`。`web/src/wrapping.test.ts` 守著「`.value` 不配 `break-words`、
   任何地方不用 `break-all`」這兩條。
@@ -922,7 +922,7 @@ The Focus Follows The Confirm Rule。**外殼只有一份（`ConfirmPanel`），
 - **Don't** 加應用內的主題切換鍵：深色是預設，亮色跟隨 `prefers-color-scheme`。
 - **Don't** 用字元當裝飾標記（`▸`、`•`、emoji）——它們會被算進無障礙名稱。要標記就用 CSS 畫。
 - **Don't** 把色塊或文字直接疊在海報之類的圖像上（The Paint Needs A Painted Ground Rule）。
-- **Don't** 把整塊網格塗成 `rule` 再靠 `gap-px` 透出格線，除非格數是固定的。泊位板可以（永遠四格），
+- **Don't** 把整塊網格塗成 `rule` 再靠 `gap-px` 透出格線，除非格數是固定的。泊位板可以（永遠五格），
   卡片牆不行——最後一排沒填滿時，空欄會變成一塊灰色的板子（票 03 實跑）。線交給每一格自己的 `border-2`。
 - **Don't** 引入 webfont 或對外部字型服務發請求；離線可用是自架應用的底線。
 - **Don't** 用 `break-all`：它會在英文詞中間斷行（`(S` / `TEP 4)`）。

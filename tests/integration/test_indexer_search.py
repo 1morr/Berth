@@ -118,6 +118,25 @@ TORZNAB_URL = "http://prowlarr:9696/2/api"
 
 @respx.mock
 @pytest.mark.asyncio
+async def test_prowlarr_search_asks_only_the_sites_it_is_given() -> None:
+    """試搜逐站問（票 06e）：`indexerIds` 限定那一站，一站失敗才不會拖垮其他站。"""
+    route = respx.get(f"{PROWLARR_URL}/api/v1/search").respond(
+        200, text=read_fixture("http/prowlarr/search.no-results.json")
+    )
+
+    search = ProwlarrSearch(PROWLARR_URL, API_KEY)
+    try:
+        await search.search(SearchQuery(text="", indexer_ids=(3,)))
+    finally:
+        await search.aclose()
+
+    params = route.calls.last.request.url.params
+    assert params.get_list("indexerIds") == ["3"]
+    assert params["query"] == ""
+
+
+@respx.mock
+@pytest.mark.asyncio
 async def test_torznab_search_reads_the_same_columns_from_xml() -> None:
     """同一張結果表，換一個協定填。錄自 Prowlarr 的單站 Torznab 網址。"""
     route = respx.get(TORZNAB_URL).respond(200, text=read_fixture("http/torznab/search.acgrip.xml"))

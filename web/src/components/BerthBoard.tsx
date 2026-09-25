@@ -7,7 +7,7 @@ import { SIGNAL_FILL, type Signal } from './signal'
  *
  * 狀態三重編碼——色塊 + 模板字標籤 + 泊位號，不看顏色也讀得出來。格子裡的每個字都是資訊。
  *
- * **精靈與健康頁是同一塊板**：那幾個泊位（Jellyfin / qBittorrent / 媒體庫路徑 / 來源）
+ * **精靈與健康頁是同一塊板**：那五個泊位（Jellyfin / qBittorrent / 媒體庫路徑 / 索引站 / TMDB）
  * 是同一組東西，精靈問「接上了沒」，健康頁問「還繫著嗎」。所以這裡只有版面，一格裡要
  * 寫什麼由呼叫端決定。
  */
@@ -47,11 +47,11 @@ export function BerthBoard({
   return (
     <section aria-label={label} className="border-b-2 border-rule-strong bg-hull">
       {/* 窄版兩欄、桌機一列等寬（shape brief）。格數是奇數時最後一格橫跨整列，
-          不留一個空洞（票 06d 的 shape：5 格排成 2+2+1）。
+          不留一個空洞（票 06d 的 shape：5 格在窄版排成 2+2+1，640 以上一列五格）。
           **不是** carousel：橫向捲動時後面幾格整個在畫面外，而「一眼看出哪一格
           紅了」正是這塊板存在的理由；捲動容器還會變成一個沒有名字的 Tab 停留點。
-          欄數寫死：Tailwind 看不見組出來的類名。 */}
-      <ul className="grid grid-cols-2 gap-px bg-rule-strong sm:grid-cols-4 [&>li:last-child:nth-child(odd)]:col-span-2 sm:[&>li:last-child:nth-child(odd)]:col-span-1">
+          欄數寫死：泊位就是那五個（`components/berths.ts`），而 Tailwind 看不見組出來的類名。 */}
+      <ul className="grid grid-cols-2 gap-px bg-rule-strong sm:grid-cols-5 [&>li:last-child:nth-child(odd)]:col-span-2 sm:[&>li:last-child:nth-child(odd)]:col-span-1">
         {slots.map((slot) => {
           const here = slot.code === current
           const paint = `${

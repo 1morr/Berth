@@ -4,8 +4,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { stubApi } from '../test/fetch'
 import { renderWithProviders } from '../test/render'
+import type { SiteSearch } from '../api/setup'
 import {
   ALL_BUNDLED,
+  DEFAULT_OPTIONS,
+  added,
   detection,
   indexerSetup,
   qbittorrentSetup,
@@ -26,6 +29,8 @@ const INDEXERS = 'GET /api/setup/indexers'
 const ADD_INDEXERS = 'POST /api/setup/indexers/apply'
 const CONNECT_INDEXER = 'POST /api/setup/indexers/connect'
 const SKIP_INDEXERS = 'POST /api/setup/indexers/skip'
+const SEARCH = 'GET /api/setup/indexers/search'
+const REMOVE_YTS = 'DELETE /api/setup/indexers/3'
 const TMDB = 'GET /api/setup/tmdb'
 const TEST_TMDB = 'POST /api/setup/tmdb/test'
 
@@ -37,8 +42,26 @@ const AT_BERTH_TWO = setupStatus({
   services: ALL_BUNDLED,
 })
 
-/** 媒體庫路徑也接好了，精靈在「來源」（第 6 步，票 06d 之後是泊位 4）。 */
-const AT_SOURCE = setupStatus({ ...AT_BERTH_TWO, current_step: 6 })
+/** 媒體庫路徑也接好了，精靈在索引站（第 6 步，泊位 4）。 */
+const AT_INDEXER = setupStatus({ ...AT_BERTH_TWO, current_step: 6 })
+
+/** 同一步，但 Prowlarr 是使用者自己的那一台。 */
+const AT_EXISTING_INDEXER = setupStatus({
+  ...AT_INDEXER,
+  services: [
+    ...ALL_BUNDLED.slice(0, 2),
+    detection({
+      kind: 'prowlarr',
+      origin: 'existing',
+      reason: 'has_indexers',
+      detail: '3',
+      base_url: 'http://nas:9696',
+    }),
+  ],
+})
+
+/** 索引站有結論了，精靈在 TMDB（第 7 步，泊位 5；票 06e 拆出來的那一格）。 */
+const AT_TMDB = setupStatus({ ...AT_BERTH_TWO, current_step: 7 })
 
 describe('泊位 2：qBittorrent', () => {
   it('剖面在按之前就逐鍵列出現值與建議值', async () => {
@@ -170,30 +193,57 @@ describe('設定跑完之後再進來', () => {
       await screen.findByRole('heading', { name: '套用建議的 qBittorrent 設定' }),
     ).toBeVisible()
   })
-})
 
-describe('泊位 4：來源', () => {
-  it('十個預設站預設全勾，按鈕說得出會加幾個', async () => {
+  it('深連結 ?berth=5 停在 TMDB：探索頁「憑證缺失」連過來的就是這一格（票 06e）', async () => {
     stubApi({
-      [STATUS]: { body: AT_SOURCE },
+      [STATUS]: {
+        body: setupStatus({ current_step: 8, admin_created: true, services: ALL_BUNDLED }),
+      },
       [INDEXERS]: { body: indexerSetup() },
       [TMDB]: { body: tmdbSetup() },
     })
+
+    renderWithProviders(<SetupPage berth={5} />)
+
+    expect(await screen.findByLabelText('你的 TMDB API key')).toBeVisible()
+    expect(screen.queryByText('要加入哪些站')).not.toBeInTheDocument()
+  })
+})
+
+describe('泊位 4：索引站', () => {
+  it('預設站預設全勾，按鈕說得出會加幾個', async () => {
+    stubApi({ [STATUS]: { body: AT_INDEXER }, [INDEXERS]: { body: indexerSetup() } })
 
     renderWithProviders(<SetupPage />)
 
     const picks = (await screen.findByText('要加入哪些站')).closest('fieldset')!
     const boxes = within(picks).getAllByRole('checkbox')
-    expect(boxes).toHaveLength(10)
+    expect(boxes).toHaveLength(9)
     expect(boxes.every((box) => (box as HTMLInputElement).checked)).toBe(true)
-    expect(screen.getByRole('button', { name: '加入這 10 個站' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '加入這 9 個站' })).toBeInTheDocument()
+    // AniDex 不在預設清單裡（票 06e：anidex.info 從 09-08 起一直回 502）。
+    expect(within(picks).queryByLabelText('Anidex')).not.toBeInTheDocument()
+  })
+
+  it('每一站說出是什麼語言（照 UI 語言的名字）與一句原文說明', async () => {
+    stubApi({ [STATUS]: { body: AT_INDEXER }, [INDEXERS]: { body: indexerSetup() } })
+
+    renderWithProviders(<SetupPage />)
+
+    const dmhy = await screen.findByLabelText('dmhy')
+    expect(dmhy).toHaveAccessibleDescription(
+      '中文（台灣） · dmhy is a TAIWANESE Public magnet tracker for ANIME',
+    )
+    expect(screen.getByLabelText('Mikan')).toHaveAccessibleDescription('中文（中國）')
+    expect(screen.getByLabelText('Anime Tosho')).toHaveAccessibleDescription(
+      '英文（美國） · 半私有站，可能需要帳號',
+    )
   })
 
   it('取消勾選的站不會被送出去', async () => {
     const fetchStub = stubApi({
-      [STATUS]: { body: AT_SOURCE },
+      [STATUS]: { body: AT_INDEXER },
       [INDEXERS]: { body: indexerSetup() },
-      [TMDB]: { body: tmdbSetup() },
       [ADD_INDEXERS]: { body: indexerSetup({ steps: [step('nyaasi', 'ok')] }) },
     })
     const user = userEvent.setup()
@@ -201,7 +251,7 @@ describe('泊位 4：來源', () => {
     renderWithProviders(<SetupPage />)
     const picks = (await screen.findByText('要加入哪些站')).closest('fieldset')!
     await user.click(within(picks).getByLabelText('The Pirate Bay'))
-    await user.click(screen.getByRole('button', { name: '加入這 9 個站' }))
+    await user.click(screen.getByRole('button', { name: '加入這 8 個站' }))
 
     const call = fetchStub.mock.calls.find(([, init]) => init?.method === 'POST')!
     expect(JSON.parse(String(call[1]?.body)).indexers).not.toContain('thepiratebay')
@@ -210,7 +260,7 @@ describe('泊位 4：來源', () => {
 
   it('逐站顯示成敗：連不上的變紅並展開手動步驟，其餘照樣繫上', async () => {
     stubApi({
-      [STATUS]: { body: AT_SOURCE },
+      [STATUS]: { body: AT_INDEXER },
       [INDEXERS]: {
         body: indexerSetup({
           steps: [
@@ -224,7 +274,6 @@ describe('泊位 4：來源', () => {
           ],
         }),
       },
-      [TMDB]: { body: tmdbSetup() },
     })
 
     renderWithProviders(<SetupPage />)
@@ -238,32 +287,133 @@ describe('泊位 4：來源', () => {
     expect(within(sites).getByText('http://prowlarr:9696/#/indexers')).toBeInTheDocument()
   })
 
-  it('既有路徑可以填任意 Torznab 端點', async () => {
-    const fetchStub = stubApi({
+  it('探測到、還沒加站時，板上那一格說「Prowlarr · 尚未加入索引站」', async () => {
+    stubApi({ [STATUS]: { body: AT_INDEXER }, [INDEXERS]: { body: indexerSetup() } })
+
+    renderWithProviders(<SetupPage />)
+
+    const berth = within((await screen.findByText('BTH 4')).closest('li')!)
+    expect(berth.getByText('索引站')).toBeInTheDocument()
+    expect(await berth.findByText('Prowlarr · 尚未加入索引站')).toBeInTheDocument()
+  })
+
+  it('判定沒有站數時（例如缺 API key）那一格不說「尚未加入」，留破折號', async () => {
+    const missingKey = detection({
+      kind: 'prowlarr',
+      origin: 'existing',
+      reason: 'api_key_missing',
+      detail: '',
+      base_url: 'http://nas:9696',
+    })
+    stubApi({
       [STATUS]: {
-        body: setupStatus({
-          ...AT_SOURCE,
-          services: [
-            ...ALL_BUNDLED.slice(0, 2),
-            detection({
-              kind: 'prowlarr',
-              origin: 'existing',
-              reason: 'has_indexers',
-              detail: '3',
-              base_url: 'http://nas:9696',
-            }),
+        body: setupStatus({ ...AT_BERTH_TWO, services: [...ALL_BUNDLED.slice(0, 2), missingKey] }),
+      },
+    })
+
+    renderWithProviders(<SetupPage />)
+
+    const berth = within((await screen.findByText('BTH 4')).closest('li')!)
+    expect(berth.queryByText(/尚未加入索引站/)).not.toBeInTheDocument()
+    expect(berth.getByText('—')).toBeInTheDocument()
+  })
+
+  it('加完站之後那一格說出加了幾站', async () => {
+    stubApi({ [STATUS]: { body: AT_INDEXER }, [INDEXERS]: { body: withSites() } })
+
+    renderWithProviders(<SetupPage />)
+
+    const berth = within((await screen.findByText('BTH 4')).closest('li')!)
+    expect(await berth.findByText('Prowlarr · 3 個索引站')).toBeInTheDocument()
+  })
+
+  it('加入之後可以試搜：逐站列出筆數與前三筆標題，一站失敗不影響其他站', async () => {
+    const fetchStub = stubApi({
+      [STATUS]: { body: AT_INDEXER },
+      [INDEXERS]: { body: withSites() },
+      [`${SEARCH}?query=Frieren`]: {
+        body: {
+          query: 'Frieren',
+          error: '',
+          sites: [
+            siteSearch(1, 'dmhy', 12, ['[LoliHouse] Frieren - 28', 'b', 'c']),
+            siteSearch(2, 'Mikan', 0, [], 'GET /api/v1/search: 502 Bad Gateway'),
+            siteSearch(3, 'YTS', 0, []),
           ],
+        },
+      },
+    })
+    const user = userEvent.setup()
+
+    renderWithProviders(<SetupPage />)
+    const trial = within((await screen.findByRole('heading', { name: '試搜' })).closest('section')!)
+    // 還沒按之前，加進來的每一站都在清單上，說它還沒試搜。
+    expect(trial.getAllByText('還沒試搜')).toHaveLength(3)
+
+    await user.type(trial.getByLabelText('關鍵字'), 'Frieren')
+    await user.click(trial.getByRole('button', { name: '試搜' }))
+
+    const rows = within(await screen.findByTestId('trial'))
+    expect(await rows.findByText('12 筆')).toBeInTheDocument()
+    expect(rows.getByText('[LoliHouse] Frieren - 28')).toBeInTheDocument()
+    expect(rows.getByText('GET /api/v1/search: 502 Bad Gateway')).toBeInTheDocument()
+    expect(rows.getByText('0 筆')).toBeInTheDocument()
+    const call = fetchStub.mock.calls.find(([url]) => String(url).includes('/indexers/search'))!
+    expect(String(call[0])).toContain('query=Frieren')
+  })
+
+  it('每一站可以移除，就地確認之後才送出', async () => {
+    const fetchStub = stubApi({
+      [STATUS]: { body: AT_INDEXER },
+      [INDEXERS]: { body: withSites() },
+      [REMOVE_YTS]: {
+        body: indexerSetup({
+          options: DEFAULT_OPTIONS.map((row) =>
+            row.definition_name === 'dmhy'
+              ? added(row, 1)
+              : row.definition_name === 'mikan'
+                ? added(row, 2)
+                : row,
+          ),
         }),
       },
+    })
+    const user = userEvent.setup()
+
+    renderWithProviders(<SetupPage />)
+    const trial = await screen.findByTestId('trial')
+    const yts = within(within(trial).getByText('YTS').closest('li')!)
+    await user.click(yts.getByRole('button', { name: '移除' }))
+
+    // 第一下只展開確認，什麼都還沒送。
+    expect(fetchStub.mock.calls.some(([, init]) => init?.method === 'DELETE')).toBe(false)
+    expect(yts.getByText(/從 Prowlarr 移除 YTS/)).toBeInTheDocument()
+    await user.click(yts.getByRole('button', { name: '確定移除' }))
+
+    await waitFor(() => {
+      expect(within(screen.getByTestId('trial')).queryByText('YTS')).not.toBeInTheDocument()
+    })
+    const call = fetchStub.mock.calls.find(([, init]) => init?.method === 'DELETE')!
+    expect(String(call[0])).toMatch(/\/setup\/indexers\/3$/)
+    // 那一列連同觸發鍵一起消失：焦點落在接替那個位置的那一列，另有一行說結果（The Focus Takes The Next Row Rule）。
+    await waitFor(() => expect(document.activeElement).toHaveAccessibleName('Mikan'))
+    expect(screen.getByText('已從 Prowlarr 移除 YTS。')).toHaveClass('sr-only')
+  })
+
+  it('既有路徑可以填任意 Torznab 端點，接上之後照樣試搜，但沒有移除', async () => {
+    const connected = indexerSetup({
+      origin: 'existing',
+      kind: 'torznab',
+      base_url: 'http://jackett:9117/api',
+      options: [],
+      steps: [step('torznab', 'ok', 'Jackett · TV')],
+    })
+    const fetchStub = stubApi({
+      [STATUS]: { body: AT_EXISTING_INDEXER },
       [INDEXERS]: { body: indexerSetup({ origin: 'existing', base_url: '', options: [] }) },
-      [TMDB]: { body: tmdbSetup() },
-      [CONNECT_INDEXER]: {
-        body: indexerSetup({
-          origin: 'existing',
-          kind: 'torznab',
-          base_url: 'http://jackett:9117/api',
-          steps: [step('torznab', 'ok', 'Jackett · TV')],
-        }),
+      [CONNECT_INDEXER]: { body: connected },
+      [`${SEARCH}?query=`]: {
+        body: { query: '', error: '', sites: [siteSearch(null, 'jackett:9117', 4, ['x'])] },
       },
     })
     const user = userEvent.setup()
@@ -281,15 +431,22 @@ describe('泊位 4：來源', () => {
       api_key: 'the-key',
     })
     expect(await screen.findByText('Jackett · TV')).toBeInTheDocument()
+    // 板上那一格說出實際的那一種，不寫死 Prowlarr。
+    const berth = within(screen.getByText('BTH 4').closest('li')!)
+    expect(berth.getByText('Torznab · jackett:9117')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: '試搜' }))
+    const rows = within(await screen.findByTestId('trial'))
+    expect(await rows.findByText('4 筆')).toBeInTheDocument()
+    expect(rows.queryByRole('button', { name: '移除' })).not.toBeInTheDocument()
   })
 
   it('索引站可以之後再說，而且跳過之後畫面上看得出來', async () => {
     // 這一條原本只驗「請求送出去了」，於是「送出去了但畫面沒變」一直沒被抓到：
     // TMDB 那一節有徽章，索引站那一節沒有，按了像壞掉（票 11 的 critique）。
     const fetchStub = stubApi({
-      [STATUS]: { body: AT_SOURCE },
+      [STATUS]: { body: AT_INDEXER },
       [INDEXERS]: { body: indexerSetup() },
-      [TMDB]: { body: tmdbSetup() },
       [SKIP_INDEXERS]: { body: indexerSetup({ skipped: true }) },
     })
     const user = userEvent.setup()
@@ -297,10 +454,7 @@ describe('泊位 4：來源', () => {
     renderWithProviders(<SetupPage />)
     expect(screen.queryByTestId('indexers-deferred')).not.toBeInTheDocument()
 
-    // TMDB 那一節沒有「之後再說」——第 6 步是閘門（票 02b），所以這顆按鈕只有一個。
-    const skipButtons = await screen.findAllByRole('button', { name: '之後再說' })
-    expect(skipButtons).toHaveLength(1)
-    await user.click(skipButtons[0])
+    await user.click(await screen.findByRole('button', { name: '之後再說' }))
 
     await waitFor(() => {
       expect(fetchStub.mock.calls.some(([url]) => String(url).endsWith('/indexers/skip'))).toBe(
@@ -310,14 +464,46 @@ describe('泊位 4：來源', () => {
     expect(await screen.findByTestId('indexers-deferred')).toBeInTheDocument()
   })
 
-  it('沒填 key 就按下去會被欄位擋住，畫面說得出去哪裡拿一把', async () => {
-    // 第 6 步是閘門（票 02b）：第一次來的人手上還沒有 key，所以畫面要先說去哪裡申請。
-    // 按鈕**不停用**——票 11 的 critique 抓過「按不動的控制項讀起來像壞掉」。
-    const fetchStub = stubApi({
-      [STATUS]: { body: AT_SOURCE },
-      [INDEXERS]: { body: indexerSetup() },
-      [TMDB]: { body: tmdbSetup() },
+  /**
+   * 票 03 第 12 條。API key 與密碼同級：都是貼上去就不該留在畫面上的憑證。
+   * 遮起來之後仍然看得見——`PasswordField` 自己帶一顆「顯示」。
+   */
+  it('既有索引站的 API key 是遮著的，且看得見', async () => {
+    stubApi({
+      [STATUS]: { body: AT_EXISTING_INDEXER },
+      [INDEXERS]: { body: indexerSetup({ origin: 'existing', api_key_present: false }) },
     })
+    const user = userEvent.setup()
+
+    renderWithProviders(<SetupPage />)
+
+    const indexerKey = await screen.findByLabelText('API key')
+    expect(indexerKey).toHaveAttribute('type', 'password')
+    await user.click(
+      within(indexerKey.closest('div.relative')!).getByRole('button', { name: '顯示' }),
+    )
+    expect(screen.getByLabelText('API key')).toHaveAttribute('type', 'text')
+  })
+})
+
+describe('泊位 5：TMDB', () => {
+  it('TMDB 是自己的一格、自己的一頁，沒有「之後再說」', async () => {
+    stubApi({ [STATUS]: { body: AT_TMDB }, [TMDB]: { body: tmdbSetup() } })
+
+    renderWithProviders(<SetupPage />)
+
+    expect(await screen.findByRole('heading', { level: 2, name: 'TMDB' })).toBeVisible()
+    expect(screen.queryByRole('button', { name: '之後再說' })).not.toBeInTheDocument()
+    expect(screen.queryByText('要加入哪些站')).not.toBeInTheDocument()
+    const berth = within(screen.getByText('BTH 5').closest('li')!)
+    expect(berth.getByText('TMDB')).toBeInTheDocument()
+    expect(berth.getByRole('button')).toHaveAttribute('aria-current', 'step')
+  })
+
+  it('沒填 key 就按下去會被欄位擋住，畫面說得出去哪裡拿一把', async () => {
+    // 第 7 步是閘門（票 02b）：第一次來的人手上還沒有 key，所以畫面要先說去哪裡申請。
+    // 按鈕**不停用**——票 11 的 critique 抓過「按不動的控制項讀起來像壞掉」。
+    const fetchStub = stubApi({ [STATUS]: { body: AT_TMDB }, [TMDB]: { body: tmdbSetup() } })
     const user = userEvent.setup()
 
     renderWithProviders(<SetupPage />)
@@ -339,8 +525,7 @@ describe('泊位 4：來源', () => {
     // 「key 打錯了」與「連不到 api.themoviedb.org」是兩件事，畫面要兩條都給
     // （PRODUCT.md 原則 4；image 裡沒有 curl，所以連線那條走 python）。
     stubApi({
-      [STATUS]: { body: AT_SOURCE },
-      [INDEXERS]: { body: indexerSetup() },
+      [STATUS]: { body: AT_TMDB },
       [TMDB]: {
         body: tmdbSetup({
           api_key_present: true,
@@ -360,8 +545,7 @@ describe('泊位 4：來源', () => {
 
   it('貼上自己的 key 測過之後，留下 TMDB 自己報的值', async () => {
     const fetchStub = stubApi({
-      [STATUS]: { body: AT_SOURCE },
-      [INDEXERS]: { body: indexerSetup() },
+      [STATUS]: { body: AT_TMDB },
       [TMDB]: { body: tmdbSetup() },
       [TEST_TMDB]: {
         body: tmdbSetup({
@@ -390,49 +574,33 @@ describe('泊位 4：來源', () => {
     expect(screen.getByTestId('tmdb-required')).toHaveTextContent('已完成')
   })
 
-  /**
-   * 票 03 第 12 條。API key 與密碼同級：都是貼上去就不該留在畫面上的憑證
-   * （旁邊的 WebUI 密碼欄本來就遮著，只有 key 是明碼）。遮起來之後仍然看得見——
-   * `PasswordField` 自己帶一顆「顯示」。
-   */
-  it('索引站與 TMDB 的 API key 都是遮著的，且看得見', async () => {
-    stubApi({
-      [STATUS]: { body: AT_SOURCE },
-      [INDEXERS]: { body: indexerSetup({ origin: 'existing', api_key_present: false }) },
-      [TMDB]: { body: tmdbSetup() },
-    })
+  it('TMDB 的 key 是遮著的，且看得見', async () => {
+    stubApi({ [STATUS]: { body: AT_TMDB }, [TMDB]: { body: tmdbSetup() } })
     const user = userEvent.setup()
 
     renderWithProviders(<SetupPage />)
 
     const tmdbKey = await screen.findByLabelText('你的 TMDB API key')
     expect(tmdbKey).toHaveAttribute('type', 'password')
-
-    const indexerKey = screen.getByLabelText('API key')
-    expect(indexerKey).toHaveAttribute('type', 'password')
-
-    // 貼錯了要看得出來：每個欄位自己的「顯示」只翻自己那一個。
-    const tmdbField = within(tmdbKey.closest('div.relative')!)
-    await user.click(tmdbField.getByRole('button', { name: '顯示' }))
+    await user.click(within(tmdbKey.closest('div.relative')!).getByRole('button', { name: '顯示' }))
     expect(screen.getByLabelText('你的 TMDB API key')).toHaveAttribute('type', 'text')
-    expect(screen.getByLabelText('API key')).toHaveAttribute('type', 'password')
   })
 
   /**
-   * 票 03 第 4 條。「來源」那一格的詳情列本來只讀服務判定（索引站數），而 TMDB 是這一格的閘門——
-   * 閘門過了，板上那一格卻一個字都不會動。
+   * 票 03 第 4 條：閘門過了，板上那一格要跟著動。票 06e 之後 TMDB 是自己的一格，
+   * 它的詳情列只說憑證；索引站那一格不再被換掉。
    */
-  it('通過 TMDB 閘門之後，「來源」那一格的詳情列跟著換', async () => {
+  it('通過 TMDB 閘門之後，TMDB 那一格的詳情列跟著換', async () => {
     stubApi({
-      [STATUS]: { body: AT_SOURCE },
-      [INDEXERS]: { body: indexerSetup() },
+      [STATUS]: { body: AT_TMDB },
+      [INDEXERS]: { body: withSites() },
       [TMDB]: { body: tmdbSetup({ api_key_present: true }) },
       [TEST_TMDB]: { body: tmdbSetup({ api_key_present: true, verified: true, steps: [] }) },
     })
     const user = userEvent.setup()
 
     renderWithProviders(<SetupPage />)
-    const berth = within((await screen.findByText('BTH 4')).closest('li')!)
+    const berth = within((await screen.findByText('BTH 5')).closest('li')!)
     expect(await berth.findByText('待驗證')).toBeInTheDocument()
 
     await user.type(await screen.findByLabelText('你的 TMDB API key'), '0'.repeat(32))
@@ -440,5 +608,28 @@ describe('泊位 4：來源', () => {
 
     expect(await berth.findByText('已驗證')).toBeInTheDocument()
     expect(berth.queryByText('待驗證')).not.toBeInTheDocument()
+    const indexers = within(screen.getByText('BTH 4').closest('li')!)
+    expect(indexers.getByText('Prowlarr · 3 個索引站')).toBeInTheDocument()
   })
 })
+
+/** dmhy、Mikan、YTS 三站已經加進套件內的 Prowlarr（id 1–3）。 */
+function withSites() {
+  const ids: Record<string, number> = { dmhy: 1, mikan: 2, yts: 3 }
+  return indexerSetup({
+    options: DEFAULT_OPTIONS.map((row) =>
+      row.definition_name in ids ? added(row, ids[row.definition_name]) : row,
+    ),
+    steps: [step('dmhy', 'ok'), step('mikan', 'ok'), step('yts', 'ok')],
+  })
+}
+
+function siteSearch(
+  indexer_id: number | null,
+  name: string,
+  count: number,
+  titles: string[],
+  error = '',
+): SiteSearch {
+  return { indexer_id, definition_name: name.toLowerCase(), name, count, titles, error }
+}

@@ -163,6 +163,8 @@ class HealthDetailOut(BaseModel):
     #: 自己的迴圈——把它混進 ok / degraded 會讓 compose 的健康檢查在 qBittorrent
     #: 重啟的那三十秒把整個容器判成不健康。
     poller: PollerOut
+    #: 精靈第 7 步的 TMDB 憑證測過了沒。不是第五項檢查：不連 TMDB，讀的是那一次的結果。
+    tmdb_verified: bool
 
 
 class JellyfinWebOut(BaseModel):
@@ -188,6 +190,7 @@ def health_detail(report: HealthReport) -> HealthDetailOut:
         routes_status=report.routes_status,
         routes=[RouteOut.model_validate(row) for row in report.routes],
         poller=PollerOut.model_validate(report.poller),
+        tmdb_verified=report.tmdb_verified,
     )
 
 

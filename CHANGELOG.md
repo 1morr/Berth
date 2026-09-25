@@ -606,8 +606,19 @@ Issue、修正、對帳、刪除與重新入庫的每一條端點都是 403，�
 - **命令的副作用標記**（M3 票 05，brief §14）：`services/commands.command(Effect, inverse=...)`，只帶 metadata，
   M5 的命令登錄表讀它；`tests/unit/test_command_marks.py` 守著反向命令必須是已標記的命令，M3 起新增的 service
   模組裡公開的 `async def` 都要有標記。
+- **索引站看得到語言，加入之後可以試搜與移除**（M3 票 06e）：勾選清單每一站顯示語言（照 UI 語言的語言名）與
+  Prowlarr 定義自帶的英文說明（`GET /api/setup/indexers` 的選項多 `language`、`description`、`indexer_id`）。
+  加完站之後的「試搜」逐站列出搜到幾筆與前三筆標題，一站失敗不影響其他站，留白就是問各站最新的發佈
+  （`GET /api/setup/indexers/search?query=`，只讀）；每一站可以就地確認後移除（`DELETE /api/setup/indexers/{id}`，
+  只對套件內的 Prowlarr）。既有 Prowlarr 或 Torznab 接上之後同樣可以試搜。
 
 ### Changed
+- **索引站與 TMDB 拆成兩個泊位，泊位板變五格**（M3 票 06e）：BTH 4 索引站（第 6 步）、BTH 5 TMDB（第 7 步），
+  精靈與健康頁都是；`?berth=5` 是 TMDB（探索頁與詳情頁「憑證缺失」的連結跟著改），`?berth=4` 仍是索引站。
+  索引站那一格的詳情列說出接上的是哪一種（Prowlarr / Torznab）與站數，還沒加站時寫「Prowlarr · 尚未加入索引站」；
+  健康頁的 TMDB 那一格讀精靈第 7 步那一次憑證測試的結果（`GET /api/health/detail` 多一個 `tmdb_verified`），
+  不是第五項檢查。
+- **預設索引站拿掉 AniDex，剩九個**（M3 票 06e）：Prowlarr 的定義還在，但 anidex.info 從 2026-09-08 起一直回 502。
 - **精靈的步驟順序：媒體庫路徑移到 qBittorrent 之後**（M3 票 06d）：第 5 步是 Route、第 6 步索引站、第 7 步 TMDB；
   泊位板與健康頁的順序跟著變（BTH 3 媒體庫路徑、BTH 4 來源），`?berth=` 的號碼也是。`GET /setup/status` 的
   `current_step` 照新順序。套件內的媒體庫走到那一步就自動建 Route、跑五條檢查，沒有要按的鍵。

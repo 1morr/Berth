@@ -37,6 +37,9 @@ class SearchQuery:
     tmdb_id: int | None = None
     #: 決定走 `t=tvsearch` 還是 `t=movie`。Prowlarr 的 REST 不分這個。
     kind: MediaKind = MediaKind.TV
+    #: 只問這幾個站（Prowlarr 的 `indexerIds`）。空的是全部。精靈的試搜逐站問（票 06e），
+    #: 一站連不上才不會把其他站一起拖下水；單一 Torznab 端點本來就只有一個站，不看它。
+    indexer_ids: tuple[int, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

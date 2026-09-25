@@ -144,14 +144,16 @@ export function diff(key: string, current: string, recommended: string): Prefere
   return { key, current, recommended, differs: current !== recommended }
 }
 
-/** 十個預設站，名稱與 privacy 取自真的 `indexer/schema`（`tests/fixtures/`）。 */
+/** 九個預設站，名稱、privacy 與語言取自真的 `indexer/schema`（`tests/fixtures/`）。 */
 export const DEFAULT_OPTIONS: IndexerOption[] = [
-  option('nyaasi', 'Nyaa.si'),
-  option('dmhy', 'dmhy'),
-  option('Anidex', 'Anidex'),
-  option('animetosho-xyz', 'Anime Tosho', 'semiPrivate'),
-  option('acgrip', 'ACG.RIP'),
-  option('mikan', 'Mikan'),
+  option('nyaasi', 'Nyaa.si', { description: 'Nyaa is a Public torrent site' }),
+  option('dmhy', 'dmhy', {
+    language: 'zh-TW',
+    description: 'dmhy is a TAIWANESE Public magnet tracker for ANIME',
+  }),
+  option('animetosho-xyz', 'Anime Tosho', { privacy: 'semiPrivate' }),
+  option('acgrip', 'ACG.RIP', { language: 'zh-CN' }),
+  option('mikan', 'Mikan', { language: 'zh-CN' }),
   option('1337x', '1337x'),
   option('yts', 'YTS'),
   option('eztv', 'EZTV'),
@@ -161,10 +163,23 @@ export const DEFAULT_OPTIONS: IndexerOption[] = [
 export function option(
   definition_name: string,
   name: string,
-  privacy = 'public',
-  present = false,
+  overrides: Partial<IndexerOption> = {},
 ): IndexerOption {
-  return { definition_name, name, privacy, present }
+  return {
+    definition_name,
+    name,
+    privacy: 'public',
+    present: false,
+    language: 'en-US',
+    description: '',
+    indexer_id: null,
+    ...overrides,
+  }
+}
+
+/** 已經加進 Prowlarr 的那一列：有 id 才有「移除」可按。 */
+export function added(row: IndexerOption, indexer_id: number): IndexerOption {
+  return { ...row, present: true, indexer_id }
 }
 
 /** 第 5 步狀態的測試建構子。預設是「套件內 Prowlarr、十個站都還沒加」。 */
@@ -321,6 +336,7 @@ export function healthDetail(overrides: Partial<HealthDetail> = {}): HealthDetai
     routes_status: 'ok',
     routes: [routeView()],
     poller: pollerView(),
+    tmdb_verified: true,
     ...overrides,
   }
 }

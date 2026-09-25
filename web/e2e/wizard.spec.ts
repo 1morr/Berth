@@ -34,9 +34,22 @@ test('精靈八步走完，之後以同一組帳密登入', async ({ page }) => 
   await expect(page.getByRole('button', { name: '重新檢查 3 條 Route' })).toBeVisible()
   await page.getByRole('button', { name: '前往下一個泊位' }).click()
 
-  // 6 / 7. 索引站（十個裡有五個連不上是常態）與 TMDB（替身認得任何一把 key）
-  await expect(page.getByRole('heading', { name: '接上抓取來源' })).toBeVisible()
-  await page.getByRole('button', { name: '加入這 10 個站' }).click()
+  // 6. 索引站（九個裡有四個連不上是常態）。加入 → 試搜 → 不要的移除（票 06e）；
+  //    替身的 Mikan 演「搜尋時連不上」，其餘站照樣列出筆數。
+  await expect(page.getByRole('heading', { name: '索引站', level: 2 })).toBeVisible()
+  await page.getByRole('button', { name: '加入這 9 個站' }).click()
+  await page.getByRole('button', { name: '試搜' }).click()
+  const trial = page.getByTestId('trial')
+  await expect(trial.getByText(/502 Bad Gateway/)).toBeVisible()
+  const yts = trial.getByRole('listitem').filter({ hasText: 'YTS' }).first()
+  await expect(yts.getByText(/\d+ 筆/)).toBeVisible()
+  await yts.getByRole('button', { name: '移除' }).click()
+  await yts.getByRole('button', { name: '確定移除' }).click()
+  await expect(trial.getByText('YTS', { exact: true })).toHaveCount(0)
+  await page.getByRole('button', { name: '前往下一個泊位' }).click()
+
+  // 7. TMDB（替身認得任何一把 key）
+  await expect(page.getByRole('heading', { name: 'TMDB', level: 2 })).toBeVisible()
   await page.getByRole('textbox', { name: '你的 TMDB API key' }).fill('0'.repeat(31) + '1')
   await page.getByRole('button', { name: '測試 TMDB' }).click()
   await page.getByRole('button', { name: '前往下一個泊位' }).click()
@@ -49,7 +62,7 @@ test('精靈八步走完，之後以同一組帳密登入', async ({ page }) => 
   await page.getByRole('button', { name: '回到目前這一步' }).click()
   await expect(page.getByRole('heading', { name: '完成設定' })).toBeVisible()
   await page.getByRole('button', { name: '上一個泊位' }).click()
-  await expect(page.getByRole('heading', { name: '接上抓取來源' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'TMDB', level: 2 })).toBeVisible()
   await page.getByRole('button', { name: '前往下一個泊位' }).click()
 
   // 8. 完成

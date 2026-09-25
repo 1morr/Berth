@@ -19,6 +19,8 @@ from berth.services.indexer import (
     apply_default_indexers,
     connect_indexer,
     read_indexer_status,
+    remove_indexer,
+    search_indexers,
     skip_indexers,
 )
 from berth.services.jellyfin import (
@@ -264,6 +266,12 @@ class IndexerOptionOut(BaseModel):
     name: str
     privacy: str
     present: bool
+    #: BCP 47 代碼（`zh-TW`…）。畫面照 UI 語言換成語言名。
+    language: str
+    #: 定義自帶的英文說明，原樣顯示、不翻。
+    description: str
+    #: 加進這台 Prowlarr 之後的 id；移除打的是它。
+    indexer_id: int | None
 
 
 class IndexerSetupOut(BaseModel):
@@ -292,6 +300,26 @@ class IndexerConnectIn(BaseModel):
     kind: IndexerKind
     base_url: str = Field(min_length=1)
     api_key: str = ""
+
+
+class SiteSearchOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    indexer_id: int | None
+    definition_name: str
+    name: str
+    count: int
+    #: 前三筆的發佈名，原文。
+    titles: list[str]
+    error: str
+
+
+class IndexerSearchOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    query: str
+    sites: list[SiteSearchOut]
+    error: str
 
 
 class SkipIn(BaseModel):
@@ -333,6 +361,34 @@ async def post_indexers_connect(
             api_key=body.api_key.strip(),
         )
     )
+
+
+@router.get("/indexers/search")
+async def get_indexers_search(
+    session: SessionDep, factory: ClientFactoryDep, query: str = ""
+) -> IndexerSearchOut:
+    """加入之後的試搜（票 06e）：逐站列出搜到幾筆與前三筆標題。空白查詢回各站最新的發佈。
+
+    只讀、不寫任何東西（`read` 命令），所以是 GET。一站失敗寫在那一站上，不是整支 5xx。
+    """
+    return IndexerSearchOut.model_validate(
+        await search_indexers(session, factory, query=query.strip())
+    )
+
+
+@router.delete("/indexers/{indexer_id}")
+async def delete_indexer(
+    session: SessionDep, factory: ClientFactoryDep, indexer_id: int
+) -> IndexerSetupOut:
+    """從套件內的 Prowlarr 移除一站（票 06e）。已經不在的站照樣回 200：結果就是它不在了。
+
+    對既有的索引站回 422，與 `/indexers/apply` 同一條紅線（brief §16.4）。
+    """
+    try:
+        result = await remove_indexer(session, factory, indexer_id)
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
+    return IndexerSetupOut.model_validate(result)
 
 
 @router.post("/indexers/skip")

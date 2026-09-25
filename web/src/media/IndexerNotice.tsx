@@ -29,7 +29,7 @@ export function IndexerNotice({ problem, detail }: { problem: IndexerProblem; de
       </Notice>
       {detail && <p className="value text-xs wrap-anywhere text-ink-dim">{detail}</p>}
       {toSetup && (
-        // 「來源」那一格：索引站與 TMDB 兩步都在那裡。
+        // 索引站那一格（票 06e 起 TMDB 是自己的一格）。
         <SetupHint
           berth={berthNumberOf('prowlarr')}
           label={t('search.problem.toSetup')}
