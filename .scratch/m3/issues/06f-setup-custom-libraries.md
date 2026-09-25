@@ -26,7 +26,7 @@
 - [x] 清單存在精靈狀態裡，重新整理後還在（整合測試）
 - [x] `bootstrap` 依清單建媒體庫，類型與 `metadata_fetchers` 正確；再按一次不重建（整合測試，Fake Jellyfin）
 - [x] 第 7 步（06d 之後是第 5 步）替每一個建出來的媒體庫建一條 Route，清單不是預設三列時也成立（整合測試）
-- [ ] 預設三列不動時，行為與現在完全一樣（e2e 不必改就綠）——**後端 docker e2e 沒跑**，見 Comments；前端 e2e 綠
+- [x] 預設三列不動時，行為與現在完全一樣（e2e 不必改就綠）
 - [x] playwright 實跑：改一個名稱、加一個「電視劇（華語）」之類的第四列、刪掉 Anime，走到第 7 步看到對應的 Route，1280 與 390，附結果
 - [x] zh-Hant 與 en 並列；plan §9.3、§9.4、`.scratch/m0/wizard-shape.md` 那一條同步
 - [x] lint、type、test 綠燈
@@ -42,7 +42,7 @@
 - 390：回頭到泊位 1，三列鎖住、加一列「紀錄片・電影・docs」，沒有水平溢出；「重新跑一次」只建「紀錄片」（那條纜繩寫「紀錄片」），第 5 步「建立 1 條」補上第四條 Route，全綠。
 - 截圖在 `.local/screens/m3-06f/`（不進版控）。`pnpm -C web e2e` 四條綠（`wizard.spec` 走預設三列，沒改）。
 
-**後端 docker e2e（`tests/e2e`）沒跑**：這台機器上使用者的 `berth-trial-*` 那一套正在跑，e2e 用同一個固定 IP 與 port，得先停掉它。`tests/e2e/conftest.py` 只改了 import（`BUNDLED_LIBRARIES` 刪掉，改讀 `DEFAULT_BUNDLED_LIBRARIES`，資料夾就是原本的 slug）；預設三列時的 bootstrap、Route 與 fetcher 由沒改過的整合測試守著。票 06h（精靈驗收）會跑它。
+**後端 docker e2e（`tests/e2e`）綠**（使用者授權後補跑，commit `9f24fed` 的 image）：先記下試跑環境（project `berth-trial`，四個容器 healthy，全是 bind mount、網段 172.30.x；e2e 是 project `berth-e2e`、named volume `berth-e2e-data`、172.28.x，互不相干），`docker compose -p berth-trial stop`，照 README〈e2e〉`up -d --build --wait` → `pytest -m e2e tests/e2e -rA` **15 passed in 912.60s**（M1 管線 5、M1.5 媒體庫 6、M2 修正 5——精靈走的是預設三列，e2e 本身只改了 import：`BUNDLED_LIBRARIES` 刪掉，改讀 `DEFAULT_BUNDLED_LIBRARIES`，資料夾就是原本的 slug）→ `down --volumes`（只碰 `berth-e2e`）→ `docker compose -p berth-trial start`，四個容器回到 healthy、`:18383/api/health` 200。完整輸出在 `.local/screens/m3-06f/e2e-06f.log`（不進版控）。
 
 **code review 處理了的**：Jellyfin 裡改了名之後重跑會在同一個資料夾再建一個（「已經在 Jellyfin 上」改成名稱或路徑任一對上，bootstrap 與鎖讀同一支 `_already_built`，紅燈先行）；services 為了讓 api 組 model 而做的轉出拿掉，改收 `LibraryDraft` Protocol；`slug` 一詞不再拿來指資料夾（CONTEXT.md 的 slug 是 Route 的）；README 的 BTH 3 列、plan §2.1 與 §9.3 漏改的三處；拒絕的列號由 `bundledRefusalOf` 帶出，路徑拼接收成 `pathUnder`，型別別名只宣告一次。
 
