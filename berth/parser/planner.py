@@ -424,3 +424,13 @@ def episode_span(item: PlanItem) -> tuple[int, int, int] | None:
     if item.action is not PlanAction.IMPORT or item.season is None or item.episode_start is None:
         return None
     return (item.season, item.episode_start, item.episode_end or item.episode_start)
+
+
+def hold(item: PlanItem, reason: ItemReason) -> PlanItem:
+    """程式檢查（播出日、片長）把一列送審核：季集、目標路徑與信心都留著，核准就照這一格入庫。"""
+    return item.model_copy(update={"action": PlanAction.REVIEW, "reasons": (*item.reasons, reason)})
+
+
+def note(item: PlanItem, reason: ItemReason) -> PlanItem:
+    """程式檢查缺資料、沒有比對時記一筆，不擋。"""
+    return item.model_copy(update={"reasons": (*item.reasons, reason)})

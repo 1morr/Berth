@@ -178,7 +178,7 @@ adapters ──► domain                  （不 import services、models；回
 | `downloading` | 完成條件（brief §5.1） | `completed` | event `completed` |
 | `completed` | planner_runner 取得 | `planning` | 讀 mediainfo、更新 `job_files`（`kind` 與 `mediainfo_json`）。**進了 `planning` 就先 commit**，畫面才說得出它正在做什麼；算到一半被關掉的那一列停在這裡，下一輪掃到它會從頭再算一次（票 11） |
 | `planning` | Plan 全 high/medium 且 Route 允許 | `importing` | `plans.status = auto`、event `plan_generated`；medium 的 item 掛 `audit`。**`unmatched` 不算在「全 high/medium」裡**（票 11）：它一律是 low，但那不是低信心而是一個**已經做完的決定**——「這是一個節目，但它不是 TMDB 上的任何一集」（brief §7.6），檔案留在 complete 原位由 Unmatched 清單處理。動漫批次幾乎每一包都夾著一兩個這種 SP，擋下去等於 §11.2 T1.6 的「不經人工入庫」永遠達不到；它仍然數進 `summary.low`，畫面上看得見 |
-| `planning` | 否則 | `review` | `plans.status = pending_review`、event `review_required(reason)`。理由是封閉集合（`ReviewReason`）：`low_confidence` / `medium_not_allowed` / `nothing_to_import`——三種的下一步不同（票 11）；M3 票 14 加 `air_date_conflict`（播出日比對擋下的，§4.4），它排在最前面——被擋的那幾列信心仍是 high / medium，下一步是改季集而不是點頭。**不另外寫 `plan_generated`**：一個轉換一筆事件，兩筆說的是同一件事 |
+| `planning` | 否則 | `review` | `plans.status = pending_review`、event `review_required(reason)`。理由是封閉集合（`ReviewReason`）：`low_confidence` / `medium_not_allowed` / `nothing_to_import`——三種的下一步不同（票 11）；M3 票 14 加 `air_date_conflict`（播出日比對擋下的，§4.4），它排在最前面——被擋的那幾列信心仍是 high / medium，下一步是改季集而不是點頭。M3 票 15 加 `runtime_conflict`（片長驗證擋下的，§4.1），排在它之後、同一個道理——一列兩條都犯時先改季集。**不另外寫 `plan_generated`**：一個轉換一筆事件，兩筆說的是同一件事 |
 | `review` | 使用者核准 | `importing` | `plans.status = approved`、event `review_decided(decision=approved, files)`。**核准＝照提案入庫**（M2 票 07，2026-09-23 使用者拍板）：待審核的列季集完整就變成 `import`，寫下的目標路徑就是 `pending_review` 時畫面上顯示的那一條（`parser.promote` + `parser.revise`，`services/plan_view.landing`）；還有沒提案的列或兩列撞同一條路徑時拒絕（`PlanRefusal.undecided` / `target_clash`）。檔案由 importer 照這一份鏈接，核准不另走一條入庫的路 |
 | `review` | 使用者拒絕 | `completed` | `plans.status = rejected`、event `review_decided(decision=rejected)`；規劃器被叫醒、**整份重算**（逐列改過的不留），所以拒絕的意思是「丟掉這一份、重來」。檔案不動。`review_decided` 是事件去重的界線（同 `retried`）：重算出來的 `review_required` 與第一份一字不差，不設界線會被吞掉（票 07） |
 | `importing` | 全部 item 套用完 | `imported` | event `linked` ×N（一個檔案一筆，鏈接當下寫）；**狀態落地之後**才通知 Jellyfin：`jellyfin_scan_requested`，失敗是 `jellyfin_request_failed(request=scan)` 且不擋（§3.3）。反查在 `jellyfin_resolver`（§3.2） |
@@ -254,9 +254,11 @@ files ─► classify ─► (video | subtitle | font | audio | image | archive 
 | `plan` | → `Plan` | 為每個影片選最佳 Candidate；產生目標路徑（§5）；衝突偵測（brief §6.4 第 5 點）；extras 與 unmatched 的處置。**brief §7.8 的「與帳本既有版本重複」不在這裡**：解析器沒有 IO，看不到既有 Entry——那個判斷在規劃那一步的 services 那一半（`services/plan._against_ledger`，M1 票 14b 起比範圍、M2 票 08 起也比 Tags），不在 importer：規劃時就知道的話，重複的那一列略過、其餘照常入庫，不必等到鏈接那一刻撞上路徑才把整筆停下來。**字幕排在影片之後**：字幕自己說不出它是第幾集，配到影片就繼承它的答案，影片沒入庫字幕就跟著 unmatched / review |
 | `score` | → confidence | brief §6.5 的三級定義；批次一致性檢查在此（同模式、連續集號、數量吻合） |
 
+**片長驗證**（M3 票 15，`parser.runtime.check_runtime`，§11.4「三道程式檢查」②）：mediainfo 量到的片長（`FileEntry.duration_s`）對 TMDB 那一集的 `runtime`（多集檔是各集相加），差超過 `max(180 秒, 15% × TMDB 片長)`（`RUNTIME_SLACK`、`RUNTIME_RATIO`）的那一列送審核（`action = review`，季集與目標路徑留著），理由 `runtime_mismatch` 帶量到的片長與 TMDB 的分鐘數，Plan 的 `review_reason` 是 `runtime_conflict`（§3.1）。抓的是分類錯誤——SP / OVA、兩集合併的檔案被當成一集正片；同一季裡算錯的集號它看不出來（每一集差不多一樣長）。**與 `classify` 的分工**（2026-09-26 使用者拍板）：短於 5 分鐘的「正片」仍由 `classify` 自動降成 extra，不送審核；片長驗證管分類器看不出來的那些。純函式、只吃 Plan Item、量到的片長與快照，所以 M5 的 AI 結果也過同一條；在 `services/plan.py` 裡與播出日比對同一個入口（`_checked`，播出日在前），排在 Route 政策之前，`_plan`、`_preplan`、`held_proposal` 都跑，`proposal`（票 13 的改正）不跑。不看來源：認領與重新入庫一樣比。缺資料不擋：TMDB 沒有那一集（或範圍裡任何一集）的片長 → 記一筆 `runtime_missing`；mediainfo 沒量到（§8.7 失敗不阻擋；pre-plan 那一輪檔案還在下載）→ 不擋也不記，否則 pre-plan 每一列都是雜訊。門檻的量測見 `scripts/experiments/runtime_gap.py`（87 集對得上的正片比例 0.94–1.03、差 −84 到 +41 秒；兩集合併檔 1.86–2.04 倍）。**已知盲點**：與正片一樣長的番外被當成正片它看不出來（量到的 One Piece 外傳就是這樣）。
+
 ### 4.2 核心型別（`domain/`）
 
-- `FileEntry`：`rel_path`（相對於 torrent 內容根）、`size`、`kind`、`priority`、`duration_s`（mediainfo 量到的秒數，票 11）。`duration_s` **`None` 是「還沒量」不是 0**：pre-plan 那一輪檔案還在下載，一個訊號都沒有，而分類器拿它把短的正片降為 extra（§4.1、brief §6.2）。解析器仍然沒有 IO——量的人是 `services/plan.py`，這裡收的是它量到的結果
+- `FileEntry`：`rel_path`（相對於 torrent 內容根）、`size`、`kind`、`priority`、`duration_s`（mediainfo 量到的秒數，票 11）。`duration_s` **`None` 是「還沒量」不是 0**：pre-plan 那一輪檔案還在下載，一個訊號都沒有，而分類器拿它把短的正片降為 extra（§4.1、brief §6.2），片長驗證拿它比 TMDB 那一集的片長（§4.1，M3 票 15）。解析器仍然沒有 IO——量的人是 `services/plan.py`，這裡收的是它量到的結果
 - `CjkHints`：`subs: frozenset[Lang]`、`hardsub: bool | None`、`subtitle_kind`、`season: int | None`、`episode: int | None`、`episode_end`、`collection`、`special: SpecialKind | None`、`movie: bool`、`group: str`、`matched: tuple[str, ...]`（認出來的原文，往上併進 `ReleaseInfo.matched_tokens`）
 - `ReleaseInfo`：brief §6.3 欄位 + `raw_title`、`matched_tokens`、`part`（`Part.2` / `第二部分` 的 cour 序號，§4.4）、`air_date`（檔名寫的播出日，絕對編號換算的反證，§4.4；與 `episode_end` 一樣跟著集號走——檔名自己寫了集號時，不從 torrent 名補日期，包名上的日期說的不是這一集）。`season_hint_from_folder` **不在這裡**——資料夾提示是 `structure_hints` 的輸出，兩個階段的產物不混進同一個型別
 - `Tags`：`source`、`resolution`、`subs: tuple[Lang, ...]`、`hardsub`、`group`、`version`、`edition`；`render()` 依 brief §6.8
@@ -525,7 +527,7 @@ Session 以 httpOnly cookie（`berth_session`）承載，`SameSite=Strict`、`Pa
 ### 8.7 mediainfo adapter
 
 - `probe(path) -> MediaInfoSummary{duration_s, width, height, video_codec, bit_depth, audio_langs, subtitle_tracks[{lang, title, codec, forced, default}]}`。
-- 只在 planning 階段對影片檔呼叫；失敗不阻擋，Plan 只少一個訊號。
+- 只在 planning 階段對影片檔呼叫；失敗不阻擋，Plan 只少一個訊號。量到的片長有兩個消費者：`classify` 的 5 分鐘規則與片長驗證（§4.1）。
 
 ---
 
@@ -784,6 +786,8 @@ M1 帶過來的（票 15 的 critique，2026-09-17，使用者拍板交給這一
 **票 11 做完**：Nyaa、acg.rip adapter，非 Mikan 的 RSS Series 鍵，新 Feed 的第一輪預覽（§2.4、§6、§8.5）；Mikan 不走預覽（shape 拍板）。
 
 **票 13 做完**：Plan 記下它用的季號與 offset（§2.3）；RSS Series 的第一批進 audit、在 `/review` 以 Series 分組一顆「全部確認」、確認之後 medium 不再進 audit（§2.4、§6 review 那一列）；改正一集可以「套用到這個 RSS Series」（`POST /files/rematch` 的 `apply_to_series`，§4.4、§6 files 那一列）。
+
+**票 15 做完**：片長驗證（§4.1）、新理由 `runtime_conflict`（§3.1）；短於 5 分鐘的仍歸 `classify`。
 
 **票 14 做完**：播出日比對兩條規則（§4.4）、新理由 `air_date_conflict`（§3.1）；發佈時間住在 `jobs.published_at`（§2.3），手動送單由結果表帶回來（`JobSourceIn.published_at`，§6 jobs 群組），搜尋結果表多一欄「發佈」（`SearchResultOut.published_at`）。
 

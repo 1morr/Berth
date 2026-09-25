@@ -94,3 +94,16 @@ class MediaSnapshot(BaseModel):
     #: **不是 TMDB 的資料**：`models.Media.snapshot()` 讀出來時才放進來，所以不進快照的 JSON。
     #: 空字串 = 還沒凍結，命名照標題算。
     folder_name: str = Field(default="", exclude=True)
+
+    def episode(self, season: int, number: int) -> EpisodeSnapshot | None:
+        """TMDB 上的那一集。沒有那一季或那一集是 `None`（程式檢查拿它的播出日與片長）。"""
+        return next(
+            (
+                row
+                for block in self.seasons
+                if block.season_number == season
+                for row in block.episodes
+                if row.episode_number == number
+            ),
+            None,
+        )

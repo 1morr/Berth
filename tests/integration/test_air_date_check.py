@@ -205,45 +205,45 @@ class TestRss:
         ).model_dump(mode="json")
 
 
-class TestManual:
-    async def submit(
-        self,
-        session: AsyncSession,
-        roots: dict[str, Path],
-        snapshot: MediaSnapshot,
-        published_at: datetime | None,
-    ) -> Job:
-        """詳情頁手動送 12 那一集，發佈時間來自索引站。之後下載完、規劃、入庫。"""
-        media, route, factory = await harbour(session, roots)
-        row = await session.get(type(media), media.id)
-        assert row is not None
-        row.tmdb_snapshot_json = snapshot.model_dump(mode="json")
-        await session.commit()
-        item = next(item for item in KIMI if " - 12 " in item.title)
-        outcome = await add_download(
-            session,
-            factory,
-            source=JobSource(
-                url=item.torrent_url,
-                title=item.title,
-                info_hash=item.info_hash,
-                published_at=published_at,
-            ),
-            media_id=media.id,
-            route_id=route.id,
-            user_id=None,
-        )
-        await run_pipeline(session, factory, roots)
-        job = await session.get(Job, outcome.job.hash)
-        assert job is not None
-        await session.refresh(job)
-        assert job.trigger is JobTrigger.MANUAL
-        return job
+async def submit_manually(
+    session: AsyncSession,
+    roots: dict[str, Path],
+    snapshot: MediaSnapshot,
+    published_at: datetime | None,
+) -> Job:
+    """詳情頁手動送 12 那一集，發佈時間來自索引站。之後下載完、規劃、入庫。"""
+    media, route, factory = await harbour(session, roots)
+    row = await session.get(type(media), media.id)
+    assert row is not None
+    row.tmdb_snapshot_json = snapshot.model_dump(mode="json")
+    await session.commit()
+    item = next(item for item in KIMI if " - 12 " in item.title)
+    outcome = await add_download(
+        session,
+        factory,
+        source=JobSource(
+            url=item.torrent_url,
+            title=item.title,
+            info_hash=item.info_hash,
+            published_at=published_at,
+        ),
+        media_id=media.id,
+        route_id=route.id,
+        user_id=None,
+    )
+    await run_pipeline(session, factory, roots)
+    job = await session.get(Job, outcome.job.hash)
+    assert job is not None
+    await session.refresh(job)
+    assert job.trigger is JobTrigger.MANUAL
+    return job
 
+
+class TestManual:
     async def test_a_publish_date_before_the_air_date_waits_in_review(
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
-        job = await self.submit(session, roots, aired_from(date(2026, 9, 3)), published(12))
+        job = await submit_manually(session, roots, aired_from(date(2026, 9, 3)), published(12))
 
         assert job.state is JobState.REVIEW
         assert job.published_at == published(12)
@@ -253,7 +253,7 @@ class TestManual:
     async def test_a_matching_publish_date_imports(
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
-        job = await self.submit(session, roots, kimi_snapshot(), published(12))
+        job = await submit_manually(session, roots, kimi_snapshot(), published(12))
 
         assert job.state is JobState.IMPORTED
 
@@ -261,7 +261,7 @@ class TestManual:
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
         """索引站沒給的，跳過並記一筆——就算換算出的那一集還沒播，也沒有證據說它錯。"""
-        job = await self.submit(session, roots, aired_from(date(2026, 9, 3)), None)
+        job = await submit_manually(session, roots, aired_from(date(2026, 9, 3)), None)
 
         assert job.state is JobState.IMPORTED
         item = await session.scalar(select(PlanItem).where(PlanItem.action == PlanAction.IMPORT))
@@ -274,6 +274,6 @@ class TestManual:
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
         """手動搜的常常本來就是舊集：對到三月的 S01E12 也照常入庫。"""
-        job = await self.submit(session, roots, airing_split_cour(), published(12))
+        job = await submit_manually(session, roots, airing_split_cour(), published(12))
 
         assert job.state is JobState.IMPORTED

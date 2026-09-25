@@ -686,6 +686,12 @@ Issue、修正、對帳、刪除與重新入庫的每一條端點都是 403，�
   發佈時間跟著 Job 存下來：`jobs.published_at`（migration `c8d2f5a1e734`；既有的 RSS Job 從 Feed Item 回填），
   `POST /jobs` 的 `source` 多選填的 `published_at`；搜尋結果 `GET /search` 每一列多 `published_at`，結果表多一欄
   「發佈」（相對時間，滑過去是完整日期；索引站沒給時 `—`）。
+- **片長驗證**（M3 票 15，plan §4.1、§11.4「三道程式檢查」②）：規劃時拿 mediainfo 量到的片長比換算出的那一集的
+  TMDB 片長，差超過 3 分鐘**而且**超過 15% 的不自動入庫、停在 `/review`，理由說出兩個片長——抓 SP、OVA、兩集合併
+  的檔案被當成一集正片。被擋的那一列季集與路徑留著，片長其實沒錯的核准就照畫面上的位置入庫。手動送單、RSS、
+  認領與重新入庫都走同一條；TMDB 沒有那一集片長時不擋、記一筆，mediainfo 沒量到時不擋。短於 5 分鐘的「正片」
+  照舊由分類器自動降成特典。新的審核理由 `runtime_conflict` 與兩種逐列理由（`runtime_mismatch`、
+  `runtime_missing`）。
 
 ### Changed
 - **從審核裡套用到 RSS Series**（M3 票 14b，brief §15）：連載中的 split-cour 第一批會被播出日比對整批擋在

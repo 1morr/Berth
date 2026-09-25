@@ -9,6 +9,7 @@ from berth.parser.classify import SAMPLE_RATIO, SHORT_FEATURE, classify, kind_by
 from berth.parser.mapping import VIRTUAL_SEASON_GAP, map_episode
 from berth.parser.planner import episode_span, plan, promote, revise, written_episode
 from berth.parser.release import merge_release, parse_release, tags_of
+from berth.parser.runtime import HELD_BY_RUNTIME, RUNTIME_RATIO, RUNTIME_SLACK, check_runtime
 from berth.parser.structure import StructureHints, structure_hints
 from berth.parser.subtitles import SubtitleMatch, match_subtitle
 from berth.parser.title import MediaMatch, match_media, matches, mentions, normalize_title
@@ -16,7 +17,10 @@ from berth.parser.title import MediaMatch, match_media, matches, mentions, norma
 __all__ = [
     "BEHIND_LATEST",
     "HELD_BY_AIRING",
+    "HELD_BY_RUNTIME",
     "RELEASE_TOLERANCE",
+    "RUNTIME_RATIO",
+    "RUNTIME_SLACK",
     "SAMPLE_RATIO",
     "SHORT_FEATURE",
     "VIRTUAL_SEASON_GAP",
@@ -24,6 +28,7 @@ __all__ = [
     "StructureHints",
     "SubtitleMatch",
     "check_airing",
+    "check_runtime",
     "classify",
     "episode_span",
     "kind_by_extension",

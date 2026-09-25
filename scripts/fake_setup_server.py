@@ -17,7 +17,7 @@ import os
 import re
 import sys
 import tempfile
-from collections.abc import AsyncIterator, Sequence
+from collections.abc import AsyncIterator, Callable, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import UTC, date, datetime, timedelta
 from html import escape
@@ -30,6 +30,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.routing import Route as StarletteRoute
 
+from berth.adapters import mediainfo
 from berth.adapters.http import (
     AuthFailedError,
     ProtocolMismatchError,
@@ -101,6 +102,7 @@ from berth.domain import (
     IndexerKind,
     JobState,
     JobTrigger,
+    MediaInfoSummary,
     MediaKind,
     MediaSnapshot,
     ParseContext,
@@ -299,6 +301,9 @@ class Scenario:
     #: 送單時「下載連結 → torrent」的查表。RSS 的 `.torrent` 網址是 Mikan 的，演練不出網，
     #: 所以換成這台自己生的那幾份。空的話走真的那一支。
     torrent_sources: dict[str, TorrentSource] = field(default_factory=dict)
+    #: mediainfo 的替身（M3 票 15）：檔名含 ` - <集號> ` 的影片量到幾秒。演練寫到磁碟上的不是真的
+    #: 影片，真的 libmediainfo 一律說不出片長；空的話走真的那一支。
+    measured: dict[str, int] = field(default_factory=dict)
 
     def probes(self) -> SetupProbes:
         return SetupProbes(
@@ -1196,6 +1201,17 @@ def rss_split_cour_airing_scenario() -> Scenario:
     return _split_cour_scenario(KIMI_SPLIT_COUR_AIRING)
 
 
+def rss_runtime_scenario() -> Scenario:
+    """片長驗證（M3 票 15）：同 `rss`，但 mediainfo 是替身——第 11 集量到 12:05，其餘 24 分鐘。
+
+    TMDB 上每一集都是 24 分鐘，所以綁定之後第 11 集那一份停在 `/review`（像一支 SP 被當成了
+    正片），理由說出兩個片長；其餘 11 集照常入庫（第一批）。
+    """
+    scenario = rss_scenario()
+    scenario.measured = {"11": 12 * 60 + 5}
+    return scenario
+
+
 def _split_cour_scenario(season: TmdbSeason) -> Scenario:
     assert season.air_date is not None
     detail = replace(
@@ -1227,6 +1243,7 @@ SCENARIOS = {
     "rss": rss_scenario,
     "rss-split-cour": rss_split_cour_scenario,
     "rss-split-cour-airing": rss_split_cour_airing_scenario,
+    "rss-runtime": rss_runtime_scenario,
     "issues": issues_scenario,
     "review": review_scenario,
     "routes": routes_scenario,
@@ -1336,6 +1353,10 @@ def main(argv: list[str] | None = None) -> int:
         (config_root / "nas" / folder).mkdir(parents=True, exist_ok=True)
 
     scenario = SCENARIOS[args.scenario]()
+    if scenario.measured:
+        # 換掉模組上的函式：`services/plan.py` 以 `mediainfo.probe` 呼叫它，它不在 client 工廠裡。
+        # mypy 不讓函式被賦值；替身的簽名與它相同。
+        mediainfo.probe = _measuring(scenario.measured)  # type: ignore[assignment]
     factory = FakeClientFactory(scenario)
     # 背景迴圈不經過 FastAPI 的相依，所以它要用的 client 從 `create_app` 換掉（票 10）。
     app = create_app(config, clients=factory)
@@ -1356,6 +1377,16 @@ def main(argv: list[str] | None = None) -> int:
     print(f"scenario={args.scenario} config_root={config_root}", file=sys.stderr)
     uvicorn.run(app, host="127.0.0.1", port=args.port, log_level="warning")
     return 0
+
+
+def _measuring(measured: dict[str, int]) -> Callable[[Path], MediaInfoSummary | None]:
+    """`mediainfo.probe` 的替身：照檔名裡的集號回答，其餘 24 分鐘（`Scenario.measured`）。"""
+
+    def probe(path: Path) -> MediaInfoSummary | None:
+        episode = next((key for key in measured if f" - {key} " in path.name), None)
+        return MediaInfoSummary(duration_s=measured[episode] if episode else 24 * 60, width=1920)
+
+    return probe
 
 
 def _mount_demo_torrent(app: FastAPI, releases: tuple[str, ...]) -> None:

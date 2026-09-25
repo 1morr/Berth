@@ -57,7 +57,14 @@ from berth.domain import ReasonCode as Code
 from berth.logs import job_context
 from berth.models import Job, JobFile, LedgerEntry, Media, Plan, PlanItem, Route, RssSeries
 from berth.models.types import utcnow
-from berth.parser import HELD_BY_AIRING, check_airing, classify, episode_span
+from berth.parser import (
+    HELD_BY_AIRING,
+    HELD_BY_RUNTIME,
+    check_airing,
+    check_runtime,
+    classify,
+    episode_span,
+)
 from berth.parser import plan as decide
 from berth.services.clients import ServiceClientFactory
 from berth.services.events import EventHub, JobSignal
@@ -214,13 +221,14 @@ async def held_proposal(
     從審核裡改正一列並套用到 RSS Series 時，同一份裡沒有人碰過的列照它換（M3 票 14b）。值由呼叫端
     帶進來而不是先改 Series：Series 要在那筆 Job 的鎖裡才寫（`plan_review.edit_items`），先改的話
     這裡的查詢會把它 flush 出去，寫交易在等鎖之前就開了。與 `proposal` 同樣不重抓、不重量，差在
-    **播出日比對照常跑**：這幾列還沒入庫，新的值對不上播出日的話要繼續擋著。
+    **程式檢查照常跑**：這幾列還沒入庫，新的值對不上播出日或片長的話要繼續擋著。
     """
     _, entries, route, snapshot, series = await _stored_facts(session, job)
     context = parse_context(route, snapshot, series).model_copy(
         update={"season_hint": season, "episode_offset": offset}
     )
-    items = _apply_policy(_airing(job, decide(job.name, entries, context), snapshot, series), route)
+    decided = decide(job.name, entries, context)
+    items = _apply_policy(_program_checks(job, decided, entries, snapshot, series), route)
     return {item.rel_path: item for item in items}
 
 
@@ -550,9 +558,25 @@ def _decided(
     snapshot: MediaSnapshot | None,
     series: RssSeries | None,
 ) -> tuple[PlannedFile, ...]:
-    """解析器的答案，再過播出日比對與 Route 的政策。正式那一份與 pre-plan 走同一條。"""
+    """解析器的答案，再過程式檢查與 Route 的政策。正式那一份與 pre-plan 走同一條。"""
     decided = decide(job.name, entries, parse_context(route, snapshot, series))
-    return _apply_policy(_airing(job, decided, snapshot, series), route)
+    return _apply_policy(_program_checks(job, decided, entries, snapshot, series), route)
+
+
+def _program_checks(
+    job: Job,
+    items: Sequence[PlannedFile],
+    entries: Sequence[FileEntry],
+    snapshot: MediaSnapshot | None,
+    series: RssSeries | None,
+) -> tuple[PlannedFile, ...]:
+    """入庫前的兩道程式檢查（plan §11.4）：播出日比對、片長驗證，可疑的送審核。
+
+    **在 Route 的政策之前**：被它們擋下的那一列說的是「集數或分類多半錯了」，比「這條 Route 不讓
+    medium 自己入庫」更該先被看到。播出日在前：一列兩條都犯時先改季集。片長驗證不看來源——認領與
+    重新入庫的檔案一樣量得到。pre-plan 那一輪沒有片長（檔案還在下載），`check_runtime` 自己跳過。
+    """
+    return check_runtime(_airing(job, items, snapshot, series), entries, snapshot)
 
 
 def _airing(
@@ -561,10 +585,8 @@ def _airing(
     snapshot: MediaSnapshot | None,
     series: RssSeries | None,
 ) -> tuple[PlannedFile, ...]:
-    """播出日比對（M3 票 14、`parser.airing`）：發佈時間對換算出的那一集的播出日，可疑的送審核。
-
-    **在 Route 的政策之前**：被它擋下的那一列說的是「集數多半算錯了」，比「這條 Route 不讓 medium
-    自己入庫」更該先被看到。規則二（比最近播出的一集）只對 RSS Series。
+    """播出日比對（M3 票 14、`parser.airing`）：發佈時間對換算出的那一集的播出日。規則二（比最近
+    播出的一集）只對 RSS Series。
 
     沒有來源的 Job 不比（認領、從 complete 目錄重新入庫，`source_url` 是空的）：它們本來就沒有發佈
     時間，逐列記一筆「來源沒給」只是雜訊。既有 Job 的重新入庫留著來源，照樣再比（plan §4.4）。
@@ -751,6 +773,14 @@ def _span_clash(season: int, start: int, others: set[int]) -> ItemReason:
     return why(Code.LIBRARY_SPAN_CLASH, known=known)
 
 
+#: 程式檢查擋下的列（`_program_checks`）說的是哪一種理由，照先問的順序。它們的信心仍是 high /
+#: medium，所以排在信心之前：下一步是改季集或處置，不是點頭。播出日在前，與檢查的順序一樣。
+_HELD_BY_CHECKS: tuple[tuple[frozenset[Code], ReviewReason], ...] = (
+    (HELD_BY_AIRING, ReviewReason.AIR_DATE_CONFLICT),
+    (HELD_BY_RUNTIME, ReviewReason.RUNTIME_CONFLICT),
+)
+
+
 def _verdict(
     items: Sequence[PlannedFile], route: Route | None, duplicates: dict[str, int]
 ) -> tuple[PlanStatus, ReviewReason | None]:
@@ -767,9 +797,10 @@ def _verdict(
     它仍然被數進 `summary.low`，所以畫面上看得見。
     """
     held = [item for item in items if item.action is PlanAction.REVIEW]
-    if any(reason.code in HELD_BY_AIRING for item in held for reason in item.reasons):
-        # 播出日比對擋下的那幾列信心仍是 high / medium，所以先問它：下一步是改季集，不是點頭。
-        return PlanStatus.PENDING_REVIEW, ReviewReason.AIR_DATE_CONFLICT
+    codes = {reason.code for item in held for reason in item.reasons}
+    for checked, reason in _HELD_BY_CHECKS:
+        if codes & checked:
+            return PlanStatus.PENDING_REVIEW, reason
     if any(item.confidence is not Confidence.MEDIUM for item in held):
         return PlanStatus.PENDING_REVIEW, ReviewReason.LOW_CONFIDENCE
     if held:

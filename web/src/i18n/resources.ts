@@ -1237,6 +1237,7 @@ const zhHant = {
         target_exists: '媒體庫的目標位置上已經有別的檔案',
         audit_undone: '有一個自動入庫的檔案被撤銷了，那一列要重新決定',
         air_date_conflict: '發佈時間與換算出的集數的播出日對不上，季集多半算錯了',
+        runtime_conflict: '量到的片長與 TMDB 那一集差太多，多半是特典或合併檔被當成正片',
       },
       waitingSince: '等候於 {{value}}',
       job: '下載',
@@ -1656,6 +1657,7 @@ const zhHant = {
         target_exists: '目標位置上已經有別的檔案',
         audit_undone: '有一個自動入庫的檔案被撤銷了',
         air_date_conflict: '發佈時間與播出日對不上',
+        runtime_conflict: '片長與 TMDB 那一集對不上',
       },
       // 核准與拒絕（M2 票 07）。拒絕之後規劃器整份重算，所以下一筆就是新的那一份。
       reviewApproved_one: '管理員核准了，{{count}} 個檔案要入庫',
@@ -1752,6 +1754,8 @@ const zhHant = {
           '管理員從審核佇列撤銷了一個 medium 自動入庫的檔案：那個檔案已經不在媒體庫裡，complete 裡的來源還在。這份計劃回來等人決定那一列該是哪一集。',
         air_date_conflict:
           '有檔案的發佈時間與換算出的那一集的播出日對不上：發佈比播出早，或比這部作品正在播的集數早很多。季號、offset 或絕對編號多半算錯了。管理員在審核佇列逐列改正季集；晚幾個月才發的 BD 版這種其實沒錯的，核准就會照畫面上的位置入庫。',
+        runtime_conflict:
+          'mediainfo 量到的片長與 TMDB 上那一集的片長差太多：多半是 SP、OVA 或兩集合併的檔案被當成了一集正片。管理員在審核佇列把那一列改成特典、對不到或正確的季集；片長其實沒錯的（TMDB 寫錯、剪輯版），核准就會照畫面上的位置入庫。',
       },
       action: {
         import: '入庫',
@@ -1806,6 +1810,9 @@ const zhHant = {
           '{{episode}} 在 {{aired}} 播出，而發佈當時這部作品最近播出的是 {{latest}}（{{latest_aired}}）：季號或 offset 多半錯了',
         air_date_missing: 'TMDB 沒有 {{episode}} 的播出日，沒有比對發佈時間',
         published_missing: '來源沒有給發佈時間，沒有比對播出日',
+        runtime_mismatch:
+          'mediainfo 量到 {{measured}}，TMDB 上 {{episode}} 是 {{minutes}} 分鐘：差太多，多半是 SP、OVA 或兩集合併的檔案',
+        runtime_missing: 'TMDB 沒有 {{episode}} 的片長，沒有比對片長',
         classified: '分類是{{kind}}，不需要人看',
         disc_structure: '光碟結構，Berth 不拆',
         own_numbered_special: '字幕組自己編號的特典，TMDB 的特典編號不同',
@@ -3658,6 +3665,8 @@ const en: Translations<typeof zhHant> = {
         audit_undone: 'An auto-imported file was undone; that row needs a new decision',
         air_date_conflict:
           'The release date does not fit the air date of the episode it was mapped to; the episode is likely wrong',
+        runtime_conflict:
+          'The measured runtime is far from TMDB’s for that episode; likely a special or a merged file taken for an episode',
       },
       waitingSince: 'Waiting since {{value}}',
       job: 'Download',
@@ -4055,6 +4064,7 @@ const en: Translations<typeof zhHant> = {
         target_exists: 'another file already sits at the target',
         audit_undone: 'an auto-imported file was undone',
         air_date_conflict: 'the release date does not fit the air date',
+        runtime_conflict: 'the runtime does not fit TMDB’s episode',
       },
       reviewApproved_one: 'An administrator approved it; {{count}} file will be imported',
       reviewApproved_other: 'An administrator approved it; {{count}} files will be imported',
@@ -4141,6 +4151,8 @@ const en: Translations<typeof zhHant> = {
           'An administrator undid a medium-confidence import from the review queue: that file has left the library, and its source under complete is untouched. The plan is back, waiting for someone to decide which episode that row really is.',
         air_date_conflict:
           'A file’s release date does not fit the air date of the episode it was mapped to: it came out before that episode aired, or far behind the episode this title is airing now. The season, offset or absolute numbering is most likely wrong. An administrator corrects each row’s episode in the review queue; if it is actually right, such as a BD release months later, approving imports it where shown.',
+        runtime_conflict:
+          'A file’s measured runtime is far from TMDB’s runtime for the episode it was mapped to: most likely a special, an OVA or two episodes in one file was taken for a single episode. An administrator changes that row to an extra, unmatched or the right episode in the review queue; if the runtime is actually fine (a wrong TMDB entry, a different cut), approving imports it where shown.',
       },
       action: {
         import: 'Import',
@@ -4196,6 +4208,9 @@ const en: Translations<typeof zhHant> = {
         air_date_missing:
           'TMDB has no air date for {{episode}}, so the release date was not checked',
         published_missing: 'the source gave no release date, so the air date was not checked',
+        runtime_mismatch:
+          'mediainfo measured {{measured}}, but TMDB lists {{episode}} at {{minutes}} min: too far off, most likely a special, an OVA or two episodes in one file',
+        runtime_missing: 'TMDB has no runtime for {{episode}}, so the runtime was not checked',
         classified: 'Classified as {{kind}}; nothing to decide',
         disc_structure: 'A disc structure; Berth does not unpack those',
         own_numbered_special:

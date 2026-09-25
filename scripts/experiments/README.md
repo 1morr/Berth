@@ -41,6 +41,7 @@ ffmpeg 產種子檔），那只影響「造測試素材」這一步，不影響 
 | `air_date_lag.py` | M3 票 14：字幕組發佈比 TMDB 播出日晚多久、播出日比對的規則二在真實 feed 上擋下幾筆，定 `BEHIND_LATEST`。import `berth`（直接呼叫 `parser.check_airing`），要用 `uv run`；會連網，TMDB 憑證讀 `TMDB_API_KEY`；結果記在 `.scratch/m3/issues/14-air-date-check.md` 的 Comments |
 | `rss_auto_bind.py` | M3 票 09：RSS Series 自動綁定的規則對真的 Mikan 與 TMDB 認得出幾部、錯幾部。import `berth`（量的就是它的判定），要用 `uv run`；會連網，TMDB 憑證讀 `TMDB_API_KEY`；`docs/research/rss-sources.md` §2.8 |
 | `rss_sources.py` | M3 票 07：Mikan / Nyaa / acg.rip 三個索引站的 RSS 欄位事實——feedparser 解析結果、bencode 核對 info hash、guid / hash / 大小 / 日期一致性、pubDate 時區偏移、合集標題掃描。不用容器、不連網，只讀 `tests/fixtures/http/`；`docs/research/rss-sources.md` §7.4 |
+| `runtime_gap.py` | M3 票 15：片長驗證的門檻（`RUNTIME_SLACK`、`RUNTIME_RATIO`）：真的 mediainfo 片長（AnimeTosho）對語料的 TMDB 快照，量對得上的正片比例與秒數差落在哪；兩集合併檔以相鄰兩集的真實片長相加模擬，NCOP / SP 沒有量到。不用容器、不需要憑證，只讀本地 `tests/fixtures/`，不下載任何影片內容；結果記在 `.scratch/m3/issues/15-runtime-check.md` 的 Comments |
 | `lib.py` | 共用的 HTTP、輪詢、bencode、報告輸出 |
 
 ## 幾個不明顯的地方
@@ -115,3 +116,21 @@ ffmpeg 產種子檔），那只影響「造測試素材」這一步，不影響 
   遠大於 `requests_seconds`（兩支請求之間隔多久）。
 - **Host 標頭帶的是容器裡的 port（`localhost:8080`），不是宿主發佈的 18093**：qBittorrent 比對 Host 的 port 與它
   自己聽的那一個，對不上時 log 是 `Invalid Host header, port mismatch`、回應是 401（不是 403）。
+- **`runtime_gap.py` 對 AnimeTosho 的每個檔案頁面要自己節流**：連續無延遲地打 `/file/<id>` 會被 AT 的限速器
+  擋下 HTTP 429（回應是 nginx 的預設錯誤頁，長得完全不像 mediainfo，第一版沒特判過就整份快取下來，
+  量出 0 筆資料才發現）。腳本每次活的請求前都會 `_pace()`（最少間隔 0.5 秒），429 另外照 `Retry-After`
+  或退避重試、不快取；要重新驗證這段邏輯，刪 `.local/experiments/cache/runtime_gap/` 裡對應的 `.bin` 重跑即可。
+- **AT 對批次（多檔）種子常回 `status: "skipped"`，哪怕種子本身沒事**：不是只有失效種子才這樣，這次量到
+  的 fixture 本身種子有 6+ 個屬於這種情況，腳本因此改抓同一部作品、同一段集數的另一個發佈（`is_alt=True`）
+  ——集數對得上、正片內容一樣，但不是 fixture JSON 字面上那個種子／字幕組／編碼。
+  fixtures 沒有的一定得靠這招時要留意這一點。
+- **TMDB 有些長壽番的季集號不是每季從 1 開始**：One Piece（`tv-37854`）season 22 的 67 集直接沿用全劇累計
+  的絕對集號（`episode_number` 從 1089 起），season 內找不到 episode 1；「這一季的第一集」要用
+  `season_first_episode()`（該季 `episode_number` 的最小值）動態算，不能寫死 1，否則 runtime 查詢回 `None`。
+- **Frieren 的 TMDB season 0「Specials」跟字幕組批次裡的 S00 特典是兩批完全不同的內容**：字幕組把 BD 特典
+  編成 S00E01-11（每集長度接近正片），TMDB 的 season 0 卻是另一組 26 支 1-2 分鐘的短篇「OO 魔法」，兩邊
+  集號沒有對應關係；就算真的量得到特典時長也不能拿 TMDB season 0 直接比，腳本刻意把 season-0/SP 資料整段
+  排除在「正確對應正片」的分析之外，不是「拿不到」而是「這樣比較沒有意義」。
+- **AnimeTosho 官方公告 2026 年 10 月初到中旬停止服務**：`runtime_gap.py` 抓到的原始資料快取在
+  `.local/experiments/cache/runtime_gap/`，關站後還能對著快取重跑分析，但要擴大樣本（目前只解到 8 部
+  作品，`SKIPPED_SHOWS` 裡還有幾組沒 drill down 完）要趁它還在的時候做。

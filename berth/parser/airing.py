@@ -23,16 +23,13 @@ from collections.abc import Sequence
 from datetime import date, datetime, timedelta
 
 from berth.domain import (
-    EpisodeSnapshot,
-    ItemReason,
     MediaSnapshot,
-    PlanAction,
     PlanItem,
     episode_label,
     why,
 )
 from berth.domain import ReasonCode as Code
-from berth.parser.planner import episode_span
+from berth.parser.planner import episode_span, hold, note
 
 #: 播出日比對把一列送審核時留下的理由。規劃器看到其中一條就把整份 Plan 的理由說成
 #: `ReviewReason.AIR_DATE_CONFLICT`（`services/plan._verdict`）。
@@ -78,13 +75,13 @@ def _checked(
     season, start, end = span
     label = episode_label(season, start, end if end != start else None)
     if published is None:
-        return _noted(item, why(Code.PUBLISHED_MISSING))
+        return note(item, why(Code.PUBLISHED_MISSING))
     aired = _aired(media, season, end)
     if aired is None:
-        return _noted(item, why(Code.AIR_DATE_MISSING, episode=label))
+        return note(item, why(Code.AIR_DATE_MISSING, episode=label))
     day = published.date()
     if aired - day > RELEASE_TOLERANCE:
-        return _held(
+        return hold(
             item,
             why(
                 Code.RELEASED_BEFORE_AIRING,
@@ -96,7 +93,7 @@ def _checked(
     latest = _latest(media, day) if from_series and season > 0 else None
     if latest is not None and _far_behind(aired, latest[1], day):
         number, when = latest
-        return _held(
+        return hold(
             item,
             why(
                 Code.BEHIND_LATEST_EPISODE,
@@ -136,22 +133,5 @@ def _latest(media: MediaSnapshot, day: date) -> tuple[tuple[int, int], date] | N
 
 def _aired(media: MediaSnapshot, season: int, episode: int) -> date | None:
     """TMDB 說這一集哪天播。沒有這一集、或 TMDB 沒填日期，都是 `None`。"""
-    found: EpisodeSnapshot | None = next(
-        (
-            row
-            for block in media.seasons
-            if block.season_number == season
-            for row in block.episodes
-            if row.episode_number == episode
-        ),
-        None,
-    )
+    found = media.episode(season, episode)
     return found.air_date if found is not None else None
-
-
-def _held(item: PlanItem, reason: ItemReason) -> PlanItem:
-    return item.model_copy(update={"action": PlanAction.REVIEW, "reasons": (*item.reasons, reason)})
-
-
-def _noted(item: PlanItem, reason: ItemReason) -> PlanItem:
-    return item.model_copy(update={"reasons": (*item.reasons, reason)})

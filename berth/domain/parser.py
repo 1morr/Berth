@@ -258,6 +258,13 @@ class ReasonCode(StrEnum):
     #: 來源沒有給發佈時間，所以沒有比對播出日。
     PUBLISHED_MISSING = "published_missing"
 
+    # --- 片長驗證（M3 票 15，`parser.runtime`） ------------------------------------------
+    #: mediainfo 量到 `{measured}`，TMDB 上 `{episode}` 是 `{minutes}` 分鐘：差太多，多半是
+    #: SP / OVA 或兩集合併的檔案被當成了這一集。
+    RUNTIME_MISMATCH = "runtime_mismatch"
+    #: TMDB 沒有 `{episode}` 的片長，所以沒有比對片長。
+    RUNTIME_MISSING = "runtime_missing"
+
     # --- 處置 -------------------------------------------------------------------------
     #: 分類就決定了處置：它是 `{kind}`（`FileKind`）。
     CLASSIFIED = "classified"
@@ -339,6 +346,8 @@ REASON_PARAMS: dict[ReasonCode, frozenset[str]] = {
     _C.BEHIND_LATEST_EPISODE: frozenset({"episode", "aired", "latest", "latest_aired"}),
     _C.AIR_DATE_MISSING: frozenset({"episode"}),
     _C.PUBLISHED_MISSING: frozenset(),
+    _C.RUNTIME_MISMATCH: frozenset({"episode", "measured", "minutes"}),
+    _C.RUNTIME_MISSING: frozenset({"episode"}),
     _C.CLASSIFIED: frozenset({"kind"}),
     _C.DISC_STRUCTURE: frozenset(),
     _C.OWN_NUMBERED_SPECIAL: frozenset(),

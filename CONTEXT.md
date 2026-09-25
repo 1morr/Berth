@@ -190,12 +190,16 @@ _Avoid_: mapping, import job, rename plan
 _Avoid_: draft plan, preview
 
 **Review Reason**（停下來的理由）:
-一份 Plan 停在 review 的六種理由：`low_confidence`、`medium_not_allowed`、`nothing_to_import`、入庫途中目標上已經有別人的檔案的 `target_exists`、管理員撤銷了一個 Audit 的 `audit_undone`，以及發佈時間與換算出的那一集的播出日對不上的 `air_date_conflict`（**播出日比對**，M3 票 14）。六種的下一步不同，所以是封閉集合而不是一句話。停在 review 的 Plan 由管理員**核准**（照提案入庫）或**拒絕**（丟掉這一份、重新規劃）。
+一份 Plan 停在 review 的七種理由：`low_confidence`、`medium_not_allowed`、`nothing_to_import`、入庫途中目標上已經有別人的檔案的 `target_exists`、管理員撤銷了一個 Audit 的 `audit_undone`，發佈時間與換算出的那一集的播出日對不上的 `air_date_conflict`（**播出日比對**，M3 票 14），以及量到的片長與 TMDB 那一集差太多的 `runtime_conflict`（**片長驗證**，M3 票 15）。七種的下一步不同，所以是封閉集合而不是一句話。停在 review 的 Plan 由管理員**核准**（照提案入庫）或**拒絕**（丟掉這一份、重新規劃）。
 _Avoid_: error, message
 
 **Air-date check**（UI 顯示「播出日比對」）:
 規劃時拿來源的**發佈時間**（索引站的 `publishDate`、Feed Item 的發佈時間，存在 Job 上）比換算出的那一集的 TMDB 播出日：發佈早於播出日超過兩天，或 RSS Series 對到的那一集比作品在發佈當時最近播出的一集早很多，那一列就停下來等人，Plan 的 Review Reason 是 `air_date_conflict`。抓的是規則層有把握卻算錯的集數（offset、絕對編號），不是信心。
 _Avoid_: freshness, age score
+
+**Runtime check**（UI 顯示「片長驗證」）:
+規劃時拿 mediainfo 量到的片長比換算出的那一集的 TMDB 片長，差太多的那一列停下來等人，Plan 的 Review Reason 是 `runtime_conflict`。抓的是分類錯誤（SP、OVA、兩集合併的檔案被當成一集正片），不是集數；短於五分鐘的「正片」由分類器自己降成 extra，不歸它管。
+_Avoid_: duration score, length filter
 
 **Landing**（核准後的落點）:
 一份停在 review 的 Plan 上每一列「核准的話會寫到哪裡」：待審核的列照提案算、字幕跟著影片，與核准時真的寫進 Plan 的是同一次計算，所以畫面上看到的就是 importer 待會兒鏈接的那一條。還沒有提案或不會進媒體庫的列沒有落點。

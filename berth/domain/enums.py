@@ -816,6 +816,9 @@ class ReviewReason(StrEnum):
     #: 多半算錯了。下一步是改季集（從這裡套用到整個 RSS Series 在票 14b）；BD 版晚發這種對的也會
     #: 落在這裡，那時核准就好。
     AIR_DATE_CONFLICT = "air_date_conflict"
+    #: mediainfo 量到的片長與 TMDB 那一集的片長差太多（M3 票 15，`parser.runtime`）：多半是 SP、
+    #: OVA 或兩集合併的檔案被當成了一集正片。下一步是改那一列的處置或季集；片長其實沒錯的核准就好。
+    RUNTIME_CONFLICT = "runtime_conflict"
 
 
 class ReviewKind(StrEnum):
