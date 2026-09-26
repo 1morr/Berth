@@ -34,7 +34,7 @@ from tests.integration.test_deletion import LINKS, imported
 from tests.integration.test_importer import ledger_of, run, same_file, state_of
 from tests.integration.test_plan import NOW, events_of
 from tests.integration.test_reconcile import issues_of
-from tests.integration.test_reconcile_checks import features, open_of, scanned
+from tests.integration.test_reconcile_checks import SPY, features, open_of, scanned
 
 pytestmark = pytest.mark.asyncio
 
@@ -126,7 +126,7 @@ class TestRebuildingADeletedLibrary:
         wipe_library(route)
 
         await reimported(session, factory, job)
-        factory.jellyfin_.items_ = scanned(route, await features(session))
+        factory.jellyfin_.items_ = scanned(route, await features(session), tmdb_id=SPY)
         await sweep_resolutions(session, factory, now=utcnow() + timedelta(minutes=1))
 
         found = [entry.jellyfin_item_id for entry in await features(session)]

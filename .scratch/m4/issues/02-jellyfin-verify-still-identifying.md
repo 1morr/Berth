@@ -1,6 +1,6 @@
 # 02 — Jellyfin 回驗：「還在認」不是不一致；版本重排只推同一集
 
-**Status:** ready-for-agent
+**Status:** in-progress
 
 **Blocked by:** None — can start immediately
 
@@ -37,11 +37,27 @@
 
 ## 驗收
 
-- [ ] 試跑那份「還在認」的 item 不開 Issue，之後讀到一致時也沒有收掉又重開（整合測試，雙向：真的認成別的季集仍開）
-- [ ] 同一季入庫第 N 集時，只有同一集的其他版本被重排反查（測試，雙向）
-- [ ] 一筆 Job 的「全部找到」事件只寫一次（測試）
-- [ ] 上面兩個被改掉意義的既有測試改寫而不是刪掉；plan §2.4、§3.1 與 brief §5.2 同步
+- [x] 試跑那份「還在認」的 item 不開 Issue，之後讀到一致時也沒有收掉又重開（整合測試，雙向：真的認成別的季集仍開）
+- [x] 同一季入庫第 N 集時，只有同一集的其他版本被重排反查（測試，雙向）
+- [x] 一筆 Job 的「全部找到」事件只寫一次（測試）
+- [x] 上面兩個被改掉意義的既有測試改寫而不是刪掉；plan §2.4、§3.1 與 brief §5.2 同步
 - [ ] 真服務 e2e 的 `test_jellyfin_reading_an_episode_differently_opens_an_issue` 仍綠
-- [ ] lint、type、test 綠燈
+- [x] lint、type、test 綠燈
 
 ## Comments
+
+2026-09-26 實作：
+
+- **「還在認」的定義**（`resolver.still_identifying`）：Episode 讀不出季號或集號，或帳本有作品而 Jellyfin 那一邊的作品沒有 TMDB id（Series 查不到也算）。電影同一條：自己的 Tmdb 是空的就是還在認（票面只講了 Episode 與 Series，行為一致所以一起）。
+- **六次都認不出落到 `jellyfin_item_mismatch`**，不是票面列的 `jellyfin_item_unresolved` 或新理由：Jellyfin 列出了這個檔案，說「沒列出」是錯的；而 mismatch 的 `detail_json` 並排兩邊，正說得出它讀成空的，畫面與「重新反查」都現成。plan §2.4、progress.md 偏差記了。
+- **重排間隔**：試跑量到的是上界約 12 分鐘（下一次反查碰巧讀到的時間）。code-review 指出第 3 次之後要等一小時，真服務 e2e 等第一集只等 1200 秒——還在認的改成最晚 10 分鐘再看（同 `SCAN_SETTLE`），六次約 43 分鐘問完。季集讀自檔名、作品讀自 `[tmdbid-…]`，都不必連網。事實補進 brief §20.1。
+- **還在認的不提醒 Jellyfin**（票面沒寫）：它已經列出檔案，再請它掃只會從頭認起。
+- **對帳那一方遇到還在認的：照樣換新 item / Series id，但不比**（不開不收）。一開始連換新也跳過，結果票 13 的 Series id 補欄與合併後換主條目的測試紅了——那兩件與認沒認完無關。
+- **既有測試的 fixture**：`test_reconcile_checks.scanned` 的 Series 預設沒有 Tmdb（票 13 要牆只靠 Series id 認），走反查的兩處（`test_issue_repairs` 的重新反查 / 重新掃描、`test_reimport`）改傳 `SPY`。
+- **`jellyfin_item_resolved` 的「找到」**：帳本那一列有 item、不再排反查。認成別的、六次認不出而開了 mismatch 的算（Jellyfin 裡打得開）；放棄的不算。plan §3.1 寫明。
+
+code-review（Standards / Spec 兩軸）已修：brief §20.1 補事實、條件式裡的副作用寫明（ruff SIM102 不讓拆成巢狀 if，改用註解說 `_reschedule` 會排下一次）、`_Lookup.identifying` / `_works` 改名 `still_identifying` / `_tmdb_ids`、補「找到之後被排回反查、撞上重掃」的整合測試、還在認最晚 10 分鐘。未處理：
+
+- **`_all_found` 不看 `LedgerEntry.status`**：同一筆 Job 有一列在反查前就被拆掉鏈接（`unlinked`）又永遠沒有 item 時，這筆永遠不寫「全部找到」。刪除範圍拆鏈接是整筆 Job 一起，實際造不出來；有 repro 再改。
+- **`ResolveOutcome.retried` 現在含還在認的那幾列**，六次認不出而比了的那一列算 `resolved`（它找到了）。只進 log。
+- `_same_episode` 的「集號範圍」寫法（`episode_end or episode_start`）在 `planner` / `plan` / `inventory` 還有三處，沒有抽出來。

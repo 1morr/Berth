@@ -394,12 +394,16 @@ def record_link(
 async def restate_versions(
     session: AsyncSession, item: PlanItem, target: str, now: datetime
 ) -> None:
-    """同一個資料夾裡其他正片重新排一次反查（票 14b）。
+    """同一集的其他版本重新排一次反查（票 14b；M4 票 02 從「同一個資料夾」縮到同一集）。
 
     Jellyfin 12 的版本名是「去掉**各版本**檔名的共同前綴」剩下的部分，所以多一個版本會改掉
     同一集其他版本的名字：單獨一個時是整個檔名主幹，第二個進來之後兩個都縮短（2026-09-16 對
     12.1.0 實測）。帳本上先前那幾筆已經反查完、不再排程，不推它們一把就會停在舊名字，而畫面
     正是在多版本那一塊把它們並排（`services/inventory.py` 的 `_versions`）。
+
+    **範圍是 Jellyfin 的版本分組**：同一個資料夾、同一季、集號範圍重疊；電影沒有季集，同一個
+    資料夾就是同一部。以前是整個資料夾——一季每入庫一集就把前面每一集重反查一次，而且每次都
+    撞在新檔案觸發的重掃上（2026-09-26 試跑）。
     """
     if item.action is not PlanAction.IMPORT or item.media_id is None:
         return
@@ -413,9 +417,20 @@ async def restate_versions(
         )
     )
     for entry in siblings:
-        if str(PurePosixPath(entry.target_path).parent) == folder:
+        if str(PurePosixPath(entry.target_path).parent) == folder and _same_episode(entry, item):
             entry.resolve_attempts = 0
             entry.resolve_after = first_resolve_at(now)
+
+
+def _same_episode(entry: LedgerEntry, item: PlanItem) -> bool:
+    """同一季、集號範圍重疊。沒有集號的（電影）只看資料夾。"""
+    if item.episode_start is None or entry.episode_start is None:
+        return item.episode_start is None and entry.episode_start is None
+    if entry.season != item.season:
+        return False
+    ours = (item.episode_start, item.episode_end or item.episode_start)
+    theirs = (entry.episode_start, entry.episode_end or entry.episode_start)
+    return ours[0] <= theirs[1] and theirs[0] <= ours[1]
 
 
 async def _link_failed(

@@ -233,7 +233,7 @@ _Avoid_: directory name, slug（slug 是 Route 的）
 _Avoid_: copy, duplicate（Tags 完全相同的才是重複）
 
 **Resolve**（反查）:
-入庫之後向 Jellyfin 問出那個檔案是哪一個 item（劇集再加它的 Series）。延遲、會重試，排程存在帳本上；找到之前卡片說「Jellyfin 還在掃描」。
+入庫之後向 Jellyfin 問出那個檔案是哪一個 item（劇集再加它的 Series）。延遲、會重試，排程存在帳本上；Jellyfin 列出了 item 但還沒認完（季集、作品是空的）不算找到。找到之前卡片說「Jellyfin 還在掃描」。
 _Avoid_: sync, lookup, match
 
 **Ledger Entry**:
@@ -282,7 +282,7 @@ Reconciler、管線或健康檢查發現、要有人決定的事，有固定型�
 _Avoid_: error, problem, orphan（僅作 Issue 型別名的一部分）
 
 **Jellyfin 回驗**:
-反查或對帳找到入庫檔案的 Jellyfin item 之後，比 Jellyfin 認到的季號、集號（多集檔是範圍）與所屬作品的 TMDB id 是否與帳本一致；不一致是一件 `jellyfin_item_mismatch`。抓的是 Jellyfin 那邊的意外，抓不到 Berth 自己算錯的集數。
+反查或對帳找到入庫檔案的 Jellyfin item 之後，比 Jellyfin 認到的季號、集號（多集檔是範圍）與所屬作品的 TMDB id 是否與帳本一致；不一致是一件 `jellyfin_item_mismatch`。Jellyfin 還在認（季集是空的、作品沒有 TMDB id）不算不一致，照反查的排程再問，六次都還認不出才算。抓的是 Jellyfin 那邊的意外，抓不到 Berth 自己算錯的集數。
 _Avoid_: verify, validation（單說「驗證」會和播出日比對、片長驗證混在一起）
 
 **Unmanaged**:

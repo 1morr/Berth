@@ -1131,3 +1131,5 @@
 - 2026-09-26 試跑回饋第二輪續（不是票）：上一條開著的兩題定案——**RSS Series 保留、以作品呈現、完結自動收起、Series 層排除收進進階**（M4 票 13）；**補舊集維持 2026-09-24 的一律全補，不加開關**（大批送單的後果由票 03 承接）。同時開**自動綁定的暫時失敗重試與季名**（票 14）。brief §19 同日三列。
 - 2026-09-26 M4 票 01：**poller 選「鎖拿齊再寫、一輪一個交易」而不是逐筆 commit**：逐筆 commit 會讓「Job 接回與它的 Issue 收掉是同一刻」（`close_settled`，M3 票 02）破掉，且下載中每一筆每一輪都有進度要寫，一輪上百次 fsync。代價是 poller 等某一把被送單握著跨網路的鎖時，排序在前的那幾筆跟著等（asyncio 等待，不會 `database is locked`）。`torrents/files` 只替 `submitted` / `submit_failed` / `client_removed` 預抓：`missing_files` / `client_error` 接回時落在 `submitted` 的那一種要多等一輪才建清單（plan §3.3）。
 - 2026-09-26 M4 票 01：**刪除的 CAS 移到向 qBittorrent 移除之後**，推翻 M3 票 01 的「轉換是鎖裡的第一件事」：鎖裡先比對狀態（擋兩個分頁），CAS 留著當後盾。CAS 輸掉時 torrent 已經移除、回 `moved_on`——只有沒拿鎖改狀態的寫者造得出這種半套，目前沒有這種寫者。
+- 2026-09-26 M4 票 02：**六次都認不出的 item 落到 `jellyfin_item_mismatch`**，不是票面列的 `jellyfin_item_unresolved` 或新理由：Jellyfin 列出了這個檔案，「沒列出」說錯了；mismatch 的 detail 並排兩邊，正說得出它讀成空的。還在認的最晚 10 分鐘再看（六次約 43 分鐘），因為試跑的 12 分鐘只是上界、而原本第 3 次之後要等一小時（plan §3.2）。
+- 2026-09-26 M4 票 02：**`jellyfin_item_resolved` 改義為「這一筆的正片全部找到」，一筆 Job 只寫一次**，名稱與 payload（`count`＝整筆正片數）不變，前端與既有資料不必動；M4 的「可以看了」讀它（plan §3.1、brief §5.2）。

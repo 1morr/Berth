@@ -154,7 +154,7 @@ importing  ─► import_failed（可重試）
 
 `created(trigger, user, media, route)`、`submitted(client, category, save_path)`、`metadata_received(file_count, total_size)`、`preplan(result, confidence)`、`progress(每 25% 一筆)`、`completed`、`plan_generated(engine=rules|ai, confidence, model, tokens, cost)`、`review_required(reason)`、`review_decided(user, changes)`、`linked(file, target)`、`link_failed(file, error)`、`jellyfin_scan_requested(paths)`、`jellyfin_item_resolved(count)`、`issue_detected(type)`、`deleted(links, sources, torrent, purged, freed, unmanaged)`。
 
-`jellyfin_item_resolved` 是**一筆 Job 一行、說找到了幾個**（`count`），不是逐檔帶 item id：一季 24 集的時間線不該被 24 行「找到了」淹沒，而 item id 已經寫在帳本那幾列上（`services/resolver.py`，M3 票 01 照程式碼更正）。`deleted` 說的是真的做掉了什麼而不是勾了哪幾格（§9.2），誰按的在事件的 `actor`。
+`jellyfin_item_resolved` 是**一筆 Job 一行、說找到了幾個**（`count`），不是逐檔帶 item id：一季 24 集的時間線不該被 24 行「找到了」淹沒，而 item id 已經寫在帳本那幾列上（`services/resolver.py`，M3 票 01 照程式碼更正）。**它是「這一筆的正片全部在 Jellyfin 認出來了」，一筆 Job 只寫一次**（M4 票 02）：`count` 是整筆的正片數；之後的重新反查找到的不再寫，有一集放棄了就不寫。M4 通知的「可以看了」讀的就是它。`deleted` 說的是真的做掉了什麼而不是勾了哪幾格（§9.2），誰按的在事件的 `actor`。
 
 Event 是 Job 頁時間線的資料來源，也是未來 AI 理解「發生了什麼」的介面。
 
@@ -762,6 +762,7 @@ M1.5 拆票前的四條待決，2026-09-15 已全數照推薦拍板（上表「M
 - 深連結：`{server}/web/index.html#!/details?id={itemId}&serverId={serverId}` 在 10.10.7 與 10.11.11 **都能開到詳細頁**，前端會正規化成 `#/details?id=…`；客戶端自己產生的連結一律不帶 `!`（2026-09-07 playwright 實測，§20.6）。沒有「直接開始播放」的穩定 URL。
 - **`serverId` 可以不帶**：12.0.0 上登入後直接開 `{server}/web/#/details?id={seriesId}`（沒有 `serverId`）照樣畫出該作品的詳細頁與季列（2026-09-15 playwright 實測，Series `大熊餐廳`）。10.10 / 10.11 沒有測過不帶的形式。Berth 產生的連結不帶它（票 13）。
 - **`GET /Items` 的每一筆都帶 `ServerId`，Episode 另帶 `SeriesId` 與 `SeasonId`**，不必另外在 `fields` 要（2026-09-15 對 12.0.0 實測）。反查一集時順手就知道它屬於哪個 Series，媒體庫的深連結靠它開到作品而不是某一集（票 13）。
+- **剛掃進來的 item 有一段時間還沒認完**（2026-09-26 試跑環境，12.1，BLACK TORCH 一季 12 集；記錄在 `docs/progress.md` 同日「M3 後的全面審查」）：`GET /Items` 已經列出這個 Episode、`Path` 對得上，但 `Name` 是作品名、`ParentIndexNumber` / `IndexNumber` 是空的，所屬 Series 沒有 `ProviderIds.Tmdb`；同一個 item 之後讀回 `Episode S01E10`、Series 帶 Tmdb。這一段落在新檔案觸發的重掃上，試跑量到的上界是入庫後約 12 分鐘（那是下一次反查碰巧讀到的時間，不是 Jellyfin 真正花的時間）。反查因此先問「認完了沒」再比（`resolver.still_identifying`，M4 票 02）。
 - Webhook 插件有 `ItemAdded` / `ItemDeleted`，但走排程批次且社群長期回報不可靠（[#252](https://github.com/jellyfin/jellyfin-plugin-webhook/issues/252)、[#367](https://github.com/jellyfin/jellyfin-plugin-webhook/issues/367)）→ 支持 §9 以排程對帳為主。
 
 **Provider**

@@ -479,10 +479,15 @@ async def resolved_before_ticket_13(session: AsyncSession) -> list[LedgerEntry]:
     return entries
 
 
+#: `imported` 那一部（SPY x FAMILY）的 TMDB id：Jellyfin 認完之後 Series 的 `ProviderIds.Tmdb`。
+SPY = "120089"
+
+
 def scanned(route: Route, entries: list[LedgerEntry], *, tmdb_id: str = "") -> list[JellyfinItem]:
     """Jellyfin 掃完之後：作品資料夾是一個 Series，每一個正片一個 Episode。
 
     Series 的 `tmdb_id` 預設是空的：媒體庫牆只能靠帳本記著的 Series id 認出它（票 13）。
+    反查（`sweep_resolutions`）要傳 `SPY`：作品沒有 TMDB id 的是 Jellyfin 還在認（M4 票 02）。
     """
     root = PurePosixPath(route.target_path)
     folder = root / PurePosixPath(entries[0].target_path).relative_to(root).parts[0]

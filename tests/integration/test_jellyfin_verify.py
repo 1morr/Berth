@@ -25,6 +25,7 @@ from berth.models import Issue, LedgerEntry, Route
 from berth.models.types import utcnow
 from berth.services.issues import list_issues, resolve_issue
 from berth.services.reconcile import reconcile_once
+from berth.services.resolve_schedule import RESOLVE_DELAYS
 from berth.services.resolver import sweep_resolutions
 from tests.integration.factories import FakeClientFactory
 from tests.integration.test_plan import NOW
@@ -82,6 +83,128 @@ async def look_again(session: AsyncSession, factory: FakeClientFactory, at: time
         entry.resolve_after = NOW + at
     await session.commit()
     await sweep_resolutions(session, factory, now=NOW + at)
+
+
+async def until_given_up(
+    session: AsyncSession, factory: FakeClientFactory, entry: LedgerEntry
+) -> None:
+    """照那一列自己的排程一直問，問到它不再排程（找到或用完 6 次）。"""
+    await session.refresh(entry)
+    while entry.resolve_after is not None:
+        await sweep_resolutions(session, factory, now=entry.resolve_after)
+        await session.refresh(entry)
+
+
+def still_identifying(item: JellyfinItem) -> JellyfinItem:
+    """2026-09-26 試跑記下的那一份：Jellyfin 還沒認完剛掃進來的檔案——Name 是作品名、季集
+    `None`。Series 那一邊沒有 Tmdb 由 `unidentified_series` 擺。"""
+    return replace(item, name="SPY x FAMILY", season=None, episode_start=None, episode_end=None)
+
+
+def unidentified_series(item: JellyfinItem) -> JellyfinItem:
+    return replace(item, tmdb_id="")
+
+
+class TestStillIdentifying:
+    """「還沒認出」不是「認得不一樣」（M4 票 02）：不寫 verdict，照還沒找到的節奏再問。"""
+
+    async def test_the_trial_reading_opens_nothing_and_is_asked_again(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        _, factory, first = await looked_up(session, roots)
+        jellyfin_reads(factory, f"episode-{first.episode_start}", still_identifying)
+        jellyfin_reads(factory, "series-1", unidentified_series)
+
+        outcome = await sweep_resolutions(session, factory, now=NOW + FIRST)
+
+        assert await issues_of(session) == []
+        assert outcome.resolved == 0
+        await session.refresh(first)
+        assert first.resolve_after == NOW + FIRST + RESOLVE_DELAYS[1]
+        # 還沒認完的不算找到：畫面照實說「還在掃描」，對帳的 Jellyfin 那一方也不去比它。
+        assert first.jellyfin_item_id == ""
+
+    async def test_once_jellyfin_is_done_it_agrees_without_ever_opening(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """試跑的另一半：幾分鐘後讀回 `S01E10`，Issue 被收掉、下一輪又重開。現在一件都不開。"""
+        route, factory, first = await looked_up(session, roots)
+        jellyfin_reads(factory, f"episode-{first.episode_start}", still_identifying)
+        jellyfin_reads(factory, "series-1", unidentified_series)
+        await sweep_resolutions(session, factory, now=NOW + FIRST)
+
+        await scanned(session, route, factory)
+        await until_given_up(session, factory, first)
+
+        assert [row for row in await issues_of(session) if row.type is MISMATCH] == []
+        await session.refresh(first)
+        assert first.jellyfin_item_id == f"episode-{first.episode_start}"
+
+    async def test_it_is_asked_again_within_ten_minutes(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """Jellyfin 已經列出檔案、只差認完：不必等到一小時（同請它掃描之後，`SCAN_SETTLE`）。"""
+        _, factory, first = await looked_up(session, roots)
+        jellyfin_reads(factory, f"episode-{first.episode_start}", still_identifying)
+        waits: list[timedelta] = []
+        at = NOW + FIRST
+        while True:
+            await sweep_resolutions(session, factory, now=at)
+            await session.refresh(first)
+            if first.resolve_after is None:
+                break
+            waits.append(first.resolve_after - at)
+            at = first.resolve_after
+
+        assert waits == [RESOLVE_DELAYS[1], *[timedelta(minutes=10)] * 4]
+
+    async def test_a_relook_that_catches_a_rescan_opens_nothing(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """試跑真正的迴圈：找到、一致，之後被排回反查（新版本入庫、重新反查），正好撞上
+        新檔案觸發的重掃，讀到的是空的。那一次不開，認完之後也沒有收掉又重開。"""
+        route, factory, first = await looked_up(session, roots)
+        await sweep_resolutions(session, factory, now=NOW + FIRST)
+        jellyfin_reads(factory, f"episode-{first.episode_start}", still_identifying)
+        jellyfin_reads(factory, "series-1", unidentified_series)
+
+        await look_again(session, factory, FIRST * 2)
+        await scanned(session, route, factory)
+        await until_given_up(session, factory, first)
+
+        assert [row for row in await issues_of(session) if row.type is MISMATCH] == []
+
+    async def test_a_reading_of_another_season_still_opens_at_once(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """雙向：認得出、而且認成別的季，不必等。"""
+        _, factory, first = await looked_up(session, roots)
+        jellyfin_reads(factory, f"episode-{first.episode_start}", season_two)
+
+        await sweep_resolutions(session, factory, now=NOW + FIRST)
+
+        (issue,) = await open_mismatches(session)
+        assert issue.ledger_id == first.id
+
+    async def test_six_readings_that_never_identify_open_a_mismatch(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """用完 6 次還認不出編號：落到 `jellyfin_item_mismatch`，它並排兩邊，說得出 Jellyfin
+        讀成了空的。不是 `jellyfin_item_unresolved`——Jellyfin 列出了這個檔案。"""
+        _, factory, first = await looked_up(session, roots)
+        jellyfin_reads(factory, f"episode-{first.episode_start}", still_identifying)
+
+        await until_given_up(session, factory, first)
+
+        (issue,) = await open_mismatches(session)
+        assert issue.ledger_id == first.id
+        detail = issue.detail_json or {}
+        assert detail["differs"] == ["season", "episode"]
+        assert detail["jellyfin"]["season"] is None
+        assert [row for row in await issues_of(session) if row.type is not MISMATCH] == []
+        await session.refresh(first)
+        assert first.resolve_attempts == len(RESOLVE_DELAYS)
+        assert first.jellyfin_item_id == f"episode-{first.episode_start}"
 
 
 class TestTheResolverCompares:
@@ -176,17 +299,21 @@ class TestTheResolverCompares:
         assert issue.ledger_id == first.id
         assert (issue.detail_json or {})["jellyfin"]["item"] == "episode-merged"
 
-    async def test_an_episode_whose_series_jellyfin_did_not_list_has_no_work(
+    async def test_an_episode_whose_series_never_gets_a_work_opens_an_issue_at_the_end(
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
-        """集指著一個查不到的 Series（或 Series 沒有 `ProviderIds.Tmdb`）：說不出是哪一部作品，
-        算不一致——那正是作品沒被認出來的樣子。"""
+        """集指著一個查不到的 Series（或 Series 沒有 `ProviderIds.Tmdb`）：說不出是哪一部作品。
+        剛掃進來時那是 Jellyfin 還在認（M4 票 02），所以先照「還沒找到」的節奏再問；六次都
+        還是這樣，才是作品沒被認出來，開一件。"""
         _, factory, first = await looked_up(session, roots)
         jellyfin_reads(
             factory, f"episode-{first.episode_start}", lambda item: replace(item, series_id="gone")
         )
 
         await sweep_resolutions(session, factory, now=NOW + FIRST)
+        assert await open_mismatches(session) == []
+
+        await until_given_up(session, factory, first)
 
         (issue,) = await open_mismatches(session)
         detail = issue.detail_json or {}
@@ -267,6 +394,21 @@ class TestTheReconcilerUsesTheSameCheck:
         await scanned(session, route, factory)
         await reconcile_once(session, factory, now=NOW + timedelta(days=2))
         assert await open_mismatches(session) == []
+
+    async def test_jellyfin_still_identifying_opens_and_closes_nothing(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """對帳那一刻 Jellyfin 正在重認（有人按了重新掃描）：與找不到同一個待遇，不動。"""
+        _, factory, first = await looked_up(session, roots)
+        jellyfin_reads(factory, f"episode-{first.episode_start}", season_two)
+        await sweep_resolutions(session, factory, now=NOW + FIRST)
+
+        jellyfin_reads(factory, "series-1", unidentified_series)
+        await reconcile_once(session, factory, now=NOW + timedelta(days=1))
+
+        (issue,) = await open_mismatches(session)
+        assert issue.ledger_id == first.id
+        assert issue.detected_at == NOW + FIRST
 
     async def test_jellyfin_being_down_closes_nothing(
         self, session: AsyncSession, roots: dict[str, Path]

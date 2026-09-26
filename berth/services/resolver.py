@@ -22,7 +22,9 @@ Jellyfin 自己算的（去掉各版本檔名的共同前綴，算法連 12.0 �
 
 **找到之後比三件事**（Jellyfin 回驗，plan §11.4 ③、M3 票 17）：Jellyfin 認的季號、集號（多集檔
 是範圍）、所屬作品的 `ProviderIds.Tmdb`，都要與帳本一致，不一致就是一件
-`jellyfin_item_mismatch`，下一次比到一致由系統收掉。它是**便宜的保險**：抓的是 Jellyfin 那邊的
+`jellyfin_item_mismatch`，下一次比到一致由系統收掉。**比之前先問 Jellyfin 認完了沒**（M4 票 02）：
+剛掃進來的檔案有一段時間季集是 `None`、Series 沒有 TMDB id，那是「還沒認出」不是「認得不一樣」
+——照還沒找到的節奏再問，六次都還認不出才開那一件。它是**便宜的保險**：抓的是 Jellyfin 那邊的
 意外（兩份涵蓋範圍不同的正片被併成一集、作品被認成別的），Berth 自己算錯的集數它抓不到——
 Jellyfin 認集數靠的就是 Berth 取的檔名（brief §6.10）。反查與對帳的 Jellyfin 那一方
 （`refresh_resolved`）比的是同一份（`disagreement`），寫下與收掉也是同一支（`settle_verdicts`）。
@@ -49,8 +51,8 @@ from berth.adapters.jellyfin import (
     JellyfinItem,
     scan_libraries,
 )
-from berth.domain import CollectionType, EventType, IssueStatus, IssueType
-from berth.models import Issue, JellyfinSettings, Job, LedgerEntry, Media, Route
+from berth.domain import CollectionType, EventType, IssueStatus, IssueType, PlanAction
+from berth.models import Event, Issue, JellyfinSettings, Job, LedgerEntry, Media, Route
 from berth.models.types import utcnow
 from berth.services.clients import ServiceClientFactory
 from berth.services.issues import Recorded, clear_by_system, record_issue
@@ -67,8 +69,10 @@ logger = logging.getLogger(__name__)
 #: 靜靜地什麼都不做（2026-09-15 對 12.0.0 實測、查核 `FileRefresher.GetAffectedBaseItem`）。
 SCAN_AFTER_MISSES = 2
 
-#: 請 Jellyfin 掃描之後，下一次最晚多久再看。原本的間隔到後面是一小時，那是在等它自己的排程；
-#: 已經開口請它掃了，就不必等那麼久。
+#: 請 Jellyfin 掃描之後、或它正在認的時候，下一次最晚多久再看。原本的間隔到後面是一小時，那是
+#: 在等它自己的排程；已經開口請它掃了、或它已經列出檔案只差認完，就不必等那麼久。還在認的六次
+#: 因此在入庫後約 43 分鐘內問完（M4 票 02）：季集讀自檔名、作品讀自資料夾的 `[tmdbid-…]`，
+#: 都不必連網，認不完的就是認不出。
 SCAN_SETTLE = timedelta(minutes=10)
 
 
@@ -125,6 +129,7 @@ async def sweep_resolutions(
     client = factory.jellyfin(settings.base_url, token=settings.api_key)
     found: list[LedgerEntry] = []
     waiting: list[LedgerEntry] = []
+    identifying: list[LedgerEntry] = []
     given_up: list[LedgerEntry] = []
     verdicts: list[Verdict] = []
     try:
@@ -132,25 +137,34 @@ async def sweep_resolutions(
             lookup = await _look_up(session, client, route, entries)
             for entry in entries:
                 item = locate(entry.target_path, lookup.items)
-                if item is not None:
-                    _remember(entry, item)
-                    entry.resolve_after = None
-                    found.append(entry)
-                    verdicts.append(lookup.verdict(entry, item))
-                elif _reschedule(entry, moment):
-                    given_up.append(entry)
-                else:
-                    waiting.append(entry)
-        if await _remind(client, waiting):
-            for entry in waiting:
-                if entry.resolve_after is not None:
-                    entry.resolve_after = min(entry.resolve_after, moment + SCAN_SETTLE)
+                if item is None:
+                    if _reschedule(entry, moment):
+                        given_up.append(entry)
+                    else:
+                        waiting.append(entry)
+                    continue
+                # 還沒認完的照「還沒找到」的節奏再問（`_reschedule` 排下一次，最晚 10 分鐘），但不
+                # 提醒 Jellyfin：它已經列出這個檔案，再請它掃一次只會讓它從頭認起。`_reschedule`
+                # 說用完 6 次時落到下面：照它現在讀成的樣子比，開那一件。
+                if lookup.still_identifying(entry, item) and not _reschedule(entry, moment):
+                    identifying.append(entry)
+                    continue
+                _remember(entry, item)
+                entry.resolve_after = None
+                found.append(entry)
+                verdicts.append(lookup.verdict(entry, item))
+        settling = [*identifying, *waiting] if await _remind(client, waiting) else identifying
+        for entry in settling:
+            if entry.resolve_after is not None:
+                entry.resolve_after = min(entry.resolve_after, moment + SCAN_SETTLE)
         await _announce(session, found, given_up)
         await settle_verdicts(session, verdicts, moment)
     finally:
         await client.aclose()
     await session.commit()
-    return ResolveOutcome(resolved=len(found), retried=len(waiting), exhausted=len(given_up))
+    return ResolveOutcome(
+        resolved=len(found), retried=len(waiting) + len(identifying), exhausted=len(given_up)
+    )
 
 
 async def refresh_resolved(
@@ -167,7 +181,9 @@ async def refresh_resolved(
       本來就比 `MediaSources`，所以重對一次就會對到主條目。
 
     **找不到的那幾條不動**：「Jellyfin 現在沒列出它」可能是還在重掃、可能是它被刪了，而檔案
-    在不在是媒體庫那一方的事。這一支只把找得到的換新，不清掉任何東西。
+    在不在是媒體庫那一方的事。這一支只把找得到的換新，不清掉任何東西。**還在認的那幾條照樣換新，但不比**
+    （`still_identifying`，M4 票 02）：對帳那一刻有人按了重新掃描，開著的那一件不收、也不開新的；
+    item 與 Series id 是 Jellyfin 列出它就有的，與認沒認完無關。
 
     Jellyfin 問不到時 `ServiceError` 往上丟：呼叫端（對帳的那一方）要說出「問不到」，而不是
     把「一條都沒改」當成「都對得上」。
@@ -183,7 +199,8 @@ async def refresh_resolved(
             item = locate(entry.target_path, lookup.items)
             if item is None:
                 continue
-            verdicts.append(lookup.verdict(entry, item))
+            if not lookup.still_identifying(entry, item):
+                verdicts.append(lookup.verdict(entry, item))
             before = (
                 entry.jellyfin_item_id,
                 entry.jellyfin_series_id,
@@ -207,7 +224,8 @@ def disagreement(
     三件事：季號、集號範圍、作品的 TMDB id（Episode 是它所屬 Series 的，Movie 是它自己的）。
     **單集檔的結束集兩邊寫法不一定相同**（帳本可能是 `None` 或等於起始集，Jellyfin 的
     `IndexNumberEnd` 只有多集檔才有），所以都補成起始集再比。Jellyfin 認不出編號（`None`）
-    就是不一致——那正是「沒被認成正片」的樣子。帳本說不出作品（Media 被刪了）時不比作品：
+    在這裡是不一致，但呼叫端先問過 `still_identifying`：六次都還認不出，才拿這一份去開 Issue
+    ——那時它正是「沒被認成正片」的樣子。帳本說不出作品（Media 被刪了）時不比作品：
     拿空字串去比只會讓每一列都不一致。
 
     回傳的是 `issues.detail_json`：哪幾件不同（`differs`，畫面照它挑要強調哪一格），與兩邊
@@ -241,6 +259,18 @@ def disagreement(
             "name": item.name,
         },
     }
+
+
+def still_identifying(item: JellyfinItem, *, ledger_tmdb: str, jellyfin_tmdb: str) -> bool:
+    """Jellyfin 還沒認完這個 item：Episode 讀不出季號或集號，或作品沒有 TMDB id（M4 票 02）。
+
+    2026-09-26 試跑：剛掃進來的集 `Name` 是作品名、季集 `None`、Series 沒有 `ProviderIds.Tmdb`，
+    最慢約 12 分鐘後讀回 `S01E10`。那是「還沒認出」，不是「認得不一樣」——認成別的季集、別的
+    作品時這些欄位都有值。帳本說不出作品時不比作品（`disagreement`），也就不等作品。
+    """
+    if item.type == ITEM_EPISODE and (item.season is None or item.episode_start is None):
+        return True
+    return bool(ledger_tmdb) and not jellyfin_tmdb
 
 
 async def settle_verdicts(
@@ -385,16 +415,21 @@ class _Lookup:
     ledger_tmdb: Mapping[str, str] = field(default_factory=dict)
 
     def verdict(self, entry: LedgerEntry, item: JellyfinItem) -> Verdict:
-        work = (
+        ours, theirs = self._tmdb_ids(entry, item)
+        return Verdict(
+            entry=entry, detail=disagreement(entry, item, ledger_tmdb=ours, jellyfin_tmdb=theirs)
+        )
+
+    def still_identifying(self, entry: LedgerEntry, item: JellyfinItem) -> bool:
+        ours, theirs = self._tmdb_ids(entry, item)
+        return still_identifying(item, ledger_tmdb=ours, jellyfin_tmdb=theirs)
+
+    def _tmdb_ids(self, entry: LedgerEntry, item: JellyfinItem) -> tuple[str, str]:
+        """帳本與 Jellyfin 各自說這一列是哪一部作品（TMDB id 字串）。"""
+        theirs = (
             self.series_tmdb.get(item.series_id, "") if item.type == ITEM_EPISODE else item.tmdb_id
         )
-        detail = disagreement(
-            entry,
-            item,
-            ledger_tmdb=self.ledger_tmdb.get(entry.media_id or "", ""),
-            jellyfin_tmdb=work,
-        )
-        return Verdict(entry=entry, detail=detail)
+        return self.ledger_tmdb.get(entry.media_id or "", ""), theirs
 
 
 async def _ledger_tmdb(session: AsyncSession, entries: Sequence[LedgerEntry]) -> dict[str, str]:
@@ -451,14 +486,22 @@ async def _remind(client: JellyfinClient, entries: Sequence[LedgerEntry]) -> boo
 async def _announce(
     session: AsyncSession, found: Sequence[LedgerEntry], given_up: Sequence[LedgerEntry]
 ) -> None:
-    """一筆 Job 一行，不是一個檔案一行：一季 24 集的時間線不該被 24 行「找到了」淹沒。"""
-    for job, entries in await _by_job(session, found):
+    """一筆 Job 一行，不是一個檔案一行：一季 24 集的時間線不該被 24 行「找到了」淹沒。
+
+    **`jellyfin_item_resolved` 是「這一筆的正片全部找到了」，一筆 Job 只寫一次**（M4 票 02）：
+    M4 的「可以看了」讀它。之後再反查（新版本改了版本名、重新反查）找到的不再寫——試跑一筆
+    Job 寫了 5–7 筆，`count` 每輪不同，`record_event` 一分鐘的去重擋不住。
+    """
+    for job, _ in await _by_job(session, found):
+        features = await _all_found(session, job)
+        if features is None or await _announced(session, job):
+            continue
         await record_event(
             session,
             job,
             EventType.JELLYFIN_ITEM_RESOLVED,
             actor=actor_of(None),
-            payload={"count": len(entries)},
+            payload={"count": features},
         )
     for job, entries in await _by_job(session, given_up):
         # 事件是**一筆 Job 一行**（時間線不該被 24 集淹沒），Issue 是**一列帳本一件**
@@ -490,6 +533,29 @@ async def _announce(
                 "media": entry.media_id,
             },
         )
+
+
+async def _all_found(session: AsyncSession, job: Job) -> int | None:
+    """這一筆的正片都找到了的話回幾個；還有在等的、放棄了的（沒有 item）回 `None`。"""
+    features = list(
+        await session.scalars(
+            select(LedgerEntry).where(
+                LedgerEntry.job_hash == job.hash, LedgerEntry.action == PlanAction.IMPORT
+            )
+        )
+    )
+    if any(entry.resolve_after is not None or not entry.jellyfin_item_id for entry in features):
+        return None
+    return len(features)
+
+
+async def _announced(session: AsyncSession, job: Job) -> bool:
+    written = await session.scalar(
+        select(Event.id)
+        .where(Event.job_hash == job.hash, Event.type == EventType.JELLYFIN_ITEM_RESOLVED)
+        .limit(1)
+    )
+    return written is not None
 
 
 async def _by_job(

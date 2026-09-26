@@ -46,6 +46,7 @@ from tests.integration.test_importer import ledger_of, same_file
 from tests.integration.test_plan import NOW
 from tests.integration.test_reconcile import issues_of
 from tests.integration.test_reconcile_checks import (
+    SPY,
     features,
     open_of,
     scanned,
@@ -367,7 +368,7 @@ class TestRelook:
         await session.refresh(entry)
         assert entry.resolve_attempts == 0
         assert entry.resolve_after is not None
-        factory.jellyfin_.items_ = scanned(route, await features(session))
+        factory.jellyfin_.items_ = scanned(route, await features(session), tmdb_id=SPY)
 
         await sweep_resolutions(session, factory, now=utcnow() + timedelta(seconds=1))
 
@@ -385,7 +386,7 @@ class TestRescan:
         await press(session, factory, issue, IssueAction.RESCAN)
 
         assert factory.jellyfin_.tasks_run == [LIBRARY_SCAN_TASK.id]
-        factory.jellyfin_.items_ = scanned(route, await features(session))
+        factory.jellyfin_.items_ = scanned(route, await features(session), tmdb_id=SPY)
         await sweep_resolutions(session, factory, now=utcnow() + timedelta(hours=1))
         await session.refresh(entry)
         assert entry.jellyfin_item_id == f"episode-{entry.episode_start}"

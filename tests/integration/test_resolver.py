@@ -245,6 +245,64 @@ class TestMatching:
         resolved = [row for row in await events_of(session) if row.type == "jellyfin_item_resolved"]
         assert [(row.payload_json or {})["count"] for row in resolved] == [3]
 
+    async def test_the_resolved_event_waits_for_every_feature_of_the_job(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """`jellyfin_item_resolved` 是「這一筆的正片全部找到了」（M4 的「可以看了」讀它，票 02）：
+        找到一部分時不寫，最後一集找到的那一輪寫一筆，`count` 是整筆的正片數。"""
+        route, factory = await imported(session, roots)
+        await scanned(session, route, factory)
+        last = factory.jellyfin_.items_.pop()
+
+        await resolve(session, factory, FIRST)
+        assert [
+            row for row in await events_of(session) if row.type == "jellyfin_item_resolved"
+        ] == []
+
+        factory.jellyfin_.items_.append(last)
+        await resolve(session, factory, FIRST + RESOLVE_DELAYS[1])
+
+        resolved = [row for row in await events_of(session) if row.type == "jellyfin_item_resolved"]
+        assert [(row.payload_json or {})["count"] for row in resolved] == [3]
+
+    async def test_the_resolved_event_is_written_once_per_job(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """之後再反查（新版本入庫改了版本名、重新反查）找到的不再寫：試跑一筆 Job 寫了 5–7 筆，
+        `count` 每輪不同，`record_event` 一分鐘的去重擋不住。"""
+        route, factory = await imported(session, roots)
+        await scanned(session, route, factory)
+        await resolve(session, factory, FIRST)
+
+        for later in (timedelta(minutes=5), timedelta(hours=2)):
+            for entry in (await features(session))[:2]:
+                entry.resolve_attempts = 0
+                entry.resolve_after = NOW + later
+            await session.commit()
+            outcome = await resolve(session, factory, later)
+            assert outcome.resolved == 2
+
+        resolved = [row for row in await events_of(session) if row.type == "jellyfin_item_resolved"]
+        assert len(resolved) == 1
+
+    async def test_a_job_with_a_feature_never_found_has_no_resolved_event(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        route, factory = await imported(session, roots)
+        await scanned(session, route, factory)
+        factory.jellyfin_.items_.pop()
+        at = FIRST
+        for _attempt in RESOLVE_DELAYS:
+            await resolve(session, factory, at)
+            upcoming = (await features(session))[-1].resolve_after
+            if upcoming is None:
+                break
+            at = upcoming - NOW
+
+        types = [row.type for row in await events_of(session)]
+        assert "jellyfin_item_resolved" not in types
+        assert "issue_detected" in types
+
     async def test_an_episode_remembers_the_series_it_belongs_to(
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
