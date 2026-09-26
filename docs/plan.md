@@ -590,6 +590,8 @@ WebUI\AuthSubnetWhitelist=172.28.0.2/32
 
 ### 9.3 精靈流程
 
+> **2026-09-26 改（brief §19「精靈改為 Jellyfin 優先」「既有服務不被改動」「精靈與探索的試跑回饋」）**：第 1 步改為連 Jellyfin、成為擁有者；使用者填的位址一律既有；第 5 步不自動跑；第 6 步先測再勾。下文是改之前的樣子，M4 票 05–09 各自改寫自己那一段。
+
 每一步都是冪等的 `services/setup.py` 命令；精靈跑完之後設定頁呼叫的是同一批命令（票 06i）。**來源是逐服務判斷的**（brief §16.3）：每個服務不是「套件內」就是「既有」，三個服務可任意組合。
 
 1. **建立管理員**：帳號與密碼。套件內 Jellyfin 會以這組帳密建立管理員；既有 Jellyfin 則要求以其管理員帳密登入。勾選「同一組帳密也套用到 qBittorrent 與 Prowlarr 介面」（預設勾）則一併設定套件內的那兩者。
@@ -854,12 +856,13 @@ M1.5 帶過來的一條（票 10，2026-09-22 從 §11.3 移來）：缺集散�
 
 M3 收尾帶過來的兩條：巡檢的「一直失敗的 Feed」要分得出是補漏失敗還是輪詢失敗——現在拼在同一個 `rss_feeds.last_error`（M3 票 12，拆欄）；`jellyfin_item_mismatch` 被「忽略」之後，第二天對帳會重開，通知的「Issue 新增」等於每天推一次，改用健康檢查的「條件持續期間忽略有效」（`health_issues._still_ignored`，M3 票 17）。**2026-09-26 補**：`_still_ignored` 讀的 `cleared_at` 只有 `health_issues._settle` 會寫，`resolver.settle_verdicts` 不寫，要搬過去；而且它只解「忽略之後又重開」，試跑量到的主因是下面修補清單第 2 條的誤報。
 
-**M4 之前先做的修補**（2026-09-26 M3 後的全面審查，使用者拍板「先修再拆 M4」；審查紀錄見 progress.md 同日）：試跑環境（main `82d9cd7`）一個 Mikan MyBangumi 綁定後 11 分鐘送出 144 個 torrent，下面幾條在這一輪都真的發生了，而 M4 的通知會把它們放大成推播。票已開在 `.scratch/m4/issues/01–04`，`/to-tickets` 拆 M4 時從 05 接著編。
+**M4 之前先做的修補**（2026-09-26 M3 後的全面審查，使用者拍板「先修再拆 M4」；審查紀錄見 progress.md 同日）：試跑環境（main `82d9cd7`）一個 Mikan MyBangumi 綁定後 11 分鐘送出 144 個 torrent，下面幾條在這一輪都真的發生了，而 M4 的通知會把它們放大成推播。票已開在 `.scratch/m4/issues/01–04`，同日第二輪試跑回饋再開 05–12（清單最後一條），`/to-tickets` 拆 M4 時從 13 接著編。
 
 - SQLite 寫鎖：poller 握著寫交易逐筆拿 `job_lock`，planner 先拿 `job_lock` 再寫，順序相反，試跑爆出 `database is locked`；另有四處握著寫交易打網路（`rss._record` 的單集頁、`bind_series` 的補舊集、刪除移除 torrent、重試送單）；`round_failed` 之後下一輪成功不清 `job.error`。交易紀律定在 §3.3（票 01）。
 - Jellyfin 回驗誤報：Jellyfin 還在認剛掃進來的檔案（季集 `None`、Series 沒有 Tmdb）就被判成不一致，找到 item 當下又停止反查；`importer.restate_versions` 以整個資料夾而不是同一集重排，一季每入庫一集就把前面每一集重反查一次，`jellyfin_item_resolved` 一筆 Job 寫 5–7 次。「可以看了」的單一事件在這張票定（票 02）。
 - 大批送單：磁碟門檻不扣在途量；暫時失敗的 `submit_failed`（qBittorrent `ReadTimeout`、停機）要有限重試，不留給人逐筆按（原在 §11.4 結尾）；.torrent 下載要不要進請求預算開工時問使用者（票 03）。
 - `GET /jobs` 沒有分頁、前端每個 SSE 事件都整份重抓（2026-09-22 記「歸票 12」後沒有人接）（票 04）。
+- **試跑回饋（2026-09-26 第二輪，使用者拍板）**：既有服務被判成套件內、登入被覆寫與 qBittorrent 全域偏好被改（票 05，最先做）；精靈改為 Jellyfin 優先（票 06、07）；媒體庫路徑與索引站兩個泊位（票 08、09）；精靈完成與空媒體庫落在探索、JSX 註解外露（票 10）；第一批審核證據夠強時跳過（票 11）；作品頁的下載段（票 12）。RSS Series 的去留與補舊集的預設還在與使用者討論，定了再開票。
 
 **拆 M4 票時要定的**（同一輪審查，事實與行號在 progress.md 同日）：`record_event` 一定要一筆 Job，Issue、Feed 失敗、週報都成不了事件——「`events` 表上的訂閱者」要嘛放寬事件，要嘛另立通知的 outbox，擇一並改寫上面「通知」那一段；`events` 會被 purge 刪列，id 不能當游標；「連結直接開到那一件」要 Berth 自己的對外網址，現在只有 Jellyfin 有 `public_url`；RSS 送出的 Job `user_id` 是 `None`，「正在下載」送給誰要定；「正在下載」要按輪彙整（一次綁定就是上百則）；「可以看了」要照使用者的 Jellyfin `UserViews` 過濾；自動綁定一個候選讀不到 TMDB 就整次 `lookup_failed` 而且不重試、標題帶「第四季」這類季名時搜不到候選，這兩種會讓「等你處理」虛胖。
 
