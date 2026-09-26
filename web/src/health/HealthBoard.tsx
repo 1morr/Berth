@@ -54,6 +54,10 @@ export function HealthBoard({ report }: { report: HealthDetail }) {
       detail: row?.detail ? (
         <>
           <span className="label">{t(detailLabel(kind))}</span> {row.detail}
+          {/* 同一個數字，同一句話：與 ServiceCard 共用 i18n key（票 21）。 */}
+          {row.library_count != null && (
+            <> · {t('health.libraryCount', { count: row.library_count })}</>
+          )}
         </>
       ) : null,
       signal: STATE_SIGNAL[state],

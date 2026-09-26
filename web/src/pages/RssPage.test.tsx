@@ -108,7 +108,7 @@ const FOUND = {
   detail: '',
 }
 
-function render(routes: Record<string, StubRoute | (() => StubRoute)> = {}) {
+function render(routes: Record<string, StubRoute | (() => StubRoute | Promise<StubRoute>)> = {}) {
   return stubApi({
     'GET /api/health': { body: HEALTHY },
     'GET /api/auth/me': { body: { name: 'skipper', role: 'admin' } },
@@ -215,6 +215,28 @@ describe('RSS 頁：新 Feed 的第一輪（票 11）', () => {
       expect(screen.queryByRole('heading', { name: /等你決定/ })).not.toBeInTheDocument(),
     )
     expect(screen.getByText('《acg.rip》：只追之後的，略過 3 筆。')).toBeInTheDocument()
+  })
+
+  // DESIGN.md：送出中用 `busy` 不用 `disabled`——`disabled` 接不住焦點，按下去的那一刻鍵盤使用者
+  // 就掉回 `body`（M1.5 票 05 先踩到，這裡是同一顆鍵重犯）。
+  it('送出中焦點留在「只追之後的」上，不會掉回 body', async () => {
+    let answer: (route: StubRoute) => void = () => {}
+    render({
+      'GET /api/rss/feeds': { body: [feed(), ACGRIP] },
+      'GET /api/rss/feeds/2/preview': { body: PREVIEW },
+      'POST /api/rss/feeds/2/prime': () => new Promise((resolve) => (answer = resolve)),
+    })
+    renderApp('/rss')
+    const block = await firstRound()
+
+    await userEvent.click(await within(block).findByRole('button', { name: '只追之後的' }))
+
+    const pending = await within(block).findByRole('button', { name: '決定中…' })
+    expect(pending).toHaveAttribute('aria-disabled', 'true')
+    expect(pending).not.toBeDisabled()
+    expect(pending).toHaveFocus()
+
+    answer({ body: { feed: ACGRIP, submitted: 0, passed: 3, excluded: 1 } })
   })
 
   it('全部下載要就地確認，確認區塊說出送幾筆、幾筆等綁定', async () => {

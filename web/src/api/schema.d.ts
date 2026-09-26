@@ -4385,6 +4385,8 @@ export interface components {
             banned: boolean;
             /** Unsupported */
             unsupported: boolean;
+            /** Library Count */
+            library_count: number | null;
         };
         /**
          * ServiceKind

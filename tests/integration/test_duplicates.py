@@ -188,6 +188,30 @@ class TestTheSameVersion:
         assert (event.payload_json or {})["decision"] == "replace"
         assert (event.payload_json or {})["replaced"] == known.target_path
 
+    async def test_replacing_over_a_foreign_file_is_refused(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """使用者把 Berth 的硬鏈接換成了自己的檔案：取代舊版不覆寫它（同 `deletion.Placed`）。"""
+        media, route, factory = await first_batch(session, roots)
+        await second_download(session, roots, media, route, factory, name=SAME, files=SAME_FILES)
+        known = await entry_at(session, 2)
+        target = Path(known.target_path)
+        target.unlink()
+        target.write_bytes(b"someone else's copy")
+        (row,) = await duplicate_rows(session)
+
+        with pytest.raises(RematchRejectedError) as refusal:
+            await decide_duplicate(
+                session, factory, row.item_id, DuplicateDecision.REPLACE, actor=ACTOR
+            )
+
+        assert refusal.value.reason is RematchRefusal.TARGET_TAKEN
+        assert target.read_bytes() == b"someone else's copy"
+        await session.refresh(known)
+        assert known.job_hash != SECOND  # 帳本那一列沒有被改指到新的來源
+        assert Path(known.target_path) == target
+        assert await duplicate_rows(session) == [row]
+
     async def test_keeping_both_links_the_new_one_under_a_numbered_tag(
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:

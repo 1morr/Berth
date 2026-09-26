@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 
 import { COMPACT_BUTTON, Field, GhostButton } from '../components/controls'
 import { SIGNAL_FILL } from '../components/signal'
+import { useFocusAfterRemoval } from '../components/useFocusAfterRemoval'
 import type { LibraryDraft } from '../api/setup'
 import { folderFor, pathUnder, type RowProblems } from './libraryRules'
 import { type DraftRow, type LibraryDraftState } from './useLibraryDraft'
@@ -34,6 +35,8 @@ export function BundledLibraries({
   const { rows, setRows, problems } = draft
   const [focusKey, setFocusKey] = useState<number | null>(null)
   const anyBuilt = rows.some((row) => row.built)
+  // 刪掉一列之後，焦點落在原本那個位置現在的那一列（`useFocusAfterRemoval`）。
+  const frame = useFocusAfterRemoval()
 
   function change(key: number, patch: Partial<LibraryDraft>) {
     setRows(
@@ -59,7 +62,7 @@ export function BundledLibraries({
   }
 
   return (
-    <section className="border-2 border-rule bg-well">
+    <section ref={frame} tabIndex={-1} className="border-2 border-rule bg-well">
       <h3 className="label border-b-2 border-rule bg-deck px-4 py-2.5 text-ink-dim">
         {t('jellyfin.bundled.list.title')}
       </h3>
@@ -139,63 +142,69 @@ function EditableRow({
 
   return (
     <li className="px-4 py-4">
-      <fieldset className="grid min-w-0 gap-3">
-        <legend className="sr-only">{label}</legend>
-        <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,9rem)]">
+      <article tabIndex={-1} aria-label={label}>
+        <fieldset className="grid min-w-0 gap-3">
+          <legend className="sr-only">{label}</legend>
+          <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,9rem)]">
+            <Field
+              label={t('jellyfin.bundled.list.name')}
+              value={row.name}
+              disabled={locked}
+              autoComplete="off"
+              // 只在掛上的那一刻：新加的那一列，焦點直接落在它的名稱上。
+              autoFocus={focus}
+              error={
+                problems.name ? t(`jellyfin.bundled.list.problem.${problems.name}`) : undefined
+              }
+              onChange={(event) => onChange({ name: event.target.value })}
+            />
+            <p className="grid content-start gap-2">
+              <label htmlFor={typeId} className="label text-ink-dim">
+                {t('jellyfin.bundled.list.type')}
+              </label>
+              <select
+                id={typeId}
+                value={row.collection_type}
+                disabled={locked}
+                onChange={(event) =>
+                  onChange({
+                    collection_type: event.target.value as LibraryDraft['collection_type'],
+                  })
+                }
+                className="value w-full border-2 border-rule-strong bg-hull px-3 py-2.5 text-sm text-ink focus:border-ink disabled:bg-well disabled:text-ink-dim"
+              >
+                {TYPES.map((type) => (
+                  <option key={type} value={type}>
+                    {t(`jellyfin.bundled.list.types.${type}`)}
+                  </option>
+                ))}
+              </select>
+            </p>
+          </div>
           <Field
-            label={t('jellyfin.bundled.list.name')}
-            value={row.name}
+            label={t('jellyfin.bundled.list.folder')}
+            value={row.folder}
             disabled={locked}
             autoComplete="off"
-            // 只在掛上的那一刻：新加的那一列，焦點直接落在它的名稱上。
-            autoFocus={focus}
-            error={problems.name ? t(`jellyfin.bundled.list.problem.${problems.name}`) : undefined}
-            onChange={(event) => onChange({ name: event.target.value })}
+            hint={<span className="value wrap-anywhere">{path}</span>}
+            error={
+              problems.folder ? t(`jellyfin.bundled.list.problem.${problems.folder}`) : undefined
+            }
+            onChange={(event) => onChange({ folder: event.target.value })}
           />
-          <p className="grid content-start gap-2">
-            <label htmlFor={typeId} className="label text-ink-dim">
-              {t('jellyfin.bundled.list.type')}
-            </label>
-            <select
-              id={typeId}
-              value={row.collection_type}
+          <div>
+            <button
+              type="button"
               disabled={locked}
-              onChange={(event) =>
-                onChange({ collection_type: event.target.value as LibraryDraft['collection_type'] })
-              }
-              className="value w-full border-2 border-rule-strong bg-hull px-3 py-2.5 text-sm text-ink focus:border-ink disabled:bg-well disabled:text-ink-dim"
+              onClick={onRemove}
+              aria-label={t('jellyfin.bundled.list.removeNamed', { name: label })}
+              className={`${COMPACT_BUTTON} disabled:cursor-not-allowed disabled:text-ink-dim`}
             >
-              {TYPES.map((type) => (
-                <option key={type} value={type}>
-                  {t(`jellyfin.bundled.list.types.${type}`)}
-                </option>
-              ))}
-            </select>
-          </p>
-        </div>
-        <Field
-          label={t('jellyfin.bundled.list.folder')}
-          value={row.folder}
-          disabled={locked}
-          autoComplete="off"
-          hint={<span className="value wrap-anywhere">{path}</span>}
-          error={
-            problems.folder ? t(`jellyfin.bundled.list.problem.${problems.folder}`) : undefined
-          }
-          onChange={(event) => onChange({ folder: event.target.value })}
-        />
-        <div>
-          <button
-            type="button"
-            disabled={locked}
-            onClick={onRemove}
-            aria-label={t('jellyfin.bundled.list.removeNamed', { name: label })}
-            className={`${COMPACT_BUTTON} disabled:cursor-not-allowed disabled:text-ink-dim`}
-          >
-            {t('jellyfin.bundled.list.remove')}
-          </button>
-        </div>
-      </fieldset>
+              {t('jellyfin.bundled.list.remove')}
+            </button>
+          </div>
+        </fieldset>
+      </article>
     </li>
   )
 }
@@ -206,18 +215,20 @@ function BuiltRow({ row, libraryRoot }: { row: DraftRow; libraryRoot: string }) 
 
   return (
     <li className="grid gap-1 px-4 py-3">
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-        <span className={`label px-2 py-1 ${SIGNAL_FILL.neutral}`}>
-          {t('jellyfin.bundled.list.built')}
+      <article tabIndex={-1} aria-label={row.name} className="grid gap-1">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <span className={`label px-2 py-1 ${SIGNAL_FILL.neutral}`}>
+            {t('jellyfin.bundled.list.built')}
+          </span>
+          <span className="value text-sm font-semibold text-ink">{row.name}</span>
+          <span className="label ml-auto text-ink-dim">
+            {t(`jellyfin.bundled.list.types.${row.collection_type}`)}
+          </span>
+        </div>
+        <span className="value text-xs wrap-anywhere text-ink-dim">
+          {pathUnder(libraryRoot, row.folder)}
         </span>
-        <span className="value text-sm font-semibold text-ink">{row.name}</span>
-        <span className="label ml-auto text-ink-dim">
-          {t(`jellyfin.bundled.list.types.${row.collection_type}`)}
-        </span>
-      </div>
-      <span className="value text-xs wrap-anywhere text-ink-dim">
-        {pathUnder(libraryRoot, row.folder)}
-      </span>
+      </article>
     </li>
   )
 }

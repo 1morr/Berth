@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -21,6 +22,7 @@ from berth.adapters.qbittorrent.fake import FakeQbittorrentClient
 from berth.domain import DetectionReason, JellyfinStep, ServiceKind, ServiceOrigin, StepStatus
 from berth.models import IndexerSettings, ServiceProbe, SetupSettings, SetupStep
 from berth.services.clients import SetupProbes
+from berth.services.jellyfin import bootstrap_jellyfin
 from berth.services.settings import read_settings, write_settings
 from berth.services.setup import (
     DETECT_WINDOW,
@@ -30,6 +32,8 @@ from berth.services.setup import (
     jellyfin_owns_account,
     read_status,
 )
+from tests.integration.factories import FakeClientFactory
+from tests.integration.test_setup_jellyfin import seed as dock_jellyfin
 
 NOW = datetime(2026, 9, 7, 12, 0, tzinfo=UTC)
 
@@ -462,6 +466,25 @@ async def test_redetecting_a_pinned_service_does_not_probe_it_again(
     )
 
     assert verdict(status, ServiceKind.QBITTORRENT)[0] is ServiceOrigin.BUNDLED
+
+
+@pytest.mark.asyncio
+async def test_a_docked_bundled_jellyfin_stays_bundled_after_a_restart(
+    session: AsyncSession, tmp_path: Path
+) -> None:
+    """第 3 步幫套件內 Jellyfin 跑完它自己的精靈之後，`StartupWizardCompleted` 會變 true——
+    重新偵測不能因此把它誤判成使用者自己開的那一台（跟 qBittorrent 設完密碼、Prowlarr
+    加完索引站同一個道理，票 06b 追蹤）。
+    """
+    await dock_jellyfin(session, library_root=str(tmp_path / "library"))
+    await bootstrap_jellyfin(session, FakeClientFactory(jellyfin=FakeJellyfinClient()))
+    reprobed = FakeJellyfinClient(startup_wizard_completed=True)
+
+    status = await detect_services(
+        session, probes(jellyfin=reprobed), now=NOW, restart=True, kind=ServiceKind.JELLYFIN
+    )
+
+    assert verdict(status, ServiceKind.JELLYFIN)[0] is ServiceOrigin.BUNDLED
 
 
 @pytest.mark.asyncio

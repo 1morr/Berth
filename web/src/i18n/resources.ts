@@ -2019,6 +2019,9 @@ const zhHant = {
     recheckFailed: '重測沒有走完。Berth 後端可能沒在跑——確認容器狀態後再按一次。',
     failures_one: '連續失敗 {{count}} 次',
     failures_other: '連續失敗 {{count}} 次',
+    // Jellyfin 專有：媒體庫數量（票 21）。其餘服務沒有這個數字。
+    libraryCount_one: '{{count}} 個媒體庫',
+    libraryCount_other: '{{count}} 個媒體庫',
     state: {
       ok: '已繫上',
       drift: '設定被改過',
@@ -4551,6 +4554,9 @@ const en: Translations<typeof zhHant> = {
       'The check did not go through. The Berth backend may be down — check the container, then try again.',
     failures_one: '{{count}} consecutive failure',
     failures_other: '{{count}} consecutive failures',
+    // Jellyfin only: library count (ticket 21). No other service has this number.
+    libraryCount_one: '{{count}} library',
+    libraryCount_other: '{{count}} libraries',
     state: {
       ok: 'Ready',
       drift: 'Settings changed',

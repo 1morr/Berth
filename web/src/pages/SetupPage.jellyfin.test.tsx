@@ -218,6 +218,21 @@ describe('泊位 1：套件內 Jellyfin 的媒體庫清單（票 06f）', () => 
     )
   })
 
+  it('刪掉一列之後，焦點落在原本那個位置現在的那一列', async () => {
+    stubApi({
+      [STATUS]: { body: AT_BERTH_ONE },
+      [JELLYFIN]: { body: jellyfinSetup() },
+      [SAVE]: { body: jellyfinSetup() },
+    })
+    const user = userEvent.setup()
+
+    renderWithProviders(<SetupPage />)
+    await screen.findByRole('group', { name: 'Movies' })
+    await user.click(screen.getByRole('button', { name: '移除「TV」' }))
+
+    expect(screen.getByRole('article', { name: 'Anime' })).toHaveFocus()
+  })
+
   it('重名、重複資料夾、跳出根目錄、空清單各有擋下的說法，而且不存、不讓靠泊', async () => {
     const fetchStub = stubApi({
       [STATUS]: { body: AT_BERTH_ONE },

@@ -289,6 +289,9 @@ class ServiceHealth(BaseModel):
     #: 這台 Jellyfin 低於支援下限 12.0（brief §16.4、§20.9、票 14b）。與「連不上」分開存，
     #: 理由同上：下一步是升級，而升級不可逆，畫面要說出那幾件先做的事。
     unsupported: bool = False
+    #: Jellyfin 的媒體庫數量（票 21）。數字給前端組句子用 i18n 複數，不是寫死進 `detail`
+    #: 的英文句子——其餘服務沒有這個數字，一律是 `None`。
+    library_count: int | None = None
 
 
 class DiskSettings(SettingsGroup):

@@ -73,10 +73,13 @@ class TestAllFour:
 
         report = await check_health(session, factory, now=NOW)
         detail = {row.kind: row.detail for row in report.services}
+        library_count = {row.kind: row.library_count for row in report.services}
 
         assert "12.1.0" in detail[ServiceKind.JELLYFIN]
         assert "5.2.3" in detail[ServiceKind.QBITTORRENT]
         assert detail[ServiceKind.PROWLARR]
+        # 媒體庫數量是給前端組句子的數字，不是英文寫死進 `detail`（票 21 驗收）。
+        assert library_count[ServiceKind.JELLYFIN] == 3
 
     async def test_the_report_says_which_service_is_bundled(
         self, session: AsyncSession, roots: dict[str, Path]

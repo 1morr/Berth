@@ -48,6 +48,10 @@ export function ServiceCard({
         {row.detail && (
           <span className="value text-xs text-ink">
             <span className="label text-ink-dim">{t(detailLabel(row.kind))}</span> {row.detail}
+            {/* 媒體庫數量是數字，不是寫死進 `detail` 的英文句子（票 21）——i18n 複數在這裡組。 */}
+            {row.library_count != null && (
+              <> · {t('health.libraryCount', { count: row.library_count })}</>
+            )}
           </span>
         )}
         {row.base_url && (

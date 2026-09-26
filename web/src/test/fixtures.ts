@@ -312,7 +312,7 @@ export function serviceHealth(overrides: Partial<ServiceHealth> = {}): ServiceHe
     origin: 'bundled',
     base_url: 'http://jellyfin:8096',
     status: 'ok',
-    detail: '12.1.0 · 3 libraries',
+    detail: '12.1.0',
     error: '',
     checked_at: CHECKED_AT,
     last_ok_at: CHECKED_AT,
@@ -321,6 +321,8 @@ export function serviceHealth(overrides: Partial<ServiceHealth> = {}): ServiceHe
     drift: [],
     banned: false,
     unsupported: false,
+    // 只有 Jellyfin 有這個數字（票 21）；其餘服務覆寫成 `null`。
+    library_count: 3,
     ...overrides,
   }
 }
@@ -337,11 +339,13 @@ export function healthDetail(overrides: Partial<HealthDetail> = {}): HealthDetai
         kind: 'qbittorrent',
         base_url: 'http://qbittorrent:8080',
         detail: 'v5.2.3 · Web API 2.15.1',
+        library_count: null,
       }),
       serviceHealth({
         kind: 'prowlarr',
         base_url: 'http://prowlarr:9696',
         detail: '10',
+        library_count: null,
       }),
     ],
     routes_status: 'ok',

@@ -176,7 +176,6 @@ export function FirstRound({ feed, onDone }: { feed: Feed; onDone: (said: string
               <PrimaryButton
                 type="button"
                 busy={prime.isPending && prime.variables === 'later'}
-                disabled={prime.isPending}
                 onClick={() => prime.mutate('later')}
               >
                 {prime.isPending && prime.variables === 'later'

@@ -546,7 +546,15 @@ async def _carry_out(
     try:
         if new and new == old and move.old is not None:
             if move.old.source_abs_path != str(move.source):
-                # 同一條路徑換另一個來源（取代舊版）：一步換過去，中間沒有一刻是空的。
+                # 同一條路徑換另一個來源（取代舊版）：先認一遍舊名字底下還是不是 Berth 自己放
+                # 的那一份（同 `deletion.Placed`），使用者換過的東西不覆寫。
+                try:
+                    facts = fs.stat(Path(new))
+                except FileNotFoundError:
+                    facts = None
+                if facts is not None and not Placed.of(move.old).holds(facts):
+                    raise RematchRejectedError(RematchRefusal.TARGET_TAKEN, new)
+                # 一步換過去，中間沒有一刻是空的。
                 fs.replace_link(move.source, Path(new), roots=roots)
             move.facts = link_into(move.source, Path(new), roots=roots)
         elif new:

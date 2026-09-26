@@ -318,8 +318,8 @@ CI（`.github/workflows/ci.yml`）在 push 到 `main` 與所有 PR 上跑同一�
 
 ### e2e
 
-M1 的整條路徑、M1.5 的權限與瀏覽、M2 的修正與對帳對**真的** qBittorrent 與 Jellyfin 跑一遍（plan §10、`tests/e2e/`）。
-**一次 compose、一次精靈、一次入庫，三個模組共享**（fixture 在 `tests/e2e/conftest.py`；檔名的數字就是執行順序）：
+M1 的整條路徑、M1.5 的權限與瀏覽、M2 的修正與對帳、M3 的 RSS 對**真的** qBittorrent 與 Jellyfin 跑一遍（plan §10、`tests/e2e/`）。
+**一次 compose、一次精靈、一次入庫，四個模組共享**（fixture 在 `tests/e2e/conftest.py`；檔名的數字就是執行順序）：
 
 - `test_1_m1_pipeline.py`：精靈八步只走 Berth 的 API，送一部美劇一季、一部動漫一季、一部電影，等它們不經人工、
   依序走過完成 → 規劃 → 入庫，再驗硬鏈接兩端同一個 inode、帳本逐檔記下的 item id 就是 Jellyfin 在那條路徑上的 item。
@@ -330,6 +330,11 @@ M1 的整條路徑、M1.5 的權限與瀏覽、M2 的修正與對帳對**真的*
 - `test_3_m2_repair.py`：三種人為破壞各造一次——在 Jellyfin 裡刪掉一集、用複製品取代硬鏈接、手動刪掉 complete
   裡的來源（外加 complete 裡一個沒人認領的目錄）——手動對帳偵測到，按 Issue 上的動作修好，再對帳一次確認
   那一件沒有再開；以及整個 Anime 媒體庫的內容刪光之後按一次「重新入庫」，回到同樣的路徑、同一個 inode、同樣的帳本列。
+- `test_4_m3_rss.py`：plan §11.4 的八條驗收。一個 Mikan 聚合 feed（說了自動綁定送進 Anime）自動綁定並補舊集、
+  從 Media 頁訂閱的 acg.rip 搜尋 feed 第一輪全部下載而合集被排除、第二輪的新集自動入庫；同一集兩個字幕組與
+  同組 v1、v2 並存；確認過的 RSS Series 的新集不進 audit；一個 split-cour（Re:ZERO，TMDB 只有一季）的第一批
+  被播出日比對擋在審核，改一份並套用到 RSS Series 之後其餘自動入庫；在 Jellyfin 裡改掉一集的集號，對帳開出
+  `jellyfin_item_mismatch`。
 
 Prowlarr 也會起來讓精靈偵測，但第 6 步跳過索引站、送單直接帶 `.torrent` 網址——搜尋不在 e2e 裡。套件內的媒體庫
 一開始是空的，反查要等 Berth 請 Jellyfin 掃描之後那一輪，所以一次**約 15 分鐘**，平常的 `uv run pytest` 不收它
@@ -351,14 +356,18 @@ docker compose -f deploy/docker-compose.yml -f tests/e2e/compose.yml --env-file 
 - 容器名、網路名與 port 與正式部署相同（qBittorrent 的免密白名單認的是 berth 的固定 IP），
   所以同一台機器上正式的那一套要先停下來。
 - 沒有 peer 可以真的下載：`torrents` 容器在 `/data/e2e/staging` 造出三包發佈（檔案清單取自 benchmark
-  語料、影片是 `tests/fixtures/e2e/` 的種子），測試在送單之後把它們複製到 qBittorrent 說的下載路徑
-  再叫它 recheck。
+  語料、影片是 `tests/fixtures/e2e/` 的種子，標頭的片長照語料的 TMDB 快照改寫——片長驗證會擋），測試在
+  送單之後把它們複製到 qBittorrent 說的下載路徑再叫它 recheck。
+- 公開 RSS 站不能進 CI：`sites` 容器（`tests/e2e/sites.py`）以 network alias 冒充 `mikanani.me`、
+  `acg.rip`、`nyaa.si`，照測試寫進去的輪次送出 feed、單集頁、番組頁與 `.torrent`（發佈取自票 07 的
+  fixture）。它講 HTTPS，憑證由 `tests/fixtures/e2e/tls/` 的測試 CA 簽（`tests/e2e/make_tls.py` 產生）；
+  `ca-bundle` 先把系統的 CA 清單接上這張 CA，Berth 以 `SSL_CERT_FILE` 信它。
 - GitHub Actions 的 `.github/workflows/e2e.yml` 在 nightly、`v*` tag 與手動觸發時跑同一組指令，
   TMDB 憑證是 repo secret `TMDB_API_KEY`。
 
 ### 前端 e2e
 
-`web/e2e/` 以 playwright 對〈UI 的 Fake 後端〉的演練情境跑十五條流程（除了送單、審核與待處理那三條，各有 1280 與 390 兩份，共二十七個 project），一條流程一台 server、各佔一個 port
+`web/e2e/` 以 playwright 對〈UI 的 Fake 後端〉的演練情境跑十六條流程（除了送單、審核、待處理與自動綁定那四條，各有 1280 與 390 兩份，共二十八個 project），一條流程一台 server、各佔一個 port
 （`web/playwright.config.ts` 自己起、跑完收掉）：
 
 | 流程 | 情境 | port（1280 / 390） |
@@ -371,6 +380,7 @@ docker compose -f deploy/docker-compose.yml -f tests/e2e/compose.yml --env-file 
 | `/review` 確認一筆 audit | `review` | 8493 |
 | `/issues` 修一條 `library_link_missing` | `issues` | 8494 |
 | `/rss` 加 Mikan feed、輪詢、綁定待綁定的那一部，下載列表上兩集都已入庫 | `rss` | 8498 / 8508 |
+| `/rss` 加 Feed 時選自動綁定送進 Anime：輪詢之後那一部自動綁定並補舊集，下載列表上已入庫 | `rss` | 8516 |
 | `/rss` 排除條件：寫壞的正則存不進去、全域與 RSS Series 那一層擋下的、第二個 Feed 帶同一個 hash 的是重複 | `rss` | 8499 / 8509 |
 | `/rss` 新的 acg.rip 搜尋 feed：第一輪停在預覽、合集在「排除」那一組，選「只追之後的」之後整份歷史略過 | `rss` | 8488 / 8489 |
 | `/rss` 綁定 Mikan 的 RSS Series 時補舊集，之後每日補漏 | `rss` | 8486 / 8487 |
@@ -677,7 +687,7 @@ scripts/
   record_tmdb_snapshots.py  錄 tests/fixtures/tmdb/ 的快照（語料加了新作品時跑）
 tests/            後端測試
   e2e/              對真服務跑整條 M1 路徑（compose 覆寫檔、下載替身、pytest -m e2e）
-  fixtures/e2e/     e2e 用的兩支 330 秒種子影片
+  fixtures/e2e/     e2e 用的兩支 330 秒種子影片與冒充 RSS 站的測試 CA
   fixtures/http/    對真服務錄下來的回應，adapter 契約測試的輸入
   fixtures/mediainfo/  ffmpeg 造的一份真 Matroska（2 秒、17 KB），mediainfo adapter 的輸入
   fixtures/parser/  解析基準測試的語料（真實 torrent 的檔案清單）

@@ -41,6 +41,7 @@ from berth.adapters.jellyfin import (
 from berth.domain import (
     BundledLibraryRefusal,
     CollectionType,
+    DetectionReason,
     JellyfinStep,
     ServiceKind,
     ServiceOrigin,
@@ -55,8 +56,9 @@ from berth.models import (
     SetupSettings,
     SetupStep,
 )
+from berth.models.types import utcnow
 from berth.services.clients import ServiceClientFactory
-from berth.services.settings import read_settings, write_settings
+from berth.services.settings import read_settings, update_settings, write_settings
 from berth.services.steps import StepView, step_views
 
 #: `POST /Auth/Keys?app=` 用的名字。也是重按時辨認「這把是我建的」的依據。
@@ -305,7 +307,14 @@ async def bootstrap_jellyfin(
     session: AsyncSession, factory: ServiceClientFactory
 ) -> JellyfinSetupStatus:
     """套件內路徑：跑完 plan §9.4 的七步。重按只補做還沒做的那幾步。"""
-    return await _run(session, factory, tuple(JellyfinStep))
+    status = await _run(session, factory, tuple(JellyfinStep))
+    if _wizard_done(status):
+        # 第 6 步幫 Jellyfin 跑完它自己的精靈，`StartupWizardCompleted` 就會變 true——
+        # 跟使用者自己開一台完成初始設定的 Jellyfin 沒有兩樣。重新偵測會因此誤判成
+        # 「既有」（票 06b 追蹤）。釘住的道理跟 qBittorrent 設完密碼、Prowlarr 加完
+        # 索引站一樣：已經是 Berth 自己弄好的，不要再被重探。
+        await update_settings(session, SetupSettings, _pin_jellyfin)
+    return status
 
 
 async def connect_jellyfin(
@@ -379,6 +388,34 @@ async def add_berth_path(
     await _remember(session, libraries=libraries)
     await session.commit()
     return await read_jellyfin_status(session)
+
+
+def _wizard_done(status: JellyfinSetupStatus) -> bool:
+    """第 6 步（`complete`）這一輪真的跑了或本來就跑過，Jellyfin 那端的精靈旗標才會是 true。"""
+    return any(
+        row.step == JellyfinStep.COMPLETE.value
+        and row.status in (StepStatus.OK, StepStatus.SKIPPED)
+        for row in status.steps
+    )
+
+
+def _pin_jellyfin(setup: SetupSettings) -> None:
+    """跟 `indexer._pin_probe`、`qbittorrent._apply_password` 同一個道理：釘住之後
+    `detect_services` 的 `configured` 短路才會生效，不會再被重探。
+    """
+    probe = setup.services.get(ServiceKind.JELLYFIN)
+    if probe is None or probe.origin is not ServiceOrigin.BUNDLED:
+        return
+    setup.services = {
+        **setup.services,
+        ServiceKind.JELLYFIN: probe.model_copy(
+            update={
+                "reason": DetectionReason.CONNECTED,
+                "configured": True,
+                "checked_at": utcnow(),
+            }
+        ),
+    }
 
 
 # --- 序列 ---------------------------------------------------------------

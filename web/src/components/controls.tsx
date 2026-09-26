@@ -43,7 +43,7 @@ export function Field({ label, hint, error, ...input }: FieldProps) {
         aria-invalid={error ? true : undefined}
         aria-describedby={described || undefined}
         className={`value w-full border-2 bg-hull px-3 py-2.5 text-sm text-ink placeholder:text-ink-dim disabled:bg-well disabled:text-ink-dim ${
-          error ? 'border-blocked' : 'border-rule-strong focus:border-ink'
+          error ? 'border-blocked-ink' : 'border-rule-strong focus:border-ink'
         }`}
       />
       {hint && (

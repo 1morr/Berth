@@ -87,6 +87,8 @@ class ServiceHealthView:
     banned: bool
     #: 這台 Jellyfin 低於 12.0（brief §16.4、§20.9）。同上：下一步是升級，而升級不可逆。
     unsupported: bool
+    #: Jellyfin 的媒體庫數量（票 21）。其餘服務沒有這個數字，一律是 `None`。
+    library_count: int | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -247,6 +249,8 @@ class _Outcome:
     #: 這台 Jellyfin 低於 12.0（brief §16.4、§20.9）。同上：原文說「幾版對幾版」，
     #: 而升級的那幾件事（先備份、移除第三方插件、升完完整掃描、降不回去）由畫面說。
     unsupported: bool = False
+    #: Jellyfin 的媒體庫數量（票 21）。數字給前端組句子，不寫死進 `detail` 的英文句子。
+    library_count: int | None = None
 
 
 async def _record(
@@ -279,6 +283,7 @@ async def _record(
             drift=list(outcome.drift),
             banned=outcome.banned,
             unsupported=outcome.unsupported,
+            library_count=outcome.library_count,
         ),
     }
     await write_settings(session, health)
@@ -353,7 +358,7 @@ async def _check_jellyfin(session: AsyncSession, factory: ServiceClientFactory) 
         return _Outcome(HealthStatus.FAILED, error=message(exc))
     finally:
         await client.aclose()
-    return _Outcome(HealthStatus.OK, detail=f"{info.version} · {len(libraries)} libraries")
+    return _Outcome(HealthStatus.OK, detail=info.version, library_count=len(libraries))
 
 
 async def _check_qbittorrent(session: AsyncSession, factory: ServiceClientFactory) -> _Outcome:
@@ -441,6 +446,7 @@ def _view(
         drift=tuple(health.drift),
         banned=health.banned,
         unsupported=health.unsupported,
+        library_count=health.library_count,
     )
 
 

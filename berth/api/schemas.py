@@ -115,6 +115,8 @@ class ServiceHealthOut(BaseModel):
     #: 這台 Jellyfin 低於 12.0（brief §16.4、§20.9）。同上：下一步是升級，而升級不可逆，
     #: 所以畫面說的是「先備份、移除第三方插件、升完完整掃描」而不是「檢查容器還在嗎」。
     unsupported: bool
+    #: Jellyfin 的媒體庫數量（票 21）。前端拿它組 i18n 複數句子；其餘服務是 `None`。
+    library_count: int | None
 
 
 class UnknownTorrentOut(BaseModel):

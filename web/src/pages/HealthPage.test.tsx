@@ -105,7 +105,8 @@ describe('健康頁', () => {
 
     await screen.findByRole('region', { name: 'Jellyfin' })
 
-    expect(card('Jellyfin').getByText('12.1.0 · 3 libraries')).toBeInTheDocument()
+    // 媒體庫數量是數字組出來的句子，不是後端寫死的英文（票 21）。
+    expect(card('Jellyfin').getByText('12.1.0 · 3 個媒體庫')).toBeInTheDocument()
     expect(card('qBittorrent').getByText('v5.2.3 · Web API 2.15.1')).toBeInTheDocument()
   })
 
