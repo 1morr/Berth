@@ -119,6 +119,9 @@ class FeedOut(BaseModel):
     primed_at: datetime | None
     #: 自動綁定送進的 Route：收得下那部作品的 Route 不只一條時用它（M3 票 21）。`null` 是沒選。
     route_id: int | None
+    #: 至少讀到過一次：輪過、而且不是「一筆都沒有又失敗」。`false` 時第一輪不給選「全部下載」
+    #: （`POST /rss/feeds/{id}/prime` 回 409 `feed_unread`，M3 票 21）。
+    ever_read: bool
 
 
 class FeedIn(BaseModel):

@@ -2564,6 +2564,8 @@ export interface components {
             primed_at: string | null;
             /** Route Id */
             route_id: number | null;
+            /** Ever Read */
+            ever_read: boolean;
         };
         /**
          * FileKind

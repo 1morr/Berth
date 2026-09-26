@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-09-24T12:00:00Z",
+  "generatedAt": "2026-09-26T12:00:00Z",
   "title": "Design System: Berth",
   "extensions": {
     "colorMeta": {
@@ -305,7 +305,7 @@
       {
         "name": "sm",
         "value": "640px",
-        "purpose": "泊位板由 2×2 轉為一列四格；剖面由單欄轉為兩欄；牆 3 欄（繼續觀看第 3 格出現）；結果表與季表窄版不畫的欄開始畫；下載列與季表的發佈名 / 季名回到同一行；確認區塊的兩顆鍵並排。"
+        "purpose": "泊位板由 2+2+1 轉為一列五格；剖面由單欄轉為兩欄；牆 3 欄（繼續觀看第 3 格出現）；結果表與季表窄版不畫的欄開始畫；下載列與季表的發佈名 / 季名回到同一行；確認區塊的兩顆鍵並排。"
       },
       {
         "name": "lg",
@@ -346,9 +346,9 @@
       "name": "Field",
       "kind": "input",
       "refersTo": "input-field",
-      "description": "標籤在上（.label ink-dim）、等寬字輸入框（hull 底 + border-2 rule-strong：邊框是「這裡可以輸入」的唯一線索，rule 對 hull 只有 2:1）。focus 時邊框換 ink 加全域雙環；錯誤時邊框換 blocked、aria-invalid，訊息以 role=\"alert\" + aria-describedby 掛在下方、blocked-ink 字；停用時 well 底 + ink-dim。",
+      "description": "標籤在上（.label ink-dim）、等寬字輸入框（hull 底 + border-2 rule-strong：邊框是「這裡可以輸入」的唯一線索，rule 對 hull 只有 2:1）。focus 時邊框換 ink 加全域雙環；錯誤時邊框換 blocked-ink（不是塗裝的 blocked：亮色主題壓深才過得了 3:1）、不再換 ink 焦點邊、aria-invalid，訊息以 role=\"alert\" + aria-describedby 掛在下方、blocked-ink 字；停用時 well 底 + ink-dim。",
       "html": "<div class=\"ds-field-demo\"><p class=\"ds-field\"><label class=\"ds-field-label\" for=\"ds-field-1\">位址</label><input class=\"ds-field-input\" id=\"ds-field-1\" value=\"http://qbittorrent:8080\" aria-describedby=\"ds-field-1-hint\"><span class=\"ds-field-hint\" id=\"ds-field-1-hint\">容器內看得到的那一個位址。</span></p><p class=\"ds-field\"><label class=\"ds-field-label\" for=\"ds-field-2\">API 金鑰</label><input class=\"ds-field-input\" id=\"ds-field-2\" value=\"\" aria-invalid=\"true\" aria-describedby=\"ds-field-2-error\"><span class=\"ds-field-error\" id=\"ds-field-2-error\" role=\"alert\">Jellyfin 拒絕了這把金鑰（HTTP 401）。</span></p></div>",
-      "css": ".ds-field-demo { display: grid; gap: 1rem; max-width: 24rem; } .ds-field { display: grid; gap: 0.5rem; margin: 0; } .ds-field-label { font-family: ui-monospace, 'Cascadia Mono', 'Cascadia Code', 'SF Mono', Menlo, Consolas, 'DejaVu Sans Mono', monospace; font-size: 0.6875rem; font-weight: 600; line-height: 1; letter-spacing: 0.18em; text-transform: uppercase; color: var(--color-ink-dim, oklch(0.78 0.012 245)); } .ds-field-input { font-family: ui-monospace, 'Cascadia Mono', 'Cascadia Code', 'SF Mono', Menlo, Consolas, 'DejaVu Sans Mono', monospace; font-variant-numeric: tabular-nums; font-size: 0.875rem; line-height: 1.25rem; width: 100%; background: var(--color-hull, oklch(0.26 0.021 245)); color: var(--color-ink, oklch(0.97 0.005 245)); border: 2px solid var(--color-rule-strong, oklch(0.6 0.024 245)); border-radius: 0; padding: 0.625rem 0.75rem; } .ds-field-input::placeholder { color: var(--color-ink-dim, oklch(0.78 0.012 245)); } .ds-field-input:focus { border-color: var(--color-ink, oklch(0.97 0.005 245)); } .ds-field-input:focus-visible { outline: 2px solid var(--color-ink, oklch(0.97 0.005 245)); outline-offset: 2px; box-shadow: 0 0 0 2px var(--color-hull, oklch(0.26 0.021 245)); } .ds-field-input[aria-invalid='true'] { border-color: var(--color-blocked, oklch(0.7 0.2 27)); } .ds-field-input:disabled { background: var(--color-well, oklch(0.21 0.019 245)); color: var(--color-ink-dim, oklch(0.78 0.012 245)); } .ds-field-hint { font-size: 0.75rem; line-height: 1rem; color: var(--color-ink-dim, oklch(0.78 0.012 245)); } .ds-field-error { font-size: 0.75rem; line-height: 1rem; color: var(--color-blocked-ink, oklch(0.7 0.2 27)); }"
+      "css": ".ds-field-demo { display: grid; gap: 1rem; max-width: 24rem; } .ds-field { display: grid; gap: 0.5rem; margin: 0; } .ds-field-label { font-family: ui-monospace, 'Cascadia Mono', 'Cascadia Code', 'SF Mono', Menlo, Consolas, 'DejaVu Sans Mono', monospace; font-size: 0.6875rem; font-weight: 600; line-height: 1; letter-spacing: 0.18em; text-transform: uppercase; color: var(--color-ink-dim, oklch(0.78 0.012 245)); } .ds-field-input { font-family: ui-monospace, 'Cascadia Mono', 'Cascadia Code', 'SF Mono', Menlo, Consolas, 'DejaVu Sans Mono', monospace; font-variant-numeric: tabular-nums; font-size: 0.875rem; line-height: 1.25rem; width: 100%; background: var(--color-hull, oklch(0.26 0.021 245)); color: var(--color-ink, oklch(0.97 0.005 245)); border: 2px solid var(--color-rule-strong, oklch(0.6 0.024 245)); border-radius: 0; padding: 0.625rem 0.75rem; } .ds-field-input::placeholder { color: var(--color-ink-dim, oklch(0.78 0.012 245)); } .ds-field-input:focus { border-color: var(--color-ink, oklch(0.97 0.005 245)); } .ds-field-input:focus-visible { outline: 2px solid var(--color-ink, oklch(0.97 0.005 245)); outline-offset: 2px; box-shadow: 0 0 0 2px var(--color-hull, oklch(0.26 0.021 245)); } .ds-field-input[aria-invalid='true'], .ds-field-input[aria-invalid='true']:focus { border-color: var(--color-blocked-ink, oklch(0.7 0.2 27)); } .ds-field-input:disabled { background: var(--color-well, oklch(0.21 0.019 245)); color: var(--color-ink-dim, oklch(0.78 0.012 245)); } .ds-field-hint { font-size: 0.75rem; line-height: 1rem; color: var(--color-ink-dim, oklch(0.78 0.012 245)); } .ds-field-error { font-size: 0.75rem; line-height: 1rem; color: var(--color-blocked-ink, oklch(0.7 0.2 27)); }"
     },
     {
       "name": "Signal Chip",
@@ -362,7 +362,7 @@
       "name": "Berth Board",
       "kind": "custom",
       "refersTo": "board-cell",
-      "description": "署名元件。四格等寬的整寬橫幅，精靈與健康頁共用。狀態三重編碼：色塊 + 模板字標籤 + 泊位號。窄版 2×2，sm 以上一列四格，永不橫向捲動；目前那一格 aria-current=\"step\" + inset currentColor 底線；還沒有結果的格子留在 well 中性底。",
+      "description": "署名元件。五格等寬的整寬橫幅，精靈與健康頁共用。狀態三重編碼：色塊 + 模板字標籤 + 泊位號。窄版 2+2+1（最後一格橫跨整列），sm 以上一列五格，永不橫向捲動；目前那一格 aria-current=\"step\" + inset currentColor 底線；還沒有結果的格子留在 well 中性底。",
       "html": "<section class=\"ds-board\" aria-label=\"泊位板\"><ul class=\"ds-board-grid\"><li class=\"ds-board-cell ds-board-secured\"><div class=\"ds-board-top\"><span class=\"ds-board-code\">BTH 1</span><span class=\"ds-board-status\">已繫上</span></div><p class=\"ds-board-name\">Jellyfin</p><p class=\"ds-board-detail\">10.10.7 · 4 libraries</p></li><li class=\"ds-board-cell ds-board-assigned\" aria-current=\"step\"><div class=\"ds-board-top\"><span class=\"ds-board-code\">BTH 2</span><span class=\"ds-board-status\">需要你</span></div><p class=\"ds-board-name\">qBittorrent</p><p class=\"ds-board-detail\">5.2.0 · API 2.11.2</p></li><li class=\"ds-board-cell ds-board-blocked\"><div class=\"ds-board-top\"><span class=\"ds-board-code\">BTH 3</span><span class=\"ds-board-status\">阻擋</span></div><p class=\"ds-board-name\">來源</p><p class=\"ds-board-detail\">connection refused</p></li><li class=\"ds-board-cell ds-board-empty\"><div class=\"ds-board-top\"><span class=\"ds-board-code\">BTH 4</span><span class=\"ds-board-status\">未開始</span></div><p class=\"ds-board-name\">媒體庫路徑</p><p class=\"ds-board-detail\">—</p></li></ul></section>",
       "css": ".ds-board { border-bottom: 2px solid var(--color-rule-strong, oklch(0.6 0.024 245)); background: var(--color-hull, oklch(0.26 0.021 245)); } .ds-board-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; background: var(--color-rule-strong, oklch(0.6 0.024 245)); list-style: none; margin: 0; padding: 0; } @media (min-width: 640px) { .ds-board-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } } .ds-board-cell { padding: 0.75rem 1rem; color: var(--color-on-signal, oklch(0.16 0.02 245)); } .ds-board-cell[aria-current='step'] { box-shadow: inset 0 -3px 0 0 currentColor; } .ds-board-assigned { background: var(--color-assigned, oklch(0.85 0.18 95)); } .ds-board-secured { background: var(--color-secured, oklch(0.76 0.16 150)); } .ds-board-blocked { background: var(--color-blocked, oklch(0.7 0.2 27)); } .ds-board-empty { background: var(--color-well, oklch(0.21 0.019 245)); color: var(--color-ink-dim, oklch(0.78 0.012 245)); } .ds-board-top { display: flex; align-items: baseline; justify-content: space-between; gap: 0.5rem; } .ds-board-code { font-family: ui-monospace, 'Cascadia Mono', 'Cascadia Code', 'SF Mono', Menlo, Consolas, 'DejaVu Sans Mono', monospace; font-variant-numeric: tabular-nums; font-size: 0.75rem; line-height: 1rem; font-weight: 600; } .ds-board-status { font-family: ui-monospace, 'Cascadia Mono', 'Cascadia Code', 'SF Mono', Menlo, Consolas, 'DejaVu Sans Mono', monospace; font-size: 0.6875rem; font-weight: 600; line-height: 1; letter-spacing: 0.18em; text-transform: uppercase; opacity: 0.8; } .ds-board-name { font-family: ui-monospace, 'Cascadia Mono', 'Cascadia Code', 'SF Mono', Menlo, Consolas, 'DejaVu Sans Mono', monospace; font-variant-numeric: tabular-nums; font-size: 1rem; line-height: 1.5rem; font-weight: 600; margin: 0.5rem 0 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .ds-board-detail { font-family: ui-monospace, 'Cascadia Mono', 'Cascadia Code', 'SF Mono', Menlo, Consolas, 'DejaVu Sans Mono', monospace; font-variant-numeric: tabular-nums; font-size: 0.75rem; line-height: 1rem; height: 1rem; margin: 0.25rem 0 0; opacity: 0.8; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }"
     },
@@ -418,7 +418,7 @@
       "name": "Queue Row",
       "kind": "card",
       "refersTo": "queue-row",
-      "description": "工作清單的一列（QueueRow）：/review 每一類、/issues、媒體庫的「待審 / 對不到」子集共用。<article tabIndex=-1>，well 底 + border-2 rule + px-4 py-3，不塗信號色。由上到下：中性色塊類別標籤 + 標題（.value wrap-anywhere）→ 一句理由 Dot 多久以前 → 原生 <details> 收機器字串（hull 底 dl，每格 DetailLine：.label 欄名 + .value 值，sm 以上 10rem 兩欄）→ 動作列。工作本身是表格或表單的那一類以 body 插在一句話與展開之間。失敗時留著、就地多一塊 blocked Notice。標題層級由呼叫端給（h2 / h3）。處理完會消失，清單外層掛 useFocusAfterRemoval（The Focus Takes The Next Row Rule）。",
+      "description": "工作清單的一列（QueueRow）：/review 每一類、/issues、媒體庫的「待審 / 對不到」子集共用。<article tabIndex=-1>，well 底 + border-2 rule + px-4 py-3，不塗信號色。由上到下：中性色塊類別標籤 + 標題（.value wrap-anywhere）→ 一句理由 Dot 多久以前 → 原生 <details> 收機器字串（hull 底 dl，每格 DetailLine：.label 欄名 + .value 值，sm 以上 10rem 兩欄）→ 動作列。工作本身是表格或表單的那一類以 body 插在一句話與展開之間。失敗時留著、就地多一塊 blocked Notice。標題層級由呼叫端給（h2 / h3）。處理完會消失，清單外層掛 useFocusAfterRemoval（The Focus Takes The Next Row Rule）。 一組也是一列（AuditGroup）：有 RSS Series 的先以 Series 分組、其餘以 Job；還沒確認的 Series 的第一批只有一列也畫成組，組的「全部確認」同時確認 Series。RSS Series 送來的計劃與改季集多一格預設勾選的「套用到這個 RSS Series」，結果那一句看得見。/issues 的 jellyfin_item_mismatch 在展開裡以四條 DetailLine 並排對照：差在哪 → 帳本 → Jellyfin 認成 → 下一步。",
       "html": "<article class=\"ds-queue\" tabindex=\"-1\"><div class=\"ds-queue-id\"><span class=\"ds-queue-kind\">待確認</span><h2 class=\"ds-queue-title\">Sousou no Frieren (2023)/Season 01/Sousou no Frieren S01E05.mkv</h2></div><p class=\"ds-queue-why\">信心 medium，已自動入庫<span class=\"ds-queue-dot\" aria-hidden=\"true\"> · </span><span class=\"ds-queue-when\">入庫於 3 小時前</span></p><details class=\"ds-queue-more\"><summary class=\"ds-queue-summary\">展開</summary><dl class=\"ds-queue-dl\"><div class=\"ds-queue-line\"><dt class=\"ds-queue-term\">來源路徑</dt><dd class=\"ds-queue-val\">/downloads/[SubsPlease] Sousou no Frieren - 05 (1080p).mkv</dd></div></dl></details><div class=\"ds-queue-actions\"><button class=\"ds-queue-btn\" type=\"button\">確認</button><button class=\"ds-queue-btn\" type=\"button\">撤銷</button></div></article>",
       "css": ".ds-queue { display: grid; gap: 0.5rem; border: 2px solid var(--color-rule, oklch(0.44 0.022 245)); border-radius: 0; background: var(--color-well, oklch(0.21 0.019 245)); padding: 0.75rem 1rem; } .ds-queue:focus-visible, .ds-queue button:focus-visible, .ds-queue summary:focus-visible { outline: 2px solid var(--color-ink, oklch(0.97 0.005 245)); outline-offset: 2px; box-shadow: 0 0 0 2px var(--color-hull, oklch(0.26 0.021 245)); } .ds-queue-id { display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem 0.5rem; } .ds-queue-kind { font-family: ui-monospace, 'Cascadia Mono', 'Cascadia Code', 'SF Mono', Menlo, Consolas, 'DejaVu Sans Mono', monospace; font-size: 0.6875rem; font-weight: 600; line-height: 1; letter-spacing: 0.18em; text-transform: uppercase; background: var(--color-deck, oklch(0.31 0.022 245)); color: var(--color-ink, oklch(0.97 0.005 245)); padding: 0.375rem 0.5rem; } .ds-queue-title { font-family: ui-monospace, 'Cascadia Mono', 'Cascadia Code', 'SF Mono', Menlo, Consolas, 'DejaVu Sans Mono', monospace; font-variant-numeric: tabular-nums; font-size: 0.875rem; line-height: 1.25rem; font-weight: 400; margin: 0; min-width: 0; overflow-wrap: anywhere; color: var(--color-ink, oklch(0.97 0.005 245)); } .ds-queue-why { font-family: system-ui, -apple-system, 'Segoe UI', 'Noto Sans TC', 'PingFang TC', 'Microsoft JhengHei', 'Microsoft YaHei', sans-serif; font-size: 0.875rem; line-height: 1.25rem; margin: 0; color: var(--color-ink-dim, oklch(0.78 0.012 245)); } .ds-queue-when { font-family: ui-monospace, 'Cascadia Mono', 'Cascadia Code', 'SF Mono', Menlo, Consolas, 'DejaVu Sans Mono', monospace; font-variant-numeric: tabular-nums; font-size: 0.75rem; } .ds-queue-summary { font-family: ui-monospace, 'Cascadia Mono', 'Cascadia Code', 'SF Mono', Menlo, Consolas, 'DejaVu Sans Mono', monospace; font-size: 0.6875rem; font-weight: 600; line-height: 1; letter-spacing: 0.18em; text-transform: uppercase; width: fit-content; cursor: pointer; list-style: none; color: var(--color-ink-dim, oklch(0.78 0.012 245)); } .ds-queue-summary::-webkit-details-marker { display: none; } .ds-queue-summary:hover { color: var(--color-ink, oklch(0.97 0.005 245)); } .ds-queue-dl { display: grid; gap: 0.25rem; margin: 0.5rem 0 0; border: 2px solid var(--color-rule, oklch(0.44 0.022 245)); background: var(--color-hull, oklch(0.26 0.021 245)); padding: 0.5rem 0.75rem; } .ds-queue-line { display: grid; gap: 0.125rem; } @media (min-width: 640px) { .ds-queue-line { grid-template-columns: 10rem minmax(0, 1fr); gap: 0.5rem; } } .ds-queue-term { font-family: ui-monospace, 'Cascadia Mono', 'Cascadia Code', 'SF Mono', Menlo, Consolas, 'DejaVu Sans Mono', monospace; font-size: 0.6875rem; font-weight: 600; line-height: 1; letter-spacing: 0.18em; text-transform: uppercase; color: var(--color-ink-dim, oklch(0.78 0.012 245)); } .ds-queue-val { font-family: ui-monospace, 'Cascadia Mono', 'Cascadia Code', 'SF Mono', Menlo, Consolas, 'DejaVu Sans Mono', monospace; font-variant-numeric: tabular-nums; font-size: 0.75rem; line-height: 1rem; margin: 0; min-width: 0; overflow-wrap: anywhere; color: var(--color-ink, oklch(0.97 0.005 245)); } .ds-queue-actions { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 0.5rem; } .ds-queue-btn { font-family: ui-monospace, 'Cascadia Mono', 'Cascadia Code', 'SF Mono', Menlo, Consolas, 'DejaVu Sans Mono', monospace; font-size: 0.6875rem; font-weight: 600; line-height: 1; letter-spacing: 0.18em; text-transform: uppercase; border: 2px solid var(--color-rule, oklch(0.44 0.022 245)); border-radius: 0; background: transparent; color: var(--color-ink, oklch(0.97 0.005 245)); padding: 0.625rem 1rem; cursor: pointer; } .ds-queue-btn:hover { border-color: var(--color-rule-strong, oklch(0.6 0.024 245)); }"
     },
@@ -426,14 +426,14 @@
       "name": "In-Place Confirm",
       "kind": "custom",
       "refersTo": "confirm-panel",
-      "description": "就地展開的二次確認（useInPlaceConfirm + ConfirmPanel）：不是 dialog。well 底 + border-2 rule-strong + 0.75rem 內距；role=\"group\" + tabIndex=-1，aria-labelledby 指向說明後果的那一句。展開時焦點進到這一塊、Esc 或取消時回到觸發鍵。最後一排主要鍵 minmax(0,14rem) + 取消 max-content（CONFIRM_ACTIONS），窄版疊成一欄。外殼一份、內容四種形狀：一句後果（ConfirmAction / WatchToggle / RematchForm）；重述會被寫死的值（SubmitAction 的 Route 名與資料夾名）；先選再確認（WorkPicker：搜尋欄 + aria-pressed 候選，沒選之前主要鍵不畫）；範圍 + 即時估算（JobDelete：預設全不勾的 Checkbox 疊，鎖住的照樣畫並說出解鎖方法；border-l-2 的 aria-live 估算塊展開時才問、跟著勾選重算，主要鍵不等估算）。",
+      "description": "就地展開的二次確認（useInPlaceConfirm + ConfirmPanel）：不是 dialog。well 底 + border-2 rule-strong + 0.75rem 內距；role=\"group\" + tabIndex=-1，aria-labelledby 指向說明後果的那一句。展開時焦點進到這一塊、Esc 或取消時回到觸發鍵。最後一排主要鍵 minmax(0,14rem) + 取消 max-content（CONFIRM_ACTIONS），窄版疊成一欄。外殼一份、內容四種形狀：一句後果（ConfirmAction / WatchToggle / RematchForm）；重述會被寫死的值（SubmitAction 的 Route 名與資料夾名）；先選再確認（WorkPicker：搜尋欄 + aria-pressed 候選，沒選之前主要鍵不畫）；範圍 + 即時估算（JobDelete：預設全不勾的 Checkbox 疊，鎖住的照樣畫並說出解鎖方法；border-l-2 的 aria-live 估算塊展開時才問、跟著勾選重算，主要鍵不等估算）。 /rss 待綁定的「綁定」（SeriesBinder）與 Media 詳情的「新增訂閱」（SubscribePanel）是先選再確認加重述：候選或來源是整行的 aria-pressed 選項鍵，選好之後重述會被寫死的資料夾名與將送出幾集，沒選好之前主要鍵那一格留空。",
       "html": "<div class=\"ds-confirm\" role=\"group\" aria-labelledby=\"ds-confirm-q\" tabindex=\"-1\"><p class=\"ds-confirm-text\">送到 Route「動畫」。</p><p id=\"ds-confirm-q\" class=\"ds-confirm-text\">送出之後，這部作品的資料夾名就定了：</p><p class=\"ds-confirm-value\">Sousou no Frieren (2023) [tmdbid-209867]</p><div class=\"ds-confirm-actions\"><button class=\"ds-confirm-primary\" type=\"button\">送單</button><button class=\"ds-confirm-ghost\" type=\"button\">取消</button></div></div>",
       "css": ".ds-confirm { display: grid; gap: 0.75rem; max-width: 36rem; border: 2px solid var(--color-rule-strong, oklch(0.6 0.024 245)); border-radius: 0; background: var(--color-well, oklch(0.21 0.019 245)); padding: 0.75rem; } .ds-confirm:focus-visible { outline: 2px solid var(--color-ink, oklch(0.97 0.005 245)); outline-offset: 2px; box-shadow: 0 0 0 2px var(--color-hull, oklch(0.26 0.021 245)); } .ds-confirm-text { font-family: system-ui, -apple-system, 'Segoe UI', 'Noto Sans TC', 'PingFang TC', 'Microsoft JhengHei', 'Microsoft YaHei', sans-serif; font-size: 0.75rem; line-height: 1rem; margin: 0; max-width: 65ch; color: var(--color-ink, oklch(0.97 0.005 245)); } .ds-confirm-value { font-family: ui-monospace, 'Cascadia Mono', 'Cascadia Code', 'SF Mono', Menlo, Consolas, 'DejaVu Sans Mono', monospace; font-variant-numeric: tabular-nums; font-size: 0.75rem; line-height: 1rem; margin: 0; overflow-wrap: anywhere; color: var(--color-ink, oklch(0.97 0.005 245)); } .ds-confirm-actions { display: grid; grid-template-columns: 1fr; gap: 0.5rem; } @media (min-width: 640px) { .ds-confirm-actions { grid-template-columns: minmax(0, 14rem) max-content; align-items: center; } } .ds-confirm-primary { font-family: ui-monospace, 'Cascadia Mono', 'Cascadia Code', 'SF Mono', Menlo, Consolas, 'DejaVu Sans Mono', monospace; font-size: 0.6875rem; font-weight: 600; line-height: 1; letter-spacing: 0.18em; text-transform: uppercase; width: 100%; border: 2px solid var(--color-rule-strong, oklch(0.6 0.024 245)); border-radius: 0; background: var(--color-assigned, oklch(0.85 0.18 95)); color: var(--color-on-signal, oklch(0.16 0.02 245)); padding: 0.875rem 1rem; cursor: pointer; } .ds-confirm-ghost { font-family: ui-monospace, 'Cascadia Mono', 'Cascadia Code', 'SF Mono', Menlo, Consolas, 'DejaVu Sans Mono', monospace; font-size: 0.6875rem; font-weight: 600; line-height: 1; letter-spacing: 0.18em; text-transform: uppercase; border: 2px solid var(--color-rule, oklch(0.44 0.022 245)); border-radius: 0; background: transparent; color: var(--color-ink, oklch(0.97 0.005 245)); padding: 0.625rem 1rem; cursor: pointer; } .ds-confirm-ghost:hover { border-color: var(--color-rule-strong, oklch(0.6 0.024 245)); } .ds-confirm button:focus-visible { outline: 2px solid var(--color-ink, oklch(0.97 0.005 245)); outline-offset: 2px; box-shadow: 0 0 0 2px var(--color-hull, oklch(0.26 0.021 245)); }"
     }
   ],
   "narrative": {
     "northStar": "泊位調度板（The Berth Dispatch Board）",
-    "overview": "Berth 的介面是一塊船席調度板，不是儀表板也不是表單流程。碼頭的調度板用最少的材料回答一個問題——哪一格出事了——靠的是塗滿整格的漆、壓過整幅的重橫線、對得齊的等寬編號，以及 ISO 6346 貨櫃標識那種模板噴字。Berth 的四個泊位（Jellyfin / qBittorrent / 來源 / 媒體庫路徑）在精靈與健康頁上是同一塊板：精靈問「接上了沒」，健康頁問「還繫著嗎」，位置與意義完全不變。\n\n底色是鋼灰藍船體而不是近黑：--color-hull 的註釋寫明這是刻意迴避「近黑加單一霓虹」那種類別預設。深色是預設，亮色跟隨系統偏好，是同一塊板子印在紙上——只有中性色換值，四個信號色與 on-signal兩個主題共用。整個系統沒有引入任何 webfont：自架應用不該對 Google Fonts 發請求，離線也要成立，所以「模板噴字」的語彙由處理方式承載（等寬系統堆疊 + 重字距 + 重橫線 + 色塊），不由字體檔承載。\n\n密度高、留白少、每一格裡的每個字都是實測值。已確認拒絕的類別預設：左側垂直步驟條加深色卡片加藍色primary、uptime 儀表板的折線圖與綠色勾勾牆、訊息塊左緣的粗色條、發光、漸層、圓角卡片、把泊位板做成橫向捲動的 carousel。",
+    "overview": "Berth 的介面是一塊船席調度板，不是儀表板也不是表單流程。碼頭的調度板用最少的材料回答一個問題——哪一格出事了——靠的是塗滿整格的漆、壓過整幅的重橫線、對得齊的等寬編號，以及 ISO 6346 貨櫃標識那種模板噴字。Berth 的泊位（Jellyfin / qBittorrent / 媒體庫路徑 / 索引站 / TMDB）在精靈與健康頁上是同一塊板：精靈問「接上了沒」，健康頁問「還繫著嗎」，位置與意義完全不變。\n\n底色是鋼灰藍船體而不是近黑：--color-hull 的註釋寫明這是刻意迴避「近黑加單一霓虹」那種類別預設。深色是預設，亮色跟隨系統偏好，是同一塊板子印在紙上——只有中性色換值，四個信號色與 on-signal兩個主題共用。整個系統沒有引入任何 webfont：自架應用不該對 Google Fonts 發請求，離線也要成立，所以「模板噴字」的語彙由處理方式承載（等寬系統堆疊 + 重字距 + 重橫線 + 色塊），不由字體檔承載。\n\n密度高、留白少、每一格裡的每個字都是實測值。已確認拒絕的類別預設：左側垂直步驟條加深色卡片加藍色primary、uptime 儀表板的折線圖與綠色勾勾牆、訊息塊左緣的粗色條、發光、漸層、圓角卡片、把泊位板做成橫向捲動的 carousel。",
     "keyCharacteristics": [
       "四個信號色，每個只有一個意思；紅色永遠只代表阻擋。",
       "狀態三重編碼：塗裝色塊 + 模板字標籤 + 泊位號，不看顏色也讀得出來。",
@@ -450,7 +450,7 @@
       },
       {
         "name": "The Triple Encoding Rule（三重編碼）",
-        "body": "任何狀態都同時由色塊、模板字標籤與位置（泊位號 BTH 1–BTH 4）表達。審計測試：把畫面轉成灰階，狀態仍然讀得出來，否則這個狀態沒做完。",
+        "body": "任何狀態都同時由色塊、模板字標籤與位置（泊位號 BTH 1–BTH 5）表達。審計測試：把畫面轉成灰階，狀態仍然讀得出來，否則這個狀態沒做完。",
         "section": "colors"
       },
       {
@@ -490,7 +490,7 @@
       },
       {
         "name": "The Board Never Scrolls Rule（板不捲動）",
-        "body": "泊位板永遠四格全在畫面內：窄版 2×2，桌機一列四格。不做橫向捲動的 carousel——BTH 3 與 BTH 4 捲到畫面外時，「一眼看出哪一格紅了」這塊板存在的理由就沒了，而且捲動容器會變成一個沒有名字的 Tab 停留點。",
+        "body": "泊位板永遠五格全在畫面內：窄版 2+2+1，桌機一列五格。不做橫向捲動的 carousel——後面幾格捲到畫面外時，「一眼看出哪一格紅了」這塊板存在的理由就沒了，而且捲動容器會變成一個沒有名字的 Tab 停留點。",
         "section": "layout"
       },
       {
@@ -510,12 +510,12 @@
       },
       {
         "name": "The Focus Takes The Next Row Rule（列消失，焦點落在接替的那一列）",
-        "body": "工作清單上處理完的那一列會消失，按下去的那一顆跟著它一起走——useInPlaceConfirm 只管得到「取消」那條路，成功之後觸發鍵已經不在了。所以會讓列消失的清單，在不會跟著清單消失的那一層掛 useFocusAfterRemoval 的 callback ref：焦點掉回 body 時，改落在接替那個位置的那一列（列是 <article tabIndex={-1}>）；一列都不剩時落在那一層裡的 <h1 tabIndex={-1}>，沒有 <h1> 的（媒體庫的子集）落在那一層自己（tabIndex={-1}）。只在焦點真的掉了時動手：使用者自己點到別處、或確認收起時焦點回到觸發鍵，都不會被搶走。畫面上已經沒有東西說「成了」，所以同一層另有一行 sr-only 的 aria-live 說結果。沒有這一步，清一件就要從頁首重新 Tab 一次（M2 票 16 的 critique）。",
+        "body": "工作清單上處理完的那一列會消失，按下去的那一顆跟著它一起走——useInPlaceConfirm 只管得到「取消」那條路，成功之後觸發鍵已經不在了。所以會讓列消失的清單，在不會跟著清單消失的那一層掛 useFocusAfterRemoval 的 callback ref：焦點掉回 body 時，改落在接替那個位置的那一列（列是 <article tabIndex={-1}>）；一列都不剩時落在那一層裡的 <h1 tabIndex={-1}>，沒有 <h1> 的（媒體庫的子集、精靈裡套件的媒體庫清單 BundledLibraries）落在那一層自己（tabIndex={-1}）。RSS 頁的待綁定與綁好的 RSS Series 也是這種清單。只在焦點真的掉了時動手：使用者自己點到別處、或確認收起時焦點回到觸發鍵，都不會被搶走。畫面上已經沒有東西說「成了」，所以同一層另有一行 sr-only 的 aria-live 說結果。沒有這一步，清一件就要從頁首重新 Tab 一次（M2 票 16 的 critique）。",
         "section": "layout"
       },
       {
         "name": "The Needs-You Floats Up Rule（需要你的事浮到摘要層）",
-        "body": "需要人處理的事不能藏在展開之後才看得到。一筆已入庫、卻有 medium 自動入庫檔案待人看一眼的 Job，狀態色塊照樣是綠的「已入庫」，旁邊另塗一塊assigned 的「N 個待確認」——兩件事各一塊，同樣出現在媒體庫牆的標識帶上。Route 設定頁的紅燈與停用列預設展開，綠燈的收起。審計測試：一整份收起的清單，要能直接數出有幾件事在等你。",
+        "body": "需要人處理的事不能藏在展開之後才看得到。一筆已入庫、卻有 medium 自動入庫檔案待人看一眼的 Job，狀態色塊照樣是綠的「已入庫」，旁邊另塗一塊assigned 的「N 個待確認」——兩件事各一塊，同樣出現在媒體庫牆的標識帶上。Route 設定頁的紅燈與停用列預設展開，綠燈的收起。RSS 頁的「等你決定」（新 Feed 的第一輪）與「待綁定」有才出現、排在整頁最上面，段標題旁塗一塊 assigned 的件數——那是整頁唯一的漆。審計測試：一整份收起的清單，要能直接數出有幾件事在等你。浮上來的東西會把人正在按的那一列往下推：Feed 列的「立即輪詢」可能讓上面那兩段長出來（M3 票 21 的 audit：390px 上那一列從 y 356 被推到 2443，連同它的結果句）。所以會讓上方需要你的段落長高的動作，在重畫之後把那一列捲回畫面（scrollIntoView({ block: 'nearest' })，只在它已經不在畫面內時；在畫面內就不動，免得每按一次都跳一下）。",
         "section": "layout"
       },
       {
@@ -541,7 +541,7 @@
       "Do 用色階與線分層：well / hull / deck 三階加 border-2 border-rule 與border-b-2 border-rule-strong（The Rule-Line Rule）。",
       "Do 讓失敗在它自己那一列就地展開服務回的原文、修正說明與可複製指令。",
       "Do 讓新增的互動元件被全域 :focus-visible 選擇器涵蓋（含 summary），並保持 24px 的命中/間距底線。",
-      "Do 在窄版把泊位板排成 2×2，讓四格同時在畫面內（The Board Never Scrolls Rule）。",
+      "Do 在窄版把泊位板排成 2+2+1，讓五格同時在畫面內（The Board Never Scrolls Rule）。",
       "Do 讓長字串換行，不橫向捲動、不截斷：機器字串用 wrap-anywhere，散文用 break-words，flex / grid 子項加 min-w-0。web/src/wrapping.test.ts 守著「.value 不配 break-words、任何地方不用 break-all」這兩條。",
       "Do 用中性色塊表達角色、語言、分類這類非狀態的東西（The Role Is Not A State Rule）。",
       "Do 用原生 input / button / details，直到某一步真的需要行為基礎的元件為止。",
@@ -551,7 +551,10 @@
       "Do 讓處理完就消失的清單列把焦點交給接替的那一列，清單空了交給頁面的 h1（The Focus Takes The Next Row Rule）。",
       "Do 把「需要你」的計數塗在摘要層，不要只放在展開區裡（The Needs-You Floats Up Rule）。",
       "Do 讓窄版少掉的欄收成一行帶標籤的 Dot 分隔值，一份 DOM 兩種版面。",
-      "Do 讓 Cutaway 的 level 跟著它所在頁面的標題層級，不跳級。"
+      "Do 讓 Cutaway 與 ServiceCard 的 level 跟著它所在頁面的標題層級，不跳級。",
+      "Do 讓等得到的事（請求預算用完而延後、Feed 這一輪讀不到、送單卡住）走線變重或 assigned，不走 blocked：Berth 自己會再試的不是阻擋（The One Meaning Rule）。",
+      "Do 在會讓頁首需要你的段落長高的動作之後，把使用者剛按的那一列捲回畫面（只在它已經被推出去時）。",
+      "Do 把使用者自己寫的規則、關鍵字畫成一條一格的 .value，不是色塊、不走 .label。"
     ],
     "donts": [
       "Don't 給任何顏色第二個意思，尤其不要讓紅色代表阻擋以外的事（警告、危險動作、刪除都不是阻擋）。",
@@ -566,7 +569,7 @@
       "Don't 加應用內的主題切換鍵：深色是預設，亮色跟隨 prefers-color-scheme。",
       "Don't 用字元當裝飾標記（▸、•、emoji）——它們會被算進無障礙名稱。要標記就用 CSS 畫。",
       "Don't 把色塊或文字直接疊在海報之類的圖像上（The Paint Needs A Painted Ground Rule）。",
-      "Don't 把整塊網格塗成 rule 再靠 gap-px 透出格線，除非格數是固定的。泊位板可以（永遠四格），卡片牆不行——最後一排沒填滿時，空欄會變成一塊灰色的板子（票 03 實跑）。線交給每一格自己的 border-2。",
+      "Don't 把整塊網格塗成 rule 再靠 gap-px 透出格線，除非格數是固定的。泊位板可以（永遠五格），卡片牆不行——最後一排沒填滿時，空欄會變成一塊灰色的板子（票 03 實跑）。線交給每一格自己的 border-2。",
       "Don't 引入 webfont 或對外部字型服務發請求；離線可用是自架應用的底線。",
       "Don't 用 break-all：它會在英文詞中間斷行（(S / TEP 4)）。",
       "Don't 以為 break-words 擋得住橫向捲動：它不改變 flex / grid 子項的最小寬度，沒有空格的發佈名照樣撐寬整頁（票 15 在 390px 量到 67px）。機器字串用 wrap-anywhere。",
@@ -577,7 +580,8 @@
     "knownContradictions": [
       "值與值之間的中點分隔（components/Dot.tsx）是一個字元，而 Don't 那一條寫著「不用字元當裝飾標記」。那條規則說的是會進無障礙名稱的標記（▸、•、emoji）——螢幕閱讀器會把它們念出來。Dot 掛 aria-hidden，所以它從無障礙樹上消失了；而它必須是行內字元：CSS 畫的刻度要靠一個固定的盒子定位，跟不上一行會換行、寬度由內容決定的值列表（結果表、下載列、牆卡片標識帶、檔案與計劃列都是這種）。",
       ".impeccable/surfaces/web-src-pages-setuppage-tsx.md 的方向段仍描述亮色主題「同樣四個信號色，降明度提彩度以達 AA」。程式碼沒有這樣做：web/src/index.css 的亮色區塊只換中性色與blocked-ink / secured-ink，四個信號色與 on-signal 兩個主題共用（註釋寫明理由：白字配中明度色只有 3.6:1）。以 build 為準——本文件記錄的是共用漆的那一版。web-src-pages-healthpage-tsx.md 已不再有這句話；setup 那份尚未更新。",
-      "實測對比下限（2026-09-17，探索、下載、Media 詳情、媒體庫、Route 設定五頁，深淺兩主題 × 1280 / 390 全部量過）：深色最低 6.53:1、亮色最低 5.71:1；rule-strong 深色 3.33–4.51:1、亮色 6.46:1。這些是現況的最低值，不是目標值；新畫面仍以 AA 數值為驗收條件。",
+      "排除條件的移除鍵是一個 × 字元，建議項與開關上是 + / −（rss/RulesEditor.tsx），而 Shapes 寫著「沒有圖示」、Don't 寫著不用字元當標記。無障礙名稱沒有被污染：移除鍵的名字來自 aria-label（「拿掉「720p」」），+ / − 掛aria-hidden。但它們仍是字形圖示，不列為系統的做法：票 10 要求記下的是「一條一格」那一格的形狀（見 Chips），不是這三個字元；新畫面的動作鍵照舊用字（i18n key），不要照抄這幾個符號。",
+      "實測對比下限（2026-09-17，探索、下載、Media 詳情、媒體庫、Route 設定五頁，深淺兩主題 × 1280 / 390 全部量過）：深色最低 6.53:1、亮色最低 5.71:1；rule-strong 見上面「重橫線」那一條（深色 3.33–4.51:1、亮色 6.46:1）。這些是現況的最低值，不是目標值；新畫面仍以 AA 數值為驗收條件。",
       "媒體庫牆的格子跟著自己的內容長，同排下緣不再對齊（M1.5 票 11）。牆卡片那一節說JellyfinLine 的 min-h-10 讓基線對齊——那句話原本靠 grid 預設的 stretch 把同排拉成一樣高。卡片裡的就地確認展開時，stretch 會把同排每一格一起拉長（390px 量到多出約 300px 空白），而位移正好發生在使用者要決定一個清掉就回不來的動作時（The Failure Expands In Place Rule）。取後者：媒體庫牆走 WALL_GRID_CONFIRMABLE（多一個 items-start），代價是標題兩行的格子比一行的高一截、下緣差約 8px。探索牆、繼續觀看與觀看區的集沒有就地確認，仍是 WALL_GRID。"
     ]
   }

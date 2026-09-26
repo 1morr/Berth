@@ -81,21 +81,14 @@ function outcomeOf(row: FeedItem): Outcome | null {
   }
 }
 
-/**
- * 至少讀到過一次：輪過、而且不是「一筆都沒有又失敗」。讀不到的那一輪照樣寫 `last_polled_at`，
- * 所以光看它不夠（M3 票 21 的 critique P0）。後端 `services/rss._ever_read` 是同一條。
- */
-function everRead(feed: Feed): boolean {
-  return feed.last_polled_at !== null && (feed.last_error === '' || feed.items > 0)
-}
-
 /** 一個 Feed 的第一輪。詳情頁從作品建搜尋 feed 之後就地畫它（票 19）。 */
 export function FirstRound({ feed, onDone }: { feed: Feed; onDone: (said: string) => void }) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const headingId = useId()
-  // 還沒讀到過的不讓人選：沒看過的東西不選「全部下載」（shape §2）。
-  const read = everRead(feed)
+  // 還沒讀到過的不讓人選：沒看過的東西不選「全部下載」（shape §2）。輪過但一次都沒讀到的也算
+  // （M3 票 21），規則在後端（`services/rss._ever_read`）。
+  const read = feed.ever_read
   const preview = useQuery({ ...previewQueryOptions(feed.id), enabled: read })
   const prime = useMutation({
     mutationFn: (mode: PrimeMode) => primeFeed(feed.id, mode),

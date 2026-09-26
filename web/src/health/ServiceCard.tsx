@@ -20,12 +20,12 @@ export function ServiceCard({
   row,
   actions,
   settingsLink = true,
-  level = 'h3',
+  level = 3,
 }: {
   row: ServiceHealth
   actions?: ReactNode
   /** 標題層級跟著所在的頁面（DESIGN.md）：健康頁上它直接在 h1 底下，設定頁在區塊的 h2 底下。 */
-  level?: 'h2' | 'h3'
+  level?: 2 | 3
   /**
    * 紅燈時給不給「前往設定」（票 06i）。設定頁上的那一張不給：人已經在那一頁上了，
    * 連到自己的連結按了什麼都不會發生。
@@ -35,7 +35,7 @@ export function ServiceCard({
   const { t } = useTranslation()
   const state = serviceState(row)
   const failed = state === 'failed'
-  const Heading = level
+  const Heading = level === 2 ? 'h2' : 'h3'
 
   return (
     <section
@@ -96,7 +96,7 @@ export function ServiceCard({
                （brief §16.4、§20.9）。 */
             <p className="mt-3 max-w-prose text-xs text-ink">{t('health.fix.unsupported')}</p>
           ) : (
-            <Fix row={row} settingsLink={settingsLink} />
+            <Fix row={row} settingsLink={settingsLink} level={level} />
           )}
         </div>
       )}
@@ -131,13 +131,23 @@ const FIX_LABEL = {
 } as const
 
 /** 紅燈時該做什麼。套件內給指令，既有給「到設定頁改連線」。 */
-function Fix({ row, settingsLink }: { row: ServiceHealth; settingsLink: boolean }) {
+function Fix({
+  row,
+  settingsLink,
+  level,
+}: {
+  row: ServiceHealth
+  settingsLink: boolean
+  level: 2 | 3
+}) {
   const { t } = useTranslation()
   const kind = serviceFix(row)
+  // 比卡片的標題低一層：健康頁上卡片是 h2，設定頁上是 h3。
+  const Heading = level === 2 ? 'h3' : 'h4'
 
   return (
     <>
-      <h4 className="label mt-4 text-ink-dim">{t('health.fix.title')}</h4>
+      <Heading className="label mt-4 text-ink-dim">{t('health.fix.title')}</Heading>
       <p className="mt-2 max-w-prose text-xs text-ink-dim">{t(FIX_LABEL[kind])}</p>
       {kind === 'bundled' && (
         <div className="mt-2 grid grid-cols-1 gap-px">

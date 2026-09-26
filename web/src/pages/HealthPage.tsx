@@ -104,7 +104,7 @@ export function HealthPage() {
             <ServiceCard
               key={row.kind}
               row={row}
-              level="h2"
+              level={2}
               // 漂移是這一頁唯一「有東西可以按」的狀態，而按鈕住在設定頁。
               actions={
                 row.drift.length > 0 && me.data?.role === 'admin' ? (

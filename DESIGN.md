@@ -379,7 +379,7 @@ primary、uptime 儀表板的折線圖與綠色勾勾牆、訊息塊左緣的粗
 （手機橫放且開了鍵盤）上 flex 置中會把上緣切掉且捲不回去。
 
 **頁寬。** 三種寬度，由頁面的工作決定：掃視用的牆（探索、媒體庫）`max-w-[110rem]`；
-決策與清單（Media 詳情、下載列表）`max-w-[80rem]`；設定（健康、Route 設定）`max-w-3xl`。
+決策與清單（Media 詳情、下載列表、RSS）`max-w-[80rem]`；設定（健康、Route 設定）`max-w-3xl`。
 外緣一律 `px-6 py-8`。
 
 **牆（堆場）。** 探索與媒體庫共用同一份欄數（`WALL_GRID`）：窄版 2 欄、`sm` 3 欄、`lg` 4 欄、`xl`（1280px）6 欄，
@@ -388,7 +388,7 @@ primary、uptime 儀表板的折線圖與綠色勾勾牆、訊息塊左緣的粗
 
 **提單（Media 詳情）。** 上方身分帶（海報 `7rem` / `sm` 以上 `11rem` + 標題與一行識別值，主按鈕、簡介與新鮮度在
 `sm` 以上接在右欄、窄版整寬；底下一條 `border-b-2 border-rule-strong`），下方整寬堆疊：**觀看**（作品在 Jellyfin 裡、
-這個人看得到時才有）→ 搜尋 → 季集與入庫 → 檔案與版本 → TMDB 標示（M1.5 票 08，`.scratch/m1.5/media-detail-shape.md`）。
+這個人看得到時才有）→ 搜尋 → RSS 訂閱（只有 admin；M3 票 19，與搜尋同是「怎麼把它弄進來」，所以緊接在後）→ 季集與入庫 → 檔案與版本 → TMDB 標示（M1.5 票 08，`.scratch/m1.5/media-detail-shape.md`）。
 **後一票往區塊裡填，不重排這個順序**。整寬是為了五欄的結果表——它在一個 5:7 的右欄裡讀不完。
 
 **節奏。** 內部間距只有幾階：色塊 `0.375rem 0.5rem`、列與面板 `0.75rem 1rem`、頁面外緣 `1.5rem`、
@@ -434,14 +434,18 @@ flex / grid 子項的最小寬度，一串沒有空格的發佈名在 390px 上�
 那一顆跟著它一起走——`useInPlaceConfirm` 只管得到「取消」那條路，成功之後觸發鍵已經不在了。所以會讓列消失的清單，
 在**不會跟著清單消失的那一層**掛 `useFocusAfterRemoval` 的 callback ref：焦點掉回 `body` 時，改落在接替那個位置的
 那一列（列是 `<article tabIndex={-1}>`）；一列都不剩時落在那一層裡的 `<h1 tabIndex={-1}>`，沒有 `<h1>` 的（媒體庫的
-子集）落在那一層自己（`tabIndex={-1}`）。只在焦點**真的掉了**時動手：使用者自己點到別處、或確認收起時焦點回到觸發鍵，
+子集、精靈裡套件的媒體庫清單 `BundledLibraries`）落在那一層自己（`tabIndex={-1}`）。RSS 頁的待綁定與綁好的 RSS Series 也是這種清單。只在焦點**真的掉了**時動手：使用者自己點到別處、或確認收起時焦點回到觸發鍵，
 都不會被搶走。畫面上已經沒有東西說「成了」，所以同一層另有一行 `sr-only` 的 `aria-live` 說結果。沒有這一步，
 清一件就要從頁首重新 Tab 一次（M2 票 16 的 critique）。
 
 **The Needs-You Floats Up Rule（需要你的事浮到摘要層）。** 需要人處理的事不能藏在展開之後才看得到。
 一筆已入庫、卻有 medium 自動入庫檔案待人看一眼的 Job，狀態色塊照樣是綠的「已入庫」，旁邊另塗一塊
 `assigned` 的「N 個待確認」——兩件事各一塊，同樣出現在媒體庫牆的標識帶上。Route 設定頁的紅燈與停用列
-預設展開，綠燈的收起。審計測試：一整份收起的清單，要能直接數出有幾件事在等你。
+預設展開，綠燈的收起。RSS 頁的「等你決定」（新 Feed 的第一輪）與「待綁定」有才出現、排在整頁最上面，
+段標題旁塗一塊 `assigned` 的件數——那是整頁唯一的漆。審計測試：一整份收起的清單，要能直接數出有幾件事在等你。
+**浮上來的東西會把人正在按的那一列往下推**：Feed 列的「立即輪詢」可能讓上面那兩段長出來（M3 票 21 的 audit：390px 上
+那一列從 y 356 被推到 2443，連同它的結果句）。所以會讓上方需要你的段落長高的動作，在重畫之後把那一列捲回畫面
+（`scrollIntoView({ block: 'nearest' })`，只在它已經不在畫面內時；在畫面內就不動，免得每按一次都跳一下）。
 
 **The Summary Is One Button Rule（摘要只是一顆按鈕）。** 可展開的列用原生 `<details>`，而 `<summary>`
 本身就是一顆按鈕：它裡面不放連結或任何互動元素——下載列的作品連結因此在展開區裡，不在摘要列上。
@@ -538,6 +542,14 @@ hover 與焦點也是同一個語彙（牆卡片、Ghost 按鈕、導覽方塊�
   的小一號色塊；時間線的事件型別與預估說明是 `0.25rem 0.375rem`。
 - **Tag token:** 解析出的 Tags（`WEB`、`1080p`、`CHS+CHT`）是 `deck` 底的 `.value text-xs`，不是 `.label`——
   它們是詞彙表不是文案，`.label` 會把 `1080p` 大寫掉。
+- **一條一格（`RulesEditor`，排除條件，M3 票 10）:** 使用者自己寫的一條規則是一格：`hull` 底 + `border-2 border-rule`，
+  規則本身是 `.value text-sm wrap-anywhere`（`px-2 py-1`，它是正則或關鍵字，會被複製，The Machine String Rule），
+  右側以 `border-l-2 border-rule` 隔出一顆移除鍵（`min-h-6 min-w-6`、`self-stretch`，`ink-dim` → hover `ink`），
+  可存取名稱是「拿掉「720p」」這種帶著規則本身的一句（`aria-label`）。格與格 `flex-wrap gap-2`，清單以 `sr-only` 的一句命名。
+  **它不是色塊**：沒有塗裝、不走 `.label`——規則是使用者的字，不是狀態也不是分類。改了就存（整組覆寫），不另外按儲存；
+  拿掉一格時焦點回到加入欄（那一格連同它的鍵一起消失）。建議項（`720p`、`简体`…）是 `COMPACT_BUTTON`，裡面的規則走
+  `.value normal-case`；Feed 與 RSS Series 那一列上平常收成一顆 `COMPACT_BUTTON`「排除條件（N 條）」（`aria-expanded`）。
+  移除鍵與這兩處用的是字元，見 Known contradictions。
 - **分類 vs 狀態:** 事件型別、trigger、處置、信心、計劃狀態、停用都是分類，一律中性；
   「判斷不出來」是一句話不是分類，不給色塊，免得看起來像個結論。
 - **不透明度:** 色塊上的文字**永遠不加 opacity**。`label opacity-70` 疊在信號色上實測 3.56:1，
@@ -555,6 +567,13 @@ hover 與焦點也是同一個語彙（牆卡片、Ghost 按鈕、導覽方塊�
   標題層級由 `level` 屬性決定（預設 `3`）：精靈裡它在步驟的 `h2` 底下，Media 詳情裡它緊接著 `h1`，
   所以那裡傳 `level={2}`——標題層級跟著它所在的頁面，不跳級（票 15 audit）。
   機器字串在 `dd` 而 term 是角色名的列（「資料夾名」）照樣用 `.label` term。
+- **健康頁的卡片（`ServiceCard` / `PollerCard` / `BudgetCard`）:** 同一種面板——`deck` 抬頭列放標題，出事時整塊框換
+  `rule-strong`。**標題層級跟著所在的頁面**：`ServiceCard` 收數字的 `level?: 2 | 3`（預設 `3`，與 `Cutaway` 同一個形狀），健康頁上它直接在
+  `h1` 底下所以傳 `level={2}`，設定頁的「連線狀態」區塊有自己的 `h2`，卡片留在 `h3`（同 `Cutaway` 的 `level`）。
+  **請求預算（`BudgetCard`，M3 票 20）** 一個站一條 `border-l-2 border-rule` 的內縮列：主機名 `.value text-sm`（機器字串）
+  `Dot` `.value text-xs` 的「已用 / 上限」，下一行各用途的次數，再下面每一種被延後的工作一行 `ink` 字 + `ink-dim` 的
+  「放得下：」與 `Timestamp`。**延後不是失敗**：那是 Berth 自己先停手，等得到；所以不塗漆也不用 `blocked-ink`，只有整塊框
+  變重（The Heavier Line Rule，與下載迴圈落後一輪同一個說法）。讀不到時整塊不畫——它不是服務檢查之一。
 - **區塊標題:** 頁內每個區塊是 `.label text-ink` 的標題 + 可選的 `.value text-xs text-ink-dim` 計數，
   壓在 `border-b-2 border-rule-strong pb-2` 上；沒有名字的 `section` 用 `aria-labelledby` 接上標題。
   只有數字的計數，看得見的是數字（`aria-hidden`），聽得見的是帶單位的那一句（`sr-only`）。
@@ -567,11 +586,15 @@ hover 與焦點也是同一個語彙（牆卡片、Ghost 按鈕、導覽方塊�
   展開區裡，邊框是「這裡可以輸入」的唯一線索，而 `rule` 對 `hull` 只有 2:1，低於 WCAG 1.4.11 的 3:1
   （M2 票 16 的 audit 量到的；`rule-strong` 深色 3.95:1、淺色 6.46:1）。
 - **Focus:** 邊框換 `ink`，外加全域雙環。
-- **Error:** 邊框換 `blocked`，`aria-invalid`，錯誤訊息以 `role="alert"` + `aria-describedby` 掛在欄位下方，
-  文字用 `blocked-ink`。
+- **Error:** 邊框換 `blocked-ink`（不是 `blocked`）、不再換 `ink` 焦點邊，`aria-invalid`，錯誤訊息以 `role="alert"` +
+  `aria-describedby` 掛在欄位下方，文字同樣是 `blocked-ink`。邊框用「當字用」的那一罐，理由與字相同：塗裝的 `blocked`
+  在亮色主題的紙白 `hull` 上壓深不了，一條 2px 的框過不了非文字對比 3:1；`blocked-ink` 在亮色主題壓深、深色主題與漆同值
+  （M3 驗收輪 `d03f6dd`）。紅框在這裡仍然是「擋住了」——寫壞的欄位在改好之前送不出去（The One Meaning Rule 沒有被借出去）。
 - **Disabled:** `well` 底 + `ink-dim` 字。
 - **Checkbox:** 原生 `input[type=checkbox]`，`accent-color: var(--color-assigned)`，`size-4`。
-- **Select:** 原生 `select`，與輸入框同一套外觀（`hull` + `border-2 border-rule` + `.value`）。
+- **Select:** 原生 `select`，與輸入框同一套外觀（`hull` + `border-2 border-rule-strong` + `.value text-sm`，focus 換 `ink`）；
+  篩選列上的小一號是 `px-2 py-1`。**只在真的有得選時畫**：Feed 的「自動綁定送進」（`FeedRoutePicker`，M3 票 21）只列
+  啟用中的 Route，少於兩條時整格不出現（只有一條時沒什麼好選，停用的那條自動綁定本來就不看）；第一個選項是「不指定」。
 - **元件基礎:** 原生 `input` / `button` / `checkbox` / `select` / `details`。到 M1 為止仍沒有任何需要
   Radix 行為的元件（無 dropdown / dialog / popover / tabs），原生的無障礙比重寫一份好。要 shadcn/ui 時再引入。
 
@@ -741,6 +764,13 @@ Thumb / Backdrop / 劇照），下方同一條標識帶，框與底同牆卡片�
   送到哪一條 Route、會被寫死的資料夾名（`.value wrap-anywhere`）、「這一按就定了」或「它已經是」，加主要 / 取消兩顆鍵。
   被擋下時在同一塊裡以 `role="alert"` 的 `blocked-ink` 說封閉集合的理由，原文接在下面。成功時整塊換成
   `secured` 色塊 + 「去看下載列表」連結（`role="status"`，焦點移到連結上）。
+- **RSS 訂閱（`SubscribePanel`，M3 票 19，只有 admin）:** 次要入口，主要的仍是 `/rss`。區塊標題列右側一條 `TEXT_LINK` 到 `/rss`
+  （`ms-auto`）。上面是已經綁在這部作品上的 RSS Series：一份 `border-2 border-rule` 框、`gap-px` 透出 `rule` 的清單，每一列
+  `hull` 底——來源中性色塊 + 字幕組（`.value`）+ 第一批還沒確認時一塊 `assigned`「第一批待確認」，確認過只是一行 `ink-dim`
+  字（The Usual Stays Unpainted Rule）；下一行最近一集（`.value`）`Dot` `Timestamp`。下面一顆 Ghost「新增訂閱」就地展開成
+  `ConfirmPanel`：選來源（整行的選項鍵，同 `Choices`）→ Route → Mikan 搜番組、選字幕組 / Nyaa、acg.rip 選標題 → 資料夾名重述。
+  建好的搜尋 feed 在**同一塊裡**換成它的第一輪預覽（`FirstRound`，同 `/rss` 那一塊），旁邊一顆 Ghost「之後在 RSS 頁決定」。
+  結果那一句是看得見的 `aria-live`（`empty:hidden`）：送出幾集只在這裡說。
 - **檔案與版本（`FilesPanel`）:** 劇集**依決定分組**（處置 × 季，各是一段長清單段落，預設全收），電影不分組。
   組的摘要：處置中性小色塊 + `S01 E01–E28`（`.value text-sm`）+ `Dot` 分隔的檔案數、「帳本對得上 / N 個帳本對不上」、
   只算正片的「Jellyfin 已收錄 / 掃描中 / 找不到 N」（是 0 的不說，字幕與特典整組都沒有這一格）。帳本對不上或
@@ -813,6 +843,56 @@ Thumb / Backdrop / 劇照），下方同一條標識帶，框與底同牆卡片�
 - **刪除:** 被引用的 Route **不給刪除鍵**，直接說「刪不得、為什麼」，還啟用著就旁邊給一顆 Ghost「停用」當出路。
   沒被引用時是 `ConfirmAction` 就地確認。刪掉的那一列會卸載，所以「已刪除」由頁面那一層宣告。
 
+### RSS 頁（`/rss`，M3）
+
+只有 admin，`max-w-[80rem]` 的單頁堆疊。平常它在背景輪詢，人只在有事時回來，所以**第一屏回答「有沒有要我決定或綁定的」**：
+由上而下是 等你決定（有才出現）→ 待綁定（有才出現）→ Feed → 一次性 RSS 連結 → 排除條件 → 綁好的 RSS Series → 最近的
+Feed Item（沒有 Feed 時不畫）。每一段的 `h2` 是 `SectionHeading`：`.label` 壓在 `border-b-2 border-rule-strong` 上，
+旁邊是只有數字的計數（`aria-hidden` + `sr-only` 帶單位的那一句）或——需要你的那兩段——一塊 `assigned` 的件數色塊（它已經
+說了數量，就不另給數字）。綁完、選完的那一列會離開，頁面那一層掛 `useFocusAfterRemoval` 與一行 `sr-only` 的 `aria-live`。
+讀取中是兩塊不動的 `well` 空框。
+
+- **等你決定（`FirstRoundSection` / `FirstRound`，M3 票 11）:** 新的搜尋 feed 第一輪帶著幾個月的歷史，一筆都不送，停在這裡。
+  一個 Feed 一塊 `article`，框**直接是 `rule-strong`**（整塊就是在等你）。抬頭：來源中性色塊 + Feed 名 `h3`（`.value`）+
+  遮掉 token 的網址（`.value text-xs ink-dim`）。**還沒讀到過就不讓人選**（`feed.ever_read`，規則在後端 `services/rss._ever_read`：輪過而且不是「一筆都沒有又失敗」）——那時只有一句話（讀不到的附原文），沒有鍵。
+  讀到之後由上而下：**一行計數**（`.value text-sm`：會送出 N · 綁定之後送 N · 排除 N · 重複 N，`Dot` 與空白在
+  `whitespace-nowrap` 的那一格外面，窄版與英文才有地方換行）→ **決定**：主要鍵「只追之後的」（`sm:min-w-64`）+ Ghost
+  「全部下載」走就地確認，後果句說出會送幾筆、幾筆要綁定 → 一行 `ink-dim` 提示 → **證據**：四組照「全部下載之後會怎樣」分，
+  空的組不畫，組與組 `gap-px` 透出 `rule`。**決定在上、證據在下**：二十幾筆的清單不能把兩顆鍵推出畫面。**會下載的兩組
+  （會送出、綁定之後送）一直攤開，不會下載的兩組（排除、重複）先收起**，組標題旁一顆 Ghost「看排除（N 筆）」
+  （`aria-expanded` + `aria-controls`）。每一筆是 `hull` 底的一列：發佈名 `.value text-sm wrap-anywhere`，下一行 `Dot` 分隔的
+  發佈時間、大小、下載連結，被擋下的另一行 `ink-dim` 的理由。這一塊沒有信號色（除了段標題那塊件數）。
+- **待綁定（`Pending`）:** 每一列是 `QueueRow`（類別「待綁定」、標題是原始發佈名、一句話是等著的集數），`body` 放**自動綁定
+  沒綁上的理由**（`Grounds`：一句 lead + `list-disc` 的 `text-xs ink-dim` 條列，整句翻譯、參數不拆成 `.value` 片段）與這個
+  Series 那一層的排除條件——它回答「為什麼要我來綁」，所以不收進展開。展開裡是 Series key 與 Mikan 頁的 `DetailLine`。
+- **綁定（`SeriesBinder`）:** 收起時是動作列上的一排 Ghost：**每一個候選一顆**（「選《葬送的芙莉蓮》」+ `text-xs ink-dim`
+  的年份 · 類型，動詞寫在鍵上），最後一顆「綁定」。按候選直接展開並選定它、跳過搜尋。展開是 `ConfirmPanel`：
+  `.label` 標題 → 候選清單（`Choices`，排在搜尋框上面）→ 搜尋欄（預填從發佈名讀出的作品名，焦點落在這裡）→ 最多八個結果
+  （候選不重列）→ 選了作品才出現：Route 下拉、**會被寫死的資料夾名**（先一句「綁定之後資料夾名就定下來 / 已經定下來了」，再
+  `.value text-xs wrap-anywhere` 的那一串）、「將送出 N 集」→ Mikan 多一格「同時補下載舊集」（預設勾）→ `CONFIRM_ACTIONS`：
+  沒選好之前主要鍵那一格留空（取消不移位），選好了主要鍵說「綁定並送出 N 集 / 綁定、送出 N 集並補舊集」。
+  `Choices` 的一個選項是整行的按鈕：`border-2 border-rule`、`px-3 py-2`、`.value text-sm`，選中 `aria-pressed` + 重線 + `deck` 底。
+- **綁好的 RSS Series（`BoundRow`）:** `well` + `border-2 border-rule` 的 `article`：作品名 `h3`（跟著 UI 語言）、原始發佈名
+  `.value text-xs ink-dim`、一行 `Dot` 分隔（自動綁定 · Route · 來源 · 季 · 偏移）；自動綁定的**另說憑什麼**（同一個 `Grounds`，
+  lead 換成「依據」）；排除條件；「解除綁定」走就地確認。
+- **Feed 列（`FeedRow`）:** `well` 底 `article`，框平常 `rule`、這一輪讀不到時 `rule-strong`。來源中性色塊 + 名稱 `h3` →
+  遮掉 token 的網址 → 一行 `text-xs ink-dim`：每 N 分鐘 · 上次輪詢 `Timestamp` · N 筆 ·（有指定時）送進 Route 名 →
+  第一輪還沒選時一句 `ink`「第一輪還沒決定，一筆都不送」→ 讀不到時一塊 **`assigned`** 的 `Notice` 帶原文（卡住了、下一輪會再試，不是
+  `blocked`）→ 一行一直掛著的 `role="status"` 說手動輪詢的結果（讀不到時不說「新 0 筆」）→ 排除條件開關 → Ghost「立即輪詢」
+  與就地確認的「刪除」。輪詢之後依 The Needs-You Floats Up Rule 的最後一段把這一列捲回畫面。
+  新增表單是同一種 `well` 框：網址、名稱、（啟用中的 Route 有兩條以上時）「自動綁定送進」下拉、主要鍵 `sm:max-w-xs`。
+  沒有 Feed 時是空狀態那一塊，下一步是到 Mikan 的 `GHOST_LINK`。
+- **一次性 RSS 連結（`OneshotSection`，M3 票 18）:** 不建 Feed。貼網址的表單 → 讀到之後一行計數 → 選作品與 Route（一個
+  `fieldset`，送出中整組 `disabled`，因為送的是按下那一刻的那一組）→ 清單標題列旁一顆 Ghost「勾選全部單集 N 筆 / 全部取消」
+  → `gap-px` 的清單，每一列原生勾選框 + 發佈名 label，下面 `pl-7` 對齊勾選框的解析結果（季集、Tags 用 `.value`）、「已經有了」
+  與逐筆結果（被拒是 `blocked-ink` 的一句 + 原文，成功是一塊 `secured` 小色塊 + 下載連結——這一格是剛做完的事，不是常態）。
+  最底下是 `STICKY_ACTION`：資料夾名重述在送出鍵正上方，鍵上是「送出 N 筆」與送出中的「N / M」；還沒選作品時只有一句話。
+- **排除條件（`ExclusionsSection`）:** 全域那一層是一塊 `well` 框：lede 說三層取聯集 → 「不自動下載合集」原生勾選框 → 一條一格
+  的規則（見 Chips）。**不塗漆**：排除條件是設定，不是要你現在做的事。
+- **最近的 Feed Item:** `gap-px` 的清單，一列一個狀態色塊 + 發佈名。**常態不塗漆**：已送單、已排除、重複都是中性色塊；只有
+  送不出去（`matched` 帶著原文）塗 `assigned`。被排除或去重擋下的多一行 `ink-dim` 的「為什麼沒下載」，那不是錯誤；
+  送不出去的原文是 `.value text-xs ink`。
+
 ### 工作清單列（`QueueRow` / `DetailLine`）
 
 `/review` 的每一類（計劃、對不到、重複、待確認）、`/issues`，以及媒體庫的「待審 / 對不到」子集是**同一種列、同一份元件**
@@ -827,13 +907,23 @@ Thumb / Backdrop / 劇照），下方同一條標識帶，框與底同牆卡片�
 - **失敗時這一列留著**，動作列上方就地多一塊 `blocked` 的 `Notice` 說為什麼（The Failure Expands In Place Rule）。
 - **列不知道自己在哪一段：** 分段是頁面的事（`/review` 分段，段標題是 `.label` + 計數壓在 `border-b-2 border-rule-strong` 上；
   媒體庫的子集不分段），標題層級由呼叫端給——分段底下 `h3`，不分段 `h2`，一組裡的成員 `h4`。
-- **一組也是一列**（`AuditGroup`，M3 票 05）：同一個 Job 的 audit 收成一列，標題是作品，一句話說整組為什麼是 medium
+- **一組也是一列**（`AuditGroup`，M3 票 05、13）：**有 RSS Series 的先以 Series 分組**（補舊集一集一個 Job，以 Job 分組等於不分），
+  其餘同一個 Job 的 audit 收成一列；組的位置是它第一列出現的地方，後端的順序不動。還沒確認的 Series 的第一批**只有一列也畫成組**——
+  組上的「全部確認」同時把 Series 標成確認過，與單列的「確認」不是同一件事。第一批那一組的一句話說要人看的是季號與集數
+  （信心 high 的也在裡面），展開多兩條 `DetailLine`：Series 名（看得出字幕組）與它現在的季號、偏移。以 Job 分組時，標題是作品，一句話說整組為什麼是 medium
   （原因相同說一次，不同就說不只一種），動作列一顆 Ghost「全部確認」——同單列的「確認」，不就地確認。成員（完整的
   `AuditRow`，標題只剩季集）收在展開裡、接在下載那一格之後；組說過的那一句成員不再說（`sentence` 省略，只剩時間）。
   「展開 / 收起」走受控的 `ExpandHint open`，成員長在組的 `<details>` 裡，`group-open:` 會跟著外層亮。
 - **整段的動作掛在段標題列右側**（`/review` 的「已入庫，等你看一眼」：`AuditSectionConfirm`）：標題與它 `flex-wrap`
   共用那條 `border-b-2`，窄版換到下一行。它橫跨好幾筆下載，所以就地確認並說出件數；只在畫面上多於一格 audit 時給
   （全在同一組裡時，那一組的鍵就是它）。整組或整段一次消失好幾列，結果那一行（`aria-live`）改成看得見的 `text-sm`。
+- **套用到這個 RSS Series**（M3 票 13、14b）：RSS Series 送來的計劃指派到某一集時（`PlanEditor`），以及 audit 的改季集
+  （`RematchForm`），多一格原生 `Checkbox`「套用到這個 RSS Series」，**預設勾選**（一集錯多半整批一起錯），提示說清楚
+  會動到其餘的集。勾著時按之前的後果句改說搬的不只這一集；成功之後其餘的列會一次消失，所以結果那一句（Series 現在的
+  季號與偏移、其餘幾集怎麼了）由頁面那一層畫成**看得見的** `text-sm ink`，不只 `sr-only`（`/review` 的 `Said` 的 `shown`）。
+- **`/issues` 的 Jellyfin 回驗（`jellyfin_item_mismatch`，M3 票 17）:** 展開裡四條 `DetailLine` 疊在一起讓兩邊並排對照：
+  差在哪（季 / 集 / TMDB）→ 帳本（`S01E05 · TMDB 209867`）→ Jellyfin 認成（同一個寫法，沒有 TMDB 時說「沒有 TMDB id」）→ 下一步
+  （修法在 Jellyfin 裡，所以寫在列上）。兩邊用同一個格式化函式，差的那一格一眼對得出來；不塗漆、不畫差異標記。
 - **處理完就消失：** 清單外層掛 `useFocusAfterRemoval`（The Focus Takes The Next Row Rule）。
 
 ### 就地確認（`ConfirmAction` / `useInPlaceConfirm` / `ConfirmPanel`）
@@ -844,6 +934,7 @@ The Focus Follows The Confirm Rule。**外殼只有一份（`ConfirmPanel`），
 說明「按下去會怎樣」的那一句：
 - **一句後果**（`ConfirmAction`、`WatchToggle`、`RematchForm`）：一段 `text-xs` 的後果說明，接兩顆鍵。
 - **重述會被寫死的值**（`SubmitAction`）：後果之外，把 Route 名與資料夾名（`.value wrap-anywhere`）再印一次。
+- **先選再確認 + 重述**（`SeriesBinder`，`/rss` 待綁定的「綁定」；`SubscribePanel` 的「新增訂閱」）：兩種合在一塊，見 RSS 頁一節。
 - **先選再確認**（`WorkPicker`，`/issues` 的認領類動作）：`.label` 標題 + 搜尋欄 + 最多八個候選（整行的按鈕、`aria-pressed`，
   選中的重線 + `deck` 底）。**沒選之前主要鍵不畫**（那一格留空，取消鍵不移位）——按下去才被拒的鍵不該畫出來；
   選了之後主要鍵說出選的是哪一部。
@@ -906,7 +997,11 @@ The Focus Follows The Confirm Rule。**外殼只有一份（`ConfirmPanel`），
 - **Do** 讓處理完就消失的清單列把焦點交給接替的那一列，清單空了交給頁面的 `h1`（The Focus Takes The Next Row Rule）。
 - **Do** 把「需要你」的計數塗在摘要層，不要只放在展開區裡（The Needs-You Floats Up Rule）。
 - **Do** 讓窄版少掉的欄收成一行帶標籤的 `Dot` 分隔值，一份 DOM 兩種版面。
-- **Do** 讓 `Cutaway` 的 `level` 跟著它所在頁面的標題層級，不跳級。
+- **Do** 讓 `Cutaway` 與 `ServiceCard` 的 `level` 跟著它所在頁面的標題層級，不跳級。
+- **Do** 讓等得到的事（請求預算用完而延後、Feed 這一輪讀不到、送單卡住）走線變重或 `assigned`，不走 `blocked`：
+  Berth 自己會再試的不是阻擋（The One Meaning Rule）。
+- **Do** 在會讓頁首需要你的段落長高的動作之後，把使用者剛按的那一列捲回畫面（只在它已經被推出去時）。
+- **Do** 把使用者自己寫的規則、關鍵字畫成一條一格的 `.value`，不是色塊、不走 `.label`。
 
 ### Don't:
 
@@ -945,6 +1040,11 @@ The Focus Follows The Confirm Rule。**外殼只有一份（`ConfirmPanel`），
   `blocked-ink` / `secured-ink`，四個信號色與 `on-signal` 兩個主題共用（註釋寫明理由：
   白字配中明度色只有 3.6:1）。以 build 為準——本文件記錄的是共用漆的那一版。
   `web-src-pages-healthpage-tsx.md` 已不再有這句話；setup 那份尚未更新。
+
+- **排除條件的移除鍵是一個 `×` 字元，建議項與開關上是 `+` / `−`**（`rss/RulesEditor.tsx`），而 Shapes 寫著「沒有圖示」、
+  Don't 寫著不用字元當標記。無障礙名稱沒有被污染：移除鍵的名字來自 `aria-label`（「拿掉「720p」」），`+` / `−` 掛
+  `aria-hidden`。但它們仍是字形圖示，**不列為系統的做法**：票 10 要求記下的是「一條一格」那一格的形狀（見 Chips），
+  不是這三個字元；新畫面的動作鍵照舊用字（i18n key），不要照抄這幾個符號。
 
 - 實測對比下限（2026-09-17，探索、下載、Media 詳情、媒體庫、Route 設定五頁，深淺兩主題 × 1280 / 390 全部量過）：
   **深色最低 6.53:1、亮色最低 5.71:1**；`rule-strong` 見上面「重橫線」那一條（深色 3.33–4.51:1、亮色 6.46:1）。

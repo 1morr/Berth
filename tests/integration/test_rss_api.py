@@ -104,9 +104,10 @@ class TestThePageFlow:
         assert added.status_code == 201, added.text
         feed = added.json()
         assert (feed["kind"], feed["name"], feed["items"]) == ("mikan", "mikanani.me", 0)
-        assert feed["route_id"] is None
+        assert (feed["route_id"], feed["ever_read"]) == (None, False)
 
         polled = client.post(f"/api/rss/feeds/{feed['id']}/poll", headers=BROWSER)
+        assert client.get("/api/rss/feeds").json()[0]["ever_read"] is True
         assert polled.json() == {
             "items": 12,
             "series": 11,

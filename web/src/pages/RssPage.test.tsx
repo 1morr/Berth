@@ -29,6 +29,7 @@ function feed(overrides: Partial<Feed> = {}): Feed {
     exclusions: [],
     primed_at: '2026-09-25T11:00:00Z',
     route_id: null,
+    ever_read: true,
     ...overrides,
   }
 }
@@ -280,7 +281,9 @@ describe('RSS 頁：新 Feed 的第一輪（票 11）', () => {
 
   it('還沒讀過的 Feed 不給選', async () => {
     const stub = render({
-      'GET /api/rss/feeds': { body: [feed(), { ...ACGRIP, last_polled_at: null, items: 0 }] },
+      'GET /api/rss/feeds': {
+        body: [feed(), { ...ACGRIP, last_polled_at: null, items: 0, ever_read: false }],
+      },
     })
     renderApp('/rss')
     const block = await firstRound()
@@ -293,7 +296,10 @@ describe('RSS 頁：新 Feed 的第一輪（票 11）', () => {
   it('輪過但一次都沒讀到的 Feed 也不給選，說出上一次為什麼沒讀到', async () => {
     const stub = render({
       'GET /api/rss/feeds': {
-        body: [feed(), { ...ACGRIP, items: 0, last_error: 'acg.rip: budget exhausted' }],
+        body: [
+          feed(),
+          { ...ACGRIP, items: 0, last_error: 'acg.rip: budget exhausted', ever_read: false },
+        ],
       },
     })
     renderApp('/rss')

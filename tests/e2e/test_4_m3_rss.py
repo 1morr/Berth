@@ -4,7 +4,9 @@ qBittorrent 與 Jellyfin，TMDB 是真的。
 plan §11.4 的八條驗收，各在哪一條測試：
 
 1. Mikan 聚合 feed 全自動追完——`test_a_mikan_feed_binds_itself_and_fills_in_the_old_episodes`；
-   acg.rip 搜尋 feed——`test_a_search_subscription_takes_its_first_round_but_not_the_batch` 與
+   acg.rip 搜尋 feed（「全自動」是從 Media 頁訂閱的那一種：一般的搜尋 feed 沒有番組頁，長出來的
+   一律留給人綁，brief §15——Re:ZERO 那一個就是這樣綁的）——
+   `test_a_search_subscription_takes_its_first_round_but_not_the_batch` 與
    `test_new_episodes_arrive_by_themselves_and_versions_live_side_by_side`；
 2. 中途訂閱的一部補齊舊集、之後的新集自動入庫——同上第一條與最後那一條；
 3. 同一集兩個字幕組、同組 v1 與 v2 都並存——`…versions_live_side_by_side`；
@@ -327,10 +329,14 @@ def test_new_episodes_arrive_by_themselves_and_versions_live_side_by_side(
 ) -> None:
     # 第一輪的 Re:ZERO 改正之後也入庫了：到這裡替身送出去的每一筆都入庫，沒有一筆要人。
     assert {row["state"] for row in second_round.values()} == {"imported"}, second_round
-    fifth = [path for season, number, path in _episodes(berth, KIMI) if (season, number) == (1, 5)]
+    fifth = [row for row in _files(berth, KIMI) if (row["season"], row["episode_start"]) == (1, 5)]
     # 喵萌奶茶屋&LoliHouse 的 v1 與 v2、北宇治字幕组：三份各自一個檔案，都在同一集上。
-    assert len(fifth) == 3 and len(set(fifth)) == 3, fifth
-    assert any("v2" in path for path in fifth), fifth
+    assert len({row["target_path"] for row in fifth}) == 3, fifth
+    loli = sorted(
+        (row["target_path"] for row in fifth if row["job_hash"] in _sent_by(berth, LOLIHOUSE)),
+        key=lambda path: "v2" in path,
+    )
+    assert len(loli) == 2 and "v2" not in loli[0] and "v2" in loli[1], loli
     kitauji = _series(berth, f"mikan:4009:{KITAUJI}")
     assert (kitauji["media_id"], kitauji["bound_by"]) == (KIMI, "system")
 
@@ -343,7 +349,17 @@ def test_new_episodes_arrive_by_themselves_and_versions_live_side_by_side(
 def test_a_confirmed_series_new_episodes_stay_out_of_the_audit_list(
     berth: httpx.Client, first_round: FirstRound, second_round: dict[str, Json]
 ) -> None:
-    """確認過的那一組第二輪的兩份不進 audit；還沒確認的北宇治字幕组那一份照樣進。"""
+    """確認過的那一組第二輪的兩份不進 audit；還沒確認的北宇治字幕组那一份照樣進。
+
+    先斷言那兩份真的入庫了：停在審核的也不在 audit 清單上，那樣這一條會空泛地成立。
+    """
+    loli = _sent_by(berth, LOLIHOUSE)
+    fifth = [
+        row
+        for row in _files(berth, KIMI)
+        if (row["season"], row["episode_start"]) == (1, 5) and row["job_hash"] in loli
+    ]
+    assert len(fifth) == 2, fifth
     audit = [
         row
         for row in ok(berth.get("/review"))["rows"]
@@ -392,6 +408,16 @@ def test_jellyfin_reading_an_episode_differently_opens_an_issue(
         if row["type"] == "jellyfin_item_mismatch" and row["path"] == entry["target_path"]
     ]
     assert len(issues) == 1, ok(berth.get("/issues"))
+
+
+def _sent_by(berth: httpx.Client, subgroup: int) -> set[str]:
+    """《与你相恋》那一個字幕組的 RSS Series 送出的 Job。"""
+    series = _series(berth, f"mikan:4009:{subgroup}")["id"]
+    return {
+        row["job_hash"]
+        for row in ok(berth.get("/rss/items"))
+        if row["series_id"] == series and row["job_hash"]
+    }
 
 
 def _files(berth: httpx.Client, media: str) -> list[Json]:
