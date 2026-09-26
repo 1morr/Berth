@@ -33,6 +33,8 @@ import { Dot } from '../components/Dot'
 import { SIGNAL_FILL } from '../components/signal'
 import { Timestamp } from '../components/Timestamp'
 import { useInPlaceConfirm } from '../components/useInPlaceConfirm'
+import { displayRound } from '../i18n/displayRound'
+import { firstBatchAskText } from '../rss/firstBatchAsk'
 import { FirstRound } from '../rss/FirstRoundSection'
 import { preselect } from '../rss/preselect'
 import { RoutePicker } from './RoutePicker'
@@ -93,9 +95,13 @@ export function SubscribePanel({ media }: { media: Media }) {
   )
 }
 
-/** 一個綁在這部作品上的 RSS Series：來源、字幕組、第一批確認了沒、最近一集。 */
+/**
+ * 一個綁在這部作品上的 RSS Series：來源、字幕組、第一批確認了沒、最近一集。第一批還在等人時，標籤下面說它在問
+ * 什麼（與審核頁那一組同一句，M4 票 11）。
+ */
 function SeriesLine({ row }: { row: RssSeries }) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  const title = displayRound(i18n.language, { 'zh-Hant': row.media_title, en: row.media_title_en })
 
   return (
     <li className="grid min-w-0 gap-1 bg-hull px-3 py-2">
@@ -115,6 +121,11 @@ function SeriesLine({ row }: { row: RssSeries }) {
           </span>
         )}
       </p>
+      {!row.confirmed && row.ask && (
+        <p className="max-w-prose text-xs text-ink">
+          {firstBatchAskText(t, { title, group: row.group, ask: row.ask })}
+        </p>
+      )}
       {row.latest_title ? (
         <p className="text-xs text-ink-dim">
           {t('rss.subscribe.latest')}{' '}

@@ -66,6 +66,7 @@ from berth.parser import (
     episode_span,
 )
 from berth.parser import plan as decide
+from berth.services import first_batch
 from berth.services.clients import ServiceClientFactory
 from berth.services.events import EventHub, JobSignal
 from berth.services.jobs import (
@@ -316,6 +317,12 @@ async def _plan(
         session, job, contents, route, _decided(job, entries, route, snapshot, series)
     )
     status, reason = _verdict(items, route, duplicates)
+    # 第一批證據夠強就由系統確認（M4 票 11）：這一份的列不掛 audit，計劃落地之後才確認 Series。
+    vouched = (
+        await first_batch.vouch(session, job, series, items, snapshot)
+        if status is PlanStatus.AUTO and series is not None
+        else None
+    )
     row = await _store(
         session,
         job,
@@ -326,6 +333,7 @@ async def _plan(
         now=now,
         series=series,
         duplicates=duplicates,
+        vouched=vouched is not None,
     )
 
     landed = JobState.IMPORTING if status is PlanStatus.AUTO else JobState.REVIEW
@@ -334,6 +342,8 @@ async def _plan(
         await session.rollback()
         return 0
     await _announce(session, job, row, status, reason)
+    if vouched is not None and series is not None:
+        await first_batch.confirm_by_batch(session, job, series, vouched)
     if duplicates:
         await record_event(
             session,
@@ -350,6 +360,8 @@ async def _plan(
         "job planned",
         extra={"state": job.state.value, "plan": row.id, "status": status.value},
     )
+    if vouched is not None:
+        logger.info("rss series confirmed by its first batch", extra={"series": job.trigger_ref})
     return 1
 
 
@@ -854,6 +866,7 @@ async def _store(
     now: datetime,
     series: RssSeries | None = None,
     duplicates: dict[str, int] | None = None,
+    vouched: bool = False,
 ) -> Plan:
     """把這一輪的決定寫下來，**整份換掉**上一輪的（`models/plan.py`）。
 
@@ -862,6 +875,9 @@ async def _store(
 
     RSS Series 的季號與 offset 是規劃時讀的（brief §15），所以**這一份用了哪個值**跟著它存下來：
     之後改正並套用到 Series 時，前後兩份計劃說得出各自用了什麼（票 13）。
+
+    `vouched` 是這一份讓還沒確認的 Series 由系統確認了（M4 票 11，`first_batch.vouch`）：它的列不掛
+    audit，與確認之後才進來的集數同一個待遇。
     """
     row = await session.scalar(select(Plan).where(Plan.job_hash == job.hash))
     if row is None:
@@ -898,7 +914,7 @@ async def _store(
                 target_path=item.target_path,
                 confidence=item.confidence,
                 reasons_json=dump_reasons(item.reasons),
-                audit=_audit(item, status, series),
+                audit=_audit(item, status, series, vouched=vouched),
                 duplicate_of=(duplicates or {}).get(item.rel_path),
             )
         )
@@ -906,7 +922,9 @@ async def _store(
     return row
 
 
-def _audit(item: PlannedFile, status: PlanStatus, series: RssSeries | None) -> bool:
+def _audit(
+    item: PlannedFile, status: PlanStatus, series: RssSeries | None, *, vouched: bool = False
+) -> bool:
     """medium **而且真的自動入庫了**才掛 audit（brief §6.5、CONTEXT.md）。
 
     停在 review 的那一份誰都還沒動過，那時候掛旗標會讓 Review Queue 把「已入庫待確認」
@@ -915,9 +933,10 @@ def _audit(item: PlannedFile, status: PlanStatus, series: RssSeries | None) -> b
     RSS Series 送的另有一條（brief §15，票 13）：**第一批確認之前 high 也掛**——季號與 offset 錯了
     是整季一起錯，而 Series 帶了季號時解析器給的正是 high（`strategy = context`）；**確認過之後
     medium 也不掛**，改由播出日比對、片長驗證與 Jellyfin 回驗守著（2026-09-24 使用者拍板）。
+    **證據夠強的第一批也不掛**（`vouched`，M4 票 11）：這一份一落地，系統就確認那個 Series。
     """
     if status is not PlanStatus.AUTO or item.action not in WRITTEN:
         return False
     if series is not None:
-        return not series.confirmed
+        return not (series.confirmed or vouched)
     return item.confidence is Confidence.MEDIUM

@@ -1364,6 +1364,8 @@ const zhHant = {
         unset: '沒有設，由解析器判斷',
       },
       confirmAll: '全部確認',
+      // RSS Series 第一批那一組的那一顆：確認的是整個 Series 的季集對應，不只是畫面上這幾個檔案（M4 票 11）。
+      confirmSeries: '確認整個 Series',
       // 整段的「全部確認」就地確認並說出件數；範圍是畫面上列出的那些。
       confirmSection_one:
         '這一段列出的 {{count}} 個已入庫檔案都會記成「對的」，檔案不動。按下之後才進來的不算在內。',
@@ -1645,6 +1647,7 @@ const zhHant = {
       duplicate_decided: '重複已決定',
       recovered: '已接回',
       round_failed: '處理時出錯',
+      series_confirmed: '系統確認了 RSS Series',
     },
     timeline: {
       loading: '讀取時間線…',
@@ -1698,6 +1701,9 @@ const zhHant = {
       reviewRejected: '管理員拒絕了這份計劃，Berth 重新規劃',
       // audit 的兩顆（M2 票 06）。目標路徑是機器字串，接在後面。
       auditConfirmed: '管理員看過這個 medium 自動入庫的檔案，說它是對的',
+      // M4 票 11：第一批證據夠強，系統替人確認了那個 RSS Series。擔保的集數與 Series 名各另起一行。
+      seriesConfirmed:
+        '第一批的證據夠強，系統確認了這個 RSS Series：每一集都照檔名的集號對應、發佈時剛播出、播出日對得上。之後的集數照一般信心入庫。',
       auditUndone: '管理員撤銷了這個檔案的入庫，這一筆回到待審核',
       auditUndoneGone:
         '管理員撤銷了這個檔案的入庫（它在那之前已經不在媒體庫裡了），這一筆回到待審核',
@@ -2263,6 +2269,20 @@ const zhHant = {
       both: '第 {{season}} 季、集號偏移 {{offset}}',
       season: '第 {{season}} 季，集號不偏移',
       offset: '集號偏移 {{offset}}，季號由解析器判斷',
+    },
+    // 還沒確認的第一批在問什麼（M4 票 11，`rss/firstBatchAsk.ts`）：審核頁那一組與作品頁的「第一批待確認」。
+    firstBatch: {
+      ask: '確認 {{title}} × {{group}} 的季集對應：{{episodes}} {{basis}}',
+      askUngrouped: '確認 {{title}} 的季集對應：{{episodes}} {{basis}}',
+      separator: '、',
+      basis: {
+        literal: '由集號直接對應',
+        series: '照 Series 設的季號與偏移換算',
+        absolute: '由絕對集數換算',
+        runs: '依播出的輪次換算（字幕組從 01 重數）',
+        arc: '季號由篇章名讀出',
+        mixed: '讀法不只一種',
+      },
     },
     failed: '沒有做成。重新整理這一頁再試一次；還是不行的話看健康頁。',
     kind: { mikan: 'MIKAN', nyaa: 'NYAA', acgrip: 'ACG.RIP' },
@@ -3936,6 +3956,7 @@ const en: Translations<typeof zhHant> = {
         unset: 'Not set; the parser decides',
       },
       confirmAll: 'Confirm all',
+      confirmSeries: 'Confirm the whole Series',
       confirmSection_one:
         'The {{count}} imported file listed in this section is marked as right; no file is touched. Anything that arrives after you press this is not included.',
       confirmSection_other:
@@ -4202,6 +4223,7 @@ const en: Translations<typeof zhHant> = {
       duplicate_decided: 'Duplicate decided',
       recovered: 'Picked back up',
       round_failed: 'Failed to process',
+      series_confirmed: 'Series confirmed by Berth',
     },
     timeline: {
       loading: 'Reading the timeline…',
@@ -4247,6 +4269,8 @@ const en: Translations<typeof zhHant> = {
       reviewApproved_other: 'An administrator approved it; {{count}} files will be imported',
       reviewRejected: 'An administrator rejected this plan; Berth plans it again',
       auditConfirmed: 'An administrator looked at this medium-confidence import and confirmed it',
+      seriesConfirmed:
+        'The first batch was strong enough evidence, so Berth confirmed this RSS Series: every episode maps straight from the number in its file name, had just aired when it was released, and matches its air date. Later episodes import on the usual confidence rules.',
       auditUndone: 'An administrator undid this file’s import; the job is back in review',
       auditUndoneGone:
         'An administrator undid this file’s import (it had already left the library); the job is back in review',
@@ -4821,6 +4845,19 @@ const en: Translations<typeof zhHant> = {
       both: 'season {{season}}, episode offset {{offset}}',
       season: 'season {{season}}, no episode offset',
       offset: 'episode offset {{offset}}, season left to the parser',
+    },
+    firstBatch: {
+      ask: 'Check how {{title}} × {{group}} maps to seasons: {{episodes}} {{basis}}',
+      askUngrouped: 'Check how {{title}} maps to seasons: {{episodes}} {{basis}}',
+      separator: ', ',
+      basis: {
+        literal: 'read straight from the episode numbers',
+        series: 'from the season and offset set on the Series',
+        absolute: 'converted from absolute episode numbers',
+        runs: 'counted within a later run (the group restarted at 01)',
+        arc: 'season read from the arc name',
+        mixed: 'read more than one way',
+      },
     },
     failed:
       "That didn't go through. Reload the page and try again; if it still fails, look at the health page.",

@@ -336,6 +336,15 @@ const FACTS: Record<KnownEvent, (facing: Facing) => ReactNode> = {
       <p className="value text-xs wrap-anywhere text-blocked-ink">{text(payload.error)}</p>
     </>
   ),
+  // 第一批證據夠強，系統替人確認了那個 RSS Series（M4 票 11）。一句話說依據，擔保的集數與 Series 的原始
+  // 標題是機器字串，各起一行——同一批的每一筆都記同一份，所以集數說的是整批。
+  series_confirmed: ({ t, payload }) => (
+    <>
+      <p className="max-w-prose text-xs text-ink-dim">{t('jobs.timeline.seriesConfirmed')}</p>
+      <Row>{Array.isArray(payload.episodes) ? payload.episodes.map(text).join(' ') : ''}</Row>
+      <Row>{text(payload.name)}</Row>
+    </>
+  ),
   duplicate_decided: ({ t, payload }) => {
     const decision = DUPLICATE_DECISIONS.find((known) => known === payload.decision)
     return (

@@ -581,6 +581,14 @@ uv run --env-file .env python scripts/experiments/rss_auto_bind.py   # 要 .env 
 uv run --env-file .env python scripts/experiments/air_date_lag.py    # 同上；Windows 主控台加 PYTHONIOENCODING=utf-8
 ```
 
+第一批「證據夠強」的規則（M4 票 11）：語料那一段離線；`--online` 另跑 split-cour 模擬與上面那一套真的 RSS fixture
+（重用 `air_date_lag.py` 認作品的那一段，所以要同一把憑證）。結果記在 `.scratch/m4/issues/11-first-batch-skip-when-sure.md`：
+
+```bash
+uv run python scripts/experiments/first_batch_rule.py                                  # 只跑語料，不連網
+uv run --env-file .env python scripts/experiments/first_batch_rule.py --online          # Windows 主控台加 PYTHONIOENCODING=utf-8
+```
+
 1,000 部的媒體庫上量 Berth（M2 票 11，plan §11.3 決定 2 的門檻）：自己 build Berth 的 image（只有 backend 那一層）、
 起一次性的 Jellyfin 與 qBittorrent、造 1,000 部 × 12 集的媒體樹（掃描約 6 分鐘），量完連容器、volume、network、image
 一起刪。宿主只要 Python 標準庫與 docker；量測本身在 Berth 的 image 裡跑。結果見

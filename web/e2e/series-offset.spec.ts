@@ -5,8 +5,9 @@ import { shot } from './shot.ts'
 
 // `rss-split-cour`（M3 票 13）：同 `rss`，但 TMDB 把《与你相恋》的兩個 cour 併成一季 24 集，而字幕組的
 // 第二 cour 從 01 重數。綁定時補舊集，12 集以「只有集號、TMDB 一季」落在 S01E01–E12——錯的，正解是
-// S01E13–E24。它們是這個 RSS Series 的第一批，在 `/review` 是一組；在審核裡把第 1 集改成 S01E13 並
-// 「套用到這個 RSS Series」，其餘 11 集跟著搬到 14–24，按一次全部確認整組收掉。
+// S01E13–E24。它們是這個 RSS Series 的第一批（播完一年後才發佈，不是剛播：證據不夠強，M4 票 11），在
+// `/review` 是一組、一句話說在問什麼；在審核裡把第 1 集改成 S01E13 並「套用到這個 RSS Series」，其餘 11 集
+// 跟著搬到 14–24，按一次「確認整個 Series」整組收掉。
 const EPISODES = Array.from({ length: 12 }, (_, index) => `S01E${String(index + 13)}`)
 
 test('split-cour 的第一批：改一集並套用到 RSS Series，其餘跟著對，全部確認', async ({ page }) => {
@@ -36,9 +37,10 @@ test('split-cour 的第一批：改一集並套用到 RSS Series，其餘跟著�
   })
   await expect(async () => {
     await page.reload()
-    await expect(group).toContainText('RSS Series 的第一批：12 個檔案等你看一眼季號與集數對不對', {
-      timeout: 2_000,
-    })
+    await expect(group).toContainText(
+      '確認 與妳相戀到生命盡頭 × 喵萌奶茶屋&LoliHouse 的季集對應：S01 E01–E12 由集號直接對應',
+      { timeout: 2_000 },
+    )
   }).toPass({ timeout: 240_000, intervals: [5_000] })
 
   await group.getByText('展開').first().click()
@@ -64,13 +66,15 @@ test('split-cour 的第一批：改一集並套用到 RSS Series，其餘跟著�
     page.getByText('已修正，這個 RSS Series 改成第 1 季、集號偏移 +12。 其餘 11 集跟著搬過去了。'),
   ).toBeVisible({ timeout: 60_000 })
   // 人改的那一集是人決定的，離開清單；跟著搬的 11 集仍是第一批，等人按全部確認。
-  await expect(group).toContainText('RSS Series 的第一批：11 個檔案')
+  await expect(group).toContainText(
+    '確認 與妳相戀到生命盡頭 × 喵萌奶茶屋&LoliHouse 的季集對應：S01 E14–E24 照 Series 設的季號與偏移換算',
+  )
   await expect(members).toHaveCount(11)
   expect((await members.allTextContents()).sort()).toEqual(EPISODES.slice(1))
   await expect(group).toContainText('第 1 季、集號偏移 +12')
   await shot(page, '3-corrected')
 
-  await group.getByRole('button', { name: '全部確認' }).click()
+  await group.getByRole('button', { name: '確認整個 Series' }).click()
   await expect(page.getByText('已確認 11 個，從佇列上收掉了。')).toBeVisible()
   await expect(group).toHaveCount(0)
 

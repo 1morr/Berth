@@ -59,6 +59,7 @@ function series(overrides: Partial<RssSeries> = {}): RssSeries {
     latest_title: TITLE,
     latest_at: '2026-09-24T12:00:00Z',
     submitted: 0,
+    ask: null,
     ...overrides,
   }
 }

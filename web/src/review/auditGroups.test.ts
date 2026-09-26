@@ -12,9 +12,11 @@ function series(overrides: Partial<Series> = {}): Series {
   return {
     id: 3,
     name: '[喵萌奶茶屋&LoliHouse] 与你相恋到生命尽头 - 01',
+    group: '喵萌奶茶屋&LoliHouse',
     confirmed: false,
     season: null,
     episode_offset: null,
+    ask: null,
     ...overrides,
   }
 }

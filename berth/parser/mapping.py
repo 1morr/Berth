@@ -37,7 +37,7 @@ from berth.domain import (
     why,
 )
 from berth.domain import ReasonCode as Code
-from berth.parser.publishing import BEHIND_LATEST, RELEASE_TOLERANCE
+from berth.parser.publishing import just_aired
 from berth.parser.structure import StructureHints
 from berth.parser.title import match_media, matches, normalize_title
 
@@ -620,7 +620,7 @@ def _just_aired(media: MediaSnapshot, target: _Target, day: date) -> bool:
     if season is None or start is None:
         return False
     aired = _aired(media, season, end or start)
-    return aired is not None and -BEHIND_LATEST <= aired - day <= RELEASE_TOLERANCE
+    return aired is not None and just_aired(aired, day)
 
 
 def _guessed(

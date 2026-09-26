@@ -14,7 +14,8 @@ plan §11.4 的八條驗收，各在哪一條測試：
 5. split-cour 在審核裡改正一次、其餘集數跟著對——`test_one_correction_carries_the_rest_…`；
 6. 發佈時間與換算出的那一集播出日對不上的不自動入庫——`test_a_split_cour_…_is_held`；
 7. Jellyfin 認到的季集與帳本不同時開出 Issue——`test_jellyfin_reading_an_episode_differently_…`；
-8. 已確認的 RSS Series 的新集數不出現在 audit 清單——`test_a_confirmed_series_…_audit_list`。
+8. 已確認的 RSS Series 的新集數不出現在 audit 清單——`test_a_confirmed_series_…_audit_list`
+   （M4 票 11 起《与你相恋》兩組的第一批證據夠強、由系統確認，`second_round` 斷言這件事）。
 
 排在 `test_3_` 之後：那一組把 Anime 媒體庫刪光再重建，這一組只往裡面加。**Feed 不等背景輪詢**：
 每一輪由測試按「立即輪詢」（`POST /rss/feeds/{id}/poll`，畫面上那一顆），輪次由測試寫進替身。
@@ -299,7 +300,13 @@ def test_one_correction_carries_the_rest_of_the_series(
 def second_round(
     berth: httpx.Client, first_round: FirstRound, settle: Callable[[], dict[str, Json]]
 ) -> dict[str, Json]:
-    """確認《与你相恋》的第一批，替身換到第二輪，兩個 Feed 各讀一次，送出去的全部停下來。"""
+    """《与你相恋》的第一批由系統確認過了，替身換到第二輪，兩個 Feed 各讀一次，送出去的全部停下來。
+
+    第一批的四集都只寫集號、單季、發佈時剛播、播出日對得上（M4 票 11 的「證據夠強」）：最後一集
+    落地時整批擔保，Series 確認、四集都不在 audit 清單上，每一筆的時間線記下 `series_confirmed`。
+    """
+    series = _series(berth, f"mikan:4009:{LOLIHOUSE}")
+    assert (series["confirmed"], series["ask"]) == (True, None), series
     audit = [
         row
         for row in ok(berth.get("/review"))["rows"]
@@ -307,14 +314,13 @@ def second_round(
         and row["series"] is not None
         and row["series"]["id"] == first_round.kimi_series
     ]
-    assert len(audit) == 4, audit
-    confirmed = ok(
-        berth.post(
-            f"/review/series/{first_round.kimi_series}/confirm",
-            json={"ledger_ids": [row["ref"] for row in audit]},
-        )
-    )
-    assert confirmed["confirmed"] == 4, confirmed
+    assert audit == [], audit
+    for job in _sent_by(berth, LOLIHOUSE):
+        events = ok(berth.get(f"/jobs/{job}/events"))
+        said = [row["payload"] for row in events if row["type"] == "series_confirmed"]
+        assert [payload["episodes"] for payload in said] == [
+            ["S01E01", "S01E02", "S01E03", "S01E04"]
+        ], (job, said)
 
     in_container("sh", "-c", 'echo 2 > "$1"', "sh", str(ROUND), container=SITES_CONTAINER)
     polled = _poll(berth, first_round.aggregate)
@@ -349,7 +355,11 @@ def test_new_episodes_arrive_by_themselves_and_versions_live_side_by_side(
 def test_a_confirmed_series_new_episodes_stay_out_of_the_audit_list(
     berth: httpx.Client, first_round: FirstRound, second_round: dict[str, Json]
 ) -> None:
-    """確認過的那一組第二輪的兩份不進 audit；還沒確認的北宇治字幕组那一份照樣進。
+    """確認過的那一組第二輪的兩份不進 audit；還沒確認的 Series 照樣進。
+
+    北宇治字幕组那一個是第二輪才長出來的，它唯一的一份證據夠強，系統當場確認（M4 票 11），也不進。
+    還沒確認的那一邊是 Re:ZERO：改正並套用到 Series 之後季號與 offset 是人說的，跟著重算的三集仍是
+    第一批，照樣在 audit 清單上等人。
 
     先斷言那兩份真的入庫了：停在審核的也不在 audit 清單上，那樣這一條會空泛地成立。
     """
@@ -363,11 +373,11 @@ def test_a_confirmed_series_new_episodes_stay_out_of_the_audit_list(
     audit = [
         row
         for row in ok(berth.get("/review"))["rows"]
-        if row["kind"] == "audit" and row["media_id"] == KIMI
+        if row["kind"] == "audit" and row["media_id"] in (KIMI, REZERO)
     ]
     groups = {row["series"]["id"] for row in audit}
-    assert first_round.kimi_series not in groups, audit
-    assert groups == {_series(berth, f"mikan:4009:{KITAUJI}")["id"]}, audit
+    assert _series(berth, f"mikan:4009:{KITAUJI}")["confirmed"] is True
+    assert groups == {first_round.rezero_series}, audit
 
 
 def test_jellyfin_reading_an_episode_differently_opens_an_issue(

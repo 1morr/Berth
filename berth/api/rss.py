@@ -18,6 +18,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from berth.api.deps import ClientFactoryDep, SessionDep
 from berth.api.errors import refusal_responses
 from berth.api.gate import current_user
+from berth.api.schemas import FirstBatchAskOut
 from berth.api.search import TagsOut
 from berth.domain import (
     BindReasonCode,
@@ -231,6 +232,8 @@ class SeriesOut(BaseModel):
     latest_at: datetime | None
     #: 只有綁定回的那一份有值：這一次送出去了幾筆。
     submitted: int
+    #: 還沒確認時第一批在問什麼（M4 票 11）；確認過、或還沒有已入庫的集數在等人是 `null`。
+    ask: FirstBatchAskOut | None
 
 
 class BindingIn(BaseModel):

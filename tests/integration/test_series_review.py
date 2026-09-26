@@ -90,6 +90,16 @@ def split_cour() -> MediaSnapshot:
     return kimi_snapshot().model_copy(update={"first_air_date": first, "seasons": (season,)})
 
 
+def undated() -> MediaSnapshot:
+    """TMDB 還沒填播出日：證據不夠強，第一批照舊等人（M4 票 11 的「證據夠強時跳過」在
+    `test_first_batch.py`）。這一份測的是等人的那一條路。"""
+    season = kimi_snapshot().seasons[0]
+    episodes = tuple(row.model_copy(update={"air_date": None}) for row in season.episodes)
+    return kimi_snapshot().model_copy(
+        update={"seasons": (season.model_copy(update={"episodes": episodes}),)}
+    )
+
+
 async def delivered(
     session: AsyncSession,
     roots: dict[str, Path],
@@ -98,8 +108,10 @@ async def delivered(
     season: int | None = None,
     offset: int | None = None,
     confirmed: bool = False,
+    pipeline: bool = True,
 ) -> tuple[RssSeries, FakeClientFactory]:
-    """feed 輪一次 → 綁定 → 兩集下載完、規劃、入庫。Series 的值在綁定之前設好。"""
+    """feed 輪一次 → 綁定 → 兩集下載完、規劃、入庫。Series 的值在綁定之前設好。`pipeline = False`
+    停在送單之後，下載由呼叫端自己推。"""
     await arrange(session, roots)
     media = await kimi(session, snapshot=snapshot)
     route = await anime_route(session, roots)
@@ -114,7 +126,8 @@ async def delivered(
     series.confirmed = confirmed
     await session.commit()
     await bind_series(session, factory, series.id, media_id=media.id, route_id=route.id, user_id=1)
-    await run_pipeline(session, factory, roots)
+    if pipeline:
+        await run_pipeline(session, factory, roots)
     return series, factory
 
 
@@ -176,7 +189,7 @@ class TestTheFirstBatch:
     async def test_confirming_the_series_confirms_its_rows_and_the_series(
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
-        series, _ = await delivered(session, roots)
+        series, _ = await delivered(session, roots, snapshot=undated())
         ids = [row.ledger_id for row in await audits(session)]
 
         outcome = await confirm_series(session, series.id, ids, actor=ACTOR)
@@ -191,7 +204,7 @@ class TestTheFirstBatch:
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
         """送來的列都已被別處撤銷：沒有人看過任何一集，Series 不算確認過。"""
-        series, _ = await delivered(session, roots)
+        series, _ = await delivered(session, roots, snapshot=undated())
         ids = [row.ledger_id for row in await audits(session)]
         for ledger_id in ids:
             await undo_audit(session, ledger_id, actor=ACTOR)
@@ -206,7 +219,7 @@ class TestTheFirstBatch:
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
         """同票 05 的整段確認：送來的 id 才算，按下前一刻才進來的留著等人。"""
-        series, _ = await delivered(session, roots)
+        series, _ = await delivered(session, roots, snapshot=undated())
         first, second = await audits(session)
 
         await confirm_series(session, series.id, [first.ledger_id], actor=ACTOR)
@@ -230,7 +243,7 @@ class TestAfterConfirmation:
     async def test_an_unconfirmed_series_still_audits_medium(
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
-        await delivered(session, roots, confirmed=False)
+        await delivered(session, roots, snapshot=undated(), confirmed=False)
 
         items = list(await session.scalars(select(PlanItem).where(PlanItem.action == "import")))
         assert {item.confidence.value for item in items} == {"medium"}

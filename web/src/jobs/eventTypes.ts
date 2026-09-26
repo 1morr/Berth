@@ -34,13 +34,15 @@ export const EVENT_TYPES = [
   'duplicate_decided',
   'recovered',
   'round_failed',
+  'series_confirmed',
 ] as const
 
 export type KnownEvent = (typeof EVENT_TYPES)[number]
 
 /**
  * Plan 歷史（M2 票 12、`.scratch/m2/job-detail-shape.md`）：一筆 Job 只有一份現行 Plan，重新規劃整份
- * 換掉，所以「這份決定被誰、何時、怎麼改過」只在時間線上。這九種就是那些事件；畫法仍是 `JobTimeline`。
+ * 換掉，所以「這份決定被誰、何時、怎麼改過」只在時間線上。這十種就是那些事件；畫法仍是 `JobTimeline`。
+ * `series_confirmed` 是 M4 票 11 加的：系統確認第一批時清掉的正是這一份的 audit。
  */
 const PLAN_EVENTS: ReadonlySet<string> = new Set<KnownEvent>([
   'preplan',
@@ -52,6 +54,7 @@ const PLAN_EVENTS: ReadonlySet<string> = new Set<KnownEvent>([
   'rematched',
   'duplicate_skipped',
   'duplicate_decided',
+  'series_confirmed',
 ])
 
 /** 時間線裡屬於 Plan 歷史的那幾筆，順序不動。 */

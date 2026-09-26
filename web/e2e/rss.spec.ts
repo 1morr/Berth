@@ -50,5 +50,23 @@ test('加 Feed → 輪詢 → 待綁定的那一部一鍵選定候選 → 下載
   await expect(jobs).toHaveCount(2)
   await expect(jobs.first()).toContainText('RSS')
   await expect(jobs.first()).toContainText('已入庫', { timeout: 60_000 })
+  await expect(jobs.nth(1)).toContainText('已入庫', { timeout: 60_000 })
   await shot(page, '4-jobs')
+
+  // 兩集都只寫集號、單季、發佈時剛播、播出日對得上：證據夠強，系統確認了這個 Series（M4 票 11）。
+  // 審核頁沒有它的第一批，作品頁的 RSS 訂閱說已確認，下載的時間線說出依據。
+  await page.goto('/review')
+  await expect(page.getByRole('heading', { level: 1, name: '審核' })).toBeVisible()
+  await expect(page.getByText(/的季集對應/)).toHaveCount(0)
+  await page.goto('/media/tv:262000')
+  const block = page.getByRole('region', { name: 'RSS 訂閱' })
+  await expect(block.getByText('第一批已確認')).toBeVisible()
+  await page.goto('/jobs')
+  // 列是原生 `<details>`：先展開，詳情頁的連結在裡面。
+  await jobs.first().locator('summary').click()
+  await jobs.first().getByRole('link', { name: '下載詳情' }).click()
+  // 詳情頁的計劃歷史與完整時間線各畫一次（它屬於計劃歷史，`jobs/eventTypes.ts`）。
+  await expect(page.getByText(/第一批的證據夠強，系統確認了這個 RSS Series/).first()).toBeVisible()
+  await expect(page.getByText('S01E11 S01E12').first()).toBeVisible()
+  await shot(page, '5-series-confirmed')
 })

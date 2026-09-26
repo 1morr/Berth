@@ -25,6 +25,7 @@ from berth.api.errors import refusal_responses
 from berth.api.files import LANDING_REFUSALS, rematch_refusal, rematch_responses
 from berth.api.gate import current_user
 from berth.api.plans import ItemReasonOut
+from berth.api.schemas import FirstBatchAskOut
 from berth.domain import (
     AuditAction,
     AuditReason,
@@ -141,10 +142,14 @@ class AuditSeriesOut(BaseModel):
     id: int
     #: 長出它的那一筆 Item 的標題：看得出是哪一個字幕組。
     name: str
+    #: 發佈名讀出的字幕組；讀不出是空字串。
+    group: str
     #: `false` 時這一列是它的第一批（`reason.code = first_batch`）。
     confirmed: bool
     season: int | None
     episode_offset: int | None
+    #: 還沒確認時那一批在問什麼；確認過是 `null`。
+    ask: FirstBatchAskOut | None
 
 
 class AuditRowOut(BaseModel):

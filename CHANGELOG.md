@@ -1047,6 +1047,12 @@ split-cour 的第一批被播出日比對整批擋在審核，改正一次並套
 - `POST /api/rss/feeds/{id}/poll` 的回應多 `failed`（這一輪抓不到 Feed 的原文）；`/rss` 上那一輪讀不到時說「這一輪沒讀到」，不再說「新 0 筆」。
 - 健康頁的 Jellyfin 卡片把媒體庫數量交給 i18n（`library_count`），不再是後端寫死的英文「N libraries」。
 - e2e 的種子影片照語料的 TMDB 快照改寫標頭的片長：片長驗證（票 15）會擋下 330 秒對半小時的集數。
+- **RSS Series 的第一批證據夠強時不再等人**（M4 票 11，brief §15）：整批每一集都照檔名的集號對應、發佈時剛播、
+  播出日對得上時，入庫不掛 audit，Series 由系統確認，每一筆的時間線記新事件 `series_confirmed`（`series`、
+  `name`、`episodes`）；有一集不符合、或同一個 Series 還有集數沒落地，就照舊整批等人。仍要人看的那一組，審核頁
+  與作品頁的「第一批待確認」說一句在問什麼（哪幾集、季集怎麼讀出來），組的鍵改叫「確認整個 Series」。
+  `GET /api/review` 的 audit 列 `series` 多 `group` 與 `ask`，`GET /api/rss/series` 多 `ask`
+  （`spans` 加 `basis`：`literal` / `series` / `absolute` / `runs` / `arc` / `mixed`）。
 
 ### Removed
 - **服務設定頁 `/settings/services` 與精靈的 `?berth=` 深連結**（M3 票 06i）：前者拆進設定的各分頁，後者連同

@@ -7,7 +7,7 @@
 
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import date, timedelta
 
 #: 發佈可以比 TMDB 的播出日早多少（使用者 2026-09-24 拍板）。TMDB 寫的是當地的播出日，發佈時間是
 #: UTC：日本深夜檔在 UTC 是前一天，對岸平台與日本同步時也差一天。
@@ -18,3 +18,13 @@ RELEASE_TOLERANCE = timedelta(days=2)
 #: 而 split-cour 從 01 重數時對到的那一集至少落後一整個 cour（每週一集就是 10–13 週）。
 #: 6 週落在兩者之間，慢幾週的字幕組不會被擋。
 BEHIND_LATEST = timedelta(weeks=6)
+
+
+def just_aired(aired: date, day: date) -> bool:
+    """在 `day` 發佈的這一集是不是剛播：播出日落在發佈前 `BEHIND_LATEST` 到發佈後
+    `RELEASE_TOLERANCE`。
+
+    推測虛擬季（`mapping._just_aired`）與第一批的擔保（`first_batch`）用同一個窗口：推測放進來的讀法，
+    擔保那一邊要認得出它是剛播的。
+    """
+    return -BEHIND_LATEST <= aired - day <= RELEASE_TOLERANCE

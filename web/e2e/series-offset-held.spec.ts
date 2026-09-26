@@ -63,13 +63,17 @@ test('連載中的 split-cour：整批擋在審核 → 改一列套用到 RSS Se
   await expect(held).toContainText('S01E13')
   await shot(page, '3-corrected')
 
-  // 其餘 11 集通過播出日比對、自動入庫：第一批，在「已入庫，等你看一眼」是一組。
+  // 其餘 11 集通過播出日比對、自動入庫：第一批，在「已入庫，等你看一眼」是一組。組那一句說的是整批在問什麼，
+  // 所以也算上還停在審核的那一份（E13）。
   const group = audited.getByRole('listitem').filter({
     has: page.getByRole('heading', { level: 3, name: /與妳相戀到生命盡頭/ }),
   })
   await expect(async () => {
     await page.reload()
-    await expect(group).toContainText('RSS Series 的第一批：11 個檔案', { timeout: 2_000 })
+    await expect(group).toContainText(
+      '確認 與妳相戀到生命盡頭 × 喵萌奶茶屋&LoliHouse 的季集對應：S01 E13–E24 照 Series 設的季號與偏移換算',
+      { timeout: 2_000 },
+    )
   }).toPass({ timeout: 180_000, intervals: [5_000] })
   await group.getByText('展開').first().click()
   const members = group.getByRole('heading', { level: 4 })

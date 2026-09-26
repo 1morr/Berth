@@ -8,7 +8,7 @@ function event(id: number, type: string): JobEvent {
 }
 
 describe('計劃歷史（M2 票 12）', () => {
-  it('只留下那份決定怎麼變成現在這樣的九種事件，順序不動', () => {
+  it('只留下那份決定怎麼變成現在這樣的十種事件，順序不動', () => {
     const types = [
       'created',
       'preplan',
@@ -22,6 +22,7 @@ describe('計劃歷史（M2 票 12）', () => {
       'rematched',
       'duplicate_skipped',
       'duplicate_decided',
+      'series_confirmed',
       'deleted',
     ]
     const rows = types.map((type, index) => event(index + 1, type))
@@ -36,6 +37,7 @@ describe('計劃歷史（M2 票 12）', () => {
       'rematched',
       'duplicate_skipped',
       'duplicate_decided',
+      'series_confirmed',
     ])
   })
 })

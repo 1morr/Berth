@@ -71,8 +71,11 @@ from berth.domain import (
 from berth.domain import ReasonCode as Code
 from berth.logs import job_context
 from berth.models import Job, JobFile, LedgerEntry, Media, Plan, PlanItem, Route, RssSeries
+from berth.parser import parse_release
 from berth.services.commands import Effect, command
 from berth.services.deletion import Placed, Unlink, remove_one, route_targets
+from berth.services.first_batch import FirstBatchAsk
+from berth.services.first_batch import asks as first_batch_asks
 from berth.services.jobs import job_lock, record_event, transition
 from berth.services.plan_view import reasons_of
 
@@ -127,6 +130,11 @@ class AuditSeries:
     confirmed: bool
     season: int | None
     episode_offset: int | None
+    #: 發佈名讀出的字幕組（同 `rss.SeriesView.group`）：「BLACK TORCH × ANi」的後半。
+    group: str = ""
+    #: 還沒確認時，那一批在問人什麼（M4 票 11，`first_batch.asks`）；確認過、或已入庫的正片都
+    #: 看過了是 `None`。
+    ask: FirstBatchAsk | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -513,7 +521,13 @@ async def _fetch_audits(session: AsyncSession, limit: int) -> list[AuditRow]:
             .limit(limit)
         )
     ).tuples()
-    return [_audit_row(*row) for row in found]
+    # 外連接的四格可能是 `None`（`_audit_row`），SQLAlchemy 推導的型別沒有寫出來。
+    rows: list[tuple[LedgerEntry, Media | None, Job | None, PlanItem | None, RssSeries | None]] = (
+        list(found)
+    )
+    waiting = {series.id for *_, series in rows if series is not None and not series.confirmed}
+    asked = await first_batch_asks(session, waiting)
+    return [_audit_row(*row, asked=asked) for row in rows]
 
 
 def _audit_row(
@@ -522,6 +536,8 @@ def _audit_row(
     job: Job | None,
     item: PlanItem | None,
     series: RssSeries | None,
+    *,
+    asked: dict[int, FirstBatchAsk],
 ) -> AuditRow:
     """外連接的四格都可能是 `None`：作品被刪、Job 被清掉、Plan 重新規劃過（`SET NULL`）、
     不是 RSS 送的。
@@ -554,6 +570,8 @@ def _audit_row(
             confirmed=series.confirmed,
             season=series.season,
             episode_offset=series.episode_offset,
+            group=parse_release(series.title_raw).group,
+            ask=asked.get(series.id),
         ),
     )
 

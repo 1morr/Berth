@@ -2057,12 +2057,15 @@ export interface components {
             id: number;
             /** Name */
             name: string;
+            /** Group */
+            group: string;
             /** Confirmed */
             confirmed: boolean;
             /** Season */
             season: number | null;
             /** Episode Offset */
             episode_offset: number | null;
+            ask: components["schemas"]["FirstBatchAskOut"] | null;
         };
         /**
          * AuditUndoneOut
@@ -2573,6 +2576,35 @@ export interface components {
          * @enum {string}
          */
         FileKind: "video" | "subtitle" | "font" | "audio" | "image" | "archive" | "sample" | "disc" | "extra" | "other";
+        /**
+         * FirstBatchAskOut
+         * @description 還沒確認的 RSS Series 在問人什麼（M4 票 11）：蓋到的集數，與它們的季集是怎麼讀出來的。
+         *     審核頁那一組與作品頁的「第一批待確認」照它說同一句話。
+         */
+        FirstBatchAskOut: {
+            /** Spans */
+            spans: components["schemas"]["FirstBatchSpanOut"][];
+            basis: components["schemas"]["FirstBatchBasis"];
+        };
+        /**
+         * FirstBatchBasis
+         * @description 還在等人的第一批，季集是怎麼讀出來的（M4 票 11，`services.first_batch.asks`）。審核頁那一組與
+         *     作品頁的「第一批待確認」照它挑一句「在問什麼」。
+         * @enum {string}
+         */
+        FirstBatchBasis: "literal" | "series" | "absolute" | "runs" | "arc" | "mixed";
+        /**
+         * FirstBatchSpanOut
+         * @description 同一季裡連續的幾集。
+         */
+        FirstBatchSpanOut: {
+            /** Season */
+            season: number;
+            /** Start */
+            start: number;
+            /** End */
+            end: number;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -4348,6 +4380,7 @@ export interface components {
             latest_at: string | null;
             /** Submitted */
             submitted: number;
+            ask: components["schemas"]["FirstBatchAskOut"] | null;
         };
         /** ServiceDetectionOut */
         ServiceDetectionOut: {

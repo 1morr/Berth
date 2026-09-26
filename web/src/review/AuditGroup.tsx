@@ -6,6 +6,7 @@ import { DetailLine, QueueRow } from '../components/QueueRow'
 import { whenText } from '../components/queueText'
 import { displayRound } from '../i18n/displayRound'
 import { JobLink } from '../jobs/JobLink'
+import { firstBatchAskText } from '../rss/firstBatchAsk'
 import { seriesValuesText } from '../rss/seriesValues'
 import { AuditRow } from './AuditRow'
 import { groupLead, leadText } from './leadReason'
@@ -20,8 +21,10 @@ import { useConfirmAudits, type Said } from './useConfirmAudits'
  * 一個要能只拿掉那一個）。
  *
  * **RSS Series 的第一批**（`series.confirmed = false`）另說一句：信心 high 的也在這裡，要人看的是季號與
- * 集數對不對，所以那一句不是 medium 的原因。展開說出是哪一個 Series（它的名字看得出字幕組）與它現在的
- * 季號、偏移；組的「全部確認」打 Series 那一支（`useConfirmAudits`），之後它的 medium 不再進來。
+ * 集數對不對，所以那一句不是 medium 的原因，而是**在問什麼**——哪幾集、季集怎麼讀出來的（M4 票 11，
+ * `firstBatchAskText`）。`ask` 是 `null` 的那一種——等人的只剩特典或字幕、沒有一集正片可說——退回件數
+ * 那一句。展開說出是哪一個 Series（它的名字看得出字幕組）與它現在的季號、偏移；組的那一顆是「確認整個
+ * Series」，打 Series 那一支（`useConfirmAudits`），之後它的 medium 不再進來。
  *
  * 「全部確認」**不就地確認**：同單列的「確認」，它只清旗標、檔案不動，錯了逐列撤銷得回來。整段的那一顆
  * 才要（`AuditSectionConfirm`）——它的範圍橫跨好幾筆下載，按之前要看得到件數。
@@ -49,7 +52,9 @@ export function AuditGroup({ rows, onDone }: { rows: readonly AuditReviewRow[]; 
       title={title || first.job_name || first.job_hash}
       sentence={
         firstBatch
-          ? t('review.audit.series.firstBatch', { count })
+          ? series?.ask
+            ? firstBatchAskText(t, { title, group: series.group, ask: series.ask })
+            : t('review.audit.series.firstBatch', { count })
           : lead.kind === 'same'
             ? t('review.audit.group.same', { count, lead: leadText(t, lead.reason) })
             : t(`review.audit.group.${lead.kind}`, { count })
@@ -86,7 +91,11 @@ export function AuditGroup({ rows, onDone }: { rows: readonly AuditReviewRow[]; 
       }
     >
       <GhostButton type="button" busy={pending} onClick={() => confirm(rows)}>
-        {pending ? t('review.audit.working') : t('review.audit.confirmAll')}
+        {pending
+          ? t('review.audit.working')
+          : firstBatch
+            ? t('review.audit.confirmSeries')
+            : t('review.audit.confirmAll')}
       </GhostButton>
     </QueueRow>
   )

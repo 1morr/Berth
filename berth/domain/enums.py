@@ -169,6 +169,10 @@ class EventType(StrEnum):
     #: 下一輪再試；同一個錯誤不重寫——`Job.error` 還是它的話就是同一件事。下一次成功的一輪清掉它
     #: 並寫一筆 `recovered`。
     ROUND_FAILED = "round_failed"
+    #: 系統替人確認了送出這一筆的 RSS Series 的第一批（M4 票 11）：這一份每一集都照字面、剛播、
+    #: 播出日對得上，而那個 Series 沒有別的集數在等人（`services.first_batch.vouch`）。`series` 是
+    #: id、`name` 是它的原始標題、`episodes` 是擔保的那幾集（`S01E03`）。
+    SERIES_CONFIRMED = "series_confirmed"
 
 
 class JellyfinRequest(StrEnum):
@@ -892,6 +896,24 @@ class AuditReason(StrEnum):
     MEDIUM_AUTO_IMPORTED = "medium_auto_imported"
     #: RSS Series 的第一批：信心不論高低都等人看一眼季號與集數（brief §15，M3 票 13）。
     FIRST_BATCH = "first_batch"
+
+
+class FirstBatchBasis(StrEnum):
+    """還在等人的第一批，季集是怎麼讀出來的（M4 票 11，`services.first_batch.asks`）。審核頁那一組與
+    作品頁的「第一批待確認」照它挑一句「在問什麼」。"""
+
+    #: 照檔名：寫明的季號，或只寫集號而對到第一季；集號就是檔名寫的。
+    LITERAL = "literal"
+    #: 照 RSS Series 上設的季號或集號偏移。
+    SERIES = "series"
+    #: 絕對編號換算成季集。
+    ABSOLUTE = "absolute"
+    #: 依播出的輪次換算：虛擬季、cour 標記、以發佈時間推測的重數。
+    RUNS = "runs"
+    #: 季號由篇章名（或「最終季」）讀出。
+    ARC = "arc"
+    #: 這一批裡不只一種讀法。
+    MIXED = "mixed"
 
 
 class UnmatchedReason(StrEnum):

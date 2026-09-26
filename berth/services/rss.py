@@ -89,6 +89,8 @@ from berth.parser.release import parse_release, tags_of
 from berth.services.clients import ServiceClientFactory, feed_fetcher
 from berth.services.commands import Effect, command
 from berth.services.discover import search_media
+from berth.services.first_batch import FirstBatchAsk
+from berth.services.first_batch import asks as first_batch_asks
 from berth.services.jobs import JobRejectedError, JobSource, actor_of, add_download, freeze
 from berth.services.media import read_snapshot_checked
 from berth.services.plan import parse_context
@@ -226,6 +228,9 @@ class SeriesView:
     latest_at: datetime | None
     #: 這一次呼叫送出去了幾筆。只有 `bind_series` 回的那一份有意義，清單上一律是 0。
     submitted: int = 0
+    #: 還沒確認時，第一批在問人什麼（M4 票 11，`first_batch.asks`）：作品頁的「第一批待確認」帶
+    #: 這一句。確認過、或還沒有已入庫的集數在等人是 `None`。
+    ask: FirstBatchAsk | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -1507,7 +1512,9 @@ async def list_series(
     if media_id is not None:
         query = query.where(RssSeries.media_id == media_id)
     rows = list(await session.scalars(query))
-    return tuple([await _series_view(session, row) for row in rows])
+    # 第一批在問什麼一次問完（`first_batch.asks` 收一串 id），不逐列各問一次。
+    asked = await first_batch_asks(session, [row.id for row in rows if not row.confirmed])
+    return tuple([await _series_view(session, row, asked=asked) for row in rows])
 
 
 @command(Effect.REVERSIBLE, inverse="rss.unbind_series")
@@ -1632,7 +1639,13 @@ async def unbind_series(session: AsyncSession, series_id: int) -> SeriesView:
     return await _series_view(session, series)
 
 
-async def _series_view(session: AsyncSession, row: RssSeries) -> SeriesView:
+async def _series_view(
+    session: AsyncSession, row: RssSeries, *, asked: dict[int, FirstBatchAsk] | None = None
+) -> SeriesView:
+    """一個 RSS Series 在畫面上的樣子。`asked` 是清單先整批問好的「第一批在問什麼」；單一個的
+    回應（綁定、解除、排除條件）沒給，這裡自己問。"""
+    if asked is None:
+        asked = {} if row.confirmed else await first_batch_asks(session, [row.id])
     media = await session.get(Media, row.media_id) if row.media_id is not None else None
     route = await session.get(Route, row.route_id) if row.route_id is not None else None
     waiting = await session.scalar(
@@ -1677,6 +1690,7 @@ async def _series_view(session: AsyncSession, row: RssSeries) -> SeriesView:
         group=parse_release(row.title_raw).group,
         latest_title=latest.title if latest is not None else "",
         latest_at=latest.published_at if latest is not None else None,
+        ask=asked.get(row.id),
     )
 
 

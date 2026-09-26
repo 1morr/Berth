@@ -117,9 +117,12 @@ def test_a_correction_applied_to_the_series_says_what_followed(
     assert rows[0]["series"] == {
         "id": series_id,
         "name": rows[0]["series"]["name"],
+        "group": "喵萌奶茶屋&LoliHouse",
         "confirmed": False,
         "season": 1,
         "episode_offset": 12,
+        # 還在等人的那一集照 Series 上的值讀（M4 票 11 的「在問什麼」）。
+        "ask": {"spans": [{"season": 1, "start": 24, "end": 24}], "basis": "series"},
     }
     assert [reason["code"] for reason in rows[0]["reasons"]] == ["series_corrected"]
 

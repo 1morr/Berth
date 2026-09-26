@@ -1885,6 +1885,7 @@ function boundSeries(overrides: Partial<RssSeries> = {}): RssSeries {
     latest_title: LOLI_TITLE,
     latest_at: '2026-09-24T12:00:00Z',
     submitted: 0,
+    ask: null,
     ...overrides,
   }
 }
@@ -1927,6 +1928,22 @@ describe('詳情頁的 RSS 訂閱（M3 票 19）', () => {
     expect(within(block).getByText('第一批待確認')).toBeVisible()
     expect(within(block).getByText(LOLI_TITLE)).toBeVisible()
     expect(within(block).getByRole('link', { name: '到 RSS 頁' })).toHaveAttribute('href', '/rss')
+  })
+
+  it('第一批還在等人時，標籤下面說它在問什麼（與審核頁同一句，M4 票 11）', async () => {
+    const asking = boundSeries({
+      ask: { spans: [{ season: 1, start: 1, end: 4 }], basis: 'literal' },
+    })
+    render({ [SERIES_PATH]: { body: [asking, boundSeries({ id: 8, confirmed: true })] } })
+    renderApp('/media/tv:120089')
+
+    const block = await screen.findByRole('region', { name: 'RSS 訂閱' })
+    expect(
+      await within(block).findByText(
+        '確認 SPY×FAMILY 間諜家家酒 × LoliHouse 的季集對應：S01 E01–E04 由集號直接對應',
+      ),
+    ).toBeVisible()
+    expect(within(block).getAllByText(/的季集對應/)).toHaveLength(1)
   })
 
   it('一般使用者看不到這一段，也不問 RSS 的清單', async () => {

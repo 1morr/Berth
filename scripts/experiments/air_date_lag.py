@@ -289,7 +289,7 @@ async def _resolve_mikan_series(  # type: ignore[no-untyped-def]  # 一次性腳
     )
     try:
         clues = await _clues(fetcher, series)
-        shots = await _candidates(session, factory, clues)
+        shots, _ = await _candidates(session, factory, clues)
     except _LookupError as failed:
         print(f"   [series lookup failed] {pair}: {failed}")
         return None
@@ -355,7 +355,7 @@ async def _resolve_title_series(  # type: ignore[no-untyped-def]  # 一次性腳
     series = RssSeries(key=key, mikan_bangumi_id=None, mikan_subgroup_id=None, title_raw=item.title)
     clues = await _clues(fetcher, series)
     try:
-        shots = await _candidates(session, factory, clues)
+        shots, _ = await _candidates(session, factory, clues)
     except _LookupError as failed:
         print(f"   [series lookup failed] {key}: {failed}")
         return None

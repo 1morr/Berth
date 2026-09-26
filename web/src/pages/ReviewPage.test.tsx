@@ -554,9 +554,11 @@ function series(overrides: Partial<NonNullable<AuditReviewRow['series']>> = {}) 
     id: 3,
     // 長出它的那一筆 Item 的標題（看得出字幕組），不是哪一筆下載的名字。
     name: '[ANi] SPY×FAMILY 間諜家家酒 - 25 [1080P][Baha][WEB-DL]',
+    group: 'ANi',
     confirmed: false,
     season: null,
     episode_offset: null,
+    ask: null,
     ...overrides,
   }
 }
@@ -617,7 +619,25 @@ describe('RSS Series 的第一批（M3 票 13）', () => {
     expect(within(group).getByText('第 1 季、集號偏移 +12')).toBeInTheDocument()
   })
 
-  it('「全部確認」打 Series 那一支，送的是畫面上的 id', async () => {
+  it('後端說得出在問什麼時，整組一句話：作品 × 字幕組、哪幾集、季集怎麼讀出來（M4 票 11）', async () => {
+    const asking = series({ ask: { spans: [{ season: 2, start: 1, end: 3 }], basis: 'literal' } })
+    render({ [QUEUE]: queue(firstBatch().map((row) => ({ ...row, series: asking }))) })
+    renderApp('/review')
+    const [group] = await screen.findAllByRole('article')
+
+    expect(
+      within(group).getByText(
+        '確認 SPY×FAMILY 間諜家家酒 × ANi 的季集對應：S02 E01–E03 由集號直接對應',
+      ),
+    ).toBeInTheDocument()
+    expect(within(group).queryByText(/RSS Series 的第一批/)).not.toBeInTheDocument()
+    expect(within(group).getByRole('button', { name: '確認整個 Series' })).toBeInTheDocument()
+    // 逐列展開留著。
+    await userEvent.click(within(group).getAllByText('展開')[0])
+    expect(within(group).getAllByRole('heading', { level: 4 })).toHaveLength(3)
+  })
+
+  it('「確認整個 Series」打 Series 那一支，送的是畫面上的 id', async () => {
     let rows = firstBatch()
     const stub = render({
       [QUEUE]: () => queue(rows),
@@ -629,7 +649,7 @@ describe('RSS Series 的第一批（M3 票 13）', () => {
     renderApp('/review')
     const [group] = await screen.findAllByRole('article')
 
-    await userEvent.click(within(group).getByRole('button', { name: '全部確認' }))
+    await userEvent.click(within(group).getByRole('button', { name: '確認整個 Series' }))
 
     await waitFor(() => expect(screen.queryByRole('article')).not.toBeInTheDocument())
     expect(bodyOf(stub, '/api/review/series/3/confirm')).toEqual({ ledger_ids: [7, 8, 9] })
@@ -646,7 +666,7 @@ describe('RSS Series 的第一批（M3 票 13）', () => {
     const [group] = await screen.findAllByRole('article')
 
     expect(within(group).getByText(/RSS Series 的第一批：1 個檔案/)).toBeInTheDocument()
-    await userEvent.click(within(group).getByRole('button', { name: '全部確認' }))
+    await userEvent.click(within(group).getByRole('button', { name: '確認整個 Series' }))
 
     await waitFor(() =>
       expect(bodyOf(stub, '/api/review/series/3/confirm')).toEqual({ ledger_ids: [7] }),

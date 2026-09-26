@@ -1,6 +1,7 @@
 """跨 router 共用的回應形狀（plan §6）。
 
-一條纜繩、一個 Route、一個 qBittorrent 偏好差異這三種東西同時出現在精靈、健康頁與設定頁。
+一條纜繩、一個 Route、一個 qBittorrent 偏好差異這三種東西同時出現在精靈、健康頁與設定頁；第一批在問
+什麼（M4 票 11）同時出現在審核佇列與 RSS Series。
 形狀寫兩份的話，改了一邊另一邊會悄悄回舊欄位，而前端的型別只會抓到其中一個。
 """
 
@@ -12,6 +13,7 @@ from pydantic import BaseModel, ConfigDict
 
 from berth.domain import (
     CollectionType,
+    FirstBatchBasis,
     HealthStatus,
     MediaKind,
     ServiceKind,
@@ -282,3 +284,23 @@ class SeriesCorrectedOut(BaseModel):
     replanned: int
     #: 照新的值落不到任何一集、或搬不過去的：留在原地，仍在第一批裡等人。
     left: int
+
+
+class FirstBatchSpanOut(BaseModel):
+    """同一季裡連續的幾集。"""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    season: int
+    start: int
+    end: int
+
+
+class FirstBatchAskOut(BaseModel):
+    """還沒確認的 RSS Series 在問人什麼（M4 票 11）：蓋到的集數，與它們的季集是怎麼讀出來的。
+    審核頁那一組與作品頁的「第一批待確認」照它說同一句話。"""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    spans: list[FirstBatchSpanOut]
+    basis: FirstBatchBasis

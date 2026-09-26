@@ -325,7 +325,7 @@ _Avoid_: subscription（Subscription 是 UI 上「訂閱一部作品」的動作
 _Avoid_: rule, subscription, follow（`follows` 是字幕跟著影片的那個函式）
 
 **第一批**（first batch）:
-一個 RSS Series 在 `confirmed = false` 期間送進來的集數：入庫之後不論信心都掛 Audit，在 Review Queue 以 RSS Series 分組，一組一顆「全部確認」——按了之後 Series `confirmed = true`，之後它的 medium 入庫不再進 audit 清單。第一批裡改正一集時可以**套用到這個 RSS Series**：由那一集算出季號與 offset 寫回 Series，還沒確認的集數跟著重算（已入庫的走 rematch 搬過去、仍留在第一批；停在 review 的重新規劃）。
+一個 RSS Series 在 `confirmed = false` 期間送進來的集數：入庫之後不論信心都掛 Audit，在 Review Queue 以 RSS Series 分組，一組一顆「全部確認」——按了之後 Series `confirmed = true`，之後它的 medium 入庫不再進 audit 清單。第一批裡改正一集時可以**套用到這個 RSS Series**：由那一集算出季號與 offset 寫回 Series，還沒確認的集數跟著重算（已入庫的走 rematch 搬過去、仍留在第一批；停在 review 的重新規劃）。**證據夠強的第一批由系統確認**（M4 票 11）：整批每一集都照字面、剛播、播出日對得上時不掛 Audit，Series 直接 `confirmed = true`，時間線記 `series_confirmed`。
 _Avoid_: initial batch, pilot
 
 **Feed Item**:
