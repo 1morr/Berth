@@ -162,9 +162,12 @@ class EventType(StrEnum):
     #: `from` 是原本的狀態（`submit_failed` / `missing_files` / `client_error` /
     #: `client_removed`），`state` 是接回的那一站，`client_state` 是 qBittorrent 當下怎麼說。
     #: 沒有人按按鈕——使用者在 qBittorrent 裡自己修好，或 `torrents/add` 逾時而其實收下了。
+    #: `from` 是 `round_failed` 的那一種是背景迴圈上一輪爆掉、這一輪做完了（M4 票 01）：`Job.error`
+    #: 清掉，`state` 是它現在的狀態，沒有 `client_state`。
     RECOVERED = "recovered"
     #: 背景迴圈處理這一筆時撞到非預期的例外（`error` 是型別加原文；M3 票 02）。那一輪放棄、
-    #: 下一輪再試；同一個錯誤不重寫——`Job.error` 還是它的話就是同一件事。
+    #: 下一輪再試；同一個錯誤不重寫——`Job.error` 還是它的話就是同一件事。下一次成功的一輪清掉它
+    #: 並寫一筆 `recovered`。
     ROUND_FAILED = "round_failed"
 
 

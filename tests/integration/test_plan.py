@@ -1234,3 +1234,53 @@ class TestRoundIsolation:
         await session.refresh(job)
         assert job.state is JobState.IMPORTING
         assert job.error == ""
+
+    async def test_a_good_preplan_clears_the_error_without_a_transition(
+        self, session: AsyncSession, roots: dict[str, Path], monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """pre-plan 算完之後那一筆還在下載，沒有轉換會清 `Job.error`（M4 票 01）。試跑那一筆
+        `database is locked` 在 qBittorrent 排隊、進度一直是 0，重啟之後畫面上仍然掛著它。"""
+        media, route, factory = await ready(session, roots)
+        job = await downloaded_job(session, media, route, roots, state=JobState.DOWNLOADING)
+
+        def explode(*args: object, **kwargs: object) -> object:
+            raise ValueError("database is locked")
+
+        monkeypatch.setattr("berth.services.plan.decide", explode)
+        await run(session, factory)
+        monkeypatch.undo()
+        await session.refresh(job)
+        assert job.error == "ValueError: database is locked"
+
+        await run(session, factory)
+
+        await session.refresh(job)
+        assert job.state is JobState.DOWNLOADING
+        assert job.error == ""
+        assert (await plan_of(session)).status is PlanStatus.PREPLAN
+        tail = [(row.type, row.payload_json) for row in await events_of(session)][-3:]
+        assert tail[0] == (
+            EventType.ROUND_FAILED.value,
+            {"error": "ValueError: database is locked"},
+        )
+        assert tail[1][0] == EventType.PREPLAN.value
+        assert tail[2] == (
+            EventType.RECOVERED.value,
+            {"from": EventType.ROUND_FAILED.value, "state": JobState.DOWNLOADING.value},
+        )
+
+    async def test_an_error_a_transition_wrote_is_not_cleared_by_a_good_round(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """只清 `round_failed` 寫的那一句：狀態自己的理由（這裡是一筆從沒爆過的 Job 身上的錯誤）
+        這一輪做完了也還成立。"""
+        media, route, factory = await ready(session, roots)
+        job = await downloaded_job(session, media, route, roots, state=JobState.DOWNLOADING)
+        job.error = "qBittorrent said something"
+        await session.commit()
+
+        await run(session, factory)
+
+        await session.refresh(job)
+        assert job.error == "qBittorrent said something"
+        assert EventType.RECOVERED.value not in [row.type for row in await events_of(session)]

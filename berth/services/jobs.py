@@ -30,8 +30,8 @@ import asyncio
 import json
 import logging
 from collections import Counter
-from collections.abc import AsyncIterator, Coroutine, Sequence
-from contextlib import AbstractAsyncContextManager, asynccontextmanager
+from collections.abc import AsyncIterator, Coroutine, Iterable, Sequence
+from contextlib import AbstractAsyncContextManager, AsyncExitStack, asynccontextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -162,6 +162,17 @@ _locks = _JobLocks()
 def job_lock(job_hash: str) -> AbstractAsyncContextManager[None]:
     """握住這一筆 Job 的鎖。**不可重入**，所以只掛在對外的入口上，不掛在內部步驟裡。"""
     return _locks.hold(job_hash)
+
+
+@asynccontextmanager
+async def job_locks(job_hashes: Iterable[str]) -> AsyncIterator[None]:
+    """一次握住好幾筆的鎖。**照 hash 排序依序拿**：兩個同時要多把的呼叫端（poller 的一輪、rematch
+    的取代）各照自己的順序拿的話，會各握一半互等。
+    """
+    async with AsyncExitStack() as stack:
+        for job_hash in sorted(set(job_hashes)):
+            await stack.enter_async_context(job_lock(job_hash))
+        yield
 
 
 def held_locks() -> int:
@@ -405,6 +416,9 @@ async def _resubmit(
         # 有別人（或另一個分頁）先動過它。放棄本次操作，不覆寫他的結果（plan §3.1）。
         raise JobRejectedError(JobRefusal.NOT_RETRYABLE, job.state.value)
     await record_event(session, job, EventType.RETRIED, actor="user", payload={})
+    # **打網路之前 commit**（plan §3.3）：抓 `.torrent` 與送 qBittorrent 各要幾秒，握著寫交易等它們
+    # 的話每一個寫者都在排隊。與第一次送單同一個形狀（`add_download`）。
+    await session.commit()
     logger.info("job retried", extra={"state": job.state.value})
     try:
         torrent = await _resolve(factory, job.source_url)
@@ -467,6 +481,7 @@ async def resubmit_job(
                 actor=actor,
                 payload={"state": JobState.REQUESTED.value},
             )
+            await session.commit()
             logger.info("job resubmitted", extra={"state": job.state.value})
             await _finish(session, factory, job, route, torrent, subject, actor=actor)
     return await _view_one(session, job)
@@ -514,12 +529,14 @@ async def guarded[T](
     with job_context(job_hash):
         async with job_lock(job_hash):
             try:
-                return await work
+                done = await work
             except Exception as failure:
                 await session.rollback()
                 logger.exception("this job's round failed; the rest of the round goes on")
                 await _note_round_failure(session, job_hash, failure)
                 return fallback
+            await _note_round_recovery(session, job_hash)
+            return done
 
 
 async def _note_round_failure(session: AsyncSession, job_hash: str, failure: Exception) -> None:
@@ -529,7 +546,8 @@ async def _note_round_failure(session: AsyncSession, job_hash: str, failure: Exc
     非預期的例外多半是 `KeyError('x')` 這種，只留原文的話是一個看不出是什麼的 `'x'`。
 
     **同一個錯誤只寫一次**：迴圈每 60 秒重試一次，而 `Job.error` 還是這一句就是同一件事
-    （成功的轉換會清掉它，`transition`）。寫它本身也可能失敗（資料庫就是那個錯誤）——
+    （成功的轉換會清掉它，`transition`；沒有轉換的成功一輪也會，
+    `_note_round_recovery`）。寫它本身也可能失敗（資料庫就是那個錯誤）——
     那時只剩 log，迴圈照樣不死。
     """
     detail = f"{type(failure).__name__}: {failure}"
@@ -545,6 +563,46 @@ async def _note_round_failure(session: AsyncSession, job_hash: str, failure: Exc
     except Exception:
         await session.rollback()
         logger.exception("could not record the failed round on the job")
+
+
+async def _note_round_recovery(session: AsyncSession, job_hash: str) -> None:
+    """上一輪爆掉、這一輪做完了：清掉還掛著的那一句，時間線記一筆 `recovered`（M4 票 01）。
+
+    狀態轉換本來就會清 `Job.error`（`transition`），但成功的一輪不一定有轉換——pre-plan 算完之後
+    那一筆還在下載，而 qBittorrent 排隊中的那一筆連 `downloading` 都走不到，`database is locked`
+    就一直掛在畫面上。**只清 `round_failed` 寫的那一句**：`import_failed` 這種由轉換寫下的理由
+    是那個狀態自己的說明，這一輪做完了也還成立。
+    """
+    try:
+        await _clear_round_failure(session, job_hash)
+    except Exception:
+        # 與 `_note_round_failure` 同一個規矩：清不掉只剩 log，同一輪的其他人照樣輪得到。
+        await session.rollback()
+        logger.exception("could not clear the failed round from the job")
+
+
+async def _clear_round_failure(session: AsyncSession, job_hash: str) -> None:
+    job = await session.get(Job, job_hash)
+    if job is None or not job.error:
+        return
+    last = await session.scalar(
+        select(Event.payload_json)
+        .where(Event.job_hash == job_hash, Event.type == EventType.ROUND_FAILED.value)
+        .order_by(Event.id.desc())
+        .limit(1)
+    )
+    if (last or {}).get("error") != job.error:
+        return
+    job.error = ""
+    await record_event(
+        session,
+        job,
+        EventType.RECOVERED,
+        actor=actor_of(None),
+        payload={"from": EventType.ROUND_FAILED.value, "state": job.state.value},
+    )
+    await session.commit()
+    logger.info("job recovered from a failed round", extra={"state": job.state.value})
 
 
 async def list_jobs(session: AsyncSession) -> tuple[JobView, ...]:

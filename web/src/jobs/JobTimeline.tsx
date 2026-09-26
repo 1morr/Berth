@@ -314,8 +314,9 @@ const FACTS: Record<KnownEvent, (facing: Facing) => ReactNode> = {
       </>
     )
   },
-  // poller 在客戶端看到它好好的，接回主幹（M3 票 02）。沒有人按按鈕，所以一句話說是**哪一邊**
-  // 好了：qBittorrent 其實收下了、使用者在 qBittorrent 裡修好了。客戶端狀態是機器字串，接在後面。
+  // poller 在客戶端看到它好好的，接回主幹（M3 票 02）；或上一輪出錯的那一筆這一輪做完了（M4 票 01）。
+  // 沒有人按按鈕，所以一句話說是**哪一邊**好了：qBittorrent 其實收下了、使用者在 qBittorrent 裡
+  // 修好了、Berth 自己那一輪過去了。客戶端狀態是機器字串，接在後面。
   recovered: ({ t, payload }) => {
     const from = RECOVERED_FROM.find((known) => known === payload.from)
     return (
@@ -348,10 +349,17 @@ const FACTS: Record<KnownEvent, (facing: Facing) => ReactNode> = {
 }
 
 /**
- * poller 接回主幹的那幾個起點（M3 票 02，`services/downloads.RECOVERABLE_STATES`）。認不得的只畫
+ * poller 接回主幹的那幾個起點（M3 票 02，`services/downloads.RECOVERABLE_STATES`），加上背景迴圈
+ * 上一輪爆掉的 `round_failed`（M4 票 01，`services/jobs._note_round_recovery`）。認不得的只畫
  * 色塊——它可能是後端加的，而前端還沒有那句話。
  */
-const RECOVERED_FROM = ['submit_failed', 'missing_files', 'client_error', 'client_removed'] as const
+const RECOVERED_FROM = [
+  'submit_failed',
+  'missing_files',
+  'client_error',
+  'client_removed',
+  'round_failed',
+] as const
 
 /** `domain.DuplicateDecision`。認不得的不畫那一句——它可能是後端加的，而前端還沒有那句話。 */
 const DUPLICATE_DECISIONS = ['replace', 'keep_both', 'skip'] as const

@@ -40,7 +40,7 @@ Job 已經在了、或另一筆已經送過）→ 帳本已有同 Media / 季 / 
 from __future__ import annotations
 
 import logging
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
 from pathlib import PurePosixPath
@@ -554,9 +554,13 @@ async def poll_feed(
                 "rss feed could not be fetched", extra={"feed": feed.id, "error": feed.last_error}
             )
             return PollOutcome(items=0, series=0, bound=0, submitted=0, failed=feed.last_error)
-        items, grown, skipped = await _record(session, fetcher, feed, found, moment)
+        fresh = await _unseen(session, feed.id, found)
+        # 單集頁在寫之前抓完（plan §3.3）：一頁一個請求、逾時 30 秒，寫下第一筆之後才抓第二頁的話，
+        # 整輪都握著寫鎖。
+        keys, unkeyed = await _series_keys(fetcher, feed.kind, fresh)
+        items, grown = await _record(session, feed, fresh, moment, keys=keys)
         feed.last_polled_at = moment
-        feed.last_error = skipped
+        feed.last_error = f"{len(unkeyed)} item(s) skipped: {unkeyed[0]}" if unkeyed else ""
         await session.commit()
         # 番組頁要同一個 fetcher 抓，所以在它關掉之前認。
         for series_id in grown:
@@ -598,44 +602,66 @@ def parse_items(kind: FeedKind, content: bytes) -> tuple[FeedItem, ...]:
             return acgrip.parse_feed(content)
 
 
-async def _record(
-    session: AsyncSession,
-    fetcher: FeedFetcher,
-    feed: RssFeed,
-    found: tuple[FeedItem, ...],
-    moment: datetime,
-    *,
-    known: RssSeries | None = None,
-) -> tuple[int, list[int], str]:
-    """寫下這一輪新看到的 Item。回（新 Item 數、新 Series 的 id、跳過的那幾筆的原文）。
+async def _unseen(session: AsyncSession, feed_id: int, found: Sequence[FeedItem]) -> list[FeedItem]:
+    """`found` 裡這個 Feed 還沒寫過的那幾筆，**舊的在前**。同一份裡重複的 GUID 只留一筆。
 
-    **舊的先寫**：feed 是新的在前，送單照寫入順序走，第 11 集先於第 12 集進 qBittorrent。
-    認不出 RSS Series 的那一筆（單集頁抓不到、改版了）**不寫**：寫了就是見過，下一輪不會再試。
-
-    `known` 是補舊集讀的單一 feed：每一筆都屬於那一個 RSS Series，不抓單集頁；取消勾選補舊集之前
-    發佈的記成 `passed`（`passed_before`）。
+    舊的在前：feed 是新的在前，送單照寫入順序走，第 11 集先於第 12 集進 qBittorrent。
     """
     seen = set(
         await session.scalars(
             select(RssItem.guid).where(
-                RssItem.feed_id == feed.id, RssItem.guid.in_([item.guid for item in found])
+                RssItem.feed_id == feed_id, RssItem.guid.in_([item.guid for item in found])
             )
         )
     )
+    fresh: list[FeedItem] = []
+    for item in reversed(found):
+        if item.guid not in seen:
+            seen.add(item.guid)
+            fresh.append(item)
+    return fresh
+
+
+async def _series_keys(
+    fetcher: FeedFetcher, kind: FeedKind, items: Sequence[FeedItem]
+) -> tuple[dict[str, str], list[str]]:
+    """每一筆屬於哪一個 RSS Series（GUID → 鍵），加上認不出來的那幾筆的原因。只打網路、不寫。"""
+    keys: dict[str, str] = {}
+    unkeyed: list[str] = []
+    for item in items:
+        try:
+            keys[item.guid] = await _series_key(fetcher, kind, item)
+        except _UnkeyedError as failed:
+            unkeyed.append(str(failed))
+    return keys, unkeyed
+
+
+async def _record(
+    session: AsyncSession,
+    feed: RssFeed,
+    fresh: Sequence[FeedItem],
+    moment: datetime,
+    *,
+    keys: Mapping[str, str] | None = None,
+    known: RssSeries | None = None,
+) -> tuple[int, list[int]]:
+    """寫下這一輪新看到的 Item（`_unseen` 挑出來的）。回（新 Item 數、新 Series 的 id）。
+
+    **不打網路**（plan §3.3）：RSS Series 的鍵由呼叫的一方先問好（`_series_keys`）。`keys` 裡沒有的
+    那一筆（單集頁抓不到、改版了）**不寫**：寫了就是見過，下一輪不會再試。
+
+    `known` 是補舊集讀的單一 feed：每一筆都屬於那一個 RSS Series，沒有鍵要認；取消勾選補舊集之前
+    發佈的記成 `passed`（`passed_before`）。
+    """
     items = 0
     grown: list[int] = []
-    unkeyed: list[str] = []
     settings = await read_settings(session, RssSettings)
-    for item in reversed(found):
-        if item.guid in seen:
-            continue
+    for item in fresh:
         if known is not None:
             series = known
         else:
-            try:
-                key = await _series_key(fetcher, feed.kind, item)
-            except _UnkeyedError as failed:
-                unkeyed.append(str(failed))
+            key = (keys or {}).get(item.guid)
+            if key is None:
                 continue
             series, created = await _series(session, key, item)
             if created:
@@ -657,11 +683,9 @@ async def _record(
                 skip_json=_dump(skip),
             )
         )
-        seen.add(item.guid)
         items += 1
     await session.flush()
-    detail = f"{len(unkeyed)} item(s) skipped: {unkeyed[0]}" if unkeyed else ""
-    return items, grown, detail
+    return items, grown
 
 
 def _arriving(
@@ -744,34 +768,39 @@ async def _home_feed(session: AsyncSession, series: RssSeries) -> RssFeed | None
     return feed
 
 
-async def _backfill(
-    session: AsyncSession,
-    factory: ServiceClientFactory,
-    home: RssFeed,
-    series: RssSeries,
-    moment: datetime,
-) -> str:
-    """讀這個 Mikan RSS Series 的單一 feed（整季），沒見過的寫成 `home` 的 Item，記下補過的時間。
+async def _read_season(
+    factory: ServiceClientFactory, series: RssSeries
+) -> tuple[FeedItem, ...] | str:
+    """讀這個 Mikan RSS Series 的單一 feed（整季）。讀不到回原文（英文）。
 
-    不 commit（呼叫的一方與自己的改動一起）。讀不到回原文（英文）、什麼都不寫；讀到了回空字串。
+    **只打網路、不寫**（plan §3.3）：呼叫的一方在改任何東西之前讀它，讀完再交給 `_backfill` 寫。
     """
     assert series.mikan_bangumi_id is not None and series.mikan_subgroup_id is not None
     url = mikan.bangumi_feed_url(series.mikan_bangumi_id, series.mikan_subgroup_id)
     fetcher = feed_fetcher(factory, BudgetUse.BACKFILL)
     try:
-        try:
-            season = mikan.parse_feed(await fetcher.fetch(url))
-        except ServiceError as exc:
-            logger.warning(
-                "rss backfill could not read the single feed; the next round tries again",
-                extra={"series": series.id, "error": message(exc)},
-            )
-            return message(exc)
-        await _record(session, fetcher, home, season, moment, known=series)
+        return mikan.parse_feed(await fetcher.fetch(url))
+    except ServiceError as exc:
+        logger.warning(
+            "rss backfill could not read the single feed; the next round tries again",
+            extra={"series": series.id, "error": message(exc)},
+        )
+        return message(exc)
     finally:
         await fetcher.aclose()
+
+
+async def _backfill(
+    session: AsyncSession,
+    home: RssFeed,
+    series: RssSeries,
+    season: tuple[FeedItem, ...],
+    moment: datetime,
+) -> None:
+    """把讀到的整季裡沒見過的寫成 `home` 的 Item，記下補過的時間。不 commit（呼叫的一方與自己的
+    改動一起）。"""
+    await _record(session, home, await _unseen(session, home.id, season), moment, known=series)
     series.backfilled_at = moment
-    return ""
 
 
 async def _backfill_due(
@@ -804,9 +833,11 @@ async def _backfill_due(
         home = await _home_feed(session, series)
         if home is None or home.id != feed_id:
             continue
-        failed = await _backfill(session, factory, feed, series, moment)
-        if failed:
-            failures.append(f"backfill {series.key}: {failed}")
+        season = await _read_season(factory, series)
+        if isinstance(season, str):
+            failures.append(f"backfill {series.key}: {season}")
+            continue
+        await _backfill(session, feed, series, season, moment)
         await session.commit()
     if failures:
         feed.last_error = "; ".join(one for one in (feed.last_error, *failures) if one)
@@ -1437,6 +1468,9 @@ async def bind_series(
 
     moment = now or utcnow()
     home = await _home_feed(session, series)
+    # 補舊集的單一 feed 在改任何東西之前讀（plan §3.3）：下面第一個查詢就會把綁定的改動 flush
+    # 出去，之後才讀的話 Mikan 那幾秒（逾時 30 秒）都握著寫鎖。
+    season = await _read_season(factory, series) if home is not None else ()
     series.media_id = media.id
     series.route_id = route.id
     series.bound_by = actor_of(user_id)
@@ -1460,7 +1494,8 @@ async def bind_series(
             )
             for item in passed:
                 item.status = FeedItemStatus.MATCHED
-        await _backfill(session, factory, home, series, moment)
+        if not isinstance(season, str):
+            await _backfill(session, home, series, season, moment)
     await session.commit()
     await _rescreen(session, RssItem.series_id == series_id)
     logger.info("rss series bound", extra={"series": series_id, "media": media_id})
@@ -1689,8 +1724,7 @@ async def subscribe_mikan(
             await session.rollback()
             raise
         # 單一 feed 就是整季：讀到的每一筆照補舊集的規矩寫下（`known`），這一次也算補過。
-        await _record(session, fetcher, feed, season, moment, known=series)
-        series.backfilled_at = moment
+        await _backfill(session, feed, series, season, moment)
         await session.commit()
     finally:
         await fetcher.aclose()

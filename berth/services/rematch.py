@@ -64,7 +64,7 @@ from berth.services.importer import (
     record_link,
     restate_versions,
 )
-from berth.services.jobs import job_lock, record_event
+from berth.services.jobs import job_locks, record_event
 from berth.services.plan import WRITTEN, summarise
 from berth.services.plan_view import dump_reasons, dump_tags, load_plan, reasons_of
 from berth.services.steps import message
@@ -230,17 +230,16 @@ async def locked(*job_hashes: str | None) -> AsyncIterator[None]:
     """鎖住這幾筆 Job：importer 的重試、audit 的兩顆、Plan 編輯、刪除都寫同一份 Plan 與帳本。
 
     **取代舊版要兩把**（code-review 抓到）：它拆的是另一筆 Job 的鏈接、改的是那一筆的帳本，只鎖
-    新的那一筆的話，舊的那一筆上同時按下的撤銷會拆到剛換上去的新鏈接。多把時照 hash 排序依序拿，
-    兩個方向同時取代的兩個分頁才不會互等。`rebuild-ledger` 長回來的帳本可能沒有 Job
-    （`models/ledger.py`），那一份沒有鎖可拿。例外離開時由呼叫端的 session 收拾：拒絕都在寫入
-    之前丟出來。
+    新的那一筆的話，舊的那一筆上同時按下的撤銷會拆到剛換上去的新鏈接。多把時照 hash 排序依序拿
+    （`job_locks`），兩個方向同時取代的兩個分頁、與 poller 的一輪才不會互等。`rebuild-ledger`
+    長回來的帳本可能沒有 Job（`models/ledger.py`），那一份沒有鎖可拿。例外離開時由呼叫端的
+    session 收拾：拒絕都在寫入之前丟出來。
     """
     wanted = sorted({job_hash for job_hash in job_hashes if job_hash is not None})
     async with AsyncExitStack() as stack:
         if wanted:
             stack.enter_context(job_context(wanted[0]))
-        for job_hash in wanted:
-            await stack.enter_async_context(job_lock(job_hash))
+        await stack.enter_async_context(job_locks(wanted))
         yield
 
 

@@ -22,12 +22,13 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path, PurePosixPath
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import Row, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from berth.adapters import fs
@@ -55,7 +56,7 @@ from berth.services.clients import ServiceClientFactory
 from berth.services.events import EventHub, JobSignal
 from berth.services.hints import JobHints
 from berth.services.issues import close_settled, record_issue
-from berth.services.jobs import freeze, job_lock, record_event, restart_state, transition
+from berth.services.jobs import freeze, job_locks, record_event, restart_state, transition
 from berth.services.qbittorrent import unknown_torrent_detail, unknown_torrents
 from berth.services.settings import read_settings, write_settings
 
@@ -121,6 +122,15 @@ RECOVERABLE_STATES = frozenset(
     }
 )
 
+#: poller 每一輪看的全部。
+POLLED = IN_CLIENT_STATES | RECOVERABLE_STATES
+
+#: 這一輪可能走到 `submitted → metadata_ready` 的：本來就在 `submitted`，或接回主幹時落在那裡
+#: （`submit_failed` 一定是，`client_removed` 在還沒有檔案清單時是）。它們的檔案清單在寫交易之前
+#: 先問好（`_listings`）。`missing_files` / `client_error` 不在其中：壞掉的時候多半早就有清單了，
+#: 為了少見的例外每一輪替卡住的那幾筆各問一次不值得——真的落在 `submitted` 的話下一輪照常問。
+LISTED_STATES = frozenset({JobState.SUBMITTED, JobState.SUBMIT_FAILED, JobState.CLIENT_REMOVED})
+
 #: 客戶端的 state 字串 → Job 的壞掉狀態（plan §3.1）。
 #:
 #: 鍵用 adapter 的常數而不是字面字串：那兩個字是協定的詞，而**這一份對照是政策**
@@ -185,29 +195,52 @@ async def poll_downloads(
 
     **一輪只問一次客戶端清單**：`sync/maindata` 回的是整台機器的狀態，逐 job 問
     `torrents/info` 會讓一份 40 筆的清單變成 40 次往返。`torrents/files` 是例外——
-    它只在某一筆真的要從 `submitted` 走出去的那一輪問，一筆 Job 一輩子問一次。
+    只替這一輪可能走出 `submitted` 的那幾筆問（`LISTED_STATES`）。
+
+    **三段，順序就是寫交易紀律**（plan §3.3，M4 票 01）：網路全部問完（`sync`、`files`）→ 這一輪
+    要動的每一筆的 `job_lock` 照 hash 排序拿齊 → 才開始寫，一個交易寫完 commit。原本是握著寫交易
+    逐筆拿鎖，而 planner 反過來先拿鎖再寫：它握著 Y 的鎖等寫鎖、poller 握著寫鎖等 Y 的鎖，planner
+    等滿 `busy_timeout` 就爆 `database is locked`（2026-09-26 試跑）。**不改成逐筆 commit**：一輪
+    一個交易才有「Job 接回來與它的 Issue 收掉是同一刻」（`close_settled`），下載中的每一筆每一輪都有
+    進度要寫，逐筆 commit 是一輪上百次 fsync；鎖拿齊之後的那一段只剩資料庫，握不了多久。
+
+    **代價在拿鎖那一段**：送單、重試、重新送單握著那一筆的鎖打網路（最久是 `.torrent` 的逾時），
+    poller 等它的時候已經握著排序在前的那幾把，那幾筆的 planner、importer 與 API 跟著等——
+    是 asyncio 的等待，不是 SQLite 的，所以等得久但不會爆 `database is locked`。
     """
     moment = now or utcnow()
     statuses = {row.hash: row for row in await client.sync()}
+    watched = (
+        await session.execute(select(Job.hash, Job.state).where(Job.state.in_(POLLED)))
+    ).all()
+    listings = await _listings(client, statuses, watched)
 
     moved = 0
     signals: list[JobSignal] = []
-    jobs = await session.scalars(
-        select(Job).where(Job.state.in_(IN_CLIENT_STATES | RECOVERABLE_STATES))
-    )
-    for job in list(jobs):
-        with job_context(job.hash):
-            async with job_lock(job.hash):
+    async with job_locks(job_hash for job_hash, _ in watched):
+        # 鎖拿齊之後重讀：拿鎖那段時間裡別人（planner、使用者的刪除）可能已經把它推走了。
+        jobs = await session.scalars(
+            select(Job)
+            .where(Job.hash.in_([job_hash for job_hash, _ in watched]), Job.state.in_(POLLED))
+            .execution_options(populate_existing=True)
+        )
+        for job in list(jobs):
+            with job_context(job.hash):
                 moved += await _advance(
-                    session, client, signals, job, statuses.get(job.hash), moment
+                    session,
+                    listings.get(job.hash, ()),
+                    signals,
+                    job,
+                    statuses.get(job.hash),
+                    moment,
                 )
 
-    unknown = await _record_unknown(session, statuses, moment)
-    # 接回主幹的那幾筆（與被別的路徑推走的那幾筆）的管線 Issue 在同一個交易裡收掉：
-    # 畫面上不該有一刻是「Job 好了、Issue 還開著」（M3 票 02）。
-    await close_settled(session, moment)
-    await _remember(session, moment, unknown)
-    await session.commit()
+        unknown = await _record_unknown(session, statuses, moment)
+        # 接回主幹的那幾筆（與被別的路徑推走的那幾筆）的管線 Issue 在同一個交易裡收掉：
+        # 畫面上不該有一刻是「Job 好了、Issue 還開著」（M3 票 02）。
+        await close_settled(session, moment)
+        await _remember(session, moment, unknown)
+        await session.commit()
 
     # **推播在 commit 之後。** 反過來的話前端收到「這一筆完成了」就立刻重問一次，而那一次
     # 讀到的是還沒 commit 的舊狀態——畫面因此永遠慢一步（2026-09-10 實跑抓到：每一筆事件
@@ -299,9 +332,27 @@ async def record_poll_failure(session: AsyncSession, error: str) -> int:
 # --- 一筆 Job 的一輪 ----------------------------------------------------
 
 
+async def _listings(
+    client: QbittorrentClient,
+    statuses: dict[str, TorrentStatus],
+    watched: Sequence[Row[tuple[str, JobState]]],
+) -> dict[str, tuple[TorrentFile, ...]]:
+    """這一輪可能要建 `job_files` 的那幾筆，先把 `torrents/files` 問好。
+
+    **在拿鎖與寫之前**：問 qBittorrent 的那幾秒不能握著寫交易（plan §3.3）。只讀的請求不必等鎖——
+    鎖保證的是「不會做兩次」，而問兩次清單什麼都沒做。
+    """
+    listings: dict[str, tuple[TorrentFile, ...]] = {}
+    for job_hash, state in watched:
+        found = statuses.get(job_hash)
+        if state in LISTED_STATES and found is not None and found.metadata_ready:
+            listings[job_hash] = await client.files(job_hash)
+    return listings
+
+
 async def _advance(
     session: AsyncSession,
-    client: QbittorrentClient,
+    files: tuple[TorrentFile, ...],
     signals: list[JobSignal],
     job: Job,
     status: TorrentStatus | None,
@@ -334,7 +385,7 @@ async def _advance(
     # 上限是狀態總數：一輪最多把一筆 Job 走完整條主幹，走不動就停。有了它，任何一條
     # 意外自我循環的轉換都會被截斷，而不是把迴圈卡死在一筆 Job 上。
     for _ in range(len(JobState)):
-        if not await _step(session, client, job, status, now):
+        if not await _step(session, files, job, status, now):
             break
         steps += 1
     await _announce_progress(session, job, was[1])
@@ -409,7 +460,7 @@ def _refresh(job: Job, status: TorrentStatus, now: datetime) -> None:
 
 async def _step(
     session: AsyncSession,
-    client: QbittorrentClient,
+    files: tuple[TorrentFile, ...],
     job: Job,
     status: TorrentStatus,
     now: datetime,
@@ -424,7 +475,7 @@ async def _step(
         return bool(await _issue(session, job, broken[0], broken[1]))
 
     if job.state is JobState.SUBMITTED:
-        return await _metadata_ready(session, client, job, status)
+        return await _metadata_ready(session, files, job, status)
 
     settled = (JobState.METADATA_READY, JobState.DOWNLOADING, JobState.STALLED)
     if job.state in settled and await _completed(session, job, status, now):
@@ -467,7 +518,7 @@ async def _step(
 
 
 async def _metadata_ready(
-    session: AsyncSession, client: QbittorrentClient, job: Job, status: TorrentStatus
+    session: AsyncSession, files: tuple[TorrentFile, ...], job: Job, status: TorrentStatus
 ) -> bool:
     """`submitted` → `metadata_ready`：檔案清單到手（plan §3.1）。
 
@@ -476,11 +527,10 @@ async def _metadata_ready(
     只看清單也不行——metaDL 期間它回的是 `200` + `[]`，與「這個 torrent 不存在」同形。
 
     **pre-plan 不在這一票**（plan §3.1 的另一半副作用）：`plans` 表要到票 11 才建。
+
+    `files` 是寫交易之前就問好的那一份（`_listings`）；這一輪沒問到的是空的，下一輪再問。
     """
-    if not status.metadata_ready:
-        return False
-    files = await client.files(job.hash)
-    if not files:
+    if not status.metadata_ready or not files:
         return False
     if not await _to(session, job, JobState.METADATA_READY):
         return False

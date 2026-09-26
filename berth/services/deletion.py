@@ -156,10 +156,15 @@ async def delete_job(
     任何東西之前就停下來，向 qBittorrent 移除那一步也排在動磁碟之前——刪到一半才失敗是最難
     收拾的結果。
 
-    **轉換是鎖裡的第一件事**（M3 票 01）：CAS 的 `expected` 是這個請求進來時讀到的狀態，也就是
-    使用者按下去時看到的那一個。兩個分頁同時刪同一筆時，後拿到鎖的那一個輸掉 CAS、得到
+    **鎖裡第一件事是比對狀態**（M3 票 01）：`expected` 是這個請求進來時讀到的狀態，也就是使用者
+    按下去時看到的那一個。兩個分頁同時刪同一筆時，後拿到鎖的那一個看到它已經不是那個狀態、得到
     `moved_on`，而不是對著剛刪過的 Job 再刪一次、回報「刪好了」。先到的那一個勾了清除紀錄的話
     這一列已經不在了，後到的那一個是 `job_missing`。
+
+    **轉換（CAS）排在向 qBittorrent 移除之後**（plan §3.3，M4 票 01）：轉換一寫下去就握著 SQLite
+    的寫鎖，先轉再打 qBittorrent 的話，它慢的那幾秒每一個寫者都在等。鎖裡的比對擋得住兩個分頁。
+    CAS 照舊在，但它輸掉時 torrent 已經移除了、回的是 `moved_on`——只有沒拿鎖就改狀態的寫者造得出
+    這種半套，而改 Job 狀態的每一條路都拿著這把鎖（`transition` 的呼叫端）。
     """
     seen = (await _job(session, job_hash)).state
     if scope.delete_files and not scope.remove_torrent:
@@ -175,15 +180,9 @@ async def delete_job(
             job = await session.get(Job, job_hash, populate_existing=True)
             if job is None:
                 raise JobRejectedError(JobRefusal.JOB_MISSING, job_hash)
-            if not await transition(session, job, JobState.REMOVED, expected=seen):
+            if job.state is not seen:
                 raise JobRejectedError(JobRefusal.MOVED_ON, job.state.value)
-            try:
-                return await _apply(session, factory, job, scope, actor=actor)
-            except JobRejectedError:
-                # 拒絕的意思是「什麼都還沒動」：問不到 qBittorrent 時上面那一次轉換也要收回，
-                # 不能留給呼叫端的 session 決定要不要 commit。
-                await session.rollback()
-                raise
+            return await _apply(session, factory, job, scope, seen=seen, actor=actor)
 
 
 async def _apply(
@@ -192,9 +191,10 @@ async def _apply(
     job: Job,
     scope: DeleteScope,
     *,
+    seen: JobState,
     actor: str,
 ) -> DeleteOutcome:
-    """鎖裡面、轉換之後的那一段。抽出來是為了讓 `job_lock` 包得住整段而不必再縮排一層。"""
+    """鎖裡面、比對過狀態之後的那一段。抽出來是為了讓 `job_lock` 包得住整段而不必再縮排一層。"""
     paths = await _scope_paths(session, job)
     # **先量再刪**：`st_nlink` 在刪掉第一個名字之後就變了，事後算不出「這一次空出多少」。
     before = _measure(
@@ -203,6 +203,8 @@ async def _apply(
 
     if scope.remove_torrent:
         await _remove_torrent(session, factory, job)
+    if not await transition(session, job, JobState.REMOVED, expected=seen):
+        raise JobRejectedError(JobRefusal.MOVED_ON, job.state.value)
 
     unlinked = _unlink_all(paths.links, roots=paths.route_targets) if scope.unlink else {}
     sources = _remove_all(paths.sources, roots=[paths.complete_root]) if scope.delete_files else 0

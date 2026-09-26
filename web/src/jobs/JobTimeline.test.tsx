@@ -477,6 +477,15 @@ describe('Job 時間線', () => {
     expect(line.getByText(/這一筆又回到 qBittorrent 裡了.*downloading/)).toBeInTheDocument()
   })
 
+  it('上一輪出錯、這一輪做完的那一筆說錯誤已經過去了（M4 票 01）', () => {
+    const line = render([
+      event({ type: 'recovered', payload: { from: 'round_failed', state: 'downloading' } }),
+    ])
+
+    expect(line.getByText('已接回')).toBeInTheDocument()
+    expect(line.getByText(/上一輪的錯誤沒有再發生/)).toBeInTheDocument()
+  })
+
   it('認不得的接回起點只畫色塊，不印出一條 i18n key', () => {
     const line = render([event({ type: 'recovered', payload: { from: 'something_new' } })])
 

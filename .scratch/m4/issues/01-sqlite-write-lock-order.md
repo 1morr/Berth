@@ -1,6 +1,6 @@
 # 01 — SQLite 寫鎖：加鎖順序與握著寫交易打網路
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Blocked by:** None — can start immediately
 
@@ -37,10 +37,34 @@ WAL 與 `busy_timeout=5000` 都開著（`berth/db/engine.py:21,38-40`），所�
 
 ## 驗收
 
-- [ ] 併發 repro 的整合測試：修之前紅、修之後綠（兩者都貼輸出）
-- [ ] 握鎖打網路的四處各有一條測試或一條閘門守著（例如在 Fake 的網路呼叫裡斷言 session 沒有待寫的改動 / 不在交易中）；閘門要做檔內雙向變異
-- [ ] pre-plan 失敗後下一輪成功：`job.error` 清空、時間線有一筆（整合測試）
-- [ ] plan §3.3 寫明交易紀律；§3.2 的「票 14b 的教訓」與它一致
-- [ ] lint、type、test 綠燈
+- [x] 併發 repro 的整合測試：修之前紅、修之後綠（兩者都貼輸出）
+- [x] 握鎖打網路的四處各有一條測試或一條閘門守著（例如在 Fake 的網路呼叫裡斷言 session 沒有待寫的改動 / 不在交易中）；閘門要做檔內雙向變異
+- [x] pre-plan 失敗後下一輪成功：`job.error` 清空、時間線有一筆（整合測試）
+- [x] plan §3.3 寫明交易紀律；§3.2 的「票 14b 的教訓」與它一致
+- [x] lint、type、test 綠燈
 
 ## Comments
+
+**紅燈（修之前）**：`test_write_discipline.py` 7 failed / 3 passed；併發那一條的原文是
+`sqlite3.OperationalError: database is locked … [SQL: INSERT INTO plans …]`，與試跑同一句。修之後 12 passed
+（code-review 之後補了鎖順序與每日補漏兩條）。鎖順序那一條另以「保留預抓 `files()`、改回握著寫交易逐筆拿鎖」
+的變異驗過會紅（`database is locked`）；pre-plan 那一條在 `test_plan.py`，停掉 `_note_round_recovery` 時紅。
+
+**選擇**：poller 是「網路先問完 → 照 hash 拿齊鎖 → 一個交易寫完」，不是逐筆 commit，理由在 plan §3.3 與
+progress.md 偏差。時間線用既有的 `recovered`（`from = round_failed`），沒有新事件型別。
+
+code-review 已處理：`_note_round_recovery` 包 try/except（兩個軸都抓到：它的 commit 撞鎖會衝出 `guarded`）；
+補鎖順序與每日補漏的閘門；`poll_downloads` 與 `delete_job` docstring 的不實之處；`subscribe_mikan` 改呼叫
+`_backfill`；`type: ignore` 補理由；CHANGELOG 與 progress.md。
+
+未處理（判斷題）：
+- `rss._record` 的 `keys` 與 `known` 兩者互斥卻是兩個可選參數（Standards）。改成各自解出 Series 再交進來要動
+  三個呼叫端，收益小，留著。
+- `_read_season` 回 `tuple[FeedItem, ...] | str`，呼叫端 `isinstance` 分支（Standards）：沿用舊 `_backfill`
+  回原文字串的形狀。
+- `LISTED_STATES` 不含 `missing_files` / `client_error`：接回時落在 `submitted` 的那一種晚一輪建清單（Spec，
+  已記在 plan §3.3 與 progress 偏差）。
+- 刪除的 CAS 在移除 torrent 之後：沒拿鎖改狀態的寫者會造成半套（Spec）。目前每一條改 Job 狀態的路都拿鎖，
+  docstring 與 progress 偏差已寫明。
+- 本票沒碰到的同類：`_plan` 的 TMDB 刷新（`snapshot_for_planning` → `_load`）與 mediainfo 是否在寫交易之後
+  才跑沒有閘門；importer 的 Jellyfin 通知同。有 repro 再開票。

@@ -1730,6 +1730,7 @@ const zhHant = {
         missing_files: 'qBittorrent 裡的檔案回來了，接著下載。',
         client_error: 'qBittorrent 的錯誤解除了，接著下載。',
         client_removed: '這一筆又回到 qBittorrent 裡了，接著下載。',
+        round_failed: '上一輪的錯誤沒有再發生，這一輪處理完了。',
       },
       roundFailed: 'Berth 處理這一筆時出錯，下一輪會再試：',
       // 理由翻譯，原文不翻譯：後面接的 `client_state` 是 qBittorrent 的機器字串。
@@ -4270,6 +4271,7 @@ const en: Translations<typeof zhHant> = {
         missing_files: 'The files are back in qBittorrent; downloading carries on.',
         client_error: 'The error in qBittorrent cleared; downloading carries on.',
         client_removed: 'This one is back in qBittorrent; downloading carries on.',
+        round_failed: 'The error from the last round did not come back; this round went through.',
       },
       roundFailed: 'Berth failed while processing this one and will try again next round:',
       issue: {
