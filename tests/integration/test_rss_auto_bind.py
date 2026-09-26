@@ -259,9 +259,10 @@ class TestPending:
         assert view.media_id is None
         assert codes(view.reasons)[-1] is BindReasonCode.NO_ROUTE
 
-    async def test_mikan_unreachable_leaves_the_others_pending_as_lookup_failed(
+    async def test_mikan_unreachable_leaves_the_others_pending_to_retry(
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
+        """連不上是暫時的：留在待綁定、晚點再認（M4 票 14 的 `test_rss_auto_bind_retry`）。"""
         _, factory = await moored(session, roots)
         feed = await add_feed(session, url=FEED_URL, name="Mikan")
 
@@ -269,10 +270,10 @@ class TestPending:
 
         others = [row for row in await list_series(session) if row.key != KIMI_KEY]
         assert len(others) == 10
-        assert {tuple(codes(row.reasons)) for row in others} == {(BindReasonCode.LOOKUP_FAILED,)}
+        assert {tuple(codes(row.reasons)) for row in others} == {(BindReasonCode.LOOKUP_RETRY,)}
         assert all(row.media_id is None and row.candidates == () for row in others)
 
-    async def test_tmdb_down_leaves_it_pending_as_lookup_failed(
+    async def test_tmdb_down_leaves_it_pending_to_retry(
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
         tmdb = kimi_tmdb()
@@ -285,7 +286,7 @@ class TestPending:
         assert polled.items == 12
         view = next(row for row in await list_series(session) if row.key == KIMI_KEY)
         assert view.media_id is None
-        assert codes(view.reasons) == [BindReasonCode.LOOKUP_FAILED]
+        assert codes(view.reasons) == [BindReasonCode.LOOKUP_RETRY]
         assert "connection refused" in str(view.reasons[0].params["detail"])
 
     async def test_same_title_another_year_stays_pending_with_the_candidate(

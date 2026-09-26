@@ -52,9 +52,10 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import ColumnElement
 
-from berth.adapters.budget import BudgetExhaustedError
-from berth.adapters.http import ServiceError
+from berth.adapters.budget import BudgetExhaustedError, site_of
+from berth.adapters.http import ServiceError, is_transient
 from berth.adapters.rss import FeedFetcher, FeedItem, acgrip, mikan, nyaa
+from berth.adapters.tmdb import BASE_URL as TMDB_BASE_URL
 from berth.domain import (
     BindReason,
     BindReasonCode,
@@ -72,6 +73,7 @@ from berth.domain import (
     SkipCode,
     SkipReason,
     Tags,
+    TmdbProblem,
     because,
     collection_type_for,
     skipped,
@@ -88,7 +90,7 @@ from berth.services.clients import ServiceClientFactory, feed_fetcher
 from berth.services.commands import Effect, command
 from berth.services.discover import search_media
 from berth.services.jobs import JobRejectedError, JobSource, actor_of, add_download, freeze
-from berth.services.media import read_snapshot
+from berth.services.media import read_snapshot_checked
 from berth.services.plan import parse_context
 from berth.services.settings import read_settings, update_settings
 from berth.services.steps import message
@@ -101,6 +103,14 @@ RECENT_ITEMS = 50
 #: 自動綁定時每一個搜尋詞取前幾筆去讀詳情。一部作品是 3 + 季數個 TMDB 請求，TMDB 的相關性排序
 #: 多半把要的那一部放在最前面；搜尋詞最多三個（`parser.binding.MAX_SEARCHES`）。
 SEARCH_DEPTH = 3
+
+#: 自動綁定暫時查不到時（連不上、逾時、限流、5xx），第幾次重認之前等多久（M4 票 14，plan §3.2）；
+#: 用完落到 `lookup_failed`。一個 Series 最多認 1 + 3 次、分散在 17 小時裡：試跑那一次的 TMDB
+#: 同日稍後就讀得到，而壞掉的番組頁也不會每 15 分鐘被打一次（brief §15「綁定」原本的顧慮）。
+LOOKUP_RETRIES = (timedelta(hours=1), timedelta(hours=4), timedelta(hours=12))
+
+#: TMDB 在重認理由裡的站名，與請求預算同一種鍵（`site_of`）。
+_TMDB_SITE = site_of(TMDB_BASE_URL)
 
 #: 自動綁定的 `bound_by`（`events.actor` 的 `system`）。
 SYSTEM = actor_of(None)
@@ -577,9 +587,9 @@ async def poll_feed(
             if sent is not None:
                 bound += 1
                 submitted += sent
-        # 上一輪被請求預算擋下、還沒認的（M3 票 20）：只有它們在長出來之後的輪詢裡重認。這一輪
-        # 才長出來的剛認過，不再撞一次。
-        for series_id in await _deferred_lookups(session, feed_id, skip=grown):
+        # 上一輪被請求預算擋下的（M3 票 20）與暫時查不到、重認時間到了的（M4 票 14）：只有它們在
+        # 長出來之後的輪詢裡重認。這一輪才長出來的剛認過，不再撞一次。
+        for series_id in await _due_lookups(session, feed_id, moment, skip=grown):
             sent = await _auto_bind(session, factory, fetcher, feed, series_id, moment)
             if sent is not None:
                 bound += 1
@@ -1231,13 +1241,21 @@ async def _waiting_series(session: AsyncSession, feed_id: int) -> list[int]:
 
 
 class _LookupError(Exception):
-    """番組頁或 TMDB 這一次查不到。訊息是原文（英文），進 `lookup_failed` 的 `detail`。"""
+    """番組頁或 TMDB 這一次查不到。訊息是原文（英文），進理由的 `detail`。"""
+
+    def __init__(self, detail: str, *, site: str, transient: bool) -> None:
+        super().__init__(detail)
+        #: 哪一站，請求預算的鍵。
+        self.site = site
+        #: 等一下再問可能就好了（`adapters.http.is_transient`）。
+        self.transient = transient
 
 
-async def _deferred_lookups(
-    session: AsyncSession, feed_id: int, *, skip: Sequence[int] = ()
+async def _due_lookups(
+    session: AsyncSession, feed_id: int, moment: datetime, *, skip: Sequence[int] = ()
 ) -> list[int]:
-    """這個 Feed 帶到、上一次被請求預算擋下還沒認的 RSS Series（`lookup_deferred`，M3 票 20）。"""
+    """這個 Feed 帶到、該再認一次的 RSS Series：上一次被請求預算擋下的（`lookup_deferred`，
+    M3 票 20），與暫時查不到、重認的時間到了的（`lookup_retry`，M4 票 14）。"""
     rows = await session.scalars(
         select(RssSeries)
         .where(
@@ -1246,12 +1264,38 @@ async def _deferred_lookups(
         )
         .order_by(RssSeries.id)
     )
-    return [
-        row.id
-        for row in rows
-        if row.id not in skip
-        and any(reason.code is BindReasonCode.LOOKUP_DEFERRED for reason in _reasons(row))
-    ]
+    return [row.id for row in rows if row.id not in skip and _due(_reasons(row), moment)]
+
+
+def _due(reasons: Sequence[BindReason], moment: datetime) -> bool:
+    if any(reason.code is BindReasonCode.LOOKUP_DEFERRED for reason in reasons):
+        return True
+    retrying = _retrying(reasons)
+    return retrying is not None and datetime.fromisoformat(str(retrying.params["at"])) <= moment
+
+
+def _retrying(reasons: Sequence[BindReason]) -> BindReason | None:
+    """排著的那一次重認（`lookup_retry`）；沒有是 `None`。重認的排程只存在這一條理由裡。"""
+    return next((one for one in reasons if one.code is BindReasonCode.LOOKUP_RETRY), None)
+
+
+def _retry(series: RssSeries, failed: _LookupError, moment: datetime) -> BindReason | None:
+    """暫時的失敗、次數還沒用完時，下一次重認的理由；否則 `None`（落到 `lookup_failed`）。"""
+    previous = _retrying(_reasons(series))
+    done = int(previous.params["attempt"]) if previous is not None else 0
+    if not failed.transient or done >= len(LOOKUP_RETRIES):
+        return None
+    return because(
+        BindReasonCode.LOOKUP_RETRY,
+        site=failed.site,
+        attempt=done + 1,
+        at=(moment + LOOKUP_RETRIES[done]).isoformat(),
+        detail=str(failed),
+    )
+
+
+def _given_up(failed: _LookupError) -> BindReason:
+    return because(BindReasonCode.LOOKUP_FAILED, detail=str(failed))
 
 
 async def _auto_bind(
@@ -1264,9 +1308,14 @@ async def _auto_bind(
 ) -> int | None:
     """第一次見到的 RSS Series 去 TMDB 認作品（brief §15「綁定」、票 09）。
 
-    綁上了回送出幾筆，沒綁是 `None`。**只在長出來的那一輪做**：查不到（Mikan 或 TMDB 連不上）也
-    不在之後每一輪重試——那會讓一個壞掉的番組頁每 15 分鐘打一次；留在待綁定、理由寫
-    `lookup_failed`，人手上有搜尋。人拆掉的自動綁定也因此不會被下一輪綁回去。
+    綁上了回送出幾筆，沒綁是 `None`。**在長出來的那一輪做**，之後不在每一輪重認——那會讓一個壞掉的
+    番組頁每 15 分鐘打一次，人拆掉的自動綁定也會被綁回去。例外兩種（`_due_lookups`）：被請求預算
+    擋下的，與**暫時**查不到的（連不上、逾時、限流、5xx，M4 票 14）——後者照 `LOOKUP_RETRIES`
+    退避、有上限地重認；用完了、或再問也一樣的（404、回的不是那個服務）留在待綁定、理由寫
+    `lookup_failed`，人手上有搜尋。
+
+    **一部候選讀不到不拖垮整次**：其餘的照判，判得出來就綁；判不出來而缺的那幾部是暫時讀不到的，
+    照暫時的失敗晚點再認（缺的那一部可能正是它）；一部都沒讀到才是查不到。
 
     有把握與否是 `parser.binding.judge` 的事；Route 在這裡挑：TMDB 的類型推得出電影或劇集，
     同類型只有一條啟用中的 Route 就是它；不只一條時用 `feed` 的 Route（它得是其中一條，M3 票
@@ -1277,21 +1326,30 @@ async def _auto_bind(
         return None
     try:
         clues = await _clues(fetcher, series)
-        shots = await _candidates(session, factory, clues)
+        shots, missed = await _candidates(session, factory, clues)
     except BudgetExhaustedError as refused:
-        # 預算擋下的不是「查不到」：記成延後，下一輪輪到這個 Feed 時再認（`_deferred_lookups`）。
-        await _note(
-            session, series_id, (because(BindReasonCode.LOOKUP_DEFERRED, site=refused.site),)
-        )
+        # 預算擋下的不是「查不到」：記成延後，下一輪輪到這個 Feed 時再認（`_due_lookups`）。
+        # 已經在重認的留著那一條：次數照舊算，不因為被擋一次就從頭數。
+        retrying = _retrying(_reasons(series))
+        deferred = because(BindReasonCode.LOOKUP_DEFERRED, site=refused.site)
+        await _note(session, series_id, (deferred, *([retrying] if retrying else [])))
         return None
     except _LookupError as failed:
         logger.info("rss series lookup failed", extra={"series": series_id, "error": str(failed)})
-        await _note(
-            session, series_id, (because(BindReasonCode.LOOKUP_FAILED, detail=str(failed)),)
-        )
+        await _note(session, series_id, (_retry(series, failed, moment) or _given_up(failed),))
         return None
 
     verdict = judge(clues, shots)
+    if verdict.media is None and missed is not None:
+        retry = _retry(series, missed, moment)
+        if retry is not None or not shots:
+            logger.info(
+                "rss series lookup incomplete", extra={"series": series_id, "error": str(missed)}
+            )
+            await _note(session, series_id, (retry or _given_up(missed),))
+            return None
+        # 讀到的幾部判不出來、讀不到的那一部不再重認：兩件事都說，讀不到的那一部可能正是它。
+        verdict = replace(verdict, reasons=(*verdict.reasons, _given_up(missed)))
     ids = tuple(build_media_id(shot.kind, shot.tmdb_id) for shot in verdict.candidates)
     if verdict.media is None:
         await _note(session, series_id, verdict.reasons, ids)
@@ -1336,38 +1394,54 @@ async def _clues(fetcher: FeedFetcher, series: RssSeries) -> SeriesClues:
     """
     if series.mikan_bangumi_id is None:
         return SeriesClues(title="", premiere=None, release_title=series.title_raw, show_page=False)
+    url = mikan.bangumi_url(series.mikan_bangumi_id)
     try:
-        page = await fetcher.fetch(mikan.bangumi_url(series.mikan_bangumi_id))
+        page = await fetcher.fetch(url)
     except BudgetExhaustedError:
         raise
     except ServiceError as exc:
-        raise _LookupError(f"bangumi page: {message(exc)}") from exc
+        raise _LookupError(
+            f"bangumi page: {message(exc)}", site=site_of(url), transient=is_transient(exc)
+        ) from exc
     found = mikan.bangumi_page(page.decode("utf-8", errors="replace"))
     return SeriesClues(title=found.title, premiere=found.premiere, release_title=series.title_raw)
 
 
 async def _candidates(
     session: AsyncSession, factory: ServiceClientFactory, clues: SeriesClues
-) -> tuple[MediaSnapshot, ...]:
-    """線索去 TMDB 搜，每個詞取前 `SEARCH_DEPTH` 筆讀回快照。
+) -> tuple[tuple[MediaSnapshot, ...], _LookupError | None]:
+    """線索去 TMDB 搜，每個詞取前 `SEARCH_DEPTH` 筆讀回快照。回（讀得到的, 讀不到的那一次）。
 
-    探索頁同一支搜尋與詳情頁同一支讀取：同一份快取、同一條 24 小時規則。
+    一個詞搜不到、一部讀不到都跳過、其餘照讀（M4 票 14）；缺了幾次只回一次，暫時的優先——只要有
+    一次是暫時的，這一次的缺口就可能補得回來。探索頁同一支搜尋與詳情頁同一支讀取：同一份快取、
+    同一條 24 小時規則。
     """
+    missed: list[_LookupError] = []
     ids: dict[str, None] = {}
     for term in search_terms(clues):
         found = await search_media(session, factory, term)
         if found.problem is not None:
-            raise _LookupError(f"tmdb search: {found.detail or found.problem.value}")
+            missed.append(_tmdb_miss(f"tmdb search: {found.detail}", found.problem))
+            continue
         for item in found.items[:SEARCH_DEPTH]:
             if could_be(item.kind, item.year, clues.premiere):
                 ids.setdefault(item.id, None)
     shots: list[MediaSnapshot] = []
     for media_id in ids:
-        shot = await read_snapshot(session, factory, media_id)
-        if shot is None:
-            raise _LookupError(f"tmdb detail: {media_id} could not be read")
-        shots.append(shot)
-    return tuple(shots)
+        read = await read_snapshot_checked(session, factory, media_id)
+        if read.snapshot is None:
+            missed.append(_tmdb_miss(f"tmdb detail: {media_id}: {read.detail}", read.problem))
+            continue
+        shots.append(read.snapshot)
+    missed.sort(key=lambda one: not one.transient)
+    return tuple(shots), (missed[0] if missed else None)
+
+
+def _tmdb_miss(detail: str, problem: TmdbProblem | None) -> _LookupError:
+    """TMDB 那一頭讀不到。`unreachable` 是暫時的；它也包含「回的不是 TMDB」（`services.media` 把
+    `ServiceError` 一概歸成它），分不開，照暫時的算——多的只是上限內的幾次重認。"""
+    transient = problem is TmdbProblem.UNREACHABLE
+    return _LookupError(detail, site=_TMDB_SITE, transient=transient)
 
 
 async def _routes_for(session: AsyncSession, kind: MediaKind) -> list[Route]:

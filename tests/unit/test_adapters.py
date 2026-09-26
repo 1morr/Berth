@@ -9,7 +9,19 @@ from typing import Any
 
 import pytest
 
-from berth.adapters.http import HttpSession, is_dns_failure
+from berth.adapters.http import (
+    AuthFailedError,
+    HttpSession,
+    NotFoundError,
+    ProtocolMismatchError,
+    ServiceBusyError,
+    ServiceError,
+    ServiceNotDeployedError,
+    ServiceUnavailableError,
+    is_dns_failure,
+    is_transient,
+    raise_for_status,
+)
 from berth.adapters.prowlarr.config_file import API_KEY_ENV, read_api_key, read_api_key_from_config
 from berth.adapters.qbittorrent import (
     BERTH_TAG,
@@ -88,6 +100,59 @@ async def test_opening_a_session_does_not_build_another_ssl_context(
         await session.aclose()
 
     assert built == []
+
+
+class TestStatusClassification:
+    """狀態碼 → 例外（M4 票 14）：429 與 5xx 是「這一次不行」，不是「接錯了服務」。"""
+
+    @pytest.mark.parametrize("status", [429, 500, 502, 504])
+    def test_rate_limits_and_server_errors_are_unavailable(self, status: int) -> None:
+        with pytest.raises(ServiceUnavailableError, match=str(status)):
+            raise_for_status("GET /tv/312949", status)
+
+    def test_503_is_still_loading(self) -> None:
+        with pytest.raises(ServiceBusyError):
+            raise_for_status("GET /System/Info", 503)
+
+    @pytest.mark.parametrize("status", [401, 403])
+    def test_credentials(self, status: int) -> None:
+        with pytest.raises(AuthFailedError):
+            raise_for_status("GET /x", status)
+
+    @pytest.mark.parametrize("status", [400, 404, 405, 418, 422])
+    def test_other_client_errors_are_still_a_mismatch(self, status: int) -> None:
+        with pytest.raises(ProtocolMismatchError):
+            raise_for_status("GET /x", status)
+
+    @pytest.mark.parametrize("status", [200, 204, 302])
+    def test_success_passes(self, status: int) -> None:
+        raise_for_status("GET /x", status)
+
+
+class TestTransient:
+    """哪些失敗等一下再試可能就好了：自動綁定的有限重試讀它（M4 票 14）。"""
+
+    @pytest.mark.parametrize(
+        "error",
+        [
+            ServiceUnavailableError("GET /x: 502"),
+            ServiceBusyError("GET /x: 503 still loading"),
+            ServiceNotDeployedError("GET /x: host does not resolve"),
+        ],
+    )
+    def test_unreachable_is_transient(self, error: ServiceError) -> None:
+        assert is_transient(error)
+
+    @pytest.mark.parametrize(
+        "error",
+        [
+            ProtocolMismatchError("GET /x: response is not JSON"),
+            NotFoundError("tv/1: no such title"),
+            AuthFailedError("GET /x: 401"),
+        ],
+    )
+    def test_an_answer_that_will_not_change_is_not(self, error: ServiceError) -> None:
+        assert not is_transient(error)
 
 
 def test_api_key_read_from_the_mounted_config(tmp_path: Path) -> None:

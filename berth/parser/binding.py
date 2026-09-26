@@ -11,6 +11,12 @@
    它就是「年份」那一半，而且比年份細：同名重拍、同一部的第二季都分得開。
 3. 這樣的作品**只有一部**。
 
+**季名**（M4 票 14）：TMDB 的作品名不帶季名，`Re：从零开始的异世界生活 第四季` 原樣去搜、
+去比都對不上。季名（`parser.seasons`）從搜尋詞與比對的線索裡拆出來，拆出來的季號改當第 2 條的
+線索：只比**那一季**播出的期間（TMDB 沒有那一季時比依播出日切出的那一輪，與規劃同一個讀法，
+`mapping.season_airing`）。只比那一季，不是優先比那一季：第二季的番組頁寫的若是第一季的開播日，
+兩條線索互相矛盾——那正是續作綁到前作的樣子。
+
 其餘留在待綁定，理由碼各不相同；認得出標題的那幾部當成候選，畫面列出來讓人一鍵選。
 """
 
@@ -21,10 +27,12 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from datetime import date, timedelta
 
-from berth.domain import BindReason, MediaKind, MediaSnapshot, because
+from berth.domain import BindReason, MediaKind, MediaSnapshot, because, episode_label
 from berth.domain import BindReasonCode as Code
 from berth.parser.cjk import normalize_cjk, undecorate
+from berth.parser.mapping import season_airing
 from berth.parser.release import parse_release
+from berth.parser.seasons import split_season
 from berth.parser.title import normalize_title
 
 #: 開播日期要落在 TMDB 那一季首播的前後幾天內。起點 14 天：Mikan 寫的多半是日本首播，TMDB 也是，
@@ -38,7 +46,7 @@ MAX_SEARCHES = 3
 #: 標題到這裡為止：方括號與圓括號（集號與 tags）、` - 12` / ` - S01E10` / ` - 第12话` /
 #: ` - [01-12]`，與沒有破折號的 `S01E12`、`EP12`、`01-12`、`第12话`。**季號不在這裡**：
 #: `Season 3`、`第三季` 是標題的一部分，第三季是另一個 RSS Series——所以區間的 `-` 兩側不許有空白，
-#: `Season 3 - 08` 不是區間。
+#: `Season 3 - 08` 不是區間。季名要拆的是搜尋詞與比對（`search_terms`、`_equal_title`），不是這裡。
 _TITLE_END = re.compile(
     r"[\[(]"
     r"|\s+-\s+(?=\d|S\d|EP?\d|第|\[)"
@@ -129,13 +137,15 @@ def title_key(release_title: str) -> str | None:
 
 
 def search_terms(clues: SeriesClues) -> tuple[str, ...]:
-    """拿去搜 TMDB 的字：番組名，接著骨幹從最後一段往前（英文或羅馬字多半在最後）。最多三個。"""
+    """拿去搜 TMDB 的字：番組名，接著骨幹從最後一段往前（英文或羅馬字多半在最後），季名拿掉。
+    最多三個。"""
     wanted = [clues.title, *reversed(skeleton(clues.release_title))]
     seen: dict[str, str] = {}
     for term in wanted:
-        key = normalize_title(term)
+        bare = _unseasoned(term)
+        key = normalize_title(bare)
         if key and key not in seen:
-            seen[key] = term.strip()
+            seen[key] = bare
     return tuple(seen.values())[:MAX_SEARCHES]
 
 
@@ -155,18 +165,18 @@ def could_be(kind: MediaKind, year: int | None, premiere: date | None) -> bool:
 
 def judge(clues: SeriesClues, candidates: Sequence[MediaSnapshot]) -> BindVerdict:
     """線索 + 搜回來的作品 → 綁哪一部，或為什麼不綁。"""
-    named = [(shot, found) for shot in candidates if (found := _equal_title(clues, shot))]
+    named = [(shot, *found) for shot in candidates if (found := _equal_title(clues, shot))]
     if not named:
         return BindVerdict(media=None, candidates=(), reasons=(because(Code.NO_CANDIDATE),))
-    titled = tuple(_unique(shot for shot, _ in named))
+    titled = tuple(_unique(shot for shot, _, _ in named))
     if clues.premiere is None:
         blind = Code.NO_PREMIERE if clues.show_page else Code.NO_SHOW_PAGE
         return BindVerdict(media=None, candidates=titled, reasons=(because(blind),))
 
     near = [
         (shot, title_reason, dated)
-        for shot, title_reason in named
-        if (dated := _premiere_near(clues.premiere, shot)) is not None
+        for shot, title_reason, season in named
+        if (dated := _dated(clues.premiere, shot, season)) is not None
     ]
     fitting = tuple(_unique(shot for shot, _, _ in near))
     if not fitting:
@@ -188,55 +198,86 @@ def judge(clues: SeriesClues, candidates: Sequence[MediaSnapshot]) -> BindVerdic
             candidates=fitting,
             reasons=(because(Code.SEVERAL_CANDIDATES, number=len(fitting)),),
         )
-    shot, title_reason, (season, first_aired) = near[0]
-    date_reason = (
-        because(
-            Code.RELEASE_NEAR, premiere=clues.premiere.isoformat(), aired=first_aired.isoformat()
-        )
-        if shot.kind is MediaKind.MOVIE
-        else because(
-            Code.PREMIERE_NEAR,
-            premiere=clues.premiere.isoformat(),
-            season=season,
-            aired=first_aired.isoformat(),
-        )
-    )
+    shot, title_reason, date_reason = near[0]
     return BindVerdict(media=shot, candidates=(shot,), reasons=(title_reason, date_reason))
 
 
-def _equal_title(clues: SeriesClues, shot: MediaSnapshot) -> BindReason | None:
-    """哪一條線索與這部作品的哪一個名字相等。沒有是 `None`。"""
+def _equal_title(clues: SeriesClues, shot: MediaSnapshot) -> tuple[BindReason, int | None] | None:
+    """哪一條線索與這部作品的哪一個名字相等，連同那條線索拆出來的季號。沒有是 `None`。
+
+    原樣相等的先算：TMDB 有的作品名本身就帶季名（續作另開一部），那時季名是名字的一部分，不是季號。
+    """
     known = [
         (normalize_title(name), name)
         for name in (shot.title, shot.title_en, shot.title_original, *shot.titles)
     ]
     for clue in (clues.title, *skeleton(clues.release_title)):
-        target = normalize_title(clue)
-        if not target:
-            continue
-        for key, name in known:
-            if key == target:
-                return because(Code.TITLE_EQUAL, clue=clue.strip(), title=name)
+        bare, season = split_season(clue)
+        tries = ((clue, None),) if season is None else ((clue, None), (bare, season))
+        for text, named in tries:
+            target = normalize_title(text)
+            if not target:
+                continue
+            for key, name in known:
+                if key == target:
+                    return because(
+                        Code.TITLE_EQUAL, clue=text.strip(_EDGES + " "), title=name
+                    ), named
     return None
 
 
-def _premiere_near(premiere: date, shot: MediaSnapshot) -> tuple[int, date] | None:
-    """離 `premiere` 最近、又在窗口內的那一季（季號, 首播日）。電影只有上映日，季號記 0。"""
+def _dated(premiere: date, shot: MediaSnapshot, season: int | None) -> BindReason | None:
+    """開播日對得上這部作品的哪裡，那一條依據；對不上是 `None`。
+
+    電影比上映日；沒寫季號的劇集比各季首播，取最近的一季；名字寫了季號時比**那一季播出的期間**——
+    它的任何一集前後 `PREMIERE_WINDOW` 內（TMDB 沒有那一季時是依播出日切出的那一輪，
+    `mapping.season_airing`）。不只比首播：Mikan 把一季的第二個 cour 另開一個番組、寫它自己的開播日
+    （Re:Zero 第四季的「夺还篇」是 TMDB 那一輪的第 12 集，2026-09-26 實測），而同名重拍差的是年，
+    一樣落不進去。
+    """
+    shown = premiere.isoformat()
     if shot.kind is MediaKind.MOVIE:
-        dated = [(0, shot.first_air_date)]
-    else:
-        dated = [(row.season_number, row.air_date) for row in shot.seasons if row.season_number > 0]
-        if not dated:
-            dated = [(1, shot.first_air_date)]
+        found = _closest(premiere, [(shot.first_air_date, 0)])
+        if found is None:
+            return None
+        return because(Code.RELEASE_NEAR, premiere=shown, aired=found[0].isoformat())
+    if season is not None:
+        number, rows = season_airing(shot, season)
+        found = _closest(premiere, [(row.air_date, row.episode_number) for row in rows])
+        if found is None:
+            return None
+        aired, episode = found
+        return because(
+            Code.SEASON_AIRING,
+            premiere=shown,
+            season=season,
+            episode=episode_label(number, episode),
+            aired=aired.isoformat(),
+        )
+    dated = [(row.air_date, row.season_number) for row in shot.seasons if row.season_number > 0]
+    found = _closest(premiere, dated or [(shot.first_air_date, 1)])
+    if found is None:
+        return None
+    aired, number = found
+    return because(Code.PREMIERE_NEAR, premiere=shown, season=number, aired=aired.isoformat())
+
+
+def _closest(premiere: date, dated: Sequence[tuple[date | None, int]]) -> tuple[date, int] | None:
+    """離 `premiere` 最近、又在窗口內的那一個（日期, 它帶著的號碼）。"""
     near = [
-        (abs(aired - premiere), number, aired)
-        for number, aired in dated
+        (abs(aired - premiere), aired, number)
+        for aired, number in dated
         if aired is not None and abs(aired - premiere) <= PREMIERE_WINDOW
     ]
     if not near:
         return None
-    _, number, aired = min(near)
-    return number, aired
+    _, aired, number = min(near)
+    return aired, number
+
+
+def _unseasoned(name: str) -> str:
+    """拿掉季名的名字（`parser.seasons`），前後的分隔符一起收掉。"""
+    return split_season(name)[0].strip(_EDGES + " ")
 
 
 def _unique(shots: Iterable[MediaSnapshot]) -> list[MediaSnapshot]:

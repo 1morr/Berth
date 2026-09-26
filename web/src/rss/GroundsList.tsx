@@ -5,7 +5,7 @@ import { groundText } from './grounds'
 
 /** 一串自動綁定的理由，一條一行。前面那一句（`lead`）說這串是依據還是為什麼。 */
 export function Grounds({ lead, reasons }: { lead: string; reasons: readonly BindReason[] }) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   if (reasons.length === 0) return null
   return (
     <div className="grid gap-0.5 text-xs text-ink-dim">
@@ -14,7 +14,7 @@ export function Grounds({ lead, reasons }: { lead: string; reasons: readonly Bin
         {reasons.map((reason, index) => (
           // 參數是原文（標題、日期、Route 名），但整句是翻譯的，不拆成 `.value` 片段。
           <li key={`${reason.code}-${index}`} className="max-w-prose wrap-anywhere">
-            {groundText(t, reason)}
+            {groundText(t, reason, i18n.language)}
           </li>
         ))}
       </ul>

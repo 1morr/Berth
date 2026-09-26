@@ -521,6 +521,21 @@ def _runs(media: MediaSnapshot) -> tuple[_Run, ...]:
     return tuple(_Run(number, season, rows) for number, (season, rows) in enumerate(cours, start=1))
 
 
+def season_airing(media: MediaSnapshot, season: int) -> tuple[int, tuple[EpisodeSnapshot, ...]]:
+    """寫著「第 `season` 季」的發佈在 TMDB 上是哪幾集，與規劃同一個讀法：TMDB 有那一季就是它的
+    每一集；沒有時是按播出間隔切出的第 `season` 輪（虛擬季，`_virtual`）。回（那幾集在 TMDB 的季號,
+    那幾集），都沒有是空的。自動綁定拿它們的播出日比 Mikan 的開播日（M4 票 14）。
+    """
+    found = _season(media, season)
+    if found is not None and season > 0:
+        return season, tuple(sorted(found.episodes, key=lambda row: row.episode_number))
+    runs = _runs(media)
+    if not 1 <= season <= len(runs):
+        return season, ()
+    run = runs[season - 1]
+    return run.season.season_number, run.rows
+
+
 def _published_day(context: ParseContext) -> date | None:
     """推測虛擬季要用的發佈日。RSS Series 的 offset 是人說的，有值就不推測（plan §4.4）。"""
     if context.published_at is None or context.episode_offset is not None:

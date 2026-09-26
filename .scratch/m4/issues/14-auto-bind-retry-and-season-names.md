@@ -1,6 +1,6 @@
 # 14 — 自動綁定：暫時失敗有限重試、一個候選壞掉不拖垮整次、季名不進搜尋詞
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Blocked by:** None — can start immediately（與 01 碰同一個模組 `services/rss.py`，兩張不要同時開）
 
@@ -33,11 +33,60 @@
 
 ## 驗收
 
-- [ ] 兩條 repro 修前紅、修後綠（貼輸出）
-- [ ] 一個候選壞掉時其餘照判（單元 / 整合測試，雙向：全部壞掉仍是查不到）
-- [ ] 暫時失敗在上限內重試成功、用完落到 `lookup_failed`、非暫時性的不重試（整合測試）；同一個番組頁的請求次數有上限（測試斷言預算用量）
-- [ ] 季名規則逐寫法雙向測試；`berth bench` 輸出貼上、`auto_wrong` 不升
-- [ ] brief §15、plan §3.2、§4.4 同步
-- [ ] lint、type、test 綠燈
+- [x] 兩條 repro 修前紅、修後綠（貼輸出）
+- [x] 一個候選壞掉時其餘照判（單元 / 整合測試，雙向：全部壞掉仍是查不到）
+- [x] 暫時失敗在上限內重試成功、用完落到 `lookup_failed`、非暫時性的不重試（整合測試）；同一個番組頁的請求次數有上限（測試斷言預算用量）
+- [x] 季名規則逐寫法雙向測試；`berth bench` 輸出貼上、`auto_wrong` 不升
+- [x] brief §15、plan §3.2、§4.4 同步
+- [x] lint、type、test 綠燈
 
 ## Comments
+
+**2026-09-26 實作（session 紀錄在 `docs/progress.md`）**
+
+- **修前紅**：修之前的程式（`fe5a5cd` 的 worktree，只換上新測試與替身的錯誤鉤子）跑兩條 repro：
+
+  ```
+  FAILED test_rss_auto_bind_retry.py::TestTransientFailureIsRetried::test_a_detail_that_failed_once_binds_on_the_retry[502]
+    AssertionError: assert 0 == 1   (PollOutcome(...).bound)
+  FAILED ...::test_a_detail_that_failed_once_binds_on_the_retry[429]
+    AssertionError: assert 0 == 1
+  FAILED ...::TestSeasonName::test_a_release_named_with_its_season_binds_to_the_merged_work
+    AssertionError: assert (None, '') == ('tv:65942', 'system')
+  3 failed in 14.40s
+  ```
+
+  修後 `tests/integration/test_rss_auto_bind_retry.py` 12 passed。
+- **`berth bench`**（修前、修後相同，`auto_wrong` 0 = baseline）：
+  `overall 391 391/391 194/194 171/171 177 0 80 0 42 41 37 14`，high 0/84、medium 0/93 錯。
+  bench 不涵蓋綁定；**「綁定的語料」是 `scripts/experiments/rss_auto_bind.py` 對真的 Mikan 與 TMDB 重量**：
+  11 部認得 11 部、錯 0 部（2026-09-25 是 10 部），結果記在 `docs/research/rss-sources.md` §2.8。單元測試另補
+  Re:Zero 的真實形狀（`test_rss_binding.py::TestSeasonNames`）。
+- **第 4 點推翻了票面「優先比那一季」**：名字寫了季號時**只比那一季**，而且比那一季**播出的期間**（任何一集
+  前後 14 天），不只首播。重量時發現 Mikan 的番組 4052 是 Re:Zero 第四季的第二個 cour「夺还篇」（放送开始
+  2026-08-12），TMDB 65942 把四季全部放在第 1 季、這一天是第 78 集；只比首播會是 `premiere_far`。「優先」的
+  退路（對不上就比別季）會讓第二季的番組頁綁到只有第一季對得上日期的作品——續作綁到前作。新理由碼
+  `season_airing`（說出是 TMDB 的哪一集），取代實作中途的 `run_near`。
+- **第 5 點選了兩個選項以外的第三條：人在待綁定那一列按「綁定 → 搜尋 TMDB」**。產品裡沒有「重新認」這顆鍵，
+  做一顆是新的 UI 功能；一次性重試入口（migration 把那兩列排進重認）是替兩列資料留下的永久程式碼，而且
+  `lookup_retry` 的句子（「這一次讀不到」）套在 `no_candidate` 的那一列上是假話。票之後新發生的暫時失敗會自己
+  重認，用完與再問也一樣的正是人手綁定要接的。**代價**：綁定框預填的搜尋詞（`web/src/rss/searchTerm.ts`）
+  不拆季名，Re:Zero 那一列預填「Re：从零开始的异世界生活 第四季」會搜不到，要人自己刪掉「第四季」。
+- **分類改動的波及面**（票面要求先盤點）：接 `ProtocolMismatchError` 的只有 `services/setup.py`（精靈偵測）與
+  `services/oneshot.py`（一次性 RSS 連結）；429 / 5xx 現在分別落到「連不上」（使用者自己填的位址當場給結論，
+  compose 主機名過了視窗是逾時而不是既有）與 `feed_unreachable`，兩處都補了雙向測試。`.torrent` 下載
+  （`adapters/torrent.py`）也改走同一支 `raise_for_status`：429 / 5xx 是 `ServiceUnavailableError`、503 是
+  `ServiceBusyError`；下游只接 `ServiceError`，送單被拒的原文換一種，行為不變。
+- **已知取捨**：
+  - 一部候選讀不到時其餘照判（票面第 2 點），所以自動綁定第 3 條「這樣的作品只有一部」在缺一部時驗不全：
+    讀不到的那一部如果也對得上，本該是 `several_candidates` 卻會綁上讀得到的那一部。要同名、開播日也在 14 天內
+    的兩部作品才碰得到。
+  - TMDB 的 `unreachable`（`TmdbProblem`）也包含「回的不是 TMDB」，分不開，照暫時的算，多的只是上限內的三次重認。
+  - 重認用完、而讀得到的幾部判不出來時，理由是判定的那一條加 `lookup_failed`（code-review 抓到只寫判定的理由會
+    誤導人，已修）。
+- **code-review 沒處理的發現**：
+  - `_equal_title` 與 `_candidates` 回位置 tuple（Data Clumps），各只有一個呼叫端，沒有抽成具名型別。
+  - `services/media.read_snapshot` 現在只是轉呼叫 `read_snapshot_checked(...).snapshot`；它在 `services/search.py`
+    還有兩個呼叫端，留著。
+  - 綁定框的預填（`searchTerm.ts`）是 `parser.binding.skeleton` 在前端的一份手抄，不拆季名。修法是後端在
+    `SeriesView` 送出拆好的搜尋詞、刪掉前端那一份；沒開票。

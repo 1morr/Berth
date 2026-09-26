@@ -15,15 +15,13 @@ import re
 from pydantic import BaseModel, ConfigDict
 
 from berth.domain import Lang
-from berth.parser.cjk import CN_DIGITS, PART_CN, SEASON_CN, langs_in
+from berth.parser.cjk import PART_CN, langs_in
+from berth.parser.seasons import SEASON_CN, SEASON_LATIN, SEASON_ORDINAL, numeral
 
-#: `Season 2`、`Season.2`、`S2`、`S02`。`S` 後面要接數字，`Subs` 不算。
-_SEASON_LATIN = re.compile(r"^(?:season[\s._-]*|s)([0-9]{1,2})$", re.IGNORECASE)
-
-#: `2nd Season`、`3rd Season`、`1st Season`。
-_SEASON_ORDINAL = re.compile(r"^([0-9]{1,2})(?:st|nd|rd|th)[\s._-]*season$", re.IGNORECASE)
-
-#: `第二季` / `第2期`。與 `cjk` 同一個寫法，只差這裡整個資料夾名就是它。
+#: `Season 2/`、`S02/`、`2nd Season/`、`第二季/`。寫法與 `cjk`、`binding` 共用（`parser.seasons`），
+#: 只差這裡整個資料夾名就是它。
+_SEASON_LATIN = re.compile(f"^{SEASON_LATIN}$", re.IGNORECASE)
+_SEASON_ORDINAL = re.compile(f"^{SEASON_ORDINAL}$", re.IGNORECASE)
 _SEASON_CN = re.compile(f"^{SEASON_CN}$")
 
 #: `Part 2` / `Part.2` / `第二部分`。cour，不是季（plan §4.4）。
@@ -105,7 +103,7 @@ def _season_of(name: str) -> int | None:
         if found is not None:
             return int(found.group(1))
     found = _SEASON_CN.match(name)
-    return _number(found.group(1)) if found is not None else None
+    return numeral(found.group(1)) if found is not None else None
 
 
 def _part_of(name: str) -> int | None:
@@ -113,7 +111,7 @@ def _part_of(name: str) -> int | None:
     if found is not None:
         return int(found.group(1))
     found = _PART_CN.match(name)
-    return _number(found.group(1)) if found is not None else None
+    return numeral(found.group(1)) if found is not None else None
 
 
 def _lang_of(name: str) -> Lang | None:
@@ -123,7 +121,3 @@ def _lang_of(name: str) -> Lang | None:
         return direct
     langs = langs_in(name)
     return next(iter(langs)) if len(langs) == 1 else None
-
-
-def _number(raw: str) -> int | None:
-    return int(raw) if raw.isdigit() else CN_DIGITS.get(raw)

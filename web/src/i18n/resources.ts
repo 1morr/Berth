@@ -2438,6 +2438,8 @@ const zhHant = {
       title_equal: '「{{clue}}」與 TMDB 的「{{title}}」同名',
       premiere_near: 'Mikan 寫 {{premiere}} 開播，TMDB 第 {{season}} 季 {{aired}} 首播',
       release_near: 'Mikan 寫 {{premiere}}，TMDB 的上映日是 {{aired}}',
+      season_airing:
+        '名字寫第 {{season}} 季；Mikan 寫 {{premiere}} 開播，那時 TMDB 的這一季正在播（{{episode}} 在 {{aired}} 播出）',
       only_route: '收得下它的 Route 只有 {{route}}',
       feed_route: '收得下它的 Route 不只一條，這個 Feed 設定送進 {{route}}',
       no_candidate: 'TMDB 搜不到同名的作品',
@@ -2445,8 +2447,9 @@ const zhHant = {
       several_candidates: '同名、開播日期也對得上的有 {{number}} 部',
       no_premiere: 'Mikan 的番組頁沒寫開播日期，年份無從確認',
       no_show_page: '這個來源沒有番組頁，年份無從確認：候選只從標題來，要你確認',
-      lookup_failed: 'Mikan 番組頁或 TMDB 這一次查不到（{{detail}}）',
+      lookup_failed: 'Mikan 番組頁或 TMDB 查不到（{{detail}}），留給你綁定',
       lookup_deferred: '{{site}} 這一小時的請求預算用完了，番組頁下一輪再讀',
+      lookup_retry: '{{site}} 這一次讀不到（{{detail}}），{{at}} 再認一次（第 {{attempt}} 次重試）',
       route_ambiguous: '作品認出來了，但 {{routes}} 都收得下它',
       no_route: '作品認出來了，但沒有啟用中的 Route 收得下它',
     },
@@ -4995,6 +4998,8 @@ const en: Translations<typeof zhHant> = {
       premiere_near:
         'Mikan says it started on {{premiere}}; TMDB season {{season}} premiered on {{aired}}',
       release_near: 'Mikan says {{premiere}}; TMDB has it released on {{aired}}',
+      season_airing:
+        'the name says season {{season}}; Mikan says it started on {{premiere}}, while that season was airing on TMDB ({{episode}} aired on {{aired}})',
       only_route: 'the only route that takes it is {{route}}',
       feed_route: 'more than one route takes it; this feed sends to {{route}}',
       no_candidate: 'nothing on TMDB has the same name',
@@ -5004,9 +5009,11 @@ const en: Translations<typeof zhHant> = {
       no_premiere: 'the Mikan show page has no start date, so the year cannot be checked',
       no_show_page:
         'this source has no show page, so the year cannot be checked: the candidates come from the title alone and need you to confirm',
-      lookup_failed: 'the Mikan show page or TMDB could not be read this time ({{detail}})',
+      lookup_failed: 'the Mikan show page or TMDB could not be read ({{detail}}); bind it yourself',
       lookup_deferred:
         'the request budget for {{site}} is used up for this hour; the show page is read next round',
+      lookup_retry:
+        '{{site}} could not be read this time ({{detail}}); looking it up again at {{at}} (retry {{attempt}})',
       route_ambiguous: 'the title was recognised, but {{routes}} can all take it',
       no_route: 'the title was recognised, but no enabled route takes it',
     },

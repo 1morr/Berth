@@ -2,6 +2,7 @@ import type { TFunction } from 'i18next'
 
 import type { BindReason, BindReasonCode } from '../api/rss'
 import type { ReasonSet } from '../api/refusal'
+import { whenText } from '../components/queueText'
 
 /**
  * 自動綁定的理由（`domain.BindReason`，M3 票 09）：code 挑句子（`rss.grounds.*`），參數是原文。
@@ -15,6 +16,7 @@ const CODES: ReasonSet<BindReasonCode> = {
   title_equal: true,
   premiere_near: true,
   release_near: true,
+  season_airing: true,
   only_route: true,
   feed_route: true,
   no_candidate: true,
@@ -24,14 +26,20 @@ const CODES: ReasonSet<BindReasonCode> = {
   no_show_page: true,
   lookup_failed: true,
   lookup_deferred: true,
+  lookup_retry: true,
   route_ambiguous: true,
   no_route: true,
 }
 
-export function groundText(t: TFunction, reason: BindReason): string {
+export function groundText(t: TFunction, reason: BindReason, language: string): string {
+  // `lookup_retry` 的 `at` 是 ISO 時間（後端靠它排下一次重認）：照 UI 的語言印成當地時間。
+  const params =
+    typeof reason.params.at === 'string'
+      ? { ...reason.params, at: whenText(reason.params.at, language) }
+      : reason.params
   // `as never`：鍵是逐 code 的聯集，i18next 的型別因此要求每一句的參數同時都在（`plans/reasonText.ts`
   // 同一個理由）。參數的形狀由後端的 `BIND_PARAMS` 定、`test_bind_reasons.py` 逐句比對。
-  return t(`rss.grounds.${reason.code}`, reason.params as never)
+  return t(`rss.grounds.${reason.code}`, params as never)
 }
 
 /**

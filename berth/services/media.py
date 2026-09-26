@@ -142,12 +142,29 @@ async def read_snapshot(
     之後才按的，那時快照可能剛好過期，而用過期的標題去搜等於搜錯名字。拿不到 TMDB 時
     存下來的那一份仍然回得出來——舊的標題仍然是真的標題。
     """
-    await read_media(session, factory, media_id)
+    return (await read_snapshot_checked(session, factory, media_id)).snapshot
+
+
+@dataclass(frozen=True, slots=True)
+class SnapshotRead:
+    """`read_snapshot` 連同這一次向 TMDB 要沒要到。"""
+
+    snapshot: MediaSnapshot | None
+    #: 這一次沒要到的原因。快照可能仍然在（存過的那一份）。
+    problem: TmdbProblem | None = None
+    detail: str = ""
+
+
+async def read_snapshot_checked(
+    session: AsyncSession, factory: ServiceClientFactory, media_id: str
+) -> SnapshotRead:
+    """同 `read_snapshot`，讀不到時說得出為什麼：自動綁定要分「等一下再問」與「再問也一樣」
+    （M4 票 14）。"""
+    view = await read_media(session, factory, media_id)
     parsed = parse_media_id(media_id)
-    if parsed is None:
-        return None
-    row = await session.get(Media, build_media_id(*parsed))
-    return row.stored_snapshot() if row is not None else None
+    row = await session.get(Media, build_media_id(*parsed)) if parsed is not None else None
+    snapshot = row.stored_snapshot() if row is not None else None
+    return SnapshotRead(snapshot=snapshot, problem=view.problem, detail=view.detail)
 
 
 async def snapshot_for_planning(

@@ -81,10 +81,14 @@ async def measure(session) -> None:  # type: ignore[no-untyped-def]  # 一次性
                 clues = await _clues(fetcher, series)
                 print(f"   mikan: {clues.title!r}  premiere={clues.premiere}")
                 print(f"   search: {search_terms(clues)}")
-                shots = await _candidates(session, factory, clues)
+                shots, missed = await _candidates(session, factory, clues)
             except _LookupError as failed:
-                print(f"   LOOKUP FAILED: {failed}")
+                kind = "transient" if failed.transient else "final"
+                print(f"   LOOKUP FAILED ({kind}): {failed}")
                 continue
+            if missed is not None:
+                kind = "transient" if missed.transient else "final"
+                print(f"   skipped ({kind}): {missed}")
             for shot in shots:
                 aired = [(row.season_number, str(row.air_date)) for row in shot.seasons]
                 print(f"   candidate {shot.kind.value}:{shot.tmdb_id} {shot.title_en!r} {aired}")

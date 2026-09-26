@@ -345,6 +345,12 @@ class TestBackfillOnBinding:
         assert series.backfilled_at == NOW
 
 
+def feeds_read(factory: FakeClientFactory) -> list[str]:
+    """讀過的 feed，番組頁不算：其餘十部的番組頁連不上，照重認的節奏再讀（M4 票 14），
+    不是補漏的事。"""
+    return [url for url in factory.rss_.requested if "/Home/Bangumi/" not in url]
+
+
 class TestDailyBackfill:
     async def test_an_episode_the_feed_rolled_past_is_caught_next_day(
         self, session: AsyncSession, roots: dict[str, Path]
@@ -359,9 +365,10 @@ class TestDailyBackfill:
         serve(factory, SINGLE_URL, [thirteen])
         factory.rss_.requested.clear()
 
-        # 不滿一天的那幾輪只讀聚合 feed。
+        # 不滿一天的那幾輪只讀聚合 feed。其餘十部的番組頁連不上，照重認的節奏再讀（M4 票 14），
+        # 不是補漏的事。
         await poll_feed(session, factory, feed_id, now=NOW + timedelta(hours=6))
-        assert factory.rss_.requested == [FEED_URL]
+        assert feeds_read(factory) == [FEED_URL]
         assert thirteen.hash not in await rss_jobs(session)
 
         factory.rss_.requested.clear()
@@ -370,7 +377,7 @@ class TestDailyBackfill:
         assert polled.submitted == 1
         assert thirteen.hash in await rss_jobs(session)
         # 只讀綁好的那一個 RSS Series 的單一 feed：其餘十個待綁定，不補。
-        assert factory.rss_.requested == [FEED_URL, SINGLE_URL]
+        assert feeds_read(factory) == [FEED_URL, SINGLE_URL]
         row = await session.get(RssFeed, feed_id)
         assert row is not None and row.last_error == ""
 

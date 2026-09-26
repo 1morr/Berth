@@ -1,4 +1,5 @@
-"""測試共用的 client factory（`services.clients.ServiceClientFactory` 的替身）。
+"""測試共用的 client factory（`services.clients.ServiceClientFactory` 的替身），與替身要丟的
+HTTP 錯誤。
 
 每個 kind 都回**同一個實例**：精靈的一步橫跨好幾次呼叫，每次造新的就等於狀態歸零。
 """
@@ -6,6 +7,7 @@
 from __future__ import annotations
 
 from berth.adapters.budget import RequestBudget
+from berth.adapters.http import ServiceError, raise_for_status
 from berth.adapters.indexer import IndexerSearch
 from berth.adapters.indexer.fake import FakeIndexerSearch
 from berth.adapters.jellyfin import JellyfinClient
@@ -91,3 +93,12 @@ class FakeClientFactory:
         # 挑到的是哪一種實作。`kind` 存在資料庫裡，斷言它才驗得出「照存下來的那一種挑」。
         self.indexer_kinds.append(kind)
         return self.indexer_search_
+
+
+def answered(status: int, label: str = "GET /") -> ServiceError:
+    """服務回這個狀態碼時 adapter 丟的例外（`adapters.http.raise_for_status` 的分類），給替身丟。"""
+    try:
+        raise_for_status(label, status)
+    except ServiceError as exc:
+        return exc
+    raise AssertionError(f"{status} is not an error")

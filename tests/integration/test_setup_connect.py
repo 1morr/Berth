@@ -28,6 +28,7 @@ from berth.domain import DetectionReason, IndexerKind, ServiceKind, ServiceOrigi
 from berth.models import IndexerSettings, JellyfinSettings, QbittorrentSettings
 from berth.services.settings import read_settings
 from berth.services.setup import ServiceConnection, connect_service, read_status
+from tests.integration.factories import answered
 
 
 class FakeClientFactory:
@@ -254,6 +255,10 @@ async def test_a_failed_test_still_keeps_what_the_user_typed(session: AsyncSessi
     [
         (ServiceBusyError("503 still loading"), DetectionReason.STARTING),
         (ProtocolMismatchError("not jellyfin"), DetectionReason.PROTOCOL_MISMATCH),
+        # 429 與 5xx 是這一次答不出來，不是接錯了服務（M4 票 14，`raise_for_status`）；404 照舊。
+        (answered(502), DetectionReason.UNREACHABLE),
+        (answered(429), DetectionReason.UNREACHABLE),
+        (answered(404), DetectionReason.PROTOCOL_MISMATCH),
     ],
 )
 @pytest.mark.asyncio

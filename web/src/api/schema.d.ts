@@ -2123,7 +2123,7 @@ export interface components {
          * @description 一條綁定理由是哪一種。
          * @enum {string}
          */
-        BindReasonCode: "title_equal" | "premiere_near" | "release_near" | "only_route" | "feed_route" | "no_candidate" | "premiere_far" | "several_candidates" | "no_premiere" | "no_show_page" | "lookup_failed" | "lookup_deferred" | "route_ambiguous" | "no_route";
+        BindReasonCode: "title_equal" | "premiere_near" | "release_near" | "season_airing" | "only_route" | "feed_route" | "no_candidate" | "premiere_far" | "several_candidates" | "no_premiere" | "no_show_page" | "lookup_failed" | "lookup_deferred" | "lookup_retry" | "route_ambiguous" | "no_route";
         /**
          * BindReasonOut
          * @description 自動綁定的一條理由：封閉集合的 code 加參數，句子由前端照 code 挑（`rss.grounds.*`，票 09）。

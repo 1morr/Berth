@@ -40,7 +40,11 @@ class ServiceNotDeployedError(ServiceError):
 
 
 class ServiceUnavailableError(ServiceError):
-    """主機名解得到但連不上或逾時，通常是容器還在啟動。"""
+    """主機名解得到但連不上或逾時，通常是容器還在啟動。
+
+    **429 與 503 以外的 5xx 也是它**（M4 票 14）：連得上，但這一次答不出來——限流或服務自己出錯，
+    等一下再問可能就好了。以前歸成 `ProtocolMismatchError`，TMDB 一次 502 就讓自動綁定永遠待綁定。
+    """
 
 
 class AuthFailedError(ServiceError):
@@ -129,13 +133,31 @@ class HttpSession:
 
         if response.status_code in tolerate:
             return response
-        if response.status_code in (401, 403):
-            raise AuthFailedError(f"{method} {path}: {response.status_code}")
-        if response.status_code == 503:
-            raise ServiceBusyError(f"{method} {path}: 503 still loading")
-        if response.status_code >= 400:
-            raise ProtocolMismatchError(f"{method} {path}: {response.status_code}")
+        raise_for_status(f"{method} {path}", response.status_code)
         return response
+
+
+def raise_for_status(label: str, status: int) -> None:
+    """狀態碼 → 分類過的例外；2xx、3xx 不丟。不走 `HttpSession` 的 adapter（`.torrent` 下載）
+    也用它，services 認得的例外才是同一組。"""
+    if status in (401, 403):
+        raise AuthFailedError(f"{label}: {status}")
+    if status == 503:
+        raise ServiceBusyError(f"{label}: 503 still loading")
+    if status == 429 or status >= 500:
+        raise ServiceUnavailableError(f"{label}: {status}")
+    if status >= 400:
+        raise ProtocolMismatchError(f"{label}: {status}")
+
+
+def is_transient(exc: ServiceError) -> bool:
+    """等一下再問可能就好了：連不上、逾時、解不到主機名、限流、5xx。
+
+    其餘的（憑證被拒、404、回的不是那個服務）再問幾次答案都一樣。解不到主機名也算：對 compose 裡的
+    服務它說的是「這個服務不在」，但對 TMDB、Mikan 這種公開站，那是這台機器的網路或 DNS
+    這一刻出了事。
+    """
+    return isinstance(exc, ServiceUnavailableError | ServiceBusyError | ServiceNotDeployedError)
 
 
 def json_body(response: httpx.Response) -> Any:

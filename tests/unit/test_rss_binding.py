@@ -6,11 +6,18 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import date, timedelta
 
 import pytest
 
-from berth.domain import BindReasonCode, MediaKind, MediaSnapshot, SeasonSnapshot
+from berth.domain import (
+    BindReasonCode,
+    EpisodeSnapshot,
+    MediaKind,
+    MediaSnapshot,
+    SeasonSnapshot,
+)
 from berth.parser.binding import (
     PREMIERE_WINDOW,
     BindVerdict,
@@ -142,6 +149,22 @@ class TestTheSkeleton:
         clues = SeriesClues(title="甲", premiere=None, release_title="[G] 乙 / 丙 / 丁 / 戊 - 01")
 
         assert len(search_terms(clues)) == 3
+
+    def test_the_season_name_is_not_searched(self) -> None:
+        """TMDB 的作品名不帶季名：「第四季」一起搜就搜不到（M4 票 14，2026-09-26 實測）。"""
+        assert search_terms(REZERO) == (
+            "Re：从零开始的异世界生活 夺还篇",
+            "Re：从零开始的异世界生活",
+        )
+
+    def test_a_latin_season_name_is_not_searched_either(self) -> None:
+        clues = SeriesClues(
+            title="时光代理人 第三季",
+            premiere=None,
+            release_title="[黒ネズミたち] 时光代理人 第三季 / Link Click Season 3 - 08 (CR 1080p)",
+        )
+
+        assert search_terms(clues) == ("时光代理人", "Link Click")
 
 
 def fixture_feeds() -> dict[str, list[str]]:
@@ -317,12 +340,12 @@ class TestPending:
         assert codes(judge(KIMI, [])) == [BindReasonCode.NO_CANDIDATE]
 
     def test_a_contained_title_is_not_equal(self) -> None:
-        """「包含」夠當解析器的證據，不夠當自動綁定的：續作名常常包住前作名。"""
-        sequel = SeriesClues(
-            title="与你相恋到生命尽头 第二季", premiere=date(2026, 7, 7), release_title=""
+        """「包含」夠當解析器的證據，不夠當自動綁定的：續作、外傳的名字常常包住前作名。"""
+        spinoff = SeriesClues(
+            title="与你相恋到生命尽头 另一个结局", premiere=date(2026, 7, 7), release_title=""
         )
 
-        assert codes(judge(sequel, [show(262000)])) == [BindReasonCode.NO_CANDIDATE]
+        assert codes(judge(spinoff, [show(262000)])) == [BindReasonCode.NO_CANDIDATE]
 
     def test_without_a_premiere_the_year_cannot_be_confirmed(self) -> None:
         blind = SeriesClues(title="与你相恋到生命尽头", premiere=None, release_title="")
@@ -384,3 +407,150 @@ class TestTheYearPrefilter:
         self, year: int | None, premiere: date | None
     ) -> None:
         assert could_be(MediaKind.TV, year, premiere)
+
+
+#: 2026-09-26 試跑沒綁上的那一部（M4 票 14）：真的 Mikan 聚合 feed 裡的發佈名，與 Mikan 番組頁 4052
+#: 的番組名與「放送开始」（第四季的第二個 cour 另開的番組）。
+REZERO = SeriesClues(
+    title="Re：从零开始的异世界生活 第四季 夺还篇",
+    premiere=date(2026, 8, 12),
+    release_title=(
+        "[ANi]  Re：从零开始的异世界生活 第四季 - 18 [1080P][Baha][WEB-DL][AAC AVC][CHT][MP4]"
+    ),
+)
+
+
+def weekly(first: date, count: int, start: int = 1) -> tuple[EpisodeSnapshot, ...]:
+    return tuple(
+        EpisodeSnapshot(episode_number=start + n, air_date=first + timedelta(weeks=n))
+        for n in range(count)
+    )
+
+
+def rezero() -> MediaSnapshot:
+    """TMDB 65942 的形狀（2026-09-26 查）：四輪播出全部放在第 1 季，一共 85 集；第四輪是第 67–77 集
+    （4 月起）與隔 56 天之後的第 78–85 集（8 月起），間隔不到 180 天，同一輪。"""
+    episodes = (
+        weekly(date(2016, 4, 4), 25)
+        + weekly(date(2020, 7, 8), 25, start=26)
+        + weekly(date(2024, 10, 2), 16, start=51)
+        + weekly(date(2026, 4, 8), 11, start=67)
+        + weekly(date(2026, 8, 12), 8, start=78)
+    )
+    return MediaSnapshot(
+        tmdb_id=65942,
+        kind=MediaKind.TV,
+        title="Re：從零開始的異世界生活",
+        title_en="Re:ZERO -Starting Life in Another World-",
+        title_original="Re:ゼロから始める異世界生活",
+        year=2016,
+        first_air_date=date(2016, 4, 4),
+        titles=("Re:ZERO -Starting Life in Another World-", "Re：从零开始的异世界生活"),
+        seasons=(
+            SeasonSnapshot(
+                season_number=1,
+                name="Season 1",
+                episode_count=len(episodes),
+                air_date=date(2016, 4, 4),
+                episodes=episodes,
+            ),
+        ),
+    )
+
+
+def two_seasons() -> MediaSnapshot:
+    """《与你相恋》的兩季，每季 12 集照週播。"""
+    shot = show(262000, seasons=(date(2026, 7, 7), date(2027, 4, 5)))
+    return shot.model_copy(
+        update={
+            "seasons": tuple(
+                row.model_copy(update={"episodes": weekly(row.air_date or date.min, 12)})
+                for row in shot.seasons
+            )
+        }
+    )
+
+
+class TestSeasonNames:
+    """季名從標題拆出來當線索（M4 票 14）：標題比拆掉季名的那一段，開播日比那一季播出的期間。"""
+
+    def test_a_named_season_binds_by_that_season(self) -> None:
+        clues = SeriesClues(
+            title="与你相恋到生命尽头 第二季", premiere=date(2027, 4, 3), release_title=""
+        )
+
+        found = judge(clues, [two_seasons()])
+
+        assert found.media is not None
+        assert found.reasons[0].params == {
+            "clue": "与你相恋到生命尽头",
+            "title": "与你相恋到生命尽头",
+        }
+        assert codes(found)[1] is BindReasonCode.SEASON_AIRING
+        assert found.reasons[1].params == {
+            "premiere": "2027-04-03",
+            "season": 2,
+            "episode": "S02E01",
+            "aired": "2027-04-05",
+        }
+
+    def test_a_second_cour_that_mikan_lists_on_its_own_binds_by_the_merged_run(self) -> None:
+        """TMDB 把 Re:Zero 四輪播出都放在第 1 季：第四季是依播出日切出的第 4 輪，Mikan 的「夺还篇」
+        是那一輪隔了 56 天之後的第 78 集（plan §4.4 的虛擬季）。番組名帶篇名不相等，發佈名的
+        骨幹相等。"""
+        found = judge(REZERO, [rezero()])
+
+        assert found.media is not None
+        assert found.media.tmdb_id == 65942
+        assert codes(found) == [BindReasonCode.TITLE_EQUAL, BindReasonCode.SEASON_AIRING]
+        assert found.reasons[0].params["clue"] == "Re：从零开始的异世界生活"
+        assert found.reasons[1].params == {
+            "premiere": "2026-08-12",
+            "season": 4,
+            "episode": "S01E78",
+            "aired": "2026-08-12",
+        }
+
+    def test_a_premiere_in_the_break_between_cours_is_not_airing(self) -> None:
+        """兩個 cour 之間停播 56 天：落在中間、離兩邊都超過窗口的開播日對不上。"""
+        mid_break = replace(REZERO, premiere=date(2026, 7, 15))
+
+        assert codes(judge(mid_break, [rezero()])) == [BindReasonCode.PREMIERE_FAR]
+
+    def test_a_named_season_on_another_seasons_date_is_not_bound(self) -> None:
+        """第二季的番組頁寫的卻是第一季的開播日：兩條線索互相矛盾，留給人（續作綁到前作的樣子）。"""
+        sequel = SeriesClues(
+            title="与你相恋到生命尽头 第二季", premiere=date(2026, 7, 7), release_title=""
+        )
+
+        found = judge(sequel, [two_seasons()])
+
+        assert found.media is None
+        assert codes(found) == [BindReasonCode.PREMIERE_FAR]
+        assert [shot.tmdb_id for shot in found.candidates] == [262000]
+
+    def test_a_named_season_tmdb_does_not_have_is_not_bound(self) -> None:
+        sequel = SeriesClues(
+            title="与你相恋到生命尽头 第三季", premiere=date(2027, 4, 3), release_title=""
+        )
+
+        assert codes(judge(sequel, [two_seasons()])) == [BindReasonCode.PREMIERE_FAR]
+
+    def test_without_a_season_name_the_airing_does_not_count(self) -> None:
+        """沒寫季名時照舊只比各季首播：多一種比法就多一種綁錯的可能，這張票只補有季名的那一種。"""
+        unnamed = replace(REZERO, title="Re：从零开始的异世界生活", release_title="")
+
+        assert codes(judge(unnamed, [rezero()])) == [BindReasonCode.PREMIERE_FAR]
+
+    def test_a_title_that_carries_its_season_as_a_name_is_compared_as_before(self) -> None:
+        """TMDB 的名字本身帶季名（續作另開一部）：原樣相等時季名是名字的一部分，比各季首播。"""
+        sequel_entry = show(7, titles=("与你相恋到生命尽头 第二季",), seasons=(date(2027, 4, 5),))
+        clues = SeriesClues(
+            title="与你相恋到生命尽头 第二季", premiere=date(2027, 4, 3), release_title=""
+        )
+
+        found = judge(clues, [sequel_entry])
+
+        assert found.media is not None
+        assert codes(found) == [BindReasonCode.TITLE_EQUAL, BindReasonCode.PREMIERE_NEAR]
+        assert found.reasons[1].params["season"] == 1

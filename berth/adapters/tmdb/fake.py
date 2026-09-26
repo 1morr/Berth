@@ -51,7 +51,8 @@ class FakeTmdbClient:
         self.calls = 0
         self._trending = dict(trending or {})
         self._popular = dict(popular or {})
-        self._search = dict(search or {})
+        #: `正規化的查詢 → 結果`。公開的，測試要演「多搜到一部」就改這裡。
+        self.search_results = dict(search or {})
         self._translations = dict(translations or {})
         #: `id → 簡介`，英文那一輪以外的每一輪都回它。沒列的作品照英文那一輪（與標題同一個規矩）。
         self._overview_translations = dict(overview_translations or {})
@@ -67,7 +68,11 @@ class FakeTmdbClient:
         self.requests: list[tuple[str, str]] = []
         #: `(kind, id) → 詳情`。公開的，測試要演「TMDB 改了標題」就改這裡。
         self.details = {(row.kind, row.tmdb_id): row for row in details}
-        self._seasons = {
+        #: `(kind, id) → 讀那一部的詳情時丟的例外`。公開的，測試要演「只有這一部這一次讀不到」
+        #: 就放進來、演「後來讀得到了」就拿掉（M4 票 14）。
+        self.detail_errors: dict[tuple[MediaKind, int], Exception] = {}
+        #: `(id, 季號) → 那一季`。公開的，同 `details`。
+        self.season_rows = {
             (tmdb_id, season.season_number): season
             for tmdb_id, rows in (seasons or {}).items()
             for season in rows
@@ -92,11 +97,13 @@ class FakeTmdbClient:
     async def search(self, query: str, *, language: str) -> tuple[TmdbEntry, ...]:
         self.requests.append((f"search/{query}", language))
         self._raise()
-        return self._localised(self._search.get(query, ()), language)
+        return self._localised(self.search_results.get(query, ()), language)
 
     async def detail(self, kind: MediaKind, tmdb_id: int, *, language: str) -> TmdbDetail:
         self.requests.append((f"detail/{kind.value}/{tmdb_id}", language))
         self._raise()
+        if (kind, tmdb_id) in self.detail_errors:
+            raise self.detail_errors[(kind, tmdb_id)]
         found = self.details.get((kind, tmdb_id))
         if found is None:
             raise NotFoundError(f"{kind.value}/{tmdb_id}: no such title on TMDB")
@@ -113,7 +120,7 @@ class FakeTmdbClient:
     async def season(self, tmdb_id: int, season_number: int, *, language: str) -> TmdbSeason:
         self.requests.append((f"season/{tmdb_id}/{season_number}", language))
         self._raise()
-        found = self._seasons.get((tmdb_id, season_number))
+        found = self.season_rows.get((tmdb_id, season_number))
         if found is None:
             raise NotFoundError(f"tv/{tmdb_id}/season/{season_number}: no such season")
         return found

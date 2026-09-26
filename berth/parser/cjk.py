@@ -14,16 +14,10 @@ from __future__ import annotations
 import re
 
 from berth.domain import CjkHints, Lang, SpecialKind, SubtitleKind
+from berth.parser.seasons import SEASON_CN, numeral
 
 #: 全形括號一律轉半形：字幕組混用 `【】` 與 `[]`，後面的規則只想寫一次。
 _BRACKETS = str.maketrans({"【": "[", "】": "]", "［": "[", "］": "]", "（": "(", "）": ")"})
-
-#: 中文數字。只到十二——季號不會更大，而更長的表會開始誤吃標題裡的字。
-#: 公開的：`structure` 讀資料夾名時要的是同一張表（`第二季/` 與 `第二季` 是同一件事）。
-CN_DIGITS = {
-    "一": 1, "二": 2, "三": 3, "四": 4, "五": 5, "六": 6,
-    "七": 7, "八": 8, "九": 9, "十": 10, "十一": 11, "十二": 12,
-}  # fmt: skip
 
 #: 全形羅馬數字（U+2160 起）。一個字元一個數字，沒有邊界問題，所以整段都收。
 _ROMAN_FULLWIDTH = {
@@ -44,9 +38,7 @@ _ROMAN_HALFWIDTH_RE = re.compile(
 
 _ROMAN_FULLWIDTH_RE = re.compile("[" + "".join(_ROMAN_FULLWIDTH) + "]")
 
-#: `第N季` / `第N期`，中文或阿拉伯數字。**字串是公開的**：`structure` 讀資料夾名時要的是
-#: 同一種寫法，只差它要求整個資料夾名就是它（各寫一份的話兩邊遲早分岔）。
-SEASON_CN = r"第\s*([0-9]+|[一二三四五六七八九十]{1,3})\s*[季期]"
+#: `第N季` / `第N期`。寫法與 `structure`、`binding` 共用（`parser.seasons`）。
 _SEASON_CN = re.compile(SEASON_CN)
 
 #: `第N部分`：同一季的第幾個 cour（plan §4.4）。與 `_SEASON_CN` 分開一條，因為它們
@@ -264,7 +256,7 @@ def _take_season(text: str, matched: list[str]) -> tuple[int | None, str]:
     if found is not None:
         matched.append(found.group(0))
         raw = found.group(1)
-        season = int(raw) if raw.isdigit() else CN_DIGITS.get(raw)
+        season = numeral(raw)
 
     full = _ROMAN_FULLWIDTH_RE.search(text)
     if full is not None:
@@ -287,7 +279,7 @@ def _take_part(text: str, matched: list[str]) -> int | None:
         return None
     matched.append(found.group(0))
     raw = found.group(1)
-    return int(raw) if raw.isdigit() else CN_DIGITS.get(raw)
+    return numeral(raw)
 
 
 def _take_episode(text: str, matched: list[str]) -> tuple[int | None, int | None]:

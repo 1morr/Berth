@@ -25,7 +25,7 @@ from berth.main import create_app
 from berth.models import Job, LedgerEntry, Media, Route
 from tests.conftest import FIXTURES
 from tests.integration.arrange import arrange, bundled_libraries, factory_for, fake_jellyfin
-from tests.integration.factories import FakeClientFactory
+from tests.integration.factories import FakeClientFactory, answered
 from tests.integration.test_rss import (
     FEED,
     FEED_URL,
@@ -119,8 +119,9 @@ class TestThePageFlow:
         series = client.get("/api/rss/series").json()
         pending = next(row for row in series if row["key"] == KIMI_KEY)
         assert (pending["media_id"], pending["waiting"]) == (None, 2)
-        # 番組頁不在替身裡：自動綁定查不到，理由照封閉集合的形狀送出去（票 09）。
-        assert [reason["code"] for reason in pending["reasons"]] == ["lookup_failed"]
+        # 番組頁不在替身裡（連不上）：自動綁定晚點再認，理由照封閉集合的形狀送出去
+        # （票 09、M4 票 14）。
+        assert [reason["code"] for reason in pending["reasons"]] == ["lookup_retry"]
         assert pending["candidates"] == []
 
         bound = client.put(
@@ -435,6 +436,13 @@ class TestOneshot:
         assert refused({"url": "https://example.com/feed"}) == (422, "feed_unsupported")
         assert refused({"url": "https://acg.rip/.xml?term=nothing"}) == (502, "feed_unreachable")
         assert refused({"url": page}) == (502, "feed_not_rss")
+        # 站台回 429 / 5xx 是讀不到，不是「不是 RSS」（M4 票 14）；404 照舊是接錯了東西。
+        busy = "https://acg.rip/.xml?term=busy"
+        factory.rss_.page_errors[busy] = answered(502, f"GET {busy}")
+        assert refused({"url": busy}) == (502, "feed_unreachable")
+        gone = "https://acg.rip/.xml?term=gone"
+        factory.rss_.page_errors[gone] = answered(404, f"GET {gone}")
+        assert refused({"url": gone}) == (502, "feed_not_rss")
         assert refused({"url": SINGLE_URL, "media": "tv:1", "route": route_id}) == (
             422,
             "media_missing",

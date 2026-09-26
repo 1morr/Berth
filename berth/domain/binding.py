@@ -27,6 +27,10 @@ class BindReasonCode(StrEnum):
     PREMIERE_NEAR = "premiere_near"
     #: 電影那一種：Mikan 寫 `{premiere}`，TMDB 的上映日是 `{aired}`。
     RELEASE_NEAR = "release_near"
+    #: 名字寫了第 `{season}` 季，Mikan 寫 `{premiere}` 開播，落在 TMDB 那一季播出的期間：`{episode}`
+    #: 在 `{aired}` 播出（M4 票 14）。TMDB 把幾季併成一季時，`{episode}` 是依播出日切出的那一輪裡的
+    #: 一集（`S01E78`）。
+    SEASON_AIRING = "season_airing"
     #: 收得下這種作品的啟用中 Route 只有 `{route}`。
     ONLY_ROUTE = "only_route"
     #: 收得下這種作品的 Route 不只一條，長出它的 Feed 說送進 `{route}`（M3 票 21）。
@@ -44,11 +48,16 @@ class BindReasonCode(StrEnum):
     NO_PREMIERE = "no_premiere"
     #: Nyaa、acg.rip 這種來源沒有番組頁，開播日期無從確認：候選只從標題來，一律留給人（票 11）。
     NO_SHOW_PAGE = "no_show_page"
-    #: 番組頁或 TMDB 這一次查不到（`{detail}` 是原文）。
+    #: 番組頁或 TMDB 查不到（`{detail}` 是原文）：再問也一樣（404、回的不是那個服務），或重認的次數
+    #: 用完了。留給人。
     LOOKUP_FAILED = "lookup_failed"
     #: `{site}` 這一小時的請求預算用完了，番組頁下一輪再讀（M3 票 20）。不是查不到：
     #: 只有它會在之後的輪詢裡重認。
     LOOKUP_DEFERRED = "lookup_deferred"
+    #: 番組頁或 TMDB 這一次查不到，但等一下再問可能就好了（連不上、逾時、限流、5xx；`{detail}` 是
+    #: 原文，`{site}` 是那一站、同請求預算的鍵）。第 `{attempt}` 次重認排在 `{at}`（ISO 8601），
+    #: 次數有上限，用完是 `lookup_failed`（M4 票 14）。
+    LOOKUP_RETRY = "lookup_retry"
     #: 作品認出來了，但收得下它的 Route 有好幾條（`{routes}`），要人選。
     ROUTE_AMBIGUOUS = "route_ambiguous"
     #: 作品認出來了，但沒有一條啟用中的 Route 收得下它。
@@ -63,6 +72,7 @@ BIND_PARAMS: dict[BindReasonCode, frozenset[str]] = {
     _C.TITLE_EQUAL: frozenset({"clue", "title"}),
     _C.PREMIERE_NEAR: frozenset({"premiere", "season", "aired"}),
     _C.RELEASE_NEAR: frozenset({"premiere", "aired"}),
+    _C.SEASON_AIRING: frozenset({"premiere", "season", "episode", "aired"}),
     _C.ONLY_ROUTE: frozenset({"route"}),
     _C.FEED_ROUTE: frozenset({"route"}),
     _C.NO_CANDIDATE: frozenset(),
@@ -72,6 +82,7 @@ BIND_PARAMS: dict[BindReasonCode, frozenset[str]] = {
     _C.NO_SHOW_PAGE: frozenset(),
     _C.LOOKUP_FAILED: frozenset({"detail"}),
     _C.LOOKUP_DEFERRED: frozenset({"site"}),
+    _C.LOOKUP_RETRY: frozenset({"site", "attempt", "at", "detail"}),
     _C.ROUTE_AMBIGUOUS: frozenset({"routes"}),
     _C.NO_ROUTE: frozenset(),
 }

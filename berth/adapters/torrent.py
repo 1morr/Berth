@@ -27,11 +27,11 @@ import httpx
 
 from berth.adapters.http import (
     DEFAULT_TIMEOUT_SECONDS,
-    AuthFailedError,
     ProtocolMismatchError,
     ServiceError,
     ServiceUnavailableError,
     is_dns_failure,
+    raise_for_status,
 )
 from berth.adapters.indexer import normalise_info_hash
 
@@ -112,7 +112,9 @@ class HttpTorrentFetcher:
                     if _is_magnet(current):
                         return _from_magnet(current)
                     continue
-                _classify(url, response)
+                # 不走 `HttpSession`（它綁一個 base URL，下載連結是索引站給的整條網址），
+                # 錯誤分類照樣同一套。
+                raise_for_status(url, response.status_code)
                 content = await self._read(url, response)
                 return TorrentSource(
                     info_hash=info_hash_of(content), content=content, filename=_filename(url)
@@ -148,15 +150,6 @@ class HttpTorrentFetcher:
 
     async def aclose(self) -> None:
         await self._client.aclose()
-
-
-def _classify(url: str, response: httpx.Response) -> None:
-    """錯誤映射與 `adapters/http.py` 同一套——這一支不走 `HttpSession`（它綁一個 base URL，
-    而下載連結是索引站給的整條網址），但服務層認得的例外必須是同一組。"""
-    if response.status_code in (401, 403):
-        raise AuthFailedError(f"{url}: {response.status_code}")
-    if response.status_code >= 400:
-        raise ProtocolMismatchError(f"{url}: {response.status_code}")
 
 
 def _from_magnet(uri: str) -> TorrentSource:
