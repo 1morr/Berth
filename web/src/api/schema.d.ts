@@ -3782,6 +3782,8 @@ export interface components {
             bound: number;
             /** Submitted */
             submitted: number;
+            /** Failed */
+            failed: string;
         };
         /**
          * PollerOut

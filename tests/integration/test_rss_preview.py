@@ -307,6 +307,24 @@ class TestTheFirstRound:
         (row,) = await list_feeds(session)
         assert row.primed_at is None
 
+    async def test_download_everything_on_a_feed_whose_reads_all_failed_is_refused(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """輪過、但一次都沒讀到（連不上、請求預算用完）也是沒看過：預覽是空的，選了「全部下載」
+        的話下一次讀到的整份歷史照送（M3 票 21 的 critique P0）。"""
+        factory = await harbour(session, roots, {ACGRIP_URL: ACGRIP})
+        feed = await add_feed(session, url=ACGRIP_URL, name="")
+        factory.rss_.error = ServiceUnavailableError("acg.rip: connection refused")
+        polled = await poll_feed(session, factory, feed.id)
+        assert polled.failed
+
+        with pytest.raises(RssRejectedError) as refused:
+            await prime_feed(session, factory, feed.id, mode=PrimeMode.ALL)
+
+        assert refused.value.reason is RssRefusal.FEED_UNREAD
+        (row,) = await list_feeds(session)
+        assert row.primed_at is None
+
     async def test_a_feed_is_primed_once(
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:

@@ -2359,6 +2359,7 @@ const zhHant = {
       // 上一輪抓不到 Feed，或有幾筆的單集頁抓不到（那幾筆下一輪再試）。
       failed: '上一輪有問題',
       undecided: '第一輪還沒決定，一筆都不送：在頁首選「只追之後的」或「全部下載」。',
+      polledFailed: '這一輪沒讀到這個 Feed，什麼都沒改。原因在上面；背景下一輪會再讀。',
       polledNow:
         '這一輪：新 {{items}} 筆、長出 {{series}} 個 RSS Series（自動綁定 {{bound}} 個）、送出 {{sent}} 筆。',
       poll: '立即輪詢',
@@ -2487,6 +2488,7 @@ const zhHant = {
       lede: '搜尋 feed 第一輪就帶著好幾個月的歷史。選完之前，這個 Feed 一筆都不送。',
       unread:
         '第一輪還沒輪到：背景會在半分鐘內讀它，或在下方 Feed 段按「立即輪詢」。讀到之後這裡會列出每一筆。',
+      unreadFailed: '還沒讀到過，選不了。背景下一輪再讀，或在下方 Feed 段按「立即輪詢」。上一次：',
       tally: {
         send_one: '會送出 {{count}}',
         send_other: '會送出 {{count}}',
@@ -4916,6 +4918,8 @@ const en: Translations<typeof zhHant> = {
       failed: 'Last round had problems',
       undecided:
         "The first round isn't decided yet, so nothing is sent: choose Only what comes next or Download everything at the top of the page.",
+      polledFailed:
+        "This round couldn't read the feed, so nothing changed. The reason is above; the next background poll tries again.",
       polledNow:
         'This round: {{items}} new items, {{series}} new RSS Series ({{bound}} bound automatically), {{sent}} sent.',
       poll: 'Poll now',
@@ -5011,6 +5015,8 @@ const en: Translations<typeof zhHant> = {
       lede: 'A search feed brings months of history in its first round. Until you choose, nothing from this feed is sent.',
       unread:
         "The first round hasn't run yet: the background poll reads it within half a minute, or press Poll now in the Feeds section below. Every item shows up here once it's read.",
+      unreadFailed:
+        'Nothing has been read from it yet, so there is nothing to choose. The next background poll tries again, or press Poll now in the Feeds section below. Last time:',
       tally: {
         send_one: '{{count}} to send',
         send_other: '{{count}} to send',

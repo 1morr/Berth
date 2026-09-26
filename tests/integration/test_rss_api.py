@@ -107,7 +107,13 @@ class TestThePageFlow:
         assert feed["route_id"] is None
 
         polled = client.post(f"/api/rss/feeds/{feed['id']}/poll", headers=BROWSER)
-        assert polled.json() == {"items": 12, "series": 11, "bound": 0, "submitted": 0}
+        assert polled.json() == {
+            "items": 12,
+            "series": 11,
+            "bound": 0,
+            "submitted": 0,
+            "failed": "",
+        }
 
         series = client.get("/api/rss/series").json()
         pending = next(row for row in series if row["key"] == KIMI_KEY)

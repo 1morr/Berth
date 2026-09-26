@@ -224,13 +224,16 @@ function FeedRow({ feed, routes }: { feed: Feed; routes: RouteRow[] }) {
         </Notice>
       )}
       <p role="status" className="text-xs text-ink">
+        {/* 這一輪抓不到 Feed 時不說「新 0 筆」：那是沒讀到，不是讀到了沒有新的。原文在上面那一塊。 */}
         {polled &&
-          t('rss.feeds.polledNow', {
-            items: polled.items,
-            series: polled.series,
-            bound: polled.bound,
-            sent: polled.submitted,
-          })}
+          (polled.failed
+            ? t('rss.feeds.polledFailed')
+            : t('rss.feeds.polledNow', {
+                items: polled.items,
+                series: polled.series,
+                bound: polled.bound,
+                sent: polled.submitted,
+              }))}
       </p>
       {(poll.isError || remove.isError) && (
         <Notice signal="blocked" label={t('common.failed')}>

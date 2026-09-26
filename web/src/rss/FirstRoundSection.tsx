@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useId, useState } from 'react'
+import { Fragment, useId, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import {
@@ -81,13 +81,21 @@ function outcomeOf(row: FeedItem): Outcome | null {
   }
 }
 
+/**
+ * 至少讀到過一次：輪過、而且不是「一筆都沒有又失敗」。讀不到的那一輪照樣寫 `last_polled_at`，
+ * 所以光看它不夠（M3 票 21 的 critique P0）。後端 `services/rss._ever_read` 是同一條。
+ */
+function everRead(feed: Feed): boolean {
+  return feed.last_polled_at !== null && (feed.last_error === '' || feed.items > 0)
+}
+
 /** 一個 Feed 的第一輪。詳情頁從作品建搜尋 feed 之後就地畫它（票 19）。 */
 export function FirstRound({ feed, onDone }: { feed: Feed; onDone: (said: string) => void }) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const headingId = useId()
-  // 還沒讀過的不讓人選：沒看過的東西不選「全部下載」（shape §2）。
-  const read = feed.last_polled_at !== null
+  // 還沒讀到過的不讓人選：沒看過的東西不選「全部下載」（shape §2）。
+  const read = everRead(feed)
   const preview = useQuery({ ...previewQueryOptions(feed.id), enabled: read })
   const prime = useMutation({
     mutationFn: (mode: PrimeMode) => primeFeed(feed.id, mode),
@@ -135,7 +143,16 @@ export function FirstRound({ feed, onDone }: { feed: Feed; onDone: (said: string
       </div>
 
       {!read ? (
-        <p className="max-w-prose text-sm text-ink">{t('rss.first.unread')}</p>
+        <p className="max-w-prose text-sm text-ink">
+          {feed.last_error ? (
+            <>
+              {t('rss.first.unreadFailed')}{' '}
+              <span className="value text-xs wrap-anywhere">{feed.last_error}</span>
+            </>
+          ) : (
+            t('rss.first.unread')
+          )}
+        </p>
       ) : preview.isPending ? (
         <div className="h-24 border-2 border-rule bg-hull" aria-hidden="true" />
       ) : preview.isError ? (
@@ -145,16 +162,19 @@ export function FirstRound({ feed, onDone }: { feed: Feed; onDone: (said: string
       ) : (
         <>
           <p className="value text-sm text-ink">
+            {/* 分隔點與空白在不換行的那一格外面：窄版與英文才有地方換行（critique P1）。 */}
             {OUTCOMES.map((outcome, index) => (
-              <span key={outcome} className="whitespace-nowrap">
+              <Fragment key={outcome}>
                 {index > 0 && (
                   <>
                     {' '}
                     <Dot />{' '}
                   </>
                 )}
-                {t(`rss.first.tally.${outcome}`, { count: count(outcome) })}
-              </span>
+                <span className="whitespace-nowrap">
+                  {t(`rss.first.tally.${outcome}`, { count: count(outcome) })}
+                </span>
+              </Fragment>
             ))}
           </p>
           {refusal?.reason === 'feed_unreachable' ? (

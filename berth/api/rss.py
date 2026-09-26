@@ -145,6 +145,9 @@ class PollOut(BaseModel):
     #: 新長出的 Series 裡自動綁上的（票 09）。
     bound: int
     submitted: int
+    #: Feed 本身抓不到時的原文（同那一列的 `last_error`）；抓到了是空字串。畫面照它說「這一輪
+    #: 沒讀到」，而不是「新 0 筆」（M3 票 21 的 critique）。
+    failed: str
 
 
 class PrimeIn(BaseModel):

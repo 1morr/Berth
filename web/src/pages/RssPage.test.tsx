@@ -290,6 +290,21 @@ describe('RSS 頁：新 Feed 的第一輪（票 11）', () => {
     expect(sent(stub, 'GET', '/api/rss/feeds/2/preview')).toHaveLength(0)
   })
 
+  it('輪過但一次都沒讀到的 Feed 也不給選，說出上一次為什麼沒讀到', async () => {
+    const stub = render({
+      'GET /api/rss/feeds': {
+        body: [feed(), { ...ACGRIP, items: 0, last_error: 'acg.rip: budget exhausted' }],
+      },
+    })
+    renderApp('/rss')
+    const block = await firstRound()
+
+    expect(within(block).getByText(/還沒讀到過，選不了/)).toBeInTheDocument()
+    expect(within(block).getByText('acg.rip: budget exhausted')).toBeInTheDocument()
+    expect(within(block).queryByRole('button', { name: '全部下載' })).not.toBeInTheDocument()
+    expect(sent(stub, 'GET', '/api/rss/feeds/2/preview')).toHaveLength(0)
+  })
+
   it('Feed 段那一列說一聲第一輪還沒決定', async () => {
     render({
       'GET /api/rss/feeds': { body: [ACGRIP] },
@@ -531,6 +546,30 @@ describe('RSS 頁', () => {
     const row = await screen.findByRole('article', { name: '與妳相戀到生命盡頭' })
     expect(within(row).queryByText('依據：')).not.toBeInTheDocument()
     expect(within(row).queryByText(/自動綁定/)).not.toBeInTheDocument()
+  })
+
+  it('這一輪沒讀到 Feed 時不說「新 0 筆」', async () => {
+    render({
+      'GET /api/rss/feeds': () => ({
+        body: [feed({ last_error: 'mikanani.me: budget exhausted' })],
+      }),
+      'POST /api/rss/feeds/1/poll': {
+        body: {
+          items: 0,
+          series: 0,
+          bound: 0,
+          submitted: 0,
+          failed: 'mikanani.me: budget exhausted',
+        },
+      },
+    })
+    renderApp('/rss')
+
+    const row = await screen.findByRole('article', { name: 'Mikan' })
+    await userEvent.click(within(row).getByRole('button', { name: '立即輪詢' }))
+
+    expect(await within(row).findByText(/這一輪沒讀到這個 Feed/)).toBeInTheDocument()
+    expect(within(row).queryByText(/這一輪：新/)).not.toBeInTheDocument()
   })
 
   it('聚合 feed 的 token 不整串印出來', async () => {

@@ -365,6 +365,23 @@ def _feed_view(row: RssFeed, items: int) -> FeedView:
 # --- 第一輪預覽 ---------------------------------------------------------
 
 
+async def _ever_read(session: AsyncSession, feed: RssFeed) -> bool:
+    """這個 Feed 至少讀到過一次：輪過、而且不是「一筆都沒有又失敗」。
+
+    讀不到的那一輪照樣寫 `last_polled_at`（輪詢的間隔靠它），所以光看它不夠——連不上、請求預算
+    用完的 Feed 預覽是空的，「全部下載」等於替沒看過的整份歷史做決定（M3 票 21）。前端
+    `rss/FirstRoundSection.tsx` 的 `everRead` 是同一條。
+    """
+    if feed.last_polled_at is None:
+        return False
+    if not feed.last_error:
+        return True
+    items = await session.scalar(
+        select(func.count()).select_from(RssItem).where(RssItem.feed_id == feed.id)
+    )
+    return bool(items)
+
+
 @command(Effect.READ)
 async def preview_feed(session: AsyncSession, feed_id: int) -> tuple[ItemView, ...]:
     """這個 Feed 的每一筆，新的在前，說出各自會怎樣（brief §15、票 11）。
@@ -422,7 +439,7 @@ async def prime_feed(
         raise RssRejectedError(RssRefusal.FEED_MISSING, str(feed_id))
     if feed.primed_at is not None:
         raise RssRejectedError(RssRefusal.FEED_PRIMED, feed.primed_at.isoformat())
-    if mode is PrimeMode.ALL and feed.last_polled_at is None:
+    if mode is PrimeMode.ALL and not await _ever_read(session, feed):
         raise RssRejectedError(RssRefusal.FEED_UNREAD, str(feed_id))
     if mode is PrimeMode.LATER:
         polled = await poll_feed(session, factory, feed_id, now=now)
