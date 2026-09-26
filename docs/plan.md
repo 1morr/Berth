@@ -790,6 +790,8 @@ M1 帶過來的（票 15 的 critique，2026-09-17，使用者拍板交給這一
 
 ### 11.4 M3 RSS
 
+> **2026-09-26 驗收完成（票 21）**：八條驗收是真服務 e2e 的第四個模組（`tests/e2e/test_4_m3_rss.py`，公開 RSS 站由 `sites` 容器冒充）；自動綁定在同類型 Route 不只一條時用 Feed 的 Route（brief §15、§19）。
+
 > 2026-09-24 拆成 21 張票，同日插入 06b–06f、次日插入 06g–06i，09-26 插入 14b，共 30 張；編號與內容以 `.scratch/m3/issues/` 為準：01–06i 是下方「M3 之前先做的修補」與兩個頁面決定，07 起是 RSS（tracer 是 08）。
 
 **票 11 做完**：Nyaa、acg.rip adapter，非 Mikan 的 RSS Series 鍵，新 Feed 的第一輪預覽（§2.4、§6、§8.5）；Mikan 不走預覽（shape 拍板）。
@@ -838,7 +840,7 @@ M1 帶過來的一條（票 15）：brief §6.4 的「以**發佈時間**推測�
 
 M1.5 帶過來的一條（票 10，2026-09-22 從 §11.3 移來）：缺集散在六季以上時只退回作品名，不分批問——一次搜尋的查詢數上限是為了不把公開站打到封 IP（§8.4）。分批的節奏與 RSS 輪詢的預算是同一個決定，在這裡一起定。**票 20 做完**：規則見 §3.2「一個站一份請求預算」與 §8.4 的缺集分批。
 
-**M3 收尾（票 21）過完票 01–20 的 Comments 之後延後的**，不排里程碑，有 repro 或使用者要求再開票：核准被播出日比對擋下的列、以及 `held_proposal` 重算的列不再比帳本，`span_clash` 與重複版本會漏（票 14 / 14b，核准那一步再比一次）；每集短於 5 分鐘的短篇動畫被 `classify` 整包降成 extra，註解說的批次一致性救回並不存在（票 15，可以改看 TMDB 片長）；RSS 的兩個並行窗口——`_rescreen` 先讀再寫會把剛送出的 Item 改回 `excluded`、`prime_feed` 與背景 poller 同寫一批 guid 撞 unique 冒 500（票 10 / 11，條件式 `UPDATE` 與 `ON CONFLICT DO NOTHING`）；`QUEUE_LIMIT` 截斷時組上的「全部確認」只確認畫面上的列，Series 卻整個標成確認過（票 13）；精靈跑完之後改 `QBITTORRENT_WEBUI_PORT`，Berth 仍連存下來的舊位址（票 06b，README 已寫要先定）；既有 Jellyfin 帳密錯只顯示 `POST /Users/AuthenticateByName: 401`，沒有對成「帳號或密碼不對」（票 06h）；票 16 的「以發佈時間推測虛擬季」偏離票面的兩處（只推「某一輪的重數是發佈前六週內播的」、只套到篇章名；progress.md 偏差 2026-09-26）使用者還沒追認。
+**M3 收尾（票 21）過完票 01–20 的 Comments 之後延後的**，不排里程碑，有 repro 或使用者要求再開票：核准被播出日比對擋下的列、以及 `held_proposal` 重算的列不再比帳本，`span_clash` 與重複版本會漏（票 14 / 14b，核准那一步再比一次）；每集短於 5 分鐘的短篇動畫被 `classify` 整包降成 extra，註解說的批次一致性救回並不存在（票 15，可以改看 TMDB 片長）；RSS 的兩個並行窗口——`_rescreen` 先讀再寫會把剛送出的 Item 改回 `excluded`、`prime_feed` 與背景 poller 同寫一批 guid 撞 unique 冒 500（票 10 / 11，條件式 `UPDATE` 與 `ON CONFLICT DO NOTHING`）；`QUEUE_LIMIT` 截斷時組上的「全部確認」只確認畫面上的列，Series 卻整個標成確認過（票 13）；精靈跑完之後改 `QBITTORRENT_WEBUI_PORT`，Berth 仍連存下來的舊位址（票 06b，README 已寫要先定）；既有 Jellyfin 帳密錯只顯示 `POST /Users/AuthenticateByName: 401`，沒有對成「帳號或密碼不對」（票 06h）；票 16 的「以發佈時間推測虛擬季」偏離票面的兩處（只推「某一輪的重數是發佈前六週內播的」、只套到篇章名；progress.md 偏差 2026-09-26）使用者還沒追認；真站一輪（票 21）一次送進近兩百個 torrent 時，qBittorrent 在 `GET /api/v2/torrents/categories` 回 `ReadTimeout`，那一筆停在 `submit_failed`——沒送到 qBittorrent，票 02 的 poller 認回接不到，只能人按重試（M4 巡檢或送單的有限重試再處理）。
 
 ### 11.5 M4 巡檢與通知
 

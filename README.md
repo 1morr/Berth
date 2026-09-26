@@ -2,7 +2,7 @@
 
 自託管的媒體取得與入庫協調器：把索引站或 RSS 命中的 torrent 送到 qBittorrent，下載完成後解析、比對 TMDB，以硬鏈接入庫到 Jellyfin，並維護可修復的帳本。
 
-**M1（手動全流程）已完成**：探索 → 搜 torrent → 送單 → 下載 → 解析比對 → 硬鏈接入庫 → Jellyfin 找到它，一部美劇一季、一部動漫一季、一部電影都不經人工走完（nightly 的 e2e 對真的服務守著這一條）。**M1.5（媒體庫瀏覽）也已完成**：媒體庫是一個 Jellyfin 媒體庫一頁、瀏覽整個媒體庫（不只 Berth 經手的），繼續觀看與下一集、已看 / 未看與切換、依類型與年份排序篩選、Jellyfin 的圖由 Berth 代理，Media 詳情最上面是觀看區；權限一律由 Berth 自己對 Jellyfin 的允許清單擋，播放仍深連結到 Jellyfin。**M2（修正與對帳）也已完成**：審核佇列（低信心的計劃逐列改後核准、medium 自動入庫的一鍵確認或撤銷、對不到的檔案指派、重複版本）、修正已入庫的檔案、可組合的刪除範圍、每日與手動的對帳（Jellyfin 裡刪掉的、complete 裡少了的、被複製品取代的硬鏈接都偵測得到並一鍵修）、重新入庫與 `berth rebuild-ledger`、Job 詳情頁；審核與修正只有管理員做得了。RSS 自動追番（M3）做到第一段：`/rss` 加 Mikan 的聚合 feed、把新出現的作品 × 字幕組綁到作品與 Route，之後的新集自動送單入庫，認得出的作品自動綁定，合集與自己不要的版本用三層排除條件擋下、同一個 torrent 與媒體庫裡已有的版本不重複下載；補舊集與其他來源還沒有。設計與決定見 `docs/design-brief.md`，架構與里程碑見 `docs/plan.md`，名詞表見 `CONTEXT.md`。
+**M1（手動全流程）已完成**：探索 → 搜 torrent → 送單 → 下載 → 解析比對 → 硬鏈接入庫 → Jellyfin 找到它，一部美劇一季、一部動漫一季、一部電影都不經人工走完（nightly 的 e2e 對真的服務守著這一條）。**M1.5（媒體庫瀏覽）也已完成**：媒體庫是一個 Jellyfin 媒體庫一頁、瀏覽整個媒體庫（不只 Berth 經手的），繼續觀看與下一集、已看 / 未看與切換、依類型與年份排序篩選、Jellyfin 的圖由 Berth 代理，Media 詳情最上面是觀看區；權限一律由 Berth 自己對 Jellyfin 的允許清單擋，播放仍深連結到 Jellyfin。**M2（修正與對帳）也已完成**：審核佇列（低信心的計劃逐列改後核准、medium 自動入庫的一鍵確認或撤銷、對不到的檔案指派、重複版本）、修正已入庫的檔案、可組合的刪除範圍、每日與手動的對帳（Jellyfin 裡刪掉的、complete 裡少了的、被複製品取代的硬鏈接都偵測得到並一鍵修）、重新入庫與 `berth rebuild-ledger`、Job 詳情頁；審核與修正只有管理員做得了。**M3（RSS）也已完成**：`/rss` 加 Mikan 的聚合 feed 或 Nyaa / acg.rip 的搜尋 feed（也可以從作品頁訂閱），新出現的作品 × 字幕組認得出就自動綁定（Route 不只一條時送進 Feed 說的那一條）、綁定時補齊舊集，之後的新集自動送單入庫；合集與自己不要的版本用三層排除條件擋下，同一個 torrent 與媒體庫裡已有的版本不重複下載；發佈時間對不上播出日、片長對不上 TMDB 的不自動入庫，入庫之後 Jellyfin 認得不一樣會開 Issue；split-cour 在審核裡改正一次，整個 RSS Series 跟著對。設計與決定見 `docs/design-brief.md`，架構與里程碑見 `docs/plan.md`，名詞表見 `CONTEXT.md`。
 
 ## 部署
 
@@ -337,7 +337,7 @@ M1 的整條路徑、M1.5 的權限與瀏覽、M2 的修正與對帳、M3 的 RS
   `jellyfin_item_mismatch`。
 
 Prowlarr 也會起來讓精靈偵測，但第 6 步跳過索引站、送單直接帶 `.torrent` 網址——搜尋不在 e2e 裡。套件內的媒體庫
-一開始是空的，反查要等 Berth 請 Jellyfin 掃描之後那一輪，所以一次**約 15 分鐘**，平常的 `uv run pytest` 不收它
+一開始是空的，反查要等 Berth 請 Jellyfin 掃描之後那一輪，所以一次**約 20 分鐘**，平常的 `uv run pytest` 不收它
 （`-m 'not e2e'`）。
 
 ```bash
@@ -395,7 +395,7 @@ docker compose -f deploy/docker-compose.yml -f tests/e2e/compose.yml --env-file 
 ```bash
 pnpm -C web build                                          # server 發的是 web/dist
 pnpm -C web exec playwright install chromium               # 第一次
-pnpm -C web e2e                                            # 約 1 分鐘（十三台替身）
+pnpm -C web e2e                                            # 約 2 分鐘（二十八台替身）
 pnpm -C web e2e --project issues                           # 只跑一條
 pnpm -C web exec playwright show-trace web/test-results/<那一條>/trace.zip   # 失敗時看 trace
 ```

@@ -30,6 +30,13 @@ qBittorrent 與 Jellyfin，三種人為破壞——在 Jellyfin 裡刪掉一集�
 Issue、修正、對帳、刪除與重新入庫的每一條端點都是 403，畫面上也沒有入口。前兩件是 nightly e2e 的第三個模組
 （`tests/e2e/test_3_m2_repair.py`）。
 
+**M3（RSS）在 2026-09-26 通過驗收**（brief §17、`.scratch/m3/issues/21-m3-acceptance.md`）：一個 Mikan 聚合 feed
+與一個從作品頁訂閱的 acg.rip 搜尋 feed 全自動追完——認得出的作品自動綁定（同類型的 Route 不只一條時送進 Feed 說的
+那一條），中途訂閱的一部補齊舊集、之後的新集自動入庫；同一集兩個字幕組、同組 v1 與 v2 都並存；合集被排除；一部
+split-cour 的第一批被播出日比對整批擋在審核，改正一次並套用到 RSS Series 之後其餘集數跟著對、自動入庫；Jellyfin
+認到的季集與帳本不同時開出 Issue；已確認的 RSS Series 的新集數不再進 audit 清單。這八條是 nightly e2e 的第四個
+模組（`tests/e2e/test_4_m3_rss.py`），公開 RSS 站由 compose 裡的替身冒充，下載與入庫走真的 qBittorrent 與 Jellyfin。
+
 ### Added
 
 - Repo 骨架：uv 後端專案與 `berth` CLI（`--version`）、pnpm + Vite + React + TypeScript 前端。
