@@ -840,7 +840,7 @@ M1 帶過來的一條（票 15）：brief §6.4 的「以**發佈時間**推測�
 
 M1.5 帶過來的一條（票 10，2026-09-22 從 §11.3 移來）：缺集散在六季以上時只退回作品名，不分批問——一次搜尋的查詢數上限是為了不把公開站打到封 IP（§8.4）。分批的節奏與 RSS 輪詢的預算是同一個決定，在這裡一起定。**票 20 做完**：規則見 §3.2「一個站一份請求預算」與 §8.4 的缺集分批。
 
-**M3 收尾（票 21）過完票 01–20 的 Comments 之後延後的**，不排里程碑，有 repro 或使用者要求再開票：核准被播出日比對擋下的列、以及 `held_proposal` 重算的列不再比帳本，`span_clash` 與重複版本會漏（票 14 / 14b，核准那一步再比一次）；每集短於 5 分鐘的短篇動畫被 `classify` 整包降成 extra，註解說的批次一致性救回並不存在（票 15，可以改看 TMDB 片長）；RSS 的兩個並行窗口——`_rescreen` 先讀再寫會把剛送出的 Item 改回 `excluded`、`prime_feed` 與背景 poller 同寫一批 guid 撞 unique 冒 500（票 10 / 11，條件式 `UPDATE` 與 `ON CONFLICT DO NOTHING`）；`QUEUE_LIMIT` 截斷時組上的「全部確認」只確認畫面上的列，Series 卻整個標成確認過（票 13）；精靈跑完之後改 `QBITTORRENT_WEBUI_PORT`，Berth 仍連存下來的舊位址（票 06b，README 已寫要先定）；既有 Jellyfin 帳密錯只顯示 `POST /Users/AuthenticateByName: 401`，沒有對成「帳號或密碼不對」（票 06h）；票 16 的「以發佈時間推測虛擬季」偏離票面的兩處（只推「某一輪的重數是發佈前六週內播的」、只套到篇章名；progress.md 偏差 2026-09-26）使用者還沒追認；真站一輪（票 21）一次送進近兩百個 torrent 時，qBittorrent 在 `GET /api/v2/torrents/categories` 回 `ReadTimeout`，那一筆停在 `submit_failed`——沒送到 qBittorrent，票 02 的 poller 認回接不到，只能人按重試（M4 巡檢或送單的有限重試再處理）。
+**M3 收尾（票 21）過完票 01–20 的 Comments 之後延後的**，不排里程碑，有 repro 或使用者要求再開票：核准被播出日比對擋下的列、以及 `held_proposal` 重算的列不再比帳本，`span_clash` 與重複版本會漏（票 14 / 14b，核准那一步再比一次）；每集短於 5 分鐘的短篇動畫被 `classify` 整包降成 extra，註解說的批次一致性救回並不存在（票 15，可以改看 TMDB 片長）；RSS 的兩個並行窗口——`_rescreen` 先讀再寫會把剛送出的 Item 改回 `excluded`、`prime_feed` 與背景 poller 同寫一批 guid 撞 unique 冒 500（票 10 / 11，條件式 `UPDATE` 與 `ON CONFLICT DO NOTHING`）；`QUEUE_LIMIT` 截斷時組上的「全部確認」只確認畫面上的列，Series 卻整個標成確認過（票 13）；精靈跑完之後改 `QBITTORRENT_WEBUI_PORT`，Berth 仍連存下來的舊位址（票 06b，README 已寫要先定）；既有 Jellyfin 帳密錯只顯示 `POST /Users/AuthenticateByName: 401`，沒有對成「帳號或密碼不對」（票 06h）；票 16 的「以發佈時間推測虛擬季」偏離票面的兩處（只推「某一輪的重數是發佈前六週內播的」、只套到篇章名；progress.md 偏差 2026-09-26）使用者還沒追認；真站一輪（票 21）一次送進近兩百個 torrent 時，qBittorrent 在 `GET /api/v2/torrents/categories` 回 `ReadTimeout`，那一筆停在 `submit_failed`——沒送到 qBittorrent，票 02 的 poller 認回接不到，只能人按重試（2026-09-26 移到 §11.5「M4 之前先做的修補」，M4 票 03）。
 
 ### 11.5 M4 巡檢與通知
 
@@ -852,7 +852,16 @@ M1.5 帶過來的一條（票 10，2026-09-22 從 §11.3 移來）：缺集散�
 
 驗收：一個 RSS 命中 → 下載 → 入庫 → Jellyfin 可見的全程，使用者的手機收到「正在下載」與「可以看了」兩則，內容說得出作品、季集與 Route；一件進審核的事推出「等你處理」並連到那一件；週報說得出這週入庫、修了什麼、還有什麼等人；管道掛掉時 Berth 不阻塞任何管線、健康頁說得出來。
 
-M3 收尾帶過來的兩條：巡檢的「一直失敗的 Feed」要分得出是補漏失敗還是輪詢失敗——現在拼在同一個 `rss_feeds.last_error`（M3 票 12，拆欄）；`jellyfin_item_mismatch` 被「忽略」之後，第二天對帳會重開，通知的「Issue 新增」等於每天推一次，改用健康檢查的「條件持續期間忽略有效」（`health_issues._still_ignored`，M3 票 17）。
+M3 收尾帶過來的兩條：巡檢的「一直失敗的 Feed」要分得出是補漏失敗還是輪詢失敗——現在拼在同一個 `rss_feeds.last_error`（M3 票 12，拆欄）；`jellyfin_item_mismatch` 被「忽略」之後，第二天對帳會重開，通知的「Issue 新增」等於每天推一次，改用健康檢查的「條件持續期間忽略有效」（`health_issues._still_ignored`，M3 票 17）。**2026-09-26 補**：`_still_ignored` 讀的 `cleared_at` 只有 `health_issues._settle` 會寫，`resolver.settle_verdicts` 不寫，要搬過去；而且它只解「忽略之後又重開」，試跑量到的主因是下面修補清單第 2 條的誤報。
+
+**M4 之前先做的修補**（2026-09-26 M3 後的全面審查，使用者拍板「先修再拆 M4」；審查紀錄見 progress.md 同日）：試跑環境（main `82d9cd7`）一個 Mikan MyBangumi 綁定後 11 分鐘送出 144 個 torrent，下面幾條在這一輪都真的發生了，而 M4 的通知會把它們放大成推播。票已開在 `.scratch/m4/issues/01–04`，`/to-tickets` 拆 M4 時從 05 接著編。
+
+- SQLite 寫鎖：poller 握著寫交易逐筆拿 `job_lock`，planner 先拿 `job_lock` 再寫，順序相反，試跑爆出 `database is locked`；另有四處握著寫交易打網路（`rss._record` 的單集頁、`bind_series` 的補舊集、刪除移除 torrent、重試送單）；`round_failed` 之後下一輪成功不清 `job.error`。交易紀律定在 §3.3（票 01）。
+- Jellyfin 回驗誤報：Jellyfin 還在認剛掃進來的檔案（季集 `None`、Series 沒有 Tmdb）就被判成不一致，找到 item 當下又停止反查；`importer.restate_versions` 以整個資料夾而不是同一集重排，一季每入庫一集就把前面每一集重反查一次，`jellyfin_item_resolved` 一筆 Job 寫 5–7 次。「可以看了」的單一事件在這張票定（票 02）。
+- 大批送單：磁碟門檻不扣在途量；暫時失敗的 `submit_failed`（qBittorrent `ReadTimeout`、停機）要有限重試，不留給人逐筆按（原在 §11.4 結尾）；.torrent 下載要不要進請求預算開工時問使用者（票 03）。
+- `GET /jobs` 沒有分頁、前端每個 SSE 事件都整份重抓（2026-09-22 記「歸票 12」後沒有人接）（票 04）。
+
+**拆 M4 票時要定的**（同一輪審查，事實與行號在 progress.md 同日）：`record_event` 一定要一筆 Job，Issue、Feed 失敗、週報都成不了事件——「`events` 表上的訂閱者」要嘛放寬事件，要嘛另立通知的 outbox，擇一並改寫上面「通知」那一段；`events` 會被 purge 刪列，id 不能當游標；「連結直接開到那一件」要 Berth 自己的對外網址，現在只有 Jellyfin 有 `public_url`；RSS 送出的 Job `user_id` 是 `None`，「正在下載」送給誰要定；「正在下載」要按輪彙整（一次綁定就是上百則）；「可以看了」要照使用者的 Jellyfin `UserViews` 過濾；自動綁定一個候選讀不到 TMDB 就整次 `lookup_failed` 而且不重試、標題帶「第四季」這類季名時搜不到候選，這兩種會讓「等你處理」虛胖。
 
 ### 11.6 M5 AI 核心
 
@@ -861,7 +870,7 @@ M3 收尾帶過來的兩條：巡檢的「一直失敗的 Feed」要分得出是
 範圍：
 
 - provider（Anthropic 實作，介面保留給其他家）、`settings.ai`（憑證、月預算、各任務型別的模式）、每次呼叫記 Event（model、tokens、費用）、快取鍵。模型與價格開工時查當時的官方資料。
-- **命令登錄表**：services 命令逐一登錄 pydantic 輸入、結果與拒絕理由、副作用等級（`read` / `reversible` / `irreversible`）與反向命令。AI 的工具只從這裡來；M7 的 MCP server 包的也是它。**M3 起新增的命令先標好等級與反向命令**，表本身在這裡開頭做。登錄表開工時要處理的兩條（M3 收尾）：`confirm_audit(s)` 的反向命令標成 `review.undo_audit`，語意對不上（它拆入庫，而且拒絕確認過的列）——另立「取消確認」或改成 `inverse=None`（M3 票 05）；`services/issues` 仍在 `BEFORE_M3` 豁免表，`resolve_issue` 的各個動作要逐顆標（M3 票 17）。
+- **命令登錄表**：services 命令逐一登錄 pydantic 輸入、結果與拒絕理由、副作用等級（`read` / `reversible` / `irreversible`）與反向命令。AI 的工具只從這裡來；M7 的 MCP server 包的也是它。**M3 起新增的命令先標好等級與反向命令**，表本身在這裡開頭做。登錄表開工時要處理的兩條（M3 收尾）：`confirm_audit(s)` 的反向命令標成 `review.undo_audit`，語意對不上（它拆入庫，而且拒絕確認過的列）——另立「取消確認」或改成 `inverse=None`（M3 票 05）；`services/issues` 仍在 `BEFORE_M3` 豁免表，`resolve_issue` 的各個動作要逐顆標（M3 票 17）。**2026-09-26 全面審查更正**：「M3 起新增的命令先標好」只對 M3 新建的*模組*成立（`tests/unit/test_command_marks.py` 守的是模組），豁免表裡 42 個模組都還沒標，不只 `services/issues`；M3 加進舊模組、會改狀態的命令也沒有標（`jellyfin.save_bundled_libraries`、`jobs.fail_interrupted`、`issues.close_settled`、`resolver.settle_verdicts`）。已標的也有兩條要重看：背景迴圈的入口 `rss.poll_due` 標成 `REVERSIBLE`，登錄表會把它當成 AI 工具；`rss.delete_feed` 連帶刪掉 Feed Item（CASCADE），卻標成可逆、反向是 `add_feed`。命令簽名吃 session 與 factory、拒絕是各模組自己的例外，離「pydantic 輸入」還有一段。
 - **AI 任務**（`ai_tasks` 表）與 `ai_worker` 迴圈：事件觸發，一個任務一件事，帶資料包、允許的工具與預算上限，結果是「已處理」或「交給人（附理由）」——交給人的走 M4 的「等你處理」通知。
 - **自主權看可逆性**：`reversible` 通過驗證後自動執行；`irreversible` 一律做成 Proposal（`proposals` 表）等人。刪 complete、移除 torrent、purge、改設定與 Route 永遠要人；「忽略 Issue」也做成 Proposal。
 - **驗證**：M3 的三道程式檢查（播出日比對、片長驗證、Jellyfin 回驗）加上集在 TMDB 存在、不撞目標路徑、季集範圍，AI 的結果照樣走一遍；不通過的不套用、交給人。

@@ -2,7 +2,10 @@
 # 真的 qBittorrent、真的 Jellyfin、真的 Prowlarr，Berth 由這份工作目錄 build。
 #
 #   CONFIG_ROOT=<空目錄> docker compose -f deploy/docker-compose.yml -f tests/e2e/compose.yml \
-#     --env-file tests/e2e/e2e.env up -d --build --wait
+#     --env-file tests/e2e/e2e.env up -d --build
+#
+# **不要加 `--wait`**：fixture 要從服務還在啟動時開始偵測（冷啟動，M3 票 06h），等全部健康才開跑
+# 的話 `conftest.py` 的第一個斷言就紅。起完立刻跑 pytest（README〈e2e〉）。
 #
 # **相對路徑相對於第一個檔案所在的 deploy/**，不是這個檔案：compose 把多個 -f 合併成同一個專案。
 #
