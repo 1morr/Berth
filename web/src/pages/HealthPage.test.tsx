@@ -38,6 +38,15 @@ describe('健康頁', () => {
     expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1)
   })
 
+  it('卡片的標題直接接在 h1 底下，不跳級（M3 票 21 的 critique）', async () => {
+    render({ body: healthDetail() })
+    renderApp('/health')
+
+    await screen.findByRole('heading', { level: 1, name: '健康' })
+    expect(screen.getByRole('heading', { level: 2, name: 'Jellyfin' })).toBeVisible()
+    expect(screen.queryAllByRole('heading', { level: 3 })).toHaveLength(0)
+  })
+
   /**
    * 票 03 第 16 條。全綠時同一顆綠章在一千像素裡出現八次（板四格 + 三張服務卡 + Route 總結，
    * 每條 Route 再一顆）。板子負責回答「有沒有紅的」，底下不再把同一句話重說一遍。

@@ -26,9 +26,9 @@ export function PollerCard({ poller }: { poller: PollerView }) {
       className={`border-2 bg-well ${failing ? 'border-rule-strong' : 'border-rule'}`}
       aria-labelledby="health-poller"
     >
-      <h3 id="health-poller" className="label border-b-2 border-rule bg-deck px-4 py-2.5 text-ink">
+      <h2 id="health-poller" className="label border-b-2 border-rule bg-deck px-4 py-2.5 text-ink">
         {t('health.poller.title')}
-      </h3>
+      </h2>
 
       <dl className="divide-y divide-rule">
         <CutawayRow

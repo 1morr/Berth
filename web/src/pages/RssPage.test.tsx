@@ -1,6 +1,6 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 
 import type { Media } from '../api/media'
 import type { Feed, FeedItem, OneshotItem, RssSeries } from '../api/rss'
@@ -570,6 +570,35 @@ describe('RSS 頁', () => {
 
     expect(await within(row).findByText(/這一輪沒讀到這個 Feed/)).toBeInTheDocument()
     expect(within(row).queryByText(/這一輪：新/)).not.toBeInTheDocument()
+  })
+
+  it('輪詢長出的待綁定把這一列推出畫面時，重畫之後捲回來', async () => {
+    let polled = false
+    render({
+      'GET /api/rss/series': () => ({ body: polled ? [series()] : [] }),
+      'POST /api/rss/feeds/1/poll': () => {
+        polled = true
+        return { body: { items: 12, series: 11, bound: 0, submitted: 0, failed: '' } }
+      },
+    })
+    const scrolled = vi.fn()
+    const original = Element.prototype.scrollIntoView
+    Element.prototype.scrollIntoView = scrolled
+    onTestFinished(() => {
+      Element.prototype.scrollIntoView = original
+    })
+    renderApp('/rss')
+    const row = await screen.findByRole('article', { name: 'Mikan' })
+    // jsdom 沒有版面：這一列「被推到」視窗底下。
+    vi.spyOn(row, 'getBoundingClientRect').mockReturnValue({
+      top: 3000,
+      bottom: 3200,
+    } as DOMRect)
+
+    await userEvent.click(within(row).getByRole('button', { name: '立即輪詢' }))
+
+    await waitFor(() => expect(scrolled).toHaveBeenCalledWith({ block: 'nearest' }))
+    expect(scrolled.mock.contexts).toContain(row)
   })
 
   it('聚合 feed 的 token 不整串印出來', async () => {

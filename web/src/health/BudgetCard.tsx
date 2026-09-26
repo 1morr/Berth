@@ -27,9 +27,9 @@ export function BudgetCard() {
       className={`border-2 bg-well ${waiting ? 'border-rule-strong' : 'border-rule'}`}
       aria-labelledby="health-budget"
     >
-      <h3 id="health-budget" className="label border-b-2 border-rule bg-deck px-4 py-2.5 text-ink">
+      <h2 id="health-budget" className="label border-b-2 border-rule bg-deck px-4 py-2.5 text-ink">
         {t('health.budget.title')}
-      </h3>
+      </h2>
       <p className="max-w-prose px-4 pt-3 text-xs text-ink-dim">
         {t('health.budget.help', { limit })}
       </p>

@@ -104,6 +104,7 @@ export function HealthPage() {
             <ServiceCard
               key={row.kind}
               row={row}
+              level="h2"
               // 漂移是這一頁唯一「有東西可以按」的狀態，而按鈕住在設定頁。
               actions={
                 row.drift.length > 0 && me.data?.role === 'admin' ? (
@@ -138,9 +139,9 @@ export function HealthPage() {
             >
               {t(ROUTE_HEALTH_LABEL[report.routes_status])}
             </span>
-            <h3 id="health-routes" className="value text-sm font-semibold text-ink">
+            <h2 id="health-routes" className="value text-sm font-semibold text-ink">
               {t('health.routes.title')}
-            </h3>
+            </h2>
             <span className="value text-xs text-ink-dim">
               {t('health.routes.count', { count: report.routes.length })}
             </span>

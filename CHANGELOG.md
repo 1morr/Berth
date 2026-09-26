@@ -711,6 +711,8 @@ Issue、修正、對帳、刪除與重新入庫的每一條端點都是 403，�
   `POST /rss/oneshot`（只讀）；網址認不出、讀不到、讀到的不是 RSS 各有自己的理由（新的 `feed_not_rss`）。
 - **詳情頁的「RSS 訂閱」**（M3 票 19，只有 admin）：列出綁在這部作品上的 RSS Series；新增訂閱時 Mikan 由 Berth 代搜番組、選字幕組、建單一 feed 並綁上（預設補齊整季），Nyaa / acg.rip 以作品的標題建搜尋 feed、長出的字幕組都預先綁到這部作品，第一輪就地預覽。新端點 `GET /api/rss/mikan/search`、`GET /api/rss/mikan/bangumi/{id}`、`POST /api/rss/subscriptions/mikan`、`POST /api/rss/subscriptions/search`；`GET /api/rss/series` 多 `?media=` 與五個欄位；`rss_feeds` 多三欄（migration `f4b9d2e6a157`）。
 - **一個站一份請求預算**（M3 票 20，plan §3.2）：RSS 輪詢、補舊集與每日補漏、索引站搜尋與 `/rss` 上人按的讀取共用一份，以主機名為鍵、每站每小時 60 個（滾動窗，形狀照 Prowlarr 的 Query Limit）；用完的那一個不送，被擋下的工作照原本的退路下一輪再試。健康頁多一塊「請求預算」，新端點 `GET /api/health/budget`；搜尋放不下時回 `problem = budget_exhausted` 與 `retry_at`，`/rss` 的讀取回 429 `budget_exhausted`；自動綁定被擋下的理由是新的 `lookup_deferred`、之後的輪詢再認。
+- **Feed 帶一條自動綁定的 Route**（M3 票 21，brief §15「綁定」）：收得下認出來那部作品的 Route 不只一條時（預設安裝的 TV 與 Anime 都收劇集），自動綁定送進加 Feed 時選的那一條（照 Sonarr Import List 的 Root Folder），理由是新的 `feed_route`。`POST /api/rss/feeds` 多選填的 `route`（不存在是 422 `route_missing`），Feed 的每一列多 `route_id`；`/rss` 的新增表單在兩條以上啟用中的 Route 時多「自動綁定送進」，Feed 列說出它。
+- 真服務 e2e 多第四個模組 `tests/e2e/test_4_m3_rss.py`（M3 的八條驗收），公開 RSS 站由 compose 裡的 `sites` 容器冒充（`tests/e2e/sites.py`，HTTPS，測試 CA 在 `tests/fixtures/e2e/tls/`）。前端 e2e 多 `rss-auto-bind`。
 
 ### Changed
 - **缺集一鍵搜分批問完**（M3 票 20，plan §8.4）：季記號放不下一次搜尋的五個查詢時不再退回作品名，而是分批——每一批一組季，搜尋區塊說出這一批問了哪幾季、下一批是哪幾季、請求預算何時放得下，「問下一批」由人按。`GET /api/search` 與 `/search/queries` 多 `from_season=` 參數（下一批從哪一季起）與 `batch` 回應欄位（`from_season` 單獨帶著是 422 `from_season_without_missing`）。
@@ -1035,6 +1037,9 @@ Issue、修正、對帳、刪除與重新入庫的每一條端點都是 403，�
 
 - **`settings.services.jellyfin.metadata_fetchers` 的鍵是媒體庫的資料夾、預設是空的**（M3 票 06f）：沒寫的媒體庫
   依內容類型落回 TMDB（目前電影與劇集都是 `TheMovieDb`）；已經存了三列 `movies` / `tv` / `anime` 的設定照舊有效。
+- `POST /api/rss/feeds/{id}/poll` 的回應多 `failed`（這一輪抓不到 Feed 的原文）；`/rss` 上那一輪讀不到時說「這一輪沒讀到」，不再說「新 0 筆」。
+- 健康頁的 Jellyfin 卡片把媒體庫數量交給 i18n（`library_count`），不再是後端寫死的英文「N libraries」。
+- e2e 的種子影片照語料的 TMDB 快照改寫標頭的片長：片長驗證（票 15）會擋下 330 秒對半小時的集數。
 
 ### Removed
 - **服務設定頁 `/settings/services` 與精靈的 `?berth=` 深連結**（M3 票 06i）：前者拆進設定的各分頁，後者連同
@@ -1253,6 +1258,10 @@ Issue、修正、對帳、刪除與重新入庫的每一條端點都是 403，�
 - **審核與待處理頁的無障礙小修**（M3 票 06，M2 票 16 的遺留）：逐列「改」與「修正」打開時焦點進到表單、
   緊跟著檔名；每一列的「展開」念得出是哪一件、命中區 24px；段標題的計數念成「2 件」；刪除結果那一句所在的
   live region 一直掛著；`/issues` 進頁時不再問兩次清單。
+- 輪過、但一次都沒讀到的搜尋 Feed（連不上、請求預算用完）第一輪仍能選「全部下載」——下一次讀到時整份歷史照送。現在要至少讀到過一次（`feed_unread`），畫面說出上一次為什麼沒讀到。
+- 重複版本「取代舊版」先比 inode：目標上是使用者換進去的檔案時拒絕（`target_taken`），不再蓋掉它。
+- 套件內 Jellyfin 靠泊之後重跑偵測不再被判成既有服務。
+- 第一輪預覽的計數在窄版英文撐出橫向捲動；「只追之後的」送出中不再 `disabled`（焦點會掉回頁首）；淺色主題錯誤狀態的輸入框邊框對比不足 3:1；刪掉精靈的一個媒體庫之後焦點落到下一列。
 
 ### Security
 

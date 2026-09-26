@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useId, useState, type FormEvent } from 'react'
+import { useId, useRef, useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import {
@@ -126,6 +126,13 @@ function AddFeed({ routes }: { routes: RouteRow[] }) {
   )
 }
 
+/** 那一列不在畫面內時捲到它（在畫面內就不動，免得每按一次都跳一下）。 */
+function bringBack(element: HTMLElement | null) {
+  if (!element) return
+  const box = element.getBoundingClientRect()
+  if (box.top < 0 || box.bottom > window.innerHeight) element.scrollIntoView({ block: 'nearest' })
+}
+
 /**
  * 自動綁定送進的 Route（M3 票 21，照 Sonarr Import List 的 Root Folder）。只列啟用中的：停用的
  * 那一條自動綁定本來就不看。只有一條啟用中的 Route 時不必選，這一欄不出現。
@@ -177,6 +184,7 @@ function FeedRow({ feed, routes }: { feed: Feed; routes: RouteRow[] }) {
   const queryClient = useQueryClient()
   const headingId = useId()
   const [polled, setPolled] = useState<PollOutcome | null>(null)
+  const self = useRef<HTMLElement>(null)
   const refresh = () => queryClient.invalidateQueries({ queryKey: RSS_KEY })
   const poll = useMutation({
     mutationFn: () => pollFeed(feed.id),
@@ -184,6 +192,9 @@ function FeedRow({ feed, routes }: { feed: Feed; routes: RouteRow[] }) {
     onSuccess: async (outcome) => {
       setPolled(outcome)
       await Promise.all([refresh(), queryClient.invalidateQueries({ queryKey: ['jobs'] })])
+      // 需要人的那幾段浮在頁首（第一輪、待綁定），這一輪長出來的會把這一列連同結果句推出畫面
+      // （M3 票 21 的 audit：390px 上從 y 356 推到 2443）。重畫之後捲回來。
+      requestAnimationFrame(() => bringBack(self.current))
     },
   })
   const remove = useMutation({ mutationFn: () => deleteFeed(feed.id), onSuccess: refresh })
@@ -191,6 +202,7 @@ function FeedRow({ feed, routes }: { feed: Feed; routes: RouteRow[] }) {
 
   return (
     <article
+      ref={self}
       tabIndex={-1}
       aria-labelledby={headingId}
       className={`grid gap-2 border-2 bg-well px-4 py-3 ${
