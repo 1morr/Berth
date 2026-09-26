@@ -3213,6 +3213,8 @@ export interface components {
             info_hash?: string;
             /** Published At */
             published_at?: string | null;
+            /** Size */
+            size?: number | null;
         };
         /**
          * JobState

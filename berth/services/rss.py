@@ -903,6 +903,7 @@ async def _submit(session: AsyncSession, factory: ServiceClientFactory, item: Rs
                 title=item.title,
                 info_hash=item.info_hash,
                 published_at=item.published_at,
+                size=item.size or 0,
             ),
             media_id=series.media_id,
             route_id=series.route_id,

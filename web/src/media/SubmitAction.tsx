@@ -55,11 +55,13 @@ export function SubmitAction({
         // `info_hash` 用它自己那一格，不是 `key`——`key` 是「這一列的身分」（info hash
         // **或** guid），不報 hash 的站那一格是一條網址。
         // 發佈時間跟著 Job 存下來，規劃時比播出日（M3 票 14）；那個站沒報是 null。
+        // 大小是磁碟門檻算在途量用的：qBittorrent 報得出之前只有它（M4 票 03）。
         source: {
           url: row.download_url,
           title: row.title,
           info_hash: row.info_hash,
           published_at: row.published_at,
+          size: row.size,
         },
         media: media.id,
         route,

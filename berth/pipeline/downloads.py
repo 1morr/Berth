@@ -1,6 +1,8 @@
 """`qbit_poller`：驅動客戶端狀態那幾個轉換的背景迴圈（plan §3.2、票 10）。
 
-迴圈本身只管三件事——什麼時候該問、例外怎麼接、下一次多久之後再來。問什麼、連線握多久、
+迴圈本身只管三件事——什麼時候該問、例外怎麼接、下一次多久之後再來。問得到 qBittorrent 的那一輪
+之後順手把到時間的暫時送單失敗再送一次（`services.jobs.retry_due`，M4 票 03）：它要的正是
+「qBittorrent 這一刻答話」這個事實，而這個迴圈是唯一每幾秒就知道答案的地方。問什麼、連線握多久、
 轉換怎麼走都是 `services/downloads.py` 的事（`pipeline` 只呼叫 services，plan §1.3）。
 
 **醒得比問頻繁**，與 `health_checker` 同一個形狀：每 5 秒醒一次，但只有距離上一輪滿了
@@ -35,6 +37,7 @@ from berth.services.downloads import (
 )
 from berth.services.events import EventHub
 from berth.services.hints import JobHints
+from berth.services.jobs import retry_due
 from berth.services.setup import is_setup_complete
 from berth.services.steps import message
 
@@ -62,6 +65,7 @@ class QbitPoller:
         now: Clock = lambda: datetime.now(UTC),
     ) -> None:
         self._sessions = sessions
+        self._clients = clients
         self._downloader = Downloader(clients, hub, hints)
         self._sleep = sleep
         self._now = now
@@ -108,9 +112,17 @@ class QbitPoller:
                 )
                 return True
             self._penalty = None
+            # **問得到 qBittorrent 的那一輪才重送**（M4 票 03）：停機時 poll 本身就失敗、走不到
+            # 這裡，暫時失敗的那一批不會把重送次數花在一台不在的服務上。放在 poll 之後：客戶端
+            # 其實收下了的那幾筆這一輪已經認回，不會再送一次。
+            retried = await retry_due(session, self._clients, now=moment)
             logger.debug(
                 "qbit poller round",
-                extra={"moved": outcome.moved, "unknown": outcome.unknown},
+                extra={
+                    "moved": outcome.moved,
+                    "unknown": outcome.unknown,
+                    "retried": retried,
+                },
             )
             return True
 

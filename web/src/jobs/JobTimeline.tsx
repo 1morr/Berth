@@ -135,9 +135,12 @@ const FACTS: Record<KnownEvent, (facing: Facing) => ReactNode> = {
     </>
   ),
   // 服務回的原文，不翻譯（與精靈的纜繩同一個規矩）。用 `blocked-ink` 而不是色塊——
-  // 這是一句字，不是一個狀態格。
-  submit_failed: ({ payload }) => (
-    <p className="value text-xs wrap-anywhere text-blocked-ink">{text(payload.error)}</p>
+  // 這是一句字，不是一個狀態格。暫時的失敗多一句：幾時自動再送，或次數用完了（M4 票 03）。
+  submit_failed: ({ t, payload }) => (
+    <>
+      <p className="value text-xs wrap-anywhere text-blocked-ink">{text(payload.error)}</p>
+      <Resend t={t} payload={payload} />
+    </>
   ),
   // 重試回到的站不同：送單的重試退回「已建立」再送一次，入庫的重試退回「入庫中」從沒鏈接的
   // 檔案接著做（票 12）；待處理上的幾顆各有自己的一句（M2 票 09、09c）。`state` 與 `action`
@@ -452,6 +455,28 @@ const ISSUES = [
   'unknown_torrent',
   'jellyfin_item_unresolved',
 ] as const
+
+/**
+ * 暫時失敗的送單自動再送的那一句（M4 票 03）。後端只在暫時的失敗上寫 `attempt`：`retry_at` 是下一次
+ * 的時刻，次數用完是 `null`。沒有 `attempt` 的（再問也一樣的失敗、票 03 之前的事件）什麼都不畫——
+ * 它本來就等人按重試。
+ */
+function Resend({ t, payload }: { t: Translate; payload: JobEvent['payload'] }) {
+  const attempt = number(payload.attempt)
+  if (!attempt) return null
+  const at = text(payload.retry_at)
+  return (
+    <p className="max-w-prose text-xs text-ink-dim">
+      {at ? (
+        <>
+          {t('jobs.timeline.resendAt', { attempt })} <Timestamp at={at} />
+        </>
+      ) : (
+        t('jobs.timeline.resendSpent', { attempt })
+      )}
+    </p>
+  )
+}
 
 function Row({ children }: { children: string | false }) {
   if (!children) return null

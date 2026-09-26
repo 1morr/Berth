@@ -43,7 +43,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import InstrumentedAttribute
 
 from berth.adapters import fs
-from berth.adapters.http import ServiceError
+from berth.adapters.http import ServiceError, is_transient
 from berth.adapters.qbittorrent import TorrentAdd, ensure_category
 from berth.adapters.torrent import TorrentSource
 from berth.domain import (
@@ -197,6 +197,9 @@ class JobSource:
     #: 來源說它什麼時候發佈的（索引站的 `publishDate`、Feed Item 的發佈時間）。規劃時比播出日
     #: （M3 票 14），所以跟著 Job 存下來——結果表那一輪之後就不在了。
     published_at: datetime | None = None
+    #: 來源報的大小（索引站結果、Feed Item），位元組；不報是 `0`。qBittorrent 報得出之前它就是
+    #: `jobs.total_size`，磁碟門檻拿它算在途量（`check_disk`，M4 票 03）。
+    size: int = 0
 
 
 class JobRejectedError(Exception):
@@ -324,6 +327,7 @@ async def add_download(
             name=source.title,
             source_url=source.url,
             published_at=source.published_at,
+            total_size=source.size,
             trigger=trigger,
             trigger_ref=trigger_ref,
             user_id=user_id,
@@ -370,7 +374,7 @@ async def add_download(
         logger.info("job created", extra={"state": job.state.value, "route": route.slug})
         # 從這裡開始 poller 也看得到這一列（它已經 commit 了），所以送單與迴圈要排隊。
         async with job_lock(job.hash):
-            await _finish(session, factory, job, route, torrent, media, actor=actor)
+            await _finish(session, factory, job, route, torrent, media, actor=actor, attempt=1)
         return AddDownloadOutcome(job=await _view_one(session, job), created=True)
 
 
@@ -389,19 +393,28 @@ async def retry_job(session: AsyncSession, factory: ServiceClientFactory, job_ha
         with job_context(job.hash):
             async with job_lock(job.hash):
                 return await _resume_import(session, job)
-    route = await session.get(Route, job.route_id) if job.route_id is not None else None
-    if route is None:
-        raise JobRejectedError(JobRefusal.ROUTE_MISSING, str(job.route_id))
-    # **與第一次送單同一組前提**：那條 Route 可能在中間被停用、被改成收別種作品，或紅了。
-    # 只檢查健康的話「第一次送不出去、重試卻送得出去」——同一個決定兩種答案。
-    subject = await session.get(Media, job.media_id) if job.media_id is not None else None
-    check_route(route, subject)
-    await check_disk(session)
+    route, subject = await _retry_target(session, job)
 
     with job_context(job.hash):
         # poller 也會寫這一列（票 10），所以重試與迴圈排隊——CAS 保證不寫壞，鎖保證不做兩次。
         async with job_lock(job.hash):
-            return await _resubmit(session, factory, job, route, subject)
+            return await _resubmit(session, factory, job, route, subject, actor="user", attempt=1)
+
+
+async def _retry_target(session: AsyncSession, job: Job) -> tuple[Route, Media | None]:
+    """送單重試的 Route 與作品，前提不成立就拒絕。人按的（`retry_job`）與自動的（`retry_due`）
+    同一支。
+
+    **與第一次送單同一組前提**：那條 Route 可能在中間被停用、被改成收別種作品，或紅了。只檢查健康
+    的話「第一次送不出去、重試卻送得出去」——同一個決定兩種答案。
+    """
+    route = await session.get(Route, job.route_id) if job.route_id is not None else None
+    if route is None:
+        raise JobRejectedError(JobRefusal.ROUTE_MISSING, str(job.route_id))
+    subject = await session.get(Media, job.media_id) if job.media_id is not None else None
+    check_route(route, subject)
+    await check_disk(session)
+    return route, subject
 
 
 async def _resubmit(
@@ -410,24 +423,148 @@ async def _resubmit(
     job: Job,
     route: Route,
     subject: Media | None,
+    *,
+    actor: str,
+    attempt: int,
 ) -> JobView:
-    """重試的那幾步。抽出來是為了讓 `job_lock` 包得住整段而不必再縮排一層。"""
+    """重試的那幾步（人按的與 `retry_due` 自動的）。抽出來是為了讓 `job_lock` 包得住整段。
+
+    `attempt` 是這一次算第幾次（`SUBMIT_RETRIES`）：人按的從 1 重新數，自動的接著上一次數。
+    """
     if not await transition(session, job, JobState.REQUESTED, expected=JobState.SUBMIT_FAILED):
         # 有別人（或另一個分頁）先動過它。放棄本次操作，不覆寫他的結果（plan §3.1）。
         raise JobRejectedError(JobRefusal.NOT_RETRYABLE, job.state.value)
-    await record_event(session, job, EventType.RETRIED, actor="user", payload={})
+    await record_event(session, job, EventType.RETRIED, actor=actor, payload={})
     # **打網路之前 commit**（plan §3.3）：抓 `.torrent` 與送 qBittorrent 各要幾秒，握著寫交易等它們
     # 的話每一個寫者都在排隊。與第一次送單同一個形狀（`add_download`）。
     await session.commit()
-    logger.info("job retried", extra={"state": job.state.value})
+    logger.info("job retried", extra={"state": job.state.value, "attempt": attempt})
     try:
         torrent = await _resolve(factory, job.source_url)
     except JobRejectedError as failure:
-        await _fail(session, job, failure.detail or failure.reason, actor="user")
+        cause = failure.__cause__
+        transient = isinstance(cause, ServiceError) and is_transient(cause)
+        await _fail(
+            session,
+            job,
+            failure.detail or failure.reason,
+            actor=actor,
+            attempt=attempt if transient else None,
+        )
         await session.commit()
         return await _view_one(session, job)
-    await _finish(session, factory, job, route, torrent, subject, actor="user")
+    await _finish(session, factory, job, route, torrent, subject, actor=actor, attempt=attempt)
     return await _view_one(session, job)
+
+
+#: 暫時失敗的送單自動重送前等多久（M4 票 03，plan §3.1、§3.2）：第 n 次失敗之後等第 n 個，用完就
+#: 停下來等人——一筆最多送 1 + 4 次、分散在七個多小時裡。形狀照 `jellyfin_resolver` 的反查排程
+#: （先密後疏）：逾時多半是 qBittorrent 一時忙不過來，幾分鐘就好；`.torrent` 那一站的 5xx 則可能
+#: 掛上幾小時。**qBittorrent 整個停機不花次數**：重送只在 poller 問得到它的那一輪跑
+#: （`pipeline/downloads.py`），停機一整夜留下的那一批在服務回來的那一輪接上。
+SUBMIT_RETRIES = (
+    timedelta(minutes=1),
+    timedelta(minutes=10),
+    timedelta(hours=1),
+    timedelta(hours=6),
+)
+
+
+async def retry_due(session: AsyncSession, factory: ServiceClientFactory, *, now: datetime) -> int:
+    """把到時間的暫時失敗再送一次（plan §3.1 的 `submit_failed` 自動重送，M4 票 03）。回試了幾筆。
+
+    「到時間」讀那一筆最後一次 `submit_failed` 事件的 `retry_at`：只有暫時的失敗寫它，次數用完的
+    那一次寫 `None`——排程就是時間線本身，不另存一份會與它對不起來的欄位。
+
+    前提與人按的重試同一組（`_retry_target`），**不成立的不花次數**：磁碟滿著、Route 停用的那段時間
+    它留在原地，條件解除之後的那一輪才送。磁碟不夠時整輪停下：後面每一筆都會被同一個門檻擋下。
+
+    **一輪遇到第一筆又失敗就收手**：poll 答得了不代表送得進去——M3 票 21 真站那一輪正是一次送近
+    兩百個時 qBittorrent 逾時。照送下去的話一整批在同一刻各燒掉一次次數，約七小時內全部用完；收手
+    之後其餘的留到下一輪，每一輪只花一筆的次數。
+    """
+    tried = 0
+    for job_hash in await _due_retries(session, now):
+        job = await session.get(Job, job_hash)
+        if job is None:
+            continue
+        with job_context(job.hash):
+            try:
+                route, subject = await _retry_target(session, job)
+            except JobRejectedError as refusal:
+                logger.info(
+                    "automatic retry held back",
+                    extra={"reason": refusal.reason.value, "detail": refusal.detail},
+                )
+                if refusal.reason is JobRefusal.LOW_DISK_SPACE:
+                    break
+                continue
+            async with job_lock(job.hash):
+                # 鎖拿到之後重讀排程：等鎖那段時間裡有人按了重試、又暫時失敗的話，次數從 1 重新數、
+                # `retry_at` 也往後排了——照鎖外讀到的那一份送會把它蓋掉。
+                attempt = _due_attempt(await _last_failure(session, job.hash), now)
+                if attempt is None:
+                    continue
+                try:
+                    view = await _resubmit(
+                        session,
+                        factory,
+                        job,
+                        route,
+                        subject,
+                        actor=actor_of(None),
+                        attempt=attempt + 1,
+                    )
+                except JobRejectedError:
+                    # 拿鎖那段時間裡它被刪掉或已經不在 `submit_failed`：CAS 輸了，不歸這一輪。
+                    continue
+        tried += 1
+        if view.state is JobState.SUBMIT_FAILED:
+            break
+    return tried
+
+
+async def _due_retries(session: AsyncSession, now: datetime) -> list[str]:
+    """`submit_failed` 裡 `retry_at` 已過的那幾筆，送得早的先。"""
+    hashes = list(
+        await session.scalars(
+            select(Job.hash)
+            .where(Job.state == JobState.SUBMIT_FAILED)
+            .order_by(Job.added_at, Job.hash)
+        )
+    )
+    if not hashes:
+        return []
+    latest: dict[str, dict[str, Any]] = {}
+    rows = await session.execute(
+        select(Event.job_hash, Event.payload_json)
+        .where(Event.job_hash.in_(hashes), Event.type == EventType.SUBMIT_FAILED.value)
+        .order_by(Event.id)
+    )
+    for job_hash, payload in rows:
+        latest[job_hash] = payload or {}
+    return [
+        job_hash for job_hash in hashes if _due_attempt(latest.get(job_hash, {}), now) is not None
+    ]
+
+
+async def _last_failure(session: AsyncSession, job_hash: str) -> dict[str, Any]:
+    """這一筆最後一次 `submit_failed` 事件的 payload；沒有是空的。"""
+    payload = await session.scalar(
+        select(Event.payload_json)
+        .where(Event.job_hash == job_hash, Event.type == EventType.SUBMIT_FAILED.value)
+        .order_by(Event.id.desc())
+        .limit(1)
+    )
+    return payload or {}
+
+
+def _due_attempt(failure: dict[str, Any], now: datetime) -> int | None:
+    """這一次失敗到時間自動重送了的話，它是第幾次；還沒到、或不會自動重送是 `None`。"""
+    retry_at = failure.get("retry_at")
+    if not retry_at or datetime.fromisoformat(retry_at) > now:
+        return None
+    return int(failure.get("attempt", 1))
 
 
 async def resubmit_job(
@@ -483,7 +620,7 @@ async def resubmit_job(
             )
             await session.commit()
             logger.info("job resubmitted", extra={"state": job.state.value})
-            await _finish(session, factory, job, route, torrent, subject, actor=actor)
+            await _finish(session, factory, job, route, torrent, subject, actor=actor, attempt=1)
     return await _view_one(session, job)
 
 
@@ -701,11 +838,47 @@ async def check_disk(session: AsyncSession) -> None:
             extra={"path": root, "error": str(exc)},
         )
         return
-    if free < disk.min_free_bytes:
+    pending, counted = await _in_flight(session)
+    if free - pending < disk.min_free_bytes:
+        owed = (
+            f", {pending / 1024**3:.1f} GiB still to download for {counted} "
+            f"{'job' if counted == 1 else 'jobs'}"
+            if counted
+            else ""
+        )
         raise JobRejectedError(
             JobRefusal.LOW_DISK_SPACE,
-            f"{root}: {free / 1024**3:.1f} GiB free, below {disk.min_free_gb} GiB",
+            f"{root}: {free / 1024**3:.1f} GiB free{owed}, below {disk.min_free_gb} GiB",
         )
+
+
+#: 在途：已經交給 qBittorrent、還會在 incomplete 裡長大的那幾個狀態（M4 票 03）。`stalled` 也在裡面
+#: ——它停住了但沒放棄，追蹤站回來就接著長。`requested` 不在：它還沒進 qBittorrent，而且正是
+#: 在問門檻的那一筆。
+IN_FLIGHT = frozenset(
+    {JobState.SUBMITTED, JobState.METADATA_READY, JobState.DOWNLOADING, JobState.STALLED}
+)
+
+
+async def _in_flight(session: AsyncSession) -> tuple[int, int]:
+    """在途的 Job 還沒下完的位元組數，與算進去的筆數（M4 票 03）。
+
+    **只看剩餘空間會放行一整批**：2026-09-26 試跑一次送 144 個，每一個送單當下都過門檻（下載還沒
+    開始長），磁碟要到下載途中才滿，變成一批 `client_error`。`total_size` 在 qBittorrent 報得出之前
+    是送單時來源報的大小（`JobSource.size`）；兩邊都不知道的不算，並在 log 說有幾筆——猜一個數字
+    會讓門檻說出一句不是真的話。
+    """
+    rows = (
+        await session.execute(select(Job.total_size, Job.progress).where(Job.state.in_(IN_FLIGHT)))
+    ).all()
+    sized = [(size, progress) for size, progress in rows if size > 0]
+    if len(sized) < len(rows):
+        logger.info(
+            "in-flight jobs with size unknown are not counted against the disk threshold",
+            extra={"jobs": len(rows) - len(sized)},
+        )
+    pending = sum(int(size * (1 - min(max(progress, 0.0), 1.0))) for size, progress in sized)
+    return pending, len(sized)
 
 
 async def _resolve(factory: ServiceClientFactory, url: str) -> TorrentSource:
@@ -732,12 +905,13 @@ async def _finish(
     media: Media | None,
     *,
     actor: str,
+    attempt: int,
 ) -> None:
     """送出去，然後照結果收尾。**第一次送單與重試走同一支**——兩邊的收尾差一步就會分岔。
 
     凍結在成功之後（plan §2.2、brief §4.5）：磁碟上什麼都沒發生的那一次不該讓那串字定下來。
     """
-    await _submit(session, factory, job, route, torrent, actor=actor)
+    await _submit(session, factory, job, route, torrent, actor=actor, attempt=attempt)
     if job.state is JobState.SUBMITTED and media is not None:
         freeze(media, route)
     await session.commit()
@@ -751,6 +925,7 @@ async def _submit(
     torrent: TorrentSource,
     *,
     actor: str,
+    attempt: int,
 ) -> None:
     """`requested` → `submitted` / `submit_failed`（plan §3.1）。
 
@@ -772,6 +947,7 @@ async def _submit(
                 f"category {outcome.name!r} already points at {outcome.save_path!r}; "
                 f"Berth wants {save_path!r} and will not move an existing category",
                 actor=actor,
+                attempt=None,
             )
             return
         await client.add_torrent(
@@ -783,7 +959,9 @@ async def _submit(
             )
         )
     except ServiceError as exc:
-        await _fail(session, job, message(exc), actor=actor)
+        await _fail(
+            session, job, message(exc), actor=actor, attempt=attempt if is_transient(exc) else None
+        )
         return
     finally:
         await client.aclose()
@@ -809,16 +987,30 @@ async def _submit(
     )
 
 
-async def _fail(session: AsyncSession, job: Job, detail: str, *, actor: str) -> None:
+async def _fail(
+    session: AsyncSession, job: Job, detail: str, *, actor: str, attempt: int | None
+) -> None:
+    """`requested` → `submit_failed`。`attempt` 是暫時的失敗算第幾次，再問也一樣的是 `None`。
+
+    暫時的（`adapters.http.is_transient`：連不上、逾時、429、5xx）在事件上寫 `attempt` 與下一次
+    自動重送的 `retry_at`，次數用完寫 `None`——`retry_due` 讀的就是它，時間線也照它說「幾點
+    再送」或「不再自動送了」。
+    """
     if not await transition(
         session, job, JobState.SUBMIT_FAILED, expected=JobState.REQUESTED, error=detail
     ):
         logger.warning("job moved on before it could be marked failed", extra={"error": detail})
         return
-    await record_event(
-        session, job, EventType.SUBMIT_FAILED, actor=actor, payload={"error": detail}
+    payload: dict[str, Any] = {"error": detail}
+    if attempt is not None:
+        wait = SUBMIT_RETRIES[attempt - 1] if attempt <= len(SUBMIT_RETRIES) else None
+        payload["attempt"] = attempt
+        payload["retry_at"] = (utcnow() + wait).isoformat() if wait is not None else None
+    await record_event(session, job, EventType.SUBMIT_FAILED, actor=actor, payload=payload)
+    logger.warning(
+        "job submission failed",
+        extra={"state": job.state.value, "error": detail, "attempt": attempt},
     )
-    logger.warning("job submission failed", extra={"state": job.state.value, "error": detail})
 
 
 #: 重啟時仍停在 `requested` 的那一筆的 `error`（M3 票 02）。英文，與服務回的原文同一欄。
@@ -840,7 +1032,9 @@ async def fail_interrupted(session: AsyncSession) -> int:
     moved = 0
     for job in list(await session.scalars(select(Job).where(Job.state == JobState.REQUESTED))):
         with job_context(job.hash):
-            await _fail(session, job, INTERRUPTED, actor=actor_of(None))
+            # 被打斷是最典型的暫時：它若其實進了 qBittorrent，poller 在問得到的那一輪先認回；
+            # 沒進的由 `retry_due` 在同一輪之後再送（M4 票 03）。
+            await _fail(session, job, INTERRUPTED, actor=actor_of(None), attempt=1)
         moved += job.state is JobState.SUBMIT_FAILED
     await session.commit()
     return moved

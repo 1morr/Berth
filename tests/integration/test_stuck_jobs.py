@@ -143,7 +143,10 @@ class TestInterruptedRequest:
     async def test_a_restart_drops_it_into_submit_failed(
         self, session: AsyncSession, roots: dict[str, Path], config: Config
     ) -> None:
-        """啟動的那一刻不可能有送單正在路上，所以停在 `requested` 的都是被打斷的那一次。"""
+        """啟動的那一刻不可能有送單正在路上，所以停在 `requested` 的都是被打斷的那一次。
+
+        被打斷是暫時的失敗：事件帶第一次的 `attempt` 與 `retry_at`，poller 問得到 qBittorrent 的
+        那一輪先認回它收下的，沒收下的自動再送（M4 票 03）。"""
         job = await setup_job(session, roots, state=JobState.REQUESTED)
         app = create_app(config)
 
@@ -153,7 +156,9 @@ class TestInterruptedRequest:
         assert await state_of(session, job) is JobState.SUBMIT_FAILED
         assert job.error == INTERRUPTED
         failed = [row for row in await events_of(session) if row.type == "submit_failed"]
-        assert [payload(row) for row in failed] == [{"error": INTERRUPTED}]
+        (failure,) = [payload(row) for row in failed]
+        assert (failure["error"], failure["attempt"]) == (INTERRUPTED, 1)
+        assert failure["retry_at"]
 
     async def test_other_states_are_left_alone(
         self, session: AsyncSession, roots: dict[str, Path], config: Config

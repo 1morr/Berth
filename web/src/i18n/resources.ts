@@ -1661,6 +1661,9 @@ const zhHant = {
       retriedReplan: '狀態退回「下載完成」，重新規劃一次。',
       // 重新入庫（M2 票 10）：以 complete 裡那一包為來源，照現在的檔案重新規劃與入庫。
       retriedReimport: '重新入庫：照 complete 裡現在的檔案重新規劃一次。',
+      // 暫時失敗的送單（M4 票 03）：後面接一個相對時間（「10 分鐘後」）。
+      resendAt: '第 {{attempt}} 次沒送成，自動再送：',
+      resendSpent: '送了 {{attempt}} 次都沒成，不再自動送。修好之後按重試。',
       linkedFiles_one: '{{count}} 個檔案',
       linkedFiles_other: '{{count}} 個檔案',
       linkedTargets: '列出目標路徑',
@@ -4212,6 +4215,9 @@ const en: Translations<typeof zhHant> = {
       retriedRestart: 'qBittorrent was asked to start this one again.',
       retriedReplan: 'Back to downloaded, to be planned again.',
       retriedReimport: 'Reimported: planned again from the files in complete as they are now.',
+      resendAt: 'Attempt {{attempt}} did not go through; sending again automatically',
+      resendSpent:
+        'Tried {{attempt}} times without success; no more automatic tries. Retry once it is fixed.',
       linkedFiles_one: '{{count}} file',
       linkedFiles_other: '{{count}} files',
       linkedTargets: 'List the targets',

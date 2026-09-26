@@ -175,6 +175,7 @@ function Listing({
               title: row.title,
               info_hash: row.info_hash,
               published_at: row.published_at,
+              size: row.size,
             },
             media: media.id,
             route,

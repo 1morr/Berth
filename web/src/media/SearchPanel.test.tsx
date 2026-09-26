@@ -586,6 +586,8 @@ describe('搜尋 torrent 與結果表', () => {
           info_hash: 'a'.repeat(40),
           // 規劃時比播出日（M3 票 14）：那一列的發佈時間原樣帶回去，沒報就是 null。
           published_at: null,
+          // 磁碟門檻算在途量用：qBittorrent 報得出之前只有它（M4 票 03）。
+          size: 524_288_000,
         },
         media: 'tv:120089',
         route: 1,

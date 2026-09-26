@@ -164,6 +164,9 @@ class JobSourceIn(BaseModel):
     #: 索引站報的發佈時間（`SearchResultOut.published_at`）。站沒報時是 `null`：規劃時照「來源沒給」
     #: 跳過播出日比對（M3 票 14）。**要帶時區**：沒有時區就不知道是哪一天，存進去時也會炸。
     published_at: AwareDatetime | None = None
+    #: 索引站報的大小，位元組（`SearchResultOut.size`）；不知道是 `null`。qBittorrent 報得出之前
+    #: 磁碟門檻拿它算在途量（M4 票 03）。
+    size: int | None = Field(default=None, ge=0)
 
 
 class JobCreateIn(BaseModel):
@@ -316,6 +319,7 @@ async def post_job(
                 title=body.source.title,
                 info_hash=body.source.info_hash,
                 published_at=body.source.published_at,
+                size=body.source.size or 0,
             ),
             media_id=body.media,
             route_id=body.route,

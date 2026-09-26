@@ -30,6 +30,36 @@ function render(rows: JobEvent[]) {
 }
 
 describe('Job 時間線', () => {
+  it('暫時失敗的送單說出第幾次、幾時自動再送；次數用完說不再自動送（M4 票 03）', () => {
+    const line = render([
+      event({
+        id: 1,
+        type: 'submit_failed',
+        payload: {
+          error: 'GET /api/v2/torrents/categories: ReadTimeout',
+          attempt: 2,
+          retry_at: '2999-01-01T00:00:00Z',
+        },
+      }),
+      event({
+        id: 2,
+        type: 'submit_failed',
+        payload: {
+          error: 'POST /api/v2/auth/login: connection refused',
+          attempt: 5,
+          retry_at: null,
+        },
+      }),
+      event({ id: 3, type: 'submit_failed', payload: { error: 'POST /api/v2/torrents/add: 415' } }),
+    ])
+
+    expect(line.getByText('ReadTimeout', { exact: false })).toBeInTheDocument()
+    expect(line.getByText(/第 2 次沒送成，自動再送/)).toBeInTheDocument()
+    expect(line.getByText(/送了 5 次都沒成，不再自動送/)).toBeInTheDocument()
+    // 再問也一樣的那一種（沒有 `attempt`）只有原文：它本來就等人。
+    expect(line.getAllByText(/自動再送|不再自動送/)).toHaveLength(2)
+  })
+
   it('RSS 自動綁定送出的那一筆說出認作品的依據（M3 票 09）', () => {
     renderWithProviders(
       <JobTimeline
