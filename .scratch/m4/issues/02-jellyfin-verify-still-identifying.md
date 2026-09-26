@@ -1,6 +1,6 @@
 # 02 — Jellyfin 回驗：「還在認」不是不一致；版本重排只推同一集
 
-**Status:** in-progress
+**Status:** done
 
 **Blocked by:** None — can start immediately
 
@@ -41,7 +41,7 @@
 - [x] 同一季入庫第 N 集時，只有同一集的其他版本被重排反查（測試，雙向）
 - [x] 一筆 Job 的「全部找到」事件只寫一次（測試）
 - [x] 上面兩個被改掉意義的既有測試改寫而不是刪掉；plan §2.4、§3.1 與 brief §5.2 同步
-- [ ] 真服務 e2e 的 `test_jellyfin_reading_an_episode_differently_opens_an_issue` 仍綠
+- [x] 真服務 e2e 的 `test_jellyfin_reading_an_episode_differently_opens_an_issue` 仍綠
 - [x] lint、type、test 綠燈
 
 ## Comments
@@ -55,6 +55,8 @@
 - **對帳那一方遇到還在認的：照樣換新 item / Series id，但不比**（不開不收）。一開始連換新也跳過，結果票 13 的 Series id 補欄與合併後換主條目的測試紅了——那兩件與認沒認完無關。
 - **既有測試的 fixture**：`test_reconcile_checks.scanned` 的 Series 預設沒有 Tmdb（票 13 要牆只靠 Series id 認），走反查的兩處（`test_issue_repairs` 的重新反查 / 重新掃描、`test_reimport`）改傳 `SPY`。
 - **`jellyfin_item_resolved` 的「找到」**：帳本那一列有 item、不再排反查。認成別的、六次認不出而開了 mismatch 的算（Jellyfin 裡打得開）；放棄的不算。plan §3.1 寫明。
+
+真服務 e2e：https://github.com/1morr/Berth/actions/runs/36241325069（`0b7ed1a`，22 passed，17 分 56 秒）。
 
 code-review（Standards / Spec 兩軸）已修：brief §20.1 補事實、條件式裡的副作用寫明（ruff SIM102 不讓拆成巢狀 if，改用註解說 `_reschedule` 會排下一次）、`_Lookup.identifying` / `_works` 改名 `still_identifying` / `_tmdb_ids`、補「找到之後被排回反查、撞上重掃」的整合測試、還在認最晚 10 分鐘。未處理：
 
