@@ -87,6 +87,21 @@ class JobTrigger(StrEnum):
     REIMPORT = "reimport"
 
 
+class JobFilter(StrEnum):
+    """下載列表的四個篩選（M4 票 04，`.scratch/m4/jobs-paging-shape.md`）。
+
+    分組不改排序（最新在前）；每一組各是哪幾個狀態在 `services/jobs.py`。
+    """
+
+    #: 在路上：還沒入庫、也沒被移走的——需要人的也在裡面。打開 `/jobs` 預設看這一組。
+    ACTIVE = "active"
+    #: 需要人：在你動手之前走不下去，或等你看一眼。
+    ATTENTION = "attention"
+    IMPORTED = "imported"
+    #: 包括移走的那兩種（`removed`、`client_removed`），它們只在這裡。
+    ALL = "all"
+
+
 class EventType(StrEnum):
     """Job 時間線上一筆事件的型別（brief §5.2）。
 

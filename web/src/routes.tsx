@@ -11,6 +11,7 @@ import {
 import { meQueryOptions, type Me } from './api/auth'
 import { ApiError } from './api/client'
 import { healthQueryOptions } from './api/health'
+import { isJobFilter, type JobFilter } from './api/jobs'
 import {
   inventoriesQueryOptions,
   isInventoryFilter,
@@ -295,6 +296,12 @@ const inventoryRoute = createRoute({
   component: InventoryPageRoute,
 })
 
+/** `/jobs` 的網址參數（M4 票 04）。預設的篩選（在路上）與第 1 頁都不寫進網址。 */
+interface JobsSearch {
+  filter?: Exclude<JobFilter, 'active'>
+  page?: number
+}
+
 /**
  * 下載列表 `/jobs`（票 09）。送單之後去的地方。
  *
@@ -303,6 +310,14 @@ const inventoryRoute = createRoute({
 const jobsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/jobs',
+  // 每一格都寫回去，驗不過的寫 `undefined`（媒體庫那一條的同一個理由）。
+  validateSearch: (search: Record<string, unknown>): JobsSearch => {
+    const page = Number(search.page)
+    return {
+      filter: isJobFilter(search.filter) && search.filter !== 'active' ? search.filter : undefined,
+      page: Number.isInteger(page) && page > 1 ? page : undefined,
+    }
+  },
   beforeLoad: async ({ context, location }) => {
     await requireSignedInPage(context.queryClient, location)
   },

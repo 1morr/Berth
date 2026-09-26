@@ -220,6 +220,12 @@ export const PAGE_TITLE = 'value text-lg font-semibold text-ink'
  */
 export const NAV_BOX = 'label border-2 border-rule hover:border-rule-strong'
 export const NAV_BOX_ACTIVE = 'label border-2 border-rule-strong bg-deck'
+/**
+ * 一頁裡的一組篩選鍵（媒體庫的待審 / 對不到、下載列表的四組）：比頁首導覽小一號。選著的那一個不是連結，
+ * 是一段 `aria-current="true"` 的字（M1.5 票 13）。
+ */
+export const FILTER = `${NAV_BOX} inline-flex items-center px-3 py-1.5`
+export const FILTER_ACTIVE = `${NAV_BOX_ACTIVE} inline-flex items-center px-3 py-1.5`
 
 /**
  * 路由的 `Link` 用這一個：當前那一個由 TanStack 自己掛的 `data-status="active"` 換漆（票 13）。

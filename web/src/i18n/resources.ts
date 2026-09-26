@@ -739,8 +739,6 @@ const zhHant = {
     notInJellyfinCount_other: '{{count}} 部作品還沒進 Jellyfin',
     pages: '分頁',
     pagesEnd: '牆底的分頁',
-    previous: '上一頁',
-    next: '下一頁',
     // 看得見的是「1–50 / 523」，聽得見的是這一句。
     range: '第 {{first}}–{{last}} 部，共 {{total}} 部',
     rangeBeyond: '這一頁超出範圍，共 {{total}} 部',
@@ -1554,6 +1552,35 @@ const zhHant = {
     title: '下載',
     count_one: '{{count}} 筆',
     count_other: '{{count}} 筆',
+    // 四個篩選（M4 票 04，`.scratch/m4/jobs-paging-shape.md`）。「在路上」＝還沒入庫也沒被移走，需要人的也在裡面。
+    filters: '下載篩選',
+    filter: {
+      active_one: '在路上 {{count}}',
+      active_other: '在路上 {{count}}',
+      attention_one: '需要人 {{count}}',
+      attention_other: '需要人 {{count}}',
+      imported_one: '已入庫 {{count}}',
+      imported_other: '已入庫 {{count}}',
+      all_one: '全部 {{count}}',
+      all_other: '全部 {{count}}',
+    },
+    pages: '分頁',
+    pagesEnd: '清單底的分頁',
+    // 看得見的是「1–50 / 523」，聽得見的是這一句。
+    range: '第 {{first}}–{{last}} 筆，共 {{total}} 筆',
+    rangeBeyond: '這一頁超出範圍，共 {{total}} 筆',
+    // 篩完是空的：空的是這一組，不是整份清單，所以給一條去別組的路。
+    emptyFilter: {
+      active: '沒有在路上的下載：送出去的都入庫或移走了。',
+      attention: '沒有需要你處理的下載。',
+      imported: '還沒有入庫的下載。',
+    },
+    toFilter: {
+      active: '看在路上的',
+      imported: '看已入庫的',
+    },
+    emptyPage: '這一頁沒有下載：翻頁的當下清單變短了。',
+    toFirstPage: '回第一頁',
     empty: '還沒有送過任何下載。到探索頁找一部作品，在它的頁面上搜 torrent 再送單。',
     toDiscover: '回探索頁',
     off: '讀不到下載列表。Berth 自己的 API 沒有回應，先確認它還活著。',
@@ -2606,6 +2633,11 @@ const zhHant = {
       passed: '新 Feed 的第一輪選了「只追之後的」：這一筆在那之前就在了。',
     },
   },
+  // 清單的上一頁 / 下一頁（`components/Pager`）：媒體庫的牆與下載列表共用。
+  pager: {
+    previous: '上一頁',
+    next: '下一頁',
+  },
   common: {
     expand: '展開',
     collapse: '收起',
@@ -3381,8 +3413,6 @@ const en: Translations<typeof zhHant> = {
     notInJellyfinCount_other: '{{count}} titles not in Jellyfin yet',
     pages: 'Pages',
     pagesEnd: 'Pages, end of wall',
-    previous: 'Previous',
-    next: 'Next',
     range: 'Titles {{first}}–{{last}} of {{total}}',
     rangeBeyond: 'This page is past the end; {{total}} titles in all',
     status: {
@@ -4134,6 +4164,32 @@ const en: Translations<typeof zhHant> = {
     title: 'Downloads',
     count_one: '{{count}} job',
     count_other: '{{count}} jobs',
+    filters: 'Download filters',
+    filter: {
+      active_one: 'On the way {{count}}',
+      active_other: 'On the way {{count}}',
+      attention_one: 'Needs you {{count}}',
+      attention_other: 'Needs you {{count}}',
+      imported_one: 'Imported {{count}}',
+      imported_other: 'Imported {{count}}',
+      all_one: 'All {{count}}',
+      all_other: 'All {{count}}',
+    },
+    pages: 'Pages',
+    pagesEnd: 'Pages, end of list',
+    range: 'Jobs {{first}}–{{last}} of {{total}}',
+    rangeBeyond: 'This page is past the end; {{total}} jobs in all',
+    emptyFilter: {
+      active: 'Nothing on the way: everything sent has been imported or removed.',
+      attention: 'Nothing needs you.',
+      imported: 'Nothing has been imported yet.',
+    },
+    toFilter: {
+      active: 'Show what is on the way',
+      imported: 'Show imported',
+    },
+    emptyPage: 'Nothing on this page: the list got shorter while you were paging.',
+    toFirstPage: 'Back to the first page',
     empty:
       'Nothing has been sent to download yet. Find a title on the discover page, search it for torrents, and send one.',
     toDiscover: 'Back to discover',
@@ -5191,6 +5247,10 @@ const en: Translations<typeof zhHant> = {
       passed:
         'The feed was new and you chose to follow only what comes next: this item was already in it.',
     },
+  },
+  pager: {
+    previous: 'Previous',
+    next: 'Next',
   },
   common: {
     expand: 'Expand',

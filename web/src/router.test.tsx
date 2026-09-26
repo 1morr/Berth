@@ -275,7 +275,7 @@ describe('正式設定下的 401', () => {
     const api = stubApi({
       [HEALTH]: DONE,
       [ME]: () => backend.me(),
-      'GET /api/jobs': () => {
+      'GET /api/jobs?filter=active&page=1': () => {
         backend.signOut()
         return UNAUTHORIZED
       },
@@ -289,6 +289,8 @@ describe('正式設定下的 401', () => {
     )
 
     await waitFor(() => expect(router.state.location.pathname).toBe('/login'))
-    expect(api.mock.calls.filter(([url]) => url === '/api/jobs')).toHaveLength(1)
+    expect(api.mock.calls.filter(([url]) => url === '/api/jobs?filter=active&page=1')).toHaveLength(
+      1,
+    )
   })
 })

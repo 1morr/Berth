@@ -29,6 +29,7 @@ from tests.e2e.harness import (
     TORRENTS_CONTAINER,
     Json,
     Submitted,
+    all_jobs,
     berth_client,
     corpus,
     docker,
@@ -178,7 +179,7 @@ def jobs(berth: httpx.Client, submitted: tuple[Submitted, ...], planted: None) -
     wanted = {job.info_hash for job in submitted}
 
     def settled() -> dict[str, Json] | None:
-        rows = {row["hash"]: row for row in ok(berth.get("/jobs")) if row["hash"] in wanted}
+        rows = {row["hash"]: row for row in all_jobs(berth) if row["hash"] in wanted}
         done = len(rows) == len(wanted) and all(row["state"] in SETTLED for row in rows.values())
         return rows if done else None
 

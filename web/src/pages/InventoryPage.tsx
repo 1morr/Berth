@@ -28,13 +28,14 @@ import {
   Checkbox,
   GHOST_LINK,
   GhostButton,
-  NAV_BOX,
-  NAV_BOX_ACTIVE,
+  FILTER,
+  FILTER_ACTIVE,
   NAV_LINK,
   TEXT_LINK,
   Notice,
 } from '../components/controls'
 import { Dot } from '../components/Dot'
+import { PAGE_LINK, Pager } from '../components/Pager'
 import { TilePlaceholder } from '../components/TilePlaceholder'
 import { SEARCH_DEBOUNCE_MS } from '../components/useDebounced'
 import { useFocusAfterRemoval } from '../components/useFocusAfterRemoval'
@@ -50,11 +51,6 @@ const PLACEHOLDERS = 12
 
 /** 切換列與篩選列的一個方塊。當前那一個重橫線 + `deck` 底，不靠顏色（與頁首導覽同一種）。 */
 const SWITCH = `${NAV_LINK} inline-flex items-center px-4 py-2.5`
-/** 篩選列的方塊比切換列小一號。 */
-const FILTER = `${NAV_BOX} inline-flex items-center px-3 py-1.5`
-const FILTER_ACTIVE = `${NAV_BOX_ACTIVE} inline-flex items-center px-3 py-1.5`
-/** 分頁鍵：Ghost 的外觀，但它們換網址，所以是連結。到頭的那一顆是同樣大小的一段字。 */
-const PAGE_KEY = 'label inline-flex min-h-6 items-center border-2 px-3 py-1.5'
 /** 排序的兩個下拉：輸入框那一套外觀（DESIGN.md Inputs），高度與篩選列的方塊對齊。 */
 const SELECT =
   'value max-w-full border-2 border-rule-strong bg-hull px-2 py-1 text-sm text-ink focus:border-ink'
@@ -231,7 +227,7 @@ function Wall({
           {filter ? (
             <QueueCount libraryId={libraryId} filter={filter} />
           ) : (
-            <Pager inventory={inventory} query={query} announce />
+            <WallPager inventory={inventory} query={query} announce />
           )}
         </div>
         {!filter && open && (
@@ -246,7 +242,7 @@ function Wall({
             {/* 牆底那一組只在真的有別頁時出現：只有一頁時總數已經寫在篩選列旁。 */}
             {(inventory.total > inventory.page_size || inventory.page > 1) && (
               <div className="flex justify-end">
-                <Pager inventory={inventory} query={query} end />
+                <WallPager inventory={inventory} query={query} end />
               </div>
             )}
           </>
@@ -727,13 +723,10 @@ function Filters({
 }
 
 /**
- * `1–50 / 523` 加上一頁 / 下一頁（jellyfin-web 的分頁，使用者拍板）。看得見的是數字，聽得見的是
- * 帶單位的那一句（DESIGN.md 的區塊標題規則）；牆上方那一組把它放進 `aria-live`，換頁時念得出來。
- *
- * 牆上下各一組，**兩個 landmark 名字不同**（`end`，票 13）：地標清單裡兩個同名的「分頁」分不出哪個是哪個
- * （WAI-ARIA landmark 的慣例：同一種出現兩次就各給一個名字）。
+ * 牆上下各一組共用的分頁（`components/Pager`）。上方那一組念得出範圍（`announce`），牆底那一組的
+ * landmark 名字不同（`end`）。
  */
-function Pager({
+function WallPager({
   inventory,
   query,
   announce = false,
@@ -747,73 +740,32 @@ function Pager({
 }) {
   const { t } = useTranslation()
   const { page, page_size: size, total, library } = inventory
-  if (total === 0) return null
-  const pages = Math.max(1, Math.ceil(total / size))
-  const first = Math.min((page - 1) * size + 1, total)
-  const last = Math.min(page * size, total)
-  const beyond = page > pages
 
   return (
-    <nav
-      aria-label={end ? t('inventory.pagesEnd') : t('inventory.pages')}
-      className="flex flex-wrap items-center gap-2"
-    >
-      <span aria-hidden="true" className="value text-xs text-ink-dim">
-        {beyond ? `— / ${total}` : `${first}–${last} / ${total}`}
-      </span>
-      {announce && (
-        <span aria-live="polite" className="sr-only">
-          {beyond
-            ? t('inventory.rangeBeyond', { total })
-            : t('inventory.range', { first, last, total })}
-        </span>
+    <Pager
+      page={page}
+      size={size}
+      total={total}
+      label={end ? t('inventory.pagesEnd') : t('inventory.pages')}
+      announce={
+        announce
+          ? (range) =>
+              range.beyond
+                ? t('inventory.rangeBeyond', { total })
+                : t('inventory.range', { first: range.first, last: range.last, total })
+          : undefined
+      }
+      link={(to, children) => (
+        <Link
+          to="/library/$libraryId"
+          params={{ libraryId: library.id }}
+          search={onPage(to, query)}
+          className={PAGE_LINK}
+        >
+          {children}
+        </Link>
       )}
-      {(pages > 1 || page > 1) && (
-        <>
-          <PageKey
-            libraryId={library.id}
-            to={page > 1 ? Math.min(page - 1, pages) : null}
-            query={query}
-          >
-            {t('inventory.previous')}
-          </PageKey>
-          <PageKey libraryId={library.id} to={page < pages ? page + 1 : null} query={query}>
-            {t('inventory.next')}
-          </PageKey>
-        </>
-      )}
-    </nav>
-  )
-}
-
-function PageKey({
-  libraryId,
-  to,
-  query,
-  children,
-}: {
-  libraryId: string
-  to: number | null
-  query: WallQuery
-  children: string
-}) {
-  if (to === null) {
-    // 到頭了：位置不變、不是連結，說得出它按不了。
-    return (
-      <span aria-disabled="true" className={`${PAGE_KEY} border-rule text-ink-dim`}>
-        {children}
-      </span>
-    )
-  }
-  return (
-    <Link
-      to="/library/$libraryId"
-      params={{ libraryId }}
-      search={onPage(to, query)}
-      className={`${PAGE_KEY} border-rule text-ink hover:border-rule-strong`}
-    >
-      {children}
-    </Link>
+    />
   )
 }
 

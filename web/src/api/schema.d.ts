@@ -483,7 +483,7 @@ export interface paths {
         };
         /**
          * Get Jobs
-         * @description 下載列表，最新的在前面。
+         * @description 下載列表的一頁，最新的在前面。預設是在路上的（還沒入庫也沒被移走）；超過最後一頁是空的一頁。
          */
         get: operations["get_jobs_api_jobs_get"];
         put?: never;
@@ -3066,6 +3066,20 @@ export interface components {
             /** Port */
             port: number | null;
         };
+        /**
+         * JobCountsOut
+         * @description 四個篩選各幾筆（篩選鍵上的數字）。不論現在看的是哪一個都是這四個。
+         */
+        JobCountsOut: {
+            /** Active */
+            active: number;
+            /** Attention */
+            attention: number;
+            /** Imported */
+            imported: number;
+            /** All */
+            all: number;
+        };
         /** JobCreateIn */
         JobCreateIn: {
             source: components["schemas"]["JobSourceIn"];
@@ -3129,6 +3143,14 @@ export interface components {
             created_at: string;
         };
         /**
+         * JobFilter
+         * @description 下載列表的四個篩選（M4 票 04，`.scratch/m4/jobs-paging-shape.md`）。
+         *
+         *     分組不改排序（最新在前）；每一組各是哪幾個狀態在 `services/jobs.py`。
+         * @enum {string}
+         */
+        JobFilter: "active" | "attention" | "imported" | "all";
+        /**
          * JobOut
          * @description 下載列表與 Job 詳情上的一筆。
          */
@@ -3188,6 +3210,22 @@ export interface components {
             plan_id: number | null;
             /** Audits */
             audits: number;
+        };
+        /**
+         * JobPageOut
+         * @description 下載列表的一頁（M4 票 04）。形狀照媒體庫的牆：`page`、`page_size`、`total`。
+         */
+        JobPageOut: {
+            filter: components["schemas"]["JobFilter"];
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+            /** Total */
+            total: number;
+            /** Jobs */
+            jobs: components["schemas"]["JobOut"][];
+            counts: components["schemas"]["JobCountsOut"];
         };
         /**
          * JobRefusal
@@ -5815,7 +5853,10 @@ export interface operations {
     };
     get_jobs_api_jobs_get: {
         parameters: {
-            query?: never;
+            query?: {
+                filter?: components["schemas"]["JobFilter"];
+                page?: number;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -5828,7 +5869,16 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["JobOut"][];
+                    "application/json": components["schemas"]["JobPageOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

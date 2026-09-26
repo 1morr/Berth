@@ -45,7 +45,8 @@ test('加 Feed → 輪詢 → 待綁定的那一部一鍵選定候選 → 下載
   await expect(pending).toContainText('10 個待綁定')
   await expect(page.getByRole('region', { name: 'RSS Series' })).toContainText('入庫到 Anime')
 
-  await page.goto('/jobs')
+  // 入庫了的不在預設的「在路上」（M4 票 04）：看全部。
+  await page.goto('/jobs?filter=all')
   const jobs = page.getByRole('listitem').filter({ hasText: 'Kimi ga Shinu made Koi wo Shitai' })
   await expect(jobs).toHaveCount(2)
   await expect(jobs.first()).toContainText('RSS')
@@ -61,7 +62,7 @@ test('加 Feed → 輪詢 → 待綁定的那一部一鍵選定候選 → 下載
   await page.goto('/media/tv:262000')
   const block = page.getByRole('region', { name: 'RSS 訂閱' })
   await expect(block.getByText('第一批已確認')).toBeVisible()
-  await page.goto('/jobs')
+  await page.goto('/jobs?filter=all')
   // 列是原生 `<details>`：先展開，詳情頁的連結在裡面。
   await jobs.first().locator('summary').click()
   await jobs.first().getByRole('link', { name: '下載詳情' }).click()

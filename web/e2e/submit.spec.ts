@@ -20,8 +20,14 @@ test('從作品頁送單，一路走到已入庫', async ({ page }) => {
   await release.getByRole('link', { name: '看下載列表' }).click()
   await expect(page).toHaveURL('/jobs')
   const job = page.getByRole('listitem').filter({ hasText: '[Berth-Demo] SPY×FAMILY S01' })
+  await expect(job).toBeVisible()
   // 下載完成 → 規劃 → 入庫靠 poller 的提示接力，實測幾秒；上限放寬到一輪規劃器的間隔。
-  await expect(job).toContainText('已入庫', { timeout: 60_000 })
+  // 入庫的那一刻它離開預設的「在路上」（M4 票 04），到「已入庫」那一組。
+  await expect(job).toHaveCount(0, { timeout: 60_000 })
+  const filters = page.getByRole('navigation', { name: '下載篩選' })
+  await filters.getByRole('link', { name: /^已入庫/ }).click()
+  await expect(page).toHaveURL('/jobs?filter=imported')
+  await expect(job).toContainText('已入庫')
 
   // 作品頁的「檔案與版本」讀帳本：三集正片、一個特典、一條字幕都在，而且帳本對得上。
   await page.goto('/media/tv:120089')

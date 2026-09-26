@@ -43,7 +43,8 @@ test('詳情頁訂閱 Mikan 番組 × 字幕組，再建 acg.rip 搜尋 feed 看
   await expect(block.getByRole('button', { name: '只追之後的' })).toHaveCount(0)
   await shot(page, '4-acgrip-primed')
 
-  await page.goto('/jobs')
+  // 入庫了的不在預設的「在路上」（M4 票 04）：看全部。
+  await page.goto('/jobs?filter=all')
   const jobs = page.getByRole('listitem').filter({ hasText: 'Kimi ga Shinu made Koi wo Shitai' })
   await expect(jobs).toHaveCount(12)
 })

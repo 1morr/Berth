@@ -50,6 +50,7 @@ from berth.domain import (
     BindReason,
     EventType,
     HealthStatus,
+    JobFilter,
     JobRefusal,
     JobState,
     JobTrigger,
@@ -91,6 +92,32 @@ RETRYABLE = frozenset({JobState.SUBMIT_FAILED, JobState.IMPORT_FAILED})
 #: **與 `RETRYABLE` 放在一起**：兩個都在回答「這一筆現在按得了什麼」，而畫面上那兩顆按鈕
 #: 就在同一塊展開區裡。規則分兩個模組寫的話，其中一份遲早會漏掉一個狀態。
 REPLANNABLE = frozenset({JobState.COMPLETED, JobState.PLANNING, JobState.REVIEW})
+
+#: 下載列表一頁幾筆（M4 票 04）。與媒體庫的牆同一個數（`services/inventory.PAGE_SIZE`）。
+PAGE_SIZE = 50
+
+#: 需要人的那幾個狀態：前端塗 `blocked` 與 `assigned` 的那六個（`web/src/jobs/jobState.ts`）。
+#: 兩邊對不上時 `tests/unit/test_job_filters.py` 紅。
+_ATTENTION = frozenset(
+    {
+        JobState.SUBMIT_FAILED,
+        JobState.STALLED,
+        JobState.MISSING_FILES,
+        JobState.CLIENT_ERROR,
+        JobState.REVIEW,
+        JobState.IMPORT_FAILED,
+    }
+)
+
+#: 每個篩選是哪幾個狀態；`all` 不篩。移走的兩種（`removed`、`client_removed`）只在「全部」
+#: （shape 時使用者拍板）：它們不會再往前走，也沒有東西在等人。
+FILTER_STATES: dict[JobFilter, frozenset[JobState] | None] = {
+    JobFilter.ACTIVE: frozenset(JobState)
+    - {JobState.IMPORTED, JobState.REMOVED, JobState.CLIENT_REMOVED},
+    JobFilter.ATTENTION: _ATTENTION,
+    JobFilter.IMPORTED: frozenset({JobState.IMPORTED}),
+    JobFilter.ALL: None,
+}
 
 
 def replannable(state: JobState, role: Role) -> bool:
@@ -261,6 +288,19 @@ class JobView:
     #: 那一份計劃裡 medium 自動入庫、掛著 audit 的檔案數（brief §6.5）。列上要說得出
     #: 「N 個待確認」：Job 的狀態是綠色的「已入庫」，而原則 3 說的是那幾個還要人看一眼（票 15）。
     audits: int
+
+
+@dataclass(frozen=True, slots=True)
+class JobPage:
+    """下載列表的一頁（M4 票 04）。形狀照媒體庫的牆：`page`、`page_size`、這個篩選的 `total`。"""
+
+    shown: JobFilter
+    page: int
+    page_size: int
+    total: int
+    jobs: tuple[JobView, ...]
+    #: 四個篩選各幾筆，不論現在看的是哪一個：篩選鍵上的數字。
+    counts: dict[JobFilter, int]
 
 
 @dataclass(frozen=True, slots=True)
@@ -743,11 +783,40 @@ async def _clear_round_failure(session: AsyncSession, job_hash: str) -> None:
     logger.info("job recovered from a failed round", extra={"state": job.state.value})
 
 
-async def list_jobs(session: AsyncSession) -> tuple[JobView, ...]:
-    """下載列表頁的一整份，最新的在前面（brief §13）。"""
-    rows = tuple(await session.scalars(select(Job).order_by(Job.added_at.desc(), Job.hash)))
+async def list_jobs(
+    session: AsyncSession, *, shown: JobFilter = JobFilter.ACTIVE, page: int = 1
+) -> JobPage:
+    """下載列表的一頁，最新的在前面（brief §13）。
+
+    **一頁有上限**（M4 票 04）：RSS 一次綁定就送上百筆，而已入庫的不會離開清單；一頁的關聯
+    （`_related`）也因此是有上限的 `in_()`。超過最後一頁是空的一頁，不是錯誤——翻頁的當下
+    背景迴圈可能剛好把最後幾筆移到別組。
+    """
+    states = FILTER_STATES[shown]
+    query = select(Job).order_by(Job.added_at.desc(), Job.hash)
+    if states is not None:
+        query = query.where(Job.state.in_(states))
+    rows = tuple(await session.scalars(query.limit(PAGE_SIZE).offset((page - 1) * PAGE_SIZE)))
     related = await _related(session, rows)
-    return tuple(_view(row, related) for row in rows)
+    counts = await _filter_counts(session)
+    return JobPage(
+        shown=shown,
+        page=page,
+        page_size=PAGE_SIZE,
+        total=counts[shown],
+        jobs=tuple(_view(row, related) for row in rows),
+        counts=counts,
+    )
+
+
+async def _filter_counts(session: AsyncSession) -> dict[JobFilter, int]:
+    """四個篩選各幾筆：照狀態數一次，再折成篩選。"""
+    rows = await session.execute(select(Job.state, func.count()).group_by(Job.state))
+    by_state: dict[JobState, int] = dict(rows.tuples().all())
+    return {
+        shown: sum(count for state, count in by_state.items() if states is None or state in states)
+        for shown, states in FILTER_STATES.items()
+    }
 
 
 async def read_job(session: AsyncSession, job_hash: str) -> JobView | None:
@@ -1203,6 +1272,9 @@ async def _plans_of(session: AsyncSession, job_hashes: Sequence[str]) -> dict[st
 
     `services/plan.plan_id_of` 問的是前一半；**這裡不呼叫它**：`services/plan` 已經 import
      這一支（`transition`、`job_lock`），反過來就是循環。
+
+    `in_()` 的長度就是呼叫端給的筆數：清單一頁（`PAGE_SIZE`）或單獨一筆。不要拿整張表來問
+    （M4 票 04）。
     """
     if not job_hashes:
         return {}

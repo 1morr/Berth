@@ -12,7 +12,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Iterator
 from dataclasses import replace
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import httpx
@@ -24,7 +24,7 @@ from berth.adapters.torrent import NotATorrentError
 from berth.api.deps import get_client_factory
 from berth.api.gate import CSRF_HEADER
 from berth.config import Config
-from berth.domain import HealthStatus
+from berth.domain import HealthStatus, JobState, JobTrigger
 from berth.main import create_app
 from berth.models import Job, Route, TmdbSettings
 from berth.services.routes import build_routes
@@ -148,6 +148,36 @@ def body(client: TestClient, **overrides: object) -> dict[str, object]:
     return payload | overrides
 
 
+def listed(client: TestClient) -> list[dict[str, object]]:
+    """下載列表上每一筆，不分篩選（這個檔案裡的 Job 從不超過一頁）。"""
+    rows: list[dict[str, object]] = client.get("/api/jobs?filter=all").json()["jobs"]
+    return rows
+
+
+def pile_up(client: TestClient, count: int, state: JobState = JobState.IMPORTED) -> None:
+    """`count` 筆 RSS 送來的 Job，發佈名與真的一樣長。"""
+
+    async def run() -> None:
+        sessions = client.app.state.session_factory  # type: ignore[attr-defined]  # app.state 是 Starlette 的動態屬性
+        async with sessions() as session:
+            for index in range(count):
+                session.add(
+                    Job(
+                        hash=f"{index:040x}",
+                        name=(
+                            f"[LoliHouse] Sousou no Frieren - {index:02d}"
+                            " [WebRip 1080p HEVC-10bit AAC][简繁内封字幕]"
+                        ),
+                        state=state,
+                        trigger=JobTrigger.RSS,
+                        added_at=datetime(2026, 9, 26, tzinfo=UTC) + timedelta(seconds=index),
+                    )
+                )
+            await session.commit()
+
+    asyncio.run(run())
+
+
 def submit(client: TestClient, **overrides: object) -> httpx.Response:
     # 詳情頁先開過一次，`media` 那一列才存在（快照要有地方放，plan §2.2）。
     client.get(f"/api/media/{SPY_ID}")
@@ -175,6 +205,47 @@ class TestGate:
         client.get(f"/api/media/{SPY_ID}")
 
         assert client.post("/api/jobs", json=body(client)).status_code == 403
+
+
+class TestTheList:
+    """`GET /jobs` 一頁有上限、照狀態篩（M4 票 04）。"""
+
+    def test_five_hundred_jobs_answer_one_bounded_page(self, client: TestClient) -> None:
+        sign_in(client)
+        pile_up(client, 500)
+
+        response = client.get("/api/jobs?filter=imported")
+
+        page = response.json()
+        assert len(page["jobs"]) == page["page_size"] == 50
+        assert page["total"] == 500
+        # 一頁實測約 29 KB；不分頁的一整份是十倍。
+        assert len(response.content) < 64 * 1024
+
+    def test_the_default_is_what_is_still_on_its_way(self, client: TestClient) -> None:
+        sign_in(client)
+        pile_up(client, 3)
+        submit(client)
+
+        page = client.get("/api/jobs").json()
+
+        assert page["filter"] == "active"
+        assert [row["hash"] for row in page["jobs"]] == [MAGNET_HASH]
+        assert page["counts"] == {"active": 1, "attention": 0, "imported": 3, "all": 4}
+
+    def test_a_page_past_the_end_is_empty_not_an_error(self, client: TestClient) -> None:
+        sign_in(client)
+        pile_up(client, 3, JobState.DOWNLOADING)
+
+        page = client.get("/api/jobs?page=9").json()
+
+        assert (page["page"], page["total"], page["jobs"]) == (9, 3, [])
+
+    def test_an_unknown_filter_or_page_is_refused(self, client: TestClient) -> None:
+        sign_in(client)
+
+        assert client.get("/api/jobs?filter=done").status_code == 422
+        assert client.get("/api/jobs?page=0").status_code == 422
 
 
 class TestSubmitting:
@@ -230,7 +301,7 @@ class TestSubmitting:
 
         assert payload["created"] is False
         assert payload["job"]["hash"] == MAGNET_HASH
-        assert len(client.get("/api/jobs").json()) == 1
+        assert len(listed(client)) == 1
 
     def test_the_timeline_reads_oldest_first(self, client: TestClient) -> None:
         sign_in(client)
@@ -273,7 +344,7 @@ class TestRefusals:
 
         assert response.status_code == 409
         assert response.json()["detail"]["reason"] == "route_unhealthy"
-        assert client.get("/api/jobs").json() == []
+        assert listed(client) == []
 
     def test_a_route_that_cannot_hold_this_kind_is_unprocessable(self, client: TestClient) -> None:
         sign_in(client)
@@ -315,7 +386,7 @@ class TestRefusals:
 
         assert refused.status_code == 409
         assert refused.json()["detail"]["reason"] == "low_disk_space"
-        assert client.get("/api/jobs").json() == []
+        assert listed(client) == []
 
         set_threshold(client, 0)
 
@@ -440,7 +511,7 @@ class TestDeleteScope:
 
         client.delete(f"/api/jobs/{MAGNET_HASH}?purge=true", headers=BROWSER)
 
-        assert client.get("/api/jobs").json() == []
+        assert listed(client) == []
 
     def test_without_purge_it_stays_on_the_list_as_removed(self, client: TestClient) -> None:
         sign_in(client)
@@ -448,7 +519,7 @@ class TestDeleteScope:
 
         client.delete(f"/api/jobs/{MAGNET_HASH}", headers=BROWSER)
 
-        assert [row["state"] for row in client.get("/api/jobs").json()] == ["removed"]
+        assert [row["state"] for row in listed(client)] == ["removed"]
 
     def test_the_estimate_answers_before_anything_is_deleted(self, client: TestClient) -> None:
         """送單當下還沒有檔案，所以每一格都是 0——**而且那一筆 Job 一點都沒有變**。"""
@@ -459,7 +530,7 @@ class TestDeleteScope:
 
         assert response.status_code == 200
         assert response.json()["reclaimable"] == 0
-        assert [row["state"] for row in client.get("/api/jobs").json()] == ["submitted"]
+        assert [row["state"] for row in listed(client)] == ["submitted"]
 
     def test_the_estimate_of_a_job_that_is_not_there_is_404(self, client: TestClient) -> None:
         sign_in(client)
@@ -509,7 +580,7 @@ class TestReimport:
 
         assert response.status_code == 409
         assert response.json()["detail"]["reason"] == "not_reimportable"
-        assert [row["reimportable"] for row in client.get("/api/jobs").json()] == [False]
+        assert [row["reimportable"] for row in listed(client)] == [False]
 
     def test_a_job_that_is_not_there_is_404(self, client: TestClient) -> None:
         sign_in(client)

@@ -31,6 +31,7 @@ from berth.domain import (
     Confidence,
     EventType,
     HealthStatus,
+    JobFilter,
     JobState,
     JobTrigger,
     MediaKind,
@@ -51,6 +52,8 @@ from berth.models import (
     User,
 )
 from berth.services.jobs import (
+    PAGE_SIZE,
+    JobPage,
     JobRejectedError,
     JobSource,
     add_download,
@@ -988,7 +991,7 @@ class TestReading:
         first.added_at = datetime(2026, 1, 1, tzinfo=UTC)
         await session.commit()
 
-        rows = await list_jobs(session)
+        rows = (await list_jobs(session)).jobs
 
         assert [row.name for row in rows] == ["A second release", RELEASE]
         assert rows[0].route_name == "Anime"
@@ -1010,7 +1013,7 @@ class TestReading:
             session, factory, source=_source(), media_id=media.id, route_id=route.id, user_id=None
         )
 
-        (row,) = await list_jobs(session)
+        (row,) = (await list_jobs(session)).jobs
 
         assert (row.media_title, row.media_title_en) == ("SPY×FAMILY 間諜家家酒", "SPY x FAMILY")
 
@@ -1029,12 +1032,12 @@ class TestReading:
         await _plan_backed_jobs(session, media, route, user, count=1)
 
         with counting(engine) as one:
-            assert len(await list_jobs(session)) == 1
+            assert len((await list_jobs(session, shown=JobFilter.IMPORTED)).jobs) == 1
 
         await _plan_backed_jobs(session, media, route, user, count=9, start=1)
 
         with counting(engine) as ten:
-            assert len(await list_jobs(session)) == 10
+            assert len((await list_jobs(session, shown=JobFilter.IMPORTED)).jobs) == 10
 
         assert len(ten) == len(one)
 
@@ -1048,6 +1051,92 @@ class TestReading:
 
         assert (await read_job(session, MAGNET_HASH)) is not None
         assert (await read_job(session, "0" * 40)) is None
+
+
+async def _jobs_in(session: AsyncSession, *states: JobState) -> list[str]:
+    """每個狀態一筆，照給的順序越來越新。回 hash，最舊的在前。"""
+    hashes = []
+    for index, state in enumerate(states):
+        job_hash = f"{index:040x}"
+        session.add(
+            Job(
+                hash=job_hash,
+                name=f"Release {index}",
+                state=state,
+                trigger=JobTrigger.RSS,
+                added_at=datetime(2026, 1, 1, tzinfo=UTC) + timedelta(minutes=index),
+            )
+        )
+        hashes.append(job_hash)
+    await session.commit()
+    return hashes
+
+
+class TestTheListIsPagedAndFiltered:
+    """下載列表一頁一頁讀、照狀態分組（M4 票 04）：RSS 一次綁定就送上百筆，完成的不會離開清單。"""
+
+    async def test_each_filter_holds_its_own_states(self, session: AsyncSession) -> None:
+        downloading, review, failed, imported, removed, gone = await _jobs_in(
+            session,
+            JobState.DOWNLOADING,
+            JobState.REVIEW,
+            JobState.SUBMIT_FAILED,
+            JobState.IMPORTED,
+            JobState.REMOVED,
+            JobState.CLIENT_REMOVED,
+        )
+
+        def hashes(page: JobPage) -> list[str]:
+            return [row.hash for row in page.jobs]
+
+        # 在路上＝還沒入庫也沒被移走的，需要人的也在裡面；最新在前。
+        assert hashes(await list_jobs(session)) == [failed, review, downloading]
+        assert hashes(await list_jobs(session, shown=JobFilter.ATTENTION)) == [failed, review]
+        assert hashes(await list_jobs(session, shown=JobFilter.IMPORTED)) == [imported]
+        # 移走的兩種只在「全部」。
+        assert hashes(await list_jobs(session, shown=JobFilter.ALL)) == [
+            gone,
+            removed,
+            imported,
+            failed,
+            review,
+            downloading,
+        ]
+
+    async def test_the_counts_cover_every_filter_whichever_is_shown(
+        self, session: AsyncSession
+    ) -> None:
+        await _jobs_in(
+            session,
+            JobState.DOWNLOADING,
+            JobState.STALLED,
+            JobState.IMPORTED,
+            JobState.IMPORTED,
+            JobState.REMOVED,
+        )
+
+        page = await list_jobs(session, shown=JobFilter.IMPORTED)
+
+        assert page.counts == {
+            JobFilter.ACTIVE: 2,
+            JobFilter.ATTENTION: 1,
+            JobFilter.IMPORTED: 2,
+            JobFilter.ALL: 5,
+        }
+        assert page.total == 2
+
+    async def test_a_page_holds_at_most_page_size_newest_first(self, session: AsyncSession) -> None:
+        hashes = await _jobs_in(session, *[JobState.DOWNLOADING] * (PAGE_SIZE + 10))
+        newest_first = hashes[::-1]
+
+        first = await list_jobs(session, page=1)
+        second = await list_jobs(session, page=2)
+        beyond = await list_jobs(session, page=3)
+
+        assert [row.hash for row in first.jobs] == newest_first[:PAGE_SIZE]
+        assert [row.hash for row in second.jobs] == newest_first[PAGE_SIZE:]
+        assert beyond.jobs == ()
+        assert (first.total, first.page_size, second.page) == (PAGE_SIZE + 10, PAGE_SIZE, 2)
 
 
 class TestJobLogging:

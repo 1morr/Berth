@@ -88,6 +88,18 @@ def ok(response: httpx.Response) -> Json:
     return response.json() if response.content else None
 
 
+def all_jobs(berth: httpx.Client) -> list[Json]:
+    """下載列表上的每一筆，不分篩選、翻完每一頁（`GET /jobs` 一頁有上限，M4 票 04）。"""
+    rows: list[Json] = []
+    page = 1
+    while True:
+        answer = ok(berth.get("/jobs", params={"filter": "all", "page": page}))
+        rows += answer["jobs"]
+        if page * answer["page_size"] >= answer["total"]:
+            return rows
+        page += 1
+
+
 def docker(*command: str) -> str:
     """對 compose 起的容器下一句 docker（`stop` / `start`）。"""
     result = subprocess.run(

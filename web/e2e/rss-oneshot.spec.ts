@@ -37,7 +37,8 @@ test('Mikan 單一 feed：列出整季，勾三集就是三筆下載，不建 Fe
   await expect(page.getByRole('region', { name: /^Feed/ })).toContainText('還沒有 Feed')
   await expect(page.getByRole('region', { name: '最近的 Feed Item' })).toHaveCount(0)
 
-  await page.goto('/jobs')
+  // 入庫了的不在預設的「在路上」（M4 票 04）：看全部。
+  await page.goto('/jobs?filter=all')
   const jobs = page.getByRole('listitem').filter({ hasText: 'Kimi ga Shinu made Koi wo Shitai' })
   await expect(jobs).toHaveCount(3)
   await shot(page, '4-jobs')

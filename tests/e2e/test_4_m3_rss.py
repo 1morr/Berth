@@ -36,6 +36,7 @@ from tests.e2e.harness import (
     PASSWORD,
     QBITTORRENT,
     Json,
+    all_jobs,
     in_container,
     ledger_of,
     ok,
@@ -124,7 +125,7 @@ def settle(berth: httpx.Client, qbittorrent: httpx.Client) -> Callable[[], dict[
 
     def run() -> dict[str, Json]:
         def settled() -> dict[str, Json] | None:
-            rows = {row["hash"]: row for row in ok(berth.get("/jobs")) if row["hash"] in index}
+            rows = {row["hash"]: row for row in all_jobs(berth) if row["hash"] in index}
             for digest in set(rows) - planted:
                 listed: list[Json] = ok(qbittorrent.get(f"/api/v2/torrents/info?hashes={digest}"))
                 if not listed:

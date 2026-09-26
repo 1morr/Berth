@@ -604,7 +604,7 @@ hover 與焦點也是同一個語彙（牆卡片、Ghost 按鈕、導覽方塊�
   標出（`border-rule-strong`），不靠顏色——狀態不只靠顏色是產品層級的無障礙底線。
 - 導覽包在 `<nav aria-label>` 裡，是一個地標；頁首之前有 skip link（見 Layout）。
 - 同一個方塊（`NAV_BOX` / `NAV_BOX_ACTIVE`，不含內距）也是設定的子分頁列（`SettingsTabs`，`0.5rem 0.75rem`，
-  自己一個 `<nav>`）、媒體庫的 Route 切換列與篩選列（篩選小一號，`0.375rem 0.75rem`）。內距由呼叫端給一次。
+  自己一個 `<nav>`）、媒體庫的 Route 切換列與篩選列（篩選小一號，`0.375rem 0.75rem`，`FILTER` / `FILTER_ACTIVE`；下載列表的四組篩選同一種，M4 票 04）。內距由呼叫端給一次。
 - **路由的 `Link` 用 `NAV_LINK`**（M2 票 13）：當前那一格由 TanStack 自己掛的 `data-status="active"` 換漆
   （`data-[status=active]:`），不用 `activeProps`——它的 class 是**接在後面**的，當前那一格同時帶 `border-rule` 與
   `border-rule-strong`，誰贏看 CSS 的產生順序。按鈕（`aria-pressed` 的季切換、只看缺集）照舊二選一 `NAV_BOX` / `NAV_BOX_ACTIVE`。
@@ -666,6 +666,7 @@ ISO 6346 標識在哪個語言都是同一串字母數字）、狀態標籤（`.
   盤點行（「已入庫 N / 已播出 M」或版本數）在沒經手的作品上留空但保留高度。還沒進 Jellyfin 的 Berth 作品是牆上方
   自己一條（`.label` 標題 + 數字壓在重橫線上，同一份 `WALL_GRID`）。分頁鍵是 Ghost 外觀的連結，到頭的那一顆是
   `aria-disabled` 的 `ink-dim` 字、位置不變。牆上下各一組分頁，**兩個 `<nav>` 名字不同**（「分頁」「牆底的分頁」）。
+  分頁是共用元件 `components/Pager`，下載列表用同一個（「分頁」「清單底的分頁」，M4 票 04）。
   海報與標識帶連到 Media 詳情（沒有 TMDB id 的作品那一塊不是連結），底下 **Jellyfin 那一行**是同一格裡、並排不巢狀的另一條連結：
   `border-t-2 border-rule`、`min-h-10` 固定高度讓基線對齊；找到了是 `.label` 文字連結（開新分頁）。**每一格都有這一條，
   名字帶上作品名**（「在 Jellyfin 開啟：The Bear（開新分頁）」，M2 票 13、plan §11.3 的二選一；看得見的字仍是名字的開頭，

@@ -27,7 +27,8 @@ test('加 Feed 時選 Route → 輪詢 → 那一部自動綁定 → 下載列�
   await expect(bound).toContainText('收得下它的 Route 不只一條，這個 Feed 設定送進 Anime')
   await shot(page, '1-bound')
 
-  await page.goto('/jobs')
+  // 入庫了的不在預設的「在路上」（M4 票 04）：看全部。
+  await page.goto('/jobs?filter=all')
   const jobs = page.getByRole('listitem').filter({ hasText: 'Kimi ga Shinu made Koi wo Shitai' })
   await expect(jobs.first()).toContainText('RSS')
   await expect(jobs.first()).toContainText('已入庫', { timeout: 60_000 })

@@ -1054,6 +1054,14 @@ split-cour 的第一批被播出日比對整批擋在審核，改正一次並套
   `GET /api/review` 的 audit 列 `series` 多 `group` 與 `ask`，`GET /api/rss/series` 多 `ask`
   （`spans` 加 `basis`：`literal` / `series` / `absolute` / `runs` / `arc` / `mixed`）。
 
+- **下載列表一頁 50 筆、分四組**（M4 票 04，`.scratch/m4/jobs-paging-shape.md`）：在路上（還沒入庫也沒被移走，
+  需要人的也在裡面）· 需要人 · 已入庫 · 全部，各帶件數；打開 `/jobs` 預設看在路上的，入庫的那一筆移到「已入庫」。
+  篩選與頁碼在網址上（`?filter=&page=`），分頁的樣子與媒體庫的牆相同。**`GET /api/jobs` 的回應從陣列改成一頁**：
+  `{page, page_size, total, jobs, counts}`，參數 `filter`（`active` 預設 / `attention` / `imported` / `all`）與 `page`。
+- **一批 SSE 推播只重抓一次下載列表**（M4 票 04）：原本每一則推播都讓整份 `['jobs']` 失效，poller 一輪推 N 則就是
+  N 次整份 `GET /jobs`、每一列展開中的時間線與計劃跟著重問。現在一秒內到的併成一次，只失效清單與推播到的那幾筆，
+  進行中的請求不取消（前端的讀取接上 `AbortSignal`，換頁時沒人要的請求真的被取消）；刪除估算不再被別的 Job 的進度
+  重算（它每重算一次就逐檔 `stat`）。
 ### Removed
 - **服務設定頁 `/settings/services` 與精靈的 `?berth=` 深連結**（M3 票 06i）：前者拆進設定的各分頁，後者連同
   「改位址或憑證」與精靈跑完之後的「回到 Berth」一起拿掉——精靈跑完之後不再是設定入口。後端的

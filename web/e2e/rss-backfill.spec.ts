@@ -32,7 +32,8 @@ test('中途訂閱的一部：綁定時預設補舊集，整季都進下載列�
   await expect(items.getByRole('link', { name: '看這一筆下載' })).toHaveCount(12)
   await shot(page, '2-bound')
 
-  await page.goto('/jobs')
+  // 入庫了的不在預設的「在路上」（M4 票 04）：看全部。
+  await page.goto('/jobs?filter=all')
   const jobs = page.getByRole('listitem').filter({ hasText: 'Kimi ga Shinu made Koi wo Shitai' })
   await expect(jobs).toHaveCount(12)
   await expect(jobs.first()).toContainText('RSS')

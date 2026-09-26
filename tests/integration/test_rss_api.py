@@ -132,7 +132,7 @@ class TestThePageFlow:
         assert bound.status_code == 200, bound.text
         assert (bound.json()["media_id"], bound.json()["submitted"]) == (KIMI_ID, 2)
 
-        jobs = client.get("/api/jobs").json()
+        jobs = client.get("/api/jobs?filter=all").json()["jobs"]
         assert {row["hash"] for row in jobs} == {item.info_hash for item in KIMI}
         items = client.get("/api/rss/items").json()
         assert len(items) == 12
@@ -360,7 +360,7 @@ class TestOneshot:
             assert sent.status_code == 200, sent.text
             assert sent.json()["created"] is True
 
-        jobs = client.get("/api/jobs").json()
+        jobs = client.get("/api/jobs?filter=all").json()["jobs"]
         assert {row["hash"] for row in jobs} == {row["info_hash"] for row in picked}
         assert {(row["trigger"], row["media_id"]) for row in jobs} == {("manual", KIMI_ID)}
         # 不建 Feed、不長 RSS Series、不寫 Feed Item。

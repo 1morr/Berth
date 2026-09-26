@@ -12,9 +12,9 @@ from __future__ import annotations
 
 from dataclasses import asdict
 from datetime import datetime
-from typing import Any
+from typing import Annotated, Any
 
-from fastapi import APIRouter, HTTPException, Request, status
+from fastapi import APIRouter, HTTPException, Query, Request, status
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 
 from berth.api.deps import (
@@ -26,7 +26,7 @@ from berth.api.deps import (
 )
 from berth.api.errors import refusal_responses
 from berth.api.gate import current_user
-from berth.domain import JobRefusal, JobState, JobTrigger, Role
+from berth.domain import JobFilter, JobRefusal, JobState, JobTrigger, Role
 from berth.services import deletion
 from berth.services.deletion import DeleteScope
 from berth.services.jobs import (
@@ -230,6 +230,28 @@ class JobOut(BaseModel):
     audits: int
 
 
+class JobCountsOut(BaseModel):
+    """四個篩選各幾筆（篩選鍵上的數字）。不論現在看的是哪一個都是這四個。"""
+
+    active: int
+    attention: int
+    imported: int
+    all: int
+
+
+class JobPageOut(BaseModel):
+    """下載列表的一頁（M4 票 04）。形狀照媒體庫的牆：`page`、`page_size`、`total`。"""
+
+    #: 這一頁是哪一個篩選。換篩選時畫面拿它分辨手上的是不是上一組的那一頁。
+    filter: JobFilter
+    page: int
+    page_size: int
+    #: 這個篩選一共幾筆。
+    total: int
+    jobs: list[JobOut]
+    counts: JobCountsOut
+
+
 class JobCreatedOut(BaseModel):
     """送單的結果。
 
@@ -331,9 +353,22 @@ async def post_job(
 
 
 @router.get("")
-async def get_jobs(session: SessionDep, request: Request) -> list[JobOut]:
-    """下載列表，最新的在前面。"""
-    return [_out(row, request) for row in await list_jobs(session)]
+async def get_jobs(
+    session: SessionDep,
+    request: Request,
+    shown: Annotated[JobFilter, Query(alias="filter")] = JobFilter.ACTIVE,
+    page: Annotated[int, Query(ge=1)] = 1,
+) -> JobPageOut:
+    """下載列表的一頁，最新的在前面。預設是在路上的（還沒入庫也沒被移走）；超過最後一頁是空的一頁。"""
+    result = await list_jobs(session, shown=shown, page=page)
+    return JobPageOut(
+        filter=result.shown,
+        page=result.page,
+        page_size=result.page_size,
+        total=result.total,
+        jobs=[_out(row, request) for row in result.jobs],
+        counts=JobCountsOut(**{key.value: count for key, count in result.counts.items()}),
+    )
 
 
 @router.get("/{job_hash}")

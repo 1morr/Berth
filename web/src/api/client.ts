@@ -36,8 +36,8 @@ export function signedOut(error: unknown): boolean {
  * 這裡不做 path → 型別的推導：回應型別由呼叫端指定 `T`，請求的 body 則在呼叫端以
  * `satisfies Schemas['...']` 檢查（`body` 在這一層是 `unknown`）。
  */
-export async function apiGet<T>(path: string): Promise<T> {
-  return request<T>('GET', path)
+export async function apiGet<T>(path: string, init: { signal?: AbortSignal } = {}): Promise<T> {
+  return request<T>('GET', path, undefined, init.signal)
 }
 
 export async function apiPost<T>(path: string, body?: unknown): Promise<T> {
@@ -56,9 +56,19 @@ export async function apiDelete<T = void>(path: string): Promise<T> {
   return request<T>('DELETE', path)
 }
 
-async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+/**
+ * `signal` 是 TanStack Query 給 `queryFn` 的那一個（M4 票 04）：頁面換掉、翻頁時沒人要的那一次請求真的
+ * 被取消，而不是照樣送到後端、跑完一整份查詢才被丟掉。
+ */
+async function request<T>(
+  method: string,
+  path: string,
+  body?: unknown,
+  signal?: AbortSignal,
+): Promise<T> {
   const response = await fetch(`${API_PREFIX}${path}`, {
     method,
+    signal,
     headers: {
       Accept: 'application/json',
       ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),

@@ -171,12 +171,12 @@ class TestReplan:
     def test_the_download_list_carries_the_plan_id(self, client: TestClient) -> None:
         """有沒有那一格就是畫面要的答案：要不要去要那一份逐檔的決定。"""
         sign_in(client)
-        before = client.get("/api/jobs").json()[0]
+        before = client.get("/api/jobs?filter=all").json()["jobs"][0]
         assert before["plan_id"] is None
 
         replan(client)
 
-        assert client.get("/api/jobs").json()[0]["plan_id"] is not None
+        assert client.get("/api/jobs?filter=all").json()["jobs"][0]["plan_id"] is not None
 
     def test_a_missing_job_is_a_404(self, client: TestClient) -> None:
         sign_in(client)
@@ -254,7 +254,7 @@ class TestReplanInReviewIsAdmins:
 
     def test_an_ordinary_user_still_replans_a_completed_job(self, client: TestClient) -> None:
         sign_in(client, CREW)
-        assert client.get("/api/jobs").json()[0]["replannable"] is True
+        assert client.get("/api/jobs?filter=all").json()["jobs"][0]["replannable"] is True
 
         response = replan(client)
 
