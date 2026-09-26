@@ -122,8 +122,9 @@ def reimportable(job: Job) -> bool:
     return job.state in REIMPORTABLE and job.completed_at is not None
 
 
-class _JobLocks:
-    """一個 job 一把程序內的鎖（plan §3.1、brief §5.3「同一時間一個 Job 只有一個 worker」）。
+class KeyedLocks:
+    """一個鍵一把程序內的鎖。Job 用它（plan §3.1、brief §5.3「同一時間一個 Job 只有一個 worker」），
+    RSS 的 Feed 也用它（同一個 Feed 一次只輪一輪，`rss.poll_feed`）。
 
     compare-and-set 保證的是「不會寫壞」，鎖保證的是「不會做兩次」：poller 正在為某一筆
     建 `job_files` 時，使用者按下的重試如果同時跑，兩邊會各打一次 qBittorrent。
@@ -143,20 +144,20 @@ class _JobLocks:
         return len(self._locks)
 
     @asynccontextmanager
-    async def hold(self, job_hash: str) -> AsyncIterator[None]:
-        self._waiting[job_hash] += 1
-        lock = self._locks.setdefault(job_hash, asyncio.Lock())
+    async def hold(self, key: str) -> AsyncIterator[None]:
+        self._waiting[key] += 1
+        lock = self._locks.setdefault(key, asyncio.Lock())
         try:
             async with lock:
                 yield
         finally:
-            self._waiting[job_hash] -= 1
-            if not self._waiting[job_hash]:
-                del self._waiting[job_hash]
-                self._locks.pop(job_hash, None)
+            self._waiting[key] -= 1
+            if not self._waiting[key]:
+                del self._waiting[key]
+                self._locks.pop(key, None)
 
 
-_locks = _JobLocks()
+_locks = KeyedLocks()
 
 
 def job_lock(job_hash: str) -> AbstractAsyncContextManager[None]:

@@ -10,6 +10,7 @@ RSS Series 的季號與 offset 規劃時讀得到。
 
 from __future__ import annotations
 
+import asyncio
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path, PurePosixPath
 
@@ -56,6 +57,7 @@ from berth.services.hints import JobHints
 from berth.services.importer import sweep_imports
 from berth.services.plan import sweep_plans
 from berth.services.rss import (
+    PollOutcome,
     RssRejectedError,
     add_feed,
     bind_series,
@@ -597,6 +599,36 @@ class TestFeeds:
         assert row is not None
         assert "connection refused" in row.last_error
         assert row.last_polled_at == NOW
+
+
+class TestTwoRoundsAtOnce:
+    """「立即輪詢」與背景 poller 同時輪同一個 Feed（真服務 e2e 2026-09-27 撞到：剛加的 Feed
+    從沒輪過，背景那一輪也挑到它）。兩邊各長一次同一個 RSS Series，後寫的撞 `rss_series.key`
+    的 unique，而 `poll_due` 把那個例外寫進 Feed 的 `last_error`——前一輪其實好好做完了。"""
+
+    async def test_they_take_turns_and_neither_fails(
+        self, engine: AsyncEngine, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        _, _, factory = await harbour(session, roots)
+        feed = await add_feed(session, url=FEED_URL, name="Mikan")
+        await session.commit()
+        sessions = create_session_factory(engine)
+
+        async def by_hand() -> PollOutcome:
+            async with sessions() as mine:
+                return await poll_feed(mine, factory, feed.id, now=NOW)
+
+        async def in_background() -> int:
+            async with sessions() as mine:
+                return await poll_due(mine, factory, now=NOW)
+
+        outcome, polled = await asyncio.gather(by_hand(), in_background())
+
+        assert (outcome.items, polled) == (12, 1)
+        row = await session.get(RssFeed, feed.id, populate_existing=True)
+        assert row is not None
+        assert row.last_error == ""
+        assert await count(session, RssSeries) == 11
 
 
 class TestSchedule:

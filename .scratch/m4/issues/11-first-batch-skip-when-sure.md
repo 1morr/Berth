@@ -34,3 +34,13 @@
 - [ ] lint、type、test 綠燈
 
 ## Comments
+
+**量測**（`scripts/experiments/first_batch_rule.py`，2026-09-27）：語料 34 份擔保 10 份、擔保錯 0；對抗的一輪（發佈時間改成 Berth 讀成的那一集播出後一天）26 份擔保 9 份、擔保錯 0；芙莉蓮、藥師少女的 split-cour 第二輪從 01 重數 0 份被擔保、第一輪剛播的 2 份都擔保；真的 RSS fixture 150 筆擔保 135 筆，沒擔保的 15 筆是 Re:Zero 第四季的虛擬季換算、慢發六週以上的補檔與 Doomdos 一次補齊的 12 集。`berth bench`：auto_wrong 0（high 0/84、medium 0/93）。
+
+**code-review 沒處理的**（兩軸，起點 `ef805ea`）：
+- 季集範圍有三種寫法（parser 的 `tuple[int, int, int]`、`first_batch.Span`、API 的 `FirstBatchSpanOut`）；`_store` / `_audit` 多一個布林 `vouched`。判斷題，沒改。
+- `parse_release(series.title_raw).group` 在 `review._audit_row` 與 `rss._series_view` 各寫一次。
+- `IMPORTING` 算已落地：它之後若轉成 `import_failed`，Series 已經確認了。另一個窗口：兄弟 Job 的 importer 已經讀到 `audit = true`、`confirm_by_batch` 才清旗標，帳本那一列會留一個 audit（確認過的 Series 下它說成 medium 那一種，人按一次確認）。兩者都沒有 repro，沒修。
+- 最後一筆停在審核、之後由人核准才落地時不再整批評估：那一批有一列不符合，照設計由人按「確認整個 Series」。同一個 Series 有 Job 卡在 `submit_failed` / `client_error` 時整批一直等人。
+- 整合層只接了幾條條件（沒有播出日、季號、只有 offset、不是剛播、split-cour、另一集還在下載）；每一條條件的雙向在單元測試。
+- 前端 e2e 的 `rss-subscribe`（1280 或 390 其中一份）建完 acg.rip 搜尋 feed 之後 5 秒內等不到第一輪預覽：`ef805ea`（本票之前）在暫時的 worktree 上跑兩次也是同樣一紅一綠，不是本票造成的，沒修。

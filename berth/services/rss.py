@@ -91,7 +91,14 @@ from berth.services.commands import Effect, command
 from berth.services.discover import search_media
 from berth.services.first_batch import FirstBatchAsk
 from berth.services.first_batch import asks as first_batch_asks
-from berth.services.jobs import JobRejectedError, JobSource, actor_of, add_download, freeze
+from berth.services.jobs import (
+    JobRejectedError,
+    JobSource,
+    KeyedLocks,
+    actor_of,
+    add_download,
+    freeze,
+)
 from berth.services.media import read_snapshot_checked
 from berth.services.plan import parse_context
 from berth.services.settings import read_settings, update_settings
@@ -113,6 +120,9 @@ LOOKUP_RETRIES = (timedelta(hours=1), timedelta(hours=4), timedelta(hours=12))
 
 #: TMDB 在重認理由裡的站名，與請求預算同一種鍵（`site_of`）。
 _TMDB_SITE = site_of(TMDB_BASE_URL)
+
+#: 一個 Feed 一把程序內的鎖（`poll_feed`）。
+_feed_locks = KeyedLocks()
 
 #: 自動綁定的 `bound_by`（`events.actor` 的 `system`）。
 SYSTEM = actor_of(None)
@@ -551,7 +561,22 @@ async def poll_feed(
     """一個 Feed 的一輪。抓不到 Feed 時失敗記在那一列，不丟例外（畫面上的「立即輪詢」照樣回 200）。
 
     可逆但沒有單一反向命令：它長出的 Item 與 Series 是紀錄，送出去的 Job 有自己的刪除範圍。
+
+    **同一個 Feed 一次只輪一輪**（`_feed_locks`）：人按「立即輪詢」時背景 poller 也可能正挑到它
+    （剛加的 Feed 從沒輪過，兩邊同時到），兩輪各長一次同一個 RSS Series 會撞 `rss_series.key` 的
+    unique（2026-09-27 真服務 e2e）。後到的那一輪等前一輪做完，讀到的都是看過的 Item。
     """
+    async with _feed_locks.hold(str(feed_id)):
+        return await _poll_feed(session, factory, feed_id, now=now)
+
+
+async def _poll_feed(
+    session: AsyncSession,
+    factory: ServiceClientFactory,
+    feed_id: int,
+    *,
+    now: datetime | None,
+) -> PollOutcome:
     moment = now or utcnow()
     feed = await session.get(RssFeed, feed_id)
     if feed is None:
