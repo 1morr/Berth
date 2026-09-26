@@ -1,6 +1,6 @@
 # 11 — 第一批審核：證據夠強時跳過；要看的整組說一句話
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Blocked by:** 02（Jellyfin 回驗誤報修掉之前，審核頁的量不準）
 
@@ -27,13 +27,15 @@
 
 ## 驗收
 
-- [ ] 規則寫成純函式，逐條件雙向測試（每拿掉一個條件，本來跳過的那一批就會掛 audit）
-- [ ] split-cour 與虛擬季的案例仍停在審核（整合測試 + 真服務 e2e 綠燈）
-- [ ] 跳過時 Series 自動確認、時間線有依據；不跳過時審核頁整組一句話（vitest + playwright 文字結果）
-- [ ] brief §15、plan §11.4 同步；`berth bench` 的 `auto_wrong` 不升
-- [ ] lint、type、test 綠燈
+- [x] 規則寫成純函式，逐條件雙向測試（每拿掉一個條件，本來跳過的那一批就會掛 audit）
+- [x] split-cour 與虛擬季的案例仍停在審核（整合測試 + 真服務 e2e 綠燈）
+- [x] 跳過時 Series 自動確認、時間線有依據；不跳過時審核頁整組一句話（vitest + playwright 文字結果）
+- [x] brief §15、plan §11.4 同步；`berth bench` 的 `auto_wrong` 不升
+- [x] lint、type、test 綠燈
 
 ## Comments
+
+真服務 e2e：https://github.com/1morr/Berth/actions/runs/36264540080（`1513db5`，22 passed，18 分 02 秒）。前一次 run 36263268749（`343c51a`）在 M3 模組第一步撞 `rss_series.key` 的 unique：「立即輪詢」與背景 poller 同時輪剛加的 Feed，不是本票的規則；`1513db5` 讓同一個 Feed 一次只輪一輪（progress.md 偏差同日）。前端 e2e 31 條中 `rss-subscribe` 一份紅（本票之前就是，見下）；vitest 935、pytest 3130。
 
 **量測**（`scripts/experiments/first_batch_rule.py`，2026-09-27）：語料 34 份擔保 10 份、擔保錯 0；對抗的一輪（發佈時間改成 Berth 讀成的那一集播出後一天）26 份擔保 9 份、擔保錯 0；芙莉蓮、藥師少女的 split-cour 第二輪從 01 重數 0 份被擔保、第一輪剛播的 2 份都擔保；真的 RSS fixture 150 筆擔保 135 筆，沒擔保的 15 筆是 Re:Zero 第四季的虛擬季換算、慢發六週以上的補檔與 Doomdos 一次補齊的 12 集。`berth bench`：auto_wrong 0（high 0/84、medium 0/93）。
 
