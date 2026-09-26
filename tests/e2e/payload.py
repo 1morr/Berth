@@ -44,6 +44,8 @@ PIECE_LENGTH = 1 << 18
 VIDEO_SUFFIXES = (".mkv", ".mp4")
 #: 種子本身的片長（`tests/fixtures/e2e/README.md`）。
 SEED_SECONDS = 330
+#: 分類器把量到的片長短於它的正片降成特典（`berth/parser/classify.py`，這台容器沒有 Berth）。
+SHORT_FEATURE = 300
 #: Matroska Segment Info 的 Duration（EBML id `0x4489`）、8 位元組浮點數：`lasting()` 改的那一格。
 _DURATION = bytes.fromhex("448988")
 #: 不是影片的檔案（`.txt`、`.jpg`）只要存在：分類器看副檔名，它們一律略過。
@@ -120,12 +122,20 @@ def runtimes(fixtures: Path, media: str) -> dict[tuple[int, int], int]:
 
 
 def video(seeds: dict[str, bytes], path: str, seconds: int | None) -> bytes:
-    """一支影片的位元組：種子（片長照 TMDB，只拉長不縮短——短於五分鐘的正片會被分類器降成
-    特典，而 330 秒對幾分鐘的特典在容忍之內）加上檔名當尾巴，逐檔內容不同。"""
+    """一支影片的位元組：種子（片長照 TMDB）加上檔名當尾巴，逐檔內容不同。
+
+    **TMDB 說短於五分鐘的那幾集**（Frieren 那包的迷你特典，1–2 分鐘）寫成 mediainfo 讀不出來的
+    位元組：量到真的片長，分類器會把它降成特典（`parser.classify.SHORT_FEATURE`），而語料說它
+    入庫；量到 330 秒，片長驗證說差太多。兩道檢查對這種集數沒有一致的答案（plan §11.4 結尾延後
+    的那一條），量不到則兩道都不管——語料的期待就是那一條路。
+    """
     suffix = Path(path).suffix.lower()
     head = seeds.get(suffix, FILLER)
-    if suffix == ".mkv" and seconds is not None and seconds > SEED_SECONDS:
-        head = lasting(head, seconds)
+    if suffix == ".mkv" and seconds is not None:
+        if seconds < SHORT_FEATURE:
+            head = FILLER
+        elif seconds > SEED_SECONDS:
+            head = lasting(head, seconds)
     return head + path.encode()
 
 
