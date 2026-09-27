@@ -6,6 +6,7 @@
 from berth.parser.airing import HELD_BY_AIRING, check_airing
 from berth.parser.cjk import langs_in, normalize_cjk
 from berth.parser.classify import SAMPLE_RATIO, SHORT_FEATURE, classify, kind_by_extension
+from berth.parser.finished import QUIET_AFTER, SETTLED_AFTER, series_finished
 from berth.parser.first_batch import VOUCHED, vouch_first_batch
 from berth.parser.mapping import VIRTUAL_SEASON_GAP, map_episode
 from berth.parser.planner import episode_span, plan, promote, revise, written_episode
@@ -20,10 +21,12 @@ __all__ = [
     "BEHIND_LATEST",
     "HELD_BY_AIRING",
     "HELD_BY_RUNTIME",
+    "QUIET_AFTER",
     "RELEASE_TOLERANCE",
     "RUNTIME_RATIO",
     "RUNTIME_SLACK",
     "SAMPLE_RATIO",
+    "SETTLED_AFTER",
     "SHORT_FEATURE",
     "VIRTUAL_SEASON_GAP",
     "VOUCHED",
@@ -48,6 +51,7 @@ __all__ = [
     "plan",
     "promote",
     "revise",
+    "series_finished",
     "structure_hints",
     "tags_of",
     "vouch_first_batch",

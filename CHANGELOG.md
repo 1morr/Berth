@@ -1068,6 +1068,17 @@ split-cour 的第一批被播出日比對整批擋在審核，改正一次並套
   送過下載的作品不畫這一段。季表上「下載中」「卡住」那一格連到蓋到那一集的那一筆（原本「卡住」連到整份下載列表）。
   API：`GET /api/jobs` 多參數 `media` 與篩選 `open`（`counts` 多 `open`），新 `GET /api/jobs/{hash}/files`，
   `JobOut` 多 `series`、集表的每一集多 `job`；下載列表的每一列也印出 RSS 送的那一筆的字幕組。
+- **RSS 頁以作品呈現 RSS Series**（M4 票 13，`.scratch/m4/rss-series-shape.md`）：綁好的 Series 作品一塊、字幕組
+  一列，列上說 Mikan 的番組名與字幕組名（連到番組頁）、已入庫 / 在路上 / 排除各幾筆、最近**發佈**的那一集與時間；
+  展開看它的每一筆 Item 與送出的下載，Series 層的排除條件、季號與 offset、解除綁定收在展開區的「進階」。畫面上
+  不再出現 Mikan 的數字 id（`Mikan 3985 × 583`、`mikan:…` 的鍵）。TMDB 說完結而且它入庫過的那幾季都在庫（最後一筆
+  發佈滿一週）、或 30 天沒有新的一筆的 Series 收進段尾預設收起的「已完結」——紀錄不刪，新的一筆出現就回到上面。「最近的 Feed
+  Item」每一列說出來自哪個 Feed、屬於哪部作品的哪個字幕組（沒綁的說待綁定）。作品頁的 RSS 訂閱也改說 Mikan 的
+  字幕組名。API：新 `GET /api/rss/series/{id}/items`；`SeriesOut` 多 `mikan_bangumi_name`、`mikan_subgroup_name`、
+  `latest_episode`、`imported`、`active`、`excluded`、`finished`，`ItemOut` 多 `episode`；
+  `POST /api/rss/subscriptions/mikan` 多選填的 `subgroup_name`。番組名取自自動綁定讀的番組頁與單一 feed 的 channel
+  標題（補舊集與每日補漏本來就讀它），字幕組名取自番組頁；資料庫多兩欄（migration `d5c8e2a7f391`，既有的留空，
+  下一次補漏補上番組名，畫面上沒有就不顯示）；TMDB 快照多 `ended`（至多 24 小時後刷新補上）。
 ### Removed
 - **服務設定頁 `/settings/services` 與精靈的 `?berth=` 深連結**（M3 票 06i）：前者拆進設定的各分頁，後者連同
   「改位址或憑證」與精靈跑完之後的「回到 Berth」一起拿掉——精靈跑完之後不再是設定入口。後端的
@@ -1088,6 +1099,9 @@ split-cour 的第一批被播出日比對整批擋在審核，改正一次並套
   媒體庫頁那一份 `GET /api/inventory/{library_id}/watching` 不變。
 
 ### Fixed
+- **自動綁定握著寫交易問 TMDB**（M4 票 13 的 code-review 抓到，plan §3.3）：搜尋與讀詳情寫了快取卻不 commit，下一個
+  搜尋詞與每一部候選的詳情都在寫交易裡打 TMDB——一個番組最多十幾個請求，期間其他寫者只能等，是 M4 票 01
+  `database is locked` 那一型。現在每問完一次就 commit；`test_write_discipline` 多一條監看 TMDB 的閘門。
 
 - **精靈的文案與實際不符的幾處**（M3 票 06h）：完成頁寫「四個泊位」、既有 Jellyfin 也說「用剛才建立的管理員
   登入」；前置列把探測中的服務也算成已判定；第 2 步寫死 `qbittorrent:8080`；連線表單三個服務的範例位址都是

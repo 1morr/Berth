@@ -111,6 +111,14 @@ export function seriesQueryOptions() {
   })
 }
 
+/** 一個 RSS Series 的每一筆，發佈新的在前（M4 票 13：RSS 頁展開一列看它下了什麼）。 */
+export function seriesItemsQueryOptions(series: number) {
+  return queryOptions({
+    queryKey: [...RSS_KEY, 'series-items', series],
+    queryFn: () => apiGet<FeedItem[]>(`/rss/series/${series}/items`),
+  })
+}
+
 /** 綁在這部作品上的 RSS Series（詳情頁的「RSS 訂閱」，票 19）。 */
 export function workSeriesQueryOptions(media: string) {
   return queryOptions({

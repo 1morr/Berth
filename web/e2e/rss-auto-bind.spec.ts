@@ -22,9 +22,11 @@ test('加 Feed 時選 Route → 輪詢 → 那一部自動綁定 → 下載列�
   const bound = page
     .getByRole('region', { name: 'RSS Series' })
     .getByRole('article', { name: '與妳相戀到生命盡頭' })
-  await expect(bound).toContainText('入庫到 Anime')
+  // 作品一塊，Route 在塊上（M4 票 13）；依據在字幕組那一列的展開裡。
+  await expect(bound.locator('header')).toContainText('Anime')
+  await bound.getByRole('article', { name: 'LoliHouse' }).locator('summary').click()
   // 綁上的依據說出是 Feed 挑的 Route，不是「只有一條」。
-  await expect(bound).toContainText('收得下它的 Route 不只一條，這個 Feed 設定送進 Anime')
+  await expect(bound.getByText('收得下它的 Route 不只一條，這個 Feed 設定送進 Anime')).toBeVisible()
   await shot(page, '1-bound')
 
   // 入庫了的不在預設的「在路上」（M4 票 04）：看全部。

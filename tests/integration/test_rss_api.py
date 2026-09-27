@@ -139,6 +139,19 @@ class TestThePageFlow:
         assert {row["status"] for row in items if row["series_id"] == pending["id"]} == {
             "downloaded"
         }
+        # 展開一列看它下了什麼（M4 票 13）：發佈新的在前、帶集數與 Job。
+        own = client.get(f"/api/rss/series/{pending['id']}/items").json()
+        assert [(row["episode"], row["job_hash"]) for row in own] == [
+            (12, KIMI[0].info_hash),
+            (11, KIMI[1].info_hash),
+        ]
+        listed = next(row for row in client.get("/api/rss/series").json() if row["key"] == KIMI_KEY)
+        assert (listed["active"], listed["latest_episode"], listed["finished"]) == (
+            2,
+            12,
+            False,
+        )
+        assert client.get("/api/rss/series/404/items").status_code == 404
 
     def test_deleting_a_feed_says_how_many_items_went(
         self, client: TestClient, roots: dict[str, Path]
@@ -529,6 +542,7 @@ class TestSubscribeFromTheDetailPage:
                 "bangumi": 4009,
                 "subgroup": 370,
                 "name": "与你相恋到生命尽头 · LoliHouse",
+                "subgroup_name": "LoliHouse",
             },
             headers=BROWSER,
         )
@@ -543,6 +557,11 @@ class TestSubscribeFromTheDetailPage:
             False,
         )
         assert listed["latest_title"] and listed["latest_at"]
+        # 挑的時候讀過的名字記下來，RSS 頁的來源說名字（M4 票 13）。
+        assert (listed["mikan_bangumi_name"], listed["mikan_subgroup_name"]) == (
+            "与你相恋到生命尽头",
+            "LoliHouse",
+        )
         assert client.get("/api/rss/series", params={"media": "tv:1"}).json() == []
 
     def test_subscribing_twice_is_409(

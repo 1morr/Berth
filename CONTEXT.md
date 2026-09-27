@@ -328,6 +328,10 @@ _Avoid_: rule, subscription, follow（`follows` 是字幕跟著影片的那個�
 一個 RSS Series 在 `confirmed = false` 期間送進來的集數：入庫之後不論信心都掛 Audit，在 Review Queue 以 RSS Series 分組，一組一顆「全部確認」——按了之後 Series `confirmed = true`，之後它的 medium 入庫不再進 audit 清單。第一批裡改正一集時可以**套用到這個 RSS Series**：由那一集算出季號與 offset 寫回 Series，還沒確認的集數跟著重算（已入庫的走 rematch 搬過去、仍留在第一批；停在 review 的重新規劃）。**證據夠強的第一批由系統確認**（M4 票 11）：整批每一集都照字面、剛播、播出日對得上時不掛 Audit，Series 直接 `confirmed = true`，時間線記 `series_confirmed`。
 _Avoid_: initial batch, pilot
 
+**已完結**（finished）:
+RSS Series 的一種**照現況算出來**的樣子，不是存下來的狀態：TMDB 說作品完結而且它入庫過的那幾季都在庫、沒有在路上的，或 30 天沒有新的一筆。RSS 頁把它收進預設收起的一段；紀錄不刪，新的一筆出現就不再是。
+_Avoid_: 封存（archived）——沒有人按，也沒有東西被搬走
+
 **Feed Item**:
 Feed 中的一筆項目及其結果：unbound（待綁定）/ matched（綁好還沒送成）/ downloaded（送出去了）/ excluded（**排除條件**擋下）/ duplicate（去重擋下：同一個 torrent 已經送過，或媒體庫已有同一個版本）/ passed（新 Feed 的**第一輪預覽**選了「只追之後的」時已經在 feed 裡的；或綁定時取消**補舊集**、那一刻之前發佈的舊集）。擋下的都不是錯誤，帶著「為什麼沒下載」的理由。
 

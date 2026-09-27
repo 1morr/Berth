@@ -288,7 +288,7 @@ async def _resolve_mikan_series(  # type: ignore[no-untyped-def]  # 一次性腳
         title_raw=item.title,
     )
     try:
-        clues = await _clues(fetcher, series)
+        clues, _ = await _clues(fetcher, series)
         shots, _ = await _candidates(session, factory, clues)
     except _LookupError as failed:
         print(f"   [series lookup failed] {pair}: {failed}")
@@ -353,7 +353,7 @@ async def _resolve_title_series(  # type: ignore[no-untyped-def]  # 一次性腳
 ) -> MediaSnapshot | None:
     """非 Mikan 沒有番組頁：`judge` 一律不給有把握的 `media`，剩一個候選才當量測依據。"""
     series = RssSeries(key=key, mikan_bangumi_id=None, mikan_subgroup_id=None, title_raw=item.title)
-    clues = await _clues(fetcher, series)
+    clues, _ = await _clues(fetcher, series)
     try:
         shots, _ = await _candidates(session, factory, clues)
     except _LookupError as failed:

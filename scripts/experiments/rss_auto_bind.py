@@ -78,7 +78,7 @@ async def measure(session) -> None:  # type: ignore[no-untyped-def]  # 一次性
             )
             print(f"\n== mikan {pair[0]} x {pair[1]}  {item.title}")
             try:
-                clues = await _clues(fetcher, series)
+                clues, _ = await _clues(fetcher, series)
                 print(f"   mikan: {clues.title!r}  premiere={clues.premiere}")
                 print(f"   search: {search_terms(clues)}")
                 shots, missed = await _candidates(session, factory, clues)

@@ -41,6 +41,8 @@ function series(overrides: Partial<RssSeries> = {}): RssSeries {
     title_raw: TITLE,
     mikan_bangumi_id: 4009,
     mikan_subgroup_id: 370,
+    mikan_bangumi_name: '',
+    mikan_subgroup_name: '',
     media_id: null,
     media_title: '',
     media_title_en: '',
@@ -58,6 +60,11 @@ function series(overrides: Partial<RssSeries> = {}): RssSeries {
     group: '喵萌奶茶屋&LoliHouse',
     latest_title: TITLE,
     latest_at: '2026-09-24T12:00:00Z',
+    latest_episode: 12,
+    imported: 0,
+    active: 0,
+    excluded: 0,
+    finished: false,
     submitted: 0,
     ask: null,
     ...overrides,
@@ -78,6 +85,7 @@ function item(overrides: Partial<FeedItem> = {}): FeedItem {
     error: '',
     skip: null,
     size: null,
+    episode: 12,
     ...overrides,
   }
 }
@@ -808,6 +816,169 @@ describe('RSS 頁', () => {
     expect(
       JSON.parse(String(sent(stub, 'PUT', '/api/rss/series/7/exclusions')[0][1]?.body)),
     ).toEqual({ rules: ['简体'] })
+  })
+})
+
+/** 綁好的《与你相恋》：喵萌奶茶屋&LoliHouse 與 ANi 兩組（M4 票 13）。 */
+function boundKimi(overrides: Partial<RssSeries> = {}): RssSeries {
+  return series({
+    media_id: 'tv:262000',
+    media_title: '與妳相戀到生命盡頭',
+    media_title_en: 'Kimishinu',
+    route_id: 3,
+    route_name: 'Anime',
+    bound_by: '1',
+    waiting: 0,
+    confirmed: true,
+    mikan_bangumi_name: '与你相恋到生命尽头',
+    mikan_subgroup_name: 'LoliHouse',
+    imported: 11,
+    active: 1,
+    excluded: 0,
+    latest_episode: 12,
+    ...overrides,
+  })
+}
+
+const ANI = boundKimi({
+  id: 8,
+  key: 'mikan:4009:583',
+  mikan_subgroup_id: 583,
+  mikan_subgroup_name: 'ANi',
+  group: 'ANi',
+  imported: 3,
+  active: 0,
+  excluded: 2,
+  latest_episode: 4,
+})
+
+describe('RSS 頁：以作品呈現 Series（M4 票 13）', () => {
+  it('畫面上不出現 Mikan 的數字 id：待綁定、綁好的、沒讀到名字的都一樣', async () => {
+    render({
+      'GET /api/rss/series': {
+        body: [
+          series({ mikan_bangumi_id: 3985, mikan_subgroup_id: 583, key: 'mikan:3985:583' }),
+          boundKimi(),
+          boundKimi({ id: 9, key: 'mikan:4009:1', mikan_subgroup_id: 1, mikan_bangumi_name: '' }),
+        ],
+      },
+    })
+    renderApp('/rss')
+
+    await screen.findByRole('region', { name: /RSS Series/ })
+    const text = document.body.textContent ?? ''
+    for (const id of ['3985', '583', '4009', '370', 'mikan:']) expect(text).not.toContain(id)
+    // 名字讀到了就說名字，連到 Mikan 的番組頁（id 只在網址裡）。
+    const link = screen.getAllByRole('link', { name: 'Mikan：与你相恋到生命尽头' })[0]
+    expect(link).toHaveAttribute('href', 'https://mikanani.me/Home/Bangumi/4009#370')
+  })
+
+  it('同一部作品的兩個字幕組是一塊：作品名與 Route 在塊上，一組一列說件數與最近一集', async () => {
+    render({ 'GET /api/rss/series': { body: [boundKimi(), ANI] } })
+    renderApp('/rss')
+
+    const work = await screen.findByRole('article', { name: '與妳相戀到生命盡頭' })
+    expect(within(work).getByText('Anime')).toBeInTheDocument()
+    const loli = within(work).getByRole('article', { name: 'LoliHouse' })
+    expect(loli).toHaveTextContent('已入庫 11')
+    expect(loli).toHaveTextContent('在路上 1')
+    expect(loli).toHaveTextContent('排除 0')
+    expect(loli).toHaveTextContent('最近 E12')
+    const ani = within(work).getByRole('article', { name: 'ANi' })
+    expect(ani).toHaveTextContent('排除 2')
+    expect(ani).toHaveTextContent('最近 E04')
+    // 長出它的那一筆（`title_raw`）不當成標題，也不當成「最近」。
+    expect(within(work).queryByText(TITLE)).not.toBeInTheDocument()
+  })
+
+  it('展開一列才讀它的 Item：每一筆的狀態、集數、Job；Series 層的排除條件在進階裡', async () => {
+    const stub = render({
+      'GET /api/rss/series': { body: [boundKimi()] },
+      'GET /api/rss/series/7/items': {
+        body: [
+          item({ id: 2, status: 'downloaded', job_hash: 'b'.repeat(40) }),
+          item({
+            id: 1,
+            title: TITLE.replace(' - 12 ', ' - 11 '),
+            episode: 11,
+            status: 'excluded',
+            skip: { code: 'series_rule', params: { rule: '720p' } },
+          }),
+        ],
+      },
+    })
+    renderApp('/rss')
+
+    const row = await screen.findByRole('article', { name: 'LoliHouse' })
+    expect(sent(stub, 'GET', '/api/rss/series/7/items')).toHaveLength(0)
+    await userEvent.click(within(row).getByText('展開'))
+
+    const list = await within(row).findByRole('list')
+    const lines = within(list).getAllByRole('listitem')
+    expect(lines[0]).toHaveTextContent('已送單')
+    expect(lines[0]).toHaveTextContent('E12')
+    expect(within(lines[0]).getByRole('link', { name: '看這一筆下載' })).toHaveAttribute(
+      'href',
+      `/jobs/${'b'.repeat(40)}`,
+    )
+    expect(lines[1]).toHaveTextContent('已排除')
+    expect(lines[1]).toHaveTextContent('E11')
+    expect(within(row).getByText('進階')).toBeInTheDocument()
+    expect(within(row).getByRole('button', { name: /排除條件（0 條）/ })).toBeInTheDocument()
+    expect(within(row).getByRole('button', { name: '解除綁定' })).toBeInTheDocument()
+  })
+
+  it('讀不到它的 Item 時說出來，給一顆重讀', async () => {
+    render({
+      'GET /api/rss/series': { body: [boundKimi()] },
+      'GET /api/rss/series/7/items': { status: 503, body: {} },
+    })
+    renderApp('/rss')
+
+    const row = await screen.findByRole('article', { name: 'LoliHouse' })
+    await userEvent.click(within(row).getByText('展開'))
+
+    expect(await within(row).findByText('讀不到它的 Feed Item。')).toBeInTheDocument()
+    expect(within(row).getByRole('button', { name: '重讀' })).toBeInTheDocument()
+  })
+
+  it('完結的收進段尾預設收起的「已完結」，上面只留還在追的', async () => {
+    render({ 'GET /api/rss/series': { body: [boundKimi({ finished: true }), ANI] } })
+    renderApp('/rss')
+
+    const region = await screen.findByRole('region', { name: /RSS Series/ })
+    const finished = within(region).getByText('已完結 1 個').closest('details')
+    expect(finished).not.toHaveAttribute('open')
+    expect(
+      within(finished as HTMLElement).getByRole('article', { name: 'LoliHouse' }),
+    ).toBeInTheDocument()
+    const active = within(region).getAllByRole('article', { name: '與妳相戀到生命盡頭' })[0]
+    expect(within(active).getByRole('article', { name: 'ANi' })).toBeInTheDocument()
+    expect(within(active).queryByRole('article', { name: 'LoliHouse' })).not.toBeInTheDocument()
+  })
+
+  it('全部完結時說沒有還在追的', async () => {
+    render({ 'GET /api/rss/series': { body: [boundKimi({ finished: true })] } })
+    renderApp('/rss')
+
+    expect(await screen.findByText('沒有還在追的 RSS Series。')).toBeInTheDocument()
+  })
+
+  it('最近的 Feed Item 每一筆說出來自哪個 Feed、屬於哪個 Series；沒綁的說待綁定', async () => {
+    render({
+      'GET /api/rss/series': {
+        body: [boundKimi(), series({ id: 9, key: 'mikan:1:1', group: 'ANi' })],
+      },
+      'GET /api/rss/items': {
+        body: [item({ id: 1, series_id: 7, status: 'downloaded' }), item({ id: 2, series_id: 9 })],
+      },
+    })
+    renderApp('/rss')
+
+    const list = await screen.findByRole('region', { name: /最近的 Feed Item/ })
+    const [bound, pending] = within(list).getAllByRole('listitem')
+    expect(bound).toHaveTextContent('來自 Mikan · 與妳相戀到生命盡頭 × LoliHouse')
+    expect(pending).toHaveTextContent('來自 Mikan · 待綁定')
   })
 })
 

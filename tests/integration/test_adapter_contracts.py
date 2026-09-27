@@ -50,7 +50,7 @@ from berth.adapters.qbittorrent import (
 )
 from berth.adapters.qbittorrent.client import HttpQbittorrentClient
 from berth.adapters.rate import TokenBucket
-from berth.adapters.tmdb import TmdbEntry, parse_absolute_ordering
+from berth.adapters.tmdb import TmdbEntry, parse_absolute_ordering, parse_detail
 from berth.adapters.tmdb.client import RATE_PER_SECOND, HttpTmdbClient
 from berth.adapters.torznab.client import HttpTorznabClient
 from berth.domain import CollectionType, MediaKind, SortOrder
@@ -2710,6 +2710,29 @@ async def test_tmdb_tv_detail_reads_the_season_list_and_the_absolute_group() -> 
     assert detail.seasons[1].air_date == date(2022, 4, 9)
     # 五個 group 裡挑得出 `type == 2` 的那一個（brief §20.3 的 Absolute）。
     assert detail.absolute_group_id == "689a2aec017d0bc9ecc6fac8"
+    # 錄下的那一刻 TMDB 寫 `"status": "Ended"`（M4 票 13 的完結）。
+    assert detail.ended
+
+
+@pytest.mark.parametrize(
+    ("status", "ended"),
+    [
+        ("Ended", True),
+        ("Canceled", True),
+        ("Returning Series", False),
+        ("In Production", False),
+        ("Planned", False),
+        ("Pilot", False),
+        (None, False),
+    ],
+)
+def test_tmdb_tv_status_reads_ended_only_for_ended_and_canceled(
+    status: str | None, ended: bool
+) -> None:
+    """`status` 六種（brief §20.3）：只有 `Ended` 與 `Canceled` 是不會再播了。"""
+    payload = json.loads(read_fixture("http/tmdb/tv-detail.spy-x-family.en.json"))
+    payload["status"] = status
+    assert parse_detail(payload, MediaKind.TV).ended is ended
 
 
 @respx.mock

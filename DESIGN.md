@@ -767,7 +767,7 @@ Thumb / Backdrop / 劇照），下方同一條標識帶，框與底同牆卡片�
   `secured` 色塊 + 「去看下載列表」連結（`role="status"`，焦點移到連結上）。
 - **RSS 訂閱（`SubscribePanel`，M3 票 19，只有 admin）:** 次要入口，主要的仍是 `/rss`。區塊標題列右側一條 `TEXT_LINK` 到 `/rss`
   （`ms-auto`）。上面是已經綁在這部作品上的 RSS Series：一份 `border-2 border-rule` 框、`gap-px` 透出 `rule` 的清單，每一列
-  `hull` 底——來源中性色塊 + 字幕組（`.value`）+ 第一批還沒確認時一塊 `assigned`「第一批待確認」，確認過只是一行 `ink-dim`
+  `hull` 底——來源中性色塊 + 字幕組（`.value`，Mikan 番組頁上的名字優先，同 `/rss`）+ 第一批還沒確認時一塊 `assigned`「第一批待確認」，確認過只是一行 `ink-dim`
   字（The Usual Stays Unpainted Rule）；下一行最近一集（`.value`）`Dot` `Timestamp`。下面一顆 Ghost「新增訂閱」就地展開成
   `ConfirmPanel`：選來源（整行的選項鍵，同 `Choices`）→ Route → Mikan 搜番組、選字幕組 / Nyaa、acg.rip 選標題 → 資料夾名重述。
   建好的搜尋 feed 在**同一塊裡**換成它的第一輪預覽（`FirstRound`，同 `/rss` 那一塊），旁邊一顆 Ghost「之後在 RSS 頁決定」。
@@ -865,7 +865,9 @@ Feed Item（沒有 Feed 時不畫）。每一段的 `h2` 是 `SectionHeading`：
   發佈時間、大小、下載連結，被擋下的另一行 `ink-dim` 的理由。這一塊沒有信號色（除了段標題那塊件數）。
 - **待綁定（`Pending`）:** 每一列是 `QueueRow`（類別「待綁定」、標題是原始發佈名、一句話是等著的集數），`body` 放**自動綁定
   沒綁上的理由**（`Grounds`：一句 lead + `list-disc` 的 `text-xs ink-dim` 條列，整句翻譯、參數不拆成 `.value` 片段）與這個
-  Series 那一層的排除條件——它回答「為什麼要我來綁」，所以不收進展開。展開裡是 Series key 與 Mikan 頁的 `DetailLine`。
+  Series 那一層的排除條件——它回答「為什麼要我來綁」，所以不收進展開。時間那一格是來源（`sourceLabel`：Mikan 的番組名
+  × 字幕組名，沒讀到就只說 Mikan）；展開裡是 Mikan 番組頁的 `DetailLine`，連結的字是名字。**畫面上不印 Mikan 的數字 id
+  與 Series 的鍵**（M4 票 13）：那是內部編號，id 只留在 `href` 裡。
 - **綁定（`SeriesBinder`）:** 收起時是動作列上的一排 Ghost：**每一個候選一顆**（「選《葬送的芙莉蓮》」+ `text-xs ink-dim`
   的年份 · 類型，動詞寫在鍵上），最後一顆「綁定」。按候選直接展開並選定它、跳過搜尋。展開是 `ConfirmPanel`：
   `.label` 標題 → 候選清單（`Choices`，排在搜尋框上面）→ 搜尋欄（預填從發佈名讀出的作品名，焦點落在這裡）→ 最多八個結果
@@ -873,9 +875,15 @@ Feed Item（沒有 Feed 時不畫）。每一段的 `h2` 是 `SectionHeading`：
   `.value text-xs wrap-anywhere` 的那一串）、「將送出 N 集」→ Mikan 多一格「同時補下載舊集」（預設勾）→ `CONFIRM_ACTIONS`：
   沒選好之前主要鍵那一格留空（取消不移位），選好了主要鍵說「綁定並送出 N 集 / 綁定、送出 N 集並補舊集」。
   `Choices` 的一個選項是整行的按鈕：`border-2 border-rule`、`px-3 py-2`、`.value text-sm`，選中 `aria-pressed` + 重線 + `deck` 底。
-- **綁好的 RSS Series（`BoundRow`）:** `well` + `border-2 border-rule` 的 `article`：作品名 `h3`（跟著 UI 語言）、原始發佈名
-  `.value text-xs ink-dim`、一行 `Dot` 分隔（自動綁定 · Route · 來源 · 季 · 偏移）；自動綁定的**另說憑什麼**（同一個 `Grounds`，
-  lead 換成「依據」）；排除條件；「解除綁定」走就地確認。
+- **綁好的 RSS Series（`SeriesSection`，M4 票 13，`.scratch/m4/rss-series-shape.md`）:** **作品一塊、字幕組一列**。作品塊是
+  `border-2 border-rule` 的 `article`，標題帶 `deck` 底：作品名 `h3`（跟著 UI 語言）+ 右側 Route（`.value text-xs ink-dim`）；
+  塊內的列 `well` 底、`gap-px` 透出 `rule`。一列：字幕組 `h4`（`.value`）+ 來源連結（`text-xs ink-dim` 底線，字是 Mikan 的
+  番組名）→ 一行 `Dot` 分隔的件數（已入庫 · 在路上 · 排除，`.value`、中性；「在路上」與 `/jobs` 同一組）與「最近 E12 · `Timestamp`」（最近**發佈**的那一筆，
+  不是長出它的那一筆）· 自動綁定 → 第一批待確認時一塊 `assigned` 加那一句（與作品頁同一句）→ 原生 `<details>`（摘要是
+  `ExpandHint`，名字接字幕組）。展開：自動綁定的依據（`Grounds`，lead「依據」）→ 它的每一筆 Item（展開才讀，同「最近的
+  Feed Item」的列、不帶來源那一行）→ `border-t-2` 隔開的 `.label`「進階」：季號 / 偏移、Series 層排除條件、就地確認的「解除
+  綁定」——多半只想要 Feed 層的，所以收在這裡。**完結的**（後端照現況算的 `finished`）收在段尾預設收起的 `<details>`「已完結
+  N 個」，展開後是同一種作品塊；上面一個都不剩時一句「沒有還在追的 RSS Series」。已完結不塗漆。
 - **Feed 列（`FeedRow`）:** `well` 底 `article`，框平常 `rule`、這一輪讀不到時 `rule-strong`。來源中性色塊 + 名稱 `h3` →
   遮掉 token 的網址 → 一行 `text-xs ink-dim`：每 N 分鐘 · 上次輪詢 `Timestamp` · N 筆 ·（有指定時）送進 Route 名 →
   第一輪還沒選時一句 `ink`「第一輪還沒決定，一筆都不送」→ 讀不到時一塊 **`assigned`** 的 `Notice` 帶原文（卡住了、下一輪會再試，不是
@@ -892,7 +900,8 @@ Feed Item（沒有 Feed 時不畫）。每一段的 `h2` 是 `SectionHeading`：
   的規則（見 Chips）。**不塗漆**：排除條件是設定，不是要你現在做的事。
 - **最近的 Feed Item:** `gap-px` 的清單，一列一個狀態色塊 + 發佈名。**常態不塗漆**：已送單、已排除、重複都是中性色塊；只有
   送不出去（`matched` 帶著原文）塗 `assigned`。被排除或去重擋下的多一行 `ink-dim` 的「為什麼沒下載」，那不是錯誤；
-  送不出去的原文是 `.value text-xs ink`。
+  送不出去的原文是 `.value text-xs ink`。事實行開頭是集數（`E12`，`.value ink`）；另一行說來自哪裡：「來自 Feed 名 · 作品名
+  × 字幕組」，沒綁的是「待綁定」（M4 票 13；列是 `rss/ItemLine`，Series 展開的清單共用、不帶這一行）。
 
 ### 工作清單列（`QueueRow` / `DetailLine`）
 

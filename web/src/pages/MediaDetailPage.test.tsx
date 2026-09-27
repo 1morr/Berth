@@ -1944,6 +1944,8 @@ function boundSeries(overrides: Partial<RssSeries> = {}): RssSeries {
     title_raw: LOLI_TITLE,
     mikan_bangumi_id: 1234,
     mikan_subgroup_id: 370,
+    mikan_bangumi_name: '',
+    mikan_subgroup_name: '',
     media_id: 'tv:120089',
     media_title: 'SPY×FAMILY 間諜家家酒',
     media_title_en: 'SPY x FAMILY',
@@ -1961,6 +1963,11 @@ function boundSeries(overrides: Partial<RssSeries> = {}): RssSeries {
     group: 'LoliHouse',
     latest_title: LOLI_TITLE,
     latest_at: '2026-09-24T12:00:00Z',
+    latest_episode: 12,
+    imported: 0,
+    active: 0,
+    excluded: 0,
+    finished: false,
     submitted: 0,
     ask: null,
     ...overrides,
@@ -2065,6 +2072,7 @@ describe('詳情頁的 RSS 訂閱（M3 票 19）', () => {
       bangumi: 1234,
       subgroup: 370,
       name: '间谍过家家 · LoliHouse',
+      subgroup_name: 'LoliHouse',
       backfill: true,
     })
     expect(await within(block).findByText('已訂閱，送出 12 集。')).toBeVisible()

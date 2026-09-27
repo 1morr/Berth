@@ -296,6 +296,7 @@ async def _fetch(
         runtime=base.runtime,
         titles=_titles(base, display),
         seasons=tuple(seasons),
+        ended=base.ended,
     )
 
 

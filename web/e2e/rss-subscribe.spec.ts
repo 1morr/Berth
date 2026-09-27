@@ -23,7 +23,8 @@ test('詳情頁訂閱 Mikan 番組 × 字幕組，再建 acg.rip 搜尋 feed 看
 
   await expect(block.getByText('已訂閱，送出 12 集。')).toBeVisible()
   await expect(block.getByText('MIKAN')).toBeVisible()
-  await expect(block.getByText('喵萌奶茶屋&LoliHouse', { exact: true })).toBeVisible()
+  // 字幕組說 Mikan 番組頁上的名字（挑的時候讀過的，M4 票 13），不是發佈名讀出的那一串。
+  await expect(block.getByText('LoliHouse', { exact: true })).toBeVisible()
   await expect(block.getByText('第一批待確認')).toBeVisible()
   await shot(page, '2-mikan-subscribed')
 

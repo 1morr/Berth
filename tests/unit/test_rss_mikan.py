@@ -19,6 +19,7 @@ from berth.adapters.rss.mikan import (
     bangumi_page,
     bangumi_url,
     parse_feed,
+    parse_single_feed,
     published_at,
     search_page,
     search_url,
@@ -74,6 +75,18 @@ class TestTheAggregatedFeed:
 
         assert len(items) == 12
         assert all(item.torrent_url.endswith(".torrent") for item in items)
+
+    def test_the_single_feed_names_its_bangumi_in_the_channel_title(self) -> None:
+        """`Mikan Project - 与你相恋到生命尽头`：feed 本身帶的番組名（M4 票 13），不多打一次
+        番組頁。"""
+        found = parse_single_feed((MIKAN / "rss-bangumi.4009-370.xml").read_bytes())
+
+        assert found.bangumi == "与你相恋到生命尽头"
+        assert len(found.items) == 12
+
+    def test_a_channel_title_without_the_mikan_prefix_names_nothing(self) -> None:
+        empty = b'<rss version="2.0"><channel><title>Something else</title></channel></rss>'
+        assert parse_single_feed(empty).bangumi == ""
 
 
 class TestPublishedAt:

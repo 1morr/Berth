@@ -41,6 +41,7 @@ from berth.services.rss import (
     list_feeds,
     list_items,
     list_series,
+    list_series_items,
     poll_feed,
     preview_feed,
     prime_feed,
@@ -204,6 +205,9 @@ class SeriesOut(BaseModel):
     title_raw: str
     mikan_bangumi_id: int | None
     mikan_subgroup_id: int | None
+    #: Mikan 的番組名與字幕組名（M4 票 13）：畫面上的來源說名字、不說 id。沒讀到是空字串。
+    mikan_bangumi_name: str
+    mikan_subgroup_name: str
     #: `null` 是待綁定。
     media_id: str | None
     media_title: str
@@ -230,6 +234,17 @@ class SeriesOut(BaseModel):
     #: 最近的一筆（排除條件擋下的不算）；沒有是空字串與 `null`（票 19 的詳情頁）。
     latest_title: str
     latest_at: datetime | None
+    #: 最近那一筆的集數（發佈名讀出的）；讀不出是 `null`。
+    latest_episode: int | None
+    #: 它送出去的 Item：Job 已入庫的、在路上的（`/jobs` 預設那一組的狀態，需要人的也在
+    #: 裡面），與排除條件擋下的（M4 票 13）。
+    imported: int
+    active: int
+    excluded: int
+    #: 完結了：TMDB 說完結而且它入庫過的那幾季都在庫、沒有在路上的、一週內沒有新的一筆，
+    #: 或最近一筆發佈之後 30 天沒有新的（`parser.series_finished`）。RSS 頁收進「已完結」；
+    #: 新的一筆出現時自己變回 `false`。
+    finished: bool
     #: 只有綁定回的那一份有值：這一次送出去了幾筆。
     submitted: int
     #: 還沒確認時第一批在問什麼（M4 票 11）；確認過、或還沒有已入庫的集數在等人是 `null`。
@@ -294,6 +309,8 @@ class ItemOut(BaseModel):
     skip: SkipReasonOut | None
     #: 近似的位元組數，只供顯示（三站都不準）；來源不報時 `null`。
     size: int | None
+    #: 發佈名讀出的集數；讀不出是 `null`（M4 票 13）。
+    episode: int | None
 
 
 class OneshotIn(BaseModel):
@@ -471,6 +488,16 @@ async def get_series(session: SessionDep, media: str | None = None) -> list[Seri
     return [SeriesOut.model_validate(row) for row in await list_series(session, media_id=media)]
 
 
+@router.get("/series/{series_id}/items", responses=_responses(RssRefusal.SERIES_MISSING))
+async def get_series_items(session: SessionDep, series_id: int) -> list[ItemOut]:
+    """這個 RSS Series 的每一筆，發佈新的在前（M4 票 13）。"""
+    try:
+        rows = await list_series_items(session, series_id)
+    except RssRejectedError as refusal:
+        raise rss_refusal(refusal) from refusal
+    return [ItemOut.model_validate(row) for row in rows]
+
+
 @router.put(
     "/series/{series_id}/binding",
     responses=_responses(
@@ -578,6 +605,9 @@ class MikanSubscriptionIn(BaseModel):
     subgroup: int
     #: Feed 的名字；空的就用網址的主機名。
     name: str = ""
+    #: 挑的時候畫面從番組頁讀過的字幕組名（`GET /rss/mikan/bangumi/{id}`），記在 RSS Series 上給
+    #: RSS 頁的來源那一格說（M4 票 13）。空的就不記。番組名由單一 feed 自己帶。
+    subgroup_name: str = ""
     #: 補舊集（票 12）：`false` 時綁定之前發佈的記成略過。
     backfill: bool = True
 
@@ -662,6 +692,7 @@ async def post_mikan_subscription(
             route_id=body.route,
             user_id=user.id if user is not None else None,
             name=body.name,
+            subgroup_name=body.subgroup_name,
             backfill=body.backfill,
         )
     except RssRejectedError as refusal:

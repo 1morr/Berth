@@ -63,6 +63,7 @@ from berth.domain import (
     FeedItemStatus,
     FeedKind,
     FileEntry,
+    JobFilter,
     JobState,
     JobTrigger,
     MediaKind,
@@ -82,6 +83,7 @@ from berth.models import Job, LedgerEntry, Media, Route, RssFeed, RssItem, RssSe
 from berth.models import media_id as build_media_id
 from berth.models.types import utcnow
 from berth.parser import plan as decide
+from berth.parser import series_finished
 from berth.parser.binding import SeriesClues, could_be, judge, search_terms, title_key
 from berth.parser.exclusion import Layer, RuleError, normalize_rules, screen
 from berth.parser.planner import episode_span
@@ -92,6 +94,7 @@ from berth.services.discover import search_media
 from berth.services.first_batch import FirstBatchAsk
 from berth.services.first_batch import asks as first_batch_asks
 from berth.services.jobs import (
+    FILTER_STATES,
     JobRejectedError,
     JobSource,
     KeyedLocks,
@@ -209,6 +212,9 @@ class SeriesView:
     title_raw: str
     mikan_bangumi_id: int | None
     mikan_subgroup_id: int | None
+    #: Mikan 的番組名與字幕組名（M4 票 13）；沒讀到是空字串。畫面上的來源說名字、不說 id。
+    mikan_bangumi_name: str
+    mikan_subgroup_name: str
     #: `None` 是待綁定。
     media_id: str | None
     #: 作品名的兩輪（`JobView` 同一個規矩）；沒綁是空字串。
@@ -236,6 +242,16 @@ class SeriesView:
     #: 最近的一筆（照發佈時間，排除條件擋下的不算）：詳情頁的「最近一集」（票 19）。沒有是空字串。
     latest_title: str
     latest_at: datetime | None
+    #: 最近那一筆的集數（發佈名讀出的）；讀不出是 `None`。
+    latest_episode: int | None
+    #: 它送出去的 Item：Job 已入庫的、在路上的（`/jobs` 的「在路上」那一組狀態，需要人的也在裡面），
+    #: 與排除條件擋下的（M4 票 13）。
+    imported: int
+    active: int
+    excluded: int
+    #: 完結了（`parser.series_finished`）：RSS 頁收進「已完結」。紀錄照舊，新的一筆出現時自己
+    #: 變回 `False`。
+    finished: bool
     #: 這一次呼叫送出去了幾筆。只有 `bind_series` 回的那一份有意義，清單上一律是 0。
     submitted: int = 0
     #: 還沒確認時，第一批在問人什麼（M4 票 11，`first_batch.asks`）：作品頁的「第一批待確認」帶
@@ -259,6 +275,8 @@ class ItemView:
     skip: SkipReason | None
     #: 近似的位元組數（只供顯示）；來源不報時 `None`。
     size: int | None
+    #: 發佈名讀出的集數（M4 票 13，Series 展開的清單）；讀不出是 `None`。
+    episode: int | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -808,9 +826,7 @@ async def _home_feed(session: AsyncSession, series: RssSeries) -> RssFeed | None
     return feed
 
 
-async def _read_season(
-    factory: ServiceClientFactory, series: RssSeries
-) -> tuple[FeedItem, ...] | str:
+async def _read_season(factory: ServiceClientFactory, series: RssSeries) -> mikan.SingleFeed | str:
     """讀這個 Mikan RSS Series 的單一 feed（整季）。讀不到回原文（英文）。
 
     **只打網路、不寫**（plan §3.3）：呼叫的一方在改任何東西之前讀它，讀完再交給 `_backfill` 寫。
@@ -819,7 +835,7 @@ async def _read_season(
     url = mikan.bangumi_feed_url(series.mikan_bangumi_id, series.mikan_subgroup_id)
     fetcher = feed_fetcher(factory, BudgetUse.BACKFILL)
     try:
-        return mikan.parse_feed(await fetcher.fetch(url))
+        return mikan.parse_single_feed(await fetcher.fetch(url))
     except ServiceError as exc:
         logger.warning(
             "rss backfill could not read the single feed; the next round tries again",
@@ -834,13 +850,19 @@ async def _backfill(
     session: AsyncSession,
     home: RssFeed,
     series: RssSeries,
-    season: tuple[FeedItem, ...],
+    season: mikan.SingleFeed,
     moment: datetime,
 ) -> None:
     """把讀到的整季裡沒見過的寫成 `home` 的 Item，記下補過的時間。不 commit（呼叫的一方與自己的
-    改動一起）。"""
-    await _record(session, home, await _unseen(session, home.id, season), moment, known=series)
+    改動一起）。
+
+    單一 feed 的 channel 標題帶著番組名（M4 票 13）：還沒有名字的 Series 順手記下——補漏每天讀它，
+    自動綁定之前就長出來、或讀不到番組頁的 Series 也就有了名字，不為了顯示多打 Mikan。
+    """
+    fresh = await _unseen(session, home.id, season.items)
+    await _record(session, home, fresh, moment, known=series)
     series.backfilled_at = moment
+    series.mikan_bangumi_name = series.mikan_bangumi_name or season.bangumi
 
 
 async def _backfill_due(
@@ -1356,7 +1378,10 @@ async def _auto_bind(
     if series is None or series.media_id is not None:
         return None
     try:
-        clues = await _clues(fetcher, series)
+        clues, subgroup = await _clues(fetcher, series)
+        # 番組頁已經抓了：名字順手記下（RSS 頁的來源那一格，M4 票 13）。先寫完再去問 TMDB——
+        # 握著寫交易打網路會鎖住整個資料庫（M4 票 01）。
+        await _remember_names(session, series_id, clues.title, subgroup)
         shots, missed = await _candidates(session, factory, clues)
     except BudgetExhaustedError as refused:
         # 預算擋下的不是「查不到」：記成延後，下一輪輪到這個 Feed 時再認（`_due_lookups`）。
@@ -1417,14 +1442,18 @@ async def _auto_bind(
     return bound.submitted
 
 
-async def _clues(fetcher: FeedFetcher, series: RssSeries) -> SeriesClues:
-    """番組頁的中文名與開播日期 + 長出它的那一筆發佈名。
+async def _clues(fetcher: FeedFetcher, series: RssSeries) -> tuple[SeriesClues, str]:
+    """番組頁的中文名與開播日期 + 長出它的那一筆發佈名；加上番組頁上這個字幕組的名字（沒有是
+    空字串）。
 
     不是 Mikan 的（Nyaa、acg.rip）沒有番組頁：線索只有發佈名，`judge` 列出候選、一律留給人
     （票 11）。
     """
     if series.mikan_bangumi_id is None:
-        return SeriesClues(title="", premiere=None, release_title=series.title_raw, show_page=False)
+        clues = SeriesClues(
+            title="", premiere=None, release_title=series.title_raw, show_page=False
+        )
+        return clues, ""
     url = mikan.bangumi_url(series.mikan_bangumi_id)
     try:
         page = await fetcher.fetch(url)
@@ -1434,8 +1463,28 @@ async def _clues(fetcher: FeedFetcher, series: RssSeries) -> SeriesClues:
         raise _LookupError(
             f"bangumi page: {message(exc)}", site=site_of(url), transient=is_transient(exc)
         ) from exc
-    found = mikan.bangumi_page(page.decode("utf-8", errors="replace"))
-    return SeriesClues(title=found.title, premiere=found.premiere, release_title=series.title_raw)
+    text = page.decode("utf-8", errors="replace")
+    found = mikan.bangumi_page(text)
+    subgroup = next(
+        (row.name for row in mikan.subgroups(text) if row.id == series.mikan_subgroup_id), ""
+    )
+    clues = SeriesClues(title=found.title, premiere=found.premiere, release_title=series.title_raw)
+    return clues, subgroup
+
+
+async def _remember_names(
+    session: AsyncSession, series_id: int, bangumi: str, subgroup: str
+) -> None:
+    """記下 Mikan 的番組名與字幕組名（M4 票 13）。讀不到的那一格不蓋掉已經有的。"""
+    bangumi, subgroup = bangumi.strip(), subgroup.strip()
+    if not bangumi and not subgroup:
+        return
+    row = await session.get(RssSeries, series_id)
+    if row is None:
+        return
+    row.mikan_bangumi_name = bangumi or row.mikan_bangumi_name
+    row.mikan_subgroup_name = subgroup or row.mikan_subgroup_name
+    await session.commit()
 
 
 async def _candidates(
@@ -1451,6 +1500,9 @@ async def _candidates(
     ids: dict[str, None] = {}
     for term in search_terms(clues):
         found = await search_media(session, factory, term)
+        # 搜尋與讀詳情都會寫快取、不 commit（網頁請求由請求結束時 commit）；這裡接著還要打 TMDB，
+        # 不先 commit 就是握著寫交易打網路（M4 票 01，`test_write_discipline` 抓到的，M4 票 13）。
+        await session.commit()
         if found.problem is not None:
             missed.append(_tmdb_miss(f"tmdb search: {found.detail}", found.problem))
             continue
@@ -1460,6 +1512,7 @@ async def _candidates(
     shots: list[MediaSnapshot] = []
     for media_id in ids:
         read = await read_snapshot_checked(session, factory, media_id)
+        await session.commit()
         if read.snapshot is None:
             missed.append(_tmdb_miss(f"tmdb detail: {media_id}: {read.detail}", read.problem))
             continue
@@ -1525,11 +1578,11 @@ def _reasons(row: RssSeries) -> tuple[BindReason, ...]:
 
 @command(Effect.READ)
 async def list_series(
-    session: AsyncSession, *, media_id: str | None = None
+    session: AsyncSession, *, media_id: str | None = None, now: datetime | None = None
 ) -> tuple[SeriesView, ...]:
     """待綁定的排前面（shape §2），同類之內新的在前。
 
-    給 `media_id` 時只列綁在那部作品上的（票 19 的詳情頁）。
+    給 `media_id` 時只列綁在那部作品上的（票 19 的詳情頁）。`now` 是算完結的那一刻。
     """
     query = select(RssSeries).order_by(
         RssSeries.media_id.is_not(None), RssSeries.created_at.desc(), RssSeries.id.desc()
@@ -1539,7 +1592,8 @@ async def list_series(
     rows = list(await session.scalars(query))
     # 第一批在問什麼一次問完（`first_batch.asks` 收一串 id），不逐列各問一次。
     asked = await first_batch_asks(session, [row.id for row in rows if not row.confirmed])
-    return tuple([await _series_view(session, row, asked=asked) for row in rows])
+    moment = now or utcnow()
+    return tuple([await _series_view(session, row, asked=asked, now=moment) for row in rows])
 
 
 @command(Effect.REVERSIBLE, inverse="rss.unbind_series")
@@ -1577,7 +1631,7 @@ async def bind_series(
     home = await _home_feed(session, series)
     # 補舊集的單一 feed 在改任何東西之前讀（plan §3.3）：下面第一個查詢就會把綁定的改動 flush
     # 出去，之後才讀的話 Mikan 那幾秒（逾時 30 秒）都握著寫鎖。
-    season = await _read_season(factory, series) if home is not None else ()
+    season = await _read_season(factory, series) if home is not None else None
     series.media_id = media.id
     series.route_id = route.id
     series.bound_by = actor_of(user_id)
@@ -1601,7 +1655,7 @@ async def bind_series(
             )
             for item in passed:
                 item.status = FeedItemStatus.MATCHED
-        if not isinstance(season, str):
+        if isinstance(season, mikan.SingleFeed):
             await _backfill(session, home, series, season, moment)
     await session.commit()
     await _rescreen(session, RssItem.series_id == series_id)
@@ -1665,7 +1719,11 @@ async def unbind_series(session: AsyncSession, series_id: int) -> SeriesView:
 
 
 async def _series_view(
-    session: AsyncSession, row: RssSeries, *, asked: dict[int, FirstBatchAsk] | None = None
+    session: AsyncSession,
+    row: RssSeries,
+    *,
+    asked: dict[int, FirstBatchAsk] | None = None,
+    now: datetime | None = None,
 ) -> SeriesView:
     """一個 RSS Series 在畫面上的樣子。`asked` 是清單先整批問好的「第一批在問什麼」；單一個的
     回應（綁定、解除、排除條件）沒給，這裡自己問。"""
@@ -1673,17 +1731,7 @@ async def _series_view(
         asked = {} if row.confirmed else await first_batch_asks(session, [row.id])
     media = await session.get(Media, row.media_id) if row.media_id is not None else None
     route = await session.get(Route, row.route_id) if row.route_id is not None else None
-    waiting = await session.scalar(
-        select(func.count())
-        .select_from(RssItem)
-        .where(
-            RssItem.series_id == row.id,
-            or_(
-                RssItem.status == FeedItemStatus.UNBOUND,
-                RssItem.status == FeedItemStatus.MATCHED,
-            ),
-        )
-    )
+    tally = await _tally(session, row.id)
     latest = await session.scalar(
         select(RssItem)
         .where(RssItem.series_id == row.id, RssItem.status != FeedItemStatus.EXCLUDED)
@@ -1692,21 +1740,25 @@ async def _series_view(
     )
     feed = await session.get(RssFeed, latest.feed_id) if latest is not None else None
     latest_kind = feed.kind if feed is not None else None
+    snapshot = media.snapshot() if media is not None else None
+    finished = await _finished(session, row, snapshot, tally, now or utcnow())
     return SeriesView(
         id=row.id,
         key=row.key,
         title_raw=row.title_raw,
         mikan_bangumi_id=row.mikan_bangumi_id,
         mikan_subgroup_id=row.mikan_subgroup_id,
+        mikan_bangumi_name=row.mikan_bangumi_name,
+        mikan_subgroup_name=row.mikan_subgroup_name,
         media_id=row.media_id,
-        media_title=media.snapshot().title if media is not None else "",
+        media_title=snapshot.title if snapshot is not None else "",
         media_title_en=media.title_en if media is not None else "",
         route_id=row.route_id,
         route_name=route.name if route is not None else "",
         season=row.season,
         episode_offset=row.episode_offset,
         bound_by=row.bound_by,
-        waiting=int(waiting or 0),
+        waiting=tally.waiting,
         reasons=_reasons(row),
         candidates=await _candidate_views(session, row.candidates_json or ()),
         exclusions=tuple(row.exclude_json),
@@ -1715,7 +1767,112 @@ async def _series_view(
         group=parse_release(row.title_raw).group,
         latest_title=latest.title if latest is not None else "",
         latest_at=latest.published_at if latest is not None else None,
+        latest_episode=parse_release(latest.title).episode if latest is not None else None,
+        imported=tally.imported,
+        active=tally.active,
+        excluded=tally.excluded,
+        finished=finished,
         ask=asked.get(row.id),
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class _Tally:
+    """一個 RSS Series 的 Item 各在哪裡。"""
+
+    #: 還沒送出去的（待綁定、綁好還沒送成）。
+    waiting: int = 0
+    imported: int = 0
+    #: 送出去了、Job 在 `/jobs` 的「在路上」那一組（還沒入庫也沒被移走）。
+    active: int = 0
+    excluded: int = 0
+
+
+#: 「在路上」與 `/jobs` 的預設那一組是同一份定義。
+_ACTIVE_JOBS = FILTER_STATES[JobFilter.ACTIVE] or frozenset()
+
+
+async def _tally(session: AsyncSession, series_id: int) -> _Tally:
+    rows = await session.execute(
+        select(RssItem.status, Job.state, func.count())
+        .select_from(RssItem)
+        .outerjoin(Job, Job.hash == RssItem.job_hash)
+        .where(RssItem.series_id == series_id)
+        .group_by(RssItem.status, Job.state)
+    )
+    waiting = imported = active = excluded = 0
+    for status, state, number in rows:
+        if status in _WAITING:
+            waiting += number
+        elif status is FeedItemStatus.EXCLUDED:
+            excluded += number
+        elif status is not FeedItemStatus.DOWNLOADED or state is None:
+            continue
+        elif state is JobState.IMPORTED:
+            imported += number
+        elif state in _ACTIVE_JOBS:
+            active += number
+    return _Tally(waiting=waiting, imported=imported, active=active, excluded=excluded)
+
+
+async def _finished(
+    session: AsyncSession,
+    row: RssSeries,
+    snapshot: MediaSnapshot | None,
+    tally: _Tally,
+    moment: datetime,
+) -> bool:
+    """`parser.series_finished` 要的現況：最近一筆的發佈時間（沒寫的用看到它的那一刻；一筆都沒有
+    用長出來的那一刻）、這個 Series 入庫過的那幾季、這部作品在庫的集數。後兩者只在 TMDB 說完結時
+    才查。"""
+    published = await session.scalar(
+        select(func.max(RssItem.published_at)).where(RssItem.series_id == row.id)
+    )
+    unstamped = await session.scalar(
+        select(func.max(RssItem.seen_at)).where(
+            RssItem.series_id == row.id, RssItem.published_at.is_(None)
+        )
+    )
+    stamps = [one for one in (published, unstamped) if one is not None]
+    latest = max(stamps) if stamps else row.created_at
+    seasons: set[int] = set()
+    held: set[tuple[int, int]] = set()
+    if snapshot is not None and snapshot.ended and row.media_id is not None:
+        seasons = {
+            season
+            for season in await session.scalars(
+                select(LedgerEntry.season)
+                .join(Job, Job.hash == LedgerEntry.job_hash)
+                .where(
+                    Job.trigger == JobTrigger.RSS,
+                    Job.trigger_ref == str(row.id),
+                    LedgerEntry.media_id == row.media_id,
+                    LedgerEntry.action == PlanAction.IMPORT,
+                )
+                .distinct()
+            )
+            if season is not None
+        }
+        spans = await session.execute(
+            select(LedgerEntry.season, LedgerEntry.episode_start, LedgerEntry.episode_end).where(
+                LedgerEntry.media_id == row.media_id,
+                LedgerEntry.action == PlanAction.IMPORT,
+                LedgerEntry.season.in_(seasons),
+            )
+        )
+        held = {
+            (season, episode)
+            for season, start, end in spans
+            if season is not None and start is not None
+            for episode in range(start, (end or start) + 1)
+        }
+    return series_finished(
+        latest=latest,
+        now=moment,
+        media=snapshot,
+        seasons=seasons,
+        held=held,
+        open_items=tally.waiting + tally.active,
     )
 
 
@@ -1759,10 +1916,14 @@ async def subscribe_mikan(
     route_id: int,
     user_id: int | None,
     name: str = "",
+    subgroup_name: str = "",
     backfill: bool = True,
     now: datetime | None = None,
 ) -> Subscription:
     """從 Media 頁訂閱一個 Mikan 番組 × 字幕組（brief §15「從 Media 頁訂閱」、票 19）。
+
+    `subgroup_name` 是畫面讓人挑的時候從番組頁讀過的名字（M4 票 13），記在 RSS Series 上；
+    番組名由單一 feed 的 channel 標題來（`_backfill`）。
 
     建它的單一 feed（`/RSS/Bangumi?bangumiId=&subgroupid=`）、當場長出那一個 RSS Series 並走
     `bind_series` 綁上，讀到的整季寫成這個 Feed 的 Item 送出。**鍵從網址就知道**：單一 feed 只有一個
@@ -1794,7 +1955,13 @@ async def subscribe_mikan(
             backfill=backfill,
             now=moment,
         )
-        return Subscription(feed=await _feed_view_of(session, home.id), series=bound)
+        await _remember_names(session, series.id, "", subgroup_name)
+        named = await session.get(RssSeries, series.id, populate_existing=True)
+        assert named is not None
+        return Subscription(
+            feed=await _feed_view_of(session, home.id),
+            series=replace(await _series_view(session, named), submitted=bound.submitted),
+        )
 
     url = mikan.bangumi_feed_url(bangumi_id, subgroup_id)
     if await session.scalar(select(RssFeed.id).where(RssFeed.url == url)) is not None:
@@ -1802,7 +1969,7 @@ async def subscribe_mikan(
     fetcher = feed_fetcher(factory, BudgetUse.MANUAL)
     try:
         try:
-            season = mikan.parse_feed(await fetcher.fetch(url))
+            season = mikan.parse_single_feed(await fetcher.fetch(url))
         except ServiceError as exc:
             raise unread(exc) from exc
         feed = RssFeed(
@@ -1816,7 +1983,7 @@ async def subscribe_mikan(
         if series is None:
             series = RssSeries(
                 key=key,
-                title_raw=season[0].title if season else "",
+                title_raw=season.items[0].title if season.items else "",
                 mikan_bangumi_id=bangumi_id,
                 mikan_subgroup_id=subgroup_id,
             )
@@ -1843,6 +2010,7 @@ async def subscribe_mikan(
     finally:
         await fetcher.aclose()
     submitted = await _submit_waiting(session, factory, RssItem.feed_id == feed.id)
+    await _remember_names(session, series.id, "", subgroup_name)
     row = await session.get(RssSeries, series.id)
     assert row is not None
     return Subscription(
@@ -1903,6 +2071,20 @@ async def _feed_view_of(session: AsyncSession, feed_id: int) -> FeedView:
 
 
 @command(Effect.READ)
+async def list_series_items(session: AsyncSession, series_id: int) -> tuple[ItemView, ...]:
+    """一個 RSS Series 的每一筆，發佈新的在前（M4 票 13：RSS 頁展開一列看它下了什麼）。不分頁：一季
+    12–50 筆。跟著 Feed 刪掉的就不在了。"""
+    if await session.get(RssSeries, series_id) is None:
+        raise RssRejectedError(RssRefusal.SERIES_MISSING, str(series_id))
+    rows = await session.scalars(
+        select(RssItem)
+        .where(RssItem.series_id == series_id)
+        .order_by(RssItem.published_at.desc(), RssItem.seen_at.desc(), RssItem.id.desc())
+    )
+    return tuple(_item_view(row) for row in rows)
+
+
+@command(Effect.READ)
 async def list_items(session: AsyncSession) -> tuple[ItemView, ...]:
     """最近看到的 `RECENT_ITEMS` 筆，新的在前。"""
     rows = await session.scalars(
@@ -1925,4 +2107,5 @@ def _item_view(row: RssItem) -> ItemView:
         error=row.error,
         skip=_skip_of(row),
         size=row.size,
+        episode=parse_release(row.title).episode,
     )

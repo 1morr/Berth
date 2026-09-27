@@ -71,6 +71,10 @@ class RssSeries(Base):
     key: Mapped[str] = mapped_column(Text, unique=True)
     mikan_bangumi_id: Mapped[int | None] = mapped_column(default=None)
     mikan_subgroup_id: Mapped[int | None] = mapped_column(default=None)
+    #: Mikan 的番組名與字幕組名（M4 票 13）：RSS 頁的來源那一格說名字、不說 id。取自已經抓過的番組頁
+    #: （自動綁定、從 Media 頁訂閱），不為了顯示多打 Mikan；沒讀到是空字串。
+    mikan_bangumi_name: Mapped[str] = mapped_column(Text, default="", server_default="")
+    mikan_subgroup_name: Mapped[str] = mapped_column(Text, default="", server_default="")
     #: 長出它的那一筆 Item 的標題，原樣。待綁定清單上認得出這是哪一部、哪一組的就是它。
     title_raw: Mapped[str] = mapped_column(Text)
     media_id: Mapped[str | None] = mapped_column(

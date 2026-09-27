@@ -35,6 +35,7 @@ import { Timestamp } from '../components/Timestamp'
 import { useInPlaceConfirm } from '../components/useInPlaceConfirm'
 import { displayRound } from '../i18n/displayRound'
 import { firstBatchAskText } from '../rss/firstBatchAsk'
+import { groupName } from '../rss/seriesByWork'
 import { FirstRound } from '../rss/FirstRoundSection'
 import { preselect } from '../rss/preselect'
 import { RoutePicker } from './RoutePicker'
@@ -110,7 +111,7 @@ function SeriesLine({ row }: { row: RssSeries }) {
           <span className="label bg-deck px-2 py-1 text-ink">{t(`rss.kind.${row.source}`)}</span>
         )}
         <span className="value min-w-0 text-sm wrap-anywhere text-ink">
-          {row.group || row.title_raw}
+          {groupName(row) || row.title_raw}
         </span>
         {/* 還沒確認是一件在等人的事（`assigned`）；確認過是常態，不塗漆（The Usual Stays Unpainted Rule）。 */}
         {row.confirmed ? (
@@ -123,7 +124,7 @@ function SeriesLine({ row }: { row: RssSeries }) {
       </p>
       {!row.confirmed && row.ask && (
         <p className="max-w-prose text-xs text-ink">
-          {firstBatchAskText(t, { title, group: row.group, ask: row.ask })}
+          {firstBatchAskText(t, { title, group: groupName(row), ask: row.ask })}
         </p>
       )}
       {row.latest_title ? (
@@ -252,6 +253,8 @@ function MikanPicker({
         bangumi: bangumi.id,
         subgroup: group.id,
         name: `${bangumi.title} · ${group.name}`,
+        // 挑的時候讀過的字幕組名：RSS 頁的來源那一格說它，不說 id（M4 票 13）。番組名單一 feed 自己帶。
+        subgroup_name: group.name,
         backfill,
       })
     },

@@ -151,11 +151,16 @@ class TestMikan:
             media_id=media.id,
             route_id=route.id,
             user_id=1,
+            subgroup_name="LoliHouse",
             now=NOW,
         )
 
         assert [feed.id for feed in await feeds(session)] == [feed_id]
         assert (done.feed.id, done.series.id) == (feed_id, series_id)
+        assert (done.series.mikan_bangumi_name, done.series.mikan_subgroup_name) == (
+            "与你相恋到生命尽头",
+            "LoliHouse",
+        )
         assert await rss_jobs(session) == {item.info_hash for item in SEASON}
 
     async def test_a_series_bound_elsewhere_is_refused_and_nothing_is_added(

@@ -49,6 +49,7 @@ from tests.integration.test_downloads import status
 from tests.integration.test_jobs import MAGNET_HASH, _media, _route, _source
 from tests.integration.test_plan import HASH, NOW, downloaded_job, ready
 from tests.integration.test_rss import FEED_URL, harbour
+from tests.integration.test_rss_auto_bind import moored
 from tests.integration.test_rss_backfill import subscribed
 from tests.integration.test_rss_screen import SINGLE_URL
 
@@ -420,3 +421,19 @@ class TestNetworkOutsideTheWriteTransaction:
 
         assert view.state is JobState.SUBMITTED
         assert added == [False]
+
+    async def test_auto_binding_asks_tmdb_after_the_names_are_written(
+        self, session: AsyncSession, roots: dict[str, Path], config: Config
+    ) -> None:
+        """自動綁定讀番組頁時順手記下番組名與字幕組名（M4 票 13），要在問 TMDB 之前寫完
+        commit。"""
+        _, factory = await moored(session, roots)
+        feed = await add_feed(session, url=FEED_URL, name="Mikan")
+        searched = watch(factory.tmdb_, "search", config.database_path)
+        detailed = watch(factory.tmdb_, "detail", config.database_path)
+
+        polled = await poll_feed(session, factory, feed.id, now=NOW)
+
+        assert polled.bound == 1
+        assert searched and detailed
+        assert not any(searched + detailed)

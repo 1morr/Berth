@@ -1212,6 +1212,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/rss/series/{series_id}/items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Series Items
+         * @description 這個 RSS Series 的每一筆，發佈新的在前（M4 票 13）。
+         */
+        get: operations["get_series_items_api_rss_series__series_id__items_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/rss/series/{series_id}/binding": {
         parameters: {
             query?: never;
@@ -3008,6 +3028,8 @@ export interface components {
             skip: components["schemas"]["SkipReasonOut"] | null;
             /** Size */
             size: number | null;
+            /** Episode */
+            episode: number | null;
         };
         /**
          * ItemReasonOut
@@ -3611,6 +3633,11 @@ export interface components {
              * @default
              */
             name?: string;
+            /**
+             * Subgroup Name
+             * @default
+             */
+            subgroup_name?: string;
             /**
              * Backfill
              * @default true
@@ -4432,6 +4459,10 @@ export interface components {
             mikan_bangumi_id: number | null;
             /** Mikan Subgroup Id */
             mikan_subgroup_id: number | null;
+            /** Mikan Bangumi Name */
+            mikan_bangumi_name: string;
+            /** Mikan Subgroup Name */
+            mikan_subgroup_name: string;
             /** Media Id */
             media_id: string | null;
             /** Media Title */
@@ -4465,6 +4496,16 @@ export interface components {
             latest_title: string;
             /** Latest At */
             latest_at: string | null;
+            /** Latest Episode */
+            latest_episode: number | null;
+            /** Imported */
+            imported: number;
+            /** Active */
+            active: number;
+            /** Excluded */
+            excluded: number;
+            /** Finished */
+            finished: boolean;
             /** Submitted */
             submitted: number;
             ask: components["schemas"]["FirstBatchAskOut"] | null;
@@ -7585,6 +7626,46 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SeriesOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_series_items_api_rss_series__series_id__items_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                series_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemOut"][];
+                };
+            };
+            /** @description `series_missing` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RssRefusalOut"];
                 };
             };
             /** @description Validation Error */

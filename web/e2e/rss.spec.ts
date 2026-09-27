@@ -43,7 +43,14 @@ test('加 Feed → 輪詢 → 待綁定的那一部一鍵選定候選 → 下載
   await shot(page, '3-binding')
   await row.getByRole('button', { name: '綁定並送出 2 集' }).click()
   await expect(pending).toContainText('10 個待綁定')
-  await expect(page.getByRole('region', { name: 'RSS Series' })).toContainText('入庫到 Anime')
+  // 以作品呈現（M4 票 13）：作品名與 Route 在塊上，字幕組一列、來源說番組名而不是 Mikan 的數字 id。
+  const work = page
+    .getByRole('region', { name: 'RSS Series' })
+    .getByRole('article', { name: '與妳相戀到生命盡頭' })
+  await expect(work.locator('header')).toContainText('Anime')
+  const loli = work.getByRole('article', { name: 'LoliHouse' })
+  await expect(loli.getByRole('link', { name: 'Mikan：与你相恋到生命尽头' })).toBeVisible()
+  await expect(loli).toContainText('最近 E12')
 
   // 入庫了的不在預設的「在路上」（M4 票 04）：看全部。
   await page.goto('/jobs?filter=all')
@@ -53,6 +60,25 @@ test('加 Feed → 輪詢 → 待綁定的那一部一鍵選定候選 → 下載
   await expect(jobs.first()).toContainText('已入庫', { timeout: 60_000 })
   await expect(jobs.nth(1)).toContainText('已入庫', { timeout: 60_000 })
   await shot(page, '4-jobs')
+
+  // 回到 RSS 頁：那一列說出下了什麼，展開看得到它的每一筆；最近的 Feed Item 說出來自哪、屬於誰。
+  await page.goto('/rss')
+  await expect(loli).toContainText('已入庫 2')
+  await loli.locator('summary').click()
+  const own = loli.getByRole('list')
+  // 取消了補舊集：單一 feed 讀到的其餘 10 集記成略過，也是這個 Series 的 Item。
+  await expect(own.getByRole('listitem')).toHaveCount(12)
+  await expect(own.getByRole('listitem').first()).toContainText('E12')
+  await expect(own.getByText('略過')).toHaveCount(10)
+  await expect(own.getByRole('link', { name: '看這一筆下載' })).toHaveCount(2)
+  const recent = page.getByRole('region', { name: /最近的 Feed Item/ })
+  await expect(
+    recent.getByText('來自 mikanani.me · 與妳相戀到生命盡頭 × LoliHouse').first(),
+  ).toBeVisible()
+  await expect(recent.getByText('來自 mikanani.me · 待綁定').first()).toBeVisible()
+  const text = (await page.locator('main').innerText()) + (await page.locator('main').textContent())
+  expect(text).not.toMatch(/Mikan \d|mikan:\d|4009|× 370/)
+  await shot(page, '4b-rss-by-work')
 
   // 兩集都只寫集號、單季、發佈時剛播、播出日對得上：證據夠強，系統確認了這個 Series（M4 票 11）。
   // 審核頁沒有它的第一批，作品頁的 RSS 訂閱說已確認，下載的時間線說出依據。

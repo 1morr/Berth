@@ -105,11 +105,18 @@ class TmdbDetail:
     seasons: tuple[TmdbSeasonEntry, ...] = ()
     #: Absolute episode group 的 id，沒有那種 group 時是空字串（brief §20.3）。
     absolute_group_id: str = ""
+    #: 劇集不會再播了：`status` 是 `ENDED_STATUSES` 之一（brief §20.3）。
+    #: 電影一律 `False`。
+    ended: bool = False
 
 
 #: `episode_groups` 的 `type`：1 播出序、**2 絕對編號**、3 DVD、4 數位、5 故事線、6 製作、7 電視
 #: （brief §20.3）。只有 2 是 Berth 要的那一種。
 ABSOLUTE_GROUP_TYPE = 2
+
+#: 劇集 `status` 的六種（`Returning Series`、`Planned`、`In Production`、`Ended`、`Canceled`、
+#: `Pilot`，brief §20.3）裡「不會再播了」的兩種。RSS Series 的完結看它（M4 票 13）。
+ENDED_STATUSES = frozenset({"Ended", "Canceled"})
 
 #: 詳情要的 append。兩種作品都要標題集合，只有劇集有 episode groups。
 #: **不要 `external_ids` 與 `release_dates`**：快照裡沒有任何欄位讀它們，而後者每部電影就是
@@ -241,6 +248,7 @@ def parse_detail(payload: Any, kind: MediaKind) -> TmdbDetail:
         titles=_titles(title, original, payload),
         seasons=_seasons(payload.get("seasons")) if series else (),
         absolute_group_id=_absolute_group_id(payload.get("episode_groups")),
+        ended=series and _text(payload, "status") in ENDED_STATUSES,
     )
 
 

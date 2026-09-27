@@ -2506,6 +2506,29 @@ const zhHant = {
       // `bound_by = system`（票 09）：畫面說得出為什麼是這一部。
       automatic: '自動綁定',
       grounds: '依據：',
+      // 以作品呈現（M4 票 13）：一列一個字幕組，件數與最近一筆。
+      imported: '已入庫 {{n}}',
+      active: '在路上 {{n}}',
+      excluded: '排除 {{n}}',
+      latest: '最近 {{episode}}',
+      latestUnnumbered: '最近一筆',
+      nothingYet: '還沒有發佈',
+      finished_one: '已完結 {{count}} 個',
+      finished_other: '已完結 {{count}} 個',
+      finishedLede: '播完而且都入庫了，或 30 天沒有新的一筆。紀錄留著，新的一筆出現時回到上面。',
+      allFinished: '沒有還在追的 RSS Series。',
+      items: '它的 Feed Item',
+      itemsLoading: '正在讀它的 Feed Item…',
+      itemsOff: '讀不到它的 Feed Item。',
+      itemsRetry: '重讀',
+      itemsEmpty: '它的 Feed Item 跟著 Feed 刪掉了。',
+      advanced: '進階',
+    },
+    // RSS Series 從哪裡來（M4 票 13）：說番組與字幕組的名字，不說 Mikan 的數字 id。
+    source: {
+      mikan: 'Mikan：{{bangumi}}',
+      mikanGroup: 'Mikan：{{bangumi}} × {{group}}',
+      mikanBare: 'Mikan',
     },
     // 自動綁定的理由（`domain.BindReasonCode`，票 09）。參數是原文，不翻譯；
     // 佔位符由 `tests/unit/test_bind_reasons.py` 對後端的參數表逐句比對。
@@ -2636,7 +2659,6 @@ const zhHant = {
       outcome: { sent: '已送出', already: '本來就在了' },
     },
     series: {
-      key: '鍵',
       page: 'Mikan 番組頁',
     },
     items: {
@@ -2646,6 +2668,10 @@ const zhHant = {
       empty: '還沒有 Feed Item。加一個 Feed、按「立即輪詢」。',
       published: '發佈於',
       job: '看這一筆下載',
+      // 每一筆來自哪個 Feed、屬於哪個 Series（M4 票 13）。
+      from: '來自',
+      work: '{{work}} × {{group}}',
+      unbound: '待綁定',
       status: {
         unbound: '待綁定',
         matched: '待送出',
@@ -5138,6 +5164,28 @@ const en: Translations<typeof zhHant> = {
       unbound: 'Unbound.',
       automatic: 'Bound automatically',
       grounds: 'Because:',
+      imported: '{{n}} in library',
+      active: '{{n}} on the way',
+      excluded: '{{n}} excluded',
+      latest: 'Latest {{episode}}',
+      latestUnnumbered: 'Latest',
+      nothingYet: 'Nothing released yet',
+      finished_one: '{{count}} finished',
+      finished_other: '{{count}} finished',
+      finishedLede:
+        'Aired out and all in the library, or nothing new for 30 days. The record stays; a new item brings it back up.',
+      allFinished: 'No RSS Series is still being followed.',
+      items: 'Its feed items',
+      itemsLoading: 'Reading its feed items…',
+      itemsOff: "Can't read its feed items.",
+      itemsRetry: 'Read again',
+      itemsEmpty: 'Its feed items went with the feed that was deleted.',
+      advanced: 'Advanced',
+    },
+    source: {
+      mikan: 'Mikan: {{bangumi}}',
+      mikanGroup: 'Mikan: {{bangumi}} × {{group}}',
+      mikanBare: 'Mikan',
     },
     grounds: {
       title_equal: '“{{clue}}” has the same name as “{{title}}” on TMDB',
@@ -5242,7 +5290,6 @@ const en: Translations<typeof zhHant> = {
       outcome: { sent: 'Sent', already: 'Already there' },
     },
     series: {
-      key: 'Key',
       page: 'Mikan show page',
     },
     rules: {
@@ -5282,6 +5329,9 @@ const en: Translations<typeof zhHant> = {
       empty: 'No feed items yet. Add a feed and press Poll now.',
       published: 'Published',
       job: 'Open this download',
+      from: 'From',
+      work: '{{work}} × {{group}}',
+      unbound: 'Not bound yet',
       status: {
         unbound: 'To bind',
         matched: 'To send',

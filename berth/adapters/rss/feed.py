@@ -20,10 +20,15 @@ def entries(content: bytes) -> list[Any]:
     連到的不是 feed（登入頁、Cloudflare 的錯誤頁）時 feedparser 回一份空的 `entries`，那一刻說不出
     「這週沒更新」與「網址錯了」的差別，所以認不出 feed 格式（`version` 是空的）就當成協定不符。
     """
+    return channel(content)[0]
+
+
+def channel(content: bytes) -> tuple[list[Any], str]:
+    """`entries` 加上 channel 的 `<title>`（沒有是空字串）。認不出 feed 格式的規矩同 `entries`。"""
     parsed: Any = feedparser.parse(content)
     if not parsed.get("version"):
         raise ProtocolMismatchError("the response is not an RSS feed")
-    return list(parsed.entries)
+    return list(parsed.entries), str(parsed.feed.get("title", "")).strip()
 
 
 def enclosure(entry: Any) -> str:

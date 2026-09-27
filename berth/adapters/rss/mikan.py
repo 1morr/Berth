@@ -20,7 +20,7 @@ from typing import Any
 from urllib.parse import parse_qs, urlencode, urljoin, urlsplit
 
 from berth.adapters.rss import FeedItem, approx_bytes
-from berth.adapters.rss.feed import enclosure, entries
+from berth.adapters.rss.feed import channel, enclosure, entries
 
 logger = logging.getLogger(__name__)
 
@@ -35,8 +35,33 @@ _HASH = re.compile(r"^[0-9a-fA-F]{40}$")
 
 def parse_feed(content: bytes) -> tuple[FeedItem, ...]:
     """一份 Mikan RSS 的原文 → Feed Item，照 feed 的順序（新的在前）。"""
+    return _items(entries(content))
+
+
+@dataclass(frozen=True, slots=True)
+class SingleFeed:
+    """番組 × 字幕組的單一 feed（`bangumi_feed_url`）：整季的 Item 與番組名。"""
+
+    items: tuple[FeedItem, ...]
+    #: channel 標題 `Mikan Project - <番組名>` 裡的番組名（M4 票 13：RSS 頁的來源說名字，不多打一次
+    #: 番組頁）。認不出是空字串。聚合 feed 的標題是「我的番组」，所以只拿單一 feed 讀它。
+    bangumi: str
+
+
+_CHANNEL_PREFIX = "Mikan Project - "
+
+
+def parse_single_feed(content: bytes) -> SingleFeed:
+    found, title = channel(content)
+    bangumi = (
+        title.removeprefix(_CHANNEL_PREFIX).strip() if title.startswith(_CHANNEL_PREFIX) else ""
+    )
+    return SingleFeed(items=_items(found), bangumi=bangumi)
+
+
+def _items(found_entries: list[Any]) -> tuple[FeedItem, ...]:
     found: list[FeedItem] = []
-    for entry in entries(content):
+    for entry in found_entries:
         item = _item(entry)
         if item is None:
             logger.warning(

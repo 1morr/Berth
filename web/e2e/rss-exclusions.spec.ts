@@ -46,6 +46,8 @@ test('三層排除與重複：清單上每一筆都說得出為什麼沒下載',
   const bound = page
     .getByRole('region', { name: 'RSS Series' })
     .getByRole('article', { name: '與妳相戀到生命盡頭' })
+  // Series 層的排除條件在字幕組那一列展開後的「進階」裡（M4 票 13）。
+  await bound.getByRole('article', { name: 'LoliHouse' }).locator('summary').click()
   await bound.getByRole('button', { name: '排除條件（0 條）' }).click()
   await bound.getByLabel('加一條排除條件').fill('/ - (0\\d|10) \\[/')
   await bound.getByRole('button', { name: '加入規則' }).click()
