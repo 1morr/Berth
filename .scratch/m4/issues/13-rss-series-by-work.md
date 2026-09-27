@@ -36,7 +36,7 @@
 - [x] 完結的規則寫成純函式、雙向測試；有新 Item 時回到清單（整合測試）
 - [x] Series 展開的 Item 清單、Feed Item 的來源欄（vitest + playwright，1280 與 390）
 - [x] brief §15、plan §2.4、§6 同步；`pnpm gen:api` 同一個 commit
-- [ ] lint、type、test、前端 e2e 綠燈——前端 e2e 33 條過 31：`rss-subscribe` 與 `rss-subscribe-390` 紅在 acg.rip 第一輪預覽（見 Comments），開工時的 `23ad00e` 上同樣紅
+- [x] lint、type、test、前端 e2e 綠燈——收尾時前端 e2e 33 條過 31（`rss-subscribe` 與 `rss-subscribe-390` 紅在 acg.rip 第一輪預覽，開工時的 `23ad00e` 上同樣紅）；票 13b 修好之後整套 33 條連跑三次都綠（見 `13b-rss-subscribe-e2e-preview.md` 的 Comments）
 
 ## Comments
 

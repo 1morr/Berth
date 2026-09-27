@@ -591,6 +591,15 @@ uv run python scripts/experiments/first_batch_rule.py                           
 uv run --env-file .env python scripts/experiments/first_batch_rule.py --online          # Windows 主控台加 PYTHONIOENCODING=utf-8
 ```
 
+前端 e2e `rss-subscribe` 的第一輪預覽為什麼慢（M4 票 13b）：起一台 `rss` 情境的演練 server，打那條 spec 同一串 API、
+逐步計時；不連網。結果記在 `.scratch/m4/issues/13b-rss-subscribe-e2e-preview.md`：
+
+```bash
+uv run python scripts/experiments/rss_subscribe_timing.py                 # 訂閱 Mikan 之後馬上建 acg.rip 搜尋 feed
+uv run python scripts/experiments/rss_subscribe_timing.py --settle 30     # 先等補舊集跑完 30 秒再建
+uv run python scripts/experiments/rss_subscribe_timing.py --profile       # 同一個行程起 server，cProfile 包住預覽
+```
+
 1,000 部的媒體庫上量 Berth（M2 票 11，plan §11.3 決定 2 的門檻）：自己 build Berth 的 image（只有 backend 那一層）、
 起一次性的 Jellyfin 與 qBittorrent、造 1,000 部 × 12 集的媒體樹（掃描約 6 分鐘），量完連容器、volume、network、image
 一起刪。宿主只要 Python 標準庫與 docker；量測本身在 Berth 的 image 裡跑。結果見

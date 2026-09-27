@@ -15,12 +15,14 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from guessit import guessit
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from berth.adapters.rss import acgrip
 from berth.domain import FeedItemStatus, FeedKind, JobTrigger, Role, RssRefusal
 from berth.models import Job, Route, RssFeed, RssItem, RssSeries, User
+from berth.parser import release
 from berth.services.rss import (
     RssRejectedError,
     add_feed,
@@ -278,6 +280,47 @@ class TestSearchFeed:
         assert FeedItemStatus.UNBOUND not in {row.status for row in preview}
         assert FeedItemStatus.MATCHED in {row.status for row in preview}
         assert await session.scalar(select(Job.hash).where(Job.trigger == JobTrigger.RSS)) is None
+
+    async def test_its_preview_reads_each_release_name_at_most_once(
+        self, session: AsyncSession, roots: dict[str, Path], monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """M4 票 13b：第一輪預覽是 30 筆都綁好的 Item，每一筆說集號、當場看去重（`library_copy` 以
+        規劃的算法猜季集、再讀一次字幕組）。同一個發佈名每一步各解析一次的話，一次預覽呼叫 guessit
+        約 120 次、閒著也要 2 秒以上，而且是握著事件迴圈的 CPU：背景同時在規劃時，前端 e2e 5 秒內
+        等不到它。發佈名解析是純函式，一個名字只該解析一次。
+
+        建 feed 那一輪已經讀過這些名字，所以預覽之前先清掉記住的結果：要看的是預覽**自己**冷著讀
+        的時候也不重讀，不是快取剛好熱著。"""
+        media, route, factory = await harbour(session, roots)
+        user_id = await skipper(session)
+        factory.rss_.pages[acgrip.search_url(TERM)] = ACGRIP_FEED
+        feed = await subscribe_search(
+            session,
+            factory,
+            kind=FeedKind.ACGRIP,
+            term=TERM,
+            media_id=media.id,
+            route_id=route.id,
+            user_id=user_id,
+            now=NOW,
+        )
+        calls: list[str] = []
+
+        def counting(name: str, options: dict[str, object]) -> object:
+            calls.append(name)
+            return guessit(name, options)
+
+        monkeypatch.setattr(release, "guessit", counting)
+        release._parse_release.cache_clear()
+        preview = await preview_feed(session, feed.id)
+        again = await preview_feed(session, feed.id)
+
+        assert len(preview) == len(again) == 30
+        assert calls, "the preview read no release name at all"
+        # guessit 收的是正規化過的字串，兩個發佈名可以正規化成同一串：比的是讀了幾個名字——每一筆的
+        # 標題，加上 `library_copy` 配的中性檔名。
+        names = {row.title for row in preview} | {"episode.mkv"}
+        assert len(calls) <= len(names), f"{len(calls)} calls for {len(names)} names"
 
     async def test_series_already_waiting_from_another_feed_are_bound_too(
         self, session: AsyncSession, roots: dict[str, Path]

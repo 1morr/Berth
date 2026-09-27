@@ -1102,6 +1102,9 @@ split-cour 的第一批被播出日比對整批擋在審核，改正一次並套
 - **自動綁定握著寫交易問 TMDB**（M4 票 13 的 code-review 抓到，plan §3.3）：搜尋與讀詳情寫了快取卻不 commit，下一個
   搜尋詞與每一部候選的詳情都在寫交易裡打 TMDB——一個番組最多十幾個請求，期間其他寫者只能等，是 M4 票 01
   `database is locked` 那一型。現在每問完一次就 commit；`test_write_discipline` 多一條監看 TMDB 的閘門。
+- **搜尋 feed 的第一輪預覽要兩秒多**（M4 票 13b）：30 筆的預覽把同一個發佈名丟給 guessit 約四次，一次 120 次、握著
+  事件迴圈，背景同時規劃補舊集時前端 e2e 5 秒內等不到它。`parse_release` 記住最近 2048 個名字的結果，預覽降到
+  0.15 秒左右、建搜尋 feed 降到 1 秒內；量測腳本 `scripts/experiments/rss_subscribe_timing.py`。
 
 - **精靈的文案與實際不符的幾處**（M3 票 06h）：完成頁寫「四個泊位」、既有 Jellyfin 也說「用剛才建立的管理員
   登入」；前置列把探測中的服務也算成已判定；第 2 步寫死 `qbittorrent:8080`；連線表單三個服務的範例位址都是

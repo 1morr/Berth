@@ -12,7 +12,7 @@ brief §10 / §19 / §20.3 / §20.4 / §20.6 / §20.7 / §20.8。原始 JSON 落
 stdout 是同一份東西的人類版（`absolute_rule_cost.py` 只印 stdout）。
 
 腳本只用 Python 標準庫，不 import `berth`，也不需要專案的虛擬環境 —— 這樣才能原封不動搬到 NAS
-或別人的 Linux 宿主上跑。**例外是 `absolute_rule_cost.py` 與 `jellyfin_images.py`**：它們量的就是 Berth
+或別人的 Linux 宿主上跑。**例外是 `absolute_rule_cost.py`、`jellyfin_images.py` 與 `rss_subscribe_timing.py`**：它們量的就是 Berth
 自己的解析器與圖片代理，搬到別台機器上跑沒有意義，所以 import `berth`、要用 `uv run` 跑（`large_library_berth.py`
 也 import `berth`，但它跑在 Berth 自己 build 出來的 image 裡，宿主不需要虛擬環境）。唯一的宿主相依是 `make_media.py` 會呼叫 `docker`（借 Jellyfin image 的
 ffmpeg 產種子檔），那只影響「造測試素材」這一步，不影響 `hardlink.sh` 的可攜性。
@@ -43,6 +43,7 @@ ffmpeg 產種子檔），那只影響「造測試素材」這一步，不影響 
 | `rss_sources.py` | M3 票 07：Mikan / Nyaa / acg.rip 三個索引站的 RSS 欄位事實——feedparser 解析結果、bencode 核對 info hash、guid / hash / 大小 / 日期一致性、pubDate 時區偏移、合集標題掃描。不用容器、不連網，只讀 `tests/fixtures/http/`；`docs/research/rss-sources.md` §7.4 |
 | `runtime_gap.py` | M3 票 15：片長驗證的門檻（`RUNTIME_SLACK`、`RUNTIME_RATIO`）：真的 mediainfo 片長（AnimeTosho）對語料的 TMDB 快照，量對得上的正片比例與秒數差落在哪；兩集合併檔以相鄰兩集的真實片長相加模擬，NCOP / SP 沒有量到。不用容器、不需要憑證，只讀本地 `tests/fixtures/`，不下載任何影片內容；結果記在 `.scratch/m3/issues/15-runtime-check.md` 的 Comments |
 | `first_batch_rule.py` | M4 票 11：第一批「證據夠強」（`parser.vouch_first_batch`）擔保了幾筆、有沒有擔保錯。語料（期望答案在手，沒有發佈時間的模擬成那一集播出後一天）、split-cour 模擬（TMDB 併成一季、第二輪從 01 重數）、`air_date_lag.py` 那一套真的 RSS fixture（沒有標準答案，列出不擔保的那幾筆）。import `berth`，要用 `uv run`；`--online` 才連網 |
+| `rss_subscribe_timing.py` | M4 票 13b：前端 e2e `rss-subscribe` 的第一輪預覽 5 秒內沒回，是在等鎖、等背景的補舊集，還是自己就慢。對 `rss` 情境的演練 server（`scripts/fake_setup_server.py`，子程序）打同一串 API 逐步計時，`--settle` 先等補舊集跑完，`--profile` 改在同一個行程起 server、cProfile 包住 `preview_feed`。import `berth` 與 httpx（量的是 Berth 自己），要在 repo 根目錄以 `uv run` 跑；不連網；結果記在票的 Comments |
 | `lib.py` | 共用的 HTTP、輪詢、bencode、報告輸出 |
 
 ## 幾個不明顯的地方

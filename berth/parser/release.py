@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import re
 from datetime import date
+from functools import lru_cache
 from typing import Any
 
 from guessit import guessit
@@ -91,7 +92,19 @@ _GUESSIT_OPTIONS = {"date_year_first": True}
 
 
 def parse_release(name: str) -> ReleaseInfo:
-    """一個發佈名（torrent 名或檔名）→ `ReleaseInfo`。缺的欄位留空，不猜（brief §6.3）。"""
+    """一個發佈名（torrent 名或檔名）→ `ReleaseInfo`。缺的欄位留空，不猜（brief §6.3）。
+
+    **記住最近的結果**（`_parse_release`）：guessit 一次十幾毫秒，同一個名字在一個請求裡常被讀好幾次
+    （RSS 預覽的一筆要說集號、以規劃的算法猜季集、再讀一次字幕組），30 筆的預覽就要兩秒多、握著
+    事件迴圈（M4 票 13b）。純函式而且 `ReleaseInfo` 是 frozen，共用同一份不會被改。2048 筆是幾十條
+    搜尋 feed 的一輪（acg.rip 一次 30 筆、Nyaa 75 筆）。快取不直接掛在這裡：`lru_cache` 包起來的
+    函式在型別上收任何 `Hashable`，呼叫端傳錯型別 mypy 就看不到了。
+    """
+    return _parse_release(name)
+
+
+@lru_cache(maxsize=2048)
+def _parse_release(name: str) -> ReleaseInfo:
     trailing = _TRAILING_GROUP.search(name)
     stripped = _TRAILING_GROUP.sub("", name) if trailing else name
     cleaned, hints = normalize_cjk(stripped)
