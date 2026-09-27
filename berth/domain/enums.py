@@ -88,7 +88,7 @@ class JobTrigger(StrEnum):
 
 
 class JobFilter(StrEnum):
-    """下載列表的四個篩選（M4 票 04，`.scratch/m4/jobs-paging-shape.md`）。
+    """下載列表的篩選（M4 票 04，`.scratch/m4/jobs-paging-shape.md`；`open` 是票 12 作品頁的）。
 
     分組不改排序（最新在前）；每一組各是哪幾個狀態在 `services/jobs.py`。
     """
@@ -100,6 +100,9 @@ class JobFilter(StrEnum):
     IMPORTED = "imported"
     #: 包括移走的那兩種（`removed`、`client_removed`），它們只在這裡。
     ALL = "all"
+    #: 還沒了結：在路上的，加上已入庫而 audit 還掛著的（還在等人看一眼）。作品頁的「下載」段
+    #: 預設看這一組（M4 票 12，`.scratch/m4/media-downloads-shape.md`）；`/jobs` 的篩選列沒有它。
+    OPEN = "open"
 
 
 class EventType(StrEnum):

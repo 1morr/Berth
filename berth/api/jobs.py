@@ -26,7 +26,7 @@ from berth.api.deps import (
 )
 from berth.api.errors import refusal_responses
 from berth.api.gate import current_user
-from berth.domain import JobFilter, JobRefusal, JobState, JobTrigger, Role
+from berth.domain import JobFilter, JobRefusal, JobState, JobTrigger, PlanAction, Role
 from berth.services import deletion
 from berth.services.deletion import DeleteScope
 from berth.services.jobs import (
@@ -38,6 +38,7 @@ from berth.services.jobs import (
     list_jobs,
     read_job,
     read_job_events,
+    read_job_files,
     replannable,
     retry_job,
 )
@@ -228,15 +229,38 @@ class JobOut(BaseModel):
     plan_id: int | None
     #: 那一份計劃裡 medium 自動入庫、掛著 audit 的檔案數。列上說「N 個待確認」用它（票 15）。
     audits: int
+    #: RSS 送的那一筆是哪個 RSS Series：字幕組，讀不出時是 Series 的原始標題（M4 票 12）。
+    #: 不是 RSS 送的是空字串。
+    series: str
 
 
 class JobCountsOut(BaseModel):
-    """四個篩選各幾筆（篩選鍵上的數字）。不論現在看的是哪一個都是這四個。"""
+    """每個篩選各幾筆（篩選鍵上的數字）。不論現在看的是哪一個都是這幾個。"""
 
     active: int
     attention: int
     imported: int
     all: int
+    #: 作品頁「下載」段的預設那一組（M4 票 12）；`/jobs` 的篩選列不畫它。
+    open: int
+
+
+class JobFileOut(BaseModel):
+    """一筆 Job 裡的一個檔案，與現在那一份計劃把它對到哪裡。
+
+    作品頁「下載」段展開的那一列（M4 票 12）。
+    """
+
+    #: 相對 torrent 內容根的路徑，原樣。
+    rel_path: str
+    size: int
+    #: qBittorrent 會不會下載它。不下載的不進計劃，後面四格都是 `null`。
+    wanted: bool
+    #: 計劃沒有這個檔案、或還沒算過時是 `null`。
+    action: PlanAction | None
+    season: int | None
+    episode_start: int | None
+    episode_end: int | None
 
 
 class JobPageOut(BaseModel):
@@ -358,9 +382,13 @@ async def get_jobs(
     request: Request,
     shown: Annotated[JobFilter, Query(alias="filter")] = JobFilter.ACTIVE,
     page: Annotated[int, Query(ge=1)] = 1,
+    media: Annotated[str | None, Query(min_length=1)] = None,
 ) -> JobPageOut:
-    """下載列表的一頁，最新的在前面。預設是在路上的（還沒入庫也沒被移走）；超過最後一頁是空的一頁。"""
-    result = await list_jobs(session, shown=shown, page=page)
+    """下載列表的一頁，最新的在前面。預設是在路上的（還沒入庫也沒被移走）；超過最後一頁是空的一頁。
+
+    `media` 收到一部作品（作品頁的「下載」段，M4 票 12），件數也只數它的；沒有這部作品是空的一頁。
+    """
+    result = await list_jobs(session, shown=shown, page=page, media_id=media)
     return JobPageOut(
         filter=result.shown,
         page=result.page,
@@ -377,6 +405,15 @@ async def get_job(session: SessionDep, request: Request, job_hash: str) -> JobOu
     if job is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="no such job")
     return _out(job, request)
+
+
+@router.get("/{job_hash}/files")
+async def get_job_files(session: SessionDep, job_hash: str) -> list[JobFileOut]:
+    """這一筆的檔案，照路徑排。qBittorrent 還沒給出檔案清單時是空的。"""
+    files = await read_job_files(session, job_hash)
+    if files is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="no such job")
+    return [JobFileOut.model_validate(asdict(row)) for row in files]
 
 
 @router.get("/{job_hash}/events")

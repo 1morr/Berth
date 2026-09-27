@@ -217,7 +217,7 @@ function EpisodeRow({
       )}
       {/* `whitespace-nowrap`：窄版上集名那一欄會吃掉寬度，狀態被擠成一字一行（票 15 實跑）。 */}
       <td className="px-4 py-2 whitespace-nowrap">
-        <EpisodeState status={episode.status} />
+        <EpisodeState status={episode.status} job={episode.job} />
       </td>
       <td className="px-4 py-2 text-sm break-words text-ink">
         {episode.name}
@@ -246,25 +246,28 @@ function EpisodeRow({
  * 一集在媒體庫裡的樣子（票 13）。
  *
  * **常態不塗漆，例外才塗**：一季 1213 集的表不該是一整欄綠色勾勾（DESIGN.md 拒絕的那一種）。
- * 下載中是 `working`；卡住是 `assigned`——它要人去下載列表看是哪一筆停下來了，所以它是一條連結。
+ * 下載中是 `working`；卡住是 `assigned`。**兩種都連到蓋到這一集的那一筆**（M4 票 12，使用者拍板連詳情頁）：
+ * 那一頁一定到得了它，不受作品頁「下載」段的篩選與分頁影響；兩筆蓋到同一集時後端給最新送的那一筆。
  */
-function EpisodeState({ status }: { status: Episode['status'] }) {
+function EpisodeState({ status, job }: { status: Episode['status']; job: Episode['job'] }) {
   const { t } = useTranslation()
   const label = t(`media.episode.state.${status}`)
+  const held = status === 'stuck' || status === 'downloading'
+  const fill = SIGNAL_FILL[status === 'stuck' ? 'assigned' : 'working']
 
-  if (status === 'stuck') {
+  if (held && job) {
     return (
       <Link
-        to="/jobs"
-        className={`label inline-flex min-h-6 items-center px-1.5 ${SIGNAL_FILL.assigned}`}
+        to="/jobs/$hash"
+        params={{ hash: job }}
+        className={`label inline-flex min-h-6 items-center px-1.5 ${fill}`}
       >
         {label}
       </Link>
     )
   }
-  if (status === 'downloading') {
-    return <span className={`label px-1.5 py-0.5 ${SIGNAL_FILL.working}`}>{label}</span>
-  }
+  // 後端對這兩種都給 `job`（與 `status` 同一個優先序）；型別是 nullable，這一條只是不讓它變成一條壞連結。
+  if (held) return <span className={`label px-1.5 py-0.5 ${fill}`}>{label}</span>
   return (
     <span className={`label ${status === 'unaired' ? 'text-ink-dim' : 'text-ink'}`}>{label}</span>
   )

@@ -70,6 +70,7 @@ function tracking(overrides: Partial<NonNullable<InventoryCard['tracking']>> = {
     aired: 28,
     versions: 0,
     audits: 0,
+    series: '',
     ...overrides,
   }
 }

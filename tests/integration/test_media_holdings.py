@@ -114,6 +114,30 @@ class TestEpisodes:
 
         assert (found.imported, found.aired) == (1, 2)
 
+    async def test_a_held_or_coming_episode_names_the_job_holding_it(
+        self, session: AsyncSession
+    ) -> None:
+        """季表的「下載中 / 卡住」連到那一筆（M4 票 12）；兩筆蓋到同一集時是最新送的那一筆。"""
+        tv = await route(session)
+        spy = await title(session, seasons=(season(1, aired=3),))
+        await linked(session, spy, tv, episode=1)
+        older = await job(session, spy, tv, JobState.DOWNLOADING, hash="a" * 40)
+        newer = await job(session, spy, tv, JobState.SUBMITTED, hash="0" * 40)
+        newer.added_at = older.added_at + timedelta(minutes=1)
+        await session.commit()
+        await plan(session, older, (PlanAction.IMPORT, 1, 2), status=PlanStatus.PREPLAN)
+        await plan(session, newer, (PlanAction.IMPORT, 1, 2), status=PlanStatus.PREPLAN)
+        held = await job(session, spy, tv, JobState.REVIEW, hash="b" * 40)
+        await plan(session, held, (PlanAction.IMPORT, 1, 3), status=PlanStatus.PENDING_REVIEW)
+
+        (found,) = (await detail(session, spy)).seasons
+
+        assert {row.episode_number: row.job for row in found.episodes} == {
+            1: None,
+            2: "0" * 40,
+            3: "b" * 40,
+        }
+
 
 class TestAwaitingReview:
     """`user` 碰到停在 `review` 的那一筆只能等，詳情頁要說得出「等管理員審核」（M2 票 06）。"""

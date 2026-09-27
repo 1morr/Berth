@@ -44,11 +44,13 @@ from berth.models import (
     DiskSettings,
     Event,
     Job,
+    JobFile,
     Media,
     PathSettings,
     Plan,
     PlanItem,
     Route,
+    RssSeries,
     User,
 )
 from berth.services.jobs import (
@@ -60,6 +62,7 @@ from berth.services.jobs import (
     list_jobs,
     read_job,
     read_job_events,
+    read_job_files,
     retry_job,
 )
 from berth.services.settings import read_settings, write_settings
@@ -1122,6 +1125,7 @@ class TestTheListIsPagedAndFiltered:
             JobFilter.ATTENTION: 1,
             JobFilter.IMPORTED: 2,
             JobFilter.ALL: 5,
+            JobFilter.OPEN: 2,
         }
         assert page.total == 2
 
@@ -1137,6 +1141,193 @@ class TestTheListIsPagedAndFiltered:
         assert [row.hash for row in second.jobs] == newest_first[PAGE_SIZE:]
         assert beyond.jobs == ()
         assert (first.total, first.page_size, second.page) == (PAGE_SIZE + 10, PAGE_SIZE, 2)
+
+
+async def _audited(session: AsyncSession, job_hash: str, *, audit: bool) -> None:
+    """那一筆的計劃，一個檔案；`audit` 是它還掛不掛著待確認。"""
+    plan = Plan(job_hash=job_hash, status=PlanStatus.APPLIED)
+    session.add(plan)
+    await session.flush()
+    session.add(
+        PlanItem(
+            plan_id=plan.id,
+            rel_path="E01.mkv",
+            action=PlanAction.IMPORT,
+            confidence=Confidence.MEDIUM,
+            audit=audit,
+        )
+    )
+    await session.commit()
+
+
+async def _of_series(session: AsyncSession, job_hash: str, title_raw: str) -> None:
+    """那一筆改成這個 RSS Series 送的（`trigger_ref` 是它的 id）。"""
+    series = RssSeries(key=f"title:{job_hash}", title_raw=title_raw)
+    session.add(series)
+    await session.flush()
+    job = await session.get(Job, job_hash)
+    assert job is not None
+    job.trigger, job.trigger_ref = JobTrigger.RSS, str(series.id)
+    await session.commit()
+
+
+class TestAWorksDownloads:
+    """作品頁的「下載」段（M4 票 12、`.scratch/m4/media-downloads-shape.md`）。
+
+    這部作品的 Job，預設是還沒了結的。
+    """
+
+    async def test_open_holds_what_is_on_its_way_and_imports_still_to_confirm(
+        self, session: AsyncSession
+    ) -> None:
+        queued, review, to_confirm, confirmed, removed = await _jobs_in(
+            session,
+            JobState.SUBMITTED,
+            JobState.REVIEW,
+            JobState.IMPORTED,
+            JobState.IMPORTED,
+            JobState.REMOVED,
+        )
+        await _audited(session, to_confirm, audit=True)
+        await _audited(session, confirmed, audit=False)
+
+        page = await list_jobs(session, shown=JobFilter.OPEN)
+
+        assert [row.hash for row in page.jobs] == [to_confirm, review, queued]
+        assert (page.total, page.counts[JobFilter.OPEN]) == (3, 3)
+        # 另外四組不因為它變：確認過的與待確認的都是「已入庫」。
+        assert page.counts[JobFilter.IMPORTED] == 2
+        assert removed not in [row.hash for row in page.jobs]
+
+    async def test_a_work_lists_and_counts_only_its_own_jobs(self, session: AsyncSession) -> None:
+        spy = await _media(session)
+        mine, others, also_mine = await _jobs_in(
+            session, JobState.DOWNLOADING, JobState.DOWNLOADING, JobState.IMPORTED
+        )
+        for job_hash in (mine, also_mine):
+            job = await session.get(Job, job_hash)
+            assert job is not None
+            job.media_id = spy.id
+        await session.commit()
+
+        page = await list_jobs(session, shown=JobFilter.ALL, media_id=spy.id)
+
+        assert [row.hash for row in page.jobs] == [also_mine, mine]
+        assert page.counts == {
+            JobFilter.ACTIVE: 1,
+            JobFilter.ATTENTION: 0,
+            JobFilter.IMPORTED: 1,
+            JobFilter.ALL: 2,
+            JobFilter.OPEN: 1,
+        }
+        assert others not in [row.hash for row in (await list_jobs(session, media_id=spy.id)).jobs]
+
+    async def test_an_rss_job_says_which_group_sent_it(self, session: AsyncSession) -> None:
+        rss, manual = await _jobs_in(session, JobState.DOWNLOADING, JobState.DOWNLOADING)
+        await _of_series(
+            session, rss, "[LoliHouse] Kaiju Girl Caramelise - 01 [WebRip 1080p HEVC-10bit AAC]"
+        )
+        other = await session.get(Job, manual)
+        assert other is not None
+        other.trigger = JobTrigger.MANUAL
+        await session.commit()
+
+        by_hash = {row.hash: row for row in (await list_jobs(session)).jobs}
+
+        assert by_hash[rss].series == "LoliHouse"
+        assert by_hash[manual].series == ""
+
+    async def test_a_series_without_a_readable_group_is_named_by_its_title(
+        self, session: AsyncSession
+    ) -> None:
+        (rss,) = await _jobs_in(session, JobState.DOWNLOADING)
+        await _of_series(session, rss, "Kaiju Girl Caramelise 01")
+
+        view = await read_job(session, rss)
+
+        assert view is not None
+        assert view.series == "Kaiju Girl Caramelise 01"
+
+
+class TestAJobsFiles:
+    """展開一列看得到的檔案：`job_files` 逐檔，加上現在那一份計劃把它對到哪裡（M4 票 12）。"""
+
+    async def test_each_file_carries_its_size_and_where_the_plan_puts_it(
+        self, session: AsyncSession
+    ) -> None:
+        (job_hash,) = await _jobs_in(session, JobState.DOWNLOADING)
+        episode = JobFile(job_hash=job_hash, rel_path="Show/E02.mkv", size=700, priority=1)
+        double = JobFile(job_hash=job_hash, rel_path="Show/E03-E04.mkv", size=900, priority=1)
+        font = JobFile(job_hash=job_hash, rel_path="Show/Fonts.zip", size=5, priority=0)
+        readme = JobFile(job_hash=job_hash, rel_path="Show/readme.txt", size=1, priority=1)
+        session.add_all([readme, font, double, episode])
+        await session.flush()
+        plan = Plan(job_hash=job_hash, status=PlanStatus.PREPLAN)
+        session.add(plan)
+        await session.flush()
+        session.add_all(
+            [
+                PlanItem(
+                    plan_id=plan.id,
+                    job_file_id=episode.id,
+                    rel_path=episode.rel_path,
+                    action=PlanAction.IMPORT,
+                    season=1,
+                    episode_start=2,
+                    confidence=Confidence.HIGH,
+                ),
+                PlanItem(
+                    plan_id=plan.id,
+                    job_file_id=double.id,
+                    rel_path=double.rel_path,
+                    action=PlanAction.IMPORT,
+                    season=1,
+                    episode_start=3,
+                    episode_end=4,
+                    confidence=Confidence.HIGH,
+                ),
+                PlanItem(
+                    plan_id=plan.id,
+                    job_file_id=readme.id,
+                    rel_path=readme.rel_path,
+                    action=PlanAction.SKIP,
+                    confidence=Confidence.HIGH,
+                ),
+            ]
+        )
+        await session.commit()
+
+        files = await read_job_files(session, job_hash)
+
+        # 照路徑排：與 qBittorrent、檔案總管裡看到的順序一樣。不下載的那一個照列，計劃沒有它。
+        assert files is not None
+        assert [
+            (
+                row.rel_path,
+                row.size,
+                row.wanted,
+                row.action,
+                row.season,
+                row.episode_start,
+                row.episode_end,
+            )
+            for row in files
+        ] == [
+            ("Show/E02.mkv", 700, True, PlanAction.IMPORT, 1, 2, None),
+            ("Show/E03-E04.mkv", 900, True, PlanAction.IMPORT, 1, 3, 4),
+            ("Show/Fonts.zip", 5, False, None, None, None, None),
+            ("Show/readme.txt", 1, True, PlanAction.SKIP, None, None, None),
+        ]
+
+    async def test_before_qbittorrent_names_the_files_there_are_none(
+        self, session: AsyncSession
+    ) -> None:
+        (job_hash,) = await _jobs_in(session, JobState.SUBMITTED)
+
+        assert await read_job_files(session, job_hash) == ()
+
+    async def test_a_job_that_is_not_there_has_no_file_list(self, session: AsyncSession) -> None:
+        assert await read_job_files(session, "f" * 40) is None
 
 
 class TestJobLogging:

@@ -144,6 +144,7 @@ from berth.parser import plan as decide
 from berth.services.clients import SetupProbes
 from berth.services.health import check_health
 from berth.services.health_issues import watch_conditions
+from berth.services.media import read_media
 from berth.services.routes import build_routes
 from berth.services.settings import read_settings, write_settings
 
@@ -298,6 +299,8 @@ class Scenario:
     #: 審核佇列（M2 票 06）。見 `_seed_review`：兩個 medium 自動入庫的檔案真的硬鏈接在媒體庫裡，
     #: 帳本與 Plan Item 都掛著 audit——按「確認」清旗標，按「撤銷」真的把鏈接拆掉。
     review_demo: bool = False
+    #: 作品頁的「下載」段（M4 票 12）。見 `_seed_downloads`。
+    downloads_demo: bool = False
     #: RSS 演練（M3 票 08）：`FeedFetcher` 替身查的「網址 → 原文」。空的話走真的那一支。
     feed_pages: dict[str, bytes] = field(default_factory=dict)
     #: 送單時「下載連結 → torrent」的查表。RSS 的 `.torrent` 網址是 Mikan 的，演練不出網，
@@ -1320,6 +1323,181 @@ def _split_cour_scenario(season: TmdbSeason) -> Scenario:
     return rss_scenario(detail=detail, seasons=(season,))
 
 
+def downloads_scenario() -> Scenario:
+    """作品頁的「下載」段（M4 票 12）：SPY×FAMILY 已經有五筆下載，四種樣子都在。
+
+    同 `import`（TMDB、索引站、qBittorrent 都是替身，一個請求都不出網），加上 `_seed_downloads`：
+    一筆在 qBittorrent 排隊、一筆**下載中而且進度每一輪都往上走**（`TricklingQbittorrent`，
+    驗即時更新）、一筆停在待審核、一筆已入庫還有一個檔案待確認、一筆已入庫確認過（只在「全部」）。
+    """
+    scenario = import_scenario()
+    scenario.qbittorrent = TricklingQbittorrent(
+        {PLAN_RELEASE: PLAN_FILES}, version=QbittorrentVersion(app="v5.2.3", webapi="2.15.1")
+    )
+    scenario.downloads_demo = True
+    return scenario
+
+
+@dataclass(frozen=True, slots=True)
+class _SeededDownload:
+    """`downloads` 情境的一筆。`episode` 是已經有計劃的那三筆對到的第一季集號；`reported` 是還在
+    qBittorrent 上的那兩筆它報的狀態。"""
+
+    hash: str
+    name: str
+    state: JobState
+    episode: int | None = None
+    held: bool = False
+    audit: bool = False
+    reported: str = ""
+    progress: float = 0.0
+
+
+#: `downloads` 情境的五筆，最舊的在前。替身 TMDB 的第一季只列 E01 與 E25（`demo_tmdb`），
+#: 所以下載中的是 25、待審核的是 01——季表上那兩集的標籤連得到它們。
+DOWNLOADS: tuple[_SeededDownload, ...] = (
+    _SeededDownload(
+        "d5" * 20, "[ANi] SPY×FAMILY - 04 [1080P][WEB-DL][AAC AVC][CHT]", JobState.IMPORTED, 4
+    ),
+    _SeededDownload(
+        "d4" * 20,
+        "[ANi] SPY×FAMILY - 05 [1080P][WEB-DL][AAC AVC][CHT]",
+        JobState.IMPORTED,
+        5,
+        audit=True,
+    ),
+    _SeededDownload(
+        "d3" * 20,
+        "[ANi] SPY×FAMILY - 01 [1080P][WEB-DL][AAC AVC][CHT]",
+        JobState.REVIEW,
+        1,
+        held=True,
+    ),
+    # 送出去而已：poller 自己走 `metadata_ready`（建檔案清單）→ `downloading`。
+    _SeededDownload(
+        "d2" * 20,
+        "[ANi] SPY×FAMILY - 25 [1080P][WEB-DL][AAC AVC][CHT]",
+        JobState.SUBMITTED,
+        reported="downloading",
+        progress=0.1,
+    ),
+    # 排隊中、還沒有檔案清單。
+    _SeededDownload(
+        "d1" * 20,
+        "[ANi] SPY×FAMILY - 08 [1080P][WEB-DL][AAC AVC][CHT]",
+        JobState.SUBMITTED,
+        reported="queuedDL",
+    ),
+)
+
+
+class TricklingQbittorrent(PlanningQbittorrent):
+    """下載中的 torrent 每被問一次就多下一點（`downloads` 情境，M4 票 12）。
+
+    `PlanningQbittorrent` 收下就是 100%，畫面上看不到進度在動；這一台讓 `downloading` 的那幾筆
+    每一輪（poller 每 5 秒問一次 `sync`）多 7%，過了 95% 回到 5%——不讓它完成，畫面上那一筆一直在
+    下載。**循環而不是停住**：整套前端 e2e 一起跑時，server 起來到輪到這一條可能隔好幾分鐘，停住的話
+    那時候已經不動了（實跑踩到）。
+    """
+
+    async def sync(self) -> tuple[TorrentStatus, ...]:
+        self.torrents = tuple(
+            replace(row, progress=_trickle(row.progress)) if row.state == "downloading" else row
+            for row in self.torrents
+        )
+        return await super().sync()
+
+
+def _trickle(progress: float) -> float:
+    after = round(progress + 0.07, 2)
+    return after if after <= 0.95 else 0.05
+
+
+async def _seed_downloads(
+    session: AsyncSession, scenario: Scenario, factory: FakeClientFactory
+) -> None:
+    """五筆 SPY×FAMILY 的下載（M4 票 12，`DOWNLOADS`）。
+
+    作品那一列由產品自己的 `read_media` 建（替身 TMDB 答得出）。還在 qBittorrent 上的兩筆
+    真的掛在替身上（poller 照它們報的狀態走），下載中那一筆有檔案清單，展開看得到的預估季集
+    要等規劃器算出 pre-plan。
+    其餘三筆已經過了 qBittorrent 那一段，直接寫成最後的樣子。
+    """
+    tv = media_id(MediaKind.TV, 120089)
+    await read_media(session, factory, tv)
+    route = await session.scalar(select(Route).where(Route.slug == "anime"))
+    assert route is not None
+    now = datetime.now(UTC)
+    size = 1_400_000_000
+    save_path = "/data/torrent/incomplete/anime"
+    for offset, row in enumerate(DOWNLOADS):
+        finished = row.state in {JobState.IMPORTED, JobState.REVIEW}
+        session.add(
+            Job(
+                hash=row.hash,
+                name=row.name,
+                source_url="",
+                trigger=JobTrigger.MANUAL,
+                media_id=tv,
+                route_id=route.id,
+                state=row.state,
+                save_path=save_path,
+                total_size=size,
+                progress=1.0 if finished else 0.0,
+                added_at=now - timedelta(hours=len(DOWNLOADS) - offset),
+                completed_at=now if finished else None,
+                imported_at=now if row.state is JobState.IMPORTED else None,
+            )
+        )
+        await session.flush()
+        if row.episode is not None:
+            file = JobFile(job_hash=row.hash, rel_path=f"{row.name}.mkv", size=size, priority=1)
+            plan = Plan(
+                job_hash=row.hash,
+                status=PlanStatus.PENDING_REVIEW if row.held else PlanStatus.APPLIED,
+            )
+            session.add_all([file, plan])
+            await session.flush()
+            session.add(
+                PlanItem(
+                    plan_id=plan.id,
+                    job_file_id=file.id,
+                    rel_path=file.rel_path,
+                    action=PlanAction.REVIEW if row.held else PlanAction.IMPORT,
+                    media_id=tv,
+                    season=1,
+                    episode_start=row.episode,
+                    confidence=Confidence.LOW if row.held else Confidence.MEDIUM,
+                    audit=row.audit,
+                )
+            )
+        if row.reported:
+            scenario.qbittorrent.torrents = (
+                *scenario.qbittorrent.torrents,
+                TorrentStatus(
+                    hash=row.hash,
+                    name=row.name,
+                    state=row.reported,
+                    category="berth-anime",
+                    tags=("berth",),
+                    progress=row.progress,
+                    completion_on=-1,
+                    last_activity=int(now.timestamp()),
+                    added_on=int(now.timestamp()),
+                    save_path=save_path,
+                    content_path=f"{save_path}/{row.name}.mkv",
+                    total_size=size,
+                ),
+            )
+        if row.reported == "downloading":
+            scenario.qbittorrent.files_by_hash[row.hash] = (
+                TorrentFile(
+                    index=0, name=f"{row.name}.mkv", size=size, priority=1, progress=row.progress
+                ),
+            )
+    await session.commit()
+
+
 SCENARIOS = {
     "bundled": bundled,
     "discover": discover,
@@ -1341,6 +1519,7 @@ SCENARIOS = {
     "budget": budget_scenario,
     "issues": issues_scenario,
     "review": review_scenario,
+    "downloads": downloads_scenario,
     "routes": routes_scenario,
     "degraded": degraded,
     "drifted": drifted,
@@ -1732,6 +1911,8 @@ async def _moor(
         await _seed_claims(session, scenario, paths)
     if scenario.review_demo:
         await _seed_review(session, paths)
+    if scenario.downloads_demo:
+        await _seed_downloads(session, scenario, factory)
 
 
 async def _seed_issues(session: AsyncSession, paths: PathSettings) -> None:

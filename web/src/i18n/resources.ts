@@ -891,6 +891,31 @@ const zhHant = {
         unaired: '未播出',
       },
     },
+    // 這部作品的下載（M4 票 12，`.scratch/m4/media-downloads-shape.md`）。發佈名、檔名與字幕組不是文案。
+    downloads: {
+      title: '下載',
+      filters: '這部作品的下載篩選',
+      // 還沒了結＝還在路上的，加上已入庫、還有檔案等人確認的。
+      filter: {
+        open_one: '還沒了結 {{count}}',
+        open_other: '還沒了結 {{count}}',
+        all_one: '全部 {{count}}',
+        all_other: '全部 {{count}}',
+      },
+      pages: '下載的分頁',
+      pagesEnd: '下載清單底的分頁',
+      noneOpen: '這部作品沒有還在路上或等你確認的下載。',
+      off: '讀不到這部作品的下載。Berth 自己的 API 沒有回應，先確認它還活著。',
+      retry: '重試',
+      files: {
+        title: '檔案',
+        loading: '正在讀檔案清單…',
+        none: 'qBittorrent 還沒給出這個 torrent 的檔案清單。',
+        off: '讀不到檔案清單。Berth 自己的 API 沒有回應。',
+        // priority 0：qBittorrent 不會下載它，計劃也不看它。
+        unwanted: '不下載',
+      },
+    },
     // 檔案與版本（票 13）。路徑、Tags 與版本名是機器字串，原樣顯示。
     files: {
       title: '檔案與版本',
@@ -3546,6 +3571,28 @@ const en: Translations<typeof zhHant> = {
         stuck: 'Stuck',
         missing: 'Missing',
         unaired: 'Not aired',
+      },
+    },
+    downloads: {
+      title: 'Downloads',
+      filters: 'Filter this title’s downloads',
+      filter: {
+        open_one: 'Open {{count}}',
+        open_other: 'Open {{count}}',
+        all_one: 'All {{count}}',
+        all_other: 'All {{count}}',
+      },
+      pages: 'Download pages',
+      pagesEnd: 'Download pages, end of list',
+      noneOpen: 'Nothing for this title is on its way or waiting for you to confirm.',
+      off: 'Can’t read this title’s downloads. Berth’s own API isn’t answering — check that it is still running.',
+      retry: 'Retry',
+      files: {
+        title: 'Files',
+        loading: 'Reading the file list…',
+        none: 'qBittorrent hasn’t listed this torrent’s files yet.',
+        off: 'Can’t read the file list. Berth’s own API isn’t answering.',
+        unwanted: 'Not downloaded',
       },
     },
     files: {

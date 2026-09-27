@@ -43,6 +43,7 @@ function job(overrides: Partial<Job> = {}): Job {
     reimportable: false,
     plan_id: null,
     audits: 0,
+    series: '',
     ...overrides,
   }
 }
@@ -69,7 +70,13 @@ function listing(rows: Job[], overrides: Partial<JobPage> = {}): StubRoute {
       page_size: 50,
       total: rows.length,
       jobs: rows,
-      counts: { active: rows.length, attention: 0, imported: 0, all: rows.length },
+      counts: {
+        active: rows.length,
+        attention: 0,
+        imported: 0,
+        all: rows.length,
+        open: rows.length,
+      },
       ...overrides,
     } satisfies JobPage,
   }
@@ -300,7 +307,7 @@ describe('分頁與篩選（M4 票 04）', () => {
       job({ hash: (from + index).toString(16).padStart(40, '0'), name: `Release ${from + index}` }),
     )
   }
-  const COUNTS = { active: 120, attention: 3, imported: 505, all: 628 }
+  const COUNTS = { active: 120, attention: 3, imported: 505, all: 628, open: 120 }
 
   it('四個篩選說得出各幾筆；預設的「在路上」是現在這一組，不是連結', async () => {
     render({ [JOBS]: listing(many(2), { total: 120, counts: COUNTS }) })

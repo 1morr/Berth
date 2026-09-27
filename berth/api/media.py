@@ -62,6 +62,9 @@ class EpisodeOut(BaseModel):
     absolute_number: int | None
     #: 這一集在媒體庫裡的樣子（票 13）。依序取：已入庫 → 卡住 → 下載中 → 缺 / 未播出。
     status: EpisodeStatus
+    #: 「卡住」「下載中」的那一集是哪一筆 Job 的 hash（兩筆蓋到時是最新送的那一筆）；季表的標籤連到
+    #: `/jobs/{hash}`（M4 票 12）。其餘是 `null`。
+    job: str | None
 
 
 class SeasonOut(BaseModel):

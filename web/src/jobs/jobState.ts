@@ -75,3 +75,12 @@ export function mediaTitleOf(job: Job, locale: string): string {
     ''
   )
 }
+
+/**
+ * 船期列的外框。失敗那一列**線變重**，不是變紅：紅色留給狀態色塊那一格（The One Meaning Rule）。
+ * 下載列表與作品頁的「下載」段（M4 票 12）是同一種列。
+ */
+export function jobRowFrame(job: Job): string {
+  const failed = JOB_SIGNAL[job.state] === 'blocked'
+  return `group min-w-0 border-2 bg-well ${failed ? 'border-rule-strong' : 'border-rule'}`
+}

@@ -171,6 +171,8 @@ class EpisodeView:
     runtime: int | None
     absolute_number: int | None
     status: EpisodeStatus
+    #: 「卡住」「下載中」的那一集是哪一筆 Job（最新送的那一筆），其餘 `None`（M4 票 12）。
+    job: str | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -345,8 +347,16 @@ async def read_holdings(session: AsyncSession, media: Media, snapshot: MediaSnap
         )
     )
 
-    stuck: set[tuple[int, int]] = set()
-    under_way: set[tuple[int, int]] = set()
+    # 季集 → 蓋到它的那一筆 Job；兩筆蓋到同一集時留最新送的那一筆（季表的標籤連過去，M4 票 12）。
+    stuck: dict[tuple[int, int], Job] = {}
+    under_way: dict[tuple[int, int], Job] = {}
+
+    def claim(held: dict[tuple[int, int], Job], item: PlanItem, job: Job) -> None:
+        for pair in episodes_of(item):
+            known = held.get(pair)
+            if known is None or (known.added_at, known.hash) < (job.added_at, job.hash):
+                held[pair] = job
+
     unmatched: list[UnmatchedFileView] = []
     kinds = await _file_kinds(
         session, [item.job_file_id for item in items if item.action is PlanAction.UNMATCHED]
@@ -379,9 +389,9 @@ async def read_holdings(session: AsyncSession, media: Media, snapshot: MediaSnap
         if item.action not in _CLAIMING:
             continue
         if job.state in STUCK_STATES:
-            stuck.update(episodes_of(item))
+            claim(stuck, item, job)
         elif job.state in UNDER_WAY_STATES:
-            under_way.update(episodes_of(item))
+            claim(under_way, item, job)
 
     features = [entry for entry in entries if entry.action is PlanAction.IMPORT]
     imported = {pair for entry in features for pair in episodes_of(entry)}
@@ -398,6 +408,14 @@ async def read_holdings(session: AsyncSession, media: Media, snapshot: MediaSnap
         if _aired(episode, today):
             return EpisodeStatus.MISSING
         return EpisodeStatus.UNAIRED
+
+    def holder(season: int, episode: EpisodeSnapshot) -> str | None:
+        """卡住或在路上的那一集是哪一筆。與 `status` 同一個優先序：標籤說的與連到的是同一件事。"""
+        pair = (season, episode.episode_number)
+        if pair in imported:
+            return None
+        job = stuck.get(pair) or under_way.get(pair)
+        return job.hash if job is not None else None
 
     seasons = []
     for season in snapshot.seasons:
@@ -420,6 +438,7 @@ async def read_holdings(session: AsyncSession, media: Media, snapshot: MediaSnap
                         runtime=episode.runtime,
                         absolute_number=episode.absolute_number,
                         status=status(season.season_number, episode),
+                        job=holder(season.season_number, episode),
                     )
                     for episode in season.episodes
                 ),

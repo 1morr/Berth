@@ -3,7 +3,7 @@ import { Link, useSearch } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 
 import { useJobStream } from '../api/events'
-import { JOB_FILTERS, jobsQueryOptions, type JobFilter, type JobPage } from '../api/jobs'
+import { JOB_FILTERS, jobsQueryOptions, type JobPage, type ListFilter } from '../api/jobs'
 import { FILTER, FILTER_ACTIVE, GHOST_LINK, PAGE_TITLE } from '../components/controls'
 import { PAGE_LINK, Pager } from '../components/Pager'
 import { JobRow } from '../jobs/JobRow'
@@ -30,7 +30,7 @@ import { JobRow } from '../jobs/JobRow'
 export function JobsPage() {
   const { t } = useTranslation()
   const search = useSearch({ from: '/jobs' })
-  const filter: JobFilter = search.filter ?? 'active'
+  const filter: ListFilter = search.filter ?? 'active'
   const page = search.page ?? 1
   const jobs = useQuery(jobsQueryOptions(filter, page))
   // 掛在這一頁而不是 AppShell：探索頁與設定頁不在乎 job 動了沒，而一條永遠開著的連線
@@ -92,7 +92,7 @@ export function JobsPage() {
 }
 
 /** 這一個篩選的網址參數：預設的篩選與第 1 頁不寫進網址（`routes.tsx` 的 `JobsSearch`）。 */
-function onFilter(filter: JobFilter, page = 1) {
+function onFilter(filter: ListFilter, page = 1) {
   return {
     ...(filter === 'active' ? {} : { filter }),
     ...(page > 1 ? { page } : {}),
@@ -105,7 +105,7 @@ function onFilter(filter: JobFilter, page = 1) {
  *
  * **選著的那一個不是連結**，是一段 `aria-current="true"` 的字——與媒體庫的篩選同一條（M1.5 票 13）。
  */
-function Filters({ listing, filter }: { listing: JobPage; filter: JobFilter }) {
+function Filters({ listing, filter }: { listing: JobPage; filter: ListFilter }) {
   const { t } = useTranslation()
 
   return (
@@ -133,7 +133,7 @@ function JobsPager({
   end = false,
 }: {
   listing: JobPage
-  filter: JobFilter
+  filter: ListFilter
   announce?: boolean
   /** 清單底那一組。 */
   end?: boolean
@@ -168,7 +168,7 @@ function JobsPager({
  * 這一頁是空的，但整份清單不是。兩種：頁碼超過最後一頁（翻頁的當下有幾筆移到別組），給回第一頁的路；
  * 這一組本來就是空的，給去別組的路——空的是篩選的結果，不是下載列表本身（PRODUCT 原則 4）。
  */
-function EmptyFilter({ listing, filter }: { listing: JobPage; filter: JobFilter }) {
+function EmptyFilter({ listing, filter }: { listing: JobPage; filter: ListFilter }) {
   const { t } = useTranslation()
   const beyond = listing.total > 0
   // `all` 空的時候整份清單就是空的，那是 `Empty`，到不了這裡。

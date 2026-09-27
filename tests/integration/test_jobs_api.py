@@ -231,7 +231,25 @@ class TestTheList:
 
         assert page["filter"] == "active"
         assert [row["hash"] for row in page["jobs"]] == [MAGNET_HASH]
-        assert page["counts"] == {"active": 1, "attention": 0, "imported": 3, "all": 4}
+        assert page["counts"] == {
+            "active": 1,
+            "attention": 0,
+            "imported": 3,
+            "all": 4,
+            "open": 1,
+        }
+
+    def test_a_work_answers_with_only_its_own_downloads(self, client: TestClient) -> None:
+        """作品頁的「下載」段（M4 票 12）：件數也只數這部作品的。"""
+        sign_in(client)
+        pile_up(client, 3)
+        submit(client)
+
+        page = client.get(f"/api/jobs?media={SPY_ID}&filter=open").json()
+
+        assert (page["filter"], [row["hash"] for row in page["jobs"]]) == ("open", [MAGNET_HASH])
+        assert page["counts"] == {"active": 1, "attention": 0, "imported": 0, "all": 1, "open": 1}
+        assert client.get("/api/jobs?media=tv:1&filter=all").json()["total"] == 0
 
     def test_a_page_past_the_end_is_empty_not_an_error(self, client: TestClient) -> None:
         sign_in(client)
@@ -246,6 +264,23 @@ class TestTheList:
 
         assert client.get("/api/jobs?filter=done").status_code == 422
         assert client.get("/api/jobs?page=0").status_code == 422
+
+
+class TestTheFiles:
+    """`GET /jobs/{hash}/files`：展開一列看得到的檔案（M4 票 12）。"""
+
+    def test_before_qbittorrent_names_the_files_the_list_is_empty(self, client: TestClient) -> None:
+        sign_in(client)
+        submit(client)
+
+        response = client.get(f"/api/jobs/{MAGNET_HASH}/files")
+
+        assert (response.status_code, response.json()) == (200, [])
+
+    def test_a_job_that_is_not_there_is_not_found(self, client: TestClient) -> None:
+        sign_in(client)
+
+        assert client.get(f"/api/jobs/{'f' * 40}/files").status_code == 404
 
 
 class TestSubmitting:
@@ -267,6 +302,7 @@ class TestSubmitting:
             "SPY x FAMILY",
         )
         assert job["user_name"] == "skipper"
+        assert job["series"] == ""
         assert job["retryable"] is False
 
     def test_the_publish_date_from_the_indexer_is_kept_on_the_job(self, client: TestClient) -> None:

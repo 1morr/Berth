@@ -39,7 +39,6 @@ from berth.domain import (
     ItemReason,
     JobRefusal,
     JobState,
-    JobTrigger,
     MediaSnapshot,
     ParseContext,
     PlanAction,
@@ -77,6 +76,7 @@ from berth.services.jobs import (
     job_lock,
     record_event,
     replannable,
+    series_id_of,
     transition,
 )
 from berth.services.media import snapshot_for_planning
@@ -499,9 +499,8 @@ async def series_of(session: AsyncSession, job: Job) -> RssSeries | None:
 
     不是 RSS 送的、或那一個不在了是 `None`。審核佇列與套用到 RSS Series（票 13）也認同一個。
     """
-    if job.trigger is not JobTrigger.RSS or not job.trigger_ref.isdigit():
-        return None
-    return await session.get(RssSeries, int(job.trigger_ref))
+    found = series_id_of(job)
+    return None if found is None else await session.get(RssSeries, found)
 
 
 async def _contents(session: AsyncSession, job: Job) -> Contents:

@@ -45,6 +45,7 @@ function job(overrides: Partial<Job> = {}): Job {
     reimportable: false,
     plan_id: 7,
     audits: 0,
+    series: '',
     ...overrides,
   }
 }

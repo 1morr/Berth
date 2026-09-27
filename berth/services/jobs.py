@@ -37,7 +37,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import func, select, update
+from sqlalchemy import ColumnElement, and_, exists, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import InstrumentedAttribute
@@ -54,6 +54,7 @@ from berth.domain import (
     JobRefusal,
     JobState,
     JobTrigger,
+    PlanAction,
     Role,
     collection_type_for,
 )
@@ -69,9 +70,11 @@ from berth.models import (
     PlanItem,
     QbittorrentSettings,
     Route,
+    RssSeries,
     User,
 )
 from berth.models.types import utcnow
+from berth.parser.release import parse_release
 from berth.services.clients import ServiceClientFactory
 from berth.services.qbittorrent import sign_in
 from berth.services.routes import save_path_of
@@ -111,6 +114,9 @@ _ATTENTION = frozenset(
 
 #: 每個篩選是哪幾個狀態；`all` 不篩。移走的兩種（`removed`、`client_removed`）只在「全部」
 #: （shape 時使用者拍板）：它們不會再往前走，也沒有東西在等人。
+#:
+#: **`open` 不在這裡**：它的已入庫那一半看的是計劃還掛不掛著 audit，不是狀態
+#: （`_filter_condition`）。
 FILTER_STATES: dict[JobFilter, frozenset[JobState] | None] = {
     JobFilter.ACTIVE: frozenset(JobState)
     - {JobState.IMPORTED, JobState.REMOVED, JobState.CLIENT_REMOVED},
@@ -118,6 +124,22 @@ FILTER_STATES: dict[JobFilter, frozenset[JobState] | None] = {
     JobFilter.IMPORTED: frozenset({JobState.IMPORTED}),
     JobFilter.ALL: None,
 }
+
+#: 已入庫、而計劃裡還有掛著 audit 的檔案（「N 個待確認」，`_plans_of` 數的是同一個欄位）。
+_STILL_TO_CONFIRM = and_(
+    Job.state == JobState.IMPORTED,
+    exists()
+    .where(Plan.job_hash == Job.hash, PlanItem.plan_id == Plan.id, PlanItem.audit)
+    .correlate(Job),
+)
+
+
+def _filter_condition(shown: JobFilter) -> ColumnElement[bool] | None:
+    """這個篩選的條件；`all` 是 `None`（不篩）。"""
+    if shown is JobFilter.OPEN:
+        return or_(Job.state.in_(FILTER_STATES[JobFilter.ACTIVE] or ()), _STILL_TO_CONFIRM)
+    states = FILTER_STATES[shown]
+    return None if states is None else Job.state.in_(states)
 
 
 def replannable(state: JobState, role: Role) -> bool:
@@ -288,6 +310,9 @@ class JobView:
     #: 那一份計劃裡 medium 自動入庫、掛著 audit 的檔案數（brief §6.5）。列上要說得出
     #: 「N 個待確認」：Job 的狀態是綠色的「已入庫」，而原則 3 說的是那幾個還要人看一眼（票 15）。
     audits: int
+    #: RSS 送的那一筆是哪個 RSS Series：發佈名讀出的字幕組，讀不出時是 Series 的原始標題（作品頁
+    #: 「下載」段的來源那一格，M4 票 12）。不是 RSS 送的、或 Series 不在了是空字串。
+    series: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -301,6 +326,21 @@ class JobPage:
     jobs: tuple[JobView, ...]
     #: 四個篩選各幾筆，不論現在看的是哪一個：篩選鍵上的數字。
     counts: dict[JobFilter, int]
+
+
+@dataclass(frozen=True, slots=True)
+class JobFileView:
+    """一筆 Job 裡的一個檔案，與現在那一份計劃把它對到哪裡（M4 票 12）。"""
+
+    rel_path: str
+    size: int
+    #: qBittorrent 會不會下載它（優先序不是 0）。不下載的不進計劃，所以後面四格都是 `None`。
+    wanted: bool
+    #: 計劃沒有這個檔案、或還沒算過時是 `None`。
+    action: PlanAction | None
+    season: int | None
+    episode_start: int | None
+    episode_end: int | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -784,21 +824,28 @@ async def _clear_round_failure(session: AsyncSession, job_hash: str) -> None:
 
 
 async def list_jobs(
-    session: AsyncSession, *, shown: JobFilter = JobFilter.ACTIVE, page: int = 1
+    session: AsyncSession,
+    *,
+    shown: JobFilter = JobFilter.ACTIVE,
+    page: int = 1,
+    media_id: str | None = None,
 ) -> JobPage:
-    """下載列表的一頁，最新的在前面（brief §13）。
+    """下載列表的一頁，最新的在前面（brief §13）。`media_id` 收到一部作品（作品頁的「下載」段，
+    M4 票 12），件數也只數它的。
 
     **一頁有上限**（M4 票 04）：RSS 一次綁定就送上百筆，而已入庫的不會離開清單；一頁的關聯
     （`_related`）也因此是有上限的 `in_()`。超過最後一頁是空的一頁，不是錯誤——翻頁的當下
     背景迴圈可能剛好把最後幾筆移到別組。
     """
-    states = FILTER_STATES[shown]
     query = select(Job).order_by(Job.added_at.desc(), Job.hash)
-    if states is not None:
-        query = query.where(Job.state.in_(states))
+    if media_id is not None:
+        query = query.where(Job.media_id == media_id)
+    condition = _filter_condition(shown)
+    if condition is not None:
+        query = query.where(condition)
     rows = tuple(await session.scalars(query.limit(PAGE_SIZE).offset((page - 1) * PAGE_SIZE)))
     related = await _related(session, rows)
-    counts = await _filter_counts(session)
+    counts = await _filter_counts(session, media_id)
     return JobPage(
         shown=shown,
         page=page,
@@ -809,14 +856,20 @@ async def list_jobs(
     )
 
 
-async def _filter_counts(session: AsyncSession) -> dict[JobFilter, int]:
-    """四個篩選各幾筆：照狀態數一次，再折成篩選。"""
-    rows = await session.execute(select(Job.state, func.count()).group_by(Job.state))
+async def _filter_counts(session: AsyncSession, media_id: str | None) -> dict[JobFilter, int]:
+    """每個篩選各幾筆：照狀態數一次再折成篩選，`open` 另外數它已入庫的那一半。"""
+    scope = [] if media_id is None else [Job.media_id == media_id]
+    rows = await session.execute(select(Job.state, func.count()).where(*scope).group_by(Job.state))
     by_state: dict[JobState, int] = dict(rows.tuples().all())
-    return {
+    counts = {
         shown: sum(count for state, count in by_state.items() if states is None or state in states)
         for shown, states in FILTER_STATES.items()
     }
+    to_confirm = await session.scalar(
+        select(func.count()).select_from(Job).where(*scope, _STILL_TO_CONFIRM)
+    )
+    counts[JobFilter.OPEN] = counts[JobFilter.ACTIVE] + (to_confirm or 0)
+    return counts
 
 
 async def read_job(session: AsyncSession, job_hash: str) -> JobView | None:
@@ -838,6 +891,38 @@ async def read_job_events(session: AsyncSession, job_hash: str) -> tuple[JobEven
             created_at=row.created_at,
         )
         for row in rows
+    )
+
+
+async def read_job_files(session: AsyncSession, job_hash: str) -> tuple[JobFileView, ...] | None:
+    """這一筆的檔案，照路徑排（作品頁「下載」段展開的那一列，M4 票 12）。沒有這一筆是 `None`。
+
+    qBittorrent 給出檔案清單之前（磁力、排隊中）是空的：`job_files` 在 `metadata_ready` 才建。
+    季集是現在那一份計劃的（一筆 Job 只有一份），還沒算過或計劃沒有這個檔案（不下載的）是 `None`。
+    """
+    if await session.get(Job, job_hash) is None:
+        return None
+    # 只接這一筆自己那一份：rematch 的單列 Plan（`job_hash` 是 `NULL`）也指得到同一個檔案。
+    own = select(Plan.id).where(Plan.job_hash == job_hash).scalar_subquery()
+    rows = await session.execute(
+        select(JobFile, PlanItem)
+        .outerjoin(PlanItem, and_(PlanItem.job_file_id == JobFile.id, PlanItem.plan_id == own))
+        .where(JobFile.job_hash == job_hash)
+        .order_by(JobFile.rel_path)
+    )
+    return tuple(_file_view(file, item) for file, item in rows.tuples())
+
+
+def _file_view(file: JobFile, item: PlanItem | None) -> JobFileView:
+    """外接的那一列可能沒有計劃（不下載的、還沒算過的）。"""
+    return JobFileView(
+        rel_path=file.rel_path,
+        size=file.size,
+        wanted=file.priority != 0,
+        action=item.action if item is not None else None,
+        season=item.season if item is not None else None,
+        episode_start=item.episode_start if item is not None else None,
+        episode_end=item.episode_end if item is not None else None,
     )
 
 
@@ -1245,6 +1330,8 @@ class _Related:
     users: dict[int, User]
     #: job hash → 現在那一份計劃的 id 與它掛著 audit 的檔案數。
     plans: dict[str, tuple[int, int]]
+    #: 送出它們的 RSS Series（`trigger_ref` 是 id）。沒有 RSS 送的就不問。
+    series: dict[int, RssSeries]
 
 
 async def _related(session: AsyncSession, jobs: Sequence[Job]) -> _Related:
@@ -1254,7 +1341,24 @@ async def _related(session: AsyncSession, jobs: Sequence[Job]) -> _Related:
         media=await _by_id(session, Media, Media.id, {j.media_id for j in jobs}),
         users=await _by_id(session, User, User.id, {j.user_id for j in jobs}),
         plans=await _plans_of(session, [job.hash for job in jobs]),
+        series=await _by_id(session, RssSeries, RssSeries.id, {series_id_of(j) for j in jobs}),
     )
+
+
+def series_id_of(job: Job) -> int | None:
+    """送出這一筆的 RSS Series 的 id（`services/plan.series_of` 讀的就是它）。
+
+    重新入庫那種的 `trigger_ref` 是路徑，不是 id。
+    """
+    if job.trigger is not JobTrigger.RSS or not job.trigger_ref.isdigit():
+        return None
+    return int(job.trigger_ref)
+
+
+def _series_name(series: RssSeries | None) -> str:
+    if series is None:
+        return ""
+    return parse_release(series.title_raw).group or series.title_raw
 
 
 async def _by_id[K, T](
@@ -1292,6 +1396,7 @@ def _view(job: Job, related: _Related) -> JobView:
     media = related.media.get(job.media_id) if job.media_id is not None else None
     user = related.users.get(job.user_id) if job.user_id is not None else None
     plan_id, audits = related.plans.get(job.hash, (None, 0))
+    series_id = series_id_of(job)
     return JobView(
         hash=job.hash,
         name=job.name,
@@ -1319,4 +1424,5 @@ def _view(job: Job, related: _Related) -> JobView:
         reimportable=reimportable(job),
         plan_id=plan_id,
         audits=audits,
+        series=_series_name(related.series.get(series_id) if series_id is not None else None),
     )

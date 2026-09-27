@@ -484,6 +484,8 @@ export interface paths {
         /**
          * Get Jobs
          * @description 下載列表的一頁，最新的在前面。預設是在路上的（還沒入庫也沒被移走）；超過最後一頁是空的一頁。
+         *
+         *     `media` 收到一部作品（作品頁的「下載」段，M4 票 12），件數也只數它的；沒有這部作品是空的一頁。
          */
         get: operations["get_jobs_api_jobs_get"];
         put?: never;
@@ -524,6 +526,26 @@ export interface paths {
          *     刪掉時，畫面要說得出「0 個鏈接」而不是一句「刪好了」。
          */
         delete: operations["delete_job_api_jobs__job_hash__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/jobs/{job_hash}/files": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Job Files
+         * @description 這一筆的檔案，照路徑排。qBittorrent 還沒給出檔案清單時是空的。
+         */
+        get: operations["get_job_files_api_jobs__job_hash__files_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -2478,6 +2500,8 @@ export interface components {
             /** Absolute Number */
             absolute_number: number | null;
             status: components["schemas"]["EpisodeStatus"];
+            /** Job */
+            job: string | null;
         };
         /**
          * EpisodeStatus
@@ -3068,7 +3092,7 @@ export interface components {
         };
         /**
          * JobCountsOut
-         * @description 四個篩選各幾筆（篩選鍵上的數字）。不論現在看的是哪一個都是這四個。
+         * @description 每個篩選各幾筆（篩選鍵上的數字）。不論現在看的是哪一個都是這幾個。
          */
         JobCountsOut: {
             /** Active */
@@ -3079,6 +3103,8 @@ export interface components {
             imported: number;
             /** All */
             all: number;
+            /** Open */
+            open: number;
         };
         /** JobCreateIn */
         JobCreateIn: {
@@ -3143,13 +3169,34 @@ export interface components {
             created_at: string;
         };
         /**
+         * JobFileOut
+         * @description 一筆 Job 裡的一個檔案，與現在那一份計劃把它對到哪裡。
+         *
+         *     作品頁「下載」段展開的那一列（M4 票 12）。
+         */
+        JobFileOut: {
+            /** Rel Path */
+            rel_path: string;
+            /** Size */
+            size: number;
+            /** Wanted */
+            wanted: boolean;
+            action: components["schemas"]["PlanAction"] | null;
+            /** Season */
+            season: number | null;
+            /** Episode Start */
+            episode_start: number | null;
+            /** Episode End */
+            episode_end: number | null;
+        };
+        /**
          * JobFilter
-         * @description 下載列表的四個篩選（M4 票 04，`.scratch/m4/jobs-paging-shape.md`）。
+         * @description 下載列表的篩選（M4 票 04，`.scratch/m4/jobs-paging-shape.md`；`open` 是票 12 作品頁的）。
          *
          *     分組不改排序（最新在前）；每一組各是哪幾個狀態在 `services/jobs.py`。
          * @enum {string}
          */
-        JobFilter: "active" | "attention" | "imported" | "all";
+        JobFilter: "active" | "attention" | "imported" | "all" | "open";
         /**
          * JobOut
          * @description 下載列表與 Job 詳情上的一筆。
@@ -3210,6 +3257,8 @@ export interface components {
             plan_id: number | null;
             /** Audits */
             audits: number;
+            /** Series */
+            series: string;
         };
         /**
          * JobPageOut
@@ -5856,6 +5905,7 @@ export interface operations {
             query?: {
                 filter?: components["schemas"]["JobFilter"];
                 page?: number;
+                media?: string | null;
             };
             header?: never;
             path?: never;
@@ -6024,6 +6074,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["JobRefusalOut"];
+                };
+            };
+        };
+    };
+    get_job_files_api_jobs__job_hash__files_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_hash: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobFileOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

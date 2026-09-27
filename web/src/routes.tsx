@@ -11,7 +11,7 @@ import {
 import { meQueryOptions, type Me } from './api/auth'
 import { ApiError } from './api/client'
 import { healthQueryOptions } from './api/health'
-import { isJobFilter, type JobFilter } from './api/jobs'
+import { isListFilter, type ListFilter } from './api/jobs'
 import {
   inventoriesQueryOptions,
   isInventoryFilter,
@@ -298,7 +298,7 @@ const inventoryRoute = createRoute({
 
 /** `/jobs` 的網址參數（M4 票 04）。預設的篩選（在路上）與第 1 頁都不寫進網址。 */
 interface JobsSearch {
-  filter?: Exclude<JobFilter, 'active'>
+  filter?: Exclude<ListFilter, 'active'>
   page?: number
 }
 
@@ -314,7 +314,7 @@ const jobsRoute = createRoute({
   validateSearch: (search: Record<string, unknown>): JobsSearch => {
     const page = Number(search.page)
     return {
-      filter: isJobFilter(search.filter) && search.filter !== 'active' ? search.filter : undefined,
+      filter: isListFilter(search.filter) && search.filter !== 'active' ? search.filter : undefined,
       page: Number.isInteger(page) && page > 1 ? page : undefined,
     }
   },

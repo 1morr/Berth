@@ -2,6 +2,7 @@ import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import type { Job, JobFile, JobPage, MediaJobFilter } from '../api/jobs'
 import type { Media, WatchArea, WatchEpisode } from '../api/media'
 import type { Bangumi, Feed, RssSeries } from '../api/rss'
 import type { Batch, SearchResults } from '../api/search'
@@ -13,6 +14,75 @@ afterEach(() => {
 })
 
 const SPY_PATH = 'GET /api/media/tv%3A120089'
+/** 「下載」段的兩組（M4 票 12）。 */
+const DOWNLOADS = 'GET /api/jobs?media=tv%3A120089&filter=open&page=1'
+const DOWNLOADS_ALL = 'GET /api/jobs?media=tv%3A120089&filter=all&page=1'
+
+function downloadJob(overrides: Partial<Job> = {}): Job {
+  return {
+    hash: '0'.repeat(40),
+    name: 'Kaiju Girl',
+    state: 'submitted',
+    trigger: 'manual',
+    trigger_ref: '',
+    error: '',
+    media_id: 'tv:120089',
+    media_title: 'SPY×FAMILY 間諜家家酒',
+    media_title_en: 'SPY x FAMILY',
+    route_id: 2,
+    route_name: 'Anime',
+    route_slug: 'anime',
+    user_id: 1,
+    user_name: 'skipper',
+    save_path: '',
+    content_path: '',
+    total_size: 0,
+    progress: 0,
+    client_state: '',
+    added_at: '2026-09-26T12:00:00Z',
+    completed_at: null,
+    imported_at: null,
+    retryable: false,
+    replannable: false,
+    reimportable: false,
+    plan_id: null,
+    audits: 0,
+    series: '',
+    ...overrides,
+  }
+}
+
+/** 「下載」段的一頁；件數預設是一部從沒送過下載的作品。 */
+function jobPage(
+  filter: MediaJobFilter,
+  rows: Job[] = [],
+  counts: JobPage['counts'] = { active: 0, attention: 0, imported: 0, all: 0, open: 0 },
+  page = 1,
+): StubRoute {
+  return {
+    body: {
+      filter,
+      page,
+      page_size: 50,
+      total: counts[filter],
+      jobs: rows,
+      counts,
+    } satisfies JobPage,
+  }
+}
+
+function jobFile(overrides: Partial<JobFile> = {}): JobFile {
+  return {
+    rel_path: 'E01.mkv',
+    size: 1,
+    wanted: true,
+    action: 'import',
+    season: null,
+    episode_start: null,
+    episode_end: null,
+    ...overrides,
+  }
+}
 
 function media(overrides: Partial<Media> = {}): Media {
   return {
@@ -56,6 +126,7 @@ function media(overrides: Partial<Media> = {}): Media {
             runtime: 25,
             absolute_number: 1,
             status: 'imported',
+            job: null,
           },
         ],
       },
@@ -74,6 +145,7 @@ function media(overrides: Partial<Media> = {}): Media {
             runtime: 24,
             absolute_number: 26,
             status: 'stuck',
+            job: 'c'.repeat(40),
           },
         ],
       },
@@ -151,6 +223,8 @@ function render(
     'GET /api/search/queries?media=tv%3A120089': { body: { queries: ['SPY x FAMILY'] } },
     // admin 才有的「RSS 訂閱」段（M3 票 19）一進頁面就問綁在這部作品上的 RSS Series。
     [SERIES_PATH]: { body: [] },
+    // 「下載」段（M4 票 12）一進頁面就問這部作品的下載；預設是從沒送過。
+    [DOWNLOADS]: jobPage('open'),
     ...routes,
   })
 }
@@ -573,8 +647,11 @@ describe('Media 詳情頁', () => {
 
     await userEvent.click(screen.getByText('Season 2'))
     const stuck = (await screen.findByText('FOLLOW MAMA AND PAPA')).closest('tr')!
-    // 卡住的那一集要人去看是哪一筆下載停下來了。
-    expect(within(stuck).getByRole('link', { name: '卡住' })).toHaveAttribute('href', '/jobs')
+    // 卡住的那一集要人去看是哪一筆下載停下來了：連到那一筆（M4 票 12）。
+    expect(within(stuck).getByRole('link', { name: '卡住' })).toHaveAttribute(
+      'href',
+      `/jobs/${'c'.repeat(40)}`,
+    )
   })
 
   it('集表有自己的名字，窄版不畫的片長與播出收在集名那一格裡（票 13）', async () => {
@@ -2052,5 +2129,220 @@ describe('詳情頁的 RSS 訂閱（M3 票 19）', () => {
     })
     expect(await within(block).findByRole('button', { name: '只追之後的' })).toBeVisible()
     expect(within(block).getByText(LOLI_TITLE)).toBeVisible()
+  })
+})
+
+describe('下載段（M4 票 12，`.scratch/m4/media-downloads-shape.md`）', () => {
+  const QUEUED = downloadJob({
+    hash: 'a'.repeat(40),
+    name: '[LoliHouse] Kaiju Girl Caramelise - 03 [WebRip 1080p]',
+    state: 'submitted',
+    trigger: 'rss',
+    trigger_ref: '7',
+    series: 'LoliHouse',
+  })
+  const DOWNLOADING = downloadJob({
+    hash: 'b'.repeat(40),
+    name: '[LoliHouse] Kaiju Girl Caramelise - 02 [WebRip 1080p]',
+    state: 'downloading',
+    progress: 0.42,
+    total_size: 734003200,
+  })
+  const HELD = downloadJob({ hash: 'c'.repeat(40), name: 'Kaiju Girl 04', state: 'review' })
+  const TO_CONFIRM = downloadJob({
+    hash: 'd'.repeat(40),
+    name: 'Kaiju Girl 01',
+    state: 'imported',
+    audits: 1,
+  })
+  const DONE = downloadJob({ hash: 'e'.repeat(40), name: 'Kaiju Girl 00', state: 'imported' })
+  const COUNTS = { active: 3, attention: 1, imported: 2, all: 5, open: 4 }
+  const FILES = `GET /api/jobs/${DOWNLOADING.hash}/files`
+
+  it('預設列還沒了結的（排隊中、下載中、待審核、已入庫待確認），展開看得到檔案與對到的季集', async () => {
+    render({
+      [DOWNLOADS]: jobPage('open', [TO_CONFIRM, HELD, QUEUED, DOWNLOADING], COUNTS),
+      [FILES]: {
+        body: [
+          jobFile({ rel_path: 'Kaiju/E02.mkv', size: 734003200, season: 1, episode_start: 2 }),
+          jobFile({ rel_path: 'Kaiju/Fonts.zip', size: 2048, wanted: false, action: null }),
+        ],
+      },
+    })
+    renderApp('/media/tv:120089')
+
+    const section = (await screen.findByRole('heading', { level: 2, name: '下載' })).closest(
+      'section',
+    )!
+    expect(within(section).getByText('還沒了結 4')).toHaveAttribute('aria-current', 'true')
+    expect(within(section).getByRole('button', { name: '全部 5' })).toBeVisible()
+    for (const row of [QUEUED, DOWNLOADING, HELD, TO_CONFIRM]) {
+      expect(within(section).getByText(row.name)).toBeVisible()
+    }
+    expect(within(section).queryByText(DONE.name)).not.toBeInTheDocument()
+    // 整頁都是這部作品：列上不重印作品名；RSS 那一筆說得出是哪個字幕組送的。
+    expect(within(section).queryByText('SPY×FAMILY 間諜家家酒')).not.toBeInTheDocument()
+    expect(within(section).getByText('LoliHouse')).toBeVisible()
+    expect(within(section).getByText('1 個待確認')).toBeVisible()
+
+    const row = within(section).getByText(DOWNLOADING.name).closest('details')!
+    await userEvent.click(within(section).getByText(DOWNLOADING.name))
+
+    const file = (await within(section).findByText('Kaiju/E02.mkv')).closest('li')!
+    expect(within(file).getByText('S01E02')).toBeVisible()
+    expect(within(file).getByText('700 MB')).toBeVisible()
+    const font = within(section).getByText('Kaiju/Fonts.zip').closest('li')!
+    expect(within(font).getByText('不下載')).toBeVisible()
+    expect(within(row).getByRole('link', { name: '下載詳情' })).toHaveAttribute(
+      'href',
+      `/jobs/${DOWNLOADING.hash}`,
+    )
+  })
+
+  it('「全部」列出已入庫而確認過的那幾筆', async () => {
+    render({
+      [DOWNLOADS]: jobPage('open', [QUEUED], COUNTS),
+      [DOWNLOADS_ALL]: jobPage('all', [DONE, TO_CONFIRM, HELD, QUEUED, DOWNLOADING], COUNTS),
+    })
+    renderApp('/media/tv:120089')
+
+    await userEvent.click(await screen.findByRole('button', { name: '全部 5' }))
+
+    expect(await screen.findByText(DONE.name)).toBeVisible()
+    expect(screen.getByText('全部 5')).toHaveAttribute('aria-current', 'true')
+  })
+
+  it('qBittorrent 還沒給檔案清單時說出來，不是一片空白', async () => {
+    render({
+      [DOWNLOADS]: jobPage('open', [QUEUED], COUNTS),
+      [`GET /api/jobs/${QUEUED.hash}/files`]: { body: [] },
+    })
+    renderApp('/media/tv:120089')
+
+    await userEvent.click(await screen.findByText(QUEUED.name))
+
+    expect(await screen.findByText('qBittorrent 還沒給出這個 torrent 的檔案清單。')).toBeVisible()
+  })
+
+  it('全部都了結了：一句話，「全部」照樣按得到', async () => {
+    render({ [DOWNLOADS]: jobPage('open', [], { ...COUNTS, active: 0, attention: 0, open: 0 }) })
+    renderApp('/media/tv:120089')
+
+    expect(await screen.findByText('這部作品沒有還在路上或等你確認的下載。')).toBeVisible()
+    expect(screen.getByRole('button', { name: '全部 5' })).toBeVisible()
+  })
+
+  it('這部作品從沒送過下載：整段不畫', async () => {
+    const api = render()
+    renderApp('/media/tv:120089')
+
+    await screen.findByRole('heading', { level: 2, name: '季集與入庫' })
+    await waitFor(() =>
+      expect(api.mock.calls.some(([url]) => String(url).startsWith('/api/jobs?'))).toBe(true),
+    )
+    expect(screen.queryByRole('heading', { level: 2, name: '下載' })).not.toBeInTheDocument()
+  })
+
+  it('季表的「下載中」連到蓋到那一集的那一筆', async () => {
+    render({
+      [SPY_PATH]: {
+        body: media({
+          seasons: [
+            {
+              season_number: 1,
+              name: 'Season 1',
+              episode_count: 2,
+              air_date: '2022-04-09',
+              imported: 0,
+              aired: 1,
+              episodes: [
+                {
+                  episode_number: 2,
+                  name: 'SECURE A WIFE',
+                  air_date: '2022-04-16',
+                  runtime: 24,
+                  absolute_number: null,
+                  status: 'downloading',
+                  job: DOWNLOADING.hash,
+                },
+              ],
+            },
+          ],
+        }),
+      },
+    })
+    renderApp('/media/tv:120089')
+
+    await userEvent.click(await screen.findByText('Season 1'))
+
+    const row = (await screen.findByText('SECURE A WIFE')).closest('tr')!
+    expect(within(row).getByRole('link', { name: '下載中' })).toHaveAttribute(
+      'href',
+      `/jobs/${DOWNLOADING.hash}`,
+    )
+  })
+
+  it('有一筆換了狀態，季表重問一次；只換篩選、件數沒變時不重問', async () => {
+    let counts = COUNTS
+    const api = render({
+      [DOWNLOADS]: () => jobPage('open', [QUEUED], counts),
+      [DOWNLOADS_ALL]: () => jobPage('all', [QUEUED, DONE], counts),
+    })
+    renderApp('/media/tv:120089')
+    const mediaReads = () => api.mock.calls.filter(([url]) => url === '/api/media/tv%3A120089')
+    await screen.findByText(QUEUED.name)
+    const before = mediaReads().length
+
+    await userEvent.click(screen.getByRole('button', { name: '全部 5' }))
+    await screen.findByText(DONE.name)
+    expect(mediaReads().length).toBe(before)
+
+    // 回到「還沒了結」的那一刻，排隊中那一筆已經入庫了（件數跟著變）。
+    counts = { ...COUNTS, active: 2, imported: 3, open: 3 }
+    await userEvent.click(screen.getByRole('button', { name: '還沒了結 4' }))
+
+    await waitFor(() => expect(mediaReads().length).toBe(before + 1))
+  })
+
+  it('下載中的那一筆算出預估的計劃時（狀態沒變），季表也重問一次', async () => {
+    let queued = QUEUED
+    const api = render({
+      [DOWNLOADS]: () => jobPage('open', [queued], COUNTS),
+      [DOWNLOADS_ALL]: () => jobPage('all', [queued, DONE], COUNTS),
+    })
+    renderApp('/media/tv:120089')
+    const mediaReads = () => api.mock.calls.filter(([url]) => url === '/api/media/tv%3A120089')
+    await screen.findByText(QUEUED.name)
+    await userEvent.click(screen.getByRole('button', { name: '全部 5' }))
+    await screen.findByText(DONE.name)
+    const before = mediaReads().length
+
+    // pre-plan 是規劃器另外算的：狀態、件數都不動，只有 `plan_id` 從 `null` 變成一個數。
+    queued = { ...QUEUED, plan_id: 7 }
+    await userEvent.click(screen.getByRole('button', { name: '還沒了結 4' }))
+
+    await waitFor(() => expect(mediaReads().length).toBe(before + 1))
+  })
+
+  it('翻過了最後一頁（翻頁的當下清單變短）給回第一頁的路，不說「沒有還在路上的」', async () => {
+    const many = { ...COUNTS, open: 60, all: 61 }
+    render({
+      [DOWNLOADS]: jobPage('open', [QUEUED], many),
+      'GET /api/jobs?media=tv%3A120089&filter=open&page=2': jobPage(
+        'open',
+        [],
+        { ...many, open: 50 },
+        2,
+      ),
+    })
+    renderApp('/media/tv:120089')
+
+    const pages = await screen.findByRole('navigation', { name: '下載的分頁' })
+    await userEvent.click(within(pages).getByRole('button', { name: '下一頁' }))
+
+    expect(await screen.findByText('這一頁沒有下載：翻頁的當下清單變短了。')).toBeVisible()
+    expect(screen.queryByText('這部作品沒有還在路上或等你確認的下載。')).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: '回第一頁' }))
+    expect(await screen.findByText(QUEUED.name)).toBeVisible()
   })
 })

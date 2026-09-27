@@ -12,6 +12,7 @@ import { KIND_CODE } from '../components/kind'
 import { Timestamp } from '../components/Timestamp'
 import { TmdbNotice } from '../components/TmdbNotice'
 import { displayRound } from '../i18n/displayRound'
+import { DownloadsPanel } from '../media/DownloadsPanel'
 import { FilesPanel } from '../media/FilesPanel'
 import { SearchPanel, type SearchHandle } from '../media/SearchPanel'
 import { SeasonsPanel } from '../media/SeasonsPanel'
@@ -28,8 +29,8 @@ import { ArtSlot } from '../components/ArtSlot'
  *
  * 1. **身分帶**：海報、標題、一行識別值、**主按鈕**（作品在 Jellyfin 裡時才有）、簡介、快照新鮮度。
  * 2. **觀看**：Jellyfin 的季與集（劇集在 Jellyfin 裡、這個人看得到時才有）。
- * 3. 以下是 Berth 的那一半，順序固定：**搜尋** → **RSS 訂閱**（只有 admin，M3 票 19）→ **季集與入庫** →
- *    **檔案與版本** → TMDB 標示。
+ * 3. 以下是 Berth 的那一半，順序固定：**搜尋** → **RSS 訂閱**（只有 admin，M3 票 19）→ **下載**（M4 票 12）→
+ *    **季集與入庫** → **檔案與版本** → TMDB 標示。
  *
  * 不在 Jellyfin（或看不到）時少了主按鈕與觀看區，搜尋就排在身分帶正下方——原本的五列識別剖面把「搜尋」壓到
  * 1280×900 的 y=984（票 15 critique），現在收成一行、資料夾名搬進搜尋區塊（送單會寫死的就是它）。
@@ -101,6 +102,10 @@ export function MediaDetailPage({ id }: { id: string }) {
           <AdminOnly>
             <SubscribePanel media={found} />
           </AdminOnly>
+
+          {/* 這部作品的下載（M4 票 12）：送完單往下一段就看得到它進去了，在路上的排在庫裡的（季集、檔案）前面。
+              `key`：換作品時不拿上一部的那一頁當佔位（`keepPreviousData` 認的是同一個 observer）。 */}
+          <DownloadsPanel key={`downloads:${found.id}`} media={found} />
 
           {/* `user` 碰到停在待審核的下載只能等（brief §11、M2 票 06）。季表上那幾集是「卡住」，
               這一句說它卡在誰手上。admin 不畫：審核是他自己的事。 */}

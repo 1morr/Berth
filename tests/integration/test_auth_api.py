@@ -445,6 +445,8 @@ ACCESS: dict[tuple[str, str], Access] = {
     ("POST", "/jobs"): Access.SIGNED_IN,
     ("GET", "/jobs/*"): Access.SIGNED_IN,
     ("GET", "/jobs/*/events"): Access.SIGNED_IN,
+    # 作品頁「下載」段展開的那一列（M4 票 12）：與時間線同一種讀，誰送的單誰都看得到。
+    ("GET", "/jobs/*/files"): Access.SIGNED_IN,
     ("POST", "/jobs/*/replan"): Access.SIGNED_IN,
     ("POST", "/jobs/*/retry"): Access.SIGNED_IN,
     ("GET", "/media/*"): Access.SIGNED_IN,

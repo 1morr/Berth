@@ -10,19 +10,25 @@ export type Job = Schemas['JobOut']
 /** 下載列表的一頁（`JobPageOut`，M4 票 04）：這一頁的 Job、這個篩選一共幾筆、四個篩選各幾筆。 */
 export type JobPage = Schemas['JobPageOut']
 
-/** 四個篩選（`domain/enums.py` 的 `JobFilter`）。`active` 是預設：在路上的。 */
+/** 篩選（`domain/enums.py` 的 `JobFilter`）。`active` 是 `/jobs` 的預設：在路上的。 */
 export type JobFilter = Schemas['JobFilter']
 
+/**
+ * `/jobs` 篩選列上的四組。**`open`（還沒了結）不在這一列**：它是作品頁「下載」段的預設（M4 票 12），
+ * 下載列表上的「需要人」已經回答了同一個問題的大半，第五顆鍵只是多一個要選的東西。
+ */
+export type ListFilter = Exclude<JobFilter, 'open'>
+
 /** 篩選鍵，照這裡的先後排。`ReasonSet` 是整個封閉集合的 `Record`：少一種或多一種都是編譯錯誤。 */
-const FILTER_ORDER: ReasonSet<JobFilter> = {
+const FILTER_ORDER: ReasonSet<ListFilter> = {
   active: true,
   attention: true,
   imported: true,
   all: true,
 }
-export const JOB_FILTERS = Object.keys(FILTER_ORDER) as JobFilter[]
+export const JOB_FILTERS = Object.keys(FILTER_ORDER) as ListFilter[]
 
-export function isJobFilter(value: unknown): value is JobFilter {
+export function isListFilter(value: unknown): value is ListFilter {
   return JOB_FILTERS.some((filter) => filter === value)
 }
 
@@ -90,6 +96,38 @@ export function jobsQueryOptions(filter: JobFilter, page: number) {
     queryKey: [...JOBS_LIST_KEY, filter, page],
     queryFn: ({ signal }) => apiGet<JobPage>(`/jobs?filter=${filter}&page=${page}`, { signal }),
     placeholderData: keepPreviousData,
+  })
+}
+
+/** 作品頁「下載」段的兩組（M4 票 12，`.scratch/m4/media-downloads-shape.md`）：還沒了結的是預設。 */
+export type MediaJobFilter = Extract<JobFilter, 'open' | 'all'>
+
+/**
+ * 一部作品的下載，一頁（作品頁的「下載」段，M4 票 12）。**key 在 `JOBS_LIST_KEY` 底下**：SSE 一批推播失效
+ * 清單時它跟著重問，不必另接一條訂閱（票 04 的合併失效）。上一頁留到新的一頁回來，理由同 `jobsQueryOptions`。
+ */
+export function mediaJobsQueryOptions(media: string, filter: MediaJobFilter, page: number) {
+  const query = new URLSearchParams({ media, filter, page: String(page) })
+  return queryOptions({
+    queryKey: [...JOBS_LIST_KEY, 'media', media, filter, page],
+    queryFn: ({ signal }) => apiGet<JobPage>(`/jobs?${query}`, { signal }),
+    placeholderData: keepPreviousData,
+  })
+}
+
+/** 一筆 Job 裡的一個檔案與它被對到哪裡（`JobFileOut`）。 */
+export type JobFile = Schemas['JobFileOut']
+
+/**
+ * 一筆 Job 的檔案，照路徑排；展開那一列時才問。**key 掛在 `['jobs', hash]` 底下**：推播到這一筆時跟著重問
+ * ——檔案清單在 `metadata_ready` 才有，季集要等計劃算出來，兩件事都會推一次。
+ */
+export function jobFilesQueryOptions(hash: string, enabled: boolean) {
+  return queryOptions({
+    queryKey: ['jobs', hash, 'files'],
+    queryFn: ({ signal }) =>
+      apiGet<JobFile[]>(`/jobs/${encodeURIComponent(hash)}/files`, { signal }),
+    enabled,
   })
 }
 

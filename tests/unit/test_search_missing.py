@@ -57,6 +57,7 @@ def episode(number: int, status: EpisodeStatus, absolute: int | None = None) -> 
         runtime=None,
         absolute_number=absolute,
         status=status,
+        job=None,
     )
 
 

@@ -147,6 +147,7 @@ class TestDetail:
             "absolute_number": 1,
             # 播出了，媒體庫裡沒有，也沒有任何一筆 Job 衝著它來（票 13）。
             "status": "missing",
+            "job": None,
         }
         assert (body["files"], body["unmatched"], body["versions"]) == ([], [], [])
 

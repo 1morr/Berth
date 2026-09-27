@@ -111,6 +111,7 @@ function job(): Job {
     reimportable: false,
     plan_id: null,
     audits: 0,
+    series: '',
   }
 }
 
