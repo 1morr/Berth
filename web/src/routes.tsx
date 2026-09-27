@@ -108,7 +108,7 @@ async function requireSession(
     return null
   }
   if (me === null) {
-    // 打開 Berth 的網址本身就是 `/`，那不是「要回探索頁」，登入後照預設落在媒體庫（`destination`）。
+    // 打開 Berth 的網址本身就是 `/`，那不是「要回探索頁」，登入後照預設落地（`destination`）。
     // 用到一半被踢出來的不一樣：他原本就在那一頁，登入後回去。
     const search: LoginSearch =
       wasSignedIn || location.href !== '/' ? { redirect: location.href } : {}
@@ -177,7 +177,9 @@ const loginRoute = createRoute({
     // 精靈還沒跑完就還沒有身分來源，這一頁不該存在。
     if (!(await isSetupComplete(context.queryClient))) throw redirect({ to: '/setup' })
     // 已經登入的人不必再看一次表單。
-    if (await signedIn(context.queryClient)) throw redirect({ href: destination(search.redirect) })
+    if (await signedIn(context.queryClient)) {
+      throw redirect({ href: await destination(context.queryClient, search.redirect) })
+    }
   },
   component: LoginPage,
 })

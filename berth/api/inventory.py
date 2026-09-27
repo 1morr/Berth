@@ -37,7 +37,7 @@ from berth.domain import (
     SortOrder,
 )
 from berth.services.deeplink import jellyfin_web
-from berth.services.inventory import InventoryCard, read_wall
+from berth.services.inventory import InventoryCard, libraries_with_imports, read_wall
 from berth.services.jellyfin_access import (
     AccountDisabledError,
     JellyfinUnreachableError,
@@ -70,6 +70,14 @@ class InventoryLibraryOut(BaseModel):
     #: 排序選單，照 jellyfin-web 的順序；第一個是打開牆時的排序（票 06）。劇集庫與電影庫不同，
     #: 牆那一支只收這裡有的。
     sorts: list[LibrarySort]
+
+
+class InventoryLibraryChoiceOut(InventoryLibraryOut):
+    """切換列上的一格。"""
+
+    #: 帳本至少一列落在它底下（`services.inventory.libraries_with_imports`）。登入後沒有指定去處時，
+    #: 這個人看得到的每一個都是 `false` 就落在探索而不是媒體庫（brief §19 2026-09-26）。
+    has_imports: bool
 
 
 class InventoryFiltersOut(BaseModel):
@@ -151,14 +159,20 @@ _LIBRARIES_REFUSALS = (AccountDisabledError, JellyfinUnreachableError)
 @router.get("", responses=access_responses(*_LIBRARIES_REFUSALS))
 async def get_inventories(
     session: SessionDep, factory: ClientFactoryDep, cache: AccessCacheDep, request: Request
-) -> list[InventoryLibraryOut]:
+) -> list[InventoryLibraryChoiceOut]:
     """切換列：這位使用者在 Jellyfin 看得到、Berth 瀏覽得了的媒體庫。"""
     try:
         async with jellyfin_access(session, factory, cache, session_user(request)) as access:
             libraries = access.libraries
     except _LIBRARIES_REFUSALS as refusal:
         raise access_refusal(refusal) from refusal
-    return [InventoryLibraryOut.model_validate(row) for row in libraries]
+    stocked = await libraries_with_imports(session, [row.id for row in libraries])
+    return [
+        InventoryLibraryChoiceOut(
+            **InventoryLibraryOut.model_validate(row).model_dump(), has_imports=row.id in stocked
+        )
+        for row in libraries
+    ]
 
 
 #: 牆另外會遇到選單外的排序鍵（票 06）。

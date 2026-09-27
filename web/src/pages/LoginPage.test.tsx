@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { HEALTHY, UNCONFIGURED, session, stubApi } from '../test/fetch'
+import { discoverWall, inventoryLibraries } from '../test/fixtures'
 import { renderApp } from '../test/render'
 
 afterEach(() => {
@@ -15,11 +16,14 @@ const LOGIN = 'POST /api/auth/login'
 const DONE = { body: HEALTHY }
 const ADMIN = { name: 'skipper', role: 'admin' } as const
 const LIBRARY = 'f137a2dd21bbc1b99aa5c0f6bf02a805'
-/** `/library` 落在第一個媒體庫；那一頁本身打的其他 API 這裡不在乎。 */
-const LIBRARIES = {
-  'GET /api/inventory': {
-    body: [{ id: LIBRARY, name: 'Anime', collection_type: 'tvshows', sorts: [] }],
-  },
+/** 這個人看得到的媒體庫；`/library` 落在第一個。那一頁本身打的其他 API 這裡不在乎。 */
+function libraries(hasImports: boolean) {
+  return { 'GET /api/inventory': inventoryLibraries({ hasImports, first: LIBRARY }) }
+}
+const LIBRARIES = libraries(true)
+const DISCOVER = {
+  'GET /api/discover/trending': discoverWall(),
+  'GET /api/discover/popular': discoverWall(),
 }
 
 /** 沒有人登入的一台；`signIn` 之後 `GET /auth/me` 才回得出人來。 */
@@ -41,7 +45,7 @@ async function fillIn(username: string, password: string) {
 
 describe('登入頁', () => {
   // 探索頁只放 TMDB 牆之後（brief §19，M3 票 06），登入後第一個畫面是媒體庫：接著看的兩列在那裡。
-  it('打完帳密送出後落到媒體庫', async () => {
+  it('Berth 入庫過東西的人打完帳密送出後落到媒體庫', async () => {
     const { backend, routes } = signedOut()
     const stub = stubApi({ ...routes, [LOGIN]: backend.signIn(ADMIN), ...LIBRARIES })
     const { router } = renderApp('/login')
@@ -53,14 +57,28 @@ describe('登入頁', () => {
     expect(bodyOf(login!)).toEqual({ username: 'skipper', password: 'harbour' })
   })
 
+  // 精靈剛跑完、或接上的是別人的 Jellyfin 而 Berth 還沒入庫過東西：媒體庫是一面空牆或別人的片，
+  // 第一件事是找片（brief §19 2026-09-26）。
+  it('這個人看得到的媒體庫裡都還沒有 Berth 入庫的東西時落到探索', async () => {
+    const { backend, routes } = signedOut()
+    stubApi({ ...routes, [LOGIN]: backend.signIn(ADMIN), ...libraries(false), ...DISCOVER })
+    const { router } = renderApp('/login')
+
+    await fillIn('skipper', 'harbour')
+
+    await waitFor(() => expect(router.state.location.pathname).toBe('/'))
+  })
+
   it('回到原本要去的那一頁，而不是一律回首頁', async () => {
     const { backend, routes } = signedOut()
-    stubApi({ ...routes, [LOGIN]: backend.signIn(ADMIN) })
+    const stub = stubApi({ ...routes, [LOGIN]: backend.signIn(ADMIN) })
     const { router } = renderApp('/login?redirect=%2Fsettings%2Ftmdb')
 
     await fillIn('skipper', 'harbour')
 
     await waitFor(() => expect(router.state.location.pathname).toBe('/settings/tmdb'))
+    // 有去處就不必問媒體庫：那一支要繞到 Jellyfin。
+    expect(stub.mock.calls.map((call) => String(call[0]))).not.toContain('/api/inventory')
   })
 
   it('外部網址不算「原本要去的那一頁」', async () => {

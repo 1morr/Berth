@@ -2824,6 +2824,21 @@ export interface components {
             years: number[];
         };
         /**
+         * InventoryLibraryChoiceOut
+         * @description 切換列上的一格。
+         */
+        InventoryLibraryChoiceOut: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            collection_type: components["schemas"]["CollectionType"];
+            /** Sorts */
+            sorts: components["schemas"]["LibrarySort"][];
+            /** Has Imports */
+            has_imports: boolean;
+        };
+        /**
          * InventoryLibraryOut
          * @description 這位使用者看得到、Berth 瀏覽得了的一個媒體庫。
          *
@@ -5330,7 +5345,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["InventoryLibraryOut"][];
+                    "application/json": components["schemas"]["InventoryLibraryChoiceOut"][];
                 };
             };
             /** @description `account_disabled` */

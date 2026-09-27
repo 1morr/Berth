@@ -1,6 +1,6 @@
 # 10 — 精靈完成與空媒體庫時落在探索；JSX 註解外露與它的閘門
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Blocked by:** None — can start immediately
 
@@ -26,10 +26,19 @@
 
 ## 驗收
 
-- [ ] 精靈完成 → 探索；有入庫紀錄的使用者登入 → 媒體庫；`?redirect=` 照舊優先（vitest，三條）
-- [ ] 第 2 步畫面不再出現註解文字（playwright 文字結果）
-- [ ] lint 規則的雙向變異測試；`pnpm -C web lint` 綠燈
-- [ ] brief §19 那一列與 plan §7 同步
-- [ ] lint、type、test、前端 e2e 綠燈
+- [x] 精靈完成 → 探索；有入庫紀錄的使用者登入 → 媒體庫；`?redirect=` 照舊優先（vitest，三條）
+- [x] 第 2 步畫面不再出現註解文字（playwright 文字結果）
+- [x] lint 規則的雙向變異測試；`pnpm -C web lint` 綠燈
+- [x] brief §19 那一列與 plan §7 同步
+- [x] lint、type、test、前端 e2e 綠燈
 
 ## Comments
+
+- 2026-09-27 實作：「精靈剛完成」沒有另一個旗標——精靈跑完是登出狀態，下一次登入時帳本必然是空的，由「帳本一筆都沒有」那一條接住（vitest 走整條：完成設定 → 登入 → `/`）。規則在 `web/src/auth/destination.ts`（`internalRedirect`、`home`），後端欄位是 `GET /inventory` 的 `has_imports`。外掛選 `@eslint-react/eslint-plugin`：`eslint-plugin-react` 的 peerDependencies 到 ESLint ^9.7。
+- code-review 已處理：`destination` 問媒體庫不重試（原本多卡約 7 秒）；`libraries_with_imports` 改回與牆同一個 `owning_route` 判斷；測試的媒體庫 fixture 收成 `inventoryLibraries()`；`lint.test.ts` 的反例改成大括號、字串、屬性裡都有 `//`。
+- code-review 未處理（判斷題，留著）：
+  - 帳本算任何一列，字幕與 Extras 也算（票面字面）。只有 Berth 補字幕的媒體庫會落在媒體庫，那裡接著看的兩列是空的。
+  - `GET /inventory` 每次載入切換列多跑每條 Route 一次查詢（找到一列就停）。媒體庫頁每次進場付這個成本，量級與牆的 `_survey` 相比很小，沒量。
+  - `destination.ts` 同時放純規則與問媒體庫的那一支；分檔只換來多一個 import。
+  - e2e 的 `/票 06h|StepFrame/` 斷言只擋得住那一行字，通用的防線是 lint 規則；留著是因為票要 playwright 的文字結果。
+  - `api/inventory.py` 的 `InventoryLibraryChoiceOut(**InventoryLibraryOut.model_validate(row).model_dump(), …)` 繞一圈（`BrowsableLibrary` 是 dataclass、`sorts` 是 property，`model_validate` 沒有 `update`）。

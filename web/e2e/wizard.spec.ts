@@ -19,6 +19,8 @@ test('精靈八步走完，之後以同一組帳密登入', async ({ page }) => 
   // 2. 偵測服務：三個都是套件內，畫面停在第 2 步等人按「前往泊位 1」。
   await page.getByRole('button', { name: '開始探測' }).click()
   await expect(page.getByText('3 個服務已判定')).toBeVisible()
+  // 「前往泊位 1」上方曾經印出一行寫在 JSX 子節點裡的 `//` 註解（M4 票 10）。
+  await expect(page.getByText(/票 06h|StepFrame/)).toHaveCount(0)
   await shot(page, '2-detect')
   await page.getByRole('button', { name: '前往泊位 1' }).click()
 

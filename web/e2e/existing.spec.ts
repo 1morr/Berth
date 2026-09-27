@@ -29,6 +29,8 @@ test('既有服務：接上三個服務、選寫入目標，完成後用那台 J
   await qbittorrent.getByRole('button', { name: '測試連線' }).click()
   await expect(qbittorrent.getByText('連線測試通過')).toBeVisible()
   await expect(page.getByText('3 個服務已判定')).toBeVisible()
+  // 「前往泊位 1」上方曾經印出一行寫在 JSX 子節點裡的 `//` 註解（M4 票 10）。
+  await expect(page.getByText(/票 06h|StepFrame/)).toHaveCount(0)
   await shot(page, '2-detect')
   await page.getByRole('button', { name: '前往泊位 1' }).click()
 
@@ -87,5 +89,7 @@ test('既有服務：接上三個服務、選寫入目標，完成後用那台 J
   await page.getByRole('textbox', { name: '帳號' }).fill(OWNER.user)
   await page.getByRole('textbox', { name: '密碼' }).fill(OWNER.password)
   await page.getByRole('button', { name: '登入' }).click()
-  await expect(page.getByRole('heading', { name: '媒體庫', level: 1 })).toBeVisible()
+  // Berth 還沒入庫過東西，媒體庫裡只有別人的片：第一件事是找片（M4 票 10，brief §19 2026-09-26）。
+  await expect(page).toHaveURL('/')
+  await expect(page.getByRole('heading', { name: '探索', level: 1 })).toBeAttached()
 })

@@ -8,7 +8,7 @@ import { HEALTHY, UNAUTHORIZED, UNCONFIGURED, session, stubApi } from './test/fe
 import { expectCurrentByStateOnly } from './test/navState'
 import { renderApp } from './test/render'
 import { createAppRouter, createQueryClient } from './router'
-import { discoverWall, setupStatus } from './test/fixtures'
+import { discoverWall, inventoryLibraries, setupStatus } from './test/fixtures'
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -120,6 +120,19 @@ describe('門禁', () => {
     const { router } = renderApp('/login?redirect=%2Fhealth')
 
     await waitFor(() => expect(router.state.location.pathname).toBe('/health'))
+  })
+
+  it('已經登入的人沒有指定去處時照同一條規則落地', async () => {
+    stubApi({
+      [HEALTH]: DONE,
+      [ME]: ADMIN,
+      'GET /api/inventory': inventoryLibraries({ hasImports: false }),
+      ...DISCOVER,
+    })
+
+    const { router } = renderApp('/login')
+
+    await waitFor(() => expect(router.state.location.pathname).toBe('/'))
   })
 
   it('setup 跑完之後沒登入就開 /setup 也會被擋', async () => {

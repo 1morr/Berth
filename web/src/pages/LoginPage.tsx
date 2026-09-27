@@ -24,9 +24,9 @@ export function LoginPage() {
   const login = useMutation({
     mutationKey: SIGN_IN_KEY,
     mutationFn: signIn,
-    onSuccess: (me: Me) => {
+    onSuccess: async (me: Me) => {
       queryClient.setQueryData(meQueryOptions.queryKey, me)
-      void navigate({ href: destination(redirect) })
+      await navigate({ href: await destination(queryClient, redirect) })
     },
     // 被拒絕之後焦點回到密碼欄：帳號多半是對的，要改的是下面那一格。
     onError: () => password.current?.focus(),

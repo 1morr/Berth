@@ -107,7 +107,7 @@ export function DetectStep({
         ) : resolved ? (
           // 判定全部出來了才前進，而且是使用者自己按——不然他根本看不到逐條纜繩的結果。
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,18rem)_auto] sm:items-center">
-            // 探測做完、「開始探測」換掉之後，焦點接到這一顆（`StepFrame`，票 06h）。
+            {/* 探測做完、「開始探測」換掉之後，焦點接到這一顆（`StepFrame`，票 06h）。 */}
             <PrimaryButton type="button" busy={probing} data-berth-next onClick={onContinue}>
               {t('detect.continue')}
             </PrimaryButton>

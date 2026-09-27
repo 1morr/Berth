@@ -2,11 +2,13 @@ import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { stubApi } from '../test/fetch'
+import { session, stubApi } from '../test/fetch'
 import { renderApp, renderWithProviders } from '../test/render'
 import {
   ALL_BUNDLED,
   CHECKS_PASSED,
+  discoverWall,
+  inventoryLibraries,
   indexerSetup,
   jellyfinSetup,
   libraryChoice,
@@ -631,5 +633,38 @@ describe('第 8 步：完成', () => {
 
     // 精靈跑完之後 `/` 不再導向 `/setup`，而是導向登入頁（票 07 的守衛）。
     await waitFor(() => expect(router.state.location.pathname).toBe('/login'))
+  })
+
+  // brief §19 2026-09-26：精靈剛跑完，媒體庫是空的（或只有別人的片），第一件事是找片。
+  it('精靈跑完之後登入落在探索，不是空的媒體庫', async () => {
+    let completed = false
+    const backend = session()
+    stubApi({
+      'GET /api/health': () => ({
+        body: { status: 'ok', version: '0.1.0', setup_completed: completed },
+      }),
+      [STATUS]: { body: AT_THE_END },
+      [ROUTES]: { body: BUILT },
+      [INDEXERS]: { body: indexerSetup() },
+      [TMDB]: { body: tmdbSetup() },
+      [COMPLETE]: () => {
+        completed = true
+        return { body: { ...AT_THE_END, completed: true } }
+      },
+      'GET /api/auth/me': () => backend.me(),
+      'POST /api/auth/login': backend.signIn({ name: 'skipper', role: 'admin' }),
+      'GET /api/inventory': inventoryLibraries({ hasImports: false }),
+      'GET /api/discover/trending': discoverWall(),
+      'GET /api/discover/popular': discoverWall(),
+    })
+
+    const { router } = renderApp('/setup')
+    await userEvent.click(await screen.findByRole('button', { name: '完成設定' }))
+    await userEvent.type(await screen.findByLabelText('帳號'), 'skipper')
+    await userEvent.type(screen.getByLabelText('密碼'), 'harbour')
+    await userEvent.click(screen.getByRole('button', { name: '登入' }))
+
+    await waitFor(() => expect(router.state.location.pathname).toBe('/'))
+    expect(router.state.location.search).toEqual({})
   })
 })

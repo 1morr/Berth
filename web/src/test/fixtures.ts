@@ -18,6 +18,7 @@ import type {
 } from '../api/schemas'
 import type { LibraryOption, ManagedRoute } from '../api/routes'
 import type { Discover, DiscoverItem } from '../api/discover'
+import type { InventoryLibraryChoice } from '../api/inventory'
 import type { HealthDetail, ServiceHealth } from '../api/health'
 import type { StubRoute } from './fetch'
 
@@ -389,4 +390,29 @@ export function withFailedService(
 /** 探索頁一個 feed 的回應。路過這一頁的測試給空牆就夠了。 */
 export function discoverWall(items: DiscoverItem[] = []): StubRoute {
   return { body: { items, problem: null, detail: '' } satisfies Discover }
+}
+
+/**
+ * `GET /api/inventory` 的回應：這個人看得到的媒體庫，第一個是 `/library` 落地的那一個。
+ * `hasImports` 是其中一個（最後那個）有沒有 Berth 入庫的東西——登入後落在哪一頁讀它（M4 票 10）。
+ */
+export function inventoryLibraries({
+  hasImports,
+  first = 'tv',
+}: {
+  hasImports: boolean
+  first?: string
+}): StubRoute {
+  return {
+    body: [
+      { id: first, name: 'TV', collection_type: 'tvshows', sorts: [], has_imports: false },
+      {
+        id: 'movies',
+        name: 'Movies',
+        collection_type: 'movies',
+        sorts: [],
+        has_imports: hasImports,
+      },
+    ] satisfies InventoryLibraryChoice[],
+  }
 }

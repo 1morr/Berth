@@ -326,6 +326,18 @@ class TestInventory:
         ]
         assert jellyfin.browse_queries == []
 
+    def test_each_library_says_whether_berth_has_imported_into_it(self, client: TestClient) -> None:
+        """登入後落在哪一頁讀它（brief §19 2026-09-26）。規則在
+        `test_inventory.py::TestHasImports`。"""
+        sign_in(client)
+        before = {row["id"]: row["has_imports"] for row in client.get("/api/inventory").json()}
+        put_on_the_wall(client)
+
+        after = {row["id"]: row["has_imports"] for row in client.get("/api/inventory").json()}
+
+        assert before == {MOVIES: False, TV: False, ANIME: False}
+        assert after == {MOVIES: False, TV: True, ANIME: False}
+
     def test_each_library_says_which_sorts_it_offers(self, client: TestClient) -> None:
         """前端照這一份畫排序選單：兩種媒體庫不同，而判定在後端（`tests/unit/test_browsable_library.py`）。"""
         sign_in(client)

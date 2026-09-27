@@ -1079,6 +1079,10 @@ split-cour 的第一批被播出日比對整批擋在審核，改正一次並套
   `POST /api/rss/subscriptions/mikan` 多選填的 `subgroup_name`。番組名取自自動綁定讀的番組頁與單一 feed 的 channel
   標題（補舊集與每日補漏本來就讀它），字幕組名取自番組頁；資料庫多兩欄（migration `d5c8e2a7f391`，既有的留空，
   下一次補漏補上番組名，畫面上沒有就不顯示）；TMDB 快照多 `ended`（至多 24 小時後刷新補上）。
+- **媒體庫裡還沒有 Berth 入庫的東西時，登入後落在探索**（M4 票 10，brief §19 2026-09-26）：精靈剛跑完、或接上
+  既有 Jellyfin 而 Berth 還沒入庫過東西時，原本落在一面空牆（或只有別人的片）。現在這個人看得到的媒體庫裡帳本
+  一筆都沒有就落在探索，其餘照舊落在媒體庫；`?redirect=` 照舊優先。API：`GET /api/inventory` 每一列多
+  `has_imports`。
 ### Removed
 - **服務設定頁 `/settings/services` 與精靈的 `?berth=` 深連結**（M3 票 06i）：前者拆進設定的各分頁，後者連同
   「改位址或憑證」與精靈跑完之後的「回到 Berth」一起拿掉——精靈跑完之後不再是設定入口。後端的
@@ -1105,6 +1109,8 @@ split-cour 的第一批被播出日比對整批擋在審核，改正一次並套
 - **搜尋 feed 的第一輪預覽要兩秒多**（M4 票 13b）：30 筆的預覽把同一個發佈名丟給 guessit 約四次，一次 120 次、握著
   事件迴圈，背景同時規劃補舊集時前端 e2e 5 秒內等不到它。`parse_release` 記住最近 2048 個名字的結果，預覽降到
   0.15 秒左右、建搜尋 feed 降到 1 秒內；量測腳本 `scripts/experiments/rss_subscribe_timing.py`。
+- **精靈第 2 步探測完，「前往泊位 1」上方印出一行程式碼註解**（M4 票 10）：`//` 註解寫在 JSX 子節點裡就是文字。
+  `pnpm -C web lint` 多開 `@eslint-react/jsx-no-comment-textnodes` 擋這一型（`web/src/lint.test.ts` 守著它還開著）。
 
 - **精靈的文案與實際不符的幾處**（M3 票 06h）：完成頁寫「四個泊位」、既有 Jellyfin 也說「用剛才建立的管理員
   登入」；前置列把探測中的服務也算成已判定；第 2 步寫死 `qbittorrent:8080`；連線表單三個服務的範例位址都是

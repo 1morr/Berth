@@ -15,6 +15,9 @@ import type { Schemas } from './schemas'
 /** 這位使用者看得到、Berth 瀏覽得了的一個媒體庫。 */
 export type InventoryLibrary = Schemas['InventoryLibraryOut']
 
+/** 切換列上的一格：另外說 Berth 入庫過東西沒有（登入後落在哪一頁，`auth/destination.ts`）。 */
+export type InventoryLibraryChoice = Schemas['InventoryLibraryChoiceOut']
+
 /** 一個媒體庫的一頁牆，加上 Berth 經手的每一部。 */
 export type Inventory = Schemas['InventoryOut']
 
@@ -23,7 +26,7 @@ export type InventoryCard = Schemas['InventoryCardOut']
 
 export const inventoriesQueryOptions = queryOptions({
   queryKey: ['inventory'],
-  queryFn: () => apiGet<InventoryLibrary[]>('/inventory'),
+  queryFn: () => apiGet<InventoryLibraryChoice[]>('/inventory'),
   retry: retryUnlessRefused,
 })
 

@@ -18,7 +18,7 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Iterator, Sequence
+from collections.abc import Collection, Iterator, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import PurePosixPath
@@ -319,6 +319,35 @@ async def read_wall(
             )
         ),
     )
+
+
+async def libraries_with_imports(
+    session: AsyncSession, library_ids: Collection[str]
+) -> frozenset[str]:
+    """這幾個媒體庫裡，哪幾個有 Berth 入庫的檔案：帳本至少一列落在指向它的 Route 底下。
+
+    登入後落在哪一頁讀它（brief §19 2026-09-26）：一筆都沒有的人先去探索找片。下載中不算——
+    媒體庫牆上的「還沒進 Jellyfin」那一條有它，可是接著看的兩列還是空的。歸屬與牆同一個判斷
+    （`_survey`）：前綴粗篩，`owning_route` 精判；找到一列就停。
+    """
+    routes = await _routes(session)
+    found: set[str] = set()
+    for row in routes:
+        library = row.jellyfin_library_id
+        if library not in library_ids or library in found:
+            continue
+        paths = await session.stream_scalars(
+            select(LedgerEntry.target_path).where(
+                LedgerEntry.target_path.startswith(target_prefix(row), autoescape=True)
+            )
+        )
+        async for path in paths:
+            owner = owning_route(path, routes)
+            if owner is not None and owner.jellyfin_library_id == library:
+                found.add(library)
+                break
+        await paths.close()
+    return frozenset(found)
 
 
 async def read_holdings(session: AsyncSession, media: Media, snapshot: MediaSnapshot) -> Holdings:

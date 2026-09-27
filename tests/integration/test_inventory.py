@@ -69,6 +69,7 @@ from berth.services.inventory import (
     InventoryCard,
     InventoryWall,
     Tracking,
+    libraries_with_imports,
     read_wall,
 )
 from berth.services.jellyfin_access import (
@@ -625,6 +626,46 @@ class TestTrackedOnTheWall:
         await session.commit()
 
         assert (await card(session)).media_id == "tv:120089"
+
+
+class TestHasImports:
+    """登入後落在哪一頁（brief §19 2026-09-26）：媒體庫裡還沒有 Berth 入庫的東西時落在探索。"""
+
+    async def test_a_download_is_not_an_import_yet(self, session: AsyncSession) -> None:
+        tv = await route(session)
+        await job(session, await title(session), tv, JobState.DOWNLOADING)
+
+        assert await libraries_with_imports(session, ["library-tv"]) == frozenset()
+
+    async def test_one_file_under_a_route_is_enough(self, session: AsyncSession) -> None:
+        tv = await route(session, "tv")
+        await route(session, "anime")
+        await linked(session, await title(session), tv)
+
+        assert await libraries_with_imports(session, ["library-tv", "library-anime"]) == {
+            "library-tv"
+        }
+
+    async def test_a_file_under_a_deeper_route_belongs_to_that_routes_library(
+        self, session: AsyncSession
+    ) -> None:
+        """`/data/library/tv/anime` 可以是另一條 Route（brief §4.3）：它底下的檔案不算 TV 的。"""
+        await route(session, "tv")
+        anime = await route(session, "anime")
+        anime.target_path = "/data/library/tv/anime"
+        await session.commit()
+        await linked(session, await title(session), anime)
+
+        assert await libraries_with_imports(session, ["library-tv", "library-anime"]) == {
+            "library-anime"
+        }
+
+    async def test_only_the_libraries_asked_about_are_answered(self, session: AsyncSession) -> None:
+        """問的是這個人看得到的那幾個：別人的媒體庫有東西不算。"""
+        tv = await route(session)
+        await linked(session, await title(session), tv)
+
+        assert await libraries_with_imports(session, ["library-anime"]) == frozenset()
 
 
 class TestWatchState:
