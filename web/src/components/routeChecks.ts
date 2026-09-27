@@ -34,7 +34,8 @@ export const CHECK_LABEL = {
 /** 這一條真的打的那支端點或做的那件事。貼在它那一行，不進散文。 */
 export const CHECK_ENDPOINT = {
   category: 'torrents/createCategory',
-  download_path: 'app/preferences → stat()',
+  // 兩種都 stat 分類回報的路徑；套件內另外讀全域 save_path，細節列會並排兩條（M4 票 05）。
+  download_path: 'torrents/categories → stat()',
   library_path: 'Library/VirtualFolders → stat()',
   probe_visible: 'Environment/ValidatePath',
   hardlink: 'link()',

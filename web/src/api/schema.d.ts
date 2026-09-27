@@ -4026,6 +4026,8 @@ export interface components {
             temp_path_warning: boolean;
             /** Sets Password */
             sets_password: boolean;
+            /** Writes Preferences */
+            writes_preferences: boolean;
             /** Error */
             error: string;
         };

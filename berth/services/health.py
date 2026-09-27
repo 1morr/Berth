@@ -48,7 +48,7 @@ from berth.services.clients import ServiceClientFactory
 from berth.services.downloads import ACTIVE_INTERVAL
 from berth.services.health_issues import watch_conditions
 from berth.services.indexer import probe_indexer
-from berth.services.qbittorrent import drifted_keys
+from berth.services.qbittorrent import drifted_keys, qbittorrent_target
 from berth.services.routes import RouteView, check_routes, read_route_status, routes_health
 from berth.services.settings import read_settings, write_settings
 from berth.services.steps import message
@@ -362,11 +362,12 @@ async def _check_jellyfin(session: AsyncSession, factory: ServiceClientFactory) 
 
 
 async def _check_qbittorrent(session: AsyncSession, factory: ServiceClientFactory) -> _Outcome:
-    """連得上、版本夠新，而且建議偏好還是建議值（brief §16.3）。"""
+    """連得上、版本夠新，而且套件內那一台的建議偏好還是建議值（brief §16.3）。"""
     settings = await read_settings(session, QbittorrentSettings)
     paths = await read_settings(session, PathSettings)
     if not settings.base_url:
         return _Outcome(HealthStatus.UNKNOWN, configured=False)
+    origin, _ = qbittorrent_target(await read_settings(session, SetupSettings), settings)
 
     client = factory.qbittorrent(settings.base_url)
     try:
@@ -394,7 +395,7 @@ async def _check_qbittorrent(session: AsyncSession, factory: ServiceClientFactor
     return _Outcome(
         HealthStatus.OK,
         detail=f"{version.app} · Web API {version.webapi}",
-        drift=drifted_keys(preferences, paths),
+        drift=drifted_keys(preferences, paths, origin),
     )
 
 

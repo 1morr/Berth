@@ -4,9 +4,13 @@
 逐鍵套用（`apply_qbittorrent`）。兩者都不改使用者沒同意的東西：
 
 - **只寫有差異的鍵**。已經是建議值的鍵連送都不送，重按時它們是 `skipped`。
+- **全域偏好只寫套件內的那一台**（M4 票 05，brief §16.4）。既有 qBittorrent 的五個鍵只列現值
+  與建議值，一個都不寫：改它的全域 `save_path` 會讓使用者不經 Berth 加的 torrent 全部跑進
+  Berth 的目錄。Berth 的下載靠自己的分類（建立時帶 save path）與逐個 torrent 的 `autoTMM=true`，
+  與 Sonarr / Radarr 對下載器的做法相同。
 - **密碼只給套件內的那一台**，而且要使用者勾了「同一組帳密」。既有 qBittorrent 是他自己的
   服務，Berth 不改它的密碼（brief §16.4）。
-- **temp path 未啟用只警告**。建議值仍然列出來，套不套是使用者的事。
+- **既有服務的 temp path 未啟用只警告**，不阻擋。
 - **Web API 低於 2.8.4 拒絕接入**，因為 Berth 要用的端點在那之前不存在（brief §16.4）。
 """
 
@@ -144,6 +148,8 @@ class QbittorrentSetupStatus:
     temp_path_warning: bool
     #: 勾了「同一組帳密也套用到 qBittorrent」而且這一台是套件內的。
     sets_password: bool
+    #: 五個建議鍵會被寫。既有的那一台是 `False`：畫面只列現值與建議值，按鈕只是確認。
+    writes_preferences: bool
     #: 連線本身的失敗原文（英文）。UI 貼在手動步驟旁邊。
     error: str
 
@@ -178,7 +184,11 @@ async def read_qbittorrent_diff(
 async def apply_qbittorrent(
     session: AsyncSession, factory: ServiceClientFactory
 ) -> QbittorrentSetupStatus:
-    """套用建議偏好。只寫有差異的鍵；密碼是另一次呼叫，所以它失敗不影響前面五個鍵。"""
+    """套用建議偏好。只寫有差異的鍵；密碼是另一次呼叫，所以它失敗不影響前面五個鍵。
+
+    既有的那一台一個鍵都不寫：五條纜繩記成 `skipped`（Berth 看過、沒動它），細節是它的現值。
+    這一步對它的意思只剩「連得上、版本夠新」，按下去就繫上。
+    """
     setup = await read_settings(session, SetupSettings)
     settings = await read_settings(session, QbittorrentSettings)
     paths = await read_settings(session, PathSettings)
@@ -199,8 +209,12 @@ async def apply_qbittorrent(
             )
 
         diffs = _diffs(preferences, paths)
-        changes = {row.key: _recommended_value(row.key, paths) for row in diffs if row.differs}
-        steps = [_preference_step(row) for row in diffs]
+        if writes_preferences(origin):
+            changes = {row.key: _recommended_value(row.key, paths) for row in diffs if row.differs}
+            steps = [_preference_step(row) for row in diffs]
+        else:
+            changes = {}
+            steps = [_untouched_step(row) for row in diffs]
         if changes:
             await client.set_preferences(changes)
 
@@ -300,12 +314,22 @@ def qbittorrent_target(
     return (origin, settings.base_url or (probe.base_url if probe else ""))
 
 
-def drifted_keys(preferences: Mapping[str, Any], paths: PathSettings) -> tuple[str, ...]:
+def writes_preferences(origin: ServiceOrigin) -> bool:
+    """五個建議鍵寫不寫得：只有套件內的那一台（M4 票 05）。"""
+    return origin is ServiceOrigin.BUNDLED
+
+
+def drifted_keys(
+    preferences: Mapping[str, Any], paths: PathSettings, origin: ServiceOrigin
+) -> tuple[str, ...]:
     """現在與建議值不同的那幾個鍵（brief §16.3 的「關鍵設定漂移」）。
 
     健康檢查與精靈第 4 步問的是同一個問題，所以用同一份比對——包含尾斜線正規化，否則
-    4.4 上每一輪健康檢查都會報一次假的漂移。
+    4.4 上每一輪健康檢查都會報一次假的漂移。既有的那一台沒有漂移可言：它的全域偏好本來就
+    是使用者的，「還原建議設定」在它上面什麼都不寫。
     """
+    if not writes_preferences(origin):
+        return ()
     return tuple(row.key for row in _diffs(dict(preferences), paths) if row.differs)
 
 
@@ -358,6 +382,11 @@ def _preference_step(diff: PreferenceDiff) -> SetupStep:
     )
 
 
+def _untouched_step(diff: PreferenceDiff) -> SetupStep:
+    """既有的那一台：Berth 看過這個鍵、沒動它。細節是它的現值，不是建議值。"""
+    return SetupStep(key=diff.key, status=StepStatus.SKIPPED, detail=diff.current)
+
+
 def _sets_password(setup: SetupSettings, origin: ServiceOrigin) -> bool:
     return (
         origin is ServiceOrigin.BUNDLED
@@ -392,6 +421,7 @@ def _status(
             origin is ServiceOrigin.EXISTING and preferences.get("temp_path_enabled") is False
         ),
         sets_password=_sets_password(setup, origin),
+        writes_preferences=writes_preferences(origin),
         error="",
     )
 
@@ -411,6 +441,7 @@ def _unreachable(
         steps=step_views(setup.qbittorrent.steps),
         temp_path_warning=False,
         sets_password=_sets_password(setup, origin),
+        writes_preferences=writes_preferences(origin),
         error=error,
     )
 

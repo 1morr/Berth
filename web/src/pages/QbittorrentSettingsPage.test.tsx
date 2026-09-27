@@ -120,6 +120,25 @@ describe('設定 → qBittorrent', () => {
     expect(screen.queryByRole('button', { name: '還原建議設定' })).not.toBeInTheDocument()
   })
 
+  it('既有 qBittorrent 沒有建議設定可還原：它的全域偏好是使用者的（M4 票 05）', async () => {
+    render({
+      [STATUS]: { body: EXISTING },
+      [DRIFT]: {
+        body: qbittorrentSetup({
+          origin: 'existing',
+          base_url: 'http://nas:8080',
+          sets_password: false,
+          writes_preferences: false,
+        }),
+      },
+    })
+    renderApp('/settings/qbittorrent')
+
+    expect(await screen.findByText(/Berth 不改你這台 qBittorrent 的全域偏好/)).toBeInTheDocument()
+    expect(screen.queryByText(/個鍵與建議值不同/)).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '還原建議設定' })).not.toBeInTheDocument()
+  })
+
   it('漂移時列出逐鍵差異與還原按鈕（brief §16.3）', async () => {
     render({
       [DRIFT]: {

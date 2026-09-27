@@ -605,7 +605,7 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 
 ### 16.3 開箱即用（一鍵設定）【決定】
 
-> **2026-09-26 改（§19 兩列）**：下表與下列說明裡的「Berth 管理員」由「Jellyfin 擁有者」取代，既有服務不寫帳密、不改全域偏好。M4 票 05–07 做完時改寫本節。
+> **2026-09-26 改（§19 兩列）**：下表與下列說明裡的「Berth 管理員」由「Jellyfin 擁有者」取代（M4 票 06–07 做完時改寫）。既有服務不寫帳密、不改全域偏好的那一半已由 M4 票 05 改寫進下文。
 
 目標：新手使用者下載 compose 範本、`docker compose up`、開瀏覽器，之後所有設定都在 Berth 的精靈裡完成，不需要分別打開 qBittorrent、Jellyfin、Prowlarr 的介面。做法是「預置設定檔 + Berth 透過各服務 API 代為設定」，兩者都冪等，可重複按。
 
@@ -613,13 +613,14 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 
 | 服務 | 預置（compose 範本） | Berth 一鍵設定（API） | 使用者仍需自己做 |
 | --- | --- | --- | --- |
-| qBittorrent | **只預置「讓 Berth 進得去」**：只放行 Berth 容器固定 IP 的免密白名單（不是整個網段，理由見 §20.7）。原因是 4.6.1 起首次啟動的隨機密碼只印在容器 log，Berth 拿不到，沒有這一步按鈕就登不進去 | 套用建議偏好（temp path、save path、autoTMM）、依 Route 建立 category、設定 WebUI 密碼；按下前顯示差異 | 無 |
+| qBittorrent | **只預置「讓 Berth 進得去」**：只放行 Berth 容器固定 IP 的免密白名單（不是整個網段，理由見 §20.7）。原因是 4.6.1 起首次啟動的隨機密碼只印在容器 log，Berth 拿不到，沒有這一步按鈕就登不進去 | 套件內：套用建議偏好（temp path、save path、autoTMM）、設定 WebUI 密碼，按下前顯示差異；兩種都依 Route 建立 category | 無 |
 | Jellyfin | 無 | 偵測「尚未完成初始精靈」→ 以 Berth 管理員帳密建立 Jellyfin 管理員 → 建立使用者在精靈列的媒體庫（內容類型 + 名稱 + 資料夾，預設 Movies / TV / Anime 對應 `/data/library/{movies,tv,anime}`，可改名、增刪，M3 票 06f）→ 每個媒體庫自動建立一個 Route | 無 |
 | Prowlarr | 無；Berth 唯讀掛載其設定目錄讀取 API key | 加入預設索引站清單（Nyaa.si、dmhy、Anime Tosho、ACG.RIP、Mikan、1337x、YTS、EZTV、The Pirate Bay，可勾選；AniDex 於 2026-09-25 拿掉，§20.7）、以 Berth 管理員帳密設定介面登入 | 私有站的帳號 |
 | TMDB | 無 —— **Berth 不內建任何 provider 的 key**【決定 2026-09-09】 | 無 | **必要**：自己申請一把 API key 貼進精靈第 6 步（§20.7） |
 | 索引站 / RSS | 無 | Mikan、Nyaa feed 由使用者貼 URL | 貼自己的 Mikan 訂閱 URL |
 
-- **每個服務各自判斷來源，沒有全局模式**。精靈逐一探測 compose 主機名（`jellyfin`、`qbittorrent`、`prowlarr`）：探得到且尚未設定過（Jellyfin 的 `StartupWizardCompleted=false`、qBittorrent 免密可進、Prowlarr 無索引站）→ 視為**套件內服務**，全自動；否則顯示連線表單 → **既有服務**，只做檢查，「套用建議設定」「加入媒體庫路徑」「安裝插件」各是一顆需確認的按鈕。NAS 使用者常見的組合是既有 Jellyfin + 套件內 qBittorrent 與 Prowlarr。
+- **每個服務各自判斷來源，沒有全局模式**。精靈逐一探測 compose 主機名（`jellyfin`、`qbittorrent`、`prowlarr`）：探得到且尚未設定過（Jellyfin 的 `StartupWizardCompleted=false`、qBittorrent 免密可進、Prowlarr 無索引站）→ 視為**套件內服務**，全自動；否則顯示連線表單 → **既有服務**，只做檢查，不寫帳密、不改全域偏好，「加入媒體庫路徑」是一顆需確認的按鈕。NAS 使用者常見的組合是既有 Jellyfin + 套件內 qBittorrent 與 Prowlarr。
+- **只有 compose 主機名上探到的才可能是套件內，使用者在連線表單填的位址一律既有**（§19 2026-09-26，M4 票 05）：「免密可進」「無索引站」說不出服務是誰的，使用者自己開了子網免驗證的 qBittorrent、還沒加站的 Prowlarr 都長這樣。填的就是 compose 主機名時照上一條判。**Jellyfin 例外**：沒跑過初始精靈的 Jellyfin 不論位址是誰填的都算套件內——它上面沒有任何人的帳號可以蓋掉（plan §9.3 第 2 步）。
 - compose 用 profiles：`.env` 的 `COMPOSE_PROFILES=jellyfin,qbittorrent,prowlarr` 預設全起；已有某服務的人把它從清單拿掉即可。
 - 預置只在設定檔不存在時寫入一次，之後使用者在各服務介面改什麼都行；健康檢查發現關鍵設定漂移時提供「還原建議設定」按鈕。精靈的 qBittorrent 步驟會列出「已預置的項目」。
 - 每顆按鈕都顯示「將會做什麼」與執行結果，失敗給出可複製的手動步驟。
@@ -631,7 +632,7 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 
 - **唯一的硬規則**：Berth、qBittorrent、Jellyfin 三個容器把同一個宿主父目錄掛在**相同的容器路徑**，且下載目錄與媒體庫目錄都在它底下。路徑字串不必是 `/data`（`/volume1/media` 掛成 `/volume1/media` 也可以）；Berth 的 incomplete / complete 根目錄可設定，媒體庫路徑讀自 Jellyfin。
 - **既有 Jellyfin 不搬媒體庫**：Jellyfin 的項目 ID 由路徑算出，改路徑等於全部變成新項目、觀看紀錄歸零。做法是用 Jellyfin 的「一個媒體庫多個路徑」：Berth 按鈕以 `POST /Library/VirtualFolders/Paths` 為既有媒體庫**加**一個 Berth 用的路徑（§20.7），Route 指向新路徑；舊媒體原地不動，在 Berth 只是 unmanaged 檔案。
-- **既有 qBittorrent 不搬舊種**：使用者多加一個掛載，Berth 用自己的 `berth-*` category 與新的 save path；舊 torrent 留在原目錄，Berth 忽略非自己分類的 torrent。全域 autoTMM 關閉也無妨，Berth 送單時逐個 torrent 指定 `autoTMM=true`。temp path 未啟用只給警告，不阻擋。
+- **既有 qBittorrent 不搬舊種、不改全域偏好**：使用者多加一個掛載，Berth 用自己的 `berth-*` category 與新的 save path；舊 torrent 留在原目錄，Berth 忽略非自己分類的 torrent。全域的 save path、temp path、autoTMM 一個都不寫（M4 票 05；Sonarr / Radarr 對下載器同樣只用分類）——改了它們，使用者不經 Berth 加的 torrent 就會落進 Berth 的目錄。全域 autoTMM 關閉也無妨，Berth 送單時逐個 torrent 指定 `autoTMM=true`。temp path 未啟用只給警告，不阻擋。
 - **健康檢查會擋下的情況**：qBittorrent 回報的 save path 在 Berth 看不到；Jellyfin 的媒體庫路徑在 Berth 看不到；兩者在 Berth 內是不同掛載（`link()` 回 `EXDEV`）；qBittorrent 低於 4.4；Jellyfin 低於 12.0（說出目前版本，附升級注意：先完整備份、移除第三方插件、升級後完整掃描、不能降級，§20.9）；媒體庫掛 TVDB 插件（警告，M2 票 09c 起是一件 `library_uses_tvdb` Issue，§9.1）。每項附「哪個容器少了哪個掛載」的 compose 修正片段。
 - **跨主機驗證**：Berth 在 Route 目標寫一個探測檔，再以 `POST /Environment/ValidatePath` 請 Jellyfin 確認看得到同一路徑（§20.7）；Jellyfin 在別台機器而路徑不一致會立刻現形。
 - **不支援**：Jellyfin 10.x（2026-09-15 起只支援 12 以上，§19）；Berth 與 qBittorrent 不在存放媒體的同一台機器（硬鏈接做不到）；remote path mapping（第一階段不做，見 §18）。
@@ -713,7 +714,7 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 | 沒有 AI 時把人工降到最少（2026-09-24） | 播出日比對、片長驗證與 Jellyfin 回驗放進 M3（不需要 AI；同日更正：抓集數算錯的是播出日比對，Jellyfin 回驗抓不到——它認集數靠 Berth 取的檔名）；里程碑改為 **M4 巡檢與通知 → M5 AI 核心**；審核頁加同一個 Job / RSS Series 的批次確認，以及 audit 段的整段確認（M3 前的修補；整段確認是同日試跑時加的）；已確認的 RSS Series 之後的 medium 入庫不再進 audit 清單，改由回驗與每日檢查守著 | §14、§15、plan §11.4–§11.6 |
 | RSS 自動綁定送進哪一條 Route（2026-09-26） | M3 驗收時發現預設安裝的 TV 與 Anime 兩條 Route 都收劇集，自動綁定一律停在 `route_ambiguous`。**Feed 帶一條 Route**：照 Sonarr Import List 的 Root Folder，加 Feed 時選（兩條以上啟用中才問），收得下那部作品的 Route 不只一條時用它；沒選的留給人。不採「作品上次用的 Route」：追新番時作品多半沒送過單。 | §15「綁定」、plan §2.4 `rss_feeds.route_id`、§6 rss |
 | 精靈改為 Jellyfin 優先（2026-09-26） | 使用者試跑時看不懂第 1 步「建立 Berth 管理員」：Berth 沒有自己的帳號（§11），這組帳密卻身兼精靈門鎖、套件內 Jellyfin 管理員、qBittorrent 與 Prowlarr 的介面登入三職；接既有服務時它在精靈結束後登不進 Berth，唯一的用途是門鎖。**照 Seerr：第 1 步就是連 Jellyfin**——套件內建立 Jellyfin 管理員並說明 Berth 用 Jellyfin 的帳號，既有的以它的管理員登入；成功的人就是擁有者，精靈從那一刻起要登入。安全面不變（誰先到誰建立，Jellyfin 的啟動精靈與 Seerr 相同）。其他服務每一個泊位「偵測 → 連線或登入 → 檢查」，套件內 qBittorrent / Prowlarr 的介面帳密在它們自己的泊位、預設帶入擁有者那一組 | §16.3、plan §9.3；M4 票 06、07 |
-| 既有服務不被改動（2026-09-26） | `berth-lab` 實測：使用者自己的 Prowlarr 還沒加索引站就被判成套件內，登入被覆寫成第 1 步的帳密；既有 qBittorrent 的全域下載路徑被改成 Berth 的目錄。**只有 compose 主機名上探到的才可能是套件內，使用者填的位址一律既有；既有服務不寫帳密、不改全域偏好，只用 Berth 自己的分類**（Sonarr / Radarr 對下載器的慣例） | §16.3、§16.4、plan §9.3、§9.5；M4 票 05 |
+| 既有服務不被改動（2026-09-26） | `berth-lab` 實測：使用者自己的 Prowlarr 還沒加索引站就被判成套件內，登入被覆寫成第 1 步的帳密；既有 qBittorrent 的全域下載路徑被改成 Berth 的目錄。**只有 compose 主機名上探到的才可能是套件內，使用者填的位址一律既有（Jellyfin 例外：沒跑過初始精靈的那一台沒有任何人的帳號可蓋，M4 票 05 定）；既有服務不寫帳密、不改全域偏好，只用 Berth 自己的分類**（Sonarr / Radarr 對下載器的慣例） | §16.3、§16.4、plan §9.3、§9.5；M4 票 05 |
 | 第一批審核證據夠強時跳過（2026-09-26） | 使用者試跑：第一批每一集都對，逐一展開看不出要在意什麼。**季集照字面對應、理由只限白名單、播出日比對拿得到而且通過、那一集剛播的第一批不再掛 audit，系統自動確認那個 RSS Series**（M4 票 11 定案：「規則層有把握」改成白名單加剛播，理由在 §15）；有一列不符合就照舊整批等人，審核頁整組說一句話。split-cour 與重數仍要停住（M3 驗收那一條） | §15、plan §11.4；M4 票 11 |
 | 精靈與探索的試跑回饋（2026-09-26） | 使用者試跑提出、同意照做：媒體庫路徑泊位進入時不自動跑（它會建分類、寫測試檔），每條 Route 收成一列、失敗才展開；索引站推薦清單預設不勾、先測試通過才勾得起來、加入後逐站 / 全部試搜、另列 Prowlarr 的全部公開站（私有站連到 Prowlarr 自己加），設定頁同樣不自動檢查；**精靈剛完成或媒體庫裡還沒有 Berth 入庫的東西時落在探索**，其餘照 2026-09-24 落在媒體庫（M4 票 10 實作：「還沒有」＝這個人看得到的媒體庫裡帳本一筆都沒有，下載中不算；精靈剛完成時必然如此，不另判；`?redirect=` 照舊優先）；作品頁加「下載」段列出這部作品的 torrent 與檔案 | plan §7、§9.3；M4 票 08、09、10、12 |
 | RSS Series 保留、以作品呈現（2026-09-26） | 使用者試跑時問 Series 有沒有必要（當季播完就永遠留著、畫面上是 Mikan 的數字 id）。**保留**：它是「番組 × 字幕組 → 作品、Route、季號與 offset、第一批」的記憶，拿掉就得每一筆 Item 重認作品、修正沒地方存（AutoBangumi 同樣每個番組 × 字幕組一筆紀錄）。**改的是呈現**：RSS 頁以作品分組、顯示番組與字幕組名稱、「最近」是最近發佈的一筆、展開看得到它的 Item；完結的自動收進「已完結」（紀錄不刪）；Series 層排除收進進階 | §15、plan §2.4、§6、§7；M4 票 13 |

@@ -38,7 +38,7 @@ from berth.domain import (
 )
 from berth.models import IndexerSettings, SetupSettings, SetupStep
 from berth.models.types import utcnow
-from berth.services.clients import BUNDLED_PROWLARR_URL, ServiceClientFactory
+from berth.services.clients import BUNDLED_PROWLARR_URL, ServiceClientFactory, same_host
 from berth.services.commands import Effect, command
 from berth.services.settings import read_settings, update_settings, write_settings
 from berth.services.steps import StepView, message, step_views
@@ -213,7 +213,12 @@ async def connect_indexer(
     base_url: str,
     api_key: str,
 ) -> IndexerSetupStatus:
-    """既有路徑的「測試」：先存再測，測不過也存（與第 2 步的連線表單同一個規矩）。"""
+    """既有路徑的「測試」：先存再測，測不過也存（與第 2 步的連線表單同一個規矩）。
+
+    **填的不是 compose 主機名就是既有**（M4 票 05，`setup.connect_service` 的同一條規則）：套件內
+    Prowlarr 連不上時泊位照樣給這張表單，使用者在這裡填的是他自己的 Prowlarr。只存位址的話，
+    第 2 步留下的「套件內」會讓預設站與 `config/host` 對著他那一台跑。
+    """
     settings = await read_settings(session, IndexerSettings)
     settings.kind = kind.value
     settings.base_url = base_url
@@ -225,6 +230,28 @@ async def connect_indexer(
     def record(latest: SetupSettings) -> None:
         latest.indexer.steps = [step]
         latest.indexer.skipped = False
+        probe = latest.services.get(ServiceKind.PROWLARR)
+        if (
+            kind is IndexerKind.PROWLARR
+            and probe is not None
+            and not same_host(base_url, BUNDLED_PROWLARR_URL)
+        ):
+            # 釘住（`configured`），第 2 步的重探才不會把它探回 compose 主機名上的那一台。
+            latest.services = {
+                **latest.services,
+                ServiceKind.PROWLARR: probe.model_copy(
+                    update={
+                        "origin": ServiceOrigin.EXISTING,
+                        # 測不過就留著原本的理由：換成 `connected` 是說謊。
+                        "reason": DetectionReason.CONNECTED
+                        if step.status is StepStatus.OK
+                        else probe.reason,
+                        "base_url": base_url,
+                        "configured": True,
+                        "checked_at": utcnow(),
+                    }
+                ),
+            }
 
     # 測試在路上的那幾秒裡，第 7 步可能已經寫進同一組設定（M2 票 15）。
     setup = await update_settings(session, SetupSettings, record)

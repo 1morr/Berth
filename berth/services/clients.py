@@ -10,6 +10,7 @@ import os
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Protocol
+from urllib.parse import urlsplit
 
 from berth.adapters.budget import BudgetedFetcher, RequestBudget
 from berth.adapters.indexer import IndexerSearch
@@ -104,6 +105,17 @@ def bundled_targets(config: Config) -> dict[ServiceKind, str]:
         ServiceKind.QBITTORRENT: f"http://qbittorrent:{config.qbittorrent_webui_port}",
         ServiceKind.PROWLARR: BUNDLED_PROWLARR_URL,
     }
+
+
+def same_host(typed: str, compose: str) -> bool:
+    """使用者填的位址是不是那個 compose 位址：主機名與 port 相同就是同一台，scheme、尾斜線、
+    大小寫不算差別（M4 票 05：只有 compose 主機名上的才可能是套件內）。"""
+    a, b = urlsplit(typed), urlsplit(compose)
+    try:
+        return (a.hostname, a.port) == (b.hostname, b.port)
+    except ValueError:
+        # port 不是數字：那一條本來就連不上，更不會是 compose 主機名。
+        return False
 
 
 def build_setup_probes(config: Config, environ: Mapping[str, str] | None = None) -> SetupProbes:

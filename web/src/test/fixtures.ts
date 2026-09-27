@@ -147,6 +147,7 @@ export function qbittorrentSetup(overrides: Partial<QbittorrentSetup> = {}): Qbi
     steps: [],
     temp_path_warning: false,
     sets_password: true,
+    writes_preferences: true,
     error: '',
     ...overrides,
   }

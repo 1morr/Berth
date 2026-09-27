@@ -171,6 +171,7 @@ async def post_service(
                 password=body.password,
             ),
             factory,
+            compose_hosts=bundled_targets(config),
         ),
         config,
     )

@@ -28,7 +28,7 @@ from berth.domain import DetectionReason, IndexerKind, ServiceKind, ServiceOrigi
 from berth.models import IndexerSettings, JellyfinSettings, QbittorrentSettings
 from berth.services.settings import read_settings
 from berth.services.setup import ServiceConnection, connect_service, read_status
-from tests.integration.factories import answered
+from tests.integration.factories import COMPOSE, answered
 
 
 class FakeClientFactory:
@@ -96,6 +96,7 @@ async def test_an_existing_jellyfin_reports_its_version(session: AsyncSession) -
         ServiceKind.JELLYFIN,
         ServiceConnection(base_url="http://nas:8096"),
         factory,
+        compose_hosts=COMPOSE,
     )
 
     # 判定用的是服務自己報的事實（跑過初始精靈），不是「他填了表單所以算既有」。
@@ -117,6 +118,7 @@ async def test_qbittorrent_credentials_are_verified_and_stored(session: AsyncSes
         ServiceKind.QBITTORRENT,
         ServiceConnection(base_url="http://nas:8080", username="admin", password="secret"),
         factory,
+        compose_hosts=COMPOSE,
     )
 
     assert verdict(status, ServiceKind.QBITTORRENT) == (
@@ -142,6 +144,7 @@ async def test_a_password_free_qbittorrent_is_not_asked_to_log_in(session: Async
         ServiceKind.QBITTORRENT,
         ServiceConnection(base_url="http://nas:8080"),
         factory,
+        compose_hosts=COMPOSE,
     )
 
     assert qbittorrent.logins == []
@@ -158,6 +161,7 @@ async def test_wrong_qbittorrent_credentials_report_auth_required(session: Async
         ServiceKind.QBITTORRENT,
         ServiceConnection(base_url="http://nas:8080", username="admin", password="wrong"),
         factory,
+        compose_hosts=COMPOSE,
     )
 
     assert verdict(status, ServiceKind.QBITTORRENT) == (
@@ -178,6 +182,7 @@ async def test_a_hand_pasted_prowlarr_key_is_stored_and_used(session: AsyncSessi
         ServiceKind.PROWLARR,
         ServiceConnection(base_url="http://prowlarr:9696", api_key="pasted"),
         factory,
+        compose_hosts=COMPOSE,
     )
 
     assert verdict(status, ServiceKind.PROWLARR) == (
@@ -206,6 +211,7 @@ async def test_a_bundled_prowlarr_stays_bundled_after_pasting_its_key(
         ServiceKind.PROWLARR,
         ServiceConnection(base_url="http://prowlarr:9696", api_key="pasted"),
         FakeClientFactory(),
+        compose_hosts=COMPOSE,
     )
 
     assert verdict(status, ServiceKind.PROWLARR) == (
@@ -221,6 +227,7 @@ async def test_prowlarr_without_a_pasted_key_still_asks_for_one(session: AsyncSe
         ServiceKind.PROWLARR,
         ServiceConnection(base_url="http://prowlarr:9696"),
         FakeClientFactory(),
+        compose_hosts=COMPOSE,
     )
 
     assert verdict(status, ServiceKind.PROWLARR) == (
@@ -241,6 +248,7 @@ async def test_a_failed_test_still_keeps_what_the_user_typed(session: AsyncSessi
         ServiceKind.JELLYFIN,
         ServiceConnection(base_url="http://typo:8096"),
         factory,
+        compose_hosts=COMPOSE,
     )
 
     assert verdict(status, ServiceKind.JELLYFIN) == (
@@ -269,7 +277,11 @@ async def test_a_typed_address_is_not_given_the_startup_window(
     factory = FakeClientFactory(jellyfin=FakeJellyfinClient(error=error))
 
     status = await connect_service(
-        session, ServiceKind.JELLYFIN, ServiceConnection(base_url="http://nas:8096"), factory
+        session,
+        ServiceKind.JELLYFIN,
+        ServiceConnection(base_url="http://nas:8096"),
+        factory,
+        compose_hosts=COMPOSE,
     )
 
     assert verdict(status, ServiceKind.JELLYFIN) == (ServiceOrigin.EXISTING, reason)
@@ -305,6 +317,7 @@ async def test_a_connected_service_is_not_reprobed_by_the_polling_loop(
         ServiceKind.JELLYFIN,
         ServiceConnection(base_url="http://nas:8096"),
         nas,
+        compose_hosts=COMPOSE,
     )
 
     # qBittorrent 還在啟動，所以輪詢會再打一次 detect。
@@ -338,6 +351,7 @@ async def test_connecting_one_service_leaves_the_others_alone(session: AsyncSess
         ServiceKind.JELLYFIN,
         ServiceConnection(base_url="http://nas:8096"),
         FakeClientFactory(),
+        compose_hosts=COMPOSE,
     )
 
     status = await read_status(session)

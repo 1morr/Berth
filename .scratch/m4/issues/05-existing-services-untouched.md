@@ -1,6 +1,6 @@
 # 05 — 既有服務不被改動：判定規則與 qBittorrent 全域偏好
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Blocked by:** None — can start immediately（排在 06 之前：06 會重寫第 1 步，這張先把會毀資料的那條堵住）
 
@@ -38,10 +38,17 @@
 
 ## 驗收
 
-- [ ] 兩條 repro 修前紅、修後綠（貼輸出）；雙向：compose 主機名上的空 Prowlarr / 免密 qBittorrent 仍判套件內
-- [ ] 既有 qBittorrent 走完第 4、5 步後全域 `save_path` / `temp_path` 不變，送單照樣落在 Berth 的分類路徑（整合測試）
-- [ ] `berth-lab/reset.sh existing` 之後用 playwright 走一次精靈：舊 Prowlarr 的登入帳號、舊 qBittorrent 的預設下載路徑都沒變
-- [ ] plan §9.3、§9.5 與 brief §16.3、§16.4 同步；CHANGELOG 一條
-- [ ] lint、type、test 綠燈
+- [x] 兩條 repro 修前紅、修後綠（貼輸出）；雙向：compose 主機名上的空 Prowlarr / 免密 qBittorrent 仍判套件內
+- [x] 既有 qBittorrent 走完第 4、5 步後全域 `save_path` / `temp_path` 不變，送單照樣落在 Berth 的分類路徑（整合測試）
+- [x] `berth-lab/reset.sh existing` 之後用 playwright 走一次精靈：舊 Prowlarr 的登入帳號、舊 qBittorrent 的預設下載路徑都沒變
+- [x] plan §9.3、§9.5 與 brief §16.3、§16.4 同步；CHANGELOG 一條
+- [x] lint、type、test 綠燈
 
 ## Comments
+
+- 2026-09-27 實作（session 紀錄見 progress.md）。repro 修前的輸出：`test_a_typed_prowlarr_without_indexers_is_existing_and_keeps_its_login`、`test_a_typed_password_free_qbittorrent_is_existing_and_gets_no_password` 都在判定紅——`At index 0 diff: <ServiceOrigin.BUNDLED: 'bundled'> != <ServiceOrigin.EXISTING: 'existing'>`（`2 failed, 2 passed`）；修後 `7 passed`（含 code-review 補的 `connect_indexer` 那一條與第 4、5 步、漂移兩條）。
+- code-review 沒處理的：
+  - `qbittorrent_target` 與 `indexer._target` 在沒有判定時預設 `BUNDLED`。正常流程裡第 4、6 步之前一定有判定，寫不出失效條件，沒改；判定缺失、位址卻已存的舊資料才會走到。
+  - 測試的 `tests/integration/factories.COMPOSE` 手寫了 qBittorrent 的預設 port 8080；`verdict()` 小工具在三個測試檔各有一份。
+  - `QbittorrentStep.tsx` 裡 `writes ? … : …` 出現七次；既有那一台的畫面長大時再拆成自己的元件。
+- `berth-lab`：`existing/docker-compose.yml` 的 Berth image 改成這一張 build 的 `berth:m4-05`；`CREDENTIALS.md` 的 Prowlarr API key 是 reset 之前那一把（reset 之後 Prowlarr 重新產生，要到它的「設定 → 一般」抄）；精靈第 1 步的帳密記在 `.creds.env` 的 `BERTH_*`。

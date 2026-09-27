@@ -72,7 +72,7 @@ from berth.services.jellyfin import (
     library_slug,
     tvdb_fetchers,
 )
-from berth.services.qbittorrent import qbittorrent_target, sign_in
+from berth.services.qbittorrent import qbittorrent_target, sign_in, writes_preferences
 from berth.services.settings import read_settings
 from berth.services.steps import StepView, message, step_views
 
@@ -647,14 +647,14 @@ async def _run_checks(
     qbittorrent_settings = await read_settings(session, QbittorrentSettings)
     jellyfin_settings = await read_settings(session, JellyfinSettings)
     setup = await read_settings(session, SetupSettings)
-    _, qbittorrent_url = qbittorrent_target(setup, qbittorrent_settings)
+    qbittorrent_origin, qbittorrent_url = qbittorrent_target(setup, qbittorrent_settings)
     qbittorrent = factory.qbittorrent(qbittorrent_url)
     jellyfin = factory.jellyfin(jellyfin_settings.base_url, token=jellyfin_settings.api_key)
     try:
         await sign_in(qbittorrent, qbittorrent_settings)
         for plan_row, route in zip(planned, routes, strict=True):
             previous = RouteHealth.model_validate(route.health_detail_json or {})
-            health = await _check(plan_row, route, qbittorrent, jellyfin)
+            health = await _check(plan_row, route, qbittorrent, qbittorrent_origin, jellyfin)
             passed = all(row.status is not StepStatus.FAILED for row in health.checks)
             health.checked_at = moment
             # 沒過就留住上一次成功的時間，別讓它看起來從來沒通過（brief §16.2）。
@@ -821,10 +821,11 @@ async def _check(
     plan_row: _Planned,
     route: Route,
     qbittorrent: QbittorrentClient,
+    qbittorrent_origin: ServiceOrigin,
     jellyfin: JellyfinClient,
 ) -> RouteHealth:
     """跑完一個 Route 的檢查序列。第一條斷掉之後的檢查一律 `pending`。"""
-    checker = _Checker(plan_row, qbittorrent, jellyfin)
+    checker = _Checker(plan_row, qbittorrent, qbittorrent_origin, jellyfin)
     checks: list[SetupStep] = []
     stopped = False
     for check in RouteCheck:
@@ -844,10 +845,12 @@ class _Checker:
         self,
         plan_row: _Planned,
         qbittorrent: QbittorrentClient,
+        qbittorrent_origin: ServiceOrigin,
         jellyfin: JellyfinClient,
     ) -> None:
         self._plan = plan_row
         self._qbittorrent = qbittorrent
+        self._qbittorrent_origin = qbittorrent_origin
         self._jellyfin = jellyfin
         self._target = Path(plan_row.target_path)
         self._save_path = Path(plan_row.save_path)
@@ -884,19 +887,25 @@ class _Checker:
         return (StepStatus.OK if outcome.created else StepStatus.SKIPPED), detail
 
     async def _download_path(self) -> tuple[StepStatus, str]:
-        """檢查一：**qBittorrent 報的**兩條路徑，Berth 這個容器看得到（plan §9.5）。
+        """檢查一：**qBittorrent 報的**路徑，Berth 這個容器看得到（plan §9.5）。
 
-        兩條都現查那台服務：全域 `save_path` 讀 `app/preferences`，category 的那條用上一步
-        `torrents/categories` 回報的值。讀不到偏好也是這一條的紅燈——把它吞掉會讓這一步在
-        「其實什麼都沒驗到」的情況下變綠。
+        category 的那條用上一步 `torrents/categories` 回報的值。套件內那一台另外現查全域
+        `save_path`（`app/preferences`）：它在第 4 步被設成 Berth 的 complete 根目錄，讀不到偏好
+        也是這一條的紅燈——把它吞掉會讓這一步在「其實什麼都沒驗到」的情況下變綠。**既有的那一台
+        不看全域**（M4 票 05）：那是使用者自己的預設路徑，Berth 不寫它、送單也不落在那裡
+        （逐個 torrent `autoTMM=true` 走分類），它 Berth 看不看得到與 Berth 無關。
         """
+        category_path = self._reported_save_path or str(self._save_path)
+        if not writes_preferences(self._qbittorrent_origin):
+            _visible(category_path)
+            return StepStatus.OK, category_path
         preferences = await self._qbittorrent.preferences()
         global_path = str(preferences.get("save_path", "") or "")
         if not global_path:
             raise _CheckFailedError("qBittorrent did not report a global save_path")
         _visible(global_path)
-        _visible(self._reported_save_path or str(self._save_path))
-        return StepStatus.OK, f"{global_path} · {self._reported_save_path or self._save_path}"
+        _visible(category_path)
+        return StepStatus.OK, f"{global_path} · {category_path}"
 
     async def _library_path(self) -> tuple[StepStatus, str]:
         """檢查二：**向 Jellyfin 現查**媒體庫路徑，逐一確認 Berth 看得到（plan §9.5）。

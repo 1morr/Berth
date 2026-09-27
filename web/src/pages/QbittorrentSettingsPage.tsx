@@ -139,7 +139,8 @@ function DiskThreshold() {
  * qBittorrent 的建議設定漂移（brief §16.3）。
  *
  * 剖面是一張逐鍵的差異表（鍵 / 現值 / 建議值），不是散文——鍵名用 `app/setPreferences`
- * 的原字串，使用者在 qBittorrent 自己的介面上也找得到它（票 08 的決定）。
+ * 的原字串，使用者在 qBittorrent 自己的介面上也找得到它（票 08 的決定）。既有的那一台沒有
+ * 漂移可言（M4 票 05）：它的全域偏好是使用者的，這一區只說 Berth 不改它。
  */
 function Drift({
   drift,
@@ -169,7 +170,11 @@ function Drift({
         </div>
       )}
 
-      {drift?.reachable && (
+      {drift?.reachable && !drift.writes_preferences && (
+        <p className="max-w-prose text-xs text-ink-dim">{t('settings.drift.existing')}</p>
+      )}
+
+      {drift?.reachable && drift.writes_preferences && (
         <>
           <p className="text-xs text-ink-dim">
             {changed.length === 0

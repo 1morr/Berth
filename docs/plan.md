@@ -598,7 +598,7 @@ WebUI\AuthSubnetWhitelist=172.28.0.2/32
 
 ### 9.3 精靈流程
 
-> **2026-09-26 改（brief §19「精靈改為 Jellyfin 優先」「既有服務不被改動」「精靈與探索的試跑回饋」）**：第 1 步改為連 Jellyfin、成為擁有者；使用者填的位址一律既有；第 5 步不自動跑；第 6 步先測再勾。下文是改之前的樣子，M4 票 05–09 各自改寫自己那一段。
+> **2026-09-26 改（brief §19「精靈改為 Jellyfin 優先」「既有服務不被改動」「精靈與探索的試跑回饋」）**：第 1 步改為連 Jellyfin、成為擁有者；使用者填的位址一律既有；第 5 步不自動跑；第 6 步先測再勾。下文是改之前的樣子，M4 票 05–09 各自改寫自己那一段（票 05 已改：第 2 步的判定規則、第 4 步）。
 
 每一步都是冪等的 `services/setup.py` 命令；精靈跑完之後設定頁呼叫的是同一批命令（票 06i）。**來源是逐服務判斷的**（brief §16.3）：每個服務不是「套件內」就是「既有」，三個服務可任意組合。
 
@@ -612,10 +612,11 @@ WebUI\AuthSubnetWhitelist=172.28.0.2/32
    - 「連得上」不等於「有結論」：從 `COMPOSE_PROFILES` 拿掉的服務立刻就有結論（既有），但 Berth 還不知道它在哪裡。判定帶一個 `resolved` 旗標（`not_deployed` / `unreachable` / `starting` / `auth_required` / `protocol_mismatch` / `api_key_missing` 都是**未解決**），全部解決才離得開第 2 步——否則精靈會跳過那張使用者唯一能填位址的表單。前端的信號色讀同一個旗標，不另外維護一份理由清單。
    - 判定一出來伺服器就把步驟推到 3，但**畫面停在第 2 步**等使用者按「前往泊位 1」（它去的是泊位 1，不是「後端目前那一步」——票 06d 修掉的 bug）。這是前端的覆寫，不是後端的游標；規則見本節末的〈前端的導覽〉。
    - 既有服務按「測試連線」時，連線資訊先存進它平常住的 `settings.services.*` 再測——測不過也存，使用者才能改一個欄位再按一次。
+   - **使用者填的位址一律既有，除非它就是 compose 主機名**（M4 票 05，brief §19 2026-09-26「既有服務不被改動」）：`services.setup.connect_service` 拿 `bundled_targets` 比主機名與 port，一樣的才照上面的規則判（讀不到唯讀掛載的套件內 Prowlarr 貼上 key 之後仍是套件內，票 08 的預設站對它才會跑）；其餘的 qBittorrent 免密可進、Prowlarr 沒有索引站都判既有，理由 `connected`（Prowlarr 的細節是站數 `0`）。第 6 步的連線表單（套件內 Prowlarr 連不上時也給，`indexer.connect_indexer`）走同一條規則：填的不是 compose 主機名，就把 Prowlarr 的判定改成既有並釘住。原因：「沒有索引站」「免密可進」只說得出服務還沒被設過什麼，說不出它是誰的——`berth-lab` 裡使用者自己的空 Prowlarr 被判成套件內，第 6 步就以第 1 步的帳密 `PUT config/host` 覆寫它的登入並重啟；開了「本機 / 子網免驗證」的舊 qBittorrent 同理會被設 WebUI 密碼。**Jellyfin 例外**：使用者填的位址上是一台 `StartupWizardCompleted=false` 的 Jellyfin 仍判套件內——還沒跑過初始精靈的 Jellyfin 上沒有任何使用者，代建管理員不會蓋掉任何人的帳號，而那一台除了 Berth 代跑也沒有別的路接進來（票 06 重寫這一步時沿用這條規則）。
 3. **Jellyfin**：**先看版本**——低於 12.0 就停在這一步，說出目前版本與升級注意（brief §16.4、§19、§20.9）。過得了閘門之後：套件內 → §9.4 全自動；既有 → 登入、建立 API key、列出媒體庫與各自路徑。
    - **套件內的媒體庫由使用者列**（票 06f，brief §19；Jellyfin 啟動精靈「新增媒體庫」的慣例：內容類型 + 顯示名稱 + 資料夾）：按「開始靠泊」之前是一張可編輯的清單（06f 放在剖面，06h 搬進工作面、排在「開始靠泊」之前：它是這一步的輸入），預設 Movies・電影、TV・劇集、Anime・劇集三列，可以改名、改類型、改資料夾、刪列、加列，至少一列。類型只有電影與劇集（Berth 的 `SUPPORTED_TYPES`）；資料夾是 `library_root` 底下的一層（不能有 `/`、`\`、不能是 `.`、`..`，也不能有 Windows 不收的字元），名稱是 ASCII 時由它推導（照 `library_slug`），不是 ASCII 時要使用者填；名稱與資料夾各自不可重複（不分大小寫）。規則在 `services.jellyfin.check_bundled_libraries`，前端 `web/src/setup/libraryRules.ts` 用同一組在送出之前擋。
    - 清單存在 `settings.setup.jellyfin.bundled`（`PUT /setup/jellyfin/bundled`，拒絕是 `BundledLibraryRefusal` 帶列號）：清單停手就存，按下靠泊之前再存一次，關掉瀏覽器回來還在。**已經在 Jellyfin 建好的列（第 3 步最後一次讀到同名的媒體庫）鎖住**：bootstrap 以名稱認媒體庫，改了名重跑會多建一個指向同一個資料夾的，刪了 Berth 也不會去刪 Jellyfin 的——改名與刪除要去 Jellyfin，後端回 `built_changed`。靠泊之後加的列照樣建得出來，重跑只建它們。精靈跑完之後新增媒體庫照舊：在 Jellyfin 建好，再到 `/settings/routes` 加 Route。**沒有安裝插件的按鈕**（票 14b）：12.x 原生合併多版本，Berth 不碰別人的插件，也就不會重啟別人的 Jellyfin。
-4. **qBittorrent**：顯示建議偏好與現值的差異（§8.1），按「套用」；套件內另設密碼；既有服務的 temp path 未啟用只警告。
+4. **qBittorrent**：顯示建議偏好與現值的差異（§8.1）。**套件內**按「套用」寫有差異的鍵、另設密碼。**既有**一個全域鍵都不寫（M4 票 05，照 Sonarr / Radarr 對下載器只用分類的慣例）：剖面照樣逐鍵列現值與套件內的建議值、標明「Berth 不會寫入」，按鈕只是確認連得上、版本夠新，五條纜繩記成 `skipped`、細節是它自己的現值（`QbittorrentSetupStatus.writes_preferences` 是 `false`，畫面照它換標題、剖面標題與按鈕）；temp path 未啟用只警告。Berth 的路徑全靠分類（建立時帶 save path）與逐個 torrent 的 `autoTMM=true`，所以全域 `save_path` / `temp_path` / `temp_path_enabled`、`auto_tmm_enabled`、`category_changed_tmm_enabled` 動了會改掉使用者不經 Berth 加的 torrent 落在哪裡，而 Berth 自己用不到它們。健康檢查的漂移（`drifted_keys`）與設定頁的「還原建議設定」同理只看套件內的那一台。
 5. **媒體庫與 Route**（票 06d 從第 7 步移到 qBittorrent 之後：它只依賴 Jellyfin 與 qBittorrent——第 1 條建分類、第 2 條讀下載路徑——與索引站、TMDB 無關；掛載設錯是最常卡住的地方，越早知道越好）：套件內 Jellyfin → 第 3 步讀回來的每一個電影或劇集媒體庫自動各建一個 Route（預設三列就是 `movies` / `tv` / `anime`；slug 照舊由媒體庫名稱算，使用者自取的資料夾不影響它），寫入目標取自 **Jellyfin 回報的** `locations`，**走到這一格就自動跑**（前端在「後端正停在第 5 步、一條 Route 都沒有」時送一次，回頭看不重跑，要重跑有按鈕；請求沒走完才把鍵還給使用者）——那裡沒有要選的東西，按鈕只是儀式；既有 Jellyfin → 使用者勾選媒體庫，每個媒體庫可「加入 Berth 路徑」（§9.5，就地確認，與第 3 步同一顆）或在既有路徑中選寫入目標；預選的是 Berth 路徑（加過的話），否則只有一條路徑時是那一條（brief §4.3，票 06h）。目標只能從那個媒體庫回報的路徑裡選，送別的路徑回 422。每個 Route 立即建立 qBittorrent category 並跑 §9.5 的五項檢查；**每一條都綠燈**才走得到第 6 步——紅的那個 Route 送單一定失敗（brief §4.4）。**重跑只新增、不改不刪**（票 14，使用者拍板）：已經有 Route 的媒體庫在勾選表上鎖住、它的選擇略過，slug 與整張表比；**寫入目標已經被別的 Route（或同一批前面的選擇）佔用的選擇也略過**，不回 422——與前一條是同一條只新增規則，套件內的媒體庫自動全勾，舊 Route 的 key 一旦對不上（沒有 `ItemId`、媒體庫又改了名），回 422 會讓重跑永遠卡住（票 14a）。重跑的意思只剩「補上新勾的、全部重驗」。精靈跑完之前新建的 Route 直接啟用（紅著就擋完成）；跑完之後重跑新建的**先停用建立，檢查綠了才啟用**（票 14a：先啟用再關掉紅的，檢查跑完之前的那幾秒裡送單選得到還沒驗過的 Route）。重讀既有 Route、`_plan` 與插入在同一把寫鎖裡。認媒體庫用 `ItemId`（沒有 id 的舊資料才用名字）。選錯了的出路是每條 Route 底下明確的刪除（`DELETE /setup/routes/{id}`，被引用時拒絕）；精靈跑完之後在 `/settings/routes` 逐條管理。
 6. **索引站**（泊位 4；票 06e 起與 TMDB 各是一個泊位，每一格一個服務）：套件內 → 勾選預設公開站清單（預設全勾）：Nyaa.si、dmhy、Anime Tosho、ACG.RIP、Mikan、1337x、YTS、EZTV、The Pirate Bay（AniDex 拿掉了：定義還在，但站從 2026-09-08 起一直回 502，brief §20.7）。每一列顯示語言（`indexer/schema` 的 BCP 47 代碼照 UI 語言換成語言名，`Intl.DisplayNames`）與定義自帶的英文說明（不翻）；Berth 以 `indexer/schema` 取定義、`indexer` 新增（這一支就會連站，成敗即逐站結果）、已經加過的站改用 `indexer/test` 驗一次。**一站失敗不影響其他站**，公開站裡有幾個連不上是常態。勾了「同一組帳密」時另以 `config/host` 設 Prowlarr 介面的 Forms 登入（回 202 後它會自行重啟，要等 `/ping` 回來）。既有 → Prowlarr 位址 + API key，或任意 Torznab 端點 + key（Jackett）；後者以 `?t=caps` 驗證。
    - **加入之後試搜，不要的移除**（票 06e）：Prowlarr 只搜得到已經加入的站，所以流程是「加入 → 試搜 → 移除」。試搜是 `read` 命令 `indexer.search_indexers`（`GET /setup/indexers/search?query=`）：**逐站各發一個** `GET /api/v1/search?indexerIds=<id>`、併發，一站失敗寫在那一站上；回每站筆數與前三筆標題。查詢預設留白——兩種協定都回各站最新的發佈，不必先想一個標題（TMDB 在下一個泊位，這時拿不到趨勢）。既有 Torznab 打它自己的 `t=search`，整個端點算一站。移除是 `indexer.remove_indexer`（`DELETE /setup/indexers/{id}` → Prowlarr `DELETE /api/v1/indexer/{id}`），就地確認，只對套件內、只對預設站（既有的站與使用者在 Prowlarr 自己加的站 Berth 加不回去，回 422）；那一站的加入結果一起拿掉，最後一站也移除時精靈回到第 6 步。
@@ -668,13 +669,13 @@ WebUI\AuthSubnetWhitelist=172.28.0.2/32
 
 - 不搬舊種：Berth 只用自己建立的 `berth-*` category，忽略其他分類的 torrent；舊 torrent 留在原目錄。
 - 使用者若原本只掛 `/downloads`，多加一個父目錄掛載即可；Berth 的 category save path 落在父目錄下。
-- 全域 autoTMM 關閉無妨，送單時逐個 torrent `autoTMM=true`；temp path 未啟用只警告。
+- **不改全域偏好**（M4 票 05）：全域 `save_path`、temp path、autoTMM 都是使用者的，Berth 一個都不寫；送單時逐個 torrent `autoTMM=true`，路徑由 Berth 的分類決定。temp path 未啟用只警告。
 - 版本低於 4.4（API 2.8.4）拒絕接入並提示升級。
 
 **檢查與訊息**（精靈第 5 步與 `health_checker` 共用）。一個 Route 五條纜繩，前一條失敗就不跑下一條——後面的檢查測的會是錯的路徑。`RouteCheck` 是它們的封閉值集合，結果逐條存進 `routes.health_detail_json`。
 
 1. `category`：`torrents/createCategory` 建 `berth-<slug>`（save path 為 `<complete root>/<slug>`）。已存在且路徑相同就跳過；路徑不同 → 回報衝突且**不覆寫**（改 category 路徑會搬走該分類所有 torrent，brief §20.2）。
-2. `download_path`：向 qBittorrent 讀全域 `save_path`（`app/preferences`）與**它回報的**這個 category 的路徑（第 1 步的 `torrents/categories`），逐一 `stat` 確認 Berth 看得到。`stat` 的必須是服務報出來的字串——拿 Berth 自己算出來、而且剛剛才建好的目錄去 `stat` 一定會過，等於沒檢查。全域那一條在第 4 步就已經被設成 Berth 的 complete 根目錄。
+2. `download_path`：**qBittorrent 回報的**這個 category 的路徑（第 1 步的 `torrents/categories`）`stat` 得到；套件內那一台另外讀全域 `save_path`（`app/preferences`）一起 `stat`——它在第 4 步被設成 Berth 的 complete 根目錄。`stat` 的必須是服務報出來的字串——拿 Berth 自己算出來、而且剛剛才建好的目錄去 `stat` 一定會過，等於沒檢查。**既有的那一台不看全域**（M4 票 05）：那是使用者自己的預設路徑，Berth 不寫它、送單也不落在那裡，Berth 看不看得到它與 Berth 無關。
 3. `library_path`：**向 Jellyfin 現查**這個 Route 的媒體庫，它回報的每一條路徑逐一 `stat`。不吃第 3 步存下來的快照——使用者可能在那之後改了路徑或刪了媒體庫。
 4. `probe_visible`：在 Route 目標寫探測檔，`POST /Environment/ValidatePath` `{Path, IsFile: true}` 請 Jellyfin 確認看得到同一條路徑（看得到 204、看不到 404），問完就刪。
 5. `hardlink`：在 `<complete root>/<slug>` 建暫存檔並 `link()` 到 Route 目標，確認同 device、同 inode，之後兩邊都清乾淨（`fs.link_test`）。

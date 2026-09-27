@@ -132,7 +132,7 @@ describe('泊位 2：qBittorrent', () => {
     expect(screen.queryByRole('button', { name: /套用/ })).not.toBeInTheDocument()
   })
 
-  it('既有服務的 temp path 未啟用只是警告，按鈕照樣按得下去', async () => {
+  it('既有服務只列現值與建議值、不寫任何鍵；temp path 未啟用只是警告（M4 票 05）', async () => {
     stubApi({
       [STATUS]: { body: AT_BERTH_TWO },
       [DIFF]: {
@@ -141,6 +141,7 @@ describe('泊位 2：qBittorrent', () => {
           base_url: 'http://nas:8080',
           temp_path_warning: true,
           sets_password: false,
+          writes_preferences: false,
         }),
       },
     })
@@ -148,7 +149,13 @@ describe('泊位 2：qBittorrent', () => {
     renderWithProviders(<SetupPage />)
 
     expect(await screen.findByText(/沒有啟用未完成目錄/)).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '套用這 5 個鍵' })).toBeEnabled()
+    expect(screen.getByRole('heading', { name: '確認你的 qBittorrent', level: 2 })).toBeVisible()
+    // 剖面照樣逐鍵列出，但說的是「不會寫入」，不是「將會寫入」。
+    expect(screen.getByText('你的偏好（Berth 不會寫入）')).toBeInTheDocument()
+    expect(screen.queryByText('將會寫入的鍵')).not.toBeInTheDocument()
+    expect(screen.getByText('/downloads')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /套用/ })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '確認，不改任何設定' })).toBeEnabled()
   })
 
   it('連不上時說得出下一步', async () => {

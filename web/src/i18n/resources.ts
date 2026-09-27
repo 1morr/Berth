@@ -68,8 +68,9 @@ const zhHant = {
           '已經建好的媒體庫要改名、刪除或換路徑，在 Jellyfin 自己的介面上做，Berth 建的也一樣。',
       },
       qbittorrent: {
-        can: '重新檢查並套用建議設定：已經是建議值的鍵標「已經是這樣」，不會再寫一次。',
-        elsewhere: '這五個鍵以外的偏好在 qBittorrent 自己的介面上改，Berth 不碰。',
+        can: '重新檢查：套件內的那一台再套用一次建議設定，已經是建議值的鍵標「已經是這樣」、不會再寫一次；你自己的 qBittorrent 只重新確認連得上，一個鍵都不寫。',
+        elsewhere:
+          '套件內那五個鍵以外的偏好，以及你自己那一台的所有偏好，都在 qBittorrent 自己的介面上改，Berth 不碰。',
       },
       routes: {
         can: '精靈只新增：補上新勾的媒體庫，並重驗每一條 Route 的五條檢查。選錯的那一條在它底下刪掉。',
@@ -341,13 +342,16 @@ const zhHant = {
     },
   },
   qbittorrent: {
-    title: '套用建議的 qBittorrent 設定',
+    title: {
+      bundled: '套用建議的 qBittorrent 設定',
+      existing: '確認你的 qBittorrent',
+    },
     unreachable: '讀不到 qBittorrent 這一步的狀態。確認 Berth 後端還在跑。',
     lede: {
       bundled:
         '這台 qBittorrent 是套件內的，Berth 直接改它的偏好。下面五個鍵是 Berth 送單與入庫要用的，只有與現值不同的才會被寫。',
       existing:
-        '這台 qBittorrent 是你自己的。Berth 只寫下面這幾個鍵，不動其他任何設定，也不碰你既有的 torrent。',
+        '這台 qBittorrent 是你自己的，Berth 不改它的任何偏好，也不碰你既有的 torrent。Berth 送出的 torrent 放進自己的 berth-* 分類（分類帶自己的下載路徑）、逐個開自動管理；你不經 Berth 加的 torrent 照舊落在你自己的預設路徑。下面的建議值只供參考。',
     },
     cutaway: {
       server: '這台 qBittorrent',
@@ -355,9 +359,11 @@ const zhHant = {
       password: 'WebUI 密碼',
       willSet: '將設為第 1 步的帳密',
       diff: '將會寫入的鍵',
+      reference: '你的偏好（Berth 不會寫入）',
       key: '鍵',
       current: '現值',
       recommended: '建議值',
+      bundledValue: '套件內的建議值',
       same: '已經是這樣',
     },
     step: {
@@ -390,6 +396,11 @@ const zhHant = {
     applying: '套用中…',
     rerun: '重新檢查並套用',
     done: '這個泊位的事做完了。qBittorrent 的路徑與自動管理都是 Berth 要的樣子。',
+    confirm: '確認，不改任何設定',
+    checking: '檢查中…',
+    recheck: '重新檢查',
+    doneExisting:
+      '這個泊位的事做完了。Berth 沒有改這台 qBittorrent 的任何偏好，它的下載走自己的分類。',
     requestFailed: '請求沒跑完。Berth 後端可能沒在跑——確認容器狀態後再試一次。',
   },
   indexer: {
@@ -2222,6 +2233,8 @@ const zhHant = {
       restore: '還原建議設定',
       restoring: '還原中…',
       restoreFailed: '寫不進去。qBittorrent 可能不在了，或帳密變了——看上面那一項的原文。',
+      existing:
+        'Berth 不改你這台 qBittorrent 的全域偏好，這裡沒有要還原的東西。Berth 的下載走自己的 berth-* 分類與逐個 torrent 的自動管理，不看全域的預設路徑。',
       unreachable: '連不上 qBittorrent，讀不到它現在的偏好。',
     },
   },
@@ -2768,9 +2781,9 @@ const en: Translations<typeof zhHant> = {
           'Rename, remove or repath libraries that already exist in Jellyfin itself — including the ones Berth created.',
       },
       qbittorrent: {
-        can: 'Check and apply the recommended settings again: keys already at the recommended value show as “already so” and are not written again.',
+        can: 'Check again: the bundled qBittorrent gets the recommended settings applied once more, and keys already at the recommended value show as “already so” and are not written again; your own qBittorrent is only checked for a connection, with no key written.',
         elsewhere:
-          'Preferences other than these five keys are changed in qBittorrent itself; Berth leaves them alone.',
+          'Preferences beyond the five bundled keys, and every preference on your own qBittorrent, are changed in qBittorrent itself; Berth leaves them alone.',
       },
       routes: {
         can: 'The wizard only adds: newly ticked libraries get a route, and every route’s five checks run again. Delete a wrong one underneath it.',
@@ -3061,13 +3074,16 @@ const en: Translations<typeof zhHant> = {
     },
   },
   qbittorrent: {
-    title: 'Apply the recommended qBittorrent settings',
+    title: {
+      bundled: 'Apply the recommended qBittorrent settings',
+      existing: 'Check your qBittorrent',
+    },
     unreachable: 'Cannot read the state of this step. Check that the Berth backend is running.',
     lede: {
       bundled:
         'This qBittorrent came with the bundle, so Berth writes its preferences directly. The five keys below are the ones Berth needs; only the ones that differ get written.',
       existing:
-        'This qBittorrent is yours. Berth writes only the keys below — no other settings, and none of your existing torrents.',
+        'This qBittorrent is yours. Berth changes none of its preferences and none of your existing torrents. Torrents Berth sends go into its own berth-* categories (each with its own save path) with automatic management switched on per torrent; anything you add yourself still lands in your own default folder. The recommended values below are for reference only.',
     },
     cutaway: {
       server: 'This qBittorrent',
@@ -3075,9 +3091,11 @@ const en: Translations<typeof zhHant> = {
       password: 'WebUI password',
       willSet: 'Will be set to the step 1 credentials',
       diff: 'Keys that will be written',
+      reference: 'Your preferences (Berth will not write them)',
       key: 'Key',
       current: 'Current',
       recommended: 'Recommended',
+      bundledValue: 'Recommended for the bundle',
       same: 'Already set',
     },
     step: {
@@ -3112,6 +3130,11 @@ const en: Translations<typeof zhHant> = {
     applying: 'Applying…',
     rerun: 'Check and apply again',
     done: "This berth is done. qBittorrent's paths and automatic management are what Berth needs.",
+    confirm: 'Confirm without changing anything',
+    checking: 'Checking…',
+    recheck: 'Check again',
+    doneExisting:
+      'This berth is done. Berth changed none of this qBittorrent’s preferences; its downloads go through its own categories.',
     requestFailed:
       'The request did not finish. Check that the Berth backend is running, then try again.',
   },
@@ -4865,6 +4888,8 @@ const en: Translations<typeof zhHant> = {
       restoring: 'Restoring…',
       restoreFailed:
         'Could not write them. qBittorrent may be gone, or its credentials changed — read the raw message on that check above.',
+      existing:
+        'Berth does not change the global preferences of your qBittorrent, so there is nothing to restore here. Berth’s downloads go through its own berth-* categories with automatic management per torrent, not the global default folder.',
       unreachable: 'Cannot reach qBittorrent, so its current preferences are unknown.',
     },
   },

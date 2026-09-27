@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
@@ -40,7 +40,7 @@ from berth.models import (
     SetupAdmin,
     SetupSettings,
 )
-from berth.services.clients import ServiceClientFactory, SetupProbes
+from berth.services.clients import ServiceClientFactory, SetupProbes, same_host
 from berth.services.routes import routes_ready
 from berth.services.settings import read_settings, write_settings
 from berth.services.tmdb import tmdb_verified
@@ -274,21 +274,26 @@ async def connect_service(
     connection: ServiceConnection,
     factory: ServiceClientFactory,
     *,
+    compose_hosts: Mapping[ServiceKind, str],
     now: datetime | None = None,
 ) -> SetupStatus:
     """既有服務的「測試連線」：存下連線資訊，然後真的連一次（plan §9.3 第 2 步）。
 
     測不過也照樣存——使用者要能改一個欄位再按一次，而不是每次重打整份表單。
 
-    **判定用的是同一套規則**（`_probe`），不是「他填了表單所以算既有」：使用者為一台
-    讀不到 API key 的**套件內** Prowlarr 貼上 key 之後，它仍然該是套件內，否則票 08 的
-    十個預設索引站對它不會跑。位址是誰填的不影響服務自己報出來的事實。
+    **使用者填的位址一律既有，除非它就是 compose 主機名**（`compose_hosts`，也就是
+    `clients.bundled_targets`；M4 票 05）。「沒有索引站」「免密可進」只說得出服務還沒被設過
+    什麼，說不出它是誰的：`berth-lab` 裡使用者自己的空 Prowlarr 被判成套件內，第 6 步就以第 1 步
+    的帳密把它的登入覆寫掉。填的就是 compose 主機名時規則照舊——讀不到 API key 的**套件內**
+    Prowlarr 貼上 key 之後仍然是套件內，否則票 08 的預設索引站對它不會跑。Jellyfin 例外見
+    `_verdict_jellyfin`。
     """
     moment = now or _utcnow()
     setup = await read_settings(session, SetupSettings)
     await _remember_connection(session, kind, connection)
 
-    origin, reason, detail, _ = await _probe_connection(kind, connection, factory)
+    compose = same_host(connection.base_url, compose_hosts[kind])
+    origin, reason, detail, _ = await _probe_connection(kind, connection, factory, compose=compose)
     setup.services = {
         **setup.services,
         kind: ServiceProbe(
@@ -329,21 +334,31 @@ async def _remember_connection(
 
 
 async def _probe_connection(
-    kind: ServiceKind, connection: ServiceConnection, factory: ServiceClientFactory
+    kind: ServiceKind,
+    connection: ServiceConnection,
+    factory: ServiceClientFactory,
+    *,
+    compose: bool,
 ) -> _Verdict:
-    """用使用者填的位址與憑證跑一次判定，規則與探測 compose 主機名時完全相同。
+    """用使用者填的位址與憑證跑一次判定。`compose` 是「填的就是 compose 主機名」。
 
-    唯一的差別是「探測中」的意思：探 compose 主機名時連不上、還在載入、回的不像它自己，都代表
+    另一個差別是「探測中」的意思：探 compose 主機名時連不上、還在載入、回的不像它自己，都代表
     容器還在啟動，該等（票 06g）；使用者自己填的位址當場就給結論，不該給他一個永遠不會好的倒數。
     """
-    origin, reason, detail, base_url = await _connection_verdict(kind, connection, factory)
+    origin, reason, detail, base_url = await _connection_verdict(
+        kind, connection, factory, compose=compose
+    )
     if origin is ServiceOrigin.PENDING:
         return _existing(reason, detail, base_url)
     return (origin, reason, detail, base_url)
 
 
 async def _connection_verdict(
-    kind: ServiceKind, connection: ServiceConnection, factory: ServiceClientFactory
+    kind: ServiceKind,
+    connection: ServiceConnection,
+    factory: ServiceClientFactory,
+    *,
+    compose: bool,
 ) -> _Verdict:
     if kind is ServiceKind.JELLYFIN:
         jellyfin = factory.jellyfin(connection.base_url)
@@ -355,13 +370,15 @@ async def _connection_verdict(
     if kind is ServiceKind.QBITTORRENT:
         qbittorrent = factory.qbittorrent(connection.base_url)
         try:
-            return await _verdict_qbittorrent(qbittorrent, connection.username, connection.password)
+            return await _verdict_qbittorrent(
+                qbittorrent, connection.username, connection.password, compose=compose
+            )
         finally:
             await qbittorrent.aclose()
 
     prowlarr = factory.prowlarr(connection.base_url, connection.api_key)
     try:
-        return await _verdict_prowlarr(prowlarr, connection.api_key)
+        return await _verdict_prowlarr(prowlarr, connection.api_key, compose=compose)
     finally:
         await prowlarr.aclose()
 
@@ -424,12 +441,18 @@ async def _probe(kind: ServiceKind, probes: SetupProbes) -> _Verdict:
     if kind is ServiceKind.JELLYFIN:
         return await _verdict_jellyfin(probes.jellyfin)
     if kind is ServiceKind.QBITTORRENT:
-        return await _verdict_qbittorrent(probes.qbittorrent, "", "")
-    return await _verdict_prowlarr(probes.prowlarr, probes.prowlarr_api_key)
+        return await _verdict_qbittorrent(probes.qbittorrent, "", "", compose=True)
+    return await _verdict_prowlarr(probes.prowlarr, probes.prowlarr_api_key, compose=True)
 
 
 async def _verdict_jellyfin(client: JellyfinClient) -> _Verdict:
-    """`StartupWizardCompleted=false` 才是套件內；跑過自己的精靈就是使用者的服務。"""
+    """`StartupWizardCompleted=false` 才是套件內；跑過自己的精靈就是使用者的服務。
+
+    **不論位址是誰填的**（M4 票 05 的例外）：還沒跑過初始精靈的 Jellyfin 上沒有任何使用者，
+    代建管理員不會蓋掉任何人的帳號，而使用者填的位址上也只能靠 Berth 代跑這一段。qBittorrent
+    與 Prowlarr 的判據沒有這種保證——免密可進可能是使用者自己開的子網免驗證，沒有索引站的
+    Prowlarr 早就有自己的登入。
+    """
 
     async def probe() -> _Verdict:
         info = await client.public_info()
@@ -445,23 +468,26 @@ async def _verdict_jellyfin(client: JellyfinClient) -> _Verdict:
     return await _classified(probe, client.base_url)
 
 
-async def _verdict_qbittorrent(client: QbittorrentClient, username: str, password: str) -> _Verdict:
-    """免密進得去就是套件內；要帳密就是使用者自己設過密碼的那一台（plan §9.2）。"""
+async def _verdict_qbittorrent(
+    client: QbittorrentClient, username: str, password: str, *, compose: bool
+) -> _Verdict:
+    """compose 主機名上免密進得去就是套件內（plan §9.2 的白名單）；其餘都是使用者的那一台。"""
 
     async def probe() -> _Verdict:
         if username:
             await client.login(username, password)
-            settled = _existing(DetectionReason.CONNECTED, "", client.base_url)
-        else:
+        if compose and not username:
             settled = (ServiceOrigin.BUNDLED, DetectionReason.ANONYMOUS_OK, "", client.base_url)
+        else:
+            settled = _existing(DetectionReason.CONNECTED, "", client.base_url)
         version = await client.version()
         return (settled[0], settled[1], _version_detail(version), client.base_url)
 
     return await _classified(probe, client.base_url)
 
 
-async def _verdict_prowlarr(client: ProwlarrClient, api_key: str) -> _Verdict:
-    """讀得到 API key 而且一個索引站都沒有才是套件內（plan §9.3 第 2 步）。"""
+async def _verdict_prowlarr(client: ProwlarrClient, api_key: str, *, compose: bool) -> _Verdict:
+    """compose 主機名上、讀得到 API key 而且一個索引站都沒有才是套件內（plan §9.3 第 2 步）。"""
 
     async def probe() -> _Verdict:
         await client.ping()
@@ -471,6 +497,8 @@ async def _verdict_prowlarr(client: ProwlarrClient, api_key: str) -> _Verdict:
         indexers = await client.indexers()
         if indexers:
             return _existing(DetectionReason.HAS_INDEXERS, str(len(indexers)), client.base_url)
+        if not compose:
+            return _existing(DetectionReason.CONNECTED, "0", client.base_url)
         return (ServiceOrigin.BUNDLED, DetectionReason.NO_INDEXERS, "", client.base_url)
 
     return await _classified(probe, client.base_url)

@@ -46,9 +46,10 @@ test('既有服務：接上三個服務、選寫入目標，完成後用那台 J
   await shot(page, '3-jellyfin')
   await page.getByRole('button', { name: '前往下一個泊位' }).click()
 
-  // 4. 既有 qBittorrent：只寫那五個鍵，WebUI 帳密不動。
-  await expect(page.getByRole('heading', { name: '套用建議的 qBittorrent 設定' })).toBeVisible()
-  await page.getByRole('button', { name: '套用這 5 個鍵' }).click()
+  // 4. 既有 qBittorrent：全域偏好與 WebUI 帳密都不動，只確認連得上（M4 票 05）。
+  await expect(page.getByRole('heading', { name: '確認你的 qBittorrent' })).toBeVisible()
+  await expect(page.getByText('你的偏好（Berth 不會寫入）')).toBeVisible()
+  await page.getByRole('button', { name: '確認，不改任何設定' }).click()
   await expect(page.getByRole('button', { name: '前往下一個泊位' })).toBeVisible()
   await shot(page, '4-qbittorrent')
   await page.getByRole('button', { name: '前往下一個泊位' }).click()

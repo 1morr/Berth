@@ -87,6 +87,8 @@ class QbittorrentOut(BaseModel):
     steps: list[StepOut]
     temp_path_warning: bool
     sets_password: bool
+    #: 五個建議鍵會被寫。既有的那一台是 `false`：只列出來，Berth 不改它的全域偏好（M4 票 05）。
+    writes_preferences: bool
     error: str
 
 

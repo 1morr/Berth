@@ -24,7 +24,15 @@ from berth.adapters.torrent import TorrentFetcher
 from berth.adapters.torrent_fake import FakeTorrentFetcher
 from berth.adapters.torznab import TorznabClient
 from berth.adapters.torznab.fake import FakeTorznabClient
-from berth.domain import IndexerKind
+from berth.domain import IndexerKind, ServiceKind
+from berth.services.clients import BUNDLED_JELLYFIN_URL, BUNDLED_PROWLARR_URL
+
+#: 精靈第 2 步探的三個 compose 位址（`clients.bundled_targets`，port 是預設值）。
+COMPOSE = {
+    ServiceKind.JELLYFIN: BUNDLED_JELLYFIN_URL,
+    ServiceKind.QBITTORRENT: "http://qbittorrent:8080",
+    ServiceKind.PROWLARR: BUNDLED_PROWLARR_URL,
+}
 
 
 class FakeClientFactory:
