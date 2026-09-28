@@ -224,10 +224,6 @@ class SetupQbittorrent(BaseModel):
 
     #: 逐鍵的套用結果；`key` 是 `QbittorrentStep`，也就是 `app/setPreferences` 的鍵名。
     steps: list[SetupStep] = []
-    #: 套件內那一台的 WebUI 帳密（qBittorrent 自己的登入；Berth 靠免密白名單，用不到它）。
-    #: 空的就不設。M4 票 06 拿掉第 1 步的「同一組帳密」之後，由票 07 的泊位欄位填。
-    web_ui_username: str = ""
-    web_ui_password: str = ""
 
 
 class SetupIndexer(BaseModel):
@@ -240,13 +236,10 @@ class SetupIndexer(BaseModel):
     steps: list[SetupStep] = []
     #: 「之後再說」。可跳過的只有這一步，完成頁列出跳過了什麼（plan §9.3、票 02b）。
     skipped: bool = False
-    #: 套件內 Prowlarr 的介面登入（`config/host` 的 Forms 驗證）。空的就不設。M4 票 06 拿掉
-    #: 第 1 步的「同一組帳密」之後，由票 07 的泊位欄位填。
+    #: Berth 上一次寫進套件內 Prowlarr `config/host` 的介面登入（Forms 驗證，M4 票 07）。空的是
+    #: 還沒設過。密碼那邊讀回來是雜湊，重按時只有它比得出「密碼改過了」（票 06c）。
     web_ui_username: str = ""
     web_ui_password: str = ""
-    #: Berth 上一次寫進 `config/host` 的密碼。那邊讀回來是雜湊，重按時只有它比得出
-    #: 「密碼改過了」（票 06c）。
-    login_password: str = ""
 
 
 class SetupTmdb(BaseModel):

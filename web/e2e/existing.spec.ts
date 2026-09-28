@@ -55,6 +55,8 @@ test('既有服務：接上三個服務、選寫入目標，完成後用那台 J
   // 4. 既有 qBittorrent：全域偏好與 WebUI 帳密都不動，只確認連得上（M4 票 05）。
   await expect(page.getByRole('heading', { name: '確認你的 qBittorrent' })).toBeVisible()
   await expect(page.getByText('你的偏好（Berth 不會寫入）')).toBeVisible()
+  // 既有的那一台沒有 WebUI 登入那一格（M4 票 07）。
+  await expect(page.getByRole('group', { name: 'qBittorrent WebUI 登入' })).toHaveCount(0)
   await page.getByRole('button', { name: '確認，不改任何設定' }).click()
   await expect(page.getByRole('button', { name: '前往下一個泊位' })).toBeVisible()
   await shot(page, '4-qbittorrent')
@@ -77,6 +79,7 @@ test('既有服務：接上三個服務、選寫入目標，完成後用那台 J
   await main.getByRole('button', { name: '測試連線' }).click()
   await main.getByRole('button', { name: '試搜' }).click()
   await expect(page.getByTestId('trial').getByText(/\d+ 筆/)).toBeVisible()
+  await expect(page.getByRole('group', { name: 'Prowlarr 介面登入' })).toHaveCount(0)
   await shot(page, '6-indexers')
   await page.getByRole('button', { name: '前往下一個泊位' }).click()
 

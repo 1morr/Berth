@@ -6,6 +6,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import replace
 from typing import Any
 
+from berth.adapters.http import AuthFailedError
 from berth.adapters.qbittorrent import (
     QbittorrentCategory,
     QbittorrentVersion,
@@ -56,6 +57,7 @@ class FakeQbittorrentClient:
         self.add_error = add_error
         self.calls = 0
         self.logins: list[tuple[str, str]] = []
+        self._web_ui_password: str | None = None
         #: 每一次 `set_preferences` 收到的鍵值，用來斷言「只寫有差異的鍵」。
         self.writes: list[dict[str, Any]] = []
         #: 這一台上被建出來的 category，用來斷言「已經在那裡的不會再建一次」。
@@ -82,6 +84,13 @@ class FakeQbittorrentClient:
         self.logins.append((username, password))
         if self._login_error is not None:
             raise self._login_error
+        # 設過 WebUI 密碼之後只認那一組（M4 票 07 的「舊的失效、新的有效」）。沒設過的替身什麼都收：
+        # 真的那一台此時只有容器 log 的臨時密碼，測試不模擬它。
+        if self._web_ui_password is not None and (username, password) != (
+            self._preferences.get("web_ui_username"),
+            self._web_ui_password,
+        ):
+            raise AuthFailedError("auth/login: Fails.")
 
     async def version(self) -> QbittorrentVersion:
         self.calls += 1
@@ -98,7 +107,11 @@ class FakeQbittorrentClient:
         if self._set_preferences_error is not None:
             raise self._set_preferences_error
         self.writes.append(dict(values))
-        self._preferences.update(values)
+        # 密碼只寫不讀（brief §20.7）：讀回來的偏好裡沒有它，只有登入認它。
+        written = dict(values)
+        if "web_ui_password" in written:
+            self._web_ui_password = str(written.pop("web_ui_password"))
+        self._preferences.update(written)
 
     async def categories(self) -> tuple[QbittorrentCategory, ...]:
         if self.error is not None:

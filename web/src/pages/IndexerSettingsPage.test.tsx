@@ -24,6 +24,7 @@ const ADD = 'POST /api/setup/indexers/apply'
 const CONNECT = 'POST /api/setup/indexers/connect'
 const SEARCH = 'GET /api/setup/indexers/search'
 const REMOVE_YTS = 'DELETE /api/setup/indexers/3'
+const LOGIN = 'PUT /api/setup/indexers/login'
 
 /** 精靈加過 dmhy、Mikan、YTS 三站的套件內 Prowlarr。 */
 function withSites(ids: Record<string, number> = { dmhy: 1, mikan: 2, yts: 3 }): IndexerSetup {
@@ -91,6 +92,8 @@ describe('設定 → 索引站', () => {
     expect(JSON.parse(String(call[1]?.body)).indexers.sort()).toEqual(
       ['dmhy', 'mikan', 'nyaasi', 'yts'].sort(),
     )
+    // 加站不帶登入：介面登入在它自己的那一區改（M4 票 07）。
+    expect(JSON.parse(String(call[1]?.body)).login).toBeNull()
     // 加進來之後它就在試搜的清單上。
     const trial = within(await screen.findByTestId('trial'))
     expect(await trial.findByText('Nyaa.si')).toBeInTheDocument()
@@ -144,6 +147,7 @@ describe('設定 → 索引站', () => {
       base_url: 'http://jackett:9117/api',
       options: [],
       steps: [step('torznab', 'ok', 'Jackett · TV')],
+      web_ui_login: false,
     })
     const stub = render({
       [INDEXERS]: { body: existing },
@@ -170,5 +174,66 @@ describe('設定 → 索引站', () => {
       api_key: 'new-key',
     })
     expect(screen.getByRole('button', { name: '試搜' })).toBeInTheDocument()
+    // 既有的索引站沒有介面登入那一區（M4 票 07）。
+    expect(screen.queryByRole('heading', { name: '介面登入' })).not.toBeInTheDocument()
+  })
+
+  it('改 Prowlarr 介面登入：只送登入那一支，說出舊的那一組不能再用（M4 票 07）', async () => {
+    const stub = render({
+      [INDEXERS]: { body: { ...withSites(), web_ui_username: 'skipper' } },
+      [LOGIN]: {
+        body: {
+          ...withSites(),
+          web_ui_username: 'skipper',
+          steps: [step('dmhy', 'ok'), step('prowlarr_login', 'ok', 'skipper')],
+        },
+      },
+      'POST /api/settings/services/prowlarr/test': { body: healthDetail() },
+    })
+    const user = userEvent.setup()
+    renderApp('/settings/indexers')
+
+    const login = within(
+      (await screen.findByRole('heading', { name: '介面登入' })).closest('section')!,
+    )
+    expect(login.getByLabelText('帳號')).toHaveValue('skipper')
+    await user.type(login.getByLabelText('密碼'), 'changed')
+    await user.type(login.getByLabelText('再輸入一次密碼'), 'changed')
+    await user.click(login.getByRole('button', { name: '更新登入' }))
+
+    expect(await login.findByText(/之後用 skipper 登入，舊的那一組不能再用/)).toBeInTheDocument()
+    const call = stub.mock.calls.find(([url]) => url === '/api/setup/indexers/login')!
+    expect(call[1]?.method).toBe('PUT')
+    expect(JSON.parse(String(call[1]?.body))).toEqual({ username: 'skipper', password: 'changed' })
+    expect(stub.mock.calls.some(([url]) => url === '/api/setup/indexers/apply')).toBe(false)
+  })
+
+  it('Prowlarr 沒有確認到設成功：說出原文，不說舊的照舊有效（M4 票 07）', async () => {
+    render({
+      [LOGIN]: {
+        body: {
+          ...withSites(),
+          steps: [
+            step('dmhy', 'ok'),
+            { step: 'prowlarr_login', status: 'failed', detail: '', error: 'connection refused' },
+          ],
+        },
+      },
+      'POST /api/settings/services/prowlarr/test': { body: healthDetail() },
+    })
+    const user = userEvent.setup()
+    renderApp('/settings/indexers')
+
+    const login = within(
+      (await screen.findByRole('heading', { name: '介面登入' })).closest('section')!,
+    )
+    expect(login.getByText(/還沒有設過/)).toBeInTheDocument()
+    await user.type(login.getByLabelText('帳號'), 'skipper')
+    await user.type(login.getByLabelText('密碼'), 'changed')
+    await user.type(login.getByLabelText('再輸入一次密碼'), 'changed')
+    await user.click(login.getByRole('button', { name: '更新登入' }))
+
+    expect(await login.findByText('connection refused')).toBeInTheDocument()
+    expect(login.getByText(/沒有確認到新的登入生效/)).toBeInTheDocument()
   })
 })

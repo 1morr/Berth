@@ -1,5 +1,5 @@
 import { screen, waitFor, within } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
+import userEvent, { type UserEvent } from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { SetupStatus } from '../api/setup'
@@ -39,6 +39,7 @@ const ROUTES_DONE = routeSetup({
 const SITES_DONE = indexerSetup({
   options: indexerSetup().options.map((row) => ({ ...row, present: true })),
   steps: indexerSetup().options.map((row) => step(row.definition_name, 'ok')),
+  web_ui_username: 'skipper',
 })
 
 const TMDB_DONE = tmdbSetup({
@@ -80,7 +81,7 @@ function wizard(start: number, overrides: Record<string, StubRoute | (() => Stub
     'GET /api/setup/qbittorrent/diff': () => ({ body: qbittorrentSetup() }),
     'POST /api/setup/qbittorrent/apply': advance(
       5,
-      qbittorrentSetup({ diffs: [], steps: [step('save_path', 'ok')] }),
+      qbittorrentSetup({ diffs: [], steps: [step('save_path', 'ok')], web_ui_username: 'skipper' }),
     ),
     'GET /api/setup/routes': () => ({ body: current > 5 ? ROUTES_DONE : routeSetup() }),
     'POST /api/setup/routes': advance(6, ROUTES_DONE),
@@ -91,6 +92,12 @@ function wizard(start: number, overrides: Record<string, StubRoute | (() => Stub
     ...overrides,
   })
   return { fetchStub, current: () => current }
+}
+
+/** 泊位上的介面登入（M4 票 07）：必填，帳號預填擁有者，密碼打兩次。 */
+async function typeLogin(user: UserEvent) {
+  await user.type(await screen.findByLabelText('密碼'), 'harbour')
+  await user.type(screen.getByLabelText('再輸入一次密碼'), 'harbour')
 }
 
 function heading() {
@@ -125,6 +132,7 @@ describe('每個泊位做完都停在結果上', () => {
     const user = userEvent.setup()
     renderWithProviders(<SetupPage />)
 
+    await typeLogin(user)
     await user.click(await screen.findByRole('button', { name: /^套用這/ }))
 
     expect(await screen.findByRole('button', { name: '前往下一個泊位' })).toBeVisible()
@@ -180,6 +188,7 @@ describe('每個泊位做完都停在結果上', () => {
     // TMDB 不在這一頁了（票 06e 拆成兩個泊位）。
     expect(await heading()).toHaveTextContent('索引站')
     expect(screen.queryByLabelText(/TMDB API key/)).not.toBeInTheDocument()
+    await typeLogin(user)
     await user.click(await screen.findByRole('button', { name: /^加入這/ }))
 
     expect(await screen.findByRole('button', { name: '前往下一個泊位' })).toBeVisible()
@@ -512,6 +521,7 @@ describe('焦點不掉回 body', () => {
     const user = userEvent.setup()
     renderWithProviders(<SetupPage />)
 
+    await typeLogin(user)
     await user.click(await screen.findByRole('button', { name: /^套用這/ }))
     await user.click(await screen.findByRole('button', { name: '前往下一個泊位' }))
 

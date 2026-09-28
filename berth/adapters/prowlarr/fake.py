@@ -112,6 +112,7 @@ class FakeProwlarrClient:
         #: 被移除的站的 id，順序即呼叫順序。
         self.deleted: list[int] = []
         self.restarts = 0
+        self._password = ""
 
     async def ping(self) -> None:
         if self.ping_error is not None:
@@ -157,9 +158,25 @@ class FakeProwlarrClient:
         return dict(self._host_config)
 
     async def set_host_config(self, values: Mapping[str, Any]) -> None:
-        self._host_config.update(values)
+        written = dict(values)
+        # 密碼讀回來是雜湊（brief §20.7）：替身留一份給 `signs_in` 比，讀回來的不是原文。
+        if written.get("password"):
+            self._password = str(written["password"])
+            written["password"] = written["passwordConfirmation"] = "hashed"
+        self._host_config.update(written)
         # 真的那一台會回 202 然後自行重啟；這裡只記下發生過。
         self.restarts += 1
+
+    def signs_in(self, username: str, password: str) -> bool:
+        """這一組登得進 Prowlarr 的介面嗎（M4 票 07 的「舊的失效、新的有效」）。
+
+        真的那一台是 Forms 登入頁；Berth 自己不登入它（用 API key），所以這只是替身上的斷言點。
+        """
+        return (
+            self._host_config.get("authenticationMethod") == "forms"
+            and self._host_config.get("username") == username
+            and self._password == password
+        )
 
     async def aclose(self) -> None:
         return None

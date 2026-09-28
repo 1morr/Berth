@@ -21,6 +21,7 @@ from berth.adapters.qbittorrent.fake import FakeQbittorrentClient
 from berth.adapters.tmdb.fake import FakeTmdbClient
 from berth.api.gate import SESSION_COOKIE
 from berth.domain import (
+    PROWLARR_LOGIN_STEP,
     DetectionReason,
     JellyfinStep,
     QbittorrentStep,
@@ -66,12 +67,14 @@ async def arrange(
     setup.jellyfin.steps = [
         SetupStep(key=step.value, status=StepStatus.OK) for step in JellyfinStep
     ]
+    # 套件內那兩台的介面登入也設好了（M4 票 07：兩格都必填）。
     setup.qbittorrent.steps = [
-        SetupStep(key=step.value, status=StepStatus.OK)
-        for step in QbittorrentStep
-        if step is not QbittorrentStep.PASSWORD
+        SetupStep(key=step.value, status=StepStatus.OK) for step in QbittorrentStep
     ]
-    setup.indexer.steps = [SetupStep(key="nyaasi", status=StepStatus.OK)]
+    setup.indexer.steps = [
+        SetupStep(key="nyaasi", status=StepStatus.OK),
+        SetupStep(key=PROWLARR_LOGIN_STEP, status=StepStatus.OK),
+    ]
     setup.tmdb.steps = [SetupStep(key="configuration", status=StepStatus.OK)]
     setup.jellyfin.libraries = list(libraries or bundled_libraries(roots["library"]))
     setup.services = {
@@ -143,16 +146,6 @@ def sign_in_owner(client: TestClient, name: str = "skipper") -> None:
 
     assert client.portal is not None
     client.cookies.set(SESSION_COOKIE, client.portal.call(seat))
-
-
-async def interface_logins(session: AsyncSession, username: str, password: str) -> None:
-    """套件內 qBittorrent 與 Prowlarr 泊位上填了介面帳密（`web_ui_*`，票 07 的欄位）。不 commit。"""
-    setup = await read_settings(session, SetupSettings)
-    setup.qbittorrent.web_ui_username = username
-    setup.qbittorrent.web_ui_password = password
-    setup.indexer.web_ui_username = username
-    setup.indexer.web_ui_password = password
-    await write_settings(session, setup)
 
 
 def bundled_libraries(library_root: Path) -> tuple[SetupLibrary, ...]:

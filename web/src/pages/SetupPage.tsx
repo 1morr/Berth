@@ -446,9 +446,10 @@ export function SetupPage() {
         qbittorrent.data ? (
           <QbittorrentStep
             setup={qbittorrent.data}
+            owner={current.owner}
             applying={applyPreferences.isPending}
             requestFailed={applyPreferences.isError}
-            onApply={() => applyPreferences.mutate()}
+            onApply={(login) => applyPreferences.mutateAsync(login)}
             note={note}
             nav={nav}
             redetect={redetectButton('qbittorrent')}
@@ -500,9 +501,10 @@ export function SetupPage() {
         indexers.data ? (
           <IndexerStep
             indexers={indexers.data}
+            owner={current.owner}
             applying={applySites.isPending}
             connecting={connectSource.isPending}
-            onApply={(selected) => applySites.mutate(selected)}
+            onApply={(input) => applySites.mutateAsync(input)}
             onConnect={(input) => connectSource.mutate(input)}
             onSkip={() => skipSites.mutate()}
             trial={{

@@ -1747,9 +1747,31 @@ export interface paths {
         put?: never;
         /**
          * Post Qbittorrent Apply
-         * @description 套用建議偏好。只寫有差異的鍵；勾了「同一組帳密」才順便設 WebUI 密碼。
+         * @description 套用建議偏好。只寫有差異的鍵；帶了登入就順便設套件內那一台的 WebUI 登入。
+         *
+         *     既有的那一台帶登入回 422：Berth 不寫既有服務的帳密（brief §16.4）。
          */
         post: operations["post_qbittorrent_apply_api_setup_qbittorrent_apply_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/setup/qbittorrent/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Put Qbittorrent Login
+         * @description 設定頁的「更新登入」（M4 票 07）：只換套件內那一台的 WebUI 登入。既有的那一台 422。
+         */
+        put: operations["put_qbittorrent_login_api_setup_qbittorrent_login_put"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1789,6 +1811,28 @@ export interface paths {
          *     對既有的索引站回 422：那是使用者自己的服務，Berth 只做檢查（brief §16.4）。
          */
         post: operations["post_indexers_apply_api_setup_indexers_apply_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/setup/indexers/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Put Indexers Login
+         * @description 設定頁的「更新登入」（M4 票 07）：只換套件內 Prowlarr 的介面登入，等它重啟回來。
+         *
+         *     既有的索引站回 422，與 `/indexers/apply` 同一條紅線（brief §16.4）。
+         */
+        put: operations["put_indexers_login_api_setup_indexers_login_put"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -2706,6 +2750,7 @@ export interface components {
              * @default []
              */
             indexers?: string[];
+            login?: components["schemas"]["InterfaceLoginIn"] | null;
         };
         /**
          * IndexerConnectIn
@@ -2779,10 +2824,25 @@ export interface components {
             steps: components["schemas"]["StepOut"][];
             /** Skipped */
             skipped: boolean;
-            /** Sets Password */
-            sets_password: boolean;
+            /** Web Ui Login */
+            web_ui_login: boolean;
+            /** Web Ui Username */
+            web_ui_username: string;
             /** Error */
             error: string;
+        };
+        /**
+         * InterfaceLoginIn
+         * @description 套件內 qBittorrent / Prowlarr 自己的介面登入（M4 票 07）。兩次密碼一致由前端比對。
+         *
+         *     與 `LoginIn` 不同，這裡**要**約束：它不是拿來驗誰的帳密，空的就是沒填，422 說得出哪一格。
+         *     帳號先去掉前後空白再驗：只有空白的帳號寫進去就是一個沒人打得出來的登入。密碼照原樣。
+         */
+        InterfaceLoginIn: {
+            /** Username */
+            username: string;
+            /** Password */
+            password: string;
         };
         /**
          * InventoryCardOut
@@ -4028,6 +4088,10 @@ export interface components {
             /** Excluded */
             excluded: number;
         };
+        /** QbittorrentApplyIn */
+        QbittorrentApplyIn: {
+            login?: components["schemas"]["InterfaceLoginIn"] | null;
+        };
         /**
          * QbittorrentOut
          * @description 精靈第 4 步與設定頁的漂移還原共用（brief §16.3）。
@@ -4052,8 +4116,10 @@ export interface components {
             steps: components["schemas"]["StepOut"][];
             /** Temp Path Warning */
             temp_path_warning: boolean;
-            /** Sets Password */
-            sets_password: boolean;
+            /** Web Ui Login */
+            web_ui_login: boolean;
+            /** Web Ui Username */
+            web_ui_username: string;
             /** Writes Preferences */
             writes_preferences: boolean;
             /** Error */
@@ -8673,7 +8739,11 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["QbittorrentApplyIn"] | null;
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -8682,6 +8752,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["QbittorrentOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_qbittorrent_login_api_setup_qbittorrent_login_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InterfaceLoginIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QbittorrentOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -8716,6 +8828,39 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["IndexerApplyIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IndexerSetupOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_indexers_login_api_setup_indexers_login_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InterfaceLoginIn"];
             };
         };
         responses: {

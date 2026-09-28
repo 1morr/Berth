@@ -607,30 +607,38 @@ def _jellyfin_secured(setup: SetupSettings) -> bool:
 
 
 def _qbittorrent_secured(setup: SetupSettings) -> bool:
-    """第 4 步做完了沒（票 08）：五個建議鍵都有結論。
+    """第 4 步做完了沒（票 08）：五個建議鍵都有結論，套件內的那一台還要有 WebUI 登入。
 
-    密碼不算——泊位上沒有 WebUI 帳密的那一台永遠不會有那一條，拿它當條件會把精靈卡在第 4 步。
+    登入兩格都必填（M4 票 07 shape）：沒設過的那一台密碼那一條是 `pending`，精靈停在這裡。
+    既有的那一台沒有那一格，那一條永遠是 `skipped`，不拿它當條件。
     """
     done = {
         row.key
         for row in setup.qbittorrent.steps
         if row.status in (StepStatus.OK, StepStatus.SKIPPED)
     }
-    return done >= {step.value for step in QbittorrentStep if step is not QbittorrentStep.PASSWORD}
+    probe = setup.services.get(ServiceKind.QBITTORRENT)
+    bundled = probe is not None and probe.origin is ServiceOrigin.BUNDLED
+    return done >= {
+        step.value for step in QbittorrentStep if bundled or step is not QbittorrentStep.PASSWORD
+    }
 
 
 def _indexer_settled(setup: SetupSettings) -> bool:
     """第 6 步可跳過（plan §9.3），所以「有結論」包含「使用者說之後再說」。
 
     逐站失敗不擋：十個公開站裡有幾個連不上是常態，只要接上了一個就走得下去。
-    **替 Prowlarr 介面設登入那一條不算**——它與站接不接得上無關，而且泊位上沒有介面帳密時
-    它永遠是 `skipped`，算進去等於十站全失敗也放行。
+    **替 Prowlarr 介面設登入那一條不算「接上了一個」**——它與站接不接得上無關，算進去等於
+    十站全失敗也放行；但套件內的那一台要**另外**有它（兩格都必填，M4 票 07 shape）。
     """
-    return setup.indexer.skipped or any(
-        row.status in (StepStatus.OK, StepStatus.SKIPPED)
-        for row in setup.indexer.steps
-        if row.key != PROWLARR_LOGIN_STEP
-    )
+    if setup.indexer.skipped:
+        return True
+    settled = {
+        row.key for row in setup.indexer.steps if row.status in (StepStatus.OK, StepStatus.SKIPPED)
+    }
+    probe = setup.services.get(ServiceKind.PROWLARR)
+    bundled = probe is not None and probe.origin is ServiceOrigin.BUNDLED
+    return bool(settled - {PROWLARR_LOGIN_STEP}) and (not bundled or PROWLARR_LOGIN_STEP in settled)
 
 
 def _owner_signs_in(setup: SetupSettings) -> bool:

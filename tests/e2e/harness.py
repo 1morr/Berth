@@ -6,7 +6,6 @@ fixture 在 `conftest.py`；這裡只有不需要 fixture 的那些。宿主上�
 from __future__ import annotations
 
 import json
-import re
 import subprocess
 import time
 from collections import Counter
@@ -30,7 +29,7 @@ TORRENTS_CONTAINER = "berth-e2e-torrents"
 JELLYFIN_CONTAINER = "jellyfin"
 
 ADMIN = "skipper"
-#: 精靈第 1 步勾了「同一組帳密」，所以 Jellyfin 與 qBittorrent 也是這一組。
+#: 擁有者的 Jellyfin 密碼（精靈第 1 步）。qBittorrent 的 WebUI 登入是另一組（`WEB_UI_LOGIN`）。
 PASSWORD = "harbour-e2e"
 
 JELLYFIN_CLIENT = 'MediaBrowser Client="Berth e2e", Device="ci", DeviceId="berth-e2e", Version="1"'
@@ -110,22 +109,17 @@ def docker(*command: str) -> str:
     return result.stdout
 
 
-#: 套件內 qBittorrent 的容器名（compose 的 `container_name`，與正式部署相同）。
-QBITTORRENT_CONTAINER = "qbittorrent"
-
-#: 沒設過 WebUI 密碼時，它每次啟動在 log 印一組臨時密碼（4.6.1 起，brief §16.3）。
-_TEMPORARY_PASSWORD = re.compile(r"temporary password is provided for this session: (\S+)")
+#: 精靈第 4 步替套件內 qBittorrent 設的 WebUI 登入（M4 票 07：泊位上必填，帳號預填擁有者）。
+WEB_UI_LOGIN = {"username": ADMIN, "password": "harbour-webui"}
 
 
 def qbittorrent_session(client: httpx.Client) -> None:
     """以 WebUI 登入套件內的 qBittorrent，測試才看得到、改得到它的 torrent。
 
-    **用容器 log 的臨時密碼**：M4 票 06 起精靈第 1 步不再把擁有者的帳密套到 qBittorrent，
-    它的 WebUI 帳密由票 07 的泊位欄位設；這之前使用者自己打開 WebUI 也只有這一組。
+    用的是精靈第 4 步在泊位上設的那一組（M4 票 07）——這也順便驗了「泊位上設的帳密之後能登入
+    qBittorrent WebUI」。
     """
-    found = _TEMPORARY_PASSWORD.findall(docker("logs", QBITTORRENT_CONTAINER))
-    assert found, "qBittorrent printed no temporary WebUI password"
-    login = client.post("/api/v2/auth/login", data={"username": "admin", "password": found[-1]})
+    login = client.post("/api/v2/auth/login", data=WEB_UI_LOGIN)
     # 成功的形狀隨版本不同（4.4 是 `200 Ok.`、5.x 是 `204`，brief §20.7），失敗是 `Fails.`。
     assert login.is_success and login.text != "Fails.", (login.status_code, login.text)
 

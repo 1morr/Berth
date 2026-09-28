@@ -27,6 +27,7 @@ from tests.e2e.harness import (
     QBITTORRENT,
     TORRENTS,
     TORRENTS_CONTAINER,
+    WEB_UI_LOGIN,
     Json,
     Submitted,
     all_jobs,
@@ -115,7 +116,8 @@ def configured(berth: httpx.Client) -> None:
     failed = [row for row in jellyfin["steps"] if row["status"] == "failed"]
     assert not failed, failed
 
-    ok(berth.post("/setup/qbittorrent/apply"))
+    qbittorrent = ok(berth.post("/setup/qbittorrent/apply", json={"login": WEB_UI_LOGIN}))
+    assert qbittorrent["web_ui_username"] == ADMIN, qbittorrent["steps"]
     ok(berth.post("/setup/indexers/skip", json={"skipped": True}))
     tmdb = ok(berth.post("/setup/tmdb/test", json={"api_key": tmdb_key}))
     assert tmdb["verified"], tmdb["steps"]

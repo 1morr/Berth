@@ -1096,6 +1096,14 @@ split-cour 的第一批被播出日比對整批擋在審核，改正一次並套
   Berth 寫進 Prowlarr 的那一份；精靈已經跑完的安裝不受影響，跑到一半的回到第 1 步。
   **套件內 qBittorrent 與 Prowlarr 的介面密碼暫時不設**：第 1 步的「同一組帳密也套用」勾選框拿掉了，各自泊位上的
   欄位在下一張票補上；這之前 Berth 照常運作，自己開 qBittorrent WebUI 要用容器 log 的臨時密碼。
+- **套件內 qBittorrent 與 Prowlarr 的介面登入在各自的泊位上填，而且必填**（M4 票 07，
+  `.scratch/m4/service-logins-shape.md`）：泊位 2 與泊位 4 多一組「帳號（預填擁有者的名字）、密碼、再一次密碼」，
+  跟著「套用」「加入」送出；沒設過就停在那一步。設過之後回頭看只說帳號是誰，按「更換登入」才打開。設定頁
+  → qBittorrent 與 → 索引站多「介面登入」一區，只換登入，舊的那一組隨即失效。既有服務沒有這一格。API：
+  `POST /api/setup/qbittorrent/apply` 收 `{login}`、`POST /api/setup/indexers/apply` 多 `login`（都可省略，省略是登入
+  照舊；對既有服務帶了回 422），新增 `PUT /api/setup/qbittorrent/login`、`PUT /api/setup/indexers/login`；
+  `QbittorrentOut`、`IndexerSetupOut` 的 `sets_password` 換成 `web_ui_login`、`web_ui_username`。沒設過登入的套件內
+  那一台，密碼那一條纜繩是 `pending`。
 ### Removed
 - **服務設定頁 `/settings/services` 與精靈的 `?berth=` 深連結**（M3 票 06i）：前者拆進設定的各分頁，後者連同
   「改位址或憑證」與精靈跑完之後的「回到 Berth」一起拿掉——精靈跑完之後不再是設定入口。後端的

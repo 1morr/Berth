@@ -11,7 +11,7 @@ from berth.api.auth import issue_cookie
 from berth.api.deps import ClientFactoryDep, ConfigDep, SessionDep, SetupProbesDep
 from berth.api.errors import refusal_responses
 from berth.api.routes import route_refusal, route_responses
-from berth.api.schemas import QbittorrentOut, RouteOut, StepOut
+from berth.api.schemas import InterfaceLoginIn, QbittorrentOut, RouteOut, StepOut
 from berth.config import Config
 from berth.domain import (
     BundledLibraryRefusal,
@@ -32,6 +32,9 @@ from berth.services.indexer import (
     search_indexers,
     skip_indexers,
 )
+from berth.services.indexer import (
+    set_interface_login as set_prowlarr_login,
+)
 from berth.services.jellyfin import (
     BundledLibraryRejectedError,
     add_berth_path,
@@ -41,6 +44,7 @@ from berth.services.jellyfin import (
     save_bundled_libraries,
 )
 from berth.services.qbittorrent import apply_qbittorrent, read_qbittorrent_diff
+from berth.services.qbittorrent import set_interface_login as set_qbittorrent_login
 from berth.services.routes import (
     RouteRejectedError,
     RouteSelection,
@@ -368,10 +372,37 @@ async def get_qbittorrent_diff(session: SessionDep, factory: ClientFactoryDep) -
     return QbittorrentOut.model_validate(await read_qbittorrent_diff(session, factory))
 
 
+class QbittorrentApplyIn(BaseModel):
+    #: 泊位上填的 WebUI 登入（M4 票 07）。不帶就是登入照舊；套件內那一台沒設過時精靈停在這一步。
+    login: InterfaceLoginIn | None = None
+
+
 @router.post("/qbittorrent/apply")
-async def post_qbittorrent_apply(session: SessionDep, factory: ClientFactoryDep) -> QbittorrentOut:
-    """套用建議偏好。只寫有差異的鍵；勾了「同一組帳密」才順便設 WebUI 密碼。"""
-    return QbittorrentOut.model_validate(await apply_qbittorrent(session, factory))
+async def post_qbittorrent_apply(
+    session: SessionDep, factory: ClientFactoryDep, body: QbittorrentApplyIn | None = None
+) -> QbittorrentOut:
+    """套用建議偏好。只寫有差異的鍵；帶了登入就順便設套件內那一台的 WebUI 登入。
+
+    既有的那一台帶登入回 422：Berth 不寫既有服務的帳密（brief §16.4）。
+    """
+    login = body.login.value() if body is not None and body.login is not None else None
+    try:
+        result = await apply_qbittorrent(session, factory, login=login)
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
+    return QbittorrentOut.model_validate(result)
+
+
+@router.put("/qbittorrent/login")
+async def put_qbittorrent_login(
+    session: SessionDep, factory: ClientFactoryDep, body: InterfaceLoginIn
+) -> QbittorrentOut:
+    """設定頁的「更新登入」（M4 票 07）：只換套件內那一台的 WebUI 登入。既有的那一台 422。"""
+    try:
+        result = await set_qbittorrent_login(session, factory, body.value())
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
+    return QbittorrentOut.model_validate(result)
 
 
 # --- 第 6 步：索引站（plan §9.3 第 6 步、§8.4）---
@@ -403,13 +434,18 @@ class IndexerSetupOut(BaseModel):
     options: list[IndexerOptionOut]
     steps: list[StepOut]
     skipped: bool
-    sets_password: bool
+    #: 泊位上有介面登入那一格：只有套件內的 Prowlarr（M4 票 07）。
+    web_ui_login: bool
+    #: Berth 替套件內 Prowlarr 設下的介面帳號；還沒設過是空字串。
+    web_ui_username: str
     error: str
 
 
 class IndexerApplyIn(BaseModel):
     #: 勾起來的站，值是 Prowlarr 的 `definitionName`。空清單代表一個都沒勾。
     indexers: list[str] = []
+    #: 泊位上填的 Prowlarr 介面登入（M4 票 07）。不帶就是登入照舊。
+    login: InterfaceLoginIn | None = None
 
 
 class IndexerConnectIn(BaseModel):
@@ -459,7 +495,27 @@ async def post_indexers_apply(
     對既有的索引站回 422：那是使用者自己的服務，Berth 只做檢查（brief §16.4）。
     """
     try:
-        result = await apply_default_indexers(session, factory, body.indexers)
+        result = await apply_default_indexers(
+            session,
+            factory,
+            body.indexers,
+            login=body.login.value() if body.login is not None else None,
+        )
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
+    return IndexerSetupOut.model_validate(result)
+
+
+@router.put("/indexers/login")
+async def put_indexers_login(
+    session: SessionDep, factory: ClientFactoryDep, body: InterfaceLoginIn
+) -> IndexerSetupOut:
+    """設定頁的「更新登入」（M4 票 07）：只換套件內 Prowlarr 的介面登入，等它重啟回來。
+
+    既有的索引站回 422，與 `/indexers/apply` 同一條紅線（brief §16.4）。
+    """
+    try:
+        result = await set_prowlarr_login(session, factory, body.value())
     except ValueError as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
     return IndexerSetupOut.model_validate(result)

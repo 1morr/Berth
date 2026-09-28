@@ -163,8 +163,19 @@ export const qbittorrentSetupQueryOptions = queryOptions({
   queryFn: () => apiGet<QbittorrentSetup>('/setup/qbittorrent/diff'),
 })
 
-export function applyQbittorrent(): Promise<QbittorrentSetup> {
-  return apiPost<QbittorrentSetup>('/setup/qbittorrent/apply')
+/** 套件內 qBittorrent / Prowlarr 自己的介面登入（M4 票 07）。 */
+export type InterfaceLogin = Schemas['InterfaceLoginIn']
+
+/** `login` 是泊位上填的 WebUI 登入；`null` 是登入照舊。 */
+export function applyQbittorrent(login: InterfaceLogin | null): Promise<QbittorrentSetup> {
+  return apiPost<QbittorrentSetup>('/setup/qbittorrent/apply', {
+    login,
+  } satisfies Schemas['QbittorrentApplyIn'])
+}
+
+/** 設定頁的「更新登入」：只換套件內那一台的 WebUI 登入，五個鍵不動。 */
+export function setQbittorrentLogin(login: InterfaceLogin): Promise<QbittorrentSetup> {
+  return apiPut<QbittorrentSetup>('/setup/qbittorrent/login', login)
 }
 
 /** --- 第 6、7 步：索引站與 TMDB（plan §9.3 第 6–7 步、§8.3、§8.4；票 06e 拆成兩個泊位）--- */
@@ -196,10 +207,23 @@ export const tmdbSetupQueryOptions = queryOptions({
   queryFn: () => apiGet<TmdbSetup>('/setup/tmdb'),
 })
 
-export function applyIndexers(indexers: string[]): Promise<IndexerSetup> {
+/** `login` 是泊位上填的 Prowlarr 介面登入；`null` 是登入照舊（設定頁加站）。 */
+export function applyIndexers({
+  indexers,
+  login,
+}: {
+  indexers: string[]
+  login: InterfaceLogin | null
+}): Promise<IndexerSetup> {
   return apiPost<IndexerSetup>('/setup/indexers/apply', {
     indexers,
+    login,
   } satisfies Schemas['IndexerApplyIn'])
+}
+
+/** 設定頁的「更新登入」：只換套件內 Prowlarr 的介面登入，等它重啟回來。 */
+export function setIndexerLogin(login: InterfaceLogin): Promise<IndexerSetup> {
+  return apiPut<IndexerSetup>('/setup/indexers/login', login)
 }
 
 export function connectIndexer(body: IndexerConnectInput): Promise<IndexerSetup> {

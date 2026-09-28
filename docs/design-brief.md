@@ -605,7 +605,7 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 
 ### 16.3 開箱即用（一鍵設定）【決定】
 
-> **2026-09-26 改（§19 兩列）**：「Berth 管理員」由「Jellyfin 擁有者」取代（M4 票 06 已改寫 Jellyfin 那一列；qBittorrent 與 Prowlarr 的介面帳密由票 07 移到各自的泊位）。既有服務不寫帳密、不改全域偏好的那一半已由 M4 票 05 改寫進下文。
+> **2026-09-26 改（§19 兩列）**：「Berth 管理員」由「Jellyfin 擁有者」取代（M4 票 06 已改寫 Jellyfin 那一列；qBittorrent 與 Prowlarr 的介面帳密由票 07 移到各自的泊位，已改寫進下表）。既有服務不寫帳密、不改全域偏好的那一半已由 M4 票 05 改寫進下文。
 
 目標：新手使用者下載 compose 範本、`docker compose up`、開瀏覽器，之後所有設定都在 Berth 的精靈裡完成，不需要分別打開 qBittorrent、Jellyfin、Prowlarr 的介面。做法是「預置設定檔 + Berth 透過各服務 API 代為設定」，兩者都冪等，可重複按。
 
@@ -613,9 +613,9 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 
 | 服務 | 預置（compose 範本） | Berth 一鍵設定（API） | 使用者仍需自己做 |
 | --- | --- | --- | --- |
-| qBittorrent | **只預置「讓 Berth 進得去」**：只放行 Berth 容器固定 IP 的免密白名單（不是整個網段，理由見 §20.7）。原因是 4.6.1 起首次啟動的隨機密碼只印在容器 log，Berth 拿不到，沒有這一步按鈕就登不進去 | 套件內：套用建議偏好（temp path、save path、autoTMM）、設定泊位上填的 WebUI 密碼（M4 票 07 補上欄位，這之前不設），按下前顯示差異；兩種都依 Route 建立 category | 無 |
+| qBittorrent | **只預置「讓 Berth 進得去」**：只放行 Berth 容器固定 IP 的免密白名單（不是整個網段，理由見 §20.7）。原因是 4.6.1 起首次啟動的隨機密碼只印在容器 log，Berth 拿不到，沒有這一步按鈕就登不進去 | 套件內：套用建議偏好（temp path、save path、autoTMM）、設定泊位上填的 WebUI 登入（M4 票 07：必填，帳號預填擁有者；不設的話 WebUI 只剩容器 log 裡每次重啟都換的臨時密碼），按下前顯示差異；兩種都依 Route 建立 category | 無 |
 | Jellyfin | 無 | 精靈第 1 步偵測「尚未完成初始精靈」→ 以擁有者填的帳密建立 Jellyfin 管理員、跑完它的初始設定、換 API key（帳密不存下來；既有 Jellyfin 以它的管理員登入換 key，M4 票 06）→ 泊位 1 建立使用者在精靈列的媒體庫（內容類型 + 名稱 + 資料夾，預設 Movies / TV / Anime 對應 `/data/library/{movies,tv,anime}`，可改名、增刪，M3 票 06f）→ 每個媒體庫自動建立一個 Route | 無 |
-| Prowlarr | 無；Berth 唯讀掛載其設定目錄讀取 API key | 加入預設索引站清單（Nyaa.si、dmhy、Anime Tosho、ACG.RIP、Mikan、1337x、YTS、EZTV、The Pirate Bay，可勾選；AniDex 於 2026-09-25 拿掉，§20.7）、以泊位上填的帳密設定介面登入（M4 票 07 補上欄位，這之前不設） | 私有站的帳號 |
+| Prowlarr | 無；Berth 唯讀掛載其設定目錄讀取 API key | 加入預設索引站清單（Nyaa.si、dmhy、Anime Tosho、ACG.RIP、Mikan、1337x、YTS、EZTV、The Pirate Bay，可勾選；AniDex 於 2026-09-25 拿掉，§20.7）、以泊位上填的帳密設定介面登入（M4 票 07：必填，與 qBittorrent 各自一組） | 私有站的帳號 |
 | TMDB | 無 —— **Berth 不內建任何 provider 的 key**【決定 2026-09-09】 | 無 | **必要**：自己申請一把 API key 貼進精靈第 6 步（§20.7） |
 | 索引站 / RSS | 無 | Mikan、Nyaa feed 由使用者貼 URL | 貼自己的 Mikan 訂閱 URL |
 

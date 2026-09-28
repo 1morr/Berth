@@ -352,6 +352,36 @@ const zhHant = {
       retryHint: '手動做完之後按下面的按鈕，Berth 只會重跑還沒完成的步驟。',
     },
   },
+  interfaceLogin: {
+    qbittorrent: {
+      legend: 'qBittorrent WebUI 登入',
+      lede: '這是 qBittorrent 自己的登入，給你之後打開它的 WebUI 用。Berth 自己用不到它（靠免密白名單進得去）；不設的話，WebUI 只剩容器 log 裡每次重啟都換的臨時密碼。',
+      set: 'qBittorrent WebUI 的帳號：',
+    },
+    prowlarr: {
+      legend: 'Prowlarr 介面登入',
+      lede: '這是 Prowlarr 自己的登入，給你之後打開它的介面用。Berth 自己用不到它（用 API key）；不設的話，Prowlarr 第一次打開時會自己要你設一組。設完它會自行重啟，要等一下。',
+      set: 'Prowlarr 介面的帳號：',
+    },
+    username: '帳號',
+    password: '密碼',
+    confirm: '再輸入一次密碼',
+    change: '更換登入',
+    error: {
+      blank: '這一格要填。',
+      mismatch: '兩次輸入的密碼不一樣。',
+    },
+    settings: {
+      title: '介面登入',
+      current: '目前的帳號是 {{username}}。改了之後舊的那一組就不能再用。',
+      none: '還沒有設過。設一組之後，打開這個服務的介面就用它登入。',
+      save: '更新登入',
+      saving: '更新中…',
+      saved: '已更新。之後用 {{username}} 登入，舊的那一組不能再用。',
+      refused: '沒有確認到新的登入生效。用新的那一組試登入一次，不行就再按一次。服務回的原文：',
+      failed: '這一次請求沒有走完，登入沒有變。確認 Berth 後端還在跑，再按一次。',
+    },
+  },
   qbittorrent: {
     title: {
       bundled: '套用建議的 qBittorrent 設定',
@@ -367,9 +397,9 @@ const zhHant = {
     cutaway: {
       server: '這台 qBittorrent',
       webapi: 'Web API',
-      password: 'WebUI 密碼',
-      willSet: '將設為泊位上填的那一組',
-      notSet: '不設（Berth 靠免密白名單進得去）',
+      password: 'WebUI 登入',
+      willSet: '將設為下面填的那一組',
+      existingLogin: '不改（這台是你自己的）',
       diff: '將會寫入的鍵',
       reference: '你的偏好（Berth 不會寫入）',
       key: '鍵',
@@ -384,7 +414,7 @@ const zhHant = {
       save_path: '完成目錄',
       auto_tmm_enabled: '自動 Torrent 管理',
       category_changed_tmm_enabled: '分類改變時跟著搬',
-      web_ui_password: 'WebUI 帳密',
+      web_ui_password: 'WebUI 登入',
     },
     fix: {
       temp_path_enabled: '在 qBittorrent 的「選項 → 下載」勾選「保留未完成的 torrent 於」：',
@@ -3092,6 +3122,38 @@ const en: Translations<typeof zhHant> = {
         'Once you have done it by hand, press the button below — Berth only reruns the steps that are not finished.',
     },
   },
+  interfaceLogin: {
+    qbittorrent: {
+      legend: 'qBittorrent WebUI login',
+      lede: "This is qBittorrent's own login, for when you open its WebUI yourself. Berth does not need it (it gets in through the no-password allowlist); without it, the WebUI only has the temporary password in the container log, which changes on every restart.",
+      set: 'qBittorrent WebUI username:',
+    },
+    prowlarr: {
+      legend: 'Prowlarr interface login',
+      lede: "This is Prowlarr's own login, for when you open its interface yourself. Berth does not need it (it uses the API key); without it, Prowlarr asks you to set one the first time you open it. Setting it restarts Prowlarr, so give it a moment.",
+      set: 'Prowlarr interface username:',
+    },
+    username: 'Username',
+    password: 'Password',
+    confirm: 'Password again',
+    change: 'Change login',
+    error: {
+      blank: 'Fill this in.',
+      mismatch: 'The two passwords differ.',
+    },
+    settings: {
+      title: 'Interface login',
+      current: 'The username is {{username}}. Once you change it, the old login stops working.',
+      none: 'Not set yet. Set one and use it whenever you open this service yourself.',
+      save: 'Update login',
+      saving: 'Updating…',
+      saved: 'Updated. Sign in as {{username}} from now on; the old login no longer works.',
+      refused:
+        'Could not confirm the new login took. Try signing in with it; if that fails, press again. What the service said:',
+      failed:
+        'The request did not finish and the login is unchanged. Check that the Berth backend is running, then press again.',
+    },
+  },
   qbittorrent: {
     title: {
       bundled: 'Apply the recommended qBittorrent settings',
@@ -3107,9 +3169,9 @@ const en: Translations<typeof zhHant> = {
     cutaway: {
       server: 'This qBittorrent',
       webapi: 'Web API',
-      password: 'WebUI password',
-      willSet: 'Will be set to the credentials entered on this berth',
-      notSet: 'Not set (Berth gets in through the no-password allowlist)',
+      password: 'WebUI login',
+      willSet: 'Will be set to the one entered below',
+      existingLogin: 'Left alone (this one is yours)',
       diff: 'Keys that will be written',
       reference: 'Your preferences (Berth will not write them)',
       key: 'Key',
@@ -3124,7 +3186,7 @@ const en: Translations<typeof zhHant> = {
       save_path: 'Completed folder',
       auto_tmm_enabled: 'Automatic torrent management',
       category_changed_tmm_enabled: 'Relocate when the category changes',
-      web_ui_password: 'WebUI credentials',
+      web_ui_password: 'WebUI login',
     },
     fix: {
       temp_path_enabled: 'In qBittorrent, Options → Downloads, tick "Keep incomplete torrents in":',

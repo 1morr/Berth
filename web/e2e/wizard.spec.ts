@@ -58,7 +58,14 @@ test('精靈八步走完，之後以同一組帳密登入', async ({ page }) => 
 
   // 4. qBittorrent
   await expect(page.getByRole('heading', { name: '套用建議的 qBittorrent 設定' })).toBeVisible()
+  // WebUI 登入必填，帳號預填擁有者（M4 票 07）；設完之後只說帳號是誰。
+  const webUi = page.getByRole('group', { name: 'qBittorrent WebUI 登入' })
+  await expect(webUi.getByRole('textbox', { name: '帳號' })).not.toHaveValue('')
+  await webUi.getByLabel('密碼', { exact: true }).fill('harbour-webui')
+  await webUi.getByLabel('再輸入一次密碼').fill('harbour-webui')
+  await shot(page, '4-qbittorrent-login')
   await page.getByRole('button', { name: /^套用這 \d+ 個鍵$/ }).click()
+  await expect(page.getByText('qBittorrent WebUI 的帳號：')).toBeVisible()
   await expect(page.getByRole('button', { name: '前往下一個泊位' })).toBeVisible()
   await shot(page, '4-qbittorrent')
   await page.getByRole('button', { name: '前往下一個泊位' }).click()
@@ -75,7 +82,12 @@ test('精靈八步走完，之後以同一組帳密登入', async ({ page }) => 
   // 6. 索引站（九個裡有四個連不上是常態）。加入 → 試搜 → 不要的移除（票 06e）；
   //    替身的 Mikan 演「搜尋時連不上」，其餘站照樣列出筆數。
   await expect(page.getByRole('heading', { name: '索引站', level: 2 })).toBeVisible()
+  const prowlarrUi = page.getByRole('group', { name: 'Prowlarr 介面登入' })
+  await prowlarrUi.getByLabel('密碼', { exact: true }).fill('harbour-prowlarr')
+  await prowlarrUi.getByLabel('再輸入一次密碼').fill('harbour-prowlarr')
+  await shot(page, '6-indexers-login')
   await page.getByRole('button', { name: '加入這 9 個站' }).click()
+  await expect(page.getByText('Prowlarr 介面的帳號：')).toBeVisible()
   await page.getByRole('button', { name: '試搜' }).click()
   const trial = page.getByTestId('trial')
   await expect(trial.getByText(/502 Bad Gateway/)).toBeVisible()

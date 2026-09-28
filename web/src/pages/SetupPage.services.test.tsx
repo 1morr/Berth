@@ -1,5 +1,5 @@
 import { screen, waitFor, within } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
+import userEvent, { type UserEvent } from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { stubApi } from '../test/fetch'
@@ -33,6 +33,17 @@ const SEARCH = 'GET /api/setup/indexers/search'
 const REMOVE_YTS = 'DELETE /api/setup/indexers/3'
 const TMDB = 'GET /api/setup/tmdb'
 const TEST_TMDB = 'POST /api/setup/tmdb/test'
+
+/** 泊位上的介面登入（M4 票 07）：帳號預填擁有者的名字，密碼打兩次。 */
+async function typePassword(user: UserEvent, password = 'harbour') {
+  await user.type(await screen.findByLabelText('密碼'), password)
+  await user.type(screen.getByLabelText('再輸入一次密碼'), password)
+}
+
+function bodyOf(stub: ReturnType<typeof stubApi>, url: string) {
+  const call = stub.mock.calls.find(([called]) => called === url)!
+  return JSON.parse(String(call[1]?.body)) as Record<string, unknown>
+}
 
 /** 前兩個泊位都接好了，精靈在泊位 2。 */
 const AT_BERTH_TWO = setupStatus({
@@ -91,8 +102,9 @@ describe('泊位 2：qBittorrent', () => {
         step('category_changed_tmm_enabled', 'ok', 'true'),
         step('web_ui_password', 'ok', 'skipper'),
       ],
+      web_ui_username: 'skipper',
     })
-    stubApi({
+    const stub = stubApi({
       [STATUS]: { body: AT_BERTH_TWO },
       [DIFF]: { body: qbittorrentSetup() },
       [APPLY]: { body: applied },
@@ -100,6 +112,7 @@ describe('泊位 2：qBittorrent', () => {
     const user = userEvent.setup()
 
     renderWithProviders(<SetupPage />)
+    await typePassword(user)
     await user.click(await screen.findByRole('button', { name: '套用這 5 個鍵' }))
 
     const sequence = await screen.findByTestId('sequence')
@@ -107,7 +120,59 @@ describe('泊位 2：qBittorrent', () => {
       expect(within(sequence).getAllByText('已完成')).toHaveLength(5)
     })
     expect(within(sequence).getByText('已經是這樣')).toBeInTheDocument()
-    expect(within(sequence).getByText('WebUI 帳密')).toBeInTheDocument()
+    expect(within(sequence).getByText('WebUI 登入')).toBeInTheDocument()
+    expect(bodyOf(stub, '/api/setup/qbittorrent/apply')).toEqual({
+      login: { username: 'skipper', password: 'harbour' },
+    })
+    // 設好之後欄位收起來，只說帳號是誰。
+    expect(await screen.findByText('qBittorrent WebUI 的帳號：')).toBeInTheDocument()
+    expect(screen.queryByLabelText('再輸入一次密碼')).not.toBeInTheDocument()
+  })
+
+  it('WebUI 登入必填：帳號預填擁有者，沒填密碼或兩次不同就不送（M4 票 07）', async () => {
+    const stub = stubApi({
+      [STATUS]: { body: AT_BERTH_TWO },
+      [DIFF]: { body: qbittorrentSetup() },
+      [APPLY]: { body: qbittorrentSetup() },
+    })
+    const user = userEvent.setup()
+
+    renderWithProviders(<SetupPage />)
+    const legend = await screen.findByText('qBittorrent WebUI 登入')
+    const fields = within(legend.closest('fieldset')!)
+    expect(fields.getByLabelText('帳號')).toHaveValue('skipper')
+    // 說得出這是 qBittorrent 自己的登入、Berth 用不到它。
+    expect(fields.getByText(/Berth 自己用不到它/)).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: '套用這 5 個鍵' }))
+    expect(await fields.findByText('這一格要填。')).toBeInTheDocument()
+    await user.type(fields.getByLabelText('密碼'), 'harbour')
+    await user.type(fields.getByLabelText('再輸入一次密碼'), 'harbor')
+    await user.click(screen.getByRole('button', { name: '套用這 5 個鍵' }))
+    expect(await fields.findByText('兩次輸入的密碼不一樣。')).toBeInTheDocument()
+
+    expect(stub.mock.calls.some(([url]) => url === '/api/setup/qbittorrent/apply')).toBe(false)
+  })
+
+  it('設過登入之後重按不帶登入，按「更換登入」才打開欄位（M4 票 07）', async () => {
+    const set = qbittorrentSetup({ web_ui_username: 'skipper' })
+    const stub = stubApi({
+      [STATUS]: { body: AT_BERTH_TWO },
+      [DIFF]: { body: set },
+      [APPLY]: { body: set },
+    })
+    const user = userEvent.setup()
+
+    renderWithProviders(<SetupPage />)
+    expect(await screen.findByText('qBittorrent WebUI 的帳號：')).toBeInTheDocument()
+    expect(screen.queryByLabelText('密碼')).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '套用這 5 個鍵' }))
+
+    await waitFor(() =>
+      expect(bodyOf(stub, '/api/setup/qbittorrent/apply')).toEqual({ login: null }),
+    )
+    await user.click(screen.getByRole('button', { name: '更換登入' }))
+    expect(screen.getByLabelText('帳號')).toHaveValue('skipper')
   })
 
   it('版本太舊時給的是升級指令，不是一顆按不動的按鈕', async () => {
@@ -139,7 +204,8 @@ describe('泊位 2：qBittorrent', () => {
           origin: 'existing',
           base_url: 'http://nas:8080',
           temp_path_warning: true,
-          sets_password: false,
+          web_ui_login: false,
+          web_ui_username: '',
           writes_preferences: false,
         }),
       },
@@ -155,6 +221,9 @@ describe('泊位 2：qBittorrent', () => {
     expect(screen.getByText('/downloads')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /套用/ })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: '確認，不改任何設定' })).toBeEnabled()
+    // 既有的那一台沒有 WebUI 登入那一格（M4 票 07）。
+    expect(screen.queryByText('qBittorrent WebUI 登入')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('再輸入一次密碼')).not.toBeInTheDocument()
   })
 
   it('連不上時說得出下一步', async () => {
@@ -221,11 +290,33 @@ describe('泊位 4：索引站', () => {
     renderWithProviders(<SetupPage />)
     const picks = (await screen.findByText('要加入哪些站')).closest('fieldset')!
     await user.click(within(picks).getByLabelText('The Pirate Bay'))
+    await typePassword(user)
     await user.click(screen.getByRole('button', { name: '加入這 8 個站' }))
 
-    const call = fetchStub.mock.calls.find(([, init]) => init?.method === 'POST')!
-    expect(JSON.parse(String(call[1]?.body)).indexers).not.toContain('thepiratebay')
-    expect(JSON.parse(String(call[1]?.body)).indexers).toContain('nyaasi')
+    await waitFor(() =>
+      expect(fetchStub.mock.calls.some(([url]) => url === '/api/setup/indexers/apply')).toBe(true),
+    )
+    const body = bodyOf(fetchStub, '/api/setup/indexers/apply')
+    expect(body.indexers).not.toContain('thepiratebay')
+    expect(body.indexers).toContain('nyaasi')
+    // Prowlarr 的介面登入跟著「加入」一起送（M4 票 07）。
+    expect(body.login).toEqual({ username: 'skipper', password: 'harbour' })
+  })
+
+  it('Prowlarr 介面登入必填：沒填密碼就不加站（M4 票 07）', async () => {
+    const fetchStub = stubApi({
+      [STATUS]: { body: AT_INDEXER },
+      [INDEXERS]: { body: indexerSetup() },
+    })
+    const user = userEvent.setup()
+
+    renderWithProviders(<SetupPage />)
+    const fields = within((await screen.findByText('Prowlarr 介面登入')).closest('fieldset')!)
+    expect(fields.getByLabelText('帳號')).toHaveValue('skipper')
+    await user.click(screen.getByRole('button', { name: '加入這 9 個站' }))
+
+    expect(await fields.findByText('這一格要填。')).toBeInTheDocument()
+    expect(fetchStub.mock.calls.some(([url]) => url === '/api/setup/indexers/apply')).toBe(false)
   })
 
   it('逐站顯示成敗：連不上的變紅並展開手動步驟，其餘照樣繫上', async () => {

@@ -1,12 +1,18 @@
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { QBITTORRENT_STEPS, type QbittorrentStep as QbittorrentStepKey } from '../api/setup'
+import {
+  QBITTORRENT_STEPS,
+  type InterfaceLogin,
+  type QbittorrentStep as QbittorrentStepKey,
+} from '../api/setup'
 import { type QbittorrentSetup, type SetupStep } from '../api/schemas'
 import { STICKY_ACTION, CopyLine, GhostButton, Notice, PrimaryButton } from '../components/controls'
 import { Cutaway, CutawayRow } from '../components/Cutaway'
 import { StepLine } from '../components/StepLine'
 import { isSettled } from '../components/steps'
+import { useInterfaceLogin } from './interfaceLogin'
+import { BerthLogin } from './InterfaceLoginFields'
 import { STEP_FIX, STEP_LABEL } from './qbittorrentSteps'
 import { StepFrame } from './StepFrame'
 
@@ -18,9 +24,12 @@ import { StepFrame } from './StepFrame'
  *
  * **既有的那一台一個鍵都不寫**（`writes_preferences`，M4 票 05）：剖面照樣列，但說的是
  * 「不會寫入」，按鈕只是確認連得上、版本夠新。
+ *
+ * **套件內的那一台多一組 WebUI 登入**（`web_ui_login`，M4 票 07）：跟著「套用」送出，必填。
  */
 export function QbittorrentStep({
   setup,
+  owner,
   applying,
   requestFailed,
   onApply,
@@ -29,10 +38,16 @@ export function QbittorrentStep({
   redetect,
 }: {
   setup: QbittorrentSetup
+  /** 擁有者的名字：WebUI 帳號還沒設過時預填它。 */
+  owner: string
   applying: boolean
   /** 請求本身沒跑完。逐鍵的失敗在 `setup.steps` 裡，各自貼在它那一行。 */
   requestFailed: boolean
-  onApply: () => void
+  /**
+   * `login` 是泊位上填的 WebUI 登入；`null` 是登入照舊（設過了、沒按「更換」）。
+   * 回傳的 promise 成功之後欄位清掉密碼、收起來。
+   */
+  onApply: (login: InterfaceLogin | null) => Promise<unknown>
   /** 回頭看的說明（`RevisitNote`），這一頁做完了才有。 */
   note?: ReactNode
   /** 上一個 / 下一個泊位（`BerthNav`）。 */
@@ -57,6 +72,7 @@ export function QbittorrentStep({
       ) : (
         <ApplySequence
           setup={setup}
+          owner={owner}
           applying={applying}
           requestFailed={requestFailed}
           onApply={onApply}
@@ -87,10 +103,12 @@ function DiffCutaway({ setup }: { setup: QbittorrentSetup }) {
         />
         <CutawayRow
           term={t('qbittorrent.cutaway.password')}
-          value={t(
-            setup.sets_password ? 'qbittorrent.cutaway.willSet' : 'qbittorrent.cutaway.notSet',
-          )}
-          muted={!setup.sets_password}
+          value={
+            !setup.web_ui_login
+              ? t('qbittorrent.cutaway.existingLogin')
+              : setup.web_ui_username || t('qbittorrent.cutaway.willSet')
+          }
+          muted={!setup.web_ui_username}
         />
       </Cutaway>
 
@@ -195,16 +213,29 @@ function Blocked({ setup, redetect }: { setup: QbittorrentSetup; redetect?: Reac
  */
 function ApplySequence({
   setup,
+  owner,
   applying,
   requestFailed,
   onApply,
 }: {
   setup: QbittorrentSetup
+  owner: string
   applying: boolean
   requestFailed: boolean
-  onApply: () => void
+  onApply: (login: InterfaceLogin | null) => Promise<unknown>
 }) {
   const { t } = useTranslation()
+  const login = useInterfaceLogin({ current: setup.web_ui_username, suggested: owner })
+
+  function apply() {
+    const taken = setup.web_ui_login ? login.take() : null
+    if (taken === undefined) return
+    // 請求沒走完的那一句由 `requestFailed` 說；欄位留著，改一個字再按。
+    onApply(taken).then(
+      () => taken && login.reset(taken.username),
+      () => undefined,
+    )
+  }
   const byStep = new Map(setup.steps.map((row) => [row.step, row]))
   const started = setup.steps.length > 0
   const done = started && !applying && setup.steps.every((row) => isSettled(row.status))
@@ -218,6 +249,12 @@ function ApplySequence({
           <Notice signal="assigned" label={t('common.warning')}>
             {t('qbittorrent.warning.tempPath')}
           </Notice>
+        </div>
+      )}
+
+      {setup.web_ui_login && (
+        <div className="mt-6">
+          <BerthLogin service="qbittorrent" current={setup.web_ui_username} form={login} />
         </div>
       )}
 
@@ -257,11 +294,11 @@ function ApplySequence({
 
       <div className={`mt-6 ${done ? '' : STICKY_ACTION}`}>
         {done ? (
-          <GhostButton type="button" busy={applying} onClick={onApply}>
+          <GhostButton type="button" busy={applying} onClick={apply}>
             {t(writes ? 'qbittorrent.rerun' : 'qbittorrent.recheck')}
           </GhostButton>
         ) : (
-          <PrimaryButton type="button" busy={applying} onClick={onApply}>
+          <PrimaryButton type="button" busy={applying} onClick={apply}>
             {applying
               ? t(writes ? 'qbittorrent.applying' : 'qbittorrent.checking')
               : writes

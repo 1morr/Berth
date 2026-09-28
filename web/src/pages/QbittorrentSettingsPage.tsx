@@ -6,6 +6,7 @@ import { ApiError } from '../api/client'
 import { issuesQueryOptions } from '../api/issues'
 import { reviewQueryOptions } from '../api/review'
 import type { QbittorrentSetup } from '../api/schemas'
+import { setQbittorrentLogin } from '../api/setup'
 import {
   diskQueryOptions,
   qbittorrentDriftQueryOptions,
@@ -17,11 +18,13 @@ import { SIGNAL_FILL } from '../components/signal'
 import { SettingsFrame, SettingsSection } from '../settings/SettingsFrame'
 import { ServiceConnection } from '../settings/ServiceConnection'
 import { HealthSection } from '../settings/HealthSection'
+import { InterfaceLoginSection } from '../settings/InterfaceLoginSection'
 import { useServiceCheck } from '../settings/useServiceCheck'
 
 /**
  * 設定 → qBittorrent（票 06i）。健康與重新檢查、既有 qBittorrent 的位址與帳密（精靈第 2 步的
- * 同一條纜繩）、建議設定的差異與還原（brief §16.3），以及磁碟空間門檻。
+ * 同一條纜繩）、套件內那一台的 WebUI 登入（M4 票 07）、建議設定的差異與還原（brief §16.3），
+ * 以及磁碟空間門檻。
  *
  * 門檻住這裡（shape 時使用者拍板）：它量的是 qBittorrent 的 incomplete 那一側，擋的是送單給
  * qBittorrent（M3 票 04），不必為一個欄位多開一個「一般」分頁。
@@ -40,6 +43,13 @@ export function QbittorrentSettingsPage() {
       check.mutate('qbittorrent')
     },
   })
+  const login = useMutation({
+    mutationFn: setQbittorrentLogin,
+    onSuccess: (fresh) => {
+      queryClient.setQueryData(qbittorrentDriftQueryOptions.queryKey, fresh)
+      check.mutate('qbittorrent')
+    },
+  })
 
   return (
     <SettingsFrame
@@ -55,6 +65,21 @@ export function QbittorrentSettingsPage() {
           void queryClient.invalidateQueries({ queryKey: qbittorrentDriftQueryOptions.queryKey })
         }}
       />
+      {/* 連不上時照樣畫：按下去得到的是服務回的原文，不是一個消失的區塊。 */}
+      {drift.data?.web_ui_login && (
+        <InterfaceLoginSection
+          service="qbittorrent"
+          current={drift.data.web_ui_username}
+          saving={login.isPending}
+          onSave={async (value) => {
+            const fresh = await login.mutateAsync(value)
+            return {
+              step: fresh.steps.find((row) => row.step === 'web_ui_password'),
+              error: fresh.error,
+            }
+          }}
+        />
+      )}
       <Drift
         drift={drift.data}
         pending={drift.isPending}

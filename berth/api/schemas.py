@@ -8,8 +8,9 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
 from berth.domain import (
     CollectionType,
@@ -21,6 +22,7 @@ from berth.domain import (
     StepStatus,
 )
 from berth.services.health import CHECK_INTERVAL, HealthReport, Status
+from berth.services.steps import InterfaceLogin
 
 
 class StepOut(BaseModel):
@@ -71,6 +73,20 @@ class PreferenceDiffOut(BaseModel):
     differs: bool
 
 
+class InterfaceLoginIn(BaseModel):
+    """套件內 qBittorrent / Prowlarr 自己的介面登入（M4 票 07）。兩次密碼一致由前端比對。
+
+    與 `LoginIn` 不同，這裡**要**約束：它不是拿來驗誰的帳密，空的就是沒填，422 說得出哪一格。
+    帳號先去掉前後空白再驗：只有空白的帳號寫進去就是一個沒人打得出來的登入。密碼照原樣。
+    """
+
+    username: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
+    password: str = Field(min_length=1)
+
+    def value(self) -> InterfaceLogin:
+        return InterfaceLogin(username=self.username, password=self.password)
+
+
 class QbittorrentOut(BaseModel):
     """精靈第 4 步與設定頁的漂移還原共用（brief §16.3）。"""
 
@@ -86,7 +102,10 @@ class QbittorrentOut(BaseModel):
     diffs: list[PreferenceDiffOut]
     steps: list[StepOut]
     temp_path_warning: bool
-    sets_password: bool
+    #: 泊位上有 WebUI 登入那一格：只有套件內的那一台（M4 票 07）。
+    web_ui_login: bool
+    #: Berth 替套件內那一台設下的 WebUI 帳號；還沒設過是空字串。
+    web_ui_username: str
     #: 五個建議鍵會被寫。既有的那一台是 `false`：只列出來，Berth 不改它的全域偏好（M4 票 05）。
     writes_preferences: bool
     error: str

@@ -6,6 +6,7 @@ import type {
   IndexerKind,
   IndexerOption,
   IndexerSetup,
+  InterfaceLogin,
   SiteSearch,
   TrialSearchResult,
 } from '../api/setup'
@@ -24,6 +25,8 @@ import { SIGNAL_FILL } from '../components/signal'
 import { Cutaway, CutawayRow } from '../components/Cutaway'
 import { StepLine } from '../components/StepLine'
 import { useFocusAfterRemoval } from '../components/useFocusAfterRemoval'
+import { useInterfaceLogin } from './interfaceLogin'
+import { BerthLogin } from './InterfaceLoginFields'
 import { languageName } from './languageName'
 import { StepFrame } from './StepFrame'
 
@@ -39,6 +42,7 @@ import { StepFrame } from './StepFrame'
  */
 export function IndexerStep({
   indexers,
+  owner,
   applying,
   connecting,
   onApply,
@@ -50,9 +54,11 @@ export function IndexerStep({
   redetect,
 }: {
   indexers: IndexerSetup
+  /** 擁有者的名字：Prowlarr 介面帳號還沒設過時預填它。 */
+  owner: string
   applying: boolean
   connecting: boolean
-  onApply: (selected: string[]) => void
+  onApply: (input: ApplyIndexersInput) => Promise<unknown>
   onConnect: (input: IndexerConnectInput) => void
   onSkip: () => void
   /** 試搜與移除（`TrialSearch` 的 props，少了站的清單——那由這一頁從 `indexers` 導出）。 */
@@ -75,6 +81,7 @@ export function IndexerStep({
 
       <IndexerActions
         indexers={indexers}
+        owner={owner}
         applying={applying}
         connecting={connecting}
         onApply={onApply}
@@ -89,13 +96,20 @@ export function IndexerStep({
   )
 }
 
+/** 「加入」送出的：勾起來的站，與泊位上填的介面登入（`null` 是登入照舊）。 */
+export interface ApplyIndexersInput {
+  indexers: string[]
+  login: InterfaceLogin | null
+}
+
 /**
  * 這個泊位能做的事：套件內是勾預設站 + 試搜 + 移除，既有是填位址與 key + 試搜。
  * 精靈與設定的索引站那一頁共用這一塊（票 06i）；設定頁不給 `onSkip`——那裡不是第一次，
- * 沒有「之後再說」。
+ * 沒有「之後再說」——也不給 `owner`：介面登入在它自己的那一區改（M4 票 07）。
  */
 export function IndexerActions({
   indexers,
+  owner,
   applying,
   connecting,
   onApply,
@@ -105,9 +119,11 @@ export function IndexerActions({
   redetect,
 }: {
   indexers: IndexerSetup
+  /** 精靈給：套件內 Prowlarr 的介面登入跟著「加入」一起送，未設過時帳號預填它。 */
+  owner?: string
   applying: boolean
   connecting: boolean
-  onApply: (selected: string[]) => void
+  onApply: (input: ApplyIndexersInput) => Promise<unknown>
   onConnect: (input: IndexerConnectInput) => void
   /** 「之後再說」。只有精靈給。 */
   onSkip?: () => void
@@ -125,6 +141,7 @@ export function IndexerActions({
       <>
         <DefaultIndexers
           indexers={indexers}
+          owner={owner}
           applying={applying}
           onApply={onApply}
           onSkip={onSkip}
@@ -204,16 +221,23 @@ function IndexerCutaway({ indexers, bundled }: { indexers: IndexerSetup; bundled
  */
 function DefaultIndexers({
   indexers,
+  owner,
   applying,
   onApply,
   onSkip,
 }: {
   indexers: IndexerSetup
+  owner?: string
   applying: boolean
-  onApply: (selected: string[]) => void
+  onApply: (input: ApplyIndexersInput) => Promise<unknown>
   onSkip?: () => void
 }) {
   const { t, i18n } = useTranslation()
+  const withLogin = owner !== undefined && indexers.web_ui_login
+  const loginForm = useInterfaceLogin({
+    current: indexers.web_ui_username,
+    suggested: owner ?? '',
+  })
   const [touched, setTouched] = useState<ReadonlyMap<string, boolean>>(new Map())
   const fresh = !indexers.options.some((row) => row.present)
   const ticked = (row: IndexerOption) => touched.get(row.definition_name) ?? (fresh || row.present)
@@ -224,6 +248,15 @@ function DefaultIndexers({
 
   function toggle(name: string, value: boolean) {
     setTouched((was) => new Map(was).set(name, value))
+  }
+
+  function apply() {
+    const taken = withLogin ? loginForm.take() : null
+    if (taken === undefined) return
+    onApply({ indexers: selected, login: taken }).then(
+      () => taken && loginForm.reset(taken.username),
+      () => undefined,
+    )
   }
 
   return (
@@ -265,12 +298,19 @@ function DefaultIndexers({
         </div>
       </fieldset>
 
+      {/* 介面登入跟著「加入」一起送（M4 票 07）；「之後再說」連它一起跳過。 */}
+      {withLogin && (
+        <div className="mt-6">
+          <BerthLogin service="prowlarr" current={indexers.web_ui_username} form={loginForm} />
+        </div>
+      )}
+
       <div className={`mt-6 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] ${STICKY_ACTION}`}>
         <PrimaryButton
           type="button"
           busy={applying}
           disabled={selected.length === 0}
-          onClick={() => onApply(selected)}
+          onClick={apply}
         >
           {applying
             ? t('indexer.defaults.applying')
@@ -299,7 +339,7 @@ function DefaultIndexers({
                 <p className="mt-3 text-xs text-ink-dim">{t('indexer.defaults.retryHint')}</p>
               </StepLine>
             ))}
-          {/* 「同一組帳密」那一條也是這一輪做的事，成敗要看得到（brief §16.3）。 */}
+          {/* 介面登入那一條也是這一輪做的事，成敗要看得到（brief §16.3）。 */}
           {login && (
             <StepLine
               label={t('indexer.defaults.login')}

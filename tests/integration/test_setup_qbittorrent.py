@@ -1,7 +1,7 @@
 """精靈第 4 步的 services 命令（plan §9.3 第 4 步、§8.1、票 08）。
 
-驗的是票 08 的驗收條件本身：差異列得出來、套用只寫有差異的鍵、勾了「同一組帳密」才設密碼、
-既有服務的 temp path 未啟用只警告、Web API 低於 2.8.4 拒絕接入、重按結果一致。
+驗的是票 08 的驗收條件本身：差異列得出來、套用只寫有差異的鍵、套件內那一台設泊位上填的登入
+（M4 票 07）、既有服務的 temp path 未啟用只警告、Web API 低於 2.8.4 拒絕接入、重按結果一致。
 """
 
 from __future__ import annotations
@@ -25,17 +25,23 @@ from berth.domain import (
     StepStatus,
 )
 from berth.models import PathSettings, QbittorrentSettings, ServiceProbe, SetupSettings, SetupStep
+from berth.services.commands import CommandMark, Effect, mark_of
 from berth.services.qbittorrent import (
     WEB_UI_PASSWORD_KEY,
     apply_qbittorrent,
     read_qbittorrent_diff,
+    set_interface_login,
 )
 from berth.services.settings import read_settings, write_settings
 from berth.services.setup import STEP_QBITTORRENT, STEP_ROUTES, read_status
-from tests.integration.arrange import interface_logins, own
+from berth.services.steps import InterfaceLogin
+from tests.integration.arrange import own
 from tests.integration.factories import FakeClientFactory
 
 NOW = datetime(2026, 9, 8, 12, 0, tzinfo=UTC)
+
+#: 泊位上填的 WebUI 登入（M4 票 07）。
+SKIPPER = InterfaceLogin(username="skipper", password="harbour")
 
 #: 精靈建議的五個鍵（plan §8.1）。順序即畫面上纜繩的順序。
 RECOMMENDED_KEYS = [
@@ -51,14 +57,11 @@ async def arrange(
     session: AsyncSession,
     *,
     origin: ServiceOrigin = ServiceOrigin.BUNDLED,
-    logins: bool = True,
     username: str = "",
     password: str = "",
 ) -> None:
     """把資料庫推到「第 3 步做完、輪到 qBittorrent」的狀態。"""
     await own(session)
-    if logins:
-        await interface_logins(session, "skipper", "harbour")
     setup = await read_settings(session, SetupSettings)
     # 前兩個泊位已經接好了：步驟由狀態導出，所以第 4 步要成為「當前」就得先把它們填齊。
     setup.jellyfin.steps = [SetupStep(key=JellyfinStep.API_KEY.value, status=StepStatus.OK)]
@@ -132,7 +135,7 @@ async def test_diff_lists_the_five_recommended_keys(session: AsyncSession) -> No
 
 @pytest.mark.asyncio
 async def test_apply_writes_only_the_keys_that_differ(session: AsyncSession) -> None:
-    await arrange(session, logins=False)
+    await arrange(session)
     paths = await read_settings(session, PathSettings)
     client = FakeQbittorrentClient(
         preferences={"auto_tmm_enabled": True, "save_path": paths.complete_root}
@@ -156,19 +159,22 @@ async def test_apply_writes_only_the_keys_that_differ(session: AsyncSession) -> 
 
 
 @pytest.mark.asyncio
-async def test_apply_sets_the_web_ui_password_when_the_admin_asked_for_it(
-    session: AsyncSession,
-) -> None:
+async def test_apply_sets_the_web_ui_login_typed_on_the_berth(session: AsyncSession) -> None:
+    """套件內那一台的 WebUI 登入跟著「套用」送進來（M4 票 07），設完之後拿它登得進去。"""
     await arrange(session)
     client = FakeQbittorrentClient()
     factory = FakeClientFactory(qbittorrent=client)
 
-    status = await apply_qbittorrent(session, factory)
+    status = await apply_qbittorrent(session, factory, login=SKIPPER)
 
     assert client.writes[-1] == {"web_ui_username": "skipper", "web_ui_password": "harbour"}
     assert [row.status for row in status.steps if row.step == QbittorrentStep.PASSWORD.value] == [
         StepStatus.OK
     ]
+    assert (status.web_ui_login, status.web_ui_username) == (True, "skipper")
+    await client.login("skipper", "harbour")
+    with pytest.raises(AuthFailedError):
+        await client.login("admin", "adminadmin")
     # 密碼設下去之後 Berth 自己要留一份，之後的里程碑才登得進去。
     settings = await read_settings(session, QbittorrentSettings)
     assert (settings.username, settings.password) == ("skipper", "harbour")
@@ -179,52 +185,96 @@ async def test_apply_sets_the_web_ui_password_when_the_admin_asked_for_it(
 
 
 @pytest.mark.asyncio
-async def test_new_interface_credentials_reach_qbittorrent_when_step_four_is_applied_again(
-    session: AsyncSession,
-) -> None:
-    """泊位上的介面帳密改了，回到第 4 步重新套用才生效（票 06c、M4 票 06）。"""
+async def test_a_changed_login_replaces_the_old_one(session: AsyncSession) -> None:
+    """設定頁改登入（M4 票 07）：舊的那一組失效、新的有效，偏好不跟著重寫。"""
     await arrange(session)
     client = FakeQbittorrentClient()
     factory = FakeClientFactory(qbittorrent=client)
-    await apply_qbittorrent(session, factory)
+    await apply_qbittorrent(session, factory, login=SKIPPER)
+    written = len(client.writes)
 
-    await interface_logins(session, "deckhand", "changed")
-    await session.commit()
-    await apply_qbittorrent(session, factory)
+    status = await set_interface_login(
+        session, factory, InterfaceLogin(username="deckhand", password="changed")
+    )
 
-    assert client.writes[-1] == {"web_ui_username": "deckhand", "web_ui_password": "changed"}
+    assert client.writes[written:] == [
+        {"web_ui_username": "deckhand", "web_ui_password": "changed"}
+    ]
+    await client.login("deckhand", "changed")
+    with pytest.raises(AuthFailedError):
+        await client.login("skipper", "harbour")
+    assert status.web_ui_username == "deckhand"
     settings = await read_settings(session, QbittorrentSettings)
     assert (settings.username, settings.password) == ("deckhand", "changed")
+    # 密碼那一條換成這一次的結果，五個鍵的纜繩留著。
+    by_step = {row.step: row.status for row in status.steps}
+    assert by_step[QbittorrentStep.PASSWORD.value] is StepStatus.OK
+    assert by_step[QbittorrentStep.SAVE_PATH.value] is StepStatus.OK
+    assert mark_of(set_interface_login) == CommandMark(Effect.REVERSIBLE)
 
 
 @pytest.mark.asyncio
-async def test_apply_leaves_the_password_alone_without_a_login_on_the_berth(
+async def test_reapplying_without_a_login_keeps_the_one_already_set(
     session: AsyncSession,
 ) -> None:
-    await arrange(session, logins=False)
+    """回頭重按、設定頁的「還原建議設定」都不帶登入：已經設過的那一組照舊，不重寫。"""
+    await arrange(session)
+    client = FakeQbittorrentClient()
+    factory = FakeClientFactory(qbittorrent=client)
+    await apply_qbittorrent(session, factory, login=SKIPPER)
+    written = len(client.writes)
+
+    status = await apply_qbittorrent(session, factory)
+
+    assert client.writes[written:] == []
+    password = [row for row in status.steps if row.step == QbittorrentStep.PASSWORD.value]
+    assert [(row.status, row.detail) for row in password] == [(StepStatus.SKIPPED, "skipper")]
+    assert (await read_status(session)).current_step == STEP_ROUTES
+
+
+@pytest.mark.asyncio
+async def test_a_bundled_qbittorrent_without_a_login_holds_the_wizard(
+    session: AsyncSession,
+) -> None:
+    """兩格都必填（M4 票 07 shape）：沒設過登入的套件內那一台，密碼那一條沒跑到，精靈不往下走。"""
+    await arrange(session)
     client = FakeQbittorrentClient()
     factory = FakeClientFactory(qbittorrent=client)
 
     status = await apply_qbittorrent(session, factory)
 
-    assert all("web_ui_password" not in write for write in client.writes)
+    assert all(WEB_UI_PASSWORD_KEY not in write for write in client.writes)
     assert [row.status for row in status.steps if row.step == QbittorrentStep.PASSWORD.value] == [
-        StepStatus.SKIPPED
+        StepStatus.PENDING
     ]
+    assert (status.web_ui_login, status.web_ui_username) == (True, "")
+    assert (await read_status(session)).current_step == STEP_QBITTORRENT
 
 
 @pytest.mark.asyncio
 async def test_existing_service_never_gets_a_password_from_berth(session: AsyncSession) -> None:
-    """既有 qBittorrent 是使用者自己的，Berth 不改他的密碼（brief §16.4）。"""
+    """既有 qBittorrent 是使用者自己的，Berth 不改他的密碼（brief §16.4、M4 票 07）。
+
+    泊位上沒有那一格（`web_ui_login` 是 false）；直接打 API 帶了登入也一個字都不送。
+    """
     await arrange(session, origin=ServiceOrigin.EXISTING, username="owner", password="s3cret")
     client = FakeQbittorrentClient(base_url="http://nas:8080")
     factory = FakeClientFactory(qbittorrent=client)
 
-    await apply_qbittorrent(session, factory)
+    status = await apply_qbittorrent(session, factory)
+    with pytest.raises(ValueError, match="existing service"):
+        await apply_qbittorrent(session, factory, login=SKIPPER)
+    with pytest.raises(ValueError, match="existing service"):
+        await set_interface_login(session, factory, SKIPPER)
 
-    assert all("web_ui_password" not in write for write in client.writes)
-    # 既有服務要先登入才寫得了偏好。
+    assert all(WEB_UI_PASSWORD_KEY not in write for write in client.writes)
+    assert (status.web_ui_login, status.web_ui_username) == (False, "")
+    # 既有服務要先登入才讀得了偏好；Berth 連它用的那一組不是「WebUI 登入」。
     assert client.logins == [("owner", "s3cret")]
+    settings = await read_settings(session, QbittorrentSettings)
+    assert (settings.username, settings.password) == ("owner", "s3cret")
+    # 它的判定不因為這一步被釘成套件內，也不算要設登入：精靈照樣往下走。
+    assert (await read_status(session)).current_step == STEP_ROUTES
 
 
 @pytest.mark.asyncio
@@ -268,8 +318,8 @@ async def test_pressing_apply_twice_changes_nothing_the_second_time(
     client = FakeQbittorrentClient()
     factory = FakeClientFactory(qbittorrent=client)
 
-    first = await apply_qbittorrent(session, factory)
-    second = await apply_qbittorrent(session, factory)
+    first = await apply_qbittorrent(session, factory, login=SKIPPER)
+    second = await apply_qbittorrent(session, factory, login=SKIPPER)
 
     assert len(client.writes) == 2  # 第一輪的五個鍵 + 密碼；第二輪一個都不寫。
     assert [row.status for row in second.steps] == [
@@ -290,7 +340,8 @@ async def test_the_wizard_moves_on_once_the_preferences_are_applied(
     await arrange(session)
     assert (await read_status(session)).current_step == STEP_QBITTORRENT
 
-    await apply_qbittorrent(session, FakeClientFactory(qbittorrent=FakeQbittorrentClient()))
+    factory = FakeClientFactory(qbittorrent=FakeQbittorrentClient())
+    await apply_qbittorrent(session, factory, login=SKIPPER)
 
     # 下一步是媒體庫路徑（票 06d 移到 qBittorrent 之後）。
     assert (await read_status(session)).current_step == STEP_ROUTES
@@ -321,7 +372,7 @@ async def test_a_trailing_slash_is_not_a_difference(session: AsyncSession) -> No
     照字面比對的話那兩個鍵在 4.4 上永遠「不同」，每次重按都重寫一次同樣的值——
     也就破壞了「重按結果一致」。
     """
-    await arrange(session, logins=False)
+    await arrange(session)
     paths = await read_settings(session, PathSettings)
     client = FakeQbittorrentClient(
         version=QbittorrentVersion(app="v4.4.5", webapi="2.8.5"),
@@ -359,7 +410,7 @@ async def test_a_password_that_will_not_write_keeps_the_five_keys(
 
     client.set_preferences = fail_on_password  # type: ignore[method-assign]
 
-    status = await apply_qbittorrent(session, factory)
+    status = await apply_qbittorrent(session, factory, login=SKIPPER)
 
     by_step = {row.step: row.status for row in status.steps}
     assert by_step[QbittorrentStep.SAVE_PATH.value] is StepStatus.OK

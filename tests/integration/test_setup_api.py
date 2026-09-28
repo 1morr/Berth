@@ -235,7 +235,9 @@ WRITES: tuple[tuple[str, str, object], ...] = (
     ("POST", "/api/setup/jellyfin/libraries/paths", {"library": "x"}),
     ("POST", "/api/setup/services/qbittorrent", {"base_url": "http://nas:8080"}),
     ("POST", "/api/setup/qbittorrent/apply", None),
+    ("PUT", "/api/setup/qbittorrent/login", {"username": "a", "password": "b"}),
     ("POST", "/api/setup/indexers/apply", {"indexers": ["nyaasi"]}),
+    ("PUT", "/api/setup/indexers/login", {"username": "a", "password": "b"}),
     ("POST", "/api/setup/indexers/connect", {"kind": "prowlarr", "base_url": "http://x"}),
     ("POST", "/api/setup/indexers/skip", {}),
     ("POST", "/api/setup/tmdb/test", {"api_key": "k"}),
@@ -673,22 +675,74 @@ class TestQbittorrent:
         assert body["version"] == "v5.2.3"
         assert body["webapi_version"] == "2.15.1"
         assert body["supported"] is True
-        # 介面帳密在票 07 的泊位欄位；那之前 Berth 不設 qBittorrent 的密碼（M4 票 06）。
-        assert body["sets_password"] is False
+        # 套件內的那一台有 WebUI 登入那一格，還沒設過（M4 票 07）。
+        assert (body["web_ui_login"], body["web_ui_username"]) == (True, "")
 
     def test_applying_writes_the_keys_and_leaves_no_difference(
         self, client: TestClient, qbittorrent: FakeQbittorrentClient
     ) -> None:
-        body = client.post("/api/setup/qbittorrent/apply").json()
+        body = client.post(
+            "/api/setup/qbittorrent/apply", json={"login": {"username": "skipper", "password": "h"}}
+        ).json()
 
         assert [row["differs"] for row in body["diffs"]] == [False] * 5
-        assert [row["status"] for row in body["steps"]] == ["ok"] * 5 + ["skipped"]
+        assert [row["status"] for row in body["steps"]] == ["ok"] * 6
         assert qbittorrent.writes[0].keys() == {
             "temp_path_enabled",
             "temp_path",
             "save_path",
             "auto_tmm_enabled",
             "category_changed_tmm_enabled",
+        }
+        assert body["web_ui_username"] == "skipper"
+
+    def test_without_a_login_the_password_line_has_not_run(self, client: TestClient) -> None:
+        """兩格都必填（M4 票 07）：沒帶登入也沒設過，密碼那一條沒跑到（精靈因此停在第 4 步，
+        `test_setup_qbittorrent.py` 驗那一半）。"""
+        body = client.post("/api/setup/qbittorrent/apply").json()
+
+        assert [row["status"] for row in body["steps"]] == ["ok"] * 5 + ["pending"]
+
+    @pytest.mark.parametrize(
+        "login",
+        [{"username": "skipper", "password": ""}, {"username": "   ", "password": "h"}],
+        ids=["blank-password", "whitespace-username"],
+    )
+    def test_a_blank_login_is_refused_before_anything_is_written(
+        self, client: TestClient, qbittorrent: FakeQbittorrentClient, login: dict[str, str]
+    ) -> None:
+        response = client.post("/api/setup/qbittorrent/apply", json={"login": login})
+
+        assert response.status_code == 422
+        assert qbittorrent.writes == []
+
+    def test_the_username_is_trimmed_before_it_is_written(
+        self, client: TestClient, qbittorrent: FakeQbittorrentClient
+    ) -> None:
+        client.post(
+            "/api/setup/qbittorrent/apply",
+            json={"login": {"username": " skipper ", "password": "h"}},
+        )
+
+        assert qbittorrent.writes[-1]["web_ui_username"] == "skipper"
+
+    def test_the_login_endpoint_replaces_the_web_ui_login(
+        self, client: TestClient, qbittorrent: FakeQbittorrentClient
+    ) -> None:
+        """設定頁的「更新登入」（M4 票 07）：舊的失效、新的有效。"""
+        client.post(
+            "/api/setup/qbittorrent/apply", json={"login": {"username": "skipper", "password": "h"}}
+        )
+
+        response = client.put(
+            "/api/setup/qbittorrent/login", json={"username": "deckhand", "password": "changed"}
+        )
+
+        assert response.status_code == 200
+        assert response.json()["web_ui_username"] == "deckhand"
+        assert qbittorrent.writes[-1] == {
+            "web_ui_username": "deckhand",
+            "web_ui_password": "changed",
         }
 
     def test_an_old_web_api_is_refused_with_its_version_visible(
@@ -769,6 +823,25 @@ class TestSource:
         assert [row["definition_name"] for row in body["options"]] == list(DEFAULT_INDEXERS)
         assert body["kind"] == "prowlarr"
         assert body["origin"] == "bundled"
+
+    def test_the_login_rides_along_and_can_be_changed_later(
+        self, client: TestClient, prowlarr: FakeProwlarrClient
+    ) -> None:
+        """Prowlarr 的介面登入跟著「加入」送；設定頁再改一次，舊的失效（M4 票 07）。"""
+        body = client.post(
+            "/api/setup/indexers/apply",
+            json={"indexers": ["nyaasi"], "login": {"username": "skipper", "password": "h"}},
+        ).json()
+        assert body["web_ui_username"] == "skipper"
+        assert prowlarr.signs_in("skipper", "h")
+
+        response = client.put(
+            "/api/setup/indexers/login", json={"username": "skipper", "password": "changed"}
+        )
+
+        assert response.status_code == 200
+        assert prowlarr.signs_in("skipper", "changed")
+        assert not prowlarr.signs_in("skipper", "h")
 
     def test_applying_adds_only_what_was_ticked(self, client: TestClient) -> None:
         body = client.post(
@@ -894,7 +967,10 @@ class TestRoutes:
             _set_paths(running, tmp_path)
             _claim(running)
             running.post("/api/setup/jellyfin/bootstrap")
-            running.post("/api/setup/qbittorrent/apply")
+            running.post(
+                "/api/setup/qbittorrent/apply",
+                json={"login": {"username": "skipper", "password": "harbour"}},
+            )
             running.post("/api/setup/indexers/skip", json={})
             running.post("/api/setup/tmdb/test", json={"api_key": "the-users-key"})
             yield running

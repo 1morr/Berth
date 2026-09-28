@@ -7,17 +7,20 @@ import {
   indexerSetupQueryOptions,
   removeIndexer,
   searchIndexers,
+  setIndexerLogin,
   type IndexerSetup,
 } from '../api/setup'
 import { Notice } from '../components/controls'
 import { SettingsFrame, SettingsSection } from '../settings/SettingsFrame'
 import { HealthSection } from '../settings/HealthSection'
+import { InterfaceLoginSection } from '../settings/InterfaceLoginSection'
 import { useServiceCheck } from '../settings/useServiceCheck'
 import { IndexerActions } from '../setup/IndexerStep'
 
 /**
  * 設定 → 索引站（票 06i）。加站、試搜、移除，既有 Torznab 換網址或 key——全部是精靈第 6 步的
- * `IndexerActions` 與同一批 `setup/indexers/*` 命令，只是沒有「之後再說」。
+ * `IndexerActions` 與同一批 `setup/indexers/*` 命令，只是沒有「之後再說」。套件內 Prowlarr 的
+ * 介面登入是自己的一區（M4 票 07）：加站不帶登入，登入在這裡改。
  *
  * 健康卡是 Prowlarr 那一張：接的是任意 Torznab 端點時，健康檢查仍以那一項報它（plan §3.2）。
  */
@@ -37,6 +40,7 @@ export function IndexerSettingsPage() {
   const connect = useMutation({ mutationFn: connectIndexer, onSuccess: absorb })
   const trial = useMutation({ mutationFn: searchIndexers })
   const remove = useMutation({ mutationFn: removeIndexer, onSuccess: absorb })
+  const login = useMutation({ mutationFn: setIndexerLogin, onSuccess: absorb })
 
   return (
     <SettingsFrame title={t('settings.indexerPage.title')} lede={t('settings.indexerPage.lede')}>
@@ -50,7 +54,7 @@ export function IndexerSettingsPage() {
               indexers={indexers.data}
               applying={apply.isPending}
               connecting={connect.isPending}
-              onApply={(selected) => apply.mutate(selected)}
+              onApply={(input) => apply.mutateAsync({ ...input, login: null })}
               onConnect={(input) => connect.mutate(input)}
               trial={{
                 result: trial.data,
@@ -71,6 +75,20 @@ export function IndexerSettingsPage() {
           <p className="text-sm text-ink-dim">{t('health.checking')}</p>
         )}
       </SettingsSection>
+      {indexers.data?.web_ui_login && (
+        <InterfaceLoginSection
+          service="prowlarr"
+          current={indexers.data.web_ui_username}
+          saving={login.isPending}
+          onSave={async (value) => {
+            const fresh = await login.mutateAsync(value)
+            return {
+              step: fresh.steps.find((row) => row.step === 'prowlarr_login'),
+              error: fresh.error,
+            }
+          }}
+        />
+      )}
     </SettingsFrame>
   )
 }

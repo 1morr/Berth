@@ -36,7 +36,7 @@ docker compose up -d
 
 每個泊位做完都停在結果上，按「前往下一個泊位」才走；泊位板上走過的格子點得回去，每一頁都有「上一個泊位」。
 
-**Berth 沒有自己的帳號**：第 1 步的那一組就是 Jellyfin 的管理員，也是 Berth 的擁有者，之後登入 Berth 就用它（其他人用自己的 Jellyfin 帳號，角色由 Jellyfin 決定）。密碼只交給 Jellyfin，Berth 不存。擁有者成立之前精靈只做得了「找到 Jellyfin、成為擁有者」，之後的每一步都要登入——誰先到誰建立，與 Jellyfin 自己的啟動精靈相同。套件內 qBittorrent 與 Prowlarr 的介面密碼目前不設（Berth 靠免密白名單進得去；自己開 qBittorrent WebUI 要看容器 log 的臨時密碼），各自的泊位欄位在下一版補上。
+**Berth 沒有自己的帳號**：第 1 步的那一組就是 Jellyfin 的管理員，也是 Berth 的擁有者，之後登入 Berth 就用它（其他人用自己的 Jellyfin 帳號，角色由 Jellyfin 決定）。密碼只交給 Jellyfin，Berth 不存。擁有者成立之前精靈只做得了「找到 Jellyfin、成為擁有者」，之後的每一步都要登入——誰先到誰建立，與 Jellyfin 自己的啟動精靈相同。套件內 qBittorrent 與 Prowlarr 的介面登入在它們各自的泊位上設（必填，帳號預填擁有者的名字）：那是給你自己打開它們的介面用的，Berth 靠免密白名單與 API key 用不到它；之後在設定頁的「介面登入」改。
 
 設定完成後精靈關閉，擁有者直接進 Berth；健康頁 `/health` 每 5 分鐘重跑同一組檢查。
 
@@ -56,7 +56,7 @@ docker compose up -d
 | 服務 | `.env` 變數（預設） | 備註 |
 | --- | --- | --- |
 | Berth | `BERTH_PORT`（8383） | 唯一需要開的介面 |
-| qBittorrent | `QBITTORRENT_WEBUI_PORT`（8080）、`QBITTORRENT_BT_PORT`（6881） | WebUI 從宿主或 LAN 進來要密碼（精靈設定它的泊位欄位在下一版補上，這之前是容器 log 的臨時密碼）。兩個 port 都是容器內外同一個號碼 |
+| qBittorrent | `QBITTORRENT_WEBUI_PORT`（8080）、`QBITTORRENT_BT_PORT`（6881） | WebUI 從宿主或 LAN 進來要密碼：精靈第 4 步泊位上設的那一組（設定 → qBittorrent 的「介面登入」改）。兩個 port 都是容器內外同一個號碼 |
 | Jellyfin | `JELLYFIN_PORT`（8096） | 「在 Jellyfin 開啟」開的就是這個 port |
 | Prowlarr | `PROWLARR_PORT`（9696） | |
 

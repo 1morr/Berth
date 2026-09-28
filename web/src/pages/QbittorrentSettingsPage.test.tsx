@@ -25,6 +25,7 @@ const DISK = 'GET /api/settings/disk'
 const SAVE_DISK = 'POST /api/settings/disk'
 const STATUS = 'GET /api/setup/status'
 const CONNECT = 'POST /api/setup/services/qbittorrent'
+const LOGIN = 'PUT /api/setup/qbittorrent/login'
 
 /** 建議值全部一致的那一台：沒有漂移，所以不該出現還原按鈕。 */
 const CLEAN = qbittorrentSetup({
@@ -104,12 +105,96 @@ describe('設定 → qBittorrent', () => {
     })
   })
 
-  it('套件內的 qBittorrent 沒有帳密表單：帳密是 Berth 寫進去的', async () => {
-    render()
+  it('套件內的 qBittorrent 沒有連線表單，只有它自己的 WebUI 登入（M4 票 07）', async () => {
+    render({ [DRIFT]: { body: qbittorrentSetup({ ...CLEAN, web_ui_username: 'skipper' }) } })
     renderApp('/settings/qbittorrent')
 
     expect(await screen.findByText(/這一套 compose 起的/)).toBeInTheDocument()
-    expect(screen.queryByLabelText('密碼')).not.toBeInTheDocument()
+    const login = within(
+      (await screen.findByRole('heading', { name: '介面登入' })).closest('section')!,
+    )
+    expect(login.getByText(/目前的帳號是 skipper/)).toBeInTheDocument()
+    expect(login.getByLabelText('帳號')).toHaveValue('skipper')
+    expect(screen.queryByRole('button', { name: '測試連線' })).not.toBeInTheDocument()
+  })
+
+  it('改 WebUI 登入：只送登入那一支，說出舊的那一組不能再用（M4 票 07）', async () => {
+    const stub = render({
+      [DRIFT]: { body: qbittorrentSetup({ ...CLEAN, web_ui_username: 'skipper' }) },
+      [LOGIN]: {
+        body: qbittorrentSetup({
+          ...CLEAN,
+          web_ui_username: 'deckhand',
+          steps: [{ step: 'web_ui_password', status: 'ok', detail: 'deckhand', error: '' }],
+        }),
+      },
+      [TEST_QBIT]: { body: healthDetail() },
+    })
+    const user = userEvent.setup()
+    renderApp('/settings/qbittorrent')
+
+    const login = within(
+      (await screen.findByRole('heading', { name: '介面登入' })).closest('section')!,
+    )
+    await user.clear(login.getByLabelText('帳號'))
+    await user.type(login.getByLabelText('帳號'), 'deckhand')
+    await user.type(login.getByLabelText('密碼'), 'changed')
+    await user.type(login.getByLabelText('再輸入一次密碼'), 'changed')
+    await user.click(login.getByRole('button', { name: '更新登入' }))
+
+    expect(await login.findByText(/之後用 deckhand 登入，舊的那一組不能再用/)).toBeInTheDocument()
+    const call = stub.mock.calls.find(([url]) => url === '/api/setup/qbittorrent/login')!
+    expect(call[1]?.method).toBe('PUT')
+    expect(JSON.parse(String(call[1]?.body))).toEqual({ username: 'deckhand', password: 'changed' })
+    // 只換登入：不連帶「還原建議設定」。
+    expect(stub.mock.calls.some(([url]) => url === '/api/settings/qbittorrent/apply')).toBe(false)
+    expect(login.getByLabelText('密碼')).toHaveValue('')
+  })
+
+  it('改登入時 qBittorrent 連不上：貼出原文，不說成請求沒走完（M4 票 07）', async () => {
+    render({
+      [DRIFT]: { body: qbittorrentSetup({ ...CLEAN, web_ui_username: 'skipper' }) },
+      [LOGIN]: {
+        body: qbittorrentSetup({
+          web_ui_username: 'skipper',
+          reachable: false,
+          blocked: true,
+          diffs: [],
+          error: 'connection refused',
+        }),
+      },
+      [TEST_QBIT]: { body: healthDetail() },
+    })
+    const user = userEvent.setup()
+    renderApp('/settings/qbittorrent')
+
+    const login = within(
+      (await screen.findByRole('heading', { name: '介面登入' })).closest('section')!,
+    )
+    await user.type(login.getByLabelText('密碼'), 'changed')
+    await user.type(login.getByLabelText('再輸入一次密碼'), 'changed')
+    await user.click(login.getByRole('button', { name: '更新登入' }))
+
+    expect(await login.findByText('connection refused')).toBeInTheDocument()
+    expect(login.queryByText(/請求沒有走完/)).not.toBeInTheDocument()
+  })
+
+  it('兩次密碼不一樣就不送（M4 票 07）', async () => {
+    const stub = render({
+      [DRIFT]: { body: qbittorrentSetup({ ...CLEAN, web_ui_username: 'skipper' }) },
+    })
+    const user = userEvent.setup()
+    renderApp('/settings/qbittorrent')
+
+    const login = within(
+      (await screen.findByRole('heading', { name: '介面登入' })).closest('section')!,
+    )
+    await user.type(login.getByLabelText('密碼'), 'changed')
+    await user.type(login.getByLabelText('再輸入一次密碼'), 'chagned')
+    await user.click(login.getByRole('button', { name: '更新登入' }))
+
+    expect(await login.findByText('兩次輸入的密碼不一樣。')).toBeInTheDocument()
+    expect(stub.mock.calls.some(([url]) => url === '/api/setup/qbittorrent/login')).toBe(false)
   })
 
   it('沒有漂移時不給還原按鈕——沒有東西要還原', async () => {
@@ -127,7 +212,8 @@ describe('設定 → qBittorrent', () => {
         body: qbittorrentSetup({
           origin: 'existing',
           base_url: 'http://nas:8080',
-          sets_password: false,
+          web_ui_login: false,
+          web_ui_username: '',
           writes_preferences: false,
         }),
       },
@@ -137,6 +223,8 @@ describe('設定 → qBittorrent', () => {
     expect(await screen.findByText(/Berth 不改你這台 qBittorrent 的全域偏好/)).toBeInTheDocument()
     expect(screen.queryByText(/個鍵與建議值不同/)).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '還原建議設定' })).not.toBeInTheDocument()
+    // 也沒有介面登入那一區：Berth 不寫既有服務的帳密（M4 票 07）。
+    expect(screen.queryByRole('heading', { name: '介面登入' })).not.toBeInTheDocument()
   })
 
   it('漂移時列出逐鍵差異與還原按鈕（brief §16.3）', async () => {

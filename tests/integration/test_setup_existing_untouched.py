@@ -44,7 +44,7 @@ from berth.services.setup import (
     connect_service,
     read_status,
 )
-from tests.integration.arrange import NOW, arrange, factory_for, interface_logins, own
+from tests.integration.arrange import NOW, arrange, factory_for, own
 from tests.integration.factories import COMPOSE, FakeClientFactory
 
 
@@ -54,9 +54,8 @@ def verdict(status: SetupStatus, kind: ServiceKind) -> tuple[ServiceOrigin, Dete
 
 
 async def owner(session: AsyncSession) -> None:
-    """擁有者成立、泊位上填了介面帳密：套件內的那兩台會被設成這一組，既有的不會。"""
+    """擁有者成立。既有的那兩台泊位上沒有介面登入那一格（M4 票 07），帶了也被拒。"""
     await own(session, "labgate")
-    await interface_logins(session, "labgate", "harbour")
     await session.commit()
 
 
