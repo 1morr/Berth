@@ -8,7 +8,6 @@ import {
   ALL_BUNDLED,
   CHECKS_PASSED,
   discoverWall,
-  inventoryLibraries,
   indexerSetup,
   jellyfinSetup,
   libraryChoice,
@@ -36,8 +35,7 @@ const TMDB = 'GET /api/setup/tmdb'
 /** Jellyfin 與 qBittorrent 都接好了，精靈在媒體庫路徑（第 5 步，票 06d 移到 qBittorrent 之後）。 */
 const AT_ROUTES = setupStatus({
   current_step: 5,
-  admin_created: true,
-  admin_username: 'skipper',
+  owner: 'skipper',
   services: ALL_BUNDLED,
 })
 
@@ -523,32 +521,8 @@ describe('第 8 步：完成', () => {
     expect(screen.getByText('/data/torrent/complete/tv')).toBeInTheDocument()
     expect(screen.getByText(/索引站還沒接/)).toBeInTheDocument()
     expect(screen.getByText(/五個泊位/)).toBeInTheDocument()
-    expect(screen.getByText(/剛才建立的 Jellyfin 管理員帳號/)).toBeInTheDocument()
-  })
-
-  /** 票 06h 實走 `mixed` 時抓到：既有 Jellyfin 的管理員不是精靈建的，登入要用他自己那台的帳號。 */
-  it('既有 Jellyfin 時，登入的提示說的是那台 Jellyfin 自己的帳號', async () => {
-    stubApi({
-      [STATUS]: {
-        body: setupStatus({
-          ...AT_THE_END,
-          services: ALL_BUNDLED.map((row) =>
-            row.kind === 'jellyfin'
-              ? { ...row, origin: 'existing', reason: 'setup_completed' }
-              : row,
-          ),
-        }),
-      },
-      [ROUTES]: { body: BUILT },
-      [INDEXERS]: { body: indexerSetup() },
-      [TMDB]: { body: tmdbSetup() },
-    })
-
-    renderWithProviders(<SetupPage />)
-
-    expect(await screen.findByRole('button', { name: '完成設定' })).toBeInTheDocument()
-    expect(screen.queryByText(/剛才建立/)).not.toBeInTheDocument()
-    expect(screen.getByText(/你那台 Jellyfin 的帳號/)).toBeInTheDocument()
+    // 之後拿什麼登入：擁有者的 Jellyfin 帳號（M4 票 06），套件內與既有同一句。
+    expect(screen.getByText(/你是 skipper/)).toBeInTheDocument()
   })
 
   /**
@@ -611,37 +585,19 @@ describe('第 8 步：完成', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(/後端/)
   })
 
-  it('按下完成之後精靈關閉，回首頁時不再被導回精靈', async () => {
+  // M4 票 06：擁有者從第 1 步起就登入著，精靈跑完直接落在探索（媒體庫這時必然是空的，
+  // 第一件事是找片，brief §19 2026-09-26），不必再登入一次，也不再被導回精靈。
+  it('按下完成之後精靈關閉，擁有者直接落在探索', async () => {
     let completed = false
+    const backend = session({ name: 'skipper', role: 'admin' })
     stubApi({
       'GET /api/health': () => ({
-        body: { status: 'ok', version: '0.1.0', setup_completed: completed },
-      }),
-      [STATUS]: { body: AT_THE_END },
-      [ROUTES]: { body: BUILT },
-      [INDEXERS]: { body: indexerSetup() },
-      [TMDB]: { body: tmdbSetup() },
-      [COMPLETE]: () => {
-        completed = true
-        return { body: { ...AT_THE_END, completed: true } }
-      },
-      'GET /api/auth/me': { status: 401, body: { detail: 'sign in to use this API' } },
-    })
-
-    const { router } = renderApp('/setup')
-    await userEvent.click(await screen.findByRole('button', { name: '完成設定' }))
-
-    // 精靈跑完之後 `/` 不再導向 `/setup`，而是導向登入頁（票 07 的守衛）。
-    await waitFor(() => expect(router.state.location.pathname).toBe('/login'))
-  })
-
-  // brief §19 2026-09-26：精靈剛跑完，媒體庫是空的（或只有別人的片），第一件事是找片。
-  it('精靈跑完之後登入落在探索，不是空的媒體庫', async () => {
-    let completed = false
-    const backend = session()
-    stubApi({
-      'GET /api/health': () => ({
-        body: { status: 'ok', version: '0.1.0', setup_completed: completed },
+        body: {
+          status: 'ok',
+          version: '0.1.0',
+          setup_completed: completed,
+          owner_established: true,
+        },
       }),
       [STATUS]: { body: AT_THE_END },
       [ROUTES]: { body: BUILT },
@@ -652,19 +608,40 @@ describe('第 8 步：完成', () => {
         return { body: { ...AT_THE_END, completed: true } }
       },
       'GET /api/auth/me': () => backend.me(),
-      'POST /api/auth/login': backend.signIn({ name: 'skipper', role: 'admin' }),
-      'GET /api/inventory': inventoryLibraries({ hasImports: false }),
       'GET /api/discover/trending': discoverWall(),
       'GET /api/discover/popular': discoverWall(),
     })
 
     const { router } = renderApp('/setup')
     await userEvent.click(await screen.findByRole('button', { name: '完成設定' }))
-    await userEvent.type(await screen.findByLabelText('帳號'), 'skipper')
+
+    await waitFor(() => expect(router.state.location.pathname).toBe('/'))
+    expect(screen.queryByLabelText('Jellyfin 帳號')).not.toBeInTheDocument()
+  })
+
+  it('擁有者成立之後、精靈跑完之前沒有 session 的人被送去登入，登入之後回到精靈', async () => {
+    const backend = session()
+    stubApi({
+      'GET /api/health': {
+        body: { status: 'ok', version: '0.1.0', setup_completed: false, owner_established: true },
+      },
+      [STATUS]: { body: AT_THE_END },
+      [ROUTES]: { body: BUILT },
+      [INDEXERS]: { body: indexerSetup() },
+      [TMDB]: { body: tmdbSetup() },
+      'GET /api/auth/me': () => backend.me(),
+      'POST /api/auth/login': backend.signIn({ name: 'skipper', role: 'admin' }),
+    })
+
+    const { router } = renderApp('/setup')
+
+    await waitFor(() => expect(router.state.location.pathname).toBe('/login'))
+    expect(router.state.location.search).toEqual({ redirect: '/setup' })
+    await userEvent.type(await screen.findByLabelText('Jellyfin 帳號'), 'skipper')
     await userEvent.type(screen.getByLabelText('密碼'), 'harbour')
     await userEvent.click(screen.getByRole('button', { name: '登入' }))
 
-    await waitFor(() => expect(router.state.location.pathname).toBe('/'))
-    expect(router.state.location.search).toEqual({})
+    await waitFor(() => expect(router.state.location.pathname).toBe('/setup'))
+    expect(await screen.findByRole('button', { name: '完成設定' })).toBeInTheDocument()
   })
 })

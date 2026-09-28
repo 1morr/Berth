@@ -56,9 +56,7 @@ function wizard(start: number, overrides: Record<string, StubRoute | (() => Stub
   const status = (): SetupStatus =>
     setupStatus({
       current_step: current,
-      admin_created: true,
-      admin_username: 'skipper',
-      interface_username: 'skipper',
+      owner: 'skipper',
       services: ALL_BUNDLED,
     })
   const advance =
@@ -262,7 +260,7 @@ describe('回頭看永遠有出口', () => {
     const user = userEvent.setup()
     renderWithProviders(<SetupPage />)
 
-    await user.click(await screen.findByRole('button', { name: /3 個服務已判定/ }))
+    await user.click(await screen.findByRole('button', { name: /2 個服務已判定/ }))
     await user.click(await screen.findByRole('button', { name: '重新探測' }))
     await user.click(await screen.findByRole('button', { name: '前往泊位 1' }))
 
@@ -289,7 +287,7 @@ describe('泊位板與前置列', () => {
     }
   })
 
-  it('前置列是證據也是入口：管理員回第 1 步、判定回第 2 步；沒有每頁的「重新探測」', async () => {
+  it('前置列是證據也是入口：擁有者回第 1 步、判定回第 2 步；沒有每頁的「重新探測」', async () => {
     wizard(4)
     const user = userEvent.setup()
     renderWithProviders(<SetupPage />)
@@ -298,10 +296,10 @@ describe('泊位板與前置列', () => {
     expect(screen.queryByRole('button', { name: '重新探測' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '改帳密' })).not.toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: /管理員已建立：skipper/ }))
-    expect(await heading()).toHaveTextContent('Berth 管理員')
+    await user.click(screen.getByRole('button', { name: '擁有者 · skipper' }))
+    expect(await heading()).toHaveTextContent('擁有者：skipper')
 
-    await user.click(screen.getByRole('button', { name: /3 個服務已判定/ }))
+    await user.click(screen.getByRole('button', { name: /2 個服務已判定/ }))
     expect(await heading()).toHaveTextContent('偵測服務')
   })
 
@@ -311,8 +309,7 @@ describe('泊位板與前置列', () => {
       'GET /api/setup/status': {
         body: setupStatus({
           current_step: 2,
-          admin_created: true,
-          admin_username: 'skipper',
+          owner: 'skipper',
           services: [
             detection({ origin: 'pending', reason: 'starting', resolved: false }),
             ALL_BUNDLED[1]!,
@@ -331,7 +328,7 @@ describe('泊位板與前置列', () => {
     await heading()
 
     expect(screen.getByRole('button', { name: /1 個服務已判定/ })).toBeVisible()
-    expect(screen.queryByRole('button', { name: /3 個服務已判定/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /2 個服務已判定/ })).not.toBeInTheDocument()
   })
 })
 
@@ -383,8 +380,7 @@ describe('重新偵測這個服務', () => {
   it('第 2 步：逾時或未解決的那一列旁邊有，只探那一個服務', async () => {
     const timedOut = setupStatus({
       current_step: 2,
-      admin_created: true,
-      admin_username: 'skipper',
+      owner: 'skipper',
       services: [
         detection(),
         detection({
@@ -441,8 +437,7 @@ describe('重新偵測之後回得到原本那一頁', () => {
     const at = (step: number, origin: 'pending' | 'bundled') =>
       setupStatus({
         current_step: step,
-        admin_created: true,
-        admin_username: 'skipper',
+        owner: 'skipper',
         services: [
           detection(),
           detection({

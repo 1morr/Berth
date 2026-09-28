@@ -110,28 +110,20 @@ class PathSettings(SettingsGroup):
     library_root: str = "/data/library"
 
 
-class SetupAdmin(BaseModel):
-    """精靈第 1 步建立的管理員（plan §9.3）。
+class SetupOwner(BaseModel):
+    """精靈第 1 步成立的擁有者：一個 Jellyfin 管理員（brief §11、§19 2026-09-26，M4 票 06）。
 
-    密碼是明文的：第 3 步要拿它去建 Jellyfin 管理員，第 4 步要拿它設 qBittorrent 的 WebUI 密碼，
-    雜湊做不到這兩件事。Berth 自己從不驗證這組密碼——登入一律走 Jellyfin（brief §11）。
-    秘密只靠檔案權限保護，與其他 `settings.services.*` 的 key 與密碼一致（brief §16.2）。
-
-    **兩組帳密**（票 06c）：`username` / `password` 是帳號本身，套件內 Jellyfin 的管理員建好
-    之後它就是那個管理員，第 1 步不再改它（`services.setup.jellyfin_owns_account`）；既有
-    Jellyfin 從來不用它（Berth 的登入是那台自己的帳號），偵測出來之後同樣不再改。
-    `interface_*` 是套用到 qBittorrent 與 Prowlarr 介面的那一組，一直改得動。在帳號還沒
-    交給 Jellyfin 之前兩組相同。
+    **只記是誰，不記密碼**：Berth 沒有自己的帳號，登入一律交給 Jellyfin。擁有者的帳密在第 1 步
+    只用來建立（套件內）或登入（既有）Jellyfin、換 Berth 的 API key，用完就丟。
+    這一列在，精靈的其餘端點就要登入（`api/gate.py`）。
     """
 
     model_config = ConfigDict(extra="ignore")
 
-    username: str = ""
-    password: str = ""
-    interface_username: str = ""
-    interface_password: str = ""
-    #: 「同一組帳密也套用到 qBittorrent 與 Prowlarr 介面」，預設勾。
-    apply_to_services: bool = True
+    #: Jellyfin 的 user id（`users.jellyfin_user_id` 同一個值）。空字串就是還沒有擁有者。
+    jellyfin_user_id: str = ""
+    #: Jellyfin 回的名字，畫面的前置列說「擁有者 · <name>」。
+    name: str = ""
 
 
 class ServiceProbe(BaseModel):
@@ -232,6 +224,10 @@ class SetupQbittorrent(BaseModel):
 
     #: 逐鍵的套用結果；`key` 是 `QbittorrentStep`，也就是 `app/setPreferences` 的鍵名。
     steps: list[SetupStep] = []
+    #: 套件內那一台的 WebUI 帳密（qBittorrent 自己的登入；Berth 靠免密白名單，用不到它）。
+    #: 空的就不設。M4 票 06 拿掉第 1 步的「同一組帳密」之後，由票 07 的泊位欄位填。
+    web_ui_username: str = ""
+    web_ui_password: str = ""
 
 
 class SetupIndexer(BaseModel):
@@ -244,8 +240,12 @@ class SetupIndexer(BaseModel):
     steps: list[SetupStep] = []
     #: 「之後再說」。可跳過的只有這一步，完成頁列出跳過了什麼（plan §9.3、票 02b）。
     skipped: bool = False
-    #: Berth 上一次寫進 Prowlarr `config/host` 的密碼。那邊讀回來是雜湊，重按時只有它比得出
-    #: 「使用者在第 1 步改了密碼」（票 06c）。
+    #: 套件內 Prowlarr 的介面登入（`config/host` 的 Forms 驗證）。空的就不設。M4 票 06 拿掉
+    #: 第 1 步的「同一組帳密」之後，由票 07 的泊位欄位填。
+    web_ui_username: str = ""
+    web_ui_password: str = ""
+    #: Berth 上一次寫進 `config/host` 的密碼。那邊讀回來是雜湊，重按時只有它比得出
+    #: 「密碼改過了」（票 06c）。
     login_password: str = ""
 
 
@@ -375,7 +375,7 @@ class SetupSettings(SettingsGroup):
     KEY = "setup"
 
     completed: bool = False
-    admin: SetupAdmin = SetupAdmin()
+    owner: SetupOwner = SetupOwner()
     #: 逐服務的判定；鍵是 `ServiceKind`。
     services: dict[ServiceKind, ServiceProbe] = {}
     #: 本輪輪詢的起點，用來算 2 分鐘上限。全部服務都判定完就清掉。

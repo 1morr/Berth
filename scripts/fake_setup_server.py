@@ -134,8 +134,8 @@ from berth.models import (
     QbittorrentSettings,
     Route,
     ServiceProbe,
-    SetupAdmin,
     SetupLibrary,
+    SetupOwner,
     SetupSettings,
     TmdbSettings,
     media_id,
@@ -1842,12 +1842,8 @@ async def _moor(
         )
 
     setup = await read_settings(session, SetupSettings)
-    setup.admin = SetupAdmin(
-        username="skipper",
-        password="harbour",
-        interface_username="skipper",
-        interface_password="harbour",
-    )
+    # 擁有者（M4 票 06）：替身 Jellyfin 的管理員 skipper。帳密不存，只記他是誰。
+    setup.owner = SetupOwner(jellyfin_user_id="moored-owner", name="skipper")
     setup.services = {
         kind: ServiceProbe(
             origin=ServiceOrigin.BUNDLED,

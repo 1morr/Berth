@@ -11,7 +11,17 @@ export type ServiceDetection = Schemas['ServiceDetectionOut']
 
 export type SetupStatus = Schemas['SetupStatusOut']
 
-export type AdminInput = Schemas['AdminIn']
+/** 擁有者的 Jellyfin 帳密（第 1 步，M4 票 06）。只交給 Jellyfin，Berth 不存。 */
+export type OwnerInput = Schemas['OwnerIn']
+
+export type OwnerRefusal = Refusal<Schemas['OwnerRefusal']>
+
+const OWNER_REASONS: ReasonSet<Schemas['OwnerRefusal']> = {
+  jellyfin_unresolved: true,
+  invalid_credentials: true,
+  not_administrator: true,
+  jellyfin_failed: true,
+}
 
 /** 既有服務的連線表單。每個服務只用得到其中幾個欄位。 */
 export type ConnectInput = Schemas['ConnectIn']
@@ -21,8 +31,17 @@ export const setupStatusQueryOptions = queryOptions({
   queryFn: () => apiGet<SetupStatus>('/setup/status'),
 })
 
-export function createAdmin(body: AdminInput): Promise<SetupStatus> {
-  return apiPost<SetupStatus>('/setup/admin', body)
+/**
+ * 第 1 步：成為擁有者。成功時後端發 session cookie（與 `/auth/login` 同一種），之後精靈要登入。
+ * 帳密不對是 401——那是這一支的答案，不是 session 過期（`router.ts` 照樣會重跑一次守衛，無害）。
+ */
+export function claimOwner(body: OwnerInput): Promise<SetupStatus> {
+  return apiPost<SetupStatus>('/setup/owner', body)
+}
+
+/** 第 1 步被拒的理由。認不得的（或根本不是拒絕，例如連不上 Berth）是 `null`。 */
+export function ownerRefusalOf(error: unknown): OwnerRefusal | null {
+  return parseRefusal(error, OWNER_REASONS)
 }
 
 /**
@@ -38,7 +57,8 @@ export function connectService(kind: ServiceKind, body: ConnectInput): Promise<S
 }
 
 /**
- * `JellyfinStep`：plan §9.4 的七步，順序即宣告順序。
+ * `JellyfinStep`：plan §9.4 的七步，順序即宣告順序、也是執行順序。前六步在第 1 步（擁有者）跑，
+ * 建媒體庫在泊位 1（M4 票 06）。
  *
  * 後端把 `StepOut.step` 宣告成 `str`，所以這個集合在 OpenAPI 裡不存在——它是 UI 的
  * 顯示順序，不是 API 的形狀（`QBITTORRENT_STEPS` 同理）。
@@ -47,10 +67,10 @@ export const JELLYFIN_STEPS = [
   'public_info',
   'configuration',
   'admin_user',
-  'libraries',
   'remote_access',
   'complete',
   'api_key',
+  'libraries',
 ] as const
 export type JellyfinStep = (typeof JELLYFIN_STEPS)[number]
 

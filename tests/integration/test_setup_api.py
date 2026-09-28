@@ -26,7 +26,7 @@ from berth.config import Config
 from berth.main import create_app
 from berth.services.clients import SetupProbes
 from berth.services.indexer import DEFAULT_INDEXERS
-from tests.integration.arrange import delete_once_during_checks
+from tests.integration.arrange import delete_once_during_checks, sign_in_owner
 from tests.integration.factories import FakeClientFactory
 
 #: 前端每個非 GET 請求都帶這個標頭（`api/client.ts`）；缺了它的行為在 `test_auth_api.py`。
@@ -50,31 +50,53 @@ def probes() -> SetupProbes:
 
 
 @pytest.fixture
-def client(config: Config, tmp_path: Path, probes: SetupProbes) -> Iterator[TestClient]:
+def jellyfin() -> FakeJellyfinClient:
+    return FakeJellyfinClient()
+
+
+@pytest.fixture
+def fresh(
+    config: Config, tmp_path: Path, probes: SetupProbes, jellyfin: FakeJellyfinClient
+) -> Iterator[TestClient]:
+    """剛裝好的一台：還沒有擁有者，沒有人登入。"""
     app = create_app(replace(config, web_root=tmp_path / "never-built"))
 
     async def override() -> AsyncIterator[SetupProbes]:
-        yield probes
+        yield jellyfin_probes(probes, jellyfin)
 
+    factory = FakeClientFactory(jellyfin=jellyfin)
     app.dependency_overrides[get_setup_probes] = override
+    app.dependency_overrides[get_client_factory] = lambda: factory
     with TestClient(app, headers=BROWSER) as running:
         yield running
 
 
+@pytest.fixture
+def client(fresh: TestClient) -> TestClient:
+    """擁有者成立、以他登入（M4 票 06）：之後的精靈端點都要這張 session。"""
+    sign_in_owner(fresh)
+    return fresh
+
+
+def _claim(client: TestClient) -> None:
+    """走一次真的第 1 步：找到 Jellyfin → 成為擁有者（拿到 cookie）→ 偵測其餘服務。"""
+    assert client.post("/api/setup/detect", json={}).status_code == 200
+    owned = client.post("/api/setup/owner", json={"username": "skipper", "password": "harbour"})
+    assert owned.status_code == 200, owned.text
+    assert client.post("/api/setup/detect", json={}).status_code == 200
+
+
 class TestStatus:
-    def test_a_clean_install_answers_anonymously_at_step_one(self, client: TestClient) -> None:
-        response = client.get("/api/setup/status")
+    def test_a_clean_install_answers_anonymously_at_step_one(self, fresh: TestClient) -> None:
+        response = fresh.get("/api/setup/status")
 
         assert response.status_code == 200
         body = response.json()
         assert body == {
             "completed": False,
             "current_step": 1,
-            "admin_created": False,
-            "admin_username": "",
-            "interface_username": "",
-            "jellyfin_owns_account": False,
-            "apply_to_services": True,
+            "owner": "",
+            "owner_signs_in": False,
             "services": [],
             "waited_seconds": 0,
             "window_seconds": 120,
@@ -98,56 +120,67 @@ class TestStatus:
         assert targets["qbittorrent"] == "http://qbittorrent:18080"
 
 
-class TestAdmin:
-    def test_creating_the_admin_advances_to_the_detection_step(self, client: TestClient) -> None:
-        response = client.post(
-            "/api/setup/admin",
-            json={"username": "skipper", "password": "harbour", "apply_to_services": False},
+class TestOwner:
+    """第 1 步（M4 票 06）。規則本身在 `test_setup_owner.py`，這裡是形狀、cookie 與門禁。"""
+
+    def test_the_owner_gets_a_session_and_the_wizard_moves_on(
+        self, fresh: TestClient, jellyfin: FakeJellyfinClient
+    ) -> None:
+        fresh.post("/api/setup/detect", json={})
+
+        response = fresh.post(
+            "/api/setup/owner", json={"username": "skipper", "password": "harbour"}
         )
 
         assert response.status_code == 200
-        assert response.json()["current_step"] == 2
-        assert response.json()["admin_username"] == "skipper"
-        assert response.json()["apply_to_services"] is False
+        assert (response.json()["owner"], response.json()["current_step"]) == ("skipper", 2)
+        assert jellyfin.admin == ("skipper", "harbour")
+        # 與 `/auth/login` 同一種 cookie：接著問「我是誰」就是他，而且是管理員。
+        assert fresh.get("/api/auth/me").json() == {"name": "skipper", "role": "admin"}
 
-    def test_the_checkbox_defaults_to_checked(self, client: TestClient) -> None:
-        response = client.post(
-            "/api/setup/admin", json={"username": "skipper", "password": "harbour"}
-        )
+    def test_the_password_is_never_returned(self, fresh: TestClient) -> None:
+        fresh.post("/api/setup/detect", json={})
 
-        assert response.json()["apply_to_services"] is True
-
-    def test_the_password_is_never_returned(self, client: TestClient) -> None:
-        response = client.post(
-            "/api/setup/admin", json={"username": "skipper", "password": "harbour"}
+        response = fresh.post(
+            "/api/setup/owner", json={"username": "skipper", "password": "harbour"}
         )
 
         assert "harbour" not in response.text
         assert "password" not in response.json()
 
-    def test_the_admin_survives_a_reload(self, client: TestClient) -> None:
-        client.post("/api/setup/admin", json={"username": "skipper", "password": "harbour"})
-
-        assert client.get("/api/setup/status").json()["admin_username"] == "skipper"
-
-    def test_blank_credentials_are_rejected(self, client: TestClient) -> None:
-        assert (
-            client.post(
-                "/api/setup/admin", json={"username": "", "password": "harbour"}
-            ).status_code
-            == 422
-        )
-        assert (
-            client.post(
-                "/api/setup/admin", json={"username": "skipper", "password": ""}
-            ).status_code
-            == 422
+    def test_before_jellyfin_is_found_the_claim_is_a_conflict(self, fresh: TestClient) -> None:
+        response = fresh.post(
+            "/api/setup/owner", json={"username": "skipper", "password": "harbour"}
         )
 
-    def test_whitespace_only_username_is_rejected(self, client: TestClient) -> None:
-        response = client.post("/api/setup/admin", json={"username": "   ", "password": "harbour"})
+        assert response.status_code == 409
+        assert response.json()["detail"] == {"reason": "jellyfin_unresolved", "detail": ""}
 
-        assert response.status_code == 422
+    def test_someone_who_is_not_an_administrator_is_refused(
+        self, fresh: TestClient, jellyfin: FakeJellyfinClient
+    ) -> None:
+        jellyfin.startup_wizard_completed = True
+        jellyfin.admin = ("captain", "harbour")
+        jellyfin.users = {"deckhand": "rope"}
+        fresh.post("/api/setup/detect", json={})
+
+        response = fresh.post("/api/setup/owner", json={"username": "deckhand", "password": "rope"})
+
+        assert response.status_code == 403
+        assert response.json()["detail"]["reason"] == "not_administrator"
+        assert fresh.get("/api/auth/me").status_code == 401
+        assert fresh.get("/api/setup/status").json()["owner"] == ""
+
+    def test_blank_credentials_are_refused_like_wrong_ones(
+        self, fresh: TestClient, jellyfin: FakeJellyfinClient
+    ) -> None:
+        fresh.post("/api/setup/detect", json={})
+
+        response = fresh.post("/api/setup/owner", json={"username": "   ", "password": ""})
+
+        assert response.status_code == 401
+        assert response.json()["detail"]["reason"] == "invalid_credentials"
+        assert jellyfin.admin is None
 
 
 class TestDetect:
@@ -193,19 +226,95 @@ class TestDetect:
         assert body["window_seconds"] == 120
 
 
+#: 會寫別人的服務或 Berth 自己設定的精靈端點（建立、套用、加站、存清單、建 Route、完成）。
+#: 擁有者成立之前一支都不開（M4 票 06）。
+WRITES: tuple[tuple[str, str, object], ...] = (
+    ("POST", "/api/setup/jellyfin/bootstrap", None),
+    ("PUT", "/api/setup/jellyfin/bundled", {"libraries": []}),
+    ("POST", "/api/setup/jellyfin/connect", {"username": "a", "password": "b"}),
+    ("POST", "/api/setup/jellyfin/libraries/paths", {"library": "x"}),
+    ("POST", "/api/setup/services/qbittorrent", {"base_url": "http://nas:8080"}),
+    ("POST", "/api/setup/qbittorrent/apply", None),
+    ("POST", "/api/setup/indexers/apply", {"indexers": ["nyaasi"]}),
+    ("POST", "/api/setup/indexers/connect", {"kind": "prowlarr", "base_url": "http://x"}),
+    ("POST", "/api/setup/indexers/skip", {}),
+    ("POST", "/api/setup/tmdb/test", {"api_key": "k"}),
+    ("POST", "/api/setup/routes", {}),
+    ("POST", "/api/setup/complete", None),
+)
+
+
 class TestGate:
+    @pytest.mark.parametrize(("method", "path", "body"), WRITES)
+    def test_before_the_owner_every_write_is_refused(
+        self, fresh: TestClient, method: str, path: str, body: object
+    ) -> None:
+        response = fresh.request(method, path, json=body)
+
+        assert response.status_code == 403
+        assert "step 1" in response.json()["detail"]
+
+    def test_before_the_owner_only_the_opening_is_open(
+        self, fresh: TestClient, jellyfin: FakeJellyfinClient
+    ) -> None:
+        """找 Jellyfin、填它的位址、成為擁有者——其餘的讀也不開（它們會去連別人的服務）。"""
+        assert fresh.get("/api/setup/status").status_code == 200
+        assert fresh.post("/api/setup/detect", json={}).status_code == 200
+        typed = fresh.post("/api/setup/services/jellyfin", json={"base_url": "http://nas:8096"})
+        assert typed.status_code == 200
+        assert fresh.get("/api/setup/qbittorrent/diff").status_code == 403
+        assert fresh.get("/api/setup/indexers").status_code == 403
+
+    @pytest.mark.parametrize(("method", "path", "body"), WRITES)
+    def test_after_the_owner_the_same_writes_need_a_session(
+        self, fresh: TestClient, method: str, path: str, body: object
+    ) -> None:
+        _claim(fresh)
+        signed_in = fresh.request(method, path, json=body)
+        fresh.cookies.clear()
+
+        anonymous = fresh.request(method, path, json=body)
+
+        # 拿著擁有者的 session 過得了門（之後是 200、422 或 404，那是端點自己的事）。
+        assert signed_in.status_code not in (401, 403)
+        assert anonymous.status_code == 401
+
+    def test_after_the_owner_the_opening_is_closed_too(self, fresh: TestClient) -> None:
+        """誰先到誰建立：成立之後第二個人不能再來一次，也不能再改 Jellyfin 的位址。"""
+        _claim(fresh)
+        fresh.cookies.clear()
+
+        assert fresh.get("/api/setup/status").status_code == 401
+        assert fresh.post("/api/setup/detect", json={}).status_code == 401
+        assert (
+            fresh.post("/api/setup/owner", json={"username": "x", "password": "y"}).status_code
+            == 401
+        )
+        assert (
+            fresh.post("/api/setup/services/jellyfin", json={"base_url": "http://evil"}).status_code
+            == 401
+        )
+
     def test_setup_endpoints_require_login_once_setup_is_complete(self, client: TestClient) -> None:
-        """setup 完成後這個群組不再匿名（plan §6）。真正的登入在票 07。"""
         _complete_setup(client)
+        client.cookies.clear()
 
         assert client.get("/api/setup/status").status_code == 401
         assert client.post("/api/setup/detect", json={}).status_code == 401
         assert (
             client.post(
-                "/api/setup/admin", json={"username": "other", "password": "pass"}
+                "/api/setup/owner", json={"username": "other", "password": "pass"}
             ).status_code
             == 401
         )
+
+    def test_health_says_whether_the_owner_is_there(self, fresh: TestClient) -> None:
+        assert fresh.get("/api/health").json()["owner_established"] is False
+
+        _claim(fresh)
+        fresh.cookies.clear()
+
+        assert fresh.get("/api/health").json()["owner_established"] is True
 
     def test_health_stays_anonymous_after_setup(self, client: TestClient) -> None:
         _complete_setup(client)
@@ -260,21 +369,33 @@ class TestJellyfin:
         app.dependency_overrides[get_client_factory] = lambda: OneJellyfin(jellyfin)
         with TestClient(app, headers=BROWSER) as running:
             _set_paths(running, tmp_path)
+            _claim(running)
             yield running
 
-    def test_before_anything_the_step_list_is_empty(
+    def test_after_the_owner_only_the_libraries_are_left(
         self, client: TestClient, tmp_path: Path
     ) -> None:
+        """第 1 步已經建好管理員、跑完初始設定、換好 key（M4 票 06）；泊位 1 剩下建媒體庫。"""
         response = client.get("/api/setup/jellyfin")
 
         assert response.status_code == 200
         assert response.json() == {
-            "origin": "existing",
-            "base_url": "",
-            "api_key_present": False,
-            "steps": [],
+            "origin": "bundled",
+            "base_url": "http://jellyfin:8096",
+            "api_key_present": True,
+            "steps": [
+                {"step": step, "status": "ok", "detail": detail, "error": ""}
+                for step, detail in (
+                    ("public_info", "12.1.0"),
+                    ("configuration", "zh-TW · TW"),
+                    ("admin_user", "skipper"),
+                    ("remote_access", ""),
+                    ("complete", ""),
+                    ("api_key", "Berth"),
+                )
+            ],
             "libraries": [],
-            "version": "",
+            "version": "12.1.0",
             # 還沒問過就不是紅燈：那一格是「尚未取得」。
             "version_supported": True,
             # 沒有人動過清單時就是預設三列（票 06f）。
@@ -343,8 +464,6 @@ class TestJellyfin:
     def test_bootstrap_returns_every_step_with_its_measured_value(
         self, client: TestClient, jellyfin: FakeJellyfinClient
     ) -> None:
-        client.post("/api/setup/admin", json={"username": "skipper", "password": "harbour"})
-        client.post("/api/setup/detect", json={})
 
         response = client.post("/api/setup/jellyfin/bootstrap")
 
@@ -354,10 +473,10 @@ class TestJellyfin:
             "public_info",
             "configuration",
             "admin_user",
-            "libraries",
             "remote_access",
             "complete",
             "api_key",
+            "libraries",
         ]
         assert {row["status"] for row in body["steps"]} == {"ok"}
         assert body["origin"] == "bundled"
@@ -367,8 +486,6 @@ class TestJellyfin:
         assert jellyfin.admin == ("skipper", "harbour")
 
     def test_the_status_endpoint_replays_the_last_run(self, client: TestClient) -> None:
-        client.post("/api/setup/admin", json={"username": "skipper", "password": "harbour"})
-        client.post("/api/setup/detect", json={})
         client.post("/api/setup/jellyfin/bootstrap")
 
         body = client.get("/api/setup/jellyfin").json()
@@ -380,8 +497,6 @@ class TestJellyfin:
         self, client: TestClient, jellyfin: FakeJellyfinClient
     ) -> None:
         """版本閘門就是第一步：低於 12.0 時整段停在那裡（brief §16.4、§19）。"""
-        client.post("/api/setup/admin", json={"username": "skipper", "password": "harbour"})
-        client.post("/api/setup/detect", json={})
         jellyfin.version = "10.11.11"
 
         body = client.post("/api/setup/jellyfin/bootstrap").json()
@@ -451,6 +566,7 @@ class TestJellyfin:
 
     def test_the_jellyfin_endpoints_close_after_setup(self, client: TestClient) -> None:
         _complete_setup(client)
+        client.cookies.clear()
 
         assert client.get("/api/setup/jellyfin").status_code == 401
         assert client.post("/api/setup/jellyfin/bootstrap").status_code == 401
@@ -539,8 +655,7 @@ class TestQbittorrent:
             qbittorrent=qbittorrent
         )
         with TestClient(app, headers=BROWSER) as running:
-            running.post("/api/setup/admin", json={"username": "skipper", "password": "harbour"})
-            running.post("/api/setup/detect")
+            _claim(running)
             yield running
 
     def test_the_diff_lists_every_recommended_key(self, client: TestClient) -> None:
@@ -558,7 +673,8 @@ class TestQbittorrent:
         assert body["version"] == "v5.2.3"
         assert body["webapi_version"] == "2.15.1"
         assert body["supported"] is True
-        assert body["sets_password"] is True
+        # 介面帳密在票 07 的泊位欄位；那之前 Berth 不設 qBittorrent 的密碼（M4 票 06）。
+        assert body["sets_password"] is False
 
     def test_applying_writes_the_keys_and_leaves_no_difference(
         self, client: TestClient, qbittorrent: FakeQbittorrentClient
@@ -566,7 +682,7 @@ class TestQbittorrent:
         body = client.post("/api/setup/qbittorrent/apply").json()
 
         assert [row["differs"] for row in body["diffs"]] == [False] * 5
-        assert [row["status"] for row in body["steps"]] == ["ok"] * 6
+        assert [row["status"] for row in body["steps"]] == ["ok"] * 5 + ["skipped"]
         assert qbittorrent.writes[0].keys() == {
             "temp_path_enabled",
             "temp_path",
@@ -587,6 +703,7 @@ class TestQbittorrent:
         app.dependency_overrides[get_setup_probes] = override_probes
         app.dependency_overrides[get_client_factory] = lambda: FakeClientFactory(qbittorrent=old)
         with TestClient(app, headers=BROWSER) as running:
+            sign_in_owner(running)
             body = running.get("/api/setup/qbittorrent/diff").json()
 
         assert (body["supported"], body["blocked"]) == (False, True)
@@ -605,6 +722,7 @@ class TestQbittorrent:
         app.dependency_overrides[get_setup_probes] = override_probes
         app.dependency_overrides[get_client_factory] = lambda: FakeClientFactory(qbittorrent=down)
         with TestClient(app, headers=BROWSER) as running:
+            sign_in_owner(running)
             response = running.get("/api/setup/qbittorrent/diff")
 
         assert response.status_code == 200
@@ -642,8 +760,7 @@ class TestSource:
             prowlarr=prowlarr, tmdb=tmdb
         )
         with TestClient(app, headers=BROWSER) as running:
-            running.post("/api/setup/admin", json={"username": "skipper", "password": "harbour"})
-            running.post("/api/setup/detect")
+            _claim(running)
             yield running
 
     def test_the_defaults_come_back_with_their_names(self, client: TestClient) -> None:
@@ -734,6 +851,7 @@ class TestSource:
     def test_the_new_endpoints_close_after_setup(self, client: TestClient) -> None:
         """門禁是 middleware，所以新掛的端點什麼都不做就已經在門後（票 07）。"""
         _complete_setup(client)
+        client.cookies.clear()
 
         for path in ("/api/setup/qbittorrent/diff", "/api/setup/indexers", "/api/setup/tmdb"):
             assert client.get(path).status_code == 401, path
@@ -742,7 +860,7 @@ class TestSource:
 class TestRoutes:
     """第 5 步、第 8 步的三支端點（plan §9.3 第 5 步、第 8 步、§9.5、票 09）。
 
-    這一組是**整個精靈跑一遍**：管理員 → 偵測 → Jellyfin → qBittorrent → 跳過來源 →
+    這一組是**整個精靈跑一遍**：擁有者 → 偵測 → Jellyfin → qBittorrent → 跳過來源 →
     建 Route → 完成。檔案系統是真的（`tmp_path`），所以硬鏈接檢查也是真的。
     """
 
@@ -774,8 +892,7 @@ class TestRoutes:
         )
         with TestClient(app, headers=BROWSER) as running:
             _set_paths(running, tmp_path)
-            running.post("/api/setup/admin", json={"username": "skipper", "password": "harbour"})
-            running.post("/api/setup/detect")
+            _claim(running)
             running.post("/api/setup/jellyfin/bootstrap")
             running.post("/api/setup/qbittorrent/apply")
             running.post("/api/setup/indexers/skip", json={})
@@ -884,6 +1001,8 @@ class TestRoutes:
         assert body["completed"] is True
         assert client.get("/api/health").json()["setup_completed"] is True
         # 精靈跑完之後這一組就是設定入口，只有登入的管理員進得來（票 07）。
+        assert client.get("/api/setup/status").status_code == 200
+        client.cookies.clear()
         assert client.get("/api/setup/status").status_code == 401
         assert client.get("/api/setup/routes").status_code == 401
         assert client.post("/api/setup/complete").status_code == 401

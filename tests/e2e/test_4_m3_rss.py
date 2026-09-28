@@ -32,14 +32,13 @@ import httpx
 import pytest
 
 from tests.e2e.harness import (
-    ADMIN,
-    PASSWORD,
     QBITTORRENT,
     Json,
     all_jobs,
     in_container,
     ledger_of,
     ok,
+    qbittorrent_session,
     wait,
 )
 from tests.e2e.sites import (
@@ -108,8 +107,7 @@ def _release_index() -> dict[str, Json]:
 @pytest.fixture(scope="module")
 def qbittorrent(configured: None) -> Iterator[httpx.Client]:
     with closing(httpx.Client(base_url=QBITTORRENT, headers={"Referer": QBITTORRENT})) as client:
-        login = client.post("/api/v2/auth/login", data={"username": ADMIN, "password": PASSWORD})
-        assert login.is_success and login.text != "Fails.", (login.status_code, login.text)
+        qbittorrent_session(client)
         yield client
 
 

@@ -40,7 +40,7 @@ const zhHant = {
     resumed: '進度已保留，關掉瀏覽器再回來會回到這一步。',
     prelude: '前置',
     place: {
-      admin: '建立管理員',
+      owner: '擁有者',
       detect: '偵測服務',
     },
     nav: {
@@ -86,58 +86,69 @@ const zhHant = {
       },
     },
   },
-  admin: {
-    title: '建立 Berth 管理員',
-    lede: '這組帳密是 Berth 的管理員。Jellyfin 是套件內的話，之後會用它建立 Jellyfin 管理員。',
+  owner: {
+    title: {
+      finding: '先找到 Jellyfin',
+      create: '建立 Jellyfin 管理員',
+      signIn: '用你的 Jellyfin 管理員登入',
+      owned: '擁有者：{{name}}',
+    },
+    lede: {
+      finding:
+        'Berth 沒有自己的帳號，登入一律交給 Jellyfin。所以第一件事是找到它：套件內的那一台會自己出現，你自己的那一台填它的位址。',
+      create:
+        'Berth 沒有自己的帳號：這一組就是之後登入 Berth 用的 Jellyfin 帳號。Berth 會以它建立 Jellyfin 的管理員，你就是 Berth 的擁有者；其他人用自己的 Jellyfin 帳號登入，角色由 Jellyfin 決定。',
+      signIn:
+        'Berth 沒有自己的帳號，登入一律交給 Jellyfin。用這台 Jellyfin 的管理員登入，你就是 Berth 的擁有者；其他人用自己的 Jellyfin 帳號登入，角色由 Jellyfin 決定。',
+      owned:
+        '{{name}} 是這台 Jellyfin 的管理員，也是 Berth 的擁有者。之後登入 Berth 就用這個 Jellyfin 帳號；密碼在 Jellyfin 裡改。',
+    },
     cutaway: {
-      title: '將會寫入',
-      berth: 'Berth 管理員',
-      jellyfin: 'Jellyfin 管理員帳密（第 3 步）',
-      qbittorrent: 'qBittorrent WebUI 帳密（第 4 步）',
-      prowlarr: 'Prowlarr 介面帳密（第 6 步）',
-      skipped: '不套用',
-      value: {
-        account: '{{account}}',
-        berthExisting: '用你 Jellyfin 的管理員登入',
-        pair: '{{account}} · 密碼同上',
-        jellyfinPending: '{{account}} · 密碼同上（第 2 步偵測到是套件內的才建立）',
-        jellyfinOwned: '{{account}} · 已建立，密碼在 Jellyfin 裡改',
-        jellyfinExisting: '你自己的服務：用它的管理員登入，不建立',
-        interfacePending: '{{account}} · 密碼同上（第 2 步偵測到是套件內的才寫入）',
-        interfaceExisting: '你自己的服務，不寫入',
-      },
+      title: '將會做什麼',
+      found: '找到',
+      create: '建立',
+      finish: '完成',
+      change: '改動',
+      owner: '擁有者',
+      stored: '不存下',
+      admin: 'Jellyfin 管理員',
+      startup: 'Jellyfin 的初始設定',
+      apiKey: 'API key「Berth」',
+      nothing: '不改這台 Jellyfin 的任何設定',
+      password: '你的密碼（只交給 Jellyfin）',
     },
     field: {
-      username: '帳號',
+      username: 'Jellyfin 帳號',
       password: '密碼',
-      apply: '同一組帳密也套用到 qBittorrent 與 Prowlarr 介面',
-      applyHint:
-        '只影響套件內的服務，你自己的既有服務不會被改動。第 2 步會判斷每個服務是套件內還是你自己的。',
+      confirm: '再輸入一次密碼',
     },
-    owned: {
-      title: 'qBittorrent 與 Prowlarr 介面帳密',
-      bundled:
-        'Jellyfin 管理員 {{account}} 已經建立，這個帳號現在屬於 Jellyfin：密碼在 Jellyfin 裡改；Berth 的登入就是 Jellyfin 帳號。',
-      existing: 'Jellyfin 是你自己的服務：Berth 的登入就是它的帳號，密碼在 Jellyfin 裡改。',
-      label: '帳號屬於 Jellyfin',
-      lede: '這裡只改得動套用到 qBittorrent 與 Prowlarr 介面的那一組。改完要回到 qBittorrent 與 Prowlarr 泊位重新套用才會生效。',
-      username: '介面帳號',
-      password: '介面密碼',
-      applyHint: '只影響套件內的服務，你自己的既有服務不會被改動。',
-      submit: '儲存介面帳密',
-      submitting: '儲存中…',
+    submit: {
+      create: '建立管理員並登入',
+      signIn: '登入',
     },
-    submit: '建立管理員',
-    submitting: '建立中…',
-    saved: '管理員已建立：{{username}}',
+    submitting: {
+      create: '建立中…',
+      signIn: '登入中…',
+    },
+    refused: {
+      jellyfin_unresolved: '還沒找到 Jellyfin。先讓上面那一條連上，再登入。',
+      invalid_credentials: 'Jellyfin 不認這組帳號或密碼。',
+      not_administrator:
+        '這個帳號登得進 Jellyfin，但不是管理員。擁有者要改得動設定——用這台 Jellyfin 的管理員登入。',
+      jellyfin_failed:
+        'Jellyfin 那一段沒做完。它回的原文在下面；排除之後再按一次，做過的不會重做。',
+    },
+    saved: '擁有者 · {{name}}',
+    change: '換一台 Jellyfin',
     error: {
       blank: '帳號與密碼都要填。',
-      failed: '存不進去。Berth 後端可能沒在跑——確認容器狀態後再試一次。',
+      mismatch: '兩次輸入的密碼不一樣。',
+      failed: '沒送出去。Berth 後端可能沒在跑——確認容器狀態後再試一次。',
     },
   },
   detect: {
     title: '偵測服務',
-    lede: 'Berth 逐一探測三個 compose 主機名，判斷每個服務是套件內的還是你自己的。',
+    lede: 'Berth 逐一探測 qBittorrent 與 Prowlarr 的 compose 主機名，判斷每個服務是套件內的還是你自己的。',
     cutaway: {
       title: '將會探測',
       verdict: '判定依據',
@@ -242,7 +253,7 @@ const zhHant = {
     step: {
       public_info: '確認版本與初始精靈還沒跑過',
       configuration: '語言與 metadata 地區',
-      admin_user: '以 Berth 的帳密建立管理員',
+      admin_user: '以擁有者的帳密建立管理員（第 1 步）',
       libraries: '建立清單上的媒體庫',
       remote_access: '開啟遠端存取',
       complete: '結束初始精靈',
@@ -250,15 +261,15 @@ const zhHant = {
     },
     bundled: {
       title: '接手這台 Jellyfin',
-      lede: '這台 Jellyfin 還沒跑過自己的初始精靈，所以 Berth 可以全部代辦。每一步都可以重按：已經對的那幾步會標成「已經是這樣」，不會做第二次。',
+      lede: '第 1 步已經替這台 Jellyfin 建好管理員、跑完它的初始設定、換好 API key；這裡建你列的媒體庫。可以重按：已經建好的標成「已經是這樣」，不會建第二次。',
       run: '開始靠泊',
       rerun: '重新跑一次',
       retry: '重試失敗的那一步',
       running: '進行中…',
       done_one:
-        '這個泊位的事做完了。Jellyfin 有 Berth 管理員、{{count}} 個媒體庫與一把 Berth 專用的 API key。',
+        '這個泊位的事做完了。Jellyfin 有擁有者的管理員帳號、{{count}} 個媒體庫與一把 Berth 專用的 API key。',
       done_other:
-        '這個泊位的事做完了。Jellyfin 有 Berth 管理員、{{count}} 個媒體庫與一把 Berth 專用的 API key。',
+        '這個泊位的事做完了。Jellyfin 有擁有者的管理員帳號、{{count}} 個媒體庫與一把 Berth 專用的 API key。',
       requestFailed: '請求沒跑完。Berth 後端可能沒在跑——確認容器狀態後再試一次。',
       list: {
         title: '要建的媒體庫',
@@ -357,7 +368,8 @@ const zhHant = {
       server: '這台 qBittorrent',
       webapi: 'Web API',
       password: 'WebUI 密碼',
-      willSet: '將設為第 1 步的帳密',
+      willSet: '將設為泊位上填的那一組',
+      notSet: '不設（Berth 靠免密白名單進得去）',
       diff: '將會寫入的鍵',
       reference: '你的偏好（Berth 不會寫入）',
       key: '鍵',
@@ -565,7 +577,7 @@ const zhHant = {
   },
   complete: {
     title: '完成設定',
-    lede: '五個泊位都走過了。按下完成之後精靈就關閉，之後要用 Jellyfin 帳號登入才進得來設定。',
+    lede: '五個泊位都走過了。按下完成之後精靈就關閉，之後的修改在設定頁。',
     submit: '完成設定',
     completing: '完成中…',
     failed: '寫不進去。Berth 後端可能沒在跑——確認容器狀態後再按一次。',
@@ -574,9 +586,8 @@ const zhHant = {
     needRoutes: '第 5 步還沒完成：每一條 Route 的五條纜繩都要綠燈。紅著的那一條，送單一定失敗。',
     unfinished: '還有一步沒做完，但這一頁看不出是哪一步。回上一步逐格看一次，紅的那一格就是。',
     fixTmdb: '回去填 TMDB key',
-    signInHint: '完成後會回到首頁，那裡會請你用剛才建立的 Jellyfin 管理員帳號登入。',
-    signInHintExisting:
-      '完成後會回到首頁，那裡會請你用你那台 Jellyfin 的帳號登入；是那台的管理員才進得來設定。',
+    signInHint:
+      '完成後直接進 Berth。之後登入一律用 Jellyfin 帳號：你是 {{name}}，其他人用自己的 Jellyfin 帳號，是那台的管理員才進得來設定。',
     savePath: 'complete 目錄',
     skippedTitle: '跳過的步驟',
     cutaway: {
@@ -596,7 +607,7 @@ const zhHant = {
     code: 'BTH 0',
     title: '登船口',
     field: {
-      username: '帳號',
+      username: 'Jellyfin 帳號',
       password: '密碼',
     },
     submit: '登入',
@@ -2753,7 +2764,7 @@ const en: Translations<typeof zhHant> = {
     resumed: 'Progress is saved. Close the browser and you come back to this step.',
     prelude: 'Pre-berth',
     place: {
-      admin: 'Create admin',
+      owner: 'Owner',
       detect: 'Detect services',
     },
     nav: {
@@ -2802,62 +2813,70 @@ const en: Translations<typeof zhHant> = {
       },
     },
   },
-  admin: {
-    title: 'Create the Berth administrator',
-    lede: 'This account administers Berth. If Jellyfin is bundled, a later step uses it to create the Jellyfin administrator.',
+  owner: {
+    title: {
+      finding: 'Find Jellyfin first',
+      create: 'Create the Jellyfin administrator',
+      signIn: 'Sign in with your Jellyfin administrator',
+      owned: 'Owner: {{name}}',
+    },
+    lede: {
+      finding:
+        'Berth has no accounts of its own; every sign-in goes through Jellyfin. So the first thing is to find it: a bundled one shows up by itself, your own one needs its address.',
+      create:
+        'Berth has no accounts of its own: this is the Jellyfin account you will sign in to Berth with. Berth creates the Jellyfin administrator with it, and you become the owner of Berth. Everyone else signs in with their own Jellyfin account, and Jellyfin decides their role.',
+      signIn:
+        'Berth has no accounts of its own; every sign-in goes through Jellyfin. Sign in with an administrator of this Jellyfin and you become the owner of Berth. Everyone else signs in with their own Jellyfin account, and Jellyfin decides their role.',
+      owned:
+        '{{name}} administers this Jellyfin and owns Berth. Sign in to Berth with this Jellyfin account from now on; its password is changed in Jellyfin.',
+    },
     cutaway: {
-      title: 'Will be written',
-      berth: 'Berth administrator',
-      jellyfin: 'Jellyfin administrator credentials (step 3)',
-      qbittorrent: 'qBittorrent WebUI credentials (step 4)',
-      prowlarr: 'Prowlarr interface credentials (step 6)',
-      skipped: 'Not applied',
-      value: {
-        account: '{{account}}',
-        berthExisting: 'Sign in with your Jellyfin administrator',
-        pair: '{{account}} · password as above',
-        jellyfinPending:
-          '{{account}} · password as above (created only if step 2 finds it bundled)',
-        jellyfinOwned: '{{account}} · created; change the password in Jellyfin',
-        jellyfinExisting: 'Your own service: sign in with its administrator, nothing is created',
-        interfacePending:
-          '{{account}} · password as above (written only if step 2 finds it bundled)',
-        interfaceExisting: 'Your own service, nothing is written',
-      },
+      title: 'What happens',
+      found: 'Found',
+      create: 'Creates',
+      finish: 'Finishes',
+      change: 'Changes',
+      owner: 'Owner',
+      stored: 'Not stored',
+      admin: 'The Jellyfin administrator',
+      startup: "Jellyfin's startup setup",
+      apiKey: 'API key “Berth”',
+      nothing: 'Nothing on this Jellyfin',
+      password: 'Your password (it only goes to Jellyfin)',
     },
     field: {
-      username: 'Username',
+      username: 'Jellyfin username',
       password: 'Password',
-      apply: 'Use the same credentials for the qBittorrent and Prowlarr interfaces',
-      applyHint:
-        'Bundled services only. Your own existing services are never changed. Step 2 decides which services are bundled and which are yours.',
+      confirm: 'Password again',
     },
-    owned: {
-      title: 'qBittorrent and Prowlarr interface credentials',
-      bundled:
-        'The Jellyfin administrator {{account}} exists, so this account now belongs to Jellyfin: change its password in Jellyfin. Signing in to Berth uses the Jellyfin account.',
-      existing:
-        'Jellyfin is your own service: signing in to Berth uses its account, and its password is changed in Jellyfin.',
-      label: 'Owned by Jellyfin',
-      lede: 'Only the credentials for the qBittorrent and Prowlarr interfaces can change here. They take effect once you apply them again on the qBittorrent and Prowlarr berths.',
-      username: 'Interface username',
-      password: 'Interface password',
-      applyHint: 'Bundled services only. Your own existing services are never changed.',
-      submit: 'Save interface credentials',
-      submitting: 'Saving…',
+    submit: {
+      create: 'Create administrator and sign in',
+      signIn: 'Sign in',
     },
-    submit: 'Create administrator',
-    submitting: 'Creating…',
-    saved: 'Administrator created: {{username}}',
+    submitting: {
+      create: 'Creating…',
+      signIn: 'Signing in…',
+    },
+    refused: {
+      jellyfin_unresolved: 'Jellyfin is not found yet. Get the line above connected, then sign in.',
+      invalid_credentials: 'Jellyfin does not accept that username or password.',
+      not_administrator:
+        'That account can sign in to Jellyfin but is not an administrator. The owner has to be able to change settings — sign in with an administrator of this Jellyfin.',
+      jellyfin_failed:
+        'Jellyfin did not finish. Its own words are below; fix that and press again — nothing already done is redone.',
+    },
+    saved: 'Owner · {{name}}',
+    change: 'Use a different Jellyfin',
     error: {
       blank: 'Username and password are both required.',
+      mismatch: 'The two passwords do not match.',
       failed:
-        'Could not save. The Berth backend may not be running — check the container and retry.',
+        'Nothing was sent. The Berth backend may not be running — check the container and retry.',
     },
   },
   detect: {
     title: 'Detect services',
-    lede: 'Berth probes the three compose hostnames and decides whether each service is bundled or your own.',
+    lede: 'Berth probes the qBittorrent and Prowlarr compose hostnames and decides whether each service is bundled or your own.',
     cutaway: {
       title: 'Will be probed',
       verdict: 'Decided on',
@@ -2965,7 +2984,7 @@ const en: Translations<typeof zhHant> = {
     step: {
       public_info: 'Confirm the version and that the startup wizard has not run',
       configuration: 'Language and metadata region',
-      admin_user: 'Create the administrator from the Berth credentials',
+      admin_user: 'Create the administrator with the owner credentials (step 1)',
       libraries: 'Create the libraries on the list',
       remote_access: 'Enable remote access',
       complete: 'Finish the startup wizard',
@@ -2973,15 +2992,15 @@ const en: Translations<typeof zhHant> = {
     },
     bundled: {
       title: 'Take this Jellyfin over',
-      lede: 'This Jellyfin has not run its own startup wizard, so Berth can do all of it. Every step is safe to press again: the ones already in the right shape are marked "already so" and are not redone.',
+      lede: 'Step 1 already created the administrator on this Jellyfin, finished its startup setup and got an API key; this berth builds the libraries you list. Safe to press again: the ones already built are marked "already so" and are not built twice.',
       run: 'Start mooring',
       rerun: 'Run it again',
       retry: 'Retry the failed step',
       running: 'Running…',
       done_one:
-        'This berth is secured. Jellyfin has the Berth administrator, {{count}} library and an API key for Berth.',
+        'This berth is secured. Jellyfin has the owner administrator account, {{count}} library and an API key for Berth.',
       done_other:
-        'This berth is secured. Jellyfin has the Berth administrator, {{count}} libraries and an API key for Berth.',
+        'This berth is secured. Jellyfin has the owner administrator account, {{count}} libraries and an API key for Berth.',
       requestFailed:
         'The request did not finish. The Berth backend may not be running — check it and retry.',
       list: {
@@ -3089,7 +3108,8 @@ const en: Translations<typeof zhHant> = {
       server: 'This qBittorrent',
       webapi: 'Web API',
       password: 'WebUI password',
-      willSet: 'Will be set to the step 1 credentials',
+      willSet: 'Will be set to the credentials entered on this berth',
+      notSet: 'Not set (Berth gets in through the no-password allowlist)',
       diff: 'Keys that will be written',
       reference: 'Your preferences (Berth will not write them)',
       key: 'Key',
@@ -3310,7 +3330,7 @@ const en: Translations<typeof zhHant> = {
   },
   complete: {
     title: 'Finish setup',
-    lede: 'All five berths have been visited. Finishing closes the wizard; after that you sign in with a Jellyfin account to reach the settings.',
+    lede: 'All five berths have been visited. Finishing closes the wizard; later changes happen in Settings.',
     submit: 'Finish setup',
     completing: 'Finishing…',
     failed: 'Could not save. The Berth backend may be down — check the container and press again.',
@@ -3322,9 +3342,7 @@ const en: Translations<typeof zhHant> = {
       'A step is still unfinished, but this page cannot tell which. Go back a step and look at each berth — the red one is it.',
     fixTmdb: 'Go back and enter the TMDB key',
     signInHint:
-      'You land on the home page, which asks you to sign in with the Jellyfin administrator you just created.',
-    signInHintExisting:
-      'You land on the home page, which asks you to sign in with an account on your Jellyfin; only its administrators reach the settings.',
+      'You go straight into Berth. Signing in always uses a Jellyfin account from now on: you are {{name}}, everyone else uses their own Jellyfin account, and only its administrators reach the settings.',
     savePath: 'Complete directory',
     skippedTitle: 'Skipped steps',
     cutaway: {
@@ -3345,7 +3363,7 @@ const en: Translations<typeof zhHant> = {
     code: 'BTH 0',
     title: 'Gangway',
     field: {
-      username: 'Username',
+      username: 'Jellyfin username',
       password: 'Password',
     },
     submit: 'Sign in',

@@ -53,9 +53,15 @@ async def post_login(
         # 密碼沒有錯，是身分來源不在。UI 要說得出這兩件事的差別（brief §11）。
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(exc)) from exc
 
+    issue_cookie(response, signed.token)
+    return MeOut(name=signed.user.name, role=signed.user.role)
+
+
+def issue_cookie(response: Response, token: str) -> None:
+    """登入與精靈第 1 步（`POST /setup/owner`，M4 票 06）發的是同一種 cookie。"""
     response.set_cookie(
         SESSION_COOKIE,
-        signed.token,
+        token,
         max_age=int(SESSION_TTL.total_seconds()),
         httponly=True,
         samesite="strict",
@@ -63,7 +69,6 @@ async def post_login(
         # 刻意不設 `secure`：自架幾乎都是區網的純 HTTP 位址，設了 cookie 根本存不下來。
         # 防線是 httpOnly + SameSite=Strict + CSRF 標頭（plan §6）；HTTPS 交給前置代理。
     )
-    return MeOut(name=signed.user.name, role=signed.user.role)
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)

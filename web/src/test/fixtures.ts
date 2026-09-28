@@ -30,11 +30,8 @@ export function setupStatus(overrides: Partial<SetupStatus> = {}): SetupStatus {
   return {
     completed: false,
     current_step: 1,
-    admin_created: false,
-    admin_username: '',
-    interface_username: '',
-    jellyfin_owns_account: false,
-    apply_to_services: true,
+    owner: '',
+    owner_signs_in: false,
     services: [],
     waited_seconds: 0,
     window_seconds: 120,

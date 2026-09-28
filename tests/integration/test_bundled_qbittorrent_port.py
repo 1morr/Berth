@@ -24,7 +24,7 @@ from berth.services.routes import build_routes
 from berth.services.settings import read_settings, write_settings
 from berth.services.setup import detect_services
 from tests.conftest import read_fixture
-from tests.integration.arrange import arrange, factory_for
+from tests.integration.arrange import arrange, factory_for, own
 
 MOVED = "http://qbittorrent:18080"
 
@@ -43,6 +43,7 @@ async def test_detection_knocks_on_the_port_berth_was_given(
     config = load_config({"EXT_ROOT": str(tmp_path), "QBITTORRENT_WEBUI_PORT": "18080"})
     real = build_setup_probes(config, {})
     probes = dataclasses.replace(real, jellyfin=FakeJellyfinClient(), prowlarr=FakeProwlarrClient())
+    await own(session)
     try:
         await detect_services(session, probes)
     finally:

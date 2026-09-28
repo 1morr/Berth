@@ -77,6 +77,15 @@ async def sign_in(
         raise InvalidCredentialsError(_REFUSAL)
 
     auth = await _authenticate(session, factory, username, password)
+    return await open_session(session, auth)
+
+
+async def open_session(session: AsyncSession, auth: JellyfinAuth) -> SignedIn:
+    """Jellyfin 已經認過的人換一張 Berth session，並當場 commit。
+
+    `sign_in` 與精靈第 1 步（`setup.claim_owner`，M4 票 06）共用：擁有者成立的那一刻拿到的
+    就是 `/login` 那一種 cookie。
+    """
     user = await _mirror_user(session, auth)
     token = secrets.token_urlsafe(TOKEN_BYTES)
     session.add(

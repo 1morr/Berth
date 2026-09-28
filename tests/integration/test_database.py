@@ -268,6 +268,60 @@ async def test_the_interface_pair_starts_as_the_account_pair(config: Config) -> 
     assert json.loads(downgraded["setup"]) == json.loads(admin)
 
 
+#: M4 票 06 拿掉第 1 步那組帳密的那一版，與它的前一版。
+OWNER_ONLY = "e8a1c4d7b293"
+BEFORE_OWNER_ONLY = "d5c8e2a7f391"
+
+
+async def test_the_old_setup_pair_is_dropped_and_not_kept_anywhere(config: Config) -> None:
+    """M4 票 06：擁有者的帳密只交給 Jellyfin，資料庫裡不留。舊列的兩組帳密與 Berth 寫進 Prowlarr
+    的那一份（就是同一個密碼）一起拿掉；其餘的鍵原封不動。
+    """
+    config.config_root.mkdir(parents=True, exist_ok=True)
+    engine = create_engine(config)
+    old = {
+        "completed": True,
+        "admin": {
+            "username": "skipper",
+            "password": "harbour",
+            "interface_username": "skipper",
+            "interface_password": "harbour",
+            "apply_to_services": True,
+        },
+        "indexer": {"steps": [], "skipped": False, "login_password": "harbour"},
+        "tmdb": {"steps": []},
+    }
+    try:
+        async with engine.begin() as connection:
+            await connection.run_sync(_upgrade_to, BEFORE_OWNER_ONLY)
+        with _sqlite(config.database_path) as db:
+            db.execute(
+                "INSERT INTO settings (key, value_json, updated_at)"
+                " VALUES ('setup', ?, '2026-09-28T00:00:00.000000+00:00')",
+                (json.dumps(old),),
+            )
+            db.commit()
+
+        async with engine.begin() as connection:
+            await connection.run_sync(_upgrade_to, OWNER_ONLY)
+        with _sqlite(config.database_path) as db:
+            upgraded = db.execute("SELECT value_json FROM settings WHERE key = 'setup'").fetchone()[
+                0
+            ]
+
+        async with engine.begin() as connection:
+            await connection.run_sync(_downgrade_to, BEFORE_OWNER_ONLY)
+    finally:
+        await engine.dispose()
+
+    assert "harbour" not in upgraded
+    assert json.loads(upgraded) == {
+        "completed": True,
+        "indexer": {"steps": [], "skipped": False},
+        "tmdb": {"steps": []},
+    }
+
+
 async def test_alembic_records_the_head_revision(config: Config) -> None:
     await migrate(config)
 

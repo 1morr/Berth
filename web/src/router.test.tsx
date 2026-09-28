@@ -94,7 +94,7 @@ describe('門禁', () => {
 
     renderApp('/')
 
-    expect(await screen.findByLabelText('帳號')).toBeInTheDocument()
+    expect(await screen.findByLabelText('Jellyfin 帳號')).toBeInTheDocument()
     expect(screen.queryByText('工作階段已過期，請重新登入。')).not.toBeInTheDocument()
   })
 

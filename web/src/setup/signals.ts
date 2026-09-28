@@ -56,8 +56,12 @@ const PROBE_PATH: Record<ServiceKind, string> = {
  * qBittorrent 的 port 是 `.env` 的 `QBITTORRENT_WEBUI_PORT`，寫死的話換了 port 就說錯（票 06h）。
  */
 export function probeEndpoint(status: SetupStatus, kind: ServiceKind): string {
+  // 使用者自己填了位址（`configured`）之後探的就是那一台，不再是 compose 主機名（M4 票 06 的
+  // critique：纜繩寫 `jellyfin:8096`、表單寫 `nas:8096`，同一台兩個位址）。
+  const typed = status.services.find((row) => row.kind === kind && row.configured)?.base_url
   // OpenAPI 把 dict 寫成任意鍵；後端三個服務一定都給（`services/clients.bundled_targets`）。
-  return status.probe_targets[kind]!.replace(/^https?:\/\//, '') + PROBE_PATH[kind]
+  const target = typed || status.probe_targets[kind]!
+  return target.replace(/^https?:\/\//, '') + PROBE_PATH[kind]
 }
 
 export const REASON_LABEL = {
@@ -75,3 +79,9 @@ export const REASON_LABEL = {
   protocol_mismatch: 'reason.protocol_mismatch',
   connected: 'reason.connected',
 } as const satisfies Record<DetectionReason, string>
+
+/**
+ * 第 2 步探的服務。Jellyfin 在第 1 步就找到了——它的管理員是擁有者，擁有者成立之前只探它
+ * （M4 票 06）。
+ */
+export const DETECTED_IN_STEP_TWO: readonly ServiceKind[] = ['qbittorrent', 'prowlarr']

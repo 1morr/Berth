@@ -1555,7 +1555,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/setup/admin": {
+    "/api/setup/owner": {
         parameters: {
             query?: never;
             header?: never;
@@ -1564,8 +1564,13 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Post Admin */
-        post: operations["post_admin_api_setup_admin_post"];
+        /**
+         * Post Owner
+         * @description 第 1 步：成立擁有者並發 session（plan §9.3 第 1 步、M4 票 06）。
+         *
+         *     cookie 與 `/auth/login` 發的是同一種。
+         */
+        post: operations["post_owner_api_setup_owner_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2006,18 +2011,6 @@ export interface components {
             reason: components["schemas"]["AccessRefusal"];
             /** Detail */
             detail: string;
-        };
-        /** AdminIn */
-        AdminIn: {
-            /** Username */
-            username: string;
-            /** Password */
-            password: string;
-            /**
-             * Apply To Services
-             * @default true
-             */
-            apply_to_services?: boolean;
         };
         /**
          * AuditAction
@@ -2665,6 +2658,8 @@ export interface components {
             version: string;
             /** Setup Completed */
             setup_completed: boolean;
+            /** Owner Established */
+            owner_established: boolean;
         };
         /**
          * HealthDetailOut
@@ -3710,6 +3705,39 @@ export interface components {
             items: components["schemas"]["OneshotItemOut"][];
         };
         /**
+         * OwnerIn
+         * @description 擁有者的 Jellyfin 帳密：套件內拿去建管理員，既有拿去登入。只交給 Jellyfin，不存下來。
+         *
+         *     不加約束，理由同 `LoginIn`：空的與錯的一律由 services 拒絕成 `invalid_credentials`。
+         */
+        OwnerIn: {
+            /**
+             * Username
+             * @default
+             */
+            username?: string;
+            /**
+             * Password
+             * @default
+             */
+            password?: string;
+        };
+        /**
+         * OwnerRefusal
+         * @description 精靈第 1 步「擁有者」做不下去（`services/setup.claim_owner`、M4 票 06）。
+         *
+         *     擁有者就是 Jellyfin 的管理員（brief §11、§19 2026-09-26）：帳密交給 Jellyfin 驗，
+         *     Berth 自己不存。
+         * @enum {string}
+         */
+        OwnerRefusal: "jellyfin_unresolved" | "invalid_credentials" | "not_administrator" | "jellyfin_failed";
+        /** OwnerRefusalOut */
+        OwnerRefusalOut: {
+            reason: components["schemas"]["OwnerRefusal"];
+            /** Detail */
+            detail: string;
+        };
+        /**
          * PlanAction
          * @description 一個檔案的處置（plan §2.3 的 `plan_items.action`）。
          * @enum {string}
@@ -4590,16 +4618,10 @@ export interface components {
             completed: boolean;
             /** Current Step */
             current_step: number;
-            /** Admin Created */
-            admin_created: boolean;
-            /** Admin Username */
-            admin_username: string;
-            /** Interface Username */
-            interface_username: string;
-            /** Jellyfin Owns Account */
-            jellyfin_owns_account: boolean;
-            /** Apply To Services */
-            apply_to_services: boolean;
+            /** Owner */
+            owner: string;
+            /** Owner Signs In */
+            owner_signs_in: boolean;
             /** Services */
             services: components["schemas"]["ServiceDetectionOut"][];
             /** Waited Seconds */
@@ -8348,7 +8370,7 @@ export interface operations {
             };
         };
     };
-    post_admin_api_setup_admin_post: {
+    post_owner_api_setup_owner_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -8357,7 +8379,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["AdminIn"];
+                "application/json": components["schemas"]["OwnerIn"];
             };
         };
         responses: {
@@ -8370,6 +8392,33 @@ export interface operations {
                     "application/json": components["schemas"]["SetupStatusOut"];
                 };
             };
+            /** @description `invalid_credentials` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OwnerRefusalOut"];
+                };
+            };
+            /** @description `not_administrator` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OwnerRefusalOut"];
+                };
+            };
+            /** @description `jellyfin_unresolved` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OwnerRefusalOut"];
+                };
+            };
             /** @description Validation Error */
             422: {
                 headers: {
@@ -8377,6 +8426,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description `jellyfin_failed` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OwnerRefusalOut"];
                 };
             };
         };

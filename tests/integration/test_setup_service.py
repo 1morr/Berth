@@ -1,4 +1,8 @@
-"""精靈第 1–2 步的 services 命令（plan §9.3、票 05）。"""
+"""精靈第 2 步的 services 命令：偵測服務（plan §9.3、票 05）。
+
+第 1 步（擁有者）在 `test_setup_owner.py`。這裡的每一條都從「擁有者已經成立」開始
+（`owner_first`）：擁有者成立之前偵測只探 Jellyfin（M4 票 06）。
+"""
 
 from __future__ import annotations
 
@@ -6,6 +10,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
+import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from berth.adapters.http import (
@@ -19,19 +24,18 @@ from berth.adapters.jellyfin.fake import FakeJellyfinClient
 from berth.adapters.prowlarr import ProwlarrIndexer
 from berth.adapters.prowlarr.fake import FakeProwlarrClient
 from berth.adapters.qbittorrent.fake import FakeQbittorrentClient
-from berth.domain import DetectionReason, JellyfinStep, ServiceKind, ServiceOrigin, StepStatus
-from berth.models import IndexerSettings, ServiceProbe, SetupSettings, SetupStep
+from berth.domain import DetectionReason, ServiceKind, ServiceOrigin
+from berth.models import IndexerSettings, SetupSettings
 from berth.services.clients import SetupProbes
-from berth.services.jellyfin import bootstrap_jellyfin
 from berth.services.settings import read_settings, write_settings
 from berth.services.setup import (
     DETECT_WINDOW,
     SetupStatus,
-    create_admin,
+    claim_owner,
     detect_services,
-    jellyfin_owns_account,
     read_status,
 )
+from tests.integration.arrange import own
 from tests.integration.factories import FakeClientFactory
 from tests.integration.test_setup_jellyfin import seed as dock_jellyfin
 
@@ -62,110 +66,10 @@ def detail(status: SetupStatus, kind: ServiceKind) -> str:
     return next(row for row in status.services if row.kind is kind).detail
 
 
-# --- 第 1 步：建立管理員 ---
-
-
-@pytest.mark.asyncio
-async def test_status_on_a_clean_install_starts_at_step_one(session: AsyncSession) -> None:
-    status = await read_status(session)
-
-    assert status.completed is False
-    assert status.current_step == 1
-    assert status.admin_created is False
-    assert status.services == ()
-
-
-@pytest.mark.asyncio
-async def test_create_admin_records_the_account_and_the_checkbox(session: AsyncSession) -> None:
-    await create_admin(session, username="skipper", password="harbour", apply_to_services=False)
-
-    status = await read_status(session)
-    assert status.admin_created is True
-    assert status.admin_username == "skipper"
-    assert status.apply_to_services is False
-    assert status.current_step == 2
-
-
-@pytest.mark.asyncio
-async def test_apply_to_services_defaults_to_checked(session: AsyncSession) -> None:
-    await create_admin(session, username="skipper", password="harbour", apply_to_services=True)
-
-    assert (await read_status(session)).apply_to_services is True
-
-
-@pytest.mark.asyncio
-async def test_create_admin_is_rerunnable_without_duplicating(session: AsyncSession) -> None:
-    await create_admin(session, username="first", password="one", apply_to_services=True)
-    await create_admin(session, username="second", password="two", apply_to_services=False)
-
-    status = await read_status(session)
-    assert status.admin_username == "second"
-    assert status.apply_to_services is False
-
-
-@pytest.mark.asyncio
-async def test_create_admin_rejects_blank_credentials(session: AsyncSession) -> None:
-    with pytest.raises(ValueError):
-        await create_admin(session, username="  ", password="harbour", apply_to_services=True)
-    with pytest.raises(ValueError):
-        await create_admin(session, username="skipper", password="", apply_to_services=True)
-
-
-@pytest.mark.asyncio
-async def test_admin_password_is_kept_for_the_service_steps(session: AsyncSession) -> None:
-    """票 06 / 08 要拿這組帳密去建 Jellyfin 管理員與設 qBittorrent 密碼，所以存明文。"""
-    await create_admin(session, username="skipper", password="harbour", apply_to_services=True)
-
-    assert (await read_settings(session, SetupSettings)).admin.password == "harbour"
-
-
-def owned(origin: ServiceOrigin | None, admin_user: StepStatus | None = None) -> bool:
-    setup = SetupSettings()
-    if origin is not None:
-        setup.services = {
-            ServiceKind.JELLYFIN: ServiceProbe(
-                origin=origin, reason=DetectionReason.SETUP_PENDING, checked_at=NOW
-            )
-        }
-    if admin_user is not None:
-        setup.jellyfin.steps = [SetupStep(key=JellyfinStep.ADMIN_USER.value, status=admin_user)]
-    return jellyfin_owns_account(setup)
-
-
-@pytest.mark.parametrize(
-    ("origin", "admin_user", "expected"),
-    [
-        # 還沒偵測：探測中、逾時、沒有判定都一樣，帳號還是第 1 步的。
-        (None, None, False),
-        (ServiceOrigin.PENDING, None, False),
-        (ServiceOrigin.TIMEOUT, None, False),
-        # 套件內：要等「建立管理員」那一步有結論。
-        (ServiceOrigin.BUNDLED, None, False),
-        (ServiceOrigin.BUNDLED, StepStatus.FAILED, False),
-        (ServiceOrigin.BUNDLED, StepStatus.OK, True),
-        (ServiceOrigin.BUNDLED, StepStatus.SKIPPED, True),
-        # 既有：Berth 的登入本來就是它自己的帳號。
-        (ServiceOrigin.EXISTING, None, True),
-    ],
-)
-def test_the_account_belongs_to_jellyfin_once_jellyfin_has_its_administrator(
-    origin: ServiceOrigin | None, admin_user: StepStatus | None, expected: bool
-) -> None:
-    assert owned(origin, admin_user) is expected
-
-
-@pytest.mark.asyncio
-async def test_before_jellyfin_owns_the_account_both_pairs_follow_step_one(
-    session: AsyncSession,
-) -> None:
-    await create_admin(session, username="first", password="one", apply_to_services=True)
-    await create_admin(session, username="second", password="two", apply_to_services=True)
-
-    admin = (await read_settings(session, SetupSettings)).admin
-    assert (admin.username, admin.password) == ("second", "two")
-    assert (admin.interface_username, admin.interface_password) == ("second", "two")
-    status = await read_status(session)
-    assert (status.interface_username, status.jellyfin_owns_account) == ("second", False)
+@pytest_asyncio.fixture(autouse=True)
+async def owner_first(session: AsyncSession) -> None:
+    await own(session)
+    await session.commit()
 
 
 # --- 第 2 步：偵測服務 ---
@@ -173,7 +77,6 @@ async def test_before_jellyfin_owns_the_account_both_pairs_follow_step_one(
 
 @pytest.mark.asyncio
 async def test_all_three_bundled_on_a_clean_compose(session: AsyncSession) -> None:
-    await create_admin(session, username="skipper", password="harbour", apply_to_services=True)
     status = await detect_services(session, probes(), now=NOW)
 
     assert verdict(status, ServiceKind.JELLYFIN) == (
@@ -266,7 +169,6 @@ async def test_prowlarr_rejecting_the_api_key_is_existing(session: AsyncSession)
 @pytest.mark.asyncio
 async def test_a_service_removed_from_compose_profiles_is_existing(session: AsyncSession) -> None:
     """主機名解不到就不必等：立刻顯示既有服務的表單（票 05 驗收）。"""
-    await create_admin(session, username="skipper", password="harbour", apply_to_services=True)
     absent = FakeJellyfinClient(error=ServiceNotDeployedError("no such host"))
 
     status = await detect_services(session, probes(jellyfin=absent), now=NOW)
@@ -287,7 +189,6 @@ async def test_a_service_removed_from_compose_profiles_is_existing(session: Asyn
 
 @pytest.mark.asyncio
 async def test_a_container_still_starting_stays_pending(session: AsyncSession) -> None:
-    await create_admin(session, username="skipper", password="harbour", apply_to_services=True)
     starting = FakeQbittorrentClient(error=ServiceUnavailableError("connection refused"))
 
     status = await detect_services(session, probes(qbittorrent=starting), now=NOW)
@@ -334,7 +235,6 @@ async def test_retry_restarts_the_polling_window(session: AsyncSession) -> None:
 @pytest.mark.asyncio
 async def test_jellyfin_still_loading_is_pending_not_an_error(session: AsyncSession) -> None:
     """Jellyfin 啟動中每一支端點都回 503（票 06g）：那是「還在啟動」，不是 500、也不是既有。"""
-    await create_admin(session, username="skipper", password="harbour", apply_to_services=True)
     loading = FakeJellyfinClient(error=ServiceBusyError("503 still loading"))
 
     status = await detect_services(session, probes(jellyfin=loading), now=NOW)
@@ -402,7 +302,6 @@ async def test_something_else_answering_past_the_window_is_existing(
 @pytest.mark.asyncio
 async def test_detection_results_survive_a_reload(session: AsyncSession) -> None:
     """關掉瀏覽器再回來要回到原本那一步（shape brief 的續行）。"""
-    await create_admin(session, username="skipper", password="harbour", apply_to_services=True)
     await detect_services(session, probes(), now=NOW)
 
     status = await read_status(session)
@@ -454,7 +353,6 @@ async def test_redetecting_a_pinned_service_does_not_probe_it_again(
     session: AsyncSession,
 ) -> None:
     """釘住的服務（Berth 自己設過密碼、加過站）指名重探也不探：判定規則看的正是 Berth 做掉的事。"""
-    await create_admin(session, username="skipper", password="harbour", apply_to_services=True)
     await detect_services(session, probes(), now=NOW)
     setup = await read_settings(session, SetupSettings)
     setup.services[ServiceKind.QBITTORRENT].configured = True
@@ -472,12 +370,14 @@ async def test_redetecting_a_pinned_service_does_not_probe_it_again(
 async def test_a_docked_bundled_jellyfin_stays_bundled_after_a_restart(
     session: AsyncSession, tmp_path: Path
 ) -> None:
-    """第 3 步幫套件內 Jellyfin 跑完它自己的精靈之後，`StartupWizardCompleted` 會變 true——
+    """第 1 步幫套件內 Jellyfin 跑完它自己的精靈之後，`StartupWizardCompleted` 會變 true——
     重新偵測不能因此把它誤判成使用者自己開的那一台（跟 qBittorrent 設完密碼、Prowlarr
     加完索引站同一個道理，票 06b 追蹤）。
     """
-    await dock_jellyfin(session, library_root=str(tmp_path / "library"))
-    await bootstrap_jellyfin(session, FakeClientFactory(jellyfin=FakeJellyfinClient()))
+    await dock_jellyfin(session, library_root=str(tmp_path / "library"), owner=False)
+    await claim_owner(
+        session, FakeClientFactory(jellyfin=FakeJellyfinClient()), username="s", password="p"
+    )
     reprobed = FakeJellyfinClient(startup_wizard_completed=True)
 
     status = await detect_services(

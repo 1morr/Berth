@@ -1083,6 +1083,19 @@ split-cour 的第一批被播出日比對整批擋在審核，改正一次並套
   既有 Jellyfin 而 Berth 還沒入庫過東西時，原本落在一面空牆（或只有別人的片）。現在這個人看得到的媒體庫裡帳本
   一筆都沒有就落在探索，其餘照舊落在媒體庫；`?redirect=` 照舊優先。API：`GET /api/inventory` 每一列多
   `has_imports`。
+- **精靈第 1 步改為「擁有者」：Jellyfin 的管理員就是 Berth 的擁有者**（M4 票 06，brief §11、§19 2026-09-26；
+  Seerr 的做法）。Berth 沒有自己的帳號，原本的「建立 Berth 管理員」那組帳密在接既有 Jellyfin 時精靈結束後登不進
+  Berth。現在第 1 步先找到 Jellyfin：套件內的那一台以你填的帳密建立它的管理員、跑完它的初始設定、換 API key；
+  既有的那一台用它自己的管理員登入（不是管理員就拒絕）。成功那一刻就登入 Berth，之後登入 Berth 就用這一組；
+  **密碼只交給 Jellyfin，Berth 不存**。qBittorrent 與 Prowlarr 的偵測移到第 2 步；泊位 1 剩下建媒體庫（套件內）
+  或列媒體庫（既有，不再要帳密）；精靈跑完直接進 Berth，不必再登入一次。API：`POST /api/setup/admin` 由
+  `POST /api/setup/owner` 取代（成功時發 session cookie；拒絕是 `OwnerRefusal`：409 / 401 / 403 / 502）；
+  `SetupStatusOut` 的 `admin_created`、`admin_username`、`interface_username`、`jellyfin_owns_account`、
+  `apply_to_services` 換成 `owner`、`owner_signs_in`；`GET /api/health` 多 `owner_established`。資料：
+  `settings.setup.admin` 由 `owner`（Jellyfin 的 user id 與名字）取代，migration `e8a1c4d7b293` 拿掉舊的兩組帳密與
+  Berth 寫進 Prowlarr 的那一份；精靈已經跑完的安裝不受影響，跑到一半的回到第 1 步。
+  **套件內 qBittorrent 與 Prowlarr 的介面密碼暫時不設**：第 1 步的「同一組帳密也套用」勾選框拿掉了，各自泊位上的
+  欄位在下一張票補上；這之前 Berth 照常運作，自己開 qBittorrent WebUI 要用容器 log 的臨時密碼。
 ### Removed
 - **服務設定頁 `/settings/services` 與精靈的 `?berth=` 深連結**（M3 票 06i）：前者拆進設定的各分頁，後者連同
   「改位址或憑證」與精靈跑完之後的「回到 Berth」一起拿掉——精靈跑完之後不再是設定入口。後端的
@@ -1349,6 +1362,8 @@ split-cour 的第一批被播出日比對整批擋在審核，改正一次並套
 
 ### Security
 
+- **精靈在擁有者成立之前只開兩件事**（M4 票 06）：找到 Jellyfin、成為擁有者。其餘精靈端點（建立、套用、加站、
+  讀別人的服務）一律 403，成立之後整組要管理員的 session。誰先到誰建立，與 Jellyfin 自己的啟動精靈相同。
 - **媒體庫瀏覽由 Berth 自己擋 Jellyfin 的權限**（M1.5 票 03，plan §11.2b）。伺服器 API key 帶 `parentId` 替使用者查時
   Jellyfin 不套媒體庫權限、停用的帳號照樣代讀得到（12.1.0 實測），所以：Jellyfin 的使用者 id 只從 session 來；
   媒體庫 id 對 `GET /UserViews` 的允許清單驗過才會送出，不在清單回 404 且不問 Jellyfin；允許清單與帳號 `Policy`

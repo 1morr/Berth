@@ -712,19 +712,20 @@ class StepStatus(StrEnum):
 
 
 class JellyfinStep(StrEnum):
-    """Jellyfin 自動初始化序列的七步（plan §9.4）。順序即宣告順序。
+    """Jellyfin 自動初始化序列的七步（plan §9.4）。順序即宣告順序，也是執行的順序。
 
-    原本有第 8、9 步（裝 MergeVersions、記下兩個合併任務的 Id）。12.x 原生合併多版本，
-    插件在上面是空跑，所以整段移除了（票 14b、brief §19、§20.9）。
+    前六步在精靈第 1 步成立擁有者時跑，建媒體庫在泊位 1（M4 票 06，`services/jellyfin.py`
+    的 `OWNER_STEPS` / `BERTH_STEPS`）。原本有第 8、9 步（裝 MergeVersions、記下兩個合併任務的
+    Id）。12.x 原生合併多版本，插件在上面是空跑，所以整段移除了（票 14b、brief §19、§20.9）。
     """
 
     PUBLIC_INFO = "public_info"
     CONFIGURATION = "configuration"
     ADMIN_USER = "admin_user"
-    LIBRARIES = "libraries"
     REMOTE_ACCESS = "remote_access"
     COMPLETE = "complete"
     API_KEY = "api_key"
+    LIBRARIES = "libraries"
 
 
 class RouteCheck(StrEnum):
@@ -1092,6 +1093,23 @@ class BundledLibraryRefusal(StrEnum):
     FOLDER_CHARACTERS = "folder_characters"
     #: 已經在 Jellyfin 建好的那一列被改了或刪了。那一列要去 Jellyfin 改（票 06f）。
     BUILT_CHANGED = "built_changed"
+
+
+class OwnerRefusal(StrEnum):
+    """精靈第 1 步「擁有者」做不下去（`services/setup.claim_owner`、M4 票 06）。
+
+    擁有者就是 Jellyfin 的管理員（brief §11、§19 2026-09-26）：帳密交給 Jellyfin 驗，
+    Berth 自己不存。
+    """
+
+    #: 還不知道 Jellyfin 在哪裡：探測中、逾時，或探不到而使用者還沒填位址。
+    JELLYFIN_UNRESOLVED = "jellyfin_unresolved"
+    #: Jellyfin 不認這組帳密。帳號不存在與密碼錯誤是同一種（`auth.InvalidCredentialsError`）。
+    INVALID_CREDENTIALS = "invalid_credentials"
+    #: 帳密對，但這個人不是 Jellyfin 管理員。擁有者要改得動設定，一般使用者不行。
+    NOT_ADMINISTRATOR = "not_administrator"
+    #: Jellyfin 那一段序列有一步失敗（版本太舊、連不上、建不了 API key）；`detail` 是原文。
+    JELLYFIN_FAILED = "jellyfin_failed"
 
 
 class AccessRefusal(StrEnum):

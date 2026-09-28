@@ -31,7 +31,8 @@ from berth.services.qbittorrent import (
     read_qbittorrent_diff,
 )
 from berth.services.settings import read_settings, write_settings
-from berth.services.setup import STEP_QBITTORRENT, STEP_ROUTES, create_admin, read_status
+from berth.services.setup import STEP_QBITTORRENT, STEP_ROUTES, read_status
+from tests.integration.arrange import interface_logins, own
 from tests.integration.factories import FakeClientFactory
 
 NOW = datetime(2026, 9, 8, 12, 0, tzinfo=UTC)
@@ -50,14 +51,14 @@ async def arrange(
     session: AsyncSession,
     *,
     origin: ServiceOrigin = ServiceOrigin.BUNDLED,
-    apply_to_services: bool = True,
+    logins: bool = True,
     username: str = "",
     password: str = "",
 ) -> None:
     """把資料庫推到「第 3 步做完、輪到 qBittorrent」的狀態。"""
-    await create_admin(
-        session, username="skipper", password="harbour", apply_to_services=apply_to_services
-    )
+    await own(session)
+    if logins:
+        await interface_logins(session, "skipper", "harbour")
     setup = await read_settings(session, SetupSettings)
     # 前兩個泊位已經接好了：步驟由狀態導出，所以第 4 步要成為「當前」就得先把它們填齊。
     setup.jellyfin.steps = [SetupStep(key=JellyfinStep.API_KEY.value, status=StepStatus.OK)]
@@ -131,7 +132,7 @@ async def test_diff_lists_the_five_recommended_keys(session: AsyncSession) -> No
 
 @pytest.mark.asyncio
 async def test_apply_writes_only_the_keys_that_differ(session: AsyncSession) -> None:
-    await arrange(session, apply_to_services=False)
+    await arrange(session, logins=False)
     paths = await read_settings(session, PathSettings)
     client = FakeQbittorrentClient(
         preferences={"auto_tmm_enabled": True, "save_path": paths.complete_root}
@@ -181,28 +182,26 @@ async def test_apply_sets_the_web_ui_password_when_the_admin_asked_for_it(
 async def test_new_interface_credentials_reach_qbittorrent_when_step_four_is_applied_again(
     session: AsyncSession,
 ) -> None:
-    """帳號屬於 Jellyfin 之後第 1 步只改得動介面那一組，回到第 4 步重新套用才生效（票 06c）。"""
+    """泊位上的介面帳密改了，回到第 4 步重新套用才生效（票 06c、M4 票 06）。"""
     await arrange(session)
     client = FakeQbittorrentClient()
     factory = FakeClientFactory(qbittorrent=client)
     await apply_qbittorrent(session, factory)
 
-    await create_admin(session, username="deckhand", password="changed", apply_to_services=True)
+    await interface_logins(session, "deckhand", "changed")
     await session.commit()
     await apply_qbittorrent(session, factory)
 
     assert client.writes[-1] == {"web_ui_username": "deckhand", "web_ui_password": "changed"}
     settings = await read_settings(session, QbittorrentSettings)
     assert (settings.username, settings.password) == ("deckhand", "changed")
-    # 帳號本身沒動：它屬於 Jellyfin。
-    assert (await read_status(session)).admin_username == "skipper"
 
 
 @pytest.mark.asyncio
-async def test_apply_leaves_the_password_alone_when_the_box_is_unchecked(
+async def test_apply_leaves_the_password_alone_without_a_login_on_the_berth(
     session: AsyncSession,
 ) -> None:
-    await arrange(session, apply_to_services=False)
+    await arrange(session, logins=False)
     client = FakeQbittorrentClient()
     factory = FakeClientFactory(qbittorrent=client)
 
@@ -322,7 +321,7 @@ async def test_a_trailing_slash_is_not_a_difference(session: AsyncSession) -> No
     照字面比對的話那兩個鍵在 4.4 上永遠「不同」，每次重按都重寫一次同樣的值——
     也就破壞了「重按結果一致」。
     """
-    await arrange(session, apply_to_services=False)
+    await arrange(session, logins=False)
     paths = await read_settings(session, PathSettings)
     client = FakeQbittorrentClient(
         version=QbittorrentVersion(app="v4.4.5", webapi="2.8.5"),

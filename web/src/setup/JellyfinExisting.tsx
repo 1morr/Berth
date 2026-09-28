@@ -18,43 +18,29 @@ import { SIGNAL_FILL } from '../components/signal'
 /**
  * 既有 Jellyfin（plan §9.5）。紅線在這裡是**看得見的**：畫面上沒有「建立媒體庫」，
  * 只有「加入 Berth 路徑」；每個媒體庫的舊路徑照原樣列出來，加的那一條另外標。
+ *
+ * 沒有登入表單：API key 在第 1 步成立擁有者時就換好了（M4 票 06）。換一把 key 在設定頁
+ * （`JellyfinSignIn`）。
  */
 export function JellyfinExisting({
   setup,
-  signInFailed,
-  connecting,
   addingPath,
-  onConnect,
   onAddPath,
 }: {
   setup: JellyfinSetup
-  signInFailed: boolean
-  connecting: boolean
   addingPath: string | null
-  onConnect: (input: JellyfinConnectInput) => void
   onAddPath: (library: string) => void
 }) {
   const libraryStep = setup.steps.find((row) => row.step === 'libraries')
 
   return (
-    <>
-      <JellyfinSignIn
-        setup={setup}
-        connecting={connecting}
-        failed={signInFailed}
-        onConnect={onConnect}
-      />
-
-      {setup.api_key_present && (
-        <Libraries
-          libraries={setup.libraries}
-          addingPath={addingPath}
-          failure={libraryStep?.status === 'failed' ? libraryStep : undefined}
-          baseUrl={setup.base_url}
-          onAddPath={onAddPath}
-        />
-      )}
-    </>
+    <Libraries
+      libraries={setup.libraries}
+      addingPath={addingPath}
+      failure={libraryStep?.status === 'failed' ? libraryStep : undefined}
+      baseUrl={setup.base_url}
+      onAddPath={onAddPath}
+    />
   )
 }
 
@@ -128,7 +114,7 @@ function SignInForm({
         label={t('jellyfin.existing.username')}
         value={username}
         autoComplete="off"
-        error={blank && !username.trim() ? t('admin.error.blank') : undefined}
+        error={blank && !username.trim() ? t('owner.error.blank') : undefined}
         onChange={(event) => setUsername(event.target.value)}
       />
       <PasswordField
@@ -136,7 +122,7 @@ function SignInForm({
         value={password}
         autoComplete="off"
         hint={t('jellyfin.existing.passwordHint')}
-        error={blank && !password ? t('admin.error.blank') : undefined}
+        error={blank && !password ? t('owner.error.blank') : undefined}
         onChange={(event) => setPassword(event.target.value)}
       />
       {failed && (

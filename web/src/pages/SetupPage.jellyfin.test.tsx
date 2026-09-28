@@ -22,7 +22,6 @@ afterEach(() => {
 const STATUS = 'GET /api/setup/status'
 const JELLYFIN = 'GET /api/setup/jellyfin'
 const BOOTSTRAP = 'POST /api/setup/jellyfin/bootstrap'
-const CONNECT = 'POST /api/setup/jellyfin/connect'
 const PATHS = 'POST /api/setup/jellyfin/libraries/paths'
 const SAVE = 'PUT /api/setup/jellyfin/bundled'
 
@@ -41,8 +40,7 @@ function quietFor(ms: number) {
 /** 第 1–2 步都做完了，精靈在泊位 1。 */
 const AT_BERTH_ONE = setupStatus({
   current_step: 3,
-  admin_created: true,
-  admin_username: 'skipper',
+  owner: 'skipper',
   services: ALL_BUNDLED,
 })
 
@@ -55,6 +53,29 @@ const NAS = setupStatus({
 })
 
 describe('泊位 1：套件內 Jellyfin', () => {
+  // M4 票 06：前六步在第 1 步（擁有者）就有結論了，泊位 1 還沒做的是建媒體庫。
+  it('第 1 步做完的那幾步不算這一格做完：仍然是「開始靠泊」', async () => {
+    const owned = (
+      [
+        'public_info',
+        'configuration',
+        'admin_user',
+        'remote_access',
+        'complete',
+        'api_key',
+      ] as const
+    ).map((step) => ({ step, status: 'ok' as const, detail: '', error: '' }))
+    stubApi({
+      [STATUS]: { body: AT_BERTH_ONE },
+      [JELLYFIN]: { body: jellyfinSetup({ steps: owned, api_key_present: true }) },
+    })
+
+    renderWithProviders(<SetupPage />)
+
+    expect(await screen.findByRole('button', { name: '開始靠泊' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '重新跑一次' })).not.toBeInTheDocument()
+  })
+
   it('剖面在按之前就列出七支端點', async () => {
     stubApi({ [STATUS]: { body: AT_BERTH_ONE }, [JELLYFIN]: { body: jellyfinSetup() } })
 
@@ -324,7 +345,7 @@ describe('泊位 1：套件內 Jellyfin 的媒體庫清單（票 06f）', () => 
     expect(within(list).getByText(/到 Jellyfin 的「控制台 → 媒體庫」/)).toBeInTheDocument()
     const documentaries = within(list).getByRole('group', { name: '紀錄片' })
     expect(within(documentaries).getByLabelText('名稱')).toBeEnabled()
-    expect(screen.getByText(/Jellyfin 有 Berth 管理員、2 個媒體庫/)).toBeInTheDocument()
+    expect(screen.getByText(/Jellyfin 有擁有者的管理員帳號、2 個媒體庫/)).toBeInTheDocument()
   })
 
   it('後端擋下來的清單就地說出理由', async () => {
@@ -396,41 +417,18 @@ describe('泊位 1：既有 Jellyfin', () => {
     ],
   })
 
-  it('先要那台伺服器的管理員帳密，沒有靠泊按鈕', async () => {
-    stubApi({
-      [STATUS]: { body: NAS },
-      [JELLYFIN]: { body: jellyfinSetup({ origin: 'existing', base_url: 'http://nas:8096' }) },
-    })
+  // M4 票 06：登入與 API key 在第 1 步（擁有者）就做完了，泊位 1 不再要帳密。
+  it('不再要帳密，也沒有靠泊按鈕：直接列媒體庫', async () => {
+    stubApi({ [STATUS]: { body: NAS }, [JELLYFIN]: { body: CONNECTED } })
 
     renderWithProviders(<SetupPage />)
 
-    expect(await screen.findByLabelText('Jellyfin 管理員帳號')).toBeInTheDocument()
+    expect(await screen.findByText('/volume1/media/films')).toBeInTheDocument()
+    expect(screen.queryByLabelText('Jellyfin 管理員帳號')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '開始靠泊' })).not.toBeInTheDocument()
     // 紅線：既有 Jellyfin 上不會出現任何「建立媒體庫」的動作——套件內那一份清單也不在。
     expect(screen.queryByText('要建的媒體庫')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '加一個媒體庫' })).not.toBeInTheDocument()
-  })
-
-  it('送出帳密去換一把 API key', async () => {
-    const fetchStub = stubApi({
-      [STATUS]: { body: NAS },
-      [JELLYFIN]: { body: jellyfinSetup({ origin: 'existing', base_url: 'http://nas:8096' }) },
-      [CONNECT]: { body: CONNECTED },
-    })
-    const user = userEvent.setup()
-
-    renderWithProviders(<SetupPage />)
-    await user.type(await screen.findByLabelText('Jellyfin 管理員帳號'), 'owner')
-    await user.type(screen.getByLabelText('Jellyfin 管理員密碼'), 's3cret')
-    await user.click(screen.getByRole('button', { name: '登入並建立 API key' }))
-
-    await waitFor(() => {
-      const call = fetchStub.mock.calls.find(([url]) => url === '/api/setup/jellyfin/connect')
-      expect(call && JSON.parse(String(call[1]?.body))).toEqual({
-        username: 'owner',
-        password: 's3cret',
-      })
-    })
   })
 
   it('列出媒體庫與各自路徑，掛 TVDB 的那個給警告', async () => {

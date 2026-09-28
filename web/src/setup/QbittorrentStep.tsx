@@ -87,7 +87,9 @@ function DiffCutaway({ setup }: { setup: QbittorrentSetup }) {
         />
         <CutawayRow
           term={t('qbittorrent.cutaway.password')}
-          value={t(setup.sets_password ? 'qbittorrent.cutaway.willSet' : 'admin.cutaway.skipped')}
+          value={t(
+            setup.sets_password ? 'qbittorrent.cutaway.willSet' : 'qbittorrent.cutaway.notSet',
+          )}
           muted={!setup.sets_password}
         />
       </Cutaway>

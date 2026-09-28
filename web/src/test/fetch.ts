@@ -40,10 +40,15 @@ export function stubApi(
 }
 
 /** 精靈已經跑完的一台。路由守衛讀的是這一支（`setup_completed`）。 */
-export const HEALTHY = { status: 'ok', version: '0.1.0', setup_completed: true }
+export const HEALTHY = {
+  status: 'ok',
+  version: '0.1.0',
+  setup_completed: true,
+  owner_established: true,
+}
 
 /** 還沒設定過的一台：任何頁面都該被導向精靈。 */
-export const UNCONFIGURED = { ...HEALTHY, setup_completed: false }
+export const UNCONFIGURED = { ...HEALTHY, setup_completed: false, owner_established: false }
 
 export const UNAUTHORIZED: StubRoute = { status: 401, body: { detail: 'sign in to use this API' } }
 

@@ -1,24 +1,32 @@
 import { expect, test } from '@playwright/test'
 
-import { ADMIN } from './login.ts'
 import { shot } from './shot.ts'
 
 /** `mixed` 那台既有 Jellyfin 的管理員（`scripts/fake_setup_server.py` 的 `nas_jellyfin`）。 */
 const OWNER = { user: 'owner', password: 's3cret' } as const
 
 // `mixed`：NAS 的常見組合（plan §9.3）。既有 Jellyfin 跑過自己的精靈、兩個媒體庫；qBittorrent 設了
-// 密碼；Prowlarr 已經有站。精靈不建也不改使用者的東西，只接上去：填 qBittorrent 的帳密、登入
-// Jellyfin 換一把 API key、替媒體庫加一條 Berth 路徑並選它當寫入目標、貼 Prowlarr 的 key。
+// 密碼；Prowlarr 已經有站。精靈不建也不改使用者的東西，只接上去：以那台 Jellyfin 的管理員成為擁有者
+// （同時換一把 API key）、填 qBittorrent 的帳密、替媒體庫加一條 Berth 路徑並選它當寫入目標、貼 Prowlarr 的 key。
 test('既有服務：接上三個服務、選寫入目標，完成後用那台 Jellyfin 的帳號登入', async ({ page }) => {
   await page.goto('/')
   await expect(page).toHaveURL('/setup')
 
-  // 1. 管理員：帳號之後交給 Jellyfin（票 06c），剖面說三個服務都不建立、不寫入要等第 2 步判定。
-  await page.getByRole('textbox', { name: '帳號' }).fill(ADMIN.user)
-  await page.getByRole('textbox', { name: '密碼' }).fill(ADMIN.password)
-  await page.getByRole('button', { name: '建立管理員' }).click()
+  // 1. 擁有者：Jellyfin 是既有的，用它的管理員登入。不是管理員的帳號被拒並說明原因（M4 票 06）。
+  //    `absent` 那一條演 Jellyfin 從 compose 拿掉；這裡它在 compose 主機名上，但跑過自己的精靈。
+  await expect(page.getByRole('heading', { name: '用你的 Jellyfin 管理員登入' })).toBeVisible()
+  await expect(page.getByRole('textbox', { name: '再輸入一次密碼' })).toHaveCount(0)
+  await page.getByRole('textbox', { name: 'Jellyfin 帳號' }).fill(OWNER.user)
+  await page.getByRole('textbox', { name: '密碼', exact: true }).fill('not-the-password')
+  await page.getByRole('button', { name: '登入', exact: true }).click()
+  await expect(page.getByText('Jellyfin 不認這組帳號或密碼。')).toBeVisible()
+  await page.getByRole('textbox', { name: '密碼', exact: true }).fill(OWNER.password)
+  await shot(page, '1-owner')
+  await page.getByRole('button', { name: '登入', exact: true }).click()
+  await expect(page.getByRole('heading', { name: '擁有者：owner' })).toBeVisible()
+  await page.getByRole('button', { name: '前往下一個泊位' }).click()
 
-  // 2. 偵測：三個都是既有。qBittorrent 要帳密，填了才判定完成。
+  // 2. 偵測：兩個都是既有。qBittorrent 要帳密，填了才判定完成。
   await page.getByRole('button', { name: '開始探測' }).click()
   const qbittorrent = page
     .getByRole('listitem')
@@ -28,17 +36,15 @@ test('既有服務：接上三個服務、選寫入目標，完成後用那台 J
   await qbittorrent.getByRole('textbox', { name: '密碼' }).fill('adminadmin')
   await qbittorrent.getByRole('button', { name: '測試連線' }).click()
   await expect(qbittorrent.getByText('連線測試通過')).toBeVisible()
-  await expect(page.getByText('3 個服務已判定')).toBeVisible()
+  await expect(page.getByText('2 個服務已判定')).toBeVisible()
   // 「前往泊位 1」上方曾經印出一行寫在 JSX 子節點裡的 `//` 註解（M4 票 10）。
   await expect(page.getByText(/票 06h|StepFrame/)).toHaveCount(0)
   await shot(page, '2-detect')
   await page.getByRole('button', { name: '前往泊位 1' }).click()
 
-  // 3. 既有 Jellyfin：用那台的管理員換一把 API key，替「電影」加一條 Berth 路徑（就地確認）。
+  // 3. 既有 Jellyfin：API key 在第 1 步就換好了，這裡直接列媒體庫；替「電影」加一條 Berth 路徑（就地確認）。
   await expect(page.getByRole('heading', { name: '接入你的 Jellyfin' })).toBeVisible()
-  await page.getByRole('textbox', { name: 'Jellyfin 管理員帳號' }).fill(OWNER.user)
-  await page.getByRole('textbox', { name: 'Jellyfin 管理員密碼' }).fill(OWNER.password)
-  await page.getByRole('button', { name: '登入並建立 API key' }).click()
+  await expect(page.getByRole('textbox', { name: 'Jellyfin 管理員帳號' })).toHaveCount(0)
   const film = page.getByRole('listitem').filter({ hasText: '/nas/movies' })
   await film.getByRole('button', { name: '加入 Berth 路徑' }).click()
   await film.getByRole('button', { name: '確認加入' }).click()
@@ -79,18 +85,22 @@ test('既有服務：接上三個服務、選寫入目標，完成後用那台 J
   await page.getByRole('button', { name: '測試 TMDB' }).click()
   await page.getByRole('button', { name: '前往下一個泊位' }).click()
 
-  // 8. 完成：管理員不是精靈建的，登入提示說的是那台 Jellyfin 自己的帳號。
+  // 8. 完成：之後登入用的是那台 Jellyfin 自己的帳號，擁有者就是它的管理員。
   await expect(page.getByRole('heading', { name: '完成設定' })).toBeVisible()
   await expect(page.getByText('已繫上')).toHaveCount(1)
-  await expect(page.getByText(/你那台 Jellyfin 的帳號/)).toBeVisible()
+  await expect(page.getByText(/你是 owner/)).toBeVisible()
   await shot(page, '8-complete')
   await page.getByRole('main').getByRole('button', { name: '完成設定' }).click()
 
-  await expect(page).toHaveURL(/\/login/)
-  await page.getByRole('textbox', { name: '帳號' }).fill(OWNER.user)
-  await page.getByRole('textbox', { name: '密碼' }).fill(OWNER.password)
-  await page.getByRole('button', { name: '登入' }).click()
   // Berth 還沒入庫過東西，媒體庫裡只有別人的片：第一件事是找片（M4 票 10，brief §19 2026-09-26）。
   await expect(page).toHaveURL('/')
   await expect(page.getByRole('heading', { name: '探索', level: 1 })).toBeAttached()
+
+  // 登出再用那台 Jellyfin 的管理員登入：是 Berth 的管理員（設定頁進得去）。
+  await page.context().clearCookies()
+  await page.goto('/login?redirect=%2Fsettings%2Fjellyfin')
+  await page.getByRole('textbox', { name: 'Jellyfin 帳號' }).fill(OWNER.user)
+  await page.getByRole('textbox', { name: '密碼' }).fill(OWNER.password)
+  await page.getByRole('button', { name: '登入' }).click()
+  await expect(page).toHaveURL('/settings/jellyfin')
 })

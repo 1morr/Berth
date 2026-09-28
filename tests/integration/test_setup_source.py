@@ -52,9 +52,10 @@ from berth.services.indexer import (
     skip_indexers,
 )
 from berth.services.settings import read_settings, write_settings
-from berth.services.setup import STEP_COMPLETE, STEP_INDEXER, STEP_TMDB, create_admin, read_status
+from berth.services.setup import STEP_COMPLETE, STEP_INDEXER, STEP_TMDB, read_status
 from berth.services.tmdb import read_tmdb_status, verify_tmdb
 from tests.conftest import TMDB_API_KEY
+from tests.integration.arrange import interface_logins, own
 from tests.integration.factories import FakeClientFactory
 
 NOW = datetime(2026, 9, 8, 12, 0, tzinfo=UTC)
@@ -72,15 +73,15 @@ async def arrange(
     session: AsyncSession,
     *,
     origin: ServiceOrigin = ServiceOrigin.BUNDLED,
-    apply_to_services: bool = True,
+    logins: bool = True,
 ) -> None:
     """把資料庫推到「Jellyfin、qBittorrent、媒體庫路徑都接好、輪到來源」的狀態。
 
     媒體庫路徑排在來源之前（票 06d），所以這裡要有一條綠的 Route，否則精靈停在第 5 步。
     """
-    await create_admin(
-        session, username="skipper", password="harbour", apply_to_services=apply_to_services
-    )
+    await own(session)
+    if logins:
+        await interface_logins(session, "skipper", "harbour")
     setup = await read_settings(session, SetupSettings)
     setup.jellyfin.steps = [SetupStep(key=JellyfinStep.API_KEY.value, status=StepStatus.OK)]
     setup.qbittorrent.steps = [
@@ -158,7 +159,7 @@ async def test_applying_the_defaults_reports_every_site_on_its_own_line(
     session: AsyncSession,
 ) -> None:
     """公開站裡有幾個連不上是常態：失敗的那幾條變紅，其餘照樣繫上。"""
-    await arrange(session, apply_to_services=False)
+    await arrange(session, logins=False)
     client = FakeProwlarrClient(rejects=BLOCKED)
     factory = FakeClientFactory(prowlarr=client)
 
@@ -175,7 +176,7 @@ async def test_applying_the_defaults_reports_every_site_on_its_own_line(
 
 @pytest.mark.asyncio
 async def test_only_the_ticked_indexers_are_added(session: AsyncSession) -> None:
-    await arrange(session, apply_to_services=False)
+    await arrange(session, logins=False)
     client = FakeProwlarrClient()
     factory = FakeClientFactory(prowlarr=client)
 
@@ -191,7 +192,7 @@ async def test_only_the_ticked_indexers_are_added(session: AsyncSession) -> None
 @pytest.mark.asyncio
 async def test_pressing_apply_twice_does_not_add_a_second_copy(session: AsyncSession) -> None:
     """同名的第二個站會被 Prowlarr 拒（`Should be unique`），所以先列再決定（實測）。"""
-    await arrange(session, apply_to_services=False)
+    await arrange(session, logins=False)
     client = FakeProwlarrClient()
     factory = FakeClientFactory(prowlarr=client)
 
@@ -241,7 +242,7 @@ async def test_new_interface_credentials_reach_prowlarr_when_step_six_is_applied
     factory = FakeClientFactory(prowlarr=client)
     await apply_default_indexers(session, factory, ["nyaasi"], sleep=_no_sleep)
 
-    await create_admin(session, username="skipper", password="changed", apply_to_services=True)
+    await interface_logins(session, "skipper", "changed")
     await session.commit()
     status = await apply_default_indexers(session, factory, ["nyaasi"], sleep=_no_sleep)
 
@@ -252,7 +253,7 @@ async def test_new_interface_credentials_reach_prowlarr_when_step_six_is_applied
         StepStatus.OK
     ]
 
-    await create_admin(session, username="deckhand", password="changed", apply_to_services=True)
+    await interface_logins(session, "deckhand", "changed")
     await session.commit()
     await apply_default_indexers(session, factory, ["nyaasi"], sleep=_no_sleep)
 
@@ -261,10 +262,10 @@ async def test_new_interface_credentials_reach_prowlarr_when_step_six_is_applied
 
 
 @pytest.mark.asyncio
-async def test_an_unticked_box_leaves_the_prowlarr_interface_alone(
+async def test_no_login_on_the_berth_leaves_the_prowlarr_interface_alone(
     session: AsyncSession,
 ) -> None:
-    await arrange(session, apply_to_services=False)
+    await arrange(session, logins=False)
     client = FakeProwlarrClient()
 
     await apply_default_indexers(session, FakeClientFactory(prowlarr=client), ["nyaasi"])
@@ -278,7 +279,7 @@ async def test_the_prowlarr_verdict_is_pinned_once_berth_has_added_indexers(
     session: AsyncSession,
 ) -> None:
     """判定是「一個索引站都沒有 → 套件內」，加完之後重探會說謊，所以釘住它。"""
-    await arrange(session, apply_to_services=False)
+    await arrange(session, logins=False)
 
     await apply_default_indexers(session, FakeClientFactory(), ["nyaasi"])
 
@@ -627,7 +628,7 @@ async def test_every_offered_site_says_its_language_and_what_it_is(session: Asyn
 @pytest.mark.asyncio
 async def test_a_trial_search_reports_each_site_on_its_own(session: AsyncSession) -> None:
     """加入之後試搜：逐站列出搜到幾筆與前三筆標題，一站失敗不影響其他站。"""
-    await arrange(session, apply_to_services=False)
+    await arrange(session, logins=False)
     prowlarr = FakeProwlarrClient()
     search = FakeIndexerSearch(
         by_indexer={1: _results("Nyaa.si", 5), 2: ()},
@@ -658,7 +659,7 @@ async def test_a_trial_search_reports_each_site_on_its_own(session: AsyncSession
 @pytest.mark.asyncio
 async def test_a_trial_search_writes_nothing(session: AsyncSession) -> None:
     """試搜是 `read` 命令（票 05 的標記）：它不寫任何東西，所以也不會讓精靈前進或後退。"""
-    await arrange(session, apply_to_services=False)
+    await arrange(session, logins=False)
     factory = FakeClientFactory(indexer_search=FakeIndexerSearch(results=_results("x", 1)))
     await apply_default_indexers(session, factory, ["nyaasi"])
     before = (await read_settings(session, SetupSettings)).model_dump()
@@ -704,7 +705,7 @@ async def test_a_trial_search_that_cannot_list_the_sites_says_so(session: AsyncS
 @pytest.mark.asyncio
 async def test_a_removed_site_is_gone_and_no_longer_searched(session: AsyncSession) -> None:
     """每一站可以移除（Prowlarr `DELETE /api/v1/indexer/{id}`）；移除後試搜不再打它。"""
-    await arrange(session, apply_to_services=False)
+    await arrange(session, logins=False)
     prowlarr = FakeProwlarrClient()
     search = FakeIndexerSearch()
     factory = FakeClientFactory(prowlarr=prowlarr, indexer_search=search)
@@ -729,7 +730,7 @@ async def test_a_removed_site_is_gone_and_no_longer_searched(session: AsyncSessi
 async def test_removing_the_last_site_sends_the_wizard_back_to_the_indexers(
     session: AsyncSession,
 ) -> None:
-    await arrange(session, apply_to_services=False)
+    await arrange(session, logins=False)
     factory = FakeClientFactory()
     added = await apply_default_indexers(session, factory, ["nyaasi"])
     assert (await read_status(session)).current_step == STEP_TMDB

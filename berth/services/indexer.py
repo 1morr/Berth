@@ -3,7 +3,7 @@
 兩條路徑，同一份狀態形狀（`SetupIndexer`）：
 
 - **套件內 Prowlarr**：勾選預設公開站，Berth 以 `indexer/schema` 取定義、`indexer` 新增、
-  `indexer/test` 驗證，逐站顯示成敗。勾了「同一組帳密」時順便替 Prowlarr 介面設 Forms 登入。
+  `indexer/test` 驗證，逐站顯示成敗。泊位上有介面帳密時順便替 Prowlarr 介面設 Forms 登入。
 - **既有**：Prowlarr 位址 + API key，或任意 Torznab 端點 + key，各有一顆「測試」。
 
 **逐站的成敗來自新增那一支**：`POST /api/v1/indexer` 會先連一次那個站，連不上就回 400 而且
@@ -94,7 +94,7 @@ class IndexerSetupStatus:
     options: tuple[IndexerOption, ...]
     steps: tuple[StepView, ...]
     skipped: bool
-    #: 勾了「同一組帳密」而且這一台是套件內的 —— 套用時會順便設 Prowlarr 介面的登入。
+    #: 泊位上有介面帳密而且這一台是套件內的 —— 套用時會順便設 Prowlarr 介面的登入。
     sets_password: bool
     error: str
 
@@ -196,7 +196,7 @@ async def apply_default_indexers(
         latest.indexer.steps = steps
         latest.indexer.skipped = False
         if steps[-1].key == PROWLARR_LOGIN_STEP and steps[-1].status is StepStatus.OK:
-            latest.indexer.login_password = setup.admin.interface_password
+            latest.indexer.login_password = setup.indexer.web_ui_password
         _pin_probe(latest, origin)
 
     # 逐站加完要一分鐘上下，這段時間裡第 7 步可能已經寫進同一組設定（M2 票 15）。
@@ -404,15 +404,14 @@ async def _apply_password(
     *,
     sleep: Sleeper,
 ) -> SetupStep:
-    """套件內 Prowlarr 的介面登入用第 1 步的介面帳密（brief §16.3、票 06c）。
+    """套件內 Prowlarr 的介面登入用泊位自己的那一組（`SetupIndexer.web_ui_*`，M4 票 06）。
 
     `PUT config/host` 回 202 之後 Prowlarr **自行重啟**，所以要等它回來才算做完；
     整份物件都要送回去，少了 `passwordConfirmation` 會被拒（brief §20.7）。
     """
     key = PROWLARR_LOGIN_STEP
-    admin = setup.admin
-    username, password = admin.interface_username, admin.interface_password
-    if origin is not ServiceOrigin.BUNDLED or not admin.apply_to_services or not password:
+    username, password = setup.indexer.web_ui_username, setup.indexer.web_ui_password
+    if origin is not ServiceOrigin.BUNDLED or not username or not password:
         return SetupStep(key=key, status=StepStatus.SKIPPED)
 
     try:
@@ -561,7 +560,6 @@ def _view(
     reachable: bool,
     error: str,
 ) -> IndexerSetupStatus:
-    admin = setup.admin
     return IndexerSetupStatus(
         origin=origin,
         kind=IndexerKind(settings.kind),
@@ -573,8 +571,8 @@ def _view(
         skipped=setup.indexer.skipped,
         sets_password=(
             origin is ServiceOrigin.BUNDLED
-            and admin.apply_to_services
-            and bool(admin.interface_password)
+            and bool(setup.indexer.web_ui_username)
+            and bool(setup.indexer.web_ui_password)
         ),
         error=error,
     )

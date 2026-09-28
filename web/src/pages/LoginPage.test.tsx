@@ -38,7 +38,7 @@ function bodyOf(call: Parameters<typeof fetch>): unknown {
 
 async function fillIn(username: string, password: string) {
   const user = userEvent.setup()
-  await user.type(await screen.findByLabelText('帳號'), username)
+  await user.type(await screen.findByLabelText('Jellyfin 帳號'), username)
   await user.type(screen.getByLabelText('密碼'), password)
   await user.click(screen.getByRole('button', { name: '登入' }))
 }
@@ -144,7 +144,7 @@ describe('登入頁', () => {
 
     renderApp('/login')
 
-    expect(await screen.findByLabelText('帳號')).toBeInTheDocument()
+    expect(await screen.findByLabelText('Jellyfin 帳號')).toBeInTheDocument()
     expect(screen.queryByText('工作階段已過期，請重新登入。')).not.toBeInTheDocument()
   })
 

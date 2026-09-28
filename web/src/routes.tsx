@@ -60,11 +60,20 @@ const rootRoute = createRootRouteWithContext<RouterContext>()({ component: Outle
  * 後端連不上時不導向：那是健康問題，該讓目的地自己顯示錯誤，而不是把人丟到精靈。
  */
 async function isSetupComplete(queryClient: QueryClient) {
+  return (await wizardGate(queryClient)).completed
+}
+
+/**
+ * 精靈的兩個位元（`GET /health`）：跑完了沒、擁有者成立了沒（M4 票 06）。擁有者成立之後精靈
+ * 要登入——這個決定同樣要在還沒有人登入時做得出來。問不到後端時當成兩者都是，理由同上。
+ */
+async function wizardGate(queryClient: QueryClient) {
   try {
-    return (await queryClient.ensureQueryData(healthQueryOptions)).setup_completed
+    const health = await queryClient.ensureQueryData(healthQueryOptions)
+    return { completed: health.setup_completed, owned: health.owner_established }
   } catch (error) {
     if (isRedirect(error)) throw error
-    return true
+    return { completed: true, owned: true }
   }
 }
 
@@ -152,11 +161,16 @@ const setupRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/setup',
   /**
-   * 精靈跑完之前匿名開放——那時候還沒有人登入得了。**精靈只管第一次**（票 06i，使用者拍板）：
-   * 跑完之後打開它的管理員被帶到設定頁，改東西在那裡；一般使用者回首頁。
+   * 擁有者成立之前匿名開放——那時候還沒有人登入得了；成立之後要有 session，沒有就去登入頁、
+   * 登入之後回到這裡（M4 票 06）。**精靈只管第一次**（票 06i，使用者拍板）：跑完之後打開它的
+   * 管理員被帶到設定頁，改東西在那裡；一般使用者回首頁。
    */
   beforeLoad: async ({ context, location }) => {
-    if (!(await isSetupComplete(context.queryClient))) return
+    const gate = await wizardGate(context.queryClient)
+    if (!gate.completed) {
+      if (gate.owned) await requireSession(context.queryClient, location)
+      return
+    }
     const me = await requireSession(context.queryClient, location)
     if (me !== null && me.role !== 'admin') throw redirect({ to: '/' })
     throw redirect({ to: '/settings' })
@@ -174,8 +188,9 @@ const loginRoute = createRoute({
     return parsed
   },
   beforeLoad: async ({ context, search }) => {
-    // 精靈還沒跑完就還沒有身分來源，這一頁不該存在。
-    if (!(await isSetupComplete(context.queryClient))) throw redirect({ to: '/setup' })
+    // 擁有者還沒成立就還沒有身分來源，這一頁不該存在；成立之後精靈跑到一半的人從這裡回精靈。
+    const gate = await wizardGate(context.queryClient)
+    if (!gate.completed && !gate.owned) throw redirect({ to: '/setup' })
     // 已經登入的人不必再看一次表單。
     if (await signedIn(context.queryClient)) {
       throw redirect({ href: await destination(context.queryClient, search.redirect) })

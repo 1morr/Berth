@@ -13,7 +13,7 @@ afterEach(() => {
 })
 
 const STATUS = 'GET /api/setup/status'
-const ADMIN = 'POST /api/setup/admin'
+const OWNER = 'POST /api/setup/owner'
 const DETECT = 'POST /api/setup/detect'
 
 function bodyOf(call: Parameters<typeof fetch>): unknown {
@@ -35,93 +35,202 @@ describe('精靈的外框', () => {
   })
 })
 
-describe('第 1 步：建立管理員', () => {
-  it('剖面跟著輸入走，套用前後看同一份「將會寫入」', async () => {
-    stubApi({ [STATUS]: { body: setupStatus() } })
-    const user = userEvent.setup()
-
-    renderWithProviders(<SetupPage />)
-    await user.type(await screen.findByLabelText('帳號'), 'skipper')
-
-    // Berth 管理員一列、Jellyfin 與兩個介面三列都跟著顯示同一個帳號（逐狀態的文案在
-    // `AdminStep.test.tsx`）。
-    expect(screen.getAllByText(/^skipper/)).toHaveLength(4)
+describe('第 1 步：擁有者', () => {
+  const BUNDLED_JELLYFIN = detection()
+  const EXISTING_JELLYFIN = detection({
+    origin: 'existing',
+    reason: 'setup_completed',
+    detail: '12.0.0',
   })
+  const FOUND = setupStatus({ services: [BUNDLED_JELLYFIN] })
 
-  it('取消勾選之後 qBittorrent 與 Prowlarr 那兩列顯示不套用', async () => {
-    stubApi({ [STATUS]: { body: setupStatus() } })
-    const user = userEvent.setup()
+  async function fill(user: ReturnType<typeof userEvent.setup>, confirm = 'harbour') {
+    await user.type(await screen.findByLabelText('Jellyfin 帳號'), 'skipper')
+    await user.type(screen.getByLabelText('密碼'), 'harbour')
+    if (confirm) await user.type(screen.getByLabelText('再輸入一次密碼'), confirm)
+  }
 
-    renderWithProviders(<SetupPage />)
-    await user.type(await screen.findByLabelText('帳號'), 'skipper')
-    await user.click(screen.getByRole('checkbox'))
-
-    expect(screen.getAllByText('不套用')).toHaveLength(2)
-  })
-
-  it('送出時帶上帳密與勾選狀態', async () => {
+  it('一打開就去找 Jellyfin，找到套件內的那一台就給建立管理員的表單', async () => {
     const fetchStub = stubApi({
       [STATUS]: { body: setupStatus() },
-      [ADMIN]: { body: setupStatus({ admin_created: true, admin_username: 'skipper' }) },
+      [DETECT]: { body: FOUND },
     })
-    const user = userEvent.setup()
 
     renderWithProviders(<SetupPage />)
-    await user.type(await screen.findByLabelText('帳號'), 'skipper')
-    await user.type(screen.getByLabelText('密碼'), 'harbour')
-    await user.click(screen.getByRole('button', { name: '建立管理員' }))
 
-    await waitFor(() => {
-      const call = fetchStub.mock.calls.find(([url]) => url === '/api/setup/admin')
-      expect(call && bodyOf(call)).toEqual({
-        username: 'skipper',
-        password: 'harbour',
-        apply_to_services: true,
-      })
-    })
+    expect(
+      await screen.findByRole('heading', { level: 2, name: '建立 Jellyfin 管理員' }),
+    ).toBeVisible()
+    expect(fetchStub.mock.calls.filter(([url]) => url === '/api/setup/detect')).toHaveLength(1)
+    // 說清楚 Berth 沒有自己的帳號、之後拿什麼登入（brief §11、§19 2026-09-26）。
+    expect(screen.getByText(/Berth 沒有自己的帳號/)).toBeVisible()
+    expect(screen.getByLabelText('再輸入一次密碼')).toBeInTheDocument()
   })
 
-  it('非 GET 帶 X-Requested-With 作 CSRF 防線', async () => {
+  it('剖面說出會做什麼，也說出密碼不存下來', async () => {
+    stubApi({ [STATUS]: { body: FOUND } })
+
+    renderWithProviders(<SetupPage />)
+
+    const cutaway = (await screen.findByText('將會做什麼')).closest('section')!
+    expect(within(cutaway).getByText('Jellyfin 管理員')).toBeInTheDocument()
+    expect(within(cutaway).getByText('API key「Berth」')).toBeInTheDocument()
+    expect(within(cutaway).getByText('你的密碼（只交給 Jellyfin）')).toBeInTheDocument()
+  })
+
+  it('送出帳密到 /setup/owner，帶 CSRF 標頭', async () => {
     const fetchStub = stubApi({
-      [STATUS]: { body: setupStatus() },
-      [ADMIN]: { body: setupStatus({ current_step: 2, admin_created: true }) },
+      [STATUS]: { body: FOUND },
+      [OWNER]: {
+        body: setupStatus({ current_step: 2, owner: 'skipper', services: [BUNDLED_JELLYFIN] }),
+      },
     })
     const user = userEvent.setup()
 
     renderWithProviders(<SetupPage />)
-    await user.type(await screen.findByLabelText('帳號'), 'skipper')
-    await user.type(screen.getByLabelText('密碼'), 'harbour')
-    await user.click(screen.getByRole('button', { name: '建立管理員' }))
+    await fill(user)
+    await user.click(screen.getByRole('button', { name: '建立管理員並登入' }))
 
     await waitFor(() => {
-      const call = fetchStub.mock.calls.find(([url]) => url === '/api/setup/admin')
+      const call = fetchStub.mock.calls.find(([url]) => url === '/api/setup/owner')
+      expect(call && bodyOf(call)).toEqual({ username: 'skipper', password: 'harbour' })
       const headers = call?.[1]?.headers as Record<string, string>
       expect(headers['X-Requested-With']).toBe('XMLHttpRequest')
     })
+    // 成立之後停在結果上（票 06d 的規則），前置列說出擁有者是誰；按了才去偵測。
+    expect(await screen.findByRole('heading', { level: 2, name: '擁有者：skipper' })).toBeVisible()
+    expect(screen.getByRole('button', { name: '擁有者 · skipper' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '前往下一個泊位' }))
+    expect(await screen.findByRole('heading', { level: 2, name: '偵測服務' })).toBeVisible()
   })
 
-  it('空白欄位就地報錯，不打後端', async () => {
-    const fetchStub = stubApi({ [STATUS]: { body: setupStatus() } })
+  it('建立時兩次密碼不一樣就地報錯，不打後端', async () => {
+    const fetchStub = stubApi({ [STATUS]: { body: FOUND } })
     const user = userEvent.setup()
 
     renderWithProviders(<SetupPage />)
-    await user.click(await screen.findByRole('button', { name: '建立管理員' }))
+    await fill(user, 'harbor')
+    await user.click(screen.getByRole('button', { name: '建立管理員並登入' }))
 
-    expect(screen.getAllByRole('alert').length).toBeGreaterThan(0)
-    expect(fetchStub.mock.calls.some(([url]) => url === '/api/setup/admin')).toBe(false)
+    expect(await screen.findByText('兩次輸入的密碼不一樣。')).toBeVisible()
+    expect(fetchStub.mock.calls.some(([url]) => url === '/api/setup/owner')).toBe(false)
   })
 
-  it('後端存不進去時說得出下一步', async () => {
+  it('空白欄位就地報錯，不打後端', async () => {
+    const fetchStub = stubApi({ [STATUS]: { body: FOUND } })
+    const user = userEvent.setup()
+
+    renderWithProviders(<SetupPage />)
+    await user.click(await screen.findByRole('button', { name: '建立管理員並登入' }))
+
+    expect(screen.getAllByText('帳號與密碼都要填。').length).toBeGreaterThan(0)
+    expect(fetchStub.mock.calls.some(([url]) => url === '/api/setup/owner')).toBe(false)
+  })
+
+  it('既有 Jellyfin 是登入，不是建立；只要一次密碼', async () => {
     stubApi({
-      [STATUS]: { body: setupStatus() },
-      [ADMIN]: { status: 500, body: { detail: 'boom' } },
+      [STATUS]: { body: setupStatus({ services: [EXISTING_JELLYFIN], owner_signs_in: true }) },
+    })
+
+    renderWithProviders(<SetupPage />)
+
+    expect(
+      await screen.findByRole('heading', { level: 2, name: '用你的 Jellyfin 管理員登入' }),
+    ).toBeVisible()
+    expect(screen.queryByLabelText('再輸入一次密碼')).not.toBeInTheDocument()
+    expect(screen.getByText('不改這台 Jellyfin 的任何設定')).toBeInTheDocument()
+  })
+
+  it('找到既有的那一台之後位址表單收起來，要換一台再打開', async () => {
+    const typed = detection({
+      origin: 'existing',
+      reason: 'setup_completed',
+      detail: '12.0.0',
+      base_url: 'http://nas:8096',
+      configured: true,
+    })
+    stubApi({ [STATUS]: { body: setupStatus({ services: [typed], owner_signs_in: true }) } })
+    const user = userEvent.setup()
+
+    renderWithProviders(<SetupPage />)
+
+    expect(await screen.findByLabelText('Jellyfin 帳號')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '測試連線' })).not.toBeInTheDocument()
+    // 纜繩寫的是使用者填的那一台，不是 compose 主機名。
+    expect(screen.getByText('nas:8096/System/Info/Public')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '換一台 Jellyfin' }))
+    expect(screen.getByRole('textbox', { name: '位址' })).toHaveValue('http://nas:8096')
+  })
+
+  it('套件內那一台的管理員已經建好時也是登入', async () => {
+    stubApi({
+      [STATUS]: { body: setupStatus({ services: [BUNDLED_JELLYFIN], owner_signs_in: true }) },
+    })
+
+    renderWithProviders(<SetupPage />)
+
+    expect(
+      await screen.findByRole('heading', { level: 2, name: '用你的 Jellyfin 管理員登入' }),
+    ).toBeVisible()
+  })
+
+  it('不是管理員就地說明被拒的原因', async () => {
+    stubApi({
+      [STATUS]: { body: setupStatus({ services: [EXISTING_JELLYFIN], owner_signs_in: true }) },
+      [OWNER]: { status: 403, body: { detail: { reason: 'not_administrator', detail: '' } } },
     })
     const user = userEvent.setup()
 
     renderWithProviders(<SetupPage />)
-    await user.type(await screen.findByLabelText('帳號'), 'skipper')
-    await user.type(screen.getByLabelText('密碼'), 'harbour')
-    await user.click(screen.getByRole('button', { name: '建立管理員' }))
+    await fill(user, '')
+    await user.click(screen.getByRole('button', { name: '登入' }))
+
+    expect(await screen.findByText(/不是管理員/)).toBeVisible()
+  })
+
+  it('Jellyfin 那一段沒做完時把它的原文貼出來', async () => {
+    stubApi({
+      [STATUS]: { body: FOUND },
+      [OWNER]: {
+        status: 502,
+        body: { detail: { reason: 'jellyfin_failed', detail: 'Jellyfin 10.11.11 is too old' } },
+      },
+    })
+    const user = userEvent.setup()
+
+    renderWithProviders(<SetupPage />)
+    await fill(user)
+    await user.click(screen.getByRole('button', { name: '建立管理員並登入' }))
+
+    expect(await screen.findByText('Jellyfin 10.11.11 is too old')).toBeVisible()
+  })
+
+  it('找不到 Jellyfin 時先給位址表單，還沒有帳密表單', async () => {
+    const removed = detection({
+      origin: 'existing',
+      reason: 'not_deployed',
+      detail: '',
+      resolved: false,
+    })
+    stubApi({ [STATUS]: { body: setupStatus({ services: [removed] }) } })
+
+    renderWithProviders(<SetupPage />)
+
+    expect(await screen.findByRole('heading', { level: 2, name: '先找到 Jellyfin' })).toBeVisible()
+    expect(screen.getByRole('button', { name: '測試連線' })).toBeInTheDocument()
+    expect(screen.queryByLabelText('Jellyfin 帳號')).not.toBeInTheDocument()
+  })
+
+  it('後端連不上時說得出下一步', async () => {
+    stubApi({
+      [STATUS]: { body: FOUND },
+      [OWNER]: { status: 500, body: { detail: 'boom' } },
+    })
+    const user = userEvent.setup()
+
+    renderWithProviders(<SetupPage />)
+    await fill(user)
+    await user.click(screen.getByRole('button', { name: '建立管理員並登入' }))
 
     expect(await screen.findByText(/確認容器狀態/)).toBeInTheDocument()
   })
@@ -130,8 +239,7 @@ describe('第 1 步：建立管理員', () => {
 describe('第 2 步：偵測服務', () => {
   const AT_STEP_TWO = setupStatus({
     current_step: 2,
-    admin_created: true,
-    admin_username: 'skipper',
+    owner: 'skipper',
   })
 
   it('每個服務逐條顯示判定與實測值', async () => {
@@ -146,10 +254,11 @@ describe('第 2 步：偵測服務', () => {
 
     // 伺服器已經把步驟推到 3，但畫面停在這一輪的結果上等使用者按下前進。
     const sequence = await screen.findByTestId('mooring-sequence')
+    // Jellyfin 在第 1 步就判定了（M4 票 06），這裡只剩 qBittorrent 與 Prowlarr 兩條。
     await waitFor(() => {
-      expect(within(sequence).getAllByText('套件內')).toHaveLength(3)
+      expect(within(sequence).getAllByText('套件內')).toHaveLength(2)
     })
-    expect(within(sequence).getByText('12.1.0')).toBeInTheDocument()
+    expect(within(sequence).queryByText('Jellyfin')).not.toBeInTheDocument()
     expect(within(sequence).getByText('v5.2.3 · Web API 2.15.1')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '前往泊位 1' })).toBeInTheDocument()
   })
@@ -167,7 +276,7 @@ describe('第 2 步：偵測服務', () => {
     expect(region).toHaveAttribute('aria-live', 'polite')
     await user.click(screen.getByRole('button', { name: '開始探測' }))
 
-    await waitFor(() => expect(within(region).getAllByText('套件內')).toHaveLength(3))
+    await waitFor(() => expect(within(region).getAllByText('套件內')).toHaveLength(2))
     expect(region).toBeInTheDocument()
   })
 
@@ -211,7 +320,6 @@ describe('第 2 步：偵測服務', () => {
     renderWithProviders(<SetupPage />)
     await user.click(await screen.findByRole('button', { name: '開始探測' }))
 
-    expect(await screen.findByText(/初始精靈尚未跑過/)).toBeInTheDocument()
     expect(await screen.findByText(/免密進得去/)).toBeInTheDocument()
     expect(await screen.findByText(/一個索引站都沒有/)).toBeInTheDocument()
   })
@@ -230,21 +338,36 @@ describe('第 2 步：偵測服務', () => {
 
   it('既有服務就地展開連線表單', async () => {
     const existing = [
-      detection({ origin: 'existing', reason: 'setup_completed', detail: '12.0.0' }),
-      ...ALL_BUNDLED.slice(1),
+      ALL_BUNDLED[0],
+      detection({
+        kind: 'qbittorrent',
+        origin: 'existing',
+        reason: 'auth_required',
+        detail: '',
+        base_url: 'http://qbittorrent:8080',
+        resolved: false,
+      }),
+      ALL_BUNDLED[2],
     ]
     stubApi({ [STATUS]: { body: setupStatus({ ...AT_STEP_TWO, services: existing }) } })
 
     renderWithProviders(<SetupPage />)
 
-    expect(await screen.findByLabelText('位址')).toHaveValue('http://jellyfin:8096')
+    expect(await screen.findByLabelText('位址')).toHaveValue('http://qbittorrent:8080')
     expect(screen.getByRole('button', { name: '測試連線' })).toBeInTheDocument()
   })
 
   it('從 COMPOSE_PROFILES 拿掉的服務判為既有，並附可複製的手動步驟', async () => {
     const removed = [
-      detection({ origin: 'existing', reason: 'not_deployed', detail: '', resolved: false }),
-      ...ALL_BUNDLED.slice(1),
+      ...ALL_BUNDLED.slice(0, 2),
+      detection({
+        kind: 'prowlarr',
+        origin: 'existing',
+        reason: 'not_deployed',
+        detail: '',
+        base_url: 'http://prowlarr:9696',
+        resolved: false,
+      }),
     ]
     stubApi({ [STATUS]: { body: setupStatus({ ...AT_STEP_TWO, services: removed }) } })
 
@@ -259,17 +382,25 @@ describe('第 2 步：偵測服務', () => {
 
   it('既有服務連得上就不再是「待你處理」，連不上才是', async () => {
     const services = [
-      // 連得上：判定是服務自己報的事實（跑過初始精靈）。
-      detection({ origin: 'existing', reason: 'setup_completed', detail: '12.0.0' }),
-      // 連不上：要使用者補連線資訊。
+      ALL_BUNDLED[0],
+      // 連得上：判定是服務自己報的事實（接上了、有自己的索引站）。
       detection({
         kind: 'qbittorrent',
         origin: 'existing',
-        reason: 'auth_required',
+        reason: 'connected',
+        detail: 'v5.2.3 · Web API 2.15.1',
+        base_url: 'http://nas:8080',
+        configured: true,
+      }),
+      // 連不上：要使用者補連線資訊。
+      detection({
+        kind: 'prowlarr',
+        origin: 'existing',
+        reason: 'api_key_missing',
         detail: '',
+        base_url: 'http://prowlarr:9696',
         resolved: false,
       }),
-      ALL_BUNDLED[2],
     ]
     stubApi({ [STATUS]: { body: setupStatus({ ...AT_STEP_TWO, services }) } })
 
@@ -283,10 +414,10 @@ describe('第 2 步：偵測服務', () => {
     // 兩條都給表單（票 05 驗收：既有就顯示連線表單）。
     expect(within(lines[0]).getByRole('button', { name: '測試連線' })).toBeInTheDocument()
     expect(within(lines[1]).getByRole('button', { name: '測試連線' })).toBeInTheDocument()
-    // 位址的範例是那個服務自己的 port，不是三個都寫 Jellyfin 的 8096（票 06h）。
+    // 位址的範例是那個服務自己的 port，不是都寫 Jellyfin 的 8096（票 06h）。
     const address = (line: HTMLElement) => within(line).getByRole('textbox', { name: '位址' })
-    expect(address(lines[0])).toHaveAttribute('placeholder', 'http://192.168.1.10:8096')
-    expect(address(lines[1])).toHaveAttribute('placeholder', 'http://192.168.1.10:8080')
+    expect(address(lines[0])).toHaveAttribute('placeholder', 'http://192.168.1.10:8080')
+    expect(address(lines[1])).toHaveAttribute('placeholder', 'http://192.168.1.10:9696')
   })
 
   it('貼上的 Prowlarr API key 送到 connect 端點', async () => {
@@ -341,7 +472,7 @@ describe('第 2 步：偵測服務', () => {
 
     // 倒數貼在還在等的那一條纜繩上，不是清單底下的一條橫幅。
     const sequence = await screen.findByTestId('mooring-sequence')
-    const line = within(sequence).getAllByRole('listitem')[1]
+    const line = within(sequence).getAllByRole('listitem')[0]
     expect(await within(line).findByText('12 / 120 秒')).toBeInTheDocument()
     expect(within(line).getByText('探測中')).toBeInTheDocument()
   })
@@ -478,26 +609,28 @@ describe('第 2 步：偵測服務', () => {
   })
 
   /** 前置列的管理員那一格就是回第 1 步的入口（票 06d：「改帳密」回到第 1 步上）。 */
-  it('可以回頭改管理員帳密', async () => {
-    stubApi({ [STATUS]: { body: AT_STEP_TWO } })
+  it('回頭看第 1 步：擁有者是誰、之後拿什麼登入，沒有表單', async () => {
+    stubApi({ [STATUS]: { body: setupStatus({ ...AT_STEP_TWO, services: [ALL_BUNDLED[0]] }) } })
     const user = userEvent.setup()
 
     renderWithProviders(<SetupPage />)
-    await user.click(await screen.findByRole('button', { name: /管理員已建立：skipper/ }))
+    await user.click(await screen.findByRole('button', { name: '擁有者 · skipper' }))
 
-    expect(screen.getByRole('button', { name: '建立管理員' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { level: 2, name: '擁有者：skipper' })).toBeVisible()
+    expect(screen.getByText(/密碼在 Jellyfin 裡改/)).toBeVisible()
+    expect(screen.queryByLabelText('Jellyfin 帳號')).not.toBeInTheDocument()
   })
 })
 
 describe('語言', () => {
   it('ZH / EN 切換整頁文案', async () => {
-    stubApi({ [STATUS]: { body: setupStatus() } })
+    stubApi({ [STATUS]: { body: setupStatus({ services: [ALL_BUNDLED[0]] }) } })
     const user = userEvent.setup()
 
     renderWithProviders(<SetupPage />)
     await user.click(await screen.findByRole('button', { name: 'EN' }))
 
-    expect(await screen.findByText('Create the Berth administrator')).toBeInTheDocument()
+    expect(await screen.findByText('Create the Jellyfin administrator')).toBeInTheDocument()
     expect(document.documentElement.lang).toBe('en')
   })
 })

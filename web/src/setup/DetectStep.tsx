@@ -2,11 +2,11 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { type ConnectInput, type SetupStatus } from '../api/setup'
-import { SERVICE_KINDS, type ServiceKind } from '../api/schemas'
+import type { ServiceKind } from '../api/schemas'
 import { Cutaway, CutawayRow } from '../components/Cutaway'
 import { MooringLine } from './MooringLine'
 import { STICKY_ACTION, GhostButton, Notice, PrimaryButton } from '../components/controls'
-import { probeEndpoint } from './signals'
+import { DETECTED_IN_STEP_TWO, probeEndpoint } from './signals'
 import { StepFrame } from './StepFrame'
 
 /** 逐條纜繩繫上的節拍。整份結果是一次回來的，這裡只是揭露的節奏。 */
@@ -45,21 +45,22 @@ export function DetectStep({
   nav: ReactNode
 }) {
   const { t } = useTranslation()
-  const byKind = new Map(status.services.map((row) => [row.kind, row]))
-  const probed = status.services.length > 0
-  const timedOut = status.services.some((row) => row.origin === 'timeout')
+  const rows = status.services.filter((row) => DETECTED_IN_STEP_TWO.includes(row.kind))
+  const byKind = new Map(rows.map((row) => [row.kind, row]))
+  const probed = rows.length > 0
+  const timedOut = rows.some((row) => row.origin === 'timeout')
   // 每個服務都連得上了才走得下去；沒解決的那幾個要使用者先補連線資訊（plan §9.3 第 2 步）。
-  const resolved = probed && status.services.every((row) => row.resolved)
+  const resolved = rows.length === DETECTED_IN_STEP_TWO.length && rows.every((row) => row.resolved)
   // 換一輪結果就換 key：重新掛載讓揭露從第一條纜繩重來，不必在 effect 裡回寫 state。
   const revealKey = probing
     ? 'probing'
-    : status.services.map((row) => `${row.kind}:${row.origin}:${row.reason}`).join('|')
+    : rows.map((row) => `${row.kind}:${row.origin}:${row.reason}`).join('|')
 
   return (
     <StepFrame
       cutaway={
         <Cutaway title={t('detect.cutaway.title')}>
-          {SERVICE_KINDS.map((kind) => (
+          {DETECTED_IN_STEP_TWO.map((kind) => (
             <CutawayRow
               key={kind}
               code
@@ -157,7 +158,7 @@ function MooringSequence({
   onConnect: (kind: ServiceKind, input: ConnectInput) => void
   onRedetect: (kind: ServiceKind) => void
 }) {
-  const total = SERVICE_KINDS.length
+  const total = DETECTED_IN_STEP_TWO.length
   const [revealed, setRevealed] = useState(() => (prefersReducedMotion() ? total : 0))
 
   useEffect(() => {
@@ -170,7 +171,7 @@ function MooringSequence({
 
   return (
     <ol className="mt-6 grid gap-3" data-testid="mooring-sequence">
-      {SERVICE_KINDS.map((kind, index) => (
+      {DETECTED_IN_STEP_TWO.map((kind, index) => (
         <MooringLine
           key={kind}
           kind={kind}

@@ -4,21 +4,28 @@ import { ADMIN, signIn } from './login.ts'
 import { shot } from './shot.ts'
 
 // `bundled`：乾淨的 compose，三個服務都判為套件內（plan §9.3）。八步走完、中途回頭再往前、關掉精靈，
-// 再以第 1 步那組帳密登入——那組帳密是精靈第 3 步替 Jellyfin 建的管理員。
+// 再以第 1 步那組帳密登入——那組帳密是第 1 步替 Jellyfin 建的管理員，也就是 Berth 的擁有者（M4 票 06）。
 // 每一個泊位做完都停在結果上，按了才走（票 06d）；走的是 1280 與 390 兩種寬度（`playwright.config.ts`）。
 test('精靈八步走完，之後以同一組帳密登入', async ({ page }) => {
   await page.goto('/')
   await expect(page).toHaveURL('/setup')
 
-  // 1. 管理員
-  await page.getByRole('textbox', { name: '帳號' }).fill(ADMIN.user)
-  await page.getByRole('textbox', { name: '密碼' }).fill(ADMIN.password)
-  await shot(page, '1-admin')
-  await page.getByRole('button', { name: '建立管理員' }).click()
+  // 1. 擁有者：精靈自己找到套件內的 Jellyfin，以這一組建立它的管理員並登入 Berth。
+  await expect(page.getByRole('heading', { name: '建立 Jellyfin 管理員' })).toBeVisible()
+  await expect(page.getByText(/Berth 沒有自己的帳號/)).toBeVisible()
+  await page.getByRole('textbox', { name: 'Jellyfin 帳號' }).fill(ADMIN.user)
+  await page.getByRole('textbox', { name: '密碼', exact: true }).fill(ADMIN.password)
+  await page.getByRole('textbox', { name: '再輸入一次密碼' }).fill(ADMIN.password)
+  await shot(page, '1-owner')
+  await page.getByRole('button', { name: '建立管理員並登入' }).click()
 
-  // 2. 偵測服務：三個都是套件內，畫面停在第 2 步等人按「前往泊位 1」。
+  // 2. 偵測其餘兩個服務：都是套件內，畫面停在第 2 步等人按「前往泊位 1」。
+  await expect(page.getByRole('heading', { name: '擁有者：skipper' })).toBeVisible()
+  await expect(page.getByRole('button', { name: '擁有者 · skipper' })).toBeVisible()
+  await shot(page, '1-owned')
+  await page.getByRole('button', { name: '前往下一個泊位' }).click()
   await page.getByRole('button', { name: '開始探測' }).click()
-  await expect(page.getByText('3 個服務已判定')).toBeVisible()
+  await expect(page.getByText('2 個服務已判定')).toBeVisible()
   // 「前往泊位 1」上方曾經印出一行寫在 JSX 子節點裡的 `//` 註解（M4 票 10）。
   await expect(page.getByText(/票 06h|StepFrame/)).toHaveCount(0)
   await shot(page, '2-detect')
@@ -104,14 +111,17 @@ test('精靈八步走完，之後以同一組帳密登入', async ({ page }) => 
   // 8. 完成
   await expect(page.getByRole('heading', { name: '完成設定' })).toBeVisible()
   await expect(page.getByText('已繫上')).toHaveCount(3)
-  await expect(page.getByText(/剛才建立的 Jellyfin 管理員帳號/)).toBeVisible()
+  await expect(page.getByText(/你是 skipper/)).toBeVisible()
   await shot(page, '8-complete')
   await page.getByRole('button', { name: '完成設定' }).click()
 
-  // 精靈關掉之後 `/` 要登入，不再導向精靈。
-  await expect(page).toHaveURL(/\/login/)
-  await signIn(page, '/jobs')
-  await expect(page.getByRole('heading', { name: '下載', level: 1 })).toBeVisible()
-  await page.goto('/')
+  // 擁有者從第 1 步起就登入著：精靈關掉之後直接落在探索，不再導向精靈。
   await expect(page).toHaveURL('/')
+  await expect(page.getByRole('heading', { name: '探索', level: 1 })).toBeAttached()
+
+  // 同一組帳密就是登入 Berth 的那一組，而且是管理員（設定頁只有管理員進得去）。
+  await page.context().clearCookies()
+  await signIn(page, '/settings/jellyfin')
+  await page.goto('/jobs')
+  await expect(page.getByRole('heading', { name: '下載', level: 1 })).toBeVisible()
 })

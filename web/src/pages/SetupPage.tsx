@@ -11,14 +11,14 @@ import {
   bootstrapJellyfin,
   bundledRefusalOf,
   buildRoutes,
+  claimOwner,
   completeSetup,
   connectIndexer,
-  connectJellyfin,
   connectService,
-  createAdmin,
   detectServices,
   indexerSetupQueryOptions,
   jellyfinSetupQueryOptions,
+  ownerRefusalOf,
   qbittorrentSetupQueryOptions,
   removeIndexer,
   routeSetupQueryOptions,
@@ -28,7 +28,6 @@ import {
   skipIndexers,
   testTmdb,
   tmdbSetupQueryOptions,
-  type AdminInput,
   type ConnectInput,
   type IndexerSetup,
   type JellyfinSetup,
@@ -39,11 +38,11 @@ import {
   type TmdbSetup,
 } from '../api/setup'
 import { type QbittorrentSetup, type ServiceKind } from '../api/schemas'
+import { meQueryOptions } from '../api/auth'
 import { healthQueryOptions } from '../api/health'
 import { routeRefusalOf } from '../api/routes'
 import { BERTHS } from '../components/berths'
 import { LanguageToggle } from '../components/LanguageToggle'
-import { AdminStep } from '../setup/AdminStep'
 import { BerthBoard, type BerthSignals } from '../setup/BerthBoard'
 import { BerthNav, RevisitNote } from '../setup/BerthNav'
 import { CompleteStep, type CompleteFailure } from '../setup/CompleteStep'
@@ -51,6 +50,7 @@ import { DetectStep } from '../setup/DetectStep'
 import { IndexerStep } from '../setup/IndexerStep'
 import { JellyfinStep } from '../setup/JellyfinStep'
 import { RedetectButton } from '../setup/MooringLine'
+import { OwnerStep } from '../setup/OwnerStep'
 import { QbittorrentStep } from '../setup/QbittorrentStep'
 import { RouteStep } from '../setup/RouteStep'
 import { TmdbStep } from '../setup/TmdbStep'
@@ -70,7 +70,7 @@ import {
 import { PAGE_TITLE, GhostButton, NAV_BOX, NAV_BOX_ACTIVE } from '../components/controls'
 import { type Signal } from '../components/signal'
 import { isSettled } from '../components/steps'
-import { signalOf } from '../setup/signals'
+import { DETECTED_IN_STEP_TWO, signalOf } from '../setup/signals'
 
 /** 服務還在啟動時的重探間隔。上限由後端的輪詢窗口決定（`window_seconds`）。 */
 const POLL_INTERVAL_MS = 3000
@@ -100,7 +100,7 @@ export function SetupPage() {
   const [pinned, setPinned] = useState<number | null>(null)
 
   const current = status.data
-  const backend = current?.current_step ?? STEP.admin
+  const backend = current?.current_step ?? STEP.owner
   const step = shownStep(backend, pinned)
 
   /** 去某一步。去後端目前那一頁就是解除覆寫（`go`）。 */
@@ -130,11 +130,18 @@ export function SetupPage() {
     void queryClient.invalidateQueries({ queryKey: setupStatusQueryOptions.queryKey })
   }
 
-  const admin = useMutation({
-    mutationFn: (input: AdminInput) => createAdmin(input),
+  // 第 1 步：成為擁有者（M4 票 06）。成功時後端發了 session cookie——從這一刻起精靈要登入，
+  // 所以路由守衛讀的那一個位元（`owner_established`）就地改掉，「我是誰」也重問。
+  // 成功之後照 06d 的規則停在結果上（「擁有者：名字」，critique：峰值要落地），按了才走。
+  const owner = useMutation({
+    mutationFn: claimOwner,
+    onMutate: hold,
     onSuccess: (next) => {
       absorb(next)
-      setPinned(null)
+      queryClient.setQueryData(healthQueryOptions.queryKey, (old) =>
+        old ? { ...old, owner_established: true } : old,
+      )
+      void queryClient.invalidateQueries({ queryKey: meQueryOptions.queryKey })
     },
   })
   // 探測本身連續失敗的起點（票 06g）。後端沒回判定就沒有 `waited_seconds`，視窗由前端自己量；
@@ -192,11 +199,6 @@ export function SetupPage() {
       await saveBundledLibraries(libraries)
       return bootstrapJellyfin()
     },
-    onMutate: hold,
-    onSuccess: absorbJellyfin,
-  })
-  const signIn = useMutation({
-    mutationFn: connectJellyfin,
     onMutate: hold,
     onSuccess: absorbJellyfin,
   })
@@ -293,6 +295,16 @@ export function SetupPage() {
     return () => window.clearTimeout(timer)
   }, [waiting, detect, redetect.isPending, failingInWindow])
 
+  // 第 1 步一打開就去找 Jellyfin（只讀，不需要門鎖）：它是唯一在擁有者之前就能做的事。
+  // 只在還沒有任何判定、後端也還停在第 1 步時送一次；之後的輪詢與重試照第 2 步的規則走。
+  const soughtJellyfin = useRef(false)
+  useEffect(() => {
+    if (soughtJellyfin.current || !current || current.owner) return
+    if (step !== STEP.owner || current.services.length > 0) return
+    soughtJellyfin.current = true
+    detect.mutate(false)
+  }, [current, step, detect])
+
   // 套件內的媒體庫路徑沒有要選的東西：第一次走到這一格就自動建 Route、跑五條檢查（票 06d）。
   // 只在「後端正停在這一步、一條 Route 都還沒有」時跑一次；回頭看不重跑，要重跑有按鈕。
   const autoBuilt = useRef(false)
@@ -306,7 +318,7 @@ export function SetupPage() {
 
   if (!current) {
     return (
-      <Shell step={STEP.admin}>
+      <Shell step={STEP.owner}>
         <p className="p-6 text-sm text-ink-dim">
           {status.isError ? t('detect.failed') : t('health.checking')}
         </p>
@@ -369,12 +381,23 @@ export function SetupPage() {
 
   return (
     <Shell {...shell}>
-      {step === STEP.admin ? (
-        <AdminStep
+      {step === STEP.owner ? (
+        <OwnerStep
           status={current}
-          pending={admin.isPending}
-          failed={admin.isError}
-          onSubmit={(input) => admin.mutate(input)}
+          probing={probing}
+          detectFailed={failed}
+          connecting={connect.isPending}
+          redetecting={redetect.isPending}
+          claiming={owner.isPending}
+          refusal={ownerRefusalOf(owner.error)}
+          claimFailed={owner.isError}
+          onDetect={(restart) => {
+            failingSince.current = null
+            detect.mutate(restart)
+          }}
+          onConnect={(kind, input) => connect.mutate({ kind, input })}
+          onRedetect={(kind) => redetect.mutate(kind)}
+          onClaim={(input) => owner.mutate(input)}
           nav={advanced(step, backend) ? nav : undefined}
         />
       ) : step === STEP.detect ? (
@@ -393,7 +416,7 @@ export function SetupPage() {
           onConnect={(kind, input) => connect.mutate({ kind, input })}
           onRedetect={(kind) => redetect.mutate(kind)}
           onContinue={() => goTo(STEP.jellyfin)}
-          nav={<BerthNav onPrevious={() => goTo(STEP.admin)} />}
+          nav={<BerthNav onPrevious={() => goTo(STEP.owner)} />}
         />
       ) : step === STEP.jellyfin ? (
         jellyfin.data ? (
@@ -401,14 +424,11 @@ export function SetupPage() {
             setup={jellyfin.data}
             running={bootstrap.isPending}
             bootstrapFailed={bootstrap.isError && !bootstrapRefusal}
-            signInFailed={signIn.isError}
-            connecting={signIn.isPending}
             addingPath={addPath.isPending ? addPath.variables : null}
             onBootstrap={(libraries) => bootstrap.mutate(libraries)}
             onSaveLibraries={(libraries) => saveLibraries.mutate(libraries)}
             savingLibraries={saveLibraries.isPending}
             saveLibrariesFailed={librariesFailure()}
-            onConnect={(input) => signIn.mutate(input)}
             onAddPath={(library) => addPath.mutate(library)}
             note={note}
             nav={nav}
@@ -466,9 +486,7 @@ export function SetupPage() {
           <CompleteStep
             routes={routes.data}
             indexers={indexers.data}
-            bundledJellyfin={
-              current.services.find((row) => row.kind === 'jellyfin')?.origin === 'bundled'
-            }
+            owner={current.owner}
             completing={finish.isPending}
             failure={completeFailure(finish.error, tmdb.data, routes.data)}
             onComplete={() => finish.mutate()}
@@ -644,7 +662,7 @@ function librarySignal(
 
 function Shell({
   step,
-  backend = STEP.admin,
+  backend = STEP.owner,
   status,
   signals,
   indexers,
@@ -687,7 +705,7 @@ function Shell({
         <LanguageToggle />
       </header>
 
-      {status?.admin_created && onGo && <Prelude status={status} step={step} onGo={onGo} />}
+      {status?.owner && onGo && <Prelude status={status} step={step} onGo={onGo} />}
 
       <BerthBoard
         services={status?.services ?? []}
@@ -728,11 +746,14 @@ function Prelude({
 }) {
   const { t } = useTranslation()
   // 探測中與逾時的還沒有判定（票 06h：冷啟動時說成「3 個已判定」，清單上卻還有兩個在等）。
+  // Jellyfin 在第 1 步就判定了，這一格只數第 2 步的那兩個（M4 票 06）。
   const detected = status.services.filter(
-    (row) => row.origin === 'bundled' || row.origin === 'existing',
+    (row) =>
+      DETECTED_IN_STEP_TWO.includes(row.kind) &&
+      (row.origin === 'bundled' || row.origin === 'existing'),
   ).length
   const items = [
-    { step: STEP.admin, text: t('admin.saved', { username: status.admin_username }) },
+    { step: STEP.owner, text: t('owner.saved', { name: status.owner }) },
     {
       step: STEP.detect,
       text: detected > 0 ? t('detect.done', { count: detected }) : t('setup.place.detect'),
@@ -778,7 +799,7 @@ function StrayBand({
   const berth = code ? BERTHS.find((row) => row.code === code) : undefined
   const place = berth
     ? `${berth.code} ${t(berth.nameKey)}`
-    : t(step === STEP.admin ? 'setup.place.admin' : 'setup.place.detect')
+    : t(step === STEP.owner ? 'setup.place.owner' : 'setup.place.detect')
 
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b-2 border-rule bg-deck px-6 py-3">

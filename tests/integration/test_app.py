@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import sqlite3
+from collections.abc import AsyncIterator
 from contextlib import closing
 from dataclasses import replace
 from pathlib import Path
@@ -13,10 +14,15 @@ import pytest
 from fastapi.testclient import TestClient
 from starlette.types import Message, Receive, Scope, Send
 
+from berth.adapters.jellyfin.fake import FakeJellyfinClient
+from berth.adapters.prowlarr.fake import FakeProwlarrClient
+from berth.adapters.qbittorrent.fake import FakeQbittorrentClient
+from berth.api.deps import get_setup_probes
 from berth.api.gate import CSRF_HEADER
 from berth.config import Config
 from berth.main import HEALTH_CHECKER_TASK, QBIT_POLLER_TASK, RSS_POLLER_TASK, create_app
 from berth.models import SetupSettings
+from berth.services.clients import SetupProbes
 
 
 @pytest.fixture
@@ -182,32 +188,42 @@ class TestUnitOfWork:
         self, config: Config, web_root: Path
     ) -> None:
         app = create_app(replace(config, web_root=web_root))
+        # 擁有者成立之前匿名寫得了的一支：偵測 Jellyfin。探測換成替身，不打網路。
+        probes = SetupProbes(
+            jellyfin=FakeJellyfinClient(),
+            qbittorrent=FakeQbittorrentClient(),
+            prowlarr=FakeProwlarrClient(),
+            prowlarr_api_key="",
+        )
+
+        async def fake_probes() -> AsyncIterator[SetupProbes]:
+            yield probes
+
+        app.dependency_overrides[get_setup_probes] = fake_probes
         committed_at_start: list[bool] = []
 
         async def watching(scope: Scope, receive: Receive, send: Send) -> None:
             async def watched(message: Message) -> None:
                 if message["type"] == "http.response.start":
-                    committed_at_start.append(_admin_committed(config))
+                    committed_at_start.append(_detection_committed(config))
                 await send(message)
 
             await app(scope, receive, watched if scope["type"] == "http" else send)
 
         with TestClient(watching, headers={CSRF_HEADER: "XMLHttpRequest"}) as client:
-            response = client.post(
-                "/api/setup/admin", json={"username": "skipper", "password": "harbour"}
-            )
+            response = client.post("/api/setup/detect", json={})
 
         assert response.status_code == 200
         assert committed_at_start == [True]
 
 
-def _admin_committed(config: Config) -> bool:
+def _detection_committed(config: Config) -> bool:
     """另開一條連線讀：看得到的只有已經 commit 的東西。"""
     with closing(sqlite3.connect(config.database_path)) as db:
         row = db.execute(
             "SELECT value_json FROM settings WHERE key = ?", (SetupSettings.KEY,)
         ).fetchone()
-    return row is not None and json.loads(row[0])["admin"]["username"] == "skipper"
+    return row is not None and "jellyfin" in json.loads(row[0])["services"]
 
 
 class TestBackgroundLoops:

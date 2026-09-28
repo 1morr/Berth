@@ -8,8 +8,8 @@
   與建議值，一個都不寫：改它的全域 `save_path` 會讓使用者不經 Berth 加的 torrent 全部跑進
   Berth 的目錄。Berth 的下載靠自己的分類（建立時帶 save path）與逐個 torrent 的 `autoTMM=true`，
   與 Sonarr / Radarr 對下載器的做法相同。
-- **密碼只給套件內的那一台**，而且要使用者勾了「同一組帳密」。既有 qBittorrent 是他自己的
-  服務，Berth 不改它的密碼（brief §16.4）。
+- **密碼只給套件內的那一台**，而且泊位上要有那一組（`SetupQbittorrent.web_ui_*`）。
+  既有 qBittorrent 是他自己的服務，Berth 不改它的密碼（brief §16.4）。
 - **既有服務的 temp path 未啟用只警告**，不阻擋。
 - **Web API 低於 2.8.4 拒絕接入**，因為 Berth 要用的端點在那之前不存在（brief §16.4）。
 """
@@ -146,7 +146,7 @@ class QbittorrentSetupStatus:
     steps: tuple[StepView, ...]
     #: 既有服務的 temp path 未啟用——只警告，不阻擋（brief §16.4）。
     temp_path_warning: bool
-    #: 勾了「同一組帳密也套用到 qBittorrent」而且這一台是套件內的。
+    #: 泊位上有 WebUI 帳密而且這一台是套件內的。
     sets_password: bool
     #: 五個建議鍵會被寫。既有的那一台是 `False`：畫面只列現值與建議值，按鈕只是確認。
     writes_preferences: bool
@@ -247,12 +247,12 @@ async def _apply_password(
     settings: QbittorrentSettings,
     origin: ServiceOrigin,
 ) -> SetupStep:
-    """套件內的那一台另設 WebUI 帳密：第 1 步的介面那一組（plan §9.3 第 4 步、票 06c）。
+    """套件內的那一台另設 WebUI 帳密：泊位自己的那一組（`SetupQbittorrent.web_ui_*`，M4 票 06）。
 
     設完之後**不能再被重探判成「既有」**：判定的規則是「免密進得去 → 套件內」，而現在它要
     密碼了——那個密碼還是 Berth 自己設的。所以連同判定一起釘住（`configured`）。
     """
-    username, password = setup.admin.interface_username, setup.admin.interface_password
+    username, password = setup.qbittorrent.web_ui_username, setup.qbittorrent.web_ui_password
     if not _sets_password(setup, origin):
         return SetupStep(key=QbittorrentStep.PASSWORD.value, status=StepStatus.SKIPPED)
     if (settings.username, settings.password) == (username, password):
@@ -390,9 +390,8 @@ def _untouched_step(diff: PreferenceDiff) -> SetupStep:
 def _sets_password(setup: SetupSettings, origin: ServiceOrigin) -> bool:
     return (
         origin is ServiceOrigin.BUNDLED
-        and setup.admin.apply_to_services
-        and bool(setup.admin.interface_username)
-        and bool(setup.admin.interface_password)
+        and bool(setup.qbittorrent.web_ui_username)
+        and bool(setup.qbittorrent.web_ui_password)
     )
 
 

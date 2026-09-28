@@ -38,7 +38,7 @@ const FAILURE_MESSAGE = {
 export function CompleteStep({
   routes,
   indexers,
-  bundledJellyfin,
+  owner,
   completing,
   failure,
   onComplete,
@@ -48,10 +48,10 @@ export function CompleteStep({
   routes: RouteSetup
   indexers: IndexerSetup | undefined
   /**
-   * 登入要用哪一組帳密：套件內的 Jellyfin 管理員是精靈第 3 步用第 1 步那組建的，既有的那台
-   * 是使用者自己的帳號（票 06h 實走 `mixed` 時抓到原本一律說「剛才建立的」）。
+   * 擁有者的 Jellyfin 名字。精靈從第 1 步起就是以他登入的（M4 票 06），完成之後直接進 Berth；
+   * 這一句說的是之後拿什麼登入。
    */
-  bundledJellyfin: boolean
+  owner: string
   completing: boolean
   failure?: CompleteFailure
   onComplete: () => void
@@ -136,7 +136,7 @@ export function CompleteStep({
       </div>
 
       <p className="mt-4 max-w-prose text-xs text-ink-dim">
-        {t(bundledJellyfin ? 'complete.signInHint' : 'complete.signInHintExisting')}
+        {t('complete.signInHint', { name: owner })}
       </p>
       {nav}
     </StepFrame>

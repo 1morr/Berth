@@ -28,6 +28,7 @@ from berth.domain import DetectionReason, IndexerKind, ServiceKind, ServiceOrigi
 from berth.models import IndexerSettings, JellyfinSettings, QbittorrentSettings
 from berth.services.settings import read_settings
 from berth.services.setup import ServiceConnection, connect_service, read_status
+from tests.integration.arrange import own
 from tests.integration.factories import COMPOSE, answered
 
 
@@ -337,6 +338,7 @@ async def test_connecting_one_service_leaves_the_others_alone(session: AsyncSess
     from berth.services.clients import SetupProbes
     from berth.services.setup import detect_services
 
+    await own(session)
     await detect_services(
         session,
         SetupProbes(

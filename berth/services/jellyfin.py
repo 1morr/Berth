@@ -1,11 +1,13 @@
 """精靈第 3 步：Jellyfin（plan §9.3 第 3 步、§9.4、§9.5）。
 
-兩條路徑共用同一份狀態形狀（`SetupJellyfin`）：
+兩條路徑共用同一份狀態形狀（`SetupJellyfin`）。plan §9.4 的七步分兩半跑（M4 票 06）：
 
-- **套件內**：`bootstrap_jellyfin` 跑完 plan §9.4 的七步。每一步都冪等——媒體庫先看再建、
-  API key 先列再建。重按只會把已經對的那幾步標成 `skipped`。
-- **既有**：`connect_jellyfin` 以管理員帳密登入並建立 API key、列出媒體庫；`add_berth_path`
-  為選定的媒體庫**加**一條路徑。
+- **擁有者**（精靈第 1 步，`claim_jellyfin`）：帳密只在這裡出現。套件內建立管理員、跑完
+  Jellyfin 自己的初始設定、換 API key；既有以它的管理員登入、換 API key。之後的一切都用那把 key。
+- **泊位 1**：套件內 `bootstrap_jellyfin` 建使用者列的媒體庫；既有 `add_berth_path` 為選定的
+  媒體庫**加**一條路徑。設定頁換位址或 key 走 `connect_jellyfin`。
+
+每一步都冪等——媒體庫先看再建、API key 先列再建。重按只會把已經對的那幾步標成 `skipped`。
 
 **第一步是版本閘門**（brief §16.4、§19、§20.9）：低於 Jellyfin 12.0 就停在那裡，不往下做。
 10.x 上同一集的兩個版本是兩個重複的條目，要靠 MergeVersions 插件；12.0 起原生合併，所以
@@ -29,8 +31,9 @@ from typing import Protocol
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from berth.adapters.fs import ensure_directory
-from berth.adapters.http import ServiceError
+from berth.adapters.http import AuthFailedError, ServiceError
 from berth.adapters.jellyfin import (
+    JellyfinAuth,
     JellyfinClient,
     JellyfinLibrary,
     NewLibrary,
@@ -43,6 +46,7 @@ from berth.domain import (
     CollectionType,
     DetectionReason,
     JellyfinStep,
+    OwnerRefusal,
     ServiceKind,
     ServiceOrigin,
     StepStatus,
@@ -51,14 +55,13 @@ from berth.models import (
     BundledLibrary,
     JellyfinSettings,
     PathSettings,
-    SetupAdmin,
     SetupLibrary,
     SetupSettings,
     SetupStep,
 )
 from berth.models.types import utcnow
 from berth.services.clients import ServiceClientFactory
-from berth.services.settings import read_settings, update_settings, write_settings
+from berth.services.settings import read_settings, write_settings
 from berth.services.steps import StepView, step_views
 
 #: `POST /Auth/Keys?app=` 用的名字。也是重按時辨認「這把是我建的」的依據。
@@ -303,33 +306,90 @@ def _already_built(
     return row.name in names or bundled_path(row.folder, library_root) in locations
 
 
+#: 擁有者那一半（精靈第 1 步）。套件內的那一台要先有管理員、跑完它自己的初始設定，才換
+#: API key——初始設定跑完之後再登入、建 key 是實測過的順序（brief §20.7）。
+#: 既有的那一台只登入、換 key。
+OWNER_STEPS: dict[ServiceOrigin, tuple[JellyfinStep, ...]] = {
+    ServiceOrigin.BUNDLED: (
+        JellyfinStep.PUBLIC_INFO,
+        JellyfinStep.CONFIGURATION,
+        JellyfinStep.ADMIN_USER,
+        JellyfinStep.REMOTE_ACCESS,
+        JellyfinStep.COMPLETE,
+        JellyfinStep.API_KEY,
+    ),
+    ServiceOrigin.EXISTING: (JellyfinStep.PUBLIC_INFO, JellyfinStep.API_KEY),
+}
+
+#: 泊位 1 的那一半（套件內）：版本再看一次，然後建媒體庫。用的是第 1 步存下的 API key。
+BERTH_STEPS = (JellyfinStep.PUBLIC_INFO, JellyfinStep.LIBRARIES)
+
+
+@dataclass(frozen=True, slots=True)
+class JellyfinClaim:
+    """第 1 步那一半的結果。`auth` 有值就是這個人是這台 Jellyfin 的管理員、key 也拿到了。"""
+
+    status: JellyfinSetupStatus
+    auth: JellyfinAuth | None
+    #: 沒成立時的理由；`detail` 是失敗那一步的原文（版本太舊時帶著版本號）。
+    refusal: OwnerRefusal | None
+    detail: str
+
+
+async def claim_jellyfin(
+    session: AsyncSession, factory: ServiceClientFactory, *, username: str, password: str
+) -> JellyfinClaim:
+    """精靈第 1 步的 Jellyfin 那一半：套件內建管理員並跑完初始設定，既有的登入；都換 API key。
+
+    **帳密一律交給 Jellyfin 驗**，即使已經有一把 key：第 1 步要證明的是「這個人是它的管理員」，
+    不是「Berth 連得上它」。帳密不存下來（brief §11）。
+
+    套件內那一台的管理員已經在（上一次在某一步失敗，或 session 過期之後重來）時，建立那一步是
+    `skipped`（12.0 起回 403，brief §20.9），驗證落在換 key 那一步——所以同一組照樣成立，
+    別的密碼蓋不掉它。
+    """
+    setup = await read_settings(session, SetupSettings)
+    jellyfin = await read_settings(session, JellyfinSettings)
+    origin, _ = _target(setup, jellyfin)
+    steps = OWNER_STEPS.get(origin, OWNER_STEPS[ServiceOrigin.EXISTING])
+    status, runner = await _run(session, factory, steps, credentials=(username, password))
+    failed = next((row for row in status.steps if row.status is StepStatus.FAILED), None)
+    if runner.refusal is not None:
+        # 帳密那兩種的理由本身就是完整的一句話；Jellyfin 的原文只給「那一段沒做完」。
+        return JellyfinClaim(status=status, auth=None, refusal=runner.refusal, detail="")
+    if failed is not None or runner.auth is None:
+        return JellyfinClaim(
+            status=status,
+            auth=None,
+            refusal=OwnerRefusal.JELLYFIN_FAILED,
+            detail=failed.error if failed is not None else "",
+        )
+    return JellyfinClaim(status=status, auth=runner.auth, refusal=None, detail="")
+
+
 async def bootstrap_jellyfin(
     session: AsyncSession, factory: ServiceClientFactory
 ) -> JellyfinSetupStatus:
-    """套件內路徑：跑完 plan §9.4 的七步。重按只補做還沒做的那幾步。"""
-    status = await _run(session, factory, tuple(JellyfinStep))
-    if _wizard_done(status):
-        # 第 6 步幫 Jellyfin 跑完它自己的精靈，`StartupWizardCompleted` 就會變 true——
-        # 跟使用者自己開一台完成初始設定的 Jellyfin 沒有兩樣。重新偵測會因此誤判成
-        # 「既有」（票 06b 追蹤）。釘住的道理跟 qBittorrent 設完密碼、Prowlarr 加完
-        # 索引站一樣：已經是 Berth 自己弄好的，不要再被重探。
-        await update_settings(session, SetupSettings, _pin_jellyfin)
+    """套件內路徑的泊位 1：建使用者列的媒體庫。重按只補建還沒建的那幾個。"""
+    status, _ = await _run(session, factory, BERTH_STEPS)
     return status
 
 
 async def connect_jellyfin(
     session: AsyncSession, factory: ServiceClientFactory, *, username: str, password: str
 ) -> JellyfinSetupStatus:
-    """既有路徑：以**那台 Jellyfin 的**管理員帳密登入、建 API key、列出媒體庫（plan §9.5）。
+    """設定頁：以**那台 Jellyfin 的**管理員帳密登入、建 API key、列出媒體庫（plan §9.5）。
 
+    精靈裡同一件事在第 1 步（`claim_jellyfin`）；這一支是精靈跑完之後換位址、換 key 用的。
     帳密不存下來：Berth 只需要 API key，而那台伺服器的管理員密碼不是 Berth 的東西。
     """
-    return await _run(
+    status, _ = await _run(
         session,
         factory,
-        (JellyfinStep.PUBLIC_INFO, JellyfinStep.API_KEY),
+        OWNER_STEPS[ServiceOrigin.EXISTING],
         credentials=(username, password),
     )
+    return status
 
 
 async def add_berth_path(
@@ -390,30 +450,22 @@ async def add_berth_path(
     return await read_jellyfin_status(session)
 
 
-def _wizard_done(status: JellyfinSetupStatus) -> bool:
-    """第 6 步（`complete`）這一輪真的跑了或本來就跑過，Jellyfin 那端的精靈旗標才會是 true。"""
-    return any(
-        row.step == JellyfinStep.COMPLETE.value
-        and row.status in (StepStatus.OK, StepStatus.SKIPPED)
-        for row in status.steps
-    )
+def pin_jellyfin(setup: SetupSettings) -> None:
+    """擁有者成立之後這一台的判定釘住，`detect_services` 不再重探（`configured` 短路）。
 
-
-def _pin_jellyfin(setup: SetupSettings) -> None:
-    """跟 `indexer._pin_probe`、`qbittorrent._apply_password` 同一個道理：釘住之後
-    `detect_services` 的 `configured` 短路才會生效，不會再被重探。
+    套件內的那一台剛被 Berth 跑完它自己的初始精靈，`StartupWizardCompleted` 變成 true——
+    跟使用者自己開一台完成初始設定的 Jellyfin 沒有兩樣，重探會誤判成「既有」（票 06b 追蹤）。
+    道理跟 qBittorrent 設完密碼、Prowlarr 加完索引站一樣：已經是 Berth 自己弄好的，不要再被重探。
+    既有的那一台同樣釘住：擁有者的帳號在它上面，換一台就是換一個擁有者。
     """
     probe = setup.services.get(ServiceKind.JELLYFIN)
-    if probe is None or probe.origin is not ServiceOrigin.BUNDLED:
+    if probe is None:
         return
+    reason = DetectionReason.CONNECTED if probe.origin is ServiceOrigin.BUNDLED else probe.reason
     setup.services = {
         **setup.services,
         ServiceKind.JELLYFIN: probe.model_copy(
-            update={
-                "reason": DetectionReason.CONNECTED,
-                "configured": True,
-                "checked_at": utcnow(),
-            }
+            update={"reason": reason, "configured": True, "checked_at": utcnow()}
         ),
     }
 
@@ -427,16 +479,14 @@ async def _run(
     steps: tuple[JellyfinStep, ...],
     *,
     credentials: tuple[str, str] | None = None,
-) -> JellyfinSetupStatus:
+) -> tuple[JellyfinSetupStatus, _Runner]:
     setup = await read_settings(session, SetupSettings)
     jellyfin = await read_settings(session, JellyfinSettings)
     paths = await read_settings(session, PathSettings)
     _, base_url = _target(setup, jellyfin)
 
     client = factory.jellyfin(base_url, token=jellyfin.api_key)
-    runner = _Runner(client, setup.admin, jellyfin, paths, setup.jellyfin.bundled)
-    if credentials is not None:
-        runner.sign_in_as(*credentials)
+    runner = _Runner(client, jellyfin, paths, setup.jellyfin.bundled, credentials=credentials)
     try:
         # 這一輪要跑的步驟先全部歸零，畫面才不會把上一輪的結果當成這一輪的進度。
         await _record(session, *(_step(step, StepStatus.PENDING) for step in steps))
@@ -455,7 +505,7 @@ async def _run(
     jellyfin.api_key = runner.api_key or jellyfin.api_key
     await write_settings(session, jellyfin)
     await session.commit()
-    return await read_jellyfin_status(session)
+    return await read_jellyfin_status(session), runner
 
 
 async def _record(session: AsyncSession, *steps: SetupStep) -> None:
@@ -506,26 +556,27 @@ class _Runner:
     def __init__(
         self,
         client: JellyfinClient,
-        admin: SetupAdmin,
         jellyfin: JellyfinSettings,
         paths: PathSettings,
         bundled: Sequence[BundledLibrary],
+        *,
+        credentials: tuple[str, str] | None,
     ) -> None:
         self._client = client
         self._jellyfin = jellyfin
         self._paths = paths
         self._bundled = tuple(bundled)
-        self._credentials = (admin.username, admin.password)
-        self._token = jellyfin.api_key
+        self._credentials = credentials
+        # 給了帳密就一定拿它登入，不拿存下來的 key 抄捷徑：要證明的是這個人是管理員。
+        self._token = "" if credentials is not None else jellyfin.api_key
         self._fresh = False
         self.api_key = jellyfin.api_key
         #: `None` 代表這一輪沒讀到媒體庫；不要拿它覆寫存下來的清單。
         self.libraries: tuple[JellyfinLibrary, ...] | None = None
-
-    def sign_in_as(self, username: str, password: str) -> None:
-        """既有 Jellyfin 的管理員帳密，與 Berth 自己的那一組無關。"""
-        self._credentials = (username, password)
-        self._token = ""
+        #: 拿帳密登入成功的那一次（`claim_jellyfin` 拿它發 Berth session）。
+        self.auth: JellyfinAuth | None = None
+        #: 帳密這一關沒過的理由。其他失敗照樣是那一步的 `failed`。
+        self.refusal: OwnerRefusal | None = None
 
     async def run(self, step: JellyfinStep) -> SetupStep:
         try:
@@ -568,23 +619,23 @@ class _Runner:
         return StepStatus.OK, detail
 
     async def _admin_user(self) -> tuple[StepStatus, str]:
+        if self._credentials is None:
+            raise StepFailedError("no owner yet; finish step 1 of the wizard first")
         username, password = self._credentials
-        if not username or not password:
-            raise StepFailedError("no Berth administrator yet; finish step 1 of the wizard first")
         if not self._fresh:
             return StepStatus.SKIPPED, username
         # GET 不是多餘的讀取：它會建立預設使用者，少了它 POST 回 500（brief §20.7）。
         await self._client.ensure_default_user()
         # 12.0 起「第一個使用者已經有密碼」回 403，而那是**已經設過了**不是失敗：第 3 步成功、
         # 之後某一步失敗、Jellyfin 沒重啟時按重試就走到這裡（brief §20.9、票 14b）。密碼對不對
-        # 由第 7 步的登入驗證——那一步本來就要拿同一組帳密換 API key。
+        # 由換 API key 那一步的登入驗證——那一步本來就要拿同一組帳密登入。
         created = await self._client.create_startup_user(username, password)
         return (StepStatus.OK if created else StepStatus.SKIPPED), username
 
     async def _libraries(self) -> tuple[StepStatus, str]:
-        if not self._fresh:
-            # 初始精靈跑完之後，`/Library/VirtualFolders` 就要管理員憑證了。
-            await self._authenticate()
+        # 一律要第 1 步的 API key：初始精靈跑完之後 `/Library/VirtualFolders` 本來就要管理員憑證，
+        # 而還沒跑完的那一台匿名也建得了——那正是擁有者成立之前不該有人做得到的事（M4 票 06）。
+        await self._authenticate()
         libraries = await self._client.libraries()
         names = {library.name for library in libraries}
         locations = {path for library in libraries for path in library.locations}
@@ -639,12 +690,18 @@ class _Runner:
         if self._token:
             self._client.use_token(self._token)
             return
+        if self._credentials is None:
+            raise StepFailedError("no API key for this Jellyfin yet; finish step 1 of the wizard")
         username, password = self._credentials
-        if not username or not password:
-            raise StepFailedError("no administrator credentials for this Jellyfin")
-        auth = await self._client.authenticate(username, password)
+        try:
+            auth = await self._client.authenticate(username, password)
+        except AuthFailedError:
+            self.refusal = OwnerRefusal.INVALID_CREDENTIALS
+            raise
         if not auth.is_administrator:
+            self.refusal = OwnerRefusal.NOT_ADMINISTRATOR
             raise StepFailedError(f"{username} is not a Jellyfin administrator")
+        self.auth = auth
         self._token = auth.token
         self._client.use_token(auth.token)
 

@@ -38,7 +38,7 @@ const CLEAN = qbittorrentSetup({
 const EXISTING = setupStatus({
   completed: true,
   current_step: 8,
-  admin_created: true,
+  owner: 'skipper',
   services: ALL_BUNDLED.map((row) =>
     row.kind === 'qbittorrent'
       ? detection({

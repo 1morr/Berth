@@ -943,7 +943,7 @@ describe('session 在頁面上失效', () => {
     await waitFor(() => expect(router.state.location.pathname).toBe('/login'))
     expect(router.state.location.search).toEqual({ redirect: '/review', expired: true })
 
-    await userEvent.type(await screen.findByLabelText('帳號'), 'skipper')
+    await userEvent.type(await screen.findByLabelText('Jellyfin 帳號'), 'skipper')
     await userEvent.type(screen.getByLabelText('密碼'), 'harbour')
     await userEvent.click(screen.getByRole('button', { name: '登入' }))
 

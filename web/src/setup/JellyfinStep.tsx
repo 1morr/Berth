@@ -1,12 +1,7 @@
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import {
-  JELLYFIN_STEPS,
-  type JellyfinConnectInput,
-  type JellyfinSetup,
-  type LibraryDraft,
-} from '../api/setup'
+import { JELLYFIN_STEPS, type JellyfinSetup, type LibraryDraft } from '../api/setup'
 import { type SetupStep } from '../api/schemas'
 import { STICKY_ACTION, GhostButton, Notice, PrimaryButton } from '../components/controls'
 import { Cutaway, CutawayRow } from '../components/Cutaway'
@@ -23,20 +18,18 @@ import { StepFrame } from './StepFrame'
  *
  * 套件內：剖面是一張要建的媒體庫清單（票 06f），一顆按鈕跑完 plan §9.4 的七步，畫面逐條纜繩
  * 顯示結果與實測值。
- * 既有：連線表單 + 媒體庫清單 + 一顆要二次確認的按鈕（`JellyfinExisting` 的「加入 Berth 路徑」）。
+ * 既有：媒體庫清單 + 一顆要二次確認的按鈕（`JellyfinExisting` 的「加入 Berth 路徑」）；登入與
+ * API key 在第 1 步（M4 票 06）。
  */
 export function JellyfinStep({
   setup,
   running,
   bootstrapFailed,
-  signInFailed,
   onBootstrap,
   onSaveLibraries,
   savingLibraries,
   saveLibrariesFailed,
-  onConnect,
   onAddPath,
-  connecting,
   addingPath,
   note,
   nav,
@@ -46,7 +39,6 @@ export function JellyfinStep({
   running: boolean
   /** 請求本身沒跑完（後端沒回應）。步驟自己的失敗在 `setup.steps` 裡，各自貼在它那一行。 */
   bootstrapFailed: boolean
-  signInFailed: boolean
   /** 帶著剖面上的清單：先存它，再跑序列（`bootstrap` 讀的是存下來的那一份）。 */
   onBootstrap: (libraries: LibraryDraft[]) => void
   /** 剖面停手一會兒就存（票 06f）。 */
@@ -54,9 +46,7 @@ export function JellyfinStep({
   savingLibraries: boolean
   /** 清單存不下來的那一句，沒有就是 `null`。 */
   saveLibrariesFailed: string | null
-  onConnect: (input: JellyfinConnectInput) => void
   onAddPath: (library: string) => void
-  connecting: boolean
   addingPath: string | null
   /** 回頭看的說明（`RevisitNote`），這一頁做完了才有。 */
   note?: ReactNode
@@ -106,14 +96,7 @@ export function JellyfinStep({
           redetect={redetect}
         />
       ) : (
-        <JellyfinExisting
-          setup={setup}
-          signInFailed={signInFailed}
-          connecting={connecting}
-          addingPath={addingPath}
-          onConnect={onConnect}
-          onAddPath={onAddPath}
-        />
+        <JellyfinExisting setup={setup} addingPath={addingPath} onAddPath={onAddPath} />
       )}
       {nav}
     </StepFrame>
@@ -195,9 +178,12 @@ function BootstrapSequence({
 }) {
   const { t } = useTranslation()
   const byStep = new Map(setup.steps.map((row) => [row.step, row]))
-  const started = setup.steps.length > 0
   const broke = setup.steps.find((row) => row.status === 'failed')
-  const done = started && !running && setup.steps.every((row) => isSettled(row.status))
+  // 前六步在第 1 步（擁有者）就有結論了（M4 票 06），這一格做完的是建媒體庫那一步。
+  const done =
+    !running &&
+    byStep.get('libraries') !== undefined &&
+    setup.steps.every((row) => isSettled(row.status))
   // 清單還有標紅的格子就不靠泊：建出來的會是使用者沒打算要的那一份（票 06f）。
   const blocked = draft.blocked && !running
   const run = () => onBootstrap(draft.drafts)

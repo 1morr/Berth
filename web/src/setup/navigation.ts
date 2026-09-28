@@ -16,7 +16,7 @@ import type { BerthSlot } from '../components/berths'
 
 /** plan §9.3 的八步。Route 排在 qBittorrent 之後（票 06d）。 */
 export const STEP = {
-  admin: 1,
+  owner: 1,
   detect: 2,
   jellyfin: 3,
   qbittorrent: 4,
@@ -54,7 +54,7 @@ export function nextOf(step: number): number | null {
 
 /** 上一步。第 1 步沒有上一個。 */
 export function previousOf(step: number): number | null {
-  return step > STEP.admin ? step - 1 : null
+  return step > STEP.owner ? step - 1 : null
 }
 
 /** 這一步做完了：後端已經過了它。「前往下一個泊位」只在這時候有。 */

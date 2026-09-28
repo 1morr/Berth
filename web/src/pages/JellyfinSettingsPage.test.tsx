@@ -31,7 +31,7 @@ const SAVE_ADDRESS = 'POST /api/settings/jellyfin'
 const EXISTING = setupStatus({
   completed: true,
   current_step: 8,
-  admin_created: true,
+  owner: 'skipper',
   services: [
     detection({
       origin: 'existing',

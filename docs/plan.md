@@ -598,22 +598,26 @@ WebUI\AuthSubnetWhitelist=172.28.0.2/32
 
 ### 9.3 精靈流程
 
-> **2026-09-26 改（brief §19「精靈改為 Jellyfin 優先」「既有服務不被改動」「精靈與探索的試跑回饋」）**：第 1 步改為連 Jellyfin、成為擁有者；使用者填的位址一律既有；第 5 步不自動跑；第 6 步先測再勾。下文是改之前的樣子，M4 票 05–09 各自改寫自己那一段（票 05 已改：第 2 步的判定規則、第 4 步）。
+> **2026-09-26 改（brief §19「精靈改為 Jellyfin 優先」「既有服務不被改動」「精靈與探索的試跑回饋」）**：第 1 步改為連 Jellyfin、成為擁有者；使用者填的位址一律既有；第 5 步不自動跑；第 6 步先測再勾。M4 票 05–09 各自改寫自己那一段（票 05 已改：第 2 步的判定規則、第 4 步；票 06 已改：第 1–3 步、§9.4 的分段、〈前端的導覽〉的前置列）。
 
 每一步都是冪等的 `services/setup.py` 命令；精靈跑完之後設定頁呼叫的是同一批命令（票 06i）。**來源是逐服務判斷的**（brief §16.3）：每個服務不是「套件內」就是「既有」，三個服務可任意組合。
 
-1. **建立管理員**：帳號與密碼。套件內 Jellyfin 會以這組帳密建立管理員；既有 Jellyfin 則要求以其管理員帳密登入。勾選「同一組帳密也套用到 qBittorrent 與 Prowlarr 介面」（預設勾）則一併設定套件內的那兩者。
-   - **先建管理員、後偵測**（Jellyfin 啟動精靈、Home Assistant、Jellyseerr 的慣例；管理員不存在時精靈的 API 誰都呼叫得到），所以第 1 步還不知道哪個服務是套件內的。「將會寫入」剖面照 `status.services` 說話（`web/src/setup/adminCutaway.ts`，票 06c）：還沒偵測（含探測中、逾時）寫「第 2 步偵測到是套件內的才建立 / 寫入」，套件內寫「帳號 · 密碼同上」，既有寫「你自己的服務，不建立 / 不寫入」；畫面上從不出現密碼本身。
-   - **帳號交給 Jellyfin 之後只改得動介面那一組**（Seerr 的慣例：媒體伺服器的管理員就是帳號的主人，票 06c）：套件內 Jellyfin 的「建立管理員」有結論、或 Jellyfin 判為既有，`services.setup.jellyfin_owns_account` 就成立。Berth 改不了 Jellyfin 的密碼（初始精靈跑過之後 `_admin_user` 一律略過），覆寫帳號只會讓第 3 步與之後的登入拿著 Jellyfin 不認得的密碼。所以 `SetupAdmin` 存兩組：帳號本身（第 3 步用）與介面那一組（`interface_*`，第 4、5 步用；06c 之前的舊列由 migration `c3d8a6f1b240` 抄一份過去）；之後第 1 步只寫後者，畫面說出密碼在 Jellyfin 裡改、改完要回到第 4、5 步重新套用才生效。Prowlarr 讀回來的密碼是雜湊，重套時比的是 Berth 上一次寫下去的那一組（`SetupIndexer.login_password`）。
-2. **偵測服務**：逐一探測 compose 主機名 `jellyfin:8096` `/System/Info/Public`、`qbittorrent:${QBITTORRENT_WEBUI_PORT}` `/api/v2/app/version`（免密）、`prowlarr:9696` `/ping`（三個位址由 `services.clients.bundled_targets` 給，`GET /setup/status` 的 `probe_targets` 把同一份交給畫面，票 06h）；Jellyfin 未完成初始精靈、qBittorrent 免密可進、Prowlarr 讀得到 API key 且無索引站 → 該服務標為**套件內**；探不到或已設定過 → 標為**既有**，顯示位址與憑證表單，每項有「測試連線」。服務未就緒時輪詢至多 2 分鐘。
+1. **擁有者**（M4 票 06，brief §11、§19 2026-09-26；Seerr 的慣例：先連媒體伺服器，它的管理員就是擁有者）。Berth 沒有自己的帳號，所以第 1 步就是 Jellyfin：
+   - **先找 Jellyfin**：第 1 步一打開就探 `jellyfin:8096`（只讀，第 2 步同一套判定與輪詢規則）；探不到或未解決就地給連線表單（`POST /setup/services/jellyfin`）。**擁有者成立之前 `detect_services` 只探 Jellyfin**——qBittorrent 與 Prowlarr 的判定之後會引來寫入它們的命令。
+   - **套件內**（`StartupWizardCompleted=false`）：「建立 Jellyfin 管理員」，帳號、密碼、再輸入一次（前端比對，Jellyfin 自己的啟動精靈也是）。**既有**：「用你的 Jellyfin 管理員登入」，密碼一次。套件內那一台的管理員已經建好（上一次在後面某一步失敗、或舊資料庫的精靈跑到一半）時也是登入表單（`SetupStatus.owner_signs_in`）。
+   - `POST /setup/owner` → `services.setup.claim_owner` → `jellyfin.claim_jellyfin`：套件內跑 §9.4 的前六步（版本、語言、建管理員、遠端存取、完成初始精靈、登入換 API key），既有跑版本與登入換 key。**帳密一律交給 Jellyfin 驗**，即使已經有一把 key；不是管理員就拒絕（`OwnerRefusal`：`jellyfin_unresolved` 409、`invalid_credentials` 401、`not_administrator` 403、`jellyfin_failed` 502 帶原文）。成功時 `settings.setup.owner` 記 Jellyfin 的 user id 與名字、釘住 Jellyfin 的判定（`configured`，套件內那一台剛被跑完初始精靈，重探會誤判成既有），並發 Berth session（與 `/auth/login` 同一種 cookie，`auth.open_session`）。畫面照〈前端的導覽〉停在結果上（「擁有者：名字」），按了才去第 2 步。
+   - **帳密不存下來**：只用來建立或登入 Jellyfin、換 API key。舊的 `SetupAdmin`（帳號與介面兩組，M3 票 06c）由 migration `e8a1c4d7b293` 拿掉，連同 `indexer.login_password`（Berth 寫進 Prowlarr 的那一份，就是同一個密碼）；精靈已經跑完的舊資料庫沒有擁有者也沒關係（`completed` 就讓門關著），跑到一半的回到第 1 步，套件內那一台的同一組帳密就是登入。
+   - **門禁**（`api/gate.py`）：擁有者成立之前只開精靈的開場（`SETUP_OPENING_PATHS`：`GET /setup/status`、`POST /setup/detect`、`POST /setup/services/jellyfin`、`POST /setup/owner`），其餘 `setup/*` 一律 403「先做完第 1 步」；成立之後整組要管理員的 session，與精靈跑完之後相同。**安全面與原本相同**：誰先到誰建立，與 Jellyfin 自己的啟動精靈、Seerr 一樣；原本的「Berth 管理員」門鎖也是先到先得，差別只在那組帳密現在登得進 Berth。匿名的 `GET /health` 多一個位元 `owner_established`，前端守衛靠它在精靈跑完之前就把沒有 session 的人送去 `/login?redirect=/setup`。
+   - **套件內 qBittorrent 與 Prowlarr 的介面帳密**不再跟著第 1 步：寫它們的程式碼讀泊位自己的欄位（`SetupQbittorrent.web_ui_*`、`SetupIndexer.web_ui_*`），由 M4 票 07 補上填它們的地方。這之前兩者都不設（Berth 靠免密白名單與掛載讀到的 API key 照常運作）。
+2. **偵測服務**（擁有者成立之後，qBittorrent 與 Prowlarr；Jellyfin 在第 1 步已經判定並釘住）：逐一探測 compose 主機名 `jellyfin:8096` `/System/Info/Public`、`qbittorrent:${QBITTORRENT_WEBUI_PORT}` `/api/v2/app/version`（免密）、`prowlarr:9696` `/ping`（三個位址由 `services.clients.bundled_targets` 給，`GET /setup/status` 的 `probe_targets` 把同一份交給畫面，票 06h）；Jellyfin 未完成初始精靈、qBittorrent 免密可進、Prowlarr 讀得到 API key 且無索引站 → 該服務標為**套件內**；探不到或已設定過 → 標為**既有**，顯示位址與憑證表單，每項有「測試連線」。服務未就緒時輪詢至多 2 分鐘。
    - **「探不到」要分兩種**：主機名解不到（`socket.gaierror`）代表這個服務不在 compose 裡（使用者從 `COMPOSE_PROFILES` 拿掉了）→ 立刻判既有，不必等；主機名解得到但連不上 → 容器還在啟動 → 判**探測中**，繼續輪詢到 2 分鐘上限，逾時轉**逾時**並提供重試。逾時與既有都會展開連線表單，所以 DNS 會劫持 NXDOMAIN 的環境仍然走得下去。
    - **「還在啟動」也有兩種樣子**（M3 票 06g，四個容器同時起來時量到）：服務連得上、回 503「載入中」（Jellyfin 的 `ServiceBusyError`）→ 判**探測中**、理由 `starting`，與連不上一樣受 2 分鐘上限管；服務連得上、回的東西不像它自己（`protocol_mismatch`，實測 Jellyfin 起來後第 11 秒）→ 在輪詢視窗內也判**探測中**，**過了視窗仍是它才判既有**（不是逾時：主機名上真的是別的東西，要展開表單）。代價是主機名上真的是別的服務時要等到視窗結束，與連不上同一個代價。這兩條只給 compose 主機名；使用者自己填的位址當場給結論（`starting` 也是未解決）。前端在探測本身失敗（非 2xx）時照樣每 3 秒再探，從第一次失敗起算到同一個上限，視窗內的失敗顯示成「探測中」而不是失敗。
-   - **精靈的步驟由狀態導出，不存游標**：管理員未建立 → 第 1 步；有服務**還沒連得上** → 第 2 步；否則進第 3 步。存「走到第幾步」的游標會在偵測結果變回等待時說謊。
+   - **精靈的步驟由狀態導出，不存游標**：擁有者未成立 → 第 1 步；有服務**還沒連得上** → 第 2 步；否則進第 3 步。存「走到第幾步」的游標會在偵測結果變回等待時說謊。
    - 「連得上」不等於「有結論」：從 `COMPOSE_PROFILES` 拿掉的服務立刻就有結論（既有），但 Berth 還不知道它在哪裡。判定帶一個 `resolved` 旗標（`not_deployed` / `unreachable` / `starting` / `auth_required` / `protocol_mismatch` / `api_key_missing` 都是**未解決**），全部解決才離得開第 2 步——否則精靈會跳過那張使用者唯一能填位址的表單。前端的信號色讀同一個旗標，不另外維護一份理由清單。
    - 判定一出來伺服器就把步驟推到 3，但**畫面停在第 2 步**等使用者按「前往泊位 1」（它去的是泊位 1，不是「後端目前那一步」——票 06d 修掉的 bug）。這是前端的覆寫，不是後端的游標；規則見本節末的〈前端的導覽〉。
    - 既有服務按「測試連線」時，連線資訊先存進它平常住的 `settings.services.*` 再測——測不過也存，使用者才能改一個欄位再按一次。
    - **使用者填的位址一律既有，除非它就是 compose 主機名**（M4 票 05，brief §19 2026-09-26「既有服務不被改動」）：`services.setup.connect_service` 拿 `bundled_targets` 比主機名與 port，一樣的才照上面的規則判（讀不到唯讀掛載的套件內 Prowlarr 貼上 key 之後仍是套件內，票 08 的預設站對它才會跑）；其餘的 qBittorrent 免密可進、Prowlarr 沒有索引站都判既有，理由 `connected`（Prowlarr 的細節是站數 `0`）。第 6 步的連線表單（套件內 Prowlarr 連不上時也給，`indexer.connect_indexer`）走同一條規則：填的不是 compose 主機名，就把 Prowlarr 的判定改成既有並釘住。原因：「沒有索引站」「免密可進」只說得出服務還沒被設過什麼，說不出它是誰的——`berth-lab` 裡使用者自己的空 Prowlarr 被判成套件內，第 6 步就以第 1 步的帳密 `PUT config/host` 覆寫它的登入並重啟；開了「本機 / 子網免驗證」的舊 qBittorrent 同理會被設 WebUI 密碼。**Jellyfin 例外**：使用者填的位址上是一台 `StartupWizardCompleted=false` 的 Jellyfin 仍判套件內——還沒跑過初始精靈的 Jellyfin 上沒有任何使用者，代建管理員不會蓋掉任何人的帳號，而那一台除了 Berth 代跑也沒有別的路接進來（票 06 重寫這一步時沿用這條規則）。
-3. **Jellyfin**：**先看版本**——低於 12.0 就停在這一步，說出目前版本與升級注意（brief §16.4、§19、§20.9）。過得了閘門之後：套件內 → §9.4 全自動；既有 → 登入、建立 API key、列出媒體庫與各自路徑。
+3. **Jellyfin**：**先看版本**——低於 12.0 就停在這一步，說出目前版本與升級注意（brief §16.4、§19、§20.9；第 1 步已經擋過一次，這裡是重按時的那一次）。管理員、初始設定與 API key 在第 1 步就做完了（M4 票 06），這一格剩下：套件內 → 建使用者列的媒體庫（§9.4 第 7 步，`bootstrap_jellyfin` 跑版本與媒體庫兩步，用第 1 步的 key；沒有 key 就拒絕，即使那台還沒跑過初始精靈、匿名也建得了）；既有 → 列出媒體庫與各自路徑，沒有登入表單。設定頁換位址或 key 仍然是登入換 key（`POST /setup/jellyfin/connect`）。
    - **套件內的媒體庫由使用者列**（票 06f，brief §19；Jellyfin 啟動精靈「新增媒體庫」的慣例：內容類型 + 顯示名稱 + 資料夾）：按「開始靠泊」之前是一張可編輯的清單（06f 放在剖面，06h 搬進工作面、排在「開始靠泊」之前：它是這一步的輸入），預設 Movies・電影、TV・劇集、Anime・劇集三列，可以改名、改類型、改資料夾、刪列、加列，至少一列。類型只有電影與劇集（Berth 的 `SUPPORTED_TYPES`）；資料夾是 `library_root` 底下的一層（不能有 `/`、`\`、不能是 `.`、`..`，也不能有 Windows 不收的字元），名稱是 ASCII 時由它推導（照 `library_slug`），不是 ASCII 時要使用者填；名稱與資料夾各自不可重複（不分大小寫）。規則在 `services.jellyfin.check_bundled_libraries`，前端 `web/src/setup/libraryRules.ts` 用同一組在送出之前擋。
    - 清單存在 `settings.setup.jellyfin.bundled`（`PUT /setup/jellyfin/bundled`，拒絕是 `BundledLibraryRefusal` 帶列號）：清單停手就存，按下靠泊之前再存一次，關掉瀏覽器回來還在。**已經在 Jellyfin 建好的列（第 3 步最後一次讀到同名的媒體庫）鎖住**：bootstrap 以名稱認媒體庫，改了名重跑會多建一個指向同一個資料夾的，刪了 Berth 也不會去刪 Jellyfin 的——改名與刪除要去 Jellyfin，後端回 `built_changed`。靠泊之後加的列照樣建得出來，重跑只建它們。精靈跑完之後新增媒體庫照舊：在 Jellyfin 建好，再到 `/settings/routes` 加 Route。**沒有安裝插件的按鈕**（票 14b）：12.x 原生合併多版本，Berth 不碰別人的插件，也就不會重啟別人的 Jellyfin。
 4. **qBittorrent**：顯示建議偏好與現值的差異（§8.1）。**套件內**按「套用」寫有差異的鍵、另設密碼。**既有**一個全域鍵都不寫（M4 票 05，照 Sonarr / Radarr 對下載器只用分類的慣例）：剖面照樣逐鍵列現值與套件內的建議值、標明「Berth 不會寫入」，按鈕只是確認連得上、版本夠新，五條纜繩記成 `skipped`、細節是它自己的現值（`QbittorrentSetupStatus.writes_preferences` 是 `false`，畫面照它換標題、剖面標題與按鈕）；temp path 未啟用只警告。Berth 的路徑全靠分類（建立時帶 save path）與逐個 torrent 的 `autoTMM=true`，所以全域 `save_path` / `temp_path` / `temp_path_enabled`、`auto_tmm_enabled`、`category_changed_tmm_enabled` 動了會改掉使用者不經 Berth 加的 torrent 落在哪裡，而 Berth 自己用不到它們。健康檢查的漂移（`drifted_keys`）與設定頁的「還原建議設定」同理只看套件內的那一台。
@@ -624,14 +628,14 @@ WebUI\AuthSubnetWhitelist=172.28.0.2/32
    - 套件內 Prowlarr 的 API key 讀自唯讀掛載，**探測時就存進 `settings.services.indexer`**，第 6 步與 M1 的搜尋從同一個地方拿憑證。使用者貼過的值優先。
    - qBittorrent 設過密碼、Prowlarr 加過索引站之後，那個服務的判定**釘住不再重探**（`ServiceProbe.configured`）：判定規則是「免密可進 / 一個索引站都沒有 → 套件內」，而這兩件事正是 Berth 自己剛做掉的，重探會說謊。
 7. **TMDB**（泊位 5）：使用者貼自己的 API key（v3 key 或 v4 token 都收），按「測試」。**這一步是必填的閘門**：`configuration` 綠燈才走得到第 8 步，畫面同時要說得出去哪裡申請（themoviedb.org → 設定 → API）。完成那一步再擋一次，閘門看的是存下來的那一條綠燈。還沒有驗過的 key 時先存再測（測不過也存，改一個字再按）；**已經有一把驗過的在用時，新的測不過就不換**，紅燈只回給畫面（票 06i，使用者拍板：設定頁換 key 貼錯一把不該讓探索與入庫停擺）。
-8. **完成**：`POST /setup/complete` 寫 `settings.setup.completed`（第 7 步沒綠燈或第 5 步沒全綠時回 422），說出跳過了什麼與在哪裡補，並說出之後用哪一組帳號登入（套件內 Jellyfin 是第 3 步剛建的管理員，既有的是那台 Jellyfin 自己的帳號，票 06h），然後回首頁——那一刻起 `setup/*` 需登入、`/` 不再導向精靈，所以前端要就地把 `GET /health` 的那一個位元改掉再導航。
+8. **完成**：`POST /setup/complete` 寫 `settings.setup.completed`（第 7 步沒綠燈或第 5 步沒全綠時回 422），說出跳過了什麼與在哪裡補，並說出之後拿什麼登入（擁有者的 Jellyfin 帳號，M4 票 06），然後回首頁——擁有者從第 1 步起就登入著，直接落在探索；`/` 從那一刻起不再導向精靈，所以前端要就地把 `GET /health` 的那一個位元改掉再導航。
 
 **續行與跳過**：精靈狀態存在 `settings.setup`，關掉瀏覽器再回來回到原本那一步。**可跳過的只有第 6 步（索引站）**，完成頁說出跳過了什麼與在哪裡補；第 3、4、5、7 步不可跳。兩者不同級：沒有索引站只是搜尋不到東西，沒有 TMDB 則探索、季集快照與命名全部停擺（M1 票 02b）。八步的畫面結構與狀態見 `.scratch/m0/wizard-shape.md`。
 
 **前端的導覽**（票 06d；Material Stepper 的 linear 模式，Jellyfin 自己的啟動精靈有「上一步」）。後端的步驟仍然是導出的、前端不改它；前端只有一個覆寫「畫面停在哪一步」，進出規則全部是 `web/src/setup/navigation.ts` 的純函式：
 
 - **做完停在結果上**：按下一頁的動作那一刻把畫面釘在那一頁；後端前進之後畫面不動，出現「前往下一個泊位」才走。第 2 步的「前往泊位 1」是同一條規則。
-- **走過的點得回去，沒到的點不過去**：泊位板上走過的與目前的那幾格是按鈕，還沒到的是純文字——前進只能靠把事做完。第 1、2 步不上板，在板上方的前置列（管理員是誰、判定了幾個服務——只算套件內與既有，探測中與逾時不算，票 06h），兩格同時是證據與入口。健康頁同一塊板，不可點。
+- **走過的點得回去，沒到的點不過去**：泊位板上走過的與目前的那幾格是按鈕，還沒到的是純文字——前進只能靠把事做完。第 1、2 步不上板，在板上方的前置列（「擁有者 · <名字>」、第 2 步判定了幾個服務——只算 qBittorrent 與 Prowlarr 的套件內與既有，探測中與逾時不算，票 06h、M4 票 06），兩格同時是證據與入口；擁有者成立之前沒有前置列。回頭看第 1 步只說擁有者是誰、密碼在 Jellyfin 裡改，沒有表單。健康頁同一塊板，不可點。
 - **每一頁有「上一個泊位」**；去後端目前那一頁（或更後面）就是解除覆寫，所以回頭之後永遠走得回來。回頭看得比「剛做完的那一格」更前面時，板下一條帶子給「回到目前這一步」。
 - **回頭看的那一頁說出能改什麼、不能改的去哪裡**：每一步都是冪等命令，回頭照樣重跑，做過的標「已經是這樣」。
 - **「重新偵測這個服務」放在出問題的那一格**（`POST /setup/detect` 帶 `kind`，只重探那一個，已釘住的服務照樣不重探）：第 2 步未解決或逾時的那一列、泊位頁連不上那個服務時。全部重新探測只在第 2 步。
@@ -641,12 +645,14 @@ WebUI\AuthSubnetWhitelist=172.28.0.2/32
 
 依 brief §20.7：`/Startup/*` 與 `/Library/VirtualFolders` 在精靈完成前不需憑證；插件與排程任務需要管理員 token。
 
+**分兩半跑**（M4 票 06）：精靈第 1 步（擁有者）跑下面的 1–3、5–7——帳密只在那一刻出現；泊位 1 跑 1 與 4，用第 1 步存下的 API key（`services.jellyfin` 的 `OWNER_STEPS` / `BERTH_STEPS`）。`JellyfinStep` 的宣告順序就是這個執行順序（媒體庫排最後），畫面照它列。所以媒體庫是在 Jellyfin 的初始精靈跑完之後、以 API key 建的——第 4 步原本的「初始精靈跑完之後這一支要管理員憑證」從重按的特例變成常態。
+
 1. `GET /System/Info/Public` → **先確認版本 ≥ 12.0**（低於就整段停在這裡，brief §16.4），再看 `StartupWizardCompleted == false`；後者為 true 時視為既有服務（§9.5）。
 2. `POST /Startup/Configuration` `{ UICulture: "zh-TW", MetadataCountryCode: "TW", PreferredMetadataLanguage: "zh-TW" }`（精靈可改）。
-3. **先 `GET /Startup/User`**（它會跑 `UserManager.InitializeAsync()` 建立預設使用者），再 `POST /Startup/User` `{ Name, Password }` = Berth 管理員。少了 GET，POST 會回 500（brief §20.7）。**12.0 起第一個使用者已經有密碼時這一支回 403**，那是「已經設過了」而不是失敗（票 14b、brief §20.9）：第 3 步成功、後面某一步失敗、Jellyfin 沒重啟時按重試就會走到這裡，翻成錯誤的話重試永遠走不完。密碼對不對由第 7 步的登入驗證。
+3. **先 `GET /Startup/User`**（它會跑 `UserManager.InitializeAsync()` 建立預設使用者），再 `POST /Startup/User` `{ Name, Password }` = 擁有者在第 1 步填的那一組。少了 GET，POST 會回 500（brief §20.7）。**12.0 起第一個使用者已經有密碼時這一支回 403**，那是「已經設過了」而不是失敗（票 14b、brief §20.9）：第 3 步成功、後面某一步失敗、Jellyfin 沒重啟時按重試就會走到這裡，翻成錯誤的話重試永遠走不完。密碼對不對由第 7 步的登入驗證——所以管理員已經在時，第 1 步的同一組帳密就是登入，別的密碼過不了第 7 步。
 4. **先 `GET /Library/VirtualFolders` 看有沒有同名的**：同名不會被拒，會建出 `Movies2` 指向同一個路徑（brief §20.7），所以清單上（§9.3 第 3 步，`settings.setup.jellyfin.bundled`）同名已經在的標「已經是這樣」，只建其餘的。目錄由 Berth 建（`library_root` 之下那一列的資料夾，預設 `movies` / `tv` / `anime`），然後 `POST /Library/VirtualFolders?name=Movies&collectionType=movies&paths=<library_root>/movies&refreshLibrary=false`，body 是 `AddVirtualFolderDto`，也就是 **`{"LibraryOptions": { … }}`（要包一層）**：`PathInfos`、`PreferredMetadataLanguage`、`MetadataCountryCode`、`EnableRealtimeMonitor=false`（Berth 主動通知）、`SeasonZeroDisplayName="Specials"`、`TypeOptions[]`。直接送 `LibraryOptions` 物件一樣回 204，但整份設定會被靜默丟掉（brief §20.7）。清單上每一列各一次，預設就是 `Movies`（`movies`）、`TV`（`tvshows`）、`Anime`（`tvshows`）。
    - `TypeOptions[]` 的 **`MetadataFetchers` 是設定值**（`services.jellyfin.metadata_fetchers`，鍵是那一列的資料夾；沒寫的依內容類型落回 `DEFAULT_METADATA_FETCHERS`，目前兩種都是 TMDB，票 06f），**`ImageFetchers` 取自 `GET /Libraries/AvailableOptions?libraryContentType=`**。兩個都要給：只給 metadata 的話 image fetcher 會被存成空陣列，該類型從此不抓圖（實測，brief §20.7）。`AvailableOptions` 掛 `FirstTimeSetupOrDefault`，精靈期間匿名讀得到。
-   - **初始精靈跑完之後這一支要管理員憑證**，所以重按 bootstrap 時要先登入再列媒體庫。
+   - **初始精靈跑完之後這一支要管理員憑證**：M4 票 06 起一律用第 1 步存下的 API key（見本節開頭的分兩半），沒有 key 就不建。
 5. `POST /Startup/RemoteAccess` `{ EnableRemoteAccess: true }`。
 6. `POST /Startup/Complete`。
 7. `POST /Users/AuthenticateByName` 取 token → **先 `GET /Auth/Keys` 找 `AppName == "Berth"`**，沒有才 `POST /Auth/Keys?app=Berth`，建完再列一次把 key 讀回來。那一支回 204 而且**不回傳 key**，也不檢查重複——按兩次就有兩把同名的（brief §20.7）。key 存入 `settings.services.jellyfin`，之後的請求改用它（與登入 token 同一個標頭形狀）。

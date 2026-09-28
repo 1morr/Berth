@@ -2,7 +2,8 @@
 
 驗的是票 06 的驗收條件本身：七步跑完之後 Jellyfin 上真的有那些東西、metadata fetcher 是
 設定值、重按不會建第二份、失敗的那一步可以單獨重來、既有路徑不碰舊資料。版本閘門與 403
-的重試是票 14b 加的。
+的重試是票 14b 加的。M4 票 06 起七步分兩半：前六步在第 1 步成立擁有者時跑（`claim_jellyfin`，
+擁有者本身在 `test_setup_owner.py`），這裡的 `dock` 把兩半接起來。
 """
 
 from __future__ import annotations
@@ -38,11 +39,13 @@ from berth.services.jellyfin import (
     JellyfinSetupStatus,
     add_berth_path,
     bootstrap_jellyfin,
+    claim_jellyfin,
     connect_jellyfin,
     save_bundled_libraries,
 )
 from berth.services.settings import read_settings, write_settings
-from berth.services.setup import STEP_QBITTORRENT, create_admin, read_status
+from berth.services.setup import STEP_QBITTORRENT, read_status
+from tests.integration.arrange import own
 from tests.integration.factories import FakeClientFactory
 
 NOW = datetime(2026, 9, 7, 12, 0, tzinfo=UTC)
@@ -57,11 +60,11 @@ async def seed(
     origin: ServiceOrigin = ServiceOrigin.BUNDLED,
     base_url: str = "http://jellyfin:8096",
     library_root: str = "/data/library",
-    admin: tuple[str, str] | None = ("skipper", "harbour"),
+    owner: bool = True,
 ) -> None:
-    """把第 1–2 步的產物放好：管理員與 Jellyfin 的判定。"""
-    if admin is not None:
-        await create_admin(session, username=admin[0], password=admin[1], apply_to_services=True)
+    """把第 1–2 步的產物放好：擁有者與三個服務的判定。"""
+    if owner:
+        await own(session)
     setup = await read_settings(session, SetupSettings)
     setup.services = {
         ServiceKind.JELLYFIN: ServiceProbe(
@@ -96,6 +99,12 @@ async def seed(
     await session.commit()
 
 
+async def dock(session: AsyncSession, factory: FakeClientFactory) -> JellyfinSetupStatus:
+    """套件內的整段序列：第 1 步那一半（建管理員、跑完初始設定、換 key），再加泊位 1 建媒體庫。"""
+    await claim_jellyfin(session, factory, username="skipper", password="harbour")
+    return await bootstrap_jellyfin(session, factory)
+
+
 def step(status: JellyfinSetupStatus, which: JellyfinStep) -> StepStatus:
     return next(row.status for row in status.steps if row.step == which.value)
 
@@ -113,7 +122,7 @@ async def test_bootstrap_runs_the_whole_sequence(session: AsyncSession, tmp_path
     jellyfin = FakeJellyfinClient()
     factory = FakeClientFactory(jellyfin=jellyfin)
 
-    status = await bootstrap_jellyfin(session, factory)
+    status = await dock(session, factory)
 
     assert [row.status for row in status.steps] == [StepStatus.OK] * len(JellyfinStep)
     # Jellyfin 上真的有 Berth 管理員與三個媒體庫。
@@ -142,7 +151,7 @@ async def test_bootstrap_writes_the_library_options_the_plan_asks_for(
     await seed(session, library_root=str(tmp_path / "library"))
     jellyfin = FakeJellyfinClient()
 
-    await bootstrap_jellyfin(session, FakeClientFactory(jellyfin=jellyfin))
+    await dock(session, FakeClientFactory(jellyfin=jellyfin))
 
     for created in jellyfin.created:
         assert created.preferred_metadata_language == "zh-TW"
@@ -162,7 +171,7 @@ async def test_metadata_fetchers_come_from_settings_not_from_the_code(
     await session.commit()
     jellyfin = FakeJellyfinClient()
 
-    await bootstrap_jellyfin(session, FakeClientFactory(jellyfin=jellyfin))
+    await dock(session, FakeClientFactory(jellyfin=jellyfin))
 
     by_name = {created.name: created for created in jellyfin.created}
     assert [option.metadata_fetchers for option in by_name["Anime"].type_options] == [
@@ -185,7 +194,7 @@ async def test_bootstrap_stores_the_api_key(session: AsyncSession, tmp_path: Pat
     await seed(session, library_root=str(tmp_path / "library"))
     jellyfin = FakeJellyfinClient()
 
-    status = await bootstrap_jellyfin(session, FakeClientFactory(jellyfin=jellyfin))
+    status = await dock(session, FakeClientFactory(jellyfin=jellyfin))
 
     stored = await read_settings(session, JellyfinSettings)
     assert stored.api_key == jellyfin.api_keys_[0].access_token
@@ -202,15 +211,15 @@ async def test_pressing_bootstrap_twice_changes_nothing(
     await seed(session, library_root=str(tmp_path / "library"))
     jellyfin = FakeJellyfinClient()
     factory = FakeClientFactory(jellyfin=jellyfin)
-    await bootstrap_jellyfin(session, factory)
+    await dock(session, factory)
 
     status = await bootstrap_jellyfin(session, factory)
 
     assert len(jellyfin.libraries_) == 3
     assert len(jellyfin.api_keys_) == 1
-    # 第一步永遠真的問一次；其餘的都是「已經是想要的樣子」。
+    # 第一步永遠真的問一次；媒體庫是「已經是想要的樣子」。
     assert step(status, JellyfinStep.PUBLIC_INFO) is StepStatus.OK
-    assert {row.status for row in status.steps[1:]} == {StepStatus.SKIPPED}
+    assert step(status, JellyfinStep.LIBRARIES) is StepStatus.SKIPPED
 
 
 @pytest.mark.asyncio
@@ -221,7 +230,7 @@ async def test_the_second_run_still_reaches_the_libraries_after_the_wizard_close
     await seed(session, library_root=str(tmp_path / "library"))
     jellyfin = FakeJellyfinClient()
     factory = FakeClientFactory(jellyfin=jellyfin)
-    await bootstrap_jellyfin(session, factory)
+    await dock(session, factory)
     jellyfin.use_token("")
 
     status = await bootstrap_jellyfin(session, factory)
@@ -242,7 +251,7 @@ async def test_the_bundled_paths_match_what_the_berth_path_rule_computes(
     await seed(session, library_root=root)
     jellyfin = FakeJellyfinClient()
 
-    status = await bootstrap_jellyfin(session, FakeClientFactory(jellyfin=jellyfin))
+    status = await dock(session, FakeClientFactory(jellyfin=jellyfin))
 
     assert [row.has_berth_path for row in status.libraries] == [True, True, True]
     assert [row.berth_path for row in status.libraries] == [
@@ -272,7 +281,7 @@ async def test_bootstrap_builds_the_libraries_on_the_list(
     await save_bundled_libraries(session, EDITED)
     jellyfin = FakeJellyfinClient()
 
-    status = await bootstrap_jellyfin(session, FakeClientFactory(jellyfin=jellyfin))
+    status = await dock(session, FakeClientFactory(jellyfin=jellyfin))
 
     assert [(row.name, row.collection_type, row.locations) for row in jellyfin.libraries_] == [
         ("電影", "movies", (f"{root}/films",)),
@@ -297,7 +306,7 @@ async def test_new_libraries_get_the_fetchers_of_their_type_unless_their_folder_
     await session.commit()
     jellyfin = FakeJellyfinClient()
 
-    await bootstrap_jellyfin(session, FakeClientFactory(jellyfin=jellyfin))
+    await dock(session, FakeClientFactory(jellyfin=jellyfin))
 
     fetchers = {
         created.name: {option.metadata_fetchers for option in created.type_options}
@@ -324,7 +333,7 @@ async def test_a_row_added_after_docking_is_the_only_one_built_on_the_rerun(
     await seed(session, library_root=str(tmp_path / "library"))
     jellyfin = FakeJellyfinClient()
     factory = FakeClientFactory(jellyfin=jellyfin)
-    first = await bootstrap_jellyfin(session, factory)
+    first = await dock(session, factory)
     documentaries = BundledLibrary(
         name="紀錄片", collection_type=CollectionType.MOVIES, folder="docs"
     )
@@ -354,7 +363,7 @@ async def test_a_row_added_after_docking_is_the_only_one_built_on_the_rerun(
 async def test_a_built_library_is_locked_on_the_list(session: AsyncSession, tmp_path: Path) -> None:
     """建好的那一列改名要去 Jellyfin：同名認得的規則下，這裡改了名重跑就是第二個媒體庫。"""
     await seed(session, library_root=str(tmp_path / "library"))
-    await bootstrap_jellyfin(session, FakeClientFactory(jellyfin=FakeJellyfinClient()))
+    await dock(session, FakeClientFactory(jellyfin=FakeJellyfinClient()))
 
     with pytest.raises(BundledLibraryRejectedError) as caught:
         await save_bundled_libraries(session, EDITED)
@@ -377,7 +386,7 @@ async def test_a_library_renamed_in_jellyfin_is_not_built_again(
     await seed(session, library_root=str(root))
     jellyfin = FakeJellyfinClient()
     factory = FakeClientFactory(jellyfin=jellyfin)
-    await bootstrap_jellyfin(session, factory)
+    await dock(session, factory)
     jellyfin.libraries_[0] = replace(jellyfin.libraries_[0], name="Films")
 
     status = await bootstrap_jellyfin(session, factory)
@@ -399,7 +408,10 @@ async def test_a_jellyfin_below_twelve_stops_at_the_first_step(
     await seed(session, library_root=str(tmp_path / "library"))
     jellyfin = FakeJellyfinClient(version=TOO_OLD)
 
-    status = await bootstrap_jellyfin(session, FakeClientFactory(jellyfin=jellyfin))
+    claim = await claim_jellyfin(
+        session, FakeClientFactory(jellyfin=jellyfin), username="skipper", password="harbour"
+    )
+    status = claim.status
 
     failure = next(row for row in status.steps if row.step == JellyfinStep.PUBLIC_INFO.value)
     assert failure.status is StepStatus.FAILED
@@ -444,93 +456,59 @@ async def test_an_existing_jellyfin_below_twelve_is_refused_too(
 async def test_a_failing_step_stops_the_sequence_and_keeps_what_worked(
     session: AsyncSession, tmp_path: Path
 ) -> None:
-    """媒體庫目錄建不出來（掛載對不上，brief §16.4）是第 4 步最真實的失敗。"""
+    """媒體庫目錄建不出來（掛載對不上，brief §16.4）是泊位 1 最真實的失敗。"""
     blocked = tmp_path / "library"
     blocked.write_text("not a directory", encoding="utf-8")
     await seed(session, library_root=str(blocked))
     jellyfin = FakeJellyfinClient()
     factory = FakeClientFactory(jellyfin=jellyfin)
 
-    status = await bootstrap_jellyfin(session, factory)
+    status = await dock(session, factory)
 
     assert step(status, JellyfinStep.LIBRARIES) is StepStatus.FAILED
-    assert step(status, JellyfinStep.COMPLETE) is StepStatus.PENDING
-    # 前三步做過的事都留著，重按時才跳得過去。
-    assert {row.status for row in status.steps[:3]} == {StepStatus.OK}
+    # 第 1 步做過的事都留著：管理員、初始設定、API key。
+    assert {row.status for row in status.steps if row.step != JellyfinStep.LIBRARIES.value} == {
+        StepStatus.OK
+    }
     assert jellyfin.admin == ("skipper", "harbour")
-    assert jellyfin.startup_wizard_completed is False
+    assert jellyfin.libraries_ == []
 
 
 @pytest.mark.asyncio
 async def test_retrying_after_a_failure_walks_the_rest_of_the_sequence(
     session: AsyncSession, tmp_path: Path
 ) -> None:
-    """票 06 的「可重試」在 12.x 只有這一條路走得通（brief §20.9、票 14b）。
-
-    第 3 步已經替 Jellyfin 建好了管理員，而 12.0 起第一個使用者有密碼之後
-    `POST /Startup/User` 回 **403**。把它當成失敗的話，第 4 步失敗之後的重試會永遠卡在第 3 步。
+    """媒體庫失敗之後重按，只補建媒體庫。管理員那一步的 403 重試在第 1 步
+    （`test_setup_owner.py::test_a_second_claim_on_a_bundled_jellyfin_is_a_sign_in`）。
     """
     blocked = tmp_path / "library"
     blocked.write_text("not a directory", encoding="utf-8")
     await seed(session, library_root=str(blocked))
     jellyfin = FakeJellyfinClient()
     factory = FakeClientFactory(jellyfin=jellyfin)
-    await bootstrap_jellyfin(session, factory)
+    await dock(session, factory)
     blocked.unlink()
 
     status = await bootstrap_jellyfin(session, factory)
 
     assert [row.status for row in status.steps] != [StepStatus.FAILED]
     assert {row.status for row in status.steps} <= {StepStatus.OK, StepStatus.SKIPPED}
-    # 密碼沒有被改掉——403 是「已經設過了」，不是「再設一次」。
     assert jellyfin.admin == ("skipper", "harbour")
-    assert step(status, JellyfinStep.ADMIN_USER) is StepStatus.SKIPPED
     assert len(jellyfin.libraries_) == 3
 
 
 @pytest.mark.asyncio
-async def test_changing_step_one_after_jellyfin_took_the_account_keeps_step_three_working(
-    session: AsyncSession, tmp_path: Path
-) -> None:
-    """管理員建好之後那組帳號屬於 Jellyfin（票 06c，Seerr 的慣例）。
-
-    Berth 寫不進 Jellyfin 的密碼（初始精靈跑過之後 `_admin_user` 一律略過），所以第 1 步再改
-    帳密只能改 qBittorrent 與 Prowlarr 那一組；否則重跑第 3 步會拿新密碼去登入而被 401。
-    **序列要停在拿到 API key 之前**才測得出來：有了 key，`_authenticate` 用它而不用密碼。
-    同一組錯的帳密之後也擋在「用 Jellyfin 帳號登入 Berth」那一關，那一關沒有 key 可以墊。
-    """
-    blocked = tmp_path / "library"
-    blocked.write_text("not a directory", encoding="utf-8")
-    await seed(session, library_root=str(blocked))
-    jellyfin = FakeJellyfinClient()
-    factory = FakeClientFactory(jellyfin=jellyfin)
-    await bootstrap_jellyfin(session, factory)
-    await create_admin(session, username="deckhand", password="changed", apply_to_services=True)
-    await session.commit()
-    blocked.unlink()
-
-    status = await bootstrap_jellyfin(session, factory)
-
-    assert {row.status for row in status.steps} <= {StepStatus.OK, StepStatus.SKIPPED}
-    assert jellyfin.admin == ("skipper", "harbour")
-    admin = (await read_settings(session, SetupSettings)).admin
-    assert (admin.username, admin.password) == ("skipper", "harbour")
-    assert (admin.interface_username, admin.interface_password) == ("deckhand", "changed")
-
-
-@pytest.mark.asyncio
-async def test_bootstrap_without_an_administrator_says_so(
-    session: AsyncSession, tmp_path: Path
-) -> None:
-    await seed(session, library_root=str(tmp_path / "library"), admin=None)
+async def test_bootstrap_without_an_owner_says_so(session: AsyncSession, tmp_path: Path) -> None:
+    """沒有第 1 步的 API key 就不建媒體庫——即使那台 Jellyfin 還沒跑過初始精靈、匿名也建得了。"""
+    await seed(session, library_root=str(tmp_path / "library"), owner=False)
     jellyfin = FakeJellyfinClient()
 
     status = await bootstrap_jellyfin(session, FakeClientFactory(jellyfin=jellyfin))
 
-    failure = next(row for row in status.steps if row.step == JellyfinStep.ADMIN_USER.value)
+    failure = next(row for row in status.steps if row.step == JellyfinStep.LIBRARIES.value)
     assert failure.status is StepStatus.FAILED
     assert "step 1" in failure.error
-    assert jellyfin.admin is None
+    assert jellyfin.libraries_ == []
 
 
 @pytest.mark.asyncio
@@ -540,7 +518,7 @@ async def test_a_jellyfin_that_is_not_reachable_fails_on_the_first_step(
     await seed(session, library_root=str(tmp_path / "library"))
     jellyfin = FakeJellyfinClient(error=ServiceUnavailableError("connection refused"))
 
-    status = await bootstrap_jellyfin(session, FakeClientFactory(jellyfin=jellyfin))
+    status = await dock(session, FakeClientFactory(jellyfin=jellyfin))
 
     assert step(status, JellyfinStep.PUBLIC_INFO) is StepStatus.FAILED
     assert {row.status for row in status.steps[1:]} == {StepStatus.PENDING}
@@ -556,7 +534,7 @@ async def test_the_wizard_moves_past_jellyfin_once_the_sequence_is_done(
     await seed(session, library_root=str(tmp_path / "library"))
     assert (await read_status(session)).current_step == 3
 
-    await bootstrap_jellyfin(session, FakeClientFactory(jellyfin=FakeJellyfinClient()))
+    await dock(session, FakeClientFactory(jellyfin=FakeJellyfinClient()))
 
     assert (await read_status(session)).current_step == STEP_QBITTORRENT
 

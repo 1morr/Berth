@@ -21,9 +21,10 @@ docker compose up -d
 
 | 泊位 | 步驟 | 套件內的服務 | 你自己的服務 |
 | --- | --- | --- | --- |
-| — | 1–2 建立 Berth 管理員、逐服務探測 | 探到 compose 主機名就是套件內；還在啟動的顯示「探測中」，自己等到起來（上限 2 分鐘），不必按重新探測 | 探不到就填位址，就地測連線 |
-| BTH 1 | 3 Jellyfin | 確認版本 ≥ 12.0、建管理員、建清單上的媒體庫（預設 Movies / TV / Anime，可改名、增刪）、API key | 只做檢查；「加入 Berth 路徑」是一顆要確認的按鈕 |
-| BTH 2 | 4 qBittorrent | 套用五個建議鍵、設 WebUI 密碼 | 先顯示逐鍵差異再問要不要套用 |
+| — | 1 擁有者 | 找到 Jellyfin、確認版本 ≥ 12.0，以你填的帳密建立它的管理員、跑完它的初始設定、換 API key | 用它自己的管理員登入、換 API key，不改任何設定；探不到就填位址 |
+| — | 2 探測 qBittorrent 與 Prowlarr | 探到 compose 主機名就是套件內；還在啟動的顯示「探測中」，自己等到起來（上限 2 分鐘），不必按重新探測 | 探不到就填位址，就地測連線 |
+| BTH 1 | 3 Jellyfin | 建清單上的媒體庫（預設 Movies / TV / Anime，可改名、增刪） | 列出媒體庫；「加入 Berth 路徑」是一顆要確認的按鈕 |
+| BTH 2 | 4 qBittorrent | 套用五個建議鍵 | 只顯示現值，一個全域鍵都不寫 |
 | BTH 3 | 5 媒體庫路徑 | 走到就替每個媒體庫自動建一條 Route、跑五條檢查 | 勾選媒體庫與寫入目標 |
 | BTH 4 | 6 索引站 | 加九個預設公開站（每一站標出語言），加完試搜、不要的移除 | 填既有 Prowlarr 或任一 Torznab 網址，接上之後同樣可以試搜 |
 | BTH 5 | 7 TMDB | 貼你自己的 API key 並測試 | 同左 |
@@ -35,7 +36,9 @@ docker compose up -d
 
 每個泊位做完都停在結果上，按「前往下一個泊位」才走；泊位板上走過的格子點得回去，每一頁都有「上一個泊位」。
 
-設定完成後精靈關閉，之後用 Jellyfin 的帳號登入；健康頁 `/health` 每 5 分鐘重跑同一組檢查。
+**Berth 沒有自己的帳號**：第 1 步的那一組就是 Jellyfin 的管理員，也是 Berth 的擁有者，之後登入 Berth 就用它（其他人用自己的 Jellyfin 帳號，角色由 Jellyfin 決定）。密碼只交給 Jellyfin，Berth 不存。擁有者成立之前精靈只做得了「找到 Jellyfin、成為擁有者」，之後的每一步都要登入——誰先到誰建立，與 Jellyfin 自己的啟動精靈相同。套件內 qBittorrent 與 Prowlarr 的介面密碼目前不設（Berth 靠免密白名單進得去；自己開 qBittorrent WebUI 要看容器 log 的臨時密碼），各自的泊位欄位在下一版補上。
+
+設定完成後精靈關閉，擁有者直接進 Berth；健康頁 `/health` 每 5 分鐘重跑同一組檢查。
 
 ### 頁面
 
@@ -53,7 +56,7 @@ docker compose up -d
 | 服務 | `.env` 變數（預設） | 備註 |
 | --- | --- | --- |
 | Berth | `BERTH_PORT`（8383） | 唯一需要開的介面 |
-| qBittorrent | `QBITTORRENT_WEBUI_PORT`（8080）、`QBITTORRENT_BT_PORT`（6881） | WebUI 要密碼，密碼在精靈裡設定。兩個 port 都是容器內外同一個號碼 |
+| qBittorrent | `QBITTORRENT_WEBUI_PORT`（8080）、`QBITTORRENT_BT_PORT`（6881） | WebUI 從宿主或 LAN 進來要密碼（精靈設定它的泊位欄位在下一版補上，這之前是容器 log 的臨時密碼）。兩個 port 都是容器內外同一個號碼 |
 | Jellyfin | `JELLYFIN_PORT`（8096） | 「在 Jellyfin 開啟」開的就是這個 port |
 | Prowlarr | `PROWLARR_PORT`（9696） | |
 
@@ -99,7 +102,7 @@ TMDB 的條款限非商業使用；歸屬聲明見〈[授權與歸屬](#授權�
 
 ### 外部服務的前提
 
-- **qBittorrent**：最低 4.4（Web API 2.8.4）。套件內的容器由 `deploy/preseed/qbittorrent/10-berth.sh` 在服務啟動前補上免密白名單，而且只放行 Berth 那一個固定 IP —— 4.6.1 起首次啟動的隨機密碼只印在容器 log，沒有這一步 Berth 進不去；WebUI 從宿主或 LAN 進來仍然要密碼。其餘偏好（temp path、save path、category 的 autoTMM）與 WebUI 密碼由精靈經 API 設定，按之前會顯示差異。腳本不覆蓋任何已經有值的設定。
+- **qBittorrent**：最低 4.4（Web API 2.8.4）。套件內的容器由 `deploy/preseed/qbittorrent/10-berth.sh` 在服務啟動前補上免密白名單，而且只放行 Berth 那一個固定 IP —— 4.6.1 起首次啟動的隨機密碼只印在容器 log，沒有這一步 Berth 進不去；WebUI 從宿主或 LAN 進來仍然要密碼。其餘偏好（temp path、save path、category 的 autoTMM）由精靈經 API 設定，按之前會顯示差異。腳本不覆蓋任何已經有值的設定。
 - **Jellyfin**：**最低 12.0**（12.0 就是原本的 10.12 —— Jellyfin 把版號前面永遠不變的 `10` 拿掉了）。12.0 起同一集的多個版本由 Jellyfin 自己合併成一個條目，不需要任何插件；10.x 要靠第三方插件，而那個插件在 12 上是空跑、還會跨媒體庫誤併，所以 Berth 只支援 12 以上。更舊的伺服器在精靈第 3 步與健康頁都是紅燈，不會被接進來。
   - **從 10.x 升上來**：10.10.7 與任何 10.11.x 都可以直接升，不必經過中繼版本。**升級前**把 Jellyfin 的 `${CONFIG_ROOT}/jellyfin` 完整備份 —— 12 改了資料庫，降不回去，只能還原備份；再移除第三方插件，10.11 的插件在 12 載入不了。**升級後**完整掃描一次媒體庫，自動分組的版本才會回來。
   - **套件內的 Jellyfin 釘在 `version-12.1ubu2604`**：`docker compose pull` 只會拿到 12.1 這條線的重建，不會默默跨到下一個大版本。要升級時先備份上面那個目錄，再改 `deploy/docker-compose.yml` 的 tag 並 `docker compose up -d jellyfin`。
@@ -350,7 +353,7 @@ docker compose -f deploy/docker-compose.yml -f tests/e2e/compose.yml --env-file 
 ```
 
 - **不加 `--wait`，`up` 完馬上跑測試**：這是冷啟動閘門（票 06h）。精靈在 Jellyfin 與 Prowlarr 還在啟動時就開始，
-  照常輪詢到三個服務都判定完成、不按重新探測；第一輪探測就全部判定完成的話測試會失敗，因為那一輪沒碰到啟動中的
+  第 1 步照常輪詢到 Jellyfin 判定完成、成立擁有者，第 2 步輪詢到其餘兩個，都不按重新探測；探測一輪就全部判定完成的話測試會失敗，因為那一輪沒碰到啟動中的
   那幾秒。所以 `up` 之前先 `build`（與拉 image），不要讓 `up` 之後還有東西要等。
 - **一次 `up` 只跑得了一次**：精靈走完就不能再走一遍，重跑前先 `down --volumes`。
 - 容器名、網路名與 port 與正式部署相同（qBittorrent 的免密白名單認的是 berth 的固定 IP），
@@ -372,9 +375,9 @@ docker compose -f deploy/docker-compose.yml -f tests/e2e/compose.yml --env-file 
 
 | 流程 | 情境 | port（1280 / 390） |
 | --- | --- | --- |
-| 精靈八步走完（改媒體庫清單、每一格停在結果上、回頭再往前、試搜與移除），之後以同一組帳密登入 | `bundled` | 8491 / 8501 |
-| 既有服務：填 qBittorrent 帳密、登入既有 Jellyfin 加 Berth 路徑並選它當寫入目標、貼 Prowlarr 的 key | `mixed` | 8495 / 8505 |
-| 冷啟動：服務還在啟動時開始精靈，不按重新探測就判定完成 | `starting` | 8496 / 8506 |
+| 精靈八步走完（第 1 步建 Jellyfin 管理員成為擁有者、改媒體庫清單、每一格停在結果上、回頭再往前、試搜與移除），之後以同一組帳密登入、是管理員 | `bundled` | 8491 / 8501 |
+| 既有服務：以既有 Jellyfin 的管理員成為擁有者（打錯密碼被拒）、填 qBittorrent 帳密、加 Berth 路徑並選它當寫入目標、貼 Prowlarr 的 key | `mixed` | 8495 / 8505 |
+| 冷啟動：服務還在啟動時開始精靈，第 1 步等 Jellyfin、第 2 步等其餘兩個，不按重新探測就判定完成 | `starting` | 8496 / 8506 |
 | 精靈跑完之後：`/setup` 導向設定頁，加一個索引站並試搜、換 TMDB key | `healthy` | 8497 / 8507 |
 | 從作品頁送單，一路走到已入庫 | `import` | 8492 |
 | `/review` 確認一筆 audit | `review` | 8493 |

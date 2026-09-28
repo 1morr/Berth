@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from dataclasses import asdict
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Response, status
 from pydantic import BaseModel, ConfigDict, Field
 
+from berth.api.auth import issue_cookie
 from berth.api.deps import ClientFactoryDep, ConfigDep, SessionDep, SetupProbesDep
 from berth.api.errors import refusal_responses
 from berth.api.routes import route_refusal, route_responses
@@ -17,6 +18,7 @@ from berth.domain import (
     CollectionType,
     DetectionReason,
     IndexerKind,
+    OwnerRefusal,
     RouteRefusal,
     ServiceKind,
     ServiceOrigin,
@@ -47,17 +49,19 @@ from berth.services.routes import (
     read_route_status,
 )
 from berth.services.setup import (
+    OwnerRejectedError,
     ServiceConnection,
     SetupStatus,
+    claim_owner,
     complete_setup,
     connect_service,
-    create_admin,
     detect_services,
     read_status,
 )
 from berth.services.tmdb import read_tmdb_status, verify_tmdb
 
-#: 誰進得來這一組由門禁決定（`api/gate.py`）：精靈跑完之前匿名開放，跑完之後只有管理員。
+#: 誰進得來這一組由門禁決定（`api/gate.py`）：擁有者成立之前只開找 Jellyfin 與成立擁有者那幾支，
+#: 之後只有管理員（M4 票 06）。
 #: 規則放在那裡而不是這裡的相依，是為了「忘記掛相依」不會變成一個沒人守的洞。
 #: 精靈跑完之後設定頁呼叫的也是這一組（票 06i）：命令冪等，一份命令、一份端點。
 router = APIRouter(prefix="/setup", tags=["setup"])
@@ -84,11 +88,10 @@ class SetupStatusOut(BaseModel):
 
     completed: bool
     current_step: int
-    admin_created: bool
-    admin_username: str
-    interface_username: str
-    jellyfin_owns_account: bool
-    apply_to_services: bool
+    #: 擁有者的 Jellyfin 名字；空字串就是還沒有（第 1 步）。
+    owner: str
+    #: 第 1 步是登入（既有 Jellyfin，或套件內的管理員已經建好）而不是建立。
+    owner_signs_in: bool
     services: list[ServiceDetectionOut]
     waited_seconds: int
     window_seconds: int
@@ -97,11 +100,35 @@ class SetupStatusOut(BaseModel):
     probe_targets: dict[ServiceKind, str]
 
 
-class AdminIn(BaseModel):
-    username: str = Field(min_length=1)
-    password: str = Field(min_length=1)
-    #: 「同一組帳密也套用到 qBittorrent 與 Prowlarr 介面」，預設勾（plan §9.3 第 1 步）。
-    apply_to_services: bool = True
+class OwnerIn(BaseModel):
+    """擁有者的 Jellyfin 帳密：套件內拿去建管理員，既有拿去登入。只交給 Jellyfin，不存下來。
+
+    不加約束，理由同 `LoginIn`：空的與錯的一律由 services 拒絕成 `invalid_credentials`。
+    """
+
+    username: str = ""
+    password: str = ""
+
+
+#: 一種理由一個狀態碼（`refusal_responses` 由它導出文件）。帳密不對與登入同一個 401；不是管理員
+#: 是 403；還沒找到 Jellyfin 是 409（先做完這一步的前半）；Jellyfin 那一段失敗是 502。
+_OWNER_STATUS: dict[OwnerRefusal, int] = {
+    OwnerRefusal.JELLYFIN_UNRESOLVED: status.HTTP_409_CONFLICT,
+    OwnerRefusal.INVALID_CREDENTIALS: status.HTTP_401_UNAUTHORIZED,
+    OwnerRefusal.NOT_ADMINISTRATOR: status.HTTP_403_FORBIDDEN,
+    OwnerRefusal.JELLYFIN_FAILED: status.HTTP_502_BAD_GATEWAY,
+}
+
+
+class OwnerRefusalOut(BaseModel):
+    reason: OwnerRefusal
+    #: Jellyfin 那一步的原文（英文）；帳密那兩種是空字串。
+    detail: str
+
+
+def owner_refusal(refusal: OwnerRejectedError) -> HTTPException:
+    body = OwnerRefusalOut(reason=refusal.reason, detail=refusal.detail)
+    return HTTPException(_OWNER_STATUS[refusal.reason], detail=body.model_dump(mode="json"))
 
 
 class ConnectIn(BaseModel):
@@ -127,18 +154,26 @@ async def get_status(session: SessionDep, config: ConfigDep) -> SetupStatusOut:
     return _out(await read_status(session), config)
 
 
-@router.post("/admin")
-async def post_admin(session: SessionDep, config: ConfigDep, body: AdminIn) -> SetupStatusOut:
+@router.post("/owner", responses=refusal_responses(OwnerRefusalOut, _OWNER_STATUS))
+async def post_owner(
+    session: SessionDep,
+    config: ConfigDep,
+    factory: ClientFactoryDep,
+    body: OwnerIn,
+    response: Response,
+) -> SetupStatusOut:
+    """第 1 步：成立擁有者並發 session（plan §9.3 第 1 步、M4 票 06）。
+
+    cookie 與 `/auth/login` 發的是同一種。
+    """
     try:
-        result = await create_admin(
-            session,
-            username=body.username,
-            password=body.password,
-            apply_to_services=body.apply_to_services,
+        claimed = await claim_owner(
+            session, factory, username=body.username, password=body.password
         )
-    except ValueError as exc:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
-    return _out(result, config)
+    except OwnerRejectedError as refusal:
+        raise owner_refusal(refusal) from refusal
+    issue_cookie(response, claimed.signed_in.token)
+    return _out(claimed.status, config)
 
 
 @router.post("/detect")

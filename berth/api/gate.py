@@ -3,8 +3,8 @@
 放在 middleware 而不是逐個 router 的相依，是為了**預設拒絕**：新增端點時什麼都不做
 就已經在門後，忘記掛相依不會變成一個沒人守的洞。整份規則就一句話——
 
-    `/api` 底下每個請求都要有 session，除了白名單那三條；`setup/*` 在精靈跑完之前
-    也開放，因為那時候還沒有人登入得了。
+    `/api` 底下每個請求都要有 session，除了白名單那三條；精靈在擁有者成立之前開放找
+    Jellyfin 與成立擁有者那幾支，因為那時候還沒有人登入得了（M4 票 06）。
 
 兩道檢查各防一件事：
 
@@ -29,7 +29,7 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from berth.domain import Role
 from berth.services.auth import AuthenticatedUser, read_session
-from berth.services.setup import is_setup_complete
+from berth.services.setup import is_owner_established
 
 #: 不改狀態的方法不必帶 CSRF 標頭。
 SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
@@ -50,6 +50,18 @@ ANONYMOUS_PATHS = frozenset(
 
 #: 設定精靈。它自己有一條隨時間關上的規則，見 `_setup_verdict`。
 SETUP_PREFIX = "/setup"
+
+#: 精靈的開場：擁有者成立之前匿名可達的那幾支（M4 票 06）。只有「找到 Jellyfin」與「成為擁有者」
+#: ——其餘的精靈端點會寫別人的服務（建管理員之外的一切、套用偏好、加站），要在門後。
+#: 擁有者成立之後它們與其他精靈端點一樣只有管理員。`(方法, 路徑)`，完全比對。
+SETUP_OPENING_PATHS: frozenset[tuple[str, str]] = frozenset(
+    {
+        ("GET", "/setup/status"),
+        ("POST", "/setup/detect"),
+        ("POST", "/setup/services/jellyfin"),
+        ("POST", "/setup/owner"),
+    }
+)
 
 #: 只有管理員進得來的路徑（brief §11）。規則放在門禁而不是 router 的相依，理由與 `setup/*`
 #: 一樣：底下新掛的端點什麼都不做就已經在同一道門後面。
@@ -109,7 +121,9 @@ class Access(StrEnum):
 
     #: 不必登入（`ANONYMOUS_PATHS`）。
     ANONYMOUS = "anonymous"
-    #: 精靈：跑完之前匿名開放，之後只有管理員（`_setup_verdict`）。
+    #: 精靈的開場（`SETUP_OPENING_PATHS`）：擁有者成立之前匿名，之後只有管理員。
+    SETUP_OPENING = "setup_opening"
+    #: 精靈其餘的端點：擁有者成立之前誰都不行，之後只有管理員（`_setup_verdict`）。
     SETUP = "setup"
     #: 只有管理員（`ADMIN_PREFIXES`、`ADMIN_ROUTES`）。
     ADMIN = "admin"
@@ -125,6 +139,8 @@ def access_of(method: str, path: str) -> Access:
     """
     if path in ANONYMOUS_PATHS:
         return Access.ANONYMOUS
+    if (method, path) in SETUP_OPENING_PATHS:
+        return Access.SETUP_OPENING
     if _under_any(path, (SETUP_PREFIX,)):
         return Access.SETUP
     if _under_any(path, ADMIN_PREFIXES) or _is_admin_route(method, path):
@@ -172,8 +188,8 @@ class ApiGate:
         match access_of(request.method, path):
             case Access.ANONYMOUS:
                 return None
-            case Access.SETUP:
-                return await _setup_verdict(request, user)
+            case Access.SETUP_OPENING | Access.SETUP as access:
+                return await _setup_verdict(request, user, access)
             case Access.ADMIN:
                 return _admin_verdict(user)
             case Access.SIGNED_IN:
@@ -196,24 +212,27 @@ class ApiGate:
         return user
 
 
-async def _setup_verdict(request: Request, user: AuthenticatedUser | None) -> JSONResponse | None:
-    """精靈跑完之前整組匿名開放；跑完之後只有管理員進得來。
+async def _setup_verdict(
+    request: Request, user: AuthenticatedUser | None, access: Access
+) -> JSONResponse | None:
+    """擁有者成立之前只開精靈的開場（`SETUP_OPENING_PATHS`）；成立之後整組只有管理員進得來。
+
+    精靈是唯一能在沒有任何帳號時就跑的東西，但沒有帳號時它只做得了一件事：找到 Jellyfin、
+    讓第一個 Jellyfin 管理員成為擁有者（誰先到誰建立，與 Jellyfin 自己的啟動精靈、Seerr 相同，
+    plan §9.3 第 1 步）。成立之後角色跟著 Jellyfin 的 `Policy.IsAdministrator`（brief §11）。
 
     跑完之後這一組是**設定頁的寫入端點**（票 06i）：設定的 Jellyfin / qBittorrent / 索引站 / TMDB
     那幾頁呼叫的就是精靈的同一批命令，不另開 `settings/*` 的一份。
-
-    精靈是唯一能在沒有任何帳號時就跑的東西——它跑完之前根本還沒有人登入得了
-    （plan §6）。跑完之後角色跟著 Jellyfin 的 `Policy.IsAdministrator`（brief §11）。
     """
     async with _sessions(request)() as session:
-        if not await is_setup_complete(session):
-            return None
+        established = await is_owner_established(session)
 
+    if not established:
+        if access is Access.SETUP_OPENING:
+            return None
+        return _refuse(status.HTTP_403_FORBIDDEN, "finish step 1 of the setup wizard first")
     if user is None:
-        return _refuse(
-            status.HTTP_401_UNAUTHORIZED,
-            "setup is complete; sign in to change these settings",
-        )
+        return _refuse(status.HTTP_401_UNAUTHORIZED, "sign in to continue the setup wizard")
     if user.role is not Role.ADMIN:
         return _refuse(status.HTTP_403_FORBIDDEN, "administrators only")
     return None

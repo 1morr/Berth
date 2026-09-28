@@ -37,8 +37,7 @@ const TEST_TMDB = 'POST /api/setup/tmdb/test'
 /** 前兩個泊位都接好了，精靈在泊位 2。 */
 const AT_BERTH_TWO = setupStatus({
   current_step: 4,
-  admin_created: true,
-  admin_username: 'skipper',
+  owner: 'skipper',
   services: ALL_BUNDLED,
 })
 

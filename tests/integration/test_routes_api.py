@@ -27,7 +27,13 @@ from berth.main import create_app
 from berth.models import Job
 from berth.services.routes import build_routes
 from berth.services.setup import complete_setup
-from tests.integration.arrange import arrange, factory_for, fake_jellyfin, with_second_disk
+from tests.integration.arrange import (
+    arrange,
+    factory_for,
+    fake_jellyfin,
+    sign_in_owner,
+    with_second_disk,
+)
 from tests.integration.factories import FakeClientFactory
 
 BROWSER = {CSRF_HEADER: "XMLHttpRequest"}
@@ -63,9 +69,10 @@ def client(
 def wizard(
     config: Config, tmp_path: Path, roots: dict[str, Path], factory: FakeClientFactory
 ) -> Iterator[TestClient]:
-    """停在第 5 步的一台：三條 Route 建好了，精靈還沒按完成。"""
+    """停在第 5 步的一台：三條 Route 建好了，精靈還沒按完成；擁有者登入著（M4 票 06）。"""
     with _running(config, tmp_path, factory) as running:
         _seed(running, roots, factory, complete=False)
+        sign_in_owner(running)
         yield running
 
 
@@ -151,9 +158,10 @@ class TestWhoGetsIn:
     ) -> None:
         """票 14a 推翻票 14 的「跟著 `setup/*` 匿名開放」：那樣的話精靈跑完之前，匿名的人可以把
         紅燈 Route 停用、再按完成。精靈要的只有刪除，它有自己的一支。"""
+        movies = setup_route_id(wizard, "movies")
+        wizard.cookies.clear()
         assert wizard.get("/api/routes").status_code == 401
         assert wizard.get("/api/jellyfin/libraries").status_code == 401
-        movies = setup_route_id(wizard, "movies")
         assert (
             wizard.put(
                 f"/api/routes/{movies}",

@@ -10,14 +10,16 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from pathlib import Path
 
+from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from berth.adapters.indexer.fake import FakeIndexerSearch
-from berth.adapters.jellyfin import JellyfinLibrary
+from berth.adapters.jellyfin import JellyfinAuth, JellyfinLibrary
 from berth.adapters.jellyfin.fake import FakeJellyfinClient
 from berth.adapters.qbittorrent import QbittorrentCategory
 from berth.adapters.qbittorrent.fake import FakeQbittorrentClient
 from berth.adapters.tmdb.fake import FakeTmdbClient
+from berth.api.gate import SESSION_COOKIE
 from berth.domain import (
     DetectionReason,
     JellyfinStep,
@@ -34,12 +36,13 @@ from berth.models import (
     QbittorrentSettings,
     ServiceProbe,
     SetupLibrary,
+    SetupOwner,
     SetupSettings,
     SetupStep,
 )
+from berth.services.auth import open_session
 from berth.services.routes import delete_route
 from berth.services.settings import read_settings, write_settings
-from berth.services.setup import create_admin
 from tests.integration.factories import FakeClientFactory
 
 NOW = datetime(2026, 9, 8, 12, 0, tzinfo=UTC)
@@ -58,7 +61,7 @@ async def arrange(
     libraries: tuple[SetupLibrary, ...] | None = None,
 ) -> None:
     """把資料庫推到「前三個泊位都接好、輪到媒體庫路徑」的狀態。"""
-    await create_admin(session, username="skipper", password="harbour", apply_to_services=True)
+    await own(session)
     setup = await read_settings(session, SetupSettings)
     setup.jellyfin.steps = [
         SetupStep(key=step.value, status=StepStatus.OK) for step in JellyfinStep
@@ -114,6 +117,42 @@ async def arrange(
         ),
     )
     await session.commit()
+
+
+async def own(session: AsyncSession, name: str = "skipper") -> None:
+    """第 1 步的產物：擁有者成立了（M4 票 06）。帳密不存，所以這裡只有他是誰。不 commit。"""
+    setup = await read_settings(session, SetupSettings)
+    setup.owner = SetupOwner(jellyfin_user_id=f"id-{name}", name=name)
+    await write_settings(session, setup)
+
+
+def sign_in_owner(client: TestClient, name: str = "skipper") -> None:
+    """擁有者成立並登入（M4 票 06），不經過 Jellyfin：那一段在 `test_setup_owner.py`。
+
+    `client` 要在 `with TestClient(...)` 裡面——`portal` 只在那時候有。
+    """
+
+    async def seat() -> str:
+        sessions: async_sessionmaker[AsyncSession] = client.app.state.session_factory  # type: ignore[attr-defined]  # Starlette 的 app 型別是 ASGIApp
+        async with sessions() as session:
+            await own(session, name)
+            auth = JellyfinAuth(
+                token="", user_id=f"id-{name}", name=name, server_id="", is_administrator=True
+            )
+            return (await open_session(session, auth)).token
+
+    assert client.portal is not None
+    client.cookies.set(SESSION_COOKIE, client.portal.call(seat))
+
+
+async def interface_logins(session: AsyncSession, username: str, password: str) -> None:
+    """套件內 qBittorrent 與 Prowlarr 泊位上填了介面帳密（`web_ui_*`，票 07 的欄位）。不 commit。"""
+    setup = await read_settings(session, SetupSettings)
+    setup.qbittorrent.web_ui_username = username
+    setup.qbittorrent.web_ui_password = password
+    setup.indexer.web_ui_username = username
+    setup.indexer.web_ui_password = password
+    await write_settings(session, setup)
 
 
 def bundled_libraries(library_root: Path) -> tuple[SetupLibrary, ...]:

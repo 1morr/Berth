@@ -42,10 +42,9 @@ from berth.services.setup import (
     ServiceConnection,
     SetupStatus,
     connect_service,
-    create_admin,
     read_status,
 )
-from tests.integration.arrange import NOW, arrange, factory_for
+from tests.integration.arrange import NOW, arrange, factory_for, interface_logins, own
 from tests.integration.factories import COMPOSE, FakeClientFactory
 
 
@@ -55,8 +54,9 @@ def verdict(status: SetupStatus, kind: ServiceKind) -> tuple[ServiceOrigin, Dete
 
 
 async def owner(session: AsyncSession) -> None:
-    """第 1 步勾了「同一組帳密」：套件內的那兩台會被設成這一組。"""
-    await create_admin(session, username="labgate", password="harbour", apply_to_services=True)
+    """擁有者成立、泊位上填了介面帳密：套件內的那兩台會被設成這一組，既有的不會。"""
+    await own(session, "labgate")
+    await interface_logins(session, "labgate", "harbour")
     await session.commit()
 
 

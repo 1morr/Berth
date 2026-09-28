@@ -340,10 +340,12 @@ ACCESS: dict[tuple[str, str], Access] = {
     ("POST", "/auth/login"): Access.ANONYMOUS,
     ("POST", "/auth/logout"): Access.ANONYMOUS,
     ("GET", "/health"): Access.ANONYMOUS,
-    # 精靈：跑完之前匿名、之後只有管理員（`TestSettingsAreAdminOnly`）。
-    ("POST", "/setup/admin"): Access.SETUP,
+    # 精靈的開場：擁有者成立之前匿名，之後只有管理員（M4 票 06，`test_setup_api.py::TestGate`）。
+    ("POST", "/setup/owner"): Access.SETUP_OPENING,
+    ("POST", "/setup/detect"): Access.SETUP_OPENING,
+    ("GET", "/setup/status"): Access.SETUP_OPENING,
+    # 精靈其餘的：擁有者成立之前誰都不行，之後只有管理員（`TestSettingsAreAdminOnly`）。
     ("POST", "/setup/complete"): Access.SETUP,
-    ("POST", "/setup/detect"): Access.SETUP,
     ("GET", "/setup/indexers"): Access.SETUP,
     ("POST", "/setup/indexers/apply"): Access.SETUP,
     ("POST", "/setup/indexers/connect"): Access.SETUP,
@@ -360,8 +362,9 @@ ACCESS: dict[tuple[str, str], Access] = {
     ("GET", "/setup/routes"): Access.SETUP,
     ("POST", "/setup/routes"): Access.SETUP,
     ("DELETE", "/setup/routes/*"): Access.SETUP,
+    # `*` 是 `ServiceKind`。`jellyfin` 那一個是開場（`SETUP_OPENING_PATHS` 比的是具體路徑），
+    # 兩邊的門在 `test_setup_api.py::TestGate` 各有一條。
     ("POST", "/setup/services/*"): Access.SETUP,
-    ("GET", "/setup/status"): Access.SETUP,
     ("GET", "/setup/tmdb"): Access.SETUP,
     ("POST", "/setup/tmdb/test"): Access.SETUP,
     # M2 驗收第四條點名的六組（plan §11.3、票 16）：審核、Issue、rematch、對帳、刪除、重新入庫。

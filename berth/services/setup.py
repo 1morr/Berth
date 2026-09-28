@@ -27,6 +27,7 @@ from berth.domain import (
     DetectionReason,
     IndexerKind,
     JellyfinStep,
+    OwnerRefusal,
     QbittorrentStep,
     ServiceKind,
     ServiceOrigin,
@@ -37,10 +38,12 @@ from berth.models import (
     JellyfinSettings,
     QbittorrentSettings,
     ServiceProbe,
-    SetupAdmin,
+    SetupOwner,
     SetupSettings,
 )
+from berth.services.auth import SignedIn, open_session
 from berth.services.clients import ServiceClientFactory, SetupProbes, same_host
+from berth.services.jellyfin import claim_jellyfin, pin_jellyfin
 from berth.services.routes import routes_ready
 from berth.services.settings import read_settings, write_settings
 from berth.services.tmdb import tmdb_verified
@@ -48,11 +51,11 @@ from berth.services.tmdb import tmdb_verified
 #: 服務未就緒時的輪詢上限（plan §9.3 第 2 步）。逾時後使用者可重試，不是永遠轉圈。
 DETECT_WINDOW = timedelta(minutes=2)
 
-#: 精靈的步序（plan §9.3）。第 1 步建管理員，第 2 步偵測，第 3 步起是各服務。
-#: 每一步「做完了沒」由它自己的狀態導出（`_current_step`），不存游標。
+#: 精靈的步序（plan §9.3）。第 1 步找 Jellyfin、成立擁有者（M4 票 06），第 2 步偵測其餘服務，
+#: 第 3 步起是各泊位。每一步「做完了沒」由它自己的狀態導出（`_current_step`），不存游標。
 #: Route 排在 qBittorrent 之後、索引站之前（票 06d）：它只依賴 Jellyfin 與 qBittorrent，
 #: 而掛載設錯是最常卡住的地方，越早知道越好。
-STEP_ADMIN = 1
+STEP_OWNER = 1
 STEP_DETECT = 2
 STEP_JELLYFIN = 3
 STEP_QBITTORRENT = 4
@@ -92,13 +95,11 @@ class SetupStatus:
 
     completed: bool
     current_step: int
-    admin_created: bool
-    admin_username: str
-    #: 套用到 qBittorrent 與 Prowlarr 介面的那一組的帳號。帳號交給 Jellyfin 之前與上一欄相同。
-    interface_username: str
-    #: 帳號已經屬於 Jellyfin，第 1 步只改得動介面那一組（`jellyfin_owns_account`）。
-    jellyfin_owns_account: bool
-    apply_to_services: bool
+    #: 擁有者的 Jellyfin 名字。空字串就是還沒有擁有者（第 1 步）。
+    owner: str
+    #: 第 1 步是登入而不是建立：Jellyfin 是既有的，或套件內那一台的管理員已經建好了
+    #: （上一次在後面某一步失敗、或舊資料庫的精靈跑到一半）。畫面照它換表單。
+    owner_signs_in: bool
     services: tuple[ServiceDetection, ...]
     #: 本輪已等待的秒數與上限，UI 用來顯示等待狀態與逾時。
     waited_seconds: int
@@ -120,8 +121,8 @@ async def read_status(session: AsyncSession) -> SetupStatus:
 async def complete_setup(session: AsyncSession) -> SetupStatus:
     """第 8 步：寫下 `settings.setup.completed`，精靈結束（plan §9.3 第 8 步）。
 
-    **這個位元就是門禁的開關**：寫下去之後 `setup/*` 只有管理員進得來，`/` 也不再導向精靈
-    （票 07）。所以在寫之前要確定不可跳的那幾步真的做完了——第 3、4、5、7 步不可跳
+    寫下去之後 `/` 不再導向精靈、`setup/*` 由設定頁接手（票 06i）；門禁早在擁有者成立時就關上了
+    （`owner_established`）。在寫之前要確定不可跳的那幾步真的做完了——第 3、4、5、7 步不可跳
     （plan §9.3、票 02b）。第 7 步在這裡再擋一次，因為使用者回得去把 key 清掉。
     """
     setup = await read_settings(session, SetupSettings)
@@ -142,57 +143,64 @@ async def _read(session: AsyncSession, *, now: datetime) -> SetupStatus:
     return _status(setup, now=now, routes=await routes_ready(session))
 
 
-async def create_admin(
-    session: AsyncSession,
-    *,
-    username: str,
-    password: str,
-    apply_to_services: bool,
-) -> SetupStatus:
-    """第 1 步。重跑就是覆寫同一組帳密。呼叫端負責 commit。
+class OwnerRejectedError(Exception):
+    """第 1 步沒成立（`OwnerRefusal`）。`detail` 是 Jellyfin 那一步的原文，說不出就是空字串。"""
 
-    **帳號交給 Jellyfin 之後只覆寫介面那一組**（`jellyfin_owns_account`，票 06c）：Berth 改不了
-    Jellyfin 的密碼，覆寫帳號只會讓第 3 步與之後的登入拿著 Jellyfin 不認得的密碼。
+    def __init__(self, reason: OwnerRefusal, detail: str = "") -> None:
+        super().__init__(f"{reason}: {detail}" if detail else str(reason))
+        self.reason = reason
+        self.detail = detail
+
+
+@dataclass(frozen=True, slots=True)
+class ClaimedOwner:
+    status: SetupStatus
+    #: 擁有者的 Berth session。token 只在這裡出現一次（`auth.SignedIn`）。
+    signed_in: SignedIn
+
+
+async def claim_owner(
+    session: AsyncSession, factory: ServiceClientFactory, *, username: str, password: str
+) -> ClaimedOwner:
+    """第 1 步：Jellyfin 的管理員就是 Berth 的擁有者（brief §11、§19 2026-09-26，M4 票 06）。
+
+    照 Seerr：套件內的那一台由 Berth 以這組帳密建立管理員，既有的那一台要它自己的管理員登入；
+    兩者都換 Berth 的 API key（`jellyfin.claim_jellyfin`）。成立的那一刻發 Berth session，
+    之後精靈的每一支都要登入（`api/gate.py`）。帳密只交給 Jellyfin，不存下來。
+
+    **誰先到誰建立**：擁有者成立之前這一支匿名可達，與 Jellyfin 自己的啟動精靈、Seerr 相同；
+    成立之後它與其他精靈端點一樣要管理員的 session（plan §9.3 第 1 步）。
     """
-    if not username.strip():
-        raise ValueError("username must not be blank")
-    if not password:
-        raise ValueError("password must not be blank")
+    if not username.strip() or not password:
+        raise OwnerRejectedError(OwnerRefusal.INVALID_CREDENTIALS)
+    setup = await read_settings(session, SetupSettings)
+    probe = setup.services.get(ServiceKind.JELLYFIN)
+    if probe is None or not _resolved(probe):
+        raise OwnerRejectedError(OwnerRefusal.JELLYFIN_UNRESOLVED)
+
+    claim = await claim_jellyfin(session, factory, username=username.strip(), password=password)
+    if claim.auth is None:
+        raise OwnerRejectedError(claim.refusal or OwnerRefusal.JELLYFIN_FAILED, claim.detail)
 
     setup = await read_settings(session, SetupSettings)
-    owned = jellyfin_owns_account(setup)
-    setup.admin = SetupAdmin(
-        username=setup.admin.username if owned else username.strip(),
-        password=setup.admin.password if owned else password,
-        interface_username=username.strip(),
-        interface_password=password,
-        apply_to_services=apply_to_services,
-    )
+    setup.owner = SetupOwner(jellyfin_user_id=claim.auth.user_id, name=claim.auth.name)
+    pin_jellyfin(setup)
     await write_settings(session, setup)
-    return await _read(session, now=_utcnow())
+    # `open_session` 自己 commit，擁有者與它的 session 一起落地。
+    signed_in = await open_session(session, claim.auth)
+    return ClaimedOwner(status=await _read(session, now=_utcnow()), signed_in=signed_in)
 
 
-def jellyfin_owns_account(setup: SetupSettings) -> bool:
-    """第 1 步的帳號是不是已經屬於 Jellyfin（票 06c）。
+def owner_established(setup: SetupSettings) -> bool:
+    """精靈的門關上了沒：有擁有者，或精靈已經跑完（擁有者出現之前就跑完的舊資料庫）。
 
-    照 Seerr 的慣例：媒體伺服器的管理員就是帳號的主人。
-
-    套件內 Jellyfin 的「建立管理員」有結論就是（`ok` 是剛建、`skipped` 是早就建好）；
-    既有 Jellyfin 從來不用這組帳號，Berth 的登入就是它自己的帳號，偵測出來就是。
-    還沒偵測（探測中、逾時、沒有判定）時帳號還是第 1 步的。
+    門禁（`api/gate.py`）與步驟（`_current_step`）讀同一條。
     """
-    probe = setup.services.get(ServiceKind.JELLYFIN)
-    if probe is None:
-        return False
-    if probe.origin is ServiceOrigin.EXISTING:
-        return True
-    if probe.origin is not ServiceOrigin.BUNDLED:
-        return False
-    return any(
-        row.key == JellyfinStep.ADMIN_USER.value
-        and row.status in (StepStatus.OK, StepStatus.SKIPPED)
-        for row in setup.jellyfin.steps
-    )
+    return bool(setup.owner.jellyfin_user_id) or setup.completed
+
+
+async def is_owner_established(session: AsyncSession) -> bool:
+    return owner_established(await read_settings(session, SetupSettings))
 
 
 async def detect_services(
@@ -203,7 +211,10 @@ async def detect_services(
     kind: ServiceKind | None = None,
     now: datetime | None = None,
 ) -> SetupStatus:
-    """第 2 步：逐一探測三個 compose 主機名並記下判定（plan §9.3、brief §16.3）。
+    """第 1、2 步：逐一探測 compose 主機名並記下判定（plan §9.3、brief §16.3）。
+
+    **擁有者成立之前只探 Jellyfin**（M4 票 06）：找到它才有人能成為擁有者，而 qBittorrent 與
+    Prowlarr 的判定之後會引來寫入它們的命令——那些要在門後。
 
     `restart=True` 是使用者按「重試」，重新開始 2 分鐘的輪詢窗口。給了 `kind` 就只探那一個
     （精靈的「重新偵測這個服務」，票 06d），其他服務的判定原封不動。
@@ -219,8 +230,12 @@ async def detect_services(
         setup.probe_started_at = moment
 
     waited = moment - setup.probe_started_at
-    probed: dict[ServiceKind, ServiceProbe] = {}
-    for each in ServiceKind:
+    # 這一輪不探的服務原封不動：擁有者之前只探 Jellyfin，但另外兩列可能是舊資料庫留下、已經
+    # 釘住的判定，丟掉的話之後重探會說謊（見 `ServiceProbe.configured`）。
+    probed = {
+        kind: probe for kind, probe in setup.services.items() if kind not in _detectable(setup)
+    }
+    for each in _detectable(setup):
         known = setup.services.get(each)
         # 指名重探別的服務：這一個的判定原封不動。
         if known is not None and kind is not None and each is not kind:
@@ -246,6 +261,12 @@ async def detect_services(
     await _remember_bundled_indexer(session, probed, probes.prowlarr_api_key)
     await write_settings(session, setup)
     return await _read(session, now=moment)
+
+
+def _detectable(setup: SetupSettings) -> tuple[ServiceKind, ...]:
+    if owner_established(setup):
+        return tuple(ServiceKind)
+    return (ServiceKind.JELLYFIN,)
 
 
 async def _remember_bundled_indexer(
@@ -283,8 +304,8 @@ async def connect_service(
 
     **使用者填的位址一律既有，除非它就是 compose 主機名**（`compose_hosts`，也就是
     `clients.bundled_targets`；M4 票 05）。「沒有索引站」「免密可進」只說得出服務還沒被設過
-    什麼，說不出它是誰的：`berth-lab` 裡使用者自己的空 Prowlarr 被判成套件內，第 6 步就以第 1 步
-    的帳密把它的登入覆寫掉。填的就是 compose 主機名時規則照舊——讀不到 API key 的**套件內**
+    什麼，說不出它是誰的：`berth-lab` 裡使用者自己的空 Prowlarr 被判成套件內，第 6 步就以當時
+    第 1 步的帳密把它的登入覆寫掉。填的就是 compose 主機名時規則照舊——讀不到 API key 的**套件內**
     Prowlarr 貼上 key 之後仍然是套件內，否則票 08 的預設索引站對它不會跑。Jellyfin 例外見
     `_verdict_jellyfin`。
     """
@@ -401,7 +422,9 @@ UNRESOLVED_REASONS = frozenset(
 
 def _still_waiting(setup: SetupSettings) -> bool:
     return not setup.services or any(
-        probe.origin in _UNSETTLED for probe in setup.services.values()
+        probe.origin in _UNSETTLED
+        for kind, probe in setup.services.items()
+        if kind in _detectable(setup)
     )
 
 
@@ -551,8 +574,8 @@ def _current_step(setup: SetupSettings, *, routes: bool) -> int:
     精靈可以續行也可以重跑，存「走到第幾步」的游標會在偵測結果變回等待時說謊。
     第 5 步（Route）的依據不在設定裡而在 `routes` 表（`routes_ready`），所以它由參數帶進來。
     """
-    if not setup.admin.username:
-        return STEP_ADMIN
+    if not owner_established(setup):
+        return STEP_OWNER
     if not _detect_done(setup):
         return STEP_DETECT
     if not _jellyfin_secured(setup):
@@ -586,7 +609,7 @@ def _jellyfin_secured(setup: SetupSettings) -> bool:
 def _qbittorrent_secured(setup: SetupSettings) -> bool:
     """第 4 步做完了沒（票 08）：五個建議鍵都有結論。
 
-    密碼不算——沒勾「同一組帳密」的人永遠不會有那一條，拿它當條件會把精靈卡在第 4 步。
+    密碼不算——泊位上沒有 WebUI 帳密的那一台永遠不會有那一條，拿它當條件會把精靈卡在第 4 步。
     """
     done = {
         row.key
@@ -600,7 +623,7 @@ def _indexer_settled(setup: SetupSettings) -> bool:
     """第 6 步可跳過（plan §9.3），所以「有結論」包含「使用者說之後再說」。
 
     逐站失敗不擋：十個公開站裡有幾個連不上是常態，只要接上了一個就走得下去。
-    **替 Prowlarr 介面設登入那一條不算**——它與站接不接得上無關，而且不勾「同一組帳密」時
+    **替 Prowlarr 介面設登入那一條不算**——它與站接不接得上無關，而且泊位上沒有介面帳密時
     它永遠是 `skipped`，算進去等於十站全失敗也放行。
     """
     return setup.indexer.skipped or any(
@@ -610,16 +633,24 @@ def _indexer_settled(setup: SetupSettings) -> bool:
     )
 
 
+def _owner_signs_in(setup: SetupSettings) -> bool:
+    probe = setup.services.get(ServiceKind.JELLYFIN)
+    if probe is not None and probe.origin is ServiceOrigin.EXISTING:
+        return True
+    return any(
+        row.key == JellyfinStep.ADMIN_USER.value
+        and row.status in (StepStatus.OK, StepStatus.SKIPPED)
+        for row in setup.jellyfin.steps
+    )
+
+
 def _status(setup: SetupSettings, *, now: datetime, routes: bool) -> SetupStatus:
     waited = now - setup.probe_started_at if setup.probe_started_at else timedelta()
     return SetupStatus(
         completed=setup.completed,
         current_step=_current_step(setup, routes=routes),
-        admin_created=bool(setup.admin.username),
-        admin_username=setup.admin.username,
-        interface_username=setup.admin.interface_username,
-        jellyfin_owns_account=jellyfin_owns_account(setup),
-        apply_to_services=setup.admin.apply_to_services,
+        owner=setup.owner.name,
+        owner_signs_in=_owner_signs_in(setup),
         services=tuple(
             ServiceDetection(
                 kind=kind,

@@ -81,6 +81,7 @@ STATUS_TABLES: dict[str, dict[Any, int]] = {
     "RematchRefusal": files_api._STATUS,
     "RssRefusal": rss_api._STATUS,
     "BundledLibraryRefusal": setup_api._BUNDLED_STATUS,
+    "OwnerRefusal": setup_api._OWNER_STATUS,
 }
 
 #: 拒絕的形狀（`{reason, detail}` 與 Route 多的那兩格）與 SSE 的推播。前端直接取這幾個
@@ -94,6 +95,7 @@ MODELS = (
     "PlanRefusalOut",
     "RematchRefusalOut",
     "BundledLibraryRefusalOut",
+    "OwnerRefusalOut",
     "JobSignalOut",
 )
 
@@ -442,6 +444,7 @@ class TestDeclaringWhatEachEndpointRefuses:
             "plan_refusal": "PlanRefusalOut",
             "rematch_refusal": "RematchRefusalOut",
             "bundled_refusal": "BundledLibraryRefusalOut",
+            "owner_refusal": "OwnerRefusalOut",
             "rss_refusal": "RssRefusalOut",
             "_refuse": "JobRefusalOut",
         }

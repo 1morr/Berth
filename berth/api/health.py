@@ -24,7 +24,7 @@ from berth.services.health import (
     read_budget,
     read_health,
 )
-from berth.services.setup import is_setup_complete
+from berth.services.setup import is_owner_established, is_setup_complete
 
 router = APIRouter(tags=["health"])
 
@@ -35,6 +35,9 @@ class Health(BaseModel):
     #: 精靈跑完了沒。前端的路由守衛靠它決定要畫精靈還是登入頁——那個決定必須在還沒有人
     #: 登入得了的時候就做得出來，所以它掛在這支匿名端點上，不在 `setup/status`（票 07）。
     setup_completed: bool
+    #: 精靈第 1 步的擁有者成立了沒（M4 票 06）。成立之後精靈要登入，前端守衛靠它在精靈跑完之前
+    #: 就把沒有 session 的人送去登入頁，而不是讓精靈的每一支都回 401。
+    owner_established: bool
 
 
 @router.get("/health")
@@ -43,6 +46,7 @@ async def read_root_health(session: SessionDep) -> Health:
         status=await overall_status(session),
         version=VERSION,
         setup_completed=await is_setup_complete(session),
+        owner_established=await is_owner_established(session),
     )
 
 

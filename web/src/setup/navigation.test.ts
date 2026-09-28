@@ -30,8 +30,8 @@ describe('畫面停在哪一步', () => {
 
 describe('前往與回頭', () => {
   it('上一個：每一步都回到前一頁，第 1 步沒有上一個', () => {
-    expect(previousOf(STEP.admin)).toBeNull()
-    expect(previousOf(STEP.detect)).toBe(STEP.admin)
+    expect(previousOf(STEP.owner)).toBeNull()
+    expect(previousOf(STEP.detect)).toBe(STEP.owner)
     expect(previousOf(STEP.jellyfin)).toBe(STEP.detect)
     expect(previousOf(STEP.routes)).toBe(STEP.qbittorrent)
     expect(previousOf(STEP.indexer)).toBe(STEP.routes)
@@ -133,6 +133,6 @@ describe('步驟與泊位', () => {
     })
     expect(berthOf(STEP.tmdb)).toBe('tmdb')
     expect(berthOf(STEP.indexer)).toBe('prowlarr')
-    expect([STEP.admin, STEP.detect, STEP.complete].map(berthOf)).toEqual([null, null, null])
+    expect([STEP.owner, STEP.detect, STEP.complete].map(berthOf)).toEqual([null, null, null])
   })
 })

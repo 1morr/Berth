@@ -94,6 +94,7 @@ class TestAnonymousHealth:
             "status",
             "version",
             "setup_completed",
+            "owner_established",
         }
 
 

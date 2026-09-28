@@ -29,6 +29,7 @@ export function MooringLine({
   redetecting,
   onConnect,
   onRedetect,
+  collapsed = false,
 }: {
   kind: ServiceKind
   /** 探哪裡（`probeEndpoint`）。 */
@@ -45,10 +46,15 @@ export function MooringLine({
   onConnect: (kind: ServiceKind, input: ConnectInput) => void
   /** 只重新探這一個服務（票 06d）。全部重新探測留在第 2 步的主要動作上。 */
   onRedetect: (kind: ServiceKind) => void
+  /**
+   * 連線表單收起來。第 1 步找到 Jellyfin 之後，同一個工作面上還有帳密表單；兩份表單兩顆送出鈕
+   * 會讓人不知道該填哪一份（M4 票 06 的 critique）。要換一台時由呼叫端再打開。
+   */
+  collapsed?: boolean
 }) {
   const { t } = useTranslation()
   const signal = tying ? 'working' : signalOf(detection)
-  const showForm = !tying && needsConnectionForm(detection)
+  const showForm = !tying && !collapsed && needsConnectionForm(detection)
   // 還沒解決的那一條才給：逾時、探不到、要帳密。還在探的由輪詢接手，不必人按。
   const redetectable =
     !tying && detection !== undefined && !detection.resolved && detection.origin !== 'pending'

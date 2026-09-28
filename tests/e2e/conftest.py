@@ -14,7 +14,7 @@ from __future__ import annotations
 import os
 import time
 from collections import Counter
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import closing
 
 import httpx
@@ -36,6 +36,7 @@ from tests.e2e.harness import (
     in_container,
     jellyfin_client,
     ok,
+    qbittorrent_session,
     wait,
 )
 from tests.e2e.payload import PACKS, STAGING, info_name
@@ -71,28 +72,44 @@ def berth() -> Iterator[httpx.Client]:
 def configured(berth: httpx.Client) -> None:
     """精靈八步，順序照 `api/setup.py`。
 
-    **第 2 步是冷啟動閘門**（票 06h）：compose 不加 `--wait`，Berth 一回應就開始精靈，這時
+    **第 1、2 步是冷啟動閘門**（票 06h）：compose 不加 `--wait`，Berth 一回應就開始精靈，這時
     Jellyfin 與 Prowlarr 還在啟動（Jellyfin 會回 503、會回不像它自己的東西，票 06g）。
-    照常輪詢到三個都判定完成，**不按重新探測**——使用者也不必按。第一輪就全部判定完成的話，
+    照常輪詢到判定完成，**不按重新探測**——使用者也不必按。第一輪就全部判定完成的話，
     代表這一輪沒有碰到啟動中的那幾秒，閘門等於沒守，所以那樣也算失敗。
+
+    M4 票 06 起第 1 步是擁有者：先找到 Jellyfin（擁有者之前只探它），以 `ADMIN` 建立它的管理員
+    並拿到 Berth 的 session；之後的精靈都帶著那張 cookie，其餘兩個服務在第 2 步才探。
     """
     tmdb_key = os.environ.get("TMDB_API_KEY", "").strip()
     assert tmdb_key, "set TMDB_API_KEY: step 7 of the wizard is a gate (ticket 02b)"
 
-    ok(berth.post("/setup/admin", json={"username": ADMIN, "password": PASSWORD}))
-
     started = time.monotonic()
     rounds: list[list[Json]] = []
 
-    def detected() -> bool | None:
-        services: list[Json] = ok(berth.post("/setup/detect", json={"restart": False}))["services"]
-        rounds.append(services)
-        verdicts = ", ".join(f"{row['kind']}={row['origin']}/{row['reason']}" for row in services)
-        print(f"detect +{time.monotonic() - started:5.1f}s {verdicts}")
-        return True if services and all(row["resolved"] for row in services) else None
+    def detected(kinds: set[str]) -> Callable[[], bool | None]:
+        def probe() -> bool | None:
+            services: list[Json] = ok(berth.post("/setup/detect", json={"restart": False}))[
+                "services"
+            ]
+            rounds.append(services)
+            verdicts = ", ".join(
+                f"{row['kind']}={row['origin']}/{row['reason']}" for row in services
+            )
+            print(f"detect +{time.monotonic() - started:5.1f}s {verdicts}")
+            wanted = [row for row in services if row["kind"] in kinds]
+            return (
+                True if len(wanted) == len(kinds) and all(r["resolved"] for r in wanted) else None
+            )
 
-    wait("the three bundled services to be detected", 300, detected, every=2)
-    assert len(rounds) > 1, ("services were already up: the cold start was not exercised", rounds)
+        return probe
+
+    wait("the bundled Jellyfin to be detected", 300, detected({"jellyfin"}), every=2)
+    owner = ok(berth.post("/setup/owner", json={"username": ADMIN, "password": PASSWORD}))
+    assert (owner["owner"], owner["current_step"]) == (ADMIN, 2), owner
+    # 擁有者那一刻拿到的就是 Berth 的 session，而且是管理員（brief §11）。
+    assert ok(berth.get("/auth/me")) == {"name": ADMIN, "role": "admin"}
+    wait("the other two bundled services", 300, detected({"qbittorrent", "prowlarr"}), every=2)
+    assert len(rounds) > 2, ("services were already up: the cold start was not exercised", rounds)
 
     jellyfin = ok(berth.post("/setup/jellyfin/bootstrap", timeout=1200))
     failed = [row for row in jellyfin["steps"] if row["status"] == "failed"]
@@ -106,7 +123,9 @@ def configured(berth: httpx.Client) -> None:
     routes = ok(berth.post("/setup/routes", json={}, timeout=300))
     assert routes["ready"], [(row["slug"], row["checks"]) for row in routes["routes"]]
     ok(berth.post("/setup/complete"))
-    ok(berth.post("/auth/login", json={"username": ADMIN, "password": PASSWORD}))
+    # 同一組帳密就是之後登入 Berth 的那一組（Jellyfin 認的帳號），不是另一組 Berth 自己的。
+    signed = ok(berth.post("/auth/login", json={"username": ADMIN, "password": PASSWORD}))
+    assert signed == {"name": ADMIN, "role": "admin"}, signed
 
 
 @pytest.fixture(scope="session")
@@ -155,11 +174,7 @@ def submitted(berth: httpx.Client, configured: None) -> tuple[Submitted, ...]:
 def planted(submitted: tuple[Submitted, ...]) -> None:
     """位元組到了：複製進 qBittorrent 的下載路徑，再叫它 recheck。"""
     with httpx.Client(base_url=QBITTORRENT, headers={"Referer": QBITTORRENT}) as qbittorrent:
-        login = qbittorrent.post(
-            "/api/v2/auth/login", data={"username": ADMIN, "password": PASSWORD}
-        )
-        # 成功的形狀隨版本不同（4.4 是 `200 Ok.`、5.x 是 `204`，brief §20.7），失敗是 `Fails.`。
-        assert login.is_success and login.text != "Fails.", (login.status_code, login.text)
+        qbittorrent_session(qbittorrent)
         for job in submitted:
             info = f"/api/v2/torrents/info?hashes={job.info_hash}"
 
