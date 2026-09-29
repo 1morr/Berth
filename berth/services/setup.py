@@ -50,6 +50,7 @@ from berth.models import (
 )
 from berth.services.auth import SignedIn, open_session
 from berth.services.clients import BundledServices, ServiceClientFactory
+from berth.services.indexer import outdated_step
 from berth.services.jellyfin import claim_jellyfin
 from berth.services.routes import forget_route_checks, routes_ready
 from berth.services.settings import read_settings, write_settings
@@ -431,6 +432,10 @@ async def _test_connection(
 
     async def prowlarr_test() -> _Outcome:
         await prowlarr.ping()
+        status = await prowlarr.status()
+        if not status.supported:
+            # 等不會好，所以不是 `transient`：套件內的那一台也當場紅（M4 票 17）。
+            return _Outcome(reason=ConnectionReason.VERSION_UNSUPPORTED, detail=status.version)
         indexers = await prowlarr.indexers()
         return _Outcome(reason=ConnectionReason.CONNECTED, detail=str(len(indexers)), ok=True)
 
@@ -499,9 +504,12 @@ def _settle(
 
 
 def _existing_indexer_step(test: ServiceTest) -> SetupStep:
-    """既有 Prowlarr 的那一條纜繩：連得上是 `ok`、細節是站數。形狀與 `indexer.probe_indexer` 同。"""
+    """既有 Prowlarr 的那一條纜繩：連得上是 `ok`、細節是站數。形狀與 `indexer.probe_indexer` 同，
+    版本太舊也是它的那一句（M4 票 17）。"""
     if test.state is ConnectionState.OK:
         return SetupStep(key=IndexerKind.PROWLARR.value, status=StepStatus.OK, detail=test.detail)
+    if test.reason is ConnectionReason.VERSION_UNSUPPORTED:
+        return outdated_step(test.detail)
     return SetupStep(key=IndexerKind.PROWLARR.value, status=StepStatus.FAILED, error=test.reason)
 
 

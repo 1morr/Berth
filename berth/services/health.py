@@ -400,16 +400,22 @@ async def _check_qbittorrent(session: AsyncSession, factory: ServiceClientFactor
 
 
 async def _check_indexer(session: AsyncSession, factory: ServiceClientFactory) -> _Outcome:
-    """索引站還搜得動。第 6 步可以跳過，所以沒填位址是 `unknown` 而不是紅燈。"""
+    """索引站還搜得動、Prowlarr 夠新。第 6 步可以跳過，所以沒填位址是 `unknown` 而不是紅燈。
+
+    版本太舊與精靈同一句（`indexer.outdated_step`，M4 票 17）：原文說出目前版本與下限。
+    """
     settings = await read_settings(session, IndexerSettings)
     if not settings.base_url:
         return _Outcome(HealthStatus.UNKNOWN, configured=False)
 
-    step = await probe_indexer(
+    probe = await probe_indexer(
         factory, IndexerKind(settings.kind), settings.base_url, settings.api_key
     )
+    step = probe.step
     if step.status is StepStatus.FAILED:
-        return _Outcome(HealthStatus.FAILED, detail=step.detail, error=step.error)
+        # 失敗那一輪的 `detail` 不是站數（版本太舊時是版本，caps 沒有搜尋時是伺服器名），
+        # 而健康頁把它標成「索引站」；該說的都在原文裡（M4 票 17 的 code-review）。
+        return _Outcome(HealthStatus.FAILED, error=step.error)
     return _Outcome(HealthStatus.OK, detail=step.detail)
 
 

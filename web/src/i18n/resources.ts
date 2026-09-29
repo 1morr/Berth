@@ -165,6 +165,12 @@ const zhHant = {
         '條件：它與 Berth 在同一台主機，而且把同一個父目錄掛在同一個容器路徑（例如都是 /data）——Berth 用硬鏈接入庫，另一台 NAS 上的、或把下載與媒體庫分開掛的接不上。',
       profiles:
         '選了既有，就把 {{kind}} 從 .env 的 COMPOSE_PROFILES 拿掉，再 docker compose up -d——套件內那一台用不到了。忘了拿掉也不致命。',
+      floor: {
+        jellyfin: '版本下限：Jellyfin 12.0。從 10.x 升級是單向的，先看升級注意。',
+        qbittorrent: '版本下限：qBittorrent 4.4（Web API 2.8.4）。',
+        prowlarr: '版本下限：Prowlarr 1.3.2。',
+      },
+      upgradeNotes: 'Jellyfin 12.0 升級注意',
     },
     switchToBundled: '改用套件內的那一台',
     switchWarning: {
@@ -205,8 +211,9 @@ const zhHant = {
       credentials: '帳號或密碼不對。改好上面的欄位再測一次。',
       banned:
         '它把 Berth 這台的 IP 封了（連續登入失敗）。等封鎖過期，或到它自己的介面解除，再測一次——現在改帳密只會再失敗。',
-      address:
-        '連不到這個位址。Berth 在容器裡：填 localhost 指的是 Berth 自己，改成 host.docker.internal 或區網 IP；也確認 port 沒填錯、服務在跑。',
+      address: '連不到這個位址。確認 port 沒填錯、服務在跑，而且 Berth 的容器連得到那台主機。',
+      outdated: '它比 Berth 支援的下限舊，等也不會好。升級之後再測一次。',
+      outdatedBundled: '套件內那一台比 Berth 支援的下限舊：拉新的 image 再起一次，然後重新測試。',
     },
   },
   reason: {
@@ -220,6 +227,7 @@ const zhHant = {
     unreachable: '主機名解得到但連不上',
     starting: '連得上，但它說自己還在啟動',
     protocol_mismatch: '連得上，但回的東西不是這個服務',
+    version_unsupported: '連得上，但版本比 Berth 支援的下限舊',
   },
   detail: {
     version: '版本',
@@ -247,6 +255,8 @@ const zhHant = {
     error: {
       blank: '位址要填。',
     },
+    loopback:
+      'Berth 在容器裡，這個位址指的是 Berth 自己，不是你的主機。改填 host.docker.internal（Docker Desktop 內建；Linux 由 compose 的 extra_hosts 提供，服務要監聽 0.0.0.0）或它的區網 IP。用 network_mode: host 部署的話，照填沒關係。',
     fix: {
       title: '手動步驟',
       unreachable: '在宿主上確認容器活著，再確認 port 沒有被改掉：',
@@ -2962,6 +2972,13 @@ const en: Translations<typeof zhHant> = {
         'Condition: it runs on the same host as Berth and mounts the same parent directory at the same container path (for example /data on both) — Berth imports with hard links, so one on another NAS, or with downloads and libraries mounted apart, cannot be connected.',
       profiles:
         'With an existing one, take {{kind}} out of COMPOSE_PROFILES in .env and run docker compose up -d — the bundled one is not needed. Forgetting is not fatal.',
+      floor: {
+        jellyfin:
+          'Oldest supported: Jellyfin 12.0. Upgrading from 10.x is one-way, so read the upgrade notes first.',
+        qbittorrent: 'Oldest supported: qBittorrent 4.4 (Web API 2.8.4).',
+        prowlarr: 'Oldest supported: Prowlarr 1.3.2.',
+      },
+      upgradeNotes: 'Jellyfin 12.0 upgrade notes',
     },
     switchToBundled: 'Use the bundled one instead',
     switchWarning: {
@@ -3005,7 +3022,11 @@ const en: Translations<typeof zhHant> = {
       banned:
         'It has banned this machine (too many failed logins). Wait for the ban to expire, or lift it in its own interface, then test again — changing the password now only fails again.',
       address:
-        'Nothing answers at this address. Berth runs in a container: localhost means Berth itself, so use host.docker.internal or a LAN IP; also check the port and that the service is running.',
+        "Nothing answers at this address. Check the port, that the service is running, and that Berth's container can reach that host.",
+      outdated:
+        'It is older than the oldest version Berth supports, and waiting will not change that. Upgrade it, then test again.',
+      outdatedBundled:
+        'The bundled one is older than the oldest version Berth supports: pull a new image and start it again, then test again.',
     },
   },
   reason: {
@@ -3019,6 +3040,7 @@ const en: Translations<typeof zhHant> = {
     unreachable: 'Hostname resolves but nothing answers',
     starting: 'It answers, but says it is still starting up',
     protocol_mismatch: 'Something answered, but it is not this service',
+    version_unsupported: 'It answers, but it is older than the oldest version Berth supports',
   },
   detail: {
     version: 'Version',
@@ -3046,6 +3068,8 @@ const en: Translations<typeof zhHant> = {
     error: {
       blank: 'The address is required.',
     },
+    loopback:
+      'Berth runs in a container, so this address points at Berth itself, not your host. Use host.docker.internal (built into Docker Desktop; on Linux the compose extra_hosts line provides it, and the service must listen on 0.0.0.0) or its LAN IP. If you deploy with network_mode: host, this is fine as it is.',
     fix: {
       title: 'Manual steps',
       unreachable:

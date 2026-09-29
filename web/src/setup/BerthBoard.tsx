@@ -123,7 +123,7 @@ function serviceDetail(
   if (!chosen?.detail || !service) return null
   return (
     <>
-      <span className="label">{t(detailLabel(service))}</span> {chosen.detail}
+      <span className="label">{t(detailLabel(service, chosen.reason))}</span> {chosen.detail}
     </>
   )
 }

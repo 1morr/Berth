@@ -29,6 +29,7 @@ from berth.adapters.prowlarr import (
     IndexerRejectedError,
     ProwlarrClient,
     ProwlarrIndexer,
+    unsupported_message,
 )
 from berth.domain import (
     PROWLARR_LOGIN_STEP,
@@ -112,6 +113,9 @@ class IndexerSetupStatus:
     #: 是空字串。
     web_ui_username: str
     error: str
+    #: 上一次連線測試的理由（服務頁與頁 4 的既有表單寫的同一份）；還沒測過是 `None`。
+    #: 既有表單照它選補法：版本太舊時叫人升級，不叫人改位址（M4 票 17）。
+    reason: ConnectionReason | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -255,7 +259,8 @@ async def connect_indexer(
     settings.api_key = api_key
     await write_settings(session, settings)
 
-    step = await probe_indexer(factory, kind, base_url, api_key)
+    probe = await probe_indexer(factory, kind, base_url, api_key)
+    step = probe.step
     moment = utcnow()
 
     def record(latest: SetupSettings) -> None:
@@ -278,10 +283,7 @@ async def connect_indexer(
                     state=ConnectionState.OK
                     if step.status is StepStatus.OK
                     else ConnectionState.FAILED,
-                    # 這一支的失敗只有原文（`probe_indexer` 與健康檢查共用），理由說不出更細的。
-                    reason=ConnectionReason.CONNECTED
-                    if step.status is StepStatus.OK
-                    else ConnectionReason.UNREACHABLE,
+                    reason=probe.reason,
                     detail=step.detail,
                     checked_at=moment,
                 ),
@@ -572,10 +574,18 @@ async def _wait_for_restart(client: ProwlarrClient, *, sleep: Sleeper) -> None:
     raise ServiceError("prowlarr did not come back after the credentials were set")
 
 
+@dataclass(frozen=True, slots=True)
+class IndexerProbe:
+    step: SetupStep
+    #: 給服務頁的理由。這一支的失敗多半只有原文，分得出來的只有「版本太舊」（M4 票 17），
+    #: 其餘一律是連不上。
+    reason: ConnectionReason
+
+
 @command(Effect.READ)
 async def probe_indexer(
     factory: ServiceClientFactory, kind: IndexerKind, base_url: str, api_key: str
-) -> SetupStep:
+) -> IndexerProbe:
     """那個索引站位址現在回得出什麼。
 
     精靈第 6 步的既有路徑與健康檢查的第三項用的是同一支：兩者問的都是「這個端點還能不能
@@ -586,31 +596,66 @@ async def probe_indexer(
         try:
             caps = await torznab.caps()
         except ServiceError as exc:
-            return SetupStep(key=kind.value, status=StepStatus.FAILED, error=message(exc))
+            return _unreachable(
+                SetupStep(key=kind.value, status=StepStatus.FAILED, error=message(exc))
+            )
         finally:
             await torznab.aclose()
         if not caps.search.available:
-            return SetupStep(
-                key=kind.value,
-                status=StepStatus.FAILED,
-                detail=caps.server_title,
-                error="t=caps: this endpoint does not offer search",
+            return _unreachable(
+                SetupStep(
+                    key=kind.value,
+                    status=StepStatus.FAILED,
+                    detail=caps.server_title,
+                    error="t=caps: this endpoint does not offer search",
+                )
             )
-        return SetupStep(
-            key=kind.value,
-            status=StepStatus.OK,
-            detail=" · ".join(part for part in (caps.server_title, *caps.categories[:3]) if part),
+        return _connected(
+            SetupStep(
+                key=kind.value,
+                status=StepStatus.OK,
+                detail=" · ".join(
+                    part for part in (caps.server_title, *caps.categories[:3]) if part
+                ),
+            )
         )
 
     prowlarr = factory.prowlarr(base_url, api_key)
     try:
         await prowlarr.ping()
+        status = await prowlarr.status()
+        if not status.supported:
+            return IndexerProbe(
+                step=outdated_step(status.version),
+                reason=ConnectionReason.VERSION_UNSUPPORTED,
+            )
         indexers = await prowlarr.indexers()
     except ServiceError as exc:
-        return SetupStep(key=kind.value, status=StepStatus.FAILED, error=message(exc))
+        return _unreachable(SetupStep(key=kind.value, status=StepStatus.FAILED, error=message(exc)))
     finally:
         await prowlarr.aclose()
-    return SetupStep(key=kind.value, status=StepStatus.OK, detail=str(len(indexers)))
+    return _connected(SetupStep(key=kind.value, status=StepStatus.OK, detail=str(len(indexers))))
+
+
+def outdated_step(version: str) -> SetupStep:
+    """比下限舊的 Prowlarr：細節是它的版本、錯誤是那一句原文（brief §20.14）。
+
+    精靈的兩條入口與健康檢查都寫這一份，所以三處說的是同一句話。
+    """
+    return SetupStep(
+        key=IndexerKind.PROWLARR.value,
+        status=StepStatus.FAILED,
+        detail=version,
+        error=unsupported_message(version),
+    )
+
+
+def _connected(step: SetupStep) -> IndexerProbe:
+    return IndexerProbe(step=step, reason=ConnectionReason.CONNECTED)
+
+
+def _unreachable(step: SetupStep) -> IndexerProbe:
+    return IndexerProbe(step=step, reason=ConnectionReason.UNREACHABLE)
 
 
 def _target(setup: SetupSettings, settings: IndexerSettings) -> tuple[ServiceOrigin | None, str]:
@@ -672,4 +717,10 @@ def _view(
         if origin is ServiceOrigin.BUNDLED
         else "",
         error=error,
+        reason=_last_reason(setup),
     )
+
+
+def _last_reason(setup: SetupSettings) -> ConnectionReason | None:
+    choice = setup.choices.get(ServiceKind.PROWLARR)
+    return choice.test.reason if choice is not None and choice.test is not None else None

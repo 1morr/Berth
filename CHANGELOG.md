@@ -1134,6 +1134,14 @@ split-cour 的第一批被播出日比對整批擋在審核，改正一次並套
   `extra_hosts: host.docker.internal:host-gateway`，Linux 上既有服務的位址也能填 `host.docker.internal`
   （Docker Desktop 本來就有這個名字，明寫這一條不改變它）。`.env.example` 在 `COMPOSE_PROFILES` 旁寫明接既有的
   哪一個就拿掉哪一個；README〈部署疑難排解〉多了 `port is already allocated` 與連不到宿主兩條。
+- **既有 Prowlarr 有版本下限了：1.3.2**（M4 票 17，brief §20.14，`docs/research/prowlarr-version-floor.md`）：
+  Berth 用到的端點裡最晚出現的是匿名的 `/ping`。精靈（頁 4 的既有表單、服務頁的選擇與重新測試）與健康檢查都讀
+  `GET /api/v1/system/status` 的版本，太舊時停在 Prowlarr 頁、說出目前版本與下限（`ConnectionReason` 多一個
+  `version_unsupported`）。Torznab 端點不受影響。
+- **既有服務填 `localhost` 時就地提示**（M4 票 17，brief §16.4）：位址是 `localhost`、`127.x.x.x`、`::1` 時，
+  位址欄下說明那是 Berth 自己的容器、改填 `host.docker.internal` 或區網 IP；只提示、不擋。測試連不上時的補法也說同一句。
+- **三個服務頁的「既有」旁寫出版本下限**（M4 票 17）：Jellyfin 12.0（附 12.0 發佈文的升級注意連結）、
+  qBittorrent 4.4、Prowlarr 1.3.2。
 ### Removed
 - **精靈的偵測**（M4 票 15）：`POST /api/setup/detect`、「偵測服務」那一步與泊位板上方的前置列、「重新偵測這個服務」
   （換成出問題那一頁的「重新測試」）。選之前 Berth 不對任何服務發請求。

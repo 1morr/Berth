@@ -14,6 +14,7 @@ import {
 } from '../components/controls'
 import { SERVICE_LABEL, detailLabel } from '../components/services'
 import { SIGNAL_FILL } from '../components/signal'
+import { pointsAtBerth } from './loopback'
 import {
   EXAMPLE_ADDRESS,
   REASON_LABEL,
@@ -23,6 +24,12 @@ import {
   signalOf,
   testEndpoint,
 } from './signals'
+
+/**
+ * Jellyfin 12.0 的發佈文，TL;DR 那一段就是升級注意：先完整備份、移除第三方插件、升級後完整掃描、
+ * 不能降級（brief §20.9）。
+ */
+const JELLYFIN_UPGRADE_NOTES = 'https://jellyfin.org/posts/jellyfin-release-12.0/#tl-dr'
 
 /** 頁面接到 `ServiceChoice` 的那幾樣：兩支 mutation 與它們的進度（`SetupPage`）。 */
 export interface ChoiceControls {
@@ -160,6 +167,23 @@ export function ServiceChoice({
             {kind !== 'prowlarr' && (
               <span className="mt-2 block text-xs text-ink">{t('choice.existing.sameHost')}</span>
             )}
+            {/* 選之前就說出下限（M4 票 17）：版本太舊的那一台要到測試才紅，那時候已經填完表了。 */}
+            <span data-testid="version-floor" className="mt-2 block text-xs text-ink">
+              {t(`choice.existing.floor.${kind}`)}
+              {kind === 'jellyfin' && (
+                <>
+                  {' '}
+                  <a
+                    href={JELLYFIN_UPGRADE_NOTES}
+                    target="_blank"
+                    rel="noreferrer noopener"
+                    className="underline underline-offset-2 hover:text-ink-dim"
+                  >
+                    {t('choice.existing.upgradeNotes')}
+                  </a>
+                </>
+              )}
+            </span>
           </ChoiceCard>
         </div>
         {locked && <p className="max-w-prose text-xs text-ink-dim">{locked}</p>}
@@ -320,6 +344,7 @@ function ExistingForm({
         inputMode="url"
         autoFocus={focusFirst}
         placeholder={EXAMPLE_ADDRESS[kind]}
+        hint={pointsAtBerth(baseUrl) ? <LoopbackHint /> : undefined}
         onChange={(event) => setBaseUrl(event.target.value)}
         error={checked && !baseUrl.trim() ? t('connect.error.blank') : undefined}
       />
@@ -353,6 +378,22 @@ function ExistingForm({
         </PrimaryButton>
       </div>
     </form>
+  )
+}
+
+/**
+ * 既有服務的位址指到 Berth 自己（`pointsAtBerth`）時，位址欄下的那一句（M4 票 17）。只提示、不擋：
+ * `network_mode: host` 的部署填 localhost 是對的。呼叫端先判斷，這裡只畫。
+ */
+export function LoopbackHint() {
+  const { t } = useTranslation()
+  return (
+    <span
+      data-testid="loopback-hint"
+      className="mt-1 block border-l-2 border-assigned pl-2 text-ink"
+    >
+      {t('connect.loopback')}
+    </span>
   )
 }
 
@@ -408,7 +449,9 @@ export function TestLine({
           <dd className="text-sm text-ink">{t(REASON_LABEL[service.reason])}</dd>
           {service.detail && (
             <>
-              <dt className="label mt-1 self-center text-ink-dim">{t(detailLabel(kind))}</dt>
+              <dt className="label mt-1 self-center text-ink-dim">
+                {t(detailLabel(kind, service.reason))}
+              </dt>
               <dd className="value mt-1 text-sm text-ink">{service.detail}</dd>
             </>
           )}
@@ -485,6 +528,9 @@ function Fix({
   } else if (bundled && reason === 'auth_required') {
     lede = t('connection.fix.whitelist')
     commands = [`docker compose restart ${kind}`]
+  } else if (bundled && reason === 'version_unsupported') {
+    lede = t('connection.fix.outdatedBundled')
+    commands = [`docker compose pull ${kind}`, `docker compose up -d ${kind}`]
   } else if (bundled) {
     lede = t('connection.fix.bundledDown')
     commands = [`docker compose ps ${kind}`, `docker compose logs --tail 50 ${kind}`]
@@ -492,6 +538,11 @@ function Fix({
     lede = t('connection.fix.credentials')
   } else if (reason === 'ip_banned') {
     lede = t('connection.fix.banned')
+  } else if (reason === 'version_unsupported') {
+    lede = t('connection.fix.outdated')
+  } else if (pointsAtBerth(service.base_url)) {
+    // 位址欄下的那一句（M4 票 17）：填 localhost 的人最常卡在這裡，而「連不上」看不出原因。
+    lede = t('connect.loopback')
   } else {
     lede = t('connection.fix.address')
   }

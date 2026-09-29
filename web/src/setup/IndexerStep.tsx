@@ -1,5 +1,6 @@
 import { useId, useState, type FormEvent, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
 
 import type {
   IndexerConnectInput,
@@ -30,7 +31,8 @@ import { useFocusAfterRemoval } from '../components/useFocusAfterRemoval'
 import { useInterfaceLogin } from './interfaceLogin'
 import { BerthLogin } from './InterfaceLoginFields'
 import { languageName } from './languageName'
-import { ServiceChoice, type ChoiceControls } from './ServiceChoice'
+import { pointsAtBerth } from './loopback'
+import { LoopbackHint, ServiceChoice, type ChoiceControls } from './ServiceChoice'
 import { connected } from './signals'
 import { StepFrame } from './StepFrame'
 
@@ -128,12 +130,8 @@ export function IndexerStep({
         </>
       )}
       {/* 既有的站是使用者自己的，Berth 不移除（brief §16.4），所以不給 `onRemove`。 */}
-      {ready && indexers && !bundled && (
-        <TrialSearch {...trial} sites={[]} onRemove={undefined} />
-      )}
-      {indexersFailed && (
-        <p className="mt-6 text-sm text-ink-dim">{t('indexer.unreachable')}</p>
-      )}
+      {ready && indexers && !bundled && <TrialSearch {...trial} sites={[]} onRemove={undefined} />}
+      {indexersFailed && <p className="mt-6 text-sm text-ink-dim">{t('indexer.unreachable')}</p>}
 
       {/* 選之前、或既有那一頁，「之後再說」在這裡；套件內的在「加入」旁邊。 */}
       {!(ready && bundled) && (
@@ -701,7 +699,12 @@ function ExistingIndexer({
               ? 'http://192.168.1.10:9696'
               : 'http://192.168.1.10:9117/api/v2.0/indexers/all/results/torznab/api'
           }
-          hint={t(`indexer.existing.hint.${kind}`)}
+          hint={
+            <>
+              {t(`indexer.existing.hint.${kind}`)}
+              {pointsAtBerth(baseUrl) && <LoopbackHint />}
+            </>
+          }
           onChange={(event) => setBaseUrl(event.target.value)}
         />
         <PasswordField
@@ -728,12 +731,20 @@ function ExistingIndexer({
             label={t(`indexer.kind.${kind}`)}
             endpoint={kind === 'prowlarr' ? 'GET /api/v1/indexer' : '?t=caps'}
             row={row}
-            fix={t('indexer.existing.fix')}
+            // 照上一次測試的理由與測過的位址（不是欄位裡正在改的那一個）說補法（M4 票 17）。
+            fix={existingFix(t, indexers)}
           />
         </ol>
       )}
     </section>
   )
+}
+
+/** 既有索引站測不過時的補法：太舊就升級，位址指到 Berth 自己就說 localhost，其餘是一般的那一句。 */
+function existingFix(t: TFunction, indexers: IndexerSetup): string {
+  if (indexers.reason === 'version_unsupported') return t('connection.fix.outdated')
+  if (pointsAtBerth(indexers.base_url)) return t('connect.loopback')
+  return t('indexer.existing.fix')
 }
 
 /** 連不上套件內的 Prowlarr 時，畫面仍然要說得出下一步。 */

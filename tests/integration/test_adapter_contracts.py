@@ -40,6 +40,7 @@ from berth.adapters.prowlarr import (
     IndexerDefinition,
     IndexerRejectedError,
     ProwlarrIndexer,
+    ProwlarrStatus,
 )
 from berth.adapters.prowlarr.client import SCHEMA_TIMEOUT_SECONDS, HttpProwlarrClient
 from berth.adapters.qbittorrent import (
@@ -798,6 +799,36 @@ async def test_prowlarr_ping_is_anonymous() -> None:
         await client.ping()
     finally:
         await client.aclose()
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_prowlarr_status_reads_the_four_part_version_with_the_key() -> None:
+    """版本下限靠它（M4 票 17）。它要 API key（不帶是 401），所以也順便驗了 key。"""
+    route = respx.get(f"{PROWLARR_URL}/api/v1/system/status").respond(
+        200, text=read_fixture("http/prowlarr/system-status.json")
+    )
+
+    client = HttpProwlarrClient(PROWLARR_URL, "the-key")
+    try:
+        status = await client.status()
+    finally:
+        await client.aclose()
+
+    assert status == ProwlarrStatus(version="2.6.5.5623")
+    assert status.supported
+    assert route.calls.last.request.headers["X-Api-Key"] == "the-key"
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_prowlarr_status_without_api_key_maps_to_auth_failed() -> None:
+    respx.get(f"{PROWLARR_URL}/api/v1/system/status").respond(401)
+
+    client = HttpProwlarrClient(PROWLARR_URL)
+    with pytest.raises(AuthFailedError):
+        await client.status()
+    await client.aclose()
 
 
 @respx.mock

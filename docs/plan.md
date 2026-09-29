@@ -509,7 +509,7 @@ Session 以 httpOnly cookie（`berth_session`）承載，`SameSite=Strict`、`Pa
   一次搜尋回一兩千筆，全部解析會把事件迴圈卡住半分鐘。粗篩用 `parser.title.mentions`（純字串）。
 - 上限內**逐站輪流取**（`RESULT_LIMIT = 100`），不是取做種前 100 筆：The Pirate Bay 的 scene 發佈有
   28–86 個做種，Mikan 那一千多筆多半是個位數，純做種排序會讓一百筆全部來自同一個站（票 08 實測）。
-- `ProwlarrClient`（僅 setup 用）：`indexer/schema` 取定義、`indexer` 新增、`indexer/test` 驗證、`config/host` 設介面登入。**新增之前 Prowlarr 會先連一次那個站**，連不上就回 400 加一份逐條理由（`errorMessage`）而且什麼都不建立——逐站的成敗因此來自新增那一支，不是另一次 `indexer/test`；`?forceSave=true` 不會跳過這個檢查。同名的第二個站被拒（`Should be unique`），所以冪等靠先列（2026-09-08 實測，brief §20.7）。schema 給的 `appProfileId` 是 `0`，送回去之前要換成 `1`。
+- `ProwlarrClient`（僅 setup 與健康檢查用）：`system/status` 讀版本（要 API key，下限 1.3.2，§9.5、M4 票 17）、`indexer/schema` 取定義、`indexer` 新增、`indexer/test` 驗證、`config/host` 設介面登入。**新增之前 Prowlarr 會先連一次那個站**，連不上就回 400 加一份逐條理由（`errorMessage`）而且什麼都不建立——逐站的成敗因此來自新增那一支，不是另一次 `indexer/test`；`?forceSave=true` 不會跳過這個檢查。同名的第二個站被拒（`Should be unique`），所以冪等靠先列（2026-09-08 實測，brief §20.7）。schema 給的 `appProfileId` 是 `0`，送回去之前要換成 `1`。
 
 - 逾時：**搜尋**用 120 秒（Prowlarr 的 REST）/ 60 秒（單站 Torznab）——`GET /api/v1/search` 要現場去連
   五個追蹤站，2026-09-10 實測單次冷查詢 60–85 秒，三個查詢併發共 35 秒（所以併發是對的，短逾時不是）；
@@ -622,11 +622,11 @@ WebUI\AuthSubnetWhitelist=172.28.0.2/32
 **服務頁的共同形狀**（頁 1、2、4）：
 
 - **頁首二選一**「套件內」/「既有」（Seerr 與 Sonarr / Radarr 都是手動填、按 Test，brief §20.14），**不預選**（票 15 shape 時使用者拍板：猜錯正是這一輪要消滅的；`.scratch/m4/service-pages-shape.md`）。點「套件內」就存下並測（唯讀）；點「既有」只展開表單，按「測試連線」才存下並測。「既有」旁說明條件：Jellyfin 與 qBittorrent 要與 Berth 在同一台主機、把同一個父目錄掛在同一個容器路徑（brief §16.4；Prowlarr 不碰檔案，沒有這一條）；選既有時說出要從 `.env` 的 `COMPOSE_PROFILES` 拿掉哪一個（`jellyfin` / `qbittorrent` / `prowlarr`），不叫人改 compose 檔，忘了拿掉也不致命。**「既有」說明不多說撞 port 的事**（票 16 實測，brief §20.14）：容器名改成 `berth-*` 之後撞名消失；撞 port 時只有撞到的那一台套件內容器停在 `created`，`berth` 與其他照常跑，而那個錯在終端機跑 `docker compose up -d` 時就印出來、早於精靈，起不來的正是使用者不要的那一台。疑難排解寫在 README〈部署疑難排解〉。
-- **套件內**連 compose 主機名（`services.clients.bundled_targets`：`jellyfin:8096`、`qbittorrent:${QBITTORRENT_WEBUI_PORT}`、`prowlarr:9696`；compose 服務名不變，容器名是 `berth-*`，票 16）。**既有**填位址與那個服務要的憑證（brief §16.4）：Jellyfin 的管理員帳密、qBittorrent 的 WebUI 帳密、Prowlarr 的 API key（或任一 Torznab 端點 + key）。填 `localhost` / `127.0.0.1` 時就地提示改成 `host.docker.internal` 或區網 IP（票 17）。
+- **套件內**連 compose 主機名（`services.clients.bundled_targets`：`jellyfin:8096`、`qbittorrent:${QBITTORRENT_WEBUI_PORT}`、`prowlarr:9696`；compose 服務名不變，容器名是 `berth-*`，票 16）。**既有**填位址與那個服務要的憑證（brief §16.4）：Jellyfin 的管理員帳密、qBittorrent 的 WebUI 帳密、Prowlarr 的 API key（或任一 Torznab 端點 + key）。填 `localhost` / `127.0.0.0/8` / `::1` 時位址欄下就地提示改成 `host.docker.internal` 或區網 IP（票 17：前端純函式 `setup/loopback.ts` 的 `pointsAtBerth`，只提示不擋；測過的位址是它而連不上時，補法說同一句）。「既有」選項旁說出版本下限（Jellyfin 12.0 連到 12.0 發佈文的升級注意、qBittorrent 4.4、Prowlarr 1.3.2）。
 - **選完就測，不偵測**：選擇與連線資訊先存進 `settings.setup` 與它們平常住的 `settings.services.*` 再測——測不過也存，使用者才能改一個欄位再按一次。套件內測不過要分開說：
   - 主機名解不到（`socket.gaierror`）＝那個服務不在 compose 裡 → 「把 `qbittorrent` 加回 `.env` 的 `COMPOSE_PROFILES` 再 `docker compose up -d`」。
   - 解得到但連不上、回 503「載入中」、回的東西不像它自己（`protocol_mismatch`）＝容器還在啟動 → 照舊每 3 秒再測、到 2 分鐘上限（M3 票 06g 量到的三種樣子），逾時給重試；過了上限仍是 `protocol_mismatch` 就說那個主機名上是別的東西。
-  - 既有的當場給結論。版本低於下限（Jellyfin 12.0、qBittorrent 4.4、Prowlarr 見 brief §20.14）停在這一頁，說出目前版本（Jellyfin 附升級注意，brief §20.9）。
+  - 既有的當場給結論。版本低於下限（Jellyfin 12.0、qBittorrent 4.4、Prowlarr 1.3.2，brief §20.14）停在這一頁，說出目前版本（Jellyfin 附升級注意，brief §20.9）。
 - **表單跟著那一台的狀態走，選擇決定 Berth 之後寫什麼**（brief §16.3）：套件內但已經初始化過（重裝保留 config、精靈中途中斷）時，Jellyfin 已有管理員就給登入表單、不再建立；qBittorrent / Prowlarr 已設過介面登入就不強迫再設（「已設過」各怎麼認由票 15 查證）。選既有而那台 Jellyfin 還沒跑過初始精靈時，一樣給建立管理員的表單——它上面沒有任何人的帳號可以蓋掉。
 - **回頭改選擇**（票 15 shape 時使用者拍板）：**Jellyfin 在擁有者成立之後鎖住來源**——擁有者是那一台上的帳號，換一台等於換擁有者；後端回 409（`ChoiceLockedError`），同一個來源換位址照舊可以（設定頁的連線區）。**qBittorrent / Prowlarr 隨時可改**：這一頁有結果時換另一格先就地確認，說出 Berth 已經寫進原本那一台的偏好、登入、站留在那裡、不撤回；換了之後那一頁的結果清掉重做（`setup._start_over`）。qBittorrent 換了，所有 Route 的檢查標成未檢查（`routes.forget_route_checks`：分類建在原本那一台上），頁 3 要重新檢查才走得過去。
 - **「已經設過介面登入」怎麼認**（票 15 查證，brief §20.14）：qBittorrent 的 `app/preferences` 讀不到密碼，只有 `web_ui_username`——全新的那一台是 `admin`，所以帳號不是 `admin` 就當設過了，還是 `admin` 的一律當沒設過；Prowlarr 的 `config/host` 全新是 `authenticationMethod: none`、帳號空白。設過的那一台，頁上說出帳號、給「更換登入」，不強迫再設。
@@ -694,7 +694,7 @@ WebUI\AuthSubnetWhitelist=172.28.0.2/32
 
 **掛載規則**：Berth、qBittorrent、Jellyfin 在**同一台主機**，把同一個宿主父目錄掛在相同的容器路徑，下載目錄與媒體庫目錄都在它底下（TRaSH 的單一 `/data`，brief §20.14）。路徑字串隨使用者，例如 NAS 上三個容器都掛 `/volume1/media:/volume1/media`。Berth 的 incomplete / complete 根目錄在精靈的 qBittorrent 頁設為該父目錄下的子目錄。**不做 remote path mapping**（brief §18）：既有服務在另一台主機、或把下載與媒體庫分開掛成 `/downloads`、`/tv` 的，要先改掛載；「既有」選項旁說明這一條，媒體庫與路徑頁的檢查失敗時說出怎麼改。
 
-**連線位址**：Berth 在容器裡，使用者填 `localhost` / `127.0.0.1` 指的是 Berth 自己。就地提示改成 `host.docker.internal`（Docker Desktop 內建；Linux 靠 `berth` 服務的 `extra_hosts: ["host.docker.internal:host-gateway"]`，§9.1，而且宿主上的服務要監聽 `0.0.0.0`）或區網 IP（brief §20.14，票 16、17）。
+**連線位址**：Berth 在容器裡，使用者填 `localhost` / `127.0.0.1` 指的是 Berth 自己。位址欄下就地提示改成 `host.docker.internal`（Docker Desktop 內建；Linux 靠 `berth` 服務的 `extra_hosts: ["host.docker.internal:host-gateway"]`，§9.1，而且宿主上的服務要監聽 `0.0.0.0`）或區網 IP（brief §20.14，票 16、17）。
 
 **既有 Jellyfin**
 
@@ -717,7 +717,7 @@ WebUI\AuthSubnetWhitelist=172.28.0.2/32
 
 - 要的是位址 + **API key**（Prowlarr 的 API 只收 API key，帳密只給瀏覽器，brief §20.14），或任一 Torznab 端點 + key（Jackett）。
 - 用使用者已有的索引站，Berth 不替它加站、不移除它的站、不設它的登入（票 05，422）。
-- 版本下限未定，票 17 查證後寫進 brief §20.14 並在這裡補。
+- **版本下限 1.3.2**（brief §20.14：卡住它的是匿名的 `GET /ping`，其餘端點從 0.1 就有）。版本讀 `GET /api/v1/system/status` 的 `version`（`ProwlarrStatus.supported`，形狀照 Jellyfin 的 `public_info().supported`）。`indexer.probe_indexer`（頁 4 的既有表單與健康檢查共用）與 `setup._test_connection`（服務頁的二選一與「重新測試」）在 `/ping` 之後問它，太舊寫 `indexer.outdated_step`：細節是它的版本、原文是 `prowlarr.unsupported_message`，理由 `ConnectionReason.VERSION_UNSUPPORTED`（不等，套件內也當場紅）。Torznab 端點不在此列。
 
 **檢查與訊息**（精靈的媒體庫與路徑頁與 `health_checker` 共用）。一個 Route 五條纜繩，前一條失敗就不跑下一條——後面的檢查測的會是錯的路徑。`RouteCheck` 是它們的封閉值集合，結果逐條存進 `routes.health_detail_json`。
 

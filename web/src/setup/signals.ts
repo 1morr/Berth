@@ -90,6 +90,7 @@ export const REASON_LABEL = {
   unreachable: 'reason.unreachable',
   starting: 'reason.starting',
   protocol_mismatch: 'reason.protocol_mismatch',
+  version_unsupported: 'reason.version_unsupported',
 } as const satisfies Record<ConnectionReason, string>
 
 export const STATE_LABEL = {

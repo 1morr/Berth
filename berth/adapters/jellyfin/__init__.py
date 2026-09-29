@@ -10,9 +10,9 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
-from itertools import takewhile
 from typing import Protocol
 
+from berth.adapters.versions import parse_version
 from berth.domain import CollectionType, SortOrder
 
 #: 支援下限（brief §16.4、§20.9）。**12.0 就是原本的 10.12**——Jellyfin 只是把版號前面
@@ -39,7 +39,7 @@ class JellyfinPublicInfo:
 
 def version_supported(version: str) -> bool:
     """版號字串 ≥ `MIN_VERSION`。空字串（還沒問過）不在這裡判，呼叫端自己決定。"""
-    return _parse(version) >= MIN_VERSION
+    return parse_version(version) >= MIN_VERSION
 
 
 def unsupported_message(version: str) -> str:
@@ -50,15 +50,6 @@ def unsupported_message(version: str) -> str:
     """
     floor = ".".join(str(part) for part in MIN_VERSION)
     return f"Jellyfin {version or 'with no version string'} is older than {floor}"
-
-
-def _parse(version: str) -> tuple[int, ...]:
-    """`12.1.0` → `(12, 1, 0)`。認不得的片段當 0，整串認不得就是 `(0,)`。"""
-    parts = []
-    for chunk in version.split("."):
-        digits = "".join(takewhile(str.isdigit, chunk))
-        parts.append(int(digits) if digits else 0)
-    return tuple(parts) or (0,)
 
 
 @dataclass(frozen=True, slots=True)

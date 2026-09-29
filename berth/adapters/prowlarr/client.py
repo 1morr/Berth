@@ -16,6 +16,7 @@ from berth.adapters.prowlarr import (
     IndexerDefinition,
     IndexerRejectedError,
     ProwlarrIndexer,
+    ProwlarrStatus,
 )
 
 #: 新增與驗證索引站要真的連上那個站，比一般 API 慢得多（實測單站 5–40 秒）。
@@ -48,6 +49,12 @@ class HttpProwlarrClient:
         payload = json_body(response)
         if not isinstance(payload, dict) or "status" not in payload:
             raise ProtocolMismatchError("/ping: not a Prowlarr ping payload")
+
+    async def status(self) -> ProwlarrStatus:
+        payload = json_body(await self._session.get("/api/v1/system/status"))
+        if not isinstance(payload, dict) or "version" not in payload:
+            raise ProtocolMismatchError("/api/v1/system/status: not a Prowlarr status payload")
+        return ProwlarrStatus(version=str(payload["version"]))
 
     async def indexers(self) -> list[ProwlarrIndexer]:
         payload = json_body(await self._session.get("/api/v1/indexer"))

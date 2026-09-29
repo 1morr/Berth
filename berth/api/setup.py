@@ -517,6 +517,8 @@ class IndexerSetupOut(BaseModel):
     #: Berth 替套件內 Prowlarr 設下的介面帳號；還沒設過是空字串。
     web_ui_username: str
     error: str
+    #: 上一次連線測試的理由；還沒測過是 `null`（M4 票 17：既有表單照它選補法）。
+    reason: ConnectionReason | None
 
 
 class IndexerApplyIn(BaseModel):

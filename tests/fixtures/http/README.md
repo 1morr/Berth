@@ -257,3 +257,9 @@ Mikan 與 acg.rip 從開發機匿名 curl；Nyaa 從開發機連不上，是在 
 | `nyaa/rss-user.subsplease.kamiina-botan.xml` | `GET https://nyaa.si/?page=rss&u=subsplease&q=Kamiina+Botan`：使用者 feed，夾著 `[Batch]` 合集 |
 | `acgrip/rss-search.kimi-ga-shinu.xml` | `GET https://acg.rip/.xml?term=Kimi+ga+Shinu+made+Koi+wo+Shitai`：與 Mikan 單一 feed 同一個發佈（第 12 集），對照時區 |
 | `acgrip/rss-search.kamiina-botan.xml` | `GET https://acg.rip/.xml?term=Kamiina+Botan`：夾著「01-12 合集」的搜尋 feed |
+
+2026-09-29（M4 票 17）。Prowlarr 版本下限的讀法：
+
+| 檔案 | 來源 |
+| --- | --- |
+| `prowlarr/system-status.json` | berth-lab `home-prowlarr`（`lscr.io/linuxserver/prowlarr:latest`，2.6.5.5623）帶 API key 打 `GET /api/v1/system/status`，原樣。不帶 key 是 401 |

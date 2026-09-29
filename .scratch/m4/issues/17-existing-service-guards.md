@@ -1,6 +1,6 @@
 # 17 — 既有服務防呆：`localhost` 提示、版本門檻說明、Prowlarr 版本下限
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Blocked by:** None — can start immediately（不依賴 15；提示要掛在 15 的「既有」表單上，建議排在 15 之後，先做的話掛在現在的連線表單、15 搬過去）
 
@@ -31,11 +31,33 @@
 
 ## 驗收
 
-- [ ] Prowlarr 版本下限與來源寫進 brief §20.14、§16.4、plan §9.5；研究檔在 `docs/research/`
-- [ ] Prowlarr 低於下限時精靈與健康檢查都說出目前版本與下限（整合測試：Fake 回舊版本；雙向：剛好等於下限時通過）
-- [ ] `localhost` / `127.0.0.1` / `[::1]` 出提示，`host.docker.internal`、區網 IP、compose 主機名不出（單元測試或 vitest，雙向）
-- [ ] 三個「既有」選項旁有版本下限（vitest 或 playwright 文字結果，zh-Hant 與 en）
-- [ ] `berth-lab` existing 用 playwright 實跑：填 `localhost:38096` 看到提示、改 `host.docker.internal:38096` 之後接得上
-- [ ] lint、type、test 綠燈
+- [x] Prowlarr 版本下限與來源寫進 brief §20.14、§16.4、plan §9.5；研究檔在 `docs/research/`
+- [x] Prowlarr 低於下限時精靈與健康檢查都說出目前版本與下限（整合測試：Fake 回舊版本；雙向：剛好等於下限時通過）
+- [x] `localhost` / `127.0.0.1` / `[::1]` 出提示，`host.docker.internal`、區網 IP、compose 主機名不出（單元測試或 vitest，雙向）
+- [x] 三個「既有」選項旁有版本下限（vitest 或 playwright 文字結果，zh-Hant 與 en）
+- [x] `berth-lab` existing 用 playwright 實跑：填 `localhost:38096` 看到提示、改 `host.docker.internal:38096` 之後接得上
+- [x] lint、type、test 綠燈
 
 ## Comments
+
+**2026-09-29 實作紀錄**
+
+- berth-lab existing 實跑（`berth:m4-17`，playwright，owner 已成立的那一份設定；位址已改回 `host.docker.internal`）：
+  Jellyfin 頁「改位址或憑證」→ 填 `http://localhost:38096`，位址欄下出現「Berth 在容器裡，這個位址指的是 Berth 自己…」；
+  按測試連線 → 紅燈「主機名解得到但連不上」、手動步驟是同一句；改 `http://host.docker.internal:38096` → 欄位下的提示收起、
+  測試綠燈「連上了，已經有管理員 · 版本 12.1.0」。「既有」卡上是「版本下限：Jellyfin 12.0。從 10.x 升級是單向的，先看
+  升級注意。」加連結 `https://jellyfin.org/posts/jellyfin-release-12.0/#tl-dr`。berth-lab `existing/docker-compose.yml`
+  的 image 改成 `berth:m4-17`（repo 外）。
+- `127.0.0.0/8` 整段都當迴路（票只列 `127.0.0.1`）；`.localhost` 子網域與 `0.0.0.0` 不提示。
+- 套件內 Prowlarr 太舊也當場紅（`_test_connection` 共用同一個判斷），補法是 `docker compose pull prowlarr`。
+
+**code-review 未處理的發現**
+
+- 同一個下限寫在三處：`adapters/prowlarr.MIN_VERSION`、i18n 的 `choice.existing.floor.*`（zh-Hant / en）、vitest 的字串。
+  沒有閘門把前端文案綁到後端常數；Jellyfin 與 qBittorrent 的下限本來就是同樣的形狀，要綁就三個一起（例如 `/setup/status`
+  帶下限、文案用插值），不在這一票。
+- `indexer.probe_indexer` 與 `setup._test_connection` 的 Prowlarr 分支各寫一遍「ping → 版本 → 列站」（ping → 列站的重複
+  原本就有）：前者把錯誤收成 `SetupStep`、後者要例外分類，合不起來除非 `_classified` 搬家。
+- `_Outcome.detail` 一欄兩用（站數或版本），`_existing_indexer_step` 靠理由分辨；`unsupported_message` Jellyfin 與 Prowlarr
+  各一支。
+- `probe_indexer` 失敗的理由只分得出「版本太舊」與其餘（一律 `unreachable`，含帳密錯）：既有行為，沒有 repro 不動。

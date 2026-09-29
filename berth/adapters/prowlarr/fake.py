@@ -5,7 +5,15 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from berth.adapters.prowlarr import IndexerDefinition, IndexerRejectedError, ProwlarrIndexer
+from berth.adapters.prowlarr import (
+    IndexerDefinition,
+    IndexerRejectedError,
+    ProwlarrIndexer,
+    ProwlarrStatus,
+)
+
+#: 替身預設回報的版本：berth-trial 套件內那一台（brief §20.14 的實測對象）。
+CURRENT_VERSION = "2.6.5.5623"
 
 #: 假的定義清單：站名與 `definitionName` 都取自真的 `indexer/schema`（`tests/fixtures/`）。
 DEFAULT_DEFINITIONS: tuple[IndexerDefinition, ...] = tuple(
@@ -87,8 +95,11 @@ class FakeProwlarrClient:
         #: 這些站加不進來（連不上、被 CloudFlare 擋），值就是 Prowlarr 回的理由。
         rejects: Mapping[str, str] | None = None,
         host_config: Mapping[str, Any] | None = None,
+        version: str = CURRENT_VERSION,
     ) -> None:
         self.base_url = base_url
+        #: 公開的：測試要在同一個實例上把它換成太舊的一版（M4 票 17）。
+        self.version = version
         self._indexers = indexers or []
         self._definitions = definitions
         #: 兩個旗標都是公開的：測試要在同一個實例上演「服務掛了」再「服務回來了」，
@@ -117,6 +128,11 @@ class FakeProwlarrClient:
     async def ping(self) -> None:
         if self.ping_error is not None:
             raise self.ping_error
+
+    async def status(self) -> ProwlarrStatus:
+        if self.ping_error is not None:
+            raise self.ping_error
+        return ProwlarrStatus(version=self.version)
 
     def present(self) -> list[ProwlarrIndexer]:
         """現在有的站，不經過 `indexers_error`（演練伺服器照它造試搜的回答）。"""

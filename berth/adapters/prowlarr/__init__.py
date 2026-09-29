@@ -7,6 +7,34 @@ from dataclasses import dataclass, field
 from typing import Any, Protocol
 
 from berth.adapters.http import ServiceError
+from berth.adapters.versions import parse_version
+
+#: 支援下限（brief §16.4、§20.14，M4 票 17，`docs/research/prowlarr-version-floor.md`）：Berth
+#: 用到的每一支端點都有的第一個 stable。卡住它的只有匿名的 `GET /ping`（1.3.0.2757 的 develop
+#: 版才加進來，第一個 stable 是 1.3.2.3006）；其餘端點與欄位從第一個 tag 0.1.0.361 就有。
+MIN_VERSION = (1, 3, 2)
+
+
+@dataclass(frozen=True, slots=True)
+class ProwlarrStatus:
+    """`GET /api/v1/system/status` 裡 Berth 讀的那一欄。要 API key，所以它也順便驗了 key。"""
+
+    #: 四段的版號，例如 `2.0.5.5160`。
+    version: str
+
+    @property
+    def supported(self) -> bool:
+        """這台 Prowlarr 夠新嗎。讀不出版號的當成不支援，與 Jellyfin 同一條規則。"""
+        return parse_version(self.version) >= MIN_VERSION
+
+
+def unsupported_message(version: str) -> str:
+    """版本太舊時的原文（英文）。精靈與健康檢查共用同一句，因為那是同一個事實。"""
+    floor = ".".join(str(part) for part in MIN_VERSION)
+    return (
+        f"Prowlarr {version or 'with no version string'} is older than {floor}, "
+        "the oldest version Berth supports"
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -58,6 +86,10 @@ class ProwlarrClient(Protocol):
         """`GET /ping`。設了密碼之後仍然匿名 200（brief §20.7）。"""
         ...
 
+    async def status(self) -> ProwlarrStatus:
+        """`GET /api/v1/system/status`：版本（M4 票 17）。"""
+        ...
+
     async def indexers(self) -> list[ProwlarrIndexer]: ...
 
     async def definitions(self) -> tuple[IndexerDefinition, ...]:
@@ -93,8 +125,11 @@ DEFAULT_APP_PROFILE_ID = 1
 
 __all__ = [
     "DEFAULT_APP_PROFILE_ID",
+    "MIN_VERSION",
     "IndexerDefinition",
     "IndexerRejectedError",
     "ProwlarrClient",
     "ProwlarrIndexer",
+    "ProwlarrStatus",
+    "unsupported_message",
 ]

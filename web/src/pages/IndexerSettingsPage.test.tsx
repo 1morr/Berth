@@ -248,3 +248,51 @@ describe('設定 → 索引站', () => {
     expect(login.getByText(/沒有確認到新的登入生效/)).toBeInTheDocument()
   })
 })
+
+describe('既有 Prowlarr 測不過時的補法（M4 票 17）', () => {
+  function failed(overrides: Partial<IndexerSetup>): IndexerSetup {
+    return indexerSetup({
+      origin: 'existing',
+      options: [],
+      web_ui_login: false,
+      reason: 'unreachable',
+      steps: [step('prowlarr', 'failed', '', 'GET /ping: connection refused')],
+      ...overrides,
+    })
+  }
+
+  it.each([
+    [
+      '比下限舊：叫人升級，不叫人改位址',
+      {
+        base_url: 'http://localhost:9696',
+        reason: 'version_unsupported',
+        steps: [
+          step(
+            'prowlarr',
+            'failed',
+            '1.2.2.2699',
+            'Prowlarr 1.2.2.2699 is older than 1.3.2, the oldest version Berth supports',
+          ),
+        ],
+      },
+      '它比 Berth 支援的下限舊',
+    ],
+    [
+      '測過的是 localhost：說 Berth 在容器裡',
+      { base_url: 'http://127.0.0.1:9696' },
+      'Berth 在容器裡，這個位址指的是 Berth 自己',
+    ],
+    [
+      '其他：一般的那一句',
+      { base_url: 'http://192.168.1.10:9696' },
+      '確認位址、port 與 API key 都對',
+    ],
+  ] as const)('%s', async (_, overrides, fix) => {
+    render({ [INDEXERS]: { body: failed(overrides as Partial<IndexerSetup>) } })
+    renderApp('/settings/indexers')
+
+    const line = (await screen.findByTestId('sites')).querySelector('li')!
+    expect(line).toHaveTextContent(fix)
+  })
+})

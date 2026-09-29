@@ -1693,7 +1693,7 @@ export interface paths {
         put?: never;
         /**
          * Post Jellyfin Connect
-         * @description 既有路徑：登入、建立 API key、列出媒體庫（plan §9.5）。
+         * @description 既有路徑：登入、建立 API key、列出媒體庫（plan §9.5）。還沒選來源是 422。
          */
         post: operations["post_jellyfin_connect_api_setup_jellyfin_connect_post"];
         delete?: never;
@@ -2385,7 +2385,7 @@ export interface components {
          * @description 測試結果的理由。UI 逐服務顯示，所以是封閉集合而不是自由文字。
          * @enum {string}
          */
-        ConnectionReason: "connected" | "setup_pending" | "setup_completed" | "auth_required" | "ip_banned" | "api_key_missing" | "not_deployed" | "unreachable" | "starting" | "protocol_mismatch";
+        ConnectionReason: "connected" | "setup_pending" | "setup_completed" | "auth_required" | "ip_banned" | "api_key_missing" | "not_deployed" | "unreachable" | "starting" | "protocol_mismatch" | "version_unsupported";
         /**
          * ConnectionState
          * @description 選完之後那一次測試的結果（plan §9.3〈服務頁的共同形狀〉）。
@@ -2851,6 +2851,7 @@ export interface components {
             web_ui_username: string;
             /** Error */
             error: string;
+            reason: components["schemas"]["ConnectionReason"] | null;
         };
         /**
          * InterfaceLoginIn

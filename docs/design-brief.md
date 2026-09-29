@@ -640,11 +640,12 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 - **既有服務要給的東西各不相同**（§20.14）：
   - Jellyfin：位址 + **管理員**帳密（不是管理員就拒絕，M4 票 06）；Berth 以它登入、自己建 API key。版本下限 12.0（§19 2026-09-15，2026-09-29 使用者再確認）。
   - qBittorrent：位址 + WebUI 帳密。版本下限 4.4（Web API 2.8.4）。5.2 起它有 API key（`Authorization: Bearer`），之後可當第二種接法，這一輪不做。
-  - Prowlarr：位址 + **API key**（Prowlarr 的「設定 → 一般 → 安全性」）；它的 API 只收 API key，帳密只給瀏覽器登入。也可以是任一 Torznab 端點 + key（Jackett）。Berth 用使用者已有的索引站，不替既有 Prowlarr 加站（M4 票 05 已擋 422）。版本下限未定，M4 票 17 查證後寫進 §20.14。
-- **容器裡的 `localhost`**：使用者填 `localhost` / `127.0.0.1` 時提示：Berth 在容器裡，那指的是 Berth 自己；要填 `host.docker.internal`（Docker Desktop 內建；Linux 由 compose 的 `extra_hosts: ["host.docker.internal:host-gateway"]` 提供，且服務要監聽 `0.0.0.0` 而不是 `127.0.0.1`）或區網 IP（§20.14，M4 票 16、17）。
+  - Prowlarr：位址 + **API key**（Prowlarr 的「設定 → 一般 → 安全性」）；它的 API 只收 API key，帳密只給瀏覽器登入。也可以是任一 Torznab 端點 + key（Jackett）。Berth 用使用者已有的索引站，不替既有 Prowlarr 加站（M4 票 05 已擋 422）。版本下限 1.3.2（卡住它的是匿名的 `/ping`，§20.14，M4 票 17）；Torznab 端點沒有版本下限。
+  - 三個服務的下限都寫在「既有」選項旁（M4 票 17），版本太舊時精靈與健康檢查說出目前版本與下限。
+- **容器裡的 `localhost`**：使用者填 `localhost` / `127.0.0.0/8` / `::1` 時，位址欄下就地提示（只提示、不擋：`network_mode: host` 的部署填 `localhost` 是對的；測試不過時的補法也是同一句，M4 票 17）：Berth 在容器裡，那指的是 Berth 自己；要填 `host.docker.internal`（Docker Desktop 內建；Linux 由 compose 的 `extra_hosts: ["host.docker.internal:host-gateway"]` 提供，且服務要監聽 `0.0.0.0` 而不是 `127.0.0.1`）或區網 IP（§20.14，M4 票 16、17）。
 - **既有 Jellyfin 不搬媒體庫**：Jellyfin 的項目 ID 由路徑算出，改路徑等於全部變成新項目、觀看紀錄歸零。做法是用 Jellyfin 的「一個媒體庫多個路徑」：Berth 按鈕以 `POST /Library/VirtualFolders/Paths` 為既有媒體庫**加**一個 Berth 用的路徑（§20.7），Route 指向新路徑；舊媒體原地不動，在 Berth 只是 unmanaged 檔案。
 - **既有 qBittorrent 不搬舊種、不改全域偏好**：使用者多加一個掛載，Berth 用自己的 `berth-*` category 與新的 save path；舊 torrent 留在原目錄，Berth 忽略非自己分類的 torrent。全域的 save path、temp path、autoTMM 一個都不寫（M4 票 05；Sonarr / Radarr 對下載器同樣只用分類）——改了它們，使用者不經 Berth 加的 torrent 就會落進 Berth 的目錄。全域 autoTMM 關閉也無妨，Berth 送單時逐個 torrent 指定 `autoTMM=true`。temp path 未啟用只給警告，不阻擋。
-- **健康檢查會擋下的情況**：qBittorrent 回報的 save path 在 Berth 看不到；Jellyfin 的媒體庫路徑在 Berth 看不到；兩者在 Berth 內是不同掛載（`link()` 回 `EXDEV`）；qBittorrent 低於 4.4；Jellyfin 低於 12.0（說出目前版本，附升級注意：先完整備份、移除第三方插件、升級後完整掃描、不能降級，§20.9）；媒體庫掛 TVDB 插件（警告，M2 票 09c 起是一件 `library_uses_tvdb` Issue，§9.1）。每項附「哪個容器少了哪個掛載」的 compose 修正片段。
+- **健康檢查會擋下的情況**：qBittorrent 回報的 save path 在 Berth 看不到；Jellyfin 的媒體庫路徑在 Berth 看不到；兩者在 Berth 內是不同掛載（`link()` 回 `EXDEV`）；qBittorrent 低於 4.4；Prowlarr 低於 1.3.2；Jellyfin 低於 12.0（說出目前版本，附升級注意：先完整備份、移除第三方插件、升級後完整掃描、不能降級，§20.9）；媒體庫掛 TVDB 插件（警告，M2 票 09c 起是一件 `library_uses_tvdb` Issue，§9.1）。每項附「哪個容器少了哪個掛載」的 compose 修正片段。
 - **跨主機驗證**：Berth 在 Route 目標寫一個探測檔，再以 `POST /Environment/ValidatePath` 請 Jellyfin 確認看得到同一路徑（§20.7）；Jellyfin 在別台機器而路徑不一致會立刻現形。
 - **不支援**：Jellyfin 10.x（2026-09-15 起只支援 12 以上，§19）；既有 qBittorrent 或 Jellyfin 與 Berth 不在同一台主機、或沒有把同一個父目錄掛在同一個容器路徑（硬鏈接做不到）；remote path mapping（不做，§18；2026-09-29 使用者再確認）。
 
@@ -1321,6 +1322,7 @@ thepiratebay / yts，fixture 在 `tests/fixtures/http/prowlarr/search.*.json` �
 全文、原始碼行號與實測紀錄見 [`docs/research/jellyfin-12.md`](research/jellyfin-12.md)。實測對象是一次性的 linuxserver `12.0ubu2604-ls48`（12.0.0）與 `12.1ubu2604-ls49`（12.1.0），跑完即刪；10.x 的對照引 §20.6 與 `m0-experiments.md`。
 
 - **版號**：12.0 就是原本的 10.12，只拿掉永遠不變的 `10`（2026-09-08 發佈；12.1 在 2026-09-15 發佈）。【文件】
+- **升級注意的出處**：官方發佈文 [Jellyfin 12.0](https://jellyfin.org/posts/jellyfin-release-12.0/) 的 TL;DR 段（`#tl-dr`：先停機完整備份、移除第三方插件、升級後完整掃描、不能降級）；精靈「既有」選項旁的版本下限連到它（M4 票 17）。【文件】
 - **升級是單向的**：10.10.7 或任何 10.11.x 可直接升；資料庫改動讓降級只能靠備份還原。第三方插件要對 .NET 10 重建，10.11 的插件在 12 載入不了。升級後要完整掃描一次，自動分組的版本才會回來。item id 的算法（`MD5(型別全名 + 路徑)`）在 10.11.11 與 12.1 逐字相同，所以一般 Movie / Episode 主條目升級後 id 不變；型別被修正的條目（含自動分組的次要版本）會換 id，缺檔與孤立的條目會被刪。沒有做升級前後逐筆比對的實測。【文件 + 原始碼】
 - **從 10.11 升級的阻力**（2026-09-15 補查，`jellyfin-12.md` §4）：
   - **遷移會失敗**：12.0 發佈一週內仍有 12 條遷移、啟動、媒體庫變空的 open issue，多數沒有維護者回應，其中 #17862 是 12.1 啟動不了。內建的遷移前備份只保護資料庫。
@@ -1424,4 +1426,9 @@ fixture 在 `tests/fixtures/http/{mikan,nyaa,acgrip}/`（來源網址與去掉 t
   - **撞 port**（宿主上的容器佔了 `JELLYFIN_PORT`）：`up -d` 結束碼 1，`Error response from daemon: failed to set up container networking: driver failed programming external connectivity on endpoint …jellyfin (…): Bind for 0.0.0.0:<port> failed: port is already allocated`；**只有那一台停在 `created`**，`berth` 與其他兩台照常 `running`。
   - `COMPOSE_PROFILES=`（空字串，三個都接既有）只起 `berth`。
 - **`extra_hosts: host.docker.internal:host-gateway` 在 Docker Desktop 上不蓋掉內建的解析**（同一次實測）：沒有這一行的容器由 Docker Desktop 的 DNS 解成 `192.168.65.254`；有這一行時 `/etc/hosts` 多出 `192.168.65.254` 與 `fdc4:f303:9324::254` 兩列（`getent hosts` 先回 IPv6 那一個），`berth` 容器以 `http://host.docker.internal:<port>/` 連宿主上發佈的 port 回 200。**Linux 未實測**（沒有環境）；Linux 的條件見上面「容器裡的 `localhost`」那一條。
-- **【待查證，M4 票 17】Prowlarr 的版本下限**：Berth 用到的 `indexer/schema`、`indexer`、`indexer/test`、`search`、`config/host` 各從哪一版起有，查證後把下限與來源寫回這一條。
+- **Prowlarr 的版本下限是 1.3.2**（M4 票 17，2026-09-29 查證；全表與來源在 [`docs/research/prowlarr-version-floor.md`](research/prowlarr-version-floor.md)，讀的是 Prowlarr 各 tag 的原始碼，沒有對 1.3.x 實跑）：
+  - 卡住下限的只有匿名的 `GET /ping`：[`5abb5ad`](https://github.com/Prowlarr/Prowlarr/commit/5abb5ada4991142e871dcfa94c32c8e4cb0ea247)「New: Ping Endpoint」第一個進的是 1.3.0.2757（develop），第一個 stable 是 **1.3.2.3006**（2023-04-07）。1.2.2.2699 雖然較晚發佈，但不含這個 commit。
+  - 其餘端點與欄位從第一個 tag 0.1.0.361（2021-06）就有：`/api/v1` 前綴；`indexer` 的列、建（帶 `appProfileId`，內建 id 1）、`schema`、`test`、刪；`config/host` 的 `authenticationMethod` / `username` / `password`；`search` 的 `query` / 重複的 `indexerIds` 與 Berth 讀的每一個回應欄位；`system/status` 的 `version`。`type=search` 是 0.1.4.1155、`authenticationRequired` 是 1.0.0.2171。【原始碼】
+  - `passwordConfirmation` 要到 1.10.5.4116 才有，但不推高下限：Berth 只替套件內那一台設登入，而舊版的 JSON 設定不拒收多的欄位（讀序列化設定推論，未實跑）。
+  - 版本從 **`GET /api/v1/system/status` 的 `version`** 讀，四段（`2.6.5.5623`，berth-lab 實測錄成 `tests/fixtures/http/prowlarr/system-status.json`）。它**要 API key**（不帶是 401，實測），所以這一支也順便驗了 key。
+  - 目前最新 stable 是 2.6.5.5623（2026-09-16）。2.6.3 起多了 Allowed Hosts：使用者自己設了清單時，Berth 用別的主機名連可能被擋，回什麼沒查。

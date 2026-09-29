@@ -814,6 +814,8 @@ class ConnectionReason(StrEnum):
     STARTING = "starting"
     #: 連得上但回的東西不是預期的服務。
     PROTOCOL_MISMATCH = "protocol_mismatch"
+    #: 連得上、是對的服務，但版本比 Berth 的下限舊（Prowlarr，M4 票 17）。等不會好，要升級。
+    VERSION_UNSUPPORTED = "version_unsupported"
 
 
 class PlanStatus(StrEnum):

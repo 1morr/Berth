@@ -206,6 +206,7 @@ export function indexerSetup(overrides: Partial<IndexerSetup> = {}): IndexerSetu
     web_ui_login: true,
     web_ui_username: '',
     error: '',
+    reason: null,
     ...overrides,
   }
 }
