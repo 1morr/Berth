@@ -603,10 +603,11 @@ class TestFeeds:
 
 class TestTwoRoundsAtOnce:
     """「立即輪詢」與背景 poller 同時輪同一個 Feed（真服務 e2e 2026-09-27 撞到：剛加的 Feed
-    從沒輪過，背景那一輪也挑到它）。兩邊各長一次同一個 RSS Series，後寫的撞 `rss_series.key`
-    的 unique，而 `poll_due` 把那個例外寫進 Feed 的 `last_error`——前一輪其實好好做完了。"""
+    從沒輪過，背景那一輪也挑到它）。兩邊一起輪會各長一次同一個 RSS Series，後寫的撞
+    `rss_series.key` 的 unique，而 `poll_due` 把那個例外寫進 Feed 的 `last_error`——前一輪其實
+    好好做完了。後到的不另輪，拿正在跑的那一輪的結果（M4 票 13c）。"""
 
-    async def test_they_take_turns_and_neither_fails(
+    async def test_only_one_round_runs_and_neither_fails(
         self, engine: AsyncEngine, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
         _, _, factory = await harbour(session, roots)
@@ -625,10 +626,57 @@ class TestTwoRoundsAtOnce:
         outcome, polled = await asyncio.gather(by_hand(), in_background())
 
         assert (outcome.items, polled) == (12, 1)
+        assert factory.rss_.requested.count(FEED_URL) == 1
         row = await session.get(RssFeed, feed.id, populate_existing=True)
         assert row is not None
         assert row.last_error == ""
         assert await count(session, RssSeries) == 11
+
+    async def test_the_later_one_reports_the_round_it_waited_for(
+        self, engine: AsyncEngine, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """背景那一輪先拿到 Feed、「立即輪詢」後到（M4 票 13c，CI run 36614179332）：後到的若自己
+        再輪一次，讀到的全是看過的 Item，畫面說「新 0 筆」，但那 12 筆其實剛被背景那一輪收下。"""
+        _, _, factory = await harbour(session, roots)
+        gate = _GatedFetcher(factory.rss_.pages, hold=FEED_URL)
+        factory.rss_ = gate
+        feed = await add_feed(session, url=FEED_URL, name="Mikan")
+        await session.commit()
+        sessions = create_session_factory(engine)
+
+        async def in_background() -> int:
+            async with sessions() as mine:
+                return await poll_due(mine, factory, now=NOW)
+
+        async def by_hand() -> PollOutcome:
+            async with sessions() as mine:
+                return await poll_feed(mine, factory, feed.id, now=NOW)
+
+        background = asyncio.create_task(in_background())
+        await gate.entered.wait()
+        pressed = asyncio.create_task(by_hand())
+        await asyncio.sleep(0.05)
+        gate.release.set()
+        polled, outcome = await asyncio.gather(background, pressed)
+
+        assert (polled, outcome.items, outcome.series) == (1, 12, 11)
+        assert gate.requested.count(FEED_URL) == 1
+
+
+class _GatedFetcher(FakeFeedFetcher):
+    """抓 `hold` 那一條網址時停下來，等測試放行：讓「背景那一輪已經在跑」成為確定的狀態。"""
+
+    def __init__(self, pages: dict[str, bytes], *, hold: str) -> None:
+        super().__init__(pages)
+        self.hold = hold
+        self.entered = asyncio.Event()
+        self.release = asyncio.Event()
+
+    async def fetch(self, url: str) -> bytes:
+        if url == self.hold:
+            self.entered.set()
+            await self.release.wait()
+        return await super().fetch(url)
 
 
 class TestSchedule:

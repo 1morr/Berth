@@ -1200,6 +1200,8 @@ split-cour 的第一批被播出日比對整批擋在審核，改正一次並套
 - **搜尋 feed 的第一輪預覽要兩秒多**（M4 票 13b）：30 筆的預覽把同一個發佈名丟給 guessit 約四次，一次 120 次、握著
   事件迴圈，背景同時規劃補舊集時前端 e2e 5 秒內等不到它。`parse_release` 記住最近 2048 個名字的結果，預覽降到
   0.15 秒左右、建搜尋 feed 降到 1 秒內；量測腳本 `scripts/experiments/rss_subscribe_timing.py`。
+- **剛加的 Feed 按「立即輪詢」偶爾說「新 0 筆」**（M4 票 13c）：背景 poller 正好在輪它時，按下去的那一輪排在後面，
+  讀到的全是前一輪剛收下的 Item。後到的現在直接拿正在跑的那一輪的結果（Go `singleflight` 的做法），不再多抓一次。
 - **精靈第 2 步探測完，「前往泊位 1」上方印出一行程式碼註解**（M4 票 10）：`//` 註解寫在 JSX 子節點裡就是文字。
   `pnpm -C web lint` 多開 `@eslint-react/jsx-no-comment-textnodes` 擋這一型（`web/src/lint.test.ts` 守著它還開著）。
 

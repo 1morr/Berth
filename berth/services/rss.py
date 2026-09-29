@@ -39,6 +39,7 @@ Job 已經在了、或另一筆已經送過）→ 帳本已有同 Media / 季 / 
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
@@ -97,7 +98,6 @@ from berth.services.jobs import (
     FILTER_STATES,
     JobRejectedError,
     JobSource,
-    KeyedLocks,
     actor_of,
     add_download,
     freeze,
@@ -124,8 +124,8 @@ LOOKUP_RETRIES = (timedelta(hours=1), timedelta(hours=4), timedelta(hours=12))
 #: TMDB 在重認理由裡的站名，與請求預算同一種鍵（`site_of`）。
 _TMDB_SITE = site_of(TMDB_BASE_URL)
 
-#: 一個 Feed 一把程序內的鎖（`poll_feed`）。
-_feed_locks = KeyedLocks()
+#: 正在跑的那一輪（`poll_feed`）：Feed id → 做完時放進結果（沒做完就結束是 `None`）。
+_rounds: dict[int, asyncio.Future[PollOutcome | None]] = {}
 
 #: 自動綁定的 `bound_by`（`events.actor` 的 `system`）。
 SYSTEM = actor_of(None)
@@ -580,12 +580,26 @@ async def poll_feed(
 
     可逆但沒有單一反向命令：它長出的 Item 與 Series 是紀錄，送出去的 Job 有自己的刪除範圍。
 
-    **同一個 Feed 一次只輪一輪**（`_feed_locks`）：人按「立即輪詢」時背景 poller 也可能正挑到它
-    （剛加的 Feed 從沒輪過，兩邊同時到），兩輪各長一次同一個 RSS Series 會撞 `rss_series.key` 的
-    unique（2026-09-27 真服務 e2e）。後到的那一輪等前一輪做完，讀到的都是看過的 Item。
+    **同一個 Feed 一次只輪一輪，後到的拿正在跑的那一輪的結果**（`_rounds`；Go `singleflight` 的
+    做法）：人按「立即輪詢」時背景 poller 也可能正挑到它（剛加的 Feed 從沒輪過，兩邊同時到）。兩輪
+    一起跑會各長一次同一個 RSS Series、撞 `rss_series.key` 的 unique（2026-09-27 真服務 e2e）；
+    排隊再輪一次則讀到的全是看過的 Item，畫面說「新 0 筆」而那幾筆剛被前一輪收下（M4 票 13c），
+    還多花一個請求預算。後到的拿的是前一輪的 `now` 算出的結果；前一輪沒做完就結束（例外、被
+    cancel）時，後到的自己再輪。
     """
-    async with _feed_locks.hold(str(feed_id)):
-        return await _poll_feed(session, factory, feed_id, now=now)
+    while (running := _rounds.get(feed_id)) is not None:
+        # shield：後到的被 cancel 時不能連帶 cancel 別人也在等的那一個結果。
+        if (shared := await asyncio.shield(running)) is not None:
+            return shared
+    running = asyncio.get_running_loop().create_future()
+    _rounds[feed_id] = running
+    outcome = None
+    try:
+        outcome = await _poll_feed(session, factory, feed_id, now=now)
+        return outcome
+    finally:
+        del _rounds[feed_id]
+        running.set_result(outcome)
 
 
 async def _poll_feed(
