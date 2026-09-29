@@ -2,7 +2,7 @@
 target: 精靈第 1 步 擁有者
 total_score: 31
 max_score: 40
-na_heuristics: 
+na_heuristics:
 p0_count: 0
 p1_count: 2
 target_identity: "file:C:\\Users\\Roxy\\orca\\projects\\MediaServer\\web\\src\\setup\\OwnerStep.tsx"

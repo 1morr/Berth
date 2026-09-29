@@ -17,11 +17,11 @@
 
 1. 讀 `docs/progress.md` 的 session 紀錄與偏差，再讀票；只讀票列出的 plan / brief 章節，其他按需讀。
 2. `/implement <票路徑>`：tdd、定期 typecheck、結尾 `/code-review <開工時的 commit>`、commit。
-3. 驗證：跑 lint、type、test；貼指令輸出。
+3. 驗證：README「全部檢查」（`pre-commit run --all-files`：lint、type 與檔案衛生）加 test；貼指令輸出。
 4. 實作若推翻 plan 或 brief，同一 commit 改文件，並在 progress.md「偏差與決定」記一行。
 5. 票的 `Status:` 改為 `done`、勾掉驗收條件、code-review 未處理的發現記到票的 `## Comments`；progress.md 加一行 session 紀錄；commit；提醒使用者開新 session。
 
-完成標準：票上每個驗收條件打勾、lint / type / test 綠燈、progress.md 已更新、已 commit。缺一就還沒完成。
+完成標準：票上每個驗收條件打勾、全部檢查與 test 綠燈、progress.md 已更新、已 commit。缺一就還沒完成。
 
 ## 事實與查證
 

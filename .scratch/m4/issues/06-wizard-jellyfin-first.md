@@ -73,4 +73,3 @@ Berth 登入一律交給 Jellyfin（`berth/services/auth.py:1-8`，Seerr 的慣�
 - `claim_owner`、`open_session` 是寫入命令，落在 `BEFORE_M3` 豁免的 `setup`、`auth` 模組，`test_command_marks.py` 守不到（M5 補標記時一起）。
 - `SetupIndexer` 同時有 `web_ui_password`（要設的）與 `login_password`（上次寫進去的），差別只在註解；07 動這兩格時考慮改名。
 - 非管理員在精靈跑到一半時自己去 `/login` 登入，`/setup` 會讓他留在精靈頁、每一支回 403（守衛只看有沒有 session）。罕見，沒有擋。
-

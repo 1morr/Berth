@@ -2,7 +2,7 @@
 target: M4 票 15 設定精靈（手動選擇）
 total_score: 26
 max_score: 40
-na_heuristics: 
+na_heuristics:
 p0_count: 0
 p1_count: 3
 target_identity: "file:C:\\Users\\Roxy\\orca\\projects\\MediaServer\\web\\src\\pages\\SetupPage.tsx"
