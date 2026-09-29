@@ -30,8 +30,10 @@ test('精靈跑完之後：/setup 導向設定頁，加一個索引站並試搜�
   await main.getByRole('button', { name: '測試 YTS' }).click()
   await main.getByRole('checkbox', { name: 'YTS' }).check()
   await main.getByRole('button', { name: '加入 1 個站' }).click()
-  await main.getByRole('button', { name: '搜尋全部' }).click()
+  // 「搜尋全部」搜的是按下去那一刻已加入的站：加站回來之前按，YTS 那一列會停在「還沒搜」（M4 票 13c）。
   const yts = page.getByTestId('trial').getByRole('listitem').filter({ hasText: 'YTS' }).first()
+  await expect(yts).toBeVisible()
+  await main.getByRole('button', { name: '搜尋全部' }).click()
   await expect(yts.getByText(/\d+ 筆/)).toBeVisible()
   await shot(page, 'indexers')
 
