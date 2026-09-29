@@ -1,4 +1,5 @@
-import { JELLYFIN_STEPS, type JellyfinStep } from '../api/setup'
+import { JELLYFIN_STEPS, type JellyfinSetup, type JellyfinStep } from '../api/setup'
+import { type SetupStep } from '../api/schemas'
 
 /**
  * plan §9.4 的七步。**每一步標的是它真的打的那支端點**，不是一句形容——剖面裡逐行列出來，
@@ -61,4 +62,9 @@ export function manualSteps(step: string, base: string): readonly string[] {
 
 export function isJellyfinStep(step: string): step is JellyfinStep {
   return (JELLYFIN_STEPS as readonly string[]).includes(step)
+}
+
+/** 建媒體庫（或加路徑）那一步失敗了：它記在 Jellyfin 的 `libraries` 那一步上。 */
+export function librariesFailed(jellyfin: JellyfinSetup): SetupStep | undefined {
+  return jellyfin.steps.find((row) => row.step === 'libraries' && row.status === 'failed')
 }

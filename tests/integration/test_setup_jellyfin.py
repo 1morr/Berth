@@ -46,6 +46,7 @@ from berth.services.jellyfin import (
     connect_jellyfin,
     save_bundled_libraries,
 )
+from berth.services.routes import read_route_status
 from berth.services.settings import read_settings, write_settings
 from berth.services.setup import STEP_INDEXER, STEP_ROUTES, read_status
 from tests.integration.arrange import chosen, own
@@ -694,6 +695,70 @@ async def test_adding_a_berth_path_leaves_the_old_paths_alone(
     assert movies.locations == ("/volume1/media/movies", f"{library_root}/電影")
     assert movies.has_berth_path is True
     assert (tmp_path / "library" / "電影").is_dir()
+
+
+@pytest.mark.asyncio
+async def test_a_berth_path_added_under_the_spaced_slug_still_counts(
+    session: AsyncSession, tmp_path: Path
+) -> None:
+    """票 08 之前加的 Berth 路徑帶空白（`…/tv shows`）：它仍是這個媒體庫的 Berth 路徑，
+    不再加一條 `…/tv-shows`（已經加上的路徑與 Route、分類一樣不改名）。"""
+    library_root = str(tmp_path / "library")
+    legacy = f"{library_root}/tv shows"
+    Path(legacy).mkdir(parents=True)
+    await seed(
+        session,
+        origin=ServiceOrigin.EXISTING,
+        base_url="http://nas:8096",
+        library_root=library_root,
+    )
+    shows = JellyfinLibrary(
+        name="TV Shows",
+        item_id="a3",
+        collection_type="tvshows",
+        locations=("/volume1/media/tv", legacy),
+        type_options=(),
+    )
+    factory = FakeClientFactory(jellyfin=nas_jellyfin(libraries=(shows,)))
+    await connect_jellyfin(session, factory, username="owner", password="s3cret")
+
+    status = await add_berth_path(session, factory, library_name="TV Shows")
+
+    [view] = status.libraries
+    assert view.locations == ("/volume1/media/tv", legacy)
+    assert (view.berth_path, view.has_berth_path) == (legacy, True)
+    assert not (tmp_path / "library" / "tv-shows").exists()
+    [choice] = (await read_route_status(session)).libraries
+    assert (choice.berth_path, choice.has_berth_path, choice.target_path) == (legacy, True, legacy)
+
+
+@pytest.mark.asyncio
+async def test_a_new_library_with_spaces_gets_the_hyphenated_berth_path(
+    session: AsyncSession, tmp_path: Path
+) -> None:
+    """反向：還沒有 Berth 路徑的媒體庫照新規則加 `…/tv-shows`。"""
+    library_root = str(tmp_path / "library")
+    await seed(
+        session,
+        origin=ServiceOrigin.EXISTING,
+        base_url="http://nas:8096",
+        library_root=library_root,
+    )
+    shows = JellyfinLibrary(
+        name="TV Shows",
+        item_id="a3",
+        collection_type="tvshows",
+        locations=("/volume1/media/tv",),
+        type_options=(),
+    )
+    factory = FakeClientFactory(jellyfin=nas_jellyfin(libraries=(shows,)))
+    await connect_jellyfin(session, factory, username="owner", password="s3cret")
+
+    status = await add_berth_path(session, factory, library_name="TV Shows")
+
+    [view] = status.libraries
+    assert view.locations == ("/volume1/media/tv", f"{library_root}/tv-shows")
+    assert view.has_berth_path is True
 
 
 @pytest.mark.asyncio

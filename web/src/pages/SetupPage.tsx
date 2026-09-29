@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
@@ -33,13 +33,11 @@ import {
   type ChoiceInput,
   type IndexerSetup,
   type JellyfinSetup,
-  type LibraryDraft,
-  type RouteSelectionInput,
   type RouteSetup,
   type SetupStatus,
   type TmdbSetup,
 } from '../api/setup'
-import { type QbittorrentSetup, type ServiceKind, type SetupStep } from '../api/schemas'
+import { type QbittorrentSetup, type ServiceKind } from '../api/schemas'
 import { meQueryOptions } from '../api/auth'
 import { healthQueryOptions } from '../api/health'
 import { routeRefusalOf } from '../api/routes'
@@ -49,11 +47,10 @@ import { BerthBoard, type BerthSignals } from '../setup/BerthBoard'
 import { BerthNav, RevisitNote } from '../setup/BerthNav'
 import { CompleteStep, type CompleteFailure } from '../setup/CompleteStep'
 import { IndexerStep } from '../setup/IndexerStep'
-import { AddPathFailure } from '../setup/JellyfinExisting'
-import { JellyfinStep } from '../setup/JellyfinStep'
 import { OwnerStep } from '../setup/OwnerStep'
 import { QbittorrentStep } from '../setup/QbittorrentStep'
-import { RouteStep } from '../setup/RouteStep'
+import { librariesFailed } from '../setup/jellyfinSteps'
+import { RouteStep, type DockFailure, type DockPlan } from '../setup/RouteStep'
 import { TmdbStep } from '../setup/TmdbStep'
 import {
   BERTH_STEP,
@@ -103,8 +100,6 @@ export function SetupPage() {
   const status = useQuery(setupStatusQueryOptions)
   // 步驟是由狀態導出的（plan §9.3），所以「停在結果上」與「回頭看」都靠這個覆寫，不是靠改狀態。
   const [pinned, setPinned] = useState<number | null>(null)
-  // 頁 3 套件內那一半顯示清單還是 Route。`null` 是照狀態：清單建完之前是清單。
-  const [libraryView, setLibraryView] = useState<boolean | null>(null)
 
   const current = status.data
   const backend = current?.current_step ?? STEP.jellyfin
@@ -201,28 +196,35 @@ export function SetupPage() {
     mutationFn: saveBundledLibraries,
     onSuccess: (next) => queryClient.setQueryData(jellyfinSetupQueryOptions.queryKey, next),
   })
-  // 先存剖面上的那一份再跑：`bootstrap` 讀的是存下來的清單，而停手存檔可能還沒送出去。
-  // 按下去那一刻也把頁 3 釘在清單上：建完之後停在結果上，按「前往 Route 與檢查」才走（票 06d 的規則）。
-  const bootstrap = useMutation({
-    mutationFn: async (libraries: LibraryDraft[]) => {
-      await saveBundledLibraries(libraries)
-      return bootstrapJellyfin()
+  // 頁 3 的「建立並檢查」（M4 票 08）：一顆鈕照順序做完，一段失敗就停、後面的不送。建媒體庫與加路徑
+  // 的失敗不是 4xx，而是 Jellyfin 那一份的 `libraries` 那一步變紅——那時不建 Route，畫面讀它說原文。
+  const dock = useMutation({
+    mutationFn: async (plan: DockPlan): Promise<RouteSetup | null> => {
+      if (plan.origin === 'bundled') {
+        // 先存清單再建：`bootstrap` 讀的是存下來的那一份，而停手存檔可能還沒送出去。
+        await saveBundledLibraries(plan.libraries)
+        if (plan.buildLibraries && !(await stepThrough(bootstrapJellyfin()))) return null
+        return buildRoutes([])
+      }
+      for (const library of plan.newPaths) {
+        if (!(await stepThrough(addLibraryPath(library)))) return null
+      }
+      return buildRoutes(plan.selections)
     },
-    onMutate: () => {
-      hold()
-      setLibraryView(true)
-    },
-    onSuccess: absorbJellyfin,
-  })
-  const addPath = useMutation({
-    mutationFn: addLibraryPath,
     onMutate: hold,
     onSuccess: (next) => {
-      absorbJellyfin(next)
-      // 媒體庫路徑那一格的清單裡多了一條路徑，那份也要重讀。
-      void queryClient.invalidateQueries({ queryKey: routeSetupQueryOptions.queryKey })
+      if (next) absorbBerth(routeSetupQueryOptions.queryKey, next)
+      // 媒體庫清單或某個媒體庫的路徑變了：那一份也要重讀。
+      else void queryClient.invalidateQueries({ queryKey: routeSetupQueryOptions.queryKey })
     },
   })
+
+  /** Jellyfin 那一段做完了，照實收下；它的 `libraries` 那一步紅了就不往下走。 */
+  async function stepThrough(request: Promise<JellyfinSetup>): Promise<boolean> {
+    const next = await request
+    absorbJellyfin(next)
+    return librariesFailed(next) === undefined
+  }
   const applyPreferences = useMutation({
     mutationFn: applyQbittorrent,
     onMutate: hold,
@@ -256,11 +258,6 @@ export function SetupPage() {
     onMutate: hold,
     onSuccess: (next) => absorbBerth(tmdbSetupQueryOptions.queryKey, next),
   })
-  const build = useMutation({
-    mutationFn: (selections: RouteSelectionInput[]) => buildRoutes(selections),
-    onMutate: hold,
-    onSuccess: (next) => absorbBerth(routeSetupQueryOptions.queryKey, next),
-  })
   const finish = useMutation({
     mutationFn: completeSetup,
     onSuccess: (next) => {
@@ -277,15 +274,14 @@ export function SetupPage() {
 
   // 套件內那一台還在啟動：每 3 秒重測，直到有結論或後端判逾時（M3 票 06g 的三種樣子）。
   const waitingKind = current?.services.find((row) => row.state === 'waiting')?.kind
-  const inFlight = bootstrap.isPending
-  // 靠泊之前那一次存檔被擋下來：那不是「請求沒跑完」，由剖面自己說（`librariesFailure`）。
-  const bootstrapRefusal = bundledRefusalOf(bootstrap.error)
+  // 按下之前那一次存檔被擋下來：那不是「請求沒跑完」，由清單自己說（`librariesFailure`）。
+  const dockRefusal = bundledRefusalOf(dock.error)
 
   // 套件內 Jellyfin 的媒體庫清單在頁 3（M4 票 15 從 Jellyfin 頁搬過來）。這一支不連線，只讀存下的狀態。
   const jellyfin = useQuery({
     ...jellyfinSetupQueryOptions,
     enabled: step === STEP.routes,
-    refetchInterval: inFlight ? PROGRESS_INTERVAL_MS : false,
+    refetchInterval: dock.isPending ? PROGRESS_INTERVAL_MS : false,
   })
   const qbittorrentChoice = current?.services.find((row) => row.kind === 'qbittorrent')
   // 頁 2 的差異是**現查的**：使用者可能在 qBittorrent 自己的介面上改過東西。**選了、連上了才問**
@@ -307,22 +303,6 @@ export function SetupPage() {
     )
     return () => window.clearTimeout(timer)
   }, [waitingKind, retest, choose.isPending])
-
-  // 頁 3 套件內那一半：媒體庫清單建完之前先給清單（票 06f），建完之後是 Route。使用者可以來回切。
-  const librariesBuilt = jellyfinLibrariesBuilt(jellyfin.data)
-  const showLibraries = jellyfin.data?.origin === 'bundled' && (libraryView ?? !librariesBuilt)
-
-  // 套件內的媒體庫路徑沒有要選的東西：第一次走到這一格就自動建 Route、跑五條檢查（票 06d）。
-  // 只在「後端正停在這一步、一條 Route 都還沒有」時跑一次；回頭看不重跑，要重跑有按鈕。
-  const autoBuilt = useRef(false)
-  const routeSetup = routes.data
-  useEffect(() => {
-    if (autoBuilt.current || step !== STEP.routes || backend !== STEP.routes) return
-    if (showLibraries || !librariesBuilt) return
-    if (routeSetup?.origin !== 'bundled' || routeSetup.routes.length > 0) return
-    autoBuilt.current = true
-    build.mutate([])
-  }, [step, backend, routeSetup, build, showLibraries, librariesBuilt])
 
   if (!current) {
     return (
@@ -346,8 +326,8 @@ export function SetupPage() {
 
   /** 媒體庫清單沒存下來的那一句：後端說得出是哪一列就說，說不出就是請求沒跑完（票 06f）。 */
   function librariesFailure(): string | null {
-    // 停手存檔的失敗（任何一種）優先；靠泊之前那一次存檔被擋下來也算——那時 `bootstrap` 失敗的原因就是它。
-    const refusal = saveLibraries.isError ? bundledRefusalOf(saveLibraries.error) : bootstrapRefusal
+    // 停手存檔的失敗（任何一種）優先；按下之前那一次存檔被擋下來也算——那時 `dock` 失敗的原因就是它。
+    const refusal = saveLibraries.isError ? bundledRefusalOf(saveLibraries.error) : dockRefusal
     if (saveLibraries.isError && !refusal) return t('jellyfin.bundled.list.saveFailed')
     if (!refusal) return null
     const reason = t(`jellyfin.bundled.list.problem.${refusal.reason}`)
@@ -365,7 +345,7 @@ export function SetupPage() {
     signals: {
       jellyfin: jellyfinSignal(current),
       qbittorrent: qbittorrentSignal(current, qbittorrent.data, applyPreferences.isPending),
-      library: librarySignal(current, routes.data, jellyfin.data, build.isPending || inFlight),
+      library: librarySignal(current, routes.data, jellyfin.data, dock.isPending),
       prowlarr: indexerSignal(
         current,
         indexers.data,
@@ -404,75 +384,34 @@ export function SetupPage() {
           note={note}
           nav={nav}
         />
-      ) : step === STEP.routes && showLibraries ? (
-        jellyfin.data ? (
-          <JellyfinStep
-            setup={jellyfin.data}
-            running={bootstrap.isPending}
-            bootstrapFailed={bootstrap.isError && !bootstrapRefusal}
-            onBootstrap={(libraries) => bootstrap.mutate(libraries)}
+      ) : step === STEP.routes ? (
+        routes.data && jellyfin.data ? (
+          <RouteStep
+            setup={routes.data}
+            done={advanced(step, backend)}
+            jellyfin={jellyfin.data}
+            existing={{
+              jellyfin: routes.data.origin === 'existing',
+              qbittorrent: qbittorrentChoice?.origin === 'existing',
+            }}
+            docking={dock.isPending}
+            failure={dockFailure(dock.error)}
+            onDock={(plan) => dock.mutate(plan)}
             onSaveLibraries={(libraries) => saveLibraries.mutate(libraries)}
             savingLibraries={saveLibraries.isPending}
             saveLibrariesFailed={librariesFailure()}
-            note={
-              <>
-                {note}
-                {librariesBuilt && (
-                  <div className="mt-4">
-                    {/* 建完之後焦點接到這一顆（`StepFrame`）：它就是這一頁接下來要按的。 */}
-                    <GhostButton
-                      type="button"
-                      data-berth-next
-                      onClick={() => setLibraryView(false)}
-                    >
-                      {t('jellyfin.bundled.toRoutes')}
-                    </GhostButton>
-                  </div>
-                )}
-              </>
-            }
-            nav={nav}
-          />
-        ) : (
-          <Waiting failed={jellyfin.isError} message={t('jellyfin.unreachable')} nav={nav} />
-        )
-      ) : step === STEP.routes ? (
-        routes.data ? (
-          <RouteStep
-            setup={routes.data}
-            building={build.isPending}
-            addingPath={addPath.isPending ? addPath.variables : null}
-            requestFailed={build.isError}
-            refusal={routeRefusalOf(build.error)}
-            onBuild={(selections) => build.mutate(selections)}
-            onAddPath={(library) => addPath.mutate(library)}
             onRouteDeleted={() =>
               void queryClient.invalidateQueries({ queryKey: routeSetupQueryOptions.queryKey })
             }
-            autoBuilding={build.isIdle || build.isPending}
-            note={
-              <>
-                {note}
-                {routes.data.origin === 'bundled' && (
-                  <div className="mt-4">
-                    <GhostButton type="button" onClick={() => setLibraryView(true)}>
-                      {t('jellyfin.bundled.editList')}
-                    </GhostButton>
-                  </div>
-                )}
-                {/* 既有 Jellyfin「加入 Berth 路徑」沒加上：原文與怎麼改掛載（plan §9.5）。 */}
-                {addPathFailure(jellyfin.data) && (
-                  <AddPathFailure
-                    step={addPathFailure(jellyfin.data)!}
-                    baseUrl={jellyfin.data!.base_url}
-                  />
-                )}
-              </>
-            }
+            note={note}
             nav={nav}
           />
         ) : (
-          <Waiting failed={routes.isError} message={t('routes.unreachable')} nav={nav} />
+          <Waiting
+            failed={routes.isError || jellyfin.isError}
+            message={t('routes.unreachable')}
+            nav={nav}
+          />
         )
       ) : step === STEP.complete ? (
         routes.data ? (
@@ -547,15 +486,13 @@ function Waiting({ failed, message, nav }: { failed: boolean; message: string; n
   )
 }
 
-/** 既有 Jellyfin 上一次「加入 Berth 路徑」失敗的那一步（它記在 `libraries` 那一步上）。 */
-function addPathFailure(setup: JellyfinSetup | undefined): SetupStep | undefined {
-  if (setup?.origin !== 'existing') return undefined
-  return setup.steps.find((row) => row.step === 'libraries' && row.status === 'failed')
-}
-
-/** 套件內 Jellyfin 的媒體庫清單建完了沒（票 06f）：`libraries` 那一步有結論。 */
-function jellyfinLibrariesBuilt(setup: JellyfinSetup | undefined): boolean {
-  return setup?.steps.some((row) => row.step === 'libraries' && isSettled(row.status)) ?? false
+/**
+ * 「建立並檢查」沒走完的那一種。清單被擋下來不算（清單自己說，`librariesFailure`）；建 Route 途中有一條
+ * 被另一個分頁刪掉說得出原因（M2 票 01）；其餘是請求沒走完。
+ */
+function dockFailure(error: unknown): DockFailure | null {
+  if (error === null || error === undefined || bundledRefusalOf(error)) return null
+  return routeRefusalOf(error)?.reason === 'route_missing' ? 'route_missing' : 'request'
 }
 
 /**

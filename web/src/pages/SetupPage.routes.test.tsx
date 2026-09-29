@@ -13,13 +13,13 @@ import {
   indexerSetup,
   jellyfinSetup,
   libraryChoice,
-  library,
   routeSetup,
   routeView,
   setupStatus,
   step,
   tmdbSetup,
 } from '../test/fixtures'
+import { type RouteView } from '../api/schemas'
 import { SetupPage } from './SetupPage'
 
 afterEach(() => {
@@ -30,11 +30,17 @@ const STATUS = 'GET /api/setup/status'
 const ROUTES = 'GET /api/setup/routes'
 const BUILD = 'POST /api/setup/routes'
 const COMPLETE = 'POST /api/setup/complete'
-const ADD_PATH = 'POST /api/setup/jellyfin/libraries/paths'
 const INDEXERS = 'GET /api/setup/indexers'
 const TMDB = 'GET /api/setup/tmdb'
 
 const JELLYFIN = 'GET /api/setup/jellyfin'
+
+/** 送出去的每一個寫入請求（非 GET），依序。 */
+function writes(fetch: ReturnType<typeof stubApi>): string[] {
+  return fetch.mock.calls
+    .filter(([, init]) => (init?.method ?? 'GET') !== 'GET')
+    .map(([input, init]) => `${init?.method} ${String(input)}`)
+}
 
 /** Jellyfin 與 qBittorrent 都接好了，精靈在媒體庫與路徑（頁 3，票 06d 移到 qBittorrent 之後）。 */
 const AT_ROUTES = setupStatus({
@@ -46,13 +52,23 @@ const AT_ROUTES = setupStatus({
 /** 每個泊位都接好了，剩下按完成。 */
 const AT_THE_END = setupStatus({ ...AT_ROUTES, current_step: 6, services: ALL_BUNDLED })
 
-/**
- * 頁 3、套件內 Jellyfin、媒體庫清單建完了（`libraries` 那一步 ok）：畫的是 Route 那一半，
- * 自動建立也才會跑（M4 票 15，清單從 Jellyfin 頁搬到這一頁的前半）。
- */
+/** 頁 3、套件內 Jellyfin、清單上的媒體庫都建好了：按下只建 Route（M4 票 08）。 */
 const BUNDLED_PAGE = {
   [STATUS]: { body: AT_ROUTES },
-  [JELLYFIN]: { body: jellyfinSetup({ steps: SEQUENCE_DONE, api_key_present: true }) },
+  [JELLYFIN]: {
+    body: jellyfinSetup({
+      steps: SEQUENCE_DONE,
+      api_key_present: true,
+      bundled: jellyfinSetup().bundled.map((row) => ({ ...row, built: true })),
+    }),
+  },
+  'PUT /api/setup/jellyfin/bundled': {
+    body: jellyfinSetup({
+      steps: SEQUENCE_DONE,
+      api_key_present: true,
+      bundled: jellyfinSetup().bundled.map((row) => ({ ...row, built: true })),
+    }),
+  },
 }
 
 /** 頁 3、既有 Jellyfin：沒有清單，直接是 Route 的勾選。 */
@@ -88,52 +104,25 @@ const BUILT = routeSetup({
 })
 
 describe('頁 3：媒體庫路徑（套件內）', () => {
-  /** 套件內沒有要選的東西，第一次走到這一格就自動跑（票 06d）。建立還在路上時看得到剖面。 */
-  it('自動建立還在跑時，剖面列出將建立的三條 Route 與它們的寫入目標，沒有要按的鍵', async () => {
-    stubApi({
-      ...BUNDLED_PAGE,
-      [ROUTES]: { body: routeSetup() },
-      [BUILD]: () => new Promise(() => {}),
-    })
+  it('進頁不送任何寫入：一顆「建立並檢查」，按下才建（M4 票 08）', async () => {
+    const fetch = stubApi({ ...BUNDLED_PAGE, [ROUTES]: { body: routeSetup() } })
 
     renderWithProviders(<SetupPage />)
-    const plan = (await screen.findByText('將建立')).closest('section')!
 
-    expect(within(plan).getByText('Movies')).toBeInTheDocument()
-    expect(within(plan).getByText('/data/library/tv')).toBeInTheDocument()
-    expect(await screen.findByText(/走到這一格就自動跑/)).toBeVisible()
-    expect(screen.queryByRole('button', { name: /Route 並檢查/ })).not.toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: '建立並檢查' })).toBeEnabled()
+    await new Promise((resolve) => setTimeout(resolve, 900))
+    expect(writes(fetch)).toEqual([])
   })
 
-  it('剖面的數字只算建得了 Route 的媒體庫', async () => {
-    const withMusic = routeSetup({
-      libraries: [
-        ...routeSetup().libraries,
-        libraryChoice({ name: '音樂', collection_type: 'music', supported: false }),
-      ],
-    })
-    stubApi({
-      ...BUNDLED_PAGE,
-      [ROUTES]: { body: withMusic },
-      [BUILD]: () => new Promise(() => {}),
-    })
-
-    renderWithProviders(<SetupPage />)
-    const plan = (await screen.findByText('將建立')).closest('section')!
-
-    expect(within(plan).queryByText('音樂')).not.toBeInTheDocument()
-    const count = screen.getByText('這一輪要建的 Route').closest('div')!
-    expect(within(count).getByText('3')).toBeInTheDocument()
-  })
-
-  it('走到就自動建，每條 Route 逐項顯示檢查結果，含硬鏈接的 inode', async () => {
-    stubApi({
+  it('按下之後每條 Route 逐項顯示檢查結果，含硬鏈接的 inode；送出的是空的勾選', async () => {
+    const fetch = stubApi({
       ...BUNDLED_PAGE,
       [ROUTES]: { body: routeSetup() },
       [BUILD]: { body: BUILT },
     })
 
     renderWithProviders(<SetupPage />)
+    await userEvent.click(await screen.findByRole('button', { name: '建立並檢查' }))
 
     const sequences = await screen.findAllByTestId('checks')
     expect(sequences).toHaveLength(3)
@@ -143,24 +132,45 @@ describe('頁 3：媒體庫路徑（套件內）', () => {
       within(sequences[1]).getByText('dev=70 · inode=8162774324533690 · 137.4 GB free'),
     ).toBeInTheDocument()
     expect(within(sequences[1]).getAllByText('已完成')).toHaveLength(5)
+    const build = fetch.mock.calls.find(
+      ([input, init]) => init?.method === 'POST' && String(input) === '/api/setup/routes',
+    )!
+    expect(JSON.parse(String(build[1]?.body))).toEqual({ selections: [] })
   })
 
-  it('送出的是空的勾選：套件內的三條由伺服器自己導出', async () => {
-    const fetch = stubApi({
-      ...BUNDLED_PAGE,
-      [ROUTES]: { body: routeSetup() },
-      [BUILD]: { body: BUILT },
+  it('每條 Route 收成一列說「5 / 5 通過」，全過的收起、紅的那一條自己打開', async () => {
+    const oneRed = routeSetup({
+      ...BUILT,
+      ready: false,
+      routes: [
+        ...BUILT.routes.slice(0, 2),
+        routeView({
+          id: 4,
+          library: 'Anime',
+          slug: 'anime',
+          health: 'failed',
+          checks: [
+            ...CHECKS_PASSED.slice(0, 3),
+            step('probe_visible', 'failed', '', 'Jellyfin cannot see /data/library/anime'),
+            step('hardlink', 'pending'),
+          ],
+        }),
+        routeView({ id: 5, library: 'Docs', slug: 'docs', collection_type: 'movies' }),
+      ],
     })
+    stubApi({ ...BUNDLED_PAGE, [ROUTES]: { body: oneRed } })
 
     renderWithProviders(<SetupPage />)
-    await screen.findAllByTestId('checks')
+    const list = await screen.findByRole('list', { name: '這一頁的 Route' })
+    const rows = within(list).getAllByRole('group')
 
-    const posts = fetch.mock.calls.filter(([, init]) => init?.method === 'POST')
-    expect(posts).toHaveLength(1)
-    expect(JSON.parse(String(posts[0][1]?.body))).toEqual({ selections: [] })
+    expect(rows).toHaveLength(4)
+    expect(within(list).getAllByText('5 / 5 通過')).toHaveLength(3)
+    expect(within(list).getByText('3 / 5 通過')).toBeInTheDocument()
+    expect(rows.map((row) => row.hasAttribute('open'))).toEqual([false, false, true, false])
   })
 
-  it('自動建立的請求沒走完時，把鍵還給他再試一次', async () => {
+  it('請求沒走完時說出來，鍵還在，再按一次', async () => {
     stubApi({
       ...BUNDLED_PAGE,
       [ROUTES]: { body: routeSetup() },
@@ -168,8 +178,10 @@ describe('頁 3：媒體庫路徑（套件內）', () => {
     })
 
     renderWithProviders(<SetupPage />)
+    await userEvent.click(await screen.findByRole('button', { name: '建立並檢查' }))
 
-    expect(await screen.findByRole('button', { name: '建立 3 條 Route 並檢查' })).toBeVisible()
+    expect(await screen.findByText(/後端可能沒在跑/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '建立並檢查' })).toBeEnabled()
   })
 
   it('三條都建好之後，剖面不再說「將建立」那三條（票 14、14e 留給票 15 的兩條）', async () => {
@@ -179,8 +191,6 @@ describe('頁 3：媒體庫路徑（套件內）', () => {
     await screen.findByRole('button', { name: '重新檢查 3 條 Route' })
 
     expect(screen.queryByText('將建立')).not.toBeInTheDocument()
-    const count = screen.getByText('這一輪要建的 Route').closest('div')!
-    expect(within(count).getByText('0')).toBeInTheDocument()
   })
 
   it('三條都建好之後再按一次是全部重驗，不會多建（票 14：精靈只新增）', async () => {
@@ -308,38 +318,6 @@ describe('頁 3：媒體庫路徑（套件內）', () => {
   })
 })
 
-describe('頁 3：套件內的自動建立等媒體庫清單建完', () => {
-  it('清單還沒建完：畫的是清單，一個 Route 請求都不發', async () => {
-    const fetch = stubApi({
-      ...BUNDLED_PAGE,
-      [JELLYFIN]: { body: jellyfinSetup() },
-      [ROUTES]: { body: routeSetup() },
-      [BUILD]: { body: BUILT },
-    })
-
-    renderWithProviders(<SetupPage />)
-
-    expect(await screen.findByRole('button', { name: '開始靠泊' })).toBeVisible()
-    expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('建立媒體庫')
-    expect(fetch.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false)
-  })
-
-  it('清單建完了（libraries 那一步 ok）：一走到就自動建', async () => {
-    const fetch = stubApi({
-      ...BUNDLED_PAGE,
-      [ROUTES]: { body: routeSetup() },
-      [BUILD]: { body: BUILT },
-    })
-
-    renderWithProviders(<SetupPage />)
-
-    await waitFor(() =>
-      expect(fetch.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(1),
-    )
-    expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('媒體庫路徑')
-  })
-})
-
 describe('頁 3 的失敗', () => {
   it('EXDEV 指出兩個目錄是不同掛載，並附三個容器的 compose 片段', async () => {
     const blocked = routeSetup({
@@ -384,6 +362,8 @@ describe('頁 3 的失敗', () => {
 
     expect(await screen.findByText('Jellyfin cannot see /data/library/tv')).toBeInTheDocument()
     expect(screen.getByText(/jellyfin 容器少了這條路徑的掛載/)).toBeInTheDocument()
+    // 套件內的那一台就在 compose 裡：不說「多半在另一台主機」（那一句只給既有的，雙向）。
+    expect(screen.queryByText(/另一台主機/)).not.toBeInTheDocument()
   })
 
   it('category 已存在但路徑不同時說明不覆寫的理由', async () => {
@@ -422,8 +402,8 @@ describe('頁 3 的失敗', () => {
       },
     })
 
-    // 套件內走到就自動建（票 06d），失敗照樣就地說。
     renderWithProviders(<SetupPage />)
+    await userEvent.click(await screen.findByRole('button', { name: '建立並檢查' }))
 
     const notice = await screen.findByText(/被刪掉了/)
     expect(notice).toHaveTextContent('重新檢查了既有的 Route')
@@ -439,9 +419,99 @@ describe('頁 3 的失敗', () => {
     })
 
     renderWithProviders(<SetupPage />)
+    await userEvent.click(await screen.findByRole('button', { name: '建立並檢查' }))
 
     expect(await screen.findByText(/後端可能沒在跑/)).toBeInTheDocument()
     expect(screen.queryByText(/被刪掉了/)).not.toBeInTheDocument()
+  })
+})
+
+describe('頁 3 的失敗：既有服務說出怎麼改掛載（M4 票 08）', () => {
+  /** 既有 Jellyfin、既有 qBittorrent，一條紅的 Route。 */
+  function yours(route: RouteView) {
+    return {
+      [STATUS]: {
+        body: setupStatus({
+          ...AT_ROUTES,
+          services: [
+            chosen({ origin: 'existing', base_url: 'http://nas:8096', reason: 'setup_completed' }),
+            chosen({ kind: 'qbittorrent', origin: 'existing', base_url: 'http://nas:8080' }),
+          ],
+        }),
+      },
+      [JELLYFIN]: EXISTING_PAGE[JELLYFIN],
+      [ROUTES]: {
+        body: routeSetup({
+          origin: 'existing',
+          libraries: [libraryChoice({ name: 'TV', has_route: true })],
+          routes: [route],
+        }),
+      },
+    }
+  }
+
+  it('Jellyfin 看不到探測檔：它多半在另一台主機或掛在別的容器路徑', async () => {
+    stubApi(
+      yours(
+        routeView({
+          health: 'failed',
+          checks: [
+            ...CHECKS_PASSED.slice(0, 3),
+            step('probe_visible', 'failed', '', 'Jellyfin cannot see /data/library/tv'),
+            step('hardlink', 'pending'),
+          ],
+        }),
+      ),
+    )
+
+    renderWithProviders(<SetupPage />)
+
+    expect(await screen.findByText(/多半是它在另一台主機/)).toBeInTheDocument()
+    expect(screen.getByText(/不做 remote path mapping/)).toBeInTheDocument()
+  })
+
+  it('EXDEV：你的服務多半分開掛載，改成同一個父目錄', async () => {
+    stubApi(
+      yours(
+        routeView({
+          health: 'failed',
+          cross_device: true,
+          checks: [
+            ...CHECKS_PASSED.slice(0, 4),
+            step('hardlink', 'failed', '', '[Errno 18] Invalid cross-device link'),
+          ],
+        }),
+      ),
+    )
+
+    renderWithProviders(<SetupPage />)
+
+    expect(await screen.findByText(/分開掛（\/downloads、\/tv 各一條）/)).toBeInTheDocument()
+  })
+
+  it('Berth 看不到 qBittorrent 報的路徑：說同一台主機、同一個容器路徑', async () => {
+    stubApi(
+      yours(
+        routeView({
+          health: 'failed',
+          checks: [
+            CHECKS_PASSED[0],
+            step(
+              'download_path',
+              'failed',
+              '',
+              '/downloads/tv is not visible from the Berth container',
+            ),
+            ...CHECKS_PASSED.slice(2).map((row) => step(row.step, 'pending')),
+          ],
+        }),
+      ),
+    )
+
+    renderWithProviders(<SetupPage />)
+
+    expect(await screen.findByText(/這是你自己的 qBittorrent/)).toBeInTheDocument()
+    expect(screen.queryByText(/這是你自己的 Jellyfin/)).not.toBeInTheDocument()
   })
 })
 
@@ -464,7 +534,7 @@ describe('頁 3：媒體庫路徑（既有 Jellyfin）', () => {
 
     renderWithProviders(<SetupPage />)
 
-    expect(await screen.findByRole('button', { name: '建立 0 條 Route 並檢查' })).toBeDisabled()
+    expect(await screen.findByRole('button', { name: '建立並檢查' })).toBeDisabled()
   })
 
   it('勾了媒體庫再選一條路徑，送出去的就是那一條', async () => {
@@ -477,7 +547,7 @@ describe('頁 3：媒體庫路徑（既有 Jellyfin）', () => {
     renderWithProviders(<SetupPage />)
     await userEvent.click(await screen.findByRole('checkbox', { name: '影集' }))
     await userEvent.click(screen.getByRole('radio', { name: '/data/library/影集' }))
-    await userEvent.click(screen.getByRole('button', { name: '建立 1 條 Route 並檢查' }))
+    await userEvent.click(screen.getByRole('button', { name: '建立並檢查' }))
 
     await waitFor(() => {
       const call = fetch.mock.calls.find(([, init]) => init?.method === 'POST')
@@ -496,42 +566,6 @@ describe('頁 3：媒體庫路徑（既有 Jellyfin）', () => {
     expect(await screen.findByText('音樂')).toBeInTheDocument()
     expect(screen.queryByRole('checkbox', { name: '音樂' })).not.toBeInTheDocument()
     expect(screen.getByText(/只寫入電影與劇集/)).toBeInTheDocument()
-  })
-
-  it('還沒有 Berth 路徑的媒體庫可以就地加一條', async () => {
-    const withoutBerthPath = routeSetup({
-      origin: 'existing',
-      libraries: [
-        libraryChoice({
-          name: '影集',
-          locations: ['/volume1/media/tv'],
-          berth_path: '/data/library/影集',
-          has_berth_path: false,
-          target_path: '/volume1/media/tv',
-        }),
-      ],
-    })
-    const fetch = stubApi({
-      ...EXISTING_PAGE,
-      [ROUTES]: { body: withoutBerthPath },
-      [ADD_PATH]: { body: jellyfinSetup({ libraries: [library()] }) },
-    })
-
-    renderWithProviders(<SetupPage />)
-    await userEvent.click(await screen.findByRole('checkbox', { name: '影集' }))
-    await userEvent.click(screen.getByRole('button', { name: '加入 Berth 路徑' }))
-    // 動的是使用者自己那台 Jellyfin：先就地確認再送（票 06h 的 critique）。
-    expect(fetch.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false)
-    expect(screen.getByText(/舊路徑不動/)).toBeVisible()
-    await userEvent.click(screen.getByRole('button', { name: '確認加入' }))
-
-    await waitFor(() => {
-      const call = fetch.mock.calls.find(
-        ([input, init]) => init?.method === 'POST' && String(input).endsWith('/libraries/paths'),
-      )
-      expect(call).toBeDefined()
-      expect(JSON.parse(String(call![1]?.body))).toEqual({ library: '影集' })
-    })
   })
 
   /**

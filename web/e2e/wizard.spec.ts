@@ -9,9 +9,12 @@ import { shot } from './shot.ts'
 // （`playwright.config.ts`）。**選之前一個服務請求都不發**（M4 票 15）。
 test('精靈六頁走完，之後以同一組帳密登入', async ({ page }) => {
   const probed: string[] = []
+  // 精靈送出的寫入（非 GET），頁 3 用它證明「進頁不動手」（M4 票 08）。
+  const writes: string[] = []
   page.on('request', (request) => {
     const url = request.url()
     if (/\/api\/setup\/(services\/|qbittorrent\/diff)/.test(url)) probed.push(url)
+    if (request.method() !== 'GET' && url.includes('/api/setup/')) writes.push(url)
   })
   await page.goto('/')
   await expect(page).toHaveURL('/setup')
@@ -57,9 +60,12 @@ test('精靈六頁走完，之後以同一組帳密登入', async ({ page }) => 
   await shot(page, '2-qbittorrent')
   await page.getByRole('button', { name: '前往下一個泊位' }).click()
 
-  // 3. 媒體庫與路徑：套件內先建你列的媒體庫（票 06f；M4 票 15 從 Jellyfin 頁搬過來）。
-  //    Movies 改名、加一個、刪 Anime；建完停在結果上，按了才去 Route。
-  await expect(page.getByRole('heading', { name: '建立媒體庫' })).toBeVisible()
+  // 3. 媒體庫與路徑（M4 票 08）：進頁不送任何寫入；你列的媒體庫、一顆「建立並檢查」建媒體庫、建 Route、
+  //    跑五條檢查。Movies 改名、加一個，四個媒體庫就是四條 Route。
+  const arrived = writes.length
+  await expect(page.getByRole('heading', { name: '媒體庫路徑', level: 2 })).toBeVisible()
+  await page.waitForLoadState('networkidle')
+  expect(writes.slice(arrived)).toEqual([])
   // 資料夾跟著名稱走，名稱不是英文字母時要自己填（票 06f）。
   await page
     .getByRole('group', { name: 'Movies' })
@@ -75,20 +81,23 @@ test('精靈六頁走完，之後以同一組帳密登入', async ({ page }) => 
   await added.getByRole('combobox', { name: '內容類型' }).selectOption({ label: '電影' })
   await added.getByRole('textbox', { name: '資料夾' }).fill('documentaries')
   await added.getByRole('textbox', { name: '名稱' }).fill('紀錄片')
-  await page.getByRole('button', { name: '移除「Anime」' }).click()
-  await expect(page.getByRole('group', { name: 'Anime' })).toHaveCount(0)
+  const preview = page.getByRole('region', { name: '按下之後會' })
+  await expect(preview.getByText(/在 Jellyfin 建 4 個媒體庫/)).toBeVisible()
   await shot(page, '3-libraries')
-  await page.getByRole('button', { name: '開始靠泊' }).click()
-  await expect(page.getByText(/3 個媒體庫/)).toBeVisible()
-  await shot(page, '3-jellyfin')
-  // Route：一走到就自動建、跑五條檢查（票 06d），清單上改過的名字就是 Route 的名字。後端要每一條
-  // 都綠才前進（plan §9.3），所以「前往下一個泊位」出現就是全綠。
-  await page.getByRole('button', { name: '前往 Route 與檢查' }).click()
-  await expect(page.getByRole('heading', { name: '媒體庫路徑' })).toBeVisible()
-  await expect(page.getByRole('button', { name: '重新檢查 3 條 Route' })).toBeVisible()
-  await expect(page.getByText('berth-紀錄片', { exact: true })).toBeVisible()
+  await page.getByRole('button', { name: '建立並檢查' }).click()
+  // 後端要每一條都綠才前進（plan §9.3），所以「前往下一個泊位」出現就是全綠；四條各一列、收起。
+  const next = page.getByRole('button', { name: '前往下一個泊位' })
+  await expect(next).toBeVisible()
+  const routes = page.getByRole('list', { name: '這一頁的 Route' })
+  await expect(routes.getByText('5 / 5 通過')).toHaveCount(4)
+  await expect(routes.getByText('berth-紀錄片', { exact: true })).toBeVisible()
+  // 不捲動就看得到下一步（票 08 驗收）：回到頁頂量。
+  // 字串而不是函式：e2e 的 tsconfig 沒有 DOM 型別，這一行在瀏覽器裡跑。
+  await page.evaluate('window.scrollTo(0, 0)')
+  await expect(next).toBeInViewport()
+  await page.screenshot({ path: test.info().outputPath('3-routes-viewport.png') })
   await shot(page, '3-routes')
-  await page.getByRole('button', { name: '前往下一個泊位' }).click()
+  await next.click()
 
   // 4. Prowlarr 與索引站（九個裡有四個連不上是常態）。選套件內 → 介面登入自己設一組（取消沿用）→
   //    加入 → 試搜 → 不要的移除（票 06e）；替身的 Mikan 演「搜尋時連不上」。
@@ -121,12 +130,12 @@ test('精靈六頁走完，之後以同一組帳密登入', async ({ page }) => 
   await shot(page, '5-tmdb')
   await page.getByRole('button', { name: '前往下一個泊位' }).click()
 
-  // 中途回頭再往前：板上點回 BTH 3 看媒體庫清單，一顆鍵回到目前這一步；上一個泊位、再前往下一個也回得來。
+  // 中途回頭再往前：板上點回 BTH 3 展開媒體庫清單，一顆鍵回到目前這一步；上一個泊位、再前往下一個也回得來。
   await expect(page.getByRole('heading', { name: '完成設定' })).toBeVisible()
   await board.getByRole('button', { name: /BTH 3/ }).click()
-  await page.getByRole('button', { name: '媒體庫清單' }).click()
+  await page.getByText('4 個已建立').click()
   // 建好的列鎖住，改名刪除去 Jellyfin（票 06f）。
-  await expect(page.getByText('已建立', { exact: true })).toHaveCount(3)
+  await expect(page.getByText('已建立', { exact: true })).toHaveCount(4)
   await page.getByRole('button', { name: '回到目前這一步' }).click()
   await expect(page.getByRole('heading', { name: '完成設定' })).toBeVisible()
   await page.getByRole('button', { name: '上一個泊位' }).click()
@@ -135,7 +144,7 @@ test('精靈六頁走完，之後以同一組帳密登入', async ({ page }) => 
 
   // 6. 完成
   await expect(page.getByRole('heading', { name: '完成設定' })).toBeVisible()
-  await expect(page.getByText('已繫上')).toHaveCount(3)
+  await expect(page.getByText('已繫上')).toHaveCount(4)
   await expect(page.getByText(/你是 skipper/)).toBeVisible()
   await shot(page, '6-complete')
   await page.getByRole('button', { name: '完成設定' }).click()

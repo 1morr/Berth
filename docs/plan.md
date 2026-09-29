@@ -602,7 +602,7 @@ WebUI\AuthSubnetWhitelist=172.28.0.2/32
 
 ### 9.3 精靈流程
 
-> **2026-09-29 改（brief §19「精靈改為每個服務手動選擇」）**：Jellyfin、qBittorrent、Prowlarr 各一頁，使用者手動選「套件內」或「既有」，拿掉「偵測服務」那一步，Prowlarr 與索引站併成一頁。M4 票 15 做完了選擇、服務頁與頁序；票 16（compose）、17（既有服務防呆）、08（媒體庫與路徑按鈕觸發）、09（Prowlarr 頁的索引站先測再加）還沒做。舊的八步全文見 `git show bd4216b:docs/plan.md` 的 §9.3。
+> **2026-09-29 改（brief §19「精靈改為每個服務手動選擇」）**：Jellyfin、qBittorrent、Prowlarr 各一頁，使用者手動選「套件內」或「既有」，拿掉「偵測服務」那一步，Prowlarr 與索引站併成一頁。M4 票 15 做完了選擇、服務頁與頁序，16（compose）、17（既有服務防呆）、08（媒體庫與路徑按鈕觸發）也做完了；09（Prowlarr 頁的索引站先測再加）還沒做。舊的八步全文見 `git show bd4216b:docs/plan.md` 的 §9.3。
 >
 > 2026-09-26 改：第 1 步改為連 Jellyfin、成為擁有者（M4 票 06）；套件內 qBittorrent / Prowlarr 的介面登入在各自的泊位（M4 票 07）。
 
@@ -646,8 +646,8 @@ WebUI\AuthSubnetWhitelist=172.28.0.2/32
    - Berth 的路徑全靠分類（建立時帶 save path）與逐個 torrent 的 `autoTMM=true`，所以全域 `save_path` / `temp_path` / `temp_path_enabled`、`auto_tmm_enabled`、`category_changed_tmm_enabled` 動了會改掉使用者不經 Berth 加的 torrent 落在哪裡，而 Berth 自己用不到它們。健康檢查的漂移（`drifted_keys`）與設定頁的「還原建議設定」只看套件內的那一台。
 3. **媒體庫與路徑**（票 06d 把它排在 qBittorrent 之後；票 08 改成按鈕觸發）：
    - **套件內 Jellyfin 的媒體庫由使用者列**（票 06f，Jellyfin 啟動精靈「新增媒體庫」的慣例：內容類型 + 顯示名稱 + 資料夾）：一張可編輯的清單，預設 Movies・電影、TV・劇集、Anime・劇集三列，可以改名、改類型、改資料夾、刪列、加列，至少一列。類型只有電影與劇集（Berth 的 `SUPPORTED_TYPES`）；資料夾是 `library_root` 底下的一層（不能有 `/`、`\`、不能是 `.`、`..`，也不能有 Windows 不收的字元），名稱是 ASCII 時由它推導（照 `library_slug`），不是 ASCII 時要使用者填；名稱與資料夾各自不可重複（不分大小寫）。規則在 `services.jellyfin.check_bundled_libraries`，前端 `web/src/setup/libraryRules.ts` 用同一組在送出之前擋。清單存在 `settings.setup.jellyfin.bundled`（`PUT /setup/jellyfin/bundled`，拒絕是 `BundledLibraryRefusal` 帶列號），停手就存。**已經在 Jellyfin 建好的列鎖住**：bootstrap 以名稱認媒體庫，改了名重跑會多建一個指向同一個資料夾的——改名與刪除要去 Jellyfin，後端回 `built_changed`。媒體庫以第 1 頁存下的 API key 建（§9.4 第 1、4 步，`bootstrap_jellyfin`；沒有 key 就拒絕）。**沒有安裝插件的按鈕**（票 14b）。
-   - **既有 Jellyfin**：使用者勾選媒體庫，每個媒體庫可「加入 Berth 路徑」（§9.5）或在既有路徑中選寫入目標；預選的是 Berth 路徑（加過的話），否則只有一條路徑時是那一條（brief §4.3，票 06h）。目標只能從那個媒體庫回報的路徑裡選，送別的路徑回 422。「加入 Berth 路徑」沒確認完就走不出這一頁（票 08：擋下並說出還差哪一步，或把確認併進同一個動作，shape 時定）。
-   - **Route**：每個選到的（套件內是全部的）電影或劇集媒體庫各一個 Route，寫入目標取自 **Jellyfin 回報的** `locations`；slug 由媒體庫名稱算，空白換成 `-`（票 08；已經存在的 Route 與分類不改名）。**進這一頁不自動跑**（票 08：它會建分類、寫探測檔與硬鏈接測試檔，有副作用的動作由人按）：一顆「建立並檢查」（第一次）/「重新檢查」，按下之前說出會做哪些事；套件內這一顆也負責建上面清單的媒體庫。每個 Route 立即建立 qBittorrent category 並跑 §9.5 的五項檢查；**每一條都綠燈**才走得到完成——紅的那個 Route 送單一定失敗（brief §4.4）。每條 Route 收成一列（名稱、寫入目標、「5 / 5 通過」），失敗的那條自動展開；檢查失敗時說出怎麼改掛載（brief §16.4）。設定頁的 Route 列表用同一個元件。
+   - **既有 Jellyfin**：使用者勾選媒體庫，每個媒體庫從它回報的路徑裡選寫入目標；還沒有 Berth 路徑的，寫入目標多一個「新的 Berth 路徑」選項（§9.5），**按下「建立並檢查」時才加**、再建 Route（票 08 shape 時使用者拍板把確認併進同一個動作，`.scratch/m4/route-berth-shape.md`：沒有「確認加入」那種做了一半、走得過去的狀態）。預選的是 Berth 路徑（加過的話），否則只有一條路徑時是那一條（brief §4.3，票 06h）。目標只能從那個媒體庫回報的路徑裡選，送別的路徑回 422。勾了卻還沒選目標、或一個都沒勾時，主鈕擋住並說出還差哪一步。
+   - **Route**：每個選到的（套件內是全部的）電影或劇集媒體庫各一個 Route，寫入目標取自 **Jellyfin 回報的** `locations`；slug 由媒體庫名稱算，空白換成 `-`（票 08；已經存在的 Route 與分類不改名）。**進這一頁不送任何寫入**（票 08：它會建媒體庫、加路徑、建分類、寫探測檔與硬鏈接測試檔，有副作用的動作由人按）：一顆「建立並檢查」（有新的可建）/「重新檢查 N 條 Route」，上面一份「按下之後會」列出這一輪真的會做的事（建哪幾個媒體庫、在哪個媒體庫加哪一條路徑、建或核對幾個 `berth-` 分類、在幾個寫入目標寫測試檔）。按下之後照順序做（前端 `SetupPage` 的 `dock`，各段仍是各自的命令）：套件內存清單 → 清單上有還沒建的才 `bootstrap` → `POST /setup/routes`；既有逐個加 Berth 路徑 → `POST /setup/routes`。**一段失敗就停**，後面的不送（建媒體庫或加路徑的失敗是 Jellyfin 那一份 `libraries` 那一步變紅，就地給原文與手動步驟）。每個 Route 立即建立 qBittorrent category 並跑 §9.5 的五項檢查；**每一條都綠燈**才走得到完成——紅的那個 Route 送單一定失敗（brief §4.4）。每條 Route 收成一列（`RouteRow`：健康、名稱、分類、寫入目標、「5 / 5 通過」），紅的那條自動展開、全過的收起；全過又沒有新的時，Route 列排在前、「重新檢查」降成次要排在後。健康頁與 Route 設定頁用同一個列元件。套件內的清單全部建好時收成一列（「媒體庫清單 · N 個已建立」），要加一個再展開。剖面只放 Route 列沒有的：兩個根目錄與這一輪將建立的 Route 寫到哪裡。
    - **重跑只新增、不改不刪**（票 14）：已經有 Route 的媒體庫在勾選表上鎖住、它的選擇略過，slug 與整張表比；寫入目標已經被別的 Route（或同一批前面的選擇）佔用的選擇也略過，不回 422（票 14a）。重跑的意思只剩「補上新勾的、全部重驗」。精靈跑完之前新建的 Route 直接啟用（紅著就擋完成）；跑完之後重跑新建的**先停用建立，檢查綠了才啟用**（票 14a）。重讀既有 Route、`_plan` 與插入在同一把寫鎖裡。認媒體庫用 `ItemId`（沒有 id 的舊資料才用名字）。選錯了的出路是每條 Route 底下明確的刪除（`DELETE /setup/routes/{id}`，被引用時拒絕）；精靈跑完之後在 `/settings/routes` 逐條管理。
 4. **Prowlarr 與索引站**（併成一頁，brief §19 2026-09-29；票 15 併頁，票 09 做索引站那一半）：
    - **套件內**：API key 讀自唯讀掛載的 `/ext/prowlarr/config.xml`（零輸入，§9.2），選了就讀、存進 `settings.services.indexer`，M1 的搜尋從同一個地方拿憑證；讀不到時就地給貼 key 的欄位，貼了仍是套件內。**介面登入**與 qBittorrent 同一條規則（預設「沿用 Jellyfin 帳密」、只存雜湊、必填），以 `config/host` 設 Forms 登入（回 202 後它會自行重啟，要等 `/ping` 回來）；帳密跟著「加入」送（`POST /setup/indexers/apply` 的 `login`），套件內 Prowlarr 要那一條有結論這一頁才算做完（`_indexer_settled`）。設定頁 → 索引站的「介面登入」一區走 `PUT /setup/indexers/login`（`indexer.set_interface_login`），加站不帶登入。
@@ -667,7 +667,8 @@ WebUI\AuthSubnetWhitelist=172.28.0.2/32
 - **每一頁有「上一個泊位」**；去後端目前那一頁（或更後面）就是解除覆寫，所以回頭之後永遠走得回來。回頭看得比「剛做完的那一格」更前面時，板下一條帶子給「回到目前這一步」。
 - **回頭看的那一頁說出能改什麼、不能改的去哪裡**：每一頁都是冪等命令，回頭照樣重跑，做過的標「已經是這樣」。
 - **「重新測試」放在出問題的那一頁**：測試那一條是紅燈時才有（`POST /setup/services/{kind}/test` 帶 `restart`），取代原本的「重新偵測這個服務」。
-- **頁 3 的套件內那一半**：套件內 Jellyfin 的媒體庫清單還沒建完時先畫清單與「開始靠泊」，建完停在結果上、按「前往 Route 與檢查」才去 Route；Route 那一邊有「媒體庫清單」回去（票 15 只搬，照原本的行為；票 08 改成按鈕觸發）。
+- **頁 3 是一個畫面**（票 08 使用者拍板）：套件內的清單與 Route 在同一頁，一顆「建立並檢查」做完；原本的「開始靠泊」「前往 Route 與檢查」「媒體庫清單」三顆鈕與兩個畫面的切換拿掉。
+- **「上一個 / 前往下一個泊位」有下一個時不分寬度固定在工作面底部**（票 08：頁 3 做完是四條 Route，1280 × 720 上它被擠出畫面；DESIGN.md 記了這個例外）。
 - 只管第一次設定：精靈跑完之後的修改由設定頁接手（票 06i）。跑完之後 `/setup` 導向 `/settings`，精靈沒有「從外面直接跳到某個泊位」的深連結。
 
 ### 9.4 Jellyfin 自動初始化序列
@@ -726,7 +727,7 @@ WebUI\AuthSubnetWhitelist=172.28.0.2/32
 3. `library_path`：**向 Jellyfin 現查**這個 Route 的媒體庫，它回報的每一條路徑逐一 `stat`。不吃存下來的快照——使用者可能在那之後改了路徑或刪了媒體庫。
 4. `probe_visible`：在 Route 目標寫探測檔，`POST /Environment/ValidatePath` `{Path, IsFile: true}` 請 Jellyfin 確認看得到同一條路徑（看得到 204、看不到 404），問完就刪。
 5. `hardlink`：在 `<complete root>/<slug>` 建暫存檔並 `link()` 到 Route 目標，確認同 device、同 inode，之後兩邊都清乾淨（`fs.link_test`）。
-6. 任一步失敗 → 精靈與健康頁指出「哪個容器少了哪個掛載」，附該容器的 compose `volumes:` 修正片段；`EXDEV` 另附「兩個目錄在 Berth 內是不同掛載」的說明。既有服務失敗在第 2–5 條時，另說出「同一台主機、同一個父目錄掛在同一個容器路徑」的條件與怎麼改掛載（票 08）。
+6. 任一步失敗 → 精靈與健康頁指出「哪個容器少了哪個掛載」，附該容器的 compose `volumes:` 修正片段；`EXDEV` 另附「兩個目錄在 Berth 內是不同掛載」的說明。**精靈頁 3 另對既有服務說怎麼改掛載**（票 08，`RouteCheckList` 的 `existing`）：`download_path`（既有 qBittorrent）與 `library_path`（既有 Jellyfin）說同一台主機、同一個父目錄掛在同一個容器路徑、不做 remote path mapping；`probe_visible`（既有 Jellyfin）說它多半在另一台主機或掛在別的容器路徑；`hardlink` 的 `EXDEV`（任一既有）說下載與媒體庫分開掛（`/downloads`、`/tv`）要改成一條共同父目錄。compose 片段照舊附上（它是套件內那一份）。健康頁與設定頁讀不到來源，不說這一句。
 
 **不支援**：既有 qBittorrent 或 Jellyfin 與 Berth 不在同一台主機、或沒有把同一個父目錄掛在同一個容器路徑；remote path mapping。
 

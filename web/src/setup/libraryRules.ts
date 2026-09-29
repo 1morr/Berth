@@ -33,16 +33,19 @@ const UNSAFE = /[<>:"|?*]/
 /** 後端 `_UNSAFE_IN_PATH` 除了控制字元以外的那幾個，推導時換成 `-`。 */
 const UNSAFE_IN_NAME = /[<>:"/\\|?*]+/g
 const PRINTABLE_ASCII = /^[\x20-\x7e]*$/
+/** 後端 `_SPACE_RUN`：一段空白連同貼著它的 `-` 換成一個 `-`（票 08）。 */
+const SPACE_RUN = /[\s-]*\s[\s-]*/g
 
 /**
- * 名稱 → 預設的資料夾名。照後端 `library_slug` 的規則（小寫、不安全字元換成 `-`、修掉頭尾的
- * 空白、點與 `-`），但**只在名稱全是 ASCII 時給**：中日文的資料夾名在兩種檔案系統都合法，
+ * 名稱 → 預設的資料夾名。照後端 `library_slug` 的規則（小寫、不安全字元換成 `-`、空白換成 `-`、
+ * 修掉頭尾的點與 `-`），但**只在名稱全是 ASCII 時給**：中日文的資料夾名在兩種檔案系統都合法，
  * 要不要用它由使用者決定，不替他決定（票 06f）。
  */
 export function folderFor(name: string): string {
   if (!PRINTABLE_ASCII.test(name)) return ''
   return name
     .replace(UNSAFE_IN_NAME, '-')
+    .replace(SPACE_RUN, '-')
     .replace(/^[ .-]+|[ .-]+$/g, '')
     .toLowerCase()
 }

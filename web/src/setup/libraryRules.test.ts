@@ -8,10 +8,14 @@ function row(name: string, folder: string): LibraryDraft {
 }
 
 describe('名稱推導資料夾', () => {
-  it('ASCII 的名稱照後端 `library_slug` 的規則推：小寫、不安全字元換成 -', () => {
+  // 與 `tests/unit/test_library_slug.py` 同一組例子：兩邊的規則一分岔，預設的資料夾就與 Berth 路徑對不上。
+  it('ASCII 的名稱照後端 `library_slug` 的規則推：小寫、不安全字元與空白換成一個 -', () => {
     expect(folderFor('Movies')).toBe('movies')
-    expect(folderFor('TV: Kids ')).toBe('tv- kids')
-    expect(folderFor('Anime / Old')).toBe('anime - old')
+    expect(folderFor('TV Shows')).toBe('tv-shows')
+    expect(folderFor('Kids  TV')).toBe('kids-tv')
+    expect(folderFor('TV: Kids ')).toBe('tv-kids')
+    expect(folderFor('Anime / Old')).toBe('anime-old')
+    expect(folderFor('a--b')).toBe('a--b')
   })
 
   it('名稱不是 ASCII 就不推，要使用者自己填', () => {

@@ -265,7 +265,6 @@ const zhHant = {
   jellyfin: {
     unreachable: '讀不到 Jellyfin 這一步的狀態。確認 Berth 後端還在跑。',
     cutaway: {
-      sequence: '將會做什麼',
       server: '這台 Jellyfin',
       apiKey: 'API key',
       held: '已取得',
@@ -289,22 +288,9 @@ const zhHant = {
       api_key: '建立 Berth 專用的 API key',
     },
     bundled: {
-      title: '建立媒體庫',
-      lede: 'Jellyfin 那一頁已經替這台 Jellyfin 建好管理員、跑完它的初始設定、換好 API key；這裡建你列的媒體庫，之後每一個都是一條 Route。可以重按：已經建好的標成「已經是這樣」，不會建第二次。',
-      toRoutes: '前往 Route 與檢查',
-      editList: '媒體庫清單',
-      run: '開始靠泊',
-      rerun: '重新跑一次',
-      retry: '重試失敗的那一步',
-      running: '進行中…',
-      done_one:
-        '這個泊位的事做完了。Jellyfin 有擁有者的管理員帳號、{{count}} 個媒體庫與一把 Berth 專用的 API key。',
-      done_other:
-        '這個泊位的事做完了。Jellyfin 有擁有者的管理員帳號、{{count}} 個媒體庫與一把 Berth 專用的 API key。',
-      requestFailed: '請求沒跑完。Berth 後端可能沒在跑——確認容器狀態後再試一次。',
       list: {
         title: '要建的媒體庫',
-        lede: '內容類型、名稱與資料夾，照 Jellyfin 自己「新增媒體庫」的那三格。每一個都會在「媒體庫路徑」那一步成為一條 Route。',
+        lede: '內容類型、名稱與資料夾，照 Jellyfin 自己「新增媒體庫」的那三格。每一個都會成為一條 Route。',
         name: '名稱',
         type: '內容類型',
         types: {
@@ -321,7 +307,6 @@ const zhHant = {
           '已經建好的媒體庫在這裡改不動：要改名、刪除或換路徑，到 Jellyfin 的「控制台 → 媒體庫」。這裡只加還沒建的，重跑只建新加的那幾個。',
         saving: '儲存中…',
         unsaved: '清單有標紅的格子，改好才會存下來。',
-        blocked: '清單有標紅的格子，改好才能靠泊。',
         saveFailed: '清單沒存下來：請求沒跑完。確認 Berth 後端的狀態，再改一格試試。',
         refused: '清單沒存下來：{{reason}}',
         refusedRow: '清單沒存下來（第 {{position}} 個）：{{reason}}',
@@ -363,10 +348,7 @@ const zhHant = {
       tvdb: '這個媒體庫用 TVDB 取 metadata。Berth 第一階段以 TMDB 對應作品，季集編號可能與這裡不一致。不阻擋，但比對出錯時先看這裡。',
       willAdd: '將會加入這一條路徑',
       addPath: '加入 Berth 路徑',
-      addConfirm: '確認加入',
       adding: '加入中…',
-      addWarning:
-        '會對媒體庫「{{library}}」加上 {{path}}。舊路徑不動、不會重新掃描、觀看紀錄不受影響。',
       addFailed:
         '路徑沒加上去。最常見的原因是 Berth 與 Jellyfin 沒把同一個宿主目錄掛在同一個容器路徑——Berth 建得出目錄，Jellyfin 卻看不到。也可以在 Jellyfin 自己的媒體庫設定裡手動加這一條：',
     },
@@ -587,17 +569,37 @@ const zhHant = {
     title: '媒體庫路徑',
     lede: {
       bundled:
-        'Berth 替你建的每一個媒體庫各成為一條 Route：下載完成後檔案硬鏈接到它的寫入目標。這一步會在 qBittorrent 建好分類，並實際鏈接一個檔案，確認三個容器看到的是同一個檔案系統。',
+        '你列的每一個媒體庫各成為一條 Route：下載完成後硬鏈接到它的寫入目標。進這一頁不會動任何東西，按下「建立並檢查」才建，並實際鏈接一個檔案，確認三個容器看到同一個檔案系統。',
       existing:
-        '勾選要交給 Berth 寫入的媒體庫，每個選一條寫入目標。Berth 只往你選的那一條寫，同一個媒體庫的其他路徑維持唯讀；不想讓它寫進你既有的資料夾，先加一條 Berth 路徑再選它。',
+        '勾選要交給 Berth 寫入的媒體庫，每個選一條寫入目標。Berth 只往你選的那一條寫，同一個媒體庫的其他路徑維持唯讀；不想讓它寫進你既有的資料夾，選「新的 Berth 路徑」，按「建立並檢查」時才加到 Jellyfin。進這一頁不會動任何東西。',
     },
     empty:
       '這台 Jellyfin 一個媒體庫都沒有。先在 Jellyfin 建一個再回來，Berth 才有地方寫入。Berth 不會替你的伺服器建媒體庫。',
     unreachable: '讀不到媒體庫清單。Berth 後端可能沒在跑——確認容器狀態後重新整理。',
-    building: '建立中…',
-    automatic: '建立 Route 並跑五條檢查中…套件內的媒體庫沒有要選的東西，走到這一格就自動跑。',
-    build_one: '建立 {{count}} 條 Route 並檢查',
-    build_other: '建立 {{count}} 條 Route 並檢查',
+    docking: '建立並檢查中…',
+    list: '這一頁的 Route',
+    tally: '{{passed}} / {{total}} 通過',
+    listSummary: '媒體庫清單',
+    listPending_one: '{{count}} 個要建立',
+    listPending_other: '{{count}} 個要建立',
+    listBuilt_one: '{{count}} 個已建立',
+    listBuilt_other: '{{count}} 個已建立',
+    // 「建立並檢查」與按下之前列出的事（M4 票 08：進頁不動手，有副作用的由人按）。
+    dock: {
+      title: '按下之後會',
+      build: '建立並檢查',
+      libraries_one: '在 Jellyfin 建 {{count}} 個媒體庫：{{names}}',
+      libraries_other: '在 Jellyfin 建 {{count}} 個媒體庫：{{names}}',
+      berthPath: '在 Jellyfin 的「{{library}}」加入路徑 {{path}}（原本的路徑不動、不重新掃描）',
+      categories_one: '在 qBittorrent 建或核對 {{count}} 個 berth- 分類（已經有的不改路徑）',
+      categories_other: '在 qBittorrent 建或核對 {{count}} 個 berth- 分類（已經有的不改路徑）',
+      probes_one: '在 {{count}} 個寫入目標各寫一個探測檔、做一次硬鏈接，檢查完就刪掉',
+      probes_other: '在 {{count}} 個寫入目標各寫一個探測檔、做一次硬鏈接，檢查完就刪掉',
+      listBlocked: '清單有標紅的格子，改好才能建立。',
+      pickOne: '還差一步：勾一個媒體庫。',
+      pickTarget: '還差一步：替「{{library}}」選一條寫入目標。',
+      retryHint: '手動做完之後再按一次「建立並檢查」，已經建好的不會建第二次。',
+    },
     recheck_one: '重新檢查 {{count}} 條 Route',
     recheck_other: '重新檢查 {{count}} 條 Route',
     requestFailed: '請求沒有走完。Berth 後端可能沒在跑——確認容器狀態後再按一次。',
@@ -607,11 +609,9 @@ const zhHant = {
       paths: '路徑',
       libraryRoot: '媒體庫根目錄',
       completeRoot: 'complete 根目錄',
-      count: '這一輪要建的 Route',
       plan: '將建立',
       library: '媒體庫',
       target: '寫入目標',
-      category: '分類',
     },
     picker: {
       title: '選擇媒體庫',
@@ -623,9 +623,7 @@ const zhHant = {
       noPath: '這個媒體庫在 Jellyfin 上沒有任何路徑。',
       routed:
         '已經有 Route 了：精靈只新增，不改也不刪它。選錯了就用下面那一條的刪除；精靈跑完之後在「設定 → 媒體庫路徑」管理。',
-      addBerthPath: '加入 Berth 路徑',
-      adding: '加入中…',
-      addHint: '在這個媒體庫加一條 {{path}}，舊路徑原地不動；加完就用它當寫入目標。',
+      newBerthPath: '新的 Berth 路徑：按「建立並檢查」時加到這個媒體庫，原本的路徑不動',
     },
     health: {
       unknown: '尚未檢查',
@@ -650,6 +648,17 @@ const zhHant = {
         '鏈接不起來。complete 目錄與媒體庫目錄要在同一個檔案系統，容器裡的使用者也要寫得進去。',
       crossDevice:
         '這兩個目錄在 Berth 內是不同掛載（EXDEV）。硬鏈接跨不了掛載點——用一條掛載蓋住整個父目錄，不要 complete 與 library 各掛一條。網路磁碟、exFAT 隨身碟與 mergerfs 也做不到硬鏈接。',
+      // 既有服務失敗在第 2–5 條時另說的那一句（M4 票 08，brief §16.4）：上面的 compose 片段是套件內那一份。
+      existing: {
+        qbittorrent:
+          '這是你自己的 qBittorrent：它報的是它自己容器裡的路徑。Berth 要看得到同一個字串，兩者得在同一台主機、把同一個父目錄掛在同一個容器路徑（例如兩邊都掛成 /data）。Berth 不做 remote path mapping——改 qBittorrent 或 berth 的 volumes，讓這條路徑在兩邊指到同一個地方。',
+        jellyfin:
+          '這是你自己的 Jellyfin：它報的是它自己容器裡的媒體庫路徑。Berth 要看得到同一個字串，兩者得在同一台主機、把同一個父目錄掛在同一個容器路徑（例如兩邊都掛成 /data）。Berth 不做 remote path mapping——改 Jellyfin 或 berth 的 volumes，讓這條路徑在兩邊指到同一個地方。',
+        probe:
+          '這是你自己的 Jellyfin：它看不到 Berth 剛寫的檔案，多半是它在另一台主機，或把這個目錄掛在別的容器路徑。Berth 不做 remote path mapping——Jellyfin 要與 Berth 在同一台主機，把同一個父目錄掛在同一個容器路徑。',
+        split:
+          '你自己的服務多半把下載與媒體庫分開掛（/downloads、/tv 各一條），Berth 跟著分開掛就跨了掛載點。改成三個容器都掛同一個父目錄（例如 /data，底下再分下載與媒體庫），容器路徑也一樣。',
+      },
     },
   },
   complete: {
@@ -3079,7 +3088,6 @@ const en: Translations<typeof zhHant> = {
   jellyfin: {
     unreachable: 'Cannot read the state of this step. Check that the Berth backend is running.',
     cutaway: {
-      sequence: 'What will happen',
       server: 'This Jellyfin',
       apiKey: 'API key',
       held: 'Held',
@@ -3103,23 +3111,9 @@ const en: Translations<typeof zhHant> = {
       api_key: 'Create an API key for Berth',
     },
     bundled: {
-      title: 'Create the libraries',
-      lede: 'The Jellyfin page already created the administrator on this Jellyfin, finished its startup setup and got an API key; this builds the libraries you list, and each one becomes a route. Safe to press again: the ones already built are marked "already so" and are not built twice.',
-      toRoutes: 'On to routes and checks',
-      editList: 'Library list',
-      run: 'Start mooring',
-      rerun: 'Run it again',
-      retry: 'Retry the failed step',
-      running: 'Running…',
-      done_one:
-        'This berth is secured. Jellyfin has the owner administrator account, {{count}} library and an API key for Berth.',
-      done_other:
-        'This berth is secured. Jellyfin has the owner administrator account, {{count}} libraries and an API key for Berth.',
-      requestFailed:
-        'The request did not finish. The Berth backend may not be running — check it and retry.',
       list: {
         title: 'Libraries to create',
-        lede: 'Content type, name and folder — the same three fields as “Add media library” in Jellyfin itself. Each one becomes a route at the Routes step.',
+        lede: 'Content type, name and folder — the same three fields as “Add media library” in Jellyfin itself. Each one becomes a route.',
         name: 'Name',
         type: 'Content type',
         types: {
@@ -3136,7 +3130,6 @@ const en: Translations<typeof zhHant> = {
           'Libraries that already exist cannot be changed here: rename, remove or repath them under Dashboard → Libraries in Jellyfin. Here you can only add new ones, and a rerun creates only those.',
         saving: 'Saving…',
         unsaved: 'Fix the fields marked in red and the list will be saved.',
-        blocked: 'Fix the fields marked in red before mooring.',
         saveFailed:
           'The list was not saved: the request did not finish. Check the Berth backend, then change a field to try again.',
         refused: 'The list was not saved: {{reason}}',
@@ -3183,10 +3176,7 @@ const en: Translations<typeof zhHant> = {
       tvdb: 'This library fetches metadata from TVDB. Berth matches titles against TMDB for now, so season and episode numbers may disagree. Not blocking, but look here first when a match goes wrong.',
       willAdd: 'This path will be added',
       addPath: 'Add the Berth path',
-      addConfirm: 'Confirm',
       adding: 'Adding…',
-      addWarning:
-        'Adds {{path}} to the library "{{library}}". Existing paths stay, no rescan is triggered, and watch history is unaffected.',
       addFailed:
         'The path was not added. The usual cause is that Berth and Jellyfin do not mount the same host directory at the same container path — Berth can create the directory but Jellyfin cannot see it. You can also add the path by hand under Jellyfin Libraries:',
     },
@@ -3422,19 +3412,43 @@ const en: Translations<typeof zhHant> = {
     title: 'Routes',
     lede: {
       bundled:
-        'Each library Berth created becomes a route: finished downloads are hard-linked into its write target. This step creates the qBittorrent categories and links a real file, proving all three containers see one file system.',
+        'Each library you list becomes a route: finished downloads are hard-linked into its write target. Arriving here changes nothing; “Build and check” builds them and links a real file, proving all three containers see one file system.',
       existing:
-        'Tick the libraries Berth may write into and pick one write target for each. Berth writes only to the path you pick; the library’s other paths stay read-only. To keep Berth out of your existing folders, add a Berth path first and pick that.',
+        'Tick the libraries Berth may write into and pick one write target for each. Berth writes only to the path you pick; the library’s other paths stay read-only. To keep Berth out of your existing folders, pick “new Berth path” — it is added to Jellyfin when you press “Build and check”. Arriving here changes nothing.',
     },
     empty:
       'This Jellyfin has no libraries. Create one in Jellyfin and come back, so Berth has somewhere to write. Berth does not create libraries on your server.',
     unreachable:
       'Could not read the library list. The Berth backend may be down — check the container, then reload.',
-    building: 'Building…',
-    automatic:
-      'Creating routes and running the five checks… The bundled libraries leave nothing to choose, so this runs as soon as you arrive.',
-    build_one: 'Build {{count}} route and check',
-    build_other: 'Build {{count}} routes and check',
+    docking: 'Building and checking…',
+    list: 'Routes on this page',
+    tally: '{{passed}} / {{total}} passed',
+    listSummary: 'Library list',
+    listPending_one: '{{count}} to create',
+    listPending_other: '{{count}} to create',
+    listBuilt_one: '{{count}} created',
+    listBuilt_other: '{{count}} created',
+    dock: {
+      title: 'Pressing it will',
+      build: 'Build and check',
+      libraries_one: 'Create {{count}} library in Jellyfin: {{names}}',
+      libraries_other: 'Create {{count}} libraries in Jellyfin: {{names}}',
+      berthPath:
+        'Add the path {{path}} to the Jellyfin library “{{library}}” (existing paths stay, no rescan)',
+      categories_one:
+        'Create or verify {{count}} berth- category in qBittorrent (existing ones keep their path)',
+      categories_other:
+        'Create or verify {{count}} berth- categories in qBittorrent (existing ones keep their path)',
+      probes_one:
+        'Write a probe file and make one hard link in {{count}} write target, deleted once checked',
+      probes_other:
+        'Write a probe file and make one hard link in each of {{count}} write targets, deleted once checked',
+      listBlocked: 'Fix the fields marked in red before building.',
+      pickOne: 'One step left: tick a library.',
+      pickTarget: 'One step left: pick a write target for “{{library}}”.',
+      retryHint:
+        'Once you have done it by hand, press “Build and check” again; what is already built is not built twice.',
+    },
     recheck_one: 'Check {{count}} route again',
     recheck_other: 'Check {{count}} routes again',
     requestFailed:
@@ -3445,11 +3459,9 @@ const en: Translations<typeof zhHant> = {
       paths: 'Paths',
       libraryRoot: 'Library root',
       completeRoot: 'Complete root',
-      count: 'Routes to build this round',
       plan: 'Will create',
       library: 'Library',
       target: 'Write target',
-      category: 'Category',
     },
     picker: {
       title: 'Pick the libraries',
@@ -3461,10 +3473,8 @@ const en: Translations<typeof zhHant> = {
       noPath: 'This library has no path on Jellyfin.',
       routed:
         'Already has a route: the wizard only adds, it never changes or deletes one. If it was a mistake, use the delete under that route below; once setup is done, manage routes under Settings → Routes.',
-      addBerthPath: 'Add a Berth path',
-      adding: 'Adding…',
-      addHint:
-        'Adds {{path}} to this library. Your existing paths stay where they are, and the new one becomes the write target.',
+      newBerthPath:
+        'New Berth path: added to this library when you press “Build and check”; existing paths stay',
     },
     health: {
       unknown: 'Not checked',
@@ -3489,6 +3499,16 @@ const en: Translations<typeof zhHant> = {
         'The link failed. The complete directory and the library directory have to sit on one file system, and the container user has to be able to write there.',
       crossDevice:
         'Those two directories are separate mounts inside Berth (EXDEV). A hard link cannot cross a mount point: use one mount covering the whole parent directory instead of mounting complete and library separately. Network shares, exFAT drives and mergerfs cannot hard-link either.',
+      existing: {
+        qbittorrent:
+          'This is your own qBittorrent: the path it reports is a path inside its own container. For Berth to see the same string, both must run on the same host and mount the same parent directory at the same container path (for example /data on both). Berth does no remote path mapping — change the volumes of qBittorrent or berth so this path points at the same place in both.',
+        jellyfin:
+          'This is your own Jellyfin: the library paths it reports are paths inside its own container. For Berth to see the same string, both must run on the same host and mount the same parent directory at the same container path (for example /data on both). Berth does no remote path mapping — change the volumes of Jellyfin or berth so this path points at the same place in both.',
+        probe:
+          'This is your own Jellyfin: it cannot see the file Berth just wrote, most likely because it runs on another host or mounts this directory at a different container path. Berth does no remote path mapping — Jellyfin has to run on the same host as Berth and mount the same parent directory at the same container path.',
+        split:
+          'Your own services probably mount downloads and media separately (/downloads and /tv), and mounting Berth the same way puts them on two mount points. Mount one shared parent directory in all three containers instead (for example /data, with downloads and media underneath), at the same container path.',
+      },
     },
   },
   complete: {

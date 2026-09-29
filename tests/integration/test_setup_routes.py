@@ -353,6 +353,54 @@ class TestExisting:
         assert [row.target_path for row in status.routes] == [berth]
 
     @pytest.mark.asyncio
+    async def test_a_library_name_with_spaces_gets_a_hyphenated_slug(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """票 08：空白換成 `-`，分類名與 complete 子目錄不帶空白。"""
+        target = roots["library"] / "shows"
+        target.mkdir()
+        libraries = (existing_library(target).model_copy(update={"name": "TV Shows"}),)
+        await arrange(session, roots, origin=ServiceOrigin.EXISTING, libraries=libraries)
+        qbittorrent = applied_qbittorrent(roots)
+
+        status = await build_routes(
+            session,
+            factory_for(roots, libraries=libraries, qbittorrent=qbittorrent),
+            (RouteSelection(library="TV Shows", target_path=str(target)),),
+        )
+
+        [route] = status.routes
+        assert (route.slug, route.category) == ("tv-shows", "berth-tv-shows")
+        assert route.save_path.endswith("/tv-shows")
+        assert [row.name for row in qbittorrent.created_categories] == ["berth-tv-shows"]
+
+    @pytest.mark.asyncio
+    async def test_a_route_built_with_a_spaced_slug_keeps_it_on_a_rerun(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """票 08：已經存在的 Route 與分類不改名——改分類的 save path 會搬走它底下的 torrent
+        （brief §20.2）。重跑照存下來的 slug 與分類檢查，不另建一個 `berth-tv-shows`。"""
+        target = roots["library"] / "shows"
+        target.mkdir()
+        libraries = (existing_library(target).model_copy(update={"name": "TV Shows"}),)
+        await arrange(session, roots, origin=ServiceOrigin.EXISTING, libraries=libraries)
+        selection = (RouteSelection(library="TV Shows", target_path=str(target)),)
+        await build_routes(session, factory_for(roots, libraries=libraries), selection)
+        route = (await session.scalars(select(Route))).one()
+        route.slug, route.category = "tv shows", "berth-tv shows"
+        await session.commit()
+        qbittorrent = applied_qbittorrent(roots)
+
+        status = await build_routes(
+            session, factory_for(roots, libraries=libraries, qbittorrent=qbittorrent), selection
+        )
+
+        [kept] = status.routes
+        assert (kept.slug, kept.category) == ("tv shows", "berth-tv shows")
+        assert kept.save_path.endswith("/tv shows")
+        assert [row.name for row in qbittorrent.created_categories] == ["berth-tv shows"]
+
+    @pytest.mark.asyncio
     async def test_two_selections_for_the_same_target_build_one_route(
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:

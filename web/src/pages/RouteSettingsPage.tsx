@@ -23,7 +23,7 @@ import {
 import { Dot } from '../components/Dot'
 import { RouteCheckList } from '../components/RouteCheckList'
 import { RouteDelete, type RouteChange } from '../components/RouteDelete'
-import { RouteIdentity } from '../components/RouteIdentity'
+import { RouteRow } from '../components/RouteRow'
 import { SettingsTabs } from '../components/SettingsTabs'
 import { AddRoute } from '../settings/AddRoute'
 
@@ -79,7 +79,7 @@ export function RouteSettingsPage() {
         <ul className="mt-6 grid gap-3">
           {routes.data.map((row) => (
             <li key={row.route.id} className="min-w-0">
-              <RouteRow row={row} onChanged={(change) => changed(row.route, change)} />
+              <ManagedRouteRow row={row} onChanged={(change) => changed(row.route, change)} />
             </li>
           ))}
         </ul>
@@ -102,10 +102,9 @@ function refreshRoutes(queryClient: QueryClient) {
 }
 
 /**
- * 一條 Route。用原生 `<details>`：鍵盤與螢幕閱讀器的行為比自己管 state 好（票 05 的決定）。
- * `<summary>` 是 flex，三角形會被吃掉，所以展開與否由模板字自己說出來。
+ * 一條 Route：列本身與精靈、健康頁共用（`RouteRow`，M4 票 08）。紅燈或停用的就地展開（使用者拍板）。
  */
-function RouteRow({
+function ManagedRouteRow({
   row,
   onChanged,
 }: {
@@ -114,18 +113,14 @@ function RouteRow({
 }) {
   const { t } = useTranslation()
   const { route } = row
-  const attention = route.health === 'failed' || !route.enabled
 
   return (
-    <details
-      open={attention}
-      className={`group min-w-0 border-2 bg-well ${attention ? 'border-rule-strong' : 'border-rule'}`}
-    >
-      <summary className="flex cursor-pointer flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3">
-        <RouteIdentity route={route} />
-        <span className="value min-w-0 grow wrap-anywhere text-xs text-ink-dim">
-          {route.target_path}
-        </span>
+    <RouteRow
+      route={route}
+      attention={route.health === 'failed' || !route.enabled}
+      expandLabel={t('routeSettings.manage')}
+      collapseLabel={t('routeSettings.collapse')}
+      extra={
         <span className="flex flex-wrap items-center gap-x-2 text-xs text-ink-dim">
           <span className="value">{t('routeSettings.usage.jobs', { count: row.jobs })}</span>
           <Dot />
@@ -133,14 +128,9 @@ function RouteRow({
             {t('routeSettings.usage.files', { count: row.ledger_entries })}
           </span>
         </span>
-        <span className="label shrink-0 text-ink-dim group-open:hidden">
-          {t('routeSettings.manage')}
-        </span>
-        <span className="label hidden shrink-0 text-ink-dim group-open:inline">
-          {t('routeSettings.collapse')}
-        </span>
-      </summary>
-      <div className="grid gap-6 border-t-2 border-rule px-4 py-4">
+      }
+    >
+      <div className="grid gap-6">
         <RouteEditor route={route} />
         <RouteChecks route={route} />
         <RouteDelete
@@ -152,7 +142,7 @@ function RouteRow({
           onChanged={onChanged}
         />
       </div>
-    </details>
+    </RouteRow>
   )
 }
 

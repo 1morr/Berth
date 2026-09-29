@@ -421,7 +421,7 @@ async def add_berth_path(
         library = next((row for row in libraries if row.name == library_name), None)
         if library is None:
             raise StepFailedError(f"no library named {library_name!r} on this Jellyfin")
-        path = berth_path(library_name, paths.library_root)
+        path = berth_path(library_name, paths.library_root, library.locations)
         if path not in library.locations:
             ensure_directory(Path(path))
             await client.add_library_path(library_name, path)
@@ -813,15 +813,20 @@ def _measured_version(setup: SetupSettings) -> str:
 
 #: 路徑上不能出現的字元（Windows 最嚴，brief §4.5）。中日文照留，它們在兩種檔案系統都合法。
 _UNSAFE_IN_PATH = re.compile(r'[<>:"/\\|?*\x00-\x1f]+')
+#: 一段空白連同貼著它的 `-`：「TV Shows」「Anime / Old」都只剩一個 `-`（票 08）。
+_SPACE_RUN = re.compile(r"[\s-]*\s[\s-]*")
 
 
 def library_slug(library_name: str) -> str:
-    """媒體庫名 → 路徑與 category 用的 slug。中日文照留（brief §4.5）。
+    """媒體庫名 → 路徑與 category 用的 slug。中日文照留（brief §4.5），空白換成 `-`（票 08）。
 
     第 5 步的 Route 用同一支：Route 的 complete 子目錄、qBittorrent category 與這個媒體庫的
-    Berth 路徑要對得起來，兩套算法遲早會分岔。
+    Berth 路徑要對得起來，兩套算法遲早會分岔。**只影響新建的**：已經存在的 Route 存著自己的
+    slug 與分類，不重算——改分類的 save path 會搬走它底下的 torrent（brief §20.2）。前端
+    `libraryRules.folderFor` 照同一條規則推套件內清單的資料夾。
     """
-    return _UNSAFE_IN_PATH.sub("-", library_name).strip(" .-").lower() or "berth"
+    unsafe = _UNSAFE_IN_PATH.sub("-", library_name)
+    return _SPACE_RUN.sub("-", unsafe).strip(" .-").lower() or "berth"
 
 
 def bundled_path(folder: str, library_root: str) -> str:
@@ -833,17 +838,24 @@ def bundled_path(folder: str, library_root: str) -> str:
     return f"{library_root.rstrip('/')}/{folder}"
 
 
-def berth_path(library_name: str, library_root: str) -> str:
+def berth_path(library_name: str, library_root: str, locations: Sequence[str] = ()) -> str:
     """「加入 Berth 路徑」加的那一條：`<library root>/<slug>`（CONTEXT.md）。
 
     第 5 步的 Route 也用這一支決定「這個媒體庫的 Berth 路徑是哪一條」，兩邊算出來的字串
     必須一模一樣，否則畫面會對 Berth 自己建的路徑說「還沒有 Berth 路徑」。
+
+    **已經加上去的那一條不改名**（票 08）：票 08 之前的 slug 留著空白（`…/tv shows`），媒體庫的
+    `locations` 裡有它就是它——否則畫面會再給一條 `…/tv-shows`，按下去 Jellyfin 就多一條路徑。
     """
-    return f"{library_root.rstrip('/')}/{library_slug(library_name)}"
+    root = library_root.rstrip("/")
+    spaced = _UNSAFE_IN_PATH.sub("-", library_name).strip(" .-").lower() or "berth"
+    if f"{root}/{spaced}" in locations:
+        return f"{root}/{spaced}"
+    return f"{root}/{library_slug(library_name)}"
 
 
 def _library_view(library: SetupLibrary, library_root: str) -> LibraryView:
-    path = berth_path(library.name, library_root)
+    path = berth_path(library.name, library_root, library.locations)
     return LibraryView(
         name=library.name,
         collection_type=library.collection_type,

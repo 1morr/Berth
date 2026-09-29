@@ -9,7 +9,7 @@ import { PAGE_TITLE, GhostButton, Notice } from '../components/controls'
 import { berthOf } from '../components/berths'
 import { ROUTE_HEALTH_LABEL, ROUTE_SIGNAL } from '../components/routeChecks'
 import { RouteCheckList } from '../components/RouteCheckList'
-import { RouteIdentity } from '../components/RouteIdentity'
+import { RouteRow } from '../components/RouteRow'
 import { UNPAINTED_FILL } from '../components/signal'
 import { Timestamp } from '../components/Timestamp'
 import { HealthBoard } from '../health/HealthBoard'
@@ -162,7 +162,7 @@ export function HealthPage() {
             <ul className="mt-3 grid gap-3">
               {report.routes.map((route) => (
                 <li key={route.slug} className="min-w-0">
-                  <RouteRow route={route} />
+                  <HealthRoute route={route} />
                 </li>
               ))}
             </ul>
@@ -175,49 +175,29 @@ export function HealthPage() {
 
 /**
  * 一條 Route。綠燈只有一行，紅燈就地展開五條纜繩——全綠的時候沒有人要讀那 15 行
- * （shape brief §7 的第三個決定）。用 `<details>` 而不是自己管 state：原生的鍵盤與
- * 螢幕閱讀器行為比重寫一份好（票 05 的決定）。
+ * （shape brief §7 的第三個決定）。列本身與精靈、Route 設定頁共用（`RouteRow`，M4 票 08）。
  */
-function RouteRow({ route }: { route: RouteView }) {
+function HealthRoute({ route }: { route: RouteView }) {
   const { t } = useTranslation()
-  const failed = route.health === 'failed'
 
   return (
-    <details
-      open={failed}
-      className={`group min-w-0 border-2 bg-well ${failed ? 'border-rule-strong' : 'border-rule'}`}
+    <RouteRow
+      route={route}
+      attention={route.health === 'failed'}
+      expandLabel={t('health.routes.expand')}
+      collapseLabel={t('health.routes.collapse')}
     >
-      {/* `display: flex` 會吃掉 `<summary>` 的三角形，所以展開與否要自己說出來——
-          否則收起來的那一列看不出它是按得開的。 */}
-      <summary className="flex cursor-pointer flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3">
-        <RouteIdentity route={route} />
-        {/* `wrap-anywhere` 而不是 `truncate`：三條 Route 常常只差路徑的最後一段
-            （`/mnt/disk1/tv`、`/mnt/disk2/tv`），截掉尾巴之後窄版上三列一模一樣
-            ——而那一段正是分辨它們的唯一依據（票 03 第 15 條）。Route 設定頁的
-            同一列本來就是這樣畫的。 */}
-        <span className="value min-w-0 grow wrap-anywhere text-xs text-ink-dim">
-          {route.target_path}
-        </span>
-        <span className="label shrink-0 text-ink-dim group-open:hidden">
-          {t('health.routes.expand')}
-        </span>
-        <span className="label hidden shrink-0 text-ink-dim group-open:inline">
-          {t('health.routes.collapse')}
-        </span>
-      </summary>
-      <div className="border-t-2 border-rule px-4 py-4">
-        <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 pb-4 text-xs">
-          <dt className="label self-center text-ink-dim">{t('health.lastOk')}</dt>
-          <dd className="text-ink">
-            <Timestamp at={route.last_ok_at} />
-          </dd>
-          <dt className="label self-center text-ink-dim">{t('health.lastChecked')}</dt>
-          <dd className="text-ink">
-            <Timestamp at={route.checked_at} />
-          </dd>
-        </dl>
-        <RouteCheckList route={route} />
-      </div>
-    </details>
+      <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-xs">
+        <dt className="label self-center text-ink-dim">{t('health.lastOk')}</dt>
+        <dd className="text-ink">
+          <Timestamp at={route.last_ok_at} />
+        </dd>
+        <dt className="label self-center text-ink-dim">{t('health.lastChecked')}</dt>
+        <dd className="text-ink">
+          <Timestamp at={route.checked_at} />
+        </dd>
+      </dl>
+      <RouteCheckList route={route} />
+    </RouteRow>
   )
 }

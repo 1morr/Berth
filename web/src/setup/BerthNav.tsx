@@ -1,13 +1,14 @@
 import { useTranslation } from 'react-i18next'
 
-import { STICKY_ACTION, GhostButton, PrimaryButton } from '../components/controls'
+import { STICKY_BAR, GhostButton, PrimaryButton } from '../components/controls'
 import { STEP } from './navigation'
 
 /**
  * 每一頁工作面底部的「上一個泊位 / 前往下一個泊位」（票 06d）。
  *
  * 「前往下一個」只在這一頁做完了才有（後端已經過了它）：前進只能靠把事做完。有它的時候它是
- * 這一頁的主要動作，所以窄版固定在底部；那一頁自己的「重跑」同時降成次要、不再固定
+ * 這一頁的主要動作，所以固定在底部，**桌機也是**（M4 票 08：頁 3 做完是四條 Route 加上清單與重新
+ * 檢查，1280 × 720 上它被擠到畫面外）；那一頁自己的「重跑」同時降成次要、不再固定
  * （兩個 sticky 會疊在同一個位置）。
  */
 export function BerthNav({ onPrevious, onNext }: { onPrevious?: () => void; onNext?: () => void }) {
@@ -19,7 +20,7 @@ export function BerthNav({ onPrevious, onNext }: { onPrevious?: () => void; onNe
       aria-label={t('setup.nav.label')}
       // 窄版也排成一列：固定在底部的一條要矮，上一個縮成它自己的寬度，下一個佔滿剩下的。
       className={`mt-8 grid grid-cols-[auto_minmax(0,1fr)] gap-3 sm:grid-cols-[auto_minmax(0,18rem)] sm:justify-between ${
-        onNext ? STICKY_ACTION : ''
+        onNext ? STICKY_BAR : ''
       }`}
     >
       {onPrevious ? (

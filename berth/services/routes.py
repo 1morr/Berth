@@ -1078,7 +1078,7 @@ def owning_route(target_path: str, routes: Sequence[Route]) -> Route | None:
 
 def _library_choice(library: SetupLibrary, library_root: str, route: Route | None) -> LibraryChoice:
     #: 「加入 Berth 路徑」加的是哪一條由第 3 步決定，這裡呼叫的是同一支函式（不重算 slug）。
-    path = berth_path(library.name, library_root)
+    path = berth_path(library.name, library_root, library.locations)
     return LibraryChoice(
         name=library.name,
         collection_type=library.collection_type,

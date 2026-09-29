@@ -1,40 +1,232 @@
-import { useState, type ReactNode } from 'react'
+import { useId, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import {
   deleteSetupRoute,
+  type JellyfinSetup,
   type LibraryChoice,
+  type LibraryDraft,
   type RouteSelectionInput,
   type RouteSetup,
 } from '../api/setup'
-import { type RouteRefusalDetail } from '../api/routes'
-import { type RouteView } from '../api/schemas'
-import {
-  STICKY_ACTION,
-  Checkbox,
-  ConfirmAction,
-  GhostButton,
-  Notice,
-  PrimaryButton,
-} from '../components/controls'
-import { ROUTE_HEALTH_LABEL, ROUTE_SIGNAL } from '../components/routeChecks'
-import { RouteCheckList } from '../components/RouteCheckList'
-import { SIGNAL_FILL } from '../components/signal'
+import { STICKY_ACTION, Checkbox, GhostButton, Notice, PrimaryButton } from '../components/controls'
 import { Cutaway, CutawayRow } from '../components/Cutaway'
+import { RouteCheckList, type ExistingServices } from '../components/RouteCheckList'
 import { RouteDelete } from '../components/RouteDelete'
+import { RouteRow } from '../components/RouteRow'
+import { StepLine } from '../components/StepLine'
+import { BundledLibraries } from './BundledLibraries'
+import { AddPathFailure } from './JellyfinExisting'
+import { STEP_ENDPOINT, STEP_FIX, STEP_LABEL, librariesFailed, manualSteps } from './jellyfinSteps'
+import { pathUnder } from './libraryRules'
 import { StepFrame } from './StepFrame'
+import { useLibraryDraft } from './useLibraryDraft'
 
 /**
- * 泊位 3：媒體庫路徑 → Library Route（plan §9.3 第 5 步、§9.5）。
+ * 頁 3「媒體庫與路徑」（plan §9.3 頁 3、§9.5；M4 票 08，`.scratch/m4/route-berth-shape.md`）。
  *
- * 套件內 Jellyfin 的每一個媒體庫直接導出一個 Route，沒有可選的東西——剖面列的就是將建立的
- * 那幾條，而且第一次走到這一格就自動跑（`SetupPage`，票 06d），沒有要按的鍵。既有 Jellyfin
- * 由使用者勾選媒體庫，並從**那個媒體庫自己回報的路徑**裡選寫入目標；想要一條乾淨的
- * Berth 路徑就用「加入 Berth 路徑」（第 3 步的同一支端點，舊路徑原地不動）。
+ * **進頁不動手，一顆鈕做完**：這一頁會建媒體庫、在 Jellyfin 加路徑、建 qBittorrent 分類、寫探測檔與
+ * 硬鏈接測試檔，所以由人按，按之前把這一輪會做的事列出來（`DockPreview`）。套件內這一顆也建清單上
+ * 還沒建的媒體庫；既有 Jellyfin 的 Berth 路徑是寫入目標的一個選項，按下時才加——沒有「確認加入」
+ * 那種做了一半、走得過去的狀態（使用者拍板）。
  *
- * 每個 Route 五條纜繩，最後一條真的鏈接一次檔案再比 inode（brief §4.4）。失敗就地展開
- * 那個容器的 compose `volumes:` 片段——這是「哪個容器少了哪個掛載」唯一有用的回答。
+ * 按下之後的順序在 `SetupPage` 的 `dock`：一段失敗就停，後面的不送。每條 Route 收成一列，
+ * 紅的自己打開（`RouteRow`）；失敗說出哪個容器少了哪個掛載，既有服務另說同主機、同容器路徑的條件。
  */
+
+/** 按下「建立並檢查」要做的事，照順序。 */
+export type DockPlan =
+  | {
+      origin: 'bundled'
+      /** 先存這一份清單（`bootstrap` 讀的是存下來的那一份）。 */
+      libraries: LibraryDraft[]
+      /** 清單上有還沒建的：先建媒體庫再建 Route。 */
+      buildLibraries: boolean
+    }
+  | {
+      origin: 'existing'
+      /** 按下時先替這幾個媒體庫加 Berth 路徑（plan §9.5）。 */
+      newPaths: string[]
+      selections: RouteSelectionInput[]
+    }
+
+/** 請求沒走完的那一種。後端的拒絕說得出原因就說原因（PRODUCT 原則 4）。 */
+export type DockFailure = 'request' | 'route_missing'
+
+/** 這一輪會新建的一條 Route：哪個媒體庫、寫到哪裡。剖面列它。 */
+interface Planned {
+  library: string
+  target: string
+}
+
+interface Common {
+  setup: RouteSetup
+  /**
+   * 這一頁做完了（後端已經過了它）：「前往下一個泊位」出現、而且固定在底部，這一頁的主鈕降成
+   * 次要、不再固定——兩個 sticky 會疊在同一個位置，一屏也不能有兩顆 `assigned`（code-review）。
+   */
+  done: boolean
+  /** 使用者自己的那幾台：它們的檢查失敗時另說改掛載（票 08）。 */
+  existing: ExistingServices
+  docking: boolean
+  failure: DockFailure | null
+  onDock: (plan: DockPlan) => void
+  /** 一條 Route 被明確地刪掉了（票 14）：這一步的清單要重讀。 */
+  onRouteDeleted: () => void
+  /** 回頭看的說明（`RevisitNote`），這一頁做完了才有。 */
+  note?: ReactNode
+  /** 上一個 / 下一個泊位（`BerthNav`）。 */
+  nav?: ReactNode
+}
+
+export function RouteStep({
+  jellyfin,
+  onSaveLibraries,
+  savingLibraries,
+  saveLibrariesFailed,
+  ...common
+}: Common & {
+  /** 套件內的清單、建媒體庫那一步與版本；既有的「加路徑」失敗也記在它的 `libraries` 那一步。 */
+  jellyfin: JellyfinSetup
+  /** 清單停手就存（票 06f）。 */
+  onSaveLibraries: (libraries: LibraryDraft[]) => void
+  savingLibraries: boolean
+  /** 清單存不下來的那一句，沒有就是 `null`。 */
+  saveLibrariesFailed: string | null
+}) {
+  return common.setup.origin === 'bundled' ? (
+    <BundledRoutes
+      {...common}
+      jellyfin={jellyfin}
+      onSaveLibraries={onSaveLibraries}
+      saving={savingLibraries}
+      saveFailed={saveLibrariesFailed}
+    />
+  ) : (
+    <ExistingRoutes {...common} jellyfin={jellyfin} />
+  )
+}
+
+/** 套件內：你列的媒體庫一個一條 Route，沒有要選的東西。 */
+function BundledRoutes({
+  jellyfin,
+  onSaveLibraries,
+  saving,
+  saveFailed,
+  ...common
+}: Common & {
+  jellyfin: JellyfinSetup
+  onSaveLibraries: (libraries: LibraryDraft[]) => void
+  saving: boolean
+  saveFailed: string | null
+}) {
+  const { t } = useTranslation()
+  const { setup, docking } = common
+  // 它只在清單真的被改過時才存。
+  const draft = useLibraryDraft(jellyfin, onSaveLibraries)
+  const unbuilt = draft.rows.filter((row) => !row.built)
+  // 已經在 Jellyfin 上、還沒有 Route 的（建過媒體庫、Route 被刪掉的也是這一種）。
+  const unrouted = setup.libraries.filter((library) => library.supported && !library.has_route)
+  const broke = librariesFailed(jellyfin)
+  const names = unbuilt.map((row) => row.name.trim()).filter(Boolean)
+
+  return (
+    <RoutePage
+      {...common}
+      lede={t('routes.lede.bundled')}
+      planned={[
+        ...unrouted.map((library) => ({
+          library: library.name,
+          target: library.locations[0] ?? '',
+        })),
+        ...unbuilt.map((row) => ({
+          library: row.name.trim() || '—',
+          target: row.folder.trim() ? pathUnder(jellyfin.library_root, row.folder.trim()) : '—',
+        })),
+      ]}
+      fresh={unrouted.length + unbuilt.length}
+      preview={
+        unbuilt.length > 0
+          ? [<LibrariesLine key="libraries" count={unbuilt.length} names={names} />]
+          : []
+      }
+      blocked={draft.blocked ? t('routes.dock.listBlocked') : null}
+      onPress={() =>
+        common.onDock({
+          origin: 'bundled',
+          libraries: draft.drafts,
+          buildLibraries: unbuilt.length > 0,
+        })
+      }
+    >
+      {!jellyfin.version_supported && <VersionNotice version={jellyfin.version} />}
+      {/* 清單全部建好了就收成一列，要加一個再展開（shape）；還有沒建的就打開。**永遠是同一個
+          `<details>`**：兩種樣子換元件的話，展開後按「加一個媒體庫」清單會被重新掛載，焦點掉回 body
+          （code-review）。`open` 只在「有沒有沒建的」變了時才動，使用者自己開關的不蓋掉。 */}
+      <details open={unbuilt.length > 0} className="group mt-6">
+        <summary className="flex cursor-pointer flex-wrap items-center gap-x-3 gap-y-2 border-2 border-rule bg-well px-4 py-3">
+          <span className="label text-ink-dim">{t('routes.listSummary')}</span>
+          <span className="value text-xs text-ink">
+            {unbuilt.length > 0
+              ? t('routes.listPending', { count: unbuilt.length })
+              : t('routes.listBuilt', { count: draft.rows.length })}
+          </span>
+          <span className="label ml-auto text-ink-dim group-open:hidden">{t('common.expand')}</span>
+          <span className="label ml-auto hidden text-ink-dim group-open:inline">
+            {t('common.collapse')}
+          </span>
+        </summary>
+        {/* 清單自己有框：摘要一條、清單一塊，不疊兩層框。 */}
+        <div className="mt-3">
+          <BundledLibraries
+            draft={draft}
+            libraryRoot={jellyfin.library_root}
+            locked={docking}
+            saving={saving}
+            saveFailed={saveFailed}
+          />
+        </div>
+      </details>
+      {broke && (
+        <ol className="mt-4 grid gap-3">
+          <StepLine
+            label={t(STEP_LABEL.libraries)}
+            endpoint={STEP_ENDPOINT.libraries}
+            row={broke}
+            fix={t(STEP_FIX.libraries)}
+            commands={manualSteps('libraries', jellyfin.base_url)}
+          >
+            <p className="mt-3 text-xs text-ink-dim">{t('routes.dock.retryHint')}</p>
+          </StepLine>
+        </ol>
+      )}
+    </RoutePage>
+  )
+}
+
+function LibrariesLine({ count, names }: { count: number; names: string[] }) {
+  const { t, i18n } = useTranslation()
+  const list = names.length > 0 ? new Intl.ListFormat(i18n.language).format(names) : '—'
+  return <>{t('routes.dock.libraries', { count, names: list })}</>
+}
+
+/**
+ * 版本太舊（brief §16.4、§19、§20.9）。**擺在清單之前**：升級之前按幾次都是同一個結果，而升級是
+ * 不可逆的，那幾件先做的事要在按之前就看得到。
+ */
+function VersionNotice({ version }: { version: string }) {
+  const { t } = useTranslation()
+
+  return (
+    <div className="mt-4 grid gap-2">
+      <Notice signal="blocked" label={t('jellyfin.version.label')}>
+        {t('jellyfin.version.current', { version })}
+      </Notice>
+      <p className="max-w-prose text-xs text-ink-dim">{t('jellyfin.version.why')}</p>
+      <p className="max-w-prose text-xs text-ink">{t('jellyfin.version.upgrade')}</p>
+    </div>
+  )
+}
 
 /** 使用者對一個媒體庫做的選擇。`Pick` 是 TS 內建型別的名字，所以不用它。 */
 interface LibraryPick {
@@ -42,47 +234,14 @@ interface LibraryPick {
   target: string
 }
 
-export function RouteStep({
-  setup,
-  building,
-  addingPath,
-  requestFailed,
-  refusal,
-  onBuild,
-  onAddPath,
-  onRouteDeleted,
-  autoBuilding,
-  note,
-  nav,
-}: {
-  setup: RouteSetup
-  building: boolean
-  /** 正在為這個媒體庫加 Berth 路徑（第 3 步的端點）。 */
-  addingPath: string | null
-  /** 請求本身沒跑完。逐項檢查的失敗在 `routes[].checks` 裡，各自貼在它那一行。 */
-  requestFailed: boolean
-  /** 後端說不行的那一份。認不得的（或根本不是拒絕）是 `null`，落回一句通用的話。 */
-  refusal: RouteRefusalDetail | null
-  onBuild: (selections: RouteSelectionInput[]) => void
-  onAddPath: (library: string) => void
-  /** 一條 Route 被明確地刪掉了（票 14）：這一步的清單要重讀。 */
-  onRouteDeleted: () => void
-  /**
-   * 套件內的自動建立還沒送出或正在跑（票 06d）。跑過之後又把 Route 全刪光的人要拿得到鍵，
-   * 所以「一條都沒有」本身不代表自動建立會接手。
-   */
-  autoBuilding: boolean
-  /** 回頭看的說明（`RevisitNote`），這一頁做完了才有。 */
-  note?: ReactNode
-  /** 上一個 / 下一個泊位（`BerthNav`）。 */
-  nav?: ReactNode
-}) {
+/**
+ * 既有 Jellyfin：勾媒體庫、從**那個媒體庫自己回報的路徑**裡選寫入目標（brief §4.3）。還沒有 Berth 路徑的
+ * 媒體庫，Berth 路徑是多出來的一個選項，按下時才加（plan §9.5：舊路徑原地不動）。
+ */
+function ExistingRoutes({ jellyfin, ...common }: Common & { jellyfin: JellyfinSetup }) {
   const { t } = useTranslation()
-  const bundled = setup.origin === 'bundled'
+  const { setup } = common
   const [picks, setPicks] = useState<Record<string, LibraryPick>>({})
-  // 刪掉的那一條連同它的訊息一起卸載，所以「已刪除」由這一層說（票 14a）。
-  const [announcement, setAnnouncement] = useState('')
-  const routable = setup.libraries.filter((library) => library.supported)
 
   function pickOf(library: LibraryChoice): LibraryPick {
     return (
@@ -98,9 +257,8 @@ export function RouteStep({
   }
 
   /**
-   * 這條路徑已經被誰拿去當寫入目標了（票 03 第 6 條）。兩個來源與 plan §9.3 第 5 步
-   * 的略過規則一致：已經存在的 Route，以及**同一批裡前面已經選走它**的別的媒體庫。
-   * 自己選的那一條不算佔用，否則勾完就再也改不回來。
+   * 這條路徑已經被誰拿去當寫入目標了（票 03 第 6 條）。兩個來源與後端的略過規則一致：已經存在的
+   * Route，以及**同一批裡前面已經選走它**的別的媒體庫。自己選的那一條不算佔用，否則勾完就再也改不回來。
    */
   function takenBy(library: LibraryChoice, path: string): string | null {
     const route = setup.routes.find((row) => row.target_path === path)
@@ -111,154 +269,238 @@ export function RouteStep({
     return other ? other.name : null
   }
 
-  // 送得出去的只有「勾了、而且目標真的是這個媒體庫的路徑之一」的那幾個：伺服器用同一條
-  // 規則擋（回 422），但那時候畫面只說得出「請求沒走完」。最典型的情況是「加入 Berth 路徑」
-  // 失敗——那條路徑沒真的加上去，選它就會被退回來。
-  const selections = setup.libraries
-    .filter((library) => {
-      const pick = pickOf(library)
-      // 已經有 Route 的媒體庫不送：精靈只新增，不改也不刪（票 14，使用者拍板）。
-      return (
-        library.supported &&
-        !library.has_route &&
-        pick.selected &&
-        library.locations.includes(pick.target)
-      )
-    })
-    .map((library) => ({ library: library.name, target_path: pickOf(library).target }))
-  // 按下去會新建幾條。沒有新的時候這一顆就是「全部重驗」——重跑第 5 步只剩這個意思。
-  const fresh = bundled
-    ? routable.filter((library) => !library.has_route).length
-    : selections.length
-  // 套件內第一次走到這一格是自動跑的（票 06d）：沒有要選的東西，那一顆鍵只是儀式。
-  // 請求沒走完時才把鍵還給他——那時候總得有辦法再試一次。
-  const automatic = bundled && setup.routes.length === 0 && !requestFailed && autoBuilding
+  // 已經有 Route 的媒體庫不送：精靈只新增，不改也不刪（票 14，使用者拍板）。
+  const ticked = setup.libraries.filter(
+    (library) => library.supported && !library.has_route && pickOf(library).selected,
+  )
+  // 送得出去的是「目標是這個媒體庫的路徑之一，或按下時才加的 Berth 路徑」：伺服器用同一條規則擋
+  // （回 422），但那時候畫面只說得出「請求沒走完」。
+  const ready = ticked.filter((library) => {
+    const target = pickOf(library).target
+    return library.locations.includes(target) || isNewBerthPath(library, target)
+  })
+  const missing = ticked.find((library) => !ready.includes(library))
+  const newPaths = ready.filter((library) => isNewBerthPath(library, pickOf(library).target))
+  const selections = ready.map((library) => ({
+    library: library.name,
+    target_path: pickOf(library).target,
+  }))
+  const broke = librariesFailed(jellyfin)
 
   return (
-    <StepFrame cutaway={<RouteCutaway setup={setup} planned={bundled ? undefined : selections} />}>
-      <h2 className="text-lg font-semibold text-ink">{t('routes.title')}</h2>
-      <p className="mt-2 max-w-prose text-sm text-ink-dim">
-        {t(bundled ? 'routes.lede.bundled' : 'routes.lede.existing')}
-      </p>
-      {note}
-
-      {!bundled &&
-        (setup.libraries.length === 0 ? (
-          <div className="mt-6">
-            {/* Berth 不替既有伺服器建媒體庫（brief §16.4 的紅線），所以這裡沒有動作。 */}
-            <Notice signal="assigned" label={t('common.warning')}>
-              {t('routes.empty')}
-            </Notice>
-          </div>
-        ) : (
-          <LibraryPicker
-            libraries={setup.libraries}
-            pickOf={pickOf}
-            takenBy={takenBy}
-            addingPath={addingPath}
-            onChange={change}
-            onAddPath={(library) => {
-              // 按了就是要寫在那裡：路徑加完之後它就是這個媒體庫的寫入目標。
-              change(library, { selected: true, target: library.berth_path })
-              onAddPath(library.name)
-            }}
-          />
-        ))}
-
-      {automatic ? (
-        <p aria-live="polite" className="value mt-6 text-sm text-ink-dim">
-          {t('routes.automatic')}
-        </p>
-      ) : fresh === 0 && setup.ready ? (
-        // 全綠、沒有新的可建：這一顆只剩「全部重驗」，是次要的——主要動作是前往下一個泊位。
+    <RoutePage
+      {...common}
+      lede={t('routes.lede.existing')}
+      planned={selections.map((row) => ({ library: row.library, target: row.target_path }))}
+      fresh={selections.length}
+      preview={newPaths.map((library) => (
+        <span key={library.name}>
+          {t('routes.dock.berthPath', { library: library.name, path: library.berth_path })}
+        </span>
+      ))}
+      blocked={
+        missing
+          ? t('routes.dock.pickTarget', { library: missing.name })
+          : selections.length === 0 && setup.routes.length === 0
+            ? t('routes.dock.pickOne')
+            : null
+      }
+      onPress={() =>
+        common.onDock({
+          origin: 'existing',
+          newPaths: newPaths.map((library) => library.name),
+          selections,
+        })
+      }
+    >
+      {setup.libraries.length === 0 ? (
         <div className="mt-6">
-          <GhostButton
-            type="button"
-            busy={building}
-            onClick={() => onBuild(bundled ? [] : selections)}
-          >
-            {building ? t('routes.building') : t('routes.recheck', { count: setup.routes.length })}
-          </GhostButton>
+          {/* Berth 不替既有伺服器建媒體庫（brief §16.4 的紅線），所以這裡沒有動作。 */}
+          <Notice signal="assigned" label={t('common.warning')}>
+            {t('routes.empty')}
+          </Notice>
         </div>
       ) : (
-        <div className={`mt-6 ${STICKY_ACTION}`}>
-          <PrimaryButton
-            type="button"
-            busy={building}
-            disabled={fresh === 0 && setup.routes.length === 0}
-            onClick={() => onBuild(bundled ? [] : selections)}
-          >
-            {building
-              ? t('routes.building')
-              : fresh > 0 || setup.routes.length === 0
-                ? t('routes.build', { count: fresh })
-                : t('routes.recheck', { count: setup.routes.length })}
-          </PrimaryButton>
-        </div>
+        <LibraryPicker
+          libraries={setup.libraries}
+          pickOf={pickOf}
+          takenBy={takenBy}
+          onChange={change}
+        />
       )}
+      {/* 加路徑沒加上：原文與怎麼改掛載（plan §9.5）。建 Route 那一段沒有送出。 */}
+      {broke && <AddPathFailure step={broke} baseUrl={jellyfin.base_url} />}
+    </RoutePage>
+  )
+}
 
-      {requestFailed && (
+/** 這個目標是還沒加到 Jellyfin 上的 Berth 路徑：按下「建立並檢查」時才加。 */
+function isNewBerthPath(library: LibraryChoice, target: string): boolean {
+  return !library.has_berth_path && target === library.berth_path
+}
+
+/** 兩種來源共用的那一半：剖面、「按下之後會」、主鈕、請求失敗、Route 列。 */
+function RoutePage({
+  setup,
+  done,
+  existing,
+  docking,
+  failure,
+  onRouteDeleted,
+  note,
+  nav,
+  lede,
+  planned,
+  fresh,
+  preview,
+  blocked,
+  onPress,
+  children,
+}: Common & {
+  lede: string
+  planned: Planned[]
+  /** 按下去會新建幾條。沒有新的時這一顆就是「全部重驗」。 */
+  fresh: number
+  /** 這一種來源自己要先做的事（建媒體庫、加路徑），排在分類與測試檔之前。 */
+  preview: ReactNode[]
+  /** 還差哪一步，說得出來就擋住主鈕。 */
+  blocked: string | null
+  onPress: () => void
+  children: ReactNode
+}) {
+  const { t } = useTranslation()
+  const [announcement, setAnnouncement] = useState('')
+  const total = setup.routes.length + fresh
+  // 做完了：主要動作是前往下一個泊位，這一顆（重驗、或回頭補建）是次要的
+  // （每屏一顆 `assigned`，票 15 的 critique）。
+  const quiet = done
+  const Button = quiet ? GhostButton : PrimaryButton
+  const label = docking
+    ? t('routes.docking')
+    : fresh > 0 || setup.routes.length === 0
+      ? t('routes.dock.build')
+      : t('routes.recheck', { count: setup.routes.length })
+
+  const action = (
+    <>
+      <DockPreview items={preview} total={total} />
+      <div className={`mt-4 ${quiet ? '' : STICKY_ACTION}`}>
+        {blocked && <p className="mb-3 text-xs text-blocked-ink">{blocked}</p>}
+        <Button
+          type="button"
+          busy={docking}
+          disabled={blocked !== null || total === 0}
+          onClick={onPress}
+        >
+          {label}
+        </Button>
+      </div>
+
+      {failure && (
         <div className="mt-4">
           <Notice signal="blocked" label={t('common.failed')}>
-            {/* 後端說得出原因的那一種就說原因與下一步（PRODUCT 原則 4），與設定頁上的
-                  三處同一個形狀（`RouteDelete`、`AddRoute`、`RouteSettingsPage`）。這一步
-                  順帶重跑既有 Route 的檢查，所以 `route_missing` 到得了這裡（M2 票 01）。 */}
-            {refusal?.reason === 'route_missing'
-              ? t('routes.routeMissing')
-              : t('routes.requestFailed')}
+            {/* 這一步順帶重跑既有 Route 的檢查，所以 `route_missing` 到得了這裡（M2 票 01）。 */}
+            {failure === 'route_missing' ? t('routes.routeMissing') : t('routes.requestFailed')}
           </Notice>
         </div>
       )}
+    </>
+  )
+
+  const rows = setup.routes.length > 0 && (
+    <ul className="mt-4 grid gap-3" aria-label={t('routes.list')}>
+      {setup.routes.map((route) => (
+        <li key={route.slug} className="min-w-0">
+          <RouteRow
+            route={route}
+            attention={route.health === 'failed'}
+            expandLabel={t('common.expand')}
+            collapseLabel={t('common.collapse')}
+          >
+            <RouteCheckList route={route} busy={docking} existing={existing} />
+            {/* 精靈只新增不改不刪；選錯了、紅燈卡住時的出路是明確地刪掉這一條（票 14）。
+                打的是精靈自己的那一支，跟著精靈的門禁；停用在 Route 設定頁，這裡不給（票 14a）。 */}
+            <RouteDelete
+              route={route}
+              onDelete={() => deleteSetupRoute(route.id)}
+              onChanged={() => {
+                setAnnouncement(t('routeSettings.delete.done', { name: route.name }))
+                onRouteDeleted()
+              }}
+            />
+          </RouteRow>
+        </li>
+      ))}
+    </ul>
+  )
+
+  return (
+    <StepFrame cutaway={<RouteCutaway setup={setup} planned={planned} />}>
+      <h2 className="text-lg font-semibold text-ink">{t('routes.title')}</h2>
+      <p className="mt-2 max-w-prose text-sm text-ink-dim">{lede}</p>
+      {note}
+      {children}
 
       {/* 先在畫面上、內容再換：`aria-live` 區塊要在變化之前就存在，螢幕閱讀器才念得到。 */}
       <p aria-live="polite" className="mt-4 max-w-prose text-sm text-ink">
         {announcement}
       </p>
-
-      {setup.routes.map((route) => (
-        <RouteSequence
-          key={route.slug}
-          route={route}
-          building={building}
-          onDeleted={() => {
-            setAnnouncement(t('routeSettings.delete.done', { name: route.name }))
-            onRouteDeleted()
-          }}
-        />
-      ))}
+      {/* 做完了（全過、沒有新的）：結果在前，重新檢查是次要的、排在後面。還有事要做時，動作在前。 */}
+      {quiet ? (
+        <>
+          {rows}
+          {action}
+        </>
+      ) : (
+        <>
+          {action}
+          {rows}
+        </>
+      )}
       {nav}
     </StepFrame>
   )
 }
 
-/** 剖面即預覽：按下去會建立哪幾條 Route，各自寫到哪裡、用哪個 category。 */
-function RouteCutaway({
-  setup,
-  planned,
-}: {
-  setup: RouteSetup
-  /** 既有路徑：使用者現在勾了什麼。套件內是 `undefined`（三條由伺服器導出）。 */
-  planned?: RouteSelectionInput[]
-}) {
+/**
+ * 「按下之後會」（票 08）：這一輪真的會做的事，數字照目前的選擇算。分類與測試檔每條 Route 都有，
+ * 包括已經建好的那幾條——重新檢查一樣會核對分類、寫測試檔再刪掉。
+ */
+function DockPreview({ items, total }: { items: ReactNode[]; total: number }) {
   const { t } = useTranslation()
-  // 套件內沒有可選的東西，剖面列的就是伺服器**這一輪**會建的那幾條——只有建得了 Route、而且
-  // 還沒有 Route 的媒體庫算數。已經建好的列在右邊；精靈只新增（票 14），剖面若照樣列三條
-  // 「將建立」就是在說一件不會發生的事（票 14、14e 留下、票 15 收掉）。
-  const rows =
-    planned ??
-    setup.libraries
-      .filter((library) => library.supported && !library.has_route)
-      .map((library) => ({ library: library.name, target_path: library.locations[0] ?? '' }))
+  if (total === 0) return null
+
+  return (
+    <section aria-labelledby="dock-preview" className="mt-6">
+      <h3 id="dock-preview" className="label text-ink-dim">
+        {t('routes.dock.title')}
+      </h3>
+      <ul className="mt-2 grid max-w-prose list-disc gap-1 pl-5 text-xs text-ink">
+        {items.map((item, index) => (
+          <li key={index}>{item}</li>
+        ))}
+        <li>{t('routes.dock.categories', { count: total })}</li>
+        <li>{t('routes.dock.probes', { count: total })}</li>
+      </ul>
+    </section>
+  )
+}
+
+/**
+ * 剖面只放 Route 列沒有的（票 15 的 critique：原本把纜繩列的端點再列一遍）：兩個根目錄，以及這一輪會
+ * 新建的 Route 寫到哪裡。建好的那幾條在右邊自己有一列，這裡不再說一次；沒有新的就不畫那張表。
+ */
+function RouteCutaway({ setup, planned }: { setup: RouteSetup; planned: Planned[] }) {
+  const { t } = useTranslation()
 
   return (
     <div className="grid gap-6">
       <Cutaway title={t('routes.cutaway.paths')}>
         <CutawayRow term={t('routes.cutaway.libraryRoot')} value={setup.library_root} />
         <CutawayRow term={t('routes.cutaway.completeRoot')} value={setup.complete_root} />
-        <CutawayRow term={t('routes.cutaway.count')} value={String(rows.length)} />
       </Cutaway>
 
-      {rows.length > 0 && (
+      {planned.length > 0 && (
         <section className="border-2 border-rule bg-well">
           <h3 className="label border-b-2 border-rule bg-deck px-4 py-2.5 text-ink-dim">
             {t('routes.cutaway.plan')}
@@ -272,22 +514,16 @@ function RouteCutaway({
                 <th scope="col" className="label px-4 py-2 text-ink-dim">
                   {t('routes.cutaway.target')}
                 </th>
-                <th scope="col" className="label px-4 py-2 text-ink-dim">
-                  {t('routes.cutaway.category')}
-                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-rule">
-              {rows.map((row) => (
-                <tr key={row.library}>
+              {planned.map((row, index) => (
+                <tr key={`${row.library}-${index}`}>
                   <th scope="row" className="value px-4 py-3 text-xs font-normal wrap-anywhere">
                     {row.library}
                   </th>
                   <td className="value px-4 py-3 text-xs wrap-anywhere text-ink">
-                    {row.target_path || '—'}
-                  </td>
-                  <td className="value px-4 py-3 text-xs wrap-anywhere text-ink-dim">
-                    {categoryOf(setup, row.library)}
+                    {row.target || '—'}
                   </td>
                 </tr>
               ))}
@@ -299,30 +535,18 @@ function RouteCutaway({
   )
 }
 
-/**
- * category 名稱是伺服器算的（`berth-<slug>`）。已經建過的 Route 顯示它真的用的那一個，
- * 還沒建的就先留白——這裡不重寫一份 slug 演算法，兩份遲早會分岔。
- */
-function categoryOf(setup: RouteSetup, library: string): string {
-  return setup.routes.find((route) => route.library === library)?.category ?? '—'
-}
-
 /** 既有 Jellyfin：勾媒體庫、選寫入目標（brief §4.3）。路徑用選的，不用打的。 */
 function LibraryPicker({
   libraries,
   pickOf,
   takenBy,
-  addingPath,
   onChange,
-  onAddPath,
 }: {
   libraries: LibraryChoice[]
   pickOf: (library: LibraryChoice) => LibraryPick
   /** 這條路徑被誰佔著（對這個媒體庫而言）。`null` 代表還空著。 */
   takenBy: (library: LibraryChoice, path: string) => string | null
-  addingPath: string | null
   onChange: (library: LibraryChoice, patch: Partial<LibraryPick>) => void
-  onAddPath: (library: LibraryChoice) => void
 }) {
   const { t } = useTranslation()
 
@@ -367,33 +591,13 @@ function LibraryPicker({
                 <p className="mt-2 max-w-prose text-xs text-ink-dim">{t('routes.picker.routed')}</p>
               )}
               {library.supported && !library.has_route && pick.selected && (
-                <div className="mt-3 grid gap-3 border-t-2 border-rule pt-3">
+                <div className="mt-3 border-t-2 border-rule pt-3">
                   <Targets
                     library={library}
                     target={pick.target}
                     takenBy={(path) => takenBy(library, path)}
                     onPick={(target) => onChange(library, { target })}
                   />
-                  {!library.has_berth_path && (
-                    <div>
-                      {/* 動的是使用者自己那台 Jellyfin：與泊位 1 同一顆就地確認、同一句後果
-                          （票 06h 的 critique：原本這裡按了就加）。 */}
-                      <ConfirmAction
-                        label={t('routes.picker.addBerthPath')}
-                        confirmLabel={t('jellyfin.libraries.addConfirm')}
-                        warning={t('jellyfin.libraries.addWarning', {
-                          library: library.name,
-                          path: library.berth_path,
-                        })}
-                        pending={addingPath === library.name}
-                        pendingLabel={t('routes.picker.adding')}
-                        onConfirm={() => onAddPath(library)}
-                      />
-                      <p className="mt-2 max-w-prose text-xs text-ink-dim">
-                        {t('routes.picker.addHint', { path: library.berth_path })}
-                      </p>
-                    </div>
-                  )}
                 </div>
               )}
             </li>
@@ -405,11 +609,11 @@ function LibraryPicker({
 }
 
 /**
- * 這個媒體庫回報的路徑，選一條當寫入目標。其他的仍然唯讀（brief §4.3）。
+ * 這個媒體庫回報的路徑，選一條當寫入目標。其他的仍然唯讀（brief §4.3）。還沒有 Berth 路徑的，多一個
+ * 「新的」選項：選它就是要 Berth 按下時替這個媒體庫加上那一條（票 08，使用者拍板併進同一顆鈕）。
  *
- * **已經被佔用的選不了**（票 03 第 6 條）：同一個目標兩條 Route，帳本就認不出檔案是誰的，
- * 所以後端本來就會擋（plan §9.3 第 5 步：被別的 Route 或同一批前面的選擇佔走的一律略過）。
- * 在按下去之前就說出來——`/settings/routes` 的新增表是同一個做法。
+ * **已經被佔用的選不了**（票 03 第 6 條）：同一個目標兩條 Route，帳本就認不出檔案是誰的，所以後端本來
+ * 就會擋。在按下去之前就說出來——`/settings/routes` 的新增表是同一個做法。
  */
 function Targets({
   library,
@@ -424,79 +628,51 @@ function Targets({
   onPick: (target: string) => void
 }) {
   const { t } = useTranslation()
-
-  if (library.locations.length === 0) {
-    return <p className="text-xs text-ink-dim">{t('routes.picker.noPath')}</p>
-  }
+  // 說明的 id 不能用媒體庫名或路徑拼：`aria-describedby` 以空白分隔，「TV Shows」就斷成兩個 id（code-review）。
+  const idBase = useId()
+  const options = library.has_berth_path
+    ? library.locations
+    : [...library.locations, library.berth_path]
 
   return (
     <fieldset className="grid gap-2">
       <legend className="label text-ink-dim">{t('routes.picker.target')}</legend>
-      {library.locations.map((location) => {
-        const holder = takenBy(location)
-        const takenId = `taken-${library.name}-${location}`
+      {library.locations.length === 0 && (
+        <p className="text-xs text-ink-dim">{t('routes.picker.noPath')}</p>
+      )}
+      {options.map((location, index) => {
+        const fresh = isNewBerthPath(library, location)
+        const holder = fresh ? null : takenBy(location)
+        const noteId = `${idBase}-${index}`
         return (
-          <label key={location} className="flex flex-wrap items-start gap-x-3 gap-y-1">
-            <input
-              type="radio"
-              name={`target-${library.name}`}
-              value={location}
-              checked={target === location}
-              disabled={holder !== null}
-              aria-describedby={holder !== null ? takenId : undefined}
-              onChange={() => onPick(location)}
-              className="mt-0.5 size-4 shrink-0 accent-[var(--color-assigned)] disabled:cursor-not-allowed"
-            />
-            <span className="value min-w-0 text-xs wrap-anywhere text-ink">{location}</span>
+          // 說明不放進 `<label>`：radio 的名字只是那條路徑，說明走 `aria-describedby`。
+          <div key={location} className="flex flex-wrap items-start gap-x-3 gap-y-1">
+            <label className="flex min-w-0 items-start gap-x-3">
+              <input
+                type="radio"
+                name={`target-${library.name}`}
+                value={location}
+                checked={target === location}
+                disabled={holder !== null}
+                aria-describedby={holder !== null || fresh ? noteId : undefined}
+                onChange={() => onPick(location)}
+                className="mt-0.5 size-4 shrink-0 accent-[var(--color-assigned)] disabled:cursor-not-allowed"
+              />
+              <span className="value min-w-0 text-xs wrap-anywhere text-ink">{location}</span>
+            </label>
             {holder !== null && (
-              <span id={takenId} className="text-xs text-ink-dim">
+              <span id={noteId} className="text-xs text-ink-dim">
                 {t('routeSettings.add.taken', { name: holder })}
               </span>
             )}
-          </label>
+            {fresh && (
+              <span id={noteId} className="text-xs text-ink-dim">
+                {t('routes.picker.newBerthPath')}
+              </span>
+            )}
+          </div>
         )
       })}
     </fieldset>
-  )
-}
-
-/** 一個 Route 的靠泊序列：五條纜繩，失敗就地展開手動步驟與 compose 片段。 */
-function RouteSequence({
-  route,
-  building,
-  onDeleted,
-}: {
-  route: RouteView
-  building: boolean
-  onDeleted: () => void
-}) {
-  const { t } = useTranslation()
-
-  return (
-    <section className="mt-6">
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-        <span className={`label px-2 py-1.5 ${SIGNAL_FILL[ROUTE_SIGNAL[route.health]]}`}>
-          {t(ROUTE_HEALTH_LABEL[route.health])}
-        </span>
-        <span className="value text-sm font-semibold text-ink">{route.name}</span>
-        <span className="value text-xs text-ink-dim">{route.category}</span>
-        <span className="value ml-auto min-w-0 truncate text-xs text-ink-dim">
-          {route.target_path}
-        </span>
-      </div>
-
-      <div className="mt-3">
-        <RouteCheckList route={route} busy={building} />
-      </div>
-      {/* 精靈只新增不改不刪；選錯了、紅燈卡住時的出路是明確地刪掉這一條（票 14）。
-          打的是精靈自己的那一支，跟著精靈的門禁；停用在 Route 設定頁，這裡不給（票 14a）。 */}
-      <div className="mt-3">
-        <RouteDelete
-          route={route}
-          onDelete={() => deleteSetupRoute(route.id)}
-          onChanged={onDeleted}
-        />
-      </div>
-    </section>
   )
 }

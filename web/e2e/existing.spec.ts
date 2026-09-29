@@ -10,6 +10,12 @@ const OWNER = { user: 'owner', password: 's3cret' } as const
 // 以那台 Jellyfin 的管理員成為擁有者（同時換一把 API key）、填 qBittorrent 的帳密、替媒體庫加一條
 // Berth 路徑並選它當寫入目標、貼 Prowlarr 的 key。
 test('既有服務：三頁都選既有、選寫入目標，完成後用那台 Jellyfin 的帳號登入', async ({ page }) => {
+  const writes: string[] = []
+  page.on('request', (request) => {
+    if (request.method() !== 'GET' && request.url().includes('/api/setup/')) {
+      writes.push(request.url())
+    }
+  })
   await page.goto('/')
   await expect(page).toHaveURL('/setup')
 
@@ -48,15 +54,20 @@ test('既有服務：三頁都選既有、選寫入目標，完成後用那台 J
   await shot(page, '2-qbittorrent')
   await page.getByRole('button', { name: '前往下一個泊位' }).click()
 
-  // 3. 既有 Jellyfin 不建媒體庫：直接是 Route。勾「電影」、替它加一條 Berth 路徑（就地確認）並選它當
-  //    寫入目標；「Anime」不交給 Berth。
+  // 3. 既有 Jellyfin 不建媒體庫：直接是 Route。進頁不送任何寫入（M4 票 08）。勾「電影」、選「新的 Berth
+  //    路徑」當寫入目標——按下「建立並檢查」時才加到 Jellyfin；「Anime」不交給 Berth。
+  const arrived = writes.length
   await expect(page.getByRole('heading', { name: '媒體庫路徑' })).toBeVisible()
-  await expect(page.getByRole('heading', { name: '建立媒體庫' })).toHaveCount(0)
+  await page.waitForLoadState('networkidle')
+  expect(writes.slice(arrived)).toEqual([])
+  await expect(page.getByText('要建的媒體庫')).toHaveCount(0)
   await page.getByRole('checkbox', { name: '電影' }).check()
-  await page.getByRole('button', { name: '加入 Berth 路徑' }).click()
-  await page.getByRole('button', { name: '確認加入' }).click()
   await page.getByRole('radio', { name: /data\/library\/電影$/ }).check()
-  await page.getByRole('button', { name: '建立 1 條 Route 並檢查' }).click()
+  await expect(
+    page.getByRole('region', { name: '按下之後會' }).getByText(/在 Jellyfin 的「電影」加入路徑/),
+  ).toBeVisible()
+  expect(writes.slice(arrived)).toEqual([])
+  await page.getByRole('button', { name: '建立並檢查' }).click()
   await expect(page.getByRole('button', { name: '前往下一個泊位' })).toBeVisible()
   await shot(page, '3-routes')
   await page.getByRole('button', { name: '前往下一個泊位' }).click()

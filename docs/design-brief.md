@@ -91,6 +91,7 @@
 
 - `incomplete` 與 `complete` 的根目錄在 WebUI 設定，預設如上。
 - `complete/<route-slug>` 對應一個 qBittorrent category；category 名稱預設 `berth-<route-slug>`，可改。
+  `route-slug` 由媒體庫名稱算：換掉路徑不收的字元、空白換成 `-`、小寫，中日文照留（「TV Shows」→ `tv-shows`，M4 票 08；之前建的 Route 保留自己帶空白的 slug 與分類，不改名——改分類路徑會搬走 torrent，§20.2）。
 - library 路徑一律從 Jellyfin `VirtualFolders` 讀取，使用者只做「選擇」，不做「輸入」。
 
 ### 4.2 為什麼 incomplete / complete **不**鏡像 library 結構【決定】

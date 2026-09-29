@@ -12,11 +12,16 @@ import { useInPlaceConfirm } from './useInPlaceConfirm'
  */
 
 /**
- * 手機上主要動作固定在底部安全區之上（shape brief §6）；桌機恢復成一般的行內按鈕。
- * `-mx-6` 是為了讓貼底的那一條橫跨整個工作面，而不是縮在 padding 裡面。
+ * 固定在工作面底部安全區之上的一條。`-mx-6` 是為了讓貼底的那一條橫跨整個工作面，而不是縮在 padding
+ * 裡面。精靈的「前往下一個泊位」不分寬度用它（`BerthNav`，M4 票 08）。
  */
-export const STICKY_ACTION =
-  'sticky bottom-0 -mx-6 border-t-2 border-rule bg-hull px-6 pb-[max(1rem,env(safe-area-inset-bottom))] pt-4 lg:static lg:mx-0 lg:border-0 lg:bg-transparent lg:p-0'
+export const STICKY_BAR =
+  'sticky bottom-0 -mx-6 border-t-2 border-rule bg-hull px-6 pb-[max(1rem,env(safe-area-inset-bottom))] pt-4'
+
+/**
+ * 手機上主要動作固定在底部安全區之上（shape brief §6）；桌機恢復成一般的行內按鈕。
+ */
+export const STICKY_ACTION = `${STICKY_BAR} lg:static lg:mx-0 lg:border-0 lg:bg-transparent lg:p-0`
 
 // `ComponentPropsWithRef` 而不是 `InputHTMLAttributes`：登入失敗後要把焦點送回密碼欄，
 // 呼叫端得拿得到那個 input（React 19 的 `ref` 就是一個一般的 prop）。
