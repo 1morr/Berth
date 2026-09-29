@@ -29,7 +29,10 @@
 4. **檢查失敗時說出怎麼改掛載**：第 2–5 條（`download_path`、`library_path`、`probe_visible`、`hardlink`）失敗時，除了
    現有的「哪個容器少了哪個掛載」與 compose 修正片段，對既有服務另說出同主機、同容器路徑的條件；Jellyfin 在另一台
    主機（`probe_visible` 看不到）與分開掛載（`EXDEV`）各一句。
-5. `library_slug`：空白換成 `-`（中日文照留）。已經存在的 Route 與分類不改名（改分類路徑會搬走 torrent，brief §20.2），只影響新建的。
+5. **票 15 critique 留下的這一頁的雜訊**：剖面與纜繩列把同一份端點列兩遍（剖面只放纜繩列沒有的）；Route 建完之後剖面
+   「這一輪要建的 Route」仍是 0；套件內媒體庫建完出現「這個泊位的事做完了」但泊位板仍是「待靠泊」、真正的下一步
+   「前往 Route 與檢查」是上方的次要鈕；「開始靠泊」看不出會建媒體庫；每屏只留一顆 `assigned` 主鈕。
+6. `library_slug`：空白換成 `-`（中日文照留）。已經存在的 Route 與分類不改名（改分類路徑會搬走 torrent，brief §20.2），只影響新建的。
 
 ## 驗收
 
@@ -38,6 +41,7 @@
 - [ ] 加路徑沒確認時被擋（vitest）
 - [ ] 既有 Jellyfin 的 `probe_visible` 失敗與 `EXDEV` 各有改掛載的說明（整合測試或 vitest；`berth-lab` existing 故意少掛一個目錄實跑一次）
 - [ ] `library_slug("TV Shows") == "tv-shows"`，既有 Route 不受影響（單元測試，雙向）
+- [ ] 剖面不重複纜繩列的端點；建完媒體庫之後主要動作是前往 Route 那一步（vitest）
 - [ ] plan §9.3 頁 3、§9.5〈檢查與訊息〉與實作一致
 - [ ] lint、type、test、前端 e2e 綠燈
 

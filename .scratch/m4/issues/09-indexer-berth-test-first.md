@@ -32,6 +32,14 @@
    私有 / 半私有站要依定義動態產生帳密欄位——這一張不做，連到 Prowlarr 自己的介面去加，Berth 認得 Prowlarr 裡已有的站。
 5. 既有：列出 Prowlarr 裡已有的站與站數，可試搜，沒有勾選與加入。
 6. 設定頁的索引站分頁：進入不自動檢查，同一套元件。
+7. **單站失敗的呈現**（票 15 critique 的 P1，使用者 2026-09-29 排在最前）：現在加站失敗是 Prowlarr 的英文原文、
+   `role=alert` 一次好幾塊；「Query successful, but no results」被說成連不上；補法連結是容器主機名
+   `http://prowlarr:9696/#/indexers`（瀏覽器解析不到）；失敗之後主鈕數的是已經加好的站；紅色在這裡不代表這一步被擋。
+   改成：常見失敗（Cloudflare、查無結果、連不上）對應成 i18n 理由，原文收進可展開的區塊；失敗收成一條 `assigned`
+   摘要、只一個 live 區；連結給使用者主機上的位址，給不出就拿掉；主鈕只數還沒加的。和第 1 條的「先測再勾」一起 shape。
+8. **換另一格的確認**（票 15 critique / audit 的 P2，`web/src/setup/ServiceChoice.tsx`，頁 1、2、4 與設定頁共用）：改用
+   `ConfirmPanel`（焦點移進去、Esc 收起）；確認之前標題與 lede 跟著草稿的來源；`switchWarning` 依原本的來源分兩種說法
+   （從既有換走時 Berth 沒寫過那一台的偏好）；方向鍵在兩格間移動只改草稿、不觸發套件內的選擇與測試。
 
 ## 驗收
 
@@ -41,6 +49,8 @@
 - [ ] 既有 Prowlarr 的頁面沒有勾選與加入，試搜得到它已有的站（vitest + `berth-lab` existing 實測）
 - [ ] 進入精靈這一頁與設定頁的索引站分頁都不送檢查請求（vitest + playwright network 紀錄）
 - [ ] 1280 與 390 截圖：結果出來後「前往下一個泊位」不必捲動
+- [ ] 單站失敗：原文不直接顯示、一條摘要一個 live 區、沒有容器主機名的連結、主鈕只數沒加的（vitest，照 fake 的四站失敗）
+- [ ] 換另一格：Esc 收起確認、焦點進確認區、方向鍵瀏覽不送 `POST /setup/services/{kind}`、從既有換走的警告不說「寫過偏好」（vitest）
 - [ ] plan §9.3 頁 4、brief §16.3 同步
 - [ ] lint、type、test、前端 e2e 綠燈
 
