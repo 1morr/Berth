@@ -4,14 +4,18 @@ import { ApiError, apiDelete, apiGet, apiPost, apiPut } from './client'
 import { parseRefusal, type ReasonSet, type Refusal } from './refusal'
 import type { QbittorrentSetup, Schemas, ServiceKind } from './schemas'
 
-/** `DetectionReason`：判定的理由，UI 逐服務顯示。 */
-export type DetectionReason = Schemas['DetectionReason']
+/** `ConnectionReason`：選完之後那一次測試的理由，UI 逐服務顯示（M4 票 15）。 */
+export type ConnectionReason = Schemas['ConnectionReason']
 
-export type ServiceDetection = Schemas['ServiceDetectionOut']
+/** `ConnectionState`：測試的結果。`waiting` 是套件內那一台還在啟動，前端每 3 秒重測。 */
+export type ConnectionState = Schemas['ConnectionState']
+
+/** 一個服務的來源選擇與最後一次測試。沒選的服務不在 `SetupStatus.services` 裡。 */
+export type SetupService = Schemas['ServiceOut']
 
 export type SetupStatus = Schemas['SetupStatusOut']
 
-/** 擁有者的 Jellyfin 帳密（第 1 步，M4 票 06）。只交給 Jellyfin，Berth 不存。 */
+/** 擁有者的 Jellyfin 帳密（頁 1，M4 票 06）。只交給 Jellyfin，Berth 不存。 */
 export type OwnerInput = Schemas['OwnerIn']
 
 export type OwnerRefusal = Refusal<Schemas['OwnerRefusal']>
@@ -23,8 +27,11 @@ const OWNER_REASONS: ReasonSet<Schemas['OwnerRefusal']> = {
   jellyfin_failed: true,
 }
 
-/** 既有服務的連線表單。每個服務只用得到其中幾個欄位。 */
-export type ConnectInput = Schemas['ConnectIn']
+/**
+ * 服務頁的二選一（plan §9.3〈服務頁的共同形狀〉）。套件內只帶 `origin`（Prowlarr 讀不到掛載時
+ * 另帶貼上的 key）；既有帶位址與那個服務要的憑證。
+ */
+export type ChoiceInput = Schemas['ChoiceIn']
 
 export const setupStatusQueryOptions = queryOptions({
   queryKey: ['setup', 'status'],
@@ -32,33 +39,42 @@ export const setupStatusQueryOptions = queryOptions({
 })
 
 /**
- * 第 1 步：成為擁有者。成功時後端發 session cookie（與 `/auth/login` 同一種），之後精靈要登入。
+ * 頁 1：成為擁有者。成功時後端發 session cookie（與 `/auth/login` 同一種），之後精靈要登入。
  * 帳密不對是 401——那是這一支的答案，不是 session 過期（`router.ts` 照樣會重跑一次守衛，無害）。
  */
+/**
+ * 頁 1 成為擁有者的 mutation key：帳密不對與登入同一個 401，路由不能把它當成 session 失效
+ * （`router.leaveOnSignOut`，票 15 的 critique）。
+ */
+export const CLAIM_OWNER_KEY = ['setup', 'owner'] as const
+
 export function claimOwner(body: OwnerInput): Promise<SetupStatus> {
   return apiPost<SetupStatus>('/setup/owner', body)
 }
 
-/** 第 1 步被拒的理由。認不得的（或根本不是拒絕，例如連不上 Berth）是 `null`。 */
+/** 頁 1 被拒的理由。認不得的（或根本不是拒絕，例如連不上 Berth）是 `null`。 */
 export function ownerRefusalOf(error: unknown): OwnerRefusal | null {
   return parseRefusal(error, OWNER_REASONS)
 }
 
-/**
- * 第 2 步的探測。給了 `kind` 就只重探那一個服務（票 06d 的「重新偵測這個服務」）；
- * 沒給就是整輪。
- */
-export function detectServices(restart = false, kind?: ServiceKind): Promise<SetupStatus> {
-  return apiPost<SetupStatus>('/setup/detect', { restart, kind } satisfies Schemas['DetectIn'])
-}
-
-export function connectService(kind: ServiceKind, body: ConnectInput): Promise<SetupStatus> {
+/** 選來源、存下、測一次。擁有者成立之後改 Jellyfin 的來源是 409（擁有者是那一台上的帳號）。 */
+export function chooseService(kind: ServiceKind, body: ChoiceInput): Promise<SetupStatus> {
   return apiPost<SetupStatus>(`/setup/services/${kind}`, body)
 }
 
 /**
- * `JellyfinStep`：plan §9.4 的七步，順序即宣告順序、也是執行順序。前六步在第 1 步（擁有者）跑，
- * 建媒體庫在泊位 1（M4 票 06）。
+ * 用存下來的選擇再測一次：出問題那一頁的「重新測試」（`restart`：2 分鐘重新算），以及套件內
+ * 那一台還在啟動時的輪詢（不帶）。
+ */
+export function retestService(kind: ServiceKind, restart = false): Promise<SetupStatus> {
+  return apiPost<SetupStatus>(`/setup/services/${kind}/test`, {
+    restart,
+  } satisfies Schemas['RetestIn'])
+}
+
+/**
+ * `JellyfinStep`：plan §9.4 的七步，順序即宣告順序、也是執行順序。前六步在頁 1（擁有者）跑，
+ * 建媒體庫在頁 3（M4 票 06、15）。
  *
  * 後端把 `StepOut.step` 宣告成 `str`，所以這個集合在 OpenAPI 裡不存在——它是 UI 的
  * 顯示順序，不是 API 的形狀（`QBITTORRENT_STEPS` 同理）。
@@ -145,7 +161,7 @@ export function addLibraryPath(library: string): Promise<JellyfinSetup> {
   } satisfies Schemas['LibraryPathIn'])
 }
 
-/** --- 第 4 步：qBittorrent（plan §9.3 第 4 步、§8.1）--- */
+/** --- 頁 2：qBittorrent（plan §9.3、§8.1）--- */
 
 /** `QbittorrentStep`：一個鍵一條纜繩，值就是 `app/setPreferences` 的鍵名。 */
 export const QBITTORRENT_STEPS = [
@@ -163,8 +179,23 @@ export const qbittorrentSetupQueryOptions = queryOptions({
   queryFn: () => apiGet<QbittorrentSetup>('/setup/qbittorrent/diff'),
 })
 
-/** 套件內 qBittorrent / Prowlarr 自己的介面登入（M4 票 07）。 */
+/**
+ * 套件內 qBittorrent / Prowlarr 自己的介面登入（M4 票 07）。`reuse_owner` 是「沿用 Jellyfin 帳密」
+ * （M4 票 15）：帳號由後端填成擁有者，密碼先向 Jellyfin 驗過。
+ */
 export type InterfaceLogin = Schemas['InterfaceLoginIn']
+
+export type InterfaceLoginRefusal = Refusal<Schemas['InterfaceLoginRefusal']>
+
+const LOGIN_REASONS: ReasonSet<Schemas['InterfaceLoginRefusal']> = {
+  owner_password: true,
+  jellyfin_unreachable: true,
+}
+
+/** 沿用 Jellyfin 帳密時 Jellyfin 那一關沒過的理由；其餘的失敗是 `null`。 */
+export function loginRefusalOf(error: unknown): InterfaceLoginRefusal | null {
+  return parseRefusal(error, LOGIN_REASONS)
+}
 
 /** `login` 是泊位上填的 WebUI 登入；`null` 是登入照舊。 */
 export function applyQbittorrent(login: InterfaceLogin | null): Promise<QbittorrentSetup> {
@@ -178,7 +209,7 @@ export function setQbittorrentLogin(login: InterfaceLogin): Promise<QbittorrentS
   return apiPut<QbittorrentSetup>('/setup/qbittorrent/login', login)
 }
 
-/** --- 第 6、7 步：索引站與 TMDB（plan §9.3 第 6–7 步、§8.3、§8.4；票 06e 拆成兩個泊位）--- */
+/** --- 頁 4、5：Prowlarr 與索引站、TMDB（plan §9.3、§8.3、§8.4）--- */
 
 /** `IndexerKind`：既有路徑的兩種接法。 */
 export type IndexerKind = Schemas['IndexerKind']
@@ -247,12 +278,12 @@ export function removeIndexer(id: number): Promise<IndexerSetup> {
   return apiDelete<IndexerSetup>(`/setup/indexers/${id}`)
 }
 
-/** 第 7 步沒有 `skip`：憑證是使用者自備的必填項，測得過才走得到完成（票 02b）。 */
+/** TMDB 頁沒有 `skip`：憑證是使用者自備的必填項，測得過才走得到完成（票 02b）。 */
 export function testTmdb(api_key: string): Promise<TmdbSetup> {
   return apiPost<TmdbSetup>('/setup/tmdb/test', { api_key } satisfies Schemas['TmdbTestIn'])
 }
 
-/** --- 第 5 步：媒體庫 → Route（plan §9.3 第 5 步、§9.5）--- */
+/** --- 頁 3：媒體庫與路徑（plan §9.3、§9.5）--- */
 
 export type LibraryChoice = Schemas['LibraryChoiceOut']
 
@@ -270,7 +301,7 @@ export function buildRoutes(selections: RouteSelectionInput[]): Promise<RouteSet
 }
 
 /**
- * 第 5 步每條 Route 底下的刪除（票 14a）。與設定頁的 `deleteRoute` 同一個命令、同一種拒絕，
+ * 頁 3 每條 Route 底下的刪除（票 14a）。與設定頁的 `deleteRoute` 同一個命令、同一種拒絕，
  * 只是跟著精靈的門禁：精靈跑完之前還沒有人登入得了，而 `/routes/*` 永遠只有 admin。
  */
 export function deleteSetupRoute(id: number): Promise<void> {

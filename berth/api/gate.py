@@ -51,14 +51,14 @@ ANONYMOUS_PATHS = frozenset(
 #: 設定精靈。它自己有一條隨時間關上的規則，見 `_setup_verdict`。
 SETUP_PREFIX = "/setup"
 
-#: 精靈的開場：擁有者成立之前匿名可達的那幾支（M4 票 06）。只有「找到 Jellyfin」與「成為擁有者」
-#: ——其餘的精靈端點會寫別人的服務（建管理員之外的一切、套用偏好、加站），要在門後。
+#: 精靈的開場：擁有者成立之前匿名可達的那幾支（M4 票 06、15）。只有「選 Jellyfin、測它」與
+#: 「成為擁有者」——其餘的精靈端點會寫別人的服務（建管理員之外的一切、套用偏好、加站），要在門後。
 #: 擁有者成立之後它們與其他精靈端點一樣只有管理員。`(方法, 路徑)`，完全比對。
 SETUP_OPENING_PATHS: frozenset[tuple[str, str]] = frozenset(
     {
         ("GET", "/setup/status"),
-        ("POST", "/setup/detect"),
         ("POST", "/setup/services/jellyfin"),
+        ("POST", "/setup/services/jellyfin/test"),
         ("POST", "/setup/owner"),
     }
 )

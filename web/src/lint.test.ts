@@ -8,7 +8,7 @@ import { describe, expect, it } from 'vitest'
 const RULE = '@eslint-react/jsx-no-comment-textnodes'
 
 // 型別資訊要一個專案裡真的有的檔名；內容是這裡給的，檔案本身不讀。
-const PROBE = 'src/setup/DetectStep.tsx'
+const PROBE = 'src/setup/StepFrame.tsx'
 
 async function flagged(source: string): Promise<string[]> {
   const [result] = await new ESLint().lintText(source, { filePath: PROBE })

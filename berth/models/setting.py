@@ -14,7 +14,8 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from berth.domain import (
     CollectionType,
-    DetectionReason,
+    ConnectionReason,
+    ConnectionState,
     HealthStatus,
     ServiceKind,
     ServiceOrigin,
@@ -126,20 +127,30 @@ class SetupOwner(BaseModel):
     name: str = ""
 
 
-class ServiceProbe(BaseModel):
-    """精靈第 2 步對單一服務的判定結果。"""
+class ServiceTest(BaseModel):
+    """選完之後那一次測試（plan §9.3〈服務頁的共同形狀〉）。"""
+
+    model_config = ConfigDict(extra="ignore")
+
+    state: ConnectionState
+    reason: ConnectionReason
+    #: 實測值：版本號或索引站數量。沒有就是空字串。
+    detail: str = ""
+    checked_at: datetime
+    #: 套件內那一台還在啟動時，這一輪 2 分鐘輪詢的起點。有結論就清掉。
+    waiting_since: datetime | None = None
+
+
+class ServiceChoice(BaseModel):
+    """使用者在精靈替一個服務選的來源（M4 票 15）。從此「套件內 / 既有」由它決定。"""
 
     model_config = ConfigDict(extra="ignore")
 
     origin: ServiceOrigin
-    reason: DetectionReason
-    #: 探測到的實測值：版本號或索引站數量。沒有就是空字串。
-    detail: str = ""
+    #: Berth 連的那一條：套件內是 compose 主機名，既有是使用者填的。
     base_url: str = ""
-    checked_at: datetime
-    #: 這個判定來自使用者填的連線表單，不是探測 compose 主機名的結果。
-    #: 重探時要跳過它——它根本不在那個主機名上。
-    configured: bool = False
+    #: 最後一次測試；還沒測過是 `None`。
+    test: ServiceTest | None = None
 
 
 class SetupStep(BaseModel):
@@ -224,6 +235,11 @@ class SetupQbittorrent(BaseModel):
 
     #: 逐鍵的套用結果；`key` 是 `QbittorrentStep`，也就是 `app/setPreferences` 的鍵名。
     steps: list[SetupStep] = []
+    #: Berth 替套件內那一台設下的 WebUI 登入（M4 票 07、15）。**只記帳號與加鹽雜湊**
+    #: （`services.steps.hash_password`）：勾了「沿用 Jellyfin 帳密」時那就是擁有者的密碼。
+    #: Berth 自己連它靠免密白名單，用不到這組。帳號在、雜湊空的是「那一台自己就設過了」。
+    web_ui_username: str = ""
+    web_ui_password_hash: str = ""
 
 
 class SetupIndexer(BaseModel):
@@ -236,10 +252,11 @@ class SetupIndexer(BaseModel):
     steps: list[SetupStep] = []
     #: 「之後再說」。可跳過的只有這一步，完成頁列出跳過了什麼（plan §9.3、票 02b）。
     skipped: bool = False
-    #: Berth 上一次寫進套件內 Prowlarr `config/host` 的介面登入（Forms 驗證，M4 票 07）。空的是
-    #: 還沒設過。密碼那邊讀回來是雜湊，重按時只有它比得出「密碼改過了」（票 06c）。
+    #: Berth 上一次寫進套件內 Prowlarr `config/host` 的介面登入（Forms 驗證，M4 票 07、15）。
+    #: 空的是還沒設過。只記帳號與加鹽雜湊，理由同 `SetupQbittorrent`；重按時靠它比出
+    #: 「密碼改過了」（票 06c）。
     web_ui_username: str = ""
-    web_ui_password: str = ""
+    web_ui_password_hash: str = ""
 
 
 class SetupTmdb(BaseModel):
@@ -369,14 +386,17 @@ class SetupSettings(SettingsGroup):
 
     completed: bool = False
     owner: SetupOwner = SetupOwner()
-    #: 逐服務的判定；鍵是 `ServiceKind`。
-    services: dict[ServiceKind, ServiceProbe] = {}
-    #: 本輪輪詢的起點，用來算 2 分鐘上限。全部服務都判定完就清掉。
-    probe_started_at: datetime | None = None
+    #: 逐服務的來源選擇；鍵是 `ServiceKind`。沒有那一列就是還沒選，寫入它的命令一律拒絕。
+    choices: dict[ServiceKind, ServiceChoice] = {}
     jellyfin: SetupJellyfin = SetupJellyfin()
     qbittorrent: SetupQbittorrent = SetupQbittorrent()
     indexer: SetupIndexer = SetupIndexer()
     tmdb: SetupTmdb = SetupTmdb()
+
+    def origin_of(self, kind: ServiceKind) -> ServiceOrigin | None:
+        """使用者替這個服務選的來源；還沒選是 `None`。"""
+        choice = self.choices.get(kind)
+        return choice.origin if choice is not None else None
 
 
 #: 所有分組的清單，用來確認每一組都有預設值。

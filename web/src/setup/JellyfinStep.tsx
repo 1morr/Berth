@@ -6,7 +6,6 @@ import { type SetupStep } from '../api/schemas'
 import { STICKY_ACTION, GhostButton, Notice, PrimaryButton } from '../components/controls'
 import { Cutaway, CutawayRow } from '../components/Cutaway'
 import { BundledLibraries } from './BundledLibraries'
-import { JellyfinExisting } from './JellyfinExisting'
 import { useLibraryDraft, type LibraryDraftState } from './useLibraryDraft'
 import { StepLine } from '../components/StepLine'
 import { isSettled } from '../components/steps'
@@ -14,12 +13,11 @@ import { STEP_ENDPOINT, STEP_FIX, STEP_LABEL, isJellyfinStep, manualSteps } from
 import { StepFrame } from './StepFrame'
 
 /**
- * 泊位 1：Jellyfin（plan §9.3 第 3 步）。兩條路徑由第 2 步的判定決定，使用者不必自己選。
+ * 頁 3 的前半：套件內 Jellyfin 的媒體庫（plan §9.3 頁 3、§9.4，票 06f；M4 票 15 從 Jellyfin 頁搬過來）。
  *
- * 套件內：剖面是一張要建的媒體庫清單（票 06f），一顆按鈕跑完 plan §9.4 的七步，畫面逐條纜繩
- * 顯示結果與實測值。
- * 既有：媒體庫清單 + 一顆要二次確認的按鈕（`JellyfinExisting` 的「加入 Berth 路徑」）；登入與
- * API key 在第 1 步（M4 票 06）。
+ * 剖面是七步各打哪一支端點；工作面是一張要建的媒體庫清單，一顆按鈕跑完建媒體庫那一步，畫面逐條纜繩
+ * 顯示結果與實測值（前六步在頁 1 成立擁有者時就有結論了）。**只給套件內**：既有 Jellyfin 絕不自動建
+ * 媒體庫（brief §16.4），它的頁 3 直接是 Route，「加入 Berth 路徑」在 Route 的勾選表上。
  */
 export function JellyfinStep({
   setup,
@@ -29,11 +27,8 @@ export function JellyfinStep({
   onSaveLibraries,
   savingLibraries,
   saveLibrariesFailed,
-  onAddPath,
-  addingPath,
   note,
   nav,
-  redetect,
 }: {
   setup: JellyfinSetup
   running: boolean
@@ -46,58 +41,42 @@ export function JellyfinStep({
   savingLibraries: boolean
   /** 清單存不下來的那一句，沒有就是 `null`。 */
   saveLibrariesFailed: string | null
-  onAddPath: (library: string) => void
-  addingPath: string | null
   /** 回頭看的說明（`RevisitNote`），這一頁做完了才有。 */
   note?: ReactNode
   /** 上一個 / 下一個泊位（`BerthNav`）。 */
   nav?: ReactNode
-  /** 請求沒走完（多半是連不上）時的「重新偵測這個服務」（票 06d）。 */
-  redetect?: ReactNode
 }) {
   const { t } = useTranslation()
-  const bundled = setup.origin === 'bundled'
-  // 既有路徑用不到它，但 hook 不能有條件地呼叫；它只在清單真的被改過時才存。
+  // 它只在清單真的被改過時才存。
   const draft = useLibraryDraft(setup, onSaveLibraries)
 
   return (
-    <StepFrame cutaway={bundled ? <SequenceCutaway /> : <ServerCutaway setup={setup} />}>
-      <h2 className="text-lg font-semibold text-ink">
-        {t(bundled ? 'jellyfin.bundled.title' : 'jellyfin.existing.title')}
-      </h2>
-      <p className="mt-2 max-w-prose text-sm text-ink-dim">
-        {t(bundled ? 'jellyfin.bundled.lede' : 'jellyfin.existing.lede')}
-      </p>
+    <StepFrame cutaway={<SequenceCutaway />}>
+      <h2 className="text-lg font-semibold text-ink">{t('jellyfin.bundled.title')}</h2>
+      <p className="mt-2 max-w-prose text-sm text-ink-dim">{t('jellyfin.bundled.lede')}</p>
       {note}
 
       {!setup.version_supported && <VersionNotice version={setup.version} />}
 
       {/* 清單是這一步的輸入，排在「開始靠泊」之前（票 06h：原本在左欄剖面，工作面搬到 DOM
           前面之後，Tab 會先到右欄的鍵、再回頭到清單）。 */}
-      {bundled && (
-        <div className="mt-6">
-          <BundledLibraries
-            draft={draft}
-            libraryRoot={setup.library_root}
-            locked={running}
-            saving={savingLibraries}
-            saveFailed={saveLibrariesFailed}
-          />
-        </div>
-      )}
-
-      {bundled ? (
-        <BootstrapSequence
-          setup={setup}
+      <div className="mt-6">
+        <BundledLibraries
           draft={draft}
-          running={running}
-          failed={bootstrapFailed}
-          onBootstrap={onBootstrap}
-          redetect={redetect}
+          libraryRoot={setup.library_root}
+          locked={running}
+          saving={savingLibraries}
+          saveFailed={saveLibrariesFailed}
         />
-      ) : (
-        <JellyfinExisting setup={setup} addingPath={addingPath} onAddPath={onAddPath} />
-      )}
+      </div>
+
+      <BootstrapSequence
+        setup={setup}
+        draft={draft}
+        running={running}
+        failed={bootstrapFailed}
+        onBootstrap={onBootstrap}
+      />
       {nav}
     </StepFrame>
   )
@@ -134,29 +113,6 @@ function VersionNotice({ version }: { version: string }) {
   )
 }
 
-/** 既有服務的剖面：這台伺服器現在是什麼樣子，全部是它自己報出來的值。 */
-function ServerCutaway({ setup }: { setup: JellyfinSetup }) {
-  const { t } = useTranslation()
-  const version = setup.version
-
-  return (
-    <Cutaway title={t('jellyfin.cutaway.server')}>
-      <CutawayRow term={t('connect.field.baseUrl')} value={setup.base_url || '—'} />
-      <CutawayRow term={t('detail.version')} value={version || '—'} muted={!version} />
-      <CutawayRow
-        term={t('jellyfin.cutaway.apiKey')}
-        value={t(setup.api_key_present ? 'jellyfin.cutaway.held' : 'jellyfin.cutaway.absent')}
-        muted={!setup.api_key_present}
-      />
-      <CutawayRow
-        term={t('jellyfin.cutaway.libraries')}
-        value={setup.libraries.length ? String(setup.libraries.length) : '—'}
-        muted={setup.libraries.length === 0}
-      />
-    </Cutaway>
-  )
-}
-
 /**
  * 靠泊序列：九條纜繩。整份結果在請求回來時一次到位，但每一步在後端做之前就把自己標成
  * `running` 並存下來，所以請求還在飛的時候前端輪詢就看得到序列走到哪裡。
@@ -167,14 +123,12 @@ function BootstrapSequence({
   running,
   failed,
   onBootstrap,
-  redetect,
 }: {
   setup: JellyfinSetup
   draft: LibraryDraftState
   running: boolean
   failed: boolean
   onBootstrap: (libraries: LibraryDraft[]) => void
-  redetect?: ReactNode
 }) {
   const { t } = useTranslation()
   const byStep = new Map(setup.steps.map((row) => [row.step, row]))
@@ -217,7 +171,6 @@ function BootstrapSequence({
           <Notice signal="blocked" label={t('common.failed')}>
             {t('jellyfin.bundled.requestFailed')}
           </Notice>
-          {redetect && <div className="mt-3">{redetect}</div>}
         </div>
       )}
 

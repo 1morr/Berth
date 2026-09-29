@@ -233,6 +233,14 @@ async def routes_ready(session: AsyncSession) -> bool:
     return _ready(tuple(route.health_status for route in routes.values() if route.enabled))
 
 
+async def forget_route_checks(session: AsyncSession) -> None:
+    """所有 Route 的檢查作廢，回到「還沒檢查」（M4 票 15）：使用者在精靈換了一台 qBittorrent，
+    分類建在原本那一台上，上一次的綠燈說的是它。媒體庫與路徑頁要重新檢查才走得過去
+    （`routes_ready`）。逐條明細留著——它說的是那一次看到什麼，畫面照樣讀得出來。"""
+    for route in (await _existing_routes(session)).values():
+        route.health_status = HealthStatus.UNKNOWN
+
+
 async def build_routes(
     session: AsyncSession,
     factory: ServiceClientFactory,
@@ -249,6 +257,10 @@ async def build_routes(
     重跑已經沒有完成條件擋著，所以**先停用建立、檢查綠了才啟用**（票 14a）：先啟用再把紅的關掉的話，
     檢查跑完之前的那幾秒裡，送單選得到一條還沒驗過的 Route。
     """
+    chosen = await read_settings(session, SetupSettings)
+    if None in (chosen.origin_of(ServiceKind.JELLYFIN), chosen.origin_of(ServiceKind.QBITTORRENT)):
+        # 還沒選來源就不建分類、不寫探測檔（M4 票 15）：不知道那一台是誰的。
+        raise ValueError("choose where Jellyfin and qBittorrent come from first")
     async with _write_lock(session):
         # 鎖內重讀：另一個分頁可能剛在設定頁建了一條，`_plan` 要看到它的 slug 與目標。
         setup = await read_settings(session, SetupSettings)
@@ -821,7 +833,7 @@ async def _check(
     plan_row: _Planned,
     route: Route,
     qbittorrent: QbittorrentClient,
-    qbittorrent_origin: ServiceOrigin,
+    qbittorrent_origin: ServiceOrigin | None,
     jellyfin: JellyfinClient,
 ) -> RouteHealth:
     """跑完一個 Route 的檢查序列。第一條斷掉之後的檢查一律 `pending`。"""
@@ -845,7 +857,7 @@ class _Checker:
         self,
         plan_row: _Planned,
         qbittorrent: QbittorrentClient,
-        qbittorrent_origin: ServiceOrigin,
+        qbittorrent_origin: ServiceOrigin | None,
         jellyfin: JellyfinClient,
     ) -> None:
         self._plan = plan_row
@@ -1012,8 +1024,8 @@ assert set(_CHECKS) == set(RouteCheck), "every RouteCheck needs a check"
 
 
 def _jellyfin_origin(setup: SetupSettings) -> ServiceOrigin:
-    probe = setup.services.get(ServiceKind.JELLYFIN)
-    return probe.origin if probe is not None else ServiceOrigin.EXISTING
+    """還沒選就當既有：不替任何人建媒體庫（M4 票 15）。"""
+    return setup.origin_of(ServiceKind.JELLYFIN) or ServiceOrigin.EXISTING
 
 
 def _route_view(route: Route, complete_root: str) -> RouteView:

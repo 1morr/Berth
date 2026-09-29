@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { loginProblems } from './interfaceLogin'
+import { loginProblems, takenLogin } from './interfaceLogin'
 
 describe('loginProblems（M4 票 07：兩格都必填、密碼打兩次）', () => {
   it('帳號、密碼、再一次都對得上就沒有問題', () => {
@@ -23,5 +23,29 @@ describe('loginProblems（M4 票 07：兩格都必填、密碼打兩次）', () 
     expect(loginProblems({ username: 'skipper', password: '', confirm: 'harbour' })).toEqual({
       password: 'blank',
     })
+  })
+})
+
+describe('沿用 Jellyfin 帳密（M4 票 15）', () => {
+  /** 帳號是擁有者、密碼打一次：Jellyfin 會驗它，打錯了有人會說（票 06「兩次只在建立時」的反面）。 */
+  it('只要密碼那一格：帳號與再一次都不看', () => {
+    expect(loginProblems({ username: '', password: 'harbour', confirm: '' }, true)).toEqual({})
+    expect(loginProblems({ username: '', password: '', confirm: '' }, true)).toEqual({
+      password: 'blank',
+    })
+  })
+
+  it('送出去的是「沿用」，帳號留給後端填', () => {
+    expect(takenLogin({ username: 'typed', password: 'harbour', confirm: '' }, true)).toEqual({
+      username: '',
+      password: 'harbour',
+      reuse_owner: true,
+    })
+  })
+
+  it('取消勾選就是自設的那一組，帳號去空白', () => {
+    expect(
+      takenLogin({ username: ' deck ', password: 'rope', confirm: 'rope' }, false),
+    ).toEqual({ username: 'deck', password: 'rope', reuse_owner: false })
   })
 })

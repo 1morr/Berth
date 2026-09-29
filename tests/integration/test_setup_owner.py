@@ -14,10 +14,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from berth.adapters.jellyfin.fake import FakeJellyfinClient
-from berth.adapters.prowlarr.fake import FakeProwlarrClient
-from berth.adapters.qbittorrent.fake import FakeQbittorrentClient
 from berth.domain import (
-    DetectionReason,
+    ConnectionReason,
+    ConnectionState,
     JellyfinStep,
     OwnerRefusal,
     Role,
@@ -25,18 +24,17 @@ from berth.domain import (
     ServiceOrigin,
     StepStatus,
 )
-from berth.models import JellyfinSettings, ServiceProbe, Setting, SetupSettings
+from berth.models import JellyfinSettings, Setting, SetupSettings
 from berth.services.auth import read_session, sign_in
-from berth.services.clients import SetupProbes
 from berth.services.settings import read_settings, write_settings
 from berth.services.setup import (
-    STEP_DETECT,
-    STEP_OWNER,
+    STEP_JELLYFIN,
+    STEP_QBITTORRENT,
     OwnerRejectedError,
     claim_owner,
-    detect_services,
     read_status,
 )
+from tests.integration.arrange import chosen
 from tests.integration.factories import FakeClientFactory
 
 NOW = datetime(2026, 9, 28, 12, 0, tzinfo=UTC)
@@ -47,18 +45,13 @@ async def found(
     session: AsyncSession,
     *,
     origin: ServiceOrigin = ServiceOrigin.BUNDLED,
-    reason: DetectionReason = DetectionReason.SETUP_PENDING,
+    reason: ConnectionReason = ConnectionReason.SETUP_PENDING,
+    state: ConnectionState = ConnectionState.OK,
 ) -> None:
-    """第 1 步前半：Jellyfin 已經找到了（探測的結果）。"""
+    """頁 1 前半：使用者選了來源、測試是 `state`（M4 票 15）。"""
     setup = await read_settings(session, SetupSettings)
-    setup.services = {
-        ServiceKind.JELLYFIN: ServiceProbe(
-            origin=origin,
-            reason=reason,
-            detail="12.1.0",
-            base_url="http://jellyfin:8096",
-            checked_at=NOW,
-        )
+    setup.choices = {
+        ServiceKind.JELLYFIN: chosen(origin, "http://jellyfin:8096", reason, state=state)
     }
     await write_settings(session, setup)
     await write_settings(session, JellyfinSettings(base_url="http://jellyfin:8096"))
@@ -88,7 +81,7 @@ async def stored_setup(session: AsyncSession) -> str:
 async def test_a_clean_install_starts_at_the_owner(session: AsyncSession) -> None:
     status = await read_status(session)
 
-    assert (status.completed, status.current_step, status.owner) == (False, STEP_OWNER, "")
+    assert (status.completed, status.current_step, status.owner) == (False, STEP_JELLYFIN, "")
     assert status.services == ()
 
 
@@ -146,15 +139,15 @@ async def test_the_owners_password_is_not_stored(session: AsyncSession) -> None:
 
 
 @pytest.mark.asyncio
-async def test_the_owner_moves_the_wizard_to_detection(session: AsyncSession) -> None:
+async def test_the_owner_moves_the_wizard_to_qbittorrent(session: AsyncSession) -> None:
     await found(session)
-    assert (await read_status(session)).current_step == STEP_OWNER
+    assert (await read_status(session)).current_step == STEP_JELLYFIN
 
     await claim_owner(session, bundled(), username="skipper", password=PASSWORD)
 
     status = await read_status(session)
     assert status.owner == "skipper"
-    assert status.current_step == STEP_DETECT
+    assert status.current_step == STEP_QBITTORRENT
 
 
 @pytest.mark.asyncio
@@ -180,20 +173,20 @@ async def test_a_second_claim_on_a_bundled_jellyfin_is_a_sign_in(session: AsyncS
 
 @pytest.mark.asyncio
 async def test_existing_refuses_a_user_who_is_not_an_administrator(session: AsyncSession) -> None:
-    await found(session, origin=ServiceOrigin.EXISTING, reason=DetectionReason.SETUP_COMPLETED)
+    await found(session, origin=ServiceOrigin.EXISTING, reason=ConnectionReason.SETUP_COMPLETED)
 
     with pytest.raises(OwnerRejectedError) as refused:
         await claim_owner(session, existing(), username="deckhand", password=PASSWORD)
 
     assert (refused.value.reason, refused.value.detail) == (OwnerRefusal.NOT_ADMINISTRATOR, "")
     status = await read_status(session)
-    assert (status.owner, status.current_step) == ("", STEP_OWNER)
+    assert (status.owner, status.current_step) == ("", STEP_JELLYFIN)
     assert (await read_settings(session, JellyfinSettings)).api_key == ""
 
 
 @pytest.mark.asyncio
 async def test_existing_admin_becomes_the_owner(session: AsyncSession) -> None:
-    await found(session, origin=ServiceOrigin.EXISTING, reason=DetectionReason.SETUP_COMPLETED)
+    await found(session, origin=ServiceOrigin.EXISTING, reason=ConnectionReason.SETUP_COMPLETED)
     factory = existing()
 
     claimed = await claim_owner(session, factory, username="captain", password=PASSWORD)
@@ -209,7 +202,7 @@ async def test_existing_admin_becomes_the_owner(session: AsyncSession) -> None:
 
 @pytest.mark.asyncio
 async def test_a_wrong_password_is_refused_as_invalid_credentials(session: AsyncSession) -> None:
-    await found(session, origin=ServiceOrigin.EXISTING, reason=DetectionReason.SETUP_COMPLETED)
+    await found(session, origin=ServiceOrigin.EXISTING, reason=ConnectionReason.SETUP_COMPLETED)
 
     with pytest.raises(OwnerRejectedError) as refused:
         await claim_owner(session, existing(), username="captain", password="nope")
@@ -219,7 +212,7 @@ async def test_a_wrong_password_is_refused_as_invalid_credentials(session: Async
 
 @pytest.mark.asyncio
 async def test_an_old_jellyfin_is_refused_with_its_version(session: AsyncSession) -> None:
-    await found(session, origin=ServiceOrigin.EXISTING, reason=DetectionReason.SETUP_COMPLETED)
+    await found(session, origin=ServiceOrigin.EXISTING, reason=ConnectionReason.SETUP_COMPLETED)
     factory = existing()
     factory.jellyfin_.version = "10.11.11"
 
@@ -230,12 +223,15 @@ async def test_an_old_jellyfin_is_refused_with_its_version(session: AsyncSession
     assert "10.11.11" in refused.value.detail
 
 
-# --- 偵測 ---
+# --- 選擇與測試 ---
 
 
+@pytest.mark.parametrize("state", [ConnectionState.WAITING, ConnectionState.FAILED])
 @pytest.mark.asyncio
-async def test_no_claim_before_jellyfin_is_found(session: AsyncSession) -> None:
-    await found(session, origin=ServiceOrigin.PENDING, reason=DetectionReason.UNREACHABLE)
+async def test_no_claim_until_the_chosen_jellyfin_answers(
+    session: AsyncSession, state: ConnectionState
+) -> None:
+    await found(session, reason=ConnectionReason.UNREACHABLE, state=state)
 
     with pytest.raises(OwnerRejectedError) as refused:
         await claim_owner(session, bundled(), username="skipper", password=PASSWORD)
@@ -243,59 +239,41 @@ async def test_no_claim_before_jellyfin_is_found(session: AsyncSession) -> None:
     assert refused.value.reason is OwnerRefusal.JELLYFIN_UNRESOLVED
 
 
-def probes(jellyfin: FakeJellyfinClient) -> SetupProbes:
-    return SetupProbes(
-        jellyfin=jellyfin,
-        qbittorrent=FakeQbittorrentClient(),
-        prowlarr=FakeProwlarrClient(),
-        prowlarr_api_key="key-prowlarr",
-    )
+@pytest.mark.asyncio
+async def test_no_claim_before_jellyfin_is_chosen(session: AsyncSession) -> None:
+    factory = bundled()
+
+    with pytest.raises(OwnerRejectedError) as refused:
+        await claim_owner(session, factory, username="skipper", password=PASSWORD)
+
+    assert refused.value.reason is OwnerRefusal.JELLYFIN_UNRESOLVED
+    assert factory.jellyfin_.admin is None
 
 
 @pytest.mark.asyncio
-async def test_before_the_owner_detection_only_looks_for_jellyfin(session: AsyncSession) -> None:
-    """其他服務的偵測在擁有者之後（票 06）：那時候寫入的東西都已經在門後。"""
-    status = await detect_services(session, probes(FakeJellyfinClient()), now=NOW)
-
-    assert [row.kind for row in status.services] == [ServiceKind.JELLYFIN]
-    assert status.current_step == STEP_OWNER
-
-
-@pytest.mark.asyncio
-async def test_after_the_owner_jellyfin_is_not_probed_again(session: AsyncSession) -> None:
-    """套件內的那一台剛被 Berth 跑完初始精靈，重探會把它判成既有（`_pin_jellyfin` 的道理）。"""
-    await found(session)
-    await claim_owner(session, bundled(), username="skipper", password=PASSWORD)
-
-    status = await detect_services(
-        session, probes(FakeJellyfinClient(startup_wizard_completed=True)), now=NOW
-    )
-
-    by_kind = {row.kind: row for row in status.services}
-    assert by_kind[ServiceKind.JELLYFIN].origin is ServiceOrigin.BUNDLED
-    assert set(by_kind) == set(ServiceKind)
-
-
-@pytest.mark.asyncio
-async def test_detection_before_the_owner_leaves_the_other_verdicts_alone(
+async def test_an_existing_jellyfin_that_never_ran_its_wizard_gets_its_admin_created(
     session: AsyncSession,
 ) -> None:
-    """擁有者之前只探 Jellyfin，但**不丟掉**另外兩列：舊資料庫的精靈跑到一半時（migration 之後
-    回到第 1 步），Prowlarr 已經被 Berth 加過站、判定釘住了（`configured`）。丟掉的話擁有者之後
-    重探會看到它有索引站而判成既有——plan §9.3「釘住不再重探」的那一條（code-review 抓到）。
-    """
-    pinned = ServiceProbe(
-        origin=ServiceOrigin.BUNDLED,
-        reason=DetectionReason.NO_INDEXERS,
-        base_url="http://prowlarr:9696",
-        checked_at=NOW,
-        configured=True,
-    )
-    setup = await read_settings(session, SetupSettings)
-    setup.services = {ServiceKind.PROWLARR: pinned}
-    await write_settings(session, setup)
-    await session.commit()
+    """表單跟著那一台的狀態走（brief §16.3）：選既有而它還沒初始化，擁有者建立它的管理員。"""
+    await found(session, origin=ServiceOrigin.EXISTING, reason=ConnectionReason.SETUP_PENDING)
+    factory = bundled()
 
-    await detect_services(session, probes(FakeJellyfinClient()), now=NOW)
+    claimed = await claim_owner(session, factory, username="skipper", password=PASSWORD)
 
-    assert (await read_settings(session, SetupSettings)).services[ServiceKind.PROWLARR] == pinned
+    assert factory.jellyfin_.admin == ("skipper", PASSWORD)
+    assert claimed.signed_in.user.role is Role.ADMIN
+
+
+@pytest.mark.asyncio
+async def test_a_bundled_jellyfin_kept_from_a_reinstall_is_a_sign_in(
+    session: AsyncSession,
+) -> None:
+    """套件內但已經初始化過（重裝保留 config）：同一組管理員帳密登入，一個設定都不動。"""
+    await found(session, reason=ConnectionReason.SETUP_COMPLETED)
+    factory = existing()
+
+    claimed = await claim_owner(session, factory, username="captain", password=PASSWORD)
+
+    assert claimed.signed_in.user.role is Role.ADMIN
+    assert factory.jellyfin_.culture is None
+    assert factory.jellyfin_.remote_access is None

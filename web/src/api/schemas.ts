@@ -18,7 +18,7 @@ export type Schemas = components['schemas']
 /** `berth/domain/enums.py` 的 `ServiceKind`。 */
 export type ServiceKind = Schemas['ServiceKind']
 
-/** `ServiceOrigin`：逐服務的判定。 */
+/** `ServiceOrigin`：使用者替一個服務選的來源（M4 票 15）。 */
 export type ServiceOrigin = Schemas['ServiceOrigin']
 
 /** `StepStatus`：一條纜繩的結果。 */

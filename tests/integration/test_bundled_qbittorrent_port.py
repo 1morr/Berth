@@ -1,28 +1,26 @@
 """套件內 qBittorrent 換了 WebUI port 之後（票 06b）。
 
 `QBITTORRENT_WEBUI_PORT` 內外兩側一起換（Host 檢查連 port 都比對，plan §9.2），所以 compose
-內網上那一台也不在 8080 了。偵測要照 Berth 的設定去敲，之後的步驟連的是偵測記下的那一台。
+內網上那一台也不在 8080 了。選了套件內，測試要照 Berth 的設定去敲，之後的步驟連的也是那一台
+（M4 票 15 起位址在選的時候記下）。
 """
 
 from __future__ import annotations
 
-import dataclasses
 from pathlib import Path
 
 import pytest
 import respx
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from berth.adapters.jellyfin.fake import FakeJellyfinClient
-from berth.adapters.prowlarr.fake import FakeProwlarrClient
 from berth.config import load_config
-from berth.domain import DetectionReason, ServiceKind, ServiceOrigin
-from berth.models import QbittorrentSettings, SetupSettings
-from berth.services.clients import build_setup_probes, close_setup_probes
+from berth.domain import ConnectionState, ServiceKind, ServiceOrigin
+from berth.models import SetupSettings
+from berth.services.clients import HttpServiceClientFactory, bundled_services
 from berth.services.qbittorrent import read_qbittorrent_diff
 from berth.services.routes import build_routes
-from berth.services.settings import read_settings, write_settings
-from berth.services.setup import detect_services
+from berth.services.settings import read_settings
+from berth.services.setup import choose_service
 from tests.conftest import read_fixture
 from tests.integration.arrange import arrange, factory_for, own
 
@@ -31,7 +29,7 @@ MOVED = "http://qbittorrent:18080"
 
 @respx.mock
 @pytest.mark.asyncio
-async def test_detection_knocks_on_the_port_berth_was_given(
+async def test_choosing_bundled_knocks_on_the_port_berth_was_given(
     session: AsyncSession, tmp_path: Path
 ) -> None:
     respx.get(f"{MOVED}/api/v2/app/version").respond(
@@ -41,41 +39,46 @@ async def test_detection_knocks_on_the_port_berth_was_given(
         200, text=read_fixture("http/qbittorrent/app-webapiversion.5.2.3.txt")
     )
     config = load_config({"EXT_ROOT": str(tmp_path), "QBITTORRENT_WEBUI_PORT": "18080"})
-    real = build_setup_probes(config, {})
-    probes = dataclasses.replace(real, jellyfin=FakeJellyfinClient(), prowlarr=FakeProwlarrClient())
     await own(session)
-    try:
-        await detect_services(session, probes)
-    finally:
-        await close_setup_probes(real)
 
-    probe = (await read_settings(session, SetupSettings)).services[ServiceKind.QBITTORRENT]
-    assert (probe.origin, probe.reason, probe.base_url) == (
+    await choose_service(
+        session,
+        HttpServiceClientFactory(),
+        bundled_services(config, {}),
+        ServiceKind.QBITTORRENT,
         ServiceOrigin.BUNDLED,
-        DetectionReason.ANONYMOUS_OK,
-        MOVED,
     )
 
+    choice = (await read_settings(session, SetupSettings)).choices[ServiceKind.QBITTORRENT]
+    assert choice.base_url == MOVED
+    assert choice.test is not None and choice.test.state is ConnectionState.OK
 
-async def detected_at(session: AsyncSession, roots: dict[str, Path], base_url: str) -> None:
-    """偵測判成套件內、記下 `base_url`，而第 4 步還沒把位址寫進 `QbittorrentSettings`。"""
+
+async def chosen_at(session: AsyncSession, roots: dict[str, Path], base_url: str) -> None:
+    """選了套件內，而那一台在 `base_url`。"""
+    config = load_config(
+        {"EXT_ROOT": str(roots["library"].parent), "QBITTORRENT_WEBUI_PORT": "18080"}
+    )
     await arrange(session, roots)
-    setup = await read_settings(session, SetupSettings)
-    probe = setup.services[ServiceKind.QBITTORRENT]
-    setup.services = {
-        **setup.services,
-        ServiceKind.QBITTORRENT: probe.model_copy(update={"base_url": base_url}),
-    }
-    await write_settings(session, setup)
-    await write_settings(session, QbittorrentSettings())
+    factory = factory_for(roots)
+    await choose_service(
+        session,
+        factory,
+        bundled_services(config, {}),
+        ServiceKind.QBITTORRENT,
+        ServiceOrigin.BUNDLED,
+    )
     await session.commit()
+    assert (await read_settings(session, SetupSettings)).choices[
+        ServiceKind.QBITTORRENT
+    ].base_url == base_url
 
 
 @pytest.mark.asyncio
-async def test_the_qbittorrent_step_connects_to_the_one_detection_found(
+async def test_the_qbittorrent_page_connects_to_the_chosen_one(
     session: AsyncSession, roots: dict[str, Path]
 ) -> None:
-    await detected_at(session, roots, MOVED)
+    await chosen_at(session, roots, MOVED)
     factory = factory_for(roots)
 
     status = await read_qbittorrent_diff(session, factory)
@@ -84,10 +87,10 @@ async def test_the_qbittorrent_step_connects_to_the_one_detection_found(
 
 
 @pytest.mark.asyncio
-async def test_route_checks_connect_to_the_one_detection_found(
+async def test_route_checks_connect_to_the_chosen_one(
     session: AsyncSession, roots: dict[str, Path]
 ) -> None:
-    await detected_at(session, roots, MOVED)
+    await chosen_at(session, roots, MOVED)
     factory = factory_for(roots)
 
     await build_routes(session, factory, ())

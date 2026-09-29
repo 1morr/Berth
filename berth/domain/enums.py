@@ -684,15 +684,26 @@ class ServiceKind(StrEnum):
 
 
 class ServiceOrigin(StrEnum):
-    """精靈第 2 步對單一服務的判定（plan §9.3）。逐服務判斷，沒有全局模式。"""
+    """使用者在精靈替一個服務選的來源（plan §9.3、brief §16.3）。逐服務選，沒有全局模式。
 
-    #: 套件內：探得到而且還沒被設定過，Berth 可以全自動接手。
+    **是使用者的選擇，不是 Berth 猜的**（2026-09-29 起，M4 票 15）。選完要測試；測試的狀態
+    （還在啟動、逾時）是 `ConnectionState`，不是來源。
+    """
+
+    #: 套件內：compose 帶來的那一台，Berth 代為設定。
     BUNDLED = "bundled"
-    #: 既有：使用者自己的服務（或不在 compose 內），顯示連線表單。
+    #: 既有：使用者自己的服務。Berth 只用自己的分類，不寫它的帳密與全域偏好（M4 票 05）。
     EXISTING = "existing"
-    #: 容器還在啟動；輪詢期間的暫時狀態。
-    PENDING = "pending"
-    #: 超過輪詢上限仍未就緒，使用者可重試。
+
+
+class ConnectionState(StrEnum):
+    """選完之後那一次測試的結果（plan §9.3〈服務頁的共同形狀〉）。"""
+
+    OK = "ok"
+    FAILED = "failed"
+    #: 套件內那一台還在啟動（連不上、503、回的不像它自己，M3 票 06g）：前端每 3 秒重測。
+    WAITING = "waiting"
+    #: 等超過 2 分鐘還沒起來。使用者按「重新測試」重算。
     TIMEOUT = "timeout"
 
 
@@ -776,37 +787,33 @@ class IndexerKind(StrEnum):
     TORZNAB = "torznab"
 
 
-class DetectionReason(StrEnum):
-    """判定的理由。UI 逐服務顯示，所以是封閉集合而不是自由文字。"""
+class ConnectionReason(StrEnum):
+    """測試結果的理由。UI 逐服務顯示，所以是封閉集合而不是自由文字。"""
 
-    #: Jellyfin 的 `StartupWizardCompleted=false`。
+    #: 連上了。qBittorrent 與 Prowlarr 的綠燈。
+    CONNECTED = "connected"
+    #: Jellyfin 連上了，而且還沒跑過自己的初始精靈（`StartupWizardCompleted=false`）：
+    #: 擁有者表單是建立。
     SETUP_PENDING = "setup_pending"
-    #: Jellyfin 已經跑過初始精靈。
+    #: Jellyfin 連上了，已經有管理員：擁有者表單是登入。
     SETUP_COMPLETED = "setup_completed"
-    #: qBittorrent 免密進得去 API。
-    ANONYMOUS_OK = "anonymous_ok"
-    #: 需要憑證：Prowlarr 的 API key 不被接受，或 qBittorrent 要帳密。
+    #: 需要憑證：Prowlarr 的 API key 不被接受，或 qBittorrent 要帳密（套件內那一台就是
+    #: 白名單沒生效）。
     AUTH_REQUIRED = "auth_required"
     #: qBittorrent 把 Berth 這台的 IP 封了（連續 5 次登入失敗，brief §20.2、票 10）。
     #: 與 `AUTH_REQUIRED` 分開的理由是**下一步不同**：帳密不對要去改設定，被封要等封鎖過期
     #: 或去 qBittorrent 的介面解除——改帳密只會再失敗五次，把封鎖時間重新算一輪。
     IP_BANNED = "ip_banned"
-    #: Prowlarr 讀得到 API key 而且一個索引站都沒有。
-    NO_INDEXERS = "no_indexers"
-    #: Prowlarr 已經有索引站，視為使用者自己在用的那一套。
-    HAS_INDEXERS = "has_indexers"
-    #: 唯讀掛載的 `config.xml` 與環境變數都沒有 API key，退回手動貼上。
+    #: Prowlarr 的 API key 拿不到：套件內的唯讀掛載與環境變數都沒有，使用者也還沒貼。
     API_KEY_MISSING = "api_key_missing"
-    #: compose 主機名解不到 —— 這個服務不在套件裡（從 `COMPOSE_PROFILES` 拿掉了）。
+    #: 主機名解不到。套件內的就是那個服務不在 compose 裡（從 `COMPOSE_PROFILES` 拿掉了）。
     NOT_DEPLOYED = "not_deployed"
-    #: 主機名解得到但連不上，通常是容器還在啟動。
+    #: 主機名解得到但連不上。套件內的通常是容器還在啟動。
     UNREACHABLE = "unreachable"
     #: 連得上、是對的服務，但它說自己還在載入（Jellyfin 啟動中的 503，票 06g）。
     STARTING = "starting"
     #: 連得上但回的東西不是預期的服務。
     PROTOCOL_MISMATCH = "protocol_mismatch"
-    #: 使用者填的既有服務連線資訊測試通過。
-    CONNECTED = "connected"
 
 
 class PlanStatus(StrEnum):
@@ -1093,6 +1100,23 @@ class BundledLibraryRefusal(StrEnum):
     FOLDER_CHARACTERS = "folder_characters"
     #: 已經在 Jellyfin 建好的那一列被改了或刪了。那一列要去 Jellyfin 改（票 06f）。
     BUILT_CHANGED = "built_changed"
+
+
+class ChoiceRefusal(StrEnum):
+    """服務頁的選擇不成立（`services/setup.choose_service`，M4 票 15）。"""
+
+    #: 擁有者成立之後改 Jellyfin 的來源：擁有者是那一台上的帳號，換一台等於換擁有者
+    #: （shape 時拍板）。同一個來源換位址可以。
+    JELLYFIN_OWNED = "jellyfin_owned"
+
+
+class InterfaceLoginRefusal(StrEnum):
+    """套件內 qBittorrent / Prowlarr 的介面登入沒寫（M4 票 15 的「沿用 Jellyfin 帳密」）。"""
+
+    #: 勾了沿用，但 Jellyfin 不認這個密碼是擁有者的。兩台都沒被寫。
+    OWNER_PASSWORD = "owner_password"
+    #: 勾了沿用，但 Jellyfin 連不上，驗不了。`detail` 是原文。
+    JELLYFIN_UNREACHABLE = "jellyfin_unreachable"
 
 
 class OwnerRefusal(StrEnum):

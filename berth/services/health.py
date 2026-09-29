@@ -452,15 +452,14 @@ def _view(
 
 
 def _origin(kind: ServiceKind, setup: SetupSettings, indexer: IndexerSettings) -> ServiceOrigin:
-    """套件內還是既有——沿用第 2 步的判定。
+    """套件內還是既有——使用者在精靈選的（M4 票 15）；還沒選就當既有，不給會寫東西的建議。
 
     Torznab 是使用者自己貼的端點，與 compose 裡那台 Prowlarr 無關，所以它一律是既有
     （與 `services/indexer.py` 的規則相同）。
     """
     if kind is ServiceKind.PROWLARR and indexer.kind == IndexerKind.TORZNAB.value:
         return ServiceOrigin.EXISTING
-    probe = setup.services.get(kind)
-    return probe.origin if probe is not None else ServiceOrigin.EXISTING
+    return setup.origin_of(kind) or ServiceOrigin.EXISTING
 
 
 def _degraded(health: HealthSettings) -> bool:

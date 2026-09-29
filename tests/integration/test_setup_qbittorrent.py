@@ -17,14 +17,14 @@ from berth.adapters.http import AuthFailedError, ServiceUnavailableError
 from berth.adapters.qbittorrent import QbittorrentVersion
 from berth.adapters.qbittorrent.fake import FakeQbittorrentClient
 from berth.domain import (
-    DetectionReason,
+    ConnectionReason,
     JellyfinStep,
     QbittorrentStep,
     ServiceKind,
     ServiceOrigin,
     StepStatus,
 )
-from berth.models import PathSettings, QbittorrentSettings, ServiceProbe, SetupSettings, SetupStep
+from berth.models import PathSettings, QbittorrentSettings, SetupSettings, SetupStep
 from berth.services.commands import CommandMark, Effect, mark_of
 from berth.services.qbittorrent import (
     WEB_UI_PASSWORD_KEY,
@@ -34,8 +34,8 @@ from berth.services.qbittorrent import (
 )
 from berth.services.settings import read_settings, write_settings
 from berth.services.setup import STEP_QBITTORRENT, STEP_ROUTES, read_status
-from berth.services.steps import InterfaceLogin
-from tests.integration.arrange import own
+from berth.services.steps import InterfaceLogin, password_matches
+from tests.integration.arrange import chosen, own
 from tests.integration.factories import FakeClientFactory
 
 NOW = datetime(2026, 9, 8, 12, 0, tzinfo=UTC)
@@ -65,34 +65,14 @@ async def arrange(
     setup = await read_settings(session, SetupSettings)
     # 前兩個泊位已經接好了：步驟由狀態導出，所以第 4 步要成為「當前」就得先把它們填齊。
     setup.jellyfin.steps = [SetupStep(key=JellyfinStep.API_KEY.value, status=StepStatus.OK)]
-    setup.services = {
-        ServiceKind.JELLYFIN: ServiceProbe(
-            origin=ServiceOrigin.EXISTING,
-            reason=DetectionReason.SETUP_COMPLETED,
-            detail="12.1.0",
-            base_url="http://nas:8096",
-            checked_at=NOW,
-            configured=True,
+    setup.choices = {
+        ServiceKind.JELLYFIN: chosen(
+            ServiceOrigin.EXISTING, "http://nas:8096", ConnectionReason.SETUP_COMPLETED
         ),
-        ServiceKind.PROWLARR: ServiceProbe(
-            origin=ServiceOrigin.BUNDLED,
-            reason=DetectionReason.NO_INDEXERS,
-            base_url="http://prowlarr:9696",
-            checked_at=NOW,
-        ),
-        ServiceKind.QBITTORRENT: ServiceProbe(
-            origin=origin,
-            reason=(
-                DetectionReason.ANONYMOUS_OK
-                if origin is ServiceOrigin.BUNDLED
-                else DetectionReason.CONNECTED
-            ),
-            detail="v5.2.3 · Web API 2.15.1",
-            base_url="http://qbittorrent:8080"
-            if origin is ServiceOrigin.BUNDLED
-            else "http://nas:8080",
-            checked_at=NOW,
-            configured=origin is not ServiceOrigin.BUNDLED,
+        ServiceKind.PROWLARR: chosen(ServiceOrigin.BUNDLED, "http://prowlarr:9696"),
+        ServiceKind.QBITTORRENT: chosen(
+            origin,
+            "http://qbittorrent:8080" if origin is ServiceOrigin.BUNDLED else "http://nas:8080",
         ),
     }
     await write_settings(session, setup)
@@ -175,13 +155,12 @@ async def test_apply_sets_the_web_ui_login_typed_on_the_berth(session: AsyncSess
     await client.login("skipper", "harbour")
     with pytest.raises(AuthFailedError):
         await client.login("admin", "adminadmin")
-    # 密碼設下去之後 Berth 自己要留一份，之後的里程碑才登得進去。
-    settings = await read_settings(session, QbittorrentSettings)
-    assert (settings.username, settings.password) == ("skipper", "harbour")
-    # 也不能再被重探判成「既有」——它要密碼了，而那個密碼是 Berth 自己設的。
+    # Berth 只記帳號與雜湊（M4 票 15）；它連這一台靠免密白名單，連線帳密是空的。
     setup = await read_settings(session, SetupSettings)
-    probe = setup.services[ServiceKind.QBITTORRENT]
-    assert (probe.origin, probe.configured) == (ServiceOrigin.BUNDLED, True)
+    assert setup.qbittorrent.web_ui_username == "skipper"
+    assert password_matches("harbour", setup.qbittorrent.web_ui_password_hash)
+    settings = await read_settings(session, QbittorrentSettings)
+    assert (settings.username, settings.password) == ("", "")
 
 
 @pytest.mark.asyncio
@@ -204,8 +183,8 @@ async def test_a_changed_login_replaces_the_old_one(session: AsyncSession) -> No
     with pytest.raises(AuthFailedError):
         await client.login("skipper", "harbour")
     assert status.web_ui_username == "deckhand"
-    settings = await read_settings(session, QbittorrentSettings)
-    assert (settings.username, settings.password) == ("deckhand", "changed")
+    setup = await read_settings(session, SetupSettings)
+    assert password_matches("changed", setup.qbittorrent.web_ui_password_hash)
     # 密碼那一條換成這一次的結果，五個鍵的纜繩留著。
     by_step = {row.step: row.status for row in status.steps}
     assert by_step[QbittorrentStep.PASSWORD.value] is StepStatus.OK

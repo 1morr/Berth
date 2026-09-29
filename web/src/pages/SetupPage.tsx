@@ -11,16 +11,18 @@ import {
   bootstrapJellyfin,
   bundledRefusalOf,
   buildRoutes,
+  chooseService,
+  CLAIM_OWNER_KEY,
   claimOwner,
   completeSetup,
   connectIndexer,
-  connectService,
-  detectServices,
   indexerSetupQueryOptions,
   jellyfinSetupQueryOptions,
+  loginRefusalOf,
   ownerRefusalOf,
   qbittorrentSetupQueryOptions,
   removeIndexer,
+  retestService,
   routeSetupQueryOptions,
   saveBundledLibraries,
   searchIndexers,
@@ -28,7 +30,7 @@ import {
   skipIndexers,
   testTmdb,
   tmdbSetupQueryOptions,
-  type ConnectInput,
+  type ChoiceInput,
   type IndexerSetup,
   type JellyfinSetup,
   type LibraryDraft,
@@ -37,7 +39,7 @@ import {
   type SetupStatus,
   type TmdbSetup,
 } from '../api/setup'
-import { type QbittorrentSetup, type ServiceKind } from '../api/schemas'
+import { type QbittorrentSetup, type ServiceKind, type SetupStep } from '../api/schemas'
 import { meQueryOptions } from '../api/auth'
 import { healthQueryOptions } from '../api/health'
 import { routeRefusalOf } from '../api/routes'
@@ -46,10 +48,9 @@ import { LanguageToggle } from '../components/LanguageToggle'
 import { BerthBoard, type BerthSignals } from '../setup/BerthBoard'
 import { BerthNav, RevisitNote } from '../setup/BerthNav'
 import { CompleteStep, type CompleteFailure } from '../setup/CompleteStep'
-import { DetectStep } from '../setup/DetectStep'
 import { IndexerStep } from '../setup/IndexerStep'
+import { AddPathFailure } from '../setup/JellyfinExisting'
 import { JellyfinStep } from '../setup/JellyfinStep'
-import { RedetectButton } from '../setup/MooringLine'
 import { OwnerStep } from '../setup/OwnerStep'
 import { QbittorrentStep } from '../setup/QbittorrentStep'
 import { RouteStep } from '../setup/RouteStep'
@@ -67,12 +68,13 @@ import {
   shownStep,
   straying,
 } from '../setup/navigation'
-import { PAGE_TITLE, GhostButton, NAV_BOX, NAV_BOX_ACTIVE } from '../components/controls'
+import { type ChoiceControls } from '../setup/ServiceChoice'
+import { PAGE_TITLE, GhostButton } from '../components/controls'
 import { type Signal } from '../components/signal'
 import { isSettled } from '../components/steps'
-import { DETECTED_IN_STEP_TWO, signalOf } from '../setup/signals'
+import { connected, signalOf } from '../setup/signals'
 
-/** 服務還在啟動時的重探間隔。上限由後端的輪詢窗口決定（`window_seconds`）。 */
+/** 套件內那一台還在啟動時的重測間隔。上限由後端的輪詢窗口決定（`window_seconds`）。 */
 const POLL_INTERVAL_MS = 3000
 
 /**
@@ -83,7 +85,10 @@ const PROGRESS_INTERVAL_MS = 1500
 
 /**
  * 設定精靈。方向見 `.impeccable/surfaces/web-src-pages-setuppage-tsx.md`：
- * 泊位常駐在頂端，工作面在下；不是八張「下一步」的表單。
+ * 泊位常駐在頂端，工作面在下；不是六張「下一步」的表單。
+ *
+ * **不偵測**（M4 票 15，`.scratch/m4/service-pages-shape.md`）：三個服務頁的頁首是二選一，選了才連。
+ * 進頁與選擇之前，這一頁不對任何服務發請求——qBittorrent 的差異在選了、連上之後才讀。
  *
  * 導覽的規則（停在結果上、上一個 / 下一個、點得到哪幾格）在 `setup/navigation.ts`，是純函式；
  * 這一頁只把它接到按鈕上（票 06d）。
@@ -98,9 +103,11 @@ export function SetupPage() {
   const status = useQuery(setupStatusQueryOptions)
   // 步驟是由狀態導出的（plan §9.3），所以「停在結果上」與「回頭看」都靠這個覆寫，不是靠改狀態。
   const [pinned, setPinned] = useState<number | null>(null)
+  // 頁 3 套件內那一半顯示清單還是 Route。`null` 是照狀態：清單建完之前是清單。
+  const [libraryView, setLibraryView] = useState<boolean | null>(null)
 
   const current = status.data
-  const backend = current?.current_step ?? STEP.owner
+  const backend = current?.current_step ?? STEP.jellyfin
   const step = shownStep(backend, pinned)
 
   /** 去某一步。去後端目前那一頁就是解除覆寫（`go`）。 */
@@ -130,10 +137,11 @@ export function SetupPage() {
     void queryClient.invalidateQueries({ queryKey: setupStatusQueryOptions.queryKey })
   }
 
-  // 第 1 步：成為擁有者（M4 票 06）。成功時後端發了 session cookie——從這一刻起精靈要登入，
+  // 頁 1：成為擁有者（M4 票 06）。成功時後端發了 session cookie——從這一刻起精靈要登入，
   // 所以路由守衛讀的那一個位元（`owner_established`）就地改掉，「我是誰」也重問。
   // 成功之後照 06d 的規則停在結果上（「擁有者：名字」，critique：峰值要落地），按了才走。
   const owner = useMutation({
+    mutationKey: CLAIM_OWNER_KEY,
     mutationFn: claimOwner,
     onMutate: hold,
     onSuccess: (next) => {
@@ -144,62 +152,66 @@ export function SetupPage() {
       void queryClient.invalidateQueries({ queryKey: meQueryOptions.queryKey })
     },
   })
-  // 探測本身連續失敗的起點（票 06g）。後端沒回判定就沒有 `waited_seconds`，視窗由前端自己量；
-  // 還在視窗內的失敗算「還在探測」，過了才說失敗、等人按。
-  const failingSince = useRef<number | null>(null)
-  const [failingInWindow, setFailingInWindow] = useState(false)
-  const windowMs = (status.data?.window_seconds ?? 0) * 1000
-  // 背景輪詢也走這一支，所以釘住畫面的是按鍵那一刻（`onDetect`），不是這裡：輪詢若也釘，
-  // 在泊位頁上重新偵測、服務還在啟動的那幾秒會把畫面釘回第 2 步，判定出來之後回不去原本那一頁。
-  const detect = useMutation({
-    mutationFn: (restart: boolean) => detectServices(restart),
-    onSuccess: (next) => {
-      failingSince.current = null
-      absorb(next)
-    },
-    onError: () => {
-      failingSince.current ??= Date.now()
-      setFailingInWindow(Date.now() - failingSince.current < windowMs)
-    },
-  })
-  // 「重新偵測這個服務」（票 06d）：只探那一個，然後泊位的狀態也重讀——連不上的通常是它。
-  // 不重啟輪詢窗口：其他服務的等待不該因為這一個被重算（整輪重試才重啟，`restart`）。
-  const redetect = useMutation({
-    mutationFn: (kind: ServiceKind) => detectServices(false, kind),
+  /** 那個服務的頁自己讀的那一份：選擇換了，它說的就是另一台。 */
+  function invalidateBerthOf(kind: ServiceKind) {
+    const options = {
+      jellyfin: jellyfinSetupQueryOptions,
+      qbittorrent: qbittorrentSetupQueryOptions,
+      prowlarr: indexerSetupQueryOptions,
+    }[kind]
+    void queryClient.invalidateQueries({ queryKey: options.queryKey })
+    // 換了一台 qBittorrent，Route 的檢查作廢了（後端 `forget_route_checks`）。
+    if (kind === 'qbittorrent') {
+      void queryClient.invalidateQueries({ queryKey: routeSetupQueryOptions.queryKey })
+    }
+  }
+  // 服務頁的二選一（M4 票 15）：存下、測一次。按下去那一刻釘住這一頁，結果回來照樣停在這裡。
+  const choose = useMutation({
+    mutationFn: ({ kind, input }: { kind: ServiceKind; input: ChoiceInput }) =>
+      chooseService(kind, input),
     onMutate: hold,
-    onSuccess: (next) => {
-      // 拿到新的判定，上一輪整輪探測的失敗就是舊的了：不清掉的話它會蓋掉新判定的「探測中」，
-      // 輪詢不會恢復（票 06g code review）。
-      failingSince.current = null
-      detect.reset()
+    onSuccess: (next, { kind }) => {
       absorb(next)
-      for (const options of [
-        jellyfinSetupQueryOptions,
-        qbittorrentSetupQueryOptions,
-        indexerSetupQueryOptions,
-      ]) {
-        void queryClient.invalidateQueries({ queryKey: options.queryKey })
-      }
+      invalidateBerthOf(kind)
     },
   })
-  const connect = useMutation({
-    mutationFn: ({ kind, input }: { kind: ServiceKind; input: ConnectInput }) =>
-      connectService(kind, input),
-    onMutate: hold,
-    onSuccess: absorb,
+  // 重測：紅燈上的「重新測試」（`restart`），以及套件內那一台還在啟動時的輪詢。輪詢不釘畫面——
+  // 使用者在別頁回頭看的時候，背景的重測不該把他拉回去。
+  const retest = useMutation({
+    mutationFn: ({ kind, restart }: { kind: ServiceKind; restart: boolean }) =>
+      retestService(kind, restart),
+    onSuccess: (next, { kind }) => {
+      absorb(next)
+      invalidateBerthOf(kind)
+    },
   })
+  function choiceOf(kind: ServiceKind): ChoiceControls {
+    return {
+      choosing: choose.isPending && choose.variables.kind === kind,
+      retesting: retest.isPending && retest.variables.kind === kind && retest.variables.restart,
+      onChoose: (input, settled) => choose.mutate({ kind, input }, { onSettled: settled }),
+      onRetest: (restart) => {
+        if (restart) hold()
+        retest.mutate({ kind, restart })
+      },
+    }
+  }
   // 剖面上的媒體庫清單停手就存（票 06f）。不釘畫面、不重讀精靈狀態：存清單不會讓精靈前進。
   const saveLibraries = useMutation({
     mutationFn: saveBundledLibraries,
     onSuccess: (next) => queryClient.setQueryData(jellyfinSetupQueryOptions.queryKey, next),
   })
   // 先存剖面上的那一份再跑：`bootstrap` 讀的是存下來的清單，而停手存檔可能還沒送出去。
+  // 按下去那一刻也把頁 3 釘在清單上：建完之後停在結果上，按「前往 Route 與檢查」才走（票 06d 的規則）。
   const bootstrap = useMutation({
     mutationFn: async (libraries: LibraryDraft[]) => {
       await saveBundledLibraries(libraries)
       return bootstrapJellyfin()
     },
-    onMutate: hold,
+    onMutate: () => {
+      hold()
+      setLibraryView(true)
+    },
     onSuccess: absorbJellyfin,
   })
   const addPath = useMutation({
@@ -221,6 +233,7 @@ export function SetupPage() {
     onMutate: hold,
     onSuccess: (next) => absorbBerth(indexerSetupQueryOptions.queryKey, next),
   })
+  // 既有 Prowlarr 或 Torznab 的表單（頁 4 選「既有」時）：這就是選了既有，精靈狀態裡的選擇也跟著變。
   const connectSource = useMutation({
     mutationFn: connectIndexer,
     onMutate: hold,
@@ -262,48 +275,42 @@ export function SetupPage() {
     },
   })
 
-  const waiting = current?.services.some((row) => row.origin === 'pending') ?? false
+  // 套件內那一台還在啟動：每 3 秒重測，直到有結論或後端判逾時（M3 票 06g 的三種樣子）。
+  const waitingKind = current?.services.find((row) => row.state === 'waiting')?.kind
   const inFlight = bootstrap.isPending
   // 靠泊之前那一次存檔被擋下來：那不是「請求沒跑完」，由剖面自己說（`librariesFailure`）。
   const bootstrapRefusal = bundledRefusalOf(bootstrap.error)
 
+  // 套件內 Jellyfin 的媒體庫清單在頁 3（M4 票 15 從 Jellyfin 頁搬過來）。這一支不連線，只讀存下的狀態。
   const jellyfin = useQuery({
     ...jellyfinSetupQueryOptions,
-    enabled: step === STEP.jellyfin,
+    enabled: step === STEP.routes,
     refetchInterval: inFlight ? PROGRESS_INTERVAL_MS : false,
   })
-  // 第 4 步的差異是**現查的**：使用者可能在 qBittorrent 自己的介面上改過東西。
+  const qbittorrentChoice = current?.services.find((row) => row.kind === 'qbittorrent')
+  // 頁 2 的差異是**現查的**：使用者可能在 qBittorrent 自己的介面上改過東西。**選了、連上了才問**
+  // ——這一支會去連那一台，選之前不發（M4 票 15）。
   const qbittorrent = useQuery({
     ...qbittorrentSetupQueryOptions,
-    enabled: step === STEP.qbittorrent,
+    enabled: step === STEP.qbittorrent && connected(qbittorrentChoice),
   })
   // 泊位板要畫得出走過的每一格，所以這三份跟著後端走到哪裡，不跟著畫面停在哪裡。
   const routes = useQuery({ ...routeSetupQueryOptions, enabled: backend >= STEP.routes })
   const indexers = useQuery({ ...indexerSetupQueryOptions, enabled: backend >= STEP.indexer })
   const tmdb = useQuery({ ...tmdbSetupQueryOptions, enabled: backend >= STEP.tmdb })
 
-  // 服務還在啟動就繼續探，直到有結論或後端判逾時（plan §9.3 第 2 步）。
-  // 探測本身失敗（非 2xx）也照樣排下一次（票 06g）：四個容器同時起來時探測會在拿到任何判定
-  // 之前就失敗，那時沒有 `pending` 可看。失敗時不看上一份判定——它是舊的——只看從第一次失敗
-  // 起算有沒有過輪詢上限；過了就停在「探測沒跑完」等人按。
-  const probing = detect.isPending || (detect.isError && failingInWindow)
-  const failed = detect.isError && !failingInWindow
   useEffect(() => {
-    if (detect.isPending || redetect.isPending) return
-    if (detect.isError ? !failingInWindow : !waiting) return
-    const timer = window.setTimeout(() => detect.mutate(false), POLL_INTERVAL_MS)
+    if (!waitingKind || retest.isPending || choose.isPending) return
+    const timer = window.setTimeout(
+      () => retest.mutate({ kind: waitingKind, restart: false }),
+      POLL_INTERVAL_MS,
+    )
     return () => window.clearTimeout(timer)
-  }, [waiting, detect, redetect.isPending, failingInWindow])
+  }, [waitingKind, retest, choose.isPending])
 
-  // 第 1 步一打開就去找 Jellyfin（只讀，不需要門鎖）：它是唯一在擁有者之前就能做的事。
-  // 只在還沒有任何判定、後端也還停在第 1 步時送一次；之後的輪詢與重試照第 2 步的規則走。
-  const soughtJellyfin = useRef(false)
-  useEffect(() => {
-    if (soughtJellyfin.current || !current || current.owner) return
-    if (step !== STEP.owner || current.services.length > 0) return
-    soughtJellyfin.current = true
-    detect.mutate(false)
-  }, [current, step, detect])
+  // 頁 3 套件內那一半：媒體庫清單建完之前先給清單（票 06f），建完之後是 Route。使用者可以來回切。
+  const librariesBuilt = jellyfinLibrariesBuilt(jellyfin.data)
+  const showLibraries = jellyfin.data?.origin === 'bundled' && (libraryView ?? !librariesBuilt)
 
   // 套件內的媒體庫路徑沒有要選的東西：第一次走到這一格就自動建 Route、跑五條檢查（票 06d）。
   // 只在「後端正停在這一步、一條 Route 都還沒有」時跑一次；回頭看不重跑，要重跑有按鈕。
@@ -311,16 +318,17 @@ export function SetupPage() {
   const routeSetup = routes.data
   useEffect(() => {
     if (autoBuilt.current || step !== STEP.routes || backend !== STEP.routes) return
+    if (showLibraries || !librariesBuilt) return
     if (routeSetup?.origin !== 'bundled' || routeSetup.routes.length > 0) return
     autoBuilt.current = true
     build.mutate([])
-  }, [step, backend, routeSetup, build])
+  }, [step, backend, routeSetup, build, showLibraries, librariesBuilt])
 
   if (!current) {
     return (
-      <Shell step={STEP.owner}>
+      <Shell step={STEP.jellyfin}>
         <p className="p-6 text-sm text-ink-dim">
-          {status.isError ? t('detect.failed') : t('health.checking')}
+          {status.isError ? t('setup.statusFailed') : t('health.checking')}
         </p>
       </Shell>
     )
@@ -335,16 +343,6 @@ export function SetupPage() {
     />
   )
   const note = advanced(step, backend) ? <RevisitNote step={step} /> : null
-  // 手動接好的服務後端不重探（它不在 compose 主機名上），給它這顆鍵等於一顆按了沒反應的鍵——
-  // 那種服務改位址或帳密在第 2 步的連線表單上。
-  const redetectButton = (kind: ServiceKind) =>
-    current.services.find((row) => row.kind === kind)?.configured ? null : (
-      <RedetectButton
-        kind={kind}
-        busy={redetect.isPending && redetect.variables === kind}
-        onRedetect={(which) => redetect.mutate(which)}
-      />
-    )
 
   /** 媒體庫清單沒存下來的那一句：後端說得出是哪一列就說，說不出就是請求沒跑完（票 06f）。 */
   function librariesFailure(): string | null {
@@ -365,9 +363,9 @@ export function SetupPage() {
     indexers: indexers.data,
     tmdb: tmdb.data,
     signals: {
-      jellyfin: jellyfinSignal(current, jellyfin.data, inFlight),
+      jellyfin: jellyfinSignal(current),
       qbittorrent: qbittorrentSignal(current, qbittorrent.data, applyPreferences.isPending),
-      library: librarySignal(current, routes.data, build.isPending),
+      library: librarySignal(current, routes.data, jellyfin.data, build.isPending || inFlight),
       prowlarr: indexerSignal(
         current,
         indexers.data,
@@ -381,86 +379,62 @@ export function SetupPage() {
 
   return (
     <Shell {...shell}>
-      {step === STEP.owner ? (
+      {step === STEP.jellyfin ? (
         <OwnerStep
           status={current}
-          probing={probing}
-          detectFailed={failed}
-          connecting={connect.isPending}
-          redetecting={redetect.isPending}
+          choice={choiceOf('jellyfin')}
           claiming={owner.isPending}
           refusal={ownerRefusalOf(owner.error)}
           claimFailed={owner.isError}
-          onDetect={(restart) => {
-            failingSince.current = null
-            detect.mutate(restart)
-          }}
-          onConnect={(kind, input) => connect.mutate({ kind, input })}
-          onRedetect={(kind) => redetect.mutate(kind)}
           onClaim={(input) => owner.mutate(input)}
+          note={note}
           nav={advanced(step, backend) ? nav : undefined}
         />
-      ) : step === STEP.detect ? (
-        <DetectStep
+      ) : step === STEP.qbittorrent ? (
+        <QbittorrentStep
           status={current}
-          probing={probing}
-          connectingKind={connect.isPending ? connect.variables.kind : null}
-          redetectingKind={redetect.isPending ? redetect.variables : null}
-          failed={failed}
-          onDetect={(restart) => {
-            hold()
-            // 使用者自己按的是新的一輪：失敗的視窗重新算。
-            failingSince.current = null
-            detect.mutate(restart)
-          }}
-          onConnect={(kind, input) => connect.mutate({ kind, input })}
-          onRedetect={(kind) => redetect.mutate(kind)}
-          onContinue={() => goTo(STEP.jellyfin)}
-          nav={<BerthNav onPrevious={() => goTo(STEP.owner)} />}
+          setup={qbittorrent.data}
+          setupFailed={qbittorrent.isError}
+          owner={current.owner}
+          applying={applyPreferences.isPending}
+          requestFailed={applyPreferences.isError}
+          loginRefusal={loginRefusalOf(applyPreferences.error)}
+          onApply={(login) => applyPreferences.mutateAsync(login)}
+          choice={choiceOf('qbittorrent')}
+          note={note}
+          nav={nav}
         />
-      ) : step === STEP.jellyfin ? (
+      ) : step === STEP.routes && showLibraries ? (
         jellyfin.data ? (
           <JellyfinStep
             setup={jellyfin.data}
             running={bootstrap.isPending}
             bootstrapFailed={bootstrap.isError && !bootstrapRefusal}
-            addingPath={addPath.isPending ? addPath.variables : null}
             onBootstrap={(libraries) => bootstrap.mutate(libraries)}
             onSaveLibraries={(libraries) => saveLibraries.mutate(libraries)}
             savingLibraries={saveLibraries.isPending}
             saveLibrariesFailed={librariesFailure()}
-            onAddPath={(library) => addPath.mutate(library)}
-            note={note}
+            note={
+              <>
+                {note}
+                {librariesBuilt && (
+                  <div className="mt-4">
+                    {/* 建完之後焦點接到這一顆（`StepFrame`）：它就是這一頁接下來要按的。 */}
+                    <GhostButton
+                      type="button"
+                      data-berth-next
+                      onClick={() => setLibraryView(false)}
+                    >
+                      {t('jellyfin.bundled.toRoutes')}
+                    </GhostButton>
+                  </div>
+                )}
+              </>
+            }
             nav={nav}
-            redetect={redetectButton('jellyfin')}
           />
         ) : (
-          <Waiting
-            failed={jellyfin.isError}
-            message={t('jellyfin.unreachable')}
-            redetect={redetectButton('jellyfin')}
-            nav={nav}
-          />
-        )
-      ) : step === STEP.qbittorrent ? (
-        qbittorrent.data ? (
-          <QbittorrentStep
-            setup={qbittorrent.data}
-            owner={current.owner}
-            applying={applyPreferences.isPending}
-            requestFailed={applyPreferences.isError}
-            onApply={(login) => applyPreferences.mutateAsync(login)}
-            note={note}
-            nav={nav}
-            redetect={redetectButton('qbittorrent')}
-          />
-        ) : (
-          <Waiting
-            failed={qbittorrent.isError}
-            message={t('qbittorrent.unreachable')}
-            redetect={redetectButton('qbittorrent')}
-            nav={nav}
-          />
+          <Waiting failed={jellyfin.isError} message={t('jellyfin.unreachable')} nav={nav} />
         )
       ) : step === STEP.routes ? (
         routes.data ? (
@@ -476,7 +450,25 @@ export function SetupPage() {
               void queryClient.invalidateQueries({ queryKey: routeSetupQueryOptions.queryKey })
             }
             autoBuilding={build.isIdle || build.isPending}
-            note={note}
+            note={
+              <>
+                {note}
+                {routes.data.origin === 'bundled' && (
+                  <div className="mt-4">
+                    <GhostButton type="button" onClick={() => setLibraryView(true)}>
+                      {t('jellyfin.bundled.editList')}
+                    </GhostButton>
+                  </div>
+                )}
+                {/* 既有 Jellyfin「加入 Berth 路徑」沒加上：原文與怎麼改掛載（plan §9.5）。 */}
+                {addPathFailure(jellyfin.data) && (
+                  <AddPathFailure
+                    step={addPathFailure(jellyfin.data)!}
+                    baseUrl={jellyfin.data!.base_url}
+                  />
+                )}
+              </>
+            }
             nav={nav}
           />
         ) : (
@@ -498,15 +490,21 @@ export function SetupPage() {
           <Waiting failed={routes.isError} message={t('routes.unreachable')} nav={nav} />
         )
       ) : step === STEP.indexer ? (
+        // 讀回來才掛：先掛上的話 `StepFrame` 的焦點接手比試搜清單的「移除之後接到下一列」先跑，
+        // 移除一站之後焦點會被搶到標題上（票 15 的測試抓到的退化）。
         indexers.data ? (
           <IndexerStep
+            status={current}
             indexers={indexers.data}
+            indexersFailed={indexers.isError}
             owner={current.owner}
             applying={applySites.isPending}
             connecting={connectSource.isPending}
+            loginRefusal={loginRefusalOf(applySites.error)}
             onApply={(input) => applySites.mutateAsync(input)}
             onConnect={(input) => connectSource.mutate(input)}
             onSkip={() => skipSites.mutate()}
+            choice={choiceOf('prowlarr')}
             trial={{
               result: trialSearch.data,
               searching: trialSearch.isPending,
@@ -518,7 +516,6 @@ export function SetupPage() {
             }}
             note={note}
             nav={nav}
-            redetect={redetectButton('prowlarr')}
           />
         ) : (
           <Waiting failed={indexers.isError} message={t('indexer.unreachable')} nav={nav} />
@@ -539,43 +536,43 @@ export function SetupPage() {
 }
 
 /** 還沒讀到那個泊位的狀態。讀不到與還在讀是兩件事，說法也不一樣。 */
-function Waiting({
-  failed,
-  message,
-  redetect,
-  nav,
-}: {
-  failed: boolean
-  message: string
-  /** 讀不到的是某個服務時：就地重新偵測它（票 06d）。 */
-  redetect?: ReactNode
-  nav: ReactNode
-}) {
+function Waiting({ failed, message, nav }: { failed: boolean; message: string; nav: ReactNode }) {
   const { t } = useTranslation()
 
   return (
     <div className="p-6">
       <p className="text-sm text-ink-dim">{failed ? message : t('health.checking')}</p>
-      {failed && redetect && <div className="mt-4">{redetect}</div>}
       {nav}
     </div>
   )
 }
 
+/** 既有 Jellyfin 上一次「加入 Berth 路徑」失敗的那一步（它記在 `libraries` 那一步上）。 */
+function addPathFailure(setup: JellyfinSetup | undefined): SetupStep | undefined {
+  if (setup?.origin !== 'existing') return undefined
+  return setup.steps.find((row) => row.step === 'libraries' && row.status === 'failed')
+}
+
+/** 套件內 Jellyfin 的媒體庫清單建完了沒（票 06f）：`libraries` 那一步有結論。 */
+function jellyfinLibrariesBuilt(setup: JellyfinSetup | undefined): boolean {
+  return setup?.steps.some((row) => row.step === 'libraries' && isSettled(row.status)) ?? false
+}
+
 /**
- * 泊位 1 的信號。探到了不等於這個泊位的事做完了，所以它看的是第 3 步自己的狀態：
- * 有步驟在跑 → 進行中；有步驟失敗 → 阻擋；精靈已經前進到下一個泊位 → 已繫上。
+ * 泊位 1 的信號：Jellyfin 那一頁的事是成立擁有者。成立了就繫上；之前看選擇的測試結果。
  */
-function jellyfinSignal(
-  status: SetupStatus,
-  setup: JellyfinSetup | undefined,
-  inFlight: boolean,
-): Signal {
-  const detection = status.services.find((row) => row.kind === 'jellyfin')
-  if (inFlight || setup?.steps.some((row) => row.status === 'running')) return 'working'
-  if (setup?.steps.some((row) => row.status === 'failed')) return 'blocked'
-  if (status.current_step > STEP.jellyfin) return 'secured'
-  return signalOf(detection)
+function jellyfinSignal(status: SetupStatus): Signal {
+  if (status.owner || status.current_step > STEP.jellyfin) return 'secured'
+  return pageSignal(status.services.find((row) => row.kind === 'jellyfin'))
+}
+
+/**
+ * 那一頁還沒做完時，選擇的測試結果在板上怎麼塗：連上了只是「輪到你」（`assigned`），不是繫上——
+ * 那一頁自己的事（擁有者、偏好、索引站）還在等人。其餘照測試的結果。
+ */
+function pageSignal(chosen: SetupStatus['services'][number] | undefined): Signal {
+  const signal = signalOf(chosen)
+  return signal === 'secured' ? 'assigned' : signal
 }
 
 /** 泊位 2 的信號。版本太舊或連不上是阻擋——那一步在使用者升級之前做不下去。 */
@@ -584,11 +581,11 @@ function qbittorrentSignal(
   setup: QbittorrentSetup | undefined,
   applying: boolean,
 ): Signal {
-  const detection = status.services.find((row) => row.kind === 'qbittorrent')
+  const chosen = status.services.find((row) => row.kind === 'qbittorrent')
   if (applying) return 'working'
   if (setup?.blocked || setup?.steps.some((row) => row.status === 'failed')) return 'blocked'
   if (status.current_step > STEP.qbittorrent) return 'secured'
-  return signalOf(detection)
+  return pageSignal(chosen)
 }
 
 /**
@@ -600,13 +597,13 @@ function indexerSignal(
   indexers: IndexerSetup | undefined,
   busy: boolean,
 ): Signal {
-  const detection = status.services.find((row) => row.kind === 'prowlarr')
+  const chosen = status.services.find((row) => row.kind === 'prowlarr')
   if (busy) return 'working'
   if (status.current_step > STEP.indexer) return 'secured'
   const settled =
     (indexers?.skipped ?? false) || (indexers?.steps.some((row) => isSettled(row.status)) ?? false)
   if (settled) return 'secured'
-  return signalOf(detection)
+  return pageSignal(chosen)
 }
 
 /**
@@ -646,25 +643,29 @@ function completeFailure(
 }
 
 /**
- * 媒體庫路徑那一格的信號。這一格沒有對應的服務判定，看的是 Route 自己的健康：有紅的就是阻擋，
- * 全綠才是已繫上（`ready` 與後端「第 5 步做完了沒」是同一條規則）。
+ * 媒體庫路徑那一格的信號。這一格沒有對應的服務，看的是媒體庫清單與 Route 自己的健康：有紅的就是
+ * 阻擋，後端過了這一頁才是已繫上（套件內的清單也要建完，後端 `_libraries_built`）。
  */
 function librarySignal(
   status: SetupStatus,
   routes: RouteSetup | undefined,
+  jellyfin: JellyfinSetup | undefined,
   building: boolean,
 ): Signal {
   if (building) return 'working'
+  if (jellyfin?.steps.some((row) => row.step === 'libraries' && row.status === 'failed')) {
+    return 'blocked'
+  }
   // 停用的 Route 不是目的地，完成條件也不算它（票 14，後端 `routes_ready` 同一條規則）。
   if (routes?.routes.some((route) => route.enabled && route.health === 'failed')) return 'blocked'
-  if (routes?.ready) return 'secured'
+  if (status.current_step > STEP.routes) return 'secured'
   if (status.current_step >= STEP.routes) return 'assigned'
   return 'neutral'
 }
 
 function Shell({
   step,
-  backend = STEP.owner,
+  backend = STEP.jellyfin,
   status,
   signals,
   indexers,
@@ -679,9 +680,9 @@ function Shell({
   backend?: number
   status?: SetupStatus
   signals?: BerthSignals
-  /** 索引站那一格的詳情列（接上的是哪一種、幾站）。第 6 步起才問得到。 */
+  /** 索引站那一格的詳情列（接上的是哪一種、幾站）。頁 4 起才問得到。 */
   indexers?: IndexerSetup
-  /** TMDB 那一格的詳情列（憑證驗過了沒）。第 7 步起才問得到。 */
+  /** TMDB 那一格的詳情列（憑證驗過了沒）。頁 5 起才問得到。 */
   tmdb?: TmdbSetup
   onGo?: (step: number) => void
   /** 回到目前這一步：解除覆寫。 */
@@ -699,15 +700,11 @@ function Shell({
         {/* 精靈這一頁的標題。每一步自己的 `<h2>` 掛在它底下（票 03 第 13 條）。 */}
         <h1 className={PAGE_TITLE}>{t('setup.title')}</h1>
         <p className="label ml-auto text-ink-dim">
-          {code
-            ? t('setup.stage.berth', { code })
-            : t(step === STEP.complete ? 'setup.stage.final' : 'setup.stage.pre')}{' '}
-          · {t('setup.step', { current: step, total: TOTAL_STEPS })}
+          {code ? t('setup.stage.berth', { code }) : t('setup.stage.final')} ·{' '}
+          {t('setup.step', { current: step, total: TOTAL_STEPS })}
         </p>
         <LanguageToggle />
       </header>
-
-      {status?.owner && onGo && <Prelude status={status} step={step} onGo={onGo} />}
 
       <BerthBoard
         services={status?.services ?? []}
@@ -720,7 +717,7 @@ function Shell({
       />
 
       {onReturn && straying(step, backend) && (
-        <StrayBand step={step} backend={backend} code={code} onReturn={onReturn} />
+        <StrayBand backend={backend} code={code} onReturn={onReturn} />
       )}
 
       <main className="flex flex-1 flex-col">{children}</main>
@@ -733,75 +730,23 @@ function Shell({
 }
 
 /**
- * 前置列：第 1、2 步不是泊位，不上板，但走過了就要點得回去（票 06d 的 shape）。
- * 兩格同時是證據（管理員是誰、判定了幾個服務）與入口——原本那條 trail 的「改帳密」
- * 「重新探測」兩顆鍵拿掉了，那兩件事在它們自己的那一步上做。
- */
-function Prelude({
-  status,
-  step,
-  onGo,
-}: {
-  status: SetupStatus
-  step: number
-  onGo: (step: number) => void
-}) {
-  const { t } = useTranslation()
-  // 探測中與逾時的還沒有判定（票 06h：冷啟動時說成「3 個已判定」，清單上卻還有兩個在等）。
-  // Jellyfin 在第 1 步就判定了，這一格只數第 2 步的那兩個（M4 票 06）。
-  const detected = status.services.filter(
-    (row) =>
-      DETECTED_IN_STEP_TWO.includes(row.kind) &&
-      (row.origin === 'bundled' || row.origin === 'existing'),
-  ).length
-  const items = [
-    { step: STEP.owner, text: t('owner.saved', { name: status.owner }) },
-    {
-      step: STEP.detect,
-      text: detected > 0 ? t('detect.done', { count: detected }) : t('setup.place.detect'),
-    },
-  ]
-
-  return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b-2 border-rule px-6 py-3">
-      <span className="label text-ink-dim">{t('setup.prelude')}</span>
-      {items.map((item) => (
-        <button
-          key={item.step}
-          type="button"
-          aria-current={item.step === step ? 'step' : undefined}
-          onClick={() => onGo(item.step)}
-          // 模板字的 `.label` 會把帳號大寫掉，所以字用 `.value`，外框借 NAV_BOX 的方塊。
-          className={`${item.step === step ? NAV_BOX_ACTIVE : NAV_BOX} px-3 py-1.5 normal-case`}
-        >
-          <span className="value text-sm tracking-normal text-ink">{item.text}</span>
-        </button>
-      ))}
-    </div>
-  )
-}
-
-/**
  * 回頭看得比「剛做完的那一格」更前面時，板下一條帶子說出在哪裡、目前走到哪，給一顆直接回去的鍵
  * （票 06d：回頭看的時候永遠有出口）。剛做完、停在結果上的那一格不需要它——
  * 「前往下一個泊位」就是回去的路。
  */
 function StrayBand({
-  step,
   backend,
   code,
   onReturn,
 }: {
-  step: number
   backend: number
   code: string | undefined
   onReturn: () => void
 }) {
   const { t } = useTranslation()
   const berth = code ? BERTHS.find((row) => row.code === code) : undefined
-  const place = berth
-    ? `${berth.code} ${t(berth.nameKey)}`
-    : t(step === STEP.owner ? 'setup.place.owner' : 'setup.place.detect')
+  // 每一頁（除了完成）都是板上的一格；回頭看的一定是其中一格。
+  const place = berth ? `${berth.code} ${t(berth.nameKey)}` : ''
 
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b-2 border-rule bg-deck px-6 py-3">

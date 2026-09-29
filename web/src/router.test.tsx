@@ -4,6 +4,8 @@ import { RouterProvider, createMemoryHistory } from '@tanstack/react-router'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { ApiError } from './api/client'
+import { CLAIM_OWNER_KEY } from './api/setup'
 import { HEALTHY, UNAUTHORIZED, UNCONFIGURED, session, stubApi } from './test/fetch'
 import { expectCurrentByStateOnly } from './test/navState'
 import { renderApp } from './test/render'
@@ -305,5 +307,35 @@ describe('正式設定下的 401', () => {
     expect(api.mock.calls.filter(([url]) => url === '/api/jobs?filter=active&page=1')).toHaveLength(
       1,
     )
+  })
+})
+
+/**
+ * critique（票 15）：擁有者那一步的帳密不對回的是 401，被當成 session 失效、重跑路由守衛，整頁捲回
+ * 頂端，送出鈕與「Jellyfin 不認這組帳號或密碼」都不在畫面上。與登入同一個例外。
+ */
+describe('帳密不對的 401 不是 session 失效', () => {
+  async function refuse(
+    queryClient: ReturnType<typeof createQueryClient>,
+    key?: readonly string[],
+  ) {
+    const mutation = queryClient.getMutationCache().build(queryClient, {
+      mutationKey: key,
+      mutationFn: () => Promise.reject(new ApiError(401, 'refused')),
+    })
+    await mutation.execute(undefined).catch(() => undefined)
+  }
+
+  it('擁有者被拒不重跑守衛；其他請求的 401 照樣重跑', async () => {
+    stubApi({ [HEALTH]: { body: UNCONFIGURED } })
+    const queryClient = createQueryClient()
+    const router = createAppRouter(queryClient, createMemoryHistory({ initialEntries: ['/setup'] }))
+    const rerun = vi.spyOn(router, 'invalidate').mockResolvedValue(undefined)
+
+    await refuse(queryClient, CLAIM_OWNER_KEY)
+    expect(rerun).not.toHaveBeenCalled()
+
+    await refuse(queryClient)
+    expect(rerun).toHaveBeenCalledTimes(1)
   })
 })

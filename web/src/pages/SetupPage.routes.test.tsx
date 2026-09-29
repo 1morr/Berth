@@ -7,6 +7,8 @@ import { renderApp, renderWithProviders } from '../test/render'
 import {
   ALL_BUNDLED,
   CHECKS_PASSED,
+  SEQUENCE_DONE,
+  chosen,
   discoverWall,
   indexerSetup,
   jellyfinSetup,
@@ -32,15 +34,48 @@ const ADD_PATH = 'POST /api/setup/jellyfin/libraries/paths'
 const INDEXERS = 'GET /api/setup/indexers'
 const TMDB = 'GET /api/setup/tmdb'
 
-/** Jellyfin 與 qBittorrent 都接好了，精靈在媒體庫路徑（第 5 步，票 06d 移到 qBittorrent 之後）。 */
+const JELLYFIN = 'GET /api/setup/jellyfin'
+
+/** Jellyfin 與 qBittorrent 都接好了，精靈在媒體庫與路徑（頁 3，票 06d 移到 qBittorrent 之後）。 */
 const AT_ROUTES = setupStatus({
-  current_step: 5,
+  current_step: 3,
   owner: 'skipper',
-  services: ALL_BUNDLED,
+  services: ALL_BUNDLED.slice(0, 2),
 })
 
 /** 每個泊位都接好了，剩下按完成。 */
-const AT_THE_END = setupStatus({ ...AT_ROUTES, current_step: 8 })
+const AT_THE_END = setupStatus({ ...AT_ROUTES, current_step: 6, services: ALL_BUNDLED })
+
+/**
+ * 頁 3、套件內 Jellyfin、媒體庫清單建完了（`libraries` 那一步 ok）：畫的是 Route 那一半，
+ * 自動建立也才會跑（M4 票 15，清單從 Jellyfin 頁搬到這一頁的前半）。
+ */
+const BUNDLED_PAGE = {
+  [STATUS]: { body: AT_ROUTES },
+  [JELLYFIN]: { body: jellyfinSetup({ steps: SEQUENCE_DONE, api_key_present: true }) },
+}
+
+/** 頁 3、既有 Jellyfin：沒有清單，直接是 Route 的勾選。 */
+const EXISTING_PAGE = {
+  [STATUS]: {
+    body: setupStatus({
+      ...AT_ROUTES,
+      services: [
+        chosen({ origin: 'existing', base_url: 'http://nas:8096', reason: 'setup_completed' }),
+        ...ALL_BUNDLED.slice(1, 2),
+      ],
+    }),
+  },
+  [JELLYFIN]: {
+    body: jellyfinSetup({ origin: 'existing', base_url: 'http://nas:8096', api_key_present: true }),
+  },
+}
+
+/** 後端過了頁 3（Route 全綠、清單建完）：精靈在頁 4。 */
+const PAST_ROUTES = {
+  [STATUS]: { body: setupStatus({ ...AT_ROUTES, current_step: 4, services: ALL_BUNDLED }) },
+  [INDEXERS]: { body: indexerSetup() },
+}
 
 const BUILT = routeSetup({
   routes: [
@@ -52,11 +87,11 @@ const BUILT = routeSetup({
   ready: true,
 })
 
-describe('泊位 3：媒體庫路徑（套件內）', () => {
+describe('頁 3：媒體庫路徑（套件內）', () => {
   /** 套件內沒有要選的東西，第一次走到這一格就自動跑（票 06d）。建立還在路上時看得到剖面。 */
   it('自動建立還在跑時，剖面列出將建立的三條 Route 與它們的寫入目標，沒有要按的鍵', async () => {
     stubApi({
-      [STATUS]: { body: AT_ROUTES },
+      ...BUNDLED_PAGE,
       [ROUTES]: { body: routeSetup() },
       [BUILD]: () => new Promise(() => {}),
     })
@@ -78,7 +113,7 @@ describe('泊位 3：媒體庫路徑（套件內）', () => {
       ],
     })
     stubApi({
-      [STATUS]: { body: AT_ROUTES },
+      ...BUNDLED_PAGE,
       [ROUTES]: { body: withMusic },
       [BUILD]: () => new Promise(() => {}),
     })
@@ -93,7 +128,7 @@ describe('泊位 3：媒體庫路徑（套件內）', () => {
 
   it('走到就自動建，每條 Route 逐項顯示檢查結果，含硬鏈接的 inode', async () => {
     stubApi({
-      [STATUS]: { body: AT_ROUTES },
+      ...BUNDLED_PAGE,
       [ROUTES]: { body: routeSetup() },
       [BUILD]: { body: BUILT },
     })
@@ -112,7 +147,7 @@ describe('泊位 3：媒體庫路徑（套件內）', () => {
 
   it('送出的是空的勾選：套件內的三條由伺服器自己導出', async () => {
     const fetch = stubApi({
-      [STATUS]: { body: AT_ROUTES },
+      ...BUNDLED_PAGE,
       [ROUTES]: { body: routeSetup() },
       [BUILD]: { body: BUILT },
     })
@@ -127,7 +162,7 @@ describe('泊位 3：媒體庫路徑（套件內）', () => {
 
   it('自動建立的請求沒走完時，把鍵還給他再試一次', async () => {
     stubApi({
-      [STATUS]: { body: AT_ROUTES },
+      ...BUNDLED_PAGE,
       [ROUTES]: { body: routeSetup() },
       [BUILD]: { status: 500, body: { detail: 'boom' } },
     })
@@ -138,7 +173,7 @@ describe('泊位 3：媒體庫路徑（套件內）', () => {
   })
 
   it('三條都建好之後，剖面不再說「將建立」那三條（票 14、14e 留給票 15 的兩條）', async () => {
-    stubApi({ [STATUS]: { body: AT_ROUTES }, [ROUTES]: { body: BUILT } })
+    stubApi({ ...BUNDLED_PAGE, [ROUTES]: { body: BUILT } })
 
     renderWithProviders(<SetupPage />)
     await screen.findByRole('button', { name: '重新檢查 3 條 Route' })
@@ -149,7 +184,7 @@ describe('泊位 3：媒體庫路徑（套件內）', () => {
   })
 
   it('三條都建好之後再按一次是全部重驗，不會多建（票 14：精靈只新增）', async () => {
-    stubApi({ [STATUS]: { body: AT_ROUTES }, [ROUTES]: { body: BUILT } })
+    stubApi({ ...BUNDLED_PAGE, [ROUTES]: { body: BUILT } })
 
     renderWithProviders(<SetupPage />)
 
@@ -163,7 +198,7 @@ describe('泊位 3：媒體庫路徑（套件內）', () => {
       routes: BUILT.routes.filter((route) => route.slug !== 'movies'),
     })
     const fetch = stubApi({
-      [STATUS]: { body: AT_ROUTES },
+      ...BUNDLED_PAGE,
       [ROUTES]: () => ({ body: deleted ? withoutMovies : BUILT }),
       'DELETE /api/setup/routes/2': () => {
         deleted = true
@@ -190,7 +225,7 @@ describe('泊位 3：媒體庫路徑（套件內）', () => {
 
   it('刪的那一刻被引用：說出數字（票 14a）', async () => {
     stubApi({
-      [STATUS]: { body: AT_ROUTES },
+      ...BUNDLED_PAGE,
       [ROUTES]: { body: BUILT },
       'DELETE /api/setup/routes/2': {
         status: 409,
@@ -215,7 +250,7 @@ describe('泊位 3：媒體庫路徑（套件內）', () => {
 
   it('409 沒帶數字時仍說刪不得，不說後端沒在跑', async () => {
     stubApi({
-      [STATUS]: { body: AT_ROUTES },
+      ...BUNDLED_PAGE,
       [ROUTES]: { body: BUILT },
       'DELETE /api/setup/routes/2': {
         status: 409,
@@ -240,7 +275,7 @@ describe('泊位 3：媒體庫路徑（套件內）', () => {
         routeView({ id: 9, library: 'TV', slug: 'tv-2', enabled: false, health: 'failed' }),
       ],
     })
-    stubApi({ [STATUS]: { body: AT_ROUTES }, [ROUTES]: { body: withDisabledRed } })
+    stubApi({ ...PAST_ROUTES, [ROUTES]: { body: withDisabledRed } })
 
     renderWithProviders(<SetupPage />)
     const board = await screen.findByRole('region', { name: '泊位板' })
@@ -250,8 +285,9 @@ describe('泊位 3：媒體庫路徑（套件內）', () => {
     )
   })
 
-  it('泊位板的媒體庫路徑那一格全綠之後標成已繫上', async () => {
-    stubApi({ [STATUS]: { body: AT_ROUTES }, [ROUTES]: { body: BUILT } })
+  /** 後端過了這一頁才是已繫上：套件內的清單也要建完（後端 `_libraries_built`）。 */
+  it('泊位板的媒體庫路徑那一格在後端過了頁 3 之後標成已繫上', async () => {
+    stubApi({ ...PAST_ROUTES, [ROUTES]: { body: BUILT } })
 
     renderWithProviders(<SetupPage />)
     const board = await screen.findByRole('region', { name: '泊位板' })
@@ -259,10 +295,52 @@ describe('泊位 3：媒體庫路徑（套件內）', () => {
     await waitFor(() =>
       expect(within(board).getByText('BTH 3').closest('li')).toHaveTextContent('已完成'),
     )
+  })
+
+  it('Route 全綠但後端還停在頁 3 時，那一格仍是待靠泊', async () => {
+    stubApi({ ...BUNDLED_PAGE, [ROUTES]: { body: BUILT } })
+
+    renderWithProviders(<SetupPage />)
+    await screen.findByRole('button', { name: '重新檢查 3 條 Route' })
+    const board = screen.getByRole('region', { name: '泊位板' })
+
+    expect(within(board).getByText('BTH 3').closest('li')).toHaveTextContent('待靠泊')
   })
 })
 
-describe('泊位 3 的失敗', () => {
+describe('頁 3：套件內的自動建立等媒體庫清單建完', () => {
+  it('清單還沒建完：畫的是清單，一個 Route 請求都不發', async () => {
+    const fetch = stubApi({
+      ...BUNDLED_PAGE,
+      [JELLYFIN]: { body: jellyfinSetup() },
+      [ROUTES]: { body: routeSetup() },
+      [BUILD]: { body: BUILT },
+    })
+
+    renderWithProviders(<SetupPage />)
+
+    expect(await screen.findByRole('button', { name: '開始靠泊' })).toBeVisible()
+    expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('建立媒體庫')
+    expect(fetch.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false)
+  })
+
+  it('清單建完了（libraries 那一步 ok）：一走到就自動建', async () => {
+    const fetch = stubApi({
+      ...BUNDLED_PAGE,
+      [ROUTES]: { body: routeSetup() },
+      [BUILD]: { body: BUILT },
+    })
+
+    renderWithProviders(<SetupPage />)
+
+    await waitFor(() =>
+      expect(fetch.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(1),
+    )
+    expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('媒體庫路徑')
+  })
+})
+
+describe('頁 3 的失敗', () => {
   it('EXDEV 指出兩個目錄是不同掛載，並附三個容器的 compose 片段', async () => {
     const blocked = routeSetup({
       routes: [
@@ -277,7 +355,7 @@ describe('泊位 3 的失敗', () => {
         }),
       ],
     })
-    stubApi({ [STATUS]: { body: AT_ROUTES }, [ROUTES]: { body: blocked } })
+    stubApi({ ...BUNDLED_PAGE, [ROUTES]: { body: blocked } })
 
     renderWithProviders(<SetupPage />)
 
@@ -300,7 +378,7 @@ describe('泊位 3 的失敗', () => {
         }),
       ],
     })
-    stubApi({ [STATUS]: { body: AT_ROUTES }, [ROUTES]: { body: blocked } })
+    stubApi({ ...BUNDLED_PAGE, [ROUTES]: { body: blocked } })
 
     renderWithProviders(<SetupPage />)
 
@@ -321,7 +399,7 @@ describe('泊位 3 的失敗', () => {
         }),
       ],
     })
-    stubApi({ [STATUS]: { body: AT_ROUTES }, [ROUTES]: { body: blocked } })
+    stubApi({ ...BUNDLED_PAGE, [ROUTES]: { body: blocked } })
 
     renderWithProviders(<SetupPage />)
 
@@ -336,7 +414,7 @@ describe('泊位 3 的失敗', () => {
    */
   it('建立途中有 Route 被刪掉：說出是哪一種失敗與下一步，不說後端沒在跑', async () => {
     stubApi({
-      [STATUS]: { body: AT_ROUTES },
+      ...BUNDLED_PAGE,
       [ROUTES]: { body: routeSetup() },
       [BUILD]: {
         status: 404,
@@ -355,7 +433,7 @@ describe('泊位 3 的失敗', () => {
 
   it('認不得的失敗仍落回那句通用的話：只有說得出原因時才換掉它', async () => {
     stubApi({
-      [STATUS]: { body: AT_ROUTES },
+      ...BUNDLED_PAGE,
       [ROUTES]: { body: routeSetup() },
       [BUILD]: { status: 500, body: { detail: 'boom' } },
     })
@@ -367,7 +445,7 @@ describe('泊位 3 的失敗', () => {
   })
 })
 
-describe('泊位 3：媒體庫路徑（既有 Jellyfin）', () => {
+describe('頁 3：媒體庫路徑（既有 Jellyfin）', () => {
   const NAS = routeSetup({
     origin: 'existing',
     libraries: [
@@ -382,7 +460,7 @@ describe('泊位 3：媒體庫路徑（既有 Jellyfin）', () => {
   })
 
   it('一個都沒勾時建立鍵按不下去', async () => {
-    stubApi({ [STATUS]: { body: AT_ROUTES }, [ROUTES]: { body: NAS } })
+    stubApi({ ...EXISTING_PAGE, [ROUTES]: { body: NAS } })
 
     renderWithProviders(<SetupPage />)
 
@@ -391,7 +469,7 @@ describe('泊位 3：媒體庫路徑（既有 Jellyfin）', () => {
 
   it('勾了媒體庫再選一條路徑，送出去的就是那一條', async () => {
     const fetch = stubApi({
-      [STATUS]: { body: AT_ROUTES },
+      ...EXISTING_PAGE,
       [ROUTES]: { body: NAS },
       [BUILD]: { body: NAS },
     })
@@ -411,7 +489,7 @@ describe('泊位 3：媒體庫路徑（既有 Jellyfin）', () => {
   })
 
   it('不是電影或劇集的媒體庫不給勾，並說明理由', async () => {
-    stubApi({ [STATUS]: { body: AT_ROUTES }, [ROUTES]: { body: NAS } })
+    stubApi({ ...EXISTING_PAGE, [ROUTES]: { body: NAS } })
 
     renderWithProviders(<SetupPage />)
 
@@ -434,7 +512,7 @@ describe('泊位 3：媒體庫路徑（既有 Jellyfin）', () => {
       ],
     })
     const fetch = stubApi({
-      [STATUS]: { body: AT_ROUTES },
+      ...EXISTING_PAGE,
       [ROUTES]: { body: withoutBerthPath },
       [ADD_PATH]: { body: jellyfinSetup({ libraries: [library()] }) },
     })
@@ -442,7 +520,7 @@ describe('泊位 3：媒體庫路徑（既有 Jellyfin）', () => {
     renderWithProviders(<SetupPage />)
     await userEvent.click(await screen.findByRole('checkbox', { name: '影集' }))
     await userEvent.click(screen.getByRole('button', { name: '加入 Berth 路徑' }))
-    // 動的是使用者自己那台 Jellyfin：與泊位 1 同一顆就地確認（票 06h 的 critique）。
+    // 動的是使用者自己那台 Jellyfin：先就地確認再送（票 06h 的 critique）。
     expect(fetch.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false)
     expect(screen.getByText(/舊路徑不動/)).toBeVisible()
     await userEvent.click(screen.getByRole('button', { name: '確認加入' }))
@@ -472,7 +550,7 @@ describe('泊位 3：媒體庫路徑（既有 Jellyfin）', () => {
       ],
       routes: [routeView({ name: '舊影集', library: '別的庫', target_path: '/volume1/media/tv' })],
     })
-    stubApi({ [STATUS]: { body: AT_ROUTES }, [ROUTES]: { body: shared } })
+    stubApi({ ...EXISTING_PAGE, [ROUTES]: { body: shared } })
 
     renderWithProviders(<SetupPage />)
     await userEvent.click(await screen.findByRole('checkbox', { name: '影集' }))
@@ -493,7 +571,7 @@ describe('泊位 3：媒體庫路徑（既有 Jellyfin）', () => {
       ],
       routes: [routeView({ library: '影集', slug: '影集', target_path: '/data/library/影集' })],
     })
-    stubApi({ [STATUS]: { body: AT_ROUTES }, [ROUTES]: { body: routed } })
+    stubApi({ ...EXISTING_PAGE, [ROUTES]: { body: routed } })
 
     renderWithProviders(<SetupPage />)
 
@@ -506,7 +584,7 @@ describe('泊位 3：媒體庫路徑（既有 Jellyfin）', () => {
   })
 })
 
-describe('第 8 步：完成', () => {
+describe('頁 6：完成', () => {
   it('列出跑出來的 Route 與跳過的索引站、在哪裡補', async () => {
     stubApi({
       [STATUS]: { body: AT_THE_END },
@@ -529,7 +607,7 @@ describe('第 8 步：完成', () => {
    * 票 03 第 5 條。後端的 422 是「不可跳的那幾步還沒做完」（`services/setup.py` 的兩個
    * `ValueError`），不是後端掛了——原本兩種都說「Berth 後端可能沒在跑」，把使用者送去看容器。
    */
-  it('缺 TMDB 憑證時說的是第 7 步沒做完，不是後端出錯', async () => {
+  it('缺 TMDB 憑證時說的是 TMDB 那一步沒做完，不是後端出錯', async () => {
     stubApi({
       [STATUS]: { body: AT_THE_END },
       [ROUTES]: { body: BUILT },
@@ -544,7 +622,7 @@ describe('第 8 步：完成', () => {
     const alert = await screen.findByRole('alert')
     expect(alert).toHaveTextContent(/TMDB/)
     expect(alert).not.toHaveTextContent(/後端/)
-    // 修的地方在第 7 步，所以出口也在這裡。
+    // 修的地方在 TMDB 那一頁（頁 5），所以出口也在這裡。
     expect(screen.getByRole('button', { name: '回去填 TMDB key' })).toBeInTheDocument()
   })
 

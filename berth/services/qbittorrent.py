@@ -8,9 +8,10 @@
   與建議值，一個都不寫：改它的全域 `save_path` 會讓使用者不經 Berth 加的 torrent 全部跑進
   Berth 的目錄。Berth 的下載靠自己的分類（建立時帶 save path）與逐個 torrent 的 `autoTMM=true`，
   與 Sonarr / Radarr 對下載器的做法相同。
-- **WebUI 登入只給套件內的那一台**：泊位上填的那一組跟著「套用」送進來（M4 票 07），設定頁改它走
+- **WebUI 登入只給套件內的那一台**：頁上填的那一組跟著「套用」送進來（M4 票 07），設定頁改它走
   `set_interface_login`。既有 qBittorrent 是他自己的服務，Berth 不改它的密碼（brief §16.4），帶了
-  登入就拒絕。
+  登入就拒絕。**Berth 只記帳號與雜湊**，自己連它靠免密白名單（M4 票 15）。
+- **還沒選來源就什麼都不寫**（M4 票 15）：寫入的命令一律拒絕。
 - **既有服務的 temp path 未啟用只警告**，不阻擋。
 - **Web API 低於 2.8.4 拒絕接入**，因為 Berth 要用的端點在那之前不存在（brief §16.4）。
 """
@@ -33,7 +34,6 @@ from berth.adapters.qbittorrent import (
     TorrentStatus,
 )
 from berth.domain import (
-    DetectionReason,
     IssueType,
     QbittorrentStep,
     ServiceKind,
@@ -41,11 +41,18 @@ from berth.domain import (
     StepStatus,
 )
 from berth.models import Job, PathSettings, QbittorrentSettings, Route, SetupSettings, SetupStep
-from berth.models.types import utcnow
 from berth.services.clients import ServiceClientFactory
 from berth.services.commands import Effect, command
+from berth.services.jellyfin import resolve_interface_login
 from berth.services.settings import read_settings, write_settings
-from berth.services.steps import InterfaceLogin, StepView, message, step_views
+from berth.services.steps import (
+    InterfaceLogin,
+    StepView,
+    hash_password,
+    message,
+    password_matches,
+    step_views,
+)
 
 #: 建議偏好的五個鍵（plan §8.1）。順序即畫面上的順序，也是送出去的順序。
 RECOMMENDED_STEPS: tuple[QbittorrentStep, ...] = (
@@ -59,6 +66,10 @@ RECOMMENDED_STEPS: tuple[QbittorrentStep, ...] = (
 #: WebUI 帳號的偏好鍵。`web_ui_password` 只寫不讀，讀回來的偏好裡根本沒有它（brief §20.7）。
 WEB_UI_USERNAME_KEY = "web_ui_username"
 WEB_UI_PASSWORD_KEY = "web_ui_password"
+
+#: 全新 qBittorrent 的 WebUI 帳號（brief §20.14）。它讀得回來、密碼讀不回來，所以「套件內那一台
+#: 自己就設過登入了」只認得出帳號不是它的那一種；還是 `admin` 的一律當沒設過（寧可多問一次）。
+DEFAULT_WEB_UI_USERNAME = "admin"
 
 
 def managed(statuses: Iterable[TorrentStatus], categories: Container[str]) -> list[TorrentStatus]:
@@ -134,7 +145,8 @@ class PreferenceDiff:
 class QbittorrentSetupStatus:
     """`GET /api/setup/qbittorrent/diff` 與 `POST .../apply` 的整份形狀。"""
 
-    origin: ServiceOrigin
+    #: 使用者在頁 2 選的來源；還沒選是 `None`。
+    origin: ServiceOrigin | None
     base_url: str
     #: `app/version` 與 `app/webapiVersion`，探到什麼就顯示什麼。
     version: str
@@ -150,7 +162,8 @@ class QbittorrentSetupStatus:
     temp_path_warning: bool
     #: 泊位上有 WebUI 登入那一格：只有套件內的那一台（M4 票 07）。
     web_ui_login: bool
-    #: Berth 替套件內那一台設下的 WebUI 帳號；還沒設過、或是既有的那一台是空字串。
+    #: 套件內那一台的 WebUI 帳號：Berth 設下的，或那一台自己就設過的（不是 `admin`）。還沒設過、
+    #: 或是既有的那一台是空字串。
     web_ui_username: str
     #: 五個建議鍵會被寫。既有的那一台是 `False`：畫面只列現值與建議值，按鈕只是確認。
     writes_preferences: bool
@@ -166,6 +179,9 @@ async def read_qbittorrent_diff(
     settings = await read_settings(session, QbittorrentSettings)
     paths = await read_settings(session, PathSettings)
     origin, base_url = qbittorrent_target(setup, settings)
+    if origin is None:
+        # 選之前不連（M4 票 15）：不知道那一台是誰的，連「讀」也不去敲。
+        return _unreachable(setup, settings, origin, base_url, "choose where it comes from first")
 
     client = factory.qbittorrent(base_url)
     try:
@@ -204,8 +220,12 @@ async def apply_qbittorrent(
     settings = await read_settings(session, QbittorrentSettings)
     paths = await read_settings(session, PathSettings)
     origin, base_url = qbittorrent_target(setup, settings)
+    if origin is None:
+        raise ValueError("choose where qBittorrent comes from first")
     if login is not None:
         _refuse_existing(origin)
+        # 沿用 Jellyfin 帳密要先過 Jellyfin 那一關：在寫任何東西之前（M4 票 15）。
+        login = await resolve_interface_login(session, factory, login)
 
     client = factory.qbittorrent(base_url)
     try:
@@ -232,7 +252,7 @@ async def apply_qbittorrent(
         if changes:
             await client.set_preferences(changes)
 
-        steps.append(await _apply_password(client, setup, settings, origin, login))
+        steps.append(await _apply_password(client, setup, origin, login, preferences))
         preferences = dict(await client.preferences())
     except ServiceError as exc:
         return _unreachable(setup, settings, origin, base_url, message(exc))
@@ -270,11 +290,12 @@ async def set_interface_login(
     paths = await read_settings(session, PathSettings)
     origin, base_url = qbittorrent_target(setup, settings)
     _refuse_existing(origin)
+    login = await resolve_interface_login(session, factory, login)
 
     client = factory.qbittorrent(base_url)
     try:
         version, preferences = await _connect(client, settings)
-        step = await _apply_password(client, setup, settings, origin, login)
+        step = await _apply_password(client, setup, origin, login, preferences)
     except ServiceError as exc:
         return _unreachable(setup, settings, origin, base_url, message(exc))
     finally:
@@ -298,7 +319,7 @@ async def set_interface_login(
     )
 
 
-def _refuse_existing(origin: ServiceOrigin) -> None:
+def _refuse_existing(origin: ServiceOrigin | None) -> None:
     if origin is not ServiceOrigin.BUNDLED:
         # 泊位上根本沒有那一格；走到這裡的只有直接打 API 的人（brief §16.4 的紅線）。
         raise ValueError("this qBittorrent is an existing service; Berth does not set its login")
@@ -307,28 +328,35 @@ def _refuse_existing(origin: ServiceOrigin) -> None:
 async def _apply_password(
     client: QbittorrentClient,
     setup: SetupSettings,
-    settings: QbittorrentSettings,
-    origin: ServiceOrigin,
+    origin: ServiceOrigin | None,
     login: InterfaceLogin | None,
+    preferences: Mapping[str, Any],
 ) -> SetupStep:
     """套件內的那一台另設 WebUI 登入（M4 票 07）。
 
-    設完的那一組記在 `QbittorrentSettings.username` / `password`：Berth 之後拿它登入，也靠它比出
-    「已經是這一組了」——密碼是這一步唯一讀不回來比對的鍵。不帶登入時，設過的照舊（`skipped`、
-    細節是帳號），沒設過的是 `pending`：兩格都必填，精靈停在第 4 步
-    （`setup._qbittorrent_secured`）。
+    設完的那一組只記帳號與加鹽雜湊（`setup.qbittorrent.web_ui_*`，M4 票 15）：Berth 連它靠免密
+    白名單，用不到密碼；雜湊只拿來比出「已經是這一組了」——密碼是這一步唯一讀不回來比對的鍵。
 
-    設完之後**不能再被重探判成「既有」**：判定的規則是「免密進得去 → 套件內」，而現在它要
-    密碼了——那個密碼還是 Berth 自己設的。所以連同判定一起釘住（`configured`）。
+    不帶登入時：設過的照舊（`skipped`、細節是帳號）；**那一台自己就設過的也不強迫再設**（重裝保留
+    config，M4 票 15）——帳號不是 `admin` 就是設過了（brief §20.14），記下帳號、雜湊留空；其餘是
+    `pending`：必填，精靈停在頁 2（`setup._qbittorrent_secured`）。
     """
     key = QbittorrentStep.PASSWORD.value
     if origin is not ServiceOrigin.BUNDLED:
         return SetupStep(key=key, status=StepStatus.SKIPPED)
-    current = InterfaceLogin(username=settings.username, password=settings.password)
-    if login is None or login == current:
-        if not current.username:
+    record = setup.qbittorrent
+    if login is None:
+        instance = _instance_username(preferences)
+        if not record.web_ui_username and instance:
+            record.web_ui_username = instance
+            record.web_ui_password_hash = ""
+        if not record.web_ui_username:
             return SetupStep(key=key, status=StepStatus.PENDING)
-        return SetupStep(key=key, status=StepStatus.SKIPPED, detail=current.username)
+        return SetupStep(key=key, status=StepStatus.SKIPPED, detail=record.web_ui_username)
+    if login.username == record.web_ui_username and password_matches(
+        login.password, record.web_ui_password_hash
+    ):
+        return SetupStep(key=key, status=StepStatus.SKIPPED, detail=login.username)
 
     try:
         await client.set_preferences(
@@ -337,21 +365,15 @@ async def _apply_password(
     except ServiceError as exc:
         # 這一條失敗不該把前面五個鍵的結果一起丟掉——它們已經寫進去了。
         return SetupStep(key=key, status=StepStatus.FAILED, error=message(exc))
-    settings.username = login.username
-    settings.password = login.password
-    probe = setup.services.get(ServiceKind.QBITTORRENT)
-    if probe is not None:
-        setup.services = {
-            **setup.services,
-            ServiceKind.QBITTORRENT: probe.model_copy(
-                update={
-                    "reason": DetectionReason.CONNECTED,
-                    "configured": True,
-                    "checked_at": utcnow(),
-                }
-            ),
-        }
+    record.web_ui_username = login.username
+    record.web_ui_password_hash = hash_password(login.password)
     return SetupStep(key=key, status=StepStatus.OK, detail=login.username)
+
+
+def _instance_username(preferences: Mapping[str, Any]) -> str:
+    """那一台自己的 WebUI 帳號，還是預設的 `admin` 時是空字串（`DEFAULT_WEB_UI_USERNAME`）。"""
+    name = str(preferences.get(WEB_UI_USERNAME_KEY) or "")
+    return "" if name == DEFAULT_WEB_UI_USERNAME else name
 
 
 async def _connect(
@@ -368,25 +390,23 @@ async def _connect(
 
 def qbittorrent_target(
     setup: SetupSettings, settings: QbittorrentSettings
-) -> tuple[ServiceOrigin, str]:
-    """要連哪一台：存過位址就用它，否則是第 2 步探到的那一台。
-
-    套件內那一台的位址不在這裡組：它的 port 是部署的設定值（`QBITTORRENT_WEBUI_PORT`），
-    偵測照設定敲到之後記在判定上（`clients.build_setup_probes`）。還沒偵測過就沒有位址，
-    連線會以連不上收場。
+) -> tuple[ServiceOrigin | None, str]:
+    """要連哪一台、它是誰的：使用者在頁 2 選的（M4 票 15），位址是選的時候存下的那一條
+    （套件內是 compose 主機名，`clients.bundled_targets`）。還沒選是 `None`，寫入的命令一律拒絕。
     """
-    probe = setup.services.get(ServiceKind.QBITTORRENT)
-    origin = probe.origin if probe is not None else ServiceOrigin.BUNDLED
-    return (origin, settings.base_url or (probe.base_url if probe else ""))
+    choice = setup.choices.get(ServiceKind.QBITTORRENT)
+    if choice is None:
+        return (None, settings.base_url)
+    return (choice.origin, settings.base_url or choice.base_url)
 
 
-def writes_preferences(origin: ServiceOrigin) -> bool:
+def writes_preferences(origin: ServiceOrigin | None) -> bool:
     """五個建議鍵寫不寫得：只有套件內的那一台（M4 票 05）。"""
     return origin is ServiceOrigin.BUNDLED
 
 
 def drifted_keys(
-    preferences: Mapping[str, Any], paths: PathSettings, origin: ServiceOrigin
+    preferences: Mapping[str, Any], paths: PathSettings, origin: ServiceOrigin | None
 ) -> tuple[str, ...]:
     """現在與建議值不同的那幾個鍵（brief §16.3 的「關鍵設定漂移」）。
 
@@ -453,19 +473,21 @@ def _untouched_step(diff: PreferenceDiff) -> SetupStep:
     return SetupStep(key=diff.key, status=StepStatus.SKIPPED, detail=diff.current)
 
 
-def _web_ui_username(settings: QbittorrentSettings, origin: ServiceOrigin) -> str:
-    """套件內那一台的 `username` 就是 Berth 設下的 WebUI 帳號。
-
-    既有的那一台的 `username` 是使用者給 Berth 連線用的帳密，不是 Berth 設的登入。
-    """
-    return settings.username if origin is ServiceOrigin.BUNDLED else ""
+def _web_ui_username(
+    setup: SetupSettings, origin: ServiceOrigin | None, preferences: Mapping[str, Any]
+) -> str:
+    """套件內那一台的 WebUI 帳號：Berth 記下的，或那一台自己就設過的。既有的那一台是空字串——
+    Berth 連它用的帳密是使用者給的，不是 Berth 設的登入。"""
+    if origin is not ServiceOrigin.BUNDLED:
+        return ""
+    return setup.qbittorrent.web_ui_username or _instance_username(preferences)
 
 
 def _status(
     setup: SetupSettings,
     settings: QbittorrentSettings,
     *,
-    origin: ServiceOrigin,
+    origin: ServiceOrigin | None,
     base_url: str,
     version: QbittorrentVersion,
     preferences: dict[str, Any],
@@ -487,7 +509,7 @@ def _status(
             origin is ServiceOrigin.EXISTING and preferences.get("temp_path_enabled") is False
         ),
         web_ui_login=origin is ServiceOrigin.BUNDLED,
-        web_ui_username=_web_ui_username(settings, origin),
+        web_ui_username=_web_ui_username(setup, origin, preferences),
         writes_preferences=writes_preferences(origin),
         error="",
     )
@@ -496,7 +518,7 @@ def _status(
 def _unreachable(
     setup: SetupSettings,
     settings: QbittorrentSettings,
-    origin: ServiceOrigin,
+    origin: ServiceOrigin | None,
     base_url: str,
     error: str,
 ) -> QbittorrentSetupStatus:
@@ -512,7 +534,7 @@ def _unreachable(
         steps=step_views(setup.qbittorrent.steps),
         temp_path_warning=False,
         web_ui_login=origin is ServiceOrigin.BUNDLED,
-        web_ui_username=_web_ui_username(settings, origin),
+        web_ui_username=_web_ui_username(setup, origin, {}),
         writes_preferences=writes_preferences(origin),
         error=error,
     )

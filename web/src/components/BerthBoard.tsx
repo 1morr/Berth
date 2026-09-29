@@ -103,7 +103,10 @@ function Cell({ slot }: { slot: BoardSlot }) {
         <span className={`label ${secondary}`}>{slot.status}</span>
       </div>
       <p className="value mt-2 truncate text-base font-semibold">{slot.name}</p>
-      <p className={`value mt-1 h-4 truncate text-xs ${secondary}`}>{slot.detail || '—'}</p>
+      {/* 不截斷（DESIGN.md）：390 寬時版本那一行會比格子寬，換行而不是吃掉後半（票 15 的 audit）。 */}
+      <p className={`value mt-1 min-h-4 text-xs wrap-anywhere ${secondary}`}>
+        {slot.detail || '—'}
+      </p>
     </>
   )
 }

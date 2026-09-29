@@ -17,7 +17,7 @@ import os
 import re
 import sys
 import tempfile
-from collections.abc import AsyncIterator, Callable, Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import UTC, date, datetime, timedelta
 from html import escape
@@ -92,12 +92,13 @@ from berth.adapters.torrent import (
 from berth.adapters.torrent_fake import FakeTorrentFetcher
 from berth.adapters.torznab import TorznabClient
 from berth.adapters.torznab.fake import FakeTorznabClient
-from berth.api.deps import get_client_factory, get_setup_probes
+from berth.api.deps import get_bundled_services, get_client_factory
 from berth.config import Config, load_config
 from berth.db import create_engine, create_session_factory, upgrade_to_head
 from berth.domain import (
     Confidence,
-    DetectionReason,
+    ConnectionReason,
+    ConnectionState,
     EpisodeSnapshot,
     FileEntry,
     HealthStatus,
@@ -133,7 +134,8 @@ from berth.models import (
     PlanItem,
     QbittorrentSettings,
     Route,
-    ServiceProbe,
+    ServiceChoice,
+    ServiceTest,
     SetupLibrary,
     SetupOwner,
     SetupSettings,
@@ -141,7 +143,11 @@ from berth.models import (
     media_id,
 )
 from berth.parser import plan as decide
-from berth.services.clients import SetupProbes
+from berth.services.clients import (
+    BUNDLED_JELLYFIN_URL,
+    BUNDLED_PROWLARR_URL,
+    BundledServices,
+)
 from berth.services.health import check_health
 from berth.services.health_issues import watch_conditions
 from berth.services.media import read_media
@@ -245,7 +251,7 @@ def nas_jellyfin(**overrides: object) -> FakeJellyfinClient:
 
 @dataclass
 class Scenario:
-    """一個情境的三台假服務。探測與「代為設定」用的是同一份實例，狀態才留得住。"""
+    """一個情境的三台假服務。測試與「代為設定」用的是同一份實例，狀態才留得住。"""
 
     jellyfin: FakeJellyfinClient
     qbittorrent: FakeQbittorrentClient
@@ -314,11 +320,14 @@ class Scenario:
     #: 替身索引站的一個查詢打到哪幾站（請求預算的鍵）。空的話不記帳。
     indexer_sites: frozenset[str] = frozenset()
 
-    def probes(self) -> SetupProbes:
-        return SetupProbes(
-            jellyfin=self.jellyfin,
-            qbittorrent=self.qbittorrent,
-            prowlarr=self.prowlarr,
+    def bundled(self) -> BundledServices:
+        """選了「套件內」時連的三個 compose 位址（與正式的預設 port 相同）與掛載讀到的 key。"""
+        return BundledServices(
+            targets={
+                ServiceKind.JELLYFIN: BUNDLED_JELLYFIN_URL,
+                ServiceKind.QBITTORRENT: "http://qbittorrent:8080",
+                ServiceKind.PROWLARR: BUNDLED_PROWLARR_URL,
+            },
             prowlarr_api_key=self.prowlarr_api_key,
         )
 
@@ -436,14 +445,14 @@ def starting() -> Scenario:
 
 
 def key_missing() -> Scenario:
-    """Prowlarr 的設定目錄沒有唯讀掛進 Berth：讀不到 API key，第 2 步要使用者貼上。"""
+    """Prowlarr 的設定目錄沒有唯讀掛進 Berth：讀不到 API key，選了套件內要使用者貼上。"""
     scenario = bundled()
     scenario.prowlarr_api_key = ""
     return scenario
 
 
 def absent() -> Scenario:
-    """Jellyfin 從 COMPOSE_PROFILES 拿掉了：探不到，要使用者填自己那一台的位址。"""
+    """Jellyfin 從 COMPOSE_PROFILES 拿掉了：選套件內是「主機名解不到」，要改選既有、填位址。"""
     scenario = mixed()
     scenario.jellyfin = FakeJellyfinClient(error=ServiceNotDeployedError("no such host"))
     return scenario
@@ -1546,8 +1555,8 @@ class FakeClientFactory:
         self.budget = RequestBudget() if limit is None else RequestBudget(limit=limit)
 
     def jellyfin(self, base_url: str, token: str = "") -> JellyfinClient:
-        if self._scenario.jellyfin.error is not None:
-            # 探不到的那一台，使用者填了位址之後就該連得上。
+        if self._scenario.jellyfin.error is not None and base_url != BUNDLED_JELLYFIN_URL:
+            # 套件內那一台壞了（不在 compose 裡）；使用者填了自己那一台的位址就該連得上。
             self._scenario.jellyfin = nas_jellyfin(base_url=base_url)
         client = self._scenario.jellyfin
         client.base_url = base_url
@@ -1560,8 +1569,8 @@ class FakeClientFactory:
             # **每次造一個新的**：`sync/maindata` 的 rid 掛在那條連線的 session 上，而
             # `Downloader` 自己會把它握著（票 10）。共用一份反而會讓兩個呼叫端搶同一個 rid。
             return HttpQbittorrentClient(self._scenario.qbittorrent_url)
-        if self._scenario.qbittorrent.error is not None:
-            # 要帳密的那一台，使用者填了之後就該連得上。
+        if self._scenario.qbittorrent.error is not None and "qbittorrent:" not in base_url:
+            # 要帳密的那一台，使用者填了自己那一台的位址與帳密之後就該連得上。
             self._scenario.qbittorrent = FakeQbittorrentClient(base_url=base_url)
         client = self._scenario.qbittorrent
         client.base_url = base_url
@@ -1641,12 +1650,8 @@ def main(argv: list[str] | None = None) -> int:
     # 背景迴圈不經過 FastAPI 的相依，所以它要用的 client 從 `create_app` 換掉（票 10）。
     app = create_app(config, clients=factory)
     asyncio.run(_seed(config, scenario, factory))
-    probes = scenario.probes()
-
-    async def override_probes() -> AsyncIterator[SetupProbes]:
-        yield probes
-
-    app.dependency_overrides[get_setup_probes] = override_probes
+    bundled_services = scenario.bundled()
+    app.dependency_overrides[get_bundled_services] = lambda: bundled_services
     app.dependency_overrides[get_client_factory] = lambda: factory
     if scenario.demo_releases:
         _mount_demo_torrent(app, scenario.demo_releases)
@@ -1844,17 +1849,16 @@ async def _moor(
     setup = await read_settings(session, SetupSettings)
     # 擁有者（M4 票 06）：替身 Jellyfin 的管理員 skipper。帳密不存，只記他是誰。
     setup.owner = SetupOwner(jellyfin_user_id="moored-owner", name="skipper")
-    setup.services = {
-        kind: ServiceProbe(
+    setup.choices = {
+        kind: ServiceChoice(
             origin=ServiceOrigin.BUNDLED,
-            reason=reason,
             base_url=base_url,
-            checked_at=datetime.now(UTC),
+            test=ServiceTest(state=ConnectionState.OK, reason=reason, checked_at=datetime.now(UTC)),
         )
         for kind, reason, base_url in (
-            (ServiceKind.JELLYFIN, DetectionReason.SETUP_PENDING, "http://jellyfin:8096"),
-            (ServiceKind.QBITTORRENT, DetectionReason.ANONYMOUS_OK, "http://qbittorrent:8080"),
-            (ServiceKind.PROWLARR, DetectionReason.NO_INDEXERS, "http://prowlarr:9696"),
+            (ServiceKind.JELLYFIN, ConnectionReason.SETUP_COMPLETED, BUNDLED_JELLYFIN_URL),
+            (ServiceKind.QBITTORRENT, ConnectionReason.CONNECTED, "http://qbittorrent:8080"),
+            (ServiceKind.PROWLARR, ConnectionReason.CONNECTED, BUNDLED_PROWLARR_URL),
         )
     }
     setup.jellyfin.libraries = [

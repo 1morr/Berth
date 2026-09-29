@@ -7,6 +7,8 @@ import type {
   IndexerOption,
   IndexerSetup,
   InterfaceLogin,
+  InterfaceLoginRefusal,
+  SetupStatus,
   SiteSearch,
   TrialSearchResult,
 } from '../api/setup'
@@ -28,68 +30,119 @@ import { useFocusAfterRemoval } from '../components/useFocusAfterRemoval'
 import { useInterfaceLogin } from './interfaceLogin'
 import { BerthLogin } from './InterfaceLoginFields'
 import { languageName } from './languageName'
+import { ServiceChoice, type ChoiceControls } from './ServiceChoice'
+import { connected } from './signals'
 import { StepFrame } from './StepFrame'
 
 /**
- * 泊位 4：索引站（plan §9.3 第 6 步）。票 06e 從「來源」拆出來，TMDB 是下一個泊位。
+ * 頁 4：Prowlarr 與索引站（plan §9.3，M4 票 15 併成一頁）。
  *
- * 套件內 Prowlarr：勾預設公開站，一站一條纜繩。**逐站的成敗是 Prowlarr 自己連過那個站的結果**：
- * 幾個連不上是常態，失敗的變紅，其餘照樣繫上（brief §20.7）。加完之後**試搜**，不要的就地移除——
- * Prowlarr 只搜得到已經加進來的站，所以流程是「加入 → 試搜 → 移除」，不是加入前試搜。
- * 既有：Prowlarr 位址 + key，或任意 Torznab 端點 + key；接上之後同樣可以試搜，但不移除別人的站。
+ * 頁首是二選一（`ServiceChoice`）。套件內 Prowlarr：API key 讀自唯讀掛載，連上之後勾預設公開站，一站
+ * 一條纜繩。**逐站的成敗是 Prowlarr 自己連過那個站的結果**：幾個連不上是常態，失敗的變紅，其餘照樣
+ * 繫上（brief §20.7）。加完之後**試搜**，不要的就地移除。既有：Prowlarr 位址 + key，或任意 Torznab
+ * 端點 + key（`ExistingIndexer`，選「既有」時的表單）；Berth 用你已經有的站，試搜照樣可用。
+ * 整頁可以「之後再說」，連選都還沒選也可以。
  *
  * **資料與動作全部從 props 進來**：精靈跑完之後設定頁接手（票 06i），重用 `IndexerActions`。
  */
 export function IndexerStep({
+  status,
   indexers,
+  indexersFailed,
   owner,
   applying,
   connecting,
+  loginRefusal,
   onApply,
   onConnect,
   onSkip,
+  choice,
   trial,
   note,
   nav,
-  redetect,
 }: {
-  indexers: IndexerSetup
-  /** 擁有者的名字：Prowlarr 介面帳號還沒設過時預填它。 */
+  status: SetupStatus
+  /** 選之前也讀得到：後端還沒選時不去連 Prowlarr（`indexer.read_indexer_status`）。 */
+  indexers: IndexerSetup | undefined
+  indexersFailed: boolean
+  /** 擁有者的名字：沿用 Jellyfin 帳密時的帳號，取消勾選時預填它。 */
   owner: string
   applying: boolean
   connecting: boolean
+  /** 沿用 Jellyfin 帳密而 Jellyfin 那一關沒過：什麼都沒寫。 */
+  loginRefusal: InterfaceLoginRefusal | null
   onApply: (input: ApplyIndexersInput) => Promise<unknown>
   onConnect: (input: IndexerConnectInput) => void
   onSkip: () => void
+  choice: ChoiceControls
   /** 試搜與移除（`TrialSearch` 的 props，少了站的清單——那由這一頁從 `indexers` 導出）。 */
   trial: Omit<TrialSearchProps, 'sites'>
   /** 回頭看的說明（`RevisitNote`），這一頁做完了才有。 */
   note?: ReactNode
   /** 上一個 / 下一個泊位（`BerthNav`）。 */
   nav?: ReactNode
-  /** 套件內的 Prowlarr 連不上時的「重新偵測這個服務」（票 06d）。 */
-  redetect?: ReactNode
 }) {
   const { t } = useTranslation()
-  const bundled = indexers.origin === 'bundled' && indexers.reachable
+  const service = status.services.find((row) => row.kind === 'prowlarr')
+  const ready = connected(service)
+  const bundled = Boolean(indexers && indexers.origin === 'bundled' && indexers.reachable)
+  const hasResults = Boolean(indexers && indexers.steps.length > 0)
 
   return (
-    <StepFrame cutaway={<IndexerCutaway indexers={indexers} bundled={bundled} />}>
+    <StepFrame
+      cutaway={
+        indexers ? <IndexerCutaway indexers={indexers} bundled={bundled} /> : <span aria-hidden />
+      }
+    >
       <h2 className="text-lg font-semibold text-ink">{t('indexer.title')}</h2>
-      <p className="mt-2 max-w-prose text-sm text-ink-dim">{t('indexer.lede')}</p>
+      <p className="mt-2 max-w-prose text-sm text-ink-dim">
+        {service ? t('indexer.lede') : t('indexer.chooseLede')}
+      </p>
       {note}
 
-      <IndexerActions
-        indexers={indexers}
-        owner={owner}
-        applying={applying}
-        connecting={connecting}
-        onApply={onApply}
-        onConnect={onConnect}
-        onSkip={onSkip}
-        trial={trial}
-        redetect={redetect}
+      <ServiceChoice
+        kind="prowlarr"
+        status={status}
+        {...choice}
+        switchWarning={hasResults ? t('choice.switchWarning.prowlarr') : undefined}
+        existingForm={
+          indexers && (
+            <ExistingIndexer indexers={indexers} connecting={connecting} onConnect={onConnect} />
+          )
+        }
       />
+
+      {ready && indexers && bundled && (
+        <>
+          <DefaultIndexers
+            indexers={indexers}
+            owner={owner}
+            applying={applying}
+            loginRefusal={loginRefusal}
+            onApply={onApply}
+            onSkip={onSkip}
+          />
+          {indexers.options.some((row) => row.present) && (
+            <TrialSearch {...trial} sites={presentSites(indexers)} />
+          )}
+        </>
+      )}
+      {/* 既有的站是使用者自己的，Berth 不移除（brief §16.4），所以不給 `onRemove`。 */}
+      {ready && indexers && !bundled && (
+        <TrialSearch {...trial} sites={[]} onRemove={undefined} />
+      )}
+      {indexersFailed && (
+        <p className="mt-6 text-sm text-ink-dim">{t('indexer.unreachable')}</p>
+      )}
+
+      {/* 選之前、或既有那一頁，「之後再說」在這裡；套件內的在「加入」旁邊。 */}
+      {!(ready && bundled) && (
+        <div className="mt-6">
+          <GhostButton type="button" busy={applying || connecting} onClick={onSkip}>
+            {t('indexer.skip')}
+          </GhostButton>
+        </div>
+      )}
 
       {nav}
     </StepFrame>
@@ -116,7 +169,6 @@ export function IndexerActions({
   onConnect,
   onSkip,
   trial,
-  redetect,
 }: {
   indexers: IndexerSetup
   /** 精靈給：套件內 Prowlarr 的介面登入跟著「加入」一起送，未設過時帳號預填它。 */
@@ -128,8 +180,6 @@ export function IndexerActions({
   /** 「之後再說」。只有精靈給。 */
   onSkip?: () => void
   trial: Omit<TrialSearchProps, 'sites'>
-  /** 套件內的 Prowlarr 連不上時的「重新偵測這個服務」。 */
-  redetect?: ReactNode
 }) {
   const bundled = indexers.origin === 'bundled' && indexers.reachable
   const connected = indexers.steps.some(
@@ -143,6 +193,7 @@ export function IndexerActions({
           indexers={indexers}
           owner={owner}
           applying={applying}
+          loginRefusal={null}
           onApply={onApply}
           onSkip={onSkip}
         />
@@ -156,7 +207,7 @@ export function IndexerActions({
   return (
     <>
       {/* 套件內的那台連不上：說清楚，然後照樣給表單——他總得有辦法往下走。 */}
-      {indexers.origin === 'bundled' && <Unreachable indexers={indexers} redetect={redetect} />}
+      {indexers.origin === 'bundled' && <Unreachable indexers={indexers} />}
       <ExistingIndexer
         indexers={indexers}
         connecting={connecting}
@@ -223,21 +274,20 @@ function DefaultIndexers({
   indexers,
   owner,
   applying,
+  loginRefusal,
   onApply,
   onSkip,
 }: {
   indexers: IndexerSetup
   owner?: string
   applying: boolean
+  loginRefusal: InterfaceLoginRefusal | null
   onApply: (input: ApplyIndexersInput) => Promise<unknown>
   onSkip?: () => void
 }) {
   const { t, i18n } = useTranslation()
   const withLogin = owner !== undefined && indexers.web_ui_login
-  const loginForm = useInterfaceLogin({
-    current: indexers.web_ui_username,
-    suggested: owner ?? '',
-  })
+  const loginForm = useInterfaceLogin({ current: indexers.web_ui_username, owner: owner ?? '' })
   const [touched, setTouched] = useState<ReadonlyMap<string, boolean>>(new Map())
   const fresh = !indexers.options.some((row) => row.present)
   const ticked = (row: IndexerOption) => touched.get(row.definition_name) ?? (fresh || row.present)
@@ -254,7 +304,7 @@ function DefaultIndexers({
     const taken = withLogin ? loginForm.take() : null
     if (taken === undefined) return
     onApply({ indexers: selected, login: taken }).then(
-      () => taken && loginForm.reset(taken.username),
+      () => taken && loginForm.reset(taken.username ?? ''),
       () => undefined,
     )
   }
@@ -302,6 +352,13 @@ function DefaultIndexers({
       {withLogin && (
         <div className="mt-6">
           <BerthLogin service="prowlarr" current={indexers.web_ui_username} form={loginForm} />
+        </div>
+      )}
+      {loginRefusal && (
+        <div className="mt-4">
+          <Notice signal="blocked" label={t('common.failed')}>
+            {t(`interfaceLogin.refused.${loginRefusal.reason}`, { owner: owner ?? '' })}
+          </Notice>
         </div>
       )}
 
@@ -594,6 +651,7 @@ function ExistingIndexer({
   indexers: IndexerSetup
   connecting: boolean
   onConnect: (input: IndexerConnectInput) => void
+  /** 設定頁不給；精靈的「之後再說」在頁尾。 */
   onSkip?: () => void
 }) {
   const { t } = useTranslation()
@@ -679,7 +737,7 @@ function ExistingIndexer({
 }
 
 /** 連不上套件內的 Prowlarr 時，畫面仍然要說得出下一步。 */
-function Unreachable({ indexers, redetect }: { indexers: IndexerSetup; redetect?: ReactNode }) {
+function Unreachable({ indexers }: { indexers: IndexerSetup }) {
   const { t } = useTranslation()
 
   return (
@@ -696,7 +754,6 @@ function Unreachable({ indexers, redetect }: { indexers: IndexerSetup; redetect?
         <CopyLine command="docker compose ps prowlarr" />
         <CopyLine command="docker compose logs --tail 50 prowlarr" />
       </div>
-      {redetect && <div>{redetect}</div>}
     </div>
   )
 }

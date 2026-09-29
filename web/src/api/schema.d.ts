@@ -1577,23 +1577,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/setup/detect": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Post Detect */
-        post: operations["post_detect_api_setup_detect_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/setup/services/{kind}": {
         parameters: {
             query?: never;
@@ -1605,9 +1588,32 @@ export interface paths {
         put?: never;
         /**
          * Post Service
-         * @description 既有服務的「測試連線」：存下連線資訊再連一次（plan §9.3 第 2 步）。
+         * @description 服務頁的二選一：存下來源與連線資訊，然後測一次（plan §9.3〈服務頁的共同形狀〉）。
+         *
+         *     擁有者成立之後改 Jellyfin 的來源是 409（擁有者是那一台上的帳號）；既有卻沒給位址是 422。
          */
         post: operations["post_service_api_setup_services__kind__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/setup/services/{kind}/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Service Test
+         * @description 用存下來的選擇再測一次：出問題那一頁的「重新測試」，與套件內那一台還在啟動時的輪詢。
+         *     還沒選過是 422。
+         */
+        post: operations["post_service_test_api_setup_services__kind__test_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1645,7 +1651,9 @@ export interface paths {
         put?: never;
         /**
          * Post Jellyfin Bootstrap
-         * @description 套件內路徑：跑完 plan §9.4 的七步。重按只補做還沒做的那幾步。
+         * @description 套件內路徑：建使用者列的媒體庫（plan §9.4 第 4 步）。重按只補建還沒建的那幾個。
+         *
+         *     選了既有（或還沒選）是 422：Berth 絕不在使用者的 Jellyfin 上建媒體庫（brief §16.4）。
          */
         post: operations["post_jellyfin_bootstrap_api_setup_jellyfin_bootstrap_post"];
         delete?: never;
@@ -2314,6 +2322,45 @@ export interface components {
             year: number | null;
         };
         /**
+         * ChoiceIn
+         * @description 服務頁的二選一。選既有時帶那個服務要的連線資訊，每個服務只用得到其中幾個欄位。
+         */
+        ChoiceIn: {
+            origin: components["schemas"]["ServiceOrigin"];
+            /**
+             * Base Url
+             * @default
+             */
+            base_url?: string;
+            /**
+             * Api Key
+             * @default
+             */
+            api_key?: string;
+            /**
+             * Username
+             * @default
+             */
+            username?: string;
+            /**
+             * Password
+             * @default
+             */
+            password?: string;
+        };
+        /**
+         * ChoiceRefusal
+         * @description 服務頁的選擇不成立（`services/setup.choose_service`，M4 票 15）。
+         * @enum {string}
+         */
+        ChoiceRefusal: "jellyfin_owned";
+        /** ChoiceRefusalOut */
+        ChoiceRefusalOut: {
+            reason: components["schemas"]["ChoiceRefusal"];
+            /** Detail */
+            detail: string;
+        };
+        /**
          * CollectionType
          * @description Jellyfin 媒體庫的類型；沿用 Jellyfin 的字串（brief §4.3）。
          * @enum {string}
@@ -2334,28 +2381,17 @@ export interface components {
             ledger_ids: number[];
         };
         /**
-         * ConnectIn
-         * @description 既有服務的連線表單。每個服務只用得到其中幾個欄位。
+         * ConnectionReason
+         * @description 測試結果的理由。UI 逐服務顯示，所以是封閉集合而不是自由文字。
+         * @enum {string}
          */
-        ConnectIn: {
-            /** Base Url */
-            base_url: string;
-            /**
-             * Api Key
-             * @default
-             */
-            api_key?: string;
-            /**
-             * Username
-             * @default
-             */
-            username?: string;
-            /**
-             * Password
-             * @default
-             */
-            password?: string;
-        };
+        ConnectionReason: "connected" | "setup_pending" | "setup_completed" | "auth_required" | "ip_banned" | "api_key_missing" | "not_deployed" | "unreachable" | "starting" | "protocol_mismatch";
+        /**
+         * ConnectionState
+         * @description 選完之後那一次測試的結果（plan §9.3〈服務頁的共同形狀〉）。
+         * @enum {string}
+         */
+        ConnectionState: "ok" | "failed" | "waiting" | "timeout";
         /**
          * DeferralOut
          * @description 被預算擋下、還沒過得去的一種工作。
@@ -2397,21 +2433,6 @@ export interface components {
             /** Held */
             held: number;
         };
-        /** DetectIn */
-        DetectIn: {
-            /**
-             * Restart
-             * @default false
-             */
-            restart?: boolean;
-            kind?: components["schemas"]["ServiceKind"] | null;
-        };
-        /**
-         * DetectionReason
-         * @description 判定的理由。UI 逐服務顯示，所以是封閉集合而不是自由文字。
-         * @enum {string}
-         */
-        DetectionReason: "setup_pending" | "setup_completed" | "anonymous_ok" | "auth_required" | "ip_banned" | "no_indexers" | "has_indexers" | "api_key_missing" | "not_deployed" | "unreachable" | "starting" | "protocol_mismatch" | "connected";
         /**
          * DiscoverItemOut
          * @description 牆上的一格。
@@ -2810,7 +2831,7 @@ export interface components {
         };
         /** IndexerSetupOut */
         IndexerSetupOut: {
-            origin: components["schemas"]["ServiceOrigin"];
+            origin: components["schemas"]["ServiceOrigin"] | null;
             kind: components["schemas"]["IndexerKind"];
             /** Base Url */
             base_url: string;
@@ -2837,12 +2858,34 @@ export interface components {
          *
          *     與 `LoginIn` 不同，這裡**要**約束：它不是拿來驗誰的帳密，空的就是沒填，422 說得出哪一格。
          *     帳號先去掉前後空白再驗：只有空白的帳號寫進去就是一個沒人打得出來的登入。密碼照原樣。
+         *
+         *     `reuse_owner` 是「沿用 Jellyfin 帳密」（M4 票 15）：帳號由 Berth 填成擁有者，這一格可以留空。
          */
         InterfaceLoginIn: {
-            /** Username */
-            username: string;
+            /**
+             * Username
+             * @default
+             */
+            username?: string;
             /** Password */
             password: string;
+            /**
+             * Reuse Owner
+             * @default false
+             */
+            reuse_owner?: boolean;
+        };
+        /**
+         * InterfaceLoginRefusal
+         * @description 套件內 qBittorrent / Prowlarr 的介面登入沒寫（M4 票 15 的「沿用 Jellyfin 帳密」）。
+         * @enum {string}
+         */
+        InterfaceLoginRefusal: "owner_password" | "jellyfin_unreachable";
+        /** InterfaceLoginRefusalOut */
+        InterfaceLoginRefusalOut: {
+            reason: components["schemas"]["InterfaceLoginRefusal"];
+            /** Detail */
+            detail: string;
         };
         /**
          * InventoryCardOut
@@ -4094,10 +4137,10 @@ export interface components {
         };
         /**
          * QbittorrentOut
-         * @description 精靈第 4 步與設定頁的漂移還原共用（brief §16.3）。
+         * @description 精靈頁 2 與設定頁的漂移還原共用（brief §16.3）。
          */
         QbittorrentOut: {
-            origin: components["schemas"]["ServiceOrigin"];
+            origin: components["schemas"]["ServiceOrigin"] | null;
             /** Base Url */
             base_url: string;
             /** Version */
@@ -4239,6 +4282,14 @@ export interface components {
             reason: components["schemas"]["RematchRefusal"];
             /** Detail */
             detail: string;
+        };
+        /** RetestIn */
+        RetestIn: {
+            /**
+             * Restart
+             * @default false
+             */
+            restart?: boolean;
         };
         /**
          * ReviewQueueOut
@@ -4621,20 +4672,6 @@ export interface components {
             submitted: number;
             ask: components["schemas"]["FirstBatchAskOut"] | null;
         };
-        /** ServiceDetectionOut */
-        ServiceDetectionOut: {
-            kind: components["schemas"]["ServiceKind"];
-            origin: components["schemas"]["ServiceOrigin"];
-            reason: components["schemas"]["DetectionReason"];
-            /** Detail */
-            detail: string;
-            /** Base Url */
-            base_url: string;
-            /** Configured */
-            configured: boolean;
-            /** Resolved */
-            resolved: boolean;
-        };
         /**
          * ServiceHealthOut
          * @description 健康頁與設定頁上一個服務那一列。
@@ -4674,10 +4711,29 @@ export interface components {
         ServiceKind: "jellyfin" | "qbittorrent" | "prowlarr";
         /**
          * ServiceOrigin
-         * @description 精靈第 2 步對單一服務的判定（plan §9.3）。逐服務判斷，沒有全局模式。
+         * @description 使用者在精靈替一個服務選的來源（plan §9.3、brief §16.3）。逐服務選，沒有全局模式。
+         *
+         *     **是使用者的選擇，不是 Berth 猜的**（2026-09-29 起，M4 票 15）。選完要測試；測試的狀態
+         *     （還在啟動、逾時）是 `ConnectionState`，不是來源。
          * @enum {string}
          */
-        ServiceOrigin: "bundled" | "existing" | "pending" | "timeout";
+        ServiceOrigin: "bundled" | "existing";
+        /**
+         * ServiceOut
+         * @description 一個服務的來源選擇與最後一次測試（plan §9.3〈服務頁的共同形狀〉）。
+         */
+        ServiceOut: {
+            kind: components["schemas"]["ServiceKind"];
+            origin: components["schemas"]["ServiceOrigin"];
+            /** Base Url */
+            base_url: string;
+            state: components["schemas"]["ConnectionState"] | null;
+            reason: components["schemas"]["ConnectionReason"] | null;
+            /** Detail */
+            detail: string;
+            /** Waited Seconds */
+            waited_seconds: number;
+        };
         /** SetupStatusOut */
         SetupStatusOut: {
             /** Completed */
@@ -4689,13 +4745,11 @@ export interface components {
             /** Owner Signs In */
             owner_signs_in: boolean;
             /** Services */
-            services: components["schemas"]["ServiceDetectionOut"][];
-            /** Waited Seconds */
-            waited_seconds: number;
+            services: components["schemas"]["ServiceOut"][];
             /** Window Seconds */
             window_seconds: number;
-            /** Probe Targets */
-            probe_targets: {
+            /** Bundled Targets */
+            bundled_targets: {
                 [key: string]: string;
             };
         };
@@ -8505,16 +8559,18 @@ export interface operations {
             };
         };
     };
-    post_detect_api_setup_detect_post: {
+    post_service_api_setup_services__kind__post: {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                kind: components["schemas"]["ServiceKind"];
+            };
             cookie?: never;
         };
-        requestBody?: {
+        requestBody: {
             content: {
-                "application/json": components["schemas"]["DetectIn"] | null;
+                "application/json": components["schemas"]["ChoiceIn"];
             };
         };
         responses: {
@@ -8525,6 +8581,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SetupStatusOut"];
+                };
+            };
+            /** @description `jellyfin_owned` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChoiceRefusalOut"];
                 };
             };
             /** @description Validation Error */
@@ -8538,7 +8603,7 @@ export interface operations {
             };
         };
     };
-    post_service_api_setup_services__kind__post: {
+    post_service_test_api_setup_services__kind__test_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -8547,9 +8612,9 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody: {
+        requestBody?: {
             content: {
-                "application/json": components["schemas"]["ConnectIn"];
+                "application/json": components["schemas"]["RetestIn"] | null;
             };
         };
         responses: {
@@ -8754,13 +8819,22 @@ export interface operations {
                     "application/json": components["schemas"]["QbittorrentOut"];
                 };
             };
-            /** @description Validation Error */
+            /** @description `owner_password` */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["InterfaceLoginRefusalOut"];
+                };
+            };
+            /** @description `jellyfin_unreachable` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InterfaceLoginRefusalOut"];
                 };
             };
         };
@@ -8787,13 +8861,22 @@ export interface operations {
                     "application/json": components["schemas"]["QbittorrentOut"];
                 };
             };
-            /** @description Validation Error */
+            /** @description `owner_password` */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["InterfaceLoginRefusalOut"];
+                };
+            };
+            /** @description `jellyfin_unreachable` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InterfaceLoginRefusalOut"];
                 };
             };
         };
@@ -8840,13 +8923,22 @@ export interface operations {
                     "application/json": components["schemas"]["IndexerSetupOut"];
                 };
             };
-            /** @description Validation Error */
+            /** @description `owner_password` */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["InterfaceLoginRefusalOut"];
+                };
+            };
+            /** @description `jellyfin_unreachable` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InterfaceLoginRefusalOut"];
                 };
             };
         };
@@ -8873,13 +8965,22 @@ export interface operations {
                     "application/json": components["schemas"]["IndexerSetupOut"];
                 };
             };
-            /** @description Validation Error */
+            /** @description `owner_password` */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["InterfaceLoginRefusalOut"];
+                };
+            };
+            /** @description `jellyfin_unreachable` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InterfaceLoginRefusalOut"];
                 };
             };
         };

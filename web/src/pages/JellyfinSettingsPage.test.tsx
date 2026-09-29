@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { HEALTHY, stubApi, type StubRoute } from '../test/fetch'
 import {
   ALL_BUNDLED,
-  detection,
+  chosen,
   healthDetail,
   jellyfinSetup,
   setupStatus,
@@ -23,32 +23,44 @@ const TEST = 'POST /api/settings/services/jellyfin/test'
 const STATUS = 'GET /api/setup/status'
 const SETUP = 'GET /api/setup/jellyfin'
 const CONNECT = 'POST /api/setup/services/jellyfin'
+const RETEST = 'POST /api/setup/services/jellyfin/test'
 const SIGN_IN = 'POST /api/setup/jellyfin/connect'
 const ADDRESS = 'GET /api/settings/jellyfin'
 const SAVE_ADDRESS = 'POST /api/settings/jellyfin'
 
-/** 使用者自己的 Jellyfin：精靈第 2 步填過位址、第 3 步登入過。 */
-const EXISTING = setupStatus({
-  completed: true,
-  current_step: 8,
-  owner: 'skipper',
-  services: [
-    detection({
-      origin: 'existing',
-      reason: 'connected',
-      base_url: 'http://192.168.1.10:8096',
-      configured: true,
-    }),
-    ...ALL_BUNDLED.slice(1),
-  ],
-})
+/** 使用者自己的 Jellyfin：精靈頁 1 選了既有、連上了、擁有者在那一台上登入過。 */
+function existing(overrides: Parameters<typeof chosen>[0] = {}) {
+  return setupStatus({
+    completed: true,
+    current_step: 6,
+    owner: 'skipper',
+    owner_signs_in: true,
+    services: [
+      chosen({
+        origin: 'existing',
+        reason: 'setup_completed',
+        base_url: 'http://192.168.1.10:8096',
+        ...overrides,
+      }),
+      ...ALL_BUNDLED.slice(1),
+    ],
+  })
+}
+const EXISTING = existing()
 
 function render(routes: Record<string, StubRoute | (() => StubRoute)> = {}) {
   return stubApi({
     'GET /api/health': { body: HEALTHY },
     'GET /api/auth/me': { body: { name: 'skipper', role: 'admin' } },
     [SERVICES]: { body: healthDetail() },
-    [STATUS]: { body: setupStatus({ completed: true, current_step: 8, services: ALL_BUNDLED }) },
+    [STATUS]: {
+      body: setupStatus({
+        completed: true,
+        current_step: 6,
+        owner: 'skipper',
+        services: ALL_BUNDLED,
+      }),
+    },
     [SETUP]: { body: jellyfinSetup({ origin: 'existing', api_key_present: true }) },
     // 套件內的 Jellyfin、對外網址沒填：深連結開在瀏覽器的主機名上。
     [ADDRESS]: { body: { public_url: '', url: '', port: 8096 } },
@@ -98,29 +110,43 @@ describe('設定 → Jellyfin', () => {
     expect(screen.queryByRole('link', { name: /前往設定/ })).not.toBeInTheDocument()
   })
 
-  it('套件內的 Jellyfin 沒有位址表單：位址是 compose 決定的', async () => {
+  it('套件內的 Jellyfin：來源鎖住、沒有位址表單——位址是 compose 決定的（M4 票 15）', async () => {
     render()
     renderApp('/settings/jellyfin')
 
-    expect(await screen.findByText(/這一套 compose 起的/)).toBeInTheDocument()
-    expect(screen.queryByLabelText('位址')).not.toBeInTheDocument()
+    const connection = within(await screen.findByRole('region', { name: '位址與憑證' }))
+    // 選擇讀回來之前那一塊說「檢查中」。
+    expect(await connection.findByRole('radio', { name: /^套件內/ })).toBeChecked()
+    // 擁有者是那一台上的帳號：另一格點不下去，旁邊說出為什麼。
+    expect(connection.getByRole('radio', { name: /^既有/ })).toBeDisabled()
+    expect(connection.getByText(/擁有者是這一台 Jellyfin 上的帳號/)).toBeInTheDocument()
+    expect(connection.getByText('連上了')).toBeInTheDocument()
+    expect(connection.queryByLabelText('位址')).not.toBeInTheDocument()
+    expect(connection.queryByRole('button', { name: '改位址或憑證' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '重新登入' })).not.toBeInTheDocument()
   })
 
-  it('既有的 Jellyfin 可以換位址：跑精靈第 2 步的同一支命令，然後重測健康', async () => {
+  it('既有的 Jellyfin 可以換位址：同一支選擇命令帶 existing，然後重測健康（M4 票 15）', async () => {
     const stub = render({
       [STATUS]: { body: EXISTING },
-      [CONNECT]: { body: EXISTING },
+      [CONNECT]: { body: existing({ base_url: 'http://192.168.1.20:8096' }) },
       [TEST]: { body: healthDetail() },
     })
     const user = userEvent.setup()
     renderApp('/settings/jellyfin')
 
-    const address = await screen.findByLabelText('位址')
+    const connection = within(await screen.findByRole('region', { name: '位址與憑證' }))
+    // 來源鎖住，位址照樣改得了。
+    expect(await connection.findByRole('radio', { name: /^既有/ })).toBeChecked()
+    expect(connection.getByRole('radio', { name: /^套件內/ })).toBeDisabled()
+    expect(connection.queryByLabelText('位址')).not.toBeInTheDocument()
+    await user.click(connection.getByRole('button', { name: '改位址或憑證' }))
+
+    const address = connection.getByLabelText('位址')
     expect(address).toHaveValue('http://192.168.1.10:8096')
     await user.clear(address)
     await user.type(address, 'http://192.168.1.20:8096')
-    await user.click(screen.getByRole('button', { name: '測試連線' }))
+    await user.click(connection.getByRole('button', { name: '測試連線' }))
 
     await waitFor(() =>
       expect(stub.mock.calls.some(([url]) => url === '/api/settings/services/jellyfin/test')).toBe(
@@ -128,9 +154,35 @@ describe('設定 → Jellyfin', () => {
       ),
     )
     const call = stub.mock.calls.find(([url]) => url === '/api/setup/services/jellyfin')!
-    expect(JSON.parse(String(call[1]?.body))).toMatchObject({
+    expect(JSON.parse(String(call[1]?.body))).toEqual({
+      origin: 'existing',
       base_url: 'http://192.168.1.20:8096',
+      api_key: '',
+      username: '',
+      password: '',
     })
+    // 存完表單收起來，測試那一條說的是新的那一台。
+    expect(await connection.findByText('192.168.1.20:8096/System/Info/Public')).toBeVisible()
+    expect(connection.queryByLabelText('位址')).not.toBeInTheDocument()
+  })
+
+  it('連不上的那一台：紅燈上有「重新測試」，送的是重測那一支並重算時窗（M4 票 15）', async () => {
+    const down = existing({ state: 'failed', reason: 'unreachable', detail: 'connection refused' })
+    const stub = render({
+      [STATUS]: { body: down },
+      [RETEST]: { body: EXISTING },
+    })
+    const user = userEvent.setup()
+    renderApp('/settings/jellyfin')
+
+    const connection = within(await screen.findByRole('region', { name: '位址與憑證' }))
+    expect(await connection.findByText('連不上')).toBeInTheDocument()
+    await user.click(connection.getByRole('button', { name: '重新測試' }))
+
+    expect(await connection.findByText('連上了')).toBeInTheDocument()
+    const call = stub.mock.calls.find(([url]) => url === '/api/setup/services/jellyfin/test')!
+    expect(JSON.parse(String(call[1]?.body))).toEqual({ restart: true })
+    expect(connection.queryByRole('button', { name: '重新測試' })).not.toBeInTheDocument()
   })
 
   it('既有的 Jellyfin 可以重新登入換一把 API key', async () => {

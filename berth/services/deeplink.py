@@ -46,9 +46,8 @@ async def jellyfin_web(session: AsyncSession, *, published_port: int) -> Jellyfi
     if settings.public_url:
         return JellyfinWeb(public_url=settings.public_url, url=settings.public_url, port=None)
     setup = await read_settings(session, SetupSettings)
-    probe = setup.services.get(ServiceKind.JELLYFIN)
-    # 沒有判定紀錄就當既有：與健康頁的 `_origin` 同一條規則。
-    if probe is None or probe.origin is not ServiceOrigin.BUNDLED:
+    # 還沒選就當既有：與健康頁的 `_origin` 同一條規則。
+    if setup.origin_of(ServiceKind.JELLYFIN) is not ServiceOrigin.BUNDLED:
         return JellyfinWeb(public_url="", url=settings.base_url.rstrip("/"), port=None)
     return JellyfinWeb(public_url="", url="", port=published_port)
 

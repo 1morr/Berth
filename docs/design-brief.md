@@ -605,7 +605,7 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 
 ### 16.3 開箱即用（一鍵設定）【決定】
 
-> **2026-09-29 改（§19「精靈改為每個服務手動選擇」）**：不再偵測服務是不是套件內。Jellyfin、qBittorrent、Prowlarr 各一頁，使用者自己選「套件內」或「既有」，選擇存下來、選完要測試。取代 2026-09-26「只有 compose 主機名上探到的才可能是套件內」的判定規則（M4 票 05 的判定那一半）；票 05 的「既有服務不寫帳密、不改全域偏好」保留，改讀使用者的選擇。實作在 M4 票 15–17，做完之前程式照舊是偵測。
+> **2026-09-29 改（§19「精靈改為每個服務手動選擇」）**：不再偵測服務是不是套件內。Jellyfin、qBittorrent、Prowlarr 各一頁，使用者自己選「套件內」或「既有」，選擇存下來、選完要測試。取代 2026-09-26「只有 compose 主機名上探到的才可能是套件內」的判定規則（M4 票 05 的判定那一半）；票 05 的「既有服務不寫帳密、不改全域偏好」保留，改讀使用者的選擇。選擇、服務頁與頁序在 M4 票 15 做完；compose 容器名（票 16）與既有服務防呆（票 17）另外做。
 >
 > 2026-09-26 改（§19 兩列）：「Berth 管理員」由「Jellyfin 擁有者」取代（M4 票 06），qBittorrent 與 Prowlarr 的介面帳密移到各自的泊位（M4 票 07）。
 
@@ -1416,5 +1416,8 @@ fixture 在 `tests/fixtures/http/{mikan,nyaa,acgrip}/`（來源網址與去掉 t
 - **qBittorrent 5.2 起有 API key**：以 `Authorization: Bearer <key>` 取代 cookie 登入；Berth 這一輪只做 WebUI 帳密（版本下限 4.4 不變）。【[qbittorrent-api：Behavior & Configuration](https://qbittorrent-api.readthedocs.io/en/latest/behavior%26configuration.html)】
 - **Prowlarr 的 API 只收 API key**（Settings → General → Security）；表單登入的帳密只給瀏覽器。所以既有 Prowlarr 要的是位址 + API key，不是帳密。【[Servarr Wiki：Prowlarr Settings](https://wiki.servarr.com/prowlarr/settings)】
 - **容器裡的 `localhost` 是容器自己**：要連宿主上的服務，Docker Desktop 內建 `host.docker.internal`；Linux 要在 compose 加 `extra_hosts: ["host.docker.internal:host-gateway"]`，而且宿主上的服務要監聽 `0.0.0.0`，只監聽 `127.0.0.1` 的從容器連不到。【[Nick Janetakis：Connect to a Service Running on Your Docker Host from a Container](https://nickjanetakis.com/blog/connect-to-a-service-running-on-your-docker-host-from-a-container)】
+- **套件內那一台「已經設過介面登入」怎麼認**（M4 票 15，2026-09-29 查證＋實測）：
+  - qBittorrent：`app/preferences` 讀得到 `web_ui_username`，**讀不到密碼**——`web_ui_password` 自 Web API 2.3.0 起「not readable, write-only」。全新的 linuxserver 那一台 `qBittorrent.conf` 沒有 `WebUI\Username` / `WebUI\Password_PBKDF2`，讀回來的帳號是預設的 `admin`，log 印「The WebUI administrator password was not set. A temporary password is provided」；設過的那一台（berth-lab `bundled`，5.2.3）conf 有 `Password_PBKDF2`、帳號是設下的那一個。所以**帳號不是 `admin` 就當設過了**；還是 `admin` 而另設了密碼的認不出來，一律當沒設過、要使用者設一組（寧可多問一次）。【[qBittorrent Wiki：WebUI API (4.1) → Get application preferences](https://github.com/qbittorrent/qBittorrent/wiki/WebUI-API-(qBittorrent-4.1))】
+  - Prowlarr：`GET /api/v1/config/host` 全新是 `authenticationMethod: "none"`、`username: ""`（berth-trial 的 2.6.5 實測）；設過是 `forms`（或 `basic`）加帳號，`password` 讀回來是雜湊（berth-lab `bundled` 實測）。**方法不是 `none` 就當設過了**。
 - **【待實測，M4 票 16】撞名撞 port 時 `docker compose up -d` 的行為**：社群報告是撞名或撞 port 的那一個容器起不來、其他容器照常起。套件容器名因此改成 `berth-*`；實測結果寫回這一條。
 - **【待查證，M4 票 17】Prowlarr 的版本下限**：Berth 用到的 `indexer/schema`、`indexer`、`indexer/test`、`search`、`config/host` 各從哪一版起有，查證後把下限與來源寫回這一條。

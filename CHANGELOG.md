@@ -1104,7 +1104,30 @@ split-cour 的第一批被播出日比對整批擋在審核，改正一次並套
   照舊；對既有服務帶了回 422），新增 `PUT /api/setup/qbittorrent/login`、`PUT /api/setup/indexers/login`；
   `QbittorrentOut`、`IndexerSetupOut` 的 `sets_password` 換成 `web_ui_login`、`web_ui_username`。沒設過登入的套件內
   那一台，密碼那一條纜繩是 `pending`。
+- **精靈重做：每個服務由你自己選「套件內」或「既有」，不再偵測**（M4 票 15，brief §19 2026-09-29，
+  `.scratch/m4/service-pages-shape.md`）。原本的偵測只能靠「免密可進」「沒有索引站」這類跡象猜服務是誰的，猜錯就
+  寫到你的服務上。現在 Jellyfin、qBittorrent、Prowlarr 各一頁，頁首二選一、不預選；選了 Berth 才去連，選完當場測。
+  頁序是 Jellyfin（擁有者）→ qBittorrent → 媒體庫與路徑 → Prowlarr 與索引站（併成一頁）→ TMDB → 完成，泊位板五格、
+  沒有前置列；泊位板每一格的狀態字跟著連線結果（連不上就寫「失敗」），選的來源寫在詳情列。套件內那一台還在啟動就每 3 秒再測（上限 2 分鐘）；它不在 compose 裡時說出怎麼把它加回
+  `COMPOSE_PROFILES`。選「既有」時說出同主機、同容器路徑的條件與要從 `COMPOSE_PROFILES` 拿掉哪一個。擁有者表單
+  跟著那一台的狀態走：還沒初始化就建立管理員（選既有也一樣），已經有管理員就登入（套件內重裝保留 config 也一樣）。
+  擁有者成立之後 Jellyfin 的來源鎖住；qBittorrent 與 Prowlarr 隨時可改選，那一頁重做（Berth 已經寫進原本那一台的
+  東西不撤回），換了 qBittorrent 媒體庫路徑要重新檢查。套件內 Jellyfin 的媒體庫清單從 Jellyfin 頁搬到媒體庫與路徑
+  頁。套件內 qBittorrent / Prowlarr 已經設過介面登入（重裝保留 config）就不強迫再設。介面登入預設**沿用 Jellyfin
+  帳密**：帳號是擁有者、密碼打一次，Berth 先向 Jellyfin 驗過才寫。API：`POST /api/setup/services/{kind}` 改收
+  `{origin, base_url, api_key, username, password}`（擁有者之後改 Jellyfin 的來源是 409），新增
+  `POST /api/setup/services/{kind}/test`；`SetupStatusOut.services` 換成每個服務的選擇與測試結果（`ServiceOut`：
+  `origin`、`base_url`、`state`、`reason`、`detail`、`waited_seconds`），`probe_targets` 改名 `bundled_targets`、
+  `waited_seconds` 移到每個服務上；`DetectionReason` 換成 `ConnectionReason`，`ServiceOrigin` 只剩 `bundled` /
+  `existing`；`InterfaceLoginIn` 多 `reuse_owner`（帳號可以留空），沿用而 Jellyfin 驗不過是 422 / 502
+  `InterfaceLoginRefusal`。**還沒選的服務，寫入它的命令一律拒絕**；`POST /api/setup/jellyfin/bootstrap` 對既有
+  Jellyfin 回 422。資料：`settings.setup.services`（偵測判定）換成 `settings.setup.choices`，migration `f3c9a1d6b2e8`
+  把有結論的判定轉成同一個來源的選擇（連得上的測試是綠的），還在探測、逾時、以及偵測猜成既有卻沒被你填過的
+  丟掉——那一頁回到二選一。
 ### Removed
+- **精靈的偵測**（M4 票 15）：`POST /api/setup/detect`、「偵測服務」那一步與泊位板上方的前置列、「重新偵測這個服務」
+  （換成出問題那一頁的「重新測試」）。選之前 Berth 不對任何服務發請求。
+
 - **服務設定頁 `/settings/services` 與精靈的 `?berth=` 深連結**（M3 票 06i）：前者拆進設定的各分頁，後者連同
   「改位址或憑證」與精靈跑完之後的「回到 Berth」一起拿掉——精靈跑完之後不再是設定入口。後端的
   `GET /api/settings/services` 照舊（設定頁的健康卡讀它）。
@@ -1124,6 +1147,8 @@ split-cour 的第一批被播出日比對整批擋在審核，改正一次並套
   媒體庫頁那一份 `GET /api/inventory/{library_id}/watching` 不變。
 
 ### Fixed
+- **精靈頁 1 擁有者的密碼打錯時，整頁被捲回頂端、看不到錯誤訊息**（M4 票 15 的 critique）：那個 401 被當成登入
+  失效、重跑了路由守衛；現在與登入頁一樣當成帳密不對。
 - **自動綁定握著寫交易問 TMDB**（M4 票 13 的 code-review 抓到，plan §3.3）：搜尋與讀詳情寫了快取卻不 commit，下一個
   搜尋詞與每一部候選的詳情都在寫交易裡打 TMDB——一個番組最多十幾個請求，期間其他寫者只能等，是 M4 票 01
   `database is locked` 那一型。現在每問完一次就 commit；`test_write_discipline` 多一條監看 TMDB 的閘門。
@@ -1369,6 +1394,12 @@ split-cour 的第一批被播出日比對整批擋在審核，改正一次並套
   「選項 → 下載」把預設儲存路徑與未完成目錄改回你原本的設定。
 
 ### Security
+
+- **Berth 寫進套件內 qBittorrent / Prowlarr 的介面密碼只存加鹽雜湊**（M4 票 15，brief §19 2026-09-29 ⑤）：勾了
+  「沿用 Jellyfin 帳密」時那就是擁有者的 Jellyfin 密碼，照票 07 存明文會推翻「資料庫裡沒有擁有者的明文密碼」。
+  雜湊只拿來比對「已經是這一組」；Berth 連套件內 qBittorrent 靠免密白名單，那一台的連線帳密因此是空的。
+  migration `f3c9a1d6b2e8` 把票 07 存下的明文（套件內那一台的 `settings.services.qbittorrent` 帳密、
+  `settings.setup.indexer.web_ui_password`）換成雜湊；既有 qBittorrent 的帳密是 Berth 的連線憑證，照舊存。
 
 - **精靈在擁有者成立之前只開兩件事**（M4 票 06）：找到 Jellyfin、成為擁有者。其餘精靈端點（建立、套用、加站、
   讀別人的服務）一律 403，成立之後整組要管理員的 session。誰先到誰建立，與 Jellyfin 自己的啟動精靈相同。

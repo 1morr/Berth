@@ -71,46 +71,50 @@ def berth() -> Iterator[httpx.Client]:
 
 @pytest.fixture(scope="session")
 def configured(berth: httpx.Client) -> None:
-    """精靈八步，順序照 `api/setup.py`。
+    """精靈六頁，順序照 `api/setup.py`。
 
-    **第 1、2 步是冷啟動閘門**（票 06h）：compose 不加 `--wait`，Berth 一回應就開始精靈，這時
-    Jellyfin 與 Prowlarr 還在啟動（Jellyfin 會回 503、會回不像它自己的東西，票 06g）。
-    照常輪詢到判定完成，**不按重新探測**——使用者也不必按。第一輪就全部判定完成的話，
-    代表這一輪沒有碰到啟動中的那幾秒，閘門等於沒守，所以那樣也算失敗。
+    **三個服務頁都選套件內，是冷啟動閘門**（票 06h）：compose 不加 `--wait`，Berth 一回應就開始
+    精靈，這時 Jellyfin 與 Prowlarr 還在啟動（Jellyfin 會回 503、會回不像它自己的東西，票 06g）。
+    選了之後照常每 2 秒重測到連上，**不按「重新測試」**（`restart` 一律是 false）——使用者也不必按。
+    第一輪就全部連上的話，代表這一輪沒有碰到啟動中的那幾秒，閘門等於沒守，所以那樣也算失敗。
 
-    M4 票 06 起第 1 步是擁有者：先找到 Jellyfin（擁有者之前只探它），以 `ADMIN` 建立它的管理員
-    並拿到 Berth 的 session；之後的精靈都帶著那張 cookie，其餘兩個服務在第 2 步才探。
+    M4 票 15 起不偵測：來源由使用者選（`POST /setup/services/{kind}`），選了才測。頁 1 是擁有者：以
+    `ADMIN` 建立套件內 Jellyfin 的管理員並拿到 Berth 的 session；之後的精靈都帶著那張 cookie。
     """
     tmdb_key = os.environ.get("TMDB_API_KEY", "").strip()
-    assert tmdb_key, "set TMDB_API_KEY: step 7 of the wizard is a gate (ticket 02b)"
+    assert tmdb_key, "set TMDB_API_KEY: the TMDB page of the wizard is a gate (ticket 02b)"
 
     started = time.monotonic()
     rounds: list[list[Json]] = []
 
-    def detected(kinds: set[str]) -> Callable[[], bool | None]:
+    def connected(kind: str) -> Callable[[], bool | None]:
         def probe() -> bool | None:
-            services: list[Json] = ok(berth.post("/setup/detect", json={"restart": False}))[
-                "services"
-            ]
+            services: list[Json] = ok(
+                berth.post(f"/setup/services/{kind}/test", json={"restart": False})
+            )["services"]
             rounds.append(services)
-            verdicts = ", ".join(
-                f"{row['kind']}={row['origin']}/{row['reason']}" for row in services
+            states = ", ".join(
+                f"{row['kind']}={row['origin']}/{row['state']}/{row['reason']}" for row in services
             )
-            print(f"detect +{time.monotonic() - started:5.1f}s {verdicts}")
-            wanted = [row for row in services if row["kind"] in kinds]
-            return (
-                True if len(wanted) == len(kinds) and all(r["resolved"] for r in wanted) else None
-            )
+            print(f"test +{time.monotonic() - started:5.1f}s {states}")
+            (row,) = [row for row in services if row["kind"] == kind]
+            assert row["state"] in ("ok", "waiting"), row
+            return True if row["state"] == "ok" else None
 
         return probe
 
-    wait("the bundled Jellyfin to be detected", 300, detected({"jellyfin"}), every=2)
+    def choose_bundled(kind: str) -> None:
+        ok(berth.post(f"/setup/services/{kind}", json={"origin": "bundled"}))
+        wait(f"the bundled {kind} to answer", 300, connected(kind), every=2)
+
+    choose_bundled("jellyfin")
     owner = ok(berth.post("/setup/owner", json={"username": ADMIN, "password": PASSWORD}))
     assert (owner["owner"], owner["current_step"]) == (ADMIN, 2), owner
     # 擁有者那一刻拿到的就是 Berth 的 session，而且是管理員（brief §11）。
     assert ok(berth.get("/auth/me")) == {"name": ADMIN, "role": "admin"}
-    wait("the other two bundled services", 300, detected({"qbittorrent", "prowlarr"}), every=2)
-    assert len(rounds) > 2, ("services were already up: the cold start was not exercised", rounds)
+    choose_bundled("qbittorrent")
+    choose_bundled("prowlarr")
+    assert len(rounds) > 3, ("services were already up: the cold start was not exercised", rounds)
 
     jellyfin = ok(berth.post("/setup/jellyfin/bootstrap", timeout=1200))
     failed = [row for row in jellyfin["steps"] if row["status"] == "failed"]

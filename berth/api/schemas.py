@@ -10,7 +10,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
 from berth.domain import (
     CollectionType,
@@ -78,21 +78,33 @@ class InterfaceLoginIn(BaseModel):
 
     與 `LoginIn` 不同，這裡**要**約束：它不是拿來驗誰的帳密，空的就是沒填，422 說得出哪一格。
     帳號先去掉前後空白再驗：只有空白的帳號寫進去就是一個沒人打得出來的登入。密碼照原樣。
+
+    `reuse_owner` 是「沿用 Jellyfin 帳密」（M4 票 15）：帳號由 Berth 填成擁有者，這一格可以留空。
     """
 
-    username: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
+    username: Annotated[str, StringConstraints(strip_whitespace=True)] = ""
     password: str = Field(min_length=1)
+    reuse_owner: bool = False
+
+    @model_validator(mode="after")
+    def _username_unless_reused(self) -> InterfaceLoginIn:
+        if not self.reuse_owner and not self.username:
+            raise ValueError("username is required unless the Jellyfin login is reused")
+        return self
 
     def value(self) -> InterfaceLogin:
-        return InterfaceLogin(username=self.username, password=self.password)
+        return InterfaceLogin(
+            username=self.username, password=self.password, reuse_owner=self.reuse_owner
+        )
 
 
 class QbittorrentOut(BaseModel):
-    """精靈第 4 步與設定頁的漂移還原共用（brief §16.3）。"""
+    """精靈頁 2 與設定頁的漂移還原共用（brief §16.3）。"""
 
     model_config = ConfigDict(from_attributes=True)
 
-    origin: ServiceOrigin
+    #: 使用者在頁 2 選的來源；還沒選是 `null`。
+    origin: ServiceOrigin | None
     base_url: str
     version: str
     webapi_version: str
@@ -104,7 +116,7 @@ class QbittorrentOut(BaseModel):
     temp_path_warning: bool
     #: 泊位上有 WebUI 登入那一格：只有套件內的那一台（M4 票 07）。
     web_ui_login: bool
-    #: Berth 替套件內那一台設下的 WebUI 帳號；還沒設過是空字串。
+    #: 套件內那一台的 WebUI 帳號（Berth 設下的，或它自己就設過的）；還沒設過是空字串。
     web_ui_username: str
     #: 五個建議鍵會被寫。既有的那一台是 `false`：只列出來，Berth 不改它的全域偏好（M4 票 05）。
     writes_preferences: bool

@@ -2,6 +2,7 @@ import { QueryClient, hashKey } from '@tanstack/react-query'
 import { createRouter, type RouterHistory } from '@tanstack/react-router'
 
 import { meQueryOptions, SIGN_IN_KEY } from './api/auth'
+import { CLAIM_OWNER_KEY } from './api/setup'
 import { signedOut } from './api/client'
 import { routeTree } from './routes'
 
@@ -30,11 +31,12 @@ export function createAppRouter(queryClient: QueryClient, history?: RouterHistor
  * `/login?redirect=<這一頁>` 並說「登入已失效」，登入之後回到這一頁——與 session 在兩次導航之間過期同一條路。
  *
  * 掛在快取上而不是 `api/client.ts`：那一層不認得路由，而每一個讀資料與按鈕都經過這兩份快取。
- * 例外兩支：`GET /auth/me` 的 401 本來就由守衛處置（再重跑一次會繞圈），登入的 401 是帳密不對。
+ * 例外：`GET /auth/me` 的 401 本來就由守衛處置（再重跑一次會繞圈）；登入與精靈頁 1 成為擁有者的
+ * 401 是帳密不對（後者票 15 的 critique：重跑守衛把整頁捲回頂端，錯誤訊息不在畫面上）。
  */
 function leaveOnSignOut(queryClient: QueryClient, rerunGuards: () => void) {
   const me = hashKey(meQueryOptions.queryKey)
-  const login = hashKey(SIGN_IN_KEY)
+  const credentialChecks = new Set([hashKey(SIGN_IN_KEY), hashKey(CLAIM_OWNER_KEY)])
 
   queryClient.getQueryCache().subscribe((event) => {
     if (event.type !== 'updated' || event.action.type !== 'error') return
@@ -44,7 +46,7 @@ function leaveOnSignOut(queryClient: QueryClient, rerunGuards: () => void) {
   queryClient.getMutationCache().subscribe((event) => {
     if (event.type !== 'updated' || event.action.type !== 'error') return
     const key = event.mutation.options.mutationKey
-    if (key && hashKey(key) === login) return
+    if (key && credentialChecks.has(hashKey(key))) return
     if (signedOut(event.action.error)) rerunGuards()
   })
 }

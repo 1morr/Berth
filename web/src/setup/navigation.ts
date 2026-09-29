@@ -14,16 +14,18 @@ import type { BerthSlot } from '../components/berths'
  * 一步一頁（票 06e 把索引站與 TMDB 拆成兩個泊位之後）：「頁」與「步」是同一個號碼。
  */
 
-/** plan §9.3 的八步。Route 排在 qBittorrent 之後（票 06d）。 */
+/**
+ * plan §9.3 的六頁（M4 票 15）：Jellyfin（擁有者）→ qBittorrent → 媒體庫與路徑 → Prowlarr 與索引站
+ * → TMDB → 完成。媒體庫與路徑排在 qBittorrent 之後（票 06d）。沒有偵測那一步：來源由使用者在各服務
+ * 那一頁選。
+ */
 export const STEP = {
-  owner: 1,
-  detect: 2,
-  jellyfin: 3,
-  qbittorrent: 4,
-  routes: 5,
-  indexer: 6,
-  tmdb: 7,
-  complete: 8,
+  jellyfin: 1,
+  qbittorrent: 2,
+  routes: 3,
+  indexer: 4,
+  tmdb: 5,
+  complete: 6,
 } as const
 
 export const TOTAL_STEPS = STEP.complete
@@ -52,9 +54,9 @@ export function nextOf(step: number): number | null {
   return step < STEP.complete ? step + 1 : null
 }
 
-/** 上一步。第 1 步沒有上一個。 */
+/** 上一步。Jellyfin 那一頁沒有上一個。 */
 export function previousOf(step: number): number | null {
-  return step > STEP.owner ? step - 1 : null
+  return step > STEP.jellyfin ? step - 1 : null
 }
 
 /** 這一步做完了：後端已經過了它。「前往下一個泊位」只在這時候有。 */
@@ -71,12 +73,12 @@ export function straying(step: number, current: number): boolean {
   return next !== null && next < current
 }
 
-/** 泊位板與前置列上點得到的步驟：走過的與目前的。 */
+/** 泊位板上點得到的頁：走過的與目前的。 */
 export function reachable(step: number, current: number): boolean {
   return step <= current
 }
 
-/** 這一步屬於哪一個泊位。前置的兩步與完成頁不屬於任何泊位。 */
+/** 這一頁屬於哪一個泊位。只有完成頁不在板上。 */
 export function berthOf(step: number): BerthSlot | null {
   const slots = Object.keys(BERTH_STEP) as BerthSlot[]
   return slots.find((slot) => BERTH_STEP[slot] === step) ?? null

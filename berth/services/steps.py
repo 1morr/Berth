@@ -8,6 +8,9 @@
 
 from __future__ import annotations
 
+import hashlib
+import hmac
+import os
 from collections.abc import Iterable
 from dataclasses import dataclass
 
@@ -35,6 +38,34 @@ class InterfaceLogin:
 
     username: str
     password: str
+    #: 「沿用 Jellyfin 帳密」（brief §16.3，M4 票 15）：帳號是擁有者、密碼要先過 Jellyfin 那一關
+    #: （`jellyfin.owner_login`）。勾了它時 `username` 不算數。
+    reuse_owner: bool = False
+
+
+def hash_password(password: str) -> str:
+    """Berth 寫進套件內服務的介面密碼只存這個（brief §19 2026-09-29 ⑤）：加鹽的 scrypt。
+
+    勾了「沿用 Jellyfin 帳密」時那一組就是擁有者的 Jellyfin 密碼，存明文會推翻票 06 的「資料庫裡
+    沒有擁有者的明文密碼」。雜湊只拿來比對「已經是這一組了」（`password_matches`）。
+    """
+    salt = os.urandom(16)
+    return f"scrypt${salt.hex()}${_scrypt(password, salt).hex()}"
+
+
+def password_matches(password: str, stored: str) -> bool:
+    """`stored` 是 `hash_password` 寫下的那一串。空的或認不得的一律不相符。"""
+    try:
+        scheme, salt, digest = stored.split("$")
+        if scheme != "scrypt":
+            return False
+        return hmac.compare_digest(_scrypt(password, bytes.fromhex(salt)).hex(), digest)
+    except ValueError:
+        return False
+
+
+def _scrypt(password: str, salt: bytes) -> bytes:
+    return hashlib.scrypt(password.encode(), salt=salt, n=2**14, r=8, p=1)
 
 
 def step_views(rows: Iterable[SetupStep]) -> tuple[StepView, ...]:

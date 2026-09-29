@@ -24,7 +24,7 @@ from berth.db import create_session_factory
 from berth.domain import (
     PROWLARR_LOGIN_STEP,
     CollectionType,
-    DetectionReason,
+    ConnectionReason,
     HealthStatus,
     IndexerKind,
     JellyfinStep,
@@ -36,7 +36,6 @@ from berth.domain import (
 from berth.models import (
     IndexerSettings,
     Route,
-    ServiceProbe,
     SetupSettings,
     SetupStep,
     TmdbSettings,
@@ -57,7 +56,7 @@ from berth.services.setup import STEP_COMPLETE, STEP_INDEXER, STEP_TMDB, read_st
 from berth.services.steps import InterfaceLogin
 from berth.services.tmdb import read_tmdb_status, verify_tmdb
 from tests.conftest import TMDB_API_KEY
-from tests.integration.arrange import own
+from tests.integration.arrange import chosen, own
 from tests.integration.factories import FakeClientFactory
 
 NOW = datetime(2026, 9, 8, 12, 0, tzinfo=UTC)
@@ -89,32 +88,14 @@ async def arrange(
     setup.qbittorrent.steps = [
         SetupStep(key=step.value, status=StepStatus.OK) for step in QbittorrentStep
     ]
-    setup.services = {
-        ServiceKind.JELLYFIN: ServiceProbe(
-            origin=ServiceOrigin.EXISTING,
-            reason=DetectionReason.SETUP_COMPLETED,
-            base_url="http://nas:8096",
-            checked_at=NOW,
-            configured=True,
+    setup.choices = {
+        ServiceKind.JELLYFIN: chosen(
+            ServiceOrigin.EXISTING, "http://nas:8096", ConnectionReason.SETUP_COMPLETED
         ),
-        ServiceKind.QBITTORRENT: ServiceProbe(
-            origin=ServiceOrigin.BUNDLED,
-            reason=DetectionReason.ANONYMOUS_OK,
-            base_url="http://qbittorrent:8080",
-            checked_at=NOW,
-        ),
-        ServiceKind.PROWLARR: ServiceProbe(
-            origin=origin,
-            reason=(
-                DetectionReason.NO_INDEXERS
-                if origin is ServiceOrigin.BUNDLED
-                else DetectionReason.HAS_INDEXERS
-            ),
-            base_url="http://prowlarr:9696"
-            if origin is ServiceOrigin.BUNDLED
-            else "http://nas:9696",
-            checked_at=NOW,
-            configured=origin is not ServiceOrigin.BUNDLED,
+        ServiceKind.QBITTORRENT: chosen(ServiceOrigin.BUNDLED, "http://qbittorrent:8080"),
+        ServiceKind.PROWLARR: chosen(
+            origin,
+            "http://prowlarr:9696" if origin is ServiceOrigin.BUNDLED else "http://nas:9696",
         ),
     }
     await write_settings(session, setup)
@@ -287,20 +268,6 @@ async def test_a_bundled_prowlarr_without_a_login_holds_the_wizard(
         StepStatus.PENDING
     ]
     assert (await read_status(session)).current_step == STEP_INDEXER
-
-
-@pytest.mark.asyncio
-async def test_the_prowlarr_verdict_is_pinned_once_berth_has_added_indexers(
-    session: AsyncSession,
-) -> None:
-    """判定是「一個索引站都沒有 → 套件內」，加完之後重探會說謊，所以釘住它。"""
-    await arrange(session)
-
-    await apply_default_indexers(session, FakeClientFactory(), ["nyaasi"])
-
-    setup = await read_settings(session, SetupSettings)
-    probe = setup.services[ServiceKind.PROWLARR]
-    assert (probe.origin, probe.configured) == (ServiceOrigin.BUNDLED, True)
 
 
 @pytest.mark.asyncio

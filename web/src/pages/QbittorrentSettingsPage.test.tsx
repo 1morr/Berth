@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { HEALTHY, stubApi, type StubRoute } from '../test/fetch'
 import {
   ALL_BUNDLED,
-  detection,
+  chosen,
   diff,
   healthDetail,
   qbittorrentSetup,
@@ -35,31 +35,69 @@ const CLEAN = qbittorrentSetup({
   ],
 })
 
-/** 使用者自己的 qBittorrent：精靈第 2 步填過位址與帳密。 */
-const EXISTING = setupStatus({
+/** 精靈跑完、三個都是套件內的一台；擁有者 skipper（介面登入沿用的就是他）。 */
+const BUNDLED = setupStatus({
   completed: true,
-  current_step: 8,
+  current_step: 6,
   owner: 'skipper',
+  services: ALL_BUNDLED,
+})
+
+/** 使用者自己的 qBittorrent：精靈頁 2 選了既有、填過位址與帳密。 */
+const EXISTING = setupStatus({
+  ...BUNDLED,
   services: ALL_BUNDLED.map((row) =>
     row.kind === 'qbittorrent'
-      ? detection({
+      ? chosen({
           kind: 'qbittorrent',
           origin: 'existing',
           reason: 'connected',
           detail: 'v5.1.2 · Web API 2.11.4',
           base_url: 'http://nas:8080',
-          configured: true,
         })
       : row,
   ),
 })
+
+/** 既有那一台的差異表：Berth 不寫它的偏好，也不管它的登入。 */
+const EXISTING_DRIFT = qbittorrentSetup({
+  origin: 'existing',
+  base_url: 'http://nas:8080',
+  web_ui_login: false,
+  web_ui_username: '',
+  writes_preferences: false,
+})
+
+/** 設過 WebUI 登入（帳號 skipper）的套件內那一台。 */
+const WITH_LOGIN = qbittorrentSetup({ ...CLEAN, web_ui_username: 'skipper' })
+
+/** 「更新登入」寫進去了：帳號是 `username`。 */
+function loginSet(username: string) {
+  return qbittorrentSetup({
+    ...CLEAN,
+    web_ui_username: username,
+    steps: [{ step: 'web_ui_password', status: 'ok', detail: username, error: '' }],
+  })
+}
+
+const REUSE = '沿用 Jellyfin 帳密（skipper）'
+const OWNER_PASSWORD = 'skipper 的 Jellyfin 密碼'
+
+/** 介面登入那一區。擁有者讀回來之前欄位不畫，所以等勾選出現。 */
+async function loginSection() {
+  const section = within(
+    (await screen.findByRole('heading', { name: '介面登入' })).closest('section')!,
+  )
+  await section.findByRole('checkbox', { name: REUSE })
+  return section
+}
 
 function render(routes: Record<string, StubRoute | (() => StubRoute)> = {}) {
   return stubApi({
     'GET /api/health': { body: HEALTHY },
     'GET /api/auth/me': { body: { name: 'skipper', role: 'admin' } },
     [SERVICES]: { body: healthDetail() },
-    [STATUS]: { body: setupStatus({ completed: true, current_step: 8, services: ALL_BUNDLED }) },
+    [STATUS]: { body: BUNDLED },
     [DRIFT]: { body: CLEAN },
     [DISK]: { body: { min_free_gb: 10 } },
     'GET /api/issues': { body: [] },
@@ -76,20 +114,26 @@ describe('設定 → qBittorrent', () => {
     expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1)
   })
 
-  it('既有 qBittorrent 換帳密：跑精靈第 2 步的同一支命令，然後重測健康（票 06i 驗收）', async () => {
+  it('既有 qBittorrent 換帳密：打開表單、送同一支選擇命令帶 existing，然後重測健康（M4 票 15）', async () => {
     const stub = render({
       [STATUS]: { body: EXISTING },
+      [DRIFT]: { body: EXISTING_DRIFT },
       [CONNECT]: { body: EXISTING },
       [TEST_QBIT]: { body: healthDetail() },
     })
     const user = userEvent.setup()
     renderApp('/settings/qbittorrent')
 
-    const line = within((await screen.findByText('連到你的 qBittorrent')).closest('li')!)
-    expect(line.getByLabelText('位址')).toHaveValue('http://nas:8080')
-    await user.type(line.getByLabelText('帳號'), 'admin')
-    await user.type(line.getByLabelText('密碼'), 'new-secret')
-    await user.click(line.getByRole('button', { name: '測試連線' }))
+    const connection = within(await screen.findByRole('region', { name: '位址與憑證' }))
+    expect(await connection.findByRole('radio', { name: /^既有/ })).toBeChecked()
+    // 連上了的那一台不攤開表單；要改才按。
+    expect(connection.queryByLabelText('位址')).not.toBeInTheDocument()
+    await user.click(connection.getByRole('button', { name: '改位址或憑證' }))
+
+    expect(connection.getByLabelText('位址')).toHaveValue('http://nas:8080')
+    await user.type(connection.getByLabelText('帳號'), 'admin')
+    await user.type(connection.getByLabelText('密碼'), 'new-secret')
+    await user.click(connection.getByRole('button', { name: '測試連線' }))
 
     await waitFor(() =>
       expect(
@@ -98,6 +142,7 @@ describe('設定 → qBittorrent', () => {
     )
     const call = stub.mock.calls.find(([url]) => url === '/api/setup/services/qbittorrent')!
     expect(JSON.parse(String(call[1]?.body))).toEqual({
+      origin: 'existing',
       base_url: 'http://nas:8080',
       api_key: '',
       username: 'admin',
@@ -105,37 +150,83 @@ describe('設定 → qBittorrent', () => {
     })
   })
 
-  it('套件內的 qBittorrent 沒有連線表單，只有它自己的 WebUI 登入（M4 票 07）', async () => {
-    render({ [DRIFT]: { body: qbittorrentSetup({ ...CLEAN, web_ui_username: 'skipper' }) } })
+  it('套件內的 qBittorrent 沒有連線表單，只有它自己的 WebUI 登入（M4 票 07、15）', async () => {
+    render({ [DRIFT]: { body: WITH_LOGIN } })
     renderApp('/settings/qbittorrent')
 
-    expect(await screen.findByText(/這一套 compose 起的/)).toBeInTheDocument()
-    const login = within(
-      (await screen.findByRole('heading', { name: '介面登入' })).closest('section')!,
-    )
-    expect(login.getByText(/目前的帳號是 skipper/)).toBeInTheDocument()
-    expect(login.getByLabelText('帳號')).toHaveValue('skipper')
+    const connection = within(await screen.findByRole('region', { name: '位址與憑證' }))
+    expect(await connection.findByRole('radio', { name: /^套件內/ })).toBeChecked()
+    expect(connection.getByText('連上了')).toBeInTheDocument()
+    expect(connection.queryByLabelText('位址')).not.toBeInTheDocument()
+    expect(connection.queryByRole('button', { name: '改位址或憑證' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '測試連線' })).not.toBeInTheDocument()
+
+    const login = await loginSection()
+    expect(login.getByText(/目前的帳號是 skipper/)).toBeInTheDocument()
   })
 
-  it('改 WebUI 登入：只送登入那一支，說出舊的那一組不能再用（M4 票 07）', async () => {
+  it('改 WebUI 登入預設沿用 Jellyfin 帳密：只打一次擁有者的密碼（M4 票 15）', async () => {
     const stub = render({
-      [DRIFT]: { body: qbittorrentSetup({ ...CLEAN, web_ui_username: 'skipper' }) },
-      [LOGIN]: {
-        body: qbittorrentSetup({
-          ...CLEAN,
-          web_ui_username: 'deckhand',
-          steps: [{ step: 'web_ui_password', status: 'ok', detail: 'deckhand', error: '' }],
-        }),
-      },
+      [DRIFT]: { body: WITH_LOGIN },
+      [LOGIN]: { body: loginSet('skipper') },
       [TEST_QBIT]: { body: healthDetail() },
     })
     const user = userEvent.setup()
     renderApp('/settings/qbittorrent')
 
-    const login = within(
-      (await screen.findByRole('heading', { name: '介面登入' })).closest('section')!,
-    )
+    const login = await loginSection()
+    expect(login.getByRole('checkbox', { name: REUSE })).toBeChecked()
+    // 沿用時只有一格：帳號就是擁有者，密碼也不必打兩次。
+    expect(login.queryByLabelText('帳號')).not.toBeInTheDocument()
+    expect(login.queryByLabelText('再輸入一次密碼')).not.toBeInTheDocument()
+    await user.type(login.getByLabelText(OWNER_PASSWORD), 'hunter2')
+    await user.click(login.getByRole('button', { name: '更新登入' }))
+
+    expect(await login.findByText(/之後用 skipper 登入，舊的那一組不能再用/)).toBeInTheDocument()
+    const call = stub.mock.calls.find(([url]) => url === '/api/setup/qbittorrent/login')!
+    expect(call[1]?.method).toBe('PUT')
+    expect(JSON.parse(String(call[1]?.body))).toEqual({
+      username: '',
+      password: 'hunter2',
+      reuse_owner: true,
+    })
+    // 只換登入：不連帶「還原建議設定」。
+    expect(stub.mock.calls.some(([url]) => url === '/api/settings/qbittorrent/apply')).toBe(false)
+    expect(login.getByLabelText(OWNER_PASSWORD)).toHaveValue('')
+  })
+
+  it('不是擁有者的 Jellyfin 密碼：說出來，說什麼都沒寫（M4 票 15）', async () => {
+    render({
+      [DRIFT]: { body: WITH_LOGIN },
+      [LOGIN]: { status: 422, body: { detail: { reason: 'owner_password', detail: '' } } },
+    })
+    const user = userEvent.setup()
+    renderApp('/settings/qbittorrent')
+
+    const login = await loginSection()
+    await user.type(login.getByLabelText(OWNER_PASSWORD), 'wrong')
+    await user.click(login.getByRole('button', { name: '更新登入' }))
+
+    expect(
+      await login.findByText('這不是 skipper 的 Jellyfin 密碼，所以什麼都沒寫；改好再按一次。'),
+    ).toBeInTheDocument()
+    expect(login.queryByText(/請求沒有走完/)).not.toBeInTheDocument()
+    expect(login.queryByText(/舊的那一組不能再用/)).not.toBeInTheDocument()
+  })
+
+  it('取消勾選就自設一組：三格、帳號預填目前那一個，送 reuse_owner false（M4 票 07、15）', async () => {
+    const stub = render({
+      [DRIFT]: { body: WITH_LOGIN },
+      [LOGIN]: { body: loginSet('deckhand') },
+      [TEST_QBIT]: { body: healthDetail() },
+    })
+    const user = userEvent.setup()
+    renderApp('/settings/qbittorrent')
+
+    const login = await loginSection()
+    await user.click(login.getByRole('checkbox', { name: REUSE }))
+    expect(login.queryByLabelText(OWNER_PASSWORD)).not.toBeInTheDocument()
+    expect(login.getByLabelText('帳號')).toHaveValue('skipper')
     await user.clear(login.getByLabelText('帳號'))
     await user.type(login.getByLabelText('帳號'), 'deckhand')
     await user.type(login.getByLabelText('密碼'), 'changed')
@@ -145,15 +236,17 @@ describe('設定 → qBittorrent', () => {
     expect(await login.findByText(/之後用 deckhand 登入，舊的那一組不能再用/)).toBeInTheDocument()
     const call = stub.mock.calls.find(([url]) => url === '/api/setup/qbittorrent/login')!
     expect(call[1]?.method).toBe('PUT')
-    expect(JSON.parse(String(call[1]?.body))).toEqual({ username: 'deckhand', password: 'changed' })
-    // 只換登入：不連帶「還原建議設定」。
-    expect(stub.mock.calls.some(([url]) => url === '/api/settings/qbittorrent/apply')).toBe(false)
+    expect(JSON.parse(String(call[1]?.body))).toEqual({
+      username: 'deckhand',
+      password: 'changed',
+      reuse_owner: false,
+    })
     expect(login.getByLabelText('密碼')).toHaveValue('')
   })
 
   it('改登入時 qBittorrent 連不上：貼出原文，不說成請求沒走完（M4 票 07）', async () => {
     render({
-      [DRIFT]: { body: qbittorrentSetup({ ...CLEAN, web_ui_username: 'skipper' }) },
+      [DRIFT]: { body: WITH_LOGIN },
       [LOGIN]: {
         body: qbittorrentSetup({
           web_ui_username: 'skipper',
@@ -168,27 +261,21 @@ describe('設定 → qBittorrent', () => {
     const user = userEvent.setup()
     renderApp('/settings/qbittorrent')
 
-    const login = within(
-      (await screen.findByRole('heading', { name: '介面登入' })).closest('section')!,
-    )
-    await user.type(login.getByLabelText('密碼'), 'changed')
-    await user.type(login.getByLabelText('再輸入一次密碼'), 'changed')
+    const login = await loginSection()
+    await user.type(login.getByLabelText(OWNER_PASSWORD), 'hunter2')
     await user.click(login.getByRole('button', { name: '更新登入' }))
 
     expect(await login.findByText('connection refused')).toBeInTheDocument()
     expect(login.queryByText(/請求沒有走完/)).not.toBeInTheDocument()
   })
 
-  it('兩次密碼不一樣就不送（M4 票 07）', async () => {
-    const stub = render({
-      [DRIFT]: { body: qbittorrentSetup({ ...CLEAN, web_ui_username: 'skipper' }) },
-    })
+  it('自設時兩次密碼不一樣就不送（M4 票 07）', async () => {
+    const stub = render({ [DRIFT]: { body: WITH_LOGIN } })
     const user = userEvent.setup()
     renderApp('/settings/qbittorrent')
 
-    const login = within(
-      (await screen.findByRole('heading', { name: '介面登入' })).closest('section')!,
-    )
+    const login = await loginSection()
+    await user.click(login.getByRole('checkbox', { name: REUSE }))
     await user.type(login.getByLabelText('密碼'), 'changed')
     await user.type(login.getByLabelText('再輸入一次密碼'), 'chagned')
     await user.click(login.getByRole('button', { name: '更新登入' }))
@@ -208,15 +295,7 @@ describe('設定 → qBittorrent', () => {
   it('既有 qBittorrent 沒有建議設定可還原：它的全域偏好是使用者的（M4 票 05）', async () => {
     render({
       [STATUS]: { body: EXISTING },
-      [DRIFT]: {
-        body: qbittorrentSetup({
-          origin: 'existing',
-          base_url: 'http://nas:8080',
-          web_ui_login: false,
-          web_ui_username: '',
-          writes_preferences: false,
-        }),
-      },
+      [DRIFT]: { body: EXISTING_DRIFT },
     })
     renderApp('/settings/qbittorrent')
 

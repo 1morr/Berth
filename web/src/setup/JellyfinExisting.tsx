@@ -1,11 +1,10 @@
 import { useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import type { JellyfinConnectInput, JellyfinLibrary, JellyfinSetup } from '../api/setup'
+import type { JellyfinConnectInput, JellyfinSetup } from '../api/setup'
 import type { SetupStep } from '../api/schemas'
 import {
   STICKY_ACTION,
-  ConfirmAction,
   CopyLine,
   Field,
   Notice,
@@ -13,34 +12,22 @@ import {
   PrimaryButton,
 } from '../components/controls'
 
-import { SIGNAL_FILL } from '../components/signal'
-
 /**
- * 既有 Jellyfin（plan §9.5）。紅線在這裡是**看得見的**：畫面上沒有「建立媒體庫」，
- * 只有「加入 Berth 路徑」；每個媒體庫的舊路徑照原樣列出來，加的那一條另外標。
- *
- * 沒有登入表單：API key 在第 1 步成立擁有者時就換好了（M4 票 06）。換一把 key 在設定頁
- * （`JellyfinSignIn`）。
+ * 既有 Jellyfin「加入 Berth 路徑」失敗的那一句（plan §9.5）：原文、最常見的原因（沒有把同一個宿主目錄掛在
+ * 同一個容器路徑）與它自己的媒體庫設定頁。精靈頁 3 的 Route 那一邊畫它（M4 票 15 把頁 3 併起來之後，
+ * 原本列媒體庫的那一塊在精靈裡已經到不了）。
  */
-export function JellyfinExisting({
-  setup,
-  addingPath,
-  onAddPath,
-}: {
-  setup: JellyfinSetup
-  addingPath: string | null
-  onAddPath: (library: string) => void
-}) {
-  const libraryStep = setup.steps.find((row) => row.step === 'libraries')
+export function AddPathFailure({ step, baseUrl }: { step: SetupStep; baseUrl: string }) {
+  const { t } = useTranslation()
 
   return (
-    <Libraries
-      libraries={setup.libraries}
-      addingPath={addingPath}
-      failure={libraryStep?.status === 'failed' ? libraryStep : undefined}
-      baseUrl={setup.base_url}
-      onAddPath={onAddPath}
-    />
+    <div className="mt-4 grid grid-cols-1 gap-2">
+      <Notice signal="blocked" label={t('common.failed')}>
+        <span className="value wrap-anywhere">{step.error}</span>
+      </Notice>
+      <p className="max-w-prose text-xs text-ink-dim">{t('jellyfin.libraries.addFailed')}</p>
+      <CopyLine command={`${baseUrl}/web/#/dashboard/libraries`} />
+    </div>
   )
 }
 
@@ -138,134 +125,5 @@ function SignInForm({
         </PrimaryButton>
       </div>
     </form>
-  )
-}
-
-function Libraries({
-  libraries,
-  addingPath,
-  failure,
-  baseUrl,
-  onAddPath,
-}: {
-  libraries: JellyfinLibrary[]
-  addingPath: string | null
-  /** 上一次「加入 Berth 路徑」失敗的那一步。原文與手動步驟就地攤開。 */
-  failure: SetupStep | undefined
-  baseUrl: string
-  onAddPath: (library: string) => void
-}) {
-  const { t } = useTranslation()
-
-  return (
-    <section className="mt-8 border-t-2 border-rule pt-6">
-      <h3 className="text-sm font-semibold text-ink">{t('jellyfin.libraries.title')}</h3>
-      <p className="mt-2 max-w-prose text-xs text-ink-dim">{t('jellyfin.libraries.lede')}</p>
-
-      {failure && (
-        <div className="mt-4 grid grid-cols-1 gap-2">
-          <Notice signal="blocked" label={t('common.failed')}>
-            <span className="value wrap-anywhere">{failure.error}</span>
-          </Notice>
-          <p className="max-w-prose text-xs text-ink-dim">{t('jellyfin.libraries.addFailed')}</p>
-          <CopyLine command={`${baseUrl}/web/#/dashboard/libraries`} />
-        </div>
-      )}
-
-      {libraries.length === 0 ? (
-        <div className="mt-4">
-          <Notice signal="assigned" label={t('jellyfin.libraries.emptyLabel')}>
-            {t('jellyfin.libraries.empty')}
-          </Notice>
-        </div>
-      ) : (
-        <ul className="mt-4 grid gap-3">
-          {libraries.map((library) => (
-            <LibraryRow
-              key={library.name}
-              library={library}
-              adding={addingPath === library.name}
-              onAddPath={onAddPath}
-            />
-          ))}
-        </ul>
-      )}
-    </section>
-  )
-}
-
-function LibraryRow({
-  library,
-  adding,
-  onAddPath,
-}: {
-  library: JellyfinLibrary
-  adding: boolean
-  onAddPath: (library: string) => void
-}) {
-  const { t } = useTranslation()
-
-  return (
-    <li className="min-w-0 border-2 border-rule bg-well">
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
-        <span
-          className={`label px-2 py-1.5 ${
-            SIGNAL_FILL[library.has_berth_path ? 'secured' : 'assigned']
-          }`}
-        >
-          {t(library.has_berth_path ? 'jellyfin.libraries.wired' : 'jellyfin.libraries.unwired')}
-        </span>
-        <span className="value text-sm font-semibold text-ink">{library.name}</span>
-        <span className="label ml-auto text-ink-dim">{library.collection_type || '—'}</span>
-      </div>
-
-      <dl className="grid grid-cols-1 gap-x-4 gap-y-1 border-t-2 border-rule px-4 py-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
-        <dt className="label self-center text-ink-dim">{t('jellyfin.libraries.paths')}</dt>
-        <dd className="value min-w-0 text-sm text-ink">
-          {library.locations.map((path) => (
-            <span key={path} className="block wrap-anywhere">
-              {path}
-              {path === library.berth_path && (
-                <span className="label ml-2 text-ink-dim">{t('jellyfin.libraries.berthPath')}</span>
-              )}
-            </span>
-          ))}
-        </dd>
-        <dt className="label mt-1 self-center text-ink-dim">{t('jellyfin.libraries.fetchers')}</dt>
-        <dd className="value mt-1 min-w-0 wrap-anywhere text-sm text-ink">
-          {library.metadata_fetchers.join(' · ') || '—'}
-        </dd>
-      </dl>
-
-      {library.uses_tvdb && (
-        <div className="border-t-2 border-rule px-4 py-3">
-          <Notice signal="assigned" label={t('jellyfin.libraries.warningLabel')}>
-            {t('jellyfin.libraries.tvdb')}
-          </Notice>
-        </div>
-      )}
-
-      {!library.has_berth_path && (
-        <div className="border-t-2 border-rule bg-hull px-4 py-4">
-          <p className="label text-ink-dim">{t('jellyfin.libraries.willAdd')}</p>
-          <div className="mt-2">
-            <CopyLine command={library.berth_path} />
-          </div>
-          <div className="mt-3">
-            <ConfirmAction
-              label={t('jellyfin.libraries.addPath')}
-              confirmLabel={t('jellyfin.libraries.addConfirm')}
-              warning={t('jellyfin.libraries.addWarning', {
-                library: library.name,
-                path: library.berth_path,
-              })}
-              pending={adding}
-              pendingLabel={t('jellyfin.libraries.adding')}
-              onConfirm={() => onAddPath(library.name)}
-            />
-          </div>
-        </div>
-      )}
-    </li>
   )
 }

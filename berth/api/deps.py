@@ -13,12 +13,7 @@ from fastapi import Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from berth.config import Config
-from berth.services.clients import (
-    ServiceClientFactory,
-    SetupProbes,
-    build_setup_probes,
-    close_setup_probes,
-)
+from berth.services.clients import BundledServices, ServiceClientFactory, bundled_services
 from berth.services.events import EventHub
 from berth.services.hints import JobHints
 from berth.services.jellyfin_access import AccessCache
@@ -42,14 +37,12 @@ async def get_session(request: Request) -> AsyncIterator[AsyncSession]:
         await session.commit()
 
 
-async def get_setup_probes(
-    config: Annotated[Config, Depends(get_config)],
-) -> AsyncIterator[SetupProbes]:
-    probes = build_setup_probes(config)
-    try:
-        yield probes
-    finally:
-        await close_setup_probes(probes)
+def get_bundled_services(config: Annotated[Config, Depends(get_config)]) -> BundledServices:
+    """套件內三台的位址與掛載讀到的 Prowlarr key。
+
+    每個請求重讀一次：key 在 Prowlarr 第一次啟動時才產生。
+    """
+    return bundled_services(config)
 
 
 def get_event_hub(request: Request) -> EventHub:
@@ -107,4 +100,4 @@ ImportHintsDep = Annotated[JobHints, Depends(get_import_hints)]
 PlanHintsDep = Annotated[JobHints, Depends(get_plan_hints)]
 ConfigDep = Annotated[Config, Depends(get_config)]
 ReconcilerDep = Annotated[ReconcileRunner, Depends(get_reconciler)]
-SetupProbesDep = Annotated[SetupProbes, Depends(get_setup_probes)]
+BundledServicesDep = Annotated[BundledServices, Depends(get_bundled_services)]

@@ -14,8 +14,6 @@ export const SERVICE_LABEL = {
 export const ORIGIN_LABEL = {
   bundled: 'origin.bundled',
   existing: 'origin.existing',
-  pending: 'origin.pending',
-  timeout: 'origin.timeout',
 } as const satisfies Record<ServiceOrigin, string>
 
 /** `detail` 的意思由服務決定：版本號或索引站數量。 */

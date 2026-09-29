@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from contextlib import closing, contextmanager
 from pathlib import Path
 
@@ -21,6 +21,7 @@ from sqlalchemy.engine import Connection
 from berth.config import Config
 from berth.db import create_engine
 from berth.db.migrate import alembic_config
+from berth.services.steps import password_matches
 from tests.conftest import migrate
 
 pytestmark = pytest.mark.asyncio
@@ -320,6 +321,170 @@ async def test_the_old_setup_pair_is_dropped_and_not_kept_anywhere(config: Confi
         "indexer": {"steps": [], "skipped": False},
         "tmdb": {"steps": []},
     }
+
+
+#: M4 票 15 把偵測判定換成選擇的那一版，與它的前一版。
+SETUP_CHOICES = "f3c9a1d6b2e8"
+
+
+async def _migrate_rows(
+    config: Config, rows: Mapping[str, object], *, before: str, after: str
+) -> tuple[dict[str, object], dict[str, object]]:
+    """在 `before` 寫下這幾列設定，升到 `after`、再降回 `before`，回兩次讀到的設定。"""
+    config.config_root.mkdir(parents=True, exist_ok=True)
+    engine = create_engine(config)
+    try:
+        async with engine.begin() as connection:
+            await connection.run_sync(_upgrade_to, before)
+        with _sqlite(config.database_path) as db:
+            for key, value in rows.items():
+                db.execute(
+                    "INSERT INTO settings (key, value_json, updated_at)"
+                    " VALUES (?, ?, '2026-09-29T00:00:00.000000+00:00')",
+                    (key, json.dumps(value)),
+                )
+            db.commit()
+        async with engine.begin() as connection:
+            await connection.run_sync(_upgrade_to, after)
+        with _sqlite(config.database_path) as db:
+            upgraded = {
+                key: json.loads(value)
+                for key, value in db.execute("SELECT key, value_json FROM settings")
+            }
+        async with engine.begin() as connection:
+            await connection.run_sync(_downgrade_to, before)
+        with _sqlite(config.database_path) as db:
+            downgraded = {
+                key: json.loads(value)
+                for key, value in db.execute("SELECT key, value_json FROM settings")
+            }
+    finally:
+        await engine.dispose()
+    return upgraded, downgraded
+
+
+def _probe(origin: str, reason: str, base_url: str, **extra: object) -> dict[str, object]:
+    return {
+        "origin": origin,
+        "reason": reason,
+        "detail": "",
+        "base_url": base_url,
+        "checked_at": "2026-09-28T00:00:00+00:00",
+        **extra,
+    }
+
+
+async def test_a_finished_wizard_keeps_its_sources_as_choices(config: Config) -> None:
+    """M4 票 15：精靈跑完的舊資料庫，每個服務的判定就是那時候的來源。
+
+    套件內 qBittorrent 的 WebUI 登入（票 07 存在連線帳密裡的明文）換成帳號加雜湊，連線帳密清空
+    ——Berth 連套件內那一台靠免密白名單；Prowlarr 的介面密碼同樣換成雜湊。資料庫裡不剩明文。
+    """
+    rows = {
+        "setup": {
+            "completed": True,
+            "owner": {"jellyfin_user_id": "u1", "name": "skipper"},
+            "services": {
+                "jellyfin": _probe("existing", "setup_completed", "http://nas:8096"),
+                "qbittorrent": _probe(
+                    "bundled", "connected", "http://qbittorrent:8080", configured=True
+                ),
+                "prowlarr": _probe("bundled", "connected", "http://prowlarr:9696"),
+            },
+            "probe_started_at": None,
+            "qbittorrent": {"steps": []},
+            "indexer": {"steps": [], "web_ui_username": "deck", "web_ui_password": "Deck-pass-1"},
+        },
+        "services.qbittorrent": {
+            "base_url": "http://qbittorrent:8080",
+            "username": "skipper",
+            "password": "Webui-pass-1",
+        },
+    }
+
+    upgraded, downgraded = await _migrate_rows(config, rows, before=OWNER_ONLY, after=SETUP_CHOICES)
+
+    setup = upgraded["setup"]
+    assert isinstance(setup, dict)
+    assert "services" not in setup and "probe_started_at" not in setup
+    assert {kind: row["origin"] for kind, row in setup["choices"].items()} == {
+        "jellyfin": "existing",
+        "qbittorrent": "bundled",
+        "prowlarr": "bundled",
+    }
+    assert setup["choices"]["jellyfin"]["base_url"] == "http://nas:8096"
+    assert setup["choices"]["jellyfin"]["test"]["reason"] == "setup_completed"
+    assert all(row["test"]["state"] == "ok" for row in setup["choices"].values())
+    assert setup["qbittorrent"]["web_ui_username"] == "skipper"
+    assert password_matches("Webui-pass-1", setup["qbittorrent"]["web_ui_password_hash"])
+    assert password_matches("Deck-pass-1", setup["indexer"]["web_ui_password_hash"])
+    assert upgraded["services.qbittorrent"] == {
+        "base_url": "http://qbittorrent:8080",
+        "username": "",
+        "password": "",
+    }
+    text = json.dumps(upgraded)
+    assert "Webui-pass-1" not in text and "Deck-pass-1" not in text
+
+    old = downgraded["setup"]
+    assert isinstance(old, dict)
+    assert {kind: row["origin"] for kind, row in old["services"].items()} == {
+        "jellyfin": "existing",
+        "qbittorrent": "bundled",
+        "prowlarr": "bundled",
+    }
+
+
+async def test_a_half_run_wizard_drops_the_guesses_it_never_confirmed(config: Config) -> None:
+    """M4 票 15：跑到一半的舊資料庫，還在探測、逾時、以及偵測猜成既有卻從沒被使用者填過的，都不是
+    使用者的選擇，那一頁回到二選一。使用者填過而連不上的既有服務留著，測試是紅的。既有 qBittorrent
+    的連線帳密是 Berth 的連線憑證，照舊。"""
+    rows = {
+        "setup": {
+            "completed": False,
+            "owner": {"jellyfin_user_id": "u1", "name": "skipper"},
+            "services": {
+                "jellyfin": _probe("bundled", "connected", "http://jellyfin:8096", configured=True),
+                "qbittorrent": _probe(
+                    "existing", "auth_required", "http://nas:8080", configured=True
+                ),
+                "prowlarr": _probe("existing", "not_deployed", "http://prowlarr:9696"),
+            },
+            "probe_started_at": "2026-09-28T00:00:00+00:00",
+        },
+        "services.qbittorrent": {
+            "base_url": "http://nas:8080",
+            "username": "home",
+            "password": "Home-pass-1",
+        },
+    }
+
+    upgraded, _ = await _migrate_rows(config, rows, before=OWNER_ONLY, after=SETUP_CHOICES)
+
+    setup = upgraded["setup"]
+    assert isinstance(setup, dict)
+    assert set(setup["choices"]) == {"jellyfin", "qbittorrent"}
+    assert setup["choices"]["qbittorrent"]["origin"] == "existing"
+    assert setup["choices"]["qbittorrent"]["test"]["state"] == "failed"
+    assert setup["choices"]["qbittorrent"]["test"]["reason"] == "auth_required"
+    connection = upgraded["services.qbittorrent"]
+    assert isinstance(connection, dict)
+    assert connection["password"] == "Home-pass-1"
+
+
+async def test_pending_probes_are_not_choices(config: Config) -> None:
+    rows = {
+        "setup": {
+            "services": {
+                "jellyfin": _probe("pending", "unreachable", "http://jellyfin:8096"),
+                "qbittorrent": _probe("timeout", "unreachable", "http://qbittorrent:8080"),
+            }
+        }
+    }
+
+    upgraded, _ = await _migrate_rows(config, rows, before=OWNER_ONLY, after=SETUP_CHOICES)
+
+    assert upgraded["setup"] == {"choices": {}, "qbittorrent": {}, "indexer": {}}
 
 
 async def test_alembic_records_the_head_revision(config: Config) -> None:

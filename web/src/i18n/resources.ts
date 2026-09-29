@@ -32,17 +32,12 @@ const zhHant = {
   setup: {
     title: '設定精靈',
     stage: {
-      pre: '前置',
       berth: '泊位 {{code}}',
       final: '收尾',
     },
     step: '第 {{current}} 步，共 {{total}} 步',
     resumed: '進度已保留，關掉瀏覽器再回來會回到這一步。',
-    prelude: '前置',
-    place: {
-      owner: '擁有者',
-      detect: '偵測服務',
-    },
+    statusFailed: '讀不到精靈的狀態。Berth 後端可能沒在跑——確認容器狀態後再試一次。',
     nav: {
       label: '泊位導覽',
       previous: '上一個泊位',
@@ -57,27 +52,22 @@ const zhHant = {
       label: '回頭看',
       can: '這裡能做',
       elsewhere: '不在這裡做',
-      detect: {
-        can: '重新探測還沒接好的服務，或改既有服務的位址與憑證再測一次。',
-        elsewhere:
-          '已經接好的服務（設過密碼、加過站）不再重探——判定規則看的正是 Berth 自己做掉的事，重探會說錯；要重測就到它自己的泊位。',
-      },
       jellyfin: {
-        can: '重跑靠泊序列：每一步都是冪等的，做過的標「已經是這樣」。套件內可以在清單上加還沒建的媒體庫，重跑只建新加的；既有 Jellyfin 可以重新登入、替媒體庫加入 Berth 路徑。',
+        can: '看擁有者是誰、重新測試這一台。來源在擁有者成立之後就鎖住了。',
         elsewhere:
-          '已經建好的媒體庫要改名、刪除或換路徑，在 Jellyfin 自己的介面上做，Berth 建的也一樣。',
+          '擁有者的密碼在 Jellyfin 裡改；換一台 Jellyfin 的位址在精靈跑完之後的「設定 → Jellyfin」。',
       },
       qbittorrent: {
-        can: '重新檢查：套件內的那一台再套用一次建議設定，已經是建議值的鍵標「已經是這樣」、不會再寫一次；你自己的 qBittorrent 只重新確認連得上，一個鍵都不寫。',
+        can: '改選套件內或既有（這一頁要重做）、重新檢查：套件內的那一台再套用一次建議設定，已經是建議值的鍵標「已經是這樣」、不會再寫一次；你自己的 qBittorrent 只重新確認連得上，一個鍵都不寫。',
         elsewhere:
           '套件內那五個鍵以外的偏好，以及你自己那一台的所有偏好，都在 qBittorrent 自己的介面上改，Berth 不碰。',
       },
       routes: {
-        can: '精靈只新增：補上新勾的媒體庫，並重驗每一條 Route 的五條檢查。選錯的那一條在它底下刪掉。',
+        can: '精靈只新增：套件內可以在清單上加還沒建的媒體庫；補上新勾的媒體庫，並重驗每一條 Route 的五條檢查。選錯的那一條在它底下刪掉。',
         elsewhere: 'Route 的改名與停用在精靈跑完之後的「設定 → 媒體庫路徑」。',
       },
       indexer: {
-        can: '加更多站、試搜、移除不要的站。加過的站不會被加第二次。',
+        can: '改選套件內或既有、加更多站、試搜、移除不要的站。加過的站不會被加第二次。',
         elsewhere: '預設清單以外的站（含私有站）在 Prowlarr 自己的介面上加。',
       },
       tmdb: {
@@ -88,14 +78,14 @@ const zhHant = {
   },
   owner: {
     title: {
-      finding: '先找到 Jellyfin',
+      choose: '先選 Jellyfin 是哪一台',
       create: '建立 Jellyfin 管理員',
       signIn: '用你的 Jellyfin 管理員登入',
       owned: '擁有者：{{name}}',
     },
     lede: {
-      finding:
-        'Berth 沒有自己的帳號，登入一律交給 Jellyfin。所以第一件事是找到它：套件內的那一台會自己出現，你自己的那一台填它的位址。',
+      choose:
+        'Berth 沒有自己的帳號，登入一律交給 Jellyfin。所以第一件事是說出用哪一台：compose 帶來的那一台，或你自己已經在跑的那一台。選了 Berth 才去連它。',
       create:
         'Berth 沒有自己的帳號：這一組就是之後登入 Berth 用的 Jellyfin 帳號。Berth 會以它建立 Jellyfin 的管理員，你就是 Berth 的擁有者；其他人用自己的 Jellyfin 帳號登入，角色由 Jellyfin 決定。',
       signIn:
@@ -105,7 +95,6 @@ const zhHant = {
     },
     cutaway: {
       title: '將會做什麼',
-      found: '找到',
       create: '建立',
       finish: '完成',
       change: '改動',
@@ -131,7 +120,7 @@ const zhHant = {
       signIn: '登入中…',
     },
     refused: {
-      jellyfin_unresolved: '還沒找到 Jellyfin。先讓上面那一條連上，再登入。',
+      jellyfin_unresolved: 'Jellyfin 還沒連上。先讓上面那一條測試通過，再登入。',
       invalid_credentials: 'Jellyfin 不認這組帳號或密碼。',
       not_administrator:
         '這個帳號登得進 Jellyfin，但不是管理員。擁有者要改得動設定——用這台 Jellyfin 的管理員登入。',
@@ -139,37 +128,13 @@ const zhHant = {
         'Jellyfin 那一段沒做完。它回的原文在下面；排除之後再按一次，做過的不會重做。',
     },
     saved: '擁有者 · {{name}}',
-    change: '換一台 Jellyfin',
+    locked:
+      '擁有者是這一台 Jellyfin 上的帳號，換一台等於換擁有者，所以精靈裡鎖住了。精靈跑完之後在「設定 → Jellyfin」換位址。',
     error: {
       blank: '帳號與密碼都要填。',
       mismatch: '兩次輸入的密碼不一樣。',
       failed: '沒送出去。Berth 後端可能沒在跑——確認容器狀態後再試一次。',
     },
-  },
-  detect: {
-    title: '偵測服務',
-    lede: 'Berth 逐一探測 qBittorrent 與 Prowlarr 的 compose 主機名，判斷每個服務是套件內的還是你自己的。',
-    cutaway: {
-      title: '將會探測',
-      verdict: '判定依據',
-      jellyfin: '初始精靈是否跑過',
-      qbittorrent: '免密是否進得去',
-      prowlarr: '讀不讀得到 API key、有沒有索引站',
-    },
-    run: '開始探測',
-    rerun: '重新探測',
-    running: '探測中…',
-    retry: '重試',
-    continue: '前往泊位 1',
-    redetect: '重新偵測這個服務（{{service}}）',
-    redetecting: '偵測中…',
-    waitingLabel: '等待中',
-    waiting: '{{waited}} / {{window}} 秒',
-    waitingHint: '容器還在啟動。Berth 會持續探測到上限為止。',
-    failed: '探測沒跑完。Berth 後端可能沒在跑——確認容器狀態後再試一次。',
-    empty: '還沒探測過。',
-    done_one: '{{count}} 個服務已判定',
-    done_other: '{{count}} 個服務已判定',
   },
   service: {
     jellyfin: 'Jellyfin',
@@ -186,23 +151,75 @@ const zhHant = {
   origin: {
     bundled: '套件內',
     existing: '既有',
-    pending: '探測中',
-    timeout: '逾時',
+  },
+  choice: {
+    legend: '這一台 {{service}} 是哪一台？',
+    bundled: {
+      title: '套件內',
+      lede: 'compose 帶來的那一台 {{service}}。Berth 連它、替你設定好：',
+    },
+    existing: {
+      title: '既有',
+      lede: '你自己已經在跑的那一台 {{service}}。Berth 只連它，不改你的設定。',
+      sameHost:
+        '條件：它與 Berth 在同一台主機，而且把同一個父目錄掛在同一個容器路徑（例如都是 /data）——Berth 用硬鏈接入庫，另一台 NAS 上的、或把下載與媒體庫分開掛的接不上。',
+      profiles:
+        '選了既有，就把 {{kind}} 從 .env 的 COMPOSE_PROFILES 拿掉，再 docker compose up -d——套件內那一台用不到了。忘了拿掉也不致命。',
+    },
+    switchToBundled: '改用套件內的那一台',
+    switchWarning: {
+      qbittorrent:
+        '換一台 qBittorrent：Berth 已經寫進原本那一台的偏好與登入留在那裡，不會撤回；這一頁要重做，媒體庫與路徑也要重新檢查——分類建在原本那一台上。',
+      prowlarr:
+        '換一台 Prowlarr：Berth 已經加進原本那一台的站與登入留在那裡，不會撤回；這一頁要重做。',
+    },
+  },
+  connection: {
+    state: {
+      ok: '連上了',
+      waiting: '啟動中',
+      failed: '連不上',
+      timeout: '逾時',
+    },
+    testing: '測試中',
+    untested: '還沒測',
+    result: '測試結果',
+    waitingLabel: '等待中',
+    waiting: '{{waited}} / {{window}} 秒',
+    waitingHint: '容器還在啟動。Berth 每 3 秒再測一次，到上限為止。',
+    retest: '重新測試',
+    retesting: '測試中…',
+    announce: '{{service}} {{state}}：{{reason}}',
+    edit: '改位址或憑證',
+    pasteKey: '用這把 key 再測一次',
+    fix: {
+      notDeployed:
+        '這個主機名解不到：{{kind}} 不在這套 compose 裡。把 {{kind}} 加回 .env 的 COMPOSE_PROFILES，再 docker compose up -d；或改選「既有」接你自己的那一台。',
+      somethingElse:
+        '等到上限了，{{kind}} 這個主機名上回應的還是別的東西。確認 compose 裡那個服務名對應的是它，或改選「既有」。',
+      apiKeyMissing:
+        '唯讀掛載與環境變數都讀不到 Prowlarr 的 API key。到 Prowlarr 的「設定 → 一般 → 安全性」抄下來貼在下面，仍然是套件內。',
+      whitelist:
+        '套件內那一台要帳密：Berth 的免密白名單沒生效。重啟它讓預置腳本補上白名單，再重新測試：',
+      bundledDown: '容器還沒起來。在宿主上確認它活著、看它的 log：',
+      credentials: '帳號或密碼不對。改好上面的欄位再測一次。',
+      banned:
+        '它把 Berth 這台的 IP 封了（連續登入失敗）。等封鎖過期，或到它自己的介面解除，再測一次——現在改帳密只會再失敗。',
+      address:
+        '連不到這個位址。Berth 在容器裡：填 localhost 指的是 Berth 自己，改成 host.docker.internal 或區網 IP；也確認 port 沒填錯、服務在跑。',
+    },
   },
   reason: {
-    setup_pending: '初始精靈尚未跑過，Berth 可以全自動接手',
-    setup_completed: '已經跑過自己的初始精靈',
-    anonymous_ok: '免密進得去 Web API',
+    connected: '連線測試通過',
+    setup_pending: '連上了，還沒跑過自己的初始精靈',
+    setup_completed: '連上了，已經有管理員',
     auth_required: '要求帳密',
     ip_banned: '把 Berth 這台的 IP 封了（連續登入失敗）',
-    no_indexers: '讀得到 API key 且一個索引站都沒有',
-    has_indexers: '已經設定過索引站',
-    api_key_missing: '唯讀掛載與環境變數都讀不到 API key',
-    not_deployed: '主機名解不到，不在這套 compose 裡',
+    api_key_missing: '讀不到 API key',
+    not_deployed: '主機名解不到',
     unreachable: '主機名解得到但連不上',
     starting: '連得上，但它說自己還在啟動',
     protocol_mismatch: '連得上，但回的東西不是這個服務',
-    connected: '連線測試通過',
   },
   detail: {
     version: '版本',
@@ -221,15 +238,17 @@ const zhHant = {
       password: '密碼',
     },
     hint: {
-      jellyfin: '這裡只確認位址連得到；管理員登入與 API key 是另一件事。',
+      jellyfin: '這裡只確認位址連得到；管理員帳密在下一格。',
       qbittorrent: '免密的話帳密留空。',
       prowlarr: '在 Prowlarr 的「設定 → 一般 → 安全性」找得到 API key。',
     },
     submit: '測試連線',
     submitting: '測試中…',
+    error: {
+      blank: '位址要填。',
+    },
     fix: {
       title: '手動步驟',
-      notDeployed: '把 {{service}} 加回 .env 的 COMPOSE_PROFILES，或在上面填你自己那一台的位址。',
       unreachable: '在宿主上確認容器活著，再確認 port 沒有被改掉：',
     },
   },
@@ -253,15 +272,17 @@ const zhHant = {
     step: {
       public_info: '確認版本與初始精靈還沒跑過',
       configuration: '語言與 metadata 地區',
-      admin_user: '以擁有者的帳密建立管理員（第 1 步）',
+      admin_user: '以擁有者的帳密建立管理員（Jellyfin 那一頁）',
       libraries: '建立清單上的媒體庫',
       remote_access: '開啟遠端存取',
       complete: '結束初始精靈',
       api_key: '建立 Berth 專用的 API key',
     },
     bundled: {
-      title: '接手這台 Jellyfin',
-      lede: '第 1 步已經替這台 Jellyfin 建好管理員、跑完它的初始設定、換好 API key；這裡建你列的媒體庫。可以重按：已經建好的標成「已經是這樣」，不會建第二次。',
+      title: '建立媒體庫',
+      lede: 'Jellyfin 那一頁已經替這台 Jellyfin 建好管理員、跑完它的初始設定、換好 API key；這裡建你列的媒體庫，之後每一個都是一條 Route。可以重按：已經建好的標成「已經是這樣」，不會建第二次。',
+      toRoutes: '前往 Route 與檢查',
+      editList: '媒體庫清單',
       run: '開始靠泊',
       rerun: '重新跑一次',
       retry: '重試失敗的那一步',
@@ -343,7 +364,7 @@ const zhHant = {
       generic: '在你的 Jellyfin 上手動做這一步，然後回來重試。',
       public_info: '確認 Jellyfin 容器活著、版本是 12.0 以上，再確認位址與 port 沒有被改掉：',
       configuration: '在 Jellyfin 自己的初始精靈把語言設成繁體中文、地區設成台灣：',
-      admin_user: '在 Jellyfin 自己的初始精靈建立管理員，帳密要與這裡的第 1 步一致：',
+      admin_user: '在 Jellyfin 自己的初始精靈建立管理員，帳密要與這裡 Jellyfin 那一頁一致：',
       libraries:
         '在 Jellyfin 的「媒體庫」手動建立清單上的媒體庫（名稱、類型與資料夾照左邊那一份），關掉即時監控、Specials 顯示名稱填 Specials：',
       remote_access: '在 Jellyfin 的初始精靈開啟遠端存取：',
@@ -367,9 +388,18 @@ const zhHant = {
     password: '密碼',
     confirm: '再輸入一次密碼',
     change: '更換登入',
+    reuse: '沿用 Jellyfin 帳密（{{owner}}）',
+    reuseHint:
+      '帳號就是 {{owner}}，密碼打一次：Berth 先向 Jellyfin 確認它是對的才寫進去，只記雜湊、不存密碼。取消勾選就自己設一組。',
+    ownerPassword: '{{owner}} 的 Jellyfin 密碼',
     error: {
       blank: '這一格要填。',
       mismatch: '兩次輸入的密碼不一樣。',
+    },
+    refused: {
+      owner_password: '這不是 {{owner}} 的 Jellyfin 密碼，所以什麼都沒寫；改好再按一次。',
+      jellyfin_unreachable:
+        '連不上 Jellyfin，驗不了這個密碼，所以什麼都沒寫。確認 Jellyfin 在跑再試一次。',
     },
     settings: {
       title: '介面登入',
@@ -384,11 +414,14 @@ const zhHant = {
   },
   qbittorrent: {
     title: {
+      choose: '先選 qBittorrent 是哪一台',
       bundled: '套用建議的 qBittorrent 設定',
       existing: '確認你的 qBittorrent',
     },
     unreachable: '讀不到 qBittorrent 這一步的狀態。確認 Berth 後端還在跑。',
     lede: {
+      choose:
+        '套件內的那一台由 Berth 設好偏好與 WebUI 登入；你自己的那一台 Berth 只用自己的分類，一個全域偏好都不寫。選了 Berth 才去連它。',
       bundled:
         '這台 qBittorrent 是套件內的，Berth 直接改它的偏好。下面五個鍵是 Berth 送單與入庫要用的，只有與現值不同的才會被寫。',
       existing:
@@ -400,6 +433,8 @@ const zhHant = {
       password: 'WebUI 登入',
       willSet: '將設為下面填的那一組',
       existingLogin: '不改（這台是你自己的）',
+      bundledPlan: '套用五個建議偏好 · 設定 WebUI 登入',
+      existingPlan: '只建 Berth 自己的分類 · 一個全域偏好都不寫',
       diff: '將會寫入的鍵',
       reference: '你的偏好（Berth 不會寫入）',
       key: '鍵',
@@ -448,6 +483,8 @@ const zhHant = {
   indexer: {
     title: '索引站',
     lede: '索引站決定 Berth 找得到什麼。加進來之後試搜一次，不要的就地移除；這一步可以之後再說。',
+    chooseLede:
+      '先選 Prowlarr 是哪一台：套件內的那一台 Berth 讀得到它的 API key、替它加站與設介面登入；你自己的那一台貼 API key（或任一 Torznab 端點），用你已經有的站。',
     skip: '之後再說',
     deferred: '之後再說',
     unreachable: '連不上套件內的 Prowlarr。可以先填自己的位址，或跳過這一步之後再補。',
@@ -612,8 +649,9 @@ const zhHant = {
     completing: '完成中…',
     failed: '寫不進去。Berth 後端可能沒在跑——確認容器狀態後再按一次。',
     needTmdb:
-      '第 7 步還沒完成：TMDB 要一把測得過的 key。沒有它，探索、季集快照與命名全部停擺，所以這一步不能跳。',
-    needRoutes: '第 5 步還沒完成：每一條 Route 的五條纜繩都要綠燈。紅著的那一條，送單一定失敗。',
+      'TMDB 那一頁（頁 5）還沒完成：TMDB 要一把測得過的 key。沒有它，探索、季集快照與命名全部停擺，所以這一步不能跳。',
+    needRoutes:
+      '媒體庫路徑那一頁（頁 3）還沒完成：每一條 Route 的五條纜繩都要綠燈。紅著的那一條，送單一定失敗。',
     unfinished: '還有一步沒做完，但這一頁看不出是哪一步。回上一步逐格看一次，紅的那一格就是。',
     fixTmdb: '回去填 TMDB key',
     signInHint:
@@ -2204,10 +2242,9 @@ const zhHant = {
     },
     connection: {
       title: '位址與憑證',
-      lede: '與設定精靈第 2 步是同一張表單：按下去就存，然後真的連一次。上面那張卡會跟著重新檢查。',
-      bundled:
-        '這個服務是這一套 compose 起的：位址由 compose 決定，Berth 在設定精靈裡已經接好它，這裡沒有要填的東西。壞了的話照上面那張卡的修正步驟。',
+      lede: '與設定精靈那一頁的頁首是同一塊：按下去就存，然後真的連一次。上面那張卡會跟著重新檢查。',
       failed: '沒有存進去。Berth 後端可能沒在跑——確認容器狀態後再按一次。',
+      locked: '擁有者是這一台 Jellyfin 上的帳號，所以來源換不了；同一台換了位址可以在這裡改。',
     },
     jellyfinPage: {
       title: 'Jellyfin 設定',
@@ -2786,17 +2823,13 @@ const en: Translations<typeof zhHant> = {
   setup: {
     title: 'Setup wizard',
     stage: {
-      pre: 'Pre-berth',
       berth: '{{code}}',
       final: 'Cast off',
     },
     step: 'Step {{current}} of {{total}}',
     resumed: 'Progress is saved. Close the browser and you come back to this step.',
-    prelude: 'Pre-berth',
-    place: {
-      owner: 'Owner',
-      detect: 'Detect services',
-    },
+    statusFailed:
+      'Cannot read the wizard state. The Berth backend may not be running — check the container and retry.',
     nav: {
       label: 'Berth navigation',
       previous: 'Previous berth',
@@ -2811,28 +2844,23 @@ const en: Translations<typeof zhHant> = {
       label: 'Looking back',
       can: 'You can do here',
       elsewhere: 'Not here',
-      detect: {
-        can: 'Probe the services that are not connected yet, or change an existing service’s address and credentials and test again.',
-        elsewhere:
-          'Services already set up (password set, indexers added) are not probed again — the rules look at exactly what Berth itself did, so a new probe would get them wrong. Retest one on its own berth.',
-      },
       jellyfin: {
-        can: 'Run the mooring sequence again: every step is idempotent, and what is already done shows as “already so”. A bundled Jellyfin can take more libraries on the list, and the rerun creates only the new ones; an existing Jellyfin can sign in again or get a Berth path on a library.',
+        can: 'See who the owner is and test this Jellyfin again. The choice is locked once there is an owner.',
         elsewhere:
-          'Rename, remove or repath libraries that already exist in Jellyfin itself — including the ones Berth created.',
+          'The owner’s password is changed in Jellyfin; moving to another Jellyfin address happens in Settings → Jellyfin once the wizard is finished.',
       },
       qbittorrent: {
-        can: 'Check again: the bundled qBittorrent gets the recommended settings applied once more, and keys already at the recommended value show as “already so” and are not written again; your own qBittorrent is only checked for a connection, with no key written.',
+        can: 'Switch between bundled and existing (this page starts over), or check again: the bundled qBittorrent gets the recommended settings applied once more, and keys already at the recommended value show as “already so” and are not written again; your own qBittorrent is only checked for a connection, with no key written.',
         elsewhere:
           'Preferences beyond the five bundled keys, and every preference on your own qBittorrent, are changed in qBittorrent itself; Berth leaves them alone.',
       },
       routes: {
-        can: 'The wizard only adds: newly ticked libraries get a route, and every route’s five checks run again. Delete a wrong one underneath it.',
+        can: 'The wizard only adds: a bundled Jellyfin can take more libraries on the list; newly ticked libraries get a route, and every route’s five checks run again. Delete a wrong one underneath it.',
         elsewhere:
           'Renaming and disabling routes happens in Settings → Library paths once the wizard is finished.',
       },
       indexer: {
-        can: 'Add more indexers, run a trial search, remove the ones you do not want. Indexers already added are not added twice.',
+        can: 'Switch between bundled and existing, add more indexers, run a trial search, remove the ones you do not want. Indexers already added are not added twice.',
         elsewhere:
           'Sites outside the default list (private ones included) are added in Prowlarr itself.',
       },
@@ -2845,14 +2873,14 @@ const en: Translations<typeof zhHant> = {
   },
   owner: {
     title: {
-      finding: 'Find Jellyfin first',
+      choose: 'First, which Jellyfin?',
       create: 'Create the Jellyfin administrator',
       signIn: 'Sign in with your Jellyfin administrator',
       owned: 'Owner: {{name}}',
     },
     lede: {
-      finding:
-        'Berth has no accounts of its own; every sign-in goes through Jellyfin. So the first thing is to find it: a bundled one shows up by itself, your own one needs its address.',
+      choose:
+        'Berth has no accounts of its own; every sign-in goes through Jellyfin. So the first thing is to say which one: the one compose brought, or the one you already run. Berth only connects once you choose.',
       create:
         'Berth has no accounts of its own: this is the Jellyfin account you will sign in to Berth with. Berth creates the Jellyfin administrator with it, and you become the owner of Berth. Everyone else signs in with their own Jellyfin account, and Jellyfin decides their role.',
       signIn:
@@ -2862,7 +2890,6 @@ const en: Translations<typeof zhHant> = {
     },
     cutaway: {
       title: 'What happens',
-      found: 'Found',
       create: 'Creates',
       finish: 'Finishes',
       change: 'Changes',
@@ -2888,7 +2915,8 @@ const en: Translations<typeof zhHant> = {
       signIn: 'Signing in…',
     },
     refused: {
-      jellyfin_unresolved: 'Jellyfin is not found yet. Get the line above connected, then sign in.',
+      jellyfin_unresolved:
+        'Jellyfin is not connected yet. Get the test above to pass, then sign in.',
       invalid_credentials: 'Jellyfin does not accept that username or password.',
       not_administrator:
         'That account can sign in to Jellyfin but is not an administrator. The owner has to be able to change settings — sign in with an administrator of this Jellyfin.',
@@ -2896,38 +2924,14 @@ const en: Translations<typeof zhHant> = {
         'Jellyfin did not finish. Its own words are below; fix that and press again — nothing already done is redone.',
     },
     saved: 'Owner · {{name}}',
-    change: 'Use a different Jellyfin',
+    locked:
+      'The owner is an account on this Jellyfin, so another Jellyfin would mean another owner — the choice is locked in the wizard. Move to another address in Settings → Jellyfin once the wizard is finished.',
     error: {
       blank: 'Username and password are both required.',
       mismatch: 'The two passwords do not match.',
       failed:
         'Nothing was sent. The Berth backend may not be running — check the container and retry.',
     },
-  },
-  detect: {
-    title: 'Detect services',
-    lede: 'Berth probes the qBittorrent and Prowlarr compose hostnames and decides whether each service is bundled or your own.',
-    cutaway: {
-      title: 'Will be probed',
-      verdict: 'Decided on',
-      jellyfin: 'Whether the startup wizard has run',
-      qbittorrent: 'Whether the API answers without credentials',
-      prowlarr: 'Whether the API key is readable and any indexer exists',
-    },
-    run: 'Start probing',
-    rerun: 'Probe again',
-    running: 'Probing…',
-    retry: 'Retry',
-    continue: 'Go to Berth 1',
-    redetect: 'Detect this service again ({{service}})',
-    redetecting: 'Detecting…',
-    waitingLabel: 'Waiting',
-    waiting: '{{waited}} of {{window}} seconds',
-    waitingHint: 'Containers are still starting. Berth keeps probing until the limit.',
-    failed: 'The probe did not finish. The Berth backend may not be running — check it and retry.',
-    empty: 'Not probed yet.',
-    done_one: '{{count}} service decided',
-    done_other: '{{count}} services decided',
   },
   service: {
     jellyfin: 'Jellyfin',
@@ -2944,23 +2948,77 @@ const en: Translations<typeof zhHant> = {
   origin: {
     bundled: 'Bundled',
     existing: 'Existing',
-    pending: 'Probing',
-    timeout: 'Timed out',
+  },
+  choice: {
+    legend: 'Which {{service}} is this?',
+    bundled: {
+      title: 'Bundled',
+      lede: 'The {{service}} compose brought along. Berth connects to it and sets it up for you:',
+    },
+    existing: {
+      title: 'Existing',
+      lede: 'The {{service}} you already run. Berth only connects to it and leaves your settings alone.',
+      sameHost:
+        'Condition: it runs on the same host as Berth and mounts the same parent directory at the same container path (for example /data on both) — Berth imports with hard links, so one on another NAS, or with downloads and libraries mounted apart, cannot be connected.',
+      profiles:
+        'With an existing one, take {{kind}} out of COMPOSE_PROFILES in .env and run docker compose up -d — the bundled one is not needed. Forgetting is not fatal.',
+    },
+    switchToBundled: 'Use the bundled one instead',
+    switchWarning: {
+      qbittorrent:
+        'Switching qBittorrent: the preferences and login Berth already wrote to the old one stay there and are not undone; this page starts over, and library paths need checking again — the categories live on the old one.',
+      prowlarr:
+        'Switching Prowlarr: the indexers and login Berth already added to the old one stay there and are not undone; this page starts over.',
+    },
+  },
+  connection: {
+    state: {
+      ok: 'Connected',
+      waiting: 'Starting',
+      failed: 'Unreachable',
+      timeout: 'Timed out',
+    },
+    testing: 'Testing',
+    untested: 'Not tested',
+    result: 'Test result',
+    waitingLabel: 'Waiting',
+    waiting: '{{waited}} of {{window}} seconds',
+    waitingHint:
+      'The container is still starting. Berth tests again every 3 seconds until the limit.',
+    retest: 'Test again',
+    retesting: 'Testing…',
+    announce: '{{service}} {{state}}: {{reason}}',
+    edit: 'Change address or credentials',
+    pasteKey: 'Test again with this key',
+    fix: {
+      notDeployed:
+        'This hostname does not resolve: {{kind}} is not part of this compose project. Put {{kind}} back into COMPOSE_PROFILES in .env and run docker compose up -d — or choose “Existing” for your own one.',
+      somethingElse:
+        'The limit has passed and something other than {{kind}} still answers on that hostname. Check that the compose service by that name is really it, or choose “Existing”.',
+      apiKeyMissing:
+        'Neither the read-only mount nor the environment has the Prowlarr API key. Copy it from Settings → General → Security in Prowlarr and paste it below; it stays bundled.',
+      whitelist:
+        'The bundled one asks for credentials: Berth’s password-free allowlist did not take. Restart it so the preseed script adds the allowlist, then test again:',
+      bundledDown:
+        'The container is not up yet. Check on the host that it is running, and read its log:',
+      credentials: 'The username or password is wrong. Fix the fields above and test again.',
+      banned:
+        'It has banned this machine (too many failed logins). Wait for the ban to expire, or lift it in its own interface, then test again — changing the password now only fails again.',
+      address:
+        'Nothing answers at this address. Berth runs in a container: localhost means Berth itself, so use host.docker.internal or a LAN IP; also check the port and that the service is running.',
+    },
   },
   reason: {
-    setup_pending: 'Startup wizard has not run; Berth can take it over',
-    setup_completed: 'Already ran its own startup wizard',
-    anonymous_ok: 'Web API answers without credentials',
+    connected: 'Connection test passed',
+    setup_pending: 'Connected; its startup wizard has not run yet',
+    setup_completed: 'Connected; it already has an administrator',
     auth_required: 'Asks for credentials',
     ip_banned: 'Has banned this machine (too many failed logins)',
-    no_indexers: 'API key readable and no indexer configured',
-    has_indexers: 'Indexers are already configured',
-    api_key_missing: 'No API key in the read-only mount or the environment',
-    not_deployed: 'Hostname does not resolve; not part of this compose project',
+    api_key_missing: 'No API key available',
+    not_deployed: 'Hostname does not resolve',
     unreachable: 'Hostname resolves but nothing answers',
     starting: 'It answers, but says it is still starting up',
     protocol_mismatch: 'Something answered, but it is not this service',
-    connected: 'Connection test passed',
   },
   detail: {
     version: 'Version',
@@ -2979,17 +3037,17 @@ const en: Translations<typeof zhHant> = {
       password: 'Password',
     },
     hint: {
-      jellyfin:
-        'This only confirms the address answers; the admin login and API key are a separate step.',
+      jellyfin: 'This only confirms the address answers; the administrator comes next.',
       qbittorrent: 'Leave the credentials empty if the WebUI has no password.',
       prowlarr: 'The API key is under Settings → General → Security in Prowlarr.',
     },
     submit: 'Test connection',
     submitting: 'Testing…',
+    error: {
+      blank: 'The address is required.',
+    },
     fix: {
       title: 'Manual steps',
-      notDeployed:
-        'Put {{service}} back into COMPOSE_PROFILES in .env, or enter the address of your own instance above.',
       unreachable:
         'Check the container is running on the host, then check the port was not changed:',
     },
@@ -3014,15 +3072,17 @@ const en: Translations<typeof zhHant> = {
     step: {
       public_info: 'Confirm the version and that the startup wizard has not run',
       configuration: 'Language and metadata region',
-      admin_user: 'Create the administrator with the owner credentials (step 1)',
+      admin_user: 'Create the administrator with the owner credentials (the Jellyfin page)',
       libraries: 'Create the libraries on the list',
       remote_access: 'Enable remote access',
       complete: 'Finish the startup wizard',
       api_key: 'Create an API key for Berth',
     },
     bundled: {
-      title: 'Take this Jellyfin over',
-      lede: 'Step 1 already created the administrator on this Jellyfin, finished its startup setup and got an API key; this berth builds the libraries you list. Safe to press again: the ones already built are marked "already so" and are not built twice.',
+      title: 'Create the libraries',
+      lede: 'The Jellyfin page already created the administrator on this Jellyfin, finished its startup setup and got an API key; this builds the libraries you list, and each one becomes a route. Safe to press again: the ones already built are marked "already so" and are not built twice.',
+      toRoutes: 'On to routes and checks',
+      editList: 'Library list',
       run: 'Start mooring',
       rerun: 'Run it again',
       retry: 'Retry the failed step',
@@ -3112,7 +3172,7 @@ const en: Translations<typeof zhHant> = {
         'Check the Jellyfin container is running and on 12.0 or newer, then check the address and port were not changed:',
       configuration: "Set the language and metadata country in Jellyfin's own startup wizard:",
       admin_user:
-        "Create the administrator in Jellyfin's own startup wizard, using the same credentials as step 1 here:",
+        "Create the administrator in Jellyfin's own startup wizard, using the same credentials as the Jellyfin page here:",
       libraries:
         "Create the libraries on the list by hand under Jellyfin's Libraries (names, types and folders as on the left), with real-time monitoring off and Specials as the season-zero name:",
       remote_access: "Enable remote access in Jellyfin's startup wizard:",
@@ -3137,9 +3197,19 @@ const en: Translations<typeof zhHant> = {
     password: 'Password',
     confirm: 'Password again',
     change: 'Change login',
+    reuse: 'Reuse the Jellyfin login ({{owner}})',
+    reuseHint:
+      'The username is {{owner}}; type the password once. Berth checks it with Jellyfin before writing it, and keeps only a hash, never the password. Untick to set a login of your own.',
+    ownerPassword: "{{owner}}'s Jellyfin password",
     error: {
       blank: 'Fill this in.',
       mismatch: 'The two passwords differ.',
+    },
+    refused: {
+      owner_password:
+        "That is not {{owner}}'s Jellyfin password, so nothing was written; fix it and press again.",
+      jellyfin_unreachable:
+        'Jellyfin could not be reached to check that password, so nothing was written. Check Jellyfin is running and retry.',
     },
     settings: {
       title: 'Interface login',
@@ -3156,11 +3226,14 @@ const en: Translations<typeof zhHant> = {
   },
   qbittorrent: {
     title: {
+      choose: 'First, which qBittorrent?',
       bundled: 'Apply the recommended qBittorrent settings',
       existing: 'Check your qBittorrent',
     },
     unreachable: 'Cannot read the state of this step. Check that the Berth backend is running.',
     lede: {
+      choose:
+        'Berth sets up the preferences and WebUI login on the bundled one; on your own one it uses only its own categories and writes no global preference. Berth only connects once you choose.',
       bundled:
         'This qBittorrent came with the bundle, so Berth writes its preferences directly. The five keys below are the ones Berth needs; only the ones that differ get written.',
       existing:
@@ -3172,6 +3245,8 @@ const en: Translations<typeof zhHant> = {
       password: 'WebUI login',
       willSet: 'Will be set to the one entered below',
       existingLogin: 'Left alone (this one is yours)',
+      bundledPlan: 'Applies five recommended preferences · sets the WebUI login',
+      existingPlan: 'Only creates Berth’s own categories · writes no global preference',
       diff: 'Keys that will be written',
       reference: 'Your preferences (Berth will not write them)',
       key: 'Key',
@@ -3223,6 +3298,8 @@ const en: Translations<typeof zhHant> = {
   indexer: {
     title: 'Indexers',
     lede: 'Indexers decide what Berth can find. Run a trial search once they are added and remove the ones you do not want; this step can wait.',
+    chooseLede:
+      'First, which Prowlarr: on the bundled one Berth reads its API key, adds indexers and sets its interface login; for your own one paste its API key (or any Torznab endpoint) and Berth uses the indexers you already have.',
     skip: 'Do this later',
     deferred: 'Deferred',
     unreachable:
@@ -3397,9 +3474,9 @@ const en: Translations<typeof zhHant> = {
     completing: 'Finishing…',
     failed: 'Could not save. The Berth backend may be down — check the container and press again.',
     needTmdb:
-      'Step 7 is not finished: TMDB needs an API key that passes its test. Without it discovery, episode snapshots and naming all stop, so this step cannot be skipped.',
+      'The TMDB page (page 5) is not finished: TMDB needs an API key that passes its test. Without it discovery, episode snapshots and naming all stop, so this step cannot be skipped.',
     needRoutes:
-      'Step 5 is not finished: all five checks have to pass on every route. Submitting to a red one always fails.',
+      'The library paths page (page 3) is not finished: all five checks have to pass on every route. Submitting to a red one always fails.',
     unfinished:
       'A step is still unfinished, but this page cannot tell which. Go back a step and look at each berth — the red one is it.',
     fixTmdb: 'Go back and enter the TMDB key',
@@ -4899,11 +4976,11 @@ const en: Translations<typeof zhHant> = {
     },
     connection: {
       title: 'Address and credentials',
-      lede: 'The same form as step 2 of the setup wizard: submitting saves it, then really connects once. The card above checks again right after.',
-      bundled:
-        'This service comes from the bundled compose file: compose decides its address and the setup wizard already connected it, so there is nothing to fill in here. If it breaks, follow the fix on the card above.',
+      lede: 'The same block as the top of that wizard page: submitting saves it, then really connects once. The card above checks again right after.',
       failed:
         'It was not saved. The Berth backend may be down — check the container, then try again.',
+      locked:
+        'The owner is an account on this Jellyfin, so its source cannot change; if the same Jellyfin moved to a new address, change it here.',
     },
     jellyfinPage: {
       title: 'Jellyfin settings',

@@ -82,6 +82,8 @@ STATUS_TABLES: dict[str, dict[Any, int]] = {
     "RssRefusal": rss_api._STATUS,
     "BundledLibraryRefusal": setup_api._BUNDLED_STATUS,
     "OwnerRefusal": setup_api._OWNER_STATUS,
+    "InterfaceLoginRefusal": setup_api._LOGIN_STATUS,
+    "ChoiceRefusal": setup_api._CHOICE_STATUS,
 }
 
 #: 拒絕的形狀（`{reason, detail}` 與 Route 多的那兩格）與 SSE 的推播。前端直接取這幾個
@@ -96,6 +98,8 @@ MODELS = (
     "RematchRefusalOut",
     "BundledLibraryRefusalOut",
     "OwnerRefusalOut",
+    "InterfaceLoginRefusalOut",
+    "ChoiceRefusalOut",
     "JobSignalOut",
 )
 
@@ -445,6 +449,8 @@ class TestDeclaringWhatEachEndpointRefuses:
             "rematch_refusal": "RematchRefusalOut",
             "bundled_refusal": "BundledLibraryRefusalOut",
             "owner_refusal": "OwnerRefusalOut",
+            "login_refusal": "InterfaceLoginRefusalOut",
+            "choice_refusal": "ChoiceRefusalOut",
             "rss_refusal": "RssRefusalOut",
             "_refuse": "JobRefusalOut",
         }

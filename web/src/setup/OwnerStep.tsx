@@ -1,72 +1,47 @@
 import { useState, type FormEvent, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import type { ConnectInput, OwnerInput, OwnerRefusal, SetupStatus } from '../api/setup'
-import type { ServiceKind } from '../api/schemas'
+import type { OwnerInput, OwnerRefusal, SetupStatus } from '../api/setup'
 import { Cutaway, CutawayRow } from '../components/Cutaway'
 import { ORIGIN_LABEL } from '../components/services'
-import {
-  STICKY_ACTION,
-  Field,
-  GhostButton,
-  Notice,
-  PasswordField,
-  PrimaryButton,
-} from '../components/controls'
-import { MooringLine } from './MooringLine'
-import { probeEndpoint } from './signals'
+import { STICKY_ACTION, Field, Notice, PasswordField, PrimaryButton } from '../components/controls'
+import { ServiceChoice, type ChoiceControls } from './ServiceChoice'
+import { connected } from './signals'
 import { StepFrame } from './StepFrame'
 
 /**
- * 第 1 步：擁有者（plan §9.3 第 1 步、M4 票 06，`.scratch/m4/wizard-owner-shape.md`）。
+ * 頁 1：Jellyfin，它的管理員就是 Berth 的擁有者（plan §9.3、M4 票 06、15）。
  *
- * 照 Seerr：先找到 Jellyfin，它的管理員就是 Berth 的擁有者。Berth 沒有自己的帳號——套件內的
- * 那一台由 Berth 代建管理員，既有的那一台用它自己的管理員登入；帳密只交給 Jellyfin，不存下來。
- *
- * 工作面先是 Jellyfin 那一條纜繩（找不到時就地展開位址表單），找到了才給帳密表單。
+ * 照 Seerr：先連媒體伺服器。頁首二選一（`ServiceChoice`）——不預選、選了才連；連上之後表單跟著
+ * 那一台的狀態走：還沒跑過初始精靈就建立管理員（選既有也一樣），已經有管理員就登入（套件內重裝
+ * 保留 config 也一樣）。帳密只交給 Jellyfin，不存下來。擁有者成立之後這一頁的選擇鎖住。
  */
 export function OwnerStep({
   status,
-  probing,
-  detectFailed,
-  connecting,
-  redetecting,
+  choice,
   claiming,
   refusal,
   claimFailed,
-  onDetect,
-  onConnect,
-  onRedetect,
   onClaim,
+  note,
   nav,
 }: {
   status: SetupStatus
-  /** 正在找 Jellyfin（第一次、重試或輪詢）。 */
-  probing: boolean
-  /** 探測本身沒跑完（後端沒回判定）。 */
-  detectFailed: boolean
-  connecting: boolean
-  redetecting: boolean
+  choice: ChoiceControls
   claiming: boolean
   /** 後端說不行的那一份（`ownerRefusalOf`）。 */
   refusal: OwnerRefusal | null
   /** 請求沒跑完，而且不是一份認得的拒絕。 */
   claimFailed: boolean
-  onDetect: (restart: boolean) => void
-  onConnect: (kind: ServiceKind, input: ConnectInput) => void
-  onRedetect: (kind: ServiceKind) => void
   onClaim: (input: OwnerInput) => void
-  /** 回頭看第 1 步時的導覽（`BerthNav`）。 */
+  /** 回頭看的說明（`RevisitNote`），這一頁做完了才有。 */
+  note?: ReactNode
+  /** 回頭看這一頁時的導覽（`BerthNav`）。 */
   nav?: ReactNode
 }) {
   const { t } = useTranslation()
   const jellyfin = status.services.find((row) => row.kind === 'jellyfin')
-  const found = jellyfin !== undefined && jellyfin.resolved && !probing
-  const mode = modeOf(status, found)
-  // 找到之後位址表單收起來，只留一顆「換一台」（critique：兩份表單搶同一個工作面）。
-  // 探到的是套件內那一台時沒有表單可開，這顆鍵也就不給。
-  const [changing, setChanging] = useState(false)
-  const changeable = found && jellyfin.origin === 'existing'
+  const mode = modeOf(status, connected(jellyfin))
 
   return (
     <StepFrame cutaway={<OwnerCutaway status={status} mode={mode} />}>
@@ -76,74 +51,38 @@ export function OwnerStep({
       <p className="mt-2 max-w-prose text-sm text-ink-dim">
         {t(`owner.lede.${mode}`, { name: status.owner })}
       </p>
+      {note}
 
-      {mode === 'owned' ? null : (
-        <>
-          <div aria-live="polite" aria-busy={probing}>
-            <ol className="mt-6 grid gap-3">
-              <MooringLine
-                kind="jellyfin"
-                endpoint={probeEndpoint(status, 'jellyfin')}
-                detection={jellyfin}
-                tying={probing}
-                waitedSeconds={status.waited_seconds}
-                windowSeconds={status.window_seconds}
-                connecting={connecting}
-                redetecting={redetecting}
-                onConnect={onConnect}
-                onRedetect={onRedetect}
-                collapsed={found && !changing}
-              />
-            </ol>
-          </div>
-          {changeable && !changing && (
-            <div className="mt-3">
-              <GhostButton type="button" onClick={() => setChanging(true)}>
-                {t('owner.change')}
-              </GhostButton>
-            </div>
-          )}
-          {detectFailed && (
-            <div className="mt-4">
-              <Notice signal="blocked" label={t('common.failed')}>
-                {t('detect.failed')}
-              </Notice>
-            </div>
-          )}
-          {mode === 'finding' ? (
-            !probing &&
-            jellyfin?.origin !== 'pending' && (
-              <div className={`mt-6 ${STICKY_ACTION}`}>
-                <GhostButton type="button" onClick={() => onDetect(jellyfin?.origin === 'timeout')}>
-                  {jellyfin?.origin === 'timeout' ? t('detect.retry') : t('detect.rerun')}
-                </GhostButton>
-              </div>
-            )
-          ) : (
-            <OwnerForm
-              key={mode}
-              signsIn={mode === 'signIn'}
-              claiming={claiming}
-              refusal={refusal}
-              claimFailed={claimFailed}
-              onClaim={onClaim}
-              sticky={!nav}
-            />
-          )}
-        </>
+      <ServiceChoice
+        kind="jellyfin"
+        status={status}
+        {...choice}
+        locked={status.owner ? t('owner.locked') : undefined}
+      />
+
+      {(mode === 'create' || mode === 'signIn') && (
+        <OwnerForm
+          key={mode}
+          signsIn={mode === 'signIn'}
+          claiming={claiming}
+          refusal={refusal}
+          claimFailed={claimFailed}
+          onClaim={onClaim}
+          sticky={!nav}
+        />
       )}
       {nav}
     </StepFrame>
   )
 }
 
-/** 這一步畫哪一種：已成立、還在找 Jellyfin、登入既有的、建立套件內的管理員。 */
-type OwnerMode = 'owned' | 'finding' | 'signIn' | 'create'
+/** 這一頁畫哪一種：已成立、還沒選或還沒連上、建立管理員、登入既有的管理員。 */
+type OwnerMode = 'owned' | 'choose' | 'signIn' | 'create'
 
-function modeOf(status: SetupStatus, found: boolean): OwnerMode {
+function modeOf(status: SetupStatus, ready: boolean): OwnerMode {
   if (status.owner) return 'owned'
-  if (!found) return 'finding'
-  // 登入還是建立由後端說（`owner_signs_in`：既有，或套件內那一台的管理員已經建好）。
+  if (!ready) return 'choose'
+  // 登入還是建立由後端說（`owner_signs_in`：那一台已經有管理員），與選套件內或既有無關。
   return status.owner_signs_in ? 'signIn' : 'create'
 }
 
@@ -229,25 +168,21 @@ function OwnerForm({
   )
 }
 
-/** 剖面：將會做什麼。照判定說話，找到 Jellyfin 之前只說會去哪裡找。 */
+/** 剖面：將會做什麼。選之前兩種都說；連上之後照那一台的狀態說。 */
 function OwnerCutaway({ status, mode }: { status: SetupStatus; mode: OwnerMode }) {
   const { t } = useTranslation()
   const jellyfin = status.services.find((row) => row.kind === 'jellyfin')
-  const endpoint = jellyfin?.base_url || status.probe_targets.jellyfin
 
   return (
     <Cutaway title={t('owner.cutaway.title')}>
-      <CutawayRow code term={endpoint} value={t('service.jellyfin')} />
-      {jellyfin && (jellyfin.origin === 'bundled' || jellyfin.origin === 'existing') && (
+      {jellyfin && (
         <CutawayRow
-          term={t('owner.cutaway.found')}
+          code
+          term={jellyfin.base_url}
           value={[jellyfin.detail, t(ORIGIN_LABEL[jellyfin.origin])].filter(Boolean).join(' · ')}
         />
       )}
-      {mode === 'finding' && (
-        <CutawayRow term={t('detect.cutaway.verdict')} value={t('detect.cutaway.jellyfin')} />
-      )}
-      {mode === 'create' && (
+      {(mode === 'create' || mode === 'choose') && (
         <>
           <CutawayRow term={t('owner.cutaway.create')} value={t('owner.cutaway.admin')} />
           <CutawayRow term={t('owner.cutaway.finish')} value={t('owner.cutaway.startup')} />

@@ -1,8 +1,9 @@
-"""既有服務不被改動（M4 票 05、brief §19 2026-09-26）。
+"""既有服務不被改動（M4 票 05、brief §19 2026-09-26；M4 票 15 起改讀使用者的選擇）。
 
 `berth-lab` 實測：使用者自己的 Prowlarr 還沒加索引站就被判成套件內，第 6 步以第 1 步的帳密
-`PUT config/host` 把它的登入覆寫掉；免密可進的舊 qBittorrent 走同一條路。規則是**只有 compose
-主機名上探到的才可能是套件內**，使用者填的位址一律既有——Jellyfin 例外（plan §9.3 第 2 步）。
+`PUT config/host` 把它的登入覆寫掉；免密可進的舊 qBittorrent 走同一條路。票 05 的修法是收緊判定；
+2026-09-29 起根本不判定——**使用者選了既有，Berth 就不寫它的帳密、不改它的全域偏好、不替它加站**，
+「沒有索引站」「免密可進」這種跡象一概不看（brief §16.3）。雙向：選了套件內的照舊寫。
 """
 
 from __future__ import annotations
@@ -12,13 +13,10 @@ from pathlib import Path
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from berth.adapters.jellyfin.fake import FakeJellyfinClient
 from berth.adapters.prowlarr.fake import FakeProwlarrClient
 from berth.adapters.qbittorrent.fake import FakeQbittorrentClient
 from berth.domain import (
-    DetectionReason,
     HealthStatus,
-    IndexerKind,
     MediaKind,
     RouteCheck,
     ServiceKind,
@@ -26,8 +24,9 @@ from berth.domain import (
     StepStatus,
 )
 from berth.models import Media, QbittorrentSettings, SetupSettings
+from berth.services.clients import BundledServices
 from berth.services.health import check_health
-from berth.services.indexer import apply_default_indexers, connect_indexer
+from berth.services.indexer import apply_default_indexers, set_interface_login
 from berth.services.jobs import JobSource, add_download
 from berth.services.qbittorrent import (
     WEB_UI_PASSWORD_KEY,
@@ -40,155 +39,114 @@ from berth.services.setup import (
     STEP_QBITTORRENT,
     STEP_ROUTES,
     ServiceConnection,
-    SetupStatus,
-    connect_service,
+    choose_service,
     read_status,
 )
-from tests.integration.arrange import NOW, arrange, factory_for, own
+from berth.services.steps import InterfaceLogin
+from tests.integration.arrange import NOW, arrange, chosen, factory_for, own
 from tests.integration.factories import COMPOSE, FakeClientFactory
 
-
-def verdict(status: SetupStatus, kind: ServiceKind) -> tuple[ServiceOrigin, DetectionReason]:
-    row = next(r for r in status.services if r.kind is kind)
-    return row.origin, row.reason
+BUNDLED = BundledServices(targets=COMPOSE, prowlarr_api_key="mounted-key")
+LOGIN = InterfaceLogin(username="labgate", password="Lab-gate-1")
 
 
 async def owner(session: AsyncSession) -> None:
-    """擁有者成立。既有的那兩台泊位上沒有介面登入那一格（M4 票 07），帶了也被拒。"""
     await own(session, "labgate")
     await session.commit()
 
 
 @pytest.mark.asyncio
-async def test_a_typed_prowlarr_without_indexers_is_existing_and_keeps_its_login(
+async def test_an_existing_prowlarr_without_indexers_keeps_its_login(
     session: AsyncSession,
 ) -> None:
+    """05 的 repro：一個站都沒有的既有 Prowlarr。選了既有，就不加站、不設登入。"""
     await owner(session)
     prowlarr = FakeProwlarrClient(host_config={"username": "homeprowlarr"})
     factory = FakeClientFactory(prowlarr=prowlarr)
 
-    status = await connect_service(
+    await choose_service(
         session,
+        factory,
+        BUNDLED,
         ServiceKind.PROWLARR,
+        ServiceOrigin.EXISTING,
         ServiceConnection(base_url="http://home-prowlarr:9696", api_key="theirs"),
-        factory,
-        compose_hosts=COMPOSE,
     )
 
-    assert verdict(status, ServiceKind.PROWLARR)[0] is ServiceOrigin.EXISTING
-    # 第 6 步對既有 Prowlarr 不加站、不設登入：`config/host` 一次都沒寫。
     with pytest.raises(ValueError, match="existing service"):
-        await apply_default_indexers(session, factory, ["nyaasi"])
+        await apply_default_indexers(session, factory, ["nyaasi"], login=LOGIN)
+    with pytest.raises(ValueError, match="existing service"):
+        await set_interface_login(session, factory, LOGIN)
     assert prowlarr.restarts == 0
+    assert await prowlarr.indexers() == []
     assert (await prowlarr.host_config())["username"] == "homeprowlarr"
 
 
 @pytest.mark.asyncio
-async def test_a_prowlarr_typed_at_the_indexer_berth_is_existing_and_keeps_its_login(
-    session: AsyncSession, roots: dict[str, Path]
-) -> None:
-    """第 6 步的另一扇門：套件內 Prowlarr 連不上時，泊位照樣給連線表單（`IndexerStep`）。
-
-    使用者在那裡填自己的 Prowlarr，判定也要跟著變成既有；只存位址的話，第 2 步留下的
-    「套件內」會讓預設站清單與 `config/host` 對著他那一台跑。
-    """
-    await arrange(session, roots)
-    prowlarr = FakeProwlarrClient(host_config={"username": "homeprowlarr"})
-    factory = FakeClientFactory(prowlarr=prowlarr)
-
-    status = await connect_indexer(
-        session,
-        factory,
-        kind=IndexerKind.PROWLARR,
-        base_url="http://home-prowlarr:9696",
-        api_key="theirs",
-    )
-
-    assert status.origin is ServiceOrigin.EXISTING
-    with pytest.raises(ValueError, match="existing service"):
-        await apply_default_indexers(session, factory, ["nyaasi"])
-    assert prowlarr.restarts == 0
-    assert (await prowlarr.host_config())["username"] == "homeprowlarr"
-
-
-@pytest.mark.asyncio
-async def test_a_typed_password_free_qbittorrent_is_existing_and_gets_no_password(
+async def test_an_existing_password_free_qbittorrent_gets_no_password(
     session: AsyncSession,
 ) -> None:
+    """05 的 repro：免密可進的既有 qBittorrent。選了既有，就沒有登入那一格、不寫全域偏好。"""
     await owner(session)
     qbittorrent = FakeQbittorrentClient(base_url="http://home-qbittorrent:8080")
     factory = FakeClientFactory(qbittorrent=qbittorrent)
 
-    status = await connect_service(
+    await choose_service(
         session,
-        ServiceKind.QBITTORRENT,
-        ServiceConnection(base_url="http://home-qbittorrent:8080"),
         factory,
-        compose_hosts=COMPOSE,
-    )
-
-    assert verdict(status, ServiceKind.QBITTORRENT) == (
+        BUNDLED,
+        ServiceKind.QBITTORRENT,
         ServiceOrigin.EXISTING,
-        DetectionReason.CONNECTED,
+        ServiceConnection(base_url="http://home-qbittorrent:8080"),
     )
+
+    with pytest.raises(ValueError, match="existing service"):
+        await apply_qbittorrent(session, factory, login=LOGIN)
     await apply_qbittorrent(session, factory)
-    assert all(WEB_UI_PASSWORD_KEY not in write for write in qbittorrent.writes)
+    assert qbittorrent.writes == []
 
 
 @pytest.mark.asyncio
-async def test_the_compose_hostnames_are_still_bundled_when_typed(session: AsyncSession) -> None:
-    """雙向：compose 主機名上的空 Prowlarr 與免密 qBittorrent，手動填了仍然是套件內。
+async def test_a_bundled_choice_is_still_written(session: AsyncSession) -> None:
+    """雙向：選了套件內的一樣是一個站都沒有、一樣免密可進——那兩台照舊由 Berth 設定。"""
+    await owner(session)
+    qbittorrent = FakeQbittorrentClient()
+    prowlarr = FakeProwlarrClient()
+    factory = FakeClientFactory(qbittorrent=qbittorrent, prowlarr=prowlarr)
+    for kind in (ServiceKind.QBITTORRENT, ServiceKind.PROWLARR):
+        await choose_service(session, factory, BUNDLED, kind, ServiceOrigin.BUNDLED)
 
-    讀不到唯讀掛載的套件內 Prowlarr，使用者貼了 key 之後照樣要跑預設索引站（票 08）。
-    """
-    factory = FakeClientFactory()
+    await apply_qbittorrent(session, factory, login=LOGIN)
+    await apply_default_indexers(session, factory, ["nyaasi"], login=LOGIN, sleep=_no_wait)
 
-    await connect_service(
-        session,
-        ServiceKind.QBITTORRENT,
-        ServiceConnection(base_url="http://qbittorrent:8080"),
-        factory,
-        compose_hosts=COMPOSE,
-    )
-    status = await connect_service(
-        session,
-        ServiceKind.PROWLARR,
-        ServiceConnection(base_url="http://prowlarr:9696/", api_key="pasted"),
-        factory,
-        compose_hosts=COMPOSE,
-    )
-
-    assert verdict(status, ServiceKind.QBITTORRENT) == (
-        ServiceOrigin.BUNDLED,
-        DetectionReason.ANONYMOUS_OK,
-    )
-    assert verdict(status, ServiceKind.PROWLARR) == (
-        ServiceOrigin.BUNDLED,
-        DetectionReason.NO_INDEXERS,
-    )
+    assert any(WEB_UI_PASSWORD_KEY in write for write in qbittorrent.writes)
+    assert any("save_path" in write for write in qbittorrent.writes)
+    assert prowlarr.restarts == 1
+    assert prowlarr.signs_in("labgate", "Lab-gate-1")
 
 
+@pytest.mark.parametrize("kind", [ServiceKind.QBITTORRENT, ServiceKind.PROWLARR])
 @pytest.mark.asyncio
-async def test_a_typed_jellyfin_that_never_ran_its_wizard_is_still_bundled(
-    session: AsyncSession,
-) -> None:
-    """Jellyfin 是例外：沒跑過初始精靈的那一台上沒有任何人的帳號可以蓋掉（plan §9.3 第 2 步）。"""
-    factory = FakeClientFactory(
-        jellyfin=FakeJellyfinClient(base_url="http://nas:8096", startup_wizard_completed=False)
-    )
+async def test_nothing_is_written_before_a_choice(session: AsyncSession, kind: ServiceKind) -> None:
+    """還沒選的服務，寫入命令一律拒絕（票 05 的「沒有判定時預設套件內」一併消失）。"""
+    await owner(session)
+    qbittorrent = FakeQbittorrentClient()
+    prowlarr = FakeProwlarrClient()
+    factory = FakeClientFactory(qbittorrent=qbittorrent, prowlarr=prowlarr)
+    await write_settings(session, QbittorrentSettings(base_url=COMPOSE[ServiceKind.QBITTORRENT]))
 
-    status = await connect_service(
-        session,
-        ServiceKind.JELLYFIN,
-        ServiceConnection(base_url="http://nas:8096"),
-        factory,
-        compose_hosts=COMPOSE,
-    )
+    with pytest.raises(ValueError):
+        if kind is ServiceKind.QBITTORRENT:
+            await apply_qbittorrent(session, factory, login=LOGIN)
+        else:
+            await apply_default_indexers(session, factory, ["nyaasi"], login=LOGIN)
 
-    assert verdict(status, ServiceKind.JELLYFIN) == (
-        ServiceOrigin.BUNDLED,
-        DetectionReason.SETUP_PENDING,
-    )
+    assert qbittorrent.writes == []
+    assert prowlarr.restarts == 0
+
+
+async def _no_wait(_: float) -> None:
+    return None
 
 
 MAGNET = "magnet:?xt=urn:btih:4bd0f6ef1d3b1e3cbb1e1b6b6c2a9c7d8e5f0a1b&dn=Show"
@@ -206,21 +164,13 @@ THEIR_PREFERENCES = {
 async def at_step_four_with_existing_qbittorrent(
     session: AsyncSession, roots: dict[str, Path]
 ) -> None:
-    """其他泊位都接好（`arrange`），qBittorrent 換成使用者的、第 4 步還沒按。"""
+    """其他頁都接好（`arrange`），qBittorrent 選了使用者的那一台、頁 2 還沒按。"""
     await arrange(session, roots)
     setup = await read_settings(session, SetupSettings)
     setup.qbittorrent.steps = []
-    setup.services = {
-        **setup.services,
-        ServiceKind.QBITTORRENT: setup.services[ServiceKind.QBITTORRENT].model_copy(
-            update={
-                "origin": ServiceOrigin.EXISTING,
-                "reason": DetectionReason.CONNECTED,
-                "base_url": "http://home-qbittorrent:8080",
-                "configured": True,
-                "checked_at": NOW,
-            }
-        ),
+    setup.choices = {
+        **setup.choices,
+        ServiceKind.QBITTORRENT: chosen(ServiceOrigin.EXISTING, "http://home-qbittorrent:8080"),
     }
     await write_settings(session, setup)
     await write_settings(session, QbittorrentSettings(base_url="http://home-qbittorrent:8080"))
@@ -228,7 +178,7 @@ async def at_step_four_with_existing_qbittorrent(
 
 
 @pytest.mark.asyncio
-async def test_an_existing_qbittorrent_keeps_its_global_paths_through_steps_four_and_five(
+async def test_an_existing_qbittorrent_keeps_its_global_paths_through_pages_two_and_three(
     session: AsyncSession, roots: dict[str, Path]
 ) -> None:
     await at_step_four_with_existing_qbittorrent(session, roots)

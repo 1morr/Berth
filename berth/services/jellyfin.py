@@ -1,10 +1,11 @@
-"""精靈第 3 步：Jellyfin（plan §9.3 第 3 步、§9.4、§9.5）。
+"""精靈的 Jellyfin（plan §9.3 頁 1 與頁 3、§9.4、§9.5）。
 
 兩條路徑共用同一份狀態形狀（`SetupJellyfin`）。plan §9.4 的七步分兩半跑（M4 票 06）：
 
-- **擁有者**（精靈第 1 步，`claim_jellyfin`）：帳密只在這裡出現。套件內建立管理員、跑完
-  Jellyfin 自己的初始設定、換 API key；既有以它的管理員登入、換 API key。之後的一切都用那把 key。
-- **泊位 1**：套件內 `bootstrap_jellyfin` 建使用者列的媒體庫；既有 `add_berth_path` 為選定的
+- **擁有者**（精靈頁 1，`claim_jellyfin`）：帳密只在這裡出現。還沒跑過初始精靈的那一台建立
+  管理員、跑完它自己的初始設定、換 API key；已經有管理員的以它的管理員登入、換 API key。
+  之後的一切都用那把 key。
+- **媒體庫與路徑頁**：套件內 `bootstrap_jellyfin` 建使用者列的媒體庫；既有 `add_berth_path` 為選定的
   媒體庫**加**一條路徑。設定頁換位址或 key 走 `connect_jellyfin`。
 
 每一步都冪等——媒體庫先看再建、API key 先列再建。重按只會把已經對的那幾步標成 `skipped`。
@@ -44,7 +45,7 @@ from berth.adapters.jellyfin import (
 from berth.domain import (
     BundledLibraryRefusal,
     CollectionType,
-    DetectionReason,
+    InterfaceLoginRefusal,
     JellyfinStep,
     OwnerRefusal,
     ServiceKind,
@@ -59,10 +60,9 @@ from berth.models import (
     SetupSettings,
     SetupStep,
 )
-from berth.models.types import utcnow
 from berth.services.clients import ServiceClientFactory
 from berth.services.settings import read_settings, write_settings
-from berth.services.steps import StepView, step_views
+from berth.services.steps import InterfaceLogin, StepView, step_views
 
 #: `POST /Auth/Keys?app=` 用的名字。也是重按時辨認「這把是我建的」的依據。
 API_KEY_APP = "Berth"
@@ -306,22 +306,23 @@ def _already_built(
     return row.name in names or bundled_path(row.folder, library_root) in locations
 
 
-#: 擁有者那一半（精靈第 1 步）。套件內的那一台要先有管理員、跑完它自己的初始設定，才換
-#: API key——初始設定跑完之後再登入、建 key 是實測過的順序（brief §20.7）。
-#: 既有的那一台只登入、換 key。
-OWNER_STEPS: dict[ServiceOrigin, tuple[JellyfinStep, ...]] = {
-    ServiceOrigin.BUNDLED: (
-        JellyfinStep.PUBLIC_INFO,
-        JellyfinStep.CONFIGURATION,
-        JellyfinStep.ADMIN_USER,
-        JellyfinStep.REMOTE_ACCESS,
-        JellyfinStep.COMPLETE,
-        JellyfinStep.API_KEY,
-    ),
-    ServiceOrigin.EXISTING: (JellyfinStep.PUBLIC_INFO, JellyfinStep.API_KEY),
-}
+#: 擁有者那一半（精靈頁 1）。還沒跑過初始精靈的那一台要先有管理員、跑完它自己的初始設定，才換
+#: API key——初始設定跑完之後再登入、建 key 是實測過的順序（brief §20.7）。已經有管理員的那一台
+#: 在 `public_info` 就知道了，中間四步都是 `skipped`（`_Runner._fresh`）。**選套件內或既有不影響
+#: 這一條**（M4 票 15）：選既有而那一台還沒初始化，它上面沒有任何人的帳號可以蓋掉。
+OWNER_STEPS: tuple[JellyfinStep, ...] = (
+    JellyfinStep.PUBLIC_INFO,
+    JellyfinStep.CONFIGURATION,
+    JellyfinStep.ADMIN_USER,
+    JellyfinStep.REMOTE_ACCESS,
+    JellyfinStep.COMPLETE,
+    JellyfinStep.API_KEY,
+)
 
-#: 泊位 1 的那一半（套件內）：版本再看一次，然後建媒體庫。用的是第 1 步存下的 API key。
+#: 設定頁換位址或 key：只登入、換 key，不動那一台的任何設定。
+SIGN_IN_STEPS: tuple[JellyfinStep, ...] = (JellyfinStep.PUBLIC_INFO, JellyfinStep.API_KEY)
+
+#: 媒體庫與路徑頁的那一半（套件內）：版本再看一次，然後建媒體庫。用的是頁 1 存下的 API key。
 BERTH_STEPS = (JellyfinStep.PUBLIC_INFO, JellyfinStep.LIBRARIES)
 
 
@@ -348,11 +349,7 @@ async def claim_jellyfin(
     `skipped`（12.0 起回 403，brief §20.9），驗證落在換 key 那一步——所以同一組照樣成立，
     別的密碼蓋不掉它。
     """
-    setup = await read_settings(session, SetupSettings)
-    jellyfin = await read_settings(session, JellyfinSettings)
-    origin, _ = _target(setup, jellyfin)
-    steps = OWNER_STEPS.get(origin, OWNER_STEPS[ServiceOrigin.EXISTING])
-    status, runner = await _run(session, factory, steps, credentials=(username, password))
+    status, runner = await _run(session, factory, OWNER_STEPS, credentials=(username, password))
     failed = next((row for row in status.steps if row.status is StepStatus.FAILED), None)
     if runner.refusal is not None:
         # 帳密那兩種的理由本身就是完整的一句話；Jellyfin 的原文只給「那一段沒做完」。
@@ -370,7 +367,15 @@ async def claim_jellyfin(
 async def bootstrap_jellyfin(
     session: AsyncSession, factory: ServiceClientFactory
 ) -> JellyfinSetupStatus:
-    """套件內路徑的泊位 1：建使用者列的媒體庫。重按只補建還沒建的那幾個。"""
+    """套件內路徑的媒體庫與路徑頁：建使用者列的媒體庫。重按只補建還沒建的那幾個。
+
+    **只對選了套件內的那一台**（`ValueError`）：既有 Jellyfin 絕不自動建媒體庫（brief §16.4）。
+    """
+    setup = await read_settings(session, SetupSettings)
+    if setup.origin_of(ServiceKind.JELLYFIN) is not ServiceOrigin.BUNDLED:
+        raise ValueError(
+            "this Jellyfin is an existing service; Berth does not create libraries on it"
+        )
     status, _ = await _run(session, factory, BERTH_STEPS)
     return status
 
@@ -380,15 +385,12 @@ async def connect_jellyfin(
 ) -> JellyfinSetupStatus:
     """設定頁：以**那台 Jellyfin 的**管理員帳密登入、建 API key、列出媒體庫（plan §9.5）。
 
-    精靈裡同一件事在第 1 步（`claim_jellyfin`）；這一支是精靈跑完之後換位址、換 key 用的。
+    精靈裡同一件事在頁 1（`claim_jellyfin`）；這一支是精靈跑完之後換位址、換 key 用的。
     帳密不存下來：Berth 只需要 API key，而那台伺服器的管理員密碼不是 Berth 的東西。
+    還沒選來源是 `ValueError`（M4 票 15）。
     """
-    status, _ = await _run(
-        session,
-        factory,
-        OWNER_STEPS[ServiceOrigin.EXISTING],
-        credentials=(username, password),
-    )
+    _require_choice(await read_settings(session, SetupSettings))
+    status, _ = await _run(session, factory, SIGN_IN_STEPS, credentials=(username, password))
     return status
 
 
@@ -406,6 +408,7 @@ async def add_berth_path(
     把它變成 500 等於把唯一有用的訊息丟掉。
     """
     setup = await read_settings(session, SetupSettings)
+    _require_choice(setup)
     jellyfin = await read_settings(session, JellyfinSettings)
     paths = await read_settings(session, PathSettings)
     _, base_url = _target(setup, jellyfin)
@@ -450,24 +453,41 @@ async def add_berth_path(
     return await read_jellyfin_status(session)
 
 
-def pin_jellyfin(setup: SetupSettings) -> None:
-    """擁有者成立之後這一台的判定釘住，`detect_services` 不再重探（`configured` 短路）。
+class InterfaceLoginRejectedError(Exception):
+    """勾了「沿用 Jellyfin 帳密」而 Jellyfin 那一關沒過（`InterfaceLoginRefusal`）。"""
 
-    套件內的那一台剛被 Berth 跑完它自己的初始精靈，`StartupWizardCompleted` 變成 true——
-    跟使用者自己開一台完成初始設定的 Jellyfin 沒有兩樣，重探會誤判成「既有」（票 06b 追蹤）。
-    道理跟 qBittorrent 設完密碼、Prowlarr 加完索引站一樣：已經是 Berth 自己弄好的，不要再被重探。
-    既有的那一台同樣釘住：擁有者的帳號在它上面，換一台就是換一個擁有者。
+    def __init__(self, reason: InterfaceLoginRefusal, detail: str = "") -> None:
+        super().__init__(f"{reason}: {detail}" if detail else str(reason))
+        self.reason = reason
+        self.detail = detail
+
+
+async def resolve_interface_login(
+    session: AsyncSession, factory: ServiceClientFactory, login: InterfaceLogin
+) -> InterfaceLogin:
+    """「沿用 Jellyfin 帳密」（brief §16.3，M4 票 15）：帳號換成擁有者，密碼先向 Jellyfin 驗過。
+
+    沒勾就原樣回。驗不過就拒絕（`InterfaceLoginRejectedError`），呼叫端在寫任何東西之前呼叫它，
+    所以密碼打錯時兩台都不會被寫。Berth 仍然不存擁有者的密碼（票 06）：寫進那兩台之後只記雜湊。
     """
-    probe = setup.services.get(ServiceKind.JELLYFIN)
-    if probe is None:
-        return
-    reason = DetectionReason.CONNECTED if probe.origin is ServiceOrigin.BUNDLED else probe.reason
-    setup.services = {
-        **setup.services,
-        ServiceKind.JELLYFIN: probe.model_copy(
-            update={"reason": reason, "configured": True, "checked_at": utcnow()}
-        ),
-    }
+    if not login.reuse_owner:
+        return login
+    setup = await read_settings(session, SetupSettings)
+    jellyfin = await read_settings(session, JellyfinSettings)
+    if not setup.owner.name:
+        raise ValueError("there is no owner yet; finish page 1 of the wizard first")
+    client = factory.jellyfin(jellyfin.base_url)
+    try:
+        auth = await client.authenticate(setup.owner.name, login.password)
+    except AuthFailedError as exc:
+        raise InterfaceLoginRejectedError(InterfaceLoginRefusal.OWNER_PASSWORD) from exc
+    except ServiceError as exc:
+        raise InterfaceLoginRejectedError(
+            InterfaceLoginRefusal.JELLYFIN_UNREACHABLE, _message(exc)
+        ) from exc
+    finally:
+        await client.aclose()
+    return InterfaceLogin(username=auth.name or setup.owner.name, password=login.password)
 
 
 # --- 序列 ---------------------------------------------------------------
@@ -760,11 +780,19 @@ assert set(_ACTIONS) == set(JellyfinStep), "every JellyfinStep needs an action"
 
 
 def _target(setup: SetupSettings, jellyfin: JellyfinSettings) -> tuple[ServiceOrigin, str]:
-    """第 3 步要連哪一台、它是套件內還是既有——兩者都由第 2 步的判定決定。"""
-    probe = setup.services.get(ServiceKind.JELLYFIN)
-    if probe is None:
-        return ServiceOrigin.EXISTING, jellyfin.base_url
-    return probe.origin, probe.base_url or jellyfin.base_url
+    """要連哪一台、它是套件內還是既有——使用者在頁 1 選的（M4 票 15）。還沒選就當既有：
+    建媒體庫的那一條另外擋（`bootstrap_jellyfin`）。"""
+    choice = setup.choices.get(ServiceKind.JELLYFIN)
+    return (
+        choice.origin if choice is not None else ServiceOrigin.EXISTING,
+        jellyfin.base_url or (choice.base_url if choice is not None else ""),
+    )
+
+
+def _require_choice(setup: SetupSettings) -> None:
+    """還沒選的服務，寫入它的命令一律拒絕（M4 票 15）。"""
+    if setup.origin_of(ServiceKind.JELLYFIN) is None:
+        raise ValueError("choose where Jellyfin comes from first")
 
 
 def _step(step: JellyfinStep, status: StepStatus) -> SetupStep:

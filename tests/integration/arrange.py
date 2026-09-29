@@ -22,7 +22,8 @@ from berth.adapters.tmdb.fake import FakeTmdbClient
 from berth.api.gate import SESSION_COOKIE
 from berth.domain import (
     PROWLARR_LOGIN_STEP,
-    DetectionReason,
+    ConnectionReason,
+    ConnectionState,
     JellyfinStep,
     QbittorrentStep,
     ServiceKind,
@@ -35,7 +36,8 @@ from berth.models import (
     JellyfinSettings,
     PathSettings,
     QbittorrentSettings,
-    ServiceProbe,
+    ServiceChoice,
+    ServiceTest,
     SetupLibrary,
     SetupOwner,
     SetupSettings,
@@ -77,29 +79,16 @@ async def arrange(
     ]
     setup.tmdb.steps = [SetupStep(key="configuration", status=StepStatus.OK)]
     setup.jellyfin.libraries = list(libraries or bundled_libraries(roots["library"]))
-    setup.services = {
-        ServiceKind.JELLYFIN: ServiceProbe(
-            origin=origin,
-            reason=(
-                DetectionReason.SETUP_PENDING
-                if origin is ServiceOrigin.BUNDLED
-                else DetectionReason.SETUP_COMPLETED
-            ),
-            base_url="http://jellyfin:8096",
-            checked_at=NOW,
+    setup.choices = {
+        ServiceKind.JELLYFIN: chosen(
+            origin,
+            "http://jellyfin:8096",
+            ConnectionReason.SETUP_PENDING
+            if origin is ServiceOrigin.BUNDLED
+            else ConnectionReason.SETUP_COMPLETED,
         ),
-        ServiceKind.QBITTORRENT: ServiceProbe(
-            origin=ServiceOrigin.BUNDLED,
-            reason=DetectionReason.ANONYMOUS_OK,
-            base_url="http://qbittorrent:8080",
-            checked_at=NOW,
-        ),
-        ServiceKind.PROWLARR: ServiceProbe(
-            origin=ServiceOrigin.BUNDLED,
-            reason=DetectionReason.NO_INDEXERS,
-            base_url="http://prowlarr:9696",
-            checked_at=NOW,
-        ),
+        ServiceKind.QBITTORRENT: chosen(ServiceOrigin.BUNDLED, "http://qbittorrent:8080"),
+        ServiceKind.PROWLARR: chosen(ServiceOrigin.BUNDLED, "http://prowlarr:9696"),
     }
     await write_settings(session, setup)
     await write_settings(
@@ -120,6 +109,22 @@ async def arrange(
         ),
     )
     await session.commit()
+
+
+def chosen(
+    origin: ServiceOrigin,
+    base_url: str,
+    reason: ConnectionReason = ConnectionReason.CONNECTED,
+    *,
+    state: ConnectionState = ConnectionState.OK,
+    detail: str = "",
+) -> ServiceChoice:
+    """使用者在服務頁選了這個來源，測試結果是 `state`（M4 票 15）。"""
+    return ServiceChoice(
+        origin=origin,
+        base_url=base_url,
+        test=ServiceTest(state=state, reason=reason, detail=detail, checked_at=NOW),
+    )
 
 
 async def own(session: AsyncSession, name: str = "skipper") -> None:

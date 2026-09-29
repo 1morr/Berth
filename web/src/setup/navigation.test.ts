@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   BERTH_STEP,
   STEP,
+  TOTAL_STEPS,
   advanced,
   berthOf,
   go,
@@ -13,35 +14,48 @@ import {
   straying,
 } from './navigation'
 
-describe('畫面停在哪一步', () => {
-  it('沒有覆寫時跟著後端的步驟', () => {
+describe('頁序（plan §9.3，M4 票 15）', () => {
+  /** Jellyfin → qBittorrent → 媒體庫與路徑 → Prowlarr 與索引站 → TMDB → 完成；沒有偵測那一步。 */
+  it('六頁，Jellyfin 是第一頁，完成是最後一頁', () => {
+    expect(STEP).toEqual({
+      jellyfin: 1,
+      qbittorrent: 2,
+      routes: 3,
+      indexer: 4,
+      tmdb: 5,
+      complete: 6,
+    })
+    expect(TOTAL_STEPS).toBe(6)
+  })
+})
+
+describe('畫面停在哪一頁', () => {
+  it('沒有覆寫時跟著後端的頁', () => {
     expect(shownStep(STEP.routes, null)).toBe(STEP.routes)
   })
 
-  it('覆寫到走過的步驟就停在那裡', () => {
+  it('覆寫到走過的頁就停在那裡', () => {
     expect(shownStep(STEP.routes, STEP.jellyfin)).toBe(STEP.jellyfin)
   })
 
-  /** 後端退回去了（例如偵測結果又變回等待）：還沒到的那一步不能看。 */
-  it('覆寫到比後端還前面的步驟不算數', () => {
-    expect(shownStep(STEP.detect, STEP.qbittorrent)).toBe(STEP.detect)
+  /** 後端退回去了（例如換了一台 qBittorrent，那一頁要重做）：還沒到的那一頁不能看。 */
+  it('覆寫到比後端還前面的頁不算數', () => {
+    expect(shownStep(STEP.qbittorrent, STEP.indexer)).toBe(STEP.qbittorrent)
   })
 })
 
 describe('前往與回頭', () => {
-  it('上一個：每一步都回到前一頁，第 1 步沒有上一個', () => {
-    expect(previousOf(STEP.owner)).toBeNull()
-    expect(previousOf(STEP.detect)).toBe(STEP.owner)
-    expect(previousOf(STEP.jellyfin)).toBe(STEP.detect)
+  it('上一個：每一頁都回到前一頁，Jellyfin 沒有上一個', () => {
+    expect(previousOf(STEP.jellyfin)).toBeNull()
+    expect(previousOf(STEP.qbittorrent)).toBe(STEP.jellyfin)
     expect(previousOf(STEP.routes)).toBe(STEP.qbittorrent)
     expect(previousOf(STEP.indexer)).toBe(STEP.routes)
-    // 索引站與 TMDB 各是一個泊位（票 06e），TMDB 的上一個就是索引站。
     expect(previousOf(STEP.tmdb)).toBe(STEP.indexer)
     expect(previousOf(STEP.complete)).toBe(STEP.tmdb)
   })
 
-  it('下一個：一步一頁，完成頁沒有下一個', () => {
-    expect(nextOf(STEP.detect)).toBe(STEP.jellyfin)
+  it('下一個：一頁接一頁，完成頁沒有下一個', () => {
+    expect(nextOf(STEP.jellyfin)).toBe(STEP.qbittorrent)
     expect(nextOf(STEP.qbittorrent)).toBe(STEP.routes)
     expect(nextOf(STEP.routes)).toBe(STEP.indexer)
     expect(nextOf(STEP.indexer)).toBe(STEP.tmdb)
@@ -55,18 +69,19 @@ describe('前往與回頭', () => {
     expect(go(STEP.tmdb, STEP.tmdb)).toBeNull()
   })
 
-  it('去走過的步驟是覆寫', () => {
+  it('去走過的頁是覆寫', () => {
     expect(go(STEP.jellyfin, STEP.routes)).toBe(STEP.jellyfin)
-    // 拆開之後索引站在 TMDB 之前，是走過的那一頁。
     expect(go(STEP.indexer, STEP.tmdb)).toBe(STEP.indexer)
   })
 
   /**
-   * 票 06d 的 bug：走完過的人按「重新探測」再按「前往泊位 1」，落到的是最後一步——
-   * 那顆鍵做的是解除覆寫。現在「前往」是去下一頁，只有下一頁就是後端目前那一頁時才解除。
+   * 票 06d 的 bug：走完過的人回到前面再按「前往下一個」，落到的是最後一頁——那顆鍵做的是
+   * 解除覆寫。現在「前往」是去下一頁，只有下一頁就是後端目前那一頁時才解除。
    */
-  it('從第 2 步前往下一個，落在泊位 1，不是後端目前那一步', () => {
-    expect(shownStep(STEP.complete, go(nextOf(STEP.detect)!, STEP.complete))).toBe(STEP.jellyfin)
+  it('從 Jellyfin 頁前往下一個，落在 qBittorrent，不是後端目前那一頁', () => {
+    expect(shownStep(STEP.complete, go(nextOf(STEP.jellyfin)!, STEP.complete))).toBe(
+      STEP.qbittorrent,
+    )
   })
 
   /** 票 06d 的 bug：完成頁回媒體庫路徑之後出不去。回頭之後前往下一個，一路走得回來。 */
@@ -87,7 +102,6 @@ describe('做完了沒、回頭看了沒', () => {
   it('後端已經過了這一頁，才算這一頁做完', () => {
     expect(advanced(STEP.jellyfin, STEP.jellyfin)).toBe(false)
     expect(advanced(STEP.jellyfin, STEP.qbittorrent)).toBe(true)
-    // 索引站做完、TMDB 還沒：索引站那一格做完了（票 06e 拆開之前它們是同一頁）。
     expect(advanced(STEP.indexer, STEP.tmdb)).toBe(true)
     expect(advanced(STEP.tmdb, STEP.tmdb)).toBe(false)
   })
@@ -103,27 +117,27 @@ describe('做完了沒、回頭看了沒', () => {
 
   it('比那更前面才是回頭看', () => {
     expect(straying(STEP.jellyfin, STEP.routes)).toBe(true)
-    expect(straying(STEP.detect, STEP.complete)).toBe(true)
+    expect(straying(STEP.qbittorrent, STEP.complete)).toBe(true)
     expect(straying(STEP.indexer, STEP.complete)).toBe(true)
   })
 })
 
-describe('點得到哪幾步', () => {
+describe('點得到哪幾頁', () => {
   it('走過的與目前的點得到，還沒到的點不到', () => {
     expect(reachable(STEP.jellyfin, STEP.routes)).toBe(true)
     expect(reachable(STEP.routes, STEP.routes)).toBe(true)
     expect(reachable(STEP.indexer, STEP.routes)).toBe(false)
   })
 
-  it('TMDB 那一格要索引站有結論之後才點得到', () => {
+  it('TMDB 那一格要 Prowlarr 那一頁有結論之後才點得到', () => {
     expect(reachable(STEP.indexer, STEP.tmdb)).toBe(true)
     expect(reachable(STEP.tmdb, STEP.indexer)).toBe(false)
   })
 })
 
-describe('步驟與泊位', () => {
-  /** 票 06e：板變 5 格，每一格一個服務、一步。 */
-  it('五個泊位各對到一步，前置兩步與完成頁不屬於任何泊位', () => {
+describe('頁與泊位', () => {
+  /** 泊位板五格、沒有前置列：每一頁（除了完成）就是板上的一格（M4 票 15）。 */
+  it('五個泊位各對到一頁，只有完成頁不在板上', () => {
     expect(BERTH_STEP).toEqual({
       jellyfin: STEP.jellyfin,
       qbittorrent: STEP.qbittorrent,
@@ -131,8 +145,9 @@ describe('步驟與泊位', () => {
       prowlarr: STEP.indexer,
       tmdb: STEP.tmdb,
     })
+    expect(berthOf(STEP.jellyfin)).toBe('jellyfin')
     expect(berthOf(STEP.tmdb)).toBe('tmdb')
     expect(berthOf(STEP.indexer)).toBe('prowlarr')
-    expect([STEP.owner, STEP.detect, STEP.complete].map(berthOf)).toEqual([null, null, null])
+    expect(berthOf(STEP.complete)).toBeNull()
   })
 })

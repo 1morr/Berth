@@ -5,7 +5,7 @@ import type {
   JellyfinSetup,
   LibraryChoice,
   RouteSetup,
-  ServiceDetection,
+  SetupService,
   SetupStatus,
   TmdbSetup,
 } from '../api/setup'
@@ -25,7 +25,7 @@ import type { StubRoute } from './fetch'
 /** 檢查與精靈都用這一個時間點，畫面上的「上次檢查」才是同一輪。 */
 const CHECKED_AT = '2026-09-08T12:00:00Z'
 
-/** 精靈狀態的測試建構子。預設是乾淨安裝的第 1 步。 */
+/** 精靈狀態的測試建構子。預設是乾淨安裝的頁 1：什麼都還沒選。 */
 export function setupStatus(overrides: Partial<SetupStatus> = {}): SetupStatus {
   return {
     completed: false,
@@ -33,9 +33,8 @@ export function setupStatus(overrides: Partial<SetupStatus> = {}): SetupStatus {
     owner: '',
     owner_signs_in: false,
     services: [],
-    waited_seconds: 0,
     window_seconds: 120,
-    probe_targets: {
+    bundled_targets: {
       jellyfin: 'http://jellyfin:8096',
       qbittorrent: 'http://qbittorrent:8080',
       prowlarr: 'http://prowlarr:9696',
@@ -44,38 +43,38 @@ export function setupStatus(overrides: Partial<SetupStatus> = {}): SetupStatus {
   }
 }
 
-export function detection(overrides: Partial<ServiceDetection> = {}): ServiceDetection {
+/** 一個服務的選擇與最後一次測試（M4 票 15）。預設是套件內 Jellyfin、連上了、還沒初始化。 */
+export function chosen(overrides: Partial<SetupService> = {}): SetupService {
   return {
     kind: 'jellyfin',
     origin: 'bundled',
+    base_url: 'http://jellyfin:8096',
+    state: 'ok',
     reason: 'setup_pending',
     detail: '12.1.0',
-    base_url: 'http://jellyfin:8096',
-    // 探測 compose 主機名的結果，不是使用者填的連線表單。
-    configured: false,
-    resolved: true,
+    waited_seconds: 0,
     ...overrides,
   }
 }
 
-/** 乾淨 compose：三個服務都判為套件內。 */
-export const ALL_BUNDLED: ServiceDetection[] = [
-  detection(),
-  detection({
+/** 乾淨 compose：三個服務都選了套件內、都連上了。 */
+export const ALL_BUNDLED: SetupService[] = [
+  chosen(),
+  chosen({
     kind: 'qbittorrent',
-    reason: 'anonymous_ok',
+    reason: 'connected',
     detail: 'v5.2.3 · Web API 2.15.1',
     base_url: 'http://qbittorrent:8080',
   }),
-  detection({
+  chosen({
     kind: 'prowlarr',
-    reason: 'no_indexers',
-    detail: '',
+    reason: 'connected',
+    detail: '0',
     base_url: 'http://prowlarr:9696',
   }),
 ]
 
-/** 第 3 步狀態的測試建構子。預設是「套件內、還沒跑過」。 */
+/** Jellyfin 狀態的測試建構子（頁 3 的媒體庫）。預設是「套件內、還沒跑過」。 */
 export function jellyfinSetup(overrides: Partial<JellyfinSetup> = {}): JellyfinSetup {
   return {
     origin: 'bundled',

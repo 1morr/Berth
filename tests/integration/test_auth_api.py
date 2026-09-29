@@ -282,7 +282,7 @@ class TestSettingsAreAdminOnly:
         sign_in(client, DECKHAND)
 
         assert client.get("/api/setup/status").status_code == 403
-        assert post(client, "/api/setup/detect", {}).status_code == 403
+        assert post(client, "/api/setup/services/qbittorrent/test", {}).status_code == 403
 
     def test_an_ordinary_user_cannot_rerun_the_jellyfin_sequence(self, client: TestClient) -> None:
         sign_in(client, DECKHAND)
@@ -342,7 +342,6 @@ ACCESS: dict[tuple[str, str], Access] = {
     ("GET", "/health"): Access.ANONYMOUS,
     # 精靈的開場：擁有者成立之前匿名，之後只有管理員（M4 票 06，`test_setup_api.py::TestGate`）。
     ("POST", "/setup/owner"): Access.SETUP_OPENING,
-    ("POST", "/setup/detect"): Access.SETUP_OPENING,
     ("GET", "/setup/status"): Access.SETUP_OPENING,
     # 精靈其餘的：擁有者成立之前誰都不行，之後只有管理員（`TestSettingsAreAdminOnly`）。
     ("POST", "/setup/complete"): Access.SETUP,
@@ -367,6 +366,7 @@ ACCESS: dict[tuple[str, str], Access] = {
     # `*` 是 `ServiceKind`。`jellyfin` 那一個是開場（`SETUP_OPENING_PATHS` 比的是具體路徑），
     # 兩邊的門在 `test_setup_api.py::TestGate` 各有一條。
     ("POST", "/setup/services/*"): Access.SETUP,
+    ("POST", "/setup/services/*/test"): Access.SETUP,
     ("GET", "/setup/tmdb"): Access.SETUP,
     ("POST", "/setup/tmdb/test"): Access.SETUP,
     # M2 驗收第四條點名的六組（plan §11.3、票 16）：審核、Issue、rematch、對帳、刪除、重新入庫。

@@ -8,16 +8,19 @@ from fastapi import APIRouter, HTTPException, Response, status
 from pydantic import BaseModel, ConfigDict, Field
 
 from berth.api.auth import issue_cookie
-from berth.api.deps import ClientFactoryDep, ConfigDep, SessionDep, SetupProbesDep
+from berth.api.deps import BundledServicesDep, ClientFactoryDep, ConfigDep, SessionDep
 from berth.api.errors import refusal_responses
 from berth.api.routes import route_refusal, route_responses
 from berth.api.schemas import InterfaceLoginIn, QbittorrentOut, RouteOut, StepOut
 from berth.config import Config
 from berth.domain import (
     BundledLibraryRefusal,
+    ChoiceRefusal,
     CollectionType,
-    DetectionReason,
+    ConnectionReason,
+    ConnectionState,
     IndexerKind,
+    InterfaceLoginRefusal,
     OwnerRefusal,
     RouteRefusal,
     ServiceKind,
@@ -37,6 +40,7 @@ from berth.services.indexer import (
 )
 from berth.services.jellyfin import (
     BundledLibraryRejectedError,
+    InterfaceLoginRejectedError,
     add_berth_path,
     bootstrap_jellyfin,
     connect_jellyfin,
@@ -53,37 +57,41 @@ from berth.services.routes import (
     read_route_status,
 )
 from berth.services.setup import (
+    ChoiceLockedError,
     OwnerRejectedError,
     ServiceConnection,
     SetupStatus,
+    choose_service,
     claim_owner,
     complete_setup,
-    connect_service,
-    detect_services,
     read_status,
+    retest_service,
 )
 from berth.services.tmdb import read_tmdb_status, verify_tmdb
 
-#: 誰進得來這一組由門禁決定（`api/gate.py`）：擁有者成立之前只開找 Jellyfin 與成立擁有者那幾支，
+#: 誰進得來這一組由門禁決定（`api/gate.py`）：擁有者成立之前只開 Jellyfin 的選擇、測試與成立擁有者，
 #: 之後只有管理員（M4 票 06）。
 #: 規則放在那裡而不是這裡的相依，是為了「忘記掛相依」不會變成一個沒人守的洞。
 #: 精靈跑完之後設定頁呼叫的也是這一組（票 06i）：命令冪等，一份命令、一份端點。
 router = APIRouter(prefix="/setup", tags=["setup"])
 
 
-class ServiceDetectionOut(BaseModel):
+class ServiceOut(BaseModel):
+    """一個服務的來源選擇與最後一次測試（plan §9.3〈服務頁的共同形狀〉）。"""
+
     model_config = ConfigDict(from_attributes=True)
 
     kind: ServiceKind
     origin: ServiceOrigin
-    reason: DetectionReason
+    #: Berth 連的那一條：套件內是 compose 主機名，既有是使用者填的。
+    base_url: str
+    #: 還沒測過是 `null`。
+    state: ConnectionState | None
+    reason: ConnectionReason | None
     #: 實測值（版本號、索引站數量）。UI 直接顯示，不翻譯。
     detail: str
-    base_url: str
-    #: 這個判定來自使用者填的連線表單，不是探測 compose 主機名的結果。
-    configured: bool
-    #: 連線問題解掉了沒。沒解掉就要使用者補位址或憑證。
-    resolved: bool
+    #: 套件內那一台還在啟動時，這一輪已經等了幾秒。
+    waited_seconds: int
 
 
 class SetupStatusOut(BaseModel):
@@ -92,16 +100,17 @@ class SetupStatusOut(BaseModel):
 
     completed: bool
     current_step: int
-    #: 擁有者的 Jellyfin 名字；空字串就是還沒有（第 1 步）。
+    #: 擁有者的 Jellyfin 名字；空字串就是還沒有（頁 1）。
     owner: str
-    #: 第 1 步是登入（既有 Jellyfin，或套件內的管理員已經建好）而不是建立。
+    #: 頁 1 是登入（那一台已經有管理員）而不是建立。
     owner_signs_in: bool
-    services: list[ServiceDetectionOut]
-    waited_seconds: int
+    #: 選過的服務。沒選的不在裡面。
+    services: list[ServiceOut]
+    #: 套件內那一台還在啟動時的輪詢上限。
     window_seconds: int
-    #: 第 2 步探的三個 compose 位址（`bundled_targets`）。畫面的「將會探測」照它說，
+    #: 選「套件內」會連的三個 compose 位址（`bundled_targets`）。服務頁照它說「套件內會連哪裡」，
     #: 不在前端寫死 port（票 06h）。
-    probe_targets: dict[ServiceKind, str]
+    bundled_targets: dict[ServiceKind, str]
 
 
 class OwnerIn(BaseModel):
@@ -135,22 +144,36 @@ def owner_refusal(refusal: OwnerRejectedError) -> HTTPException:
     return HTTPException(_OWNER_STATUS[refusal.reason], detail=body.model_dump(mode="json"))
 
 
-class ConnectIn(BaseModel):
-    """既有服務的連線表單。每個服務只用得到其中幾個欄位。"""
+#: 選擇不成立的那一種：擁有者之後改 Jellyfin 的來源是 409（與它現在的狀態衝突）。
+_CHOICE_STATUS: dict[ChoiceRefusal, int] = {ChoiceRefusal.JELLYFIN_OWNED: status.HTTP_409_CONFLICT}
 
-    base_url: str = Field(min_length=1)
-    #: Prowlarr / Torznab 的 key；Prowlarr 讀不到掛載時使用者手動貼在這裡。
+
+class ChoiceRefusalOut(BaseModel):
+    reason: ChoiceRefusal
+    detail: str
+
+
+def choice_refusal(refusal: ChoiceLockedError) -> HTTPException:
+    body = ChoiceRefusalOut(reason=refusal.reason, detail=refusal.detail)
+    return HTTPException(_CHOICE_STATUS[refusal.reason], detail=body.model_dump(mode="json"))
+
+
+class ChoiceIn(BaseModel):
+    """服務頁的二選一。選既有時帶那個服務要的連線資訊，每個服務只用得到其中幾個欄位。"""
+
+    origin: ServiceOrigin
+    #: 既有服務的位址。套件內的忽略它：位址是 compose 主機名。
+    base_url: str = ""
+    #: Prowlarr 的 API key：既有的必填；套件內的只在唯讀掛載讀不到時由使用者貼。
     api_key: str = ""
-    #: qBittorrent 的 WebUI 帳密。留空代表那台是免密的。
+    #: 既有 qBittorrent 的 WebUI 帳密。留空代表那台是免密的。
     username: str = ""
     password: str = ""
 
 
-class DetectIn(BaseModel):
-    #: 使用者按「重試」，重新開始 2 分鐘的輪詢窗口。
+class RetestIn(BaseModel):
+    #: 使用者按「重新測試」：2 分鐘的輪詢重新算。前端的自動輪詢不帶。
     restart: bool = False
-    #: 只重探這一個服務（精靈的「重新偵測這個服務」，票 06d）。沒給就是整輪。
-    kind: ServiceKind | None = None
 
 
 @router.get("/status")
@@ -180,49 +203,86 @@ async def post_owner(
     return _out(claimed.status, config)
 
 
-@router.post("/detect")
-async def post_detect(
-    session: SessionDep, config: ConfigDep, probes: SetupProbesDep, body: DetectIn | None = None
-) -> SetupStatusOut:
-    request = body or DetectIn()
-    return _out(
-        await detect_services(session, probes, restart=request.restart, kind=request.kind), config
-    )
-
-
-@router.post("/services/{kind}")
+@router.post("/services/{kind}", responses=refusal_responses(ChoiceRefusalOut, _CHOICE_STATUS))
 async def post_service(
     session: SessionDep,
     config: ConfigDep,
     factory: ClientFactoryDep,
+    bundled: BundledServicesDep,
     kind: ServiceKind,
-    body: ConnectIn,
+    body: ChoiceIn,
 ) -> SetupStatusOut:
-    """既有服務的「測試連線」：存下連線資訊再連一次（plan §9.3 第 2 步）。"""
-    return _out(
-        await connect_service(
+    """服務頁的二選一：存下來源與連線資訊，然後測一次（plan §9.3〈服務頁的共同形狀〉）。
+
+    擁有者成立之後改 Jellyfin 的來源是 409（擁有者是那一台上的帳號）；既有卻沒給位址是 422。
+    """
+    try:
+        result = await choose_service(
             session,
+            factory,
+            bundled,
             kind,
+            body.origin,
             ServiceConnection(
-                base_url=body.base_url.rstrip("/"),
+                base_url=body.base_url.strip().rstrip("/"),
                 api_key=body.api_key.strip(),
                 username=body.username,
                 password=body.password,
             ),
-            factory,
-            compose_hosts=bundled_targets(config),
-        ),
-        config,
-    )
+        )
+    except ChoiceLockedError as refusal:
+        raise choice_refusal(refusal) from refusal
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
+    return _out(result, config)
+
+
+@router.post("/services/{kind}/test")
+async def post_service_test(
+    session: SessionDep,
+    config: ConfigDep,
+    factory: ClientFactoryDep,
+    kind: ServiceKind,
+    body: RetestIn | None = None,
+) -> SetupStatusOut:
+    """用存下來的選擇再測一次：出問題那一頁的「重新測試」，與套件內那一台還在啟動時的輪詢。
+    還沒選過是 422。"""
+    try:
+        result = await retest_service(session, factory, kind, restart=(body or RetestIn()).restart)
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
+    return _out(result, config)
 
 
 def _out(result: SetupStatus, config: Config) -> SetupStatusOut:
     return SetupStatusOut.model_validate(
-        {**asdict(result), "probe_targets": bundled_targets(config)}
+        {**asdict(result), "bundled_targets": bundled_targets(config)}
     )
 
 
-# --- 第 3 步：Jellyfin（plan §9.4、§9.5）---
+#: 「沿用 Jellyfin 帳密」沒過的兩種（M4 票 15）：密碼不對是 422（這份輸入不成立），
+#: Jellyfin 連不上是 502。
+_LOGIN_STATUS: dict[InterfaceLoginRefusal, int] = {
+    InterfaceLoginRefusal.OWNER_PASSWORD: status.HTTP_422_UNPROCESSABLE_CONTENT,
+    InterfaceLoginRefusal.JELLYFIN_UNREACHABLE: status.HTTP_502_BAD_GATEWAY,
+}
+
+
+class InterfaceLoginRefusalOut(BaseModel):
+    reason: InterfaceLoginRefusal
+    #: Jellyfin 的原文（英文）；密碼不對是空字串。
+    detail: str
+
+
+def login_refusal(refusal: InterfaceLoginRejectedError) -> HTTPException:
+    body = InterfaceLoginRefusalOut(reason=refusal.reason, detail=refusal.detail)
+    return HTTPException(_LOGIN_STATUS[refusal.reason], detail=body.model_dump(mode="json"))
+
+
+_LOGIN_RESPONSES = refusal_responses(InterfaceLoginRefusalOut, _LOGIN_STATUS)
+
+
+# --- Jellyfin（頁 1 之後的媒體庫與設定頁，plan §9.4、§9.5）---
 
 
 class LibraryOut(BaseModel):
@@ -324,8 +384,15 @@ async def get_jellyfin(session: SessionDep) -> JellyfinSetupOut:
 async def post_jellyfin_bootstrap(
     session: SessionDep, factory: ClientFactoryDep
 ) -> JellyfinSetupOut:
-    """套件內路徑：跑完 plan §9.4 的七步。重按只補做還沒做的那幾步。"""
-    return JellyfinSetupOut.model_validate(await bootstrap_jellyfin(session, factory))
+    """套件內路徑：建使用者列的媒體庫（plan §9.4 第 4 步）。重按只補建還沒建的那幾個。
+
+    選了既有（或還沒選）是 422：Berth 絕不在使用者的 Jellyfin 上建媒體庫（brief §16.4）。
+    """
+    try:
+        result = await bootstrap_jellyfin(session, factory)
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
+    return JellyfinSetupOut.model_validate(result)
 
 
 @router.put(
@@ -344,10 +411,14 @@ async def put_jellyfin_bundled(session: SessionDep, body: BundledLibrariesIn) ->
 async def post_jellyfin_connect(
     session: SessionDep, factory: ClientFactoryDep, body: JellyfinConnectIn
 ) -> JellyfinSetupOut:
-    """既有路徑：登入、建立 API key、列出媒體庫（plan §9.5）。"""
-    return JellyfinSetupOut.model_validate(
-        await connect_jellyfin(session, factory, username=body.username, password=body.password)
-    )
+    """既有路徑：登入、建立 API key、列出媒體庫（plan §9.5）。還沒選來源是 422。"""
+    try:
+        result = await connect_jellyfin(
+            session, factory, username=body.username, password=body.password
+        )
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
+    return JellyfinSetupOut.model_validate(result)
 
 
 @router.post("/jellyfin/libraries/paths")
@@ -358,12 +429,14 @@ async def post_jellyfin_library_path(
 
     失敗不是 4xx/5xx，而是回一條 `failed` 的 `libraries` 步驟——畫面靠它顯示原文與手動步驟。
     """
-    return JellyfinSetupOut.model_validate(
-        await add_berth_path(session, factory, library_name=body.library)
-    )
+    try:
+        result = await add_berth_path(session, factory, library_name=body.library)
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
+    return JellyfinSetupOut.model_validate(result)
 
 
-# --- 第 4 步：qBittorrent（plan §9.3 第 4 步、§8.1）---
+# --- 頁 2：qBittorrent（plan §9.3、§8.1）---
 
 
 @router.get("/qbittorrent/diff")
@@ -377,7 +450,7 @@ class QbittorrentApplyIn(BaseModel):
     login: InterfaceLoginIn | None = None
 
 
-@router.post("/qbittorrent/apply")
+@router.post("/qbittorrent/apply", responses=_LOGIN_RESPONSES)
 async def post_qbittorrent_apply(
     session: SessionDep, factory: ClientFactoryDep, body: QbittorrentApplyIn | None = None
 ) -> QbittorrentOut:
@@ -388,24 +461,28 @@ async def post_qbittorrent_apply(
     login = body.login.value() if body is not None and body.login is not None else None
     try:
         result = await apply_qbittorrent(session, factory, login=login)
+    except InterfaceLoginRejectedError as refusal:
+        raise login_refusal(refusal) from refusal
     except ValueError as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
     return QbittorrentOut.model_validate(result)
 
 
-@router.put("/qbittorrent/login")
+@router.put("/qbittorrent/login", responses=_LOGIN_RESPONSES)
 async def put_qbittorrent_login(
     session: SessionDep, factory: ClientFactoryDep, body: InterfaceLoginIn
 ) -> QbittorrentOut:
     """設定頁的「更新登入」（M4 票 07）：只換套件內那一台的 WebUI 登入。既有的那一台 422。"""
     try:
         result = await set_qbittorrent_login(session, factory, body.value())
+    except InterfaceLoginRejectedError as refusal:
+        raise login_refusal(refusal) from refusal
     except ValueError as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
     return QbittorrentOut.model_validate(result)
 
 
-# --- 第 6 步：索引站（plan §9.3 第 6 步、§8.4）---
+# --- 頁 4：Prowlarr 與索引站（plan §9.3、§8.4）---
 
 
 class IndexerOptionOut(BaseModel):
@@ -426,7 +503,8 @@ class IndexerOptionOut(BaseModel):
 class IndexerSetupOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    origin: ServiceOrigin
+    #: 使用者在頁 4 選的來源；還沒選是 `null`。
+    origin: ServiceOrigin | None
     kind: IndexerKind
     base_url: str
     api_key_present: bool
@@ -486,7 +564,7 @@ async def get_indexers(session: SessionDep, factory: ClientFactoryDep) -> Indexe
     return IndexerSetupOut.model_validate(await read_indexer_status(session, factory))
 
 
-@router.post("/indexers/apply")
+@router.post("/indexers/apply", responses=_LOGIN_RESPONSES)
 async def post_indexers_apply(
     session: SessionDep, factory: ClientFactoryDep, body: IndexerApplyIn
 ) -> IndexerSetupOut:
@@ -501,12 +579,14 @@ async def post_indexers_apply(
             body.indexers,
             login=body.login.value() if body.login is not None else None,
         )
+    except InterfaceLoginRejectedError as refusal:
+        raise login_refusal(refusal) from refusal
     except ValueError as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
     return IndexerSetupOut.model_validate(result)
 
 
-@router.put("/indexers/login")
+@router.put("/indexers/login", responses=_LOGIN_RESPONSES)
 async def put_indexers_login(
     session: SessionDep, factory: ClientFactoryDep, body: InterfaceLoginIn
 ) -> IndexerSetupOut:
@@ -516,6 +596,8 @@ async def put_indexers_login(
     """
     try:
         result = await set_prowlarr_login(session, factory, body.value())
+    except InterfaceLoginRejectedError as refusal:
+        raise login_refusal(refusal) from refusal
     except ValueError as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
     return IndexerSetupOut.model_validate(result)
@@ -574,7 +656,7 @@ async def post_indexers_skip(
     )
 
 
-# --- 第 7 步：TMDB（plan §9.3 第 7 步、§8.3）。憑證使用者自備、必填（票 02b）---
+# --- 頁 5：TMDB（plan §9.3、§8.3）。憑證使用者自備、必填（票 02b）---
 
 
 class TmdbSetupOut(BaseModel):
@@ -606,7 +688,7 @@ async def post_tmdb_test(
     return TmdbSetupOut.model_validate(await verify_tmdb(session, factory, api_key=body.api_key))
 
 
-# --- 第 5 步、第 8 步：媒體庫 → Route 與完成（plan §9.3 第 5 步、第 8 步、§9.5）---
+# --- 頁 3、頁 6：媒體庫與路徑、完成（plan §9.3、§9.5）---
 
 
 class LibraryChoiceOut(BaseModel):

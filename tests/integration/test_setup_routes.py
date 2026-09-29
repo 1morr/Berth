@@ -1,4 +1,4 @@
-"""精靈第 5 步（Route）與第 8 步的 services 命令（plan §9.3、§9.5、brief §4、§16.4、票 09）。
+"""精靈頁 3（媒體庫與路徑）與完成頁的 services 命令（plan §9.3、§9.5、brief §4、§16.4、票 09）。
 
 驗的是票 09 的驗收條件：套件內自動建三個 Route、既有由使用者勾選、每個 Route 建 category
 並跑三項檢查、失敗說得出是哪個容器少了哪個掛載、重跑不長出重複列、全綠才寫得下
@@ -553,18 +553,18 @@ class TestCompletion:
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
         """Route 只依賴 Jellyfin 與 qBittorrent，所以排在索引站與 TMDB 之前（票 06d）：
-        掛載設錯的人在第 5 步就知道，不必先去申請一把 TMDB key。"""
+        掛載設錯的人在頁 3 就知道，不必先去申請一把 TMDB key。"""
         await arrange(session, roots)
         setup = await read_settings(session, SetupSettings)
         setup.indexer.steps = []
         setup.tmdb.steps = []
         await write_settings(session, setup)
 
-        assert (await read_status(session)).current_step == STEP_ROUTES == 5
+        assert (await read_status(session)).current_step == STEP_ROUTES == 3
 
         await build_routes(session, factory_for(roots), ())
 
-        assert (await read_status(session)).current_step == STEP_INDEXER == 6
+        assert (await read_status(session)).current_step == STEP_INDEXER == 4
 
     @pytest.mark.asyncio
     async def test_a_green_route_moves_the_wizard_to_the_last_step(

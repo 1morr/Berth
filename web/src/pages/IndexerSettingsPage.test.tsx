@@ -40,13 +40,27 @@ function siteSearch(indexer_id: number | null, name: string, count: number): Sit
   return { indexer_id, definition_name: name.toLowerCase(), name, count, titles: [], error: '' }
 }
 
+/** 介面登入那一區。擁有者讀回來之前欄位不畫，所以等勾選出現。 */
+async function loginSection() {
+  const section = within(
+    (await screen.findByRole('heading', { name: '介面登入' })).closest('section')!,
+  )
+  await section.findByRole('checkbox', { name: '沿用 Jellyfin 帳密（skipper）' })
+  return section
+}
+
 function render(routes: Record<string, StubRoute | (() => StubRoute)> = {}) {
   return stubApi({
     'GET /api/health': { body: HEALTHY },
     'GET /api/auth/me': { body: { name: 'skipper', role: 'admin' } },
     'GET /api/settings/services': { body: healthDetail() },
     'GET /api/setup/status': {
-      body: setupStatus({ completed: true, current_step: 8, services: ALL_BUNDLED }),
+      body: setupStatus({
+        completed: true,
+        current_step: 6,
+        owner: 'skipper',
+        services: ALL_BUNDLED,
+      }),
     },
     [INDEXERS]: { body: withSites() },
     ...routes,
@@ -178,7 +192,7 @@ describe('設定 → 索引站', () => {
     expect(screen.queryByRole('heading', { name: '介面登入' })).not.toBeInTheDocument()
   })
 
-  it('改 Prowlarr 介面登入：只送登入那一支，說出舊的那一組不能再用（M4 票 07）', async () => {
+  it('改 Prowlarr 介面登入：預設沿用 Jellyfin 帳密，只送登入那一支（M4 票 07、15）', async () => {
     const stub = render({
       [INDEXERS]: { body: { ...withSites(), web_ui_username: 'skipper' } },
       [LOGIN]: {
@@ -193,18 +207,19 @@ describe('設定 → 索引站', () => {
     const user = userEvent.setup()
     renderApp('/settings/indexers')
 
-    const login = within(
-      (await screen.findByRole('heading', { name: '介面登入' })).closest('section')!,
-    )
-    expect(login.getByLabelText('帳號')).toHaveValue('skipper')
-    await user.type(login.getByLabelText('密碼'), 'changed')
-    await user.type(login.getByLabelText('再輸入一次密碼'), 'changed')
+    const login = await loginSection()
+    expect(login.getByRole('checkbox', { name: '沿用 Jellyfin 帳密（skipper）' })).toBeChecked()
+    await user.type(login.getByLabelText('skipper 的 Jellyfin 密碼'), 'hunter2')
     await user.click(login.getByRole('button', { name: '更新登入' }))
 
     expect(await login.findByText(/之後用 skipper 登入，舊的那一組不能再用/)).toBeInTheDocument()
     const call = stub.mock.calls.find(([url]) => url === '/api/setup/indexers/login')!
     expect(call[1]?.method).toBe('PUT')
-    expect(JSON.parse(String(call[1]?.body))).toEqual({ username: 'skipper', password: 'changed' })
+    expect(JSON.parse(String(call[1]?.body))).toEqual({
+      username: '',
+      password: 'hunter2',
+      reuse_owner: true,
+    })
     expect(stub.mock.calls.some(([url]) => url === '/api/setup/indexers/apply')).toBe(false)
   })
 
@@ -224,13 +239,9 @@ describe('設定 → 索引站', () => {
     const user = userEvent.setup()
     renderApp('/settings/indexers')
 
-    const login = within(
-      (await screen.findByRole('heading', { name: '介面登入' })).closest('section')!,
-    )
+    const login = await loginSection()
     expect(login.getByText(/還沒有設過/)).toBeInTheDocument()
-    await user.type(login.getByLabelText('帳號'), 'skipper')
-    await user.type(login.getByLabelText('密碼'), 'changed')
-    await user.type(login.getByLabelText('再輸入一次密碼'), 'changed')
+    await user.type(login.getByLabelText('skipper 的 Jellyfin 密碼'), 'hunter2')
     await user.click(login.getByRole('button', { name: '更新登入' }))
 
     expect(await login.findByText('connection refused')).toBeInTheDocument()

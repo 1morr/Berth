@@ -21,8 +21,10 @@ from berth.adapters.jellyfin.fake import FakeJellyfinClient
 from berth.domain import (
     BundledLibraryRefusal,
     CollectionType,
-    DetectionReason,
+    ConnectionReason,
+    HealthStatus,
     JellyfinStep,
+    QbittorrentStep,
     ServiceKind,
     ServiceOrigin,
     StepStatus,
@@ -31,8 +33,9 @@ from berth.models import (
     BundledLibrary,
     JellyfinSettings,
     PathSettings,
-    ServiceProbe,
+    Route,
     SetupSettings,
+    SetupStep,
 )
 from berth.services.jellyfin import (
     BundledLibraryRejectedError,
@@ -44,8 +47,8 @@ from berth.services.jellyfin import (
     save_bundled_libraries,
 )
 from berth.services.settings import read_settings, write_settings
-from berth.services.setup import STEP_QBITTORRENT, read_status
-from tests.integration.arrange import own
+from berth.services.setup import STEP_INDEXER, STEP_ROUTES, read_status
+from tests.integration.arrange import chosen, own
 from tests.integration.factories import FakeClientFactory
 
 NOW = datetime(2026, 9, 7, 12, 0, tzinfo=UTC)
@@ -62,35 +65,21 @@ async def seed(
     library_root: str = "/data/library",
     owner: bool = True,
 ) -> None:
-    """把第 1–2 步的產物放好：擁有者與三個服務的判定。"""
+    """把頁 1 的產物放好：擁有者與三個服務的選擇（M4 票 15）。"""
     if owner:
         await own(session)
     setup = await read_settings(session, SetupSettings)
-    setup.services = {
-        ServiceKind.JELLYFIN: ServiceProbe(
-            origin=origin,
-            reason=(
-                DetectionReason.SETUP_PENDING
-                if origin is ServiceOrigin.BUNDLED
-                else DetectionReason.SETUP_COMPLETED
-            ),
+    setup.choices = {
+        ServiceKind.JELLYFIN: chosen(
+            origin,
+            base_url,
+            ConnectionReason.SETUP_PENDING
+            if origin is ServiceOrigin.BUNDLED
+            else ConnectionReason.SETUP_COMPLETED,
             detail="12.1.0",
-            base_url=base_url,
-            checked_at=NOW,
         ),
-        # 另外兩個服務也要有結論，否則精靈還在第 2 步（plan §9.3）。
-        ServiceKind.QBITTORRENT: ServiceProbe(
-            origin=ServiceOrigin.BUNDLED,
-            reason=DetectionReason.ANONYMOUS_OK,
-            base_url="http://qbittorrent:8080",
-            checked_at=NOW,
-        ),
-        ServiceKind.PROWLARR: ServiceProbe(
-            origin=ServiceOrigin.BUNDLED,
-            reason=DetectionReason.NO_INDEXERS,
-            base_url="http://prowlarr:9696",
-            checked_at=NOW,
-        ),
+        ServiceKind.QBITTORRENT: chosen(ServiceOrigin.BUNDLED, "http://qbittorrent:8080"),
+        ServiceKind.PROWLARR: chosen(ServiceOrigin.BUNDLED, "http://prowlarr:9696"),
     }
     await write_settings(session, setup)
     paths = await read_settings(session, PathSettings)
@@ -528,15 +517,49 @@ async def test_a_jellyfin_that_is_not_reachable_fails_on_the_first_step(
 
 
 @pytest.mark.asyncio
-async def test_the_wizard_moves_past_jellyfin_once_the_sequence_is_done(
+async def test_the_libraries_page_waits_for_the_bundled_libraries(
     session: AsyncSession, tmp_path: Path
 ) -> None:
+    """頁 3 的前半是套件內 Jellyfin 的媒體庫（票 06f，M4 票 15 把它從 Jellyfin 頁搬過來）：
+    有一條綠的 Route 也不算，清單建完才走得過去。"""
     await seed(session, library_root=str(tmp_path / "library"))
-    assert (await read_status(session)).current_step == 3
+    setup = await read_settings(session, SetupSettings)
+    setup.qbittorrent.steps = [
+        SetupStep(key=step.value, status=StepStatus.OK) for step in QbittorrentStep
+    ]
+    await write_settings(session, setup)
+    session.add(
+        Route(
+            slug="tv",
+            name="TV",
+            jellyfin_library_id="item-tv",
+            jellyfin_library_name="TV",
+            collection_type=CollectionType.TVSHOWS,
+            target_path=f"{tmp_path}/library/tv",
+            category="berth-tv",
+            health_status=HealthStatus.OK,
+        )
+    )
+    await session.commit()
+    assert (await read_status(session)).current_step == STEP_ROUTES
 
     await dock(session, FakeClientFactory(jellyfin=FakeJellyfinClient()))
 
-    assert (await read_status(session)).current_step == STEP_QBITTORRENT
+    assert (await read_status(session)).current_step == STEP_INDEXER
+
+
+@pytest.mark.asyncio
+async def test_libraries_are_never_created_on_an_existing_jellyfin(
+    session: AsyncSession, tmp_path: Path
+) -> None:
+    """brief §16.4 的紅線：選了既有就不建媒體庫——畫面沒有那顆鍵，直接打 API 也一樣。"""
+    await seed(session, origin=ServiceOrigin.EXISTING, library_root=str(tmp_path / "library"))
+    jellyfin = FakeJellyfinClient()
+
+    with pytest.raises(ValueError, match="existing service"):
+        await dock(session, FakeClientFactory(jellyfin=jellyfin))
+
+    assert jellyfin.created == []
 
 
 # --- 既有 Jellyfin（plan §9.5）---

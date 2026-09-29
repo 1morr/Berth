@@ -17,26 +17,39 @@ docker compose up -d
 開 <http://localhost:8383>，之後所有設定都在 Berth 的精靈裡完成，不需要分別打開另外三個服務的介面。
 **唯一要離開 Berth 的一步是 TMDB 的 API key**，見下面的〈先申請一把 TMDB API key〉。
 
-精靈是八個步驟、五個泊位：
+精靈是六頁、五個泊位。**Jellyfin、qBittorrent、Prowlarr 那三頁的頁首都是二選一**：「套件內」（compose 帶來的那一台）
+或「既有」（你自己已經在跑的那一台）。不預選、不偵測——選了 Berth 才去連，選完當場測給你看。
 
-| 泊位 | 步驟 | 套件內的服務 | 你自己的服務 |
+| 泊位 | 頁 | 選「套件內」 | 選「既有」 |
 | --- | --- | --- | --- |
-| — | 1 擁有者 | 找到 Jellyfin、確認版本 ≥ 12.0，以你填的帳密建立它的管理員、跑完它的初始設定、換 API key | 用它自己的管理員登入、換 API key，不改任何設定；探不到就填位址 |
-| — | 2 探測 qBittorrent 與 Prowlarr | 探到 compose 主機名就是套件內；還在啟動的顯示「探測中」，自己等到起來（上限 2 分鐘），不必按重新探測 | 探不到就填位址，就地測連線 |
-| BTH 1 | 3 Jellyfin | 建清單上的媒體庫（預設 Movies / TV / Anime，可改名、增刪） | 列出媒體庫；「加入 Berth 路徑」是一顆要確認的按鈕 |
-| BTH 2 | 4 qBittorrent | 套用五個建議鍵 | 只顯示現值，一個全域鍵都不寫 |
-| BTH 3 | 5 媒體庫路徑 | 走到就替每個媒體庫自動建一條 Route、跑五條檢查 | 勾選媒體庫與寫入目標 |
-| BTH 4 | 6 索引站 | 加九個預設公開站（每一站標出語言），加完試搜、不要的移除 | 填既有 Prowlarr 或任一 Torznab 網址，接上之後同樣可以試搜 |
-| BTH 5 | 7 TMDB | 貼你自己的 API key 並測試 | 同左 |
-| — | 8 完成 | 說出跳過了什麼、在哪裡補 | 同左 |
+| BTH 1 | 1 Jellyfin | 連 compose 裡的那一台；還在啟動就顯示倒數、自己每 3 秒再測（上限 2 分鐘），不必按 | 填位址、按「測試連線」 |
+| | | 連上之後：那一台還沒跑過初始精靈就以你填的帳密建立管理員、跑完它的初始設定；已經有管理員就用它登入。兩種都換一把 API key「Berth」 | 同左（選既有而它還沒初始化，一樣是建立） |
+| BTH 2 | 2 qBittorrent | 套用五個建議鍵、設 WebUI 登入 | 填位址與 WebUI 帳密；只顯示現值，一個全域鍵都不寫 |
+| BTH 3 | 3 媒體庫路徑 | 先建清單上的媒體庫（預設 Movies / TV / Anime，可改名、增刪），再替每個媒體庫自動建一條 Route、跑五條檢查 | 勾選媒體庫與寫入目標；「加入 Berth 路徑」是一顆要確認的按鈕 |
+| BTH 4 | 4 Prowlarr 與索引站 | API key 從掛載讀；加九個預設公開站（每一站標出語言）、設介面登入，加完試搜、不要的移除 | 貼 API key（或任一 Torznab 網址），用你已經有的站，接上之後同樣可以試搜 |
+| BTH 5 | 5 TMDB | 貼你自己的 API key 並測試 | 同左 |
+| — | 6 完成 | 說出跳過了什麼、在哪裡補 | 同左 |
 
-索引站那一步可以按「之後再說」（沒接只是搜尋不到東西）；**TMDB 那一步不行** —— 沒有一把測得過的憑證就沒有標題、季集與封面，精靈停在第 7 步。
+**選「既有」的條件**：Jellyfin 與 qBittorrent 要和 Berth 在**同一台主機**，而且把同一個父目錄掛在**同一個容器路徑**
+（例如三個都是 `/data`）——Berth 用硬鏈接入庫，另一台 NAS 上的、或把下載與媒體庫分開掛成 `/downloads`、`/tv` 的接不上
+（不做 remote path mapping）。選了既有，就把那個服務從 `.env` 的 `COMPOSE_PROFILES` 拿掉再 `docker compose up -d`；
+頁上會照你已經選的算出整行（其他選了既有的也不在裡面），忘了拿掉也不致命。反過來，選了「套件內」而 compose 裡沒有它
+（主機名解不到），那一條會說出怎麼把它加回 `COMPOSE_PROFILES`；加回、或改了 `.env` 的 port 之後，在那一頁**再點一次
+「套件內」**（重存 compose 位址再測）——「重新測試」只拿已經存下的那一條再敲一次。
 
-每條 Route 建立時都會**真的建一個硬鏈接再比對 inode**，三個容器看到的不是同一個檔案系統就當場失敗，並指出是哪個容器少了哪個掛載。全部綠燈才走得到下一個泊位——所以掛載設錯在第 5 步就會知道，不必先去申請 TMDB key。
+**換一台**：Jellyfin 在擁有者成立之後鎖住（擁有者是那一台上的帳號，換一台等於換擁有者；精靈跑完之後在「設定 → Jellyfin」
+換位址）。qBittorrent 與 Prowlarr 隨時可以改選：Berth 已經寫進原本那一台的東西留在那裡、不撤回，那一頁要重做；換了
+qBittorrent，媒體庫路徑也要重新檢查。
 
-每個泊位做完都停在結果上，按「前往下一個泊位」才走；泊位板上走過的格子點得回去，每一頁都有「上一個泊位」。
+索引站那一頁可以按「之後再說」（沒接只是搜尋不到東西）；**TMDB 那一頁不行** —— 沒有一把測得過的憑證就沒有標題、季集與封面，精靈停在頁 5。
 
-**Berth 沒有自己的帳號**：第 1 步的那一組就是 Jellyfin 的管理員，也是 Berth 的擁有者，之後登入 Berth 就用它（其他人用自己的 Jellyfin 帳號，角色由 Jellyfin 決定）。密碼只交給 Jellyfin，Berth 不存。擁有者成立之前精靈只做得了「找到 Jellyfin、成為擁有者」，之後的每一步都要登入——誰先到誰建立，與 Jellyfin 自己的啟動精靈相同。套件內 qBittorrent 與 Prowlarr 的介面登入在它們各自的泊位上設（必填，帳號預填擁有者的名字）：那是給你自己打開它們的介面用的，Berth 靠免密白名單與 API key 用不到它；之後在設定頁的「介面登入」改。
+每條 Route 建立時都會**真的建一個硬鏈接再比對 inode**，三個容器看到的不是同一個檔案系統就當場失敗，並指出是哪個容器少了哪個掛載。全部綠燈才走得到下一個泊位——所以掛載設錯在頁 3 就會知道，不必先去申請 TMDB key。
+
+每一頁做完都停在結果上，按「前往下一個泊位」才走；泊位板上走過的格子點得回去，每一頁都有「上一個泊位」。
+
+**Berth 沒有自己的帳號**：頁 1 的那一組就是 Jellyfin 的管理員，也是 Berth 的擁有者，之後登入 Berth 就用它（其他人用自己的 Jellyfin 帳號，角色由 Jellyfin 決定）。密碼只交給 Jellyfin，Berth 不存。擁有者成立之前精靈只做得了「選 Jellyfin、成為擁有者」，之後的每一頁都要登入——誰先到誰建立，與 Jellyfin 自己的啟動精靈相同。
+
+套件內 qBittorrent 與 Prowlarr 的**介面登入**在它們各自的頁上設（必填）：預設勾選「沿用 Jellyfin 帳密」，帳號就是擁有者、密碼打一次，Berth 先向 Jellyfin 驗過才寫進去；取消勾選就自己設一組（密碼打兩次）。那是給你自己打開它們的介面用的，Berth 靠免密白名單與 API key 用不到它，**只記帳號與加鹽雜湊、不存密碼**。那一台已經設過登入（重裝保留了 config）就不強迫再設。之後在設定頁的「介面登入」改。
 
 設定完成後精靈關閉，擁有者直接進 Berth；健康頁 `/health` 每 5 分鐘重跑同一組檢查。
 
@@ -56,23 +69,23 @@ docker compose up -d
 | 服務 | `.env` 變數（預設） | 備註 |
 | --- | --- | --- |
 | Berth | `BERTH_PORT`（8383） | 唯一需要開的介面 |
-| qBittorrent | `QBITTORRENT_WEBUI_PORT`（8080）、`QBITTORRENT_BT_PORT`（6881） | WebUI 從宿主或 LAN 進來要密碼：精靈第 4 步泊位上設的那一組（設定 → qBittorrent 的「介面登入」改）。兩個 port 都是容器內外同一個號碼 |
+| qBittorrent | `QBITTORRENT_WEBUI_PORT`（8080）、`QBITTORRENT_BT_PORT`（6881） | WebUI 從宿主或 LAN 進來要密碼：精靈頁 2 設的那一組（設定 → qBittorrent 的「介面登入」改）。兩個 port 都是容器內外同一個號碼 |
 | Jellyfin | `JELLYFIN_PORT`（8096） | 「在 Jellyfin 開啟」開的就是這個 port |
 | Prowlarr | `PROWLARR_PORT`（9696） | |
 
 port 跟這台機器上別的東西撞到時（同一台還跑著另一套 Berth、開發環境），改 `.env` 的這五個變數再
 `docker compose up -d`，**不要改 compose 檔**。`.env` 只放這五個 Berth 在容器裡看不到的宿主端事實；
 服務位址與憑證、下載目錄、媒體庫路徑都在精靈與設定頁裡改（brief §19）。
-**`QBITTORRENT_WEBUI_PORT` 要在跑精靈之前定下來**：Berth 連套件內 qBittorrent 的位址是精靈第 2 步探到、
-第 4 步存下的那一條，之後再改這個變數不會跟著走。
+**`QBITTORRENT_WEBUI_PORT` 要在跑精靈之前定下來**：Berth 連套件內 qBittorrent 的位址是精靈頁 2 選「套件內」
+那一刻存下的那一條，之後再改這個變數不會跟著走（回頭在頁 2 再選一次套件內就會重存）。
 
-已經有其中某個服務的人，把它從 `.env` 的 `COMPOSE_PROFILES` 拿掉，精靈會改用「既有服務」的表單接入；`berth` 沒有 profile，永遠會啟動。變數清單見 `deploy/.env.example`，裡面沒有任何秘密欄位。
+已經有其中某個服務的人，在精靈那一頁選「既有」、把它從 `.env` 的 `COMPOSE_PROFILES` 拿掉；`berth` 沒有 profile，永遠會啟動。變數清單見 `deploy/.env.example`，裡面沒有任何秘密欄位。
 
 ### 先申請一把 TMDB API key
 
 Berth **不內建任何 provider 的 API key**，TMDB 的憑證要你自己申請 —— 專案不替所有使用者背一把
 共用憑證。它是必要的：作品標題、季集結構與封面全部來自 TMDB，沒有它精靈走不完。
-**這台機器也要連得到 `api.themoviedb.org`**：第 7 步真的打一次 TMDB 驗憑證，被防火牆擋住的話精靈同樣走不完。
+**這台機器也要連得到 `api.themoviedb.org`**：TMDB 那一頁真的打一次 TMDB 驗憑證，被防火牆擋住的話精靈同樣走不完。
 
 1. 在 <https://www.themoviedb.org/signup> 註冊一個免費帳號（要收驗證信）。
 2. 開 <https://www.themoviedb.org/settings/api>，申請 API key，用途（Type of Use）選
@@ -80,7 +93,7 @@ Berth **不內建任何 provider 的 API key**，TMDB 的憑證要你自己申�
 3. 那一頁同時給兩把東西：**API Key (v3 auth)** 是 32 個十六進位字元，**API Read Access Token
    (v4 auth)** 是很長的一串 JWT。**兩種 Berth 都收**，貼哪一把都成立（v4 走標頭，不會落在
    任何一行 log 裡）。
-4. 精靈第 7 步貼上去按「測試 TMDB」，綠燈才走得到下一個泊位。之後要換一把就在
+4. 精靈 TMDB 那一頁（頁 5）貼上去按「測試 TMDB」，綠燈才走得到下一個泊位。之後要換一把就在
    「設定 → TMDB」重貼：新的那一把測得過才換掉舊的，測不過的話舊的照舊在用。
 
 TMDB 的條款限非商業使用；歸屬聲明見〈[授權與歸屬](#授權與歸屬)〉。
@@ -103,12 +116,12 @@ TMDB 的條款限非商業使用；歸屬聲明見〈[授權與歸屬](#授權�
 ### 外部服務的前提
 
 - **qBittorrent**：最低 4.4（Web API 2.8.4）。套件內的容器由 `deploy/preseed/qbittorrent/10-berth.sh` 在服務啟動前補上免密白名單，而且只放行 Berth 那一個固定 IP —— 4.6.1 起首次啟動的隨機密碼只印在容器 log，沒有這一步 Berth 進不去；WebUI 從宿主或 LAN 進來仍然要密碼。其餘偏好（temp path、save path、category 的 autoTMM）由精靈經 API 設定，按之前會顯示差異。腳本不覆蓋任何已經有值的設定。
-- **Jellyfin**：**最低 12.0**（12.0 就是原本的 10.12 —— Jellyfin 把版號前面永遠不變的 `10` 拿掉了）。12.0 起同一集的多個版本由 Jellyfin 自己合併成一個條目，不需要任何插件；10.x 要靠第三方插件，而那個插件在 12 上是空跑、還會跨媒體庫誤併，所以 Berth 只支援 12 以上。更舊的伺服器在精靈第 3 步與健康頁都是紅燈，不會被接進來。
+- **Jellyfin**：**最低 12.0**（12.0 就是原本的 10.12 —— Jellyfin 把版號前面永遠不變的 `10` 拿掉了）。12.0 起同一集的多個版本由 Jellyfin 自己合併成一個條目，不需要任何插件；10.x 要靠第三方插件，而那個插件在 12 上是空跑、還會跨媒體庫誤併，所以 Berth 只支援 12 以上。更舊的伺服器在精靈 Jellyfin 那一頁與健康頁都是紅燈，不會被接進來。
   - **從 10.x 升上來**：10.10.7 與任何 10.11.x 都可以直接升，不必經過中繼版本。**升級前**把 Jellyfin 的 `${CONFIG_ROOT}/jellyfin` 完整備份 —— 12 改了資料庫，降不回去，只能還原備份；再移除第三方插件，10.11 的插件在 12 載入不了。**升級後**完整掃描一次媒體庫，自動分組的版本才會回來。
   - **套件內的 Jellyfin 釘在 `version-12.1ubu2604`**：`docker compose pull` 只會拿到 12.1 這條線的重建，不會默默跨到下一個大版本。要升級時先備份上面那個目錄，再改 `deploy/docker-compose.yml` 的 tag 並 `docker compose up -d jellyfin`。
 - **Prowlarr**：不預置任何東西，Berth 唯讀掛載它的設定目錄以讀取它自動產生的 API key。
 - **TMDB**：要你自己申請一把 API key（上面那一節），Berth 不內建。憑證存在 Berth 自己的資料庫裡，
-  精靈第 7 步或「設定 → TMDB」都改得了。
+  精靈 TMDB 那一頁或「設定 → TMDB」都改得了。
 
 ### 秘密與備份
 
@@ -186,7 +199,7 @@ pnpm -C web dev                                     # 前端，開 Vite 印出�
 | `DATA_ROOT` | `/data` | 媒體根：incomplete、complete 與媒體庫路徑都在它底下 |
 | `PORT` | `8383` | 對外的唯一 port |
 | `JELLYFIN_PORT` | `8096` | 套件內 Jellyfin 在宿主上發佈的 port；「在 Jellyfin 開啟」沒填對外網址時開這個 port。compose 從 `deploy/.env` 的同名變數傳進來 |
-| `QBITTORRENT_WEBUI_PORT` | `8080` | 套件內 qBittorrent 的 WebUI port（容器內外同一個號碼）；精靈第 2 步探 `http://qbittorrent:<它>`。compose 從 `deploy/.env` 的同名變數傳進來 |
+| `QBITTORRENT_WEBUI_PORT` | `8080` | 套件內 qBittorrent 的 WebUI port（容器內外同一個號碼）；精靈頁 2 選套件內時連 `http://qbittorrent:<它>`。compose 從 `deploy/.env` 的同名變數傳進來 |
 | `WEB_ROOT` | `<repo>/web/dist` | 前端 build 產物。找不到時只提供 API |
 | `EXT_ROOT` | `/ext` | 其他服務唯讀掛進來的設定目錄。目前只讀 `${EXT_ROOT}/prowlarr/config.xml` 的 `<ApiKey>` |
 | `PROWLARR__AUTH__APIKEY` | 無 | Prowlarr 的 API key。用這個環境變數部署 Prowlarr 的人把同一個值也給 Berth，就不必唯讀掛它的設定目錄；有值時蓋過 `config.xml` |
@@ -324,7 +337,7 @@ CI（`.github/workflows/ci.yml`）在 push 到 `main` 與所有 PR 上跑同一�
 M1 的整條路徑、M1.5 的權限與瀏覽、M2 的修正與對帳、M3 的 RSS 對**真的** qBittorrent 與 Jellyfin 跑一遍（plan §10、`tests/e2e/`）。
 **一次 compose、一次精靈、一次入庫，四個模組共享**（fixture 在 `tests/e2e/conftest.py`；檔名的數字就是執行順序）：
 
-- `test_1_m1_pipeline.py`：精靈八步只走 Berth 的 API，送一部美劇一季、一部動漫一季、一部電影，等它們不經人工、
+- `test_1_m1_pipeline.py`：精靈六頁只走 Berth 的 API（三個服務都選套件內），送一部美劇一季、一部動漫一季、一部電影，等它們不經人工、
   依序走過完成 → 規劃 → 入庫，再驗硬鏈接兩端同一個 inode、帳本逐檔記下的 item id 就是 Jellyfin 在那條路徑上的 item。
 - `test_2_m15_library.py`：以 Jellyfin API 建一個只開放一個媒體庫的一般使用者，用它登入 Berth——看不到沒權限的
   媒體庫、直接請求也被拒；不經 Berth 放進那個媒體庫的作品照樣在牆上；某一集的 `item_id` 就是 Jellyfin 在帳本
@@ -339,7 +352,7 @@ M1 的整條路徑、M1.5 的權限與瀏覽、M2 的修正與對帳、M3 的 RS
   被播出日比對擋在審核，改一份並套用到 RSS Series 之後其餘自動入庫；在 Jellyfin 裡改掉一集的集號，對帳開出
   `jellyfin_item_mismatch`。
 
-Prowlarr 也會起來讓精靈偵測，但第 6 步跳過索引站、送單直接帶 `.torrent` 網址——搜尋不在 e2e 裡。套件內的媒體庫
+Prowlarr 也會起來讓精靈選套件內、測到連上，但索引站那一頁跳過、送單直接帶 `.torrent` 網址——搜尋不在 e2e 裡。套件內的媒體庫
 一開始是空的，反查要等 Berth 請 Jellyfin 掃描之後那一輪，所以一次**約 20 分鐘**，平常的 `uv run pytest` 不收它
 （`-m 'not e2e'`）。
 
@@ -348,13 +361,13 @@ Prowlarr 也會起來讓精靈偵測，但第 6 步跳過索引站、送單直�
 # 因為發佈名很長，Windows bind mount 的 260 字元路徑放不下。
 export CONFIG_ROOT="$PWD/.local/e2e-config"          # PowerShell: $env:CONFIG_ROOT = "$PWD/.local/e2e-config"
 docker compose -f deploy/docker-compose.yml -f tests/e2e/compose.yml --env-file tests/e2e/e2e.env up -d --build
-uv run --env-file .env pytest -m e2e tests/e2e -rA     # 要 .env 裡的 TMDB_API_KEY：精靈第 7 步是閘門
+uv run --env-file .env pytest -m e2e tests/e2e -rA     # 要 .env 裡的 TMDB_API_KEY：精靈 TMDB 那一頁是閘門
 docker compose -f deploy/docker-compose.yml -f tests/e2e/compose.yml --env-file tests/e2e/e2e.env down --volumes
 ```
 
 - **不加 `--wait`，`up` 完馬上跑測試**：這是冷啟動閘門（票 06h）。精靈在 Jellyfin 與 Prowlarr 還在啟動時就開始，
-  第 1 步照常輪詢到 Jellyfin 判定完成、成立擁有者，第 2 步輪詢到其餘兩個，都不按重新探測；探測一輪就全部判定完成的話測試會失敗，因為那一輪沒碰到啟動中的
-  那幾秒。所以 `up` 之前先 `build`（與拉 image），不要讓 `up` 之後還有東西要等。
+  三個服務頁都選套件內，各自照常每 2 秒重測到連上（頁 1 連上之後成立擁有者），都不按「重新測試」；測一輪就全部連上的話
+  測試會失敗，因為那一輪沒碰到啟動中的那幾秒。所以 `up` 之前先 `build`（與拉 image），不要讓 `up` 之後還有東西要等。
 - **一次 `up` 只跑得了一次**：精靈走完就不能再走一遍，重跑前先 `down --volumes`。
 - 容器名、網路名與 port 與正式部署相同（qBittorrent 的免密白名單認的是 berth 的固定 IP），
   所以同一台機器上正式的那一套要先停下來。
@@ -375,9 +388,9 @@ docker compose -f deploy/docker-compose.yml -f tests/e2e/compose.yml --env-file 
 
 | 流程 | 情境 | port（1280 / 390） |
 | --- | --- | --- |
-| 精靈八步走完（第 1 步建 Jellyfin 管理員成為擁有者、改媒體庫清單、每一格停在結果上、回頭再往前、試搜與移除），之後以同一組帳密登入、是管理員 | `bundled` | 8491 / 8501 |
-| 既有服務：以既有 Jellyfin 的管理員成為擁有者（打錯密碼被拒）、填 qBittorrent 帳密、加 Berth 路徑並選它當寫入目標、貼 Prowlarr 的 key | `mixed` | 8495 / 8505 |
-| 冷啟動：服務還在啟動時開始精靈，第 1 步等 Jellyfin、第 2 步等其餘兩個，不按重新探測就判定完成 | `starting` | 8496 / 8506 |
+| 精靈六頁走完（三頁都選套件內、選之前不發請求；頁 1 建 Jellyfin 管理員成為擁有者、頁 2 沿用 Jellyfin 帳密且打錯密碼被拒、頁 3 改媒體庫清單、頁 4 自設 Prowlarr 登入、每一格停在結果上、回頭再往前、試搜與移除），之後以同一組帳密登入、是管理員 | `bundled` | 8491 / 8501 |
+| 既有服務：三頁都選既有（說出同主機條件與 `COMPOSE_PROFILES` 那一行）、以既有 Jellyfin 的管理員成為擁有者（打錯密碼被拒）、填 qBittorrent 帳密、加 Berth 路徑並選它當寫入目標、貼 Prowlarr 的 key | `mixed` | 8495 / 8505 |
+| 冷啟動：服務還在啟動時選套件內，Jellyfin 與 qBittorrent 各自每 3 秒重測到連上，不按重新測試 | `starting` | 8496 / 8506 |
 | 精靈跑完之後：`/setup` 導向設定頁，加一個索引站並試搜、換 TMDB key | `healthy` | 8497 / 8507 |
 | 從作品頁送單，一路走到已入庫 | `import` | 8492 |
 | `/review` 確認一筆 audit | `review` | 8493 |
@@ -428,13 +441,13 @@ uv run python scripts/fake_setup_server.py --port 8383     # 換 port（索引�
 
 | `--scenario` | 演的是什麼 |
 | --- | --- |
-| `bundled`（預設） | 乾淨的 compose：三個服務都判為套件內，泊位 1–3 全部走得完。九個預設索引站裡有四個連不上（訊息取自真的 Prowlarr 那一輪），逐站成敗看得到；加完之後試搜，Mikan 演「搜尋時連不上」，其餘站各回幾筆 |
-| `outdated` | qBittorrent 的 Web API 低於 2.8.4：第 4 步拒絕接入並給升級指令 |
-| `mixed` | NAS 的常見組合：既有 Jellyfin（跑過自己的精靈、兩個媒體庫，其中一個掛 TVDB；管理員 `owner` / `s3cret`）、qBittorrent 已設密碼（任何帳密都測得過）、Prowlarr 已有索引站。兩個媒體庫的舊路徑是暫存目錄底下真的存在的 `nas/movies`、`nas/anime`，Route 的第三條纜繩才看得到它們，精靈走得完 |
-| `starting` | 四個容器同時起來（票 06g 量到的時間線，照探測次數演，前端每 3 秒一次）：Jellyfin 先回不像它自己的東西、再回兩次 503「還在載入」，約 9 秒後是套件內；qBittorrent 第一次連不上；Prowlarr 連不上五次，約 15 秒。第 2 步不必按重新探測就全部判定完成，之後與 `bundled` 一樣走得完 |
-| `key-missing` | 同 `bundled`，但 Prowlarr 的設定目錄沒有唯讀掛進 Berth：讀不到 API key，第 2 步要貼上 |
-| `absent` | Jellyfin 不在 `COMPOSE_PROFILES` 裡：探不到，要在第 2 步填自己那一台的位址 |
-| `old-jellyfin` | 既有 Jellyfin 還停在 10.11（其餘兩個服務照 `bundled`，擋路的只留一個）：泊位 1 紅燈，說出目前版本、為什麼要 12，以及升級前後要做的事；健康頁上同一台也是紅的 |
+| `bundled`（預設） | 乾淨的 compose：三個服務選套件內都連得上、全部走得完。九個預設索引站裡有四個連不上（訊息取自真的 Prowlarr 那一輪），逐站成敗看得到；加完之後試搜，Mikan 演「搜尋時連不上」，其餘站各回幾筆 |
+| `outdated` | qBittorrent 的 Web API 低於 2.8.4：頁 2 拒絕接入並給升級指令 |
+| `mixed` | NAS 的常見組合：既有 Jellyfin（跑過自己的精靈、兩個媒體庫，其中一個掛 TVDB；管理員 `owner` / `s3cret`）、qBittorrent 已設密碼（選既有、填任何位址與帳密都測得過；選套件內是「要求帳密」）、Prowlarr 已有索引站。三頁都選既有才走得完。兩個媒體庫的舊路徑是暫存目錄底下真的存在的 `nas/movies`、`nas/anime`，Route 的第三條纜繩才看得到它們，精靈走得完 |
+| `starting` | 四個容器同時起來（票 06g 量到的時間線，照測試次數演，前端每 3 秒一次）：選了套件內之後 Jellyfin 先回不像它自己的東西、再回兩次 503「還在載入」，約 9 秒後連上；qBittorrent 第一次連不上；Prowlarr 連不上五次，約 15 秒。不必按「重新測試」，之後與 `bundled` 一樣走得完 |
+| `key-missing` | 同 `bundled`，但 Prowlarr 的設定目錄沒有唯讀掛進 Berth：頁 4 選套件內之後讀不到 API key，就地貼上 |
+| `absent` | Jellyfin 不在 `COMPOSE_PROFILES` 裡：頁 1 選套件內是「主機名解不到」並說出怎麼加回 `COMPOSE_PROFILES`；改選既有、填任何位址就接得上 |
+| `old-jellyfin` | 既有 Jellyfin 還停在 10.11（其餘兩個服務照 `bundled`，擋路的只留一個）：頁 1 擁有者那一步紅燈，說出目前版本、為什麼要 12，以及升級前後要做的事；健康頁上同一台也是紅的 |
 | `signed-out` | 精靈已跑完，畫面從登入頁開始。`skipper` / `harbour` 是管理員，`deckhand` / `rope` 是普通使用者（看不到設定入口） |
 | `unmounted` | Jellyfin 少了媒體庫目錄的掛載：泊位 4 的第四條纜繩失敗，看「哪個容器少了哪個掛載」與 compose 修正片段 |
 | `rss` | RSS 頁 `/rss`（M3 票 08）：同 `healthy`，一個請求都不出網。Mikan 是替身：加 `https://mikanani.me/RSS/MyBangumi?token=REDACTED`（任何 token 都一樣，替身只認這一條網址）、按「立即輪詢」，票 07 錄下來的聚合 feed 12 筆長出 11 個待綁定的 RSS Series（單集頁照 `tests/integration/test_rss.py` 合成）。TMDB 也是替身，搜「Kimi ga Shinu made Koi wo Shitai」或「与你相恋到生命尽头」找得到那一部；在《与你相恋到生命尽头》那一列綁到它與 Anime，兩集的 `.torrent` 換成這台自己生的，qBittorrent 收下就當場完成，幾秒後 `/jobs` 上兩筆都已入庫。票 11 起另有錄下來的 acg.rip 搜尋 feed：加 `https://acg.rip/.xml?term=Kamiina+Botan`、按「立即輪詢」，30 筆停在頁首的第一輪預覽（8 筆合集被排除）。票 19 起在《与你相恋》的詳情頁（`/media/tv:262000`）按「新增訂閱」：以任何一個名字搜 Mikan 都是番組 4009（搜尋頁是合成的），訂閱喵萌奶茶屋&LoliHouse 就是整季 12 筆；acg.rip 以任何一個名字建搜尋 feed 讀到的都是錄下來的《与你相恋》那一份。帳號同 `signed-out` |
@@ -516,11 +529,11 @@ BERTH_QBITTORRENT_URL=http://127.0.0.1:8080   uv run --env-file .env python scri
 這些環境變數**只給開發時的演練與 `scripts/experiments/*` 用**。Berth 自己不讀它們：產品的
 唯一來源是 `settings.services.tmdb.api_key` 與 `settings.services.indexer`，由精靈寫進資料庫。
 
-Fake 是**有狀態**的，每個情境只有一份，所以第 3 步真的會把那台假 Jellyfin 一步一步改掉，
+Fake 是**有狀態**的，每個情境只有一份，所以頁 1 與頁 3 真的會把那台假 Jellyfin 一步一步改掉，
 重按也真的會標成「已經是這樣」。
 
 每次啟動都用一個新的暫存 `CONFIG_ROOT`，所以永遠是乾淨環境；`--config-root` 可指定成固定目錄
-以便跨次保留進度。精靈第 5 步（媒體庫路徑）會**真的**建目錄、寫探測檔並呼叫 `link()`，所以三層
+以便跨次保留進度。精靈頁 3（媒體庫路徑）會**真的**建目錄、寫探測檔並呼叫 `link()`，所以三層
 路徑（`settings.paths`）由這支腳本指到該次的暫存 `DATA_ROOT` 底下，不會碰到容器裡的 `/data`。
 
 `healthy` / `degraded` / `drifted` 三個情境在啟動時就真的跑過一輪 `build_routes` 與健康檢查，

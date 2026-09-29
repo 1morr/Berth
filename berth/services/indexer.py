@@ -15,8 +15,9 @@ unique`），所以重按時改成 `indexer/test`，結果一樣是「這個站�
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Awaitable, Callable, Sequence
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
+from typing import Any
 from urllib.parse import urlsplit
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -31,18 +32,27 @@ from berth.adapters.prowlarr import (
 )
 from berth.domain import (
     PROWLARR_LOGIN_STEP,
-    DetectionReason,
+    ConnectionReason,
+    ConnectionState,
     IndexerKind,
     ServiceKind,
     ServiceOrigin,
     StepStatus,
 )
-from berth.models import IndexerSettings, SetupSettings, SetupStep
+from berth.models import IndexerSettings, ServiceChoice, ServiceTest, SetupSettings, SetupStep
 from berth.models.types import utcnow
-from berth.services.clients import BUNDLED_PROWLARR_URL, ServiceClientFactory, same_host
+from berth.services.clients import ServiceClientFactory
 from berth.services.commands import Effect, command
+from berth.services.jellyfin import resolve_interface_login
 from berth.services.settings import read_settings, update_settings, write_settings
-from berth.services.steps import InterfaceLogin, StepView, message, step_views
+from berth.services.steps import (
+    InterfaceLogin,
+    StepView,
+    hash_password,
+    message,
+    password_matches,
+    step_views,
+)
 
 #: 預設勾的九個公開站（plan §9.3 第 6 步、brief §16.3）。值是 Prowlarr 的 `definitionName`：
 #: 顯示用的站名 Prowlarr 自己會改，機器名不會。原本有第十個 `Anidex`：它的定義還在，但
@@ -86,7 +96,8 @@ class IndexerOption:
 class IndexerSetupStatus:
     """`GET /api/setup/indexers` 與兩顆按鈕的整份形狀。"""
 
-    origin: ServiceOrigin
+    #: 使用者在頁 4 選的來源；還沒選是 `None`。Torznab 端點一律是既有。
+    origin: ServiceOrigin | None
     kind: IndexerKind
     base_url: str
     api_key_present: bool
@@ -97,7 +108,8 @@ class IndexerSetupStatus:
     skipped: bool
     #: 泊位上有介面登入那一格：只有套件內的 Prowlarr（M4 票 07）。
     web_ui_login: bool
-    #: Berth 替套件內 Prowlarr 設下的介面帳號；還沒設過、或是既有的那一台是空字串。
+    #: 套件內 Prowlarr 的介面帳號：Berth 設下的，或那一台自己就設過的。還沒設過、或是既有的那一台
+    #: 是空字串。
     web_ui_username: str
     error: str
 
@@ -142,6 +154,7 @@ async def read_indexer_status(
     client = factory.prowlarr(base_url, settings.api_key)
     try:
         options = _options(await client.definitions(), await client.indexers())
+        instance = _instance_username(await client.host_config())
     except ServiceError as exc:
         return _view(
             setup, settings, origin, base_url, options=(), reachable=False, error=message(exc)
@@ -149,7 +162,16 @@ async def read_indexer_status(
     finally:
         await client.aclose()
 
-    return _view(setup, settings, origin, base_url, options=options, reachable=True, error="")
+    return _view(
+        setup,
+        settings,
+        origin,
+        base_url,
+        options=options,
+        reachable=True,
+        error="",
+        instance_username=instance,
+    )
 
 
 # 沒有單一反向命令：一次加好幾站、還可能設了 Prowlarr 的介面登入，
@@ -178,6 +200,9 @@ async def apply_default_indexers(
         # 既有的索引站是使用者自己的，Berth 只做檢查（brief §16.4 的紅線）。UI 在這個狀態下
         # 根本不給這顆按鈕，所以走到這裡的只有直接打 API 的人。
         raise ValueError("this indexer is an existing service; Berth does not add sites to it")
+    if login is not None:
+        # 沿用 Jellyfin 帳密要先過 Jellyfin 那一關：在加站與寫登入之前（M4 票 15）。
+        login = await resolve_interface_login(session, factory, login)
 
     client = factory.prowlarr(base_url, settings.api_key)
     steps: list[SetupStep] = []
@@ -186,7 +211,8 @@ async def apply_default_indexers(
         existing = {row.definition_name: row for row in await client.indexers()}
         for name in selected:
             steps.append(await _ensure_indexer(client, name, definitions, existing))
-        steps.append(await _apply_password(client, setup, origin, login, sleep=sleep))
+        instance = _instance_username(await client.host_config())
+        steps.append(await _apply_password(client, setup, origin, login, instance, sleep=sleep))
     except ServiceError as exc:
         return _view(
             setup, settings, origin, base_url, options=(), reachable=False, error=message(exc)
@@ -201,8 +227,7 @@ async def apply_default_indexers(
     def record(latest: SetupSettings) -> None:
         latest.indexer.steps = steps
         latest.indexer.skipped = False
-        _record_login(latest, steps[-1], login)
-        _pin_probe(latest, origin)
+        _record_login(latest, steps[-1], login, instance)
 
     # 逐站加完要一分鐘上下，這段時間裡第 7 步可能已經寫進同一組設定（M2 票 15）。
     await update_settings(session, SetupSettings, record)
@@ -218,11 +243,11 @@ async def connect_indexer(
     base_url: str,
     api_key: str,
 ) -> IndexerSetupStatus:
-    """既有路徑的「測試」：先存再測，測不過也存（與第 2 步的連線表單同一個規矩）。
+    """既有路徑的「測試」：先存再測，測不過也存（與服務頁的連線表單同一個規矩）。
 
-    **填的不是 compose 主機名就是既有**（M4 票 05，`setup.connect_service` 的同一條規則）：套件內
-    Prowlarr 連不上時泊位照樣給這張表單，使用者在這裡填的是他自己的 Prowlarr。只存位址的話，
-    第 2 步留下的「套件內」會讓預設站與 `config/host` 對著他那一台跑。
+    **這就是選了「既有」**（M4 票 15）：頁 4 與設定頁的既有表單走這一支，Torznab 端點
+    （Jackett）也是。
+    選擇記成既有，Berth 從此不替它加站、不設它的登入（票 05）。
     """
     settings = await read_settings(session, IndexerSettings)
     settings.kind = kind.value
@@ -231,34 +256,39 @@ async def connect_indexer(
     await write_settings(session, settings)
 
     step = await probe_indexer(factory, kind, base_url, api_key)
+    moment = utcnow()
 
     def record(latest: SetupSettings) -> None:
+        previous = latest.choices.get(ServiceKind.PROWLARR)
+        if previous is not None and (previous.origin, previous.base_url) != (
+            ServiceOrigin.EXISTING,
+            base_url,
+        ):
+            # 換了一台：原本那一台的介面登入紀錄說的不是它（`setup._start_over` 同一條）。
+            latest.indexer.web_ui_username = ""
+            latest.indexer.web_ui_password_hash = ""
         latest.indexer.steps = [step]
         latest.indexer.skipped = False
-        probe = latest.services.get(ServiceKind.PROWLARR)
-        if (
-            kind is IndexerKind.PROWLARR
-            and probe is not None
-            and not same_host(base_url, BUNDLED_PROWLARR_URL)
-        ):
-            # 釘住（`configured`），第 2 步的重探才不會把它探回 compose 主機名上的那一台。
-            latest.services = {
-                **latest.services,
-                ServiceKind.PROWLARR: probe.model_copy(
-                    update={
-                        "origin": ServiceOrigin.EXISTING,
-                        # 測不過就留著原本的理由：換成 `connected` 是說謊。
-                        "reason": DetectionReason.CONNECTED
-                        if step.status is StepStatus.OK
-                        else probe.reason,
-                        "base_url": base_url,
-                        "configured": True,
-                        "checked_at": utcnow(),
-                    }
+        latest.choices = {
+            **latest.choices,
+            ServiceKind.PROWLARR: ServiceChoice(
+                origin=ServiceOrigin.EXISTING,
+                base_url=base_url,
+                test=ServiceTest(
+                    state=ConnectionState.OK
+                    if step.status is StepStatus.OK
+                    else ConnectionState.FAILED,
+                    # 這一支的失敗只有原文（`probe_indexer` 與健康檢查共用），理由說不出更細的。
+                    reason=ConnectionReason.CONNECTED
+                    if step.status is StepStatus.OK
+                    else ConnectionReason.UNREACHABLE,
+                    detail=step.detail,
+                    checked_at=moment,
                 ),
-            }
+            ),
+        }
 
-    # 測試在路上的那幾秒裡，第 7 步可能已經寫進同一組設定（M2 票 15）。
+    # 測試在路上的那幾秒裡，TMDB 頁可能已經寫進同一組設定（M2 票 15）。
     setup = await update_settings(session, SetupSettings, record)
     origin, _ = _target(setup, settings)
     return _view(setup, settings, origin, base_url, options=(), reachable=True, error="")
@@ -418,10 +448,15 @@ async def set_interface_login(
     settings = await read_settings(session, IndexerSettings)
     origin, base_url = _target(setup, settings)
     _refuse_existing(origin)
+    login = await resolve_interface_login(session, factory, login)
 
     client = factory.prowlarr(base_url, settings.api_key)
     try:
-        step = await _apply_password(client, setup, origin, login, sleep=sleep)
+        instance = _instance_username(await client.host_config())
+        step = await _apply_password(client, setup, origin, login, instance, sleep=sleep)
+    except ServiceError as exc:
+        step = SetupStep(key=PROWLARR_LOGIN_STEP, status=StepStatus.FAILED, error=message(exc))
+        instance = ""
     finally:
         await client.aclose()
 
@@ -430,38 +465,56 @@ async def set_interface_login(
             *(row for row in latest.indexer.steps if row.key != PROWLARR_LOGIN_STEP),
             step,
         ]
-        _record_login(latest, step, login)
+        _record_login(latest, step, login, instance)
 
     await update_settings(session, SetupSettings, record)
     return await read_indexer_status(session, factory)
 
 
-def _refuse_existing(origin: ServiceOrigin) -> None:
+def _refuse_existing(origin: ServiceOrigin | None) -> None:
     if origin is not ServiceOrigin.BUNDLED:
         # 既有的索引站是使用者自己的，Berth 只做檢查（brief §16.4 的紅線）。UI 在這個狀態下
         # 根本不給這顆按鈕，所以走到這裡的只有直接打 API 的人。
         raise ValueError("this indexer is an existing service; Berth does not change it")
 
 
-def _record_login(setup: SetupSettings, step: SetupStep, login: InterfaceLogin | None) -> None:
-    """登入真的寫進去了才記下那一組：之後靠它比出「已經是這一組」，也靠它說出帳號是誰。"""
-    if login is not None and step.key == PROWLARR_LOGIN_STEP and step.status is StepStatus.OK:
+def _record_login(
+    setup: SetupSettings, step: SetupStep, login: InterfaceLogin | None, instance: str
+) -> None:
+    """登入真的寫進去了才記下那一組：之後靠它比出「已經是這一組」，也靠它說出帳號是誰。只記帳號
+    與加鹽雜湊（M4 票 15）。沒帶登入、那一台自己就設過的，只記帳號（雜湊留空）。"""
+    if step.key != PROWLARR_LOGIN_STEP or step.status not in (StepStatus.OK, StepStatus.SKIPPED):
+        return
+    if login is not None and step.status is StepStatus.OK:
         setup.indexer.web_ui_username = login.username
-        setup.indexer.web_ui_password = login.password
+        setup.indexer.web_ui_password_hash = hash_password(login.password)
+    elif login is None and not setup.indexer.web_ui_username and instance:
+        setup.indexer.web_ui_username = instance
+        setup.indexer.web_ui_password_hash = ""
+
+
+def _instance_username(config: Mapping[str, Any]) -> str:
+    """那一台自己設過的介面帳號（brief §20.14）：`config/host` 的 `authenticationMethod` 全新是
+    `none`、帳號空白；設過是 `forms` / `basic` 加帳號。沒設過是空字串。"""
+    if str(config.get("authenticationMethod") or "none").lower() == "none":
+        return ""
+    return str(config.get("username") or "")
 
 
 async def _apply_password(
     client: ProwlarrClient,
     setup: SetupSettings,
-    origin: ServiceOrigin,
+    origin: ServiceOrigin | None,
     login: InterfaceLogin | None,
+    instance: str,
     *,
     sleep: Sleeper,
 ) -> SetupStep:
     """套件內 Prowlarr 的介面登入（M4 票 07）：`config/host` 的 Forms 驗證。
 
-    不帶登入時，設過的照舊（`skipped`、細節是帳號），沒設過的是 `pending`：兩格都必填，精靈
-    停在第 6 步（`setup._indexer_settled`）。
+    不帶登入時，設過的照舊（`skipped`、細節是帳號）；**那一台自己就設過的也不強迫再設**
+    （重裝保留 config，M4 票 15，`instance`）；其餘是 `pending`：必填，精靈停在頁 4
+    （`setup._indexer_settled`）。
 
     `PUT config/host` 回 202 之後 Prowlarr **自行重啟**，所以要等它回來才算做完；
     整份物件都要送回去，少了 `passwordConfirmation` 會被拒（brief §20.7）。
@@ -469,23 +522,23 @@ async def _apply_password(
     key = PROWLARR_LOGIN_STEP
     if origin is not ServiceOrigin.BUNDLED:
         return SetupStep(key=key, status=StepStatus.SKIPPED)
-    recorded = InterfaceLogin(
-        username=setup.indexer.web_ui_username, password=setup.indexer.web_ui_password
-    )
+    recorded = setup.indexer.web_ui_username
     if login is None:
-        if not recorded.username:
+        known = recorded or instance
+        if not known:
             return SetupStep(key=key, status=StepStatus.PENDING)
-        return SetupStep(key=key, status=StepStatus.SKIPPED, detail=recorded.username)
+        return SetupStep(key=key, status=StepStatus.SKIPPED, detail=known)
 
     try:
         config = await client.host_config()
         if (
             config.get("authenticationMethod") == "forms"
             and config.get("username") == login.username
-            and recorded == login
+            and recorded == login.username
+            and password_matches(login.password, setup.indexer.web_ui_password_hash)
         ):
-            # 已經是這一組帳密了。密碼讀回來是雜湊，比不了，所以比的是 Berth 上一次寫下去的值
-            # ——只改密碼時帳號一樣，只比帳號會把新密碼略過（票 06c）。
+            # 已經是這一組帳密了。密碼讀回來是雜湊，比不了，所以比的是 Berth 上一次寫下去的那一組
+            # 的雜湊——只改密碼時帳號一樣，只比帳號會把新密碼略過（票 06c）。
             return SetupStep(key=key, status=StepStatus.SKIPPED, detail=login.username)
 
         await client.set_host_config(
@@ -560,34 +613,15 @@ async def probe_indexer(
     return SetupStep(key=kind.value, status=StepStatus.OK, detail=str(len(indexers)))
 
 
-def _target(setup: SetupSettings, settings: IndexerSettings) -> tuple[ServiceOrigin, str]:
-    probe = setup.services.get(ServiceKind.PROWLARR)
-    origin = probe.origin if probe is not None else ServiceOrigin.BUNDLED
+def _target(setup: SetupSettings, settings: IndexerSettings) -> tuple[ServiceOrigin | None, str]:
+    """要連哪一台、它是誰的：使用者在頁 4 選的（M4 票 15）。還沒選是 `None`，寫入的命令一律拒絕。"""
     if settings.kind == IndexerKind.TORZNAB.value:
         # Torznab 是使用者自己貼的端點，與 compose 裡那台 Prowlarr 無關。
         return (ServiceOrigin.EXISTING, settings.base_url)
-    return (origin, settings.base_url or (probe.base_url if probe else "") or BUNDLED_PROWLARR_URL)
-
-
-def _pin_probe(setup: SetupSettings, origin: ServiceOrigin) -> None:
-    """加完索引站之後不能再被重探判成「既有」。
-
-    判定的規則是「讀得到 key 而且一個索引站都沒有 → 套件內」，而現在它有好幾個了——還是
-    Berth 自己加的。與 qBittorrent 設完密碼之後同一個道理。
-    """
-    probe = setup.services.get(ServiceKind.PROWLARR)
-    if probe is None or origin is not ServiceOrigin.BUNDLED:
-        return
-    setup.services = {
-        **setup.services,
-        ServiceKind.PROWLARR: probe.model_copy(
-            update={
-                "reason": DetectionReason.CONNECTED,
-                "configured": True,
-                "checked_at": utcnow(),
-            }
-        ),
-    }
+    choice = setup.choices.get(ServiceKind.PROWLARR)
+    if choice is None:
+        return (None, settings.base_url)
+    return (choice.origin, settings.base_url or choice.base_url)
 
 
 def _options(
@@ -616,12 +650,13 @@ def _options(
 def _view(
     setup: SetupSettings,
     settings: IndexerSettings,
-    origin: ServiceOrigin,
+    origin: ServiceOrigin | None,
     base_url: str,
     *,
     options: tuple[IndexerOption, ...],
     reachable: bool,
     error: str,
+    instance_username: str = "",
 ) -> IndexerSetupStatus:
     return IndexerSetupStatus(
         origin=origin,
@@ -633,6 +668,8 @@ def _view(
         steps=step_views(setup.indexer.steps),
         skipped=setup.indexer.skipped,
         web_ui_login=origin is ServiceOrigin.BUNDLED,
-        web_ui_username=setup.indexer.web_ui_username if origin is ServiceOrigin.BUNDLED else "",
+        web_ui_username=(setup.indexer.web_ui_username or instance_username)
+        if origin is ServiceOrigin.BUNDLED
+        else "",
         error=error,
     )

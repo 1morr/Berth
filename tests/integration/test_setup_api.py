@@ -1,17 +1,18 @@
 """`/api/setup/*` 的端點行為（plan §6 setup 群組、票 05 驗收）。
 
 用 `dependency_overrides` 把三個 client 換成 Fake，所以這裡測的是 API 的形狀與門禁，
-不是網路。判定規則本身在 `test_setup_service.py`。
+不是網路。選擇與測試的規則本身在 `test_setup_choice.py`。
 """
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator, Iterator
+from collections.abc import Iterator
 from dataclasses import replace
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+from httpx import Response
 
 from berth.adapters.http import ServiceUnavailableError
 from berth.adapters.jellyfin import JellyfinLibrary, TypeOption
@@ -20,33 +21,21 @@ from berth.adapters.prowlarr.fake import FakeProwlarrClient
 from berth.adapters.qbittorrent import QbittorrentVersion
 from berth.adapters.qbittorrent.fake import FakeQbittorrentClient
 from berth.adapters.tmdb.fake import FakeTmdbClient
-from berth.api.deps import get_client_factory, get_setup_probes
+from berth.api.deps import get_bundled_services, get_client_factory
 from berth.api.gate import CSRF_HEADER
 from berth.config import Config
 from berth.main import create_app
-from berth.services.clients import SetupProbes
+from berth.services.clients import BundledServices
 from berth.services.indexer import DEFAULT_INDEXERS
 from tests.integration.arrange import delete_once_during_checks, sign_in_owner
-from tests.integration.factories import FakeClientFactory
+from tests.integration.factories import COMPOSE, FakeClientFactory
 
 #: 前端每個非 GET 請求都帶這個標頭（`api/client.ts`）；缺了它的行為在 `test_auth_api.py`。
 BROWSER = {CSRF_HEADER: "XMLHttpRequest"}
 
 
-def fake_probes(**overrides: object) -> SetupProbes:
-    defaults: dict[str, object] = {
-        "jellyfin": FakeJellyfinClient(),
-        "qbittorrent": FakeQbittorrentClient(),
-        "prowlarr": FakeProwlarrClient(),
-        "prowlarr_api_key": "the-key",
-    }
-    defaults.update(overrides)
-    return SetupProbes(**defaults)  # type: ignore[arg-type]
-
-
-@pytest.fixture
-def probes() -> SetupProbes:
-    return fake_probes()
+#: 套件內三台的位址與「掛載讀到的」Prowlarr key（`get_bundled_services` 的替身）。
+BUNDLED = BundledServices(targets=COMPOSE, prowlarr_api_key="the-key")
 
 
 @pytest.fixture
@@ -55,17 +44,12 @@ def jellyfin() -> FakeJellyfinClient:
 
 
 @pytest.fixture
-def fresh(
-    config: Config, tmp_path: Path, probes: SetupProbes, jellyfin: FakeJellyfinClient
-) -> Iterator[TestClient]:
+def fresh(config: Config, tmp_path: Path, jellyfin: FakeJellyfinClient) -> Iterator[TestClient]:
     """剛裝好的一台：還沒有擁有者，沒有人登入。"""
     app = create_app(replace(config, web_root=tmp_path / "never-built"))
 
-    async def override() -> AsyncIterator[SetupProbes]:
-        yield jellyfin_probes(probes, jellyfin)
-
     factory = FakeClientFactory(jellyfin=jellyfin)
-    app.dependency_overrides[get_setup_probes] = override
+    app.dependency_overrides[get_bundled_services] = lambda: BUNDLED
     app.dependency_overrides[get_client_factory] = lambda: factory
     with TestClient(app, headers=BROWSER) as running:
         yield running
@@ -79,11 +63,19 @@ def client(fresh: TestClient) -> TestClient:
 
 
 def _claim(client: TestClient) -> None:
-    """走一次真的第 1 步：找到 Jellyfin → 成為擁有者（拿到 cookie）→ 偵測其餘服務。"""
-    assert client.post("/api/setup/detect", json={}).status_code == 200
+    """走一次真的頁 1：選套件內 Jellyfin → 成為擁有者（拿到 cookie）→ 另外兩個也選套件內。"""
+    assert _choose(client, "jellyfin").status_code == 200
     owned = client.post("/api/setup/owner", json={"username": "skipper", "password": "harbour"})
     assert owned.status_code == 200, owned.text
-    assert client.post("/api/setup/detect", json={}).status_code == 200
+    assert _choose(client, "qbittorrent").status_code == 200
+    assert _choose(client, "prowlarr").status_code == 200
+
+
+def _choose(client: TestClient, kind: str, **body: str) -> Response:
+    """服務頁的二選一。沒給欄位就是套件內。"""
+    choice = {"origin": "existing", **body} if body else {"origin": "bundled"}
+    response: Response = client.post(f"/api/setup/services/{kind}", json=choice)
+    return response
 
 
 class TestStatus:
@@ -98,24 +90,23 @@ class TestStatus:
             "owner": "",
             "owner_signs_in": False,
             "services": [],
-            "waited_seconds": 0,
             "window_seconds": 120,
-            "probe_targets": {
+            "bundled_targets": {
                 "jellyfin": "http://jellyfin:8096",
                 "qbittorrent": "http://qbittorrent:8080",
                 "prowlarr": "http://prowlarr:9696",
             },
         }
 
-    def test_the_probe_targets_follow_the_qbittorrent_port_in_env(
+    def test_the_bundled_targets_follow_the_qbittorrent_port_in_env(
         self, config: Config, tmp_path: Path
     ) -> None:
-        """票 06h：第 2 步寫死 `qbittorrent:8080`，`.env` 換了 port 畫面就說錯（06b 的遺留）。"""
+        """票 06h：畫面寫死 `qbittorrent:8080`，`.env` 換了 port 就說錯（06b 的遺留）。"""
         app = create_app(
             replace(config, web_root=tmp_path / "never-built", qbittorrent_webui_port=18080)
         )
         with TestClient(app, headers=BROWSER) as running:
-            targets = running.get("/api/setup/status").json()["probe_targets"]
+            targets = running.get("/api/setup/status").json()["bundled_targets"]
 
         assert targets["qbittorrent"] == "http://qbittorrent:18080"
 
@@ -126,7 +117,7 @@ class TestOwner:
     def test_the_owner_gets_a_session_and_the_wizard_moves_on(
         self, fresh: TestClient, jellyfin: FakeJellyfinClient
     ) -> None:
-        fresh.post("/api/setup/detect", json={})
+        _choose(fresh, "jellyfin")
 
         response = fresh.post(
             "/api/setup/owner", json={"username": "skipper", "password": "harbour"}
@@ -139,7 +130,7 @@ class TestOwner:
         assert fresh.get("/api/auth/me").json() == {"name": "skipper", "role": "admin"}
 
     def test_the_password_is_never_returned(self, fresh: TestClient) -> None:
-        fresh.post("/api/setup/detect", json={})
+        _choose(fresh, "jellyfin")
 
         response = fresh.post(
             "/api/setup/owner", json={"username": "skipper", "password": "harbour"}
@@ -162,7 +153,7 @@ class TestOwner:
         jellyfin.startup_wizard_completed = True
         jellyfin.admin = ("captain", "harbour")
         jellyfin.users = {"deckhand": "rope"}
-        fresh.post("/api/setup/detect", json={})
+        _choose(fresh, "jellyfin")
 
         response = fresh.post("/api/setup/owner", json={"username": "deckhand", "password": "rope"})
 
@@ -174,7 +165,7 @@ class TestOwner:
     def test_blank_credentials_are_refused_like_wrong_ones(
         self, fresh: TestClient, jellyfin: FakeJellyfinClient
     ) -> None:
-        fresh.post("/api/setup/detect", json={})
+        _choose(fresh, "jellyfin")
 
         response = fresh.post("/api/setup/owner", json={"username": "   ", "password": ""})
 
@@ -183,47 +174,59 @@ class TestOwner:
         assert jellyfin.admin is None
 
 
-class TestDetect:
-    def test_a_clean_compose_reports_three_bundled_services(self, client: TestClient) -> None:
-        response = client.post("/api/setup/detect", json={})
+class TestChoice:
+    """服務頁的二選一（M4 票 15）。規則本身在 `test_setup_choice.py`，這裡是形狀與狀態碼。"""
+
+    def test_choosing_bundled_tests_the_compose_hostname(self, client: TestClient) -> None:
+        response = _choose(client, "qbittorrent")
 
         assert response.status_code == 200
-        services = response.json()["services"]
-        assert [row["kind"] for row in services] == ["jellyfin", "qbittorrent", "prowlarr"]
-        assert {row["origin"] for row in services} == {"bundled"}
+        row = next(r for r in response.json()["services"] if r["kind"] == "qbittorrent")
+        assert row == {
+            "kind": "qbittorrent",
+            "origin": "bundled",
+            "base_url": "http://qbittorrent:8080",
+            "state": "ok",
+            "reason": "connected",
+            "detail": "v5.2.3 · Web API 2.15.1",
+            "waited_seconds": 0,
+        }
 
-    def test_the_measured_values_reach_the_client(self, client: TestClient) -> None:
-        services = client.post("/api/setup/detect", json={}).json()["services"]
+    def test_the_choice_is_readable_from_status_afterwards(self, client: TestClient) -> None:
+        for kind in ("jellyfin", "qbittorrent", "prowlarr"):
+            _choose(client, kind)
 
-        by_kind = {row["kind"]: row for row in services}
-        assert by_kind["jellyfin"]["detail"] == "12.1.0"
-        assert by_kind["jellyfin"]["base_url"] == "http://jellyfin:8096"
-        assert by_kind["jellyfin"]["reason"] == "setup_pending"
+        body = client.get("/api/setup/status").json()
 
-    def test_detect_works_without_a_body(self, client: TestClient) -> None:
-        assert client.post("/api/setup/detect").status_code == 200
+        assert [row["origin"] for row in body["services"]] == ["bundled"] * 3
 
-    def test_results_are_readable_from_status_afterwards(self, client: TestClient) -> None:
-        client.post("/api/setup/detect", json={})
+    def test_an_existing_service_without_an_address_is_unprocessable(
+        self, client: TestClient
+    ) -> None:
+        response = client.post("/api/setup/services/qbittorrent", json={"origin": "existing"})
 
-        assert len(client.get("/api/setup/status").json()["services"]) == 3
+        assert response.status_code == 422
 
-    def test_rerunning_detect_does_not_duplicate_rows(self, client: TestClient) -> None:
-        client.post("/api/setup/detect", json={})
-        response = client.post("/api/setup/detect", json={})
+    def test_the_jellyfin_source_is_a_conflict_once_there_is_an_owner(
+        self, client: TestClient
+    ) -> None:
+        client.post("/api/setup/services/jellyfin", json={"origin": "bundled"})
 
-        assert len(response.json()["services"]) == 3
+        response = client.post(
+            "/api/setup/services/jellyfin",
+            json={"origin": "existing", "base_url": "http://nas:8096"},
+        )
 
-    @pytest.mark.parametrize(
-        "probes",
-        [fake_probes(qbittorrent=FakeQbittorrentClient(error=ServiceUnavailableError("refused")))],
-    )
-    def test_a_starting_container_reports_the_waiting_window(self, client: TestClient) -> None:
-        body = client.post("/api/setup/detect", json={}).json()
+        assert response.status_code == 409
+        assert response.json()["detail"] == {"reason": "jellyfin_owned", "detail": ""}
 
-        qbittorrent = next(row for row in body["services"] if row["kind"] == "qbittorrent")
-        assert qbittorrent["origin"] == "pending"
-        assert body["window_seconds"] == 120
+    def test_retesting_before_choosing_is_unprocessable(self, fresh: TestClient) -> None:
+        assert fresh.post("/api/setup/services/jellyfin/test", json={}).status_code == 422
+
+    def test_retesting_works_without_a_body(self, fresh: TestClient) -> None:
+        _choose(fresh, "jellyfin")
+
+        assert fresh.post("/api/setup/services/jellyfin/test").status_code == 200
 
 
 #: 會寫別人的服務或 Berth 自己設定的精靈端點（建立、套用、加站、存清單、建 Route、完成）。
@@ -233,7 +236,8 @@ WRITES: tuple[tuple[str, str, object], ...] = (
     ("PUT", "/api/setup/jellyfin/bundled", {"libraries": []}),
     ("POST", "/api/setup/jellyfin/connect", {"username": "a", "password": "b"}),
     ("POST", "/api/setup/jellyfin/libraries/paths", {"library": "x"}),
-    ("POST", "/api/setup/services/qbittorrent", {"base_url": "http://nas:8080"}),
+    ("POST", "/api/setup/services/qbittorrent", {"origin": "existing", "base_url": "http://x"}),
+    ("POST", "/api/setup/services/prowlarr/test", {}),
     ("POST", "/api/setup/qbittorrent/apply", None),
     ("PUT", "/api/setup/qbittorrent/login", {"username": "a", "password": "b"}),
     ("POST", "/api/setup/indexers/apply", {"indexers": ["nyaasi"]}),
@@ -259,11 +263,14 @@ class TestGate:
     def test_before_the_owner_only_the_opening_is_open(
         self, fresh: TestClient, jellyfin: FakeJellyfinClient
     ) -> None:
-        """找 Jellyfin、填它的位址、成為擁有者——其餘的讀也不開（它們會去連別人的服務）。"""
+        """選 Jellyfin、測它、成為擁有者——其餘的讀也不開（它們會去連別人的服務）。"""
         assert fresh.get("/api/setup/status").status_code == 200
-        assert fresh.post("/api/setup/detect", json={}).status_code == 200
-        typed = fresh.post("/api/setup/services/jellyfin", json={"base_url": "http://nas:8096"})
+        typed = fresh.post(
+            "/api/setup/services/jellyfin",
+            json={"origin": "existing", "base_url": "http://nas:8096"},
+        )
         assert typed.status_code == 200
+        assert fresh.post("/api/setup/services/jellyfin/test", json={}).status_code == 200
         assert fresh.get("/api/setup/qbittorrent/diff").status_code == 403
         assert fresh.get("/api/setup/indexers").status_code == 403
 
@@ -287,13 +294,16 @@ class TestGate:
         fresh.cookies.clear()
 
         assert fresh.get("/api/setup/status").status_code == 401
-        assert fresh.post("/api/setup/detect", json={}).status_code == 401
+        assert fresh.post("/api/setup/services/jellyfin/test", json={}).status_code == 401
         assert (
             fresh.post("/api/setup/owner", json={"username": "x", "password": "y"}).status_code
             == 401
         )
         assert (
-            fresh.post("/api/setup/services/jellyfin", json={"base_url": "http://evil"}).status_code
+            fresh.post(
+                "/api/setup/services/jellyfin",
+                json={"origin": "existing", "base_url": "http://evil"},
+            ).status_code
             == 401
         )
 
@@ -302,7 +312,7 @@ class TestGate:
         client.cookies.clear()
 
         assert client.get("/api/setup/status").status_code == 401
-        assert client.post("/api/setup/detect", json={}).status_code == 401
+        assert client.post("/api/setup/services/jellyfin/test", json={}).status_code == 401
         assert (
             client.post(
                 "/api/setup/owner", json={"username": "other", "password": "pass"}
@@ -358,16 +368,12 @@ class TestJellyfin:
         self,
         config: Config,
         tmp_path: Path,
-        probes: SetupProbes,
         jellyfin: FakeJellyfinClient,
     ) -> Iterator[TestClient]:
         """媒體庫路徑指到 tmp_path：bootstrap 會真的建目錄（plan §9.1）。"""
         app = create_app(replace(config, web_root=tmp_path / "never-built"))
 
-        async def override_probes() -> AsyncIterator[SetupProbes]:
-            yield jellyfin_probes(probes, jellyfin)
-
-        app.dependency_overrides[get_setup_probes] = override_probes
+        app.dependency_overrides[get_bundled_services] = lambda: BUNDLED
         app.dependency_overrides[get_client_factory] = lambda: OneJellyfin(jellyfin)
         with TestClient(app, headers=BROWSER) as running:
             _set_paths(running, tmp_path)
@@ -597,15 +603,6 @@ class OneJellyfin:
         return FakeProwlarrClient(base_url=base_url)
 
 
-def jellyfin_probes(probes: SetupProbes, jellyfin: FakeJellyfinClient) -> SetupProbes:
-    return SetupProbes(
-        jellyfin=jellyfin,
-        qbittorrent=probes.qbittorrent,
-        prowlarr=probes.prowlarr,
-        prowlarr_api_key=probes.prowlarr_api_key,
-    )
-
-
 def _set_paths(client: TestClient, data_root: Path) -> None:
     """三層路徑指到 tmp_path：測試不該對真的 `/data` 建目錄、鏈接檔案（brief §4.1）。"""
     import asyncio
@@ -644,15 +641,11 @@ class TestQbittorrent:
         self,
         config: Config,
         tmp_path: Path,
-        probes: SetupProbes,
         qbittorrent: FakeQbittorrentClient,
     ) -> Iterator[TestClient]:
         app = create_app(replace(config, web_root=tmp_path / "never-built"))
 
-        async def override_probes() -> AsyncIterator[SetupProbes]:
-            yield probes
-
-        app.dependency_overrides[get_setup_probes] = override_probes
+        app.dependency_overrides[get_bundled_services] = lambda: BUNDLED
         app.dependency_overrides[get_client_factory] = lambda: FakeClientFactory(
             qbittorrent=qbittorrent
         )
@@ -746,18 +739,16 @@ class TestQbittorrent:
         }
 
     def test_an_old_web_api_is_refused_with_its_version_visible(
-        self, config: Config, tmp_path: Path, probes: SetupProbes
+        self, config: Config, tmp_path: Path
     ) -> None:
         app = create_app(replace(config, web_root=tmp_path / "never-built"))
         old = FakeQbittorrentClient(version=QbittorrentVersion(app="v4.3.9", webapi="2.8.2"))
 
-        async def override_probes() -> AsyncIterator[SetupProbes]:
-            yield probes
-
-        app.dependency_overrides[get_setup_probes] = override_probes
+        app.dependency_overrides[get_bundled_services] = lambda: BUNDLED
         app.dependency_overrides[get_client_factory] = lambda: FakeClientFactory(qbittorrent=old)
         with TestClient(app, headers=BROWSER) as running:
             sign_in_owner(running)
+            _choose(running, "qbittorrent")
             body = running.get("/api/setup/qbittorrent/diff").json()
 
         assert (body["supported"], body["blocked"]) == (False, True)
@@ -765,18 +756,17 @@ class TestQbittorrent:
         assert body["diffs"] == []
 
     def test_an_unreachable_service_is_a_body_not_a_500(
-        self, config: Config, tmp_path: Path, probes: SetupProbes
+        self, config: Config, tmp_path: Path
     ) -> None:
         app = create_app(replace(config, web_root=tmp_path / "never-built"))
         down = FakeQbittorrentClient(error=ServiceUnavailableError("connection refused"))
 
-        async def override_probes() -> AsyncIterator[SetupProbes]:
-            yield probes
-
-        app.dependency_overrides[get_setup_probes] = override_probes
+        app.dependency_overrides[get_bundled_services] = lambda: BUNDLED
         app.dependency_overrides[get_client_factory] = lambda: FakeClientFactory(qbittorrent=down)
         with TestClient(app, headers=BROWSER) as running:
             sign_in_owner(running)
+            # 選了套件內、測試紅燈，選擇照樣存下（M4 票 15）；差異頁再敲一次，錯誤訊息在 body 裡。
+            _choose(running, "qbittorrent")
             response = running.get("/api/setup/qbittorrent/diff")
 
         assert response.status_code == 200
@@ -800,16 +790,12 @@ class TestSource:
         self,
         config: Config,
         tmp_path: Path,
-        probes: SetupProbes,
         prowlarr: FakeProwlarrClient,
         tmdb: FakeTmdbClient,
     ) -> Iterator[TestClient]:
         app = create_app(replace(config, web_root=tmp_path / "never-built"))
 
-        async def override_probes() -> AsyncIterator[SetupProbes]:
-            yield probes
-
-        app.dependency_overrides[get_setup_probes] = override_probes
+        app.dependency_overrides[get_bundled_services] = lambda: BUNDLED
         app.dependency_overrides[get_client_factory] = lambda: FakeClientFactory(
             prowlarr=prowlarr, tmdb=tmdb
         )
@@ -954,12 +940,8 @@ class TestRoutes:
         qbittorrent: FakeQbittorrentClient,
     ) -> Iterator[TestClient]:
         app = create_app(replace(config, web_root=tmp_path / "never-built"))
-        probes = fake_probes(jellyfin=jellyfin, qbittorrent=qbittorrent)
 
-        async def override_probes() -> AsyncIterator[SetupProbes]:
-            yield probes
-
-        app.dependency_overrides[get_setup_probes] = override_probes
+        app.dependency_overrides[get_bundled_services] = lambda: BUNDLED
         app.dependency_overrides[get_client_factory] = lambda: FakeClientFactory(
             jellyfin=jellyfin, qbittorrent=qbittorrent
         )
@@ -975,10 +957,10 @@ class TestRoutes:
             running.post("/api/setup/tmdb/test", json={"api_key": "the-users-key"})
             yield running
 
-    def test_the_wizard_arrives_at_step_five_with_three_libraries_to_route(
+    def test_the_wizard_arrives_at_page_three_with_three_libraries_to_route(
         self, client: TestClient
     ) -> None:
-        assert client.get("/api/setup/status").json()["current_step"] == 5
+        assert client.get("/api/setup/status").json()["current_step"] == 3
 
         body = client.get("/api/setup/routes").json()
 
@@ -1070,7 +1052,7 @@ class TestRoutes:
 
     def test_completing_closes_the_wizard_and_the_api(self, client: TestClient) -> None:
         client.post("/api/setup/routes", json={})
-        assert client.get("/api/setup/status").json()["current_step"] == 8
+        assert client.get("/api/setup/status").json()["current_step"] == 6
 
         body = client.post("/api/setup/complete").json()
 
@@ -1105,7 +1087,7 @@ def _forget_tmdb(client: TestClient) -> None:
 
 
 def _mark_jellyfin_existing(client: TestClient) -> None:
-    """把 Jellyfin 的判定改成既有——套件內不看使用者的勾選，那條路徑才驗得到。"""
+    """把 Jellyfin 的選擇改成既有——套件內不看使用者的勾選，那條路徑才驗得到。"""
     import asyncio
 
     from berth.domain import ServiceKind, ServiceOrigin
@@ -1116,10 +1098,10 @@ def _mark_jellyfin_existing(client: TestClient) -> None:
         factory = client.app.state.session_factory  # type: ignore[attr-defined]
         async with factory() as session:
             setup = await read_settings(session, SetupSettings)
-            probe = setup.services[ServiceKind.JELLYFIN]
-            setup.services = {
-                **setup.services,
-                ServiceKind.JELLYFIN: probe.model_copy(update={"origin": ServiceOrigin.EXISTING}),
+            choice = setup.choices[ServiceKind.JELLYFIN]
+            setup.choices = {
+                **setup.choices,
+                ServiceKind.JELLYFIN: choice.model_copy(update={"origin": ServiceOrigin.EXISTING}),
             }
             await write_settings(session, setup)
             await session.commit()

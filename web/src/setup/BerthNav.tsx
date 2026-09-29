@@ -40,11 +40,10 @@ export function BerthNav({ onPrevious, onNext }: { onPrevious?: () => void; onNe
 }
 
 /**
- * 回頭看的那一步說出能改什麼、不能改的去哪裡改，以步驟號查（票 06e 把原本「步驟 → 頁名 → 字」
- * 兩張表收成這一張）。查表：動態組 key 過不了 `strictKeyChecks`。前置的第 1 步由它自己的 lede 說。
+ * 回頭看的那一頁說出能改什麼、不能改的去哪裡改，以頁號查（票 06e 把原本「步驟 → 頁名 → 字」
+ * 兩張表收成這一張）。查表：動態組 key 過不了 `strictKeyChecks`。
  */
 const REVISIT = {
-  [STEP.detect]: { can: 'setup.revisit.detect.can', elsewhere: 'setup.revisit.detect.elsewhere' },
   [STEP.jellyfin]: {
     can: 'setup.revisit.jellyfin.can',
     elsewhere: 'setup.revisit.jellyfin.elsewhere',
@@ -64,7 +63,7 @@ const REVISIT = {
 /**
  * 回頭看的說明（票 06d）：每一步都是冪等命令，回頭照樣重跑；這一格做不到的事去哪裡做。
  * 只在這一頁已經做完（後端過了它）時出現——目前這一步要做的事，lede 已經說了。
- * 沒有說明的步驟（第 1 步、完成頁）什麼都不畫。
+ * 沒有說明的頁（完成頁）什麼都不畫。
  */
 export function RevisitNote({ step }: { step: number }) {
   const { t } = useTranslation()

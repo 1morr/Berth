@@ -27,18 +27,18 @@ from berth.adapters.tmdb.fake import FakeTmdbClient
 from berth.api.deps import get_client_factory
 from berth.api.gate import CSRF_HEADER
 from berth.config import Config
-from berth.domain import DetectionReason, ServiceKind, ServiceOrigin
+from berth.domain import ServiceKind, ServiceOrigin
 from berth.main import create_app
 from berth.models import (
     IndexerSettings,
     JellyfinSettings,
     QbittorrentSettings,
-    ServiceProbe,
     SetupSettings,
     TmdbSettings,
 )
 from berth.services.settings import read_settings, write_settings
 from tests.conftest import TMDB_API_KEY
+from tests.integration.arrange import chosen
 from tests.integration.factories import FakeClientFactory
 
 BROWSER = {CSRF_HEADER: "XMLHttpRequest"}
@@ -142,12 +142,17 @@ def test_an_administrator_changes_the_qbittorrent_credentials(
     response = post(
         client,
         "/api/setup/services/qbittorrent",
-        {"base_url": "http://nas:8080", "username": "admin", "password": "new-secret"},
+        {
+            "origin": "existing",
+            "base_url": "http://nas:8080",
+            "username": "admin",
+            "password": "new-secret",
+        },
     )
 
     assert response.status_code == 200
     (qbittorrent,) = [row for row in response.json()["services"] if row["kind"] == "qbittorrent"]
-    assert (qbittorrent["origin"], qbittorrent["reason"]) == ("existing", "connected")
+    assert (qbittorrent["origin"], qbittorrent["state"]) == ("existing", "ok")
     assert factory.qbittorrent_.logins[-1] == ("admin", "new-secret")
     stored = asyncio.run(_read_qbittorrent(client))
     assert (stored.username, stored.password) == ("admin", "new-secret")
@@ -189,27 +194,10 @@ def _finished_wizard(client: TestClient) -> None:
         async with factory() as session:
             setup = await read_settings(session, SetupSettings)
             setup.completed = True
-            setup.services = {
-                ServiceKind.JELLYFIN: ServiceProbe(
-                    origin=ServiceOrigin.EXISTING,
-                    reason=DetectionReason.CONNECTED,
-                    base_url="http://jellyfin:8096",
-                    checked_at=NOW,
-                    configured=True,
-                ),
-                ServiceKind.QBITTORRENT: ServiceProbe(
-                    origin=ServiceOrigin.EXISTING,
-                    reason=DetectionReason.CONNECTED,
-                    base_url="http://nas:8080",
-                    checked_at=NOW,
-                    configured=True,
-                ),
-                ServiceKind.PROWLARR: ServiceProbe(
-                    origin=ServiceOrigin.BUNDLED,
-                    reason=DetectionReason.NO_INDEXERS,
-                    base_url="http://prowlarr:9696",
-                    checked_at=NOW,
-                ),
+            setup.choices = {
+                ServiceKind.JELLYFIN: chosen(ServiceOrigin.EXISTING, "http://jellyfin:8096"),
+                ServiceKind.QBITTORRENT: chosen(ServiceOrigin.EXISTING, "http://nas:8080"),
+                ServiceKind.PROWLARR: chosen(ServiceOrigin.BUNDLED, "http://prowlarr:9696"),
             }
             await write_settings(session, setup)
             await write_settings(

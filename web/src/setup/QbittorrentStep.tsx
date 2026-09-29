@@ -4,7 +4,9 @@ import { useTranslation } from 'react-i18next'
 import {
   QBITTORRENT_STEPS,
   type InterfaceLogin,
+  type InterfaceLoginRefusal,
   type QbittorrentStep as QbittorrentStepKey,
+  type SetupStatus,
 } from '../api/setup'
 import { type QbittorrentSetup, type SetupStep } from '../api/schemas'
 import { STICKY_ACTION, CopyLine, GhostButton, Notice, PrimaryButton } from '../components/controls'
@@ -14,72 +16,114 @@ import { isSettled } from '../components/steps'
 import { useInterfaceLogin } from './interfaceLogin'
 import { BerthLogin } from './InterfaceLoginFields'
 import { STEP_FIX, STEP_LABEL } from './qbittorrentSteps'
+import { ServiceChoice, type ChoiceControls } from './ServiceChoice'
+import { connected } from './signals'
 import { StepFrame } from './StepFrame'
 
 /**
- * 泊位 2：qBittorrent（plan §9.3 第 4 步）。
+ * 頁 2：qBittorrent（plan §9.3）。
  *
- * 剖面列的是**逐鍵的差異**：現值在左、建議值在右，一眼看得出按下去會改掉什麼。
- * 套用只寫有差異的鍵，本來就對的那幾條是「已經是這樣」。
+ * 頁首是二選一（M4 票 15，`ServiceChoice`）：不預選、選了才連。連上之後才有這一頁自己的事——
+ * 剖面列**逐鍵的差異**：現值在左、建議值在右，一眼看得出按下去會改掉什麼。套用只寫有差異的鍵，
+ * 本來就對的那幾條是「已經是這樣」。
  *
  * **既有的那一台一個鍵都不寫**（`writes_preferences`，M4 票 05）：剖面照樣列，但說的是
  * 「不會寫入」，按鈕只是確認連得上、版本夠新。
  *
- * **套件內的那一台多一組 WebUI 登入**（`web_ui_login`，M4 票 07）：跟著「套用」送出，必填。
+ * **套件內的那一台多一組 WebUI 登入**（`web_ui_login`，M4 票 07）：跟著「套用」送出，必填；預設
+ * 「沿用 Jellyfin 帳密」（M4 票 15）。那一台自己就設過的不強迫再設（`web_ui_username` 已經有值）。
  */
 export function QbittorrentStep({
+  status,
   setup,
+  setupFailed,
   owner,
   applying,
   requestFailed,
+  loginRefusal,
   onApply,
+  choice,
   note,
   nav,
-  redetect,
 }: {
-  setup: QbittorrentSetup
-  /** 擁有者的名字：WebUI 帳號還沒設過時預填它。 */
+  status: SetupStatus
+  /** 連上之後才讀：選之前一個請求都不發（M4 票 15）。 */
+  setup: QbittorrentSetup | undefined
+  setupFailed: boolean
+  /** 擁有者的名字：沿用 Jellyfin 帳密時的帳號，取消勾選時預填它。 */
   owner: string
   applying: boolean
   /** 請求本身沒跑完。逐鍵的失敗在 `setup.steps` 裡，各自貼在它那一行。 */
   requestFailed: boolean
+  /** 沿用 Jellyfin 帳密而 Jellyfin 那一關沒過：什麼都沒寫。 */
+  loginRefusal: InterfaceLoginRefusal | null
   /**
-   * `login` 是泊位上填的 WebUI 登入；`null` 是登入照舊（設過了、沒按「更換」）。
+   * `login` 是頁上填的 WebUI 登入；`null` 是登入照舊（設過了、沒按「更換」）。
    * 回傳的 promise 成功之後欄位清掉密碼、收起來。
    */
   onApply: (login: InterfaceLogin | null) => Promise<unknown>
+  choice: ChoiceControls
   /** 回頭看的說明（`RevisitNote`），這一頁做完了才有。 */
   note?: ReactNode
   /** 上一個 / 下一個泊位（`BerthNav`）。 */
   nav?: ReactNode
-  /** 連不上時的「重新偵測這個服務」（票 06d）。 */
-  redetect?: ReactNode
 }) {
+  const { t } = useTranslation()
+  const service = status.services.find((row) => row.kind === 'qbittorrent')
+  const mode = !service ? 'choose' : setup?.writes_preferences === false ? 'existing' : 'bundled'
+  const ready = connected(service)
+
+  return (
+    <StepFrame
+      cutaway={setup && ready ? <DiffCutaway setup={setup} /> : <ChoiceCutaway />}
+    >
+      <h2 className="text-lg font-semibold text-ink">{t(`qbittorrent.title.${mode}`)}</h2>
+      <p className="mt-2 max-w-prose text-sm text-ink-dim">{t(`qbittorrent.lede.${mode}`)}</p>
+      {note}
+
+      <ServiceChoice
+        kind="qbittorrent"
+        status={status}
+        {...choice}
+        switchWarning={
+          setup && setup.steps.length > 0 ? t('choice.switchWarning.qbittorrent') : undefined
+        }
+      />
+
+      {ready &&
+        (setup ? (
+          setup.blocked ? (
+            <Blocked setup={setup} />
+          ) : (
+            <ApplySequence
+              key={`${service?.origin}:${service?.base_url}`}
+              setup={setup}
+              owner={owner}
+              applying={applying}
+              requestFailed={requestFailed}
+              loginRefusal={loginRefusal}
+              onApply={onApply}
+            />
+          )
+        ) : (
+          <p className="mt-6 text-sm text-ink-dim">
+            {setupFailed ? t('qbittorrent.unreachable') : t('health.checking')}
+          </p>
+        ))}
+      {nav}
+    </StepFrame>
+  )
+}
+
+/** 還沒選（或還沒連上）時的剖面：兩種來源各會做什麼。 */
+function ChoiceCutaway() {
   const { t } = useTranslation()
 
   return (
-    <StepFrame cutaway={<DiffCutaway setup={setup} />}>
-      <h2 className="text-lg font-semibold text-ink">
-        {t(setup.writes_preferences ? 'qbittorrent.title.bundled' : 'qbittorrent.title.existing')}
-      </h2>
-      <p className="mt-2 max-w-prose text-sm text-ink-dim">
-        {t(setup.writes_preferences ? 'qbittorrent.lede.bundled' : 'qbittorrent.lede.existing')}
-      </p>
-      {note}
-
-      {setup.blocked ? (
-        <Blocked setup={setup} redetect={redetect} />
-      ) : (
-        <ApplySequence
-          setup={setup}
-          owner={owner}
-          applying={applying}
-          requestFailed={requestFailed}
-          onApply={onApply}
-        />
-      )}
-      {nav}
-    </StepFrame>
+    <Cutaway title={t('owner.cutaway.title')}>
+      <CutawayRow term={t('origin.bundled')} value={t('qbittorrent.cutaway.bundledPlan')} />
+      <CutawayRow term={t('origin.existing')} value={t('qbittorrent.cutaway.existingPlan')} />
+    </Cutaway>
   )
 }
 
@@ -169,7 +213,7 @@ function DiffCutaway({ setup }: { setup: QbittorrentSetup }) {
 }
 
 /** 版本太舊或連不上：這一步做不下去，畫面給的是升級 / 排查的路，不是一顆按不動的按鈕。 */
-function Blocked({ setup, redetect }: { setup: QbittorrentSetup; redetect?: ReactNode }) {
+function Blocked({ setup }: { setup: QbittorrentSetup }) {
   const { t } = useTranslation()
   const tooOld = !setup.supported && setup.reachable
 
@@ -199,8 +243,6 @@ function Blocked({ setup, redetect }: { setup: QbittorrentSetup; redetect?: Reac
           ))}
         </div>
       </div>
-      {/* 連不上的那一種：改好 compose、把容器叫起來之後，在這一格就地重探。 */}
-      {!tooOld && redetect && <div>{redetect}</div>}
     </div>
   )
 }
@@ -216,23 +258,25 @@ function ApplySequence({
   owner,
   applying,
   requestFailed,
+  loginRefusal,
   onApply,
 }: {
   setup: QbittorrentSetup
   owner: string
   applying: boolean
   requestFailed: boolean
+  loginRefusal: InterfaceLoginRefusal | null
   onApply: (login: InterfaceLogin | null) => Promise<unknown>
 }) {
   const { t } = useTranslation()
-  const login = useInterfaceLogin({ current: setup.web_ui_username, suggested: owner })
+  const login = useInterfaceLogin({ current: setup.web_ui_username, owner })
 
   function apply() {
     const taken = setup.web_ui_login ? login.take() : null
     if (taken === undefined) return
     // 請求沒走完的那一句由 `requestFailed` 說；欄位留著，改一個字再按。
     onApply(taken).then(
-      () => taken && login.reset(taken.username),
+      () => taken && login.reset(taken.username ?? ''),
       () => undefined,
     )
   }
@@ -287,7 +331,9 @@ function ApplySequence({
       {requestFailed && (
         <div className="mt-4">
           <Notice signal="blocked" label={t('common.failed')}>
-            {t('qbittorrent.requestFailed')}
+            {loginRefusal
+              ? t(`interfaceLogin.refused.${loginRefusal.reason}`, { owner })
+              : t('qbittorrent.requestFailed')}
           </Notice>
         </div>
       )}

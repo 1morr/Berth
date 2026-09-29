@@ -8,7 +8,6 @@ import {
   ALL_BUNDLED,
   CHECKS_PASSED,
   SEQUENCE_DONE,
-  detection,
   indexerSetup,
   jellyfinSetup,
   qbittorrentSetup,
@@ -51,14 +50,29 @@ const TMDB_DONE = tmdbSetup({
 /**
  * 會前進的假後端：步驟由它說了算（plan §9.3「步驟由狀態導出」），每一個動作做完就把
  * `current_step` 推到下一步——正是「做完就被換頁」那個 bug 的條件。
+ *
+ * 選擇跟著頁走（M4 票 15）：Jellyfin 在頁 1 選、qBittorrent 在頁 2、Prowlarr 在頁 4，三個都是套件內、
+ * 都連上了。`built` 是套件內 Jellyfin 的媒體庫清單建完了沒（頁 3 先畫清單還是 Route）；
+ * 預設是「已經走過頁 3 就建完了」，按「開始靠泊」也會把它建完。
  */
-function wizard(start: number, overrides: Record<string, StubRoute | (() => StubRoute)> = {}) {
+function wizard(
+  start: number,
+  overrides: Record<string, StubRoute | (() => StubRoute)> = {},
+  { built = start > 3 }: { built?: boolean } = {},
+) {
   let current = start
+  let owner = start > 1 ? 'skipper' : ''
+  let listBuilt = built
   const status = (): SetupStatus =>
     setupStatus({
       current_step: current,
-      owner: 'skipper',
-      services: ALL_BUNDLED,
+      owner,
+      services: ALL_BUNDLED.filter(
+        (row) =>
+          row.kind === 'jellyfin' ||
+          (row.kind === 'qbittorrent' && current >= 2) ||
+          (row.kind === 'prowlarr' && current >= 4),
+      ),
     })
   const advance =
     (to: number, body: unknown): (() => StubRoute) =>
@@ -68,36 +82,50 @@ function wizard(start: number, overrides: Record<string, StubRoute | (() => Stub
     }
   const fetchStub = stubApi({
     'GET /api/setup/status': () => ({ body: status() }),
-    'POST /api/setup/detect': () => ({ body: status() }),
+    'POST /api/setup/owner': () => {
+      owner = 'skipper'
+      current = Math.max(current, 2)
+      return { body: status() }
+    },
+    'GET /api/setup/qbittorrent/diff': () => ({ body: qbittorrentSetup() }),
+    'POST /api/setup/qbittorrent/apply': advance(
+      3,
+      qbittorrentSetup({ diffs: [], steps: [step('save_path', 'ok')], web_ui_username: 'skipper' }),
+    ),
     'GET /api/setup/jellyfin': () => ({
       body: jellyfinSetup({
-        steps: current > 3 ? SEQUENCE_DONE : [],
-        api_key_present: current > 3,
+        steps: listBuilt ? SEQUENCE_DONE : [],
+        api_key_present: true,
       }),
     }),
     // 按下靠泊之前先存剖面上的媒體庫清單（票 06f）。
     'PUT /api/setup/jellyfin/bundled': () => ({ body: jellyfinSetup() }),
-    'POST /api/setup/jellyfin/bootstrap': advance(4, jellyfinSetup({ steps: SEQUENCE_DONE })),
-    'GET /api/setup/qbittorrent/diff': () => ({ body: qbittorrentSetup() }),
-    'POST /api/setup/qbittorrent/apply': advance(
-      5,
-      qbittorrentSetup({ diffs: [], steps: [step('save_path', 'ok')], web_ui_username: 'skipper' }),
-    ),
-    'GET /api/setup/routes': () => ({ body: current > 5 ? ROUTES_DONE : routeSetup() }),
-    'POST /api/setup/routes': advance(6, ROUTES_DONE),
-    'GET /api/setup/indexers': () => ({ body: current > 6 ? SITES_DONE : indexerSetup() }),
-    'POST /api/setup/indexers/apply': advance(7, SITES_DONE),
-    'GET /api/setup/tmdb': () => ({ body: current > 7 ? TMDB_DONE : tmdbSetup() }),
-    'POST /api/setup/tmdb/test': advance(8, TMDB_DONE),
+    // 建清單不讓精靈前進：頁 3 還要 Route 全綠（後端 `_libraries_built` + `routes_ready`）。
+    'POST /api/setup/jellyfin/bootstrap': () => {
+      listBuilt = true
+      return { body: jellyfinSetup({ steps: SEQUENCE_DONE, api_key_present: true }) }
+    },
+    'GET /api/setup/routes': () => ({ body: current > 3 ? ROUTES_DONE : routeSetup() }),
+    'POST /api/setup/routes': advance(4, ROUTES_DONE),
+    'GET /api/setup/indexers': () => ({ body: current > 4 ? SITES_DONE : indexerSetup() }),
+    'POST /api/setup/indexers/apply': advance(5, SITES_DONE),
+    'GET /api/setup/tmdb': () => ({ body: current > 5 ? TMDB_DONE : tmdbSetup() }),
+    'POST /api/setup/tmdb/test': advance(6, TMDB_DONE),
     ...overrides,
   })
   return { fetchStub, current: () => current }
 }
 
-/** 泊位上的介面登入（M4 票 07）：必填，帳號預填擁有者，密碼打兩次。 */
+/** 送出過的那幾個 POST（依序）。 */
+function posts(fetchStub: ReturnType<typeof stubApi>): string[] {
+  return fetchStub.mock.calls
+    .filter(([, init]) => init?.method === 'POST')
+    .map(([url]) => String(url))
+}
+
+/** 泊位上的介面登入（M4 票 07、15）：預設沿用擁有者的 Jellyfin 帳密，密碼打一次。 */
 async function typeLogin(user: UserEvent) {
-  await user.type(await screen.findByLabelText('密碼'), 'harbour')
-  await user.type(screen.getByLabelText('再輸入一次密碼'), 'harbour')
+  await user.type(await screen.findByLabelText('skipper 的 Jellyfin 密碼'), 'harbour')
 }
 
 function heading() {
@@ -113,22 +141,26 @@ function findBoard() {
 }
 
 describe('每個泊位做完都停在結果上', () => {
-  it('泊位 1：靠泊序列跑完，畫面停在序列上，按了才前往下一個泊位', async () => {
-    wizard(3)
+  it('頁 1：擁有者成立之後停在「擁有者：名字」上，按了才前往下一個泊位', async () => {
+    wizard(1)
     const user = userEvent.setup()
     renderWithProviders(<SetupPage />)
 
-    await user.click(await screen.findByRole('button', { name: '開始靠泊' }))
+    expect(await heading()).toHaveTextContent('建立 Jellyfin 管理員')
+    await user.type(screen.getByLabelText('Jellyfin 帳號'), 'skipper')
+    await user.type(screen.getByLabelText('密碼'), 'harbour')
+    await user.type(screen.getByLabelText('再輸入一次密碼'), 'harbour')
+    await user.click(screen.getByRole('button', { name: '建立管理員並登入' }))
 
     expect(await screen.findByRole('button', { name: '前往下一個泊位' })).toBeVisible()
-    expect(await heading()).toHaveTextContent('接手這台 Jellyfin')
+    expect(await heading()).toHaveTextContent('擁有者：skipper')
 
     await user.click(screen.getByRole('button', { name: '前往下一個泊位' }))
     expect(await heading()).toHaveTextContent('套用建議的 qBittorrent 設定')
   })
 
-  it('泊位 2：套用完停在逐鍵結果上', async () => {
-    wizard(4)
+  it('頁 2：套用完停在逐鍵結果上，前往下一個是頁 3 的媒體庫清單', async () => {
+    wizard(2)
     const user = userEvent.setup()
     renderWithProviders(<SetupPage />)
 
@@ -139,16 +171,43 @@ describe('每個泊位做完都停在結果上', () => {
     expect(await heading()).toHaveTextContent('套用建議的 qBittorrent 設定')
 
     await user.click(screen.getByRole('button', { name: '前往下一個泊位' }))
-    expect(await heading()).toHaveTextContent('媒體庫路徑')
+    // 套件內 Jellyfin 的清單還沒建：頁 3 先畫清單（M4 票 15 從 Jellyfin 頁搬過來）。
+    expect(await heading()).toHaveTextContent('建立媒體庫')
   })
 
-  it('泊位 3：套件內一走到就自動建 Route，停在五條檢查的結果上，沒有要按的鍵', async () => {
-    const { fetchStub } = wizard(5)
+  it('頁 3：靠泊序列跑完停在清單的結果上，不自動跳去 Route；按「前往 Route 與檢查」才去', async () => {
+    const { fetchStub } = wizard(3)
+    const user = userEvent.setup()
+    renderWithProviders(<SetupPage />)
+
+    expect(await heading()).toHaveTextContent('建立媒體庫')
+    await user.click(await screen.findByRole('button', { name: '開始靠泊' }))
+
+    const toRoutes = await screen.findByRole('button', { name: '前往 Route 與檢查' })
+    expect(await heading()).toHaveTextContent('建立媒體庫')
+    // 建清單不讓精靈前進，這一頁還沒做完：沒有「前往下一個泊位」，Route 也還沒建。
+    expect(screen.queryByRole('button', { name: '前往下一個泊位' })).not.toBeInTheDocument()
+    expect(posts(fetchStub)).not.toContain('/api/setup/routes')
+
+    await user.click(toRoutes)
+
+    expect(await heading()).toHaveTextContent('媒體庫路徑')
+    // 走到 Route 這一半就自動建，建完停在五條檢查的結果上。
+    expect(await screen.findByRole('button', { name: '前往下一個泊位' })).toBeVisible()
+    expect(posts(fetchStub).filter((url) => url === '/api/setup/routes')).toHaveLength(1)
+    expect(await heading()).toHaveTextContent('媒體庫路徑')
+
+    await user.click(screen.getByRole('button', { name: '前往下一個泊位' }))
+    expect(await heading()).toHaveTextContent('索引站')
+  })
+
+  it('頁 3：清單已經建完時一走到就自動建 Route，停在五條檢查的結果上，沒有要按的鍵', async () => {
+    const { fetchStub } = wizard(3, {}, { built: true })
     const user = userEvent.setup()
     renderWithProviders(<SetupPage />)
 
     expect(await screen.findByRole('button', { name: '前往下一個泊位' })).toBeVisible()
-    expect(fetchStub.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(1)
+    expect(posts(fetchStub)).toEqual(['/api/setup/routes'])
     expect(await heading()).toHaveTextContent('媒體庫路徑')
     expect(screen.getAllByText('berth-tv').length).toBeGreaterThan(0)
     expect(screen.queryByRole('button', { name: /^建立/ })).not.toBeInTheDocument()
@@ -157,35 +216,42 @@ describe('每個泊位做完都停在結果上', () => {
     expect(await heading()).toHaveTextContent('索引站')
   })
 
-  it('泊位 3：回頭看已經建好的 Route 不重跑', async () => {
-    const { fetchStub } = wizard(8)
+  it('頁 3：回頭看已經建好的 Route 不重跑', async () => {
+    const { fetchStub } = wizard(6)
     const user = userEvent.setup()
     renderWithProviders(<SetupPage />)
 
     await user.click(await within(await findBoard()).findByRole('button', { name: /BTH 3/ }))
 
     expect(await heading()).toHaveTextContent('媒體庫路徑')
-    expect(fetchStub.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false)
+    expect(posts(fetchStub)).toEqual([])
   })
 
-  it('泊位 3：既有 Jellyfin 仍然要勾媒體庫、自己按', async () => {
+  it('頁 3：既有 Jellyfin 直接是 Route，仍然要勾媒體庫、自己按；沒有清單可切', async () => {
     const existing = routeSetup({
       origin: 'existing',
       libraries: routeSetup().libraries.map((row) => ({ ...row, has_berth_path: false })),
     })
-    const { fetchStub } = wizard(5, { 'GET /api/setup/routes': { body: existing } })
+    const { fetchStub } = wizard(3, {
+      'GET /api/setup/routes': { body: existing },
+      'GET /api/setup/jellyfin': {
+        body: jellyfinSetup({ origin: 'existing', base_url: 'http://nas:8096' }),
+      },
+    })
     renderWithProviders(<SetupPage />)
 
     expect(await screen.findByRole('checkbox', { name: 'Movies' })).toBeVisible()
-    expect(fetchStub.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false)
+    expect(await heading()).toHaveTextContent('媒體庫路徑')
+    expect(screen.queryByRole('button', { name: '媒體庫清單' })).not.toBeInTheDocument()
+    expect(posts(fetchStub)).toEqual([])
   })
 
-  it('泊位 4：加完站停在逐站結果與試搜上，前往下一個是 TMDB', async () => {
-    wizard(6)
+  it('頁 4：加完站停在逐站結果與試搜上，前往下一個是 TMDB', async () => {
+    wizard(4)
     const user = userEvent.setup()
     renderWithProviders(<SetupPage />)
 
-    // TMDB 不在這一頁了（票 06e 拆成兩個泊位）。
+    // TMDB 不在這一頁（票 06e 拆成兩個泊位）。
     expect(await heading()).toHaveTextContent('索引站')
     expect(screen.queryByLabelText(/TMDB API key/)).not.toBeInTheDocument()
     await typeLogin(user)
@@ -199,8 +265,8 @@ describe('每個泊位做完都停在結果上', () => {
     expect(await heading()).toHaveTextContent('TMDB')
   })
 
-  it('泊位 5：測過 TMDB 停在結果上，前往下一個是完成頁', async () => {
-    wizard(7)
+  it('頁 5：測過 TMDB 停在結果上，前往下一個是完成頁', async () => {
+    wizard(5)
     const user = userEvent.setup()
     renderWithProviders(<SetupPage />)
 
@@ -217,14 +283,17 @@ describe('每個泊位做完都停在結果上', () => {
 
 describe('上一個泊位', () => {
   it.each([
-    [3, '接手這台 Jellyfin', '偵測服務'],
-    [4, '套用建議的 qBittorrent 設定', '接手這台 Jellyfin'],
-    [5, '媒體庫路徑', '套用建議的 qBittorrent 設定'],
-    [6, '索引站', '媒體庫路徑'],
-    [7, 'TMDB', '索引站'],
-    [8, '完成設定', 'TMDB'],
-  ])('第 %i 步有上一個泊位', async (at, here, previous) => {
-    wizard(at, at === 5 ? { 'GET /api/setup/routes': { body: ROUTES_DONE } } : {})
+    [2, '套用建議的 qBittorrent 設定', '擁有者：skipper'],
+    [3, '媒體庫路徑', '套用建議的 qBittorrent 設定'],
+    [4, '索引站', '媒體庫路徑'],
+    [5, 'TMDB', '索引站'],
+    [6, '完成設定', 'TMDB'],
+  ])('頁 %i 有上一個泊位', async (at, here, previous) => {
+    wizard(
+      at,
+      at === 3 ? { 'GET /api/setup/routes': { body: ROUTES_DONE } } : {},
+      { built: at >= 3 },
+    )
     const user = userEvent.setup()
     renderWithProviders(<SetupPage />)
 
@@ -233,12 +302,24 @@ describe('上一個泊位', () => {
 
     expect(await heading()).toHaveTextContent(previous)
   })
+
+  it('頁 1 沒有上一個泊位，只有前往下一個', async () => {
+    wizard(6)
+    const user = userEvent.setup()
+    renderWithProviders(<SetupPage />)
+
+    await user.click(await within(await findBoard()).findByRole('button', { name: /BTH 1/ }))
+
+    expect(await heading()).toHaveTextContent('擁有者：skipper')
+    expect(screen.getByRole('button', { name: '前往下一個泊位' })).toBeVisible()
+    expect(screen.queryByRole('button', { name: '上一個泊位' })).not.toBeInTheDocument()
+  })
 })
 
 describe('回頭看永遠有出口', () => {
   /** 票 06d 的 bug：完成頁的「回媒體庫路徑」把畫面釘住，之後沒有任何按鈕解除。 */
   it('完成頁回頭之後，走得回完成頁', async () => {
-    wizard(8)
+    wizard(6)
     const user = userEvent.setup()
     renderWithProviders(<SetupPage />)
 
@@ -251,35 +332,37 @@ describe('回頭看永遠有出口', () => {
     expect(await heading()).toHaveTextContent('完成設定')
   })
 
-  it('跳回很前面時，一顆「回到目前這一步」直接回去', async () => {
-    wizard(8)
+  it('跳回很前面時，板下的帶子說出在哪、走到哪，一顆「回到目前這一步」直接回去', async () => {
+    wizard(6)
     const user = userEvent.setup()
     renderWithProviders(<SetupPage />)
 
     await user.click(await within(await findBoard()).findByRole('button', { name: /BTH 1/ }))
-    expect(await heading()).toHaveTextContent('接手這台 Jellyfin')
+    expect(await heading()).toHaveTextContent('擁有者：skipper')
+    expect(screen.getByText(/回頭看：BTH 1 Jellyfin/)).toBeVisible()
+    expect(screen.getByText(/目前走到第 6 步/)).toBeVisible()
 
-    await user.click(screen.getByRole('button', { name: /回到目前這一步/ }))
+    await user.click(screen.getByRole('button', { name: '回到目前這一步' }))
     expect(await heading()).toHaveTextContent('完成設定')
+    expect(screen.queryByText(/回頭看：/)).not.toBeInTheDocument()
   })
 
-  /** 票 06d 的 bug：「前往泊位 1」做的是解除覆寫，走完過的人按了落到最後一步。 */
-  it('走完過的人重新探測，再按前往泊位 1，落在泊位 1', async () => {
-    wizard(8)
+  it('停在剛做完的那一頁不出帶子：「前往下一個泊位」就是回去的路', async () => {
+    wizard(6)
     const user = userEvent.setup()
     renderWithProviders(<SetupPage />)
 
-    await user.click(await screen.findByRole('button', { name: /2 個服務已判定/ }))
-    await user.click(await screen.findByRole('button', { name: '重新探測' }))
-    await user.click(await screen.findByRole('button', { name: '前往泊位 1' }))
+    expect(await heading()).toHaveTextContent('完成設定')
+    await user.click(screen.getByRole('button', { name: '上一個泊位' }))
 
-    expect(await heading()).toHaveTextContent('接手這台 Jellyfin')
+    expect(await heading()).toHaveTextContent('TMDB')
+    expect(screen.queryByRole('button', { name: '回到目前這一步' })).not.toBeInTheDocument()
   })
 })
 
-describe('泊位板與前置列', () => {
+describe('泊位板', () => {
   it('走過的與目前的是按鈕，還沒到的不是按鈕', async () => {
-    wizard(5, { 'GET /api/setup/routes': { body: ROUTES_DONE } })
+    wizard(3, { 'GET /api/setup/routes': { body: ROUTES_DONE } }, { built: true })
     renderWithProviders(<SetupPage />)
     await heading()
 
@@ -296,60 +379,34 @@ describe('泊位板與前置列', () => {
     }
   })
 
-  it('前置列是證據也是入口：擁有者回第 1 步、判定回第 2 步；沒有每頁的「重新探測」', async () => {
+  /** M4 票 15：不再偵測，板上方那一列「擁有者 · 名字」「N 個服務已判定」跟著拿掉。 */
+  it('板上正好五格，沒有前置列，也沒有偵測或重新偵測的鍵', async () => {
     wizard(4)
-    const user = userEvent.setup()
     renderWithProviders(<SetupPage />)
     await heading()
 
-    expect(screen.queryByRole('button', { name: '重新探測' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: '改帳密' })).not.toBeInTheDocument()
-
-    await user.click(screen.getByRole('button', { name: '擁有者 · skipper' }))
-    expect(await heading()).toHaveTextContent('擁有者：skipper')
-
-    await user.click(screen.getByRole('button', { name: /2 個服務已判定/ }))
-    expect(await heading()).toHaveTextContent('偵測服務')
-  })
-
-  /** 票 06h 的冷啟動演練抓到：探測中的也被算成「已判定」，前置列說 3 個、清單上還有兩個在等。 */
-  it('前置列只算判定完成的服務，探測中的不算', async () => {
-    stubApi({
-      'GET /api/setup/status': {
-        body: setupStatus({
-          current_step: 2,
-          owner: 'skipper',
-          services: [
-            detection({ origin: 'pending', reason: 'starting', resolved: false }),
-            ALL_BUNDLED[1]!,
-            detection({
-              kind: 'prowlarr',
-              origin: 'pending',
-              reason: 'unreachable',
-              resolved: false,
-            }),
-          ],
-        }),
-      },
-      'POST /api/setup/detect': () => new Promise(() => {}),
-    })
-    renderWithProviders(<SetupPage />)
-    await heading()
-
-    expect(screen.getByRole('button', { name: /1 個服務已判定/ })).toBeVisible()
-    expect(screen.queryByRole('button', { name: /2 個服務已判定/ })).not.toBeInTheDocument()
+    expect(within(board()).getAllByText(/^BTH \d$/).map((cell) => cell.textContent)).toEqual([
+      'BTH 1',
+      'BTH 2',
+      'BTH 3',
+      'BTH 4',
+      'BTH 5',
+    ])
+    expect(screen.queryByRole('button', { name: /擁有者 · / })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /個服務已判定/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /偵測/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /探測/ })).not.toBeInTheDocument()
   })
 })
 
 describe('回頭看的泊位說出能改什麼', () => {
   it.each([
-    ['BTH 1', /重跑.*已經是這樣/, /媒體庫.*改名.*Jellyfin/],
-    // 套件內與既有各說一半（M4 票 05：既有的那一台一個鍵都不寫）。
-    ['BTH 2', /套件內.*套用.*已經是這樣.*你自己的.*一個鍵都不寫/, /qBittorrent 自己的介面/],
-    ['BTH 3', /只新增.*重驗/, /改名.*停用.*設定.*媒體庫路徑/],
-    ['BTH 4', /加.*站.*試搜.*移除/, /預設清單以外.*Prowlarr/],
+    // 套件內與既有各說一半（M4 票 05：既有的那一台一個鍵都不寫）；來源可以改選（M4 票 15）。
+    ['BTH 2', /改選套件內或既有.*套用.*已經是這樣.*你自己的.*一個鍵都不寫/, /qBittorrent 自己的介面/],
+    ['BTH 3', /只新增.*清單.*重驗/, /改名.*停用.*設定.*媒體庫路徑/],
+    ['BTH 4', /改選套件內或既有.*加.*站.*試搜.*移除/, /預設清單以外.*Prowlarr/],
   ])('%s', async (code, can, elsewhere) => {
-    wizard(8)
+    wizard(6)
     const user = userEvent.setup()
     renderWithProviders(<SetupPage />)
 
@@ -363,7 +420,7 @@ describe('回頭看的泊位說出能改什麼', () => {
   })
 
   it('BTH 5', async () => {
-    wizard(8)
+    wizard(6)
     const user = userEvent.setup()
     renderWithProviders(<SetupPage />)
 
@@ -377,7 +434,7 @@ describe('回頭看的泊位說出能改什麼', () => {
   })
 
   it('目前這一步沒有回頭看的說明', async () => {
-    wizard(4)
+    wizard(2)
     renderWithProviders(<SetupPage />)
     await heading()
 
@@ -385,126 +442,41 @@ describe('回頭看的泊位說出能改什麼', () => {
   })
 })
 
-describe('重新偵測這個服務', () => {
-  it('第 2 步：逾時或未解決的那一列旁邊有，只探那一個服務', async () => {
-    const timedOut = setupStatus({
-      current_step: 2,
-      owner: 'skipper',
-      services: [
-        detection(),
-        detection({
-          kind: 'qbittorrent',
-          origin: 'timeout',
-          reason: 'unreachable',
-          resolved: false,
-        }),
-        detection({ kind: 'prowlarr', reason: 'no_indexers', detail: '' }),
-      ],
-    })
-    const fetchStub = stubApi({
-      'GET /api/setup/status': { body: timedOut },
-      'POST /api/setup/detect': { body: timedOut },
-    })
-    const user = userEvent.setup()
-    renderWithProviders(<SetupPage />)
-
-    const buttons = await screen.findAllByRole('button', { name: /重新偵測這個服務/ })
-    expect(buttons).toHaveLength(1)
-    await user.click(buttons[0])
-
-    await waitFor(() => {
-      const call = fetchStub.mock.calls.find(([url]) => url === '/api/setup/detect')
-      expect(JSON.parse(String(call?.[1]?.body))).toEqual({ restart: false, kind: 'qbittorrent' })
-    })
-  })
-
-  it('泊位連不上時，那一頁有重新偵測那個服務', async () => {
-    const fetchStub = wizard(4, {
-      'GET /api/setup/qbittorrent/diff': {
-        body: qbittorrentSetup({ reachable: false, blocked: true, error: 'connection refused' }),
-      },
-    }).fetchStub
-    const user = userEvent.setup()
-    renderWithProviders(<SetupPage />)
-
-    await user.click(await screen.findByRole('button', { name: /重新偵測這個服務/ }))
-
-    await waitFor(() => {
-      const call = fetchStub.mock.calls.find(([url]) => url === '/api/setup/detect')
-      expect(JSON.parse(String(call?.[1]?.body))).toEqual({ restart: false, kind: 'qbittorrent' })
-    })
-  })
-})
-
-describe('重新偵測之後回得到原本那一頁', () => {
-  /**
-   * 泊位 2 上重新偵測 qBittorrent，它還在啟動：後端退回第 2 步、前端輪詢接手。輪詢不能把畫面
-   * 釘在第 2 步——判定一出來，畫面要回到按下那顆鍵的那一頁。
-   */
-  it('服務還在啟動的那幾秒退回偵測，判定出來之後回到泊位 2', async () => {
-    let starting = true
-    const at = (step: number, origin: 'pending' | 'bundled') =>
-      setupStatus({
-        current_step: step,
-        owner: 'skipper',
-        services: [
-          detection(),
-          detection({
-            kind: 'qbittorrent',
-            origin,
-            reason: 'anonymous_ok',
-            resolved: origin !== 'pending',
-          }),
-          detection({ kind: 'prowlarr', reason: 'no_indexers', detail: '' }),
-        ],
-      })
-    stubApi({
-      'GET /api/setup/status': () => ({ body: at(4, 'bundled') }),
-      'GET /api/setup/qbittorrent/diff': {
-        body: qbittorrentSetup({ reachable: false, blocked: true, error: 'connection refused' }),
-      },
-      'POST /api/setup/detect': () => {
-        if (starting) {
-          starting = false
-          return { body: at(2, 'pending') }
-        }
-        return { body: at(4, 'bundled') }
-      },
-    })
-    const user = userEvent.setup()
-    renderWithProviders(<SetupPage />)
-
-    await user.click(await screen.findByRole('button', { name: /重新偵測這個服務/ }))
-    expect(await heading()).toHaveTextContent('偵測服務')
-
-    expect(
-      await screen.findByRole(
-        'heading',
-        { name: '套用建議的 qBittorrent 設定' },
-        { timeout: 6000 },
-      ),
-    ).toBeVisible()
-  }, 10000)
-})
-
 describe('套件內的自動建立只跑一次', () => {
   /** 自動建立跑過之後 Route 又一條都沒有（全刪了）：鍵要回來，不能只剩「自動建立中」。 */
   it('跑過之後一條都沒有，鍵回來', async () => {
-    const { fetchStub } = wizard(5, { 'POST /api/setup/routes': { body: routeSetup() } })
+    const { fetchStub } = wizard(
+      3,
+      { 'POST /api/setup/routes': { body: routeSetup() } },
+      { built: true },
+    )
     renderWithProviders(<SetupPage />)
 
     expect(await screen.findByRole('button', { name: '建立 3 條 Route 並檢查' })).toBeVisible()
-    expect(fetchStub.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(1)
+    expect(posts(fetchStub)).toEqual(['/api/setup/routes'])
+  })
+
+  it('清單還沒建完就不建 Route：清單那一半一個 Route 請求都不發', async () => {
+    const { fetchStub } = wizard(3)
+    renderWithProviders(<SetupPage />)
+
+    expect(await screen.findByRole('button', { name: '開始靠泊' })).toBeVisible()
+    expect(await heading()).toHaveTextContent('建立媒體庫')
+    expect(posts(fetchStub)).toEqual([])
   })
 })
 
-describe('第 2 步之後的每一格都有結果可看', () => {
+describe('頁 2 之後的每一格都有結果可看', () => {
   it('Route 的檢查結果留在畫面上', async () => {
-    wizard(5, {
-      'POST /api/setup/routes': {
-        body: routeSetup({ routes: [routeView({ checks: CHECKS_PASSED })], ready: true }),
+    wizard(
+      3,
+      {
+        'POST /api/setup/routes': {
+          body: routeSetup({ routes: [routeView({ checks: CHECKS_PASSED })], ready: true }),
+        },
       },
-    })
+      { built: true },
+    )
     renderWithProviders(<SetupPage />)
 
     expect(await screen.findByText(/inode=8162774324533690/)).toBeVisible()
@@ -517,7 +489,7 @@ describe('第 2 步之後的每一格都有結果可看', () => {
  */
 describe('焦點不掉回 body', () => {
   it('前往下一個泊位之後，焦點在新一步的標題上', async () => {
-    wizard(4)
+    wizard(2)
     const user = userEvent.setup()
     renderWithProviders(<SetupPage />)
 
@@ -526,16 +498,17 @@ describe('焦點不掉回 body', () => {
     await user.click(await screen.findByRole('button', { name: '前往下一個泊位' }))
 
     const next = await heading()
-    expect(next).toHaveTextContent('媒體庫路徑')
+    expect(next).toHaveTextContent('建立媒體庫')
     await waitFor(() => expect(next).toHaveFocus())
   })
 
   it('做完這一步、按的那顆鍵換掉之後，焦點落在「前往下一個泊位」', async () => {
-    wizard(3)
+    wizard(2)
     const user = userEvent.setup()
     renderWithProviders(<SetupPage />)
 
-    await user.click(await screen.findByRole('button', { name: '開始靠泊' }))
+    await typeLogin(user)
+    await user.click(await screen.findByRole('button', { name: /^套用這/ }))
 
     const next = await screen.findByRole('button', { name: '前往下一個泊位' })
     await waitFor(() => expect(next).toHaveFocus())

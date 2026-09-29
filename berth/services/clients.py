@@ -10,7 +10,6 @@ import os
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Protocol
-from urllib.parse import urlsplit
 
 from berth.adapters.budget import BudgetedFetcher, RequestBudget
 from berth.adapters.indexer import IndexerSearch
@@ -35,7 +34,7 @@ from berth.domain import BudgetUse, IndexerKind, ServiceKind
 
 
 class ServiceClientFactory(Protocol):
-    """依位址造 client。探測套件內服務用的是固定主機名，不走這裡。"""
+    """依位址造 client。套件內的那三台也走這裡，位址是 compose 主機名（`bundled_targets`）。"""
 
     #: 一個站一份請求預算（M3 票 20）。一個程序一份：它造的每一個 client 都打同一批公開站。
     budget: RequestBudget
@@ -81,24 +80,25 @@ class ServiceClientFactory(Protocol):
 
 
 @dataclass(frozen=True, slots=True)
-class SetupProbes:
-    """精靈第 2 步要探的三個 client，加上唯讀掛載讀到的 Prowlarr API key。"""
+class BundledServices:
+    """套件內那三台在哪裡，加上唯讀掛載讀到的 Prowlarr API key（plan §9.1、§9.2）。
 
-    jellyfin: JellyfinClient
-    qbittorrent: QbittorrentClient
-    prowlarr: ProwlarrClient
+    使用者在服務頁選了「套件內」時 Berth 連這裡（M4 票 15）；選之前一個請求都不發。
+    """
+
+    targets: Mapping[ServiceKind, str]
     prowlarr_api_key: str
 
 
 #: 套件內服務的位址就是 compose 的服務名（plan §9.1）。qBittorrent 不在這裡：它的 WebUI port
-#: 內外兩側一起換（Host 檢查連 port 都比對，brief §20.7），號碼是設定值（`build_setup_probes`）。
+#: 內外兩側一起換（Host 檢查連 port 都比對，brief §20.7），號碼是設定值（`bundled_targets`）。
 BUNDLED_JELLYFIN_URL = "http://jellyfin:8096"
 BUNDLED_PROWLARR_URL = "http://prowlarr:9696"
 
 
 def bundled_targets(config: Config) -> dict[ServiceKind, str]:
-    """精靈第 2 步探的三個 compose 位址。探測照它連，畫面照它說「將會探測」哪裡（票 06h：
-    原本前端寫死 `qbittorrent:8080`，`.env` 換了 port 就說錯）。
+    """套件內三台的 compose 位址。服務頁照它說「套件內會連哪裡」（票 06h：原本前端寫死
+    `qbittorrent:8080`，`.env` 換了 port 就說錯）。
     """
     return {
         ServiceKind.JELLYFIN: BUNDLED_JELLYFIN_URL,
@@ -107,38 +107,13 @@ def bundled_targets(config: Config) -> dict[ServiceKind, str]:
     }
 
 
-def same_host(typed: str, compose: str) -> bool:
-    """使用者填的位址是不是那個 compose 位址：主機名與 port 相同就是同一台，scheme、尾斜線、
-    大小寫不算差別（M4 票 05：只有 compose 主機名上的才可能是套件內）。"""
-    a, b = urlsplit(typed), urlsplit(compose)
-    try:
-        return (a.hostname, a.port) == (b.hostname, b.port)
-    except ValueError:
-        # port 不是數字：那一條本來就連不上，更不會是 compose 主機名。
-        return False
-
-
-def build_setup_probes(config: Config, environ: Mapping[str, str] | None = None) -> SetupProbes:
-    """精靈第 2 步用的三個 client。探測的是 compose 主機名，不是使用者填的位址。
-
-    判成套件內時，這裡的位址會記進判定（`ServiceProbe.base_url`）；之後的步驟連的是那一條，
-    不再自己組一次。
-    """
+def bundled_services(config: Config, environ: Mapping[str, str] | None = None) -> BundledServices:
+    """選了套件內時用的位址與 key。key 讀自唯讀掛載或環境變數，讀不到是空字串（plan §9.2）。"""
     env = os.environ if environ is None else environ
-    api_key = read_api_key(config.prowlarr_config_path, env)
-    targets = bundled_targets(config)
-    return SetupProbes(
-        jellyfin=HttpJellyfinClient(targets[ServiceKind.JELLYFIN]),
-        qbittorrent=HttpQbittorrentClient(targets[ServiceKind.QBITTORRENT]),
-        prowlarr=HttpProwlarrClient(targets[ServiceKind.PROWLARR], api_key),
-        prowlarr_api_key=api_key,
+    return BundledServices(
+        targets=bundled_targets(config),
+        prowlarr_api_key=read_api_key(config.prowlarr_config_path, env),
     )
-
-
-async def close_setup_probes(probes: SetupProbes) -> None:
-    await probes.jellyfin.aclose()
-    await probes.qbittorrent.aclose()
-    await probes.prowlarr.aclose()
 
 
 def feed_fetcher(factory: ServiceClientFactory, use: BudgetUse) -> FeedFetcher:
@@ -147,7 +122,7 @@ def feed_fetcher(factory: ServiceClientFactory, use: BudgetUse) -> FeedFetcher:
 
 
 class HttpServiceClientFactory:
-    """既有服務用：位址由使用者填，不是 compose 主機名。"""
+    """正式的那一份：位址由呼叫端給，套件內是 compose 主機名、既有是使用者填的。"""
 
     def __init__(self) -> None:
         self.budget = RequestBudget()

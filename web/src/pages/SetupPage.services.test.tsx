@@ -9,7 +9,7 @@ import {
   ALL_BUNDLED,
   DEFAULT_OPTIONS,
   added,
-  detection,
+  chosen,
   indexerSetup,
   qbittorrentSetup,
   setupStatus,
@@ -23,6 +23,8 @@ afterEach(() => {
 })
 
 const STATUS = 'GET /api/setup/status'
+const CHOOSE_QBITTORRENT = 'POST /api/setup/services/qbittorrent'
+const RETEST_QBITTORRENT = 'POST /api/setup/services/qbittorrent/test'
 const DIFF = 'GET /api/setup/qbittorrent/diff'
 const APPLY = 'POST /api/setup/qbittorrent/apply'
 const INDEXERS = 'GET /api/setup/indexers'
@@ -34,10 +36,17 @@ const REMOVE_YTS = 'DELETE /api/setup/indexers/3'
 const TMDB = 'GET /api/setup/tmdb'
 const TEST_TMDB = 'POST /api/setup/tmdb/test'
 
-/** 泊位上的介面登入（M4 票 07）：帳號預填擁有者的名字，密碼打兩次。 */
-async function typePassword(user: UserEvent, password = 'harbour') {
-  await user.type(await screen.findByLabelText('密碼'), password)
-  await user.type(screen.getByLabelText('再輸入一次密碼'), password)
+/** 介面登入預設沿用 Jellyfin 帳密（M4 票 15）：只有一格擁有者的密碼。 */
+const OWNER_PASSWORD = 'skipper 的 Jellyfin 密碼'
+
+/** 取消勾選「沿用」之後的三格（M4 票 07）：帳號預填擁有者的名字，密碼打兩次。 */
+async function typeOwnLogin(
+  user: UserEvent,
+  fields: ReturnType<typeof within>,
+  confirm = 'harbour',
+) {
+  await user.type(fields.getByLabelText('密碼'), 'harbour')
+  await user.type(fields.getByLabelText('再輸入一次密碼'), confirm)
 }
 
 function bodyOf(stub: ReturnType<typeof stubApi>, url: string) {
@@ -45,37 +54,183 @@ function bodyOf(stub: ReturnType<typeof stubApi>, url: string) {
   return JSON.parse(String(call[1]?.body)) as Record<string, unknown>
 }
 
-/** 前兩個泊位都接好了，精靈在泊位 2。 */
-const AT_BERTH_TWO = setupStatus({
-  current_step: 4,
+function called(stub: ReturnType<typeof stubApi>, url: string) {
+  return stub.mock.calls.some(([each]) => each === url)
+}
+
+/** 二選一的那兩格。label 裡還有說明句與位址，所以只比開頭。 */
+const bundledCard = () => screen.getByRole('radio', { name: /^套件內/ })
+const existingCard = () => screen.getByRole('radio', { name: /^既有/ })
+
+const EXISTING_QBITTORRENT = chosen({
+  kind: 'qbittorrent',
+  origin: 'existing',
+  base_url: 'http://nas:8080',
+  reason: 'connected',
+  detail: 'v5.2.3 · Web API 2.15.1',
+})
+
+/** 擁有者成立了，精靈在頁 2，qBittorrent 還沒選。 */
+const CHOOSING_QBITTORRENT = setupStatus({
+  current_step: 2,
   owner: 'skipper',
-  services: ALL_BUNDLED,
+  services: [ALL_BUNDLED[0]],
 })
 
-/** 媒體庫路徑也接好了，精靈在索引站（第 6 步，泊位 4）。 */
-const AT_INDEXER = setupStatus({ ...AT_BERTH_TWO, current_step: 6 })
+/** 同一頁，選了套件內而且連上了。 */
+const AT_QBITTORRENT = setupStatus({ ...CHOOSING_QBITTORRENT, services: ALL_BUNDLED.slice(0, 2) })
 
-/** 同一步，但 Prowlarr 是使用者自己的那一台。 */
-const AT_EXISTING_INDEXER = setupStatus({
-  ...AT_INDEXER,
-  services: [
-    ...ALL_BUNDLED.slice(0, 2),
-    detection({
-      kind: 'prowlarr',
-      origin: 'existing',
-      reason: 'has_indexers',
-      detail: '3',
-      base_url: 'http://nas:9696',
-    }),
-  ],
+/** 同一頁，選了使用者自己的那一台。 */
+const AT_EXISTING_QBITTORRENT = setupStatus({
+  ...CHOOSING_QBITTORRENT,
+  services: [ALL_BUNDLED[0], EXISTING_QBITTORRENT],
 })
 
-/** 索引站有結論了，精靈在 TMDB（第 7 步，泊位 5；票 06e 拆出來的那一格）。 */
-const AT_TMDB = setupStatus({ ...AT_BERTH_TWO, current_step: 7 })
+/** 自己的 qBittorrent 的差異：一個鍵都不寫、沒有 WebUI 登入那一格（M4 票 05、07）。 */
+const EXISTING_DIFF = qbittorrentSetup({
+  origin: 'existing',
+  base_url: 'http://nas:8080',
+  web_ui_login: false,
+  web_ui_username: '',
+  writes_preferences: false,
+})
 
-describe('泊位 2：qBittorrent', () => {
+/** 三個服務都接好、媒體庫路徑也過了，精靈在索引站（頁 4）。 */
+const AT_INDEXER = setupStatus({ current_step: 4, owner: 'skipper', services: ALL_BUNDLED })
+
+/** 同一頁，Prowlarr 還沒選。 */
+const CHOOSING_INDEXER = setupStatus({ ...AT_INDEXER, services: ALL_BUNDLED.slice(0, 2) })
+
+/** 索引站有結論了，精靈在 TMDB（頁 5）。 */
+const AT_TMDB = setupStatus({ ...AT_INDEXER, current_step: 5 })
+
+describe('頁 2：qBittorrent', () => {
+  /** M4 票 15 驗收：選之前一個請求都不發——差異要連那一台才讀得到。 */
+  it('選之前不讀差異、不測 qBittorrent', async () => {
+    const stub = stubApi({
+      [STATUS]: { body: CHOOSING_QBITTORRENT },
+      [DIFF]: { body: qbittorrentSetup() },
+    })
+
+    renderWithProviders(<SetupPage />)
+
+    expect(
+      await screen.findByRole('heading', { level: 2, name: '先選 qBittorrent 是哪一台' }),
+    ).toBeVisible()
+    expect(bundledCard()).not.toBeChecked()
+    expect(existingCard()).not.toBeChecked()
+    expect(screen.queryByText('將會寫入的鍵')).not.toBeInTheDocument()
+    expect(called(stub, '/api/setup/qbittorrent/diff')).toBe(false)
+    expect(stub.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false)
+  })
+
+  /** 票 06h：`.env` 換了 `QBITTORRENT_WEBUI_PORT`，畫面原本照樣寫 `qbittorrent:8080`。 */
+  it('套件內那一格的位址照後端說的寫，不寫死 port', async () => {
+    const targets = { ...setupStatus().bundled_targets, qbittorrent: 'http://qbittorrent:18080' }
+    stubApi({
+      [STATUS]: { body: setupStatus({ ...CHOOSING_QBITTORRENT, bundled_targets: targets }) },
+    })
+
+    renderWithProviders(<SetupPage />)
+
+    expect(await screen.findByText('http://qbittorrent:18080')).toBeInTheDocument()
+    expect(screen.queryByText(/qbittorrent:8080/)).not.toBeInTheDocument()
+  })
+
+  it('點「套件內」就送出選擇，連上了才讀差異', async () => {
+    const stub = stubApi({
+      [STATUS]: { body: CHOOSING_QBITTORRENT },
+      [CHOOSE_QBITTORRENT]: { body: AT_QBITTORRENT },
+      [DIFF]: { body: qbittorrentSetup() },
+    })
+    const user = userEvent.setup()
+
+    renderWithProviders(<SetupPage />)
+    await screen.findByRole('heading', { level: 2, name: '先選 qBittorrent 是哪一台' })
+    await user.click(bundledCard())
+
+    await waitFor(() =>
+      expect(bodyOf(stub, '/api/setup/services/qbittorrent')).toEqual({ origin: 'bundled' }),
+    )
+    expect(await screen.findByText('將會寫入的鍵')).toBeInTheDocument()
+    expect(
+      screen.getByRole('heading', { level: 2, name: '套用建議的 qBittorrent 設定' }),
+    ).toBeVisible()
+    expect(called(stub, '/api/setup/qbittorrent/diff')).toBe(true)
+  })
+
+  it('點「既有」只展開表單；按「測試連線」才送位址與 WebUI 帳密', async () => {
+    const stub = stubApi({
+      [STATUS]: { body: CHOOSING_QBITTORRENT },
+      [CHOOSE_QBITTORRENT]: { body: AT_EXISTING_QBITTORRENT },
+      [DIFF]: { body: EXISTING_DIFF },
+    })
+    const user = userEvent.setup()
+
+    renderWithProviders(<SetupPage />)
+    await screen.findByRole('heading', { level: 2, name: '先選 qBittorrent 是哪一台' })
+    await user.click(existingCard())
+
+    const address = screen.getByRole('textbox', { name: '位址' })
+    // 位址的範例是 qBittorrent 自己的 port，不是 Jellyfin 的 8096（票 06h）。
+    expect(address).toHaveAttribute('placeholder', 'http://192.168.1.10:8080')
+    expect(screen.getByText('COMPOSE_PROFILES=jellyfin,prowlarr')).toBeInTheDocument()
+    expect(stub.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false)
+    expect(called(stub, '/api/setup/qbittorrent/diff')).toBe(false)
+
+    await user.type(address, 'http://nas:8080')
+    await user.type(screen.getByLabelText('帳號'), 'admin')
+    await user.type(screen.getByLabelText('密碼'), 'adminadmin')
+    await user.click(screen.getByRole('button', { name: '測試連線' }))
+
+    await waitFor(() =>
+      expect(bodyOf(stub, '/api/setup/services/qbittorrent')).toEqual({
+        origin: 'existing',
+        base_url: 'http://nas:8080',
+        api_key: '',
+        username: 'admin',
+        password: 'adminadmin',
+      }),
+    )
+    expect(
+      await screen.findByRole('heading', { level: 2, name: '確認你的 qBittorrent' }),
+    ).toBeVisible()
+  })
+
+  it('套件內那一台逾時：給診斷指令，「重新測試」重算上限', async () => {
+    const timedOut = chosen({
+      ...ALL_BUNDLED[1],
+      state: 'timeout',
+      reason: 'unreachable',
+      detail: '',
+      waited_seconds: 121,
+    })
+    const stub = stubApi({
+      [STATUS]: {
+        body: setupStatus({ ...CHOOSING_QBITTORRENT, services: [ALL_BUNDLED[0], timedOut] }),
+      },
+      [RETEST_QBITTORRENT]: { body: AT_QBITTORRENT },
+      [DIFF]: { body: qbittorrentSetup() },
+    })
+    const user = userEvent.setup()
+
+    renderWithProviders(<SetupPage />)
+
+    expect(await screen.findByText('docker compose ps qbittorrent')).toBeInTheDocument()
+    expect(screen.getByText('逾時')).toBeInTheDocument()
+    // 連不上就沒有差異可讀。
+    expect(called(stub, '/api/setup/qbittorrent/diff')).toBe(false)
+
+    await user.click(screen.getByRole('button', { name: '重新測試' }))
+
+    await waitFor(() =>
+      expect(bodyOf(stub, '/api/setup/services/qbittorrent/test')).toEqual({ restart: true }),
+    )
+    expect(await screen.findByText('將會寫入的鍵')).toBeInTheDocument()
+  })
+
   it('剖面在按之前就逐鍵列出現值與建議值', async () => {
-    stubApi({ [STATUS]: { body: AT_BERTH_TWO }, [DIFF]: { body: qbittorrentSetup() } })
+    stubApi({ [STATUS]: { body: AT_QBITTORRENT }, [DIFF]: { body: qbittorrentSetup() } })
 
     renderWithProviders(<SetupPage />)
     const diff = (await screen.findByText('將會寫入的鍵')).closest('section')!
@@ -87,7 +242,7 @@ describe('泊位 2：qBittorrent', () => {
     expect(screen.getByRole('button', { name: '套用這 5 個鍵' })).toBeInTheDocument()
   })
 
-  it('套用之後逐鍵留下結果，已經是建議值的那幾條標成已經是這樣', async () => {
+  it('WebUI 登入預設沿用 Jellyfin 帳密：只有一格密碼，套用之後逐鍵留下結果', async () => {
     const applied = qbittorrentSetup({
       diffs: qbittorrentSetup().diffs.map((row) => ({
         ...row,
@@ -105,15 +260,23 @@ describe('泊位 2：qBittorrent', () => {
       web_ui_username: 'skipper',
     })
     const stub = stubApi({
-      [STATUS]: { body: AT_BERTH_TWO },
+      [STATUS]: { body: AT_QBITTORRENT },
       [DIFF]: { body: qbittorrentSetup() },
       [APPLY]: { body: applied },
     })
     const user = userEvent.setup()
 
     renderWithProviders(<SetupPage />)
-    await typePassword(user)
-    await user.click(await screen.findByRole('button', { name: '套用這 5 個鍵' }))
+    const legend = await screen.findByText('qBittorrent WebUI 登入')
+    const fields = within(legend.closest('fieldset')!)
+    expect(fields.getByRole('checkbox', { name: '沿用 Jellyfin 帳密（skipper）' })).toBeChecked()
+    // 說得出這是 qBittorrent 自己的登入、Berth 用不到它。
+    expect(fields.getByText(/Berth 自己用不到它/)).toBeInTheDocument()
+    expect(fields.queryByLabelText('帳號')).not.toBeInTheDocument()
+    expect(fields.queryByLabelText('再輸入一次密碼')).not.toBeInTheDocument()
+
+    await user.type(fields.getByLabelText(OWNER_PASSWORD), 'harbour')
+    await user.click(screen.getByRole('button', { name: '套用這 5 個鍵' }))
 
     const sequence = await screen.findByTestId('sequence')
     await waitFor(() => {
@@ -121,17 +284,33 @@ describe('泊位 2：qBittorrent', () => {
     })
     expect(within(sequence).getByText('已經是這樣')).toBeInTheDocument()
     expect(within(sequence).getByText('WebUI 登入')).toBeInTheDocument()
+    // 沿用時帳號留空：後端填成擁有者。
     expect(bodyOf(stub, '/api/setup/qbittorrent/apply')).toEqual({
-      login: { username: 'skipper', password: 'harbour' },
+      login: { username: '', password: 'harbour', reuse_owner: true },
     })
     // 設好之後欄位收起來，只說帳號是誰。
     expect(await screen.findByText('qBittorrent WebUI 的帳號：')).toBeInTheDocument()
-    expect(screen.queryByLabelText('再輸入一次密碼')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(OWNER_PASSWORD)).not.toBeInTheDocument()
   })
 
-  it('WebUI 登入必填：帳號預填擁有者，沒填密碼或兩次不同就不送（M4 票 07）', async () => {
+  it('沿用時沒填密碼就不送', async () => {
     const stub = stubApi({
-      [STATUS]: { body: AT_BERTH_TWO },
+      [STATUS]: { body: AT_QBITTORRENT },
+      [DIFF]: { body: qbittorrentSetup() },
+      [APPLY]: { body: qbittorrentSetup() },
+    })
+    const user = userEvent.setup()
+
+    renderWithProviders(<SetupPage />)
+    await user.click(await screen.findByRole('button', { name: '套用這 5 個鍵' }))
+
+    expect(await screen.findByText('這一格要填。')).toBeInTheDocument()
+    expect(called(stub, '/api/setup/qbittorrent/apply')).toBe(false)
+  })
+
+  it('取消沿用是自設的三格：帳號預填擁有者，沒填或兩次不同就不送，送的是 reuse_owner:false', async () => {
+    const stub = stubApi({
+      [STATUS]: { body: AT_QBITTORRENT },
       [DIFF]: { body: qbittorrentSetup() },
       [APPLY]: { body: qbittorrentSetup() },
     })
@@ -140,31 +319,61 @@ describe('泊位 2：qBittorrent', () => {
     renderWithProviders(<SetupPage />)
     const legend = await screen.findByText('qBittorrent WebUI 登入')
     const fields = within(legend.closest('fieldset')!)
-    expect(fields.getByLabelText('帳號')).toHaveValue('skipper')
-    // 說得出這是 qBittorrent 自己的登入、Berth 用不到它。
-    expect(fields.getByText(/Berth 自己用不到它/)).toBeInTheDocument()
+    await user.click(fields.getByRole('checkbox', { name: '沿用 Jellyfin 帳密（skipper）' }))
 
+    expect(fields.getByLabelText('帳號')).toHaveValue('skipper')
+    expect(fields.queryByLabelText(OWNER_PASSWORD)).not.toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: '套用這 5 個鍵' }))
     expect(await fields.findByText('這一格要填。')).toBeInTheDocument()
-    await user.type(fields.getByLabelText('密碼'), 'harbour')
-    await user.type(fields.getByLabelText('再輸入一次密碼'), 'harbor')
+    await typeOwnLogin(user, fields, 'harbor')
     await user.click(screen.getByRole('button', { name: '套用這 5 個鍵' }))
     expect(await fields.findByText('兩次輸入的密碼不一樣。')).toBeInTheDocument()
+    expect(called(stub, '/api/setup/qbittorrent/apply')).toBe(false)
 
-    expect(stub.mock.calls.some(([url]) => url === '/api/setup/qbittorrent/apply')).toBe(false)
+    await user.clear(fields.getByLabelText('再輸入一次密碼'))
+    await user.type(fields.getByLabelText('再輸入一次密碼'), 'harbour')
+    await user.click(screen.getByRole('button', { name: '套用這 5 個鍵' }))
+
+    await waitFor(() =>
+      expect(bodyOf(stub, '/api/setup/qbittorrent/apply')).toEqual({
+        login: { username: 'skipper', password: 'harbour', reuse_owner: false },
+      }),
+    )
   })
 
-  it('設過登入之後重按不帶登入，按「更換登入」才打開欄位（M4 票 07）', async () => {
-    const set = qbittorrentSetup({ web_ui_username: 'skipper' })
+  it('沿用的密碼不是擁有者的 Jellyfin 密碼時，畫面說出來而且什麼都沒寫', async () => {
+    stubApi({
+      [STATUS]: { body: AT_QBITTORRENT },
+      [DIFF]: { body: qbittorrentSetup() },
+      [APPLY]: { status: 422, body: { detail: { reason: 'owner_password', detail: '' } } },
+    })
+    const user = userEvent.setup()
+
+    renderWithProviders(<SetupPage />)
+    await user.type(await screen.findByLabelText(OWNER_PASSWORD), 'wrong')
+    await user.click(screen.getByRole('button', { name: '套用這 5 個鍵' }))
+
+    expect(
+      await screen.findByText('這不是 skipper 的 Jellyfin 密碼，所以什麼都沒寫；改好再按一次。'),
+    ).toBeVisible()
+    // 欄位留著，改一個字再按。
+    expect(screen.getByLabelText(OWNER_PASSWORD)).toHaveValue('wrong')
+  })
+
+  it('那一台自己就設過登入時欄位收起來、說出帳號，重按不帶登入；按「更換登入」才打開', async () => {
+    const set = qbittorrentSetup({ web_ui_username: 'admin' })
     const stub = stubApi({
-      [STATUS]: { body: AT_BERTH_TWO },
+      [STATUS]: { body: AT_QBITTORRENT },
       [DIFF]: { body: set },
       [APPLY]: { body: set },
     })
     const user = userEvent.setup()
 
     renderWithProviders(<SetupPage />)
-    expect(await screen.findByText('qBittorrent WebUI 的帳號：')).toBeInTheDocument()
+    expect(await screen.findByText('qBittorrent WebUI 的帳號：')).toHaveTextContent(
+      'qBittorrent WebUI 的帳號： admin',
+    )
+    expect(screen.queryByLabelText(OWNER_PASSWORD)).not.toBeInTheDocument()
     expect(screen.queryByLabelText('密碼')).not.toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: '套用這 5 個鍵' }))
 
@@ -172,12 +381,63 @@ describe('泊位 2：qBittorrent', () => {
       expect(bodyOf(stub, '/api/setup/qbittorrent/apply')).toEqual({ login: null }),
     )
     await user.click(screen.getByRole('button', { name: '更換登入' }))
-    expect(screen.getByLabelText('帳號')).toHaveValue('skipper')
+    expect(screen.getByLabelText(OWNER_PASSWORD)).toBeInTheDocument()
+    // 取消沿用時帳號預填那一台現在的帳號，不是擁有者。
+    await user.click(screen.getByRole('checkbox', { name: '沿用 Jellyfin 帳密（skipper）' }))
+    expect(screen.getByLabelText('帳號')).toHaveValue('admin')
+  })
+
+  it('已經套用過時換成既有要先看過後果，不當場送出；點回原本那一格就是不換', async () => {
+    const applied = qbittorrentSetup({
+      steps: [step('temp_path_enabled', 'ok', 'true')],
+      web_ui_username: 'skipper',
+    })
+    const stub = stubApi({ [STATUS]: { body: AT_QBITTORRENT }, [DIFF]: { body: applied } })
+    const user = userEvent.setup()
+
+    renderWithProviders(<SetupPage />)
+    await screen.findByText('將會寫入的鍵')
+    await user.click(existingCard())
+
+    expect(screen.getByText(/Berth 已經寫進原本那一台的偏好與登入留在那裡/)).toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: '位址' })).toBeInTheDocument()
+    expect(stub.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false)
+
+    await user.click(bundledCard())
+    expect(
+      screen.queryByText(/Berth 已經寫進原本那一台的偏好與登入留在那裡/),
+    ).not.toBeInTheDocument()
+    expect(screen.queryByRole('textbox', { name: '位址' })).not.toBeInTheDocument()
+  })
+
+  it('已經確認過既有的那一台時換成套件內要先確認，按了才送出', async () => {
+    const confirmed = qbittorrentSetup({
+      ...EXISTING_DIFF,
+      steps: [step('temp_path_enabled', 'skipped', 'true')],
+    })
+    const stub = stubApi({
+      [STATUS]: { body: AT_EXISTING_QBITTORRENT },
+      [DIFF]: { body: confirmed },
+      [CHOOSE_QBITTORRENT]: { body: AT_QBITTORRENT },
+    })
+    const user = userEvent.setup()
+
+    renderWithProviders(<SetupPage />)
+    await screen.findByRole('heading', { level: 2, name: '確認你的 qBittorrent' })
+    await user.click(bundledCard())
+
+    expect(screen.getByText(/Berth 已經寫進原本那一台的偏好與登入留在那裡/)).toBeInTheDocument()
+    expect(called(stub, '/api/setup/services/qbittorrent')).toBe(false)
+    await user.click(screen.getByRole('button', { name: '改用套件內的那一台' }))
+
+    await waitFor(() =>
+      expect(bodyOf(stub, '/api/setup/services/qbittorrent')).toEqual({ origin: 'bundled' }),
+    )
   })
 
   it('版本太舊時給的是升級指令，不是一顆按不動的按鈕', async () => {
     stubApi({
-      [STATUS]: { body: AT_BERTH_TWO },
+      [STATUS]: { body: AT_QBITTORRENT },
       [DIFF]: {
         body: qbittorrentSetup({
           version: 'v4.3.9',
@@ -198,17 +458,8 @@ describe('泊位 2：qBittorrent', () => {
 
   it('既有服務只列現值與建議值、不寫任何鍵；temp path 未啟用只是警告（M4 票 05）', async () => {
     stubApi({
-      [STATUS]: { body: AT_BERTH_TWO },
-      [DIFF]: {
-        body: qbittorrentSetup({
-          origin: 'existing',
-          base_url: 'http://nas:8080',
-          temp_path_warning: true,
-          web_ui_login: false,
-          web_ui_username: '',
-          writes_preferences: false,
-        }),
-      },
+      [STATUS]: { body: AT_EXISTING_QBITTORRENT },
+      [DIFF]: { body: qbittorrentSetup({ ...EXISTING_DIFF, temp_path_warning: true }) },
     })
 
     renderWithProviders(<SetupPage />)
@@ -223,12 +474,12 @@ describe('泊位 2：qBittorrent', () => {
     expect(screen.getByRole('button', { name: '確認，不改任何設定' })).toBeEnabled()
     // 既有的那一台沒有 WebUI 登入那一格（M4 票 07）。
     expect(screen.queryByText('qBittorrent WebUI 登入')).not.toBeInTheDocument()
-    expect(screen.queryByLabelText('再輸入一次密碼')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(OWNER_PASSWORD)).not.toBeInTheDocument()
   })
 
-  it('連不上時說得出下一步', async () => {
+  it('差異讀回來說連不上時說得出下一步', async () => {
     stubApi({
-      [STATUS]: { body: AT_BERTH_TWO },
+      [STATUS]: { body: AT_QBITTORRENT },
       [DIFF]: {
         body: qbittorrentSetup({
           reachable: false,
@@ -249,7 +500,7 @@ describe('泊位 2：qBittorrent', () => {
   })
 })
 
-describe('泊位 4：索引站', () => {
+describe('頁 4：Prowlarr 與索引站', () => {
   it('預設站預設全勾，按鈕說得出會加幾個', async () => {
     stubApi({ [STATUS]: { body: AT_INDEXER }, [INDEXERS]: { body: indexerSetup() } })
 
@@ -290,7 +541,7 @@ describe('泊位 4：索引站', () => {
     renderWithProviders(<SetupPage />)
     const picks = (await screen.findByText('要加入哪些站')).closest('fieldset')!
     await user.click(within(picks).getByLabelText('The Pirate Bay'))
-    await typePassword(user)
+    await user.type(screen.getByLabelText(OWNER_PASSWORD), 'harbour')
     await user.click(screen.getByRole('button', { name: '加入這 8 個站' }))
 
     await waitFor(() =>
@@ -299,8 +550,8 @@ describe('泊位 4：索引站', () => {
     const body = bodyOf(fetchStub, '/api/setup/indexers/apply')
     expect(body.indexers).not.toContain('thepiratebay')
     expect(body.indexers).toContain('nyaasi')
-    // Prowlarr 的介面登入跟著「加入」一起送（M4 票 07）。
-    expect(body.login).toEqual({ username: 'skipper', password: 'harbour' })
+    // Prowlarr 的介面登入跟著「加入」一起送（M4 票 07），預設沿用 Jellyfin 帳密（M4 票 15）。
+    expect(body.login).toEqual({ username: '', password: 'harbour', reuse_owner: true })
   })
 
   it('Prowlarr 介面登入必填：沒填密碼就不加站（M4 票 07）', async () => {
@@ -312,7 +563,8 @@ describe('泊位 4：索引站', () => {
 
     renderWithProviders(<SetupPage />)
     const fields = within((await screen.findByText('Prowlarr 介面登入')).closest('fieldset')!)
-    expect(fields.getByLabelText('帳號')).toHaveValue('skipper')
+    expect(fields.getByRole('checkbox', { name: '沿用 Jellyfin 帳密（skipper）' })).toBeChecked()
+    expect(fields.getByLabelText(OWNER_PASSWORD)).toHaveValue('')
     await user.click(screen.getByRole('button', { name: '加入這 9 個站' }))
 
     expect(await fields.findByText('這一格要填。')).toBeInTheDocument()
@@ -348,28 +600,32 @@ describe('泊位 4：索引站', () => {
     expect(within(sites).getByText('http://prowlarr:9696/#/indexers')).toBeInTheDocument()
   })
 
-  it('探測到、還沒加站時，板上那一格說「Prowlarr · 尚未加入索引站」', async () => {
+  it('連上了、還沒加站時，板上那一格說「套件內 · Prowlarr · 尚未加入索引站」', async () => {
     stubApi({ [STATUS]: { body: AT_INDEXER }, [INDEXERS]: { body: indexerSetup() } })
 
     renderWithProviders(<SetupPage />)
 
     const berth = within((await screen.findByText('BTH 4')).closest('li')!)
     expect(berth.getByText('索引站')).toBeInTheDocument()
-    expect(await berth.findByText('Prowlarr · 尚未加入索引站')).toBeInTheDocument()
+    expect(await berth.findByText('套件內 · Prowlarr · 尚未加入索引站')).toBeInTheDocument()
   })
 
-  it('判定沒有站數時（例如缺 API key）那一格不說「尚未加入」，留破折號', async () => {
-    const missingKey = detection({
+  it('測試沒有站數時（例如缺 API key）那一格不說「尚未加入」，留破折號', async () => {
+    const missingKey = chosen({
       kind: 'prowlarr',
-      origin: 'existing',
+      state: 'failed',
       reason: 'api_key_missing',
       detail: '',
-      base_url: 'http://nas:9696',
+      base_url: 'http://prowlarr:9696',
     })
     stubApi({
       [STATUS]: {
-        body: setupStatus({ ...AT_BERTH_TWO, services: [...ALL_BUNDLED.slice(0, 2), missingKey] }),
+        body: setupStatus({
+          ...AT_QBITTORRENT,
+          services: [...ALL_BUNDLED.slice(0, 2), missingKey],
+        }),
       },
+      [DIFF]: { body: qbittorrentSetup() },
     })
 
     renderWithProviders(<SetupPage />)
@@ -385,7 +641,7 @@ describe('泊位 4：索引站', () => {
     renderWithProviders(<SetupPage />)
 
     const berth = within((await screen.findByText('BTH 4')).closest('li')!)
-    expect(await berth.findByText('Prowlarr · 3 個索引站')).toBeInTheDocument()
+    expect(await berth.findByText('套件內 · Prowlarr · 3 個索引站')).toBeInTheDocument()
   })
 
   it('加入之後可以試搜：逐站列出筆數與前三筆標題，一站失敗不影響其他站', async () => {
@@ -424,21 +680,7 @@ describe('泊位 4：索引站', () => {
   })
 
   it('每一站可以移除，就地確認之後才送出', async () => {
-    const fetchStub = stubApi({
-      [STATUS]: { body: AT_INDEXER },
-      [INDEXERS]: { body: withSites() },
-      [REMOVE_YTS]: {
-        body: indexerSetup({
-          options: DEFAULT_OPTIONS.map((row) =>
-            row.definition_name === 'dmhy'
-              ? added(row, 1)
-              : row.definition_name === 'mikan'
-                ? added(row, 2)
-                : row,
-          ),
-        }),
-      },
-    })
+    const fetchStub = stubRemoval()
     const user = userEvent.setup()
 
     renderWithProviders(<SetupPage />)
@@ -456,12 +698,43 @@ describe('泊位 4：索引站', () => {
     })
     const call = fetchStub.mock.calls.find(([, init]) => init?.method === 'DELETE')!
     expect(String(call[0])).toMatch(/\/setup\/indexers\/3$/)
-    // 那一列連同觸發鍵一起消失：焦點落在接替那個位置的那一列，另有一行說結果（The Focus Takes The Next Row Rule）。
-    await waitFor(() => expect(document.activeElement).toHaveAccessibleName('Mikan'))
+    // 那一列連同觸發鍵一起消失，另有一行說結果。
     expect(screen.getByText('已從 Prowlarr 移除 YTS。')).toHaveClass('sr-only')
   })
 
-  it('既有路徑可以填任意 Torznab 端點，接上之後照樣試搜，但沒有移除', async () => {
+  /**
+   * The Focus Takes The Next Row Rule：焦點落在接替那個位置的那一列。
+   *
+   * 票 15 一度退化過：頁 4 在清單讀回來之前就掛上 `StepFrame`，它的 MutationObserver 比試搜清單的
+   * `useFocusAfterRemoval` 先建立、先跑，焦點被搶到 h2。現在頁 4 讀回來才掛（`SetupPage`）。
+   */
+  it('移除之後焦點落在接替那個位置的那一列', async () => {
+    stubRemoval()
+    const user = userEvent.setup()
+
+    renderWithProviders(<SetupPage />)
+    const trial = await screen.findByTestId('trial')
+    const yts = within(within(trial).getByText('YTS').closest('li')!)
+    await user.click(yts.getByRole('button', { name: '移除' }))
+    await user.click(yts.getByRole('button', { name: '確定移除' }))
+
+    await waitFor(() => {
+      expect(within(screen.getByTestId('trial')).queryByText('YTS')).not.toBeInTheDocument()
+    })
+    await waitFor(() => expect(document.activeElement).toHaveAccessibleName('Mikan'), {
+      timeout: 1000,
+    })
+  })
+
+  it('選「既有」可以填任意 Torznab 端點，接上之後照樣試搜，但沒有移除', async () => {
+    const existingProwlarr = chosen({
+      kind: 'prowlarr',
+      origin: 'existing',
+      base_url: 'http://jackett:9117/api',
+      reason: 'connected',
+      detail: '',
+    })
+    let connectedYet = false
     const connected = indexerSetup({
       origin: 'existing',
       kind: 'torznab',
@@ -470,9 +743,17 @@ describe('泊位 4：索引站', () => {
       steps: [step('torznab', 'ok', 'Jackett · TV')],
     })
     const fetchStub = stubApi({
-      [STATUS]: { body: AT_EXISTING_INDEXER },
+      // 接上就是選了既有：之後重讀的精靈狀態裡有這一台。
+      [STATUS]: () => ({
+        body: connectedYet
+          ? setupStatus({ ...AT_INDEXER, services: [...ALL_BUNDLED.slice(0, 2), existingProwlarr] })
+          : CHOOSING_INDEXER,
+      }),
       [INDEXERS]: { body: indexerSetup({ origin: 'existing', base_url: '', options: [] }) },
-      [CONNECT_INDEXER]: { body: connected },
+      [CONNECT_INDEXER]: () => {
+        connectedYet = true
+        return { body: connected }
+      },
       [`${SEARCH}?query=`]: {
         body: { query: '', error: '', sites: [siteSearch(null, 'jackett:9117', 4, ['x'])] },
       },
@@ -480,13 +761,17 @@ describe('泊位 4：索引站', () => {
     const user = userEvent.setup()
 
     renderWithProviders(<SetupPage />)
-    await user.click(await screen.findByRole('radio', { name: 'Torznab 端點' }))
+    await screen.findByRole('heading', { level: 2, name: '索引站' })
+    await user.click(existingCard())
+    // 選「既有」只展開表單；Prowlarr 頁的表單自己送 connect，不經 `services/prowlarr`。
+    expect(fetchStub.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false)
+    await user.click(screen.getByRole('radio', { name: 'Torznab 端點' }))
     await user.type(screen.getByLabelText('位址'), 'http://jackett:9117/api')
     await user.type(screen.getByLabelText('API key'), 'the-key')
     await user.click(screen.getByRole('button', { name: '測試連線' }))
 
-    const call = fetchStub.mock.calls.find(([url]) => String(url).endsWith('/indexers/connect'))!
-    expect(JSON.parse(String(call[1]?.body))).toEqual({
+    await waitFor(() => expect(called(fetchStub, '/api/setup/indexers/connect')).toBe(true))
+    expect(bodyOf(fetchStub, '/api/setup/indexers/connect')).toEqual({
       kind: 'torznab',
       base_url: 'http://jackett:9117/api',
       api_key: 'the-key',
@@ -494,9 +779,9 @@ describe('泊位 4：索引站', () => {
     expect(await screen.findByText('Jackett · TV')).toBeInTheDocument()
     // 板上那一格說出實際的那一種，不寫死 Prowlarr。
     const berth = within(screen.getByText('BTH 4').closest('li')!)
-    expect(berth.getByText('Torznab · jackett:9117')).toBeInTheDocument()
+    expect(berth.getByText('既有 · Torznab · jackett:9117')).toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: '試搜' }))
+    await user.click(await screen.findByRole('button', { name: '試搜' }))
     const rows = within(await screen.findByTestId('trial'))
     expect(await rows.findByText('4 筆')).toBeInTheDocument()
     expect(rows.queryByRole('button', { name: '移除' })).not.toBeInTheDocument()
@@ -513,9 +798,11 @@ describe('泊位 4：索引站', () => {
     const user = userEvent.setup()
 
     renderWithProviders(<SetupPage />)
+    // 讀到清單之前頁尾有一顆同名的「之後再說」，讀到之後換成「加入」旁邊那一顆：等清單畫好再按。
+    await screen.findByText('要加入哪些站')
     expect(screen.queryByTestId('indexers-deferred')).not.toBeInTheDocument()
 
-    await user.click(await screen.findByRole('button', { name: '之後再說' }))
+    await user.click(screen.getByRole('button', { name: '之後再說' }))
 
     await waitFor(() => {
       expect(fetchStub.mock.calls.some(([url]) => String(url).endsWith('/indexers/skip'))).toBe(
@@ -531,14 +818,16 @@ describe('泊位 4：索引站', () => {
    */
   it('既有索引站的 API key 是遮著的，且看得見', async () => {
     stubApi({
-      [STATUS]: { body: AT_EXISTING_INDEXER },
+      [STATUS]: { body: CHOOSING_INDEXER },
       [INDEXERS]: { body: indexerSetup({ origin: 'existing', api_key_present: false }) },
     })
     const user = userEvent.setup()
 
     renderWithProviders(<SetupPage />)
+    await screen.findByRole('heading', { level: 2, name: '索引站' })
+    await user.click(existingCard())
 
-    const indexerKey = await screen.findByLabelText('API key')
+    const indexerKey = screen.getByLabelText('API key')
     expect(indexerKey).toHaveAttribute('type', 'password')
     await user.click(
       within(indexerKey.closest('div.relative')!).getByRole('button', { name: '顯示' }),
@@ -547,7 +836,7 @@ describe('泊位 4：索引站', () => {
   })
 })
 
-describe('泊位 5：TMDB', () => {
+describe('頁 5：TMDB', () => {
   it('TMDB 是自己的一格、自己的一頁，沒有「之後再說」', async () => {
     stubApi({ [STATUS]: { body: AT_TMDB }, [TMDB]: { body: tmdbSetup() } })
 
@@ -674,7 +963,7 @@ describe('泊位 5：TMDB', () => {
     expect(await berth.findByText('已驗證')).toBeInTheDocument()
     expect(berth.queryByText('待驗證')).not.toBeInTheDocument()
     const indexers = within(screen.getByText('BTH 4').closest('li')!)
-    expect(indexers.getByText('Prowlarr · 3 個索引站')).toBeInTheDocument()
+    expect(indexers.getByText('套件內 · Prowlarr · 3 個索引站')).toBeInTheDocument()
   })
 })
 
@@ -697,4 +986,23 @@ function siteSearch(
   error = '',
 ): SiteSearch {
   return { indexer_id, definition_name: name.toLowerCase(), name, count, titles, error }
+}
+
+/** 頁 4 上 dmhy、Mikan、YTS 三站都在，移除 YTS 之後剩兩站。 */
+function stubRemoval() {
+  return stubApi({
+    [STATUS]: { body: AT_INDEXER },
+    [INDEXERS]: { body: withSites() },
+    [REMOVE_YTS]: {
+      body: indexerSetup({
+        options: DEFAULT_OPTIONS.map((row) =>
+          row.definition_name === 'dmhy'
+            ? added(row, 1)
+            : row.definition_name === 'mikan'
+              ? added(row, 2)
+              : row,
+        ),
+      }),
+    },
+  })
 }
