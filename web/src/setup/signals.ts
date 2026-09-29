@@ -99,3 +99,12 @@ export const STATE_LABEL = {
   failed: 'connection.state.failed',
   timeout: 'connection.state.timeout',
 } as const satisfies Record<ConnectionState, string>
+
+/** 網址的主機與 port（`jackett:9117`）：Torznab 端點整個算一站時拿它當名字。解析不了就原樣。 */
+export function hostOf(url: string): string {
+  try {
+    return new URL(url).host
+  } catch {
+    return url
+  }
+}

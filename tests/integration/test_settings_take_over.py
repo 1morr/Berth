@@ -93,9 +93,8 @@ def test_an_administrator_adds_a_site_tries_it_and_removes_it(client: TestClient
 
     added = post(client, "/api/setup/indexers/apply", {"indexers": ["nyaasi", "mikan"]})
     assert added.status_code == 200
-    present = {row["definition_name"]: row["indexer_id"] for row in added.json()["options"]}
-    assert present["nyaasi"] is not None
-    assert present["mikan"] is not None
+    present = {row["definition_name"]: row["indexer_id"] for row in added.json()["sites"]}
+    assert set(present) == {"nyaasi", "mikan"}
 
     trial = client.get("/api/setup/indexers/search", params={"query": ""})
     assert trial.status_code == 200
@@ -103,9 +102,7 @@ def test_an_administrator_adds_a_site_tries_it_and_removes_it(client: TestClient
 
     removed = client.delete(f"/api/setup/indexers/{present['mikan']}", headers=BROWSER)
     assert removed.status_code == 200
-    assert [row["definition_name"] for row in removed.json()["options"] if row["present"]] == [
-        "nyaasi"
-    ]
+    assert [row["definition_name"] for row in removed.json()["sites"]] == ["nyaasi"]
     assert still_complete(client)
 
 
@@ -113,7 +110,7 @@ def test_removing_every_site_does_not_reopen_the_wizard(client: TestClient) -> N
     """精靈的步驟由狀態導出、會退回第 6 步；完成與否是另一個位元，設定頁的修改不碰它。"""
     sign_in(client, ADMIN)
     added = post(client, "/api/setup/indexers/apply", {"indexers": ["nyaasi"]}).json()
-    (only,) = [row["indexer_id"] for row in added["options"] if row["present"]]
+    (only,) = [row["indexer_id"] for row in added["sites"]]
 
     assert client.delete(f"/api/setup/indexers/{only}", headers=BROWSER).status_code == 200
 

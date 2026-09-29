@@ -31,6 +31,7 @@ from berth.domain import (
     QbittorrentStep,
     ServiceKind,
     ServiceOrigin,
+    SiteFailure,
     StepStatus,
 )
 from berth.models import (
@@ -50,6 +51,7 @@ from berth.services.indexer import (
     search_indexers,
     set_interface_login,
     skip_indexers,
+    verify_sites,
 )
 from berth.services.settings import read_settings, write_settings
 from berth.services.setup import STEP_COMPLETE, STEP_INDEXER, STEP_TMDB, read_status
@@ -126,13 +128,14 @@ async def test_the_default_indexers_are_offered_with_their_real_names(
 
     status = await read_indexer_status(session, factory)
 
-    assert [row.definition_name for row in status.options] == list(DEFAULT_INDEXERS)
-    assert [row.name for row in status.options][:3] == ["Nyaa.si", "dmhy", "Anime Tosho"]
+    recommended = [row for row in status.candidates if row.recommended]
+    assert [row.definition_name for row in recommended] == list(DEFAULT_INDEXERS)
+    assert [row.name for row in recommended][:3] == ["Nyaa.si", "dmhy", "Anime Tosho"]
     # 站名是伺服器自己報的，privacy 也是——勾選清單靠它標出唯一不是公開的那一個。
-    assert [row.privacy for row in status.options if row.definition_name == "animetosho-xyz"] == [
+    assert [row.privacy for row in recommended if row.definition_name == "animetosho-xyz"] == [
         "semiPrivate"
     ]
-    assert all(row.present is False for row in status.options)
+    assert status.sites == ()
 
 
 @pytest.mark.asyncio
@@ -150,7 +153,7 @@ async def test_applying_the_defaults_reports_every_site_on_its_own_line(
     assert by_step["nyaasi"].status is StepStatus.OK
     assert by_step["1337x"].status is StepStatus.FAILED
     assert by_step["1337x"].error == BLOCKED["1337x"]
-    assert [row.definition_name for row in status.options if row.present] == [
+    assert [row.definition_name for row in status.sites] == [
         name for name in DEFAULT_INDEXERS if name not in BLOCKED
     ]
 
@@ -602,7 +605,7 @@ async def test_anidex_is_not_offered_any_more(session: AsyncSession) -> None:
 
     assert "Anidex" not in DEFAULT_INDEXERS
     assert len(DEFAULT_INDEXERS) == 9
-    assert "Anidex" not in [row.definition_name for row in status.options]
+    assert "Anidex" not in [row.definition_name for row in status.candidates if row.recommended]
 
 
 @pytest.mark.asyncio
@@ -611,11 +614,9 @@ async def test_every_offered_site_says_its_language_and_what_it_is(session: Asyn
 
     status = await read_indexer_status(session, FakeClientFactory())
 
-    by_name = {row.definition_name: row for row in status.options}
+    by_name = {row.definition_name: row for row in status.candidates}
     assert (by_name["dmhy"].language, by_name["mikan"].language) == ("zh-TW", "zh-CN")
     assert by_name["yts"].description.startswith("YTS is a Public torrent site")
-    # 還沒加進來的站沒有 id，所以也沒有「移除」可按。
-    assert by_name["dmhy"].indexer_id is None
 
 
 @pytest.mark.asyncio
@@ -629,7 +630,7 @@ async def test_a_trial_search_reports_each_site_on_its_own(session: AsyncSession
     )
     factory = FakeClientFactory(prowlarr=prowlarr, indexer_search=search)
     added = await apply_default_indexers(session, factory, ["nyaasi", "dmhy", "mikan"])
-    ids = {row.definition_name: row.indexer_id for row in added.options if row.present}
+    ids = {row.definition_name: row.indexer_id for row in added.sites}
 
     result = await search_indexers(session, factory, query="Frieren")
 
@@ -703,13 +704,12 @@ async def test_a_removed_site_is_gone_and_no_longer_searched(session: AsyncSessi
     search = FakeIndexerSearch()
     factory = FakeClientFactory(prowlarr=prowlarr, indexer_search=search)
     added = await apply_default_indexers(session, factory, ["nyaasi", "yts"])
-    yts = next(row.indexer_id for row in added.options if row.definition_name == "yts")
-    assert yts is not None
+    yts = next(row.indexer_id for row in added.sites if row.definition_name == "yts")
 
     status = await remove_indexer(session, factory, yts)
 
     assert prowlarr.deleted == [yts]
-    assert [row.definition_name for row in status.options if row.present] == ["nyaasi"]
+    assert [row.definition_name for row in status.sites] == ["nyaasi"]
     # 那一站的「加入結果」一起拿掉：留著一條綠的「YTS」等於說它還在。
     assert [row.step for row in status.steps] == ["nyaasi", PROWLARR_LOGIN_STEP]
     await search_indexers(session, factory, query="")
@@ -729,8 +729,7 @@ async def test_removing_the_last_site_sends_the_wizard_back_to_the_indexers(
         session, factory, ["nyaasi"], login=SKIPPER, sleep=_no_sleep
     )
     assert (await read_status(session)).current_step == STEP_TMDB
-    (only,) = [row.indexer_id for row in added.options if row.present]
-    assert only is not None
+    (only,) = [row.indexer_id for row in added.sites]
 
     await remove_indexer(session, factory, only)
 
@@ -760,7 +759,178 @@ async def test_a_site_the_user_added_in_prowlarr_is_not_removed(session: AsyncSe
         indexers=[ProwlarrIndexer(id=7, name="MyTracker", enabled=True, definition_name="private")]
     )
 
-    with pytest.raises(ValueError, match="default sites"):
+    with pytest.raises(ValueError, match="Berth only removes"):
         await remove_indexer(session, FakeClientFactory(prowlarr=client), 7)
 
     assert client.deleted == []
+
+
+# --- M4 票 09：先測再勾、全部公開站、已加入的站 ---
+
+
+@pytest.mark.asyncio
+async def test_the_other_public_torrent_sites_follow_the_recommended_ones(
+    session: AsyncSession,
+) -> None:
+    """推薦清單之外是 schema 裡 privacy = public 的 torrent 站，依名稱排
+    （`.scratch/m4/indexer-berth-shape.md`）。
+
+    usenet 的公開站（NZBIndex）Berth 接不了；私站要帳號，連到 Prowlarr 自己加。同一個
+    `definitionName` 出現兩次（`Torrent RSS Feed` 與它的 preset showRSS）只列第一個——Berth
+    認站靠的就是它。
+    """
+    await arrange(session)
+
+    status = await read_indexer_status(session, FakeClientFactory())
+
+    others = [row.definition_name for row in status.candidates if not row.recommended]
+    assert others == ["Anidex", "Knaben", "rutor", "Torrent RSS Feed", "tokyotosho"]
+    assert [row.name for row in status.candidates if row.definition_name == "rutor"] == ["RuTor"]
+    assert [row.language for row in status.candidates if row.definition_name == "rutor"] == [
+        "ru-RU"
+    ]
+
+
+@pytest.mark.asyncio
+async def test_an_added_site_moves_from_the_candidates_to_the_sites(session: AsyncSession) -> None:
+    await arrange(session)
+    factory = FakeClientFactory()
+
+    status = await apply_default_indexers(session, factory, ["dmhy", "Knaben"])
+
+    assert [(row.definition_name, row.language) for row in status.sites] == [
+        ("dmhy", "zh-TW"),
+        ("Knaben", "en-US"),
+    ]
+    assert {"dmhy", "Knaben"}.isdisjoint(row.definition_name for row in status.candidates)
+    # 兩站都是 Berth 加得回去的（推薦清單、公開 torrent 站），所以都可以從 Berth 移除。
+    assert [row.removable for row in status.sites] == [True, True]
+
+
+@pytest.mark.asyncio
+async def test_a_site_is_tested_before_it_is_added(session: AsyncSession) -> None:
+    """`indexer/test` 收還沒加入的定義（brief §20.7）：逐站通不通、理由分成幾種，什麼都不建立。"""
+    await arrange(session)
+    client = FakeProwlarrClient(rejects=BLOCKED)
+    factory = FakeClientFactory(prowlarr=client)
+    before = (await read_settings(session, SetupSettings)).model_dump()
+
+    checks = await verify_sites(session, factory, ["yts", "1337x"])
+
+    assert [(row.definition_name, row.passed, row.reason) for row in checks] == [
+        ("yts", True, None),
+        ("1337x", False, SiteFailure.CLOUDFLARE),
+    ]
+    assert checks[1].detail == BLOCKED["1337x"]
+    assert await client.indexers() == []
+    assert (await read_settings(session, SetupSettings)).model_dump() == before
+    assert mark_of(verify_sites) == CommandMark(Effect.READ)
+
+
+@pytest.mark.asyncio
+async def test_a_site_that_needs_an_account_is_neither_tested_nor_added(
+    session: AsyncSession,
+) -> None:
+    """私站與 usenet 站不在 Berth 加得了的範圍：測試與加入都回「沒通過」，一個請求都不送。"""
+    await arrange(session)
+    client = FakeProwlarrClient()
+    factory = FakeClientFactory(prowlarr=client)
+
+    checks = await verify_sites(session, factory, ["AnimeBytes", "NZBIndex", "nope"])
+    status = await apply_default_indexers(session, factory, ["AnimeBytes"])
+
+    assert [(row.passed, row.reason) for row in checks] == [(False, SiteFailure.OTHER)] * 3
+    assert client.tested == []
+    assert await client.indexers() == []
+    assert [(row.step, row.status) for row in status.steps][:1] == [
+        ("AnimeBytes", StepStatus.FAILED)
+    ]
+
+
+@pytest.mark.asyncio
+async def test_berth_does_not_test_sites_for_an_existing_indexer(session: AsyncSession) -> None:
+    await arrange(session, origin=ServiceOrigin.EXISTING)
+    client = FakeProwlarrClient(base_url="http://nas:9696")
+
+    with pytest.raises(ValueError, match="existing service"):
+        await verify_sites(session, FakeClientFactory(prowlarr=client), ["yts"])
+
+    assert client.tested == []
+
+
+@pytest.mark.asyncio
+async def test_what_the_last_apply_said_about_each_site_is_kept_with_a_reason(
+    session: AsyncSession,
+) -> None:
+    """勾了的站在加入時仍可能加不進去（Prowlarr 加之前自己再連一次）：那一站的理由與測試同一套。"""
+    await arrange(session)
+    factory = FakeClientFactory(prowlarr=FakeProwlarrClient(rejects=BLOCKED))
+
+    status = await apply_default_indexers(session, factory, ["yts", "eztv"])
+
+    assert [(row.definition_name, row.passed, row.reason) for row in status.checks] == [
+        ("yts", True, None),
+        ("eztv", False, SiteFailure.CLOUDFLARE),
+    ]
+    again = await read_indexer_status(session, factory)
+    assert again.checks == status.checks
+
+
+@pytest.mark.asyncio
+async def test_an_existing_prowlarr_lists_its_own_sites_and_none_to_add(
+    session: AsyncSession,
+) -> None:
+    """既有 Prowlarr：列出它已有的站與站數，沒有可加的站，也沒有一站可以從 Berth 移除（票 05）。"""
+    await arrange(session, origin=ServiceOrigin.EXISTING)
+    client = FakeProwlarrClient(
+        base_url="http://nas:9696",
+        indexers=[
+            ProwlarrIndexer(4, "dmhy", True, "dmhy", privacy="public", language="zh-TW"),
+            ProwlarrIndexer(9, "MyTracker", True, "private", privacy="private"),
+        ],
+    )
+    factory = FakeClientFactory(prowlarr=client)
+    await connect_indexer(
+        session, factory, kind=IndexerKind.PROWLARR, base_url="http://nas:9696", api_key="k"
+    )
+
+    status = await read_indexer_status(session, factory)
+
+    assert [(row.indexer_id, row.name, row.removable) for row in status.sites] == [
+        (4, "dmhy", False),
+        (9, "MyTracker", False),
+    ]
+    assert status.candidates == ()
+
+
+@pytest.mark.asyncio
+async def test_a_single_site_can_be_searched_on_its_own(session: AsyncSession) -> None:
+    """每一列一顆「搜尋」：只問那一站（`indexerIds` 只帶它）。"""
+    await arrange(session)
+    search = FakeIndexerSearch(by_indexer={1: _results("Nyaa.si", 2), 2: _results("dmhy", 4)})
+    factory = FakeClientFactory(indexer_search=search)
+    await apply_default_indexers(session, factory, ["nyaasi", "dmhy"])
+
+    result = await search_indexers(session, factory, query="Frieren", indexer_id=2)
+
+    assert [(row.definition_name, row.count) for row in result.sites] == [("dmhy", 4)]
+    assert [query.indexer_ids for query in search.queries] == [(2,)]
+
+
+@pytest.mark.asyncio
+async def test_a_public_site_the_user_added_in_prowlarr_can_be_removed(
+    session: AsyncSession,
+) -> None:
+    """Berth 加得回去的站（公開的 torrent 站）都可以從 Berth 移除，不論是誰加的：反向命令成立。"""
+    await arrange(session)
+    client = FakeProwlarrClient(
+        indexers=[
+            ProwlarrIndexer(5, "Knaben", True, "Knaben", privacy="public", protocol="torrent")
+        ]
+    )
+    factory = FakeClientFactory(prowlarr=client)
+
+    status = await remove_indexer(session, factory, 5)
+
+    assert client.deleted == [5]
+    assert status.sites == ()

@@ -78,8 +78,18 @@ test('既有服務：三頁都選既有、選寫入目標，完成後用那台 J
   await main.getByRole('textbox', { name: '位址' }).fill('http://nas:9696')
   await main.getByRole('textbox', { name: 'API key' }).fill('0123456789abcdef0123456789abcdef')
   await main.getByRole('button', { name: '測試連線' }).click()
-  await main.getByRole('button', { name: '試搜' }).click()
-  await expect(page.getByTestId('trial').getByText(/\d+ 筆/)).toBeVisible()
+  // 它已有的站與站數；沒有勾選、加入與移除（M4 票 09）。
+  const sites = page.getByTestId('added')
+  await expect(sites.getByText('2 站')).toBeVisible()
+  await expect(main.getByRole('checkbox', { name: 'Nyaa.si' })).toHaveCount(0)
+  await expect(sites.getByRole('button', { name: '移除' })).toHaveCount(0)
+  await sites.getByRole('button', { name: '搜尋全部' }).click()
+  await expect(
+    page
+      .getByTestId('trial')
+      .getByText(/\d+ 筆/)
+      .first(),
+  ).toBeVisible()
   await expect(page.getByRole('group', { name: 'Prowlarr 介面登入' })).toHaveCount(0)
   await shot(page, '4-indexers')
   await page.getByRole('button', { name: '前往下一個泊位' }).click()

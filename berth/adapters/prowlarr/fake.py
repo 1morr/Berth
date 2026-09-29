@@ -16,8 +16,17 @@ from berth.adapters.prowlarr import (
 CURRENT_VERSION = "2.6.5.5623"
 
 #: 假的定義清單：站名與 `definitionName` 都取自真的 `indexer/schema`（`tests/fixtures/`）。
+#: 推薦的九站（與 Anidex）之後是推薦清單以外的定義（2026-09-30 berth-lab 的 Prowlarr 2.6.5 schema，
+#: M4 票 09）：公開的 torrent 站、與 preset 同 `definitionName` 的一對、公開的 usenet 站、一個私站。
 DEFAULT_DEFINITIONS: tuple[IndexerDefinition, ...] = tuple(
-    IndexerDefinition(definition_name, name, privacy, language=language, description=description)
+    IndexerDefinition(
+        definition_name,
+        name,
+        privacy,
+        language=language,
+        description=description,
+        protocol="usenet" if definition_name == "NZBIndex" else "torrent",
+    )
     for definition_name, name, privacy, language, description in (
         (
             "nyaasi",
@@ -26,7 +35,13 @@ DEFAULT_DEFINITIONS: tuple[IndexerDefinition, ...] = tuple(
             "en-US",
             "Nyaa is a Public torrent site focused on Eastern ASIAN media",
         ),
-        ("dmhy", "dmhy", "public", "zh-TW", "dmhy is a TAIWANESE Public magnet tracker for ANIME"),
+        (
+            "dmhy",
+            "dmhy",
+            "public",
+            "zh-TW",
+            "dmhy is a TAIWANESE Public magnet tracker for ANIME",
+        ),
         (
             "Anidex",
             "Anidex",
@@ -69,13 +84,69 @@ DEFAULT_DEFINITIONS: tuple[IndexerDefinition, ...] = tuple(
             "en-US",
             "YTS is a Public torrent site specialising in HD movies of small size",
         ),
-        ("eztv", "EZTV", "public", "en-US", "EZTV is a Public torrent site for TV shows"),
+        (
+            "eztv",
+            "EZTV",
+            "public",
+            "en-US",
+            "EZTV is a Public torrent site for TV shows",
+        ),
         (
             "thepiratebay",
             "The Pirate Bay",
             "public",
             "en-US",
             "The Pirate Bay (TPB) is the galaxy’s most resilient Public BitTorrent site",
+        ),
+        (
+            "Knaben",
+            "Knaben",
+            "public",
+            "en-US",
+            "Knaben is a Public torrent meta-search engine",
+        ),
+        (
+            "rutor",
+            "RuTor",
+            "public",
+            "ru-RU",
+            "RuTor is a RUSSIAN Public site for MOVIES / TV / GENERAL",
+        ),
+        (
+            "tokyotosho",
+            "Tokyo Toshokan",
+            "public",
+            "en-US",
+            "Tokyo Toshokan is a Public BitTorrent Library for JAPANESE Media",
+        ),
+        (
+            "Torrent RSS Feed",
+            "showRSS",
+            "public",
+            "en-US",
+            "showRSS is a service that allows you to keep track of your favorite TV shows",
+        ),
+        (
+            "Torrent RSS Feed",
+            "Torrent RSS Feed",
+            "public",
+            "en-US",
+            "Generic RSS Feed containing torrents",
+        ),
+        (
+            "NZBIndex",
+            "NZBIndex",
+            "public",
+            "en-US",
+            "A Usenet Indexer",
+        ),
+        (
+            "AnimeBytes",
+            "AnimeBytes",
+            "private",
+            "en-US",
+            "AnimeBytes (AB) is the largest private torrent tracker that specialises in anime "
+            "and anime-related content.",
         ),
     )
 )
@@ -156,6 +227,10 @@ class FakeProwlarrClient:
             name=definition.name,
             enabled=True,
             definition_name=definition.definition_name,
+            privacy=definition.privacy,
+            language=definition.language,
+            description=definition.description,
+            protocol=definition.protocol,
         )
         self._indexers.append(indexer)
         return indexer
@@ -165,6 +240,13 @@ class FakeProwlarrClient:
         reason = self._rejects.get(indexer.definition_name)
         if reason is not None:
             raise IndexerRejectedError(f"test {indexer.name}", messages=(reason,))
+
+    async def test_definition(self, definition: IndexerDefinition) -> None:
+        """還沒加入的定義：理由與新增那一支同一份 `rejects`（真的那一台也是同一段連站）。"""
+        self.tested.append(definition.definition_name)
+        reason = self._rejects.get(definition.definition_name)
+        if reason is not None:
+            raise IndexerRejectedError(f"test {definition.definition_name}", messages=(reason,))
 
     async def delete_indexer(self, indexer_id: int) -> None:
         self.deleted.append(indexer_id)

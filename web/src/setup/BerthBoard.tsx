@@ -8,7 +8,7 @@ import { BerthBoard as Board, type BoardSlot } from '../components/BerthBoard'
 import { BERTHS, type BerthSlot } from '../components/berths'
 import { ORIGIN_LABEL, detailLabel } from '../components/services'
 import type { Signal } from '../components/signal'
-import { signalOf } from './signals'
+import { hostOf, signalOf } from './signals'
 
 /**
  * 精靈的泊位板：版面在 `components/BerthBoard.tsx`（健康頁用同一塊），這裡只負責
@@ -131,8 +131,8 @@ function serviceDetail(
 /**
  * 索引站那一格的詳情列（票 06e）：接上的是哪一種（Prowlarr / Torznab，不寫死），加了幾站。
  *
- * 站數優先讀頁 4 的清單（加完站之後測試時的數字會過期），讀不到才用測試時的數字（既有 Prowlarr
- * 報的站數）。**兩者都沒有就不猜**：還沒測、連不上時測試的詳情是空的，那不是「零站」
+ * 站數優先讀頁 4 的清單（加完站、或使用者在自己的 Prowlarr 加了站之後，測試時的數字會過期），讀不到
+ * 才用測試時的數字。**兩者都沒有就不猜**：還沒測、連不上時測試的詳情是空的，那不是「零站」
  * （票 06e 的 code review）。Torznab 端點沒有站數，說它是哪一台。
  */
 function indexerDetail(
@@ -144,9 +144,10 @@ function indexerDetail(
   const kind = indexers?.kind ?? 'prowlarr'
   const product = INDEXER_PRODUCT[kind]
   if (kind === 'torznab') return `${product} · ${hostOf(indexers?.base_url ?? '')}`
+  // 頁上的清單讀得到就用它：套件內與既有 Prowlarr 都列了它現在有的站（M4 票 09）。
   const count =
-    indexers?.origin === 'bundled' && indexers.reachable
-      ? indexers.options.filter((row) => row.present).length
+    indexers && indexers.origin !== null && indexers.reachable && !indexers.error
+      ? indexers.sites.length
       : chosen?.state === 'ok' && chosen.detail
         ? Number(chosen.detail)
         : null
@@ -154,14 +155,6 @@ function indexerDetail(
   return count > 0
     ? t('board.indexerCount', { product, count })
     : t('board.indexerNone', { product })
-}
-
-function hostOf(url: string): string {
-  try {
-    return new URL(url).host
-  } catch {
-    return url
-  }
 }
 
 /** TMDB 那一格的詳情列：憑證驗過了沒。頁 5 之前讀不到，就留破折號。 */

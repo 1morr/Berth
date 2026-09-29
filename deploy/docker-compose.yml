@@ -54,6 +54,8 @@ services:
       JELLYFIN_PORT: ${JELLYFIN_PORT:-8096}
       # 套件內 qBittorrent 在 compose 內網上也是這一個號碼（見 qbittorrent 服務）。
       QBITTORRENT_WEBUI_PORT: ${QBITTORRENT_WEBUI_PORT:-8080}
+      # 精靈頁 4「在 Prowlarr 加私站」的連結開的是宿主上的 port（M4 票 09）。
+      PROWLARR_PORT: ${PROWLARR_PORT:-9696}
     volumes:
       - ${CONFIG_ROOT:?請在 .env 設定 CONFIG_ROOT}/berth:/config
       - ${DATA_ROOT:?請在 .env 設定 DATA_ROOT}:/data

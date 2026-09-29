@@ -41,6 +41,7 @@ from berth.adapters.prowlarr import (
     IndexerRejectedError,
     ProwlarrIndexer,
     ProwlarrStatus,
+    failure_of,
 )
 from berth.adapters.prowlarr.client import SCHEMA_TIMEOUT_SECONDS, HttpProwlarrClient
 from berth.adapters.qbittorrent import (
@@ -54,7 +55,7 @@ from berth.adapters.rate import TokenBucket
 from berth.adapters.tmdb import TmdbEntry, parse_absolute_ordering, parse_detail
 from berth.adapters.tmdb.client import RATE_PER_SECOND, HttpTmdbClient
 from berth.adapters.torznab.client import HttpTorznabClient
-from berth.domain import CollectionType, MediaKind, SortOrder
+from berth.domain import CollectionType, MediaKind, SiteFailure, SortOrder
 from berth.services.indexer import DEFAULT_INDEXERS
 from tests.conftest import read_fixture
 
@@ -2262,6 +2263,31 @@ async def test_prowlarr_add_indexer_sends_the_definition_with_a_real_app_profile
     assert sent["appProfileId"] == DEFAULT_APP_PROFILE_ID
     assert (created.id, created.name, created.enabled) == (6, "dmhy", True)
     assert created.definition_name == "dmhy"
+    # 已加入的站自己帶著定義的那幾欄：列「已加入」不必再讀 schema，移除的規則也靠它（M4 票 09）。
+    assert (created.privacy, created.protocol, created.language) == ("public", "torrent", "zh-TW")
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_prowlarr_add_indexer_always_enables_the_site() -> None:
+    """schema 裡有定義預設 `enable: false`（2.6.5 的 645 個裡 47 個，公開站只有 TorrentsCSV）：
+    原樣送回去加成的是停用的站，試搜與搜尋都不會問它（2026-09-30 berth-lab 實測，M4 票 09）。
+    加站就是要用它。"""
+    route = respx.post(f"{PROWLARR_URL}/api/v1/indexer").respond(
+        201, text=read_fixture("http/prowlarr/indexer.created.dmhy.json")
+    )
+
+    client = HttpProwlarrClient(PROWLARR_URL, "key")
+    try:
+        await client.add_indexer(
+            IndexerDefinition(
+                "TorrentsCSV", "TorrentsCSV", "public", payload={"enable": False, "name": "x"}
+            )
+        )
+    finally:
+        await client.aclose()
+
+    assert json.loads(route.calls.last.request.content)["enable"] is True
 
 
 @respx.mock
@@ -2694,6 +2720,63 @@ async def test_prowlarr_tests_an_indexer_that_is_already_there() -> None:
         await client.aclose()
 
     assert json.loads(route.calls.last.request.content)["definitionName"] == "dmhy"
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_prowlarr_tests_a_definition_before_it_is_added() -> None:
+    """`indexer/test` 也收**還沒加入**的定義（2026-09-30 berth-lab 實測，M4 票 09）：通過回
+    200 `{}`、什麼都不建立。送的是 schema 的原樣，`appProfileId` 與新增那一支一樣換成 1。
+    """
+    respx.get(f"{PROWLARR_URL}/api/v1/indexer/schema").respond(
+        200, text=read_fixture("http/prowlarr/indexer-schema.defaults.json")
+    )
+    route = respx.post(f"{PROWLARR_URL}/api/v1/indexer/test").respond(200, json={})
+
+    client = HttpProwlarrClient(PROWLARR_URL, "key")
+    try:
+        yts = next(row for row in await client.definitions() if row.definition_name == "yts")
+        await client.test_definition(yts)
+    finally:
+        await client.aclose()
+
+    sent = json.loads(route.calls.last.request.content)
+    assert (sent["definitionName"], sent["appProfileId"]) == ("yts", DEFAULT_APP_PROFILE_ID)
+    assert "id" not in sent or not sent["id"]
+    assert yts.protocol == "torrent"
+
+
+@pytest.mark.parametrize(
+    ("fixture", "failure"),
+    [
+        ("indexer-test.rejected.1337x-cloudflare.json", SiteFailure.CLOUDFLARE),
+        ("indexer-test.rejected.nyaasi-ssl.json", SiteFailure.UNREACHABLE),
+        ("indexer.rejected.nyaasi.json", SiteFailure.NO_RESULTS),
+        ("indexer.rejected.duplicate.json", SiteFailure.OTHER),
+    ],
+)
+@respx.mock
+@pytest.mark.asyncio
+async def test_prowlarr_names_why_a_site_did_not_pass(fixture: str, failure: SiteFailure) -> None:
+    """常見的幾種原文（實測錄下的）分成畫面說得出來的理由；其餘是 `other`，原文照樣帶著。"""
+    respx.post(f"{PROWLARR_URL}/api/v1/indexer/test").respond(
+        400, text=read_fixture(f"http/prowlarr/{fixture}")
+    )
+
+    client = HttpProwlarrClient(PROWLARR_URL, "key")
+    with pytest.raises(IndexerRejectedError) as caught:
+        await client.test_definition(IndexerDefinition("x", "X", "public"))
+    await client.aclose()
+
+    assert failure_of(caught.value.messages) is failure
+
+
+def test_a_reason_that_is_not_the_first_line_still_counts() -> None:
+    """理由可能不只一條；認得出任何一條就是那一種（順序照 Prowlarr）。"""
+    assert failure_of(("Something else", "blocked by CloudFlare Protection.")) is (
+        SiteFailure.CLOUDFLARE
+    )
+    assert failure_of(()) is SiteFailure.OTHER
 
 
 @respx.mock

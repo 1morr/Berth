@@ -214,7 +214,16 @@ export function setQbittorrentLogin(login: InterfaceLogin): Promise<QbittorrentS
 /** `IndexerKind`：既有路徑的兩種接法。 */
 export type IndexerKind = Schemas['IndexerKind']
 
-export type IndexerOption = Schemas['IndexerOptionOut']
+/** Prowlarr 裡已經有的一站（M4 票 09 的「已加入」）。 */
+export type IndexerSite = Schemas['IndexerSiteOut']
+
+/** 還沒加入、Berth 加得了的一站（M4 票 09 的「加站」）：推薦清單與其他公開的 torrent 站。 */
+export type IndexerCandidate = Schemas['IndexerCandidateOut']
+
+/** 一站通不通：「測試」的回答，也是上一次「加入」對那一站的結論。 */
+export type SiteCheck = Schemas['SiteCheckOut']
+
+export type SiteFailure = NonNullable<SiteCheck['reason']>
 
 export type IndexerSetup = Schemas['IndexerSetupOut']
 
@@ -266,11 +275,27 @@ export function skipIndexers(skipped: boolean): Promise<IndexerSetup> {
 }
 
 /**
- * 加入之後的試搜（票 06e）。只讀，但要 Prowlarr 現場去連每一個站，所以是按了才問，
- * 不是開頁就問。空白的查詢回各站最新的發佈。
+ * 「測試」（M4 票 09）：逐站問套件內的 Prowlarr 通不通，什麼都不建立。只讀，但要 Prowlarr 現場
+ * 去連那些站，所以是按了才問。
  */
-export function searchIndexers(query: string): Promise<TrialSearchResult> {
-  return apiGet<TrialSearchResult>(`/setup/indexers/search?${new URLSearchParams({ query })}`)
+export async function testIndexers(indexers: string[]): Promise<SiteCheck[]> {
+  const body = await apiPost<Schemas['IndexerTestOut']>('/setup/indexers/test', {
+    indexers,
+  } satisfies Schemas['IndexerTestIn'])
+  return body.checks
+}
+
+/**
+ * 加入之後的試搜（票 06e）。只讀，但要 Prowlarr 現場去連每一個站，所以是按了才問，
+ * 不是開頁就問。空白的查詢回各站最新的發佈。`indexerId` 是那一列的「搜尋」，只問那一站。
+ */
+export function searchIndexers(
+  query: string,
+  indexerId: number | null = null,
+): Promise<TrialSearchResult> {
+  const params = new URLSearchParams({ query })
+  if (indexerId !== null) params.set('indexer_id', String(indexerId))
+  return apiGet<TrialSearchResult>(`/setup/indexers/search?${params}`)
 }
 
 /** 從套件內的 Prowlarr 移除一站（票 06e）。回的是整份索引站狀態：那一站與它的加入結果都不在了。 */

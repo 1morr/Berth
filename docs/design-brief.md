@@ -618,7 +618,7 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 | --- | --- | --- | --- |
 | qBittorrent | **只預置「讓 Berth 進得去」**：只放行 Berth 容器固定 IP 的免密白名單（不是整個網段，理由見 §20.7）。原因是 4.6.1 起首次啟動的隨機密碼只印在容器 log，Berth 拿不到，沒有這一步按鈕就登不進去 | 套件內：套用建議偏好（temp path、save path、autoTMM）、設定 WebUI 登入（必填；預設「沿用 Jellyfin 帳密」，見下文；不設的話 WebUI 只剩容器 log 裡每次重啟都換的臨時密碼，M4 票 07），按下前顯示差異。既有：填位址與 WebUI 帳密，一個全域偏好都不寫（§16.4）。兩種都依 Route 建立 category | 無 |
 | Jellyfin | 無 | 精靈第一頁選套件內或既有 → 那一台還沒跑過初始精靈就以擁有者填的帳密建立 Jellyfin 管理員、跑完它的初始設定；已經有管理員就用管理員登入 → Berth 自己建 API key「Berth」（帳密不存下來，M4 票 06）→ 媒體庫與路徑泊位：套件內建立使用者在精靈列的媒體庫（內容類型 + 名稱 + 資料夾，預設 Movies / TV / Anime 對應 `/data/library/{movies,tv,anime}`，可改名、增刪，M3 票 06f），既有只「加入 Berth 路徑」→ 每個媒體庫一個 Route | 無 |
-| Prowlarr | 無；Berth 唯讀掛載其設定目錄讀取 API key（套件內零輸入） | 套件內：加入預設索引站清單（Nyaa.si、dmhy、Anime Tosho、ACG.RIP、Mikan、1337x、YTS、EZTV、The Pirate Bay，先測試通過才勾得起來，M4 票 09；AniDex 於 2026-09-25 拿掉，§20.7）、設定介面登入（與 qBittorrent 同一條「沿用 Jellyfin 帳密」規則，各自一組）。既有：貼 API key，用使用者已有的索引站，Berth 不替它加站 | 私有站的帳號 |
+| Prowlarr | 無；Berth 唯讀掛載其設定目錄讀取 API key（套件內零輸入） | 套件內：推薦清單（Nyaa.si、dmhy、Anime Tosho、ACG.RIP、Mikan、1337x、YTS、EZTV、The Pirate Bay；AniDex 於 2026-09-25 拿掉，§20.7）與 schema 裡其他公開的 torrent 站，預設不勾、先測試通過才勾得起來再加入（M4 票 09，`indexer/test` 測還沒加入的定義，§20.7）、設定介面登入（與 qBittorrent 同一條「沿用 Jellyfin 帳密」規則，各自一組）。既有：貼 API key，用使用者已有的索引站，Berth 不替它加站 | 私有站的帳號 |
 | TMDB | 無 —— **Berth 不內建任何 provider 的 key**【決定 2026-09-09】 | 無 | **必要**：自己申請一把 API key 貼進精靈的 TMDB 泊位（§20.7） |
 | 索引站 / RSS | 無 | Mikan、Nyaa feed 由使用者貼 URL | 貼自己的 Mikan 訂閱 URL |
 
@@ -1187,6 +1187,21 @@ M1.5 拆票前的四條待決，2026-09-15 已全數照推薦拍板（上表「M
 - **空白查詢回各站最新的發佈**（2026-09-25 實測）：`GET /api/v1/search?query=&indexerIds=<id>&type=search`
   對 dmhy 回 80 筆、YTS 96 筆，各約 1.3 秒。精靈的試搜（票 06e）以它當預設：不必先想一個標題也證明得了
   那一站回得出東西。`indexerIds` 限定那一站，逐站各發一個才分得出哪一站失敗。
+- **`indexer/test` 也測得了還沒加入的定義；搜尋只吃已加入的站**（2026-09-30 berth-lab `bundled` 的
+  Prowlarr 2.6.5.5623 實測，M4 票 09；OpenAPI 的 `POST /api/v1/indexer/test` body 是 `IndexerResource`、
+  另有 `forceTest` 查詢參數）：把 `indexer/schema` 的定義原樣送（`appProfileId` 換 1），通過回 **200 `{}`**
+  （YTS 1.9 秒、dmhy 1.1 秒），不通過回 **400 加逐條理由**，形狀與新增那一支相同；兩種都**不建立任何東西**
+  （測完 `GET /api/v1/indexer` 仍是 0 站）。這就是 Prowlarr 自己「新增索引站」對話框的 Test。
+  `GET /api/v1/search?indexerIds=99999` 回 400「Search failed due to all selected indexers being unavailable」：
+  `indexerIds` 只認已加入的站，所以「加入之前先搜」做不到，流程是「測試 → 勾通過的 → 加入 → 逐站 / 全部試搜
+  → 不要的移除」。錄下的原文在 `tests/fixtures/http/prowlarr/indexer-test.rejected.*.json`：
+  `Unable to access 1337x.to, blocked by CloudFlare Protection.`、`Unable to connect to indexer. This is
+  typically caused by DNS/SSL issues. …`（nyaasi 的 SSL 失敗）；加上 09-08 那一份
+  `Query successful, but no results were returned …`，畫面分成 Cloudflare / 查無結果 / 連不上 / 其他四種理由。
+- **schema 裡的公開站**（同一次實測）：645 個定義，privacy 是 `public` 88、`semiPrivate` 64、`private` 493。
+  公開站裡 NZBIndex 是 usenet（`protocol: usenet`，Berth 只接 qBittorrent），`Torrent RSS Feed` 的
+  `definitionName` 出現兩次（它自己與 preset showRSS）。所以「全部公開站」只收 `protocol == torrent`、依
+  `definitionName` 去重。語言分布：`en-US` 59、`ru-RU` 15、`zh-CN` 5、其餘各 1–2。
 - **TMDB 的兩種憑證都打得動 v3 端點**：v4 的 read access token 走 `Authorization: Bearer`（官方建議、
   不進網址），v3 的 32 字元 API key 走 `?api_key=`；key 不對回 401。Berth 認憑證的**形狀**，
   所以使用者貼哪一種都成立。

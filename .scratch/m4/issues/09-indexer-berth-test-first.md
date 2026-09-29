@@ -1,6 +1,6 @@
 # 09 — Prowlarr 頁的索引站：預設不勾、先測再勾、全部公開站可搜尋
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Blocked by:** 15（15 把 Prowlarr 與索引站併成一頁；這張改那一頁的索引站那一半）
 
@@ -43,15 +43,47 @@
 
 ## 驗收
 
-- [ ] 查證結論與來源寫進 brief §20.7
-- [ ] 沒測過或測試失敗的站勾不起來（vitest，雙向）
-- [ ] 全部公開站的清單來自 Prowlarr 的 schema、可搜尋；加一個不在推薦清單上的站成功（`berth-lab/reset.sh bundled` 實測）
-- [ ] 既有 Prowlarr 的頁面沒有勾選與加入，試搜得到它已有的站（vitest + `berth-lab` existing 實測）
-- [ ] 進入精靈這一頁與設定頁的索引站分頁都不送檢查請求（vitest + playwright network 紀錄）
-- [ ] 1280 與 390 截圖：結果出來後「前往下一個泊位」不必捲動
-- [ ] 單站失敗：原文不直接顯示、一條摘要一個 live 區、沒有容器主機名的連結、主鈕只數沒加的（vitest，照 fake 的四站失敗）
-- [ ] 換另一格：Esc 收起確認、焦點進確認區、方向鍵瀏覽不送 `POST /setup/services/{kind}`、從既有換走的警告不說「寫過偏好」（vitest）
-- [ ] plan §9.3 頁 4、brief §16.3 同步
-- [ ] lint、type、test、前端 e2e 綠燈
+- [x] 查證結論與來源寫進 brief §20.7
+- [x] 沒測過或測試失敗的站勾不起來（vitest，雙向）
+- [x] 全部公開站的清單來自 Prowlarr 的 schema、可搜尋；加一個不在推薦清單上的站成功（`berth-lab/reset.sh bundled` 實測）
+- [x] 既有 Prowlarr 的頁面沒有勾選與加入，試搜得到它已有的站（vitest + `berth-lab` existing 實測）
+- [x] 進入精靈這一頁與設定頁的索引站分頁都不送檢查請求（vitest + playwright network 紀錄）
+- [x] 1280 與 390 截圖：結果出來後「前往下一個泊位」不必捲動
+- [x] 單站失敗：原文不直接顯示、一條摘要一個 live 區、沒有容器主機名的連結、主鈕只數沒加的（vitest，照 fake 的四站失敗）
+- [x] 換另一格：Esc 收起確認、焦點進確認區、方向鍵瀏覽不送 `POST /setup/services/{kind}`、從既有換走的警告不說「寫過偏好」（vitest）
+- [x] plan §9.3 頁 4、brief §16.3 同步
+- [x] lint、type、test、前端 e2e 綠燈
 
 ## Comments
+
+- 2026-09-30 實作（shape：`.scratch/m4/indexer-berth-shape.md`，使用者三題都照建議：結果逐列行內；推薦在上、其他公開站用
+  名稱 / 語言叫出來；「已加入」一段在上、「加站」在下）。
+- 查證（berth-lab bundled 的 Prowlarr 2.6.5.5623，brief §20.7）：`indexer/test` 收還沒加入的定義，通過 200 `{}`、不通過
+  400 加理由，都不建立任何東西；`indexerIds` 只認已加入的站（不存在的 id 回 400）。schema 645 個定義、public 88 個，其中
+  NZBIndex 是 usenet、`Torrent RSS Feed` 的 `definitionName` 出現兩次——公開站清單只收 torrent、依 `definitionName` 去重。
+  錄下 `tests/fixtures/http/prowlarr/indexer-test.rejected.*.json`。
+- berth-lab 實跑（image `berth:m4-09`）：
+  - bundled（`reset.sh bundled` 之後走精靈）：進頁 4 只發 `GET /api/setup/indexers`；「測試全部」約 5 秒，Nyaa.si（SSL）、
+    Anime Tosho 連不上，1337x、EZTV 被 Cloudflare 擋，其餘 5 站通過；其他公開站 78 個，Knaben 在這台連不上、TorrentsCSV
+    通過並加入；私站連結是 `http://localhost:29696/#/indexers`，開得起來。
+  - **實測抓到的 bug**：TorrentsCSV 的 schema 預設 `enable: false`，原樣送回去加成的是停用的站，「搜尋全部」跳過它、
+    畫面說「還沒搜」。修：`add_indexer` 一律送 `enable: true`（契約測試修前紅）；前端停用的站說「在 Prowlarr 停用了」、
+    不給搜尋。重建 image 之後移除再加一次，啟用、搜尋全部有問到它。
+  - existing（home-prowlarr 以使用者身分用它自己的 API 加了 dmhy、YTS）：頁 4「已加入 2 站」，沒有勾選、加入與移除，
+    搜尋全部 dmhy 80 筆、YTS 103 筆。泊位板原本仍說上一次測試的「尚未加入索引站」，改成清單讀得到就用清單（vitest）。
+  - 1280 × 720 與 390 × 844 在結果出來之後回到頁頂，「前往下一個泊位」在畫面內（lab 與 e2e 的
+    `4-indexers-viewport.png` 各兩張）。
+- code-review（Standards、Spec 兩軸）修掉的：radio 觸發的確認另寫了一份 Esc 處理（改用 `useInPlaceConfirm` 的
+  `escapeOnly`）、方向鍵瀏覽時 radio 上按 Esc 收不起確認（補上，DESIGN.md 記為例外）；測試請求沒送到時多一個紅色
+  `role=alert`（併進摘要那一個 live 區）；既有 Prowlarr 沒有 shape 寫的連結（`prowlarrWeb` 補既有：`host.docker.internal`
+  換成瀏覽器主機名、compose 主機名不給）；plan 的 API 表沒同步；`verify_sites` 測已加入站的分支沒有呼叫端（刪）；
+  `hostOf` 兩份；沒通過的列照 The Heavier Line Rule 換 `rule-strong`；e2e「進頁不送寫入」的取樣點有競態；`keeps` / `web`
+  改名。
+- **沒處理的**：
+  - Smell（判斷題）：站的描述欄位（`privacy`、`language`、`description`、`protocol`）在 `ProwlarrIndexer`、
+    `IndexerDefinition`、`IndexerSite`、`IndexerCandidate` 與兩個 `*Out` 各一份；`useChoiceDraft` 之後的
+    `switching` 推導在四個服務頁各寫一次；`IndexerStep` 與 `IndexerActions` 各組一次「已加入 + 加站」；前端的
+    `'prowlarr_login'` 靠註解對齊後端（票 07 起就是這樣）；幾處巢狀三元組狀態字。
+  - 既有 Prowlarr 測試那一條的「索引站 0」是上一次測試時的數字，重新測試才會變；回頭看的說明（`RevisitNote`）不分來源，
+    既有那一頁也說「測試並加更多公開站」。
+

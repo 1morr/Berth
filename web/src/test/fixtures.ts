@@ -1,6 +1,8 @@
 import type {
-  IndexerOption,
+  IndexerCandidate,
   IndexerSetup,
+  IndexerSite,
+  SiteCheck,
   JellyfinLibrary,
   JellyfinSetup,
   LibraryChoice,
@@ -154,59 +156,93 @@ export function diff(key: string, current: string, recommended: string): Prefere
   return { key, current, recommended, differs: current !== recommended }
 }
 
-/** 九個預設站，名稱、privacy 與語言取自真的 `indexer/schema`（`tests/fixtures/`）。 */
-export const DEFAULT_OPTIONS: IndexerOption[] = [
-  option('nyaasi', 'Nyaa.si', { description: 'Nyaa is a Public torrent site' }),
-  option('dmhy', 'dmhy', {
+/** 推薦的九站，名稱、privacy 與語言取自真的 `indexer/schema`（`tests/fixtures/`）。 */
+export const RECOMMENDED: IndexerCandidate[] = [
+  candidate('nyaasi', 'Nyaa.si', { description: 'Nyaa is a Public torrent site' }),
+  candidate('dmhy', 'dmhy', {
     language: 'zh-TW',
     description: 'dmhy is a TAIWANESE Public magnet tracker for ANIME',
   }),
-  option('animetosho-xyz', 'Anime Tosho', { privacy: 'semiPrivate' }),
-  option('acgrip', 'ACG.RIP', { language: 'zh-CN' }),
-  option('mikan', 'Mikan', { language: 'zh-CN' }),
-  option('1337x', '1337x'),
-  option('yts', 'YTS'),
-  option('eztv', 'EZTV'),
-  option('thepiratebay', 'The Pirate Bay'),
+  candidate('animetosho-xyz', 'Anime Tosho', { privacy: 'semiPrivate' }),
+  candidate('acgrip', 'ACG.RIP', { language: 'zh-CN' }),
+  candidate('mikan', 'Mikan', { language: 'zh-CN' }),
+  candidate('1337x', '1337x'),
+  candidate('yts', 'YTS'),
+  candidate('eztv', 'EZTV'),
+  candidate('thepiratebay', 'The Pirate Bay'),
 ]
 
-export function option(
+/** 推薦清單之外的公開站（M4 票 09，2026-09-30 berth-lab 的 schema）。 */
+export const OTHER_PUBLIC: IndexerCandidate[] = [
+  candidate('Knaben', 'Knaben', { recommended: false }),
+  candidate('rutor', 'RuTor', { recommended: false, language: 'ru-RU' }),
+  candidate('tokyotosho', 'Tokyo Toshokan', { recommended: false }),
+]
+
+export function candidate(
   definition_name: string,
   name: string,
-  overrides: Partial<IndexerOption> = {},
-): IndexerOption {
+  overrides: Partial<IndexerCandidate> = {},
+): IndexerCandidate {
   return {
     definition_name,
     name,
     privacy: 'public',
-    present: false,
     language: 'en-US',
     description: '',
-    indexer_id: null,
+    recommended: true,
     ...overrides,
   }
 }
 
-/** 已經加進 Prowlarr 的那一列：有 id 才有「移除」可按。 */
-export function added(row: IndexerOption, indexer_id: number): IndexerOption {
-  return { ...row, present: true, indexer_id }
+/** 已經加進 Prowlarr 的那一站：從候選搬過去，有 id 才有「搜尋」與「移除」可按。 */
+export function site(
+  row: Pick<IndexerCandidate, 'definition_name' | 'name'> & Partial<IndexerSite>,
+  indexer_id: number,
+): IndexerSite {
+  return {
+    indexer_id,
+    enabled: true,
+    language: 'en-US',
+    description: '',
+    privacy: 'public',
+    removable: true,
+    ...row,
+  }
 }
 
-/** 第 5 步狀態的測試建構子。預設是「套件內 Prowlarr、十個站都還沒加」。 */
+/** 測試或加入對一站的結論。 */
+export function check(
+  definition_name: string,
+  reason: SiteCheck['reason'] = null,
+  detail = '',
+): SiteCheck {
+  return { definition_name, passed: reason === null, reason, detail }
+}
+
+/**
+ * 頁 4 狀態的測試建構子。預設是「套件內 Prowlarr、一站都還沒加」。`sites` 給了的話，那幾站從
+ * 候選清單拿掉（與後端一樣：加入就搬去「已加入」）。
+ */
 export function indexerSetup(overrides: Partial<IndexerSetup> = {}): IndexerSetup {
+  const sites = overrides.sites ?? []
+  const added = new Set(sites.map((row) => row.definition_name))
   return {
     origin: 'bundled',
     kind: 'prowlarr',
     base_url: 'http://prowlarr:9696',
     api_key_present: true,
     reachable: true,
-    options: DEFAULT_OPTIONS,
+    sites,
+    candidates: [...RECOMMENDED, ...OTHER_PUBLIC].filter((row) => !added.has(row.definition_name)),
+    checks: [],
     steps: [],
     skipped: false,
     web_ui_login: true,
     web_ui_username: '',
     error: '',
     reason: null,
+    web_port: 9696,
     ...overrides,
   }
 }

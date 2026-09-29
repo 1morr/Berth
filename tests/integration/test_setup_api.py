@@ -241,6 +241,7 @@ WRITES: tuple[tuple[str, str, object], ...] = (
     ("POST", "/api/setup/qbittorrent/apply", None),
     ("PUT", "/api/setup/qbittorrent/login", {"username": "a", "password": "b"}),
     ("POST", "/api/setup/indexers/apply", {"indexers": ["nyaasi"]}),
+    ("POST", "/api/setup/indexers/test", {"indexers": ["nyaasi"]}),
     ("PUT", "/api/setup/indexers/login", {"username": "a", "password": "b"}),
     ("POST", "/api/setup/indexers/connect", {"kind": "prowlarr", "base_url": "http://x"}),
     ("POST", "/api/setup/indexers/skip", {}),
@@ -779,7 +780,10 @@ class TestSource:
 
     @pytest.fixture
     def prowlarr(self) -> FakeProwlarrClient:
-        return FakeProwlarrClient()
+        # 1337x 被 CloudFlare 擋（brief §20.7 的實測原文）：其餘站都加得進去。
+        return FakeProwlarrClient(
+            rejects={"1337x": "Unable to access 1337x.to, blocked by CloudFlare Protection."}
+        )
 
     @pytest.fixture
     def tmdb(self) -> FakeTmdbClient:
@@ -803,12 +807,28 @@ class TestSource:
             _claim(running)
             yield running
 
-    def test_the_defaults_come_back_with_their_names(self, client: TestClient) -> None:
+    def test_the_defaults_come_back_with_their_names(
+        self, client: TestClient, config: Config
+    ) -> None:
         body = client.get("/api/setup/indexers").json()
 
-        assert [row["definition_name"] for row in body["options"]] == list(DEFAULT_INDEXERS)
+        recommended = [row for row in body["candidates"] if row["recommended"]]
+        assert [row["definition_name"] for row in recommended] == list(DEFAULT_INDEXERS)
         assert body["kind"] == "prowlarr"
         assert body["origin"] == "bundled"
+        # 「在 Prowlarr 加私站」的連結開宿主上的 port（瀏覽器的主機名由前端補，M4 票 09）。
+        assert body["web_port"] == config.prowlarr_port
+
+    def test_sites_are_tested_without_being_added(self, client: TestClient) -> None:
+        """先測再勾（M4 票 09）：「測試」逐站回答、理由分好，Prowlarr 裡一站都沒多。"""
+        response = client.post("/api/setup/indexers/test", json={"indexers": ["yts", "1337x"]})
+
+        assert response.status_code == 200
+        assert [
+            (row["definition_name"], row["passed"], row["reason"])
+            for row in response.json()["checks"]
+        ] == [("yts", True, None), ("1337x", False, "cloudflare")]
+        assert client.get("/api/setup/indexers").json()["sites"] == []
 
     def test_the_login_rides_along_and_can_be_changed_later(
         self, client: TestClient, prowlarr: FakeProwlarrClient
@@ -838,10 +858,7 @@ class TestSource:
             "nyaasi",
             "mikan",
         ]
-        assert [row["definition_name"] for row in body["options"] if row["present"]] == [
-            "nyaasi",
-            "mikan",
-        ]
+        assert [row["definition_name"] for row in body["sites"]] == ["nyaasi", "mikan"]
 
     def test_an_existing_torznab_endpoint_is_tested_and_remembered(
         self, client: TestClient
@@ -865,18 +882,21 @@ class TestSource:
     ) -> None:
         """加入 → 試搜 → 不要的移除（票 06e）。試搜逐站回報，移除之後那一站不見。"""
         added = client.post("/api/setup/indexers/apply", json={"indexers": ["dmhy", "yts"]}).json()
-        ids = {row["definition_name"]: row["indexer_id"] for row in added["options"]}
-        assert added["options"][1]["language"] == "zh-TW"
+        ids = {row["definition_name"]: row["indexer_id"] for row in added["sites"]}
+        assert added["sites"][0]["language"] == "zh-TW"
 
         found = client.get("/api/setup/indexers/search", params={"query": " "}).json()
         assert found["query"] == ""
         assert [row["definition_name"] for row in found["sites"]] == ["dmhy", "yts"]
+        # 那一列的「搜尋」只問那一站。
+        one = client.get(
+            "/api/setup/indexers/search", params={"query": "x", "indexer_id": ids["yts"]}
+        ).json()
+        assert [row["definition_name"] for row in one["sites"]] == ["yts"]
 
         after = client.delete(f"/api/setup/indexers/{ids['yts']}")
         assert after.status_code == 200
-        assert [row["definition_name"] for row in after.json()["options"] if row["present"]] == [
-            "dmhy"
-        ]
+        assert [row["definition_name"] for row in after.json()["sites"]] == ["dmhy"]
         assert prowlarr.deleted == [ids["yts"]]
 
     def test_only_the_indexer_half_can_be_skipped_and_unskipped(self, client: TestClient) -> None:

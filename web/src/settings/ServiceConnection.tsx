@@ -10,6 +10,7 @@ import {
   type SetupStatus,
 } from '../api/setup'
 import { Notice } from '../components/controls'
+import { useChoiceDraft } from '../setup/choiceDraft'
 import { ServiceChoice } from '../setup/ServiceChoice'
 import { SettingsSection } from './SettingsFrame'
 
@@ -31,6 +32,7 @@ export function ServiceConnection({
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const status = useQuery(setupStatusQueryOptions)
+  const choiceDraft = useChoiceDraft()
 
   function absorb(next: SetupStatus) {
     queryClient.setQueryData(setupStatusQueryOptions.queryKey, next)
@@ -62,6 +64,7 @@ export function ServiceConnection({
         <ServiceChoice
           kind={kind}
           status={status.data}
+          {...choiceDraft}
           choosing={choose.isPending}
           retesting={retest.isPending}
           onChoose={(input, settled) => choose.mutate(input, { onSettled: settled })}

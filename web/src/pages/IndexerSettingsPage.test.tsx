@@ -6,11 +6,12 @@ import type { IndexerSetup, SiteSearch } from '../api/setup'
 import { HEALTHY, stubApi, type StubRoute } from '../test/fetch'
 import {
   ALL_BUNDLED,
-  DEFAULT_OPTIONS,
-  added,
+  RECOMMENDED,
+  check,
   healthDetail,
   indexerSetup,
   setupStatus,
+  site,
   step,
 } from '../test/fixtures'
 import { renderApp } from '../test/render'
@@ -21,6 +22,7 @@ afterEach(() => {
 
 const INDEXERS = 'GET /api/setup/indexers'
 const ADD = 'POST /api/setup/indexers/apply'
+const TEST = 'POST /api/setup/indexers/test'
 const CONNECT = 'POST /api/setup/indexers/connect'
 const SEARCH = 'GET /api/setup/indexers/search'
 const REMOVE_YTS = 'DELETE /api/setup/indexers/3'
@@ -29,8 +31,8 @@ const LOGIN = 'PUT /api/setup/indexers/login'
 /** 精靈加過 dmhy、Mikan、YTS 三站的套件內 Prowlarr。 */
 function withSites(ids: Record<string, number> = { dmhy: 1, mikan: 2, yts: 3 }): IndexerSetup {
   return indexerSetup({
-    options: DEFAULT_OPTIONS.map((row) =>
-      row.definition_name in ids ? added(row, ids[row.definition_name]) : row,
+    sites: RECOMMENDED.filter((row) => row.definition_name in ids).map((row) =>
+      site(row, ids[row.definition_name]),
     ),
     steps: [step('dmhy', 'ok'), step('mikan', 'ok'), step('yts', 'ok')],
   })
@@ -77,35 +79,40 @@ describe('設定 → 索引站', () => {
     expect(await screen.findByRole('region', { name: 'Prowlarr' })).toBeInTheDocument()
   })
 
-  it('已經加進來的站打勾、拿掉的沒勾；沒有「之後再說」——這裡不是 onboarding', async () => {
-    render()
+  it('進來只讀：不測任何一站、不送任何寫入；已加入的站在上面，沒有「之後再說」', async () => {
+    const stub = render()
     renderApp('/settings/indexers')
 
-    const picks = within((await screen.findByText('要加入哪些站')).closest('fieldset')!)
-    expect(picks.getByRole('checkbox', { name: /dmhy/ })).toBeChecked()
-    expect(picks.getByRole('checkbox', { name: /Mikan/ })).toBeChecked()
-    expect(picks.getByRole('checkbox', { name: /Nyaa\.si/ })).not.toBeChecked()
+    const added = within(await screen.findByTestId('added'))
+    expect(added.getByText('dmhy')).toBeInTheDocument()
+    expect(added.getByText('3 站')).toBeInTheDocument()
+    // 加進來的站不在加站清單上；還沒加的一站都沒勾，也勾不起來。
+    expect(screen.queryByRole('checkbox', { name: 'dmhy' })).not.toBeInTheDocument()
+    expect(screen.getByRole('checkbox', { name: 'Nyaa.si' })).toBeDisabled()
     expect(screen.queryByRole('button', { name: '之後再說' })).not.toBeInTheDocument()
+    expect(stub.mock.calls.every(([, init]) => (init?.method ?? 'GET') === 'GET')).toBe(true)
   })
 
-  it('加一個站：勾它、按加入，送的是精靈第 6 步的同一支命令（票 06i 驗收）', async () => {
+  it('加一個站：測過、勾它、按加入，送的是精靈頁 4 的同一支命令（票 06i 驗收）', async () => {
     const stub = render({
+      [TEST]: { body: { checks: [check('nyaasi')] } },
       [ADD]: { body: withSites({ dmhy: 1, mikan: 2, yts: 3, nyaasi: 4 }) },
     })
     const user = userEvent.setup()
     renderApp('/settings/indexers')
 
-    const picks = within((await screen.findByText('要加入哪些站')).closest('fieldset')!)
-    await user.click(picks.getByRole('checkbox', { name: /Nyaa\.si/ }))
-    await user.click(screen.getByRole('button', { name: '加入這 4 個站' }))
+    await user.click(await screen.findByRole('button', { name: '測試 Nyaa.si' }))
+    const nyaa = screen.getByRole('checkbox', { name: 'Nyaa.si' })
+    await waitFor(() => expect(nyaa).toBeEnabled())
+    await user.click(nyaa)
+    await user.click(screen.getByRole('button', { name: '加入 1 個站' }))
 
     await waitFor(() =>
       expect(stub.mock.calls.some(([url]) => url === '/api/setup/indexers/apply')).toBe(true),
     )
     const call = stub.mock.calls.find(([url]) => url === '/api/setup/indexers/apply')!
-    expect(JSON.parse(String(call[1]?.body)).indexers.sort()).toEqual(
-      ['dmhy', 'mikan', 'nyaasi', 'yts'].sort(),
-    )
+    // 只送還沒加的那一站：已經在的不重加（M4 票 09）。
+    expect(JSON.parse(String(call[1]?.body)).indexers).toEqual(['nyaasi'])
     // 加站不帶登入：介面登入在它自己的那一區改（M4 票 07）。
     expect(JSON.parse(String(call[1]?.body)).login).toBeNull()
     // 加進來之後它就在試搜的清單上。
@@ -126,8 +133,8 @@ describe('設定 → 索引站', () => {
     const user = userEvent.setup()
     renderApp('/settings/indexers')
 
-    const trial = within((await screen.findByRole('heading', { name: '試搜' })).closest('section')!)
-    await user.click(trial.getByRole('button', { name: '試搜' }))
+    const added = within(await screen.findByTestId('added'))
+    await user.click(added.getByRole('button', { name: '搜尋全部' }))
 
     const rows = within(await screen.findByTestId('trial'))
     expect(await rows.findByText('12 筆')).toBeInTheDocument()
@@ -149,9 +156,8 @@ describe('設定 → 索引站', () => {
     })
     const call = stub.mock.calls.find(([, init]) => init?.method === 'DELETE')!
     expect(String(call[0])).toMatch(/\/setup\/indexers\/3$/)
-    // 移除之後它不再打勾：下一次按「加入」不會把它加回來。
-    const picks = within(screen.getByText('要加入哪些站').closest('fieldset')!)
-    expect(picks.getByRole('checkbox', { name: /YTS/ })).not.toBeChecked()
+    // 移除之後它回到加站清單，沒勾：要用得再測一次、再加。
+    expect(screen.getByRole('checkbox', { name: 'YTS' })).not.toBeChecked()
   })
 
   it('既有的 Torznab 換網址或 key：沒有「之後再說」，接上之後照樣試搜', async () => {
@@ -159,7 +165,7 @@ describe('設定 → 索引站', () => {
       origin: 'existing',
       kind: 'torznab',
       base_url: 'http://jackett:9117/api',
-      options: [],
+      candidates: [],
       steps: [step('torznab', 'ok', 'Jackett · TV')],
       web_ui_login: false,
     })
@@ -187,7 +193,7 @@ describe('設定 → 索引站', () => {
       base_url: 'http://jackett:9117/api/v2',
       api_key: 'new-key',
     })
-    expect(screen.getByRole('button', { name: '試搜' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '搜尋全部' })).toBeInTheDocument()
     // 既有的索引站沒有介面登入那一區（M4 票 07）。
     expect(screen.queryByRole('heading', { name: '介面登入' })).not.toBeInTheDocument()
   })
@@ -253,7 +259,7 @@ describe('既有 Prowlarr 測不過時的補法（M4 票 17）', () => {
   function failed(overrides: Partial<IndexerSetup>): IndexerSetup {
     return indexerSetup({
       origin: 'existing',
-      options: [],
+      candidates: [],
       web_ui_login: false,
       reason: 'unreachable',
       steps: [step('prowlarr', 'failed', '', 'GET /ping: connection refused')],

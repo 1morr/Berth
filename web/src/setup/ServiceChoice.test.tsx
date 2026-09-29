@@ -6,18 +6,47 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import '../i18n'
 import type { ServiceKind } from '../api/schemas'
 import { chosen, setupStatus } from '../test/fixtures'
+import type { ChoiceInput } from '../api/setup'
+import { useChoiceDraft } from './choiceDraft'
 import { ServiceChoice } from './ServiceChoice'
 
-function mount(kind: ServiceKind, services = setupStatus().services) {
+/** 草稿由頁面持有（`useChoiceDraft`）：這一層就是那個頁面。 */
+function Page({
+  kind,
+  services,
+  switchWarning,
+  onChoose,
+}: {
+  kind: ServiceKind
+  services: ReturnType<typeof setupStatus>['services']
+  switchWarning?: string
+  onChoose: (input: ChoiceInput) => void
+}) {
+  const draft = useChoiceDraft()
+  return (
+    <>
+      <p data-testid="draft">{draft.draft ?? 'none'}</p>
+      <ServiceChoice
+        kind={kind}
+        status={setupStatus({ services })}
+        choosing={false}
+        retesting={false}
+        switchWarning={switchWarning}
+        onChoose={onChoose}
+        onRetest={vi.fn()}
+        {...draft}
+      />
+    </>
+  )
+}
+
+function mount(
+  kind: ServiceKind,
+  services = setupStatus().services,
+  { switchWarning, onChoose = vi.fn() }: { switchWarning?: string; onChoose?: () => void } = {},
+) {
   return render(
-    <ServiceChoice
-      kind={kind}
-      status={setupStatus({ services })}
-      choosing={false}
-      retesting={false}
-      onChoose={vi.fn()}
-      onRetest={vi.fn()}
-    />,
+    <Page kind={kind} services={services} switchWarning={switchWarning} onChoose={onChoose} />,
   )
 }
 
@@ -127,5 +156,100 @@ describe('版本比下限舊（M4 票 17）', () => {
     expect(screen.getByText('連得上，但版本比 Berth 支援的下限舊')).toBeInTheDocument()
     expect(screen.getByText(i18next.t('connection.fix.outdatedBundled'))).toBeInTheDocument()
     expect(screen.getByText('docker compose pull prowlarr')).toBeInTheDocument()
+  })
+})
+
+describe('換另一格與方向鍵（M4 票 09，票 15 critique / audit 的 P2）', () => {
+  const bundled = () => screen.getByRole('radio', { name: /^套件內/ })
+  const existing = () => screen.getByRole('radio', { name: /^既有/ })
+
+  it('方向鍵在兩格間移動只改草稿，不送選擇；按「使用套件內」才送', async () => {
+    const onChoose = vi.fn()
+    const user = userEvent.setup()
+    mount('qbittorrent', [], { onChoose })
+
+    bundled().focus()
+    await user.keyboard('{ArrowRight}')
+    expect(existing()).toBeChecked()
+    expect(screen.getByTestId('draft')).toHaveTextContent('existing')
+    await user.keyboard('{ArrowLeft}')
+    expect(bundled()).toBeChecked()
+    expect(screen.getByTestId('draft')).toHaveTextContent('bundled')
+    // 瀏覽時焦點留在 radio 上，才走得回另一格。
+    expect(bundled()).toHaveFocus()
+    expect(onChoose).not.toHaveBeenCalled()
+
+    await user.click(screen.getByRole('button', { name: '使用套件內的 qBittorrent' }))
+    expect(onChoose).toHaveBeenCalledExactlyOnceWith({ origin: 'bundled' })
+  })
+
+  it('點一下「套件內」照舊當場存下並測', async () => {
+    const onChoose = vi.fn()
+    const user = userEvent.setup()
+    mount('qbittorrent', [], { onChoose })
+
+    await user.click(bundled())
+
+    expect(onChoose).toHaveBeenCalledExactlyOnceWith({ origin: 'bundled' })
+  })
+
+  it('從既有換走：警告只說這一頁要重做，不說 Berth 寫過那一台', async () => {
+    const user = userEvent.setup()
+    mount(
+      'prowlarr',
+      [chosen({ kind: 'prowlarr', origin: 'existing', base_url: 'http://nas:9696' })],
+      {
+        switchWarning: i18next.t('choice.switchWarning.prowlarr'),
+      },
+    )
+
+    await user.click(bundled())
+
+    const panel = screen.getByRole('group', { name: /換一台 Prowlarr/ })
+    expect(panel).toHaveTextContent('Berth 沒動過你那一台的站')
+    expect(panel).not.toHaveTextContent('已經加進原本那一台')
+  })
+
+  it('從套件內換成既有：後果、表單與取消在同一個確認區，Esc 收起回到原本那一格', async () => {
+    const onChoose = vi.fn()
+    const user = userEvent.setup()
+    mount('prowlarr', [chosen({ kind: 'prowlarr', base_url: 'http://prowlarr:9696' })], {
+      switchWarning: i18next.t('choice.switchWarning.prowlarr'),
+      onChoose,
+    })
+
+    await user.click(existing())
+
+    const panel = screen.getByRole('group', { name: /換一台 Prowlarr/ })
+    expect(panel).toHaveFocus()
+    expect(panel).toHaveTextContent('已經加進原本那一台的站與登入留在那裡')
+    expect(within(panel).getByRole('textbox', { name: '位址' })).toBeInTheDocument()
+
+    await user.keyboard('{Escape}')
+    expect(screen.queryByRole('group', { name: /換一台 Prowlarr/ })).toBeNull()
+    expect(bundled()).toBeChecked()
+    expect(bundled()).toHaveFocus()
+    expect(onChoose).not.toHaveBeenCalled()
+  })
+
+  it('用方向鍵換過去：焦點留在 radio 上瀏覽，Esc 在 radio 上就收得起確認', async () => {
+    const onChoose = vi.fn()
+    const user = userEvent.setup()
+    mount(
+      'prowlarr',
+      [chosen({ kind: 'prowlarr', origin: 'existing', base_url: 'http://nas:9696' })],
+      { switchWarning: i18next.t('choice.switchWarning.prowlarr'), onChoose },
+    )
+
+    existing().focus()
+    await user.keyboard('{ArrowLeft}')
+    expect(screen.getByRole('group', { name: /換一台 Prowlarr/ })).toBeInTheDocument()
+    expect(bundled()).toHaveFocus()
+
+    await user.keyboard('{Escape}')
+    expect(screen.queryByRole('group', { name: /換一台 Prowlarr/ })).toBeNull()
+    expect(existing()).toBeChecked()
+    expect(existing()).toHaveFocus()
+    expect(onChoose).not.toHaveBeenCalled()
   })
 })

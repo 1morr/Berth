@@ -373,14 +373,25 @@ def outdated() -> Scenario:
     return scenario
 
 
+#: 使用者自己那台 Prowlarr 上的站（`mixed`）：一個公開站、一個帶帳號的私站
+#: （M4 票 09 的「既有」列表）。
+NAS_INDEXERS = (
+    ProwlarrIndexer(
+        1, "Nyaa.si", True, "nyaasi", privacy="public", language="en-US", protocol="torrent"
+    ),
+    ProwlarrIndexer(2, "AnimeBytes", True, "AnimeBytes", privacy="private", language="en-US"),
+)
+
+
 def mixed() -> Scenario:
     """NAS 的常見組合：既有 Jellyfin（跑過自己的精靈、兩個媒體庫）、qBittorrent 已設密碼。"""
     return Scenario(
         jellyfin=nas_jellyfin(),
         qbittorrent=FakeQbittorrentClient(error=AuthFailedError("403")),
-        prowlarr=FakeProwlarrClient(indexers=[ProwlarrIndexer(id=1, name="Nyaa.si", enabled=True)]),
+        # 試搜照這一份造回答（`trial_search`），所以與既有那一台列的站是同一份。
+        prowlarr=FakeProwlarrClient(indexers=list(NAS_INDEXERS)),
         prowlarr_api_key="00000000000000000000000000000001",
-        connect_indexers=[ProwlarrIndexer(id=1, name="Nyaa.si", enabled=True)],
+        connect_indexers=list(NAS_INDEXERS),
     )
 
 

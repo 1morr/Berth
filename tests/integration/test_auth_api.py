@@ -347,6 +347,7 @@ ACCESS: dict[tuple[str, str], Access] = {
     ("POST", "/setup/complete"): Access.SETUP,
     ("GET", "/setup/indexers"): Access.SETUP,
     ("POST", "/setup/indexers/apply"): Access.SETUP,
+    ("POST", "/setup/indexers/test"): Access.SETUP,
     ("PUT", "/setup/indexers/login"): Access.SETUP,
     ("POST", "/setup/indexers/connect"): Access.SETUP,
     ("POST", "/setup/indexers/skip"): Access.SETUP,

@@ -8,6 +8,7 @@ import {
   removeIndexer,
   searchIndexers,
   setIndexerLogin,
+  testIndexers,
   type IndexerSetup,
 } from '../api/setup'
 import { Notice } from '../components/controls'
@@ -18,8 +19,9 @@ import { useServiceCheck } from '../settings/useServiceCheck'
 import { IndexerActions } from '../setup/IndexerStep'
 
 /**
- * 設定 → 索引站（票 06i）。加站、試搜、移除，既有 Torznab 換網址或 key——全部是精靈第 6 步的
- * `IndexerActions` 與同一批 `setup/indexers/*` 命令，只是沒有「之後再說」。套件內 Prowlarr 的
+ * 設定 → 索引站（票 06i）。進來只讀（M4 票 09：不測任何一站）；測試、加站、試搜、移除、既有
+ * Torznab 換網址或 key 都由人按——全部是精靈頁 4 的 `IndexerActions` 與同一批 `setup/indexers/*`
+ * 命令，只是沒有「之後再說」。套件內 Prowlarr 的
  * 介面登入是自己的一區（M4 票 07）：加站不帶登入，登入在這裡改。
  *
  * 健康卡是 Prowlarr 那一張：接的是任意 Torznab 端點時，健康檢查仍以那一項報它（plan §3.2）。
@@ -38,7 +40,6 @@ export function IndexerSettingsPage() {
 
   const apply = useMutation({ mutationFn: applyIndexers, onSuccess: absorb })
   const connect = useMutation({ mutationFn: connectIndexer, onSuccess: absorb })
-  const trial = useMutation({ mutationFn: searchIndexers })
   const remove = useMutation({ mutationFn: removeIndexer, onSuccess: absorb })
   const login = useMutation({ mutationFn: setIndexerLogin, onSuccess: absorb })
 
@@ -56,11 +57,9 @@ export function IndexerSettingsPage() {
               connecting={connect.isPending}
               onApply={(input) => apply.mutateAsync({ ...input, login: null })}
               onConnect={(input) => connect.mutate(input)}
-              trial={{
-                result: trial.data,
-                searching: trial.isPending,
-                failed: trial.isError,
-                onSearch: (query) => trial.mutate(query),
+              sites={{
+                onTest: testIndexers,
+                onSearch: searchIndexers,
                 removing: remove.isPending ? remove.variables : null,
                 removeFailed: remove.isError,
                 onRemove: (id) => remove.mutate(id),
@@ -72,7 +71,8 @@ export function IndexerSettingsPage() {
             {t('indexer.unreachable')}
           </Notice>
         ) : (
-          <p className="text-sm text-ink-dim">{t('health.checking')}</p>
+          // 進來只讀（M4 票 09）：這一句說的是讀清單，不是檢查。
+          <p className="text-sm text-ink-dim">{t('indexer.add.loading')}</p>
         )}
       </SettingsSection>
       {indexers.data?.web_ui_login && (

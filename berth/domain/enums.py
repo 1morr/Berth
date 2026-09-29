@@ -654,6 +654,22 @@ class IndexerProblem(StrEnum):
     BUDGET_EXHAUSTED = "budget_exhausted"
 
 
+class SiteFailure(StrEnum):
+    """一個索引站沒通過 Prowlarr 的測試或加不進去時，畫面說得出來的理由（M4 票 09）。
+
+    Prowlarr 只給英文原文，而常見的就那幾種（brief §20.7 實測）：分出來是為了換成 i18n 的一句話，
+    原文照樣帶著給人展開看。認不出來的是 `other`。
+    """
+
+    #: 「blocked by CloudFlare Protection」：那個站擋自動化的請求，要 FlareSolverr 才過得去。
+    CLOUDFLARE = "cloudflare"
+    #: 「Query successful, but no results」：連得上，但測試那一次查詢什麼都沒回。
+    NO_RESULTS = "no_results"
+    #: 「Unable to connect to indexer」：DNS、TLS、站掛了（502）。
+    UNREACHABLE = "unreachable"
+    OTHER = "other"
+
+
 class BudgetUse(StrEnum):
     """誰用掉一個站的請求預算（M3 票 20、plan §3.2）。健康頁照它拆「這一小時是誰問的」。"""
 

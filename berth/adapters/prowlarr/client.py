@@ -76,14 +76,16 @@ class HttpProwlarrClient:
                 payload=row,
                 language=str(row.get("language") or ""),
                 description=str(row.get("description") or ""),
+                protocol=str(row.get("protocol") or ""),
             )
             for row in payload
             if isinstance(row, dict) and row.get("definitionName")
         )
 
     async def add_indexer(self, definition: IndexerDefinition) -> ProwlarrIndexer:
-        """schema 給的定義原樣送回去，只換掉 `appProfileId`（schema 是 0，會建不起來）。"""
-        body = {**definition.payload, "appProfileId": DEFAULT_APP_PROFILE_ID}
+        """schema 給的定義原樣送回去，只換掉 `appProfileId`（schema 是 0，會建不起來）與 `enable`：
+        有的定義預設停用（TorrentsCSV，M4 票 09 實測），停用的站搜尋不會問它。"""
+        body = {**definition.payload, "appProfileId": DEFAULT_APP_PROFILE_ID, "enable": True}
         response = await self._session.request(
             "POST",
             "/api/v1/indexer",
@@ -113,6 +115,21 @@ class HttpProwlarrClient:
                 f"test {indexer.name}", messages=_reasons(json_body(response))
             )
 
+    async def test_definition(self, definition: IndexerDefinition) -> None:
+        """schema 的定義原樣送，`appProfileId` 與新增那一支一樣換掉（M4 票 09 實測）。"""
+        body = {**definition.payload, "appProfileId": DEFAULT_APP_PROFILE_ID}
+        response = await self._session.request(
+            "POST",
+            "/api/v1/indexer/test",
+            json=body,
+            tolerate=(400,),
+            timeout=INDEXER_TIMEOUT_SECONDS,
+        )
+        if response.status_code == 400:
+            raise IndexerRejectedError(
+                f"test {definition.definition_name}", messages=_reasons(json_body(response))
+            )
+
     async def delete_indexer(self, indexer_id: int) -> None:
         await self._session.request("DELETE", f"/api/v1/indexer/{indexer_id}")
 
@@ -139,6 +156,10 @@ def _indexer(row: Mapping[str, Any]) -> ProwlarrIndexer:
         enabled=bool(row.get("enable", False)),
         definition_name=str(row.get("definitionName", "")),
         payload=row,
+        privacy=str(row.get("privacy") or ""),
+        language=str(row.get("language") or ""),
+        description=str(row.get("description") or ""),
+        protocol=str(row.get("protocol") or ""),
     )
 
 

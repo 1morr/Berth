@@ -25,15 +25,18 @@ from berth.domain import (
     RouteRefusal,
     ServiceKind,
     ServiceOrigin,
+    SiteFailure,
 )
 from berth.services.clients import bundled_targets
 from berth.services.indexer import (
+    IndexerSetupStatus,
     apply_default_indexers,
     connect_indexer,
     read_indexer_status,
     remove_indexer,
     search_indexers,
     skip_indexers,
+    verify_sites,
 )
 from berth.services.indexer import (
     set_interface_login as set_prowlarr_login,
@@ -485,19 +488,47 @@ async def put_qbittorrent_login(
 # --- 頁 4：Prowlarr 與索引站（plan §9.3、§8.4）---
 
 
-class IndexerOptionOut(BaseModel):
+class IndexerSiteOut(BaseModel):
+    """Prowlarr 裡已經有的一站（M4 票 09 的「已加入」）。"""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    indexer_id: int
+    definition_name: str
+    name: str
+    enabled: bool
+    #: BCP 47 代碼（`zh-TW`…）。畫面照 UI 語言換成語言名。
+    language: str
+    #: 定義自帶的英文說明，原樣顯示、不翻。
+    description: str
+    privacy: str
+    #: 可以從 Berth 移除（套件內、而且 Berth 加得回去）。
+    removable: bool
+
+
+class IndexerCandidateOut(BaseModel):
+    """還沒加入、Berth 加得了的一站（M4 票 09 的「加站」）。"""
+
     model_config = ConfigDict(from_attributes=True)
 
     definition_name: str
     name: str
     privacy: str
-    present: bool
-    #: BCP 47 代碼（`zh-TW`…）。畫面照 UI 語言換成語言名。
     language: str
-    #: 定義自帶的英文說明，原樣顯示、不翻。
     description: str
-    #: 加進這台 Prowlarr 之後的 id；移除打的是它。
-    indexer_id: int | None
+    #: 推薦清單上的（排最前）；其餘是 schema 裡其他公開的 torrent 站。
+    recommended: bool
+
+
+class SiteCheckOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    definition_name: str
+    passed: bool
+    #: 沒通過時是哪一種；通過是 `null`。
+    reason: SiteFailure | None
+    #: Prowlarr 的原文（英文）。
+    detail: str
 
 
 class IndexerSetupOut(BaseModel):
@@ -509,7 +540,12 @@ class IndexerSetupOut(BaseModel):
     base_url: str
     api_key_present: bool
     reachable: bool
-    options: list[IndexerOptionOut]
+    #: Prowlarr 裡已經有的站（套件內與既有 Prowlarr）。
+    sites: list[IndexerSiteOut]
+    #: 還沒加入、Berth 加得了的站。只有套件內。
+    candidates: list[IndexerCandidateOut]
+    #: 上一次「加入」對每一站的結論。
+    checks: list[SiteCheckOut]
     steps: list[StepOut]
     skipped: bool
     #: 泊位上有介面登入那一格：只有套件內的 Prowlarr（M4 票 07）。
@@ -519,6 +555,16 @@ class IndexerSetupOut(BaseModel):
     error: str
     #: 上一次連線測試的理由；還沒測過是 `null`（M4 票 17：既有表單照它選補法）。
     reason: ConnectionReason | None
+    #: 套件內 Prowlarr 在宿主上發佈的 port（`PROWLARR_PORT`）：瀏覽器開它的介面是「現在的主機名 +
+    #: 這個 port」，主機名只有前端知道（同 Jellyfin 深連結）。既有與還沒選是 `null`。
+    web_port: int | None
+
+    @classmethod
+    def of(cls, status: IndexerSetupStatus, config: Config) -> IndexerSetupOut:
+        bundled = status.origin is ServiceOrigin.BUNDLED
+        return cls.model_validate(
+            {**asdict(status), "web_port": config.prowlarr_port if bundled else None}
+        )
 
 
 class IndexerApplyIn(BaseModel):
@@ -526,6 +572,15 @@ class IndexerApplyIn(BaseModel):
     indexers: list[str] = []
     #: 泊位上填的 Prowlarr 介面登入（M4 票 07）。不帶就是登入照舊。
     login: InterfaceLoginIn | None = None
+
+
+class IndexerTestIn(BaseModel):
+    #: 要測的站，值是 Prowlarr 的 `definitionName`。
+    indexers: list[str] = Field(min_length=1)
+
+
+class IndexerTestOut(BaseModel):
+    checks: list[SiteCheckOut]
 
 
 class IndexerConnectIn(BaseModel):
@@ -562,13 +617,32 @@ class SkipIn(BaseModel):
 
 
 @router.get("/indexers")
-async def get_indexers(session: SessionDep, factory: ClientFactoryDep) -> IndexerSetupOut:
-    return IndexerSetupOut.model_validate(await read_indexer_status(session, factory))
+async def get_indexers(
+    session: SessionDep, config: ConfigDep, factory: ClientFactoryDep
+) -> IndexerSetupOut:
+    """只讀：進頁 4 與設定頁的索引站分頁只發這一支，不測任何一站（M4 票 09）。"""
+    return IndexerSetupOut.of(await read_indexer_status(session, factory), config)
+
+
+@router.post("/indexers/test")
+async def post_indexers_test(
+    session: SessionDep, factory: ClientFactoryDep, body: IndexerTestIn
+) -> IndexerTestOut:
+    """「測試」：逐站問套件內的 Prowlarr 通不通，什麼都不建立（M4 票 09）。
+
+    只讀（`read` 命令），但它要 Prowlarr 現場去連那些站、要花幾秒，所以是由人按的 POST。
+    既有的索引站回 422：Berth 不替它加站，也就沒有要測的（brief §16.4）。
+    """
+    try:
+        checks = await verify_sites(session, factory, body.indexers)
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
+    return IndexerTestOut.model_validate({"checks": [asdict(row) for row in checks]})
 
 
 @router.post("/indexers/apply", responses=_LOGIN_RESPONSES)
 async def post_indexers_apply(
-    session: SessionDep, factory: ClientFactoryDep, body: IndexerApplyIn
+    session: SessionDep, config: ConfigDep, factory: ClientFactoryDep, body: IndexerApplyIn
 ) -> IndexerSetupOut:
     """套件內路徑：勾起來的站逐個加進 Prowlarr，逐站回報成敗。
 
@@ -585,12 +659,12 @@ async def post_indexers_apply(
         raise login_refusal(refusal) from refusal
     except ValueError as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
-    return IndexerSetupOut.model_validate(result)
+    return IndexerSetupOut.of(result, config)
 
 
 @router.put("/indexers/login", responses=_LOGIN_RESPONSES)
 async def put_indexers_login(
-    session: SessionDep, factory: ClientFactoryDep, body: InterfaceLoginIn
+    session: SessionDep, config: ConfigDep, factory: ClientFactoryDep, body: InterfaceLoginIn
 ) -> IndexerSetupOut:
     """設定頁的「更新登入」（M4 票 07）：只換套件內 Prowlarr 的介面登入，等它重啟回來。
 
@@ -602,60 +676,61 @@ async def put_indexers_login(
         raise login_refusal(refusal) from refusal
     except ValueError as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
-    return IndexerSetupOut.model_validate(result)
+    return IndexerSetupOut.of(result, config)
 
 
 @router.post("/indexers/connect")
 async def post_indexers_connect(
-    session: SessionDep, factory: ClientFactoryDep, body: IndexerConnectIn
+    session: SessionDep, config: ConfigDep, factory: ClientFactoryDep, body: IndexerConnectIn
 ) -> IndexerSetupOut:
     """既有路徑的「測試」。測不過也存，使用者才能改一個欄位再按一次。"""
-    return IndexerSetupOut.model_validate(
-        await connect_indexer(
-            session,
-            factory,
-            kind=body.kind,
-            base_url=body.base_url.rstrip("/"),
-            api_key=body.api_key.strip(),
-        )
+    result = await connect_indexer(
+        session,
+        factory,
+        kind=body.kind,
+        base_url=body.base_url.rstrip("/"),
+        api_key=body.api_key.strip(),
     )
+    return IndexerSetupOut.of(result, config)
 
 
 @router.get("/indexers/search")
 async def get_indexers_search(
-    session: SessionDep, factory: ClientFactoryDep, query: str = ""
+    session: SessionDep,
+    factory: ClientFactoryDep,
+    query: str = "",
+    indexer_id: int | None = None,
 ) -> IndexerSearchOut:
     """加入之後的試搜（票 06e）：逐站列出搜到幾筆與前三筆標題。空白查詢回各站最新的發佈。
 
+    `indexer_id` 是那一列的「搜尋」，只問那一站（M4 票 09）；不帶是全部。
     只讀、不寫任何東西（`read` 命令），所以是 GET。一站失敗寫在那一站上，不是整支 5xx。
     """
     return IndexerSearchOut.model_validate(
-        await search_indexers(session, factory, query=query.strip())
+        await search_indexers(session, factory, query=query.strip(), indexer_id=indexer_id)
     )
 
 
 @router.delete("/indexers/{indexer_id}")
 async def delete_indexer(
-    session: SessionDep, factory: ClientFactoryDep, indexer_id: int
+    session: SessionDep, config: ConfigDep, factory: ClientFactoryDep, indexer_id: int
 ) -> IndexerSetupOut:
     """從套件內的 Prowlarr 移除一站（票 06e）。已經不在的站照樣回 200：結果就是它不在了。
 
-    對既有的索引站回 422，與 `/indexers/apply` 同一條紅線（brief §16.4）。
+    對既有的索引站、與 Berth 加不回去的站（私站）回 422（brief §16.4）。
     """
     try:
         result = await remove_indexer(session, factory, indexer_id)
     except ValueError as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
-    return IndexerSetupOut.model_validate(result)
+    return IndexerSetupOut.of(result, config)
 
 
 @router.post("/indexers/skip")
 async def post_indexers_skip(
-    session: SessionDep, factory: ClientFactoryDep, body: SkipIn
+    session: SessionDep, config: ConfigDep, factory: ClientFactoryDep, body: SkipIn
 ) -> IndexerSetupOut:
-    return IndexerSetupOut.model_validate(
-        await skip_indexers(session, factory, skipped=body.skipped)
-    )
+    return IndexerSetupOut.of(await skip_indexers(session, factory, skipped=body.skipped), config)
 
 
 # --- 頁 5：TMDB（plan §9.3、§8.3）。憑證使用者自備、必填（票 02b）---

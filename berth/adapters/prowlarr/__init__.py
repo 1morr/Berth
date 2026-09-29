@@ -8,6 +8,7 @@ from typing import Any, Protocol
 
 from berth.adapters.http import ServiceError
 from berth.adapters.versions import parse_version
+from berth.domain import SiteFailure
 
 #: 支援下限（brief §16.4、§20.14，M4 票 17，`docs/research/prowlarr-version-floor.md`）：Berth
 #: 用到的每一支端點都有的第一個 stable。卡住它的只有匿名的 `GET /ping`（1.3.0.2757 的 develop
@@ -48,6 +49,12 @@ class ProwlarrIndexer:
     definition_name: str = ""
     #: 整份資源原文。`indexer/test` 收的就是它，所以照原樣留著（field 順序與內容由 Prowlarr 決定）。
     payload: Mapping[str, Any] = field(default_factory=dict)
+    #: 與定義同一組（`IndexerDefinition`）：已加入的站自己帶著，列已加入的站不必再讀 schema
+    #: （M4 票 09）。
+    privacy: str = ""
+    language: str = ""
+    description: str = ""
+    protocol: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -63,6 +70,8 @@ class IndexerDefinition:
     language: str = ""
     #: 定義自帶的一句英文說明。畫面原樣顯示、不翻（同 Tags）。
     description: str = ""
+    #: `torrent` / `usenet`。Berth 只接 qBittorrent，公開站清單只收 torrent（M4 票 09）。
+    protocol: str = ""
 
 
 class IndexerRejectedError(ServiceError):
@@ -76,6 +85,20 @@ class IndexerRejectedError(ServiceError):
     def __init__(self, message: str, *, messages: tuple[str, ...] = ()) -> None:
         super().__init__(message)
         self.messages = messages or (message,)
+
+
+#: Prowlarr 原文裡認得出來的片段 → 理由（brief §20.7 錄下的實測原文）。順序即優先序。
+_FAILURE_MARKS: tuple[tuple[str, SiteFailure], ...] = (
+    ("cloudflare", SiteFailure.CLOUDFLARE),
+    ("but no results", SiteFailure.NO_RESULTS),
+    ("unable to connect", SiteFailure.UNREACHABLE),
+)
+
+
+def failure_of(messages: tuple[str, ...]) -> SiteFailure:
+    """Prowlarr 拒絕一個站的理由是哪一種（M4 票 09）。任何一條認得出來就是那一種。"""
+    text = " ".join(messages).lower()
+    return next((failure for mark, failure in _FAILURE_MARKS if mark in text), SiteFailure.OTHER)
 
 
 class ProwlarrClient(Protocol):
@@ -102,6 +125,13 @@ class ProwlarrClient(Protocol):
 
     async def test_indexer(self, indexer: ProwlarrIndexer) -> None:
         """`POST /api/v1/indexer/test`：已經加進來的站現在還通不通。"""
+        ...
+
+    async def test_definition(self, definition: IndexerDefinition) -> None:
+        """同一支 `indexer/test`，送的是還沒加入的定義：通不通，什麼都不建立（M4 票 09）。
+
+        不通丟 `IndexerRejectedError`，理由與新增那一支同一種形狀。
+        """
         ...
 
     async def delete_indexer(self, indexer_id: int) -> None:
@@ -131,5 +161,6 @@ __all__ = [
     "ProwlarrClient",
     "ProwlarrIndexer",
     "ProwlarrStatus",
+    "failure_of",
     "unsupported_message",
 ]

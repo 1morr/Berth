@@ -1153,6 +1153,22 @@ split-cour 的第一批被播出日比對整批擋在審核，改正一次並套
 - **媒體庫名稱帶空白時，新建的 Route、分類與 Berth 路徑用 `-`**（M4 票 08）：「TV Shows」是 `berth-tv-shows`、
   `/complete/tv-shows`，不再是 `berth-tv shows`。**已經建好的不改名**（改分類路徑會搬走它底下的 torrent）；
   已經加到 Jellyfin 上的 `…/tv shows` 仍認作那個媒體庫的 Berth 路徑，不會再加一條。
+- **索引站先測再加，一站都不預勾**（M4 票 09，plan §9.3 頁 4）：原本九個推薦站預設全勾、按一次全加。現在每一站
+  一顆「測試」（`POST /api/setup/indexers/test`，Prowlarr 現場連一次那個站、什麼都不建立），推薦清單一顆「測試全部」，
+  通過的才勾得起來；主鈕只數還沒加的站。推薦清單之外多了「其他公開站」：這台 Prowlarr 的 schema 裡所有公開的
+  torrent 站，依名稱或語言叫出來。私站連到 Prowlarr 自己的介面加，連結開的是瀏覽器所在主機的 `PROWLARR_PORT`，
+  不再是瀏覽器解不到的 `http://prowlarr:9696`。
+- **一站沒通過的呈現**（M4 票 09）：Prowlarr 的英文原文收進「Prowlarr 原文」，列上說一句理由（Cloudflare 擋住、
+  查無結果、連不上、其他）；上方一條摘要說幾站沒通過、各是什麼理由，整段只有這一個 live 區，不再一次跳出好幾塊
+  紅色警示——一站沒通過不擋這一頁。
+- **「已加入」列出 Prowlarr 裡的每一站**（M4 票 09）：含你在 Prowlarr 自己加的（要帳號的站 Berth 不移除），每一列
+  可以單獨搜（`GET /api/setup/indexers/search` 多 `indexer_id=`），也可以「搜尋全部」。既有 Prowlarr 同樣列出它的站
+  與站數、可以試搜，沒有勾選與加入。精靈這一頁與設定頁的索引站分頁進來只讀，不測任何一站。`GET /api/setup/indexers`
+  的 `options` 拆成 `sites`、`candidates`、`checks`，多 `web_port`。
+- **服務頁換另一格的確認**（M4 票 09，頁 1、2、4 與設定頁）：方向鍵在「套件內 / 既有」間移動只是瀏覽，不再當場
+  存下並測試套件內那一台（鍵盤選到的另有「使用套件內的 X」）；這一頁有結果時換另一格走就地確認，焦點移進去、
+  Esc 收起；確認之前標題就跟著選著的那一格；從既有換走時不再說 Berth 寫過那一台的偏好。
+- **compose 多傳 `PROWLARR_PORT` 給 `berth`**（M4 票 09）：「在 Prowlarr 加私站」的連結用它。
 ### Removed
 - **精靈的偵測**（M4 票 15）：`POST /api/setup/detect`、「偵測服務」那一步與泊位板上方的前置列、「重新偵測這個服務」
   （換成出問題那一頁的「重新測試」）。選之前 Berth 不對任何服務發請求。

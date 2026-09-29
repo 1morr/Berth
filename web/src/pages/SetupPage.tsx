@@ -28,6 +28,7 @@ import {
   searchIndexers,
   setupStatusQueryOptions,
   skipIndexers,
+  testIndexers,
   testTmdb,
   tmdbSetupQueryOptions,
   type ChoiceInput,
@@ -246,8 +247,8 @@ export function SetupPage() {
     onMutate: hold,
     onSuccess: (next) => absorbBerth(indexerSetupQueryOptions.queryKey, next),
   })
-  // 試搜只讀、不改後端的步驟，所以不釘畫面；移除最後一站會讓後端退回第 6 步，照樣停在這一頁。
-  const trialSearch = useMutation({ mutationFn: searchIndexers })
+  // 測試與試搜只讀、不改後端的步驟，所以不經 mutation 也不釘畫面（`IndexerSites` 自己記結果）；
+  // 移除最後一站會讓後端退回頁 4，照樣停在這一頁。
   const removeSite = useMutation({
     mutationFn: removeIndexer,
     onMutate: hold,
@@ -444,11 +445,9 @@ export function SetupPage() {
             onConnect={(input) => connectSource.mutate(input)}
             onSkip={() => skipSites.mutate()}
             choice={choiceOf('prowlarr')}
-            trial={{
-              result: trialSearch.data,
-              searching: trialSearch.isPending,
-              failed: trialSearch.isError,
-              onSearch: (query) => trialSearch.mutate(query),
+            sites={{
+              onTest: testIndexers,
+              onSearch: searchIndexers,
               removing: removeSite.isPending ? removeSite.variables : null,
               removeFailed: removeSite.isError,
               onRemove: (id) => removeSite.mutate(id),

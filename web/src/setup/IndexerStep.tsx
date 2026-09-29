@@ -1,22 +1,16 @@
-import { useId, useState, type FormEvent, type ReactNode } from 'react'
+import { useState, type FormEvent, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
 
 import type {
   IndexerConnectInput,
   IndexerKind,
-  IndexerOption,
   IndexerSetup,
-  InterfaceLogin,
   InterfaceLoginRefusal,
   SetupStatus,
-  SiteSearch,
-  TrialSearchResult,
 } from '../api/setup'
 import {
   STICKY_ACTION,
-  Checkbox,
-  ConfirmAction,
   CopyLine,
   Field,
   GhostButton,
@@ -24,26 +18,25 @@ import {
   PasswordField,
   PrimaryButton,
 } from '../components/controls'
-import { SIGNAL_FILL } from '../components/signal'
 import { Cutaway, CutawayRow } from '../components/Cutaway'
 import { StepLine } from '../components/StepLine'
-import { useFocusAfterRemoval } from '../components/useFocusAfterRemoval'
-import { useInterfaceLogin } from './interfaceLogin'
-import { BerthLogin } from './InterfaceLoginFields'
-import { languageName } from './languageName'
+import { AddedSites, AddSites, type ApplyIndexersInput, type SiteControls } from './IndexerSites'
 import { pointsAtBerth } from './loopback'
 import { LoopbackHint, ServiceChoice, type ChoiceControls } from './ServiceChoice'
+import { useChoiceDraft } from './choiceDraft'
+import { STEP } from './navigation'
 import { connected } from './signals'
 import { StepFrame } from './StepFrame'
 
+export type { ApplyIndexersInput, SiteControls } from './IndexerSites'
+
 /**
- * 頁 4：Prowlarr 與索引站（plan §9.3，M4 票 15 併成一頁）。
+ * 頁 4：Prowlarr 與索引站（plan §9.3，M4 票 15 併成一頁、票 09 改成先測再加）。
  *
- * 頁首是二選一（`ServiceChoice`）。套件內 Prowlarr：API key 讀自唯讀掛載，連上之後勾預設公開站，一站
- * 一條纜繩。**逐站的成敗是 Prowlarr 自己連過那個站的結果**：幾個連不上是常態，失敗的變紅，其餘照樣
- * 繫上（brief §20.7）。加完之後**試搜**，不要的就地移除。既有：Prowlarr 位址 + key，或任意 Torznab
- * 端點 + key（`ExistingIndexer`，選「既有」時的表單）；Berth 用你已經有的站，試搜照樣可用。
- * 整頁可以「之後再說」，連選都還沒選也可以。
+ * 頁首是二選一（`ServiceChoice`）。套件內 Prowlarr：API key 讀自唯讀掛載，連上之後是「已加入」與
+ * 「加站」兩段（`IndexerSites`）：先測、通過的勾起來加入，加入之後試搜、不要的就地移除。既有：Prowlarr
+ * 位址 + key，或任意 Torznab 端點 + key（`ExistingIndexer`，選「既有」時的表單）；Berth 用你已經有的站，
+ * 試搜照樣可用。整頁可以「之後再說」，連選都還沒選也可以。
  *
  * **資料與動作全部從 props 進來**：精靈跑完之後設定頁接手（票 06i），重用 `IndexerActions`。
  */
@@ -59,7 +52,7 @@ export function IndexerStep({
   onConnect,
   onSkip,
   choice,
-  trial,
+  sites,
   note,
   nav,
 }: {
@@ -73,12 +66,12 @@ export function IndexerStep({
   connecting: boolean
   /** 沿用 Jellyfin 帳密而 Jellyfin 那一關沒過：什麼都沒寫。 */
   loginRefusal: InterfaceLoginRefusal | null
-  onApply: (input: ApplyIndexersInput) => Promise<unknown>
+  onApply: (input: ApplyIndexersInput) => Promise<IndexerSetup>
   onConnect: (input: IndexerConnectInput) => void
   onSkip: () => void
   choice: ChoiceControls
-  /** 試搜與移除（`TrialSearch` 的 props，少了站的清單——那由這一頁從 `indexers` 導出）。 */
-  trial: Omit<TrialSearchProps, 'sites'>
+  /** 測試、試搜與移除（`IndexerSites`）。 */
+  sites: SiteControls
   /** 回頭看的說明（`RevisitNote`），這一頁做完了才有。 */
   note?: ReactNode
   /** 上一個 / 下一個泊位（`BerthNav`）。 */
@@ -86,7 +79,11 @@ export function IndexerStep({
 }) {
   const { t } = useTranslation()
   const service = status.services.find((row) => row.kind === 'prowlarr')
-  const ready = connected(service)
+  const choiceDraft = useChoiceDraft()
+  // 標題與 lede 跟著畫面上選著的那一格：換另一格還在確認時就說那一格的事（票 15 critique）。
+  const switching = choiceDraft.draft !== null && choiceDraft.draft !== service?.origin
+  const origin = choiceDraft.draft ?? service?.origin
+  const ready = connected(service) && !switching
   const bundled = Boolean(indexers && indexers.origin === 'bundled' && indexers.reachable)
   const hasResults = Boolean(indexers && indexers.steps.length > 0)
 
@@ -98,7 +95,7 @@ export function IndexerStep({
     >
       <h2 className="text-lg font-semibold text-ink">{t('indexer.title')}</h2>
       <p className="mt-2 max-w-prose text-sm text-ink-dim">
-        {service ? t('indexer.lede') : t('indexer.chooseLede')}
+        {t(`indexer.lede.${origin ?? 'choose'}`)}
       </p>
       {note}
 
@@ -106,6 +103,7 @@ export function IndexerStep({
         kind="prowlarr"
         status={status}
         {...choice}
+        {...choiceDraft}
         switchWarning={hasResults ? t('choice.switchWarning.prowlarr') : undefined}
         existingForm={
           indexers && (
@@ -116,21 +114,21 @@ export function IndexerStep({
 
       {ready && indexers && bundled && (
         <>
-          <DefaultIndexers
+          {indexers.sites.length > 0 && <AddedSites indexers={indexers} controls={sites} />}
+          <AddSites
             indexers={indexers}
             owner={owner}
             applying={applying}
             loginRefusal={loginRefusal}
+            controls={sites}
             onApply={onApply}
             onSkip={onSkip}
+            sticky={status.current_step <= STEP.indexer}
           />
-          {indexers.options.some((row) => row.present) && (
-            <TrialSearch {...trial} sites={presentSites(indexers)} />
-          )}
         </>
       )}
-      {/* 既有的站是使用者自己的，Berth 不移除（brief §16.4），所以不給 `onRemove`。 */}
-      {ready && indexers && !bundled && <TrialSearch {...trial} sites={[]} onRemove={undefined} />}
+      {/* 既有的站是使用者自己的，Berth 不加、不移除（brief §16.4）。 */}
+      {ready && indexers && !bundled && <AddedSites indexers={indexers} controls={sites} />}
       {indexersFailed && <p className="mt-6 text-sm text-ink-dim">{t('indexer.unreachable')}</p>}
 
       {/* 選之前、或既有那一頁，「之後再說」在這裡；套件內的在「加入」旁邊。 */}
@@ -147,14 +145,8 @@ export function IndexerStep({
   )
 }
 
-/** 「加入」送出的：勾起來的站，與泊位上填的介面登入（`null` 是登入照舊）。 */
-export interface ApplyIndexersInput {
-  indexers: string[]
-  login: InterfaceLogin | null
-}
-
 /**
- * 這個泊位能做的事：套件內是勾預設站 + 試搜 + 移除，既有是填位址與 key + 試搜。
+ * 這個泊位能做的事：套件內是已加入 + 加站，既有是填位址與 key + 已加入（只試搜）。
  * 精靈與設定的索引站那一頁共用這一塊（票 06i）；設定頁不給 `onSkip`——那裡不是第一次，
  * 沒有「之後再說」——也不給 `owner`：介面登入在它自己的那一區改（M4 票 07）。
  */
@@ -166,18 +158,18 @@ export function IndexerActions({
   onApply,
   onConnect,
   onSkip,
-  trial,
+  sites,
 }: {
   indexers: IndexerSetup
   /** 精靈給：套件內 Prowlarr 的介面登入跟著「加入」一起送，未設過時帳號預填它。 */
   owner?: string
   applying: boolean
   connecting: boolean
-  onApply: (input: ApplyIndexersInput) => Promise<unknown>
+  onApply: (input: ApplyIndexersInput) => Promise<IndexerSetup>
   onConnect: (input: IndexerConnectInput) => void
   /** 「之後再說」。只有精靈給。 */
   onSkip?: () => void
-  trial: Omit<TrialSearchProps, 'sites'>
+  sites: SiteControls
 }) {
   const bundled = indexers.origin === 'bundled' && indexers.reachable
   const connected = indexers.steps.some(
@@ -187,17 +179,16 @@ export function IndexerActions({
   if (bundled) {
     return (
       <>
-        <DefaultIndexers
+        {indexers.sites.length > 0 && <AddedSites indexers={indexers} controls={sites} />}
+        <AddSites
           indexers={indexers}
           owner={owner}
           applying={applying}
           loginRefusal={null}
+          controls={sites}
           onApply={onApply}
           onSkip={onSkip}
         />
-        {indexers.options.some((row) => row.present) && (
-          <TrialSearch {...trial} sites={presentSites(indexers)} />
-        )}
       </>
     )
   }
@@ -212,31 +203,15 @@ export function IndexerActions({
         onConnect={onConnect}
         onSkip={onSkip}
       />
-      {/* 既有的站是使用者自己的，Berth 不移除（brief §16.4），所以不給 `onRemove`。 */}
-      {connected && <TrialSearch {...trial} sites={[]} onRemove={undefined} />}
+      {/* 既有的站是使用者自己的，Berth 不加、不移除（brief §16.4）。 */}
+      {connected && <AddedSites indexers={indexers} controls={sites} />}
     </>
-  )
-}
-
-/** 試搜清單上的一站：套件內是加進來的預設站（有 id、可以移除）。 */
-export interface TrialSite {
-  indexerId: number
-  name: string
-  language: string
-}
-
-function presentSites(indexers: IndexerSetup): TrialSite[] {
-  return indexers.options.flatMap((row) =>
-    row.present && row.indexer_id !== null
-      ? [{ indexerId: row.indexer_id, name: row.name, language: row.language }]
-      : [],
   )
 }
 
 /** 剖面：這個泊位接上的是哪一種索引站、加了幾站。 */
 function IndexerCutaway({ indexers, bundled }: { indexers: IndexerSetup; bundled: boolean }) {
   const { t } = useTranslation()
-  const added = indexers.options.filter((row) => row.present).length
 
   return (
     <Cutaway title={t('indexer.cutaway.title')}>
@@ -250,392 +225,14 @@ function IndexerCutaway({ indexers, bundled }: { indexers: IndexerSetup; bundled
         value={t(indexers.api_key_present ? 'jellyfin.cutaway.held' : 'jellyfin.cutaway.absent')}
         muted={!indexers.api_key_present}
       />
-      {bundled && (
+      {indexers.kind === 'prowlarr' && (
         <CutawayRow
           term={t('indexer.cutaway.added')}
-          value={`${added} / ${indexers.options.length}`}
-          muted={added === 0}
+          value={String(indexers.sites.length)}
+          muted={indexers.sites.length === 0}
         />
       )}
     </Cutaway>
-  )
-}
-
-/**
- * 套件內 Prowlarr 的預設公開站（plan §9.3 第 6 步）。
- *
- * **勾選的起點是 Prowlarr 現在的樣子**（票 06i）：一站都還沒加時預設全勾，加過之後勾的是在的那幾站。
- * 按「加入」只加不刪，所以起點若一律全勾，試搜時移除的站會在下一次加站時被默默加回來。
- * 使用者自己動過的那幾格照他的意思，不跟著後端變。
- */
-function DefaultIndexers({
-  indexers,
-  owner,
-  applying,
-  loginRefusal,
-  onApply,
-  onSkip,
-}: {
-  indexers: IndexerSetup
-  owner?: string
-  applying: boolean
-  loginRefusal: InterfaceLoginRefusal | null
-  onApply: (input: ApplyIndexersInput) => Promise<unknown>
-  onSkip?: () => void
-}) {
-  const { t, i18n } = useTranslation()
-  const withLogin = owner !== undefined && indexers.web_ui_login
-  const loginForm = useInterfaceLogin({ current: indexers.web_ui_username, owner: owner ?? '' })
-  const [touched, setTouched] = useState<ReadonlyMap<string, boolean>>(new Map())
-  const fresh = !indexers.options.some((row) => row.present)
-  const ticked = (row: IndexerOption) => touched.get(row.definition_name) ?? (fresh || row.present)
-  const selected = indexers.options.filter(ticked).map((row) => row.definition_name)
-  const byStep = new Map(indexers.steps.map((row) => [row.step, row]))
-  //: 與後端的 `PROWLARR_LOGIN_STEP` 同一個字串——那一條不是站，不能混進站的清單裡。
-  const login = byStep.get('prowlarr_login')
-
-  function toggle(name: string, value: boolean) {
-    setTouched((was) => new Map(was).set(name, value))
-  }
-
-  function apply() {
-    const taken = withLogin ? loginForm.take() : null
-    if (taken === undefined) return
-    onApply({ indexers: selected, login: taken }).then(
-      () => taken && loginForm.reset(taken.username ?? ''),
-      () => undefined,
-    )
-  }
-
-  return (
-    <section className="mt-6">
-      <div className="flex flex-wrap items-center gap-3">
-        <h3 className="label text-ink-dim">{t('indexer.defaults.title')}</h3>
-        {indexers.skipped && (
-          <span
-            data-testid="indexers-deferred"
-            className={`label px-2 py-1.5 ${SIGNAL_FILL.neutral}`}
-          >
-            {t('indexer.deferred')}
-          </span>
-        )}
-      </div>
-      <p className="mt-2 max-w-prose text-sm text-ink-dim">{t('indexer.defaults.lede')}</p>
-
-      <fieldset className="mt-4 border-2 border-rule bg-well px-4 py-4">
-        <legend className="label px-2 text-ink-dim">{t('indexer.defaults.pick')}</legend>
-        <div className="grid gap-4 sm:grid-cols-2">
-          {indexers.options.map((option) => (
-            <Checkbox
-              key={option.definition_name}
-              label={option.name}
-              // 語言照 UI 語言說名字；說明是定義自帶的英文原文，不翻（同 Tags）。
-              hint={[
-                languageName(option.language, i18n.language),
-                option.privacy && option.privacy !== 'public'
-                  ? t('indexer.defaults.semiPrivate')
-                  : '',
-                option.description,
-              ]
-                .filter(Boolean)
-                .join(' · ')}
-              checked={ticked(option)}
-              onChange={(value) => toggle(option.definition_name, value)}
-            />
-          ))}
-        </div>
-      </fieldset>
-
-      {/* 介面登入跟著「加入」一起送（M4 票 07）；「之後再說」連它一起跳過。 */}
-      {withLogin && (
-        <div className="mt-6">
-          <BerthLogin service="prowlarr" current={indexers.web_ui_username} form={loginForm} />
-        </div>
-      )}
-      {loginRefusal && (
-        <div className="mt-4">
-          <Notice signal="blocked" label={t('common.failed')}>
-            {t(`interfaceLogin.refused.${loginRefusal.reason}`, { owner: owner ?? '' })}
-          </Notice>
-        </div>
-      )}
-
-      <div className={`mt-6 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] ${STICKY_ACTION}`}>
-        <PrimaryButton
-          type="button"
-          busy={applying}
-          disabled={selected.length === 0}
-          onClick={apply}
-        >
-          {applying
-            ? t('indexer.defaults.applying')
-            : t('indexer.defaults.apply', { sites: selected.length })}
-        </PrimaryButton>
-        {onSkip && (
-          <GhostButton type="button" busy={applying} onClick={onSkip}>
-            {t('indexer.skip')}
-          </GhostButton>
-        )}
-      </div>
-
-      {indexers.steps.length > 0 && (
-        <ol aria-live="polite" aria-busy={applying} className="mt-6 grid gap-3" data-testid="sites">
-          {indexers.options
-            .filter((option) => byStep.has(option.definition_name))
-            .map((option) => (
-              <StepLine
-                key={option.definition_name}
-                label={option.name}
-                endpoint={option.definition_name}
-                row={byStep.get(option.definition_name)}
-                fix={t('indexer.defaults.fix')}
-                commands={[`${indexers.base_url}/#/indexers`]}
-              >
-                <p className="mt-3 text-xs text-ink-dim">{t('indexer.defaults.retryHint')}</p>
-              </StepLine>
-            ))}
-          {/* 介面登入那一條也是這一輪做的事，成敗要看得到（brief §16.3）。 */}
-          {login && (
-            <StepLine
-              label={t('indexer.defaults.login')}
-              endpoint="PUT /api/v1/config/host"
-              row={login}
-              fix={t('indexer.defaults.loginFix')}
-              commands={[`${indexers.base_url}/#/settings/general`]}
-            />
-          )}
-        </ol>
-      )}
-    </section>
-  )
-}
-
-export interface TrialSearchProps {
-  /** 套件內加進來的站。空的時候（既有路徑）清單就是試搜回來的那幾站。 */
-  sites: TrialSite[]
-  result?: TrialSearchResult
-  searching: boolean
-  /** 請求本身沒走完（Berth 後端）。逐站的失敗在 `result` 裡。 */
-  failed: boolean
-  onSearch: (query: string) => void
-  /** 正在移除哪一站。 */
-  removing?: number | null
-  removeFailed?: boolean
-  /** 移除一站。只有套件內給：既有的站是使用者自己的（brief §16.4）。 */
-  onRemove?: (indexerId: number) => void
-}
-
-/**
- * 加入之後試搜（票 06e）：逐站列出搜到幾筆與前三筆標題，不要的就地移除。
- *
- * 查詢框預設空白：空白是一個真的問題——兩種協定都回各站最新的發佈（brief §20.7），
- * 證明那一站回得出東西，不必先想一個標題。TMDB 在下一個泊位，這時候還拿不到趨勢。
- *
- * 移除成功之後那一列連同觸發鍵一起消失，焦點落在接替那個位置的那一列，另有一行 `sr-only` 說結果
- * （DESIGN.md 的 The Focus Takes The Next Row Rule）。
- */
-export function TrialSearch({
-  sites,
-  result,
-  searching,
-  failed,
-  onSearch,
-  removing = null,
-  removeFailed = false,
-  onRemove,
-}: TrialSearchProps) {
-  const { t, i18n } = useTranslation()
-  const [query, setQuery] = useState('')
-  const titleId = useId()
-  const frame = useFocusAfterRemoval()
-  // 最後按下確認移除的那一站。它從清單上消失了，就是移除成了——畫面上已經沒有東西說「成了」。
-  const [removed, setRemoved] = useState<string | null>(null)
-  const found = new Map(result?.sites.map((row) => [siteKey(row), row]))
-  const rows =
-    sites.length > 0
-      ? sites.map((site) => ({
-          key: String(site.indexerId),
-          name: site.name,
-          language: languageName(site.language, i18n.language),
-          indexerId: site.indexerId as number | null,
-        }))
-      : (result?.sites ?? []).map((row) => ({
-          key: siteKey(row),
-          name: row.name,
-          language: '',
-          indexerId: null,
-        }))
-
-  const gone = removed !== null && !rows.some((row) => row.name === removed)
-
-  function submit(event: FormEvent) {
-    event.preventDefault()
-    onSearch(query.trim())
-  }
-
-  return (
-    <section
-      ref={frame}
-      tabIndex={-1}
-      className="mt-10 border-t-2 border-rule pt-6"
-      aria-labelledby={titleId}
-    >
-      <h3 id={titleId} className="label text-ink-dim">
-        {t('indexer.trial.title')}
-      </h3>
-      <p className="mt-2 max-w-prose text-sm text-ink-dim">{t('indexer.trial.lede')}</p>
-
-      <form
-        onSubmit={submit}
-        noValidate
-        className="mt-4 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end"
-      >
-        <Field
-          label={t('indexer.trial.field')}
-          type="search"
-          value={query}
-          placeholder={t('indexer.trial.placeholder')}
-          onChange={(event) => setQuery(event.target.value)}
-        />
-        <GhostButton type="submit" busy={searching}>
-          {searching ? t('indexer.trial.searching') : t('indexer.trial.search')}
-        </GhostButton>
-      </form>
-
-      {failed && (
-        <div className="mt-4">
-          <Notice signal="blocked" label={t('common.failed')}>
-            {t('indexer.trial.failed')}
-          </Notice>
-        </div>
-      )}
-      {result?.error && (
-        <p role="alert" className="value mt-4 max-w-prose wrap-anywhere text-xs text-blocked-ink">
-          {result.error}
-        </p>
-      )}
-      <p aria-live="polite" className="sr-only">
-        {gone ? t('indexer.remove.done', { name: removed }) : ''}
-      </p>
-      {removeFailed && (
-        <div className="mt-4">
-          <Notice signal="blocked" label={t('common.failed')}>
-            {t('indexer.remove.failed')}
-          </Notice>
-        </div>
-      )}
-
-      {rows.length > 0 && (
-        <ul
-          aria-live="polite"
-          aria-busy={searching}
-          className="mt-4 grid gap-3"
-          data-testid="trial"
-        >
-          {rows.map((row) => (
-            <TrialRow
-              key={row.key}
-              name={row.name}
-              language={row.language}
-              site={found.get(row.key)}
-              searched={result !== undefined}
-              removing={row.indexerId !== null && removing === row.indexerId}
-              onRemove={
-                onRemove && row.indexerId !== null
-                  ? () => {
-                      setRemoved(row.name)
-                      onRemove(row.indexerId as number)
-                    }
-                  : undefined
-              }
-            />
-          ))}
-        </ul>
-      )}
-    </section>
-  )
-}
-
-/** 試搜結果以 id 對回清單上的那一站；單一 Torznab 端點沒有 id，整個算一站。 */
-function siteKey(row: SiteSearch): string {
-  return row.indexer_id !== null ? String(row.indexer_id) : row.name
-}
-
-function TrialRow({
-  name,
-  language,
-  site,
-  searched,
-  removing,
-  onRemove,
-}: {
-  name: string
-  language: string
-  site: SiteSearch | undefined
-  /** 按過試搜了。沒按過的站說「還沒試搜」，按過卻沒有這一站的結果是它剛加進來。 */
-  searched: boolean
-  removing: boolean
-  onRemove?: () => void
-}) {
-  const { t } = useTranslation()
-  const signal = !site
-    ? 'neutral'
-    : site.error
-      ? 'blocked'
-      : site.count > 0
-        ? 'secured'
-        : 'assigned'
-
-  return (
-    // `<article tabIndex={-1}>`：一站被移除之後焦點落在接替那個位置的這一格（`useFocusAfterRemoval`）。
-    <li>
-      <article
-        tabIndex={-1}
-        aria-label={name}
-        className="grid gap-3 border-2 border-rule px-4 py-3 sm:grid-cols-[minmax(0,1fr)_auto]"
-      >
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-            <span className="text-sm font-semibold text-ink">{name}</span>
-            {language && <span className="text-xs text-ink-dim">{language}</span>}
-            <span className={`label px-2 py-1 ${SIGNAL_FILL[signal]}`}>
-              {!site
-                ? t(searched ? 'indexer.trial.notAsked' : 'indexer.trial.pending')
-                : site.error
-                  ? t('common.failed')
-                  : t('indexer.trial.count', { count: site.count })}
-            </span>
-          </div>
-          {site?.error && (
-            <p role="alert" className="value mt-2 wrap-anywhere text-xs text-blocked-ink">
-              {site.error}
-            </p>
-          )}
-          {site && site.titles.length > 0 && (
-            // 發佈名是原文：中日英混排、一百多字，整條換行不截斷（票 08 §8 同一條）。
-            <ul className="mt-2 grid gap-1">
-              {site.titles.map((title) => (
-                <li key={title} className="value wrap-anywhere text-xs text-ink-dim">
-                  {title}
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-        {onRemove && (
-          <div className="sm:self-start">
-            <ConfirmAction
-              label={t('indexer.remove.label')}
-              confirmLabel={t('indexer.remove.confirm')}
-              warning={t('indexer.remove.warning', { name })}
-              pending={removing}
-              pendingLabel={t('indexer.remove.pending')}
-              onConfirm={onRemove}
-            />
-          </div>
-        )}
-      </article>
-    </li>
   )
 }
 

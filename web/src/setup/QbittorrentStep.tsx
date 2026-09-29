@@ -17,6 +17,7 @@ import { useInterfaceLogin } from './interfaceLogin'
 import { BerthLogin } from './InterfaceLoginFields'
 import { STEP_FIX, STEP_LABEL } from './qbittorrentSteps'
 import { ServiceChoice, type ChoiceControls } from './ServiceChoice'
+import { useChoiceDraft } from './choiceDraft'
 import { connected } from './signals'
 import { StepFrame } from './StepFrame'
 
@@ -70,13 +71,21 @@ export function QbittorrentStep({
 }) {
   const { t } = useTranslation()
   const service = status.services.find((row) => row.kind === 'qbittorrent')
-  const mode = !service ? 'choose' : setup?.writes_preferences === false ? 'existing' : 'bundled'
-  const ready = connected(service)
+  const choiceDraft = useChoiceDraft()
+  // 標題與 lede 跟著畫面上選著的那一格：換另一格還在確認時就說那一格的事（M4 票 09）。
+  const draft = choiceDraft.draft !== service?.origin ? choiceDraft.draft : null
+  const switching = draft !== null
+  const mode = draft
+    ? draft
+    : !service
+      ? 'choose'
+      : setup?.writes_preferences === false
+        ? 'existing'
+        : 'bundled'
+  const ready = connected(service) && !switching
 
   return (
-    <StepFrame
-      cutaway={setup && ready ? <DiffCutaway setup={setup} /> : <ChoiceCutaway />}
-    >
+    <StepFrame cutaway={setup && ready ? <DiffCutaway setup={setup} /> : <ChoiceCutaway />}>
       <h2 className="text-lg font-semibold text-ink">{t(`qbittorrent.title.${mode}`)}</h2>
       <p className="mt-2 max-w-prose text-sm text-ink-dim">{t(`qbittorrent.lede.${mode}`)}</p>
       {note}
@@ -85,6 +94,7 @@ export function QbittorrentStep({
         kind="qbittorrent"
         status={status}
         {...choice}
+        {...choiceDraft}
         switchWarning={
           setup && setup.steps.length > 0 ? t('choice.switchWarning.qbittorrent') : undefined
         }

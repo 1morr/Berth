@@ -99,28 +99,57 @@ test('精靈六頁走完，之後以同一組帳密登入', async ({ page }) => 
   await shot(page, '3-routes')
   await next.click()
 
-  // 4. Prowlarr 與索引站（九個裡有四個連不上是常態）。選套件內 → 介面登入自己設一組（取消沿用）→
-  //    加入 → 試搜 → 不要的移除（票 06e）；替身的 Mikan 演「搜尋時連不上」。
+  // 4. Prowlarr 與索引站（M4 票 09）：進頁不送任何測試或寫入；一站都不預勾，先測、通過的才勾得起來。
+  //    九個裡有四個連不上是常態（替身的 `BLOCKED_SITES`）：一條摘要、理由各一句。加入之後逐站 / 全部試搜，
+  //    不要的移除；替身的 Mikan 演「搜尋時連不上」。再從其他公開站加一個不在推薦清單上的。
   await expect(page.getByRole('heading', { name: '索引站', level: 2 })).toBeVisible()
+  const atIndexers = writes.length
   await page.getByRole('radio', { name: /套件內/ }).click()
+  await expect(page.getByTestId('recommended')).toBeVisible()
+  await page.waitForLoadState('networkidle')
+  // 選套件內那一下是唯一的寫入；清單出來之後一站都沒測、沒加。
+  expect(writes.slice(atIndexers).map((url) => new URL(url).pathname)).toEqual([
+    '/api/setup/services/prowlarr',
+  ])
+  await expect(
+    page.getByTestId('recommended').getByRole('checkbox', { checked: true }),
+  ).toHaveCount(0)
+  await page.getByRole('button', { name: '測試全部' }).click()
+  const summary = page.getByTestId('check-summary')
+  await expect(summary.getByText('4 站沒通過')).toBeVisible()
+  await expect(page.getByRole('checkbox', { name: '1337x' })).toBeDisabled()
+  for (const name of ['dmhy', 'Mikan', 'YTS']) {
+    await page.getByRole('checkbox', { name }).check()
+  }
+  await page.getByLabel('搜尋名稱').fill('knab')
+  await page.getByRole('button', { name: '測試 Knaben' }).click()
+  await page.getByRole('checkbox', { name: 'Knaben' }).check()
   const prowlarrUi = page.getByRole('group', { name: 'Prowlarr 介面登入' })
   await prowlarrUi.getByRole('checkbox', { name: /沿用 Jellyfin 帳密/ }).uncheck()
   await prowlarrUi.getByRole('textbox', { name: '帳號' }).fill('deck')
   await prowlarrUi.getByLabel('密碼', { exact: true }).fill('harbour-prowlarr')
   await prowlarrUi.getByLabel('再輸入一次密碼').fill('harbour-prowlarr')
   await shot(page, '4-indexers-login')
-  await page.getByRole('button', { name: '加入這 9 個站' }).click()
+  await page.getByRole('button', { name: '加入 4 個站' }).click()
   await expect(page.getByText('Prowlarr 介面的帳號：')).toBeVisible()
-  await page.getByRole('button', { name: '試搜' }).click()
+  const addedSites = page.getByTestId('added')
+  await expect(addedSites.getByText('4 站')).toBeVisible()
+  await addedSites.getByRole('button', { name: '搜尋 YTS' }).click()
   const trial = page.getByTestId('trial')
-  await expect(trial.getByText(/502 Bad Gateway/)).toBeVisible()
   const yts = trial.getByRole('listitem').filter({ hasText: 'YTS' }).first()
   await expect(yts.getByText(/\d+ 筆/)).toBeVisible()
+  await addedSites.getByRole('button', { name: '搜尋全部' }).click()
+  await expect(trial.getByText('搜尋失敗')).toBeVisible()
   await yts.getByRole('button', { name: '移除' }).click()
   await yts.getByRole('button', { name: '確定移除' }).click()
   await expect(trial.getByText('YTS', { exact: true })).toHaveCount(0)
+  // 結果出來之後不捲動就看得到下一步（M4 票 09 驗收）：回到頁頂量。
+  const toTmdb = page.getByRole('button', { name: '前往下一個泊位' })
+  await page.evaluate('window.scrollTo(0, 0)')
+  await expect(toTmdb).toBeInViewport()
+  await page.screenshot({ path: test.info().outputPath('4-indexers-viewport.png') })
   await shot(page, '4-indexers')
-  await page.getByRole('button', { name: '前往下一個泊位' }).click()
+  await toTmdb.click()
 
   // 5. TMDB（替身認得任何一把 key）
   await expect(page.getByRole('heading', { name: 'TMDB', level: 2 })).toBeVisible()

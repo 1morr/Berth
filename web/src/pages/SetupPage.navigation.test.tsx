@@ -7,6 +7,7 @@ import { stubApi, type StubRoute } from '../test/fetch'
 import {
   ALL_BUNDLED,
   CHECKS_PASSED,
+  RECOMMENDED,
   SEQUENCE_DONE,
   indexerSetup,
   jellyfinSetup,
@@ -14,6 +15,7 @@ import {
   routeSetup,
   routeView,
   setupStatus,
+  site,
   step,
   tmdbSetup,
 } from '../test/fixtures'
@@ -36,8 +38,8 @@ const ROUTES_DONE = routeSetup({
 })
 
 const SITES_DONE = indexerSetup({
-  options: indexerSetup().options.map((row) => ({ ...row, present: true })),
-  steps: indexerSetup().options.map((row) => step(row.definition_name, 'ok')),
+  sites: RECOMMENDED.map((row, index) => site(row, index + 1)),
+  steps: RECOMMENDED.map((row) => step(row.definition_name, 'ok')),
   web_ui_username: 'skipper',
 })
 
@@ -247,11 +249,11 @@ describe('每個泊位做完都停在結果上', () => {
     expect(await heading()).toHaveTextContent('索引站')
     expect(screen.queryByLabelText(/TMDB API key/)).not.toBeInTheDocument()
     await typeLogin(user)
-    await user.click(await screen.findByRole('button', { name: /^加入這/ }))
+    await user.click(await screen.findByRole('button', { name: '設定介面登入' }))
 
     expect(await screen.findByRole('button', { name: '前往下一個泊位' })).toBeVisible()
     expect(await heading()).toHaveTextContent('索引站')
-    expect(screen.getByRole('heading', { name: '試搜' })).toBeVisible()
+    expect(screen.getByRole('heading', { name: /^已加入/ })).toBeVisible()
 
     await user.click(screen.getByRole('button', { name: '前往下一個泊位' }))
     expect(await heading()).toHaveTextContent('TMDB')
@@ -396,7 +398,7 @@ describe('回頭看的泊位說出能改什麼', () => {
       /qBittorrent 自己的介面/,
     ],
     ['BTH 3', /只新增.*清單.*重驗/, /改名.*停用.*設定.*媒體庫路徑/],
-    ['BTH 4', /改選套件內或既有.*加.*站.*試搜.*移除/, /預設清單以外.*Prowlarr/],
+    ['BTH 4', /改選套件內或既有.*加.*站.*試搜.*移除/, /要帳號的站.*Prowlarr/],
   ])('%s', async (code, can, elsewhere) => {
     wizard(6)
     const user = userEvent.setup()

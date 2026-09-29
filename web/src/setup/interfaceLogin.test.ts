@@ -44,8 +44,10 @@ describe('沿用 Jellyfin 帳密（M4 票 15）', () => {
   })
 
   it('取消勾選就是自設的那一組，帳號去空白', () => {
-    expect(
-      takenLogin({ username: ' deck ', password: 'rope', confirm: 'rope' }, false),
-    ).toEqual({ username: 'deck', password: 'rope', reuse_owner: false })
+    expect(takenLogin({ username: ' deck ', password: 'rope', confirm: 'rope' }, false)).toEqual({
+      username: 'deck',
+      password: 'rope',
+      reuse_owner: false,
+    })
   })
 })

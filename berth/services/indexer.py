@@ -2,10 +2,12 @@
 
 兩條路徑，同一份狀態形狀（`SetupIndexer`）：
 
-- **套件內 Prowlarr**：勾選預設公開站，Berth 以 `indexer/schema` 取定義、`indexer` 新增、
-  `indexer/test` 驗證，逐站顯示成敗。泊位上填的介面登入跟著送進來，替 Prowlarr 介面設 Forms
-  登入（M4 票 07）；設定頁改它走 `set_interface_login`。
-- **既有**：Prowlarr 位址 + API key，或任意 Torznab 端點 + key，各有一顆「測試」。
+- **套件內 Prowlarr**：推薦清單與 schema 裡其他公開的 torrent 站（`candidates`），**先測再加**
+  （M4 票 09）：`verify_sites` 以 `indexer/test` 測還沒加入的定義，通過的才勾得起來；加入是
+  `indexer` 新增，逐站顯示成敗。泊位上填的介面登入跟著送進來，替 Prowlarr 介面設 Forms 登入
+  （M4 票 07）；設定頁改它走 `set_interface_login`。
+- **既有**：Prowlarr 位址 + API key，或任意 Torznab 端點 + key，各有一顆「測試」。Berth 列出它已有的
+  站、可以試搜，不加、不測、不移除（票 05）。
 
 **逐站的成敗來自新增那一支**：`POST /api/v1/indexer` 會先連一次那個站，連不上就回 400 而且
 什麼都不建立（2026-09-08 實測，brief §20.7）。已經加過的站不重加——同名會被拒（`Should be
@@ -29,6 +31,7 @@ from berth.adapters.prowlarr import (
     IndexerRejectedError,
     ProwlarrClient,
     ProwlarrIndexer,
+    failure_of,
     unsupported_message,
 )
 from berth.domain import (
@@ -38,6 +41,7 @@ from berth.domain import (
     IndexerKind,
     ServiceKind,
     ServiceOrigin,
+    SiteFailure,
     StepStatus,
 )
 from berth.models import IndexerSettings, ServiceChoice, ServiceTest, SetupSettings, SetupStep
@@ -55,7 +59,8 @@ from berth.services.steps import (
     step_views,
 )
 
-#: 預設勾的九個公開站（plan §9.3 第 6 步、brief §16.3）。值是 Prowlarr 的 `definitionName`：
+#: 推薦的九個站（plan §9.3 頁 4、brief §16.3），預設不勾、先測再勾（M4 票 09）。值是 Prowlarr 的
+#: `definitionName`：
 #: 顯示用的站名 Prowlarr 自己會改，機器名不會。原本有第十個 `Anidex`：它的定義還在，但
 #: anidex.info 從 2026-09-08 起每一次都回 502（brief §20.7），預設勾它只是多一條紅線（票 06e）。
 DEFAULT_INDEXERS: tuple[str, ...] = (
@@ -70,6 +75,10 @@ DEFAULT_INDEXERS: tuple[str, ...] = (
     "thepiratebay",
 )
 
+#: 一次「測試全部」同時連幾站。每一站是 Prowlarr 現場去連那個站（實測 1–2 秒，連不上的等到逾時），
+#: 一次放八十幾個出去只是讓它們一起逾時。
+VERIFY_CONCURRENCY = 4
+
 #: Prowlarr 設了 Forms 登入之後會自行重啟；等它回來的輪詢（brief §20.7）。
 RESTART_ATTEMPTS = 60
 POLL_SECONDS = 2.0
@@ -78,19 +87,47 @@ Sleeper = Callable[[float], Awaitable[None]]
 
 
 @dataclass(frozen=True, slots=True)
-class IndexerOption:
-    """勾選清單的一列。"""
+class IndexerSite:
+    """Prowlarr 裡已經有的一站（M4 票 09 的「已加入」）。
+
+    Berth 加的、使用者在 Prowlarr 自己加的都算。
+    """
+
+    indexer_id: int
+    definition_name: str
+    name: str
+    enabled: bool
+    #: BCP 47 代碼與一句英文說明，取自這台伺服器自己的定義（票 06e）。
+    language: str
+    description: str
+    privacy: str
+    #: 可以從 Berth 移除：套件內，而且是 Berth 加得回去的站（`_offered`），反向命令才成立。
+    removable: bool
+
+
+@dataclass(frozen=True, slots=True)
+class IndexerCandidate:
+    """還沒加入、Berth 加得了的一站（M4 票 09 的「加站」）。"""
 
     definition_name: str
     name: str
     privacy: str
-    #: 這台 Prowlarr 上已經有這個站了。
-    present: bool
-    #: BCP 47 代碼與一句英文說明，取自這台伺服器自己的定義（票 06e）。
-    language: str = ""
-    description: str = ""
-    #: 那個站在這台 Prowlarr 上的 id。加進來了才有；移除與試搜認的是它。
-    indexer_id: int | None = None
+    language: str
+    description: str
+    #: 推薦清單上的（排最前、順序照 `DEFAULT_INDEXERS`）；其餘是 schema 裡其他公開的 torrent 站。
+    recommended: bool
+
+
+@dataclass(frozen=True, slots=True)
+class SiteCheck:
+    """一站通不通（M4 票 09）：「測試」的回答，也是上一次「加入」對那一站的結論。"""
+
+    definition_name: str
+    passed: bool
+    #: 沒通過時是哪一種（Prowlarr 原文分出來的）；通過是 `None`。
+    reason: SiteFailure | None
+    #: Prowlarr 的原文（英文），畫面收在可展開的區塊裡。
+    detail: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -104,7 +141,12 @@ class IndexerSetupStatus:
     api_key_present: bool
     #: 連得上那台 Prowlarr（套件內路徑才有意義）。
     reachable: bool
-    options: tuple[IndexerOption, ...]
+    #: Prowlarr 裡已經有的站（套件內與既有 Prowlarr；Torznab 端點沒有站的清單）。
+    sites: tuple[IndexerSite, ...]
+    #: 還沒加入、Berth 加得了的站。只有套件內。
+    candidates: tuple[IndexerCandidate, ...]
+    #: 上一次「加入」對每一站的結論（從 `steps` 導出，理由分好了）。
+    checks: tuple[SiteCheck, ...]
     steps: tuple[StepView, ...]
     skipped: bool
     #: 泊位上有介面登入那一格：只有套件內的 Prowlarr（M4 票 07）。
@@ -148,21 +190,27 @@ TRIAL_TITLES = 3
 async def read_indexer_status(
     session: AsyncSession, factory: ServiceClientFactory
 ) -> IndexerSetupStatus:
-    """套件內路徑列出預設站與它們現在的狀態；既有路徑只回存下來的連線資訊。"""
+    """套件內列出已加入的站與加得了的站；既有 Prowlarr 只列它已有的站；Torznab 只回連線資訊。
+
+    **只讀**：進這一頁（精靈與設定頁）只發這一支，不測任何一站（M4 票 09）。
+    """
     setup = await read_settings(session, SetupSettings)
     settings = await read_settings(session, IndexerSettings)
     origin, base_url = _target(setup, settings)
-    if origin is not ServiceOrigin.BUNDLED:
-        return _view(setup, settings, origin, base_url, options=(), reachable=True, error="")
+    if origin is None or settings.kind == IndexerKind.TORZNAB.value:
+        return _view(setup, settings, origin, base_url)
 
+    bundled = origin is ServiceOrigin.BUNDLED
     client = factory.prowlarr(base_url, settings.api_key)
     try:
-        options = _options(await client.definitions(), await client.indexers())
+        present = await client.indexers()
+        if not bundled:
+            # 既有的那一台：列出來、可以試搜，就這樣（票 05）。連不上照舊由測試那一條說。
+            return _view(setup, settings, origin, base_url, sites=_sites(present, bundled=False))
+        candidates = _candidates(await client.definitions(), present)
         instance = _instance_username(await client.host_config())
     except ServiceError as exc:
-        return _view(
-            setup, settings, origin, base_url, options=(), reachable=False, error=message(exc)
-        )
+        return _view(setup, settings, origin, base_url, reachable=not bundled, error=message(exc))
     finally:
         await client.aclose()
 
@@ -171,11 +219,46 @@ async def read_indexer_status(
         settings,
         origin,
         base_url,
-        options=options,
-        reachable=True,
-        error="",
+        sites=_sites(present, bundled=True),
+        candidates=candidates,
         instance_username=instance,
     )
+
+
+@command(Effect.READ)
+async def verify_sites(
+    session: AsyncSession, factory: ServiceClientFactory, names: Sequence[str]
+) -> tuple[SiteCheck, ...]:
+    """「測試」：逐站問 Prowlarr 通不通，**什麼都不建立、什麼都不寫**（M4 票 09）。
+
+    `indexer/test` 也收還沒加入的定義（2026-09-30 實測，brief §20.7）：送的是 schema 的原樣。
+    測的是「加站」那一段的候選，所以一律測定義；Berth 加不了的（私站、usenet、這台沒有的定義）
+    直接回沒通過，一個請求都不送。只有套件內：既有的那一台 Berth 不加站，也就沒有要測的（票 05）。
+    """
+    setup = await read_settings(session, SetupSettings)
+    settings = await read_settings(session, IndexerSettings)
+    origin, base_url = _target(setup, settings)
+    _refuse_existing(origin)
+
+    client = factory.prowlarr(base_url, settings.api_key)
+    gate = asyncio.Semaphore(VERIFY_CONCURRENCY)
+
+    async def verify(name: str, definitions: Mapping[str, IndexerDefinition]) -> SiteCheck:
+        definition = definitions.get(name)
+        if definition is None or not _offered(definition):
+            return _refused(name)
+        async with gate:
+            try:
+                await client.test_definition(definition)
+            except IndexerRejectedError as exc:
+                return _failed(name, exc.messages)
+        return _passed(name)
+
+    try:
+        definitions = _by_definition(await client.definitions())
+        return tuple(await asyncio.gather(*(verify(name, definitions) for name in names)))
+    finally:
+        await client.aclose()
 
 
 # 沒有單一反向命令：一次加好幾站、還可能設了 Prowlarr 的介面登入，
@@ -189,7 +272,10 @@ async def apply_default_indexers(
     login: InterfaceLogin | None = None,
     sleep: Sleeper = asyncio.sleep,
 ) -> IndexerSetupStatus:
-    """勾起來的站逐個加進套件內的 Prowlarr（plan §9.3 第 6 步）。
+    """勾起來的站逐個加進套件內的 Prowlarr（plan §9.3 頁 4）。
+
+    勾得起來的是測試通過的站（M4 票 09，前端擋）；Prowlarr 加之前自己會再連一次，所以這裡照樣
+    逐站記成敗。Berth 加不了的定義（私站、usenet）是 `failed`，不送。
 
     一站一條纜繩：新增成功 `ok`、已經在了就改用 `indexer/test` 驗一次（通過是 `skipped`），
     連不上是 `failed` 加上 Prowlarr 回的原文。整批不會因為一個站失敗就停下來——公開站裡
@@ -211,16 +297,14 @@ async def apply_default_indexers(
     client = factory.prowlarr(base_url, settings.api_key)
     steps: list[SetupStep] = []
     try:
-        definitions = {row.definition_name: row for row in await client.definitions()}
+        definitions = _by_definition(await client.definitions())
         existing = {row.definition_name: row for row in await client.indexers()}
         for name in selected:
             steps.append(await _ensure_indexer(client, name, definitions, existing))
         instance = _instance_username(await client.host_config())
         steps.append(await _apply_password(client, setup, origin, login, instance, sleep=sleep))
     except ServiceError as exc:
-        return _view(
-            setup, settings, origin, base_url, options=(), reachable=False, error=message(exc)
-        )
+        return _view(setup, settings, origin, base_url, reachable=False, error=message(exc))
     finally:
         await client.aclose()
 
@@ -291,9 +375,8 @@ async def connect_indexer(
         }
 
     # 測試在路上的那幾秒裡，TMDB 頁可能已經寫進同一組設定（M2 票 15）。
-    setup = await update_settings(session, SetupSettings, record)
-    origin, _ = _target(setup, settings)
-    return _view(setup, settings, origin, base_url, options=(), reachable=True, error="")
+    await update_settings(session, SetupSettings, record)
+    return await read_indexer_status(session, factory)
 
 
 @command(Effect.REVERSIBLE, inverse="indexer.skip_indexers")
@@ -310,7 +393,11 @@ async def skip_indexers(
 
 @command(Effect.READ)
 async def search_indexers(
-    session: AsyncSession, factory: ServiceClientFactory, *, query: str
+    session: AsyncSession,
+    factory: ServiceClientFactory,
+    *,
+    query: str,
+    indexer_id: int | None = None,
 ) -> IndexerSearchResult:
     """加入之後的試搜（票 06e）：逐站問一次，列出搜到幾筆與前三筆標題。
 
@@ -321,6 +408,8 @@ async def search_indexers(
     空白的查詢也是一個問題：Prowlarr 與 Torznab 都回各站最新的發佈（2026-09-25 實測 dmhy
     80 筆、YTS 96 筆，約 1.3 秒），證明那個站回得出東西，不必先想一個標題。
     **不寫任何東西**：它是 `read` 命令，精靈的步驟不因它前進或後退。
+
+    `indexer_id` 是那一列的「搜尋」（M4 票 09）：只問那一站。不帶是「搜尋全部」。
     """
     setup = await read_settings(session, SetupSettings)
     settings = await read_settings(session, IndexerSettings)
@@ -334,7 +423,11 @@ async def search_indexers(
 
         client = factory.prowlarr(base_url, settings.api_key)
         try:
-            indexers = [row for row in await client.indexers() if row.enabled]
+            indexers = [
+                row
+                for row in await client.indexers()
+                if row.enabled and indexer_id in (None, row.id)
+            ]
         except ServiceError as exc:
             return IndexerSearchResult(query=query, sites=(), error=message(exc))
         finally:
@@ -356,9 +449,10 @@ async def remove_indexer(
 ) -> IndexerSetupStatus:
     """從套件內的 Prowlarr 移除一站（`DELETE /api/v1/indexer/{id}`，票 06e）。
 
-    **只移除 Berth 提供的預設站**：反向命令是再勾一次那一站，預設站是公開站，加回來就是原樣；
-    使用者在 Prowlarr 自己加的站（可能是私站、帶帳號）Berth 加不回去，所以不碰。那一站的「加入結果」
-    一起拿掉——留著一條綠的等於說它還在；最後一站也移除時，精靈就回到第 6 步（`_indexer_settled`）。
+    **只移除 Berth 加得回去的站**（推薦清單與公開的 torrent 站，`_offered`）：反向命令是再加一次
+    那一站，公開站加回來就是原樣；私站帶帳號，Berth 加不回去，所以不碰——不論是誰加的（M4 票 09）。
+    那一站的「加入結果」一起拿掉——留著一條綠的等於說它還在；最後一站也移除時，精靈就回到頁 4
+    （`_indexer_settled`）。
     """
     setup = await read_settings(session, SetupSettings)
     settings = await read_settings(session, IndexerSettings)
@@ -370,8 +464,8 @@ async def remove_indexer(
     client = factory.prowlarr(base_url, settings.api_key)
     try:
         gone = next((row for row in await client.indexers() if row.id == indexer_id), None)
-        if gone is not None and gone.definition_name not in DEFAULT_INDEXERS:
-            raise ValueError(f"{gone.name}: Berth only removes the default sites it offers")
+        if gone is not None and not _offered(gone):
+            raise ValueError(f"{gone.name}: Berth only removes the public sites it can add back")
         if gone is not None:
             await client.delete_indexer(indexer_id)
     finally:
@@ -411,11 +505,9 @@ async def _ensure_indexer(
 ) -> SetupStep:
     definition = definitions.get(definition_name)
     already = existing.get(definition_name)
-    if definition is None and already is None:
+    if already is None and (definition is None or not _offered(definition)):
         return SetupStep(
-            key=definition_name,
-            status=StepStatus.FAILED,
-            error=f"{definition_name}: this Prowlarr has no definition by that name",
+            key=definition_name, status=StepStatus.FAILED, error=_refused(definition_name).detail
         )
 
     # `detail` 留空：站名已經是這一條纜繩的標題，重複一次只是噪音。
@@ -669,26 +761,94 @@ def _target(setup: SetupSettings, settings: IndexerSettings) -> tuple[ServiceOri
     return (choice.origin, settings.base_url or choice.base_url)
 
 
-def _options(
-    definitions: tuple[IndexerDefinition, ...], existing: list[ProwlarrIndexer]
-) -> tuple[IndexerOption, ...]:
-    """預設站，順序照 `DEFAULT_INDEXERS`；顯示名、privacy、語言與說明取自這台伺服器自己的定義。"""
-    by_name = {row.definition_name: row for row in definitions}
-    present = {row.definition_name: row.id for row in existing}
-    # 定義不在了、站還在的（這台 Prowlarr 的定義更新拿掉了它）：照樣列出來，只有機器名可顯示。
-    missing = IndexerDefinition("", "", "")
+def _offered(site: IndexerDefinition | ProwlarrIndexer) -> bool:
+    """Berth 加得了（也就加得回去）的站：推薦清單上的，或公開的 torrent 站（M4 票 09）。
+
+    私站與半私站要帳號、usenet 站 qBittorrent 接不了；推薦清單上的 Anime Tosho 是半私站，照樣算。
+    """
+    if site.definition_name in DEFAULT_INDEXERS:
+        return True
+    return site.privacy == "public" and site.protocol == "torrent"
+
+
+def _refused(name: str) -> SiteCheck:
+    return SiteCheck(
+        name,
+        passed=False,
+        reason=SiteFailure.OTHER,
+        detail=f"{name}: not a public torrent site this Prowlarr knows; add it in Prowlarr itself",
+    )
+
+
+def _passed(name: str) -> SiteCheck:
+    return SiteCheck(name, passed=True, reason=None, detail="")
+
+
+def _failed(name: str, messages: tuple[str, ...]) -> SiteCheck:
+    return SiteCheck(name, passed=False, reason=failure_of(messages), detail=" · ".join(messages))
+
+
+def _by_definition(definitions: tuple[IndexerDefinition, ...]) -> dict[str, IndexerDefinition]:
+    """同一個 `definitionName` 可能出現兩次（`Torrent RSS Feed` 與它的 preset showRSS，
+    brief §20.7）：Berth 認站靠它，所以第一個算數。"""
+    by_name: dict[str, IndexerDefinition] = {}
+    for row in definitions:
+        by_name.setdefault(row.definition_name, row)
+    return by_name
+
+
+def _candidates(
+    definitions: tuple[IndexerDefinition, ...], present: list[ProwlarrIndexer]
+) -> tuple[IndexerCandidate, ...]:
+    """還沒加入、Berth 加得了的站：推薦清單照 `DEFAULT_INDEXERS` 的順序在前，其餘依名稱。"""
+    added = {row.definition_name for row in present}
+    by_name = _by_definition(definitions)
+    recommended = [by_name[name] for name in DEFAULT_INDEXERS if name in by_name]
+    others = sorted(
+        (
+            row
+            for row in by_name.values()
+            if row.definition_name not in DEFAULT_INDEXERS and _offered(row)
+        ),
+        key=lambda row: row.name.casefold(),
+    )
     return tuple(
-        IndexerOption(
-            definition_name=name,
-            name=by_name.get(name, missing).name or name,
-            privacy=by_name.get(name, missing).privacy,
-            present=name in present,
-            language=by_name.get(name, missing).language,
-            description=by_name.get(name, missing).description,
-            indexer_id=present.get(name),
+        IndexerCandidate(
+            definition_name=row.definition_name,
+            name=row.name,
+            privacy=row.privacy,
+            language=row.language,
+            description=row.description,
+            recommended=row.definition_name in DEFAULT_INDEXERS,
         )
-        for name in DEFAULT_INDEXERS
-        if name in by_name or name in present
+        for row in (*recommended, *others)
+        if row.definition_name not in added
+    )
+
+
+def _sites(present: list[ProwlarrIndexer], *, bundled: bool) -> tuple[IndexerSite, ...]:
+    return tuple(
+        IndexerSite(
+            indexer_id=row.id,
+            definition_name=row.definition_name,
+            name=row.name,
+            enabled=row.enabled,
+            language=row.language,
+            description=row.description,
+            privacy=row.privacy,
+            removable=bundled and _offered(row),
+        )
+        for row in present
+    )
+
+
+def _checks(steps: list[SetupStep]) -> tuple[SiteCheck, ...]:
+    """上一次「加入」對每一站的結論。介面登入那一條不是站。"""
+    return tuple(
+        _failed(row.key, (row.error,)) if row.status is StepStatus.FAILED else _passed(row.key)
+        for row in steps
+        if row.key != PROWLARR_LOGIN_STEP
+        and row.status in (StepStatus.OK, StepStatus.SKIPPED, StepStatus.FAILED)
     )
 
 
@@ -698,9 +858,10 @@ def _view(
     origin: ServiceOrigin | None,
     base_url: str,
     *,
-    options: tuple[IndexerOption, ...],
-    reachable: bool,
-    error: str,
+    sites: tuple[IndexerSite, ...] = (),
+    candidates: tuple[IndexerCandidate, ...] = (),
+    reachable: bool = True,
+    error: str = "",
     instance_username: str = "",
 ) -> IndexerSetupStatus:
     return IndexerSetupStatus(
@@ -709,7 +870,9 @@ def _view(
         base_url=base_url,
         api_key_present=bool(settings.api_key),
         reachable=reachable,
-        options=options,
+        sites=sites,
+        candidates=candidates,
+        checks=_checks(setup.indexer.steps),
         steps=step_views(setup.indexer.steps),
         skipped=setup.indexer.skipped,
         web_ui_login=origin is ServiceOrigin.BUNDLED,

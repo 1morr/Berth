@@ -67,8 +67,8 @@ const zhHant = {
         elsewhere: 'Route 的改名與停用在精靈跑完之後的「設定 → 媒體庫路徑」。',
       },
       indexer: {
-        can: '改選套件內或既有、加更多站、試搜、移除不要的站。加過的站不會被加第二次。',
-        elsewhere: '預設清單以外的站（含私有站）在 Prowlarr 自己的介面上加。',
+        can: '改選套件內或既有、測試並加更多公開站、試搜、移除不要的站。加過的站不會被加第二次。',
+        elsewhere: '要帳號的站（私站、半私站）在 Prowlarr 自己的介面上加。',
       },
       tmdb: {
         can: '重貼一把 key 再測一次；測不過的 key 照樣存下來，改一個字再按就好。',
@@ -173,6 +173,15 @@ const zhHant = {
       upgradeNotes: 'Jellyfin 12.0 升級注意',
     },
     switchToBundled: '改用套件內的那一台',
+    useBundled: '使用套件內的 {{service}}',
+    useBundledLede:
+      '按下之後 Berth 存下這個選擇，連 compose 帶來的那一台 {{service}} 測一次（只讀）。',
+    switchAway: {
+      jellyfin: '換一台 Jellyfin：這一頁要重做。',
+      qbittorrent:
+        '換一台 qBittorrent：Berth 沒改過你那一台的偏好，只在上面建了 berth- 分類，那些留著；這一頁要重做，媒體庫與路徑也要重新檢查。',
+      prowlarr: '換一台 Prowlarr：Berth 沒動過你那一台的站；這一頁要重做。',
+    },
     switchWarning: {
       qbittorrent:
         '換一台 qBittorrent：Berth 已經寫進原本那一台的偏好與登入留在那裡，不會撤回；這一頁要重做，媒體庫與路徑也要重新檢查——分類建在原本那一台上。',
@@ -474,9 +483,14 @@ const zhHant = {
   },
   indexer: {
     title: '索引站',
-    lede: '索引站決定 Berth 找得到什麼。加進來之後試搜一次，不要的就地移除；這一步可以之後再說。',
-    chooseLede:
-      '先選 Prowlarr 是哪一台：套件內的那一台 Berth 讀得到它的 API key、替它加站與設介面登入；你自己的那一台貼 API key（或任一 Torznab 端點），用你已經有的站。',
+    lede: {
+      choose:
+        '先選 Prowlarr 是哪一台：套件內的那一台 Berth 讀得到它的 API key、替它加站與設介面登入；你自己的那一台貼 API key（或任一 Torznab 端點），用你已經有的站。',
+      bundled:
+        '索引站決定 Berth 找得到什麼。先測試，通過的站勾起來加入；加入之後試搜，不要的就地移除。這一步可以之後再說。',
+      existing:
+        '索引站決定 Berth 找得到什麼。Berth 用你那一台已經有的站，可以試搜，不替它加站、也不移除。這一步可以之後再說。',
+    },
     skip: '之後再說',
     deferred: '之後再說',
     unreachable: '連不上套件內的 Prowlarr。可以先填自己的位址，或跳過這一步之後再補。',
@@ -490,15 +504,34 @@ const zhHant = {
       prowlarr: 'Prowlarr',
       torznab: 'Torznab 端點',
     },
-    defaults: {
-      title: '預設公開索引站',
-      lede: 'Berth 會把勾起來的站加進這台 Prowlarr。加之前 Prowlarr 會先連一次那個站，所以逐站都有結果——公開站有幾個連不上是常態，不影響其他站。每一站的說明是 Prowlarr 定義自帶的原文。',
-      pick: '要加入哪些站',
+    add: {
+      title: '加站',
+      lede: '按「測試」時 Prowlarr 會現場連一次那個站，什麼都不建立；通過的才勾得起來。公開站有幾個連不上是常態，不影響其他站。每一站的說明是 Prowlarr 定義自帶的原文。',
+      recommended: '推薦的站',
+      others: '其他公開站',
+      othersLede: '這台 Prowlarr 認得的其他公開 torrent 站。輸入名稱或選一個語言才列出來。',
+      filter: '搜尋名稱',
+      language: '語言',
+      anyLanguage: '全部語言',
+      matches_one: '{{count}} 站符合',
+      matches_other: '{{count}} 站符合',
+      noMatch: '沒有符合的站。',
+      test: '測試',
+      testOne: '測試 {{name}}',
+      testAll: '測試全部',
+      testing: '測試中…',
+      testFirst: '先測試，通過才勾得起來',
       semiPrivate: '半私有站，可能需要帳號',
-      apply: '加入這 {{sites}} 個站',
+      apply_one: '加入 {{count}} 個站',
+      apply_other: '加入 {{count}} 個站',
+      applyNone: '加入',
+      loginOnly: '設定介面登入',
       applying: '加入中…',
-      fix: '這個站 Prowlarr 連不上。可以在它自己的介面上手動加、換一個鏡像網址，或直接不勾它：',
-      retryHint: '其他站不受影響。改好之後重按，已經加好的站不會被加第二次。',
+      privateSites:
+        '要帳號的站（私站、半私站）在 Prowlarr 自己的介面加，加完 Berth 就認得、可以試搜。',
+      openProwlarr: '開啟 Prowlarr 的索引站頁',
+      requestFailed: '測試沒有送到。Berth 後端可能沒在跑——確認容器狀態後再試一次。',
+      loading: '向 Prowlarr 讀站的清單…',
       login: '替 Prowlarr 介面設登入',
       loginFix:
         '帳密沒設成功，Prowlarr 的介面仍然是免登入的。設完它會自行重啟，所以也可能只是還沒回來。可以在它自己的介面上設：',
@@ -516,24 +549,65 @@ const zhHant = {
           '整條 Torznab 網址。Jackett 的聚合網址是 /api/v2.0/indexers/all/results/torznab/api。',
       },
     },
-    trial: {
-      title: '試搜',
-      lede: 'Prowlarr 只搜得到已經加進來的站，所以先加、再試搜。逐站列出搜到幾筆與前三筆；留白就是問各站最新的發佈。',
+    added: {
+      title: '已加入',
+      sites_one: '{{count}} 站',
+      sites_other: '{{count}} 站',
+      lede: 'Prowlarr 只搜得到已經加入的站。每一列可以單獨搜，也可以一次搜全部；關鍵字留白就是問各站最新的發佈。',
+      existingLede: '你那一台上已經有的站。Berth 用它們搜尋，不加、不移除——要改請到它自己的介面。',
+      none: '這一台上還沒有任何站。',
       field: '關鍵字',
       placeholder: '留白＝各站最新的發佈',
-      search: '試搜',
+      search: '搜尋',
+      searchOne: '搜尋 {{name}}',
+      searchAll: '搜尋全部',
       searching: '搜尋中…',
-      pending: '還沒試搜',
-      notAsked: '這一站在試搜之後才加入',
+      pending: '還沒搜',
       count_one: '{{count}} 筆',
       count_other: '{{count}} 筆',
-      failed: '試搜沒跑完。Berth 後端可能沒在跑——確認容器狀態後再試一次。',
+      searchFailed: '搜尋失敗',
+      disabled: '在 Prowlarr 停用了',
+      failed: '搜尋沒跑完。Berth 後端可能沒在跑——確認容器狀態後再試一次。',
+      keeps: '要帳號的站 Berth 不移除',
+      done_one: '搜完了：{{count}} 站有結果。',
+      done_other: '搜完了：{{count}} 站有結果。',
+    },
+    check: {
+      untested: '未測',
+      testing: '測試中',
+      passed: '通過',
+      failed: '沒通過',
+    },
+    failure: {
+      cloudflare:
+        '被 Cloudflare 擋住：這個站擋掉自動化的請求，要在 Prowlarr 設 FlareSolverr 才過得去。',
+      no_results: '連得上，但測試那一次查詢什麼都沒回：站可能暫時空了或改了版，之後再測。',
+      unreachable: '連不上：DNS、TLS 或站本身掛了。換個時間再測，或檢查 Prowlarr 那台對外的網路。',
+      other: '沒通過，原因在 Prowlarr 的原文裡。',
+      original: 'Prowlarr 原文',
+    },
+    summary: {
+      failed_one: '{{count}} 站沒通過',
+      failed_other: '{{count}} 站沒通過',
+      passed_one: '{{count}} 站通過',
+      passed_other: '{{count}} 站通過',
+      reason: {
+        cloudflare_one: 'Cloudflare 擋住 {{count}}',
+        cloudflare_other: 'Cloudflare 擋住 {{count}}',
+        no_results_one: '查無結果 {{count}}',
+        no_results_other: '查無結果 {{count}}',
+        unreachable_one: '連不上 {{count}}',
+        unreachable_other: '連不上 {{count}}',
+        other_one: '其他 {{count}}',
+        other_other: '其他 {{count}}',
+      },
+      hint: '沒通過的勾不起來，之後可以再測。',
     },
     remove: {
       label: '移除',
       confirm: '確定移除',
       pending: '移除中…',
-      warning: '從 Prowlarr 移除 {{name}}。之後要用，回到這裡重新勾選加入就好。',
+      warning: '從 Prowlarr 移除 {{name}}。之後要用，回到這裡測試通過再加入就好。',
       done: '已從 Prowlarr 移除 {{name}}。',
       failed: '移除沒成功。Prowlarr 可能正在重啟——等一下再按一次。',
     },
@@ -2879,9 +2953,9 @@ const en: Translations<typeof zhHant> = {
           'Renaming and disabling routes happens in Settings → Library paths once the wizard is finished.',
       },
       indexer: {
-        can: 'Switch between bundled and existing, add more indexers, run a trial search, remove the ones you do not want. Indexers already added are not added twice.',
+        can: 'Switch between bundled and existing, test and add more public sites, run a trial search, remove the ones you do not want. Indexers already added are not added twice.',
         elsewhere:
-          'Sites outside the default list (private ones included) are added in Prowlarr itself.',
+          'Sites that need an account (private and semi-private) are added in Prowlarr itself.',
       },
       tmdb: {
         can: 'Paste a key and test it again; a key that fails is still saved, so you can fix one character and press again.',
@@ -2990,6 +3064,16 @@ const en: Translations<typeof zhHant> = {
       upgradeNotes: 'Jellyfin 12.0 upgrade notes',
     },
     switchToBundled: 'Use the bundled one instead',
+    useBundled: 'Use the bundled {{service}}',
+    useBundledLede:
+      'Berth saves this choice and tests the {{service}} compose brought along (read-only).',
+    switchAway: {
+      jellyfin: 'Switching Jellyfin: this page starts over.',
+      qbittorrent:
+        'Switching qBittorrent: Berth never changed the preferences on yours, it only created berth- categories there, which stay; this page starts over, and library paths need checking again.',
+      prowlarr:
+        'Switching Prowlarr: Berth never touched the sites on yours; this page starts over.',
+    },
     switchWarning: {
       qbittorrent:
         'Switching qBittorrent: the preferences and login Berth already wrote to the old one stay there and are not undone; this page starts over, and library paths need checking again — the categories live on the old one.',
@@ -3311,9 +3395,14 @@ const en: Translations<typeof zhHant> = {
   },
   indexer: {
     title: 'Indexers',
-    lede: 'Indexers decide what Berth can find. Run a trial search once they are added and remove the ones you do not want; this step can wait.',
-    chooseLede:
-      'First, which Prowlarr: on the bundled one Berth reads its API key, adds indexers and sets its interface login; for your own one paste its API key (or any Torznab endpoint) and Berth uses the indexers you already have.',
+    lede: {
+      choose:
+        'First, which Prowlarr: on the bundled one Berth reads its API key, adds indexers and sets its interface login; for your own one paste its API key (or any Torznab endpoint) and Berth uses the indexers you already have.',
+      bundled:
+        'Indexers decide what Berth can find. Test first, tick the ones that pass and add them; then run a trial search and remove the ones you do not want. This step can wait.',
+      existing:
+        'Indexers decide what Berth can find. Berth uses the indexers your instance already has: you can search them, and Berth neither adds nor removes any. This step can wait.',
+    },
     skip: 'Do this later',
     deferred: 'Deferred',
     unreachable:
@@ -3328,19 +3417,39 @@ const en: Translations<typeof zhHant> = {
       prowlarr: 'Prowlarr',
       torznab: 'Torznab endpoint',
     },
-    defaults: {
-      title: 'Default public indexers',
-      lede: "Berth adds the ticked sites to this Prowlarr. Prowlarr connects to each site before saving it, so every site gets its own verdict — a few public sites being unreachable is normal and does not affect the rest. Each site's description is the text from its Prowlarr definition.",
-      pick: 'Which sites to add',
+    add: {
+      title: 'Add indexers',
+      lede: "Test asks Prowlarr to reach the site right now and creates nothing; only sites that pass can be ticked. A few public sites being unreachable is normal and does not affect the rest. Each site's description is the text from its Prowlarr definition.",
+      recommended: 'Recommended',
+      others: 'Other public sites',
+      othersLede:
+        'The other public torrent sites this Prowlarr knows. Type a name or pick a language to list them.',
+      filter: 'Search by name',
+      language: 'Language',
+      anyLanguage: 'Any language',
+      matches_one: '{{count}} site matches',
+      matches_other: '{{count}} sites match',
+      noMatch: 'No site matches.',
+      test: 'Test',
+      testOne: 'Test {{name}}',
+      testAll: 'Test all',
+      testing: 'Testing…',
+      testFirst: 'Test it first; only a site that passes can be ticked',
       semiPrivate: 'Semi-private; may need an account',
-      apply: 'Add these {{sites}} sites',
+      apply_one: 'Add {{count}} site',
+      apply_other: 'Add {{count}} sites',
+      applyNone: 'Add',
+      loginOnly: 'Set the interface login',
       applying: 'Adding…',
-      fix: 'Prowlarr could not reach this site. Add it by hand in Prowlarr, try another mirror, or leave it unticked:',
+      privateSites:
+        'Sites that need an account (private and semi-private) are added in Prowlarr itself; once they are there Berth knows them and can search them.',
+      openProwlarr: "Open Prowlarr's indexers page",
+      requestFailed:
+        'The test did not go through. The Berth backend may be down — check the container and try again.',
+      loading: 'Reading the site list from Prowlarr…',
       login: 'Set the Prowlarr interface login',
       loginFix:
         'The credentials did not stick, so the Prowlarr interface is still open. Setting them restarts Prowlarr, so it may simply not be back yet. You can set them there yourself:',
-      retryHint:
-        'The other sites are unaffected. Press again after fixing it; sites already added are not added twice.',
     },
     existing: {
       title: 'Connect your own indexer',
@@ -3356,25 +3465,70 @@ const en: Translations<typeof zhHant> = {
           "The whole Torznab URL. Jackett's aggregate URL ends in /api/v2.0/indexers/all/results/torznab/api.",
       },
     },
-    trial: {
-      title: 'Trial search',
-      lede: 'Prowlarr only searches sites that have been added, so add first, then search. Each site lists how many results it found and the first three; leave it blank to ask each site for its latest releases.',
+    added: {
+      title: 'Added',
+      sites_one: '{{count}} site',
+      sites_other: '{{count}} sites',
+      lede: 'Prowlarr only searches sites that have been added. Search one row at a time or all of them at once; leave the keywords blank to ask each site for its latest releases.',
+      existingLede:
+        'The sites your instance already has. Berth searches with them and neither adds nor removes any — change them in its own interface.',
+      none: 'This instance has no sites yet.',
       field: 'Keywords',
       placeholder: 'Blank = latest releases on each site',
       search: 'Search',
+      searchOne: 'Search {{name}}',
+      searchAll: 'Search all',
       searching: 'Searching…',
       pending: 'Not searched yet',
-      notAsked: 'Added after the last search',
       count_one: '{{count}} result',
       count_other: '{{count}} results',
+      searchFailed: 'Search failed',
+      disabled: 'Disabled in Prowlarr',
       failed:
-        'The trial search did not finish. The Berth backend may be down — check the container and try again.',
+        'The search did not finish. The Berth backend may be down — check the container and try again.',
+      keeps: 'Berth does not remove sites that need an account',
+      done_one: 'Search finished: {{count}} site has results.',
+      done_other: 'Search finished: {{count}} sites have results.',
+    },
+    check: {
+      untested: 'Untested',
+      testing: 'Testing',
+      passed: 'Passed',
+      failed: 'Did not pass',
+    },
+    failure: {
+      cloudflare:
+        'Blocked by Cloudflare: the site turns away automated requests. Prowlarr needs FlareSolverr to get through.',
+      no_results:
+        'Reachable, but the test query came back empty: the site may be empty for now or have changed. Test again later.',
+      unreachable:
+        "Unreachable: DNS, TLS or the site itself is down. Test again later, or check the Prowlarr host's outbound network.",
+      other: "Did not pass; the reason is in Prowlarr's own text.",
+      original: "Prowlarr's text",
+    },
+    summary: {
+      failed_one: '{{count}} site did not pass',
+      failed_other: '{{count}} sites did not pass',
+      passed_one: '{{count}} site passed',
+      passed_other: '{{count}} sites passed',
+      reason: {
+        cloudflare_one: 'Cloudflare {{count}}',
+        cloudflare_other: 'Cloudflare {{count}}',
+        no_results_one: 'no results {{count}}',
+        no_results_other: 'no results {{count}}',
+        unreachable_one: 'unreachable {{count}}',
+        unreachable_other: 'unreachable {{count}}',
+        other_one: 'other {{count}}',
+        other_other: 'other {{count}}',
+      },
+      hint: 'Sites that did not pass cannot be ticked; test them again later.',
     },
     remove: {
       label: 'Remove',
       confirm: 'Remove it',
       pending: 'Removing…',
-      warning: 'Remove {{name}} from Prowlarr. To use it again later, come back here and tick it.',
+      warning:
+        'Remove {{name}} from Prowlarr. To use it again later, come back here, test it and add it.',
       done: 'Removed {{name}} from Prowlarr.',
       failed: 'Removing it did not work. Prowlarr may be restarting — press again in a moment.',
     },

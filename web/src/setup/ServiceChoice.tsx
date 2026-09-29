@@ -1,4 +1,4 @@
-import { useId, useState, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import type { ChoiceInput, SetupService, SetupStatus } from '../api/setup'
@@ -8,12 +8,14 @@ import {
   CopyLine,
   Field,
   GhostButton,
-  Notice,
   PasswordField,
   PrimaryButton,
 } from '../components/controls'
+import { ConfirmPanel } from '../components/ConfirmPanel'
+import { escapeOnly } from '../components/useInPlaceConfirm'
 import { SERVICE_LABEL, detailLabel } from '../components/services'
 import { SIGNAL_FILL } from '../components/signal'
+import type { ChoiceDraft } from './choiceDraft'
 import { pointsAtBerth } from './loopback'
 import {
   EXAMPLE_ADDRESS,
@@ -47,7 +49,12 @@ export interface ChoiceControls {
  * `.scratch/m4/service-pages-shape.md`）。
  *
  * **不預選**（shape 時使用者拍板）：猜錯正是 M4 票 15 要消滅的。進頁與選擇之前一個請求都不發；
- * 點「套件內」就存下並測（唯讀）；點「既有」只展開表單，按「測試連線」才存下並測。
+ * **點**「套件內」就存下並測（唯讀）；點「既有」只展開表單，按「測試連線」才存下並測。
+ *
+ * **方向鍵只是瀏覽**（M4 票 09，票 15 audit 的 P2）：radio 在兩格間移動就會選中，而選中「套件內」原本
+ * 就是一次存下與測試。所以只有指標點下去的那一次算數（方向鍵與空白鍵不送 pointerdown），鍵盤選到的
+ * 是草稿，另給一顆「使用套件內的 X」。這一頁已經有結果時換另一格一律先就地確認（`ConfirmPanel`：
+ * 焦點進去、Esc 收起回到原本那一格）。
  */
 export function ServiceChoice({
   kind,
@@ -57,55 +64,93 @@ export function ServiceChoice({
   locked,
   switchWarning,
   existingForm,
+  draft,
+  onDraft,
   onChoose,
   onRetest,
-}: ChoiceControls & {
-  kind: ServiceKind
-  status: SetupStatus
-  /** 來源鎖住：擁有者成立之後的 Jellyfin（shape 時拍板）。值是說給人聽的原因。位址照樣改得了。 */
-  locked?: string
-  /**
-   * 這一頁已經有結果時換另一格的後果（Berth 寫進原本那一台的東西不撤回、這一頁要重做）。
-   * 有值時換成套件內要先確認，換成既有的表單上方說出來。
-   */
-  switchWarning?: string
-  /** 既有那一格自己的表單（Prowlarr 頁：Prowlarr 或 Torznab）。沒給就是內建的位址與憑證。 */
-  existingForm?: ReactNode
-}) {
+}: ChoiceControls &
+  ChoiceDraft & {
+    kind: ServiceKind
+    status: SetupStatus
+    /** 來源鎖住：擁有者成立之後的 Jellyfin（shape 時拍板）。值是說給人聽的原因。位址照樣改得了。 */
+    locked?: string
+    /**
+     * 這一頁已經有結果時換另一格的後果（Berth 寫進原本那一台的東西不撤回、這一頁要重做）。
+     * 有值時換另一格要先確認。從既有換走時說法不同：Berth 沒寫過使用者那一台（`choice.switchAway`）。
+     */
+    switchWarning?: string
+    /** 既有那一格自己的表單（Prowlarr 頁：Prowlarr 或 Torznab）。沒給就是內建的位址與憑證。 */
+    existingForm?: ReactNode
+  }) {
   const { t } = useTranslation()
   const groupName = useId()
+  const warningId = useId()
   const service = status.services.find((row) => row.kind === kind)
-  // 使用者點了、還沒存下去的那一格。存下去之後以後端的選擇為準。
-  const [draft, setDraft] = useState<ServiceOrigin | null>(null)
   const [editing, setEditing] = useState(false)
+  const pointer = useRef(false)
+  const radios = useRef<Partial<Record<ServiceOrigin, HTMLInputElement | null>>>({})
+  const panel = useRef<HTMLDivElement>(null)
+  // 點下去開的確認才把焦點送進去；方向鍵瀏覽時焦點留在 radio 上，才走得回另一格。
+  const [focusPanel, setFocusPanel] = useState(false)
   const selected = draft ?? service?.origin ?? null
   const switching = draft !== null && service !== undefined && draft !== service.origin
+  // 這一頁有結果時換另一格：先確認。從既有換走，Berth 沒寫過那一台，說的只有這一頁要重做。
+  const confirming = switching && Boolean(switchWarning)
+  const warning = service?.origin === 'existing' ? t(`choice.switchAway.${kind}`) : switchWarning
   const name = t(SERVICE_LABEL[kind])
 
+  useEffect(() => {
+    if (focusPanel && draft !== null) panel.current?.focus()
+  }, [focusPanel, draft])
+
   function pick(origin: ServiceOrigin) {
+    const clicked = pointer.current
+    pointer.current = false
     if (locked) return
+    setFocusPanel(false)
     if (origin === service?.origin) {
-      setDraft(null)
+      onDraft(null)
       // 套件內那一台紅著時再點一次就是重存再測：改了 `.env` 的 port 之後，存下的 compose 位址要換
       // （重新測試只拿存下的那一條再敲一次）。
-      if (origin === 'bundled' && !draft && service.state !== 'ok' && service.state !== 'waiting') {
+      if (
+        clicked &&
+        origin === 'bundled' &&
+        !draft &&
+        service.state !== 'ok' &&
+        service.state !== 'waiting'
+      ) {
         onChoose({ origin: 'bundled' })
       }
       return
     }
-    // 第一次選套件內：直接存下並測。換過來的（這一頁已經有結果）先確認。
-    if (origin === 'bundled' && !(service && switchWarning)) {
-      setDraft(null)
+    // 第一次點套件內（或換過來而這一頁沒有結果）：直接存下並測。
+    if (origin === 'bundled' && clicked && !(service && switchWarning)) {
+      onDraft(null)
       onChoose({ origin: 'bundled' })
       return
     }
-    setDraft(origin)
+    onDraft(origin)
+    setFocusPanel(clicked && Boolean(service && switchWarning))
+  }
+
+  /** 不換了：回到原本那一格，焦點也回去。 */
+  function cancel() {
+    onDraft(null)
+    setFocusPanel(false)
+    const back = service?.origin ?? draft
+    if (back) radios.current[back]?.focus()
+  }
+
+  function chooseBundled() {
+    onDraft(null)
+    setFocusPanel(false)
+    onChoose({ origin: 'bundled' })
   }
 
   function chooseExisting(input: ChoiceInput) {
     // 表單與勾選留到回應回來（audit）：先清掉的話，請求還在路上時表單卸下、兩格都沒勾。
     onChoose(input, () => {
-      setDraft(null)
+      onDraft(null)
       setEditing(false)
     })
   }
@@ -127,13 +172,37 @@ export function ServiceChoice({
   // 鎖住的是來源，不是位址：同一個來源換位址照舊可以（設定頁的連線區就是做這件事）。
   const showExistingForm =
     selected === 'existing' && (draft === 'existing' || editing || service?.state !== 'ok')
+  const form =
+    showExistingForm &&
+    (existingForm ?? (
+      <ExistingForm
+        kind={kind}
+        service={service?.origin === 'existing' ? service : undefined}
+        choosing={choosing}
+        focusFirst={editing}
+        onSubmit={chooseExisting}
+      />
+    ))
+  const cancelButton = (
+    <div>
+      <GhostButton type="button" onClick={cancel}>
+        {t('common.cancel')}
+      </GhostButton>
+    </div>
+  )
 
   return (
     <section aria-labelledby={`${groupName}-legend`} className="mt-6 grid gap-4">
       <p role="status" data-announcer={kind} className="sr-only">
         {announcement}
       </p>
-      <fieldset className="grid gap-3">
+      {/* 方向鍵瀏覽時焦點留在 radio 上（見上），所以 radio 上的 Esc 也收得起草稿與它的確認。 */}
+      <fieldset
+        className="grid gap-3"
+        onKeyDown={(event) => {
+          if (draft !== null && draft !== service?.origin) escapeOnly(event, cancel)
+        }}
+      >
         <legend id={`${groupName}-legend`} className="label mb-3 text-ink-dim">
           {t('choice.legend', { service: name })}
         </legend>
@@ -144,6 +213,12 @@ export function ServiceChoice({
             checked={selected === 'bundled'}
             disabled={Boolean(locked) && selected !== 'bundled'}
             title={t('choice.bundled.title')}
+            inputRef={(element) => {
+              radios.current.bundled = element
+            }}
+            onPointer={() => {
+              pointer.current = true
+            }}
             onPick={pick}
           >
             <span className="block text-xs text-ink-dim">
@@ -159,6 +234,12 @@ export function ServiceChoice({
             checked={selected === 'existing'}
             disabled={Boolean(locked) && selected !== 'existing'}
             title={t('choice.existing.title')}
+            inputRef={(element) => {
+              radios.current.existing = element
+            }}
+            onPointer={() => {
+              pointer.current = true
+            }}
             onPick={pick}
           >
             <span className="block text-xs text-ink-dim">
@@ -198,40 +279,47 @@ export function ServiceChoice({
         </div>
       )}
 
-      {switching && switchWarning && (
-        <Notice signal="assigned" label={t('common.warning')}>
-          {switchWarning}
-        </Notice>
+      {draft === 'bundled' && draft !== service?.origin && (
+        // 鍵盤選到套件內（還沒送），或這一頁有結果時換成套件內：一顆確認、一顆不換。
+        <ConfirmPanel
+          panelRef={panel}
+          onKeyDown={(event) => escapeOnly(event, cancel)}
+          labelledBy={warningId}
+        >
+          <p id={warningId} className="max-w-prose text-xs text-ink">
+            {confirming ? warning : t('choice.useBundledLede', { service: name })}
+          </p>
+          <div className={CONFIRM_ACTIONS}>
+            <PrimaryButton type="button" busy={choosing} onClick={chooseBundled}>
+              {confirming ? t('choice.switchToBundled') : t('choice.useBundled', { service: name })}
+            </PrimaryButton>
+            <GhostButton type="button" onClick={cancel}>
+              {t('common.cancel')}
+            </GhostButton>
+          </div>
+        </ConfirmPanel>
       )}
 
-      {switching && draft === 'bundled' && (
-        <div className={CONFIRM_ACTIONS}>
-          <PrimaryButton
-            type="button"
-            busy={choosing}
-            onClick={() => {
-              setDraft(null)
-              onChoose({ origin: 'bundled' })
-            }}
-          >
-            {t('choice.switchToBundled')}
-          </PrimaryButton>
-          <GhostButton type="button" onClick={() => setDraft(null)}>
-            {t('common.cancel')}
-          </GhostButton>
-        </div>
+      {draft === 'existing' && confirming ? (
+        // 這一頁有結果時換成既有：後果、表單（按「測試連線」就是確認）與不換，同一個確認區。
+        <ConfirmPanel
+          panelRef={panel}
+          onKeyDown={(event) => escapeOnly(event, cancel)}
+          labelledBy={warningId}
+        >
+          <p id={warningId} className="max-w-prose text-xs text-ink">
+            {warning}
+          </p>
+          {form}
+          {cancelButton}
+        </ConfirmPanel>
+      ) : (
+        <>
+          {form}
+          {/* 既有換過去、表單還沒送：留一條退路（票 15 critique：既有表單打開後沒有取消）。 */}
+          {switching && draft === 'existing' && cancelButton}
+        </>
       )}
-
-      {showExistingForm &&
-        (existingForm ?? (
-          <ExistingForm
-            kind={kind}
-            service={service?.origin === 'existing' ? service : undefined}
-            choosing={choosing}
-            focusFirst={editing}
-            onSubmit={chooseExisting}
-          />
-        ))}
 
       {/* 自己帶表單的那一種（Prowlarr 頁的既有）在表單下面說結果，這一條就不重複。 */}
       {service && !switching && !(showExistingForm && existingForm) && (
@@ -258,6 +346,8 @@ function ChoiceCard({
   checked,
   disabled,
   title,
+  inputRef,
+  onPointer,
   onPick,
   children,
 }: {
@@ -266,16 +356,21 @@ function ChoiceCard({
   checked: boolean
   disabled: boolean
   title: string
+  inputRef: (element: HTMLInputElement | null) => void
+  /** 指標按下：接著的那一次選擇是點的，不是方向鍵瀏覽。 */
+  onPointer: () => void
   onPick: (origin: ServiceOrigin) => void
   children: ReactNode
 }) {
   return (
     <label
+      onPointerDown={onPointer}
       className={`flex min-w-0 cursor-pointer gap-3 border-2 px-4 py-3 has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-[var(--color-working)] ${
         checked ? 'border-rule-strong bg-deck' : 'border-rule bg-well hover:border-rule-strong'
       } ${disabled ? 'cursor-not-allowed opacity-60' : ''}`}
     >
       <input
+        ref={inputRef}
         type="radio"
         name={name}
         value={origin}

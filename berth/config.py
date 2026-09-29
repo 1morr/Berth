@@ -19,10 +19,12 @@ DEFAULT_DATA_ROOT = Path("/data")
 #: 其他服務唯讀掛進來的設定目錄；目前只有 `prowlarr/config.xml`（plan §9.1）。
 DEFAULT_EXT_ROOT = Path("/ext")
 DEFAULT_PORT = 8383
-#: 套件內 Jellyfin 與 qBittorrent WebUI 在宿主上發佈的 port（compose 的 `JELLYFIN_PORT`、
-#: `QBITTORRENT_WEBUI_PORT`，plan §9.1）。Berth 在容器裡看不到宿主那一側，只能由 compose 傳進來。
+#: 套件內 Jellyfin、qBittorrent WebUI 與 Prowlarr 在宿主上發佈的 port（compose 的 `JELLYFIN_PORT`、
+#: `QBITTORRENT_WEBUI_PORT`、`PROWLARR_PORT`，plan §9.1）。Berth 在容器裡看不到宿主那一側，只能由
+#: compose 傳進來。
 DEFAULT_JELLYFIN_PORT = 8096
 DEFAULT_QBITTORRENT_WEBUI_PORT = 8080
+DEFAULT_PROWLARR_PORT = 9696
 
 #: repo 佈局下 `pnpm -C web build` 的產出；container 內由 `WEB_ROOT` 指向 image 的複製位置。
 DEFAULT_WEB_ROOT = Path(__file__).resolve().parent.parent / "web" / "dist"
@@ -43,6 +45,8 @@ class Config:
     jellyfin_port: int
     #: 內外兩側同一個號碼：Host 檢查連 port 都比對（plan §9.2），所以 compose 內網也在這一個上。
     qbittorrent_webui_port: int
+    #: 瀏覽器開套件內 Prowlarr 介面用的 port（加私站的連結，M4 票 09）；容器內永遠在 9696。
+    prowlarr_port: int
 
     @property
     def database_path(self) -> Path:
@@ -64,6 +68,7 @@ def load_config(environ: Mapping[str, str] | None = None) -> Config:
         port=_port(env, "PORT", DEFAULT_PORT),
         jellyfin_port=_port(env, "JELLYFIN_PORT", DEFAULT_JELLYFIN_PORT),
         qbittorrent_webui_port=_port(env, "QBITTORRENT_WEBUI_PORT", DEFAULT_QBITTORRENT_WEBUI_PORT),
+        prowlarr_port=_port(env, "PROWLARR_PORT", DEFAULT_PROWLARR_PORT),
     )
 
 

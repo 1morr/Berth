@@ -6,6 +6,7 @@ import { Cutaway, CutawayRow } from '../components/Cutaway'
 import { ORIGIN_LABEL } from '../components/services'
 import { STICKY_ACTION, Field, Notice, PasswordField, PrimaryButton } from '../components/controls'
 import { ServiceChoice, type ChoiceControls } from './ServiceChoice'
+import { useChoiceDraft } from './choiceDraft'
 import { connected } from './signals'
 import { StepFrame } from './StepFrame'
 
@@ -41,7 +42,10 @@ export function OwnerStep({
 }) {
   const { t } = useTranslation()
   const jellyfin = status.services.find((row) => row.kind === 'jellyfin')
-  const mode = modeOf(status, connected(jellyfin))
+  const choiceDraft = useChoiceDraft()
+  // 換另一格還在確認：標題與表單不說原本那一台的事（M4 票 09）。
+  const switching = choiceDraft.draft !== null && choiceDraft.draft !== jellyfin?.origin
+  const mode = switching ? 'choose' : modeOf(status, connected(jellyfin))
 
   return (
     <StepFrame cutaway={<OwnerCutaway status={status} mode={mode} />}>
@@ -57,6 +61,7 @@ export function OwnerStep({
         kind="jellyfin"
         status={status}
         {...choice}
+        {...choiceDraft}
         locked={status.owner ? t('owner.locked') : undefined}
       />
 

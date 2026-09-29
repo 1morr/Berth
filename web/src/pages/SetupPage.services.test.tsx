@@ -4,15 +4,17 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { stubApi } from '../test/fetch'
 import { renderWithProviders } from '../test/render'
-import type { SiteSearch } from '../api/setup'
+import type { SiteFailure, SiteSearch } from '../api/setup'
 import {
   ALL_BUNDLED,
-  DEFAULT_OPTIONS,
-  added,
+  OTHER_PUBLIC,
+  RECOMMENDED,
+  check,
   chosen,
   indexerSetup,
   qbittorrentSetup,
   setupStatus,
+  site,
   step,
   tmdbSetup,
 } from '../test/fixtures'
@@ -29,12 +31,24 @@ const DIFF = 'GET /api/setup/qbittorrent/diff'
 const APPLY = 'POST /api/setup/qbittorrent/apply'
 const INDEXERS = 'GET /api/setup/indexers'
 const ADD_INDEXERS = 'POST /api/setup/indexers/apply'
+const TEST_SITES = 'POST /api/setup/indexers/test'
 const CONNECT_INDEXER = 'POST /api/setup/indexers/connect'
 const SKIP_INDEXERS = 'POST /api/setup/indexers/skip'
 const SEARCH = 'GET /api/setup/indexers/search'
 const REMOVE_YTS = 'DELETE /api/setup/indexers/3'
 const TMDB = 'GET /api/setup/tmdb'
 const TEST_TMDB = 'POST /api/setup/tmdb/test'
+
+/** Prowlarr 對 1337x 回的原文（brief §20.7 的實測）。 */
+const CLOUDFLARE = 'Unable to access 1337x.to, blocked by CloudFlare Protection.'
+
+/** 演練伺服器那四站沒通過的樣子（`scripts/fake_setup_server.py` 的 `BLOCKED_SITES`）。 */
+const FOUR_FAILURES: Record<string, [SiteFailure, string]> = {
+  nyaasi: ['no_results', 'Query successful, but no results were returned from your indexer.'],
+  '1337x': ['cloudflare', CLOUDFLARE],
+  eztv: ['cloudflare', 'Unable to access eztvx.to, blocked by CloudFlare Protection.'],
+  'animetosho-xyz': ['unreachable', 'Unable to connect to indexer, check the log above.'],
+}
 
 /** 介面登入預設沿用 Jellyfin 帳密（M4 票 15）：只有一格擁有者的密碼。 */
 const OWNER_PASSWORD = 'skipper 的 Jellyfin 密碼'
@@ -410,7 +424,11 @@ describe('頁 2：qBittorrent', () => {
     expect(screen.queryByRole('textbox', { name: '位址' })).not.toBeInTheDocument()
   })
 
-  it('已經確認過既有的那一台時換成套件內要先確認，按了才送出', async () => {
+  /**
+   * 票 15 critique / audit 的 P2（M4 票 09）：確認走 `ConfirmPanel`——焦點進去、Esc 收起回到原本那一格；
+   * 確認之前標題就跟著草稿；從既有換走時 Berth 沒寫過那一台的偏好，警告不這麼說。
+   */
+  it('已經確認過既有的那一台時換成套件內要先確認：焦點進確認區、Esc 收起，按了才送出', async () => {
     const confirmed = qbittorrentSetup({
       ...EXISTING_DIFF,
       steps: [step('temp_path_enabled', 'skipped', 'true')],
@@ -426,8 +444,21 @@ describe('頁 2：qBittorrent', () => {
     await screen.findByRole('heading', { level: 2, name: '確認你的 qBittorrent' })
     await user.click(bundledCard())
 
-    expect(screen.getByText(/Berth 已經寫進原本那一台的偏好與登入留在那裡/)).toBeInTheDocument()
+    const panel = screen.getByRole('group', { name: /換一台 qBittorrent/ })
+    await waitFor(() => expect(panel).toHaveFocus())
+    expect(panel).toHaveTextContent(/Berth 沒改過你那一台的偏好/)
+    expect(panel).not.toHaveTextContent(/寫進原本那一台的偏好/)
+    // 確認之前標題已經說套件內那一台的事。
+    expect(screen.queryByRole('heading', { level: 2, name: '確認你的 qBittorrent' })).toBeNull()
     expect(called(stub, '/api/setup/services/qbittorrent')).toBe(false)
+
+    await user.keyboard('{Escape}')
+    expect(screen.queryByRole('group', { name: /換一台 qBittorrent/ })).not.toBeInTheDocument()
+    expect(existingCard()).toHaveFocus()
+    expect(existingCard()).toBeChecked()
+    expect(screen.getByRole('heading', { level: 2, name: '確認你的 qBittorrent' })).toBeVisible()
+
+    await user.click(bundledCard())
     await user.click(screen.getByRole('button', { name: '改用套件內的那一台' }))
 
     await waitFor(() =>
@@ -501,60 +532,199 @@ describe('頁 2：qBittorrent', () => {
 })
 
 describe('頁 4：Prowlarr 與索引站', () => {
-  it('預設站預設全勾，按鈕說得出會加幾個', async () => {
-    stubApi({ [STATUS]: { body: AT_INDEXER }, [INDEXERS]: { body: indexerSetup() } })
-
-    renderWithProviders(<SetupPage />)
-
-    const picks = (await screen.findByText('要加入哪些站')).closest('fieldset')!
-    const boxes = within(picks).getAllByRole('checkbox')
-    expect(boxes).toHaveLength(9)
-    expect(boxes.every((box) => (box as HTMLInputElement).checked)).toBe(true)
-    expect(screen.getByRole('button', { name: '加入這 9 個站' })).toBeInTheDocument()
-    // AniDex 不在預設清單裡（票 06e：anidex.info 從 09-08 起一直回 502）。
-    expect(within(picks).queryByLabelText('Anidex')).not.toBeInTheDocument()
-  })
-
-  it('每一站說出是什麼語言（照 UI 語言的名字）與一句原文說明', async () => {
-    stubApi({ [STATUS]: { body: AT_INDEXER }, [INDEXERS]: { body: indexerSetup() } })
-
-    renderWithProviders(<SetupPage />)
-
-    const dmhy = await screen.findByLabelText('dmhy')
-    expect(dmhy).toHaveAccessibleDescription(
-      '中文（台灣） · dmhy is a TAIWANESE Public magnet tracker for ANIME',
-    )
-    expect(screen.getByLabelText('Mikan')).toHaveAccessibleDescription('中文（中國）')
-    expect(screen.getByLabelText('Anime Tosho')).toHaveAccessibleDescription(
-      '英文（美國） · 半私有站，可能需要帳號',
-    )
-  })
-
-  it('取消勾選的站不會被送出去', async () => {
+  it('進這一頁只讀：不測任何一站、不送任何寫入，一站都不預勾', async () => {
     const fetchStub = stubApi({
       [STATUS]: { body: AT_INDEXER },
       [INDEXERS]: { body: indexerSetup() },
-      [ADD_INDEXERS]: { body: indexerSetup({ steps: [step('nyaasi', 'ok')] }) },
+    })
+
+    renderWithProviders(<SetupPage />)
+
+    const recommended = within(await screen.findByTestId('recommended'))
+    const boxes = recommended.getAllByRole('checkbox')
+    expect(boxes).toHaveLength(9)
+    expect(boxes.every((box) => !(box as HTMLInputElement).checked)).toBe(true)
+    expect(recommended.getAllByText('未測')).toHaveLength(9)
+    expect(fetchStub.mock.calls.every(([, init]) => (init?.method ?? 'GET') === 'GET')).toBe(true)
+    // 一站都沒勾、登入也還沒填：主鈕說的是設登入，不是「加入 9 個站」。
+    expect(screen.getByRole('button', { name: '設定介面登入' })).toBeInTheDocument()
+  })
+
+  it('沒測過或測試沒通過的站勾不起來；測過通過的才勾得起來', async () => {
+    const fetchStub = stubApi({
+      [STATUS]: { body: AT_INDEXER },
+      [INDEXERS]: { body: indexerSetup() },
+      [TEST_SITES]: { body: { checks: [check('yts'), check('1337x', 'cloudflare', CLOUDFLARE)] } },
     })
     const user = userEvent.setup()
 
     renderWithProviders(<SetupPage />)
-    const picks = (await screen.findByText('要加入哪些站')).closest('fieldset')!
-    await user.click(within(picks).getByLabelText('The Pirate Bay'))
-    await user.type(screen.getByLabelText(OWNER_PASSWORD), 'harbour')
-    await user.click(screen.getByRole('button', { name: '加入這 8 個站' }))
+    const yts = await screen.findByRole('checkbox', { name: 'YTS' })
+    const blocked = screen.getByRole('checkbox', { name: '1337x' })
+    expect(yts).toBeDisabled()
+    expect(yts).toHaveAccessibleDescription(/先測試，通過才勾得起來/)
 
-    await waitFor(() =>
-      expect(fetchStub.mock.calls.some(([url]) => url === '/api/setup/indexers/apply')).toBe(true),
-    )
-    const body = bodyOf(fetchStub, '/api/setup/indexers/apply')
-    expect(body.indexers).not.toContain('thepiratebay')
-    expect(body.indexers).toContain('nyaasi')
-    // Prowlarr 的介面登入跟著「加入」一起送（M4 票 07），預設沿用 Jellyfin 帳密（M4 票 15）。
-    expect(body.login).toEqual({ username: '', password: 'harbour', reuse_owner: true })
+    await user.click(screen.getByRole('button', { name: '測試 YTS' }))
+    await user.click(screen.getByRole('button', { name: '測試 1337x' }))
+
+    await waitFor(() => expect(yts).toBeEnabled())
+    expect(blocked).toBeDisabled()
+    // 測過而沒通過的不再叫人先測試：理由在那一列上。
+    expect(blocked).not.toHaveAccessibleDescription(/先測試/)
+    await user.click(yts)
+    expect(yts).toBeChecked()
+    expect(screen.getByRole('button', { name: '加入 1 個站' })).toBeInTheDocument()
+    expect(bodyOf(fetchStub, TEST_SITES.replace('POST ', ''))).toEqual({ indexers: ['yts'] })
   })
 
-  it('Prowlarr 介面登入必填：沒填密碼就不加站（M4 票 07）', async () => {
+  it('「測試全部」測推薦清單裡還沒通過的站', async () => {
+    const fetchStub = stubApi({
+      [STATUS]: { body: AT_INDEXER },
+      [INDEXERS]: { body: indexerSetup() },
+      [TEST_SITES]: { body: { checks: RECOMMENDED.map((row) => check(row.definition_name)) } },
+    })
+    const user = userEvent.setup()
+
+    renderWithProviders(<SetupPage />)
+    await user.click(await screen.findByRole('button', { name: '測試全部' }))
+
+    await waitFor(() => expect(called(fetchStub, '/api/setup/indexers/test')).toBe(true))
+    expect(bodyOf(fetchStub, '/api/setup/indexers/test').indexers).toEqual(
+      RECOMMENDED.map((row) => row.definition_name),
+    )
+    expect(await screen.findAllByText('通過')).toHaveLength(9)
+    // 全過了：沒有還要測的，「測試全部」停用。
+    expect(screen.getByRole('button', { name: '測試全部' })).toBeDisabled()
+  })
+
+  /**
+   * 票 15 critique 的 P1，照演練伺服器的四站失敗（`scripts/fake_setup_server.py` 的 `BLOCKED_SITES`）：
+   * 原文不直接攤開、一條摘要一個 live 區、沒有容器主機名的連結、紅色不用在這裡。
+   */
+  it('四站沒通過：各說一句理由，原文收起來，只有一條摘要、一個 live 區', async () => {
+    stubApi({
+      [STATUS]: { body: AT_INDEXER },
+      [INDEXERS]: { body: indexerSetup() },
+      [TEST_SITES]: {
+        body: {
+          checks: RECOMMENDED.map((row) =>
+            FOUR_FAILURES[row.definition_name]
+              ? check(row.definition_name, ...FOUR_FAILURES[row.definition_name])
+              : check(row.definition_name),
+          ),
+        },
+      },
+    })
+    const user = userEvent.setup()
+
+    renderWithProviders(<SetupPage />)
+    await user.click(await screen.findByRole('button', { name: '測試全部' }))
+
+    const summary = await screen.findByTestId('check-summary')
+    await within(summary).findByText('4 站沒通過')
+    expect(summary).toHaveAttribute('aria-live', 'polite')
+    expect(summary).toHaveTextContent('Cloudflare 擋住 2 · 查無結果 1 · 連不上 1 · 5 站通過')
+    const add = within(screen.getByRole('region', { name: '加站' }))
+    expect(add.getAllByText(/被 Cloudflare 擋住/)).toHaveLength(2)
+    expect(add.getByText(/連得上，但測試那一次查詢什麼都沒回/)).toBeVisible()
+    // 原文在「Prowlarr 原文」底下，沒有展開就看不到。
+    expect(add.getByText(CLOUDFLARE)).not.toBeVisible()
+    expect(add.getAllByText('Prowlarr 原文')).toHaveLength(4)
+    // 這一段只有摘要那一個 live 區，也沒有任何一塊在喊阻擋。
+    expect(document.querySelectorAll('[aria-live]:not([role=status])')).toHaveLength(1)
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    // 補法連結是使用者瀏覽器到得了的位址，不是 compose 內網的主機名。
+    expect(document.body.innerHTML).not.toContain('prowlarr:9696/#')
+    expect(add.getByRole('link', { name: '開啟 Prowlarr 的索引站頁' })).toHaveAttribute(
+      'href',
+      `http://${window.location.hostname}:9696/#/indexers`,
+    )
+  })
+
+  it('測試的請求沒送到：說在摘要那一個 live 區裡，剛才的站回到未測', async () => {
+    stubApi({
+      [STATUS]: { body: AT_INDEXER },
+      [INDEXERS]: { body: indexerSetup() },
+      [TEST_SITES]: { status: 502, body: { detail: 'Bad Gateway' } },
+    })
+    const user = userEvent.setup()
+
+    renderWithProviders(<SetupPage />)
+    await user.click(await screen.findByRole('button', { name: '測試 YTS' }))
+
+    const summary = await screen.findByTestId('check-summary')
+    expect(await within(summary).findByText(/測試沒有送到/)).toBeInTheDocument()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    const yts = within(screen.getByRole('checkbox', { name: 'YTS' }).closest('li')!)
+    expect(yts.getByText('未測')).toBeInTheDocument()
+  })
+
+  it('主鈕只數還沒加的站；加入送的是勾的那幾站與介面登入', async () => {
+    const fetchStub = stubApi({
+      [STATUS]: { body: AT_INDEXER },
+      [INDEXERS]: { body: indexerSetup() },
+      [TEST_SITES]: { body: { checks: [check('dmhy'), check('mikan')] } },
+      [ADD_INDEXERS]: {
+        body: indexerSetup({
+          sites: [site(RECOMMENDED[1], 1), site(RECOMMENDED[4], 2)],
+          steps: [step('dmhy', 'ok'), step('mikan', 'ok'), step('prowlarr_login', 'ok', 'skipper')],
+          checks: [check('dmhy'), check('mikan')],
+          web_ui_username: 'skipper',
+        }),
+      },
+    })
+    const user = userEvent.setup()
+
+    renderWithProviders(<SetupPage />)
+    await user.click(await screen.findByRole('button', { name: '測試 dmhy' }))
+    await user.click(screen.getByRole('button', { name: '測試 Mikan' }))
+    await user.click(await screen.findByRole('checkbox', { name: 'dmhy' }))
+    await waitFor(() => expect(screen.getByRole('checkbox', { name: 'Mikan' })).toBeEnabled())
+    await user.click(screen.getByRole('checkbox', { name: 'Mikan' }))
+    await user.type(screen.getByLabelText(OWNER_PASSWORD), 'harbour')
+    await user.click(screen.getByRole('button', { name: '加入 2 個站' }))
+
+    await waitFor(() => expect(called(fetchStub, '/api/setup/indexers/apply')).toBe(true))
+    expect(bodyOf(fetchStub, '/api/setup/indexers/apply')).toEqual({
+      indexers: ['dmhy', 'mikan'],
+      // Prowlarr 的介面登入跟著「加入」一起送（M4 票 07），預設沿用 Jellyfin 帳密（M4 票 15）。
+      login: { username: '', password: 'harbour', reuse_owner: true },
+    })
+    // 兩站搬去「已加入」，加站那一段不再有它們；主鈕回到沒有東西可加。
+    const added = within(await screen.findByTestId('added'))
+    expect(added.getByText('dmhy')).toBeInTheDocument()
+    expect(screen.queryByRole('checkbox', { name: 'dmhy' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '加入' })).toBeDisabled()
+  })
+
+  it('勾了的站加入時被 Prowlarr 拒了：回到沒通過、理由同一套', async () => {
+    stubApi({
+      [STATUS]: { body: AT_INDEXER },
+      [INDEXERS]: { body: indexerSetup({ web_ui_username: 'skipper' }) },
+      [TEST_SITES]: { body: { checks: [check('eztv')] } },
+      [ADD_INDEXERS]: {
+        body: indexerSetup({
+          web_ui_username: 'skipper',
+          steps: [step('eztv', 'failed', '', CLOUDFLARE)],
+          checks: [check('eztv', 'cloudflare', CLOUDFLARE)],
+        }),
+      },
+    })
+    const user = userEvent.setup()
+
+    renderWithProviders(<SetupPage />)
+    await user.click(await screen.findByRole('button', { name: '測試 EZTV' }))
+    const eztv = screen.getByRole('checkbox', { name: 'EZTV' })
+    await waitFor(() => expect(eztv).toBeEnabled())
+    await user.click(eztv)
+    await user.click(screen.getByRole('button', { name: '加入 1 個站' }))
+
+    await waitFor(() => expect(eztv).toBeDisabled())
+    expect(screen.getByText(/被 Cloudflare 擋住/)).toBeInTheDocument()
+    expect(screen.getByTestId('check-summary')).toHaveTextContent('1 站沒通過')
+  })
+
+  it('Prowlarr 介面登入必填：沒填密碼就不送（M4 票 07）', async () => {
     const fetchStub = stubApi({
       [STATUS]: { body: AT_INDEXER },
       [INDEXERS]: { body: indexerSetup() },
@@ -564,40 +734,53 @@ describe('頁 4：Prowlarr 與索引站', () => {
     renderWithProviders(<SetupPage />)
     const fields = within((await screen.findByText('Prowlarr 介面登入')).closest('fieldset')!)
     expect(fields.getByRole('checkbox', { name: '沿用 Jellyfin 帳密（skipper）' })).toBeChecked()
-    expect(fields.getByLabelText(OWNER_PASSWORD)).toHaveValue('')
-    await user.click(screen.getByRole('button', { name: '加入這 9 個站' }))
+    await user.click(screen.getByRole('button', { name: '設定介面登入' }))
 
     expect(await fields.findByText('這一格要填。')).toBeInTheDocument()
-    expect(fetchStub.mock.calls.some(([url]) => url === '/api/setup/indexers/apply')).toBe(false)
+    expect(called(fetchStub, '/api/setup/indexers/apply')).toBe(false)
   })
 
-  it('逐站顯示成敗：連不上的變紅並展開手動步驟，其餘照樣繫上', async () => {
-    stubApi({
-      [STATUS]: { body: AT_INDEXER },
-      [INDEXERS]: {
-        body: indexerSetup({
-          steps: [
-            step('nyaasi', 'ok'),
-            step(
-              '1337x',
-              'failed',
-              '',
-              'Unable to access 1337x.to, blocked by CloudFlare Protection.',
-            ),
-          ],
-        }),
-      },
-    })
+  it('每一站說出是什麼語言（照 UI 語言的名字）與一句原文說明', async () => {
+    stubApi({ [STATUS]: { body: AT_INDEXER }, [INDEXERS]: { body: indexerSetup() } })
 
     renderWithProviders(<SetupPage />)
 
-    const sites = await screen.findByTestId('sites')
-    expect(within(sites).getByText('已完成')).toBeInTheDocument()
-    expect(within(sites).getByText('失敗')).toBeInTheDocument()
-    expect(
-      within(sites).getByText('Unable to access 1337x.to, blocked by CloudFlare Protection.'),
-    ).toBeInTheDocument()
-    expect(within(sites).getByText('http://prowlarr:9696/#/indexers')).toBeInTheDocument()
+    const dmhy = within((await screen.findByRole('checkbox', { name: 'dmhy' })).closest('li')!)
+    expect(dmhy.getByText('中文（台灣）')).toBeInTheDocument()
+    expect(screen.getByRole('checkbox', { name: 'dmhy' })).toHaveAccessibleDescription(
+      'dmhy is a TAIWANESE Public magnet tracker for ANIME · 先測試，通過才勾得起來',
+    )
+    expect(screen.getByRole('checkbox', { name: 'Anime Tosho' })).toHaveAccessibleDescription(
+      '半私有站，可能需要帳號 · 先測試，通過才勾得起來',
+    )
+  })
+
+  it('其他公開站依名稱或語言叫出來，同樣先測再勾', async () => {
+    const fetchStub = stubApi({
+      [STATUS]: { body: AT_INDEXER },
+      [INDEXERS]: { body: indexerSetup() },
+      [TEST_SITES]: { body: { checks: [check('rutor')] } },
+    })
+    const user = userEvent.setup()
+
+    renderWithProviders(<SetupPage />)
+    // 不搜就不列：八十幾站不該佔掉整頁。
+    await screen.findByText('其他公開站')
+    expect(screen.queryByTestId('others')).not.toBeInTheDocument()
+
+    await user.type(screen.getByLabelText('搜尋名稱'), 'to')
+    const others = within(await screen.findByTestId('others'))
+    expect(others.getAllByRole('checkbox')).toHaveLength(2)
+    expect(others.getByRole('checkbox', { name: 'RuTor' })).toBeInTheDocument()
+    expect(others.getByRole('checkbox', { name: 'Tokyo Toshokan' })).toBeInTheDocument()
+
+    await user.clear(screen.getByLabelText('搜尋名稱'))
+    await user.selectOptions(screen.getByRole('combobox', { name: '語言' }), '俄文（俄羅斯）')
+    const russian = within(screen.getByTestId('others'))
+    expect(russian.getAllByRole('checkbox')).toHaveLength(1)
+    await user.click(russian.getByRole('button', { name: '測試 RuTor' }))
+    await waitFor(() => expect(russian.getByRole('checkbox', { name: 'RuTor' })).toBeEnabled())
+    expect(bodyOf(fetchStub, '/api/setup/indexers/test')).toEqual({ indexers: ['rutor'] })
   })
 
   it('連上了、還沒加站時，板上那一格說「套件內 · Prowlarr · 尚未加入索引站」', async () => {
@@ -644,10 +827,48 @@ describe('頁 4：Prowlarr 與索引站', () => {
     expect(await berth.findByText('套件內 · Prowlarr · 3 個索引站')).toBeInTheDocument()
   })
 
-  it('加入之後可以試搜：逐站列出筆數與前三筆標題，一站失敗不影響其他站', async () => {
+  it('既有 Prowlarr 的站數也讀頁上的清單：測試之後使用者自己加的站照樣算（berth-lab 實測）', async () => {
+    const existingProwlarr = chosen({
+      kind: 'prowlarr',
+      origin: 'existing',
+      base_url: 'http://nas:9696',
+      reason: 'connected',
+      detail: '0',
+    })
+    stubApi({
+      [STATUS]: {
+        body: setupStatus({
+          ...AT_INDEXER,
+          services: [...ALL_BUNDLED.slice(0, 2), existingProwlarr],
+        }),
+      },
+      [INDEXERS]: {
+        body: indexerSetup({
+          origin: 'existing',
+          base_url: 'http://nas:9696',
+          sites: [site(RECOMMENDED[1], 1), site(RECOMMENDED[6], 2)],
+          candidates: [],
+        }),
+      },
+    })
+
+    renderWithProviders(<SetupPage />)
+
+    const berth = within((await screen.findByText('BTH 4')).closest('li')!)
+    expect(await berth.findByText('既有 · Prowlarr · 2 個索引站')).toBeInTheDocument()
+  })
+
+  it('已加入的站可以一站一站搜，也可以全部搜；一站失敗不影響其他站', async () => {
     const fetchStub = stubApi({
       [STATUS]: { body: AT_INDEXER },
       [INDEXERS]: { body: withSites() },
+      [`${SEARCH}?query=Frieren&indexer_id=1`]: {
+        body: {
+          query: 'Frieren',
+          error: '',
+          sites: [siteSearch(1, 'dmhy', 12, ['[LoliHouse] Frieren - 28', 'b', 'c'])],
+        },
+      },
       [`${SEARCH}?query=Frieren`]: {
         body: {
           query: 'Frieren',
@@ -663,20 +884,27 @@ describe('頁 4：Prowlarr 與索引站', () => {
     const user = userEvent.setup()
 
     renderWithProviders(<SetupPage />)
-    const trial = within((await screen.findByRole('heading', { name: '試搜' })).closest('section')!)
-    // 還沒按之前，加進來的每一站都在清單上，說它還沒試搜。
-    expect(trial.getAllByText('還沒試搜')).toHaveLength(3)
+    const added = within(await screen.findByTestId('added'))
+    // 還沒按之前，加進來的每一站都在清單上，說它還沒搜。
+    expect(added.getAllByText('還沒搜')).toHaveLength(3)
+    await user.type(added.getByLabelText('關鍵字'), 'Frieren')
 
-    await user.type(trial.getByLabelText('關鍵字'), 'Frieren')
-    await user.click(trial.getByRole('button', { name: '試搜' }))
+    await user.click(added.getByRole('button', { name: '搜尋 dmhy' }))
+    expect(await added.findByText('12 筆')).toBeInTheDocument()
+    expect(added.getAllByText('還沒搜')).toHaveLength(2)
 
-    const rows = within(await screen.findByTestId('trial'))
-    expect(await rows.findByText('12 筆')).toBeInTheDocument()
-    expect(rows.getByText('[LoliHouse] Frieren - 28')).toBeInTheDocument()
-    expect(rows.getByText('GET /api/v1/search: 502 Bad Gateway')).toBeInTheDocument()
-    expect(rows.getByText('0 筆')).toBeInTheDocument()
-    const call = fetchStub.mock.calls.find(([url]) => String(url).includes('/indexers/search'))!
-    expect(String(call[0])).toContain('query=Frieren')
+    await user.click(added.getByRole('button', { name: '搜尋全部' }))
+    expect(await added.findByText('0 筆')).toBeInTheDocument()
+    expect(added.getByText('[LoliHouse] Frieren - 28')).toBeInTheDocument()
+    expect(added.getByText('搜尋失敗')).toBeInTheDocument()
+    expect(added.getByText('GET /api/v1/search: 502 Bad Gateway')).not.toBeVisible()
+    const searches = fetchStub.mock.calls.filter(([url]) =>
+      String(url).includes('/indexers/search'),
+    )
+    expect(searches.map(([url]) => String(url))).toEqual([
+      '/api/setup/indexers/search?query=Frieren&indexer_id=1',
+      '/api/setup/indexers/search?query=Frieren',
+    ])
   })
 
   it('每一站可以移除，就地確認之後才送出', async () => {
@@ -726,6 +954,111 @@ describe('頁 4：Prowlarr 與索引站', () => {
     })
   })
 
+  it('在 Prowlarr 停用的站說它停用了，不給搜尋：搜尋不會問它（berth-lab 實測）', async () => {
+    stubApi({
+      [STATUS]: { body: AT_INDEXER },
+      [INDEXERS]: {
+        body: indexerSetup({
+          sites: [site(RECOMMENDED[1], 1), site({ ...OTHER_PUBLIC[0], enabled: false }, 4)],
+        }),
+      },
+    })
+
+    renderWithProviders(<SetupPage />)
+
+    const off = within(await screen.findByRole('article', { name: 'Knaben' }))
+    expect(off.getByText('在 Prowlarr 停用了')).toBeInTheDocument()
+    expect(off.queryByRole('button', { name: '搜尋 Knaben' })).not.toBeInTheDocument()
+    expect(off.queryByText('還沒搜')).not.toBeInTheDocument()
+  })
+
+  it('要帳號的站（在 Prowlarr 自己加的）列在已加入、可以搜，但沒有移除', async () => {
+    stubApi({
+      [STATUS]: { body: AT_INDEXER },
+      [INDEXERS]: {
+        body: indexerSetup({
+          sites: [
+            site(RECOMMENDED[1], 1),
+            site(
+              {
+                definition_name: 'AnimeBytes',
+                name: 'AnimeBytes',
+                privacy: 'private',
+                removable: false,
+              },
+              7,
+            ),
+          ],
+        }),
+      },
+    })
+
+    renderWithProviders(<SetupPage />)
+
+    const mine = within(await screen.findByRole('article', { name: 'AnimeBytes' }))
+    expect(mine.getByRole('button', { name: '搜尋 AnimeBytes' })).toBeInTheDocument()
+    expect(mine.queryByRole('button', { name: '移除' })).not.toBeInTheDocument()
+    expect(mine.getByText('要帳號的站 Berth 不移除')).toBeInTheDocument()
+  })
+
+  it('既有 Prowlarr：列出它已有的站與站數、可以試搜，沒有勾選、加入與移除', async () => {
+    const existingProwlarr = chosen({
+      kind: 'prowlarr',
+      origin: 'existing',
+      base_url: 'http://nas:9696',
+      reason: 'connected',
+      detail: '2',
+    })
+    const fetchStub = stubApi({
+      [STATUS]: {
+        body: setupStatus({
+          ...AT_INDEXER,
+          services: [...ALL_BUNDLED.slice(0, 2), existingProwlarr],
+        }),
+      },
+      [INDEXERS]: {
+        body: indexerSetup({
+          origin: 'existing',
+          base_url: 'http://nas:9696',
+          web_ui_login: false,
+          web_port: null,
+          sites: [
+            site({ ...RECOMMENDED[0], removable: false }, 1),
+            site({ definition_name: 'AnimeBytes', name: 'AnimeBytes', removable: false }, 2),
+          ],
+          candidates: [],
+          steps: [step('prowlarr', 'ok', '2')],
+        }),
+      },
+      [`${SEARCH}?query=`]: {
+        body: {
+          query: '',
+          error: '',
+          sites: [siteSearch(1, 'Nyaa.si', 5, ['x']), siteSearch(2, 'AnimeBytes', 3, ['y'])],
+        },
+      },
+    })
+    const user = userEvent.setup()
+
+    renderWithProviders(<SetupPage />)
+
+    const added = within(await screen.findByTestId('added'))
+    expect(added.getByText('2 站')).toBeInTheDocument()
+    expect(screen.queryByRole('checkbox', { name: 'Nyaa.si' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^加入/ })).not.toBeInTheDocument()
+    expect(added.queryByRole('button', { name: '移除' })).not.toBeInTheDocument()
+    // 要改它的站到它自己的介面：連結是使用者填的位址。
+    expect(screen.getByRole('link', { name: '開啟 Prowlarr 的索引站頁' })).toHaveAttribute(
+      'href',
+      'http://nas:9696/#/indexers',
+    )
+
+    await user.click(added.getByRole('button', { name: '搜尋全部' }))
+    expect(await added.findByText('5 筆')).toBeInTheDocument()
+    expect(added.getByText('3 筆')).toBeInTheDocument()
+    expect(fetchStub.mock.calls.every(([, init]) => (init?.method ?? 'GET') === 'GET')).toBe(true)
+  })
+
   it('選「既有」可以填任意 Torznab 端點，接上之後照樣試搜，但沒有移除', async () => {
     const existingProwlarr = chosen({
       kind: 'prowlarr',
@@ -739,7 +1072,7 @@ describe('頁 4：Prowlarr 與索引站', () => {
       origin: 'existing',
       kind: 'torznab',
       base_url: 'http://jackett:9117/api',
-      options: [],
+      candidates: [],
       steps: [step('torznab', 'ok', 'Jackett · TV')],
     })
     const fetchStub = stubApi({
@@ -749,7 +1082,7 @@ describe('頁 4：Prowlarr 與索引站', () => {
           ? setupStatus({ ...AT_INDEXER, services: [...ALL_BUNDLED.slice(0, 2), existingProwlarr] })
           : CHOOSING_INDEXER,
       }),
-      [INDEXERS]: { body: indexerSetup({ origin: 'existing', base_url: '', options: [] }) },
+      [INDEXERS]: { body: indexerSetup({ origin: 'existing', base_url: '', candidates: [] }) },
       [CONNECT_INDEXER]: () => {
         connectedYet = true
         return { body: connected }
@@ -781,7 +1114,7 @@ describe('頁 4：Prowlarr 與索引站', () => {
     const berth = within(screen.getByText('BTH 4').closest('li')!)
     expect(berth.getByText('既有 · Torznab · jackett:9117')).toBeInTheDocument()
 
-    await user.click(await screen.findByRole('button', { name: '試搜' }))
+    await user.click(await screen.findByRole('button', { name: '搜尋全部' }))
     const rows = within(await screen.findByTestId('trial'))
     expect(await rows.findByText('4 筆')).toBeInTheDocument()
     expect(rows.queryByRole('button', { name: '移除' })).not.toBeInTheDocument()
@@ -799,7 +1132,7 @@ describe('頁 4：Prowlarr 與索引站', () => {
 
     renderWithProviders(<SetupPage />)
     // 讀到清單之前頁尾有一顆同名的「之後再說」，讀到之後換成「加入」旁邊那一顆：等清單畫好再按。
-    await screen.findByText('要加入哪些站')
+    await screen.findByTestId('recommended')
     expect(screen.queryByTestId('indexers-deferred')).not.toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: '之後再說' }))
@@ -969,11 +1302,8 @@ describe('頁 5：TMDB', () => {
 
 /** dmhy、Mikan、YTS 三站已經加進套件內的 Prowlarr（id 1–3）。 */
 function withSites() {
-  const ids: Record<string, number> = { dmhy: 1, mikan: 2, yts: 3 }
   return indexerSetup({
-    options: DEFAULT_OPTIONS.map((row) =>
-      row.definition_name in ids ? added(row, ids[row.definition_name]) : row,
-    ),
+    sites: [site(RECOMMENDED[1], 1), site(RECOMMENDED[4], 2), site(RECOMMENDED[6], 3)],
     steps: [step('dmhy', 'ok'), step('mikan', 'ok'), step('yts', 'ok')],
   })
 }
@@ -994,15 +1324,7 @@ function stubRemoval() {
     [STATUS]: { body: AT_INDEXER },
     [INDEXERS]: { body: withSites() },
     [REMOVE_YTS]: {
-      body: indexerSetup({
-        options: DEFAULT_OPTIONS.map((row) =>
-          row.definition_name === 'dmhy'
-            ? added(row, 1)
-            : row.definition_name === 'mikan'
-              ? added(row, 2)
-              : row,
-        ),
-      }),
+      body: indexerSetup({ sites: [site(RECOMMENDED[1], 1), site(RECOMMENDED[4], 2)] }),
     },
   })
 }

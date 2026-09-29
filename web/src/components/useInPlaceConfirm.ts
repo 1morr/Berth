@@ -37,11 +37,16 @@ export function useInPlaceConfirm() {
     close,
     trigger,
     panel,
-    onKeyDown: (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return
-      // 確認可能在另一個會吃 Esc 的東西裡（`<details>`）；這一下只收起確認。
-      event.stopPropagation()
-      close()
-    },
+    onKeyDown: (event: KeyboardEvent) => escapeOnly(event, close),
   }
+}
+
+/**
+ * 確認區裡的 Esc：只收起確認。確認可能在另一個會吃 Esc 的東西裡（`<details>`）；這一下不往外傳。
+ * 焦點不歸這支 hook 管的確認（`ServiceChoice`：觸發的是 radio，草稿由頁面持有）直接用它。
+ */
+export function escapeOnly(event: KeyboardEvent, close: () => void) {
+  if (event.key !== 'Escape') return
+  event.stopPropagation()
+  close()
 }

@@ -1793,10 +1793,36 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get Indexers */
+        /**
+         * Get Indexers
+         * @description 只讀：進頁 4 與設定頁的索引站分頁只發這一支，不測任何一站（M4 票 09）。
+         */
         get: operations["get_indexers_api_setup_indexers_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/setup/indexers/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Indexers Test
+         * @description 「測試」：逐站問套件內的 Prowlarr 通不通，什麼都不建立（M4 票 09）。
+         *
+         *     只讀（`read` 命令），但它要 Prowlarr 現場去連那些站、要花幾秒，所以是由人按的 POST。
+         *     既有的索引站回 422：Berth 不替它加站，也就沒有要測的（brief §16.4）。
+         */
+        post: operations["post_indexers_test_api_setup_indexers_test_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1878,6 +1904,7 @@ export interface paths {
          * Get Indexers Search
          * @description 加入之後的試搜（票 06e）：逐站列出搜到幾筆與前三筆標題。空白查詢回各站最新的發佈。
          *
+         *     `indexer_id` 是那一列的「搜尋」，只問那一站（M4 票 09）；不帶是全部。
          *     只讀、不寫任何東西（`read` 命令），所以是 GET。一站失敗寫在那一站上，不是整支 5xx。
          */
         get: operations["get_indexers_search_api_setup_indexers_search_get"];
@@ -1903,7 +1930,7 @@ export interface paths {
          * Delete Indexer
          * @description 從套件內的 Prowlarr 移除一站（票 06e）。已經不在的站照樣回 200：結果就是它不在了。
          *
-         *     對既有的索引站回 422，與 `/indexers/apply` 同一條紅線（brief §16.4）。
+         *     對既有的索引站、與 Berth 加不回去的站（私站）回 422（brief §16.4）。
          */
         delete: operations["delete_indexer_api_setup_indexers__indexer_id__delete"];
         options?: never;
@@ -2774,6 +2801,24 @@ export interface components {
             login?: components["schemas"]["InterfaceLoginIn"] | null;
         };
         /**
+         * IndexerCandidateOut
+         * @description 還沒加入、Berth 加得了的一站（M4 票 09 的「加站」）。
+         */
+        IndexerCandidateOut: {
+            /** Definition Name */
+            definition_name: string;
+            /** Name */
+            name: string;
+            /** Privacy */
+            privacy: string;
+            /** Language */
+            language: string;
+            /** Description */
+            description: string;
+            /** Recommended */
+            recommended: boolean;
+        };
+        /**
          * IndexerConnectIn
          * @description 既有路徑：Prowlarr 位址 + key，或任意 Torznab 端點 + key。
          */
@@ -2793,23 +2838,6 @@ export interface components {
          * @enum {string}
          */
         IndexerKind: "prowlarr" | "torznab";
-        /** IndexerOptionOut */
-        IndexerOptionOut: {
-            /** Definition Name */
-            definition_name: string;
-            /** Name */
-            name: string;
-            /** Privacy */
-            privacy: string;
-            /** Present */
-            present: boolean;
-            /** Language */
-            language: string;
-            /** Description */
-            description: string;
-            /** Indexer Id */
-            indexer_id: number | null;
-        };
         /**
          * IndexerProblem
          * @description 索引站那邊沒搜到東西的五種樣子（票 08 的結果表）。
@@ -2839,8 +2867,12 @@ export interface components {
             api_key_present: boolean;
             /** Reachable */
             reachable: boolean;
-            /** Options */
-            options: components["schemas"]["IndexerOptionOut"][];
+            /** Sites */
+            sites: components["schemas"]["IndexerSiteOut"][];
+            /** Candidates */
+            candidates: components["schemas"]["IndexerCandidateOut"][];
+            /** Checks */
+            checks: components["schemas"]["SiteCheckOut"][];
             /** Steps */
             steps: components["schemas"]["StepOut"][];
             /** Skipped */
@@ -2852,6 +2884,40 @@ export interface components {
             /** Error */
             error: string;
             reason: components["schemas"]["ConnectionReason"] | null;
+            /** Web Port */
+            web_port: number | null;
+        };
+        /**
+         * IndexerSiteOut
+         * @description Prowlarr 裡已經有的一站（M4 票 09 的「已加入」）。
+         */
+        IndexerSiteOut: {
+            /** Indexer Id */
+            indexer_id: number;
+            /** Definition Name */
+            definition_name: string;
+            /** Name */
+            name: string;
+            /** Enabled */
+            enabled: boolean;
+            /** Language */
+            language: string;
+            /** Description */
+            description: string;
+            /** Privacy */
+            privacy: string;
+            /** Removable */
+            removable: boolean;
+        };
+        /** IndexerTestIn */
+        IndexerTestIn: {
+            /** Indexers */
+            indexers: string[];
+        };
+        /** IndexerTestOut */
+        IndexerTestOut: {
+            /** Checks */
+            checks: components["schemas"]["SiteCheckOut"][];
         };
         /**
          * InterfaceLoginIn
@@ -4780,6 +4846,25 @@ export interface components {
             /** Deferred */
             deferred: components["schemas"]["DeferralOut"][];
         };
+        /** SiteCheckOut */
+        SiteCheckOut: {
+            /** Definition Name */
+            definition_name: string;
+            /** Passed */
+            passed: boolean;
+            reason: components["schemas"]["SiteFailure"] | null;
+            /** Detail */
+            detail: string;
+        };
+        /**
+         * SiteFailure
+         * @description 一個索引站沒通過 Prowlarr 的測試或加不進去時，畫面說得出來的理由（M4 票 09）。
+         *
+         *     Prowlarr 只給英文原文，而常見的就那幾種（brief §20.7 實測）：分出來是為了換成 i18n 的一句話，
+         *     原文照樣帶著給人展開看。認不出來的是 `other`。
+         * @enum {string}
+         */
+        SiteFailure: "cloudflare" | "no_results" | "unreachable" | "other";
         /** SiteSearchOut */
         SiteSearchOut: {
             /** Indexer Id */
@@ -8902,6 +8987,39 @@ export interface operations {
             };
         };
     };
+    post_indexers_test_api_setup_indexers_test_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IndexerTestIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IndexerTestOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     post_indexers_apply_api_setup_indexers_apply_post: {
         parameters: {
             query?: never;
@@ -9023,6 +9141,7 @@ export interface operations {
         parameters: {
             query?: {
                 query?: string;
+                indexer_id?: number | null;
             };
             header?: never;
             path?: never;

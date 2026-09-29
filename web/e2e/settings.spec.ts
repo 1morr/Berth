@@ -14,12 +14,23 @@ test('精靈跑完之後：/setup 導向設定頁，加一個索引站並試搜�
   await page.goto('/setup')
   await expect(page).toHaveURL(/\/settings\//)
 
+  // 進來只讀（M4 票 09）：不測任何一站、不送任何寫入。
+  const writes: string[] = []
+  page.on('request', (request) => {
+    if (request.method() !== 'GET' && request.url().includes('/api/setup/')) {
+      writes.push(request.url())
+    }
+  })
   await page.goto('/settings/indexers')
   const main = page.getByRole('main')
   await expect(main.getByRole('heading', { name: '索引站設定' })).toBeVisible()
-  await main.getByRole('checkbox', { name: /YTS/ }).check()
-  await main.getByRole('button', { name: '加入這 2 個站' }).click()
-  await main.getByRole('button', { name: '試搜' }).click()
+  await expect(main.getByTestId('added')).toBeVisible()
+  await page.waitForLoadState('networkidle')
+  expect(writes).toEqual([])
+  await main.getByRole('button', { name: '測試 YTS' }).click()
+  await main.getByRole('checkbox', { name: 'YTS' }).check()
+  await main.getByRole('button', { name: '加入 1 個站' }).click()
+  await main.getByRole('button', { name: '搜尋全部' }).click()
   const yts = page.getByTestId('trial').getByRole('listitem').filter({ hasText: 'YTS' }).first()
   await expect(yts.getByText(/\d+ 筆/)).toBeVisible()
   await shot(page, 'indexers')
