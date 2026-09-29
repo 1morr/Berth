@@ -97,17 +97,18 @@ Berth 協調的三個外部服務之一：Jellyfin、qBittorrent、Prowlarr。�
 _Avoid_: integration, provider（Provider 專指 metadata provider）
 
 **Service Origin**:
-精靈對單一服務的判定：`bundled`（套件內，Berth 全自動接手）或 `existing`（既有，使用者自己的那一台）。
-逐服務判斷，沒有全局模式；探測中與逾時是輪詢期間的暫時值（探測中包括容器還在啟動：連不上、回 503、回的東西不像它自己，M3 票 06g）。**與 Trigger 的「來源」無關**。
+使用者在精靈替單一服務選的來源：`bundled`（套件內，Berth 代為設定）或 `existing`（既有，使用者自己的那一台）。
+逐服務選，沒有全局模式；**是使用者的選擇，不是 Berth 偵測出來的判定**（2026-09-29 起，brief §16.3；之前是偵測）。選完要測試，套件內的測試在容器還在啟動時（連不上、回 503、回的東西不像它自己，M3 票 06g）照舊輪詢，那是測試的狀態，不是來源。**與 Trigger 的「來源」無關**。
 _Avoid_: mode, service type
 
 **Bundled service**（UI 顯示「套件內」）:
-compose 起的、而且還沒被設定過的服務。判準逐服務不同：Jellyfin 的 `StartupWizardCompleted=false`、
-qBittorrent 免密進得去、Prowlarr 讀得到 API key 且無索引站。
+使用者選「套件內」的服務：這套 compose 起的那一台（容器名 `berth-*`，Berth 以 compose 服務名連它），
+Berth 代為設定（建管理員或登入、偏好、介面登入、索引站）。已經初始化過的（重裝保留 config）照樣是套件內，只是改成登入。
 _Avoid_: managed, built-in, ours
 
 **Existing service**（UI 顯示「既有」）:
-使用者自己的服務，或不在這套 compose 裡的服務。Berth 只做檢查，改動一律要按鈕確認。
+使用者選「既有」的服務：使用者自己的那一台，填位址與憑證接進來。Berth 只做檢查，不寫它的帳密、不改它的全域偏好、
+不替它加索引站，改動一律要按鈕確認；Jellyfin 與 qBittorrent 必須與 Berth 同一台主機、同一個容器路徑掛同一個父目錄。
 _Avoid_: external, remote, byo
 
 **Step status**（UI 顯示於每一條纜繩）:
@@ -117,8 +118,8 @@ _Avoid_: external, remote, byo
 _Avoid_: success/error（那是 HTTP 的詞）, done（`ok` 與 `skipped` 都算做完）
 
 **Berth（泊位）**:
-設定精靈把八個步驟歸成的五格：Jellyfin、qBittorrent、媒體庫路徑、索引站（Prowlarr 或任一 Torznab 端點）、TMDB。
-一格一個服務（M3 票 06e 把原本的「來源」拆成索引站與 TMDB 兩格）。
+設定精靈的五格，一格一頁（之後是完成頁）：Jellyfin、qBittorrent、媒體庫路徑、Prowlarr（與索引站；或任一 Torznab 端點）、TMDB。
+一格一個服務（M3 票 06e 把原本的「來源」拆成索引站與 TMDB 兩格；2026-09-29 起 Prowlarr 與索引站同一格、拿掉格子前的擁有者與偵測兩步，擁有者就是 Jellyfin 那一格的結果）。
 用在精靈、健康頁的泊位板與設定頁（一格一頁，同一個順序，M3 票 06i）；與產品名 Berth 同字，指的是畫面上那一格。
 _Avoid_: stage, section, panel
 
@@ -300,7 +301,7 @@ _Avoid_: purge level, cleanup mode
 **Health Check**:
 對服務連線、版本、Route 硬鏈接與跨服務可見性的檢查，結果顯示在健康頁。**四項**：Jellyfin、
 qBittorrent、索引站、Route；三個服務與 Route 各對應精靈的一個泊位（BTH 1、2、4 與 BTH 3），第四項是所有 Route 的總結。
-TMDB 那一格（BTH 5）不是檢查：它讀精靈第 7 步那一次憑證測試的結果。
+TMDB 那一格（BTH 5）不是檢查：它讀精靈 TMDB 泊位那一次憑證測試的結果。
 背景迴圈每 5 分鐘跑一次，也可以在畫面上按「立即重測」。
 _Avoid_: diagnostics, status check
 
