@@ -1124,6 +1124,16 @@ split-cour 的第一批被播出日比對整批擋在審核，改正一次並套
   Jellyfin 回 422。資料：`settings.setup.services`（偵測判定）換成 `settings.setup.choices`，migration `f3c9a1d6b2e8`
   把有結論的判定轉成同一個來源的選擇（連得上的測試是綠的），還在探測、逾時、以及偵測猜成既有卻沒被你填過的
   丟掉——那一頁回到二選一。
+- **套件內三個服務的容器名改成 `berth-jellyfin` / `berth-qbittorrent` / `berth-prowlarr`**（M4 票 16，brief §20.14）：
+  同一台主機上原本就有叫 `jellyfin` 的容器，而 `COMPOSE_PROFILES` 忘了拿掉套件內那一台時，`docker compose up -d`
+  會連 Berth 在內**整套都起不來**（實測，不是只有撞名的那一台）。`berth` 的容器名不變；compose 的服務名與 profile
+  也不變，`.env` 不必改。**已經部署的人**：`docker compose up -d` 之後三個容器以新名字重建，設定都在 `CONFIG_ROOT`
+  的 bind mount 上，不受影響；自己寫過 `docker exec qbittorrent …`、`docker logs jellyfin` 這類指令的要改成新名字
+  （`docker compose exec qbittorrent …` 用的是服務名，照舊）。
+- **`berth` 連得到宿主上的服務**（M4 票 16，brief §16.4）：compose 的 `berth` 服務加
+  `extra_hosts: host.docker.internal:host-gateway`，Linux 上既有服務的位址也能填 `host.docker.internal`
+  （Docker Desktop 本來就有這個名字，明寫這一條不改變它）。`.env.example` 在 `COMPOSE_PROFILES` 旁寫明接既有的
+  哪一個就拿掉哪一個；README〈部署疑難排解〉多了 `port is already allocated` 與連不到宿主兩條。
 ### Removed
 - **精靈的偵測**（M4 票 15）：`POST /api/setup/detect`、「偵測服務」那一步與泊位板上方的前置列、「重新偵測這個服務」
   （換成出問題那一頁的「重新測試」）。選之前 Berth 不對任何服務發請求。

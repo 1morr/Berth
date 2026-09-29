@@ -153,6 +153,21 @@ qBittorrent 的 Host 檢查除了網域還會比對 port，而且 `WebUI\ServerD
 裡。`QBITTORRENT_WEBUI_PORT` 會把容器內外兩側與 qBittorrent 自己的 `WEBUI_PORT` 一起換成同一個號碼。
 **不要**用 `WebUI\HostHeaderValidation=false` 繞過：那是 qBittorrent 防 DNS rebinding 的那一道。
 
+**`docker compose up -d` 報 `port is already allocated`：宿主上已經有服務佔了那個 port。** 通常是你原本就有
+Jellyfin / qBittorrent / Prowlarr，而 `.env` 的 `COMPOSE_PROFILES` 還開著套件內的那一個。起不來的只有撞到的那一台
+（停在 `created`），Berth 與其他服務照常跑。要接你原本的那一台：在精靈那一頁選「既有」、把它從 `COMPOSE_PROFILES`
+拿掉再 `docker compose up -d`；要用套件內的：改 `.env` 裡那個服務的 `*_PORT`。套件的容器名是 `berth-jellyfin` /
+`berth-qbittorrent` / `berth-prowlarr`，不會與你原本叫 `jellyfin` 的容器撞名（brief §20.14）。
+
+**Berth 連不到宿主上的服務：位址填 `host.docker.internal`，不要填 `localhost`。** Berth 在容器裡，`localhost`
+是它自己。`host.docker.internal` 在 Docker Desktop 內建，Linux 上由 compose 裡 `berth` 的
+`extra_hosts: host.docker.internal:host-gateway` 提供；Linux 上宿主的服務還要監聽 `0.0.0.0`，只聽 `127.0.0.1` 的
+從容器連不到。確認解得到：
+
+```bash
+docker compose exec berth getent hosts host.docker.internal
+```
+
 ## 環境需求
 
 | 工具 | 版本 | 用途 |
@@ -637,6 +652,15 @@ python scripts/experiments/qbittorrent_stopped_recheck.py      # 5.2.3；報告�
 python scripts/experiments/qbittorrent_stopped_recheck.py --image lscr.io/linuxserver/qbittorrent:latest   # compose 預設的那一個
 python scripts/experiments/qbittorrent_stopped_recheck.py --image lscr.io/linuxserver/qbittorrent:4.4.5    # 對照組
 python scripts/experiments/qbittorrent_stopped_recheck.py --only stopped_recheck_start --keep            # 只跑一個情境，留著容器
+```
+
+套件容器撞名、撞 port 時 `docker compose up -d` 怎麼收場，以及 `berth` 的 `host.docker.internal` 解到哪
+（M4 票 16，brief §20.14）：以 `deploy/docker-compose.yml` 改出一套隔離的 compose project（`berth-exp-collide`、
+子網 `172.26.0.0/16`、容器名前綴 `bexp-`、port 4xxxx），不碰這台機器上正在跑的部署；`berth` 用本地已有的 image，
+不 build。約 2 分鐘，結束時全部清掉並印出殘留。換 Docker 或 Compose 版本之後重量：
+
+```bash
+python scripts/experiments/compose_collisions.py --berth-image berth:e2e   # 報告寫到 .local/experiments/results/compose-collisions.json
 ```
 
 `jellyfin_naming.py` 必須從乾淨的 `/config` 跑（Jellyfin 的 DB 會留住舊掃描結果，插件裝過

@@ -1,6 +1,6 @@
 # 16 — compose：套件容器名加 `berth-` 前綴、Berth 連得到宿主（host-gateway）
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Blocked by:** None — can start immediately（不依賴 15；建議排在 15 之後）
 
@@ -33,11 +33,37 @@
 
 ## 驗收
 
-- [ ] `docker compose config` 裡三個套件容器名是 `berth-*`、`berth` 有 `extra_hosts`；單元測試守著（與 `tests/unit/test_deploy_ports.py` 同一類，檔內雙向變異：拿掉前綴會紅、改無關的格式不紅）
-- [ ] Docker Desktop 上 `berth` 容器內 `host.docker.internal` 解得到、連得到宿主上的一個 port（貼指令輸出）；Linux 有環境就一併量，沒有就在 Comments 記「Linux 未實測」
-- [ ] 撞名 / 撞 port 的實測腳本在 `scripts/experiments/`，結果與 Docker 版本寫進 brief §20.14
-- [ ] 真服務 e2e 全綠（harness 改名之後）；`berth-lab` 同步後 `reset.sh bundled` 起得來
-- [ ] README、`.env.example`、CHANGELOG 同步；plan §9.1 若與實作有出入一併改
-- [ ] lint、type、test 綠燈
+- [x] `docker compose config` 裡三個套件容器名是 `berth-*`、`berth` 有 `extra_hosts`；單元測試守著（與 `tests/unit/test_deploy_ports.py` 同一類，檔內雙向變異：拿掉前綴會紅、改無關的格式不紅）
+- [x] Docker Desktop 上 `berth` 容器內 `host.docker.internal` 解得到、連得到宿主上的一個 port（貼指令輸出）；Linux 有環境就一併量，沒有就在 Comments 記「Linux 未實測」
+- [x] 撞名 / 撞 port 的實測腳本在 `scripts/experiments/`，結果與 Docker 版本寫進 brief §20.14
+- [x] 真服務 e2e 全綠（harness 改名之後）；`berth-lab` 同步後 `reset.sh bundled` 起得來
+- [x] README、`.env.example`、CHANGELOG 同步；plan §9.1 若與實作有出入一併改
+- [x] lint、type、test 綠燈
 
 ## Comments
+
+- 2026-09-29（實作）：**撞名的實測推翻了社群說法的一半**（`scripts/experiments/compose_collisions.py`，隔離的
+  compose project `berth-exp-collide`；Docker Engine 29.6.2、Compose v5.3.1、Docker Desktop WSL2 6.18.33.2）：
+  舊容器名撞名時 `up -d` exit 1，**其他容器連 `berth` 在內都停在 `created`**；改名之後四個都 `running`；撞 port
+  exit 1、只有那一台 `created`、其餘 `running`；`COMPOSE_PROFILES=` 只起 `berth`。寫進 brief §20.14。
+  精靈「既有」說明**不多說撞 port**（plan §9.3）：錯在終端機 `up -d` 時就印出、早於精靈，起不來的是使用者不要的
+  那一台；改放 README〈部署疑難排解〉。
+- 2026-09-29（host-gateway，Docker Desktop）：e2e 那一套的 `berth` 容器內——
+  ```
+  $ docker exec berth getent hosts host.docker.internal
+  fdc4:f303:9324::254 host.docker.internal
+  $ docker exec berth grep host.docker /etc/hosts
+  192.168.65.254	host.docker.internal
+  fdc4:f303:9324::254	host.docker.internal
+  $ docker exec berth python -c "import urllib.request; print(urllib.request.urlopen('http://host.docker.internal:8096/health', timeout=10).read())"
+  b'Healthy'
+  ```
+  沒有 `extra_hosts` 的容器由 Docker Desktop 的 DNS 解成 `192.168.65.254`，明寫之後多了 v4 + v6 兩列，連得到宿主
+  發佈的 port。**Linux 未實測**（沒有環境）。
+- 2026-09-29（驗證）：真服務 e2e **22 passed**（1118 秒，`JELLYFIN_CONTAINER` 改成 `berth-jellyfin`）；berth-trial
+  先 `env -u CONFIG_ROOT -u DATA_ROOT docker compose down`（不加 `-v`），跑完以同樣前綴 `up -d` 還原，四個容器
+  healthy、`berth` 掛回 `berth-trial/config/berth`。berth-lab 兩份 compose 的 `berth` 加 `extra_hosts`（lab 的容器名
+  本來就是 `lab-*`）；`reset.sh bundled` 之後四個 healthy，`lab-bundled-berth` 以 `host.docker.internal:38096`
+  連得到 home-media 的 Jellyfin。
+- code-review（Standards / Spec 兩軸）抓到的都修了：plan §9.1 與 compose、測試的註解把撞名說成「只有那一台起不來」；
+  實驗腳本的情境改成明確欄位、報告欄位型別一致。沒有未處理的發現。

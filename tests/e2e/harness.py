@@ -24,9 +24,9 @@ JELLYFIN = "http://127.0.0.1:8096"
 #: compose 網路裡 `torrents` 那台的位址：抓 `.torrent` 的是 Berth 的容器，不是這個程序。
 TORRENTS = "http://torrents:8000"
 TORRENTS_CONTAINER = "berth-e2e-torrents"
-#: `jellyfin` / `qbittorrent` / `berth` 的 `container_name` 兩份 compose 相同：e2e 那一份只換
+#: 容器名沿用 `deploy/docker-compose.yml`（套件內三台是 `berth-*`，M4 票 16）：e2e 那一份只換
 #: 專案名，另外加了 `torrents` 這台與自己的 volume。
-JELLYFIN_CONTAINER = "jellyfin"
+JELLYFIN_CONTAINER = "berth-jellyfin"
 
 ADMIN = "skipper"
 #: 擁有者的 Jellyfin 密碼（精靈第 1 步）。qBittorrent 的 WebUI 登入是另一組（`WEB_UI_LOGIN`）。

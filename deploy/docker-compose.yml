@@ -4,7 +4,11 @@
 #   docker compose up -d   # 之後所有設定都在 http://localhost:8383 的精靈裡完成
 #
 # 已經有 Jellyfin / qBittorrent / Prowlarr 的人，把它從 .env 的 COMPOSE_PROFILES 拿掉，
-# 精靈會改用「既有服務」的表單接入（plan §9.5）。berth 沒有 profile，永遠會起。
+# 在精靈那一頁選「既有」（plan §9.5）。berth 沒有 profile，永遠會起。
+#
+# 套件內三台的容器名是 berth-*：同一台主機上既有的容器多半就叫 jellyfin / qbittorrent / prowlarr，
+# 撞名時 up -d 會連 berth 在內整套都起不來（brief §20.14）。服務名不加前綴——Berth 以服務名（compose 網路上的 DNS 名）
+# 連它們，profile 也與它同名。tests/unit/test_deploy_names.py 守著。
 name: berth
 
 # 固定子網加 berth 的固定 IP：qBittorrent 的免密白名單（preseed/qbittorrent/10-berth.sh）
@@ -57,13 +61,17 @@ services:
       - ${CONFIG_ROOT}/prowlarr:/ext/prowlarr:ro
     ports:
       - ${BERTH_PORT:-8383}:8383
+    # 接宿主上的既有服務時填 host.docker.internal（容器裡的 localhost 是 Berth 自己）。Docker Desktop
+    # 內建這個名字；Linux 要這一行才解得到（brief §16.4、§20.14）。
+    extra_hosts:
+      - host.docker.internal:host-gateway
     networks:
       default:
         ipv4_address: *berth-ip
 
   qbittorrent:
     image: lscr.io/linuxserver/qbittorrent:latest
-    container_name: qbittorrent
+    container_name: berth-qbittorrent
     restart: unless-stopped
     profiles: [qbittorrent]
     environment:
@@ -92,7 +100,7 @@ services:
     # 不會默默跨到下一個大版本。12.0 證明那種跨版是不可逆的——它改資料庫、讓插件失效、改變版本
     # 分組。升級步驟（先備份 /config、升完完整掃描）見 README。Berth 支援的下限是 Jellyfin 12.0。
     image: lscr.io/linuxserver/jellyfin:version-12.1ubu2604
-    container_name: jellyfin
+    container_name: berth-jellyfin
     restart: unless-stopped
     profiles: [jellyfin]
     environment: *ids
@@ -107,7 +115,7 @@ services:
 
   prowlarr:
     image: lscr.io/linuxserver/prowlarr:latest
-    container_name: prowlarr
+    container_name: berth-prowlarr
     restart: unless-stopped
     profiles: [prowlarr]
     environment: *ids
