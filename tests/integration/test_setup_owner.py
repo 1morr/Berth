@@ -26,6 +26,7 @@ from berth.domain import (
 )
 from berth.models import JellyfinSettings, Setting, SetupSettings
 from berth.services.auth import read_session, sign_in
+from berth.services.jellyfin import JellyfinStartup
 from berth.services.settings import read_settings, write_settings
 from berth.services.setup import (
     STEP_JELLYFIN,
@@ -262,6 +263,82 @@ async def test_an_existing_jellyfin_that_never_ran_its_wizard_gets_its_admin_cre
 
     assert factory.jellyfin_.admin == ("skipper", PASSWORD)
     assert claimed.signed_in.user.role is Role.ADMIN
+
+
+@pytest.mark.asyncio
+async def test_the_language_and_remote_access_asked_on_screen_are_what_jellyfin_gets(
+    session: AsyncSession,
+) -> None:
+    """既有而還沒初始化的那一台：語言與地區、遠端存取在畫面上問（M4 票 18，使用者拍板），
+    送出的值就是寫進 `/Startup/Configuration` 與 `/Startup/RemoteAccess` 的。"""
+    await found(session, origin=ServiceOrigin.EXISTING, reason=ConnectionReason.SETUP_PENDING)
+    factory = bundled()
+
+    await claim_owner(
+        session,
+        factory,
+        username="skipper",
+        password=PASSWORD,
+        startup=JellyfinStartup(
+            ui_culture="en-GB", metadata_language="en", metadata_country="GB", remote_access=True
+        ),
+    )
+
+    assert factory.jellyfin_.culture == ("en-GB", "GB", "en")
+    assert factory.jellyfin_.remote_access is True
+
+
+@pytest.mark.asyncio
+async def test_remote_access_stays_off_unless_asked_for(session: AsyncSession) -> None:
+    await found(session, origin=ServiceOrigin.EXISTING, reason=ConnectionReason.SETUP_PENDING)
+    factory = bundled()
+
+    await claim_owner(
+        session,
+        factory,
+        username="skipper",
+        password=PASSWORD,
+        startup=JellyfinStartup(
+            ui_culture="zh-TW", metadata_language="zh-TW", metadata_country="TW"
+        ),
+    )
+
+    assert factory.jellyfin_.culture == ("zh-TW", "TW", "zh-TW")
+    assert factory.jellyfin_.remote_access is False
+
+
+# --- 擁有者成立之後 ---
+
+
+@pytest.mark.asyncio
+async def test_the_owner_remembers_which_jellyfin_it_lives_on(session: AsyncSession) -> None:
+    """ServerId 記下來，之後換位址只接受同一台（brief §20.15、M4 票 18）。"""
+    await found(session, origin=ServiceOrigin.EXISTING, reason=ConnectionReason.SETUP_COMPLETED)
+    factory = existing()
+    factory.jellyfin_.server_id = "9fda94c0187f455fb00c8593d35ef9d1"
+
+    await claim_owner(session, factory, username="captain", password=PASSWORD)
+
+    owner = (await read_settings(session, SetupSettings)).owner
+    assert owner.jellyfin_server_id == "9fda94c0187f455fb00c8593d35ef9d1"
+
+
+@pytest.mark.asyncio
+async def test_an_established_owner_is_not_replaced(session: AsyncSession) -> None:
+    """成立之後任何一位管理員再打這一支都不換擁有者（M4 票 18）；連 Jellyfin 都不問。"""
+    await found(session, origin=ServiceOrigin.EXISTING, reason=ConnectionReason.SETUP_COMPLETED)
+    factory = existing()
+    factory.jellyfin_.admin = ("captain", PASSWORD)
+    await claim_owner(session, factory, username="captain", password=PASSWORD)
+    factory.jellyfin_.users = {}
+    factory.jellyfin_.admin = ("first-mate", PASSWORD)
+    factory.jellyfin_.error = AssertionError("Jellyfin must not be asked")
+
+    with pytest.raises(OwnerRejectedError) as refused:
+        await claim_owner(session, factory, username="first-mate", password=PASSWORD)
+
+    assert refused.value.reason is OwnerRefusal.OWNER_EXISTS
+    assert (await read_status(session)).owner == "captain"
 
 
 @pytest.mark.asyncio

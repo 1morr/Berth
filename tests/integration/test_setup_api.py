@@ -162,6 +162,28 @@ class TestOwner:
         assert fresh.get("/api/auth/me").status_code == 401
         assert fresh.get("/api/setup/status").json()["owner"] == ""
 
+    def test_the_language_and_remote_access_reach_jellyfin(
+        self, fresh: TestClient, jellyfin: FakeJellyfinClient
+    ) -> None:
+        """還沒初始化的那一台：畫面上問的語言與地區、遠端存取照送（M4 票 18）。"""
+        assert _choose(fresh, "jellyfin").status_code == 200
+
+        response = fresh.post(
+            "/api/setup/owner",
+            json={
+                "username": "skipper",
+                "password": "harbour",
+                "ui_culture": "en-US",
+                "metadata_language": "en",
+                "metadata_country": "US",
+                "remote_access": True,
+            },
+        )
+
+        assert response.status_code == 200, response.text
+        assert jellyfin.culture == ("en-US", "US", "en")
+        assert jellyfin.remote_access is True
+
     def test_blank_credentials_are_refused_like_wrong_ones(
         self, fresh: TestClient, jellyfin: FakeJellyfinClient
     ) -> None:
@@ -219,6 +241,23 @@ class TestChoice:
 
         assert response.status_code == 409
         assert response.json()["detail"] == {"reason": "jellyfin_owned", "detail": ""}
+
+    def test_another_jellyfin_after_the_owner_is_a_conflict_that_saves_nothing(
+        self, fresh: TestClient, jellyfin: FakeJellyfinClient
+    ) -> None:
+        """擁有者成立之後，新位址上是另一台（ServerId 不同，M4 票 18）：409，位址不變。"""
+        assert _choose(fresh, "jellyfin", base_url="http://nas:8096").status_code == 200
+        owned = fresh.post("/api/setup/owner", json={"username": "skipper", "password": "harbour"})
+        assert owned.status_code == 200, owned.text
+        jellyfin.server_id = "9fda94c0187f455fb00c8593d35ef9d1"
+        jellyfin.server_name = "elsewhere"
+
+        response = _choose(fresh, "jellyfin", base_url="http://other:8096")
+
+        assert response.status_code == 409
+        assert response.json()["detail"] == {"reason": "other_server", "detail": "elsewhere"}
+        services = fresh.get("/api/setup/status").json()["services"]
+        assert [row["base_url"] for row in services] == ["http://nas:8096"]
 
     def test_retesting_before_choosing_is_unprocessable(self, fresh: TestClient) -> None:
         assert fresh.post("/api/setup/services/jellyfin/test", json={}).status_code == 422
@@ -307,6 +346,20 @@ class TestGate:
             ).status_code
             == 401
         )
+
+    def test_a_second_owner_is_a_conflict_even_for_an_administrator(
+        self, fresh: TestClient
+    ) -> None:
+        """擁有者成立之後，登入中的管理員再打這一支也不換擁有者（M4 票 18）。"""
+        _claim(fresh)
+
+        response = fresh.post(
+            "/api/setup/owner", json={"username": "skipper", "password": "harbour"}
+        )
+
+        assert response.status_code == 409
+        assert response.json()["detail"] == {"reason": "owner_exists", "detail": ""}
+        assert fresh.get("/api/setup/status").json()["owner"] == "skipper"
 
     def test_setup_endpoints_require_login_once_setup_is_complete(self, client: TestClient) -> None:
         _complete_setup(client)

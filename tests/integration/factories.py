@@ -48,8 +48,12 @@ class FakeClientFactory:
         torrent: FakeTorrentFetcher | None = None,
         rss: FakeFeedFetcher | None = None,
         budget: RequestBudget | None = None,
+        #: 位址 → 在那個位址上的另一台 Jellyfin（M4 票 18：換位址時認得出是不是同一台）。
+        #: 沒列的位址都是 `jellyfin` 那一台。
+        elsewhere: dict[str, FakeJellyfinClient] | None = None,
     ) -> None:
         self.jellyfin_ = jellyfin or FakeJellyfinClient()
+        self.elsewhere = dict(elsewhere or {})
         self.qbittorrent_ = qbittorrent or FakeQbittorrentClient()
         self.prowlarr_ = prowlarr or FakeProwlarrClient()
         self.tmdb_ = tmdb or FakeTmdbClient()
@@ -66,10 +70,11 @@ class FakeClientFactory:
 
     def jellyfin(self, base_url: str, token: str = "") -> JellyfinClient:
         self.tokens.append(token)
-        self.jellyfin_.base_url = base_url
+        client = self.elsewhere.get(base_url, self.jellyfin_)
+        client.base_url = base_url
         if token:
-            self.jellyfin_.use_token(token)
-        return self.jellyfin_
+            client.use_token(token)
+        return client
 
     def qbittorrent(self, base_url: str) -> QbittorrentClient:
         self.qbittorrent_.base_url = base_url

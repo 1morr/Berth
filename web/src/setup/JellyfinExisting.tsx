@@ -51,7 +51,7 @@ export function JellyfinSignIn({
 
   return (
     <>
-      <SignInForm
+      <JellyfinSignInForm
         connecting={connecting}
         failed={failed}
         onConnect={onConnect}
@@ -69,7 +69,8 @@ export function JellyfinSignIn({
   )
 }
 
-function SignInForm({
+/** 管理員帳密那一格。頁 1 在 Berth 的 key 被撤掉時也用它（M4 票 18）。 */
+export function JellyfinSignInForm({
   connecting,
   failed,
   signedIn,

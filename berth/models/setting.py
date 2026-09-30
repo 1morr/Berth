@@ -125,6 +125,10 @@ class SetupOwner(BaseModel):
     jellyfin_user_id: str = ""
     #: Jellyfin 回的名字，畫面的前置列說「擁有者 · <name>」。
     name: str = ""
+    #: 擁有者所在的那一台 Jellyfin 的 ServerId（`/System/Info/Public` 的 `Id`，brief §20.15）。
+    #: 之後換位址只接受同一台（M4 票 18）。空字串是票 18 之前成立的擁有者：下一次測到的那一台
+    #: 就記成它（`services.setup`）。
+    jellyfin_server_id: str = ""
 
 
 class ServiceTest(BaseModel):

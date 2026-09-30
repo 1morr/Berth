@@ -108,6 +108,8 @@ async def test_jellyfin_public_info_after_startup_wizard() -> None:
         await client.aclose()
 
     assert info.startup_wizard_completed is True
+    # 「同一台」的判準（brief §20.15）：這份錄製回應的 `Id`，換網址、重啟都不變。
+    assert info.server_id == "d43adb7f03724d6e80db02b9561433dd"
 
 
 @respx.mock

@@ -28,6 +28,9 @@ class JellyfinPublicInfo:
     server_name: str
     version: str
     startup_wizard_completed: bool
+    #: `Id`：這一台的 `SystemId`，存在它的 `<DataPath>/device.txt`，換網址、重啟、重建容器都不變
+    #: （brief §20.15）。「同一台 Jellyfin」以它為準；`server_name` 是容器的 hostname，重建就變。
+    server_id: str
 
     @property
     def supported(self) -> bool:

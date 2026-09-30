@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from berth.adapters.indexer.fake import FakeIndexerSearch
 from berth.adapters.jellyfin import JellyfinAuth, JellyfinLibrary
-from berth.adapters.jellyfin.fake import FakeJellyfinClient
+from berth.adapters.jellyfin.fake import SERVER_ID, FakeJellyfinClient
 from berth.adapters.qbittorrent import QbittorrentCategory
 from berth.adapters.qbittorrent.fake import FakeQbittorrentClient
 from berth.adapters.tmdb.fake import FakeTmdbClient
@@ -127,10 +127,11 @@ def chosen(
     )
 
 
-async def own(session: AsyncSession, name: str = "skipper") -> None:
-    """第 1 步的產物：擁有者成立了（M4 票 06）。帳密不存，所以這裡只有他是誰。不 commit。"""
+async def own(session: AsyncSession, name: str = "skipper", *, server_id: str = SERVER_ID) -> None:
+    """第 1 步的產物：擁有者成立了（M4 票 06）。帳密不存，所以這裡只有他是誰、在哪一台 Jellyfin
+    上（`server_id`，預設是替身的那一台，M4 票 18）。不 commit。"""
     setup = await read_settings(session, SetupSettings)
-    setup.owner = SetupOwner(jellyfin_user_id=f"id-{name}", name=name)
+    setup.owner = SetupOwner(jellyfin_user_id=f"id-{name}", name=name, jellyfin_server_id=server_id)
     await write_settings(session, setup)
 
 

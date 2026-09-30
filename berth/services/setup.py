@@ -51,7 +51,7 @@ from berth.models import (
 from berth.services.auth import SignedIn, open_session
 from berth.services.clients import BundledServices, ServiceClientFactory
 from berth.services.indexer import outdated_step
-from berth.services.jellyfin import claim_jellyfin
+from berth.services.jellyfin import DEFAULT_STARTUP, JellyfinStartup, claim_jellyfin
 from berth.services.routes import forget_route_checks, routes_ready
 from berth.services.settings import read_settings, write_settings
 from berth.services.tmdb import tmdb_verified
@@ -115,9 +115,9 @@ class SetupStatus:
 
 
 class ChoiceLockedError(Exception):
-    """服務頁的選擇不成立（`ChoiceRefusal`）。目前只有一種：擁有者成立之後改 Jellyfin 的來源
-    （shape 時使用者拍板）——擁有者是那一台上的帳號，換一台 Jellyfin 等於換擁有者。同一個來源換
-    位址（設定頁的連線區）照舊可以。"""
+    """服務頁的選擇不成立（`ChoiceRefusal`），什麼都沒存。都是擁有者成立之後的 Jellyfin：擁有者是
+    那一台上的帳號，換一台 Jellyfin 等於換擁有者（shape 時使用者拍板）。所以來源換不了；位址換得了，
+    但只能換到同一台（ServerId 相同，brief §20.15、M4 票 18）。"""
 
     def __init__(self, reason: ChoiceRefusal, detail: str = "") -> None:
         super().__init__(f"{reason}: {detail}" if detail else str(reason))
@@ -179,7 +179,12 @@ class ClaimedOwner:
 
 
 async def claim_owner(
-    session: AsyncSession, factory: ServiceClientFactory, *, username: str, password: str
+    session: AsyncSession,
+    factory: ServiceClientFactory,
+    *,
+    username: str,
+    password: str,
+    startup: JellyfinStartup = DEFAULT_STARTUP,
 ) -> ClaimedOwner:
     """頁 1：Jellyfin 的管理員就是 Berth 的擁有者（brief §11、§19 2026-09-26，M4 票 06）。
 
@@ -190,21 +195,32 @@ async def claim_owner(
     不存下來。
 
     **誰先到誰建立**：擁有者成立之前這一支匿名可達，與 Jellyfin 自己的啟動精靈、Seerr 相同；
-    成立之後它與其他精靈端點一樣要管理員的 session（plan §9.3 頁 1）。
+    成立之後它與其他精靈端點一樣要管理員的 session（plan §9.3 頁 1），**而且不再重建擁有者**
+    （`OWNER_EXISTS`，M4 票 18）：換 API key 的重新登入是另一支（`jellyfin.connect_jellyfin`）。
+
+    `startup` 只用在還沒初始化的那一台（建立管理員那一條）：語言與地區、遠端存取（M4 票 18）。
     """
+    setup = await read_settings(session, SetupSettings)
+    if owner_established(setup):
+        raise OwnerRejectedError(OwnerRefusal.OWNER_EXISTS)
     if not username.strip() or not password:
         raise OwnerRejectedError(OwnerRefusal.INVALID_CREDENTIALS)
-    setup = await read_settings(session, SetupSettings)
     choice = setup.choices.get(ServiceKind.JELLYFIN)
     if choice is None or choice.test is None or choice.test.state is not ConnectionState.OK:
         raise OwnerRejectedError(OwnerRefusal.JELLYFIN_UNRESOLVED)
 
-    claim = await claim_jellyfin(session, factory, username=username.strip(), password=password)
+    claim = await claim_jellyfin(
+        session, factory, username=username.strip(), password=password, startup=startup
+    )
     if claim.auth is None:
         raise OwnerRejectedError(claim.refusal or OwnerRefusal.JELLYFIN_FAILED, claim.detail)
 
     setup = await read_settings(session, SetupSettings)
-    setup.owner = SetupOwner(jellyfin_user_id=claim.auth.user_id, name=claim.auth.name)
+    setup.owner = SetupOwner(
+        jellyfin_user_id=claim.auth.user_id,
+        name=claim.auth.name,
+        jellyfin_server_id=claim.server_id,
+    )
     chosen = setup.choices[ServiceKind.JELLYFIN]
     if chosen.test is not None:
         # 那一台現在有管理員了：測試那一條不該還說「還沒跑過初始精靈」。
@@ -252,8 +268,11 @@ async def choose_service(
 
     **換了一台就重做那一頁**（shape 時使用者拍板）：來源或位址變了，那一頁的結果清掉——它們說的是
     原本那一台。Berth 寫進原本那一台的東西不撤回。qBittorrent 換了，所有 Route 的檢查一起作廢：
-    分類建在原本那一台上（`routes.forget_route_checks`）。**Jellyfin 在擁有者成立之後不能換來源**
-    （`ChoiceLockedError`），同一個來源換位址可以——設定頁的連線區就是做這件事。
+    分類建在原本那一台上（`routes.forget_route_checks`）。
+
+    **擁有者成立之後的 Jellyfin**（`ChoiceLockedError`，什麼都不存）：來源換不了；位址換得了，
+    但新位址要先回答它是**同一台**（`_same_jellyfin`，M4 票 18）——那一頁因此不重做。設定頁的連線區
+    走的也是這一支。
     """
     moment = now or _utcnow()
     connection = connection or ServiceConnection()
@@ -274,12 +293,15 @@ async def choose_service(
             raise ValueError("an existing service needs its address")
 
     moved = previous is not None and (previous.origin, previous.base_url) != (origin, base_url)
-    if moved and not (kind is ServiceKind.JELLYFIN and owner_established(setup)):
+    tested: _Outcome | None = None
+    if moved and previous is not None and kind is ServiceKind.JELLYFIN and owner_established(setup):
+        tested = await _same_jellyfin(session, factory, setup, previous.base_url, base_url)
+    elif moved:
         await _start_over(session, setup, kind)
     await _remember_connection(session, kind, origin, base_url, connection, bundled)
     setup.choices = {**setup.choices, kind: ServiceChoice(origin=origin, base_url=base_url)}
     await write_settings(session, setup)
-    return await _test_and_record(session, factory, kind, restart=True, now=moment)
+    return await _test_and_record(session, factory, kind, restart=True, now=moment, tested=tested)
 
 
 async def retest_service(
@@ -305,12 +327,17 @@ async def _test_and_record(
     *,
     restart: bool,
     now: datetime,
+    tested: _Outcome | None = None,
 ) -> SetupStatus:
+    """測一次並記下結果。`tested` 是呼叫端剛對同一個位址測過的那一次，不再敲第二次。"""
     setup = await read_settings(session, SetupSettings)
     choice = setup.choices[kind]
-    outcome = await _test_connection(session, factory, kind)
+    outcome = tested or await _test_connection(session, factory, kind)
     test = _settle(outcome, choice, restart=restart, now=now)
     setup.choices = {**setup.choices, kind: choice.model_copy(update={"test": test})}
+    if owner_established(setup) and outcome.server_id and not setup.owner.jellyfin_server_id:
+        # 票 18 之前成立的擁有者沒記 ServerId：這一次回答的那一台就是它，之後照樣擋另一台。
+        setup.owner = setup.owner.model_copy(update={"jellyfin_server_id": outcome.server_id})
     if kind is ServiceKind.PROWLARR and choice.origin is ServiceOrigin.EXISTING:
         # 既有 Prowlarr 這一頁只有「連得上」這一件事：它就是這一頁的結果（`_indexer_settled`）。
         setup.indexer.steps = [_existing_indexer_step(test)]
@@ -381,6 +408,9 @@ class _Outcome:
     #: 連上了。沒連上的再分「可能還在啟動」（`transient`）與當場就有結論的。
     ok: bool = False
     transient: bool = False
+    #: Jellyfin 說了它是哪一台（`/System/Info/Public` 的 `Id`，brief §20.15）。沒問到、或不是
+    #: Jellyfin 的是空字串。
+    server_id: str = ""
 
 
 async def _test_connection(
@@ -388,22 +418,9 @@ async def _test_connection(
 ) -> _Outcome:
     """用存下來的連線資訊連一次那個服務。只讀，不寫任何東西。"""
     if kind is ServiceKind.JELLYFIN:
-        jellyfin_settings = await read_settings(session, JellyfinSettings)
-        jellyfin = factory.jellyfin(jellyfin_settings.base_url)
-
-        async def jellyfin_test() -> _Outcome:
-            info = await jellyfin.public_info()
-            reason = (
-                ConnectionReason.SETUP_COMPLETED
-                if info.startup_wizard_completed
-                else ConnectionReason.SETUP_PENDING
-            )
-            return _Outcome(reason=reason, detail=info.version, ok=True)
-
-        try:
-            return await _classified(jellyfin_test)
-        finally:
-            await jellyfin.aclose()
+        jellyfin = await read_settings(session, JellyfinSettings)
+        setup = await read_settings(session, SetupSettings)
+        return await _test_jellyfin(factory, jellyfin.base_url, setup, api_key=jellyfin.api_key)
 
     if kind is ServiceKind.QBITTORRENT:
         settings = await read_settings(session, QbittorrentSettings)
@@ -443,6 +460,87 @@ async def _test_connection(
         return await _classified(prowlarr_test)
     finally:
         await prowlarr.aclose()
+
+
+async def _test_jellyfin(
+    factory: ServiceClientFactory, base_url: str, setup: SetupSettings, *, api_key: str
+) -> _Outcome:
+    """Jellyfin 的測試：它是哪一台、版本夠不夠新（brief §16.4）；擁有者成立之後再問兩件事——是不是
+    擁有者那一台（ServerId，brief §20.15）、Berth 的 key 它還收不收（M4 票 18）。
+
+    版本在這裡就擋，不等到登入：10.x 原本在測試時是綠燈、到登入才 502，表單填完才知道白填了。
+    """
+    client = factory.jellyfin(base_url)
+    owned = owner_established(setup)
+    recorded = setup.owner.jellyfin_server_id
+
+    async def test() -> _Outcome:
+        info = await client.public_info()
+        if owned and recorded and info.server_id != recorded:
+            return _Outcome(
+                reason=ConnectionReason.OTHER_SERVER,
+                detail=info.server_name,
+                server_id=info.server_id,
+            )
+        if not info.supported:
+            # 等不會好，所以不是 `transient`：套件內的那一台也當場紅（同 Prowlarr，M4 票 17）。
+            return _Outcome(
+                reason=ConnectionReason.VERSION_UNSUPPORTED,
+                detail=info.version,
+                server_id=info.server_id,
+            )
+        if owned and api_key:
+            client.use_token(api_key)
+            try:
+                # `/Auth/Keys` 要管理員憑證：答得出來，這一把就還是管理員級的 key。
+                await client.api_keys()
+            except AuthFailedError:
+                # 同一台、key 被撤了：擁有者重新登入換一把（`jellyfin.connect_jellyfin`）。
+                return _Outcome(
+                    reason=ConnectionReason.AUTH_REQUIRED,
+                    detail=info.version,
+                    server_id=info.server_id,
+                )
+        reason = (
+            ConnectionReason.SETUP_COMPLETED
+            if info.startup_wizard_completed
+            else ConnectionReason.SETUP_PENDING
+        )
+        return _Outcome(reason=reason, detail=info.version, ok=True, server_id=info.server_id)
+
+    try:
+        return await _classified(test)
+    finally:
+        await client.aclose()
+
+
+async def _same_jellyfin(
+    session: AsyncSession,
+    factory: ServiceClientFactory,
+    setup: SetupSettings,
+    previous_url: str,
+    base_url: str,
+) -> _Outcome:
+    """擁有者成立之後換位址：新位址要先回答它是同一台，不然拒絕、什麼都不存（M4 票 18）。
+
+    **連不上也不存**：認不出是不是同一台，而存下去的話每個人的登入都會打到那個位址。回的是這一次
+    測試，存下之後不必再敲第二次。
+
+    票 18 之前成立的擁有者沒記 ServerId：先問原本那一台是誰、記在 `setup` 上（呼叫端存），再比新的。
+    原本那一台也問不到就認不出，一樣不存——不能拿新位址自己的回答當標準。
+    """
+    if not setup.owner.jellyfin_server_id:
+        known = await _test_jellyfin(factory, previous_url, setup, api_key="")
+        if not known.server_id:
+            raise ChoiceLockedError(ChoiceRefusal.UNVERIFIED, known.reason.value)
+        setup.owner = setup.owner.model_copy(update={"jellyfin_server_id": known.server_id})
+    api_key = (await read_settings(session, JellyfinSettings)).api_key
+    outcome = await _test_jellyfin(factory, base_url, setup, api_key=api_key)
+    if outcome.reason is ConnectionReason.OTHER_SERVER:
+        raise ChoiceLockedError(ChoiceRefusal.OTHER_SERVER, outcome.detail)
+    if not outcome.server_id:
+        raise ChoiceLockedError(ChoiceRefusal.UNVERIFIED, outcome.reason.value)
+    return outcome
 
 
 async def _classified(test: Callable[[], Awaitable[_Outcome]]) -> _Outcome:

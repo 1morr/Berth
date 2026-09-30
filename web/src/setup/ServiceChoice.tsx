@@ -1,13 +1,21 @@
 import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
 
-import type { ChoiceInput, SetupService, SetupStatus } from '../api/setup'
+import type {
+  ChoiceInput,
+  ChoiceRefusal,
+  ConnectionReason,
+  SetupService,
+  SetupStatus,
+} from '../api/setup'
 import type { ServiceKind, ServiceOrigin } from '../api/schemas'
 import {
   CONFIRM_ACTIONS,
   CopyLine,
   Field,
   GhostButton,
+  Notice,
   PasswordField,
   PrimaryButton,
 } from '../components/controls'
@@ -21,6 +29,7 @@ import {
   EXAMPLE_ADDRESS,
   REASON_LABEL,
   STATE_LABEL,
+  VERSION_FLOOR,
   connectFields,
   composeProfiles,
   signalOf,
@@ -38,8 +47,13 @@ export interface ChoiceControls {
   /** 選擇送出去還沒回來。 */
   choosing: boolean
   retesting: boolean
-  /** `settled`：這一次選擇的請求結束時（成敗都算）叫一次。 */
-  onChoose: (input: ChoiceInput, settled?: () => void) => void
+  /**
+   * 上一次選擇沒存下的理由（`choiceRefusalOf`，409）：擁有者成立之後的 Jellyfin 換到另一台、或新位址
+   * 認不出是哪一台（M4 票 18）。表單留著、理由就地說。
+   */
+  refusal: ChoiceRefusal | null
+  /** `done`：這一次選擇存下來了才叫——被拒或沒送到時表單留著，改一格再按。 */
+  onChoose: (input: ChoiceInput, done?: () => void) => void
   /** `restart`：使用者按的「重新測試」，2 分鐘重新算。 */
   onRetest: (restart: boolean) => void
 }
@@ -61,6 +75,7 @@ export function ServiceChoice({
   status,
   choosing,
   retesting,
+  refusal,
   locked,
   switchWarning,
   existingForm,
@@ -148,7 +163,8 @@ export function ServiceChoice({
   }
 
   function chooseExisting(input: ChoiceInput) {
-    // 表單與勾選留到回應回來（audit）：先清掉的話，請求還在路上時表單卸下、兩格都沒勾。
+    // 表單與勾選留到存下來（audit）：先清掉的話，請求還在路上時表單卸下、兩格都沒勾；被拒時
+    // （M4 票 18）表單也要留著，理由掛在它上面。
     onChoose(input, () => {
       onDraft(null)
       setEditing(false)
@@ -179,6 +195,7 @@ export function ServiceChoice({
         kind={kind}
         service={service?.origin === 'existing' ? service : undefined}
         choosing={choosing}
+        refusal={refusal}
         focusFirst={editing}
         onSubmit={chooseExisting}
       />
@@ -389,11 +406,15 @@ function ChoiceCard({
   )
 }
 
-/** 選「既有」的表單：位址 + 那個服務要的憑證（brief §16.4）。測不過也存，改一格再按。 */
+/**
+ * 選「既有」的表單：位址 + 那個服務要的憑證（brief §16.4）。測不過也存，改一格再按；擁有者成立之後的
+ * Jellyfin 換到另一台不存（`refusal`，M4 票 18）。
+ */
 function ExistingForm({
   kind,
   service,
   choosing,
+  refusal,
   focusFirst,
   onSubmit,
 }: {
@@ -401,6 +422,7 @@ function ExistingForm({
   /** 已經選過既有的那一份：位址帶回來，不必重打。 */
   service: SetupService | undefined
   choosing: boolean
+  refusal: ChoiceRefusal | null
   /** 按「改位址或憑證」打開的：那顆鈕自己卸下了，焦點交給位址欄（audit）。 */
   focusFirst: boolean
   onSubmit: (input: ChoiceInput) => void
@@ -467,6 +489,13 @@ function ExistingForm({
           />
         </>
       )}
+      {refusal && (
+        <Notice signal="blocked" label={t('common.failed')}>
+          {t(`choice.refused.${refusal.reason}`, {
+            detail: refusedDetail(refusal, t),
+          })}
+        </Notice>
+      )}
       <div>
         <PrimaryButton type="submit" busy={choosing}>
           {choosing ? t('connect.submitting') : t('connect.submit')}
@@ -474,6 +503,14 @@ function ExistingForm({
       </div>
     </form>
   )
+}
+
+/** 拒絕的細節：認不出是哪一台時是那一次測試的理由，照 UI 語言說；另一台時是它的伺服器名。 */
+function refusedDetail(refusal: ChoiceRefusal, t: TFunction): string {
+  const reason = refusal.detail as ConnectionReason
+  return refusal.reason === 'unverified' && reason in REASON_LABEL
+    ? t(REASON_LABEL[reason])
+    : refusal.detail
 }
 
 /**
@@ -586,8 +623,9 @@ export function TestLine({
             </GhostButton>
           )}
           {onEdit && (
+            // Jellyfin 沒有憑證欄（管理員帳密在擁有者表單），它那一格只改位址（M4 票 18）。
             <GhostButton type="button" onClick={onEdit}>
-              {t('connection.edit')}
+              {kind === 'jellyfin' ? t('connection.editAddress') : t('connection.edit')}
             </GhostButton>
           )}
         </div>
@@ -612,7 +650,14 @@ function Fix({
 
   let lede: string
   let commands: string[] = []
-  if (bundled && reason === 'not_deployed') {
+  // 「至少要 X，這一台是 Y」（M4 票 18）：與「既有」旁的下限同一組數字。
+  const outdated = { floor: VERSION_FLOOR[kind], version: service.detail }
+  if (kind === 'jellyfin' && reason === 'auth_required') {
+    // 同一台、Berth 的 key 被撤了：套件內或既有都一樣，擁有者重新登入換一把（M4 票 18）。
+    lede = t('connection.fix.jellyfinKey')
+  } else if (reason === 'other_server') {
+    lede = t('connection.fix.otherServer', { name: service.detail })
+  } else if (bundled && reason === 'not_deployed') {
     // 主機名解不到＝它不在 compose 裡：說出怎麼加回來（plan §9.3）。
     lede = t('connection.fix.notDeployed', { kind })
     commands = [composeProfiles(status, kind, 'bundled'), 'docker compose up -d']
@@ -624,7 +669,7 @@ function Fix({
     lede = t('connection.fix.whitelist')
     commands = [`docker compose restart ${kind}`]
   } else if (bundled && reason === 'version_unsupported') {
-    lede = t('connection.fix.outdatedBundled')
+    lede = t('connection.fix.outdatedBundled', outdated)
     commands = [`docker compose pull ${kind}`, `docker compose up -d ${kind}`]
   } else if (bundled) {
     lede = t('connection.fix.bundledDown')
@@ -634,7 +679,7 @@ function Fix({
   } else if (reason === 'ip_banned') {
     lede = t('connection.fix.banned')
   } else if (reason === 'version_unsupported') {
-    lede = t('connection.fix.outdated')
+    lede = t('connection.fix.outdated', outdated)
   } else if (pointsAtBerth(service.base_url)) {
     // 位址欄下的那一句（M4 票 17）：填 localhost 的人最常卡在這裡，而「連不上」看不出原因。
     lede = t('connect.loopback')

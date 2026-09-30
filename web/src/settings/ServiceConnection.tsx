@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import type { ServiceKind } from '../api/schemas'
 import {
   chooseService,
+  choiceRefusalOf,
   retestService,
   setupStatusQueryOptions,
   type ChoiceInput,
@@ -67,13 +68,15 @@ export function ServiceConnection({
           {...choiceDraft}
           choosing={choose.isPending}
           retesting={retest.isPending}
-          onChoose={(input, settled) => choose.mutate(input, { onSettled: settled })}
+          refusal={choiceRefusalOf(choose.error)}
+          onChoose={(input, done) => choose.mutate(input, { onSuccess: done })}
           onRetest={(restart) => retest.mutate(restart)}
           locked={kind === 'jellyfin' ? t('settings.connection.locked') : undefined}
           switchWarning={kind === 'qbittorrent' ? t('choice.switchWarning.qbittorrent') : undefined}
         />
       )}
-      {(choose.isError || retest.isError) && (
+      {/* 說得出理由的拒絕掛在表單上（`ServiceChoice`），這一條只給沒送到的。 */}
+      {((choose.isError && !choiceRefusalOf(choose.error)) || retest.isError) && (
         <div className="mt-3">
           <Notice signal="blocked" label={t('common.failed')}>
             {t('settings.connection.failed')}

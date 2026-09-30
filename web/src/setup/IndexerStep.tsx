@@ -25,7 +25,7 @@ import { pointsAtBerth } from './loopback'
 import { LoopbackHint, ServiceChoice, type ChoiceControls } from './ServiceChoice'
 import { useChoiceDraft } from './choiceDraft'
 import { STEP } from './navigation'
-import { connected } from './signals'
+import { VERSION_FLOOR, connected } from './signals'
 import { StepFrame } from './StepFrame'
 
 export type { ApplyIndexersInput, SiteControls } from './IndexerSites'
@@ -339,7 +339,11 @@ function ExistingIndexer({
 
 /** 既有索引站測不過時的補法：太舊就升級，位址指到 Berth 自己就說 localhost，其餘是一般的那一句。 */
 function existingFix(t: TFunction, indexers: IndexerSetup): string {
-  if (indexers.reason === 'version_unsupported') return t('connection.fix.outdated')
+  if (indexers.reason === 'version_unsupported') {
+    // 「至少要 X，這一台是 Y」：版本在那一條纜繩的實測值上（`indexer.outdated_step`）。
+    const version = indexers.steps.find((row) => row.step === 'prowlarr')?.detail ?? ''
+    return t('connection.fix.outdated', { floor: VERSION_FLOOR.prowlarr, version })
+  }
   if (pointsAtBerth(indexers.base_url)) return t('connect.loopback')
   return t('indexer.existing.fix')
 }

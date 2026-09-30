@@ -1568,7 +1568,7 @@ export interface paths {
          * Post Owner
          * @description 第 1 步：成立擁有者並發 session（plan §9.3 第 1 步、M4 票 06）。
          *
-         *     cookie 與 `/auth/login` 發的是同一種。
+         *     cookie 與 `/auth/login` 發的是同一種。擁有者已經在是 409：這一支不換擁有者（M4 票 18）。
          */
         post: operations["post_owner_api_setup_owner_post"];
         delete?: never;
@@ -1590,7 +1590,8 @@ export interface paths {
          * Post Service
          * @description 服務頁的二選一：存下來源與連線資訊，然後測一次（plan §9.3〈服務頁的共同形狀〉）。
          *
-         *     擁有者成立之後改 Jellyfin 的來源是 409（擁有者是那一台上的帳號）；既有卻沒給位址是 422。
+         *     擁有者成立之後改 Jellyfin 的來源、或把位址換到另一台 Jellyfin 是 409（擁有者是那一台上的帳號，
+         *     M4 票 18）；既有卻沒給位址是 422。
          */
         post: operations["post_service_api_setup_services__kind__post"];
         delete?: never;
@@ -2380,7 +2381,7 @@ export interface components {
          * @description 服務頁的選擇不成立（`services/setup.choose_service`，M4 票 15）。
          * @enum {string}
          */
-        ChoiceRefusal: "jellyfin_owned";
+        ChoiceRefusal: "jellyfin_owned" | "other_server" | "unverified";
         /** ChoiceRefusalOut */
         ChoiceRefusalOut: {
             reason: components["schemas"]["ChoiceRefusal"];
@@ -2412,7 +2413,7 @@ export interface components {
          * @description 測試結果的理由。UI 逐服務顯示，所以是封閉集合而不是自由文字。
          * @enum {string}
          */
-        ConnectionReason: "connected" | "setup_pending" | "setup_completed" | "auth_required" | "ip_banned" | "api_key_missing" | "not_deployed" | "unreachable" | "starting" | "protocol_mismatch" | "version_unsupported";
+        ConnectionReason: "connected" | "setup_pending" | "setup_completed" | "auth_required" | "ip_banned" | "api_key_missing" | "not_deployed" | "unreachable" | "starting" | "protocol_mismatch" | "version_unsupported" | "other_server";
         /**
          * ConnectionState
          * @description 選完之後那一次測試的結果（plan §9.3〈服務頁的共同形狀〉）。
@@ -3878,7 +3879,9 @@ export interface components {
          * OwnerIn
          * @description 擁有者的 Jellyfin 帳密：套件內拿去建管理員，既有拿去登入。只交給 Jellyfin，不存下來。
          *
-         *     不加約束，理由同 `LoginIn`：空的與錯的一律由 services 拒絕成 `invalid_credentials`。
+         *     帳密不加約束，理由同 `LoginIn`：空的與錯的一律由 services 拒絕成 `invalid_credentials`。
+         *     其餘四欄只用在還沒初始化的那一台（`jellyfin.JellyfinStartup`，M4 票 18）：既有的在畫面上問，
+         *     套件內的由前端帶 UI 語言、不開遠端存取。
          */
         OwnerIn: {
             /**
@@ -3891,6 +3894,26 @@ export interface components {
              * @default
              */
             password?: string;
+            /**
+             * Ui Culture
+             * @default zh-TW
+             */
+            ui_culture?: string;
+            /**
+             * Metadata Language
+             * @default zh-TW
+             */
+            metadata_language?: string;
+            /**
+             * Metadata Country
+             * @default TW
+             */
+            metadata_country?: string;
+            /**
+             * Remote Access
+             * @default false
+             */
+            remote_access?: boolean;
         };
         /**
          * OwnerRefusal
@@ -3900,7 +3923,7 @@ export interface components {
          *     Berth 自己不存。
          * @enum {string}
          */
-        OwnerRefusal: "jellyfin_unresolved" | "invalid_credentials" | "not_administrator" | "jellyfin_failed";
+        OwnerRefusal: "jellyfin_unresolved" | "invalid_credentials" | "not_administrator" | "jellyfin_failed" | "owner_exists";
         /** OwnerRefusalOut */
         OwnerRefusalOut: {
             reason: components["schemas"]["OwnerRefusal"];
@@ -8616,7 +8639,7 @@ export interface operations {
                     "application/json": components["schemas"]["OwnerRefusalOut"];
                 };
             };
-            /** @description `jellyfin_unresolved` */
+            /** @description `jellyfin_unresolved` · `owner_exists` */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -8669,7 +8692,7 @@ export interface operations {
                     "application/json": components["schemas"]["SetupStatusOut"];
                 };
             };
-            /** @description `jellyfin_owned` */
+            /** @description `jellyfin_owned` · `other_server` · `unverified` */
             409: {
                 headers: {
                     [name: string]: unknown;

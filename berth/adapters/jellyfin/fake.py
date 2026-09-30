@@ -118,6 +118,9 @@ AVAILABLE_TYPE_OPTIONS: dict[CollectionType, tuple[TypeOption, ...]] = {
     ),
 }
 
+#: 替身預設的伺服器 id（`/System/Info/Public` 的 `Id`、登入回應的 `ServerId`）。
+SERVER_ID = "4e71f8d8bc324291b6e6c5a4f3fa8825"
+
 #: 內建的「重新掃描媒體庫」（實測 12.0.0 的 id 與 key，brief §20.1）。
 LIBRARY_SCAN_TASK = JellyfinTask(
     id="7738148ffcd07979c7ceb148e06b3aed", key="RefreshLibrary", name="Scan Media Library"
@@ -133,6 +136,8 @@ class FakeJellyfinClient:
         #: 讓精靈與健康檢查的版本閘門測得出來。
         version: str = "12.1.0",
         server_name: str = "jellyfin",
+        #: `/System/Info/Public` 的 `Id`（brief §20.15）。兩台替身要是不同的伺服器就給不同的值。
+        server_id: str = SERVER_ID,
         startup_wizard_completed: bool = False,
         #: 已存在的管理員帳密。`authenticate` 給它 `IsAdministrator=true`。
         admin: tuple[str, str] | None = None,
@@ -163,6 +168,7 @@ class FakeJellyfinClient:
         self.base_url = base_url
         self.version = version
         self.server_name = server_name
+        self.server_id = server_id
         self.startup_wizard_completed = startup_wizard_completed
         self.admin = admin
         self.users = dict(users or {})
@@ -208,6 +214,8 @@ class FakeJellyfinClient:
         #: 之前不問這部劇的下一集」靠它斷言。
         self.watch_area_queries: list[tuple[str, str, str]] = []
         self.token = ""
+        #: 在 Jellyfin 裡被撤掉的 API key。帶著它的請求是 401（M4 票 18：換位址之後重驗 key）。
+        self.revoked: set[str] = set()
         self.culture: tuple[str, str, str] | None = None
         self.remote_access: bool | None = None
         #: 每一次 `create_library` 收到的整份請求，測試用來斷言寫進去的選項。
@@ -223,6 +231,7 @@ class FakeJellyfinClient:
             server_name=self.server_name,
             version=self.version,
             startup_wizard_completed=self.startup_wizard_completed,
+            server_id=self.server_id,
         )
 
     # --- 初始精靈 ---
@@ -278,6 +287,12 @@ class FakeJellyfinClient:
         self.api_keys_.append(
             JellyfinApiKey(app_name=app, access_token=f"key-{app.lower()}-{len(self.api_keys_)}")
         )
+
+    def revoke_api_key(self, app: str) -> None:
+        """管理員在 Jellyfin 的「API 金鑰」頁刪掉那一把：之後帶著它的請求都是 401。"""
+        for key in [key for key in self.api_keys_ if key.app_name == app]:
+            self.api_keys_.remove(key)
+            self.revoked.add(key.access_token)
 
     # --- 媒體庫 ---
 
@@ -714,6 +729,8 @@ class FakeJellyfinClient:
             raise self.error
         if elevated and (always or self.startup_wizard_completed) and not self.token:
             raise AuthFailedError("401 requires elevation")
+        if elevated and self.token in self.revoked:
+            raise AuthFailedError("401 revoked api key")
 
 
 def _auth(username: str, *, is_administrator: bool) -> JellyfinAuth:
@@ -722,7 +739,7 @@ def _auth(username: str, *, is_administrator: bool) -> JellyfinAuth:
         token=f"token-for-{username}",
         user_id=_user_id(username),
         name=username,
-        server_id="4e71f8d8bc324291b6e6c5a4f3fa8825",
+        server_id=SERVER_ID,
         is_administrator=is_administrator,
     )
 

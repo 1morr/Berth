@@ -42,8 +42,10 @@ from berth.services.indexer import (
     set_interface_login as set_prowlarr_login,
 )
 from berth.services.jellyfin import (
+    DEFAULT_STARTUP,
     BundledLibraryRejectedError,
     InterfaceLoginRejectedError,
+    JellyfinStartup,
     add_berth_path,
     bootstrap_jellyfin,
     connect_jellyfin,
@@ -77,6 +79,9 @@ from berth.services.tmdb import read_tmdb_status, verify_tmdb
 #: 規則放在那裡而不是這裡的相依，是為了「忘記掛相依」不會變成一個沒人守的洞。
 #: 精靈跑完之後設定頁呼叫的也是這一組（票 06i）：命令冪等，一份命令、一份端點。
 router = APIRouter(prefix="/setup", tags=["setup"])
+
+#: Jellyfin 的語言代碼：兩三碼的語言，可帶地區或文字（`zh-TW`、`en`、`zh-Hant`）。
+_LANGUAGE = r"^[a-z]{2,3}(-[A-Za-z]{2,4})?$"
 
 
 class ServiceOut(BaseModel):
@@ -119,17 +124,27 @@ class SetupStatusOut(BaseModel):
 class OwnerIn(BaseModel):
     """擁有者的 Jellyfin 帳密：套件內拿去建管理員，既有拿去登入。只交給 Jellyfin，不存下來。
 
-    不加約束，理由同 `LoginIn`：空的與錯的一律由 services 拒絕成 `invalid_credentials`。
+    帳密不加約束，理由同 `LoginIn`：空的與錯的一律由 services 拒絕成 `invalid_credentials`。
+    其餘四欄只用在還沒初始化的那一台（`jellyfin.JellyfinStartup`，M4 票 18）：既有的在畫面上問，
+    套件內的由前端帶 UI 語言、不開遠端存取。
     """
 
     username: str = ""
     password: str = ""
+    #: Jellyfin 的語言代碼（`zh-TW`、`en-US`、`ja`）：`UICulture`。
+    ui_culture: str = Field(default=DEFAULT_STARTUP.ui_culture, pattern=_LANGUAGE)
+    #: `PreferredMetadataLanguage`（`zh-TW`、`en`）。
+    metadata_language: str = Field(default=DEFAULT_STARTUP.metadata_language, pattern=_LANGUAGE)
+    #: `MetadataCountryCode`，ISO 3166 兩碼。
+    metadata_country: str = Field(default=DEFAULT_STARTUP.metadata_country, pattern=r"^[A-Z]{2}$")
+    remote_access: bool = DEFAULT_STARTUP.remote_access
 
 
 #: 一種理由一個狀態碼（`refusal_responses` 由它導出文件）。帳密不對與登入同一個 401；不是管理員
-#: 是 403；還沒找到 Jellyfin 是 409（先做完這一步的前半）；Jellyfin 那一段失敗是 502。
+#: 是 403；還沒找到 Jellyfin 與擁有者已經在是 409（與現在的狀態衝突）；Jellyfin 那一段失敗是 502。
 _OWNER_STATUS: dict[OwnerRefusal, int] = {
     OwnerRefusal.JELLYFIN_UNRESOLVED: status.HTTP_409_CONFLICT,
+    OwnerRefusal.OWNER_EXISTS: status.HTTP_409_CONFLICT,
     OwnerRefusal.INVALID_CREDENTIALS: status.HTTP_401_UNAUTHORIZED,
     OwnerRefusal.NOT_ADMINISTRATOR: status.HTTP_403_FORBIDDEN,
     OwnerRefusal.JELLYFIN_FAILED: status.HTTP_502_BAD_GATEWAY,
@@ -147,8 +162,9 @@ def owner_refusal(refusal: OwnerRejectedError) -> HTTPException:
     return HTTPException(_OWNER_STATUS[refusal.reason], detail=body.model_dump(mode="json"))
 
 
-#: 選擇不成立的那一種：擁有者之後改 Jellyfin 的來源是 409（與它現在的狀態衝突）。
-_CHOICE_STATUS: dict[ChoiceRefusal, int] = {ChoiceRefusal.JELLYFIN_OWNED: status.HTTP_409_CONFLICT}
+#: 選擇不成立的三種都是擁有者之後的 Jellyfin，都是 409（與它現在的狀態衝突）：改來源、換到另一台、
+#: 新位址認不出是哪一台（M4 票 18）。
+_CHOICE_STATUS: dict[ChoiceRefusal, int] = dict.fromkeys(ChoiceRefusal, status.HTTP_409_CONFLICT)
 
 
 class ChoiceRefusalOut(BaseModel):
@@ -194,11 +210,20 @@ async def post_owner(
 ) -> SetupStatusOut:
     """第 1 步：成立擁有者並發 session（plan §9.3 第 1 步、M4 票 06）。
 
-    cookie 與 `/auth/login` 發的是同一種。
+    cookie 與 `/auth/login` 發的是同一種。擁有者已經在是 409：這一支不換擁有者（M4 票 18）。
     """
     try:
         claimed = await claim_owner(
-            session, factory, username=body.username, password=body.password
+            session,
+            factory,
+            username=body.username,
+            password=body.password,
+            startup=JellyfinStartup(
+                ui_culture=body.ui_culture,
+                metadata_language=body.metadata_language,
+                metadata_country=body.metadata_country,
+                remote_access=body.remote_access,
+            ),
         )
     except OwnerRejectedError as refusal:
         raise owner_refusal(refusal) from refusal
@@ -217,7 +242,8 @@ async def post_service(
 ) -> SetupStatusOut:
     """服務頁的二選一：存下來源與連線資訊，然後測一次（plan §9.3〈服務頁的共同形狀〉）。
 
-    擁有者成立之後改 Jellyfin 的來源是 409（擁有者是那一台上的帳號）；既有卻沒給位址是 422。
+    擁有者成立之後改 Jellyfin 的來源、或把位址換到另一台 Jellyfin 是 409（擁有者是那一台上的帳號，
+    M4 票 18）；既有卻沒給位址是 422。
     """
     try:
         result = await choose_service(

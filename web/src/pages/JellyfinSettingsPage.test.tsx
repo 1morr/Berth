@@ -122,7 +122,7 @@ describe('設定 → Jellyfin', () => {
     expect(connection.getByText(/擁有者是這一台 Jellyfin 上的帳號/)).toBeInTheDocument()
     expect(connection.getByText('連上了')).toBeInTheDocument()
     expect(connection.queryByLabelText('位址')).not.toBeInTheDocument()
-    expect(connection.queryByRole('button', { name: '改位址或憑證' })).not.toBeInTheDocument()
+    expect(connection.queryByRole('button', { name: '改位址' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '重新登入' })).not.toBeInTheDocument()
   })
 
@@ -140,7 +140,7 @@ describe('設定 → Jellyfin', () => {
     expect(await connection.findByRole('radio', { name: /^既有/ })).toBeChecked()
     expect(connection.getByRole('radio', { name: /^套件內/ })).toBeDisabled()
     expect(connection.queryByLabelText('位址')).not.toBeInTheDocument()
-    await user.click(connection.getByRole('button', { name: '改位址或憑證' }))
+    await user.click(connection.getByRole('button', { name: '改位址' }))
 
     const address = connection.getByLabelText('位址')
     expect(address).toHaveValue('http://192.168.1.10:8096')
@@ -164,6 +164,56 @@ describe('設定 → Jellyfin', () => {
     // 存完表單收起來，測試那一條說的是新的那一台。
     expect(await connection.findByText('192.168.1.20:8096/System/Info/Public')).toBeVisible()
     expect(connection.queryByLabelText('位址')).not.toBeInTheDocument()
+  })
+
+  it('套件內那一台的 key 被撤了（M4 票 18）：出現重新登入，換到 key 之後重測連線', async () => {
+    const revoked = setupStatus({
+      completed: true,
+      owner: 'skipper',
+      services: [chosen({ reason: 'auth_required', state: 'failed' })],
+    })
+    const stub = render({
+      [STATUS]: { body: revoked },
+      [SETUP]: { body: jellyfinSetup({ api_key_present: true }) },
+      [SIGN_IN]: { body: jellyfinSetup({ api_key_present: true }) },
+      [RETEST]: { body: setupStatus({ completed: true, owner: 'skipper', services: [chosen()] }) },
+      [TEST]: { body: healthDetail() },
+    })
+    const user = userEvent.setup()
+    renderApp('/settings/jellyfin')
+
+    await user.type(await screen.findByLabelText('Jellyfin 管理員帳號'), 'skipper')
+    await user.type(screen.getByLabelText('Jellyfin 管理員密碼'), 'harbour')
+    await user.click(screen.getByRole('button', { name: '重新登入' }))
+
+    await waitFor(() =>
+      expect(stub.mock.calls.some(([url]) => url === '/api/setup/services/jellyfin/test')).toBe(
+        true,
+      ),
+    )
+  })
+
+  it('換到另一台 Jellyfin 被擋（M4 票 18）：表單留著，說出那一台是誰、為什麼沒存', async () => {
+    render({
+      [STATUS]: { body: EXISTING },
+      [CONNECT]: {
+        status: 409,
+        body: { detail: { reason: 'other_server', detail: 'dc2288726bbe' } },
+      },
+    })
+    const user = userEvent.setup()
+    renderApp('/settings/jellyfin')
+
+    const connection = within(await screen.findByRole('region', { name: '位址與憑證' }))
+    await user.click(await connection.findByRole('button', { name: '改位址' }))
+    const address = connection.getByLabelText('位址')
+    await user.clear(address)
+    await user.type(address, 'http://host.docker.internal:58097')
+    await user.click(connection.getByRole('button', { name: '測試連線' }))
+
+    expect(await connection.findByText(/沒有存：dc2288726bbe 是另一台 Jellyfin/)).toBeVisible()
+    expect(connection.getByLabelText('位址')).toHaveValue('http://host.docker.internal:58097')
+    expect(screen.queryByText(/沒有存進去/)).not.toBeInTheDocument()
   })
 
   it('連不上的那一台：紅燈上有「重新測試」，送的是重測那一支並重算時窗（M4 票 15）', async () => {

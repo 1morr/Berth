@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import '../i18n'
 import type { ServiceKind } from '../api/schemas'
 import { chosen, setupStatus } from '../test/fixtures'
-import type { ChoiceInput } from '../api/setup'
+import type { ChoiceInput, ChoiceRefusal } from '../api/setup'
 import { useChoiceDraft } from './choiceDraft'
 import { ServiceChoice } from './ServiceChoice'
 
@@ -15,11 +15,15 @@ function Page({
   kind,
   services,
   switchWarning,
+  locked,
+  refusal,
   onChoose,
 }: {
   kind: ServiceKind
   services: ReturnType<typeof setupStatus>['services']
   switchWarning?: string
+  locked?: string
+  refusal: ChoiceRefusal | null
   onChoose: (input: ChoiceInput) => void
 }) {
   const draft = useChoiceDraft()
@@ -32,6 +36,8 @@ function Page({
         choosing={false}
         retesting={false}
         switchWarning={switchWarning}
+        locked={locked}
+        refusal={refusal}
         onChoose={onChoose}
         onRetest={vi.fn()}
         {...draft}
@@ -43,10 +49,27 @@ function Page({
 function mount(
   kind: ServiceKind,
   services = setupStatus().services,
-  { switchWarning, onChoose = vi.fn() }: { switchWarning?: string; onChoose?: () => void } = {},
+  {
+    switchWarning,
+    locked,
+    refusal = null,
+    onChoose = vi.fn(),
+  }: {
+    switchWarning?: string
+    locked?: string
+    refusal?: ChoiceRefusal | null
+    onChoose?: () => void
+  } = {},
 ) {
   return render(
-    <Page kind={kind} services={services} switchWarning={switchWarning} onChoose={onChoose} />,
+    <Page
+      kind={kind}
+      services={services}
+      switchWarning={switchWarning}
+      locked={locked}
+      refusal={refusal}
+      onChoose={onChoose}
+    />,
   )
 }
 
@@ -154,8 +177,124 @@ describe('版本比下限舊（M4 票 17）', () => {
     ])
 
     expect(screen.getByText('連得上，但版本比 Berth 支援的下限舊')).toBeInTheDocument()
-    expect(screen.getByText(i18next.t('connection.fix.outdatedBundled'))).toBeInTheDocument()
+    expect(
+      screen.getByText('至少要 Prowlarr 1.3.2，套件內那一台是 1.2.2.2699', { exact: false }),
+    ).toBeInTheDocument()
     expect(screen.getByText('docker compose pull prowlarr')).toBeInTheDocument()
+  })
+
+  /** M4 票 18：10.10.7 原本在測連線時是綠燈、到登入才 502，而且只有英文原文。 */
+  it.each([
+    ['zh-Hant', '至少要 Jellyfin 12.0，這一台是 10.10.7'],
+    ['en', 'Berth needs at least Jellyfin 12.0; this one is 10.10.7'],
+  ] as const)('既有 Jellyfin：補法說出下限與它的版本（%s）', async (language, text) => {
+    await i18next.changeLanguage(language)
+    mount('jellyfin', [
+      chosen({
+        origin: 'existing',
+        base_url: 'http://host.docker.internal:58096',
+        state: 'failed',
+        reason: 'version_unsupported',
+        detail: '10.10.7',
+      }),
+    ])
+
+    expect(screen.getByText(text, { exact: false })).toBeInTheDocument()
+    await i18next.changeLanguage('zh-Hant')
+  })
+})
+
+describe('擁有者成立之後的 Jellyfin（M4 票 18）', () => {
+  const CONNECTED = chosen({
+    origin: 'existing',
+    base_url: 'http://host.docker.internal:48096',
+    reason: 'setup_completed',
+  })
+
+  afterEach(async () => {
+    await i18next.changeLanguage('zh-Hant')
+  })
+
+  it.each([
+    ['zh-Hant', '改位址', '改位址或憑證'],
+    ['en', 'Change address', 'Change address or credentials'],
+  ] as const)(
+    'Jellyfin 那一格的鈕只說改位址；qBittorrent 照舊（%s）',
+    async (language, jellyfin, other) => {
+      await i18next.changeLanguage(language)
+      const { unmount } = mount('jellyfin', [CONNECTED], { locked: 'locked' })
+      expect(screen.getByRole('button', { name: jellyfin })).toBeVisible()
+      expect(screen.queryByRole('button', { name: other })).toBeNull()
+      unmount()
+
+      mount('qbittorrent', [
+        chosen({ kind: 'qbittorrent', origin: 'existing', reason: 'connected', detail: '5.2.3' }),
+      ])
+      expect(screen.getByRole('button', { name: other })).toBeVisible()
+    },
+  )
+
+  it.each([
+    ['zh-Hant', '管理員帳密在下一格'],
+    ['en', 'the administrator comes next'],
+  ] as const)('Jellyfin 的表單不說「管理員帳密在下一格」（%s）', async (language, stale) => {
+    await i18next.changeLanguage(language)
+    const user = userEvent.setup()
+    mount('jellyfin', [CONNECTED], { locked: 'locked' })
+
+    await user.click(screen.getByRole('button', { name: i18next.t('connection.editAddress') }))
+
+    expect(screen.getByText(i18next.t('connect.hint.jellyfin'))).toBeVisible()
+    expect(screen.queryByText(stale, { exact: false })).toBeNull()
+  })
+
+  it('測試結果那一列不重複「連上了」', () => {
+    mount('jellyfin', [CONNECTED])
+
+    expect(screen.getByText('已經有管理員')).toBeVisible()
+    expect(screen.queryByText(/連上了，已經有管理員/)).toBeNull()
+  })
+
+  it('換到另一台被擋：表單不收，就地說出那一台是誰、為什麼沒存', async () => {
+    const user = userEvent.setup()
+    const { rerender } = mount('jellyfin', [CONNECTED], { locked: 'locked' })
+    await user.click(screen.getByRole('button', { name: '改位址' }))
+    rerender(
+      <Page
+        kind="jellyfin"
+        services={[CONNECTED]}
+        locked="locked"
+        refusal={{ reason: 'other_server', detail: 'dc2288726bbe' }}
+        onChoose={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByText(/沒有存：dc2288726bbe 是另一台 Jellyfin/)).toBeVisible()
+    expect(screen.getByRole('textbox', { name: '位址' })).toBeVisible()
+  })
+
+  it('連不到的新位址：說認不出是不是同一台，理由用人話', () => {
+    mount('jellyfin', [chosen({ ...CONNECTED, state: 'failed', reason: 'unreachable' })], {
+      locked: 'locked',
+      refusal: { reason: 'unverified', detail: 'unreachable' },
+    })
+
+    expect(screen.getByText(/認不出是不是同一台/)).toHaveTextContent('主機名解得到但連不上')
+  })
+
+  it('存下的位址後面換成另一台：補法說把位址改回去，實測值標成伺服器', () => {
+    mount('jellyfin', [
+      chosen({ ...CONNECTED, state: 'failed', reason: 'other_server', detail: 'dc2288726bbe' }),
+    ])
+
+    expect(screen.getByText(/現在回答的是另一台 Jellyfin（dc2288726bbe）/)).toBeVisible()
+    expect(screen.getByText('伺服器')).toBeVisible()
+  })
+
+  it('Berth 的 key 被撤了：補法說用管理員重新登入', () => {
+    mount('jellyfin', [chosen({ ...CONNECTED, state: 'failed', reason: 'auth_required' })])
+
+    expect(screen.getByText(i18next.t('connection.fix.jellyfinKey'))).toBeVisible()
   })
 })
 

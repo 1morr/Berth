@@ -282,7 +282,7 @@ describe('既有 Prowlarr 測不過時的補法（M4 票 17）', () => {
           ),
         ],
       },
-      '它比 Berth 支援的下限舊',
+      '至少要 Prowlarr 1.3.2，這一台是 1.2.2.2699',
     ],
     [
       '測過的是 localhost：說 Berth 在容器裡',

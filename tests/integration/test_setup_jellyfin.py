@@ -118,7 +118,8 @@ async def test_bootstrap_runs_the_whole_sequence(session: AsyncSession, tmp_path
     # Jellyfin 上真的有 Berth 管理員與三個媒體庫。
     assert jellyfin.admin == ("skipper", "harbour")
     assert jellyfin.startup_wizard_completed is True
-    assert jellyfin.remote_access is True
+    # 遠端存取不開：Berth 從同一台主機的容器連進來，用不到它（M4 票 18）。
+    assert jellyfin.remote_access is False
     assert [(row.name, row.collection_type) for row in jellyfin.libraries_] == [
         ("Movies", "movies"),
         ("TV", "tvshows"),

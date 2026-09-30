@@ -19,12 +19,14 @@ from berth.adapters.http import (
     ServiceNotDeployedError,
     ServiceUnavailableError,
 )
-from berth.adapters.jellyfin.fake import FakeJellyfinClient
+from berth.adapters.jellyfin import JellyfinApiKey
+from berth.adapters.jellyfin.fake import SERVER_ID, FakeJellyfinClient
 from berth.adapters.prowlarr import ProwlarrIndexer
 from berth.adapters.prowlarr.fake import FakeProwlarrClient
 from berth.adapters.qbittorrent import IpBannedError
 from berth.adapters.qbittorrent.fake import FakeQbittorrentClient
 from berth.domain import (
+    ChoiceRefusal,
     ConnectionReason,
     ConnectionState,
     HealthStatus,
@@ -569,12 +571,11 @@ async def test_the_jellyfin_source_is_locked_once_there_is_an_owner(
     ) is ServiceOrigin.BUNDLED
 
 
-@pytest.mark.asyncio
-async def test_an_existing_jellyfin_can_move_to_a_new_address_after_the_owner(
-    session: AsyncSession,
+async def owned_existing_jellyfin(
+    session: AsyncSession, factory: FakeClientFactory, *, api_key: str = "key-berth-0"
 ) -> None:
-    """同一個來源換位址可以：設定頁的連線區就是做這件事。Jellyfin 頁的結果不重做。"""
-    factory = FakeClientFactory(jellyfin=FakeJellyfinClient(startup_wizard_completed=True))
+    """既有 Jellyfin 在 `http://nas:8096`、擁有者在它上面、Berth 的 key 是它發的，頁 1 做完了。"""
+    factory.jellyfin_.api_keys_.append(JellyfinApiKey(app_name="Berth", access_token=api_key))
     await choose(
         session,
         factory,
@@ -583,11 +584,28 @@ async def test_an_existing_jellyfin_can_move_to_a_new_address_after_the_owner(
         ServiceConnection(base_url="http://nas:8096"),
     )
     await own(session)
+    jellyfin = await read_settings(session, JellyfinSettings)
+    jellyfin.api_key = api_key
+    await write_settings(session, jellyfin)
     setup = await read_settings(session, SetupSettings)
     setup.jellyfin.steps = [SetupStep(key="api_key", status=StepStatus.OK)]
     await write_settings(session, setup)
 
-    await choose(
+
+def jellyfin_at(setup: SetupSettings, jellyfin: JellyfinSettings) -> tuple[str, str]:
+    return setup.choices[ServiceKind.JELLYFIN].base_url, jellyfin.base_url
+
+
+@pytest.mark.asyncio
+async def test_after_the_owner_jellyfin_moves_only_to_the_same_server(
+    session: AsyncSession,
+) -> None:
+    """同一台換了網址（ServerId 相同，brief §20.15）：存下、重驗 Berth 的 key，這一頁不重做。"""
+    factory = FakeClientFactory(jellyfin=FakeJellyfinClient(startup_wizard_completed=True))
+    await owned_existing_jellyfin(session, factory)
+    factory.jellyfin_.use_token("")
+
+    status = await choose(
         session,
         factory,
         ServiceKind.JELLYFIN,
@@ -596,9 +614,229 @@ async def test_an_existing_jellyfin_can_move_to_a_new_address_after_the_owner(
     )
 
     setup = await read_settings(session, SetupSettings)
-    assert setup.choices[ServiceKind.JELLYFIN].base_url == "http://nas2:8096"
+    jellyfin = await read_settings(session, JellyfinSettings)
+    assert jellyfin_at(setup, jellyfin) == ("http://nas2:8096", "http://nas2:8096")
     assert [row.key for row in setup.jellyfin.steps] == ["api_key"]
-    assert (await read_settings(session, JellyfinSettings)).base_url == "http://nas2:8096"
+    moved = view(status, ServiceKind.JELLYFIN)
+    assert (moved.state, moved.reason) == (ConnectionState.OK, ConnectionReason.SETUP_COMPLETED)
+    # 重驗的是存下來的那一把。
+    assert factory.jellyfin_.token == "key-berth-0"
+
+
+@pytest.mark.asyncio
+async def test_after_the_owner_another_server_is_refused_and_nothing_is_saved(
+    session: AsyncSession,
+) -> None:
+    """另一台 Jellyfin（ServerId 不同）：擁有者、key、媒體庫都在原本那一台，換過去就是換擁有者。"""
+    other = FakeJellyfinClient(
+        startup_wizard_completed=True, server_id="9fda94c0187f455fb00c8593d35ef9d1"
+    )
+    factory = FakeClientFactory(
+        jellyfin=FakeJellyfinClient(startup_wizard_completed=True),
+        elsewhere={"http://other:8096": other},
+    )
+    await owned_existing_jellyfin(session, factory)
+    before = await read_settings(session, SetupSettings)
+
+    with pytest.raises(ChoiceLockedError) as refused:
+        await choose(
+            session,
+            factory,
+            ServiceKind.JELLYFIN,
+            ServiceOrigin.EXISTING,
+            ServiceConnection(base_url="http://other:8096"),
+        )
+
+    assert refused.value.reason is ChoiceRefusal.OTHER_SERVER
+    setup = await read_settings(session, SetupSettings)
+    jellyfin = await read_settings(session, JellyfinSettings)
+    assert jellyfin_at(setup, jellyfin) == ("http://nas:8096", "http://nas:8096")
+    assert setup.choices == before.choices
+    assert jellyfin.api_key == "key-berth-0"
+
+
+@pytest.mark.asyncio
+async def test_after_the_owner_an_address_that_does_not_answer_is_not_saved(
+    session: AsyncSession,
+) -> None:
+    """連不上就認不出是不是同一台：不存。存下去的話每個人的登入都會打到一個不回答的位址。"""
+    factory = FakeClientFactory(
+        jellyfin=FakeJellyfinClient(startup_wizard_completed=True),
+        elsewhere={
+            "http://gone:8096": FakeJellyfinClient(error=ServiceUnavailableError("refused"))
+        },
+    )
+    await owned_existing_jellyfin(session, factory)
+
+    with pytest.raises(ChoiceLockedError) as refused:
+        await choose(
+            session,
+            factory,
+            ServiceKind.JELLYFIN,
+            ServiceOrigin.EXISTING,
+            ServiceConnection(base_url="http://gone:8096"),
+        )
+
+    assert (refused.value.reason, refused.value.detail) == (
+        ChoiceRefusal.UNVERIFIED,
+        ConnectionReason.UNREACHABLE.value,
+    )
+    setup = await read_settings(session, SetupSettings)
+    assert setup.choices[ServiceKind.JELLYFIN].base_url == "http://nas:8096"
+
+
+@pytest.mark.asyncio
+async def test_a_revoked_key_on_the_same_server_asks_the_owner_to_sign_in_again(
+    session: AsyncSession,
+) -> None:
+    """同一台、但 Berth 那一把在 Jellyfin 被撤了：位址照樣存下，測試紅在「要求帳密」。"""
+    factory = FakeClientFactory(jellyfin=FakeJellyfinClient(startup_wizard_completed=True))
+    await owned_existing_jellyfin(session, factory)
+    factory.jellyfin_.revoke_api_key("Berth")
+
+    status = await choose(
+        session,
+        factory,
+        ServiceKind.JELLYFIN,
+        ServiceOrigin.EXISTING,
+        ServiceConnection(base_url="http://nas2:8096"),
+    )
+
+    moved = view(status, ServiceKind.JELLYFIN)
+    assert (moved.base_url, moved.state, moved.reason) == (
+        "http://nas2:8096",
+        ConnectionState.FAILED,
+        ConnectionReason.AUTH_REQUIRED,
+    )
+
+
+@pytest.mark.asyncio
+async def test_retesting_finds_another_server_behind_the_saved_address(
+    session: AsyncSession,
+) -> None:
+    """同一個位址後面換成了另一台（別的容器佔了那個 port）：重新測試就說出來，不是綠燈。"""
+    factory = FakeClientFactory(jellyfin=FakeJellyfinClient(startup_wizard_completed=True))
+    await owned_existing_jellyfin(session, factory)
+    factory.jellyfin_.server_id = "9fda94c0187f455fb00c8593d35ef9d1"
+
+    status = await retest_service(session, factory, ServiceKind.JELLYFIN, now=NOW)
+
+    retested = view(status, ServiceKind.JELLYFIN)
+    assert (retested.state, retested.reason) == (
+        ConnectionState.FAILED,
+        ConnectionReason.OTHER_SERVER,
+    )
+
+
+@pytest.mark.asyncio
+async def test_an_owner_from_before_the_server_id_adopts_the_one_it_answers_with(
+    session: AsyncSession,
+) -> None:
+    """票 18 之前成立的擁有者沒記 ServerId：下一次測到的那一台就是它（之後照樣擋另一台）。"""
+    factory = FakeClientFactory(jellyfin=FakeJellyfinClient(startup_wizard_completed=True))
+    await owned_existing_jellyfin(session, factory)
+    await own(session, server_id="")
+
+    await retest_service(session, factory, ServiceKind.JELLYFIN, now=NOW)
+
+    assert (await read_settings(session, SetupSettings)).owner.jellyfin_server_id == SERVER_ID
+
+
+@pytest.mark.asyncio
+async def test_an_owner_from_before_the_server_id_cannot_move_to_another_server_either(
+    session: AsyncSession,
+) -> None:
+    """沒記 ServerId 的擁有者第一次換位址：先問原本那一台是誰，另一台照樣擋（spec review）。"""
+    other = FakeJellyfinClient(
+        startup_wizard_completed=True, server_id="9fda94c0187f455fb00c8593d35ef9d1"
+    )
+    factory = FakeClientFactory(
+        jellyfin=FakeJellyfinClient(startup_wizard_completed=True),
+        elsewhere={"http://other:8096": other},
+    )
+    await owned_existing_jellyfin(session, factory)
+    await own(session, server_id="")
+
+    with pytest.raises(ChoiceLockedError) as refused:
+        await choose(
+            session,
+            factory,
+            ServiceKind.JELLYFIN,
+            ServiceOrigin.EXISTING,
+            ServiceConnection(base_url="http://other:8096"),
+        )
+
+    assert refused.value.reason is ChoiceRefusal.OTHER_SERVER
+    setup = await read_settings(session, SetupSettings)
+    assert setup.choices[ServiceKind.JELLYFIN].base_url == "http://nas:8096"
+
+
+@pytest.mark.asyncio
+async def test_an_owner_from_before_the_server_id_whose_old_address_is_gone_cannot_move(
+    session: AsyncSession,
+) -> None:
+    """原本那一台也不回答：認不出新位址是不是它，不存。"""
+    factory = FakeClientFactory(
+        jellyfin=FakeJellyfinClient(startup_wizard_completed=True),
+        elsewhere={"http://nas2:8096": FakeJellyfinClient(startup_wizard_completed=True)},
+    )
+    await owned_existing_jellyfin(session, factory)
+    await own(session, server_id="")
+    factory.jellyfin_.error = ServiceUnavailableError("refused")
+
+    with pytest.raises(ChoiceLockedError) as refused:
+        await choose(
+            session,
+            factory,
+            ServiceKind.JELLYFIN,
+            ServiceOrigin.EXISTING,
+            ServiceConnection(base_url="http://nas2:8096"),
+        )
+
+    assert refused.value.reason is ChoiceRefusal.UNVERIFIED
+
+
+@pytest.mark.parametrize(
+    ("version", "state", "reason"),
+    [
+        ("10.10.7", ConnectionState.FAILED, ConnectionReason.VERSION_UNSUPPORTED),
+        ("11.9.9", ConnectionState.FAILED, ConnectionReason.VERSION_UNSUPPORTED),
+        ("12.0.0", ConnectionState.OK, ConnectionReason.SETUP_COMPLETED),
+    ],
+)
+@pytest.mark.asyncio
+async def test_the_jellyfin_version_floor_is_checked_when_testing(
+    session: AsyncSession, version: str, state: ConnectionState, reason: ConnectionReason
+) -> None:
+    """版本在測連線時就擋，不等到登入（M4 票 18）：頁 1 的擁有者表單因此不會出現。"""
+    factory = FakeClientFactory(
+        jellyfin=FakeJellyfinClient(startup_wizard_completed=True, version=version)
+    )
+
+    status = await choose(
+        session,
+        factory,
+        ServiceKind.JELLYFIN,
+        ServiceOrigin.EXISTING,
+        ServiceConnection(base_url="http://nas:8096"),
+    )
+
+    tested = view(status, ServiceKind.JELLYFIN)
+    assert (tested.state, tested.reason, tested.detail) == (state, reason, version)
+
+
+@pytest.mark.asyncio
+async def test_an_outdated_bundled_jellyfin_is_red_at_once(session: AsyncSession) -> None:
+    """套件內那一台太舊也當場紅：等不會好（與 Prowlarr 同，M4 票 17）。"""
+    factory = FakeClientFactory(jellyfin=FakeJellyfinClient(version="10.10.7"))
+
+    status = await choose(session, factory, ServiceKind.JELLYFIN, ServiceOrigin.BUNDLED)
+
+    tested = view(status, ServiceKind.JELLYFIN)
+    assert (tested.state, tested.reason) == (
+        ConnectionState.FAILED,
+        ConnectionReason.VERSION_UNSUPPORTED,
+    )
 
 
 @pytest.mark.asyncio

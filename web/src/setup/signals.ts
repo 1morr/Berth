@@ -91,7 +91,18 @@ export const REASON_LABEL = {
   starting: 'reason.starting',
   protocol_mismatch: 'reason.protocol_mismatch',
   version_unsupported: 'reason.version_unsupported',
+  other_server: 'reason.other_server',
 } as const satisfies Record<ConnectionReason, string>
+
+/**
+ * 版本下限（brief §16.4、§20.14），補法那一句「至少要 X，這一台是 Y」用它。「既有」旁的
+ * `choice.existing.floor.*` 說的是同一組數字。
+ */
+export const VERSION_FLOOR: Record<ServiceKind, string> = {
+  jellyfin: 'Jellyfin 12.0',
+  qbittorrent: 'qBittorrent 4.4',
+  prowlarr: 'Prowlarr 1.3.2',
+}
 
 export const STATE_LABEL = {
   ok: 'connection.state.ok',

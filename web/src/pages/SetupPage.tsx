@@ -12,10 +12,13 @@ import {
   bundledRefusalOf,
   buildRoutes,
   chooseService,
+  choiceRefusalOf,
   CLAIM_OWNER_KEY,
   claimOwner,
   completeSetup,
   connectIndexer,
+  apiKeyFailed,
+  connectJellyfin,
   indexerSetupQueryOptions,
   jellyfinSetupQueryOptions,
   loginRefusalOf,
@@ -185,13 +188,22 @@ export function SetupPage() {
     return {
       choosing: choose.isPending && choose.variables.kind === kind,
       retesting: retest.isPending && retest.variables.kind === kind && retest.variables.restart,
-      onChoose: (input, settled) => choose.mutate({ kind, input }, { onSettled: settled }),
+      refusal: choose.variables?.kind === kind ? choiceRefusalOf(choose.error) : null,
+      onChoose: (input, done) => choose.mutate({ kind, input }, { onSuccess: done }),
       onRetest: (restart) => {
         if (restart) hold()
         retest.mutate({ kind, restart })
       },
     }
   }
+  // 擁有者成立之後 Berth 的 key 被撤了（M4 票 18）：頁 1 就地以管理員重新登入換一把，換到了就重新測試。
+  const reSignIn = useMutation({
+    mutationFn: connectJellyfin,
+    onSuccess: (next) => {
+      queryClient.setQueryData(jellyfinSetupQueryOptions.queryKey, next)
+      if (!apiKeyFailed(next)) retest.mutate({ kind: 'jellyfin', restart: true })
+    },
+  })
   // 剖面上的媒體庫清單停手就存（票 06f）。不釘畫面、不重讀精靈狀態：存清單不會讓精靈前進。
   const saveLibraries = useMutation({
     mutationFn: saveBundledLibraries,
@@ -368,6 +380,12 @@ export function SetupPage() {
           refusal={ownerRefusalOf(owner.error)}
           claimFailed={owner.isError}
           onClaim={(input) => owner.mutate(input)}
+          reSignIn={{
+            connecting: reSignIn.isPending,
+            failed:
+              reSignIn.isError || (reSignIn.data !== undefined && apiKeyFailed(reSignIn.data)),
+            onConnect: (input) => reSignIn.mutate(input),
+          }}
           note={note}
           nav={advanced(step, backend) ? nav : undefined}
         />

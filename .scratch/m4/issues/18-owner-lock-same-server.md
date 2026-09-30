@@ -1,6 +1,6 @@
 # 18 — 擁有者鎖定做實：只能換到同一台 Jellyfin、不能重建擁有者、版本在測連線時就擋
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Blocked by:** None — can start immediately
 
@@ -44,14 +44,59 @@
 
 ## 驗收
 
-- [ ] ServerId 判準的查證結論寫進 brief §20，附來源或實測紀錄
-- [ ] 整合測試：擁有者成立後把位址換到 ServerId 不同的 Fake → 拒絕、`base_url` 不變；換到同一台的新網址 → 存下並
+- [x] ServerId 判準的查證結論寫進 brief §20，附來源或實測紀錄
+- [x] 整合測試：擁有者成立後把位址換到 ServerId 不同的 Fake → 拒絕、`base_url` 不變；換到同一台的新網址 → 存下並
       重驗 key（雙向：同一台過、不同台擋）
-- [ ] 整合測試：擁有者已存在時 `POST /setup/owner` 回 409，擁有者不變
-- [ ] 整合測試：`/System/Info/Public` 回 11.x 時測連線就是 `version_unsupported`，訊息帶目前版本與下限；剛好 12.0 通過
-- [ ] vitest：Jellyfin 那一格的按鈕文字、沒有「管理員帳密在下一格」；zh-Hant 與 en 並列
-- [ ] 既有 Jellyfin 建立擁有者時問語言與地區、遠端存取（整合測試：送出的值真的寫進 `/Startup/Configuration` 與
+- [x] 整合測試：擁有者已存在時 `POST /setup/owner` 回 409，擁有者不變
+- [x] 整合測試：`/System/Info/Public` 回 11.x 時測連線就是 `version_unsupported`，訊息帶目前版本與下限；剛好 12.0 通過
+- [x] vitest：Jellyfin 那一格的按鈕文字、沒有「管理員帳密在下一格」；zh-Hant 與 en 並列
+- [x] 既有 Jellyfin 建立擁有者時問語言與地區、遠端存取（整合測試：送出的值真的寫進 `/Startup/Configuration` 與
       `/Startup/RemoteAccess`；vitest：欄位只在既有且未初始化時出現），決定記進 progress.md「偏差與決定」
-- [ ] playwright 對 `berth-existing` 實跑（另起一份受測 Berth，見研究檔）：10.10.7 在測連線就紅；擁有者成立後改到另一台
+- [x] playwright 對 `berth-existing` 實跑（另起一份受測 Berth，見研究檔）：10.10.7 在測連線就紅；擁有者成立後改到另一台
       被擋、畫面說明為什麼；改回同一台通過。附截圖或文字結果
-- [ ] 全部檢查（`pre-commit run --all-files`）、test、前端 e2e 綠燈
+- [x] 全部檢查（`pre-commit run --all-files`）、test、前端 e2e 綠燈
+
+## Comments
+
+**2026-09-30 實作紀錄**
+
+- ServerId：`/System/Info/Public` 的 `Id` 是 Jellyfin 的 `SystemId`，存在 `<DataPath>/device.txt`（v12.1 原始碼）；對
+  `bad-jellyfin-elsewhere` 實測換網址、`docker restart`、`--force-recreate` 都不變，`ServerName` 在重建後會變
+  （brief §20.15，`scripts/experiments/jellyfin_server_id.py`）。
+- 換位址的規則在 `setup.choose_service` → `_same_jellyfin`：新位址要先答出同一個 `Id` 才存，另一台 409 `other_server`、
+  不回答 409 `unverified`；存下之後同一次測試以 Berth 的 key 打 `/Auth/Keys` 重驗，被撤了是 `auth_required`。
+  擁有者成立之後**每一次**測試都比 `Id`、驗 key（存下的位址後面換了一台也抓得到）。票 18 之前的擁有者沒記 `Id`：
+  重新測試時記下測到的那一台；換位址時先問**原本那一台**（spec review 抓到：原本拿新位址自己的回答當標準，鎖是開的）。
+- `POST /setup/owner` 已有擁有者 → 409 `owner_exists`，在碰 Jellyfin 之前就擋。
+- 版本在 `_test_jellyfin` 就擋（`version_unsupported`，套件內也當場紅）；補法「至少要 X，這一台是 Y」由
+  `connection.fix.outdated*` 插值，Prowlarr 的同一句一起換成這個句型（`VERSION_FLOOR`）。
+- 語言與地區是一組預設（`web/src/setup/jellyfinStartup.ts`：zh-TW / zh-HK / zh-CN / en-US / en-GB / ja / ko），名字用
+  `Intl.DisplayNames`。套件內那一台不問：UI 語言、不開遠端存取（原本開）。媒體庫自己的 metadata 語言照舊 zh-TW。
+- key 被撤時的重新登入：頁 1 在擁有者成立後、測試是 `auth_required` 時出一格（`owner.reSignIn`），設定頁的「管理員登入」
+  對套件內的那一台也在這時出現；換到 key 就重測連線。
+
+**實跑（playwright，受測 Berth 是宿主上的 `berth serve` + 這一版的前端，port 28383，config/data 在 scratchpad，用完停掉刪掉；
+對 berth-existing）**
+
+1. 既有、`http://localhost:58096`（10.10.7）→ 測試連線：紅，「連得上，但版本比 Berth 支援的下限舊」，手動步驟
+   「至少要 Jellyfin 12.0，這一台是 10.10.7；等也不會好。升級之後再測一次。」擁有者表單不出現。
+2. 改 `http://localhost:58097`（12.1）→ 綠「已經有管理員」（不再是「連上了，已經有管理員」）→ 管理員登入成為擁有者。
+   回頭看頁 1：只有一顆「改位址」，沒有「改位址或憑證」；「這裡能做 / 不在這裡做」說鎖到同一台、換一台 Berth 不支援。
+3. 「改位址」→ 表單提示「這裡只確認位址連得到、版本夠新。」→ 填 `http://localhost:48096`（ok-jellyfin）→ 被擋：
+   「沒有存：548d38d28268 是另一台 Jellyfin，不是擁有者所在的那一台。…」；`/api/setup/status` 的位址仍是 `:58097`。
+4. 改 `http://127.0.0.1:58097`（同一台）→ 存下、`ok` / `setup_completed`。
+5. 直接打 `POST /api/setup/owner`（登入中）→ `409 {"reason":"owner_exists"}`。
+
+playwright MCP 的瀏覽器被別的 session 佔著，改用 `web/node_modules/@playwright/test` 的 chromium 寫一支腳本跑（repo 外）。
+第一次跑時帳密欄位切錯一欄，登入被拒、什麼都沒建，重置受測 Berth 之後重跑。
+
+**code-review 未處理的發現**
+
+- 版本下限在後端常數、`VERSION_FLOOR`、`choice.existing.floor.*` 三處（票 17 就記過）：沒有閘門綁在一起。
+- `_Outcome.detail` / `ChoiceRefusal.detail` 一欄多義（版本、伺服器名、`ConnectionReason`），前端 `refusedDetail` 靠理由分辨。
+- `_test_and_record` 是三個服務共用的，夾著 Jellyfin 專屬的 ServerId 回填（票 18 之前的擁有者才走得到）；回填沒有移除條件。
+- `kind === 'jellyfin'` 的特判散在 `TestLine`、`Fix`、`detailLabel`。
+- `JellyfinStartup` 的預設值從 API 一路傳到 `_Runner`：前端建立時一定帶值，預設只給測試與舊呼叫端。
+- `onChoose` 的收尾從 `onSettled` 改成 `onSuccess`：三個服務的既有表單在沒送到時都留著（原本收起），不只 Jellyfin 被拒時。
+- 登入那一段的版本後備仍把 `unsupported_message` 的英文當 `detail` 顯示；前句改成「下面是那一步的錯誤訊息」，英文原文的
+  層次留給票 21。

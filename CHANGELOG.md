@@ -1142,6 +1142,20 @@ split-cour 的第一批被播出日比對整批擋在審核，改正一次並套
   位址欄下說明那是 Berth 自己的容器、改填 `host.docker.internal` 或區網 IP；只提示、不擋。測試連不上時的補法也說同一句。
 - **三個服務頁的「既有」旁寫出版本下限**（M4 票 17）：Jellyfin 12.0（附 12.0 發佈文的升級注意連結）、
   qBittorrent 4.4、Prowlarr 1.3.2。
+- **Jellyfin 的版本在測連線時就擋**（M4 票 18）：10.x 原本測試是綠燈、到登入才 502 一句英文；現在頁 1 當場紅在
+  `version_unsupported`，補法說「至少要 Jellyfin 12.0，這一台是 X」（Prowlarr 同一句型），擁有者表單不出現。
+  套件內那一台太舊也當場紅，不等輪詢上限。
+- **擁有者成立之後 Jellyfin 只能換到同一台**（M4 票 18，brief §20.15）：換位址時先問新位址的 ServerId
+  （`/System/Info/Public` 的 `Id`），與擁有者成立時記下的不同就 409 `other_server`、新位址不回答就 409
+  `unverified`，兩者都不存；同一台就存下並以 Berth 的 key 重驗，被撤了測試紅在 `auth_required`，頁 1 與設定頁
+  就地用管理員重新登入換一把。存下的位址後面換成另一台時，重新測試紅在新的 `other_server`。
+  `settings.setup.owner` 多 `jellyfin_server_id`；之前成立的擁有者在下一次測試時記下測到的那一台。
+- **替還沒初始化的既有 Jellyfin 建立擁有者時問語言與地區、遠端存取**（M4 票 18，使用者拍板）：`POST /api/setup/owner`
+  多 `ui_culture`、`metadata_language`、`metadata_country`、`remote_access`，寫進它的 `/Startup/Configuration` 與
+  `/Startup/RemoteAccess`。預設跟著 UI 語言、不開遠端存取。**套件內那一台不再開遠端存取**（原本開），語言也跟著
+  UI 語言（原本固定 `zh-TW`）。
+- **頁 1 的文案**（M4 票 18）：Jellyfin 那一格的鈕叫「改位址」，表單不再說「管理員帳密在下一格」；回頭看只列畫面上
+  真的有的動作；測試結果不再說兩次「連上了」。
 - **精靈的「媒體庫與路徑」頁進頁不動手，一顆「建立並檢查」做完**（M4 票 08，plan §9.3 頁 3）：原本一走到就自動建
   分類、寫探測檔；現在按下之前列出這一輪會做的事（建哪幾個媒體庫、在哪個媒體庫加哪一條路徑、幾個分類、幾個測試檔）。
   套件內的媒體庫清單與 Route 併成一個畫面，「開始靠泊」「前往 Route 與檢查」拿掉；既有 Jellyfin 的「加入 Berth
@@ -1442,6 +1456,9 @@ split-cour 的第一批被播出日比對整批擋在審核，改正一次並套
 
 ### Security
 
+- **`POST /api/setup/owner` 不再重建擁有者**（M4 票 18）：成立之後連登入中的管理員再打這一支都是 409
+  `owner_exists`，原本任何一位管理員都能換掉擁有者。換 API key 的重新登入是 `POST /api/setup/jellyfin/connect`，
+  不受影響。
 - **Berth 寫進套件內 qBittorrent / Prowlarr 的介面密碼只存加鹽雜湊**（M4 票 15，brief §19 2026-09-29 ⑤）：勾了
   「沿用 Jellyfin 帳密」時那就是擁有者的 Jellyfin 密碼，照票 07 存明文會推翻「資料庫裡沒有擁有者的明文密碼」。
   雜湊只拿來比對「已經是這一組」；Berth 連套件內 qBittorrent 靠免密白名單，那一台的連線帳密因此是空的。

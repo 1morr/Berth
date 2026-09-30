@@ -7,8 +7,10 @@ import { ApiError } from '../api/client'
 import type { JellyfinWeb } from '../api/jellyfin'
 import { jellyfinAddressQueryOptions, saveJellyfinAddress } from '../api/settings'
 import {
+  apiKeyFailed,
   connectJellyfin,
   jellyfinSetupQueryOptions,
+  retestService,
   setupStatusQueryOptions,
   type JellyfinConnectInput,
 } from '../api/setup'
@@ -41,26 +43,31 @@ export function JellyfinSettingsPage() {
 }
 
 /**
- * 重新登入換一把 API key。只有既有的 Jellyfin 有：套件內那一台的 key 是精靈在靠泊時
- * 自己建的，使用者手上沒有那個管理員要登入的理由。
+ * 重新登入換一把 API key。既有的 Jellyfin 一直有；套件內那一台的 key 是精靈自己建的，只有測試說它
+ * 被撤了（`auth_required`，M4 票 18）才出現。換到了就連重測連線那一格，它才不會還紅著。
  */
 function SignIn({ check }: { check: ServiceCheck }) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const status = useQuery(setupStatusQueryOptions)
-  const existing =
-    status.data?.services.find((row) => row.kind === 'jellyfin')?.origin === 'existing'
-  const setup = useQuery({ ...jellyfinSetupQueryOptions, enabled: existing })
+  const jellyfin = status.data?.services.find((row) => row.kind === 'jellyfin')
+  const shown = jellyfin?.origin === 'existing' || jellyfin?.reason === 'auth_required'
+  const setup = useQuery({ ...jellyfinSetupQueryOptions, enabled: shown })
 
   const signIn = useMutation({
-    mutationFn: (input: JellyfinConnectInput) => connectJellyfin(input),
-    onSuccess: (next) => {
+    mutationFn: async (input: JellyfinConnectInput) => {
+      const next = await connectJellyfin(input)
       queryClient.setQueryData(jellyfinSetupQueryOptions.queryKey, next)
-      check.mutate('jellyfin')
+      if (apiKeyFailed(next)) return
+      queryClient.setQueryData(
+        setupStatusQueryOptions.queryKey,
+        await retestService('jellyfin', true),
+      )
     },
+    onSuccess: () => check.mutate('jellyfin'),
   })
 
-  if (!existing || !setup.data) return null
+  if (!shown || !setup.data) return null
 
   return (
     <SettingsSection

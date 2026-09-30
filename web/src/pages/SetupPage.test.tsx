@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { stubApi } from '../test/fetch'
 import { renderWithProviders } from '../test/render'
-import { ALL_BUNDLED, chosen, setupStatus } from '../test/fixtures'
+import { ALL_BUNDLED, chosen, jellyfinSetup, setupStatus } from '../test/fixtures'
 import { SetupPage } from './SetupPage'
 
 afterEach(() => {
@@ -187,7 +187,7 @@ describe('頁 1：Jellyfin 與擁有者', () => {
     expect(screen.queryByRole('button', { name: '測試連線' })).not.toBeInTheDocument()
     // 測試那一條寫的是使用者填的那一台，不是 compose 主機名。
     expect(screen.getByText('nas:8096/System/Info/Public')).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: '改位址或憑證' }))
+    await user.click(screen.getByRole('button', { name: '改位址' }))
     expect(screen.getByRole('textbox', { name: '位址' })).toHaveValue('http://nas:8096')
   })
 
@@ -216,14 +216,14 @@ describe('頁 1：Jellyfin 與擁有者', () => {
   })
 
   /** audit（票 15）：按鈕自己卸下之後，焦點原本交給 StepFrame 的兜底，越過剛打開的表單。 */
-  it('按「改位址或憑證」之後焦點進到位址欄', async () => {
+  it('按「改位址」之後焦點進到位址欄', async () => {
     stubApi({
       [STATUS]: { body: setupStatus({ services: [EXISTING_JELLYFIN], owner_signs_in: true }) },
     })
     const user = userEvent.setup()
 
     renderWithProviders(<SetupPage />)
-    await user.click(await screen.findByRole('button', { name: '改位址或憑證' }))
+    await user.click(await screen.findByRole('button', { name: '改位址' }))
 
     expect(screen.getByRole('textbox', { name: '位址' })).toHaveFocus()
   })
@@ -398,9 +398,14 @@ describe('頁 1：Jellyfin 與擁有者', () => {
 
     await waitFor(() => {
       const call = fetchStub.mock.calls.find(([url]) => url === '/api/setup/owner')
+      // 套件內那一台不問語言與遠端存取：帶 UI 語言、不開（M4 票 18）。
       expect(call && JSON.parse(String(call[1]?.body))).toEqual({
         username: 'skipper',
         password: 'harbour',
+        ui_culture: 'zh-TW',
+        metadata_language: 'zh-TW',
+        metadata_country: 'TW',
+        remote_access: false,
       })
       const headers = call?.[1]?.headers as Record<string, string>
       expect(headers['X-Requested-With']).toBe('XMLHttpRequest')
@@ -411,6 +416,7 @@ describe('頁 1：Jellyfin 與擁有者', () => {
     expect(existingCard()).toBeDisabled()
     expect(bundledCard()).toBeChecked()
     expect(screen.getByText(/換一台等於換擁有者/)).toBeVisible()
+    expect(screen.queryByLabelText('語言與地區')).toBeNull()
 
     await user.click(screen.getByRole('button', { name: '前往下一個泊位' }))
     expect(
@@ -505,11 +511,140 @@ describe('頁 1：Jellyfin 與擁有者', () => {
     expect(screen.getByText(/之後登入 Berth 就用這個 Jellyfin 帳號/)).toBeVisible()
     // 回頭看的說明：這裡能做什麼、不能做的去哪裡（票 06d）。
     const revisit = screen.getByRole('note', { name: '回頭看' })
-    expect(within(revisit).getByText(/看擁有者是誰、重新測試這一台/)).toBeVisible()
-    expect(within(revisit).getByText(/設定 → Jellyfin/)).toBeVisible()
+    // 只列畫面上真的有的動作（M4 票 18）：套件內這一格沒有「重新測試」鈕，也沒有「改位址」。
+    expect(within(revisit).getByText(/看擁有者是誰/)).toBeVisible()
+    expect(within(revisit).queryByText(/重新測試/)).toBeNull()
+    expect(within(revisit).getByText(/Berth 不支援/)).toBeVisible()
+    expect(screen.queryByRole('button', { name: '重新測試' })).toBeNull()
     expect(screen.queryByLabelText('Jellyfin 帳號')).not.toBeInTheDocument()
     expect(existingCard()).toBeDisabled()
     expect(screen.getByText(/換一台等於換擁有者/)).toBeVisible()
+  })
+})
+
+describe('頁 1：替還沒初始化的既有 Jellyfin 建立擁有者（M4 票 18）', () => {
+  const PENDING_EXISTING = setupStatus({
+    services: [chosen({ origin: 'existing', base_url: 'http://nas:8096' })],
+  })
+
+  async function fill(user: ReturnType<typeof userEvent.setup>) {
+    await user.type(await screen.findByLabelText('Jellyfin 帳號'), 'skipper')
+    await user.type(screen.getByLabelText('密碼'), 'harbour')
+    await user.type(screen.getByLabelText('再輸入一次密碼'), 'harbour')
+  }
+
+  it('問語言與地區（預設跟著 UI 語言）與遠端存取（預設不開），送出的就是選的', async () => {
+    const fetchStub = stubApi({
+      [STATUS]: { body: PENDING_EXISTING },
+      [OWNER]: { body: setupStatus({ current_step: 2, owner: 'skipper' }) },
+    })
+    const user = userEvent.setup()
+
+    renderWithProviders(<SetupPage />)
+    await fill(user)
+    const language = screen.getByRole('combobox', { name: '語言與地區' })
+    const remote = screen.getByRole('checkbox', { name: '開啟遠端存取' })
+    expect(language).toHaveDisplayValue('中文（台灣）')
+    expect(remote).not.toBeChecked()
+    expect(remote).toHaveAccessibleDescription(/用不到它/)
+
+    await user.selectOptions(language, 'en-GB')
+    await user.click(remote)
+    await user.click(screen.getByRole('button', { name: '建立管理員並登入' }))
+
+    await waitFor(() =>
+      expect(bodiesOf(fetchStub, '/api/setup/owner')).toEqual([
+        {
+          username: 'skipper',
+          password: 'harbour',
+          ui_culture: 'en-GB',
+          metadata_language: 'en',
+          metadata_country: 'GB',
+          remote_access: true,
+        },
+      ]),
+    )
+  })
+
+  it('已經有管理員的既有 Jellyfin 是登入：不問，也不送', async () => {
+    const fetchStub = stubApi({
+      [STATUS]: {
+        body: setupStatus({
+          services: [chosen({ origin: 'existing', reason: 'setup_completed' })],
+          owner_signs_in: true,
+        }),
+      },
+      [OWNER]: { body: setupStatus({ current_step: 2, owner: 'skipper' }) },
+    })
+    const user = userEvent.setup()
+
+    renderWithProviders(<SetupPage />)
+    await user.type(await screen.findByLabelText('Jellyfin 帳號'), 'skipper')
+    await user.type(screen.getByLabelText('密碼'), 'harbour')
+    expect(screen.queryByLabelText('語言與地區')).toBeNull()
+    expect(screen.queryByLabelText('開啟遠端存取')).toBeNull()
+    await user.click(screen.getByRole('button', { name: '登入' }))
+
+    await waitFor(() =>
+      expect(bodiesOf(fetchStub, '/api/setup/owner')).toEqual([
+        { username: 'skipper', password: 'harbour' },
+      ]),
+    )
+  })
+
+  it('套件內還沒初始化的那一台不問', async () => {
+    stubApi({ [STATUS]: { body: setupStatus({ services: [chosen()] }) } })
+
+    renderWithProviders(<SetupPage />)
+
+    expect(await screen.findByLabelText('Jellyfin 帳號')).toBeVisible()
+    expect(screen.queryByLabelText('語言與地區')).toBeNull()
+    expect(screen.queryByLabelText('開啟遠端存取')).toBeNull()
+  })
+})
+
+describe('頁 1：擁有者成立之後 Berth 的 key 被撤了（M4 票 18）', () => {
+  it('就地用管理員重新登入換 key，然後重新測試', async () => {
+    const revoked = setupStatus({
+      current_step: 2,
+      owner: 'skipper',
+      services: [
+        chosen({
+          origin: 'existing',
+          base_url: 'http://nas:8096',
+          state: 'failed',
+          reason: 'auth_required',
+        }),
+      ],
+    })
+    const fetchStub = stubApi({
+      [STATUS]: { body: revoked },
+      'POST /api/setup/jellyfin/connect': { body: jellyfinSetup() },
+      [RETEST]: {
+        body: setupStatus({
+          current_step: 2,
+          owner: 'skipper',
+          services: [chosen({ origin: 'existing', reason: 'setup_completed' })],
+        }),
+      },
+    })
+    const user = userEvent.setup()
+
+    renderWithProviders(<SetupPage />)
+    await screen.findByRole('heading', { level: 2, name: '先選 qBittorrent 是哪一台' })
+    await user.click(within(screen.getByText('BTH 1').closest('li')!).getByRole('button'))
+
+    expect(await screen.findByText('Berth 的 API key 要換一把')).toBeVisible()
+    await user.type(screen.getByLabelText('Jellyfin 管理員帳號'), 'skipper')
+    await user.type(screen.getByLabelText('Jellyfin 管理員密碼'), 'harbour')
+    await user.click(screen.getByRole('button', { name: /登入/ }))
+
+    await waitFor(() =>
+      expect(requestsOf(fetchStub)).toEqual(
+        expect.arrayContaining(['POST /api/setup/jellyfin/connect', RETEST]),
+      ),
+    )
+    expect(bodiesOf(fetchStub, '/api/setup/services/jellyfin/test')).toEqual([{ restart: true }])
   })
 })
 

@@ -67,10 +67,30 @@ from berth.services.steps import InterfaceLogin, StepView, step_views
 #: `POST /Auth/Keys?app=` 用的名字。也是重按時辨認「這把是我建的」的依據。
 API_KEY_APP = "Berth"
 
-#: plan §9.4 第 2 步。「精靈可改」是之後的事，M0 用固定值。
-UI_CULTURE = "zh-TW"
+#: 套件內媒體庫的 metadata 語言與國家（plan §9.4 第 4 步）。Jellyfin 自己的初始設定（第 2 步）
+#: 不用它，走 `JellyfinStartup`。
 METADATA_LANGUAGE = "zh-TW"
 METADATA_COUNTRY = "TW"
+
+
+@dataclass(frozen=True, slots=True)
+class JellyfinStartup:
+    """替還沒初始化的 Jellyfin 跑它自己的初始精靈時寫進去的（plan §9.4 第 2、5 步）。
+
+    **在畫面上問**（M4 票 18，使用者 2026-09-30 拍板）：既有那一台問語言與地區、遠端存取；套件內
+    那一台不問，前端帶 UI 語言、不開遠端存取——Berth 從同一台主機的容器連進來，用不到它。
+    已經初始化過的那一台不寫，這一份用不到。
+    """
+
+    #: `UICulture` 與 `PreferredMetadataLanguage`（Jellyfin 的語言代碼：`zh-TW`、`en`）。
+    ui_culture: str = "zh-TW"
+    metadata_language: str = "zh-TW"
+    #: `MetadataCountryCode`（ISO 3166 兩碼）。
+    metadata_country: str = "TW"
+    remote_access: bool = False
+
+
+DEFAULT_STARTUP = JellyfinStartup()
 
 #: 設定裡沒寫的媒體庫依內容類型落回這裡（票 06f）。brief §10 的決定：第一階段只用 TMDB，
 #: 所以兩種現在一樣；分開寫是因為切換點是按類型與按媒體庫，不是全域的。
@@ -335,10 +355,17 @@ class JellyfinClaim:
     #: 沒成立時的理由；`detail` 是失敗那一步的原文（版本太舊時帶著版本號）。
     refusal: OwnerRefusal | None
     detail: str
+    #: 這一台的 ServerId（brief §20.15）。擁有者記下它，之後換位址只接受同一台（M4 票 18）。
+    server_id: str = ""
 
 
 async def claim_jellyfin(
-    session: AsyncSession, factory: ServiceClientFactory, *, username: str, password: str
+    session: AsyncSession,
+    factory: ServiceClientFactory,
+    *,
+    username: str,
+    password: str,
+    startup: JellyfinStartup = DEFAULT_STARTUP,
 ) -> JellyfinClaim:
     """精靈第 1 步的 Jellyfin 那一半：套件內建管理員並跑完初始設定，既有的登入；都換 API key。
 
@@ -349,7 +376,9 @@ async def claim_jellyfin(
     `skipped`（12.0 起回 403，brief §20.9），驗證落在換 key 那一步——所以同一組照樣成立，
     別的密碼蓋不掉它。
     """
-    status, runner = await _run(session, factory, OWNER_STEPS, credentials=(username, password))
+    status, runner = await _run(
+        session, factory, OWNER_STEPS, credentials=(username, password), startup=startup
+    )
     failed = next((row for row in status.steps if row.status is StepStatus.FAILED), None)
     if runner.refusal is not None:
         # 帳密那兩種的理由本身就是完整的一句話；Jellyfin 的原文只給「那一段沒做完」。
@@ -361,7 +390,9 @@ async def claim_jellyfin(
             refusal=OwnerRefusal.JELLYFIN_FAILED,
             detail=failed.error if failed is not None else "",
         )
-    return JellyfinClaim(status=status, auth=runner.auth, refusal=None, detail="")
+    return JellyfinClaim(
+        status=status, auth=runner.auth, refusal=None, detail="", server_id=runner.server_id
+    )
 
 
 async def bootstrap_jellyfin(
@@ -499,6 +530,7 @@ async def _run(
     steps: tuple[JellyfinStep, ...],
     *,
     credentials: tuple[str, str] | None = None,
+    startup: JellyfinStartup = DEFAULT_STARTUP,
 ) -> tuple[JellyfinSetupStatus, _Runner]:
     setup = await read_settings(session, SetupSettings)
     jellyfin = await read_settings(session, JellyfinSettings)
@@ -506,7 +538,9 @@ async def _run(
     _, base_url = _target(setup, jellyfin)
 
     client = factory.jellyfin(base_url, token=jellyfin.api_key)
-    runner = _Runner(client, jellyfin, paths, setup.jellyfin.bundled, credentials=credentials)
+    runner = _Runner(
+        client, jellyfin, paths, setup.jellyfin.bundled, credentials=credentials, startup=startup
+    )
     try:
         # 這一輪要跑的步驟先全部歸零，畫面才不會把上一輪的結果當成這一輪的進度。
         await _record(session, *(_step(step, StepStatus.PENDING) for step in steps))
@@ -581,8 +615,10 @@ class _Runner:
         bundled: Sequence[BundledLibrary],
         *,
         credentials: tuple[str, str] | None,
+        startup: JellyfinStartup,
     ) -> None:
         self._client = client
+        self._startup = startup
         self._jellyfin = jellyfin
         self._paths = paths
         self._bundled = tuple(bundled)
@@ -597,6 +633,8 @@ class _Runner:
         self.auth: JellyfinAuth | None = None
         #: 帳密這一關沒過的理由。其他失敗照樣是那一步的 `failed`。
         self.refusal: OwnerRefusal | None = None
+        #: 第 1 步讀到的 ServerId（brief §20.15）。
+        self.server_id = ""
 
     async def run(self, step: JellyfinStep) -> SetupStep:
         try:
@@ -625,16 +663,18 @@ class _Runner:
             # 版本閘門就在第一步，後面的步驟因此一步都不會跑（brief §16.4、§19）。
             raise StepFailedError(unsupported_message(info.version), detail=info.version)
         self._fresh = not info.startup_wizard_completed
+        self.server_id = info.server_id
         return StepStatus.OK, info.version
 
     async def _configuration(self) -> tuple[StepStatus, str]:
-        detail = f"{UI_CULTURE} · {METADATA_COUNTRY}"
+        startup = self._startup
+        detail = f"{startup.ui_culture} · {startup.metadata_country}"
         if not self._fresh:
             return StepStatus.SKIPPED, detail
         await self._client.start_configuration(
-            ui_culture=UI_CULTURE,
-            metadata_country_code=METADATA_COUNTRY,
-            preferred_metadata_language=METADATA_LANGUAGE,
+            ui_culture=startup.ui_culture,
+            metadata_country_code=startup.metadata_country,
+            preferred_metadata_language=startup.metadata_language,
         )
         return StepStatus.OK, detail
 
@@ -680,7 +720,7 @@ class _Runner:
     async def _remote_access(self) -> tuple[StepStatus, str]:
         if not self._fresh:
             return StepStatus.SKIPPED, ""
-        await self._client.set_remote_access(enabled=True)
+        await self._client.set_remote_access(enabled=self._startup.remote_access)
         return StepStatus.OK, ""
 
     async def _complete(self) -> tuple[StepStatus, str]:

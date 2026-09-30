@@ -83,6 +83,7 @@ class HttpJellyfinClient:
             server_name=str(payload.get("ServerName", "")),
             version=str(payload.get("Version", "")),
             startup_wizard_completed=bool(payload["StartupWizardCompleted"]),
+            server_id=str(payload.get("Id", "")),
         )
 
     # --- 初始精靈 ---

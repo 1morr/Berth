@@ -25,6 +25,7 @@ const OWNER_REASONS: ReasonSet<Schemas['OwnerRefusal']> = {
   invalid_credentials: true,
   not_administrator: true,
   jellyfin_failed: true,
+  owner_exists: true,
 }
 
 /**
@@ -57,7 +58,26 @@ export function ownerRefusalOf(error: unknown): OwnerRefusal | null {
   return parseRefusal(error, OWNER_REASONS)
 }
 
-/** 選來源、存下、測一次。擁有者成立之後改 Jellyfin 的來源是 409（擁有者是那一台上的帳號）。 */
+export type ChoiceRefusal = Refusal<Schemas['ChoiceRefusal']>
+
+const CHOICE_REASONS: ReasonSet<Schemas['ChoiceRefusal']> = {
+  jellyfin_owned: true,
+  other_server: true,
+  unverified: true,
+}
+
+/**
+ * 選擇沒存下的理由（409）：都是擁有者成立之後的 Jellyfin——改來源、換到另一台、新位址認不出是哪一台
+ * （M4 票 18）。認不得的是 `null`。
+ */
+export function choiceRefusalOf(error: unknown): ChoiceRefusal | null {
+  return parseRefusal(error, CHOICE_REASONS)
+}
+
+/**
+ * 選來源、存下、測一次。擁有者成立之後改 Jellyfin 的來源、或換到另一台 Jellyfin 是 409
+ * （`choiceRefusalOf`）。
+ */
 export function chooseService(kind: ServiceKind, body: ChoiceInput): Promise<SetupStatus> {
   return apiPost<SetupStatus>(`/setup/services/${kind}`, body)
 }
@@ -149,6 +169,11 @@ export function bundledRefusalOf(error: unknown): BundledRefusal | null {
   if (refusal === null || !(error instanceof ApiError)) return refusal
   const { row } = error.detail as Partial<Schemas['BundledLibraryRefusalOut']>
   return typeof row === 'number' ? { ...refusal, row } : refusal
+}
+
+/** 換 key 那一步沒成（帳密不對、不是管理員）：沒換到就不必重測（M4 票 18，頁 1 與設定頁共用）。 */
+export function apiKeyFailed(setup: JellyfinSetup): boolean {
+  return setup.steps.some((row) => row.step === 'api_key' && row.status === 'failed')
 }
 
 export function connectJellyfin(body: JellyfinConnectInput): Promise<JellyfinSetup> {

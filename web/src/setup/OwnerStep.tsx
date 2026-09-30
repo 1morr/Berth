@@ -1,14 +1,32 @@
-import { useState, type FormEvent, type ReactNode } from 'react'
+import { useId, useState, type FormEvent, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import type { OwnerInput, OwnerRefusal, SetupStatus } from '../api/setup'
+import type { JellyfinConnectInput, OwnerInput, OwnerRefusal, SetupStatus } from '../api/setup'
+import type { ServiceOrigin } from '../api/schemas'
 import { Cutaway, CutawayRow } from '../components/Cutaway'
 import { ORIGIN_LABEL } from '../components/services'
-import { STICKY_ACTION, Field, Notice, PasswordField, PrimaryButton } from '../components/controls'
+import {
+  STICKY_ACTION,
+  Checkbox,
+  Field,
+  Notice,
+  PasswordField,
+  PrimaryButton,
+} from '../components/controls'
+import { JellyfinSignInForm } from './JellyfinExisting'
+import { JELLYFIN_LOCALES, localeForUi, localeLabel } from './jellyfinStartup'
 import { ServiceChoice, type ChoiceControls } from './ServiceChoice'
 import { useChoiceDraft } from './choiceDraft'
 import { connected } from './signals'
 import { StepFrame } from './StepFrame'
+
+/** 擁有者成立之後 Berth 的 key 被撤了：就地重新登入換一把（M4 票 18）。 */
+export interface ReSignIn {
+  connecting: boolean
+  /** 沒送到，或 Jellyfin 那一段沒換到 key。 */
+  failed: boolean
+  onConnect: (input: JellyfinConnectInput) => void
+}
 
 /**
  * 頁 1：Jellyfin，它的管理員就是 Berth 的擁有者（plan §9.3、M4 票 06、15）。
@@ -24,6 +42,7 @@ export function OwnerStep({
   refusal,
   claimFailed,
   onClaim,
+  reSignIn,
   note,
   nav,
 }: {
@@ -35,6 +54,7 @@ export function OwnerStep({
   /** 請求沒跑完，而且不是一份認得的拒絕。 */
   claimFailed: boolean
   onClaim: (input: OwnerInput) => void
+  reSignIn: ReSignIn
   /** 回頭看的說明（`RevisitNote`），這一頁做完了才有。 */
   note?: ReactNode
   /** 回頭看這一頁時的導覽（`BerthNav`）。 */
@@ -46,6 +66,7 @@ export function OwnerStep({
   // 換另一格還在確認：標題與表單不說原本那一台的事（M4 票 09）。
   const switching = choiceDraft.draft !== null && choiceDraft.draft !== jellyfin?.origin
   const mode = switching ? 'choose' : modeOf(status, connected(jellyfin))
+  const reSignInId = useId()
 
   return (
     <StepFrame cutaway={<OwnerCutaway status={status} mode={mode} />}>
@@ -65,10 +86,21 @@ export function OwnerStep({
         locked={status.owner ? t('owner.locked') : undefined}
       />
 
-      {(mode === 'create' || mode === 'signIn') && (
+      {mode === 'owned' && jellyfin?.state === 'failed' && jellyfin.reason === 'auth_required' && (
+        <section aria-labelledby={`${reSignInId}-title`} className="mt-6">
+          <h3 id={`${reSignInId}-title`} className="text-sm font-semibold text-ink">
+            {t('owner.reSignIn.title')}
+          </h3>
+          <p className="mt-1 max-w-prose text-xs text-ink-dim">{t('owner.reSignIn.lede')}</p>
+          <JellyfinSignInForm {...reSignIn} signedIn />
+        </section>
+      )}
+
+      {(mode === 'create' || mode === 'signIn') && jellyfin && (
         <OwnerForm
           key={mode}
           signsIn={mode === 'signIn'}
+          origin={jellyfin.origin}
           claiming={claiming}
           refusal={refusal}
           claimFailed={claimFailed}
@@ -93,6 +125,7 @@ function modeOf(status: SetupStatus, ready: boolean): OwnerMode {
 
 function OwnerForm({
   signsIn,
+  origin,
   claiming,
   refusal,
   claimFailed,
@@ -100,17 +133,26 @@ function OwnerForm({
   sticky,
 }: {
   signsIn: boolean
+  /**
+   * 建立時寫進 Jellyfin 初始設定的語言與遠端存取（M4 票 18，使用者拍板）：既有的在畫面上問；套件內的
+   * 是 Berth 的，不問——帶 UI 語言、不開遠端存取。登入的那一台已經設過了，不送。
+   */
+  origin: ServiceOrigin
   claiming: boolean
   refusal: OwnerRefusal | null
   claimFailed: boolean
   onClaim: (input: OwnerInput) => void
   sticky: boolean
 }) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
   const [checked, setChecked] = useState(false)
+  const [culture, setCulture] = useState(() => localeForUi(i18n.language).ui_culture)
+  const [remoteAccess, setRemoteAccess] = useState(false)
+  const asksStartup = !signsIn && origin === 'existing'
+  const languageId = useId()
 
   const blank = checked && (!username.trim() || !password)
   // 密碼打兩次只在建立時（Jellyfin 自己的啟動精靈也是）：登入打錯了 Jellyfin 會拒絕，
@@ -121,7 +163,15 @@ function OwnerForm({
     event.preventDefault()
     setChecked(true)
     if (!username.trim() || !password || (!signsIn && password !== confirm)) return
-    onClaim({ username: username.trim(), password })
+    const credentials = { username: username.trim(), password }
+    if (signsIn) {
+      onClaim(credentials)
+      return
+    }
+    const locale = asksStartup
+      ? JELLYFIN_LOCALES.find((row) => row.ui_culture === culture)!
+      : localeForUi(i18n.language)
+    onClaim({ ...credentials, ...locale, remote_access: asksStartup && remoteAccess })
   }
 
   return (
@@ -148,6 +198,37 @@ function OwnerForm({
           onChange={(event) => setConfirm(event.target.value)}
           error={mismatch ? t('owner.error.mismatch') : undefined}
         />
+      )}
+      {asksStartup && (
+        <>
+          <p className="grid gap-2">
+            <label htmlFor={languageId} className="label text-ink-dim">
+              {t('owner.startup.language')}
+            </label>
+            <select
+              id={languageId}
+              value={culture}
+              aria-describedby={`${languageId}-hint`}
+              onChange={(event) => setCulture(event.target.value)}
+              className="value w-full border-2 border-rule-strong bg-hull px-3 py-2.5 text-sm text-ink focus:border-ink"
+            >
+              {JELLYFIN_LOCALES.map((row) => (
+                <option key={row.ui_culture} value={row.ui_culture}>
+                  {localeLabel(row, i18n.language)}
+                </option>
+              ))}
+            </select>
+            <span id={`${languageId}-hint`} className="text-xs text-ink-dim">
+              {t('owner.startup.languageHint')}
+            </span>
+          </p>
+          <Checkbox
+            label={t('owner.startup.remote')}
+            hint={t('owner.startup.remoteHint')}
+            checked={remoteAccess}
+            onChange={setRemoteAccess}
+          />
+        </>
       )}
       {/* 拒絕的那一句在送出鈕上方：窄版的送出鈕吸在底部，放在它下面要捲才看得到（critique）。 */}
       {refusal ? (

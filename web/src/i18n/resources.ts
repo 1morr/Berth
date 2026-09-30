@@ -53,9 +53,8 @@ const zhHant = {
       can: '這裡能做',
       elsewhere: '不在這裡做',
       jellyfin: {
-        can: '看擁有者是誰、重新測試這一台。來源在擁有者成立之後就鎖住了。',
-        elsewhere:
-          '擁有者的密碼在 Jellyfin 裡改；換一台 Jellyfin 的位址在精靈跑完之後的「設定 → Jellyfin」。',
+        can: '看擁有者是誰。擁有者成立之後來源鎖住；既有的那一台換了位址（例如改了 port）按測試結果上的「改位址」，只收同一台伺服器。',
+        elsewhere: '擁有者的密碼在 Jellyfin 裡改。換成另一台 Jellyfin 等於換擁有者，Berth 不支援。',
       },
       qbittorrent: {
         can: '改選套件內或既有（這一頁要重做）、重新檢查：套件內的那一台再套用一次建議設定，已經是建議值的鍵標「已經是這樣」、不會再寫一次；你自己的 qBittorrent 只重新確認連得上，一個鍵都不寫。',
@@ -125,11 +124,25 @@ const zhHant = {
       not_administrator:
         '這個帳號登得進 Jellyfin，但不是管理員。擁有者要改得動設定——用這台 Jellyfin 的管理員登入。',
       jellyfin_failed:
-        'Jellyfin 那一段沒做完。它回的原文在下面；排除之後再按一次，做過的不會重做。',
+        'Jellyfin 那一段沒做完，下面是那一步的錯誤訊息；排除之後再按一次，做過的不會重做。',
+      owner_exists:
+        '擁有者已經成立了，這裡不換人。Berth 的 API key 要換的話，到「設定 → Jellyfin」用管理員重新登入。',
     },
     saved: '擁有者 · {{name}}',
     locked:
-      '擁有者是這一台 Jellyfin 上的帳號，換一台等於換擁有者，所以精靈裡鎖住了。精靈跑完之後在「設定 → Jellyfin」換位址。',
+      '擁有者是這一台 Jellyfin 上的帳號，換一台等於換擁有者，所以來源鎖住了。同一台換了位址可以改，另一台伺服器會被擋下。',
+    startup: {
+      language: '語言與地區',
+      languageHint:
+        '寫進這台 Jellyfin 自己的初始設定：它的介面語言，以及抓 metadata 用的語言與國家。之後在 Jellyfin 的控制台改。',
+      remote: '開啟遠端存取',
+      remoteHint:
+        '讓區網以外的裝置連得進這台 Jellyfin。Berth 從同一台主機的容器連進來，用不到它，所以預設不開。',
+    },
+    reSignIn: {
+      title: 'Berth 的 API key 要換一把',
+      lede: '這台 Jellyfin 不收 Berth 存的那一把了（多半是在 Jellyfin 的「API 金鑰」被刪了）。用它的管理員重新登入，Berth 換一把新的，再測一次。',
+    },
     error: {
       blank: '帳號與密碼都要填。',
       mismatch: '兩次輸入的密碼不一樣。',
@@ -173,6 +186,13 @@ const zhHant = {
       upgradeNotes: 'Jellyfin 12.0 升級注意',
     },
     switchToBundled: '改用套件內的那一台',
+    refused: {
+      jellyfin_owned: '擁有者成立之後，Jellyfin 的來源換不了。',
+      other_server:
+        '沒有存：{{detail}} 是另一台 Jellyfin，不是擁有者所在的那一台。擁有者、Berth 的 API key 與媒體庫都在原本那一台；換一台等於換擁有者，Berth 不支援。',
+      unverified:
+        '沒有存：這個位址沒有說出它是哪一台 Jellyfin（{{detail}}），認不出是不是同一台。確認位址與 port 再試一次。',
+    },
     useBundled: '使用套件內的 {{service}}',
     useBundledLede:
       '按下之後 Berth 存下這個選擇，連 compose 帶來的那一台 {{service}} 測一次（只讀）。',
@@ -206,6 +226,7 @@ const zhHant = {
     retesting: '測試中…',
     announce: '{{service}} {{state}}：{{reason}}',
     edit: '改位址或憑證',
+    editAddress: '改位址',
     pasteKey: '用這把 key 再測一次',
     fix: {
       notDeployed:
@@ -221,14 +242,19 @@ const zhHant = {
       banned:
         '它把 Berth 這台的 IP 封了（連續登入失敗）。等封鎖過期，或到它自己的介面解除，再測一次——現在改帳密只會再失敗。',
       address: '連不到這個位址。確認 port 沒填錯、服務在跑，而且 Berth 的容器連得到那台主機。',
-      outdated: '它比 Berth 支援的下限舊，等也不會好。升級之後再測一次。',
-      outdatedBundled: '套件內那一台比 Berth 支援的下限舊：拉新的 image 再起一次，然後重新測試。',
+      outdated: '至少要 {{floor}}，這一台是 {{version}}；等也不會好。升級之後再測一次。',
+      outdatedBundled:
+        '至少要 {{floor}}，套件內那一台是 {{version}}：拉新的 image 再起一次，然後重新測試。',
+      jellyfinKey:
+        'Berth 存的 API key 這一台不收了（多半是在 Jellyfin 的「API 金鑰」被刪了）。用它的管理員在下面重新登入，換一把新的。',
+      otherServer:
+        '這個位址上現在回答的是另一台 Jellyfin（{{name}}）。擁有者、Berth 的 API key 與媒體庫都在原本那一台：把位址改回它，或確認那個 port 沒被別的容器佔走。',
     },
   },
   reason: {
     connected: '連線測試通過',
-    setup_pending: '連上了，還沒跑過自己的初始精靈',
-    setup_completed: '連上了，已經有管理員',
+    setup_pending: '還沒跑過自己的初始精靈',
+    setup_completed: '已經有管理員',
     auth_required: '要求帳密',
     ip_banned: '把 Berth 這台的 IP 封了（連續登入失敗）',
     api_key_missing: '讀不到 API key',
@@ -237,9 +263,11 @@ const zhHant = {
     starting: '連得上，但它說自己還在啟動',
     protocol_mismatch: '連得上，但回的東西不是這個服務',
     version_unsupported: '連得上，但版本比 Berth 支援的下限舊',
+    other_server: '回答的是另一台 Jellyfin，不是擁有者所在的那一台',
   },
   detail: {
     version: '版本',
+    server: '伺服器',
     indexers: '索引站',
     tmdb: 'TMDB',
     credential: '憑證',
@@ -255,7 +283,7 @@ const zhHant = {
       password: '密碼',
     },
     hint: {
-      jellyfin: '這裡只確認位址連得到；管理員帳密在下一格。',
+      jellyfin: '這裡只確認位址連得到、版本夠新。',
       qbittorrent: '免密的話帳密留空。',
       prowlarr: '在 Prowlarr 的「設定 → 一般 → 安全性」找得到 API key。',
     },
@@ -2337,14 +2365,15 @@ const zhHant = {
       title: '位址與憑證',
       lede: '與設定精靈那一頁的頁首是同一塊：按下去就存，然後真的連一次。上面那張卡會跟著重新檢查。',
       failed: '沒有存進去。Berth 後端可能沒在跑——確認容器狀態後再按一次。',
-      locked: '擁有者是這一台 Jellyfin 上的帳號，所以來源換不了；同一台換了位址可以在這裡改。',
+      locked:
+        '擁有者是這一台 Jellyfin 上的帳號，所以來源換不了；同一台換了位址可以在這裡改，另一台伺服器會被擋下。',
     },
     jellyfinPage: {
       title: 'Jellyfin 設定',
       lede: '這一台 Jellyfin 還連得上嗎、位址或 API key 要不要換，以及媒體庫上「在 Jellyfin 開啟」開在哪裡。',
       signIn: {
         title: '管理員登入',
-        lede: 'Berth 用一把自己的 API key 跟 Jellyfin 說話。那把 key 被撤掉了、或換了一台 Jellyfin，就用管理員重新登入一次換一把新的。',
+        lede: 'Berth 用一把自己的 API key 跟 Jellyfin 說話。那把 key 被撤掉了，就用管理員重新登入一次換一把新的。',
       },
     },
     qbittorrentPage: {
@@ -2938,9 +2967,9 @@ const en: Translations<typeof zhHant> = {
       can: 'You can do here',
       elsewhere: 'Not here',
       jellyfin: {
-        can: 'See who the owner is and test this Jellyfin again. The choice is locked once there is an owner.',
+        can: 'See who the owner is. Once there is an owner the source is locked; if your existing Jellyfin moved (a new port, say), use “Change address” on the test result — only the same server is accepted.',
         elsewhere:
-          'The owner’s password is changed in Jellyfin; moving to another Jellyfin address happens in Settings → Jellyfin once the wizard is finished.',
+          'The owner’s password is changed in Jellyfin. Moving to another Jellyfin would mean another owner, which Berth does not support.',
       },
       qbittorrent: {
         can: 'Switch between bundled and existing (this page starts over), or check again: the bundled qBittorrent gets the recommended settings applied once more, and keys already at the recommended value show as “already so” and are not written again; your own qBittorrent is only checked for a connection, with no key written.',
@@ -3014,11 +3043,25 @@ const en: Translations<typeof zhHant> = {
       not_administrator:
         'That account can sign in to Jellyfin but is not an administrator. The owner has to be able to change settings — sign in with an administrator of this Jellyfin.',
       jellyfin_failed:
-        'Jellyfin did not finish. Its own words are below; fix that and press again — nothing already done is redone.',
+        'Jellyfin did not finish; the error from that step is below. Fix it and press again — nothing already done is redone.',
+      owner_exists:
+        'There is already an owner, and it is not replaced here. To give Berth a new API key, sign in again as an administrator in Settings → Jellyfin.',
     },
     saved: 'Owner · {{name}}',
     locked:
-      'The owner is an account on this Jellyfin, so another Jellyfin would mean another owner — the choice is locked in the wizard. Move to another address in Settings → Jellyfin once the wizard is finished.',
+      'The owner is an account on this Jellyfin, so another Jellyfin would mean another owner — the source is locked. A new address for the same server is fine; another server is refused.',
+    startup: {
+      language: 'Language and region',
+      languageHint:
+        'Written into this Jellyfin’s own first-run settings: its interface language, and the language and country it fetches metadata in. Change them later in the Jellyfin dashboard.',
+      remote: 'Allow remote access',
+      remoteHint:
+        'Lets devices outside your network reach this Jellyfin. Berth connects from a container on the same host and does not need it, so it is off by default.',
+    },
+    reSignIn: {
+      title: 'Berth needs a new API key',
+      lede: 'This Jellyfin no longer accepts the key Berth stored (most likely it was deleted under API Keys in Jellyfin). Sign in as one of its administrators and Berth gets a new one, then tests again.',
+    },
     error: {
       blank: 'Username and password are both required.',
       mismatch: 'The two passwords do not match.',
@@ -3064,6 +3107,13 @@ const en: Translations<typeof zhHant> = {
       upgradeNotes: 'Jellyfin 12.0 upgrade notes',
     },
     switchToBundled: 'Use the bundled one instead',
+    refused: {
+      jellyfin_owned: 'Once there is an owner, the Jellyfin source cannot change.',
+      other_server:
+        'Not saved: {{detail}} is another Jellyfin, not the one the owner is on. The owner, Berth’s API key and the libraries are all on the original one; another server would mean another owner, which Berth does not support.',
+      unverified:
+        'Not saved: this address did not say which Jellyfin it is ({{detail}}), so Berth cannot tell whether it is the same one. Check the address and port, then try again.',
+    },
     useBundled: 'Use the bundled {{service}}',
     useBundledLede:
       'Berth saves this choice and tests the {{service}} compose brought along (read-only).',
@@ -3099,6 +3149,7 @@ const en: Translations<typeof zhHant> = {
     retesting: 'Testing…',
     announce: '{{service}} {{state}}: {{reason}}',
     edit: 'Change address or credentials',
+    editAddress: 'Change address',
     pasteKey: 'Test again with this key',
     fix: {
       notDeployed:
@@ -3117,15 +3168,19 @@ const en: Translations<typeof zhHant> = {
       address:
         "Nothing answers at this address. Check the port, that the service is running, and that Berth's container can reach that host.",
       outdated:
-        'It is older than the oldest version Berth supports, and waiting will not change that. Upgrade it, then test again.',
+        'Berth needs at least {{floor}}; this one is {{version}}, and waiting will not change that. Upgrade it, then test again.',
       outdatedBundled:
-        'The bundled one is older than the oldest version Berth supports: pull a new image and start it again, then test again.',
+        'Berth needs at least {{floor}}; the bundled one is {{version}}: pull a new image and start it again, then test again.',
+      jellyfinKey:
+        'This Jellyfin no longer accepts the API key Berth stored (most likely it was deleted under API Keys in Jellyfin). Sign in below as one of its administrators to get a new one.',
+      otherServer:
+        'Another Jellyfin ({{name}}) now answers at this address. The owner, Berth’s API key and the libraries are all on the original one: point the address back at it, or check that no other container took that port.',
     },
   },
   reason: {
     connected: 'Connection test passed',
-    setup_pending: 'Connected; its startup wizard has not run yet',
-    setup_completed: 'Connected; it already has an administrator',
+    setup_pending: 'Its startup wizard has not run yet',
+    setup_completed: 'It already has an administrator',
     auth_required: 'Asks for credentials',
     ip_banned: 'Has banned this machine (too many failed logins)',
     api_key_missing: 'No API key available',
@@ -3134,9 +3189,11 @@ const en: Translations<typeof zhHant> = {
     starting: 'It answers, but says it is still starting up',
     protocol_mismatch: 'Something answered, but it is not this service',
     version_unsupported: 'It answers, but it is older than the oldest version Berth supports',
+    other_server: 'Another Jellyfin answers, not the one the owner is on',
   },
   detail: {
     version: 'Version',
+    server: 'Server',
     indexers: 'Indexers',
     tmdb: 'TMDB',
     credential: 'Credential',
@@ -3152,7 +3209,7 @@ const en: Translations<typeof zhHant> = {
       password: 'Password',
     },
     hint: {
-      jellyfin: 'This only confirms the address answers; the administrator comes next.',
+      jellyfin: 'This only confirms the address answers and the version is new enough.',
       qbittorrent: 'Leave the credentials empty if the WebUI has no password.',
       prowlarr: 'The API key is under Settings → General → Security in Prowlarr.',
     },
@@ -5178,14 +5235,14 @@ const en: Translations<typeof zhHant> = {
       failed:
         'It was not saved. The Berth backend may be down — check the container, then try again.',
       locked:
-        'The owner is an account on this Jellyfin, so its source cannot change; if the same Jellyfin moved to a new address, change it here.',
+        'The owner is an account on this Jellyfin, so its source cannot change; if the same Jellyfin moved to a new address, change it here — another server is refused.',
     },
     jellyfinPage: {
       title: 'Jellyfin settings',
       lede: 'Whether this Jellyfin still answers, whether its address or API key needs changing, and where “Open in Jellyfin” on the library page opens.',
       signIn: {
         title: 'Administrator sign-in',
-        lede: 'Berth talks to Jellyfin with an API key of its own. If that key was revoked, or you moved to another Jellyfin, sign in as an administrator once more to get a new one.',
+        lede: 'Berth talks to Jellyfin with an API key of its own. If that key was revoked, sign in as an administrator once more to get a new one.',
       },
     },
     qbittorrentPage: {

@@ -830,8 +830,12 @@ class ConnectionReason(StrEnum):
     STARTING = "starting"
     #: 連得上但回的東西不是預期的服務。
     PROTOCOL_MISMATCH = "protocol_mismatch"
-    #: 連得上、是對的服務，但版本比 Berth 的下限舊（Prowlarr，M4 票 17）。等不會好，要升級。
+    #: 連得上、是對的服務，但版本比 Berth 的下限舊（Prowlarr，M4 票 17；Jellyfin，票 18）。
+    #: 等不會好，要升級。`detail` 是它的版本。
     VERSION_UNSUPPORTED = "version_unsupported"
+    #: 擁有者成立之後，存下的位址上回答的是另一台 Jellyfin（ServerId 不同，brief §20.15、
+    #: M4 票 18）：擁有者、Berth 的 key 與媒體庫都在原本那一台。
+    OTHER_SERVER = "other_server"
 
 
 class PlanStatus(StrEnum):
@@ -1126,6 +1130,12 @@ class ChoiceRefusal(StrEnum):
     #: 擁有者成立之後改 Jellyfin 的來源：擁有者是那一台上的帳號，換一台等於換擁有者
     #: （shape 時拍板）。同一個來源換位址可以。
     JELLYFIN_OWNED = "jellyfin_owned"
+    #: 擁有者成立之後的新位址上是另一台 Jellyfin（ServerId 不同，brief §20.15、M4 票 18）。
+    #: 沒有存。`detail` 是那一台的 `ServerName`。
+    OTHER_SERVER = "other_server"
+    #: 擁有者成立之後的新位址沒有回答它是哪一台（連不上、不是 Jellyfin）：認不出是不是同一台，
+    #: 所以沒有存。`detail` 是那一次測試的 `ConnectionReason`。
+    UNVERIFIED = "unverified"
 
 
 class InterfaceLoginRefusal(StrEnum):
@@ -1152,6 +1162,9 @@ class OwnerRefusal(StrEnum):
     NOT_ADMINISTRATOR = "not_administrator"
     #: Jellyfin 那一段序列有一步失敗（版本太舊、連不上、建不了 API key）；`detail` 是原文。
     JELLYFIN_FAILED = "jellyfin_failed"
+    #: 擁有者已經成立（M4 票 18）：這一支不重建擁有者。換 API key 的重新登入是另一支
+    #: （`POST /setup/jellyfin/connect`）。
+    OWNER_EXISTS = "owner_exists"
 
 
 class AccessRefusal(StrEnum):

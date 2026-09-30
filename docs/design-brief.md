@@ -639,7 +639,7 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 
 - **唯一的硬規則**：Berth、qBittorrent、Jellyfin 三個容器在**同一台主機**、把同一個宿主父目錄掛在**相同的容器路徑**，且下載目錄與媒體庫目錄都在它底下（TRaSH 的單一 `/data` 掛載，§20.14）。路徑字串不必是 `/data`（`/volume1/media` 掛成 `/volume1/media` 也可以）；Berth 的 incomplete / complete 根目錄可設定，媒體庫路徑讀自 Jellyfin。**這是既有 qBittorrent 與 Jellyfin 最關鍵的條件**：在另一台 NAS 上的、或把下載與媒體庫分開掛成 `/downloads`、`/tv` 的，要先改掛載才接得上。「既有」選項旁說明這個條件；媒體庫與路徑泊位的探測檔 / 硬鏈接檢查失敗時，說出怎麼改掛載（M4 票 08）。
 - **既有服務要給的東西各不相同**（§20.14）：
-  - Jellyfin：位址 + **管理員**帳密（不是管理員就拒絕，M4 票 06）；Berth 以它登入、自己建 API key。版本下限 12.0（§19 2026-09-15，2026-09-29 使用者再確認）。
+  - Jellyfin：位址 + **管理員**帳密（不是管理員就拒絕，M4 票 06）；Berth 以它登入、自己建 API key。版本下限 12.0（§19 2026-09-15，2026-09-29 使用者再確認），**測連線時就擋**（M4 票 18）。擁有者成立之後只能換到**同一台**的另一個位址（ServerId，§20.15）。還沒初始化的那一台由擁有者表單建立管理員，語言與地區、遠端存取在畫面上問（預設 UI 語言、不開遠端存取）。
   - qBittorrent：位址 + WebUI 帳密。版本下限 4.4（Web API 2.8.4）。5.2 起它有 API key（`Authorization: Bearer`），之後可當第二種接法，這一輪不做。
   - Prowlarr：位址 + **API key**（Prowlarr 的「設定 → 一般 → 安全性」）；它的 API 只收 API key，帳密只給瀏覽器登入。也可以是任一 Torznab 端點 + key（Jackett）。Berth 用使用者已有的索引站，不替既有 Prowlarr 加站（M4 票 05 已擋 422）。版本下限 1.3.2（卡住它的是匿名的 `/ping`，§20.14，M4 票 17）；Torznab 端點沒有版本下限。
   - 三個服務的下限都寫在「既有」選項旁（M4 票 17），版本太舊時精靈與健康檢查說出目前版本與下限。
@@ -734,6 +734,7 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 | 補舊集維持預設全補（2026-09-26） | 同一輪討論過「Mikan 聚合 feed 只下載 feed 裡有的、每個 Series 一顆補齊按鈕」與 Feed 層開關，**使用者拍板維持 2026-09-24 的決定：綁定時一律補齊舊集，不加開關**。一次綁定送出上百個 torrent 的後果由 M4 票 03 的在途量磁碟門檻與暫時失敗的有限重試承接 | §15；M4 票 03 |
 | 自動綁定的兩種失敗（2026-09-26） | 試跑 10 個 Series 有 2 個沒綁上：TMDB 一次讀取失敗就永久 `lookup_failed`（同日稍後讀得到），發佈名帶「第四季」時搜不到候選（拿掉就找到）。**暫時失敗有退避、有上限地重試，一個候選壞掉不拖垮整次，季名從搜尋詞拆出來交給判斷當線索**；「壞掉的番組頁不要每 15 分鐘打一次」的顧慮保留 | §15、plan §3.2、§4.4；M4 票 14 |
 | 精靈改為每個服務手動選擇（2026-09-29） | 使用者試跑全新環境後拍板：**Jellyfin、qBittorrent、Prowlarr 各一頁，進頁先手動選「套件內」或「既有」，不再偵測**；選擇存下來、選完要測試（選了套件內而 compose 沒起那個服務時說出怎麼補 `COMPOSE_PROFILES`）；套件內但已初始化過改成登入；compose 裡用不到的服務拿掉，忘了拿掉也不致命。頁面順序：Jellyfin（擁有者）→ qBittorrent → 媒體庫與路徑 → Prowlarr 與索引站（併成一頁）→ TMDB → 完成，拿掉「偵測服務」那一步；媒體庫與路徑維持在 qBittorrent 之後（M3 票 06d 的理由：掛載設錯最常卡住，越早知道越好）。同日拍板：① Jellyfin 版本下限維持 12.0；② 不做 remote path mapping，把「既有服務要與 Berth 在同一台主機、把同一個父目錄掛在同一個容器路徑」講清楚；③ 套件容器名改成 `berth-*` 前綴；④ Prowlarr 與索引站併成一頁，套件內 qBittorrent / Prowlarr 的介面登入預設「沿用 Jellyfin 帳密」；⑤ Berth 寫進那兩台的介面密碼只存加鹽雜湊（勾了沿用時那就是 Jellyfin 密碼，存明文會推翻 M4 票 06 的「資料庫裡沒有擁有者的明文密碼」；取代 M4 票 07 存明文的做法）。**推翻** 2026-09-26 的兩件：「既有服務不被改動」的判定規則（只有 compose 主機名上探到的才可能是套件內），與「精靈改為 Jellyfin 優先」的「其他服務每一個泊位偵測」；票 05 的保護（既有服務不寫帳密、不改全域偏好）保留，改讀使用者的選擇。慣例照 Seerr 與 Sonarr / Radarr 的「手動填 → Test → Save」、TRaSH 的單一 `/data`（§20.14） | §16.3、§16.4、§18、§20.14、plan §9.1、§9.3–§9.5；M4 票 15、16、17、08、09；`.scratch/m4/wizard-manual-choice-decision.md` |
+| 擁有者鎖到同一台 Jellyfin（2026-09-30，精靈審查；M4 票 18） | 擁有者成立之後 Jellyfin 的位址只能換到**同一台伺服器**（`/System/Info/Public` 的 `Id`，§20.15），另一台與不回答的新位址一律不存；`POST /setup/owner` 不再重建擁有者（409）；版本在測連線時就擋。替還沒初始化的**既有** Jellyfin 建立擁有者時，語言與地區、遠端存取**在畫面上問**（使用者拍板；預設 UI 語言、不開遠端存取），套件內的不問（沿用 UI 語言、不開遠端存取——原本開） | 審查時兩位測試員各自把擁有者換到另一台而且存下來了；Seerr 換媒體伺服器＝重裝（`docs/research/wizard-review-2026-09-30.md`）。plan §9.3、§9.4 |
 | 前端沒有 shadcn/ui、沒有腳本化的 playwright e2e（2026-09-22 結案） | plan §1.4 / §7 原本寫 shadcn/ui 為元件基礎，M0 票 05 起沒有引入、三個里程碑沒有一個元件需要它，plan 已改；plan §10 原本寫「playwright 對 Fake 後端跑精靈與 M1 流程」但從未寫過，UI 驗證是每張票用 playwright 實跑演練情境並貼結果，plan 已改成實話，腳本化是 M2 的候選票 | plan §1.4、§7、§10、§11.3 |
 
 M1.5 拆票前的四條待決，2026-09-15 已全數照推薦拍板（上表「M1.5 拆票前的四條」那一列），這裡留著當時的理由：
@@ -1448,3 +1449,11 @@ fixture 在 `tests/fixtures/http/{mikan,nyaa,acgrip}/`（來源網址與去掉 t
   - `passwordConfirmation` 要到 1.10.5.4116 才有，但不推高下限：Berth 只替套件內那一台設登入，而舊版的 JSON 設定不拒收多的欄位（讀序列化設定推論，未實跑）。
   - 版本從 **`GET /api/v1/system/status` 的 `version`** 讀，四段（`2.6.5.5623`，berth-lab 實測錄成 `tests/fixtures/http/prowlarr/system-status.json`）。它**要 API key**（不帶是 401，實測），所以這一支也順便驗了 key。
   - 目前最新 stable 是 2.6.5.5623（2026-09-16）。2.6.3 起多了 Allowed Hosts：使用者自己設了清單時，Berth 用別的主機名連可能被擋，回什麼沒查。
+
+
+### 20.15 「同一台 Jellyfin」怎麼認：ServerId（2026-09-30 查證＋實測，M4 票 18）
+
+- **`GET /System/Info/Public` 的 `Id` 就是伺服器的 `SystemId`**，匿名讀得到。原始碼：`SystemManager` 把 `Id` 設成 `ApplicationHost.SystemId`，它是 `DeviceId.Value`——第一次啟動時產生一個 GUID 寫進 **`<DataPath>/device.txt`**，之後都從那個檔讀（類別說明「the persistent unique identifier of this server installation」）。【[DeviceId.cs @ v12.1](https://github.com/jellyfin/jellyfin/blob/v12.1/Emby.Server.Implementations/Devices/DeviceId.cs)、[ApplicationHost.cs @ v12.1](https://github.com/jellyfin/jellyfin/blob/v12.1/Emby.Server.Implementations/ApplicationHost.cs)（`SystemId => _deviceId.Value`）】
+- **實測（berth-existing，linuxserver 12.1.0 與 10.10.7；`scripts/experiments/jellyfin_server_id.py`）**：同一台用 `localhost`、`127.0.0.1`、從另一個容器用 `host.docker.internal` 連，`Id` 都一樣；`docker restart` 之後不變；`docker compose up -d --force-recreate` 重建容器之後也不變（`/config` 掛載還在），`device.txt` 的內容就是那個值。三台不同的 Jellyfin 各自不同。
+- **`ServerName` 不能拿來認**：沒設過時它是容器的 hostname，重建容器就變（同一次實測 `dc2288726bbe` → `135a4ae43523`）。
+- 所以 Berth 以 `Id` 判「同一台」：擁有者成立時記下，之後換位址只接受 `Id` 相同的（§19「擁有者鎖到同一台 Jellyfin」、plan §9.3）。清掉 `/config`（或複製別人的 `/config`）的那一台會換 `Id`（或撞 `Id`）——前者等於一台新的伺服器，擁有者帳號也不在了；後者不防。
