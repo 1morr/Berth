@@ -5,15 +5,21 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
+from berth.adapters.http import AuthFailedError, ProtocolMismatchError
 from berth.adapters.prowlarr import (
     IndexerDefinition,
     IndexerRejectedError,
     ProwlarrIndexer,
     ProwlarrStatus,
 )
+from berth.adapters.versions import parse_version
 
 #: 替身預設回報的版本：berth-trial 套件內那一台（brief §20.14 的實測對象）。
 CURRENT_VERSION = "2.6.5.5623"
+
+#: 第一個有匿名 `GET /ping` 的版本（develop 1.3.0.2757）。更舊的回介面的 HTML（1.0.1 實測，
+#: `docs/research/prowlarr-version-floor.md`）。
+PING_SINCE = (1, 3, 0)
 
 #: 假的定義清單：站名與 `definitionName` 都取自真的 `indexer/schema`（`tests/fixtures/`）。
 #: 推薦的九站（與 Anidex）之後是推薦清單以外的定義（2026-09-30 berth-lab 的 Prowlarr 2.6.5 schema，
@@ -177,6 +183,8 @@ class FakeProwlarrClient:
         #: 而健康檢查的驗收正是那兩個轉換（票 10）。
         self.ping_error = ping_error
         self.indexers_error = indexers_error
+        #: 送來的 API key 不對：要 key 的端點一律 401（M4 票 20）。`/ping` 是匿名的，照樣回答。
+        self.key_rejected = False
         self._rejects = dict(rejects or {})
         self._host_config: dict[str, Any] = dict(
             host_config
@@ -199,11 +207,18 @@ class FakeProwlarrClient:
     async def ping(self) -> None:
         if self.ping_error is not None:
             raise self.ping_error
+        if parse_version(self.version) < PING_SINCE:
+            raise ProtocolMismatchError(f"{self.base_url}/ping: response is not JSON")
 
     async def status(self) -> ProwlarrStatus:
         if self.ping_error is not None:
             raise self.ping_error
+        self._authorize("/api/v1/system/status")
         return ProwlarrStatus(version=self.version)
+
+    def _authorize(self, path: str) -> None:
+        if self.key_rejected:
+            raise AuthFailedError(f"GET {path}: 401")
 
     def present(self) -> list[ProwlarrIndexer]:
         """現在有的站，不經過 `indexers_error`（演練伺服器照它造試搜的回答）。"""
@@ -212,6 +227,7 @@ class FakeProwlarrClient:
     async def indexers(self) -> list[ProwlarrIndexer]:
         if self.indexers_error is not None:
             raise self.indexers_error
+        self._authorize("/api/v1/indexer")
         return list(self._indexers)
 
     async def definitions(self) -> tuple[IndexerDefinition, ...]:

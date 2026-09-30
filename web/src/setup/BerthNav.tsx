@@ -54,21 +54,34 @@ const REVISIT = {
     elsewhere: 'setup.revisit.qbittorrent.elsewhere',
   },
   [STEP.routes]: { can: 'setup.revisit.routes.can', elsewhere: 'setup.revisit.routes.elsewhere' },
+  // 頁 4 依來源分兩套（M4 票 20）：套件內那一台 Berth 能移除站、改登入，你自己的那一台不行。
+  // 這一格是還沒選時的預設（實際上做完這一頁一定選過了）。
   [STEP.indexer]: {
-    can: 'setup.revisit.indexer.can',
-    elsewhere: 'setup.revisit.indexer.elsewhere',
+    can: 'setup.revisit.indexer.bundled.can',
+    elsewhere: 'setup.revisit.indexer.bundled.elsewhere',
   },
   [STEP.tmdb]: { can: 'setup.revisit.tmdb.can', elsewhere: 'setup.revisit.tmdb.elsewhere' },
+} as const
+
+/** 既有的索引站（Prowlarr 或 Torznab）回頭看時的那一套。 */
+const REVISIT_EXISTING_INDEXER = {
+  can: 'setup.revisit.indexer.existing.can',
+  elsewhere: 'setup.revisit.indexer.existing.elsewhere',
 } as const
 
 /**
  * 回頭看的說明（票 06d）：每一步都是冪等命令，回頭照樣重跑；這一格做不到的事去哪裡做。
  * 只在這一頁已經做完（後端過了它）時出現——目前這一步要做的事，lede 已經說了。
  * 沒有說明的頁（完成頁）什麼都不畫。
+ *
+ * `origin` 是頁 4 的 Prowlarr 選了哪一種：既有的那一台說的是另一套（M4 票 20）。
  */
-export function RevisitNote({ step }: { step: number }) {
+export function RevisitNote({ step, origin }: { step: number; origin?: 'bundled' | 'existing' }) {
   const { t } = useTranslation()
-  const words = (REVISIT as Partial<Record<number, (typeof REVISIT)[keyof typeof REVISIT]>>)[step]
+  const words =
+    step === STEP.indexer && origin === 'existing'
+      ? REVISIT_EXISTING_INDEXER
+      : (REVISIT as Partial<Record<number, (typeof REVISIT)[keyof typeof REVISIT]>>)[step]
   if (!words) return null
 
   return (

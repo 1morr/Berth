@@ -6,6 +6,7 @@ import type {
   IndexerConnectInput,
   IndexerKind,
   IndexerSetup,
+  InterfaceLogin,
   InterfaceLoginRefusal,
   SetupStatus,
 } from '../api/setup'
@@ -17,26 +18,45 @@ import {
   Notice,
   PasswordField,
   PrimaryButton,
+  TEXT_LINK,
 } from '../components/controls'
 import { Cutaway, CutawayRow } from '../components/Cutaway'
 import { StepLine } from '../components/StepLine'
-import { AddedSites, AddSites, type ApplyIndexersInput, type SiteControls } from './IndexerSites'
+import { AddedSites, AddSites, type SiteControls } from './IndexerSites'
+import { useInterfaceLogin } from './interfaceLogin'
+import { BerthLogin } from './InterfaceLoginFields'
 import { pointsAtBerth } from './loopback'
+import { prowlarrWeb } from './prowlarrWeb'
 import { LoopbackHint, ServiceChoice, type ChoiceControls } from './ServiceChoice'
 import { useChoiceDraft } from './choiceDraft'
 import { STEP } from './navigation'
 import { VERSION_FLOOR, connected } from './signals'
 import { StepFrame } from './StepFrame'
 
-export type { ApplyIndexersInput, SiteControls } from './IndexerSites'
+export type { SiteControls } from './IndexerSites'
+
+/** 套件內 Prowlarr 的介面登入（M4 票 20 從「加入」拆出來的那一區）。 */
+export interface LoginControls {
+  saving: boolean
+  /** 沿用 Jellyfin 帳密而 Jellyfin 那一關沒過：什麼都沒寫。 */
+  refusal: InterfaceLoginRefusal | null
+  /** 請求沒走完就 reject。 */
+  onSave: (login: InterfaceLogin) => Promise<IndexerSetup>
+}
 
 /**
  * 頁 4：Prowlarr 與索引站（plan §9.3，M4 票 15 併成一頁、票 09 改成先測再加）。
  *
- * 頁首是二選一（`ServiceChoice`）。套件內 Prowlarr：API key 讀自唯讀掛載，連上之後是「已加入」與
- * 「加站」兩段（`IndexerSites`）：先測、通過的勾起來加入，加入之後試搜、不要的就地移除。既有：Prowlarr
- * 位址 + key，或任意 Torznab 端點 + key（`ExistingIndexer`，選「既有」時的表單）；Berth 用你已經有的站，
- * 試搜照樣可用。整頁可以「之後再說」，連選都還沒選也可以。
+ * 頁首是二選一（`ServiceChoice`），連上之後照接的是哪一種畫：
+ *
+ * - **套件內 Prowlarr**：「已加入」與「加站」兩段（`IndexerSites`），加站旁邊就是「加入 N 個站」；
+ *   介面登入是自己的一區與按鈕（`ProwlarrLogin`，M4 票 20），必填。
+ * - **既有 Prowlarr**：同樣的「已加入」與「加站」，加的是使用者自己那一台，Berth 不移除（M4 票 20，
+ *   使用者拍板：按一次確認）。**一站都沒有時這一頁待處理**（`NoSites`）：到 Prowlarr 加站後重新讀取、
+ *   在這裡加推薦的公開站，或之後再說。
+ * - **Torznab 端點**：一個端點整個算一站，只有試搜。
+ *
+ * 整頁可以「之後再說」，連選都還沒選也可以。
  *
  * **資料與動作全部從 props 進來**：精靈跑完之後設定頁接手（票 06i），重用 `IndexerActions`。
  */
@@ -47,7 +67,7 @@ export function IndexerStep({
   owner,
   applying,
   connecting,
-  loginRefusal,
+  login,
   onApply,
   onConnect,
   onSkip,
@@ -64,9 +84,8 @@ export function IndexerStep({
   owner: string
   applying: boolean
   connecting: boolean
-  /** 沿用 Jellyfin 帳密而 Jellyfin 那一關沒過：什麼都沒寫。 */
-  loginRefusal: InterfaceLoginRefusal | null
-  onApply: (input: ApplyIndexersInput) => Promise<IndexerSetup>
+  login: LoginControls
+  onApply: (indexers: string[]) => Promise<IndexerSetup>
   onConnect: (input: IndexerConnectInput) => void
   onSkip: () => void
   choice: ChoiceControls
@@ -84,13 +103,22 @@ export function IndexerStep({
   const switching = choiceDraft.draft !== null && choiceDraft.draft !== service?.origin
   const origin = choiceDraft.draft ?? service?.origin
   const ready = connected(service) && !switching
-  const bundled = Boolean(indexers && indexers.origin === 'bundled' && indexers.reachable)
+  // 畫哪一種看這一份清單自己說的來源：剛選下去、清單還沒重讀回來時兩者不一致，那幾秒什麼都不畫，
+  // 不閃另一種的文案（M4 票 20）。
+  const mode = ready && indexers ? modeOf(indexers, service?.origin) : null
   const hasResults = Boolean(indexers && indexers.steps.length > 0)
+  // 既有的那一台連上過、這一次讀清單卻失敗：說讀不到，不說成「沒有站」（M4 票 20 的 code-review）。
+  const unread = mode === 'prowlarr' && Boolean(indexers?.error)
+  const sticky = status.current_step <= STEP.indexer
 
   return (
     <StepFrame
       cutaway={
-        indexers ? <IndexerCutaway indexers={indexers} bundled={bundled} /> : <span aria-hidden />
+        indexers ? (
+          <IndexerCutaway indexers={indexers} bundled={mode === 'bundled'} />
+        ) : (
+          <span aria-hidden />
+        )
       }
     >
       <h2 className="text-lg font-semibold text-ink">{t('indexer.title')}</h2>
@@ -112,27 +140,41 @@ export function IndexerStep({
         }
       />
 
-      {ready && indexers && bundled && (
+      {indexers && unread && (
+        <ReadFailed
+          error={indexers.error}
+          rereading={choice.retesting}
+          onReread={() => choice.onRetest(true)}
+        />
+      )}
+      {indexers && (mode === 'bundled' || (mode === 'prowlarr' && !unread)) && (
         <>
+          {mode === 'prowlarr' && indexers.sites.length === 0 && (
+            <NoSites
+              indexers={indexers}
+              rereading={choice.retesting}
+              onReread={() => choice.onRetest(true)}
+            />
+          )}
           {indexers.sites.length > 0 && <AddedSites indexers={indexers} controls={sites} />}
           <AddSites
             indexers={indexers}
-            owner={owner}
             applying={applying}
-            loginRefusal={loginRefusal}
             controls={sites}
             onApply={onApply}
             onSkip={onSkip}
-            sticky={status.current_step <= STEP.indexer}
+            sticky={sticky}
           />
+          {mode === 'bundled' && (
+            <ProwlarrLogin indexers={indexers} owner={owner} controls={login} />
+          )}
         </>
       )}
-      {/* 既有的站是使用者自己的，Berth 不加、不移除（brief §16.4）。 */}
-      {ready && indexers && !bundled && <AddedSites indexers={indexers} controls={sites} />}
+      {indexers && mode === 'torznab' && <AddedSites indexers={indexers} controls={sites} />}
       {indexersFailed && <p className="mt-6 text-sm text-ink-dim">{t('indexer.unreachable')}</p>}
 
-      {/* 選之前、或既有那一頁，「之後再說」在這裡；套件內的在「加入」旁邊。 */}
-      {!(ready && bundled) && (
+      {/* 選之前、或 Torznab 那一頁，「之後再說」在這裡；Prowlarr 的在「加入」旁邊。 */}
+      {((mode !== 'bundled' && mode !== 'prowlarr') || unread) && (
         <div className="mt-6">
           <GhostButton type="button" busy={applying || connecting} onClick={onSkip}>
             {t('indexer.skip')}
@@ -145,14 +187,162 @@ export function IndexerStep({
   )
 }
 
+/** 連上之後畫哪一種：套件內、既有 Prowlarr、Torznab 端點。 */
+type IndexerMode = 'bundled' | 'prowlarr' | 'torznab'
+
+/** 清單說的來源與選擇不一致（剛選下去、清單還沒重讀回來）時是 `null`：不畫另一種的東西。 */
+function modeOf(indexers: IndexerSetup, chosen: string | undefined): IndexerMode | null {
+  if (indexers.origin === null || indexers.origin !== chosen) return null
+  if (indexers.origin === 'bundled') return indexers.reachable ? 'bundled' : null
+  return indexers.kind === 'torznab' ? 'torznab' : 'prowlarr'
+}
+
 /**
- * 這個泊位能做的事：套件內是已加入 + 加站，既有是填位址與 key + 已加入（只試搜）。
+ * 既有 Prowlarr 一站都沒有（M4 票 20）：Berth 什麼都搜不到，這一頁還沒完。說出三條路——到 Prowlarr
+ * 加站後重新讀取、在下面加推薦的公開站、或之後再說——連結用瀏覽器開得了的位址（`prowlarrWeb`）。
+ */
+function NoSites({
+  indexers,
+  rereading,
+  onReread,
+}: {
+  indexers: IndexerSetup
+  rereading: boolean
+  onReread: () => void
+}) {
+  const { t } = useTranslation()
+  const webUrl = prowlarrWeb(indexers)
+
+  return (
+    <section className="mt-6 grid gap-3" data-testid="no-sites">
+      <Notice signal="assigned" label={t('indexer.empty.label')}>
+        {t('indexer.empty.body')}
+      </Notice>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        <GhostButton type="button" busy={rereading} onClick={onReread}>
+          {rereading ? t('indexer.empty.rereading') : t('indexer.empty.reread')}
+        </GhostButton>
+        {webUrl && (
+          <a
+            href={`${webUrl}/#/indexers`}
+            target="_blank"
+            rel="noreferrer noopener"
+            className={`${TEXT_LINK} text-sm`}
+          >
+            {t('indexer.add.openProwlarr')}
+          </a>
+        )}
+      </div>
+    </section>
+  )
+}
+
+/** 既有 Prowlarr 的站清單這一次讀不到：原文與「重新讀取」（重測那一台，清單跟著重讀）。 */
+function ReadFailed({
+  error,
+  rereading,
+  onReread,
+}: {
+  error: string
+  rereading: boolean
+  onReread: () => void
+}) {
+  const { t } = useTranslation()
+
+  return (
+    <section className="mt-6 grid gap-3" data-testid="read-failed">
+      <Notice signal="blocked" label={t('common.failed')}>
+        {t('indexer.readFailed')}
+      </Notice>
+      <p className="value max-w-prose wrap-anywhere text-xs text-blocked-ink">{error}</p>
+      <div>
+        <GhostButton type="button" busy={rereading} onClick={onReread}>
+          {rereading ? t('indexer.empty.rereading') : t('indexer.empty.reread')}
+        </GhostButton>
+      </div>
+    </section>
+  )
+}
+
+/**
+ * 套件內 Prowlarr 的介面登入：自己的一區、自己的按鈕（M4 票 20），不跟著「加入」送。
+ *
+ * **必填**（M4 票 07 shape）：Prowlarr 現行版本不讓介面沒有登入——沒設的話，第一次打開它會跳出關不掉的
+ * 視窗要人設一組（v2.6.5 `Page.js` 在驗證沒開時掛 `AuthenticationRequiredModal`，沒有關閉鈕）。精靈在
+ * 這一條有結論之前停在頁 4（後端 `_indexer_settled`）。
+ */
+function ProwlarrLogin({
+  indexers,
+  owner,
+  controls,
+}: {
+  indexers: IndexerSetup
+  owner: string
+  controls: LoginControls
+}) {
+  const { t } = useTranslation()
+  const form = useInterfaceLogin({ current: indexers.web_ui_username, owner })
+  // 與後端的 `PROWLARR_LOGIN_STEP` 同一個字串：那一條不是站。
+  const row = indexers.steps.find((step) => step.step === 'prowlarr_login')
+  const webUrl = prowlarrWeb(indexers)
+
+  function save() {
+    const taken = form.take()
+    if (!taken) return
+    controls.onSave(taken).then(
+      () => form.reset(taken.username || owner),
+      () => undefined,
+    )
+  }
+
+  return (
+    <section className="mt-10 border-t-2 border-rule pt-6" data-testid="prowlarr-login">
+      <div className="flex flex-wrap items-center gap-3">
+        <h3 className="label text-ink-dim">{t('interfaceLogin.prowlarr.legend')}</h3>
+        <span className="label border-2 border-rule px-2 py-1 text-ink-dim">
+          {t('indexer.login.required')}
+        </span>
+      </div>
+      <div className="mt-4">
+        <BerthLogin service="prowlarr" current={indexers.web_ui_username} form={form} />
+      </div>
+      {controls.refusal && (
+        <div className="mt-4">
+          <Notice signal="blocked" label={t('common.failed')}>
+            {t(`interfaceLogin.refused.${controls.refusal.reason}`, { owner })}
+          </Notice>
+        </div>
+      )}
+      {form.open && (
+        <div className="mt-4">
+          <PrimaryButton type="button" busy={controls.saving} onClick={save}>
+            {controls.saving ? t('indexer.login.saving') : t('indexer.login.save')}
+          </PrimaryButton>
+        </div>
+      )}
+      {/* 設下去的成敗要看得到（brief §16.3）；沒設過時是一條待處理。 */}
+      {row && (
+        <ol className="mt-6 grid gap-3">
+          <StepLine
+            label={t('indexer.add.login')}
+            endpoint="PUT /api/v1/config/host"
+            row={row}
+            fix={t('indexer.add.loginFix')}
+            commands={webUrl ? [`${webUrl}/#/settings/general`] : []}
+          />
+        </ol>
+      )}
+    </section>
+  )
+}
+
+/**
+ * 這個泊位能做的事：Prowlarr 是已加入 + 加站，既有的另有填位址與 key 的表單；Torznab 只試搜。
  * 精靈與設定的索引站那一頁共用這一塊（票 06i）；設定頁不給 `onSkip`——那裡不是第一次，
- * 沒有「之後再說」——也不給 `owner`：介面登入在它自己的那一區改（M4 票 07）。
+ * 沒有「之後再說」。介面登入在設定頁它自己的那一區改（M4 票 07）。
  */
 export function IndexerActions({
   indexers,
-  owner,
   applying,
   connecting,
   onApply,
@@ -161,34 +351,34 @@ export function IndexerActions({
   sites,
 }: {
   indexers: IndexerSetup
-  /** 精靈給：套件內 Prowlarr 的介面登入跟著「加入」一起送，未設過時帳號預填它。 */
-  owner?: string
   applying: boolean
   connecting: boolean
-  onApply: (input: ApplyIndexersInput) => Promise<IndexerSetup>
+  onApply: (indexers: string[]) => Promise<IndexerSetup>
   onConnect: (input: IndexerConnectInput) => void
   /** 「之後再說」。只有精靈給。 */
   onSkip?: () => void
   sites: SiteControls
 }) {
   const bundled = indexers.origin === 'bundled' && indexers.reachable
+  // 連上了：0 站的既有 Prowlarr 是待處理（M4 票 20），也算連上。
   const connected = indexers.steps.some(
-    (row) => row.step === indexers.kind && (row.status === 'ok' || row.status === 'skipped'),
+    (row) => row.step === indexers.kind && row.status !== 'failed' && row.status !== 'running',
+  )
+  const addSites = (
+    <AddSites
+      indexers={indexers}
+      applying={applying}
+      controls={sites}
+      onApply={onApply}
+      onSkip={onSkip}
+    />
   )
 
   if (bundled) {
     return (
       <>
         {indexers.sites.length > 0 && <AddedSites indexers={indexers} controls={sites} />}
-        <AddSites
-          indexers={indexers}
-          owner={owner}
-          applying={applying}
-          loginRefusal={null}
-          controls={sites}
-          onApply={onApply}
-          onSkip={onSkip}
-        />
+        {addSites}
       </>
     )
   }
@@ -203,8 +393,9 @@ export function IndexerActions({
         onConnect={onConnect}
         onSkip={onSkip}
       />
-      {/* 既有的站是使用者自己的，Berth 不加、不移除（brief §16.4）。 */}
       {connected && <AddedSites indexers={indexers} controls={sites} />}
+      {/* 既有 Prowlarr 也加得了公開站（M4 票 20）；Berth 不移除它的站。 */}
+      {connected && indexers.origin === 'existing' && indexers.kind === 'prowlarr' && addSites}
     </>
   )
 }
@@ -326,7 +517,7 @@ function ExistingIndexer({
         <ol className="mt-4 grid gap-3" data-testid="sites">
           <StepLine
             label={t(`indexer.kind.${kind}`)}
-            endpoint={kind === 'prowlarr' ? 'GET /api/v1/indexer' : '?t=caps'}
+            endpoint={kind === 'prowlarr' ? 'GET /api/v1/system/status' : '?t=caps'}
             row={row}
             // 照上一次測試的理由與測過的位址（不是欄位裡正在改的那一個）說補法（M4 票 17）。
             fix={existingFix(t, indexers)}
@@ -337,8 +528,14 @@ function ExistingIndexer({
   )
 }
 
-/** 既有索引站測不過時的補法：太舊就升級，位址指到 Berth 自己就說 localhost，其餘是一般的那一句。 */
+/**
+ * 既有索引站測不過時的補法：太舊就升級，key 不對就說去哪裡複製（M4 票 20），位址指到 Berth 自己就說
+ * localhost，其餘是一般的那一句。
+ */
 function existingFix(t: TFunction, indexers: IndexerSetup): string {
+  if (indexers.reason === 'auth_required' && indexers.kind === 'prowlarr') {
+    return t('connection.fix.prowlarrKey')
+  }
   if (indexers.reason === 'version_unsupported') {
     // 「至少要 X，這一台是 Y」：版本在那一條纜繩的實測值上（`indexer.outdated_step`）。
     const version = indexers.steps.find((row) => row.step === 'prowlarr')?.detail ?? ''

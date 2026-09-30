@@ -118,6 +118,8 @@ function wizard(
     'POST /api/setup/routes': advance(4, ROUTES_DONE),
     'GET /api/setup/indexers': () => ({ body: current > 4 ? SITES_DONE : indexerSetup() }),
     'POST /api/setup/indexers/apply': advance(5, SITES_DONE),
+    // 介面登入是自己的一顆按鈕（M4 票 20）；站已經在了，設下去這一頁就做完。
+    'PUT /api/setup/indexers/login': advance(5, SITES_DONE),
     'GET /api/setup/tmdb': () => ({ body: current > 5 ? TMDB_DONE : tmdbSetup() }),
     'POST /api/setup/tmdb/test': advance(6, TMDB_DONE),
     ...overrides,

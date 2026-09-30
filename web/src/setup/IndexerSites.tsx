@@ -5,8 +5,6 @@ import type {
   IndexerCandidate,
   IndexerSetup,
   IndexerSite,
-  InterfaceLogin,
-  InterfaceLoginRefusal,
   SiteCheck,
   SiteFailure,
   SiteSearch,
@@ -22,10 +20,7 @@ import {
   TEXT_LINK,
 } from '../components/controls'
 import { SIGNAL_FILL, type Signal } from '../components/signal'
-import { StepLine } from '../components/StepLine'
 import { useFocusAfterRemoval } from '../components/useFocusAfterRemoval'
-import { useInterfaceLogin } from './interfaceLogin'
-import { BerthLogin } from './InterfaceLoginFields'
 import { languageName } from './languageName'
 import { prowlarrWeb } from './prowlarrWeb'
 import { hostOf } from './signals'
@@ -34,9 +29,9 @@ import { hostOf } from './signals'
  * 頁 4 與設定頁的索引站那一半（M4 票 09，`.scratch/m4/indexer-berth-shape.md`）：
  *
  * - **已加入**（`AddedSites`）：Prowlarr 裡的每一站，一列一顆「搜尋」，段頭一顆「搜尋全部」；
- *   Berth 加得回去的站可以就地移除。既有 Prowlarr 只有這一段、沒有移除。
- * - **加站**（`AddSites`，只有套件內）：推薦的九站與其他公開站，**先測再勾**——`indexer/test` 測還沒加入
- *   的定義，什麼都不建立（brief §20.7），通過的才勾得起來。沒通過的是中性的一列：紅色只代表阻擋，
+ *   Berth 加得回去的站可以就地移除。既有 Prowlarr 沒有移除：那是它自己介面上的事。
+ * - **加站**（`AddSites`，套件內與既有的 Prowlarr，M4 票 20）：推薦的九站與其他公開站，**先測再勾**——
+ *   `indexer/test` 測還沒加入的定義，什麼都不建立（brief §20.7），通過的才勾得起來。沒通過的是中性的一列：紅色只代表阻擋，
  *   而一站沒通過不擋這一頁。
  *
  * 結果長在它那一列（shape 時使用者拍板），**進頁不送任何測試**：測試與搜尋都由人按。
@@ -51,12 +46,6 @@ export interface SiteControls {
   removing: number | null
   removeFailed: boolean
   onRemove: (indexerId: number) => void
-}
-
-/** 「加入」送出的：勾起來的站，與泊位上填的介面登入（`null` 是登入照舊）。 */
-export interface ApplyIndexersInput {
-  indexers: string[]
-  login: InterfaceLogin | null
 }
 
 /** 一站在畫面上的測試狀態：還沒測、測試中，或測過的結論。 */
@@ -343,16 +332,16 @@ function AddedSiteRow({
 // --- 加站 ---
 
 /**
- * 套件內 Prowlarr 的加站：推薦的站、其他公開站、沒通過的摘要、介面登入與「加入」。
+ * Prowlarr 的加站：推薦的站、其他公開站、沒通過的摘要與「加入」。套件內與既有的 Prowlarr 都有（M4 票 20）；
+ * 既有的那一台在按鈕旁說出會加進哪一台、加哪幾站，移除交給它自己的介面。
  *
  * **勾選的起點是空的**（M4 票 09）：一站都不預勾，測試通過才勾得起來。加入之後那幾站搬去「已加入」，
- * 這裡只剩還沒加的——主鈕數的也只有它們。
+ * 這裡只剩還沒加的——主鈕數的也只有它們。**介面登入不在這裡**（M4 票 20）：加站不該被登入欄擋住，
+ * 套件內那一台的登入是精靈上自己的一區。
  */
 export function AddSites({
   indexers,
-  owner,
   applying,
-  loginRefusal,
   controls,
   onApply,
   onSkip,
@@ -364,19 +353,14 @@ export function AddSites({
    * 同一個位置（票 08 的 code-review）。沒有東西可按時本來就不固定。
    */
   sticky?: boolean
-  /** 精靈給：套件內 Prowlarr 的介面登入跟著「加入」一起送，未設過時帳號預填它。設定頁不給。 */
-  owner?: string
   applying: boolean
-  loginRefusal: InterfaceLoginRefusal | null
   controls: Pick<SiteControls, 'onTest'>
-  onApply: (input: ApplyIndexersInput) => Promise<IndexerSetup>
+  onApply: (indexers: string[]) => Promise<IndexerSetup>
   /** 「之後再說」。只有精靈給。 */
   onSkip?: () => void
 }) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const titleId = useId()
-  const withLogin = owner !== undefined && indexers.web_ui_login
-  const loginForm = useInterfaceLogin({ current: indexers.web_ui_username, owner: owner ?? '' })
   // 起點是上一次「加入」的結論（回頭看時沒通過的那幾站仍說得出為什麼）；之後疊上這一頁按的測試。
   const [checks, setChecks] = useState<ReadonlyMap<string, CheckState>>(
     () => new Map(indexers.checks.map((row) => [row.definition_name, row])),
@@ -388,15 +372,13 @@ export function AddSites({
     const state = checks.get(name)
     return state !== undefined && state !== 'testing' && state.passed
   }
-  const selected = candidates
-    .filter((row) => ticked.has(row.definition_name) && passed(row.definition_name))
-    .map((row) => row.definition_name)
+  const chosen = candidates.filter(
+    (row) => ticked.has(row.definition_name) && passed(row.definition_name),
+  )
+  const selected = chosen.map((row) => row.definition_name)
   const recommended = candidates.filter((row) => row.recommended)
   const others = candidates.filter((row) => !row.recommended)
-  const loginPending = withLogin && loginForm.open
-  const byStep = new Map(indexers.steps.map((row) => [row.step, row]))
-  //: 與後端的 `PROWLARR_LOGIN_STEP` 同一個字串——那一條不是站，不能混進站的清單裡。
-  const login = byStep.get('prowlarr_login')
+  const existing = indexers.origin === 'existing'
   const webUrl = prowlarrWeb(indexers)
 
   async function test(names: string[]) {
@@ -433,9 +415,7 @@ export function AddSites({
   }
 
   function apply() {
-    const taken = withLogin ? loginForm.take() : null
-    if (taken === undefined) return
-    onApply({ indexers: selected, login: taken }).then(
+    onApply(selected).then(
       (next) => {
         // 加進去的搬去「已加入」；加不進去的（Prowlarr 加之前自己又連了一次）回到沒通過、理由同一套。
         setChecks(
@@ -448,7 +428,6 @@ export function AddSites({
             ]),
         )
         setTicked(new Set())
-        if (taken) loginForm.reset(taken.username ?? '')
       },
       () => undefined,
     )
@@ -477,7 +456,9 @@ export function AddSites({
           </span>
         )}
       </div>
-      <p className="mt-2 max-w-prose text-sm text-ink-dim">{t('indexer.add.lede')}</p>
+      <p className="mt-2 max-w-prose text-sm text-ink-dim">
+        {t(existing ? 'indexer.add.ledeExisting' : 'indexer.add.lede')}
+      </p>
 
       <CheckSummary candidates={candidates} checks={checks} requestFailed={requestFailed} />
 
@@ -519,6 +500,40 @@ export function AddSites({
         />
       )}
 
+      {/* 主鈕貼著站清單（M4 票 20）：勾完就在手邊，不隔著別的區塊。 */}
+      {existing && chosen.length > 0 && (
+        <p className="mt-6 max-w-prose text-sm text-ink" data-testid="adds-into">
+          {t('indexer.add.intoYours', {
+            host: hostOf(indexers.base_url),
+            names: new Intl.ListFormat(i18n.language).format(chosen.map((row) => row.name)),
+            count: chosen.length,
+          })}
+        </p>
+      )}
+      <div
+        className={`mt-6 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] ${
+          sticky && selected.length > 0 ? STICKY_ACTION : ''
+        }`}
+      >
+        <PrimaryButton
+          type="button"
+          busy={applying}
+          disabled={selected.length === 0}
+          onClick={apply}
+        >
+          {applying
+            ? t('indexer.add.applying')
+            : selected.length > 0
+              ? t('indexer.add.apply', { count: selected.length })
+              : t('indexer.add.applyNone')}
+        </PrimaryButton>
+        {onSkip && (
+          <GhostButton type="button" busy={applying} onClick={onSkip}>
+            {t('indexer.skip')}
+          </GhostButton>
+        )}
+      </div>
+
       <p className="mt-6 max-w-prose text-sm text-ink-dim">
         {t('indexer.add.privateSites')}{' '}
         {webUrl && (
@@ -532,59 +547,6 @@ export function AddSites({
           </a>
         )}
       </p>
-
-      {/* 介面登入跟著「加入」一起送（M4 票 07）；「之後再說」連它一起跳過。 */}
-      {withLogin && (
-        <div className="mt-6">
-          <BerthLogin service="prowlarr" current={indexers.web_ui_username} form={loginForm} />
-        </div>
-      )}
-      {loginRefusal && (
-        <div className="mt-4">
-          <Notice signal="blocked" label={t('common.failed')}>
-            {t(`interfaceLogin.refused.${loginRefusal.reason}`, { owner: owner ?? '' })}
-          </Notice>
-        </div>
-      )}
-
-      <div
-        className={`mt-6 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] ${
-          sticky && (selected.length > 0 || loginPending) ? STICKY_ACTION : ''
-        }`}
-      >
-        <PrimaryButton
-          type="button"
-          busy={applying}
-          disabled={selected.length === 0 && !loginPending}
-          onClick={apply}
-        >
-          {applying
-            ? t('indexer.add.applying')
-            : selected.length > 0
-              ? t('indexer.add.apply', { count: selected.length })
-              : loginPending
-                ? t('indexer.add.loginOnly')
-                : t('indexer.add.applyNone')}
-        </PrimaryButton>
-        {onSkip && (
-          <GhostButton type="button" busy={applying} onClick={onSkip}>
-            {t('indexer.skip')}
-          </GhostButton>
-        )}
-      </div>
-
-      {/* 介面登入那一條也是這一輪做的事，成敗要看得到（brief §16.3）。 */}
-      {login && (
-        <ol className="mt-6 grid gap-3">
-          <StepLine
-            label={t('indexer.add.login')}
-            endpoint="PUT /api/v1/config/host"
-            row={login}
-            fix={t('indexer.add.loginFix')}
-            commands={webUrl ? [`${webUrl}/#/settings/general`] : []}
-          />
-        </ol>
-      )}
     </section>
   )
 }

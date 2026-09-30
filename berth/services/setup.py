@@ -50,7 +50,7 @@ from berth.models import (
 )
 from berth.services.auth import SignedIn, open_session
 from berth.services.clients import BundledServices, ServiceClientFactory
-from berth.services.indexer import outdated_step
+from berth.services.indexer import existing_prowlarr_step, outdated_step
 from berth.services.jellyfin import DEFAULT_STARTUP, JellyfinStartup, claim_jellyfin
 from berth.services.routes import forget_route_checks, routes_ready
 from berth.services.settings import read_settings, write_settings
@@ -339,7 +339,8 @@ async def _test_and_record(
         # 票 18 之前成立的擁有者沒記 ServerId：這一次回答的那一台就是它，之後照樣擋另一台。
         setup.owner = setup.owner.model_copy(update={"jellyfin_server_id": outcome.server_id})
     if kind is ServiceKind.PROWLARR and choice.origin is ServiceOrigin.EXISTING:
-        # 既有 Prowlarr 這一頁只有「連得上」這一件事：它就是這一頁的結果（`_indexer_settled`）。
+        # 既有 Prowlarr 這一頁是「連得上、而且有站」（M4 票 20）：它就是這一頁的結果
+        # （`_indexer_settled`）。
         setup.indexer.steps = [_existing_indexer_step(test)]
         setup.indexer.skipped = False
     await write_settings(session, setup)
@@ -448,7 +449,7 @@ async def _test_connection(
     prowlarr = factory.prowlarr(indexer.base_url, indexer.api_key)
 
     async def prowlarr_test() -> _Outcome:
-        await prowlarr.ping()
+        # 不問 `/ping`：1.3.2 之前沒有它，版本就說不出來了（`indexer.probe_indexer`，M4 票 20）。
         status = await prowlarr.status()
         if not status.supported:
             # 等不會好，所以不是 `transient`：套件內的那一台也當場紅（M4 票 17）。
@@ -602,10 +603,10 @@ def _settle(
 
 
 def _existing_indexer_step(test: ServiceTest) -> SetupStep:
-    """既有 Prowlarr 的那一條纜繩：連得上是 `ok`、細節是站數。形狀與 `indexer.probe_indexer` 同，
-    版本太舊也是它的那一句（M4 票 17）。"""
+    """既有 Prowlarr 的那一條纜繩：連得上是站數（0 站是 `pending`，M4 票 20），與頁 4 的既有表單
+    同一份（`indexer.existing_prowlarr_step`）；版本太舊也是它的那一句（M4 票 17）。"""
     if test.state is ConnectionState.OK:
-        return SetupStep(key=IndexerKind.PROWLARR.value, status=StepStatus.OK, detail=test.detail)
+        return existing_prowlarr_step(int(test.detail or 0))
     if test.reason is ConnectionReason.VERSION_UNSUPPORTED:
         return outdated_step(test.detail)
     return SetupStep(key=IndexerKind.PROWLARR.value, status=StepStatus.FAILED, error=test.reason)

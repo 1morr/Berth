@@ -59,7 +59,8 @@ async def owner(session: AsyncSession) -> None:
 async def test_an_existing_prowlarr_without_indexers_keeps_its_login(
     session: AsyncSession,
 ) -> None:
-    """05 的 repro：一個站都沒有的既有 Prowlarr。選了既有，就不加站、不設登入。"""
+    """05 的 repro：一個站都沒有的既有 Prowlarr。選了既有，就不設登入、不自動加站（使用者按了
+    「加入」才加勾的那幾站，M4 票 20，`test_setup_existing_prowlarr.py`）。"""
     await owner(session)
     prowlarr = FakeProwlarrClient(host_config={"username": "homeprowlarr"})
     factory = FakeClientFactory(prowlarr=prowlarr)
@@ -73,8 +74,6 @@ async def test_an_existing_prowlarr_without_indexers_keeps_its_login(
         ServiceConnection(base_url="http://home-prowlarr:9696", api_key="theirs"),
     )
 
-    with pytest.raises(ValueError, match="existing service"):
-        await apply_default_indexers(session, factory, ["nyaasi"], login=LOGIN)
     with pytest.raises(ValueError, match="existing service"):
         await set_interface_login(session, factory, LOGIN)
     assert prowlarr.restarts == 0
@@ -117,7 +116,8 @@ async def test_a_bundled_choice_is_still_written(session: AsyncSession) -> None:
         await choose_service(session, factory, BUNDLED, kind, ServiceOrigin.BUNDLED)
 
     await apply_qbittorrent(session, factory, login=LOGIN)
-    await apply_default_indexers(session, factory, ["nyaasi"], login=LOGIN, sleep=_no_wait)
+    await apply_default_indexers(session, factory, ["nyaasi"], sleep=_no_wait)
+    await set_interface_login(session, factory, LOGIN, sleep=_no_wait)
 
     assert any(WEB_UI_PASSWORD_KEY in write for write in qbittorrent.writes)
     # 套件內的全域偏好只寫這三個鍵。未完成目錄不寫全域（票 22）：Berth 的分類各自帶
@@ -142,7 +142,7 @@ async def test_nothing_is_written_before_a_choice(session: AsyncSession, kind: S
         if kind is ServiceKind.QBITTORRENT:
             await apply_qbittorrent(session, factory, login=LOGIN)
         else:
-            await apply_default_indexers(session, factory, ["nyaasi"], login=LOGIN)
+            await apply_default_indexers(session, factory, ["nyaasi"])
 
     assert qbittorrent.writes == []
     assert prowlarr.restarts == 0

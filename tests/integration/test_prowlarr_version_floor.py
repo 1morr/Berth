@@ -91,7 +91,9 @@ class TestWizard:
             session, factory, kind=IndexerKind.PROWLARR, base_url="http://nas:9696", api_key="k"
         )
 
-        assert status.steps[0].status is StepStatus.OK
+        # 過了下限；替身一站都沒有，所以這一頁待處理而不是完成（M4 票 20）。
+        assert status.steps[0].status is StepStatus.PENDING
+        assert status.reason is ConnectionReason.CONNECTED
 
     @pytest.mark.parametrize(
         ("version", "passes"), [(BELOW_FLOOR, False), (AT_FLOOR, True)], ids=["below", "at"]
@@ -117,7 +119,7 @@ class TestWizard:
         retested = (await read_settings(session, SetupSettings)).indexer.steps
 
         expected = (
-            SetupStep(key="prowlarr", status=StepStatus.OK, detail="0")
+            SetupStep(key="prowlarr", status=StepStatus.PENDING, detail="0")
             if passes
             else SetupStep(
                 key="prowlarr",

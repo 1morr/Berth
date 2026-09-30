@@ -66,8 +66,15 @@ const zhHant = {
         elsewhere: 'Route 的改名與停用在精靈跑完之後的「設定 → 媒體庫路徑」。',
       },
       indexer: {
-        can: '改選套件內或既有、測試並加更多公開站、試搜、移除不要的站。加過的站不會被加第二次。',
-        elsewhere: '要帳號的站（私站、半私站）在 Prowlarr 自己的介面上加。',
+        bundled: {
+          can: '改選套件內或既有、測試並加更多公開站、試搜、移除不要的站、更換介面登入。加過的站不會被加第二次。',
+          elsewhere: '要帳號的站（私站、半私站）在 Prowlarr 自己的介面上加。',
+        },
+        existing: {
+          can: '改選套件內或既有、重新讀取站的清單、試搜；接的是 Prowlarr 時，也可以測試公開站、按一次加進它。加過的站不會被加第二次。',
+          elsewhere:
+            '移除站、加要帳號的站、改介面登入，都在你那一台自己的介面上做；Berth 不移除你的站，也不碰它的登入。',
+        },
       },
       tmdb: {
         can: '重貼一把 key 再測一次；測不過的 key 照樣存下來，改一個字再按就好。',
@@ -239,6 +246,8 @@ const zhHant = {
         '套件內那一台要帳密：Berth 的免密白名單沒生效。重啟它讓預置腳本補上白名單，再重新測試：',
       bundledDown: '容器還沒起來。在宿主上確認它活著、看它的 log：',
       credentials: '帳號或密碼不對。改好上面的欄位再測一次。',
+      prowlarrKey:
+        'API key 不對：在 Prowlarr 的「設定 → 一般」複製 API key（不是介面登入的密碼），貼上再測一次。',
       banned:
         '它把 Berth 這台的 IP 封了（連續登入失敗）。等封鎖過期，或到它自己的介面解除，再測一次——現在改帳密只會再失敗。',
       address: '連不到這個位址。確認 port 沒填錯、服務在跑，而且 Berth 的容器連得到那台主機。',
@@ -420,7 +429,7 @@ const zhHant = {
     },
     prowlarr: {
       legend: 'Prowlarr 介面登入',
-      lede: '這是 Prowlarr 自己的登入，給你之後打開它的介面用。Berth 自己用不到它（用 API key）；不設的話，Prowlarr 第一次打開時會自己要你設一組。設完它會自行重啟，要等一下。',
+      lede: '必填。這是 Prowlarr 自己的登入，給你之後打開它的介面用；Berth 用 API key，用不到它。Prowlarr 現行版本不讓介面沒有登入：沒在這裡設，第一次打開它會跳出關不掉的視窗要你設一組。設完它會自行重啟，要等一下。',
       set: 'Prowlarr 介面的帳號：',
     },
     username: '帳號',
@@ -517,11 +526,13 @@ const zhHant = {
       bundled:
         '索引站決定 Berth 找得到什麼。先測試，通過的站勾起來加入；加入之後試搜，不要的就地移除。這一步可以之後再說。',
       existing:
-        '索引站決定 Berth 找得到什麼。Berth 用你那一台已經有的站，可以試搜，不替它加站、也不移除。這一步可以之後再說。',
+        '索引站決定 Berth 找得到什麼。Berth 用你那一台已經有的站，可以試搜；也可以測試推薦的公開站、按一次加進去。Berth 不移除你的站。這一步可以之後再說。',
     },
     skip: '之後再說',
     deferred: '之後再說',
     unreachable: '連不上套件內的 Prowlarr。可以先填自己的位址，或跳過這一步之後再補。',
+    readFailed:
+      '讀不到這一台 Prowlarr 的站清單，所以說不出它有幾站。它可能正在重啟或暫時連不上：按「重新讀取」再試一次。',
     cutaway: {
       title: '索引站',
       kind: '接法',
@@ -535,6 +546,10 @@ const zhHant = {
     add: {
       title: '加站',
       lede: '按「測試」時 Prowlarr 會現場連一次那個站，什麼都不建立；通過的才勾得起來。公開站有幾個連不上是常態，不影響其他站。每一站的說明是 Prowlarr 定義自帶的原文。',
+      ledeExisting:
+        '這裡加的站會加進你自己的 Prowlarr。按「測試」時它會現場連一次那個站，什麼都不建立；通過的才勾得起來，按「加入」才真的加。Berth 不移除站，要移除請到 Prowlarr 自己的介面。',
+      intoYours_one: '按下去會把這 {{count}} 站加進你的 Prowlarr（{{host}}）：{{names}}。',
+      intoYours_other: '按下去會把這 {{count}} 站加進你的 Prowlarr（{{host}}）：{{names}}。',
       recommended: '推薦的站',
       others: '其他公開站',
       othersLede: '這台 Prowlarr 認得的其他公開 torrent 站。輸入名稱或選一個語言才列出來。',
@@ -553,7 +568,6 @@ const zhHant = {
       apply_one: '加入 {{count}} 個站',
       apply_other: '加入 {{count}} 個站',
       applyNone: '加入',
-      loginOnly: '設定介面登入',
       applying: '加入中…',
       privateSites:
         '要帳號的站（私站、半私站）在 Prowlarr 自己的介面加，加完 Berth 就認得、可以試搜。',
@@ -563,6 +577,17 @@ const zhHant = {
       login: '替 Prowlarr 介面設登入',
       loginFix:
         '帳密沒設成功，Prowlarr 的介面仍然是免登入的。設完它會自行重啟，所以也可能只是還沒回來。可以在它自己的介面上設：',
+    },
+    empty: {
+      label: '待處理',
+      body: '這一台 Prowlarr 還沒有任何站，Berth 什麼都搜不到。到 Prowlarr 加站後按「重新讀取」，或在下面測試推薦的公開站、勾起來加進去；也可以之後再說。',
+      reread: '重新讀取',
+      rereading: '讀取中…',
+    },
+    login: {
+      required: '必填',
+      save: '設定介面登入',
+      saving: '設定中…',
     },
     existing: {
       title: '接入你自己的索引站',
@@ -582,7 +607,7 @@ const zhHant = {
       sites_one: '{{count}} 站',
       sites_other: '{{count}} 站',
       lede: 'Prowlarr 只搜得到已經加入的站。每一列可以單獨搜，也可以一次搜全部；關鍵字留白就是問各站最新的發佈。',
-      existingLede: '你那一台上已經有的站。Berth 用它們搜尋，不加、不移除——要改請到它自己的介面。',
+      existingLede: '你那一台上已經有的站。Berth 用它們搜尋，不移除——要移除請到它自己的介面。',
       none: '這一台上還沒有任何站。',
       field: '關鍵字',
       placeholder: '留白＝各站最新的發佈',
@@ -2995,9 +3020,16 @@ const en: Translations<typeof zhHant> = {
           'Renaming and disabling routes happens in Settings → Library paths once the wizard is finished.',
       },
       indexer: {
-        can: 'Switch between bundled and existing, test and add more public sites, run a trial search, remove the ones you do not want. Indexers already added are not added twice.',
-        elsewhere:
-          'Sites that need an account (private and semi-private) are added in Prowlarr itself.',
+        bundled: {
+          can: 'Switch between bundled and existing, test and add more public sites, run a trial search, remove the ones you do not want, change the interface login. Indexers already added are not added twice.',
+          elsewhere:
+            'Sites that need an account (private and semi-private) are added in Prowlarr itself.',
+        },
+        existing: {
+          can: 'Switch between bundled and existing, re-read the site list, run a trial search; with a Prowlarr you can also test public sites and add them in one press. Indexers already added are not added twice.',
+          elsewhere:
+            'Removing sites, adding ones that need an account and changing the interface login all happen in your instance’s own interface; Berth does not remove your sites or touch its login.',
+        },
       },
       tmdb: {
         can: 'Paste a key and test it again; a key that fails is still saved, so you can fix one character and press again.',
@@ -3176,6 +3208,8 @@ const en: Translations<typeof zhHant> = {
       bundledDown:
         'The container is not up yet. Check on the host that it is running, and read its log:',
       credentials: 'The username or password is wrong. Fix the fields above and test again.',
+      prowlarrKey:
+        'The API key is wrong. Copy it from Settings → General in Prowlarr (not the interface password), paste it and test again.',
       banned:
         'It has banned this machine (too many failed logins). Wait for the ban to expire, or lift it in its own interface, then test again — changing the password now only fails again.',
       address:
@@ -3367,7 +3401,7 @@ const en: Translations<typeof zhHant> = {
     },
     prowlarr: {
       legend: 'Prowlarr interface login',
-      lede: "This is Prowlarr's own login, for when you open its interface yourself. Berth does not need it (it uses the API key); without it, Prowlarr asks you to set one the first time you open it. Setting it restarts Prowlarr, so give it a moment.",
+      lede: "Required. This is Prowlarr's own login, for when you open its interface yourself; Berth uses the API key and does not need it. Current Prowlarr versions do not allow an interface without a login: if you skip it here, the first time you open Prowlarr it shows a window you cannot close until you set one. Setting it restarts Prowlarr, so give it a moment.",
       set: 'Prowlarr interface username:',
     },
     username: 'Username',
@@ -3470,12 +3504,14 @@ const en: Translations<typeof zhHant> = {
       bundled:
         'Indexers decide what Berth can find. Test first, tick the ones that pass and add them; then run a trial search and remove the ones you do not want. This step can wait.',
       existing:
-        'Indexers decide what Berth can find. Berth uses the indexers your instance already has: you can search them, and Berth neither adds nor removes any. This step can wait.',
+        'Indexers decide what Berth can find. Berth uses the indexers your instance already has and you can search them; you can also test the recommended public sites and add them in one press. Berth never removes your sites. This step can wait.',
     },
     skip: 'Do this later',
     deferred: 'Deferred',
     unreachable:
       'Cannot reach the bundled Prowlarr. Point Berth at your own instead, or skip this step and come back.',
+    readFailed:
+      "Could not read this Prowlarr's site list, so Berth cannot tell how many sites it has. It may be restarting or briefly unreachable: press Re-read to try again.",
     cutaway: {
       title: 'Indexers',
       kind: 'Connection',
@@ -3489,6 +3525,11 @@ const en: Translations<typeof zhHant> = {
     add: {
       title: 'Add indexers',
       lede: "Test asks Prowlarr to reach the site right now and creates nothing; only sites that pass can be ticked. A few public sites being unreachable is normal and does not affect the rest. Each site's description is the text from its Prowlarr definition.",
+      ledeExisting:
+        'Sites added here go into your own Prowlarr. Test asks it to reach the site right now and creates nothing; only sites that pass can be ticked, and nothing is added until you press Add. Berth does not remove sites — do that in Prowlarr itself.',
+      intoYours_one: 'Pressing Add puts this site into your Prowlarr ({{host}}): {{names}}.',
+      intoYours_other:
+        'Pressing Add puts these {{count}} sites into your Prowlarr ({{host}}): {{names}}.',
       recommended: 'Recommended',
       others: 'Other public sites',
       othersLede:
@@ -3508,7 +3549,6 @@ const en: Translations<typeof zhHant> = {
       apply_one: 'Add {{count}} site',
       apply_other: 'Add {{count}} sites',
       applyNone: 'Add',
-      loginOnly: 'Set the interface login',
       applying: 'Adding…',
       privateSites:
         'Sites that need an account (private and semi-private) are added in Prowlarr itself; once they are there Berth knows them and can search them.',
@@ -3519,6 +3559,17 @@ const en: Translations<typeof zhHant> = {
       login: 'Set the Prowlarr interface login',
       loginFix:
         'The credentials did not stick, so the Prowlarr interface is still open. Setting them restarts Prowlarr, so it may simply not be back yet. You can set them there yourself:',
+    },
+    empty: {
+      label: 'To do',
+      body: 'This Prowlarr has no sites yet, so Berth cannot find anything. Add sites in Prowlarr and press Re-read, or test the recommended public sites below and add the ones that pass; or do this later.',
+      reread: 'Re-read',
+      rereading: 'Reading…',
+    },
+    login: {
+      required: 'Required',
+      save: 'Set the interface login',
+      saving: 'Setting…',
     },
     existing: {
       title: 'Connect your own indexer',
@@ -3540,7 +3591,7 @@ const en: Translations<typeof zhHant> = {
       sites_other: '{{count}} sites',
       lede: 'Prowlarr only searches sites that have been added. Search one row at a time or all of them at once; leave the keywords blank to ask each site for its latest releases.',
       existingLede:
-        'The sites your instance already has. Berth searches with them and neither adds nor removes any — change them in its own interface.',
+        'The sites your instance already has. Berth searches with them and never removes any — remove them in its own interface.',
       none: 'This instance has no sites yet.',
       field: 'Keywords',
       placeholder: 'Blank = latest releases on each site',

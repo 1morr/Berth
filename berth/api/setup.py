@@ -588,7 +588,7 @@ class IndexerSetupOut(BaseModel):
     reachable: bool
     #: Prowlarr 裡已經有的站（套件內與既有 Prowlarr）。
     sites: list[IndexerSiteOut]
-    #: 還沒加入、Berth 加得了的站。只有套件內。
+    #: 還沒加入、Berth 加得了的站。Prowlarr（套件內與既有）才有；Torznab 端點沒有。
     candidates: list[IndexerCandidateOut]
     #: 上一次「加入」對每一站的結論。
     checks: list[SiteCheckOut]
@@ -614,10 +614,9 @@ class IndexerSetupOut(BaseModel):
 
 
 class IndexerApplyIn(BaseModel):
-    #: 勾起來的站，值是 Prowlarr 的 `definitionName`。空清單代表一個都沒勾。
+    #: 勾起來的站，值是 Prowlarr 的 `definitionName`。空清單代表一個都沒勾。介面登入不跟著送
+    #: （M4 票 20）：套件內那一台的登入走 `PUT /indexers/login`。
     indexers: list[str] = []
-    #: 泊位上填的 Prowlarr 介面登入（M4 票 07）。不帶就是登入照舊。
-    login: InterfaceLoginIn | None = None
 
 
 class IndexerTestIn(BaseModel):
@@ -674,10 +673,10 @@ async def get_indexers(
 async def post_indexers_test(
     session: SessionDep, factory: ClientFactoryDep, body: IndexerTestIn
 ) -> IndexerTestOut:
-    """「測試」：逐站問套件內的 Prowlarr 通不通，什麼都不建立（M4 票 09）。
+    """「測試」：逐站問 Prowlarr 通不通，什麼都不建立（M4 票 09；既有的那一台也測，M4 票 20）。
 
     只讀（`read` 命令），但它要 Prowlarr 現場去連那些站、要花幾秒，所以是由人按的 POST。
-    既有的索引站回 422：Berth 不替它加站，也就沒有要測的（brief §16.4）。
+    Torznab 端點回 422：沒有站的清單可加。
     """
     try:
         checks = await verify_sites(session, factory, body.indexers)
@@ -686,23 +685,16 @@ async def post_indexers_test(
     return IndexerTestOut.model_validate({"checks": [asdict(row) for row in checks]})
 
 
-@router.post("/indexers/apply", responses=_LOGIN_RESPONSES)
+@router.post("/indexers/apply")
 async def post_indexers_apply(
     session: SessionDep, config: ConfigDep, factory: ClientFactoryDep, body: IndexerApplyIn
 ) -> IndexerSetupOut:
-    """套件內路徑：勾起來的站逐個加進 Prowlarr，逐站回報成敗。
+    """勾起來的站逐個加進 Prowlarr（套件內與既有，M4 票 20），逐站回報成敗。
 
-    對既有的索引站回 422：那是使用者自己的服務，Berth 只做檢查（brief §16.4）。
+    Torznab 端點與還沒選的回 422：沒有一台 Prowlarr 可加。
     """
     try:
-        result = await apply_default_indexers(
-            session,
-            factory,
-            body.indexers,
-            login=body.login.value() if body.login is not None else None,
-        )
-    except InterfaceLoginRejectedError as refusal:
-        raise login_refusal(refusal) from refusal
+        result = await apply_default_indexers(session, factory, body.indexers)
     except ValueError as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
     return IndexerSetupOut.of(result, config)
@@ -714,7 +706,7 @@ async def put_indexers_login(
 ) -> IndexerSetupOut:
     """設定頁的「更新登入」（M4 票 07）：只換套件內 Prowlarr 的介面登入，等它重啟回來。
 
-    既有的索引站回 422，與 `/indexers/apply` 同一條紅線（brief §16.4）。
+    既有的索引站回 422：它的登入是使用者自己的（brief §16.4）。
     """
     try:
         result = await set_prowlarr_login(session, factory, body.value())

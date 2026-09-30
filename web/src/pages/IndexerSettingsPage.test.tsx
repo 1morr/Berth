@@ -111,10 +111,9 @@ describe('設定 → 索引站', () => {
       expect(stub.mock.calls.some(([url]) => url === '/api/setup/indexers/apply')).toBe(true),
     )
     const call = stub.mock.calls.find(([url]) => url === '/api/setup/indexers/apply')!
-    // 只送還沒加的那一站：已經在的不重加（M4 票 09）。
-    expect(JSON.parse(String(call[1]?.body)).indexers).toEqual(['nyaasi'])
-    // 加站不帶登入：介面登入在它自己的那一區改（M4 票 07）。
-    expect(JSON.parse(String(call[1]?.body)).login).toBeNull()
+    // 只送還沒加的那一站：已經在的不重加（M4 票 09）。加站不帶登入：介面登入在它自己的那一區改
+    // （M4 票 07、20）。
+    expect(JSON.parse(String(call[1]?.body))).toEqual({ indexers: ['nyaasi'] })
     // 加進來之後它就在試搜的清單上。
     const trial = within(await screen.findByTestId('trial'))
     expect(await trial.findByText('Nyaa.si')).toBeInTheDocument()
@@ -262,7 +261,7 @@ describe('既有 Prowlarr 測不過時的補法（M4 票 17）', () => {
       candidates: [],
       web_ui_login: false,
       reason: 'unreachable',
-      steps: [step('prowlarr', 'failed', '', 'GET /ping: connection refused')],
+      steps: [step('prowlarr', 'failed', '', 'GET /api/v1/system/status: connection refused')],
       ...overrides,
     })
   }
@@ -288,6 +287,15 @@ describe('既有 Prowlarr 測不過時的補法（M4 票 17）', () => {
       '測過的是 localhost：說 Berth 在容器裡',
       { base_url: 'http://127.0.0.1:9696' },
       'Berth 在容器裡，這個位址指的是 Berth 自己',
+    ],
+    [
+      'key 不對：說去哪裡複製，不說連不上（M4 票 20）',
+      {
+        base_url: 'http://192.168.1.10:9696',
+        reason: 'auth_required',
+        steps: [step('prowlarr', 'failed', '', 'GET /api/v1/system/status: 401')],
+      },
+      'API key 不對：在 Prowlarr 的「設定 → 一般」複製',
     ],
     [
       '其他：一般的那一句',

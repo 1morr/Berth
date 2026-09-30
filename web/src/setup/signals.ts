@@ -39,11 +39,14 @@ export function connectFields(kind: ServiceKind): ReadonlyArray<'apiKey' | 'cred
   return []
 }
 
-/** 測試打的那一支（`services/setup._probe`）。 */
+/**
+ * 測試打的第一支（`services/setup._test_connection`）。Prowlarr 問 `system/status`：1.3.2 之前沒有 `/ping`，
+ * 版本就說不出來了（M4 票 20）。
+ */
 const TEST_PATH: Record<ServiceKind, string> = {
   jellyfin: '/System/Info/Public',
   qbittorrent: '/api/v2/app/version',
-  prowlarr: '/ping',
+  prowlarr: '/api/v1/system/status',
 }
 
 /**

@@ -34,6 +34,20 @@
 - `version` 來自 `BuildInfo.Version.ToString()`，也就是 `System.Version`，固定四段，例如 `2.6.5.5623`。四段與 release tag 一一對應（tag 是 `v` 加上同一個字串）。v0.1.0.361 用的是同一行程式碼。已驗證。
 - **需要 API key。** `Startup.cs` 的 `FallbackPolicy` 是 `AuthorizationPolicyBuilder("API").RequireAuthenticatedUser()`（從 v0.1.0.361 到 v2.6.5.5623 都是），`SystemController` 沒有 `[AllowAnonymous]`。整個原始碼裡標了 `[AllowAnonymous]` 的只有 `/ping`、登入端點與靜態資源。v2.6.5.5623 的 `ApiKeyAuthenticationHandler` 依序接受 `?apikey=`、`X-Api-Key` 標頭、`Authorization: Bearer <key>`；沒帶或帶錯都回 **401**。`authenticationRequired=disabledForLocalAddresses` 只放寬 `UI` policy（前端頁面），不放寬 API 的 fallback policy。已驗證（讀原始碼，沒有實跑）。
 
+## 實測：比下限舊的那一台（2026-09-30，M4 票 20）
+
+對 `berth-existing` 的 `bad-prowlarr-old`（linuxserver `version-1.0.1.2220`，`config/host` 的 `authentication` 是 `none`）與 `ok-prowlarr`（2.6.5）以 `curl` 從宿主打：
+
+| 請求 | 1.0.1.2220 | 2.6.5 |
+| --- | --- | --- |
+| `GET /ping` | **200 `text/html`**（介面的 HTML） | 200 `{"status": "OK"}` |
+| `GET /api/v1/system/status`，不帶 key | 401 | — |
+| 同上，`X-Api-Key` 是對的 | 200，`version: "1.0.1.2220"` | 200 |
+| 同上，`X-Api-Key` 是錯的 | 401 | 401 |
+| `GET /api/v1/indexer`，對的 key | 200 | 200 |
+
+結論：1.0–1.3 的 `system/status` 在「帶對的 API key」這一種驗證下拿得到，與介面登入設沒設無關（上一節讀原始碼的推論成立，這一版實跑過了）。所以 Berth 的連線測試從 `system/status` 問起、不先問 `/ping`；錯的 key 是 401 → `auth_required`。1.3.x 本身仍沒有實跑。
+
 ## 目前最新 stable
 
 - **2.6.5.5623**，2026-09-16 發佈（`gh api repos/Prowlarr/Prowlarr/releases/latest`）。它之後的 2.6.x 都是 develop（prerelease）。
@@ -49,7 +63,7 @@
 
 ## 未查清的地方
 
-- 只讀了原始碼，**沒有**對 1.3.x 實跑。1.3.2.3006 的 `indexer/schema` 內容（Cardigann 定義的 `definitionName`、有哪些站）是執行期從定義伺服器下載的，跟 Prowlarr 版本沒有直接關係，Berth 釘住的 `definitionName` 在舊版上能不能加得起來沒有驗證。
+- 只讀了原始碼，**沒有**對 1.3.x 實跑（1.0.1 有，見〈實測〉）。1.3.2.3006 的 `indexer/schema` 內容（Cardigann 定義的 `definitionName`、有哪些站）是執行期從定義伺服器下載的，跟 Prowlarr 版本沒有直接關係，Berth 釘住的 `definitionName` 在舊版上能不能加得起來沒有驗證。
 - `POST /api/v1/indexer` 連不上時回的 400 陣列欄位（`isWarning`、`propertyName`、`errorMessage`、`severity`）只在 2.5.2.5491 實測過。舊版走同一條 `ValidationException` 路徑，但錯誤模型的欄位是否完全相同沒有逐版核對。
 - 1.10.5 之前的 `GET config/host` 會把 `password` 以雜湊原樣回傳，Berth 送的新密碼會直接 Upsert。這是讀程式碼推出來的，沒有實跑。
 - linuxserver 的 Docker image 是否還保留 `1.3.2.3006` 這類舊 tag 沒有查。

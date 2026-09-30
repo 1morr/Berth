@@ -1819,10 +1819,10 @@ export interface paths {
         put?: never;
         /**
          * Post Indexers Test
-         * @description 「測試」：逐站問套件內的 Prowlarr 通不通，什麼都不建立（M4 票 09）。
+         * @description 「測試」：逐站問 Prowlarr 通不通，什麼都不建立（M4 票 09；既有的那一台也測，M4 票 20）。
          *
          *     只讀（`read` 命令），但它要 Prowlarr 現場去連那些站、要花幾秒，所以是由人按的 POST。
-         *     既有的索引站回 422：Berth 不替它加站，也就沒有要測的（brief §16.4）。
+         *     Torznab 端點回 422：沒有站的清單可加。
          */
         post: operations["post_indexers_test_api_setup_indexers_test_post"];
         delete?: never;
@@ -1842,9 +1842,9 @@ export interface paths {
         put?: never;
         /**
          * Post Indexers Apply
-         * @description 套件內路徑：勾起來的站逐個加進 Prowlarr，逐站回報成敗。
+         * @description 勾起來的站逐個加進 Prowlarr（套件內與既有，M4 票 20），逐站回報成敗。
          *
-         *     對既有的索引站回 422：那是使用者自己的服務，Berth 只做檢查（brief §16.4）。
+         *     Torznab 端點與還沒選的回 422：沒有一台 Prowlarr 可加。
          */
         post: operations["post_indexers_apply_api_setup_indexers_apply_post"];
         delete?: never;
@@ -1865,7 +1865,7 @@ export interface paths {
          * Put Indexers Login
          * @description 設定頁的「更新登入」（M4 票 07）：只換套件內 Prowlarr 的介面登入，等它重啟回來。
          *
-         *     既有的索引站回 422，與 `/indexers/apply` 同一條紅線（brief §16.4）。
+         *     既有的索引站回 422：它的登入是使用者自己的（brief §16.4）。
          */
         put: operations["put_indexers_login_api_setup_indexers_login_put"];
         post?: never;
@@ -2843,7 +2843,6 @@ export interface components {
              * @default []
              */
             indexers?: string[];
-            login?: components["schemas"]["InterfaceLoginIn"] | null;
         };
         /**
          * IndexerCandidateOut
@@ -9109,22 +9108,13 @@ export interface operations {
                     "application/json": components["schemas"]["IndexerSetupOut"];
                 };
             };
-            /** @description `owner_password` */
+            /** @description Validation Error */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["InterfaceLoginRefusalOut"];
-                };
-            };
-            /** @description `jellyfin_unreachable` */
-            502: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["InterfaceLoginRefusalOut"];
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

@@ -89,7 +89,8 @@ async def test_reusing_the_jellyfin_login_sets_the_owners_pair_on_both(
     clients = factory(qbittorrent=qbittorrent, prowlarr=prowlarr)
 
     await apply_qbittorrent(session, clients, login=REUSED)
-    await apply_default_indexers(session, clients, ["nyaasi"], login=REUSED, sleep=_no_sleep)
+    await apply_default_indexers(session, clients, ["nyaasi"])
+    await set_prowlarr_login(session, clients, REUSED, sleep=_no_sleep)
 
     await qbittorrent.login("skipper", OWNER_PASSWORD)
     assert prowlarr.signs_in("skipper", OWNER_PASSWORD)
@@ -109,7 +110,6 @@ async def test_a_mistyped_jellyfin_password_writes_neither(session: AsyncSession
     for attempt in (
         apply_qbittorrent(session, clients, login=MISTYPED),
         set_qbittorrent_login(session, clients, MISTYPED),
-        apply_default_indexers(session, clients, ["nyaasi"], login=MISTYPED, sleep=_no_sleep),
         set_prowlarr_login(session, clients, MISTYPED, sleep=_no_sleep),
     ):
         with pytest.raises(InterfaceLoginRejectedError) as refused:
@@ -152,7 +152,8 @@ async def test_no_interface_password_is_stored_in_plain_text(session: AsyncSessi
     own_pair = InterfaceLogin(username="deck", password="Deck-pass-9")
 
     await apply_qbittorrent(session, clients, login=REUSED)
-    await apply_default_indexers(session, clients, ["nyaasi"], login=own_pair, sleep=_no_sleep)
+    await apply_default_indexers(session, clients, ["nyaasi"])
+    await set_prowlarr_login(session, clients, own_pair, sleep=_no_sleep)
 
     stored = await stored_settings(session)
     assert OWNER_PASSWORD not in stored

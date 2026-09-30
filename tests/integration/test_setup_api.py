@@ -880,13 +880,19 @@ class TestSource:
         ] == [("yts", True, None), ("1337x", False, "cloudflare")]
         assert client.get("/api/setup/indexers").json()["sites"] == []
 
-    def test_the_login_rides_along_and_can_be_changed_later(
+    def test_the_login_is_its_own_request_and_can_be_changed_later(
         self, client: TestClient, prowlarr: FakeProwlarrClient
     ) -> None:
-        """Prowlarr 的介面登入跟著「加入」送；設定頁再改一次，舊的失效（M4 票 07）。"""
-        body = client.post(
-            "/api/setup/indexers/apply",
-            json={"indexers": ["nyaasi"], "login": {"username": "skipper", "password": "h"}},
+        """Prowlarr 的介面登入是自己的一支（M4 票 20）：「加入」不設它。再改一次，舊的失效
+        （M4 票 07）。"""
+        added = client.post("/api/setup/indexers/apply", json={"indexers": ["nyaasi"]}).json()
+        assert [row["status"] for row in added["steps"] if row["step"] == "prowlarr_login"] == [
+            "pending"
+        ]
+        assert prowlarr.restarts == 0
+
+        body = client.put(
+            "/api/setup/indexers/login", json={"username": "skipper", "password": "h"}
         ).json()
         assert body["web_ui_username"] == "skipper"
         assert prowlarr.signs_in("skipper", "h")

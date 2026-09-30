@@ -1212,6 +1212,18 @@ split-cour 的第一批被播出日比對整批擋在審核，改正一次並套
 - **接既有 qBittorrent 不再列偏好表、不再警告「沒有啟用未完成目錄」**（M4 票 22）：`GET /api/setup/qbittorrent/diff`
   對既有的那一台回空的 `diffs`，按「確認」只記密碼那一條 `skipped`。那句警告的理由不成立（完成看的是
   qBittorrent 回報的狀態），而它的全域偏好沒有一個影響 Berth。
+- **既有 Prowlarr 一站都沒有時，精靈停在索引站那一頁**（M4 票 20，brief §19 2026-09-30）：原本連上就標「已完成」，
+  零站的 Berth 什麼都搜不到。現在那一頁待處理，說出三條路：到 Prowlarr 加站後按「重新讀取」、在精靈加推薦的公開站、
+  或「之後再說」。**既有 Prowlarr 也能加站**：同一套先測再勾、按一次加入，按鈕旁寫明會加進哪一台、加哪幾站；
+  Berth 不移除它的站、不碰它的介面登入。`POST /api/setup/indexers/test` 與 `/apply` 對既有 Prowlarr 不再 422
+  （Torznab 端點照舊 422）。
+- **比 1.3.2 舊的 Prowlarr 說得出版本，key 錯不再說「連不上」**（M4 票 20）：連線測試從
+  `GET /api/v1/system/status` 問起、不先問 `/ping`（1.0.1 的 `/ping` 回介面的 HTML），太舊時說「至少 1.3.2，你的
+  是 X」；401 是 `auth_required`，補法說 API key 在 Prowlarr 的「設定 → 一般」。測試那一行標的端點跟著改。
+- **套件內 Prowlarr 的介面登入是自己的一顆按鈕**（M4 票 20）：「加入 N 個站」貼著站清單、不必先填登入；
+  介面登入一區寫明必填與理由（Prowlarr 第一次打開介面會跳出關不掉的設定視窗），按「設定介面登入」走
+  `PUT /api/setup/indexers/login`。**`POST /api/setup/indexers/apply` 不再收 `login`**。加站與移除之後，連線卡與
+  泊位卡的站數跟著清單；回頭看頁 4 的說明依套件內 / 既有分兩套。
 ### Removed
 - **`QbittorrentOut.temp_path_warning`**（M4 票 22）：既有 qBittorrent 沒開全域未完成目錄不再是一件事。
 

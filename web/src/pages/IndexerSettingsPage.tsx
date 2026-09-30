@@ -55,7 +55,7 @@ export function IndexerSettingsPage() {
               indexers={indexers.data}
               applying={apply.isPending}
               connecting={connect.isPending}
-              onApply={(input) => apply.mutateAsync({ ...input, login: null })}
+              onApply={apply.mutateAsync}
               onConnect={(input) => connect.mutate(input)}
               sites={{
                 onTest: testIndexers,

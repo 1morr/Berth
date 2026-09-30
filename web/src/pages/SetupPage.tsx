@@ -30,6 +30,7 @@ import {
   routeSetupQueryOptions,
   saveBundledLibraries,
   searchIndexers,
+  setIndexerLogin,
   setupStatusQueryOptions,
   skipIndexers,
   testIndexers,
@@ -74,7 +75,6 @@ import { type ChoiceControls } from '../setup/ServiceChoice'
 import { PAGE_TITLE, GhostButton } from '../components/controls'
 import { commonRoot } from '../components/routeChecks'
 import { type Signal } from '../components/signal'
-import { isSettled } from '../components/steps'
 import { connected, signalOf } from '../setup/signals'
 
 /** 套件內那一台還在啟動時的重測間隔。上限由後端的輪詢窗口決定（`window_seconds`）。 */
@@ -251,6 +251,12 @@ export function SetupPage() {
     onMutate: hold,
     onSuccess: (next) => absorbBerth(indexerSetupQueryOptions.queryKey, next),
   })
+  // 套件內 Prowlarr 的介面登入是自己的一顆按鈕（M4 票 20），不跟著「加入」送。
+  const prowlarrLogin = useMutation({
+    mutationFn: setIndexerLogin,
+    onMutate: hold,
+    onSuccess: (next) => absorbBerth(indexerSetupQueryOptions.queryKey, next),
+  })
   // 既有 Prowlarr 或 Torznab 的表單（頁 4 選「既有」時）：這就是選了既有，精靈狀態裡的選擇也跟著變。
   const connectSource = useMutation({
     mutationFn: connectIndexer,
@@ -349,7 +355,12 @@ export function SetupPage() {
       onNext={next !== null && advanced(step, backend) ? () => goTo(next) : undefined}
     />
   )
-  const note = advanced(step, backend) ? <RevisitNote step={step} /> : null
+  const note = advanced(step, backend) ? (
+    <RevisitNote
+      step={step}
+      origin={current.services.find((row) => row.kind === 'prowlarr')?.origin}
+    />
+  ) : null
 
   /** 媒體庫清單沒存下來的那一句：後端說得出是哪一列就說，說不出就是請求沒跑完（票 06f）。 */
   function librariesFailure(): string | null {
@@ -375,8 +386,10 @@ export function SetupPage() {
       library: librarySignal(current, routes.data, jellyfin.data, dock.isPending),
       prowlarr: indexerSignal(
         current,
-        indexers.data,
-        applySites.isPending || connectSource.isPending || removeSite.isPending,
+        applySites.isPending ||
+          connectSource.isPending ||
+          removeSite.isPending ||
+          prowlarrLogin.isPending,
       ),
       tmdb: tmdbSignal(current, tmdb.data, tmdbTest.isPending),
     } satisfies BerthSignals,
@@ -478,8 +491,12 @@ export function SetupPage() {
             owner={current.owner}
             applying={applySites.isPending}
             connecting={connectSource.isPending}
-            loginRefusal={loginRefusalOf(applySites.error)}
-            onApply={(input) => applySites.mutateAsync(input)}
+            login={{
+              saving: prowlarrLogin.isPending,
+              refusal: loginRefusalOf(prowlarrLogin.error),
+              onSave: (login) => prowlarrLogin.mutateAsync(login),
+            }}
+            onApply={(selected) => applySites.mutateAsync(selected)}
             onConnect={(input) => connectSource.mutate(input)}
             onSkip={() => skipSites.mutate()}
             choice={choiceOf('prowlarr')}
@@ -564,19 +581,13 @@ function qbittorrentSignal(
 
 /**
  * 索引站那一格的信號。逐站失敗**不算阻擋**：公開站裡有幾個連不上是常態，只要接上了一個
- * 就走得下去（後端的步驟判定用的是同一條規則）。
+ * 就走得下去。做完了沒只看後端的頁序（`_indexer_settled`）：加了站而介面登入還沒設、既有 Prowlarr
+ * 一站都沒有，都還沒做完（M4 票 20），從纜繩猜會猜成已繫上。
  */
-function indexerSignal(
-  status: SetupStatus,
-  indexers: IndexerSetup | undefined,
-  busy: boolean,
-): Signal {
+function indexerSignal(status: SetupStatus, busy: boolean): Signal {
   const chosen = status.services.find((row) => row.kind === 'prowlarr')
   if (busy) return 'working'
   if (status.current_step > STEP.indexer) return 'secured'
-  const settled =
-    (indexers?.skipped ?? false) || (indexers?.steps.some((row) => isSettled(row.status)) ?? false)
-  if (settled) return 'secured'
   return pageSignal(chosen)
 }
 

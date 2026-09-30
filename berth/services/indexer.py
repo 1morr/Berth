@@ -2,12 +2,14 @@
 
 兩條路徑，同一份狀態形狀（`SetupIndexer`）：
 
-- **套件內 Prowlarr**：推薦清單與 schema 裡其他公開的 torrent 站（`candidates`），**先測再加**
-  （M4 票 09）：`verify_sites` 以 `indexer/test` 測還沒加入的定義，通過的才勾得起來；加入是
-  `indexer` 新增，逐站顯示成敗。泊位上填的介面登入跟著送進來，替 Prowlarr 介面設 Forms 登入
-  （M4 票 07）；設定頁改它走 `set_interface_login`。
-- **既有**：Prowlarr 位址 + API key，或任意 Torznab 端點 + key，各有一顆「測試」。Berth 列出它已有的
-  站、可以試搜，不加、不測、不移除（票 05）。
+- **Prowlarr（套件內與既有）**：推薦清單與 schema 裡其他公開的 torrent 站（`candidates`），
+  **先測再加**（M4 票 09）：`verify_sites` 以 `indexer/test` 測還沒加入的定義，通過的才勾得起來；
+  加入是 `indexer` 新增，逐站顯示成敗。**既有的那一台也可以加**（M4 票 20，使用者拍板：按一次
+  確認），但 Berth 不移除它的站、不碰它的介面登入。
+- **套件內 Prowlarr 的介面登入**是自己的一條（`set_interface_login`，M4 票 20 從「加入」拆出來），
+  必填（M4 票 07）。
+- **既有**：Prowlarr 位址 + API key，或任意 Torznab 端點 + key，各有一顆「測試」。**一站都沒有的
+  既有 Prowlarr 這一頁不算完成**（`existing_prowlarr_step`，M4 票 20）：零站的 Berth 什麼都搜不到。
 
 **逐站的成敗來自新增那一支**：`POST /api/v1/indexer` 會先連一次那個站，連不上就回 400 而且
 什麼都不建立（2026-09-08 實測，brief §20.7）。已經加過的站不重加——同名會被拒（`Should be
@@ -24,7 +26,7 @@ from urllib.parse import urlsplit
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from berth.adapters.http import ServiceError
+from berth.adapters.http import AuthFailedError, ProtocolMismatchError, ServiceError
 from berth.adapters.indexer import IndexerSearch, SearchQuery
 from berth.adapters.prowlarr import (
     IndexerDefinition,
@@ -143,7 +145,7 @@ class IndexerSetupStatus:
     reachable: bool
     #: Prowlarr 裡已經有的站（套件內與既有 Prowlarr；Torznab 端點沒有站的清單）。
     sites: tuple[IndexerSite, ...]
-    #: 還沒加入、Berth 加得了的站。只有套件內。
+    #: 還沒加入、Berth 加得了的站。Prowlarr（套件內與既有，M4 票 20）才有。
     candidates: tuple[IndexerCandidate, ...]
     #: 上一次「加入」對每一站的結論（從 `steps` 導出，理由分好了）。
     checks: tuple[SiteCheck, ...]
@@ -190,7 +192,7 @@ TRIAL_TITLES = 3
 async def read_indexer_status(
     session: AsyncSession, factory: ServiceClientFactory
 ) -> IndexerSetupStatus:
-    """套件內列出已加入的站與加得了的站；既有 Prowlarr 只列它已有的站；Torznab 只回連線資訊。
+    """Prowlarr 列出已加入的站與加得了的站；Torznab 只回連線資訊。
 
     **只讀**：進這一頁（精靈與設定頁）只發這一支，不測任何一站（M4 票 09）。
     """
@@ -204,12 +206,11 @@ async def read_indexer_status(
     client = factory.prowlarr(base_url, settings.api_key)
     try:
         present = await client.indexers()
-        if not bundled:
-            # 既有的那一台：列出來、可以試搜，就這樣（票 05）。連不上照舊由測試那一條說。
-            return _view(setup, settings, origin, base_url, sites=_sites(present, bundled=False))
         candidates = _candidates(await client.definitions(), present)
-        instance = _instance_username(await client.host_config())
+        # 既有的那一台的介面登入不是 Berth 的事，連讀都不讀（M4 票 20）。
+        instance = _instance_username(await client.host_config()) if bundled else ""
     except ServiceError as exc:
+        # 既有的那一台連不上由測試那一條說（`reason`），表單照樣畫得出來。
         return _view(setup, settings, origin, base_url, reachable=not bundled, error=message(exc))
     finally:
         await client.aclose()
@@ -219,7 +220,7 @@ async def read_indexer_status(
         settings,
         origin,
         base_url,
-        sites=_sites(present, bundled=True),
+        sites=_sites(present, bundled=bundled),
         candidates=candidates,
         instance_username=instance,
     )
@@ -233,12 +234,12 @@ async def verify_sites(
 
     `indexer/test` 也收還沒加入的定義（2026-09-30 實測，brief §20.7）：送的是 schema 的原樣。
     測的是「加站」那一段的候選，所以一律測定義；Berth 加不了的（私站、usenet、這台沒有的定義）
-    直接回沒通過，一個請求都不送。只有套件內：既有的那一台 Berth 不加站，也就沒有要測的（票 05）。
+    直接回沒通過，一個請求都不送。套件內與既有的 Prowlarr 都測（M4 票 20）；Torznab 端點沒有站可加。
     """
     setup = await read_settings(session, SetupSettings)
     settings = await read_settings(session, IndexerSettings)
     origin, base_url = _target(setup, settings)
-    _refuse_existing(origin)
+    _refuse_unless_prowlarr(origin, settings)
 
     client = factory.prowlarr(base_url, settings.api_key)
     gate = asyncio.Semaphore(VERIFY_CONCURRENCY)
@@ -261,18 +262,17 @@ async def verify_sites(
         await client.aclose()
 
 
-# 沒有單一反向命令：一次加好幾站、還可能設了 Prowlarr 的介面登入，
-# `remove_indexer` 一次只撤得掉一站。
+# 沒有單一反向命令：一次加好幾站，`remove_indexer` 一次只撤得掉一站（既有的那一台 Berth 不撤，
+# 移除交給它自己的介面，M4 票 20）。
 @command(Effect.REVERSIBLE)
 async def apply_default_indexers(
     session: AsyncSession,
     factory: ServiceClientFactory,
     selected: Sequence[str],
     *,
-    login: InterfaceLogin | None = None,
     sleep: Sleeper = asyncio.sleep,
 ) -> IndexerSetupStatus:
-    """勾起來的站逐個加進套件內的 Prowlarr（plan §9.3 頁 4）。
+    """勾起來的站逐個加進 Prowlarr（plan §9.3 頁 4），套件內與既有的都是（M4 票 20）。
 
     勾得起來的是測試通過的站（M4 票 09，前端擋）；Prowlarr 加之前自己會再連一次，所以這裡照樣
     逐站記成敗。Berth 加不了的定義（私站、usenet）是 `failed`，不送。
@@ -281,28 +281,28 @@ async def apply_default_indexers(
     連不上是 `failed` 加上 Prowlarr 回的原文。整批不會因為一個站失敗就停下來——公開站裡
     有幾個連不上是常態。
 
-    `login` 是泊位上填的介面登入（M4 票 07）；不帶就是登入照舊（設定頁加站不帶）。
+    **不帶介面登入**（M4 票 20：加站不該被登入欄擋住）：套件內的那一台照樣記登入那一條——設過的
+    `skipped`、沒設過的 `pending`，精靈停在頁 4 等 `set_interface_login`。既有的那一台不讀也不寫
+    `config/host`，它的連線纜繩改成加完之後的站數。
     """
     setup = await read_settings(session, SetupSettings)
     settings = await read_settings(session, IndexerSettings)
     origin, base_url = _target(setup, settings)
-    if origin is not ServiceOrigin.BUNDLED:
-        # 既有的索引站是使用者自己的，Berth 只做檢查（brief §16.4 的紅線）。UI 在這個狀態下
-        # 根本不給這顆按鈕，所以走到這裡的只有直接打 API 的人。
-        raise ValueError("this indexer is an existing service; Berth does not add sites to it")
-    if login is not None:
-        # 沿用 Jellyfin 帳密要先過 Jellyfin 那一關：在加站與寫登入之前（M4 票 15）。
-        login = await resolve_interface_login(session, factory, login)
+    _refuse_unless_prowlarr(origin, settings)
+    bundled = origin is ServiceOrigin.BUNDLED
 
     client = factory.prowlarr(base_url, settings.api_key)
     steps: list[SetupStep] = []
+    instance = ""
     try:
         definitions = _by_definition(await client.definitions())
         existing = {row.definition_name: row for row in await client.indexers()}
         for name in selected:
             steps.append(await _ensure_indexer(client, name, definitions, existing))
-        instance = _instance_username(await client.host_config())
-        steps.append(await _apply_password(client, setup, origin, login, instance, sleep=sleep))
+        sites = len(await client.indexers())
+        if bundled:
+            instance = _instance_username(await client.host_config())
+            steps.append(await _apply_password(client, setup, None, instance, sleep=sleep))
     except ServiceError as exc:
         return _view(setup, settings, origin, base_url, reachable=False, error=message(exc))
     finally:
@@ -313,9 +313,11 @@ async def apply_default_indexers(
     await write_settings(session, settings)
 
     def record(latest: SetupSettings) -> None:
-        latest.indexer.steps = steps
+        latest.indexer.steps = steps if bundled else [existing_prowlarr_step(sites), *steps]
         latest.indexer.skipped = False
-        _record_login(latest, steps[-1], login, instance)
+        if bundled:
+            _record_login(latest, steps[-1], None, instance)
+        _recount(latest, sites)
 
     # 逐站加完要一分鐘上下，這段時間裡第 7 步可能已經寫進同一組設定（M2 票 15）。
     await update_settings(session, SetupSettings, record)
@@ -344,7 +346,7 @@ async def connect_indexer(
     await write_settings(session, settings)
 
     probe = await probe_indexer(factory, kind, base_url, api_key)
-    step = probe.step
+    step = probe.step if probe.sites is None else existing_prowlarr_step(probe.sites)
     moment = utcnow()
 
     def record(latest: SetupSettings) -> None:
@@ -364,8 +366,9 @@ async def connect_indexer(
                 origin=ServiceOrigin.EXISTING,
                 base_url=base_url,
                 test=ServiceTest(
+                    # 連線的成敗看探測本身：0 站是連上了、這一頁還沒完（M4 票 20）。
                     state=ConnectionState.OK
-                    if step.status is StepStatus.OK
+                    if probe.reason is ConnectionReason.CONNECTED
                     else ConnectionState.FAILED,
                     reason=probe.reason,
                     detail=step.detail,
@@ -463,7 +466,8 @@ async def remove_indexer(
 
     client = factory.prowlarr(base_url, settings.api_key)
     try:
-        gone = next((row for row in await client.indexers() if row.id == indexer_id), None)
+        present = await client.indexers()
+        gone = next((row for row in present if row.id == indexer_id), None)
         if gone is not None and not _offered(gone):
             raise ValueError(f"{gone.name}: Berth only removes the public sites it can add back")
         if gone is not None:
@@ -476,6 +480,7 @@ async def remove_indexer(
 
         def record(latest: SetupSettings) -> None:
             latest.indexer.steps = [row for row in latest.indexer.steps if row.key != removed]
+            _recount(latest, len(present) - 1)
 
         await update_settings(session, SetupSettings, record)
     return await read_indexer_status(session, factory)
@@ -547,7 +552,7 @@ async def set_interface_login(
     client = factory.prowlarr(base_url, settings.api_key)
     try:
         instance = _instance_username(await client.host_config())
-        step = await _apply_password(client, setup, origin, login, instance, sleep=sleep)
+        step = await _apply_password(client, setup, login, instance, sleep=sleep)
     except ServiceError as exc:
         step = SetupStep(key=PROWLARR_LOGIN_STEP, status=StepStatus.FAILED, error=message(exc))
         instance = ""
@@ -567,9 +572,28 @@ async def set_interface_login(
 
 def _refuse_existing(origin: ServiceOrigin | None) -> None:
     if origin is not ServiceOrigin.BUNDLED:
-        # 既有的索引站是使用者自己的，Berth 只做檢查（brief §16.4 的紅線）。UI 在這個狀態下
+        # 既有的索引站是使用者自己的，它的登入 Berth 不碰（brief §16.4 的紅線）。UI 在這個狀態下
         # 根本不給這顆按鈕，所以走到這裡的只有直接打 API 的人。
         raise ValueError("this indexer is an existing service; Berth does not change it")
+
+
+def _refuse_unless_prowlarr(origin: ServiceOrigin | None, settings: IndexerSettings) -> None:
+    """測站與加站要一台 Prowlarr：還沒選、或接的是 Torznab 端點（沒有站的清單）都拒絕。"""
+    if origin is None:
+        raise ValueError("choose where Prowlarr comes from first")
+    if settings.kind == IndexerKind.TORZNAB.value:
+        raise ValueError("a Torznab endpoint has no site list for Berth to add to")
+
+
+def _recount(setup: SetupSettings, sites: int) -> None:
+    """加站、移除之後，上一次連線測試記下的站數跟著清單（M4 票 20）：連線卡與泊位卡讀的是它，
+    不更新就一直說「0 站」。只改連得上的那一次——失敗那一次的細節是版本或空的，不是站數。"""
+    choice = setup.choices.get(ServiceKind.PROWLARR)
+    if choice is None or choice.test is None or choice.test.state is not ConnectionState.OK:
+        return
+    test = choice.test.model_copy(update={"detail": str(sites)})
+    fresh = choice.model_copy(update={"test": test})
+    setup.choices = {**setup.choices, ServiceKind.PROWLARR: fresh}
 
 
 def _record_login(
@@ -598,13 +622,13 @@ def _instance_username(config: Mapping[str, Any]) -> str:
 async def _apply_password(
     client: ProwlarrClient,
     setup: SetupSettings,
-    origin: ServiceOrigin | None,
     login: InterfaceLogin | None,
     instance: str,
     *,
     sleep: Sleeper,
 ) -> SetupStep:
-    """套件內 Prowlarr 的介面登入（M4 票 07）：`config/host` 的 Forms 驗證。
+    """套件內 Prowlarr 的介面登入（M4 票 07）：`config/host` 的 Forms 驗證。呼叫端先確認是套件內
+    （既有的那一台不讀也不寫 `config/host`，M4 票 20）。
 
     不帶登入時，設過的照舊（`skipped`、細節是帳號）；**那一台自己就設過的也不強迫再設**
     （重裝保留 config，M4 票 15，`instance`）；其餘是 `pending`：必填，精靈停在頁 4
@@ -614,8 +638,6 @@ async def _apply_password(
     整份物件都要送回去，少了 `passwordConfirmation` 會被拒（brief §20.7）。
     """
     key = PROWLARR_LOGIN_STEP
-    if origin is not ServiceOrigin.BUNDLED:
-        return SetupStep(key=key, status=StepStatus.SKIPPED)
     recorded = setup.indexer.web_ui_username
     if login is None:
         known = recorded or instance
@@ -669,9 +691,10 @@ async def _wait_for_restart(client: ProwlarrClient, *, sleep: Sleeper) -> None:
 @dataclass(frozen=True, slots=True)
 class IndexerProbe:
     step: SetupStep
-    #: 給服務頁的理由。這一支的失敗多半只有原文，分得出來的只有「版本太舊」（M4 票 17），
-    #: 其餘一律是連不上。
+    #: 給服務頁的理由：版本太舊（M4 票 17）、key 不被接受、回的不是它（M4 票 20），其餘是連不上。
     reason: ConnectionReason
+    #: 連上的 Prowlarr 有幾站。沒連上與 Torznab 端點是 `None`。
+    sites: int | None = None
 
 
 @command(Effect.READ)
@@ -682,25 +705,28 @@ async def probe_indexer(
 
     精靈第 6 步的既有路徑與健康檢查的第三項用的是同一支：兩者問的都是「這個端點還能不能
     搜」，分成兩份實作只會讓其中一份先過期（票 10）。
+
+    **Prowlarr 從 `system/status` 問起，不問 `/ping`**（M4 票 20）：1.3.2 之前沒有 `/ping`，它回
+    介面的 HTML（1.0.1 實測），版本就說不出來了；`system/status` 從第一版就有、帶 key 才答，所以
+    它同時驗了 key（錯的是 401 → `auth_required`）。
     """
     if kind is IndexerKind.TORZNAB:
         torznab = factory.torznab(base_url, api_key)
         try:
             caps = await torznab.caps()
         except ServiceError as exc:
-            return _unreachable(
-                SetupStep(key=kind.value, status=StepStatus.FAILED, error=message(exc))
-            )
+            return _failed_probe(kind, exc)
         finally:
             await torznab.aclose()
         if not caps.search.available:
-            return _unreachable(
-                SetupStep(
+            return IndexerProbe(
+                reason=ConnectionReason.UNREACHABLE,
+                step=SetupStep(
                     key=kind.value,
                     status=StepStatus.FAILED,
                     detail=caps.server_title,
                     error="t=caps: this endpoint does not offer search",
-                )
+                ),
             )
         return _connected(
             SetupStep(
@@ -714,7 +740,6 @@ async def probe_indexer(
 
     prowlarr = factory.prowlarr(base_url, api_key)
     try:
-        await prowlarr.ping()
         status = await prowlarr.status()
         if not status.supported:
             return IndexerProbe(
@@ -723,10 +748,24 @@ async def probe_indexer(
             )
         indexers = await prowlarr.indexers()
     except ServiceError as exc:
-        return _unreachable(SetupStep(key=kind.value, status=StepStatus.FAILED, error=message(exc)))
+        return _failed_probe(kind, exc)
     finally:
         await prowlarr.aclose()
-    return _connected(SetupStep(key=kind.value, status=StepStatus.OK, detail=str(len(indexers))))
+    step = SetupStep(key=kind.value, status=StepStatus.OK, detail=str(len(indexers)))
+    return IndexerProbe(step=step, reason=ConnectionReason.CONNECTED, sites=len(indexers))
+
+
+def existing_prowlarr_step(sites: int) -> SetupStep:
+    """精靈裡既有 Prowlarr 連上之後的那一條纜繩，細節是站數。
+
+    **一站都沒有是 `pending`**（M4 票 20）：零站的 Berth 什麼都搜不到，頁 4 停著等使用者加站、重新
+    讀取，或說之後再說（`setup._indexer_settled`）。健康檢查不走這裡：連得上就是綠的。
+    """
+    return SetupStep(
+        key=IndexerKind.PROWLARR.value,
+        status=StepStatus.OK if sites else StepStatus.PENDING,
+        detail=str(sites),
+    )
 
 
 def outdated_step(version: str) -> SetupStep:
@@ -746,8 +785,16 @@ def _connected(step: SetupStep) -> IndexerProbe:
     return IndexerProbe(step=step, reason=ConnectionReason.CONNECTED)
 
 
-def _unreachable(step: SetupStep) -> IndexerProbe:
-    return IndexerProbe(step=step, reason=ConnectionReason.UNREACHABLE)
+def _failed_probe(kind: IndexerKind, exc: ServiceError) -> IndexerProbe:
+    """測不過：原文照錄，理由分得出 key 不對與回的不是它（M4 票 20），其餘是連不上。"""
+    if isinstance(exc, AuthFailedError):
+        reason = ConnectionReason.AUTH_REQUIRED
+    elif isinstance(exc, ProtocolMismatchError):
+        reason = ConnectionReason.PROTOCOL_MISMATCH
+    else:
+        reason = ConnectionReason.UNREACHABLE
+    step = SetupStep(key=kind.value, status=StepStatus.FAILED, error=message(exc))
+    return IndexerProbe(step=step, reason=reason)
 
 
 def _target(setup: SetupSettings, settings: IndexerSettings) -> tuple[ServiceOrigin | None, str]:
@@ -842,12 +889,16 @@ def _sites(present: list[ProwlarrIndexer], *, bundled: bool) -> tuple[IndexerSit
     )
 
 
+#: 頁 4 的纜繩裡不是站的那幾條：介面登入、既有的連線（值是 `IndexerKind`）。
+_NOT_SITES = frozenset({PROWLARR_LOGIN_STEP, *(kind.value for kind in IndexerKind)})
+
+
 def _checks(steps: list[SetupStep]) -> tuple[SiteCheck, ...]:
-    """上一次「加入」對每一站的結論。介面登入那一條不是站。"""
+    """上一次「加入」對每一站的結論。"""
     return tuple(
         _failed(row.key, (row.error,)) if row.status is StepStatus.FAILED else _passed(row.key)
         for row in steps
-        if row.key != PROWLARR_LOGIN_STEP
+        if row.key not in _NOT_SITES
         and row.status in (StepStatus.OK, StepStatus.SKIPPED, StepStatus.FAILED)
     )
 

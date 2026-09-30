@@ -196,14 +196,18 @@ async def test_pressing_apply_twice_does_not_add_a_second_copy(session: AsyncSes
 async def test_the_bundled_prowlarr_gets_the_login_typed_on_the_berth(
     session: AsyncSession,
 ) -> None:
-    """泊位上的登入跟著「加入」送進來，替 Prowlarr 介面設 Forms 登入（brief §16.3、M4 票 07）。"""
+    """泊位上的介面登入替 Prowlarr 設 Forms 登入（brief §16.3、M4 票 07）。它是自己的一顆按鈕
+    （M4 票 20）：「加入」不帶它，沒設過時那一條是 `pending`。"""
     await arrange(session)
     client = FakeProwlarrClient()
     factory = FakeClientFactory(prowlarr=client)
+    added = await apply_default_indexers(session, factory, ["nyaasi"], sleep=_no_sleep)
+    assert [row.status for row in added.steps if row.step == PROWLARR_LOGIN_STEP] == [
+        StepStatus.PENDING
+    ]
+    assert client.restarts == 0
 
-    status = await apply_default_indexers(
-        session, factory, ["nyaasi"], login=SKIPPER, sleep=_no_sleep
-    )
+    status = await set_interface_login(session, factory, SKIPPER, sleep=_no_sleep)
 
     assert client.signs_in("skipper", "harbour")
     config = await client.host_config()
@@ -214,8 +218,8 @@ async def test_the_bundled_prowlarr_gets_the_login_typed_on_the_berth(
     ]
     assert (status.web_ui_login, status.web_ui_username) == (True, "skipper")
 
-    # 重按（帶同一組、或不帶）不會再設一次，也就不會再重啟一次。
-    await apply_default_indexers(session, factory, ["nyaasi"], login=SKIPPER, sleep=_no_sleep)
+    # 同一組再設一次、或再按「加入」，不會再設一次，也就不會再重啟一次。
+    await set_interface_login(session, factory, SKIPPER, sleep=_no_sleep)
     again = await apply_default_indexers(session, factory, ["nyaasi"], sleep=_no_sleep)
     assert client.restarts == 1
     assert [(row.status, row.detail) for row in again.steps if row.step == PROWLARR_LOGIN_STEP] == [
@@ -232,7 +236,8 @@ async def test_a_changed_prowlarr_login_replaces_the_old_one(session: AsyncSessi
     await arrange(session)
     client = FakeProwlarrClient()
     factory = FakeClientFactory(prowlarr=client)
-    await apply_default_indexers(session, factory, ["nyaasi"], login=SKIPPER, sleep=_no_sleep)
+    await apply_default_indexers(session, factory, ["nyaasi"], sleep=_no_sleep)
+    await set_interface_login(session, factory, SKIPPER, sleep=_no_sleep)
     tested = list(client.tested)
 
     status = await set_interface_login(
@@ -467,15 +472,14 @@ async def _no_sleep(_seconds: float) -> None:
 async def test_a_prowlarr_that_never_comes_back_does_not_erase_the_site_results(
     session: AsyncSession,
 ) -> None:
-    """設密碼會讓 Prowlarr 重啟。它沒回來時，前面那幾站已經加進去了——結果不能跟著消失。"""
+    """設密碼會讓 Prowlarr 重啟。它沒回來時，先前加進去的站已經在了——結果不能跟著消失。"""
     await arrange(session)
     client = FakeProwlarrClient()
-    client.ping = _never_comes_back  # type: ignore[method-assign]
     factory = FakeClientFactory(prowlarr=client)
+    await apply_default_indexers(session, factory, ["nyaasi", "mikan"], sleep=_no_sleep)
+    client.ping = _never_comes_back  # type: ignore[method-assign]
 
-    status = await apply_default_indexers(
-        session, factory, ["nyaasi", "mikan"], login=SKIPPER, sleep=_no_sleep
-    )
+    status = await set_interface_login(session, factory, SKIPPER, sleep=_no_sleep)
 
     by_step = {row.step: row.status for row in status.steps}
     assert by_step["nyaasi"] is StepStatus.OK
@@ -493,30 +497,27 @@ async def test_every_site_failing_does_not_let_the_wizard_move_on(session: Async
     await arrange(session)
     every_site = dict.fromkeys(DEFAULT_INDEXERS, "Unable to connect to indexer.")
     factory = FakeClientFactory(prowlarr=FakeProwlarrClient(rejects=every_site))
+    await set_interface_login(session, factory, SKIPPER, sleep=_no_sleep)
 
-    status = await apply_default_indexers(
-        session, factory, DEFAULT_INDEXERS, login=SKIPPER, sleep=_no_sleep
-    )
+    status = await apply_default_indexers(session, factory, DEFAULT_INDEXERS, sleep=_no_sleep)
 
     assert [row.status for row in status.steps if row.step in DEFAULT_INDEXERS] == [
         StepStatus.FAILED
     ] * len(DEFAULT_INDEXERS)
     assert [row.status for row in status.steps if row.step == PROWLARR_LOGIN_STEP] == [
-        StepStatus.OK
+        StepStatus.SKIPPED
     ]
     assert (await read_status(session)).current_step == STEP_INDEXER
 
 
 @pytest.mark.asyncio
-async def test_berth_never_adds_sites_to_an_existing_indexer(session: AsyncSession) -> None:
-    """既有服務只做檢查（brief §16.4 的紅線）。UI 不給這顆按鈕，直接打 API 的也要被擋。"""
+async def test_berth_never_sets_the_login_of_an_existing_indexer(session: AsyncSession) -> None:
+    """既有 Prowlarr 的介面登入是使用者自己的（brief §16.4 的紅線）。加站可以（M4 票 20，
+    `test_setup_existing_prowlarr.py`），登入不行：UI 不給那一格，直接打 API 的也要被擋。"""
     await arrange(session, origin=ServiceOrigin.EXISTING)
     client = FakeProwlarrClient(base_url="http://nas:9696")
 
     factory = FakeClientFactory(prowlarr=client)
-    with pytest.raises(ValueError, match="existing service"):
-        await apply_default_indexers(session, factory, ["nyaasi"])
-    # 泊位上沒有介面登入那一格（M4 票 07）；直接打 API 帶了也一個字都不送。
     with pytest.raises(ValueError, match="existing service"):
         await set_interface_login(session, factory, SKIPPER, sleep=_no_sleep)
 
@@ -555,7 +556,7 @@ class _SitesAddedMeanwhile(FakeTmdbClient):
     async def configuration(self) -> TmdbConfiguration:
         async with create_session_factory(self._engine)() as other:
             factory = FakeClientFactory()
-            await apply_default_indexers(other, factory, ["nyaasi"], login=SKIPPER, sleep=_no_sleep)
+            await apply_default_indexers(other, factory, ["nyaasi"], sleep=_no_sleep)
         return await super().configuration()
 
 
@@ -566,8 +567,9 @@ async def test_sites_being_added_do_not_erase_a_tmdb_check_made_meanwhile(
     """兩支命令都是「讀、打網路、寫回」：後寫完的那一支不准把對方剛寫的那一半蓋回去。"""
     await arrange(session)
     factory = FakeClientFactory(prowlarr=_TmdbPressedMeanwhile(engine))
+    await set_interface_login(session, factory, SKIPPER, sleep=_no_sleep)
 
-    await apply_default_indexers(session, factory, ["nyaasi"], login=SKIPPER, sleep=_no_sleep)
+    await apply_default_indexers(session, factory, ["nyaasi"], sleep=_no_sleep)
 
     assert (await read_tmdb_status(session)).verified is True
     assert (await read_status(session)).current_step == STEP_COMPLETE
@@ -579,6 +581,7 @@ async def test_a_tmdb_check_does_not_erase_sites_added_meanwhile(
 ) -> None:
     await arrange(session)
     factory = FakeClientFactory(tmdb=_SitesAddedMeanwhile(engine))
+    await set_interface_login(session, factory, SKIPPER, sleep=_no_sleep)
 
     await verify_tmdb(session, factory, api_key=TMDB_API_KEY)
 
@@ -725,9 +728,8 @@ async def test_removing_the_last_site_sends_the_wizard_back_to_the_indexers(
 ) -> None:
     await arrange(session)
     factory = FakeClientFactory()
-    added = await apply_default_indexers(
-        session, factory, ["nyaasi"], login=SKIPPER, sleep=_no_sleep
-    )
+    await set_interface_login(session, factory, SKIPPER, sleep=_no_sleep)
+    added = await apply_default_indexers(session, factory, ["nyaasi"], sleep=_no_sleep)
     assert (await read_status(session)).current_step == STEP_TMDB
     (only,) = [row.indexer_id for row in added.sites]
 
@@ -848,17 +850,6 @@ async def test_a_site_that_needs_an_account_is_neither_tested_nor_added(
 
 
 @pytest.mark.asyncio
-async def test_berth_does_not_test_sites_for_an_existing_indexer(session: AsyncSession) -> None:
-    await arrange(session, origin=ServiceOrigin.EXISTING)
-    client = FakeProwlarrClient(base_url="http://nas:9696")
-
-    with pytest.raises(ValueError, match="existing service"):
-        await verify_sites(session, FakeClientFactory(prowlarr=client), ["yts"])
-
-    assert client.tested == []
-
-
-@pytest.mark.asyncio
 async def test_what_the_last_apply_said_about_each_site_is_kept_with_a_reason(
     session: AsyncSession,
 ) -> None:
@@ -877,10 +868,11 @@ async def test_what_the_last_apply_said_about_each_site_is_kept_with_a_reason(
 
 
 @pytest.mark.asyncio
-async def test_an_existing_prowlarr_lists_its_own_sites_and_none_to_add(
+async def test_an_existing_prowlarr_lists_its_own_sites_and_the_public_ones_to_add(
     session: AsyncSession,
 ) -> None:
-    """既有 Prowlarr：列出它已有的站與站數，沒有可加的站，也沒有一站可以從 Berth 移除（票 05）。"""
+    """既有 Prowlarr：列出它已有的站，沒有一站可以從 Berth 移除（票 05）；還沒加的公開站照樣列出來
+    可以加（M4 票 20）。"""
     await arrange(session, origin=ServiceOrigin.EXISTING)
     client = FakeProwlarrClient(
         base_url="http://nas:9696",
@@ -900,7 +892,9 @@ async def test_an_existing_prowlarr_lists_its_own_sites_and_none_to_add(
         (4, "dmhy", False),
         (9, "MyTracker", False),
     ]
-    assert status.candidates == ()
+    offered = [row.definition_name for row in status.candidates]
+    assert "dmhy" not in offered
+    assert offered[0] == "nyaasi"
 
 
 @pytest.mark.asyncio

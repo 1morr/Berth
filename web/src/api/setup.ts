@@ -275,21 +275,17 @@ export const tmdbSetupQueryOptions = queryOptions({
   queryFn: () => apiGet<TmdbSetup>('/setup/tmdb'),
 })
 
-/** `login` 是泊位上填的 Prowlarr 介面登入；`null` 是登入照舊（設定頁加站）。 */
-export function applyIndexers({
-  indexers,
-  login,
-}: {
-  indexers: string[]
-  login: InterfaceLogin | null
-}): Promise<IndexerSetup> {
+/**
+ * 勾起來的站加進 Prowlarr（套件內與既有，M4 票 20）。介面登入不跟著送：套件內那一台的登入是
+ * 自己的一顆按鈕（`setIndexerLogin`）。
+ */
+export function applyIndexers(indexers: string[]): Promise<IndexerSetup> {
   return apiPost<IndexerSetup>('/setup/indexers/apply', {
     indexers,
-    login,
   } satisfies Schemas['IndexerApplyIn'])
 }
 
-/** 設定頁的「更新登入」：只換套件內 Prowlarr 的介面登入，等它重啟回來。 */
+/** 精靈與設定頁的介面登入：只換套件內 Prowlarr 的介面登入，等它重啟回來。 */
 export function setIndexerLogin(login: InterfaceLogin): Promise<IndexerSetup> {
   return apiPut<IndexerSetup>('/setup/indexers/login', login)
 }
