@@ -26,9 +26,9 @@
 ## 做什麼
 
 1. **0 站不算完成**：既有 Prowlarr 連上但沒有站 → 這一頁停在「待處理」，說出下一步：到 Prowlarr 加站（連結用瀏覽器
-   開得了的位址）後按「重新讀取」，或明確選「之後再說」（沿用現有的 skip）。**開工前問使用者**要不要另外讓 Berth
-   替既有 Prowlarr 加推薦的公開站（這是寫入使用者的服務，與「既有不改」的原則要權衡；協調者建議：可以，但要使用者在
-   畫面上按一次、清楚寫會加哪幾站，移除仍交給 Prowlarr 自己的介面）。
+   開得了的位址）後按「重新讀取」，或明確選「之後再說」（沿用現有的 skip）。**使用者 2026-09-30 拍板：可以，要按一次確認**——既有 Prowlarr 也走套件內那套「推薦站預設不勾、先測試、通過才勾、按一次
+   加入」，畫面寫清楚會加進使用者的 Prowlarr、加哪幾站；移除仍交給 Prowlarr 自己的介面（不提供移除鈕）。介面登入只屬於
+   套件內，既有模式不碰。
 2. **舊版說出版本**：`/ping` 不是 JSON 時改讀 `/api/v1/system/status`（帶 key）取版本；低於 1.3.2 → `version_unsupported`，
    「至少 1.3.2，你的是 X」。1.0–1.3 的 `system/status` 在哪種驗證下拿得到要先查證（研究檔或對 `bad-prowlarr-old` 實測），
    補進 `docs/research/prowlarr-version-floor.md`。
@@ -43,7 +43,8 @@
 - [ ] 整合測試：`/ping` 回 HTML 而 `system/status` 回 1.0.1 → `version_unsupported` 帶版本；1.3.2 → 通過
 - [ ] 整合測試：key 錯 → `auth_required`，不是 `unreachable`
 - [ ] vitest：加站按鈕在沒填介面登入時可按；介面登入是獨立按鈕；「回頭看」依來源不同
-- [ ] 使用者對「替既有 Prowlarr 加站」的決定實作並記進 progress.md「偏差與決定」
+- [ ] 既有 Prowlarr 可以測站、勾選、按一次加入（整合測試：加的只有勾選的站、不改 `config/host`；雙向：沒按就不加），
+      決定記進 progress.md「偏差與決定」
 - [ ] playwright 對 `berth-existing` 實跑：`bad-prowlarr-old`（`:59696`）說出版本；`ok-prowlarr`（`:48696`）0 站時停在待處理、
       加站或 skip 之後往下；附截圖或文字結果
 - [ ] 全部檢查（`pre-commit run --all-files`）、test、前端 e2e 綠燈
