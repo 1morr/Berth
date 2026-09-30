@@ -223,7 +223,6 @@ async def reread_libraries(
     """
     libraries = await _live_libraries(session, factory)
     await remember_libraries(session, libraries)
-    await session.commit()
     return await read_route_status(session)
 
 

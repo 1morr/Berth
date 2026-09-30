@@ -17,7 +17,7 @@ from berth.adapters.http import ServiceError
 from berth.domain import StepFailure, StepStatus
 from berth.models import SetupSettings, SetupStep, TmdbSettings
 from berth.services.clients import ServiceClientFactory
-from berth.services.settings import read_settings, update_settings, write_settings
+from berth.services.settings import read_settings, update_settings
 from berth.services.steps import StepView, failed_step, step_views
 
 #: 這一步唯一的那條纜繩，也是它打的端點。
@@ -63,10 +63,14 @@ async def verify_tmdb(
         # 不寫回：資料庫裡仍是舊的那一把與它那一條綠燈，這一次的紅燈只回給畫面。
         return TmdbSetupStatus(api_key_present=True, verified=True, steps=step_views([step]))
 
-    # 圖片基底順手存下來：它對同一把憑證是常數，而探索頁（票 03）每一張卡都要它。
-    settings.image_base_url = image_base_url or settings.image_base_url
+    def remember(latest: TmdbSettings) -> None:
+        latest.api_key = settings.api_key
+        # 圖片基底順手存下來：它對同一把憑證是常數，而探索頁（票 03）每一張卡都要它。
+        latest.image_base_url = image_base_url or latest.image_base_url
+
     # 還沒有能用的 key 時測不過也存，使用者才能改一個字再按一次（與其他連線表單同一個規矩）。
-    await write_settings(session, settings)
+    # 測試在路上時開頭讀到的那一份不整組寫回（M4 票 23）。
+    settings = await update_settings(session, TmdbSettings, remember)
 
     def record(latest: SetupSettings) -> None:
         latest.tmdb.steps = [step]

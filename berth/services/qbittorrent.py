@@ -41,11 +41,20 @@ from berth.domain import (
     StepFailure,
     StepStatus,
 )
-from berth.models import Job, PathSettings, QbittorrentSettings, Route, SetupSettings, SetupStep
+from berth.models import (
+    Job,
+    PathSettings,
+    QbittorrentSettings,
+    Route,
+    ServiceChoice,
+    SetupQbittorrent,
+    SetupSettings,
+    SetupStep,
+)
 from berth.services.clients import ServiceClientFactory
 from berth.services.commands import Effect, command
 from berth.services.jellyfin import resolve_interface_login
-from berth.services.settings import read_settings, write_settings
+from berth.services.settings import read_settings, update_settings
 from berth.services.steps import (
     InterfaceLogin,
     StepView,
@@ -235,6 +244,8 @@ async def apply_qbittorrent(
     setup = await read_settings(session, SetupSettings)
     settings = await read_settings(session, QbittorrentSettings)
     paths = await read_settings(session, PathSettings)
+    chosen = setup.choices.get(ServiceKind.QBITTORRENT)
+    before = setup.qbittorrent.model_copy()
     origin, base_url = qbittorrent_target(setup, settings)
     if origin is None:
         raise ValueError("choose where qBittorrent comes from first")
@@ -271,11 +282,20 @@ async def apply_qbittorrent(
     finally:
         await client.aclose()
 
-    setup.qbittorrent.steps = steps
-    settings.base_url = base_url
-    await write_settings(session, settings)
-    await write_settings(session, setup)
-    await session.commit()
+    after = setup.qbittorrent
+
+    def record(latest: SetupSettings) -> None:
+        if _still_chosen(latest, chosen):
+            latest.qbittorrent.steps = steps
+            _keep_login(latest, before, after)
+
+    def remember_address(latest: QbittorrentSettings) -> None:
+        latest.base_url = base_url
+
+    # 套用要好幾個來回，這段時間裡別的頁、啟動中的輪詢可能已經寫進同一組設定（M4 票 23）。
+    setup = await update_settings(session, SetupSettings, record)
+    if _still_chosen(setup, chosen):
+        settings = await update_settings(session, QbittorrentSettings, remember_address)
 
     return _status(
         setup,
@@ -300,6 +320,8 @@ async def set_interface_login(
     setup = await read_settings(session, SetupSettings)
     settings = await read_settings(session, QbittorrentSettings)
     paths = await read_settings(session, PathSettings)
+    chosen = setup.choices.get(ServiceKind.QBITTORRENT)
+    before = setup.qbittorrent.model_copy()
     origin, base_url = qbittorrent_target(setup, settings)
     _refuse_existing(origin)
     login = await resolve_interface_login(session, factory, login)
@@ -313,13 +335,18 @@ async def set_interface_login(
     finally:
         await client.aclose()
 
-    setup.qbittorrent.steps = [
-        *(row for row in setup.qbittorrent.steps if row.key != step.key),
-        step,
-    ]
-    await write_settings(session, settings)
-    await write_settings(session, setup)
-    await session.commit()
+    after = setup.qbittorrent
+
+    def record(latest: SetupSettings) -> None:
+        if not _still_chosen(latest, chosen):
+            return
+        latest.qbittorrent.steps = [
+            *(row for row in latest.qbittorrent.steps if row.key != step.key),
+            step,
+        ]
+        _keep_login(latest, before, after)
+
+    setup = await update_settings(session, SetupSettings, record)
     return _status(
         setup,
         settings,
@@ -380,6 +407,27 @@ async def _apply_password(
     record.web_ui_username = login.username
     record.web_ui_password_hash = hash_password(login.password)
     return SetupStep(key=key, status=StepStatus.OK, detail=login.username)
+
+
+def _still_chosen(latest: SetupSettings, chosen: ServiceChoice | None) -> bool:
+    """剛才連的那一台還是頁 2 現在選的。使用者在這段時間裡換了一台（另一個分頁），結果說的是原本
+    那一台，不記（M4 票 23，`setup._test_and_record` 同一條）。"""
+    current = latest.choices.get(ServiceKind.QBITTORRENT)
+    return (
+        chosen is not None and current is not None and current.is_at(chosen.origin, chosen.base_url)
+    )
+
+
+def _keep_login(latest: SetupSettings, before: SetupQbittorrent, after: SetupQbittorrent) -> None:
+    """`_apply_password` 這一次改了介面登入的紀錄才搬到重讀的那一份上（M4 票 23）。沒改的話不寫：
+    開頭讀到的那一組可能已經被別的命令換掉了。"""
+    if (after.web_ui_username, after.web_ui_password_hash) == (
+        before.web_ui_username,
+        before.web_ui_password_hash,
+    ):
+        return
+    latest.qbittorrent.web_ui_username = after.web_ui_username
+    latest.qbittorrent.web_ui_password_hash = after.web_ui_password_hash
 
 
 def _instance_username(preferences: Mapping[str, Any]) -> str:

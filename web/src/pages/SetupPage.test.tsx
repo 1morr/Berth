@@ -372,6 +372,32 @@ describe('頁 1：Jellyfin 與擁有者', () => {
     ])
   })
 
+  /** M4 票 23：別頁的服務在啟動中不跟著輪詢，它的重測只會與這一頁的命令搶同一組設定。 */
+  it('只重測畫面上等著的那一個服務', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    const waiting = { state: 'waiting', reason: 'starting', detail: '', waited_seconds: 3 } as const
+    const both = setupStatus({
+      current_step: 2,
+      owner: 'skipper',
+      services: [chosen(waiting), chosen({ ...waiting, kind: 'qbittorrent' })],
+    })
+    const fetchStub = stubApi({
+      [STATUS]: { body: both },
+      'POST /api/setup/services/qbittorrent/test': { body: both },
+    })
+
+    renderWithProviders(<SetupPage />)
+    expect(await screen.findByText('3 / 120 秒')).toBeInTheDocument()
+
+    await vi.advanceTimersByTimeAsync(3000)
+    await waitFor(() =>
+      expect(bodiesOf(fetchStub, '/api/setup/services/qbittorrent/test')).toEqual([
+        { restart: false },
+      ]),
+    )
+    expect(bodiesOf(fetchStub, '/api/setup/services/jellyfin/test')).toEqual([])
+  })
+
   it('剖面說出會做什麼，也說出密碼不存下來', async () => {
     stubApi({ [STATUS]: { body: FOUND } })
 

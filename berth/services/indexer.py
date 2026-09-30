@@ -52,7 +52,7 @@ from berth.models.types import utcnow
 from berth.services.clients import ServiceClientFactory
 from berth.services.commands import Effect, command
 from berth.services.jellyfin import resolve_interface_login
-from berth.services.settings import read_settings, update_settings, write_settings
+from berth.services.settings import read_settings, update_settings
 from berth.services.steps import (
     InterfaceLogin,
     StepView,
@@ -314,9 +314,11 @@ async def apply_default_indexers(
     finally:
         await client.aclose()
 
-    settings.kind = IndexerKind.PROWLARR.value
-    settings.base_url = base_url
-    await write_settings(session, settings)
+    def remember_address(latest: IndexerSettings) -> None:
+        latest.kind = IndexerKind.PROWLARR.value
+        latest.base_url = base_url
+
+    await update_settings(session, IndexerSettings, remember_address)
 
     def record(latest: SetupSettings) -> None:
         latest.indexer.steps = steps if bundled else [existing_prowlarr_step(sites), *steps]
@@ -345,11 +347,13 @@ async def connect_indexer(
     （Jackett）也是。
     選擇記成既有，Berth 從此不替它加站、不設它的登入（票 05）。
     """
-    settings = await read_settings(session, IndexerSettings)
-    settings.kind = kind.value
-    settings.base_url = base_url
-    settings.api_key = api_key
-    await write_settings(session, settings)
+
+    def remember(settings: IndexerSettings) -> None:
+        settings.kind = kind.value
+        settings.base_url = base_url
+        settings.api_key = api_key
+
+    await update_settings(session, IndexerSettings, remember)
 
     probe = await probe_indexer(factory, kind, base_url, api_key)
     step = probe.step if probe.sites is None else existing_prowlarr_step(probe.sites)
@@ -357,10 +361,7 @@ async def connect_indexer(
 
     def record(latest: SetupSettings) -> None:
         previous = latest.choices.get(ServiceKind.PROWLARR)
-        if previous is not None and (previous.origin, previous.base_url) != (
-            ServiceOrigin.EXISTING,
-            base_url,
-        ):
+        if previous is not None and not previous.is_at(ServiceOrigin.EXISTING, base_url):
             # 換了一台：原本那一台的介面登入紀錄說的不是它（`setup._start_over` 同一條）。
             latest.indexer.web_ui_username = ""
             latest.indexer.web_ui_password_hash = ""
@@ -393,10 +394,11 @@ async def skip_indexers(
     session: AsyncSession, factory: ServiceClientFactory, *, skipped: bool = True
 ) -> IndexerSetupStatus:
     """「之後再說」。完成頁會列出跳過了什麼、在哪裡補（plan §9.3）。"""
-    setup = await read_settings(session, SetupSettings)
-    setup.indexer.skipped = skipped
-    await write_settings(session, setup)
-    await session.commit()
+
+    def record(latest: SetupSettings) -> None:
+        latest.indexer.skipped = skipped
+
+    await update_settings(session, SetupSettings, record)
     return await read_indexer_status(session, factory)
 
 

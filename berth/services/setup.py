@@ -54,7 +54,7 @@ from berth.services.clients import BundledServices, ServiceClientFactory
 from berth.services.indexer import existing_prowlarr_step, outdated_step
 from berth.services.jellyfin import DEFAULT_STARTUP, JellyfinStartup, claim_jellyfin
 from berth.services.routes import forget_route_checks, routes_ready
-from berth.services.settings import read_settings, write_settings
+from berth.services.settings import read_settings, update_settings
 from berth.services.steps import message
 from berth.services.tmdb import tmdb_verified
 
@@ -156,9 +156,11 @@ async def complete_setup(session: AsyncSession) -> SetupStatus:
         raise ValueError("finish page 3 first: every library route has to pass its checks")
     if not tmdb_verified(setup):
         raise ValueError("finish page 5 first: TMDB needs a credential that passes its test")
-    setup.completed = True
-    await write_settings(session, setup)
-    await session.commit()
+
+    def record(latest: SetupSettings) -> None:
+        latest.completed = True
+
+    await update_settings(session, SetupSettings, record)
     return await _read(session, now=_utcnow())
 
 
@@ -221,28 +223,32 @@ async def claim_owner(
     if claim.auth is None:
         raise OwnerRejectedError(claim.refusal or OwnerRefusal.JELLYFIN_FAILED, claim.detail)
 
-    setup = await read_settings(session, SetupSettings)
-    setup.owner = SetupOwner(
-        jellyfin_user_id=claim.auth.user_id,
-        name=claim.auth.name,
-        jellyfin_server_id=claim.server_id,
-    )
-    chosen = setup.choices[ServiceKind.JELLYFIN]
-    if chosen.test is not None:
-        # 那一台現在有管理員了：測試那一條不該還說「還沒跑過初始精靈」。
-        setup.choices = {
-            **setup.choices,
-            ServiceKind.JELLYFIN: chosen.model_copy(
-                update={
-                    "test": chosen.test.model_copy(
-                        update={"reason": ConnectionReason.SETUP_COMPLETED}
-                    )
-                }
-            ),
-        }
-    await write_settings(session, setup)
-    # `open_session` 自己 commit，擁有者與它的 session 一起落地。
-    signed_in = await open_session(session, claim.auth)
+    auth = claim.auth
+
+    def record(latest: SetupSettings) -> None:
+        if owner_established(latest):
+            # 兩個人同時送頁 1：先寫進去的那一個是擁有者，後到的不蓋掉他。
+            raise OwnerRejectedError(OwnerRefusal.OWNER_EXISTS)
+        latest.owner = SetupOwner(
+            jellyfin_user_id=auth.user_id, name=auth.name, jellyfin_server_id=claim.server_id
+        )
+        chosen = latest.choices[ServiceKind.JELLYFIN]
+        if chosen.test is not None:
+            # 那一台現在有管理員了：測試那一條不該還說「還沒跑過初始精靈」。
+            latest.choices = {
+                **latest.choices,
+                ServiceKind.JELLYFIN: chosen.model_copy(
+                    update={
+                        "test": chosen.test.model_copy(
+                            update={"reason": ConnectionReason.SETUP_COMPLETED}
+                        )
+                    }
+                ),
+            }
+
+    await update_settings(session, SetupSettings, record)
+    # 擁有者先落地、session 後發：`open_session` 失敗的話擁有者已成立，從登入頁用同一組帳密進來。
+    signed_in = await open_session(session, auth)
     return ClaimedOwner(status=await _read(session, now=_utcnow()), signed_in=signed_in)
 
 
@@ -298,20 +304,27 @@ async def choose_service(
         if not base_url:
             raise ValueError("an existing service needs its address")
 
-    moved = previous is not None and (previous.origin, previous.base_url) != (origin, base_url)
-    # 同一個位址改帳密再測：上一次的結果留著，連錯的次數才接得下去（qBittorrent 數的是這台的 IP）。
-    kept = previous.test if previous is not None and not moved else None
+    moved = previous is not None and not previous.is_at(origin, base_url)
     tested: _Outcome | None = None
     if moved and previous is not None and kind is ServiceKind.JELLYFIN and owner_established(setup):
         tested = await _same_jellyfin(session, factory, setup, previous.base_url, base_url)
-    elif moved:
-        await _start_over(session, setup, kind)
+    elif moved and kind is ServiceKind.QBITTORRENT:
+        await forget_route_checks(session)
     await _remember_connection(session, kind, origin, base_url, connection, bundled)
-    setup.choices = {
-        **setup.choices,
-        kind: ServiceChoice(origin=origin, base_url=base_url, test=kept),
-    }
-    await write_settings(session, setup)
+
+    def record(latest: SetupSettings) -> None:
+        current = latest.choices.get(kind)
+        # 同一個位址改帳密再測：上一次的結果留著，連錯的次數才接得下去（qBittorrent 數的是
+        # 這台的 IP）。
+        kept = current.test if current is not None and current.is_at(origin, base_url) else None
+        if moved and tested is None:
+            _start_over(latest, kind)
+        latest.choices = {
+            **latest.choices,
+            kind: ServiceChoice(origin=origin, base_url=base_url, test=kept),
+        }
+
+    await update_settings(session, SetupSettings, record)
     return await _test_and_record(session, factory, kind, restart=True, now=moment, tested=tested)
 
 
@@ -340,26 +353,37 @@ async def _test_and_record(
     now: datetime,
     tested: _Outcome | None = None,
 ) -> SetupStatus:
-    """測一次並記下結果。`tested` 是呼叫端剛對同一個位址測過的那一次，不再敲第二次。"""
-    setup = await read_settings(session, SetupSettings)
-    choice = setup.choices[kind]
+    """測一次並記下結果。`tested` 是呼叫端剛對同一個位址測過的那一次，不再敲第二次。
+
+    **記的時候重讀、只改這個服務那一段**（M4 票 23）：一次測試短則幾秒，對暫停中的容器實測要
+    30 秒上下，而啟動中的輪詢每 3 秒一次，這段時間裡別的頁、別的分頁可能已經寫進同一組設定。
+    測的那一台已經不是現在選的（使用者換了位址），結果說的是原本那一台，不記。
+    """
+    tested_choice = (await read_settings(session, SetupSettings)).choices[kind]
     outcome = tested or await _test_connection(session, factory, kind)
-    test = _settle(outcome, choice, restart=restart, now=now)
-    setup.choices = {**setup.choices, kind: choice.model_copy(update={"test": test})}
-    if owner_established(setup) and outcome.server_id and not setup.owner.jellyfin_server_id:
-        # 票 18 之前成立的擁有者沒記 ServerId：這一次回答的那一台就是它，之後照樣擋另一台。
-        setup.owner = setup.owner.model_copy(update={"jellyfin_server_id": outcome.server_id})
-    if kind is ServiceKind.PROWLARR and choice.origin is ServiceOrigin.EXISTING:
-        # 既有 Prowlarr 這一頁是「連得上、而且有站」（M4 票 20）：它就是這一頁的結果
-        # （`_indexer_settled`）。
-        setup.indexer.steps = [_existing_indexer_step(test)]
-        setup.indexer.skipped = False
-    await write_settings(session, setup)
+
+    def record(latest: SetupSettings) -> None:
+        choice = latest.choices.get(kind)
+        if choice is None or not choice.is_at(tested_choice.origin, tested_choice.base_url):
+            return
+        test = _settle(outcome, choice, restart=restart, now=now)
+        latest.choices = {**latest.choices, kind: choice.model_copy(update={"test": test})}
+        if owner_established(latest) and outcome.server_id and not latest.owner.jellyfin_server_id:
+            # 票 18 之前成立的擁有者沒記 ServerId：這一次回答的那一台就是它，之後照樣擋另一台。
+            latest.owner = latest.owner.model_copy(update={"jellyfin_server_id": outcome.server_id})
+        if kind is ServiceKind.PROWLARR and choice.origin is ServiceOrigin.EXISTING:
+            # 既有 Prowlarr 這一頁是「連得上、而且有站」（M4 票 20）：它就是這一頁的結果
+            # （`_indexer_settled`）。
+            latest.indexer.steps = [_existing_indexer_step(test)]
+            latest.indexer.skipped = False
+
+    await update_settings(session, SetupSettings, record)
     return await _read(session, now=now)
 
 
-async def _start_over(session: AsyncSession, setup: SetupSettings, kind: ServiceKind) -> None:
-    """換了一台：那一頁的結果說的是原本那一台，清掉重做。"""
+def _start_over(setup: SetupSettings, kind: ServiceKind) -> None:
+    """換了一台：那一頁的結果說的是原本那一台，清掉重做。qBittorrent 的 Route 檢查由呼叫端作廢
+    （`routes.forget_route_checks`）：它們在 `routes` 表，不在這一組設定裡。"""
     if kind is ServiceKind.JELLYFIN:
         setup.jellyfin.steps = []
         setup.jellyfin.libraries = []
@@ -367,7 +391,6 @@ async def _start_over(session: AsyncSession, setup: SetupSettings, kind: Service
         setup.qbittorrent.steps = []
         setup.qbittorrent.web_ui_username = ""
         setup.qbittorrent.web_ui_password_hash = ""
-        await forget_route_checks(session)
     else:
         setup.indexer.steps = []
         setup.indexer.skipped = False
@@ -389,28 +412,31 @@ async def _remember_connection(
     只記雜湊、不拿來連（M4 票 15）。
     """
     if kind is ServiceKind.JELLYFIN:
-        jellyfin = await read_settings(session, JellyfinSettings)
-        jellyfin.base_url = base_url
-        await write_settings(session, jellyfin)
+
+        def remember_jellyfin(jellyfin: JellyfinSettings) -> None:
+            jellyfin.base_url = base_url
+
+        await update_settings(session, JellyfinSettings, remember_jellyfin)
     elif kind is ServiceKind.QBITTORRENT:
         existing = origin is ServiceOrigin.EXISTING
-        await write_settings(
-            session,
-            QbittorrentSettings(
-                base_url=base_url,
-                username=connection.username if existing else "",
-                password=connection.password if existing else "",
-            ),
-        )
+
+        def remember_qbittorrent(qbittorrent: QbittorrentSettings) -> None:
+            qbittorrent.base_url = base_url
+            qbittorrent.username = connection.username if existing else ""
+            qbittorrent.password = connection.password if existing else ""
+
+        await update_settings(session, QbittorrentSettings, remember_qbittorrent)
     else:
-        indexer = await read_settings(session, IndexerSettings)
-        indexer.kind = IndexerKind.PROWLARR.value
-        indexer.base_url = base_url
-        # 套件內：使用者貼的優先，否則是掛載讀到的（plan §9.2）。
-        indexer.api_key = connection.api_key or (
-            bundled.prowlarr_api_key if origin is ServiceOrigin.BUNDLED else ""
-        )
-        await write_settings(session, indexer)
+
+        def remember_prowlarr(indexer: IndexerSettings) -> None:
+            indexer.kind = IndexerKind.PROWLARR.value
+            indexer.base_url = base_url
+            # 套件內：使用者貼的優先，否則是掛載讀到的（plan §9.2）。
+            indexer.api_key = connection.api_key or (
+                bundled.prowlarr_api_key if origin is ServiceOrigin.BUNDLED else ""
+            )
+
+        await update_settings(session, IndexerSettings, remember_prowlarr)
 
 
 @dataclass(frozen=True, slots=True)
@@ -544,7 +570,8 @@ async def _same_jellyfin(
     **連不上也不存**：認不出是不是同一台，而存下去的話每個人的登入都會打到那個位址。回的是這一次
     測試，存下之後不必再敲第二次。
 
-    票 18 之前成立的擁有者沒記 ServerId：先問原本那一台是誰、記在 `setup` 上（呼叫端存），再比新的。
+    票 18 之前成立的擁有者沒記 ServerId：先問原本那一台是誰、記在 `setup` 上，再比新的。存下來的是
+    回傳的那一次測試的 ServerId（`_test_and_record`）：過得了這裡就是同一台。
     原本那一台也問不到就認不出，一樣不存——不能拿新位址自己的回答當標準。
     """
     if not setup.owner.jellyfin_server_id:

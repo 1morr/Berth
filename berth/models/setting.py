@@ -164,6 +164,10 @@ class ServiceChoice(BaseModel):
     #: 最後一次測試；還沒測過是 `None`。
     test: ServiceTest | None = None
 
+    def is_at(self, origin: ServiceOrigin, base_url: str) -> bool:
+        """還是同一台：來源與位址都沒變。變了的話，上一次的結果說的是原本那一台。"""
+        return (self.origin, self.base_url) == (origin, base_url)
+
 
 class SetupStep(BaseModel):
     """精靈裡一個步驟的最後結果（plan §9.4）。

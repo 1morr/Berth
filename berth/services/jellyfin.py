@@ -69,7 +69,7 @@ from berth.models import (
     SetupStep,
 )
 from berth.services.clients import ServiceClientFactory
-from berth.services.settings import read_settings, write_settings
+from berth.services.settings import read_settings, update_settings
 from berth.services.steps import (
     InterfaceLogin,
     StepFailedError,
@@ -241,12 +241,13 @@ async def save_bundled_libraries(
     會多建一個指向同一個資料夾的；刪了 Berth 也不會去刪 Jellyfin 的（brief §16.4 的紅線對自己
     建的也一樣）。改名與刪除要去 Jellyfin。
     """
-    setup = await read_settings(session, SetupSettings)
     paths = await read_settings(session, PathSettings)
-    built = _on_jellyfin(setup, paths.library_root)
-    setup.jellyfin.bundled = list(check_bundled_libraries(rows, built=built))
-    await write_settings(session, setup)
-    await session.commit()
+
+    def record(latest: SetupSettings) -> None:
+        built = _on_jellyfin(latest, paths.library_root)
+        latest.jellyfin.bundled = list(check_bundled_libraries(rows, built=built))
+
+    await update_settings(session, SetupSettings, record)
     return await read_jellyfin_status(session)
 
 
@@ -490,11 +491,12 @@ async def add_berth_paths(
             error="; ".join(f"{row.library}: {row.error}" for row in failed),
         ),
     )
-    setup = await read_settings(session, SetupSettings)
-    setup.jellyfin.berth_paths = results
-    await write_settings(session, setup)
+
+    def record(latest: SetupSettings) -> None:
+        latest.jellyfin.berth_paths = results
+
+    await update_settings(session, SetupSettings, record)
     await _remember(session, libraries=libraries)
-    await session.commit()
     return await read_jellyfin_status(session)
 
 
@@ -624,10 +626,13 @@ async def _run(
         await client.aclose()
 
     await _remember(session, libraries=runner.libraries)
-    jellyfin.base_url = base_url
-    jellyfin.api_key = runner.api_key or jellyfin.api_key
-    await write_settings(session, jellyfin)
-    await session.commit()
+
+    def remember(latest: JellyfinSettings) -> None:
+        latest.base_url = base_url
+        latest.api_key = runner.api_key or latest.api_key
+
+    # 九步要一分鐘上下，開頭讀到的那一份不拿來整組寫回（M4 票 23）。
+    await update_settings(session, JellyfinSettings, remember)
     return await read_jellyfin_status(session), runner
 
 
@@ -637,13 +642,14 @@ async def _record(session: AsyncSession, *steps: SetupStep) -> None:
     每一步各自 commit，前端輪詢才看得到序列走到哪裡；中途失敗時已完成的步驟也留得下來，
     重按時才跳得過它們。
     """
-    setup = await read_settings(session, SetupSettings)
-    by_key = {row.key: row for row in setup.jellyfin.steps}
-    for step in steps:
-        by_key[step.key] = step
-    setup.jellyfin.steps = [by_key[key] for key in _ordered(by_key)]
-    await write_settings(session, setup)
-    await session.commit()
+
+    def record(latest: SetupSettings) -> None:
+        by_key = {row.key: row for row in latest.jellyfin.steps}
+        for step in steps:
+            by_key[step.key] = step
+        latest.jellyfin.steps = [by_key[key] for key in _ordered(by_key)]
+
+    await update_settings(session, SetupSettings, record)
 
 
 async def _remember(
@@ -654,9 +660,8 @@ async def _remember(
 
 
 async def remember_libraries(session: AsyncSession, libraries: Sequence[JellyfinLibrary]) -> None:
-    """把 Jellyfin 現在報的媒體庫存成精靈的快照（頁 3 讀它）。不 commit。"""
-    setup = await read_settings(session, SetupSettings)
-    setup.jellyfin.libraries = [
+    """把 Jellyfin 現在報的媒體庫存成精靈的快照（頁 3 讀它），commit。"""
+    snapshot = [
         SetupLibrary(
             name=library.name,
             item_id=library.item_id,
@@ -668,7 +673,11 @@ async def remember_libraries(session: AsyncSession, libraries: Sequence[Jellyfin
         )
         for library in libraries
     ]
-    await write_settings(session, setup)
+
+    def record(latest: SetupSettings) -> None:
+        latest.jellyfin.libraries = snapshot
+
+    await update_settings(session, SetupSettings, record)
 
 
 def _ordered(by_key: dict[str, SetupStep]) -> list[str]:

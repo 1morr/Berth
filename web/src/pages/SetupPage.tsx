@@ -340,8 +340,12 @@ export function SetupPage() {
     },
   })
 
-  // 套件內那一台還在啟動：每 3 秒重測，直到有結論或後端判逾時（M3 票 06g 的三種樣子）。
-  const waitingKind = current?.services.find((row) => row.state === 'waiting')?.kind
+  // 套件內那一台還在啟動：每 3 秒重測，直到有結論或後端判逾時（M3 票 06g 的三種樣子）。只測畫面上
+  // 等著的那一個：別頁的服務不在這裡轉圈，它的重測只會與這一頁的命令搶同一組設定（M4 票 23）。
+  const shownBerth = berthOf(step)
+  const waitingKind = current?.services.find(
+    (row) => row.kind === shownBerth && row.state === 'waiting',
+  )?.kind
   // 按下之前那一次存檔被擋下來：那不是「請求沒跑完」，由清單自己說（`librariesFailure`）。
   const dockRefusal = bundledRefusalOf(dock.error)
 
