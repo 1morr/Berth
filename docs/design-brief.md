@@ -109,7 +109,7 @@
 ### 4.3 一個 Jellyfin 媒體庫有多個路徑【決定】
 
 - Library Route = （Jellyfin 媒體庫, **一個**寫入目標路徑）。
-- 媒體庫只有一個路徑時自動選定；多個路徑時建立 Route 時選一個作為寫入目標。其中有 Berth 路徑（「加入 Berth 路徑」加的那一條）時預選它——那一條本來就是為 Berth 加的（M3 票 06h）。
+- 建立 Route 時從媒體庫的路徑選一個作為寫入目標。既有 Jellyfin **預選 Berth 路徑**（「加入 Berth 路徑」加的那一條，還沒加的也是——按下「建立並檢查」時才加）：那一條本來就是為 Berth 加的，其餘路徑是使用者自己的（M3 票 06h）。**只有一個路徑時也不自動選它**（M4 票 19 推翻原本的「自動選定」）：旁邊的說明叫人別讓 Berth 寫進既有的資料夾，預設選它方向相反；要寫進去，使用者自己選。套件內的 Route 由 Berth 建的媒體庫導出，不用選。
 - 該媒體庫的其他路徑視為唯讀：用來辨識「已存在的媒體」與偵測孤兒，不寫入。
 - 同一個 Jellyfin 媒體庫可以建立多個 Route（例如兩顆碟各一個 Route），但每個 Route 有自己的 category 與 complete 子目錄，硬鏈接檢查各自獨立。
 - Route 的 slug 與寫入目標建立之後不可改；刪除是明確、要二次確認的動作，被 Job 或帳本引用時拒絕，出路是停用（票 14）。
@@ -117,7 +117,7 @@
 ### 4.4 硬鏈接能力驗證【決定】
 
 - 每個 Route 建立時與每次啟動時執行：在 `complete/<route-slug>` 建暫存檔 → 真的呼叫 `link()` 鏈接到目標路徑 → 比對 inode 與 device → 刪除。失敗即 Route 標記為不健康，拒絕送單。只比 `st_dev` 不夠（同一檔案系統掛兩次、btrfs 子卷、ZFS dataset、mergerfs 都會 `EXDEV`，§20.2），所以一定實際鏈接一次。
-- 也檢查：目標路徑對本系統可寫、qBittorrent 回報的 save path 在本系統看得到、Jellyfin 以 `Environment/ValidatePath` 確認看得到探測檔、category 為 autoTMM 模式；temp path 未啟用只警告。
+- 也檢查：目標路徑對本系統可寫、qBittorrent 回報的 save path 在本系統看得到、**反過來 qBittorrent 讀得到本系統寫進分類路徑的探測檔**（探針 torrent 校驗到 100%，M4 票 19，§20.2）、Jellyfin 以 `Environment/ValidatePath` 確認看得到探測檔、category 為 autoTMM 模式；temp path 未啟用只警告。
 - **硬鏈接失敗不退回複製**（與 Sonarr 不同）：複製會讓刪除範圍與空間估算失真，違反「避免複製檔案」的需求。
 - Docker 部署要求三個容器（qBittorrent、Jellyfin、本系統）以**相同容器路徑**掛載同一個宿主父目錄（TRaSH 的單一掛載慣例）；路徑字串可以是 `/data` 以外的任何值，套件預設 `/data`，既有服務沿用它們原本的路徑（§16.4）。第一階段不做 remote path mapping，設定精靈直接驗證「你看到的路徑 qBittorrent 與 Jellyfin 也看得到」。
 - 已知限制要寫進 README：Docker Desktop（Windows/macOS）bind mount 的硬鏈接支援與 mergerfs / 跨 dataset 情境，見 §20 的查證結果。
@@ -644,9 +644,9 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
   - Prowlarr：位址 + **API key**（Prowlarr 的「設定 → 一般 → 安全性」）；它的 API 只收 API key，帳密只給瀏覽器登入。也可以是任一 Torznab 端點 + key（Jackett）。Berth 用使用者已有的索引站，不替既有 Prowlarr 加站（M4 票 05 已擋 422）。版本下限 1.3.2（卡住它的是匿名的 `/ping`，§20.14，M4 票 17）；Torznab 端點沒有版本下限。
   - 三個服務的下限都寫在「既有」選項旁（M4 票 17），版本太舊時精靈與健康檢查說出目前版本與下限。
 - **容器裡的 `localhost`**：使用者填 `localhost` / `127.0.0.0/8` / `::1` 時，位址欄下就地提示（只提示、不擋：`network_mode: host` 的部署填 `localhost` 是對的；測試不過時的補法也是同一句，M4 票 17）：Berth 在容器裡，那指的是 Berth 自己；要填 `host.docker.internal`（Docker Desktop 內建；Linux 由 compose 的 `extra_hosts: ["host.docker.internal:host-gateway"]` 提供，且服務要監聽 `0.0.0.0` 而不是 `127.0.0.1`）或區網 IP（§20.14，M4 票 16、17）。
-- **既有 Jellyfin 不搬媒體庫**：Jellyfin 的項目 ID 由路徑算出，改路徑等於全部變成新項目、觀看紀錄歸零。做法是用 Jellyfin 的「一個媒體庫多個路徑」：Berth 按鈕以 `POST /Library/VirtualFolders/Paths` 為既有媒體庫**加**一個 Berth 用的路徑（§20.7），Route 指向新路徑；舊媒體原地不動，在 Berth 只是 unmanaged 檔案。
+- **既有 Jellyfin 不搬媒體庫**：Jellyfin 的項目 ID 由路徑算出，改路徑等於全部變成新項目、觀看紀錄歸零。做法是用 Jellyfin 的「一個媒體庫多個路徑」：Berth 按鈕以 `POST /Library/VirtualFolders/Paths` 為既有媒體庫**加**一個 Berth 用的路徑（§20.7），Route 指向新路徑；舊媒體原地不動，在 Berth 只是 unmanaged 檔案。送出前先寫探測檔問 Jellyfin 看不看得到：它對加不上的路徑只回 404，說不出原因；看不到就說「Jellyfin 看不到 <路徑>：它沒掛 <共用目錄>」、收回剛建的目錄。多個媒體庫逐個試、逐個回報（M4 票 19）。
 - **既有 qBittorrent 不搬舊種、不改全域偏好**：使用者多加一個掛載，Berth 用自己的 `berth-*` category 與新的 save path；舊 torrent 留在原目錄，Berth 忽略非自己分類的 torrent。全域的 save path、temp path、autoTMM 一個都不寫（M4 票 05；Sonarr / Radarr 對下載器同樣只用分類）——改了它們，使用者不經 Berth 加的 torrent 就會落進 Berth 的目錄。全域 autoTMM 關閉也無妨，Berth 送單時逐個 torrent 指定 `autoTMM=true`。temp path 未啟用只給警告，不阻擋。
-- **健康檢查會擋下的情況**：qBittorrent 回報的 save path 在 Berth 看不到；Jellyfin 的媒體庫路徑在 Berth 看不到；兩者在 Berth 內是不同掛載（`link()` 回 `EXDEV`）；qBittorrent 低於 4.4；Prowlarr 低於 1.3.2；Jellyfin 低於 12.0（說出目前版本，附升級注意：先完整備份、移除第三方插件、升級後完整掃描、不能降級，§20.9）；媒體庫掛 TVDB 插件（警告，M2 票 09c 起是一件 `library_uses_tvdb` Issue，§9.1）。每項附「哪個容器少了哪個掛載」的 compose 修正片段。
+- **健康檢查會擋下的情況**：qBittorrent 回報的 save path 在 Berth 看不到；qBittorrent 讀不到 Berth 寫進分類路徑的探測檔（M4 票 19）；Route 的寫入目標在 Berth 看不到（媒體庫的其他路徑不驗：Berth 只在寫入目標底下讀寫，舊的 `/movies` 看不到不礙事，M4 票 19）；兩者在 Berth 內是不同掛載（`link()` 回 `EXDEV`）；qBittorrent 低於 4.4；Prowlarr 低於 1.3.2；Jellyfin 低於 12.0（說出目前版本，附升級注意：先完整備份、移除第三方插件、升級後完整掃描、不能降級，§20.9）；媒體庫掛 TVDB 插件（警告，M2 票 09c 起是一件 `library_uses_tvdb` Issue，§9.1）。每項附「哪個容器少了哪個掛載」的 compose 修正片段，**片段對著要改的那一台**（M4 票 19）：寫入目標看不到、Jellyfin 看不到探測檔是 jellyfin；qBittorrent 讀不到探測檔是 qbittorrent；Berth 看不到 qBittorrent 報的路徑與 `EXDEV` 才是 berth。既有服務的片段是「你那一份 compose」要加的一條，照 TRaSH 用單一共用掛載，別分開掛 `/downloads`、`/movies`。
 - **跨主機驗證**：Berth 在 Route 目標寫一個探測檔，再以 `POST /Environment/ValidatePath` 請 Jellyfin 確認看得到同一路徑（§20.7）；Jellyfin 在別台機器而路徑不一致會立刻現形。
 - **不支援**：Jellyfin 10.x（2026-09-15 起只支援 12 以上，§19）；既有 qBittorrent 或 Jellyfin 與 Berth 不在同一台主機、或沒有把同一個父目錄掛在同一個容器路徑（硬鏈接做不到）；remote path mapping（不做，§18；2026-09-29 使用者再確認）。
 
@@ -913,6 +913,28 @@ M1.5 拆票前的四條待決，2026-09-15 已全數照推薦拍板（上表「M
 - **`auth/login` 在 session 還活著時直接回成功，連密碼都不看**（同一輪實測：帶著 SID 打八次錯的
   密碼全部是 `200` + `Ok.`）。所以「驗一次帳密對不對」必須從沒有 cookie 的狀態發起。
 
+**qBittorrent 看不看得到分類路徑：探針 torrent**（2026-09-30 實測 4.4.5 與 5.2.3，M4 票 19；`scripts/experiments/qbittorrent_visibility_probe.py`，一次性容器，分類路徑是一個 volume，「Berth 寫的檔」以 `docker cp` 放進去）
+
+Web API 沒有「這條路徑你看不看得到」：`app/getDirectoryContent` 5.0 才有，而且只說目錄在不在——qBittorrent 自己的檔案層裡剛好有同名空目錄也算。所以反過來證明：Berth 在分類路徑寫一個小檔，做成單檔 torrent（`private`、不掛 tracker），`torrents/add` 明送 `savepath`、`autoTMM=false`、停住，`torrents/recheck`，看校驗之後的 `progress`；之後 `torrents/delete` 帶 `deleteFiles=false`，小檔由 Berth 刪。
+
+| 情境 | 4.4.5（API 2.8.5） | 5.2.3（API 2.15.1） |
+| --- | --- | --- |
+| 檔在、停住加入、**不** recheck | `checkingResumeData` → `pausedDL`，**0%** | `checkingResumeData` → `stoppedDL`，**0%** |
+| 檔在、recheck | → `pausedUP`，100%，約 1 秒 | → `stoppedUP`，100%，約 1.4 秒 |
+| 目錄與檔都不在 | 第一次讀就是 `pausedDL` 0% | → `stoppedDL` 0% |
+| 目錄在（qBittorrent 自己的層）、檔不在 | `pausedDL` 0% | `stoppedDL` 0% |
+| 檔在、`chmod 000` root 所有 | → `checkingDL` → **`error`** | 同左 |
+| 開了全域 temp path（`download_path` 變成它） | 100%：校驗照樣找 save path 裡的檔 | 同左 |
+| 同上、加入時 `useDownloadPath=false` | 100%，`download_path` 空 | 同左 |
+
+- **停住加入不會自己校驗**，一定要 recheck。
+- **`torrents/add` 回來時它還不一定列在 `torrents/info` 裡**（2026-09-30 對 5.2.3 經 Berth 實跑：第一次讀回空陣列；一次性容器的實驗剛好沒撞上），而對還不在的 hash 送 recheck 是靜默成功——校驗沒發生，停在 0% 與看不到一模一樣。所以先等它列出、離開 `checkingResumeData`，再 recheck。
+- 看不到時 qBittorrent **不替它建目錄**，移除之後兩版都沒留下任何東西；`deleteFiles=false` 之後小檔還在。
+- `error` 是「檔在、讀不了」（權限），與看不到分得開；Berth 把它說成權限問題而不是掛載。
+- 看不到的那一面沒有一個「校驗完了」的狀態可等（4.4.5 第一次讀就已經是結論），所以 Berth 以「不在校驗或排隊中、進度不到 100%、state 3 秒不變」判看不到，整個探針最多等 20 秒（qBittorrent 預設一次只校驗一個 torrent，別的在校驗時要排隊）。
+- **校驗到 100% 會觸發「torrent 完成時執行外部程式」**（`autorun_enabled` / `autorun_program`，4.4.5 與 5.2.3 同一個實驗裡實測，每個看得到的探針各觸發一次）。所以探針只在精靈「建立並檢查」、新增 Route 與「重新檢查」時跑；**5 分鐘的健康迴圈不跑，`download_visible` 沿用上一次的結論**——每條 Route 每 5 分鐘一次，會變成使用者那邊的通知洪水。「按下之後會」說出這件事。5.x 另有「加入時執行」（`autorun_on_torrent_added_enabled`），同理只在那幾個時機觸發，沒有另外實測。
+- 探針 torrent 不掛分類、不帶 tag（tag 一建就留在使用者的清單裡；`berth` 那一個會讓 poller 把它當成 Berth 的下載），名字是 `.berth-probe-*`，停住、幾秒內就移除。
+
 **硬鏈接與 Docker**（[TRaSH Hardlinks](https://trash-guides.info/File-and-Folder-Structure/Hardlinks-and-Instant-Moves/)、[Servarr docker-guide](https://wiki.servarr.com/docker-guide)、[link(2)](https://man7.org/linux/man-pages/man2/link.2.html)）
 
 - 硬鏈接不能跨檔案系統、分割區、volume、**mount**；`link()` 即使同一個檔案系統掛兩次也會 `EXDEV`。Docker 把兩個 volume 當成兩個檔案系統，所以 `/downloads` + `/media` 分開掛一定失敗；解法是單一 `/data` 掛載。
@@ -1147,7 +1169,7 @@ M1.5 拆票前的四條待決，2026-09-15 已全數照推薦拍板（上表「M
 
 - **`POST /Auth/Keys?app=` 回 204 而且不回傳 key**，只能再 `GET /Auth/Keys` 從 `Items[].AppName` 找回來。它**不檢查重複**：同一個 `app` 按兩次就有兩把 `AppName="Berth"` 的 key。所以要先列再建、建完再列。
 - **`POST /Library/VirtualFolders` 同名不會被拒**：第二次一樣回 204，並建出名為 `Movies2` 的第二個媒體庫指向同一個路徑。冪等要靠呼叫端先 `GET /Library/VirtualFolders`。
-- **`POST /Library/VirtualFolders/Paths` 不去重**：同一條路徑送兩次，該媒體庫的 `Locations` 就有兩個一樣的字串。目錄不存在時回 **404**（`Error processing request.`），所以路徑要先由 Berth 建好——Berth 與 Jellyfin 掛同一個宿主目錄在同一個容器路徑（§16.4），建完 Jellyfin 立刻看得到。
+- **`POST /Library/VirtualFolders/Paths` 不去重**：同一條路徑送兩次，該媒體庫的 `Locations` 就有兩個一樣的字串。目錄不存在時回 **404**（`Error processing request.`），所以路徑要先由 Berth 建好——Berth 與 Jellyfin 掛同一個宿主目錄在同一個容器路徑（§16.4），建完 Jellyfin 立刻看得到。**那一句說不出原因**（2026-09-30 對 12.1 的 `bad-jellyfin-elsewhere` 再測，M4 票 19）：Jellyfin 看不到目錄與**媒體庫不存在**回的是同一個 `404` + `Error processing request.`（`text/plain`），`The path does not exist` 只在它自己的 log。所以 Berth 在送之前先寫探測檔、以 `ValidatePath {IsFile: true}` 問它。**不問目錄本身**：linuxserver 的 Jellyfin image 自己就有一個空的 `/data`，沒掛任何東西時 `ValidatePath {Path: "/data", IsFile: false}` 也是 204。
 - **`LibraryOptions.TypeOptions[]` 省略 `ImageFetchers` 會被存成空陣列**（實測送 `{Type, MetadataFetchers, MetadataFetcherOrder}` 讀回來 `ImageFetchers: []`），該類型從此不抓圖。要嘛整個 `TypeOptions` 留空用 Jellyfin 的預設，要嘛兩種 fetcher 都給值。
 - **`GET /Libraries/AvailableOptions?libraryContentType=movies|tvshows`** 回這台伺服器實際裝了哪些 fetcher（`{Name, Type}` 物件陣列），政策是 `FirstTimeSetupOrDefault`，精靈期間匿名讀得到。乾淨的 10.11.11：Movie 的 metadata 是 `TheMovieDb` / `The Open Movie Database`，image 多了 `Embedded Image Extractor` / `Screen Grabber`；tvshows 分 Series / Season / Episode 三個型別。裝了官方 TVDB 插件之後每個型別各多一個 `TheTVDB`，Series 還多 `Missing Episode Fetcher` —— 這正是「image fetcher 不可以寫死」的證據。
 - **登入 token 與 API key 在標頭裡是同一個形狀**：`Authorization: MediaBrowser Client="…", Device="…", DeviceId="…", Version="…", Token="<token 或 key>"`，兩者都吃得下 `RequiresElevation` 的端點。

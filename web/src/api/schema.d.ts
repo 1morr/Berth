@@ -1716,7 +1716,8 @@ export interface paths {
          * Post Jellyfin Library Path
          * @description 既有路徑的「加入 Berth 路徑」。舊路徑原地不動（brief §16.4）。
          *
-         *     失敗不是 4xx/5xx，而是回一條 `failed` 的 `libraries` 步驟——畫面靠它顯示原文與手動步驟。
+         *     失敗不是 4xx/5xx，而是逐個媒體庫的 `berth_paths` 加上一條 `failed` 的 `libraries` 步驟——
+         *     畫面靠它們逐個說原因。
          */
         post: operations["post_jellyfin_library_path_api_setup_jellyfin_libraries_paths_post"];
         delete?: never;
@@ -2023,6 +2024,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/setup/routes/libraries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Routes Libraries
+         * @description 頁 3 進頁時（與「重新讀取」）向 Jellyfin 重讀媒體庫（M4 票 19）。問不到是 503。
+         */
+        post: operations["post_routes_libraries_api_setup_routes_libraries_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/setup/routes/{route_id}": {
         parameters: {
             query?: never;
@@ -2235,6 +2256,29 @@ export interface components {
             next_seasons: number[];
             /** Next At */
             next_at: string | null;
+        };
+        /**
+         * BerthPathFailure
+         * @description 既有 Jellyfin 的一個媒體庫加不上 Berth 路徑（`jellyfin.add_berth_paths`，M4 票 19）。
+         *
+         *     Jellyfin 對加不上的路徑只回 404 + `Error processing request.`（brief §20.7），說不出原因；
+         *     這幾種是 Berth 自己分得出來的。
+         * @enum {string}
+         */
+        BerthPathFailure: "library_missing" | "directory" | "jellyfin_cannot_see" | "jellyfin";
+        /**
+         * BerthPathOut
+         * @description 一個媒體庫加 Berth 路徑的結果。`reason` 給畫面挑句子，`error` 是原文（M4 票 19）。
+         */
+        BerthPathOut: {
+            /** Library */
+            library: string;
+            /** Path */
+            path: string;
+            status: components["schemas"]["StepStatus"];
+            reason: components["schemas"]["BerthPathFailure"] | null;
+            /** Error */
+            error: string;
         };
         /**
          * BindReasonCode
@@ -3280,6 +3324,8 @@ export interface components {
             bundled: components["schemas"]["BundledLibraryOut"][];
             /** Library Root */
             library_root: string;
+            /** Berth Paths */
+            berth_paths: components["schemas"]["BerthPathOut"][];
         };
         /**
          * JellyfinWebOut
@@ -3655,8 +3701,8 @@ export interface components {
         };
         /** LibraryPathIn */
         LibraryPathIn: {
-            /** Library */
-            library: string;
+            /** Libraries */
+            libraries: string[];
         };
         /**
          * LibraryPathOut
@@ -9367,6 +9413,35 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_routes_libraries_api_setup_routes_libraries_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RouteSetupOut"];
+                };
+            };
+            /** @description `jellyfin_unreachable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RouteRefusalOut"];
                 };
             };
         };

@@ -13,6 +13,7 @@ from sqlalchemy import Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from berth.domain import (
+    BerthPathFailure,
     CollectionType,
     ConnectionReason,
     ConnectionState,
@@ -213,6 +214,19 @@ DEFAULT_BUNDLED_LIBRARIES: tuple[BundledLibrary, ...] = (
 )
 
 
+class BerthPathResult(BaseModel):
+    """上一次「加入 Berth 路徑」裡一個媒體庫的結果（M4 票 19）：一個一個試、一個一個回報。"""
+
+    model_config = ConfigDict(extra="ignore")
+
+    library: str
+    path: str
+    status: StepStatus
+    reason: BerthPathFailure | None = None
+    #: 服務或檔案系統回的原文（英文）。
+    error: str = ""
+
+
 class SetupJellyfin(BaseModel):
     """精靈第 3 步的狀態（plan §9.4、§9.5）。兩條路徑共用同一份形狀。
 
@@ -225,6 +239,8 @@ class SetupJellyfin(BaseModel):
 
     steps: list[SetupStep] = []
     libraries: list[SetupLibrary] = []
+    #: 上一次「加入 Berth 路徑」逐個媒體庫的結果（M4 票 19）。每按一次整份換掉。
+    berth_paths: list[BerthPathResult] = []
     #: 套件內路徑按「開始靠泊」之前使用者列的媒體庫（票 06f）。按之前就存在這裡，關掉瀏覽器
     #: 回來還在；`bootstrap_jellyfin` 讀它。既有路徑用不到它。
     bundled: list[BundledLibrary] = Field(

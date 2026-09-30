@@ -61,10 +61,11 @@ export const SERVICE_KINDS = [
   'prowlarr',
 ] as const satisfies readonly ServiceKind[]
 
-/** `RouteCheck`：一個 Route 的五條纜繩，順序即檢查順序。 */
+/** `RouteCheck`：一個 Route 的六條纜繩，順序即檢查順序。 */
 export const ROUTE_CHECKS = [
   'category',
   'download_path',
+  'download_visible',
   'library_path',
   'probe_visible',
   'hardlink',

@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import hashlib
 from collections.abc import Callable, Mapping
-from dataclasses import replace
+from dataclasses import dataclass, replace
+from pathlib import Path
 from typing import Any
 
 from berth.adapters.http import AuthFailedError
@@ -27,6 +29,15 @@ DEFAULT_PREFERENCES: Mapping[str, Any] = {
 }
 
 
+@dataclass(frozen=True, slots=True)
+class _Probe:
+    """一個還在的探針 torrent：它說它是哪個檔、放在哪裡，與校驗之後的樣子。"""
+
+    path: Path
+    payload: bytes
+    status: TorrentStatus
+
+
 class FakeQbittorrentClient:
     """偏好是**有狀態**的：套用之後再讀就是新值，重按才看得出「已經是這樣」。"""
 
@@ -44,6 +55,7 @@ class FakeQbittorrentClient:
         torrents: tuple[TorrentStatus, ...] = (),
         files: Mapping[str, tuple[TorrentFile, ...]] | None = None,
         sync_error: Exception | None = None,
+        visible_roots: tuple[str, ...] | None = None,
     ) -> None:
         self.base_url = base_url
         self._version = version or QbittorrentVersion(app="v5.2.3", webapi="2.15.1")
@@ -79,6 +91,14 @@ class FakeQbittorrentClient:
         self.restarts: list[tuple[str, str]] = []
         #: `sync()` 被呼叫過幾次。「一輪只問一次」由它守著。
         self.syncs = 0
+        #: 這一台看得到哪些路徑（字串前綴），`None` 是全部——與 Berth 共用同一個檔案系統。
+        #: 探針校驗時讀的是**真的磁碟**：檔真的在、內容對、路徑又在它看得到的範圍裡才是 100%
+        #: （Jellyfin 替身的 `visible_roots` 同一個做法，M4 票 19）。
+        self.visible_roots = visible_roots
+        #: 加過的每一個探針的檔名；`open_probes` 是還沒移除的。探針不進 `torrents`、`deleted`、
+        #: `restarts`：它不是下載，斷言那幾個欄位的測試不該看到它。
+        self.probed: list[str] = []
+        self.open_probes: dict[str, _Probe] = {}
 
     async def login(self, username: str, password: str) -> None:
         self.logins.append((username, password))
@@ -126,6 +146,33 @@ class FakeQbittorrentClient:
         self.created_categories.append(category)
         self._categories.append(category)
 
+    async def add_probe(self, name: str, payload: bytes, *, save_path: str) -> str:
+        if self.error is not None:
+            raise self.error
+        info_hash = hashlib.sha1(f"{save_path}/{name}".encode(), usedforsecurity=False).hexdigest()
+        self.probed.append(name)
+        self.open_probes[info_hash] = _Probe(
+            path=Path(save_path) / name,
+            payload=payload,
+            status=_probe_status(info_hash, name, save_path, state="stoppedDL", progress=0.0),
+        )
+        return info_hash
+
+    async def torrent(self, info_hash: str) -> TorrentStatus | None:
+        if self.error is not None:
+            raise self.error
+        if info_hash in self.open_probes:
+            return self.open_probes[info_hash].status
+        return next((row for row in self.torrents if row.hash == info_hash), None)
+
+    def _sees(self, probe: _Probe) -> bool:
+        if self.visible_roots is not None and not str(probe.path).startswith(self.visible_roots):
+            return False
+        try:
+            return probe.path.read_bytes() == probe.payload
+        except OSError:
+            return False
+
     async def add_torrent(self, request: TorrentAdd) -> None:
         """有狀態：收下的留著，測試才驗得出「重複送單沒有再送一次」。"""
         if self.add_error is not None:
@@ -141,6 +188,8 @@ class FakeQbittorrentClient:
         """
         if self.error is not None:
             raise self.error
+        if self.open_probes.pop(info_hash, None) is not None:
+            return
         self.deleted.append((info_hash, delete_files))
         self.torrents = tuple(row for row in self.torrents if row.hash != info_hash)
 
@@ -152,6 +201,19 @@ class FakeQbittorrentClient:
         """
         if self.error is not None:
             raise self.error
+        probe = self.open_probes.get(info_hash)
+        if probe is not None:
+            # 校驗一下子就完：只有一片。看得到是做種完成的樣子，看不到停在 0%（brief §20.2 實測）。
+            seen = self._sees(probe)
+            self.open_probes[info_hash] = replace(
+                probe,
+                status=replace(
+                    probe.status,
+                    state="stoppedUP" if seen else "stoppedDL",
+                    progress=1.0 if seen else 0.0,
+                ),
+            )
+            return
         self.restarts.append(("recheck", info_hash))
         self._restate(info_hash, lambda row: replace(row, state="checkingDL", progress=0.0))
 
@@ -187,3 +249,22 @@ class FakeQbittorrentClient:
 
     async def aclose(self) -> None:
         return None
+
+
+def _probe_status(
+    info_hash: str, name: str, save_path: str, *, state: str, progress: float
+) -> TorrentStatus:
+    return TorrentStatus(
+        hash=info_hash,
+        name=name,
+        state=state,
+        category="",
+        tags=(),
+        progress=progress,
+        completion_on=0,
+        last_activity=0,
+        added_on=0,
+        save_path=save_path,
+        content_path=f"{save_path}/{name}",
+        total_size=0,
+    )

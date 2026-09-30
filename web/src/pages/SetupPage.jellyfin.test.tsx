@@ -31,6 +31,7 @@ const PATHS = 'POST /api/setup/jellyfin/libraries/paths'
 const SAVE = 'PUT /api/setup/jellyfin/bundled'
 const ROUTES = 'GET /api/setup/routes'
 const BUILD = 'POST /api/setup/routes'
+const REREAD = 'POST /api/setup/routes/libraries'
 
 /** 送出去的每一份清單，依序（票 06f）。 */
 function savedLists(fetchStub: ReturnType<typeof stubApi>): unknown[] {
@@ -79,11 +80,15 @@ const ROUTES_BUILT = routeSetup({
   ready: true,
 })
 
-/** 送出去的每一個寫入請求（非 GET），依序。 */
+/**
+ * 送出去的每一個寫入請求（非 GET），依序。**頁 3 進頁的重讀不算**（M4 票 19）：它向 Jellyfin 讀、
+ * 換的是 Berth 自己的媒體庫快照，不寫任何服務——票 08 的「進頁不送寫入」說的是對服務的寫入。
+ */
 function writes(fetchStub: ReturnType<typeof stubApi>): string[] {
   return fetchStub.mock.calls
     .filter(([, init]) => (init?.method ?? 'GET') !== 'GET')
     .map(([url, init]) => `${init?.method} ${String(url)}`)
+    .filter((call) => call !== REREAD)
 }
 
 describe('頁 3：套件內 Jellyfin 的媒體庫清單與「建立並檢查」（M4 票 08）', () => {
@@ -102,7 +107,9 @@ describe('頁 3：套件內 Jellyfin 的媒體庫清單與「建立並檢查」�
     // 預設三列加上已經在 Jellyfin 上、還沒有 Route 的三個：這一輪的數字照目前的清單算。
     expect(within(preview).getByText(/在 Jellyfin 建 3 個媒體庫：Movies/)).toBeInTheDocument()
     expect(within(preview).getByText(/建或核對 6 個 berth- 分類/)).toBeInTheDocument()
-    expect(within(preview).getByText(/在 6 個寫入目標各寫一個探測檔/)).toBeInTheDocument()
+    expect(
+      within(preview).getByText(/在 6 條 Route 的分類路徑與寫入目標各寫一個探測檔/),
+    ).toBeInTheDocument()
     await quietFor(900)
     expect(writes(fetchStub)).toEqual([])
   })
@@ -654,15 +661,17 @@ describe('頁 3：既有 Jellyfin 直接是 Route', () => {
       ]),
     )
     const [addCall, buildCall] = fetchStub.mock.calls.filter(
-      ([, init]) => (init?.method ?? 'GET') !== 'GET',
+      ([url, init]) => (init?.method ?? 'GET') !== 'GET' && `POST ${String(url)}` !== REREAD,
     )
-    expect(JSON.parse(String(addCall[1]?.body))).toEqual({ library: '影集' })
+    expect(JSON.parse(String(addCall[1]?.body))).toEqual({ libraries: ['影集'] })
     expect(JSON.parse(String(buildCall[1]?.body))).toEqual({
       selections: [{ library: '影集', target_path: '/data/library/影集' }],
     })
   })
 
-  it('加路徑沒加上就停：不建 Route，說出原文與可以在 Jellyfin 手動加', async () => {
+  it('加路徑沒加上就停：不建 Route，逐個說出 Jellyfin 看不到哪條路徑、沒掛哪個目錄（票 19）', async () => {
+    const error =
+      'Jellyfin cannot see /data/library/影集: POST /Environment/ValidatePath answered 404 for a file Berth had just written there'
     const fetchStub = stubApi({
       [STATUS]: { body: NAS },
       [JELLYFIN]: { body: CONNECTED },
@@ -670,9 +679,15 @@ describe('頁 3：既有 Jellyfin 直接是 Route', () => {
       [PATHS]: {
         body: {
           ...CONNECTED,
-          steps: [
-            ...CONNECTED.steps,
-            step('libraries', 'failed', '', 'Jellyfin cannot see /data/library/影集'),
+          steps: [...CONNECTED.steps, step('libraries', 'failed', '', `影集: ${error}`)],
+          berth_paths: [
+            {
+              library: '影集',
+              path: '/data/library/影集',
+              status: 'failed',
+              reason: 'jellyfin_cannot_see',
+              error,
+            },
           ],
         },
       },
@@ -684,8 +699,15 @@ describe('頁 3：既有 Jellyfin 直接是 Route', () => {
     await user.click(screen.getByRole('radio', { name: '/data/library/影集' }))
     await user.click(screen.getByRole('button', { name: '建立並檢查' }))
 
-    expect(await screen.findByText('Jellyfin cannot see /data/library/影集')).toBeInTheDocument()
-    expect(screen.getByText(/路徑沒加上去/)).toBeInTheDocument()
+    expect(await screen.findByText(error)).toBeInTheDocument()
+    expect(screen.getByText('「影集」沒加上 Berth 路徑')).toBeInTheDocument()
+    expect(
+      screen.getByText(/Jellyfin 看不到 \/data\/library\/影集：它沒掛 \/data。/),
+    ).toBeInTheDocument()
+    expect(screen.getByText(/jellyfin:\s+volumes:/)).toBeInTheDocument()
+    // 不再叫人去 Jellyfin 手動加（同樣會失敗），也不給 Berth 連它用的位址（瀏覽器開不了）。
+    expect(screen.queryByText(/手動加/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/nas:8096/)).not.toBeInTheDocument()
     expect(writes(fetchStub)).toEqual(['POST /api/setup/jellyfin/libraries/paths'])
   })
 

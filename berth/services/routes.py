@@ -42,7 +42,13 @@ from berth.adapters.fs import (
 )
 from berth.adapters.http import ServiceError
 from berth.adapters.jellyfin import JellyfinClient, JellyfinLibrary
-from berth.adapters.qbittorrent import QbittorrentClient, ensure_category
+from berth.adapters.qbittorrent import (
+    PROBE_TIMEOUT_SECONDS,
+    ProbeSight,
+    QbittorrentClient,
+    ensure_category,
+    probe_sight,
+)
 from berth.domain import (
     CollectionType,
     HealthStatus,
@@ -70,6 +76,7 @@ from berth.services.jellyfin import (
     TVDB_MARKER,
     berth_path,
     library_slug,
+    remember_libraries,
     tvdb_fetchers,
 )
 from berth.services.qbittorrent import qbittorrent_target, sign_in, writes_preferences
@@ -204,6 +211,20 @@ async def read_route_status(session: AsyncSession) -> RouteSetupStatus:
     )
 
 
+async def reread_libraries(
+    session: AsyncSession, factory: ServiceClientFactory
+) -> RouteSetupStatus:
+    """頁 3 進頁時向 Jellyfin 重讀媒體庫，換掉頁 1 存下的快照（M4 票 19）。
+
+    使用者在頁 1 之後可能到 Jellyfin 改了掛載、路徑或媒體庫；頁 3 照快照畫的話，那些改動在
+    精靈裡看不到。問不到是 `jellyfin_unreachable`，快照原封不動。
+    """
+    libraries = await _live_libraries(session, factory)
+    await remember_libraries(session, libraries)
+    await session.commit()
+    return await read_route_status(session)
+
+
 async def routes_health(session: AsyncSession) -> HealthStatus:
     """健康頁四項裡的第四項：**啟用中**的 Route 的總結（票 10、票 14）。
 
@@ -283,13 +304,17 @@ async def build_routes(
 
 
 async def check_routes(
-    session: AsyncSession, factory: ServiceClientFactory
+    session: AsyncSession, factory: ServiceClientFactory, *, probe_qbittorrent: bool = True
 ) -> tuple[RouteView, ...]:
-    """重跑每個既有 Route 的五項檢查（票 10 的第四項健康檢查）。
+    """重跑每個既有 Route 的檢查（票 10 的第四項健康檢查）。
 
     與精靈第 5 步跑的是**同一組檢查、寫的是同一個欄位**（plan §9.5）：起點不同而已——那裡
     的起點是使用者的勾選，這裡是 `routes` 表現有的列。所以「精靈當時是綠的、現在紅了」
     在畫面上是同一種東西。
+
+    `probe_qbittorrent=False`（5 分鐘的健康迴圈）時 `download_visible` 沿用上一次的結果：探針
+    校驗到 100% 會觸發 qBittorrent 的「完成時執行外部程式」（brief §20.2 實測，M4 票 19），
+    每 5 分鐘每條 Route 一次會變成使用者那邊的通知洪水。建立、精靈與「重新檢查」照樣真的問。
     """
     routes = list((await _existing_routes(session)).values())
     if not routes:
@@ -297,7 +322,7 @@ async def check_routes(
     paths = await read_settings(session, PathSettings)
     planned = tuple(_planned_from(route, paths) for route in routes)
 
-    await _run_checks(session, factory, planned, routes)
+    await _run_checks(session, factory, planned, routes, probe_qbittorrent=probe_qbittorrent)
     return (await read_route_status(session)).routes
 
 
@@ -653,6 +678,8 @@ async def _run_checks(
     factory: ServiceClientFactory,
     planned: Sequence[_Planned],
     routes: Sequence[Route],
+    *,
+    probe_qbittorrent: bool = True,
 ) -> None:
     """逐個 Route 跑檢查並把結果寫回那一列。呼叫端負責它們的順序一致。"""
     moment = utcnow()
@@ -666,7 +693,10 @@ async def _run_checks(
         await sign_in(qbittorrent, qbittorrent_settings)
         for plan_row, route in zip(planned, routes, strict=True):
             previous = RouteHealth.model_validate(route.health_detail_json or {})
-            health = await _check(plan_row, route, qbittorrent, qbittorrent_origin, jellyfin)
+            carried = None if probe_qbittorrent else _last_probe(previous)
+            health = await _check(
+                plan_row, qbittorrent, qbittorrent_origin, jellyfin, carried=carried
+            )
             passed = all(row.status is not StepStatus.FAILED for row in health.checks)
             health.checked_at = moment
             # 沒過就留住上一次成功的時間，別讓它看起來從來沒通過（brief §16.2）。
@@ -831,18 +861,26 @@ async def _existing_routes(session: AsyncSession) -> dict[str, Route]:
 
 async def _check(
     plan_row: _Planned,
-    route: Route,
     qbittorrent: QbittorrentClient,
     qbittorrent_origin: ServiceOrigin | None,
     jellyfin: JellyfinClient,
+    *,
+    carried: SetupStep | None,
 ) -> RouteHealth:
-    """跑完一個 Route 的檢查序列。第一條斷掉之後的檢查一律 `pending`。"""
+    """跑完一個 Route 的檢查序列。第一條斷掉之後的檢查一律 `pending`。
+
+    `carried` 不是 `None` 時，`download_visible` 不問 qBittorrent、用它（`check_routes`）。
+    """
     checker = _Checker(plan_row, qbittorrent, qbittorrent_origin, jellyfin)
     checks: list[SetupStep] = []
     stopped = False
     for check in RouteCheck:
         if stopped:
             checks.append(SetupStep(key=check.value, status=StepStatus.PENDING))
+            continue
+        if check is RouteCheck.DOWNLOAD_VISIBLE and carried is not None:
+            checks.append(carried)
+            stopped = carried.status is StepStatus.FAILED
             continue
         result = await checker.run(check)
         checks.append(result)
@@ -919,11 +957,32 @@ class _Checker:
         _visible(category_path)
         return StepStatus.OK, f"{global_path} · {category_path}"
 
-    async def _library_path(self) -> tuple[StepStatus, str]:
-        """檢查二：**向 Jellyfin 現查**媒體庫路徑，逐一確認 Berth 看得到（plan §9.5）。
+    async def _download_visible(self) -> tuple[StepStatus, str]:
+        """反過來問：Berth 寫進分類路徑的檔，qBittorrent 那一台讀得到嗎（M4 票 19，brief §20.2）。
 
-        不吃第 3 步存下來的快照：使用者可能在那之後於 Jellyfin 改了路徑或刪了媒體庫，而這一步
-        要證明的正是「現在這台 Jellyfin 說的路徑，Berth 看得到」。
+        上一條只證明 Berth 看得到 qBittorrent 報的字串，而那個目錄是 Berth 自己在第一條建的——
+        既有 qBittorrent 只掛 `/downloads` 時它照樣在，下載卻會寫進 qBittorrent 自己的檔案層，
+        要到入庫才出事。所以寫一個探測檔、做成 torrent 請它校驗：100% 就是同一個目錄。
+        """
+        save_path = self._reported_save_path or self._plan.save_path
+        directory = Path(save_path)
+        with probe_file(directory, roots=[directory]) as probe:
+            sight = await probe_sight(
+                self._qbittorrent,
+                name=probe.name,
+                payload=probe.read_bytes(),
+                save_path=save_path,
+            )
+        if sight is not ProbeSight.SEEN:
+            raise _CheckFailedError(_SIGHT_FAILURE[sight].format(path=save_path))
+        return StepStatus.OK, save_path
+
+    async def _library_path(self) -> tuple[StepStatus, str]:
+        """**向 Jellyfin 現查**：寫入目標仍是媒體庫的路徑之一，而且 Berth 看得到（plan §9.5）。
+
+        不吃第 3 步存下來的快照：使用者可能在那之後於 Jellyfin 改了路徑或刪了媒體庫。**只驗寫入
+        目標**（M4 票 19）：Berth 只在它底下讀寫檔案，媒體庫的其他路徑經 Jellyfin 的 API 讀，所以
+        舊路徑原地不動、另加一條 Berth 路徑（brief §16.4）時，舊的 `/movies` Berth 看不到並不礙事。
         """
         libraries = await self._jellyfin.libraries()
         library = next((row for row in libraries if _is_library(row, self._plan)), None)
@@ -931,11 +990,14 @@ class _Checker:
             raise _CheckFailedError(
                 f"Jellyfin no longer has a library named {self._plan.library_name!r}"
             )
-        if not library.locations:
-            raise _CheckFailedError(f"{library.name!r} has no path on Jellyfin")
-        for location in library.locations:
-            _visible(location)
-        return StepStatus.OK, " · ".join(library.locations)
+        target = self._plan.target_path
+        if _normalise_path(target) not in {_normalise_path(path) for path in library.locations}:
+            raise _CheckFailedError(
+                f"Jellyfin no longer lists {target} as a path of {library.name!r} "
+                f"(it has {', '.join(library.locations) or 'none'})"
+            )
+        _visible(target)
+        return StepStatus.OK, target
 
     async def _probe_visible(self) -> tuple[StepStatus, str]:
         """檢查三前半：Berth 寫進 Route 目標的檔案，Jellyfin 那台也看得到（brief §16.4）。
@@ -966,6 +1028,13 @@ class _Checker:
         return StepStatus.OK, f"dev={facts.device} · inode={facts.inode} · free={free}"
 
 
+def _last_probe(previous: RouteHealth) -> SetupStep:
+    """上一次 `download_visible` 的結果；從來沒問過（票 19 之前建的 Route）是 `pending`。"""
+    key = RouteCheck.DOWNLOAD_VISIBLE.value
+    last = next((row for row in previous.checks if row.key == key), None)
+    return last if last is not None else SetupStep(key=key, status=StepStatus.PENDING)
+
+
 def _library_key(item_id: str, name: str) -> str:
     """認一個 Jellyfin 媒體庫：`ItemId`，沒有才用名字（票 09 之前存下的設定沒有 id）。
 
@@ -980,6 +1049,11 @@ def _is_library(library: JellyfinLibrary, plan_row: _Planned) -> bool:
     if plan_row.library_item_id:
         return library.item_id == plan_row.library_item_id
     return library.name == plan_row.library_name
+
+
+def _normalise_path(path: str) -> str:
+    """結尾斜線不算差別：Jellyfin 回報的與 Route 存下的是同一串字，但使用者可能在那邊重打過。"""
+    return path.rstrip("/") or "/"
 
 
 def _visible(path: str) -> None:
@@ -1005,9 +1079,26 @@ class _CheckFailedError(OSError):
     """
 
 
+#: 探針沒看到時的原文。畫面的補法照 `RouteCheck` 挑，這裡要說清楚的是「哪一台、哪條路徑」。
+_SIGHT_FAILURE = {
+    ProbeSight.UNSEEN: (
+        "qBittorrent cannot see {path}: it checked the file Berth had just written there "
+        "and found none of it (0% after a recheck)"
+    ),
+    ProbeSight.UNREADABLE: (
+        "qBittorrent found the file Berth wrote in {path} but could not read it "
+        "(the probe torrent went to error); check the permissions on that directory"
+    ),
+    ProbeSight.UNSETTLED: (
+        "qBittorrent did not finish checking the file Berth wrote in {path} within "
+        f"{PROBE_TIMEOUT_SECONDS:.0f} s; it may be busy checking other torrents, check again later"
+    ),
+}
+
 _CHECKS: dict[RouteCheck, Callable[[_Checker], Awaitable[tuple[StepStatus, str]]]] = {
     RouteCheck.CATEGORY: _Checker._category,
     RouteCheck.DOWNLOAD_PATH: _Checker._download_path,
+    RouteCheck.DOWNLOAD_VISIBLE: _Checker._download_visible,
     RouteCheck.LIBRARY_PATH: _Checker._library_path,
     RouteCheck.PROBE_VISIBLE: _Checker._probe_visible,
     RouteCheck.HARDLINK: _Checker._hardlink,
@@ -1088,19 +1179,10 @@ def _library_choice(library: SetupLibrary, library_root: str, route: Route | Non
         uses_tvdb=any(TVDB_MARKER in name.lower() for name in library.metadata_fetchers),
         supported=library.collection_type in SUPPORTED_TYPES,
         has_route=route is not None,
-        target_path=route.target_path if route is not None else _default_target(library, path),
+        # 還沒選過的預選 Berth 路徑，加過沒加過都是（M4 票 19）：其餘路徑是使用者自己的，
+        # 旁邊的說明也叫人別讓 Berth 寫進既有的資料夾。要寫進去，使用者自己選。
+        target_path=route.target_path if route is not None else path,
     )
-
-
-def _default_target(library: SetupLibrary, berth: str) -> str:
-    """還沒選過的媒體庫預選哪一條。
-
-    加過 Berth 路徑的就是它：那一條本來就是為 Berth 加的，其餘路徑是使用者自己的（票 06h）。
-    否則只有一條就是它（brief §4.3「自動選定」），多條留給使用者選。
-    """
-    if berth in library.locations:
-        return berth
-    return library.locations[0] if len(library.locations) == 1 else ""
 
 
 def _ready(health: Sequence[HealthStatus]) -> bool:

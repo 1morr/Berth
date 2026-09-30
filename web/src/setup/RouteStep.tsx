@@ -11,12 +11,13 @@ import {
 } from '../api/setup'
 import { STICKY_ACTION, Checkbox, GhostButton, Notice, PrimaryButton } from '../components/controls'
 import { Cutaway, CutawayRow } from '../components/Cutaway'
-import { RouteCheckList, type ExistingServices } from '../components/RouteCheckList'
+import { RouteCheckList } from '../components/RouteCheckList'
+import { type ExistingServices } from '../components/routeChecks'
 import { RouteDelete } from '../components/RouteDelete'
 import { RouteRow } from '../components/RouteRow'
 import { StepLine } from '../components/StepLine'
 import { BundledLibraries } from './BundledLibraries'
-import { AddPathFailure } from './JellyfinExisting'
+import { AddPathFailures } from './JellyfinExisting'
 import { STEP_ENDPOINT, STEP_FIX, STEP_LABEL, librariesFailed, manualSteps } from './jellyfinSteps'
 import { pathUnder } from './libraryRules'
 import { StepFrame } from './StepFrame'
@@ -73,6 +74,8 @@ interface Common {
   onDock: (plan: DockPlan) => void
   /** 一條 Route 被明確地刪掉了（票 14）：這一步的清單要重讀。 */
   onRouteDeleted: () => void
+  /** 既有 Jellyfin：進頁時向它重讀媒體庫（M4 票 19）。重讀中、讀不到時說出來。 */
+  reread: { pending: boolean; failed: boolean; onReread: () => void }
   /** 回頭看的說明（`RevisitNote`），這一頁做完了才有。 */
   note?: ReactNode
   /** 上一個 / 下一個泊位（`BerthNav`）。 */
@@ -285,7 +288,7 @@ function ExistingRoutes({ jellyfin, ...common }: Common & { jellyfin: JellyfinSe
     library: library.name,
     target_path: pickOf(library).target,
   }))
-  const broke = librariesFailed(jellyfin)
+  const { reread } = common
 
   return (
     <RoutePage
@@ -313,6 +316,13 @@ function ExistingRoutes({ jellyfin, ...common }: Common & { jellyfin: JellyfinSe
         })
       }
     >
+      {/* 頁 1 之後在 Jellyfin 改的掛載與路徑要看得到（M4 票 19）：進頁就重讀一次，也可以再按。 */}
+      <div className="mt-6 flex flex-wrap items-center gap-x-4 gap-y-2">
+        <GhostButton type="button" busy={reread.pending} onClick={reread.onReread}>
+          {reread.pending ? t('routes.rereading') : t('routes.reread')}
+        </GhostButton>
+        {reread.failed && <p className="text-xs text-blocked-ink">{t('routes.rereadFailed')}</p>}
+      </div>
       {setup.libraries.length === 0 ? (
         <div className="mt-6">
           {/* Berth 不替既有伺服器建媒體庫（brief §16.4 的紅線），所以這裡沒有動作。 */}
@@ -328,8 +338,14 @@ function ExistingRoutes({ jellyfin, ...common }: Common & { jellyfin: JellyfinSe
           onChange={change}
         />
       )}
-      {/* 加路徑沒加上：原文與怎麼改掛載（plan §9.5）。建 Route 那一段沒有送出。 */}
-      {broke && <AddPathFailure step={broke} baseUrl={jellyfin.base_url} />}
+      {/* 加路徑沒加上的那幾個，一個一條：原因與怎麼改掛載（plan §9.5、票 19）。建 Route 那一段沒有送出。 */}
+      {/* 只說還選著「新的 Berth 路徑」的那幾個：改選既有資料夾之後，上一次的失敗已經不是這一輪的事。 */}
+      <AddPathFailures
+        results={jellyfin.berth_paths.filter((row) =>
+          newPaths.some((library) => library.name === row.library),
+        )}
+        root={common.existing.root}
+      />
     </RoutePage>
   )
 }

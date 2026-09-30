@@ -24,6 +24,7 @@ from berth.models.rss import DEFAULT_INTERVAL_SEC, RssFeed, RssItem, RssSeries
 from berth.models.setting import (
     DEFAULT_BUNDLED_LIBRARIES,
     SETTINGS_GROUPS,
+    BerthPathResult,
     BundledLibrary,
     DiskSettings,
     HealthSettings,
@@ -56,6 +57,7 @@ __all__ = [
     "HARDLINK",
     "SETTINGS_GROUPS",
     "Base",
+    "BerthPathResult",
     "BundledLibrary",
     "DiskSettings",
     "Event",

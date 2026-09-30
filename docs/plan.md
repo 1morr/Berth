@@ -704,7 +704,9 @@ WebUI\AuthSubnetWhitelist=172.28.0.2/32
 - 要的是位址 + **管理員**帳密（Berth 以它登入、自己建 API key，§9.4 第 7 步）；不是管理員就拒絕（票 06）。
 - 不搬媒體庫：Jellyfin 的項目 ID 由路徑導出，改路徑等於觀看紀錄歸零。
 - 「加入 Berth 路徑」按鈕：對選定媒體庫呼叫 `POST /Library/VirtualFolders/Paths?refreshLibrary=false`，body `{Name: <library>, Path: <library_root>/<slug>, PathInfo: {Path: …}}`；Route 指向這個新路徑，舊路徑只讀（辨識已存在媒體與 unmanaged 檔案）。**送出前兩件事要先擋掉**：目錄不存在會回 404（所以 Berth 先建），同一條路徑送兩次會讓媒體庫出現兩個一樣的 location（所以先看 `Locations`）。兩者都是 2026-09-07 實測（brief §20.7）。
-- 使用者也可以不加路徑，直接在既有路徑中選一個當寫入目標；兩種都跑同樣的檢查。
+- 使用者也可以不加路徑，直接在既有路徑中選一個當寫入目標；兩種都跑同樣的檢查。**預選的是 Berth 路徑**，只有一條既有路徑時也是（M4 票 19）。
+- **加路徑之前先問 Jellyfin 看不看得到**（M4 票 19）：它對加不上的路徑只回 404 `Error processing request.`，媒體庫不存在也是同一句（brief §20.7）。Berth 建目錄、寫探測檔、`ValidatePath {IsFile: true}`；看不到就是 `BerthPathFailure.jellyfin_cannot_see`，不送那一支、收回剛建的目錄（`fs.missing_directories` / `remove_empty_directories`，只收自己建的那幾層）。一次送好幾個媒體庫（`{libraries: [...]}`），逐個試、逐個記在 `setup.jellyfin.berth_paths`；有一個沒加上，`libraries` 那一步就紅，精靈不建 Route。
+- **頁 3 進頁時重讀媒體庫**（`POST /setup/routes/libraries`，另有一顆「重新讀取」，M4 票 19）：頁 1 之後在 Jellyfin 改的掛載與路徑要看得到。它只讀 Jellyfin、換 Berth 自己的快照，不寫任何服務，所以不算票 08「進頁不送寫入」的例外。
 - 絕不自動建立媒體庫、安裝插件或改既有媒體庫的 `LibraryOptions`。**adapter 的介面上根本沒有插件那幾支**（票 14b），所以「安裝插件」與「重啟」在這一層就做不到。
 - 版本低於 12.0 的既有 Jellyfin 接不進來（brief §16.4）：Jellyfin 頁紅燈、健康檢查紅燈，訊息說出目前版本與升級前後要做的事。
 
@@ -722,14 +724,15 @@ WebUI\AuthSubnetWhitelist=172.28.0.2/32
 - 用使用者已有的索引站，Berth 不替它加站、不移除它的站、不設它的登入（票 05，422）。
 - **版本下限 1.3.2**（brief §20.14：卡住它的是匿名的 `GET /ping`，其餘端點從 0.1 就有）。版本讀 `GET /api/v1/system/status` 的 `version`（`ProwlarrStatus.supported`，形狀照 Jellyfin 的 `public_info().supported`）。`indexer.probe_indexer`（頁 4 的既有表單與健康檢查共用）與 `setup._test_connection`（服務頁的二選一與「重新測試」）在 `/ping` 之後問它，太舊寫 `indexer.outdated_step`：細節是它的版本、原文是 `prowlarr.unsupported_message`，理由 `ConnectionReason.VERSION_UNSUPPORTED`（不等，套件內也當場紅）。Torznab 端點不在此列。
 
-**檢查與訊息**（精靈的媒體庫與路徑頁與 `health_checker` 共用）。一個 Route 五條纜繩，前一條失敗就不跑下一條——後面的檢查測的會是錯的路徑。`RouteCheck` 是它們的封閉值集合，結果逐條存進 `routes.health_detail_json`。
+**檢查與訊息**（精靈的媒體庫與路徑頁與 `health_checker` 共用）。一個 Route 六條纜繩，前一條失敗就不跑下一條——後面的檢查測的會是錯的路徑。`RouteCheck` 是它們的封閉值集合，結果逐條存進 `routes.health_detail_json`。
 
 1. `category`：`torrents/createCategory` 建 `berth-<slug>`（save path 為 `<complete root>/<slug>`）。已存在且路徑相同就跳過；路徑不同 → 回報衝突且**不覆寫**（改 category 路徑會搬走該分類所有 torrent，brief §20.2）。
 2. `download_path`：**qBittorrent 回報的**這個 category 的路徑（第 1 步的 `torrents/categories`）`stat` 得到；套件內那一台另外讀全域 `save_path`（`app/preferences`）一起 `stat`——它在 qBittorrent 頁被設成 Berth 的 complete 根目錄。`stat` 的必須是服務報出來的字串——拿 Berth 自己算出來、而且剛剛才建好的目錄去 `stat` 一定會過，等於沒檢查。**既有的那一台不看全域**（M4 票 05）：那是使用者自己的預設路徑，Berth 不寫它、送單也不落在那裡。
-3. `library_path`：**向 Jellyfin 現查**這個 Route 的媒體庫，它回報的每一條路徑逐一 `stat`。不吃存下來的快照——使用者可能在那之後改了路徑或刪了媒體庫。
-4. `probe_visible`：在 Route 目標寫探測檔，`POST /Environment/ValidatePath` `{Path, IsFile: true}` 請 Jellyfin 確認看得到同一條路徑（看得到 204、看不到 404），問完就刪。
-5. `hardlink`：在 `<complete root>/<slug>` 建暫存檔並 `link()` 到 Route 目標，確認同 device、同 inode，之後兩邊都清乾淨（`fs.link_test`）。
-6. 任一步失敗 → 精靈與健康頁指出「哪個容器少了哪個掛載」，附該容器的 compose `volumes:` 修正片段；`EXDEV` 另附「兩個目錄在 Berth 內是不同掛載」的說明。**精靈頁 3 另對既有服務說怎麼改掛載**（票 08，`RouteCheckList` 的 `existing`）：`download_path`（既有 qBittorrent）與 `library_path`（既有 Jellyfin）說同一台主機、同一個父目錄掛在同一個容器路徑、不做 remote path mapping；`probe_visible`（既有 Jellyfin）說它多半在另一台主機或掛在別的容器路徑；`hardlink` 的 `EXDEV`（任一既有）說下載與媒體庫分開掛（`/downloads`、`/tv`）要改成一條共同父目錄。compose 片段照舊附上（它是套件內那一份）。健康頁與設定頁讀不到來源，不說這一句。
+3. `download_visible`：**反過來問**（M4 票 19）：Berth 在 qBittorrent 報的分類路徑寫探測檔，做成探針 torrent 請它校驗（`qbittorrent.probe_sight`，brief §20.2），100% 才過。第 2 條只證明 Berth 看得到那個字串，而那個目錄是 Berth 自己在第 1 條建的——既有 qBittorrent 只掛 `/downloads` 時它照樣在。讀到 `error` 是權限，逾時是它忙著校驗別的，理由各自說。**`health_checker` 不跑這一條、沿用上一次的結論**（`check_routes(probe_qbittorrent=False)`）：校驗到 100% 會觸發 qBittorrent 的「完成時執行外部程式」（brief §20.2 實測）；精靈、新增 Route、「重新檢查」照樣真的問。
+4. `library_path`：**向 Jellyfin 現查**這個 Route 的寫入目標仍是媒體庫的路徑之一，而且 Berth `stat` 得到。不吃存下來的快照——使用者可能在那之後改了路徑或刪了媒體庫。**只驗寫入目標，不驗媒體庫的其他路徑**（M4 票 19 定案）：Berth 只在寫入目標底下讀寫（`services/reconcile.py` 走的是 Route 的目標，媒體庫的作品經 Jellyfin 的 API 讀），「舊路徑不動、加一條 Berth 路徑」時舊的 `/movies` Berth 看不到並不礙事。
+5. `probe_visible`：在 Route 目標寫探測檔，`POST /Environment/ValidatePath` `{Path, IsFile: true}` 請 Jellyfin 確認看得到同一條路徑（看得到 204、看不到 404），問完就刪。
+6. `hardlink`：在 `<complete root>/<slug>` 建暫存檔並 `link()` 到 Route 目標，確認同 device、同 inode，之後兩邊都清乾淨（`fs.link_test`）。
+7. 任一步失敗 → 精靈與健康頁指出「哪個容器少了哪個掛載」，附**要改的那一台**的 compose `volumes:` 修正片段（`routeChecks.remedyFor`，M4 票 19）：`download_path` 與 `hardlink` 的 `EXDEV` 是 berth；`download_visible` 是 qbittorrent；`library_path` 與 `probe_visible` 是 jellyfin（Berth 早就掛著共用目錄，叫人改 berth 是白改）；不是 `EXDEV` 的硬鏈接失敗不附片段。`EXDEV` 另附「兩個目錄在 Berth 內是不同掛載」的說明。**精靈頁 3 對既有服務給那一台自己的版本**（票 08、19，`RouteCheckList` 的 `existing`）：片段是「你那一份 compose」要加的一條（`${DATA_ROOT}` 換成 berth 那一份的值、容器路徑是 Berth 的 `complete_root` 與 `library_root` 的共同父目錄），說明照 TRaSH 用單一共用掛載、別分開掛 `/downloads`、`/movies`、不做 remote path mapping；`download_path`（既有 qBittorrent）另說同一個字串的條件，`hardlink` 的 `EXDEV`（任一既有）另說下載與媒體庫分開掛要改成一條共同父目錄。健康頁與設定頁讀不到來源，給套件內那一份。
 
 **不支援**：既有 qBittorrent 或 Jellyfin 與 Berth 不在同一台主機、或沒有把同一個父目錄掛在同一個容器路徑；remote path mapping。
 

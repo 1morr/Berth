@@ -363,6 +363,7 @@ ACCESS: dict[tuple[str, str], Access] = {
     ("GET", "/setup/qbittorrent/diff"): Access.SETUP,
     ("GET", "/setup/routes"): Access.SETUP,
     ("POST", "/setup/routes"): Access.SETUP,
+    ("POST", "/setup/routes/libraries"): Access.SETUP,
     ("DELETE", "/setup/routes/*"): Access.SETUP,
     # `*` 是 `ServiceKind`。`jellyfin` 那一個是開場（`SETUP_OPENING_PATHS` 比的是具體路徑），
     # 兩邊的門在 `test_setup_api.py::TestGate` 各有一條。

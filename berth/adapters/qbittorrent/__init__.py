@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import asyncio
+import time
 from collections.abc import Mapping
 from dataclasses import dataclass
+from enum import StrEnum
 from typing import Any, Protocol
 
 from berth.adapters.http import AuthFailedError, ServiceError
@@ -354,6 +357,17 @@ class QbittorrentClient(Protocol):
         """
         ...
 
+    async def add_probe(self, name: str, payload: bytes, *, save_path: str) -> str:
+        """把 `save_path/name` 那個探測檔做成 torrent、**停住**加進去，回它的 info hash。
+
+        不掛分類、不帶 tag、`autoTMM=false`：它不是 Berth 的下載，poller 不該看到它（M4 票 19）。
+        """
+        ...
+
+    async def torrent(self, info_hash: str) -> TorrentStatus | None:
+        """`torrents/info?hashes=…` 的那一列；沒有就是 `None`。不動 `sync` 的 rid。"""
+        ...
+
     async def create_category(self, name: str, save_path: str) -> None:
         """`torrents/createCategory`。同名的已經存在時回 409（實測原始碼的
         `Unable to create category`），所以呼叫端要先讀再建——`ensure_category` 做這件事。
@@ -396,6 +410,95 @@ async def ensure_category(client: QbittorrentClient, name: str, save_path: str) 
     )
 
 
+class ProbeSight(StrEnum):
+    """qBittorrent 校驗探針之後的答案（`probe_sight`，brief §20.2 對 4.4.5 與 5.2.3 實測）。"""
+
+    #: 100%：它讀到的就是 Berth 寫的那個檔，兩邊是同一個目錄。
+    SEEN = "seen"
+    #: 0% 而且停在那裡：它那邊的這條路徑底下沒有那個檔（沒掛、或掛在別處）。
+    UNSEEN = "unseen"
+    #: `error`：檔在，它讀不了（實測 `chmod 000` 兩版都是這樣）。是權限，不是掛載。
+    UNREADABLE = "unreadable"
+    #: 期限內一直在校驗或排隊：它可能正忙著校驗別的 torrent，說不出答案。
+    UNSETTLED = "unsettled"
+
+
+#: 校驗中、排隊中的 state 前綴。這時候的 progress 還不是答案。
+_PROBE_PENDING = (*SETTLING_STATES, "queued", "allocating", METADATA_PENDING_STATE)
+
+#: 不在校驗裡、進度又不到 100% 的 state 要穩定多久才算「看不到」。實測送出 recheck 之後
+#: 4.4.5 第一次讀就已經是結論（`pausedDL`），所以這一段是給 libtorrent 接手校驗的時間，
+#: 不是等校驗本身——看得到的那一面一讀到 100% 就回，不付這一段。實測接手不到一秒，留 3 秒
+#: 給忙碌的那一台（code-review）；多付的只有看不到的那一面。
+PROBE_SETTLE_SECONDS = 3.0
+
+#: 整個探針的上限。qBittorrent 一次只校驗一個 torrent（預設），別的在校驗時探針要排隊。
+PROBE_TIMEOUT_SECONDS = 20.0
+
+#: 輪詢間隔。探測檔只有一片，實測 0.25–1.4 秒就校驗完。
+PROBE_POLL_SECONDS = 0.25
+
+
+async def probe_sight(
+    client: QbittorrentClient, *, name: str, payload: bytes, save_path: str
+) -> ProbeSight:
+    """qBittorrent 看不看得到 `save_path/name` 那個檔（M4 票 19，brief §20.2）。
+
+    呼叫端先把檔寫好。這裡把它做成 torrent、停住加入、`recheck`，看校驗之後的進度；不論結果
+    都移除 torrent 並**不刪檔**——檔是呼叫端的，它自己刪。**停住加入不會自己校驗**
+    （實測兩版都停在 0%），所以一定要 recheck。
+
+    為什麼繞這一圈：它的 Web API 沒有「這條路徑你看不看得到」。`app/getDirectoryContent` 5.0
+    才有，而且它只說目錄在不在——qBittorrent 自己的檔案層裡也可能剛好有一個同名的空目錄。
+    """
+    info_hash = await client.add_probe(name, payload, save_path=save_path)
+    deadline = time.monotonic() + PROBE_TIMEOUT_SECONDS
+    try:
+        if not await _await_listed(client, info_hash, deadline):
+            return ProbeSight.UNSETTLED
+        await client.recheck(info_hash)
+        return await _await_sight(client, info_hash, deadline)
+    finally:
+        await client.delete_torrent(info_hash, delete_files=False)
+
+
+async def _await_listed(client: QbittorrentClient, info_hash: str, deadline: float) -> bool:
+    """等它列得出來、讀完 resume data，才送 recheck。
+
+    `torrents/add` 回來的時候它**還不一定在 `torrents/info` 裡**（2026-09-30 對 5.2.3 實跑，
+    `tests/unit/test_qbittorrent_probe.py`），而對一個還不在的 hash 送 recheck 是靜默成功——
+    校驗從來沒發生，停在 0% 的樣子就與「看不到」一模一樣。
+    """
+    while time.monotonic() < deadline:
+        row = await client.torrent(info_hash)
+        if row is not None and not row.state.startswith(_PROBE_PENDING):
+            return True
+        await asyncio.sleep(PROBE_POLL_SECONDS)
+    return False
+
+
+async def _await_sight(client: QbittorrentClient, info_hash: str, deadline: float) -> ProbeSight:
+    still_since: float | None = None
+    last_state = ""
+    while time.monotonic() < deadline:
+        row = await client.torrent(info_hash)
+        now = time.monotonic()
+        # 列不出來當成還在路上：答案要等它回來，或等到期限。
+        state = row.state if row is not None else ""
+        pending = row is None or state.startswith(_PROBE_PENDING)
+        if state == ERROR_STATE:
+            return ProbeSight.UNREADABLE
+        if row is not None and not pending and row.progress >= 1.0:
+            return ProbeSight.SEEN
+        if pending or state != last_state:
+            still_since = None if pending else now
+        elif still_since is not None and now - still_since >= PROBE_SETTLE_SECONDS:
+            return ProbeSight.UNSEEN
+        last_state = state
+        await asyncio.sleep(PROBE_POLL_SECONDS)
+    return ProbeSight.UNSETTLED
+
+
 def _normalise(path: str) -> str:
     return path.rstrip("/") or "/"
 
@@ -420,12 +523,15 @@ __all__ = [
     "MIN_WEBAPI",
     "MISSING_FILES_STATE",
     "PRIORITY_SKIP",
+    "PROBE_SETTLE_SECONDS",
+    "PROBE_TIMEOUT_SECONDS",
     "SETTLING_STATES",
     "STALLED_STATE",
     "STOPPED_SINCE_WEBAPI",
     "CategoryOutcome",
     "IpBannedError",
     "MaindataCursor",
+    "ProbeSight",
     "QbittorrentCategory",
     "QbittorrentClient",
     "QbittorrentVersion",
@@ -436,4 +542,5 @@ __all__ = [
     "add_form",
     "ensure_category",
     "parse_status",
+    "probe_sight",
 ]

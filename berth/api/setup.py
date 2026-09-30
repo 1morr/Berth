@@ -14,6 +14,7 @@ from berth.api.routes import route_refusal, route_responses
 from berth.api.schemas import InterfaceLoginIn, QbittorrentOut, RouteOut, StepOut
 from berth.config import Config
 from berth.domain import (
+    BerthPathFailure,
     BundledLibraryRefusal,
     ChoiceRefusal,
     CollectionType,
@@ -26,6 +27,7 @@ from berth.domain import (
     ServiceKind,
     ServiceOrigin,
     SiteFailure,
+    StepStatus,
 )
 from berth.services.clients import bundled_targets
 from berth.services.indexer import (
@@ -46,7 +48,7 @@ from berth.services.jellyfin import (
     BundledLibraryRejectedError,
     InterfaceLoginRejectedError,
     JellyfinStartup,
-    add_berth_path,
+    add_berth_paths,
     bootstrap_jellyfin,
     connect_jellyfin,
     read_jellyfin_status,
@@ -60,6 +62,7 @@ from berth.services.routes import (
     build_routes,
     delete_route,
     read_route_status,
+    reread_libraries,
 )
 from berth.services.setup import (
     ChoiceLockedError,
@@ -338,6 +341,19 @@ class BundledLibraryOut(BaseModel):
     built: bool
 
 
+class BerthPathOut(BaseModel):
+    """一個媒體庫加 Berth 路徑的結果。`reason` 給畫面挑句子，`error` 是原文（M4 票 19）。"""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    library: str
+    #: 要加的那一條。媒體庫找不到、或一開始就問不到 Jellyfin 時是空字串。
+    path: str
+    status: StepStatus
+    reason: BerthPathFailure | None
+    error: str
+
+
 class JellyfinSetupOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -354,6 +370,8 @@ class JellyfinSetupOut(BaseModel):
     bundled: list[BundledLibraryOut]
     #: 每一列的完整路徑是 `<library_root>/<folder>`。
     library_root: str
+    #: 上一次「加入 Berth 路徑」逐個媒體庫的結果（M4 票 19）。
+    berth_paths: list[BerthPathOut]
 
 
 class JellyfinConnectIn(BaseModel):
@@ -399,8 +417,9 @@ def bundled_refusal(refusal: BundledLibraryRejectedError) -> HTTPException:
 
 
 class LibraryPathIn(BaseModel):
-    #: 要加 Berth 路徑的媒體庫名稱。路徑由伺服器算，UI 在按之前就顯示同一個值。
-    library: str = Field(min_length=1)
+    #: 要加 Berth 路徑的媒體庫名稱，逐個試、逐個回報（M4 票 19）。路徑由伺服器算，UI 在按之前
+    #: 就顯示同一個值。
+    libraries: list[str] = Field(min_length=1)
 
 
 @router.get("/jellyfin")
@@ -456,10 +475,11 @@ async def post_jellyfin_library_path(
 ) -> JellyfinSetupOut:
     """既有路徑的「加入 Berth 路徑」。舊路徑原地不動（brief §16.4）。
 
-    失敗不是 4xx/5xx，而是回一條 `failed` 的 `libraries` 步驟——畫面靠它顯示原文與手動步驟。
+    失敗不是 4xx/5xx，而是逐個媒體庫的 `berth_paths` 加上一條 `failed` 的 `libraries` 步驟——
+    畫面靠它們逐個說原因。
     """
     try:
-        result = await add_berth_path(session, factory, library_name=body.library)
+        result = await add_berth_paths(session, factory, library_names=body.libraries)
     except ValueError as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
     return JellyfinSetupOut.model_validate(result)
@@ -840,6 +860,16 @@ class RoutesIn(BaseModel):
 async def get_routes(session: SessionDep) -> RouteSetupOut:
     """不連線，只回媒體庫清單與已經建好的 Route（含上一輪的檢查結果）。"""
     return RouteSetupOut.model_validate(await read_route_status(session))
+
+
+@router.post("/routes/libraries", responses=route_responses(RouteRefusal.JELLYFIN_UNREACHABLE))
+async def post_routes_libraries(session: SessionDep, factory: ClientFactoryDep) -> RouteSetupOut:
+    """頁 3 進頁時（與「重新讀取」）向 Jellyfin 重讀媒體庫（M4 票 19）。問不到是 503。"""
+    try:
+        result = await reread_libraries(session, factory)
+    except RouteRejectedError as refusal:
+        raise route_refusal(refusal) from refusal
+    return RouteSetupOut.model_validate(result)
 
 
 #: 這一步順帶重跑**每一條**既有 Route 的檢查，途中被另一個分頁刪掉的那一條就是它

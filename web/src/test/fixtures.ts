@@ -92,6 +92,7 @@ export function jellyfinSetup(overrides: Partial<JellyfinSetup> = {}): JellyfinS
       { name: 'Anime', collection_type: 'tvshows', folder: 'anime', built: false },
     ],
     library_root: '/data/library',
+    berth_paths: [],
     ...overrides,
   }
 }
@@ -336,6 +337,7 @@ export function libraryOption(overrides: Partial<LibraryOption> = {}): LibraryOp
 export const CHECKS_PASSED: SetupStep[] = [
   step('category', 'ok', 'berth-tv → /data/torrent/complete/tv'),
   step('download_path', 'ok', '/data/torrent/complete · /data/torrent/complete/tv'),
+  step('download_visible', 'ok', '/data/torrent/complete/tv'),
   step('library_path', 'ok', '/data/library/tv'),
   step('probe_visible', 'ok', '/data/library/tv'),
   step('hardlink', 'ok', 'dev=70 · inode=8162774324533690 · 137.4 GB free'),

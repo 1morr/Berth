@@ -29,17 +29,22 @@ afterEach(() => {
 const STATUS = 'GET /api/setup/status'
 const ROUTES = 'GET /api/setup/routes'
 const BUILD = 'POST /api/setup/routes'
+const REREAD = 'POST /api/setup/routes/libraries'
 const COMPLETE = 'POST /api/setup/complete'
 const INDEXERS = 'GET /api/setup/indexers'
 const TMDB = 'GET /api/setup/tmdb'
 
 const JELLYFIN = 'GET /api/setup/jellyfin'
 
-/** 送出去的每一個寫入請求（非 GET），依序。 */
+/**
+ * 送出去的每一個寫入請求（非 GET），依序。**頁 3 進頁的重讀不算**（M4 票 19）：它向 Jellyfin 讀、
+ * 換的是 Berth 自己的媒體庫快照，不寫任何服務——票 08 的「進頁不送寫入」說的是對服務的寫入。
+ */
 function writes(fetch: ReturnType<typeof stubApi>): string[] {
   return fetch.mock.calls
     .filter(([, init]) => (init?.method ?? 'GET') !== 'GET')
     .map(([input, init]) => `${init?.method} ${String(input)}`)
+    .filter((call) => call !== REREAD)
 }
 
 /** Jellyfin 與 qBittorrent 都接好了，精靈在媒體庫與路徑（頁 3，票 06d 移到 qBittorrent 之後）。 */
@@ -131,14 +136,14 @@ describe('頁 3：媒體庫路徑（套件內）', () => {
     expect(
       within(sequences[1]).getByText('dev=70 · inode=8162774324533690 · 137.4 GB free'),
     ).toBeInTheDocument()
-    expect(within(sequences[1]).getAllByText('已完成')).toHaveLength(5)
+    expect(within(sequences[1]).getAllByText('已完成')).toHaveLength(6)
     const build = fetch.mock.calls.find(
       ([input, init]) => init?.method === 'POST' && String(input) === '/api/setup/routes',
     )!
     expect(JSON.parse(String(build[1]?.body))).toEqual({ selections: [] })
   })
 
-  it('每條 Route 收成一列說「5 / 5 通過」，全過的收起、紅的那一條自己打開', async () => {
+  it('每條 Route 收成一列說「6 / 6 通過」，全過的收起、紅的那一條自己打開', async () => {
     const oneRed = routeSetup({
       ...BUILT,
       ready: false,
@@ -150,7 +155,7 @@ describe('頁 3：媒體庫路徑（套件內）', () => {
           slug: 'anime',
           health: 'failed',
           checks: [
-            ...CHECKS_PASSED.slice(0, 3),
+            ...CHECKS_PASSED.slice(0, 4),
             step('probe_visible', 'failed', '', 'Jellyfin cannot see /data/library/anime'),
             step('hardlink', 'pending'),
           ],
@@ -165,8 +170,8 @@ describe('頁 3：媒體庫路徑（套件內）', () => {
     const rows = within(list).getAllByRole('group')
 
     expect(rows).toHaveLength(4)
-    expect(within(list).getAllByText('5 / 5 通過')).toHaveLength(3)
-    expect(within(list).getByText('3 / 5 通過')).toBeInTheDocument()
+    expect(within(list).getAllByText('6 / 6 通過')).toHaveLength(3)
+    expect(within(list).getByText('4 / 6 通過')).toBeInTheDocument()
     expect(rows.map((row) => row.hasAttribute('open'))).toEqual([false, false, true, false])
   })
 
@@ -327,7 +332,7 @@ describe('頁 3 的失敗', () => {
           health: 'failed',
           cross_device: true,
           checks: [
-            ...CHECKS_PASSED.slice(0, 4),
+            ...CHECKS_PASSED.slice(0, 5),
             step('hardlink', 'failed', '', '[Errno 18] Invalid cross-device link'),
           ],
         }),
@@ -450,13 +455,13 @@ describe('頁 3 的失敗：既有服務說出怎麼改掛載（M4 票 08）', (
     }
   }
 
-  it('Jellyfin 看不到探測檔：它多半在另一台主機或掛在別的容器路徑', async () => {
+  it('Jellyfin 看不到探測檔：補法與片段是你那一台 Jellyfin 的，不是 berth（票 19）', async () => {
     stubApi(
       yours(
         routeView({
           health: 'failed',
           checks: [
-            ...CHECKS_PASSED.slice(0, 3),
+            ...CHECKS_PASSED.slice(0, 4),
             step('probe_visible', 'failed', '', 'Jellyfin cannot see /data/library/tv'),
             step('hardlink', 'pending'),
           ],
@@ -466,8 +471,40 @@ describe('頁 3 的失敗：既有服務說出怎麼改掛載（M4 票 08）', (
 
     renderWithProviders(<SetupPage />)
 
-    expect(await screen.findByText(/多半是它在另一台主機/)).toBeInTheDocument()
+    expect(await screen.findByText(/你的 Jellyfin 看不到 Berth 剛寫的檔案/)).toBeInTheDocument()
     expect(screen.getByText(/不做 remote path mapping/)).toBeInTheDocument()
+    expect(screen.getByText(/jellyfin:\s+volumes:/)).toBeInTheDocument()
+    expect(screen.queryByText(/berth:\s+volumes:/)).not.toBeInTheDocument()
+  })
+
+  it('qBittorrent 讀不到 Berth 寫的探測檔：紅在那一條、說它少了 /data，片段是 qBittorrent 的', async () => {
+    stubApi(
+      yours(
+        routeView({
+          health: 'failed',
+          checks: [
+            ...CHECKS_PASSED.slice(0, 2),
+            step(
+              'download_visible',
+              'failed',
+              '',
+              'qBittorrent cannot see /data/torrent/complete/tv: it checked the file Berth had just written there and found none of it (0% after a recheck)',
+            ),
+            ...CHECKS_PASSED.slice(3).map((row) => step(row.step, 'pending')),
+          ],
+        }),
+      ),
+    )
+
+    renderWithProviders(<SetupPage />)
+
+    expect(
+      await screen.findByText(/qBittorrent cannot see \/data\/torrent\/complete\/tv/),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText(/你的 qBittorrent 看不到這個分類路徑：它多半沒掛 \/data/),
+    ).toBeInTheDocument()
+    expect(screen.getByText(/qbittorrent:\s+volumes:/)).toBeInTheDocument()
   })
 
   it('EXDEV：你的服務多半分開掛載，改成同一個父目錄', async () => {
@@ -477,7 +514,7 @@ describe('頁 3 的失敗：既有服務說出怎麼改掛載（M4 票 08）', (
           health: 'failed',
           cross_device: true,
           checks: [
-            ...CHECKS_PASSED.slice(0, 4),
+            ...CHECKS_PASSED.slice(0, 5),
             step('hardlink', 'failed', '', '[Errno 18] Invalid cross-device link'),
           ],
         }),
@@ -550,7 +587,9 @@ describe('頁 3：媒體庫路徑（既有 Jellyfin）', () => {
     await userEvent.click(screen.getByRole('button', { name: '建立並檢查' }))
 
     await waitFor(() => {
-      const call = fetch.mock.calls.find(([, init]) => init?.method === 'POST')
+      const call = fetch.mock.calls.find(
+        ([input, init]) => init?.method === 'POST' && input === '/api/setup/routes',
+      )
       expect(call).toBeDefined()
       expect(JSON.parse(String(call![1]?.body))).toEqual({
         selections: [{ library: '影集', target_path: '/data/library/影集' }],

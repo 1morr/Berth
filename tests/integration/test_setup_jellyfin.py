@@ -15,10 +15,11 @@ from pathlib import Path
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from berth.adapters.http import AuthFailedError, ServiceUnavailableError
+from berth.adapters.http import AuthFailedError, ProtocolMismatchError, ServiceUnavailableError
 from berth.adapters.jellyfin import JellyfinApiKey, JellyfinLibrary, TypeOption
 from berth.adapters.jellyfin.fake import FakeJellyfinClient
 from berth.domain import (
+    BerthPathFailure,
     BundledLibraryRefusal,
     CollectionType,
     ConnectionReason,
@@ -40,7 +41,7 @@ from berth.models import (
 from berth.services.jellyfin import (
     BundledLibraryRejectedError,
     JellyfinSetupStatus,
-    add_berth_path,
+    add_berth_paths,
     bootstrap_jellyfin,
     claim_jellyfin,
     connect_jellyfin,
@@ -690,7 +691,7 @@ async def test_adding_a_berth_path_leaves_the_old_paths_alone(
     factory = FakeClientFactory(jellyfin=jellyfin)
     await connect_jellyfin(session, factory, username="owner", password="s3cret")
 
-    status = await add_berth_path(session, factory, library_name="電影")
+    status = await add_berth_paths(session, factory, library_names=["電影"])
 
     movies = next(row for row in status.libraries if row.name == "電影")
     assert movies.locations == ("/volume1/media/movies", f"{library_root}/電影")
@@ -723,7 +724,7 @@ async def test_a_berth_path_added_under_the_spaced_slug_still_counts(
     factory = FakeClientFactory(jellyfin=nas_jellyfin(libraries=(shows,)))
     await connect_jellyfin(session, factory, username="owner", password="s3cret")
 
-    status = await add_berth_path(session, factory, library_name="TV Shows")
+    status = await add_berth_paths(session, factory, library_names=["TV Shows"])
 
     [view] = status.libraries
     assert view.locations == ("/volume1/media/tv", legacy)
@@ -755,7 +756,7 @@ async def test_a_new_library_with_spaces_gets_the_hyphenated_berth_path(
     factory = FakeClientFactory(jellyfin=nas_jellyfin(libraries=(shows,)))
     await connect_jellyfin(session, factory, username="owner", password="s3cret")
 
-    status = await add_berth_path(session, factory, library_name="TV Shows")
+    status = await add_berth_paths(session, factory, library_names=["TV Shows"])
 
     [view] = status.libraries
     assert view.locations == ("/volume1/media/tv", f"{library_root}/tv-shows")
@@ -776,9 +777,9 @@ async def test_adding_the_same_berth_path_twice_does_not_duplicate_it(
     jellyfin = nas_jellyfin()
     factory = FakeClientFactory(jellyfin=jellyfin)
     await connect_jellyfin(session, factory, username="owner", password="s3cret")
-    await add_berth_path(session, factory, library_name="電影")
+    await add_berth_paths(session, factory, library_names=["電影"])
 
-    status = await add_berth_path(session, factory, library_name="電影")
+    status = await add_berth_paths(session, factory, library_names=["電影"])
 
     movies = next(row for row in status.libraries if row.name == "電影")
     assert len(movies.locations) == 2
@@ -799,13 +800,109 @@ async def test_adding_a_path_that_fails_becomes_a_step_not_an_exception(
     factory = FakeClientFactory(jellyfin=jellyfin)
     await connect_jellyfin(session, factory, username="owner", password="s3cret")
 
-    status = await add_berth_path(session, factory, library_name="Nope")
+    status = await add_berth_paths(session, factory, library_names=["Nope"])
 
     assert step(status, JellyfinStep.LIBRARIES) is StepStatus.FAILED
     failure = next(row for row in status.steps if row.step == JellyfinStep.LIBRARIES.value)
     assert "Nope" in failure.error
     # 既有的媒體庫清單沒有被這次失敗清掉。
     assert [row.name for row in status.libraries] == ["電影", "Anime"]
+
+
+@pytest.mark.asyncio
+async def test_a_jellyfin_that_cannot_see_the_berth_path_says_so_and_leaves_no_directory(
+    session: AsyncSession, tmp_path: Path
+) -> None:
+    """票 19：Jellyfin 沒掛 Berth 的那個父目錄（媒體庫在 `/movies`、`/tv`）。
+
+    實測 Jellyfin 12.1 對加不上的路徑只回 404 + `Error processing request.`（brief §20.7），原因只在
+    它自己的 log。所以 Berth 先寫探測檔問它看不看得到：看不到就說出是哪一台、哪條路徑，不送那一支；
+    剛建的目錄一個都不留（`library` 那一層原本不在，也一起收掉）。
+    """
+    await seed(
+        session,
+        origin=ServiceOrigin.EXISTING,
+        base_url="http://nas:8096",
+        library_root=str(tmp_path / "library"),
+    )
+    jellyfin = nas_jellyfin(visible_roots=("/volume1",))
+    factory = FakeClientFactory(jellyfin=jellyfin)
+    await connect_jellyfin(session, factory, username="owner", password="s3cret")
+
+    status = await add_berth_paths(session, factory, library_names=["電影"])
+
+    [result] = status.berth_paths
+    assert (result.library, result.path) == ("電影", f"{tmp_path / 'library'}/電影")
+    assert result.status is StepStatus.FAILED
+    assert result.reason is BerthPathFailure.JELLYFIN_CANNOT_SEE
+    assert "Jellyfin cannot see" in result.error
+    assert result.path in result.error
+    assert step(status, JellyfinStep.LIBRARIES) is StepStatus.FAILED
+    assert not (tmp_path / "library").exists()
+    assert next(row for row in status.libraries if row.name == "電影").locations == (
+        "/volume1/media/movies",
+    )
+
+
+@pytest.mark.asyncio
+async def test_a_path_jellyfin_refuses_after_all_is_reported_and_its_directory_removed(
+    session: AsyncSession, tmp_path: Path
+) -> None:
+    """看得到探測檔、加路徑那一支卻仍然 404（例如媒體庫在這兩步之間被刪掉）：
+    記成 Jellyfin 的拒絕、帶它的原文，剛建的目錄同樣收回（code-review）。"""
+    await seed(
+        session,
+        origin=ServiceOrigin.EXISTING,
+        base_url="http://nas:8096",
+        library_root=str(tmp_path / "library"),
+    )
+    jellyfin = nas_jellyfin()
+    factory = FakeClientFactory(jellyfin=jellyfin)
+    await connect_jellyfin(session, factory, username="owner", password="s3cret")
+
+    async def refuse(library_name: str, path: str) -> None:
+        raise ProtocolMismatchError("POST /Library/VirtualFolders/Paths: 404")
+
+    jellyfin.add_library_path = refuse  # type: ignore[method-assign]  # 替身的方法換成這一次的答案
+
+    status = await add_berth_paths(session, factory, library_names=["電影"])
+
+    [result] = status.berth_paths
+    assert (result.status, result.reason) == (StepStatus.FAILED, BerthPathFailure.JELLYFIN)
+    assert "404" in result.error
+    assert not (tmp_path / "library").exists()
+
+
+@pytest.mark.asyncio
+async def test_every_library_is_tried_and_reported_on_its_own(
+    session: AsyncSession, tmp_path: Path
+) -> None:
+    """票 19：第一個加不上不擋第二個——兩個都試、各自回報，使用者一次看得到還差幾個。"""
+    library_root = tmp_path / "library"
+    library_root.mkdir()
+    await seed(
+        session,
+        origin=ServiceOrigin.EXISTING,
+        base_url="http://nas:8096",
+        library_root=str(library_root),
+    )
+    jellyfin = nas_jellyfin(visible_roots=(f"{library_root}/anime",))
+    factory = FakeClientFactory(jellyfin=jellyfin)
+    await connect_jellyfin(session, factory, username="owner", password="s3cret")
+
+    status = await add_berth_paths(session, factory, library_names=["電影", "Anime"])
+
+    assert [(row.library, row.status, row.reason) for row in status.berth_paths] == [
+        ("電影", StepStatus.FAILED, BerthPathFailure.JELLYFIN_CANNOT_SEE),
+        ("Anime", StepStatus.OK, None),
+    ]
+    assert not (library_root / "電影").exists()
+    assert (library_root / "anime").is_dir()
+    assert library_root.is_dir()
+    anime = next(row for row in status.libraries if row.name == "Anime")
+    assert f"{library_root}/anime" in anime.locations
+    # 有一個沒加上：`libraries` 那一步紅，精靈不往下建 Route。
+    assert step(status, JellyfinStep.LIBRARIES) is StepStatus.FAILED
 
 
 @pytest.mark.asyncio
@@ -823,7 +920,7 @@ async def test_a_jellyfin_that_stops_answering_while_adding_a_path_is_a_failed_s
     await connect_jellyfin(session, factory, username="owner", password="s3cret")
     jellyfin.error = ServiceUnavailableError("connection refused")
 
-    status = await add_berth_path(session, factory, library_name="電影")
+    status = await add_berth_paths(session, factory, library_names=["電影"])
 
     failure = next(row for row in status.steps if row.step == JellyfinStep.LIBRARIES.value)
     assert failure.status is StepStatus.FAILED
@@ -846,7 +943,7 @@ async def test_an_expired_api_key_surfaces_as_a_failed_step(
     await connect_jellyfin(session, factory, username="owner", password="s3cret")
     jellyfin.error = AuthFailedError("401")
 
-    status = await add_berth_path(session, factory, library_name="電影")
+    status = await add_berth_paths(session, factory, library_names=["電影"])
 
     failure = next(row for row in status.steps if row.step == JellyfinStep.LIBRARIES.value)
     assert failure.status is StepStatus.FAILED

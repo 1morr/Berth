@@ -16,11 +16,12 @@ from berth.adapters.torrent import (
     NotATorrentError,
     info_hash_of,
     magnet_info_hash,
+    probe_torrent,
 )
 
 
 def bencode(value: object) -> bytes:
-    """測試自己的編碼器。產品只解不編，所以這一支住在測試裡。"""
+    """測試自己的編碼器。產品只編探針那一種（`probe_torrent`），拿它驗它自己等於沒驗。"""
     if isinstance(value, int):
         return b"i" + str(value).encode() + b"e"
     if isinstance(value, bytes):
@@ -140,3 +141,26 @@ def test_deep_nesting_is_not_a_torrent_rather_than_a_crash() -> None:
 
     with pytest.raises(NotATorrentError):
         info_hash_of(raw)
+
+
+class TestProbeTorrent:
+    """M4 票 19：qBittorrent 那一側的探針——Berth 寫一個小檔，做成 torrent 請 qBittorrent 校驗。"""
+
+    def test_describes_exactly_the_file_berth_wrote(self) -> None:
+        """校驗比的是 piece 雜湊：名字、長度、那一片的 SHA-1 對不上，看得到也會是 0%。"""
+        raw = probe_torrent("berth-probe-1a2b3c4d", b"berth")
+
+        info = {
+            b"length": 5,
+            b"name": b"berth-probe-1a2b3c4d",
+            b"piece length": 16384,
+            b"pieces": hashlib.sha1(b"berth").digest(),
+            b"private": 1,
+        }
+        assert info_hash_of(raw) == hashlib.sha1(bencode(info)).hexdigest()
+
+    def test_two_probes_are_two_torrents(self) -> None:
+        """探測檔名每次不同：上一輪沒刪乾淨的那一個不會讓這一輪撞上 409。"""
+        assert info_hash_of(probe_torrent("berth-probe-a", b"berth")) != info_hash_of(
+            probe_torrent("berth-probe-b", b"berth")
+        )

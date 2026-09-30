@@ -237,7 +237,8 @@ describe('每個泊位做完都停在結果上', () => {
     expect(await screen.findByRole('checkbox', { name: 'Movies' })).toBeVisible()
     expect(await heading()).toHaveTextContent('媒體庫路徑')
     expect(screen.queryByRole('button', { name: '加一個媒體庫' })).not.toBeInTheDocument()
-    expect(posts(fetchStub)).toEqual([])
+    // 唯一的 POST 是進頁時向 Jellyfin 重讀媒體庫（M4 票 19）：它不寫任何服務。
+    await waitFor(() => expect(posts(fetchStub)).toEqual(['/api/setup/routes/libraries']))
   })
 
   it('頁 4：加完站停在逐站結果與試搜上，前往下一個是 TMDB', async () => {
@@ -452,7 +453,7 @@ describe('頁 2 之後的每一格都有結果可看', () => {
     await user.click(await screen.findByRole('button', { name: '建立並檢查' }))
 
     // 全綠的收起來了：展開那一列看得到實測值。
-    await user.click(await screen.findByText('5 / 5 通過'))
+    await user.click(await screen.findByText('6 / 6 通過'))
     expect(await screen.findByText(/inode=8162774324533690/)).toBeVisible()
   })
 })

@@ -19,7 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from berth.adapters.http import AuthFailedError, ServiceUnavailableError
 from berth.adapters.qbittorrent import IpBannedError, QbittorrentVersion
 from berth.adapters.qbittorrent.fake import FakeQbittorrentClient
-from berth.domain import HealthStatus, QbittorrentStep, ServiceKind, ServiceOrigin
+from berth.domain import HealthStatus, QbittorrentStep, ServiceKind, ServiceOrigin, StepStatus
 from berth.models import HealthSettings, IndexerSettings, QbittorrentSettings, Route
 from berth.services.health import (
     CHECK_INTERVAL,
@@ -316,6 +316,39 @@ class TestRoutes:
         report = await check_health(session, factory, now=NOW + CHECK_INTERVAL)
 
         assert report.routes_status is HealthStatus.OK
+
+    async def test_the_loop_does_not_probe_qbittorrent_and_keeps_the_last_answer(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """票 19：探針校驗到 100% 會觸發 qBittorrent 的「完成時執行外部程式」（brief §20.2 實測），
+        所以 5 分鐘的迴圈不問它，`download_visible` 沿用精靈那一次的結論；其餘檢查照跑。"""
+        factory = await ready(session, roots)
+        probed = len(factory.qbittorrent_.probed)
+        factory.qbittorrent_.visible_roots = ("/downloads",)
+
+        report = await check_health(session, factory, now=NOW)
+
+        assert len(factory.qbittorrent_.probed) == probed
+        assert report.routes_status is HealthStatus.OK
+        for route in report.routes:
+            row = next(step for step in route.checks if step.step == "download_visible")
+            assert row.status is StepStatus.OK
+
+    async def test_a_red_probe_stays_red_until_someone_checks_again(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """反向：精靈那一次是紅的，迴圈不會因為沒問就把它變綠。"""
+        factory = factory_for(roots, qbittorrent=applied_qbittorrent(roots, visible_roots=("/x",)))
+        await arrange(session, roots)
+        await build_routes(session, factory, ())
+
+        report = await check_health(session, factory, now=NOW)
+
+        assert report.routes_status is HealthStatus.FAILED
+        route = report.routes[0]
+        row = next(step for step in route.checks if step.step == "download_visible")
+        assert row.status is StepStatus.FAILED
+        assert "qBittorrent cannot see" in row.error
 
     async def test_no_routes_at_all_is_unknown_not_degraded(
         self, session: AsyncSession, roots: dict[str, Path]

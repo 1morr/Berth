@@ -766,6 +766,8 @@ class RouteCheck(StrEnum):
     CATEGORY = "category"
     #: qBittorrent 報的全域 save path 與這個 category 的路徑，在 Berth 內 `stat` 得到。
     DOWNLOAD_PATH = "download_path"
+    #: 反過來：Berth 寫進分類路徑的探測檔，qBittorrent 那台讀得到（探針 torrent，M4 票 19）。
+    DOWNLOAD_VISIBLE = "download_visible"
     #: Jellyfin 報的媒體庫路徑，在 Berth 內 `stat` 得到。
     LIBRARY_PATH = "library_path"
     #: Berth 在 Route 目標寫的探測檔，Jellyfin 那台也看得到（`Environment/ValidatePath`）。
@@ -1099,6 +1101,23 @@ class RouteRefusal(StrEnum):
     ROUTE_UNHEALTHY = "route_unhealthy"
     #: 同一時間的建立撞上唯一索引。選擇本身沒錯，再按一次就好。
     ROUTE_CONFLICT = "route_conflict"
+
+
+class BerthPathFailure(StrEnum):
+    """既有 Jellyfin 的一個媒體庫加不上 Berth 路徑（`jellyfin.add_berth_paths`，M4 票 19）。
+
+    Jellyfin 對加不上的路徑只回 404 + `Error processing request.`（brief §20.7），說不出原因；
+    這幾種是 Berth 自己分得出來的。
+    """
+
+    #: 那台 Jellyfin 已經沒有這個媒體庫了。
+    LIBRARY_MISSING = "library_missing"
+    #: Berth 在自己的容器裡建不出那個目錄：berth 少了掛載，或那裡寫不進去。
+    DIRECTORY = "directory"
+    #: Berth 建好目錄、寫了探測檔，Jellyfin 說它看不到：它沒掛同一個父目錄。
+    JELLYFIN_CANNOT_SEE = "jellyfin_cannot_see"
+    #: Jellyfin 連不上或拒絕了這一支。原文在 `error`。
+    JELLYFIN = "jellyfin"
 
 
 class BundledLibraryRefusal(StrEnum):

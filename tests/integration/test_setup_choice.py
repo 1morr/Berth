@@ -44,7 +44,7 @@ from berth.models import (
     SetupStep,
 )
 from berth.services.clients import BundledServices
-from berth.services.jellyfin import add_berth_path, connect_jellyfin
+from berth.services.jellyfin import add_berth_paths, connect_jellyfin
 from berth.services.qbittorrent import read_qbittorrent_diff
 from berth.services.routes import build_routes, read_route_status, routes_ready
 from berth.services.settings import read_settings, write_settings
@@ -148,7 +148,7 @@ async def test_no_berth_path_is_added_before_jellyfin_is_chosen(session: AsyncSe
     factory = FakeClientFactory(jellyfin=jellyfin)
 
     with pytest.raises(ValueError, match="choose"):
-        await add_berth_path(session, factory, library_name="TV")
+        await add_berth_paths(session, factory, library_names=["TV"])
     with pytest.raises(ValueError, match="choose"):
         await connect_jellyfin(session, factory, username="captain", password="x")
 

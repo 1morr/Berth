@@ -31,7 +31,12 @@ from typing import Protocol
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from berth.adapters.fs import ensure_directory
+from berth.adapters.fs import (
+    ensure_directory,
+    missing_directories,
+    probe_file,
+    remove_empty_directories,
+)
 from berth.adapters.http import AuthFailedError, ServiceError
 from berth.adapters.jellyfin import (
     JellyfinAuth,
@@ -43,6 +48,7 @@ from berth.adapters.jellyfin import (
     version_supported,
 )
 from berth.domain import (
+    BerthPathFailure,
     BundledLibraryRefusal,
     CollectionType,
     InterfaceLoginRefusal,
@@ -53,6 +59,7 @@ from berth.domain import (
     StepStatus,
 )
 from berth.models import (
+    BerthPathResult,
     BundledLibrary,
     JellyfinSettings,
     PathSettings,
@@ -196,6 +203,8 @@ class JellyfinSetupStatus:
     bundled: tuple[BundledLibraryView, ...]
     #: 媒體庫資料夾的父目錄。剖面上每一列的完整路徑是 `<library_root>/<folder>`。
     library_root: str
+    #: 上一次「加入 Berth 路徑」逐個媒體庫的結果（M4 票 19）。
+    berth_paths: tuple[BerthPathResult, ...]
 
 
 async def read_jellyfin_status(session: AsyncSession) -> JellyfinSetupStatus:
@@ -224,6 +233,7 @@ async def read_jellyfin_status(session: AsyncSession) -> JellyfinSetupStatus:
             for row in setup.jellyfin.bundled
         ),
         library_root=paths.library_root,
+        berth_paths=tuple(setup.jellyfin.berth_paths),
     )
 
 
@@ -425,18 +435,23 @@ async def connect_jellyfin(
     return status
 
 
-async def add_berth_path(
-    session: AsyncSession, factory: ServiceClientFactory, *, library_name: str
+async def add_berth_paths(
+    session: AsyncSession, factory: ServiceClientFactory, *, library_names: Sequence[str]
 ) -> JellyfinSetupStatus:
-    """既有路徑的「加入 Berth 路徑」按鈕（plan §9.5、brief §16.4）。
+    """既有 Jellyfin 的「加入 Berth 路徑」：**每一個媒體庫都試、各自回報**（M4 票 19）。
 
-    **舊路徑原地不動**：`POST /Library/VirtualFolders/Paths` 是加一條而不是換一條。
-    目錄要先存在（不存在 Jellyfin 回 404），同一條路徑加兩次會出現重複的 location，
-    所以兩件事都先擋掉（實測，brief §20.7）。
+    plan §9.5、brief §16.4。
 
-    失敗與序列裡的步驟走同一條路：記成 `libraries` 這一步的 `failed`，畫面就有原文與手動
-    步驟可看。「目錄建不出來」正是 brief §16.4 那句「哪個容器少了哪個掛載」最典型的失敗，
-    把它變成 500 等於把唯一有用的訊息丟掉。
+    **舊路徑原地不動**：`POST /Library/VirtualFolders/Paths` 是加一條而不是換一條。同一條路徑
+    加兩次會出現重複的 location，所以已經在的跳過（實測，brief §20.7）。
+
+    **先問 Jellyfin 看不看得到，再送那一支**：目錄不存在時它回 404 + `Error processing request.`，
+    連「媒體庫不存在」也是同一句（2026-09-30 對 12.1 實測），原因只在它自己的 log。所以 Berth 先建
+    目錄、寫探測檔、以 `Environment/ValidatePath` 問它——看不到就是它沒掛同一個父目錄，說得出
+    哪一台、哪條路徑。加不上的那一個，剛建的目錄一層一層收回去，不留空殼。
+
+    結果逐個記在 `berth_paths`；有一個沒加上，`libraries` 那一步就是紅的——精靈停在這裡，
+    不建 Route。回 422（`ValueError`）的只有還沒選來源。
     """
     setup = await read_settings(session, SetupSettings)
     _require_choice(setup)
@@ -446,42 +461,101 @@ async def add_berth_path(
 
     client = factory.jellyfin(base_url, token=jellyfin.api_key)
     libraries: tuple[JellyfinLibrary, ...] | None = None
+    results: list[BerthPathResult] = []
     await _record(session, _step(JellyfinStep.LIBRARIES, StepStatus.RUNNING))
     try:
         libraries = await client.libraries()
-        library = next((row for row in libraries if row.name == library_name), None)
-        if library is None:
-            raise StepFailedError(f"no library named {library_name!r} on this Jellyfin")
-        path = berth_path(library_name, paths.library_root, library.locations)
-        if path not in library.locations:
-            ensure_directory(Path(path))
-            await client.add_library_path(library_name, path)
-            libraries = await client.libraries()
-    except (ServiceError, StepFailedError, OSError) as exc:
-        await _record(
-            session,
-            SetupStep(
-                key=JellyfinStep.LIBRARIES.value,
+        for name in library_names:
+            results.append(await _add_berth_path(client, libraries, name, paths.library_root))
+        libraries = await client.libraries()
+    except ServiceError as exc:
+        # 一開始就問不到媒體庫：沒試到的每一個都記成同一個原因，畫面照樣逐個說。
+        tried = {row.library for row in results}
+        results += [
+            BerthPathResult(
+                library=name,
+                path="",
                 status=StepStatus.FAILED,
-                detail=library_name,
+                reason=BerthPathFailure.JELLYFIN,
                 error=_message(exc),
-            ),
-        )
-    else:
-        await _record(
-            session,
-            SetupStep(
-                key=JellyfinStep.LIBRARIES.value,
-                status=StepStatus.OK,
-                detail=f"{library_name} · {path}",
-            ),
-        )
+            )
+            for name in library_names
+            if name not in tried
+        ]
     finally:
         await client.aclose()
 
+    failed = [row for row in results if row.status is StepStatus.FAILED]
+    await _record(
+        session,
+        SetupStep(
+            key=JellyfinStep.LIBRARIES.value,
+            status=StepStatus.FAILED if failed else StepStatus.OK,
+            detail=" · ".join(f"{row.library} · {row.path}" for row in results if row.path),
+            error="; ".join(f"{row.library}: {row.error}" for row in failed),
+        ),
+    )
+    setup = await read_settings(session, SetupSettings)
+    setup.jellyfin.berth_paths = results
+    await write_settings(session, setup)
     await _remember(session, libraries=libraries)
     await session.commit()
     return await read_jellyfin_status(session)
+
+
+async def _add_berth_path(
+    client: JellyfinClient,
+    libraries: Sequence[JellyfinLibrary],
+    library_name: str,
+    library_root: str,
+) -> BerthPathResult:
+    """一個媒體庫：找到它、算出 Berth 路徑、建目錄、問 Jellyfin 看不看得到、加上去。"""
+    library = next((row for row in libraries if row.name == library_name), None)
+    if library is None:
+        return BerthPathResult(
+            library=library_name,
+            path="",
+            status=StepStatus.FAILED,
+            reason=BerthPathFailure.LIBRARY_MISSING,
+            error=f"no library named {library_name!r} on this Jellyfin",
+        )
+    path = berth_path(library_name, library_root, library.locations)
+    if path in library.locations:
+        return BerthPathResult(library=library_name, path=path, status=StepStatus.OK)
+
+    def failed(reason: BerthPathFailure, error: str) -> BerthPathResult:
+        return BerthPathResult(
+            library=library_name, path=path, status=StepStatus.FAILED, reason=reason, error=error
+        )
+
+    directory = Path(path)
+    created = missing_directories(directory)
+    try:
+        ensure_directory(directory)
+    except OSError as exc:
+        remove_empty_directories(created)
+        return failed(BerthPathFailure.DIRECTORY, _message(exc))
+    try:
+        with probe_file(directory, roots=[directory]) as probe:
+            # 容器路徑一律以 `/` 相接：`str(Path)` 在 Windows 上會換成反斜線。
+            seen = await client.validate_path(f"{path}/{probe.name}")
+        if seen:
+            await client.add_library_path(library_name, path)
+    except OSError as exc:
+        # 探測檔寫不進去是 Berth 自己這一邊的事，不是 Jellyfin 的（code-review）。
+        remove_empty_directories(created)
+        return failed(BerthPathFailure.DIRECTORY, _message(exc))
+    except ServiceError as exc:
+        remove_empty_directories(created)
+        return failed(BerthPathFailure.JELLYFIN, _message(exc))
+    if not seen:
+        remove_empty_directories(created)
+        return failed(
+            BerthPathFailure.JELLYFIN_CANNOT_SEE,
+            f"Jellyfin cannot see {path}: POST /Environment/ValidatePath answered 404 "
+            "for a file Berth had just written there",
+        )
+    return BerthPathResult(library=library_name, path=path, status=StepStatus.OK)
 
 
 class InterfaceLoginRejectedError(Exception):
@@ -580,20 +654,25 @@ async def _record(session: AsyncSession, *steps: SetupStep) -> None:
 async def _remember(
     session: AsyncSession, *, libraries: tuple[JellyfinLibrary, ...] | None = None
 ) -> None:
-    setup = await read_settings(session, SetupSettings)
     if libraries is not None:
-        setup.jellyfin.libraries = [
-            SetupLibrary(
-                name=library.name,
-                item_id=library.item_id,
-                collection_type=library.collection_type,
-                locations=list(library.locations),
-                metadata_fetchers=sorted(
-                    {name for option in library.type_options for name in option.metadata_fetchers}
-                ),
-            )
-            for library in libraries
-        ]
+        await remember_libraries(session, libraries)
+
+
+async def remember_libraries(session: AsyncSession, libraries: Sequence[JellyfinLibrary]) -> None:
+    """把 Jellyfin 現在報的媒體庫存成精靈的快照（頁 3 讀它）。不 commit。"""
+    setup = await read_settings(session, SetupSettings)
+    setup.jellyfin.libraries = [
+        SetupLibrary(
+            name=library.name,
+            item_id=library.item_id,
+            collection_type=library.collection_type,
+            locations=list(library.locations),
+            metadata_fetchers=sorted(
+                {name for option in library.type_options for name in option.metadata_fetchers}
+            ),
+        )
+        for library in libraries
+    ]
     await write_settings(session, setup)
 
 

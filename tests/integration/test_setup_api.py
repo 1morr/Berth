@@ -467,6 +467,7 @@ class TestJellyfin:
                 {"name": "Anime", "collection_type": "tvshows", "folder": "anime", "built": False},
             ],
             "library_root": str(tmp_path / "library"),
+            "berth_paths": [],
         }
 
     def test_the_library_list_is_still_there_on_the_next_visit(self, client: TestClient) -> None:
@@ -619,7 +620,7 @@ class TestJellyfin:
         jellyfin.admin = ("owner", "s3cret")
         client.post("/api/setup/jellyfin/connect", json={"username": "owner", "password": "s3cret"})
 
-        response = client.post("/api/setup/jellyfin/libraries/paths", json={"library": "Nope"})
+        response = client.post("/api/setup/jellyfin/libraries/paths", json={"libraries": ["Nope"]})
 
         assert response.status_code == 200
         libraries = next(row for row in response.json()["steps"] if row["step"] == "libraries")
@@ -634,7 +635,7 @@ class TestJellyfin:
         assert client.post("/api/setup/jellyfin/bootstrap").status_code == 401
         assert client.put("/api/setup/jellyfin/bundled", json={"libraries": []}).status_code == 401
         assert client.post(
-            "/api/setup/jellyfin/libraries/paths", json={"library": "x"}
+            "/api/setup/jellyfin/libraries/paths", json={"libraries": ["x"]}
         ).status_code == (401)
 
 
@@ -1058,6 +1059,7 @@ class TestRoutes:
         assert [row["step"] for row in body["routes"][0]["checks"]] == [
             "category",
             "download_path",
+            "download_visible",
             "library_path",
             "probe_visible",
             "hardlink",

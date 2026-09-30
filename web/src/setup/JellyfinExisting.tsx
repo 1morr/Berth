@@ -1,8 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import type { JellyfinConnectInput, JellyfinSetup } from '../api/setup'
-import type { SetupStep } from '../api/schemas'
+import type { BerthPath, BerthPathFailure, JellyfinConnectInput, JellyfinSetup } from '../api/setup'
 import {
   STICKY_ACTION,
   CopyLine,
@@ -11,23 +10,49 @@ import {
   PasswordField,
   PrimaryButton,
 } from '../components/controls'
+import { mountSnippet } from '../components/routeChecks'
+
+/** 加不上的原因 → 那一句。查表而不是動態組 key——動態組過不了 `strictKeyChecks`（票 06）。 */
+const PATH_FAILED = {
+  jellyfin_cannot_see: 'jellyfin.libraries.pathFailed.jellyfin_cannot_see',
+  directory: 'jellyfin.libraries.pathFailed.directory',
+  jellyfin: 'jellyfin.libraries.pathFailed.jellyfin',
+  library_missing: 'jellyfin.libraries.pathFailed.library_missing',
+} as const satisfies Record<BerthPathFailure, string>
 
 /**
- * 既有 Jellyfin「加入 Berth 路徑」失敗的那一句（plan §9.5）：原文、最常見的原因（沒有把同一個宿主目錄掛在
- * 同一個容器路徑）與它自己的媒體庫設定頁。精靈頁 3 的 Route 那一邊畫它（M4 票 15 把頁 3 併起來之後，
- * 原本列媒體庫的那一塊在精靈裡已經到不了）。
+ * 既有 Jellyfin「加入 Berth 路徑」沒加上的那幾個媒體庫，**一個一條**（M4 票 19，plan §9.5）。
+ *
+ * Jellyfin 自己只回 404，原因由 Berth 分辨（`reason`）：看不到的那一種說出「它沒掛哪個目錄」並附
+ * 它那一份 compose 要加的掛載——不再叫人去 Jellyfin 手動加（那樣同樣會失敗），也不給 Jellyfin 的
+ * 網址：Berth 存的是它自己連得到的位址（常常是 `host.docker.internal`），瀏覽器開不了。
  */
-export function AddPathFailure({ step, baseUrl }: { step: SetupStep; baseUrl: string }) {
+export function AddPathFailures({ results, root }: { results: BerthPath[]; root: string }) {
   const { t } = useTranslation()
+  const failed = results.filter((row) => row.status === 'failed')
+  if (failed.length === 0) return null
 
   return (
-    <div className="mt-4 grid grid-cols-1 gap-2">
-      <Notice signal="blocked" label={t('common.failed')}>
-        <span className="value wrap-anywhere">{step.error}</span>
-      </Notice>
-      <p className="max-w-prose text-xs text-ink-dim">{t('jellyfin.libraries.addFailed')}</p>
-      <CopyLine command={`${baseUrl}/web/#/dashboard/libraries`} />
-    </div>
+    <ul className="mt-4 grid grid-cols-1 gap-3" aria-label={t('jellyfin.libraries.addPath')}>
+      {failed.map((row) => (
+        <li key={row.library} className="grid grid-cols-1 gap-2">
+          <Notice
+            signal="blocked"
+            label={t('jellyfin.libraries.pathFailed.title', { library: row.library })}
+          >
+            <span className="value wrap-anywhere">{row.error}</span>
+          </Notice>
+          {row.reason && (
+            <p className="max-w-prose text-xs text-ink-dim">
+              {t(PATH_FAILED[row.reason], { library: row.library, path: row.path, root })}
+            </p>
+          )}
+          {row.reason === 'jellyfin_cannot_see' && (
+            <CopyLine command={mountSnippet('jellyfin', root)} />
+          )}
+        </li>
+      ))}
+    </ul>
   )
 }
 

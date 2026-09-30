@@ -12,7 +12,9 @@ const OWNER = { user: 'owner', password: 's3cret' } as const
 test('既有服務：三頁都選既有、選寫入目標，完成後用那台 Jellyfin 的帳號登入', async ({ page }) => {
   const writes: string[] = []
   page.on('request', (request) => {
-    if (request.method() !== 'GET' && request.url().includes('/api/setup/')) {
+    // 頁 3 進頁的重讀不算寫入（M4 票 19）：它只向 Jellyfin 讀、換 Berth 自己的媒體庫快照。
+    const reread = request.url().endsWith('/api/setup/routes/libraries')
+    if (request.method() !== 'GET' && request.url().includes('/api/setup/') && !reread) {
       writes.push(request.url())
     }
   })

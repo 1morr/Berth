@@ -148,6 +148,7 @@ class TestDetail:
         assert [row["step"] for row in route["checks"]] == [
             "category",
             "download_path",
+            "download_visible",
             "library_path",
             "probe_visible",
             "hardlink",

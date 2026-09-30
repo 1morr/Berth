@@ -44,6 +44,7 @@ ffmpeg 產種子檔），那只影響「造測試素材」這一步，不影響 
 | `runtime_gap.py` | M3 票 15：片長驗證的門檻（`RUNTIME_SLACK`、`RUNTIME_RATIO`）：真的 mediainfo 片長（AnimeTosho）對語料的 TMDB 快照，量對得上的正片比例與秒數差落在哪；兩集合併檔以相鄰兩集的真實片長相加模擬，NCOP / SP 沒有量到。不用容器、不需要憑證，只讀本地 `tests/fixtures/`，不下載任何影片內容；結果記在 `.scratch/m3/issues/15-runtime-check.md` 的 Comments |
 | `first_batch_rule.py` | M4 票 11：第一批「證據夠強」（`parser.vouch_first_batch`）擔保了幾筆、有沒有擔保錯。語料（期望答案在手，沒有發佈時間的模擬成那一集播出後一天）、split-cour 模擬（TMDB 併成一季、第二輪從 01 重數）、`air_date_lag.py` 那一套真的 RSS fixture（沒有標準答案，列出不擔保的那幾筆）。import `berth`，要用 `uv run`；`--online` 才連網 |
 | `rss_subscribe_timing.py` | M4 票 13b：前端 e2e `rss-subscribe` 的第一輪預覽 5 秒內沒回，是在等鎖、等背景的補舊集，還是自己就慢。對 `rss` 情境的演練 server（`scripts/fake_setup_server.py`，子程序）打同一串 API 逐步計時，`--settle` 先等補舊集跑完，`--profile` 改在同一個行程起 server、cProfile 包住 `preview_feed`。import `berth` 與 httpx（量的是 Berth 自己），要在 repo 根目錄以 `uv run` 跑；不連網；結果記在票的 Comments |
+| `qbittorrent_visibility_probe.py` | M4 票 19：Berth 怎麼證明 qBittorrent 看得到分類路徑——寫一個小檔、做成單檔 torrent、停住加入、recheck，看 `progress`。看得到、看不到、同名空目錄、權限不足、開了 temp path、`useDownloadPath=false` 各一包；另記移除之後留下什麼。自己起停一次性容器；結論在 brief §20.2 |
 | `compose_collisions.py` | M4 票 16：套件容器撞名（票 16 之前的容器名與現在的 `berth-*` 各一次）、撞 port、`COMPOSE_PROFILES=` 空字串時 `docker compose up -d` 的結束碼、錯誤訊息與每個容器的狀態，以及 `berth` 的 `extra_hosts` host-gateway 在這台 Docker 上解到哪、連不連得到宿主上的 port。從 `deploy/docker-compose.yml` 改出隔離的 compose project，改不到（compose 換了寫法）就停下；結論在 brief §20.14 |
 | `lib.py` | 共用的 HTTP、輪詢、bencode、報告輸出 |
 

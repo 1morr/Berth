@@ -89,7 +89,7 @@ test('精靈六頁走完，之後以同一組帳密登入', async ({ page }) => 
   const next = page.getByRole('button', { name: '前往下一個泊位' })
   await expect(next).toBeVisible()
   const routes = page.getByRole('list', { name: '這一頁的 Route' })
-  await expect(routes.getByText('5 / 5 通過')).toHaveCount(4)
+  await expect(routes.getByText('6 / 6 通過')).toHaveCount(4)
   await expect(routes.getByText('berth-紀錄片', { exact: true })).toBeVisible()
   // 不捲動就看得到下一步（票 08 驗收）：回到頁頂量。
   // 字串而不是函式：e2e 的 tsconfig 沒有 DOM 型別，這一行在瀏覽器裡跑。

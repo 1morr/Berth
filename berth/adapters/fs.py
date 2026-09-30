@@ -245,6 +245,27 @@ def probe_file(directory: Path, *, roots: Sequence[Path]) -> Iterator[Path]:
             probe.unlink()
 
 
+def missing_directories(directory: Path) -> tuple[Path, ...]:
+    """`ensure_directory(directory)` 會新建的那幾層，由深到淺。
+
+    建了之後要收回時用（`remove_empty_directories`）：只收自己建的，原本就在的一層都不碰。
+    """
+    missing: list[Path] = []
+    current = directory
+    while not current.exists() and current != current.parent:
+        missing.append(current)
+        current = current.parent
+    return tuple(missing)
+
+
+def remove_empty_directories(directories: Sequence[Path]) -> None:
+    """照給的順序（由深到淺）刪掉**空的**目錄。不空、已經不在、刪不掉的都略過：這是收尾，
+    不是一個會失敗的動作——別人在這段時間裡放了東西進去，就留給它。"""
+    for directory in directories:
+        with contextlib.suppress(OSError):
+            directory.rmdir()
+
+
 def link_test(source_dir: Path, target_dir: Path, *, roots: Sequence[Path]) -> PathFacts:
     """建暫存檔、鏈接、比對、清理（plan §8.6）。回傳兩邊共用的 device 與 inode。
 

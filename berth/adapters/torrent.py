@@ -236,6 +236,40 @@ def _info_span(raw: bytes) -> tuple[int, int] | None:
     return None
 
 
+#: 探針 torrent 的 piece 長度：BitTorrent 允許的最小值。探測檔只有幾個位元組，一片就裝完。
+PROBE_PIECE_LENGTH = 16 * 1024
+
+
+def probe_torrent(name: str, payload: bytes) -> bytes:
+    """描述 Berth 剛寫下的那一個小檔的單檔 `.torrent`（M4 票 19，brief §20.2）。
+
+    qBittorrent 校驗它時比的是 piece 雜湊，所以只有真的讀到**同一個檔**才會是 100%——這正是
+    「它看不看得到 Berth 寫的那個目錄」的答案。`private` 讓它不上 DHT / PEX / LSD：這個 torrent
+    只活幾秒，沒有理由對外說它存在。不掛 tracker 也是同一個理由。
+
+    探測檔名每次不同（`fs.probe_file`），info hash 跟著不同，上一輪沒清掉的不會撞上 409。
+    """
+    info: dict[bytes, object] = {
+        b"length": len(payload),
+        b"name": name.encode(),
+        b"piece length": PROBE_PIECE_LENGTH,
+        b"pieces": hashlib.sha1(payload, usedforsecurity=False).digest(),
+        b"private": 1,
+    }
+    return _bencode({b"info": info})
+
+
+def _bencode(value: object) -> bytes:
+    """只編 `probe_torrent` 用得到的三種型別。字典的鍵照位元組排序：規格要求，info hash 靠它。"""
+    if isinstance(value, int):
+        return b"i%de" % value
+    if isinstance(value, bytes):
+        return b"%d:%s" % (len(value), value)
+    if isinstance(value, dict):
+        return b"d" + b"".join(_bencode(key) + _bencode(value[key]) for key in sorted(value)) + b"e"
+    raise TypeError(f"bencode: {type(value).__name__}")
+
+
 class _MalformedError(Exception):
     """掃到不是 bencode 的東西。對外一律翻成 `NotATorrentError`。"""
 
@@ -291,4 +325,5 @@ __all__ = [
     "TorrentSource",
     "info_hash_of",
     "magnet_info_hash",
+    "probe_torrent",
 ]

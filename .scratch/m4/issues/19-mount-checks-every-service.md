@@ -1,6 +1,6 @@
 # 19 — 掛載檢查涵蓋每一台：qBittorrent 看不看得到、補法指對容器、404 說出原因
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Blocked by:** None — can start immediately
 
@@ -49,10 +49,53 @@
 
 ## 驗收
 
-- [ ] 探針的 prototype 腳本在 `scripts/experiments/`，結論（含 qBittorrent 4.4.5 與 5.2.3 各自的行為）寫進 brief §20.2
-- [ ] 整合測試：qBittorrent 看不到分類路徑時 Route 紅、理由指名 qBittorrent；看得到時綠（雙向）
-- [ ] 前端測試：`library_path` 紅而 Jellyfin 是既有 → 片段是 Jellyfin 的；探針紅 → qBittorrent 的；`EXDEV` → berth 的
-- [ ] 整合測試：加 Berth 路徑 404 時錯誤帶 Jellyfin 的原因、剛建的目錄被刪；兩個媒體庫都回報
-- [ ] playwright 對 `berth-existing` 實跑：`bad-qbittorrent`（`:58081`）接上後頁 3 紅在 qBittorrent 那一項、說出它少了
+- [x] 探針的 prototype 腳本在 `scripts/experiments/`，結論（含 qBittorrent 4.4.5 與 5.2.3 各自的行為）寫進 brief §20.2
+- [x] 整合測試：qBittorrent 看不到分類路徑時 Route 紅、理由指名 qBittorrent；看得到時綠（雙向）
+- [x] 前端測試：`library_path` 紅而 Jellyfin 是既有 → 片段是 Jellyfin 的；探針紅 → qBittorrent 的；`EXDEV` → berth 的
+- [x] 整合測試：加 Berth 路徑 404 時錯誤帶 Jellyfin 的原因、剛建的目錄被刪；兩個媒體庫都回報
+- [x] playwright 對 `berth-existing` 實跑：`bad-qbittorrent`（`:58081`）接上後頁 3 紅在 qBittorrent 那一項、說出它少了
       `/data`；`bad-jellyfin-elsewhere`（`:58097`）的補法指名 Jellyfin；`good/` 一路綠。附截圖或文字結果
-- [ ] 全部檢查（`pre-commit run --all-files`）、test、前端 e2e 綠燈
+- [x] 全部檢查（`pre-commit run --all-files`）、test、前端 e2e 綠燈
+
+## Comments
+
+**2026-09-30 實作（session 紀錄在 progress.md）**
+
+- 探針：`scripts/experiments/qbittorrent_visibility_probe.py` 對 4.4.5 與 5.2.3 各跑一輪，結論在 brief §20.2
+  （停住加入不會自己校驗；看得到 100%、看不到 0%、權限不足 `error`；temp path 不影響；兩版都會觸發「完成時執行
+  外部程式」）。做成 `RouteCheck.download_visible`，排在 `download_path` 之後。
+- 票面第 3 條「轉述 Jellyfin 回的原因」做不到原樣：12.1 對加不上的路徑只回 404 `Error processing request.`，
+  媒體庫不存在也是同一句（brief §20.7 再測）。改成送之前先寫探測檔、`ValidatePath` 問它，看不到就是
+  `jellyfin_cannot_see`，畫面說「Jellyfin 看不到 <路徑>：它沒掛 /data」。
+- 第 6 條定案：`library_path` 只驗寫入目標（plan §9.5、brief §16.4 已改）。
+
+**playwright 實跑（受測 Berth 在容器裡：`berth:t19-wip` 從工作樹 build，`DATA_ROOT` 指 `berth-trial/data`，
+容器 `berth-t19`、port 28383、子網 172.24.0.0/16；三輪各用全新的 `/config`；跑完 down 掉、刪目錄與 image，
+berth-existing 還原到實測前的快照）**
+
+- `good/`（ok-jellyfin + ok-qbittorrent）：Movies 預選 `/data/library/movies`，「建立並檢查」之後 6 / 6 通過
+  （分類已經是這樣、`/data/torrent/complete/movies` Berth 看得到、qBittorrent 讀得到探測檔、寫入目標看得到、
+  Jellyfin 看得到探測檔、硬鏈接 dev=69 同一個 inode）。
+- `bad-qbittorrent`（`:58081`，只掛 `/downloads`）：紅在第 3 條「qBittorrent 讀得到 Berth 寫的檔案」：
+  `qBittorrent cannot see /data/torrent/complete/movies: … found none of it (0% after a recheck)`，補法「你的
+  qBittorrent 看不到這個分類路徑：它多半沒掛 /data（例如只掛了 /downloads）…」，片段是 `qbittorrent:`；後面三條未執行。
+- `bad-jellyfin-elsewhere`（`:58097`）：新的 Berth 路徑加不上——「「Movies」沒加上 Berth 路徑」、「Jellyfin 看不到
+  /data/library/movies：它沒掛 /data。…」、片段 `jellyfin:`，沒有「手動加」、沒有 Jellyfin 的位址。改選它自己的
+  `/movies`：紅在 `library_path`（`/movies is not visible from the Berth container`），補法「你的 Jellyfin 把這個媒體庫
+  放在它自己的容器路徑…」、片段 `jellyfin:`，沒有 `berth:`。
+- 實跑抓到一個 bug（已修、`tests/unit/test_qbittorrent_probe.py` 守著）：5.2.3 的 `torrents/add` 回來時探針還不在
+  `torrents/info` 裡，第一版當場說「不見了」；而且那之前送的 recheck 會被靜默吃掉。現在先等它列出來再 recheck。
+
+**code-review 沒有處理的發現**
+
+- `library_path` 的兩種失敗共用一個補法：「寫入目標已經不在 Jellyfin 的路徑清單裡」（使用者在 Jellyfin 拿掉它）
+  也給 Jellyfin 的 volumes 片段，那不是掛載的事。原文說得清楚；票 21 統一錯誤呈現時一起分。
+- `probe_sight` 的 `finally` 刪探針失敗時，例外會蓋掉已經得到的答案，而那個探針會留在使用者的 qBittorrent 裡
+  （停住、不掛分類、名字 `.berth-probe-*`）。沒有 repro，不改。
+- `UNSETTLED`（20 秒內 qBittorrent 都在校驗別的）讓 Route 紅。健康迴圈已不跑探針，只剩手動檢查會撞上，理由說得出。
+- 加完路徑之後那一次 `client.libraries()` 失敗時，快照是加之前的樣子；頁 3 進頁會重讀，下一次就對了。
+- 判斷題的重複與中間人：`rstrip("/") or "/"` 現在三份（`routes._normalise_path`、qBittorrent adapter、
+  `services/qbittorrent`）；兩個前端測試檔各有一份 `writes()`；`_remember` 只剩轉呼叫；`BerthPathResult` 的失敗
+  建構寫了三次。都沒動。
+- `POST /api/setup/jellyfin/libraries/paths` 的 body 從 `{library}` 改成 `{libraries: [...]}`：只有 Berth 自己的前端
+  用它（同一個 image），CHANGELOG 已記。

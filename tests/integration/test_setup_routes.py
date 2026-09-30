@@ -32,6 +32,7 @@ from berth.domain import (
     CollectionType,
     HealthStatus,
     RouteCheck,
+    RouteRefusal,
     ServiceOrigin,
     StepStatus,
 )
@@ -42,11 +43,14 @@ from berth.models import (
     SetupSettings,
 )
 from berth.services.routes import (
+    RouteRejectedError,
     RouteSelection,
     RouteSetupStatus,
     build_routes,
+    check_routes,
     delete_route,
     read_route_status,
+    reread_libraries,
     routes_ready,
     save_path_of,
 )
@@ -165,6 +169,7 @@ class TestBundled:
         assert {step: row.status for step, row in checks(status, "tv").items()} == {
             RouteCheck.CATEGORY.value: StepStatus.OK,
             RouteCheck.DOWNLOAD_PATH.value: StepStatus.OK,
+            RouteCheck.DOWNLOAD_VISIBLE.value: StepStatus.OK,
             RouteCheck.LIBRARY_PATH.value: StepStatus.OK,
             RouteCheck.PROBE_VISIBLE.value: StepStatus.OK,
             RouteCheck.HARDLINK.value: StepStatus.OK,
@@ -235,10 +240,14 @@ class TestExisting:
         assert [row.target_path for row in status.libraries] == [berth]
 
     @pytest.mark.asyncio
-    async def test_a_single_path_is_preselected_as_the_brief_says(
+    async def test_the_new_berth_path_is_preselected_even_when_the_library_has_one_path(
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
-        """brief §4.3：只有一條路徑時自動選定。"""
+        """票 19：預設是還沒加的 Berth 路徑，不是使用者自己那一條（推翻 brief §4.3「自動選定」）。
+
+        旁邊的說明寫的是「不想讓它寫進你既有的資料夾」，預設選既有的就與它方向相反；要寫進既有的，
+        使用者自己選。
+        """
         old = roots["library"] / "old-tv"
         await arrange(
             session, roots, origin=ServiceOrigin.EXISTING, libraries=(existing_library(old),)
@@ -246,7 +255,7 @@ class TestExisting:
 
         status = await read_route_status(session)
 
-        assert [row.target_path for row in status.libraries] == [str(old)]
+        assert [row.target_path for row in status.libraries] == [berth_path(roots, "影集")]
 
     @pytest.mark.asyncio
     async def test_builds_a_route_for_each_selected_library(
@@ -491,6 +500,47 @@ class TestChecks:
         assert "/downloads" in row.error
 
     @pytest.mark.asyncio
+    async def test_a_qbittorrent_that_cannot_see_the_category_path_fails_the_route(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """票 19：分類路徑 Berth 看得到（那是它自己建的），qBittorrent 那一台卻只掛了 `/downloads`。
+
+        它讀不到 Berth 寫進分類路徑的探測檔：紅在這一條、理由指名 qBittorrent 與那條路徑，後面不跑。
+        """
+        await arrange(session, roots)
+        qbittorrent = applied_qbittorrent(roots, visible_roots=("/downloads",))
+
+        status = await build_routes(session, factory_for(roots, qbittorrent=qbittorrent), ())
+
+        tv = checks(status, "tv")
+        assert tv[RouteCheck.DOWNLOAD_PATH.value].status is StepStatus.OK
+        row = tv[RouteCheck.DOWNLOAD_VISIBLE.value]
+        assert row.status is StepStatus.FAILED
+        assert "qBittorrent" in row.error
+        assert save_path_of(str(roots["complete"]), "tv") in row.error
+        assert tv[RouteCheck.LIBRARY_PATH.value].status is StepStatus.PENDING
+        assert next(route for route in status.routes if route.slug == "tv").health is (
+            HealthStatus.FAILED
+        )
+
+    @pytest.mark.asyncio
+    async def test_a_qbittorrent_that_reads_the_probe_passes_and_nothing_is_left_behind(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """看得到的那一面：探針校驗完整就綠；探針 torrent 移除時不刪檔，探測檔由 Berth 自己刪。"""
+        await arrange(session, roots)
+        qbittorrent = applied_qbittorrent(roots)
+
+        status = await build_routes(session, factory_for(roots, qbittorrent=qbittorrent), ())
+
+        row = checks(status, "tv")[RouteCheck.DOWNLOAD_VISIBLE.value]
+        assert row.status is StepStatus.OK
+        assert row.detail == save_path_of(str(roots["complete"]), "tv")
+        assert len(qbittorrent.probed) == 3
+        assert qbittorrent.open_probes == {}
+        assert list(roots["complete"].rglob(".berth-probe-*")) == []
+
+    @pytest.mark.asyncio
     async def test_a_library_path_berth_cannot_see_fails_the_route(
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
@@ -508,6 +558,50 @@ class TestChecks:
         row = checks(status, status.routes[0].slug)[RouteCheck.LIBRARY_PATH.value]
         assert row.status is StepStatus.FAILED
         assert str(missing) in row.error
+
+    @pytest.mark.asyncio
+    async def test_only_the_write_target_has_to_be_visible_to_berth(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """票 19：舊路徑不動、加一條 Berth 路徑（brief §16.4）時，舊的 `/movies` 看不到也是綠的。
+
+        Berth 只在寫入目標底下讀寫檔案；舊路徑的作品經 Jellyfin 的 API 讀（`services/inventory.py`、
+        `services/reconcile.py` 都只走 Route 的目標）。
+        """
+        berth = berth_path(roots, "影集")
+        Path(berth).mkdir()
+        libraries = (existing_library("/movies", berth),)
+        await arrange(session, roots, origin=ServiceOrigin.EXISTING, libraries=libraries)
+
+        status = await build_routes(
+            session,
+            factory_for(roots, libraries=libraries),
+            (RouteSelection(library="影集", target_path=berth),),
+        )
+
+        row = checks(status, status.routes[0].slug)[RouteCheck.LIBRARY_PATH.value]
+        assert row.status is StepStatus.OK
+        assert row.detail == berth
+        assert status.routes[0].health is HealthStatus.OK
+
+    @pytest.mark.asyncio
+    async def test_a_target_jellyfin_no_longer_lists_fails_check_library_path(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """只驗寫入目標，但它仍要是媒體庫現在報的路徑之一：使用者在 Jellyfin 拿掉它之後就紅。"""
+        berth = berth_path(roots, "影集")
+        Path(berth).mkdir()
+        libraries = (existing_library(berth),)
+        await arrange(session, roots, origin=ServiceOrigin.EXISTING, libraries=libraries)
+        factory = factory_for(roots, libraries=libraries)
+        await build_routes(session, factory, (RouteSelection(library="影集", target_path=berth),))
+
+        moved = factory_for(roots, libraries=(existing_library(roots["library"] / "tv"),))
+        routes = await check_routes(session, moved)
+
+        row = next(step for step in routes[0].checks if step.step == RouteCheck.LIBRARY_PATH.value)
+        assert row.status is StepStatus.FAILED
+        assert berth in row.error
 
     @pytest.mark.asyncio
     async def test_a_jellyfin_that_cannot_see_the_probe_fails_the_route(
@@ -772,6 +866,45 @@ class TestStatus:
 
         chosen = {row.name: (row.has_route, row.target_path) for row in status.libraries}
         assert chosen["TV"] == (True, str(roots["library"] / "tv"))
+
+
+class TestReread:
+    """票 19：頁 3 進頁時重讀 Jellyfin，不再只靠頁 1 的快照。"""
+
+    @pytest.mark.asyncio
+    async def test_a_path_changed_in_jellyfin_after_page_one_shows_up(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        await arrange(
+            session,
+            roots,
+            origin=ServiceOrigin.EXISTING,
+            libraries=(existing_library("/movies"),),
+        )
+        moved = (existing_library("/data/media/tv"),)
+
+        status = await reread_libraries(session, factory_for(roots, libraries=moved))
+
+        assert [row.locations for row in status.libraries] == [("/data/media/tv",)]
+        assert [row.locations for row in (await read_route_status(session)).libraries] == [
+            ("/data/media/tv",)
+        ]
+
+    @pytest.mark.asyncio
+    async def test_a_jellyfin_that_does_not_answer_keeps_the_snapshot(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        libraries = (existing_library("/movies"),)
+        await arrange(session, roots, origin=ServiceOrigin.EXISTING, libraries=libraries)
+        down = fake_jellyfin(libraries, error=ServiceUnavailableError("connection refused"))
+
+        with pytest.raises(RouteRejectedError) as refused:
+            await reread_libraries(session, factory_for(roots, jellyfin=down))
+
+        assert refused.value.reason is RouteRefusal.JELLYFIN_UNREACHABLE
+        assert [row.locations for row in (await read_route_status(session)).libraries] == [
+            ("/movies",)
+        ]
 
 
 class TestChecksReadTheServices:

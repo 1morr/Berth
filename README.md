@@ -655,6 +655,14 @@ python scripts/experiments/qbittorrent_stopped_recheck.py --image lscr.io/linuxs
 python scripts/experiments/qbittorrent_stopped_recheck.py --only stopped_recheck_start --keep            # 只跑一個情境，留著容器
 ```
 
+qBittorrent 看不看得到 Berth 寫進分類路徑的檔：探針 torrent 在 4.4.5 與 5.2.3 上怎麼校驗（M4 票 19，brief §20.2）：
+自己起停一次性的 qBittorrent（前綴 `berth-exp-visibility`，只發佈在 `127.0.0.1:18095`），一個版本不到一分鐘：
+
+```bash
+python scripts/experiments/qbittorrent_visibility_probe.py     # 5.2.3；報告寫到 .local/experiments/results/qbittorrent-visibility-<版本>.json
+python scripts/experiments/qbittorrent_visibility_probe.py --image lscr.io/linuxserver/qbittorrent:4.4.5   # 支援下限
+```
+
 套件容器撞名、撞 port 時 `docker compose up -d` 怎麼收場，以及 `berth` 的 `host.docker.internal` 解到哪
 （M4 票 16，brief §20.14）：以 `deploy/docker-compose.yml` 改出一套隔離的 compose project（`berth-exp-collide`、
 子網 `172.26.0.0/16`、容器名前綴 `bexp-`、port 4xxxx），不碰這台機器上正在跑的部署；`berth` 用本地已有的 image，

@@ -305,7 +305,8 @@ async def _run(kind: ServiceKind, session: AsyncSession, factory: ServiceClientF
 
 async def _check_routes(session: AsyncSession, factory: ServiceClientFactory) -> HealthStatus:
     try:
-        await check_routes(session, factory)
+        # 探針不在迴圈裡跑：它會觸發使用者 qBittorrent 的「完成時執行外部程式」（M4 票 19）。
+        await check_routes(session, factory, probe_qbittorrent=False)
     except Exception:  # 同上：Route 那一項炸了不該弄丟前三項的結果
         logger.exception("route health checks failed unexpectedly")
         return HealthStatus.FAILED

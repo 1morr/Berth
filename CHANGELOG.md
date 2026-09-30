@@ -1183,6 +1183,25 @@ split-cour 的第一批被播出日比對整批擋在審核，改正一次並套
   存下並測試套件內那一台（鍵盤選到的另有「使用套件內的 X」）；這一頁有結果時換另一格走就地確認，焦點移進去、
   Esc 收起；確認之前標題就跟著選著的那一格；從既有換走時不再說 Berth 寫過那一台的偏好。
 - **compose 多傳 `PROWLARR_PORT` 給 `berth`**（M4 票 09）：「在 Prowlarr 加私站」的連結用它。
+- **Route 多一條檢查：qBittorrent 讀得到 Berth 寫的檔**（M4 票 19，brief §20.2）：`download_path` 之後的
+  `download_visible`。Berth 在分類路徑寫一個小檔、做成 private 的單檔 torrent，停住加進 qBittorrent（明送
+  `savepath`、不掛分類、不帶 tag）並校驗，100% 才是綠的，之後移除 torrent（不刪檔）、小檔由 Berth 刪。原本只在
+  Berth 容器裡 `stat` 那個它自己剛建的目錄，既有 qBittorrent 只掛 `/downloads` 時照樣綠。一條 Route 從五條纜繩
+  變六條（`RouteCheck.download_visible`）。精靈、新增 Route 與「重新檢查」時真的問；**5 分鐘的健康迴圈沿用上一次
+  的結論**：校驗到 100% 會觸發 qBittorrent 的「torrent 完成時執行外部程式」（4.4.5、5.2.3 實測）。
+- **`library_path` 只驗 Route 的寫入目標**（M4 票 19）：它仍要是那個媒體庫現在報的路徑之一、Berth 看得到；
+  媒體庫的其他路徑（例如舊的 `/movies`）Berth 看不到也不紅——Berth 只在寫入目標底下讀寫。
+- **頁 3 的補法指向要改的那一台**（M4 票 19）：`library_path`、`probe_visible` 給 Jellyfin 的 volumes 片段，探針給
+  qBittorrent 的，`download_path` 與硬鏈接的 `EXDEV` 才是 berth 自己；既有服務的說法是「你那一份 compose」、
+  照 TRaSH 用單一共用掛載。不是 `EXDEV` 的硬鏈接失敗不再附片段。
+- **「加入 Berth 路徑」逐個媒體庫試、逐個回報**（M4 票 19）：`POST /api/setup/jellyfin/libraries/paths` 的
+  body 從 `{library}` 改成 `{libraries: [...]}`，回應多 `berth_paths`（每個媒體庫的 `status`、`reason`、`error`）。
+  送出前先寫探測檔問 Jellyfin 看不看得到（它對加不上的路徑只回 404 `Error processing request.`），看不到就說
+  「Jellyfin 看不到 <路徑>：它沒掛 /data」並收回剛建的目錄；不再建議到 Jellyfin 手動加、不再給 Berth 連它用的
+  那個瀏覽器開不了的位址。
+- **頁 3 進頁時重讀既有 Jellyfin 的媒體庫**（M4 票 19）：`POST /api/setup/routes/libraries`，另有一顆「重新讀取」；
+  頁 1 之後在 Jellyfin 改的掛載與路徑看得到了。**既有模式的寫入目標預設「新的 Berth 路徑」**，只有一條路徑的
+  媒體庫也是（推翻 brief §4.3 的「自動選定」）。
 ### Removed
 - **精靈的偵測**（M4 票 15）：`POST /api/setup/detect`、「偵測服務」那一步與泊位板上方的前置列、「重新偵測這個服務」
   （換成出問題那一頁的「重新測試」）。選之前 Berth 不對任何服務發請求。

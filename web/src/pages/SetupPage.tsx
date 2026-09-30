@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next'
 
 import { ApiError } from '../api/client'
 import {
-  addLibraryPath,
+  addLibraryPaths,
   applyIndexers,
   applyQbittorrent,
   bootstrapJellyfin,
@@ -25,6 +25,7 @@ import {
   ownerRefusalOf,
   qbittorrentSetupQueryOptions,
   removeIndexer,
+  rereadRouteLibraries,
   retestService,
   routeSetupQueryOptions,
   saveBundledLibraries,
@@ -71,6 +72,7 @@ import {
 } from '../setup/navigation'
 import { type ChoiceControls } from '../setup/ServiceChoice'
 import { PAGE_TITLE, GhostButton } from '../components/controls'
+import { commonRoot } from '../components/routeChecks'
 import { type Signal } from '../components/signal'
 import { isSettled } from '../components/steps'
 import { connected, signalOf } from '../setup/signals'
@@ -219,8 +221,9 @@ export function SetupPage() {
         if (plan.buildLibraries && !(await stepThrough(bootstrapJellyfin()))) return null
         return buildRoutes([])
       }
-      for (const library of plan.newPaths) {
-        if (!(await stepThrough(addLibraryPath(library)))) return null
+      // 一次送全部：後端逐個試、逐個回報（M4 票 19），有一個沒加上就不建 Route。
+      if (plan.newPaths.length > 0 && !(await stepThrough(addLibraryPaths(plan.newPaths)))) {
+        return null
       }
       return buildRoutes(plan.selections)
     },
@@ -305,6 +308,17 @@ export function SetupPage() {
   })
   // 泊位板要畫得出走過的每一格，所以這三份跟著後端走到哪裡，不跟著畫面停在哪裡。
   const routes = useQuery({ ...routeSetupQueryOptions, enabled: backend >= STEP.routes })
+  // 頁 3 進頁時向既有 Jellyfin 重讀媒體庫（M4 票 19）：頁 1 之後在 Jellyfin 改的掛載與路徑要看得到。
+  // 讀的是 Jellyfin、寫的是 Berth 的快照，不動任何服務，所以不釘畫面。
+  const reread = useMutation({
+    mutationFn: rereadRouteLibraries,
+    onSuccess: (next) => queryClient.setQueryData(routeSetupQueryOptions.queryKey, next),
+  })
+  const rereadOnEntry = step === STEP.routes && routes.data?.origin === 'existing'
+  const { mutate: rereadNow } = reread
+  useEffect(() => {
+    if (rereadOnEntry) rereadNow()
+  }, [rereadOnEntry, rereadNow])
   const indexers = useQuery({ ...indexerSetupQueryOptions, enabled: backend >= STEP.indexer })
   const tmdb = useQuery({ ...tmdbSetupQueryOptions, enabled: backend >= STEP.tmdb })
 
@@ -412,6 +426,12 @@ export function SetupPage() {
             existing={{
               jellyfin: routes.data.origin === 'existing',
               qbittorrent: qbittorrentChoice?.origin === 'existing',
+              root: commonRoot(routes.data.complete_root, routes.data.library_root),
+            }}
+            reread={{
+              pending: reread.isPending,
+              failed: reread.isError,
+              onReread: () => reread.mutate(),
             }}
             docking={dock.isPending}
             failure={dockFailure(dock.error)}

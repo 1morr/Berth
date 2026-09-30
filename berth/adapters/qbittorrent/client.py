@@ -17,6 +17,7 @@ from berth.adapters.http import (
 )
 from berth.adapters.qbittorrent import (
     BAN_MARKER,
+    CONTENT_LAYOUT,
     IpBannedError,
     MaindataCursor,
     QbittorrentCategory,
@@ -26,7 +27,9 @@ from berth.adapters.qbittorrent import (
     TorrentRejectedError,
     TorrentStatus,
     add_form,
+    parse_status,
 )
+from berth.adapters.torrent import info_hash_of, probe_torrent
 
 #: `torrents/add` 對「不收這一個」用的狀態碼。實測兩種成因（見 `_reason`）。
 CONFLICT = 409
@@ -160,6 +163,41 @@ class HttpQbittorrentClient:
         if response.status_code == 200 and _accepted(response):
             return
         raise TorrentRejectedError(f"torrents/add: {response.status_code} {_reason(response)}")
+
+    async def add_probe(self, name: str, payload: bytes, *, save_path: str) -> str:
+        """探針的 `torrents/add`（M4 票 19）。與 `add_torrent` 刻意不同的幾件事：
+
+        - `savepath` 明送、`autoTMM=false`、不掛分類：問的正是「這條路徑」，不能讓分類或全域
+          預設決定它落在哪裡。
+        - **停住加入**（`paused` / `stopped` 隨版本，送錯會被靜默忽略，brief §20.7），校驗由
+          呼叫端的 `recheck` 觸發。
+        - 不帶 tag：tag 在 qBittorrent 上一建就留在使用者的清單裡；`berth` 那一個會讓 poller
+          把它當成 Berth 的下載。
+        """
+        version = await self.version()
+        content = probe_torrent(name, payload)
+        response = await self._session.request(
+            "POST",
+            "/api/v2/torrents/add",
+            data={
+                "savepath": save_path,
+                "autoTMM": "false",
+                "contentLayout": CONTENT_LAYOUT,
+                version.pause_parameter: "true",
+            },
+            files={"torrents": (f"{name}.torrent", content, "application/x-bittorrent")},
+            tolerate=(409, 415),
+        )
+        if response.status_code == 200 and _accepted(response):
+            return info_hash_of(content)
+        raise TorrentRejectedError(f"torrents/add: {response.status_code} {_reason(response)}")
+
+    async def torrent(self, info_hash: str) -> TorrentStatus | None:
+        payload = json_body(await self._session.get(f"/api/v2/torrents/info?hashes={info_hash}"))
+        if not isinstance(payload, list):
+            raise ProtocolMismatchError("torrents/info: expected an array")
+        row = next((row for row in payload if isinstance(row, dict)), None)
+        return parse_status(info_hash, row) if row is not None else None
 
     async def delete_torrent(self, info_hash: str, *, delete_files: bool) -> None:
         """`torrents/delete`（2026-09-22 對 4.1.0–5.2.3 逐個 tag 核對原始碼，brief §20.2）。

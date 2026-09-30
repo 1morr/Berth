@@ -180,11 +180,16 @@ export function connectJellyfin(body: JellyfinConnectInput): Promise<JellyfinSet
   return apiPost<JellyfinSetup>('/setup/jellyfin/connect', body)
 }
 
-export function addLibraryPath(library: string): Promise<JellyfinSetup> {
+/** 替這幾個媒體庫加 Berth 路徑：逐個試、逐個回報在 `berth_paths`（M4 票 19）。 */
+export function addLibraryPaths(libraries: string[]): Promise<JellyfinSetup> {
   return apiPost<JellyfinSetup>('/setup/jellyfin/libraries/paths', {
-    library,
+    libraries,
   } satisfies Schemas['LibraryPathIn'])
 }
+
+/** 一個媒體庫加 Berth 路徑的結果。 */
+export type BerthPath = Schemas['BerthPathOut']
+export type BerthPathFailure = Schemas['BerthPathFailure']
 
 /** --- 頁 2：qBittorrent（plan §9.3、§8.1）--- */
 
@@ -348,6 +353,11 @@ export const routeSetupQueryOptions = queryOptions({
 
 export function buildRoutes(selections: RouteSelectionInput[]): Promise<RouteSetup> {
   return apiPost<RouteSetup>('/setup/routes', { selections } satisfies Schemas['RoutesIn'])
+}
+
+/** 頁 3 進頁時（與「重新讀取」）向 Jellyfin 重讀媒體庫，換掉頁 1 的快照（M4 票 19）。 */
+export function rereadRouteLibraries(): Promise<RouteSetup> {
+  return apiPost<RouteSetup>('/setup/routes/libraries', {})
 }
 
 /**
