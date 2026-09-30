@@ -42,6 +42,7 @@ from berth.domain import (
     MediaSnapshot,
     ParseContext,
     SeasonSnapshot,
+    StepFailure,
     StepStatus,
     Tags,
     collection_type_for,
@@ -53,7 +54,7 @@ from berth.services.clients import ServiceClientFactory
 from berth.services.inventory import EpisodeView, SeasonView
 from berth.services.media import read_media, read_snapshot
 from berth.services.settings import read_settings
-from berth.services.steps import StepView, message
+from berth.services.steps import StepView, failure_of, message
 
 #: 一次搜尋最多發幾個查詢。每一個都是「請這台索引站現場去連它認得的每一個追蹤站」，
 #: 所以上限不是為了省 Berth 的力氣，是為了不要替使用者把那些公開站打到封 IP。
@@ -502,11 +503,21 @@ async def _attempt(
                 status=StepStatus.FAILED,
                 detail="",
                 error=f"the indexer did not answer within {timeout:.0f}s",
+                failure=StepFailure.UNREACHABLE,
             ),
             (),
         )
     except ServiceError as exc:
-        return (StepView(step=step, status=StepStatus.FAILED, detail="", error=message(exc)), ())
+        failure, params = failure_of(exc)
+        failed = StepView(
+            step=step,
+            status=StepStatus.FAILED,
+            detail="",
+            error=message(exc),
+            failure=failure,
+            params=params,
+        )
+        return (failed, ())
     return (
         StepView(step=step, status=StepStatus.OK, detail=str(len(rows)), error=""),
         rows,

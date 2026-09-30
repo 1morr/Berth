@@ -27,6 +27,7 @@ from berth.domain import (
     ServiceKind,
     ServiceOrigin,
     SiteFailure,
+    StepFailure,
     StepStatus,
 )
 from berth.services.clients import bundled_targets
@@ -101,6 +102,10 @@ class ServiceOut(BaseModel):
     reason: ConnectionReason | None
     #: 實測值（版本號、索引站數量）。UI 直接顯示，不翻譯。
     detail: str
+    #: 沒連上時服務回的原文（英文），收進「技術細節」（M4 票 21）。
+    error: str
+    #: 這個位址上連續幾次帳密不被接受（qBittorrent 預設 5 次封 IP，brief §20.2）。
+    auth_failures: int
     #: 套件內那一台還在啟動時，這一輪已經等了幾秒。
     waited_seconds: int
 
@@ -598,6 +603,8 @@ class IndexerSetupOut(BaseModel):
     web_ui_login: bool
     #: Berth 替套件內 Prowlarr 設下的介面帳號；還沒設過是空字串。
     web_ui_username: str
+    #: 讀清單那一次為什麼失敗（M4 票 21）。讀到了是 `null`。
+    failure: StepFailure | None
     error: str
     #: 上一次連線測試的理由；還沒測過是 `null`（M4 票 17：既有表單照它選補法）。
     reason: ConnectionReason | None

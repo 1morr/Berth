@@ -921,7 +921,21 @@ M1.5 拆票前的四條待決，2026-09-15 已全數照推薦拍板（上表「M
   而其他端點上的 403 與「沒有登入」完全同形，分不出來。門檻是連續 5 次
   （`WebUI\MaxAuthenticationFailCount`），封鎖時間預設 3600 秒（`WebUI\BanDuration`），
   兩者都存在記憶體裡，重啟容器就清掉。下一步不同是分開的理由：帳密不對要去改設定，
-  被封要等過期或去 qBittorrent 的介面解除——改帳密只會再失敗五次，把封鎖時間重新算一輪。
+  被封要等過期或重啟 qBittorrent——改帳密只會再失敗五次，把封鎖時間重新算一輪。
+
+  **偏好鍵與預設值**（2026-09-30 讀原始碼查證，M4 票 21；tag `release-4.4.5` 與 `release-5.0.4`，兩版相同）：
+  Web API 的鍵是 `web_ui_max_auth_fail_count`（次數，預設 5，設定檔 `Preferences/WebUI/MaxAuthenticationFailCount`）
+  與 `web_ui_ban_duration`（**秒**，預設 3600，`Preferences/WebUI/BanDuration`）——`src/webui/api/appcontroller.cpp`
+  讀寫這兩個鍵（4.4.5 第 248–249、667–670 行；5.0.4 第 316–317、876–879 行），預設值在 `src/base/preferences.cpp`
+  （4.4.5 第 662、672 行；5.0.4 第 797、810 行）。計數與封鎖表是 `src/webui/api/authcontroller.h` 的
+  `m_clientFailedLogins`（記憶體裡的 `QHash`，重啟清空），**登入成功才把那個 IP 移除**（`authcontroller.cpp`
+  5.0.4 第 82 行、4.4.5 第 69 行），不隨時間衰減；**被封期間連對的帳密也被拒**（`isBanned()` 在驗密碼之前，
+  5.0.4 第 68–75 行）。`max_auth_fail_count = 0` 不計也不封（5.0.4 第 90–91 行）。WebUI 沒有解除封鎖的介面，
+  API 也沒有：只能等期滿或重啟 qBittorrent（桌面版的「封鎖的 IP」是對 peer 的，無關）。被封時 Berth 讀不到那一台
+  的偏好，所以精靈說的是預設值（`components/services.BAN_DEFAULTS`），並從第 3 次連錯起預警。原始碼：
+  [appcontroller.cpp 5.0.4](https://github.com/qbittorrent/qBittorrent/blob/release-5.0.4/src/webui/api/appcontroller.cpp)、
+  [authcontroller.cpp 5.0.4](https://github.com/qbittorrent/qBittorrent/blob/release-5.0.4/src/webui/api/authcontroller.cpp)、
+  [preferences.cpp 4.4.5](https://github.com/qbittorrent/qBittorrent/blob/release-4.4.5/src/base/preferences.cpp)。
 
 - **`auth/login` 在 session 還活著時直接回成功，連密碼都不看**（同一輪實測：帶著 SID 打八次錯的
   密碼全部是 `200` + `Ok.`）。所以「驗一次帳密對不對」必須從沒有 cookie 的狀態發起。

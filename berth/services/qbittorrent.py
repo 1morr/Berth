@@ -19,7 +19,6 @@
 
 from __future__ import annotations
 
-import contextlib
 from collections.abc import Container, Iterable, Mapping
 from dataclasses import dataclass
 from typing import Any
@@ -39,6 +38,7 @@ from berth.domain import (
     QbittorrentStep,
     ServiceKind,
     ServiceOrigin,
+    StepFailure,
     StepStatus,
 )
 from berth.models import Job, PathSettings, QbittorrentSettings, Route, SetupSettings, SetupStep
@@ -49,6 +49,8 @@ from berth.services.settings import read_settings, write_settings
 from berth.services.steps import (
     InterfaceLogin,
     StepView,
+    failed_step,
+    failure_of,
     hash_password,
     message,
     password_matches,
@@ -124,10 +126,21 @@ async def sign_in(client: QbittorrentClient, settings: QbittorrentSettings) -> N
     呼叫會丟同一個 `AuthFailedError`，原文就落在那一行），而不是一個把整頁換成 500、
     連哪個 Route 卡住都看不出來的例外。
     """
+    await try_sign_in(client, settings)
+
+
+async def try_sign_in(
+    client: QbittorrentClient, settings: QbittorrentSettings
+) -> ServiceError | None:
+    """`sign_in`，但把失敗交回來。Route 檢查要把它說成第一條的紅燈（M4 票 21）：帳密錯時
+    接下來的 403 與「沒登入」同形（brief §20.2），原因只有這一次登入說得出來。"""
     if not settings.username:
-        return
-    with contextlib.suppress(ServiceError):
+        return None
+    try:
         await client.login(settings.username, settings.password)
+    except ServiceError as exc:
+        return exc
+    return None
 
 
 @dataclass(frozen=True, slots=True)
@@ -165,7 +178,9 @@ class QbittorrentSetupStatus:
     web_ui_username: str
     #: 建議鍵會被寫。既有的那一台是 `False`：按鈕只是確認連得上、版本夠新。
     writes_preferences: bool
-    #: 連線本身的失敗原文（英文）。UI 貼在手動步驟旁邊。
+    #: 連線本身為什麼失敗（M4 票 21）：UI 照它說人話。連上了是 `None`。
+    failure: StepFailure | None
+    #: 連線本身的失敗原文（英文）。UI 收進「技術細節」。
     error: str
 
 
@@ -179,13 +194,15 @@ async def read_qbittorrent_diff(
     origin, base_url = qbittorrent_target(setup, settings)
     if origin is None:
         # 選之前不連（M4 票 15）：不知道那一台是誰的，連「讀」也不去敲。
-        return _unreachable(setup, settings, origin, base_url, "choose where it comes from first")
+        return _unreachable(
+            setup, settings, origin, base_url, ValueError("choose where it comes from first")
+        )
 
     client = factory.qbittorrent(base_url)
     try:
         version, preferences = await _connect(client, settings)
     except ServiceError as exc:
-        return _unreachable(setup, settings, origin, base_url, message(exc))
+        return _unreachable(setup, settings, origin, base_url, exc)
     finally:
         await client.aclose()
 
@@ -250,7 +267,7 @@ async def apply_qbittorrent(
         steps.append(await _apply_password(client, setup, origin, login, preferences))
         preferences = dict(await client.preferences())
     except ServiceError as exc:
-        return _unreachable(setup, settings, origin, base_url, message(exc))
+        return _unreachable(setup, settings, origin, base_url, exc)
     finally:
         await client.aclose()
 
@@ -292,7 +309,7 @@ async def set_interface_login(
         version, preferences = await _connect(client, settings)
         step = await _apply_password(client, setup, origin, login, preferences)
     except ServiceError as exc:
-        return _unreachable(setup, settings, origin, base_url, message(exc))
+        return _unreachable(setup, settings, origin, base_url, exc)
     finally:
         await client.aclose()
 
@@ -359,7 +376,7 @@ async def _apply_password(
         )
     except ServiceError as exc:
         # 這一條失敗不該把前面幾個鍵的結果一起丟掉——它們已經寫進去了。
-        return SetupStep(key=key, status=StepStatus.FAILED, error=message(exc))
+        return failed_step(key, exc)
     record.web_ui_username = login.username
     record.web_ui_password_hash = hash_password(login.password)
     return SetupStep(key=key, status=StepStatus.OK, detail=login.username)
@@ -497,6 +514,7 @@ def _status(
         web_ui_login=origin is ServiceOrigin.BUNDLED,
         web_ui_username=_web_ui_username(setup, origin, preferences),
         writes_preferences=writes_preferences(origin),
+        failure=None,
         error="",
     )
 
@@ -506,8 +524,9 @@ def _unreachable(
     settings: QbittorrentSettings,
     origin: ServiceOrigin | None,
     base_url: str,
-    error: str,
+    exc: Exception,
 ) -> QbittorrentSetupStatus:
+    failure, _ = failure_of(exc)
     return QbittorrentSetupStatus(
         origin=origin,
         base_url=base_url,
@@ -521,7 +540,8 @@ def _unreachable(
         web_ui_login=origin is ServiceOrigin.BUNDLED,
         web_ui_username=_web_ui_username(setup, origin, {}),
         writes_preferences=writes_preferences(origin),
-        error=error,
+        failure=failure,
+        error=message(exc),
     )
 
 

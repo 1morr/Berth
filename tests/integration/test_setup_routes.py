@@ -34,6 +34,7 @@ from berth.domain import (
     RouteCheck,
     RouteRefusal,
     ServiceOrigin,
+    StepFailure,
     StepStatus,
 )
 from berth.models import (
@@ -483,6 +484,9 @@ class TestChecks:
         category = checks(status, "tv")[RouteCheck.CATEGORY.value]
         assert category.status is StepStatus.FAILED
         assert "/mnt/old/tv" in category.error
+        # 畫面照代碼說人話，路徑是參數（M4 票 21）。
+        assert category.failure is StepFailure.CATEGORY_CONFLICT
+        assert category.params["path"] == "/mnt/old/tv"
         # 其他兩個 Route 的 category 照建；不覆寫的只有撞上的那一個。
         assert [row.name for row in qbittorrent.created_categories] == [
             "berth-movies",
@@ -508,6 +512,7 @@ class TestChecks:
         category = checks(status, "tv")[RouteCheck.CATEGORY.value]
         assert category.status is StepStatus.FAILED
         assert "/mnt/temp/tv" in category.error
+        assert category.failure is StepFailure.CATEGORY_CONFLICT
         # 兩邊並排；路徑以 repr 印（Windows 上的暫存路徑有反斜線）。
         assert repr(incomplete_path_of(str(roots["incomplete"]), "tv")) in category.error
         assert await qbittorrent.categories() == (tv, *qbittorrent.created_categories)
@@ -545,6 +550,7 @@ class TestChecks:
         row = checks(status, "tv")[RouteCheck.DOWNLOAD_PATH.value]
         assert row.status is StepStatus.FAILED
         assert "/downloads" in row.error
+        assert (row.failure, row.params) == (StepFailure.PATH_NOT_VISIBLE, {"path": "/downloads"})
 
     @pytest.mark.asyncio
     async def test_a_qbittorrent_that_cannot_see_the_category_path_fails_the_route(
@@ -564,6 +570,7 @@ class TestChecks:
         row = tv[RouteCheck.DOWNLOAD_VISIBLE.value]
         assert row.status is StepStatus.FAILED
         assert "qBittorrent" in row.error
+        assert row.failure is StepFailure.PROBE_UNSEEN
         assert save_path_of(str(roots["complete"]), "tv") in row.error
         assert tv[RouteCheck.LIBRARY_PATH.value].status is StepStatus.PENDING
         assert next(route for route in status.routes if route.slug == "tv").health is (
@@ -605,6 +612,7 @@ class TestChecks:
         row = checks(status, status.routes[0].slug)[RouteCheck.LIBRARY_PATH.value]
         assert row.status is StepStatus.FAILED
         assert str(missing) in row.error
+        assert (row.failure, row.params) == (StepFailure.PATH_NOT_VISIBLE, {"path": str(missing)})
 
     @pytest.mark.asyncio
     async def test_only_the_write_target_has_to_be_visible_to_berth(
@@ -649,6 +657,10 @@ class TestChecks:
         row = next(step for step in routes[0].checks if step.step == RouteCheck.LIBRARY_PATH.value)
         assert row.status is StepStatus.FAILED
         assert berth in row.error
+        assert (row.failure, row.params) == (
+            StepFailure.LIBRARY_PATH_GONE,
+            {"library": "影集", "path": berth},
+        )
 
     @pytest.mark.asyncio
     async def test_a_jellyfin_that_cannot_see_the_probe_fails_the_route(
@@ -663,6 +675,7 @@ class TestChecks:
         row = checks(status, "movies")[RouteCheck.PROBE_VISIBLE.value]
         assert row.status is StepStatus.FAILED
         assert str(roots["library"] / "movies") in row.error
+        assert row.failure is StepFailure.JELLYFIN_CANNOT_SEE
 
     @pytest.mark.asyncio
     async def test_cross_device_is_reported_as_such(
@@ -689,13 +702,16 @@ class TestChecks:
         status = await build_routes(session, factory_for(roots, qbittorrent=qbittorrent), ())
 
         assert [row.health for row in status.routes] == [HealthStatus.FAILED] * 3
-        assert "connection refused" in checks(status, "tv")[RouteCheck.CATEGORY.value].error
+        category = checks(status, "tv")[RouteCheck.CATEGORY.value]
+        assert "connection refused" in category.error
+        assert category.failure is StepFailure.UNREACHABLE
 
     @pytest.mark.asyncio
     async def test_wrong_qbittorrent_credentials_land_on_the_category_line(
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
-        """既有 qBittorrent 的帳密不對是**那一條纜繩**的紅燈，不是整頁 500。"""
+        """既有 qBittorrent 的帳密不對是**那一條纜繩**的紅燈，不是整頁 500；而且說的是登入那一次
+        （M4 票 21）：原本登入的失敗被吞掉，紅燈是建分類時的 403，補法給成「分類衝突」。"""
         await arrange(session, roots)
         await write_settings(
             session,
@@ -711,7 +727,11 @@ class TestChecks:
         status = await build_routes(session, factory_for(roots, qbittorrent=qbittorrent), ())
 
         assert [row.health for row in status.routes] == [HealthStatus.FAILED] * 3
-        assert "403" in checks(status, "tv")[RouteCheck.CATEGORY.value].error
+        category = checks(status, "tv")[RouteCheck.CATEGORY.value]
+        assert (category.failure, category.error) == (
+            StepFailure.AUTH_REJECTED,
+            "auth/login: rejected",
+        )
 
     @pytest.mark.asyncio
     async def test_a_failed_check_leaves_the_rest_pending(
@@ -994,6 +1014,7 @@ class TestChecksReadTheServices:
         row = checks(status, "tv")[RouteCheck.DOWNLOAD_PATH.value]
         assert row.status is StepStatus.FAILED
         assert "global save_path" in row.error
+        assert row.failure is StepFailure.SAVE_PATH_MISSING
 
     @pytest.mark.asyncio
     async def test_a_library_deleted_in_jellyfin_after_step_three_fails_check_two(
@@ -1008,4 +1029,5 @@ class TestChecksReadTheServices:
         row = checks(status, "tv")[RouteCheck.LIBRARY_PATH.value]
         assert row.status is StepStatus.FAILED
         assert "no longer has a library named 'TV'" in row.error
+        assert (row.failure, row.params) == (StepFailure.LIBRARY_GONE, {"library": "TV"})
         assert next(row for row in status.routes if row.slug == "movies").health is HealthStatus.OK

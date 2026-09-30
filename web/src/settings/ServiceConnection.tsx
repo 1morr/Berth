@@ -10,7 +10,6 @@ import {
   type ChoiceInput,
   type SetupStatus,
 } from '../api/setup'
-import { Notice } from '../components/controls'
 import { useChoiceDraft } from '../setup/choiceDraft'
 import { ServiceChoice } from '../setup/ServiceChoice'
 import { SettingsSection } from './SettingsFrame'
@@ -69,19 +68,18 @@ export function ServiceConnection({
           choosing={choose.isPending}
           retesting={retest.isPending}
           refusal={choiceRefusalOf(choose.error)}
+          requestError={
+            choose.isError && !choiceRefusalOf(choose.error)
+              ? choose.error
+              : retest.isError
+                ? retest.error
+                : null
+          }
           onChoose={(input, done) => choose.mutate(input, { onSuccess: done })}
           onRetest={(restart) => retest.mutate(restart)}
           locked={kind === 'jellyfin' ? t('settings.connection.locked') : undefined}
           switchWarning={kind === 'qbittorrent' ? t('choice.switchWarning.qbittorrent') : undefined}
         />
-      )}
-      {/* 說得出理由的拒絕掛在表單上（`ServiceChoice`），這一條只給沒送到的。 */}
-      {((choose.isError && !choiceRefusalOf(choose.error)) || retest.isError) && (
-        <div className="mt-3">
-          <Notice signal="blocked" label={t('common.failed')}>
-            {t('settings.connection.failed')}
-          </Notice>
-        </div>
       )}
     </SettingsSection>
   )

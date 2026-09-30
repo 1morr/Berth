@@ -3,58 +3,71 @@ import { useTranslation } from 'react-i18next'
 
 import type { SetupStep, StepStatus } from '../api/schemas'
 import { CopyLine } from './controls'
+import { failureText } from './failures'
 import { SIGNAL_FILL } from './signal'
 import { STATUS_LABEL, STATUS_SIGNAL } from './steps'
+import { TechnicalDetails } from './TechnicalDetails'
 
 /**
  * 一條纜繩：靠泊序列裡的一個步驟（direction contract 的署名互動）。
  *
- * 每個泊位的步驟集合不同，但形狀完全一樣：色塊 + 模板字狀態 + 名稱 + 實測值 + 它打的端點；
- * 失敗**就地**變紅並展開可複製的手動步驟，其餘已繫上的纜繩不動。
+ * 每個泊位的步驟集合不同，但形狀完全一樣：色塊 + 模板字狀態 + 名稱 + 關鍵值；失敗**就地**變紅並展開
+ * 一句人話、補法與可複製的手動步驟，其餘已繫上的纜繩不動。
+ *
+ * **錯誤分三層**（M4 票 21，`.scratch/m4/error-layers-shape.md`）：人話由後端的代碼（`row.failure`）選，
+ * 不是後端的英文；補法由呼叫端照代碼與來源給；端點、實測值與原文收進「技術細節」——通過的那一列
+ * 放在行尾，失敗的那一列放在補法之後。
  */
-
 export function StepLine({
   label,
+  service,
   endpoint,
+  summary,
   row,
   fix,
   commands = [],
   children,
 }: {
   label: string
-  /** 這一步真的打的那支端點，或它寫的那個鍵。貼在它那一行，不進散文。 */
+  /** 造成失敗的那一台（「連不到 qBittorrent」）。人話裡的 `{{service}}`。 */
+  service?: string
+  /** 這一步真的打的那支端點，或它寫的那個鍵。收進技術細節。 */
   endpoint?: string
+  /**
+   * 貼在行首的關鍵值（路徑、分類名、筆數）。沒給就沒有：`row.detail` 是後端的實測值，收進技術細節。
+   */
+  summary?: string
   row: SetupStep | undefined
-  /** 失敗時的說明。手動步驟本身在 `commands`。 */
+  /** 失敗時的補法。手動步驟本身在 `commands`。 */
   fix?: string
   commands?: readonly string[]
-  /** 失敗區塊末尾的補充（例如「重試只會跑沒完成的那幾步」）。 */
+  /** 失敗區塊裡補法之後的補充（例如「重試只會跑沒完成的那幾步」）。 */
   children?: ReactNode
 }) {
   const { t } = useTranslation()
   const status: StepStatus = row?.status ?? 'pending'
+  const failed = status === 'failed' && row !== undefined
+  // 行首已經貼著的值不在技術細節裡再列一次（搜尋那一排的筆數就是 `detail`）。
+  const technical = [endpoint, row?.detail !== summary ? row?.detail : null, row?.error]
 
   return (
     <li
-      className={`min-w-0 border-2 bg-well ${
-        status === 'failed' ? 'border-rule-strong' : 'border-rule'
-      }`}
+      className={`min-w-0 border-2 bg-well ${failed ? 'border-rule-strong' : 'border-rule'}`}
+      data-failure={failed ? (row.failure ?? 'unexpected') : undefined}
     >
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
         <span className={`label px-2 py-1.5 ${SIGNAL_FILL[STATUS_SIGNAL[status]]}`}>
           {t(STATUS_LABEL[status])}
         </span>
         <span className="value text-sm font-semibold text-ink">{label}</span>
-        {row?.detail && <span className="value text-xs text-ink">{row.detail}</span>}
-        {endpoint && (
-          <span className="value ml-auto min-w-0 truncate text-xs text-ink-dim">{endpoint}</span>
-        )}
+        {summary && <span className="value text-xs wrap-anywhere text-ink">{summary}</span>}
+        {!failed && <TechnicalDetails inline lines={technical} />}
       </div>
 
-      {status === 'failed' && row && (
+      {failed && (
         <div className="border-t-2 border-rule bg-hull px-4 py-4">
-          <p role="alert" className="value max-w-prose wrap-anywhere text-xs text-blocked-ink">
-            {row.error}
+          <p role="alert" className="max-w-prose text-sm text-blocked-ink">
+            {failureText(t, row, service ?? label)}
           </p>
           {fix && (
             <>
@@ -70,6 +83,7 @@ export function StepLine({
             </div>
           )}
           {children}
+          <TechnicalDetails lines={technical} />
         </div>
       )}
     </li>

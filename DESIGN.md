@@ -419,8 +419,15 @@ flex / grid 子項的最小寬度，一串沒有空格的發佈名在 390px 上�
 不進散文。剖面（`Cutaway`）是 `dt` / `dd` 的兩欄表，不是段落。
 
 **The Failure Expands In Place Rule（失敗就地展開）。** 任何失敗都在它自己那一列的下方就地展開
-（服務回的原文 + 修正說明 + 可複製指令），其他列不動、不跳頁、不開 dialog。二次確認同樣就地展開
+（一句人話 + 修正說明 + 可複製指令 + 收起的「技術細節」），其他列不動、不跳頁、不開 dialog。二次確認同樣就地展開
 成一段說明加兩顆按鈕。
+
+**The Original Is Evidence, Not A Headline Rule（原文是證據，不是標題）。** 精靈、設定頁與健康頁上，後端的英文原文、
+HTTP 狀態、端點、errno、inode 不當標題：人話由後端的封閉代碼選 i18n 文案（`components/failures.ts`），原文收進
+`TechnicalDetails`——原生 `<details>`、預設收起、`summary` 是 `.label`「技術細節」，內容是 `.value text-xs wrap-anywhere`
+的機器字串，底是 `hull` 加 `border-2 border-rule`。通過的那一列放在行尾（收著時是一個小標籤，展開換到自己一整行），
+失敗的那一列放在補法之後（M4 票 21，`.scratch/m4/error-layers-shape.md`）。`web/eslint.config.js` 擋把 `.error` /
+`.message` 直接畫成子節點。
 
 **The Focus Follows The Confirm Rule（確認就地展開，焦點跟著走）。** 確認不是 dialog，瀏覽器不會替它管焦點，
 所以每一個就地確認都走 `useInPlaceConfirm` 加 `ConfirmPanel`：展開時焦點進到確認區塊（`role="group"` + `tabIndex={-1}`，

@@ -94,9 +94,10 @@ describe('健康頁', () => {
     })
     renderApp('/health')
 
-    const path = await screen.findByText('/mnt/disk2/tv')
+    // 第一個是 Route 列自己的那一行；展開後的檢查也貼著同一條路徑（M4 票 21 的關鍵值）。
+    const [path] = await screen.findAllByText('/mnt/disk2/tv')
     expect(path.className).not.toMatch(/truncate/)
-    expect(screen.getByText('/mnt/disk1/tv')).toBeVisible()
+    expect(screen.getAllByText('/mnt/disk1/tv')[0]).toBeVisible()
   })
 
   it('四項全綠時泊位板四格都是已繫上（票 10 驗收）', async () => {
@@ -353,12 +354,17 @@ describe('健康頁', () => {
     const { container } = renderApp('/health')
 
     await screen.findByRole('region', { name: 'Jellyfin' })
-    const rows = container.querySelectorAll<HTMLDetailsElement>('details')
+    // 技術細節也是 `<details>`（M4 票 21），只數 Route 列那一層。
+    const rows = container.querySelectorAll<HTMLDetailsElement>(
+      'details:not([data-testid="technical-details"])',
+    )
 
     expect(rows).toHaveLength(2)
     expect(rows[0].open).toBe(false)
     expect(rows[1].open).toBe(true)
-    expect(screen.getByText('Jellyfin cannot see /data/library/anime')).toBeInTheDocument()
+    // 原文在技術細節裡，收著；人話在上面。
+    expect(screen.getByText('Jellyfin cannot see /data/library/anime')).not.toBeVisible()
+    expect(screen.getByText(/^發生了沒預料到的錯誤/)).toBeVisible()
   })
 
   it('「立即重測」真的重跑一輪，而且載入這一頁時不會自己跑', async () => {

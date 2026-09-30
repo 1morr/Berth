@@ -57,6 +57,11 @@ export interface InterfaceLoginForm {
   take: () => TakenLogin
   /** 設好之後清掉密碼、收起欄位；帳號留成剛設的那一個。 */
   reset: (username: string) => void
+  /**
+   * 改過幾次欄位（M4 票 21）。呼叫端在送出時記下它，之後拒絕與失敗只在它沒變時才畫——改了一格，
+   * 上一次的「這不是 X 的 Jellyfin 密碼」說的就不是現在這幾格了。
+   */
+  edits: number
 }
 
 /**
@@ -81,14 +86,25 @@ export function useInterfaceLogin({
   const [reuse, setReuse] = useState(Boolean(owner))
   const [changing, setChanging] = useState(false)
   const [checked, setChecked] = useState(false)
+  const [edits, setEdits] = useState(0)
   const open = alwaysOpen || changing || !current
   const reusing = reuse && Boolean(owner)
 
   return {
     draft,
-    change: (patch) => setDraft((was) => ({ ...was, ...patch })),
+    change: (patch) => {
+      setDraft((was) => ({ ...was, ...patch }))
+      setEdits((count) => count + 1)
+    },
     reuse: reusing,
-    setReuse,
+    // 換一種登入：打過的密碼是另一種的（Jellyfin 的，或新的那一組），不帶過去；上一次按過送出的
+    // 「哪一格不對」也不帶——確認欄還沒填就說「不一樣」是冤枉人（M4 票 21）。
+    setReuse: (next) => {
+      setReuse(next)
+      setDraft((was) => ({ ...was, password: '', confirm: '' }))
+      setChecked(false)
+      setEdits((count) => count + 1)
+    },
     owner,
     problems: checked ? loginProblems(draft, reusing) : {},
     open,
@@ -105,5 +121,6 @@ export function useInterfaceLogin({
       setChanging(false)
       setChecked(false)
     },
+    edits,
   }
 }

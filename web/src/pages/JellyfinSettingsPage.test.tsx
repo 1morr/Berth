@@ -162,7 +162,7 @@ describe('設定 → Jellyfin', () => {
       password: '',
     })
     // 存完表單收起來，測試那一條說的是新的那一台。
-    expect(await connection.findByText('192.168.1.20:8096/System/Info/Public')).toBeVisible()
+    expect(await connection.findByText('192.168.1.20:8096')).toBeVisible()
     expect(connection.queryByLabelText('位址')).not.toBeInTheDocument()
   })
 
@@ -226,7 +226,7 @@ describe('設定 → Jellyfin', () => {
     renderApp('/settings/jellyfin')
 
     const connection = within(await screen.findByRole('region', { name: '位址與憑證' }))
-    expect(await connection.findByText('連不上')).toBeInTheDocument()
+    expect(await connection.findByText('沒通過')).toBeInTheDocument()
     await user.click(connection.getByRole('button', { name: '重新測試' }))
 
     expect(await connection.findByText('連上了')).toBeInTheDocument()

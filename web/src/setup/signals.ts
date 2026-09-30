@@ -60,6 +60,16 @@ export function testEndpoint(status: SetupStatus, kind: ServiceKind): string {
   return target.replace(/^https?:\/\//, '') + TEST_PATH[kind]
 }
 
+/**
+ * 測試那一條行首的「連哪裡」：`主機:port`（M4 票 21）。路徑是 Berth 內部打哪一支端點，收進技術細節
+ * （`testEndpoint`）。
+ */
+export function testTarget(status: SetupStatus, kind: ServiceKind): string {
+  const chosen = status.services.find((row) => row.kind === kind)?.base_url
+  // OpenAPI 把 dict 寫成任意鍵；後端三個服務一定都給（`services/clients.bundled_targets`）。
+  return (chosen || status.bundled_targets[kind]!).replace(/^https?:\/\//, '').replace(/\/+$/, '')
+}
+
 /** `.env` 預設的那一行（`deploy/.env.example`）。 */
 const ALL_PROFILES: readonly ServiceKind[] = ['jellyfin', 'qbittorrent', 'prowlarr']
 

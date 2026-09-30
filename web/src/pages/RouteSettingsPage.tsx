@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 
+import { useFadingNote } from '../components/useFadingNote'
+
 import { healthQueryOptions } from '../api/health'
 import {
   deleteRoute,
@@ -38,7 +40,7 @@ export function RouteSettingsPage() {
   const queryClient = useQueryClient()
   const routes = useQuery(routesQueryOptions)
   // 刪掉的那一列連同它自己的訊息一起卸載，所以「已刪除」「已停用」由頁面這一層說（票 14a）。
-  const [announcement, setAnnouncement] = useState('')
+  const [announcement, setAnnouncement] = useFadingNote()
 
   if (routes.isPending) {
     return <p className="px-6 py-8 text-sm text-ink-dim">{t('health.checking')}</p>

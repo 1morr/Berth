@@ -57,6 +57,7 @@ from berth.domain import (
     RouteRefusal,
     ServiceKind,
     ServiceOrigin,
+    StepFailure,
     StepStatus,
 )
 from berth.models import (
@@ -80,9 +81,9 @@ from berth.services.jellyfin import (
     remember_libraries,
     tvdb_fetchers,
 )
-from berth.services.qbittorrent import qbittorrent_target, sign_in, writes_preferences
+from berth.services.qbittorrent import qbittorrent_target, try_sign_in, writes_preferences
 from berth.services.settings import read_settings
-from berth.services.steps import StepView, message, step_views
+from berth.services.steps import StepFailedError, StepView, failed_step, message, step_views
 
 #: category 名稱的前綴（brief §4.1）。Berth 只碰自己這些分類，其他的 torrent 一律忽略。
 CATEGORY_PREFIX = "berth-"
@@ -694,12 +695,17 @@ async def _run_checks(
     qbittorrent = factory.qbittorrent(qbittorrent_url)
     jellyfin = factory.jellyfin(jellyfin_settings.base_url, token=jellyfin_settings.api_key)
     try:
-        await sign_in(qbittorrent, qbittorrent_settings)
+        signed_out = await try_sign_in(qbittorrent, qbittorrent_settings)
         for plan_row, route in zip(planned, routes, strict=True):
             previous = RouteHealth.model_validate(route.health_detail_json or {})
             carried = None if probe_qbittorrent else _last_probe(previous)
             health = await _check(
-                plan_row, qbittorrent, qbittorrent_origin, jellyfin, carried=carried
+                plan_row,
+                qbittorrent,
+                qbittorrent_origin,
+                jellyfin,
+                carried=carried,
+                signed_out=signed_out,
             )
             passed = all(row.status is not StepStatus.FAILED for row in health.checks)
             health.checked_at = moment
@@ -874,12 +880,15 @@ async def _check(
     jellyfin: JellyfinClient,
     *,
     carried: SetupStep | None,
+    signed_out: ServiceError | None,
 ) -> RouteHealth:
     """跑完一個 Route 的檢查序列。第一條斷掉之後的檢查一律 `pending`。
 
     `carried` 不是 `None` 時，`download_visible` 不問 qBittorrent、用它（`check_routes`）。
+    `signed_out` 是登入 qBittorrent 那一次的失敗（`try_sign_in`）：它就是第一條的紅燈與原因——
+    不然帳密錯要到建分類時才以一個 403 爆出，代碼與原文都說不出是登入（M4 票 21）。
     """
-    checker = _Checker(plan_row, qbittorrent, qbittorrent_origin, jellyfin)
+    checker = _Checker(plan_row, qbittorrent, qbittorrent_origin, jellyfin, signed_out)
     checks: list[SetupStep] = []
     stopped = False
     for check in RouteCheck:
@@ -905,8 +914,10 @@ class _Checker:
         qbittorrent: QbittorrentClient,
         qbittorrent_origin: ServiceOrigin | None,
         jellyfin: JellyfinClient,
+        signed_out: ServiceError | None,
     ) -> None:
         self._plan = plan_row
+        self._signed_out = signed_out
         self._qbittorrent = qbittorrent
         self._qbittorrent_origin = qbittorrent_origin
         self._jellyfin = jellyfin
@@ -922,11 +933,13 @@ class _Checker:
         try:
             status, detail = await _CHECKS[check](self)
         except (ServiceError, OSError, PathEscapeError) as exc:
-            return SetupStep(key=check.value, status=StepStatus.FAILED, error=message(exc))
+            return failed_step(check.value, exc)
         return SetupStep(key=check.value, status=status, detail=detail)
 
     async def _category(self) -> tuple[StepStatus, str]:
         """category 不存在才建；存在但路徑不同就回報衝突且**不覆寫**（plan §8.1）。"""
+        if self._signed_out is not None:
+            raise self._signed_out
         # 硬鏈接的來源目錄。qBittorrent 完成時才會自己建，但檢查現在就要用到它。未完成目錄
         # 也先建：送單前的磁碟門檻量的就是它（`jobs.check_disk`，M4 票 22）。
         ensure_directory(self._save_path)
@@ -946,8 +959,11 @@ class _Checker:
             else " (no download path of its own; downloads follow qBittorrent's global setting)"
         )
         if outcome.conflict:
-            raise _CheckFailedError(
-                conflict_detail(outcome, self._plan.save_path, self._plan.incomplete_path)
+            raise StepFailedError(
+                StepFailure.CATEGORY_CONFLICT,
+                conflict_detail(outcome, self._plan.save_path, self._plan.incomplete_path),
+                category=outcome.name,
+                path=outcome.save_path,
             )
         return (StepStatus.OK if outcome.created else StepStatus.SKIPPED), detail
 
@@ -967,7 +983,9 @@ class _Checker:
         preferences = await self._qbittorrent.preferences()
         global_path = str(preferences.get("save_path", "") or "")
         if not global_path:
-            raise _CheckFailedError("qBittorrent did not report a global save_path")
+            raise StepFailedError(
+                StepFailure.SAVE_PATH_MISSING, "qBittorrent did not report a global save_path"
+            )
         _visible(global_path)
         _visible(category_path)
         return StepStatus.OK, f"{global_path} · {category_path}"
@@ -989,7 +1007,8 @@ class _Checker:
                 save_path=save_path,
             )
         if sight is not ProbeSight.SEEN:
-            raise _CheckFailedError(_SIGHT_FAILURE[sight].format(path=save_path))
+            failure, text = _SIGHT_FAILURE[sight]
+            raise StepFailedError(failure, text.format(path=save_path), path=save_path)
         return StepStatus.OK, save_path
 
     async def _library_path(self) -> tuple[StepStatus, str]:
@@ -1002,14 +1021,19 @@ class _Checker:
         libraries = await self._jellyfin.libraries()
         library = next((row for row in libraries if _is_library(row, self._plan)), None)
         if library is None:
-            raise _CheckFailedError(
-                f"Jellyfin no longer has a library named {self._plan.library_name!r}"
+            raise StepFailedError(
+                StepFailure.LIBRARY_GONE,
+                f"Jellyfin no longer has a library named {self._plan.library_name!r}",
+                library=self._plan.library_name,
             )
         target = self._plan.target_path
         if _normalise_path(target) not in {_normalise_path(path) for path in library.locations}:
-            raise _CheckFailedError(
+            raise StepFailedError(
+                StepFailure.LIBRARY_PATH_GONE,
                 f"Jellyfin no longer lists {target} as a path of {library.name!r} "
-                f"(it has {', '.join(library.locations) or 'none'})"
+                f"(it has {', '.join(library.locations) or 'none'})",
+                library=library.name,
+                path=target,
             )
         _visible(target)
         return StepStatus.OK, target
@@ -1022,9 +1046,11 @@ class _Checker:
         with probe_file(self._target, roots=[self._target]) as probe:
             seen = await self._jellyfin.validate_path(str(probe))
         if not seen:
-            raise _CheckFailedError(
+            raise StepFailedError(
+                StepFailure.JELLYFIN_CANNOT_SEE,
                 f"Jellyfin cannot see {self._target}; "
-                "POST /Environment/ValidatePath answered 404 for a file Berth had just written"
+                "POST /Environment/ValidatePath answered 404 for a file Berth had just written",
+                path=str(self._target),
             )
         return StepStatus.OK, str(self._target)
 
@@ -1038,7 +1064,8 @@ class _Checker:
             facts = link_test(self._save_path, self._target, roots=[self._target])
         except OSError as exc:
             self.cross_device = exc.errno == errno.EXDEV
-            raise
+            failure = StepFailure.CROSS_DEVICE if self.cross_device else StepFailure.LINK_FAILED
+            raise StepFailedError(failure, message(exc)) from exc
         free = _gigabytes(free_space(self._target))
         return StepStatus.OK, f"dev={facts.device} · inode={facts.inode} · free={free}"
 
@@ -1081,32 +1108,29 @@ def _visible(path: str) -> None:
     try:
         stat(Path(path))
     except OSError as exc:
-        raise _CheckFailedError(
-            f"{path} is not visible from the Berth container ({message(exc)})"
+        raise StepFailedError(
+            StepFailure.PATH_NOT_VISIBLE,
+            f"{path} is not visible from the Berth container ({message(exc)})",
+            path=path,
         ) from exc
 
 
-class _CheckFailedError(OSError):
-    """這一項檢查沒過，而原因是 Berth 自己判斷出來的（不是誰丟出來的例外）。
-
-    繼承 `OSError` 是為了與 `stat` / `link` 的失敗走同一條處理路徑——對畫面來說它們是
-    同一件事：這條纜繩沒繫上，這是原文。
-    """
-
-
-#: 探針沒看到時的原文。畫面的補法照 `RouteCheck` 挑，這裡要說清楚的是「哪一台、哪條路徑」。
+#: 探針沒看到時的代碼與原文。畫面的補法照 `RouteCheck` 挑，原文要說清楚的是「哪一台、哪條路徑」。
 _SIGHT_FAILURE = {
     ProbeSight.UNSEEN: (
+        StepFailure.PROBE_UNSEEN,
         "qBittorrent cannot see {path}: it checked the file Berth had just written there "
-        "and found none of it (0% after a recheck)"
+        "and found none of it (0% after a recheck)",
     ),
     ProbeSight.UNREADABLE: (
+        StepFailure.PROBE_UNREADABLE,
         "qBittorrent found the file Berth wrote in {path} but could not read it "
-        "(the probe torrent went to error); check the permissions on that directory"
+        "(the probe torrent went to error); check the permissions on that directory",
     ),
     ProbeSight.UNSETTLED: (
+        StepFailure.PROBE_UNSETTLED,
         "qBittorrent did not finish checking the file Berth wrote in {path} within "
-        f"{PROBE_TIMEOUT_SECONDS:.0f} s; it may be busy checking other torrents, check again later"
+        f"{PROBE_TIMEOUT_SECONDS:.0f} s; it may be busy checking other torrents, check again later",
     ),
 }
 

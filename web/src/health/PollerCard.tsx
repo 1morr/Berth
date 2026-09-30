@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import type { PollerView } from '../api/schemas'
 import { CutawayRow } from '../components/Cutaway'
 import { Dot } from '../components/Dot'
+import { TechnicalDetails } from '../components/TechnicalDetails'
 import { Timestamp } from '../components/Timestamp'
 import { shortHash } from '../jobs/jobState'
 
@@ -49,10 +50,15 @@ export function PollerCard({ poller }: { poller: PollerView }) {
           muted={!failing}
         />
         {poller.error !== '' && (
-          // 服務回的原文，不翻譯（與精靈的纜繩同一個規矩：理由翻譯，原文不翻譯）。
+          // 服務回的原文，不翻譯，收進技術細節（M4 票 21）：一句人話在上，原文展開才看。
           <CutawayRow
             term={t('health.poller.error')}
-            value={<span className="text-blocked-ink">{poller.error}</span>}
+            value={
+              <>
+                <span className="text-blocked-ink">{t('health.poller.errorLine')}</span>
+                <TechnicalDetails lines={[poller.error]} />
+              </>
+            }
           />
         )}
       </dl>

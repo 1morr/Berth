@@ -35,7 +35,7 @@ const zhHant = {
       berth: '泊位 {{code}}',
       final: '收尾',
     },
-    step: '第 {{current}} 步，共 {{total}} 步',
+    step: '第 {{current}} 個，共 {{total}} 個泊位',
     resumed: '進度已保留，關掉瀏覽器再回來會回到這一步。',
     statusFailed: '讀不到精靈的狀態。Berth 後端可能沒在跑——確認容器狀態後再試一次。',
     nav: {
@@ -105,6 +105,8 @@ const zhHant = {
       finish: '完成',
       change: '改動',
       owner: '擁有者',
+      form: '建立或登入',
+      depends: '連上之後看那一台：已經有管理員就登入，還沒有就建立',
       stored: '不存下',
       admin: 'Jellyfin 管理員',
       startup: 'Jellyfin 的初始設定',
@@ -131,7 +133,7 @@ const zhHant = {
       not_administrator:
         '這個帳號登得進 Jellyfin，但不是管理員。擁有者要改得動設定——用這台 Jellyfin 的管理員登入。',
       jellyfin_failed:
-        'Jellyfin 那一段沒做完，下面是那一步的錯誤訊息；排除之後再按一次，做過的不會重做。',
+        'Jellyfin 那一段沒做完：技術細節裡是那一步的錯誤訊息。排除之後再按一次，做過的不會重做。',
       owner_exists:
         '擁有者已經成立了，這裡不換人。Berth 的 API key 要換的話，到「設定 → Jellyfin」用管理員重新登入。',
     },
@@ -153,7 +155,6 @@ const zhHant = {
     error: {
       blank: '帳號與密碼都要填。',
       mismatch: '兩次輸入的密碼不一樣。',
-      failed: '沒送出去。Berth 後端可能沒在跑——確認容器狀態後再試一次。',
     },
   },
   service: {
@@ -193,6 +194,7 @@ const zhHant = {
       upgradeNotes: 'Jellyfin 12.0 升級注意',
     },
     switchToBundled: '改用套件內的那一台',
+    saveFailed: '沒有存下這個選擇。',
     refused: {
       jellyfin_owned: '擁有者成立之後，Jellyfin 的來源換不了。',
       other_server:
@@ -220,7 +222,7 @@ const zhHant = {
     state: {
       ok: '連上了',
       waiting: '啟動中',
-      failed: '連不上',
+      failed: '沒通過',
       timeout: '逾時',
     },
     testing: '測試中',
@@ -246,10 +248,14 @@ const zhHant = {
         '套件內那一台要帳密：Berth 的免密白名單沒生效。重啟它讓預置腳本補上白名單，再重新測試：',
       bundledDown: '容器還沒起來。在宿主上確認它活著、看它的 log：',
       credentials: '帳號或密碼不對。改好上面的欄位再測一次。',
+      authWarning:
+        'Berth 這邊已經數到連續 {{failures}} 次登入失敗。qBittorrent 預設連錯 {{limit}} 次就封鎖 Berth 這台的 IP {{minutes}} 分鐘；最多再錯 {{left}} 次就會被封。',
+      authWarningLast:
+        'Berth 這邊已經數到連續 {{failures}} 次登入失敗，qBittorrent 預設這時已經封鎖 Berth 這台的 IP {{minutes}} 分鐘。先把帳密改對，等封鎖過期或重啟 qBittorrent 再測。',
       prowlarrKey:
         'API key 不對：在 Prowlarr 的「設定 → 一般」複製 API key（不是介面登入的密碼），貼上再測一次。',
       banned:
-        '它把 Berth 這台的 IP 封了（連續登入失敗）。等封鎖過期，或到它自己的介面解除，再測一次——現在改帳密只會再失敗。',
+        'qBittorrent 預設連錯 {{limit}} 次就封鎖這個 IP {{minutes}} 分鐘，被封的時候連對的帳密也會被拒。等 {{minutes}} 分鐘，或重啟 qBittorrent（封鎖只記在它的記憶體裡）；先把帳密改對，解封之後只測一次。',
       address: '連不到這個位址。確認 port 沒填錯、服務在跑，而且 Berth 的容器連得到那台主機。',
       outdated: '至少要 {{floor}}，這一台是 {{version}}；等也不會好。升級之後再測一次。',
       outdatedBundled:
@@ -264,7 +270,7 @@ const zhHant = {
     connected: '連線測試通過',
     setup_pending: '還沒跑過自己的初始精靈',
     setup_completed: '已經有管理員',
-    auth_required: '要求帳密',
+    auth_required: '帳密或 API key 不被接受',
     ip_banned: '把 Berth 這台的 IP 封了（連續登入失敗）',
     api_key_missing: '讀不到 API key',
     not_deployed: '主機名解不到',
@@ -282,6 +288,48 @@ const zhHant = {
     credential: '憑證',
     verified: '已驗證',
     unverified: '待驗證',
+  },
+  technical: {
+    title: '技術細節',
+  },
+  request: {
+    offline: 'Berth 的後端沒有回應：它可能沒在跑，或網路斷了。確認容器狀態後再試一次。',
+    invalid: 'Berth 不收這一次送出的內容，多半是這個畫面過時了。重新整理頁面再試一次。',
+    conflict: '這一次與 Berth 現在的狀態衝突（可能另一個分頁剛改過）。重新整理頁面再試一次。',
+    server: 'Berth 的後端出錯了。再試一次；還是不行的話看 berth 容器的 log。',
+  },
+  failure: {
+    not_deployed: '{{service}} 的主機名解不到：它不在這套 compose 裡，或位址打錯了。',
+    unreachable: '連不到 {{service}}：它沒在跑、port 不對，或這一次答不出來。',
+    starting: '{{service}} 還在啟動，等一下再試一次。',
+    auth_rejected: '{{service}} 不接受 Berth 的帳密或 API key。',
+    ip_banned: '{{service}} 把 Berth 這台的 IP 封了：連續登入失敗太多次。',
+    protocol_mismatch: '這個位址上回應的不是 {{service}}。',
+    not_found: '{{service}} 說它沒有這個東西。',
+    version_unsupported: '{{service}} 的版本 {{version}} 比 Berth 支援的下限舊。',
+    credential_missing: '還沒有憑證：貼上 key 再測。',
+    category_conflict:
+      'qBittorrent 已經有一個叫 {{category}} 的分類，存到 {{path}}；Berth 不改別人建的分類。',
+    save_path_missing: 'qBittorrent 沒有回報它預設的儲存路徑。',
+    path_not_visible: 'Berth 的容器裡看不到 {{path}}。',
+    berth_cannot_write: 'Berth 在 {{path}} 建不了目錄或寫不進檔案。',
+    probe_unseen: 'qBittorrent 看不到 Berth 放在 {{path}} 的檔案：兩邊的這個路徑不是同一個目錄。',
+    probe_unreadable: 'qBittorrent 找到了 Berth 放在 {{path}} 的檔案，但讀不了：是權限的問題。',
+    probe_unsettled:
+      'qBittorrent 在時限內沒有校驗完 Berth 放在 {{path}} 的檔案，它可能正忙著校驗別的；等一下重新檢查。',
+    library_gone: 'Jellyfin 已經沒有「{{library}}」這個媒體庫了。',
+    library_path_gone: '{{path}} 已經不是「{{library}}」的路徑了。',
+    jellyfin_cannot_see:
+      'Jellyfin 看不到 Berth 放在 {{path}} 的檔案：兩邊的這個路徑不是同一個目錄。',
+    cross_device: '硬鏈接失敗：下載目錄與媒體庫在 Berth 裡是兩個不同的掛載。',
+    link_failed: '硬鏈接失敗：這個位置的檔案系統或權限不讓 Berth 建硬鏈接。',
+    site_cloudflare: '這個站擋自動化的請求（CloudFlare），要 FlareSolverr 才過得去。',
+    site_no_results: '連得上這個站，但測試的那一次查詢什麼都沒回。',
+    site_unreachable: 'Prowlarr 連不到這個站：它可能掛了，或這台主機連不出去。',
+    site_rejected: 'Prowlarr 不肯加這個站。',
+    site_not_offered: '這個站 Berth 加不了（不是公開的 torrent 站），要在 Prowlarr 自己加。',
+    no_search: '這個 Torznab 端點不提供搜尋。',
+    unexpected: '發生了沒預料到的錯誤。技術細節裡是原文。',
   },
   connect: {
     title: '連到你的 {{service}}',
@@ -504,10 +552,8 @@ const zhHant = {
     blocked: {
       tooOld:
         'qBittorrent {{version}} 的 Web API 低於 2.8.4，Berth 要用的端點在那之前不存在。升級到 4.4 以上再回來。',
-      unreachable: '連不上這台 qBittorrent。位址、port 或容器狀態有問題。',
-      upgrade: '升級 qBittorrent（套件內的話拉新的 image 再起一次）：',
     },
-    apply: '套用這 {{keys}} 個鍵',
+    apply: '套用這 {{keys}} 項',
     applying: '套用中…',
     rerun: '重新檢查並套用',
     done: '這個泊位的事做完了。qBittorrent 的路徑與自動管理都是 Berth 要的樣子。',
@@ -516,7 +562,6 @@ const zhHant = {
     recheck: '重新檢查',
     doneExisting:
       '這個泊位的事做完了。Berth 沒有改這台 qBittorrent 的任何偏好，它的下載走自己的分類。',
-    requestFailed: '請求沒跑完。Berth 後端可能沒在跑——確認容器狀態後再試一次。',
   },
   indexer: {
     title: '索引站',
@@ -604,6 +649,7 @@ const zhHant = {
     },
     added: {
       title: '已加入',
+      listFailed: '列不出要問哪幾站：Berth 連不到 Prowlarr。確認它在跑，再搜一次。',
       sites_one: '{{count}} 站',
       sites_other: '{{count}} 站',
       lede: 'Prowlarr 只搜得到已經加入的站。每一列可以單獨搜，也可以一次搜全部；關鍵字留白就是問各站最新的發佈。',
@@ -637,7 +683,6 @@ const zhHant = {
       no_results: '連得上，但測試那一次查詢什麼都沒回：站可能暫時空了或改了版，之後再測。',
       unreachable: '連不上：DNS、TLS 或站本身掛了。換個時間再測，或檢查 Prowlarr 那台對外的網路。',
       other: '沒通過，原因在 Prowlarr 的原文裡。',
-      original: 'Prowlarr 原文',
     },
     summary: {
       failed_one: '{{count}} 站沒通過',
@@ -676,6 +721,7 @@ const zhHant = {
     },
     required: '必填',
     held: '已取得',
+    heldUnverified: '已存下，沒通過驗證',
     absent: '還沒填',
     whereLabel: '去哪裡拿',
     where:
@@ -691,6 +737,10 @@ const zhHant = {
     testing: '測試中…',
     line: '驗證憑證',
     fix: '確認 key 沒有打錯，也確認這台機器連得到 api.themoviedb.org：',
+    fixKey:
+      'TMDB 不收這把 key：多半是貼錯、少貼了幾個字，或貼到帳號密碼。到 TMDB 的 API 設定頁重新複製「API 金鑰」或「API 讀取存取權杖」再測：',
+    fixNetwork:
+      '這台機器連不到 api.themoviedb.org：確認 Berth 的容器連得出去（DNS、防火牆、代理）。在宿主上跑這一行，印出 reachable 就是通的：',
   },
   routes: {
     title: '媒體庫路徑',
@@ -731,7 +781,6 @@ const zhHant = {
     },
     recheck_one: '重新檢查 {{count}} 條 Route',
     recheck_other: '重新檢查 {{count}} 條 Route',
-    requestFailed: '請求沒有走完。Berth 後端可能沒在跑——確認容器狀態後再按一次。',
     // 頁 3 進頁時向 Jellyfin 重讀媒體庫（M4 票 19）：頁 1 之後在 Jellyfin 改的掛載與路徑要看得到。
     reread: '重新讀取 Jellyfin 媒體庫',
     rereading: '讀取中…',
@@ -784,6 +833,16 @@ const zhHant = {
         'Jellyfin 報的這條媒體庫路徑不在三個容器共用的 {{root}} 底下，Berth 看不到。媒體庫要放在 {{root}} 底下，jellyfin 容器掛同一個宿主目錄。改完 compose 之後跑 docker compose up -d：',
       hardlink:
         '鏈接不起來。complete 目錄與媒體庫目錄要在同一個檔案系統，容器裡的使用者也要寫得進去。',
+      // 與掛載無關的失敗（M4 票 21）：連不到、帳密不對時給掛載片段只會叫人白改 compose。
+      service: {
+        unreachable: '確認 {{service}} 在跑、Berth 的容器連得到它，再按「重新檢查」。',
+        auth: '{{service}} 不收 Berth 存的帳密或 API key：到 {{service}} 那一頁（設定裡也有）改好，再按「重新檢查」。',
+      },
+      probeUnreadable:
+        'qBittorrent 容器裡的使用者讀不了 {{root}} 底下 Berth 寫的檔：讓它與 berth 用同一組 PUID / PGID，或放寬那個目錄的權限。',
+      probeUnsettled: '等 qBittorrent 手上的校驗跑完，再按「重新檢查」。',
+      libraryChanged:
+        '到 Jellyfin 確認這個媒體庫與路徑還在。被刪掉或改了路徑的話，刪掉這條 Route、重新建立。',
       crossDevice:
         '這兩個目錄在 Berth 內是不同掛載（EXDEV）。硬鏈接跨不了掛載點——用一條掛載蓋住整個父目錄，不要 complete 與 library 各掛一條。網路磁碟、exFAT 隨身碟與 mergerfs 也做不到硬鏈接。',
       // 既有服務失敗在第 2–5 條時另說的那一句（M4 票 08，brief §16.4）：上面的 compose 片段是套件內那一份。
@@ -1260,6 +1319,7 @@ const zhHant = {
   // 與 brief §6.8 的詞彙表，原樣顯示。
   search: {
     title: '搜尋 torrent',
+    indexers: '索引站',
     keyword: '關鍵字',
     keywordPlaceholder: '留空就用這部作品的各個名字',
     // 從季表按進來之後（票 13）：留空問的是缺的那幾集，不是作品名。
@@ -2317,6 +2377,7 @@ const zhHant = {
   },
   health: {
     title: '健康',
+    failedLine: '這一輪的健康檢查沒通過：{{service}} 沒有回應，或回了錯誤。',
     deniedChip: '沒有權限',
     denied: '設定只有管理員改得了，所以你被送到這一頁。健康頁是唯讀的診斷，每個人都看得到。',
     checking: '檢查中…',
@@ -2357,6 +2418,7 @@ const zhHant = {
       every: '有下載時每 {{seconds}} 秒',
       failures: '連續失敗',
       error: '最後的錯誤',
+      errorLine: '上一輪問 qBittorrent 時失敗了。',
       unknown: {
         title: '無主 torrent',
         count_one: '{{count}} 筆',
@@ -2402,7 +2464,6 @@ const zhHant = {
     connection: {
       title: '位址與憑證',
       lede: '與設定精靈那一頁的頁首是同一塊：按下去就存，然後真的連一次。上面那張卡會跟著重新檢查。',
-      failed: '沒有存進去。Berth 後端可能沒在跑——確認容器狀態後再按一次。',
       locked:
         '擁有者是這一台 Jellyfin 上的帳號，所以來源換不了；同一台換了位址可以在這裡改，另一台伺服器會被擋下。',
     },
@@ -2986,7 +3047,7 @@ const en: Translations<typeof zhHant> = {
       berth: '{{code}}',
       final: 'Cast off',
     },
-    step: 'Step {{current}} of {{total}}',
+    step: 'Berth {{current}} of {{total}}',
     resumed: 'Progress is saved. Close the browser and you come back to this step.',
     statusFailed:
       'Cannot read the wizard state. The Berth backend may not be running — check the container and retry.',
@@ -3061,6 +3122,9 @@ const en: Translations<typeof zhHant> = {
       finish: 'Finishes',
       change: 'Changes',
       owner: 'Owner',
+      form: 'Create or sign in',
+      depends:
+        'Once connected, it depends on that server: sign in if it has an administrator, create one if not',
       stored: 'Not stored',
       admin: 'The Jellyfin administrator',
       startup: "Jellyfin's startup setup",
@@ -3088,7 +3152,7 @@ const en: Translations<typeof zhHant> = {
       not_administrator:
         'That account can sign in to Jellyfin but is not an administrator. The owner has to be able to change settings — sign in with an administrator of this Jellyfin.',
       jellyfin_failed:
-        'Jellyfin did not finish; the error from that step is below. Fix it and press again — nothing already done is redone.',
+        'Jellyfin did not finish: the error from that step is under technical details. Fix it and press again — nothing already done is redone.',
       owner_exists:
         'There is already an owner, and it is not replaced here. To give Berth a new API key, sign in again as an administrator in Settings → Jellyfin.',
     },
@@ -3110,8 +3174,6 @@ const en: Translations<typeof zhHant> = {
     error: {
       blank: 'Username and password are both required.',
       mismatch: 'The two passwords do not match.',
-      failed:
-        'Nothing was sent. The Berth backend may not be running — check the container and retry.',
     },
   },
   service: {
@@ -3152,6 +3214,7 @@ const en: Translations<typeof zhHant> = {
       upgradeNotes: 'Jellyfin 12.0 upgrade notes',
     },
     switchToBundled: 'Use the bundled one instead',
+    saveFailed: 'The choice was not saved.',
     refused: {
       jellyfin_owned: 'Once there is an owner, the Jellyfin source cannot change.',
       other_server:
@@ -3180,7 +3243,7 @@ const en: Translations<typeof zhHant> = {
     state: {
       ok: 'Connected',
       waiting: 'Starting',
-      failed: 'Unreachable',
+      failed: 'Failed',
       timeout: 'Timed out',
     },
     testing: 'Testing',
@@ -3208,10 +3271,14 @@ const en: Translations<typeof zhHant> = {
       bundledDown:
         'The container is not up yet. Check on the host that it is running, and read its log:',
       credentials: 'The username or password is wrong. Fix the fields above and test again.',
+      authWarning:
+        'Berth has counted {{failures}} failed logins in a row. By default qBittorrent bans this machine’s IP for {{minutes}} minutes after {{limit}}; at most {{left}} more and it will.',
+      authWarningLast:
+        'Berth has counted {{failures}} failed logins in a row; by default qBittorrent has banned this machine’s IP for {{minutes}} minutes by now. Fix the credentials, then test again once the ban expires or after restarting qBittorrent.',
       prowlarrKey:
         'The API key is wrong. Copy it from Settings → General in Prowlarr (not the interface password), paste it and test again.',
       banned:
-        'It has banned this machine (too many failed logins). Wait for the ban to expire, or lift it in its own interface, then test again — changing the password now only fails again.',
+        'By default qBittorrent bans an IP for {{minutes}} minutes after {{limit}} failed logins, and while banned even the right password is refused. Wait {{minutes}} minutes, or restart qBittorrent (it keeps bans only in memory); fix the credentials first, then test once after the ban is lifted.',
       address:
         "Nothing answers at this address. Check the port, that the service is running, and that Berth's container can reach that host.",
       outdated:
@@ -3228,7 +3295,7 @@ const en: Translations<typeof zhHant> = {
     connected: 'Connection test passed',
     setup_pending: 'Its startup wizard has not run yet',
     setup_completed: 'It already has an administrator',
-    auth_required: 'Asks for credentials',
+    auth_required: 'Credentials or API key not accepted',
     ip_banned: 'Has banned this machine (too many failed logins)',
     api_key_missing: 'No API key available',
     not_deployed: 'Hostname does not resolve',
@@ -3246,6 +3313,60 @@ const en: Translations<typeof zhHant> = {
     credential: 'Credential',
     verified: 'Verified',
     unverified: 'Not verified',
+  },
+  technical: {
+    title: 'Technical details',
+  },
+  request: {
+    offline:
+      'Berth’s backend did not answer: it may not be running, or the network dropped. Check the container and try again.',
+    invalid:
+      'Berth did not accept what was sent, most likely because this page is out of date. Reload and try again.',
+    conflict:
+      'This clashes with Berth’s current state (another tab may have just changed it). Reload and try again.',
+    server:
+      'Berth’s backend failed. Try again; if it keeps failing, read the berth container’s log.',
+  },
+  failure: {
+    not_deployed:
+      'The {{service}} hostname does not resolve: it is not part of this compose project, or the address is mistyped.',
+    unreachable:
+      'Cannot reach {{service}}: it is not running, the port is wrong, or it could not answer this time.',
+    starting: '{{service}} is still starting. Try again in a moment.',
+    auth_rejected: '{{service}} does not accept Berth’s credentials or API key.',
+    ip_banned: '{{service}} has banned this machine’s IP after too many failed logins.',
+    protocol_mismatch: 'Whatever answers at this address is not {{service}}.',
+    not_found: '{{service}} says it has no such thing.',
+    version_unsupported: '{{service}} {{version}} is older than the oldest version Berth supports.',
+    credential_missing: 'There is no credential yet: paste a key and test.',
+    category_conflict:
+      'qBittorrent already has a category called {{category}} that saves to {{path}}; Berth does not change a category it did not create.',
+    save_path_missing: 'qBittorrent did not report its default save path.',
+    path_not_visible: 'Berth’s container cannot see {{path}}.',
+    berth_cannot_write: 'Berth cannot create a folder or write a file at {{path}}.',
+    probe_unseen:
+      'qBittorrent cannot see the file Berth put in {{path}}: that path is not the same folder on both sides.',
+    probe_unreadable:
+      'qBittorrent found the file Berth put in {{path}} but cannot read it: this is a permissions problem.',
+    probe_unsettled:
+      'qBittorrent did not finish checking the file Berth put in {{path}} in time; it may be busy checking others. Check again later.',
+    library_gone: 'Jellyfin no longer has a library called “{{library}}”.',
+    library_path_gone: '{{path}} is no longer a path of “{{library}}”.',
+    jellyfin_cannot_see:
+      'Jellyfin cannot see the file Berth put in {{path}}: that path is not the same folder on both sides.',
+    cross_device:
+      'The hard link failed: the downloads and the library are two different mounts inside Berth.',
+    link_failed:
+      'The hard link failed: the file system or permissions there do not let Berth create one.',
+    site_cloudflare: 'This site blocks automated requests (CloudFlare); it needs FlareSolverr.',
+    site_no_results: 'The site answers, but the test query returned nothing.',
+    site_unreachable:
+      'Prowlarr cannot reach this site: it may be down, or this host cannot get out.',
+    site_rejected: 'Prowlarr refused to add this site.',
+    site_not_offered:
+      'Berth cannot add this site (it is not a public torrent site); add it in Prowlarr itself.',
+    no_search: 'This Torznab endpoint does not offer search.',
+    unexpected: 'Something unexpected went wrong. The original message is under technical details.',
   },
   connect: {
     title: 'Connect to your {{service}}',
@@ -3481,10 +3602,8 @@ const en: Translations<typeof zhHant> = {
     blocked: {
       tooOld:
         'qBittorrent {{version}} speaks a Web API older than 2.8.4, and the endpoints Berth needs did not exist yet. Upgrade to 4.4 or newer and come back.',
-      unreachable: 'Cannot reach this qBittorrent. Check the address, the port, or the container.',
-      upgrade: 'Upgrade qBittorrent (for the bundled one, pull a new image and start it again):',
     },
-    apply: 'Apply these {{keys}} keys',
+    apply: 'Apply these {{keys}} changes',
     applying: 'Applying…',
     rerun: 'Check and apply again',
     done: "This berth is done. qBittorrent's paths and automatic management are what Berth needs.",
@@ -3493,8 +3612,6 @@ const en: Translations<typeof zhHant> = {
     recheck: 'Check again',
     doneExisting:
       'This berth is done. Berth changed none of this qBittorrent’s preferences; its downloads go through its own categories.',
-    requestFailed:
-      'The request did not finish. Check that the Berth backend is running, then try again.',
   },
   indexer: {
     title: 'Indexers',
@@ -3587,6 +3704,8 @@ const en: Translations<typeof zhHant> = {
     },
     added: {
       title: 'Added',
+      listFailed:
+        'Could not list the sites to ask: Berth cannot reach Prowlarr. Check it is running and search again.',
       sites_one: '{{count}} site',
       sites_other: '{{count}} sites',
       lede: 'Prowlarr only searches sites that have been added. Search one row at a time or all of them at once; leave the keywords blank to ask each site for its latest releases.',
@@ -3624,7 +3743,6 @@ const en: Translations<typeof zhHant> = {
       unreachable:
         "Unreachable: DNS, TLS or the site itself is down. Test again later, or check the Prowlarr host's outbound network.",
       other: "Did not pass; the reason is in Prowlarr's own text.",
-      original: "Prowlarr's text",
     },
     summary: {
       failed_one: '{{count}} site did not pass',
@@ -3665,6 +3783,7 @@ const en: Translations<typeof zhHant> = {
     },
     required: 'Required',
     held: 'Held',
+    heldUnverified: 'Saved, not verified',
     absent: 'Not set yet',
     whereLabel: 'Where to get one',
     where:
@@ -3681,6 +3800,10 @@ const en: Translations<typeof zhHant> = {
     testing: 'Testing…',
     line: 'Verify the credential',
     fix: 'Check the key for typos, and check that this machine can reach api.themoviedb.org:',
+    fixKey:
+      'TMDB does not accept this key: most likely it was pasted wrong, cut short, or it is your account password. Copy the “API Key” or the “API Read Access Token” again from TMDB’s API settings and test:',
+    fixNetwork:
+      'This machine cannot reach api.themoviedb.org: check that Berth’s container can get out (DNS, firewall, proxy). Run this on the host; it prints reachable when it can:',
   },
   routes: {
     title: 'Routes',
@@ -3725,8 +3848,6 @@ const en: Translations<typeof zhHant> = {
     },
     recheck_one: 'Check {{count}} route again',
     recheck_other: 'Check {{count}} routes again',
-    requestFailed:
-      'The request did not finish. The Berth backend may be down — check the container and press again.',
     reread: 'Read the Jellyfin libraries again',
     rereading: 'Reading…',
     rereadFailed:
@@ -3780,6 +3901,16 @@ const en: Translations<typeof zhHant> = {
         'Jellyfin reports a library path outside {{root}}, the directory all three containers share, so Berth cannot see it. Keep libraries under {{root}} and mount the same host directory in the jellyfin container. After editing compose, run docker compose up -d:',
       hardlink:
         'The link failed. The complete directory and the library directory have to sit on one file system, and the container user has to be able to write there.',
+      service: {
+        unreachable:
+          'Check that {{service}} is running and that Berth’s container can reach it, then press “Check again”.',
+        auth: '{{service}} does not accept the credentials or API key Berth stored: fix them on the {{service}} page (it is under settings too), then press “Check again”.',
+      },
+      probeUnreadable:
+        'The user inside the qBittorrent container cannot read files Berth writes under {{root}}: give it the same PUID / PGID as berth, or loosen the permissions on that folder.',
+      probeUnsettled: 'Let qBittorrent finish the checks it is running, then press “Check again”.',
+      libraryChanged:
+        'Check in Jellyfin that this library and its path still exist. If it was deleted or its path changed, delete this route and create it again.',
       crossDevice:
         'Those two directories are separate mounts inside Berth (EXDEV). A hard link cannot cross a mount point: use one mount covering the whole parent directory instead of mounting complete and library separately. Network shares, exFAT drives and mergerfs cannot hard-link either.',
       existing: {
@@ -4216,6 +4347,7 @@ const en: Translations<typeof zhHant> = {
   },
   search: {
     title: 'Search torrents',
+    indexers: 'the indexer',
     keyword: 'Keyword',
     keywordPlaceholder: "Leave empty to use the title's own names",
     keywordPlaceholderMissing: 'Leave empty to ask for the missing episodes',
@@ -5214,6 +5346,8 @@ const en: Translations<typeof zhHant> = {
   },
   health: {
     title: 'Health',
+    failedLine:
+      'This round’s health check did not pass: {{service}} did not answer, or answered with an error.',
     deniedChip: 'Not allowed',
     denied:
       'Only an administrator can change the settings, so you were sent here instead. The health page is read-only diagnostics and everyone can see it.',
@@ -5260,6 +5394,7 @@ const en: Translations<typeof zhHant> = {
       every: 'every {{seconds}}s while downloading',
       failures: 'Consecutive failures',
       error: 'Last error',
+      errorLine: 'The last round asking qBittorrent failed.',
       unknown: {
         title: 'Unclaimed torrents',
         count_one: '{{count}} torrent',
@@ -5306,8 +5441,6 @@ const en: Translations<typeof zhHant> = {
     connection: {
       title: 'Address and credentials',
       lede: 'The same block as the top of that wizard page: submitting saves it, then really connects once. The card above checks again right after.',
-      failed:
-        'It was not saved. The Berth backend may be down — check the container, then try again.',
       locked:
         'The owner is an account on this Jellyfin, so its source cannot change; if the same Jellyfin moved to a new address, change it here — another server is refused.',
     },

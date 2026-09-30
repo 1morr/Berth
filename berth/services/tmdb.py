@@ -14,11 +14,11 @@ from dataclasses import dataclass
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from berth.adapters.http import ServiceError
-from berth.domain import StepStatus
+from berth.domain import StepFailure, StepStatus
 from berth.models import SetupSettings, SetupStep, TmdbSettings
 from berth.services.clients import ServiceClientFactory
 from berth.services.settings import read_settings, update_settings, write_settings
-from berth.services.steps import StepView, message, step_views
+from berth.services.steps import StepView, failed_step, step_views
 
 #: 這一步唯一的那條纜繩，也是它打的端點。
 TMDB_STEP = "configuration"
@@ -82,13 +82,20 @@ async def _test(factory: ServiceClientFactory, settings: TmdbSettings) -> tuple[
     基底由呼叫端寫回設定，不在這裡偷偷改 `settings`——那會讓「這支只是測一下」變成假的。
     """
     if not credential(settings):
-        return (SetupStep(key=TMDB_STEP, status=StepStatus.FAILED, error=MISSING_CREDENTIAL), "")
+        missing = SetupStep(
+            key=TMDB_STEP,
+            status=StepStatus.FAILED,
+            failure=StepFailure.CREDENTIAL_MISSING,
+            error=MISSING_CREDENTIAL,
+        )
+        return (missing, "")
 
     client = factory.tmdb(credential(settings))
     try:
         configuration = await client.configuration()
     except ServiceError as exc:
-        return (SetupStep(key=TMDB_STEP, status=StepStatus.FAILED, error=message(exc)), "")
+        # 401 是 `auth_rejected`：key 不對。畫面照代碼說，不再叫人去查網路（M4 票 21）。
+        return (failed_step(TMDB_STEP, exc), "")
     else:
         base = configuration.image_base_url
         return (SetupStep(key=TMDB_STEP, status=StepStatus.OK, detail=base), base)

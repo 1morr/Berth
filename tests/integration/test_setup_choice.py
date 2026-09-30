@@ -23,7 +23,7 @@ from berth.adapters.jellyfin import JellyfinApiKey
 from berth.adapters.jellyfin.fake import SERVER_ID, FakeJellyfinClient
 from berth.adapters.prowlarr import ProwlarrIndexer
 from berth.adapters.prowlarr.fake import FakeProwlarrClient
-from berth.adapters.qbittorrent import IpBannedError
+from berth.adapters.qbittorrent import IpBannedError, QbittorrentVersion
 from berth.adapters.qbittorrent.fake import FakeQbittorrentClient
 from berth.domain import (
     ChoiceRefusal,
@@ -414,6 +414,72 @@ async def test_an_existing_address_gets_its_answer_on_the_spot(
 
     row = view(status, ServiceKind.QBITTORRENT)
     assert (row.state, row.reason) == (ConnectionState.FAILED, reason)
+    # 原文照錄，畫面收進技術細節（M4 票 21）。
+    assert row.error == str(error)
+
+
+@pytest.mark.parametrize(
+    ("version", "passes"),
+    [
+        (QbittorrentVersion(app="v4.3.9", webapi="2.8.2"), False),
+        (QbittorrentVersion(app="v4.4.5", webapi="2.8.5"), True),
+    ],
+    ids=["4.3.9", "4.4.5"],
+)
+@pytest.mark.asyncio
+async def test_qbittorrent_below_the_floor_is_red_at_the_connection_test(
+    session: AsyncSession, version: QbittorrentVersion, passes: bool
+) -> None:
+    """版本在測連線時就擋（M4 票 21）：原本 4.3.9 在這裡是綠的「連上了」，頁 2 的泊位卡卻是紅的
+    「太舊」——同一個畫面兩種顏色。下限 Web API 2.8.4 的兩邊各一台。"""
+    await own(session)
+    factory = FakeClientFactory(qbittorrent=FakeQbittorrentClient(version=version))
+
+    status = await choose(
+        session,
+        factory,
+        ServiceKind.QBITTORRENT,
+        ServiceOrigin.EXISTING,
+        ServiceConnection(base_url="http://nas:8080"),
+    )
+
+    row = view(status, ServiceKind.QBITTORRENT)
+    if passes:
+        assert (row.state, row.reason) == (ConnectionState.OK, ConnectionReason.CONNECTED)
+    else:
+        assert (row.state, row.reason, row.detail) == (
+            ConnectionState.FAILED,
+            ConnectionReason.VERSION_UNSUPPORTED,
+            "v4.3.9",
+        )
+
+
+@pytest.mark.asyncio
+async def test_failed_logins_are_counted_until_one_succeeds(session: AsyncSession) -> None:
+    """連錯的次數（M4 票 21）：qBittorrent 預設連錯 5 次封 IP，只在登入成功時歸零（brief §20.2）。
+    同一個位址改帳密再測接著數；成功歸零；換一個位址是另一台，從頭數。"""
+    await own(session)
+    wrong = FakeClientFactory(qbittorrent=FakeQbittorrentClient(login_error=AuthFailedError("401")))
+    nas = ServiceConnection(base_url="http://nas:8080", username="home", password="wrong")
+
+    counts = []
+    for password in ("wrong", "still-wrong", "nope"):
+        attempt = ServiceConnection(base_url=nas.base_url, username="home", password=password)
+        status = await choose(
+            session, wrong, ServiceKind.QBITTORRENT, ServiceOrigin.EXISTING, attempt
+        )
+        counts.append(view(status, ServiceKind.QBITTORRENT).auth_failures)
+    retested = await retest_service(session, wrong, ServiceKind.QBITTORRENT, restart=True, now=NOW)
+    counts.append(view(retested, ServiceKind.QBITTORRENT).auth_failures)
+    assert counts == [1, 2, 3, 4]
+
+    elsewhere = ServiceConnection(base_url="http://other:8080", username="home", password="x")
+    moved = await choose(session, wrong, ServiceKind.QBITTORRENT, ServiceOrigin.EXISTING, elsewhere)
+    assert view(moved, ServiceKind.QBITTORRENT).auth_failures == 1
+
+    right = FakeClientFactory()
+    fixed = await choose(session, right, ServiceKind.QBITTORRENT, ServiceOrigin.EXISTING, elsewhere)
+    assert view(fixed, ServiceKind.QBITTORRENT).auth_failures == 0
 
 
 @pytest.mark.asyncio

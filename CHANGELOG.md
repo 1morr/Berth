@@ -722,6 +722,17 @@ split-cour 的第一批被播出日比對整批擋在審核，改正一次並套
 - 真服務 e2e 多第四個模組 `tests/e2e/test_4_m3_rss.py`（M3 的八條驗收），公開 RSS 站由 compose 裡的 `sites` 容器冒充（`tests/e2e/sites.py`，HTTPS，測試 CA 在 `tests/fixtures/e2e/tls/`）。前端 e2e 多 `rss-auto-bind`。
 
 ### Changed
+- **精靈、設定頁與健康頁的錯誤分成人話與技術細節**（M4 票 21）：失敗的那一條說一句人話（由後端的封閉代碼選
+  i18n 文案）、給照來源挑的補法，後端的英文原文、HTTP 狀態、端點、`dev=` / `inode=` 收進預設收起的「技術細節」。
+  API：`StepOut` 多 `failure`（`StepFailure`）與 `params`；`QbittorrentOut` 與 `IndexerSetupOut` 多 `failure`；
+  `ServiceOut` 多 `error`（連線測試的原文）與 `auth_failures`（這個位址上連續幾次帳密不被接受）。舊資料裡沒有代碼的
+  失敗讀出來是 `unexpected`。
+- **qBittorrent 的版本在測連線時就擋**（M4 票 21）：低於 4.4（Web API 2.8.4）的那一台，服務頁的連線測試是
+  `version_unsupported`，不再是綠燈之下的泊位卡紅燈；既有那一台的補法不給 `docker compose pull`。
+- **既有 qBittorrent 的帳密不對時，Route 檢查的第一條說的是登入那一次**（M4 票 21）：原本登入的失敗被吞掉、
+  建分類時以 403 紅燈，補法給成「分類衝突」。
+- 精靈頁首數的是泊位（「第 2 個，共 5 個泊位」，完成頁說「收尾」）；qBittorrent 的主鈕「套用這 N 項」把要設的
+  介面登入算進去；偏好表與媒體庫類型用人話的名字。
 - **缺集一鍵搜分批問完**（M3 票 20，plan §8.4）：季記號放不下一次搜尋的五個查詢時不再退回作品名，而是分批——每一批一組季，搜尋區塊說出這一批問了哪幾季、下一批是哪幾季、請求預算何時放得下，「問下一批」由人按。`GET /api/search` 與 `/search/queries` 多 `from_season=` 參數（下一批從哪一季起）與 `batch` 回應欄位（`from_season` 單獨帶著是 422 `from_season_without_missing`）。
 - **從審核裡套用到 RSS Series**（M3 票 14b，brief §15）：連載中的 split-cour 第一批會被播出日比對整批擋在
   `/review`、一集都沒入庫，現在停在審核的計劃列也有「套用到這個 RSS Series」（`PUT /plans/{id}/items` 的

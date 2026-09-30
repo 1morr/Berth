@@ -16,6 +16,8 @@ export interface LoginOutcome {
   error: string
 }
 import { GhostButton, Notice } from '../components/controls'
+import { failureText } from '../components/failures'
+import { TechnicalDetails } from '../components/TechnicalDetails'
 import { useInterfaceLogin } from '../setup/interfaceLogin'
 import { InterfaceLoginFields, type LoginService } from '../setup/InterfaceLoginFields'
 import { SettingsSection } from './SettingsFrame'
@@ -84,13 +86,17 @@ function LoginForm({
 }) {
   const { t } = useTranslation()
   const form = useInterfaceLogin({ current, owner, alwaysOpen: true })
-  const [outcome, setOutcome] = useState<SetupStep | 'failed' | InterfaceLoginRefusal | null>(null)
+  const [result, setOutcome] = useState<SetupStep | 'failed' | InterfaceLoginRefusal | null>(null)
+  // 送出那一刻的欄位版本：之後改了一格，上一次的結果說的就不是這幾格了（M4 票 21）。
+  const [sentAt, setSentAt] = useState<number | null>(null)
+  const outcome = sentAt === form.edits ? result : null
 
   function submit(event: FormEvent) {
     event.preventDefault()
     const login = form.take()
     if (!login) return
     setOutcome(null)
+    setSentAt(form.edits)
     onSave(login).then(
       ({ step, error }) => {
         // 連不上那個服務時沒有登入那一條，只有原文：照「沒有寫進去」說，原文貼上。
@@ -120,10 +126,13 @@ function LoginForm({
             {t(`interfaceLogin.refused.${outcome.reason}`, { owner })}
           </Notice>
         ) : outcome?.status === 'failed' ? (
-          <Notice signal="blocked" label={t('common.failed')}>
-            {t('interfaceLogin.settings.refused')}
-            <span className="value mt-1 block text-xs wrap-anywhere">{outcome.error}</span>
-          </Notice>
+          <div>
+            <Notice signal="blocked" label={t('common.failed')}>
+              {t('interfaceLogin.settings.refused')}{' '}
+              {failureText(t, outcome, service === 'qbittorrent' ? 'qBittorrent' : 'Prowlarr')}
+            </Notice>
+            <TechnicalDetails lines={[outcome.error]} />
+          </div>
         ) : outcome ? (
           <Notice signal="secured" label={t('status.ok')}>
             {t('interfaceLogin.settings.saved', { username: outcome.detail })}

@@ -320,6 +320,7 @@ describe('搜尋 torrent 與結果表', () => {
               status: 'failed',
               detail: '',
               error: 'GET /api/v1/search: ReadTimeout',
+              failure: 'unreachable',
             },
           ],
         }),
@@ -329,7 +330,9 @@ describe('搜尋 torrent 與結果表', () => {
 
     await userEvent.click(await screen.findByRole('button', { name: '搜尋' }))
 
-    expect(await screen.findByText('GET /api/v1/search: ReadTimeout')).toBeVisible()
+    // 一句人話說哪一個垮了；原文收進技術細節（M4 票 21）。
+    expect(await screen.findByText(/^連不到 索引站/)).toBeVisible()
+    expect(screen.getByText('GET /api/v1/search: ReadTimeout')).not.toBeVisible()
     // 垮掉的那一條不影響結果表。
     expect(within(panel()).getByRole('table')).toBeVisible()
   })
@@ -374,6 +377,7 @@ describe('搜尋 torrent 與結果表', () => {
               status: 'failed',
               detail: '',
               error: 'GET /api/v1/search: ReadTimeout',
+              failure: 'unreachable',
             },
           ],
         }),
@@ -383,7 +387,7 @@ describe('搜尋 torrent 與結果表', () => {
 
     await userEvent.click(await screen.findByRole('button', { name: '搜尋' }))
 
-    const failed = await within(panel()).findByText('GET /api/v1/search: ReadTimeout')
+    const failed = await within(panel()).findByText(/^連不到 索引站/)
     const summary = within(panel()).getByText('其餘 2 個關鍵字有回應')
     expect(failed).toBeVisible()
     expect(summary).toBeVisible()

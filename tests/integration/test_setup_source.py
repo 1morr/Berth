@@ -32,6 +32,7 @@ from berth.domain import (
     ServiceKind,
     ServiceOrigin,
     SiteFailure,
+    StepFailure,
     StepStatus,
 )
 from berth.models import (
@@ -417,6 +418,7 @@ async def test_a_blank_credential_is_a_red_line_not_a_request(session: AsyncSess
 
     assert client.calls == 0
     assert status.steps[0].status is StepStatus.FAILED
+    assert status.steps[0].failure is StepFailure.CREDENTIAL_MISSING
     assert (status.api_key_present, status.verified) == (False, False)
 
 
@@ -431,6 +433,8 @@ async def test_a_rejected_tmdb_key_is_a_failed_line_not_a_500(session: AsyncSess
 
     assert status.steps[0].status is StepStatus.FAILED
     assert status.steps[0].error == "GET /configuration: 401"
+    # 401 是「key 不對」，不是「連不出去」：畫面照這個代碼叫人重貼 key（M4 票 21）。
+    assert status.steps[0].failure is StepFailure.AUTH_REJECTED
     # 測不過也存下來，使用者才能改一個字再按一次。
     assert (await read_settings(session, TmdbSettings)).api_key.endswith("dead")
 

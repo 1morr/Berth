@@ -38,6 +38,7 @@ function Page({
         switchWarning={switchWarning}
         locked={locked}
         refusal={refusal}
+        requestError={null}
         onChoose={onChoose}
         onRetest={vi.fn()}
         {...draft}

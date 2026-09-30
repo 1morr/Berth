@@ -27,6 +27,9 @@ export type StepStatus = Schemas['StepStatus']
 /** 精靈的一步，或一個 Route 的一項檢查。 */
 export type SetupStep = Schemas['StepOut']
 
+/** `StepFailure`：一條纜繩為什麼沒繫上（M4 票 21）。前端照它選人話，原文收進技術細節。 */
+export type StepFailure = Schemas['StepFailure']
+
 /** `MediaKind`：一部作品是劇集還是電影（`berth/domain/enums.py`）。 */
 export type MediaKind = Schemas['MediaKind']
 

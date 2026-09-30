@@ -44,6 +44,7 @@ from berth.domain import (
     ServiceKind,
     ServiceOrigin,
     SiteFailure,
+    StepFailure,
     StepStatus,
 )
 from berth.models import IndexerSettings, ServiceChoice, ServiceTest, SetupSettings, SetupStep
@@ -55,11 +56,13 @@ from berth.services.settings import read_settings, update_settings, write_settin
 from berth.services.steps import (
     InterfaceLogin,
     StepView,
+    failed_step,
     hash_password,
     message,
     password_matches,
     step_views,
 )
+from berth.services.steps import failure_of as failure_of_error
 
 #: 推薦的九個站（plan §9.3 頁 4、brief §16.3），預設不勾、先測再勾（M4 票 09）。值是 Prowlarr 的
 #: `definitionName`：
@@ -156,6 +159,9 @@ class IndexerSetupStatus:
     #: 套件內 Prowlarr 的介面帳號：Berth 設下的，或那一台自己就設過的。還沒設過、或是既有的那一台
     #: 是空字串。
     web_ui_username: str
+    #: 讀清單那一次為什麼失敗（M4 票 21）：UI 照它說人話。讀到了是 `None`。
+    failure: StepFailure | None
+    #: 讀清單那一次的失敗原文（英文），收進「技術細節」。
     error: str
     #: 上一次連線測試的理由（服務頁與頁 4 的既有表單寫的同一份）；還沒測過是 `None`。
     #: 既有表單照它選補法：版本太舊時叫人升級，不叫人改位址（M4 票 17）。
@@ -211,7 +217,7 @@ async def read_indexer_status(
         instance = _instance_username(await client.host_config()) if bundled else ""
     except ServiceError as exc:
         # 既有的那一台連不上由測試那一條說（`reason`），表單照樣畫得出來。
-        return _view(setup, settings, origin, base_url, reachable=not bundled, error=message(exc))
+        return _view(setup, settings, origin, base_url, reachable=not bundled, error=exc)
     finally:
         await client.aclose()
 
@@ -304,7 +310,7 @@ async def apply_default_indexers(
             instance = _instance_username(await client.host_config())
             steps.append(await _apply_password(client, setup, None, instance, sleep=sleep))
     except ServiceError as exc:
-        return _view(setup, settings, origin, base_url, reachable=False, error=message(exc))
+        return _view(setup, settings, origin, base_url, reachable=False, error=exc)
     finally:
         await client.aclose()
 
@@ -512,7 +518,10 @@ async def _ensure_indexer(
     already = existing.get(definition_name)
     if already is None and (definition is None or not _offered(definition)):
         return SetupStep(
-            key=definition_name, status=StepStatus.FAILED, error=_refused(definition_name).detail
+            key=definition_name,
+            status=StepStatus.FAILED,
+            failure=StepFailure.SITE_NOT_OFFERED,
+            error=_refused(definition_name).detail,
         )
 
     # `detail` 留空：站名已經是這一條纜繩的標題，重複一次只是噪音。
@@ -525,7 +534,10 @@ async def _ensure_indexer(
         await client.add_indexer(definition)
     except IndexerRejectedError as exc:
         return SetupStep(
-            key=definition_name, status=StepStatus.FAILED, error=" · ".join(exc.messages)
+            key=definition_name,
+            status=StepStatus.FAILED,
+            failure=_SITE_FAILURE[failure_of(exc.messages)],
+            error=" · ".join(exc.messages),
         )
     return SetupStep(key=definition_name, status=StepStatus.OK)
 
@@ -554,7 +566,7 @@ async def set_interface_login(
         instance = _instance_username(await client.host_config())
         step = await _apply_password(client, setup, login, instance, sleep=sleep)
     except ServiceError as exc:
-        step = SetupStep(key=PROWLARR_LOGIN_STEP, status=StepStatus.FAILED, error=message(exc))
+        step = failed_step(PROWLARR_LOGIN_STEP, exc)
         instance = ""
     finally:
         await client.aclose()
@@ -670,7 +682,7 @@ async def _apply_password(
         await _wait_for_restart(client, sleep=sleep)
     except ServiceError as exc:
         # 這一條失敗不該把前面那幾站的結果一起丟掉——它們已經加進去了，畫面必須說得出來。
-        return SetupStep(key=key, status=StepStatus.FAILED, error=message(exc))
+        return failed_step(key, exc)
     return SetupStep(key=key, status=StepStatus.OK, detail=login.username)
 
 
@@ -725,6 +737,7 @@ async def probe_indexer(
                     key=kind.value,
                     status=StepStatus.FAILED,
                     detail=caps.server_title,
+                    failure=StepFailure.NO_SEARCH,
                     error="t=caps: this endpoint does not offer search",
                 ),
             )
@@ -777,6 +790,8 @@ def outdated_step(version: str) -> SetupStep:
         key=IndexerKind.PROWLARR.value,
         status=StepStatus.FAILED,
         detail=version,
+        failure=StepFailure.VERSION_UNSUPPORTED,
+        params={"version": version},
         error=unsupported_message(version),
     )
 
@@ -793,8 +808,7 @@ def _failed_probe(kind: IndexerKind, exc: ServiceError) -> IndexerProbe:
         reason = ConnectionReason.PROTOCOL_MISMATCH
     else:
         reason = ConnectionReason.UNREACHABLE
-    step = SetupStep(key=kind.value, status=StepStatus.FAILED, error=message(exc))
-    return IndexerProbe(step=step, reason=reason)
+    return IndexerProbe(step=failed_step(kind.value, exc), reason=reason)
 
 
 def _target(setup: SetupSettings, settings: IndexerSettings) -> tuple[ServiceOrigin | None, str]:
@@ -816,6 +830,15 @@ def _offered(site: IndexerDefinition | ProwlarrIndexer) -> bool:
     if site.definition_name in DEFAULT_INDEXERS:
         return True
     return site.privacy == "public" and site.protocol == "torrent"
+
+
+#: Prowlarr 拒絕一站的理由 → 那一條纜繩的代碼（M4 票 21）。
+_SITE_FAILURE = {
+    SiteFailure.CLOUDFLARE: StepFailure.SITE_CLOUDFLARE,
+    SiteFailure.NO_RESULTS: StepFailure.SITE_NO_RESULTS,
+    SiteFailure.UNREACHABLE: StepFailure.SITE_UNREACHABLE,
+    SiteFailure.OTHER: StepFailure.SITE_REJECTED,
+}
 
 
 def _refused(name: str) -> SiteCheck:
@@ -912,7 +935,7 @@ def _view(
     sites: tuple[IndexerSite, ...] = (),
     candidates: tuple[IndexerCandidate, ...] = (),
     reachable: bool = True,
-    error: str = "",
+    error: Exception | None = None,
     instance_username: str = "",
 ) -> IndexerSetupStatus:
     return IndexerSetupStatus(
@@ -930,7 +953,8 @@ def _view(
         web_ui_username=(setup.indexer.web_ui_username or instance_username)
         if origin is ServiceOrigin.BUNDLED
         else "",
-        error=error,
+        failure=failure_of_error(error)[0] if error is not None else None,
+        error=message(error) if error is not None else "",
         reason=_last_reason(setup),
     )
 

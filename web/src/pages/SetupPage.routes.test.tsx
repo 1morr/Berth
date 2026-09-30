@@ -167,7 +167,10 @@ describe('頁 3：媒體庫路徑（套件內）', () => {
 
     renderWithProviders(<SetupPage />)
     const list = await screen.findByRole('list', { name: '這一頁的 Route' })
-    const rows = within(list).getAllByRole('group')
+    // 技術細節也是 `<details>`（M4 票 21），只數 Route 列那一層。
+    const rows = within(list)
+      .getAllByRole('group')
+      .filter((row) => row.dataset.testid !== 'technical-details')
 
     expect(rows).toHaveLength(4)
     expect(within(list).getAllByText('6 / 6 通過')).toHaveLength(3)
@@ -185,7 +188,8 @@ describe('頁 3：媒體庫路徑（套件內）', () => {
     renderWithProviders(<SetupPage />)
     await userEvent.click(await screen.findByRole('button', { name: '建立並檢查' }))
 
-    expect(await screen.findByText(/後端可能沒在跑/)).toBeInTheDocument()
+    // 500 是後端自己出錯，不是「可能沒在跑」（M4 票 21）；原文收進技術細節。
+    expect(await screen.findByText(/後端出錯了/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '建立並檢查' })).toBeEnabled()
   })
 
@@ -426,7 +430,7 @@ describe('頁 3 的失敗', () => {
     renderWithProviders(<SetupPage />)
     await userEvent.click(await screen.findByRole('button', { name: '建立並檢查' }))
 
-    expect(await screen.findByText(/後端可能沒在跑/)).toBeInTheDocument()
+    expect(await screen.findByText(/後端出錯了/)).toBeInTheDocument()
     expect(screen.queryByText(/被刪掉了/)).not.toBeInTheDocument()
   })
 })

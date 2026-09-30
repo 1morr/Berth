@@ -56,6 +56,7 @@ from berth.domain import (
     OwnerRefusal,
     ServiceKind,
     ServiceOrigin,
+    StepFailure,
     StepStatus,
 )
 from berth.models import (
@@ -69,7 +70,13 @@ from berth.models import (
 )
 from berth.services.clients import ServiceClientFactory
 from berth.services.settings import read_settings, write_settings
-from berth.services.steps import InterfaceLogin, StepView, step_views
+from berth.services.steps import (
+    InterfaceLogin,
+    StepFailedError,
+    StepView,
+    failed_step,
+    step_views,
+)
 
 #: `POST /Auth/Keys?app=` 用的名字。也是重按時辨認「這把是我建的」的依據。
 API_KEY_APP = "Berth"
@@ -123,18 +130,6 @@ def tvdb_fetchers(library: JellyfinLibrary) -> tuple[str, ...]:
         if TVDB_MARKER in fetcher.lower()
     )
     return tuple(dict.fromkeys(found))
-
-
-class StepFailedError(Exception):
-    """這一步做不下去，而且原因不是外部服務丟出來的例外。
-
-    `detail` 是失敗那一刻仍然量得到的實測值（版本太舊時就是它的版本號）：那一行要同時說得出
-    「這台是什麼」與「為什麼不行」。
-    """
-
-    def __init__(self, message: str, *, detail: str = "") -> None:
-        super().__init__(message)
-        self.detail = detail
 
 
 class BundledLibraryRejectedError(Exception):
@@ -718,13 +713,10 @@ class _Runner:
     async def run(self, step: JellyfinStep) -> SetupStep:
         try:
             status, detail = await _ACTIONS[step](self)
-        except StepFailedError as exc:
-            # 量得到的實測值照樣帶著：版本太舊那一行要同時說出「它是 10.11.11」與「要 12 以上」。
-            return SetupStep(
-                key=step.value, status=StepStatus.FAILED, detail=exc.detail, error=_message(exc)
-            )
         except (ServiceError, OSError) as exc:
-            return SetupStep(key=step.value, status=StepStatus.FAILED, error=_message(exc))
+            # 量得到的實測值照樣帶著：版本太舊那一行要同時說出「它是 10.11.11」與「要 12 以上」。
+            version = exc.params.get("version", "") if isinstance(exc, StepFailedError) else ""
+            return failed_step(step.value, exc, detail=version)
         return SetupStep(key=step.value, status=status, detail=detail)
 
     async def refresh_libraries(self) -> None:
@@ -740,7 +732,11 @@ class _Runner:
         info = await self._client.public_info()
         if not info.supported:
             # 版本閘門就在第一步，後面的步驟因此一步都不會跑（brief §16.4、§19）。
-            raise StepFailedError(unsupported_message(info.version), detail=info.version)
+            raise StepFailedError(
+                StepFailure.VERSION_UNSUPPORTED,
+                unsupported_message(info.version),
+                version=info.version,
+            )
         self._fresh = not info.startup_wizard_completed
         self.server_id = info.server_id
         return StepStatus.OK, info.version
@@ -759,7 +755,9 @@ class _Runner:
 
     async def _admin_user(self) -> tuple[StepStatus, str]:
         if self._credentials is None:
-            raise StepFailedError("no owner yet; finish step 1 of the wizard first")
+            raise StepFailedError(
+                StepFailure.UNEXPECTED, "no owner yet; finish step 1 of the wizard first"
+            )
         username, password = self._credentials
         if not self._fresh:
             return StepStatus.SKIPPED, username
@@ -818,7 +816,10 @@ class _Runner:
         await self._client.create_api_key(API_KEY_APP)
         created = await self._find_api_key()
         if created is None:
-            raise StepFailedError("Jellyfin accepted POST /Auth/Keys but the key is not listed")
+            raise StepFailedError(
+                StepFailure.UNEXPECTED,
+                "Jellyfin accepted POST /Auth/Keys but the key is not listed",
+            )
         self._use(created)
         return StepStatus.OK, API_KEY_APP
 
@@ -830,7 +831,10 @@ class _Runner:
             self._client.use_token(self._token)
             return
         if self._credentials is None:
-            raise StepFailedError("no API key for this Jellyfin yet; finish step 1 of the wizard")
+            raise StepFailedError(
+                StepFailure.UNEXPECTED,
+                "no API key for this Jellyfin yet; finish step 1 of the wizard",
+            )
         username, password = self._credentials
         try:
             auth = await self._client.authenticate(username, password)
@@ -839,7 +843,9 @@ class _Runner:
             raise
         if not auth.is_administrator:
             self.refusal = OwnerRefusal.NOT_ADMINISTRATOR
-            raise StepFailedError(f"{username} is not a Jellyfin administrator")
+            raise StepFailedError(
+                StepFailure.AUTH_REJECTED, f"{username} is not a Jellyfin administrator"
+            )
         self.auth = auth
         self._token = auth.token
         self._client.use_token(auth.token)

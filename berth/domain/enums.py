@@ -738,6 +738,71 @@ class StepStatus(StrEnum):
     PENDING = "pending"
 
 
+class StepFailure(StrEnum):
+    """一條纜繩為什麼沒繫上（M4 票 21）。封閉集合：前端照它選一句人話，原文另放 `error`，
+    收進「技術細節」。
+
+    成熟產品（Home Assistant config flow、*arr）的做法：已知的失敗用代碼，由前端翻譯、掛在造成它的
+    那一條上；原始例外只在未知情況出現——那就是 `UNEXPECTED`。參數（路徑、版本、媒體庫名）在
+    `SetupStep.params`，不拼進英文句子。
+    """
+
+    # --- 服務那一端：adapter 的例外分類（`services.steps.failure_of`） ---
+    #: 主機名解不到。
+    NOT_DEPLOYED = "not_deployed"
+    #: 解得到但連不上、逾時，或它這一次答不出來（5xx）。
+    UNREACHABLE = "unreachable"
+    #: 連得上，它說自己還在載入（503）。
+    STARTING = "starting"
+    #: 帳密或 API key 不被接受（401 / 403）。
+    AUTH_REJECTED = "auth_rejected"
+    #: qBittorrent 把 Berth 這台的 IP 封了（連續登入失敗，brief §20.2）。
+    IP_BANNED = "ip_banned"
+    #: 回的東西不是這個服務。
+    PROTOCOL_MISMATCH = "protocol_mismatch"
+    #: 它說沒有這個東西（404）。
+    NOT_FOUND = "not_found"
+    #: 版本比 Berth 的下限舊。`params.version` 是它的版本。
+    VERSION_UNSUPPORTED = "version_unsupported"
+
+    # --- Berth 自己判斷的 ---
+    #: 還沒有憑證可測（TMDB 的 key 沒貼）。
+    CREDENTIAL_MISSING = "credential_missing"
+    #: 同名分類已存在而路徑不同，Berth 不覆寫。`params.category`、`params.path`。
+    CATEGORY_CONFLICT = "category_conflict"
+    #: qBittorrent 沒報全域 save path。
+    SAVE_PATH_MISSING = "save_path_missing"
+    #: 服務報的路徑在 Berth 的容器裡看不到。`params.path`。
+    PATH_NOT_VISIBLE = "path_not_visible"
+    #: Berth 在那裡建不了目錄或寫不進探測檔。`params.path`。
+    BERTH_CANNOT_WRITE = "berth_cannot_write"
+    #: qBittorrent 校驗 Berth 寫的探測檔：一點都沒看到 / 讀不了 / 時限內沒校驗完（M4 票 19）。
+    PROBE_UNSEEN = "probe_unseen"
+    PROBE_UNREADABLE = "probe_unreadable"
+    PROBE_UNSETTLED = "probe_unsettled"
+    #: Jellyfin 已經沒有這個媒體庫了。`params.library`。
+    LIBRARY_GONE = "library_gone"
+    #: 媒體庫還在，但寫入目標已不是它的路徑。`params.library`、`params.path`。
+    LIBRARY_PATH_GONE = "library_path_gone"
+    #: Berth 寫的探測檔 Jellyfin 看不到。`params.path`。
+    JELLYFIN_CANNOT_SEE = "jellyfin_cannot_see"
+    #: 硬鏈接回 `EXDEV`：兩個目錄在 Berth 裡是不同掛載。
+    CROSS_DEVICE = "cross_device"
+    #: 硬鏈接失敗，不是 `EXDEV`（權限、檔案系統不支援）。
+    LINK_FAILED = "link_failed"
+    #: Prowlarr 拒絕加這一站：被 CloudFlare 擋 / 測試查詢沒結果 / 連不到站 / 其他（`SiteFailure`）。
+    SITE_CLOUDFLARE = "site_cloudflare"
+    SITE_NO_RESULTS = "site_no_results"
+    SITE_UNREACHABLE = "site_unreachable"
+    SITE_REJECTED = "site_rejected"
+    #: 這一站不是 Berth 加得了的（不在推薦清單、也不是公開的 torrent 站）。
+    SITE_NOT_OFFERED = "site_not_offered"
+    #: Torznab 端點不提供搜尋。
+    NO_SEARCH = "no_search"
+    #: 認不出來的例外。原文照樣在 `error`。
+    UNEXPECTED = "unexpected"
+
+
 class JellyfinStep(StrEnum):
     """Jellyfin 自動初始化序列的七步（plan §9.4）。順序即宣告順序，也是執行的順序。
 

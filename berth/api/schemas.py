@@ -19,6 +19,7 @@ from berth.domain import (
     MediaKind,
     ServiceKind,
     ServiceOrigin,
+    StepFailure,
     StepStatus,
 )
 from berth.services.health import CHECK_INTERVAL, HealthReport, Status
@@ -32,10 +33,14 @@ class StepOut(BaseModel):
 
     step: str
     status: StepStatus
-    #: 實測值：版本號、建了哪幾個媒體庫、任務 id。UI 直接顯示，不翻譯。
+    #: 實測值：版本號、建了哪幾個媒體庫、任務 id。UI 收進「技術細節」，不翻譯。
     detail: str
-    #: 失敗時服務回的原文（英文）。
+    #: 失敗時服務回的原文（英文）。UI 收進「技術細節」，不當標題（M4 票 21）。
     error: str
+    #: 失敗時為什麼：UI 照它說人話。沒失敗是 `null`。
+    failure: StepFailure | None = None
+    #: 那句人話的參數：路徑、版本、媒體庫名。
+    params: dict[str, str] = {}
 
 
 class RouteOut(BaseModel):
@@ -117,8 +122,11 @@ class QbittorrentOut(BaseModel):
     web_ui_login: bool
     #: 套件內那一台的 WebUI 帳號（Berth 設下的，或它自己就設過的）；還沒設過是空字串。
     web_ui_username: str
-    #: 五個建議鍵會被寫。既有的那一台是 `false`：只列出來，Berth 不改它的全域偏好（M4 票 05）。
+    #: 建議鍵會被寫。既有的那一台是 `false`：Berth 不改它的全域偏好（M4 票 05）。
     writes_preferences: bool
+    #: 連線本身為什麼失敗（M4 票 21）。連上了是 `null`。
+    failure: StepFailure | None
+    #: 連線本身的失敗原文（英文），收進「技術細節」。
     error: str
 
 

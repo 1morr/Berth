@@ -43,7 +43,7 @@ import {
   type SetupStatus,
   type TmdbSetup,
 } from '../api/setup'
-import { type QbittorrentSetup, type ServiceKind } from '../api/schemas'
+import { type QbittorrentSetup, type ServiceKind, type ServiceOrigin } from '../api/schemas'
 import { meQueryOptions } from '../api/auth'
 import { healthQueryOptions } from '../api/health'
 import { routeRefusalOf } from '../api/routes'
@@ -61,7 +61,6 @@ import { TmdbStep } from '../setup/TmdbStep'
 import {
   BERTH_STEP,
   STEP,
-  TOTAL_STEPS,
   advanced,
   berthOf,
   go,
@@ -72,6 +71,7 @@ import {
   straying,
 } from '../setup/navigation'
 import { type ChoiceControls } from '../setup/ServiceChoice'
+import { type ChoiceDraft } from '../setup/choiceDraft'
 import { PAGE_TITLE, GhostButton } from '../components/controls'
 import { commonRoot } from '../components/routeChecks'
 import { type Signal } from '../components/signal'
@@ -106,6 +106,13 @@ export function SetupPage() {
   const status = useQuery(setupStatusQueryOptions)
   // 步驟是由狀態導出的（plan §9.3），所以「停在結果上」與「回頭看」都靠這個覆寫，不是靠改狀態。
   const [pinned, setPinned] = useState<number | null>(null)
+  // 服務頁上選著、還沒存下的那一格（M4 票 09）。由這一頁持有而不是那一頁：泊位板要跟著它，不再寫著
+  // 原本那一台的「失敗 · 套件內」（M4 票 21）。記著是哪一步的——離開那一頁就不算數了。
+  const [draft, setDraft] = useState<{
+    step: number
+    kind: ServiceKind
+    origin: ServiceOrigin
+  } | null>(null)
 
   const current = status.data
   const backend = current?.current_step ?? STEP.jellyfin
@@ -170,7 +177,10 @@ export function SetupPage() {
   const choose = useMutation({
     mutationFn: ({ kind, input }: { kind: ServiceKind; input: ChoiceInput }) =>
       chooseService(kind, input),
-    onMutate: hold,
+    onMutate: ({ kind }) => {
+      hold()
+      forgetResults(kind)
+    },
     onSuccess: (next, { kind }) => {
       absorb(next)
       invalidateBerthOf(kind)
@@ -181,16 +191,29 @@ export function SetupPage() {
   const retest = useMutation({
     mutationFn: ({ kind, restart }: { kind: ServiceKind; restart: boolean }) =>
       retestService(kind, restart),
+    // 使用者按的重測才清：啟動中每 3 秒的那一次不動畫面上的東西。
+    onMutate: ({ kind, restart }) => {
+      if (restart) forgetResults(kind)
+    },
     onSuccess: (next, { kind }) => {
       absorb(next)
       invalidateBerthOf(kind)
     },
   })
-  function choiceOf(kind: ServiceKind): ChoiceControls {
+  function choiceOf(kind: ServiceKind): ChoiceControls & ChoiceDraft {
+    const mine = choose.variables?.kind === kind
     return {
       choosing: choose.isPending && choose.variables.kind === kind,
       retesting: retest.isPending && retest.variables.kind === kind && retest.variables.restart,
-      refusal: choose.variables?.kind === kind ? choiceRefusalOf(choose.error) : null,
+      refusal: mine ? choiceRefusalOf(choose.error) : null,
+      requestError:
+        mine && choose.isError && !choiceRefusalOf(choose.error)
+          ? choose.error
+          : retest.variables?.kind === kind && retest.isError
+            ? retest.error
+            : null,
+      draft: draftOf(kind),
+      onDraft: (origin) => setDraft(origin === null ? null : { step, kind, origin }),
       onChoose: (input, done) => choose.mutate({ kind, input }, { onSuccess: done }),
       onRetest: (restart) => {
         if (restart) hold()
@@ -275,6 +298,29 @@ export function SetupPage() {
     onMutate: hold,
     onSuccess: (next) => absorbBerth(indexerSetupQueryOptions.queryKey, next),
   })
+  /**
+   * 換了來源、換了位址、按了重新測試：那一頁上一次的結果與錯誤說的是之前那一台，清掉（M4 票 21）。
+   * 原本換一台 Jellyfin 之後上一台的版本錯誤還掛著、Prowlarr 的狀態列停在上一次。
+   */
+  function forgetResults(kind: ServiceKind) {
+    if (kind === 'jellyfin') {
+      owner.reset()
+      reSignIn.reset()
+    } else if (kind === 'qbittorrent') {
+      applyPreferences.reset()
+    } else {
+      applySites.reset()
+      connectSource.reset()
+      prowlarrLogin.reset()
+      removeSite.reset()
+    }
+  }
+
+  /** 畫面上選著、還沒存下的那一格；是這一步的才算。 */
+  function draftOf(kind: ServiceKind): ServiceOrigin | null {
+    return draft && draft.step === step && draft.kind === kind ? draft.origin : null
+  }
+
   const tmdbTest = useMutation({
     mutationFn: testTmdb,
     onMutate: hold,
@@ -374,25 +420,50 @@ export function SetupPage() {
       : t('jellyfin.bundled.list.refusedRow', { position: refusal.row + 1, reason })
   }
 
+  // 泊位板照畫面上選著的那一格畫：換另一格還沒測時，那一格是「輪到你」，不是原本那一台的結果。
+  const drafted = current.services.find(
+    (row) => draftOf(row.kind) !== null && draftOf(row.kind) !== row.origin,
+  )
+  const board: SetupStatus = drafted
+    ? {
+        ...current,
+        services: current.services.map((row) =>
+          row === drafted
+            ? {
+                ...row,
+                origin: draftOf(row.kind)!,
+                state: null,
+                reason: null,
+                detail: '',
+                error: '',
+              }
+            : row,
+        ),
+      }
+    : current
+  const signals: BerthSignals = {
+    jellyfin: jellyfinSignal(current),
+    qbittorrent: qbittorrentSignal(current, qbittorrent.data, applyPreferences.isPending),
+    library: librarySignal(current, routes.data, jellyfin.data, dock.isPending),
+    prowlarr: indexerSignal(
+      current,
+      applySites.isPending ||
+        connectSource.isPending ||
+        removeSite.isPending ||
+        prowlarrLogin.isPending,
+    ),
+    tmdb: tmdbSignal(current, tmdb.data, tmdbTest.isPending),
+  }
+  if (drafted) signals[drafted.kind] = 'assigned'
+
   const shell = {
     step,
     backend,
-    status: current,
-    indexers: indexers.data,
+    status: board,
+    // 換另一格還沒測時，索引站那一格的站數說的是原本那一台，不畫。
+    indexers: drafted?.kind === 'prowlarr' ? undefined : indexers.data,
     tmdb: tmdb.data,
-    signals: {
-      jellyfin: jellyfinSignal(current),
-      qbittorrent: qbittorrentSignal(current, qbittorrent.data, applyPreferences.isPending),
-      library: librarySignal(current, routes.data, jellyfin.data, dock.isPending),
-      prowlarr: indexerSignal(
-        current,
-        applySites.isPending ||
-          connectSource.isPending ||
-          removeSite.isPending ||
-          prowlarrLogin.isPending,
-      ),
-      tmdb: tmdbSignal(current, tmdb.data, tmdbTest.isPending),
-    } satisfies BerthSignals,
+    signals,
     onGo: goTo,
     onReturn: () => setPinned(null),
   }
@@ -405,7 +476,7 @@ export function SetupPage() {
           choice={choiceOf('jellyfin')}
           claiming={owner.isPending}
           refusal={ownerRefusalOf(owner.error)}
-          claimFailed={owner.isError}
+          claimError={ownerRefusalOf(owner.error) ? null : owner.error}
           onClaim={(input) => owner.mutate(input)}
           reSignIn={{
             connecting: reSignIn.isPending,
@@ -423,7 +494,7 @@ export function SetupPage() {
           setupFailed={qbittorrent.isError}
           owner={current.owner}
           applying={applyPreferences.isPending}
-          requestFailed={applyPreferences.isError}
+          requestError={applyPreferences.error}
           loginRefusal={loginRefusalOf(applyPreferences.error)}
           onApply={(login) => applyPreferences.mutateAsync(login)}
           choice={choiceOf('qbittorrent')}
@@ -546,7 +617,9 @@ function Waiting({ failed, message, nav }: { failed: boolean; message: string; n
  */
 function dockFailure(error: unknown): DockFailure | null {
   if (error === null || error === undefined || bundledRefusalOf(error)) return null
-  return routeRefusalOf(error)?.reason === 'route_missing' ? 'route_missing' : 'request'
+  return routeRefusalOf(error)?.reason === 'route_missing'
+    ? { kind: 'route_missing' }
+    : { kind: 'request', error }
 }
 
 /**
@@ -684,9 +757,12 @@ function Shell({
         <p className="value text-lg font-semibold tracking-tight">{t('app.name')}</p>
         {/* 精靈這一頁的標題。每一步自己的 `<h2>` 掛在它底下（票 03 第 13 條）。 */}
         <h1 className={PAGE_TITLE}>{t('setup.title')}</h1>
+        {/* 數的是泊位板上的格子：板上五格，頁首原本寫「共 6 步」（完成頁也算一步，M4 票 21）。
+            完成頁不是泊位，只說「收尾」。頁序與泊位號一一對應（`navigation.BERTH_STEP`）。 */}
         <p className="label ml-auto text-ink-dim">
-          {code ? t('setup.stage.berth', { code }) : t('setup.stage.final')} ·{' '}
-          {t('setup.step', { current: step, total: TOTAL_STEPS })}
+          {code
+            ? `${t('setup.stage.berth', { code })} · ${t('setup.step', { current: step, total: BERTHS.length })}`
+            : t('setup.stage.final')}
         </p>
         <LanguageToggle />
       </header>

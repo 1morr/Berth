@@ -7,6 +7,22 @@ import reactRefresh from 'eslint-plugin-react-refresh'
 import globals from 'globals'
 import tseslint from 'typescript-eslint'
 
+/**
+ * 後端的原文不當標題（M4 票 21，`.scratch/m4/error-layers-shape.md`）：精靈、設定頁與健康頁裡，`.error` /
+ * `.message` 不能直接畫成 JSX 子節點——人話由代碼選（`components/failures.ts`），原文只經
+ * `TechnicalDetails` 的 `lines`（屬性，不是子節點）進畫面。`src/lint.test.ts` 用這份設定檔雙向驗它。
+ */
+const RAW = '[property.name=/^(error|message)$/]'
+const CHILD = ':matches(JSXElement, JSXFragment) > JSXExpressionContainer'
+const RAW_TEXT_SELECTORS = [
+  `${CHILD} > MemberExpression${RAW}`,
+  `${CHILD} > ChainExpression > MemberExpression${RAW}`,
+  `${CHILD} > LogicalExpression > MemberExpression.right${RAW}`,
+  `${CHILD} > LogicalExpression > ChainExpression.right > MemberExpression${RAW}`,
+  `${CHILD} > ConditionalExpression > MemberExpression.consequent${RAW}`,
+  `${CHILD} > ConditionalExpression > MemberExpression.alternate${RAW}`,
+]
+
 export default defineConfig([
   // `src/api/schema.d.ts` 是 `pnpm gen:api` 的產物：不 lint、不格式化，只由 tsc 檢查。
   globalIgnores(['dist', 'src/api/schema.d.ts']),
@@ -38,6 +54,28 @@ export default defineConfig([
       ecmaVersion: 2023,
       globals: globals.browser,
       parserOptions: { projectService: true, tsconfigRootDir: import.meta.dirname },
+    },
+  },
+  {
+    files: [
+      'src/setup/**/*.tsx',
+      'src/components/**/*.tsx',
+      'src/settings/**/*.tsx',
+      'src/health/**/*.tsx',
+      'src/pages/SetupPage.tsx',
+      'src/pages/*SettingsPage.tsx',
+      'src/pages/HealthPage.tsx',
+    ],
+    ignores: ['**/*.test.tsx'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        ...RAW_TEXT_SELECTORS.map((selector) => ({
+          selector,
+          message:
+            'Backend text is not a headline: pick the sentence from the failure code and put the original in <TechnicalDetails lines={…} />.',
+        })),
+      ],
     },
   },
 ])

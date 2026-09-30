@@ -45,3 +45,69 @@ describe('JSX 子節點裡的註解', () => {
     expect(await flagged(source)).toEqual([])
   })
 })
+
+/**
+ * 後端原文不當標題（M4 票 21）：`eslint.config.js` 的 `no-restricted-syntax` 只管精靈、設定頁、健康頁與
+ * 共用元件。用真正的設定檔跑——規則被拿掉、範圍的 glob 寫錯、或 selector 認不出換了包法的同一件事，
+ * 第一組就會紅；第二組是合規的寫法（原文經 `TechnicalDetails` 的屬性、或只拿來判斷）換了排版與名字，
+ * 不該紅。**擋不到的**：先賦值給變數再畫、塞進 `t()` 的插值——規則只認直接畫成子節點的成員存取。
+ */
+const RAW_TEXT = 'no-restricted-syntax'
+
+async function rawText(source: string, filePath = PROBE): Promise<number> {
+  const [result] = await new ESLint().lintText(source, { filePath })
+  return result.messages.filter((message) => message.ruleId === RAW_TEXT).length
+}
+
+describe('後端原文不當標題', () => {
+  it('把 `.error` / `.message` 直接畫成子節點會被擋，不管怎麼包', { timeout: 60_000 }, async () => {
+    const source = `export function Probe({ row, failure }: { row?: { error: string }; failure: Error }) {
+  return (
+    <div>
+      <p role="alert">{row?.error}</p>
+      <>{failure.message}</>
+      <span>{row && row.error}</span>
+      <span>{row ? row.error : ''}</span>
+    </div>
+  )
+}
+`
+    expect(await rawText(source)).toBe(4)
+  })
+
+  it(
+    '原文經 TechnicalDetails 的屬性進畫面、或只拿來判斷，不會被擋',
+    { timeout: 60_000 },
+    async () => {
+      const source = `import { TechnicalDetails } from '../components/TechnicalDetails'
+
+export function Line({ step }: { step: { error: string; failure: string | null } }) {
+  const shown = step.error !== ''
+  return (
+    <section>
+      {step.error && (
+        <TechnicalDetails
+          lines={[ step.error ]}
+        />
+      )}
+      {shown ? <p>{step.failure}</p> : null}
+    </section>
+  )
+}
+`
+      expect(await rawText(source)).toBe(0)
+    },
+  )
+
+  it(
+    '範圍之外的頁（Job 的時間線是入庫的原因，不是設定錯誤）不管',
+    { timeout: 60_000 },
+    async () => {
+      const source = `export function Probe({ row }: { row: { error: string } }) {
+  return <p>{row.error}</p>
+}
+`
+      expect(await rawText(source, 'src/jobs/JobTimeline.tsx')).toBe(0)
+    },
+  )
+})

@@ -20,8 +20,10 @@ import {
   PrimaryButton,
 } from '../components/controls'
 import { ConfirmPanel } from '../components/ConfirmPanel'
+import { RequestFailed } from '../components/RequestFailed'
+import { TechnicalDetails } from '../components/TechnicalDetails'
 import { escapeOnly } from '../components/useInPlaceConfirm'
-import { SERVICE_LABEL, detailLabel } from '../components/services'
+import { BAN_DEFAULTS, BAN_WARNING_FROM, SERVICE_LABEL, detailLabel } from '../components/services'
 import { SIGNAL_FILL } from '../components/signal'
 import type { ChoiceDraft } from './choiceDraft'
 import { pointsAtBerth } from './loopback'
@@ -34,6 +36,7 @@ import {
   composeProfiles,
   signalOf,
   testEndpoint,
+  testTarget,
 } from './signals'
 
 /**
@@ -52,6 +55,11 @@ export interface ChoiceControls {
    * 認不出是哪一台（M4 票 18）。表單留著、理由就地說。
    */
   refusal: ChoiceRefusal | null
+  /**
+   * 選擇或重測的請求本身沒成（不是 `refusal` 那種說得出理由的拒絕）：送不到、422、5xx（M4 票 21）。
+   * 原本精靈裡這幾種什麼都不顯示。沒有就是 `null`。
+   */
+  requestError: unknown
   /** `done`：這一次選擇存下來了才叫——被拒或沒送到時表單留著，改一格再按。 */
   onChoose: (input: ChoiceInput, done?: () => void) => void
   /** `restart`：使用者按的「重新測試」，2 分鐘重新算。 */
@@ -76,6 +84,7 @@ export function ServiceChoice({
   choosing,
   retesting,
   refusal,
+  requestError,
   locked,
   switchWarning,
   existingForm,
@@ -102,6 +111,8 @@ export function ServiceChoice({
   const warningId = useId()
   const service = status.services.find((row) => row.kind === kind)
   const [editing, setEditing] = useState(false)
+  // 既有表單改了一格、還沒按測試：上一次的結果說的是舊的那幾個值，先收起來（M4 票 21）。
+  const [edited, setEdited] = useState(false)
   const pointer = useRef(false)
   const radios = useRef<Partial<Record<ServiceOrigin, HTMLInputElement | null>>>({})
   const panel = useRef<HTMLDivElement>(null)
@@ -163,6 +174,7 @@ export function ServiceChoice({
   }
 
   function chooseExisting(input: ChoiceInput) {
+    setEdited(false)
     // 表單與勾選留到存下來（audit）：先清掉的話，請求還在路上時表單卸下、兩格都沒勾；被拒時
     // （M4 票 18）表單也要留著，理由掛在它上面。
     onChoose(input, () => {
@@ -193,10 +205,12 @@ export function ServiceChoice({
     (existingForm ?? (
       <ExistingForm
         kind={kind}
-        service={service?.origin === 'existing' ? service : undefined}
+        service={service?.origin === 'existing' && !edited ? service : undefined}
+        initialUrl={service?.origin === 'existing' ? service.base_url : ''}
         choosing={choosing}
-        refusal={refusal}
+        refusal={edited ? null : refusal}
         focusFirst={editing}
+        onEdit={() => setEdited(true)}
         onSubmit={chooseExisting}
       />
     ))
@@ -338,8 +352,13 @@ export function ServiceChoice({
         </>
       )}
 
-      {/* 自己帶表單的那一種（Prowlarr 頁的既有）在表單下面說結果，這一條就不重複。 */}
-      {service && !switching && !(showExistingForm && existingForm) && (
+      {requestError !== null && requestError !== undefined && (
+        <RequestFailed error={requestError} />
+      )}
+
+      {/* 自己帶表單的那一種（Prowlarr 頁的既有）在表單下面說結果，這一條就不重複。表單改了一格還沒測，
+          上一次的結果說的是舊值，也先不畫。 */}
+      {service && !switching && !(showExistingForm && (existingForm || edited)) && (
         <TestLine
           kind={kind}
           status={status}
@@ -413,22 +432,28 @@ function ChoiceCard({
 function ExistingForm({
   kind,
   service,
+  initialUrl,
   choosing,
   refusal,
   focusFirst,
+  onEdit,
   onSubmit,
 }: {
   kind: ServiceKind
-  /** 已經選過既有的那一份：位址帶回來，不必重打。 */
+  /** 上一次測的那一份（連錯的次數在它上面）。改了一格之後是 `undefined`：它說的是舊值。 */
   service: SetupService | undefined
+  /** 已經選過既有的話，位址帶回來，不必重打。 */
+  initialUrl: string
   choosing: boolean
   refusal: ChoiceRefusal | null
   /** 按「改位址或憑證」打開的：那顆鈕自己卸下了，焦點交給位址欄（audit）。 */
   focusFirst: boolean
+  /** 任何一格改了：上一次的結果與拒絕不再對得上這些值。 */
+  onEdit: () => void
   onSubmit: (input: ChoiceInput) => void
 }) {
   const { t } = useTranslation()
-  const [baseUrl, setBaseUrl] = useState(service?.base_url ?? '')
+  const [baseUrl, setBaseUrl] = useState(initialUrl)
   const [apiKey, setApiKey] = useState('')
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
@@ -462,7 +487,10 @@ function ExistingForm({
         autoFocus={focusFirst}
         placeholder={EXAMPLE_ADDRESS[kind]}
         hint={pointsAtBerth(baseUrl) ? <LoopbackHint /> : undefined}
-        onChange={(event) => setBaseUrl(event.target.value)}
+        onChange={(event) => {
+          setBaseUrl(event.target.value)
+          onEdit()
+        }}
         error={checked && !baseUrl.trim() ? t('connect.error.blank') : undefined}
       />
       {fields.includes('apiKey') && (
@@ -470,7 +498,10 @@ function ExistingForm({
           label={t('connect.field.apiKey')}
           value={apiKey}
           autoComplete="off"
-          onChange={(event) => setApiKey(event.target.value)}
+          onChange={(event) => {
+            setApiKey(event.target.value)
+            onEdit()
+          }}
         />
       )}
       {fields.includes('credentials') && (
@@ -479,13 +510,20 @@ function ExistingForm({
             label={t('connect.field.username')}
             value={username}
             autoComplete="off"
-            onChange={(event) => setUsername(event.target.value)}
+            onChange={(event) => {
+              setUsername(event.target.value)
+              onEdit()
+            }}
           />
           <PasswordField
             label={t('connect.field.password')}
             value={password}
             autoComplete="off"
-            onChange={(event) => setPassword(event.target.value)}
+            hint={banWarning(t, service)}
+            onChange={(event) => {
+              setPassword(event.target.value)
+              onEdit()
+            }}
           />
         </>
       )}
@@ -503,6 +541,20 @@ function ExistingForm({
       </div>
     </form>
   )
+}
+
+/**
+ * 連錯的預警（M4 票 21）：第 3 次起在密碼欄下說「再錯 N 次會被封」。只提示、不擋按鈕；被封之後是
+ * 測試那一條的紅燈（`connection.fix.banned`）。次數是 Berth 自己數的，所以是「至少」——qBittorrent 數的是
+ * 這台的 IP，別的程式用錯的帳密連它也算。
+ */
+function banWarning(t: TFunction, service: SetupService | undefined): string | undefined {
+  if (!service || service.kind !== 'qbittorrent' || service.reason !== 'auth_required') return
+  const failures = service.auth_failures
+  const left = BAN_DEFAULTS.limit - failures
+  if (failures < BAN_WARNING_FROM) return
+  if (left <= 0) return t('connection.fix.authWarningLast', { failures, ...BAN_DEFAULTS })
+  return t('connection.fix.authWarning', { failures, left, ...BAN_DEFAULTS })
 }
 
 /** 拒絕的細節：認不出是哪一台時是那一次測試的理由，照 UI 語言說；另一台時是它的伺服器名。 */
@@ -570,12 +622,16 @@ export function TestLine({
               : t('connection.untested')}
         </span>
         <span className="value text-sm font-semibold text-ink">{t(SERVICE_LABEL[kind])}</span>
-        <span className="value ml-auto min-w-0 truncate text-xs text-ink-dim">
-          {testEndpoint(status, kind)}
+        <span className="value min-w-0 truncate text-xs text-ink-dim">
+          {testTarget(status, kind)}
         </span>
+        {!failed && !testing && (
+          <TechnicalDetails inline lines={[testEndpoint(status, kind), service.error]} />
+        )}
       </div>
 
-      {service.reason && (
+      {/* 測試中不畫上一次的結果：它說的是這一次之前的那一台（M4 票 21）。 */}
+      {service.reason && !testing && (
         <dl className="grid grid-cols-1 gap-x-4 gap-y-1 border-t-2 border-rule px-4 py-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
           <dt className="label self-center text-ink-dim">{t('connection.result')}</dt>
           <dd className="text-sm text-ink">{t(REASON_LABEL[service.reason])}</dd>
@@ -609,7 +665,7 @@ export function TestLine({
         </dl>
       )}
 
-      {failed && <Fix kind={kind} status={status} service={service} />}
+      {failed && !testing && <Fix kind={kind} status={status} service={service} />}
 
       {service.origin === 'bundled' && service.reason === 'api_key_missing' && onPasteKey && (
         <PasteKey choosing={testing} onPaste={onPasteKey} />
@@ -677,7 +733,7 @@ function Fix({
   } else if (reason === 'auth_required') {
     lede = t('connection.fix.credentials')
   } else if (reason === 'ip_banned') {
-    lede = t('connection.fix.banned')
+    lede = t('connection.fix.banned', BAN_DEFAULTS)
   } else if (reason === 'version_unsupported') {
     lede = t('connection.fix.outdated', outdated)
   } else if (pointsAtBerth(service.base_url)) {
@@ -698,6 +754,7 @@ function Fix({
           ))}
         </div>
       )}
+      <TechnicalDetails lines={[testEndpoint(status, kind), service.error]} />
     </section>
   )
 }

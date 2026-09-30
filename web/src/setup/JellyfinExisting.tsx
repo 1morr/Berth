@@ -10,7 +10,9 @@ import {
   PasswordField,
   PrimaryButton,
 } from '../components/controls'
+import { failureText } from '../components/failures'
 import { mountSnippet } from '../components/routeChecks'
+import { TechnicalDetails } from '../components/TechnicalDetails'
 
 /** 加不上的原因 → 那一句。查表而不是動態組 key——動態組過不了 `strictKeyChecks`（票 06）。 */
 const PATH_FAILED = {
@@ -40,16 +42,15 @@ export function AddPathFailures({ results, root }: { results: BerthPath[]; root:
             signal="blocked"
             label={t('jellyfin.libraries.pathFailed.title', { library: row.library })}
           >
-            <span className="value wrap-anywhere">{row.error}</span>
+            {/* 人話照 Berth 分出來的原因說；Jellyfin 的原文收進技術細節（M4 票 21）。 */}
+            {row.reason
+              ? t(PATH_FAILED[row.reason], { library: row.library, path: row.path, root })
+              : t('failure.unexpected')}
           </Notice>
-          {row.reason && (
-            <p className="max-w-prose text-xs text-ink-dim">
-              {t(PATH_FAILED[row.reason], { library: row.library, path: row.path, root })}
-            </p>
-          )}
           {row.reason === 'jellyfin_cannot_see' && (
             <CopyLine command={mountSnippet('jellyfin', root)} />
           )}
+          <TechnicalDetails lines={[row.path, row.error]} />
         </li>
       ))}
     </ul>
@@ -86,8 +87,9 @@ export function JellyfinSignIn({
       {apiKeyStep?.status === 'failed' && (
         <div className="mt-4">
           <Notice signal="blocked" label={t('common.failed')}>
-            <span className="value wrap-anywhere">{apiKeyStep.error}</span>
+            {failureText(t, apiKeyStep, 'Jellyfin')}
           </Notice>
+          <TechnicalDetails lines={[apiKeyStep.error]} />
         </div>
       )}
     </>

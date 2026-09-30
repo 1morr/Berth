@@ -6,6 +6,7 @@ import { CopyLine } from '../components/controls'
 import { SERVICE_LABEL, detailLabel } from '../components/services'
 import { SettingsHint } from '../components/SettingsHint'
 import { UNPAINTED_FILL } from '../components/signal'
+import { TechnicalDetails } from '../components/TechnicalDetails'
 import { Timestamp } from '../components/Timestamp'
 import { STATE_LABEL, STATE_SIGNAL, composeCommands, serviceFix, serviceState } from './signals'
 
@@ -83,8 +84,8 @@ export function ServiceCard({
 
       {failed && (
         <div className="border-t-2 border-rule bg-hull px-4 py-4">
-          <p role="alert" className="value max-w-prose wrap-anywhere text-xs text-blocked-ink">
-            {row.error}
+          <p role="alert" className="max-w-prose text-sm text-blocked-ink">
+            {t('health.failedLine', { service: t(SERVICE_LABEL[row.kind]) })}
           </p>
           {/* 被封了與帳密不對在原文上分得出來，但**下一步不同**才是重點：改帳密只會再
               失敗五次，把封鎖時間重新算一輪（brief §20.2、PRODUCT 原則 4）。所以這一句
@@ -98,6 +99,8 @@ export function ServiceCard({
           ) : (
             <Fix row={row} settingsLink={settingsLink} level={level} />
           )}
+          {/* 健康檢查只記原文，沒有代碼（M4 票 21 只給精靈與 Route 檢查代碼）：原文收進技術細節。 */}
+          <TechnicalDetails lines={[row.base_url, row.error]} />
         </div>
       )}
 

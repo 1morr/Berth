@@ -1,6 +1,8 @@
 import { useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
 
+import type { SetupStep } from '../api/schemas'
 import type { TmdbSetup } from '../api/setup'
 import {
   STICKY_ACTION,
@@ -51,7 +53,7 @@ export function TmdbStep({
         <Cutaway title={t('tmdbStep.cutaway.title')}>
           <CutawayRow
             term={t('tmdbStep.cutaway.credential')}
-            value={t(tmdb.api_key_present ? 'tmdbStep.held' : 'tmdbStep.absent')}
+            value={t(credentialLabel(tmdb))}
             muted={!tmdb.api_key_present}
           />
           <CutawayRow term={t('tmdbStep.cutaway.endpoint')} value="GET /3/configuration" />
@@ -161,16 +163,40 @@ export function TmdbKey({
         className={row ? 'mt-4 grid gap-3' : undefined}
         data-testid="tmdb"
       >
-        {row && (
-          <StepLine
-            label={t('tmdbStep.line')}
-            endpoint="GET /3/configuration"
-            row={row}
-            fix={t('tmdbStep.fix')}
-            commands={[TMDB_API_SETTINGS, REACHABILITY_PROBE]}
-          />
-        )}
+        {row && <StepLine {...lineOf(t, row)} row={row} />}
       </ol>
     </section>
   )
+}
+
+/**
+ * 憑證那一格：存下來不等於驗過（M4 票 21）。原本測不過時右欄寫「已取得」，泊位卡卻是「失敗 · 待驗證」。
+ */
+function credentialLabel(
+  tmdb: TmdbSetup,
+): 'tmdbStep.held' | 'tmdbStep.heldUnverified' | 'tmdbStep.absent' {
+  if (!tmdb.api_key_present) return 'tmdbStep.absent'
+  return tmdb.verified ? 'tmdbStep.held' : 'tmdbStep.heldUnverified'
+}
+
+/**
+ * 那一條纜繩：補法照失敗的代碼挑（M4 票 21）。401 是 key 不對——原本一律叫人去查網路；
+ * 只有連不出去才給探測那一行。
+ */
+function lineOf(t: TFunction, row: SetupStep) {
+  const base = { label: t('tmdbStep.line'), service: 'TMDB', endpoint: 'GET /3/configuration' }
+  switch (row.failure) {
+    case 'auth_rejected':
+    case 'not_found':
+      return { ...base, fix: t('tmdbStep.fixKey'), commands: [TMDB_API_SETTINGS] }
+    case 'credential_missing':
+      return base
+    case 'not_deployed':
+    case 'unreachable':
+    case 'starting':
+    case 'protocol_mismatch':
+      return { ...base, fix: t('tmdbStep.fixNetwork'), commands: [REACHABILITY_PROBE] }
+    default:
+      return { ...base, fix: t('tmdbStep.fix'), commands: [TMDB_API_SETTINGS, REACHABILITY_PROBE] }
+  }
 }

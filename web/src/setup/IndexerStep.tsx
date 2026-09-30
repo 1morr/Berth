@@ -21,14 +21,16 @@ import {
   TEXT_LINK,
 } from '../components/controls'
 import { Cutaway, CutawayRow } from '../components/Cutaway'
+import { failureText } from '../components/failures'
 import { StepLine } from '../components/StepLine'
+import { TechnicalDetails } from '../components/TechnicalDetails'
 import { AddedSites, AddSites, type SiteControls } from './IndexerSites'
 import { useInterfaceLogin } from './interfaceLogin'
 import { BerthLogin } from './InterfaceLoginFields'
 import { pointsAtBerth } from './loopback'
 import { prowlarrWeb } from './prowlarrWeb'
 import { LoopbackHint, ServiceChoice, type ChoiceControls } from './ServiceChoice'
-import { useChoiceDraft } from './choiceDraft'
+import type { ChoiceDraft } from './choiceDraft'
 import { STEP } from './navigation'
 import { VERSION_FLOOR, connected } from './signals'
 import { StepFrame } from './StepFrame'
@@ -88,7 +90,8 @@ export function IndexerStep({
   onApply: (indexers: string[]) => Promise<IndexerSetup>
   onConnect: (input: IndexerConnectInput) => void
   onSkip: () => void
-  choice: ChoiceControls
+  /** 選擇的兩支 mutation 與畫面上選著、還沒存下的那一格（`SetupPage` 持有）。 */
+  choice: ChoiceControls & ChoiceDraft
   /** 測試、試搜與移除（`IndexerSites`）。 */
   sites: SiteControls
   /** 回頭看的說明（`RevisitNote`），這一頁做完了才有。 */
@@ -98,10 +101,9 @@ export function IndexerStep({
 }) {
   const { t } = useTranslation()
   const service = status.services.find((row) => row.kind === 'prowlarr')
-  const choiceDraft = useChoiceDraft()
   // 標題與 lede 跟著畫面上選著的那一格：換另一格還在確認時就說那一格的事（票 15 critique）。
-  const switching = choiceDraft.draft !== null && choiceDraft.draft !== service?.origin
-  const origin = choiceDraft.draft ?? service?.origin
+  const switching = choice.draft !== null && choice.draft !== service?.origin
+  const origin = choice.draft ?? service?.origin
   const ready = connected(service) && !switching
   // 畫哪一種看這一份清單自己說的來源：剛選下去、清單還沒重讀回來時兩者不一致，那幾秒什麼都不畫，
   // 不閃另一種的文案（M4 票 20）。
@@ -131,7 +133,6 @@ export function IndexerStep({
         kind="prowlarr"
         status={status}
         {...choice}
-        {...choiceDraft}
         switchWarning={hasResults ? t('choice.switchWarning.prowlarr') : undefined}
         existingForm={
           indexers && (
@@ -142,7 +143,7 @@ export function IndexerStep({
 
       {indexers && unread && (
         <ReadFailed
-          error={indexers.error}
+          indexers={indexers}
           rereading={choice.retesting}
           onReread={() => choice.onRetest(true)}
         />
@@ -239,11 +240,11 @@ function NoSites({
 
 /** 既有 Prowlarr 的站清單這一次讀不到：原文與「重新讀取」（重測那一台，清單跟著重讀）。 */
 function ReadFailed({
-  error,
+  indexers,
   rereading,
   onReread,
 }: {
-  error: string
+  indexers: IndexerSetup
   rereading: boolean
   onReread: () => void
 }) {
@@ -252,9 +253,9 @@ function ReadFailed({
   return (
     <section className="mt-6 grid gap-3" data-testid="read-failed">
       <Notice signal="blocked" label={t('common.failed')}>
-        {t('indexer.readFailed')}
+        {t('indexer.readFailed')} {failureText(t, indexers, 'Prowlarr')}
       </Notice>
-      <p className="value max-w-prose wrap-anywhere text-xs text-blocked-ink">{error}</p>
+      <TechnicalDetails lines={[indexers.base_url, indexers.error]} />
       <div>
         <GhostButton type="button" busy={rereading} onClick={onReread}>
           {rereading ? t('indexer.empty.rereading') : t('indexer.empty.reread')}
@@ -285,10 +286,13 @@ function ProwlarrLogin({
   // 與後端的 `PROWLARR_LOGIN_STEP` 同一個字串：那一條不是站。
   const row = indexers.steps.find((step) => step.step === 'prowlarr_login')
   const webUrl = prowlarrWeb(indexers)
+  // 送出那一刻的欄位版本：之後改了一格，上一次的拒絕就不畫了（M4 票 21）。
+  const [sentAt, setSentAt] = useState<number | null>(null)
 
   function save() {
     const taken = form.take()
     if (!taken) return
+    setSentAt(form.edits)
     controls.onSave(taken).then(
       () => form.reset(taken.username || owner),
       () => undefined,
@@ -306,7 +310,7 @@ function ProwlarrLogin({
       <div className="mt-4">
         <BerthLogin service="prowlarr" current={indexers.web_ui_username} form={form} />
       </div>
-      {controls.refusal && (
+      {controls.refusal && sentAt === form.edits && (
         <div className="mt-4">
           <Notice signal="blocked" label={t('common.failed')}>
             {t(`interfaceLogin.refused.${controls.refusal.reason}`, { owner })}
@@ -325,7 +329,9 @@ function ProwlarrLogin({
         <ol className="mt-6 grid gap-3">
           <StepLine
             label={t('indexer.add.login')}
+            service="Prowlarr"
             endpoint="PUT /api/v1/config/host"
+            summary={row.detail}
             row={row}
             fix={t('indexer.add.loginFix')}
             commands={webUrl ? [`${webUrl}/#/settings/general`] : []}
@@ -444,7 +450,10 @@ function ExistingIndexer({
   const [kind, setKind] = useState<IndexerKind>(indexers.kind)
   const [baseUrl, setBaseUrl] = useState(indexers.base_url)
   const [apiKey, setApiKey] = useState('')
-  const row = indexers.steps.find((step) => step.step === kind)
+  // 上一次測試的那一條，只在欄位還是測的那幾個值、而且不在測試中時畫（M4 票 21）：換了種類或位址，
+  // 它說的就是另一個端點——原本 Prowlarr 的狀態列停在上一次。
+  const tested = kind === indexers.kind && baseUrl.trim() === indexers.base_url
+  const row = tested && !connecting ? indexers.steps.find((step) => step.step === kind) : undefined
 
   function submit(event: FormEvent) {
     event.preventDefault()
@@ -517,6 +526,7 @@ function ExistingIndexer({
         <ol className="mt-4 grid gap-3" data-testid="sites">
           <StepLine
             label={t(`indexer.kind.${kind}`)}
+            service={t(`indexer.kind.${kind}`)}
             endpoint={kind === 'prowlarr' ? 'GET /api/v1/system/status' : '?t=caps'}
             row={row}
             // 照上一次測試的理由與測過的位址（不是欄位裡正在改的那一個）說補法（M4 票 17）。
@@ -555,14 +565,15 @@ function Unreachable({ indexers }: { indexers: IndexerSetup }) {
         {t('indexer.unreachable')}
       </Notice>
       {indexers.error && (
-        <p role="alert" className="value max-w-prose wrap-anywhere text-xs text-blocked-ink">
-          {indexers.error}
+        <p role="alert" className="max-w-prose text-sm text-blocked-ink">
+          {failureText(t, indexers, 'Prowlarr')}
         </p>
       )}
       <div className="grid grid-cols-1 gap-px">
         <CopyLine command="docker compose ps prowlarr" />
         <CopyLine command="docker compose logs --tail 50 prowlarr" />
       </div>
+      <TechnicalDetails lines={[indexers.base_url, indexers.error]} />
     </div>
   )
 }

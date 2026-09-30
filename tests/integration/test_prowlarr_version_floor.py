@@ -21,6 +21,7 @@ from berth.domain import (
     IndexerKind,
     ServiceKind,
     ServiceOrigin,
+    StepFailure,
     StepStatus,
 )
 from berth.models import SetupSettings, SetupStep
@@ -125,6 +126,8 @@ class TestWizard:
                 key="prowlarr",
                 status=StepStatus.FAILED,
                 detail=version,
+                failure=StepFailure.VERSION_UNSUPPORTED,
+                params={"version": version},
                 error=unsupported_message(version),
             )
         )

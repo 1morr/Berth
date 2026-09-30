@@ -50,11 +50,11 @@ test('精靈六頁走完，之後以同一組帳密登入', async ({ page }) => 
   await expect(webUi.getByRole('checkbox', { name: /沿用 Jellyfin 帳密/ })).toBeChecked()
   // 密碼打錯：Jellyfin 驗不過，什麼都沒寫。
   await webUi.getByLabel('skipper 的 Jellyfin 密碼').fill('not-the-password')
-  await page.getByRole('button', { name: /^套用這 \d+ 個鍵$/ }).click()
+  await page.getByRole('button', { name: /^套用這 \d+ 項$/ }).click()
   await expect(page.getByText(/這不是 skipper 的 Jellyfin 密碼/)).toBeVisible()
   await webUi.getByLabel('skipper 的 Jellyfin 密碼').fill(ADMIN.password)
   await shot(page, '2-qbittorrent-login')
-  await page.getByRole('button', { name: /^套用這 \d+ 個鍵$/ }).click()
+  await page.getByRole('button', { name: /^套用這 \d+ 項$/ }).click()
   await expect(page.getByText('qBittorrent WebUI 的帳號：')).toBeVisible()
   await expect(page.getByRole('button', { name: '前往下一個泊位' })).toBeVisible()
   await shot(page, '2-qbittorrent')
@@ -90,7 +90,8 @@ test('精靈六頁走完，之後以同一組帳密登入', async ({ page }) => 
   await expect(next).toBeVisible()
   const routes = page.getByRole('list', { name: '這一頁的 Route' })
   await expect(routes.getByText('6 / 6 通過')).toHaveCount(4)
-  await expect(routes.getByText('berth-紀錄片', { exact: true })).toBeVisible()
+  // 分類名在 Route 列上，展開後「建立分類」那一條的行首也有一份（M4 票 21 的關鍵值）：看 Route 列那一個。
+  await expect(routes.getByText('berth-紀錄片', { exact: true }).first()).toBeVisible()
   // 不捲動就看得到下一步（票 08 驗收）：回到頁頂量。
   // 字串而不是函式：e2e 的 tsconfig 沒有 DOM 型別，這一行在瀏覽器裡跑。
   await page.evaluate('window.scrollTo(0, 0)')

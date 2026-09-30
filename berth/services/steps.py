@@ -11,10 +11,20 @@ from __future__ import annotations
 import hashlib
 import hmac
 import os
-from collections.abc import Iterable
-from dataclasses import dataclass
+from collections.abc import Iterable, Mapping
+from dataclasses import dataclass, field
 
-from berth.domain import StepStatus
+from berth.adapters.fs import PathEscapeError
+from berth.adapters.http import (
+    AuthFailedError,
+    NotFoundError,
+    ProtocolMismatchError,
+    ServiceBusyError,
+    ServiceNotDeployedError,
+    ServiceUnavailableError,
+)
+from berth.adapters.qbittorrent import IpBannedError
+from berth.domain import StepFailure, StepStatus
 from berth.models import SetupStep
 
 
@@ -22,10 +32,13 @@ from berth.models import SetupStep
 class StepView:
     step: str
     status: StepStatus
-    #: 實測值：版本號、路徑、任務 id。UI 直接顯示，不翻譯。
+    #: 實測值：版本號、路徑、任務 id。UI 放進「技術細節」，不翻譯。
     detail: str
-    #: 失敗時服務回的原文（英文）。UI 貼在手動步驟旁邊。
+    #: 失敗時服務回的原文（英文）。UI 收進「技術細節」。
     error: str
+    #: 失敗時為什麼（`SetupStep.failure`）。票 21 之前存下的失敗沒有，讀出來補成 `unexpected`。
+    failure: StepFailure | None = None
+    params: Mapping[str, str] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -70,8 +83,75 @@ def _scrypt(password: str, salt: bytes) -> bytes:
 
 def step_views(rows: Iterable[SetupStep]) -> tuple[StepView, ...]:
     return tuple(
-        StepView(step=row.key, status=row.status, detail=row.detail, error=row.error)
+        StepView(
+            step=row.key,
+            status=row.status,
+            detail=row.detail,
+            error=row.error,
+            failure=_failure_or_unknown(row),
+            params=dict(row.params),
+        )
         for row in rows
+    )
+
+
+def _failure_or_unknown(row: SetupStep) -> StepFailure | None:
+    if row.status is not StepStatus.FAILED:
+        return None
+    return row.failure or StepFailure.UNEXPECTED
+
+
+class StepFailedError(OSError):
+    """這一條沒過，而原因是 Berth 自己判斷出來的（不是誰丟出來的例外），代碼與參數跟著走。
+
+    繼承 `OSError`：與 `stat` / `link` 的失敗走同一條處理路徑（`failed_step`）——對畫面來說它們是
+    同一件事：這條纜繩沒繫上。訊息是英文原文，收進技術細節。
+    """
+
+    def __init__(self, failure: StepFailure, message: str, **params: str) -> None:
+        super().__init__(message)
+        self.failure = failure
+        self.params = params
+
+
+def failure_of(exc: Exception) -> tuple[StepFailure, dict[str, str]]:
+    """例外 → 代碼與參數（M4 票 21）。adapter 已經把 httpx 分好類（`adapters.http`），這裡只是對照。
+
+    **`IpBannedError` 排在 `AuthFailedError` 前面**：它是子類，被封與帳密不對的下一步不同（票 10）。
+    其餘的 `OSError` 是 Berth 在自己的容器裡碰檔案時的失敗：建目錄、寫探測檔。
+    """
+    if isinstance(exc, StepFailedError):
+        return exc.failure, dict(exc.params)
+    for kind, failure in _FAILURES:
+        if isinstance(exc, kind):
+            return failure, {}
+    if isinstance(exc, OSError) and exc.filename is not None:
+        return StepFailure.BERTH_CANNOT_WRITE, {"path": str(exc.filename)}
+    return StepFailure.UNEXPECTED, {}
+
+
+_FAILURES: tuple[tuple[type[BaseException], StepFailure], ...] = (
+    (ServiceNotDeployedError, StepFailure.NOT_DEPLOYED),
+    (ServiceUnavailableError, StepFailure.UNREACHABLE),
+    (ServiceBusyError, StepFailure.STARTING),
+    (IpBannedError, StepFailure.IP_BANNED),
+    (AuthFailedError, StepFailure.AUTH_REJECTED),
+    (ProtocolMismatchError, StepFailure.PROTOCOL_MISMATCH),
+    (NotFoundError, StepFailure.NOT_FOUND),
+    (PathEscapeError, StepFailure.BERTH_CANNOT_WRITE),
+)
+
+
+def failed_step(key: str, exc: Exception, *, detail: str = "") -> SetupStep:
+    """一條失敗的纜繩：代碼照例外分類，原文照錄。"""
+    failure, params = failure_of(exc)
+    return SetupStep(
+        key=key,
+        status=StepStatus.FAILED,
+        detail=detail,
+        failure=failure,
+        params=params,
+        error=message(exc),
     )
 
 

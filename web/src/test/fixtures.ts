@@ -54,6 +54,8 @@ export function chosen(overrides: Partial<SetupService> = {}): SetupService {
     state: 'ok',
     reason: 'setup_pending',
     detail: '12.1.0',
+    error: '',
+    auth_failures: 0,
     waited_seconds: 0,
     ...overrides,
   }
@@ -145,6 +147,7 @@ export function qbittorrentSetup(overrides: Partial<QbittorrentSetup> = {}): Qbi
     web_ui_login: true,
     web_ui_username: '',
     writes_preferences: true,
+    failure: null,
     error: '',
     ...overrides,
   }
@@ -238,6 +241,7 @@ export function indexerSetup(overrides: Partial<IndexerSetup> = {}): IndexerSetu
     skipped: false,
     web_ui_login: true,
     web_ui_username: '',
+    failure: null,
     error: '',
     reason: null,
     web_port: 9696,

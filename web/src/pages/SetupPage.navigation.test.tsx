@@ -454,9 +454,12 @@ describe('頁 2 之後的每一格都有結果可看', () => {
     renderWithProviders(<SetupPage />)
     await user.click(await screen.findByRole('button', { name: '建立並檢查' }))
 
-    // 全綠的收起來了：展開那一列看得到實測值。
+    // 全綠的收起來了：展開那一列、再展開那一條的技術細節看得到實測值（M4 票 21）。
     await user.click(await screen.findByText('6 / 6 通過'))
-    expect(await screen.findByText(/inode=8162774324533690/)).toBeVisible()
+    const inode = await screen.findByText(/inode=8162774324533690/)
+    expect(inode).not.toBeVisible()
+    await user.click(inode.closest('details')!.querySelector('summary')!)
+    expect(inode).toBeVisible()
   })
 })
 

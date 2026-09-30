@@ -162,7 +162,13 @@ export function SearchPanel({ media, ref }: { media: Media; ref: Ref<SearchHandl
       {search.isPending ? (
         <ol className="grid gap-2">
           {pending(keyword, planned.data?.queries).map((attempt) => (
-            <StepLine key={attempt.step} label={attempt.step} row={attempt} />
+            <StepLine
+              key={attempt.step}
+              label={attempt.step}
+              service={t('search.indexers')}
+              summary={attempt.detail}
+              row={attempt}
+            />
           ))}
         </ol>
       ) : (
@@ -401,7 +407,13 @@ function Cables({ attempts }: { attempts: readonly SetupStep[] }) {
       {failed.length > 0 && (
         <ol className="grid gap-2">
           {failed.map((attempt) => (
-            <StepLine key={attempt.step} label={attempt.step} row={attempt} />
+            <StepLine
+              key={attempt.step}
+              label={attempt.step}
+              service={t('search.indexers')}
+              summary={attempt.detail}
+              row={attempt}
+            />
           ))}
         </ol>
       )}
@@ -417,7 +429,13 @@ function Cables({ attempts }: { attempts: readonly SetupStep[] }) {
           </summary>
           <ol className="mt-2 grid gap-2">
             {answered.map((attempt) => (
-              <StepLine key={attempt.step} label={attempt.step} row={attempt} />
+              <StepLine
+                key={attempt.step}
+                label={attempt.step}
+                service={t('search.indexers')}
+                summary={attempt.detail}
+                row={attempt}
+              />
             ))}
           </ol>
         </details>

@@ -1,6 +1,8 @@
 import { useId, useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { formatList } from '../i18n/list'
+
 import type {
   IndexerCandidate,
   IndexerSetup,
@@ -20,6 +22,7 @@ import {
   TEXT_LINK,
 } from '../components/controls'
 import { SIGNAL_FILL, type Signal } from '../components/signal'
+import { TechnicalDetails } from '../components/TechnicalDetails'
 import { useFocusAfterRemoval } from '../components/useFocusAfterRemoval'
 import { languageName } from './languageName'
 import { prowlarrWeb } from './prowlarrWeb'
@@ -203,7 +206,12 @@ export function AddedSites({
         </div>
       )}
       {listError && (
-        <p className="value mt-4 max-w-prose wrap-anywhere text-xs text-ink">{listError}</p>
+        <div className="mt-4">
+          <Notice signal="blocked" label={t('common.failed')}>
+            {t('indexer.added.listFailed')}
+          </Notice>
+          <TechnicalDetails lines={[listError]} />
+        </div>
       )}
       <p aria-live="polite" className="sr-only">
         {gone ? t('indexer.remove.done', { name: removed }) : announce}
@@ -290,7 +298,7 @@ function AddedSiteRow({
             </span>
           </div>
           {unremovable && <p className="mt-1 text-xs text-ink-dim">{t('indexer.added.keeps')}</p>}
-          {result?.error && <Original text={result.error} />}
+          {result?.error && <TechnicalDetails lines={[result.error]} />}
           {result && result.titles.length > 0 && (
             // 發佈名是原文：中日英混排、一百多字，整條換行不截斷（票 08 §8 同一條）。
             <ul className="mt-2 grid gap-1">
@@ -505,7 +513,10 @@ export function AddSites({
         <p className="mt-6 max-w-prose text-sm text-ink" data-testid="adds-into">
           {t('indexer.add.intoYours', {
             host: hostOf(indexers.base_url),
-            names: new Intl.ListFormat(i18n.language).format(chosen.map((row) => row.name)),
+            names: formatList(
+              chosen.map((row) => row.name),
+              i18n.language,
+            ),
             count: chosen.length,
           })}
         </p>
@@ -782,7 +793,7 @@ function CandidateRow({
               <p className="mt-2 max-w-prose text-sm text-ink">
                 {t(`indexer.failure.${result.reason ?? 'other'}`)}
               </p>
-              {result.detail && <Original text={result.detail} />}
+              <TechnicalDetails lines={[result.detail]} />
             </>
           )}
         </div>
@@ -798,18 +809,5 @@ function CandidateRow({
         </GhostButton>
       </div>
     </li>
-  )
-}
-
-/** 服務回的原文（英文）：收起來，要修的人展開看（票 15 critique：原文不直接攤在畫面上）。 */
-function Original({ text }: { text: string }) {
-  const { t } = useTranslation()
-  return (
-    <details className="mt-2 min-w-0">
-      <summary className="label cursor-pointer text-ink-dim">
-        {t('indexer.failure.original')}
-      </summary>
-      <p className="value mt-1 max-w-prose wrap-anywhere text-xs text-ink">{text}</p>
-    </details>
   )
 }

@@ -2925,6 +2925,7 @@ export interface components {
             web_ui_login: boolean;
             /** Web Ui Username */
             web_ui_username: string;
+            failure: components["schemas"]["StepFailure"] | null;
             /** Error */
             error: string;
             reason: components["schemas"]["ConnectionReason"] | null;
@@ -4298,6 +4299,7 @@ export interface components {
             web_ui_username: string;
             /** Writes Preferences */
             writes_preferences: boolean;
+            failure: components["schemas"]["StepFailure"] | null;
             /** Error */
             error: string;
         };
@@ -4864,6 +4866,10 @@ export interface components {
             reason: components["schemas"]["ConnectionReason"] | null;
             /** Detail */
             detail: string;
+            /** Error */
+            error: string;
+            /** Auth Failures */
+            auth_failures: number;
             /** Waited Seconds */
             waited_seconds: number;
         };
@@ -4984,6 +4990,17 @@ export interface components {
          */
         Source: "BD" | "WEB" | "DVD" | "HDTV" | "REMUX";
         /**
+         * StepFailure
+         * @description 一條纜繩為什麼沒繫上（M4 票 21）。封閉集合：前端照它選一句人話，原文另放 `error`，
+         *     收進「技術細節」。
+         *
+         *     成熟產品（Home Assistant config flow、*arr）的做法：已知的失敗用代碼，由前端翻譯、掛在造成它的
+         *     那一條上；原始例外只在未知情況出現——那就是 `UNEXPECTED`。參數（路徑、版本、媒體庫名）在
+         *     `SetupStep.params`，不拼進英文句子。
+         * @enum {string}
+         */
+        StepFailure: "not_deployed" | "unreachable" | "starting" | "auth_rejected" | "ip_banned" | "protocol_mismatch" | "not_found" | "version_unsupported" | "credential_missing" | "category_conflict" | "save_path_missing" | "path_not_visible" | "berth_cannot_write" | "probe_unseen" | "probe_unreadable" | "probe_unsettled" | "library_gone" | "library_path_gone" | "jellyfin_cannot_see" | "cross_device" | "link_failed" | "site_cloudflare" | "site_no_results" | "site_unreachable" | "site_rejected" | "site_not_offered" | "no_search" | "unexpected";
+        /**
          * StepOut
          * @description 一條纜繩：精靈的一步，或一個 Route 的一項檢查。
          */
@@ -4995,6 +5012,14 @@ export interface components {
             detail: string;
             /** Error */
             error: string;
+            failure?: components["schemas"]["StepFailure"] | null;
+            /**
+             * Params
+             * @default {}
+             */
+            params?: {
+                [key: string]: string;
+            };
         };
         /**
          * StepStatus

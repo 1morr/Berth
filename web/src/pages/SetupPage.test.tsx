@@ -252,14 +252,14 @@ describe('頁 1：Jellyfin 與擁有者', () => {
 
     await user.click(bundledCard())
     await waitFor(() =>
-      expect(announcer()).toHaveTextContent('Jellyfin 連不上：主機名解得到但連不上'),
+      expect(announcer()).toHaveTextContent('Jellyfin 沒通過：主機名解得到但連不上'),
     )
 
     await user.click(screen.getByRole('button', { name: '重新測試' }))
     await waitFor(() => expect(announcer()).toHaveTextContent(/^$/))
     answer({ body: DOWN })
     await waitFor(() =>
-      expect(announcer()).toHaveTextContent('Jellyfin 連不上：主機名解得到但連不上'),
+      expect(announcer()).toHaveTextContent('Jellyfin 沒通過：主機名解得到但連不上'),
     )
   })
 
@@ -289,7 +289,7 @@ describe('頁 1：Jellyfin 與擁有者', () => {
 
     renderWithProviders(<SetupPage />)
 
-    expect(await screen.findByText('連不上')).toBeInTheDocument()
+    expect(await screen.findByText('沒通過')).toBeInTheDocument()
     expect(screen.getByText('主機名解不到')).toBeInTheDocument()
     expect(screen.getByText(/jellyfin 不在這套 compose 裡/)).toBeInTheDocument()
     expect(screen.getByText('COMPOSE_PROFILES=jellyfin,qbittorrent,prowlarr')).toBeInTheDocument()
@@ -461,7 +461,7 @@ describe('頁 1：Jellyfin 與擁有者', () => {
     expect(await screen.findByText(/不是管理員/)).toBeVisible()
   })
 
-  it('Jellyfin 那一段沒做完時把它的原文貼出來', async () => {
+  it('Jellyfin 那一段沒做完時說出來，它的原文收進技術細節', async () => {
     stubApi({
       [STATUS]: { body: FOUND },
       [OWNER]: {
@@ -475,7 +475,9 @@ describe('頁 1：Jellyfin 與擁有者', () => {
     await fill(user)
     await user.click(screen.getByRole('button', { name: '建立管理員並登入' }))
 
-    expect(await screen.findByText('Jellyfin 10.11.11 is too old')).toBeVisible()
+    // 人話在上；Jellyfin 那一步的英文原文收進技術細節（M4 票 21）。
+    expect(await screen.findByText(/^Jellyfin 那一段沒做完/)).toBeVisible()
+    expect(screen.getByText('Jellyfin 10.11.11 is too old')).not.toBeVisible()
   })
 
   it('後端連不上時說得出下一步', async () => {
@@ -489,7 +491,7 @@ describe('頁 1：Jellyfin 與擁有者', () => {
     await fill(user)
     await user.click(screen.getByRole('button', { name: '建立管理員並登入' }))
 
-    expect(await screen.findByText(/確認容器狀態/)).toBeInTheDocument()
+    expect(await screen.findByText(/後端出錯了/)).toBeInTheDocument()
   })
 
   /** 泊位板的第一格就是回頁 1 的入口（票 06d：走過的步驟點得回去）。 */

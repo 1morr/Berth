@@ -211,6 +211,8 @@ class TestChoice:
             "state": "ok",
             "reason": "connected",
             "detail": "v5.2.3 · Web API 2.15.1",
+            "error": "",
+            "auth_failures": 0,
             "waited_seconds": 0,
         }
 
@@ -446,7 +448,14 @@ class TestJellyfin:
             "base_url": "http://jellyfin:8096",
             "api_key_present": True,
             "steps": [
-                {"step": step, "status": "ok", "detail": detail, "error": ""}
+                {
+                    "step": step,
+                    "status": "ok",
+                    "detail": detail,
+                    "error": "",
+                    "failure": None,
+                    "params": {},
+                }
                 for step, detail in (
                     ("public_info", "12.1.0"),
                     ("configuration", "zh-TW · TW"),

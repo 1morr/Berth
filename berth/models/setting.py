@@ -20,6 +20,7 @@ from berth.domain import (
     HealthStatus,
     ServiceKind,
     ServiceOrigin,
+    StepFailure,
     StepStatus,
 )
 from berth.models.base import Base
@@ -142,6 +143,11 @@ class ServiceTest(BaseModel):
     reason: ConnectionReason
     #: 實測值：版本號或索引站數量。沒有就是空字串。
     detail: str = ""
+    #: 沒連上時服務回的原文（英文）。UI 收進「技術細節」（M4 票 21）。
+    error: str = ""
+    #: 這個位址上連續幾次帳密不被接受。qBittorrent 預設連錯 5 次就封 IP（brief §20.2），畫面
+    #: 第 3 次起預警；成功或換位址歸零。只有 qBittorrent 用得到，別的服務一律是 0。
+    auth_failures: int = 0
     checked_at: datetime
     #: 套件內那一台還在啟動時，這一輪 2 分鐘輪詢的起點。有結論就清掉。
     waiting_since: datetime | None = None
@@ -170,9 +176,14 @@ class SetupStep(BaseModel):
 
     key: str
     status: StepStatus
-    #: 實測值：版本號、建了哪幾個媒體庫、任務 id。UI 直接顯示，不翻譯。
+    #: 實測值：版本號、建了哪幾個媒體庫、任務 id。UI 放進「技術細節」，不翻譯。
     detail: str = ""
-    #: 失敗時服務回的原文（英文）。UI 貼在手動步驟旁邊。
+    #: 失敗時為什麼（M4 票 21）。UI 照它說人話；沒失敗是 `None`。票 21 之前存下的失敗沒有它，
+    #: 畫面當 `unexpected`，下一次檢查就換成新的。
+    failure: StepFailure | None = None
+    #: 那句人話要的少量參數：路徑、版本、媒體庫名。鍵見 `StepFailure` 各值的註解。
+    params: dict[str, str] = {}
+    #: 失敗時服務回的原文（英文）。UI 收進「技術細節」，不當標題。
     error: str = ""
 
 

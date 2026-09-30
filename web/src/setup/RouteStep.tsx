@@ -1,6 +1,11 @@
 import { useId, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { formatList } from '../i18n/list'
+
+import { RequestFailed } from '../components/RequestFailed'
+import { useFadingNote } from '../components/useFadingNote'
+
 import {
   deleteSetupRoute,
   type JellyfinSetup,
@@ -51,8 +56,11 @@ export type DockPlan =
       selections: RouteSelectionInput[]
     }
 
-/** 請求沒走完的那一種。後端的拒絕說得出原因就說原因（PRODUCT 原則 4）。 */
-export type DockFailure = 'request' | 'route_missing'
+/**
+ * 請求沒走完的那一種。後端的拒絕說得出原因就說原因（PRODUCT 原則 4）；其餘照請求的失敗分類說
+ * （`RequestFailed`，M4 票 21）——選擇無效的 422 原本也說成「Berth 後端可能沒在跑」。
+ */
+export type DockFailure = { kind: 'route_missing' } | { kind: 'request'; error: unknown }
 
 /** 這一輪會新建的一條 Route：哪個媒體庫、寫到哪裡。剖面列它。 */
 interface Planned {
@@ -194,6 +202,7 @@ function BundledRoutes({
         <ol className="mt-4 grid gap-3">
           <StepLine
             label={t(STEP_LABEL.libraries)}
+            service="Jellyfin"
             endpoint={STEP_ENDPOINT.libraries}
             row={broke}
             fix={t(STEP_FIX.libraries)}
@@ -209,7 +218,7 @@ function BundledRoutes({
 
 function LibrariesLine({ count, names }: { count: number; names: string[] }) {
   const { t, i18n } = useTranslation()
-  const list = names.length > 0 ? new Intl.ListFormat(i18n.language).format(names) : '—'
+  const list = names.length > 0 ? formatList(names, i18n.language) : '—'
   return <>{t('routes.dock.libraries', { count, names: list })}</>
 }
 
@@ -385,7 +394,7 @@ function RoutePage({
   children: ReactNode
 }) {
   const { t } = useTranslation()
-  const [announcement, setAnnouncement] = useState('')
+  const [announcement, setAnnouncement] = useFadingNote()
   const total = setup.routes.length + fresh
   // 做完了：主要動作是前往下一個泊位，這一顆（重驗、或回頭補建）是次要的
   // （每屏一顆 `assigned`，票 15 的 critique）。
@@ -414,10 +423,14 @@ function RoutePage({
 
       {failure && (
         <div className="mt-4">
-          <Notice signal="blocked" label={t('common.failed')}>
-            {/* 這一步順帶重跑既有 Route 的檢查，所以 `route_missing` 到得了這裡（M2 票 01）。 */}
-            {failure === 'route_missing' ? t('routes.routeMissing') : t('routes.requestFailed')}
-          </Notice>
+          {/* 這一步順帶重跑既有 Route 的檢查，所以 `route_missing` 到得了這裡（M2 票 01）。 */}
+          {failure.kind === 'route_missing' ? (
+            <Notice signal="blocked" label={t('common.failed')}>
+              {t('routes.routeMissing')}
+            </Notice>
+          ) : (
+            <RequestFailed error={failure.error} />
+          )}
         </div>
       )}
     </>
@@ -588,9 +601,12 @@ function LibraryPicker({
                 ) : (
                   <span className="text-sm text-ink-dim">{library.name}</span>
                 )}
-                {/* 機器字串（Jellyfin 的 collection type）走 `.value`：`.label` 會把它大寫掉。 */}
+                {/* 認得的類型說人話（M4 票 21：原本顯示 movies / tvshows）；Berth 不支援的類型照 Jellyfin
+                    的字面，走 `.value`——`.label` 會把它大寫掉。 */}
                 <span className="value ml-auto text-xs text-ink-dim">
-                  {library.collection_type || t('routes.picker.mixed')}
+                  {library.collection_type === 'movies' || library.collection_type === 'tvshows'
+                    ? t(`jellyfin.bundled.list.types.${library.collection_type}`)
+                    : library.collection_type || t('routes.picker.mixed')}
                 </span>
               </div>
 

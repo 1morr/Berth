@@ -13,10 +13,12 @@ import {
   PasswordField,
   PrimaryButton,
 } from '../components/controls'
+import { RequestFailed } from '../components/RequestFailed'
+import { TechnicalDetails } from '../components/TechnicalDetails'
 import { JellyfinSignInForm } from './JellyfinExisting'
 import { JELLYFIN_LOCALES, localeForUi, localeLabel } from './jellyfinStartup'
 import { ServiceChoice, type ChoiceControls } from './ServiceChoice'
-import { useChoiceDraft } from './choiceDraft'
+import type { ChoiceDraft } from './choiceDraft'
 import { connected } from './signals'
 import { StepFrame } from './StepFrame'
 
@@ -40,19 +42,20 @@ export function OwnerStep({
   choice,
   claiming,
   refusal,
-  claimFailed,
+  claimError,
   onClaim,
   reSignIn,
   note,
   nav,
 }: {
   status: SetupStatus
-  choice: ChoiceControls
+  /** 選擇的兩支 mutation 與畫面上選著、還沒存下的那一格（`SetupPage` 持有）。 */
+  choice: ChoiceControls & ChoiceDraft
   claiming: boolean
   /** 後端說不行的那一份（`ownerRefusalOf`）。 */
   refusal: OwnerRefusal | null
-  /** 請求沒跑完，而且不是一份認得的拒絕。 */
-  claimFailed: boolean
+  /** 請求沒跑完，而且不是一份認得的拒絕（沒有就是 `null`）。 */
+  claimError: unknown
   onClaim: (input: OwnerInput) => void
   reSignIn: ReSignIn
   /** 回頭看的說明（`RevisitNote`），這一頁做完了才有。 */
@@ -62,9 +65,8 @@ export function OwnerStep({
 }) {
   const { t } = useTranslation()
   const jellyfin = status.services.find((row) => row.kind === 'jellyfin')
-  const choiceDraft = useChoiceDraft()
   // 換另一格還在確認：標題與表單不說原本那一台的事（M4 票 09）。
-  const switching = choiceDraft.draft !== null && choiceDraft.draft !== jellyfin?.origin
+  const switching = choice.draft !== null && choice.draft !== jellyfin?.origin
   const mode = switching ? 'choose' : modeOf(status, connected(jellyfin))
   const reSignInId = useId()
 
@@ -82,7 +84,6 @@ export function OwnerStep({
         kind="jellyfin"
         status={status}
         {...choice}
-        {...choiceDraft}
         locked={status.owner ? t('owner.locked') : undefined}
       />
 
@@ -103,7 +104,7 @@ export function OwnerStep({
           origin={jellyfin.origin}
           claiming={claiming}
           refusal={refusal}
-          claimFailed={claimFailed}
+          claimError={claimError}
           onClaim={onClaim}
           sticky={!nav}
         />
@@ -128,7 +129,7 @@ function OwnerForm({
   origin,
   claiming,
   refusal,
-  claimFailed,
+  claimError,
   onClaim,
   sticky,
 }: {
@@ -140,7 +141,7 @@ function OwnerForm({
   origin: ServiceOrigin
   claiming: boolean
   refusal: OwnerRefusal | null
-  claimFailed: boolean
+  claimError: unknown
   onClaim: (input: OwnerInput) => void
   sticky: boolean
 }) {
@@ -232,16 +233,15 @@ function OwnerForm({
       )}
       {/* 拒絕的那一句在送出鈕上方：窄版的送出鈕吸在底部，放在它下面要捲才看得到（critique）。 */}
       {refusal ? (
-        <Notice signal="blocked" label={t('common.failed')}>
-          {t(`owner.refused.${refusal.reason}`)}
-          {refusal.detail && <span className="value mt-1 block text-xs">{refusal.detail}</span>}
-        </Notice>
-      ) : (
-        claimFailed && (
+        <div>
           <Notice signal="blocked" label={t('common.failed')}>
-            {t('owner.error.failed')}
+            {t(`owner.refused.${refusal.reason}`)}
           </Notice>
-        )
+          {/* Jellyfin 那一步的原文（例如版本太舊的英文句子）收進技術細節（M4 票 21）。 */}
+          <TechnicalDetails lines={[refusal.detail]} />
+        </div>
+      ) : (
+        claimError !== null && claimError !== undefined && <RequestFailed error={claimError} />
       )}
       <div className={sticky ? STICKY_ACTION : ''}>
         <PrimaryButton type="submit" busy={claiming}>
@@ -268,11 +268,16 @@ function OwnerCutaway({ status, mode }: { status: SetupStatus; mode: OwnerMode }
           value={[jellyfin.detail, t(ORIGIN_LABEL[jellyfin.origin])].filter(Boolean).join(' · ')}
         />
       )}
-      {(mode === 'create' || mode === 'choose') && (
+      {mode === 'create' && (
         <>
           <CutawayRow term={t('owner.cutaway.create')} value={t('owner.cutaway.admin')} />
           <CutawayRow term={t('owner.cutaway.finish')} value={t('owner.cutaway.startup')} />
         </>
+      )}
+      {/* 還沒選或還沒連上：建立還是登入要看那一台有沒有管理員，這時說成「建立」是替它先決定了
+          （M4 票 21：選既有、還沒測時這裡列的是套件內的動作）。 */}
+      {mode === 'choose' && (
+        <CutawayRow term={t('owner.cutaway.form')} value={t('owner.cutaway.depends')} />
       )}
       {mode === 'signIn' && (
         <CutawayRow term={t('owner.cutaway.change')} value={t('owner.cutaway.nothing')} />

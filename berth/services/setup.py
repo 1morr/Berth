@@ -36,6 +36,7 @@ from berth.domain import (
     QbittorrentStep,
     ServiceKind,
     ServiceOrigin,
+    StepFailure,
     StepStatus,
 )
 from berth.models import (
@@ -54,6 +55,7 @@ from berth.services.indexer import existing_prowlarr_step, outdated_step
 from berth.services.jellyfin import DEFAULT_STARTUP, JellyfinStartup, claim_jellyfin
 from berth.services.routes import forget_route_checks, routes_ready
 from berth.services.settings import read_settings, write_settings
+from berth.services.steps import message
 from berth.services.tmdb import tmdb_verified
 
 #: 套件內那一台還在啟動時的輪詢上限（plan §9.3〈服務頁的共同形狀〉）。逾時後使用者可重測，
@@ -93,6 +95,10 @@ class ServiceView:
     reason: ConnectionReason | None
     #: 實測值：Jellyfin 與 qBittorrent 的版本、Prowlarr 的索引站數量。
     detail: str
+    #: 沒連上時服務回的原文（英文）。
+    error: str
+    #: 這個位址上連續幾次帳密不被接受（`ServiceTest.auth_failures`）。
+    auth_failures: int
     #: 套件內那一台還在啟動時，這一輪已經等了幾秒。
     waited_seconds: int
 
@@ -293,13 +299,18 @@ async def choose_service(
             raise ValueError("an existing service needs its address")
 
     moved = previous is not None and (previous.origin, previous.base_url) != (origin, base_url)
+    # 同一個位址改帳密再測：上一次的結果留著，連錯的次數才接得下去（qBittorrent 數的是這台的 IP）。
+    kept = previous.test if previous is not None and not moved else None
     tested: _Outcome | None = None
     if moved and previous is not None and kind is ServiceKind.JELLYFIN and owner_established(setup):
         tested = await _same_jellyfin(session, factory, setup, previous.base_url, base_url)
     elif moved:
         await _start_over(session, setup, kind)
     await _remember_connection(session, kind, origin, base_url, connection, bundled)
-    setup.choices = {**setup.choices, kind: ServiceChoice(origin=origin, base_url=base_url)}
+    setup.choices = {
+        **setup.choices,
+        kind: ServiceChoice(origin=origin, base_url=base_url, test=kept),
+    }
     await write_settings(session, setup)
     return await _test_and_record(session, factory, kind, restart=True, now=moment, tested=tested)
 
@@ -412,6 +423,8 @@ class _Outcome:
     #: Jellyfin 說了它是哪一台（`/System/Info/Public` 的 `Id`，brief §20.15）。沒問到、或不是
     #: Jellyfin 的是空字串。
     server_id: str = ""
+    #: 沒連上時的原文（英文），收進畫面的「技術細節」。
+    error: str = ""
 
 
 async def _test_connection(
@@ -431,6 +444,10 @@ async def _test_connection(
             if settings.username:
                 await qbittorrent.login(settings.username, settings.password)
             version = await qbittorrent.version()
+            if not version.supported:
+                # 版本在測連線時就擋（M4 票 21，與 Jellyfin、Prowlarr 同一個時機）：原本這裡是綠燈、
+                # 頁 2 的泊位卡卻是紅的「太舊」，同一個畫面兩種顏色。
+                return _Outcome(reason=ConnectionReason.VERSION_UNSUPPORTED, detail=version.app)
             return _Outcome(
                 reason=ConnectionReason.CONNECTED,
                 detail=f"{version.app} · Web API {version.webapi}",
@@ -553,21 +570,23 @@ async def _classified(test: Callable[[], Awaitable[_Outcome]]) -> _Outcome:
     """
     try:
         return await test()
-    except ServiceNotDeployedError:
-        return _Outcome(reason=ConnectionReason.NOT_DEPLOYED)
-    except ServiceUnavailableError:
-        return _Outcome(reason=ConnectionReason.UNREACHABLE, transient=True)
-    except ServiceBusyError:
+    except ServiceNotDeployedError as exc:
+        return _Outcome(reason=ConnectionReason.NOT_DEPLOYED, error=message(exc))
+    except ServiceUnavailableError as exc:
+        return _Outcome(reason=ConnectionReason.UNREACHABLE, transient=True, error=message(exc))
+    except ServiceBusyError as exc:
         # 連得上、是對的服務，但還在載入（Jellyfin 的 503）：與連不上一樣等到輪詢上限。
-        return _Outcome(reason=ConnectionReason.STARTING, transient=True)
-    except IpBannedError:
+        return _Outcome(reason=ConnectionReason.STARTING, transient=True, error=message(exc))
+    except IpBannedError as exc:
         # `AuthFailedError` 的子類，所以**一定要排在它前面**——被封的那一台會照樣回 403，
         # 而「要帳密」與「被封了」的下一步完全不同（票 10、plan T1.9 第四條）。
-        return _Outcome(reason=ConnectionReason.IP_BANNED)
-    except AuthFailedError:
-        return _Outcome(reason=ConnectionReason.AUTH_REQUIRED)
-    except ProtocolMismatchError:
-        return _Outcome(reason=ConnectionReason.PROTOCOL_MISMATCH, transient=True)
+        return _Outcome(reason=ConnectionReason.IP_BANNED, error=message(exc))
+    except AuthFailedError as exc:
+        return _Outcome(reason=ConnectionReason.AUTH_REQUIRED, error=message(exc))
+    except ProtocolMismatchError as exc:
+        return _Outcome(
+            reason=ConnectionReason.PROTOCOL_MISMATCH, transient=True, error=message(exc)
+        )
 
 
 def _settle(
@@ -576,6 +595,7 @@ def _settle(
     """一次測試的結果。只有套件內的那一台會「等」：使用者自己填的位址當場就給結論，不該給他一個
     永遠不會好的倒數。等超過上限就逾時；協定不符例外——過了上限還是它，就是主機名上真的是別的東西。
     """
+    failures = _auth_failures(outcome, choice.test)
     if outcome.ok:
         state = ConnectionState.OK
     elif not outcome.transient or choice.origin is ServiceOrigin.EXISTING:
@@ -591,6 +611,7 @@ def _settle(
             return ServiceTest(
                 state=ConnectionState.WAITING,
                 reason=outcome.reason,
+                error=outcome.error,
                 checked_at=now,
                 waiting_since=since,
             )
@@ -599,7 +620,28 @@ def _settle(
             if outcome.reason is ConnectionReason.PROTOCOL_MISMATCH
             else ConnectionState.TIMEOUT
         )
-    return ServiceTest(state=state, reason=outcome.reason, detail=outcome.detail, checked_at=now)
+    return ServiceTest(
+        state=state,
+        reason=outcome.reason,
+        detail=outcome.detail,
+        error=outcome.error,
+        auth_failures=failures,
+        checked_at=now,
+    )
+
+
+def _auth_failures(outcome: _Outcome, previous: ServiceTest | None) -> int:
+    """這個位址上連續幾次帳密不被接受（M4 票 21）。
+
+    qBittorrent 數的是 Berth 這台的 IP、只在登入成功時歸零（brief §20.2），Berth 照同一個規則
+    數：被封了也不歸零——解封之後再錯一次就又封。換位址的話呼叫端不帶上一次（`choose_service`）。
+    """
+    before = previous.auth_failures if previous is not None else 0
+    if outcome.reason is ConnectionReason.AUTH_REQUIRED:
+        return before + 1
+    if outcome.ok:
+        return 0
+    return before
 
 
 def _existing_indexer_step(test: ServiceTest) -> SetupStep:
@@ -609,7 +651,24 @@ def _existing_indexer_step(test: ServiceTest) -> SetupStep:
         return existing_prowlarr_step(int(test.detail or 0))
     if test.reason is ConnectionReason.VERSION_UNSUPPORTED:
         return outdated_step(test.detail)
-    return SetupStep(key=IndexerKind.PROWLARR.value, status=StepStatus.FAILED, error=test.reason)
+    return SetupStep(
+        key=IndexerKind.PROWLARR.value,
+        status=StepStatus.FAILED,
+        failure=_REASON_FAILURE.get(test.reason, StepFailure.UNEXPECTED),
+        error=test.error or test.reason,
+    )
+
+
+#: 連線測試的理由 → 纜繩的代碼：既有 Prowlarr 那一條就是測試結果本身（M4 票 21）。
+_REASON_FAILURE = {
+    ConnectionReason.AUTH_REQUIRED: StepFailure.AUTH_REJECTED,
+    ConnectionReason.API_KEY_MISSING: StepFailure.CREDENTIAL_MISSING,
+    ConnectionReason.NOT_DEPLOYED: StepFailure.NOT_DEPLOYED,
+    ConnectionReason.UNREACHABLE: StepFailure.UNREACHABLE,
+    ConnectionReason.STARTING: StepFailure.STARTING,
+    ConnectionReason.PROTOCOL_MISMATCH: StepFailure.PROTOCOL_MISMATCH,
+    ConnectionReason.IP_BANNED: StepFailure.IP_BANNED,
+}
 
 
 def _current_step(setup: SetupSettings, *, routes: bool) -> int:
@@ -719,6 +778,8 @@ def _view(kind: ServiceKind, choice: ServiceChoice, now: datetime) -> ServiceVie
         state=test.state if test is not None else None,
         reason=test.reason if test is not None else None,
         detail=test.detail if test is not None else "",
+        error=test.error if test is not None else "",
+        auth_failures=test.auth_failures if test is not None else 0,
         waited_seconds=max(int(waited.total_seconds()), 0),
     )
 

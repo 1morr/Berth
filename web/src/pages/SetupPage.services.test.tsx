@@ -255,13 +255,14 @@ describe('頁 2：qBittorrent', () => {
     renderWithProviders(<SetupPage />)
     const diff = (await screen.findByText('將會寫入的鍵')).closest('section')!
 
-    expect(within(diff).getByText('save_path')).toBeInTheDocument()
+    // 鍵用人話的名字（M4 票 21）：原始鍵名在那一條纜繩的技術細節裡。
+    expect(within(diff).getByText('完成目錄')).toBeInTheDocument()
     expect(within(diff).getByText('/data/torrent/complete')).toBeInTheDocument()
     // 現值也在同一列，使用者看得出來按下去會改掉什麼。
     expect(within(diff).getByText('/downloads')).toBeInTheDocument()
     // 未完成目錄不寫全域（M4 票 22）：Berth 的分類各自帶。
     expect(within(diff).queryByText('temp_path_enabled')).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '套用這 3 個鍵' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '套用這 4 項' })).toBeInTheDocument()
   })
 
   it('WebUI 登入預設沿用 Jellyfin 帳密：只有一格密碼，套用之後逐鍵留下結果', async () => {
@@ -296,7 +297,7 @@ describe('頁 2：qBittorrent', () => {
     expect(fields.queryByLabelText('再輸入一次密碼')).not.toBeInTheDocument()
 
     await user.type(fields.getByLabelText(OWNER_PASSWORD), 'harbour')
-    await user.click(screen.getByRole('button', { name: '套用這 3 個鍵' }))
+    await user.click(screen.getByRole('button', { name: '套用這 4 項' }))
 
     const sequence = await screen.findByTestId('sequence')
     await waitFor(() => {
@@ -322,7 +323,7 @@ describe('頁 2：qBittorrent', () => {
     const user = userEvent.setup()
 
     renderWithProviders(<SetupPage />)
-    await user.click(await screen.findByRole('button', { name: '套用這 3 個鍵' }))
+    await user.click(await screen.findByRole('button', { name: '套用這 4 項' }))
 
     expect(await screen.findByText('這一格要填。')).toBeInTheDocument()
     expect(called(stub, '/api/setup/qbittorrent/apply')).toBe(false)
@@ -343,16 +344,16 @@ describe('頁 2：qBittorrent', () => {
 
     expect(fields.getByLabelText('帳號')).toHaveValue('skipper')
     expect(fields.queryByLabelText(OWNER_PASSWORD)).not.toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: '套用這 3 個鍵' }))
+    await user.click(screen.getByRole('button', { name: '套用這 4 項' }))
     expect(await fields.findByText('這一格要填。')).toBeInTheDocument()
     await typeOwnLogin(user, fields, 'harbor')
-    await user.click(screen.getByRole('button', { name: '套用這 3 個鍵' }))
+    await user.click(screen.getByRole('button', { name: '套用這 4 項' }))
     expect(await fields.findByText('兩次輸入的密碼不一樣。')).toBeInTheDocument()
     expect(called(stub, '/api/setup/qbittorrent/apply')).toBe(false)
 
     await user.clear(fields.getByLabelText('再輸入一次密碼'))
     await user.type(fields.getByLabelText('再輸入一次密碼'), 'harbour')
-    await user.click(screen.getByRole('button', { name: '套用這 3 個鍵' }))
+    await user.click(screen.getByRole('button', { name: '套用這 4 項' }))
 
     await waitFor(() =>
       expect(bodyOf(stub, '/api/setup/qbittorrent/apply')).toEqual({
@@ -371,7 +372,7 @@ describe('頁 2：qBittorrent', () => {
 
     renderWithProviders(<SetupPage />)
     await user.type(await screen.findByLabelText(OWNER_PASSWORD), 'wrong')
-    await user.click(screen.getByRole('button', { name: '套用這 3 個鍵' }))
+    await user.click(screen.getByRole('button', { name: '套用這 4 項' }))
 
     expect(
       await screen.findByText('這不是 skipper 的 Jellyfin 密碼，所以什麼都沒寫；改好再按一次。'),
@@ -395,7 +396,8 @@ describe('頁 2：qBittorrent', () => {
     )
     expect(screen.queryByLabelText(OWNER_PASSWORD)).not.toBeInTheDocument()
     expect(screen.queryByLabelText('密碼')).not.toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: '套用這 3 個鍵' }))
+    // 登入照舊就不算在要寫的那幾項裡（M4 票 21：按鈕的數字與畫面上會寫的對得上）。
+    await user.click(screen.getByRole('button', { name: '套用這 3 項' }))
 
     await waitFor(() =>
       expect(bodyOf(stub, '/api/setup/qbittorrent/apply')).toEqual({ login: null }),
@@ -506,6 +508,8 @@ describe('頁 2：qBittorrent', () => {
     expect(
       await screen.findByRole('heading', { name: '確認你的 qBittorrent', level: 2 }),
     ).toBeVisible()
+    // 標題照選下的來源，不等差異讀回來（M4 票 21）；按鈕等差異回來才有。
+    expect(await screen.findByRole('button', { name: '確認，不改任何設定' })).toBeEnabled()
     expect(screen.queryByText(/沒有啟用未完成目錄/)).not.toBeInTheDocument()
     expect(screen.queryByText('將會寫入的鍵')).not.toBeInTheDocument()
     expect(screen.queryByRole('table')).not.toBeInTheDocument()
@@ -635,9 +639,9 @@ describe('頁 4：Prowlarr 與索引站', () => {
     const add = within(screen.getByRole('region', { name: '加站' }))
     expect(add.getAllByText(/被 Cloudflare 擋住/)).toHaveLength(2)
     expect(add.getByText(/連得上，但測試那一次查詢什麼都沒回/)).toBeVisible()
-    // 原文在「Prowlarr 原文」底下，沒有展開就看不到。
+    // 原文在「技術細節」底下，沒有展開就看不到（M4 票 21 統一了這個元件）。
     expect(add.getByText(CLOUDFLARE)).not.toBeVisible()
-    expect(add.getAllByText('Prowlarr 原文')).toHaveLength(4)
+    expect(add.getAllByText('技術細節')).toHaveLength(4)
     // 這一段只有摘要那一個 live 區，也沒有任何一塊在喊阻擋。
     expect(document.querySelectorAll('[aria-live]:not([role=status])')).toHaveLength(1)
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()

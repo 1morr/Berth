@@ -1,4 +1,4 @@
-import type { HealthStatus, RouteCheck } from '../api/schemas'
+import type { HealthStatus, RouteCheck, StepFailure } from '../api/schemas'
 import type { Signal } from './signal'
 
 /**
@@ -34,7 +34,7 @@ export const CHECK_LABEL = {
   hardlink: 'routes.check.hardlink',
 } as const satisfies Record<RouteCheck, string>
 
-/** 這一條真的打的那支端點或做的那件事。貼在它那一行，不進散文。 */
+/** 這一條真的打的那支端點或做的那件事。收進技術細節（M4 票 21）。 */
 export const CHECK_ENDPOINT = {
   category: 'torrents/createCategory',
   // 兩種都 stat 分類回報的路徑；套件內另外讀全域 save_path，細節列會並排兩條（M4 票 05）。
@@ -48,6 +48,32 @@ export const CHECK_ENDPOINT = {
 
 /** 失敗時要改的那一台。`remedyFor` 裡的 `null` 是與掛載無關（分類衝突、硬鏈接不是 `EXDEV`）。 */
 type Service = 'berth' | 'qbittorrent' | 'jellyfin'
+
+/**
+ * 這一條問的是哪一台：失敗那一句人話裡的 `{{service}}`（「連不到 qBittorrent」）。硬鏈接只在 Berth 自己的
+ * 容器裡做。產品名不翻譯，所以是字串不是 i18n key。
+ */
+export const CHECK_SERVICE = {
+  category: 'qBittorrent',
+  download_path: 'qBittorrent',
+  download_visible: 'qBittorrent',
+  library_path: 'Jellyfin',
+  probe_visible: 'Jellyfin',
+  hardlink: 'Berth',
+} as const satisfies Record<RouteCheck, string>
+
+/**
+ * 與掛載無關的失敗（M4 票 21）：連不到、帳密不對、被封。這時給 compose 片段只會叫人白改——
+ * 原本 qBittorrent 帳密錯時，分類那一條給的是「分類衝突」的補法。
+ */
+const SERVICE_FAILURES: ReadonlySet<StepFailure> = new Set([
+  'not_deployed',
+  'unreachable',
+  'starting',
+  'protocol_mismatch',
+  'auth_rejected',
+  'ip_banned',
+])
 
 /** 哪幾個服務是使用者自己的那一台（M4 票 08）。只有精靈讀得到選擇，健康頁與設定頁不給。 */
 export interface ExistingServices {
@@ -70,6 +96,12 @@ const FIX = {
   existingQbittorrent: 'routes.fix.existing.qbittorrentMount',
   existingLibrary: 'routes.fix.existing.libraryMount',
   existingJellyfin: 'routes.fix.existing.jellyfinMount',
+  unreachable: 'routes.fix.service.unreachable',
+  auth: 'routes.fix.service.auth',
+  banned: 'connection.fix.banned',
+  probeUnreadable: 'routes.fix.probeUnreadable',
+  probeUnsettled: 'routes.fix.probeUnsettled',
+  libraryChanged: 'routes.fix.libraryChanged',
 } as const
 
 /** 既有服務另說的那一句（票 08）。補法已經是那一台自己的版本時不另說。 */
@@ -79,7 +111,7 @@ const ADVICE = {
 } as const
 
 export interface Remedy {
-  /** 失敗時的說明（i18n key）。值裡的 `{{root}}` 由呼叫端帶入 `root`。 */
+  /** 失敗時的說明（i18n key）。值裡的 `{{root}}` 由呼叫端帶入 `root`，`{{service}}` 帶 `CHECK_SERVICE`。 */
   fix: (typeof FIX)[keyof typeof FIX]
   /** 修正片段：要改的那一台的 compose `volumes:`。 */
   commands: readonly string[]
@@ -98,7 +130,11 @@ export interface Remedy {
  */
 export function remedyFor(
   check: RouteCheck,
-  { existing, crossDevice }: { existing?: ExistingServices; crossDevice: boolean },
+  {
+    existing,
+    crossDevice,
+    failure,
+  }: { existing?: ExistingServices; crossDevice: boolean; failure?: StepFailure | null },
 ): Remedy {
   const root = existing?.root || BUNDLED_ROOT
   const remedy = (
@@ -112,6 +148,16 @@ export function remedyFor(
     advice,
     root,
   })
+
+  // 先看為什麼：與掛載無關的失敗、或檢查自己說得出不是掛載的那幾種，補法不給片段。
+  if (failure === 'ip_banned') return remedy(FIX.banned, null)
+  if (failure === 'auth_rejected') return remedy(FIX.auth, null)
+  if (failure && SERVICE_FAILURES.has(failure)) return remedy(FIX.unreachable, null)
+  if (failure === 'probe_unreadable') return remedy(FIX.probeUnreadable, null)
+  if (failure === 'probe_unsettled') return remedy(FIX.probeUnsettled, null)
+  if (failure === 'library_gone' || failure === 'library_path_gone') {
+    return remedy(FIX.libraryChanged, null)
+  }
 
   switch (check) {
     case 'category':
