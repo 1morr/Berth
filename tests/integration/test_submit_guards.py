@@ -35,6 +35,7 @@ from berth.services.jobs import (
     retry_due,
     retry_job,
 )
+from berth.services.routes import incomplete_path_of
 from berth.services.rss import add_feed, bind_series, list_items, poll_feed
 from berth.services.settings import write_settings
 from berth.services.setup import complete_setup
@@ -68,6 +69,48 @@ async def _threshold(session: AsyncSession, gigabytes: int = 1) -> None:
 
 
 class TestInFlightCountsAgainstTheDisk:
+    @pytest.mark.parametrize("created", [True, False], ids=["created", "not-yet"])
+    async def test_it_measures_where_the_route_category_downloads(
+        self,
+        session: AsyncSession,
+        roots: dict[str, Path],
+        monkeypatch: pytest.MonkeyPatch,
+        created: bool,
+    ) -> None:
+        """量的是這條 Route 的分類自己的未完成目錄（M4 票 22）：qBittorrent 下載中寫的就是那裡，
+        既有的那一台全域 temp path 怎麼設都一樣。拒絕的那一句也說出那條路徑。
+
+        目錄還沒建（Route 檢查還沒跑過，或剛從票 22 之前升上來）時量最近存在的那一層：目錄之後就
+        建在那個檔案系統上。量不到就照送的話，門檻在這段時間等於沒有。"""
+        media, route, factory = await _ready(session, roots)
+        await _threshold(session)
+        where = incomplete_path_of(str(roots["incomplete"]), route.slug)
+        if created:
+            Path(where).mkdir(parents=True)
+        else:
+            assert not Path(where).exists()
+            roots["incomplete"].mkdir(parents=True, exist_ok=True)
+        measured: list[Path] = []
+
+        def free_space(path: Path) -> int:
+            measured.append(path)
+            return 0
+
+        monkeypatch.setattr(fs, "free_space", free_space)
+
+        with pytest.raises(JobRejectedError) as refusal:
+            await add_download(
+                session,
+                factory,
+                source=_source(),
+                media_id=media.id,
+                route_id=route.id,
+                user_id=None,
+            )
+
+        assert measured == [Path(where) if created else roots["incomplete"]]
+        assert refusal.value.detail.startswith(f"{where}: ")
+
     async def test_room_for_one_but_not_two_stops_the_second(
         self, session: AsyncSession, roots: dict[str, Path], monkeypatch: pytest.MonkeyPatch
     ) -> None:

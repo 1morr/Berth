@@ -28,8 +28,8 @@ import { StepFrame } from './StepFrame'
  * 剖面列**逐鍵的差異**：現值在左、建議值在右，一眼看得出按下去會改掉什麼。套用只寫有差異的鍵，
  * 本來就對的那幾條是「已經是這樣」。
  *
- * **既有的那一台一個鍵都不寫**（`writes_preferences`，M4 票 05）：剖面照樣列，但說的是
- * 「不會寫入」，按鈕只是確認連得上、版本夠新。
+ * **既有的那一台一個鍵都不寫**（`writes_preferences`，M4 票 05），也不列偏好表（`diffs` 是空的，
+ * M4 票 22）：它的全域偏好沒有一個影響 Berth。按鈕只是確認連得上、版本夠新。
  *
  * **套件內的那一台多一組 WebUI 登入**（`web_ui_login`，M4 票 07）：跟著「套用」送出，必填；預設
  * 「沿用 Jellyfin 帳密」（M4 票 15）。那一台自己就設過的不強迫再設（`web_ui_username` 已經有值）。
@@ -169,11 +169,7 @@ function DiffCutaway({ setup }: { setup: QbittorrentSetup }) {
       {setup.diffs.length > 0 && (
         <section className="border-2 border-rule bg-well">
           <h3 className="label border-b-2 border-rule bg-deck px-4 py-2.5 text-ink-dim">
-            {t(
-              setup.writes_preferences
-                ? 'qbittorrent.cutaway.diff'
-                : 'qbittorrent.cutaway.reference',
-            )}
+            {t('qbittorrent.cutaway.diff')}
           </h3>
           <table className="w-full table-fixed border-collapse text-left">
             <thead>
@@ -185,11 +181,7 @@ function DiffCutaway({ setup }: { setup: QbittorrentSetup }) {
                   {t('qbittorrent.cutaway.current')}
                 </th>
                 <th scope="col" className="label px-4 py-2 text-ink-dim">
-                  {t(
-                    setup.writes_preferences
-                      ? 'qbittorrent.cutaway.recommended'
-                      : 'qbittorrent.cutaway.bundledValue',
-                  )}
+                  {t('qbittorrent.cutaway.recommended')}
                 </th>
               </tr>
             </thead>
@@ -260,7 +252,7 @@ function Blocked({ setup }: { setup: QbittorrentSetup }) {
 /**
  * 靠泊序列：一個鍵一條纜繩。已經是建議值的那幾條也繫上，只是沒有被寫過。
  *
- * 既有的那一台沒有纜繩可列——五個鍵都不寫、密碼也不設，列出來只會是一排「已經是這樣」，
+ * 既有的那一台沒有纜繩可列——偏好都不寫、密碼也不設，列出來只會是一排「已經是這樣」，
  * 說的是假話。它只剩一顆確認鍵與做完之後的那一句。
  */
 function ApplySequence({
@@ -298,14 +290,6 @@ function ApplySequence({
 
   return (
     <>
-      {setup.temp_path_warning && (
-        <div className="mt-4">
-          <Notice signal="assigned" label={t('common.warning')}>
-            {t('qbittorrent.warning.tempPath')}
-          </Notice>
-        </div>
-      )}
-
       {setup.web_ui_login && (
         <div className="mt-6">
           <BerthLogin service="qbittorrent" current={setup.web_ui_username} form={login} />

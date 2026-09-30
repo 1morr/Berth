@@ -1202,7 +1202,19 @@ split-cour 的第一批被播出日比對整批擋在審核，改正一次並套
 - **頁 3 進頁時重讀既有 Jellyfin 的媒體庫**（M4 票 19）：`POST /api/setup/routes/libraries`，另有一顆「重新讀取」；
   頁 1 之後在 Jellyfin 改的掛載與路徑看得到了。**既有模式的寫入目標預設「新的 Berth 路徑」**，只有一條路徑的
   媒體庫也是（推翻 brief §4.3 的「自動選定」）。
+- **未完成目錄只開在 Berth 的分類上**（M4 票 22，brief §4.1、§20.2）：建分類時帶 `downloadPathEnabled` +
+  `downloadPath=/data/torrent/incomplete/<slug>`（Berth 先建好那個目錄），下載中的檔不再落在 complete 那一側，
+  也不必動 qBittorrent 的全域設定——4.4.5 與 5.2.3 實測全域關著也生效、開著時分類的贏。**套件內的那一台不再寫
+  全域 `temp_path` / `temp_path_enabled`**，建議鍵從五個變三個（`QbittorrentStep` 少兩個值）。已存在的 Berth
+  分類有自己的未完成目錄而不同時照衝突規則回報、不覆寫；票 22 之前建的沒有，照舊跟著全域設定下載、不算衝突。
+- **送單前的磁碟門檻量那條 Route 的未完成目錄**（M4 票 22）：以前量全域的 incomplete 根目錄，既有 qBittorrent
+  根本不寫那裡；在途量照舊（M4 票 03）。
+- **接既有 qBittorrent 不再列偏好表、不再警告「沒有啟用未完成目錄」**（M4 票 22）：`GET /api/setup/qbittorrent/diff`
+  對既有的那一台回空的 `diffs`，按「確認」只記密碼那一條 `skipped`。那句警告的理由不成立（完成看的是
+  qBittorrent 回報的狀態），而它的全域偏好沒有一個影響 Berth。
 ### Removed
+- **`QbittorrentOut.temp_path_warning`**（M4 票 22）：既有 qBittorrent 沒開全域未完成目錄不再是一件事。
+
 - **精靈的偵測**（M4 票 15）：`POST /api/setup/detect`、「偵測服務」那一步與泊位板上方的前置列、「重新偵測這個服務」
   （換成出問題那一頁的「重新測試」）。選之前 Berth 不對任何服務發請求。
 

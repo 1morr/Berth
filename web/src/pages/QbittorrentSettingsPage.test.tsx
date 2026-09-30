@@ -30,7 +30,7 @@ const LOGIN = 'PUT /api/setup/qbittorrent/login'
 /** 建議值全部一致的那一台：沒有漂移，所以不該出現還原按鈕。 */
 const CLEAN = qbittorrentSetup({
   diffs: [
-    diff('temp_path_enabled', 'true', 'true'),
+    diff('auto_tmm_enabled', 'true', 'true'),
     diff('save_path', '/data/torrent/complete', '/data/torrent/complete'),
   ],
 })
@@ -288,7 +288,7 @@ describe('設定 → qBittorrent', () => {
     render({})
     renderApp('/settings/qbittorrent')
 
-    expect(await screen.findByText('五個建議鍵都還是建議值。')).toBeInTheDocument()
+    expect(await screen.findByText('三個建議鍵都還是建議值。')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '還原建議設定' })).not.toBeInTheDocument()
   })
 

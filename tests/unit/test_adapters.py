@@ -187,35 +187,40 @@ def test_blank_environment_variable_falls_back_to_the_config() -> None:
     assert key == "00000000000000000000000000000001"
 
 
+SAVE = "/data/torrent/complete/tv"
+DOWNLOAD = "/data/torrent/incomplete/tv"
+
+
 class TestEnsureCategory:
-    """`ensure_category`（plan §8.1）：不存在才建，存在但 save path 不同就回報衝突。
+    """`ensure_category`（plan §8.1）：不存在才建，存在但路徑不同就回報衝突。
 
     為什麼不覆寫：autoTMM 開著時改 category 的 savePath 會**自動搬走該分類所有 torrent**
-    （brief §20.2）。那是使用者自己的資料，Berth 不替他決定。
+    （brief §20.2）。那是使用者自己的資料，Berth 不替他決定。未完成目錄（`downloadPath`，
+    M4 票 22）同一條規則：改它會把下載中的那幾筆搬走。
     """
 
     @pytest.mark.asyncio
-    async def test_creates_the_category_when_it_is_missing(self) -> None:
+    async def test_creates_the_category_with_its_own_download_path(self) -> None:
         client = FakeQbittorrentClient()
 
-        result = await ensure_category(client, "berth-tv", "/data/torrent/complete/tv")
+        result = await ensure_category(client, "berth-tv", SAVE, DOWNLOAD)
 
         assert result == CategoryOutcome(
-            name="berth-tv", save_path="/data/torrent/complete/tv", created=True, conflict=False
+            name="berth-tv", save_path=SAVE, download_path=DOWNLOAD, created=True, conflict=False
         )
         assert await client.categories() == (
-            QbittorrentCategory(name="berth-tv", save_path="/data/torrent/complete/tv"),
+            QbittorrentCategory(name="berth-tv", save_path=SAVE, download_path=DOWNLOAD),
         )
 
     @pytest.mark.asyncio
     async def test_leaves_a_matching_category_alone(self) -> None:
         client = FakeQbittorrentClient(
             categories=(
-                QbittorrentCategory(name="berth-tv", save_path="/data/torrent/complete/tv"),
+                QbittorrentCategory(name="berth-tv", save_path=SAVE, download_path=DOWNLOAD),
             )
         )
 
-        result = await ensure_category(client, "berth-tv", "/data/torrent/complete/tv")
+        result = await ensure_category(client, "berth-tv", SAVE, DOWNLOAD)
 
         assert result.created is False
         assert result.conflict is False
@@ -226,11 +231,13 @@ class TestEnsureCategory:
         """4.4 把設進去的路徑讀回來會多一條尾斜線（brief §20.7）。"""
         client = FakeQbittorrentClient(
             categories=(
-                QbittorrentCategory(name="berth-tv", save_path="/data/torrent/complete/tv/"),
+                QbittorrentCategory(
+                    name="berth-tv", save_path=f"{SAVE}/", download_path=f"{DOWNLOAD}/"
+                ),
             )
         )
 
-        result = await ensure_category(client, "berth-tv", "/data/torrent/complete/tv")
+        result = await ensure_category(client, "berth-tv", SAVE, DOWNLOAD)
 
         assert result.conflict is False
         assert client.created_categories == []
@@ -238,14 +245,52 @@ class TestEnsureCategory:
     @pytest.mark.asyncio
     async def test_reports_a_different_save_path_without_touching_it(self) -> None:
         client = FakeQbittorrentClient(
-            categories=(QbittorrentCategory(name="berth-tv", save_path="/mnt/old/tv"),)
+            categories=(
+                QbittorrentCategory(
+                    name="berth-tv", save_path="/mnt/old/tv", download_path=DOWNLOAD
+                ),
+            )
         )
 
-        result = await ensure_category(client, "berth-tv", "/data/torrent/complete/tv")
+        result = await ensure_category(client, "berth-tv", SAVE, DOWNLOAD)
 
         assert result == CategoryOutcome(
-            name="berth-tv", save_path="/mnt/old/tv", created=False, conflict=True
+            name="berth-tv",
+            save_path="/mnt/old/tv",
+            download_path=DOWNLOAD,
+            created=False,
+            conflict=True,
         )
+        assert client.created_categories == []
+
+    @pytest.mark.asyncio
+    async def test_reports_a_different_download_path_without_touching_it(self) -> None:
+        client = FakeQbittorrentClient(
+            categories=(
+                QbittorrentCategory(name="berth-tv", save_path=SAVE, download_path="/mnt/temp/tv"),
+            )
+        )
+
+        result = await ensure_category(client, "berth-tv", SAVE, DOWNLOAD)
+
+        assert result.conflict is True
+        assert result.download_path == "/mnt/temp/tv"
+        assert client.created_categories == []
+
+    @pytest.mark.asyncio
+    async def test_a_category_without_a_download_path_is_left_as_it_is(self) -> None:
+        """票 22 之前建的 Berth 分類沒有自己的未完成目錄：照舊跟著那一台的全域設定下載，不是衝突。
+
+        判成衝突的話升級之後每一條 Route 都紅、一筆都送不出去，而 4.4 的 WebUI 連改它的地方都
+        沒有（5.2.0 才有）；補上它又會把下載中的那幾筆搬走。"""
+        client = FakeQbittorrentClient(
+            categories=(QbittorrentCategory(name="berth-tv", save_path=SAVE),)
+        )
+
+        result = await ensure_category(client, "berth-tv", SAVE, DOWNLOAD)
+
+        assert result.conflict is False
+        assert result.download_path == ""
         assert client.created_categories == []
 
 

@@ -487,22 +487,58 @@ async def test_qbittorrent_set_preferences_posts_one_json_form_field() -> None:
 
 @respx.mock
 @pytest.mark.asyncio
-async def test_qbittorrent_create_category_posts_the_camel_case_form() -> None:
-    """`torrents/createCategory` 收的是表單的 `category` 與 `savePath`（brief §20.2）。
+@pytest.mark.parametrize(
+    ("row", "download_path"),
+    [
+        # 4.4.5 與 5.2.3 設了之後讀回來都是字串（M4 票 22 實測）。
+        ({"download_path": "/data/torrent/incomplete/tv"}, "/data/torrent/incomplete/tv"),
+        # `downloadPathEnabled=false`：兩版都是 `false`。
+        ({"download_path": False}, ""),
+        # 沒設：5.2.3 是 `null`，4.4.5 整個鍵不出現。
+        ({"download_path": None}, ""),
+        ({}, ""),
+    ],
+    ids=["set", "disabled", "unset-5.2", "unset-4.4"],
+)
+async def test_qbittorrent_categories_read_the_download_path(
+    row: dict[str, Any], download_path: str
+) -> None:
+    """分類自己的未完成目錄（`scripts/experiments/qbittorrent_category_download_path.py`，
+    brief §20.2）。沒有自己的路徑一律讀成空字串：停用與沒設對 Berth 是同一件事。"""
+    respx.get(f"{QBITTORRENT_URL}/api/v2/torrents/categories").respond(
+        200,
+        json={"berth-tv": {"name": "berth-tv", "savePath": "/data/torrent/complete/tv", **row}},
+    )
 
-    per-category 的未完成路徑不送：Berth 只用全域的 temp path（plan §4.2）。
-    """
+    client = HttpQbittorrentClient(QBITTORRENT_URL)
+    try:
+        categories = await client.categories()
+    finally:
+        await client.aclose()
+
+    assert categories[0].download_path == download_path
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_qbittorrent_create_category_posts_the_camel_case_form() -> None:
+    """`torrents/createCategory` 收的是表單的 `category`、`savePath`，以及分類自己的未完成目錄
+    `downloadPathEnabled` + `downloadPath`（Web API 2.8.4 起，brief §20.2）。"""
     route = respx.post(f"{QBITTORRENT_URL}/api/v2/torrents/createCategory").respond(200, text="")
 
     client = HttpQbittorrentClient(QBITTORRENT_URL)
     try:
-        await client.create_category("berth-tv", "/data/torrent/complete/tv")
+        await client.create_category(
+            "berth-tv", "/data/torrent/complete/tv", download_path="/data/torrent/incomplete/tv"
+        )
     finally:
         await client.aclose()
 
     assert urllib.parse.parse_qs(route.calls.last.request.content.decode()) == {
         "category": ["berth-tv"],
         "savePath": ["/data/torrent/complete/tv"],
+        "downloadPathEnabled": ["true"],
+        "downloadPath": ["/data/torrent/incomplete/tv"],
     }
 
 

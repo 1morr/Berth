@@ -217,8 +217,6 @@ def applied_qbittorrent(roots: dict[str, Path], **overrides: object) -> FakeQbit
     """
     preferences = {
         "save_path": str(roots["complete"]),
-        "temp_path": str(roots["incomplete"]),
-        "temp_path_enabled": True,
         "auto_tmm_enabled": True,
         "category_changed_tmm_enabled": True,
     }

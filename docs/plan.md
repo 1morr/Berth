@@ -435,8 +435,8 @@ Session 以 httpOnly cookie（`berth_session`）承載，`SameSite=Strict`、`Pa
 - 參數依版本：API ≥ 2.11 用 `stopped`，否則 `paused`；`contentLayout=Original`；`autoTMM=true`；`category=<route.category>`；`tags=berth`。**版本判斷是必要條件**：實測送錯的那個參數會被靜默忽略（`torrents/add` 照樣回 200），torrent 就這樣開始下載（brief §20.7）。值是 `false`（**只送版本對的那一個鍵**）——qBittorrent 有一個「加入後不自動開始」的全域偏好，而 §3.1 的狀態機假設送出去的 torrent 會自己走到 `metadata_ready`；不明講的話，開著那個偏好的使用者身上每一筆 Job 都會永遠停在 `submitted`（票 09）。`savepath` **不送**：`autoTMM=true` 時路徑由 category 決定，兩個來源會讓「存到哪裡」有兩個答案。
 - **成功的形狀依版本判定**（2026-09-10 實測）：4.4.5 是 `200` + `Ok.`，5.2.3 是 `200` 加一份 JSON 摘要（`failure_count == 0` 且 `success_count > 0`）。`409` 是「不收」（已經有同一個 hash，或 category 的 save path 用不了），`415` 是那份 `.torrent` 無效，`202` 是「網址收下了、之後再去抓」而**那條路徑的失敗永遠不會回來**——所以它也不算成功（brief §20.7）。
 - **送單前 Berth 自己把 torrent 抓下來**（`adapters/torrent.py`，票 09）：索引站的下載連結 → info hash + 磁力連結或 `.torrent` 位元組。兩個理由——`jobs.hash` 是主鍵而索引站不一定報 hash（實測 ACG.RIP 不報），以及交網址給 qBittorrent 是背景抓取，失敗時 §3.1 的 `submit_failed` 永遠觸發不到。
-- `ensure_category(name, save_path)`：`torrents/categories` 讀取（接受 `savePath` 與 `save_path` 兩種鍵；4.4.5 與 5.2.3 實測都是 `savePath`，`save_path` 只出現在 4.4.0–4.4.1，仍在支援範圍所以兩種都收），不存在才建，存在但 save path 不同 → 回報衝突不改（brief §20.2）。
-- `diff_recommended_preferences()` / `apply_recommended_preferences()`：建議值為 `temp_path_enabled=true`、`temp_path=<incomplete root>`、`save_path=<complete root>`、`auto_tmm_enabled=true`、`category_changed_tmm_enabled=true`；先回傳與現值的差異給精靈顯示，套用時只寫不同的鍵。既有服務的 temp path 未啟用只列為警告。
+- `ensure_category(name, save_path, download_path)`：`torrents/categories` 讀取（接受 `savePath` 與 `save_path` 兩種鍵；4.4.5 與 5.2.3 實測都是 `savePath`，`save_path` 只出現在 4.4.0–4.4.1，仍在支援範圍所以兩種都收；未完成目錄讀 `download_path`，M4 票 22），不存在才建、建的時候帶 `downloadPathEnabled=true` + `downloadPath=<incomplete root>/<slug>`；存在但 save path 不同、或有自己的未完成目錄而不同 → 回報衝突不改（brief §20.2）。沒有自己未完成目錄的舊分類不算衝突。
+- `diff_recommended_preferences()` / `apply_recommended_preferences()`：只對套件內的那一台，建議值為 `save_path=<complete root>`、`auto_tmm_enabled=true`、`category_changed_tmm_enabled=true`；先回傳與現值的差異給精靈顯示，套用時只寫不同的鍵。未完成目錄不寫全域（M4 票 22：它開在分類上，brief §4.1）。既有服務沒有差異可列。
 - 完成判定依 brief §20.2。`torrents/files[].name` **相對 `save_path`**（多檔含 torrent 根目錄那一層），實測四種 `contentLayout` 組合都成立（brief §20.7）；組絕對路徑前先正規化 `save_path` 的尾斜線（4.4 有、5.x 沒有），組完仍 `stat` 驗證。`content_path` 是目錄或單檔，兩種都處理。
 - **`stat` 驗證只在 Berth 解析得了那條路徑、而且真的看得到它的時候才算數**（票 10）：看不到那個 save path 時視為通過，因為那不是這一筆 torrent 的問題，而是掛載對不上——而那件事有專門的檢查在報（Route 的 `download_path` 纜繩，§9.5）。在這裡把它翻成 `missing_files` 會讓每一筆 Job 都紅著，而紅的理由指向錯的地方。「解析得了」的判定是 `Path(save_path).is_absolute()`：qBittorrent 報的一律是容器裡的 POSIX 路徑，而 Windows 上它少了磁碟機代號，`Path` 會把它當成「目前磁碟機的根目錄底下」（實跑當場踩到）。看得到卻少檔案則是 `missing_files`——客戶端說做完了而檔案不在，那正是 `missingFiles` 說的那件事。
 - **IP 封鎖分得出來了**（票 10，解掉 T1.9 的第四條）：`auth/login` 上的 `403` 只有「被封了」一個意思，body 帶明說的那一句（brief §20.2 的表）。翻成 `IpBannedError`（`AuthFailedError` 的子類，因為「還連不連得上」的答案一樣），下一步不同才是分開的理由。其他端點上的 403 與「沒有登入」同形，所以這個判定只放在登入那一支。
@@ -574,7 +574,7 @@ Session 以 httpOnly cookie（`berth_session`）承載，`SameSite=Strict`、`Pa
 - **`berth` 服務帶 `extra_hosts: ["host.docker.internal:host-gateway"]`**（M4 票 16）：Linux 上 Berth 才連得到宿主上的既有服務；Docker Desktop 本來就有這個名字（§9.5〈連線位址〉）。
 - Windows：`DATA_ROOT=C:\Berth\data` 這種路徑可直接寫在 `.env`，Docker Desktop 會以 9p/drvfs 掛進容器；實測 NTFS bind mount 的硬鏈接可用（brief §20.7）。exFAT 隨身碟不支援硬鏈接，README 明說。`PUID` / `PGID` 在 Windows 掛載上沒有意義，保留預設即可。
 - 只有一份 `docker-compose.yml`，Linux 與 Windows 共用；`.env.example` 內附兩種路徑寫法的註解。
-- `/data` 只是套件的預設路徑字串。Berth 不假設它：incomplete / complete 根目錄是設定值，媒體庫路徑讀自 Jellyfin；既有服務可以沿用它們原本的容器路徑（§9.5）。
+- incomplete / complete 根目錄固定在 `/data/torrent/{incomplete,complete}`（`PathSettings` 的預設值，沒有 API 或 UI 改它，M4 票 22）；媒體庫路徑讀自 Jellyfin。要換宿主上的位置改 `DATA_ROOT` 掛到哪裡，容器路徑不變。
 - 目錄骨架由 Berth 啟動時建立：`<complete root>/..`、`<incomplete root>`。套件內 Jellyfin 的媒體庫目錄（`<library_root>/<資料夾>`，預設 `movies` / `tv` / `anime`）在精靈的媒體庫與路徑頁建立媒體庫之前才建（§9.4 第 4 步）。
 
 ### 9.2 預置設定
@@ -593,7 +593,7 @@ WebUI\AuthSubnetWhitelist=172.28.0.2/32
 - 白名單是 `/32` 不是整個網段，理由見 §9.1；`berth` 的 IP 由 compose 固定並用環境變數 `BERTH_IP` 傳給腳本，避免兩處寫死。
 - `WebUI\ServerDomains` **不預置**：linuxserver image 的預設值是 `*`，Host 檢查本來就過得了；寫成 `qbittorrent` 確實讓 `http://qbittorrent:8080` 通過，但同時讓使用者從 `localhost:8080` 與 `127.0.0.1:8080` 都吃 401（2026-09-07 實測，brief §20.7）。也**不需要** `HostHeaderValidation=false`。
 - **qBittorrent 的 WebUI port 內外兩側一起換**：Host 檢查除了網域還比對 port，`*` 也不放過 port 不符。發佈成 `18080:8080` 之類的偏移，使用者開 `localhost:18080` 會直接吃 401，而原因只寫在容器 log 裡（brief §20.7）。所以 compose 以 `QBITTORRENT_WEBUI_PORT` 同時設發佈的兩側與 `WEBUI_PORT`，compose 內網上那一台也跟著在這個 port；Berth 從同名環境變數組出偵測的位址（`http://qbittorrent:<port>`），判成套件內之後第 4 步與 Route 檢查連的是判定記下的那一條。**不預置 `HostHeaderValidation=false`**：它是防 DNS rebinding 的那一道，內外一致之後本來就用不到。README 的疑難排解有這一條。
-- temp path、save path、autoTMM（`DisableAutoTMMByDefault` 預設 `true`，即關閉）、密碼都**不預置**，由精靈 qBittorrent 頁的按鈕以 API 套用（§8.1）；Berth 送單時逐個 torrent 帶 `autoTMM=true`，所以全域預設值不影響正確性。
+- save path、autoTMM（`DisableAutoTMMByDefault` 預設 `true`，即關閉）、密碼都**不預置**，由精靈 qBittorrent 頁的按鈕以 API 套用（§8.1）；Berth 送單時逐個 torrent 帶 `autoTMM=true`，所以全域預設值不影響正確性。temp path 連套用都不套用：未完成目錄開在 Berth 的分類上（M4 票 22）。
 - 使用者在 qBittorrent 介面改任何東西都可以，健康檢查發現關鍵設定漂移時提供「還原建議設定」。
 
 **Prowlarr**：不預置。Berth 從唯讀掛載的 `/ext/prowlarr/config.xml` 讀 `<ApiKey>`（Prowlarr 首次啟動自動產生）；讀不到時精靈退回手動貼上。也支援 `PROWLARR__AUTH__APIKEY` 環境變數的部署方式。
@@ -643,8 +643,8 @@ WebUI\AuthSubnetWhitelist=172.28.0.2/32
    - **套件內**：顯示建議偏好與現值的差異（§8.1），按「套用」寫有差異的鍵、並設 WebUI 登入。Berth 自己靠免密白名單連它（§9.2），用不到這組登入。
      - **WebUI 登入預設「沿用 Jellyfin 帳密」**（brief §16.3、§19 2026-09-29）：勾選時帳號是擁有者的名字，密碼請使用者**打一次**，Berth 先以 `POST /Users/AuthenticateByName` 向 Jellyfin 驗過這組帳密（不對就拒絕、不寫）再寫入；取消勾選就是票 07 的欄位——帳號預填擁有者的名字、密碼打兩次。**必填**：不設的話使用者自己打開 WebUI 只剩容器 log 裡每次重啟都換的臨時密碼。帳密跟著「套用」送（`POST /setup/qbittorrent/apply` 的 `login`）；不帶 `login` 是「登入照舊」，設過的那一條是 `skipped`、細節是帳號，沒設過的是 `pending`，精靈停在這一頁。
      - **Berth 只記帳號與密碼的加鹽雜湊**（夠比對「已經是這一組」；票 15 把票 07 存的明文換掉，附 migration）。回頭看時欄位收起來、只說帳號是誰，按「更換登入」才打開。設定頁 → qBittorrent 的「介面登入」一區用同一組欄位與同一個勾選，`PUT /setup/qbittorrent/login`（`qbittorrent.set_interface_login`）只換登入、不連帶還原偏好。
-   - **既有**：位址 + WebUI 帳密 → 測試。一個全域鍵都不寫（M4 票 05，照 Sonarr / Radarr 對下載器只用分類的慣例）：剖面照樣逐鍵列現值與套件內的建議值、標明「Berth 不會寫入」，按鈕只是確認連得上、版本夠新，五條纜繩記成 `skipped`、細節是它自己的現值（`QbittorrentSetupStatus.writes_preferences` 是 `false`）；temp path 未啟用只警告。沒有介面登入那一格，帶了 `login` 回 422。
-   - Berth 的路徑全靠分類（建立時帶 save path）與逐個 torrent 的 `autoTMM=true`，所以全域 `save_path` / `temp_path` / `temp_path_enabled`、`auto_tmm_enabled`、`category_changed_tmm_enabled` 動了會改掉使用者不經 Berth 加的 torrent 落在哪裡，而 Berth 自己用不到它們。健康檢查的漂移（`drifted_keys`）與設定頁的「還原建議設定」只看套件內的那一台。
+   - **既有**：位址 + WebUI 帳密 → 測試。一個全域鍵都不寫（M4 票 05，照 Sonarr / Radarr 對下載器只用分類的慣例）：不列偏好表（M4 票 22：它的全域偏好沒有一個影響 Berth，列套件內的建議值只會讓人以為該去改；原本的「temp path 未啟用只警告」一併撤掉），按鈕只是確認連得上、版本夠新，只記密碼那一條 `skipped` 當「按過了」（`QbittorrentSetupStatus.writes_preferences` 是 `false`、`diffs` 是空的）。沒有介面登入那一格，帶了 `login` 回 422。
+   - Berth 的路徑全靠分類（建立時帶 save path 與未完成目錄）與逐個 torrent 的 `autoTMM=true`，所以全域 `save_path` / `temp_path` / `temp_path_enabled`、`auto_tmm_enabled`、`category_changed_tmm_enabled` 動了會改掉使用者不經 Berth 加的 torrent 落在哪裡，而 Berth 自己用不到它們。健康檢查的漂移（`drifted_keys`）與設定頁的「還原建議設定」只看套件內的那一台。
 3. **媒體庫與路徑**（票 06d 把它排在 qBittorrent 之後；票 08 改成按鈕觸發）：
    - **套件內 Jellyfin 的媒體庫由使用者列**（票 06f，Jellyfin 啟動精靈「新增媒體庫」的慣例：內容類型 + 顯示名稱 + 資料夾）：一張可編輯的清單，預設 Movies・電影、TV・劇集、Anime・劇集三列，可以改名、改類型、改資料夾、刪列、加列，至少一列。類型只有電影與劇集（Berth 的 `SUPPORTED_TYPES`）；資料夾是 `library_root` 底下的一層（不能有 `/`、`\`、不能是 `.`、`..`，也不能有 Windows 不收的字元），名稱是 ASCII 時由它推導（照 `library_slug`），不是 ASCII 時要使用者填；名稱與資料夾各自不可重複（不分大小寫）。規則在 `services.jellyfin.check_bundled_libraries`，前端 `web/src/setup/libraryRules.ts` 用同一組在送出之前擋。清單存在 `settings.setup.jellyfin.bundled`（`PUT /setup/jellyfin/bundled`，拒絕是 `BundledLibraryRefusal` 帶列號），停手就存。**已經在 Jellyfin 建好的列鎖住**：bootstrap 以名稱認媒體庫，改了名重跑會多建一個指向同一個資料夾的——改名與刪除要去 Jellyfin，後端回 `built_changed`。媒體庫以第 1 頁存下的 API key 建（§9.4 第 1、4 步，`bootstrap_jellyfin`；沒有 key 就拒絕）。**沒有安裝插件的按鈕**（票 14b）。
    - **既有 Jellyfin**：使用者勾選媒體庫，每個媒體庫從它回報的路徑裡選寫入目標；還沒有 Berth 路徑的，寫入目標多一個「新的 Berth 路徑」選項（§9.5），**按下「建立並檢查」時才加**、再建 Route（票 08 shape 時使用者拍板把確認併進同一個動作，`.scratch/m4/route-berth-shape.md`：沒有「確認加入」那種做了一半、走得過去的狀態）。預選的是 Berth 路徑（加過的話），否則只有一條路徑時是那一條（brief §4.3，票 06h）。目標只能從那個媒體庫回報的路徑裡選，送別的路徑回 422。勾了卻還沒選目標、或一個都沒勾時，主鈕擋住並說出還差哪一步。
@@ -715,7 +715,7 @@ WebUI\AuthSubnetWhitelist=172.28.0.2/32
 - 要的是位址 + WebUI 帳密（5.2 起的 API key 這一輪不做，brief §16.4）。
 - 不搬舊種：Berth 只用自己建立的 `berth-*` category，忽略其他分類的 torrent；舊 torrent 留在原目錄。
 - 使用者若原本只掛 `/downloads`，多加一個父目錄掛載即可；Berth 的 category save path 落在父目錄下。
-- **不改全域偏好**（M4 票 05）：全域 `save_path`、temp path、autoTMM 都是使用者的，Berth 一個都不寫；送單時逐個 torrent `autoTMM=true`，路徑由 Berth 的分類決定。temp path 未啟用只警告。
+- **不改全域偏好**（M4 票 05）：全域 `save_path`、temp path、autoTMM 都是使用者的，Berth 一個都不寫、也不列；送單時逐個 torrent `autoTMM=true`，路徑由 Berth 的分類決定，未完成目錄也是（`downloadPath`，M4 票 22）。
 - 版本低於 4.4（API 2.8.4）拒絕接入並提示升級。
 
 **既有 Prowlarr**

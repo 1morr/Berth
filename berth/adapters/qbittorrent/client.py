@@ -115,20 +115,24 @@ class HttpQbittorrentClient:
             QbittorrentCategory(
                 name=str(row.get("name", name)),
                 save_path=str(row.get("savePath", row.get("save_path", ""))),
+                download_path=_download_path(row.get("download_path")),
             )
             for name, row in payload.items()
             if isinstance(row, dict)
         )
 
-    async def create_category(self, name: str, save_path: str) -> None:
-        """表單欄位是 `category` 與 `savePath`（駝峰，與讀回來的鍵一致）。
-
-        per-category 的未完成路徑不送：Berth 只用全域的 `temp_path`（plan §4.2）。
-        """
+    async def create_category(self, name: str, save_path: str, *, download_path: str) -> None:
+        """表單欄位是 `category`、`savePath`、`downloadPathEnabled`、`downloadPath`（駝峰；讀回來
+        的未完成目錄卻是 `download_path`，M4 票 22 對 4.4.5 與 5.2.3 實測）。"""
         await self._session.request(
             "POST",
             "/api/v2/torrents/createCategory",
-            data={"category": name, "savePath": save_path},
+            data={
+                "category": name,
+                "savePath": save_path,
+                "downloadPathEnabled": "true",
+                "downloadPath": download_path,
+            },
         )
 
     async def add_torrent(self, request: TorrentAdd) -> None:
@@ -295,3 +299,9 @@ def _reason(response: httpx.Response) -> str:
             "or the category's save path is unusable)"
         )
     return body
+
+
+def _download_path(value: object) -> str:
+    """分類讀回來的 `download_path`：設了是字串；停用是 `false`；沒設 5.2.3 是 `null`、4.4.5 整個鍵
+    不出現（M4 票 22 實測）。後三種對 Berth 是同一件事。"""
+    return value if isinstance(value, str) else ""

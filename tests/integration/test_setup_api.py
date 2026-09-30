@@ -714,8 +714,6 @@ class TestQbittorrent:
         assert response.status_code == 200
         body = response.json()
         assert [row["key"] for row in body["diffs"]] == [
-            "temp_path_enabled",
-            "temp_path",
             "save_path",
             "auto_tmm_enabled",
             "category_changed_tmm_enabled",
@@ -733,11 +731,9 @@ class TestQbittorrent:
             "/api/setup/qbittorrent/apply", json={"login": {"username": "skipper", "password": "h"}}
         ).json()
 
-        assert [row["differs"] for row in body["diffs"]] == [False] * 5
-        assert [row["status"] for row in body["steps"]] == ["ok"] * 6
+        assert [row["differs"] for row in body["diffs"]] == [False] * 3
+        assert [row["status"] for row in body["steps"]] == ["ok"] * 4
         assert qbittorrent.writes[0].keys() == {
-            "temp_path_enabled",
-            "temp_path",
             "save_path",
             "auto_tmm_enabled",
             "category_changed_tmm_enabled",
@@ -749,7 +745,7 @@ class TestQbittorrent:
         `test_setup_qbittorrent.py` 驗那一半）。"""
         body = client.post("/api/setup/qbittorrent/apply").json()
 
-        assert [row["status"] for row in body["steps"]] == ["ok"] * 5 + ["pending"]
+        assert [row["status"] for row in body["steps"]] == ["ok"] * 3 + ["pending"]
 
     @pytest.mark.parametrize(
         "login",

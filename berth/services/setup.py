@@ -642,10 +642,11 @@ def _libraries_built(setup: SetupSettings) -> bool:
 
 
 def _qbittorrent_secured(setup: SetupSettings) -> bool:
-    """頁 2 做完了沒：選過、五個建議鍵都有結論，套件內的那一台還要有 WebUI 登入。
+    """頁 2 做完了沒：選過、按過；套件內的那一台還要建議鍵都有結論、有 WebUI 登入。
 
     登入必填（M4 票 07 shape）：沒設過的那一台密碼那一條是 `pending`，精靈停在這裡。
-    既有的那一台沒有那一格，那一條永遠是 `skipped`，不拿它當條件。
+    既有的那一台沒有偏好的纜繩（M4 票 22），按下「確認」只記密碼那一條 `skipped`——它就是
+    「按過了」的記號。
     """
     origin = setup.origin_of(ServiceKind.QBITTORRENT)
     if origin is None:
@@ -655,10 +656,9 @@ def _qbittorrent_secured(setup: SetupSettings) -> bool:
         for row in setup.qbittorrent.steps
         if row.status in (StepStatus.OK, StepStatus.SKIPPED)
     }
-    bundled = origin is ServiceOrigin.BUNDLED
-    return done >= {
-        step.value for step in QbittorrentStep if bundled or step is not QbittorrentStep.PASSWORD
-    }
+    if origin is not ServiceOrigin.BUNDLED:
+        return QbittorrentStep.PASSWORD.value in done
+    return done >= {step.value for step in QbittorrentStep}
 
 
 def _indexer_settled(setup: SetupSettings) -> bool:

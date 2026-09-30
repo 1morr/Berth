@@ -4,15 +4,16 @@
 逐鍵套用（`apply_qbittorrent`）。兩者都不改使用者沒同意的東西：
 
 - **只寫有差異的鍵**。已經是建議值的鍵連送都不送，重按時它們是 `skipped`。
-- **全域偏好只寫套件內的那一台**（M4 票 05，brief §16.4）。既有 qBittorrent 的五個鍵只列現值
-  與建議值，一個都不寫：改它的全域 `save_path` 會讓使用者不經 Berth 加的 torrent 全部跑進
-  Berth 的目錄。Berth 的下載靠自己的分類（建立時帶 save path）與逐個 torrent 的 `autoTMM=true`，
-  與 Sonarr / Radarr 對下載器的做法相同。
+- **全域偏好只寫套件內的那一台**（M4 票 05，brief §16.4）。既有 qBittorrent 的全域偏好一個都
+  不寫，也不列（M4 票 22）：改它的全域 `save_path` 會讓使用者不經 Berth 加的 torrent 全部跑進
+  Berth 的目錄，而它的全域偏好沒有一個影響 Berth——Berth 的下載靠自己的分類（建立時帶 save path
+  與未完成目錄）與逐個 torrent 的 `autoTMM=true`，與 Sonarr / Radarr 對下載器的做法相同。
+- **未完成目錄不寫全域**（M4 票 22）：套件內的那一台也不寫 `temp_path`。Berth 的每個分類帶自己的
+  `downloadPath`，兩版實測全域關著也生效、開著時分類的贏（brief §20.2）。
 - **WebUI 登入只給套件內的那一台**：頁上填的那一組跟著「套用」送進來（M4 票 07），設定頁改它走
   `set_interface_login`。既有 qBittorrent 是他自己的服務，Berth 不改它的密碼（brief §16.4），帶了
   登入就拒絕。**Berth 只記帳號與雜湊**，自己連它靠免密白名單（M4 票 15）。
 - **還沒選來源就什麼都不寫**（M4 票 15）：寫入的命令一律拒絕。
-- **既有服務的 temp path 未啟用只警告**，不阻擋。
 - **Web API 低於 2.8.4 拒絕接入**，因為 Berth 要用的端點在那之前不存在（brief §16.4）。
 """
 
@@ -54,10 +55,8 @@ from berth.services.steps import (
     step_views,
 )
 
-#: 建議偏好的五個鍵（plan §8.1）。順序即畫面上的順序，也是送出去的順序。
+#: 建議偏好的三個鍵（plan §8.1）。順序即畫面上的順序，也是送出去的順序。
 RECOMMENDED_STEPS: tuple[QbittorrentStep, ...] = (
-    QbittorrentStep.TEMP_PATH_ENABLED,
-    QbittorrentStep.TEMP_PATH,
     QbittorrentStep.SAVE_PATH,
     QbittorrentStep.AUTO_TMM_ENABLED,
     QbittorrentStep.CATEGORY_CHANGED_TMM_ENABLED,
@@ -156,16 +155,15 @@ class QbittorrentSetupStatus:
     #: 這一步做不下去：版本太舊或根本連不上。
     blocked: bool
     reachable: bool
+    #: 套件內那一台的逐鍵差異。既有的那一台是空的：它的全域偏好 Berth 不寫、也不影響 Berth。
     diffs: tuple[PreferenceDiff, ...]
     steps: tuple[StepView, ...]
-    #: 既有服務的 temp path 未啟用——只警告，不阻擋（brief §16.4）。
-    temp_path_warning: bool
     #: 泊位上有 WebUI 登入那一格：只有套件內的那一台（M4 票 07）。
     web_ui_login: bool
     #: 套件內那一台的 WebUI 帳號：Berth 設下的，或那一台自己就設過的（不是 `admin`）。還沒設過、
     #: 或是既有的那一台是空字串。
     web_ui_username: str
-    #: 五個建議鍵會被寫。既有的那一台是 `False`：畫面只列現值與建議值，按鈕只是確認。
+    #: 建議鍵會被寫。既有的那一台是 `False`：按鈕只是確認連得上、版本夠新。
     writes_preferences: bool
     #: 連線本身的失敗原文（英文）。UI 貼在手動步驟旁邊。
     error: str
@@ -208,13 +206,14 @@ async def apply_qbittorrent(
     *,
     login: InterfaceLogin | None = None,
 ) -> QbittorrentSetupStatus:
-    """套用建議偏好。只寫有差異的鍵；密碼是另一次呼叫，所以它失敗不影響前面五個鍵。
+    """套用建議偏好。只寫有差異的鍵；密碼是另一次呼叫，所以它失敗不影響前面幾個鍵。
 
     `login` 是泊位上填的 WebUI 登入（M4 票 07）。不帶就是「登入照舊」：回頭重按與設定頁的
     「還原建議設定」都不帶，已經設過的那一組不重寫。
 
-    既有的那一台一個鍵都不寫：五條纜繩記成 `skipped`（Berth 看過、沒動它），細節是它的現值。
-    這一步對它的意思只剩「連得上、版本夠新」，按下去就繫上。帶了登入就拒絕（`ValueError`）。
+    既有的那一台一個鍵都不寫、也不記偏好的纜繩：這一步對它的意思只剩「連得上、版本夠新」，
+    按下去只記密碼那一條 `skipped`（`setup._qbittorrent_secured` 認它）。帶了登入就拒絕
+    （`ValueError`）。
     """
     setup = await read_settings(session, SetupSettings)
     settings = await read_settings(session, QbittorrentSettings)
@@ -242,13 +241,9 @@ async def apply_qbittorrent(
                 paths=paths,
             )
 
-        diffs = _diffs(preferences, paths)
-        if writes_preferences(origin):
-            changes = {row.key: _recommended_value(row.key, paths) for row in diffs if row.differs}
-            steps = [_preference_step(row) for row in diffs]
-        else:
-            changes = {}
-            steps = [_untouched_step(row) for row in diffs]
+        diffs = _diffs(preferences, paths, origin)
+        changes = {row.key: _recommended_value(row.key, paths) for row in diffs if row.differs}
+        steps = [_preference_step(row) for row in diffs]
         if changes:
             await client.set_preferences(changes)
 
@@ -280,7 +275,7 @@ async def apply_qbittorrent(
 async def set_interface_login(
     session: AsyncSession, factory: ServiceClientFactory, login: InterfaceLogin
 ) -> QbittorrentSetupStatus:
-    """設定頁的「更新登入」（M4 票 07）：只換套件內那一台的 WebUI 登入，五個鍵不動。
+    """設定頁的「更新登入」（M4 票 07）：只換套件內那一台的 WebUI 登入，偏好的鍵不動。
 
     與第 4 步的密碼那一條是同一段（`_apply_password`），結果換掉那一條纜繩。可逆的方式就是
     再設一組。既有的那一台拒絕（`ValueError`）。
@@ -363,7 +358,7 @@ async def _apply_password(
             {WEB_UI_USERNAME_KEY: login.username, WEB_UI_PASSWORD_KEY: login.password}
         )
     except ServiceError as exc:
-        # 這一條失敗不該把前面五個鍵的結果一起丟掉——它們已經寫進去了。
+        # 這一條失敗不該把前面幾個鍵的結果一起丟掉——它們已經寫進去了。
         return SetupStep(key=key, status=StepStatus.FAILED, error=message(exc))
     record.web_ui_username = login.username
     record.web_ui_password_hash = hash_password(login.password)
@@ -401,7 +396,7 @@ def qbittorrent_target(
 
 
 def writes_preferences(origin: ServiceOrigin | None) -> bool:
-    """五個建議鍵寫不寫得：只有套件內的那一台（M4 票 05）。"""
+    """建議鍵寫不寫得：只有套件內的那一台（M4 票 05）。"""
     return origin is ServiceOrigin.BUNDLED
 
 
@@ -414,12 +409,16 @@ def drifted_keys(
     4.4 上每一輪健康檢查都會報一次假的漂移。既有的那一台沒有漂移可言：它的全域偏好本來就
     是使用者的，「還原建議設定」在它上面什麼都不寫。
     """
+    return tuple(row.key for row in _diffs(dict(preferences), paths, origin) if row.differs)
+
+
+def _diffs(
+    preferences: dict[str, Any], paths: PathSettings, origin: ServiceOrigin | None
+) -> tuple[PreferenceDiff, ...]:
+    """逐鍵差異。既有的那一台沒有：它的全域偏好 Berth 不寫，而且沒有一個影響 Berth（M4 票 22），
+    列出套件內的建議值只會讓人以為該去改。"""
     if not writes_preferences(origin):
         return ()
-    return tuple(row.key for row in _diffs(dict(preferences), paths) if row.differs)
-
-
-def _diffs(preferences: dict[str, Any], paths: PathSettings) -> tuple[PreferenceDiff, ...]:
     return tuple(
         _diff(step.value, preferences.get(step.value), paths) for step in RECOMMENDED_STEPS
     )
@@ -429,7 +428,7 @@ def _diff(key: str, current: Any, paths: PathSettings) -> PreferenceDiff:
     """一個鍵的現值與建議值。
 
     **路徑要正規化尾斜線再比**：4.4.5 把 `/downloads` 讀回來寫成 `/downloads/`（brief §20.7），
-    照字面比對的話那兩個鍵在 4.4 上永遠「不同」，每次重按都重寫一次同樣的值。
+    照字面比對的話 `save_path` 在 4.4 上永遠「不同」，每次重按都重寫一次同樣的值。
     """
     recommended = _recommended_value(key, paths)
     return PreferenceDiff(
@@ -441,19 +440,14 @@ def _diff(key: str, current: Any, paths: PathSettings) -> PreferenceDiff:
 
 
 def _comparable(key: str, value: Any) -> Any:
-    if key in _PATH_KEYS and isinstance(value, str):
+    # 值是路徑的只有 `save_path`；其餘兩個是布林，照字面比。
+    if key == QbittorrentStep.SAVE_PATH.value and isinstance(value, str):
         return value.rstrip("/") or "/"
     return value
 
 
-#: 值是路徑的那兩個鍵。其餘三個是布林，照字面比。
-_PATH_KEYS = frozenset({QbittorrentStep.TEMP_PATH.value, QbittorrentStep.SAVE_PATH.value})
-
-
 def _recommended_value(key: str, paths: PathSettings) -> Any:
-    """建議值（plan §8.1）。路徑兩個鍵跟著 `settings.paths` 走，不另外寫死一份。"""
-    if key == QbittorrentStep.TEMP_PATH.value:
-        return paths.incomplete_root
+    """建議值（plan §8.1）。路徑跟著 `settings.paths` 走，不另外寫死一份。"""
     if key == QbittorrentStep.SAVE_PATH.value:
         return paths.complete_root
     return True
@@ -466,11 +460,6 @@ def _preference_step(diff: PreferenceDiff) -> SetupStep:
         status=StepStatus.OK if diff.differs else StepStatus.SKIPPED,
         detail=diff.recommended,
     )
-
-
-def _untouched_step(diff: PreferenceDiff) -> SetupStep:
-    """既有的那一台：Berth 看過這個鍵、沒動它。細節是它的現值，不是建議值。"""
-    return SetupStep(key=diff.key, status=StepStatus.SKIPPED, detail=diff.current)
 
 
 def _web_ui_username(
@@ -494,7 +483,7 @@ def _status(
     paths: PathSettings,
 ) -> QbittorrentSetupStatus:
     supported = version.supported
-    diffs = _diffs(preferences, paths) if supported else ()
+    diffs = _diffs(preferences, paths, origin) if supported else ()
     return QbittorrentSetupStatus(
         origin=origin,
         base_url=base_url,
@@ -505,9 +494,6 @@ def _status(
         reachable=True,
         diffs=diffs,
         steps=step_views(setup.qbittorrent.steps),
-        temp_path_warning=(
-            origin is ServiceOrigin.EXISTING and preferences.get("temp_path_enabled") is False
-        ),
         web_ui_login=origin is ServiceOrigin.BUNDLED,
         web_ui_username=_web_ui_username(setup, origin, preferences),
         writes_preferences=writes_preferences(origin),
@@ -532,7 +518,6 @@ def _unreachable(
         reachable=False,
         diffs=(),
         steps=step_views(setup.qbittorrent.steps),
-        temp_path_warning=False,
         web_ui_login=origin is ServiceOrigin.BUNDLED,
         web_ui_username=_web_ui_username(setup, origin, {}),
         writes_preferences=writes_preferences(origin),

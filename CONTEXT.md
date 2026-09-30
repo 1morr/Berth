@@ -87,7 +87,8 @@ Library root 底下、Berth 寫入用的那一條路徑（`<library root>/<slug>
 _Avoid_: target path（那是 Route 上的欄位）, new path
 
 **Complete / Incomplete root**:
-qBittorrent 的完成與未完成下載根目錄；complete 是硬鏈接的來源。
+Berth 分類的完成與未完成下載根目錄（固定 `/data/torrent/{complete,incomplete}`）；每個 Route 的分類是底下的
+`<slug>`，complete 是硬鏈接的來源。未完成目錄開在分類上，不是 qBittorrent 的全域 temp path。
 _Avoid_: download folder, save path（僅指 qBittorrent 的欄位時可用）
 
 ### 設定

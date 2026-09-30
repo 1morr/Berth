@@ -59,7 +59,7 @@ const zhHant = {
       qbittorrent: {
         can: '改選套件內或既有（這一頁要重做）、重新檢查：套件內的那一台再套用一次建議設定，已經是建議值的鍵標「已經是這樣」、不會再寫一次；你自己的 qBittorrent 只重新確認連得上，一個鍵都不寫。',
         elsewhere:
-          '套件內那五個鍵以外的偏好，以及你自己那一台的所有偏好，都在 qBittorrent 自己的介面上改，Berth 不碰。',
+          '套件內那三個鍵以外的偏好，以及你自己那一台的所有偏好，都在 qBittorrent 自己的介面上改，Berth 不碰。',
       },
       routes: {
         can: '精靈只新增：套件內可以在清單上加還沒建的媒體庫；補上新勾的媒體庫，並重驗每一條 Route 的五條檢查。選錯的那一條在它底下刪掉。',
@@ -462,9 +462,9 @@ const zhHant = {
       choose:
         '套件內的那一台由 Berth 設好偏好與 WebUI 登入；你自己的那一台 Berth 只用自己的分類，一個全域偏好都不寫。選了 Berth 才去連它。',
       bundled:
-        '這台 qBittorrent 是套件內的，Berth 直接改它的偏好。下面五個鍵是 Berth 送單與入庫要用的，只有與現值不同的才會被寫。',
+        '這台 qBittorrent 是套件內的，Berth 直接改它的偏好。下面三個鍵是 Berth 送單與入庫要用的，只有與現值不同的才會被寫。',
       existing:
-        '這台 qBittorrent 是你自己的，Berth 不改它的任何偏好，也不碰你既有的 torrent。Berth 送出的 torrent 放進自己的 berth-* 分類（分類帶自己的下載路徑）、逐個開自動管理；你不經 Berth 加的 torrent 照舊落在你自己的預設路徑。下面的建議值只供參考。',
+        '這台 qBittorrent 是你自己的，Berth 不改它的任何偏好，也不碰你既有的 torrent。Berth 送出的 torrent 放進自己的 berth-* 分類（分類帶自己的完成與未完成目錄）、逐個開自動管理；你不經 Berth 加的 torrent 照舊落在你自己的預設路徑。',
     },
     cutaway: {
       server: '這台 qBittorrent',
@@ -472,35 +472,25 @@ const zhHant = {
       password: 'WebUI 登入',
       willSet: '將設為下面填的那一組',
       existingLogin: '不改（這台是你自己的）',
-      bundledPlan: '套用五個建議偏好 · 設定 WebUI 登入',
+      bundledPlan: '套用三個建議偏好 · 設定 WebUI 登入',
       existingPlan: '只建 Berth 自己的分類 · 一個全域偏好都不寫',
       diff: '將會寫入的鍵',
-      reference: '你的偏好（Berth 不會寫入）',
       key: '鍵',
       current: '現值',
       recommended: '建議值',
-      bundledValue: '套件內的建議值',
       same: '已經是這樣',
     },
     step: {
-      temp_path_enabled: '啟用未完成目錄',
-      temp_path: '未完成目錄',
       save_path: '完成目錄',
       auto_tmm_enabled: '自動 Torrent 管理',
       category_changed_tmm_enabled: '分類改變時跟著搬',
       web_ui_password: 'WebUI 登入',
     },
     fix: {
-      temp_path_enabled: '在 qBittorrent 的「選項 → 下載」勾選「保留未完成的 torrent 於」：',
-      temp_path: '在「選項 → 下載」把未完成目錄設成 Berth 的 incomplete 根目錄：',
       save_path: '在「選項 → 下載」把預設儲存路徑設成 Berth 的 complete 根目錄：',
       auto_tmm_enabled: '在「選項 → 下載」把「預設 Torrent 管理模式」設成自動：',
       category_changed_tmm_enabled: '在「選項 → 下載」讓分類改變時套用新的儲存路徑：',
       web_ui_password: '在「選項 → Web UI」自己設定帳號與密碼：',
-    },
-    warning: {
-      tempPath:
-        '這台 qBittorrent 沒有啟用未完成目錄。不阻擋——但下載中的檔案會直接寫在完成目錄裡，Berth 比較難分辨哪些已經下載完。',
     },
     blocked: {
       tooOld:
@@ -2446,7 +2436,7 @@ const zhHant = {
     },
     drift: {
       title: 'qBittorrent 建議設定',
-      clean: '五個建議鍵都還是建議值。',
+      clean: '三個建議鍵都還是建議值。',
       changed_one: '{{count}} 個鍵與建議值不同。',
       changed_other: '{{count}} 個鍵與建議值不同。',
       changedKey: '已改',
@@ -2997,7 +2987,7 @@ const en: Translations<typeof zhHant> = {
       qbittorrent: {
         can: 'Switch between bundled and existing (this page starts over), or check again: the bundled qBittorrent gets the recommended settings applied once more, and keys already at the recommended value show as “already so” and are not written again; your own qBittorrent is only checked for a connection, with no key written.',
         elsewhere:
-          'Preferences beyond the five bundled keys, and every preference on your own qBittorrent, are changed in qBittorrent itself; Berth leaves them alone.',
+          'Preferences beyond the three bundled keys, and every preference on your own qBittorrent, are changed in qBittorrent itself; Berth leaves them alone.',
       },
       routes: {
         can: 'The wizard only adds: a bundled Jellyfin can take more libraries on the list; newly ticked libraries get a route, and every route’s five checks run again. Delete a wrong one underneath it.',
@@ -3422,9 +3412,9 @@ const en: Translations<typeof zhHant> = {
       choose:
         'Berth sets up the preferences and WebUI login on the bundled one; on your own one it uses only its own categories and writes no global preference. Berth only connects once you choose.',
       bundled:
-        'This qBittorrent came with the bundle, so Berth writes its preferences directly. The five keys below are the ones Berth needs; only the ones that differ get written.',
+        'This qBittorrent came with the bundle, so Berth writes its preferences directly. The three keys below are the ones Berth needs; only the ones that differ get written.',
       existing:
-        'This qBittorrent is yours. Berth changes none of its preferences and none of your existing torrents. Torrents Berth sends go into its own berth-* categories (each with its own save path) with automatic management switched on per torrent; anything you add yourself still lands in your own default folder. The recommended values below are for reference only.',
+        'This qBittorrent is yours. Berth changes none of its preferences and none of your existing torrents. Torrents Berth sends go into its own berth-* categories (each with its own completed and incomplete folders) with automatic management switched on per torrent; anything you add yourself still lands in your own default folder.',
     },
     cutaway: {
       server: 'This qBittorrent',
@@ -3432,37 +3422,27 @@ const en: Translations<typeof zhHant> = {
       password: 'WebUI login',
       willSet: 'Will be set to the one entered below',
       existingLogin: 'Left alone (this one is yours)',
-      bundledPlan: 'Applies five recommended preferences · sets the WebUI login',
+      bundledPlan: 'Applies three recommended preferences · sets the WebUI login',
       existingPlan: 'Only creates Berth’s own categories · writes no global preference',
       diff: 'Keys that will be written',
-      reference: 'Your preferences (Berth will not write them)',
       key: 'Key',
       current: 'Current',
       recommended: 'Recommended',
-      bundledValue: 'Recommended for the bundle',
       same: 'Already set',
     },
     step: {
-      temp_path_enabled: 'Keep incomplete downloads separate',
-      temp_path: 'Incomplete folder',
       save_path: 'Completed folder',
       auto_tmm_enabled: 'Automatic torrent management',
       category_changed_tmm_enabled: 'Relocate when the category changes',
       web_ui_password: 'WebUI login',
     },
     fix: {
-      temp_path_enabled: 'In qBittorrent, Options → Downloads, tick "Keep incomplete torrents in":',
-      temp_path: "In Options → Downloads, point the incomplete folder at Berth's incomplete root:",
       save_path: "In Options → Downloads, set the default save path to Berth's completed root:",
       auto_tmm_enabled:
         'In Options → Downloads, set the default torrent management mode to Automatic:',
       category_changed_tmm_enabled:
         'In Options → Downloads, let a category change relocate the torrent:',
       web_ui_password: 'Set the username and password yourself under Options → Web UI:',
-    },
-    warning: {
-      tempPath:
-        'This qBittorrent does not keep incomplete downloads separate. Not a blocker — but partial files land in the completed folder, which makes "finished" harder to tell apart.',
     },
     blocked: {
       tooOld:
@@ -5332,7 +5312,7 @@ const en: Translations<typeof zhHant> = {
     },
     drift: {
       title: 'qBittorrent recommended settings',
-      clean: 'All five recommended keys still hold their recommended values.',
+      clean: 'All three recommended keys still hold their recommended values.',
       changed_one: '{{count}} key differs from the recommended value.',
       changed_other: '{{count}} keys differ from the recommended values.',
       changedKey: 'changed',

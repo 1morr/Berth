@@ -103,7 +103,8 @@ class TmdbSettings(SettingsGroup):
 class PathSettings(SettingsGroup):
     KEY = "paths"
 
-    #: qBittorrent 的全域 temp path 與 category save path 的根（brief §4.1）。
+    #: Berth 分類的未完成目錄與 save path 的根（brief §4.1）：每個 Route 的分類是 `<根>/<slug>`
+    #: （`routes.incomplete_path_of` / `save_path_of`）。固定值，沒有 API 或 UI 改它（M4 票 22）。
     incomplete_root: str = "/data/torrent/incomplete"
     complete_root: str = "/data/torrent/complete"
     #: 套件內 Jellyfin 媒體庫資料夾的父目錄（plan §9.1）。既有 Jellyfin 的「加入 Berth 路徑」

@@ -46,6 +46,7 @@ from berth.adapters.qbittorrent import (
     PROBE_TIMEOUT_SECONDS,
     ProbeSight,
     QbittorrentClient,
+    conflict_detail,
     ensure_category,
     probe_sight,
 )
@@ -374,6 +375,7 @@ async def create_route(
                 target_path=target_path,
                 category=f"{CATEGORY_PREFIX}{slug}",
                 save_path=save_path_of(paths.complete_root, slug),
+                incomplete_path=incomplete_path_of(paths.incomplete_root, slug),
             )
             route = _new_route(plan_row, name=name, enabled=False)
             session.add(route)
@@ -661,7 +663,8 @@ async def _live_library(
 
 
 def _planned_from(route: Route, paths: PathSettings) -> _Planned:
-    """已經存在的 Route → 檢查要用的計劃。save path 照 `save_path_of` 算，不另存一份。"""
+    """已經存在的 Route → 檢查要用的計劃。兩個路徑照 `save_path_of` / `incomplete_path_of` 算，
+    不另存一份。"""
     return _Planned(
         slug=route.slug,
         library_name=route.jellyfin_library_name,
@@ -670,6 +673,7 @@ def _planned_from(route: Route, paths: PathSettings) -> _Planned:
         target_path=route.target_path,
         category=route.category,
         save_path=save_path_of(paths.complete_root, route.slug),
+        incomplete_path=incomplete_path_of(paths.incomplete_root, route.slug),
     )
 
 
@@ -730,6 +734,9 @@ class _Planned:
     target_path: str
     category: str
     save_path: str
+    #: 這個 category 自己的未完成目錄（M4 票 22，qBittorrent 叫它 `downloadPath`）：下載中寫在這裡，
+    #: 完成才搬到 save path。
+    incomplete_path: str
 
 
 def _plan(
@@ -796,6 +803,7 @@ def _plan(
                 target_path=selection.target_path,
                 category=f"{CATEGORY_PREFIX}{slug}",
                 save_path=save_path_of(paths.complete_root, slug),
+                incomplete_path=incomplete_path_of(paths.incomplete_root, slug),
             )
         )
     return tuple(planned)
@@ -918,21 +926,28 @@ class _Checker:
         return SetupStep(key=check.value, status=status, detail=detail)
 
     async def _category(self) -> tuple[StepStatus, str]:
-        """category 不存在才建；存在但 save path 不同就回報衝突且**不覆寫**（plan §8.1）。"""
-        # 硬鏈接的來源目錄。qBittorrent 完成時才會自己建，但檢查現在就要用到它。
+        """category 不存在才建；存在但路徑不同就回報衝突且**不覆寫**（plan §8.1）。"""
+        # 硬鏈接的來源目錄。qBittorrent 完成時才會自己建，但檢查現在就要用到它。未完成目錄
+        # 也先建：送單前的磁碟門檻量的就是它（`jobs.check_disk`，M4 票 22）。
         ensure_directory(self._save_path)
+        ensure_directory(Path(self._plan.incomplete_path))
         # 送給 qBittorrent 的是**計劃裡那一串字**，不是 `Path` 走一趟回來的樣子：
         # 容器路徑一律是 POSIX，而 `str(Path(...))` 在 Windows 上會換成反斜線。送單
         # （票 09）比對的是同一支 `save_path_of` 的輸出，兩邊差一種分隔符就會判成衝突。
         outcome = await ensure_category(
-            self._qbittorrent, self._plan.category, self._plan.save_path
+            self._qbittorrent, self._plan.category, self._plan.save_path, self._plan.incomplete_path
         )
         self._reported_save_path = outcome.save_path
         detail = f"{outcome.name} → {outcome.save_path}"
+        # 票 22 之前建的分類沒有自己的未完成目錄（`ensure_category` 不當它衝突）：說出下載落在哪。
+        detail += (
+            f" (downloading in {outcome.download_path})"
+            if outcome.download_path
+            else " (no download path of its own; downloads follow qBittorrent's global setting)"
+        )
         if outcome.conflict:
             raise _CheckFailedError(
-                f"category {outcome.name!r} already points at {outcome.save_path!r}; "
-                f"Berth wants {self._plan.save_path!r} and will not move an existing category"
+                conflict_detail(outcome, self._plan.save_path, self._plan.incomplete_path)
             )
         return (StepStatus.OK if outcome.created else StepStatus.SKIPPED), detail
 
@@ -1143,6 +1158,12 @@ def save_path_of(complete_root: str, slug: str) -> str:
     """Route 的 complete 子目錄（brief §4.1）。**一個地方算，到處用**——精靈的檢查、
     健康頁、畫面上那一行，以及票 09 的送單（category 的 save path 就是它）。"""
     return f"{complete_root.rstrip('/')}/{slug}"
+
+
+def incomplete_path_of(incomplete_root: str, slug: str) -> str:
+    """Route 的 incomplete 子目錄：它的 category 自己的未完成目錄（qBittorrent 的 `downloadPath`，
+    M4 票 22）。建分類與送單前的磁碟門檻都用它。"""
+    return f"{incomplete_root.rstrip('/')}/{slug}"
 
 
 def target_prefix(route: Route) -> str:

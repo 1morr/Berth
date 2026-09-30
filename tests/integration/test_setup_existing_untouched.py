@@ -33,7 +33,7 @@ from berth.services.qbittorrent import (
     apply_qbittorrent,
     read_qbittorrent_diff,
 )
-from berth.services.routes import build_routes, save_path_of
+from berth.services.routes import build_routes, incomplete_path_of, save_path_of
 from berth.services.settings import read_settings, write_settings
 from berth.services.setup import (
     STEP_QBITTORRENT,
@@ -120,7 +120,10 @@ async def test_a_bundled_choice_is_still_written(session: AsyncSession) -> None:
     await apply_default_indexers(session, factory, ["nyaasi"], login=LOGIN, sleep=_no_wait)
 
     assert any(WEB_UI_PASSWORD_KEY in write for write in qbittorrent.writes)
-    assert any("save_path" in write for write in qbittorrent.writes)
+    # 套件內的全域偏好只寫這三個鍵。未完成目錄不寫全域（票 22）：Berth 的分類各自帶
+    # `downloadPath`，兩版實測全域關著也生效（brief §20.2）。
+    preferences = next(write for write in qbittorrent.writes if "save_path" in write)
+    assert set(preferences) == {"save_path", "auto_tmm_enabled", "category_changed_tmm_enabled"}
     assert prowlarr.restarts == 1
     assert prowlarr.signs_in("labgate", "Lab-gate-1")
 
@@ -151,11 +154,12 @@ async def _no_wait(_: float) -> None:
 
 MAGNET = "magnet:?xt=urn:btih:4bd0f6ef1d3b1e3cbb1e1b6b6c2a9c7d8e5f0a1b&dn=Show"
 
-#: 使用者自己那台 qBittorrent 的全域偏好：預設下載路徑是他的 `/downloads`，Berth 看不到。
+#: 使用者自己那台 qBittorrent 的全域偏好：預設下載路徑是他的 `/downloads`，Berth 看不到；沒開
+#: 「Keep incomplete torrents in」（票 22 的回報就是這一台）。
 THEIR_PREFERENCES = {
     "save_path": "/downloads",
     "temp_path": "/downloads/incomplete",
-    "temp_path_enabled": True,
+    "temp_path_enabled": False,
     "auto_tmm_enabled": False,
     "category_changed_tmm_enabled": False,
 }
@@ -189,19 +193,16 @@ async def test_an_existing_qbittorrent_keeps_its_global_paths_through_pages_two_
     assert (await read_status(session)).current_step == STEP_QBITTORRENT
 
     diff = await read_qbittorrent_diff(session, factory)
-    # 建議值照樣列出來給人看，只是不寫。
+    # 偏好表整張收起（票 22）：它的全域偏好沒有一個影響 Berth——送單逐個 torrent 帶 autoTMM、
+    # 路徑全由 Berth 的分類決定，列出套件內的建議值只會讓人以為該去改。
     assert diff.writes_preferences is False
-    assert any(row.differs for row in diff.diffs)
+    assert diff.diffs == ()
 
     applied = await apply_qbittorrent(session, factory)
     assert qbittorrent.writes == []
-    # 五條纜繩都繫上：Berth 看過、沒動它，細節是它自己的現值。
-    assert [(row.step, row.status, row.detail) for row in applied.steps][:5] == [
-        ("temp_path_enabled", StepStatus.SKIPPED, "true"),
-        ("temp_path", StepStatus.SKIPPED, "/downloads/incomplete"),
-        ("save_path", StepStatus.SKIPPED, "/downloads"),
-        ("auto_tmm_enabled", StepStatus.SKIPPED, "false"),
-        ("category_changed_tmm_enabled", StepStatus.SKIPPED, "false"),
+    # 只剩「確認」那一條：沒有密碼那一格，記成看過、沒動。
+    assert [(row.step, row.status) for row in applied.steps] == [
+        ("web_ui_password", StepStatus.SKIPPED)
     ]
     assert (await read_status(session)).current_step == STEP_ROUTES
 
@@ -233,10 +234,14 @@ async def test_an_existing_qbittorrent_keeps_its_global_paths_through_pages_two_
         user_id=None,
     )
 
-    # 送單落在 Berth 的分類，分類的路徑是 Berth 的 complete 根目錄底下那一條。
+    # 送單落在 Berth 的分類，分類的路徑是 Berth 的 complete 根目錄底下那一條；下載中落在分類自己的
+    # 未完成目錄（票 22）——這一台全域的「Keep incomplete torrents in」關著也一樣。
     assert [row.category for row in qbittorrent.added] == ["berth-anime"]
-    categories = {row.name: row.save_path for row in await qbittorrent.categories()}
-    assert categories["berth-anime"] == save_path_of(str(roots["complete"]), "anime")
+    categories = {row.name: row for row in await qbittorrent.categories()}
+    assert categories["berth-anime"].save_path == save_path_of(str(roots["complete"]), "anime")
+    assert categories["berth-anime"].download_path == incomplete_path_of(
+        str(roots["incomplete"]), "anime"
+    )
     # 全域偏好從頭到尾沒被寫過。
     preferences = await qbittorrent.preferences()
     assert {key: preferences[key] for key in THEIR_PREFERENCES} == THEIR_PREFERENCES

@@ -138,11 +138,11 @@ class FakeQbittorrentClient:
             raise self.error
         return tuple(self._categories)
 
-    async def create_category(self, name: str, save_path: str) -> None:
+    async def create_category(self, name: str, save_path: str, *, download_path: str) -> None:
         """有狀態：建完再讀就看得到，重跑精靈才測得出「已經在那裡了」。"""
         if self.error is not None:
             raise self.error
-        category = QbittorrentCategory(name=name, save_path=save_path)
+        category = QbittorrentCategory(name=name, save_path=save_path, download_path=download_path)
         self.created_categories.append(category)
         self._categories.append(category)
 

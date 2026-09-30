@@ -100,10 +100,14 @@ const AT_EXISTING_QBITTORRENT = setupStatus({
   services: [ALL_BUNDLED[0], EXISTING_QBITTORRENT],
 })
 
-/** 自己的 qBittorrent 的差異：一個鍵都不寫、沒有 WebUI 登入那一格（M4 票 05、07）。 */
+/**
+ * 自己的 qBittorrent：一個鍵都不寫、沒有 WebUI 登入那一格（M4 票 05、07），也沒有偏好表——
+ * 它的全域偏好沒有一個影響 Berth（M4 票 22）。
+ */
 const EXISTING_DIFF = qbittorrentSetup({
   origin: 'existing',
   base_url: 'http://nas:8080',
+  diffs: [],
   web_ui_login: false,
   web_ui_username: '',
   writes_preferences: false,
@@ -249,11 +253,13 @@ describe('頁 2：qBittorrent', () => {
     renderWithProviders(<SetupPage />)
     const diff = (await screen.findByText('將會寫入的鍵')).closest('section')!
 
-    expect(within(diff).getByText('temp_path_enabled')).toBeInTheDocument()
-    expect(within(diff).getByText('/data/torrent/incomplete')).toBeInTheDocument()
+    expect(within(diff).getByText('save_path')).toBeInTheDocument()
+    expect(within(diff).getByText('/data/torrent/complete')).toBeInTheDocument()
     // 現值也在同一列，使用者看得出來按下去會改掉什麼。
-    expect(within(diff).getByText('/downloads/incomplete')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '套用這 5 個鍵' })).toBeInTheDocument()
+    expect(within(diff).getByText('/downloads')).toBeInTheDocument()
+    // 未完成目錄不寫全域（M4 票 22）：Berth 的分類各自帶。
+    expect(within(diff).queryByText('temp_path_enabled')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '套用這 3 個鍵' })).toBeInTheDocument()
   })
 
   it('WebUI 登入預設沿用 Jellyfin 帳密：只有一格密碼，套用之後逐鍵留下結果', async () => {
@@ -264,8 +270,6 @@ describe('頁 2：qBittorrent', () => {
         differs: false,
       })),
       steps: [
-        step('temp_path_enabled', 'ok', 'true'),
-        step('temp_path', 'ok', '/data/torrent/incomplete'),
         step('save_path', 'skipped', '/data/torrent/complete'),
         step('auto_tmm_enabled', 'ok', 'true'),
         step('category_changed_tmm_enabled', 'ok', 'true'),
@@ -290,11 +294,11 @@ describe('頁 2：qBittorrent', () => {
     expect(fields.queryByLabelText('再輸入一次密碼')).not.toBeInTheDocument()
 
     await user.type(fields.getByLabelText(OWNER_PASSWORD), 'harbour')
-    await user.click(screen.getByRole('button', { name: '套用這 5 個鍵' }))
+    await user.click(screen.getByRole('button', { name: '套用這 3 個鍵' }))
 
     const sequence = await screen.findByTestId('sequence')
     await waitFor(() => {
-      expect(within(sequence).getAllByText('已完成')).toHaveLength(5)
+      expect(within(sequence).getAllByText('已完成')).toHaveLength(3)
     })
     expect(within(sequence).getByText('已經是這樣')).toBeInTheDocument()
     expect(within(sequence).getByText('WebUI 登入')).toBeInTheDocument()
@@ -316,7 +320,7 @@ describe('頁 2：qBittorrent', () => {
     const user = userEvent.setup()
 
     renderWithProviders(<SetupPage />)
-    await user.click(await screen.findByRole('button', { name: '套用這 5 個鍵' }))
+    await user.click(await screen.findByRole('button', { name: '套用這 3 個鍵' }))
 
     expect(await screen.findByText('這一格要填。')).toBeInTheDocument()
     expect(called(stub, '/api/setup/qbittorrent/apply')).toBe(false)
@@ -337,16 +341,16 @@ describe('頁 2：qBittorrent', () => {
 
     expect(fields.getByLabelText('帳號')).toHaveValue('skipper')
     expect(fields.queryByLabelText(OWNER_PASSWORD)).not.toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: '套用這 5 個鍵' }))
+    await user.click(screen.getByRole('button', { name: '套用這 3 個鍵' }))
     expect(await fields.findByText('這一格要填。')).toBeInTheDocument()
     await typeOwnLogin(user, fields, 'harbor')
-    await user.click(screen.getByRole('button', { name: '套用這 5 個鍵' }))
+    await user.click(screen.getByRole('button', { name: '套用這 3 個鍵' }))
     expect(await fields.findByText('兩次輸入的密碼不一樣。')).toBeInTheDocument()
     expect(called(stub, '/api/setup/qbittorrent/apply')).toBe(false)
 
     await user.clear(fields.getByLabelText('再輸入一次密碼'))
     await user.type(fields.getByLabelText('再輸入一次密碼'), 'harbour')
-    await user.click(screen.getByRole('button', { name: '套用這 5 個鍵' }))
+    await user.click(screen.getByRole('button', { name: '套用這 3 個鍵' }))
 
     await waitFor(() =>
       expect(bodyOf(stub, '/api/setup/qbittorrent/apply')).toEqual({
@@ -365,7 +369,7 @@ describe('頁 2：qBittorrent', () => {
 
     renderWithProviders(<SetupPage />)
     await user.type(await screen.findByLabelText(OWNER_PASSWORD), 'wrong')
-    await user.click(screen.getByRole('button', { name: '套用這 5 個鍵' }))
+    await user.click(screen.getByRole('button', { name: '套用這 3 個鍵' }))
 
     expect(
       await screen.findByText('這不是 skipper 的 Jellyfin 密碼，所以什麼都沒寫；改好再按一次。'),
@@ -389,7 +393,7 @@ describe('頁 2：qBittorrent', () => {
     )
     expect(screen.queryByLabelText(OWNER_PASSWORD)).not.toBeInTheDocument()
     expect(screen.queryByLabelText('密碼')).not.toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: '套用這 5 個鍵' }))
+    await user.click(screen.getByRole('button', { name: '套用這 3 個鍵' }))
 
     await waitFor(() =>
       expect(bodyOf(stub, '/api/setup/qbittorrent/apply')).toEqual({ login: null }),
@@ -403,7 +407,7 @@ describe('頁 2：qBittorrent', () => {
 
   it('已經套用過時換成既有要先看過後果，不當場送出；點回原本那一格就是不換', async () => {
     const applied = qbittorrentSetup({
-      steps: [step('temp_path_enabled', 'ok', 'true')],
+      steps: [step('save_path', 'ok', '/data/torrent/complete')],
       web_ui_username: 'skipper',
     })
     const stub = stubApi({ [STATUS]: { body: AT_QBITTORRENT }, [DIFF]: { body: applied } })
@@ -431,7 +435,7 @@ describe('頁 2：qBittorrent', () => {
   it('已經確認過既有的那一台時換成套件內要先確認：焦點進確認區、Esc 收起，按了才送出', async () => {
     const confirmed = qbittorrentSetup({
       ...EXISTING_DIFF,
-      steps: [step('temp_path_enabled', 'skipped', 'true')],
+      steps: [step('web_ui_password', 'skipped')],
     })
     const stub = stubApi({
       [STATUS]: { body: AT_EXISTING_QBITTORRENT },
@@ -487,20 +491,22 @@ describe('頁 2：qBittorrent', () => {
     expect(screen.queryByRole('button', { name: /套用/ })).not.toBeInTheDocument()
   })
 
-  it('既有服務只列現值與建議值、不寫任何鍵；temp path 未啟用只是警告（M4 票 05）', async () => {
-    stubApi({
-      [STATUS]: { body: AT_EXISTING_QBITTORRENT },
-      [DIFF]: { body: qbittorrentSetup({ ...EXISTING_DIFF, temp_path_warning: true }) },
-    })
+  /**
+   * M4 票 22：接既有 qBittorrent 時不再說「沒有啟用未完成目錄」——那句的理由不成立（完成看的是
+   * qBittorrent 回報的狀態），而未完成目錄現在開在 Berth 的分類上。它的全域偏好也不列：沒有一個
+   * 影響 Berth，列出套件內的建議值只會讓人以為該去改。
+   */
+  it('既有服務不寫任何鍵，也不列偏好表、不警告未完成目錄（M4 票 05、22）', async () => {
+    stubApi({ [STATUS]: { body: AT_EXISTING_QBITTORRENT }, [DIFF]: { body: EXISTING_DIFF } })
 
     renderWithProviders(<SetupPage />)
 
-    expect(await screen.findByText(/沒有啟用未完成目錄/)).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: '確認你的 qBittorrent', level: 2 })).toBeVisible()
-    // 剖面照樣逐鍵列出，但說的是「不會寫入」，不是「將會寫入」。
-    expect(screen.getByText('你的偏好（Berth 不會寫入）')).toBeInTheDocument()
+    expect(
+      await screen.findByRole('heading', { name: '確認你的 qBittorrent', level: 2 }),
+    ).toBeVisible()
+    expect(screen.queryByText(/沒有啟用未完成目錄/)).not.toBeInTheDocument()
     expect(screen.queryByText('將會寫入的鍵')).not.toBeInTheDocument()
-    expect(screen.getByText('/downloads')).toBeInTheDocument()
+    expect(screen.queryByRole('table')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /套用/ })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: '確認，不改任何設定' })).toBeEnabled()
     // 既有的那一台沒有 WebUI 登入那一格（M4 票 07）。

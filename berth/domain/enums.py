@@ -762,7 +762,8 @@ class RouteCheck(StrEnum):
     健康頁的 Route 檢查用同一組（`health_checker`，票 10）。
     """
 
-    #: qBittorrent 上這個 Route 的 category。已存在但 save path 不同 → 衝突，不覆寫。
+    #: qBittorrent 上這個 Route 的 category，帶自己的未完成目錄（M4 票 22）。已存在但 save path
+    #: 或未完成目錄不同 → 衝突，不覆寫。
     CATEGORY = "category"
     #: qBittorrent 報的全域 save path 與這個 category 的路徑，在 Berth 內 `stat` 得到。
     DOWNLOAD_PATH = "download_path"
@@ -780,10 +781,9 @@ class QbittorrentStep(StrEnum):
     """第 4 步逐鍵套用建議偏好（plan §9.3 第 4 步、§8.1）。
 
     值就是 `app/setPreferences` 的鍵名——一條纜繩對一個鍵，畫面顯示的與送出去的是同一個字串。
+    未完成目錄不在這裡（M4 票 22）：它開在 Berth 的每個分類上（`downloadPath`），不寫全域。
     """
 
-    TEMP_PATH_ENABLED = "temp_path_enabled"
-    TEMP_PATH = "temp_path"
     SAVE_PATH = "save_path"
     AUTO_TMM_ENABLED = "auto_tmm_enabled"
     CATEGORY_CHANGED_TMM_ENABLED = "category_changed_tmm_enabled"

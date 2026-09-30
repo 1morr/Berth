@@ -48,7 +48,9 @@ test('既有服務：三頁都選既有、選寫入目標，完成後用那台 J
   await main.getByRole('textbox', { name: '密碼' }).fill('adminadmin')
   await main.getByRole('button', { name: '測試連線' }).click()
   await expect(page.getByRole('heading', { name: '確認你的 qBittorrent' })).toBeVisible()
-  await expect(page.getByText('你的偏好（Berth 不會寫入）')).toBeVisible()
+  // 偏好表整張收起，也不警告未完成目錄：它的全域偏好沒有一個影響 Berth（M4 票 22）。
+  await expect(page.getByRole('table')).toHaveCount(0)
+  await expect(page.getByText(/沒有啟用未完成目錄/)).toHaveCount(0)
   // 既有的那一台沒有 WebUI 登入那一格（M4 票 07）。
   await expect(page.getByRole('group', { name: 'qBittorrent WebUI 登入' })).toHaveCount(0)
   await page.getByRole('button', { name: '確認，不改任何設定' }).click()

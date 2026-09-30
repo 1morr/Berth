@@ -1850,8 +1850,6 @@ async def _moor(
         await scenario.qbittorrent.set_preferences(
             {
                 "save_path": paths.complete_root,
-                "temp_path": paths.incomplete_root,
-                "temp_path_enabled": True,
                 "auto_tmm_enabled": True,
                 "category_changed_tmm_enabled": True,
             }

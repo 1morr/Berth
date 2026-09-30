@@ -115,7 +115,7 @@ TMDB 的條款限非商業使用；歸屬聲明見〈[授權與歸屬](#授權�
 
 ### 外部服務的前提
 
-- **qBittorrent**：最低 4.4（Web API 2.8.4）。套件內的容器由 `deploy/preseed/qbittorrent/10-berth.sh` 在服務啟動前補上免密白名單，而且只放行 Berth 那一個固定 IP —— 4.6.1 起首次啟動的隨機密碼只印在容器 log，沒有這一步 Berth 進不去；WebUI 從宿主或 LAN 進來仍然要密碼。其餘偏好（temp path、save path、category 的 autoTMM）由精靈經 API 設定，按之前會顯示差異。腳本不覆蓋任何已經有值的設定。
+- **qBittorrent**：最低 4.4（Web API 2.8.4）。套件內的容器由 `deploy/preseed/qbittorrent/10-berth.sh` 在服務啟動前補上免密白名單，而且只放行 Berth 那一個固定 IP —— 4.6.1 起首次啟動的隨機密碼只印在容器 log，沒有這一步 Berth 進不去；WebUI 從宿主或 LAN 進來仍然要密碼。其餘偏好（save path、autoTMM）由精靈經 API 設定，按之前會顯示差異；未完成目錄不寫全域，Berth 建每個分類時帶自己的 `downloadPath`（`/data/torrent/incomplete/<slug>`）。腳本不覆蓋任何已經有值的設定。
 - **Jellyfin**：**最低 12.0**（12.0 就是原本的 10.12 —— Jellyfin 把版號前面永遠不變的 `10` 拿掉了）。12.0 起同一集的多個版本由 Jellyfin 自己合併成一個條目，不需要任何插件；10.x 要靠第三方插件，而那個插件在 12 上是空跑、還會跨媒體庫誤併，所以 Berth 只支援 12 以上。更舊的伺服器在精靈 Jellyfin 那一頁與健康頁都是紅燈，不會被接進來。
   - **從 10.x 升上來**：10.10.7 與任何 10.11.x 都可以直接升，不必經過中繼版本。**升級前**把 Jellyfin 的 `${CONFIG_ROOT}/jellyfin` 完整備份 —— 12 改了資料庫，降不回去，只能還原備份；再移除第三方插件，10.11 的插件在 12 載入不了。**升級後**完整掃描一次媒體庫，自動分組的版本才會回來。
   - **套件內的 Jellyfin 釘在 `version-12.1ubu2604`**：`docker compose pull` 只會拿到 12.1 這條線的重建，不會默默跨到下一個大版本。要升級時先備份上面那個目錄，再改 `deploy/docker-compose.yml` 的 tag 並 `docker compose up -d jellyfin`。
@@ -661,6 +661,15 @@ qBittorrent 看不看得到 Berth 寫進分類路徑的檔：探針 torrent 在 
 ```bash
 python scripts/experiments/qbittorrent_visibility_probe.py     # 5.2.3；報告寫到 .local/experiments/results/qbittorrent-visibility-<版本>.json
 python scripts/experiments/qbittorrent_visibility_probe.py --image lscr.io/linuxserver/qbittorrent:4.4.5   # 支援下限
+```
+
+分類自己的未完成目錄（`createCategory` 的 `downloadPath`）下載中是不是落在那裡、完成後搬到 save path，全域
+temp path 開關時誰贏（M4 票 22，brief §20.2）：自己起停一台做種的 5.2.3 與一台受測版本（前綴
+`berth-exp-catpath`，只發佈在 `127.0.0.1:18093`、`18094`），一個版本約兩分鐘：
+
+```bash
+python scripts/experiments/qbittorrent_category_download_path.py     # 5.2.3；報告寫到 .local/experiments/results/qbittorrent-category-download-path-<版本>.json
+python scripts/experiments/qbittorrent_category_download_path.py --image lscr.io/linuxserver/qbittorrent:4.4.5   # 支援下限
 ```
 
 套件容器撞名、撞 port 時 `docker compose up -d` 怎麼收場，以及 `berth` 的 `host.docker.internal` 解到哪

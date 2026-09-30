@@ -44,7 +44,7 @@ from sqlalchemy.orm import InstrumentedAttribute
 
 from berth.adapters import fs
 from berth.adapters.http import ServiceError, is_transient
-from berth.adapters.qbittorrent import TorrentAdd, ensure_category
+from berth.adapters.qbittorrent import TorrentAdd, conflict_detail, ensure_category
 from berth.adapters.torrent import TorrentSource
 from berth.domain import (
     BindReason,
@@ -77,7 +77,7 @@ from berth.models.types import utcnow
 from berth.parser.release import parse_release
 from berth.services.clients import ServiceClientFactory
 from berth.services.qbittorrent import sign_in
-from berth.services.routes import save_path_of
+from berth.services.routes import incomplete_path_of, save_path_of
 from berth.services.settings import read_settings
 from berth.services.steps import message
 
@@ -395,7 +395,7 @@ async def add_download(
         if existing is not None:
             return await _existing_outcome(session, existing)
 
-    await check_disk(session)
+    await check_disk(session, route)
     torrent = await _resolve(factory, source.url)
     existing = await session.get(Job, torrent.info_hash)
     if existing is not None:
@@ -493,7 +493,7 @@ async def _retry_target(session: AsyncSession, job: Job) -> tuple[Route, Media |
         raise JobRejectedError(JobRefusal.ROUTE_MISSING, str(job.route_id))
     subject = await session.get(Media, job.media_id) if job.media_id is not None else None
     check_route(route, subject)
-    await check_disk(session)
+    await check_disk(session, route)
     return route, subject
 
 
@@ -971,24 +971,29 @@ async def _existing_outcome(session: AsyncSession, job: Job) -> AddDownloadOutco
     return AddDownloadOutcome(job=await _view_one(session, job), created=False)
 
 
-async def check_disk(session: AsyncSession) -> None:
-    """incomplete 那一側剩下的空間夠不夠再開一個下載（`DiskSettings`，M3 票 04）。
+async def check_disk(session: AsyncSession, route: Route) -> None:
+    """這條 Route 的下載落腳處剩下的空間夠不夠再開一個下載（`DiskSettings`，M3 票 04）。
 
-    只看 incomplete：下載落在那裡、長在那裡（qBittorrent 的 temp path），complete 是它下載完
-    才搬過去的地方，那一側由健康檢查的 `low_disk_space` 看著。門檻 `0` 是不量；**看不到那個
-    目錄不擋**——那是 `download_path` 纜繩要報的事，擋下來只會讓每一次送單都說錯理由。
+    量的是它的 category 自己的未完成目錄（`incomplete_path_of`，M4 票 22）：下載落在那裡、長在
+    那裡，complete 是下載完才搬過去的地方，那一側由健康檢查的 `low_disk_space` 看著。以前量全域
+    的 incomplete 根目錄，而既有 qBittorrent 根本不寫那裡。門檻 `0` 是不量；**看不到那個目錄不擋**
+    ——那是 Route 檢查要報的事，擋下來只會讓每一次送單都說錯理由。
     """
     disk = await read_settings(session, DiskSettings)
     if not disk.min_free_gb:
         return
-    root = (await read_settings(session, PathSettings)).incomplete_root
-    if not root:
-        return
+    incomplete_root = (await read_settings(session, PathSettings)).incomplete_root
+    root = incomplete_path_of(incomplete_root, route.slug)
+    # Route 的目錄在 Route 檢查跑過之前還不在（剛從票 22 之前升上來也是）：它之後就建在 incomplete
+    # 根目錄的那個檔案系統上，量根目錄。只退這一層——再往上找，沒掛上的 `/data` 會量到容器自己的根。
+    measured = next((Path(path) for path in (root, incomplete_root) if Path(path).is_dir()), None)
     try:
-        free = fs.free_space(Path(root))
+        if measured is None:
+            raise FileNotFoundError(root)
+        free = fs.free_space(measured)
     except OSError as exc:
         logger.warning(
-            "could not measure the incomplete root; submitting anyway",
+            "could not measure the route's download path; submitting anyway",
             extra={"path": root, "error": str(exc)},
         )
         return
@@ -1090,16 +1095,16 @@ async def _submit(
     settings = await read_settings(session, QbittorrentSettings)
     paths = await read_settings(session, PathSettings)
     save_path = save_path_of(paths.complete_root, route.slug)
+    incomplete_path = incomplete_path_of(paths.incomplete_root, route.slug)
     client = factory.qbittorrent(settings.base_url)
     try:
         await sign_in(client, settings)
-        outcome = await ensure_category(client, route.category, save_path)
+        outcome = await ensure_category(client, route.category, save_path, incomplete_path)
         if outcome.conflict:
             await _fail(
                 session,
                 job,
-                f"category {outcome.name!r} already points at {outcome.save_path!r}; "
-                f"Berth wants {save_path!r} and will not move an existing category",
+                conflict_detail(outcome, save_path, incomplete_path),
                 actor=actor,
                 attempt=None,
             )

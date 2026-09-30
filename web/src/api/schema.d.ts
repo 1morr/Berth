@@ -4293,8 +4293,6 @@ export interface components {
             diffs: components["schemas"]["PreferenceDiffOut"][];
             /** Steps */
             steps: components["schemas"]["StepOut"][];
-            /** Temp Path Warning */
-            temp_path_warning: boolean;
             /** Web Ui Login */
             web_ui_login: boolean;
             /** Web Ui Username */

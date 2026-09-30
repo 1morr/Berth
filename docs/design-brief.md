@@ -84,12 +84,13 @@
 ### 4.1 三層路徑【決定】
 
 ```
-/data/torrent/incomplete/<torrent 內容>                 qBittorrent 全域 temp path
+/data/torrent/incomplete/<route-slug>/<torrent 內容>     qBittorrent category 的未完成目錄（downloadPath）
 /data/torrent/complete/<route-slug>/<torrent 內容>       qBittorrent category save path
 /data/library/<Jellyfin 媒體庫路徑>/<Media 資料夾>/...     由 Jellyfin 推導，不讓使用者重填
 ```
 
-- `incomplete` 與 `complete` 的根目錄在 WebUI 設定，預設如上。
+- `incomplete` 與 `complete` 的根目錄固定在 `/data/torrent/{incomplete,complete}`，沒有 API、UI 或環境變數改它（M4 票 22：原本寫「在 WebUI 設定」，程式從來沒有那個設定；要換宿主位置改的是 `DATA_ROOT` 掛到哪裡）。
+- 未完成目錄開在 Berth 的每個 category 上（`downloadPath`，M4 票 22），不寫 qBittorrent 的全域 `temp_path`：既有 qBittorrent 不必改全域設定，下載中的檔也不會落在 complete 那一側。兩版實測全域關著也生效、開著時分類的贏（§20.2）。
 - `complete/<route-slug>` 對應一個 qBittorrent category；category 名稱預設 `berth-<route-slug>`，可改。
   `route-slug` 由媒體庫名稱算：換掉路徑不收的字元、空白換成 `-`、小寫，中日文照留（「TV Shows」→ `tv-shows`，M4 票 08；之前建的 Route 保留自己帶空白的 slug 與分類，不改名——改分類路徑會搬走 torrent，§20.2）。
 - library 路徑一律從 Jellyfin `VirtualFolders` 讀取，使用者只做「選擇」，不做「輸入」。
@@ -102,7 +103,7 @@
 2. 目錄名會鎖死在送單當下的標題，TMDB 改名、使用者改匹配都會讓目錄說謊。
 3. Sonarr/Radarr 這類成熟產品都用「category 一層、扁平」，整個生態（TRaSH Guides、qBittorrent 分類）都以此為前提。
 4. 「這個 torrent 是哪部作品」由本系統的 Job 頁與帳本回答；檔案系統層面用 `find -samefile` 也能反查。
-5. incomplete 是暫態，qBittorrent 完成時自行從 temp path 搬到 save path；鏡像它沒有任何收益。
+5. incomplete 是暫態，qBittorrent 完成時自行從分類的未完成目錄搬到 save path；鏡像它沒有任何收益。
 
 保留的替代：Job 頁提供「開啟 complete 目錄」與「顯示所有硬鏈接目標」，滿足「我想知道這堆檔案是什麼」的需求。
 
@@ -117,7 +118,7 @@
 ### 4.4 硬鏈接能力驗證【決定】
 
 - 每個 Route 建立時與每次啟動時執行：在 `complete/<route-slug>` 建暫存檔 → 真的呼叫 `link()` 鏈接到目標路徑 → 比對 inode 與 device → 刪除。失敗即 Route 標記為不健康，拒絕送單。只比 `st_dev` 不夠（同一檔案系統掛兩次、btrfs 子卷、ZFS dataset、mergerfs 都會 `EXDEV`，§20.2），所以一定實際鏈接一次。
-- 也檢查：目標路徑對本系統可寫、qBittorrent 回報的 save path 在本系統看得到、**反過來 qBittorrent 讀得到本系統寫進分類路徑的探測檔**（探針 torrent 校驗到 100%，M4 票 19，§20.2）、Jellyfin 以 `Environment/ValidatePath` 確認看得到探測檔、category 為 autoTMM 模式；temp path 未啟用只警告。
+- 也檢查：目標路徑對本系統可寫、qBittorrent 回報的 save path 在本系統看得到、**反過來 qBittorrent 讀得到本系統寫進分類路徑的探測檔**（探針 torrent 校驗到 100%，M4 票 19，§20.2）、Jellyfin 以 `Environment/ValidatePath` 確認看得到探測檔、category 為 autoTMM 模式、帶自己的未完成目錄（M4 票 22）。
 - **硬鏈接失敗不退回複製**（與 Sonarr 不同）：複製會讓刪除範圍與空間估算失真，違反「避免複製檔案」的需求。
 - Docker 部署要求三個容器（qBittorrent、Jellyfin、本系統）以**相同容器路徑**掛載同一個宿主父目錄（TRaSH 的單一掛載慣例）；路徑字串可以是 `/data` 以外的任何值，套件預設 `/data`，既有服務沿用它們原本的路徑（§16.4）。第一階段不做 remote path mapping，設定精靈直接驗證「你看到的路徑 qBittorrent 與 Jellyfin 也看得到」。
 - 已知限制要寫進 README：Docker Desktop（Windows/macOS）bind mount 的硬鏈接支援與 mergerfs / 跨 dataset 情境，見 §20 的查證結果。
@@ -591,7 +592,7 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 - **目標環境【決定】**：Linux（NAS 與伺服器）與 Windows（Docker Desktop，WSL2 後端）。兩種使用者：NAS 使用者已有目錄規劃、可能已有 Jellyfin；一般電腦使用者什麼都沒有，要能「下載一份 compose、跑起來、開瀏覽器」就完成。
 - 範例 `docker-compose.yml` 含 `berth`、qBittorrent、Jellyfin、Prowlarr，四者掛同一個 `/data`；權限採 TRaSH 的「單一使用者 + UMASK 022」簡化方案（§20.2），四個容器同 `PUID/PGID`。
 - `/data` 一律用宿主目錄 bind mount（`DATA_ROOT`），Linux 與 Windows 相同：Windows Docker Desktop 的 NTFS bind mount 硬鏈接已實測可用（§20.7）。不支援 exFAT；健康檢查在建立 Route 時即驗證。
-- README 明列：硬鏈接前提（單一掛載、不可 exFAT、不可跨 btrfs 子卷 / ZFS dataset / mergerfs branch）、支援 Linux 宿主與 Windows Docker Desktop（NTFS）、qBittorrent 版本下限與必要設定（temp path、category autoTMM）、Jellyfin 版本下限 12.0，以及從 10.x 升級的注意事項（先完整備份、移除第三方插件、升級後完整掃描、不能降級，§20.9）、**使用者要自備 TMDB API key 與取得步驟**（§16.3）、TMDB 的歸屬聲明與 logo。
+- README 明列：硬鏈接前提（單一掛載、不可 exFAT、不可跨 btrfs 子卷 / ZFS dataset / mergerfs branch）、支援 Linux 宿主與 Windows Docker Desktop（NTFS）、qBittorrent 版本下限與必要設定（category autoTMM）、Jellyfin 版本下限 12.0，以及從 10.x 升級的注意事項（先完整備份、移除第三方插件、升級後完整掃描、不能降級，§20.9）、**使用者要自備 TMDB API key 與取得步驟**（§16.3）、TMDB 的歸屬聲明與 logo。
 
 ### 16.2 跨切面需求
 
@@ -616,7 +617,7 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 
 | 服務 | 預置（compose 範本） | Berth 一鍵設定（API） | 使用者仍需自己做 |
 | --- | --- | --- | --- |
-| qBittorrent | **只預置「讓 Berth 進得去」**：只放行 Berth 容器固定 IP 的免密白名單（不是整個網段，理由見 §20.7）。原因是 4.6.1 起首次啟動的隨機密碼只印在容器 log，Berth 拿不到，沒有這一步按鈕就登不進去 | 套件內：套用建議偏好（temp path、save path、autoTMM）、設定 WebUI 登入（必填；預設「沿用 Jellyfin 帳密」，見下文；不設的話 WebUI 只剩容器 log 裡每次重啟都換的臨時密碼，M4 票 07），按下前顯示差異。既有：填位址與 WebUI 帳密，一個全域偏好都不寫（§16.4）。兩種都依 Route 建立 category | 無 |
+| qBittorrent | **只預置「讓 Berth 進得去」**：只放行 Berth 容器固定 IP 的免密白名單（不是整個網段，理由見 §20.7）。原因是 4.6.1 起首次啟動的隨機密碼只印在容器 log，Berth 拿不到，沒有這一步按鈕就登不進去 | 套件內：套用建議偏好（save path、autoTMM；未完成目錄開在 Berth 的分類上，不寫全域，M4 票 22）、設定 WebUI 登入（必填；預設「沿用 Jellyfin 帳密」，見下文；不設的話 WebUI 只剩容器 log 裡每次重啟都換的臨時密碼，M4 票 07），按下前顯示差異。既有：填位址與 WebUI 帳密，一個全域偏好都不寫（§16.4）。兩種都依 Route 建立 category | 無 |
 | Jellyfin | 無 | 精靈第一頁選套件內或既有 → 那一台還沒跑過初始精靈就以擁有者填的帳密建立 Jellyfin 管理員、跑完它的初始設定；已經有管理員就用管理員登入 → Berth 自己建 API key「Berth」（帳密不存下來，M4 票 06）→ 媒體庫與路徑泊位：套件內建立使用者在精靈列的媒體庫（內容類型 + 名稱 + 資料夾，預設 Movies / TV / Anime 對應 `/data/library/{movies,tv,anime}`，可改名、增刪，M3 票 06f），既有只「加入 Berth 路徑」→ 每個媒體庫一個 Route | 無 |
 | Prowlarr | 無；Berth 唯讀掛載其設定目錄讀取 API key（套件內零輸入） | 套件內：推薦清單（Nyaa.si、dmhy、Anime Tosho、ACG.RIP、Mikan、1337x、YTS、EZTV、The Pirate Bay；AniDex 於 2026-09-25 拿掉，§20.7）與 schema 裡其他公開的 torrent 站，預設不勾、先測試通過才勾得起來再加入（M4 票 09，`indexer/test` 測還沒加入的定義，§20.7）、設定介面登入（與 qBittorrent 同一條「沿用 Jellyfin 帳密」規則，各自一組）。既有：貼 API key，用使用者已有的索引站，Berth 不替它加站 | 私有站的帳號 |
 | TMDB | 無 —— **Berth 不內建任何 provider 的 key**【決定 2026-09-09】 | 無 | **必要**：自己申請一把 API key 貼進精靈的 TMDB 泊位（§20.7） |
@@ -637,7 +638,7 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 
 允許接入既有服務；NAS 使用者是主要客群，Seerr 與 Sonarr 也都支援。問題只有一類：路徑與檔案系統邊界。
 
-- **唯一的硬規則**：Berth、qBittorrent、Jellyfin 三個容器在**同一台主機**、把同一個宿主父目錄掛在**相同的容器路徑**，且下載目錄與媒體庫目錄都在它底下（TRaSH 的單一 `/data` 掛載，§20.14）。路徑字串不必是 `/data`（`/volume1/media` 掛成 `/volume1/media` 也可以）；Berth 的 incomplete / complete 根目錄可設定，媒體庫路徑讀自 Jellyfin。**這是既有 qBittorrent 與 Jellyfin 最關鍵的條件**：在另一台 NAS 上的、或把下載與媒體庫分開掛成 `/downloads`、`/tv` 的，要先改掛載才接得上。「既有」選項旁說明這個條件；媒體庫與路徑泊位的探測檔 / 硬鏈接檢查失敗時，說出怎麼改掛載（M4 票 08）。
+- **唯一的硬規則**：Berth、qBittorrent、Jellyfin 三個容器在**同一台主機**、把同一個宿主父目錄掛在**相同的容器路徑**，且下載目錄與媒體庫目錄都在它底下（TRaSH 的單一 `/data` 掛載，§20.14）。Berth 的 incomplete / complete 根目錄固定在 `/data/torrent/{incomplete,complete}`，所以 Berth 與 qBittorrent 的共用掛載要掛在 `/data`（M4 票 22：原本寫「根目錄可設定」，程式從來沒有那個設定）；媒體庫路徑讀自 Jellyfin。**這是既有 qBittorrent 與 Jellyfin 最關鍵的條件**：在另一台 NAS 上的、或把下載與媒體庫分開掛成 `/downloads`、`/tv` 的，要先改掛載才接得上。「既有」選項旁說明這個條件；媒體庫與路徑泊位的探測檔 / 硬鏈接檢查失敗時，說出怎麼改掛載（M4 票 08）。
 - **既有服務要給的東西各不相同**（§20.14）：
   - Jellyfin：位址 + **管理員**帳密（不是管理員就拒絕，M4 票 06）；Berth 以它登入、自己建 API key。版本下限 12.0（§19 2026-09-15，2026-09-29 使用者再確認），**測連線時就擋**（M4 票 18）。擁有者成立之後只能換到**同一台**的另一個位址（ServerId，§20.15）。還沒初始化的那一台由擁有者表單建立管理員，語言與地區、遠端存取在畫面上問（預設 UI 語言、不開遠端存取）。
   - qBittorrent：位址 + WebUI 帳密。版本下限 4.4（Web API 2.8.4）。5.2 起它有 API key（`Authorization: Bearer`），之後可當第二種接法，這一輪不做。
@@ -645,7 +646,7 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
   - 三個服務的下限都寫在「既有」選項旁（M4 票 17），版本太舊時精靈與健康檢查說出目前版本與下限。
 - **容器裡的 `localhost`**：使用者填 `localhost` / `127.0.0.0/8` / `::1` 時，位址欄下就地提示（只提示、不擋：`network_mode: host` 的部署填 `localhost` 是對的；測試不過時的補法也是同一句，M4 票 17）：Berth 在容器裡，那指的是 Berth 自己；要填 `host.docker.internal`（Docker Desktop 內建；Linux 由 compose 的 `extra_hosts: ["host.docker.internal:host-gateway"]` 提供，且服務要監聽 `0.0.0.0` 而不是 `127.0.0.1`）或區網 IP（§20.14，M4 票 16、17）。
 - **既有 Jellyfin 不搬媒體庫**：Jellyfin 的項目 ID 由路徑算出，改路徑等於全部變成新項目、觀看紀錄歸零。做法是用 Jellyfin 的「一個媒體庫多個路徑」：Berth 按鈕以 `POST /Library/VirtualFolders/Paths` 為既有媒體庫**加**一個 Berth 用的路徑（§20.7），Route 指向新路徑；舊媒體原地不動，在 Berth 只是 unmanaged 檔案。送出前先寫探測檔問 Jellyfin 看不看得到：它對加不上的路徑只回 404，說不出原因；看不到就說「Jellyfin 看不到 <路徑>：它沒掛 <共用目錄>」、收回剛建的目錄。多個媒體庫逐個試、逐個回報（M4 票 19）。
-- **既有 qBittorrent 不搬舊種、不改全域偏好**：使用者多加一個掛載，Berth 用自己的 `berth-*` category 與新的 save path；舊 torrent 留在原目錄，Berth 忽略非自己分類的 torrent。全域的 save path、temp path、autoTMM 一個都不寫（M4 票 05；Sonarr / Radarr 對下載器同樣只用分類）——改了它們，使用者不經 Berth 加的 torrent 就會落進 Berth 的目錄。全域 autoTMM 關閉也無妨，Berth 送單時逐個 torrent 指定 `autoTMM=true`。temp path 未啟用只給警告，不阻擋。
+- **既有 qBittorrent 不搬舊種、不改全域偏好**：使用者多加一個掛載，Berth 用自己的 `berth-*` category 與新的 save path；舊 torrent 留在原目錄，Berth 忽略非自己分類的 torrent。全域的 save path、temp path、autoTMM 一個都不寫、也不列在精靈上（M4 票 05、22；Sonarr / Radarr 對下載器同樣只用分類）——改了它們，使用者不經 Berth 加的 torrent 就會落進 Berth 的目錄，而它們沒有一個影響 Berth。全域 autoTMM 關閉也無妨，Berth 送單時逐個 torrent 指定 `autoTMM=true`；全域未完成目錄沒開也無妨，Berth 的分類各自帶 `downloadPath`（原本的「temp path 未啟用只警告」撤掉：警告的理由「Berth 比較難分辨下載完」不成立，完成看的是 qBittorrent 回報的 progress / completion_on / state）。票 22 之前建的 Berth 分類沒有自己的未完成目錄，照舊跟著全域設定下載、不算衝突；有而且不同才照衝突規則處理、不覆寫。
 - **健康檢查會擋下的情況**：qBittorrent 回報的 save path 在 Berth 看不到；qBittorrent 讀不到 Berth 寫進分類路徑的探測檔（M4 票 19）；Route 的寫入目標在 Berth 看不到（媒體庫的其他路徑不驗：Berth 只在寫入目標底下讀寫，舊的 `/movies` 看不到不礙事，M4 票 19）；兩者在 Berth 內是不同掛載（`link()` 回 `EXDEV`）；qBittorrent 低於 4.4；Prowlarr 低於 1.3.2；Jellyfin 低於 12.0（說出目前版本，附升級注意：先完整備份、移除第三方插件、升級後完整掃描、不能降級，§20.9）；媒體庫掛 TVDB 插件（警告，M2 票 09c 起是一件 `library_uses_tvdb` Issue，§9.1）。每項附「哪個容器少了哪個掛載」的 compose 修正片段，**片段對著要改的那一台**（M4 票 19）：寫入目標看不到、Jellyfin 看不到探測檔是 jellyfin；qBittorrent 讀不到探測檔是 qbittorrent；Berth 看不到 qBittorrent 報的路徑與 `EXDEV` 才是 berth。既有服務的片段是「你那一份 compose」要加的一條，照 TRaSH 用單一共用掛載，別分開掛 `/downloads`、`/movies`。
 - **跨主機驗證**：Berth 在 Route 目標寫一個探測檔，再以 `POST /Environment/ValidatePath` 請 Jellyfin 確認看得到同一路徑（§20.7）；Jellyfin 在別台機器而路徑不一致會立刻現形。
 - **不支援**：Jellyfin 10.x（2026-09-15 起只支援 12 以上，§19）；既有 qBittorrent 或 Jellyfin 與 Berth 不在同一台主機、或沒有把同一個父目錄掛在同一個容器路徑（硬鏈接做不到）；remote path mapping（不做，§18；2026-09-29 使用者再確認）。
@@ -808,9 +809,20 @@ M1.5 拆票前的四條待決，2026-09-15 已全數照推薦拍板（上表「M
 
 **分類與路徑**
 
-- `createCategory` / `editCategory` 參數：`category`、`savePath`、`downloadPathEnabled`、`downloadPath`。per-category 未完成路徑自 API 2.8.4 / qB 4.4.0 即存在，但 WebUI 直到 **5.2.0** 才有介面管理（[Changelog](https://raw.githubusercontent.com/qbittorrent/qBittorrent/master/Changelog)）。本系統不用它（§4.2），只用全域 `temp_path` / `temp_path_enabled`。
+- `createCategory` / `editCategory` 參數：`category`、`savePath`、`downloadPathEnabled`、`downloadPath`。per-category 未完成路徑自 API 2.8.4 / qB 4.4.0 即存在，但 WebUI 直到 **5.2.0** 才有介面管理（[Changelog](https://raw.githubusercontent.com/qbittorrent/qBittorrent/master/Changelog)）。本系統用它取代全域 `temp_path`（M4 票 22，§4.1）。
+- **分類的 `downloadPath` 實測**（M4 票 22，`scripts/experiments/qbittorrent_category_download_path.py` 對 4.4.5 與 5.2.3 各跑一次，兩版結論相同；一台做種的 5.2.3 以 `addPeers` 直連、限速讓下載中看得到，torrent 照 Berth 的送單形狀加：`category` + `autoTMM=true`、不送 `savepath`）：
+
+  | 情境 | 下載中檔案在 | 完成後 |
+  | --- | --- | --- |
+  | 分類 `downloadPathEnabled=true` + `downloadPath`，全域 `temp_path_enabled=false` | 分類的 `downloadPath`（torrent 報的 `download_path` 就是它） | 搬到分類的 `savePath` |
+  | 同上，全域開著、指向另一個目錄 | 分類的 `downloadPath`：分類的贏 | 搬到 `savePath` |
+  | 分類 `downloadPathEnabled=false`，全域開著 | 直接寫在 `savePath`：分類可以明說不走全域 | — |
+  | 分類兩個欄位都不送，全域關著 | 直接寫在 `savePath` | — |
+  | 分類兩個欄位都不送，全域開著 | 全域 temp path（5.2.3 在底下多一層分類名，4.4.5 不多） | 搬到 `savePath` |
+
+  讀回 `torrents/categories` 的鍵是 **`download_path`**（不是駝峰）：設了是字串；停用兩版都是 `false`；沒設 5.2.3 是 `null`、4.4.5 **整個鍵不出現**。對已存在的分類再送 `createCategory` 兩版都是 409 `Unable to create category`。
 - `torrents/categories` 回傳鍵在 4.4.0–4.4.1 曾在 `savePath` / `save_path` 之間反覆，adapter 兩者都要接受。
-- `createCategory` 的表單鍵是 `category` 與 `savePath`；名稱空字串回 **400** `Category cannot be empty`，名稱不合法或建不起來（含同名已存在）回 **409** `Unable to create category`（查核 master 的 [torrentscontroller.cpp](https://github.com/qbittorrent/qBittorrent/blob/master/src/webui/api/torrentscontroller.cpp)，2026-09-08）。所以冪等要靠呼叫端先 `torrents/categories` 讀一次。
+- `createCategory` 的表單鍵是 `category`、`savePath`（Berth 另帶 `downloadPathEnabled`、`downloadPath`）；名稱空字串回 **400** `Category cannot be empty`，名稱不合法或建不起來（含同名已存在）回 **409** `Unable to create category`（查核 master 的 [torrentscontroller.cpp](https://github.com/qbittorrent/qBittorrent/blob/master/src/webui/api/torrentscontroller.cpp)，2026-09-08）。所以冪等要靠呼叫端先 `torrents/categories` 讀一次。
 - autoTMM 開啟時 save path 跟隨 category；`category_changed_tmm_enabled` 為真時改 category 路徑會**自動搬移所有該分類 torrent**。→ 本系統建立 category 後不再改其 savePath；使用者改 Route 目標時建立新 category，舊 Job 維持原位。
 - TRaSH 明確要求 category 模式必須 `Automatic`（autoTMM），否則下載不會進分類資料夾（[Basic-Setup](https://trash-guides.info/Downloaders/qBittorrent/Basic-Setup)）。
 

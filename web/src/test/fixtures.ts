@@ -137,14 +137,11 @@ export function qbittorrentSetup(overrides: Partial<QbittorrentSetup> = {}): Qbi
     reachable: true,
     // 錄製回應裡的乾淨實例值（brief §20.7）。
     diffs: [
-      diff('temp_path_enabled', 'false', 'true'),
-      diff('temp_path', '/downloads/incomplete', '/data/torrent/incomplete'),
       diff('save_path', '/downloads', '/data/torrent/complete'),
       diff('auto_tmm_enabled', 'false', 'true'),
       diff('category_changed_tmm_enabled', 'false', 'true'),
     ],
     steps: [],
-    temp_path_warning: false,
     web_ui_login: true,
     web_ui_username: '',
     writes_preferences: true,

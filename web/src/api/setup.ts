@@ -195,8 +195,6 @@ export type BerthPathFailure = Schemas['BerthPathFailure']
 
 /** `QbittorrentStep`：一個鍵一條纜繩，值就是 `app/setPreferences` 的鍵名。 */
 export const QBITTORRENT_STEPS = [
-  'temp_path_enabled',
-  'temp_path',
   'save_path',
   'auto_tmm_enabled',
   'category_changed_tmm_enabled',

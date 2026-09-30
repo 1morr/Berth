@@ -49,6 +49,7 @@ from berth.services.routes import (
     build_routes,
     check_routes,
     delete_route,
+    incomplete_path_of,
     read_route_status,
     reread_libraries,
     routes_ready,
@@ -185,12 +186,16 @@ class TestBundled:
         await build_routes(session, factory_for(roots, qbittorrent=qbittorrent), ())
 
         # 送給 qBittorrent 的是 `save_path_of` 算出來的那一串字（容器路徑一律 POSIX），
-        # 不是 `Path` 在這台機器上的寫法——票 09 的送單比對的是同一支函式的輸出。
-        assert [(row.name, row.save_path) for row in qbittorrent.created_categories] == [
-            ("berth-movies", save_path_of(str(roots["complete"]), "movies")),
-            ("berth-tv", save_path_of(str(roots["complete"]), "tv")),
-            ("berth-anime", save_path_of(str(roots["complete"]), "anime")),
+        # 不是 `Path` 在這台機器上的寫法——票 09 的送單比對的是同一支函式的輸出。每個分類帶自己的
+        # 未完成目錄（票 22），Berth 先把它建好。
+        complete, incomplete = str(roots["complete"]), str(roots["incomplete"])
+        assert [
+            (row.name, row.save_path, row.download_path) for row in qbittorrent.created_categories
+        ] == [
+            (f"berth-{slug}", save_path_of(complete, slug), incomplete_path_of(incomplete, slug))
+            for slug in ("movies", "tv", "anime")
         ]
+        assert all(Path(row.download_path).is_dir() for row in qbittorrent.created_categories)
 
     @pytest.mark.asyncio
     async def test_rerunning_neither_duplicates_rows_nor_categories(
@@ -484,6 +489,48 @@ class TestChecks:
             "berth-anime",
         ]
         assert next(row for row in status.routes if row.slug == "tv").health is HealthStatus.FAILED
+
+    @pytest.mark.asyncio
+    async def test_a_category_downloading_somewhere_else_is_a_conflict(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """save path 一樣、未完成目錄不同：同一條衝突規則，不覆寫（票 22）。"""
+        tv = QbittorrentCategory(
+            name="berth-tv",
+            save_path=save_path_of(str(roots["complete"]), "tv"),
+            download_path="/mnt/temp/tv",
+        )
+        qbittorrent = applied_qbittorrent(roots, categories=(tv,))
+        await arrange(session, roots)
+
+        status = await build_routes(session, factory_for(roots, qbittorrent=qbittorrent), ())
+
+        category = checks(status, "tv")[RouteCheck.CATEGORY.value]
+        assert category.status is StepStatus.FAILED
+        assert "/mnt/temp/tv" in category.error
+        # 兩邊並排；路徑以 repr 印（Windows 上的暫存路徑有反斜線）。
+        assert repr(incomplete_path_of(str(roots["incomplete"]), "tv")) in category.error
+        assert await qbittorrent.categories() == (tv, *qbittorrent.created_categories)
+
+    @pytest.mark.asyncio
+    async def test_a_category_from_before_ticket_22_is_kept_and_says_so(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """票 22 之前建的 Berth 分類沒有自己的未完成目錄：不紅、不改，那一行說出下載跟著全域
+        設定。"""
+        tv = QbittorrentCategory(
+            name="berth-tv", save_path=save_path_of(str(roots["complete"]), "tv")
+        )
+        qbittorrent = applied_qbittorrent(roots, categories=(tv,))
+        await arrange(session, roots)
+
+        status = await build_routes(session, factory_for(roots, qbittorrent=qbittorrent), ())
+
+        category = checks(status, "tv")[RouteCheck.CATEGORY.value]
+        assert category.status is StepStatus.SKIPPED
+        assert "no download path of its own" in category.detail
+        assert next(row for row in status.routes if row.slug == "tv").health is HealthStatus.OK
+        assert (await qbittorrent.categories())[0] == tv
 
     @pytest.mark.asyncio
     async def test_a_download_path_berth_cannot_see_fails_the_route(
@@ -784,13 +831,13 @@ class TestCompletion:
         seen: list[bool] = []
 
         async def peek_mid_check(
-            client: QbittorrentClient, name: str, save_path: str
+            client: QbittorrentClient, name: str, save_path: str, download_path: str
         ) -> CategoryOutcome:
             """每條 Route 的第一條纜繩：這時新建的那兩條已經 commit，另一個 session 讀得到。"""
             async with sessions() as other:
                 fresh = select(Route.enabled).where(Route.slug.in_(("tv", "anime")))
                 seen.extend((await other.scalars(fresh)).all())
-            return await ensure_category(client, name, save_path)
+            return await ensure_category(client, name, save_path, download_path)
 
         # 包的是 routes 模組 import 進來的那個名字：檢查呼叫的是它，不是 adapter 上的原件。
         monkeypatch.setattr("berth.services.routes.ensure_category", peek_mid_check)

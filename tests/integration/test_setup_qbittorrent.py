@@ -43,10 +43,9 @@ NOW = datetime(2026, 9, 8, 12, 0, tzinfo=UTC)
 #: 泊位上填的 WebUI 登入（M4 票 07）。
 SKIPPER = InterfaceLogin(username="skipper", password="harbour")
 
-#: 精靈建議的五個鍵（plan §8.1）。順序即畫面上纜繩的順序。
+#: 精靈建議的三個鍵（plan §8.1）。順序即畫面上纜繩的順序。未完成目錄不在裡面（M4 票 22）：
+#: 它開在 Berth 的分類上，不寫全域。
 RECOMMENDED_KEYS = [
-    QbittorrentStep.TEMP_PATH_ENABLED,
-    QbittorrentStep.TEMP_PATH,
     QbittorrentStep.SAVE_PATH,
     QbittorrentStep.AUTO_TMM_ENABLED,
     QbittorrentStep.CATEGORY_CHANGED_TMM_ENABLED,
@@ -86,7 +85,7 @@ async def arrange(
 
 
 @pytest.mark.asyncio
-async def test_diff_lists_the_five_recommended_keys(session: AsyncSession) -> None:
+async def test_diff_lists_the_three_recommended_keys(session: AsyncSession) -> None:
     await arrange(session)
     factory = FakeClientFactory(qbittorrent=FakeQbittorrentClient())
 
@@ -94,21 +93,9 @@ async def test_diff_lists_the_five_recommended_keys(session: AsyncSession) -> No
 
     paths = await read_settings(session, PathSettings)
     assert [row.key for row in status.diffs] == [step.value for step in RECOMMENDED_KEYS]
-    assert [row.recommended for row in status.diffs] == [
-        "true",
-        paths.incomplete_root,
-        paths.complete_root,
-        "true",
-        "true",
-    ]
-    # 乾淨實例的現值（錄製回應，brief §20.7）：五個鍵全部與建議值不同。
-    assert [row.current for row in status.diffs] == [
-        "false",
-        "/downloads/incomplete",
-        "/downloads",
-        "false",
-        "false",
-    ]
+    assert [row.recommended for row in status.diffs] == [paths.complete_root, "true", "true"]
+    # 乾淨實例的現值（錄製回應，brief §20.7）：三個鍵全部與建議值不同。
+    assert [row.current for row in status.diffs] == ["/downloads", "false", "false"]
     assert all(row.differs for row in status.diffs)
     assert status.supported is True
 
@@ -124,15 +111,9 @@ async def test_apply_writes_only_the_keys_that_differ(session: AsyncSession) -> 
 
     status = await apply_qbittorrent(session, factory)
 
-    assert client.writes == [
-        {
-            "temp_path_enabled": True,
-            "temp_path": paths.incomplete_root,
-            "category_changed_tmm_enabled": True,
-        }
-    ]
+    assert client.writes == [{"category_changed_tmm_enabled": True}]
     written = {row.step: row.status for row in status.steps}
-    assert written[QbittorrentStep.TEMP_PATH.value] is StepStatus.OK
+    assert written[QbittorrentStep.CATEGORY_CHANGED_TMM_ENABLED.value] is StepStatus.OK
     # 已經是建議值的鍵不重寫，但仍然是一條繫上的纜繩。
     assert written[QbittorrentStep.SAVE_PATH.value] is StepStatus.SKIPPED
     assert written[QbittorrentStep.AUTO_TMM_ENABLED.value] is StepStatus.SKIPPED
@@ -185,7 +166,7 @@ async def test_a_changed_login_replaces_the_old_one(session: AsyncSession) -> No
     assert status.web_ui_username == "deckhand"
     setup = await read_settings(session, SetupSettings)
     assert password_matches("changed", setup.qbittorrent.web_ui_password_hash)
-    # 密碼那一條換成這一次的結果，五個鍵的纜繩留著。
+    # 密碼那一條換成這一次的結果，偏好的纜繩留著。
     by_step = {row.step: row.status for row in status.steps}
     assert by_step[QbittorrentStep.PASSWORD.value] is StepStatus.OK
     assert by_step[QbittorrentStep.SAVE_PATH.value] is StepStatus.OK
@@ -257,16 +238,16 @@ async def test_existing_service_never_gets_a_password_from_berth(session: AsyncS
 
 
 @pytest.mark.asyncio
-async def test_existing_service_with_temp_path_off_is_a_warning_not_a_blocker(
-    session: AsyncSession,
-) -> None:
+async def test_an_existing_service_lists_no_global_preferences(session: AsyncSession) -> None:
+    """既有的那一台不列偏好表（M4 票 22）：它沒開未完成目錄也不警告——Berth 的分類各自帶
+    `downloadPath`，它的全域設定沒有一個影響 Berth。"""
     await arrange(session, origin=ServiceOrigin.EXISTING)
-    client = FakeQbittorrentClient(base_url="http://nas:8080")
+    client = FakeQbittorrentClient(base_url="http://nas:8080")  # 全域 temp_path_enabled 是 false
     factory = FakeClientFactory(qbittorrent=client)
 
     status = await read_qbittorrent_diff(session, factory)
 
-    assert status.temp_path_warning is True
+    assert status.diffs == ()
     assert status.supported is True
     assert status.blocked is False
 
@@ -300,15 +281,8 @@ async def test_pressing_apply_twice_changes_nothing_the_second_time(
     first = await apply_qbittorrent(session, factory, login=SKIPPER)
     second = await apply_qbittorrent(session, factory, login=SKIPPER)
 
-    assert len(client.writes) == 2  # 第一輪的五個鍵 + 密碼；第二輪一個都不寫。
-    assert [row.status for row in second.steps] == [
-        StepStatus.SKIPPED,
-        StepStatus.SKIPPED,
-        StepStatus.SKIPPED,
-        StepStatus.SKIPPED,
-        StepStatus.SKIPPED,
-        StepStatus.SKIPPED,
-    ]
+    assert len(client.writes) == 2  # 第一輪的三個鍵 + 密碼；第二輪一個都不寫。
+    assert [row.status for row in second.steps] == [StepStatus.SKIPPED] * 4
     assert [row.step for row in second.steps] == [row.step for row in first.steps]
 
 
@@ -348,7 +322,7 @@ async def test_a_service_that_rejects_the_credentials_fails_the_step_not_the_req
 async def test_a_trailing_slash_is_not_a_difference(session: AsyncSession) -> None:
     """4.4.5 把設進去的路徑讀回來時**帶尾斜線**（brief §20.7）。
 
-    照字面比對的話那兩個鍵在 4.4 上永遠「不同」，每次重按都重寫一次同樣的值——
+    照字面比對的話 `save_path` 在 4.4 上永遠「不同」，每次重按都重寫一次同樣的值——
     也就破壞了「重按結果一致」。
     """
     await arrange(session)
@@ -356,8 +330,6 @@ async def test_a_trailing_slash_is_not_a_difference(session: AsyncSession) -> No
     client = FakeQbittorrentClient(
         version=QbittorrentVersion(app="v4.4.5", webapi="2.8.5"),
         preferences={
-            "temp_path_enabled": True,
-            "temp_path": f"{paths.incomplete_root}/",
             "save_path": f"{paths.complete_root}/",
             "auto_tmm_enabled": True,
             "category_changed_tmm_enabled": True,
@@ -368,18 +340,18 @@ async def test_a_trailing_slash_is_not_a_difference(session: AsyncSession) -> No
     status = await apply_qbittorrent(session, factory)
 
     assert client.writes == []
-    assert [row.differs for row in status.diffs] == [False] * 5
+    assert [row.differs for row in status.diffs] == [False] * 3
 
 
 @pytest.mark.asyncio
-async def test_a_password_that_will_not_write_keeps_the_five_keys(
+async def test_a_password_that_will_not_write_keeps_the_preference_keys(
     session: AsyncSession,
 ) -> None:
-    """密碼是另一次呼叫。它失敗時前面五個鍵已經寫進去了，畫面必須說得出來。"""
+    """密碼是另一次呼叫。它失敗時前面幾個鍵已經寫進去了，畫面必須說得出來。"""
     await arrange(session)
     client = FakeQbittorrentClient()
     factory = FakeClientFactory(qbittorrent=client)
-    #: 前五個鍵寫得進去，密碼那一次才失敗。
+    #: 前面幾個鍵寫得進去，密碼那一次才失敗。
     original = client.set_preferences
 
     async def fail_on_password(values: Mapping[str, Any]) -> None:

@@ -89,11 +89,17 @@ def test_a_bundled_qbittorrent_needs_its_login_but_an_existing_one_does_not() ->
     bundled.qbittorrent.steps = ok(
         *(step.value for step in QbittorrentStep if step is not QbittorrentStep.PASSWORD)
     )
-    existing = finished(qbittorrent=ServiceOrigin.EXISTING)
-    existing.qbittorrent.steps = list(bundled.qbittorrent.steps)
-
     assert _current_step(bundled, routes=True) == STEP_QBITTORRENT
+
+    # 既有的那一台沒有偏好的纜繩（M4 票 22）：按「確認」只記密碼那一條 `skipped`，它就是做完了。
+    existing = finished(qbittorrent=ServiceOrigin.EXISTING)
+    existing.qbittorrent.steps = [
+        SetupStep(key=QbittorrentStep.PASSWORD.value, status=StepStatus.SKIPPED)
+    ]
     assert _current_step(existing, routes=True) == STEP_COMPLETE
+    # 還沒按就還沒做完。
+    existing.qbittorrent.steps = []
+    assert _current_step(existing, routes=True) == STEP_QBITTORRENT
 
 
 @pytest.mark.parametrize("routes", [False, True])

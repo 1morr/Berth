@@ -113,7 +113,6 @@ class QbittorrentOut(BaseModel):
     reachable: bool
     diffs: list[PreferenceDiffOut]
     steps: list[StepOut]
-    temp_path_warning: bool
     #: 泊位上有 WebUI 登入那一格：只有套件內的那一台（M4 票 07）。
     web_ui_login: bool
     #: 套件內那一台的 WebUI 帳號（Berth 設下的，或它自己就設過的）；還沒設過是空字串。

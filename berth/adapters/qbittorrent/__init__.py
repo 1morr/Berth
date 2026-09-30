@@ -151,7 +151,7 @@ class TorrentFile:
         return self.priority != PRIORITY_SKIP
 
 
-#: 搬檔與校驗中的 state 前綴。從 temp path 搬到 save path 期間是 `moving`，此時檔案不在
+#: 搬檔與校驗中的 state 前綴。從未完成目錄搬到 save path 期間是 `moving`，此時檔案不在
 #: save path 上，判成完成會讓 importer 對著半個檔案建硬鏈接（brief §20.2）。
 SETTLING_STATES = ("moving", "checking")
 
@@ -291,17 +291,22 @@ class QbittorrentCategory:
 
     name: str
     save_path: str
+    #: 分類自己的未完成目錄（`downloadPath`，Web API 2.8.4 起）。沒設與停用都是空字串：兩者都是
+    #: 「跟著那一台的全域設定」（M4 票 22 實測，brief §20.2）。
+    download_path: str = ""
 
 
 @dataclass(frozen=True, slots=True)
 class CategoryOutcome:
-    """`ensure_category` 的結果。`save_path` 一律是**那台 qBittorrent 現在的值**。"""
+    """`ensure_category` 的結果。兩個路徑一律是**那台 qBittorrent 現在的值**。"""
 
     name: str
     save_path: str
+    #: 空字串是那個分類沒有自己的未完成目錄（票 22 之前建的 Berth 分類）。
+    download_path: str
     #: 這一次建的。已經在那裡的話是 False，重跑精靈時大部分是這樣。
     created: bool
-    #: 同名的 category 已存在，但指向別的 save path。Berth 不覆寫它。
+    #: 同名的 category 已存在，但指向別的 save path 或別的未完成目錄。Berth 不覆寫它。
     conflict: bool
 
 
@@ -368,9 +373,9 @@ class QbittorrentClient(Protocol):
         """`torrents/info?hashes=…` 的那一列；沒有就是 `None`。不動 `sync` 的 rid。"""
         ...
 
-    async def create_category(self, name: str, save_path: str) -> None:
-        """`torrents/createCategory`。同名的已經存在時回 409（實測原始碼的
-        `Unable to create category`），所以呼叫端要先讀再建——`ensure_category` 做這件事。
+    async def create_category(self, name: str, save_path: str, *, download_path: str) -> None:
+        """`torrents/createCategory`，帶分類自己的未完成目錄（M4 票 22）。同名的已經存在時回 409
+        （兩版實測 `Unable to create category`），所以呼叫端要先讀再建——`ensure_category` 做這件事。
         """
         ...
 
@@ -389,24 +394,53 @@ class QbittorrentClient(Protocol):
     async def aclose(self) -> None: ...
 
 
-async def ensure_category(client: QbittorrentClient, name: str, save_path: str) -> CategoryOutcome:
-    """一個 Route 的 category：不存在才建，存在但 save path 不同就回報衝突（plan §8.1）。
+async def ensure_category(
+    client: QbittorrentClient, name: str, save_path: str, download_path: str
+) -> CategoryOutcome:
+    """一個 Route 的 category：不存在才建，存在但路徑不同就回報衝突（plan §8.1）。
+
+    建的時候帶分類自己的未完成目錄（M4 票 22）：下載中的檔不落在 complete 那一側，而且不必動
+    使用者的全域 `temp_path`——兩版實測全域關著也照樣生效，全域開著時分類的贏（brief §20.2）。
 
     **衝突不覆寫**：autoTMM 開著時改 category 的 savePath 會自動搬走該分類的所有 torrent
-    （brief §20.2），那是使用者自己的資料。畫面把兩個路徑並排，讓他自己決定。
+    （brief §20.2），改 downloadPath 同理搬走下載中的那幾筆，那是使用者自己的資料。畫面把兩個
+    路徑並排，讓他自己決定。**沒有自己未完成目錄的分類不算衝突**：票 22 之前建的 Berth 分類都是
+    這樣，它照舊跟著全域設定下載；判成衝突會讓升級後每一條 Route 都紅，而 4.4 的 WebUI 連改它的
+    地方都沒有（5.2.0 才有）。
 
     比對前正規化尾斜線：4.4 把設進去的 `/data/x` 讀回來寫成 `/data/x/`（brief §20.7），
     照字面比會讓每次重跑都判成衝突。
     """
     existing = next((row for row in await client.categories() if row.name == name), None)
     if existing is None:
-        await client.create_category(name, save_path)
-        return CategoryOutcome(name=name, save_path=save_path, created=True, conflict=False)
+        await client.create_category(name, save_path, download_path=download_path)
+        return CategoryOutcome(
+            name=name,
+            save_path=save_path,
+            download_path=download_path,
+            created=True,
+            conflict=False,
+        )
+    moved = bool(existing.download_path) and (
+        _normalise(existing.download_path) != _normalise(download_path)
+    )
     return CategoryOutcome(
         name=name,
         save_path=existing.save_path,
+        download_path=existing.download_path,
         created=False,
-        conflict=_normalise(existing.save_path) != _normalise(save_path),
+        conflict=_normalise(existing.save_path) != _normalise(save_path) or moved,
+    )
+
+
+def conflict_detail(outcome: CategoryOutcome, save_path: str, download_path: str) -> str:
+    """衝突那一句（英文原文，UI 照貼）：兩邊的路徑並排。Route 檢查與送單說同一句。"""
+    current = f"saves to {outcome.save_path!r}"
+    if outcome.download_path:
+        current += f" and downloads in {outcome.download_path!r}"
+    return (
+        f"category {outcome.name!r} already {current}; Berth wants {save_path!r} "
+        f"and {download_path!r} and will not move an existing category"
     )
 
 
