@@ -25,6 +25,7 @@ import { TechnicalDetails } from '../components/TechnicalDetails'
 import { escapeOnly } from '../components/useInPlaceConfirm'
 import { BAN_DEFAULTS, BAN_WARNING_FROM, SERVICE_LABEL, detailLabel } from '../components/services'
 import { SIGNAL_FILL } from '../components/signal'
+import { addressError } from './address'
 import type { ChoiceDraft } from './choiceDraft'
 import { pointsAtBerth } from './loopback'
 import {
@@ -33,6 +34,7 @@ import {
   STATE_LABEL,
   VERSION_FLOOR,
   connectFields,
+  schemeFix,
   composeProfiles,
   signalOf,
   testEndpoint,
@@ -353,7 +355,8 @@ export function ServiceChoice({
       )}
 
       {requestError !== null && requestError !== undefined && (
-        <RequestFailed error={requestError} />
+        // 還沒有擁有者時被要求登入，是擁有者在別處搶先成立了（M4 票 25）：頁 1 選服務、測連線也會撞上。
+        <RequestFailed error={requestError} ownerPending={!status.owner} />
       )}
 
       {/* 自己帶表單的那一種（Prowlarr 頁的既有）在表單下面說結果，這一條就不重複。表單改了一格還沒測，
@@ -463,7 +466,7 @@ function ExistingForm({
   function submit(event: FormEvent) {
     event.preventDefault()
     setChecked(true)
-    if (!baseUrl.trim()) return
+    if (addressError(t, baseUrl)) return
     onSubmit({
       origin: 'existing',
       base_url: baseUrl.trim(),
@@ -491,7 +494,7 @@ function ExistingForm({
           setBaseUrl(event.target.value)
           onEdit()
         }}
-        error={checked && !baseUrl.trim() ? t('connect.error.blank') : undefined}
+        error={checked ? addressError(t, baseUrl) : undefined}
       />
       {fields.includes('apiKey') && (
         <PasswordField
@@ -708,11 +711,15 @@ function Fix({
   let commands: string[] = []
   // 「至少要 X，這一台是 Y」（M4 票 18）：與「既有」旁的下限同一組數字。
   const outdated = { floor: VERSION_FLOOR[kind], version: service.detail }
+  const scheme = schemeFix(reason)
   if (kind === 'jellyfin' && reason === 'auth_required') {
     // 同一台、Berth 的 key 被撤了：套件內或既有都一樣，擁有者重新登入換一把（M4 票 18）。
     lede = t('connection.fix.jellyfinKey')
   } else if (reason === 'other_server') {
     lede = t('connection.fix.otherServer', { name: service.detail })
+  } else if (scheme) {
+    // 位址的協定寫錯（M4 票 25）：原本說成連不上、叫人查 port。
+    lede = t(scheme)
   } else if (bundled && reason === 'not_deployed') {
     // 主機名解不到＝它不在 compose 裡：說出怎麼加回來（plan §9.3）。
     lede = t('connection.fix.notDeployed', { kind })

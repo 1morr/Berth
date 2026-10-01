@@ -269,8 +269,8 @@ async def test_bundled_prowlarr_without_a_readable_key_asks_for_one(
         ConnectionState.FAILED,
         ConnectionReason.API_KEY_MISSING,
     )
-    # 沒有 key 就不去敲它。
-    assert factory.api_keys == []
+    # 沒有 key 只敲匿名的 `/ping`：先確定它在，才說缺的是 key（M4 票 25）。
+    assert factory.api_keys == [""]
 
     # 貼了 key 仍是套件內（plan §9.2）。
     status = await choose(
@@ -284,6 +284,29 @@ async def test_bundled_prowlarr_without_a_readable_key_asks_for_one(
     row = view(status, ServiceKind.PROWLARR)
     assert (row.origin, row.state) == (ServiceOrigin.BUNDLED, ConnectionState.OK)
     assert (await read_settings(session, IndexerSettings)).api_key == "pasted-key"
+
+
+@pytest.mark.asyncio
+async def test_a_bundled_prowlarr_left_out_of_compose_is_not_a_missing_key(
+    session: AsyncSession,
+) -> None:
+    """只有 Berth 時選套件內 Prowlarr：沒有那個容器，所以也沒有掛載的 key。
+
+    原本先查 key、說「讀不到 API key」，貼了 key 才說主機名解不到（實測 E9-07～09，M4 票 25）。
+    先連線，照 Jellyfin、qBittorrent 說。
+    """
+    await own(session)
+    factory = FakeClientFactory(
+        prowlarr=FakeProwlarrClient(ping_error=ServiceNotDeployedError("no such host"))
+    )
+    unmounted = BundledServices(targets=COMPOSE, prowlarr_api_key="")
+
+    status = await choose(
+        session, factory, ServiceKind.PROWLARR, ServiceOrigin.BUNDLED, bundled=unmounted
+    )
+
+    row = view(status, ServiceKind.PROWLARR)
+    assert (row.state, row.reason) == (ConnectionState.FAILED, ConnectionReason.NOT_DEPLOYED)
 
 
 @pytest.mark.asyncio

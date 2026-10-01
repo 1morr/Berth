@@ -18,4 +18,20 @@ describe('requestProblem', () => {
     expect(requestProblem(new ApiError(500, 'POST /setup/routes failed with 500'))).toBe('server')
     expect(requestProblem(new ApiError(502, 'POST /setup/owner failed with 502'))).toBe('server')
   })
+
+  // M4 票 25（實測 E10-05、E12-11）：門禁的 401 / 403 原本落到「後端出錯了」或「後端可能沒在跑」。
+  it('403：擁有者成立之後是不是管理員；之前是門禁說「先做完頁 1」，畫面走在後端前面', () => {
+    const refused = new ApiError(403, 'GET /setup/routes failed with 403')
+
+    expect(requestProblem(refused)).toBe('notAdministrator')
+    expect(requestProblem(refused, { ownerPending: true })).toBe('conflict')
+  })
+
+  it('401：這一頁讀到的精靈還沒有擁有者，就是擁有者在別處成立了；否則是登入失效', () => {
+    const refused = new ApiError(401, 'POST /setup/owner failed with 401')
+
+    expect(requestProblem(refused, { ownerPending: true })).toBe('ownerElsewhere')
+    expect(requestProblem(refused)).toBe('signedOut')
+    expect(requestProblem(refused, { ownerPending: false })).toBe('signedOut')
+  })
 })

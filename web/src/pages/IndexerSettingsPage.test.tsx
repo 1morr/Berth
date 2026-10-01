@@ -298,6 +298,15 @@ describe('既有 Prowlarr 測不過時的補法（M4 票 17）', () => {
       'API key 不對：在 Prowlarr 的「設定 → 一般」複製',
     ],
     [
+      'https 打到講 http 的 port：說改成 http://，不叫人查 port（M4 票 25）',
+      {
+        base_url: 'https://192.168.1.10:9696',
+        reason: 'scheme_mismatch',
+        steps: [step('prowlarr', 'failed', '', 'GET /api/v1/system/status: WRONG_VERSION_NUMBER')],
+      },
+      '這個 port 講的是 http，不是 https',
+    ],
+    [
       '其他：一般的那一句',
       { base_url: 'http://192.168.1.10:9696' },
       '確認位址、port 與 API key 都對',

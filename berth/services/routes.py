@@ -19,6 +19,7 @@
 from __future__ import annotations
 
 import errno
+import os
 from collections import Counter
 from collections.abc import AsyncIterator, Awaitable, Callable, Mapping, Sequence
 from contextlib import asynccontextmanager
@@ -701,6 +702,7 @@ async def _run_checks(
     qbittorrent_settings = await read_settings(session, QbittorrentSettings)
     jellyfin_settings = await read_settings(session, JellyfinSettings)
     setup = await read_settings(session, SetupSettings)
+    paths = await read_settings(session, PathSettings)
     qbittorrent_origin, qbittorrent_url = qbittorrent_target(setup, qbittorrent_settings)
     qbittorrent = factory.qbittorrent(qbittorrent_url)
     jellyfin = factory.jellyfin(jellyfin_settings.base_url, token=jellyfin_settings.api_key)
@@ -716,6 +718,7 @@ async def _run_checks(
                 jellyfin,
                 carried=carried,
                 signed_out=signed_out,
+                shared_root=_shared_root_of(paths),
             )
             passed = all(row.status is not StepStatus.FAILED for row in health.checks)
             health.checked_at = moment
@@ -896,14 +899,17 @@ async def _check(
     *,
     carried: SetupStep | None,
     signed_out: ServiceError | None,
+    shared_root: Path,
 ) -> RouteHealth:
     """跑完一個 Route 的檢查序列。第一條斷掉之後的檢查一律 `pending`。
 
     `carried` 不是 `None` 時，`download_visible` 不問 qBittorrent、用它（`check_routes`）。
     `signed_out` 是登入 qBittorrent 那一次的失敗（`try_sign_in`）：它就是第一條的紅燈與原因——
     不然帳密錯要到建分類時才以一個 403 爆出，代碼與原文都說不出是登入（M4 票 21）。
+    `shared_root` 是 Berth 自己的共用掛載（`shared_root_of`）：看不到的路徑在它底下是目錄不見了，
+    不在它底下是沒掛（M4 票 25）。
     """
-    checker = _Checker(plan_row, qbittorrent, qbittorrent_origin, jellyfin, signed_out)
+    checker = _Checker(plan_row, qbittorrent, qbittorrent_origin, jellyfin, signed_out, shared_root)
     checks: list[SetupStep] = []
     stopped = False
     for check in RouteCheck:
@@ -930,9 +936,11 @@ class _Checker:
         qbittorrent_origin: ServiceOrigin | None,
         jellyfin: JellyfinClient,
         signed_out: ServiceError | None,
+        shared_root: Path,
     ) -> None:
         self._plan = plan_row
         self._signed_out = signed_out
+        self._shared_root = shared_root
         self._qbittorrent = qbittorrent
         self._qbittorrent_origin = qbittorrent_origin
         self._jellyfin = jellyfin
@@ -993,7 +1001,7 @@ class _Checker:
         """
         category_path = self._reported_save_path or str(self._save_path)
         if not writes_preferences(self._qbittorrent_origin):
-            _visible(category_path)
+            _visible(category_path, self._shared_root)
             return StepStatus.OK, category_path
         preferences = await self._qbittorrent.preferences()
         global_path = str(preferences.get("save_path", "") or "")
@@ -1001,8 +1009,8 @@ class _Checker:
             raise StepFailedError(
                 StepFailure.SAVE_PATH_MISSING, "qBittorrent did not report a global save_path"
             )
-        _visible(global_path)
-        _visible(category_path)
+        _visible(global_path, self._shared_root)
+        _visible(category_path, self._shared_root)
         return StepStatus.OK, f"{global_path} · {category_path}"
 
     async def _download_visible(self) -> tuple[StepStatus, str]:
@@ -1050,7 +1058,7 @@ class _Checker:
                 library=library.name,
                 path=target,
             )
-        _visible(target)
+        _visible(target, self._shared_root)
         return StepStatus.OK, target
 
     async def _probe_visible(self) -> tuple[StepStatus, str]:
@@ -1113,21 +1121,38 @@ def _normalise_path(path: str) -> str:
     return path.rstrip("/") or "/"
 
 
-def _visible(path: str) -> None:
+def _visible(path: str, shared_root: Path) -> None:
     """這條路徑在 Berth 這個容器裡看得到嗎。
 
     訊息帶的是**服務自己報的那個字串**：它就是「哪個容器少了哪個掛載」的答案，重寫成
     正規化過的樣子會讓使用者對不上他在 qBittorrent 或 Jellyfin 畫面上看到的值。各平台的
     errno 文字帶不帶檔名也不一致（Windows 的 `WinError 3` 就不帶），所以自己補。
+
+    **目錄被刪與少了掛載分開**（M4 票 25）：Berth 自己掛著共用根目錄，在它底下不存在的是目錄
+    不見了；不在它底下的（既有 Jellyfin 的 `/media/tv`）是沒掛進 Berth。不看「上面幾層在不在」：
+    image 本來就有 `/media`、`/mnt` 這種空目錄。
     """
     try:
         stat(Path(path))
     except OSError as exc:
+        missing = isinstance(exc, FileNotFoundError) and _under_shared_root(path, shared_root)
         raise StepFailedError(
-            StepFailure.PATH_NOT_VISIBLE,
+            StepFailure.DIRECTORY_MISSING if missing else StepFailure.PATH_NOT_VISIBLE,
             f"{path} is not visible from the Berth container ({message(exc)})",
             path=path,
         ) from exc
+
+
+def _under_shared_root(path: str, shared_root: Path) -> bool:
+    """下載與媒體庫沒有共同父目錄（共同的是 `/`）時，沒有一個路徑說得上是「在 Berth 的
+    掛載底下」。"""
+    return shared_root != shared_root.parent and is_within(Path(path), shared_root)
+
+
+def _shared_root_of(paths: PathSettings) -> Path:
+    """Berth 自己的共用掛載：complete 與媒體庫兩個根目錄的共同父目錄（brief §16.4，前端的
+    `commonRoot` 是同一條）。"""
+    return Path(os.path.commonpath([paths.complete_root, paths.library_root]))
 
 
 #: 探針沒看到時的代碼與原文。畫面的補法照 `RouteCheck` 挑，原文要說清楚的是「哪一台、哪條路徑」。

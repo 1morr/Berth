@@ -20,6 +20,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from berth.adapters.http import (
     AuthFailedError,
     ProtocolMismatchError,
+    SchemeMismatchError,
+    SchemeMissingError,
     ServiceBusyError,
     ServiceNotDeployedError,
     ServiceUnavailableError,
@@ -494,13 +496,17 @@ async def _test_connection(
             await qbittorrent.aclose()
 
     indexer = await read_settings(session, IndexerSettings)
-    if not indexer.api_key:
-        # 唯讀掛載與環境變數都沒有，使用者也還沒貼：就地給貼 key 的欄位（plan §9.2）。
-        return _Outcome(reason=ConnectionReason.API_KEY_MISSING)
     prowlarr = factory.prowlarr(indexer.base_url, indexer.api_key)
 
     async def prowlarr_test() -> _Outcome:
-        # 不問 `/ping`：1.3.2 之前沒有它，版本就說不出來了（`indexer.probe_indexer`，M4 票 20）。
+        if not indexer.api_key:
+            # 唯讀掛載與環境變數都沒有，使用者也還沒貼：就地給貼 key 的欄位（plan §9.2）。
+            # **先問它在不在**（匿名的 `/ping`，M4 票 25）：只有 Berth 時根本沒有那個容器，該說的
+            # 是主機名解不到，不是 key——貼了 key 才說出真正原因等於白貼一次。
+            await prowlarr.ping()
+            return _Outcome(reason=ConnectionReason.API_KEY_MISSING)
+        # 有 key 時不問 `/ping`：1.3.2 之前沒有它，版本就說不出來了（`indexer.probe_indexer`，
+        # M4 票 20）。
         status = await prowlarr.status()
         if not status.supported:
             # 等不會好，所以不是 `transient`：套件內的那一台也當場紅（M4 票 17）。
@@ -622,6 +628,11 @@ async def _classified(test: Callable[[], Awaitable[_Outcome]]) -> _Outcome:
         return _Outcome(
             reason=ConnectionReason.PROTOCOL_MISMATCH, transient=True, error=message(exc)
         )
+    except SchemeMismatchError as exc:
+        # 等不會好：位址本身寫錯了（M4 票 25）。
+        return _Outcome(reason=ConnectionReason.SCHEME_MISMATCH, error=message(exc))
+    except SchemeMissingError as exc:
+        return _Outcome(reason=ConnectionReason.SCHEME_MISSING, error=message(exc))
 
 
 def _settle(
@@ -702,6 +713,8 @@ _REASON_FAILURE = {
     ConnectionReason.UNREACHABLE: StepFailure.UNREACHABLE,
     ConnectionReason.STARTING: StepFailure.STARTING,
     ConnectionReason.PROTOCOL_MISMATCH: StepFailure.PROTOCOL_MISMATCH,
+    ConnectionReason.SCHEME_MISMATCH: StepFailure.SCHEME_MISMATCH,
+    ConnectionReason.SCHEME_MISSING: StepFailure.SCHEME_MISSING,
     ConnectionReason.IP_BANNED: StepFailure.IP_BANNED,
 }
 
@@ -727,15 +740,20 @@ def _current_step(setup: SetupSettings, *, berthed: bool) -> int:
 
 
 def _qbittorrent_secured(setup: SetupSettings) -> bool:
-    """頁 2 做完了沒：選過、按過；套件內的那一台還要建議鍵都有結論、有 WebUI 登入。
+    """頁 2 做完了沒：選過、最後一次測試連得上、按過；套件內的那一台還要建議鍵都有結論、
+    有 WebUI 登入。
 
     登入必填（M4 票 07 shape）：沒設過的那一台密碼那一條是 `pending`，精靈停在這裡。
     既有的那一台沒有偏好的纜繩（M4 票 22），按下「確認」只記密碼那一條 `skipped`——它就是
     「按過了」的記號。
+
+    **連線測試要是綠的**（M4 票 25）：套用過之後 qBittorrent 停了，重新測試紅了，這一頁就還沒做完
+    ——原本連線卡紅、前進鍵照樣在。它回來、重新測試綠了，套用過的纜繩照舊算數。
     """
-    origin = setup.origin_of(ServiceKind.QBITTORRENT)
-    if origin is None:
+    choice = setup.choices.get(ServiceKind.QBITTORRENT)
+    if choice is None or choice.test is None or choice.test.state is not ConnectionState.OK:
         return False
+    origin = choice.origin
     done = {
         row.key
         for row in setup.qbittorrent.steps

@@ -37,7 +37,9 @@ const zhHant = {
     },
     step: '第 {{current}} 個，共 {{total}} 個泊位',
     resumed: '進度已保留，關掉瀏覽器再回來會回到這一步。',
-    statusFailed: '讀不到精靈的狀態。Berth 後端可能沒在跑——確認容器狀態後再試一次。',
+    statusFailed: '讀不到精靈的狀態。',
+    notAdministrator:
+      '精靈只有 Jellyfin 管理員能繼續：{{name}} 登得進 Jellyfin，但不是這台的管理員。登出，改用管理員登入。',
     nav: {
       label: '泊位導覽',
       previous: '上一個泊位',
@@ -239,7 +241,7 @@ const zhHant = {
     pasteKey: '用這把 key 再測一次',
     fix: {
       notDeployed:
-        '這個主機名解不到：{{kind}} 不在這套 compose 裡。把 {{kind}} 加回 .env 的 COMPOSE_PROFILES，再 docker compose up -d；或改選「既有」接你自己的那一台。',
+        '這個主機名解不到：{{kind}} 的容器沒在跑（停掉的容器不在 compose 的網路上），或它不在這套 compose 裡。停了就 docker compose up -d 把它起回來；不在的話把 {{kind}} 加回 .env 的 COMPOSE_PROFILES 再 up；或改選「既有」接你自己的那一台。起來之後按「重新測試」。',
       somethingElse:
         '等到上限了，{{kind}} 這個主機名上回應的還是別的東西。確認 compose 裡那個服務名對應的是它，或改選「既有」。',
       apiKeyMissing:
@@ -257,6 +259,10 @@ const zhHant = {
       banned:
         'qBittorrent 預設連錯 {{limit}} 次就封鎖這個 IP {{minutes}} 分鐘，被封的時候連對的帳密也會被拒。等 {{minutes}} 分鐘，或重啟 qBittorrent（封鎖只記在它的記憶體裡）；先把帳密改對，解封之後只測一次。',
       address: '連不到這個位址。確認 port 沒填錯、服務在跑，而且 Berth 的容器連得到那台主機。',
+      schemeMismatch:
+        '這個 port 講的是 http，不是 https：把位址開頭的 https:// 改成 http://，再測一次。',
+      schemeMissing:
+        '位址要以 http:// 或 https:// 開頭，例如 http://192.168.1.10:8080。Berth 不替你猜是哪一種。',
       outdated: '至少要 {{floor}}，這一台是 {{version}}；等也不會好。升級之後再測一次。',
       outdatedBundled:
         '至少要 {{floor}}，套件內那一台是 {{version}}：拉新的 image 再起一次，然後重新測試。',
@@ -277,6 +283,8 @@ const zhHant = {
     unreachable: '主機名解得到但連不上',
     starting: '連得上，但它說自己還在啟動',
     protocol_mismatch: '連得上，但回的東西不是這個服務',
+    scheme_mismatch: '連得上，但這個 port 講的是 http，不是 https',
+    scheme_missing: '位址沒寫 http:// 或 https://',
     version_unsupported: '連得上，但版本比 Berth 支援的下限舊',
     other_server: '回答的是另一台 Jellyfin，不是擁有者所在的那一台',
   },
@@ -297,14 +305,21 @@ const zhHant = {
     invalid: 'Berth 不收這一次送出的內容，多半是這個畫面過時了。重新整理頁面再試一次。',
     conflict: '這一次與 Berth 現在的狀態衝突（可能另一個分頁剛改過）。重新整理頁面再試一次。',
     server: 'Berth 的後端出錯了。再試一次；還是不行的話看 berth 容器的 log。',
+    signedOut: '登入已失效：重新登入 Berth，再試一次。',
+    ownerElsewhere:
+      '擁有者已經在別處成立了：另一個瀏覽器或分頁先完成了這一步。用那個 Jellyfin 管理員登入，從目前的進度繼續。',
+    notAdministrator: '只有 Jellyfin 管理員做得了這件事：你登入的帳號不是這台 Jellyfin 的管理員。',
+    signIn: '前往登入',
   },
   failure: {
-    not_deployed: '{{service}} 的主機名解不到：它不在這套 compose 裡，或位址打錯了。',
+    not_deployed: '{{service}} 的主機名解不到：它的容器沒在跑、不在這套 compose 裡，或位址打錯了。',
     unreachable: '連不到 {{service}}：它沒在跑、port 不對，或這一次答不出來。',
     starting: '{{service}} 還在啟動，等一下再試一次。',
     auth_rejected: '{{service}} 不接受 Berth 的帳密或 API key。',
     ip_banned: '{{service}} 把 Berth 這台的 IP 封了：連續登入失敗太多次。',
     protocol_mismatch: '這個位址上回應的不是 {{service}}。',
+    scheme_mismatch: '{{service}} 的位址寫 https://，但那個 port 講的是 http。',
+    scheme_missing: '{{service}} 的位址沒寫 http:// 或 https://。',
     not_found: '{{service}} 說它沒有這個東西。',
     version_unsupported: '{{service}} 的版本 {{version}} 比 Berth 支援的下限舊。',
     credential_missing: '還沒有憑證：貼上 key 再測。',
@@ -312,6 +327,8 @@ const zhHant = {
       'qBittorrent 已經有一個叫 {{category}} 的分類，存到 {{path}}；Berth 不改別人建的分類。',
     save_path_missing: 'qBittorrent 沒有回報它預設的儲存路徑。',
     path_not_visible: 'Berth 的容器裡看不到 {{path}}。',
+    directory_missing:
+      'Berth 的容器裡沒有 {{path}} 這個目錄：它在 Berth 自己掛著的目錄底下，是這個目錄不見了。',
     berth_cannot_write: 'Berth 在 {{path}} 建不了目錄或寫不進檔案。',
     probe_unseen: 'qBittorrent 看不到 Berth 放在 {{path}} 的檔案：兩邊的這個路徑不是同一個目錄。',
     probe_unreadable: 'qBittorrent 找到了 Berth 放在 {{path}} 的檔案，但讀不了：是權限的問題。',
@@ -348,6 +365,7 @@ const zhHant = {
     submitting: '測試中…',
     error: {
       blank: '位址要填。',
+      scheme: '位址要以 http:// 或 https:// 開頭，例如 http://192.168.1.10:8080。',
     },
     loopback:
       'Berth 在容器裡，這個位址指的是 Berth 自己，不是你的主機。改填 host.docker.internal（Docker Desktop 內建；Linux 由 compose 的 extra_hosts 提供，服務要監聽 0.0.0.0）或它的區網 IP。用 network_mode: host 部署的話，照填沒關係。',
@@ -830,7 +848,13 @@ const zhHant = {
       qbittorrentMount:
         'qbittorrent 容器少了這條路徑的掛載：Berth 在分類路徑寫了一個檔，qBittorrent 校驗之後說它一點都沒有——下載會寫進它自己的檔案層，Berth 拿不到。三個容器要把同一個宿主目錄掛在同一個容器路徑。改完 compose 之後跑 docker compose up -d：',
       libraryMount:
-        'Jellyfin 報的這條媒體庫路徑不在三個容器共用的 {{root}} 底下，Berth 看不到。媒體庫要放在 {{root}} 底下，jellyfin 容器掛同一個宿主目錄。改完 compose 之後跑 docker compose up -d：',
+        'Jellyfin 報的這條媒體庫路徑不在三個容器共用的 {{root}} 底下，Berth 看不到。媒體庫要放在 {{root}} 底下，jellyfin 容器掛同一個宿主目錄。Route 建好之後寫入目標就鎖住了：在 Jellyfin 改好路徑之後，先刪掉這條 Route 再重新建立。改完 compose 之後跑 docker compose up -d：',
+      berthCannotWrite:
+        'Berth 自己寫不進 {{path}}：berth 容器裡的使用者（.env 的 PUID / PGID）沒有這個目錄的寫入權限，與別的容器的掛載無關。讓 berth 與 qBittorrent、Jellyfin 用同一組 PUID / PGID，或在宿主上把這個目錄的擁有者改成那一組（chown），再按「重新檢查」。',
+      directoryMissing:
+        'Berth 的容器裡沒有 {{path}}：掛載是好的（它在 Berth 掛著的 {{root}} 底下），是這個目錄被刪了或改了名。在宿主上把它建回來（擁有者是 berth 的 PUID / PGID），或到 {{service}} 改回原本的路徑，再按「重新檢查」。{{service}} 那邊仍看得到它的話，是兩邊的 {{root}} 掛的不是同一個宿主目錄。',
+      savePathMissing:
+        'qBittorrent 的偏好裡沒有預設儲存路徑，這不是掛載的問題。回 qBittorrent 那一頁（精靈跑完之後在「設定 → qBittorrent」）重新套用建議設定，再按「重新檢查」。',
       hardlink:
         '鏈接不起來。complete 目錄與媒體庫目錄要在同一個檔案系統，容器裡的使用者也要寫得進去。',
       // 與掛載無關的失敗（M4 票 21）：連不到、帳密不對時給掛載片段只會叫人白改 compose。
@@ -852,7 +876,7 @@ const zhHant = {
         qbittorrentMount:
           '你的 qBittorrent 看不到這個分類路徑：它多半沒掛 {{root}}（例如只掛了 /downloads），Berth 寫的檔在它那邊不存在。改你那一份 compose 的 qBittorrent：加一條與 berth 相同的掛載——同一個宿主目錄（${DATA_ROOT} 換成 berth 那一份 .env 的值）掛在同一個容器路徑 {{root}}，下載目錄也移到它底下。照 TRaSH 的做法用單一 {{root}}，不要分開掛 /downloads、/movies；Berth 不做 remote path mapping。改完 docker compose up -d，再按一次：',
         libraryMount:
-          '你的 Jellyfin 把這個媒體庫放在它自己的容器路徑（例如 /movies、/tv），不在 {{root}} 底下，Berth 看不到。改你那一份 compose 的 Jellyfin：加一條與 berth 相同的掛載——同一個宿主目錄（${DATA_ROOT} 換成 berth 那一份 .env 的值）掛在 {{root}}——寫入目標改選「新的 Berth 路徑」，舊路徑原地不動。照 TRaSH 的做法用單一 {{root}}；Berth 不做 remote path mapping：',
+          '你的 Jellyfin 把這個媒體庫放在它自己的容器路徑（例如 /movies、/tv），不在 {{root}} 底下，Berth 看不到。改你那一份 compose 的 Jellyfin：加一條與 berth 相同的掛載——同一個宿主目錄（${DATA_ROOT} 換成 berth 那一份 .env 的值）掛在 {{root}}。Route 建好之後寫入目標就鎖住了：先刪掉這條 Route，再選「新的 Berth 路徑」當寫入目標，舊路徑原地不動。照 TRaSH 的做法用單一 {{root}}；Berth 不做 remote path mapping：',
         jellyfinMount:
           '你的 Jellyfin 看不到 Berth 剛寫的檔案：它多半沒掛 {{root}}，或在另一台主機。改你那一份 compose 的 Jellyfin：加一條與 berth 相同的掛載——同一個宿主目錄（${DATA_ROOT} 換成 berth 那一份 .env 的值）掛在同一個容器路徑 {{root}}。Jellyfin 要與 Berth 在同一台主機；Berth 不做 remote path mapping：',
         split:
@@ -3049,8 +3073,9 @@ const en: Translations<typeof zhHant> = {
     },
     step: 'Berth {{current}} of {{total}}',
     resumed: 'Progress is saved. Close the browser and you come back to this step.',
-    statusFailed:
-      'Cannot read the wizard state. The Berth backend may not be running — check the container and retry.',
+    statusFailed: 'Cannot read the wizard state.',
+    notAdministrator:
+      'Only a Jellyfin administrator can carry on with the wizard: {{name}} can sign in to Jellyfin but is not an administrator there. Sign out and sign in as an administrator.',
     nav: {
       label: 'Berth navigation',
       previous: 'Previous berth',
@@ -3261,7 +3286,7 @@ const en: Translations<typeof zhHant> = {
     pasteKey: 'Test again with this key',
     fix: {
       notDeployed:
-        'This hostname does not resolve: {{kind}} is not part of this compose project. Put {{kind}} back into COMPOSE_PROFILES in .env and run docker compose up -d — or choose “Existing” for your own one.',
+        'This hostname does not resolve: the {{kind}} container is not running (a stopped container is not on the compose network), or it is not part of this compose project. If it stopped, docker compose up -d brings it back; if it is missing, put {{kind}} back into COMPOSE_PROFILES in .env and run it — or choose “Existing” for your own one. Then press “Test again”.',
       somethingElse:
         'The limit has passed and something other than {{kind}} still answers on that hostname. Check that the compose service by that name is really it, or choose “Existing”.',
       apiKeyMissing:
@@ -3281,6 +3306,10 @@ const en: Translations<typeof zhHant> = {
         'By default qBittorrent bans an IP for {{minutes}} minutes after {{limit}} failed logins, and while banned even the right password is refused. Wait {{minutes}} minutes, or restart qBittorrent (it keeps bans only in memory); fix the credentials first, then test once after the ban is lifted.',
       address:
         "Nothing answers at this address. Check the port, that the service is running, and that Berth's container can reach that host.",
+      schemeMismatch:
+        'This port speaks http, not https: change https:// at the start of the address to http:// and test again.',
+      schemeMissing:
+        'The address has to start with http:// or https://, for example http://192.168.1.10:8080. Berth does not guess which.',
       outdated:
         'Berth needs at least {{floor}}; this one is {{version}}, and waiting will not change that. Upgrade it, then test again.',
       outdatedBundled:
@@ -3302,6 +3331,8 @@ const en: Translations<typeof zhHant> = {
     unreachable: 'Hostname resolves but nothing answers',
     starting: 'It answers, but says it is still starting up',
     protocol_mismatch: 'Something answered, but it is not this service',
+    scheme_mismatch: 'It answers, but this port speaks http, not https',
+    scheme_missing: 'The address has no http:// or https://',
     version_unsupported: 'It answers, but it is older than the oldest version Berth supports',
     other_server: 'Another Jellyfin answers, not the one the owner is on',
   },
@@ -3326,16 +3357,24 @@ const en: Translations<typeof zhHant> = {
       'This clashes with Berth’s current state (another tab may have just changed it). Reload and try again.',
     server:
       'Berth’s backend failed. Try again; if it keeps failing, read the berth container’s log.',
+    signedOut: 'Your sign-in has expired: sign in to Berth again and retry.',
+    ownerElsewhere:
+      'The owner has already been set up elsewhere: another browser or tab finished this step first. Sign in as that Jellyfin administrator to carry on from where setup is now.',
+    notAdministrator:
+      'Only a Jellyfin administrator can do this: the account you signed in with is not an administrator on this Jellyfin.',
+    signIn: 'Go to sign-in',
   },
   failure: {
     not_deployed:
-      'The {{service}} hostname does not resolve: it is not part of this compose project, or the address is mistyped.',
+      'The {{service}} hostname does not resolve: its container is not running, it is not part of this compose project, or the address is mistyped.',
     unreachable:
       'Cannot reach {{service}}: it is not running, the port is wrong, or it could not answer this time.',
     starting: '{{service}} is still starting. Try again in a moment.',
     auth_rejected: '{{service}} does not accept Berth’s credentials or API key.',
     ip_banned: '{{service}} has banned this machine’s IP after too many failed logins.',
     protocol_mismatch: 'Whatever answers at this address is not {{service}}.',
+    scheme_mismatch: 'The {{service}} address says https://, but that port speaks http.',
+    scheme_missing: 'The {{service}} address has no http:// or https://.',
     not_found: '{{service}} says it has no such thing.',
     version_unsupported: '{{service}} {{version}} is older than the oldest version Berth supports.',
     credential_missing: 'There is no credential yet: paste a key and test.',
@@ -3343,6 +3382,8 @@ const en: Translations<typeof zhHant> = {
       'qBittorrent already has a category called {{category}} that saves to {{path}}; Berth does not change a category it did not create.',
     save_path_missing: 'qBittorrent did not report its default save path.',
     path_not_visible: 'Berth’s container cannot see {{path}}.',
+    directory_missing:
+      'Berth’s container has no folder {{path}}: it is under a folder Berth mounts, so this folder itself is gone.',
     berth_cannot_write: 'Berth cannot create a folder or write a file at {{path}}.',
     probe_unseen:
       'qBittorrent cannot see the file Berth put in {{path}}: that path is not the same folder on both sides.',
@@ -3385,6 +3426,8 @@ const en: Translations<typeof zhHant> = {
     submitting: 'Testing…',
     error: {
       blank: 'The address is required.',
+      scheme:
+        'The address has to start with http:// or https://, for example http://192.168.1.10:8080.',
     },
     loopback:
       'Berth runs in a container, so this address points at Berth itself, not your host. Use host.docker.internal (built into Docker Desktop; on Linux the compose extra_hosts line provides it, and the service must listen on 0.0.0.0) or its LAN IP. If you deploy with network_mode: host, this is fine as it is.',
@@ -3898,7 +3941,13 @@ const en: Translations<typeof zhHant> = {
       qbittorrentMount:
         'The qbittorrent container is missing a mount for this path: Berth wrote a file in the category path and qBittorrent found none of it after a recheck, so downloads would land in its own container layer where Berth cannot reach them. All three containers must mount the same host directory at the same container path. After editing compose, run docker compose up -d:',
       libraryMount:
-        'Jellyfin reports a library path outside {{root}}, the directory all three containers share, so Berth cannot see it. Keep libraries under {{root}} and mount the same host directory in the jellyfin container. After editing compose, run docker compose up -d:',
+        'Jellyfin reports a library path outside {{root}}, the directory all three containers share, so Berth cannot see it. Keep libraries under {{root}} and mount the same host directory in the jellyfin container. A route’s write target is fixed once it is created: after changing the path in Jellyfin, delete this route and create it again. After editing compose, run docker compose up -d:',
+      berthCannotWrite:
+        'Berth itself cannot write to {{path}}: the user inside the berth container (PUID / PGID in .env) has no write permission on that folder. The other containers’ mounts have nothing to do with it. Give berth the same PUID / PGID as qBittorrent and Jellyfin, or make that PUID / PGID the owner of the folder on the host (chown), then press “Check again”.',
+      directoryMissing:
+        'Berth’s container has no {{path}}: the mount is fine (it is under {{root}}, which Berth mounts), this folder was deleted or renamed. Create it again on the host (owned by berth’s PUID / PGID), or change {{service}} back to the original path, then press “Check again”. If {{service}} can still see it, the two sides mount different host directories at {{root}}.',
+      savePathMissing:
+        'qBittorrent’s preferences have no default save path; this is not a mount problem. Go back to the qBittorrent page (after setup it is Settings → qBittorrent), apply the recommended settings again, then press “Check again”.',
       hardlink:
         'The link failed. The complete directory and the library directory have to sit on one file system, and the container user has to be able to write there.',
       service: {
@@ -3919,7 +3968,7 @@ const en: Translations<typeof zhHant> = {
         qbittorrentMount:
           'Your qBittorrent cannot see this category path: it most likely does not mount {{root}} (only /downloads, say), so the file Berth wrote does not exist on its side. Change the qBittorrent service in your own compose file: add the same mount berth has — the same host directory (replace ${DATA_ROOT} with the value in berth’s .env) at the same container path {{root}} — and move its download folder under it. Follow TRaSH and use one {{root}} mount instead of separate /downloads and /movies; Berth does no remote path mapping. Run docker compose up -d, then press again:',
         libraryMount:
-          'Your Jellyfin keeps this library at a path of its own (/movies or /tv, say), outside {{root}}, so Berth cannot see it. Change the Jellyfin service in your own compose file: add the same mount berth has — the same host directory (replace ${DATA_ROOT} with the value in berth’s .env) at {{root}} — and pick “new Berth path” as the write target; the old paths stay as they are. Follow TRaSH and use one {{root}} mount; Berth does no remote path mapping:',
+          'Your Jellyfin keeps this library at a path of its own (/movies or /tv, say), outside {{root}}, so Berth cannot see it. Change the Jellyfin service in your own compose file: add the same mount berth has — the same host directory (replace ${DATA_ROOT} with the value in berth’s .env) at {{root}}. A route’s write target is fixed once it is created: delete this route, then pick “new Berth path” as the write target; the old paths stay as they are. Follow TRaSH and use one {{root}} mount; Berth does no remote path mapping:',
         jellyfinMount:
           'Your Jellyfin cannot see the file Berth just wrote: it most likely does not mount {{root}}, or runs on another host. Change the Jellyfin service in your own compose file: add the same mount berth has — the same host directory (replace ${DATA_ROOT} with the value in berth’s .env) at the same container path {{root}}. Jellyfin has to run on the same host as Berth; Berth does no remote path mapping:',
         split:

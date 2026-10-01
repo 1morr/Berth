@@ -76,6 +76,80 @@ describe('remedyFor（M4 票 19：補法指對容器）', () => {
   })
 })
 
+describe('remedyFor（M4 票 25：補法照原因，不照檢查項目）', () => {
+  // 檢查 1（建分類目錄）、3（寫探測檔給 qBittorrent）、5（寫探測檔給 Jellyfin）都會撞上 Berth 自己寫不進。
+  const WRITING_CHECKS = ['category', 'download_visible', 'probe_visible'] as const
+
+  it.each(WRITING_CHECKS)(
+    'Berth 自己寫不進（%s）：同一條權限的補法、沒有任何片段，既有或套件內都一樣',
+    (check) => {
+      for (const existing of [undefined, EXISTING_JELLYFIN, EXISTING_QBITTORRENT]) {
+        const remedy = remedyFor(check, {
+          existing,
+          crossDevice: false,
+          failure: 'berth_cannot_write',
+        })
+
+        expect(remedy.fix).toBe('routes.fix.berthCannotWrite')
+        expect(remedy.commands).toEqual([])
+        expect(remedy.advice).toBeNull()
+      }
+    },
+  )
+
+  it('另一面：真正是別的容器看不到時，片段仍是那一台的', () => {
+    expect(
+      serviceOf(
+        remedyFor('download_visible', { crossDevice: false, failure: 'probe_unseen' }).commands,
+      ),
+    ).toBe('qbittorrent')
+    expect(
+      serviceOf(
+        remedyFor('probe_visible', {
+          existing: EXISTING_JELLYFIN,
+          crossDevice: false,
+          failure: 'jellyfin_cannot_see',
+        }).commands,
+      ),
+    ).toBe('jellyfin')
+  })
+
+  it('qBittorrent 沒報預設儲存路徑：回頁 2 重新套用，不給 berth 的掛載片段', () => {
+    const remedy = remedyFor('download_path', { crossDevice: false, failure: 'save_path_missing' })
+
+    expect(remedy.fix).toBe('routes.fix.savePathMissing')
+    expect(remedy.commands).toEqual([])
+  })
+
+  it('目錄被刪與不在共用掛載底下分開：前者不給片段，後者照舊是 Jellyfin 的片段', () => {
+    const deleted = remedyFor('library_path', {
+      existing: EXISTING_JELLYFIN,
+      crossDevice: false,
+      failure: 'directory_missing',
+    })
+    const outside = remedyFor('library_path', {
+      existing: EXISTING_JELLYFIN,
+      crossDevice: false,
+      failure: 'path_not_visible',
+    })
+
+    expect(deleted.fix).toBe('routes.fix.directoryMissing')
+    expect(deleted.commands).toEqual([])
+    expect(outside.fix).toBe('routes.fix.existing.libraryMount')
+    expect(serviceOf(outside.commands)).toBe('jellyfin')
+  })
+
+  it.each([
+    ['scheme_mismatch', 'connection.fix.schemeMismatch'],
+    ['scheme_missing', 'connection.fix.schemeMissing'],
+  ] as const)('位址的協定寫錯（%s）：說改位址，不說確認在跑、不給片段', (failure, fix) => {
+    const remedy = remedyFor('category', { crossDevice: false, failure })
+
+    expect(remedy.fix).toBe(fix)
+    expect(remedy.commands).toEqual([])
+  })
+})
+
 describe('commonRoot', () => {
   it.each([
     ['/data/torrent/complete', '/data/library', '/data'],

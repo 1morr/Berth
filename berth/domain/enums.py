@@ -760,6 +760,9 @@ class StepFailure(StrEnum):
     IP_BANNED = "ip_banned"
     #: 回的東西不是這個服務。
     PROTOCOL_MISMATCH = "protocol_mismatch"
+    #: 位址寫 `https://`，那個 port 講的是 http / 位址沒寫協定（M4 票 25）。
+    SCHEME_MISMATCH = "scheme_mismatch"
+    SCHEME_MISSING = "scheme_missing"
     #: 它說沒有這個東西（404）。
     NOT_FOUND = "not_found"
     #: 版本比 Berth 的下限舊。`params.version` 是它的版本。
@@ -772,8 +775,12 @@ class StepFailure(StrEnum):
     CATEGORY_CONFLICT = "category_conflict"
     #: qBittorrent 沒報全域 save path。
     SAVE_PATH_MISSING = "save_path_missing"
-    #: 服務報的路徑在 Berth 的容器裡看不到。`params.path`。
+    #: 服務報的路徑在 Berth 的容器裡看不到：它不在 Berth 的共用根目錄底下（`/media/tv`），
+    #: 沒掛進來。`params.path`。
     PATH_NOT_VISIBLE = "path_not_visible"
+    #: 服務報的路徑在 Berth 的容器裡不存在，而它在 Berth 的共用根目錄底下（`/data/library/tv`）：
+    #: 目錄被刪了或改了名，不是少了掛載（M4 票 25，`routes._visible`）。`params.path`。
+    DIRECTORY_MISSING = "directory_missing"
     #: Berth 在那裡建不了目錄或寫不進探測檔。`params.path`。
     BERTH_CANNOT_WRITE = "berth_cannot_write"
     #: qBittorrent 校驗 Berth 寫的探測檔：一點都沒看到 / 讀不了 / 時限內沒校驗完（M4 票 19）。
@@ -897,6 +904,10 @@ class ConnectionReason(StrEnum):
     STARTING = "starting"
     #: 連得上但回的東西不是預期的服務。
     PROTOCOL_MISMATCH = "protocol_mismatch"
+    #: 位址寫 `https://`，那個 port 講的是 http（M4 票 25）。
+    SCHEME_MISMATCH = "scheme_mismatch"
+    #: 位址沒寫 `http://` 或 `https://`（M4 票 25）。
+    SCHEME_MISSING = "scheme_missing"
     #: 連得上、是對的服務，但版本比 Berth 的下限舊（Prowlarr，M4 票 17；Jellyfin，票 18）。
     #: 等不會好，要升級。`detail` 是它的版本。
     VERSION_UNSUPPORTED = "version_unsupported"

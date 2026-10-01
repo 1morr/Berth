@@ -6,7 +6,7 @@ import '../i18n'
 import type { ChoiceRefusal } from '../api/setup'
 import { stubApi } from '../test/fetch'
 import { renderWithProviders } from '../test/render'
-import { ALL_BUNDLED, chosen, setupStatus } from '../test/fixtures'
+import { ALL_BUNDLED, chosen, qbittorrentSetup, setupStatus } from '../test/fixtures'
 import { useChoiceDraft } from '../setup/choiceDraft'
 import { ServiceChoice } from '../setup/ServiceChoice'
 import { SetupPage } from './SetupPage'
@@ -236,5 +236,58 @@ describe('qBittorrent 的連錯與封鎖', () => {
     const fix = await screen.findByText(/連錯 5 次就封鎖這個 IP 60 分鐘/)
     expect(fix).toHaveTextContent('重啟 qBittorrent')
     expect(screen.queryByText(/自己的介面解除/)).not.toBeInTheDocument()
+  })
+})
+
+describe('頁 2 的連線卡跟著最新的失敗（M4 票 25，實測 B9-04～07）', () => {
+  it('qBittorrent 停了：讀差異連不上就重新測試一次，卡片變紅、有「重新測試」，原因照實際例外', async () => {
+    const qbittorrent = chosen({
+      kind: 'qbittorrent',
+      reason: 'connected',
+      detail: 'v5.2.3 · Web API 2.15.1',
+      base_url: 'http://qbittorrent:8080',
+    })
+    const stopped = setupStatus({
+      current_step: 2,
+      owner: 'skipper',
+      services: [
+        ALL_BUNDLED[0]!,
+        { ...qbittorrent, state: 'failed', reason: 'not_deployed', detail: '' },
+      ],
+    })
+    const fetch = stubApi({
+      [STATUS]: {
+        body: setupStatus({
+          current_step: 3,
+          owner: 'skipper',
+          services: [ALL_BUNDLED[0]!, qbittorrent],
+        }),
+      },
+      'GET /api/setup/qbittorrent/diff': {
+        body: qbittorrentSetup({
+          blocked: true,
+          reachable: false,
+          version: '',
+          diffs: [],
+          failure: 'not_deployed',
+          error: 'GET /api/v2/app/version: host does not resolve',
+        }),
+      },
+      'POST /api/setup/services/qbittorrent/test': { body: stopped },
+    })
+    const user = userEvent.setup()
+    renderWithProviders(<SetupPage />)
+    await user.click(await screen.findByRole('button', { name: '上一個泊位' }))
+
+    expect(await screen.findByRole('button', { name: '重新測試' })).toBeVisible()
+    expect(screen.getByText('沒通過')).toBeVisible()
+    expect(screen.queryByText('連上了')).not.toBeInTheDocument()
+    expect(screen.getByText(/容器沒在跑/)).toBeVisible()
+    // 後端的頁 2 不再算做完：沒有前往下一個泊位。
+    expect(screen.queryByRole('button', { name: '前往下一個泊位' })).not.toBeInTheDocument()
+    const retests = fetch.mock.calls.filter(
+      ([url, init]) => url === '/api/setup/services/qbittorrent/test' && init?.method === 'POST',
+    )
+    expect(retests).toHaveLength(1)
   })
 })

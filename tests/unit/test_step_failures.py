@@ -15,6 +15,8 @@ from berth.adapters.http import (
     AuthFailedError,
     NotFoundError,
     ProtocolMismatchError,
+    SchemeMismatchError,
+    SchemeMissingError,
     ServiceBusyError,
     ServiceError,
     ServiceNotDeployedError,
@@ -34,6 +36,8 @@ from berth.services.steps import StepFailedError, failed_step, failure_of, step_
         (ServiceBusyError("GET /: 503 still loading"), StepFailure.STARTING),
         (AuthFailedError("GET /configuration: 401"), StepFailure.AUTH_REJECTED),
         (ProtocolMismatchError("GET /: response is not JSON"), StepFailure.PROTOCOL_MISMATCH),
+        (SchemeMismatchError("GET /: WRONG_VERSION_NUMBER"), StepFailure.SCHEME_MISMATCH),
+        (SchemeMissingError("GET /: missing an 'http://'"), StepFailure.SCHEME_MISSING),
         (NotFoundError("movie/1: no such title"), StepFailure.NOT_FOUND),
         (PathEscapeError("/etc is outside /data"), StepFailure.BERTH_CANNOT_WRITE),
         (ServiceError("prowlarr did not come back"), StepFailure.UNEXPECTED),
@@ -56,6 +60,13 @@ def test_a_file_error_names_the_path_berth_could_not_write() -> None:
         StepFailure.BERTH_CANNOT_WRITE,
         {"path": "/data/torrent/complete/tv"},
     )
+
+
+def test_a_probe_berth_could_not_write_names_its_folder() -> None:
+    """寫不進的是探測檔時說它所在的目錄（M4 票 25 實跑）：使用者要改的是那個目錄的權限，探測檔本來
+    就不存在。"""
+    error = OSError(errno.EROFS, "Read-only file system", "/data/library/tv/.berth-probe-89b7d187")
+    assert failure_of(error) == (StepFailure.BERTH_CANNOT_WRITE, {"path": "/data/library/tv"})
 
 
 def test_a_judged_failure_keeps_its_code_and_params() -> None:

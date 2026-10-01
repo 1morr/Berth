@@ -51,6 +51,9 @@ export function RouteCheckList({
             summary={summaryOf(check, route)}
             row={row}
             fix={t(remedy.fix, {
+              // 那一條的參數先放：補法裡的 `{{root}}` 與 `{{service}}` 是這裡算的，不讓後端的同名參數蓋掉。
+              path: '',
+              ...row?.params,
               root: remedy.root,
               service: CHECK_SERVICE[check],
               ...BAN_DEFAULTS,

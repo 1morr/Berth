@@ -103,9 +103,21 @@ export const REASON_LABEL = {
   unreachable: 'reason.unreachable',
   starting: 'reason.starting',
   protocol_mismatch: 'reason.protocol_mismatch',
+  scheme_mismatch: 'reason.scheme_mismatch',
+  scheme_missing: 'reason.scheme_missing',
   version_unsupported: 'reason.version_unsupported',
   other_server: 'reason.other_server',
 } as const satisfies Record<ConnectionReason, string>
+
+/**
+ * 位址的協定寫錯時的補法（M4 票 25）：服務頁的連線卡與頁 4 的既有表單說同一句，不叫人查 port。
+ * 不是這兩種理由時是 `undefined`，呼叫端照自己的規則挑。
+ */
+export function schemeFix(reason: ConnectionReason | null | undefined) {
+  if (reason === 'scheme_mismatch') return 'connection.fix.schemeMismatch' as const
+  if (reason === 'scheme_missing') return 'connection.fix.schemeMissing' as const
+  return undefined
+}
 
 /**
  * 版本下限（brief §16.4、§20.14），補法那一句「至少要 X，這一台是 Y」用它。「既有」旁的

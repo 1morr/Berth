@@ -1502,6 +1502,12 @@ fixture 在 `tests/fixtures/http/{mikan,nyaa,acgrip}/`（來源網址與去掉 t
   - **比下限舊的那一台也讀得到版本**（M4 票 20，2026-09-30 對 `berth-existing` 的 `bad-prowlarr-old` 1.0.1.2220 實測，驗證方式 `authentication: none`）：`GET /ping` 回 **200 `text/html`**（介面的 HTML，所以先問它只會得到「不是 JSON」）；`GET /api/v1/system/status` 帶 `X-Api-Key` 回 200、`version` 是 `1.0.1.2220`，不帶或帶錯的 key 都是 **401**。2.6.5 的 `ok-prowlarr` 同樣是錯的 key 401。所以 Berth 的連線測試從 `system/status` 問起、不問 `/ping`：版本、key 與「是不是它」一支答完。
   - **介面登入在現行版本是必填**（M4 票 20，讀 v2.6.5.5623 原始碼）：`frontend/src/Components/Page/Page.js` 在驗證沒開時掛 `AuthenticationRequiredModal`，它的 `ModalContent` 是 `showCloseButton={false}`——第一次打開介面就是一個關不掉、要人設登入的視窗（`AuthenticationRequiredWarning`：「{appName} now requires authentication to be enabled」）。精靈因此把套件內那一台的介面登入寫成必填，理由照這一條說。【[Page.js @ v2.6.5.5623](https://github.com/Prowlarr/Prowlarr/blob/v2.6.5.5623/frontend/src/Components/Page/Page.js)、[AuthenticationRequiredModalContent.tsx](https://github.com/Prowlarr/Prowlarr/blob/v2.6.5.5623/frontend/src/FirstRun/AuthenticationRequiredModalContent.tsx)】
   - 目前最新 stable 是 2.6.5.5623（2026-09-16）。2.6.3 起多了 Allowed Hosts：使用者自己設了清單時，Berth 用別的主機名連可能被擋，回什麼沒查。
+- **位址的協定寫錯時三個服務的樣子**（M4 票 25，2026-10-01 實測；berth image 的 Python 3.13 + OpenSSL 3.5.7、httpx 0.28.1，從容器裡以 `https://host.docker.internal:<port>` 打 `berth-existing` 的 `ok-*`，各自只講 http）：
+  - **Jellyfin 12.1、Prowlarr 2.6.5** 對 TLS 的 ClientHello 回一段 HTTP 400：握手讀到它，`ssl.SSLError` 的理由是 `WRONG_VERSION_NUMBER`（httpx 包成 `ConnectError`）。
+  - **qBittorrent 5.2.3** 的 WebUI 不回、等一個 HTTP 請求：握手一直等到連線逾時（httpx 的 `ConnectTimeout`，鏈上是 `ssl.SSLWantReadError`）。
+  - 反方向（`http://` 打到講 https 的 port）只做了本機的 Python `ssl` 伺服器：它重設連線（`ReadError` / `ConnectionResetError`），與別的斷線分不開，Berth 不認它。
+  - **位址沒寫協定**（`nas:8080`、`192.168.1.5:8080`、`localhost:8096`、`qbittorrent`）：httpx 連都不連就丟 `UnsupportedProtocol`——`nas:8080` 被讀成協定 `nas`。
+- **停掉的 compose 容器，主機名解不到**（同一天實測，qa-bundled：`docker stop` 套件內 qBittorrent 之後，Berth 的連線測試是 `socket.gaierror`，與那個服務不在 compose 裡同一個樣子）：Docker 的內建 DNS 只解析在跑的容器。所以套件內「主機名解不到」的補法要同時說容器停了與不在 compose 裡。
 
 
 ### 20.15 「同一台 Jellyfin」怎麼認：ServerId（2026-09-30 查證＋實測，M4 票 18）

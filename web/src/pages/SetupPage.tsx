@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
@@ -72,7 +72,10 @@ import {
 } from '../setup/navigation'
 import { type ChoiceControls } from '../setup/ServiceChoice'
 import { type ChoiceDraft } from '../setup/choiceDraft'
-import { PAGE_TITLE, GhostButton } from '../components/controls'
+import { PAGE_TITLE, GhostButton, Notice } from '../components/controls'
+import { RequestFailed } from '../components/RequestFailed'
+import { requestProblem } from '../components/requestProblem'
+import { useSignOut } from '../components/useSignOut'
 import { commonRoot } from '../components/routeChecks'
 import { type Signal } from '../components/signal'
 import { connected, signalOf } from '../setup/signals'
@@ -369,6 +372,21 @@ export function SetupPage() {
     ...qbittorrentSetupQueryOptions,
     enabled: step === STEP.qbittorrent && connected(qbittorrentChoice),
   })
+  // 讀差異或套用時 qBittorrent 連不上了，連線卡卻還是上一次的綠燈（M4 票 25，實測 B9-04～07）：重新測試
+  // 一次。卡片照這一次的例外變紅、出現「重新測試」，後端的頁 2 也就不算做完（前進鍵收起）。同一份讀到的
+  // 結果只測一次：測完是綠的而差異仍讀不到時不來回打。
+  const qbittorrentLostAt =
+    qbittorrent.data && !qbittorrent.data.reachable && connected(qbittorrentChoice)
+      ? qbittorrent.dataUpdatedAt
+      : null
+  const retestedLoss = useRef<number | null>(null)
+  const { mutate: retestNow, isPending: retesting } = retest
+  useEffect(() => {
+    if (qbittorrentLostAt === null || retesting || retestedLoss.current === qbittorrentLostAt)
+      return
+    retestedLoss.current = qbittorrentLostAt
+    retestNow({ kind: 'qbittorrent', restart: true })
+  }, [qbittorrentLostAt, retesting, retestNow])
   // 泊位板要畫得出走過的每一格，所以這三份跟著後端走到哪裡，不跟著畫面停在哪裡。
   const routes = useQuery({ ...routeSetupQueryOptions, enabled: backend >= STEP.routes })
   // 頁 3 進頁時向 Jellyfin 重讀媒體庫（M4 票 19；套件內也是，票 24）：頁 1 之後在 Jellyfin 改的掛載、
@@ -402,9 +420,11 @@ export function SetupPage() {
   if (!current) {
     return (
       <Shell step={STEP.jellyfin}>
-        <p className="p-6 text-sm text-ink-dim">
-          {status.isError ? t('setup.statusFailed') : t('health.checking')}
-        </p>
+        {status.isError ? (
+          <StatusFailed error={status.error} />
+        ) : (
+          <p className="p-6 text-sm text-ink-dim">{t('health.checking')}</p>
+        )}
       </Shell>
     )
   }
@@ -615,6 +635,41 @@ export function SetupPage() {
         <Waiting failed={tmdb.isError} message={t('tmdbStep.unreachable')} nav={nav} />
       )}
     </Shell>
+  )
+}
+
+/**
+ * 讀不到精靈的狀態（M4 票 25，實測 E10-05）。登得進 Jellyfin 而不是管理員的人在擁有者成立之後進得了
+ * 這一頁（守衛只要 session），讀狀態卻是 403——原本說「Berth 後端可能沒在跑」，叫人去查容器。他要的是
+ * 換一個管理員帳號：說出來、給登出。其餘照請求的失敗說（`RequestFailed`）。
+ */
+function StatusFailed({ error }: { error: unknown }) {
+  const { t } = useTranslation()
+
+  if (requestProblem(error) === 'notAdministrator') return <NotAdministrator />
+  return (
+    <div className="p-6">
+      <RequestFailed error={error} lead={t('setup.statusFailed')} />
+    </div>
+  )
+}
+
+function NotAdministrator() {
+  const { t } = useTranslation()
+  const me = useQuery(meQueryOptions)
+  const leave = useSignOut()
+
+  return (
+    <div className="grid gap-3 p-6">
+      <Notice signal="blocked" label={t('common.failed')}>
+        {t('setup.notAdministrator', { name: me.data?.name ?? '' })}
+      </Notice>
+      <div>
+        <GhostButton type="button" busy={leave.isPending} onClick={() => leave.mutate()}>
+          {leave.isPending ? t('nav.signingOut') : t('nav.signOut')}
+        </GhostButton>
+      </div>
+    </div>
   )
 }
 

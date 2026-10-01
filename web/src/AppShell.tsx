@@ -1,11 +1,12 @@
 import type { ReactNode } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Link, useNavigate } from '@tanstack/react-router'
+import { useQuery } from '@tanstack/react-query'
+import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 
-import { meQueryOptions, signOut } from './api/auth'
+import { meQueryOptions } from './api/auth'
 import { GhostButton, NAV_LINK } from './components/controls'
 import { LanguageToggle } from './components/LanguageToggle'
+import { useSignOut } from './components/useSignOut'
 
 /**
  * setup 完成之後的頁面共用的外框。
@@ -72,18 +73,8 @@ function NavLink({
  */
 function Identity() {
   const { t } = useTranslation()
-  const navigate = useNavigate()
-  const queryClient = useQueryClient()
   const me = useQuery(meQueryOptions)
-
-  const leave = useMutation({
-    mutationFn: signOut,
-    onSettled: async () => {
-      // 登出後整份快取都不再屬於這個人。
-      queryClient.clear()
-      await navigate({ to: '/login' })
-    },
-  })
+  const leave = useSignOut()
 
   if (!me.data) return <LanguageToggle />
 

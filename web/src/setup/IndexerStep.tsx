@@ -24,6 +24,7 @@ import { Cutaway, CutawayRow } from '../components/Cutaway'
 import { failureText } from '../components/failures'
 import { StepLine } from '../components/StepLine'
 import { TechnicalDetails } from '../components/TechnicalDetails'
+import { addressError } from './address'
 import { AddedSites, AddSites, type SiteControls } from './IndexerSites'
 import { useInterfaceLogin } from './interfaceLogin'
 import { BerthLogin } from './InterfaceLoginFields'
@@ -32,7 +33,7 @@ import { prowlarrWeb } from './prowlarrWeb'
 import { LoopbackHint, ServiceChoice, type ChoiceControls } from './ServiceChoice'
 import type { ChoiceDraft } from './choiceDraft'
 import { STEP } from './navigation'
-import { VERSION_FLOOR, connected } from './signals'
+import { VERSION_FLOOR, connected, schemeFix } from './signals'
 import { StepFrame } from './StepFrame'
 
 export type { SiteControls } from './IndexerSites'
@@ -450,6 +451,7 @@ function ExistingIndexer({
   const [kind, setKind] = useState<IndexerKind>(indexers.kind)
   const [baseUrl, setBaseUrl] = useState(indexers.base_url)
   const [apiKey, setApiKey] = useState('')
+  const [checked, setChecked] = useState(false)
   // 上一次測試的那一條，只在欄位還是測的那幾個值、而且不在測試中時畫（M4 票 21）：換了種類或位址，
   // 它說的就是另一個端點——原本 Prowlarr 的狀態列停在上一次。
   const tested = kind === indexers.kind && baseUrl.trim() === indexers.base_url
@@ -457,7 +459,8 @@ function ExistingIndexer({
 
   function submit(event: FormEvent) {
     event.preventDefault()
-    if (!baseUrl.trim()) return
+    setChecked(true)
+    if (addressError(t, baseUrl)) return
     onConnect({ kind, base_url: baseUrl.trim(), api_key: apiKey.trim() })
   }
 
@@ -503,6 +506,7 @@ function ExistingIndexer({
             </>
           }
           onChange={(event) => setBaseUrl(event.target.value)}
+          error={checked ? addressError(t, baseUrl) : undefined}
         />
         <PasswordField
           label={t('connect.field.apiKey')}
@@ -551,6 +555,8 @@ function existingFix(t: TFunction, indexers: IndexerSetup): string {
     const version = indexers.steps.find((row) => row.step === 'prowlarr')?.detail ?? ''
     return t('connection.fix.outdated', { floor: VERSION_FLOOR.prowlarr, version })
   }
+  const scheme = schemeFix(indexers.reason)
+  if (scheme) return t(scheme)
   if (pointsAtBerth(indexers.base_url)) return t('connect.loopback')
   return t('indexer.existing.fix')
 }

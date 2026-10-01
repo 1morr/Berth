@@ -26,7 +26,13 @@ from urllib.parse import urlsplit
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from berth.adapters.http import AuthFailedError, ProtocolMismatchError, ServiceError
+from berth.adapters.http import (
+    AuthFailedError,
+    ProtocolMismatchError,
+    SchemeMismatchError,
+    SchemeMissingError,
+    ServiceError,
+)
 from berth.adapters.indexer import IndexerSearch, SearchQuery
 from berth.adapters.prowlarr import (
     IndexerDefinition,
@@ -803,11 +809,16 @@ def _connected(step: SetupStep) -> IndexerProbe:
 
 
 def _failed_probe(kind: IndexerKind, exc: ServiceError) -> IndexerProbe:
-    """測不過：原文照錄，理由分得出 key 不對與回的不是它（M4 票 20），其餘是連不上。"""
+    """測不過：原文照錄，理由分得出 key 不對與回的不是它（M4 票 20）、位址的協定寫錯（票 25），
+    其餘是連不上。"""
     if isinstance(exc, AuthFailedError):
         reason = ConnectionReason.AUTH_REQUIRED
     elif isinstance(exc, ProtocolMismatchError):
         reason = ConnectionReason.PROTOCOL_MISMATCH
+    elif isinstance(exc, SchemeMismatchError):
+        reason = ConnectionReason.SCHEME_MISMATCH
+    elif isinstance(exc, SchemeMissingError):
+        reason = ConnectionReason.SCHEME_MISSING
     else:
         reason = ConnectionReason.UNREACHABLE
     return IndexerProbe(step=failed_step(kind.value, exc), reason=reason)

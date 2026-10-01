@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import socket
 import ssl
+from collections.abc import Callable
 from functools import cache
 from types import TracebackType
 from typing import Any, Self
@@ -72,6 +73,22 @@ class ProtocolMismatchError(ServiceError):
     """連得上，但回的東西不是預期的那個服務。"""
 
 
+class SchemeMismatchError(ServiceError):
+    """位址寫 `https://`，那個 port 講的卻是 http：TLS 握手讀到的是一段 HTTP 回應（M4 票 25）。
+
+    與連不上分開的理由是**下一步不同**：叫人確認 port 與服務在跑是白查，改一個 `s` 就好。
+    反方向（`http://` 打到講 https 的 port）認不出來：實測伺服器只是重設連線，與別的斷線分不開，
+    照舊是連不上。
+    """
+
+
+class SchemeMissingError(ServiceError):
+    """位址沒寫 `http://` 或 `https://`（M4 票 25）。
+
+    httpx 連都不連就拒絕：`nas:8080` 被讀成協定 `nas`。
+    """
+
+
 class HttpSession:
     """一個 base URL 的非同步 HTTP 工作階段，回傳已分類的錯誤。"""
 
@@ -124,10 +141,18 @@ class HttpSession:
         """
         try:
             response = await self._client.request(method, path, **kwargs)
+        except httpx.UnsupportedProtocol as exc:
+            raise SchemeMissingError(f"{method} {path}: {exc}") from exc
         except httpx.ConnectError as exc:
             if is_dns_failure(exc):
                 raise ServiceNotDeployedError(f"{method} {path}: host does not resolve") from exc
+            if is_plain_http_answer(exc):
+                raise SchemeMismatchError(f"{method} {path}: {exc}") from exc
             raise ServiceUnavailableError(f"{method} {path}: connection refused") from exc
+        except httpx.ConnectTimeout as exc:
+            if is_plain_http_answer(exc):
+                raise SchemeMismatchError(f"{method} {path}: TLS handshake got no answer") from exc
+            raise ServiceUnavailableError(f"{method} {path}: ConnectTimeout") from exc
         except httpx.HTTPError as exc:
             raise ServiceUnavailableError(f"{method} {path}: {type(exc).__name__}") from exc
 
@@ -180,13 +205,41 @@ def is_dns_failure(exc: BaseException) -> bool:
     `except` 區塊裡重拋（`__context__`）。只走 `__cause__` 會在第二層斷掉，把「服務不在
     compose 裡」誤判成「還在啟動」，害使用者白等兩分鐘。所以兩條都要走。
     """
+    return _in_chain(exc, lambda link: isinstance(link, socket.gaierror))
+
+
+#: TLS 握手讀到的不是 TLS 而是一段 HTTP 回應時 OpenSSL 的理由（M4 票 25）。OpenSSL 3.5 實測
+#: （開發機與 berth image）。憑證不受信任（`CERTIFICATE_VERIFY_FAILED`）不在這裡：那個 port 講的
+#: 就是 https。
+_PLAIN_HTTP_REASONS = frozenset({"WRONG_VERSION_NUMBER"})
+
+
+def is_plain_http_answer(exc: BaseException) -> bool:
+    """`https://` 打到講 http 的 port（M4 票 25，berth image 對 berth-existing 實測兩種樣子）。
+
+    Jellyfin、Prowlarr 對 ClientHello 回一個 HTTP 400：握手讀到它，`ssl.SSLError` 的理由是
+    `WRONG_VERSION_NUMBER`。qBittorrent 的 WebUI 不回、等一個 HTTP 請求：握手一直等到逾時，鏈上是
+    `ssl.SSLWantReadError`——TCP 連上了、伺服器的第一筆 TLS 紀錄沒來。只在連線階段的逾時問它
+    （呼叫端是 `ConnectTimeout`）：讀回應逾時是另一件事。
+    """
+    return _in_chain(
+        exc,
+        lambda link: (
+            isinstance(link, ssl.SSLWantReadError)
+            or (isinstance(link, ssl.SSLError) and link.reason in _PLAIN_HTTP_REASONS)
+        ),
+    )
+
+
+def _in_chain(exc: BaseException, matches: Callable[[BaseException], bool]) -> bool:
+    """例外鏈上（`__cause__` 與 `__context__` 兩條，`is_dns_failure` 說了為什麼）有沒有一環符合。"""
     seen: set[int] = set()
     pending: list[BaseException] = [exc]
     while pending:
         current = pending.pop()
         if id(current) in seen:
             continue
-        if isinstance(current, socket.gaierror):
+        if matches(current):
             return True
         seen.add(id(current))
         pending.extend(link for link in (current.__cause__, current.__context__) if link)

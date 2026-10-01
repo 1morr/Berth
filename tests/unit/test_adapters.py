@@ -19,6 +19,7 @@ from berth.adapters.http import (
     ServiceNotDeployedError,
     ServiceUnavailableError,
     is_dns_failure,
+    is_plain_http_answer,
     is_transient,
     raise_for_status,
 )
@@ -64,6 +65,39 @@ def test_connection_refused_is_not_a_dns_failure() -> None:
     top.__cause__ = OSError(111, "Connection refused")
 
     assert is_dns_failure(top) is False
+
+
+def _wrapped(root: BaseException) -> BaseException:
+    """httpx 包 httpcore 包 ssl 的那三層（實測的鏈，`is_dns_failure` 說了兩種接法）。"""
+    middle = ConnectionError("httpcore connect error")
+    middle.__context__ = root
+    top = ConnectionError("httpx connect error")
+    top.__cause__ = middle
+    return top
+
+
+def _ssl_error(cls: type[ssl.SSLError], reason: str) -> ssl.SSLError:
+    error = cls(1, f"[SSL: {reason}]")
+    error.reason = reason
+    return error
+
+
+def test_https_to_a_port_that_speaks_http_is_a_plain_http_answer() -> None:
+    root = _ssl_error(ssl.SSLError, "WRONG_VERSION_NUMBER")
+    assert is_plain_http_answer(_wrapped(root)) is True
+
+
+def test_a_handshake_nobody_answers_is_a_plain_http_answer() -> None:
+    """qBittorrent 的 WebUI 對 ClientHello 不回、等著 HTTP 請求：握手逾時，鏈上是
+    `SSLWantReadError`。"""
+    root = ssl.SSLWantReadError(2, "The operation did not complete (read)")
+    assert is_plain_http_answer(_wrapped(root)) is True
+
+
+def test_an_untrusted_certificate_is_not_a_plain_http_answer() -> None:
+    """自簽憑證也是 TLS 握手失敗，但那個 port 講的就是 https：叫人把 `s` 拿掉是錯的。"""
+    root = _ssl_error(ssl.SSLCertVerificationError, "CERTIFICATE_VERIFY_FAILED")
+    assert is_plain_http_answer(_wrapped(root)) is False
 
 
 def test_dns_failure_survives_a_self_referential_chain() -> None:

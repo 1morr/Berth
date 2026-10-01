@@ -13,7 +13,7 @@ from typing import Any
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from berth.adapters.http import AuthFailedError, ServiceUnavailableError
+from berth.adapters.http import AuthFailedError, ServiceNotDeployedError, ServiceUnavailableError
 from berth.adapters.qbittorrent import QbittorrentVersion
 from berth.adapters.qbittorrent.fake import FakeQbittorrentClient
 from berth.domain import (
@@ -33,7 +33,7 @@ from berth.services.qbittorrent import (
     set_interface_login,
 )
 from berth.services.settings import read_settings, write_settings
-from berth.services.setup import STEP_QBITTORRENT, STEP_ROUTES, read_status
+from berth.services.setup import STEP_QBITTORRENT, STEP_ROUTES, read_status, retest_service
 from berth.services.steps import InterfaceLogin, password_matches
 from tests.integration.arrange import chosen, own
 from tests.integration.factories import FakeClientFactory
@@ -298,6 +298,29 @@ async def test_the_wizard_moves_on_once_the_preferences_are_applied(
 
     # 下一步是媒體庫路徑（票 06d 移到 qBittorrent 之後）。
     assert (await read_status(session)).current_step == STEP_ROUTES
+
+
+@pytest.mark.asyncio
+async def test_a_qbittorrent_that_stopped_after_applying_holds_page_2_again(
+    session: AsyncSession,
+) -> None:
+    """套用過之後 qBittorrent 停了：重新測試是紅的，頁 2 就不算做完（M4 票 25，實測 B9-04～07）。
+
+    原本連線卡是綠的、底下紅的、前進鍵照樣在。頁 2 做完＝這一台**現在**連得上，而且按過套用；容器
+    回來、重新測試綠了，套用過的結果照舊算數，不必再按一次。
+    """
+    await arrange(session)
+    client = FakeQbittorrentClient()
+    factory = FakeClientFactory(qbittorrent=client)
+    await apply_qbittorrent(session, factory, login=SKIPPER)
+
+    client.error = ServiceNotDeployedError("GET /api/v2/app/version: host does not resolve")
+    stopped = await retest_service(session, factory, ServiceKind.QBITTORRENT, now=NOW)
+    assert stopped.current_step == STEP_QBITTORRENT
+
+    client.error = None
+    back = await retest_service(session, factory, ServiceKind.QBITTORRENT, now=NOW)
+    assert back.current_step == STEP_ROUTES
 
 
 @pytest.mark.asyncio

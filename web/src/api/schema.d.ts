@@ -2457,7 +2457,7 @@ export interface components {
          * @description 測試結果的理由。UI 逐服務顯示，所以是封閉集合而不是自由文字。
          * @enum {string}
          */
-        ConnectionReason: "connected" | "setup_pending" | "setup_completed" | "auth_required" | "ip_banned" | "api_key_missing" | "not_deployed" | "unreachable" | "starting" | "protocol_mismatch" | "version_unsupported" | "other_server";
+        ConnectionReason: "connected" | "setup_pending" | "setup_completed" | "auth_required" | "ip_banned" | "api_key_missing" | "not_deployed" | "unreachable" | "starting" | "protocol_mismatch" | "scheme_mismatch" | "scheme_missing" | "version_unsupported" | "other_server";
         /**
          * ConnectionState
          * @description 選完之後那一次測試的結果（plan §9.3〈服務頁的共同形狀〉）。
@@ -5001,7 +5001,7 @@ export interface components {
          *     `SetupStep.params`，不拼進英文句子。
          * @enum {string}
          */
-        StepFailure: "not_deployed" | "unreachable" | "starting" | "auth_rejected" | "ip_banned" | "protocol_mismatch" | "not_found" | "version_unsupported" | "credential_missing" | "category_conflict" | "save_path_missing" | "path_not_visible" | "berth_cannot_write" | "probe_unseen" | "probe_unreadable" | "probe_unsettled" | "library_gone" | "library_path_gone" | "jellyfin_cannot_see" | "cross_device" | "link_failed" | "site_cloudflare" | "site_no_results" | "site_unreachable" | "site_rejected" | "site_not_offered" | "no_search" | "unexpected";
+        StepFailure: "not_deployed" | "unreachable" | "starting" | "auth_rejected" | "ip_banned" | "protocol_mismatch" | "scheme_mismatch" | "scheme_missing" | "not_found" | "version_unsupported" | "credential_missing" | "category_conflict" | "save_path_missing" | "path_not_visible" | "directory_missing" | "berth_cannot_write" | "probe_unseen" | "probe_unreadable" | "probe_unsettled" | "library_gone" | "library_path_gone" | "jellyfin_cannot_see" | "cross_device" | "link_failed" | "site_cloudflare" | "site_no_results" | "site_unreachable" | "site_rejected" | "site_not_offered" | "no_search" | "unexpected";
         /**
          * StepOut
          * @description 一條纜繩：精靈的一步，或一個 Route 的一項檢查。

@@ -291,7 +291,7 @@ describe('頁 1：Jellyfin 與擁有者', () => {
 
     expect(await screen.findByText('沒通過')).toBeInTheDocument()
     expect(screen.getByText('主機名解不到')).toBeInTheDocument()
-    expect(screen.getByText(/jellyfin 不在這套 compose 裡/)).toBeInTheDocument()
+    expect(screen.getByText(/jellyfin 的容器沒在跑.*或它不在這套 compose 裡/)).toBeInTheDocument()
     expect(screen.getByText('COMPOSE_PROFILES=jellyfin,qbittorrent,prowlarr')).toBeInTheDocument()
     expect(screen.getByText('docker compose up -d')).toBeInTheDocument()
     // 連不上就還沒有擁有者表單可填。

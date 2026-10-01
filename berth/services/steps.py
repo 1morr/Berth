@@ -13,12 +13,15 @@ import hmac
 import os
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
+from pathlib import PurePosixPath
 
-from berth.adapters.fs import PathEscapeError
+from berth.adapters.fs import PROBE_PREFIX, PathEscapeError
 from berth.adapters.http import (
     AuthFailedError,
     NotFoundError,
     ProtocolMismatchError,
+    SchemeMismatchError,
+    SchemeMissingError,
     ServiceBusyError,
     ServiceNotDeployedError,
     ServiceUnavailableError,
@@ -126,7 +129,10 @@ def failure_of(exc: Exception) -> tuple[StepFailure, dict[str, str]]:
         if isinstance(exc, kind):
             return failure, {}
     if isinstance(exc, OSError) and exc.filename is not None:
-        return StepFailure.BERTH_CANNOT_WRITE, {"path": str(exc.filename)}
+        # 寫不進的是探測檔時說它所在的目錄（M4 票 25）：要改權限的是那個目錄，探測檔本來就不存在。
+        path = PurePosixPath(str(exc.filename))
+        where = path.parent if path.name.startswith(PROBE_PREFIX) else path
+        return StepFailure.BERTH_CANNOT_WRITE, {"path": str(where)}
     return StepFailure.UNEXPECTED, {}
 
 
@@ -137,6 +143,8 @@ _FAILURES: tuple[tuple[type[BaseException], StepFailure], ...] = (
     (IpBannedError, StepFailure.IP_BANNED),
     (AuthFailedError, StepFailure.AUTH_REJECTED),
     (ProtocolMismatchError, StepFailure.PROTOCOL_MISMATCH),
+    (SchemeMismatchError, StepFailure.SCHEME_MISMATCH),
+    (SchemeMissingError, StepFailure.SCHEME_MISSING),
     (NotFoundError, StepFailure.NOT_FOUND),
     (PathEscapeError, StepFailure.BERTH_CANNOT_WRITE),
 )

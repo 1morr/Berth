@@ -730,8 +730,12 @@ class TestChecks:
     async def test_a_library_path_berth_cannot_see_fails_the_route(
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
-        """檢查二：Jellyfin 報的媒體庫路徑在 Berth 內 `stat` 不到。"""
-        missing = roots["library"] / "not-mounted"
+        """檢查二：Jellyfin 報的媒體庫路徑在 Berth 內 `stat` 不到——它在 Berth 的共用根目錄外面（它
+        自己掛的 `/media/tv`）。**上一層存在也一樣是沒掛**（M4 票 25 code-review）：image 本來就有
+        `/media`、`/mnt` 這種空目錄，看「上面幾層在不在」會把它說成目錄被刪。"""
+        media = roots["library"].parents[1] / "media"  # 與共用根 `data` 並排，而且存在
+        media.mkdir()
+        missing = media / "tv"
         libraries = (existing_library(missing),)
         await arrange(session, roots, origin=ServiceOrigin.EXISTING, libraries=libraries)
 
@@ -745,6 +749,25 @@ class TestChecks:
         assert row.status is StepStatus.FAILED
         assert str(missing) in row.error
         assert (row.failure, row.params) == (StepFailure.PATH_NOT_VISIBLE, {"path": str(missing)})
+
+    @pytest.mark.asyncio
+    async def test_a_deleted_write_target_is_a_missing_directory_not_a_mount(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """寫入目標被刪掉：它上面的媒體庫根目錄還在，掛載是好的（M4 票 25，實測 E12）。原本與少了
+        掛載同一個代碼，畫面因此說「不在 /data 底下」，照做修不好。"""
+        deleted = roots["library"] / "tv"
+        libraries = (existing_library(deleted),)
+        await arrange(session, roots, origin=ServiceOrigin.EXISTING, libraries=libraries)
+
+        status = await build_routes(
+            session,
+            factory_for(roots, libraries=libraries),
+            (RouteSelection(library="影集", target_path=str(deleted)),),
+        )
+
+        row = checks(status, status.routes[0].slug)[RouteCheck.LIBRARY_PATH.value]
+        assert (row.failure, row.params) == (StepFailure.DIRECTORY_MISSING, {"path": str(deleted)})
 
     @pytest.mark.asyncio
     async def test_only_the_write_target_has_to_be_visible_to_berth(

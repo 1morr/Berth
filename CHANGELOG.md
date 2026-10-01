@@ -1260,6 +1260,14 @@ split-cour 的第一批被播出日比對整批擋在審核，改正一次並套
   媒體庫頁那一份 `GET /api/inventory/{library_id}/watching` 不變。
 
 ### Fixed
+- **精靈的補法照原因給，不照檢查項目給**（M4 票 25，2026-10-01 實測 B5、B9、E2、E8～E12）：Berth 自己寫不進
+  （`berth_cannot_write`）不再被說成 Jellyfin 或 qBittorrent 沒掛 `/data`、分類衝突，改說 PUID / PGID 與目錄權限、
+  不給別的容器的片段；目錄被刪（新代碼 `directory_missing`）與不在共用掛載底下分開；qBittorrent 沒報預設儲存路徑
+  說回頁 2 重新套用。`https://` 打到講 http 的 port、位址沒寫 `http://` 不再說成連不上（新理由 `scheme_mismatch` /
+  `scheme_missing`），位址欄送出前先驗。`library_path` 的補法說先刪掉這條 Route 再選新路徑。精靈裡 Berth 自己的
+  401 / 403 各說各的：不是管理員（給登出）、擁有者在別處搶先成立、登入失效（給登入），不再說後端沒在跑或出錯。
+  只有 Berth 時選套件內 Prowlarr 先連線再讀 key，說主機名解不到而不是讀不到 key。qBittorrent 套用之後停了，
+  頁 2 的連線卡跟著變紅、出現「重新測試」，頁 2 不再算做完（前進鍵收起）；主機名解不到的句子說出容器可能停了。
 - **關機時被打斷的資料庫連線沒有關**（M4 票 24 之後，`test_setup_api.py` 單獨跑三次兩次紅）：lifespan cancel 背景迴圈
   時若正好打在開新連線（含設 pragma），SQLAlchemy 與 aiosqlite 都把那條連線丟著不關，worker thread 之後把結果交回已經
   關掉的事件迴圈。連線改由 `berth/db/engine.py` 的 `async_creator` 開，pragma 不再走 `connect` 事件；開連線與設 pragma

@@ -10,6 +10,7 @@ import {
   type ChoiceInput,
   type SetupStatus,
 } from '../api/setup'
+import { RequestFailed } from '../components/RequestFailed'
 import { useChoiceDraft } from '../setup/choiceDraft'
 import { ServiceChoice } from '../setup/ServiceChoice'
 import { SettingsSection } from './SettingsFrame'
@@ -57,9 +58,11 @@ export function ServiceConnection({
       lede={t('settings.connection.lede')}
     >
       {!status.data ? (
-        <p className="text-sm text-ink-dim">
-          {status.isError ? t('setup.statusFailed') : t('health.checking')}
-        </p>
+        status.isError ? (
+          <RequestFailed error={status.error} lead={t('setup.statusFailed')} />
+        ) : (
+          <p className="text-sm text-ink-dim">{t('health.checking')}</p>
+        )
       ) : (
         <ServiceChoice
           kind={kind}

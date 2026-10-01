@@ -102,6 +102,12 @@ const FIX = {
   probeUnreadable: 'routes.fix.probeUnreadable',
   probeUnsettled: 'routes.fix.probeUnsettled',
   libraryChanged: 'routes.fix.libraryChanged',
+  berthCannotWrite: 'routes.fix.berthCannotWrite',
+  directoryMissing: 'routes.fix.directoryMissing',
+  savePathMissing: 'routes.fix.savePathMissing',
+  // 位址的協定寫錯與服務頁同一句（M4 票 25）。
+  schemeMismatch: 'connection.fix.schemeMismatch',
+  schemeMissing: 'connection.fix.schemeMissing',
 } as const
 
 /** 既有服務另說的那一句（票 08）。補法已經是那一台自己的版本時不另說。 */
@@ -111,7 +117,10 @@ const ADVICE = {
 } as const
 
 export interface Remedy {
-  /** 失敗時的說明（i18n key）。值裡的 `{{root}}` 由呼叫端帶入 `root`，`{{service}}` 帶 `CHECK_SERVICE`。 */
+  /**
+   * 失敗時的說明（i18n key）。值裡的 `{{root}}` 由呼叫端帶入 `root`，`{{service}}` 帶 `CHECK_SERVICE`，
+   * `{{path}}` 帶那一條纜繩的 `params`。
+   */
   fix: (typeof FIX)[keyof typeof FIX]
   /** 修正片段：要改的那一台的 compose `volumes:`。 */
   commands: readonly string[]
@@ -152,12 +161,19 @@ export function remedyFor(
   // 先看為什麼：與掛載無關的失敗、或檢查自己說得出不是掛載的那幾種，補法不給片段。
   if (failure === 'ip_banned') return remedy(FIX.banned, null)
   if (failure === 'auth_rejected') return remedy(FIX.auth, null)
+  if (failure === 'scheme_mismatch') return remedy(FIX.schemeMismatch, null)
+  if (failure === 'scheme_missing') return remedy(FIX.schemeMissing, null)
   if (failure && SERVICE_FAILURES.has(failure)) return remedy(FIX.unreachable, null)
   if (failure === 'probe_unreadable') return remedy(FIX.probeUnreadable, null)
   if (failure === 'probe_unsettled') return remedy(FIX.probeUnsettled, null)
   if (failure === 'library_gone' || failure === 'library_path_gone') {
     return remedy(FIX.libraryChanged, null)
   }
+  // Berth 在自己的容器裡寫不進、目錄不見了、qBittorrent 沒報預設路徑（M4 票 25）：都不是哪一台少了
+  // 掛載。原本照檢查項目落下去——寫不進寫入目標被說成 Jellyfin 沒掛、建不了分類目錄被說成分類衝突。
+  if (failure === 'berth_cannot_write') return remedy(FIX.berthCannotWrite, null)
+  if (failure === 'directory_missing') return remedy(FIX.directoryMissing, null)
+  if (failure === 'save_path_missing') return remedy(FIX.savePathMissing, null)
 
   switch (check) {
     case 'category':

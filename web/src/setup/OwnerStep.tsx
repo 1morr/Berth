@@ -241,7 +241,9 @@ function OwnerForm({
           <TechnicalDetails lines={[refusal.detail]} />
         </div>
       ) : (
-        claimError !== null && claimError !== undefined && <RequestFailed error={claimError} />
+        // 這張表單只在還沒有擁有者時送出：門禁要求登入就是別處搶先成立了（M4 票 25，實測 E12-11）。
+        claimError !== null &&
+        claimError !== undefined && <RequestFailed error={claimError} ownerPending />
       )}
       <div className={sticky ? STICKY_ACTION : ''}>
         <PrimaryButton type="submit" busy={claiming}>
