@@ -72,6 +72,8 @@ pytest 3429 passed、3 errors——三個都是 `test_setup_api.py`（`TestSourc
 setup / teardown、`TestRoutes::test_completing_needs_a_tmdb_credential_first` 的 setup）撿到前面測試漏關的 aiosqlite 連線
 （`ResourceWarning`、`Event loop is closed`），不是斷言失敗。**既有的不穩定**：單獨跑這個檔，工作樹 3 次 2 次出現，
 基準 `ee84da0` 的 worktree 也是 3 次 2 次；沒有修（不在這張票的範圍，也還沒找到漏的是哪一條連線）。
+**後續**：同一個 session 另一個 commit 修了（`berth/db/engine.py`：關機時 cancel 打在開連線、設 pragma 的途中，連線沒人關；
+原因與修法在 progress.md 偏差與決定）。
 
 **code-review 未處理的發現**
 

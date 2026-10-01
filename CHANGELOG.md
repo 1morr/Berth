@@ -1260,6 +1260,10 @@ split-cour 的第一批被播出日比對整批擋在審核，改正一次並套
   媒體庫頁那一份 `GET /api/inventory/{library_id}/watching` 不變。
 
 ### Fixed
+- **關機時被打斷的資料庫連線沒有關**（M4 票 24 之後，`test_setup_api.py` 單獨跑三次兩次紅）：lifespan cancel 背景迴圈
+  時若正好打在開新連線（含設 pragma），SQLAlchemy 與 aiosqlite 都把那條連線丟著不關，worker thread 之後把結果交回已經
+  關掉的事件迴圈。連線改由 `berth/db/engine.py` 的 `async_creator` 開，pragma 不再走 `connect` 事件；開連線與設 pragma
+  被 cancel 時先做完、關掉再往上丟。
 - **精靈頁 3 的前進條件跟畫面一致**（M4 票 24，2026-10-01 實測 R-04～08、E6-14～16、E8-04～05）：保留 Jellyfin、
   只清 Berth 重跑時清單全部已建立，Route 全綠卻永遠停在頁 3——頁 3 的前半改看媒體庫快照（清單每一列都在
   Jellyfin 上），不再看「建媒體庫那一步有沒有跑過」。套件內只替清單上的媒體庫建 Route（`LibraryChoiceOut.listed`）：

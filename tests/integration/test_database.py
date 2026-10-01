@@ -6,11 +6,15 @@ M1 的表由後續的 migration 增量加上去（progress.md 偏差與決定）
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import json
 import sqlite3
+import threading
 from collections.abc import Iterator, Mapping
 from contextlib import closing, contextmanager
 from pathlib import Path
+from typing import Any
 
 import pytest
 from alembic import command
@@ -592,6 +596,68 @@ async def test_foreign_keys_are_enforced(config: Config) -> None:
         await engine.dispose()
 
     assert enabled == 1
+
+
+@pytest.mark.parametrize("stuck", ["connect", "pragma"])
+async def test_a_connection_cancelled_while_opening_is_still_closed(
+    config: Config, monkeypatch: pytest.MonkeyPatch, stuck: str
+) -> None:
+    """關機時 lifespan cancel 背景迴圈，打在它正在開新連線的那一刻（qbit poller 每 5 秒醒一次）。
+
+    兩個地方會把連線丟著不關：aiosqlite 的 connect 被 cancel（`connect`），以及連上之後設
+    pragma 時被 cancel（`pragma`，`journal_mode=WAL` 要等寫鎖，最容易被打中）。thread 之後把
+    結果交回已經關掉的 loop，pytest 把 `Event loop is closed` 與 `unclosed database` 算在下一個
+    測試頭上——`test_setup_api.py` 單獨跑三次兩次紅。
+    """
+    await migrate(config)
+    entered, release = threading.Event(), threading.Event()
+    opened: list[sqlite3.Connection] = []
+    real_connect = sqlite3.connect
+
+    def hold() -> int:
+        entered.set()
+        release.wait(timeout=10)
+        return 0
+
+    def slow_connect(*args: Any, **kwargs: Any) -> sqlite3.Connection:
+        if stuck == "connect":
+            hold()
+        connection: sqlite3.Connection = real_connect(*args, **kwargs)
+        if stuck == "pragma":
+            # 第一條敘述（設 pragma）執行途中卡住；放行之後拿掉，之後的敘述照常。
+            def once() -> int:
+                connection.set_progress_handler(None, 1)
+                return hold()
+
+            connection.set_progress_handler(once, 1)
+        opened.append(connection)
+        return connection
+
+    # aiosqlite 的 worker thread 以 `sqlite3.connect` 開連線、在同一條 thread 上執行敘述。
+    monkeypatch.setattr("aiosqlite.core.sqlite3.connect", slow_connect)
+    engine = create_engine(config)
+
+    async def use() -> None:
+        async with engine.connect() as connection:
+            await connection.scalar(text("SELECT 1"))
+
+    task = asyncio.create_task(use())
+    while not entered.is_set():
+        await asyncio.sleep(0.01)
+    task.cancel()
+    release.set()
+    with contextlib.suppress(asyncio.CancelledError):
+        await task
+    await engine.dispose()
+    # 修好之前沒有人等那條 thread：它開完的時候，這裡早就走過去了。
+    for _ in range(500):
+        if opened:
+            break
+        await asyncio.sleep(0.01)
+
+    assert len(opened) == 1
+    with pytest.raises(sqlite3.ProgrammingError, match="closed"):
+        opened[0].execute("SELECT 1")
 
 
 BACKFILL = "e8a3d6c1f59b"
