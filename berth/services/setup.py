@@ -23,9 +23,11 @@ from berth.adapters.http import (
     SchemeMismatchError,
     SchemeMissingError,
     ServiceBusyError,
+    ServiceError,
     ServiceNotDeployedError,
     ServiceUnavailableError,
 )
+from berth.adapters.prowlarr import ProwlarrClient
 from berth.adapters.qbittorrent import IpBannedError
 from berth.domain import (
     PROWLARR_LOGIN_STEP,
@@ -54,7 +56,12 @@ from berth.models import (
 )
 from berth.services.auth import SignedIn, open_session
 from berth.services.clients import BundledServices, ServiceClientFactory
-from berth.services.indexer import existing_prowlarr_step, outdated_step
+from berth.services.indexer import (
+    existing_prowlarr_step,
+    instance_login,
+    note_instance_login,
+    outdated_step,
+)
 from berth.services.jellyfin import (
     DEFAULT_STARTUP,
     JellyfinStartup,
@@ -341,16 +348,29 @@ async def choose_service(
 async def retest_service(
     session: AsyncSession,
     factory: ServiceClientFactory,
+    bundled: BundledServices,
     kind: ServiceKind,
     *,
     restart: bool = False,
     now: datetime | None = None,
 ) -> SetupStatus:
     """用存下來的選擇再測一次：出問題那一頁的「重新測試」（取代「重新偵測這個服務」），以及套件內
-    那一台還在啟動時前端每 3 秒的那一次。`restart=True` 是使用者按的，2 分鐘重新算。"""
+    那一台還在啟動時前端每 3 秒的那一次。`restart=True` 是使用者按的，2 分鐘重新算。
+
+    **套件內 Prowlarr 每次都重讀掛載的 key**（M4 票 27）：在 Prowlarr 重新產生 key 之後，存下的
+    那一把就不被接受了，而重新測試是畫面上唯一的出口。掛載讀不到時不動存下的——那是使用者貼的。
+    """
     setup = await read_settings(session, SetupSettings)
-    if kind not in setup.choices:
+    choice = setup.choices.get(kind)
+    if choice is None:
         raise ValueError(f"choose where {kind} comes from first")
+    mounted = bundled.prowlarr_api_key
+    if kind is ServiceKind.PROWLARR and choice.origin is ServiceOrigin.BUNDLED and mounted:
+
+        def remount(indexer: IndexerSettings) -> None:
+            indexer.api_key = mounted
+
+        await update_settings(session, IndexerSettings, remount)
     return await _test_and_record(session, factory, kind, restart=restart, now=now or _utcnow())
 
 
@@ -386,6 +406,8 @@ async def _test_and_record(
             # （`_indexer_settled`）。
             latest.indexer.steps = [_existing_indexer_step(test)]
             latest.indexer.skipped = False
+        elif kind is ServiceKind.PROWLARR:
+            note_instance_login(latest, outcome.interface_user)
 
     await update_settings(session, SetupSettings, record)
     return await _read(session, now=now)
@@ -461,6 +483,17 @@ class _Outcome:
     server_id: str = ""
     #: 沒連上時的原文（英文），收進畫面的「技術細節」。
     error: str = ""
+    #: 套件內 Prowlarr 自己設過的介面帳號（M4 票 27）；沒設過、或不是那一台是空字串。
+    interface_user: str = ""
+
+
+async def _interface_user(prowlarr: ProwlarrClient) -> str:
+    """套件內 Prowlarr 自己設過的介面帳號（M4 票 27）。只是順便讀：讀不到不讓連線測試變紅，
+    登入那一條照舊等「加入」或「設定介面登入」。"""
+    try:
+        return instance_login(await prowlarr.host_config())
+    except ServiceError:
+        return ""
 
 
 async def _test_connection(
@@ -496,6 +529,9 @@ async def _test_connection(
             await qbittorrent.aclose()
 
     indexer = await read_settings(session, IndexerSettings)
+    bundled = (await read_settings(session, SetupSettings)).origin_of(
+        ServiceKind.PROWLARR
+    ) is ServiceOrigin.BUNDLED
     prowlarr = factory.prowlarr(indexer.base_url, indexer.api_key)
 
     async def prowlarr_test() -> _Outcome:
@@ -512,7 +548,15 @@ async def _test_connection(
             # 等不會好，所以不是 `transient`：套件內的那一台也當場紅（M4 票 17）。
             return _Outcome(reason=ConnectionReason.VERSION_UNSUPPORTED, detail=status.version)
         indexers = await prowlarr.indexers()
-        return _Outcome(reason=ConnectionReason.CONNECTED, detail=str(len(indexers)), ok=True)
+        # 套件內那一台自己就有介面登入（重裝保留它的 config）：一起讀，記下來那一條就有結論
+        # （M4 票 27）。既有的那一台的 `config/host` 不讀（M4 票 20）。
+        user = await _interface_user(prowlarr) if bundled else ""
+        return _Outcome(
+            reason=ConnectionReason.CONNECTED,
+            detail=str(len(indexers)),
+            ok=True,
+            interface_user=user,
+        )
 
     try:
         return await _classified(prowlarr_test)
@@ -770,14 +814,28 @@ def _indexer_settled(setup: SetupSettings) -> bool:
     逐站失敗不擋：十個公開站裡有幾個連不上是常態，只要接上了一個就走得下去。
     **替 Prowlarr 介面設登入那一條不算「接上了一個」**——它與站接不接得上無關，算進去等於
     十站全失敗也放行；但套件內的那一台要**另外**有它（必填，M4 票 07 shape）。
+
+    **套件內那一台上已經有站也算**（M4 票 27）：重裝保留 Prowlarr 設定時，站不是這一次的 Berth
+    加的，不在候選清單、也加不了。站數取最後一次連線測試（`_sites_counted`）。
     """
     if setup.indexer.skipped:
         return True
     settled = {
         row.key for row in setup.indexer.steps if row.status in (StepStatus.OK, StepStatus.SKIPPED)
     }
-    bundled = setup.origin_of(ServiceKind.PROWLARR) is ServiceOrigin.BUNDLED
-    return bool(settled - {PROWLARR_LOGIN_STEP}) and (not bundled or PROWLARR_LOGIN_STEP in settled)
+    if setup.origin_of(ServiceKind.PROWLARR) is not ServiceOrigin.BUNDLED:
+        return bool(settled - {PROWLARR_LOGIN_STEP})
+    sites = bool(settled - {PROWLARR_LOGIN_STEP}) or _sites_counted(setup) > 0
+    return sites and PROWLARR_LOGIN_STEP in settled
+
+
+def _sites_counted(setup: SetupSettings) -> int:
+    """最後一次連得上的 Prowlarr 連線測試數到幾站（`_test_connection`；加站與移除之後
+    `indexer._recount` 跟著改）。沒連上、或還沒測過是 0。"""
+    choice = setup.choices.get(ServiceKind.PROWLARR)
+    if choice is None or choice.test is None or choice.test.state is not ConnectionState.OK:
+        return 0
+    return int(choice.test.detail or 0)
 
 
 def _owner_signs_in(setup: SetupSettings) -> bool:

@@ -53,6 +53,7 @@ import { BerthBoard, type BerthSignals } from '../setup/BerthBoard'
 import { BerthNav, RevisitNote } from '../setup/BerthNav'
 import { CompleteStep, type CompleteFailure } from '../setup/CompleteStep'
 import { IndexerStep } from '../setup/IndexerStep'
+import { GAP, indexerGaps } from '../setup/indexerGaps'
 import { OwnerStep } from '../setup/OwnerStep'
 import { QbittorrentStep } from '../setup/QbittorrentStep'
 import { librariesFailed } from '../setup/jellyfinSteps'
@@ -431,10 +432,13 @@ export function SetupPage() {
 
   const previous = previousOf(step)
   const next = nextOf(step)
+  // 頁 4 還差什麼，說在前進鍵的位置（M4 票 27）。
+  const gaps = step === STEP.indexer && indexers.data ? indexerGaps(current, indexers.data) : []
   const nav = (
     <BerthNav
       onPrevious={previous !== null ? () => goTo(previous) : undefined}
       onNext={next !== null && advanced(step, backend) ? () => goTo(next) : undefined}
+      missing={gaps.map((gap) => ({ label: t(GAP[gap].label), target: GAP[gap].target }))}
     />
   )
   const note = advanced(step, backend) ? (

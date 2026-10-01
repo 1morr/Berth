@@ -116,7 +116,9 @@ class TestWizard:
             now=LATER,
         )
         chosen = (await read_settings(session, SetupSettings)).indexer.steps
-        await retest_service(session, factory, ServiceKind.PROWLARR, restart=True, now=LATER)
+        await retest_service(
+            session, factory, bundled, ServiceKind.PROWLARR, restart=True, now=LATER
+        )
         retested = (await read_settings(session, SetupSettings)).indexer.steps
 
         expected = (

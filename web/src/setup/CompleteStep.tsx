@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
 
 import type { IndexerSetup, RouteSetup } from '../api/setup'
 import { STICKY_ACTION, GhostButton, Notice, PrimaryButton } from '../components/controls'
@@ -109,7 +110,7 @@ export function CompleteStep({
         <section className="mt-6 grid gap-3">
           <h3 className="label text-ink-dim">{t('complete.skippedTitle')}</h3>
           <Notice signal="assigned" label={t('indexer.skip')}>
-            {t('complete.where.indexers')}
+            {skippedText(t, indexers)}
           </Notice>
         </section>
       )}
@@ -141,4 +142,14 @@ export function CompleteStep({
       {nav}
     </StepFrame>
   )
+}
+
+/**
+ * 跳過索引站之後那一句照 Prowlarr 上實際有幾站說（M4 票 27）：重裝保留 Prowlarr 設定時它本來就有站，
+ * 說「搜尋不到任何東西」是錯的。這一次讀不到清單就說讀不到，不猜。
+ */
+function skippedText(t: TFunction, indexers: IndexerSetup | undefined): string {
+  if (indexers?.error) return t('complete.where.indexersUnread')
+  const count = indexers?.sites.length ?? 0
+  return count > 0 ? t('complete.where.indexersPresent', { count }) : t('complete.where.indexers')
 }

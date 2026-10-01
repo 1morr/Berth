@@ -27,6 +27,7 @@ import { useFocusAfterRemoval } from '../components/useFocusAfterRemoval'
 import { languageName } from './languageName'
 import { prowlarrWeb } from './serviceWeb'
 import { hostOf } from './signals'
+import { GAP } from './indexerGaps'
 
 /**
  * 頁 4 與設定頁的索引站那一半（M4 票 09，`.scratch/m4/indexer-berth-shape.md`）：
@@ -450,7 +451,13 @@ export function AddSites({
   const testingAny = recommended.some((row) => checks.get(row.definition_name) === 'testing')
 
   return (
-    <section aria-labelledby={titleId} className="mt-10 border-t-2 border-rule pt-6">
+    <section
+      id={GAP.sites.target}
+      // 頁 4 前進鍵位置的「還差」把焦點送到這裡（M4 票 27）。
+      tabIndex={-1}
+      aria-labelledby={titleId}
+      className="mt-10 border-t-2 border-rule pt-6"
+    >
       <div className="flex flex-wrap items-center gap-3">
         <h3 id={titleId} className="label text-ink-dim">
           {t('indexer.add.title')}

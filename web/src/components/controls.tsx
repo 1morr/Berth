@@ -23,6 +23,13 @@ export const STICKY_BAR =
  */
 export const STICKY_ACTION = `${STICKY_BAR} lg:static lg:mx-0 lg:border-0 lg:bg-transparent lg:p-0`
 
+/**
+ * `STICKY_ACTION` 的反面：只在桌機固定。窄版底部留給那一頁自己的主要動作，兩條 sticky 不疊在
+ * 同一個位置（M4 票 27 的「還差」）。
+ */
+export const STICKY_WIDE =
+  'lg:sticky lg:bottom-0 lg:-mx-6 lg:border-t-2 lg:border-rule lg:bg-hull lg:px-6 lg:pb-[max(1rem,env(safe-area-inset-bottom))] lg:pt-4'
+
 // `ComponentPropsWithRef` 而不是 `InputHTMLAttributes`：登入失敗後要把焦點送回密碼欄，
 // 呼叫端得拿得到那個 input（React 19 的 `ref` 就是一個一般的 prop）。
 type FieldProps = ComponentPropsWithRef<'input'> & {

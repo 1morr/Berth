@@ -139,7 +139,7 @@ class TestZeroSites:
         await choose_existing(session, factory)
         factory.prowlarr_ = type(factory.prowlarr_)(indexers=[site(7, "animebytes")])
 
-        await retest_service(session, factory, ServiceKind.PROWLARR, restart=True)
+        await retest_service(session, factory, BUNDLED, ServiceKind.PROWLARR, restart=True)
 
         assert (await read_status(session)).current_step > STEP_INDEXER
 

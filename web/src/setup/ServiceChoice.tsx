@@ -728,6 +728,10 @@ function Fix({
     lede = t('connection.fix.somethingElse', { kind })
   } else if (bundled && reason === 'api_key_missing') {
     lede = t('connection.fix.apiKeyMissing')
+  } else if (bundled && kind === 'prowlarr' && reason === 'auth_required') {
+    // Prowlarr 不靠白名單：Berth 讀掛載的 key，每次重新測試都重讀（M4 票 27）。key 被重新產生過、
+    // 掛載卻沒進來時，說的是掛載。
+    lede = t('connection.fix.prowlarrMount')
   } else if (bundled && reason === 'auth_required') {
     lede = t('connection.fix.whitelist')
     commands = [`docker compose restart ${kind}`]

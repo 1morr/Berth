@@ -25,6 +25,7 @@ from berth.domain import (
     PROWLARR_LOGIN_STEP,
     CollectionType,
     ConnectionReason,
+    ConnectionState,
     HealthStatus,
     IndexerKind,
     JellyfinStep,
@@ -42,6 +43,7 @@ from berth.models import (
     SetupStep,
     TmdbSettings,
 )
+from berth.services.clients import BundledServices
 from berth.services.commands import CommandMark, Effect, mark_of
 from berth.services.indexer import (
     DEFAULT_INDEXERS,
@@ -55,12 +57,18 @@ from berth.services.indexer import (
     verify_sites,
 )
 from berth.services.settings import read_settings, write_settings
-from berth.services.setup import STEP_COMPLETE, STEP_INDEXER, STEP_TMDB, read_status
+from berth.services.setup import (
+    STEP_COMPLETE,
+    STEP_INDEXER,
+    STEP_TMDB,
+    read_status,
+    retest_service,
+)
 from berth.services.steps import InterfaceLogin
 from berth.services.tmdb import read_tmdb_status, verify_tmdb
 from tests.conftest import TMDB_API_KEY
 from tests.integration.arrange import chosen, own
-from tests.integration.factories import FakeClientFactory
+from tests.integration.factories import COMPOSE, FakeClientFactory
 
 NOW = datetime(2026, 9, 8, 12, 0, tzinfo=UTC)
 
@@ -277,6 +285,73 @@ async def test_a_bundled_prowlarr_without_a_login_holds_the_wizard(
         StepStatus.PENDING
     ]
     assert (await read_status(session)).current_step == STEP_INDEXER
+
+
+@pytest.mark.parametrize(("present", "step"), [(1, STEP_TMDB), (0, STEP_INDEXER)])
+@pytest.mark.asyncio
+async def test_sites_already_on_the_bundled_prowlarr_count(
+    session: AsyncSession, present: int, step: int
+) -> None:
+    """重裝保留 Prowlarr 設定：它已經有站，只是不是這一次的 Berth 加的（實測 R-09～11，M4 票 27）。
+
+    原本站那一半只認 Berth 加站的纜繩，已有的站不在候選清單、加不了，設好介面登入仍停在頁 4。
+    """
+    await arrange(session)
+    sites = [ProwlarrIndexer(7, "Nyaa.si", True, "nyaasi")][:present]
+    factory = FakeClientFactory(prowlarr=FakeProwlarrClient(indexers=sites))
+    unmounted = BundledServices(targets=COMPOSE, prowlarr_api_key="")
+    await retest_service(session, factory, unmounted, ServiceKind.PROWLARR, now=NOW)
+    assert (await read_status(session)).current_step == STEP_INDEXER
+
+    await set_interface_login(session, factory, SKIPPER, sleep=_no_sleep)
+
+    assert (await read_status(session)).current_step == step
+
+
+@pytest.mark.parametrize(("method", "step"), [("forms", STEP_TMDB), ("none", STEP_INDEXER)])
+@pytest.mark.asyncio
+async def test_a_login_the_bundled_prowlarr_already_has_counts(
+    session: AsyncSession, method: str, step: int
+) -> None:
+    """重裝保留 Prowlarr 設定：它的介面登入也還在（實跑 t27-06b，M4 票 27）。
+
+    畫面上那一區說「帳號：qaowner」、只給「更換登入」，Berth 卻沒記那一條、停在頁 4；原本只有按
+    「加入」才記，而站已經都在了，沒有東西可加。連線測試時讀一次，與「加入」同一個結論（`skipped`）。
+    """
+    await arrange(session)
+    prowlarr = FakeProwlarrClient(
+        indexers=[ProwlarrIndexer(7, "Nyaa.si", True, "nyaasi")],
+        host_config={"authenticationMethod": method, "username": "qaowner"},
+    )
+    unmounted = BundledServices(targets=COMPOSE, prowlarr_api_key="")
+
+    await retest_service(
+        session, FakeClientFactory(prowlarr=prowlarr), unmounted, ServiceKind.PROWLARR, now=NOW
+    )
+
+    assert (await read_status(session)).current_step == step
+    assert prowlarr.restarts == 0
+
+
+class _HostConfigDown(FakeProwlarrClient):
+    async def host_config(self) -> dict[str, object]:
+        raise ServiceUnavailableError("GET /api/v1/config/host: 503")
+
+
+@pytest.mark.asyncio
+async def test_an_unreadable_login_does_not_turn_the_connection_red(session: AsyncSession) -> None:
+    """讀它自己的介面登入只是順便（M4 票 27）：讀不到時連線照樣是綠的，登入那一條照舊沒結論。"""
+    await arrange(session)
+    prowlarr = _HostConfigDown(indexers=[ProwlarrIndexer(7, "Nyaa.si", True, "nyaasi")])
+    unmounted = BundledServices(targets=COMPOSE, prowlarr_api_key="")
+
+    status = await retest_service(
+        session, FakeClientFactory(prowlarr=prowlarr), unmounted, ServiceKind.PROWLARR, now=NOW
+    )
+
+    row = next(row for row in status.services if row.kind is ServiceKind.PROWLARR)
+    assert (row.state, row.detail) == (ConnectionState.OK, "1")
+    assert status.current_step == STEP_INDEXER
 
 
 @pytest.mark.asyncio

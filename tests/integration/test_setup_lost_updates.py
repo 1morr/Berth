@@ -129,7 +129,9 @@ class _StillStarting(FakeJellyfinClient):
                     )
                     await apply_qbittorrent(other, factory)
                 else:
-                    await retest_service(other, FakeClientFactory(), ServiceKind.PROWLARR, now=NOW)
+                    await retest_service(
+                        other, FakeClientFactory(), BUNDLED, ServiceKind.PROWLARR, now=NOW
+                    )
         raise ServiceBusyError("GET /System/Info/Public: 503 Service Unavailable")
 
 
@@ -145,7 +147,9 @@ class _JellyfinUpMeanwhile(FakeQbittorrentClient):
         if not self._done:
             self._done = True
             async with create_session_factory(self._engine)() as other:
-                await retest_service(other, FakeClientFactory(), ServiceKind.JELLYFIN, now=NOW)
+                await retest_service(
+                    other, FakeClientFactory(), BUNDLED, ServiceKind.JELLYFIN, now=NOW
+                )
         await super().set_preferences(values)
 
 
@@ -157,7 +161,7 @@ async def test_a_poll_in_flight_does_not_undo_page_2(
     await arrange(session)
     factory = FakeClientFactory(jellyfin=_StillStarting(engine, "page 2"))
 
-    polled = await retest_service(session, factory, ServiceKind.JELLYFIN, now=NOW)
+    polled = await retest_service(session, factory, BUNDLED, ServiceKind.JELLYFIN, now=NOW)
 
     assert state_of(polled, ServiceKind.JELLYFIN) is ConnectionState.WAITING
     status = await read_status(session)
@@ -173,7 +177,7 @@ async def test_two_services_polled_at_once_both_keep_their_results(
     await arrange(session)
     factory = FakeClientFactory(jellyfin=_StillStarting(engine, "prowlarr"))
 
-    await retest_service(session, factory, ServiceKind.JELLYFIN, now=NOW)
+    await retest_service(session, factory, BUNDLED, ServiceKind.JELLYFIN, now=NOW)
 
     status = await read_status(session)
     assert state_of(status, ServiceKind.PROWLARR) is ConnectionState.OK
@@ -236,7 +240,7 @@ async def test_a_result_about_the_previous_address_is_not_recorded_on_the_new_on
     await arrange(session)
     factory = FakeClientFactory(qbittorrent=_SwitchedMeanwhile(engine))
 
-    await retest_service(session, factory, ServiceKind.QBITTORRENT, now=NOW)
+    await retest_service(session, factory, BUNDLED, ServiceKind.QBITTORRENT, now=NOW)
 
     choice = (await read_settings(session, SetupSettings)).choices[ServiceKind.QBITTORRENT]
     assert choice.base_url == OTHER_QBITTORRENT

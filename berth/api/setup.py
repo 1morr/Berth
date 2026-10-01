@@ -279,13 +279,16 @@ async def post_service_test(
     session: SessionDep,
     config: ConfigDep,
     factory: ClientFactoryDep,
+    bundled: BundledServicesDep,
     kind: ServiceKind,
     body: RetestIn | None = None,
 ) -> SetupStatusOut:
     """用存下來的選擇再測一次：出問題那一頁的「重新測試」，與套件內那一台還在啟動時的輪詢。
     還沒選過是 422。"""
     try:
-        result = await retest_service(session, factory, kind, restart=(body or RetestIn()).restart)
+        result = await retest_service(
+            session, factory, bundled, kind, restart=(body or RetestIn()).restart
+        )
     except ValueError as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
     return _out(result, config)

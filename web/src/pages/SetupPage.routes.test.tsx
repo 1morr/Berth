@@ -16,6 +16,7 @@ import {
   routeSetup,
   routeView,
   setupStatus,
+  site,
   step,
   tmdbSetup,
 } from '../test/fixtures'
@@ -823,6 +824,26 @@ describe('頁 6：完成', () => {
     expect(screen.getByText(/五個泊位/)).toBeInTheDocument()
     // 之後拿什麼登入：擁有者的 Jellyfin 帳號（M4 票 06），套件內與既有同一句。
     expect(screen.getByText(/你是 skipper/)).toBeInTheDocument()
+  })
+
+  it('跳過索引站但 Prowlarr 上已經有站：照實際站數說，不說搜尋不到任何東西（M4 票 27）', async () => {
+    stubPage({
+      [STATUS]: { body: AT_THE_END },
+      [ROUTES]: { body: BUILT },
+      [INDEXERS]: {
+        body: indexerSetup({
+          skipped: true,
+          sites: [site({ definition_name: 'nyaasi', name: 'Nyaa.si' }, 1)],
+        }),
+      },
+      [TMDB]: { body: tmdbSetup() },
+    })
+
+    renderWithProviders(<SetupPage />)
+
+    expect(await screen.findByRole('button', { name: '完成設定' })).toBeInTheDocument()
+    expect(screen.getByText(/Prowlarr 上已經有 1 個站/)).toBeInTheDocument()
+    expect(screen.queryByText(/搜尋不到任何東西/)).not.toBeInTheDocument()
   })
 
   /**

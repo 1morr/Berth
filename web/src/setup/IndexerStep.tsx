@@ -1,4 +1,4 @@
-import { useState, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
 
@@ -33,6 +33,7 @@ import { prowlarrWeb } from './serviceWeb'
 import { LoopbackHint, ServiceChoice, type ChoiceControls } from './ServiceChoice'
 import type { ChoiceDraft } from './choiceDraft'
 import { STEP } from './navigation'
+import { GAP, modeOf } from './indexerGaps'
 import { VERSION_FLOOR, connected, schemeFix } from './signals'
 import { StepFrame } from './StepFrame'
 
@@ -110,9 +111,26 @@ export function IndexerStep({
   // 不閃另一種的文案（M4 票 20）。
   const mode = ready && indexers ? modeOf(indexers, service?.origin) : null
   const hasResults = Boolean(indexers && indexers.steps.length > 0)
-  // 既有的那一台連上過、這一次讀清單卻失敗：說讀不到，不說成「沒有站」（M4 票 20 的 code-review）。
-  const unread = mode === 'prowlarr' && Boolean(indexers?.error)
+  // 連上過、這一次讀清單卻失敗：說讀不到，不說成「沒有站」（M4 票 20 的 code-review）。套件內的也是
+  // （M4 票 27）：Prowlarr 重新產生 key 之後連線卡還是綠的，原本整段消失、只剩「之後再說」。
+  const unread = (mode === 'prowlarr' || mode === 'bundled') && Boolean(indexers?.error)
   const sticky = status.current_step <= STEP.indexer
+  // 清單上有站、後端上一次連線測試記的卻是 0 站（使用者到 Prowlarr 自己的介面加了站再回來）：後端照那個
+  // 數判斷這一頁做完了沒，不重測的話前進鍵不出現、「還差」也空著。自動重新測試一次（M4 票 27，頁 2 的
+  // 票 25 同一個做法），只發一次、不管結果。
+  const stale =
+    (mode === 'bundled' || mode === 'prowlarr') &&
+    !unread &&
+    status.current_step === STEP.indexer &&
+    Boolean(indexers?.sites.length) &&
+    Number(service?.detail || 0) === 0
+  const resynced = useRef(false)
+  const { onRetest, retesting } = choice
+  useEffect(() => {
+    if (!stale || resynced.current || retesting) return
+    resynced.current = true
+    onRetest(false)
+  }, [stale, retesting, onRetest])
 
   return (
     <StepFrame
@@ -149,7 +167,7 @@ export function IndexerStep({
           onReread={() => choice.onRetest(true)}
         />
       )}
-      {indexers && (mode === 'bundled' || (mode === 'prowlarr' && !unread)) && (
+      {indexers && (mode === 'bundled' || mode === 'prowlarr') && !unread && (
         <>
           {mode === 'prowlarr' && indexers.sites.length === 0 && (
             <NoSites
@@ -187,16 +205,6 @@ export function IndexerStep({
       {nav}
     </StepFrame>
   )
-}
-
-/** 連上之後畫哪一種：套件內、既有 Prowlarr、Torznab 端點。 */
-type IndexerMode = 'bundled' | 'prowlarr' | 'torznab'
-
-/** 清單說的來源與選擇不一致（剛選下去、清單還沒重讀回來）時是 `null`：不畫另一種的東西。 */
-function modeOf(indexers: IndexerSetup, chosen: string | undefined): IndexerMode | null {
-  if (indexers.origin === null || indexers.origin !== chosen) return null
-  if (indexers.origin === 'bundled') return indexers.reachable ? 'bundled' : null
-  return indexers.kind === 'torznab' ? 'torznab' : 'prowlarr'
 }
 
 /**
@@ -239,7 +247,7 @@ function NoSites({
   )
 }
 
-/** 既有 Prowlarr 的站清單這一次讀不到：原文與「重新讀取」（重測那一台，清單跟著重讀）。 */
+/** Prowlarr 的站清單這一次讀不到：原文與「重新讀取」（重測那一台，清單跟著重讀）。 */
 function ReadFailed({
   indexers,
   rereading,
@@ -254,7 +262,13 @@ function ReadFailed({
   return (
     <section className="mt-6 grid gap-3" data-testid="read-failed">
       <Notice signal="blocked" label={t('common.failed')}>
-        {t('indexer.readFailed')} {failureText(t, indexers, 'Prowlarr')}
+        {t('indexer.readFailed')} {failureText(t, indexers, 'Prowlarr')}{' '}
+        {/* 套件內那一台的 key 被拒：重新讀取就是重讀掛載的 key（M4 票 27），照做就好。 */}
+        {t(
+          indexers.origin === 'bundled' && indexers.failure === 'auth_rejected'
+            ? 'indexer.rereadKey'
+            : 'indexer.rereadLater',
+        )}
       </Notice>
       <TechnicalDetails lines={[indexers.base_url, indexers.error]} />
       <div>
@@ -305,7 +319,13 @@ function ProwlarrLogin({
   }
 
   return (
-    <section className="mt-10 border-t-2 border-rule pt-6" data-testid="prowlarr-login">
+    <section
+      id={GAP.login.target}
+      // 前進鍵位置的「還差」把焦點送到這裡（M4 票 27）。
+      tabIndex={-1}
+      className="mt-10 border-t-2 border-rule pt-6"
+      data-testid="prowlarr-login"
+    >
       <div className="flex flex-wrap items-center gap-3">
         <h3 className="label text-ink-dim">{t('interfaceLogin.prowlarr.legend')}</h3>
         <span className="label border-2 border-rule px-2 py-1 text-ink-dim">

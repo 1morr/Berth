@@ -220,7 +220,7 @@ async def read_indexer_status(
         present = await client.indexers()
         candidates = _candidates(await client.definitions(), present)
         # 既有的那一台的介面登入不是 Berth 的事，連讀都不讀（M4 票 20）。
-        instance = _instance_username(await client.host_config()) if bundled else ""
+        instance = instance_login(await client.host_config()) if bundled else ""
     except ServiceError as exc:
         # 既有的那一台連不上由測試那一條說（`reason`），表單照樣畫得出來。
         return _view(setup, settings, origin, base_url, reachable=not bundled, error=exc)
@@ -313,7 +313,7 @@ async def apply_default_indexers(
             steps.append(await _ensure_indexer(client, name, definitions, existing))
         sites = len(await client.indexers())
         if bundled:
-            instance = _instance_username(await client.host_config())
+            instance = instance_login(await client.host_config())
             steps.append(await _apply_password(client, setup, None, instance, sleep=sleep))
     except ServiceError as exc:
         return _view(setup, settings, origin, base_url, reachable=False, error=exc)
@@ -571,7 +571,7 @@ async def set_interface_login(
 
     client = factory.prowlarr(base_url, settings.api_key)
     try:
-        instance = _instance_username(await client.host_config())
+        instance = instance_login(await client.host_config())
         step = await _apply_password(client, setup, login, instance, sleep=sleep)
     except ServiceError as exc:
         step = failed_step(PROWLARR_LOGIN_STEP, exc)
@@ -631,7 +631,24 @@ def _record_login(
         setup.indexer.web_ui_password_hash = ""
 
 
-def _instance_username(config: Mapping[str, Any]) -> str:
+def note_instance_login(setup: SetupSettings, instance: str) -> None:
+    """套件內那一台自己就設過介面登入（重裝保留它的 config，M4 票 27）：Berth 還沒記那一條的話記成
+    `skipped`，與「加入」不帶登入時同一個結論（`_apply_password`）。連線測試時呼叫——站都已經在了的話，
+    沒有東西可加，原本要到「加入」才記，頁 4 就停著。"""
+    if not instance or any(
+        row.key == PROWLARR_LOGIN_STEP and row.status in (StepStatus.OK, StepStatus.SKIPPED)
+        for row in setup.indexer.steps
+    ):
+        return
+    step = SetupStep(key=PROWLARR_LOGIN_STEP, status=StepStatus.SKIPPED, detail=instance)
+    setup.indexer.steps = [
+        *(row for row in setup.indexer.steps if row.key != PROWLARR_LOGIN_STEP),
+        step,
+    ]
+    _record_login(setup, step, None, instance)
+
+
+def instance_login(config: Mapping[str, Any]) -> str:
     """那一台自己設過的介面帳號（brief §20.14）：`config/host` 的 `authenticationMethod` 全新是
     `none`、帳號空白；設過是 `forms` / `basic` 加帳號。沒設過是空字串。"""
     if str(config.get("authenticationMethod") or "none").lower() == "none":

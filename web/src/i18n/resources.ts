@@ -44,6 +44,7 @@ const zhHant = {
       label: '泊位導覽',
       previous: '上一個泊位',
       next: '前往下一個泊位',
+      missing: '還差',
     },
     stray: {
       where: '回頭看：{{place}}',
@@ -246,6 +247,8 @@ const zhHant = {
         '等到上限了，{{kind}} 這個主機名上回應的還是別的東西。確認 compose 裡那個服務名對應的是它，或改選「既有」。',
       apiKeyMissing:
         '唯讀掛載與環境變數都讀不到 Prowlarr 的 API key。到 Prowlarr 的「設定 → 一般 → 安全性」抄下來貼在下面，仍然是套件內。',
+      prowlarrMount:
+        'Berth 讀到的 API key 不被接受。Berth 每次測試都重讀唯讀掛載 /ext/prowlarr 裡的 config.xml，在 Prowlarr 重新產生 key 也跟得上：確認 berth 的 compose 有把 ${CONFIG_ROOT}/prowlarr 掛進去，再按「重新測試」。',
       whitelist:
         '套件內那一台要帳密：Berth 的免密白名單沒生效。重啟它讓預置腳本補上白名單，再重新測試：',
       bundledDown: '容器還沒起來。在宿主上確認它活著、看它的 log：',
@@ -604,8 +607,14 @@ const zhHant = {
     skip: '之後再說',
     deferred: '之後再說',
     unreachable: '連不上套件內的 Prowlarr。可以先填自己的位址，或跳過這一步之後再補。',
-    readFailed:
-      '讀不到這一台 Prowlarr 的站清單，所以說不出它有幾站。它可能正在重啟或暫時連不上：按「重新讀取」再試一次。',
+    readFailed: '讀不到這一台 Prowlarr 的站清單，所以說不出它有幾站。',
+    rereadLater: '它可能正在重啟或暫時連不上：按「重新讀取」再試一次。',
+    rereadKey:
+      '多半是在 Prowlarr 重新產生了 API key。按「重新讀取」：Berth 會重讀掛載的 key 再連一次。',
+    gap: {
+      sites: '加入至少一個站',
+      login: '設定 Prowlarr 介面登入',
+    },
     cutaway: {
       title: '索引站',
       kind: '接法',
@@ -921,6 +930,13 @@ const zhHant = {
     },
     where: {
       indexers: '索引站還沒接。之後在「設定 → 索引站」補上，補之前搜尋不到任何東西。',
+      // 跳過了，但 Prowlarr 上本來就有站（重裝保留它的設定，M4 票 27）：搜尋照樣用得到。
+      indexersPresent_one:
+        '這一步跳過了，不過 Prowlarr 上已經有 {{count}} 個站，搜尋用得到它。加站與試搜在「設定 → 索引站」。',
+      indexersPresent_other:
+        '這一步跳過了，不過 Prowlarr 上已經有 {{count}} 個站，搜尋用得到它們。加站與試搜在「設定 → 索引站」。',
+      indexersUnread:
+        '這一步跳過了，這一次也讀不到 Prowlarr 的站清單。之後在「設定 → 索引站」確認或補上。',
     },
   },
   login: {
@@ -3090,6 +3106,7 @@ const en: Translations<typeof zhHant> = {
       label: 'Berth navigation',
       previous: 'Previous berth',
       next: 'Next berth',
+      missing: 'Still to do',
     },
     stray: {
       where: 'Looking back: {{place}}',
@@ -3301,6 +3318,8 @@ const en: Translations<typeof zhHant> = {
         'The limit has passed and something other than {{kind}} still answers on that hostname. Check that the compose service by that name is really it, or choose “Existing”.',
       apiKeyMissing:
         'Neither the read-only mount nor the environment has the Prowlarr API key. Copy it from Settings → General → Security in Prowlarr and paste it below; it stays bundled.',
+      prowlarrMount:
+        'Prowlarr does not accept the API key Berth read. Berth rereads config.xml from the read-only mount /ext/prowlarr on every test, so a key regenerated in Prowlarr is picked up: check that berth’s compose mounts ${CONFIG_ROOT}/prowlarr, then press “Test again”.',
       whitelist:
         'The bundled one asks for credentials: Berth’s password-free allowlist did not take. Restart it so the preseed script adds the allowlist, then test again:',
       bundledDown:
@@ -3692,7 +3711,14 @@ const en: Translations<typeof zhHant> = {
     unreachable:
       'Cannot reach the bundled Prowlarr. Point Berth at your own instead, or skip this step and come back.',
     readFailed:
-      "Could not read this Prowlarr's site list, so Berth cannot tell how many sites it has. It may be restarting or briefly unreachable: press Re-read to try again.",
+      "Could not read this Prowlarr's site list, so Berth cannot tell how many sites it has.",
+    rereadLater: 'It may be restarting or briefly unreachable: press Re-read to try again.',
+    rereadKey:
+      'Most likely the API key was regenerated in Prowlarr. Press Re-read: Berth rereads the mounted key and connects again.',
+    gap: {
+      sites: 'Add at least one site',
+      login: 'Set the Prowlarr interface login',
+    },
     cutaway: {
       title: 'Indexers',
       kind: 'Connection',
@@ -4026,6 +4052,12 @@ const en: Translations<typeof zhHant> = {
     where: {
       indexers:
         'No indexer yet. Add one later under Settings → Indexers; until then searches return nothing.',
+      indexersPresent_one:
+        'Skipped, but Prowlarr already has {{count}} site, and searches use it. Add sites and try searches under Settings → Indexers.',
+      indexersPresent_other:
+        'Skipped, but Prowlarr already has {{count}} sites, and searches use them. Add sites and try searches under Settings → Indexers.',
+      indexersUnread:
+        'Skipped, and Prowlarr’s site list could not be read this time. Check or add sites later under Settings → Indexers.',
     },
   },
   login: {

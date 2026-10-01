@@ -25,6 +25,7 @@ from berth.domain import (
     StepStatus,
 )
 from berth.models import PathSettings, QbittorrentSettings, SetupSettings, SetupStep
+from berth.services.clients import BundledServices
 from berth.services.commands import CommandMark, Effect, mark_of
 from berth.services.qbittorrent import (
     WEB_UI_PASSWORD_KEY,
@@ -36,9 +37,10 @@ from berth.services.settings import read_settings, write_settings
 from berth.services.setup import STEP_QBITTORRENT, STEP_ROUTES, read_status, retest_service
 from berth.services.steps import InterfaceLogin, password_matches
 from tests.integration.arrange import chosen, own
-from tests.integration.factories import FakeClientFactory
+from tests.integration.factories import COMPOSE, FakeClientFactory
 
 NOW = datetime(2026, 9, 8, 12, 0, tzinfo=UTC)
+BUNDLED = BundledServices(targets=COMPOSE, prowlarr_api_key="")
 
 #: 泊位上填的 WebUI 登入（M4 票 07）。
 SKIPPER = InterfaceLogin(username="skipper", password="harbour")
@@ -317,11 +319,11 @@ async def test_a_qbittorrent_that_stopped_after_applying_holds_page_2_again(
     await apply_qbittorrent(session, factory, login=SKIPPER)
 
     client.error = ServiceNotDeployedError("GET /api/v2/app/version: host does not resolve")
-    stopped = await retest_service(session, factory, ServiceKind.QBITTORRENT, now=NOW)
+    stopped = await retest_service(session, factory, BUNDLED, ServiceKind.QBITTORRENT, now=NOW)
     assert stopped.current_step == STEP_QBITTORRENT
 
     client.error = None
-    back = await retest_service(session, factory, ServiceKind.QBITTORRENT, now=NOW)
+    back = await retest_service(session, factory, BUNDLED, ServiceKind.QBITTORRENT, now=NOW)
     assert back.current_step == STEP_ROUTES
 
 

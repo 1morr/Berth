@@ -1,6 +1,12 @@
 import { useTranslation } from 'react-i18next'
 
-import { STICKY_BAR, GhostButton, PrimaryButton } from '../components/controls'
+import {
+  STICKY_BAR,
+  STICKY_WIDE,
+  GhostButton,
+  PrimaryButton,
+  TEXT_LINK,
+} from '../components/controls'
 import { STEP } from './navigation'
 
 /**
@@ -10,17 +16,30 @@ import { STEP } from './navigation'
  * 這一頁的主要動作，所以固定在底部，**桌機也是**（M4 票 08：頁 3 做完是四條 Route 加上清單與重新
  * 檢查，1280 × 720 上它被擠到畫面外）；那一頁自己的「重跑」同時降成次要、不再固定
  * （兩個 sticky 會疊在同一個位置）。
+ *
+ * **還沒做完時，前進鍵的位置說還差什麼**（`missing`，M4 票 27）：每一件是一顆連結樣式的按鈕，按了把
+ * 焦點送到那一區（`target` 是它的 `id`，那一區要 `tabIndex={-1}`）。只在桌機固定：窄版的底部是那一頁
+ * 自己的主要動作（`STICKY_ACTION`）。
  */
-export function BerthNav({ onPrevious, onNext }: { onPrevious?: () => void; onNext?: () => void }) {
+export function BerthNav({
+  onPrevious,
+  onNext,
+  missing = [],
+}: {
+  onPrevious?: () => void
+  onNext?: () => void
+  missing?: readonly { label: string; target: string }[]
+}) {
   const { t } = useTranslation()
-  if (!onPrevious && !onNext) return null
+  const pending = !onNext && missing.length > 0
+  if (!onPrevious && !onNext && !pending) return null
 
   return (
     <nav
       aria-label={t('setup.nav.label')}
       // 窄版也排成一列：固定在底部的一條要矮，上一個縮成它自己的寬度，下一個佔滿剩下的。
       className={`mt-8 grid grid-cols-[auto_minmax(0,1fr)] gap-3 sm:grid-cols-[auto_minmax(0,18rem)] sm:justify-between ${
-        onNext ? STICKY_BAR : ''
+        onNext ? STICKY_BAR : pending ? STICKY_WIDE : ''
       }`}
     >
       {onPrevious ? (
@@ -35,6 +54,21 @@ export function BerthNav({ onPrevious, onNext }: { onPrevious?: () => void; onNe
         <PrimaryButton type="button" data-berth-next onClick={onNext}>
           {t('setup.nav.next')}
         </PrimaryButton>
+      )}
+      {pending && (
+        <p className="flex flex-wrap items-baseline gap-x-3 gap-y-1 self-center text-sm text-ink-dim">
+          <span className="label">{t('setup.nav.missing')}</span>
+          {missing.map((item) => (
+            <button
+              key={item.target}
+              type="button"
+              className={`${TEXT_LINK} text-left`}
+              onClick={() => document.getElementById(item.target)?.focus()}
+            >
+              {item.label}
+            </button>
+          ))}
+        </p>
       )}
     </nav>
   )

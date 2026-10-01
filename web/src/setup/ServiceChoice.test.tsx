@@ -299,6 +299,33 @@ describe('擁有者成立之後的 Jellyfin（M4 票 18）', () => {
   })
 })
 
+describe('套件內那一台不收 Berth 的憑證（M4 票 27）', () => {
+  const rejected = {
+    origin: 'bundled' as const,
+    state: 'failed' as const,
+    reason: 'auth_required' as const,
+  }
+
+  it('Prowlarr：說掛載的 key，不說 qBittorrent 的免密白名單', () => {
+    mount('prowlarr', [
+      chosen({ ...rejected, kind: 'prowlarr', base_url: 'http://prowlarr:9696', detail: '' }),
+    ])
+
+    expect(screen.getByText(i18next.t('connection.fix.prowlarrMount'))).toBeVisible()
+    expect(screen.queryByText(i18next.t('connection.fix.whitelist'))).toBeNull()
+    expect(screen.queryByText('docker compose restart prowlarr')).toBeNull()
+  })
+
+  it('qBittorrent：照舊是白名單與重啟', () => {
+    mount('qbittorrent', [
+      chosen({ ...rejected, kind: 'qbittorrent', base_url: 'http://qbittorrent:8080' }),
+    ])
+
+    expect(screen.getByText(i18next.t('connection.fix.whitelist'))).toBeVisible()
+    expect(screen.queryByText(i18next.t('connection.fix.prowlarrMount'))).toBeNull()
+  })
+})
+
 describe('換另一格與方向鍵（M4 票 09，票 15 critique / audit 的 P2）', () => {
   const bundled = () => screen.getByRole('radio', { name: /^套件內/ })
   const existing = () => screen.getByRole('radio', { name: /^既有/ })

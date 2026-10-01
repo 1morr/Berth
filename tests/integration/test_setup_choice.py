@@ -100,7 +100,7 @@ async def test_retesting_before_choosing_is_refused(session: AsyncSession) -> No
     factory = FakeClientFactory()
 
     with pytest.raises(ValueError, match="choose"):
-        await retest_service(session, factory, ServiceKind.QBITTORRENT)
+        await retest_service(session, factory, BUNDLED, ServiceKind.QBITTORRENT)
 
     assert factory.qbittorrent_.calls == 0
 
@@ -287,6 +287,60 @@ async def test_bundled_prowlarr_without_a_readable_key_asks_for_one(
 
 
 @pytest.mark.asyncio
+async def test_retesting_a_bundled_prowlarr_reads_the_mounted_key_again(
+    session: AsyncSession,
+) -> None:
+    """在 Prowlarr 重新產生 API key 之後按「重新測試」：用掛載上現在那一把（實測 L-P2-3，
+    M4 票 27）。
+
+    原本只有「選」那一刻讀掛載，重新測試拿存下的舊 key，連線卡紅成 401、補法卻是 qBittorrent 的
+    白名單，照做沒用。
+    """
+    await own(session)
+    factory = FakeClientFactory()
+    await choose(session, factory, ServiceKind.PROWLARR, ServiceOrigin.BUNDLED)
+    regenerated = BundledServices(targets=COMPOSE, prowlarr_api_key="regenerated-key")
+
+    status = await retest_service(
+        session, factory, regenerated, ServiceKind.PROWLARR, restart=True, now=NOW
+    )
+
+    assert view(status, ServiceKind.PROWLARR).state is ConnectionState.OK
+    assert factory.api_keys[-1] == "regenerated-key"
+    assert (await read_settings(session, IndexerSettings)).api_key == "regenerated-key"
+
+
+@pytest.mark.asyncio
+async def test_retesting_without_a_mounted_key_keeps_what_was_pasted_or_still_asks(
+    session: AsyncSession,
+) -> None:
+    """掛載讀不到 key 時重新測試不換掉什麼：沒貼過的仍是 `api_key_missing`，貼過的仍用貼的
+    那一把。"""
+    await own(session)
+    factory = FakeClientFactory()
+    unmounted = BundledServices(targets=COMPOSE, prowlarr_api_key="")
+    await choose(session, factory, ServiceKind.PROWLARR, ServiceOrigin.BUNDLED, bundled=unmounted)
+
+    status = await retest_service(session, factory, unmounted, ServiceKind.PROWLARR, now=NOW)
+
+    assert view(status, ServiceKind.PROWLARR).reason is ConnectionReason.API_KEY_MISSING
+    assert factory.api_keys[-1] == ""
+
+    await choose(
+        session,
+        factory,
+        ServiceKind.PROWLARR,
+        ServiceOrigin.BUNDLED,
+        ServiceConnection(api_key="pasted-key"),
+        bundled=unmounted,
+    )
+    status = await retest_service(session, factory, unmounted, ServiceKind.PROWLARR, now=NOW)
+
+    assert view(status, ServiceKind.PROWLARR).state is ConnectionState.OK
+    assert factory.api_keys[-1] == "pasted-key"
+
+
+@pytest.mark.asyncio
 async def test_a_bundled_prowlarr_left_out_of_compose_is_not_a_missing_key(
     session: AsyncSession,
 ) -> None:
@@ -346,7 +400,9 @@ async def test_a_bundled_container_still_starting_is_waited_for(
     factory = FakeClientFactory(jellyfin=FakeJellyfinClient(error=error))
 
     await choose(session, factory, ServiceKind.JELLYFIN, ServiceOrigin.BUNDLED, now=NOW)
-    status = await retest_service(session, factory, ServiceKind.JELLYFIN, now=NOW + TEST_WINDOW)
+    status = await retest_service(
+        session, factory, BUNDLED, ServiceKind.JELLYFIN, now=NOW + TEST_WINDOW
+    )
 
     row = view(status, ServiceKind.JELLYFIN)
     assert (row.state, row.reason) == (ConnectionState.WAITING, reason)
@@ -371,7 +427,7 @@ async def test_past_the_window_the_wait_ends(
     later = NOW + TEST_WINDOW + timedelta(seconds=1)
 
     await choose(session, factory, ServiceKind.JELLYFIN, ServiceOrigin.BUNDLED, now=NOW)
-    status = await retest_service(session, factory, ServiceKind.JELLYFIN, now=later)
+    status = await retest_service(session, factory, BUNDLED, ServiceKind.JELLYFIN, now=later)
 
     assert (
         view(status, ServiceKind.JELLYFIN).state,
@@ -388,7 +444,9 @@ async def test_retesting_by_hand_restarts_the_window(session: AsyncSession) -> N
     later = NOW + TEST_WINDOW + timedelta(seconds=1)
 
     await choose(session, factory, ServiceKind.JELLYFIN, ServiceOrigin.BUNDLED, now=NOW)
-    status = await retest_service(session, factory, ServiceKind.JELLYFIN, restart=True, now=later)
+    status = await retest_service(
+        session, factory, BUNDLED, ServiceKind.JELLYFIN, restart=True, now=later
+    )
 
     row = view(status, ServiceKind.JELLYFIN)
     assert (row.state, row.waited_seconds) == (ConnectionState.WAITING, 0)
@@ -401,7 +459,7 @@ async def test_a_container_that_came_up_turns_green(session: AsyncSession) -> No
 
     await choose(session, factory, ServiceKind.JELLYFIN, ServiceOrigin.BUNDLED, now=NOW)
     jellyfin.error = None
-    status = await retest_service(session, factory, ServiceKind.JELLYFIN, now=NOW)
+    status = await retest_service(session, factory, BUNDLED, ServiceKind.JELLYFIN, now=NOW)
 
     row = view(status, ServiceKind.JELLYFIN)
     assert (row.state, row.waited_seconds) == (ConnectionState.OK, 0)
@@ -492,7 +550,9 @@ async def test_failed_logins_are_counted_until_one_succeeds(session: AsyncSessio
             session, wrong, ServiceKind.QBITTORRENT, ServiceOrigin.EXISTING, attempt
         )
         counts.append(view(status, ServiceKind.QBITTORRENT).auth_failures)
-    retested = await retest_service(session, wrong, ServiceKind.QBITTORRENT, restart=True, now=NOW)
+    retested = await retest_service(
+        session, wrong, BUNDLED, ServiceKind.QBITTORRENT, restart=True, now=NOW
+    )
     counts.append(view(retested, ServiceKind.QBITTORRENT).auth_failures)
     assert counts == [1, 2, 3, 4]
 
@@ -811,7 +871,7 @@ async def test_retesting_finds_another_server_behind_the_saved_address(
     await owned_existing_jellyfin(session, factory)
     factory.jellyfin_.server_id = "9fda94c0187f455fb00c8593d35ef9d1"
 
-    status = await retest_service(session, factory, ServiceKind.JELLYFIN, now=NOW)
+    status = await retest_service(session, factory, BUNDLED, ServiceKind.JELLYFIN, now=NOW)
 
     retested = view(status, ServiceKind.JELLYFIN)
     assert (retested.state, retested.reason) == (
@@ -829,7 +889,7 @@ async def test_an_owner_from_before_the_server_id_adopts_the_one_it_answers_with
     await owned_existing_jellyfin(session, factory)
     await own(session, server_id="")
 
-    await retest_service(session, factory, ServiceKind.JELLYFIN, now=NOW)
+    await retest_service(session, factory, BUNDLED, ServiceKind.JELLYFIN, now=NOW)
 
     assert (await read_settings(session, SetupSettings)).owner.jellyfin_server_id == SERVER_ID
 

@@ -1410,6 +1410,104 @@ describe('頁 4：Prowlarr 與索引站', () => {
     expect(screen.getByRole('button', { name: '之後再說' })).toBeInTheDocument()
   })
 
+  it('套件內 Prowlarr 換了 key、清單讀不到：說讀不到並給「重新讀取」（M4 票 27）', async () => {
+    const user = userEvent.setup()
+    const bundled = chosen({ ...ALL_BUNDLED[2], detail: '1' })
+    const fetchStub = stubApi({
+      [STATUS]: {
+        body: setupStatus({ ...AT_INDEXER, services: [...ALL_BUNDLED.slice(0, 2), bundled] }),
+      },
+      [INDEXERS]: {
+        body: indexerSetup({
+          reachable: false,
+          sites: [],
+          candidates: [],
+          failure: 'auth_rejected',
+          error: 'GET /api/v1/indexer: 401',
+        }),
+      },
+      [RETEST_PROWLARR]: { body: setupStatus({ ...AT_INDEXER }) },
+    })
+
+    renderWithProviders(<SetupPage />)
+
+    const failed = within(await screen.findByTestId('read-failed'))
+    expect(failed.getByText(/讀不到這一台 Prowlarr 的站清單/)).toBeInTheDocument()
+    expect(failed.getByText(/重讀掛載的 key/)).toBeInTheDocument()
+    expect(failed.getByText('GET /api/v1/indexer: 401')).toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: '加站' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '之後再說' })).toBeInTheDocument()
+
+    await user.click(failed.getByRole('button', { name: '重新讀取' }))
+
+    await waitFor(() => expect(called(fetchStub, '/api/setup/services/prowlarr/test')).toBe(true))
+    expect(bodyOf(fetchStub, '/api/setup/services/prowlarr/test')).toEqual({ restart: true })
+  })
+
+  it('站加好了、介面登入還沒設：前進鍵的位置說還差什麼，按了捲到那一區（M4 票 27）', async () => {
+    const user = userEvent.setup()
+    const counted = chosen({ ...ALL_BUNDLED[2], detail: '1' })
+    stubApi({
+      [STATUS]: {
+        body: setupStatus({ ...AT_INDEXER, services: [...ALL_BUNDLED.slice(0, 2), counted] }),
+      },
+      [INDEXERS]: {
+        body: indexerSetup({
+          sites: [site({ definition_name: 'nyaasi', name: 'Nyaa.si' }, 1)],
+          steps: [step('nyaasi', 'ok'), step('prowlarr_login', 'pending')],
+        }),
+      },
+    })
+
+    renderWithProviders(<SetupPage />)
+
+    await screen.findByRole('button', { name: '設定 Prowlarr 介面登入' })
+    const nav = within(screen.getByRole('navigation', { name: '泊位導覽' }))
+    expect(nav.queryByRole('button', { name: '前往下一個泊位' })).not.toBeInTheDocument()
+    expect(nav.getByText('還差')).toBeInTheDocument()
+    expect(nav.queryByRole('button', { name: '加入至少一個站' })).not.toBeInTheDocument()
+
+    await user.click(nav.getByRole('button', { name: '設定 Prowlarr 介面登入' }))
+
+    expect(screen.getByTestId('prowlarr-login')).toHaveFocus()
+  })
+
+  it('清單上有站、上一次測試記的卻是 0 站：自動重新測試一次，不留沒說原因的死路（M4 票 27）', async () => {
+    // 使用者到 Prowlarr 自己的介面加了站再回來：後端的站數取自上一次連線測試，還是 0。
+    const fetchStub = stubApi({
+      [STATUS]: { body: AT_INDEXER },
+      [INDEXERS]: {
+        body: indexerSetup({
+          sites: [site({ definition_name: 'nyaasi', name: 'Nyaa.si' }, 1)],
+          steps: [step('prowlarr_login', 'ok', 'skipper')],
+        }),
+      },
+      [RETEST_PROWLARR]: { body: AT_TMDB },
+    })
+
+    renderWithProviders(<SetupPage />)
+
+    await waitFor(() => expect(called(fetchStub, '/api/setup/services/prowlarr/test')).toBe(true))
+    expect(bodyOf(fetchStub, '/api/setup/services/prowlarr/test')).toEqual({ restart: false })
+    expect(
+      fetchStub.mock.calls.filter(([url]) => url === '/api/setup/services/prowlarr/test'),
+    ).toHaveLength(1)
+  })
+
+  it('一站都沒有、登入也沒設：兩件都列出來（M4 票 27）', async () => {
+    stubApi({
+      [STATUS]: { body: AT_INDEXER },
+      [INDEXERS]: { body: indexerSetup({ steps: [step('prowlarr_login', 'pending')] }) },
+    })
+
+    renderWithProviders(<SetupPage />)
+
+    await screen.findByRole('button', { name: '設定 Prowlarr 介面登入' })
+    const nav = within(screen.getByRole('navigation', { name: '泊位導覽' }))
+    expect(nav.getByRole('button', { name: '加入至少一個站' })).toBeInTheDocument()
+    expect(nav.getByRole('button', { name: '設定 Prowlarr 介面登入' })).toBeInTheDocument()
+  })
+
   it('剛選下去、清單還沒重讀回來：不閃另一種來源的文案（M4 票 20）', async () => {
     stubApi({
       [STATUS]: { body: AT_INDEXER },
