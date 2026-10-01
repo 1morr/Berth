@@ -964,6 +964,13 @@ Web API 沒有「這條路徑你看不看得到」：`app/getDirectoryContent` 5
 - **校驗到 100% 會觸發「torrent 完成時執行外部程式」**（`autorun_enabled` / `autorun_program`，4.4.5 與 5.2.3 同一個實驗裡實測，每個看得到的探針各觸發一次）。所以探針只在精靈「建立並檢查」、新增 Route 與「重新檢查」時跑；**5 分鐘的健康迴圈不跑，`download_visible` 沿用上一次的結論**——每條 Route 每 5 分鐘一次，會變成使用者那邊的通知洪水。「按下之後會」說出這件事。5.x 另有「加入時執行」（`autorun_on_torrent_added_enabled`），同理只在那幾個時機觸發，沒有另外實測。
 - 探針 torrent 不掛分類、不帶 tag（tag 一建就留在使用者的清單裡；`berth` 那一個會讓 poller 把它當成 Berth 的下載），名字是 `.berth-probe-*`，停住、幾秒內就移除。
 
+**WebUI 帳密規則**（2026-10-01 讀原始碼＋實測，M4 票 26；`scripts/experiments/qbittorrent_webui_login_rules.py` 對 4.4.5 與 5.2.3，報告 `.local/experiments/results/qbittorrent-webui-login-rules-*.json`）
+
+- **5.2.0 起 `app/setPreferences` 才驗**：`web_ui_username` 至少 3 字元、不能有冒號，`web_ui_password` 至少 6 字元；違反回 `400` + 一行英文原文（`WebUI password must be at least 6 characters long`、`WebUI username must be at least 3 characters long`、`WebUI username cannot contain a colon`）。4.4.5 什麼都收（實測 2 字元帳號、含冒號、5 字元密碼都 `200`）；release-5.1.4 的原始碼還沒有這段。【[appcontroller.cpp @ release-5.2.0](https://github.com/qbittorrent/qBittorrent/blob/release-5.2.0/src/webui/api/appcontroller.cpp)、[@ release-5.1.4](https://github.com/qbittorrent/qBittorrent/blob/release-5.1.4/src/webui/api/appcontroller.cpp)】
+- 字數是 QString 的長度（UTF-16 code unit），與瀏覽器的 `String.length` 同一種算法：六個中文字的密碼 5.2.3 收。
+- **帳號先驗先寫、密碼後驗**，照原始碼的順序，不看 JSON 的鍵序：帳號合規而密碼太短的那一次回 `400`，帳號**已經寫進去**、密碼沒有（實測，兩種鍵序都一樣）。所以 Berth 先單獨送密碼、成功了才送帳號（`qbittorrent._apply_password`）；兩支都過了才記下帳號。
+- 【決定】精靈與設定頁照 5.2 的規則先擋，不分版本：4.4–5.1 自己的設定頁（WebUI 的 JS）也要求帳號 3、密碼 6 字元（只少了冒號那一條），套件內那一台又一定是新版。【[preferences.html @ release-4.4.5](https://github.com/qbittorrent/qBittorrent/blob/release-4.4.5/src/webui/www/private/views/preferences.html)】
+
 **硬鏈接與 Docker**（[TRaSH Hardlinks](https://trash-guides.info/File-and-Folder-Structure/Hardlinks-and-Instant-Moves/)、[Servarr docker-guide](https://wiki.servarr.com/docker-guide)、[link(2)](https://man7.org/linux/man-pages/man2/link.2.html)）
 
 - 硬鏈接不能跨檔案系統、分割區、volume、**mount**；`link()` 即使同一個檔案系統掛兩次也會 `EXDEV`。Docker 把兩個 volume 當成兩個檔案系統，所以 `/downloads` + `/media` 分開掛一定失敗；解法是單一 `/data` 掛載。

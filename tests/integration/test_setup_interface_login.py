@@ -24,16 +24,21 @@ from berth.domain import (
     QbittorrentStep,
     ServiceKind,
     ServiceOrigin,
+    StepFailure,
     StepStatus,
 )
 from berth.models import Setting, SetupSettings
 from berth.services.indexer import apply_default_indexers, read_indexer_status
 from berth.services.indexer import set_interface_login as set_prowlarr_login
 from berth.services.jellyfin import InterfaceLoginRejectedError
-from berth.services.qbittorrent import apply_qbittorrent, read_qbittorrent_diff
+from berth.services.qbittorrent import (
+    QbittorrentSetupStatus,
+    apply_qbittorrent,
+    read_qbittorrent_diff,
+)
 from berth.services.qbittorrent import set_interface_login as set_qbittorrent_login
 from berth.services.settings import read_settings, write_settings
-from berth.services.steps import InterfaceLogin, password_matches
+from berth.services.steps import InterfaceLogin, StepView, password_matches
 from tests.integration.arrange import chosen, own
 from tests.integration.factories import FakeClientFactory
 
@@ -178,6 +183,85 @@ async def test_the_same_pair_again_is_already_in_place(session: AsyncSession) ->
     assert len(qbittorrent.writes) == written
     step = next(row for row in status.steps if row.step == QbittorrentStep.PASSWORD.value)
     assert (step.status, step.detail) == (StepStatus.SKIPPED, "deck")
+
+
+# --- qBittorrent 不收這組帳密（5.2.0 起的規則，brief §20.2、M4 票 26）---
+
+
+def password_step(status: QbittorrentSetupStatus) -> StepView:
+    return next(row for row in status.steps if row.step == QbittorrentStep.PASSWORD.value)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("login", "rule"),
+    [
+        (InterfaceLogin(username="deck", password="abcd"), "at least 6 characters"),
+        (InterfaceLogin(username="dk", password="Deck-pass-9"), "at least 3 characters"),
+        (InterfaceLogin(username="de:ck", password="Deck-pass-9"), "cannot contain a colon"),
+    ],
+)
+async def test_a_login_qbittorrent_refuses_says_so_and_records_nothing(
+    session: AsyncSession, login: InterfaceLogin, rule: str
+) -> None:
+    """實測（第 3 條）：4 字元的密碼回 400，畫面卻說「回應的不是 qBittorrent」；帳號已寫進那一台，
+    下一次讀被當成「它自己設過了」，表單收回成「帳號：deck」。"""
+    await bundled_pair(session)
+    qbittorrent = FakeQbittorrentClient()
+    clients = factory(qbittorrent=qbittorrent)
+
+    status = await apply_qbittorrent(session, clients, login=login)
+
+    step = password_step(status)
+    assert (step.status, step.failure) == (StepStatus.FAILED, StepFailure.LOGIN_REJECTED)
+    assert rule in step.error
+    setup = await read_settings(session, SetupSettings)
+    assert (setup.qbittorrent.web_ui_username, setup.qbittorrent.web_ui_password_hash) == ("", "")
+    assert (await qbittorrent.preferences())["web_ui_username"] == "admin"
+    # 再讀一次也不是「設好了」：表單照舊打開，精靈停在頁 2。
+    assert status.web_ui_username == ""
+    assert (await read_qbittorrent_diff(session, clients)).web_ui_username == ""
+    again = await apply_qbittorrent(session, clients)
+    assert password_step(again).status is StepStatus.PENDING
+
+
+@pytest.mark.asyncio
+async def test_a_short_jellyfin_password_cannot_be_reused_for_qbittorrent(
+    session: AsyncSession,
+) -> None:
+    """沿用 Jellyfin 帳密時 Jellyfin 那一關過了（密碼對），qBittorrent 那一關不收。"""
+    await bundled_pair(session)
+    qbittorrent = FakeQbittorrentClient()
+    clients = factory(
+        qbittorrent=qbittorrent, jellyfin=FakeJellyfinClient(admin=("skipper", "abcd"))
+    )
+
+    status = await set_qbittorrent_login(
+        session, clients, InterfaceLogin(username="", password="abcd", reuse_owner=True)
+    )
+
+    step = password_step(status)
+    assert (step.status, step.failure) == (StepStatus.FAILED, StepFailure.LOGIN_REJECTED)
+    assert (await read_settings(session, SetupSettings)).qbittorrent.web_ui_username == ""
+    assert (await qbittorrent.preferences())["web_ui_username"] == "admin"
+
+
+@pytest.mark.asyncio
+async def test_a_login_qbittorrent_takes_is_recorded_once_both_halves_are_in(
+    session: AsyncSession,
+) -> None:
+    """雙向：合規的那一組照舊設得進去、記得下來，拿它登得進去。"""
+    await bundled_pair(session)
+    qbittorrent = FakeQbittorrentClient()
+    clients = factory(qbittorrent=qbittorrent)
+
+    status = await apply_qbittorrent(
+        session, clients, login=InterfaceLogin(username="dek", password="abcdef")
+    )
+
+    assert password_step(status).status is StepStatus.OK
+    assert (await read_settings(session, SetupSettings)).qbittorrent.web_ui_username == "dek"
+    await qbittorrent.login("dek", "abcdef")
 
 
 # --- 已經設過（重裝保留 config）---

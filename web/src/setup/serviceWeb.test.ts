@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { prowlarrWeb } from './prowlarrWeb'
+import { prowlarrWeb, qbittorrentWeb } from './serviceWeb'
 
 const PAGE = { protocol: 'http:', hostname: 'nas.local' }
 
@@ -40,5 +40,22 @@ describe('prowlarrWeb', () => {
       prowlarrWeb({ ...setup('existing', 'http://jackett:9117/api'), kind: 'torznab' }, PAGE),
     ).toBeNull()
     expect(prowlarrWeb(setup('existing', 'not a url'), PAGE)).toBeNull()
+  })
+})
+
+describe('qbittorrentWeb（M4 票 26）', () => {
+  it('套件內的那一台同樣開在瀏覽器的主機名 + 發佈的 port；給不出 port 就沒有連結', () => {
+    const bundled = { origin: 'bundled' as const, base_url: 'http://qbittorrent:8080' }
+    expect(qbittorrentWeb({ ...bundled, web_port: 18080 }, PAGE)).toBe('http://nas.local:18080')
+    expect(qbittorrentWeb({ ...bundled, web_port: null }, PAGE)).toBeNull()
+  })
+
+  it('既有的那一台填的是 compose 主機名就給不出', () => {
+    expect(
+      qbittorrentWeb(
+        { origin: 'existing', base_url: 'http://qbittorrent:8080', web_port: null },
+        PAGE,
+      ),
+    ).toBeNull()
   })
 })

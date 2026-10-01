@@ -29,6 +29,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from berth.adapters.http import ServiceError
 from berth.adapters.qbittorrent import (
     BERTH_TAG,
+    PreferencesRejectedError,
     QbittorrentClient,
     QbittorrentVersion,
     TorrentStatus,
@@ -57,6 +58,7 @@ from berth.services.jellyfin import resolve_interface_login
 from berth.services.settings import read_settings, update_settings
 from berth.services.steps import (
     InterfaceLogin,
+    StepFailedError,
     StepView,
     failed_step,
     failure_of,
@@ -398,12 +400,21 @@ async def _apply_password(
         return SetupStep(key=key, status=StepStatus.SKIPPED, detail=login.username)
 
     try:
-        await client.set_preferences(
-            {WEB_UI_USERNAME_KEY: login.username, WEB_UI_PASSWORD_KEY: login.password}
+        # 密碼先送、帳號後送（M4 票 26）：5.2 起 qBittorrent 帳號先驗先寫、密碼後驗，一次送兩個鍵
+        # 時密碼被拒、帳號已經換掉，下一次讀就被當成「它自己設過了」（brief §20.2）。分兩次送，
+        # 密碼被拒時那一台一個鍵都沒動。帳號被拒（前端照同一套規則先擋，只剩直接打 API）或兩次
+        # 之間斷線時，密碼已經換了、帳號還是原本那一個：Berth 不記，這一條照舊是沒設好，重送一組
+        # 就蓋過去。
+        await client.set_preferences({WEB_UI_PASSWORD_KEY: login.password})
+        await client.set_preferences({WEB_UI_USERNAME_KEY: login.username})
+    except PreferencesRejectedError as exc:
+        return failed_step(
+            key, StepFailedError(StepFailure.LOGIN_REJECTED, exc.reason), detail=login.username
         )
     except ServiceError as exc:
         # 這一條失敗不該把前面幾個鍵的結果一起丟掉——它們已經寫進去了。
         return failed_step(key, exc)
+    # 兩個鍵都進去了才記（M4 票 26）。
     record.web_ui_username = login.username
     record.web_ui_password_hash = hash_password(login.password)
     return SetupStep(key=key, status=StepStatus.OK, detail=login.username)

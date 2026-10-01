@@ -1,10 +1,14 @@
+import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
 
 import { Checkbox, Field, GhostButton, PasswordField } from '../components/controls'
-import type { InterfaceLoginForm } from './interfaceLogin'
+import type { InterfaceLoginForm, LoginProblems, LoginService } from './interfaceLogin'
 
-/** 哪一個服務的介面：文案說得出是誰的登入、打開哪個網址。 */
-export type LoginService = 'qbittorrent' | 'prowlarr'
+/** 產品名不翻譯：人話裡的 `{{service}}`。 */
+const PRODUCT = { qbittorrent: 'qBittorrent', prowlarr: 'Prowlarr' } as const satisfies Record<
+  LoginService,
+  string
+>
 
 /**
  * 介面登入的欄位（M4 票 07、15）：精靈兩頁與設定頁共用。
@@ -20,7 +24,21 @@ export function InterfaceLoginFields({
   form: InterfaceLoginForm
 }) {
   const { t } = useTranslation()
-  const { draft, problems, owner } = form
+  const { draft, problems, owner, rules } = form
+  const rule = {
+    service: PRODUCT[service],
+    owner,
+    usernameMin: rules?.usernameMin ?? 0,
+    passwordMin: rules?.passwordMin ?? 0,
+  }
+  // 沿用時帳號那一格不在畫面上：擁有者的名字不合規則也說在密碼那一格，而且先說它——改密碼救不了。
+  const reuseError = problems.username
+    ? t('interfaceLogin.error.reuseUsername', { ...rule, min: rule.usernameMin })
+    : problems.password === 'short'
+      ? t('interfaceLogin.error.reusePasswordShort', { ...rule, min: rule.passwordMin })
+      : problems.password
+        ? t('interfaceLogin.error.blank')
+        : undefined
 
   return (
     <fieldset className="grid gap-5 border-2 border-rule bg-well px-4 py-4">
@@ -40,7 +58,7 @@ export function InterfaceLoginFields({
           value={draft.password}
           autoComplete="current-password"
           onChange={(event) => form.change({ password: event.target.value })}
-          error={problems.password ? t('interfaceLogin.error.blank') : undefined}
+          error={reuseError}
         />
       ) : (
         <>
@@ -49,14 +67,20 @@ export function InterfaceLoginFields({
             value={draft.username}
             autoComplete="off"
             onChange={(event) => form.change({ username: event.target.value })}
-            error={problems.username ? t('interfaceLogin.error.blank') : undefined}
+            error={usernameError(t, problems.username, rule)}
           />
           <PasswordField
             label={t('interfaceLogin.password')}
             value={draft.password}
             autoComplete="new-password"
             onChange={(event) => form.change({ password: event.target.value })}
-            error={problems.password ? t('interfaceLogin.error.blank') : undefined}
+            error={
+              problems.password === 'short'
+                ? t('interfaceLogin.error.passwordShort', { ...rule, min: rule.passwordMin })
+                : problems.password
+                  ? t('interfaceLogin.error.blank')
+                  : undefined
+            }
           />
           <PasswordField
             label={t('interfaceLogin.confirm')}
@@ -69,6 +93,23 @@ export function InterfaceLoginFields({
       )}
     </fieldset>
   )
+}
+
+function usernameError(
+  t: TFunction,
+  problem: LoginProblems['username'],
+  rule: { service: string; usernameMin: number },
+): string | undefined {
+  switch (problem) {
+    case 'blank':
+      return t('interfaceLogin.error.blank')
+    case 'short':
+      return t('interfaceLogin.error.usernameShort', { ...rule, min: rule.usernameMin })
+    case 'colon':
+      return t('interfaceLogin.error.usernameColon', rule)
+    case undefined:
+      return undefined
+  }
 }
 
 /**

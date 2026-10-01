@@ -20,6 +20,7 @@ export const FAILURE_TEXT = {
   scheme_missing: 'failure.scheme_missing',
   not_found: 'failure.not_found',
   version_unsupported: 'failure.version_unsupported',
+  login_rejected: 'failure.login_rejected',
   credential_missing: 'failure.credential_missing',
   category_conflict: 'failure.category_conflict',
   save_path_missing: 'failure.save_path_missing',

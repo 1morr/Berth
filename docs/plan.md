@@ -644,6 +644,7 @@ WebUI\AuthSubnetWhitelist=172.28.0.2/32
 2. **qBittorrent**：
    - **套件內**：顯示建議偏好與現值的差異（§8.1），按「套用」寫有差異的鍵、並設 WebUI 登入。Berth 自己靠免密白名單連它（§9.2），用不到這組登入。
      - **WebUI 登入預設「沿用 Jellyfin 帳密」**（brief §16.3、§19 2026-09-29）：勾選時帳號是擁有者的名字，密碼請使用者**打一次**，Berth 先以 `POST /Users/AuthenticateByName` 向 Jellyfin 驗過這組帳密（不對就拒絕、不寫）再寫入；取消勾選就是票 07 的欄位——帳號預填擁有者的名字、密碼打兩次。**必填**：不設的話使用者自己打開 WebUI 只剩容器 log 裡每次重啟都換的臨時密碼。帳密跟著「套用」送（`POST /setup/qbittorrent/apply` 的 `login`）；不帶 `login` 是「登入照舊」，設過的那一條是 `skipped`、細節是帳號，沒設過的是 `pending`，精靈停在這一頁。
+      - **照 qBittorrent 的規則先擋**（M4 票 26，brief §20.2）：帳號至少 3 字元、不能有冒號，密碼至少 6 字元；沿用時也檢查（Jellyfin 密碼太短、擁有者的名字不合就說不能沿用、請另設），設定頁的「更新登入」同一套。Berth **先送密碼、再送帳號**（5.2 帳號先寫、密碼後驗），兩個都進去了才記帳號；qBittorrent 仍回 400 時那一條是 `login_rejected`、原文進技術細節，欄位不收起來。
      - **Berth 只記帳號與密碼的加鹽雜湊**（夠比對「已經是這一組」；票 15 把票 07 存的明文換掉，附 migration）。回頭看時欄位收起來、只說帳號是誰，按「更換登入」才打開。設定頁 → qBittorrent 的「介面登入」一區用同一組欄位與同一個勾選，`PUT /setup/qbittorrent/login`（`qbittorrent.set_interface_login`）只換登入、不連帶還原偏好。
    - **既有**：位址 + WebUI 帳密 → 測試。一個全域鍵都不寫（M4 票 05，照 Sonarr / Radarr 對下載器只用分類的慣例）：不列偏好表（M4 票 22：它的全域偏好沒有一個影響 Berth，列套件內的建議值只會讓人以為該去改；原本的「temp path 未啟用只警告」一併撤掉），按鈕只是確認連得上、版本夠新，只記密碼那一條 `skipped` 當「按過了」（`QbittorrentSetupStatus.writes_preferences` 是 `false`、`diffs` 是空的）。沒有介面登入那一格，帶了 `login` 回 422。
    - Berth 的路徑全靠分類（建立時帶 save path 與未完成目錄）與逐個 torrent 的 `autoTMM=true`，所以全域 `save_path` / `temp_path` / `temp_path_enabled`、`auto_tmm_enabled`、`category_changed_tmm_enabled` 動了會改掉使用者不經 Berth 加的 torrent 落在哪裡，而 Berth 自己用不到它們。健康檢查的漂移（`drifted_keys`）與設定頁的「還原建議設定」只看套件內的那一台。

@@ -767,6 +767,9 @@ class StepFailure(StrEnum):
     NOT_FOUND = "not_found"
     #: 版本比 Berth 的下限舊。`params.version` 是它的版本。
     VERSION_UNSUPPORTED = "version_unsupported"
+    #: qBittorrent 不收這組 WebUI 帳密（5.2.0 起的長度與冒號規則，brief §20.2、M4 票 26）。只掛在
+    #: 介面登入那一條上；原文（哪一條規則）在 `error`。
+    LOGIN_REJECTED = "login_rejected"
 
     # --- Berth 自己判斷的 ---
     #: 還沒有憑證可測（TMDB 的 key 沒貼）。

@@ -204,7 +204,7 @@ describe('設定 → qBittorrent', () => {
     renderApp('/settings/qbittorrent')
 
     const login = await loginSection()
-    await user.type(login.getByLabelText(OWNER_PASSWORD), 'wrong')
+    await user.type(login.getByLabelText(OWNER_PASSWORD), 'wrong-one')
     await user.click(login.getByRole('button', { name: '更新登入' }))
 
     expect(
@@ -212,6 +212,41 @@ describe('設定 → qBittorrent', () => {
     ).toBeInTheDocument()
     expect(login.queryByText(/請求沒有走完/)).not.toBeInTheDocument()
     expect(login.queryByText(/舊的那一組不能再用/)).not.toBeInTheDocument()
+  })
+
+  it('短於 qBittorrent 規則的密碼送出前就擋下；qBittorrent 不收時照它的規則說（M4 票 26）', async () => {
+    const stub = render({
+      [DRIFT]: { body: WITH_LOGIN },
+      [LOGIN]: {
+        body: qbittorrentSetup({
+          ...CLEAN,
+          web_ui_username: 'skipper',
+          steps: [
+            {
+              step: 'web_ui_password',
+              status: 'failed',
+              detail: 'skipper',
+              error: 'WebUI password must be at least 6 characters long',
+              failure: 'login_rejected',
+            },
+          ],
+        }),
+      },
+    })
+    const user = userEvent.setup()
+    renderApp('/settings/qbittorrent')
+
+    const login = await loginSection()
+    await user.type(login.getByLabelText(OWNER_PASSWORD), 'abcd')
+    await user.click(login.getByRole('button', { name: '更新登入' }))
+    expect(await login.findByText(/這組 Jellyfin 密碼不能沿用/)).toBeInTheDocument()
+    expect(stub.mock.calls.some(([url]) => url === '/api/setup/qbittorrent/login')).toBe(false)
+
+    await user.type(login.getByLabelText(OWNER_PASSWORD), 'ef')
+    await user.click(login.getByRole('button', { name: '更新登入' }))
+    expect(await login.findByText(/qBittorrent 不收這組帳密/)).toBeInTheDocument()
+    // 沒有設好：打過的密碼還在，可以改。
+    expect(login.getByLabelText(OWNER_PASSWORD)).toHaveValue('abcdef')
   })
 
   it('取消勾選就自設一組：三格、帳號預填目前那一個，送 reuse_owner false（M4 票 07、15）', async () => {

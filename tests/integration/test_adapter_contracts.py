@@ -47,6 +47,7 @@ from berth.adapters.prowlarr.client import SCHEMA_TIMEOUT_SECONDS, HttpProwlarrC
 from berth.adapters.qbittorrent import (
     BERTH_TAG,
     IpBannedError,
+    PreferencesRejectedError,
     TorrentAdd,
     TorrentRejectedError,
 )
@@ -483,6 +484,25 @@ async def test_qbittorrent_set_preferences_posts_one_json_form_field() -> None:
 
     body = urllib.parse.parse_qs(route.calls.last.request.content.decode())
     assert json.loads(body["json"][0]) == {"temp_path_enabled": True, "save_path": "/data"}
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_qbittorrent_set_preferences_keeps_what_a_400_says() -> None:
+    """5.2.0 起 `setPreferences` 對不合規的值回 400 加一行原文（brief §20.2，M4 票 26 實測）。
+    那一行就是使用者要知道的規則：丟成 `protocol_mismatch` 等於說「這不是 qBittorrent」。"""
+    respx.post(f"{QBITTORRENT_URL}/api/v2/app/setPreferences").respond(
+        400, text="WebUI password must be at least 6 characters long"
+    )
+
+    client = HttpQbittorrentClient(QBITTORRENT_URL)
+    try:
+        with pytest.raises(PreferencesRejectedError) as raised:
+            await client.set_preferences({"web_ui_password": "abcd"})
+    finally:
+        await client.aclose()
+
+    assert raised.value.reason == "WebUI password must be at least 6 characters long"
 
 
 @respx.mock

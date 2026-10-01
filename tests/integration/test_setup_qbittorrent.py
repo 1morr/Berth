@@ -128,7 +128,8 @@ async def test_apply_sets_the_web_ui_login_typed_on_the_berth(session: AsyncSess
 
     status = await apply_qbittorrent(session, factory, login=SKIPPER)
 
-    assert client.writes[-1] == {"web_ui_username": "skipper", "web_ui_password": "harbour"}
+    # 密碼先、帳號後，各一次（M4 票 26：5.2 帳號先寫、密碼後驗）。
+    assert client.writes[-2:] == [{"web_ui_password": "harbour"}, {"web_ui_username": "skipper"}]
     assert [row.status for row in status.steps if row.step == QbittorrentStep.PASSWORD.value] == [
         StepStatus.OK
     ]
@@ -158,7 +159,8 @@ async def test_a_changed_login_replaces_the_old_one(session: AsyncSession) -> No
     )
 
     assert client.writes[written:] == [
-        {"web_ui_username": "deckhand", "web_ui_password": "changed"}
+        {"web_ui_password": "changed"},
+        {"web_ui_username": "deckhand"},
     ]
     await client.login("deckhand", "changed")
     with pytest.raises(AuthFailedError):
@@ -281,7 +283,7 @@ async def test_pressing_apply_twice_changes_nothing_the_second_time(
     first = await apply_qbittorrent(session, factory, login=SKIPPER)
     second = await apply_qbittorrent(session, factory, login=SKIPPER)
 
-    assert len(client.writes) == 2  # 第一輪的三個鍵 + 密碼；第二輪一個都不寫。
+    assert len(client.writes) == 3  # 第一輪的三個鍵、密碼、帳號；第二輪一個都不寫。
     assert [row.status for row in second.steps] == [StepStatus.SKIPPED] * 4
     assert [row.step for row in second.steps] == [row.step for row in first.steps]
 

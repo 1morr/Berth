@@ -494,9 +494,11 @@ async def post_jellyfin_library_path(
 
 
 @router.get("/qbittorrent/diff")
-async def get_qbittorrent_diff(session: SessionDep, factory: ClientFactoryDep) -> QbittorrentOut:
+async def get_qbittorrent_diff(
+    session: SessionDep, config: ConfigDep, factory: ClientFactoryDep
+) -> QbittorrentOut:
     """現值與建議值的逐鍵差異。連得到才有內容，連不到就是 `reachable=false` 加原文。"""
-    return QbittorrentOut.model_validate(await read_qbittorrent_diff(session, factory))
+    return QbittorrentOut.of(await read_qbittorrent_diff(session, factory), config)
 
 
 class QbittorrentApplyIn(BaseModel):
@@ -506,7 +508,10 @@ class QbittorrentApplyIn(BaseModel):
 
 @router.post("/qbittorrent/apply", responses=_LOGIN_RESPONSES)
 async def post_qbittorrent_apply(
-    session: SessionDep, factory: ClientFactoryDep, body: QbittorrentApplyIn | None = None
+    session: SessionDep,
+    config: ConfigDep,
+    factory: ClientFactoryDep,
+    body: QbittorrentApplyIn | None = None,
 ) -> QbittorrentOut:
     """套用建議偏好。只寫有差異的鍵；帶了登入就順便設套件內那一台的 WebUI 登入。
 
@@ -519,12 +524,12 @@ async def post_qbittorrent_apply(
         raise login_refusal(refusal) from refusal
     except ValueError as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
-    return QbittorrentOut.model_validate(result)
+    return QbittorrentOut.of(result, config)
 
 
 @router.put("/qbittorrent/login", responses=_LOGIN_RESPONSES)
 async def put_qbittorrent_login(
-    session: SessionDep, factory: ClientFactoryDep, body: InterfaceLoginIn
+    session: SessionDep, config: ConfigDep, factory: ClientFactoryDep, body: InterfaceLoginIn
 ) -> QbittorrentOut:
     """設定頁的「更新登入」（M4 票 07）：只換套件內那一台的 WebUI 登入。既有的那一台 422。"""
     try:
@@ -533,7 +538,7 @@ async def put_qbittorrent_login(
         raise login_refusal(refusal) from refusal
     except ValueError as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
-    return QbittorrentOut.model_validate(result)
+    return QbittorrentOut.of(result, config)
 
 
 # --- 頁 4：Prowlarr 與索引站（plan §9.3、§8.4）---

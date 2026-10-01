@@ -737,7 +737,8 @@ class TestQbittorrent:
         self, client: TestClient, qbittorrent: FakeQbittorrentClient
     ) -> None:
         body = client.post(
-            "/api/setup/qbittorrent/apply", json={"login": {"username": "skipper", "password": "h"}}
+            "/api/setup/qbittorrent/apply",
+            json={"login": {"username": "skipper", "password": "harbour"}},
         ).json()
 
         assert [row["differs"] for row in body["diffs"]] == [False] * 3
@@ -774,7 +775,7 @@ class TestQbittorrent:
     ) -> None:
         client.post(
             "/api/setup/qbittorrent/apply",
-            json={"login": {"username": " skipper ", "password": "h"}},
+            json={"login": {"username": " skipper ", "password": "harbour"}},
         )
 
         assert qbittorrent.writes[-1]["web_ui_username"] == "skipper"
@@ -784,7 +785,8 @@ class TestQbittorrent:
     ) -> None:
         """設定頁的「更新登入」（M4 票 07）：舊的失效、新的有效。"""
         client.post(
-            "/api/setup/qbittorrent/apply", json={"login": {"username": "skipper", "password": "h"}}
+            "/api/setup/qbittorrent/apply",
+            json={"login": {"username": "skipper", "password": "harbour"}},
         )
 
         response = client.put(
@@ -793,10 +795,11 @@ class TestQbittorrent:
 
         assert response.status_code == 200
         assert response.json()["web_ui_username"] == "deckhand"
-        assert qbittorrent.writes[-1] == {
-            "web_ui_username": "deckhand",
-            "web_ui_password": "changed",
-        }
+        # 密碼先、帳號後，各一次（M4 票 26：5.2 帳號先寫、密碼後驗）。
+        assert qbittorrent.writes[-2:] == [
+            {"web_ui_password": "changed"},
+            {"web_ui_username": "deckhand"},
+        ]
 
     def test_an_old_web_api_is_refused_with_its_version_visible(
         self, config: Config, tmp_path: Path

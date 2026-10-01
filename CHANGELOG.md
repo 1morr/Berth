@@ -1260,6 +1260,12 @@ split-cour 的第一批被播出日比對整批擋在審核，改正一次並套
   媒體庫頁那一份 `GET /api/inventory/{library_id}/watching` 不變。
 
 ### Fixed
+- **qBittorrent WebUI 登入照它的規則先擋、被拒說對原因、失敗不留半套**（M4 票 26，2026-10-01 實測第 3、20 條）：
+  精靈頁 2 與設定頁的「更新登入」照 qBittorrent 5.2 起的規則在送出前擋下（帳號至少 3 字元、不能有冒號，密碼至少
+  6 字元；沿用 Jellyfin 帳密時也檢查，太短就說不能沿用、請另設），不再卡在「回應的不是 qBittorrent」。
+  qBittorrent 仍回 400 時那一條是新代碼 `login_rejected`、原文進技術細節；Berth 先送密碼再送帳號（5.2 帳號先寫、
+  密碼後驗，brief §20.2），兩個都進去了才記帳號，失敗後表單不收成「帳號：xxx」，取消沿用時上一次的失敗不再掛著。
+  頁 2 補法的連結改成瀏覽器開得了的位址（`GET /setup/qbittorrent/diff` 等多回 `web_port`），給不出就不給。
 - **精靈的補法照原因給，不照檢查項目給**（M4 票 25，2026-10-01 實測 B5、B9、E2、E8～E12）：Berth 自己寫不進
   （`berth_cannot_write`）不再被說成 Jellyfin 或 qBittorrent 沒掛 `/data`、分類衝突，改說 PUID / PGID 與目錄權限、
   不給別的容器的片段；目錄被刪（新代碼 `directory_missing`）與不在共用掛載底下分開；qBittorrent 沒報預設儲存路徑

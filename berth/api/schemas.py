@@ -7,11 +7,13 @@
 
 from __future__ import annotations
 
+from dataclasses import asdict
 from datetime import datetime
 from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
+from berth.config import Config
 from berth.domain import (
     CollectionType,
     FirstBatchBasis,
@@ -23,6 +25,7 @@ from berth.domain import (
     StepStatus,
 )
 from berth.services.health import CHECK_INTERVAL, HealthReport, Status
+from berth.services.qbittorrent import QbittorrentSetupStatus
 from berth.services.steps import InterfaceLogin
 
 
@@ -128,6 +131,17 @@ class QbittorrentOut(BaseModel):
     failure: StepFailure | None
     #: 連線本身的失敗原文（英文），收進「技術細節」。
     error: str
+    #: 套件內 qBittorrent 在宿主上發佈的 WebUI port（`QBITTORRENT_WEBUI_PORT`）：瀏覽器開它的介面是
+    #: 「現在的主機名 + 這個 port」，Berth 存的是 compose 內網的位址，瀏覽器解不到（M4 票 26，同
+    #: `IndexerSetupOut.web_port`）。既有與還沒選是 `null`。
+    web_port: int | None
+
+    @classmethod
+    def of(cls, status: QbittorrentSetupStatus, config: Config) -> QbittorrentOut:
+        bundled = status.origin is ServiceOrigin.BUNDLED
+        return cls.model_validate(
+            {**asdict(status), "web_port": config.qbittorrent_webui_port if bundled else None}
+        )
 
 
 class ServiceHealthOut(BaseModel):

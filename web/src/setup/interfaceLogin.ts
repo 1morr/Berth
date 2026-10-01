@@ -15,18 +15,67 @@ export interface LoginDraft {
   confirm: string
 }
 
+/** 哪一個服務的介面：文案說得出是誰的登入、打開哪個網址，也決定照哪一份規則擋。 */
+export type LoginService = 'qbittorrent' | 'prowlarr'
+
+/** 那個服務自己收什麼樣的帳密。沒有規則的服務（Prowlarr）只要兩格都填。 */
+export interface LoginRules {
+  usernameMin: number
+  passwordMin: number
+  /** 帳號不能有冒號。 */
+  noColon: boolean
+}
+
+/**
+ * qBittorrent 5.2.0 起 `setPreferences` 照這三條拒收，帳號還先寫進去（brief §20.2，M4 票 26 實測）。
+ * 4.4–5.1 自己的設定頁也要求同樣的長度，所以不分版本照它擋。字數是 `String.length`（UTF-16 code
+ * unit），與 qBittorrent 的 QString 同一種算法。
+ */
+export const LOGIN_RULES = {
+  qbittorrent: { usernameMin: 3, passwordMin: 6, noColon: true },
+  prowlarr: null,
+} as const satisfies Record<LoginService, LoginRules | null>
+
 export interface LoginProblems {
-  username?: 'blank'
-  password?: 'blank'
+  /** 沿用時是擁有者的名字不合規則（那一格不在畫面上，說在密碼那一格）。 */
+  username?: 'blank' | 'short' | 'colon'
+  password?: 'blank' | 'short'
   confirm?: 'mismatch'
 }
 
-/** `reuse`：沿用 Jellyfin 帳密時只看密碼那一格。 */
-export function loginProblems(draft: LoginDraft, reuse = false): LoginProblems {
-  if (reuse) return draft.password ? {} : { password: 'blank' }
+/**
+ * `reuse`：沿用 Jellyfin 帳密時只看密碼那一格，再加上擁有者的名字（`owner`）合不合規則——它就是要寫進去的帳號。
+ */
+export function loginProblems(
+  draft: LoginDraft,
+  {
+    reuse = false,
+    rules = null,
+    owner = '',
+  }: { reuse?: boolean; rules?: LoginRules | null; owner?: string } = {},
+): LoginProblems {
+  const username = reuse ? owner : draft.username.trim()
+  const usernameProblem = !username
+    ? 'blank'
+    : rules && username.length < rules.usernameMin
+      ? 'short'
+      : rules?.noColon && username.includes(':')
+        ? 'colon'
+        : undefined
+  const passwordProblem = !draft.password
+    ? 'blank'
+    : rules && draft.password.length < rules.passwordMin
+      ? 'short'
+      : undefined
+  if (reuse) {
+    return {
+      ...(usernameProblem && usernameProblem !== 'blank' ? { username: usernameProblem } : {}),
+      ...(passwordProblem ? { password: passwordProblem } : {}),
+    }
+  }
   return {
-    ...(draft.username.trim() ? {} : { username: 'blank' }),
-    ...(draft.password ? {} : { password: 'blank' }),
+    ...(usernameProblem ? { username: usernameProblem } : {}),
+    ...(passwordProblem ? { password: passwordProblem } : {}),
     ...(draft.password && draft.password !== draft.confirm ? { confirm: 'mismatch' } : {}),
   }
 }
@@ -51,6 +100,8 @@ export interface InterfaceLoginForm {
   owner: string
   /** 按過送出之後才說哪一格不對，打字的當下不罵人。 */
   problems: LoginProblems
+  /** 照哪一份規則擋（`LOGIN_RULES`）。文案要說出那個數字。 */
+  rules: LoginRules | null
   /** 欄位打開著：還沒設過（必填），或按了「更換」。 */
   open: boolean
   openFields: () => void
@@ -65,15 +116,18 @@ export interface InterfaceLoginForm {
 }
 
 /**
+ * @param service 哪一個服務的登入：照它的規則擋（`LOGIN_RULES`）。
  * @param current 那一台的帳號（Berth 設下的，或它自己就設過的），空字串是還沒設過。
  * @param owner 擁有者的名字：沿用時的帳號，取消勾選時預填它（票 07 shape 時使用者拍板）。
  * @param alwaysOpen 設定頁：那一區本來就是「更新登入」，沒有收起來的狀態。
  */
 export function useInterfaceLogin({
+  service,
   current,
   owner,
   alwaysOpen = false,
 }: {
+  service: LoginService
   current: string
   owner: string
   alwaysOpen?: boolean
@@ -89,6 +143,8 @@ export function useInterfaceLogin({
   const [edits, setEdits] = useState(0)
   const open = alwaysOpen || changing || !current
   const reusing = reuse && Boolean(owner)
+  const rules = LOGIN_RULES[service]
+  const problemsNow = () => loginProblems(draft, { reuse: reusing, rules, owner })
 
   return {
     draft,
@@ -106,13 +162,14 @@ export function useInterfaceLogin({
       setEdits((count) => count + 1)
     },
     owner,
-    problems: checked ? loginProblems(draft, reusing) : {},
+    problems: checked ? problemsNow() : {},
+    rules,
     open,
     openFields: () => setChanging(true),
     take: () => {
       if (!open) return null
       setChecked(true)
-      if (Object.keys(loginProblems(draft, reusing)).length > 0) return undefined
+      if (Object.keys(problemsNow()).length > 0) return undefined
       return takenLogin(draft, reusing)
     },
     reset: (username) => {

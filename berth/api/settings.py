@@ -65,15 +65,19 @@ async def post_service_test(
 
 
 @router.get("/qbittorrent/diff")
-async def get_qbittorrent_diff(session: SessionDep, factory: ClientFactoryDep) -> QbittorrentOut:
+async def get_qbittorrent_diff(
+    session: SessionDep, config: ConfigDep, factory: ClientFactoryDep
+) -> QbittorrentOut:
     """現值與建議值的逐鍵差異——與精靈第 4 步問的是同一個問題。"""
-    return QbittorrentOut.model_validate(await read_qbittorrent_diff(session, factory))
+    return QbittorrentOut.of(await read_qbittorrent_diff(session, factory), config)
 
 
 @router.post("/qbittorrent/apply")
-async def post_qbittorrent_apply(session: SessionDep, factory: ClientFactoryDep) -> QbittorrentOut:
+async def post_qbittorrent_apply(
+    session: SessionDep, config: ConfigDep, factory: ClientFactoryDep
+) -> QbittorrentOut:
     """「還原建議設定」。只寫有差異的鍵，跑的是精靈第 4 步的同一支命令。"""
-    return QbittorrentOut.model_validate(await apply_qbittorrent(session, factory))
+    return QbittorrentOut.of(await apply_qbittorrent(session, factory), config)
 
 
 @router.get("/jellyfin")

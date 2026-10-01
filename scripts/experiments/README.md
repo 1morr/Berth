@@ -46,6 +46,7 @@ ffmpeg 產種子檔），那只影響「造測試素材」這一步，不影響 
 | `rss_subscribe_timing.py` | M4 票 13b：前端 e2e `rss-subscribe` 的第一輪預覽 5 秒內沒回，是在等鎖、等背景的補舊集，還是自己就慢。對 `rss` 情境的演練 server（`scripts/fake_setup_server.py`，子程序）打同一串 API 逐步計時，`--settle` 先等補舊集跑完，`--profile` 改在同一個行程起 server、cProfile 包住 `preview_feed`。import `berth` 與 httpx（量的是 Berth 自己），要在 repo 根目錄以 `uv run` 跑；不連網；結果記在票的 Comments |
 | `qbittorrent_category_download_path.py` | M4 票 22：分類帶 `downloadPathEnabled` + `downloadPath` 時，autoTMM 的 torrent 下載中落在哪、完成後搬到哪；全域 temp path 開、關、分類明說停用各一包，另記讀回來的鍵名。一台做種的 5.2.3 以 `addPeers` 直連、全域限速讓「下載中」看得到；torrent 是 private 而且關掉 DHT / LSD / PeX，不會連到公網的 peer。4.4.5 的 image 是 busybox，列檔不能用 `find -printf`。自己起停一次性容器；結論在 brief §20.2 |
 | `qbittorrent_visibility_probe.py` | M4 票 19：Berth 怎麼證明 qBittorrent 看得到分類路徑——寫一個小檔、做成單檔 torrent、停住加入、recheck，看 `progress`。看得到、看不到、同名空目錄、權限不足、開了 temp path、`useDownloadPath=false` 各一包；另記移除之後留下什麼。自己起停一次性容器；結論在 brief §20.2 |
+| `qbittorrent_webui_login_rules.py` | M4 票 26：`setPreferences` 收什麼樣的 WebUI 帳密——帳號 2 / 3 字元、含冒號，密碼 5 / 6 字元、六個中文字，帳號與密碼一起送時密碼太短（兩種鍵序），各記狀態碼、原文與帳號有沒有被寫進去。4.4.5 什麼都收；5.2.3 擋三條、帳號先寫。自己起停一次性容器（網段固定 172.24.0.0/16）；結論在 brief §20.2 |
 | `compose_collisions.py` | M4 票 16：套件容器撞名（票 16 之前的容器名與現在的 `berth-*` 各一次）、撞 port、`COMPOSE_PROFILES=` 空字串時 `docker compose up -d` 的結束碼、錯誤訊息與每個容器的狀態，以及 `berth` 的 `extra_hosts` host-gateway 在這台 Docker 上解到哪、連不連得到宿主上的 port。從 `deploy/docker-compose.yml` 改出隔離的 compose project，改不到（compose 換了寫法）就停下；結論在 brief §20.14 |
 | `lib.py` | 共用的 HTTP、輪詢、bencode、報告輸出 |
 

@@ -25,7 +25,7 @@ import { SIGNAL_FILL, type Signal } from '../components/signal'
 import { TechnicalDetails } from '../components/TechnicalDetails'
 import { useFocusAfterRemoval } from '../components/useFocusAfterRemoval'
 import { languageName } from './languageName'
-import { prowlarrWeb } from './prowlarrWeb'
+import { prowlarrWeb } from './serviceWeb'
 import { hostOf } from './signals'
 
 /**

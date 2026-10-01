@@ -4304,6 +4304,8 @@ export interface components {
             failure: components["schemas"]["StepFailure"] | null;
             /** Error */
             error: string;
+            /** Web Port */
+            web_port: number | null;
         };
         /**
          * ReasonCode
@@ -5001,7 +5003,7 @@ export interface components {
          *     `SetupStep.params`，不拼進英文句子。
          * @enum {string}
          */
-        StepFailure: "not_deployed" | "unreachable" | "starting" | "auth_rejected" | "ip_banned" | "protocol_mismatch" | "scheme_mismatch" | "scheme_missing" | "not_found" | "version_unsupported" | "credential_missing" | "category_conflict" | "save_path_missing" | "path_not_visible" | "directory_missing" | "berth_cannot_write" | "probe_unseen" | "probe_unreadable" | "probe_unsettled" | "library_gone" | "library_path_gone" | "jellyfin_cannot_see" | "cross_device" | "link_failed" | "site_cloudflare" | "site_no_results" | "site_unreachable" | "site_rejected" | "site_not_offered" | "no_search" | "unexpected";
+        StepFailure: "not_deployed" | "unreachable" | "starting" | "auth_rejected" | "ip_banned" | "protocol_mismatch" | "scheme_mismatch" | "scheme_missing" | "not_found" | "version_unsupported" | "login_rejected" | "credential_missing" | "category_conflict" | "save_path_missing" | "path_not_visible" | "directory_missing" | "berth_cannot_write" | "probe_unseen" | "probe_unreadable" | "probe_unsettled" | "library_gone" | "library_path_gone" | "jellyfin_cannot_see" | "cross_device" | "link_failed" | "site_cloudflare" | "site_no_results" | "site_unreachable" | "site_rejected" | "site_not_offered" | "no_search" | "unexpected";
         /**
          * StepOut
          * @description 一條纜繩：精靈的一步，或一個 Route 的一項檢查。

@@ -10,6 +10,7 @@ from typing import Any
 
 from berth.adapters.http import AuthFailedError
 from berth.adapters.qbittorrent import (
+    PreferencesRejectedError,
     QbittorrentCategory,
     QbittorrentVersion,
     TorrentAdd,
@@ -127,11 +128,24 @@ class FakeQbittorrentClient:
         if self._set_preferences_error is not None:
             raise self._set_preferences_error
         self.writes.append(dict(values))
-        # 密碼只寫不讀（brief §20.7）：讀回來的偏好裡沒有它，只有登入認它。
         written = dict(values)
-        if "web_ui_password" in written:
-            self._web_ui_password = str(written.pop("web_ui_password"))
+        password = written.pop("web_ui_password", None)
+        username = written.pop("web_ui_username", None)
         self._preferences.update(written)
+        # 5.2.0 起照原始碼的順序：帳號先驗先寫、密碼後驗——帳號合規而密碼太短時帳號已經寫進去了
+        # （brief §20.2，M4 票 26 實測）。之前的版本什麼都收。
+        rules = tuple(int(part) for part in self._version.app.lstrip("v").split(".")[:2]) >= (5, 2)
+        if username is not None:
+            if rules and len(str(username)) < 3:
+                raise PreferencesRejectedError("WebUI username must be at least 3 characters long")
+            if rules and ":" in str(username):
+                raise PreferencesRejectedError("WebUI username cannot contain a colon")
+            self._preferences["web_ui_username"] = username
+        if password is not None:
+            if rules and len(str(password)) < 6:
+                raise PreferencesRejectedError("WebUI password must be at least 6 characters long")
+            # 密碼只寫不讀（brief §20.7）：讀回來的偏好裡沒有它，只有登入認它。
+            self._web_ui_password = str(password)
 
     async def categories(self) -> tuple[QbittorrentCategory, ...]:
         if self.error is not None:

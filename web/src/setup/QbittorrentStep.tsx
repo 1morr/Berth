@@ -21,6 +21,7 @@ import { BerthLogin } from './InterfaceLoginFields'
 import { STEP_FIX, STEP_LABEL } from './qbittorrentSteps'
 import { ServiceChoice, type ChoiceControls } from './ServiceChoice'
 import type { ChoiceDraft } from './choiceDraft'
+import { qbittorrentWeb } from './serviceWeb'
 import { VERSION_FLOOR, connected } from './signals'
 import { StepFrame } from './StepFrame'
 
@@ -63,9 +64,9 @@ export function QbittorrentStep({
   loginRefusal: InterfaceLoginRefusal | null
   /**
    * `login` 是頁上填的 WebUI 登入；`null` 是登入照舊（設過了、沒按「更換」）。
-   * 回傳的 promise 成功之後欄位清掉密碼、收起來。
+   * 回傳的是套用之後的那一份；登入那一條過了，欄位才清掉密碼、收起來。
    */
-  onApply: (login: InterfaceLogin | null) => Promise<unknown>
+  onApply: (login: InterfaceLogin | null) => Promise<QbittorrentSetup>
   /** 選擇的兩支 mutation 與畫面上選著、還沒存下的那一格（`SetupPage` 持有）。 */
   choice: ChoiceControls & ChoiceDraft
   /** 回頭看的說明（`RevisitNote`），這一頁做完了才有。 */
@@ -281,10 +282,10 @@ function ApplySequence({
   applying: boolean
   requestError: unknown
   loginRefusal: InterfaceLoginRefusal | null
-  onApply: (login: InterfaceLogin | null) => Promise<unknown>
+  onApply: (login: InterfaceLogin | null) => Promise<QbittorrentSetup>
 }) {
   const { t } = useTranslation()
-  const login = useInterfaceLogin({ current: setup.web_ui_username, owner })
+  const login = useInterfaceLogin({ service: 'qbittorrent', current: setup.web_ui_username, owner })
   // 送出那一刻的欄位版本：之後改了一格，上一次的失敗就不畫了（M4 票 21）。
   const [sentAt, setSentAt] = useState<number | null>(null)
   const failed = requestError !== null && requestError !== undefined && sentAt === login.edits
@@ -293,13 +294,18 @@ function ApplySequence({
     const taken = setup.web_ui_login ? login.take() : null
     if (taken === undefined) return
     setSentAt(login.edits)
-    // 請求沒走完的那一句由 `requestFailed` 說；欄位留著，改一個字再按。
+    // 請求沒走完的那一句由 `requestFailed` 說；欄位留著，改一個字再按。登入那一條沒過時也留著
+    // （M4 票 26）：收起來就成了「帳號：xxx」，像是已經設好了。
     onApply(taken).then(
-      () => taken && login.reset(taken.username ?? ''),
+      (next) => taken && loginTook(next) && login.reset(taken.username ?? ''),
       () => undefined,
     )
   }
   const byStep = new Map(setup.steps.map((row) => [row.step, row]))
+  // 登入那一條說的是送出那一刻的欄位（M4 票 26）：之後改了一格、換了沿用與否，它就不是這幾格的結果了，
+  // 畫成還沒跑。進頁時（還沒送過）照後端存的那一次。
+  if (login.edits !== (sentAt ?? 0)) byStep.delete(PASSWORD_STEP)
+  const webUrl = qbittorrentWeb(setup)
   const started = setup.steps.length > 0
   const done = started && !applying && setup.steps.every((row) => isSettled(row.status))
   const writes = setup.writes_preferences
@@ -323,12 +329,7 @@ function ApplySequence({
           data-testid="sequence"
         >
           {QBITTORRENT_STEPS.map((step) => (
-            <QbittorrentLine
-              key={step}
-              step={step}
-              row={byStep.get(step)}
-              baseUrl={setup.base_url}
-            />
+            <QbittorrentLine key={step} step={step} row={byStep.get(step)} webUrl={webUrl} />
           ))}
         </ol>
       )}
@@ -372,17 +373,33 @@ function ApplySequence({
   )
 }
 
-/** 一條纜繩：一個偏好鍵。`step` 是封閉集合，所以標題與說明都是查表，不必有 fallback。 */
+/** WebUI 登入那一條（後端的 `QbittorrentStep.PASSWORD`）。 */
+const PASSWORD_STEP = 'web_ui_password' satisfies QbittorrentStepKey
+
+/** 登入那一條過了：寫進去了，或已經是這一組。 */
+function loginTook(next: QbittorrentSetup): boolean {
+  const row = next.steps.find((each) => each.step === PASSWORD_STEP)
+  return row?.status === 'ok' || row?.status === 'skipped'
+}
+
+/**
+ * 一條纜繩：一個偏好鍵。`step` 是封閉集合，所以標題與說明都是查表，不必有 fallback。
+ *
+ * 補法連到 qBittorrent 自己的設定頁，位址是瀏覽器開得了的那一個（`qbittorrentWeb`）；給不出就不給——
+ * 原本連的是 compose 內網的 `http://qbittorrent:8080`（M4 票 26）。qBittorrent 不收那組帳密時不叫人去
+ * 它的設定頁：同一條規則它那裡也擋，改的是這一頁上的欄位。
+ */
 function QbittorrentLine({
   step,
   row,
-  baseUrl,
+  webUrl,
 }: {
   step: QbittorrentStepKey
   row: SetupStep | undefined
-  baseUrl: string
+  webUrl: string | null
 }) {
   const { t } = useTranslation()
+  const rejected = row?.failure === 'login_rejected'
 
   return (
     <StepLine
@@ -391,8 +408,8 @@ function QbittorrentLine({
       endpoint={step}
       summary={row?.detail}
       row={row}
-      fix={t(STEP_FIX[step])}
-      commands={[`${baseUrl}/#/settings`]}
+      fix={rejected ? t('qbittorrent.fix.loginRejected') : t(STEP_FIX[step])}
+      commands={!rejected && webUrl ? [`${webUrl}/#/settings`] : []}
     />
   )
 }

@@ -29,7 +29,7 @@ import { AddedSites, AddSites, type SiteControls } from './IndexerSites'
 import { useInterfaceLogin } from './interfaceLogin'
 import { BerthLogin } from './InterfaceLoginFields'
 import { pointsAtBerth } from './loopback'
-import { prowlarrWeb } from './prowlarrWeb'
+import { prowlarrWeb } from './serviceWeb'
 import { LoopbackHint, ServiceChoice, type ChoiceControls } from './ServiceChoice'
 import type { ChoiceDraft } from './choiceDraft'
 import { STEP } from './navigation'
@@ -283,7 +283,11 @@ function ProwlarrLogin({
   controls: LoginControls
 }) {
   const { t } = useTranslation()
-  const form = useInterfaceLogin({ current: indexers.web_ui_username, owner })
+  const form = useInterfaceLogin({
+    service: 'prowlarr',
+    current: indexers.web_ui_username,
+    owner,
+  })
   // 與後端的 `PROWLARR_LOGIN_STEP` 同一個字串：那一條不是站。
   const row = indexers.steps.find((step) => step.step === 'prowlarr_login')
   const webUrl = prowlarrWeb(indexers)

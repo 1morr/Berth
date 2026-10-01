@@ -20,6 +20,7 @@ from berth.adapters.qbittorrent import (
     CONTENT_LAYOUT,
     IpBannedError,
     MaindataCursor,
+    PreferencesRejectedError,
     QbittorrentCategory,
     QbittorrentVersion,
     TorrentAdd,
@@ -33,6 +34,9 @@ from berth.adapters.torrent import info_hash_of, probe_torrent
 
 #: `torrents/add` 對「不收這一個」用的狀態碼。實測兩種成因（見 `_reason`）。
 CONFLICT = 409
+
+#: `app/setPreferences` 不收其中一個值（5.2.0 起，brief §20.2）。
+BAD_REQUEST = 400
 
 #: 登入端點上「被封了」的狀態碼。**帳密錯不是這一個**（4.4.5 是 200 + `Fails.`，
 #: 5.2.3 是 401），所以這裡的 403 只有一個意思。
@@ -99,10 +103,16 @@ class HttpQbittorrentClient:
         return payload
 
     async def set_preferences(self, values: Mapping[str, Any]) -> None:
-        """收的是表單裡一個叫 `json` 的欄位，不是 JSON body。"""
-        await self._session.request(
-            "POST", "/api/v2/app/setPreferences", data={"json": json.dumps(dict(values))}
+        """收的是表單裡一個叫 `json` 的欄位，不是 JSON body。400 是它不收其中一個值，原文跟著例外走
+        （5.2.0 起驗 WebUI 帳密，brief §20.2）。"""
+        response = await self._session.request(
+            "POST",
+            "/api/v2/app/setPreferences",
+            data={"json": json.dumps(dict(values))},
+            tolerate=(BAD_REQUEST,),
         )
+        if response.status_code == BAD_REQUEST:
+            raise PreferencesRejectedError(" ".join(response.text.split())[:200])
 
     async def categories(self) -> tuple[QbittorrentCategory, ...]:
         """鍵名兩種都收：4.4.5 與 5.2.3 實測都是 `savePath`，`save_path` 只出現在

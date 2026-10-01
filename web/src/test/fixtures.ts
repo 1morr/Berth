@@ -149,6 +149,7 @@ export function qbittorrentSetup(overrides: Partial<QbittorrentSetup> = {}): Qbi
     writes_preferences: true,
     failure: null,
     error: '',
+    web_port: null,
     ...overrides,
   }
 }

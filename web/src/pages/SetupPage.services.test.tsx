@@ -1,5 +1,6 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent, { type UserEvent } from '@testing-library/user-event'
+import i18next from 'i18next'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { stubApi } from '../test/fetch'
@@ -371,14 +372,14 @@ describe('頁 2：qBittorrent', () => {
     const user = userEvent.setup()
 
     renderWithProviders(<SetupPage />)
-    await user.type(await screen.findByLabelText(OWNER_PASSWORD), 'wrong')
+    await user.type(await screen.findByLabelText(OWNER_PASSWORD), 'wrong-one')
     await user.click(screen.getByRole('button', { name: '套用這 4 項' }))
 
     expect(
       await screen.findByText('這不是 skipper 的 Jellyfin 密碼，所以什麼都沒寫；改好再按一次。'),
     ).toBeVisible()
     // 欄位留著，改一個字再按。
-    expect(screen.getByLabelText(OWNER_PASSWORD)).toHaveValue('wrong')
+    expect(screen.getByLabelText(OWNER_PASSWORD)).toHaveValue('wrong-one')
   })
 
   it('那一台自己就設過登入時欄位收起來、說出帳號，重按不帶登入；按「更換登入」才打開', async () => {
@@ -540,6 +541,211 @@ describe('頁 2：qBittorrent', () => {
 
     expect(await screen.findByText('connection refused')).toBeInTheDocument()
     expect(screen.getByText('docker compose logs --tail 50 qbittorrent')).toBeInTheDocument()
+  })
+})
+
+/**
+ * qBittorrent 5.2 起的 WebUI 帳密規則（M4 票 26，brief §20.2）：帳號至少 3 字元、不能有冒號，密碼至少
+ * 6 字元。實測（第 3、20 條）：沿用 4 字元的 Jellyfin 密碼卡在頁 2，畫面說「回應的不是 qBittorrent」、
+ * 補法連到瀏覽器開不了的內部位址；失敗後表單收回成「帳號：xxx」，取消沿用後舊錯誤還在。
+ */
+describe('頁 2：WebUI 登入的規則', () => {
+  /** 套用回來：qBittorrent 不收這組帳密。 */
+  const REJECTED = qbittorrentSetup({
+    steps: [
+      step('save_path', 'ok', '/data/torrent/complete'),
+      step('auto_tmm_enabled', 'ok', 'true'),
+      step('category_changed_tmm_enabled', 'ok', 'true'),
+      {
+        ...step(
+          'web_ui_password',
+          'failed',
+          'skipper',
+          'WebUI password must be at least 6 characters long',
+        ),
+        failure: 'login_rejected',
+      },
+    ],
+  })
+
+  async function loginFields() {
+    const legend = await screen.findByText('qBittorrent WebUI 登入')
+    return within(legend.closest('fieldset')!)
+  }
+
+  it('沿用的 Jellyfin 密碼短於 6 字元：送出前擋下，說這組不能沿用；夠長的照送', async () => {
+    const stub = stubApi({
+      [STATUS]: { body: AT_QBITTORRENT },
+      [DIFF]: { body: qbittorrentSetup() },
+      [APPLY]: { body: qbittorrentSetup() },
+    })
+    const user = userEvent.setup()
+
+    renderWithProviders(<SetupPage />)
+    const fields = await loginFields()
+    await user.type(fields.getByLabelText(OWNER_PASSWORD), 'abcd')
+    await user.click(screen.getByRole('button', { name: '套用這 4 項' }))
+
+    expect(
+      await fields.findByText(
+        'qBittorrent 的密碼至少要 6 個字元，這組 Jellyfin 密碼不能沿用；請取消勾選，另設一組。',
+      ),
+    ).toBeVisible()
+    expect(called(stub, '/api/setup/qbittorrent/apply')).toBe(false)
+
+    await user.type(fields.getByLabelText(OWNER_PASSWORD), 'ef')
+    await user.click(screen.getByRole('button', { name: '套用這 4 項' }))
+
+    await waitFor(() =>
+      expect(bodyOf(stub, '/api/setup/qbittorrent/apply')).toEqual({
+        login: { username: '', password: 'abcdef', reuse_owner: true },
+      }),
+    )
+  })
+
+  it('擁有者的帳號不合 qBittorrent 的規則時也不能沿用', async () => {
+    const stub = stubApi({
+      [STATUS]: { body: setupStatus({ ...AT_QBITTORRENT, owner: 'jo' }) },
+      [DIFF]: { body: qbittorrentSetup() },
+    })
+    const user = userEvent.setup()
+
+    renderWithProviders(<SetupPage />)
+    const fields = await loginFields()
+    await user.type(fields.getByLabelText('jo 的 Jellyfin 密碼'), 'Harbour-1')
+    await user.click(screen.getByRole('button', { name: '套用這 4 項' }))
+
+    expect(
+      await fields.findByText(
+        'qBittorrent 的帳號至少要 3 個字元、不能有冒號，jo 不能沿用；請取消勾選，另設一組。',
+      ),
+    ).toBeVisible()
+    expect(called(stub, '/api/setup/qbittorrent/apply')).toBe(false)
+  })
+
+  it('自設的帳號與密碼照規則逐格擋，改對了才送', async () => {
+    const stub = stubApi({
+      [STATUS]: { body: AT_QBITTORRENT },
+      [DIFF]: { body: qbittorrentSetup() },
+      [APPLY]: { body: qbittorrentSetup() },
+    })
+    const user = userEvent.setup()
+
+    renderWithProviders(<SetupPage />)
+    const fields = await loginFields()
+    await user.click(fields.getByRole('checkbox', { name: '沿用 Jellyfin 帳密（skipper）' }))
+    await user.clear(fields.getByLabelText('帳號'))
+    await user.type(fields.getByLabelText('帳號'), 'ab')
+    await user.type(fields.getByLabelText('密碼'), 'abcd')
+    await user.type(fields.getByLabelText('再輸入一次密碼'), 'abcd')
+    await user.click(screen.getByRole('button', { name: '套用這 4 項' }))
+
+    expect(await fields.findByText('qBittorrent 的帳號至少要 3 個字元。')).toBeVisible()
+    expect(fields.getByText('qBittorrent 的密碼至少要 6 個字元。')).toBeVisible()
+
+    await user.type(fields.getByLabelText('帳號'), ':c')
+    await user.click(screen.getByRole('button', { name: '套用這 4 項' }))
+    expect(await fields.findByText('qBittorrent 的帳號不能有冒號（:）。')).toBeVisible()
+    expect(called(stub, '/api/setup/qbittorrent/apply')).toBe(false)
+
+    await user.clear(fields.getByLabelText('帳號'))
+    await user.type(fields.getByLabelText('帳號'), 'abc')
+    await user.type(fields.getByLabelText('密碼'), 'ef')
+    await user.type(fields.getByLabelText('再輸入一次密碼'), 'ef')
+    await user.click(screen.getByRole('button', { name: '套用這 4 項' }))
+
+    await waitFor(() =>
+      expect(bodyOf(stub, '/api/setup/qbittorrent/apply')).toEqual({
+        login: { username: 'abc', password: 'abcdef', reuse_owner: false },
+      }),
+    )
+  })
+
+  it('英文介面說同一條規則', async () => {
+    stubApi({
+      [STATUS]: { body: AT_QBITTORRENT },
+      [DIFF]: { body: qbittorrentSetup() },
+    })
+    const user = userEvent.setup()
+    await i18next.changeLanguage('en')
+    try {
+      renderWithProviders(<SetupPage />)
+      const legend = await screen.findByText('qBittorrent WebUI login')
+      const fields = within(legend.closest('fieldset')!)
+      await user.type(fields.getByLabelText("skipper's Jellyfin password"), 'abcd')
+      await user.click(screen.getByRole('button', { name: /^Apply/ }))
+
+      expect(
+        await fields.findByText(
+          'qBittorrent needs a password of at least 6 characters, so this Jellyfin password cannot be reused; untick the box and set one of its own.',
+        ),
+      ).toBeVisible()
+    } finally {
+      await i18next.changeLanguage('zh-Hant')
+    }
+  })
+
+  it('qBittorrent 不收這組帳密：說出規則、不給內部位址，表單不收起來', async () => {
+    stubApi({
+      [STATUS]: { body: AT_QBITTORRENT },
+      [DIFF]: { body: qbittorrentSetup() },
+      [APPLY]: { body: REJECTED },
+    })
+    const user = userEvent.setup()
+
+    renderWithProviders(<SetupPage />)
+    const fields = await loginFields()
+    await user.type(fields.getByLabelText(OWNER_PASSWORD), 'Harbour-1')
+    await user.click(screen.getByRole('button', { name: '套用這 4 項' }))
+
+    const sequence = await screen.findByTestId('sequence')
+    expect(
+      await within(sequence).findByText(
+        'qBittorrent 不收這組帳密：帳號至少要 3 個字元、不能有冒號，密碼至少要 6 個字元。',
+      ),
+    ).toBeVisible()
+    expect(within(sequence).queryByText(/回應的不是/)).not.toBeInTheDocument()
+    expect(within(sequence).queryByText(/qbittorrent:8080/)).not.toBeInTheDocument()
+    // 沒有設好：欄位還開著、打過的還在，沒有收成「帳號：skipper」。
+    expect(fields.getByLabelText(OWNER_PASSWORD)).toHaveValue('Harbour-1')
+    expect(screen.queryByText('qBittorrent WebUI 的帳號：')).not.toBeInTheDocument()
+  })
+
+  it('取消沿用之後，上一次的失敗不再掛著；登入照舊的那一條也不是失敗', async () => {
+    stubApi({
+      [STATUS]: { body: AT_QBITTORRENT },
+      [DIFF]: { body: REJECTED },
+    })
+    const user = userEvent.setup()
+
+    renderWithProviders(<SetupPage />)
+    const sequence = await screen.findByTestId('sequence')
+    expect(await within(sequence).findByText(/qBittorrent 不收這組帳密/)).toBeVisible()
+
+    const fields = await loginFields()
+    await user.click(fields.getByRole('checkbox', { name: '沿用 Jellyfin 帳密（skipper）' }))
+
+    expect(within(sequence).queryByText(/qBittorrent 不收這組帳密/)).not.toBeInTheDocument()
+  })
+
+  it('其他鍵失敗時的補法連到瀏覽器開得了的位址：現在的主機名＋發佈的 port', async () => {
+    stubApi({
+      [STATUS]: { body: AT_QBITTORRENT },
+      [DIFF]: {
+        body: qbittorrentSetup({
+          web_port: 18080,
+          steps: [
+            { ...step('save_path', 'failed', '', 'connection refused'), failure: 'unreachable' },
+          ],
+        }),
+      },
+    })
+
+    renderWithProviders(<SetupPage />)
+    const sequence = await screen.findByTestId('sequence')
+
+    expect(await within(sequence).findByText('http://localhost:18080/#/settings')).toBeVisible()
+    expect(within(sequence).queryByText(/qbittorrent:8080/)).not.toBeInTheDocument()
   })
 })
 

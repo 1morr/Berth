@@ -18,8 +18,8 @@ export interface LoginOutcome {
 import { GhostButton, Notice } from '../components/controls'
 import { failureText } from '../components/failures'
 import { TechnicalDetails } from '../components/TechnicalDetails'
-import { useInterfaceLogin } from '../setup/interfaceLogin'
-import { InterfaceLoginFields, type LoginService } from '../setup/InterfaceLoginFields'
+import { useInterfaceLogin, type LoginService } from '../setup/interfaceLogin'
+import { InterfaceLoginFields } from '../setup/InterfaceLoginFields'
 import { SettingsSection } from './SettingsFrame'
 
 /**
@@ -85,7 +85,7 @@ function LoginForm({
   onSave: (login: InterfaceLogin) => Promise<LoginOutcome>
 }) {
   const { t } = useTranslation()
-  const form = useInterfaceLogin({ current, owner, alwaysOpen: true })
+  const form = useInterfaceLogin({ service, current, owner, alwaysOpen: true })
   const [result, setOutcome] = useState<SetupStep | 'failed' | InterfaceLoginRefusal | null>(null)
   // 送出那一刻的欄位版本：之後改了一格，上一次的結果說的就不是這幾格了（M4 票 21）。
   const [sentAt, setSentAt] = useState<number | null>(null)

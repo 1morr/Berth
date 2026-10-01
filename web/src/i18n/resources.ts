@@ -322,6 +322,8 @@ const zhHant = {
     scheme_missing: '{{service}} 的位址沒寫 http:// 或 https://。',
     not_found: '{{service}} 說它沒有這個東西。',
     version_unsupported: '{{service}} 的版本 {{version}} 比 Berth 支援的下限舊。',
+    login_rejected:
+      '{{service}} 不收這組帳密：帳號至少要 3 個字元、不能有冒號，密碼至少要 6 個字元。',
     credential_missing: '還沒有憑證：貼上 key 再測。',
     category_conflict:
       'qBittorrent 已經有一個叫 {{category}} 的分類，存到 {{path}}；Berth 不改別人建的分類。',
@@ -509,6 +511,13 @@ const zhHant = {
     error: {
       blank: '這一格要填。',
       mismatch: '兩次輸入的密碼不一樣。',
+      usernameShort: '{{service}} 的帳號至少要 {{min}} 個字元。',
+      usernameColon: '{{service}} 的帳號不能有冒號（:）。',
+      passwordShort: '{{service}} 的密碼至少要 {{min}} 個字元。',
+      reusePasswordShort:
+        '{{service}} 的密碼至少要 {{min}} 個字元，這組 Jellyfin 密碼不能沿用；請取消勾選，另設一組。',
+      reuseUsername:
+        '{{service}} 的帳號至少要 {{min}} 個字元、不能有冒號，{{owner}} 不能沿用；請取消勾選，另設一組。',
     },
     refused: {
       owner_password: '這不是 {{owner}} 的 Jellyfin 密碼，所以什麼都沒寫；改好再按一次。',
@@ -566,6 +575,7 @@ const zhHant = {
       auto_tmm_enabled: '在「選項 → 下載」把「預設 Torrent 管理模式」設成自動：',
       category_changed_tmm_enabled: '在「選項 → 下載」讓分類改變時套用新的儲存路徑：',
       web_ui_password: '在「選項 → Web UI」自己設定帳號與密碼：',
+      loginRejected: '照上面的規則改一組帳密，或取消「沿用 Jellyfin 帳密」另設一組，再按一次套用。',
     },
     blocked: {
       tooOld:
@@ -3377,6 +3387,8 @@ const en: Translations<typeof zhHant> = {
     scheme_missing: 'The {{service}} address has no http:// or https://.',
     not_found: '{{service}} says it has no such thing.',
     version_unsupported: '{{service}} {{version}} is older than the oldest version Berth supports.',
+    login_rejected:
+      '{{service}} refused this login: the username needs at least 3 characters and no colon, the password at least 6.',
     credential_missing: 'There is no credential yet: paste a key and test.',
     category_conflict:
       'qBittorrent already has a category called {{category}} that saves to {{path}}; Berth does not change a category it did not create.',
@@ -3579,6 +3591,13 @@ const en: Translations<typeof zhHant> = {
     error: {
       blank: 'Fill this in.',
       mismatch: 'The two passwords differ.',
+      usernameShort: '{{service}} needs a username of at least {{min}} characters.',
+      usernameColon: '{{service}} does not allow a colon (:) in the username.',
+      passwordShort: '{{service}} needs a password of at least {{min}} characters.',
+      reusePasswordShort:
+        '{{service}} needs a password of at least {{min}} characters, so this Jellyfin password cannot be reused; untick the box and set one of its own.',
+      reuseUsername:
+        '{{service}} needs a username of at least {{min}} characters with no colon, so {{owner}} cannot be reused; untick the box and set one of its own.',
     },
     refused: {
       owner_password:
@@ -3641,6 +3660,8 @@ const en: Translations<typeof zhHant> = {
       category_changed_tmm_enabled:
         'In Options → Downloads, let a category change relocate the torrent:',
       web_ui_password: 'Set the username and password yourself under Options → Web UI:',
+      loginRejected:
+        'Change the login to fit the rules above, or untick “Reuse the Jellyfin login” and set one of its own, then apply again.',
     },
     blocked: {
       tooOld:

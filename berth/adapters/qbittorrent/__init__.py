@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any, Protocol
 
-from berth.adapters.http import AuthFailedError, ServiceError
+from berth.adapters.http import AuthFailedError, ProtocolMismatchError, ServiceError
 
 #: 支援下限（brief §16.4）。低於它的 Web API 缺少 Berth 要用的端點，精靈拒絕接入。
 MIN_WEBAPI = (2, 8, 4)
@@ -28,6 +28,19 @@ class TorrentRejectedError(ServiceError):
     與「連不上」分開的理由是**下一步不同**：這一個重試一百次多半還是一樣，而連不上
     只要等服務回來。畫面上兩種都是 `submit_failed`，但原文說得出是哪一種（plan §3.1）。
     """
+
+
+class PreferencesRejectedError(ProtocolMismatchError):
+    """`app/setPreferences` 回 400：qBittorrent 不收其中一個值（M4 票 26，brief §20.2）。
+
+    5.2.0 起它驗 WebUI 帳密（帳號至少 3 字元、不含冒號，密碼至少 6 字元），body 是一行英文原文，
+    `reason` 留著它。是 `ProtocolMismatchError` 的子類：除了 WebUI 登入那一條，其他鍵被拒時照舊
+    當成「回的東西對不上」——那幾個鍵的值是 Berth 算的，被拒就是兩邊對不上。
+    """
+
+    def __init__(self, reason: str) -> None:
+        super().__init__(f"app/setPreferences: 400 {reason}")
+        self.reason = reason
 
 
 #: 連續登入失敗之後 qBittorrent 封住來源 IP 時，`auth/login` 回的那一句（**4.4.5 與 5.2.3
@@ -565,6 +578,7 @@ __all__ = [
     "CategoryOutcome",
     "IpBannedError",
     "MaindataCursor",
+    "PreferencesRejectedError",
     "ProbeSight",
     "QbittorrentCategory",
     "QbittorrentClient",
