@@ -3663,6 +3663,8 @@ export interface components {
             has_route: boolean;
             /** Target Path */
             target_path: string;
+            /** Listed */
+            listed: boolean;
         };
         /**
          * LibraryOptionOut

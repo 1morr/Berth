@@ -320,6 +320,27 @@ def _on_jellyfin(setup: SetupSettings, library_root: str) -> tuple[BundledLibrar
     )
 
 
+def libraries_built(setup: SetupSettings, library_root: str) -> bool:
+    """套件內清單的每一列都在 Jellyfin 上了：頁 3 的前半（M4 票 24）。既有的那一台不建媒體庫。
+
+    **看快照，不看「建媒體庫那一步有沒有跑過」**：保留 Jellyfin、只清 Berth 重跑時清單全部已建立，
+    前端照剖面的「已建立」（`_on_jellyfin`，同一條）不呼叫 bootstrap，那一步就永遠沒有結果。
+    """
+    if setup.origin_of(ServiceKind.JELLYFIN) is not ServiceOrigin.BUNDLED:
+        return True
+    return len(_on_jellyfin(setup, library_root)) == len(setup.jellyfin.bundled)
+
+
+def is_listed(library: SetupLibrary, bundled: Sequence[BundledLibrary], library_root: str) -> bool:
+    """這個媒體庫是清單上的某一列（`_already_built` 反過來問）。套件內只替這幾個建 Route
+    （M4 票 24）：使用者自己在 Jellyfin 加的媒體庫不是 Berth 的，路徑多半也不在它的掛載裡。"""
+    names = {library.name}
+    locations = set(library.locations)
+    return any(
+        _already_built(row, library_root, names=names, locations=locations) for row in bundled
+    )
+
+
 def _already_built(
     row: BundledLibrary, library_root: str, *, names: set[str], locations: set[str]
 ) -> bool:

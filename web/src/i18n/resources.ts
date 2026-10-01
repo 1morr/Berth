@@ -784,7 +784,7 @@ const zhHant = {
     // 頁 3 進頁時向 Jellyfin 重讀媒體庫（M4 票 19）：頁 1 之後在 Jellyfin 改的掛載與路徑要看得到。
     reread: '重新讀取 Jellyfin 媒體庫',
     rereading: '讀取中…',
-    rereadFailed: '讀不到 Jellyfin 現在的媒體庫，下面是頁 1 當時存下的那一份。',
+    rereadFailed: '讀不到 Jellyfin 現在的媒體庫，下面是上一次讀到的那一份。',
     routeMissing:
       '這一步順便重新檢查了既有的 Route，其中一條在途中被刪掉了（多半是另一個分頁）。重新整理這一步，剩下的會再檢查一次。',
     cutaway: {
@@ -3851,7 +3851,7 @@ const en: Translations<typeof zhHant> = {
     reread: 'Read the Jellyfin libraries again',
     rereading: 'Reading…',
     rereadFailed:
-      'Could not read the libraries Jellyfin has now; below is the list saved on page 1.',
+      'Could not read the libraries Jellyfin has now; below is the list Berth read last time.',
     routeMissing:
       'This step also re-checks the routes you already have, and one of them was deleted while it ran — another tab, most likely. Reload this step and the rest will be checked again.',
     cutaway: {

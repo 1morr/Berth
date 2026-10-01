@@ -42,6 +42,7 @@ from berth.domain import (
 from berth.models import (
     IndexerSettings,
     JellyfinSettings,
+    PathSettings,
     QbittorrentSettings,
     ServiceChoice,
     ServiceTest,
@@ -52,7 +53,12 @@ from berth.models import (
 from berth.services.auth import SignedIn, open_session
 from berth.services.clients import BundledServices, ServiceClientFactory
 from berth.services.indexer import existing_prowlarr_step, outdated_step
-from berth.services.jellyfin import DEFAULT_STARTUP, JellyfinStartup, claim_jellyfin
+from berth.services.jellyfin import (
+    DEFAULT_STARTUP,
+    JellyfinStartup,
+    claim_jellyfin,
+    libraries_built,
+)
 from berth.services.routes import forget_route_checks, routes_ready
 from berth.services.settings import read_settings, update_settings
 from berth.services.steps import message
@@ -165,9 +171,11 @@ async def complete_setup(session: AsyncSession) -> SetupStatus:
 
 
 async def _read(session: AsyncSession, *, now: datetime) -> SetupStatus:
-    """整份狀態。頁是導出的，而頁 3 的依據在 `routes` 表，所以要多讀一次它。"""
+    """整份狀態。頁是導出的，而頁 3 的依據在 `routes` 表與媒體庫快照，所以要多讀它們。"""
     setup = await read_settings(session, SetupSettings)
-    return _status(setup, now=now, routes=await routes_ready(session))
+    paths = await read_settings(session, PathSettings)
+    berthed = await routes_ready(session) and libraries_built(setup, paths.library_root)
+    return _status(setup, now=now, berthed=berthed)
 
 
 class OwnerRejectedError(Exception):
@@ -698,34 +706,24 @@ _REASON_FAILURE = {
 }
 
 
-def _current_step(setup: SetupSettings, *, routes: bool) -> int:
+def _current_step(setup: SetupSettings, *, berthed: bool) -> int:
     """頁由狀態導出，不存游標（plan §9.3〈續行與跳過〉）。
 
     精靈可以續行也可以重跑，存「走到第幾頁」的游標會在使用者換了一台服務之後說謊。
-    頁 3 的依據不在設定裡而在 `routes` 表（`routes_ready`），所以它由參數帶進來。
+    頁 3 的依據不在這一組設定裡（`routes` 表的 `routes_ready`、套件內清單對著媒體庫快照的
+    `libraries_built`），所以它由參數 `berthed` 帶進來。
     """
     if not owner_established(setup):
         return STEP_JELLYFIN
     if not _qbittorrent_secured(setup):
         return STEP_QBITTORRENT
-    if not routes or not _libraries_built(setup):
+    if not berthed:
         return STEP_ROUTES
     if not _indexer_settled(setup):
         return STEP_INDEXER
     if not tmdb_verified(setup):
         return STEP_TMDB
     return STEP_COMPLETE
-
-
-def _libraries_built(setup: SetupSettings) -> bool:
-    """套件內 Jellyfin 的媒體庫清單建完了沒（票 06f，頁 3 的前半）。既有的那一台不建媒體庫。"""
-    if setup.origin_of(ServiceKind.JELLYFIN) is not ServiceOrigin.BUNDLED:
-        return True
-    return any(
-        row.key == JellyfinStep.LIBRARIES.value
-        and row.status in (StepStatus.OK, StepStatus.SKIPPED)
-        for row in setup.jellyfin.steps
-    )
 
 
 def _qbittorrent_secured(setup: SetupSettings) -> bool:
@@ -780,10 +778,10 @@ def _owner_signs_in(setup: SetupSettings) -> bool:
     )
 
 
-def _status(setup: SetupSettings, *, now: datetime, routes: bool) -> SetupStatus:
+def _status(setup: SetupSettings, *, now: datetime, berthed: bool) -> SetupStatus:
     return SetupStatus(
         completed=setup.completed,
-        current_step=_current_step(setup, routes=routes),
+        current_step=_current_step(setup, berthed=berthed),
         owner=setup.owner.name,
         owner_signs_in=_owner_signs_in(setup),
         services=tuple(

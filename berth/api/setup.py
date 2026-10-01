@@ -827,6 +827,8 @@ class LibraryChoiceOut(BaseModel):
     #: 已經有 Route 了：精靈只新增，這個媒體庫在勾選表上鎖住（票 14）。
     has_route: bool
     target_path: str
+    #: 套件內清單上的一列：套件內只替這幾個建 Route（M4 票 24）。既有 Jellyfin 一律 `false`。
+    listed: bool
 
 
 class RouteSetupOut(BaseModel):

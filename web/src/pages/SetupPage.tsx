@@ -229,19 +229,26 @@ export function SetupPage() {
       if (!apiKeyFailed(next)) retest.mutate({ kind: 'jellyfin', restart: true })
     },
   })
-  // 剖面上的媒體庫清單停手就存（票 06f）。不釘畫面、不重讀精靈狀態：存清單不會讓精靈前進。
+  // 剖面上的媒體庫清單停手就存（票 06f）。不釘畫面；精靈狀態要重讀：多一列還沒建的，頁 3 就還沒做完
+  // （後端 `libraries_built`，M4 票 24）。
   const saveLibraries = useMutation({
     mutationFn: saveBundledLibraries,
-    onSuccess: (next) => queryClient.setQueryData(jellyfinSetupQueryOptions.queryKey, next),
+    onSuccess: absorbJellyfin,
   })
   // 頁 3 的「建立並檢查」（M4 票 08）：一顆鈕照順序做完，一段失敗就停、後面的不送。建媒體庫與加路徑
   // 的失敗不是 4xx，而是 Jellyfin 那一份的 `libraries` 那一步變紅——那時不建 Route，畫面讀它說原文。
   const dock = useMutation({
     mutationFn: async (plan: DockPlan): Promise<RouteSetup | null> => {
       if (plan.origin === 'bundled') {
-        // 先存清單再建：`bootstrap` 讀的是存下來的那一份，而停手存檔可能還沒送出去。
-        await saveBundledLibraries(plan.libraries)
-        if (plan.buildLibraries && !(await stepThrough(bootstrapJellyfin()))) return null
+        // 先向 Jellyfin 重讀（M4 票 24）：進頁之後在 Jellyfin 刪掉的媒體庫要回到「還沒建」，
+        // Route 也照它現在報的建。
+        queryClient.setQueryData(routeSetupQueryOptions.queryKey, await rereadRouteLibraries())
+        // 再存清單：`bootstrap` 讀的是存下來的那一份，而停手存檔可能還沒送出去。回來的「已建立」
+        // 照剛重讀的快照算，與後端判定頁 3 的是同一條。
+        const saved = await saveBundledLibraries(plan.libraries)
+        absorbJellyfin(saved)
+        const unbuilt = saved.bundled.some((row) => !row.built)
+        if (unbuilt && !(await stepThrough(bootstrapJellyfin()))) return null
         return buildRoutes([])
       }
       // 一次送全部：後端逐個試、逐個回報（M4 票 19），有一個沒加上就不建 Route。
@@ -364,13 +371,18 @@ export function SetupPage() {
   })
   // 泊位板要畫得出走過的每一格，所以這三份跟著後端走到哪裡，不跟著畫面停在哪裡。
   const routes = useQuery({ ...routeSetupQueryOptions, enabled: backend >= STEP.routes })
-  // 頁 3 進頁時向既有 Jellyfin 重讀媒體庫（M4 票 19）：頁 1 之後在 Jellyfin 改的掛載與路徑要看得到。
-  // 讀的是 Jellyfin、寫的是 Berth 的快照，不動任何服務，所以不釘畫面。
+  // 頁 3 進頁時向 Jellyfin 重讀媒體庫（M4 票 19；套件內也是，票 24）：頁 1 之後在 Jellyfin 改的掛載、
+  // 路徑與媒體庫要看得到。讀的是 Jellyfin、寫的是 Berth 的快照，不動任何服務；但快照決定清單哪幾列
+  // 已建立、頁 3 走不走得過去，所以釘住這一頁、重讀清單與精靈狀態——後端因此前進時畫面停在這裡。
   const reread = useMutation({
     mutationFn: rereadRouteLibraries,
-    onSuccess: (next) => queryClient.setQueryData(routeSetupQueryOptions.queryKey, next),
+    onMutate: hold,
+    onSuccess: (next) => {
+      absorbBerth(routeSetupQueryOptions.queryKey, next)
+      void queryClient.invalidateQueries({ queryKey: jellyfinSetupQueryOptions.queryKey })
+    },
   })
-  const rereadOnEntry = step === STEP.routes && routes.data?.origin === 'existing'
+  const rereadOnEntry = step === STEP.routes && routes.data !== undefined
   const { mutate: rereadNow } = reread
   useEffect(() => {
     if (rereadOnEntry) rereadNow()
@@ -527,9 +539,12 @@ export function SetupPage() {
             onSaveLibraries={(libraries) => saveLibraries.mutate(libraries)}
             savingLibraries={saveLibraries.isPending}
             saveLibrariesFailed={librariesFailure()}
-            onRouteDeleted={() =>
+            onRouteDeleted={() => {
+              // 刪掉最後一條紅的，後端就過了這一頁（M4 票 24）：重讀進度，前進鍵才出現。畫面不跳頁：
+              // 進頁的重讀已經釘住這一頁。
               void queryClient.invalidateQueries({ queryKey: routeSetupQueryOptions.queryKey })
-            }
+              void queryClient.invalidateQueries({ queryKey: setupStatusQueryOptions.queryKey })
+            }}
             note={note}
             nav={nav}
           />
@@ -706,7 +721,7 @@ function completeFailure(
 
 /**
  * 媒體庫路徑那一格的信號。這一格沒有對應的服務，看的是媒體庫清單與 Route 自己的健康：有紅的就是
- * 阻擋，後端過了這一頁才是已繫上（套件內的清單也要建完，後端 `_libraries_built`）。
+ * 阻擋，後端過了這一頁才是已繫上（套件內的清單也要建完，後端 `libraries_built`）。
  */
 function librarySignal(
   status: SetupStatus,
@@ -715,9 +730,7 @@ function librarySignal(
   building: boolean,
 ): Signal {
   if (building) return 'working'
-  if (jellyfin?.steps.some((row) => row.step === 'libraries' && row.status === 'failed')) {
-    return 'blocked'
-  }
+  if (jellyfin && librariesFailed(jellyfin)) return 'blocked'
   // 停用的 Route 不是目的地，完成條件也不算它（票 14，後端 `routes_ready` 同一條規則）。
   if (routes?.routes.some((route) => route.enabled && route.health === 'failed')) return 'blocked'
   if (status.current_step > STEP.routes) return 'secured'

@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import errno
 import os
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from pathlib import Path
 
 import pytest
@@ -31,6 +31,7 @@ from berth.db import create_session_factory
 from berth.domain import (
     CollectionType,
     HealthStatus,
+    JellyfinStep,
     RouteCheck,
     RouteRefusal,
     ServiceOrigin,
@@ -38,6 +39,7 @@ from berth.domain import (
     StepStatus,
 )
 from berth.models import (
+    BundledLibrary,
     QbittorrentSettings,
     Route,
     SetupLibrary,
@@ -149,6 +151,7 @@ class TestBundled:
                 )
             )
         await arrange(session, roots, libraries=tuple(libraries))
+        await listed(session, [row for row in libraries if row.collection_type != "music"])
 
         status = await build_routes(session, factory_for(roots, libraries=tuple(libraries)), ())
 
@@ -224,6 +227,135 @@ class TestBundled:
 
         assert sorted(path.name for path in (roots["library"] / "tv").iterdir()) == []
         assert sorted(path.name for path in (roots["complete"] / "tv").iterdir()) == []
+
+
+class TestBundledPageThree:
+    """M4 票 24：套件內頁 3 的前進條件與 Route 的範圍都照清單與 Jellyfin 現在報的媒體庫算。"""
+
+    @pytest.mark.asyncio
+    async def test_a_reinstall_whose_jellyfin_has_every_listed_library_moves_on(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """保留 Jellyfin、只清 Berth 重跑（實測 R-07）：清單全部已建立，前端不呼叫建媒體庫。"""
+        await arrange(session, roots)
+        setup = await read_settings(session, SetupSettings)
+        # 重裝的 Berth 只跑過頁 1：`libraries` 那一步從來沒有結果。
+        setup.jellyfin.steps = [
+            row for row in setup.jellyfin.steps if row.key != JellyfinStep.LIBRARIES.value
+        ]
+        setup.indexer.steps = []
+        await write_settings(session, setup)
+
+        await build_routes(session, factory_for(roots), ())
+
+        assert (await read_status(session)).current_step == STEP_INDEXER
+
+    @pytest.mark.asyncio
+    async def test_a_listed_library_jellyfin_does_not_have_yet_holds_page_three(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """雙向：清單上有 Jellyfin 還沒有的，就算上一次建媒體庫是綠的也要先建它。"""
+        await arrange(session, roots)
+        await listed(session, [*bundled_libraries(roots["library"]), docs(roots)])
+
+        await build_routes(session, factory_for(roots), ())
+
+        assert (await read_route_status(session)).ready is True
+        assert (await read_status(session)).current_step == STEP_ROUTES
+
+    @pytest.mark.asyncio
+    async def test_a_library_that_is_not_on_the_list_gets_no_route(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """使用者自己在 Jellyfin 加的、路徑不在 `/data` 的媒體庫不自動建 Route（實測 R-04）。"""
+        libraries = (*bundled_libraries(roots["library"]), elsewhere())
+        await arrange(session, roots, libraries=libraries)
+
+        status = await build_routes(session, factory_for(roots, libraries=libraries), ())
+
+        assert [row.library for row in status.routes] == ["Movies", "TV", "Anime"]
+        assert status.ready is True
+        assert [(row.name, row.listed) for row in status.libraries] == [
+            ("Movies", True),
+            ("TV", True),
+            ("Anime", True),
+            ("Old", False),
+        ]
+
+    @pytest.mark.asyncio
+    async def test_a_deleted_red_route_is_not_built_again(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """刪掉那一條紅的之後，下一次「建立並檢查」不讓它長回來（實測 R-05、R-06）。"""
+        libraries = (*bundled_libraries(roots["library"]), elsewhere())
+        await arrange(session, roots, libraries=libraries)
+        # 票 24 之前的精靈替它建了一條，紅在 `library_path`。
+        red = Route(
+            slug="old",
+            name="Old",
+            jellyfin_library_id="item-old",
+            jellyfin_library_name="Old",
+            collection_type=CollectionType.MOVIES,
+            target_path="/mnt/old",
+            category="berth-old",
+            enabled=True,
+            health_status=HealthStatus.FAILED,
+        )
+        session.add(red)
+        await session.commit()
+        await delete_route(session, red.id)
+        await session.commit()
+
+        status = await build_routes(session, factory_for(roots, libraries=libraries), ())
+
+        assert "Old" not in [row.library for row in status.routes]
+        assert (await read_status(session)).current_step == STEP_COMPLETE
+
+    @pytest.mark.asyncio
+    async def test_a_library_deleted_in_jellyfin_is_gone_after_the_reread(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """套件內進頁也重讀：在 Jellyfin 刪掉的媒體庫不再列入，清單上那一列回到「還沒建」。"""
+        await arrange(session, roots)
+        await build_routes(session, factory_for(roots), ())
+        remaining = tuple(row for row in bundled_libraries(roots["library"]) if row.name != "Anime")
+
+        status = await reread_libraries(session, factory_for(roots, libraries=remaining))
+
+        assert [row.name for row in status.libraries] == ["Movies", "TV"]
+        assert (await read_status(session)).current_step == STEP_ROUTES
+
+
+async def listed(session: AsyncSession, libraries: Sequence[SetupLibrary]) -> None:
+    """使用者在頁 3 列的清單：每個媒體庫照它的名字與資料夾各一列。"""
+    setup = await read_settings(session, SetupSettings)
+    setup.jellyfin.bundled = [
+        BundledLibrary(
+            name=row.name,
+            collection_type=CollectionType(row.collection_type),
+            folder=Path(row.locations[0]).name,
+        )
+        for row in libraries
+    ]
+    await write_settings(session, setup)
+    await session.commit()
+
+
+def docs(roots: dict[str, Path]) -> SetupLibrary:
+    """清單上多出來、Jellyfin 還沒有的一列。"""
+    return SetupLibrary(
+        name="Docs",
+        item_id="item-docs",
+        collection_type="movies",
+        locations=[str(roots["library"] / "docs")],
+    )
+
+
+def elsewhere() -> SetupLibrary:
+    """使用者自己在套件內 Jellyfin 加的媒體庫，路徑不在 Berth 的掛載裡。"""
+    return SetupLibrary(
+        name="Old", item_id="item-old", collection_type="movies", locations=["/mnt/old"]
+    )
 
 
 class TestExisting:

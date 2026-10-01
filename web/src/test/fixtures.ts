@@ -285,6 +285,7 @@ export function libraryChoice(overrides: Partial<LibraryChoice> = {}): LibraryCh
     supported: true,
     has_route: false,
     target_path: `/data/library/${slug}`,
+    listed: true,
     ...overrides,
   }
 }

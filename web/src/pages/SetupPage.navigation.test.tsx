@@ -76,6 +76,14 @@ function wizard(
           (row.kind === 'prowlarr' && current >= 4),
       ),
     })
+  const jellyfin = () => ({
+    body: jellyfinSetup({
+      steps: listBuilt ? SEQUENCE_DONE : [],
+      api_key_present: true,
+      bundled: jellyfinSetup().bundled.map((row) => ({ ...row, built: listBuilt })),
+    }),
+  })
+  const routes = () => ({ body: current > 3 ? ROUTES_DONE : routeSetup() })
   const advance =
     (to: number, body: unknown): (() => StubRoute) =>
     () => {
@@ -94,16 +102,10 @@ function wizard(
       3,
       qbittorrentSetup({ diffs: [], steps: [step('save_path', 'ok')], web_ui_username: 'skipper' }),
     ),
-    'GET /api/setup/jellyfin': () => ({
-      body: jellyfinSetup({
-        steps: listBuilt ? SEQUENCE_DONE : [],
-        api_key_present: true,
-        bundled: jellyfinSetup().bundled.map((row) => ({ ...row, built: listBuilt })),
-      }),
-    }),
-    // 按下「建立並檢查」先存畫面上的媒體庫清單（票 06f）。
-    'PUT /api/setup/jellyfin/bundled': () => ({ body: jellyfinSetup() }),
-    // 建清單不讓精靈前進：頁 3 還要 Route 全綠（後端 `_libraries_built` + `routes_ready`）。
+    'GET /api/setup/jellyfin': jellyfin,
+    // 按下「建立並檢查」先存畫面上的媒體庫清單（票 06f）；回來的「已建立」決定建不建媒體庫（M4 票 24）。
+    'PUT /api/setup/jellyfin/bundled': jellyfin,
+    // 建清單不讓精靈前進：頁 3 還要 Route 全綠（後端 `libraries_built` + `routes_ready`）。
     'POST /api/setup/jellyfin/bootstrap': () => {
       listBuilt = true
       return {
@@ -114,7 +116,9 @@ function wizard(
         }),
       }
     },
-    'GET /api/setup/routes': () => ({ body: current > 3 ? ROUTES_DONE : routeSetup() }),
+    'GET /api/setup/routes': routes,
+    // 頁 3 進頁與按下「建立並檢查」之前都向 Jellyfin 重讀（M4 票 19、24）：不寫任何服務。
+    'POST /api/setup/routes/libraries': routes,
     'POST /api/setup/routes': advance(4, ROUTES_DONE),
     'GET /api/setup/indexers': () => ({ body: current > 4 ? SITES_DONE : indexerSetup() }),
     'POST /api/setup/indexers/apply': advance(5, SITES_DONE),
@@ -126,6 +130,9 @@ function wizard(
   })
   return { fetchStub, current: () => current }
 }
+
+/** 頁 3 向 Jellyfin 重讀媒體庫（M4 票 19、24）。 */
+const REREAD = '/api/setup/routes/libraries'
 
 /** 送出過的那幾個 POST（依序）。 */
 function posts(fetchStub: ReturnType<typeof stubApi>): string[] {
@@ -195,7 +202,12 @@ describe('每個泊位做完都停在結果上', () => {
     await user.click(await screen.findByRole('button', { name: '建立並檢查' }))
 
     expect(await screen.findByRole('button', { name: '前往下一個泊位' })).toBeVisible()
-    expect(posts(fetchStub)).toEqual(['/api/setup/jellyfin/bootstrap', '/api/setup/routes'])
+    expect(posts(fetchStub)).toEqual([
+      REREAD,
+      REREAD,
+      '/api/setup/jellyfin/bootstrap',
+      '/api/setup/routes',
+    ])
     expect(await heading()).toHaveTextContent('媒體庫路徑')
     expect(screen.getAllByText('berth-tv').length).toBeGreaterThan(0)
 
@@ -209,7 +221,8 @@ describe('每個泊位做完都停在結果上', () => {
 
     expect(await screen.findByRole('button', { name: '建立並檢查' })).toBeVisible()
     await new Promise((resolve) => setTimeout(resolve, 100))
-    expect(posts(fetchStub)).toEqual([])
+    // 唯一的 POST 是進頁的重讀（M4 票 24：套件內也重讀），它不寫任何服務。
+    expect(posts(fetchStub)).toEqual([REREAD])
   })
 
   it('頁 3：回頭看已經建好的 Route 不重跑', async () => {
@@ -220,7 +233,7 @@ describe('每個泊位做完都停在結果上', () => {
     await user.click(await within(await findBoard()).findByRole('button', { name: /BTH 3/ }))
 
     expect(await heading()).toHaveTextContent('媒體庫路徑')
-    expect(posts(fetchStub)).toEqual([])
+    await waitFor(() => expect(posts(fetchStub)).toEqual([REREAD]))
   })
 
   it('頁 3：既有 Jellyfin 直接是 Route，仍然要勾媒體庫、自己按；沒有清單', async () => {
@@ -230,6 +243,7 @@ describe('每個泊位做完都停在結果上', () => {
     })
     const { fetchStub } = wizard(3, {
       'GET /api/setup/routes': { body: existing },
+      'POST /api/setup/routes/libraries': { body: existing },
       'GET /api/setup/jellyfin': {
         body: jellyfinSetup({ origin: 'existing', base_url: 'http://nas:8096' }),
       },
@@ -240,7 +254,7 @@ describe('每個泊位做完都停在結果上', () => {
     expect(await heading()).toHaveTextContent('媒體庫路徑')
     expect(screen.queryByRole('button', { name: '加一個媒體庫' })).not.toBeInTheDocument()
     // 唯一的 POST 是進頁時向 Jellyfin 重讀媒體庫（M4 票 19）：它不寫任何服務。
-    await waitFor(() => expect(posts(fetchStub)).toEqual(['/api/setup/routes/libraries']))
+    await waitFor(() => expect(posts(fetchStub)).toEqual([REREAD]))
   })
 
   it('頁 4：加完站停在逐站結果與試搜上，前往下一個是 TMDB', async () => {

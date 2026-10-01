@@ -61,6 +61,7 @@ from berth.domain import (
     StepStatus,
 )
 from berth.models import (
+    BundledLibrary,
     JellyfinSettings,
     Job,
     LedgerEntry,
@@ -77,6 +78,7 @@ from berth.services.clients import ServiceClientFactory
 from berth.services.jellyfin import (
     TVDB_MARKER,
     berth_path,
+    is_listed,
     library_slug,
     remember_libraries,
     tvdb_fetchers,
@@ -169,6 +171,9 @@ class LibraryChoice:
     #: 已經有 Route 了：精靈只新增，這個媒體庫在勾選表上鎖住（票 14）。
     has_route: bool
     target_path: str
+    #: 套件內清單上的一列（`jellyfin.is_listed`）：套件內只替這幾個建 Route（M4 票 24）。
+    #: 既有 Jellyfin 沒有清單，一律 `False`。
+    listed: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -191,6 +196,7 @@ async def read_route_status(session: AsyncSession) -> RouteSetupStatus:
     paths = await read_settings(session, PathSettings)
     routes = await _existing_routes(session)
     views = tuple(_route_view(route, paths.complete_root) for route in routes.values())
+    bundled = _jellyfin_origin(setup) is ServiceOrigin.BUNDLED
     by_library = {
         _library_key(route.jellyfin_library_id, route.jellyfin_library_name): route
         for route in routes.values()
@@ -204,6 +210,7 @@ async def read_route_status(session: AsyncSession) -> RouteSetupStatus:
                 library,
                 paths.library_root,
                 by_library.get(_library_key(library.item_id, library.name)),
+                listed=bundled and is_listed(library, setup.jellyfin.bundled, paths.library_root),
             )
             for library in setup.jellyfin.libraries
         ),
@@ -219,7 +226,9 @@ async def reread_libraries(
     """頁 3 進頁時向 Jellyfin 重讀媒體庫，換掉頁 1 存下的快照（M4 票 19）。
 
     使用者在頁 1 之後可能到 Jellyfin 改了掛載、路徑或媒體庫；頁 3 照快照畫的話，那些改動在
-    精靈裡看不到。問不到是 `jellyfin_unreachable`，快照原封不動。
+    精靈裡看不到。問不到是 `jellyfin_unreachable`，快照原封不動。**套件內也重讀**（M4 票 24）：
+    清單哪幾列已建立、頁 3 走不走得過去（`jellyfin.libraries_built`）都照這一份算，在 Jellyfin
+    刪掉的媒體庫要回到「還沒建」。
     """
     libraries = await _live_libraries(session, factory)
     await remember_libraries(session, libraries)
@@ -258,9 +267,11 @@ async def routes_ready(session: AsyncSession) -> bool:
 async def forget_route_checks(session: AsyncSession) -> None:
     """所有 Route 的檢查作廢，回到「還沒檢查」（M4 票 15）：使用者在精靈換了一台 qBittorrent，
     分類建在原本那一台上，上一次的綠燈說的是它。媒體庫與路徑頁要重新檢查才走得過去
-    （`routes_ready`）。逐條明細留著——它說的是那一次看到什麼，畫面照樣讀得出來。"""
+    （`routes_ready`）。**逐條明細一起清掉**（M4 票 24）：留著的話畫面寫「尚未檢查」，卻仍是上一台
+    的通過數與它的錯誤；健康迴圈沿用的探針結論說的也是上一台。"""
     for route in (await _existing_routes(session)).values():
         route.health_status = HealthStatus.UNKNOWN
+        route.health_detail_json = None
 
 
 async def build_routes(
@@ -762,7 +773,7 @@ def _plan(
     """
     libraries = {library.name: library for library in setup.jellyfin.libraries}
     chosen = (
-        _bundled_selections(libraries)
+        _bundled_selections(libraries, setup.jellyfin.bundled, paths.library_root)
         if _jellyfin_origin(setup) is ServiceOrigin.BUNDLED
         else selections
     )
@@ -814,17 +825,22 @@ def _plan(
     return tuple(planned)
 
 
-def _bundled_selections(libraries: Mapping[str, SetupLibrary]) -> tuple[RouteSelection, ...]:
-    """套件內：Jellyfin 報的每一個電影或劇集媒體庫各一個 Route（plan §9.3 第 5 步）。
+def _bundled_selections(
+    libraries: Mapping[str, SetupLibrary], bundled: Sequence[BundledLibrary], library_root: str
+) -> tuple[RouteSelection, ...]:
+    """套件內：清單上、而且 Jellyfin 報得出來的每一個媒體庫各一個 Route（plan §9.5，M4 票 24）。
 
-    讀的是第 3 步讀回來的媒體庫，不是使用者列的清單（票 06f）：清單上還沒建的那一列在
-    Jellyfin 上不存在，建不出 Route；精靈的剖面也是照這一份列「將建立」的。目標路徑取自
-    **Jellyfin 回報的** `locations`，不是自己算一遍——第 3 步建立時的路徑與這裡算出來的
-    路徑一旦分岔，錯的那個要到入庫時才會被發現。
+    **只認清單上的**（`is_listed`，剖面的 `LibraryChoice.listed` 讀同一條）：使用者自己在 Jellyfin
+    加的媒體庫不是 Berth 的，原本照樣建成 Route、路徑不在掛載裡就紅著擋住頁 3，刪掉之後下一次又
+    長回來。清單上還沒建的那一列在 Jellyfin 上不存在，建不出 Route；讀的因此是 Jellyfin 回報的
+    媒體庫。目標路徑取自**Jellyfin 回報的** `locations`，不是自己算一遍——第 3 步建立時的路徑與
+    這裡算出來的路徑一旦分岔，錯的那個要到入庫時才會被發現。
     """
     chosen: list[RouteSelection] = []
     for library in libraries.values():
         if library.collection_type not in SUPPORTED_TYPES:
+            continue
+        if not is_listed(library, bundled, library_root):
             continue
         if not library.locations:
             raise ValueError(
@@ -1211,7 +1227,9 @@ def owning_route(target_path: str, routes: Sequence[Route]) -> Route | None:
     return max(owners, key=lambda route: len(route.target_path), default=None)
 
 
-def _library_choice(library: SetupLibrary, library_root: str, route: Route | None) -> LibraryChoice:
+def _library_choice(
+    library: SetupLibrary, library_root: str, route: Route | None, *, listed: bool
+) -> LibraryChoice:
     #: 「加入 Berth 路徑」加的是哪一條由第 3 步決定，這裡呼叫的是同一支函式（不重算 slug）。
     path = berth_path(library.name, library_root, library.locations)
     return LibraryChoice(
@@ -1226,6 +1244,7 @@ def _library_choice(library: SetupLibrary, library_root: str, route: Route | Non
         # 還沒選過的預選 Berth 路徑，加過沒加過都是（M4 票 19）：其餘路徑是使用者自己的，
         # 旁邊的說明也叫人別讓 Berth 寫進既有的資料夾。要寫進去，使用者自己選。
         target_path=route.target_path if route is not None else path,
+        listed=listed,
     )
 
 

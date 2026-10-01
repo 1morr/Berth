@@ -8,8 +8,6 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-import pytest
-
 from berth.domain import (
     PROWLARR_LOGIN_STEP,
     ConnectionReason,
@@ -20,7 +18,15 @@ from berth.domain import (
     ServiceOrigin,
     StepStatus,
 )
-from berth.models import ServiceChoice, ServiceTest, SetupOwner, SetupSettings, SetupStep
+from berth.models import (
+    ServiceChoice,
+    ServiceTest,
+    SetupLibrary,
+    SetupOwner,
+    SetupSettings,
+    SetupStep,
+)
+from berth.services.jellyfin import libraries_built
 from berth.services.setup import (
     STEP_COMPLETE,
     STEP_INDEXER,
@@ -62,18 +68,18 @@ def finished(**origins: ServiceOrigin) -> SetupSettings:
 
 
 def test_a_clean_install_is_on_the_jellyfin_page() -> None:
-    assert _current_step(SetupSettings(), routes=False) == STEP_JELLYFIN
+    assert _current_step(SetupSettings(), berthed=False) == STEP_JELLYFIN
 
 
 def test_everything_done_is_the_complete_page() -> None:
-    assert _current_step(finished(), routes=True) == STEP_COMPLETE
+    assert _current_step(finished(), berthed=True) == STEP_COMPLETE
 
 
 def test_no_owner_is_the_jellyfin_page_whatever_else_is_there() -> None:
     setup = finished()
     setup.owner = SetupOwner()
 
-    assert _current_step(setup, routes=True) == STEP_JELLYFIN
+    assert _current_step(setup, berthed=True) == STEP_JELLYFIN
 
 
 def test_an_unchosen_qbittorrent_holds_page_two() -> None:
@@ -81,7 +87,7 @@ def test_an_unchosen_qbittorrent_holds_page_two() -> None:
     setup = finished()
     setup.choices = {k: v for k, v in setup.choices.items() if k is not ServiceKind.QBITTORRENT}
 
-    assert _current_step(setup, routes=True) == STEP_QBITTORRENT
+    assert _current_step(setup, berthed=True) == STEP_QBITTORRENT
 
 
 def test_a_bundled_qbittorrent_needs_its_login_but_an_existing_one_does_not() -> None:
@@ -89,33 +95,58 @@ def test_a_bundled_qbittorrent_needs_its_login_but_an_existing_one_does_not() ->
     bundled.qbittorrent.steps = ok(
         *(step.value for step in QbittorrentStep if step is not QbittorrentStep.PASSWORD)
     )
-    assert _current_step(bundled, routes=True) == STEP_QBITTORRENT
+    assert _current_step(bundled, berthed=True) == STEP_QBITTORRENT
 
     # 既有的那一台沒有偏好的纜繩（M4 票 22）：按「確認」只記密碼那一條 `skipped`，它就是做完了。
     existing = finished(qbittorrent=ServiceOrigin.EXISTING)
     existing.qbittorrent.steps = [
         SetupStep(key=QbittorrentStep.PASSWORD.value, status=StepStatus.SKIPPED)
     ]
-    assert _current_step(existing, routes=True) == STEP_COMPLETE
+    assert _current_step(existing, berthed=True) == STEP_COMPLETE
     # 還沒按就還沒做完。
     existing.qbittorrent.steps = []
-    assert _current_step(existing, routes=True) == STEP_QBITTORRENT
+    assert _current_step(existing, berthed=True) == STEP_QBITTORRENT
 
 
-@pytest.mark.parametrize("routes", [False, True])
-def test_page_three_needs_green_routes_and_the_bundled_libraries(routes: bool) -> None:
+def test_page_three_holds_until_it_is_berthed() -> None:
+    assert _current_step(finished(), berthed=False) == STEP_ROUTES
+
+
+def snapshot(*rows: tuple[str, str]) -> list[SetupLibrary]:
+    """Jellyfin 報的媒體庫（名稱、路徑）。"""
+    return [
+        SetupLibrary(name=name, item_id=name, collection_type="movies", locations=[path])
+        for name, path in rows
+    ]
+
+
+def test_the_bundled_list_is_built_once_jellyfin_has_every_row() -> None:
+    """看快照、不看「建媒體庫那一步」（M4 票 24）：重裝的 Berth 從沒跑過那一步。"""
     setup = finished()
     setup.jellyfin.steps = [row for row in setup.jellyfin.steps if row.key != "libraries"]
+    setup.jellyfin.libraries = snapshot(
+        ("Movies", "/data/library/movies"),
+        ("TV", "/data/library/tv"),
+        ("動畫", "/data/library/anime"),
+    )
 
-    assert _current_step(setup, routes=routes) == STEP_ROUTES
+    # 「Anime」在 Jellyfin 被改了名，資料夾還是它的：照樣算建好了。
+    assert libraries_built(setup, "/data/library") is True
+
+
+def test_a_row_jellyfin_does_not_have_holds_the_list() -> None:
+    setup = finished()
+    setup.jellyfin.libraries = snapshot(
+        ("Movies", "/data/library/movies"), ("TV", "/data/library/tv")
+    )
+
+    assert libraries_built(setup, "/data/library") is False
 
 
 def test_an_existing_jellyfin_has_no_libraries_to_build() -> None:
     setup = finished(jellyfin=ServiceOrigin.EXISTING)
-    setup.jellyfin.steps = ok(JellyfinStep.API_KEY.value)
 
-    assert _current_step(setup, routes=True) == STEP_COMPLETE
-    assert _current_step(setup, routes=False) == STEP_ROUTES
+    assert libraries_built(setup, "/data/library") is True
 
 
 def test_page_four_can_be_skipped_but_not_left_with_only_a_login() -> None:
@@ -125,8 +156,8 @@ def test_page_four_can_be_skipped_but_not_left_with_only_a_login() -> None:
     skipped.indexer.steps = []
     skipped.indexer.skipped = True
 
-    assert _current_step(only_login, routes=True) == STEP_INDEXER
-    assert _current_step(skipped, routes=True) == STEP_COMPLETE
+    assert _current_step(only_login, berthed=True) == STEP_INDEXER
+    assert _current_step(skipped, berthed=True) == STEP_COMPLETE
 
 
 def test_a_bundled_prowlarr_needs_its_login_but_an_existing_one_does_not() -> None:
@@ -135,15 +166,15 @@ def test_a_bundled_prowlarr_needs_its_login_but_an_existing_one_does_not() -> No
     existing = finished(prowlarr=ServiceOrigin.EXISTING)
     existing.indexer.steps = ok("prowlarr")
 
-    assert _current_step(bundled, routes=True) == STEP_INDEXER
-    assert _current_step(existing, routes=True) == STEP_COMPLETE
+    assert _current_step(bundled, berthed=True) == STEP_INDEXER
+    assert _current_step(existing, berthed=True) == STEP_COMPLETE
 
 
 def test_tmdb_is_a_gate() -> None:
     setup = finished()
     setup.tmdb.steps = []
 
-    assert _current_step(setup, routes=True) == STEP_TMDB
+    assert _current_step(setup, berthed=True) == STEP_TMDB
 
 
 def test_the_page_order() -> None:

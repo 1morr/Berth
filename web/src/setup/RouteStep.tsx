@@ -14,6 +14,7 @@ import {
   type RouteSelectionInput,
   type RouteSetup,
 } from '../api/setup'
+import { type RouteView } from '../api/schemas'
 import { STICKY_ACTION, Checkbox, GhostButton, Notice, PrimaryButton } from '../components/controls'
 import { Cutaway, CutawayRow } from '../components/Cutaway'
 import { RouteCheckList } from '../components/RouteCheckList'
@@ -44,10 +45,11 @@ import { useLibraryDraft } from './useLibraryDraft'
 export type DockPlan =
   | {
       origin: 'bundled'
-      /** 先存這一份清單（`bootstrap` 讀的是存下來的那一份）。 */
+      /**
+       * 先存這一份清單（`bootstrap` 讀的是存下來的那一份）。建不建媒體庫看存下之後回來的「已建立」：
+       * 與後端判定頁 3 的是同一條（`libraries_built`，M4 票 24）。
+       */
       libraries: LibraryDraft[]
-      /** 清單上有還沒建的：先建媒體庫再建 Route。 */
-      buildLibraries: boolean
     }
   | {
       origin: 'existing'
@@ -80,9 +82,9 @@ interface Common {
   docking: boolean
   failure: DockFailure | null
   onDock: (plan: DockPlan) => void
-  /** 一條 Route 被明確地刪掉了（票 14）：這一步的清單要重讀。 */
-  onRouteDeleted: () => void
-  /** 既有 Jellyfin：進頁時向它重讀媒體庫（M4 票 19）。重讀中、讀不到時說出來。 */
+  /** 一條 Route 被明確地刪掉了（票 14）：這一步的清單與精靈的進度要重讀（M4 票 24）。 */
+  onRouteDeleted: (route: RouteView) => void
+  /** 進頁時向 Jellyfin 重讀媒體庫（M4 票 19；套件內也是，票 24）。重讀中、讀不到時說出來。 */
   reread: { pending: boolean; failed: boolean; onReread: () => void }
   /** 回頭看的說明（`RevisitNote`），這一頁做完了才有。 */
   note?: ReactNode
@@ -136,8 +138,11 @@ function BundledRoutes({
   // 它只在清單真的被改過時才存。
   const draft = useLibraryDraft(jellyfin, onSaveLibraries)
   const unbuilt = draft.rows.filter((row) => !row.built)
-  // 已經在 Jellyfin 上、還沒有 Route 的（建過媒體庫、Route 被刪掉的也是這一種）。
-  const unrouted = setup.libraries.filter((library) => library.supported && !library.has_route)
+  // 清單上、已經在 Jellyfin 上、還沒有 Route 的（建過媒體庫、Route 被刪掉的也是這一種）。使用者
+  // 自己在 Jellyfin 加的不算：後端只替清單上的建 Route（`listed`，M4 票 24）。
+  const unrouted = setup.libraries.filter(
+    (library) => library.listed && library.supported && !library.has_route,
+  )
   const broke = librariesFailed(jellyfin)
   const names = unbuilt.map((row) => row.name.trim()).filter(Boolean)
 
@@ -166,11 +171,11 @@ function BundledRoutes({
         common.onDock({
           origin: 'bundled',
           libraries: draft.drafts,
-          buildLibraries: unbuilt.length > 0,
         })
       }
     >
       {!jellyfin.version_supported && <VersionNotice version={jellyfin.version} />}
+      <Reread {...common.reread} />
       {/* 清單全部建好了就收成一列，要加一個再展開（shape）；還有沒建的就打開。**永遠是同一個
           `<details>`**：兩種樣子換元件的話，展開後按「加一個媒體庫」清單會被重新掛載，焦點掉回 body
           （code-review）。`open` 只在「有沒有沒建的」變了時才動，使用者自己開關的不蓋掉。 */}
@@ -268,6 +273,14 @@ function ExistingRoutes({ jellyfin, ...common }: Common & { jellyfin: JellyfinSe
     setPicks((was) => ({ ...was, [library.name]: { ...pickOf(library), ...patch } }))
   }
 
+  /** Route 刪掉了：它的媒體庫回到沒勾的樣子，否則下一次「建立並檢查」又把它送出去（M4 票 24）。 */
+  function forget(route: RouteView) {
+    setPicks((was) =>
+      Object.fromEntries(Object.entries(was).filter(([name]) => name !== route.library)),
+    )
+    common.onRouteDeleted(route)
+  }
+
   /**
    * 這條路徑已經被誰拿去當寫入目標了（票 03 第 6 條）。兩個來源與後端的略過規則一致：已經存在的
    * Route，以及**同一批裡前面已經選走它**的別的媒體庫。自己選的那一條不算佔用，否則勾完就再也改不回來。
@@ -297,11 +310,10 @@ function ExistingRoutes({ jellyfin, ...common }: Common & { jellyfin: JellyfinSe
     library: library.name,
     target_path: pickOf(library).target,
   }))
-  const { reread } = common
-
   return (
     <RoutePage
       {...common}
+      onRouteDeleted={forget}
       lede={t('routes.lede.existing')}
       planned={selections.map((row) => ({ library: row.library, target: row.target_path }))}
       fresh={selections.length}
@@ -325,13 +337,7 @@ function ExistingRoutes({ jellyfin, ...common }: Common & { jellyfin: JellyfinSe
         })
       }
     >
-      {/* 頁 1 之後在 Jellyfin 改的掛載與路徑要看得到（M4 票 19）：進頁就重讀一次，也可以再按。 */}
-      <div className="mt-6 flex flex-wrap items-center gap-x-4 gap-y-2">
-        <GhostButton type="button" busy={reread.pending} onClick={reread.onReread}>
-          {reread.pending ? t('routes.rereading') : t('routes.reread')}
-        </GhostButton>
-        {reread.failed && <p className="text-xs text-blocked-ink">{t('routes.rereadFailed')}</p>}
-      </div>
+      <Reread {...common.reread} />
       {setup.libraries.length === 0 ? (
         <div className="mt-6">
           {/* Berth 不替既有伺服器建媒體庫（brief §16.4 的紅線），所以這裡沒有動作。 */}
@@ -356,6 +362,23 @@ function ExistingRoutes({ jellyfin, ...common }: Common & { jellyfin: JellyfinSe
         root={common.existing.root}
       />
     </RoutePage>
+  )
+}
+
+/**
+ * 頁 1 之後在 Jellyfin 改的掛載、路徑與媒體庫要看得到（M4 票 19；套件內也是，票 24）：進頁就重讀一次，
+ * 也可以再按。
+ */
+function Reread({ pending, failed, onReread }: Common['reread']) {
+  const { t } = useTranslation()
+
+  return (
+    <div className="mt-6 flex flex-wrap items-center gap-x-4 gap-y-2">
+      <GhostButton type="button" busy={pending} onClick={onReread}>
+        {pending ? t('routes.rereading') : t('routes.reread')}
+      </GhostButton>
+      {failed && <p className="text-xs text-blocked-ink">{t('routes.rereadFailed')}</p>}
+    </div>
   )
 }
 
@@ -454,7 +477,7 @@ function RoutePage({
               onDelete={() => deleteSetupRoute(route.id)}
               onChanged={() => {
                 setAnnouncement(t('routeSettings.delete.done', { name: route.name }))
-                onRouteDeleted()
+                onRouteDeleted(route)
               }}
             />
           </RouteRow>

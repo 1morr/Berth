@@ -565,9 +565,12 @@ async def test_switching_qbittorrent_starts_its_page_over_and_voids_the_route_ch
     assert setup.qbittorrent.steps == []
     assert setup.qbittorrent.web_ui_username == ""
     assert not await routes_ready(session)
-    assert all(
-        route.health is HealthStatus.UNKNOWN for route in (await read_route_status(session)).routes
-    )
+    routes = (await read_route_status(session)).routes
+    assert all(route.health is HealthStatus.UNKNOWN for route in routes)
+    # 逐條明細也清掉（M4 票 24）：留著的話畫面寫「尚未檢查」卻仍是上一台的 6 / 6 與它的錯誤。
+    assert [(route.checks, route.checked_at, route.last_ok_at) for route in routes] == [
+        ((), None, None)
+    ] * len(routes)
     assert status.current_step == STEP_QBITTORRENT
 
 

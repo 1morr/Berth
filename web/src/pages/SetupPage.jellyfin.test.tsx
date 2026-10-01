@@ -33,6 +33,14 @@ const ROUTES = 'GET /api/setup/routes'
 const BUILD = 'POST /api/setup/routes'
 const REREAD = 'POST /api/setup/routes/libraries'
 
+/**
+ * 頁 3 的假後端。進頁與按下「建立並檢查」之前都向 Jellyfin 重讀（M4 票 19、24）；沒另外給的話，
+ * 重讀回的是與 `GET /setup/routes` 同一份——Jellyfin 在這段時間裡沒有變。
+ */
+function stubPage(routes: Parameters<typeof stubApi>[0]) {
+  return stubApi({ [REREAD]: routes[ROUTES], ...routes })
+}
+
 /** 送出去的每一份清單，依序（票 06f）。 */
 function savedLists(fetchStub: ReturnType<typeof stubApi>): unknown[] {
   return fetchStub.mock.calls
@@ -93,7 +101,7 @@ function writes(fetchStub: ReturnType<typeof stubApi>): string[] {
 
 describe('頁 3：套件內 Jellyfin 的媒體庫清單與「建立並檢查」（M4 票 08）', () => {
   it('進頁不送任何寫入：按之前先列出會建哪幾個媒體庫、幾個分類、寫幾個測試檔', async () => {
-    const fetchStub = stubApi({
+    const fetchStub = stubPage({
       [STATUS]: { body: AT_PAGE_THREE },
       [JELLYFIN]: { body: jellyfinSetup({ api_key_present: true }) },
       [ROUTES]: { body: routeSetup() },
@@ -115,7 +123,7 @@ describe('頁 3：套件內 Jellyfin 的媒體庫清單與「建立並檢查」�
   })
 
   it('剖面只放 Route 列沒有的：兩個根目錄與將建立的寫入目標，不列端點、不列數量', async () => {
-    stubApi({
+    stubPage({
       [STATUS]: { body: AT_PAGE_THREE },
       [JELLYFIN]: { body: jellyfinSetup({ api_key_present: true }) },
       [ROUTES]: { body: routeSetup({ libraries: [] }) },
@@ -132,7 +140,7 @@ describe('頁 3：套件內 Jellyfin 的媒體庫清單與「建立並檢查」�
 
   it('按下之後照順序：存清單 → 建媒體庫 → 建 Route；三條都綠之後主要動作是前往下一個泊位', async () => {
     let docked = false
-    const fetchStub = stubApi({
+    const fetchStub = stubPage({
       [STATUS]: () => ({
         body: docked ? setupStatus({ ...AT_PAGE_THREE, current_step: 4 }) : AT_PAGE_THREE,
       }),
@@ -178,7 +186,7 @@ describe('頁 3：套件內 Jellyfin 的媒體庫清單與「建立並檢查」�
         step('libraries', 'failed', '', 'POST /Library/VirtualFolders: 500'),
       ],
     })
-    const fetchStub = stubApi({
+    const fetchStub = stubPage({
       [STATUS]: { body: AT_PAGE_THREE },
       [JELLYFIN]: { body: jellyfinSetup() },
       [SAVE]: { body: jellyfinSetup() },
@@ -197,7 +205,7 @@ describe('頁 3：套件內 Jellyfin 的媒體庫清單與「建立並檢查」�
   })
 
   it('清單早就建好、Route 被刪光：按下只建 Route，不再建媒體庫', async () => {
-    const fetchStub = stubApi({
+    const fetchStub = stubPage({
       [STATUS]: { body: AT_PAGE_THREE },
       [JELLYFIN]: { body: LIST_BUILT_ALL },
       [SAVE]: { body: LIST_BUILT_ALL },
@@ -216,7 +224,7 @@ describe('頁 3：套件內 Jellyfin 的媒體庫清單與「建立並檢查」�
   })
 
   it('清單那一步失敗時，泊位板的 BTH 3 是阻擋', async () => {
-    stubApi({
+    stubPage({
       [STATUS]: { body: AT_PAGE_THREE },
       [JELLYFIN]: {
         body: jellyfinSetup({
@@ -237,8 +245,30 @@ describe('頁 3：套件內 Jellyfin 的媒體庫清單與「建立並檢查」�
     )
   })
 
+  it('上一次建媒體庫失敗、之後在 Jellyfin 補建好了：那次失敗不再掛著，BTH 3 不是阻擋（M4 票 24）', async () => {
+    const fixedByHand = jellyfinSetup({
+      steps: [
+        ...SEQUENCE_DONE.slice(0, 3),
+        step('libraries', 'failed', '', 'POST /Library/VirtualFolders: 500'),
+      ],
+      bundled: jellyfinSetup().bundled.map((row) => ({ ...row, built: true })),
+    })
+    stubPage({
+      [STATUS]: { body: AT_PAGE_THREE },
+      [JELLYFIN]: { body: fixedByHand },
+      [ROUTES]: { body: routeSetup() },
+    })
+
+    renderWithProviders(<SetupPage />)
+    await screen.findByText('3 個已建立')
+    const board = screen.getByRole('region', { name: '泊位板' })
+
+    expect(screen.queryByText(/POST \/Library\/VirtualFolders: 500/)).not.toBeInTheDocument()
+    expect(within(board).getByText('BTH 3').closest('li')).not.toHaveTextContent('失敗')
+  })
+
   it('版本低於 12 時說出目前版本與升級前要做的事', async () => {
-    stubApi({
+    stubPage({
       [STATUS]: { body: AT_PAGE_THREE },
       [JELLYFIN]: {
         body: jellyfinSetup({
@@ -276,7 +306,7 @@ describe('GET /api/setup/jellyfin 只在頁 3 讀', () => {
       '索引站',
     ],
   ])('頁 %i 不讀', async (_, status, routes, title) => {
-    const fetchStub = stubApi({
+    const fetchStub = stubPage({
       [STATUS]: { body: status },
       [JELLYFIN]: { body: LIST_BUILT },
       ...routes,
@@ -290,7 +320,7 @@ describe('GET /api/setup/jellyfin 只在頁 3 讀', () => {
   })
 
   it('從頁 4 點回 BTH 3 才讀', async () => {
-    const fetchStub = stubApi({
+    const fetchStub = stubPage({
       [STATUS]: {
         body: setupStatus({ current_step: 4, owner: 'skipper', services: ALL_BUNDLED }),
       },
@@ -311,7 +341,7 @@ describe('GET /api/setup/jellyfin 只在頁 3 讀', () => {
 describe('頁 3 做完之後回頭補建（票 08 code-review）', () => {
   /** 後端已經過了頁 3，清單三列都建好、三條 Route 全綠；從頁 4 點回 BTH 3。 */
   async function revisit() {
-    stubApi({
+    stubPage({
       [STATUS]: { body: setupStatus({ ...AT_PAGE_THREE, current_step: 4 }) },
       [JELLYFIN]: { body: LIST_BUILT_ALL },
       [SAVE]: { body: LIST_BUILT_ALL },
@@ -347,7 +377,7 @@ describe('頁 3 做完之後回頭補建（票 08 code-review）', () => {
 
 describe('頁 3：套件內 Jellyfin 的媒體庫清單（票 06f）', () => {
   it('改名、改類型、改資料夾、刪列、加列，停手就存下來', async () => {
-    const fetchStub = stubApi({
+    const fetchStub = stubPage({
       [STATUS]: { body: AT_PAGE_THREE },
       [JELLYFIN]: { body: jellyfinSetup() },
       [SAVE]: { body: jellyfinSetup() },
@@ -391,7 +421,7 @@ describe('頁 3：套件內 Jellyfin 的媒體庫清單（票 06f）', () => {
   })
 
   it('刪掉一列之後，焦點落在原本那個位置現在的那一列', async () => {
-    stubApi({
+    stubPage({
       [STATUS]: { body: AT_PAGE_THREE },
       [JELLYFIN]: { body: jellyfinSetup() },
       [SAVE]: { body: jellyfinSetup() },
@@ -407,7 +437,7 @@ describe('頁 3：套件內 Jellyfin 的媒體庫清單（票 06f）', () => {
   })
 
   it('重名、重複資料夾、跳出根目錄、空清單各有擋下的說法，而且不存、不讓靠泊', async () => {
-    const fetchStub = stubApi({
+    const fetchStub = stubPage({
       [STATUS]: { body: AT_PAGE_THREE },
       [JELLYFIN]: { body: jellyfinSetup() },
       [SAVE]: { body: jellyfinSetup() },
@@ -441,7 +471,7 @@ describe('頁 3：套件內 Jellyfin 的媒體庫清單（票 06f）', () => {
   })
 
   it('按下之前先存畫面上的那一份，再建媒體庫', async () => {
-    const fetchStub = stubApi({
+    const fetchStub = stubPage({
       [STATUS]: { body: AT_PAGE_THREE },
       [JELLYFIN]: { body: jellyfinSetup() },
       [SAVE]: { body: jellyfinSetup() },
@@ -472,7 +502,7 @@ describe('頁 3：套件內 Jellyfin 的媒體庫清單（票 06f）', () => {
   })
 
   it('建好的那幾列鎖住，說出要去 Jellyfin 改；還沒建的照樣能改', async () => {
-    stubApi({
+    stubPage({
       [STATUS]: { body: setupStatus({ ...AT_PAGE_THREE, current_step: 4 }) },
       [JELLYFIN]: {
         body: jellyfinSetup({
@@ -511,7 +541,7 @@ describe('頁 3：套件內 Jellyfin 的媒體庫清單（票 06f）', () => {
   })
 
   it('後端擋下來的清單就地說出理由', async () => {
-    stubApi({
+    stubPage({
       [STATUS]: { body: AT_PAGE_THREE },
       [JELLYFIN]: { body: jellyfinSetup() },
       [SAVE]: {
@@ -538,7 +568,7 @@ describe('頁 3：套件內 Jellyfin 的媒體庫清單（票 06f）', () => {
 
 describe('頁 3：清單的拒絕帶著列號', () => {
   it('後端說得出是第幾列就說第幾個', async () => {
-    stubApi({
+    stubPage({
       [STATUS]: { body: AT_PAGE_THREE },
       [JELLYFIN]: { body: jellyfinSetup() },
       // 另一個分頁先存了一份：這一份在後端看來第二列撞名。
@@ -599,7 +629,7 @@ describe('頁 3：既有 Jellyfin 直接是 Route', () => {
 
   // M4 票 06：登入與 API key 在頁 1（擁有者）就做完了；既有的那一台 Berth 不建媒體庫（brief §16.4）。
   it('不要帳密、沒有靠泊、沒有清單可切：直接是 Route 的勾選', async () => {
-    stubApi({
+    stubPage({
       [STATUS]: { body: NAS },
       [JELLYFIN]: { body: CONNECTED },
       [ROUTES]: { body: PICKER },
@@ -626,7 +656,7 @@ describe('頁 3：既有 Jellyfin 直接是 Route', () => {
       ],
     })
     let added = false
-    const fetchStub = stubApi({
+    const fetchStub = stubPage({
       [STATUS]: { body: NAS },
       [JELLYFIN]: { body: CONNECTED },
       [ROUTES]: () => ({ body: added ? withPath : PICKER }),
@@ -672,7 +702,7 @@ describe('頁 3：既有 Jellyfin 直接是 Route', () => {
   it('加路徑沒加上就停：不建 Route，逐個說出 Jellyfin 看不到哪條路徑、沒掛哪個目錄（票 19）', async () => {
     const error =
       'Jellyfin cannot see /data/library/影集: POST /Environment/ValidatePath answered 404 for a file Berth had just written there'
-    const fetchStub = stubApi({
+    const fetchStub = stubPage({
       [STATUS]: { body: NAS },
       [JELLYFIN]: { body: CONNECTED },
       [ROUTES]: { body: PICKER },
@@ -712,7 +742,7 @@ describe('頁 3：既有 Jellyfin 直接是 Route', () => {
   })
 
   it('勾了媒體庫、還沒選寫入目標：主鈕擋住並說出還差哪一步', async () => {
-    stubApi({
+    stubPage({
       [STATUS]: { body: NAS },
       [JELLYFIN]: { body: CONNECTED },
       [ROUTES]: {
@@ -743,7 +773,7 @@ describe('頁 3：既有 Jellyfin 直接是 Route', () => {
   })
 
   it('名稱帶空白的媒體庫，「新的 Berth 路徑」的說明照樣掛在那顆 radio 上', async () => {
-    stubApi({
+    stubPage({
       [STATUS]: { body: NAS },
       [JELLYFIN]: { body: CONNECTED },
       [ROUTES]: {
@@ -773,7 +803,7 @@ describe('頁 3：既有 Jellyfin 直接是 Route', () => {
   })
 
   it('已經有 Berth 路徑的媒體庫不再多一個「新的」選項', async () => {
-    stubApi({
+    stubPage({
       [STATUS]: { body: NAS },
       [JELLYFIN]: { body: CONNECTED },
       [ROUTES]: {
@@ -800,7 +830,7 @@ describe('頁 3：既有 Jellyfin 直接是 Route', () => {
   })
 
   it('掛 TVDB 的媒體庫給警告', async () => {
-    stubApi({
+    stubPage({
       [STATUS]: { body: NAS },
       [JELLYFIN]: { body: CONNECTED },
       [ROUTES]: {
@@ -817,7 +847,7 @@ describe('頁 3：既有 Jellyfin 直接是 Route', () => {
   })
 
   it('既有 Jellyfin 上沒有任何安裝插件或重啟的動作', async () => {
-    stubApi({
+    stubPage({
       [STATUS]: { body: NAS },
       [JELLYFIN]: { body: CONNECTED },
       [ROUTES]: { body: PICKER },
@@ -832,7 +862,7 @@ describe('頁 3：既有 Jellyfin 直接是 Route', () => {
   })
 
   it('一個媒體庫都沒有時說清楚下一步', async () => {
-    stubApi({
+    stubPage({
       [STATUS]: { body: NAS },
       [JELLYFIN]: { body: { ...CONNECTED, libraries: [] } },
       [ROUTES]: { body: routeSetup({ origin: 'existing', libraries: [] }) },

@@ -37,6 +37,14 @@ const TMDB = 'GET /api/setup/tmdb'
 const JELLYFIN = 'GET /api/setup/jellyfin'
 
 /**
+ * 頁 3 的假後端。進頁與按下「建立並檢查」之前都向 Jellyfin 重讀（M4 票 19、24）；沒另外給的話，
+ * 重讀回的是與 `GET /setup/routes` 同一份——Jellyfin 在這段時間裡沒有變。
+ */
+function stubPage(routes: Parameters<typeof stubApi>[0]) {
+  return stubApi({ [REREAD]: routes[ROUTES], ...routes })
+}
+
+/**
  * 送出去的每一個寫入請求（非 GET），依序。**頁 3 進頁的重讀不算**（M4 票 19）：它向 Jellyfin 讀、
  * 換的是 Berth 自己的媒體庫快照，不寫任何服務——票 08 的「進頁不送寫入」說的是對服務的寫入。
  */
@@ -110,7 +118,7 @@ const BUILT = routeSetup({
 
 describe('頁 3：媒體庫路徑（套件內）', () => {
   it('進頁不送任何寫入：一顆「建立並檢查」，按下才建（M4 票 08）', async () => {
-    const fetch = stubApi({ ...BUNDLED_PAGE, [ROUTES]: { body: routeSetup() } })
+    const fetch = stubPage({ ...BUNDLED_PAGE, [ROUTES]: { body: routeSetup() } })
 
     renderWithProviders(<SetupPage />)
 
@@ -120,7 +128,7 @@ describe('頁 3：媒體庫路徑（套件內）', () => {
   })
 
   it('按下之後每條 Route 逐項顯示檢查結果，含硬鏈接的 inode；送出的是空的勾選', async () => {
-    const fetch = stubApi({
+    const fetch = stubPage({
       ...BUNDLED_PAGE,
       [ROUTES]: { body: routeSetup() },
       [BUILD]: { body: BUILT },
@@ -163,7 +171,7 @@ describe('頁 3：媒體庫路徑（套件內）', () => {
         routeView({ id: 5, library: 'Docs', slug: 'docs', collection_type: 'movies' }),
       ],
     })
-    stubApi({ ...BUNDLED_PAGE, [ROUTES]: { body: oneRed } })
+    stubPage({ ...BUNDLED_PAGE, [ROUTES]: { body: oneRed } })
 
     renderWithProviders(<SetupPage />)
     const list = await screen.findByRole('list', { name: '這一頁的 Route' })
@@ -179,7 +187,7 @@ describe('頁 3：媒體庫路徑（套件內）', () => {
   })
 
   it('請求沒走完時說出來，鍵還在，再按一次', async () => {
-    stubApi({
+    stubPage({
       ...BUNDLED_PAGE,
       [ROUTES]: { body: routeSetup() },
       [BUILD]: { status: 500, body: { detail: 'boom' } },
@@ -194,7 +202,7 @@ describe('頁 3：媒體庫路徑（套件內）', () => {
   })
 
   it('三條都建好之後，剖面不再說「將建立」那三條（票 14、14e 留給票 15 的兩條）', async () => {
-    stubApi({ ...BUNDLED_PAGE, [ROUTES]: { body: BUILT } })
+    stubPage({ ...BUNDLED_PAGE, [ROUTES]: { body: BUILT } })
 
     renderWithProviders(<SetupPage />)
     await screen.findByRole('button', { name: '重新檢查 3 條 Route' })
@@ -203,7 +211,7 @@ describe('頁 3：媒體庫路徑（套件內）', () => {
   })
 
   it('三條都建好之後再按一次是全部重驗，不會多建（票 14：精靈只新增）', async () => {
-    stubApi({ ...BUNDLED_PAGE, [ROUTES]: { body: BUILT } })
+    stubPage({ ...BUNDLED_PAGE, [ROUTES]: { body: BUILT } })
 
     renderWithProviders(<SetupPage />)
 
@@ -216,7 +224,7 @@ describe('頁 3：媒體庫路徑（套件內）', () => {
       ...BUILT,
       routes: BUILT.routes.filter((route) => route.slug !== 'movies'),
     })
-    const fetch = stubApi({
+    const fetch = stubPage({
       ...BUNDLED_PAGE,
       [ROUTES]: () => ({ body: deleted ? withoutMovies : BUILT }),
       'DELETE /api/setup/routes/2': () => {
@@ -243,7 +251,7 @@ describe('頁 3：媒體庫路徑（套件內）', () => {
   })
 
   it('刪的那一刻被引用：說出數字（票 14a）', async () => {
-    stubApi({
+    stubPage({
       ...BUNDLED_PAGE,
       [ROUTES]: { body: BUILT },
       'DELETE /api/setup/routes/2': {
@@ -268,7 +276,7 @@ describe('頁 3：媒體庫路徑（套件內）', () => {
   })
 
   it('409 沒帶數字時仍說刪不得，不說後端沒在跑', async () => {
-    stubApi({
+    stubPage({
       ...BUNDLED_PAGE,
       [ROUTES]: { body: BUILT },
       'DELETE /api/setup/routes/2': {
@@ -294,7 +302,7 @@ describe('頁 3：媒體庫路徑（套件內）', () => {
         routeView({ id: 9, library: 'TV', slug: 'tv-2', enabled: false, health: 'failed' }),
       ],
     })
-    stubApi({ ...PAST_ROUTES, [ROUTES]: { body: withDisabledRed } })
+    stubPage({ ...PAST_ROUTES, [ROUTES]: { body: withDisabledRed } })
 
     renderWithProviders(<SetupPage />)
     const board = await screen.findByRole('region', { name: '泊位板' })
@@ -304,9 +312,9 @@ describe('頁 3：媒體庫路徑（套件內）', () => {
     )
   })
 
-  /** 後端過了這一頁才是已繫上：套件內的清單也要建完（後端 `_libraries_built`）。 */
+  /** 後端過了這一頁才是已繫上：套件內的清單也要建完（後端 `libraries_built`）。 */
   it('泊位板的媒體庫路徑那一格在後端過了頁 3 之後標成已繫上', async () => {
-    stubApi({ ...PAST_ROUTES, [ROUTES]: { body: BUILT } })
+    stubPage({ ...PAST_ROUTES, [ROUTES]: { body: BUILT } })
 
     renderWithProviders(<SetupPage />)
     const board = await screen.findByRole('region', { name: '泊位板' })
@@ -317,13 +325,150 @@ describe('頁 3：媒體庫路徑（套件內）', () => {
   })
 
   it('Route 全綠但後端還停在頁 3 時，那一格仍是待靠泊', async () => {
-    stubApi({ ...BUNDLED_PAGE, [ROUTES]: { body: BUILT } })
+    stubPage({ ...BUNDLED_PAGE, [ROUTES]: { body: BUILT } })
 
     renderWithProviders(<SetupPage />)
     await screen.findByRole('button', { name: '重新檢查 3 條 Route' })
     const board = screen.getByRole('region', { name: '泊位板' })
 
     expect(within(board).getByText('BTH 3').closest('li')).toHaveTextContent('待靠泊')
+  })
+})
+
+describe('頁 3 的前進條件跟畫面一致（M4 票 24）', () => {
+  const RED_OLD = routeView({ id: 9, library: 'Old', slug: 'old', health: 'failed' })
+
+  it('刪掉紅的 Route 之後重讀進度：後端過了頁 3 就出現前往下一個泊位，畫面不跳頁、不必重新整理', async () => {
+    let deleted = false
+    const withRed = routeSetup({ ...BUILT, routes: [...BUILT.routes, RED_OLD], ready: false })
+    const routes = () => ({ body: deleted ? BUILT : withRed })
+    stubPage({
+      ...BUNDLED_PAGE,
+      ...PAST_ROUTES,
+      [STATUS]: () => ({ body: deleted ? PAST_ROUTES[STATUS].body : AT_ROUTES }),
+      [ROUTES]: routes,
+      [REREAD]: routes,
+      'DELETE /api/setup/routes/9': () => {
+        deleted = true
+        return { status: 204, body: null }
+      },
+    })
+    const user = userEvent.setup()
+
+    renderWithProviders(<SetupPage />)
+    const buttons = await screen.findAllByRole('button', { name: '刪除這條 Route' })
+    expect(screen.queryByRole('button', { name: '前往下一個泊位' })).not.toBeInTheDocument()
+    await user.click(buttons[buttons.length - 1])
+    await user.click(screen.getByRole('button', { name: '確定刪除' }))
+
+    expect(await screen.findByRole('button', { name: '前往下一個泊位' })).toBeVisible()
+    // 停在結果上（票 06d）：後端已到頁 4，畫面仍是這一頁，按了才走。
+    expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('媒體庫路徑')
+  })
+
+  it('既有：刪掉 Route 之後，它的媒體庫在勾選表上取消勾選，不會在下一次又被送出去', async () => {
+    const nas = routeSetup({
+      origin: 'existing',
+      libraries: [
+        libraryChoice({ name: '影集', target_path: '/data/library/影集', listed: false }),
+      ],
+    })
+    const routed = routeSetup({
+      ...nas,
+      libraries: [{ ...nas.libraries[0], has_route: true }],
+      routes: [routeView({ library: '影集', slug: '影集', health: 'failed' })],
+    })
+    let state = nas
+    const routes = () => ({ body: state })
+    stubPage({
+      ...EXISTING_PAGE,
+      [ROUTES]: routes,
+      [REREAD]: routes,
+      [BUILD]: () => {
+        state = routed
+        return { body: routed }
+      },
+      'DELETE /api/setup/routes/2': () => {
+        state = nas
+        return { status: 204, body: null }
+      },
+    })
+    const user = userEvent.setup()
+
+    renderWithProviders(<SetupPage />)
+    await user.click(await screen.findByRole('checkbox', { name: '影集' }))
+    await user.click(screen.getByRole('button', { name: '建立並檢查' }))
+    await user.click(await screen.findByRole('button', { name: '刪除這條 Route' }))
+    await user.click(screen.getByRole('button', { name: '確定刪除' }))
+
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: '刪除這條 Route' })).not.toBeInTheDocument(),
+    )
+    expect(screen.getByRole('checkbox', { name: '影集' })).not.toBeChecked()
+  })
+
+  it('套件內進頁也向 Jellyfin 重讀；不在清單上的媒體庫不列進這一輪要建的 Route', async () => {
+    const withOld = routeSetup({
+      libraries: [
+        ...routeSetup().libraries,
+        libraryChoice({
+          name: 'Old',
+          collection_type: 'movies',
+          locations: ['/mnt/old'],
+          listed: false,
+        }),
+      ],
+    })
+    const fetch = stubPage({
+      ...BUNDLED_PAGE,
+      [ROUTES]: { body: withOld },
+      [REREAD]: { body: withOld },
+    })
+
+    renderWithProviders(<SetupPage />)
+
+    const plan = (await screen.findByRole('heading', { name: '將建立' })).closest('section')!
+    expect(within(plan).getByText('Anime')).toBeInTheDocument()
+    expect(within(plan).queryByText('Old')).not.toBeInTheDocument()
+    expect(screen.queryByText('/mnt/old')).not.toBeInTheDocument()
+    await waitFor(() =>
+      expect(
+        fetch.mock.calls.some(
+          ([input, init]) => init?.method === 'POST' && input === '/api/setup/routes/libraries',
+        ),
+      ).toBe(true),
+    )
+  })
+
+  it('套件內按下之後先重讀再存清單：Jellyfin 裡少了清單上的一列，就先把它建回來', async () => {
+    const animeGone = jellyfinSetup({
+      steps: SEQUENCE_DONE,
+      api_key_present: true,
+      bundled: jellyfinSetup().bundled.map((row) => ({ ...row, built: row.name !== 'Anime' })),
+    })
+    const fetch = stubPage({
+      ...BUNDLED_PAGE,
+      [ROUTES]: { body: routeSetup() },
+      [REREAD]: { body: routeSetup() },
+      'PUT /api/setup/jellyfin/bundled': { body: animeGone },
+      'POST /api/setup/jellyfin/bootstrap': { body: BUNDLED_PAGE[JELLYFIN].body },
+      [BUILD]: { body: BUILT },
+    })
+    const user = userEvent.setup()
+
+    renderWithProviders(<SetupPage />)
+    await user.click(await screen.findByRole('button', { name: '建立並檢查' }))
+
+    await waitFor(() => expect(writes(fetch)).toContain(BUILD))
+    const posts = fetch.mock.calls
+      .filter(([, init]) => (init?.method ?? 'GET') !== 'GET')
+      .map(([input, init]) => `${init?.method} ${String(input)}`)
+    expect(posts.slice(-4)).toEqual([
+      REREAD,
+      'PUT /api/setup/jellyfin/bundled',
+      'POST /api/setup/jellyfin/bootstrap',
+      BUILD,
+    ])
   })
 })
 
@@ -342,7 +487,7 @@ describe('頁 3 的失敗', () => {
         }),
       ],
     })
-    stubApi({ ...BUNDLED_PAGE, [ROUTES]: { body: blocked } })
+    stubPage({ ...BUNDLED_PAGE, [ROUTES]: { body: blocked } })
 
     renderWithProviders(<SetupPage />)
 
@@ -365,7 +510,7 @@ describe('頁 3 的失敗', () => {
         }),
       ],
     })
-    stubApi({ ...BUNDLED_PAGE, [ROUTES]: { body: blocked } })
+    stubPage({ ...BUNDLED_PAGE, [ROUTES]: { body: blocked } })
 
     renderWithProviders(<SetupPage />)
 
@@ -388,7 +533,7 @@ describe('頁 3 的失敗', () => {
         }),
       ],
     })
-    stubApi({ ...BUNDLED_PAGE, [ROUTES]: { body: blocked } })
+    stubPage({ ...BUNDLED_PAGE, [ROUTES]: { body: blocked } })
 
     renderWithProviders(<SetupPage />)
 
@@ -402,7 +547,7 @@ describe('頁 3 的失敗', () => {
    * ——既不是原因也不是下一步（PRODUCT 原則 4）。
    */
   it('建立途中有 Route 被刪掉：說出是哪一種失敗與下一步，不說後端沒在跑', async () => {
-    stubApi({
+    stubPage({
       ...BUNDLED_PAGE,
       [ROUTES]: { body: routeSetup() },
       [BUILD]: {
@@ -421,7 +566,7 @@ describe('頁 3 的失敗', () => {
   })
 
   it('認不得的失敗仍落回那句通用的話：只有說得出原因時才換掉它', async () => {
-    stubApi({
+    stubPage({
       ...BUNDLED_PAGE,
       [ROUTES]: { body: routeSetup() },
       [BUILD]: { status: 500, body: { detail: 'boom' } },
@@ -571,7 +716,7 @@ describe('頁 3：媒體庫路徑（既有 Jellyfin）', () => {
   })
 
   it('一個都沒勾時建立鍵按不下去', async () => {
-    stubApi({ ...EXISTING_PAGE, [ROUTES]: { body: NAS } })
+    stubPage({ ...EXISTING_PAGE, [ROUTES]: { body: NAS } })
 
     renderWithProviders(<SetupPage />)
 
@@ -579,7 +724,7 @@ describe('頁 3：媒體庫路徑（既有 Jellyfin）', () => {
   })
 
   it('勾了媒體庫再選一條路徑，送出去的就是那一條', async () => {
-    const fetch = stubApi({
+    const fetch = stubPage({
       ...EXISTING_PAGE,
       [ROUTES]: { body: NAS },
       [BUILD]: { body: NAS },
@@ -602,7 +747,7 @@ describe('頁 3：媒體庫路徑（既有 Jellyfin）', () => {
   })
 
   it('不是電影或劇集的媒體庫不給勾，並說明理由', async () => {
-    stubApi({ ...EXISTING_PAGE, [ROUTES]: { body: NAS } })
+    stubPage({ ...EXISTING_PAGE, [ROUTES]: { body: NAS } })
 
     renderWithProviders(<SetupPage />)
 
@@ -627,7 +772,7 @@ describe('頁 3：媒體庫路徑（既有 Jellyfin）', () => {
       ],
       routes: [routeView({ name: '舊影集', library: '別的庫', target_path: '/volume1/media/tv' })],
     })
-    stubApi({ ...EXISTING_PAGE, [ROUTES]: { body: shared } })
+    stubPage({ ...EXISTING_PAGE, [ROUTES]: { body: shared } })
 
     renderWithProviders(<SetupPage />)
     await userEvent.click(await screen.findByRole('checkbox', { name: '影集' }))
@@ -648,7 +793,7 @@ describe('頁 3：媒體庫路徑（既有 Jellyfin）', () => {
       ],
       routes: [routeView({ library: '影集', slug: '影集', target_path: '/data/library/影集' })],
     })
-    stubApi({ ...EXISTING_PAGE, [ROUTES]: { body: routed } })
+    stubPage({ ...EXISTING_PAGE, [ROUTES]: { body: routed } })
 
     renderWithProviders(<SetupPage />)
 
@@ -663,7 +808,7 @@ describe('頁 3：媒體庫路徑（既有 Jellyfin）', () => {
 
 describe('頁 6：完成', () => {
   it('列出跑出來的 Route 與跳過的索引站、在哪裡補', async () => {
-    stubApi({
+    stubPage({
       [STATUS]: { body: AT_THE_END },
       [ROUTES]: { body: BUILT },
       [INDEXERS]: { body: indexerSetup({ skipped: true }) },
@@ -685,7 +830,7 @@ describe('頁 6：完成', () => {
    * `ValueError`），不是後端掛了——原本兩種都說「Berth 後端可能沒在跑」，把使用者送去看容器。
    */
   it('缺 TMDB 憑證時說的是 TMDB 那一步沒做完，不是後端出錯', async () => {
-    stubApi({
+    stubPage({
       [STATUS]: { body: AT_THE_END },
       [ROUTES]: { body: BUILT },
       [INDEXERS]: { body: indexerSetup() },
@@ -708,7 +853,7 @@ describe('頁 6：完成', () => {
    * 即使真正卡住的是 Route。兩份狀態都說沒問題卻仍被擋，就別指名。
    */
   it('422 但手上這份看不出是哪一步時，不硬指一步也不怪後端', async () => {
-    stubApi({
+    stubPage({
       [STATUS]: { body: AT_THE_END },
       [ROUTES]: { body: BUILT },
       [INDEXERS]: { body: indexerSetup() },
@@ -726,7 +871,7 @@ describe('頁 6：完成', () => {
   })
 
   it('後端真的掛了時才說是後端', async () => {
-    stubApi({
+    stubPage({
       [STATUS]: { body: AT_THE_END },
       [ROUTES]: { body: BUILT },
       [INDEXERS]: { body: indexerSetup() },
@@ -745,7 +890,7 @@ describe('頁 6：完成', () => {
   it('按下完成之後精靈關閉，擁有者直接落在探索', async () => {
     let completed = false
     const backend = session({ name: 'skipper', role: 'admin' })
-    stubApi({
+    stubPage({
       'GET /api/health': () => ({
         body: {
           status: 'ok',
@@ -776,7 +921,7 @@ describe('頁 6：完成', () => {
 
   it('擁有者成立之後、精靈跑完之前沒有 session 的人被送去登入，登入之後回到精靈', async () => {
     const backend = session()
-    stubApi({
+    stubPage({
       'GET /api/health': {
         body: { status: 'ok', version: '0.1.0', setup_completed: false, owner_established: true },
       },
