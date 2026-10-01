@@ -287,7 +287,9 @@ describe('Media 詳情頁', () => {
   })
 
   it('切到 EN 時 h1 與簡介換成 en-US 那一輪，不另印中文，也不重抓（brief §7.5）', async () => {
-    const api = render()
+    // 數請求的測試不能留一支沒接的端點：觀看區的 404 照 `retryUnlessRefused` 在一秒後重試，機器忙、
+    // 測試跑超過一秒時那一次重試就被算成「切換語言重抓」。`null` 是「不在 Jellyfin 裡」。
+    const api = render({ 'GET /api/media/tv%3A120089/watch': { body: null } })
     renderApp('/media/tv:120089')
     await screen.findByRole('heading', { level: 1, name: 'SPY×FAMILY 間諜家家酒' })
     const fetched = api.mock.calls.length

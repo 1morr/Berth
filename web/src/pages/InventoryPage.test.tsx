@@ -294,7 +294,17 @@ describe('媒體庫頁', () => {
     })
 
     it('Jellyfin 的名稱不跟 UI 語言換，切換時也不重抓（使用者拍板，brief §7.5）', async () => {
-      const api = render()
+      // 數請求的測試不能留一支沒接的端點：404 照 `retryUnlessRefused` 在一秒後重試，機器忙、測試
+      // 跑超過一秒時那一次重試就被算成「切換語言重抓」。
+      const api = render({
+        [`GET /api/inventory/${TV}/watching`]: {
+          body: {
+            jellyfin: { public_url: '', url: '', port: 8096 },
+            resume: [],
+            next_up: [],
+          } satisfies Watching,
+        },
+      })
       renderApp(`/library/${TV}`)
       await findTile('Alpha Show')
       const fetched = api.mock.calls.length
