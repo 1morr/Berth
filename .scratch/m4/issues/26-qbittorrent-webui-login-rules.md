@@ -1,6 +1,6 @@
 # 26 — qBittorrent WebUI 登入：密碼規則先擋、400 說對原因、失敗不留半套
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Blocked by:** 23
 
