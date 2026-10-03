@@ -7,7 +7,8 @@ API key），不存下來；`settings.setup.owner` 只記是哪一個 Jellyfin �
 
 **舊列的處理**：
 
-- 精靈已經跑完的：沒有擁有者也沒關係，`completed` 就讓門禁關著（`setup.owner_established`）。
+- 精靈已經跑完的：沒有擁有者也沒關係，`completed` 就讓門禁關著
+  （`SetupSettings.owner_established`）。
   qBittorrent 與 Prowlarr 上已經設好的介面登入原封不動；Berth 之後不會再改它們，直到使用者在
   泊位上填新的一組（票 07）。
 - 精靈跑到一半的：回到第 1 步，用 Jellyfin 的管理員帳密成立擁有者。套件內的那一台管理員已經

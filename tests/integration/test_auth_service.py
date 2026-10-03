@@ -39,6 +39,7 @@ from berth.services.auth import (
     token_digest,
 )
 from berth.services.settings import write_settings
+from tests.integration.arrange import own
 
 #: 這個檔案裡的每個測試都是非同步的（`asyncio_mode = strict`，見 pyproject）。
 pytestmark = pytest.mark.asyncio
@@ -97,7 +98,9 @@ def factory(jellyfin: FakeJellyfinClient) -> OneJellyfin:
 
 @pytest_asyncio.fixture
 async def configured(session: AsyncSession) -> AsyncIterator[None]:
-    """精靈跑完後的樣子：Jellyfin 的位址已經存下來了。"""
+    """擁有者成立之後的樣子：Jellyfin 的位址已經存下來了。擁有者之前沒有人登得進來（M4 票 28，
+    `test_auth_api.TestLoginBeforeTheOwner`）。"""
+    await own(session)
     await write_settings(session, JellyfinSettings(base_url=JELLYFIN_URL, api_key="key"))
     await session.commit()
     yield

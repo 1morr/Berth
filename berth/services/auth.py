@@ -22,7 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from berth.adapters.http import AuthFailedError, ServiceError
 from berth.adapters.jellyfin import JellyfinAuth
 from berth.domain import Role
-from berth.models import JellyfinSettings, User, UserSession
+from berth.models import JellyfinSettings, SetupSettings, User, UserSession
 from berth.services.clients import ServiceClientFactory
 from berth.services.settings import read_settings
 
@@ -35,6 +35,14 @@ TOKEN_BYTES = 32
 
 class InvalidCredentialsError(Exception):
     """帳密不對。**刻意不分辨是哪一個**——分辨得出來就是在幫人列舉帳號。"""
+
+
+class OwnerPendingError(Exception):
+    """擁有者還沒成立，沒有人登得進來（M4 票 28）。
+
+    頁 1 一選 Jellyfin 就存了位址，不擋的話那一台上任何帳號都能直接打 `/auth/login` 拿到 session——
+    非管理員讀得到 Job，Jellyfin 管理員改得了設定。精靈的頁 1 是唯一的入口（`setup.claim_owner`）。
+    """
 
 
 class JellyfinUnavailableError(Exception):
@@ -71,7 +79,12 @@ async def sign_in(
     username: str,
     password: str,
 ) -> SignedIn:
-    """以 Jellyfin 帳密換一張 Berth session。呼叫端不必再 commit。"""
+    """以 Jellyfin 帳密換一張 Berth session。呼叫端不必再 commit。
+
+    擁有者成立之前一律 `OwnerPendingError`，帳密不交給任何一台（M4 票 28）。
+    """
+    if not (await read_settings(session, SetupSettings)).owner_established():
+        raise OwnerPendingError("finish step 1 of the setup wizard first")
     if not username.strip() or not password:
         # 空白憑證不必打擾 Jellyfin，但回的仍是同一種拒絕。
         raise InvalidCredentialsError(_REFUSAL)

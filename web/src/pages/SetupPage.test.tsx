@@ -426,6 +426,9 @@ describe('頁 1：Jellyfin 與擁有者', () => {
       const call = fetchStub.mock.calls.find(([url]) => url === '/api/setup/owner')
       // 套件內那一台不問語言與遠端存取：帶 UI 語言、不開（M4 票 18）。
       expect(call && JSON.parse(String(call[1]?.body))).toEqual({
+        // 畫面上測過的那一台（M4 票 28）。
+        base_url: 'http://jellyfin:8096',
+        server_id: chosen().server_id,
         username: 'skipper',
         password: 'harbour',
         ui_culture: 'zh-TW',
@@ -583,6 +586,8 @@ describe('頁 1：替還沒初始化的既有 Jellyfin 建立擁有者（M4 票 
     await waitFor(() =>
       expect(bodiesOf(fetchStub, '/api/setup/owner')).toEqual([
         {
+          base_url: 'http://nas:8096',
+          server_id: chosen().server_id,
           username: 'skipper',
           password: 'harbour',
           ui_culture: 'en-GB',
@@ -615,7 +620,12 @@ describe('頁 1：替還沒初始化的既有 Jellyfin 建立擁有者（M4 票 
 
     await waitFor(() =>
       expect(bodiesOf(fetchStub, '/api/setup/owner')).toEqual([
-        { username: 'skipper', password: 'harbour' },
+        {
+          base_url: 'http://jellyfin:8096',
+          server_id: chosen().server_id,
+          username: 'skipper',
+          password: 'harbour',
+        },
       ]),
     )
   })

@@ -49,6 +49,7 @@ from berth.services.jellyfin import (
     BundledLibraryRejectedError,
     InterfaceLoginRejectedError,
     JellyfinStartup,
+    JellyfinTarget,
     add_berth_paths,
     bootstrap_jellyfin,
     connect_jellyfin,
@@ -102,6 +103,8 @@ class ServiceOut(BaseModel):
     reason: ConnectionReason | None
     #: 實測值（版本號、索引站數量）。UI 直接顯示，不翻譯。
     detail: str
+    #: Jellyfin 答的它是哪一台（ServerId）。頁 1 的表單原樣帶回 `POST /setup/owner`（M4 票 28）。
+    server_id: str
     #: 沒連上時服務回的原文（英文），收進「技術細節」（M4 票 21）。
     error: str
     #: 這個位址上連續幾次帳密不被接受（qBittorrent 預設 5 次封 IP，brief §20.2）。
@@ -135,8 +138,13 @@ class OwnerIn(BaseModel):
     帳密不加約束，理由同 `LoginIn`：空的與錯的一律由 services 拒絕成 `invalid_credentials`。
     其餘四欄只用在還沒初始化的那一台（`jellyfin.JellyfinStartup`，M4 票 18）：既有的在畫面上問，
     套件內的由前端帶 UI 語言、不開遠端存取。
+
+    `base_url` 與 `server_id` **必填**：畫面上測過的那一台（`ServiceOut` 原樣帶回）。與 Berth
+    現在要連的不同就 409 `target_changed`，帳密不送（M4 票 28）。
     """
 
+    base_url: str
+    server_id: str
     username: str = ""
     password: str = ""
     #: Jellyfin 的語言代碼（`zh-TW`、`en-US`、`ja`）：`UICulture`。
@@ -149,10 +157,12 @@ class OwnerIn(BaseModel):
 
 
 #: 一種理由一個狀態碼（`refusal_responses` 由它導出文件）。帳密不對與登入同一個 401；不是管理員
-#: 是 403；還沒找到 Jellyfin 與擁有者已經在是 409（與現在的狀態衝突）；Jellyfin 那一段失敗是 502。
+#: 是 403；還沒找到 Jellyfin、擁有者已經在、目標被換過是 409（與現在的狀態衝突）；Jellyfin 那一段
+#: 失敗是 502。
 _OWNER_STATUS: dict[OwnerRefusal, int] = {
     OwnerRefusal.JELLYFIN_UNRESOLVED: status.HTTP_409_CONFLICT,
     OwnerRefusal.OWNER_EXISTS: status.HTTP_409_CONFLICT,
+    OwnerRefusal.TARGET_CHANGED: status.HTTP_409_CONFLICT,
     OwnerRefusal.INVALID_CREDENTIALS: status.HTTP_401_UNAUTHORIZED,
     OwnerRefusal.NOT_ADMINISTRATOR: status.HTTP_403_FORBIDDEN,
     OwnerRefusal.JELLYFIN_FAILED: status.HTTP_502_BAD_GATEWAY,
@@ -224,6 +234,7 @@ async def post_owner(
         claimed = await claim_owner(
             session,
             factory,
+            target=JellyfinTarget(base_url=body.base_url, server_id=body.server_id),
             username=body.username,
             password=body.password,
             startup=JellyfinStartup(

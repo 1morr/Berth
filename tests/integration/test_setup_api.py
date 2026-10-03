@@ -65,10 +65,19 @@ def client(fresh: TestClient) -> TestClient:
 def _claim(client: TestClient) -> None:
     """走一次真的頁 1：選套件內 Jellyfin → 成為擁有者（拿到 cookie）→ 另外兩個也選套件內。"""
     assert _choose(client, "jellyfin").status_code == 200
-    owned = client.post("/api/setup/owner", json={"username": "skipper", "password": "harbour"})
+    owned = client.post(
+        "/api/setup/owner", json={**_seen(client), "username": "skipper", "password": "harbour"}
+    )
     assert owned.status_code == 200, owned.text
     assert _choose(client, "qbittorrent").status_code == 200
     assert _choose(client, "prowlarr").status_code == 200
+
+
+def _seen(client: TestClient) -> dict[str, str]:
+    """頁 1 畫面上測過的那一台：表單送出時原樣帶回（M4 票 28）。還沒選 Jellyfin 是兩個空字串。"""
+    rows = client.get("/api/setup/status").json()["services"]
+    row = next((r for r in rows if r["kind"] == "jellyfin"), {"base_url": "", "server_id": ""})
+    return {"base_url": row["base_url"], "server_id": row["server_id"]}
 
 
 def _choose(client: TestClient, kind: str, **body: str) -> Response:
@@ -120,7 +129,7 @@ class TestOwner:
         _choose(fresh, "jellyfin")
 
         response = fresh.post(
-            "/api/setup/owner", json={"username": "skipper", "password": "harbour"}
+            "/api/setup/owner", json={**_seen(fresh), "username": "skipper", "password": "harbour"}
         )
 
         assert response.status_code == 200
@@ -133,7 +142,7 @@ class TestOwner:
         _choose(fresh, "jellyfin")
 
         response = fresh.post(
-            "/api/setup/owner", json={"username": "skipper", "password": "harbour"}
+            "/api/setup/owner", json={**_seen(fresh), "username": "skipper", "password": "harbour"}
         )
 
         assert "harbour" not in response.text
@@ -141,7 +150,7 @@ class TestOwner:
 
     def test_before_jellyfin_is_found_the_claim_is_a_conflict(self, fresh: TestClient) -> None:
         response = fresh.post(
-            "/api/setup/owner", json={"username": "skipper", "password": "harbour"}
+            "/api/setup/owner", json={**_seen(fresh), "username": "skipper", "password": "harbour"}
         )
 
         assert response.status_code == 409
@@ -155,7 +164,9 @@ class TestOwner:
         jellyfin.users = {"deckhand": "rope"}
         _choose(fresh, "jellyfin")
 
-        response = fresh.post("/api/setup/owner", json={"username": "deckhand", "password": "rope"})
+        response = fresh.post(
+            "/api/setup/owner", json={**_seen(fresh), "username": "deckhand", "password": "rope"}
+        )
 
         assert response.status_code == 403
         assert response.json()["detail"]["reason"] == "not_administrator"
@@ -171,6 +182,7 @@ class TestOwner:
         response = fresh.post(
             "/api/setup/owner",
             json={
+                **_seen(fresh),
                 "username": "skipper",
                 "password": "harbour",
                 "ui_culture": "en-US",
@@ -184,12 +196,41 @@ class TestOwner:
         assert jellyfin.culture == ("en-US", "US", "en")
         assert jellyfin.remote_access is True
 
+    def test_a_target_swapped_while_the_form_was_open_is_a_conflict(
+        self, fresh: TestClient, jellyfin: FakeJellyfinClient
+    ) -> None:
+        """實測 E12：頁 1 顯示一台的表單時，另一邊匿名把目標改掉——帳密不跟著送過去（M4 票 28）。"""
+        jellyfin.startup_wizard_completed = True
+        jellyfin.admin = ("skipper", "harbour")
+        assert _choose(fresh, "jellyfin", base_url="http://localhost:58097").status_code == 200
+        seen = _seen(fresh)
+        assert _choose(fresh, "jellyfin", base_url="http://localhost:48096").status_code == 200
+        jellyfin.error = AssertionError("Jellyfin must not be asked")
+
+        response = fresh.post(
+            "/api/setup/owner", json={**seen, "username": "skipper", "password": "harbour"}
+        )
+
+        assert response.status_code == 409
+        assert response.json()["detail"] == {"reason": "target_changed", "detail": ""}
+        assert fresh.get("/api/auth/me").status_code == 401
+
+    def test_the_target_is_required(self, fresh: TestClient) -> None:
+        """少了它就比對不了：不當成「沒換過」。"""
+        _choose(fresh, "jellyfin")
+
+        response = fresh.post("/api/setup/owner", json={"username": "x", "password": "y"})
+
+        assert response.status_code == 422
+
     def test_blank_credentials_are_refused_like_wrong_ones(
         self, fresh: TestClient, jellyfin: FakeJellyfinClient
     ) -> None:
         _choose(fresh, "jellyfin")
 
-        response = fresh.post("/api/setup/owner", json={"username": "   ", "password": ""})
+        response = fresh.post(
+            "/api/setup/owner", json={**_seen(fresh), "username": "   ", "password": ""}
+        )
 
         assert response.status_code == 401
         assert response.json()["detail"]["reason"] == "invalid_credentials"
@@ -211,6 +252,7 @@ class TestChoice:
             "state": "ok",
             "reason": "connected",
             "detail": "v5.2.3 · Web API 2.15.1",
+            "server_id": "",
             "error": "",
             "auth_failures": 0,
             "waited_seconds": 0,
@@ -249,7 +291,9 @@ class TestChoice:
     ) -> None:
         """擁有者成立之後，新位址上是另一台（ServerId 不同，M4 票 18）：409，位址不變。"""
         assert _choose(fresh, "jellyfin", base_url="http://nas:8096").status_code == 200
-        owned = fresh.post("/api/setup/owner", json={"username": "skipper", "password": "harbour"})
+        owned = fresh.post(
+            "/api/setup/owner", json={**_seen(fresh), "username": "skipper", "password": "harbour"}
+        )
         assert owned.status_code == 200, owned.text
         jellyfin.server_id = "9fda94c0187f455fb00c8593d35ef9d1"
         jellyfin.server_name = "elsewhere"
@@ -356,7 +400,7 @@ class TestGate:
         _claim(fresh)
 
         response = fresh.post(
-            "/api/setup/owner", json={"username": "skipper", "password": "harbour"}
+            "/api/setup/owner", json={**_seen(fresh), "username": "skipper", "password": "harbour"}
         )
 
         assert response.status_code == 409

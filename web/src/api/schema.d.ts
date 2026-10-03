@@ -3930,8 +3930,15 @@ export interface components {
          *     帳密不加約束，理由同 `LoginIn`：空的與錯的一律由 services 拒絕成 `invalid_credentials`。
          *     其餘四欄只用在還沒初始化的那一台（`jellyfin.JellyfinStartup`，M4 票 18）：既有的在畫面上問，
          *     套件內的由前端帶 UI 語言、不開遠端存取。
+         *
+         *     `base_url` 與 `server_id` **必填**：畫面上測過的那一台（`ServiceOut` 原樣帶回）。與 Berth 現在要連的
+         *     不同就 409 `target_changed`，帳密不送（M4 票 28）。
          */
         OwnerIn: {
+            /** Base Url */
+            base_url: string;
+            /** Server Id */
+            server_id: string;
             /**
              * Username
              * @default
@@ -3971,7 +3978,7 @@ export interface components {
          *     Berth 自己不存。
          * @enum {string}
          */
-        OwnerRefusal: "jellyfin_unresolved" | "invalid_credentials" | "not_administrator" | "jellyfin_failed" | "owner_exists";
+        OwnerRefusal: "jellyfin_unresolved" | "invalid_credentials" | "not_administrator" | "jellyfin_failed" | "owner_exists" | "target_changed";
         /** OwnerRefusalOut */
         OwnerRefusalOut: {
             reason: components["schemas"]["OwnerRefusal"];
@@ -4870,6 +4877,8 @@ export interface components {
             reason: components["schemas"]["ConnectionReason"] | null;
             /** Detail */
             detail: string;
+            /** Server Id */
+            server_id: string;
             /** Error */
             error: string;
             /** Auth Failures */
@@ -8711,7 +8720,7 @@ export interface operations {
                     "application/json": components["schemas"]["OwnerRefusalOut"];
                 };
             };
-            /** @description `jellyfin_unresolved` · `owner_exists` */
+            /** @description `jellyfin_unresolved` · `owner_exists` · `target_changed` */
             409: {
                 headers: {
                     [name: string]: unknown;

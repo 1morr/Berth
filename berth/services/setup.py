@@ -65,6 +65,7 @@ from berth.services.indexer import (
 from berth.services.jellyfin import (
     DEFAULT_STARTUP,
     JellyfinStartup,
+    JellyfinTarget,
     claim_jellyfin,
     libraries_built,
 )
@@ -110,6 +111,8 @@ class ServiceView:
     reason: ConnectionReason | None
     #: 實測值：Jellyfin 與 qBittorrent 的版本、Prowlarr 的索引站數量。
     detail: str
+    #: Jellyfin 答的 ServerId（`ServiceTest.server_id`）；頁 1 的表單帶著它送出（M4 票 28）。
+    server_id: str
     #: 沒連上時服務回的原文（英文）。
     error: str
     #: 這個位址上連續幾次帳密不被接受（`ServiceTest.auth_failures`）。
@@ -207,6 +210,7 @@ async def claim_owner(
     session: AsyncSession,
     factory: ServiceClientFactory,
     *,
+    target: JellyfinTarget,
     username: str,
     password: str,
     startup: JellyfinStartup = DEFAULT_STARTUP,
@@ -224,18 +228,30 @@ async def claim_owner(
     （`OWNER_EXISTS`，M4 票 18）：換 API key 的重新登入是另一支（`jellyfin.connect_jellyfin`）。
 
     `startup` 只用在還沒初始化的那一台（建立管理員那一條）：語言與地區、遠端存取（M4 票 18）。
+
+    **帳密只送到畫面上測過的那一台**（`target`，M4 票 28）：擁有者成立之前頁 1 匿名可改，存下的
+    位址或那一台的 ServerId 與 `target` 不同就是有人在填表時換了目標——`TARGET_CHANGED`，Jellyfin
+    一個請求都不發。比對過之後序列仍釘在 `target` 上（`jellyfin.claim_jellyfin`），寫擁有者時再
+    確認一次。
     """
     setup = await read_settings(session, SetupSettings)
-    if owner_established(setup):
+    if setup.owner_established():
         raise OwnerRejectedError(OwnerRefusal.OWNER_EXISTS)
     if not username.strip() or not password:
         raise OwnerRejectedError(OwnerRefusal.INVALID_CREDENTIALS)
     choice = setup.choices.get(ServiceKind.JELLYFIN)
     if choice is None or choice.test is None or choice.test.state is not ConnectionState.OK:
         raise OwnerRejectedError(OwnerRefusal.JELLYFIN_UNRESOLVED)
+    if not _aimed_at(choice, target):
+        raise OwnerRejectedError(OwnerRefusal.TARGET_CHANGED)
 
     claim = await claim_jellyfin(
-        session, factory, username=username.strip(), password=password, startup=startup
+        session,
+        factory,
+        username=username.strip(),
+        password=password,
+        target=target,
+        startup=startup,
     )
     if claim.auth is None:
         raise OwnerRejectedError(claim.refusal or OwnerRefusal.JELLYFIN_FAILED, claim.detail)
@@ -243,13 +259,17 @@ async def claim_owner(
     auth = claim.auth
 
     def record(latest: SetupSettings) -> None:
-        if owner_established(latest):
+        if latest.owner_established():
             # 兩個人同時送頁 1：先寫進去的那一個是擁有者，後到的不蓋掉他。
             raise OwnerRejectedError(OwnerRefusal.OWNER_EXISTS)
+        chosen = latest.choices.get(ServiceKind.JELLYFIN)
+        # 序列跑的那一分鐘裡目標被換了：擁有者不落在一台頁 1 已經不選的 Jellyfin 上。只比位址：
+        # ServerId 剛由序列的第一步對過，而同一時間的重測沒連上會把存下的那一格清成空字串。
+        if chosen is None or chosen.base_url != target.base_url:
+            raise OwnerRejectedError(OwnerRefusal.TARGET_CHANGED)
         latest.owner = SetupOwner(
             jellyfin_user_id=auth.user_id, name=auth.name, jellyfin_server_id=claim.server_id
         )
-        chosen = latest.choices[ServiceKind.JELLYFIN]
         if chosen.test is not None:
             # 那一台現在有管理員了：測試那一條不該還說「還沒跑過初始精靈」。
             latest.choices = {
@@ -269,16 +289,17 @@ async def claim_owner(
     return ClaimedOwner(status=await _read(session, now=_utcnow()), signed_in=signed_in)
 
 
-def owner_established(setup: SetupSettings) -> bool:
-    """精靈的門關上了沒：有擁有者，或精靈已經跑完（擁有者出現之前就跑完的舊資料庫）。
+def _aimed_at(choice: ServiceChoice, target: JellyfinTarget) -> bool:
+    """頁 1 的表單送的是不是 Berth 現在要連的那一台：位址與上一次測試答的 ServerId 都一樣。
 
-    門禁（`api/gate.py`）與頁序（`_current_step`）讀同一條。
+    上一次測試沒記到 ServerId（票 28 之前測的）不算：比不出是不是同一台，重新測試就有了。
     """
-    return bool(setup.owner.jellyfin_user_id) or setup.completed
+    tested = choice.test.server_id if choice.test is not None else ""
+    return bool(tested) and (choice.base_url, tested) == (target.base_url, target.server_id)
 
 
 async def is_owner_established(session: AsyncSession) -> bool:
-    return owner_established(await read_settings(session, SetupSettings))
+    return (await read_settings(session, SetupSettings)).owner_established()
 
 
 async def choose_service(
@@ -309,7 +330,7 @@ async def choose_service(
     previous = setup.choices.get(kind)
     if (
         kind is ServiceKind.JELLYFIN
-        and owner_established(setup)
+        and setup.owner_established()
         and previous is not None
         and previous.origin is not origin
     ):
@@ -323,7 +344,12 @@ async def choose_service(
 
     moved = previous is not None and not previous.is_at(origin, base_url)
     tested: _Outcome | None = None
-    if moved and previous is not None and kind is ServiceKind.JELLYFIN and owner_established(setup):
+    if (
+        moved
+        and previous is not None
+        and kind is ServiceKind.JELLYFIN
+        and setup.owner_established()
+    ):
         tested = await _same_jellyfin(session, factory, setup, previous.base_url, base_url)
     elif moved and kind is ServiceKind.QBITTORRENT:
         await forget_route_checks(session)
@@ -398,7 +424,7 @@ async def _test_and_record(
             return
         test = _settle(outcome, choice, restart=restart, now=now)
         latest.choices = {**latest.choices, kind: choice.model_copy(update={"test": test})}
-        if owner_established(latest) and outcome.server_id and not latest.owner.jellyfin_server_id:
+        if latest.owner_established() and outcome.server_id and not latest.owner.jellyfin_server_id:
             # 票 18 之前成立的擁有者沒記 ServerId：這一次回答的那一台就是它，之後照樣擋另一台。
             latest.owner = latest.owner.model_copy(update={"jellyfin_server_id": outcome.server_id})
         if kind is ServiceKind.PROWLARR and choice.origin is ServiceOrigin.EXISTING:
@@ -573,7 +599,7 @@ async def _test_jellyfin(
     版本在這裡就擋，不等到登入：10.x 原本在測試時是綠燈、到登入才 502，表單填完才知道白填了。
     """
     client = factory.jellyfin(base_url)
-    owned = owner_established(setup)
+    owned = setup.owner_established()
     recorded = setup.owner.jellyfin_server_id
 
     async def test() -> _Outcome:
@@ -701,6 +727,7 @@ def _settle(
             return ServiceTest(
                 state=ConnectionState.WAITING,
                 reason=outcome.reason,
+                server_id=outcome.server_id,
                 error=outcome.error,
                 checked_at=now,
                 waiting_since=since,
@@ -714,6 +741,7 @@ def _settle(
         state=state,
         reason=outcome.reason,
         detail=outcome.detail,
+        server_id=outcome.server_id,
         error=outcome.error,
         auth_failures=failures,
         checked_at=now,
@@ -770,7 +798,7 @@ def _current_step(setup: SetupSettings, *, berthed: bool) -> int:
     頁 3 的依據不在這一組設定裡（`routes` 表的 `routes_ready`、套件內清單對著媒體庫快照的
     `libraries_built`），所以它由參數 `berthed` 帶進來。
     """
-    if not owner_established(setup):
+    if not setup.owner_established():
         return STEP_JELLYFIN
     if not _qbittorrent_secured(setup):
         return STEP_QBITTORRENT
@@ -879,6 +907,7 @@ def _view(kind: ServiceKind, choice: ServiceChoice, now: datetime) -> ServiceVie
         state=test.state if test is not None else None,
         reason=test.reason if test is not None else None,
         detail=test.detail if test is not None else "",
+        server_id=test.server_id if test is not None else "",
         error=test.error if test is not None else "",
         auth_failures=test.auth_failures if test is not None else 0,
         waited_seconds=max(int(waited.total_seconds()), 0),

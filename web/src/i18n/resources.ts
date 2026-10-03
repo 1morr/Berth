@@ -139,6 +139,8 @@ const zhHant = {
         'Jellyfin 那一段沒做完：技術細節裡是那一步的錯誤訊息。排除之後再按一次，做過的不會重做。',
       owner_exists:
         '擁有者已經成立了，這裡不換人。Berth 的 API key 要換的話，到「設定 → Jellyfin」用管理員重新登入。',
+      target_changed:
+        'Jellyfin 的位址在你填表時被換過，帳密沒有送出去。重新測試，確認上面的位址是你要的那一台，再送一次。',
     },
     saved: '擁有者 · {{name}}',
     locked:
@@ -3207,6 +3209,8 @@ const en: Translations<typeof zhHant> = {
         'Jellyfin did not finish: the error from that step is under technical details. Fix it and press again — nothing already done is redone.',
       owner_exists:
         'There is already an owner, and it is not replaced here. To give Berth a new API key, sign in again as an administrator in Settings → Jellyfin.',
+      target_changed:
+        'The Jellyfin address was changed while you were filling in the form, so your password was not sent. Test again, check that the address above is the one you mean, then send it again.',
     },
     saved: 'Owner · {{name}}',
     locked:

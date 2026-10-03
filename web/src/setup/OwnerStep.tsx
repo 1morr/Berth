@@ -1,14 +1,20 @@
 import { useId, useState, type FormEvent, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import type { JellyfinConnectInput, OwnerInput, OwnerRefusal, SetupStatus } from '../api/setup'
-import type { ServiceOrigin } from '../api/schemas'
+import type {
+  JellyfinConnectInput,
+  OwnerInput,
+  OwnerRefusal,
+  SetupService,
+  SetupStatus,
+} from '../api/setup'
 import { Cutaway, CutawayRow } from '../components/Cutaway'
 import { ORIGIN_LABEL } from '../components/services'
 import {
   STICKY_ACTION,
   Checkbox,
   Field,
+  GhostButton,
   Notice,
   PasswordField,
   PrimaryButton,
@@ -44,6 +50,7 @@ export function OwnerStep({
   refusal,
   claimError,
   onClaim,
+  onClaimReset,
   reSignIn,
   note,
   nav,
@@ -57,6 +64,8 @@ export function OwnerStep({
   /** 請求沒跑完，而且不是一份認得的拒絕（沒有就是 `null`）。 */
   claimError: unknown
   onClaim: (input: OwnerInput) => void
+  /** 收掉上一次送出的結果（拒絕那一句）。`target_changed` 之後重新測試時用（M4 票 28）。 */
+  onClaimReset: () => void
   reSignIn: ReSignIn
   /** 回頭看的說明（`RevisitNote`），這一頁做完了才有。 */
   note?: ReactNode
@@ -99,13 +108,20 @@ export function OwnerStep({
 
       {(mode === 'create' || mode === 'signIn') && jellyfin && (
         <OwnerForm
-          key={mode}
+          // 畫面上的那一台換了（重讀到別人改的位址）就是另一張表單：打好的帳密不留給新的那一台
+          // （M4 票 28）。
+          key={`${mode} ${jellyfin.base_url} ${jellyfin.server_id}`}
           signsIn={mode === 'signIn'}
-          origin={jellyfin.origin}
+          jellyfin={jellyfin}
           claiming={claiming}
           refusal={refusal}
           claimError={claimError}
           onClaim={onClaim}
+          retesting={choice.retesting}
+          onRetest={() => {
+            onClaimReset()
+            choice.onRetest(true)
+          }}
           sticky={!nav}
         />
       )}
@@ -126,23 +142,29 @@ function modeOf(status: SetupStatus, ready: boolean): OwnerMode {
 
 function OwnerForm({
   signsIn,
-  origin,
+  jellyfin,
   claiming,
   refusal,
   claimError,
   onClaim,
+  retesting,
+  onRetest,
   sticky,
 }: {
   signsIn: boolean
   /**
-   * 建立時寫進 Jellyfin 初始設定的語言與遠端存取（M4 票 18，使用者拍板）：既有的在畫面上問；套件內的
-   * 是 Berth 的，不問——帶 UI 語言、不開遠端存取。登入的那一台已經設過了，不送。
+   * 畫面上測過的那一台。位址與 ServerId 隨帳密送出，後端比對沒被換過才交給 Jellyfin（M4 票 28）。
+   *
+   * 來源決定建立時寫進 Jellyfin 初始設定的語言與遠端存取（M4 票 18，使用者拍板）：既有的在畫面上問；
+   * 套件內的是 Berth 的，不問——帶 UI 語言、不開遠端存取。登入的那一台已經設過了，不送。
    */
-  origin: ServiceOrigin
+  jellyfin: SetupService
   claiming: boolean
   refusal: OwnerRefusal | null
   claimError: unknown
   onClaim: (input: OwnerInput) => void
+  retesting: boolean
+  onRetest: () => void
   sticky: boolean
 }) {
   const { t, i18n } = useTranslation()
@@ -152,7 +174,7 @@ function OwnerForm({
   const [checked, setChecked] = useState(false)
   const [culture, setCulture] = useState(() => localeForUi(i18n.language).ui_culture)
   const [remoteAccess, setRemoteAccess] = useState(false)
-  const asksStartup = !signsIn && origin === 'existing'
+  const asksStartup = !signsIn && jellyfin.origin === 'existing'
   const languageId = useId()
 
   const blank = checked && (!username.trim() || !password)
@@ -164,7 +186,12 @@ function OwnerForm({
     event.preventDefault()
     setChecked(true)
     if (!username.trim() || !password || (!signsIn && password !== confirm)) return
-    const credentials = { username: username.trim(), password }
+    const credentials = {
+      base_url: jellyfin.base_url,
+      server_id: jellyfin.server_id,
+      username: username.trim(),
+      password,
+    }
     if (signsIn) {
       onClaim(credentials)
       return
@@ -237,6 +264,13 @@ function OwnerForm({
           <Notice signal="blocked" label={t('common.failed')}>
             {t(`owner.refused.${refusal.reason}`)}
           </Notice>
+          {refusal.reason === 'target_changed' && (
+            <p className="mt-3">
+              <GhostButton type="button" busy={retesting} onClick={onRetest}>
+                {retesting ? t('connection.retesting') : t('connection.retest')}
+              </GhostButton>
+            </p>
+          )}
           {/* Jellyfin 那一步的原文（例如版本太舊的英文句子）收進技術細節（M4 票 21）。 */}
           <TechnicalDetails lines={[refusal.detail]} />
         </div>

@@ -108,7 +108,10 @@ def configured(berth: httpx.Client) -> None:
         wait(f"the bundled {kind} to answer", 300, connected(kind), every=2)
 
     choose_bundled("jellyfin")
-    owner = ok(berth.post("/setup/owner", json={"username": ADMIN, "password": PASSWORD}))
+    # 畫面上測過的那一台原樣帶回（M4 票 28）。
+    (seen,) = [row for row in rounds[-1] if row["kind"] == "jellyfin"]
+    target = {"base_url": seen["base_url"], "server_id": seen["server_id"]}
+    owner = ok(berth.post("/setup/owner", json={**target, "username": ADMIN, "password": PASSWORD}))
     assert (owner["owner"], owner["current_step"]) == (ADMIN, 2), owner
     # 擁有者那一刻拿到的就是 Berth 的 session，而且是管理員（brief §11）。
     assert ok(berth.get("/auth/me")) == {"name": ADMIN, "role": "admin"}

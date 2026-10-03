@@ -15,7 +15,10 @@ export type SetupService = Schemas['ServiceOut']
 
 export type SetupStatus = Schemas['SetupStatusOut']
 
-/** 擁有者的 Jellyfin 帳密（頁 1，M4 票 06）。只交給 Jellyfin，Berth 不存。 */
+/**
+ * 擁有者的 Jellyfin 帳密（頁 1，M4 票 06），加上畫面上測過的那一台（`base_url`、`server_id`，M4 票 28）：
+ * 送出前目標被別人換過，後端回 409 `target_changed`、帳密不送。帳密只交給 Jellyfin，Berth 不存。
+ */
 export type OwnerInput = Schemas['OwnerIn']
 
 export type OwnerRefusal = Refusal<Schemas['OwnerRefusal']>
@@ -26,6 +29,7 @@ const OWNER_REASONS: ReasonSet<Schemas['OwnerRefusal']> = {
   not_administrator: true,
   jellyfin_failed: true,
   owner_exists: true,
+  target_changed: true,
 }
 
 /**

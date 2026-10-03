@@ -54,6 +54,7 @@ export function chosen(overrides: Partial<SetupService> = {}): SetupService {
     state: 'ok',
     reason: 'setup_pending',
     detail: '12.1.0',
+    server_id: '4e71f8d8bc324291b6e6c5a4f3fa8825',
     error: '',
     auth_failures: 0,
     waited_seconds: 0,

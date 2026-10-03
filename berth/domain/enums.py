@@ -1263,6 +1263,9 @@ class OwnerRefusal(StrEnum):
     #: 擁有者已經成立（M4 票 18）：這一支不重建擁有者。換 API key 的重新登入是另一支
     #: （`POST /setup/jellyfin/connect`）。
     OWNER_EXISTS = "owner_exists"
+    #: 表單帶的位址或 ServerId 與 Berth 現在要連的那一台不同（M4 票 28）：擁有者成立前頁 1 是
+    #: 匿名的，別人在你填表時換了目標。帳密沒有送出去，重新測試再送。
+    TARGET_CHANGED = "target_changed"
 
 
 class AccessRefusal(StrEnum):

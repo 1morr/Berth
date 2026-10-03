@@ -1260,6 +1260,12 @@ split-cour 的第一批被播出日比對整批擋在審核，改正一次並套
   媒體庫頁那一份 `GET /api/inventory/{library_id}/watching` 不變。
 
 ### Fixed
+- **擁有者成立之前不能提早登入、Jellyfin 目標不能被悄悄換掉**（M4 票 28，2026-10-01 實測第 14、15 條）：
+  擁有者成立之前 `POST /api/auth/login` 一律 403、帳密不交給任何一台（原本頁 1 一選 Jellyfin，那一台上任何帳號都能
+  直接拿到 session）。`POST /api/setup/owner` **必帶**畫面上測過的 `base_url` 與 `server_id`（`GET /api/setup/status`
+  每個服務多一欄 `server_id`），與存下的不同是 409 `target_changed`，帳密不送；比對過之後序列釘在那一台上，第一步答的
+  ServerId 不同就停在帳密之前。兩個人同時成立擁有者時只有一個成立，另一個 409 `owner_exists`。畫面說位址在填表時被換過、
+  給「重新測試」，重讀到另一台時打好的帳密清掉。
 - **套件內 Prowlarr 換了 API key、或本來就有站，頁 4 不再是死路**（M4 票 27，2026-10-01 實測第 2、9、22 條）：
   「重新測試」每次都重讀唯讀掛載的 key（讀不到時沿用貼上的那一把），key 被拒的補法說掛載、不再說 qBittorrent 的
   免密白名單；連線卡綠而站清單讀不到時說讀不到、給「重新讀取」。Prowlarr 上已經有站（重裝保留它的設定）就算站那一半

@@ -16,6 +16,7 @@ from berth.services.auth import (
     SESSION_TTL,
     InvalidCredentialsError,
     JellyfinUnavailableError,
+    OwnerPendingError,
     sign_in,
     sign_out,
 )
@@ -47,6 +48,9 @@ async def post_login(
 ) -> MeOut:
     try:
         signed = await sign_in(session, factory, username=body.username, password=body.password)
+    except OwnerPendingError as exc:
+        # 與門禁擋精靈其餘端點的那一句同一個碼（`gate._setup_verdict`）：先完成頁 1。
+        raise HTTPException(status.HTTP_403_FORBIDDEN, str(exc)) from exc
     except InvalidCredentialsError as exc:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, str(exc)) from exc
     except JellyfinUnavailableError as exc:

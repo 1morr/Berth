@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from berth.adapters.http import AuthFailedError, ServiceBusyError
 from berth.adapters.jellyfin import JellyfinPublicInfo
-from berth.adapters.jellyfin.fake import FakeJellyfinClient
+from berth.adapters.jellyfin.fake import SERVER_ID, FakeJellyfinClient
 from berth.adapters.qbittorrent import QbittorrentVersion
 from berth.adapters.qbittorrent.fake import FakeQbittorrentClient
 from berth.db import create_session_factory
@@ -41,6 +41,7 @@ from berth.models import (
     SetupStep,
 )
 from berth.services.clients import BundledServices
+from berth.services.jellyfin import JellyfinTarget
 from berth.services.qbittorrent import apply_qbittorrent, set_interface_login
 from berth.services.settings import read_settings, write_settings
 from berth.services.setup import (
@@ -272,7 +273,10 @@ async def test_a_second_owner_does_not_replace_the_first(
     setup = await read_settings(session, SetupSettings)
     setup.choices = {
         ServiceKind.JELLYFIN: chosen(
-            ServiceOrigin.BUNDLED, COMPOSE[ServiceKind.JELLYFIN], ConnectionReason.SETUP_PENDING
+            ServiceOrigin.BUNDLED,
+            COMPOSE[ServiceKind.JELLYFIN],
+            ConnectionReason.SETUP_PENDING,
+            server_id=SERVER_ID,
         )
     }
     await write_settings(session, setup)
@@ -281,7 +285,13 @@ async def test_a_second_owner_does_not_replace_the_first(
     factory = FakeClientFactory(jellyfin=_RivalClaims(engine))
 
     with pytest.raises(OwnerRejectedError) as refused:
-        await claim_owner(session, factory, username="skipper", password="harbour-lights")
+        await claim_owner(
+            session,
+            factory,
+            target=JellyfinTarget(base_url=COMPOSE[ServiceKind.JELLYFIN], server_id=SERVER_ID),
+            username="skipper",
+            password="harbour-lights",
+        )
 
     assert refused.value.reason is OwnerRefusal.OWNER_EXISTS
     assert (await read_status(session)).owner == "rival"

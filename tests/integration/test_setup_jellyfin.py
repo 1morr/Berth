@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from berth.adapters.http import AuthFailedError, ProtocolMismatchError, ServiceUnavailableError
 from berth.adapters.jellyfin import JellyfinApiKey, JellyfinLibrary, TypeOption
-from berth.adapters.jellyfin.fake import FakeJellyfinClient
+from berth.adapters.jellyfin.fake import SERVER_ID, FakeJellyfinClient
 from berth.domain import (
     BerthPathFailure,
     BundledLibraryRefusal,
@@ -41,6 +41,7 @@ from berth.models import (
 from berth.services.jellyfin import (
     BundledLibraryRejectedError,
     JellyfinSetupStatus,
+    JellyfinTarget,
     add_berth_paths,
     bootstrap_jellyfin,
     claim_jellyfin,
@@ -57,6 +58,10 @@ NOW = datetime(2026, 9, 7, 12, 0, tzinfo=UTC)
 
 #: 低於支援下限的那一台（brief §16.4、§20.9）。10.11.x 是最後一個舊版號系列。
 TOO_OLD = "10.11.11"
+
+
+#: 頁 1 測過的那一台（M4 票 28）：`seed` 的預設位址、替身的 ServerId。
+SEEN = JellyfinTarget(base_url="http://jellyfin:8096", server_id=SERVER_ID)
 
 
 async def seed(
@@ -84,6 +89,10 @@ async def seed(
         ServiceKind.PROWLARR: chosen(ServiceOrigin.BUNDLED, "http://prowlarr:9696"),
     }
     await write_settings(session, setup)
+    # 選的那一刻連線設定也跟著寫（`setup._remember_connection`）。
+    jellyfin = await read_settings(session, JellyfinSettings)
+    jellyfin.base_url = base_url
+    await write_settings(session, jellyfin)
     paths = await read_settings(session, PathSettings)
     paths.library_root = library_root
     await write_settings(session, paths)
@@ -92,7 +101,7 @@ async def seed(
 
 async def dock(session: AsyncSession, factory: FakeClientFactory) -> JellyfinSetupStatus:
     """套件內的整段序列：第 1 步那一半（建管理員、跑完初始設定、換 key），再加泊位 1 建媒體庫。"""
-    await claim_jellyfin(session, factory, username="skipper", password="harbour")
+    await claim_jellyfin(session, factory, username="skipper", password="harbour", target=SEEN)
     return await bootstrap_jellyfin(session, factory)
 
 
@@ -401,7 +410,11 @@ async def test_a_jellyfin_below_twelve_stops_at_the_first_step(
     jellyfin = FakeJellyfinClient(version=TOO_OLD)
 
     claim = await claim_jellyfin(
-        session, FakeClientFactory(jellyfin=jellyfin), username="skipper", password="harbour"
+        session,
+        FakeClientFactory(jellyfin=jellyfin),
+        username="skipper",
+        password="harbour",
+        target=SEEN,
     )
     status = claim.status
 

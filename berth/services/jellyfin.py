@@ -106,6 +106,16 @@ class JellyfinStartup:
 
 DEFAULT_STARTUP = JellyfinStartup()
 
+
+@dataclass(frozen=True, slots=True)
+class JellyfinTarget:
+    """頁 1 畫面上測過的那一台：位址與它答的 ServerId（brief §20.15）。擁有者的帳密只送到這一台
+    （M4 票 28）——擁有者成立前頁 1 是匿名的，存下的目標隨時可能被別人換掉。"""
+
+    base_url: str
+    server_id: str
+
+
 #: 設定裡沒寫的媒體庫依內容類型落回這裡（票 06f）。brief §10 的決定：第一階段只用 TMDB，
 #: 所以兩種現在一樣；分開寫是因為切換點是按類型與按媒體庫，不是全域的。
 DEFAULT_METADATA_FETCHERS: dict[CollectionType, tuple[str, ...]] = {
@@ -392,6 +402,7 @@ async def claim_jellyfin(
     *,
     username: str,
     password: str,
+    target: JellyfinTarget,
     startup: JellyfinStartup = DEFAULT_STARTUP,
 ) -> JellyfinClaim:
     """精靈第 1 步的 Jellyfin 那一半：套件內建管理員並跑完初始設定，既有的登入；都換 API key。
@@ -402,9 +413,17 @@ async def claim_jellyfin(
     套件內那一台的管理員已經在（上一次在某一步失敗，或 session 過期之後重來）時，建立那一步是
     `skipped`（12.0 起回 403，brief §20.9），驗證落在換 key 那一步——所以同一組照樣成立，
     別的密碼蓋不掉它。
+
+    **釘在 `target` 上**（M4 票 28）：連的是它的位址，不重讀存下的那一個；第一步答的 ServerId 不是它
+    就 `TARGET_CHANGED`，帳密那幾步不跑。
     """
     status, runner = await _run(
-        session, factory, OWNER_STEPS, credentials=(username, password), startup=startup
+        session,
+        factory,
+        OWNER_STEPS,
+        credentials=(username, password),
+        startup=startup,
+        target=target,
     )
     failed = next((row for row in status.steps if row.status is StepStatus.FAILED), None)
     if runner.refusal is not None:
@@ -623,15 +642,22 @@ async def _run(
     *,
     credentials: tuple[str, str] | None = None,
     startup: JellyfinStartup = DEFAULT_STARTUP,
+    target: JellyfinTarget | None = None,
 ) -> tuple[JellyfinSetupStatus, _Runner]:
     setup = await read_settings(session, SetupSettings)
     jellyfin = await read_settings(session, JellyfinSettings)
     paths = await read_settings(session, PathSettings)
-    _, base_url = _target(setup, jellyfin)
+    base_url = target.base_url if target is not None else _target(setup, jellyfin)[1]
 
     client = factory.jellyfin(base_url, token=jellyfin.api_key)
     runner = _Runner(
-        client, jellyfin, paths, setup.jellyfin.bundled, credentials=credentials, startup=startup
+        client,
+        jellyfin,
+        paths,
+        setup.jellyfin.bundled,
+        credentials=credentials,
+        startup=startup,
+        target=target,
     )
     try:
         # 這一輪要跑的步驟先全部歸零，畫面才不會把上一輪的結果當成這一輪的進度。
@@ -649,6 +675,10 @@ async def _run(
     await _remember(session, libraries=runner.libraries)
 
     def remember(latest: JellyfinSettings) -> None:
+        if target is not None and latest.base_url != target.base_url:
+            # 序列跑的這一分鐘裡頁 1 被改選了別台（M4 票 28）：連線設定跟著選擇走，這一台換來的 key
+            # 不寫給新的位址——之後的重測與登入問的都是那個位址。
+            return
         latest.base_url = base_url
         latest.api_key = runner.api_key or latest.api_key
 
@@ -720,9 +750,12 @@ class _Runner:
         *,
         credentials: tuple[str, str] | None,
         startup: JellyfinStartup,
+        target: JellyfinTarget | None,
     ) -> None:
         self._client = client
         self._startup = startup
+        #: 這一輪只對這一台（擁有者那一半，M4 票 28）；`None` 是不挑。
+        self._target = target
         self._jellyfin = jellyfin
         self._paths = paths
         self._bundled = tuple(bundled)
@@ -760,6 +793,14 @@ class _Runner:
 
     async def _public_info(self) -> tuple[StepStatus, str]:
         info = await self._client.public_info()
+        expected = self._target.server_id if self._target is not None else info.server_id
+        if info.server_id != expected:
+            # 測過之後同一個位址後面換了一台：後面幾步會把帳密交給它，第一步就停（M4 票 28）。
+            self.refusal = OwnerRefusal.TARGET_CHANGED
+            raise StepFailedError(
+                StepFailure.UNEXPECTED,
+                f"this Jellyfin is {info.server_id}, not the {expected} that was tested",
+            )
         if not info.supported:
             # 版本閘門就在第一步，後面的步驟因此一步都不會跑（brief §16.4、§19）。
             raise StepFailedError(

@@ -29,6 +29,7 @@ from berth.main import create_app
 from berth.models import JellyfinSettings, SetupSettings
 from berth.services.settings import read_settings, write_settings
 from tests.endpoints import api_endpoints
+from tests.integration.arrange import own
 
 JELLYFIN_URL = "http://jellyfin:8096"
 BROWSER = {CSRF_HEADER: "XMLHttpRequest"}
@@ -150,6 +151,46 @@ class TestLogin:
         jellyfin.error = ServiceUnavailableError("connection refused")
 
         assert sign_in(client, ADMIN).status_code == 503
+
+
+class TestLoginBeforeTheOwner:
+    """擁有者成立之前沒有人登得進來（M4 票 28，實測 E12）：頁 1 一選 Jellyfin 就存了位址，那一台上
+    任何帳號原本都能直接打這一支拿到 session。畫面上的 `/login` 本來就導回 `/setup`。"""
+
+    @pytest.fixture
+    def opening(
+        self, config: Config, tmp_path: Path, jellyfin: FakeJellyfinClient
+    ) -> Iterator[TestClient]:
+        """頁 1 選了 Jellyfin、測過了，擁有者還沒成立。"""
+        app = create_app(replace(config, web_root=tmp_path / "never-built"))
+        app.dependency_overrides[get_client_factory] = lambda: OneJellyfin(jellyfin)
+        with TestClient(app) as running:
+            _point_at_jellyfin(running)
+            yield running
+
+    @pytest.mark.parametrize("who", [ADMIN, DECKHAND], ids=["administrator", "ordinary"])
+    def test_nobody_signs_in_and_jellyfin_is_not_asked(
+        self, opening: TestClient, jellyfin: FakeJellyfinClient, who: dict[str, str]
+    ) -> None:
+        jellyfin.error = AssertionError("Jellyfin must not be asked")
+
+        response = sign_in(opening, who)
+
+        assert response.status_code == 403
+        assert SESSION_COOKIE not in response.cookies
+        assert opening.get("/api/jobs").status_code == 401
+
+    @pytest.mark.parametrize(
+        ("who", "role"), [(ADMIN, "admin"), (DECKHAND, "user")], ids=["administrator", "ordinary"]
+    )
+    def test_once_the_owner_is_there_everyone_signs_in_again(
+        self, opening: TestClient, who: dict[str, str], role: str
+    ) -> None:
+        _seat_owner(opening)
+
+        response = sign_in(opening, who)
+
+        assert (response.status_code, response.json()["role"]) == (200, role)
 
 
 class TestMe:
@@ -604,3 +645,25 @@ def _finish_setup(client: TestClient) -> None:
             await session.commit()
 
     asyncio.run(mark())
+
+
+def _point_at_jellyfin(client: TestClient) -> None:
+    """頁 1 前半：位址存下了，擁有者還沒有。"""
+
+    async def point() -> None:
+        async with client.app.state.session_factory() as session:  # type: ignore[attr-defined]  # Starlette 的 app 型別是 ASGIApp
+            await write_settings(session, JellyfinSettings(base_url=JELLYFIN_URL))
+            await session.commit()
+
+    assert client.portal is not None
+    client.portal.call(point)
+
+
+def _seat_owner(client: TestClient) -> None:
+    async def seat() -> None:
+        async with client.app.state.session_factory() as session:  # type: ignore[attr-defined]  # Starlette 的 app 型別是 ASGIApp
+            await own(session)
+            await session.commit()
+
+    assert client.portal is not None
+    client.portal.call(seat)

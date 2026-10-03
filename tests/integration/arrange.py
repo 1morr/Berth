@@ -118,12 +118,16 @@ def chosen(
     *,
     state: ConnectionState = ConnectionState.OK,
     detail: str = "",
+    server_id: str = "",
 ) -> ServiceChoice:
-    """使用者在服務頁選了這個來源，測試結果是 `state`（M4 票 15）。"""
+    """使用者在服務頁選了這個來源，測試結果是 `state`（M4 票 15）。`server_id` 是 Jellyfin 答的
+    那一台（M4 票 28），別的服務是空字串。"""
     return ServiceChoice(
         origin=origin,
         base_url=base_url,
-        test=ServiceTest(state=state, reason=reason, detail=detail, checked_at=NOW),
+        test=ServiceTest(
+            state=state, reason=reason, detail=detail, server_id=server_id, checked_at=NOW
+        ),
     )
 
 

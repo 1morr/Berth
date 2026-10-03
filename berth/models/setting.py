@@ -143,6 +143,9 @@ class ServiceTest(BaseModel):
     reason: ConnectionReason
     #: 實測值：版本號或索引站數量。沒有就是空字串。
     detail: str = ""
+    #: Jellyfin 答的它是哪一台（`/System/Info/Public` 的 `Id`，brief §20.15）。頁 1 的表單送出時
+    #: 帶回來比對，換過目標就不送帳密（M4 票 28）。別的服務、沒問到是空字串。
+    server_id: str = ""
     #: 沒連上時服務回的原文（英文）。UI 收進「技術細節」（M4 票 21）。
     error: str = ""
     #: 這個位址上連續幾次帳密不被接受。qBittorrent 預設連錯 5 次就封 IP（brief §20.2），畫面
@@ -433,6 +436,13 @@ class SetupSettings(SettingsGroup):
         """使用者替這個服務選的來源；還沒選是 `None`。"""
         choice = self.choices.get(kind)
         return choice.origin if choice is not None else None
+
+    def owner_established(self) -> bool:
+        """精靈的門關上了沒：有擁有者，或精靈已經跑完（擁有者出現之前就跑完的舊資料庫）。
+
+        門禁（`api/gate.py`）、登入（`services/auth.sign_in`）與頁序（`setup._current_step`）讀同一條。
+        """
+        return bool(self.owner.jellyfin_user_id) or self.completed
 
 
 #: 所有分組的清單，用來確認每一組都有預設值。

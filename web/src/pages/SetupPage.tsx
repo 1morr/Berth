@@ -518,6 +518,7 @@ export function SetupPage() {
           refusal={ownerRefusalOf(owner.error)}
           claimError={ownerRefusalOf(owner.error) ? null : owner.error}
           onClaim={(input) => owner.mutate(input)}
+          onClaimReset={owner.reset}
           reSignIn={{
             connecting: reSignIn.isPending,
             failed:

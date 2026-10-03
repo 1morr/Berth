@@ -48,6 +48,7 @@ from berth.services.jellyfin_access import (
 )
 from berth.services.settings import write_settings
 from berth.services.watching import read_watching
+from tests.integration.arrange import own
 from tests.integration.factories import FakeClientFactory
 
 pytestmark = pytest.mark.asyncio
@@ -143,6 +144,8 @@ def cache(clock: Clock) -> AccessCache:
 async def signed_in(
     session: AsyncSession, factory: FakeClientFactory, username: str, password: str
 ) -> tuple[AuthenticatedUser, str]:
+    # 擁有者成立之前沒有人登得進來（M4 票 28）。
+    await own(session)
     await write_settings(session, JellyfinSettings(base_url="http://jellyfin:8096", api_key="key"))
     signed = await sign_in(session, factory, username=username, password=password)
     user = await read_session(session, signed.token)

@@ -291,3 +291,66 @@ describe('頁 2 的連線卡跟著最新的失敗（M4 票 25，實測 B9-04～0
     expect(retests).toHaveLength(1)
   })
 })
+
+describe('擁有者成立前目標被換（M4 票 28，實測 E12）', () => {
+  const tested = chosen({
+    origin: 'existing',
+    base_url: 'http://localhost:58097',
+    reason: 'setup_completed',
+  })
+  const swapped = chosen({
+    origin: 'existing',
+    base_url: 'http://localhost:48096',
+    reason: 'setup_completed',
+    server_id: '548d38d28268441f8d4bd0b0b7a6c1e2',
+  })
+
+  async function signIn(user: ReturnType<typeof userEvent.setup>) {
+    await user.type(await screen.findByLabelText('Jellyfin 帳號'), 'skipper')
+    await user.type(screen.getByLabelText('密碼'), 'harbour')
+    await user.click(screen.getByRole('button', { name: '登入' }))
+  }
+
+  it('送出時帶著畫面上測過的位址與 ServerId', async () => {
+    const api = stubApi({
+      [STATUS]: { body: setupStatus({ owner_signs_in: true, services: [tested] }) },
+      [OWNER]: { body: setupStatus({ owner: 'skipper', current_step: 2, services: [tested] }) },
+    })
+    const user = userEvent.setup()
+    renderWithProviders(<SetupPage />)
+
+    await signIn(user)
+
+    await waitFor(() =>
+      expect(api.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(true),
+    )
+    const [, init] = api.mock.calls.find(([, init]) => init?.method === 'POST')!
+    expect(JSON.parse(String(init?.body))).toMatchObject({
+      base_url: 'http://localhost:58097',
+      server_id: tested.server_id,
+      username: 'skipper',
+    })
+  })
+
+  it('409 target_changed：說帳密沒送出、叫人重新測試；測完畫面換成新的那一台，打好的帳密不留', async () => {
+    stubApi({
+      [STATUS]: { body: setupStatus({ owner_signs_in: true, services: [tested] }) },
+      [OWNER]: { status: 409, body: { detail: { reason: 'target_changed', detail: '' } } },
+      [RETEST_JELLYFIN]: { body: setupStatus({ owner_signs_in: true, services: [swapped] }) },
+    })
+    const user = userEvent.setup()
+    renderWithProviders(<SetupPage />)
+
+    await signIn(user)
+
+    const said = await screen.findByText(/^Jellyfin 的位址在你填表時被換過/)
+    expect(said).toHaveTextContent('帳密沒有送出去')
+    const form = said.closest('form')!
+    await user.click(within(form).getByRole('button', { name: '重新測試' }))
+
+    expect(await screen.findAllByText('http://localhost:48096')).not.toHaveLength(0)
+    expect(screen.queryByText(/^Jellyfin 的位址在你填表時被換過/)).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Jellyfin 帳號')).toHaveValue('')
+    expect(screen.getByLabelText('密碼')).toHaveValue('')
+  })
+})
