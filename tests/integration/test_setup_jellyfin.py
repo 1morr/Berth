@@ -39,8 +39,10 @@ from berth.models import (
     SetupStep,
 )
 from berth.services.jellyfin import (
+    DEFAULT_STARTUP,
     BundledLibraryRejectedError,
     JellyfinSetupStatus,
+    JellyfinStartup,
     JellyfinTarget,
     add_berth_paths,
     bootstrap_jellyfin,
@@ -99,9 +101,16 @@ async def seed(
     await session.commit()
 
 
-async def dock(session: AsyncSession, factory: FakeClientFactory) -> JellyfinSetupStatus:
+async def dock(
+    session: AsyncSession,
+    factory: FakeClientFactory,
+    *,
+    startup: JellyfinStartup = DEFAULT_STARTUP,
+) -> JellyfinSetupStatus:
     """套件內的整段序列：第 1 步那一半（建管理員、跑完初始設定、換 key），再加泊位 1 建媒體庫。"""
-    await claim_jellyfin(session, factory, username="skipper", password="harbour", target=SEEN)
+    await claim_jellyfin(
+        session, factory, username="skipper", password="harbour", target=SEEN, startup=startup
+    )
     return await bootstrap_jellyfin(session, factory)
 
 
@@ -158,6 +167,41 @@ async def test_bootstrap_writes_the_library_options_the_plan_asks_for(
         assert created.preferred_metadata_language == "zh-TW"
         assert created.metadata_country_code == "TW"
     assert jellyfin.culture == ("zh-TW", "TW", "zh-TW")
+
+
+@pytest.mark.asyncio
+async def test_libraries_speak_the_language_page_one_gave_jellyfin(
+    session: AsyncSession, tmp_path: Path
+) -> None:
+    """頁 1 說「語言跟著介面」：英文介面寫進 Jellyfin 的是 en-US，媒體庫的 metadata 也是英文
+    （M4 票 29，實測 B10-09）。媒體庫照的是 Jellyfin 自己的設定，不是另一份寫死的。"""
+    await seed(session, library_root=str(tmp_path / "library"))
+    jellyfin = FakeJellyfinClient()
+    english = JellyfinStartup(ui_culture="en-US", metadata_language="en", metadata_country="US")
+
+    await dock(session, FakeClientFactory(jellyfin=jellyfin), startup=english)
+
+    assert [
+        (created.preferred_metadata_language, created.metadata_country_code)
+        for created in jellyfin.created
+    ] == [("en", "US")] * 3
+
+
+@pytest.mark.asyncio
+async def test_a_jellyfin_kept_from_a_reinstall_keeps_its_own_metadata_language(
+    session: AsyncSession, tmp_path: Path
+) -> None:
+    """頁 1 是登入、什麼都沒寫：媒體庫照那一台原本的設定，不是 Berth 的預設。"""
+    await seed(session, library_root=str(tmp_path / "library"))
+    jellyfin = FakeJellyfinClient(startup_wizard_completed=True, admin=("skipper", "harbour"))
+    jellyfin.culture = ("ja", "JP", "ja")
+
+    await dock(session, FakeClientFactory(jellyfin=jellyfin))
+
+    assert {
+        (created.preferred_metadata_language, created.metadata_country_code)
+        for created in jellyfin.created
+    } == {("ja", "JP")}
 
 
 @pytest.mark.asyncio

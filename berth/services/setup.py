@@ -68,6 +68,7 @@ from berth.services.jellyfin import (
     JellyfinTarget,
     claim_jellyfin,
     libraries_built,
+    remembered_startup,
 )
 from berth.services.routes import forget_route_checks, routes_ready
 from berth.services.settings import read_settings, update_settings
@@ -133,6 +134,9 @@ class SetupStatus:
     #: Berth 已經替它建好了）。**選套件內或既有不影響這一條**（plan §9.3「表單跟著那一台的
     #: 狀態走」）。
     owner_signs_in: bool
+    #: 頁 1 上一次送給還沒初始化的那一台的語言與遠端存取（M4 票 29）：初始化中途失敗時，建立表單
+    #: 照它重填。還沒送過、送的時候那一台已經初始化過、或之後換了一台是 `None`。
+    jellyfin_startup: JellyfinStartup | None
     #: 選過的服務，照 `ServiceKind` 的順序。沒選的不在裡面。
     services: tuple[ServiceView, ...]
     window_seconds: int
@@ -445,6 +449,8 @@ def _start_over(setup: SetupSettings, kind: ServiceKind) -> None:
     if kind is ServiceKind.JELLYFIN:
         setup.jellyfin.steps = []
         setup.jellyfin.libraries = []
+        # 重填的是同一台的重試；另一台的建立表單不帶上一台的選擇（M4 票 29）。
+        setup.jellyfin.startup = None
     elif kind is ServiceKind.QBITTORRENT:
         setup.qbittorrent.steps = []
         setup.qbittorrent.web_ui_username = ""
@@ -867,7 +873,11 @@ def _sites_counted(setup: SetupSettings) -> int:
 
 
 def _owner_signs_in(setup: SetupSettings) -> bool:
-    """那一台 Jellyfin 已經有管理員：測試時它說跑過初始精靈了，或 Berth 已經替它建好了。"""
+    """那一台 Jellyfin 跑完了自己的初始精靈：測試時它這麼說，或 Berth 替它走完了 `Complete`。
+
+    **管理員建好了不算**（M4 票 29，實測 E12）：之後某一步失敗時那一台還沒初始化完，重試要照樣
+    寫語言與遠端存取，登入表單不帶它們，後端只能補上預設值。
+    """
     choice = setup.choices.get(ServiceKind.JELLYFIN)
     if (
         choice is not None
@@ -876,8 +886,7 @@ def _owner_signs_in(setup: SetupSettings) -> bool:
     ):
         return True
     return any(
-        row.key == JellyfinStep.ADMIN_USER.value
-        and row.status in (StepStatus.OK, StepStatus.SKIPPED)
+        row.key == JellyfinStep.COMPLETE.value and row.status in (StepStatus.OK, StepStatus.SKIPPED)
         for row in setup.jellyfin.steps
     )
 
@@ -888,6 +897,7 @@ def _status(setup: SetupSettings, *, now: datetime, berthed: bool) -> SetupStatu
         current_step=_current_step(setup, berthed=berthed),
         owner=setup.owner.name,
         owner_signs_in=_owner_signs_in(setup),
+        jellyfin_startup=remembered_startup(setup),
         services=tuple(
             _view(kind, choice, now)
             for kind in ServiceKind

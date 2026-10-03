@@ -13,6 +13,7 @@ import {
 import { failureText } from '../components/failures'
 import { mountSnippet } from '../components/routeChecks'
 import { TechnicalDetails } from '../components/TechnicalDetails'
+import { trimUsername } from './jellyfinUsername'
 
 /** 加不上的原因 → 那一句。查表而不是動態組 key——動態組過不了 `strictKeyChecks`（票 06）。 */
 const PATH_FAILED = {
@@ -115,12 +116,13 @@ export function JellyfinSignInForm({
 
   function submit(event: FormEvent) {
     event.preventDefault()
-    if (!username.trim() || !password) {
+    const name = trimUsername(username)
+    if (!name || !password) {
       setBlank(true)
       return
     }
     setBlank(false)
-    onConnect({ username: username.trim(), password })
+    onConnect({ username: name, password })
   }
 
   return (
@@ -129,7 +131,7 @@ export function JellyfinSignInForm({
         label={t('jellyfin.existing.username')}
         value={username}
         autoComplete="off"
-        error={blank && !username.trim() ? t('owner.error.blank') : undefined}
+        error={blank && !trimUsername(username) ? t('owner.error.blank') : undefined}
         onChange={(event) => setUsername(event.target.value)}
       />
       <PasswordField

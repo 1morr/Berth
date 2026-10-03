@@ -160,6 +160,9 @@ const zhHant = {
     error: {
       blank: '帳號與密碼都要填。',
       mismatch: '兩次輸入的密碼不一樣。',
+      passwordSpaces: 'Jellyfin 不收只有空白的密碼。',
+      username:
+        "Jellyfin 的帳號只能用文字、數字、空格與 - _ ' . @ + 這幾個符號，也不能只是「.」或「..」。",
     },
   },
   service: {
@@ -3230,6 +3233,9 @@ const en: Translations<typeof zhHant> = {
     error: {
       blank: 'Username and password are both required.',
       mismatch: 'The two passwords do not match.',
+      passwordSpaces: 'Jellyfin does not accept a password made only of spaces.',
+      username:
+        "Jellyfin usernames can only use letters, numbers, spaces and - _ ' . @ +, and cannot be just “.” or “..”.",
     },
   },
   service: {

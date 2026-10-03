@@ -1260,6 +1260,12 @@ split-cour 的第一批被播出日比對整批擋在審核，改正一次並套
   媒體庫頁那一份 `GET /api/inventory/{library_id}/watching` 不變。
 
 ### Fixed
+- **頁 1 的剩餘問題：重試保留語言、媒體庫語言跟介面、帳號規則先擋**（M4 票 29，2026-10-01 實測第 16、17、18 條）：
+  未初始化的 Jellyfin 在建好管理員之後某一步失敗，重新整理後頁 1 仍是建立表單、照上一次選的語言與遠端存取重填
+  （`GET /api/setup/status` 多一欄 `jellyfin_startup`，存在 `setup.jellyfin.startup`），只有那一台真的跑完初始精靈才改成
+  登入——原本重試會以 zh-TW、不開遠端存取蓋掉使用者的選擇。套件內媒體庫的 metadata 語言與國家照 Jellyfin 自己的設定
+  （`GET /System/Configuration`）建，英文介面不再建出繁中媒體庫。建立管理員時照 Jellyfin 12 的帳號規則先擋並說出規則
+  （原本被 Jellyfin 400、畫面只說「那一段沒做完」），只有空白的密碼當成沒填；登入頁與頁 1 一樣修剪帳號前後的空白。
 - **擁有者成立之前不能提早登入、Jellyfin 目標不能被悄悄換掉**（M4 票 28，2026-10-01 實測第 14、15 條）：
   擁有者成立之前 `POST /api/auth/login` 一律 403、帳密不交給任何一台（原本頁 1 一選 Jellyfin，那一台上任何帳號都能
   直接拿到 session）。`POST /api/setup/owner` **必帶**畫面上測過的 `base_url` 與 `server_id`（`GET /api/setup/status`

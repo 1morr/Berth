@@ -25,7 +25,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Awaitable, Callable, Sequence
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Protocol
 
@@ -42,6 +42,7 @@ from berth.adapters.jellyfin import (
     JellyfinAuth,
     JellyfinClient,
     JellyfinLibrary,
+    JellyfinMetadataDefaults,
     NewLibrary,
     TypeOption,
     unsupported_message,
@@ -66,6 +67,7 @@ from berth.models import (
     PathSettings,
     SetupLibrary,
     SetupSettings,
+    SetupStartup,
     SetupStep,
 )
 from berth.services.clients import ServiceClientFactory
@@ -80,11 +82,6 @@ from berth.services.steps import (
 
 #: `POST /Auth/Keys?app=` 用的名字。也是重按時辨認「這把是我建的」的依據。
 API_KEY_APP = "Berth"
-
-#: 套件內媒體庫的 metadata 語言與國家（plan §9.4 第 4 步）。Jellyfin 自己的初始設定（第 2 步）
-#: 不用它，走 `JellyfinStartup`。
-METADATA_LANGUAGE = "zh-TW"
-METADATA_COUNTRY = "TW"
 
 
 @dataclass(frozen=True, slots=True)
@@ -365,7 +362,7 @@ def _already_built(
 
 #: 擁有者那一半（精靈頁 1）。還沒跑過初始精靈的那一台要先有管理員、跑完它自己的初始設定，才換
 #: API key——初始設定跑完之後再登入、建 key 是實測過的順序（brief §20.7）。已經有管理員的那一台
-#: 在 `public_info` 就知道了，中間四步都是 `skipped`（`_Runner._fresh`）。**選套件內或既有不影響
+#: 在 `public_info` 就知道了，中間四步都是 `skipped`（`_Runner.fresh`）。**選套件內或既有不影響
 #: 這一條**（M4 票 15）：選既有而那一台還沒初始化，它上面沒有任何人的帳號可以蓋掉。
 OWNER_STEPS: tuple[JellyfinStep, ...] = (
     JellyfinStep.PUBLIC_INFO,
@@ -425,6 +422,9 @@ async def claim_jellyfin(
         startup=startup,
         target=target,
     )
+    if runner.fresh:
+        # 寫給還沒初始化的那一台的選擇記下來：之後某一步失敗，重試的表單照它重填（M4 票 29）。
+        await _remember_startup(session, startup)
     failed = next((row for row in status.steps if row.status is StepStatus.FAILED), None)
     if runner.refusal is not None:
         # 帳密那兩種的理由本身就是完整的一句話；Jellyfin 的原文只給「那一段沒做完」。
@@ -710,6 +710,23 @@ async def _remember(
         await remember_libraries(session, libraries)
 
 
+async def _remember_startup(session: AsyncSession, startup: JellyfinStartup) -> None:
+    stored = SetupStartup(**asdict(startup))
+
+    def record(latest: SetupSettings) -> None:
+        latest.jellyfin.startup = stored
+
+    await update_settings(session, SetupSettings, record)
+
+
+def remembered_startup(setup: SetupSettings) -> JellyfinStartup | None:
+    """頁 1 上一次送給還沒初始化的那一台的選擇（M4 票 29）；沒有就是 `None`。"""
+    stored = setup.jellyfin.startup
+    if stored is None:
+        return None
+    return JellyfinStartup(**stored.model_dump())
+
+
 async def remember_libraries(session: AsyncSession, libraries: Sequence[JellyfinLibrary]) -> None:
     """把 Jellyfin 現在報的媒體庫存成精靈的快照（頁 3 讀它），commit。"""
     snapshot = [
@@ -762,7 +779,8 @@ class _Runner:
         self._credentials = credentials
         # 給了帳密就一定拿它登入，不拿存下來的 key 抄捷徑：要證明的是這個人是管理員。
         self._token = "" if credentials is not None else jellyfin.api_key
-        self._fresh = False
+        #: 第 1 步看到那一台還沒跑完自己的初始精靈（`StartupWizardCompleted=false`）。
+        self.fresh = False
         self.api_key = jellyfin.api_key
         #: `None` 代表這一輪沒讀到媒體庫；不要拿它覆寫存下來的清單。
         self.libraries: tuple[JellyfinLibrary, ...] | None = None
@@ -808,14 +826,14 @@ class _Runner:
                 unsupported_message(info.version),
                 version=info.version,
             )
-        self._fresh = not info.startup_wizard_completed
+        self.fresh = not info.startup_wizard_completed
         self.server_id = info.server_id
         return StepStatus.OK, info.version
 
     async def _configuration(self) -> tuple[StepStatus, str]:
         startup = self._startup
         detail = f"{startup.ui_culture} · {startup.metadata_country}"
-        if not self._fresh:
+        if not self.fresh:
             return StepStatus.SKIPPED, detail
         await self._client.start_configuration(
             ui_culture=startup.ui_culture,
@@ -830,7 +848,7 @@ class _Runner:
                 StepFailure.UNEXPECTED, "no owner yet; finish step 1 of the wizard first"
             )
         username, password = self._credentials
-        if not self._fresh:
+        if not self.fresh:
             return StepStatus.SKIPPED, username
         # GET 不是多餘的讀取：它會建立預設使用者，少了它 POST 回 500（brief §20.7）。
         await self._client.ensure_default_user()
@@ -850,6 +868,10 @@ class _Runner:
         root = self._paths.library_root
         created: list[str] = []
         present: list[str] = []
+        # metadata 語言與國家照 Jellyfin 自己的設定：頁 1 寫進去的那一組，或那一台原本就有的
+        # （重裝保留 config）。寫死一組的話英文介面建出來的是繁中媒體庫（M4 票 29，實測 B10-09）。
+        # 有要建的才讀：全都在的話這一步不多一個請求、也不多一個會失敗的地方。
+        metadata: JellyfinMetadataDefaults | None = None
         for bundled in self._bundled:
             path = bundled_path(bundled.folder, root)
             # 媒體庫目錄由 Berth 建（plan §9.1）；兩邊掛同一個宿主目錄，所以建完 Jellyfin
@@ -858,7 +880,8 @@ class _Runner:
             if _already_built(bundled, root, names=names, locations=locations):
                 present.append(bundled.name)
                 continue
-            await self._client.create_library(await self._new_library(bundled, path))
+            metadata = metadata or await self._client.metadata_defaults()
+            await self._client.create_library(await self._new_library(bundled, path, metadata))
             created.append(bundled.name)
         self.libraries = await self._client.libraries()
         if created:
@@ -866,13 +889,13 @@ class _Runner:
         return StepStatus.SKIPPED, " · ".join(present)
 
     async def _remote_access(self) -> tuple[StepStatus, str]:
-        if not self._fresh:
+        if not self.fresh:
             return StepStatus.SKIPPED, ""
         await self._client.set_remote_access(enabled=self._startup.remote_access)
         return StepStatus.OK, ""
 
     async def _complete(self) -> tuple[StepStatus, str]:
-        if not self._fresh:
+        if not self.fresh:
             return StepStatus.SKIPPED, ""
         await self._client.complete_startup()
         return StepStatus.OK, ""
@@ -933,7 +956,9 @@ class _Runner:
                 return key.access_token
         return None
 
-    async def _new_library(self, bundled: BundledLibrary, path: str) -> NewLibrary:
+    async def _new_library(
+        self, bundled: BundledLibrary, path: str, metadata: JellyfinMetadataDefaults
+    ) -> NewLibrary:
         available = await self._client.available_type_options(bundled.collection_type)
         fetchers = self._jellyfin.metadata_fetchers.get(
             bundled.folder
@@ -953,8 +978,8 @@ class _Runner:
                 )
                 for option in available
             ),
-            preferred_metadata_language=METADATA_LANGUAGE,
-            metadata_country_code=METADATA_COUNTRY,
+            preferred_metadata_language=metadata.language,
+            metadata_country_code=metadata.country,
         )
 
 

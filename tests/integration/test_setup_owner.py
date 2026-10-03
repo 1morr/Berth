@@ -14,6 +14,7 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
+from berth.adapters.http import ServiceUnavailableError
 from berth.adapters.jellyfin import JellyfinAuth
 from berth.adapters.jellyfin.fake import SERVER_ID, FakeJellyfinClient
 from berth.db import create_session_factory
@@ -328,6 +329,104 @@ async def test_remote_access_stays_off_unless_asked_for(session: AsyncSession) -
     assert factory.jellyfin_.remote_access is False
 
 
+# --- 初始化中途失敗之後的重試（M4 票 29，實測 E12-07～10）---
+
+ENGLISH = JellyfinStartup(
+    ui_culture="en-US", metadata_language="en", metadata_country="US", remote_access=True
+)
+
+
+def fails_once(jellyfin: FakeJellyfinClient, name: str) -> None:
+    """那一台的 `name` 這一支第一次回 500，之後照常（反向代理讓它失敗一次，實測 E12）。"""
+    original = getattr(jellyfin, name)
+    calls = 0
+
+    async def flaky(*args: object, **kwargs: object) -> object:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise ServiceUnavailableError(f"{name}: 500")
+        return await original(*args, **kwargs)
+
+    setattr(jellyfin, name, flaky)
+
+
+@pytest.mark.asyncio
+async def test_a_retry_after_a_failure_past_the_admin_still_creates_with_the_first_choice(
+    session: AsyncSession,
+) -> None:
+    """管理員建好了、`/Startup/RemoteAccess` 失敗：那一台的初始精靈還沒跑完，頁 1 仍是建立表單，
+    帶著上一次選的語言與遠端存取——重試不拿預設值蓋掉它們。"""
+    await found(session, origin=ServiceOrigin.EXISTING, reason=ConnectionReason.SETUP_PENDING)
+    factory = bundled()
+    fails_once(factory.jellyfin_, "set_remote_access")
+
+    with pytest.raises(OwnerRejectedError) as refused:
+        await claim_owner(
+            session, factory, target=SEEN, username="skipper", password=PASSWORD, startup=ENGLISH
+        )
+    assert refused.value.reason is OwnerRefusal.JELLYFIN_FAILED
+
+    status = await read_status(session)
+    assert status.owner_signs_in is False
+    assert status.jellyfin_startup == ENGLISH
+
+    # 前端照狀態裡的那一份重填表單（`OwnerStep`）。
+    await claim_owner(
+        session,
+        factory,
+        target=SEEN,
+        username="skipper",
+        password=PASSWORD,
+        startup=status.jellyfin_startup,
+    )
+    assert factory.jellyfin_.culture == ("en-US", "US", "en")
+    assert factory.jellyfin_.remote_access is True
+
+
+@pytest.mark.asyncio
+async def test_switching_to_another_jellyfin_forgets_the_choice_made_for_the_first(
+    session: AsyncSession,
+) -> None:
+    """重填的是**同一台**的重試：擁有者成立前換到另一台，表單不帶上一台的語言與遠端存取。"""
+    await found(session, origin=ServiceOrigin.EXISTING, reason=ConnectionReason.SETUP_PENDING)
+    factory = bundled()
+    fails_once(factory.jellyfin_, "set_remote_access")
+    with pytest.raises(OwnerRejectedError):
+        await claim_owner(
+            session, factory, target=SEEN, username="skipper", password=PASSWORD, startup=ENGLISH
+        )
+
+    status = await choose_service(
+        session,
+        FakeClientFactory(jellyfin=FakeJellyfinClient(startup_wizard_completed=False)),
+        BundledServices(targets=COMPOSE, prowlarr_api_key=""),
+        ServiceKind.JELLYFIN,
+        ServiceOrigin.EXISTING,
+        ServiceConnection(base_url="http://nas:8096"),
+    )
+
+    assert status.jellyfin_startup is None
+
+
+@pytest.mark.asyncio
+async def test_a_failure_after_jellyfin_finished_its_wizard_is_a_sign_in(
+    session: AsyncSession,
+) -> None:
+    """另一個方向：`/Startup/Complete` 已經過了、換 key 那一步失敗——那一台真的有管理員了，
+    重試是登入，語言與遠端存取不再寫。"""
+    await found(session, origin=ServiceOrigin.EXISTING, reason=ConnectionReason.SETUP_PENDING)
+    factory = bundled()
+    fails_once(factory.jellyfin_, "create_api_key")
+
+    with pytest.raises(OwnerRejectedError):
+        await claim_owner(
+            session, factory, target=SEEN, username="skipper", password=PASSWORD, startup=ENGLISH
+        )
+
+    assert (await read_status(session)).owner_signs_in is True
+
+
 # --- 畫面上測過的那一台（M4 票 28，實測 E12）---
 
 
@@ -562,3 +661,5 @@ async def test_a_bundled_jellyfin_kept_from_a_reinstall_is_a_sign_in(
     assert claimed.signed_in.user.role is Role.ADMIN
     assert factory.jellyfin_.culture is None
     assert factory.jellyfin_.remote_access is None
+    # 沒寫進 Jellyfin 的就不記成「上一次選的」。
+    assert (await read_status(session)).jellyfin_startup is None

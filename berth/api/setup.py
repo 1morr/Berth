@@ -113,6 +113,16 @@ class ServiceOut(BaseModel):
     waited_seconds: int
 
 
+class JellyfinStartupOut(BaseModel):
+    """頁 1 上一次送給還沒初始化的那一台的語言與遠端存取（M4 票 29）。欄位名與 `OwnerIn` 相同，
+    建立表單照它重填。"""
+
+    ui_culture: str
+    metadata_language: str
+    metadata_country: str
+    remote_access: bool
+
+
 class SetupStatusOut(BaseModel):
     #: 直接從 `SetupStatus` 這個 dataclass 讀，欄位增減不必兩處同步。
     model_config = ConfigDict(from_attributes=True)
@@ -121,8 +131,10 @@ class SetupStatusOut(BaseModel):
     current_step: int
     #: 擁有者的 Jellyfin 名字；空字串就是還沒有（頁 1）。
     owner: str
-    #: 頁 1 是登入（那一台已經有管理員）而不是建立。
+    #: 頁 1 是登入（那一台跑完了自己的初始精靈）而不是建立。
     owner_signs_in: bool
+    #: 初始化中途失敗時，建立表單照這一份重填（M4 票 29）；沒有就是 `null`。
+    jellyfin_startup: JellyfinStartupOut | None
     #: 選過的服務。沒選的不在裡面。
     services: list[ServiceOut]
     #: 套件內那一台還在啟動時的輪詢上限。

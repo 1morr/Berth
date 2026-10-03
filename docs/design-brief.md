@@ -1354,6 +1354,13 @@ thepiratebay / yts，fixture 在 `tests/fixtures/http/prowlarr/search.*.json` �
 - 設完之後：不帶 `X-Api-Key` 的 API 回 401，**`GET /ping` 仍然匿名 200**（所以健康檢查不會因為使用者加了密碼而變紅）。`password` 讀回來是雜湊。
 - API key 從 `config.xml` 的 `<ApiKey>` 讀得到（首次啟動即產生，32 字元），與 plan §9.2 的做法一致。
 
+**Jellyfin 帳號規則與伺服器的 metadata 語言**（2026-10-03，M4 票 29；原始碼 v12.1 的 [UserManager.cs](https://github.com/jellyfin/jellyfin/blob/v12.1/Jellyfin.Server.Implementations/Users/UserManager.cs)、[StartupController.cs](https://github.com/jellyfin/jellyfin/blob/v12.1/Jellyfin.Api/Controllers/StartupController.cs)、[ConfigurationController.cs](https://github.com/jellyfin/jellyfin/blob/v12.1/Jellyfin.Api/Controllers/ConfigurationController.cs)、[ServerConfiguration.cs](https://github.com/jellyfin/jellyfin/blob/v12.1/MediaBrowser.Model/Configuration/ServerConfiguration.cs)；實測 `scripts/experiments/jellyfin_username_rules.py`）
+
+- **帳號**：`ThrowIfInvalidUsername` 要求不是空白、符合 `ValidUsernameRegex` = `^(?!\s)[\w\ \-'._@+]+(?<!\s)$`、而且不是 `.` 或 `..`；違規丟 `ArgumentException`（`Usernames can contain unicode symbols, numbers (0-9), dashes (-), underscores (_), apostrophes ('), and periods (.)`）→ HTTP 400。.NET 的 `\w` 是 `[\p{L}\p{Mn}\p{Nd}\p{Pc}]`，所以中日文帳號照收；`< > & " / \ : #`、空格以外的空白（tab）都不收，前後不能是空白。master 與 release-12.z 同一條。建立（`CreateUserAsync`）與改名（`RenameUser`）都過它。前端照它先擋（`web/src/setup/jellyfinUsername.ts`）。
+- **`POST /Startup/User` 的順序**：第一個使用者已經有密碼 → 403；密碼 `IsNullOrWhiteSpace` → 400 `Password must not be empty`；然後 `UpdateUserAsync`、**名字不同才 `RenameUser`**（帳號在這裡被拒）、最後才 `ChangePassword`。所以帳號被拒時密碼沒設，第一個使用者仍是「沒有密碼」，改個名字再送就好。
+- **`GET /System/Configuration`** 掛 `[Authorize]`（任何登入的使用者，API key 也行），回 `ServerConfiguration`：`PreferredMetadataLanguage`（預設 `en`）、`MetadataCountryCode`（預設 `US`）、`UICulture`（預設 `en-US`）——`/Startup/Configuration` 寫的就是這三格。套件內媒體庫照前兩格建（plan §9.4 第 4 步），fixture 在 `tests/fixtures/http/jellyfin/system-configuration.json`。
+- **實測**（`lscr.io/linuxserver/jellyfin:version-12.1ubu2604`，一次性容器）：初始精靈期間 `POST /Startup/User` 對 `a<b`、`a>b`、`a&b`、`a"b`、`a/b`、`a`、`a:b`、`a#b`、含 tab、`.`、`..` 都回 **400 `Error processing request.`**（原文不說是帳號的問題，這就是畫面只能說「那一段沒做完」的原因），每一次之後照樣能再試；只有空白的密碼回 400 `Password must not be empty`；`船長 01` 回 204。管理員之後以 `POST /Users/New` 試：`skipper`、`o'brien`、`a.b@c+d-e_f`、`José`、`ナミ`、`..x` 收（200），`a<b`、`.`、` lead`（前導空白）拒（400）。`GET /System/Configuration` 帶 token 200、讀回剛寫的 `zh-TW` / `TW`，匿名 401。
+
 **硬鏈接腳本**（`scripts/experiments/hardlink.sh`，2026-09-07）
 
 - Linux ext4 單一掛載根：PASS（nlink=2、inode 相同）。Windows NTFS bind mount（9p）：PASS（dev=70）。`torrent/` 與 `library/` 分成兩個 volume：`ln: Cross-device link`，退出碼 1。

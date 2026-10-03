@@ -56,6 +56,17 @@ def unsupported_message(version: str) -> str:
 
 
 @dataclass(frozen=True, slots=True)
+class JellyfinMetadataDefaults:
+    """`GET /System/Configuration` 裡伺服器層級的 metadata 語言與國家（`ServerConfiguration`）。
+    初始精靈的 `/Startup/Configuration` 寫的就是這兩格；新媒體庫照它（M4 票 29）。"""
+
+    #: `PreferredMetadataLanguage`（`zh-TW`、`en`）。Jellyfin 自己的預設是 `en`。
+    language: str
+    #: `MetadataCountryCode`（ISO 3166 兩碼）。預設 `US`。
+    country: str
+
+
+@dataclass(frozen=True, slots=True)
 class JellyfinAuth:
     """`POST /Users/AuthenticateByName` 的回應（brief §20.7）。"""
 
@@ -348,6 +359,11 @@ class JellyfinClient(Protocol):
 
     async def complete_startup(self) -> None: ...
 
+    async def metadata_defaults(self) -> JellyfinMetadataDefaults:
+        """`GET /System/Configuration` 的 metadata 語言與國家。要登入（任何使用者，v12.1
+        `ConfigurationController`），Berth 用 API key。"""
+        ...
+
     # --- 憑證 ---
 
     async def authenticate(self, username: str, password: str) -> JellyfinAuth: ...
@@ -606,6 +622,7 @@ __all__ = [
     "JellyfinImage",
     "JellyfinItem",
     "JellyfinLibrary",
+    "JellyfinMetadataDefaults",
     "JellyfinPage",
     "JellyfinPolicy",
     "JellyfinPublicInfo",

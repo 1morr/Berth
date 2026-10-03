@@ -57,6 +57,21 @@ describe('登入頁', () => {
     expect(bodyOf(login!)).toEqual({ username: 'skipper', password: 'harbour' })
   })
 
+  // 頁 1 修剪帳號前後的空白，登入頁也修剪：同一個帳號不能在一處登得進、另一處登不進（M4 票 29，
+  // 實測 B2-15）。Jellyfin 的帳號前後本來就不能是空白。
+  it('帳號前後的空白與頁 1 一樣修剪掉再送，密碼原樣', async () => {
+    const { backend, routes } = signedOut()
+    const stub = stubApi({ ...routes, [LOGIN]: backend.signIn(ADMIN), ...LIBRARIES })
+    renderApp('/login')
+
+    await fillIn('  skipper ', ' harbour ')
+
+    await waitFor(() => {
+      const login = stub.mock.calls.find((call) => call[1]?.method === 'POST')
+      expect(bodyOf(login!)).toEqual({ username: 'skipper', password: ' harbour ' })
+    })
+  })
+
   // 精靈剛跑完、或接上的是別人的 Jellyfin 而 Berth 還沒入庫過東西：媒體庫是一面空牆或別人的片，
   // 第一件事是找片（brief §19 2026-09-26）。
   it('這個人看得到的媒體庫裡都還沒有 Berth 入庫的東西時落到探索', async () => {

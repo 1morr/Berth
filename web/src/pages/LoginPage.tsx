@@ -8,6 +8,7 @@ import { ApiError } from '../api/client'
 import { destination } from '../auth/destination'
 import { CopyLine, Field, Notice, PasswordField, PrimaryButton } from '../components/controls'
 import { LanguageToggle } from '../components/LanguageToggle'
+import { trimUsername } from '../setup/jellyfinUsername'
 
 /**
  * 登入頁。方向見 `.scratch/m0/login-shape.md`：單一登船口窗格，不畫泊位板——
@@ -34,7 +35,8 @@ export function LoginPage() {
 
   function submit(event: FormEvent) {
     event.preventDefault()
-    login.mutate(credentials)
+    // 帳號前後的空白不算，與頁 1 同一條（M4 票 29）；密碼原樣交給 Jellyfin。
+    login.mutate({ ...credentials, username: trimUsername(credentials.username ?? '') })
   }
 
   const failure = login.error ? explain(login.error) : null

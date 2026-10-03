@@ -19,6 +19,7 @@ from berth.adapters.jellyfin import (
     JellyfinImage,
     JellyfinItem,
     JellyfinLibrary,
+    JellyfinMetadataDefaults,
     JellyfinPage,
     JellyfinPolicy,
     JellyfinPublicInfo,
@@ -120,6 +121,17 @@ class HttpJellyfinClient:
 
     async def complete_startup(self) -> None:
         await self._session.request("POST", "/Startup/Complete")
+
+    async def metadata_defaults(self) -> JellyfinMetadataDefaults:
+        payload = await self._get("/System/Configuration")
+        if not isinstance(payload, dict) or "PreferredMetadataLanguage" not in payload:
+            raise ProtocolMismatchError(
+                "/System/Configuration: not a Jellyfin server configuration"
+            )
+        return JellyfinMetadataDefaults(
+            language=str(payload["PreferredMetadataLanguage"] or ""),
+            country=str(payload.get("MetadataCountryCode") or ""),
+        )
 
     # --- 憑證 ---
 

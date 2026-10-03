@@ -599,6 +599,41 @@ describe('頁 1：替還沒初始化的既有 Jellyfin 建立擁有者（M4 票 
     )
   })
 
+  it('初始化中途失敗之後回來：仍是建立表單，照上一次選的重填（M4 票 29，實測 E12）', async () => {
+    const fetchStub = stubApi({
+      [STATUS]: {
+        body: {
+          ...PENDING_EXISTING,
+          jellyfin_startup: {
+            ui_culture: 'en-US',
+            metadata_language: 'en',
+            metadata_country: 'US',
+            remote_access: true,
+          },
+        },
+      },
+      [OWNER]: { body: setupStatus({ current_step: 2, owner: 'skipper' }) },
+    })
+    const user = userEvent.setup()
+
+    renderWithProviders(<SetupPage />)
+    await fill(user)
+    expect(screen.getByRole('combobox', { name: '語言與地區' })).toHaveValue('en-US')
+    expect(screen.getByRole('checkbox', { name: '開啟遠端存取' })).toBeChecked()
+    await user.click(screen.getByRole('button', { name: '建立管理員並登入' }))
+
+    await waitFor(() =>
+      expect(bodiesOf(fetchStub, '/api/setup/owner')).toEqual([
+        expect.objectContaining({
+          ui_culture: 'en-US',
+          metadata_language: 'en',
+          metadata_country: 'US',
+          remote_access: true,
+        }),
+      ]),
+    )
+  })
+
   it('已經有管理員的既有 Jellyfin 是登入：不問，也不送', async () => {
     const fetchStub = stubApi({
       [STATUS]: {
@@ -638,6 +673,85 @@ describe('頁 1：替還沒初始化的既有 Jellyfin 建立擁有者（M4 票 
     expect(await screen.findByLabelText('Jellyfin 帳號')).toBeVisible()
     expect(screen.queryByLabelText('語言與地區')).toBeNull()
     expect(screen.queryByLabelText('開啟遠端存取')).toBeNull()
+  })
+})
+
+describe('頁 1：Jellyfin 的帳號規則（M4 票 29，實測 B2-05～07）', () => {
+  const FOUND = setupStatus({ services: [chosen()] })
+
+  async function create(user: ReturnType<typeof userEvent.setup>, username: string) {
+    await user.type(await screen.findByLabelText('Jellyfin 帳號'), username)
+    await user.type(screen.getByLabelText('密碼'), 'harbour')
+    await user.type(screen.getByLabelText('再輸入一次密碼'), 'harbour')
+    await user.click(screen.getByRole('button', { name: '建立管理員並登入' }))
+  }
+
+  it.each(['cap<tain', '.'])('Jellyfin 不收的帳號 %j 在送出前擋下，說出規則', async (name) => {
+    const fetchStub = stubApi({ [STATUS]: { body: FOUND } })
+    const user = userEvent.setup()
+
+    renderWithProviders(<SetupPage />)
+    await create(user, name)
+
+    expect(await screen.findByLabelText('Jellyfin 帳號')).toHaveAccessibleDescription(
+      /只能用文字、數字、空格/,
+    )
+    expect(requestsOf(fetchStub)).not.toContain(OWNER)
+  })
+
+  it('前後的空白修剪掉再送；中文帳號照收', async () => {
+    const fetchStub = stubApi({
+      [STATUS]: { body: FOUND },
+      [OWNER]: { body: setupStatus({ current_step: 2, owner: '船長 01' }) },
+    })
+    const user = userEvent.setup()
+
+    renderWithProviders(<SetupPage />)
+    await create(user, '  船長 01 ')
+
+    await waitFor(() =>
+      expect(bodiesOf(fetchStub, '/api/setup/owner')).toEqual([
+        expect.objectContaining({ username: '船長 01' }),
+      ]),
+    )
+  })
+
+  it('只有空白的密碼 Jellyfin 不收（Password must not be empty），送出前就說', async () => {
+    const fetchStub = stubApi({ [STATUS]: { body: FOUND } })
+    const user = userEvent.setup()
+
+    renderWithProviders(<SetupPage />)
+    await user.type(await screen.findByLabelText('Jellyfin 帳號'), 'skipper')
+    await user.type(screen.getByLabelText('密碼'), '   ')
+    await user.type(screen.getByLabelText('再輸入一次密碼'), '   ')
+    await user.click(screen.getByRole('button', { name: '建立管理員並登入' }))
+
+    expect(await screen.findByText('Jellyfin 不收只有空白的密碼。')).toBeVisible()
+    expect(requestsOf(fetchStub)).not.toContain(OWNER)
+  })
+
+  it('登入表單不套建立的規則：那一台上的帳號本來就合法，Jellyfin 會驗', async () => {
+    const fetchStub = stubApi({
+      [STATUS]: {
+        body: setupStatus({
+          services: [chosen({ reason: 'setup_completed' })],
+          owner_signs_in: true,
+        }),
+      },
+      [OWNER]: { status: 401, body: { reason: 'invalid_credentials', detail: '' } },
+    })
+    const user = userEvent.setup()
+
+    renderWithProviders(<SetupPage />)
+    await user.type(await screen.findByLabelText('Jellyfin 帳號'), ' cap<tain ')
+    await user.type(screen.getByLabelText('密碼'), 'harbour')
+    await user.click(screen.getByRole('button', { name: '登入' }))
+
+    await waitFor(() =>
+      expect(bodiesOf(fetchStub, '/api/setup/owner')).toEqual([
+        expect.objectContaining({ username: 'cap<tain' }),
+      ]),
+    )
   })
 })
 

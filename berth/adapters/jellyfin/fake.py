@@ -56,6 +56,7 @@ from berth.adapters.jellyfin import (
     JellyfinImage,
     JellyfinItem,
     JellyfinLibrary,
+    JellyfinMetadataDefaults,
     JellyfinPage,
     JellyfinPolicy,
     JellyfinPublicInfo,
@@ -265,6 +266,14 @@ class FakeJellyfinClient:
     async def complete_startup(self) -> None:
         self._checkpoint()
         self.startup_wizard_completed = True
+
+    async def metadata_defaults(self) -> JellyfinMetadataDefaults:
+        self._checkpoint(always=True)
+        if self.culture is None:
+            # 沒人寫過就是 Jellyfin 自己的預設（v12.1 `ServerConfiguration`）。
+            return JellyfinMetadataDefaults(language="en", country="US")
+        _, country, language = self.culture
+        return JellyfinMetadataDefaults(language=language, country=country)
 
     # --- 憑證 ---
 

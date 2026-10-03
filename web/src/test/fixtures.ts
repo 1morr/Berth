@@ -34,6 +34,7 @@ export function setupStatus(overrides: Partial<SetupStatus> = {}): SetupStatus {
     current_step: 1,
     owner: '',
     owner_signs_in: false,
+    jellyfin_startup: null,
     services: [],
     window_seconds: 120,
     bundled_targets: {

@@ -1175,6 +1175,36 @@ async def test_jellyfin_validate_path_answers_no_instead_of_failing() -> None:
 
 @respx.mock
 @pytest.mark.asyncio
+async def test_jellyfin_metadata_defaults_are_what_the_startup_wizard_wrote() -> None:
+    """新媒體庫的 metadata 語言照伺服器的設定（M4 票 29）。錄的那一台跑過
+    `/Startup/Configuration`（zh-TW / TW），讀回來就是那一組。"""
+    route = respx.get(f"{JELLYFIN_URL}/System/Configuration").respond(
+        200, text=read_fixture("http/jellyfin/system-configuration.json")
+    )
+
+    client = jellyfin_client("key")
+    try:
+        defaults = await client.metadata_defaults()
+    finally:
+        await client.aclose()
+
+    assert (defaults.language, defaults.country) == ("zh-TW", "TW")
+    assert "Token=" in route.calls.last.request.headers["Authorization"]
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_jellyfin_configuration_from_something_else_is_a_mismatch() -> None:
+    respx.get(f"{JELLYFIN_URL}/System/Configuration").respond(200, json={"hello": "world"})
+
+    client = jellyfin_client("key")
+    with pytest.raises(ProtocolMismatchError):
+        await client.metadata_defaults()
+    await client.aclose()
+
+
+@respx.mock
+@pytest.mark.asyncio
 async def test_jellyfin_api_keys_are_read_back_after_creating_one() -> None:
     """`POST /Auth/Keys` 回 204 而且不回傳 key，只能再列一次（brief §20.7）。"""
     created = respx.post(f"{JELLYFIN_URL}/Auth/Keys").respond(204)

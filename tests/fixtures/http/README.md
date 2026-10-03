@@ -263,3 +263,10 @@ Mikan 與 acg.rip 從開發機匿名 curl；Nyaa 從開發機連不上，是在 
 | 檔案 | 來源 |
 | --- | --- |
 | `prowlarr/system-status.json` | berth-lab `home-prowlarr`（`lscr.io/linuxserver/prowlarr:latest`，2.6.5.5623）帶 API key 打 `GET /api/v1/system/status`，原樣。不帶 key 是 401 |
+
+2026-10-03（M4 票 29），`scripts/experiments/jellyfin_username_rules.py` 對一次性的
+`lscr.io/linuxserver/jellyfin:version-12.1ubu2604` 錄的：
+
+| 檔案 | 來源 |
+| --- | --- |
+| `jellyfin/system-configuration.json` | `GET /System/Configuration`（管理員 token），那一台跑過 `/Startup/Configuration` 寫 `zh-TW` / `TW` / `zh-TW` 之後。新媒體庫的 metadata 語言與國家照它的 `PreferredMetadataLanguage`、`MetadataCountryCode` |

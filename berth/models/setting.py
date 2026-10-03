@@ -209,6 +209,21 @@ class SetupLibrary(BaseModel):
     metadata_fetchers: list[str] = []
 
 
+class SetupStartup(BaseModel):
+    """頁 1 替還沒初始化的 Jellyfin 選的語言與遠端存取（`jellyfin.JellyfinStartup`，M4 票 29）。
+
+    記下來是為了**重試**：管理員建好之後某一步失敗，那一台的初始精靈還沒跑完，重新整理後的表單
+    照這一份重填，不拿預設值蓋掉使用者原本選的（實測 E12）。
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    ui_culture: str
+    metadata_language: str
+    metadata_country: str
+    remote_access: bool
+
+
 class BundledLibrary(BaseModel):
     """套件內 Jellyfin 要建的一個媒體庫（plan §9.4 第 4 步、M3 票 06f）。
 
@@ -260,6 +275,8 @@ class SetupJellyfin(BaseModel):
     libraries: list[SetupLibrary] = []
     #: 上一次「加入 Berth 路徑」逐個媒體庫的結果（M4 票 19）。每按一次整份換掉。
     berth_paths: list[BerthPathResult] = []
+    #: 頁 1 送給還沒初始化的那一台的選擇（M4 票 29）。那一台已經初始化過就沒有；換一台時清掉。
+    startup: SetupStartup | None = None
     #: 套件內路徑按「開始靠泊」之前使用者列的媒體庫（票 06f）。按之前就存在這裡，關掉瀏覽器
     #: 回來還在；`bootstrap_jellyfin` 讀它。既有路徑用不到它。
     bundled: list[BundledLibrary] = Field(

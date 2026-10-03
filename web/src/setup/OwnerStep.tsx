@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 
 import type {
   JellyfinConnectInput,
+  JellyfinStartup,
   OwnerInput,
   OwnerRefusal,
   SetupService,
@@ -23,6 +24,7 @@ import { RequestFailed } from '../components/RequestFailed'
 import { TechnicalDetails } from '../components/TechnicalDetails'
 import { JellyfinSignInForm } from './JellyfinExisting'
 import { JELLYFIN_LOCALES, localeForUi, localeLabel } from './jellyfinStartup'
+import { trimUsername, usernameProblem, type UsernameProblem } from './jellyfinUsername'
 import { ServiceChoice, type ChoiceControls } from './ServiceChoice'
 import type { ChoiceDraft } from './choiceDraft'
 import { connected } from './signals'
@@ -113,6 +115,7 @@ export function OwnerStep({
           key={`${mode} ${jellyfin.base_url} ${jellyfin.server_id}`}
           signsIn={mode === 'signIn'}
           jellyfin={jellyfin}
+          remembered={status.jellyfin_startup ?? null}
           claiming={claiming}
           refusal={refusal}
           claimError={claimError}
@@ -143,6 +146,7 @@ function modeOf(status: SetupStatus, ready: boolean): OwnerMode {
 function OwnerForm({
   signsIn,
   jellyfin,
+  remembered,
   claiming,
   refusal,
   claimError,
@@ -159,6 +163,11 @@ function OwnerForm({
    * 套件內的是 Berth 的，不問——帶 UI 語言、不開遠端存取。登入的那一台已經設過了，不送。
    */
   jellyfin: SetupService
+  /**
+   * 上一次送給這一台的語言與遠端存取（`SetupStatus.jellyfin_startup`，M4 票 29）：初始化中途失敗、
+   * 重新整理之後照它重填，不退回預設——重試會再寫一次 Jellyfin 的初始設定（實測 E12）。
+   */
+  remembered: JellyfinStartup | null
   claiming: boolean
   refusal: OwnerRefusal | null
   claimError: unknown
@@ -172,24 +181,36 @@ function OwnerForm({
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
   const [checked, setChecked] = useState(false)
-  const [culture, setCulture] = useState(() => localeForUi(i18n.language).ui_culture)
-  const [remoteAccess, setRemoteAccess] = useState(false)
+  const [culture, setCulture] = useState(() =>
+    remembered && JELLYFIN_LOCALES.some((row) => row.ui_culture === remembered.ui_culture)
+      ? remembered.ui_culture
+      : localeForUi(i18n.language).ui_culture,
+  )
+  const [remoteAccess, setRemoteAccess] = useState(remembered?.remote_access ?? false)
   const asksStartup = !signsIn && jellyfin.origin === 'existing'
   const languageId = useId()
 
-  const blank = checked && (!username.trim() || !password)
+  // 建立時照 Jellyfin 的帳號規則先擋（M4 票 29）；登入的那一組本來就在它上面，由它驗。
+  // 只有空白的密碼 `POST /Startup/User` 也回 400（brief §20.7），所以建立時當成沒填。
+  const nameProblem: UsernameProblem | null =
+    signsIn && trimUsername(username) ? null : signsIn ? 'blank' : usernameProblem(username)
+  const passwordProblem = !password
+    ? 'owner.error.blank'
+    : !signsIn && !password.trim()
+      ? 'owner.error.passwordSpaces'
+      : null
   // 密碼打兩次只在建立時（Jellyfin 自己的啟動精靈也是）：登入打錯了 Jellyfin 會拒絕，
   // 建立時打錯了沒有人會告訴他。
-  const mismatch = checked && !signsIn && password !== confirm
+  const mismatch = !signsIn && password !== confirm
 
   function submit(event: FormEvent) {
     event.preventDefault()
     setChecked(true)
-    if (!username.trim() || !password || (!signsIn && password !== confirm)) return
+    if (nameProblem || passwordProblem || mismatch) return
     const credentials = {
       base_url: jellyfin.base_url,
       server_id: jellyfin.server_id,
-      username: username.trim(),
+      username: trimUsername(username),
       password,
     }
     if (signsIn) {
@@ -209,14 +230,14 @@ function OwnerForm({
         value={username}
         autoComplete="username"
         onChange={(event) => setUsername(event.target.value)}
-        error={blank && !username.trim() ? t('owner.error.blank') : undefined}
+        error={checked && nameProblem ? t(USERNAME_ERROR[nameProblem]) : undefined}
       />
       <PasswordField
         label={t('owner.field.password')}
         value={password}
         autoComplete={signsIn ? 'current-password' : 'new-password'}
         onChange={(event) => setPassword(event.target.value)}
-        error={blank && !password ? t('owner.error.blank') : undefined}
+        error={checked && passwordProblem ? t(passwordProblem) : undefined}
       />
       {!signsIn && (
         <PasswordField
@@ -224,7 +245,7 @@ function OwnerForm({
           value={confirm}
           autoComplete="new-password"
           onChange={(event) => setConfirm(event.target.value)}
-          error={mismatch ? t('owner.error.mismatch') : undefined}
+          error={checked && mismatch ? t('owner.error.mismatch') : undefined}
         />
       )}
       {asksStartup && (
@@ -289,6 +310,11 @@ function OwnerForm({
     </form>
   )
 }
+
+const USERNAME_ERROR = {
+  blank: 'owner.error.blank',
+  characters: 'owner.error.username',
+} as const satisfies Record<UsernameProblem, string>
 
 /** 剖面：將會做什麼。選之前兩種都說；連上之後照那一台的狀態說。 */
 function OwnerCutaway({ status, mode }: { status: SetupStatus; mode: OwnerMode }) {

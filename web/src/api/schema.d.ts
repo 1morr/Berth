@@ -3328,6 +3328,21 @@ export interface components {
             berth_paths: components["schemas"]["BerthPathOut"][];
         };
         /**
+         * JellyfinStartupOut
+         * @description 頁 1 上一次送給還沒初始化的那一台的語言與遠端存取（M4 票 29）。欄位名與 `OwnerIn` 相同，
+         *     建立表單照它重填。
+         */
+        JellyfinStartupOut: {
+            /** Ui Culture */
+            ui_culture: string;
+            /** Metadata Language */
+            metadata_language: string;
+            /** Metadata Country */
+            metadata_country: string;
+            /** Remote Access */
+            remote_access: boolean;
+        };
+        /**
          * JellyfinWebOut
          * @description 深連結開在哪一台主機上（`services/deeplink.py`、票 13）。媒體庫的牆與設定頁共用。
          */
@@ -3931,8 +3946,8 @@ export interface components {
          *     其餘四欄只用在還沒初始化的那一台（`jellyfin.JellyfinStartup`，M4 票 18）：既有的在畫面上問，
          *     套件內的由前端帶 UI 語言、不開遠端存取。
          *
-         *     `base_url` 與 `server_id` **必填**：畫面上測過的那一台（`ServiceOut` 原樣帶回）。與 Berth 現在要連的
-         *     不同就 409 `target_changed`，帳密不送（M4 票 28）。
+         *     `base_url` 與 `server_id` **必填**：畫面上測過的那一台（`ServiceOut` 原樣帶回）。與 Berth
+         *     現在要連的不同就 409 `target_changed`，帳密不送（M4 票 28）。
          */
         OwnerIn: {
             /** Base Url */
@@ -4896,6 +4911,7 @@ export interface components {
             owner: string;
             /** Owner Signs In */
             owner_signs_in: boolean;
+            jellyfin_startup: components["schemas"]["JellyfinStartupOut"] | null;
             /** Services */
             services: components["schemas"]["ServiceOut"][];
             /** Window Seconds */

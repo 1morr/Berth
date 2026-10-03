@@ -20,6 +20,8 @@ export type SetupStatus = Schemas['SetupStatusOut']
  * 送出前目標被別人換過，後端回 409 `target_changed`、帳密不送。帳密只交給 Jellyfin，Berth 不存。
  */
 export type OwnerInput = Schemas['OwnerIn']
+/** 頁 1 上一次送給還沒初始化的那一台的語言與遠端存取（M4 票 29）。 */
+export type JellyfinStartup = Schemas['JellyfinStartupOut']
 
 export type OwnerRefusal = Refusal<Schemas['OwnerRefusal']>
 

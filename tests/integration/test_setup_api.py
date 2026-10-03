@@ -98,6 +98,7 @@ class TestStatus:
             "current_step": 1,
             "owner": "",
             "owner_signs_in": False,
+            "jellyfin_startup": None,
             "services": [],
             "window_seconds": 120,
             "bundled_targets": {
