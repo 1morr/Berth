@@ -8,7 +8,13 @@ from fastapi import APIRouter, HTTPException, Response, status
 from pydantic import BaseModel, ConfigDict, Field
 
 from berth.api.auth import issue_cookie
-from berth.api.deps import BundledServicesDep, ClientFactoryDep, ConfigDep, SessionDep
+from berth.api.deps import (
+    BundledServicesDep,
+    ClientFactoryDep,
+    ConfigDep,
+    HostResolverDep,
+    SessionDep,
+)
 from berth.api.errors import refusal_responses
 from berth.api.routes import route_refusal, route_responses
 from berth.api.schemas import InterfaceLoginIn, QbittorrentOut, RouteOut, StepOut
@@ -75,6 +81,7 @@ from berth.services.setup import (
     claim_owner,
     complete_setup,
     read_status,
+    resolve_bundled,
     retest_service,
 )
 from berth.services.tmdb import read_tmdb_status, verify_tmdb
@@ -228,6 +235,20 @@ class RetestIn(BaseModel):
 @router.get("/status")
 async def get_status(session: SessionDep, config: ConfigDep) -> SetupStatusOut:
     return _out(await read_status(session), config)
+
+
+class ComposeOut(BaseModel):
+    #: 套件內三個主機名各自解不解得到。`false` 是這套 compose 沒有起那個服務（或它停著）。
+    resolvable: dict[ServiceKind, bool]
+
+
+@router.get("/compose")
+async def get_compose(bundled: BundledServicesDep, resolver: HostResolverDep) -> ComposeOut:
+    """服務頁進頁時問的：套件內那幾台在不在這套 compose 的網路上（M4 票 30）。
+
+    只做主機名解析，不對服務發請求（brief §19）。擁有者成立之前就問得到：頁 1 的卡片要用。
+    """
+    return ComposeOut(resolvable=await resolve_bundled(bundled, resolver))
 
 
 @router.post("/owner", responses=refusal_responses(OwnerRefusalOut, _OWNER_STATUS))

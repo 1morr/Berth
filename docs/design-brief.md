@@ -1523,6 +1523,7 @@ fixture 在 `tests/fixtures/http/{mikan,nyaa,acgrip}/`（來源網址與去掉 t
   - 反方向（`http://` 打到講 https 的 port）只做了本機的 Python `ssl` 伺服器：它重設連線（`ReadError` / `ConnectionResetError`），與別的斷線分不開，Berth 不認它。
   - **位址沒寫協定**（`nas:8080`、`192.168.1.5:8080`、`localhost:8096`、`qbittorrent`）：httpx 連都不連就丟 `UnsupportedProtocol`——`nas:8080` 被讀成協定 `nas`。
 - **停掉的 compose 容器，主機名解不到**（同一天實測，qa-bundled：`docker stop` 套件內 qBittorrent 之後，Berth 的連線測試是 `socket.gaierror`，與那個服務不在 compose 裡同一個樣子）：Docker 的內建 DNS 只解析在跑的容器。所以套件內「主機名解不到」的補法要同時說容器停了與不在 compose 裡。
+- **解不到要多久**（M4 票 30，2026-10-03 實測，qa-bundled 只起 `berth`、`COMPOSE_PROFILES=`、Docker Desktop 29.6.2，從 `berth` 容器裡 `socket.getaddrinfo`）：`jellyfin`、`qbittorrent`、`prowlarr` 都是 `gaierror -5`（`EAI_NODATA`），各約 1.27 秒；三個並行問的 `GET /setup/compose` 約 2.6 秒。三個都起來之後同一支 8 毫秒內回、三個都解得到。宿主上的行為不同、不能拿來推：Windows 開發機的 `getaddrinfo("jellyfin")` 要 7 秒才 gaierror，代理工具的 fake-IP DNS 連 `berth-not-deployed.invalid` 都答一個 198.18.x。`adapters.dns` 因此以 10 秒為上限、逾時當作解得到（說不出結論就不說「沒有起」）。
 
 
 ### 20.15 「同一台 Jellyfin」怎麼認：ServerId（2026-09-30 查證＋實測，M4 票 18）

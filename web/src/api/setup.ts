@@ -46,6 +46,17 @@ export const setupStatusQueryOptions = queryOptions({
 })
 
 /**
+ * 套件內三個主機名解不解得到（M4 票 30）：`false` 是這套 compose 沒有起那個服務。服務頁進頁問一次；
+ * 後端只做 DNS，不對服務發請求。
+ */
+export type ComposeHosts = Schemas['ComposeOut']['resolvable']
+
+export const composeQueryOptions = queryOptions({
+  queryKey: ['setup', 'compose'],
+  queryFn: async () => (await apiGet<Schemas['ComposeOut']>('/setup/compose')).resolvable,
+})
+
+/**
  * 頁 1：成為擁有者。成功時後端發 session cookie（與 `/auth/login` 同一種），之後精靈要登入。
  * 帳密不對是 401——那是這一支的答案，不是 session 過期（`router.ts` 照樣會重跑一次守衛，無害）。
  */

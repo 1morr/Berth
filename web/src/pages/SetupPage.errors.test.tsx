@@ -5,7 +5,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import '../i18n'
 import type { ChoiceRefusal } from '../api/setup'
 import { stubApi } from '../test/fetch'
-import { renderWithProviders } from '../test/render'
+import { boardCells, findBoardCells } from '../test/board'
+import { renderInRoute } from '../test/render'
 import { ALL_BUNDLED, chosen, qbittorrentSetup, setupStatus } from '../test/fixtures'
 import { useChoiceDraft } from '../setup/choiceDraft'
 import { ServiceChoice } from '../setup/ServiceChoice'
@@ -63,7 +64,7 @@ describe('舊結果不留在畫面上', () => {
       [CHOOSE_JELLYFIN]: { body: elsewhere },
     })
     const user = userEvent.setup()
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
 
     await user.type(await screen.findByLabelText('Jellyfin 帳號'), 'skipper')
     await user.type(screen.getByLabelText('密碼'), 'harbour')
@@ -92,7 +93,7 @@ describe('舊結果不留在畫面上', () => {
       [RETEST_JELLYFIN]: () => new Promise((resolve) => (answer = resolve)),
     })
     const user = userEvent.setup()
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
 
     expect(await screen.findByText(/^容器還沒起來/)).toBeVisible()
     await user.click(screen.getByRole('button', { name: '重新測試' }))
@@ -117,8 +118,8 @@ describe('舊結果不留在畫面上', () => {
       },
     })
     const user = userEvent.setup()
-    renderWithProviders(<SetupPage />)
-    const board = await screen.findByRole('region', { name: '泊位板' })
+    renderInRoute(<SetupPage />)
+    const board = await findBoardCells()
     const slot = () => within(board).getByText('BTH 2').closest('li')!
     await waitFor(() => expect(slot()).toHaveTextContent('套件內'))
 
@@ -169,7 +170,7 @@ describe('舊結果不留在畫面上', () => {
 describe('既有與套件內各說各的', () => {
   it('既有 qBittorrent 帳密不對：標題與說明是既有那一套，補法不給 compose 指令', async () => {
     stubApi({ [STATUS]: { body: atExistingQbittorrent({ reason: 'auth_required' }) } })
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
 
     expect(
       await screen.findByRole('heading', { name: '確認你的 qBittorrent', level: 2 }),
@@ -187,12 +188,12 @@ describe('既有與套件內各說各的', () => {
         body: atExistingQbittorrent({ reason: 'version_unsupported', detail: 'v4.3.9' }),
       },
     })
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
 
     expect(await screen.findByText(/至少要 qBittorrent 4\.4，這一台是 v4\.3\.9/)).toBeVisible()
     expect(screen.queryByText('連上了')).not.toBeInTheDocument()
     expect(screen.queryByText(/docker compose pull/)).not.toBeInTheDocument()
-    const board = screen.getByRole('region', { name: '泊位板' })
+    const board = boardCells()
     expect(within(board).getByText('BTH 2').closest('li')).toHaveTextContent('失敗')
   })
 })
@@ -202,7 +203,7 @@ describe('qBittorrent 的連錯與封鎖', () => {
     stubApi({
       [STATUS]: { body: atExistingQbittorrent({ reason: 'auth_required', auth_failures: 3 }) },
     })
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
 
     expect(await screen.findByText(/數到連續 3 次登入失敗.*最多再錯 2 次就會被封/)).toBeVisible()
   })
@@ -211,7 +212,7 @@ describe('qBittorrent 的連錯與封鎖', () => {
     stubApi({
       [STATUS]: { body: atExistingQbittorrent({ reason: 'auth_required', auth_failures: 5 }) },
     })
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
 
     expect(await screen.findByText(/數到連續 5 次登入失敗.*已經封鎖/)).toBeVisible()
     expect(screen.queryByText(/再錯 \d 次/)).not.toBeInTheDocument()
@@ -221,7 +222,7 @@ describe('qBittorrent 的連錯與封鎖', () => {
     stubApi({
       [STATUS]: { body: atExistingQbittorrent({ reason: 'auth_required', auth_failures: 2 }) },
     })
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
 
     expect(await screen.findByText(/^帳號或密碼不對/)).toBeVisible()
     expect(screen.queryByText(/再錯 \d 次就會被封/)).not.toBeInTheDocument()
@@ -231,7 +232,7 @@ describe('qBittorrent 的連錯與封鎖', () => {
     stubApi({
       [STATUS]: { body: atExistingQbittorrent({ reason: 'ip_banned', auth_failures: 5 }) },
     })
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
 
     const fix = await screen.findByText(/連錯 5 次就封鎖這個 IP 60 分鐘/)
     expect(fix).toHaveTextContent('重啟 qBittorrent')
@@ -276,7 +277,7 @@ describe('頁 2 的連線卡跟著最新的失敗（M4 票 25，實測 B9-04～0
       'POST /api/setup/services/qbittorrent/test': { body: stopped },
     })
     const user = userEvent.setup()
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
     await user.click(await screen.findByRole('button', { name: '上一個泊位' }))
 
     expect(await screen.findByRole('button', { name: '重新測試' })).toBeVisible()
@@ -317,7 +318,7 @@ describe('擁有者成立前目標被換（M4 票 28，實測 E12）', () => {
       [OWNER]: { body: setupStatus({ owner: 'skipper', current_step: 2, services: [tested] }) },
     })
     const user = userEvent.setup()
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
 
     await signIn(user)
 
@@ -339,7 +340,7 @@ describe('擁有者成立前目標被換（M4 票 28，實測 E12）', () => {
       [RETEST_JELLYFIN]: { body: setupStatus({ owner_signs_in: true, services: [swapped] }) },
     })
     const user = userEvent.setup()
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
 
     await signIn(user)
 

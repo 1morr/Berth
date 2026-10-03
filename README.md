@@ -33,9 +33,11 @@ docker compose up -d
 **選「既有」的條件**：Jellyfin 與 qBittorrent 要和 Berth 在**同一台主機**，而且把同一個父目錄掛在**同一個容器路徑**
 （例如三個都是 `/data`）——Berth 用硬鏈接入庫，另一台 NAS 上的、或把下載與媒體庫分開掛成 `/downloads`、`/tv` 的接不上
 （不做 remote path mapping）。選了既有，就把那個服務從 `.env` 的 `COMPOSE_PROFILES` 拿掉再 `docker compose up -d`；
-頁上會照你已經選的算出整行（其他選了既有的也不在裡面），忘了拿掉也不致命。反過來，選了「套件內」而 compose 裡沒有它
-（主機名解不到），那一條會說出怎麼把它加回 `COMPOSE_PROFILES`；加回、或改了 `.env` 的 port 之後，在那一頁**再點一次
-「套件內」**（重存 compose 位址再測）——「重新測試」只拿已經存下的那一條再敲一次。
+頁上會照你已經選的算出整行（其他選了既有的也不在裡面），忘了拿掉也不致命。反過來，compose 裡沒有起的那一個
+（主機名解不到；進頁時 Berth 只查主機名、不連它），「套件內」那一格會先說「這套 compose 沒有起它」並給加回
+`COMPOSE_PROFILES` 的那一行，選了之後的測試也照樣說。加回、或改了 `.env` 的 port 之後，在那一頁**再點一次
+「套件內」**（重存 compose 位址再測）——「重新測試」只拿已經存下的那一條再敲一次。精靈的頁在網址上
+（`/setup?step=N`）：瀏覽器的上一頁回到上一個看過的頁，重新整理留在原頁。
 
 **換一台**：Jellyfin 在擁有者成立之後鎖住（擁有者是那一台上的帳號，換一台等於換擁有者；精靈跑完之後在「設定 → Jellyfin」
 換位址）。qBittorrent 與 Prowlarr 隨時可以改選：Berth 已經寫進原本那一台的東西留在那裡、不撤回，那一頁要重做；換了
@@ -462,7 +464,8 @@ uv run python scripts/fake_setup_server.py --port 8383     # 換 port（索引�
 | `mixed` | NAS 的常見組合：既有 Jellyfin（跑過自己的精靈、兩個媒體庫，其中一個掛 TVDB；管理員 `owner` / `s3cret`）、qBittorrent 已設密碼（選既有、填任何位址與帳密都測得過；選套件內是「要求帳密」）、Prowlarr 已有索引站。三頁都選既有才走得完。兩個媒體庫的舊路徑是暫存目錄底下真的存在的 `nas/movies`、`nas/anime`，Route 的第三條纜繩才看得到它們，精靈走得完 |
 | `starting` | 四個容器同時起來（票 06g 量到的時間線，照測試次數演，前端每 3 秒一次）：選了套件內之後 Jellyfin 先回不像它自己的東西、再回兩次 503「還在載入」，約 9 秒後連上；qBittorrent 第一次連不上；Prowlarr 連不上五次，約 15 秒。不必按「重新測試」，之後與 `bundled` 一樣走得完 |
 | `key-missing` | 同 `bundled`，但 Prowlarr 的設定目錄沒有唯讀掛進 Berth：頁 4 選套件內之後讀不到 API key，就地貼上 |
-| `absent` | Jellyfin 不在 `COMPOSE_PROFILES` 裡：頁 1 選套件內是「主機名解不到」並說出怎麼加回 `COMPOSE_PROFILES`；改選既有、填任何位址就接得上 |
+| `absent` | Jellyfin 不在 `COMPOSE_PROFILES` 裡：頁 1 進頁「套件內」卡片就說沒有起它、給加回 `COMPOSE_PROFILES` 的那一行，選了是「主機名解不到」；改選既有、填任何位址就接得上 |
+| `berth-only` | 只有 Berth（`COMPOSE_PROFILES=`）：三個服務頁的「套件內」卡片進頁都說沒有起；其餘同 `absent` |
 | `old-jellyfin` | 既有 Jellyfin 還停在 10.11（其餘兩個服務照 `bundled`，擋路的只留一個）：頁 1 擁有者那一步紅燈，說出目前版本、為什麼要 12，以及升級前後要做的事；健康頁上同一台也是紅的 |
 | `signed-out` | 精靈已跑完，畫面從登入頁開始。`skipper` / `harbour` 是管理員，`deckhand` / `rope` 是普通使用者（看不到設定入口） |
 | `unmounted` | Jellyfin 少了媒體庫目錄的掛載：泊位 4 的第四條纜繩失敗，看「哪個容器少了哪個掛載」與 compose 修正片段 |

@@ -11,6 +11,7 @@ import {
   previousOf,
   reachable,
   shownStep,
+  stepOf,
   straying,
 } from './navigation'
 
@@ -29,18 +30,28 @@ describe('頁序（plan §9.3，M4 票 15）', () => {
   })
 })
 
-describe('畫面停在哪一頁', () => {
-  it('沒有覆寫時跟著後端的頁', () => {
-    expect(shownStep(STEP.routes, null)).toBe(STEP.routes)
+describe('畫面停在哪一頁（網址的 step，M4 票 30）', () => {
+  it('網址沒寫就是後端的頁', () => {
+    expect(shownStep(STEP.routes, undefined)).toBe(STEP.routes)
   })
 
-  it('覆寫到走過的頁就停在那裡', () => {
+  it('網址指到走過的頁就停在那裡', () => {
     expect(shownStep(STEP.routes, STEP.jellyfin)).toBe(STEP.jellyfin)
+    expect(shownStep(STEP.routes, STEP.routes)).toBe(STEP.routes)
   })
 
-  /** 後端退回去了（例如換了一台 qBittorrent，那一頁要重做）：還沒到的那一頁不能看。 */
-  it('覆寫到比後端還前面的頁不算數', () => {
+  /** 後端退回去了（例如換了一台 qBittorrent，那一頁要重做），或網址是手打的：還沒到的那一頁不能看。 */
+  it('網址指到後端還沒到的頁，拉回後端那一頁', () => {
     expect(shownStep(STEP.qbittorrent, STEP.indexer)).toBe(STEP.qbittorrent)
+    expect(shownStep(STEP.jellyfin, STEP.complete)).toBe(STEP.jellyfin)
+  })
+
+  it('網址的 step 只認精靈的一頁', () => {
+    expect(stepOf('3')).toBe(3)
+    expect(stepOf(6)).toBe(6)
+    for (const raw of [undefined, '', '0', 0, 7, '2.5', 'x', null]) {
+      expect(stepOf(raw)).toBeUndefined()
+    }
   })
 })
 
@@ -63,20 +74,19 @@ describe('前往與回頭', () => {
     expect(nextOf(STEP.complete)).toBeNull()
   })
 
-  it('去後端目前那一頁（或更後面）就是解除覆寫', () => {
-    expect(go(STEP.routes, STEP.routes)).toBeNull()
-    expect(go(STEP.complete, STEP.routes)).toBeNull()
-    expect(go(STEP.tmdb, STEP.tmdb)).toBeNull()
-  })
-
-  it('去走過的頁是覆寫', () => {
+  it('去走過的頁與後端那一頁，就是那一頁', () => {
     expect(go(STEP.jellyfin, STEP.routes)).toBe(STEP.jellyfin)
     expect(go(STEP.indexer, STEP.tmdb)).toBe(STEP.indexer)
+    expect(go(STEP.routes, STEP.routes)).toBe(STEP.routes)
+  })
+
+  it('去後端還沒到的頁，落在後端那一頁', () => {
+    expect(go(STEP.complete, STEP.routes)).toBe(STEP.routes)
   })
 
   /**
    * 票 06d 的 bug：走完過的人回到前面再按「前往下一個」，落到的是最後一頁——那顆鍵做的是
-   * 解除覆寫。現在「前往」是去下一頁，只有下一頁就是後端目前那一頁時才解除。
+   * 解除覆寫。「前往」是去下一頁。
    */
   it('從 Jellyfin 頁前往下一個，落在 qBittorrent，不是後端目前那一頁', () => {
     expect(shownStep(STEP.complete, go(nextOf(STEP.jellyfin)!, STEP.complete))).toBe(
@@ -87,14 +97,13 @@ describe('前往與回頭', () => {
   /** 票 06d 的 bug：完成頁回媒體庫路徑之後出不去。回頭之後前往下一個，一路走得回來。 */
   it('從完成頁回頭，一路前往下一個走得回完成頁', () => {
     const current = STEP.complete
-    let pinned = go(previousOf(current)!, current)
-    const walked: number[] = []
-    while (pinned !== null) {
-      walked.push(shownStep(current, pinned))
-      pinned = go(nextOf(shownStep(current, pinned))!, current)
+    let shown = shownStep(current, go(previousOf(current)!, current))
+    const walked = [shown]
+    while (shown !== current) {
+      shown = shownStep(current, go(nextOf(shown)!, current))
+      walked.push(shown)
     }
-    expect(walked).toEqual([STEP.tmdb])
-    expect(shownStep(current, pinned)).toBe(STEP.complete)
+    expect(walked).toEqual([STEP.tmdb, STEP.complete])
   })
 })
 

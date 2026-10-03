@@ -92,7 +92,7 @@ from berth.adapters.torrent import (
 from berth.adapters.torrent_fake import FakeTorrentFetcher
 from berth.adapters.torznab import TorznabClient
 from berth.adapters.torznab.fake import FakeTorznabClient
-from berth.api.deps import get_bundled_services, get_client_factory
+from berth.api.deps import get_bundled_services, get_client_factory, get_host_resolver
 from berth.config import Config, load_config
 from berth.db import create_engine, create_session_factory, upgrade_to_head
 from berth.domain import (
@@ -259,6 +259,8 @@ class Scenario:
     prowlarr_api_key: str
     #: 「測試連線」時 Prowlarr 要回報的索引站（貼上 key 之後判套件內還是既有）。
     connect_indexers: list[ProwlarrIndexer] = field(default_factory=list)
+    #: 這套 compose 沒有起的服務：它們的主機名解不到（`GET /setup/compose`，M4 票 30）。
+    undeployed: frozenset[ServiceKind] = frozenset()
     #: 精靈已經跑完：整個 API 進門禁，畫面從登入頁開始（票 07）。
     setup_completed: bool = False
     #: 連三條 Route 與第一輪健康檢查都跑過：健康頁與設定頁的起點（票 10、06i）。
@@ -466,6 +468,17 @@ def absent() -> Scenario:
     """Jellyfin 從 COMPOSE_PROFILES 拿掉了：選套件內是「主機名解不到」，要改選既有、填位址。"""
     scenario = mixed()
     scenario.jellyfin = FakeJellyfinClient(error=ServiceNotDeployedError("no such host"))
+    scenario.undeployed = frozenset({ServiceKind.JELLYFIN})
+    return scenario
+
+
+def berth_only() -> Scenario:
+    """只有 Berth（`COMPOSE_PROFILES=`）：三張「套件內」卡片進頁就說沒有起（M4 票 30）。
+
+    其餘照 `absent`：頁 1 選套件內是「主機名解不到」，選既有、填任何位址就接得上。
+    """
+    scenario = absent()
+    scenario.undeployed = frozenset(ServiceKind)
     return scenario
 
 
@@ -1549,9 +1562,20 @@ SCENARIOS = {
     "starting": starting,
     "key-missing": key_missing,
     "absent": absent,
+    "berth-only": berth_only,
     "old-jellyfin": old_jellyfin,
     "unmounted": unmounted,
 }
+
+
+class ScenarioHosts:
+    """套件內主機名解不解得到：情境說沒起的那幾個解不到。compose 的主機名就是服務的名字。"""
+
+    def __init__(self, scenario: Scenario) -> None:
+        self._undeployed = {kind.value for kind in scenario.undeployed}
+
+    async def resolves(self, host: str) -> bool:
+        return host not in self._undeployed
 
 
 class FakeClientFactory:
@@ -1664,6 +1688,8 @@ def main(argv: list[str] | None = None) -> int:
     bundled_services = scenario.bundled()
     app.dependency_overrides[get_bundled_services] = lambda: bundled_services
     app.dependency_overrides[get_client_factory] = lambda: factory
+    # 真的解析器在宿主上問 `jellyfin` 這種名字要等好幾秒、而且一定解不到：照情境回答。
+    app.dependency_overrides[get_host_resolver] = lambda: ScenarioHosts(scenario)
     if scenario.demo_releases:
         _mount_demo_torrent(app, scenario.demo_releases)
     if scenario.library_demo:

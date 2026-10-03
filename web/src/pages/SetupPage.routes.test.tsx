@@ -3,7 +3,8 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { session, stubApi } from '../test/fetch'
-import { renderApp, renderWithProviders } from '../test/render'
+import { boardCells, findBoardCells } from '../test/board'
+import { renderApp, renderInRoute } from '../test/render'
 import {
   ALL_BUNDLED,
   CHECKS_PASSED,
@@ -121,7 +122,7 @@ describe('頁 3：媒體庫路徑（套件內）', () => {
   it('進頁不送任何寫入：一顆「建立並檢查」，按下才建（M4 票 08）', async () => {
     const fetch = stubPage({ ...BUNDLED_PAGE, [ROUTES]: { body: routeSetup() } })
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
 
     expect(await screen.findByRole('button', { name: '建立並檢查' })).toBeEnabled()
     await new Promise((resolve) => setTimeout(resolve, 900))
@@ -135,7 +136,7 @@ describe('頁 3：媒體庫路徑（套件內）', () => {
       [BUILD]: { body: BUILT },
     })
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
     await userEvent.click(await screen.findByRole('button', { name: '建立並檢查' }))
 
     const sequences = await screen.findAllByTestId('checks')
@@ -174,7 +175,7 @@ describe('頁 3：媒體庫路徑（套件內）', () => {
     })
     stubPage({ ...BUNDLED_PAGE, [ROUTES]: { body: oneRed } })
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
     const list = await screen.findByRole('list', { name: '這一頁的 Route' })
     // 技術細節也是 `<details>`（M4 票 21），只數 Route 列那一層。
     const rows = within(list)
@@ -194,7 +195,7 @@ describe('頁 3：媒體庫路徑（套件內）', () => {
       [BUILD]: { status: 500, body: { detail: 'boom' } },
     })
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
     await userEvent.click(await screen.findByRole('button', { name: '建立並檢查' }))
 
     // 500 是後端自己出錯，不是「可能沒在跑」（M4 票 21）；原文收進技術細節。
@@ -205,7 +206,7 @@ describe('頁 3：媒體庫路徑（套件內）', () => {
   it('三條都建好之後，剖面不再說「將建立」那三條（票 14、14e 留給票 15 的兩條）', async () => {
     stubPage({ ...BUNDLED_PAGE, [ROUTES]: { body: BUILT } })
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
     await screen.findByRole('button', { name: '重新檢查 3 條 Route' })
 
     expect(screen.queryByText('將建立')).not.toBeInTheDocument()
@@ -214,7 +215,7 @@ describe('頁 3：媒體庫路徑（套件內）', () => {
   it('三條都建好之後再按一次是全部重驗，不會多建（票 14：精靈只新增）', async () => {
     stubPage({ ...BUNDLED_PAGE, [ROUTES]: { body: BUILT } })
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
 
     expect(await screen.findByRole('button', { name: '重新檢查 3 條 Route' })).toBeEnabled()
   })
@@ -234,7 +235,7 @@ describe('頁 3：媒體庫路徑（套件內）', () => {
       },
     })
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
     const [first] = await screen.findAllByRole('button', { name: '刪除這條 Route' })
     await userEvent.click(first)
     await userEvent.click(screen.getByRole('button', { name: '確定刪除' }))
@@ -268,7 +269,7 @@ describe('頁 3：媒體庫路徑（套件內）', () => {
       },
     })
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
     const [first] = await screen.findAllByRole('button', { name: '刪除這條 Route' })
     await userEvent.click(first)
     await userEvent.click(screen.getByRole('button', { name: '確定刪除' }))
@@ -286,7 +287,7 @@ describe('頁 3：媒體庫路徑（套件內）', () => {
       },
     })
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
     const [first] = await screen.findAllByRole('button', { name: '刪除這條 Route' })
     await userEvent.click(first)
     await userEvent.click(screen.getByRole('button', { name: '確定刪除' }))
@@ -305,8 +306,8 @@ describe('頁 3：媒體庫路徑（套件內）', () => {
     })
     stubPage({ ...PAST_ROUTES, [ROUTES]: { body: withDisabledRed } })
 
-    renderWithProviders(<SetupPage />)
-    const board = await screen.findByRole('region', { name: '泊位板' })
+    renderInRoute(<SetupPage />)
+    const board = await findBoardCells()
 
     await waitFor(() =>
       expect(within(board).getByText('BTH 3').closest('li')).toHaveTextContent('已完成'),
@@ -317,8 +318,8 @@ describe('頁 3：媒體庫路徑（套件內）', () => {
   it('泊位板的媒體庫路徑那一格在後端過了頁 3 之後標成已繫上', async () => {
     stubPage({ ...PAST_ROUTES, [ROUTES]: { body: BUILT } })
 
-    renderWithProviders(<SetupPage />)
-    const board = await screen.findByRole('region', { name: '泊位板' })
+    renderInRoute(<SetupPage />)
+    const board = await findBoardCells()
 
     await waitFor(() =>
       expect(within(board).getByText('BTH 3').closest('li')).toHaveTextContent('已完成'),
@@ -328,9 +329,9 @@ describe('頁 3：媒體庫路徑（套件內）', () => {
   it('Route 全綠但後端還停在頁 3 時，那一格仍是待靠泊', async () => {
     stubPage({ ...BUNDLED_PAGE, [ROUTES]: { body: BUILT } })
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
     await screen.findByRole('button', { name: '重新檢查 3 條 Route' })
-    const board = screen.getByRole('region', { name: '泊位板' })
+    const board = boardCells()
 
     expect(within(board).getByText('BTH 3').closest('li')).toHaveTextContent('待靠泊')
   })
@@ -356,7 +357,7 @@ describe('頁 3 的前進條件跟畫面一致（M4 票 24）', () => {
     })
     const user = userEvent.setup()
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
     const buttons = await screen.findAllByRole('button', { name: '刪除這條 Route' })
     expect(screen.queryByRole('button', { name: '前往下一個泊位' })).not.toBeInTheDocument()
     await user.click(buttons[buttons.length - 1])
@@ -396,7 +397,7 @@ describe('頁 3 的前進條件跟畫面一致（M4 票 24）', () => {
     })
     const user = userEvent.setup()
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
     await user.click(await screen.findByRole('checkbox', { name: '影集' }))
     await user.click(screen.getByRole('button', { name: '建立並檢查' }))
     await user.click(await screen.findByRole('button', { name: '刪除這條 Route' }))
@@ -426,7 +427,7 @@ describe('頁 3 的前進條件跟畫面一致（M4 票 24）', () => {
       [REREAD]: { body: withOld },
     })
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
 
     const plan = (await screen.findByRole('heading', { name: '將建立' })).closest('section')!
     expect(within(plan).getByText('Anime')).toBeInTheDocument()
@@ -457,7 +458,7 @@ describe('頁 3 的前進條件跟畫面一致（M4 票 24）', () => {
     })
     const user = userEvent.setup()
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
     await user.click(await screen.findByRole('button', { name: '建立並檢查' }))
 
     await waitFor(() => expect(writes(fetch)).toContain(BUILD))
@@ -490,7 +491,7 @@ describe('頁 3 的失敗', () => {
     })
     stubPage({ ...BUNDLED_PAGE, [ROUTES]: { body: blocked } })
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
 
     expect(await screen.findByText('[Errno 18] Invalid cross-device link')).toBeInTheDocument()
     expect(screen.getByText(/EXDEV/)).toBeInTheDocument()
@@ -513,7 +514,7 @@ describe('頁 3 的失敗', () => {
     })
     stubPage({ ...BUNDLED_PAGE, [ROUTES]: { body: blocked } })
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
 
     expect(await screen.findByText('Jellyfin cannot see /data/library/tv')).toBeInTheDocument()
     expect(screen.getByText(/jellyfin 容器少了這條路徑的掛載/)).toBeInTheDocument()
@@ -536,7 +537,7 @@ describe('頁 3 的失敗', () => {
     })
     stubPage({ ...BUNDLED_PAGE, [ROUTES]: { body: blocked } })
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
 
     expect(await screen.findByText(/already points at/)).toBeInTheDocument()
     expect(screen.getByText(/autoTMM/)).toBeInTheDocument()
@@ -557,7 +558,7 @@ describe('頁 3 的失敗', () => {
       },
     })
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
     await userEvent.click(await screen.findByRole('button', { name: '建立並檢查' }))
 
     const notice = await screen.findByText(/被刪掉了/)
@@ -573,7 +574,7 @@ describe('頁 3 的失敗', () => {
       [BUILD]: { status: 500, body: { detail: 'boom' } },
     })
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
     await userEvent.click(await screen.findByRole('button', { name: '建立並檢查' }))
 
     expect(await screen.findByText(/後端出錯了/)).toBeInTheDocument()
@@ -619,7 +620,7 @@ describe('頁 3 的失敗：既有服務說出怎麼改掛載（M4 票 08）', (
       ),
     )
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
 
     expect(await screen.findByText(/你的 Jellyfin 看不到 Berth 剛寫的檔案/)).toBeInTheDocument()
     expect(screen.getByText(/不做 remote path mapping/)).toBeInTheDocument()
@@ -646,7 +647,7 @@ describe('頁 3 的失敗：既有服務說出怎麼改掛載（M4 票 08）', (
       ),
     )
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
 
     expect(
       await screen.findByText(/qBittorrent cannot see \/data\/torrent\/complete\/tv/),
@@ -671,7 +672,7 @@ describe('頁 3 的失敗：既有服務說出怎麼改掛載（M4 票 08）', (
       ),
     )
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
 
     expect(await screen.findByText(/分開掛（\/downloads、\/tv 各一條）/)).toBeInTheDocument()
   })
@@ -695,7 +696,7 @@ describe('頁 3 的失敗：既有服務說出怎麼改掛載（M4 票 08）', (
       ),
     )
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
 
     expect(await screen.findByText(/這是你自己的 qBittorrent/)).toBeInTheDocument()
     expect(screen.queryByText(/這是你自己的 Jellyfin/)).not.toBeInTheDocument()
@@ -719,7 +720,7 @@ describe('頁 3：媒體庫路徑（既有 Jellyfin）', () => {
   it('一個都沒勾時建立鍵按不下去', async () => {
     stubPage({ ...EXISTING_PAGE, [ROUTES]: { body: NAS } })
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
 
     expect(await screen.findByRole('button', { name: '建立並檢查' })).toBeDisabled()
   })
@@ -731,7 +732,7 @@ describe('頁 3：媒體庫路徑（既有 Jellyfin）', () => {
       [BUILD]: { body: NAS },
     })
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
     await userEvent.click(await screen.findByRole('checkbox', { name: '影集' }))
     await userEvent.click(screen.getByRole('radio', { name: '/data/library/影集' }))
     await userEvent.click(screen.getByRole('button', { name: '建立並檢查' }))
@@ -750,7 +751,7 @@ describe('頁 3：媒體庫路徑（既有 Jellyfin）', () => {
   it('不是電影或劇集的媒體庫不給勾，並說明理由', async () => {
     stubPage({ ...EXISTING_PAGE, [ROUTES]: { body: NAS } })
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
 
     expect(await screen.findByText('音樂')).toBeInTheDocument()
     expect(screen.queryByRole('checkbox', { name: '音樂' })).not.toBeInTheDocument()
@@ -775,7 +776,7 @@ describe('頁 3：媒體庫路徑（既有 Jellyfin）', () => {
     })
     stubPage({ ...EXISTING_PAGE, [ROUTES]: { body: shared } })
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
     await userEvent.click(await screen.findByRole('checkbox', { name: '影集' }))
 
     const taken = screen.getByRole('radio', { name: /\/volume1\/media\/tv/ })
@@ -796,7 +797,7 @@ describe('頁 3：媒體庫路徑（既有 Jellyfin）', () => {
     })
     stubPage({ ...EXISTING_PAGE, [ROUTES]: { body: routed } })
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
 
     const box = await screen.findByRole('checkbox', { name: '影集' })
     expect(box).toBeChecked()
@@ -816,7 +817,7 @@ describe('頁 6：完成', () => {
       [TMDB]: { body: tmdbSetup() },
     })
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
 
     expect(await screen.findByRole('button', { name: '完成設定' })).toBeInTheDocument()
     expect(screen.getByText('/data/torrent/complete/tv')).toBeInTheDocument()
@@ -839,7 +840,7 @@ describe('頁 6：完成', () => {
       [TMDB]: { body: tmdbSetup() },
     })
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
 
     expect(await screen.findByRole('button', { name: '完成設定' })).toBeInTheDocument()
     expect(screen.getByText(/Prowlarr 上已經有 1 個站/)).toBeInTheDocument()
@@ -859,7 +860,7 @@ describe('頁 6：完成', () => {
       [COMPLETE]: { status: 422, body: { detail: 'finish step 7 first: TMDB needs a credential' } },
     })
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
     await userEvent.click(await screen.findByRole('button', { name: '完成設定' }))
 
     const alert = await screen.findByRole('alert')
@@ -882,7 +883,7 @@ describe('頁 6：完成', () => {
       [COMPLETE]: { status: 422, body: { detail: 'some newer precondition' } },
     })
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
     await userEvent.click(await screen.findByRole('button', { name: '完成設定' }))
 
     const alert = await screen.findByRole('alert')
@@ -900,7 +901,7 @@ describe('頁 6：完成', () => {
       [COMPLETE]: { status: 500, body: { detail: 'boom' } },
     })
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
     await userEvent.click(await screen.findByRole('button', { name: '完成設定' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/後端/)

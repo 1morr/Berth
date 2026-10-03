@@ -4,7 +4,8 @@ import i18next from 'i18next'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { stubApi } from '../test/fetch'
-import { renderWithProviders } from '../test/render'
+import { boardCells, findBoardCells } from '../test/board'
+import { renderInRoute } from '../test/render'
 import type { SiteFailure, SiteSearch } from '../api/setup'
 import {
   ALL_BUNDLED,
@@ -133,7 +134,7 @@ describe('頁 2：qBittorrent', () => {
       [DIFF]: { body: qbittorrentSetup() },
     })
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
 
     expect(
       await screen.findByRole('heading', { level: 2, name: '先選 qBittorrent 是哪一台' }),
@@ -152,7 +153,7 @@ describe('頁 2：qBittorrent', () => {
       [STATUS]: { body: setupStatus({ ...CHOOSING_QBITTORRENT, bundled_targets: targets }) },
     })
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
 
     expect(await screen.findByText('http://qbittorrent:18080')).toBeInTheDocument()
     expect(screen.queryByText(/qbittorrent:8080/)).not.toBeInTheDocument()
@@ -166,7 +167,7 @@ describe('頁 2：qBittorrent', () => {
     })
     const user = userEvent.setup()
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
     await screen.findByRole('heading', { level: 2, name: '先選 qBittorrent 是哪一台' })
     await user.click(bundledCard())
 
@@ -188,7 +189,7 @@ describe('頁 2：qBittorrent', () => {
     })
     const user = userEvent.setup()
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
     await screen.findByRole('heading', { level: 2, name: '先選 qBittorrent 是哪一台' })
     await user.click(existingCard())
 
@@ -235,7 +236,7 @@ describe('頁 2：qBittorrent', () => {
     })
     const user = userEvent.setup()
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
 
     expect(await screen.findByText('docker compose ps qbittorrent')).toBeInTheDocument()
     expect(screen.getByText('逾時')).toBeInTheDocument()
@@ -253,7 +254,7 @@ describe('頁 2：qBittorrent', () => {
   it('剖面在按之前就逐鍵列出現值與建議值', async () => {
     stubApi({ [STATUS]: { body: AT_QBITTORRENT }, [DIFF]: { body: qbittorrentSetup() } })
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
     const diff = (await screen.findByText('將會寫入的鍵')).closest('section')!
 
     // 鍵用人話的名字（M4 票 21）：原始鍵名在那一條纜繩的技術細節裡。
@@ -288,7 +289,7 @@ describe('頁 2：qBittorrent', () => {
     })
     const user = userEvent.setup()
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
     const legend = await screen.findByText('qBittorrent WebUI 登入')
     const fields = within(legend.closest('fieldset')!)
     expect(fields.getByRole('checkbox', { name: '沿用 Jellyfin 帳密（skipper）' })).toBeChecked()
@@ -323,7 +324,7 @@ describe('頁 2：qBittorrent', () => {
     })
     const user = userEvent.setup()
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
     await user.click(await screen.findByRole('button', { name: '套用這 4 項' }))
 
     expect(await screen.findByText('這一格要填。')).toBeInTheDocument()
@@ -338,7 +339,7 @@ describe('頁 2：qBittorrent', () => {
     })
     const user = userEvent.setup()
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
     const legend = await screen.findByText('qBittorrent WebUI 登入')
     const fields = within(legend.closest('fieldset')!)
     await user.click(fields.getByRole('checkbox', { name: '沿用 Jellyfin 帳密（skipper）' }))
@@ -371,7 +372,7 @@ describe('頁 2：qBittorrent', () => {
     })
     const user = userEvent.setup()
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
     await user.type(await screen.findByLabelText(OWNER_PASSWORD), 'wrong-one')
     await user.click(screen.getByRole('button', { name: '套用這 4 項' }))
 
@@ -391,7 +392,7 @@ describe('頁 2：qBittorrent', () => {
     })
     const user = userEvent.setup()
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
     expect(await screen.findByText('qBittorrent WebUI 的帳號：')).toHaveTextContent(
       'qBittorrent WebUI 的帳號： admin',
     )
@@ -418,7 +419,7 @@ describe('頁 2：qBittorrent', () => {
     const stub = stubApi({ [STATUS]: { body: AT_QBITTORRENT }, [DIFF]: { body: applied } })
     const user = userEvent.setup()
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
     await screen.findByText('將會寫入的鍵')
     await user.click(existingCard())
 
@@ -449,7 +450,7 @@ describe('頁 2：qBittorrent', () => {
     })
     const user = userEvent.setup()
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
     await screen.findByRole('heading', { level: 2, name: '確認你的 qBittorrent' })
     await user.click(bundledCard())
 
@@ -489,7 +490,7 @@ describe('頁 2：qBittorrent', () => {
       },
     })
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
 
     expect(await screen.findByText(/Web API 低於 2\.8\.4/)).toBeInTheDocument()
     expect(screen.getByText('docker compose pull qbittorrent')).toBeInTheDocument()
@@ -504,7 +505,7 @@ describe('頁 2：qBittorrent', () => {
   it('既有服務不寫任何鍵，也不列偏好表、不警告未完成目錄（M4 票 05、22）', async () => {
     stubApi({ [STATUS]: { body: AT_EXISTING_QBITTORRENT }, [DIFF]: { body: EXISTING_DIFF } })
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
 
     expect(
       await screen.findByRole('heading', { name: '確認你的 qBittorrent', level: 2 }),
@@ -537,7 +538,7 @@ describe('頁 2：qBittorrent', () => {
       },
     })
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
 
     expect(await screen.findByText('connection refused')).toBeInTheDocument()
     expect(screen.getByText('docker compose logs --tail 50 qbittorrent')).toBeInTheDocument()
@@ -581,7 +582,7 @@ describe('頁 2：WebUI 登入的規則', () => {
     })
     const user = userEvent.setup()
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
     const fields = await loginFields()
     await user.type(fields.getByLabelText(OWNER_PASSWORD), 'abcd')
     await user.click(screen.getByRole('button', { name: '套用這 4 項' }))
@@ -610,7 +611,7 @@ describe('頁 2：WebUI 登入的規則', () => {
     })
     const user = userEvent.setup()
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
     const fields = await loginFields()
     await user.type(fields.getByLabelText('jo 的 Jellyfin 密碼'), 'Harbour-1')
     await user.click(screen.getByRole('button', { name: '套用這 4 項' }))
@@ -631,7 +632,7 @@ describe('頁 2：WebUI 登入的規則', () => {
     })
     const user = userEvent.setup()
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
     const fields = await loginFields()
     await user.click(fields.getByRole('checkbox', { name: '沿用 Jellyfin 帳密（skipper）' }))
     await user.clear(fields.getByLabelText('帳號'))
@@ -669,7 +670,7 @@ describe('頁 2：WebUI 登入的規則', () => {
     const user = userEvent.setup()
     await i18next.changeLanguage('en')
     try {
-      renderWithProviders(<SetupPage />)
+      renderInRoute(<SetupPage />)
       const legend = await screen.findByText('qBittorrent WebUI login')
       const fields = within(legend.closest('fieldset')!)
       await user.type(fields.getByLabelText("skipper's Jellyfin password"), 'abcd')
@@ -693,7 +694,7 @@ describe('頁 2：WebUI 登入的規則', () => {
     })
     const user = userEvent.setup()
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
     const fields = await loginFields()
     await user.type(fields.getByLabelText(OWNER_PASSWORD), 'Harbour-1')
     await user.click(screen.getByRole('button', { name: '套用這 4 項' }))
@@ -718,7 +719,7 @@ describe('頁 2：WebUI 登入的規則', () => {
     })
     const user = userEvent.setup()
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
     const sequence = await screen.findByTestId('sequence')
     expect(await within(sequence).findByText(/qBittorrent 不收這組帳密/)).toBeVisible()
 
@@ -741,7 +742,7 @@ describe('頁 2：WebUI 登入的規則', () => {
       },
     })
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
     const sequence = await screen.findByTestId('sequence')
 
     expect(await within(sequence).findByText('http://localhost:18080/#/settings')).toBeVisible()
@@ -756,7 +757,7 @@ describe('頁 4：Prowlarr 與索引站', () => {
       [INDEXERS]: { body: indexerSetup() },
     })
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
 
     const recommended = within(await screen.findByTestId('recommended'))
     const boxes = recommended.getAllByRole('checkbox')
@@ -776,7 +777,7 @@ describe('頁 4：Prowlarr 與索引站', () => {
     })
     const user = userEvent.setup()
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
     const yts = await screen.findByRole('checkbox', { name: 'YTS' })
     const blocked = screen.getByRole('checkbox', { name: '1337x' })
     expect(yts).toBeDisabled()
@@ -803,7 +804,7 @@ describe('頁 4：Prowlarr 與索引站', () => {
     })
     const user = userEvent.setup()
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
     await user.click(await screen.findByRole('button', { name: '測試全部' }))
 
     await waitFor(() => expect(called(fetchStub, '/api/setup/indexers/test')).toBe(true))
@@ -835,7 +836,7 @@ describe('頁 4：Prowlarr 與索引站', () => {
     })
     const user = userEvent.setup()
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
     await user.click(await screen.findByRole('button', { name: '測試全部' }))
 
     const summary = await screen.findByTestId('check-summary')
@@ -867,7 +868,7 @@ describe('頁 4：Prowlarr 與索引站', () => {
     })
     const user = userEvent.setup()
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
     await user.click(await screen.findByRole('button', { name: '測試 YTS' }))
 
     const summary = await screen.findByTestId('check-summary')
@@ -893,7 +894,7 @@ describe('頁 4：Prowlarr 與索引站', () => {
     })
     const user = userEvent.setup()
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
     await user.click(await screen.findByRole('button', { name: '測試 dmhy' }))
     await user.click(screen.getByRole('button', { name: '測試 Mikan' }))
     await user.click(await screen.findByRole('checkbox', { name: 'dmhy' }))
@@ -929,7 +930,7 @@ describe('頁 4：Prowlarr 與索引站', () => {
     })
     const user = userEvent.setup()
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
     await user.click(await screen.findByRole('button', { name: '測試 EZTV' }))
     const eztv = screen.getByRole('checkbox', { name: 'EZTV' })
     await waitFor(() => expect(eztv).toBeEnabled())
@@ -954,7 +955,7 @@ describe('頁 4：Prowlarr 與索引站', () => {
     })
     const user = userEvent.setup()
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
     const block = within(await screen.findByTestId('prowlarr-login'))
     // 說明寫清楚是必填，以及為什麼（Prowlarr 不讓介面沒有登入）。
     expect(block.getByText('必填')).toBeInTheDocument()
@@ -983,7 +984,7 @@ describe('頁 4：Prowlarr 與索引站', () => {
   it('每一站說出是什麼語言（照 UI 語言的名字）與一句原文說明', async () => {
     stubApi({ [STATUS]: { body: AT_INDEXER }, [INDEXERS]: { body: indexerSetup() } })
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
 
     const dmhy = within((await screen.findByRole('checkbox', { name: 'dmhy' })).closest('li')!)
     expect(dmhy.getByText('中文（台灣）')).toBeInTheDocument()
@@ -1003,7 +1004,7 @@ describe('頁 4：Prowlarr 與索引站', () => {
     })
     const user = userEvent.setup()
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
     // 不搜就不列：八十幾站不該佔掉整頁。
     await screen.findByText('其他公開站')
     expect(screen.queryByTestId('others')).not.toBeInTheDocument()
@@ -1026,9 +1027,13 @@ describe('頁 4：Prowlarr 與索引站', () => {
   it('連上了、還沒加站時，板上那一格說「套件內 · Prowlarr · 尚未加入索引站」', async () => {
     stubApi({ [STATUS]: { body: AT_INDEXER }, [INDEXERS]: { body: indexerSetup() } })
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
 
-    const berth = within((await screen.findByText('BTH 4')).closest('li')!)
+    const berth = within(
+      within(await findBoardCells())
+        .getByText('BTH 4')
+        .closest('li')!,
+    )
     expect(berth.getByText('索引站')).toBeInTheDocument()
     expect(await berth.findByText('套件內 · Prowlarr · 尚未加入索引站')).toBeInTheDocument()
   })
@@ -1051,9 +1056,13 @@ describe('頁 4：Prowlarr 與索引站', () => {
       [DIFF]: { body: qbittorrentSetup() },
     })
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
 
-    const berth = within((await screen.findByText('BTH 4')).closest('li')!)
+    const berth = within(
+      within(await findBoardCells())
+        .getByText('BTH 4')
+        .closest('li')!,
+    )
     expect(berth.queryByText(/尚未加入索引站/)).not.toBeInTheDocument()
     expect(berth.getByText('—')).toBeInTheDocument()
   })
@@ -1061,9 +1070,13 @@ describe('頁 4：Prowlarr 與索引站', () => {
   it('加完站之後那一格說出加了幾站', async () => {
     stubApi({ [STATUS]: { body: AT_INDEXER }, [INDEXERS]: { body: withSites() } })
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
 
-    const berth = within((await screen.findByText('BTH 4')).closest('li')!)
+    const berth = within(
+      within(await findBoardCells())
+        .getByText('BTH 4')
+        .closest('li')!,
+    )
     expect(await berth.findByText('套件內 · Prowlarr · 3 個索引站')).toBeInTheDocument()
   })
 
@@ -1092,9 +1105,13 @@ describe('頁 4：Prowlarr 與索引站', () => {
       },
     })
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
 
-    const berth = within((await screen.findByText('BTH 4')).closest('li')!)
+    const berth = within(
+      within(await findBoardCells())
+        .getByText('BTH 4')
+        .closest('li')!,
+    )
     expect(await berth.findByText('既有 · Prowlarr · 2 個索引站')).toBeInTheDocument()
   })
 
@@ -1123,7 +1140,7 @@ describe('頁 4：Prowlarr 與索引站', () => {
     })
     const user = userEvent.setup()
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
     const added = within(await screen.findByTestId('added'))
     // 還沒按之前，加進來的每一站都在清單上，說它還沒搜。
     expect(added.getAllByText('還沒搜')).toHaveLength(3)
@@ -1151,7 +1168,7 @@ describe('頁 4：Prowlarr 與索引站', () => {
     const fetchStub = stubRemoval()
     const user = userEvent.setup()
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
     const trial = await screen.findByTestId('trial')
     const yts = within(within(trial).getByText('YTS').closest('li')!)
     await user.click(yts.getByRole('button', { name: '移除' }))
@@ -1180,7 +1197,7 @@ describe('頁 4：Prowlarr 與索引站', () => {
     stubRemoval()
     const user = userEvent.setup()
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
     const trial = await screen.findByTestId('trial')
     const yts = within(within(trial).getByText('YTS').closest('li')!)
     await user.click(yts.getByRole('button', { name: '移除' }))
@@ -1204,7 +1221,7 @@ describe('頁 4：Prowlarr 與索引站', () => {
       },
     })
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
 
     const off = within(await screen.findByRole('article', { name: 'Knaben' }))
     expect(off.getByText('在 Prowlarr 停用了')).toBeInTheDocument()
@@ -1233,7 +1250,7 @@ describe('頁 4：Prowlarr 與索引站', () => {
       },
     })
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
 
     const mine = within(await screen.findByRole('article', { name: 'AnimeBytes' }))
     expect(mine.getByRole('button', { name: '搜尋 AnimeBytes' })).toBeInTheDocument()
@@ -1290,7 +1307,7 @@ describe('頁 4：Prowlarr 與索引站', () => {
     })
     const user = userEvent.setup()
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
 
     const added = within(await screen.findByTestId('added'))
     expect(added.getByText('2 站')).toBeInTheDocument()
@@ -1350,7 +1367,7 @@ describe('頁 4：Prowlarr 與索引站', () => {
     })
     const user = userEvent.setup()
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
 
     const notice = within(await screen.findByTestId('no-sites'))
     expect(notice.getByText('待處理')).toBeInTheDocument()
@@ -1399,7 +1416,7 @@ describe('頁 4：Prowlarr 與索引站', () => {
       },
     })
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
 
     const failed = within(await screen.findByTestId('read-failed'))
     expect(failed.getByText(/讀不到這一台 Prowlarr 的站清單/)).toBeInTheDocument()
@@ -1429,7 +1446,7 @@ describe('頁 4：Prowlarr 與索引站', () => {
       [RETEST_PROWLARR]: { body: setupStatus({ ...AT_INDEXER }) },
     })
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
 
     const failed = within(await screen.findByTestId('read-failed'))
     expect(failed.getByText(/讀不到這一台 Prowlarr 的站清單/)).toBeInTheDocument()
@@ -1459,7 +1476,7 @@ describe('頁 4：Prowlarr 與索引站', () => {
       },
     })
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
 
     await screen.findByRole('button', { name: '設定 Prowlarr 介面登入' })
     const nav = within(screen.getByRole('navigation', { name: '泊位導覽' }))
@@ -1485,7 +1502,7 @@ describe('頁 4：Prowlarr 與索引站', () => {
       [RETEST_PROWLARR]: { body: AT_TMDB },
     })
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
 
     await waitFor(() => expect(called(fetchStub, '/api/setup/services/prowlarr/test')).toBe(true))
     expect(bodyOf(fetchStub, '/api/setup/services/prowlarr/test')).toEqual({ restart: false })
@@ -1500,7 +1517,7 @@ describe('頁 4：Prowlarr 與索引站', () => {
       [INDEXERS]: { body: indexerSetup({ steps: [step('prowlarr_login', 'pending')] }) },
     })
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
 
     await screen.findByRole('button', { name: '設定 Prowlarr 介面登入' })
     const nav = within(screen.getByRole('navigation', { name: '泊位導覽' }))
@@ -1515,7 +1532,7 @@ describe('頁 4：Prowlarr 與索引站', () => {
       [INDEXERS]: { body: indexerSetup({ origin: null, sites: [], candidates: [] }) },
     })
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
 
     await screen.findByText(/先測試，通過的站勾起來加入/)
     expect(screen.queryByText(/你那一台上已經有的站/)).not.toBeInTheDocument()
@@ -1556,7 +1573,7 @@ describe('頁 4：Prowlarr 與索引站', () => {
     })
     const user = userEvent.setup()
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
     await screen.findByRole('heading', { level: 2, name: '索引站' })
     await user.click(existingCard())
     // 選「既有」只展開表單；Prowlarr 頁的表單自己送 connect，不經 `services/prowlarr`。
@@ -1574,7 +1591,7 @@ describe('頁 4：Prowlarr 與索引站', () => {
     })
     expect(await screen.findByText('Jackett · TV')).toBeInTheDocument()
     // 板上那一格說出實際的那一種，不寫死 Prowlarr。
-    const berth = within(screen.getByText('BTH 4').closest('li')!)
+    const berth = within(within(boardCells()).getByText('BTH 4').closest('li')!)
     expect(berth.getByText('既有 · Torznab · jackett:9117')).toBeInTheDocument()
 
     await user.click(await screen.findByRole('button', { name: '搜尋全部' }))
@@ -1593,7 +1610,7 @@ describe('頁 4：Prowlarr 與索引站', () => {
     })
     const user = userEvent.setup()
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
     // 讀到清單之前頁尾有一顆同名的「之後再說」，讀到之後換成「加入」旁邊那一顆：等清單畫好再按。
     await screen.findByTestId('recommended')
     expect(screen.queryByTestId('indexers-deferred')).not.toBeInTheDocument()
@@ -1619,7 +1636,7 @@ describe('頁 4：Prowlarr 與索引站', () => {
     })
     const user = userEvent.setup()
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
     await screen.findByRole('heading', { level: 2, name: '索引站' })
     await user.click(existingCard())
 
@@ -1636,12 +1653,12 @@ describe('頁 5：TMDB', () => {
   it('TMDB 是自己的一格、自己的一頁，沒有「之後再說」', async () => {
     stubApi({ [STATUS]: { body: AT_TMDB }, [TMDB]: { body: tmdbSetup() } })
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
 
     expect(await screen.findByRole('heading', { level: 2, name: 'TMDB' })).toBeVisible()
     expect(screen.queryByRole('button', { name: '之後再說' })).not.toBeInTheDocument()
     expect(screen.queryByText('要加入哪些站')).not.toBeInTheDocument()
-    const berth = within(screen.getByText('BTH 5').closest('li')!)
+    const berth = within(within(boardCells()).getByText('BTH 5').closest('li')!)
     expect(berth.getByText('TMDB')).toBeInTheDocument()
     expect(berth.getByRole('button')).toHaveAttribute('aria-current', 'step')
     // 精靈裡的「去哪裡拿」多一句進度會留著（設定頁沒有這一句，票 06h），兩句之間中文不加空格。
@@ -1656,7 +1673,7 @@ describe('頁 5：TMDB', () => {
     const fetchStub = stubApi({ [STATUS]: { body: AT_TMDB }, [TMDB]: { body: tmdbSetup() } })
     const user = userEvent.setup()
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
 
     expect(await screen.findByText(/設定 → API/)).toBeInTheDocument()
     expect(screen.getByRole('link', { name: '開啟 TMDB 的 API 設定' })).toHaveAttribute(
@@ -1684,7 +1701,7 @@ describe('頁 5：TMDB', () => {
       },
     })
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
 
     expect(await screen.findByText('GET /configuration: 401')).toBeInTheDocument()
     expect(screen.getAllByText('https://www.themoviedb.org/settings/api')).toHaveLength(2)
@@ -1707,7 +1724,7 @@ describe('頁 5：TMDB', () => {
     })
     const user = userEvent.setup()
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
     await user.type(
       await screen.findByLabelText('你的 TMDB API key'),
       ' 00000000000000000000000000000003 ',
@@ -1728,7 +1745,7 @@ describe('頁 5：TMDB', () => {
     stubApi({ [STATUS]: { body: AT_TMDB }, [TMDB]: { body: tmdbSetup() } })
     const user = userEvent.setup()
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
 
     const tmdbKey = await screen.findByLabelText('你的 TMDB API key')
     expect(tmdbKey).toHaveAttribute('type', 'password')
@@ -1749,8 +1766,12 @@ describe('頁 5：TMDB', () => {
     })
     const user = userEvent.setup()
 
-    renderWithProviders(<SetupPage />)
-    const berth = within((await screen.findByText('BTH 5')).closest('li')!)
+    renderInRoute(<SetupPage />)
+    const berth = within(
+      within(await findBoardCells())
+        .getByText('BTH 5')
+        .closest('li')!,
+    )
     expect(await berth.findByText('待驗證')).toBeInTheDocument()
 
     await user.type(await screen.findByLabelText('你的 TMDB API key'), '0'.repeat(32))
@@ -1758,7 +1779,7 @@ describe('頁 5：TMDB', () => {
 
     expect(await berth.findByText('已驗證')).toBeInTheDocument()
     expect(berth.queryByText('待驗證')).not.toBeInTheDocument()
-    const indexers = within(screen.getByText('BTH 4').closest('li')!)
+    const indexers = within(within(boardCells()).getByText('BTH 4').closest('li')!)
     expect(indexers.getByText('套件內 · Prowlarr · 3 個索引站')).toBeInTheDocument()
   })
 })
@@ -1791,3 +1812,79 @@ function stubRemoval() {
     },
   })
 }
+
+/**
+ * 只有 Berth 時（M4 票 30，使用者 2026-10-01 決定）：「套件內」照常列出，進頁只問主機名解不解得到；
+ * 解不到的卡片說這套 compose 沒有起它、給加回的那一行。不預選、不停用。
+ */
+describe('只有 Berth 時的套件內卡片', () => {
+  const COMPOSE = 'GET /api/setup/compose'
+  const ONLY_BERTH = {
+    body: { resolvable: { jellyfin: false, qbittorrent: false, prowlarr: false } },
+  }
+
+  it('頁 1：卡片說沒有起 Jellyfin，下面給加回它的那一行；不預選、不停用、一個 POST 都不送', async () => {
+    const stub = stubApi({ [STATUS]: { body: setupStatus() }, [COMPOSE]: ONLY_BERTH })
+
+    renderInRoute(<SetupPage />)
+
+    expect(await screen.findByText('這套 compose 沒有起 Jellyfin。')).toBeVisible()
+    expect(bundledCard()).toHaveAccessibleName(/這套 compose 沒有起 Jellyfin/)
+    expect(bundledCard()).not.toBeChecked()
+    expect(bundledCard()).toBeEnabled()
+    // 與選了之後的補法同一行（`bringBack`）：還沒選的都算在套件內。
+    expect(screen.getByText('COMPOSE_PROFILES=jellyfin,qbittorrent,prowlarr')).toBeVisible()
+    expect(screen.getByText('docker compose up -d')).toBeVisible()
+    expect(stub.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false)
+  })
+
+  it('頁 1：卡片仍可選，選了就照舊存下並測', async () => {
+    const stub = stubApi({
+      [STATUS]: { body: setupStatus() },
+      [COMPOSE]: ONLY_BERTH,
+      'POST /api/setup/services/jellyfin': {
+        body: setupStatus({
+          services: [chosen({ state: 'failed', reason: 'not_deployed', detail: '' })],
+        }),
+      },
+    })
+    const user = userEvent.setup()
+    renderInRoute(<SetupPage />)
+
+    await user.click(await screen.findByRole('radio', { name: /^套件內/ }))
+
+    await waitFor(() =>
+      expect(bodyOf(stub, '/api/setup/services/jellyfin')).toEqual({ origin: 'bundled' }),
+    )
+    // 選了之後交給測試那一條的補法，卡片下不再重複一份。
+    expect(await screen.findByText('主機名解不到')).toBeVisible()
+    expect(screen.getAllByText('COMPOSE_PROFILES=jellyfin,qbittorrent,prowlarr')).toHaveLength(1)
+  })
+
+  it('主機名解得到的服務不加註', async () => {
+    const stub = stubApi({
+      [STATUS]: { body: CHOOSING_QBITTORRENT },
+      [COMPOSE]: { body: { resolvable: { jellyfin: true, qbittorrent: true, prowlarr: true } } },
+    })
+
+    renderInRoute(<SetupPage />)
+
+    await screen.findByRole('heading', { level: 2, name: '先選 qBittorrent 是哪一台' })
+    await waitFor(() => expect(called(stub, '/api/setup/compose')).toBe(true))
+    expect(screen.queryByText(/這套 compose 沒有起/)).not.toBeInTheDocument()
+    expect(screen.queryByText('docker compose up -d')).not.toBeInTheDocument()
+  })
+
+  it('頁 4：只有沒起的那一個加註', async () => {
+    stubApi({
+      [STATUS]: { body: CHOOSING_INDEXER },
+      [INDEXERS]: { body: indexerSetup({ origin: null }) },
+      [COMPOSE]: { body: { resolvable: { jellyfin: true, qbittorrent: true, prowlarr: false } } },
+    })
+
+    renderInRoute(<SetupPage />)
+
+    expect(await screen.findByText('這套 compose 沒有起 Prowlarr。')).toBeVisible()
+    expect(screen.getByText('COMPOSE_PROFILES=jellyfin,qbittorrent,prowlarr')).toBeVisible()
+  })
+})

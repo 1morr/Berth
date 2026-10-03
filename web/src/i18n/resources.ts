@@ -28,6 +28,12 @@ const zhHant = {
     indexerCount_other: '{{product}} · {{count}} 個索引站',
     unassigned: '未指派',
     waiting: '待靠泊',
+    // 手機寬度的那一列摘要（M4 票 30）。
+    summary: {
+      expand: '展開',
+      collapse: '收起',
+      blocked: '阻擋',
+    },
   },
   setup: {
     title: '設定精靈',
@@ -186,6 +192,10 @@ const zhHant = {
     bundled: {
       title: '套件內',
       lede: 'compose 帶來的那一台 {{service}}。Berth 連它、替你設定好：',
+      // 主機名解不到（M4 票 30）：只查過 DNS，還沒連它。
+      absent: '這套 compose 沒有起 {{service}}。',
+      absentFix:
+        '要用套件內的 {{service}}：把 {{kind}} 加回 .env 的 COMPOSE_PROFILES，再 docker compose up -d，然後點「套件內」。要接你自己的那一台就選「既有」。',
     },
     existing: {
       title: '既有',
@@ -3095,6 +3105,11 @@ const en: Translations<typeof zhHant> = {
     indexerCount_other: '{{product}} · {{count}} indexers',
     unassigned: 'Unassigned',
     waiting: 'Awaiting berth',
+    summary: {
+      expand: 'Show',
+      collapse: 'Hide',
+      blocked: 'Blocked',
+    },
   },
   setup: {
     title: 'Setup wizard',
@@ -3259,6 +3274,9 @@ const en: Translations<typeof zhHant> = {
     bundled: {
       title: 'Bundled',
       lede: 'The {{service}} compose brought along. Berth connects to it and sets it up for you:',
+      absent: 'This compose project has not started {{service}}.',
+      absentFix:
+        'To use the bundled {{service}}: put {{kind}} back into COMPOSE_PROFILES in .env, run docker compose up -d, then pick “Bundled”. To connect your own, choose “Existing”.',
     },
     existing: {
       title: 'Existing',

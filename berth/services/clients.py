@@ -12,6 +12,10 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from berth.adapters.budget import BudgetedFetcher, RequestBudget
+
+# `api` 拿它當相依的型別，而 `api` 不能 import `adapters`：從這裡明示再匯出。
+from berth.adapters.dns import HostResolver as HostResolver
+from berth.adapters.dns import SystemHostResolver
 from berth.adapters.indexer import IndexerSearch
 from berth.adapters.indexer.prowlarr import ProwlarrSearch
 from berth.adapters.indexer.torznab import TorznabSearch
@@ -114,6 +118,11 @@ def bundled_services(config: Config, environ: Mapping[str, str] | None = None) -
         targets=bundled_targets(config),
         prowlarr_api_key=read_api_key(config.prowlarr_config_path, env),
     )
+
+
+def host_resolver() -> HostResolver:
+    """問套件內主機名解不解得到的那一個（M4 票 30）。`api` 不能 import `adapters`，所以由這裡造。"""
+    return SystemHostResolver()
 
 
 def feed_fetcher(factory: ServiceClientFactory, use: BudgetUse) -> FeedFetcher:

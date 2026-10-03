@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useNavigate } from '@tanstack/react-router'
+import { useNavigate, useSearch } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 
 import { ApiError } from '../api/client'
@@ -16,6 +16,7 @@ import {
   CLAIM_OWNER_KEY,
   claimOwner,
   completeSetup,
+  composeQueryOptions,
   connectIndexer,
   apiKeyFailed,
   connectJellyfin,
@@ -69,6 +70,7 @@ import {
   previousOf,
   reachable,
   shownStep,
+  stepOf,
   straying,
 } from '../setup/navigation'
 import { type ChoiceControls } from '../setup/ServiceChoice'
@@ -98,7 +100,8 @@ const PROGRESS_INTERVAL_MS = 1500
  * 進頁與選擇之前，這一頁不對任何服務發請求——qBittorrent 的差異在選了、連上之後才讀。
  *
  * 導覽的規則（停在結果上、上一個 / 下一個、點得到哪幾格）在 `setup/navigation.ts`，是純函式；
- * 這一頁只把它接到按鈕上（票 06d）。
+ * 這一頁只把它接到按鈕上（票 06d）。畫面上那一頁就是網址的 `?step=N`（M4 票 30）：換頁進瀏覽器的
+ * 歷史，上一頁回到上一個看過的頁、重新整理留在原頁。
  *
  * **精靈只管第一次**（票 06i）：跑完之後 `/setup` 導向設定頁（`routes.tsx`），改東西在那裡，
  * 所以這一頁沒有「從外面直接跳到某個泊位」或「跑完之後再回來」的分支。
@@ -108,8 +111,9 @@ export function SetupPage() {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const status = useQuery(setupStatusQueryOptions)
-  // 步驟是由狀態導出的（plan §9.3），所以「停在結果上」與「回頭看」都靠這個覆寫，不是靠改狀態。
-  const [pinned, setPinned] = useState<number | null>(null)
+  // 步驟是由狀態導出的（plan §9.3），所以「停在結果上」與「回頭看」都靠網址上的這一頁，不是靠改狀態：
+  // 網址一直寫著畫面上那一頁，後端前進時畫面不動（M4 票 30；原本是按下動作那一刻釘住的覆寫）。
+  const requested = stepOf(useSearch({ strict: false }).step)
   // 服務頁上選著、還沒存下的那一格（M4 票 09）。由這一頁持有而不是那一頁：泊位板要跟著它，不再寫著
   // 原本那一台的「失敗 · 套件內」（M4 票 21）。記著是哪一步的——離開那一頁就不算數了。
   const [draft, setDraft] = useState<{
@@ -120,20 +124,21 @@ export function SetupPage() {
 
   const current = status.data
   const backend = current?.current_step ?? STEP.jellyfin
-  const step = shownStep(backend, pinned)
+  const step = shownStep(backend, requested)
 
-  /** 去某一步。去後端目前那一頁就是解除覆寫（`go`）。 */
+  /** 去某一步：進瀏覽器的歷史，上一頁回到這裡。 */
   function goTo(target: number) {
-    setPinned(go(target, backend))
+    void navigate({ to: '/setup', search: { step: go(target, backend) } })
   }
 
-  /**
-   * 按下這一頁的動作那一刻釘住這一頁：做完之後後端就前進了，畫面照樣停在結果上，
-   * 使用者按「前往下一個泊位」才走（票 06d）。
-   */
-  function hold() {
-    setPinned(step)
-  }
+  // 網址沒寫、或指到後端還沒到的那一頁（手打的、後端退回去了）：改成畫面上那一頁，不多一筆歷史。
+  // 狀態讀回來之前不改——那時的 `backend` 是預設的頁 1，會把網址上的頁蓋掉。
+  const loaded = status.data !== undefined
+  useEffect(() => {
+    if (loaded && requested !== step) {
+      void navigate({ to: '/setup', search: { step }, replace: true })
+    }
+  }, [loaded, requested, step, navigate])
 
   function absorb(next: SetupStatus) {
     queryClient.setQueryData(setupStatusQueryOptions.queryKey, next)
@@ -155,7 +160,6 @@ export function SetupPage() {
   const owner = useMutation({
     mutationKey: CLAIM_OWNER_KEY,
     mutationFn: claimOwner,
-    onMutate: hold,
     onSuccess: (next) => {
       absorb(next)
       queryClient.setQueryData(healthQueryOptions.queryKey, (old) =>
@@ -177,21 +181,17 @@ export function SetupPage() {
       void queryClient.invalidateQueries({ queryKey: routeSetupQueryOptions.queryKey })
     }
   }
-  // 服務頁的二選一（M4 票 15）：存下、測一次。按下去那一刻釘住這一頁，結果回來照樣停在這裡。
+  // 服務頁的二選一（M4 票 15）：存下、測一次。結果回來照樣停在這一頁（網址沒變）。
   const choose = useMutation({
     mutationFn: ({ kind, input }: { kind: ServiceKind; input: ChoiceInput }) =>
       chooseService(kind, input),
-    onMutate: ({ kind }) => {
-      hold()
-      forgetResults(kind)
-    },
+    onMutate: ({ kind }) => forgetResults(kind),
     onSuccess: (next, { kind }) => {
       absorb(next)
       invalidateBerthOf(kind)
     },
   })
-  // 重測：紅燈上的「重新測試」（`restart`），以及套件內那一台還在啟動時的輪詢。輪詢不釘畫面——
-  // 使用者在別頁回頭看的時候，背景的重測不該把他拉回去。
+  // 重測：紅燈上的「重新測試」（`restart`），以及套件內那一台還在啟動時的輪詢。
   const retest = useMutation({
     mutationFn: ({ kind, restart }: { kind: ServiceKind; restart: boolean }) =>
       retestService(kind, restart),
@@ -207,6 +207,7 @@ export function SetupPage() {
   function choiceOf(kind: ServiceKind): ChoiceControls & ChoiceDraft {
     const mine = choose.variables?.kind === kind
     return {
+      composeHosts: composeHosts.data,
       choosing: choose.isPending && choose.variables.kind === kind,
       retesting: retest.isPending && retest.variables.kind === kind && retest.variables.restart,
       refusal: mine ? choiceRefusalOf(choose.error) : null,
@@ -220,7 +221,6 @@ export function SetupPage() {
       onDraft: (origin) => setDraft(origin === null ? null : { step, kind, origin }),
       onChoose: (input, done) => choose.mutate({ kind, input }, { onSuccess: done }),
       onRetest: (restart) => {
-        if (restart) hold()
         retest.mutate({ kind, restart })
       },
     }
@@ -233,7 +233,7 @@ export function SetupPage() {
       if (!apiKeyFailed(next)) retest.mutate({ kind: 'jellyfin', restart: true })
     },
   })
-  // 剖面上的媒體庫清單停手就存（票 06f）。不釘畫面；精靈狀態要重讀：多一列還沒建的，頁 3 就還沒做完
+  // 剖面上的媒體庫清單停手就存（票 06f）。精靈狀態要重讀：多一列還沒建的，頁 3 就還沒做完
   // （後端 `libraries_built`，M4 票 24）。
   const saveLibraries = useMutation({
     mutationFn: saveBundledLibraries,
@@ -261,7 +261,6 @@ export function SetupPage() {
       }
       return buildRoutes(plan.selections)
     },
-    onMutate: hold,
     onSuccess: (next) => {
       if (next) absorbBerth(routeSetupQueryOptions.queryKey, next)
       // 媒體庫清單或某個媒體庫的路徑變了：那一份也要重讀。
@@ -277,36 +276,30 @@ export function SetupPage() {
   }
   const applyPreferences = useMutation({
     mutationFn: applyQbittorrent,
-    onMutate: hold,
     onSuccess: (next) => absorbBerth(qbittorrentSetupQueryOptions.queryKey, next),
   })
   const applySites = useMutation({
     mutationFn: applyIndexers,
-    onMutate: hold,
     onSuccess: (next) => absorbBerth(indexerSetupQueryOptions.queryKey, next),
   })
   // 套件內 Prowlarr 的介面登入是自己的一顆按鈕（M4 票 20），不跟著「加入」送。
   const prowlarrLogin = useMutation({
     mutationFn: setIndexerLogin,
-    onMutate: hold,
     onSuccess: (next) => absorbBerth(indexerSetupQueryOptions.queryKey, next),
   })
   // 既有 Prowlarr 或 Torznab 的表單（頁 4 選「既有」時）：這就是選了既有，精靈狀態裡的選擇也跟著變。
   const connectSource = useMutation({
     mutationFn: connectIndexer,
-    onMutate: hold,
     onSuccess: (next) => absorbBerth(indexerSetupQueryOptions.queryKey, next),
   })
   const skipSites = useMutation({
     mutationFn: () => skipIndexers(true),
-    onMutate: hold,
     onSuccess: (next) => absorbBerth(indexerSetupQueryOptions.queryKey, next),
   })
-  // 測試與試搜只讀、不改後端的步驟，所以不經 mutation 也不釘畫面（`IndexerSites` 自己記結果）；
+  // 測試與試搜只讀、不改後端的步驟，所以不經 mutation（`IndexerSites` 自己記結果）；
   // 移除最後一站會讓後端退回頁 4，照樣停在這一頁。
   const removeSite = useMutation({
     mutationFn: removeIndexer,
-    onMutate: hold,
     onSuccess: (next) => absorbBerth(indexerSetupQueryOptions.queryKey, next),
   })
   /**
@@ -334,7 +327,6 @@ export function SetupPage() {
 
   const tmdbTest = useMutation({
     mutationFn: testTmdb,
-    onMutate: hold,
     onSuccess: (next) => absorbBerth(tmdbSetupQueryOptions.queryKey, next),
   })
   const finish = useMutation({
@@ -388,14 +380,18 @@ export function SetupPage() {
     retestedLoss.current = qbittorrentLostAt
     retestNow({ kind: 'qbittorrent', restart: true })
   }, [qbittorrentLostAt, retesting, retestNow])
+  // 服務頁進頁問一次套件內的主機名解不解得到（M4 票 30）：只查 DNS，不對服務發請求（brief §19）。
+  const composeHosts = useQuery({
+    ...composeQueryOptions,
+    enabled: step === STEP.jellyfin || step === STEP.qbittorrent || step === STEP.indexer,
+  })
   // 泊位板要畫得出走過的每一格，所以這三份跟著後端走到哪裡，不跟著畫面停在哪裡。
   const routes = useQuery({ ...routeSetupQueryOptions, enabled: backend >= STEP.routes })
   // 頁 3 進頁時向 Jellyfin 重讀媒體庫（M4 票 19；套件內也是，票 24）：頁 1 之後在 Jellyfin 改的掛載、
   // 路徑與媒體庫要看得到。讀的是 Jellyfin、寫的是 Berth 的快照，不動任何服務；但快照決定清單哪幾列
-  // 已建立、頁 3 走不走得過去，所以釘住這一頁、重讀清單與精靈狀態——後端因此前進時畫面停在這裡。
+  // 已建立、頁 3 走不走得過去，所以重讀清單與精靈狀態——後端因此前進時畫面停在這裡（網址沒變）。
   const reread = useMutation({
     mutationFn: rereadRouteLibraries,
-    onMutate: hold,
     onSuccess: (next) => {
       absorbBerth(routeSetupQueryOptions.queryKey, next)
       void queryClient.invalidateQueries({ queryKey: jellyfinSetupQueryOptions.queryKey })
@@ -505,7 +501,7 @@ export function SetupPage() {
     tmdb: tmdb.data,
     signals,
     onGo: goTo,
-    onReturn: () => setPinned(null),
+    onReturn: () => goTo(backend),
   }
 
   return (
@@ -566,7 +562,7 @@ export function SetupPage() {
             saveLibrariesFailed={librariesFailure()}
             onRouteDeleted={() => {
               // 刪掉最後一條紅的，後端就過了這一頁（M4 票 24）：重讀進度，前進鍵才出現。畫面不跳頁：
-              // 進頁的重讀已經釘住這一頁。
+              // 網址寫著這一頁。
               void queryClient.invalidateQueries({ queryKey: routeSetupQueryOptions.queryKey })
               void queryClient.invalidateQueries({ queryKey: setupStatusQueryOptions.queryKey })
             }}

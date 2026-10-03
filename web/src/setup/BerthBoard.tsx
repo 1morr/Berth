@@ -91,6 +91,11 @@ export function BerthBoard({
       label={t('board.title')}
       slots={slots}
       current={current}
+      summary={{
+        expand: t('board.summary.expand'),
+        collapse: t('board.summary.collapse'),
+        blocked: t('board.summary.blocked'),
+      }}
       onSelect={
         onSelect &&
         ((code) => {

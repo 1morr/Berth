@@ -1555,6 +1555,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/setup/compose": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Compose
+         * @description 服務頁進頁時問的：套件內那幾台在不在這套 compose 的網路上（M4 票 30）。
+         *
+         *     只做主機名解析，不對服務發請求（brief §19）。擁有者成立之前就問得到：頁 1 的卡片要用。
+         */
+        get: operations["get_compose_api_setup_compose_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/setup/owner": {
         parameters: {
             query?: never;
@@ -2438,6 +2460,13 @@ export interface components {
          * @enum {string}
          */
         CollectionType: "movies" | "tvshows";
+        /** ComposeOut */
+        ComposeOut: {
+            /** Resolvable */
+            resolvable: {
+                [key: string]: boolean;
+            };
+        };
         /**
          * Confidence
          * @description brief §6.5 的三級。`HIGH` 與 `MEDIUM` 都自動入庫，`LOW` 進 review。
@@ -8692,6 +8721,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SetupStatusOut"];
+                };
+            };
+        };
+    };
+    get_compose_api_setup_compose_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ComposeOut"];
                 };
             };
         };

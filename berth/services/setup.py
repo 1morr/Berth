@@ -11,9 +11,11 @@ Prowlarr 各一頁，使用者選「套件內」或「既有」，選擇存在 `
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from urllib.parse import urlsplit
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -55,7 +57,8 @@ from berth.models import (
     SetupStep,
 )
 from berth.services.auth import SignedIn, open_session
-from berth.services.clients import BundledServices, ServiceClientFactory
+from berth.services.clients import BundledServices, HostResolver, ServiceClientFactory
+from berth.services.commands import Effect, command
 from berth.services.indexer import (
     existing_prowlarr_step,
     instance_login,
@@ -402,6 +405,22 @@ async def retest_service(
 
         await update_settings(session, IndexerSettings, remount)
     return await _test_and_record(session, factory, kind, restart=restart, now=now or _utcnow())
+
+
+@command(Effect.READ)
+async def resolve_bundled(
+    bundled: BundledServices, resolver: HostResolver
+) -> dict[ServiceKind, bool]:
+    """套件內三個主機名各自解不解得到（M4 票 30，brief §19 2026-10-01）。
+
+    解不到就是那個服務不在這套 compose 裡（或停著）：服務頁的「套件內」卡片照它加註。**只查 DNS**，
+    不造任何服務的 client——選之前不對服務發請求（brief §19）不變。
+    """
+    kinds = list(bundled.targets)
+    answers = await asyncio.gather(
+        *(resolver.resolves(urlsplit(bundled.targets[kind]).hostname or "") for kind in kinds)
+    )
+    return dict(zip(kinds, answers, strict=True))
 
 
 async def _test_and_record(

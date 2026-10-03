@@ -22,6 +22,15 @@ const FLOWS = [
     port: 8506,
     viewport: NARROW,
   },
+  // 只有 Berth（M4 票 30）：套件內卡片進頁就說沒有起。
+  { name: 'compose-absent', spec: 'compose-absent', scenario: 'berth-only', port: 8519 },
+  {
+    name: 'compose-absent-390',
+    spec: 'compose-absent',
+    scenario: 'berth-only',
+    port: 8520,
+    viewport: NARROW,
+  },
   { name: 'settings', spec: 'settings', scenario: 'healthy', port: 8497 },
   { name: 'settings-390', spec: 'settings', scenario: 'healthy', port: 8507, viewport: NARROW },
   { name: 'submit', spec: 'submit', scenario: 'import', port: 8492 },

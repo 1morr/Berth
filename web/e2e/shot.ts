@@ -7,3 +7,8 @@ import { test, type Page } from '@playwright/test'
 export async function shot(page: Page, name: string): Promise<void> {
   await page.screenshot({ path: test.info().outputPath(`${name}.png`), fullPage: true })
 }
+
+/** 手機寬度（< 640px，Tailwind 的 `sm` 以下）：精靈的泊位板收成一列摘要（M4 票 30）。 */
+export function narrow(page: Page): boolean {
+  return (page.viewportSize()?.width ?? Infinity) < 640
+}

@@ -57,6 +57,8 @@ SETUP_PREFIX = "/setup"
 SETUP_OPENING_PATHS: frozenset[tuple[str, str]] = frozenset(
     {
         ("GET", "/setup/status"),
+        # 只查套件內的主機名（M4 票 30）：頁 1 的 Jellyfin 卡片要用，什麼都不寫、不連任何服務。
+        ("GET", "/setup/compose"),
         ("POST", "/setup/services/jellyfin"),
         ("POST", "/setup/services/jellyfin/test"),
         ("POST", "/setup/owner"),

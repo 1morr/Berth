@@ -4,12 +4,13 @@ import type { BerthSlot } from '../components/berths'
  * 精靈的導覽（票 06d）。
  *
  * **步驟由後端狀態導出，不存游標**（plan §9.3）：後端說「現在是第幾步」，前端不改它。
- * 前端只有一個覆寫——`pinned`，畫面停在哪一步——而它的進出規則全部在這裡，是純函式：
+ * 畫面停在哪一步是網址的 `?step=N`（M4 票 30）——重新整理留在原頁、瀏覽器的上一頁回到上一個看過的頁。
+ * 它的規則全部在這裡，是純函式：
  *
- * - 一個泊位做完，後端就前進了；畫面照樣停在那一步的結果上（按下動作的那一刻釘住），
+ * - 網址一直寫著畫面上那一步。一個泊位做完，後端就前進了；網址沒變，畫面照樣停在那一步的結果上，
  *   按「前往下一個泊位」才走。
  * - 走過的步驟點得回去，還沒到的點不過去——前進只能靠把事做完（Material Stepper 的 linear 模式）。
- * - 去後端目前那一步（或更後面）就是解除覆寫，所以回頭之後永遠走得回來。
+ *   網址指到後端還沒到的那一步（手打的、或後端退回去了）就拉回後端那一步。
  *
  * 一步一頁（票 06e 把索引站與 TMDB 拆成兩個泊位之後）：「頁」與「步」是同一個號碼。
  */
@@ -39,14 +40,25 @@ export const BERTH_STEP = {
   tmdb: STEP.tmdb,
 } as const satisfies Record<BerthSlot, number>
 
-/** 畫面上是哪一步。覆寫只能往回：後端退回去了的話，還沒到的那一步不能看。 */
-export function shownStep(current: number, pinned: number | null): number {
-  return pinned !== null && pinned <= current ? pinned : current
+/** 網址的 `step`：精靈的一頁才算數，其餘（沒寫、`0`、`x`、`2.5`）當作沒寫。 */
+export function stepOf(raw: unknown): number | undefined {
+  const step = Number(raw)
+  return raw !== '' && Number.isInteger(step) && step >= STEP.jellyfin && step <= STEP.complete
+    ? step
+    : undefined
 }
 
-/** 去某一步之後的覆寫。去後端目前那一步或更後面就是解除覆寫——不必記得另一顆「回到目前」。 */
-export function go(target: number, current: number): number | null {
-  return target >= current ? null : target
+/**
+ * 畫面上是哪一步。網址沒寫就是後端那一步；只能往回：後端退回去了的話，還沒到的那一步不能看。
+ * 與網址不同時，頁面把網址改成它（`replace`）。
+ */
+export function shownStep(current: number, requested: number | undefined): number {
+  return requested !== undefined && requested <= current ? requested : current
+}
+
+/** 去某一步：網址要寫的那一步。後端還沒到的那一步去不了，落在後端那一步。 */
+export function go(target: number, current: number): number {
+  return Math.min(target, current)
 }
 
 /** 下一步。完成頁沒有下一個。 */

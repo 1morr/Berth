@@ -20,7 +20,8 @@ test('冷啟動：服務還在啟動時選套件內，不按重新測試就連�
     }
   })
   await page.goto('/')
-  await expect(page).toHaveURL('/setup')
+  // 精靈的頁在網址上（M4 票 30）：讀回狀態之後補上 `?step=1`。
+  await expect(page).toHaveURL(/\/setup(\?step=1)?$/)
 
   // 1. 還沒選：一個請求都不發，也沒有帳密表單。
   await expect(page.getByRole('heading', { name: '先選 Jellyfin 是哪一台' })).toBeVisible()

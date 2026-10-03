@@ -66,7 +66,8 @@ describe('Berth 自己的 401 / 403', () => {
     // 登入頁讀的是重問過的 `/health`：快取裡那一份還說沒有擁有者，會把人送回精靈。
     await user.click(screen.getByRole('button', { name: '前往登入' }))
     await waitFor(() => expect(router.state.location.pathname).toBe('/login'))
-    expect(router.state.location.search).toEqual({ redirect: '/setup' })
+    // 回來的是同一頁：網址寫著畫面上那一頁（M4 票 30）。
+    expect(router.state.location.search).toEqual({ redirect: '/setup?step=1' })
   })
 
   it('頁 1 選服務時被搶先也一樣：不說「登入已失效」——這個人從沒登入過', async () => {

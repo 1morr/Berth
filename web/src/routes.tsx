@@ -36,6 +36,7 @@ import { QbittorrentSettingsPage } from './pages/QbittorrentSettingsPage'
 import { RouteSettingsPage } from './pages/RouteSettingsPage'
 import { RssPage } from './pages/RssPage'
 import { SetupPage } from './pages/SetupPage'
+import { stepOf } from './setup/navigation'
 import { TmdbSettingsPage } from './pages/TmdbSettingsPage'
 
 export interface RouterContext {
@@ -157,9 +158,15 @@ interface HealthSearch {
   denied?: boolean
 }
 
+/** 精靈畫面上的那一頁（M4 票 30）。沒寫或不是精靈的一頁就是 `undefined`，頁面以後端那一步補上。 */
+interface SetupSearch {
+  step?: number
+}
+
 const setupRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/setup',
+  validateSearch: (search: Record<string, unknown>): SetupSearch => ({ step: stepOf(search.step) }),
   /**
    * 擁有者成立之前匿名開放——那時候還沒有人登入得了；成立之後要有 session，沒有就去登入頁、
    * 登入之後回到這裡（M4 票 06）。**精靈只管第一次**（票 06i，使用者拍板）：跑完之後打開它的

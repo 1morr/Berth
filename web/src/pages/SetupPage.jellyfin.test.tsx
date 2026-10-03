@@ -3,7 +3,8 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { stubApi } from '../test/fetch'
-import { renderWithProviders } from '../test/render'
+import { boardCells, findBoardCells } from '../test/board'
+import { renderInRoute } from '../test/render'
 import {
   ALL_BUNDLED,
   SEQUENCE_DONE,
@@ -107,7 +108,7 @@ describe('頁 3：套件內 Jellyfin 的媒體庫清單與「建立並檢查」�
       [ROUTES]: { body: routeSetup() },
     })
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
 
     expect(await screen.findByRole('button', { name: '建立並檢查' })).toBeEnabled()
     expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('媒體庫路徑')
@@ -129,7 +130,7 @@ describe('頁 3：套件內 Jellyfin 的媒體庫清單與「建立並檢查」�
       [ROUTES]: { body: routeSetup({ libraries: [] }) },
     })
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
     const plan = (await screen.findByText('將建立')).closest('section')!
 
     expect(within(plan).getByText('/data/library/anime')).toBeInTheDocument()
@@ -156,7 +157,7 @@ describe('頁 3：套件內 Jellyfin 的媒體庫清單與「建立並檢查」�
     })
     const user = userEvent.setup()
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
     await user.click(await screen.findByRole('button', { name: '建立並檢查' }))
 
     const next = await screen.findByRole('button', { name: '前往下一個泊位' })
@@ -195,7 +196,7 @@ describe('頁 3：套件內 Jellyfin 的媒體庫清單與「建立並檢查」�
     })
     const user = userEvent.setup()
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
     await user.click(await screen.findByRole('button', { name: '建立並檢查' }))
 
     expect(await screen.findByText(/POST \/Library\/VirtualFolders: 500/)).toBeInTheDocument()
@@ -214,7 +215,7 @@ describe('頁 3：套件內 Jellyfin 的媒體庫清單與「建立並檢查」�
     })
     const user = userEvent.setup()
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
     const preview = await screen.findByRole('region', { name: '按下之後會' })
     expect(within(preview).queryByText(/個媒體庫/)).not.toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: '建立並檢查' }))
@@ -237,8 +238,8 @@ describe('頁 3：套件內 Jellyfin 的媒體庫清單與「建立並檢查」�
       [ROUTES]: { body: routeSetup() },
     })
 
-    renderWithProviders(<SetupPage />)
-    const board = await screen.findByRole('region', { name: '泊位板' })
+    renderInRoute(<SetupPage />)
+    const board = await findBoardCells()
 
     await waitFor(() =>
       expect(within(board).getByText('BTH 3').closest('li')).toHaveTextContent('失敗'),
@@ -259,9 +260,9 @@ describe('頁 3：套件內 Jellyfin 的媒體庫清單與「建立並檢查」�
       [ROUTES]: { body: routeSetup() },
     })
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
     await screen.findByText('3 個已建立')
-    const board = screen.getByRole('region', { name: '泊位板' })
+    const board = boardCells()
 
     expect(screen.queryByText(/POST \/Library\/VirtualFolders: 500/)).not.toBeInTheDocument()
     expect(within(board).getByText('BTH 3').closest('li')).not.toHaveTextContent('失敗')
@@ -282,7 +283,7 @@ describe('頁 3：套件內 Jellyfin 的媒體庫清單與「建立並檢查」�
       [ROUTES]: { body: routeSetup() },
     })
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
 
     expect(await screen.findByText(/這台 Jellyfin 是 10.11.11/)).toBeInTheDocument()
     expect(screen.getByText(/完整備份/)).toBeInTheDocument()
@@ -312,7 +313,7 @@ describe('GET /api/setup/jellyfin 只在頁 3 讀', () => {
       ...routes,
     })
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
 
     expect(await screen.findByRole('heading', { level: 2, name: title })).toBeVisible()
     await quietFor(50)
@@ -330,8 +331,8 @@ describe('GET /api/setup/jellyfin 只在頁 3 讀', () => {
     })
     const user = userEvent.setup()
 
-    renderWithProviders(<SetupPage />)
-    const board = await screen.findByRole('region', { name: '泊位板' })
+    renderInRoute(<SetupPage />)
+    const board = await findBoardCells()
     await user.click(await within(board).findByRole('button', { name: /BTH 3/ }))
 
     await waitFor(() => expect(jellyfinReads(fetchStub)).toBeGreaterThan(0))
@@ -349,8 +350,8 @@ describe('頁 3 做完之後回頭補建（票 08 code-review）', () => {
       'GET /api/setup/indexers': { body: indexerSetup() },
     })
     const user = userEvent.setup()
-    renderWithProviders(<SetupPage />)
-    const board = await screen.findByRole('region', { name: '泊位板' })
+    renderInRoute(<SetupPage />)
+    const board = await findBoardCells()
     await user.click(await within(board).findByRole('button', { name: /BTH 3/ }))
     await user.click(await screen.findByText('3 個已建立'))
     await user.click(screen.getByRole('button', { name: '加一個媒體庫' }))
@@ -385,7 +386,7 @@ describe('頁 3：套件內 Jellyfin 的媒體庫清單（票 06f）', () => {
     })
     const user = userEvent.setup()
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
     const movies = await screen.findByRole('group', { name: 'Movies' })
     const name = within(movies).getByLabelText('名稱')
     await user.clear(name)
@@ -429,7 +430,7 @@ describe('頁 3：套件內 Jellyfin 的媒體庫清單（票 06f）', () => {
     })
     const user = userEvent.setup()
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
     await screen.findByRole('group', { name: 'Movies' })
     await user.click(screen.getByRole('button', { name: '移除「TV」' }))
 
@@ -445,7 +446,7 @@ describe('頁 3：套件內 Jellyfin 的媒體庫清單（票 06f）', () => {
     })
     const user = userEvent.setup()
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
     const tv = await screen.findByRole('group', { name: 'TV' })
     await user.clear(within(tv).getByLabelText('名稱'))
     // 不分大小寫；資料夾跟著名稱推導，所以它也撞上了。
@@ -481,7 +482,7 @@ describe('頁 3：套件內 Jellyfin 的媒體庫清單（票 06f）', () => {
     })
     const user = userEvent.setup()
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
     const anime = await screen.findByRole('group', { name: 'Anime' })
     await user.click(within(anime).getByRole('button', { name: '移除「Anime」' }))
     await user.click(screen.getByRole('button', { name: '建立並檢查' }))
@@ -521,8 +522,8 @@ describe('頁 3：套件內 Jellyfin 的媒體庫清單（票 06f）', () => {
     const user = userEvent.setup()
 
     // 精靈已經走到頁 4；從泊位板回頭看頁 3。還有一列沒建，所以清單是展開的。
-    renderWithProviders(<SetupPage />)
-    const board = await screen.findByRole('region', { name: '泊位板' })
+    renderInRoute(<SetupPage />)
+    const board = await findBoardCells()
     await user.click(await within(board).findByRole('button', { name: /BTH 3/ }))
     const list = (await screen.findByRole('heading', { name: '要建的媒體庫' })).closest('section')!
 
@@ -552,7 +553,7 @@ describe('頁 3：套件內 Jellyfin 的媒體庫清單（票 06f）', () => {
     })
     const user = userEvent.setup()
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
     const anime = await screen.findByRole('group', { name: 'Anime' })
     await user.click(within(anime).getByRole('button', { name: '移除「Anime」' }))
 
@@ -577,7 +578,7 @@ describe('頁 3：清單的拒絕帶著列號', () => {
     })
     const user = userEvent.setup()
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
     const anime = await screen.findByRole('group', { name: 'Anime' })
     await user.click(within(anime).getByRole('button', { name: '移除「Anime」' }))
 
@@ -635,7 +636,7 @@ describe('頁 3：既有 Jellyfin 直接是 Route', () => {
       [ROUTES]: { body: PICKER },
     })
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
 
     expect(await screen.findByRole('checkbox', { name: '影集' })).toBeVisible()
     expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('媒體庫路徑')
@@ -668,7 +669,7 @@ describe('頁 3：既有 Jellyfin 直接是 Route', () => {
     })
     const user = userEvent.setup()
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
     await user.click(await screen.findByRole('checkbox', { name: '影集' }))
     const fresh = screen.getByRole('radio', { name: '/data/library/影集' })
     expect(fresh).toHaveAccessibleDescription(/按「建立並檢查」時加到這個媒體庫/)
@@ -724,7 +725,7 @@ describe('頁 3：既有 Jellyfin 直接是 Route', () => {
     })
     const user = userEvent.setup()
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
     await user.click(await screen.findByRole('checkbox', { name: '影集' }))
     await user.click(screen.getByRole('radio', { name: '/data/library/影集' }))
     await user.click(screen.getByRole('button', { name: '建立並檢查' }))
@@ -762,7 +763,7 @@ describe('頁 3：既有 Jellyfin 直接是 Route', () => {
     })
     const user = userEvent.setup()
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
     expect(await screen.findByText('還差一步：勾一個媒體庫。')).toBeInTheDocument()
     await user.click(screen.getByRole('checkbox', { name: '影集' }))
 
@@ -793,7 +794,7 @@ describe('頁 3：既有 Jellyfin 直接是 Route', () => {
     })
     const user = userEvent.setup()
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
     await user.click(await screen.findByRole('checkbox', { name: 'TV Shows' }))
 
     // id 用名字拼的話，`aria-describedby="target-TV Shows-…"` 會斷成兩個 id，說明就掛不上。
@@ -822,7 +823,7 @@ describe('頁 3：既有 Jellyfin 直接是 Route', () => {
     })
     const user = userEvent.setup()
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
     await user.click(await screen.findByRole('checkbox', { name: '影集' }))
 
     expect(screen.getAllByRole('radio')).toHaveLength(2)
@@ -841,7 +842,7 @@ describe('頁 3：既有 Jellyfin 直接是 Route', () => {
       },
     })
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
 
     expect(await screen.findByText(/這個媒體庫掛了 TVDB 的 metadata fetcher/)).toBeInTheDocument()
   })
@@ -853,7 +854,7 @@ describe('頁 3：既有 Jellyfin 直接是 Route', () => {
       [ROUTES]: { body: PICKER },
     })
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
 
     expect(await screen.findByRole('checkbox', { name: '影集' })).toBeInTheDocument()
     // 12.x 原生合併多版本，Berth 不再碰別人的插件，也就不會重啟別人的 Jellyfin（票 14b）。
@@ -868,7 +869,7 @@ describe('頁 3：既有 Jellyfin 直接是 Route', () => {
       [ROUTES]: { body: routeSetup({ origin: 'existing', libraries: [] }) },
     })
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
 
     expect(await screen.findByText(/先在 Jellyfin 建一個再回來/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '建立並檢查' })).toBeDisabled()

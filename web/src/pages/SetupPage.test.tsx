@@ -3,7 +3,8 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { stubApi } from '../test/fetch'
-import { renderWithProviders } from '../test/render'
+import { findBoardCells } from '../test/board'
+import { renderInRoute } from '../test/render'
 import { ALL_BUNDLED, chosen, jellyfinSetup, setupStatus } from '../test/fixtures'
 import { SetupPage } from './SetupPage'
 
@@ -40,7 +41,7 @@ describe('精靈的外框', () => {
   it('精靈有唯一的 h1，每一步的標題掛在它底下', async () => {
     stubApi({ [STATUS]: { body: setupStatus() } })
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
 
     // 先等這一步畫出來：外框的 h1 在讀取中就在了，步驟的 h2 要等狀態回來。
     expect(await screen.findByRole('heading', { level: 2 })).toBeVisible()
@@ -66,8 +67,8 @@ describe('精靈的外框', () => {
       },
     })
 
-    renderWithProviders(<SetupPage />)
-    const board = await screen.findByRole('region', { name: '泊位板' })
+    renderInRoute(<SetupPage />)
+    const board = await findBoardCells()
     const slot = (code: string) => within(board).getByText(code).closest('li')!
 
     await waitFor(() => expect(slot('BTH 2')).toHaveTextContent('失敗'))
@@ -97,10 +98,11 @@ describe('頁 1：Jellyfin 與擁有者', () => {
   }
 
   /** M4 票 15 驗收：不預選、不偵測。打開精靈只讀自己的狀態，一個服務都不去連。 */
-  it('進頁與選擇之前只讀精靈狀態，不對任何服務發請求', async () => {
+  // 另外問的只有套件內的主機名（M4 票 30）：後端只查 DNS、不連服務（`test_compose_hosts.py`）。
+  it('進頁與選擇之前只讀精靈狀態與套件內的主機名，不對任何服務發請求', async () => {
     const fetchStub = stubApi({ [STATUS]: { body: setupStatus() } })
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
 
     expect(
       await screen.findByRole('heading', { level: 2, name: '先選 Jellyfin 是哪一台' }),
@@ -110,7 +112,7 @@ describe('頁 1：Jellyfin 與擁有者', () => {
     expect(screen.queryByLabelText('Jellyfin 帳號')).not.toBeInTheDocument()
     // 套件內那一格說得出會連哪裡——後端給的 compose 位址，還沒連。
     expect(screen.getByText('http://jellyfin:8096')).toBeInTheDocument()
-    expect(new Set(requestsOf(fetchStub))).toEqual(new Set([STATUS]))
+    expect(new Set(requestsOf(fetchStub))).toEqual(new Set([STATUS, 'GET /api/setup/compose']))
   })
 
   it('點「套件內」就存下並測，連上了才給建立管理員的表單', async () => {
@@ -120,7 +122,7 @@ describe('頁 1：Jellyfin 與擁有者', () => {
     })
     const user = userEvent.setup()
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
     await screen.findByRole('heading', { level: 2, name: '先選 Jellyfin 是哪一台' })
     await user.click(bundledCard())
 
@@ -143,7 +145,7 @@ describe('頁 1：Jellyfin 與擁有者', () => {
     })
     const user = userEvent.setup()
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
     await screen.findByRole('heading', { level: 2, name: '先選 Jellyfin 是哪一台' })
     await user.click(existingCard())
 
@@ -180,7 +182,7 @@ describe('頁 1：Jellyfin 與擁有者', () => {
     })
     const user = userEvent.setup()
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
 
     expect(await screen.findByLabelText('Jellyfin 帳號')).toBeInTheDocument()
     expect(existingCard()).toBeChecked()
@@ -200,7 +202,7 @@ describe('頁 1：Jellyfin 與擁有者', () => {
     })
     const user = userEvent.setup()
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
     await screen.findByRole('heading', { level: 2, name: '先選 Jellyfin 是哪一台' })
     await user.click(existingCard())
     await user.type(screen.getByRole('textbox', { name: '位址' }), 'http://nas:8096')
@@ -222,7 +224,7 @@ describe('頁 1：Jellyfin 與擁有者', () => {
     })
     const user = userEvent.setup()
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
     await user.click(await screen.findByRole('button', { name: '改位址' }))
 
     expect(screen.getByRole('textbox', { name: '位址' })).toHaveFocus()
@@ -245,7 +247,7 @@ describe('頁 1：Jellyfin 與擁有者', () => {
     const user = userEvent.setup()
     const announcer = () => document.querySelector('[data-announcer="jellyfin"]')
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
     await screen.findByRole('heading', { level: 2, name: '先選 Jellyfin 是哪一台' })
     expect(announcer()).toHaveAttribute('role', 'status')
     expect(announcer()).toHaveTextContent(/^$/)
@@ -268,7 +270,7 @@ describe('頁 1：Jellyfin 與擁有者', () => {
       [STATUS]: { body: setupStatus({ services: [BUNDLED_JELLYFIN], owner_signs_in: true }) },
     })
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
 
     expect(
       await screen.findByRole('heading', { level: 2, name: '用你的 Jellyfin 管理員登入' }),
@@ -287,7 +289,7 @@ describe('頁 1：Jellyfin 與擁有者', () => {
     })
     const user = userEvent.setup()
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
 
     expect(await screen.findByText('沒通過')).toBeInTheDocument()
     expect(screen.getByText('主機名解不到')).toBeInTheDocument()
@@ -319,7 +321,7 @@ describe('頁 1：Jellyfin 與擁有者', () => {
     })
     const user = userEvent.setup()
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
     await user.click(await screen.findByRole('radio', { name: /^套件內/ }))
 
     await waitFor(() =>
@@ -349,7 +351,7 @@ describe('頁 1：Jellyfin 與擁有者', () => {
       },
     })
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
 
     expect(await screen.findByText('12 / 120 秒')).toBeInTheDocument()
     expect(screen.getByText('啟動中')).toBeInTheDocument()
@@ -386,7 +388,7 @@ describe('頁 1：Jellyfin 與擁有者', () => {
       'POST /api/setup/services/qbittorrent/test': { body: both },
     })
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
     expect(await screen.findByText('3 / 120 秒')).toBeInTheDocument()
 
     await vi.advanceTimersByTimeAsync(3000)
@@ -401,7 +403,7 @@ describe('頁 1：Jellyfin 與擁有者', () => {
   it('剖面說出會做什麼，也說出密碼不存下來', async () => {
     stubApi({ [STATUS]: { body: FOUND } })
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
 
     const cutaway = (await screen.findByText('將會做什麼')).closest('section')!
     expect(within(cutaway).getByText('Jellyfin 管理員')).toBeInTheDocument()
@@ -418,7 +420,7 @@ describe('頁 1：Jellyfin 與擁有者', () => {
     })
     const user = userEvent.setup()
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
     await fill(user)
     await user.click(screen.getByRole('button', { name: '建立管理員並登入' }))
 
@@ -457,7 +459,7 @@ describe('頁 1：Jellyfin 與擁有者', () => {
     const fetchStub = stubApi({ [STATUS]: { body: FOUND } })
     const user = userEvent.setup()
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
     await fill(user, 'harbor')
     await user.click(screen.getByRole('button', { name: '建立管理員並登入' }))
 
@@ -469,7 +471,7 @@ describe('頁 1：Jellyfin 與擁有者', () => {
     const fetchStub = stubApi({ [STATUS]: { body: FOUND } })
     const user = userEvent.setup()
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
     await user.click(await screen.findByRole('button', { name: '建立管理員並登入' }))
 
     expect(screen.getAllByText('帳號與密碼都要填。').length).toBeGreaterThan(0)
@@ -483,7 +485,7 @@ describe('頁 1：Jellyfin 與擁有者', () => {
     })
     const user = userEvent.setup()
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
     await fill(user, '')
     await user.click(screen.getByRole('button', { name: '登入' }))
 
@@ -500,7 +502,7 @@ describe('頁 1：Jellyfin 與擁有者', () => {
     })
     const user = userEvent.setup()
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
     await fill(user)
     await user.click(screen.getByRole('button', { name: '建立管理員並登入' }))
 
@@ -516,7 +518,7 @@ describe('頁 1：Jellyfin 與擁有者', () => {
     })
     const user = userEvent.setup()
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
     await fill(user)
     await user.click(screen.getByRole('button', { name: '建立管理員並登入' }))
 
@@ -532,7 +534,7 @@ describe('頁 1：Jellyfin 與擁有者', () => {
     })
     const user = userEvent.setup()
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
     // 讀取中的外框也有板，但格子還不是按鈕：先等頁 2 畫出來。
     await screen.findByRole('heading', { level: 2, name: '先選 qBittorrent 是哪一台' })
     const berth = screen.getByText('BTH 1').closest('li')!
@@ -571,7 +573,7 @@ describe('頁 1：替還沒初始化的既有 Jellyfin 建立擁有者（M4 票 
     })
     const user = userEvent.setup()
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
     await fill(user)
     const language = screen.getByRole('combobox', { name: '語言與地區' })
     const remote = screen.getByRole('checkbox', { name: '開啟遠端存取' })
@@ -616,7 +618,7 @@ describe('頁 1：替還沒初始化的既有 Jellyfin 建立擁有者（M4 票 
     })
     const user = userEvent.setup()
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
     await fill(user)
     expect(screen.getByRole('combobox', { name: '語言與地區' })).toHaveValue('en-US')
     expect(screen.getByRole('checkbox', { name: '開啟遠端存取' })).toBeChecked()
@@ -646,7 +648,7 @@ describe('頁 1：替還沒初始化的既有 Jellyfin 建立擁有者（M4 票 
     })
     const user = userEvent.setup()
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
     await user.type(await screen.findByLabelText('Jellyfin 帳號'), 'skipper')
     await user.type(screen.getByLabelText('密碼'), 'harbour')
     expect(screen.queryByLabelText('語言與地區')).toBeNull()
@@ -668,7 +670,7 @@ describe('頁 1：替還沒初始化的既有 Jellyfin 建立擁有者（M4 票 
   it('套件內還沒初始化的那一台不問', async () => {
     stubApi({ [STATUS]: { body: setupStatus({ services: [chosen()] }) } })
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
 
     expect(await screen.findByLabelText('Jellyfin 帳號')).toBeVisible()
     expect(screen.queryByLabelText('語言與地區')).toBeNull()
@@ -690,7 +692,7 @@ describe('頁 1：Jellyfin 的帳號規則（M4 票 29，實測 B2-05～07）', 
     const fetchStub = stubApi({ [STATUS]: { body: FOUND } })
     const user = userEvent.setup()
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
     await create(user, name)
 
     expect(await screen.findByLabelText('Jellyfin 帳號')).toHaveAccessibleDescription(
@@ -706,7 +708,7 @@ describe('頁 1：Jellyfin 的帳號規則（M4 票 29，實測 B2-05～07）', 
     })
     const user = userEvent.setup()
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
     await create(user, '  船長 01 ')
 
     await waitFor(() =>
@@ -720,7 +722,7 @@ describe('頁 1：Jellyfin 的帳號規則（M4 票 29，實測 B2-05～07）', 
     const fetchStub = stubApi({ [STATUS]: { body: FOUND } })
     const user = userEvent.setup()
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
     await user.type(await screen.findByLabelText('Jellyfin 帳號'), 'skipper')
     await user.type(screen.getByLabelText('密碼'), '   ')
     await user.type(screen.getByLabelText('再輸入一次密碼'), '   ')
@@ -742,7 +744,7 @@ describe('頁 1：Jellyfin 的帳號規則（M4 票 29，實測 B2-05～07）', 
     })
     const user = userEvent.setup()
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
     await user.type(await screen.findByLabelText('Jellyfin 帳號'), ' cap<tain ')
     await user.type(screen.getByLabelText('密碼'), 'harbour')
     await user.click(screen.getByRole('button', { name: '登入' }))
@@ -782,7 +784,7 @@ describe('頁 1：擁有者成立之後 Berth 的 key 被撤了（M4 票 18）',
     })
     const user = userEvent.setup()
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
     await screen.findByRole('heading', { level: 2, name: '先選 qBittorrent 是哪一台' })
     await user.click(within(screen.getByText('BTH 1').closest('li')!).getByRole('button'))
 
@@ -805,7 +807,7 @@ describe('語言', () => {
     stubApi({ [STATUS]: { body: setupStatus({ services: [ALL_BUNDLED[0]] }) } })
     const user = userEvent.setup()
 
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
     await user.click(await screen.findByRole('button', { name: 'EN' }))
 
     expect(await screen.findByText('Create the Jellyfin administrator')).toBeInTheDocument()

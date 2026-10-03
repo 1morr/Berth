@@ -1,6 +1,13 @@
 import type { ReactElement } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { RouterProvider, createMemoryHistory } from '@tanstack/react-router'
+import {
+  Outlet,
+  RouterProvider,
+  createMemoryHistory,
+  createRootRoute,
+  createRoute,
+  createRouter,
+} from '@tanstack/react-router'
 import { render } from '@testing-library/react'
 
 import '../i18n'
@@ -25,6 +32,35 @@ export function renderApp(initialPath = '/') {
     queryClient,
     createMemoryHistory({ initialEntries: [initialPath] }),
   )
+
+  return {
+    router,
+    queryClient,
+    ...render(
+      <QueryClientProvider client={queryClient}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    ),
+  }
+}
+
+/**
+ * 把一頁掛在一個只有它與首頁的路由上：頁面讀網址、換網址（精靈的 `?step=N`，M4 票 30），但不必替
+ * 真正的路由守衛把 `/health` 與 `/auth/me` 都接上。`path` 帶 search 就是從那一頁打開。
+ */
+export function renderInRoute(ui: ReactElement, path = '/setup') {
+  const queryClient = newQueryClient()
+  const root = createRootRoute({ component: Outlet })
+  const page = createRoute({
+    getParentRoute: () => root,
+    path: new URL(path, 'http://berth.test').pathname,
+    component: () => ui,
+  })
+  const home = createRoute({ getParentRoute: () => root, path: '/', component: () => null })
+  const router = createRouter({
+    routeTree: root.addChildren([page, home]),
+    history: createMemoryHistory({ initialEntries: [path] }),
+  })
 
   return {
     router,

@@ -5,6 +5,7 @@ import type { TFunction } from 'i18next'
 import type {
   ChoiceInput,
   ChoiceRefusal,
+  ComposeHosts,
   ConnectionReason,
   SetupService,
   SetupStatus,
@@ -35,6 +36,7 @@ import {
   VERSION_FLOOR,
   connectFields,
   schemeFix,
+  bringBack,
   composeProfiles,
   signalOf,
   testEndpoint,
@@ -49,6 +51,11 @@ const JELLYFIN_UPGRADE_NOTES = 'https://jellyfin.org/posts/jellyfin-release-12.0
 
 /** 頁面接到 `ServiceChoice` 的那幾樣：兩支 mutation 與它們的進度（`SetupPage`）。 */
 export interface ChoiceControls {
+  /**
+   * 套件內三個主機名解不解得到（`GET /setup/compose`，M4 票 30）。`false` 的那一個：「套件內」卡片說這套
+   * compose 沒有起它、給加回的那一行。沒問到（還在問、問失敗、設定頁）就是空的，不說。
+   */
+  composeHosts?: ComposeHosts
   /** 選擇送出去還沒回來。 */
   choosing: boolean
   retesting: boolean
@@ -83,6 +90,7 @@ export interface ChoiceControls {
 export function ServiceChoice({
   kind,
   status,
+  composeHosts = {},
   choosing,
   retesting,
   refusal,
@@ -126,6 +134,8 @@ export function ServiceChoice({
   const confirming = switching && Boolean(switchWarning)
   const warning = service?.origin === 'existing' ? t(`choice.switchAway.${kind}`) : switchWarning
   const name = t(SERVICE_LABEL[kind])
+  // 只有 Berth 時（M4 票 30）：照常列出、不預選、不停用，只說它沒起與怎麼加回來。
+  const absent = composeHosts[kind] === false
 
   useEffect(() => {
     if (focusPanel && draft !== null) panel.current?.focus()
@@ -260,6 +270,12 @@ export function ServiceChoice({
             <span className="value mt-2 block text-xs wrap-anywhere text-ink">
               {status.bundled_targets[kind]}
             </span>
+            {/* 中性字、不塗紅：還沒選，不是失敗。 */}
+            {absent && (
+              <span className="mt-2 block text-xs font-semibold text-ink">
+                {t('choice.bundled.absent', { service: name })}
+              </span>
+            )}
           </ChoiceCard>
           <ChoiceCard
             name={groupName}
@@ -302,6 +318,21 @@ export function ServiceChoice({
         </div>
         {locked && <p className="max-w-prose text-xs text-ink-dim">{locked}</p>}
       </fieldset>
+
+      {/* 選了之後交給測試那一條：套件內是紅的「主機名解不到」與同一組補法，既有是 COMPOSE_PROFILES 那一行。
+          放在卡片外：卡片是一個 label，可複製的那一行有自己的按鈕。 */}
+      {absent && selected === null && (
+        <div className="grid gap-2">
+          <p className="max-w-prose text-xs text-ink-dim">
+            {t('choice.bundled.absentFix', { service: name, kind })}
+          </p>
+          <div className="grid grid-cols-1 gap-px">
+            {bringBack(status, kind).map((command) => (
+              <CopyLine key={command} command={command} />
+            ))}
+          </div>
+        </div>
+      )}
 
       {selected === 'existing' && !locked && (
         <div className="grid gap-2">
@@ -723,7 +754,7 @@ function Fix({
   } else if (bundled && reason === 'not_deployed') {
     // 主機名解不到＝它不在 compose 裡：說出怎麼加回來（plan §9.3）。
     lede = t('connection.fix.notDeployed', { kind })
-    commands = [composeProfiles(status, kind, 'bundled'), 'docker compose up -d']
+    commands = bringBack(status, kind)
   } else if (bundled && reason === 'protocol_mismatch') {
     lede = t('connection.fix.somethingElse', { kind })
   } else if (bundled && reason === 'api_key_missing') {

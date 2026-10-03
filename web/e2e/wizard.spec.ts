@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test'
 
 import { ADMIN, signIn } from './login.ts'
-import { shot } from './shot.ts'
+import { narrow, shot } from './shot.ts'
 
 // `bundled`：乾淨的 compose（plan §9.3）。三個服務頁都選「套件內」，六頁走完、中途回頭再往前、關掉
 // 精靈，再以頁 1 那組帳密登入——那組帳密是頁 1 替 Jellyfin 建的管理員，也就是 Berth 的擁有者
@@ -9,15 +9,18 @@ import { shot } from './shot.ts'
 // （`playwright.config.ts`）。**選之前一個服務請求都不發**（M4 票 15）。
 test('精靈六頁走完，之後以同一組帳密登入', async ({ page }) => {
   const probed: string[] = []
-  // 精靈送出的寫入（非 GET），頁 3 用它證明「進頁不動手」（M4 票 08）。
+  // 精靈送出的寫入（非 GET），頁 3 用它證明「進頁不動手」（M4 票 08）。進頁的重讀不算（M4 票 19、24）：
+  // 它只向 Jellyfin 讀、換 Berth 自己的媒體庫快照，與 `existing.spec.ts` 同一條。
   const writes: string[] = []
   page.on('request', (request) => {
     const url = request.url()
     if (/\/api\/setup\/(services\/|qbittorrent\/diff)/.test(url)) probed.push(url)
-    if (request.method() !== 'GET' && url.includes('/api/setup/')) writes.push(url)
+    const reread = url.endsWith('/api/setup/routes/libraries')
+    if (request.method() !== 'GET' && url.includes('/api/setup/') && !reread) writes.push(url)
   })
   await page.goto('/')
-  await expect(page).toHaveURL('/setup')
+  // 精靈的頁在網址上（M4 票 30）：讀回狀態之後補上 `?step=1`。
+  await expect(page).toHaveURL(/\/setup(\?step=1)?$/)
 
   // 1. Jellyfin：不預選、選之前不連；選了套件內才測，連上之後建立管理員並登入 Berth。
   await expect(page.getByRole('heading', { name: '先選 Jellyfin 是哪一台' })).toBeVisible()
@@ -26,7 +29,18 @@ test('精靈六頁走完，之後以同一組帳密登入', async ({ page }) => 
   expect(probed).toEqual([])
   // 泊位板五格、沒有前置列（M4 票 15）。
   const board = page.getByRole('region', { name: '泊位板' })
-  await expect(board.getByText(/^BTH \d$/)).toHaveCount(5)
+  await expect(board.locator('ul > li')).toHaveCount(5)
+  // 390 寬時板收成一列摘要，首屏先看到這一頁要做的事（M4 票 30）；桌機一列五格、沒有摘要。
+  const folded = board.getByRole('button', { expanded: false })
+  if (narrow(page)) {
+    await expect(folded).toHaveText(/BTH 1.*Jellyfin/)
+    await expect(board.getByRole('list')).toHaveCount(0)
+    await expect(page.getByRole('radio', { name: /套件內/ })).toBeInViewport()
+  } else {
+    await expect(folded).toHaveCount(0)
+    await expect(board.getByRole('listitem')).toHaveCount(5)
+  }
+  await page.screenshot({ path: test.info().outputPath('1-first-viewport.png') })
   await shot(page, '1-choose')
   await page.getByRole('radio', { name: /套件內/ }).click()
   await expect(page.getByRole('heading', { name: '建立 Jellyfin 管理員' })).toBeVisible()
@@ -165,7 +179,17 @@ test('精靈六頁走完，之後以同一組帳密登入', async ({ page }) => 
 
   // 中途回頭再往前：板上點回 BTH 3 展開媒體庫清單，一顆鍵回到目前這一步；上一個泊位、再前往下一個也回得來。
   await expect(page.getByRole('heading', { name: '完成設定' })).toBeVisible()
+  if (narrow(page)) await folded.click()
   await board.getByRole('button', { name: /BTH 3/ }).click()
+  await expect(page.getByRole('heading', { name: '媒體庫路徑', level: 2 })).toBeVisible()
+  await expect(page).toHaveURL(/\/setup\?step=3$/)
+  // 重新整理留在這一頁；瀏覽器的上一頁回到上一個看過的頁、不離開精靈（M4 票 30）。
+  await page.reload()
+  await expect(page.getByRole('heading', { name: '媒體庫路徑', level: 2 })).toBeVisible()
+  await page.goBack()
+  await expect(page.getByRole('heading', { name: '完成設定' })).toBeVisible()
+  await page.goForward()
+  await expect(page.getByRole('heading', { name: '媒體庫路徑', level: 2 })).toBeVisible()
   await page.getByText('4 個已建立').click()
   // 建好的列鎖住，改名刪除去 Jellyfin（票 06f）。
   await expect(page.getByText('已建立', { exact: true })).toHaveCount(4)

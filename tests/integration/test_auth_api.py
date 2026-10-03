@@ -384,6 +384,7 @@ ACCESS: dict[tuple[str, str], Access] = {
     # 精靈的開場：擁有者成立之前匿名，之後只有管理員（M4 票 06，`test_setup_api.py::TestGate`）。
     ("POST", "/setup/owner"): Access.SETUP_OPENING,
     ("GET", "/setup/status"): Access.SETUP_OPENING,
+    ("GET", "/setup/compose"): Access.SETUP_OPENING,
     # 精靈其餘的：擁有者成立之前誰都不行，之後只有管理員（`TestSettingsAreAdminOnly`）。
     ("POST", "/setup/complete"): Access.SETUP,
     ("GET", "/setup/indexers"): Access.SETUP,

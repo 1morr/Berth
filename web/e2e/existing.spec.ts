@@ -19,7 +19,8 @@ test('既有服務：三頁都選既有、選寫入目標，完成後用那台 J
     }
   })
   await page.goto('/')
-  await expect(page).toHaveURL('/setup')
+  // 精靈的頁在網址上（M4 票 30）：讀回狀態之後補上 `?step=1`。
+  await expect(page).toHaveURL(/\/setup(\?step=1)?$/)
 
   // 1. Jellyfin 選既有：說出同主機、同容器路徑的條件與要從 COMPOSE_PROFILES 拿掉哪一個；填位址才測。
   await page.getByRole('radio', { name: /既有/ }).click()

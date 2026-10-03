@@ -19,7 +19,8 @@ import {
   step,
   tmdbSetup,
 } from '../test/fixtures'
-import { renderWithProviders } from '../test/render'
+import { boardCells, findBoardCells } from '../test/board'
+import { renderInRoute } from '../test/render'
 import { SetupPage } from './SetupPage'
 
 afterEach(() => {
@@ -151,18 +152,18 @@ function heading() {
 }
 
 function board() {
-  return screen.getByRole('region', { name: '泊位板' })
+  return boardCells()
 }
 
 function findBoard() {
-  return screen.findByRole('region', { name: '泊位板' })
+  return findBoardCells()
 }
 
 describe('每個泊位做完都停在結果上', () => {
   it('頁 1：擁有者成立之後停在「擁有者：名字」上，按了才前往下一個泊位', async () => {
     wizard(1)
     const user = userEvent.setup()
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
 
     expect(await heading()).toHaveTextContent('建立 Jellyfin 管理員')
     await user.type(screen.getByLabelText('Jellyfin 帳號'), 'skipper')
@@ -180,7 +181,7 @@ describe('每個泊位做完都停在結果上', () => {
   it('頁 2：套用完停在逐鍵結果上，前往下一個是頁 3 的媒體庫與路徑', async () => {
     wizard(2)
     const user = userEvent.setup()
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
 
     await typeLogin(user)
     await user.click(await screen.findByRole('button', { name: /^套用這/ }))
@@ -196,7 +197,7 @@ describe('每個泊位做完都停在結果上', () => {
   it('頁 3：進頁不送任何東西；按「建立並檢查」之後停在五條檢查的結果上，按了才走', async () => {
     const { fetchStub } = wizard(3)
     const user = userEvent.setup()
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
 
     expect(await heading()).toHaveTextContent('媒體庫路徑')
     await user.click(await screen.findByRole('button', { name: '建立並檢查' }))
@@ -217,7 +218,7 @@ describe('每個泊位做完都停在結果上', () => {
 
   it('頁 3：清單已經建完、還沒有 Route，進頁照樣不建', async () => {
     const { fetchStub } = wizard(3, {}, { built: true })
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
 
     expect(await screen.findByRole('button', { name: '建立並檢查' })).toBeVisible()
     await new Promise((resolve) => setTimeout(resolve, 100))
@@ -228,7 +229,7 @@ describe('每個泊位做完都停在結果上', () => {
   it('頁 3：回頭看已經建好的 Route 不重跑', async () => {
     const { fetchStub } = wizard(6)
     const user = userEvent.setup()
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
 
     await user.click(await within(await findBoard()).findByRole('button', { name: /BTH 3/ }))
 
@@ -248,7 +249,7 @@ describe('每個泊位做完都停在結果上', () => {
         body: jellyfinSetup({ origin: 'existing', base_url: 'http://nas:8096' }),
       },
     })
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
 
     expect(await screen.findByRole('checkbox', { name: 'Movies' })).toBeVisible()
     expect(await heading()).toHaveTextContent('媒體庫路徑')
@@ -260,7 +261,7 @@ describe('每個泊位做完都停在結果上', () => {
   it('頁 4：加完站停在逐站結果與試搜上，前往下一個是 TMDB', async () => {
     wizard(4)
     const user = userEvent.setup()
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
 
     // TMDB 不在這一頁（票 06e 拆成兩個泊位）。
     expect(await heading()).toHaveTextContent('索引站')
@@ -279,7 +280,7 @@ describe('每個泊位做完都停在結果上', () => {
   it('頁 5：測過 TMDB 停在結果上，前往下一個是完成頁', async () => {
     wizard(5)
     const user = userEvent.setup()
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
 
     await user.type(await screen.findByLabelText(/TMDB API key/), 'k'.repeat(32))
     await user.click(screen.getByRole('button', { name: '測試 TMDB' }))
@@ -304,7 +305,7 @@ describe('上一個泊位', () => {
       built: at >= 3,
     })
     const user = userEvent.setup()
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
 
     expect(await heading()).toHaveTextContent(here)
     await user.click(screen.getByRole('button', { name: '上一個泊位' }))
@@ -315,7 +316,7 @@ describe('上一個泊位', () => {
   it('頁 1 沒有上一個泊位，只有前往下一個', async () => {
     wizard(6)
     const user = userEvent.setup()
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
 
     await user.click(await within(await findBoard()).findByRole('button', { name: /BTH 1/ }))
 
@@ -330,7 +331,7 @@ describe('回頭看永遠有出口', () => {
   it('完成頁回頭之後，走得回完成頁', async () => {
     wizard(6)
     const user = userEvent.setup()
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
 
     expect(await heading()).toHaveTextContent('完成設定')
     expect(screen.queryByRole('button', { name: '回媒體庫路徑' })).not.toBeInTheDocument()
@@ -344,7 +345,7 @@ describe('回頭看永遠有出口', () => {
   it('跳回很前面時，板下的帶子說出在哪、走到哪，一顆「回到目前這一步」直接回去', async () => {
     wizard(6)
     const user = userEvent.setup()
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
 
     await user.click(await within(await findBoard()).findByRole('button', { name: /BTH 1/ }))
     expect(await heading()).toHaveTextContent('擁有者：skipper')
@@ -359,7 +360,7 @@ describe('回頭看永遠有出口', () => {
   it('停在剛做完的那一頁不出帶子：「前往下一個泊位」就是回去的路', async () => {
     wizard(6)
     const user = userEvent.setup()
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
 
     expect(await heading()).toHaveTextContent('完成設定')
     await user.click(screen.getByRole('button', { name: '上一個泊位' }))
@@ -369,10 +370,120 @@ describe('回頭看永遠有出口', () => {
   })
 })
 
+/**
+ * 畫面上那一頁在網址上（M4 票 30，實測 B3-01、B3-03、E10-06）：原本精靈的頁不進瀏覽器的歷史，
+ * 上一頁直接離開精靈；回頭看時重新整理被帶回目前這一步，剛做完的頁重新整理被推到下一頁。
+ */
+describe('網址上的那一頁', () => {
+  /** 瀏覽器的上一頁與下一頁是非同步的（popstate）：等標題換過去。 */
+  function shows(text: string) {
+    return waitFor(() => expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent(text))
+  }
+
+  /** 網址上的 `step`；沒寫是 `undefined`。 */
+  function urlStep(router: { state: { location: { search: { step?: unknown } } } }) {
+    return router.state.location.search.step
+  }
+
+  it('進頁時網址補上畫面上那一頁，換頁跟著換', async () => {
+    wizard(3, { 'GET /api/setup/routes': { body: ROUTES_DONE } }, { built: true })
+    const user = userEvent.setup()
+    const { router } = renderInRoute(<SetupPage />)
+
+    expect(await heading()).toHaveTextContent('媒體庫路徑')
+    await waitFor(() => expect(urlStep(router)).toBe(3))
+
+    await user.click(within(board()).getByRole('button', { name: /BTH 1/ }))
+    expect(await heading()).toHaveTextContent('擁有者：skipper')
+    expect(urlStep(router)).toBe(1)
+  })
+
+  it('瀏覽器的上一頁回到上一個看過的頁，不離開精靈；下一頁再回來', async () => {
+    wizard(6)
+    const user = userEvent.setup()
+    const { router } = renderInRoute(<SetupPage />)
+
+    expect(await heading()).toHaveTextContent('完成設定')
+    await user.click(screen.getByRole('button', { name: '上一個泊位' }))
+    expect(await heading()).toHaveTextContent('TMDB')
+    await user.click(screen.getByRole('button', { name: '上一個泊位' }))
+    expect(await heading()).toHaveTextContent('索引站')
+
+    router.history.back()
+    await shows('TMDB')
+    expect(urlStep(router)).toBe(5)
+    router.history.back()
+    await shows('完成設定')
+    expect(router.state.location.pathname).toBe('/setup')
+
+    router.history.forward()
+    await shows('TMDB')
+  })
+
+  it('補上網址那一次不多一筆歷史：上一頁不會停在同一頁', async () => {
+    wizard(6)
+    const user = userEvent.setup()
+    const { router } = renderInRoute(<SetupPage />)
+
+    expect(await heading()).toHaveTextContent('完成設定')
+    await waitFor(() => expect(urlStep(router)).toBe(6))
+    await user.click(screen.getByRole('button', { name: '上一個泊位' }))
+    expect(await heading()).toHaveTextContent('TMDB')
+
+    router.history.back()
+    await shows('完成設定')
+    expect(router.history.length).toBe(2)
+  })
+
+  it('回頭看的頁重新整理，留在那一頁', async () => {
+    wizard(6)
+    renderInRoute(<SetupPage />, '/setup?step=2')
+
+    await shows('套用建議的 qBittorrent 設定')
+    expect(screen.getByText(/回頭看：BTH 2/)).toBeVisible()
+  })
+
+  it('剛做完、停在結果上的頁重新整理，不被推到下一頁', async () => {
+    wizard(2)
+    const user = userEvent.setup()
+    const first = renderInRoute(<SetupPage />)
+    await typeLogin(user)
+    await user.click(await screen.findByRole('button', { name: /^套用這/ }))
+    expect(await screen.findByRole('button', { name: '前往下一個泊位' })).toBeVisible()
+    const href = first.router.state.location.href
+    first.unmount()
+
+    // 後端已經在頁 3；重新整理是以同一條網址重開。
+    renderInRoute(<SetupPage />, href)
+    expect(await heading()).toHaveTextContent('套用建議的 qBittorrent 設定')
+    expect(await screen.findByRole('button', { name: '前往下一個泊位' })).toBeVisible()
+  })
+
+  it.each([
+    ['手打的頁', '/setup?step=5'],
+    ['不是精靈的一頁', '/setup?step=9'],
+  ])('%s超過後端那一頁：拉回後端那一頁，網址一起改', async (_, path) => {
+    wizard(2)
+    const { router } = renderInRoute(<SetupPage />, path)
+
+    expect(await heading()).toHaveTextContent('套用建議的 qBittorrent 設定')
+    await waitFor(() => expect(urlStep(router)).toBe(2))
+  })
+
+  it('還沒做完的頁，泊位板與上一頁都過不去', async () => {
+    wizard(2)
+    const { router } = renderInRoute(<SetupPage />, '/setup?step=3')
+
+    expect(await heading()).toHaveTextContent('套用建議的 qBittorrent 設定')
+    await waitFor(() => expect(urlStep(router)).toBe(2))
+    expect(within(board()).queryByRole('button', { name: /BTH 3/ })).not.toBeInTheDocument()
+  })
+})
+
 describe('泊位板', () => {
   it('走過的與目前的是按鈕，還沒到的不是按鈕', async () => {
     wizard(3, { 'GET /api/setup/routes': { body: ROUTES_DONE } }, { built: true })
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
     await heading()
 
     const cells = within(board())
@@ -391,7 +502,7 @@ describe('泊位板', () => {
   /** M4 票 15：不再偵測，板上方那一列「擁有者 · 名字」「N 個服務已判定」跟著拿掉。 */
   it('板上正好五格，沒有前置列，也沒有偵測或重新偵測的鍵', async () => {
     wizard(4)
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
     await heading()
 
     expect(
@@ -419,7 +530,7 @@ describe('回頭看的泊位說出能改什麼', () => {
   ])('%s', async (code, can, elsewhere) => {
     wizard(6)
     const user = userEvent.setup()
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
 
     await user.click(
       await within(await findBoard()).findByRole('button', { name: new RegExp(code) }),
@@ -433,7 +544,7 @@ describe('回頭看的泊位說出能改什麼', () => {
   it('BTH 5', async () => {
     wizard(6)
     const user = userEvent.setup()
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
 
     // 從完成頁回頭一步就是它：剛做完的那一頁照樣說得出能改什麼。
     expect(await heading()).toHaveTextContent('完成設定')
@@ -446,7 +557,7 @@ describe('回頭看的泊位說出能改什麼', () => {
 
   it('目前這一步沒有回頭看的說明', async () => {
     wizard(2)
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
     await heading()
 
     expect(screen.queryByRole('note', { name: '回頭看' })).not.toBeInTheDocument()
@@ -465,7 +576,7 @@ describe('頁 2 之後的每一格都有結果可看', () => {
       { built: true },
     )
     const user = userEvent.setup()
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
     await user.click(await screen.findByRole('button', { name: '建立並檢查' }))
 
     // 全綠的收起來了：展開那一列、再展開那一條的技術細節看得到實測值（M4 票 21）。
@@ -485,7 +596,7 @@ describe('焦點不掉回 body', () => {
   it('前往下一個泊位之後，焦點在新一步的標題上', async () => {
     wizard(2)
     const user = userEvent.setup()
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
 
     await typeLogin(user)
     await user.click(await screen.findByRole('button', { name: /^套用這/ }))
@@ -499,7 +610,7 @@ describe('焦點不掉回 body', () => {
   it('做完這一步、按的那顆鍵換掉之後，焦點落在「前往下一個泊位」', async () => {
     wizard(2)
     const user = userEvent.setup()
-    renderWithProviders(<SetupPage />)
+    renderInRoute(<SetupPage />)
 
     await typeLogin(user)
     await user.click(await screen.findByRole('button', { name: /^套用這/ }))

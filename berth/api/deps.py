@@ -13,7 +13,13 @@ from fastapi import Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from berth.config import Config
-from berth.services.clients import BundledServices, ServiceClientFactory, bundled_services
+from berth.services.clients import (
+    BundledServices,
+    HostResolver,
+    ServiceClientFactory,
+    bundled_services,
+    host_resolver,
+)
 from berth.services.events import EventHub
 from berth.services.hints import JobHints
 from berth.services.jellyfin_access import AccessCache
@@ -43,6 +49,11 @@ def get_bundled_services(config: Annotated[Config, Depends(get_config)]) -> Bund
     每個請求重讀一次：key 在 Prowlarr 第一次啟動時才產生。
     """
     return bundled_services(config)
+
+
+def get_host_resolver() -> HostResolver:
+    """服務頁進頁時問套件內主機名用的解析器（M4 票 30）。測試換成認得固定幾個名字的替身。"""
+    return host_resolver()
 
 
 def get_event_hub(request: Request) -> EventHub:
@@ -101,3 +112,4 @@ PlanHintsDep = Annotated[JobHints, Depends(get_plan_hints)]
 ConfigDep = Annotated[Config, Depends(get_config)]
 ReconcilerDep = Annotated[ReconcileRunner, Depends(get_reconciler)]
 BundledServicesDep = Annotated[BundledServices, Depends(get_bundled_services)]
+HostResolverDep = Annotated[HostResolver, Depends(get_host_resolver)]
