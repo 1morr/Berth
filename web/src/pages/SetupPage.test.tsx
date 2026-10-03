@@ -740,7 +740,7 @@ describe('頁 1：Jellyfin 的帳號規則（M4 票 29，實測 B2-05～07）', 
           owner_signs_in: true,
         }),
       },
-      [OWNER]: { status: 401, body: { reason: 'invalid_credentials', detail: '' } },
+      [OWNER]: { status: 401, body: { detail: { reason: 'invalid_credentials', detail: '' } } },
     })
     const user = userEvent.setup()
 
@@ -754,6 +754,8 @@ describe('頁 1：Jellyfin 的帳號規則（M4 票 29，實測 B2-05～07）', 
         expect.objectContaining({ username: 'cap<tain' }),
       ]),
     )
+    // 等回應落地：不等的話 401 在測試結束之後才進畫面，替身寫錯形狀也沒人看見。
+    expect(await screen.findByText('Jellyfin 不認這組帳號或密碼。')).toBeVisible()
   })
 })
 
