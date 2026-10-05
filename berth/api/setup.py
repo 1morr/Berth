@@ -925,9 +925,16 @@ async def post_routes_libraries(session: SessionDep, factory: ClientFactoryDep) 
     return RouteSetupOut.model_validate(result)
 
 
-#: 這一步順帶重跑**每一條**既有 Route 的檢查，途中被另一個分頁刪掉的那一條就是它
-#: （M2 票 01）。其餘無效的選擇是 `ValueError` → 422，不走拒絕那條路，所以只有這一種。
-_BUILD_RESPONSES = route_responses(RouteRefusal.ROUTE_MISSING)
+#: 這一步順帶重跑**每一條**既有 Route 的檢查，途中被另一個分頁刪掉的那一條就是 404
+#: `route_missing`（M2 票 01）。無效的選擇也帶理由（M4 票 31）：媒體庫不在、不是電影或劇集、
+#: 目標不是它的路徑、套件內那一個在 Jellyfin 上沒有資料夾。
+_BUILD_RESPONSES = route_responses(
+    RouteRefusal.ROUTE_MISSING,
+    RouteRefusal.LIBRARY_MISSING,
+    RouteRefusal.LIBRARY_UNSUPPORTED,
+    RouteRefusal.TARGET_NOT_IN_LIBRARY,
+    RouteRefusal.LIBRARY_WITHOUT_PATH,
+)
 
 #: 與 `DELETE /routes/{id}` 同一個命令，所以同樣是這兩種（票 14a）。
 _DELETE_RESPONSES = route_responses(RouteRefusal.ROUTE_MISSING, RouteRefusal.ROUTE_IN_USE)
@@ -937,7 +944,7 @@ _DELETE_RESPONSES = route_responses(RouteRefusal.ROUTE_MISSING, RouteRefusal.ROU
 async def post_routes(
     session: SessionDep, factory: ClientFactoryDep, body: RoutesIn | None = None
 ) -> RouteSetupOut:
-    """建立 Route，並立刻建 category 與跑三項檢查（plan §9.5）。
+    """建立 Route，並立刻建 category 與跑每一項檢查（plan §9.5）。
 
     檢查失敗**不是** 4xx：它是這一步的結果，逐項回在 `routes[].checks` 裡，畫面靠它顯示
     原文與該補哪個掛載。4xx 只留給「這個選擇本身無效」（不存在的媒體庫、不是它的路徑），

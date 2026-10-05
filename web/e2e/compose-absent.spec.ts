@@ -24,9 +24,9 @@ test('只有 Berth：頁 1 的套件內卡片說沒有起 Jellyfin，照樣選�
   await page.screenshot({ path: test.info().outputPath('1-absent-viewport.png') })
   await shot(page, '1-absent')
 
-  // 卡片仍可選：選了照舊測，紅的是「主機名解不到」，補法在那一條上、卡片下不再重複。
+  // 卡片仍可選：選了照舊測，紅的是「找不到這個名字的主機」，補法在那一條上、卡片下不再重複。
   await bundled.click()
-  await expect(page.getByText('主機名解不到', { exact: true })).toBeVisible()
+  await expect(page.getByText('找不到這個名字的主機', { exact: true })).toBeVisible()
   await expect(
     page.getByText('COMPOSE_PROFILES=jellyfin,qbittorrent,prowlarr', { exact: true }),
   ).toHaveCount(1)

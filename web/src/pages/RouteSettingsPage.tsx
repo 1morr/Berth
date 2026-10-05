@@ -149,7 +149,7 @@ function ManagedRouteRow({
 }
 
 /**
- * 五條纜繩與「重新檢查」。只是診斷：不動啟用（管理員可能是故意停用它的），紅燈修好之後要用它，
+ * 每一條纜繩與「重新檢查」。只是診斷：不動啟用（管理員可能是故意停用它的），紅燈修好之後要用它，
  * 在上面明確地勾啟用再儲存一次。開頁不自動檢查——那一輪會建分類、寫探測檔（票 10 的決定）。
  */
 function RouteChecks({ route }: { route: RouteView }) {
@@ -184,7 +184,7 @@ function RouteChecks({ route }: { route: RouteView }) {
 /**
  * 名稱與啟用（使用者拍板：建立之後只改得了這兩個）。
  *
- * 儲存一定重跑五條纜繩（票 14）。**從停用到啟用而檢查是紅的**，後端回 409 `route_unhealthy`：
+ * 儲存一定重跑每一條纜繩（票 14）。**從停用到啟用而檢查是紅的**，後端回 409 `route_unhealthy`：
  * 名稱照樣存下，勾選框退回停用，並指向下面紅的那一條——那一條就是這一列展開著的原因。
  */
 function RouteEditor({ route }: { route: RouteView }) {
@@ -208,7 +208,7 @@ function RouteEditor({ route }: { route: RouteView }) {
   })
   const refusal = routeRefusalOf(save.error)
   // 兩個欄位都回到存下來的值就沒有東西要存了。這一顆與空白名稱那一條（票 02b「按鈕永遠按得下去，
-  // 說不行的是欄位自己」）不同級：那是填錯，這是沒東西可做——而按下去的代價是真的跑一輪五條纜繩
+  // 說不行的是欄位自己」）不同級：那是填錯，這是沒東西可做——而按下去的代價是真的跑一輪每一條纜繩
   // （建分類、寫探測檔）。設定表單存到沒動過就變灰是通行慣例（GitHub repo settings、Linear）。
   const dirty = name.trim() !== route.name || enabled !== route.enabled
 
@@ -247,7 +247,7 @@ function RouteEditor({ route }: { route: RouteView }) {
         <PrimaryButton type="submit" busy={save.isPending} disabled={!dirty}>
           {save.isPending ? t('routeSettings.edit.saving') : t('routeSettings.edit.save')}
         </PrimaryButton>
-        {/* 按下去會做的事要先說出來：五條纜繩會重跑一次（票 03 第 1 條）。 */}
+        {/* 按下去會做的事要先說出來：每一條纜繩會重跑一次（票 03 第 1 條）。 */}
         <p className="max-w-prose text-xs text-ink-dim">{t('routeSettings.edit.saveRechecks')}</p>
       </div>
       <p aria-live="polite" className="text-xs text-ink-dim">

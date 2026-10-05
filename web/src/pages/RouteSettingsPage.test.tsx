@@ -104,17 +104,17 @@ describe('Route 設定頁', () => {
   })
 
   /**
-   * 票 03 第 1 條。儲存一定重跑五條纜繩（`PUT /routes/{id}` 的副作用），而那一輪會建分類、
+   * 票 03 第 1 條。儲存一定重跑每一條纜繩（`PUT /routes/{id}` 的副作用），而那一輪會建分類、
    * 寫探測檔。沒改過還按得下去，等於請使用者在不知情的情況下跑一次跨服務檢查。
    */
-  it('沒改過時儲存按不下去，改了才亮，並且說得出它會重跑五條纜繩', async () => {
+  it('沒改過時儲存按不下去，改了才亮，並且說得出它會重跑每一條纜繩', async () => {
     render()
     renderApp('/settings/routes')
 
     const tv = within(await row('TV'))
     const save = tv.getByRole('button', { name: '儲存' })
     expect(save).toBeDisabled()
-    expect(tv.getByText(/重跑.*五條纜繩|重新檢查一次/)).toBeInTheDocument()
+    expect(tv.getByText(/重跑.*每一條纜繩|重新檢查一次/)).toBeInTheDocument()
 
     const name = tv.getByRole('textbox', { name: '名稱' })
     await userEvent.type(name, '2')

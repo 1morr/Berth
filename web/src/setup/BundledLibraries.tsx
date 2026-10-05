@@ -5,7 +5,7 @@ import { COMPACT_BUTTON, Field, GhostButton } from '../components/controls'
 import { SIGNAL_FILL } from '../components/signal'
 import { useFocusAfterRemoval } from '../components/useFocusAfterRemoval'
 import type { LibraryDraft } from '../api/setup'
-import { folderFor, pathUnder, type RowProblems } from './libraryRules'
+import { folderFor, pathUnder, previewUnder, type RowProblems } from './libraryRules'
 import { type DraftRow, type LibraryDraftState } from './useLibraryDraft'
 
 const TYPES = ['movies', 'tvshows'] as const satisfies readonly LibraryDraft['collection_type'][]
@@ -137,7 +137,7 @@ function EditableRow({
 }) {
   const { t } = useTranslation()
   const typeId = useId()
-  const path = pathUnder(libraryRoot, row.folder.trim() || '…')
+  const path = previewUnder(libraryRoot, row.folder)
   const label = row.name.trim() || t('jellyfin.bundled.list.unnamed', { position })
 
   return (

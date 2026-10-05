@@ -19,8 +19,8 @@ import { StepFrame } from './StepFrame'
  * 所以按鈕文案講的是「完成設定」而不是「下一步」。
  */
 /**
- * 按下完成之後失敗的原因。後端的 422 說的是「不可跳的那幾步還沒做完」
- * （`services/setup.py`：第 7 步的 TMDB 與第 5 步的 Route），那不是後端出了錯——
+ * 按下完成之後失敗的原因。後端的 422 說的是「有一頁不再成立」
+ * （`services/setup.py` 照頁序再問一次，M4 票 31），那不是後端出了錯——
  * 把兩者都講成「後端可能沒在跑」會把使用者送去看容器 log，而真正要做的事在精靈裡面
  * （票 03 第 5 條；PRODUCT.md 原則 4：失敗要說得出下一步）。
  *
@@ -40,6 +40,7 @@ export function CompleteStep({
   routes,
   indexers,
   owner,
+  doors,
   completing,
   failure,
   onComplete,
@@ -53,6 +54,8 @@ export function CompleteStep({
    * 這一句說的是之後拿什麼登入。
    */
   owner: string
+  /** 各服務自己的介面（`ServiceDoors`）：開在哪、拿什麼登入。 */
+  doors: ReactNode
   completing: boolean
   failure?: CompleteFailure
   onComplete: () => void
@@ -105,6 +108,8 @@ export function CompleteStep({
           </li>
         ))}
       </ul>
+
+      {doors}
 
       {skippedIndexers && (
         <section className="mt-6 grid gap-3">

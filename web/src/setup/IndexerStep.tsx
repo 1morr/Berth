@@ -22,6 +22,7 @@ import {
 } from '../components/controls'
 import { Cutaway, CutawayRow } from '../components/Cutaway'
 import { failureText } from '../components/failures'
+import { RequestFailed } from '../components/RequestFailed'
 import { StepLine } from '../components/StepLine'
 import { TechnicalDetails } from '../components/TechnicalDetails'
 import { addressError } from './address'
@@ -118,19 +119,23 @@ export function IndexerStep({
   // 清單上有站、後端上一次連線測試記的卻是 0 站（使用者到 Prowlarr 自己的介面加了站再回來）：後端照那個
   // 數判斷這一頁做完了沒，不重測的話前進鍵不出現、「還差」也空著。自動重新測試一次（M4 票 27，頁 2 的
   // 票 25 同一個做法），只發一次、不管結果。
+  //
+  // **反過來也一樣**（M4 票 31，實測 #34）：在 Prowlarr 刪到 0 站再回來，後端仍記著 1 站、算這一頁做完了，
+  // 畫面卻同時說「待處理」與「前往下一個泊位」。所以看的是兩個數不一致，而且後端已經走過這一頁時也看
+  // ——那正是記錯的數讓它走過去的情形。每個數只重測一次：重測之後還對不上（例如測失敗）不再追。
+  const listed = indexers?.sites.length ?? 0
   const stale =
     (mode === 'bundled' || mode === 'prowlarr') &&
     !unread &&
-    status.current_step === STEP.indexer &&
-    Boolean(indexers?.sites.length) &&
-    Number(service?.detail || 0) === 0
-  const resynced = useRef(false)
+    status.current_step >= STEP.indexer &&
+    listed !== Number(service?.detail || 0)
+  const resynced = useRef<number | null>(null)
   const { onRetest, retesting } = choice
   useEffect(() => {
-    if (!stale || resynced.current || retesting) return
-    resynced.current = true
+    if (!stale || resynced.current === listed || retesting) return
+    resynced.current = listed
     onRetest(false)
-  }, [stale, retesting, onRetest])
+  }, [stale, listed, retesting, onRetest])
 
   return (
     <StepFrame
@@ -307,14 +312,18 @@ function ProwlarrLogin({
   const webUrl = prowlarrWeb(indexers)
   // 送出那一刻的欄位版本：之後改了一格，上一次的拒絕就不畫了（M4 票 21）。
   const [sentAt, setSentAt] = useState<number | null>(null)
+  // 請求本身沒走完（Berth 停著、5xx）：原本這一支的 reject 被吞掉，按下去什麼都沒發生（M4 票 31，
+  // 實測 #21）。說得出理由的拒絕（`refusal`）照舊由它說，這裡只接其餘的。
+  const [failed, setFailed] = useState<unknown>(null)
 
   function save() {
     const taken = form.take()
     if (!taken) return
     setSentAt(form.edits)
+    setFailed(null)
     controls.onSave(taken).then(
       () => form.reset(taken.username || owner),
-      () => undefined,
+      (error: unknown) => setFailed(error),
     )
   }
 
@@ -340,6 +349,11 @@ function ProwlarrLogin({
           <Notice signal="blocked" label={t('common.failed')}>
             {t(`interfaceLogin.refused.${controls.refusal.reason}`, { owner })}
           </Notice>
+        </div>
+      )}
+      {failed !== null && !controls.refusal && sentAt === form.edits && (
+        <div className="mt-4">
+          <RequestFailed error={failed} />
         </div>
       )}
       {form.open && (
@@ -557,6 +571,10 @@ function ExistingIndexer({
             service={t(`indexer.kind.${kind}`)}
             endpoint={kind === 'prowlarr' ? 'GET /api/v1/system/status' : '?t=caps'}
             row={row}
+            // 連上了、0 站的待處理不是「尚未執行」（`indexer.existing_prowlarr_step`，M4 票 31）。
+            status={
+              row.status === 'pending' && kind === 'prowlarr' ? t('indexer.noSitesYet') : undefined
+            }
             // 照上一次測試的理由與測過的位址（不是欄位裡正在改的那一個）說補法（M4 票 17）。
             fix={existingFix(t, indexers)}
           />

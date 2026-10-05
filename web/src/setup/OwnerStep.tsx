@@ -82,7 +82,7 @@ export function OwnerStep({
   const reSignInId = useId()
 
   return (
-    <StepFrame cutaway={<OwnerCutaway status={status} mode={mode} />}>
+    <StepFrame cutaway={<OwnerCutaway status={status} mode={mode} switching={switching} />}>
       <h2 className="text-lg font-semibold text-ink">
         {t(`owner.title.${mode}`, { name: status.owner })}
       </h2>
@@ -181,11 +181,14 @@ function OwnerForm({
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
   const [checked, setChecked] = useState(false)
-  const [culture, setCulture] = useState(() =>
+  // 沒選過就跟著介面語言（M4 票 31：表單開著時切到英文，預設原本停在 Chinese (Taiwan)）；
+  // 上一次寫給那一台的（`remembered`）與這裡選過的才固定下來。
+  const [picked, setCulture] = useState<string | null>(() =>
     remembered && JELLYFIN_LOCALES.some((row) => row.ui_culture === remembered.ui_culture)
       ? remembered.ui_culture
-      : localeForUi(i18n.language).ui_culture,
+      : null,
   )
+  const culture = picked ?? localeForUi(i18n.language).ui_culture
   const [remoteAccess, setRemoteAccess] = useState(remembered?.remote_access ?? false)
   const asksStartup = !signsIn && jellyfin.origin === 'existing'
   const languageId = useId()
@@ -194,8 +197,12 @@ function OwnerForm({
   // 只有空白的密碼 `POST /Startup/User` 也回 400（brief §20.7），所以建立時當成沒填。
   const nameProblem: UsernameProblem | null =
     signsIn && trimUsername(username) ? null : signsIn ? 'blank' : usernameProblem(username)
+  // 登入時帳號填了、密碼空著：Jellyfin 允許沒有密碼的帳號，但 Berth 不讓它當擁有者——說出這一條，
+  // 不只說「都要填」（M4 票 31，實測 E 線）。
   const passwordProblem = !password
-    ? 'owner.error.blank'
+    ? signsIn && trimUsername(username)
+      ? 'owner.error.noPassword'
+      : 'owner.error.blank'
     : !signsIn && !password.trim()
       ? 'owner.error.passwordSpaces'
       : null
@@ -203,10 +210,21 @@ function OwnerForm({
   // 建立時打錯了沒有人會告訴他。
   const mismatch = !signsIn && password !== confirm
 
+  // 送出那一刻的欄位版本：之後改了帳密，上一次的拒絕說的是舊的那一組，不再畫（M4 票 31，實測 #29；
+  // 與 `ProwlarrLogin` 同一個做法）。「目標被換了」例外——它與帳密無關，出口是重新測試。
+  const [edits, setEdits] = useState(0)
+  const [sentAt, setSentAt] = useState<number | null>(null)
+  const current = sentAt === edits
+  function edit(change: () => void) {
+    change()
+    setEdits((was) => was + 1)
+  }
+
   function submit(event: FormEvent) {
     event.preventDefault()
     setChecked(true)
     if (nameProblem || passwordProblem || mismatch) return
+    setSentAt(edits)
     const credentials = {
       base_url: jellyfin.base_url,
       server_id: jellyfin.server_id,
@@ -229,14 +247,14 @@ function OwnerForm({
         label={t('owner.field.username')}
         value={username}
         autoComplete="username"
-        onChange={(event) => setUsername(event.target.value)}
+        onChange={(event) => edit(() => setUsername(event.target.value))}
         error={checked && nameProblem ? t(USERNAME_ERROR[nameProblem]) : undefined}
       />
       <PasswordField
         label={t('owner.field.password')}
         value={password}
         autoComplete={signsIn ? 'current-password' : 'new-password'}
-        onChange={(event) => setPassword(event.target.value)}
+        onChange={(event) => edit(() => setPassword(event.target.value))}
         error={checked && passwordProblem ? t(passwordProblem) : undefined}
       />
       {!signsIn && (
@@ -244,7 +262,7 @@ function OwnerForm({
           label={t('owner.field.confirm')}
           value={confirm}
           autoComplete="new-password"
-          onChange={(event) => setConfirm(event.target.value)}
+          onChange={(event) => edit(() => setConfirm(event.target.value))}
           error={checked && mismatch ? t('owner.error.mismatch') : undefined}
         />
       )}
@@ -280,7 +298,7 @@ function OwnerForm({
         </>
       )}
       {/* 拒絕的那一句在送出鈕上方：窄版的送出鈕吸在底部，放在它下面要捲才看得到（critique）。 */}
-      {refusal ? (
+      {refusal && (current || refusal.reason === 'target_changed') ? (
         <div>
           <Notice signal="blocked" label={t('common.failed')}>
             {t(`owner.refused.${refusal.reason}`)}
@@ -297,6 +315,7 @@ function OwnerForm({
         </div>
       ) : (
         // 這張表單只在還沒有擁有者時送出：門禁要求登入就是別處搶先成立了（M4 票 25，實測 E12-11）。
+        current &&
         claimError !== null &&
         claimError !== undefined && <RequestFailed error={claimError} ownerPending />
       )}
@@ -317,13 +336,22 @@ const USERNAME_ERROR = {
 } as const satisfies Record<UsernameProblem, string>
 
 /** 剖面：將會做什麼。選之前兩種都說；連上之後照那一台的狀態說。 */
-function OwnerCutaway({ status, mode }: { status: SetupStatus; mode: OwnerMode }) {
+function OwnerCutaway({
+  status,
+  mode,
+  switching,
+}: {
+  status: SetupStatus
+  mode: OwnerMode
+  /** 畫面上改選了另一格、還沒測：存下的那一台不是使用者現在在看的（M4 票 31，實測 #48）。 */
+  switching: boolean
+}) {
   const { t } = useTranslation()
   const jellyfin = status.services.find((row) => row.kind === 'jellyfin')
 
   return (
     <Cutaway title={t('owner.cutaway.title')}>
-      {jellyfin && (
+      {jellyfin && !switching && (
         <CutawayRow
           code
           term={jellyfin.base_url}

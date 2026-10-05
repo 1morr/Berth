@@ -23,7 +23,7 @@ import { ServiceCard } from '../health/ServiceCard'
  * 這一頁的讀者只在兩種時刻打開它：有東西壞了，或剛改了什麼想確認。所以第一個 viewport
  * 就是那塊泊位板——與精靈同一塊板、同一組四個泊位，只是問題從「接上了沒」變成「還繫著嗎」。
  *
- * **全綠時這一頁應該很短**：Route 的五條纜繩收起來，只有紅的那條就地展開原文與修正步驟。
+ * **全綠時這一頁應該很短**：Route 的每一條纜繩收起來，只有紅的那條就地展開原文與修正步驟。
  * **開頁不會自動重測**：那一輪檢查會在 qBittorrent 建 category、在媒體庫寫探測檔，
  * 不該是「重整頁面」的副作用（shape brief §7）。
  */
@@ -122,7 +122,7 @@ export function HealthPage() {
         </div>
 
         {/* 下載迴圈排在四項服務之後、Route 之前：它問的是「Berth 自己的迴圈還在跑嗎」，
-            比 Route 的五條纜繩上游（`.scratch/m1/live-jobs-shape.md` §6）。 */}
+            比 Route 的每一條纜繩上游（`.scratch/m1/live-jobs-shape.md` §6）。 */}
         <div className="mt-8">
           <PollerCard poller={report.poller} />
         </div>
@@ -174,7 +174,7 @@ export function HealthPage() {
 }
 
 /**
- * 一條 Route。綠燈只有一行，紅燈就地展開五條纜繩——全綠的時候沒有人要讀那 15 行
+ * 一條 Route。綠燈只有一行，紅燈就地展開每一條纜繩——全綠的時候沒有人要讀那 15 行
  * （shape brief §7 的第三個決定）。列本身與精靈、Route 設定頁共用（`RouteRow`，M4 票 08）。
  */
 function HealthRoute({ route }: { route: RouteView }) {

@@ -796,6 +796,27 @@ describe('頁 4：Prowlarr 與索引站', () => {
     expect(bodyOf(fetchStub, TEST_SITES.replace('POST ', ''))).toEqual({ indexers: ['yts'] })
   })
 
+  it('測過的結論在離開這一頁再回來之後還在（M4 票 31，實測 #40）', async () => {
+    stubApi({
+      [STATUS]: { body: AT_TMDB },
+      [INDEXERS]: { body: indexerSetup() },
+      [TMDB]: { body: tmdbSetup() },
+      [TEST_SITES]: { body: { checks: [check('yts')] } },
+    })
+    const user = userEvent.setup()
+
+    renderInRoute(<SetupPage />, '/setup?step=4')
+    await user.click(await screen.findByRole('button', { name: '測試 YTS' }))
+    await waitFor(() => expect(screen.getByRole('checkbox', { name: 'YTS' })).toBeEnabled())
+
+    const board = within(await findBoardCells())
+    await user.click(board.getByRole('button', { name: /BTH 5/ }))
+    await screen.findByLabelText('你的 TMDB API key')
+    await user.click(within(boardCells()).getByRole('button', { name: /BTH 4/ }))
+
+    expect(await screen.findByRole('checkbox', { name: 'YTS' })).toBeEnabled()
+  })
+
   it('「測試全部」測推薦清單裡還沒通過的站', async () => {
     const fetchStub = stubApi({
       [STATUS]: { body: AT_INDEXER },
@@ -981,6 +1002,23 @@ describe('頁 4：Prowlarr 與索引站', () => {
     expect(called(fetchStub, '/api/setup/indexers/apply')).toBe(false)
   })
 
+  it('Berth 停著時按「設定介面登入」：說出請求沒走完，不是什麼都沒發生（M4 票 31）', async () => {
+    stubApi({
+      [STATUS]: { body: AT_INDEXER },
+      [INDEXERS]: { body: indexerSetup() },
+      [SET_LOGIN]: () => Promise.reject(new TypeError('Failed to fetch')),
+    })
+    const user = userEvent.setup()
+
+    renderInRoute(<SetupPage />)
+    const block = within(await screen.findByTestId('prowlarr-login'))
+    await user.type(block.getByLabelText(OWNER_PASSWORD), 'harbour')
+    await user.click(block.getByRole('button', { name: '設定介面登入' }))
+
+    expect(await block.findByTestId('request-failed')).toHaveTextContent(/後端沒有回應/)
+    expect(block.getByRole('button', { name: '設定介面登入' })).toBeEnabled()
+  })
+
   it('每一站說出是什麼語言（照 UI 語言的名字）與一句原文說明', async () => {
     stubApi({ [STATUS]: { body: AT_INDEXER }, [INDEXERS]: { body: indexerSetup() } })
 
@@ -991,6 +1029,8 @@ describe('頁 4：Prowlarr 與索引站', () => {
     expect(screen.getByRole('checkbox', { name: 'dmhy' })).toHaveAccessibleDescription(
       'dmhy is a TAIWANESE Public magnet tracker for ANIME · 先測試，通過才勾得起來',
     )
+    // 原文是英文：標上語言，讀屏器才不會用中文念它（M4 票 31）。
+    expect(dmhy.getByText(/TAIWANESE/)).toHaveAttribute('lang', 'en')
     expect(screen.getByRole('checkbox', { name: 'Anime Tosho' })).toHaveAccessibleDescription(
       '半私有站，可能需要帳號 · 先測試，通過才勾得起來',
     )
@@ -1511,6 +1551,50 @@ describe('頁 4：Prowlarr 與索引站', () => {
     ).toHaveLength(1)
   })
 
+  it('在 Prowlarr 刪到 0 站再回來、後端還記著 1 站而走過了這一頁：同樣自動重測一次（M4 票 31）', async () => {
+    const existing = chosen({
+      kind: 'prowlarr',
+      origin: 'existing',
+      base_url: 'http://nas:9696',
+      reason: 'connected',
+      detail: '1',
+    })
+    const fetchStub = stubApi({
+      [STATUS]: {
+        body: setupStatus({ ...AT_TMDB, services: [...ALL_BUNDLED.slice(0, 2), existing] }),
+      },
+      [INDEXERS]: {
+        body: indexerSetup({
+          origin: 'existing',
+          base_url: 'http://nas:9696',
+          sites: [],
+          candidates: [],
+          steps: [step('prowlarr', 'pending', '0')],
+        }),
+      },
+      // 重測之後兩個數對上了：後端回到頁 4。
+      [RETEST_PROWLARR]: {
+        body: setupStatus({
+          ...AT_INDEXER,
+          services: [...ALL_BUNDLED.slice(0, 2), { ...existing, detail: '0' }],
+        }),
+      },
+    })
+
+    renderInRoute(<SetupPage />, '/setup?step=4')
+
+    await waitFor(() => expect(called(fetchStub, '/api/setup/services/prowlarr/test')).toBe(true))
+    expect(
+      fetchStub.mock.calls.filter(([url]) => url === '/api/setup/services/prowlarr/test'),
+    ).toHaveLength(1)
+    // 重測之後三處說的是同一件事：待處理、還差加站、沒有前進鍵；連上了而 0 站不說「尚未執行」。
+    const nav = within(screen.getByRole('navigation', { name: '泊位導覽' }))
+    expect(await nav.findByRole('button', { name: '加入至少一個站' })).toBeInTheDocument()
+    expect(nav.queryByRole('button', { name: '前往下一個泊位' })).not.toBeInTheDocument()
+    expect(screen.getByText(/還沒有任何站/)).toBeInTheDocument()
+    expect(screen.queryByText('尚未執行')).not.toBeInTheDocument()
+  })
+
   it('一站都沒有、登入也沒設：兩件都列出來（M4 票 27）', async () => {
     stubApi({
       [STATUS]: { body: AT_INDEXER },
@@ -1741,6 +1825,35 @@ describe('頁 5：TMDB', () => {
     expect(screen.getByTestId('tmdb-required')).toHaveTextContent('已完成')
   })
 
+  it('形狀不像 TMDB 的 key 不送出、不存下，欄位說哪裡不像（M4 票 31）', async () => {
+    const fetch = stubApi({ [STATUS]: { body: AT_TMDB }, [TMDB]: { body: tmdbSetup() } })
+    const user = userEvent.setup()
+
+    renderInRoute(<SetupPage />)
+    await user.type(await screen.findByLabelText('你的 TMDB API key'), 'hunter2')
+    await user.click(screen.getByRole('button', { name: '測試 TMDB' }))
+
+    expect(await screen.findByText(/這不像 TMDB 的 key/)).toBeVisible()
+    expect(fetch.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false)
+  })
+
+  it('還沒貼過 key 時泊位板說「還沒填」，不說「待驗證」（M4 票 31）', async () => {
+    stubApi({
+      [STATUS]: { body: AT_TMDB },
+      [TMDB]: { body: tmdbSetup({ api_key_present: false, verified: false }) },
+    })
+
+    renderInRoute(<SetupPage />)
+    const berth = within(
+      within(await findBoardCells())
+        .getByText('BTH 5')
+        .closest('li')!,
+    )
+
+    expect(await berth.findByText('還沒填')).toBeInTheDocument()
+    expect(berth.queryByText('待驗證')).not.toBeInTheDocument()
+  })
+
   it('TMDB 的 key 是遮著的，且看得見', async () => {
     stubApi({ [STATUS]: { body: AT_TMDB }, [TMDB]: { body: tmdbSetup() } })
     const user = userEvent.setup()
@@ -1857,7 +1970,7 @@ describe('只有 Berth 時的套件內卡片', () => {
       expect(bodyOf(stub, '/api/setup/services/jellyfin')).toEqual({ origin: 'bundled' }),
     )
     // 選了之後交給測試那一條的補法，卡片下不再重複一份。
-    expect(await screen.findByText('主機名解不到')).toBeVisible()
+    expect(await screen.findByText('找不到這個名字的主機')).toBeVisible()
     expect(screen.getAllByText('COMPOSE_PROFILES=jellyfin,qbittorrent,prowlarr')).toHaveLength(1)
   })
 

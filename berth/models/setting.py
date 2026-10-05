@@ -393,7 +393,7 @@ class HealthSettings(SettingsGroup):
 
     #: 逐服務的最後結果；鍵是 `ServiceKind`。
     services: dict[ServiceKind, ServiceHealth] = {}
-    #: 每個 Route 都通過了它的五項檢查。逐 Route 的明細在 `routes.health_detail_json`，
+    #: 每個 Route 都通過了它的每一項檢查。逐 Route 的明細在 `routes.health_detail_json`，
     #: 這裡只留總結——匿名的 `GET /api/health` 靠它答 ok / degraded，不必查 routes 表。
     routes: HealthStatus = HealthStatus.UNKNOWN
     checked_at: datetime | None = None

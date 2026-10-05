@@ -97,6 +97,12 @@ const REVISIT = {
   [STEP.tmdb]: { can: 'setup.revisit.tmdb.can', elsewhere: 'setup.revisit.tmdb.elsewhere' },
 } as const
 
+/** 套件內的 Jellyfin 回頭看時的「這裡能做」：「改位址」只有既有的那一台有（M4 票 31）。 */
+const REVISIT_BUNDLED_JELLYFIN = {
+  can: 'setup.revisit.jellyfin.bundledCan',
+  elsewhere: 'setup.revisit.jellyfin.elsewhere',
+} as const
+
 /** 既有的索引站（Prowlarr 或 Torznab）回頭看時的那一套。 */
 const REVISIT_EXISTING_INDEXER = {
   can: 'setup.revisit.indexer.existing.can',
@@ -108,14 +114,17 @@ const REVISIT_EXISTING_INDEXER = {
  * 只在這一頁已經做完（後端過了它）時出現——目前這一步要做的事，lede 已經說了。
  * 沒有說明的頁（完成頁）什麼都不畫。
  *
- * `origin` 是頁 4 的 Prowlarr 選了哪一種：既有的那一台說的是另一套（M4 票 20）。
+ * `origin` 是這一頁那個服務選了哪一種：頁 4 既有的 Prowlarr 說的是另一套（M4 票 20），頁 1 套件內的
+ * Jellyfin 不提「改位址」（M4 票 31）。
  */
 export function RevisitNote({ step, origin }: { step: number; origin?: 'bundled' | 'existing' }) {
   const { t } = useTranslation()
   const words =
     step === STEP.indexer && origin === 'existing'
       ? REVISIT_EXISTING_INDEXER
-      : (REVISIT as Partial<Record<number, (typeof REVISIT)[keyof typeof REVISIT]>>)[step]
+      : step === STEP.jellyfin && origin === 'bundled'
+        ? REVISIT_BUNDLED_JELLYFIN
+        : (REVISIT as Partial<Record<number, (typeof REVISIT)[keyof typeof REVISIT]>>)[step]
   if (!words) return null
 
   return (

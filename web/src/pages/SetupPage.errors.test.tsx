@@ -99,7 +99,7 @@ describe('舊結果不留在畫面上', () => {
     await user.click(screen.getByRole('button', { name: '重新測試' }))
 
     await waitFor(() => expect(screen.queryByText(/^容器還沒起來/)).not.toBeInTheDocument())
-    expect(screen.queryByText('主機名解得到但連不上')).not.toBeInTheDocument()
+    expect(screen.queryByText('找得到這台主機，但它沒有回應')).not.toBeInTheDocument()
     answer({ body: setupStatus({ services: [chosen()] }) })
     expect(await screen.findByText('連上了')).toBeInTheDocument()
   })
@@ -160,10 +160,10 @@ describe('舊結果不留在畫面上', () => {
     const user = userEvent.setup()
     render(<Page />)
 
-    expect(screen.getByText(/bad-jellyfin 是另一台 Jellyfin/)).toBeVisible()
+    expect(screen.getByText(/這個位址上回答的是另一台 Jellyfin/)).toBeVisible()
     await user.type(screen.getByLabelText('位址'), '/')
 
-    expect(screen.queryByText(/bad-jellyfin 是另一台 Jellyfin/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/這個位址上回答的是另一台 Jellyfin/)).not.toBeInTheDocument()
   })
 })
 
@@ -177,7 +177,7 @@ describe('既有與套件內各說各的', () => {
     ).toBeVisible()
     expect(screen.getByText(/這台 qBittorrent 是你自己的/)).toBeVisible()
     expect(screen.queryByText(/套件內的，Berth 直接改它的偏好/)).not.toBeInTheDocument()
-    expect(screen.getByText('帳密或 API key 不被接受')).toBeVisible()
+    expect(screen.getByText('帳密不被接受')).toBeVisible()
     expect(screen.getByText(/^帳號或密碼不對/)).toBeVisible()
     expect(screen.queryByText(/^docker compose/)).not.toBeInTheDocument()
   })

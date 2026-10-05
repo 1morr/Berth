@@ -67,7 +67,7 @@ class RouteOut(BaseModel):
     #: 硬鏈接回 `EXDEV`：兩個目錄在 Berth 內是不同掛載（brief §4.4）。
     cross_device: bool
     checked_at: datetime | None
-    #: 最後一次五條纜繩全綠的時間（brief §16.2）。
+    #: 最後一次每一條纜繩全綠的時間（brief §16.2）。
     last_ok_at: datetime | None
 
 

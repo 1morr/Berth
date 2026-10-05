@@ -355,7 +355,9 @@ describe('設定 → qBittorrent', () => {
     renderApp('/settings/qbittorrent')
 
     expect(await screen.findByText('2 個鍵與建議值不同。')).toBeInTheDocument()
-    expect(screen.getByText('auto_tmm_enabled')).toBeInTheDocument()
+    // 先寫人話、再寫原鍵名（M4 票 31）：與精靈頁 2 那一條同一個名字。
+    const key = screen.getByText('auto_tmm_enabled').closest('td')!
+    expect(key).toHaveTextContent(/^自動 Torrent 管理auto_tmm_enabled$/)
     expect(screen.getByText('/downloads')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '還原建議設定' })).toBeInTheDocument()
   })

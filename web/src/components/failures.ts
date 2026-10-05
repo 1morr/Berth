@@ -44,6 +44,15 @@ export const FAILURE_TEXT = {
   unexpected: 'failure.unexpected',
 } as const satisfies Record<StepFailure, string>
 
+/**
+ * `auth_rejected` 照是哪一台換一句（M4 票 31）：Berth 對 qBittorrent 用帳密、對 TMDB 用使用者自己申請的
+ * key（說得出去哪裡拿），其餘是那一台自己發的 API key。鍵是 `failureText` 收到的那個服務名。
+ */
+export const AUTH_REJECTED_TEXT: Readonly<Record<string, string>> = {
+  qBittorrent: 'failure.auth_rejected_login',
+  TMDB: 'failure.auth_rejected_tmdb',
+}
+
 /** 一條失敗的纜繩要的那幾個欄位。票 21 之前存下的失敗沒有代碼，當 `unexpected`。 */
 export interface Failed {
   failure?: StepFailure | null
@@ -57,5 +66,8 @@ export interface Failed {
 export function failureText(t: TFunction, row: Failed, service: string): string {
   // 每個參數都先給空字串：代碼與參數對不上時（舊資料、後端少給一個）說得短一點，不印出 `{{path}}`。
   const params = { service, version: '', category: '', path: '', library: '', ...row.params }
-  return t(FAILURE_TEXT[row.failure ?? 'unexpected'], params)
+  const failure = row.failure ?? 'unexpected'
+  const key = (failure === 'auth_rejected' && AUTH_REJECTED_TEXT[service]) || FAILURE_TEXT[failure]
+  // 動態查表的 key 型別寬成 string：兩個語言都有字由 `failures.test.ts` 守著。
+  return t(key as (typeof FAILURE_TEXT)[StepFailure], params)
 }

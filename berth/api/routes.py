@@ -43,6 +43,8 @@ _STATUS: dict[RouteRefusal, int] = {
     RouteRefusal.ROUTE_CONFLICT: status.HTTP_409_CONFLICT,
     #: 與登入同一個判斷（plan §6 auth）：Jellyfin 連不上不是使用者選錯了。
     RouteRefusal.JELLYFIN_UNREACHABLE: status.HTTP_503_SERVICE_UNAVAILABLE,
+    #: 精靈的套件內媒體庫在 Jellyfin 上沒有資料夾（M4 票 31）。重按不會好，所以不是 409。
+    RouteRefusal.LIBRARY_WITHOUT_PATH: status.HTTP_422_UNPROCESSABLE_CONTENT,
 }
 
 
@@ -71,7 +73,15 @@ def route_responses(*reasons: RouteRefusal) -> dict[int | str, dict[str, Any]]:
 
 
 #: 這一組五支端點的聯集。**不要套到別的模組**：過度宣告的文件跟漏掉的一樣沒用（票 02a）。
-REFUSAL_RESPONSES = refusal_responses(RouteRefusalOut, _STATUS)
+#: `library_without_path` 只有精靈的套件內清單會丟（M4 票 31），`routes/*` 丟不出來，不宣告。
+REFUSAL_RESPONSES = refusal_responses(
+    RouteRefusalOut,
+    {
+        reason: code
+        for reason, code in _STATUS.items()
+        if reason is not RouteRefusal.LIBRARY_WITHOUT_PATH
+    },
+)
 
 
 class ManagedRouteOut(BaseModel):
@@ -143,7 +153,7 @@ async def get_routes(session: SessionDep) -> list[ManagedRouteOut]:
 
 @router.post("/routes", responses=REFUSAL_RESPONSES)
 async def post_route(session: SessionDep, factory: ClientFactoryDep, body: RouteIn) -> RouteOut:
-    """新增，並立刻跑五條纜繩。**檢查紅燈不是 4xx**：Route 照樣建立、維持停用，紅的那一條
+    """新增，並立刻跑每一條纜繩。**檢查紅燈不是 4xx**：Route 照樣建立、維持停用，紅的那一條
     回在 `checks` 裡——與精靈第 5 步同一個規矩。"""
     try:
         view = await create_route(

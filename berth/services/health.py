@@ -5,7 +5,7 @@
 1. **Jellyfin**：連得上、而且 Berth 那把 API key 還有效（媒體庫列得出來）。
 2. **qBittorrent**：連得上、Web API 夠新，而且建議偏好沒有被改掉（漂移，brief §16.3）。
 3. **索引站**：Prowlarr 或使用者自己貼的 Torznab 端點還搜得動（plan §8.4）。
-4. **Route**：五條纜繩重跑一次——category、兩邊回報的路徑、跨服務可見性、真的 `link()`
+4. **Route**：每一條纜繩重跑一次——category、兩邊回報的路徑、跨服務可見性、真的 `link()`
    一次比 inode（plan §9.5）。與精靈第 5 步是同一組檢查、同一個欄位。
 
 四項之後再量兩件會變成 Issue 的事（M2 票 09c）：Route 的媒體庫掛不掛 TVDB、磁碟剩的空間夠不夠

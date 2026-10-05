@@ -1,5 +1,6 @@
-import { screen, waitFor, within } from '@testing-library/react'
+import { act, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import i18next from 'i18next'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { stubApi } from '../test/fetch'
@@ -138,6 +139,21 @@ describe('頁 1：Jellyfin 與擁有者', () => {
     expect(screen.getByLabelText('再輸入一次密碼')).toBeInTheDocument()
   })
 
+  it('選了套件內、再改點既有還沒測：右欄不再列套件內那一台的位址（M4 票 31）', async () => {
+    stubApi({ [STATUS]: { body: FOUND } })
+    const user = userEvent.setup()
+
+    renderInRoute(<SetupPage />)
+    // 套件內卡片自己也寫著那個位址；右欄（剖面）那一列是多出來的那一個。
+    await screen.findByRole('heading', { level: 2 })
+    const before = screen.getAllByText('http://jellyfin:8096').length
+    expect(before).toBeGreaterThan(1)
+    await user.click(existingCard())
+
+    expect(screen.getByRole('textbox', { name: '位址' })).toBeVisible()
+    expect(screen.queryAllByText('http://jellyfin:8096')).toHaveLength(before - 1)
+  })
+
   it('點「既有」只展開表單不送出，按「測試連線」才送位址；那一台有管理員就是登入', async () => {
     const fetchStub = stubApi({
       [STATUS]: { body: setupStatus() },
@@ -254,14 +270,14 @@ describe('頁 1：Jellyfin 與擁有者', () => {
 
     await user.click(bundledCard())
     await waitFor(() =>
-      expect(announcer()).toHaveTextContent('Jellyfin 沒通過：主機名解得到但連不上'),
+      expect(announcer()).toHaveTextContent('Jellyfin 沒通過：找得到這台主機，但它沒有回應'),
     )
 
     await user.click(screen.getByRole('button', { name: '重新測試' }))
     await waitFor(() => expect(announcer()).toHaveTextContent(/^$/))
     answer({ body: DOWN })
     await waitFor(() =>
-      expect(announcer()).toHaveTextContent('Jellyfin 沒通過：主機名解得到但連不上'),
+      expect(announcer()).toHaveTextContent('Jellyfin 沒通過：找得到這台主機，但它沒有回應'),
     )
   })
 
@@ -292,7 +308,7 @@ describe('頁 1：Jellyfin 與擁有者', () => {
     renderInRoute(<SetupPage />)
 
     expect(await screen.findByText('沒通過')).toBeInTheDocument()
-    expect(screen.getByText('主機名解不到')).toBeInTheDocument()
+    expect(screen.getByText('找不到這個名字的主機')).toBeInTheDocument()
     expect(screen.getByText(/jellyfin 的容器沒在跑.*或它不在這套 compose 裡/)).toBeInTheDocument()
     expect(screen.getByText('COMPOSE_PROFILES=jellyfin,qbittorrent,prowlarr')).toBeInTheDocument()
     expect(screen.getByText('docker compose up -d')).toBeInTheDocument()
@@ -478,6 +494,20 @@ describe('頁 1：Jellyfin 與擁有者', () => {
     expect(fetchStub.mock.calls.some(([url]) => url === '/api/setup/owner')).toBe(false)
   })
 
+  it('登入既有 Jellyfin 時密碼空著：說 Berth 不收沒有密碼的擁有者，不只說都要填（M4 票 31）', async () => {
+    const fetchStub = stubApi({
+      [STATUS]: { body: setupStatus({ services: [EXISTING_JELLYFIN], owner_signs_in: true }) },
+    })
+    const user = userEvent.setup()
+
+    renderInRoute(<SetupPage />)
+    await user.type(await screen.findByLabelText('Jellyfin 帳號'), 'skipper')
+    await user.click(screen.getByRole('button', { name: '登入' }))
+
+    expect(await screen.findByText(/不收沒有密碼的 Jellyfin 帳號當擁有者/)).toBeVisible()
+    expect(fetchStub.mock.calls.some(([url]) => url === '/api/setup/owner')).toBe(false)
+  })
+
   it('不是管理員就地說明被拒的原因', async () => {
     stubApi({
       [STATUS]: { body: setupStatus({ services: [EXISTING_JELLYFIN], owner_signs_in: true }) },
@@ -599,6 +629,30 @@ describe('頁 1：替還沒初始化的既有 Jellyfin 建立擁有者（M4 票 
         },
       ]),
     )
+  })
+
+  it('沒選過語言時，表單開著切換介面語言，預設跟著換；選過就不動（M4 票 31）', async () => {
+    stubApi({ [STATUS]: { body: PENDING_EXISTING } })
+    const user = userEvent.setup()
+
+    renderInRoute(<SetupPage />)
+    const language = await screen.findByRole('combobox', { name: '語言與地區' })
+    expect(language).toHaveValue('zh-TW')
+    try {
+      await act(() => i18next.changeLanguage('en'))
+      expect(await screen.findByRole('combobox', { name: 'Language and region' })).toHaveValue(
+        'en-US',
+      )
+
+      await user.selectOptions(
+        screen.getByRole('combobox', { name: 'Language and region' }),
+        'en-GB',
+      )
+      await act(() => i18next.changeLanguage('zh-Hant'))
+      expect(screen.getByRole('combobox', { name: '語言與地區' })).toHaveValue('en-GB')
+    } finally {
+      await act(() => i18next.changeLanguage('zh-Hant'))
+    }
   })
 
   it('初始化中途失敗之後回來：仍是建立表單，照上一次選的重填（M4 票 29，實測 E12）', async () => {
@@ -756,6 +810,9 @@ describe('頁 1：Jellyfin 的帳號規則（M4 票 29，實測 B2-05～07）', 
     )
     // 等回應落地：不等的話 401 在測試結束之後才進畫面，替身寫錯形狀也沒人看見。
     expect(await screen.findByText('Jellyfin 不認這組帳號或密碼。')).toBeVisible()
+    // 改了密碼，上一次的拒絕說的是舊的那一組：收起來（M4 票 31，實測 #29）。
+    await user.type(screen.getByLabelText('密碼'), '!')
+    expect(screen.queryByText('Jellyfin 不認這組帳號或密碼。')).not.toBeInTheDocument()
   })
 })
 

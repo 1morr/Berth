@@ -26,6 +26,8 @@ const zhHant = {
     indexerNone: '{{product}} · 尚未加入索引站',
     indexerCount_one: '{{product}} · {{count}} 個索引站',
     indexerCount_other: '{{product}} · {{count}} 個索引站',
+    routeCount_one: '{{count}} 條 Route',
+    routeCount_other: '{{count}} 條 Route',
     unassigned: '未指派',
     waiting: '待靠泊',
     // 手機寬度的那一列摘要（M4 票 30）。
@@ -54,7 +56,7 @@ const zhHant = {
     },
     stray: {
       where: '回頭看：{{place}}',
-      current: '目前走到第 {{current}} 步',
+      current: '目前走到：{{place}}',
       back: '回到目前這一步',
     },
     revisit: {
@@ -63,6 +65,8 @@ const zhHant = {
       elsewhere: '不在這裡做',
       jellyfin: {
         can: '看擁有者是誰。擁有者成立之後來源鎖住；既有的那一台換了位址（例如改了 port）按測試結果上的「改位址」，只收同一台伺服器。',
+        bundledCan:
+          '看擁有者是誰。擁有者成立之後來源鎖住；套件內的那一台位址由 compose 決定，不用改。',
         elsewhere: '擁有者的密碼在 Jellyfin 裡改。換成另一台 Jellyfin 等於換擁有者，Berth 不支援。',
       },
       qbittorrent: {
@@ -71,7 +75,7 @@ const zhHant = {
           '套件內那三個鍵以外的偏好，以及你自己那一台的所有偏好，都在 qBittorrent 自己的介面上改，Berth 不碰。',
       },
       routes: {
-        can: '精靈只新增：套件內可以在清單上加還沒建的媒體庫；補上新勾的媒體庫，並重驗每一條 Route 的五條檢查。選錯的那一條在它底下刪掉。',
+        can: '精靈只新增：套件內可以在清單上加還沒建的媒體庫；補上新勾的媒體庫，並重驗每一條 Route 的每一條纜繩。選錯的那一條在它底下刪掉。',
         elsewhere: 'Route 的改名與停用在精靈跑完之後的「設定 → 媒體庫路徑」。',
       },
       indexer: {
@@ -167,6 +171,8 @@ const zhHant = {
       blank: '帳號與密碼都要填。',
       mismatch: '兩次輸入的密碼不一樣。',
       passwordSpaces: 'Jellyfin 不收只有空白的密碼。',
+      noPassword:
+        'Berth 不收沒有密碼的 Jellyfin 帳號當擁有者：擁有者能改 Berth 的所有設定，沒有密碼等於誰都能。先在 Jellyfin 的「控制台 → 使用者」替這個帳號設一組密碼，再回來登入。',
       username:
         "Jellyfin 的帳號只能用文字、數字、空格與 - _ ' . @ + 這幾個符號，也不能只是「.」或「..」。",
     },
@@ -199,7 +205,16 @@ const zhHant = {
     },
     existing: {
       title: '既有',
-      lede: '你自己已經在跑的那一台 {{service}}。Berth 只連它，不改你的設定。',
+      lede: '你自己已經在跑的那一台 {{service}}。Berth 不改你原本的設定，{{adds}}',
+      // 「只連它」不對（M4 票 31）：Route 檢查前 Jellyfin 的路徑已經加上、未初始化的那一台會被跑初始精靈。
+      // 照實說會加什麼、什麼時候加。
+      adds: {
+        jellyfin:
+          '只在頁 3 你按下時替媒體庫多加一條 Berth 寫入用的路徑（原本的路徑不動）。它還沒跑過自己的初始精靈的話，頁 1 會用你填的帳密替它跑完。',
+        qbittorrent:
+          '只在頁 3 你按下時建 berth- 開頭的分類；檢查時暫時加一個停住的探測 torrent、隨即移除。偏好一個鍵都不寫。',
+        prowlarr: '只加你在頁 4 勾起來的站；原本的站不動。',
+      },
       sameHost:
         '條件：它與 Berth 在同一台主機，而且把同一個父目錄掛在同一個容器路徑（例如都是 /data）——Berth 用硬鏈接入庫，另一台 NAS 上的、或把下載與媒體庫分開掛的接不上。',
       profiles:
@@ -216,7 +231,7 @@ const zhHant = {
     refused: {
       jellyfin_owned: '擁有者成立之後，Jellyfin 的來源換不了。',
       other_server:
-        '沒有存：{{detail}} 是另一台 Jellyfin，不是擁有者所在的那一台。擁有者、Berth 的 API key 與媒體庫都在原本那一台；換一台等於換擁有者，Berth 不支援。',
+        '沒有存：這個位址上回答的是另一台 Jellyfin，不是擁有者所在的那一台。擁有者、Berth 的 API key 與媒體庫都在原本那一台；換一台等於換擁有者，Berth 不支援。',
       unverified:
         '沒有存：這個位址沒有說出它是哪一台 Jellyfin（{{detail}}），認不出是不是同一台。確認位址與 port 再試一次。',
     },
@@ -275,7 +290,7 @@ const zhHant = {
       prowlarrKey:
         'API key 不對：在 Prowlarr 的「設定 → 一般」複製 API key（不是介面登入的密碼），貼上再測一次。',
       banned:
-        'qBittorrent 預設連錯 {{limit}} 次就封鎖這個 IP {{minutes}} 分鐘，被封的時候連對的帳密也會被拒。等 {{minutes}} 分鐘，或重啟 qBittorrent（封鎖只記在它的記憶體裡）；先把帳密改對，解封之後只測一次。',
+        'qBittorrent 預設連錯 {{limit}} 次就封鎖這個 IP {{minutes}} 分鐘，被封的時候連對的帳密也會被拒。被封的是 qBittorrent 看到的來源 IP：Berth 經宿主的 port 或 host.docker.internal 連它時，那多半也是你瀏覽器的來源，所以這段時間你從宿主開它的 WebUI 也登不進去。等 {{minutes}} 分鐘，或重啟 qBittorrent（封鎖只記在它的記憶體裡）；先把帳密改對，解封之後只測一次。',
       address: '連不到這個位址。確認 port 沒填錯、服務在跑，而且 Berth 的容器連得到那台主機。',
       schemeMismatch:
         '這個 port 講的是 http，不是 https：把位址開頭的 https:// 改成 http://，再測一次。',
@@ -287,19 +302,21 @@ const zhHant = {
       jellyfinKey:
         'Berth 存的 API key 這一台不收了（多半是在 Jellyfin 的「API 金鑰」被刪了）。用它的管理員在下面重新登入，換一把新的。',
       otherServer:
-        '這個位址上現在回答的是另一台 Jellyfin（{{name}}）。擁有者、Berth 的 API key 與媒體庫都在原本那一台：把位址改回它，或確認那個 port 沒被別的容器佔走。',
+        '這個位址上現在回答的是另一台 Jellyfin。擁有者、Berth 的 API key 與媒體庫都在原本那一台：把位址改回它，或確認那個 port 沒被別的容器佔走。',
     },
   },
   reason: {
     connected: '連線測試通過',
     setup_pending: '還沒跑過自己的初始精靈',
     setup_completed: '已經有管理員',
-    auth_required: '帳密或 API key 不被接受',
+    auth_required: 'API key 不被接受',
+    auth_required_login: '帳密不被接受',
     ip_banned: '把 Berth 這台的 IP 封了（連續登入失敗）',
     api_key_missing: '讀不到 API key',
-    not_deployed: '主機名解不到',
-    unreachable: '主機名解得到但連不上',
+    not_deployed: '找不到這個名字的主機',
+    unreachable: '找得到這台主機，但它沒有回應',
     starting: '連得上，但它說自己還在啟動',
+    coming_up: '還在起來，還沒正常回應',
     protocol_mismatch: '連得上，但回的東西不是這個服務',
     scheme_mismatch: '連得上，但這個 port 講的是 http，不是 https',
     scheme_missing: '位址沒寫 http:// 或 https://',
@@ -314,6 +331,7 @@ const zhHant = {
     credential: '憑證',
     verified: '已驗證',
     unverified: '待驗證',
+    absent: '還沒填',
   },
   technical: {
     title: '技術細節',
@@ -333,7 +351,9 @@ const zhHant = {
     not_deployed: '{{service}} 的主機名解不到：它的容器沒在跑、不在這套 compose 裡，或位址打錯了。',
     unreachable: '連不到 {{service}}：它沒在跑、port 不對，或這一次答不出來。',
     starting: '{{service}} 還在啟動，等一下再試一次。',
-    auth_rejected: '{{service}} 不接受 Berth 的帳密或 API key。',
+    auth_rejected: '{{service}} 不接受 Berth 的 API key。',
+    auth_rejected_login: '{{service}} 不接受 Berth 的帳密。',
+    auth_rejected_tmdb: 'TMDB 不接受這把 key。',
     ip_banned: '{{service}} 把 Berth 這台的 IP 封了：連續登入失敗太多次。',
     protocol_mismatch: '這個位址上回應的不是 {{service}}。',
     scheme_mismatch: '{{service}} 的位址寫 https://，但那個 port 講的是 http。',
@@ -610,6 +630,7 @@ const zhHant = {
       '這個泊位的事做完了。Berth 沒有改這台 qBittorrent 的任何偏好，它的下載走自己的分類。',
   },
   indexer: {
+    noSitesYet: '還沒有站',
     title: '索引站',
     lede: {
       choose:
@@ -782,6 +803,8 @@ const zhHant = {
     whereWizard: '{{where}}現在就去申請也沒關係——精靈的進度已經存下來了，回來時還在這一步。',
     open: '開啟 TMDB 的 API 設定',
     blank: '這一步要一把 key 才走得下去。貼上你在 themoviedb.org 拿到的那一把再按一次。',
+    shape:
+      '這不像 TMDB 的 key：API key 是 32 個英數字（0–9、a–f），read access token 是用兩個點分成三段的長字串。整串複製再貼一次。',
     field: '你的 TMDB API key',
     placeholder: '貼上 API key 或 read access token',
     hint: 'v3 的 API key（32 個十六進位字元）或 v4 的 read access token（很長的一串）都可以，貼哪一種都成立。',
@@ -823,8 +846,12 @@ const zhHant = {
       categories_one: '在 qBittorrent 建或核對 {{count}} 個 berth- 分類（已經有的不改路徑）',
       categories_other: '在 qBittorrent 建或核對 {{count}} 個 berth- 分類（已經有的不改路徑）',
       probes_one:
-        '在 {{count}} 條 Route 的分類路徑與寫入目標各寫一個探測檔（分類路徑那一個請 qBittorrent 停住校驗一次、隨即移除；你的 qBittorrent 設了「torrent 完成時執行外部程式」的話，每條會觸發一次），做一次硬鏈接，檢查完就刪掉',
+        '在 {{count}} 條 Route 的分類路徑與寫入目標各寫一個探測檔（分類路徑那一個請 qBittorrent 停住校驗一次、隨即移除），做一次硬鏈接，檢查完就刪掉',
       probes_other:
+        '在 {{count}} 條 Route 的分類路徑與寫入目標各寫一個探測檔（分類路徑那一個請 qBittorrent 停住校驗一次、隨即移除），做一次硬鏈接，檢查完就刪掉',
+      probesYours_one:
+        '在 {{count}} 條 Route 的分類路徑與寫入目標各寫一個探測檔（分類路徑那一個請 qBittorrent 停住校驗一次、隨即移除；你的 qBittorrent 設了「torrent 完成時執行外部程式」的話，每條會觸發一次），做一次硬鏈接，檢查完就刪掉',
+      probesYours_other:
         '在 {{count}} 條 Route 的分類路徑與寫入目標各寫一個探測檔（分類路徑那一個請 qBittorrent 停住校驗一次、隨即移除；你的 qBittorrent 設了「torrent 完成時執行外部程式」的話，每條會觸發一次），做一次硬鏈接，檢查完就刪掉',
       listBlocked: '清單有標紅的格子，改好才能建立。',
       pickOne: '還差一步：勾一個媒體庫。',
@@ -837,6 +864,18 @@ const zhHant = {
     reread: '重新讀取 Jellyfin 媒體庫',
     rereading: '讀取中…',
     rereadFailed: '讀不到 Jellyfin 現在的媒體庫，下面是上一次讀到的那一份。',
+    rereadDone_one: '已重新讀取：Jellyfin 上現在有 {{count}} 個媒體庫。',
+    rereadDone_other: '已重新讀取：Jellyfin 上現在有 {{count}} 個媒體庫。',
+    refused: {
+      library_missing:
+        'Jellyfin 上已經沒有你選的某個媒體庫了。按上面的「重新讀取 Jellyfin 媒體庫」，清單照 Jellyfin 現在的樣子重列，再按一次。',
+      library_unsupported:
+        'Berth 只寫入電影與劇集類型的媒體庫，選到的那一個不是。取消勾選它再按一次。',
+      target_not_in_library:
+        '選的寫入目標已經不是那個媒體庫的路徑了（Jellyfin 那邊剛改過）。按「重新讀取 Jellyfin 媒體庫」，重新選一次。',
+      library_without_path:
+        'Jellyfin 上有一個清單上的媒體庫沒有任何資料夾，Berth 不知道該寫到哪裡；重新整理也不會好。到 Jellyfin 的「控制台 → 媒體庫」替它加回資料夾，或在 Jellyfin 刪掉它，再按一次——Berth 會照清單把它建回來。是哪一個寫在技術細節裡。',
+    },
     routeMissing:
       '這一步順便重新檢查了既有的 Route，其中一條在途中被刪掉了（多半是另一個分頁）。重新整理這一步，剩下的會再檢查一次。',
     cutaway: {
@@ -919,6 +958,14 @@ const zhHant = {
     },
   },
   complete: {
+    doors: {
+      title: '各服務自己的介面',
+      lede: '平常用不到它們：Berth 替你接好了。要看下載細節、管理 Jellyfin 的使用者、在 Prowlarr 加要帳號的站時才開。',
+      jellyfin: '用擁有者 {{name}} 登入，與 Berth 同一組。',
+      bundledLogin: '帳號 {{name}}，密碼是精靈裡設的那一組。',
+      yours: '用你原本的登入。',
+      noLink: '給不出連結：Berth 只知道它在容器網路裡的位址。用你平常開它的那個位址。',
+    },
     title: '完成設定',
     lede: '五個泊位都走過了。按下完成之後精靈就關閉，之後的修改在設定頁。',
     submit: '完成設定',
@@ -927,8 +974,10 @@ const zhHant = {
     needTmdb:
       'TMDB 那一頁（頁 5）還沒完成：TMDB 要一把測得過的 key。沒有它，探索、季集快照與命名全部停擺，所以這一步不能跳。',
     needRoutes:
-      '媒體庫路徑那一頁（頁 3）還沒完成：每一條 Route 的五條纜繩都要綠燈。紅著的那一條，送單一定失敗。',
+      '媒體庫路徑那一頁（頁 3）還沒完成：每一條 Route 的每一條纜繩都要綠燈。紅著的那一條，送單一定失敗。',
     unfinished: '還有一步沒做完，但這一頁看不出是哪一步。回上一步逐格看一次，紅的那一格就是。',
+    pulledBack:
+      '還不能完成：{{place}} 那一頁現在沒有做完——另一個分頁改過它，或它的檢查變紅了。先把這一頁做完，再走到完成。',
     fixTmdb: '回去填 TMDB key',
     signInHint:
       '完成後直接進 Berth。之後登入一律用 Jellyfin 帳號：你是 {{name}}，其他人用自己的 Jellyfin 帳號，是那台的管理員才進得來設定。',
@@ -2502,7 +2551,7 @@ const zhHant = {
     fix: {
       title: '修正',
       banned:
-        'qBittorrent 因為連續登入失敗把 Berth 這台的 IP 封了。**改帳密沒有用**——那只會再失敗幾次，把封鎖時間重新算一輪。等封鎖過期（qBittorrent 預設 1 小時），或到它的介面上把封鎖清掉；重啟 qBittorrent 容器也會清掉，因為封鎖只存在記憶體裡。確定帳密沒問題之後 Berth 下一輪就會自己變綠。',
+        'qBittorrent 因為連續登入失敗把 Berth 這台的 IP 封了。**改帳密沒有用**——那只會再失敗幾次，把封鎖時間重新算一輪。被封的是 qBittorrent 看到的來源 IP：Berth 經宿主的 port 或 host.docker.internal 連它時，那多半也是你瀏覽器的來源，所以這段時間你從宿主開它的 WebUI 也登不進去。等封鎖過期（qBittorrent 預設 1 小時），或到它的介面上把封鎖清掉；重啟 qBittorrent 容器也會清掉，因為封鎖只存在記憶體裡。確定帳密沒問題之後 Berth 下一輪就會自己變綠。',
       bundled:
         '這個服務是這套 compose 起的，所以先確認那個容器還在跑。三條指令的順序就是排查順序：還在嗎、把它起來、它自己說了什麼。',
       existing:
@@ -2621,15 +2670,15 @@ const zhHant = {
       name: '名稱',
       enabled: '啟用',
       enabledHint:
-        '停用的 Route 不收新的送單，已經在路上的下載照常入庫。啟用時會先把五條纜繩重跑一次。',
+        '停用的 Route 不收新的送單，已經在路上的下載照常入庫。啟用時會先把每一條纜繩重跑一次。',
       identity:
         'slug 與寫入目標建立之後就不能改：分類、complete 子目錄與帳本都認它們。要換目標就新增一條、刪掉這一條。',
       save: '儲存',
       saveRechecks:
-        '儲存會重跑下面那五條纜繩：那一輪會建 qBittorrent 分類，並在寫入目標寫一個探測檔。',
+        '儲存會重跑下面每一條纜繩：那一輪會建 qBittorrent 分類，並在寫入目標寫一個探測檔。',
       saving: '儲存並檢查中…',
       saved: '已儲存。',
-      unhealthy: '五條纜繩沒有全綠，這條 Route 維持停用。修好下面紅的那一條，再按一次儲存。',
+      unhealthy: '纜繩沒有全綠，這條 Route 維持停用。修好下面紅的那一條，再按一次儲存。',
       failed: '沒有存進去。Berth 後端可能沒在跑——確認容器狀態後再按一次。',
       nameRequired: '名稱不能空白：媒體庫頁的切換列與送單時的 Route 下拉都顯示它。',
     },
@@ -2673,9 +2722,9 @@ const zhHant = {
       pickFirst: '先選一個媒體庫，與一條還沒有 Route 的寫入目標。',
       submit: '建立並檢查',
       submitting: '建立並檢查中…',
-      createdOk: '已建立「{{name}}」：五條纜繩全綠，已經啟用。',
+      createdOk: '已建立「{{name}}」：纜繩全綠，已經啟用。',
       createdRed:
-        '已建立「{{name}}」，但五條纜繩沒有全綠，所以維持停用。修好掛載之後在它那一列重新檢查，再勾啟用。',
+        '已建立「{{name}}」，但纜繩沒有全綠，所以維持停用。修好掛載之後在它那一列重新檢查，再勾啟用。',
       unreachable: '問不到 Jellyfin 的媒體庫清單，而新增 Route 要用它回報的路徑。原文：',
       failed: '沒有建立。Berth 後端可能沒在跑——確認容器狀態後再按一次。',
       refusal: {
@@ -3103,6 +3152,8 @@ const en: Translations<typeof zhHant> = {
     indexerNone: '{{product}} · no indexers yet',
     indexerCount_one: '{{product}} · {{count}} indexer',
     indexerCount_other: '{{product}} · {{count}} indexers',
+    routeCount_one: '{{count}} route',
+    routeCount_other: '{{count}} routes',
     unassigned: 'Unassigned',
     waiting: 'Awaiting berth',
     summary: {
@@ -3130,7 +3181,7 @@ const en: Translations<typeof zhHant> = {
     },
     stray: {
       where: 'Looking back: {{place}}',
-      current: 'You are up to step {{current}}',
+      current: 'You are up to: {{place}}',
       back: 'Back to the current step',
     },
     revisit: {
@@ -3141,6 +3192,8 @@ const en: Translations<typeof zhHant> = {
         can: 'See who the owner is. Once there is an owner the source is locked; if your existing Jellyfin moved (a new port, say), use “Change address” on the test result — only the same server is accepted.',
         elsewhere:
           'The owner’s password is changed in Jellyfin. Moving to another Jellyfin would mean another owner, which Berth does not support.',
+        bundledCan:
+          'See who the owner is. Once there is an owner the source is locked; the bundled one’s address comes from compose, so there is nothing to change.',
       },
       qbittorrent: {
         can: 'Switch between bundled and existing (this page starts over), or check again: the bundled qBittorrent gets the recommended settings applied once more, and keys already at the recommended value show as “already so” and are not written again; your own qBittorrent is only checked for a connection, with no key written.',
@@ -3148,7 +3201,7 @@ const en: Translations<typeof zhHant> = {
           'Preferences beyond the three bundled keys, and every preference on your own qBittorrent, are changed in qBittorrent itself; Berth leaves them alone.',
       },
       routes: {
-        can: 'The wizard only adds: a bundled Jellyfin can take more libraries on the list; newly ticked libraries get a route, and every route’s five checks run again. Delete a wrong one underneath it.',
+        can: 'The wizard only adds: a bundled Jellyfin can take more libraries on the list; newly ticked libraries get a route, and every check on every route runs again. Delete a wrong one underneath it.',
         elsewhere:
           'Renaming and disabling routes happens in Settings → Library paths once the wizard is finished.',
       },
@@ -3249,6 +3302,8 @@ const en: Translations<typeof zhHant> = {
       blank: 'Username and password are both required.',
       mismatch: 'The two passwords do not match.',
       passwordSpaces: 'Jellyfin does not accept a password made only of spaces.',
+      noPassword:
+        'Berth does not take a Jellyfin account without a password as the owner: the owner can change every Berth setting, so no password means anyone can. Give this account a password under Dashboard → Users in Jellyfin, then sign in here.',
       username:
         "Jellyfin usernames can only use letters, numbers, spaces and - _ ' . @ +, and cannot be just “.” or “..”.",
     },
@@ -3280,7 +3335,14 @@ const en: Translations<typeof zhHant> = {
     },
     existing: {
       title: 'Existing',
-      lede: 'The {{service}} you already run. Berth only connects to it and leaves your settings alone.',
+      lede: 'The {{service}} you already run. Berth leaves your settings alone and {{adds}}',
+      adds: {
+        jellyfin:
+          'only adds one path for Berth to write to on a library when you press the button on page 3 (the existing paths stay). If it has not run its own startup wizard yet, page 1 runs it with the account you enter.',
+        qbittorrent:
+          'only creates berth- categories when you press the button on page 3; the checks add one paused probe torrent and remove it right away. No preference is written.',
+        prowlarr: 'only adds the sites you tick on page 4; the sites already there stay.',
+      },
       sameHost:
         'Condition: it runs on the same host as Berth and mounts the same parent directory at the same container path (for example /data on both) — Berth imports with hard links, so one on another NAS, or with downloads and libraries mounted apart, cannot be connected.',
       profiles:
@@ -3298,7 +3360,7 @@ const en: Translations<typeof zhHant> = {
     refused: {
       jellyfin_owned: 'Once there is an owner, the Jellyfin source cannot change.',
       other_server:
-        'Not saved: {{detail}} is another Jellyfin, not the one the owner is on. The owner, Berth’s API key and the libraries are all on the original one; another server would mean another owner, which Berth does not support.',
+        'Not saved: another Jellyfin answers at this address, not the one the owner is on. The owner, Berth’s API key and the libraries are all on the original one; another server would mean another owner, which Berth does not support.',
       unverified:
         'Not saved: this address did not say which Jellyfin it is ({{detail}}), so Berth cannot tell whether it is the same one. Check the address and port, then try again.',
     },
@@ -3360,7 +3422,7 @@ const en: Translations<typeof zhHant> = {
       prowlarrKey:
         'The API key is wrong. Copy it from Settings → General in Prowlarr (not the interface password), paste it and test again.',
       banned:
-        'By default qBittorrent bans an IP for {{minutes}} minutes after {{limit}} failed logins, and while banned even the right password is refused. Wait {{minutes}} minutes, or restart qBittorrent (it keeps bans only in memory); fix the credentials first, then test once after the ban is lifted.',
+        'By default qBittorrent bans an IP for {{minutes}} minutes after {{limit}} failed logins, and while banned even the right password is refused. The ban is on the source IP qBittorrent sees: when Berth reaches it through a host port or host.docker.internal, that is usually your browser’s source too, so its WebUI will refuse you from the host for the same time. Wait {{minutes}} minutes, or restart qBittorrent (it keeps bans only in memory); fix the credentials first, then test once after the ban is lifted.',
       address:
         "Nothing answers at this address. Check the port, that the service is running, and that Berth's container can reach that host.",
       schemeMismatch:
@@ -3374,19 +3436,21 @@ const en: Translations<typeof zhHant> = {
       jellyfinKey:
         'This Jellyfin no longer accepts the API key Berth stored (most likely it was deleted under API Keys in Jellyfin). Sign in below as one of its administrators to get a new one.',
       otherServer:
-        'Another Jellyfin ({{name}}) now answers at this address. The owner, Berth’s API key and the libraries are all on the original one: point the address back at it, or check that no other container took that port.',
+        'Another Jellyfin now answers at this address. The owner, Berth’s API key and the libraries are all on the original one: point the address back at it, or check that no other container took that port.',
     },
   },
   reason: {
     connected: 'Connection test passed',
     setup_pending: 'Its startup wizard has not run yet',
     setup_completed: 'It already has an administrator',
-    auth_required: 'Credentials or API key not accepted',
+    auth_required: 'API key not accepted',
+    auth_required_login: 'Username or password not accepted',
     ip_banned: 'Has banned this machine (too many failed logins)',
     api_key_missing: 'No API key available',
-    not_deployed: 'Hostname does not resolve',
-    unreachable: 'Hostname resolves but nothing answers',
+    not_deployed: 'No host by that name',
+    unreachable: 'The host is there, but nothing answers',
     starting: 'It answers, but says it is still starting up',
+    coming_up: 'Still coming up; no proper answer yet',
     protocol_mismatch: 'Something answered, but it is not this service',
     scheme_mismatch: 'It answers, but this port speaks http, not https',
     scheme_missing: 'The address has no http:// or https://',
@@ -3401,6 +3465,7 @@ const en: Translations<typeof zhHant> = {
     credential: 'Credential',
     verified: 'Verified',
     unverified: 'Not verified',
+    absent: 'Not entered',
   },
   technical: {
     title: 'Technical details',
@@ -3427,7 +3492,9 @@ const en: Translations<typeof zhHant> = {
     unreachable:
       'Cannot reach {{service}}: it is not running, the port is wrong, or it could not answer this time.',
     starting: '{{service}} is still starting. Try again in a moment.',
-    auth_rejected: '{{service}} does not accept Berth’s credentials or API key.',
+    auth_rejected: '{{service}} does not accept Berth’s API key.',
+    auth_rejected_login: '{{service}} does not accept Berth’s username and password.',
+    auth_rejected_tmdb: 'TMDB does not accept this key.',
     ip_banned: '{{service}} has banned this machine’s IP after too many failed logins.',
     protocol_mismatch: 'Whatever answers at this address is not {{service}}.',
     scheme_mismatch: 'The {{service}} address says https://, but that port speaks http.',
@@ -3725,6 +3792,7 @@ const en: Translations<typeof zhHant> = {
       'This berth is done. Berth changed none of this qBittorrent’s preferences; its downloads go through its own categories.',
   },
   indexer: {
+    noSitesYet: 'No sites yet',
     title: 'Indexers',
     lede: {
       choose:
@@ -3911,6 +3979,8 @@ const en: Translations<typeof zhHant> = {
     open: "Open TMDB's API settings",
     blank:
       'This step needs a key to go on. Paste the one you got from themoviedb.org and press again.',
+    shape:
+      'That does not look like a TMDB key: an API key is 32 characters of 0–9 and a–f, a read access token is a long string split into three parts by two dots. Copy the whole thing and paste it again.',
     field: 'Your TMDB API key',
     placeholder: 'Paste an API key or a read access token',
     hint: 'Either a v3 API key (32 hex characters) or a v4 read access token (a long string) works — paste whichever you have.',
@@ -3955,8 +4025,12 @@ const en: Translations<typeof zhHant> = {
       categories_other:
         'Create or verify {{count}} berth- categories in qBittorrent (existing ones keep their path)',
       probes_one:
-        'Write a probe file in the category path and the write target of {{count}} route (qBittorrent checks the first one while stopped, then it is removed; if your qBittorrent runs an external program when a torrent finishes, it runs once per route) and make one hard link, all deleted once checked',
+        'Write a probe file in the category path and the write target of {{count}} route (qBittorrent checks the first one while stopped, then it is removed) and make one hard link, all deleted once checked',
       probes_other:
+        'Write a probe file in the category path and the write target of each of {{count}} routes (qBittorrent checks the first one while stopped, then it is removed) and make one hard link, all deleted once checked',
+      probesYours_one:
+        'Write a probe file in the category path and the write target of {{count}} route (qBittorrent checks the first one while stopped, then it is removed; if your qBittorrent runs an external program when a torrent finishes, it runs once per route) and make one hard link, all deleted once checked',
+      probesYours_other:
         'Write a probe file in the category path and the write target of each of {{count}} routes (qBittorrent checks the first one while stopped, then it is removed; if your qBittorrent runs an external program when a torrent finishes, it runs once per route) and make one hard link, all deleted once checked',
       listBlocked: 'Fix the fields marked in red before building.',
       pickOne: 'One step left: tick a library.',
@@ -3970,6 +4044,18 @@ const en: Translations<typeof zhHant> = {
     rereading: 'Reading…',
     rereadFailed:
       'Could not read the libraries Jellyfin has now; below is the list Berth read last time.',
+    rereadDone_one: 'Re-read: Jellyfin now has {{count}} library.',
+    rereadDone_other: 'Re-read: Jellyfin now has {{count}} libraries.',
+    refused: {
+      library_missing:
+        'A library you picked is no longer on Jellyfin. Press “Read the Jellyfin libraries again” above so the list matches Jellyfin, then press again.',
+      library_unsupported:
+        'Berth writes into movie and TV libraries only, and one you picked is neither. Untick it and press again.',
+      target_not_in_library:
+        'The write target you picked is no longer a path of that library (Jellyfin changed just now). Press “Read the Jellyfin libraries again” and pick again.',
+      library_without_path:
+        'A library on the list has no folder on Jellyfin, so Berth does not know where to write; reloading will not fix it. Give it a folder back under Dashboard → Libraries in Jellyfin, or delete it there and press again — Berth rebuilds it from the list. Which one is in the technical details.',
+    },
     routeMissing:
       'This step also re-checks the routes you already have, and one of them was deleted while it ran — another tab, most likely. Reload this step and the rest will be checked again.',
     cutaway: {
@@ -4052,6 +4138,15 @@ const en: Translations<typeof zhHant> = {
     },
   },
   complete: {
+    doors: {
+      title: 'The services’ own interfaces',
+      lede: 'You will rarely need them: Berth has wired them up. Open them to see download details, manage Jellyfin users, or add sites that need an account in Prowlarr.',
+      jellyfin: 'Sign in as the owner, {{name}} — the same account as Berth.',
+      bundledLogin: 'Username {{name}}; the password is the one you set in the wizard.',
+      yours: 'Use the login you already have.',
+      noLink:
+        'No link: Berth only knows its address inside the container network. Use the address you normally open it at.',
+    },
     title: 'Finish setup',
     lede: 'All five berths have been visited. Finishing closes the wizard; later changes happen in Settings.',
     submit: 'Finish setup',
@@ -4060,9 +4155,11 @@ const en: Translations<typeof zhHant> = {
     needTmdb:
       'The TMDB page (page 5) is not finished: TMDB needs an API key that passes its test. Without it discovery, episode snapshots and naming all stop, so this step cannot be skipped.',
     needRoutes:
-      'The library paths page (page 3) is not finished: all five checks have to pass on every route. Submitting to a red one always fails.',
+      'The library paths page (page 3) is not finished: every check has to pass on every route. Submitting to a red one always fails.',
     unfinished:
       'A step is still unfinished, but this page cannot tell which. Go back a step and look at each berth — the red one is it.',
+    pulledBack:
+      'Setup cannot finish yet: the {{place}} page is no longer done — another tab changed it, or one of its checks turned red. Finish this page first, then go on to the end.',
     fixTmdb: 'Go back and enter the TMDB key',
     signInHint:
       'You go straight into Berth. Signing in always uses a Jellyfin account from now on: you are {{name}}, everyone else uses their own Jellyfin account, and only its administrators reach the settings.',
@@ -5544,7 +5641,7 @@ const en: Translations<typeof zhHant> = {
     fix: {
       title: 'Fix',
       banned:
-        'qBittorrent has banned this machine after repeated failed logins. **Changing the password will not help** — it only fails a few more times and restarts the ban. Wait for it to expire (1 hour by default), clear the ban in qBittorrent, or restart its container: the ban lives in memory only. Once the credentials are right, Berth turns green again on its next round.',
+        'qBittorrent has banned this machine after repeated failed logins. **Changing the password will not help** — it only fails a few more times and restarts the ban. The ban is on the source IP qBittorrent sees: when Berth reaches it through a host port or host.docker.internal, that is usually your browser’s source too, so its WebUI will refuse you from the host for the same time. Wait for it to expire (1 hour by default), clear the ban in qBittorrent, or restart its container: the ban lives in memory only. Once the credentials are right, Berth turns green again on its next round.',
       bundled:
         'This service comes from the bundled compose file, so start by checking that its container is still running. The three commands are in triage order: is it there, bring it up, what did it say.',
       existing:
@@ -5660,16 +5757,16 @@ const en: Translations<typeof zhHant> = {
       name: 'Name',
       enabled: 'Enabled',
       enabledHint:
-        'A disabled route takes no new downloads; the ones already on their way still import. Enabling it runs the five checks again first.',
+        'A disabled route takes no new downloads; the ones already on their way still import. Enabling it runs every check again first.',
       identity:
         'The slug and the write target cannot change once the route exists: the category, the complete subdirectory and the ledger all go by them. To use another target, add a route and delete this one.',
       save: 'Save',
       saveRechecks:
-        'Saving runs the five checks below again: that round creates the qBittorrent category and writes a probe file into the write target.',
+        'Saving runs every check below again: that round creates the qBittorrent category and writes a probe file into the write target.',
       saving: 'Saving and checking…',
       saved: 'Saved.',
       unhealthy:
-        'Not all five checks passed, so this route stays disabled. Fix the red one below and press Save again.',
+        'Not every check passed, so this route stays disabled. Fix the red one below and press Save again.',
       failed:
         'It was not saved. The Berth backend may be down — check the container and press again.',
       nameRequired:
@@ -5719,9 +5816,9 @@ const en: Translations<typeof zhHant> = {
       pickFirst: 'Pick a library and a write target that has no route yet.',
       submit: 'Create and check',
       submitting: 'Creating and checking…',
-      createdOk: 'Created “{{name}}”: all five checks passed and it is enabled.',
+      createdOk: 'Created “{{name}}”: every check passed and it is enabled.',
       createdRed:
-        'Created “{{name}}”, but not all five checks passed, so it stays disabled. Fix the mount, check it again in its row, then tick Enabled.',
+        'Created “{{name}}”, but not every check passed, so it stays disabled. Fix the mount, check it again in its row, then tick Enabled.',
       unreachable:
         'Could not get the library list from Jellyfin, and a new route needs the paths it reports. Raw message:',
       failed:

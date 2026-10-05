@@ -341,10 +341,23 @@ def libraries_built(setup: SetupSettings, library_root: str) -> bool:
 def is_listed(library: SetupLibrary, bundled: Sequence[BundledLibrary], library_root: str) -> bool:
     """這個媒體庫是清單上的某一列（`_already_built` 反過來問）。套件內只替這幾個建 Route
     （M4 票 24）：使用者自己在 Jellyfin 加的媒體庫不是 Berth 的，路徑多半也不在它的掛載裡。"""
+    return listed_position(library, bundled, library_root) is not None
+
+
+def listed_position(
+    library: SetupLibrary, bundled: Sequence[BundledLibrary], library_root: str
+) -> int | None:
+    """這個媒體庫是清單上的第幾列；不在清單上是 `None`。Route 照它排（M4 票 31）：Jellyfin 照字母
+    回報媒體庫，清單上的順序才是使用者排的。"""
     names = {library.name}
     locations = set(library.locations)
-    return any(
-        _already_built(row, library_root, names=names, locations=locations) for row in bundled
+    return next(
+        (
+            index
+            for index, row in enumerate(bundled)
+            if _already_built(row, library_root, names=names, locations=locations)
+        ),
+        None,
     )
 
 

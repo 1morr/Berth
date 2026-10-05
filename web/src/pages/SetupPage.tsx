@@ -47,18 +47,21 @@ import {
 import { type QbittorrentSetup, type ServiceKind, type ServiceOrigin } from '../api/schemas'
 import { meQueryOptions } from '../api/auth'
 import { healthQueryOptions } from '../api/health'
+import { jellyfinAddressQueryOptions } from '../api/settings'
 import { routeRefusalOf } from '../api/routes'
 import { BERTHS } from '../components/berths'
 import { LanguageToggle } from '../components/LanguageToggle'
 import { BerthBoard, type BerthSignals } from '../setup/BerthBoard'
 import { BerthNav, RevisitNote } from '../setup/BerthNav'
 import { CompleteStep, type CompleteFailure } from '../setup/CompleteStep'
+import { ServiceDoors } from '../setup/ServiceDoors'
 import { IndexerStep } from '../setup/IndexerStep'
 import { GAP, indexerGaps } from '../setup/indexerGaps'
 import { OwnerStep } from '../setup/OwnerStep'
 import { QbittorrentStep } from '../setup/QbittorrentStep'
 import { librariesFailed } from '../setup/jellyfinSteps'
 import { RouteStep, type DockFailure, type DockPlan } from '../setup/RouteStep'
+import { BUILD_REFUSAL, type BuildRefusal } from '../setup/buildRefusal'
 import { TmdbStep } from '../setup/TmdbStep'
 import {
   BERTH_STEP,
@@ -108,6 +111,7 @@ const PROGRESS_INTERVAL_MS = 1500
  */
 export function SetupPage() {
   const { t } = useTranslation()
+  const berthName = useBerthName()
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const status = useQuery(setupStatusQueryOptions)
@@ -341,7 +345,21 @@ export function SetupPage() {
       )
       void navigate({ to: '/' })
     },
+    // 422 是後端照頁序再問一次而某一頁不再成立（M4 票 31）：多半是另一個分頁回去改了，
+    // 手上這份進度是舊的。重讀之後網址指到後端還沒到的頁會被拉回那一頁（`navigation`）；完成頁
+    // 跟著卸下，它自己的那一句也就沒了，所以拉回去的那一頁頂上另說一句（`pulledBack`，審查 P1）。
+    onError: async (error) => {
+      if (!(error instanceof ApiError) || error.status !== 422) return
+      await queryClient.invalidateQueries({ queryKey: setupStatusQueryOptions.queryKey })
+      const next = queryClient.getQueryData(setupStatusQueryOptions.queryKey)
+      if (next && next.current_step < STEP.complete) setPulledBack(true)
+    },
   })
+  // 完成被擋、被拉回某一頁：走回完成頁之前，那一頁頂上說為什麼回來。
+  const [pulledBack, setPulledBack] = useState(false)
+  useEffect(() => {
+    if (step === STEP.complete) setPulledBack(false)
+  }, [step])
 
   // 套件內那一台還在啟動：每 3 秒重測，直到有結論或後端判逾時（M3 票 06g 的三種樣子）。只測畫面上
   // 等著的那一個：別頁的服務不在這裡轉圈，它的重測只會與這一頁的命令搶同一組設定（M4 票 23）。
@@ -360,10 +378,10 @@ export function SetupPage() {
   })
   const qbittorrentChoice = current?.services.find((row) => row.kind === 'qbittorrent')
   // 頁 2 的差異是**現查的**：使用者可能在 qBittorrent 自己的介面上改過東西。**選了、連上了才問**
-  // ——這一支會去連那一台，選之前不發（M4 票 15）。
+  // ——這一支會去連那一台，選之前不發（M4 票 15）。完成頁也讀：WebUI 開在哪、帳號是誰（M4 票 31）。
   const qbittorrent = useQuery({
     ...qbittorrentSetupQueryOptions,
-    enabled: step === STEP.qbittorrent && connected(qbittorrentChoice),
+    enabled: (step === STEP.qbittorrent || step === STEP.complete) && connected(qbittorrentChoice),
   })
   // 讀差異或套用時 qBittorrent 連不上了，連線卡卻還是上一次的綠燈（M4 票 25，實測 B9-04～07）：重新測試
   // 一次。卡片照這一次的例外變紅、出現「重新測試」，後端的頁 2 也就不算做完（前進鍵收起）。同一份讀到的
@@ -403,6 +421,11 @@ export function SetupPage() {
     if (rereadOnEntry) rereadNow()
   }, [rereadOnEntry, rereadNow])
   const indexers = useQuery({ ...indexerSetupQueryOptions, enabled: backend >= STEP.indexer })
+  // 完成頁列出 Jellyfin 開在哪（M4 票 31）：與媒體庫深連結同一份推導（`/settings/jellyfin`）。
+  const jellyfinAddress = useQuery({
+    ...jellyfinAddressQueryOptions,
+    enabled: step === STEP.complete,
+  })
   const tmdb = useQuery({ ...tmdbSetupQueryOptions, enabled: backend >= STEP.tmdb })
 
   useEffect(() => {
@@ -440,7 +463,11 @@ export function SetupPage() {
   const note = advanced(step, backend) ? (
     <RevisitNote
       step={step}
-      origin={current.services.find((row) => row.kind === 'prowlarr')?.origin}
+      origin={
+        current.services.find(
+          (row) => row.kind === (step === STEP.jellyfin ? 'jellyfin' : 'prowlarr'),
+        )?.origin
+      }
     />
   ) : null
 
@@ -499,6 +526,7 @@ export function SetupPage() {
     // 換另一格還沒測時，索引站那一格的站數說的是原本那一台，不畫。
     indexers: drafted?.kind === 'prowlarr' ? undefined : indexers.data,
     tmdb: tmdb.data,
+    routes: routes.data,
     signals,
     onGo: goTo,
     onReturn: () => goTo(backend),
@@ -506,6 +534,13 @@ export function SetupPage() {
 
   return (
     <Shell {...shell}>
+      {pulledBack && step !== STEP.complete && (
+        <div role="alert" className="px-6 pt-6">
+          <Notice signal="blocked" label={t('common.failed')}>
+            {t('complete.pulledBack', { place: berthName(backend) })}
+          </Notice>
+        </div>
+      )}
       {step === STEP.jellyfin ? (
         <OwnerStep
           status={current}
@@ -582,6 +617,14 @@ export function SetupPage() {
             routes={routes.data}
             indexers={indexers.data}
             owner={current.owner}
+            doors={
+              <ServiceDoors
+                owner={current.owner}
+                jellyfin={jellyfinAddress.data}
+                qbittorrent={qbittorrent.data}
+                indexers={indexers.data}
+              />
+            }
             completing={finish.isPending}
             failure={completeFailure(finish.error, tmdb.data, routes.data)}
             onComplete={() => finish.mutate()}
@@ -692,9 +735,12 @@ function Waiting({ failed, message, nav }: { failed: boolean; message: string; n
  */
 function dockFailure(error: unknown): DockFailure | null {
   if (error === null || error === undefined || bundledRefusalOf(error)) return null
-  return routeRefusalOf(error)?.reason === 'route_missing'
-    ? { kind: 'route_missing' }
-    : { kind: 'request', error }
+  const refusal = routeRefusalOf(error)
+  if (refusal?.reason === 'route_missing') return { kind: 'route_missing' }
+  if (refusal && refusal.reason in BUILD_REFUSAL) {
+    return { kind: 'refused', reason: refusal.reason as BuildRefusal, detail: refusal.detail }
+  }
+  return { kind: 'request', error }
 }
 
 /**
@@ -754,9 +800,9 @@ function tmdbSignal(status: SetupStatus, tmdb: TmdbSetup | undefined, testing: b
 /**
  * 按下「完成設定」失敗的原因（票 03 第 5 條）。
  *
- * **422 不是後端出錯**：`complete_setup` 用它說「第 5 步或第 7 步還沒做完」
- * （`berth/services/setup.py`）。是哪一步前端自己答得出來——TMDB 的綠燈就在手上的
- * `tmdb.verified`，不必去解那句英文散文。其餘（5xx、連不上）才是後端的問題。
+ * **422 不是後端出錯**：`complete_setup` 照頁序把每一頁再問一次，用它說「某一頁還沒做完」
+ * （`berth/services/setup.py`，M4 票 31）。頁 3、頁 5 前端自己答得出來；其餘的頁在重讀進度之後
+ * 由網址拉回去（`finish` 的 `onError`）。其餘（5xx、連不上）才是後端的問題。
  */
 function completeFailure(
   error: unknown,
@@ -769,7 +815,7 @@ function completeFailure(
   // 還沒載回來時 `verified` 是 `undefined`，拿它當「沒驗過」會在真正卡住的是 Route 時說錯話
   // （票 03 的 code review）。兩份都說沒問題卻仍被擋，代表我們這一份過期或後端多了一種 422——
   // 那就別猜，說「還有一步沒做完」。
-  // 照步驟的順序問（Route 是第 5 步、TMDB 是第 7 步），與後端 `complete_setup` 同一個順序。
+  // 照頁序問（Route 是頁 3、TMDB 是頁 5），與後端 `complete_setup` 同一個順序。
   if (routes?.ready === false) return 'routes'
   if (tmdb?.verified === false) return 'tmdb'
   return 'unfinished'
@@ -801,6 +847,7 @@ function Shell({
   signals,
   indexers,
   tmdb,
+  routes,
   onGo,
   onReturn,
   children,
@@ -815,6 +862,8 @@ function Shell({
   indexers?: IndexerSetup
   /** TMDB 那一格的詳情列（憑證驗過了沒）。頁 5 起才問得到。 */
   tmdb?: TmdbSetup
+  /** 媒體庫路徑那一格的詳情列（建了幾條 Route）。頁 3 起才問得到。 */
+  routes?: RouteSetup
   onGo?: (step: number) => void
   /** 回到目前這一步：解除覆寫。 */
   onReturn?: () => void
@@ -845,6 +894,7 @@ function Shell({
         signals={signals}
         indexers={indexers}
         tmdb={tmdb}
+        routes={routes}
         current={code}
         reachable={onGo && ((slot) => reachable(BERTH_STEP[slot], backend))}
         onSelect={onGo && ((slot) => onGo(BERTH_STEP[slot]))}
@@ -881,12 +931,14 @@ function StrayBand({
   const berth = code ? BERTHS.find((row) => row.code === code) : undefined
   // 每一頁（除了完成）都是板上的一格；回頭看的一定是其中一格。
   const place = berth ? `${berth.code} ${t(berth.nameKey)}` : ''
+  // 目前走到哪也用泊位說，不說「第 6 步」：頁首數的是泊位（共 5 個），完成頁不是泊位（M4 票 31）。
+  const current = useBerthName()(backend)
 
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b-2 border-rule bg-deck px-6 py-3">
       <p className="text-sm text-ink">
         {t('setup.stray.where', { place })}
-        <span className="text-ink-dim"> · {t('setup.stray.current', { current: backend })}</span>
+        <span className="text-ink-dim"> · {t('setup.stray.current', { place: current })}</span>
       </p>
       <div className="sm:ml-auto">
         <GhostButton type="button" onClick={onReturn}>
@@ -895,4 +947,13 @@ function StrayBand({
       </div>
     </div>
   )
+}
+
+/** 一頁的泊位名（「BTH 2 qBittorrent」）；完成頁不是泊位，說「收尾」（M4 票 31）。 */
+function useBerthName(): (step: number) => string {
+  const { t } = useTranslation()
+  return (step) => {
+    const berth = BERTHS.find((row) => row.slot === berthOf(step))
+    return berth ? `${berth.code} ${t(berth.nameKey)}` : t('setup.stage.final')
+  }
 }

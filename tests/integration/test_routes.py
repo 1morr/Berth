@@ -4,7 +4,7 @@
 紅燈不給啟用、刪除是明確動作而被引用時拒絕。
 
 與精靈同一個起點（`arrange`）、同一組**真的**檔案系統檢查——一條 Route 綠不綠，問的永遠是
-那五條纜繩，而它們在 tmp 目錄底下真的鏈接一次檔案。
+那每一條纜繩，而它們在 tmp 目錄底下真的鏈接一次檔案。
 """
 
 from __future__ import annotations
@@ -561,7 +561,7 @@ class TestRaces:
 def ask_jellyfin_together(factory: FakeClientFactory, monkeypatch: pytest.MonkeyPatch) -> None:
     """頭兩次問 Jellyfin 的呼叫要等彼此都到了才一起回：兩個建立都在鎖外問完，才一起去搶鎖。
 
-    之後的呼叫（五條纜繩裡的 `library_path`）照常，否則只剩一個建立在檢查時會永遠等下去。
+    之後的呼叫（每一條纜繩裡的 `library_path`）照常，否則只剩一個建立在檢查時會永遠等下去。
     """
     both_asked = asyncio.Barrier(2)
     ask = factory.jellyfin_.libraries

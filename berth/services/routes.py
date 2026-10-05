@@ -6,7 +6,7 @@
 - **建 Route**。套件內由 Berth 自己建的每一個媒體庫自動長出一個 Route；既有 Jellyfin 由使用者
   勾選媒體庫，並從**那個媒體庫自己回報的路徑**裡選一條當寫入目標——路徑一律用選的，不用打的
   （brief §4.1），所以這裡也拒絕不在 `locations` 裡的目標。
-- **檢查**。每個 Route 立刻在 qBittorrent 建 category，然後跑 plan §9.5 的三項檢查。它們回答
+- **檢查**。每個 Route 立刻在 qBittorrent 建 category，然後跑 plan §9.5 的每一項檢查。它們回答
   的是同一個問題：**Berth、qBittorrent、Jellyfin 三個容器看到的是不是同一個檔案系統**。
   只比 `st_dev` 不夠，所以最後一項真的鏈接一次（brief §4.4）。
 
@@ -81,6 +81,7 @@ from berth.services.jellyfin import (
     berth_path,
     is_listed,
     library_slug,
+    listed_position,
     remember_libraries,
     tvdb_fetchers,
 )
@@ -357,7 +358,7 @@ async def create_route(
     而留著這一列，修好掛載之後按一次「重新檢查」再啟用就好，不必重填一次。
 
     順序是鎖的規矩（`_write_lock`）：問 Jellyfin 在鎖外，看目標有沒有人佔、算 slug、寫入在鎖內，
-    五條纜繩又回到鎖外。兩個分頁同時建同一個目標時，後到的那一個重讀之後說 `target_taken`。
+    每一條纜繩又回到鎖外。兩個分頁同時建同一個目標時，後到的那一個重讀之後說 `target_taken`。
     """
     library = await _live_library(session, factory, library_id)
     collection_type = SUPPORTED_TYPES.get(library.collection_type)
@@ -416,7 +417,7 @@ async def update_route(
     slug 與目標路徑不在這裡：category 與 complete 子目錄由 slug 導出，帳本以目標路徑認 Route，
     改了就是另一條 Route——要換就新增一條、刪掉舊的（Sonarr 的 root folder 同樣不能改路徑）。
 
-    每一次修改都重跑五條纜繩（票 14 驗收）。**從停用到啟用**要那一輪全綠，否則拒絕並留在停用；
+    每一次修改都重跑每一條纜繩（票 14 驗收）。**從停用到啟用**要那一輪全綠，否則拒絕並留在停用；
     名稱照樣存下。已經啟用的 Route 這一輪變紅不會被停掉——它的紅燈本來就擋得住
     送單（`jobs.check_route`），默默替人停用反而是另一種隱式的改動。
     """
@@ -764,7 +765,8 @@ def _plan(
     selections: Sequence[RouteSelection],
     existing: Sequence[Route],
 ) -> tuple[_Planned, ...]:
-    """套件內由它的媒體庫導出；既有用使用者的勾選。無效的選擇丟 `ValueError`（→ 422）。
+    """套件內由它的媒體庫導出；既有用使用者的勾選。無效的選擇丟 `RouteRejectedError`（→ 422，
+    理由說得出是哪一種，M4 票 31；原本是裸的 `ValueError`，畫面只能說「畫面過時了」）。
 
     已經有 Route 的媒體庫略過（精靈只新增，見 `build_routes`）；slug 與整張表比，不只與
     這一批比——Route 設定頁建的第二條（`tv-2`）也佔著名字。
@@ -775,9 +777,10 @@ def _plan(
     一旦對不上（沒有 `ItemId`、媒體庫又改了名），回 422 的話重跑就永遠卡在這一步。
     """
     libraries = {library.name: library for library in setup.jellyfin.libraries}
+    bundled = _jellyfin_origin(setup) is ServiceOrigin.BUNDLED
     chosen = (
         _bundled_selections(libraries, setup.jellyfin.bundled, paths.library_root)
-        if _jellyfin_origin(setup) is ServiceOrigin.BUNDLED
+        if bundled
         else selections
     )
 
@@ -790,28 +793,37 @@ def _plan(
     for selection in chosen:
         library = libraries.get(selection.library)
         if library is None:
-            raise ValueError(f"no library named {selection.library!r} on this Jellyfin")
+            raise RouteRejectedError(
+                RouteRefusal.LIBRARY_MISSING,
+                f"no library named {selection.library!r} on this Jellyfin",
+            )
         key = _library_key(library.item_id, library.name)
         if key in routed:
             continue
         routed.add(key)
         collection_type = SUPPORTED_TYPES.get(library.collection_type)
         if collection_type is None:
-            raise ValueError(
+            raise RouteRejectedError(
+                RouteRefusal.LIBRARY_UNSUPPORTED,
                 f"{library.name!r} is a {library.collection_type or 'mixed'} library; "
-                "Berth routes are movies or tvshows"
+                "Berth routes are movies or tvshows",
             )
         if selection.target_path not in library.locations:
             # 路徑一律從 Jellyfin 讀，使用者只做選擇（brief §4.1）。自己打的路徑會讓
             # 「Jellyfin 看得到 Berth 寫的檔案」這個前提悄悄不成立。
-            raise ValueError(
+            raise RouteRejectedError(
+                RouteRefusal.TARGET_NOT_IN_LIBRARY,
                 f"{selection.target_path!r} is not a path of {library.name!r} "
-                f"(it has {', '.join(library.locations) or 'none'})"
+                f"(it has {', '.join(library.locations) or 'none'})",
             )
         if selection.target_path in targets:
             continue
         targets.add(selection.target_path)
-        slug = _unique_slug(library.name, taken)
+        # 套件內的媒體庫有使用者在清單上填的資料夾名（目標路徑的最後一段），分類與 complete 子目錄
+        # 跟著它（M4 票 31）：媒體庫叫「電影」、資料夾是 films 時，下載不該落在 complete/電影。
+        # 既有的媒體庫沒有那一格，照舊由名稱算。
+        source = Path(selection.target_path).name if bundled else library.name
+        slug = _unique_slug(source or library.name, taken)
         taken.add(slug)
         planned.append(
             _Planned(
@@ -839,19 +851,23 @@ def _bundled_selections(
     媒體庫。目標路徑取自**Jellyfin 回報的** `locations`，不是自己算一遍——第 3 步建立時的路徑與
     這裡算出來的路徑一旦分岔，錯的那個要到入庫時才會被發現。
     """
-    chosen: list[RouteSelection] = []
+    chosen: list[tuple[int, RouteSelection]] = []
     for library in libraries.values():
         if library.collection_type not in SUPPORTED_TYPES:
             continue
-        if not is_listed(library, bundled, library_root):
+        position = listed_position(library, bundled, library_root)
+        if position is None:
             continue
         if not library.locations:
-            raise ValueError(
-                f"Jellyfin reports the library {library.name!r} without a path; "
-                "rerun step 3 before building routes"
+            raise RouteRejectedError(
+                RouteRefusal.LIBRARY_WITHOUT_PATH,
+                f"Jellyfin reports the library {library.name!r} without a path",
             )
-        chosen.append(RouteSelection(library=library.name, target_path=library.locations[0]))
-    return tuple(chosen)
+        chosen.append(
+            (position, RouteSelection(library=library.name, target_path=library.locations[0]))
+        )
+    # 照清單的順序（M4 票 31）：Route 列與完成頁照建立順序排，Jellyfin 回報的是字母序。
+    return tuple(selection for _, selection in sorted(chosen, key=lambda pair: pair[0]))
 
 
 def _unique_slug(library_name: str, taken: set[str]) -> str:

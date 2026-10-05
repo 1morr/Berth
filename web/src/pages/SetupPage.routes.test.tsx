@@ -14,6 +14,7 @@ import {
   indexerSetup,
   jellyfinSetup,
   libraryChoice,
+  qbittorrentSetup,
   routeSetup,
   routeView,
   setupStatus,
@@ -127,6 +128,49 @@ describe('頁 3：媒體庫路徑（套件內）', () => {
     expect(await screen.findByRole('button', { name: '建立並檢查' })).toBeEnabled()
     await new Promise((resolve) => setTimeout(resolve, 900))
     expect(writes(fetch)).toEqual([])
+  })
+
+  it('套件內 qBittorrent：按下之前的清單不提「完成時執行外部程式」——那一台是 Berth 自己設的（M4 票 31）', async () => {
+    stubPage({ ...BUNDLED_PAGE, [ROUTES]: { body: routeSetup() } })
+
+    renderInRoute(<SetupPage />)
+
+    expect(await screen.findByText(/各寫一個探測檔/)).toBeVisible()
+    expect(screen.queryByText(/完成時執行外部程式/)).not.toBeInTheDocument()
+  })
+
+  it('你自己的 qBittorrent：清單說探測會觸發「完成時執行外部程式」（M4 票 31）', async () => {
+    stubPage({
+      ...BUNDLED_PAGE,
+      [STATUS]: {
+        body: setupStatus({
+          ...AT_ROUTES,
+          services: [
+            ALL_BUNDLED[0],
+            chosen({ kind: 'qbittorrent', origin: 'existing', base_url: 'http://nas:8080' }),
+          ],
+        }),
+      },
+      [ROUTES]: { body: routeSetup() },
+    })
+
+    renderInRoute(<SetupPage />)
+
+    expect(await screen.findByText(/完成時執行外部程式/)).toBeVisible()
+  })
+
+  it('按「重新讀取」讀到了也說一聲；進頁自動的那一次不說（M4 票 31）', async () => {
+    stubPage({ ...BUNDLED_PAGE, [ROUTES]: { body: routeSetup() } })
+    const user = userEvent.setup()
+
+    renderInRoute(<SetupPage />)
+    const reread = await screen.findByRole('button', { name: '重新讀取 Jellyfin 媒體庫' })
+    await waitFor(() => expect(reread).toBeEnabled())
+    expect(screen.queryByText(/已重新讀取/)).not.toBeInTheDocument()
+
+    await user.click(reread)
+
+    expect(await screen.findByText(/已重新讀取：Jellyfin 上現在有 3 個媒體庫/)).toBeVisible()
   })
 
   it('按下之後每條 Route 逐項顯示檢查結果，含硬鏈接的 inode；送出的是空的勾選', async () => {
@@ -324,6 +368,8 @@ describe('頁 3：媒體庫路徑（套件內）', () => {
     await waitFor(() =>
       expect(within(board).getByText('BTH 3').closest('li')).toHaveTextContent('已完成'),
     )
+    // 做完了也說得出建了什麼，不留破折號（M4 票 31）。
+    expect(within(board).getByText('BTH 3').closest('li')).toHaveTextContent('3 條 Route')
   })
 
   it('Route 全綠但後端還停在頁 3 時，那一格仍是待靠泊', async () => {
@@ -440,6 +486,22 @@ describe('頁 3 的前進條件跟畫面一致（M4 票 24）', () => {
         ),
       ).toBe(true),
     )
+  })
+
+  it('「將建立」照清單的順序，不照 Jellyfin 回報的字母序（M4 票 31）', async () => {
+    const alphabetical = routeSetup({
+      libraries: [...routeSetup().libraries].sort((a, b) => a.name.localeCompare(b.name)),
+    })
+    stubPage({ ...BUNDLED_PAGE, [ROUTES]: { body: alphabetical } })
+
+    renderInRoute(<SetupPage />)
+
+    const plan = (await screen.findByRole('heading', { name: '將建立' })).closest('section')!
+    const names = within(plan)
+      .getAllByRole('row')
+      .slice(1)
+      .map((row) => row.querySelector('th, td')?.textContent)
+    expect(names).toEqual(['Movies', 'TV', 'Anime'])
   })
 
   it('套件內按下之後先重讀再存清單：Jellyfin 裡少了清單上的一列，就先把它建回來', async () => {
@@ -565,6 +627,29 @@ describe('頁 3 的失敗', () => {
     expect(notice).toHaveTextContent('重新檢查了既有的 Route')
     expect(notice).toHaveTextContent('重新整理這一步')
     expect(screen.queryByText(/後端可能沒在跑/)).not.toBeInTheDocument()
+  })
+
+  it('清單上的媒體庫在 Jellyfin 上沒有資料夾：說去哪裡補，不說「畫面過時了」（M4 票 31）', async () => {
+    stubPage({
+      ...BUNDLED_PAGE,
+      [ROUTES]: { body: routeSetup() },
+      [BUILD]: {
+        status: 422,
+        body: {
+          detail: {
+            reason: 'library_without_path',
+            detail: "Jellyfin reports the library 'Movies' without a path",
+          },
+        },
+      },
+    })
+
+    renderInRoute(<SetupPage />)
+    await userEvent.click(await screen.findByRole('button', { name: '建立並檢查' }))
+
+    expect(await screen.findByText(/沒有任何資料夾/)).toBeInTheDocument()
+    expect(screen.queryByText(/畫面過時了/)).not.toBeInTheDocument()
+    expect(screen.getByText(/'Movies' without a path/)).toBeInTheDocument()
   })
 
   it('認不得的失敗仍落回那句通用的話：只有說得出原因時才換掉它', async () => {
@@ -827,6 +912,59 @@ describe('頁 6：完成', () => {
     expect(screen.getByText(/你是 skipper/)).toBeInTheDocument()
   })
 
+  it('列出各服務自己的介面開在哪、拿什麼登入；給不出的不給連結（M4 票 31）', async () => {
+    stubPage({
+      [STATUS]: { body: AT_THE_END },
+      [ROUTES]: { body: BUILT },
+      [INDEXERS]: { body: indexerSetup({ web_ui_username: 'deckhand' }) },
+      [TMDB]: { body: tmdbSetup() },
+      'GET /api/settings/jellyfin': { body: { public_url: '', url: '', port: 18096 } },
+      'GET /api/setup/qbittorrent/diff': {
+        body: qbittorrentSetup({ web_port: 18080, web_ui_username: 'skipper' }),
+      },
+    })
+
+    renderInRoute(<SetupPage />)
+
+    const doors = within(
+      (await screen.findByRole('heading', { name: '各服務自己的介面' })).closest('section')!,
+    )
+    const host = window.location.hostname
+    expect(await doors.findByRole('link', { name: `http://${host}:18096` })).toBeInTheDocument()
+    expect(await doors.findByRole('link', { name: `http://${host}:18080` })).toBeInTheDocument()
+    expect(doors.getByRole('link', { name: `http://${host}:9696` })).toBeInTheDocument()
+    expect(doors.getByText(/用擁有者 skipper 登入/)).toBeInTheDocument()
+    expect(doors.getByText(/帳號 deckhand/)).toBeInTheDocument()
+  })
+
+  it('你自己的 qBittorrent 位址是 compose 主機名時不給連結，登入說用你原本的（M4 票 31）', async () => {
+    stubPage({
+      [STATUS]: { body: AT_THE_END },
+      [ROUTES]: { body: BUILT },
+      [INDEXERS]: { body: indexerSetup({ skipped: true, origin: null }) },
+      [TMDB]: { body: tmdbSetup() },
+      'GET /api/settings/jellyfin': {
+        body: { public_url: '', url: 'http://host.docker.internal:48096', port: null },
+      },
+      'GET /api/setup/qbittorrent/diff': {
+        body: qbittorrentSetup({ origin: 'existing', base_url: 'http://qbittorrent:8080' }),
+      },
+    })
+
+    renderInRoute(<SetupPage />)
+
+    const doors = within(
+      (await screen.findByRole('heading', { name: '各服務自己的介面' })).closest('section')!,
+    )
+    expect(await doors.findByText(/給不出連結/)).toBeInTheDocument()
+    expect(doors.getByText('用你原本的登入。')).toBeInTheDocument()
+    // 既有 Jellyfin 填的是 host.docker.internal：換成這台主機才開得了（實跑 E6）。
+    expect(
+      doors.getByRole('link', { name: `http://${window.location.hostname}:48096` }),
+    ).toBeInTheDocument()
+    expect(doors.queryByText('Prowlarr')).not.toBeInTheDocument()
+  })
+
   it('跳過索引站但 Prowlarr 上已經有站：照實際站數說，不說搜尋不到任何東西（M4 票 27）', async () => {
     stubPage({
       [STATUS]: { body: AT_THE_END },
@@ -890,6 +1028,37 @@ describe('頁 6：完成', () => {
     expect(alert).toHaveTextContent(/看不出是哪一步/)
     expect(alert).not.toHaveTextContent(/後端/)
     expect(screen.queryByRole('button', { name: '回去填 TMDB key' })).not.toBeInTheDocument()
+  })
+
+  /**
+   * M4 票 31：另一個分頁回頁 2 把 qBittorrent 弄壞了，這一個停在完成頁。後端的完成照頁序把每一頁
+   * 再問一次而回 422；這一份狀態是舊的，所以重讀進度，畫面回到後端說還沒做完的那一頁。
+   */
+  it('完成被擋時重讀進度：另一個分頁弄壞了頁 2，畫面回到 qBittorrent 那一頁', async () => {
+    let broken = false
+    stubPage({
+      [STATUS]: () => ({
+        body: broken ? setupStatus({ ...AT_THE_END, current_step: 2 }) : AT_THE_END,
+      }),
+      [ROUTES]: { body: BUILT },
+      [INDEXERS]: { body: indexerSetup() },
+      [TMDB]: { body: tmdbSetup({ api_key_present: true, verified: true }) },
+      'GET /api/setup/qbittorrent/diff': { body: qbittorrentSetup() },
+      [COMPLETE]: () => {
+        broken = true
+        return { status: 422, body: { detail: 'finish page 2 first: qBittorrent' } }
+      },
+    })
+
+    const { router } = renderInRoute(<SetupPage />)
+    await userEvent.click(await screen.findByRole('button', { name: '完成設定' }))
+
+    await waitFor(() => expect(router.state.location.search).toEqual({ step: 2 }))
+    expect(screen.queryByRole('button', { name: '完成設定' })).not.toBeInTheDocument()
+    // 不是無聲換頁：拉回去的那一頁頂上說為什麼回來（審查 P1）。
+    expect(
+      await screen.findByText(/還不能完成：BTH 2 qBittorrent 那一頁現在沒有做完/),
+    ).toBeVisible()
   })
 
   it('後端真的掛了時才說是後端', async () => {

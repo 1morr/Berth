@@ -156,6 +156,16 @@ class ChoiceLockedError(Exception):
         self.detail = detail
 
 
+#: `complete_setup` 拒絕時說哪一頁差什麼。前端不解這句（它照手上的狀態指名），留給 API 的使用者。
+_UNFINISHED = {
+    STEP_JELLYFIN: "Jellyfin needs an owner",
+    STEP_QBITTORRENT: "qBittorrent has to be applied and pass its connection test",
+    STEP_ROUTES: "every library route has to pass its checks",
+    STEP_INDEXER: "add an indexer site or skip the page",
+    STEP_TMDB: "TMDB needs a credential that passes its test",
+}
+
+
 async def is_setup_complete(session: AsyncSession) -> bool:
     """精靈跑完了沒。這一個位元是匿名可讀的（`GET /api/health`）：前端要在**還沒有人
     登入得了**的時候就決定該畫精靈還是登入頁，而精靈未完成時本來就整組匿名開放。
@@ -172,15 +182,15 @@ async def complete_setup(session: AsyncSession) -> SetupStatus:
     """完成頁：寫下 `settings.setup.completed`，精靈結束（plan §9.3 頁 6）。
 
     寫下去之後 `/` 不再導向精靈、`setup/*` 由設定頁接手（票 06i）；門禁早在擁有者成立時就關上了
-    （`owner_established`）。在寫之前要確定不可跳的那幾頁真的做完了——媒體庫與路徑、TMDB 在這裡
-    再擋一次，因為使用者回得去把它們弄壞（plan §9.3、票 02b）。
+    （`owner_established`）。在寫之前要確定每一頁真的還做完——頁序導出的那一條（`_current_step`）
+    在這裡再問一次，因為使用者回得去把它們弄壞，另一個分頁也改得了（plan §9.3、票 02b、M4 票 31）。
     """
     setup = await read_settings(session, SetupSettings)
-    # 照頁序問：兩頁都沒做完時，先把人送回前面那一頁。
-    if not await routes_ready(session):
-        raise ValueError("finish page 3 first: every library route has to pass its checks")
-    if not tmdb_verified(setup):
-        raise ValueError("finish page 5 first: TMDB needs a credential that passes its test")
+    berthed = await _berthed(session, setup)
+    # 照頁序問：好幾頁沒做完時，先把人送回最前面那一頁。
+    step = _current_step(setup, berthed=berthed)
+    if step != STEP_COMPLETE:
+        raise ValueError(f"finish page {step} first: {_UNFINISHED[step]}")
 
     def record(latest: SetupSettings) -> None:
         latest.completed = True
@@ -192,9 +202,13 @@ async def complete_setup(session: AsyncSession) -> SetupStatus:
 async def _read(session: AsyncSession, *, now: datetime) -> SetupStatus:
     """整份狀態。頁是導出的，而頁 3 的依據在 `routes` 表與媒體庫快照，所以要多讀它們。"""
     setup = await read_settings(session, SetupSettings)
+    return _status(setup, now=now, berthed=await _berthed(session, setup))
+
+
+async def _berthed(session: AsyncSession, setup: SetupSettings) -> bool:
+    """頁 3 做完了沒：依據在 `routes` 表與媒體庫快照，不在這一組設定裡。"""
     paths = await read_settings(session, PathSettings)
-    berthed = await routes_ready(session) and libraries_built(setup, paths.library_root)
-    return _status(setup, now=now, berthed=berthed)
+    return await routes_ready(session) and libraries_built(setup, paths.library_root)
 
 
 class OwnerRejectedError(Exception):

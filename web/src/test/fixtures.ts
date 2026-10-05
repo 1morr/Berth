@@ -338,7 +338,7 @@ export function libraryOption(overrides: Partial<LibraryOption> = {}): LibraryOp
   }
 }
 
-/** 五條纜繩全繫上的一輪，`detail` 是實測值的形狀（inode、可用空間）。 */
+/** 每一條纜繩全繫上的一輪，`detail` 是實測值的形狀（inode、可用空間）。 */
 export const CHECKS_PASSED: SetupStep[] = [
   step('category', 'ok', 'berth-tv → /data/torrent/complete/tv'),
   step('download_path', 'ok', '/data/torrent/complete · /data/torrent/complete/tv'),

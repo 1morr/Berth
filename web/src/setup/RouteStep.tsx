@@ -1,4 +1,4 @@
-import { useId, useState, type ReactNode } from 'react'
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { formatList } from '../i18n/list'
@@ -22,10 +22,12 @@ import { type ExistingServices } from '../components/routeChecks'
 import { RouteDelete } from '../components/RouteDelete'
 import { RouteRow } from '../components/RouteRow'
 import { StepLine } from '../components/StepLine'
+import { TechnicalDetails } from '../components/TechnicalDetails'
+import { BUILD_REFUSAL, type BuildRefusal } from './buildRefusal'
 import { BundledLibraries } from './BundledLibraries'
 import { AddPathFailures } from './JellyfinExisting'
 import { STEP_ENDPOINT, STEP_FIX, STEP_LABEL, librariesFailed, manualSteps } from './jellyfinSteps'
-import { pathUnder } from './libraryRules'
+import { previewUnder } from './libraryRules'
 import { StepFrame } from './StepFrame'
 import { useLibraryDraft } from './useLibraryDraft'
 
@@ -62,7 +64,10 @@ export type DockPlan =
  * 請求沒走完的那一種。後端的拒絕說得出原因就說原因（PRODUCT 原則 4）；其餘照請求的失敗分類說
  * （`RequestFailed`，M4 票 21）——選擇無效的 422 原本也說成「Berth 後端可能沒在跑」。
  */
-export type DockFailure = { kind: 'route_missing' } | { kind: 'request'; error: unknown }
+export type DockFailure =
+  | { kind: 'route_missing' }
+  | { kind: 'refused'; reason: BuildRefusal; detail: string }
+  | { kind: 'request'; error: unknown }
 
 /** 這一輪會新建的一條 Route：哪個媒體庫、寫到哪裡。剖面列它。 */
 interface Planned {
@@ -140,9 +145,14 @@ function BundledRoutes({
   const unbuilt = draft.rows.filter((row) => !row.built)
   // 清單上、已經在 Jellyfin 上、還沒有 Route 的（建過媒體庫、Route 被刪掉的也是這一種）。使用者
   // 自己在 Jellyfin 加的不算：後端只替清單上的建 Route（`listed`，M4 票 24）。
-  const unrouted = setup.libraries.filter(
-    (library) => library.listed && library.supported && !library.has_route,
-  )
+  // 照清單的順序列（M4 票 31）：Jellyfin 照字母回報，後端建 Route 也照清單排（`_bundled_selections`）。
+  const order = (name: string) => {
+    const index = draft.rows.findIndex((row) => row.name.trim() === name)
+    return index === -1 ? draft.rows.length : index
+  }
+  const unrouted = setup.libraries
+    .filter((library) => library.listed && library.supported && !library.has_route)
+    .sort((a, b) => order(a.name) - order(b.name))
   const broke = librariesFailed(jellyfin)
   const names = unbuilt.map((row) => row.name.trim()).filter(Boolean)
 
@@ -157,7 +167,7 @@ function BundledRoutes({
         })),
         ...unbuilt.map((row) => ({
           library: row.name.trim() || '—',
-          target: row.folder.trim() ? pathUnder(jellyfin.library_root, row.folder.trim()) : '—',
+          target: previewUnder(jellyfin.library_root, row.folder),
         })),
       ]}
       fresh={unrouted.length + unbuilt.length}
@@ -175,7 +185,7 @@ function BundledRoutes({
       }
     >
       {!jellyfin.version_supported && <VersionNotice version={jellyfin.version} />}
-      <Reread {...common.reread} />
+      <Reread {...common.reread} count={common.setup.libraries.length} />
       {/* 清單全部建好了就收成一列，要加一個再展開（shape）；還有沒建的就打開。**永遠是同一個
           `<details>`**：兩種樣子換元件的話，展開後按「加一個媒體庫」清單會被重新掛載，焦點掉回 body
           （code-review）。`open` 只在「有沒有沒建的」變了時才動，使用者自己開關的不蓋掉。 */}
@@ -337,7 +347,7 @@ function ExistingRoutes({ jellyfin, ...common }: Common & { jellyfin: JellyfinSe
         })
       }
     >
-      <Reread {...common.reread} />
+      <Reread {...common.reread} count={setup.libraries.length} />
       {setup.libraries.length === 0 ? (
         <div className="mt-6">
           {/* Berth 不替既有伺服器建媒體庫（brief §16.4 的紅線），所以這裡沒有動作。 */}
@@ -369,15 +379,38 @@ function ExistingRoutes({ jellyfin, ...common }: Common & { jellyfin: JellyfinSe
  * 頁 1 之後在 Jellyfin 改的掛載、路徑與媒體庫要看得到（M4 票 19；套件內也是，票 24）：進頁就重讀一次，
  * 也可以再按。
  */
-function Reread({ pending, failed, onReread }: Common['reread']) {
+/**
+ * 「重新讀取」。讀到了也說一聲（M4 票 31，實測 #33：清單沒變時按下去像沒反應）：只在人按的那一次說，
+ * 進頁自動的那一次不說。`count` 是讀回來之後清單上的媒體庫數。
+ */
+function Reread({ pending, failed, onReread, count }: Common['reread'] & { count: number }) {
   const { t } = useTranslation()
+  const [note, setNote] = useFadingNote()
+  const pressed = useRef(false)
+
+  useEffect(() => {
+    if (pending || !pressed.current) return
+    pressed.current = false
+    if (!failed) setNote(t('routes.rereadDone', { count }))
+  }, [pending, failed, count, setNote, t])
 
   return (
     <div className="mt-6 flex flex-wrap items-center gap-x-4 gap-y-2">
-      <GhostButton type="button" busy={pending} onClick={onReread}>
+      <GhostButton
+        type="button"
+        busy={pending}
+        onClick={() => {
+          pressed.current = true
+          setNote('')
+          onReread()
+        }}
+      >
         {pending ? t('routes.rereading') : t('routes.reread')}
       </GhostButton>
       {failed && <p className="text-xs text-blocked-ink">{t('routes.rereadFailed')}</p>}
+      <p aria-live="polite" className="text-xs text-ink-dim">
+        {note}
+      </p>
     </div>
   )
 }
@@ -431,7 +464,7 @@ function RoutePage({
 
   const action = (
     <>
-      <DockPreview items={preview} total={total} />
+      <DockPreview items={preview} total={total} yours={existing.qbittorrent} />
       <div className={`mt-4 ${quiet ? '' : STICKY_ACTION}`}>
         {blocked && <p className="mb-3 text-xs text-blocked-ink">{blocked}</p>}
         <Button
@@ -451,6 +484,13 @@ function RoutePage({
             <Notice signal="blocked" label={t('common.failed')}>
               {t('routes.routeMissing')}
             </Notice>
+          ) : failure.kind === 'refused' ? (
+            <div className="grid gap-1">
+              <Notice signal="blocked" label={t('common.failed')}>
+                {t(BUILD_REFUSAL[failure.reason])}
+              </Notice>
+              <TechnicalDetails lines={[failure.detail]} />
+            </div>
           ) : (
             <RequestFailed error={failure.error} />
           )}
@@ -518,7 +558,19 @@ function RoutePage({
  * 「按下之後會」（票 08）：這一輪真的會做的事，數字照目前的選擇算。分類與測試檔每條 Route 都有，
  * 包括已經建好的那幾條——重新檢查一樣會核對分類、寫測試檔再刪掉。
  */
-function DockPreview({ items, total }: { items: ReactNode[]; total: number }) {
+/**
+ * `yours`：qBittorrent 是使用者自己的那一台。探測 torrent 校驗到 100% 會觸發「完成時執行外部程式」，
+ * 只有那一台可能設了它；套件內那一台是 Berth 自己設的，不提（M4 票 31）。
+ */
+function DockPreview({
+  items,
+  total,
+  yours,
+}: {
+  items: ReactNode[]
+  total: number
+  yours: boolean
+}) {
   const { t } = useTranslation()
   if (total === 0) return null
 
@@ -532,7 +584,7 @@ function DockPreview({ items, total }: { items: ReactNode[]; total: number }) {
           <li key={index}>{item}</li>
         ))}
         <li>{t('routes.dock.categories', { count: total })}</li>
-        <li>{t('routes.dock.probes', { count: total })}</li>
+        <li>{t(yours ? 'routes.dock.probesYours' : 'routes.dock.probes', { count: total })}</li>
       </ul>
     </section>
   )

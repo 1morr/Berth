@@ -194,7 +194,7 @@ describe('每個泊位做完都停在結果上', () => {
   })
 
   // M4 票 08：進頁不動手；一顆「建立並檢查」建媒體庫、建 Route、跑檢查，做完停在結果上。
-  it('頁 3：進頁不送任何東西；按「建立並檢查」之後停在五條檢查的結果上，按了才走', async () => {
+  it('頁 3：進頁不送任何東西；按「建立並檢查」之後停在每一條檢查的結果上，按了才走', async () => {
     const { fetchStub } = wizard(3)
     const user = userEvent.setup()
     renderInRoute(<SetupPage />)
@@ -282,7 +282,7 @@ describe('每個泊位做完都停在結果上', () => {
     const user = userEvent.setup()
     renderInRoute(<SetupPage />)
 
-    await user.type(await screen.findByLabelText(/TMDB API key/), 'k'.repeat(32))
+    await user.type(await screen.findByLabelText(/TMDB API key/), '0'.repeat(32))
     await user.click(screen.getByRole('button', { name: '測試 TMDB' }))
 
     expect(await screen.findByRole('button', { name: '前往下一個泊位' })).toBeVisible()
@@ -350,7 +350,9 @@ describe('回頭看永遠有出口', () => {
     await user.click(await within(await findBoard()).findByRole('button', { name: /BTH 1/ }))
     expect(await heading()).toHaveTextContent('擁有者：skipper')
     expect(screen.getByText(/回頭看：BTH 1 Jellyfin/)).toBeVisible()
-    expect(screen.getByText(/目前走到第 6 步/)).toBeVisible()
+    // 走到哪也用泊位說：完成頁不是泊位，不說「第 6 步」配「共 5 個泊位」（M4 票 31）。
+    expect(screen.getByText(/目前走到：收尾/)).toBeVisible()
+    expect(screen.queryByText(/第 6 步/)).not.toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: '回到目前這一步' }))
     expect(await heading()).toHaveTextContent('完成設定')

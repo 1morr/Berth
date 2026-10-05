@@ -193,7 +193,7 @@ describe('設定 → Jellyfin', () => {
     )
   })
 
-  it('換到另一台 Jellyfin 被擋（M4 票 18）：表單留著，說出那一台是誰、為什麼沒存', async () => {
+  it('換到另一台 Jellyfin 被擋（M4 票 18）：表單留著，說出為什麼沒存', async () => {
     render({
       [STATUS]: { body: EXISTING },
       [CONNECT]: {
@@ -211,7 +211,7 @@ describe('設定 → Jellyfin', () => {
     await user.type(address, 'http://host.docker.internal:58097')
     await user.click(connection.getByRole('button', { name: '測試連線' }))
 
-    expect(await connection.findByText(/沒有存：dc2288726bbe 是另一台 Jellyfin/)).toBeVisible()
+    expect(await connection.findByText(/沒有存：這個位址上回答的是另一台 Jellyfin/)).toBeVisible()
     expect(connection.getByLabelText('位址')).toHaveValue('http://host.docker.internal:58097')
     expect(screen.queryByText(/沒有存進去/)).not.toBeInTheDocument()
   })

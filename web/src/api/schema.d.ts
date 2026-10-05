@@ -951,7 +951,7 @@ export interface paths {
         put?: never;
         /**
          * Post Route
-         * @description 新增，並立刻跑五條纜繩。**檢查紅燈不是 4xx**：Route 照樣建立、維持停用，紅的那一條
+         * @description 新增，並立刻跑每一條纜繩。**檢查紅燈不是 4xx**：Route 照樣建立、維持停用，紅的那一條
          *     回在 `checks` 裡——與精靈第 5 步同一個規矩。
          */
         post: operations["post_route_api_routes_post"];
@@ -2033,7 +2033,7 @@ export interface paths {
         put?: never;
         /**
          * Post Routes
-         * @description 建立 Route，並立刻建 category 與跑三項檢查（plan §9.5）。
+         * @description 建立 Route，並立刻建 category 與跑每一項檢查（plan §9.5）。
          *
          *     檢查失敗**不是** 4xx：它是這一步的結果，逐項回在 `routes[].checks` 裡，畫面靠它顯示
          *     原文與該補哪個掛載。4xx 只留給「這個選擇本身無效」（不存在的媒體庫、不是它的路徑），
@@ -4601,10 +4601,10 @@ export interface components {
          * RouteRefusal
          * @description Route 設定頁與精靈第 5 步的一個命令做不下去（`services/routes.py`、票 14、14a）。
          *
-         *     前五種發生在建立的路上（媒體庫與路徑向 Jellyfin 現查），後四種是對既有的那一條動手時。
+         *     前六種發生在建立的路上（媒體庫與路徑向 Jellyfin 現查），後四種是對既有的那一條動手時。
          * @enum {string}
          */
-        RouteRefusal: "library_missing" | "library_unsupported" | "target_not_in_library" | "target_taken" | "jellyfin_unreachable" | "route_missing" | "route_in_use" | "route_unhealthy" | "route_conflict";
+        RouteRefusal: "library_missing" | "library_unsupported" | "target_not_in_library" | "target_taken" | "jellyfin_unreachable" | "library_without_path" | "route_missing" | "route_in_use" | "route_unhealthy" | "route_conflict";
         /**
          * RouteRefusalOut
          * @description 與送單的拒絕同形（`api/jobs.py` 的 `JobRefusalOut`）：`reason` 挑句子，`detail` 是原文。
@@ -9497,13 +9497,13 @@ export interface operations {
                     "application/json": components["schemas"]["RouteRefusalOut"];
                 };
             };
-            /** @description Validation Error */
+            /** @description `library_missing` · `library_unsupported` · `target_not_in_library` · `library_without_path` */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["RouteRefusalOut"];
                 };
             };
         };

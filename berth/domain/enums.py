@@ -1159,7 +1159,7 @@ class JobRefusal(StrEnum):
 class RouteRefusal(StrEnum):
     """Route 設定頁與精靈第 5 步的一個命令做不下去（`services/routes.py`、票 14、14a）。
 
-    前五種發生在建立的路上（媒體庫與路徑向 Jellyfin 現查），後四種是對既有的那一條動手時。
+    前六種發生在建立的路上（媒體庫與路徑向 Jellyfin 現查），後四種是對既有的那一條動手時。
     """
 
     #: Jellyfin 上已經沒有這個媒體庫了。
@@ -1172,6 +1172,8 @@ class RouteRefusal(StrEnum):
     TARGET_TAKEN = "target_taken"
     #: 現查的那一刻問不到 Jellyfin。
     JELLYFIN_UNREACHABLE = "jellyfin_unreachable"
+    #: 套件內清單上的媒體庫在 Jellyfin 上沒有任何資料夾（M4 票 31）：重新整理不會好，要去補資料夾。
+    LIBRARY_WITHOUT_PATH = "library_without_path"
     #: 沒有這個 id 的 Route，或檢查途中它被刪掉了。
     ROUTE_MISSING = "route_missing"
     #: 還有 Job 或帳本指著它。拒絕另帶 `jobs`、`ledger_entries` 兩個數字。

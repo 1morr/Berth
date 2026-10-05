@@ -75,7 +75,7 @@ test('精靈六頁走完，之後以同一組帳密登入', async ({ page }) => 
   await page.getByRole('button', { name: '前往下一個泊位' }).click()
 
   // 3. 媒體庫與路徑（M4 票 08）：進頁不送任何寫入；你列的媒體庫、一顆「建立並檢查」建媒體庫、建 Route、
-  //    跑五條檢查。Movies 改名、加一個，四個媒體庫就是四條 Route。
+  //    跑每一條檢查。Movies 改名、加一個，四個媒體庫就是四條 Route。
   const arrived = writes.length
   await expect(page.getByRole('heading', { name: '媒體庫路徑', level: 2 })).toBeVisible()
   await page.waitForLoadState('networkidle')
@@ -105,7 +105,8 @@ test('精靈六頁走完，之後以同一組帳密登入', async ({ page }) => 
   const routes = page.getByRole('list', { name: '這一頁的 Route' })
   await expect(routes.getByText('6 / 6 通過')).toHaveCount(4)
   // 分類名在 Route 列上，展開後「建立分類」那一條的行首也有一份（M4 票 21 的關鍵值）：看 Route 列那一個。
-  await expect(routes.getByText('berth-紀錄片', { exact: true }).first()).toBeVisible()
+  // 套件內照清單上填的資料夾名，不是媒體庫名（M4 票 31）。
+  await expect(routes.getByText('berth-documentaries', { exact: true }).first()).toBeVisible()
   // 不捲動就看得到下一步（票 08 驗收）：回到頁頂量。
   // 字串而不是函式：e2e 的 tsconfig 沒有 DOM 型別，這一行在瀏覽器裡跑。
   await page.evaluate('window.scrollTo(0, 0)')

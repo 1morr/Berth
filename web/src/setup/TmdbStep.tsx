@@ -15,6 +15,7 @@ import { SIGNAL_FILL } from '../components/signal'
 import { Cutaway, CutawayRow } from '../components/Cutaway'
 import { StepLine } from '../components/StepLine'
 import { StepFrame } from './StepFrame'
+import { looksLikeTmdbKey } from './tmdbKey'
 
 /** 使用者去申請 key 的那一頁。連結與可複製的網址用的是同一個字串。 */
 const TMDB_API_SETTINGS = 'https://www.themoviedb.org/settings/api'
@@ -93,7 +94,8 @@ export function TmdbKey({
 }) {
   const { t } = useTranslation()
   const [apiKey, setApiKey] = useState('')
-  const [blank, setBlank] = useState(false)
+  // 送出前就說得出的毛病：空的，或形狀不像 TMDB 的任何一種憑證（M4 票 31）。
+  const [problem, setProblem] = useState<'tmdbStep.blank' | 'tmdbStep.shape' | null>(null)
   const row = tmdb.steps.find((step) => step.step === 'configuration')
 
   return (
@@ -128,7 +130,11 @@ export function TmdbKey({
           event.preventDefault()
           // 停用的按鈕讀起來像壞掉（票 11 的 critique），所以按得下去，說不行的是欄位自己。
           if (!apiKey.trim()) {
-            setBlank(true)
+            setProblem('tmdbStep.blank')
+            return
+          }
+          if (!looksLikeTmdbKey(apiKey)) {
+            setProblem('tmdbStep.shape')
             return
           }
           onTest(apiKey.trim())
@@ -143,10 +149,10 @@ export function TmdbKey({
           required
           placeholder={t('tmdbStep.placeholder')}
           hint={t('tmdbStep.hint')}
-          error={blank ? t('tmdbStep.blank') : undefined}
+          error={problem ? t(problem) : undefined}
           onChange={(event) => {
             setApiKey(event.target.value)
-            setBlank(false)
+            setProblem(null)
           }}
         />
         <div className={`grid gap-3 ${STICKY_ACTION}`}>

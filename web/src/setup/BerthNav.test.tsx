@@ -33,3 +33,20 @@ describe('頁 4 的回頭看', () => {
     expect(screen.getByRole('note', { name: '回頭看' })).toHaveTextContent('重貼一把 key')
   })
 })
+
+/** 頁 1 的「改位址」只有既有的 Jellyfin 有（M4 票 31）：套件內那一台的說明不提它。 */
+describe('頁 1 的回頭看', () => {
+  it('套件內：不提「改位址」', () => {
+    render(<RevisitNote step={STEP.jellyfin} origin="bundled" />)
+
+    const note = screen.getByRole('note', { name: '回頭看' })
+    expect(note).toHaveTextContent('看擁有者是誰')
+    expect(note).not.toHaveTextContent('改位址')
+  })
+
+  it('既有：說得出「改位址」只收同一台', () => {
+    render(<RevisitNote step={STEP.jellyfin} origin="existing" />)
+
+    expect(screen.getByRole('note', { name: '回頭看' })).toHaveTextContent('「改位址」')
+  })
+})

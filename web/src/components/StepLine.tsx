@@ -24,6 +24,7 @@ export function StepLine({
   endpoint,
   summary,
   row,
+  status: statusText,
   fix,
   commands = [],
   children,
@@ -38,6 +39,11 @@ export function StepLine({
    */
   summary?: string
   row: SetupStep | undefined
+  /**
+   * 換掉色塊上那個狀態字。`pending` 一律是「尚未執行」，但有的纜繩的待處理不是「還沒跑」：既有 Prowlarr
+   * 連上了而 0 站是「還沒有站」（M4 票 31）。色塊照舊由狀態決定。
+   */
+  status?: string
   /** 失敗時的補法。手動步驟本身在 `commands`。 */
   fix?: string
   commands?: readonly string[]
@@ -57,7 +63,7 @@ export function StepLine({
     >
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
         <span className={`label px-2 py-1.5 ${SIGNAL_FILL[STATUS_SIGNAL[status]]}`}>
-          {t(STATUS_LABEL[status])}
+          {statusText ?? t(STATUS_LABEL[status])}
         </span>
         <span className="value text-sm font-semibold text-ink">{label}</span>
         {summary && <span className="value text-xs wrap-anywhere text-ink">{summary}</span>}

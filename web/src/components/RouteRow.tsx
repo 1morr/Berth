@@ -7,7 +7,7 @@ import { isSettled } from './steps'
 
 /**
  * 一條 Route 收成一列（M4 票 08，`.scratch/m4/route-berth-shape.md`）：精靈頁 3、健康頁、Route 設定頁
- * 共用——同一件事不該有三種畫法。摘要是身分帶、寫入目標與「5 / 5 通過」，展開的內容由那一頁給。
+ * 共用——同一件事不該有三種畫法。摘要是身分帶、寫入目標與「6 / 6 通過」，展開的內容由那一頁給。
  *
  * **紅的自己打開**（呼叫端給 `attention`）：需要人的那一條不必再按一下才看得到斷在哪裡，全綠的時候沒有人要讀
  * 那十幾行（GitHub Actions 的 job 列表同一個形狀）。原生 `<details>`：鍵盤與螢幕閱讀器的行為比自己管
@@ -58,8 +58,8 @@ export function RouteRow({
 }
 
 /**
- * 「5 / 5 通過」。`skipped`（已經是這樣）也算通過，與纜繩列的塗法一致。一次都還沒檢查過的
- * 不畫：「0 / 5」讀起來像五條都壞了，而健康色塊已經說了「尚未檢查」。
+ * 「6 / 6 通過」。`skipped`（已經是這樣）也算通過，與纜繩列的塗法一致。一次都還沒檢查過的
+ * 不畫：「0 / 6」讀起來像每一條都壞了，而健康色塊已經說了「尚未檢查」。
  */
 export function CheckTally({ route }: { route: RouteView }) {
   const { t } = useTranslation()

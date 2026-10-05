@@ -56,3 +56,50 @@ describe('plural keys', () => {
     ).toEqual([])
   })
 })
+
+/**
+ * 寫死檢查條數的文案（M4 票 31）。
+ *
+ * Route 的檢查從五條長成六條（M4 票 19 加了 `download_visible`），七個鍵還寫著「五條纜繩」——條數住在
+ * `CHECK_LABEL`，文案不跟著它改。所以文案不寫條數；要數字就用 `{{count}}` 從程式帶進來。
+ * 「一條」不算：「每一條」「哪一條纜繩」說的是其中一條，不是總數。
+ */
+const COUNTED_CHECKS =
+  /[二兩三四五六七八九十\d]+\s*條(纜繩|檢查)|\b(one|two|three|four|five|six|seven|eight|nine|ten|\d+)\s+(checks|cables)\b/i
+
+function countedChecks(tree: Tree, prefix = ''): string[] {
+  return Object.entries(tree).flatMap(([key, value]) => {
+    const path = prefix ? `${prefix}.${key}` : key
+    if (typeof value !== 'string') return countedChecks(value, path)
+    return COUNTED_CHECKS.test(value) ? [path] : []
+  })
+}
+
+describe('route check counts', () => {
+  it.each(SUPPORTED_LANGUAGES)('no %s copy writes down how many checks a route has', (language) => {
+    expect(countedChecks(resources[language].translation)).toEqual([])
+  })
+
+  it('catches a fixed count in either language', () => {
+    expect(
+      countedChecks({
+        zh: { rerun: '啟用時會先把五條纜繩重跑一次。', six: '六條檢查都要綠燈' },
+        en: { rerun: 'Enabling it runs the five checks again.', digits: 'all 6 checks passed' },
+      }),
+    ).toEqual(['zh.rerun', 'zh.six', 'en.rerun', 'en.digits'])
+  })
+
+  it('leaves counted placeholders, berths and other counts alone', () => {
+    expect(
+      countedChecks({
+        passed: '{{passed}} / {{total}} 通過',
+        berths: '五個泊位都走過了。',
+        enBerths: 'All five berths have been visited.',
+        every: '每一條 Route 的每一條纜繩都要綠燈。',
+        which: '到健康頁看是哪一條纜繩斷了。',
+        counted: '{{count}} checks failed',
+        sites: 'Prowlarr already has 5 sites.',
+      }),
+    ).toEqual([])
+  })
+})

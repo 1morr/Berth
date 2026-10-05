@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { LibraryDraft } from '../api/setup'
-import { folderFor, problemsOf } from './libraryRules'
+import { folderFor, previewUnder, problemsOf } from './libraryRules'
 
 function row(name: string, folder: string): LibraryDraft {
   return { name, folder, collection_type: 'tvshows' }
@@ -63,6 +63,19 @@ describe('清單的規則（與後端 `check_bundled_libraries` 同一組）', (
     '「%s」有 Windows 不收的字元',
     (folder) => {
       expect(problemsOf([row('TV', folder)]).rows[0]).toEqual({ folder: 'folder_characters' })
+    },
+  )
+})
+
+describe('路徑預覽（M4 票 31）', () => {
+  it('資料夾成立時照拼', () => {
+    expect(previewUnder('/data/media/', ' films ')).toBe('/data/media/films')
+  })
+
+  it.each(['', '../etc', '..', 'a/b', 'bad:name'])(
+    '「%s」不成立：寫「…」，不印出那條路徑',
+    (folder) => {
+      expect(previewUnder('/data/media', folder)).toBe('/data/media/…')
     },
   )
 })

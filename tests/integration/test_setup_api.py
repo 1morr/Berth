@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from dataclasses import replace
 from pathlib import Path
 
@@ -25,6 +25,7 @@ from berth.api.deps import get_bundled_services, get_client_factory
 from berth.api.gate import CSRF_HEADER
 from berth.config import Config
 from berth.main import create_app
+from berth.models import SetupSettings
 from berth.services.clients import BundledServices
 from berth.services.indexer import DEFAULT_INDEXERS
 from tests.integration.arrange import delete_once_during_checks, sign_in_owner
@@ -1129,7 +1130,7 @@ class TestRoutes:
         assert body["routes"][1]["target_path"] == f"{tmp_path / 'library'}/tv"
 
     def test_a_target_that_is_not_a_library_path_is_refused(self, client: TestClient) -> None:
-        """路徑用選的，不用打的（brief §4.1）。這是唯一會回 4xx 的情況。
+        """路徑用選的，不用打的（brief §4.1）。
 
         TV 還沒有 Route：已經有 Route 的媒體庫的選擇會被略過（票 14，精靈只新增）。
         """
@@ -1142,7 +1143,9 @@ class TestRoutes:
         )
 
         assert response.status_code == 422
-        assert "not a path of" in response.json()["detail"]
+        # 帶理由（M4 票 31）：畫面照它說「重新讀取、再選一次」，不說「畫面過時了」。
+        assert response.json()["detail"]["reason"] == "target_not_in_library"
+        assert "not a path of" in response.json()["detail"]["detail"]
 
     def test_a_route_deleted_while_the_step_rechecks_is_a_404_not_a_crash(
         self, client: TestClient, qbittorrent: FakeQbittorrentClient
@@ -1184,6 +1187,45 @@ class TestRoutes:
         assert "tmdb" in refused.json()["detail"].lower()
         assert client.get("/api/health").json()["setup_completed"] is False
 
+    def test_completing_needs_page_two_still_done(self, client: TestClient) -> None:
+        """另一個分頁回頁 2 把 qBittorrent 弄壞了，停在完成頁的這一個照樣按得下去（M4 票 31）。
+
+        完成要照頁序把每一頁再問一次；那一頁補好之後同一個按鈕就過。
+        """
+        client.post("/api/setup/routes", json={})
+        _alter_setup(client, lambda setup: setattr(setup.qbittorrent, "steps", []))
+
+        refused = client.post("/api/setup/complete")
+
+        assert refused.status_code == 422
+        assert "page 2" in refused.json()["detail"]
+        assert client.get("/api/health").json()["setup_completed"] is False
+
+        client.post(
+            "/api/setup/qbittorrent/apply",
+            json={"login": {"username": "skipper", "password": "harbour"}},
+        )
+        assert client.post("/api/setup/complete").status_code == 200
+
+    def test_completing_needs_page_four_still_settled(self, client: TestClient) -> None:
+        """頁 4 也一樣：另一個分頁換掉 Prowlarr 之後「之後再說」不再算數（M4 票 31）。"""
+        client.post("/api/setup/routes", json={})
+
+        def unsettle(setup: SetupSettings) -> None:
+            setup.indexer.skipped = False
+            setup.indexer.steps = []
+
+        _alter_setup(client, unsettle)
+
+        refused = client.post("/api/setup/complete")
+
+        assert refused.status_code == 422
+        assert "page 4" in refused.json()["detail"]
+        assert client.get("/api/health").json()["setup_completed"] is False
+
+        client.post("/api/setup/indexers/skip", json={})
+        assert client.post("/api/setup/complete").status_code == 200
+
     def test_completing_closes_the_wizard_and_the_api(self, client: TestClient) -> None:
         client.post("/api/setup/routes", json={})
         assert client.get("/api/setup/status").json()["current_step"] == 6
@@ -1218,6 +1260,23 @@ def _forget_tmdb(client: TestClient) -> None:
             await session.commit()
 
     asyncio.run(forget())
+
+
+def _alter_setup(client: TestClient, change: Callable[[SetupSettings], None]) -> None:
+    """從另一條連線改 `settings.setup`：另一個分頁做了什麼，這一個分頁不知道。"""
+    import asyncio
+
+    from berth.services.settings import read_settings, write_settings
+
+    async def alter() -> None:
+        factory = client.app.state.session_factory  # type: ignore[attr-defined]  # 同 _forget_tmdb
+        async with factory() as session:
+            setup = await read_settings(session, SetupSettings)
+            change(setup)
+            await write_settings(session, setup)
+            await session.commit()
+
+    asyncio.run(alter())
 
 
 def _mark_jellyfin_existing(client: TestClient) -> None:

@@ -6,7 +6,7 @@ import { ApiError } from '../api/client'
 import { issuesQueryOptions } from '../api/issues'
 import { reviewQueryOptions } from '../api/review'
 import type { QbittorrentSetup } from '../api/schemas'
-import { setQbittorrentLogin } from '../api/setup'
+import { setQbittorrentLogin, type QbittorrentStep } from '../api/setup'
 import {
   diskQueryOptions,
   qbittorrentDriftQueryOptions,
@@ -20,6 +20,7 @@ import { ServiceConnection } from '../settings/ServiceConnection'
 import { HealthSection } from '../settings/HealthSection'
 import { InterfaceLoginSection } from '../settings/InterfaceLoginSection'
 import { useServiceCheck } from '../settings/useServiceCheck'
+import { STEP_LABEL } from '../setup/qbittorrentSteps'
 
 /**
  * 設定 → qBittorrent（票 06i）。健康與重新檢查、既有 qBittorrent 的位址與帳密（精靈第 2 步的
@@ -163,8 +164,8 @@ function DiskThreshold() {
 /**
  * qBittorrent 的建議設定漂移（brief §16.3）。
  *
- * 剖面是一張逐鍵的差異表（鍵 / 現值 / 建議值），不是散文——鍵名用 `app/setPreferences`
- * 的原字串，使用者在 qBittorrent 自己的介面上也找得到它（票 08 的決定）。既有的那一台沒有
+ * 剖面是一張逐鍵的差異表（鍵 / 現值 / 建議值），不是散文。每一列先寫精靈頁 2 那一條的名字，再寫
+ * `app/setPreferences` 的原鍵名（票 08 只寫鍵名；M4 票 31 補上人話，實測 #43）。既有的那一台沒有
  * 漂移可言（M4 票 05）：它的全域偏好是使用者的，這一區只說 Berth 不改它。
  */
 function Drift({
@@ -227,7 +228,14 @@ function Drift({
               <tbody>
                 {drift.diffs.map((row) => (
                   <tr key={row.key} className="border-b border-rule last:border-0">
-                    <td className="value wrap-anywhere px-3 py-2 text-ink">{row.key}</td>
+                    <td className="wrap-anywhere px-3 py-2 text-ink">
+                      {/* 人話在上、原鍵名在下（M4 票 31，實測 #43）：鍵名是 Berth 送出去的那個字串，
+                          留著給要對照 API 的人；看設定的人讀的是第一行。 */}
+                      {row.key in STEP_LABEL && (
+                        <span className="block">{t(STEP_LABEL[row.key as QbittorrentStep])}</span>
+                      )}
+                      <span className="value block text-ink-dim">{row.key}</span>
+                    </td>
                     <td
                       className={`value wrap-anywhere px-3 py-2 ${
                         row.differs ? 'text-blocked-ink' : 'text-ink-dim'

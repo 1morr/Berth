@@ -272,7 +272,7 @@ def delete_once_during_checks(
 ) -> None:
     """下一輪檢查問 qBittorrent 的那一刻，另一個 session 把這條 Route 刪掉（票 14a、票 01）。
 
-    五條纜繩在鎖外打網路，那幾秒就是另一個分頁按下刪除的空窗。**只刪一次**：整組重跑會
+    每一條纜繩在鎖外打網路，那幾秒就是另一個分頁按下刪除的空窗。**只刪一次**：整組重跑會
     逐條問，刪第二次拿到的是刪除自己的拒絕，不是這裡要造的那個競爭。
     """
     categories = qbittorrent.categories

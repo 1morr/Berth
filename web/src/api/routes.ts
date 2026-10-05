@@ -21,6 +21,7 @@ const REASONS: ReasonSet<RouteRefusal> = {
   route_in_use: true,
   route_unhealthy: true,
   route_conflict: true,
+  library_without_path: true,
 }
 
 /** 有多少東西指著一條 Route。與清單那一列（`ManagedRoute`）同一組詞。 */
@@ -90,7 +91,7 @@ export const libraryOptionsQueryOptions = queryOptions({
   queryFn: () => apiGet<LibraryOption[]>('/jellyfin/libraries'),
 })
 
-/** 新增並立刻跑五條纜繩。檢查紅燈不是錯誤：Route 照樣建立、維持停用。 */
+/** 新增並立刻跑每一條纜繩。檢查紅燈不是錯誤：Route 照樣建立、維持停用。 */
 export function createRoute(input: RouteInput): Promise<RouteView> {
   return apiPost<RouteView>('/routes', input)
 }

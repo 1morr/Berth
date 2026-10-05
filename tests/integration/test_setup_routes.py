@@ -1,7 +1,7 @@
 """精靈頁 3（媒體庫與路徑）與完成頁的 services 命令（plan §9.3、§9.5、brief §4、§16.4、票 09）。
 
 驗的是票 09 的驗收條件：套件內自動建三個 Route、既有由使用者勾選、每個 Route 建 category
-並跑三項檢查、失敗說得出是哪個容器少了哪個掛載、重跑不長出重複列、全綠才寫得下
+並跑每一項檢查、失敗說得出是哪個容器少了哪個掛載、重跑不長出重複列、全綠才寫得下
 `settings.setup.completed`。
 
 檔案系統是**真的**：`tmp_path` 底下真的建目錄、真的 `link()`、真的比 inode。硬鏈接檢查的
@@ -161,6 +161,58 @@ class TestBundled:
             ("電視劇（華語）", str(roots["library"] / "tv-zh"), HealthStatus.OK),
         ]
         assert status.ready is True
+
+    @pytest.mark.asyncio
+    async def test_category_and_complete_folder_take_the_folder_the_user_typed(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """套件內的分類與 complete 子目錄照使用者在清單上填的資料夾名（M4 票 31，實測 #44）。
+
+        媒體庫叫「電影」、資料夾填 films，原本分類是 `berth-電影`、下載落在
+        `complete/電影`，與媒體庫資料夾對不上。
+        """
+        path = roots["library"] / "films"
+        path.mkdir(parents=True)
+        library = SetupLibrary(
+            name="電影", item_id="item-0", collection_type="movies", locations=[str(path)]
+        )
+        await arrange(session, roots, libraries=(library,))
+        await listed(session, [library])
+
+        status = await build_routes(session, factory_for(roots, libraries=(library,)), ())
+
+        assert [(row.name, row.slug, row.category) for row in status.routes] == [
+            ("電影", "films", "berth-films")
+        ]
+        assert status.routes[0].save_path == save_path_of(str(roots["complete"]), "films")
+
+    @pytest.mark.asyncio
+    async def test_routes_follow_the_order_of_the_users_list(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """Route 照使用者清單的順序建（M4 票 31，實測 #46）：Jellyfin 照字母回報媒體庫，原本 Route
+        跟著變成 Anime、Movies、TV，與頁 3 清單上的順序對不起來。"""
+        libraries = []
+        for index, (name, folder) in enumerate(
+            [("Movies", "movies"), ("TV", "tv"), ("Anime", "anime")]
+        ):
+            path = roots["library"] / folder
+            path.mkdir(parents=True)
+            libraries.append(
+                SetupLibrary(
+                    name=name,
+                    item_id=f"item-{index}",
+                    collection_type="movies" if name == "Movies" else "tvshows",
+                    locations=[str(path)],
+                )
+            )
+        alphabetical = tuple(sorted(libraries, key=lambda row: row.name))
+        await arrange(session, roots, libraries=alphabetical)
+        await listed(session, libraries)
+
+        status = await build_routes(session, factory_for(roots, libraries=alphabetical), ())
+
+        assert [row.name for row in status.routes] == ["Movies", "TV", "Anime"]
 
     @pytest.mark.asyncio
     async def test_every_check_is_green_on_a_shared_mount(
@@ -576,15 +628,19 @@ class TestExisting:
     async def test_refuses_a_target_that_is_not_one_of_the_library_paths(
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
-        """寫入目標只能從 Jellyfin 回報的路徑裡**選**，不能自己打（brief §4.1）。"""
+        """寫入目標只能從 Jellyfin 回報的路徑裡**選**，不能自己打（brief §4.1）。
+
+        拒絕帶理由（M4 票 31）：原本是裸的 `ValueError` → 422，畫面一律說「畫面過時了，重新整理」。
+        """
         await arrange(session, roots, origin=ServiceOrigin.EXISTING)
 
-        with pytest.raises(ValueError, match="not a path of"):
+        with pytest.raises(RouteRejectedError) as refused:
             await build_routes(
                 session,
                 factory_for(roots),
                 (RouteSelection(library="TV", target_path=str(roots["library"] / "elsewhere")),),
             )
+        assert refused.value.reason is RouteRefusal.TARGET_NOT_IN_LIBRARY
 
     @pytest.mark.asyncio
     async def test_refuses_a_library_this_jellyfin_does_not_have(
@@ -592,12 +648,40 @@ class TestExisting:
     ) -> None:
         await arrange(session, roots, origin=ServiceOrigin.EXISTING)
 
-        with pytest.raises(ValueError, match="no library"):
+        with pytest.raises(RouteRejectedError) as refused:
             await build_routes(
                 session,
                 factory_for(roots),
                 (RouteSelection(library="Ghost", target_path=str(roots["library"] / "ghost")),),
             )
+        assert refused.value.reason is RouteRefusal.LIBRARY_MISSING
+
+    @pytest.mark.asyncio
+    async def test_a_listed_library_jellyfin_reports_without_a_folder_says_so(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """套件內清單上的媒體庫在 Jellyfin 上沒有任何資料夾（M4 票 31，實測 #50）：重新整理不會好，
+        所以不是「畫面過時」——說出是哪一個媒體庫少了資料夾。"""
+        library = SetupLibrary(
+            name="Movies", item_id="item-0", collection_type="movies", locations=[]
+        )
+        await arrange(session, roots, libraries=(library,))
+        await listed(
+            session,
+            [
+                SetupLibrary(
+                    name="Movies",
+                    item_id="item-0",
+                    collection_type="movies",
+                    locations=[str(roots["library"] / "movies")],
+                )
+            ],
+        )
+
+        with pytest.raises(RouteRejectedError) as refused:
+            await build_routes(session, factory_for(roots, libraries=(library,)), ())
+        assert refused.value.reason is RouteRefusal.LIBRARY_WITHOUT_PATH
+        assert "Movies" in refused.value.detail
 
 
 class TestChecks:

@@ -55,6 +55,16 @@ export function pathUnder(libraryRoot: string, folder: string): string {
   return `${libraryRoot.replace(/\/+$/, '')}/${folder}`
 }
 
+/**
+ * 畫給人看的那一條路徑：資料夾空著、或它本身就不成立（跳出根目錄、有不收的字元）時寫「…」。
+ * 照拼的話 `../etc` 會印成 `/data/library/../etc`，看起來像一條會被建的路徑（M4 票 31，實測 #46）。
+ */
+export function previewUnder(libraryRoot: string, folder: string): string {
+  const trimmed = folder.trim()
+  const problem = folderProblemOf(trimmed, new Set())
+  return pathUnder(libraryRoot, problem ? '…' : trimmed)
+}
+
 export function problemsOf(rows: readonly LibraryDraft[]): ListProblems {
   const names = new Set<string>()
   const folders = new Set<string>()

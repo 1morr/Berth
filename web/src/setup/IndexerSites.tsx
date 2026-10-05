@@ -25,6 +25,7 @@ import { SIGNAL_FILL, type Signal } from '../components/signal'
 import { TechnicalDetails } from '../components/TechnicalDetails'
 import { useFocusAfterRemoval } from '../components/useFocusAfterRemoval'
 import { languageName } from './languageName'
+import { useRemembered } from './remembered'
 import { prowlarrWeb } from './serviceWeb'
 import { hostOf } from './signals'
 import { GAP } from './indexerGaps'
@@ -80,7 +81,10 @@ export function AddedSites({
   const frame = useFocusAfterRemoval()
   const [query, setQuery] = useState('')
   // 按過搜尋的每一站：搜尋中、或它的結果。
-  const [found, setFound] = useState<ReadonlyMap<string, 'searching' | SiteSearch>>(new Map())
+  const [found, setFound] = useRemembered<ReadonlyMap<string, 'searching' | SiteSearch>>(
+    ['indexer-search', indexers.kind, indexers.base_url],
+    () => new Map(),
+  )
   const [failed, setFailed] = useState(false)
   const [listError, setListError] = useState('')
   const [announce, setAnnounce] = useState('')
@@ -371,7 +375,8 @@ export function AddSites({
   const { t, i18n } = useTranslation()
   const titleId = useId()
   // 起點是上一次「加入」的結論（回頭看時沒通過的那幾站仍說得出為什麼）；之後疊上這一頁按的測試。
-  const [checks, setChecks] = useState<ReadonlyMap<string, CheckState>>(
+  const [checks, setChecks] = useRemembered<ReadonlyMap<string, CheckState>>(
+    ['indexer-checks', indexers.kind, indexers.base_url],
     () => new Map(indexers.checks.map((row) => [row.definition_name, row])),
   )
   const [ticked, setTicked] = useState<ReadonlySet<string>>(new Set())
@@ -784,16 +789,21 @@ function CandidateRow({
           </div>
           <p id={`${id}-hint`} className="mt-1 text-xs text-ink-dim">
             {[
-              candidate.privacy && candidate.privacy !== 'public'
-                ? t('indexer.add.semiPrivate')
-                : '',
-              // 說明是定義自帶的英文原文，不翻（同 Tags）。
-              candidate.description,
+              candidate.privacy && candidate.privacy !== 'public' ? (
+                <span key="privacy">{t('indexer.add.semiPrivate')}</span>
+              ) : null,
+              // 說明是定義自帶的英文原文，不翻（同 Tags）：Prowlarr 的定義只有英文，幾百站的說明
+              // 不是 Berth 譯得完、也跟不上的（M4 票 31 決定不改）。標上語言，讀屏器才用英文念。
+              candidate.description ? (
+                <span key="description" lang="en">
+                  {candidate.description}
+                </span>
+              ) : null,
               // 測過而沒通過的，理由在下面那一句；還沒測的才說要先測。
-              result ? '' : t('indexer.add.testFirst'),
+              result ? null : <span key="test">{t('indexer.add.testFirst')}</span>,
             ]
-              .filter(Boolean)
-              .join(' · ')}
+              .filter((part) => part !== null)
+              .flatMap((part, index) => (index === 0 ? [part] : [' · ', part]))}
           </p>
           {result && !result.passed && (
             <>

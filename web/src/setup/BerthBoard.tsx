@@ -2,7 +2,7 @@ import type { TFunction } from 'i18next'
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import type { IndexerSetup, SetupService, TmdbSetup } from '../api/setup'
+import type { IndexerSetup, RouteSetup, SetupService, TmdbSetup } from '../api/setup'
 import type { ServiceKind } from '../api/schemas'
 import { BerthBoard as Board, type BoardSlot } from '../components/BerthBoard'
 import { BERTHS, type BerthSlot } from '../components/berths'
@@ -42,6 +42,7 @@ export function BerthBoard({
   current,
   indexers,
   tmdb,
+  routes,
   reachable,
   onSelect,
 }: {
@@ -54,6 +55,8 @@ export function BerthBoard({
   indexers?: IndexerSetup
   /** 頁 5 起才有：TMDB 那一格說出憑證驗過了沒。 */
   tmdb?: TmdbSetup
+  /** 頁 3 起才有：媒體庫路徑那一格說出建了幾條 Route（M4 票 31：原本做完了也是「—」）。 */
+  routes?: RouteSetup
   /** 點得到哪幾格：走過的與目前的（`setup/navigation.ts` 的 `reachable`）。 */
   reachable?: (slot: BerthSlot) => boolean
   /** 點了哪一格。精靈才給。 */
@@ -78,7 +81,9 @@ export function BerthBoard({
           ? withOrigin(t, chosen, indexerDetail(t, chosen, indexers))
           : key === 'tmdb'
             ? tmdbDetail(t, tmdb)
-            : withOrigin(t, chosen, serviceDetail(t, service, chosen)),
+            : key === 'library'
+              ? routeDetail(t, routes)
+              : withOrigin(t, chosen, serviceDetail(t, service, chosen)),
       signal: own ?? signalOf(chosen),
       filled: Boolean(chosen) || Boolean(own && own !== 'neutral'),
       selectable: reachable?.(key) ?? false,
@@ -162,13 +167,26 @@ function indexerDetail(
     : t('board.indexerNone', { product })
 }
 
-/** TMDB 那一格的詳情列：憑證驗過了沒。頁 5 之前讀不到，就留破折號。 */
+/** 媒體庫路徑那一格的詳情列：建了幾條 Route。還沒有就留破折號。 */
+function routeDetail(t: TFunction, routes: RouteSetup | undefined) {
+  const count = routes?.routes.length ?? 0
+  return count > 0 ? t('board.routeCount', { count }) : null
+}
+
+/**
+ * TMDB 那一格的詳情列：憑證驗過了沒。頁 5 之前讀不到，就留破折號。還沒貼過 key 不是「待驗證」
+ * ——沒有東西可驗（M4 票 31，與剖面的 `credentialLabel` 同一條）。
+ */
 function tmdbDetail(t: TFunction, tmdb: TmdbSetup | undefined) {
   if (!tmdb) return null
+  const state = !tmdb.api_key_present
+    ? 'detail.absent'
+    : tmdb.verified
+      ? 'detail.verified'
+      : 'detail.unverified'
   return (
     <>
-      <span className="label">{t('detail.credential')}</span>{' '}
-      {t(tmdb.verified ? 'detail.verified' : 'detail.unverified')}
+      <span className="label">{t('detail.credential')}</span> {t(state)}
     </>
   )
 }

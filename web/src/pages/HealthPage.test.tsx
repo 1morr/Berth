@@ -56,7 +56,7 @@ describe('健康頁', () => {
     renderApp('/health')
 
     const board = await screen.findByRole('region', { name: '泊位板' })
-    // 收起來的 `<details>` 裡還有五條纜繩，但全綠時它們沒有畫在畫面上——
+    // 收起來的 `<details>` 裡還有每一條纜繩，但全綠時它們沒有畫在畫面上——
     // 重複八次說的是**看得到的**那幾顆。
     const painted = [...document.querySelectorAll<HTMLElement>('.bg-secured')].filter(
       (chip) => chip.closest('details:not([open])') === null,
@@ -331,7 +331,7 @@ describe('健康頁', () => {
     expect(screen.queryByText('阻擋')).not.toBeInTheDocument()
   })
 
-  it('綠燈的 Route 收起來，紅燈的就地展開五條纜繩', async () => {
+  it('綠燈的 Route 收起來，紅燈的就地展開每一條纜繩', async () => {
     render({
       body: healthDetail({
         routes_status: 'failed',

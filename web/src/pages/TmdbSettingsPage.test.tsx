@@ -13,6 +13,9 @@ afterEach(() => {
 const TMDB = 'GET /api/setup/tmdb'
 const TEST = 'POST /api/setup/tmdb/test'
 
+/** 形狀像 v3 API key 的一把：形狀不對的在送出前就被擋下（M4 票 31）。 */
+const NEW_KEY = '0'.repeat(31) + '4'
+
 /** 精靈第 7 步驗過的那一把。 */
 const VERIFIED = tmdbSetup({
   api_key_present: true,
@@ -74,14 +77,14 @@ describe('設定 → TMDB', () => {
     const user = userEvent.setup()
     renderApp('/settings/tmdb')
 
-    await user.type(await screen.findByLabelText('你的 TMDB API key'), 'new-key')
+    await user.type(await screen.findByLabelText('你的 TMDB API key'), NEW_KEY)
     await user.click(screen.getByRole('button', { name: '測試 TMDB' }))
 
     await waitFor(() =>
       expect(stub.mock.calls.some(([url]) => url === '/api/setup/tmdb/test')).toBe(true),
     )
     const call = stub.mock.calls.find(([url]) => url === '/api/setup/tmdb/test')!
-    expect(JSON.parse(String(call[1]?.body))).toEqual({ api_key: 'new-key' })
+    expect(JSON.parse(String(call[1]?.body))).toEqual({ api_key: NEW_KEY })
     const line = within(await screen.findByTestId('tmdb'))
     expect(await line.findByText('GET /3/configuration: 401 Unauthorized')).toBeInTheDocument()
   })
@@ -100,7 +103,7 @@ describe('設定 → TMDB', () => {
     const user = userEvent.setup()
     renderApp('/settings/tmdb')
 
-    await user.type(await screen.findByLabelText('你的 TMDB API key'), 'wrong-key')
+    await user.type(await screen.findByLabelText('你的 TMDB API key'), 'f'.repeat(32))
     await user.click(screen.getByRole('button', { name: '測試 TMDB' }))
 
     expect(

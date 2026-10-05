@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode, type Ref } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
 
@@ -32,6 +32,7 @@ import { pointsAtBerth } from './loopback'
 import {
   EXAMPLE_ADDRESS,
   REASON_LABEL,
+  reasonLabel,
   STATE_LABEL,
   VERSION_FLOOR,
   connectFields,
@@ -121,6 +122,7 @@ export function ServiceChoice({
   const warningId = useId()
   const service = status.services.find((row) => row.kind === kind)
   const [editing, setEditing] = useState(false)
+  const [refocusEdit, setRefocusEdit] = useState(false)
   // 既有表單改了一格、還沒按測試：上一次的結果說的是舊的那幾個值，先收起來（M4 票 21）。
   const [edited, setEdited] = useState(false)
   const pointer = useRef(false)
@@ -204,7 +206,7 @@ export function ServiceChoice({
         ? t('connection.announce', {
             service: name,
             state: t(STATE_LABEL[service.state]),
-            reason: t(REASON_LABEL[service.reason]),
+            reason: t(reasonLabel(kind, service.reason, service.state)),
           })
         : `${name} ${t(STATE_LABEL[service.state])}`
       : ''
@@ -292,7 +294,10 @@ export function ServiceChoice({
             onPick={pick}
           >
             <span className="block text-xs text-ink-dim">
-              {t('choice.existing.lede', { service: name })}
+              {t('choice.existing.lede', {
+                service: name,
+                adds: t(`choice.existing.adds.${kind}`),
+              })}
             </span>
             {kind !== 'prowlarr' && (
               <span className="mt-2 block text-xs text-ink">{t('choice.existing.sameHost')}</span>
@@ -382,6 +387,23 @@ export function ServiceChoice({
           {form}
           {/* 既有換過去、表單還沒送：留一條退路（票 15 critique：既有表單打開後沒有取消）。 */}
           {switching && draft === 'existing' && cancelButton}
+          {/* 「改位址」打開的表單也要能收回去（M4 票 31）：存下的那一台照舊連得上，什麼都不送。 */}
+          {editing && !switching && (
+            <div>
+              <GhostButton
+                type="button"
+                onClick={() => {
+                  setEditing(false)
+                  setEdited(false)
+                  // 焦點回到「改位址」（DESIGN〈The Focus Follows The Confirm Rule〉）：它要等表單收起、
+                  // 測試列重新畫出來才在，所以記一筆，由測試列掛上時接手。
+                  setRefocusEdit(true)
+                }}
+              >
+                {t('common.cancel')}
+              </GhostButton>
+            </div>
+          )}
         </>
       )}
 
@@ -404,6 +426,11 @@ export function ServiceChoice({
           onEdit={
             service.origin === 'existing' && !showExistingForm ? () => setEditing(true) : undefined
           }
+          editRef={(element: HTMLButtonElement | null) => {
+            if (!element || !refocusEdit) return
+            element.focus()
+            setRefocusEdit(false)
+          }}
         />
       )}
     </section>
@@ -435,9 +462,15 @@ function ChoiceCard({
   return (
     <label
       onPointerDown={onPointer}
-      className={`flex min-w-0 cursor-pointer gap-3 border-2 px-4 py-3 has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-[var(--color-working)] ${
-        checked ? 'border-rule-strong bg-deck' : 'border-rule bg-well hover:border-rule-strong'
-      } ${disabled ? 'cursor-not-allowed opacity-60' : ''}`}
+      // 選不了的那一格**不加 opacity**（DESIGN〈Chips〉：文字永遠不靠不透明度弱化；實測 2.6:1，M4 票 31
+      // 的 audit）：文字照原色，只把底換成頁面底色、拿掉 hover；為什麼選不了，卡片下面那一行（`locked`）說。
+      className={`flex min-w-0 gap-3 border-2 px-4 py-3 has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-[var(--color-working)] ${
+        checked
+          ? 'cursor-pointer border-rule-strong bg-deck'
+          : disabled
+            ? 'cursor-not-allowed border-rule bg-hull'
+            : 'cursor-pointer border-rule bg-well hover:border-rule-strong'
+      }`}
     >
       <input
         ref={inputRef}
@@ -628,6 +661,7 @@ export function TestLine({
   onRetest,
   onPasteKey,
   onEdit,
+  editRef,
 }: {
   kind: ServiceKind
   status: SetupStatus
@@ -639,6 +673,8 @@ export function TestLine({
   onPasteKey?: (apiKey: string) => void
   /** 既有而連上了：再打開表單改位址或憑證。 */
   onEdit?: () => void
+  /** 「改位址」那顆鍵。表單收起時焦點要回到它。 */
+  editRef?: Ref<HTMLButtonElement>
 }) {
   const { t } = useTranslation()
   const state = service.state
@@ -668,7 +704,7 @@ export function TestLine({
       {service.reason && !testing && (
         <dl className="grid grid-cols-1 gap-x-4 gap-y-1 border-t-2 border-rule px-4 py-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
           <dt className="label self-center text-ink-dim">{t('connection.result')}</dt>
-          <dd className="text-sm text-ink">{t(REASON_LABEL[service.reason])}</dd>
+          <dd className="text-sm text-ink">{t(reasonLabel(kind, service.reason, state))}</dd>
           {service.detail && (
             <>
               <dt className="label mt-1 self-center text-ink-dim">
@@ -714,7 +750,7 @@ export function TestLine({
           )}
           {onEdit && (
             // Jellyfin 沒有憑證欄（管理員帳密在擁有者表單），它那一格只改位址（M4 票 18）。
-            <GhostButton type="button" onClick={onEdit}>
+            <GhostButton ref={editRef} type="button" onClick={onEdit}>
               {kind === 'jellyfin' ? t('connection.editAddress') : t('connection.edit')}
             </GhostButton>
           )}
@@ -747,7 +783,9 @@ function Fix({
     // 同一台、Berth 的 key 被撤了：套件內或既有都一樣，擁有者重新登入換一把（M4 票 18）。
     lede = t('connection.fix.jellyfinKey')
   } else if (reason === 'other_server') {
-    lede = t('connection.fix.otherServer', { name: service.detail })
+    // 不提它的名字：新開的 Jellyfin 伺服器名預設是主機名，在容器裡就是容器 ID，使用者認不出來
+    // （M4 票 31）。名字留在下面「伺服器」那一格與技術細節。
+    lede = t('connection.fix.otherServer')
   } else if (scheme) {
     // 位址的協定寫錯（M4 票 25）：原本說成連不上、叫人查 port。
     lede = t(scheme)

@@ -23,9 +23,21 @@ function serviceWeb(
     return target.web_port === null ? null : `${page.protocol}//${page.hostname}:${target.web_port}`
   }
   if (target.origin !== 'existing') return null
+  return browserReachable(target.base_url, composeHost, page)
+}
+
+/**
+ * 使用者自己填的位址換成瀏覽器開得了的：`host.docker.internal` 就是跑 Berth 的這台主機，換成瀏覽器的
+ * 主機名；compose 主機名（`composeHost`）瀏覽器解不到，給不出。不是網址也給不出。
+ */
+export function browserReachable(
+  address: string,
+  composeHost: string,
+  page: Pick<Location, 'protocol' | 'hostname'> = window.location,
+): string | null {
   let url: URL
   try {
-    url = new URL(target.base_url)
+    url = new URL(address)
   } catch {
     return null
   }
@@ -48,4 +60,15 @@ export function qbittorrentWeb(
   page?: Pick<Location, 'protocol' | 'hostname'>,
 ): string | null {
   return serviceWeb(setup, 'qbittorrent', page)
+}
+
+/**
+ * Jellyfin 的網頁（完成頁，M4 票 31）。`address` 是深連結那一份推導的結果（`jellyfinBase`）：既有的那一台是
+ * 使用者填的位址，填的是 `host.docker.internal` 時瀏覽器開不了，照同一條換成這台主機。
+ */
+export function jellyfinWeb(
+  address: string,
+  page?: Pick<Location, 'protocol' | 'hostname'>,
+): string | null {
+  return browserReachable(address, 'jellyfin', page)
 }

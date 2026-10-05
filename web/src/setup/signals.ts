@@ -118,6 +118,26 @@ export const REASON_LABEL = {
 } as const satisfies Record<ConnectionReason, string>
 
 /**
+ * 連線卡上那一句理由（M4 票 31）。代碼是共用的，但說法看是哪一台、在哪個狀態：
+ *
+ * - 帳密被拒：Berth 對 qBittorrent 用帳密，對其餘兩台用 API key，不說「帳密或 API key」讓人猜。
+ * - 還在等套件內那一台起來（`waiting`）：起到一半的服務會回不像它自己的東西或乾脆不答，那一輪的
+ *   `protocol_mismatch` / `unreachable` 只是還沒起好；等完了還是那樣才照實說（實測 B 線：倒數
+ *   0/120 秒時寫「回的東西不是這個服務」）。
+ */
+export function reasonLabel(
+  kind: ServiceKind,
+  reason: ConnectionReason,
+  state: ConnectionState | null | undefined,
+) {
+  if (state === 'waiting' && (reason === 'protocol_mismatch' || reason === 'unreachable')) {
+    return 'reason.coming_up'
+  }
+  if (reason === 'auth_required' && kind === 'qbittorrent') return 'reason.auth_required_login'
+  return REASON_LABEL[reason]
+}
+
+/**
  * 位址的協定寫錯時的補法（M4 票 25）：服務頁的連線卡與頁 4 的既有表單說同一句，不叫人查 port。
  * 不是這兩種理由時是 `undefined`，呼叫端照自己的規則挑。
  */

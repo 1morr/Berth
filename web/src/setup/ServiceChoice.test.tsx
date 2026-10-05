@@ -256,7 +256,22 @@ describe('擁有者成立之後的 Jellyfin（M4 票 18）', () => {
     expect(screen.queryByText(/連上了，已經有管理員/)).toBeNull()
   })
 
-  it('換到另一台被擋：表單不收，就地說出那一台是誰、為什麼沒存', async () => {
+  it('「改位址」打開的表單有取消：收回去、焦點回到「改位址」，什麼都不送（M4 票 31）', async () => {
+    const user = userEvent.setup()
+    const onChoose = vi.fn()
+    mount('jellyfin', [CONNECTED], { locked: 'locked', onChoose })
+    await user.click(screen.getByRole('button', { name: '改位址' }))
+    expect(screen.getByRole('textbox', { name: '位址' })).toBeVisible()
+
+    await user.click(screen.getByRole('button', { name: '取消' }))
+
+    expect(screen.queryByRole('textbox', { name: '位址' })).not.toBeInTheDocument()
+    // 焦點回到觸發鍵，不掉回 body（DESIGN〈The Focus Follows The Confirm Rule〉）。
+    expect(screen.getByRole('button', { name: '改位址' })).toHaveFocus()
+    expect(onChoose).not.toHaveBeenCalled()
+  })
+
+  it('換到另一台被擋：表單不收，就地說出為什麼沒存', async () => {
     const user = userEvent.setup()
     const { rerender } = mount('jellyfin', [CONNECTED], { locked: 'locked' })
     await user.click(screen.getByRole('button', { name: '改位址' }))
@@ -270,7 +285,9 @@ describe('擁有者成立之後的 Jellyfin（M4 票 18）', () => {
       />,
     )
 
-    expect(screen.getByText(/沒有存：dc2288726bbe 是另一台 Jellyfin/)).toBeVisible()
+    // 不拿伺服器名稱呼它：容器裡那是容器 ID（M4 票 31）。
+    expect(screen.getByText(/沒有存：這個位址上回答的是另一台 Jellyfin/)).toBeVisible()
+    expect(screen.queryByText(/dc2288726bbe/)).not.toBeInTheDocument()
     expect(screen.getByRole('textbox', { name: '位址' })).toBeVisible()
   })
 
@@ -280,7 +297,7 @@ describe('擁有者成立之後的 Jellyfin（M4 票 18）', () => {
       refusal: { reason: 'unverified', detail: 'unreachable' },
     })
 
-    expect(screen.getByText(/認不出是不是同一台/)).toHaveTextContent('主機名解得到但連不上')
+    expect(screen.getByText(/認不出是不是同一台/)).toHaveTextContent('找得到這台主機，但它沒有回應')
   })
 
   it('存下的位址後面換成另一台：補法說把位址改回去，實測值標成伺服器', () => {
@@ -288,7 +305,8 @@ describe('擁有者成立之後的 Jellyfin（M4 票 18）', () => {
       chosen({ ...CONNECTED, state: 'failed', reason: 'other_server', detail: 'dc2288726bbe' }),
     ])
 
-    expect(screen.getByText(/現在回答的是另一台 Jellyfin（dc2288726bbe）/)).toBeVisible()
+    expect(screen.getByText(/現在回答的是另一台 Jellyfin。/)).toBeVisible()
+    expect(screen.getByText('dc2288726bbe')).toBeVisible()
     expect(screen.getByText('伺服器')).toBeVisible()
   })
 
