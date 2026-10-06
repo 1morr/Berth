@@ -1271,6 +1271,10 @@ split-cour 的第一批被播出日比對整批擋在審核，改正一次並套
   媒體庫頁那一份 `GET /api/inventory/{library_id}/watching` 不變。
 
 ### Fixed
+- **「套件內」卡片把停掉的容器說成「沒有起」，起回來測試轉綠之後還留著**（M4 票 35，2026-10-06 審計 S3）：停掉的容器
+  與不在 `COMPOSE_PROFILES` 裡的服務主機名一樣解不到、分不出來，卡片改說「這套 compose 的 X 沒在跑」，補法兩種都給：
+  停了就 `docker compose start X`，不在就加回 `COMPOSE_PROFILES` 再 `docker compose up -d`（測試那一條的補法同一組）。
+  那一頁每次選擇或按「重新測試」之後重問主機名，加註不再停在進頁那一刻。
 - **套件內 qBittorrent 的全域預設儲存路徑一改，Route 就轉紅、送單被擋**（M4 票 32，2026-10-06 審計 S5）：Route 檢查
   對套件內那一台另外現查全域 `save_path`，Berth 卻不落在那裡——送單逐個 torrent 帶自己的分類與 `autoTMM=true`。
   錯誤還掛在分類路徑底下、講的是另一個目錄。現在兩種來源都只看分類回報的兩個路徑（完成與未完成），**套件內那一台

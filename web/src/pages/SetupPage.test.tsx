@@ -369,6 +369,9 @@ describe('頁 1：Jellyfin 與擁有者', () => {
         polls += 1
         return { body: polls === 1 ? starting(15) : FOUND }
       },
+      'GET /api/setup/compose': {
+        body: { resolvable: { jellyfin: true, qbittorrent: true, prowlarr: true } },
+      },
     })
 
     renderInRoute(<SetupPage />)
@@ -392,6 +395,8 @@ describe('頁 1：Jellyfin 與擁有者', () => {
       { restart: false },
       { restart: false },
     ])
+    // 輪詢不重問主機名（M4 票 35）：只有進頁那一次。
+    expect(fetchStub.mock.calls.filter(([url]) => url === '/api/setup/compose')).toHaveLength(1)
   })
 
   /** M4 票 23：別頁的服務在啟動中不跟著輪詢，它的重測只會與這一頁的命令搶同一組設定。 */

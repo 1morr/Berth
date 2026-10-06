@@ -184,8 +184,12 @@ export function SetupPage() {
     if (kind === 'qbittorrent') {
       void queryClient.invalidateQueries({ queryKey: routeSetupQueryOptions.queryKey })
     }
-    // 測完重問主機名（M4 票 35）：容器停了又起回來，卡片的「沒在跑」不停在進頁那一刻。只查 DNS，
-    // 啟動中的輪詢也跟著問——那時主機名解得到，幾毫秒。
+  }
+  /**
+   * 選擇或使用者按的重測做完，重問主機名（M4 票 35）：容器停了又起回來，卡片的「沒在跑」不停在進頁那一刻。
+   * 啟動中每 3 秒的輪詢不問：一次問三個名字，解不到的那一個要一秒多（brief §20.14）。
+   */
+  function reaskHosts() {
     void queryClient.invalidateQueries({ queryKey: composeQueryOptions.queryKey })
   }
   // 服務頁的二選一（M4 票 15）：存下、測一次。結果回來照樣停在這一頁（網址沒變）。
@@ -196,6 +200,7 @@ export function SetupPage() {
     onSuccess: (next, { kind }) => {
       absorb(next)
       invalidateBerthOf(kind)
+      reaskHosts()
     },
   })
   // 重測：紅燈上的「重新測試」（`restart`），以及套件內那一台還在啟動時的輪詢。
@@ -206,9 +211,10 @@ export function SetupPage() {
     onMutate: ({ kind, restart }) => {
       if (restart) forgetResults(kind)
     },
-    onSuccess: (next, { kind }) => {
+    onSuccess: (next, { kind, restart }) => {
       absorb(next)
       invalidateBerthOf(kind)
+      if (restart) reaskHosts()
     },
   })
   function choiceOf(kind: ServiceKind): ChoiceControls & ChoiceDraft {

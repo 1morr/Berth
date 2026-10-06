@@ -238,7 +238,8 @@ async def get_status(session: SessionDep, config: ConfigDep) -> SetupStatusOut:
 
 
 class ComposeOut(BaseModel):
-    #: 套件內三個主機名各自解不解得到。`false` 是這套 compose 沒有起那個服務（或它停著）。
+    #: 套件內三個主機名各自解不解得到。`false` 是那個服務沒在跑：容器停了，
+    #: 或不在 `COMPOSE_PROFILES` 裡（DNS 分不出來）。
     resolvable: dict[ServiceKind, bool]
 
 

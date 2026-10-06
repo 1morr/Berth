@@ -771,8 +771,8 @@ function Fix({
   const reason = service.reason
 
   let lede: string
-  let commands: string[] = []
-  let notRunning = false
+  // lede 下面那一塊：可複製的指令（沒有就不畫）。
+  let remedy: ReactNode = null
   // 「至少要 X，這一台是 Y」（M4 票 18）：與「既有」旁的下限同一組數字。
   const outdated = { floor: VERSION_FLOOR[kind], version: service.detail }
   const scheme = schemeFix(reason)
@@ -789,7 +789,7 @@ function Fix({
   } else if (bundled && reason === 'not_deployed') {
     // 主機名解不到＝容器停了或不在 COMPOSE_PROFILES 裡：兩種起回來的方法都給（plan §9.3、M4 票 35）。
     lede = t('connection.fix.notDeployed', { kind })
-    notRunning = true
+    remedy = <BringBack status={status} kind={kind} />
   } else if (bundled && reason === 'protocol_mismatch') {
     lede = t('connection.fix.somethingElse', { kind })
   } else if (bundled && reason === 'api_key_missing') {
@@ -800,13 +800,19 @@ function Fix({
     lede = t('connection.fix.prowlarrMount')
   } else if (bundled && reason === 'auth_required') {
     lede = t('connection.fix.whitelist')
-    commands = [`docker compose restart ${kind}`]
+    remedy = <CopyLines commands={[`docker compose restart ${kind}`]} />
   } else if (bundled && reason === 'version_unsupported') {
     lede = t('connection.fix.outdatedBundled', outdated)
-    commands = [`docker compose pull ${kind}`, `docker compose up -d ${kind}`]
+    remedy = (
+      <CopyLines commands={[`docker compose pull ${kind}`, `docker compose up -d ${kind}`]} />
+    )
   } else if (bundled) {
     lede = t('connection.fix.bundledDown')
-    commands = [`docker compose ps ${kind}`, `docker compose logs --tail 50 ${kind}`]
+    remedy = (
+      <CopyLines
+        commands={[`docker compose ps ${kind}`, `docker compose logs --tail 50 ${kind}`]}
+      />
+    )
   } else if (reason === 'auth_required') {
     lede = t('connection.fix.credentials')
   } else if (reason === 'ip_banned') {
@@ -824,20 +830,20 @@ function Fix({
     <section className="border-t-2 border-rule px-4 py-3">
       <h5 className="label text-ink-dim">{t('connect.fix.title')}</h5>
       <p className="mt-2 max-w-prose text-xs text-ink-dim">{lede}</p>
-      {commands.length > 0 && (
-        <div className="mt-2 grid grid-cols-1 gap-px">
-          {commands.map((command) => (
-            <CopyLine key={command} command={command} />
-          ))}
-        </div>
-      )}
-      {notRunning && (
-        <div className="mt-2">
-          <BringBack status={status} kind={kind} />
-        </div>
-      )}
+      {remedy && <div className="mt-2">{remedy}</div>}
       <TechnicalDetails lines={[testEndpoint(status, kind), service.error]} />
     </section>
+  )
+}
+
+/** 一組可複製的指令，一行一條。 */
+function CopyLines({ commands }: { commands: string[] }) {
+  return (
+    <div className="grid grid-cols-1 gap-px">
+      {commands.map((command) => (
+        <CopyLine key={command} command={command} />
+      ))}
+    </div>
   )
 }
 
@@ -847,21 +853,16 @@ function BringBack({ status, kind }: { status: SetupStatus; kind: ServiceKind })
   const { stopped, missing } = bringBack(status, kind)
   return (
     <div className="grid gap-3">
-      {(
-        [
-          [t('choice.bringBack.stopped'), stopped],
-          [t('choice.bringBack.missing', { kind }), missing],
-        ] as const
-      ).map(([when, commands]) => (
-        <div key={when} className="grid gap-1">
-          <p className="max-w-prose text-xs text-ink-dim">{when}</p>
-          <div className="grid grid-cols-1 gap-px">
-            {commands.map((command) => (
-              <CopyLine key={command} command={command} />
-            ))}
-          </div>
-        </div>
-      ))}
+      <div className="grid gap-1">
+        <p className="max-w-prose text-xs text-ink-dim">{t('choice.bringBack.stopped')}</p>
+        <CopyLines commands={stopped} />
+      </div>
+      <div className="grid gap-1">
+        <p className="max-w-prose text-xs text-ink-dim">
+          {t('choice.bringBack.missing', { kind })}
+        </p>
+        <CopyLines commands={missing} />
+      </div>
     </div>
   )
 }

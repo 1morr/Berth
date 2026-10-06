@@ -18,7 +18,7 @@ RESOLVE_TIMEOUT_SECONDS = 10.0
 
 class HostResolver(Protocol):
     async def resolves(self, host: str) -> bool:
-        """`False` 只代表確定解不到；問不出結論時是 `True`，畫面才不會說錯「沒有起」。"""
+        """`False` 只代表確定解不到；問不出結論時是 `True`，畫面才不會說錯「沒在跑」。"""
         ...
 
 
