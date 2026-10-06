@@ -256,6 +256,9 @@ class Scenario:
     prowlarr_api_key: str
     #: 「測試連線」時 Prowlarr 要回報的索引站（貼上 key 之後判套件內還是既有）。
     connect_indexers: list[ProwlarrIndexer] = field(default_factory=list)
+    #: 使用者自己那台 Prowlarr 的 API key：設了的話，帶別的 key 一律 401（頁 4 的 key 錯，
+    #: M4 票 39）。空字串是什麼 key 都收。
+    connect_api_key: str = ""
     #: 這套 compose 沒有起的服務：它們的主機名解不到（`GET /setup/compose`，M4 票 30）。
     undeployed: frozenset[ServiceKind] = frozenset()
     #: 精靈已經跑完：整個 API 進門禁，畫面從登入頁開始（票 07）。
@@ -392,6 +395,7 @@ def mixed() -> Scenario:
         prowlarr=FakeProwlarrClient(indexers=list(NAS_INDEXERS)),
         prowlarr_api_key="00000000000000000000000000000001",
         connect_indexers=list(NAS_INDEXERS),
+        connect_api_key="0123456789abcdef0123456789abcdef",
     )
 
 
@@ -1611,7 +1615,12 @@ class FakeClientFactory:
         if base_url == self._scenario.prowlarr.base_url:
             # 套件內的那一台要回同一份實例：索引站加進去之後再讀要看得到。
             return self._scenario.prowlarr
-        return FakeProwlarrClient(base_url=base_url, indexers=list(self._scenario.connect_indexers))
+        client = FakeProwlarrClient(
+            base_url=base_url, indexers=list(self._scenario.connect_indexers)
+        )
+        expected = self._scenario.connect_api_key
+        client.key_rejected = bool(expected) and api_key != expected
+        return client
 
     def tmdb(self, credential: str) -> TmdbClient:
         if self._scenario.real_tmdb:

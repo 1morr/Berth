@@ -228,7 +228,6 @@ export function indexerSetup(overrides: Partial<IndexerSetup> = {}): IndexerSetu
     web_ui_username: '',
     failure: null,
     error: '',
-    reason: null,
     web_port: 9696,
     ...overrides,
   }

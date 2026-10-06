@@ -17,7 +17,6 @@ import {
   claimOwner,
   completeSetup,
   composeQueryOptions,
-  connectIndexer,
   apiKeyFailed,
   connectJellyfin,
   indexerSetupQueryOptions,
@@ -300,11 +299,6 @@ export function SetupPage() {
     mutationFn: setIndexerLogin,
     onSuccess: (next) => absorbBerth(indexerSetupQueryOptions.queryKey, next),
   })
-  // 既有 Prowlarr 的表單（頁 4 選「既有」時）：這就是選了既有，精靈狀態裡的選擇也跟著變。
-  const connectSource = useMutation({
-    mutationFn: connectIndexer,
-    onSuccess: (next) => absorbBerth(indexerSetupQueryOptions.queryKey, next),
-  })
   const skipSites = useMutation({
     mutationFn: () => skipIndexers(true),
     onSuccess: (next) => absorbBerth(indexerSetupQueryOptions.queryKey, next),
@@ -327,7 +321,6 @@ export function SetupPage() {
       applyPreferences.reset()
     } else {
       applySites.reset()
-      connectSource.reset()
       prowlarrLogin.reset()
       removeSite.reset()
     }
@@ -519,10 +512,7 @@ export function SetupPage() {
     library: librarySignal(current, routes.data, jellyfin.data, dock.isPending),
     prowlarr: indexerSignal(
       current,
-      applySites.isPending ||
-        connectSource.isPending ||
-        removeSite.isPending ||
-        prowlarrLogin.isPending,
+      applySites.isPending || removeSite.isPending || prowlarrLogin.isPending,
     ),
     tmdb: tmdbSignal(current, tmdb.data, tmdbTest.isPending),
   }
@@ -654,14 +644,12 @@ export function SetupPage() {
             indexersFailed={indexers.isError}
             owner={current.owner}
             applying={applySites.isPending}
-            connecting={connectSource.isPending}
             login={{
               saving: prowlarrLogin.isPending,
               refusal: loginRefusalOf(prowlarrLogin.error),
               onSave: (login) => prowlarrLogin.mutateAsync(login),
             }}
             onApply={(selected) => applySites.mutateAsync(selected)}
-            onConnect={(input) => connectSource.mutate(input)}
             onSkip={() => skipSites.mutate()}
             choice={choiceOf('prowlarr')}
             sites={{

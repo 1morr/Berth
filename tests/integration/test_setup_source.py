@@ -45,8 +45,8 @@ from berth.services.clients import BundledServices
 from berth.services.commands import CommandMark, Effect, mark_of
 from berth.services.indexer import (
     DEFAULT_INDEXERS,
+    IndexerSetupStatus,
     apply_default_indexers,
-    connect_indexer,
     read_indexer_status,
     remove_indexer,
     search_indexers,
@@ -59,6 +59,8 @@ from berth.services.setup import (
     STEP_COMPLETE,
     STEP_INDEXER,
     STEP_TMDB,
+    ServiceConnection,
+    choose_service,
     read_status,
     retest_service,
 )
@@ -351,6 +353,21 @@ async def test_an_unreadable_login_does_not_turn_the_connection_red(session: Asy
     assert status.current_step == STEP_INDEXER
 
 
+async def connect_existing(
+    session: AsyncSession, factory: FakeClientFactory, *, base_url: str, api_key: str
+) -> IndexerSetupStatus:
+    """頁 4 選「既有」：與頁 1、2 同一支服務頁的二選一（M4 票 39）。"""
+    await choose_service(
+        session,
+        factory,
+        BundledServices(targets=COMPOSE, prowlarr_api_key=""),
+        ServiceKind.PROWLARR,
+        ServiceOrigin.EXISTING,
+        ServiceConnection(base_url=base_url, api_key=api_key),
+    )
+    return await read_indexer_status(session, factory)
+
+
 @pytest.mark.asyncio
 async def test_an_existing_prowlarr_is_tested_by_address_and_key(session: AsyncSession) -> None:
     await arrange(session, origin=ServiceOrigin.EXISTING)
@@ -359,12 +376,7 @@ async def test_an_existing_prowlarr_is_tested_by_address_and_key(session: AsyncS
     )
     factory = FakeClientFactory(prowlarr=client)
 
-    status = await connect_indexer(
-        session,
-        factory,
-        base_url="http://nas:9696",
-        api_key="the-key",
-    )
+    status = await connect_existing(session, factory, base_url="http://nas:9696", api_key="the-key")
 
     assert [(row.step, row.status, row.detail) for row in status.steps] == [
         (PROWLARR_STEP, StepStatus.OK, "1")
@@ -385,7 +397,7 @@ async def test_a_failing_endpoint_is_saved_anyway_so_one_field_can_be_fixed(
         prowlarr=FakeProwlarrClient(ping_error=ServiceUnavailableError("connection refused"))
     )
 
-    status = await connect_indexer(session, factory, base_url="http://typo:9696", api_key="k")
+    status = await connect_existing(session, factory, base_url="http://typo:9696", api_key="k")
 
     assert status.steps[0].status is StepStatus.FAILED
     assert status.steps[0].error == "connection refused"
@@ -906,7 +918,7 @@ async def test_an_existing_prowlarr_lists_its_own_sites_and_the_public_ones_to_a
         ],
     )
     factory = FakeClientFactory(prowlarr=client)
-    await connect_indexer(session, factory, base_url="http://nas:9696", api_key="k")
+    await connect_existing(session, factory, base_url="http://nas:9696", api_key="k")
 
     status = await read_indexer_status(session, factory)
 

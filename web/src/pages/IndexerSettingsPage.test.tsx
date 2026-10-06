@@ -2,12 +2,13 @@ import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import type { IndexerSetup, SiteSearch } from '../api/setup'
+import type { IndexerSetup, SetupService, SiteSearch } from '../api/setup'
 import { HEALTHY, stubApi, type StubRoute } from '../test/fetch'
 import {
   ALL_BUNDLED,
   RECOMMENDED,
   check,
+  chosen,
   healthDetail,
   indexerSetup,
   setupStatus,
@@ -215,14 +216,15 @@ describe('設定 → Prowlarr', () => {
   })
 })
 
-describe('既有 Prowlarr 測不過時的補法（M4 票 17）', () => {
-  function failed(overrides: Partial<IndexerSetup>): IndexerSetup {
-    return indexerSetup({
+describe('既有 Prowlarr 測不過時的補法（M4 票 17；票 39 起是連線區那一份）', () => {
+  function failed(overrides: Partial<SetupService>): SetupService {
+    return chosen({
+      kind: 'prowlarr',
       origin: 'existing',
-      candidates: [],
-      web_ui_login: false,
+      state: 'failed',
       reason: 'unreachable',
-      steps: [step('prowlarr', 'failed', '', 'GET /api/v1/system/status: connection refused')],
+      detail: '',
+      error: 'GET /api/v1/system/status: connection refused',
       ...overrides,
     })
   }
@@ -230,18 +232,7 @@ describe('既有 Prowlarr 測不過時的補法（M4 票 17）', () => {
   it.each([
     [
       '比下限舊：叫人升級，不叫人改位址',
-      {
-        base_url: 'http://localhost:9696',
-        reason: 'version_unsupported',
-        steps: [
-          step(
-            'prowlarr',
-            'failed',
-            '1.2.2.2699',
-            'Prowlarr 1.2.2.2699 is older than 1.3.2, the oldest version Berth supports',
-          ),
-        ],
-      },
+      { base_url: 'http://localhost:9696', reason: 'version_unsupported', detail: '1.2.2.2699' },
       '至少要 Prowlarr 1.3.2，這一台是 1.2.2.2699',
     ],
     [
@@ -251,32 +242,124 @@ describe('既有 Prowlarr 測不過時的補法（M4 票 17）', () => {
     ],
     [
       'key 不對：說去哪裡複製，不說連不上（M4 票 20）',
-      {
-        base_url: 'http://192.168.1.10:9696',
-        reason: 'auth_required',
-        steps: [step('prowlarr', 'failed', '', 'GET /api/v1/system/status: 401')],
-      },
+      { base_url: 'http://192.168.1.10:9696', reason: 'auth_required' },
       'API key 不對：在 Prowlarr 的「設定 → 一般」複製',
     ],
     [
       'https 打到講 http 的 port：說改成 http://，不叫人查 port（M4 票 25）',
-      {
-        base_url: 'https://192.168.1.10:9696',
-        reason: 'scheme_mismatch',
-        steps: [step('prowlarr', 'failed', '', 'GET /api/v1/system/status: WRONG_VERSION_NUMBER')],
-      },
+      { base_url: 'https://192.168.1.10:9696', reason: 'scheme_mismatch' },
       '這個 port 講的是 http，不是 https',
+    ],
+    [
+      'key 沒填：說要貼 key，不說連不到這個位址（M4 票 39 的 code-review）',
+      { base_url: 'http://192.168.1.10:9696', reason: 'api_key_missing' },
+      '你自己的 Prowlarr 要一把 API key',
     ],
     [
       '其他：一般的那一句',
       { base_url: 'http://192.168.1.10:9696' },
-      '確認位址、port 與 API key 都對',
+      '連不到這個位址。確認 port 沒填錯',
     ],
   ] as const)('%s', async (_, overrides, fix) => {
-    render({ [INDEXERS]: { body: failed(overrides as Partial<IndexerSetup>) } })
+    render({
+      'GET /api/setup/status': {
+        body: setupStatus({
+          completed: true,
+          current_step: 6,
+          owner: 'skipper',
+          services: [...ALL_BUNDLED.slice(0, 2), failed(overrides as Partial<SetupService>)],
+        }),
+      },
+      [INDEXERS]: {
+        body: indexerSetup({
+          origin: 'existing',
+          base_url: overrides.base_url,
+          candidates: [],
+          web_ui_login: false,
+          steps: [step('prowlarr', 'failed')],
+        }),
+      },
+    })
     renderApp('/settings/indexers')
 
-    const line = (await screen.findByTestId('sites')).querySelector('li')!
-    expect(line).toHaveTextContent(fix)
+    // 測試那一條底下的「手動步驟」：頁 1、2 與精靈頁 4 同一份（`ServiceChoice` 的 `Fix`）。
+    const remedy = (await screen.findByRole('heading', { name: '手動步驟' })).closest('section')!
+    expect(remedy).toHaveTextContent(fix)
+    // 站的那一區不重複說：連不上的既有那一台叫人先在上面接上。
+    expect(screen.getByText('先在上面接上 Prowlarr，這裡才讀得到它的站。')).toBeInTheDocument()
+  })
+})
+
+describe('既有 Prowlarr 的連線區（M4 票 39）', () => {
+  const RED = chosen({
+    kind: 'prowlarr',
+    origin: 'existing',
+    base_url: 'http://192.168.1.10:9696',
+    state: 'failed',
+    reason: 'unreachable',
+    detail: '',
+  })
+  const GREEN = chosen({
+    kind: 'prowlarr',
+    origin: 'existing',
+    base_url: 'http://192.168.1.10:9696',
+    reason: 'connected',
+    detail: '0',
+  })
+
+  function statusWith(prowlarr: SetupService) {
+    return setupStatus({
+      completed: true,
+      current_step: 6,
+      owner: 'skipper',
+      services: [...ALL_BUNDLED.slice(0, 2), prowlarr],
+    })
+  }
+
+  it('重新測試轉綠之後，站的那一區跟著重讀，不停在「先在上面接上」', async () => {
+    let green = false
+    const fetchStub = render({
+      'GET /api/setup/status': () => ({ body: statusWith(green ? GREEN : RED) }),
+      'POST /api/setup/services/prowlarr/test': () => {
+        green = true
+        return { body: statusWith(GREEN) }
+      },
+      [INDEXERS]: () => ({
+        body: indexerSetup({
+          origin: 'existing',
+          base_url: 'http://192.168.1.10:9696',
+          candidates: RECOMMENDED,
+          web_ui_login: false,
+          steps: [step('prowlarr', green ? 'pending' : 'failed', green ? '0' : '')],
+        }),
+      }),
+      'POST /api/settings/services/prowlarr/test': { body: healthDetail() },
+    })
+    const user = userEvent.setup()
+    renderApp('/settings/indexers')
+
+    await screen.findByText('先在上面接上 Prowlarr，這裡才讀得到它的站。')
+    await user.click(screen.getByRole('button', { name: '重新測試' }))
+
+    await waitFor(() =>
+      expect(
+        screen.queryByText('先在上面接上 Prowlarr，這裡才讀得到它的站。'),
+      ).not.toBeInTheDocument(),
+    )
+    // 健康卡也重測一次（與「測試連線」之後同一件事）。
+    expect(
+      fetchStub.mock.calls.some(([url]) => url === '/api/settings/services/prowlarr/test'),
+    ).toBe(true)
+  })
+
+  it('換成套件內要先確認：這一頁的結果與介面登入會清掉', async () => {
+    render({ 'GET /api/setup/status': { body: statusWith(GREEN) } })
+    const user = userEvent.setup()
+    renderApp('/settings/indexers')
+
+    await user.click(await screen.findByRole('radio', { name: /^套件內/ }))
+
+    expect(await screen.findByText(/換一台 Prowlarr/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '改用套件內的那一台' })).toBeInTheDocument()
   })
 })

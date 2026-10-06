@@ -1,40 +1,28 @@
-import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { TFunction } from 'i18next'
 
 import type {
-  IndexerConnectInput,
   IndexerSetup,
   InterfaceLogin,
   InterfaceLoginRefusal,
+  SetupService,
   SetupStatus,
 } from '../api/setup'
-import {
-  STICKY_ACTION,
-  CopyLine,
-  Field,
-  GhostButton,
-  Notice,
-  PasswordField,
-  PrimaryButton,
-  TEXT_LINK,
-} from '../components/controls'
+import { CopyLine, GhostButton, Notice, PrimaryButton, TEXT_LINK } from '../components/controls'
 import { Cutaway, CutawayRow } from '../components/Cutaway'
 import { failureText } from '../components/failures'
 import { RequestFailed } from '../components/RequestFailed'
 import { StepLine } from '../components/StepLine'
 import { TechnicalDetails } from '../components/TechnicalDetails'
-import { addressError } from './address'
 import { AddedSites, AddSites, type SiteControls } from './IndexerSites'
 import { useInterfaceLogin } from './interfaceLogin'
 import { BerthLogin } from './InterfaceLoginFields'
-import { pointsAtBerth } from './loopback'
 import { prowlarrWeb } from './serviceWeb'
-import { LoopbackHint, ServiceChoice, type ChoiceControls } from './ServiceChoice'
+import { ServiceChoice, type ChoiceControls } from './ServiceChoice'
 import type { ChoiceDraft } from './choiceDraft'
 import { STEP } from './navigation'
 import { GAP, modeOf } from './indexerGaps'
-import { VERSION_FLOOR, connected, schemeFix } from './signals'
+import { connected } from './signals'
 import { StepFrame } from './StepFrame'
 
 export type { SiteControls } from './IndexerSites'
@@ -57,7 +45,8 @@ export interface LoginControls {
  *   介面登入是自己的一區與按鈕（`ProwlarrLogin`，M4 票 20），必填。
  * - **既有 Prowlarr**：同樣的「已加入」與「加站」，加的是使用者自己那一台，Berth 不移除（M4 票 20，
  *   使用者拍板：按一次確認）。**一站都沒有時這一頁待處理**（`NoSites`）：到 Prowlarr 加站後重新讀取、
- *   在這裡加推薦的公開站，或之後再說。
+ *   在這裡加推薦的公開站，或之後再說。位址與 key 的表單、測試那一條與補法是頁 1、2 那一份
+ *   （`ServiceChoice`，M4 票 39）：送的是同一支 `POST /setup/services/prowlarr`。
  *
  * 整頁可以「之後再說」，連選都還沒選也可以。
  *
@@ -69,10 +58,8 @@ export function IndexerStep({
   indexersFailed,
   owner,
   applying,
-  connecting,
   login,
   onApply,
-  onConnect,
   onSkip,
   choice,
   sites,
@@ -86,10 +73,8 @@ export function IndexerStep({
   /** 擁有者的名字：沿用 Jellyfin 帳密時的帳號，取消勾選時預填它。 */
   owner: string
   applying: boolean
-  connecting: boolean
   login: LoginControls
   onApply: (indexers: string[]) => Promise<IndexerSetup>
-  onConnect: (input: IndexerConnectInput) => void
   onSkip: () => void
   /** 選擇的兩支 mutation 與畫面上選著、還沒存下的那一格（`SetupPage` 持有）。 */
   choice: ChoiceControls & ChoiceDraft
@@ -139,7 +124,7 @@ export function IndexerStep({
     <StepFrame
       cutaway={
         indexers ? (
-          <IndexerCutaway indexers={indexers} bundled={mode === 'bundled'} />
+          <IndexerCutaway indexers={indexers} service={service} bundled={mode === 'bundled'} />
         ) : (
           <span aria-hidden />
         )
@@ -156,11 +141,6 @@ export function IndexerStep({
         status={status}
         {...choice}
         switchWarning={hasResults ? t('choice.switchWarning.prowlarr') : undefined}
-        existingForm={
-          indexers && (
-            <ExistingIndexer indexers={indexers} connecting={connecting} onConnect={onConnect} />
-          )
-        }
       />
 
       {indexers && unread && (
@@ -198,7 +178,7 @@ export function IndexerStep({
       {/* 選之前、或讀不到清單時，「之後再說」在這裡；Prowlarr 的在「加入」旁邊。 */}
       {((mode !== 'bundled' && mode !== 'prowlarr') || unread) && (
         <div className="mt-6">
-          <GhostButton type="button" busy={applying || connecting} onClick={onSkip}>
+          <GhostButton type="button" busy={applying} onClick={onSkip}>
             {t('indexer.skip')}
           </GhostButton>
         </div>
@@ -379,71 +359,57 @@ function ProwlarrLogin({
 }
 
 /**
- * 這個泊位能做的事：Prowlarr 是已加入 + 加站，既有的另有填位址與 key 的表單。
- * 精靈與設定的索引站那一頁共用這一塊（票 06i）；設定頁不給 `onSkip`——那裡不是第一次，
- * 沒有「之後再說」。介面登入在設定頁它自己的那一區改（M4 票 07）。
+ * 設定頁的索引站那一區（票 06i）：已加入 + 加站。位址與 key 在它上面的連線區改（`ServiceConnection`，
+ * M4 票 39：與精靈同一份表單、同一支端點）；介面登入在它自己的那一區（M4 票 07）。
  */
 export function IndexerActions({
   indexers,
   applying,
-  connecting,
   onApply,
-  onConnect,
-  onSkip,
   sites,
 }: {
   indexers: IndexerSetup
   applying: boolean
-  connecting: boolean
   onApply: (indexers: string[]) => Promise<IndexerSetup>
-  onConnect: (input: IndexerConnectInput) => void
-  /** 「之後再說」。只有精靈給。 */
-  onSkip?: () => void
   sites: SiteControls
 }) {
-  const bundled = indexers.origin === 'bundled' && indexers.reachable
+  const { t } = useTranslation()
   // 連上了：0 站的既有 Prowlarr 是待處理（M4 票 20），也算連上。
-  const connected = indexers.steps.some(
-    (row) => row.step === 'prowlarr' && row.status !== 'failed' && row.status !== 'running',
-  )
-  const addSites = (
-    <AddSites
-      indexers={indexers}
-      applying={applying}
-      controls={sites}
-      onApply={onApply}
-      onSkip={onSkip}
-    />
-  )
+  const reached =
+    indexers.origin === 'bundled'
+      ? indexers.reachable
+      : indexers.steps.some(
+          (row) => row.step === 'prowlarr' && row.status !== 'failed' && row.status !== 'running',
+        )
 
-  if (bundled) {
-    return (
-      <>
-        {indexers.sites.length > 0 && <AddedSites indexers={indexers} controls={sites} />}
-        {addSites}
-      </>
+  if (!reached) {
+    // 套件內的那台連不上：說清楚與怎麼查；既有的那一台連不上由上面測試那一條說。
+    return indexers.origin === 'bundled' ? (
+      <Unreachable indexers={indexers} />
+    ) : (
+      <p className="text-sm text-ink-dim">{t('indexer.connectFirst')}</p>
     )
   }
 
   return (
     <>
-      {/* 套件內的那台連不上：說清楚，然後照樣給表單——他總得有辦法往下走。 */}
-      {indexers.origin === 'bundled' && <Unreachable indexers={indexers} />}
-      <ExistingIndexer
-        indexers={indexers}
-        connecting={connecting}
-        onConnect={onConnect}
-        onSkip={onSkip}
-      />
-      {connected && <AddedSites indexers={indexers} controls={sites} />}
+      {indexers.sites.length > 0 && <AddedSites indexers={indexers} controls={sites} />}
       {/* 既有 Prowlarr 也加得了公開站（M4 票 20）；Berth 不移除它的站。 */}
-      {connected && indexers.origin === 'existing' && addSites}
+      <AddSites indexers={indexers} applying={applying} controls={sites} onApply={onApply} />
     </>
   )
 }
 
 /** 剖面：這個泊位接上的是哪一台 Prowlarr、加了幾站。 */
-function IndexerCutaway({ indexers, bundled }: { indexers: IndexerSetup; bundled: boolean }) {
+function IndexerCutaway({
+  indexers,
+  service,
+  bundled,
+}: {
+  indexers: IndexerSetup
+  service: SetupService | undefined
+  bundled: boolean
+}) {
   const { t } = useTranslation()
 
   return (
@@ -455,7 +421,7 @@ function IndexerCutaway({ indexers, bundled }: { indexers: IndexerSetup; bundled
       <CutawayRow term={t('connect.field.baseUrl')} value={indexers.base_url || '—'} />
       <CutawayRow
         term={t('connect.field.apiKey')}
-        value={t(indexers.api_key_present ? 'jellyfin.cutaway.held' : 'jellyfin.cutaway.absent')}
+        value={t(keyState(indexers, service))}
         muted={!indexers.api_key_present}
       />
       <CutawayRow
@@ -467,109 +433,15 @@ function IndexerCutaway({ indexers, bundled }: { indexers: IndexerSetup; bundled
   )
 }
 
-/** 既有：Prowlarr 位址 + key，有「測試」。 */
-function ExistingIndexer({
-  indexers,
-  connecting,
-  onConnect,
-  onSkip,
-}: {
-  indexers: IndexerSetup
-  connecting: boolean
-  onConnect: (input: IndexerConnectInput) => void
-  /** 設定頁不給；精靈的「之後再說」在頁尾。 */
-  onSkip?: () => void
-}) {
-  const { t } = useTranslation()
-  const [baseUrl, setBaseUrl] = useState(indexers.base_url)
-  const [apiKey, setApiKey] = useState('')
-  const [checked, setChecked] = useState(false)
-  // 上一次測試的那一條，只在欄位還是測的那個位址、而且不在測試中時畫（M4 票 21）：換了位址，
-  // 它說的就是另一台——狀態列不停在上一次。
-  const tested = baseUrl.trim() === indexers.base_url
-  const row =
-    tested && !connecting ? indexers.steps.find((step) => step.step === 'prowlarr') : undefined
-
-  function submit(event: FormEvent) {
-    event.preventDefault()
-    setChecked(true)
-    if (addressError(t, baseUrl)) return
-    onConnect({ base_url: baseUrl.trim(), api_key: apiKey.trim() })
-  }
-
-  return (
-    <section className="mt-6">
-      <h3 className="label text-ink-dim">{t('indexer.existing.title')}</h3>
-      <p className="mt-2 max-w-prose text-sm text-ink-dim">{t('indexer.existing.lede')}</p>
-
-      <form onSubmit={submit} noValidate className="mt-4 grid gap-4">
-        <Field
-          label={t('connect.field.baseUrl')}
-          value={baseUrl}
-          inputMode="url"
-          placeholder="http://192.168.1.10:9696"
-          hint={
-            <>
-              {t('indexer.existing.hint')}
-              {pointsAtBerth(baseUrl) && <LoopbackHint />}
-            </>
-          }
-          onChange={(event) => setBaseUrl(event.target.value)}
-          error={checked ? addressError(t, baseUrl) : undefined}
-        />
-        <PasswordField
-          label={t('connect.field.apiKey')}
-          value={apiKey}
-          autoComplete="off"
-          onChange={(event) => setApiKey(event.target.value)}
-        />
-        <div className={`grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] ${STICKY_ACTION}`}>
-          <PrimaryButton type="submit" busy={connecting}>
-            {connecting ? t('indexer.existing.testing') : t('indexer.existing.test')}
-          </PrimaryButton>
-          {onSkip && (
-            <GhostButton type="button" busy={connecting} onClick={onSkip}>
-              {t('indexer.skip')}
-            </GhostButton>
-          )}
-        </div>
-      </form>
-
-      {row && (
-        <ol className="mt-4 grid gap-3" data-testid="sites">
-          <StepLine
-            label="Prowlarr"
-            service="Prowlarr"
-            endpoint="GET /api/v1/system/status"
-            row={row}
-            // 連上了、0 站的待處理不是「尚未執行」（`indexer.existing_prowlarr_step`，M4 票 31）。
-            status={row.status === 'pending' ? t('indexer.noSitesYet') : undefined}
-            // 照上一次測試的理由與測過的位址（不是欄位裡正在改的那一個）說補法（M4 票 17）。
-            fix={existingFix(t, indexers)}
-          />
-        </ol>
-      )}
-    </section>
-  )
-}
-
 /**
- * 既有索引站測不過時的補法：太舊就升級，key 不對就說去哪裡複製（M4 票 20），位址指到 Berth 自己就說
- * localhost，其餘是一般的那一句。
+ * 右欄的 API key 那一格跟著最近一次連線測試（M4 票 39，審計 s3-14）：連得上才說「已取得」，key 被拒說
+ * 不被接受，其餘（連不上、還在等、還沒測）只知道存下了。
  */
-function existingFix(t: TFunction, indexers: IndexerSetup): string {
-  if (indexers.reason === 'auth_required') {
-    return t('connection.fix.prowlarrKey')
-  }
-  if (indexers.reason === 'version_unsupported') {
-    // 「至少要 X，這一台是 Y」：版本在那一條纜繩的實測值上（`indexer.outdated_step`）。
-    const version = indexers.steps.find((row) => row.step === 'prowlarr')?.detail ?? ''
-    return t('connection.fix.outdated', { floor: VERSION_FLOOR.prowlarr, version })
-  }
-  const scheme = schemeFix(indexers.reason)
-  if (scheme) return t(scheme)
-  if (pointsAtBerth(indexers.base_url)) return t('connect.loopback')
-  return t('indexer.existing.fix')
+function keyState(indexers: IndexerSetup, service: SetupService | undefined) {
+  if (!indexers.api_key_present) return 'indexer.cutaway.keyAbsent'
+  if (service?.state === 'ok') return 'indexer.cutaway.keyHeld'
+  if (service?.reason === 'auth_required') return 'indexer.cutaway.keyRejected'
+  return 'indexer.cutaway.keyUnverified'
 }
 
 /** 連不上套件內的 Prowlarr 時，畫面仍然要說得出下一步。 */

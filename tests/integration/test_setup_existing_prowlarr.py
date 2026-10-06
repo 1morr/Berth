@@ -1,7 +1,7 @@
 """既有 Prowlarr 不再是死路（M4 票 20，2026-09-30 精靈審查）。
 
 - **0 站不算完成**：零站的 Berth 什麼都搜不到。連上了、一站都沒有，頁 4 停在待處理，按「之後再說」
-  才往下；有站就完成。服務頁的二選一、「重新測試」與頁 4 的既有表單三條入口同一條規則。
+  才往下；有站就完成。服務頁的二選一（頁 4 的既有表單也是它，M4 票 39）與「重新測試」同一條規則。
 - **舊版說出版本**：1.3.2 之前沒有 `/ping`（回介面的 HTML），版本從 `system/status` 讀
   （帶 key；2026-09-30 對 `bad-prowlarr-old` 1.0.1.2220 實測）。
 - **key 錯是 `auth_required`**，不是「連不上」。
@@ -29,7 +29,6 @@ from berth.models import SetupSettings
 from berth.services.clients import BundledServices
 from berth.services.indexer import (
     apply_default_indexers,
-    connect_indexer,
     read_indexer_status,
     remove_indexer,
     skip_indexers,
@@ -86,35 +85,31 @@ async def choose_existing(session: AsyncSession, factory: FakeClientFactory) -> 
     )
 
 
-async def connect_existing(session: AsyncSession, factory: FakeClientFactory) -> None:
-    await connect_indexer(session, factory, base_url=HOME, api_key="theirs")
-
-
-ENTRIES = {"choose": choose_existing, "connect": connect_existing}
+async def last_reason(session: AsyncSession) -> ConnectionReason | None:
+    test = (await read_settings(session, SetupSettings)).choices[ServiceKind.PROWLARR].test
+    return test.reason if test is not None else None
 
 
 class TestZeroSites:
-    @pytest.mark.parametrize("entry", ENTRIES)
     async def test_a_prowlarr_with_no_sites_keeps_the_wizard_on_page_four(
-        self, session: AsyncSession, roots: dict[str, Path], entry: str
+        self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
         factory = await ready(session, roots)
 
-        await ENTRIES[entry](session, factory)
+        await choose_existing(session, factory)
 
         assert (await read_status(session)).current_step == STEP_INDEXER
         (step,) = (await read_settings(session, SetupSettings)).indexer.steps
         # 待處理，不是失敗：連上了，只是還沒有站。細節照樣是站數。
         assert (step.status, step.detail) == (StepStatus.PENDING, "0")
 
-    @pytest.mark.parametrize("entry", ENTRIES)
     async def test_a_prowlarr_with_sites_settles_the_page(
-        self, session: AsyncSession, roots: dict[str, Path], entry: str
+        self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
         factory = await ready(session, roots)
         factory.prowlarr_ = type(factory.prowlarr_)(indexers=[site(7, "animebytes")])
 
-        await ENTRIES[entry](session, factory)
+        await choose_existing(session, factory)
 
         assert (await read_status(session)).current_step > STEP_INDEXER
 
@@ -144,14 +139,13 @@ class TestZeroSites:
 class TestOldProwlarr:
     """`/ping` 回 HTML（1.3.2 之前沒有它），版本照樣說得出來。"""
 
-    @pytest.mark.parametrize("entry", ENTRIES)
     async def test_a_prowlarr_without_ping_says_its_version(
-        self, session: AsyncSession, roots: dict[str, Path], entry: str
+        self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
         factory = await ready(session, roots)
         factory.prowlarr_.version = OLD
 
-        await ENTRIES[entry](session, factory)
+        await choose_existing(session, factory)
 
         setup = await read_settings(session, SetupSettings)
         test = setup.choices[ServiceKind.PROWLARR].test
@@ -168,14 +162,11 @@ class TestOldProwlarr:
             unsupported_message(OLD),
         )
 
-    @pytest.mark.parametrize("entry", ENTRIES)
-    async def test_the_floor_passes(
-        self, session: AsyncSession, roots: dict[str, Path], entry: str
-    ) -> None:
+    async def test_the_floor_passes(self, session: AsyncSession, roots: dict[str, Path]) -> None:
         factory = await ready(session, roots)
         factory.prowlarr_.version = AT_FLOOR
 
-        await ENTRIES[entry](session, factory)
+        await choose_existing(session, factory)
 
         test = (await read_settings(session, SetupSettings)).choices[ServiceKind.PROWLARR].test
         assert test is not None
@@ -183,21 +174,18 @@ class TestOldProwlarr:
 
 
 class TestWrongKey:
-    @pytest.mark.parametrize("entry", ENTRIES)
     async def test_a_rejected_key_is_auth_required(
-        self, session: AsyncSession, roots: dict[str, Path], entry: str
+        self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
         factory = await ready(session, roots)
         factory.prowlarr_.key_rejected = True
 
-        await ENTRIES[entry](session, factory)
+        await choose_existing(session, factory)
 
         setup = await read_settings(session, SetupSettings)
         test = setup.choices[ServiceKind.PROWLARR].test
         assert test is not None
         assert (test.state, test.reason) == (ConnectionState.FAILED, ConnectionReason.AUTH_REQUIRED)
-        status = await read_indexer_status(session, factory)
-        assert status.reason is ConnectionReason.AUTH_REQUIRED
 
 
 class TestOtherFailures:
@@ -209,11 +197,9 @@ class TestOtherFailures:
         factory = await ready(session, roots)
         factory.prowlarr_.ping_error = ProtocolMismatchError("/api/v1/system/status: not JSON")
 
-        await connect_existing(session, factory)
+        await choose_existing(session, factory)
 
-        assert (await read_indexer_status(session, factory)).reason is (
-            ConnectionReason.PROTOCOL_MISMATCH
-        )
+        assert await last_reason(session) is ConnectionReason.PROTOCOL_MISMATCH
 
     async def test_nothing_answering_is_still_unreachable(
         self, session: AsyncSession, roots: dict[str, Path]
@@ -221,9 +207,9 @@ class TestOtherFailures:
         factory = await ready(session, roots)
         factory.prowlarr_.ping_error = ServiceUnavailableError("connection refused")
 
-        await connect_existing(session, factory)
+        await choose_existing(session, factory)
 
-        assert (await read_indexer_status(session, factory)).reason is ConnectionReason.UNREACHABLE
+        assert await last_reason(session) is ConnectionReason.UNREACHABLE
 
 
 class TestAddingToAnExistingProwlarr:

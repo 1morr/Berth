@@ -1241,6 +1241,12 @@ split-cour 的第一批被播出日比對整批擋在審核，改正一次並套
   變數，不再要 `export CONFIG_ROOT`。精靈那一段多守三件事：qBittorrent 不收的介面密碼停在頁 2、全域預設儲存路徑
   改掉之後送單照常、完成時照頁序再驗。
 ### Removed
+- **頁 4 的既有 Prowlarr 表單改用頁 1、2 那一份，`POST /api/setup/indexers/connect` 拿掉**（M4 票 39，brief §19 D5、
+  審計 E-2）：**破壞性**——既有 Prowlarr 改送 `POST /api/setup/services/prowlarr`（`{origin: "existing", base_url,
+  api_key}`），精靈的 `choices` 只剩這一條寫入路徑，換台時一律經過同一份清理；`GET /api/setup/indexers` 不再回
+  `reason`（只給那份表單選補法，連線測試的理由在 `GET /api/setup/status` 的 `services`）。畫面上 key 錯時與頁 1、2
+  同一個錯誤版面（有「測試結果」那一列、補法說去哪裡複製 key），右欄的 API key 那一格跟著最近一次連線測試，失敗時
+  不再寫「已取得」；設定 → Prowlarr 的位址與 key 改在與另兩頁同一個連線區。
 - **BTH 4 只接 Prowlarr：通用 Torznab 端點與 Jackett 拿掉**（M4 票 37，brief §19 D3，2026-10-06 使用者拍板）：
   **破壞性**——`POST /api/setup/indexers/connect` 不再收 `kind`（只收 `{base_url, api_key}`）、`GET /api/setup/indexers`
   不再回 `kind`、`IndexerProblem` 與 `StepFailure` 少 `no_search`、`SiteSearchOut.indexer_id` 一律是整數、

@@ -398,8 +398,7 @@ async def _check_indexer(session: AsyncSession, factory: ServiceClientFactory) -
     if not settings.base_url:
         return _Outcome(HealthStatus.UNKNOWN, configured=False)
 
-    probe = await probe_indexer(factory, settings.base_url, settings.api_key)
-    step = probe.step
+    step = await probe_indexer(factory, settings.base_url, settings.api_key)
     if step.status is StepStatus.FAILED:
         # 失敗那一輪的 `detail` 不是站數（版本太舊時是版本），
         # 而健康頁把它標成「索引站」；該說的都在原文裡（M4 票 17 的 code-review）。

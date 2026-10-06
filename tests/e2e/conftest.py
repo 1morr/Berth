@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import time
 from collections import Counter
 from collections.abc import Callable, Iterator
@@ -24,6 +25,7 @@ import pytest
 from berth.models import DEFAULT_BUNDLED_LIBRARIES
 from tests.e2e.harness import (
     ADMIN,
+    BERTH_CONTAINER,
     GLOBAL_SAVE_PATH,
     PASSWORD,
     QBITTORRENT_CONTAINER,
@@ -127,6 +129,10 @@ def configured(berth: httpx.Client) -> None:
 
     _secure_qbittorrent(berth)
     _move_the_global_save_path()
+    _prowlarr_as_existing(berth)
+    choose_bundled("prowlarr")
+    # 從既有換回套件內是換了一台：既有那一台的「之後再說」不跟過來（M4 票 39）。
+    assert ok(berth.get("/setup/indexers"))["skipped"] is False
     ok(berth.post("/setup/indexers/skip", json={"skipped": True}))
     tmdb = ok(berth.post("/setup/tmdb/test", json={"api_key": tmdb_key}))
     assert tmdb["verified"], tmdb["steps"]
@@ -177,6 +183,40 @@ def _secure_qbittorrent(berth: httpx.Client) -> None:
         ("web_ui_password", "skipped")
     ], read["steps"]
     assert read["web_ui_username"] == ADMIN, read
+
+
+def _prowlarr_as_existing(berth: httpx.Client) -> None:
+    """頁 4 選「既有」：與頁 1、2 同一支 `POST /setup/services/prowlarr`（M4 票 39）。
+
+    拿套件內那一台的位址當作使用者自己的：key 錯是 `auth_required`（不是連不上），帶對的 key 連上。
+    對的 key 從 berth 唯讀掛載的 `config.xml` 讀——使用者是從 Prowlarr 的「設定 → 一般」抄。
+    最後按「之後再說」，換回套件內時看它有沒有被清掉（呼叫端）。
+    """
+    status = ok(berth.get("/setup/status"))
+    (bundled,) = [row for row in status["services"] if row["kind"] == "prowlarr"]
+
+    def existing(api_key: str) -> Json:
+        chosen = ok(
+            berth.post(
+                "/setup/services/prowlarr",
+                json={"origin": "existing", "base_url": bundled["base_url"], "api_key": api_key},
+            )
+        )
+        (row,) = [row for row in chosen["services"] if row["kind"] == "prowlarr"]
+        return row
+
+    rejected = existing("0" * 32)
+    assert (rejected["origin"], rejected["state"], rejected["reason"]) == (
+        "existing",
+        "failed",
+        "auth_required",
+    ), rejected
+    config = in_container("cat", "/ext/prowlarr/config.xml", container=BERTH_CONTAINER)
+    found = re.search(r"<ApiKey>(\w+)</ApiKey>", config)
+    assert found, config
+    accepted = existing(found.group(1))
+    assert (accepted["state"], accepted["reason"]) == ("ok", "connected"), accepted
+    ok(berth.post("/setup/indexers/skip", json={"skipped": True}))
 
 
 def _move_the_global_save_path() -> None:

@@ -1,6 +1,6 @@
 """既有 Prowlarr 的版本下限（M4 票 17、brief §20.14、plan §9.5）。
 
-精靈的兩條入口（頁 4 的既有表單 `connect_indexer`、服務頁的二選一 `choose_service` 與「重新測試」）
+精靈的入口（服務頁的二選一 `choose_service`——頁 4 的既有表單也是它，M4 票 39——與「重新測試」）
 與健康檢查用同一個判斷、同一句原文；低於下限停在 Prowlarr 頁，說出目前版本與下限。
 雙向：比下限舊一版的擋、剛好等於下限的過。
 """
@@ -15,8 +15,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from berth.adapters.prowlarr import unsupported_message
 from berth.domain import (
-    ConnectionReason,
-    ConnectionState,
     HealthStatus,
     ServiceKind,
     ServiceOrigin,
@@ -26,14 +24,11 @@ from berth.domain import (
 from berth.models import SetupSettings, SetupStep
 from berth.services.clients import BundledServices
 from berth.services.health import check_health
-from berth.services.indexer import connect_indexer
 from berth.services.routes import build_routes
 from berth.services.settings import read_settings
 from berth.services.setup import (
-    STEP_INDEXER,
     ServiceConnection,
     choose_service,
-    read_status,
     retest_service,
 )
 from tests.integration.arrange import NOW, arrange, factory_for
@@ -58,46 +53,13 @@ async def ready(session: AsyncSession, roots: dict[str, Path], version: str) -> 
 
 
 class TestWizard:
-    async def test_the_existing_form_stops_below_the_floor_and_says_both_versions(
-        self, session: AsyncSession, roots: dict[str, Path]
-    ) -> None:
-        factory = await ready(session, roots, BELOW_FLOOR)
-
-        status = await connect_indexer(session, factory, base_url="http://nas:9696", api_key="k")
-
-        (step,) = status.steps
-        assert (step.status, step.detail) == (StepStatus.FAILED, BELOW_FLOOR)
-        assert step.error == unsupported_message(BELOW_FLOOR)
-        assert BELOW_FLOOR in step.error and "1.3.2" in step.error
-        setup = await read_settings(session, SetupSettings)
-        test = setup.choices[ServiceKind.PROWLARR].test
-        assert test is not None
-        assert (test.state, test.reason) == (
-            ConnectionState.FAILED,
-            ConnectionReason.VERSION_UNSUPPORTED,
-        )
-        assert (await read_status(session)).current_step == STEP_INDEXER
-        # 既有表單照理由選補法：叫人升級，不叫人改位址。
-        assert status.reason is ConnectionReason.VERSION_UNSUPPORTED
-
-    async def test_the_existing_form_passes_exactly_at_the_floor(
-        self, session: AsyncSession, roots: dict[str, Path]
-    ) -> None:
-        factory = await ready(session, roots, AT_FLOOR)
-
-        status = await connect_indexer(session, factory, base_url="http://nas:9696", api_key="k")
-
-        # 過了下限；替身一站都沒有，所以這一頁待處理而不是完成（M4 票 20）。
-        assert status.steps[0].status is StepStatus.PENDING
-        assert status.reason is ConnectionReason.CONNECTED
-
     @pytest.mark.parametrize(
         ("version", "passes"), [(BELOW_FLOOR, False), (AT_FLOOR, True)], ids=["below", "at"]
     )
     async def test_choosing_and_retesting_use_the_same_gate(
         self, session: AsyncSession, roots: dict[str, Path], version: str, passes: bool
     ) -> None:
-        """服務頁的二選一與「重新測試」不經過頁 4 的表單，一樣要擋（它們會改寫這一頁的結果）。"""
+        """服務頁的二選一與「重新測試」同一道閘：低於下限的那一條說出兩個版本，剛好等於下限的過。"""
         factory = await ready(session, roots, version)
         bundled = BundledServices(targets=COMPOSE, prowlarr_api_key="")
 

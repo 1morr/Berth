@@ -330,7 +330,6 @@ WRITES: tuple[tuple[str, str, object], ...] = (
     ("POST", "/api/setup/indexers/apply", {"indexers": ["nyaasi"]}),
     ("POST", "/api/setup/indexers/test", {"indexers": ["nyaasi"]}),
     ("PUT", "/api/setup/indexers/login", {"username": "a", "password": "b"}),
-    ("POST", "/api/setup/indexers/connect", {"base_url": "http://x"}),
     ("POST", "/api/setup/indexers/skip", {}),
     ("POST", "/api/setup/tmdb/test", {"api_key": "k"}),
     ("POST", "/api/setup/routes", {}),
@@ -965,16 +964,45 @@ class TestSource:
         assert [row["definition_name"] for row in body["sites"]] == ["nyaasi", "mikan"]
 
     def test_an_existing_prowlarr_is_tested_and_remembered(self, client: TestClient) -> None:
-        """既有表單只送位址與 key（M4 票 37：沒有「接法」）。"""
-        body = client.post(
-            "/api/setup/indexers/connect",
-            json={"base_url": "http://nas:9696/", "api_key": "the-key"},
-        ).json()
+        """頁 4 的既有表單就是頁 1、2 那一份（M4 票 39）：送服務頁的二選一，只帶位址與 key。"""
+        chosen = _choose(client, "prowlarr", base_url="http://nas:9696/", api_key="the-key")
+        assert chosen.status_code == 200
 
+        body = client.get("/api/setup/indexers").json()
         assert body["origin"] == "existing"
         assert [row["step"] for row in body["steps"]] == ["prowlarr"]
         # 尾斜線在存下來之前就削掉，之後組網址才不會出現兩條斜線。
         assert body["base_url"] == "http://nas:9696"
+
+    def test_switching_to_another_prowlarr_starts_page_four_over(self, client: TestClient) -> None:
+        """換了一台：頁 4 的結果說的是原本那一台，經 `_start_over` 清掉（M4 票 39）。
+
+        從既有換回套件內才看得出來：換到既有時，連線測試本來就會蓋掉這一頁的纜繩。
+        """
+        _choose(client, "prowlarr", base_url="http://nas:9696", api_key="theirs")
+        client.post("/api/setup/indexers/apply", json={"indexers": ["nyaasi"]})
+        client.post("/api/setup/indexers/skip", json={})
+
+        _choose(client, "prowlarr")
+
+        body = client.get("/api/setup/indexers").json()
+        assert "nyaasi" not in [row["step"] for row in body["steps"]]
+        # 「之後再說」說的也是原本那一台。
+        assert body["skipped"] is False
+
+    def test_choosing_the_same_prowlarr_again_keeps_page_four(self, client: TestClient) -> None:
+        """同一台再選一次（使用者再點一次套件內）：不清，介面登入、加站的結果與「之後再說」留著。"""
+        client.post("/api/setup/indexers/apply", json={"indexers": ["nyaasi"]})
+        client.put("/api/setup/indexers/login", json={"username": "skipper", "password": "h"})
+
+        client.post("/api/setup/indexers/skip", json={})
+
+        _choose(client, "prowlarr")
+
+        body = client.get("/api/setup/indexers").json()
+        assert body["skipped"] is True
+        assert body["web_ui_username"] == "skipper"
+        assert {"nyaasi", "prowlarr_login"} <= {row["step"] for row in body["steps"]}
 
     def test_sites_can_be_searched_and_removed_after_they_are_added(
         self, client: TestClient, prowlarr: FakeProwlarrClient

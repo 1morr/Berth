@@ -442,7 +442,9 @@ uv run --env-file .env python -m tests.e2e.stack -k m3 # 多給的參數原樣�
   測試會失敗，因為那一輪沒碰到啟動中的那幾秒。所以 `up` 之前先 `build`，不要讓 `up` 之後還有東西要等（缺的 image `up` 會先拉完才啟動任何容器）。
 - 精靈那一段也守著 M4 之後的行為：頁 2 先送一組 qBittorrent 不收的密碼（停在頁 2、說得出被拒），qBittorrent
   的全域預設儲存路徑被改到別處之後建 Route 與送單照常（Berth 不寫也不看全域偏好），完成前停掉 qBittorrent
-  並收回頁 4 的「之後再說」——完成照頁序先送回頁 2、再送回頁 4。
+  並收回頁 4 的「之後再說」——完成照頁序先送回頁 2、再送回頁 4。頁 4 先把套件內那一台當成既有接：錯的 key 是
+  `auth_required`、對的 key（從 berth 唯讀掛載的 `config.xml` 讀）連上，按「之後再說」之後換回套件內，「之後再說」
+  不跟過來（換台的清理，M4 票 39）。
 - 沒有 peer 可以真的下載：`torrents` 容器在 `/data/e2e/staging` 造出三包發佈（檔案清單取自 benchmark
   語料、影片是 `tests/fixtures/e2e/` 的種子，標頭的片長照語料的 TMDB 快照改寫——片長驗證會擋），測試在
   送單之後把它們複製到 qBittorrent 說的下載路徑再叫它 recheck。
@@ -461,7 +463,7 @@ uv run --env-file .env python -m tests.e2e.stack -k m3 # 多給的參數原樣�
 | 流程 | 情境 | port（1280 / 390） |
 | --- | --- | --- |
 | 精靈六頁走完（三頁都選套件內、選之前不發請求；頁 1 建 Jellyfin 管理員成為擁有者、頁 2 沿用 Jellyfin 帳密且打錯密碼被拒、頁 3 改媒體庫清單、頁 4 自設 Prowlarr 登入、每一格停在結果上、回頭再往前、試搜與移除），之後以同一組帳密登入、是管理員 | `bundled` | 8491 / 8501 |
-| 既有服務：三頁都選既有（說出同主機條件與 `COMPOSE_PROFILES` 那一行）、以既有 Jellyfin 的管理員成為擁有者（打錯密碼被拒）、填 qBittorrent 帳密（測試通過就做完、沒有確認鍵）、加 Berth 路徑並選它當寫入目標、貼 Prowlarr 的 key | `mixed` | 8495 / 8505 |
+| 既有服務：三頁都選既有（說出同主機條件與 `COMPOSE_PROFILES` 那一行）、以既有 Jellyfin 的管理員成為擁有者（打錯密碼被拒）、填 qBittorrent 帳密（測試通過就做完、沒有確認鍵）、加 Berth 路徑並選它當寫入目標、貼 Prowlarr 的 key（先貼錯的：與頁 1、2 同一個錯誤版面、右欄不寫「已取得」） | `mixed` | 8495 / 8505 |
 | 冷啟動：服務還在啟動時選套件內，Jellyfin 與 qBittorrent 各自每 3 秒重測到連上，不按重新測試 | `starting` | 8496 / 8506 |
 | 精靈跑完之後：`/setup` 導向設定頁，加一個索引站並試搜、換 TMDB key | `healthy` | 8497 / 8507 |
 | 從作品頁送單，一路走到已入庫 | `import` | 8492 |

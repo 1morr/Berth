@@ -20,8 +20,8 @@ import { SettingsSection } from './SettingsFrame'
  * 二選一、測試那一條、既有服務的表單都是同一個元件，送的也是同一支 `POST /setup/services/{kind}`——
  * 精靈跑完之後那一組端點只有 admin 打得到（`api/gate.py`），命令本來就冪等。
  *
- * Jellyfin 的來源鎖住（擁有者是那一台上的帳號），位址照樣改得了。存完之後頁面重測健康
- * （`onConnected`），結果就在上面那張卡上。
+ * Jellyfin 的來源鎖住（擁有者是那一台上的帳號），位址照樣改得了。存完或使用者按的重新測試之後頁面
+ * 重測健康、重讀那一頁自己的資料（`onConnected`，M4 票 39：Prowlarr 的站那一區看的是測試寫下的結果）。
  */
 export function ServiceConnection({
   kind,
@@ -48,7 +48,10 @@ export function ServiceConnection({
   })
   const retest = useMutation({
     mutationFn: (restart: boolean) => retestService(kind, restart),
-    onSuccess: absorb,
+    onSuccess: (next) => {
+      absorb(next)
+      onConnected()
+    },
   })
 
   return (
@@ -81,7 +84,8 @@ export function ServiceConnection({
           onChoose={(input, done) => choose.mutate(input, { onSuccess: done })}
           onRetest={(restart) => retest.mutate(restart)}
           locked={kind === 'jellyfin' ? t('settings.connection.locked') : undefined}
-          switchWarning={kind === 'qbittorrent' ? t('choice.switchWarning.qbittorrent') : undefined}
+          // Jellyfin 的來源鎖著；另兩個換來源都會清掉那一頁的結果（`_start_over`），先確認。
+          switchWarning={kind === 'jellyfin' ? undefined : t(`choice.switchWarning.${kind}`)}
         />
       )}
     </SettingsSection>

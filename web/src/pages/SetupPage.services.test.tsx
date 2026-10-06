@@ -34,7 +34,7 @@ const APPLY = 'POST /api/setup/qbittorrent/apply'
 const INDEXERS = 'GET /api/setup/indexers'
 const ADD_INDEXERS = 'POST /api/setup/indexers/apply'
 const TEST_SITES = 'POST /api/setup/indexers/test'
-const CONNECT_INDEXER = 'POST /api/setup/indexers/connect'
+const CHOOSE_PROWLARR = 'POST /api/setup/services/prowlarr'
 const SKIP_INDEXERS = 'POST /api/setup/indexers/skip'
 const SET_LOGIN = 'PUT /api/setup/indexers/login'
 const RETEST_PROWLARR = 'POST /api/setup/services/prowlarr/test'
@@ -1654,31 +1654,22 @@ describe('頁 4：Prowlarr 與索引站', () => {
     expect(screen.queryByTestId('added')).not.toBeInTheDocument()
   })
 
-  it('選「既有」只有位址與 API key：沒有「接法」，送出的只有 base_url 與 api_key', async () => {
+  it('選「既有」是頁 1、2 那一份表單：送服務頁的二選一，只有位址與 API key（M4 票 39）', async () => {
     const existingProwlarr = chosen({
       kind: 'prowlarr',
       origin: 'existing',
       base_url: 'http://192.168.1.10:9696',
       reason: 'connected',
-      detail: '',
-    })
-    let connectedYet = false
-    const connected = indexerSetup({
-      origin: 'existing',
-      base_url: 'http://192.168.1.10:9696',
-      candidates: [],
-      steps: [step('prowlarr', 'ok', '1.0.0')],
+      detail: '1',
     })
     const fetchStub = stubApi({
-      [STATUS]: () => ({
-        body: connectedYet
-          ? setupStatus({ ...AT_INDEXER, services: [...ALL_BUNDLED.slice(0, 2), existingProwlarr] })
-          : CHOOSING_INDEXER,
-      }),
-      [INDEXERS]: { body: indexerSetup({ origin: 'existing', base_url: '', candidates: [] }) },
-      [CONNECT_INDEXER]: () => {
-        connectedYet = true
-        return { body: connected }
+      [STATUS]: { body: CHOOSING_INDEXER },
+      [INDEXERS]: { body: indexerSetup({ origin: null, base_url: '', candidates: [] }) },
+      [CHOOSE_PROWLARR]: {
+        body: setupStatus({
+          ...AT_INDEXER,
+          services: [...ALL_BUNDLED.slice(0, 2), existingProwlarr],
+        }),
       },
     })
     const user = userEvent.setup()
@@ -1686,18 +1677,83 @@ describe('頁 4：Prowlarr 與索引站', () => {
     renderInRoute(<SetupPage />)
     await screen.findByRole('heading', { level: 2, name: 'Prowlarr' })
     await user.click(existingCard())
-    expect(screen.queryByRole('radio', { name: /Torznab/ })).not.toBeInTheDocument()
-    expect(screen.queryByRole('group', { name: '接法' })).not.toBeInTheDocument()
-    expect(screen.queryByText(/Torznab/)).not.toBeInTheDocument()
+    // 頁 1、2 的 `ExistingForm`：它自己的那一句提示（M4 票 39）。
+    expect(
+      screen.getByText('在 Prowlarr 的「設定 → 一般 → 安全性」找得到 API key。'),
+    ).toBeInTheDocument()
     await user.type(screen.getByLabelText('位址'), 'http://192.168.1.10:9696')
     await user.type(screen.getByLabelText('API key'), 'the-key')
     await user.click(screen.getByRole('button', { name: '測試連線' }))
 
-    await waitFor(() => expect(called(fetchStub, '/api/setup/indexers/connect')).toBe(true))
-    expect(bodyOf(fetchStub, '/api/setup/indexers/connect')).toEqual({
+    await waitFor(() => expect(called(fetchStub, '/api/setup/services/prowlarr')).toBe(true))
+    expect(bodyOf(fetchStub, '/api/setup/services/prowlarr')).toMatchObject({
+      origin: 'existing',
       base_url: 'http://192.168.1.10:9696',
       api_key: 'the-key',
     })
+  })
+
+  it('key 錯時與頁 1、2 同一個錯誤版面，右欄不寫「已取得」（M4 票 39、審計 s3-14）', async () => {
+    const rejected = chosen({
+      kind: 'prowlarr',
+      origin: 'existing',
+      base_url: 'http://192.168.1.10:9696',
+      state: 'failed',
+      reason: 'auth_required',
+      detail: '',
+      error: '401 Unauthorized',
+    })
+    let chosenYet = false
+    stubApi({
+      [STATUS]: () => ({
+        body: chosenYet
+          ? setupStatus({ ...AT_INDEXER, services: [...ALL_BUNDLED.slice(0, 2), rejected] })
+          : CHOOSING_INDEXER,
+      }),
+      [INDEXERS]: () => ({
+        body: chosenYet
+          ? indexerSetup({
+              origin: 'existing',
+              base_url: 'http://192.168.1.10:9696',
+              api_key_present: true,
+              candidates: [],
+              steps: [step('prowlarr', 'failed', '', '401 Unauthorized')],
+              web_ui_login: false,
+              web_port: null,
+            })
+          : indexerSetup({ origin: null, base_url: '', candidates: [] }),
+      }),
+      [CHOOSE_PROWLARR]: () => {
+        chosenYet = true
+        return {
+          body: setupStatus({ ...AT_INDEXER, services: [...ALL_BUNDLED.slice(0, 2), rejected] }),
+        }
+      },
+    })
+    const user = userEvent.setup()
+
+    renderInRoute(<SetupPage />)
+    await screen.findByRole('heading', { level: 2, name: 'Prowlarr' })
+    await user.click(existingCard())
+    await user.type(screen.getByLabelText('位址'), 'http://192.168.1.10:9696')
+    await user.type(screen.getByLabelText('API key'), 'wrong')
+    await user.click(screen.getByRole('button', { name: '測試連線' }))
+
+    // 「測試結果」那一列與補法：頁 1、2 的 `TestLine`。
+    const result = await screen.findByText('測試結果')
+    expect(result.nextElementSibling).toHaveTextContent('API key 不被接受')
+    expect(
+      screen.getByText(/API key 不對：在 Prowlarr 的「設定 → 一般」複製 API key/),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '重新測試' })).toBeInTheDocument()
+    // 右欄跟著最近一次連線測試：key 被拒時不說「已取得」。
+    const cutaway = within(
+      screen.getByRole('heading', { level: 3, name: 'Prowlarr' }).closest('section')!,
+    )
+    await waitFor(() => expect(cutaway.getByText('http://192.168.1.10:9696')).toBeInTheDocument())
+    const key = cutaway.getByText('API key').nextElementSibling
+    expect(key).not.toHaveTextContent('已取得')
+    expect(key).toHaveTextContent('不被接受')
   })
 
   it('索引站可以之後再說，而且跳過之後畫面上看得出來', async () => {

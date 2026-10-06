@@ -39,7 +39,6 @@ from berth.services.clients import bundled_targets
 from berth.services.indexer import (
     IndexerSetupStatus,
     apply_default_indexers,
-    connect_indexer,
     read_indexer_status,
     remove_indexer,
     search_indexers,
@@ -660,8 +659,6 @@ class IndexerSetupOut(BaseModel):
     #: 讀清單那一次為什麼失敗（M4 票 21）。讀到了是 `null`。
     failure: StepFailure | None
     error: str
-    #: 上一次連線測試的理由；還沒測過是 `null`（M4 票 17：既有表單照它選補法）。
-    reason: ConnectionReason | None
     #: 套件內 Prowlarr 在宿主上發佈的 port（`PROWLARR_PORT`）：瀏覽器開它的介面是「現在的主機名 +
     #: 這個 port」，主機名只有前端知道（同 Jellyfin 深連結）。既有與還沒選是 `null`。
     web_port: int | None
@@ -687,13 +684,6 @@ class IndexerTestIn(BaseModel):
 
 class IndexerTestOut(BaseModel):
     checks: list[SiteCheckOut]
-
-
-class IndexerConnectIn(BaseModel):
-    """既有路徑：Prowlarr 位址 + key。"""
-
-    base_url: str = Field(min_length=1)
-    api_key: str = ""
 
 
 class SiteSearchOut(BaseModel):
@@ -774,20 +764,6 @@ async def put_indexers_login(
         raise login_refusal(refusal) from refusal
     except ValueError as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
-    return IndexerSetupOut.of(result, config)
-
-
-@router.post("/indexers/connect")
-async def post_indexers_connect(
-    session: SessionDep, config: ConfigDep, factory: ClientFactoryDep, body: IndexerConnectIn
-) -> IndexerSetupOut:
-    """既有路徑的「測試」。測不過也存，使用者才能改一個欄位再按一次。"""
-    result = await connect_indexer(
-        session,
-        factory,
-        base_url=body.base_url.rstrip("/"),
-        api_key=body.api_key.strip(),
-    )
     return IndexerSetupOut.of(result, config)
 
 

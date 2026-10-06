@@ -813,7 +813,7 @@ def _auth_failures(outcome: _Outcome, previous: ServiceTest | None) -> int:
 
 
 def _existing_indexer_step(test: ServiceTest) -> SetupStep:
-    """既有 Prowlarr 的那一條纜繩：連得上是站數（0 站是 `pending`，M4 票 20），與頁 4 的既有表單
+    """既有 Prowlarr 的那一條纜繩：連得上是站數（0 站是 `pending`，M4 票 20），與加站之後
     同一份（`indexer.existing_prowlarr_step`）；版本太舊也是它的那一句（M4 票 17）。"""
     if test.state is ConnectionState.OK:
         return existing_prowlarr_step(int(test.detail or 0))

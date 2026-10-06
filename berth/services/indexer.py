@@ -8,8 +8,9 @@
   確認），但 Berth 不移除它的站、不碰它的介面登入。
 - **套件內 Prowlarr 的介面登入**是自己的一條（`set_interface_login`，M4 票 20 從「加入」拆出來），
   必填（M4 票 07）。
-- **既有**：Prowlarr 位址 + API key，有一顆「測試」。**一站都沒有的
-  既有 Prowlarr 這一頁不算完成**（`existing_prowlarr_step`，M4 票 20）：零站的 Berth 什麼都搜不到。
+- **既有**：連線走服務頁的二選一（`setup.choose_service`，M4 票 39：與頁 1、2 同一支、同一份換台
+  清理）。**一站都沒有的既有 Prowlarr 這一頁不算完成**（`existing_prowlarr_step`，M4 票 20）：零站
+  的 Berth 什麼都搜不到。
 
 **逐站的成敗來自新增那一支**：`POST /api/v1/indexer` 會先連一次那個站，連不上就回 400 而且
 什麼都不建立（2026-09-08 實測，brief §20.7）。已經加過的站不重加——同名會被拒（`Should be
@@ -26,10 +27,6 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from berth.adapters.http import (
-    AuthFailedError,
-    ProtocolMismatchError,
-    SchemeMismatchError,
-    SchemeMissingError,
     ServiceError,
 )
 from berth.adapters.indexer import IndexerSearch, SearchQuery
@@ -44,7 +41,6 @@ from berth.adapters.prowlarr import (
 from berth.domain import (
     PROWLARR_LOGIN_STEP,
     PROWLARR_STEP,
-    ConnectionReason,
     ConnectionState,
     ServiceKind,
     ServiceOrigin,
@@ -52,8 +48,7 @@ from berth.domain import (
     StepFailure,
     StepStatus,
 )
-from berth.models import IndexerSettings, ServiceChoice, ServiceTest, SetupSettings, SetupStep
-from berth.models.types import utcnow
+from berth.models import IndexerSettings, SetupSettings, SetupStep
 from berth.services.clients import ServiceClientFactory
 from berth.services.commands import Effect, command
 from berth.services.jellyfin import resolve_interface_login
@@ -167,9 +162,6 @@ class IndexerSetupStatus:
     failure: StepFailure | None
     #: 讀清單那一次的失敗原文（英文），收進「技術細節」。
     error: str
-    #: 上一次連線測試的理由（服務頁與頁 4 的既有表單寫的同一份）；還沒測過是 `None`。
-    #: 既有表單照它選補法：版本太舊時叫人升級，不叫人改位址（M4 票 17）。
-    reason: ConnectionReason | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -220,7 +212,7 @@ async def read_indexer_status(
         # 既有的那一台的介面登入不是 Berth 的事，連讀都不讀（M4 票 20）。
         instance = instance_login(await client.host_config()) if bundled else ""
     except ServiceError as exc:
-        # 既有的那一台連不上由測試那一條說（`reason`），表單照樣畫得出來。
+        # 既有的那一台連不上由服務頁的測試那一條說（`setup.choices`），這裡只說清單讀不到。
         return _view(setup, settings, origin, base_url, reachable=not bundled, error=exc)
     finally:
         await client.aclose()
@@ -331,60 +323,6 @@ async def apply_default_indexers(
         _recount(latest, sites)
 
     # 逐站加完要一分鐘上下，這段時間裡第 7 步可能已經寫進同一組設定（M2 票 15）。
-    await update_settings(session, SetupSettings, record)
-    return await read_indexer_status(session, factory)
-
-
-@command(Effect.REVERSIBLE)
-async def connect_indexer(
-    session: AsyncSession,
-    factory: ServiceClientFactory,
-    *,
-    base_url: str,
-    api_key: str,
-) -> IndexerSetupStatus:
-    """既有路徑的「測試」：先存再測，測不過也存（與服務頁的連線表單同一個規矩）。
-
-    **這就是選了「既有」**（M4 票 15）：頁 4 與設定頁的既有表單走這一支。
-    選擇記成既有，Berth 從此不替它加站、不設它的登入（票 05）。
-    """
-
-    def remember(settings: IndexerSettings) -> None:
-        settings.base_url = base_url
-        settings.api_key = api_key
-
-    await update_settings(session, IndexerSettings, remember)
-
-    probe = await probe_indexer(factory, base_url, api_key)
-    step = probe.step if probe.sites is None else existing_prowlarr_step(probe.sites)
-    moment = utcnow()
-
-    def record(latest: SetupSettings) -> None:
-        previous = latest.choices.get(ServiceKind.PROWLARR)
-        if previous is not None and not previous.is_at(ServiceOrigin.EXISTING, base_url):
-            # 換了一台：原本那一台的介面登入紀錄說的不是它（`setup._start_over` 同一條）。
-            latest.indexer.web_ui_username = ""
-            latest.indexer.web_ui_password_hash = ""
-        latest.indexer.steps = [step]
-        latest.indexer.skipped = False
-        latest.choices = {
-            **latest.choices,
-            ServiceKind.PROWLARR: ServiceChoice(
-                origin=ServiceOrigin.EXISTING,
-                base_url=base_url,
-                test=ServiceTest(
-                    # 連線的成敗看探測本身：0 站是連上了、這一頁還沒完（M4 票 20）。
-                    state=ConnectionState.OK
-                    if probe.reason is ConnectionReason.CONNECTED
-                    else ConnectionState.FAILED,
-                    reason=probe.reason,
-                    detail=step.detail,
-                    checked_at=moment,
-                ),
-            ),
-        }
-
-    # 測試在路上的那幾秒裡，TMDB 頁可能已經寫進同一組設定（M2 票 15）。
     await update_settings(session, SetupSettings, record)
     return await read_indexer_status(session, factory)
 
@@ -711,41 +649,25 @@ async def _wait_for_restart(client: ProwlarrClient, *, sleep: Sleeper) -> None:
     raise ServiceError("prowlarr did not come back after the credentials were set")
 
 
-@dataclass(frozen=True, slots=True)
-class IndexerProbe:
-    step: SetupStep
-    #: 給服務頁的理由：版本太舊（M4 票 17）、key 不被接受、回的不是它（M4 票 20），其餘是連不上。
-    reason: ConnectionReason
-    #: 連上的 Prowlarr 有幾站。沒連上是 `None`。
-    sites: int | None = None
-
-
 @command(Effect.READ)
-async def probe_indexer(factory: ServiceClientFactory, base_url: str, api_key: str) -> IndexerProbe:
-    """那個索引站位址現在回得出什麼。
-
-    精靈第 6 步的既有路徑與健康檢查的第三項用的是同一支：兩者問的都是「這個端點還能不能
-    搜」，分成兩份實作只會讓其中一份先過期（票 10）。
+async def probe_indexer(factory: ServiceClientFactory, base_url: str, api_key: str) -> SetupStep:
+    """那個 Prowlarr 現在回得出什麼：健康檢查的第三項（精靈的連線測試是 `setup._test_connection`）。
 
     **Prowlarr 從 `system/status` 問起，不問 `/ping`**（M4 票 20）：1.3.2 之前沒有 `/ping`，它回
     介面的 HTML（1.0.1 實測），版本就說不出來了；`system/status` 從第一版就有、帶 key 才答，所以
-    它同時驗了 key（錯的是 401 → `auth_required`）。
+    它同時驗了 key。測不過的原文照錄在那一條上。
     """
     prowlarr = factory.prowlarr(base_url, api_key)
     try:
         status = await prowlarr.status()
         if not status.supported:
-            return IndexerProbe(
-                step=outdated_step(status.version),
-                reason=ConnectionReason.VERSION_UNSUPPORTED,
-            )
+            return outdated_step(status.version)
         indexers = await prowlarr.indexers()
     except ServiceError as exc:
-        return _failed_probe(exc)
+        return failed_step(PROWLARR_STEP, exc)
     finally:
         await prowlarr.aclose()
-    step = SetupStep(key=PROWLARR_STEP, status=StepStatus.OK, detail=str(len(indexers)))
-    return IndexerProbe(step=step, reason=ConnectionReason.CONNECTED, sites=len(indexers))
+    return SetupStep(key=PROWLARR_STEP, status=StepStatus.OK, detail=str(len(indexers)))
 
 
 def existing_prowlarr_step(sites: int) -> SetupStep:
@@ -774,22 +696,6 @@ def outdated_step(version: str) -> SetupStep:
         params={"version": version},
         error=unsupported_message(version),
     )
-
-
-def _failed_probe(exc: ServiceError) -> IndexerProbe:
-    """測不過：原文照錄，理由分得出 key 不對與回的不是它（M4 票 20）、位址的協定寫錯（票 25），
-    其餘是連不上。"""
-    if isinstance(exc, AuthFailedError):
-        reason = ConnectionReason.AUTH_REQUIRED
-    elif isinstance(exc, ProtocolMismatchError):
-        reason = ConnectionReason.PROTOCOL_MISMATCH
-    elif isinstance(exc, SchemeMismatchError):
-        reason = ConnectionReason.SCHEME_MISMATCH
-    elif isinstance(exc, SchemeMissingError):
-        reason = ConnectionReason.SCHEME_MISSING
-    else:
-        reason = ConnectionReason.UNREACHABLE
-    return IndexerProbe(step=failed_step(PROWLARR_STEP, exc), reason=reason)
 
 
 def _target(setup: SetupSettings, settings: IndexerSettings) -> tuple[ServiceOrigin | None, str]:
@@ -932,10 +838,4 @@ def _view(
         else "",
         failure=failure_of_error(error)[0] if error is not None else None,
         error=message(error) if error is not None else "",
-        reason=_last_reason(setup),
     )
-
-
-def _last_reason(setup: SetupSettings) -> ConnectionReason | None:
-    choice = setup.choices.get(ServiceKind.PROWLARR)
-    return choice.test.reason if choice is not None and choice.test is not None else None

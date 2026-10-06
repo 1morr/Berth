@@ -264,9 +264,6 @@ export type SiteFailure = NonNullable<SiteCheck['reason']>
 
 export type IndexerSetup = Schemas['IndexerSetupOut']
 
-/** 既有 Prowlarr 的連線表單。 */
-export type IndexerConnectInput = Schemas['IndexerConnectIn']
-
 export type TmdbSetup = Schemas['TmdbSetupOut']
 
 /** 試搜的整份結果：逐站一列（票 06e）。 */
@@ -297,10 +294,6 @@ export function applyIndexers(indexers: string[]): Promise<IndexerSetup> {
 /** 精靈與設定頁的介面登入：只換套件內 Prowlarr 的介面登入，等它重啟回來。 */
 export function setIndexerLogin(login: InterfaceLogin): Promise<IndexerSetup> {
   return apiPut<IndexerSetup>('/setup/indexers/login', login)
-}
-
-export function connectIndexer(body: IndexerConnectInput): Promise<IndexerSetup> {
-  return apiPost<IndexerSetup>('/setup/indexers/connect', body)
 }
 
 export function skipIndexers(skipped: boolean): Promise<IndexerSetup> {

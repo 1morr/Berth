@@ -284,6 +284,8 @@ const zhHant = {
         '等到上限了，{{kind}} 這個主機名上回應的還是別的東西。確認 compose 裡那個服務名對應的是它，或改選「既有」。',
       apiKeyMissing:
         '唯讀掛載與環境變數都讀不到 Prowlarr 的 API key。到 Prowlarr 的「設定 → 一般 → 安全性」抄下來貼在下面，仍然是套件內。',
+      apiKeyEmpty:
+        '你自己的 Prowlarr 要一把 API key 才連得上：在它的「設定 → 一般 → 安全性」複製，貼進上面的欄位再測一次。',
       prowlarrMount:
         'Berth 讀到的 API key 不被接受。Berth 每次測試都重讀唯讀掛載 /ext/prowlarr 裡的 config.xml，在 Prowlarr 重新產生 key 也跟得上：確認 berth 的 compose 有把 ${CONFIG_ROOT}/prowlarr 掛進去，再按「重新測試」。',
       whitelist:
@@ -424,8 +426,6 @@ const zhHant = {
     cutaway: {
       server: '這台 Jellyfin',
       apiKey: 'API key',
-      held: '已取得',
-      absent: '尚未取得',
       libraries: '媒體庫',
     },
     version: {
@@ -621,7 +621,6 @@ const zhHant = {
       '這個泊位的事做完了。Berth 沒有改這台 qBittorrent 的任何偏好，它的下載走自己的分類。',
   },
   indexer: {
-    noSitesYet: '還沒有站',
     title: 'Prowlarr',
     lede: {
       choose:
@@ -648,7 +647,12 @@ const zhHant = {
       bundled: '套件內 Prowlarr',
       existing: '你自己的 Prowlarr',
       added: '已加入',
+      keyHeld: '已取得',
+      keyRejected: '不被接受',
+      keyUnverified: '已存下，還沒驗證',
+      keyAbsent: '尚未取得',
     },
+    connectFirst: '先在上面接上 Prowlarr，這裡才讀得到它的站。',
     add: {
       title: '加站',
       lede: '按「測試」時 Prowlarr 會現場連一次那個站，什麼都不建立；通過的才勾得起來。公開站有幾個連不上是常態，不影響其他站。每一站的說明是 Prowlarr 定義自帶的原文。',
@@ -694,14 +698,6 @@ const zhHant = {
       required: '必填',
       save: '設定介面登入',
       saving: '設定中…',
-    },
-    existing: {
-      title: '接入你自己的 Prowlarr',
-      lede: '填它的位址與 API key。',
-      test: '測試連線',
-      testing: '測試中…',
-      fix: '確認位址、port 與 API key 都對，再確認那台服務從 Berth 這個容器連得到。',
-      hint: 'Prowlarr 的位址，例如 http://192.168.1.10:9696。API key 在它的「設定 → 一般」。',
     },
     added: {
       title: '已加入',
@@ -3372,6 +3368,8 @@ const en: Translations<typeof zhHant> = {
         'The limit has passed and something other than {{kind}} still answers on that hostname. Check that the compose service by that name is really it, or choose “Existing”.',
       apiKeyMissing:
         'Neither the read-only mount nor the environment has the Prowlarr API key. Copy it from Settings → General → Security in Prowlarr and paste it below; it stays bundled.',
+      apiKeyEmpty:
+        'Your own Prowlarr needs an API key before Berth can connect: copy it from Settings → General → Security, paste it into the field above and test again.',
       prowlarrMount:
         'Prowlarr does not accept the API key Berth read. Berth rereads config.xml from the read-only mount /ext/prowlarr on every test, so a key regenerated in Prowlarr is picked up: check that berth’s compose mounts ${CONFIG_ROOT}/prowlarr, then press “Test again”.',
       whitelist:
@@ -3530,8 +3528,6 @@ const en: Translations<typeof zhHant> = {
     cutaway: {
       server: 'This Jellyfin',
       apiKey: 'API key',
-      held: 'Held',
-      absent: 'Not yet',
       libraries: 'Libraries',
     },
     version: {
@@ -3737,7 +3733,6 @@ const en: Translations<typeof zhHant> = {
       'This berth is done. Berth changed none of this qBittorrent’s preferences; its downloads go through its own categories.',
   },
   indexer: {
-    noSitesYet: 'No sites yet',
     title: 'Prowlarr',
     lede: {
       choose:
@@ -3766,7 +3761,12 @@ const en: Translations<typeof zhHant> = {
       bundled: 'Bundled Prowlarr',
       existing: 'Your own Prowlarr',
       added: 'Added',
+      keyHeld: 'Held',
+      keyRejected: 'Not accepted',
+      keyUnverified: 'Saved, not verified yet',
+      keyAbsent: 'Not yet',
     },
+    connectFirst: 'Connect Prowlarr above first; its sites show up here once Berth can reach it.',
     add: {
       title: 'Add indexers',
       lede: "Test asks Prowlarr to reach the site right now and creates nothing; only sites that pass can be ticked. A few public sites being unreachable is normal and does not affect the rest. Each site's description is the text from its Prowlarr definition.",
@@ -3815,14 +3815,6 @@ const en: Translations<typeof zhHant> = {
       required: 'Required',
       save: 'Set the interface login',
       saving: 'Setting…',
-    },
-    existing: {
-      title: 'Connect your own Prowlarr',
-      lede: 'Give its address and API key.',
-      test: 'Test connection',
-      testing: 'Testing…',
-      fix: "Check the address, the port and the API key, then check that Berth's container can reach that service:",
-      hint: 'The Prowlarr address, e.g. http://192.168.1.10:9696. Its API key is under Settings → General.',
     },
     added: {
       title: 'Added',

@@ -1859,26 +1859,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/setup/indexers/connect": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Post Indexers Connect
-         * @description 既有路徑的「測試」。測不過也存，使用者才能改一個欄位再按一次。
-         */
-        post: operations["post_indexers_connect_api_setup_indexers_connect_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/setup/indexers/search": {
         parameters: {
             query?: never;
@@ -2854,19 +2834,6 @@ export interface components {
             recommended: boolean;
         };
         /**
-         * IndexerConnectIn
-         * @description 既有路徑：Prowlarr 位址 + key。
-         */
-        IndexerConnectIn: {
-            /** Base Url */
-            base_url: string;
-            /**
-             * Api Key
-             * @default
-             */
-            api_key?: string;
-        };
-        /**
          * IndexerProblem
          * @description 索引站那邊沒搜到東西的五種樣子（票 08 的結果表）。
          *
@@ -2911,7 +2878,6 @@ export interface components {
             failure: components["schemas"]["StepFailure"] | null;
             /** Error */
             error: string;
-            reason: components["schemas"]["ConnectionReason"] | null;
             /** Web Port */
             web_port: number | null;
         };
@@ -9157,39 +9123,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["InterfaceLoginRefusalOut"];
-                };
-            };
-        };
-    };
-    post_indexers_connect_api_setup_indexers_connect_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["IndexerConnectIn"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["IndexerSetupOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

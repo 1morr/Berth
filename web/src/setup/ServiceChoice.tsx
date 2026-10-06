@@ -98,7 +98,6 @@ export function ServiceChoice({
   requestError,
   locked,
   switchWarning,
-  existingForm,
   draft,
   onDraft,
   onChoose,
@@ -114,8 +113,6 @@ export function ServiceChoice({
      * 有值時換另一格要先確認。從既有換走時說法不同：Berth 沒寫過使用者那一台（`choice.switchAway`）。
      */
     switchWarning?: string
-    /** 既有那一格自己的表單（Prowlarr 頁）。沒給就是內建的位址與憑證。 */
-    existingForm?: ReactNode
   }) {
   const { t } = useTranslation()
   const groupName = useId()
@@ -214,20 +211,18 @@ export function ServiceChoice({
   // 鎖住的是來源，不是位址：同一個來源換位址照舊可以（設定頁的連線區就是做這件事）。
   const showExistingForm =
     selected === 'existing' && (draft === 'existing' || editing || service?.state !== 'ok')
-  const form =
-    showExistingForm &&
-    (existingForm ?? (
-      <ExistingForm
-        kind={kind}
-        service={service?.origin === 'existing' && !edited ? service : undefined}
-        initialUrl={service?.origin === 'existing' ? service.base_url : ''}
-        choosing={choosing}
-        refusal={edited ? null : refusal}
-        focusFirst={editing}
-        onEdit={() => setEdited(true)}
-        onSubmit={chooseExisting}
-      />
-    ))
+  const form = showExistingForm && (
+    <ExistingForm
+      kind={kind}
+      service={service?.origin === 'existing' && !edited ? service : undefined}
+      initialUrl={service?.origin === 'existing' ? service.base_url : ''}
+      choosing={choosing}
+      refusal={edited ? null : refusal}
+      focusFirst={editing}
+      onEdit={() => setEdited(true)}
+      onSubmit={chooseExisting}
+    />
+  )
   const cancelButton = (
     <div>
       <GhostButton type="button" onClick={cancel}>
@@ -413,9 +408,8 @@ export function ServiceChoice({
         <RequestFailed error={requestError} ownerPending={!status.owner} />
       )}
 
-      {/* 自己帶表單的那一種（Prowlarr 頁的既有）在表單下面說結果，這一條就不重複。表單改了一格還沒測，
-          上一次的結果說的是舊值，也先不畫。 */}
-      {service && !switching && !(showExistingForm && (existingForm || edited)) && (
+      {/* 表單改了一格還沒測，上一次的結果說的是舊值，先不畫。 */}
+      {service && !switching && !(showExistingForm && edited) && (
         <TestLine
           kind={kind}
           status={status}
@@ -818,8 +812,15 @@ function Fix({
         commands={[`docker compose ps ${kind}`, `docker compose logs --tail 50 ${kind}`]}
       />
     )
+  } else if (kind === 'prowlarr' && reason === 'auth_required') {
+    // Prowlarr 只有 key，沒有帳密：說去哪裡複製、不是介面登入的密碼（M4 票 20；頁 4 原本自己那一份的這一句，
+    // 票 39 起由這裡說）。
+    lede = t('connection.fix.prowlarrKey')
   } else if (reason === 'auth_required') {
     lede = t('connection.fix.credentials')
+  } else if (reason === 'api_key_missing') {
+    // 既有 Prowlarr 的 key 留空（M4 票 39 的 code-review）：Berth 先問到它在，才說缺 key。
+    lede = t('connection.fix.apiKeyEmpty')
   } else if (reason === 'ip_banned') {
     lede = t('connection.fix.banned', BAN_DEFAULTS)
   } else if (reason === 'version_unsupported') {
