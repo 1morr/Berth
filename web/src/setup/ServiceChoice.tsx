@@ -302,6 +302,9 @@ export function ServiceChoice({
             {kind !== 'prowlarr' && (
               <span className="mt-2 block text-xs text-ink">{t('choice.existing.sameHost')}</span>
             )}
+            {kind === 'jellyfin' && (
+              <span className="mt-2 block text-xs text-ink">{t('choice.existing.library')}</span>
+            )}
             {/* 選之前就說出下限（M4 票 17）：版本太舊的那一台要到測試才紅，那時候已經填完表了。 */}
             <span data-testid="version-floor" className="mt-2 block text-xs text-ink">
               {t(`choice.existing.floor.${kind}`)}
@@ -324,7 +327,8 @@ export function ServiceChoice({
         {locked && <p className="max-w-prose text-xs text-ink-dim">{locked}</p>}
       </fieldset>
 
-      {/* 選了之後交給測試那一條：套件內是紅的「主機名解不到」與同一組補法，既有是 COMPOSE_PROFILES 那一行。
+      {/* 選了之後交給測試那一條：套件內是紅的「主機名解不到」與同一組補法，既有是 COMPOSE_PROFILES 那一行
+          加停掉已在跑的那一台（只改 profile 再 up -d 停不掉它，brief §20.14）。
           放在卡片外：卡片是一個 label，可複製的那一行有自己的按鈕。 */}
       {absent && selected === null && (
         <div className="grid gap-2">
@@ -341,6 +345,7 @@ export function ServiceChoice({
             {t('choice.existing.profiles', { kind })}
           </p>
           <CopyLine command={composeProfiles(status, kind, 'existing')} />
+          <CopyLine command={`docker compose stop ${kind}`} />
         </div>
       )}
 

@@ -14,6 +14,7 @@ import {
   type ManagedRoute,
 } from '../api/routes'
 import type { RouteView } from '../api/schemas'
+import { setupStatusQueryOptions } from '../api/setup'
 import {
   PAGE_TITLE,
   Checkbox,
@@ -24,6 +25,7 @@ import {
 } from '../components/controls'
 import { Dot } from '../components/Dot'
 import { RouteCheckList } from '../components/RouteCheckList'
+import { SHARED_ROOT, type ExistingServices } from '../components/routeChecks'
 import { RouteDelete, type RouteChange } from '../components/RouteDelete'
 import { RouteRow } from '../components/RouteRow'
 import { SettingsTabs } from '../components/SettingsTabs'
@@ -149,12 +151,25 @@ function ManagedRouteRow({
 }
 
 /**
+ * 哪幾台是使用者自己的（M4 票 36）：掛載補法要給那一台的版本——在原本那一份多加一條 `/data`，compose 與
+ * `docker run` 各一種寫法。讀不到（還沒載完、失敗）就是套件內那一份。
+ */
+function useExisting(): ExistingServices | undefined {
+  const status = useQuery(setupStatusQueryOptions)
+  if (!status.data) return undefined
+  const yours = (kind: 'jellyfin' | 'qbittorrent') =>
+    status.data.services.some((row) => row.kind === kind && row.origin === 'existing')
+  return { jellyfin: yours('jellyfin'), qbittorrent: yours('qbittorrent'), root: SHARED_ROOT }
+}
+
+/**
  * 每一條纜繩與「重新檢查」。只是診斷：不動啟用（管理員可能是故意停用它的），紅燈修好之後要用它，
  * 在上面明確地勾啟用再儲存一次。開頁不自動檢查——那一輪會建分類、寫探測檔（票 10 的決定）。
  */
 function RouteChecks({ route }: { route: RouteView }) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
+  const existing = useExisting()
   const recheck = useMutation({
     mutationFn: () => recheckRoute(route.id),
     onSettled: () => refreshRoutes(queryClient),
@@ -162,7 +177,7 @@ function RouteChecks({ route }: { route: RouteView }) {
 
   return (
     <div className="grid gap-3">
-      <RouteCheckList route={route} busy={recheck.isPending} />
+      <RouteCheckList route={route} busy={recheck.isPending} existing={existing} />
       <div>
         <GhostButton type="button" busy={recheck.isPending} onClick={() => recheck.mutate()}>
           {recheck.isPending ? t('routeSettings.rechecking') : t('routeSettings.recheck')}

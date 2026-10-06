@@ -221,9 +221,11 @@ const zhHant = {
         prowlarr: '只加你在頁 4 勾起來的站；原本的站不動。',
       },
       sameHost:
-        '條件：它與 Berth 在同一台主機，而且把同一個父目錄掛在同一個容器路徑（例如都是 /data）——Berth 用硬鏈接入庫，另一台 NAS 上的、或把下載與媒體庫分開掛的接不上。',
+        '條件：它與 Berth 在同一台主機，而且把 Berth 的 DATA_ROOT 也掛在容器路徑 /data——只能是 /data，Berth 的下載與媒體庫目錄固定在它底下。原本的掛載不用動，多加這一條就好。DATA_ROOT 要在建得了硬鏈接的檔案系統上（exFAT、網路磁碟、mergerfs 不行）；另一台 NAS 上的接不上。',
+      library:
+        '它要先有對應類型的媒體庫（電影、劇集）：Berth 不替你的 Jellyfin 建媒體庫，只在頁 3 替勾選的媒體庫加一條路徑。',
       profiles:
-        '選了既有，就把 {{kind}} 從 .env 的 COMPOSE_PROFILES 拿掉，再 docker compose up -d——套件內那一台用不到了。忘了拿掉也不致命。',
+        '選了既有，套件內那一台用不到了：把 .env 的 COMPOSE_PROFILES 換成第一行（{{kind}} 不在裡面），再用第二行停掉已經在跑的那一台——只改 COMPOSE_PROFILES 再 docker compose up -d 停不掉它。忘了也不致命。',
       floor: {
         jellyfin: '版本下限：Jellyfin 12.0。從 10.x 升級是單向的，先看升級注意。',
         qbittorrent: '版本下限：qBittorrent 4.4（Web API 2.8.4）。',
@@ -509,7 +511,7 @@ const zhHant = {
       pathFailed: {
         title: '「{{library}}」沒加上 Berth 路徑',
         jellyfin_cannot_see:
-          'Jellyfin 看不到 {{path}}：它沒掛 {{root}}。Berth 建好了目錄、在裡面寫了一個檔，Jellyfin 說它看不到；這一次建的目錄已經收回（原本就在的不動）。改你那一份 compose 的 Jellyfin：加一條與 berth 相同的掛載（${DATA_ROOT} 換成 berth 那一份 .env 的值），docker compose up -d 之後再按一次：',
+          'Jellyfin 看不到 {{path}}：它沒掛 {{root}}。Berth 建好了目錄、在裡面寫了一個檔，Jellyfin 說它看不到；這一次建的目錄已經收回（原本就在的不動）。在你原本那一份 compose（或 docker run 指令）的 Jellyfin 上多加一條掛載：berth 那一份 .env 的 DATA_ROOT 掛在 {{root}}（${DATA_ROOT} 換成那個值）。原本的掛載不用動。重建它之後再按一次：',
         directory:
           'Berth 在自己的容器裡建不出 {{path}}：berth 少了 {{root}} 的掛載，或容器裡的使用者寫不進去。',
         jellyfin:
@@ -936,15 +938,15 @@ const zhHant = {
       // 既有服務失敗在第 2–5 條時另說的那一句（M4 票 08，brief §16.4）：上面的 compose 片段是套件內那一份。
       existing: {
         qbittorrent:
-          '這是你自己的 qBittorrent：它報的是它自己容器裡的路徑。Berth 要看得到同一個字串，兩者得在同一台主機、把同一個父目錄掛在同一個容器路徑（例如兩邊都掛成 /data）。Berth 不做 remote path mapping——改 qBittorrent 或 berth 的 volumes，讓這條路徑在兩邊指到同一個地方。',
+          '這是你自己的 qBittorrent：它報的是它自己容器裡的路徑。Berth 要看得到同一個字串，兩者得在同一台主機、把同一個宿主目錄掛在容器路徑 /data（只能是 /data）。Berth 不做 remote path mapping——在 qBittorrent 原本的掛載之外多加這一條（原本的不用動），讓這條路徑在兩邊指到同一個地方。',
         qbittorrentMount:
-          '你的 qBittorrent 看不到這個分類路徑：它多半沒掛 {{root}}（例如只掛了 /downloads），Berth 寫的檔在它那邊不存在。改你那一份 compose 的 qBittorrent：加一條與 berth 相同的掛載——同一個宿主目錄（${DATA_ROOT} 換成 berth 那一份 .env 的值）掛在同一個容器路徑 {{root}}，下載目錄也移到它底下。照 TRaSH 的做法用單一 {{root}}，不要分開掛 /downloads、/movies；Berth 不做 remote path mapping。改完 docker compose up -d，再按一次：',
+          '你的 qBittorrent 看不到這個分類路徑：它多半沒掛 {{root}}（例如只掛了 /downloads），Berth 寫的檔在它那邊不存在。在你原本那一份 compose（或 docker run 指令）的 qBittorrent 上多加一條掛載：berth 那一份 .env 的 DATA_ROOT 掛在 {{root}}（${DATA_ROOT} 換成那個值；容器路徑只能是 {{root}}）。原本的掛載不用動：/downloads 留著，舊 torrent 照常做種，Berth 只在 {{root}} 底下讀寫。Berth 不做 remote path mapping。重建它（docker compose up -d，或刪掉容器再照新的指令 docker run）之後再按一次：',
         libraryMount:
-          '你的 Jellyfin 把這個媒體庫放在它自己的容器路徑（例如 /movies、/tv），不在 {{root}} 底下，Berth 看不到。改你那一份 compose 的 Jellyfin：加一條與 berth 相同的掛載——同一個宿主目錄（${DATA_ROOT} 換成 berth 那一份 .env 的值）掛在 {{root}}。Route 建好之後寫入目標就鎖住了：先刪掉這條 Route，再選「新的 Berth 路徑」當寫入目標，舊路徑原地不動。照 TRaSH 的做法用單一 {{root}}；Berth 不做 remote path mapping：',
+          '你的 Jellyfin 把這個媒體庫放在它自己的容器路徑（例如 /movies、/tv），不在 {{root}} 底下，Berth 看不到。在你原本那一份 compose（或 docker run 指令）的 Jellyfin 上多加一條掛載：berth 那一份 .env 的 DATA_ROOT 掛在 {{root}}（${DATA_ROOT} 換成那個值）。原本的掛載不用動：/movies、/tv 留著——改了既有項目的路徑等於換成新項目、觀看紀錄歸零。Route 建好之後寫入目標就鎖住了：先刪掉這條 Route，再選「新的 Berth 路徑」當寫入目標。Berth 不做 remote path mapping：',
         jellyfinMount:
-          '你的 Jellyfin 看不到 Berth 剛寫的檔案：它多半沒掛 {{root}}，或在另一台主機。改你那一份 compose 的 Jellyfin：加一條與 berth 相同的掛載——同一個宿主目錄（${DATA_ROOT} 換成 berth 那一份 .env 的值）掛在同一個容器路徑 {{root}}。Jellyfin 要與 Berth 在同一台主機；Berth 不做 remote path mapping：',
+          '你的 Jellyfin 看不到 Berth 剛寫的檔案：它多半沒掛 {{root}}，或在另一台主機。在你原本那一份 compose（或 docker run 指令）的 Jellyfin 上多加一條掛載：berth 那一份 .env 的 DATA_ROOT 掛在同一個容器路徑 {{root}}（${DATA_ROOT} 換成那個值）。原本的掛載不用動。Jellyfin 要與 Berth 在同一台主機；Berth 不做 remote path mapping：',
         split:
-          '你自己的服務多半把下載與媒體庫分開掛（/downloads、/tv 各一條），Berth 跟著分開掛就跨了掛載點。改成三個容器都掛同一個父目錄（例如 /data，底下再分下載與媒體庫），容器路徑也一樣。',
+          '硬鏈接要 berth 只用一條掛載蓋住整個 /data：別為了配合你自己的服務，把下載與媒體庫拆成兩條掛進 berth。你的服務原本的 /downloads、/tv 留著，各自多掛一條同一個 /data 就好。',
       },
     },
   },
@@ -3320,9 +3322,11 @@ const en: Translations<typeof zhHant> = {
         prowlarr: 'only adds the sites you tick on page 4; the sites already there stay.',
       },
       sameHost:
-        'Condition: it runs on the same host as Berth and mounts the same parent directory at the same container path (for example /data on both) — Berth imports with hard links, so one on another NAS, or with downloads and libraries mounted apart, cannot be connected.',
+        'Condition: it runs on the same host as Berth and also mounts Berth’s DATA_ROOT at the container path /data — it has to be /data, since Berth’s download and library folders sit underneath it. Its existing mounts stay as they are; adding this one is enough. DATA_ROOT has to be on a file system that supports hard links (not exFAT, a network share or mergerfs); one on another NAS cannot be connected.',
+      library:
+        'It needs libraries of the matching types (movies, shows) already: Berth does not create libraries on your Jellyfin, it only adds a path to the ones you tick on page 3.',
       profiles:
-        'With an existing one, take {{kind}} out of COMPOSE_PROFILES in .env and run docker compose up -d — the bundled one is not needed. Forgetting is not fatal.',
+        'With an existing one, the bundled one is not needed: replace COMPOSE_PROFILES in .env with the first line ({{kind}} is left out), then stop the one already running with the second — changing COMPOSE_PROFILES and running docker compose up -d does not stop it. Forgetting is not fatal.',
       floor: {
         jellyfin:
           'Oldest supported: Jellyfin 12.0. Upgrading from 10.x is one-way, so read the upgrade notes first.',
@@ -3633,7 +3637,7 @@ const en: Translations<typeof zhHant> = {
       pathFailed: {
         title: 'No Berth path was added to “{{library}}”',
         jellyfin_cannot_see:
-          'Jellyfin cannot see {{path}}: it does not mount {{root}}. Berth created the directory and wrote a file in it, Jellyfin says it cannot see it; whatever this attempt created has been removed again (anything already there stays). Change the Jellyfin service in your own compose file: add the same mount berth has (replace ${DATA_ROOT} with the value in berth’s .env), run docker compose up -d, then press again:',
+          'Jellyfin cannot see {{path}}: it does not mount {{root}}. Berth created the directory and wrote a file in it, Jellyfin says it cannot see it; whatever this attempt created has been removed again (anything already there stays). Add one mount to the Jellyfin service in your own compose file (or to its docker run command): berth’s DATA_ROOT at {{root}} (replace ${DATA_ROOT} with the value in berth’s .env). Keep your existing mounts. Recreate it, then press again:',
         directory:
           'Berth could not create {{path}} in its own container: berth does not mount {{root}}, or the container user cannot write there.',
         jellyfin:
@@ -4085,15 +4089,15 @@ const en: Translations<typeof zhHant> = {
         'Those two directories are separate mounts inside Berth (EXDEV). A hard link cannot cross a mount point: use one mount covering the whole parent directory instead of mounting complete and library separately. Network shares, exFAT drives and mergerfs cannot hard-link either.',
       existing: {
         qbittorrent:
-          'This is your own qBittorrent: the path it reports is a path inside its own container. For Berth to see the same string, both must run on the same host and mount the same parent directory at the same container path (for example /data on both). Berth does no remote path mapping — change the volumes of qBittorrent or berth so this path points at the same place in both.',
+          'This is your own qBittorrent: the path it reports is a path inside its own container. For Berth to see the same string, both must run on the same host and mount the same host directory at the container path /data (it has to be /data). Berth does no remote path mapping — add this one mount to qBittorrent next to its existing ones (keep those as they are), so this path points at the same place in both.',
         qbittorrentMount:
-          'Your qBittorrent cannot see this category path: it most likely does not mount {{root}} (only /downloads, say), so the file Berth wrote does not exist on its side. Change the qBittorrent service in your own compose file: add the same mount berth has — the same host directory (replace ${DATA_ROOT} with the value in berth’s .env) at the same container path {{root}} — and move its download folder under it. Follow TRaSH and use one {{root}} mount instead of separate /downloads and /movies; Berth does no remote path mapping. Run docker compose up -d, then press again:',
+          'Your qBittorrent cannot see this category path: it most likely does not mount {{root}} (only /downloads, say), so the file Berth wrote does not exist on its side. Add one mount to the qBittorrent service in your own compose file (or to its docker run command): berth’s DATA_ROOT at {{root}} (replace ${DATA_ROOT} with the value in berth’s .env; the container path has to be {{root}}). Keep your existing mounts: /downloads stays, your old torrents keep seeding, and Berth only reads and writes under {{root}}. Berth does no remote path mapping. Recreate it (docker compose up -d, or remove the container and docker run the new command), then press again:',
         libraryMount:
-          'Your Jellyfin keeps this library at a path of its own (/movies or /tv, say), outside {{root}}, so Berth cannot see it. Change the Jellyfin service in your own compose file: add the same mount berth has — the same host directory (replace ${DATA_ROOT} with the value in berth’s .env) at {{root}}. A route’s write target is fixed once it is created: delete this route, then pick “new Berth path” as the write target; the old paths stay as they are. Follow TRaSH and use one {{root}} mount; Berth does no remote path mapping:',
+          'Your Jellyfin keeps this library at a path of its own (/movies or /tv, say), outside {{root}}, so Berth cannot see it. Add one mount to the Jellyfin service in your own compose file (or to its docker run command): berth’s DATA_ROOT at {{root}} (replace ${DATA_ROOT} with the value in berth’s .env). Keep your existing mounts: /movies and /tv stay — changing the path of existing items turns them into new items and resets watch history. A route’s write target is fixed once it is created: delete this route, then pick “new Berth path” as the write target. Berth does no remote path mapping:',
         jellyfinMount:
-          'Your Jellyfin cannot see the file Berth just wrote: it most likely does not mount {{root}}, or runs on another host. Change the Jellyfin service in your own compose file: add the same mount berth has — the same host directory (replace ${DATA_ROOT} with the value in berth’s .env) at the same container path {{root}}. Jellyfin has to run on the same host as Berth; Berth does no remote path mapping:',
+          'Your Jellyfin cannot see the file Berth just wrote: it most likely does not mount {{root}}, or runs on another host. Add one mount to the Jellyfin service in your own compose file (or to its docker run command): berth’s DATA_ROOT at the same container path {{root}} (replace ${DATA_ROOT} with the value in berth’s .env). Keep your existing mounts. Jellyfin has to run on the same host as Berth; Berth does no remote path mapping:',
         split:
-          'Your own services probably mount downloads and media separately (/downloads and /tv), and mounting Berth the same way puts them on two mount points. Mount one shared parent directory in all three containers instead (for example /data, with downloads and media underneath), at the same container path.',
+          'A hard link needs berth to cover all of /data with one mount: do not split downloads and media into two mounts in berth to match your own services. Keep your existing mounts on those services (/downloads, /tv) and add the same /data to each.',
       },
     },
   },

@@ -1271,6 +1271,13 @@ split-cour 的第一批被播出日比對整批擋在審核，改正一次並套
   媒體庫頁那一份 `GET /api/inventory/{library_id}/watching` 不變。
 
 ### Fixed
+- **既有服務的接入說明：只多掛一條 `/data`，並真的停掉套件內那一台**（M4 票 36，2026-10-06 審計 §C1、§C2、S2）：
+  「既有」卡片原本寫「同一個容器路徑（例如都是 /data）」，Berth 的三層路徑其實固定在 `/data` 底下；改寫成只能是
+  `/data`、`DATA_ROOT` 要建得了硬鏈接，既有 Jellyfin 要先有對應類型的媒體庫。掛載的補法原本叫人把下載目錄移到
+  `/data` 底下、別分開掛 `/downloads`，照做舊 torrent 會找不到檔案；現在是在原本那一份多加一條
+  `${DATA_ROOT}:/data`、原本的掛載不動，compose 與 `docker run -v` 各給一行（精靈頁 3，Route 設定頁也照選擇給這一份）。
+  選了既有之後原本只說「從 `COMPOSE_PROFILES` 拿掉再 `docker compose up -d`」，那停不掉已經在跑的套件內容器，
+  現在多給 `docker compose stop <服務>`（`scripts/experiments/compose_profile_removal.py` 實測，brief §20.14）。
 - **「套件內」卡片把停掉的容器說成「沒有起」，起回來測試轉綠之後還留著**（M4 票 35，2026-10-06 審計 S3）：停掉的容器
   與不在 `COMPOSE_PROFILES` 裡的服務主機名一樣解不到、分不出來，卡片改說「這套 compose 的 X 沒在跑」，補法兩種都給：
   停了就 `docker compose start X`，不在就加回 `COMPOSE_PROFILES` 再 `docker compose up -d`（測試那一條的補法同一組）。

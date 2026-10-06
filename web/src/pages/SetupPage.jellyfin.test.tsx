@@ -736,6 +736,8 @@ describe('頁 3：既有 Jellyfin 直接是 Route', () => {
       screen.getByText(/Jellyfin 看不到 \/data\/library\/影集：它沒掛 \/data。/),
     ).toBeInTheDocument()
     expect(screen.getByText(/jellyfin:\s+volumes:/)).toBeInTheDocument()
+    // 用 docker run 起的那一台：原本的指令多加一個 -v（M4 票 36）。
+    expect(screen.getByText('-v ${DATA_ROOT}:/data')).toBeInTheDocument()
     // 不再叫人去 Jellyfin 手動加（同樣會失敗），也不給 Berth 連它用的位址（瀏覽器開不了）。
     expect(screen.queryByText(/手動加/)).not.toBeInTheDocument()
     expect(screen.queryByText(/nas:8096/)).not.toBeInTheDocument()

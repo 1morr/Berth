@@ -621,7 +621,7 @@ WebUI\AuthSubnetWhitelist=172.28.0.2/32
 
 **服務頁的共同形狀**（頁 1、2、4）：
 
-- **頁首二選一**「套件內」/「既有」（Seerr 與 Sonarr / Radarr 都是手動填、按 Test，brief §20.14），**不預選**（票 15 shape 時使用者拍板：猜錯正是這一輪要消滅的；`.scratch/m4/service-pages-shape.md`）。點「套件內」就存下並測（唯讀）；點「既有」只展開表單，按「測試連線」才存下並測。「既有」旁說明條件：Jellyfin 與 qBittorrent 要與 Berth 在同一台主機、把同一個父目錄掛在同一個容器路徑（brief §16.4；Prowlarr 不碰檔案，沒有這一條）；選既有時說出要從 `.env` 的 `COMPOSE_PROFILES` 拿掉哪一個（`jellyfin` / `qbittorrent` / `prowlarr`），不叫人改 compose 檔，忘了拿掉也不致命。**「既有」說明不多說撞 port 的事**（票 16 實測，brief §20.14）：容器名改成 `berth-*` 之後撞名消失；撞 port 時只有撞到的那一台套件內容器停在 `created`，`berth` 與其他照常跑，而那個錯在終端機跑 `docker compose up -d` 時就印出來、早於精靈，起不來的正是使用者不要的那一台。疑難排解寫在 README〈部署疑難排解〉。
+- **頁首二選一**「套件內」/「既有」（Seerr 與 Sonarr / Radarr 都是手動填、按 Test，brief §20.14），**不預選**（票 15 shape 時使用者拍板：猜錯正是這一輪要消滅的；`.scratch/m4/service-pages-shape.md`）。點「套件內」就存下並測（唯讀）；點「既有」只展開表單，按「測試連線」才存下並測。「既有」旁說明條件：Jellyfin 與 qBittorrent 要與 Berth 在同一台主機、把 Berth 的 `DATA_ROOT` 也掛在容器路徑 `/data`（只能是 `/data`，原本的掛載不動；`DATA_ROOT` 要建得了硬鏈接；既有 Jellyfin 要先有對應類型的媒體庫，M4 票 36，brief §16.4；Prowlarr 不碰檔案，沒有這一條）；選既有時說出要從 `.env` 的 `COMPOSE_PROFILES` 拿掉哪一個（`jellyfin` / `qbittorrent` / `prowlarr`），**再給 `docker compose stop <服務>`**——只改 profile 再 `up -d` 停不掉已經在跑的那一台（M4 票 36，brief §20.14）。不叫人改 compose 檔，忘了也不致命。**「既有」說明不多說撞 port 的事**（票 16 實測，brief §20.14）：容器名改成 `berth-*` 之後撞名消失；撞 port 時只有撞到的那一台套件內容器停在 `created`，`berth` 與其他照常跑，而那個錯在終端機跑 `docker compose up -d` 時就印出來、早於精靈，起不來的正是使用者不要的那一台。疑難排解寫在 README〈部署疑難排解〉。
 - **套件內**連 compose 主機名（`services.clients.bundled_targets`：`jellyfin:8096`、`qbittorrent:${QBITTORRENT_WEBUI_PORT}`、`prowlarr:9696`；compose 服務名不變，容器名是 `berth-*`，票 16）。**既有**填位址與那個服務要的憑證（brief §16.4）：Jellyfin 的管理員帳密、qBittorrent 的 WebUI 帳密、Prowlarr 的 API key（或任一 Torznab 端點 + key）。填 `localhost` / `127.0.0.0/8` / `::1` 時位址欄下就地提示改成 `host.docker.internal` 或區網 IP（票 17：前端純函式 `setup/loopback.ts` 的 `pointsAtBerth`，只提示不擋；測過的位址是它而連不上時，補法說同一句）。「既有」選項旁說出版本下限（Jellyfin 12.0 連到 12.0 發佈文的升級注意、qBittorrent 4.4、Prowlarr 1.3.2）。
 - **進頁只查主機名**（M4 票 30，brief §19 2026-10-01）：服務頁進頁問 `GET /setup/compose`，Berth 解析三個套件內主機名（`services.setup.resolve_bundled` → `adapters.dns`，`getaddrinfo`、10 秒上限、逾時當作解得到），**不造任何服務的 client**——這不算「選之前發請求」。解不到的那一張「套件內」卡片寫「這套 compose 的 X 沒在跑」：停掉的容器與不在 `COMPOSE_PROFILES` 裡的服務一樣解不到、分不出來（不另外掛 Docker socket），所以還沒選時卡片下兩種補法都給——停了就 `docker compose start X`，不在就加回 `COMPOSE_PROFILES` 那一行再 `docker compose up -d`（M4 票 35）；不預選、不停用，選了照舊測（紅的是下面那一條 `not_deployed`，補法是同一組 `bringBack`）。那一頁每次選擇或重新測試完都再問一次主機名，起回來、測試轉綠之後加註跟著消失（票 35）。
 - **選完就測，不偵測**：選擇與連線資訊先存進 `settings.setup` 與它們平常住的 `settings.services.*` 再測——測不過也存，使用者才能改一個欄位再按一次。套件內測不過要分開說：
@@ -701,7 +701,27 @@ WebUI\AuthSubnetWhitelist=172.28.0.2/32
 
 「既有」由使用者在那個服務的頁面選（§9.3，2026-09-29 起），不再由偵測判定；這一節是選了既有之後 Berth 怎麼接。
 
-**掛載規則**：Berth、qBittorrent、Jellyfin 在**同一台主機**，把同一個宿主父目錄掛在相同的容器路徑，下載目錄與媒體庫目錄都在它底下（TRaSH 的單一 `/data`，brief §20.14）。路徑字串隨使用者，例如 NAS 上三個容器都掛 `/volume1/media:/volume1/media`。Berth 的 incomplete / complete 根目錄在精靈的 qBittorrent 頁設為該父目錄下的子目錄。**不做 remote path mapping**（brief §18）：既有服務在另一台主機、或把下載與媒體庫分開掛成 `/downloads`、`/tv` 的，要先改掛載；「既有」選項旁說明這一條，媒體庫與路徑頁的檢查失敗時說出怎麼改。
+**掛載規則**：Berth、qBittorrent、Jellyfin 在**同一台主機**，把同一個宿主目錄（Berth 的 `DATA_ROOT`）掛在容器路徑 **`/data`**——只能是 `/data`：Berth 的三層路徑固定在它底下（`/data/torrent/{incomplete,complete}`、`/data/library`，`models.setting.PathSettings`，沒有設定可改；TRaSH 的單一 `/data`，brief §20.14）。**既有服務原本的掛載不動，多加這一條就好**（M4 票 36，審計 §C2）：Berth 只在 `/data` 底下讀寫，舊 torrent 照常在 `/downloads` 做種，Jellyfin 的 `/tv`、`/movies` 不能改（項目 ID 由路徑導出）。**不做 remote path mapping**（brief §18）：既有服務在另一台主機的接不上。「既有」選項旁說明這一條（容器路徑只能是 `/data`、`DATA_ROOT` 要建得了硬鏈接、既有 Jellyfin 要先有對應類型的媒體庫），媒體庫與路徑頁的檢查失敗時給那一台要多加的那一條（compose 與 `docker run` 各一種）。
+
+NAS 範例：媒體在 `/volume1/media`、下載在 `/volume1/downloads`，Berth 的 `.env` 設 `DATA_ROOT=/volume1/berth`。使用者原本那一份只多加一條，其餘不動：
+
+```yaml
+services:
+  jellyfin:
+    volumes:
+      - /volume1/docker/jellyfin:/config
+      - /volume1/media/tv:/tv            # 原本的，留著
+      - /volume1/berth:/data             # 新增
+  qbittorrent:
+    volumes:
+      - /volume1/docker/qbittorrent:/config
+      - /volume1/downloads:/downloads    # 原本的，留著（舊 torrent 繼續做種）
+      - /volume1/berth:/data             # 新增
+```
+
+`docker run` 起的在原本的指令多加 `-v /volume1/berth:/data`。`/volume1/berth` 與 `/volume1/media` 不必在同一個檔案系統：硬鏈接只發生在 `/volume1/berth` 裡面（complete → library）。
+
+**選了既有之後停掉套件內那一台**：從 `COMPOSE_PROFILES` 拿掉只讓之後的 `up -d` 不再起它，停不掉已經在跑的容器（brief §20.14 實測），所以精靈「選了既有」那一段、README 與 `deploy/.env.example` 都另給 `docker compose stop <服務>`。
 
 **連線位址**：Berth 在容器裡，使用者填 `localhost` / `127.0.0.1` 指的是 Berth 自己。位址欄下就地提示改成 `host.docker.internal`（Docker Desktop 內建；Linux 靠 `berth` 服務的 `extra_hosts: ["host.docker.internal:host-gateway"]`，§9.1，而且宿主上的服務要監聽 `0.0.0.0`）或區網 IP（brief §20.14，票 16、17）。
 
@@ -720,7 +740,7 @@ WebUI\AuthSubnetWhitelist=172.28.0.2/32
 
 - 要的是位址 + WebUI 帳密（5.2 起的 API key 這一輪不做，brief §16.4）。
 - 不搬舊種：Berth 只用自己建立的 `berth-*` category，忽略其他分類的 torrent；舊 torrent 留在原目錄。
-- 使用者若原本只掛 `/downloads`，多加一個父目錄掛載即可；Berth 的 category save path 落在父目錄下。
+- 使用者原本只掛 `/downloads` 的，多加一條 `${DATA_ROOT}:/data` 即可、`/downloads` 留著；Berth 的 category save path 落在 `/data/torrent/complete` 下（M4 票 36）。
 - **不改全域偏好**（M4 票 05；套件內同一條，M4 票 32）：全域 `save_path`、temp path、autoTMM 都是使用者的，Berth 一個都不寫、也不列；送單時逐個 torrent `autoTMM=true`，路徑由 Berth 的分類決定，未完成目錄也是（`downloadPath`，M4 票 22）。
 - 版本低於 4.4（API 2.8.4）拒絕接入並提示升級。
 
@@ -738,12 +758,12 @@ WebUI\AuthSubnetWhitelist=172.28.0.2/32
 4. `library_path`：**向 Jellyfin 現查**這個 Route 的寫入目標仍是媒體庫的路徑之一，而且 Berth `stat` 得到。不吃存下來的快照——使用者可能在那之後改了路徑或刪了媒體庫。**只驗寫入目標，不驗媒體庫的其他路徑**（M4 票 19 定案）：Berth 只在寫入目標底下讀寫（`services/reconcile.py` 走的是 Route 的目標，媒體庫的作品經 Jellyfin 的 API 讀），「舊路徑不動、加一條 Berth 路徑」時舊的 `/movies` Berth 看不到並不礙事。
 5. `probe_visible`：在 Route 目標寫探測檔，`POST /Environment/ValidatePath` `{Path, IsFile: true}` 請 Jellyfin 確認看得到同一條路徑（看得到 204、看不到 404），問完就刪。
 6. `hardlink`：在 `<complete root>/<slug>` 建暫存檔並 `link()` 到 Route 目標，確認同 device、同 inode，之後兩邊都清乾淨（`fs.link_test`）。
-7. 任一步失敗 → 精靈與健康頁指出「哪個容器少了哪個掛載」，附**要改的那一台**的 compose `volumes:` 修正片段（`routeChecks.remedyFor`，M4 票 19）：`download_path` 與 `hardlink` 的 `EXDEV` 是 berth；`download_visible` 是 qbittorrent；`library_path` 與 `probe_visible` 是 jellyfin（Berth 早就掛著共用目錄，叫人改 berth 是白改）；不是 `EXDEV` 的硬鏈接失敗不附片段。`EXDEV` 另附「兩個目錄在 Berth 內是不同掛載」的說明。**精靈頁 3 對既有服務給那一台自己的版本**（票 08、19，`RouteCheckList` 的 `existing`）：片段是「你那一份 compose」要加的一條（`${DATA_ROOT}` 換成 berth 那一份的值、容器路徑是 Berth 的 `complete_root` 與 `library_root` 的共同父目錄），說明照 TRaSH 用單一共用掛載、別分開掛 `/downloads`、`/movies`、不做 remote path mapping；`download_path`（既有 qBittorrent）另說同一個字串的條件，`hardlink` 的 `EXDEV`（任一既有）另說下載與媒體庫分開掛要改成一條共同父目錄。健康頁與設定頁讀不到來源，給套件內那一份。
+7. 任一步失敗 → 精靈與健康頁指出「哪個容器少了哪個掛載」，附**要改的那一台**的 compose `volumes:` 修正片段（`routeChecks.remedyFor`，M4 票 19）：`download_path` 與 `hardlink` 的 `EXDEV` 是 berth；`download_visible` 是 qbittorrent；`library_path` 與 `probe_visible` 是 jellyfin（Berth 早就掛著共用目錄，叫人改 berth 是白改）；不是 `EXDEV` 的硬鏈接失敗不附片段。`EXDEV` 另附「兩個目錄在 Berth 內是不同掛載」的說明。**精靈頁 3 對既有服務給那一台自己的版本**（票 08、19，`RouteCheckList` 的 `existing`）：片段是「你原本那一份」要**多加**的一條，compose 與 `docker run -v` 各一種（`routeChecks.runMount`；`${DATA_ROOT}` 換成 berth 那一份的值、容器路徑是 Berth 的 `complete_root` 與 `library_root` 的共同父目錄，也就是 `/data`），說明講原本的掛載不動、不做 remote path mapping（M4 票 36：原本叫人把下載目錄移到 `/data` 底下，照做舊 torrent 會找不到檔案）；`download_path`（既有 qBittorrent）另說同一個字串的條件，`hardlink` 的 `EXDEV`（任一既有）另說 berth 只能用一條掛載蓋住 `/data`、你的服務原本的掛載留著。Route 設定頁照 `GET /setup/status` 的選擇給同一份（票 36）；健康頁給套件內那一份。
 8. **補法先看原因、再看是哪一條**（M4 票 25，實測 B5、E12）：與掛載無關的原因不給任何片段——`berth_cannot_write`（Berth 在自己的容器裡建不了目錄、寫不進探測檔，第 1、3、5 條都會撞上）說 PUID / PGID 與目錄權限；`directory_missing`（`_visible` 讀到 `FileNotFoundError` 而那條路徑在 Berth 自己的共用根目錄底下——`complete_root` 與 `library_root` 的共同父目錄，Berth 掛著它：目錄被刪或改名；不看「上面幾層在不在」，image 本來就有 `/media`、`/mnt`）說把它建回來或改回原路徑，與不在共用根目錄底下的 `path_not_visible`（沒掛進 Berth）分開；位址的協定寫錯與連不上、帳密、被封同一類。`library_path` 的掛載補法說 Route 建好之後寫入目標就鎖住了，要先刪掉這條 Route 再選新的路徑。
 
 **套件內的 Route 範圍**（M4 票 24 定案）：套件內 Jellyfin 只替**清單上的媒體庫**建 Route（`jellyfin.is_listed`：名稱相同，或它的路徑之一是那一列的資料夾——與「已建立」同一條比對；`LibraryChoice.listed` 讓剖面照同一條列「將建立」）。使用者自己在那台 Jellyfin 加的媒體庫（重裝時保留下來的、路徑不在 `/data` 的）不自動建 Route：原本照樣建、紅著擋住頁 3，刪掉之後下一次「建立並檢查」又長回來（實測 R-04～06）。沒選另一個做法「記下使用者刪過的媒體庫」：要多存一份墓碑，而且第一次照樣先建出一條紅的。代價：清單上的媒體庫刪了 Route 會在下一次按下時再建——要它不再出現就在 Jellyfin 刪掉媒體庫、重讀之後從清單拿掉那一列；精靈跑完之後在 `/settings/routes` 逐條管理。
 
-**不支援**：既有 qBittorrent 或 Jellyfin 與 Berth 不在同一台主機、或沒有把同一個父目錄掛在同一個容器路徑；remote path mapping。
+**不支援**：既有 qBittorrent 或 Jellyfin 與 Berth 不在同一台主機、或沒有把 Berth 的 `DATA_ROOT` 掛在容器路徑 `/data`；remote path mapping。
 
 ### 9.6 為什麼這樣做
 
@@ -979,7 +999,7 @@ M3 收尾帶過來的兩條：巡檢的「一直失敗的 Feed」要分得出是
 | Windows 使用者把 `DATA_ROOT` 指到 exFAT 隨身碟，或分開掛兩個目錄 | 硬鏈接失敗 | NTFS bind mount 已實測可用；健康檢查在精靈頁 3（媒體庫與路徑）就擋下並說明原因 |
 | Jellyfin 首次啟動較慢，精靈頁 1 呼叫 `/Startup/*` 時服務尚未就緒 | 精靈失敗 | 選了套件內之後每 3 秒重測至就緒（上限 2 分鐘）才給擁有者表單；每步可重試 |
 | 既有 Jellyfin 使用者把媒體庫搬到新路徑而不是加路徑 | 觀看紀錄歸零 | 精靈只提供「加入路徑」，文件明說不要搬；健康檢查不會建議改既有路徑 |
-| 既有服務的容器路徑各不相同（`/downloads`、`/tv`、`/movies` 分開掛） | 硬鏈接 `EXDEV` | 檢查訊息附 compose 修正片段；README 用 NAS 範例說明「加一個父目錄掛載」 |
+| 既有服務的容器路徑各不相同（`/downloads`、`/tv`、`/movies` 分開掛） | 硬鏈接 `EXDEV`、探測檔看不到 | 檢查訊息附那一台要多加的 `${DATA_ROOT}:/data`（compose 與 `docker run`）；README 用 NAS 範例說明「原本的掛載不動、多加一條」（M4 票 36） |
 | TMDB 與字幕組的動漫季編號不一致 | medium 誤入庫 | benchmark 分開報告 medium 錯誤率；offset 偵測；M3 的 RSS Series offset 與第一批審核；後續接 anime-lists |
 | Jellyfin 的大版本再跳一次（12 → 13）：版本分組、版本名算法或 `/Startup/*` 那幾支 deprecated 端點被移除 | 多版本顯示、精靈頁 1 與頁 3 | 支援下限寫在一處（`adapters/jellyfin.MIN_VERSION`）；版本名讀 Jellyfin 回的而不是自己算；`/Startup/*` 在 13.0 前要換成設定端點（brief §20.9） |
 | Mikan / Nyaa feed 欄位與假設不同 | M3 | 先抓 fixture 再寫 adapter |

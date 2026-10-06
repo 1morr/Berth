@@ -34,10 +34,50 @@ docker compose up -d
 `berth-*` 分類、你勾選加入的站——不改帳密與全域偏好、不動你原有的媒體庫與站。套件內多做的只有讓那一台登得進去
 （Jellyfin 管理員、qBittorrent 與 Prowlarr 的介面登入）。每一樣是什麼、能不能撤回，見 `docs/design-brief.md` §16.4。
 
-**選「既有」的條件**：Jellyfin 與 qBittorrent 要和 Berth 在**同一台主機**，而且把同一個父目錄掛在**同一個容器路徑**
-（例如三個都是 `/data`）——Berth 用硬鏈接入庫，另一台 NAS 上的、或把下載與媒體庫分開掛成 `/downloads`、`/tv` 的接不上
-（不做 remote path mapping）。選了既有，就把那個服務從 `.env` 的 `COMPOSE_PROFILES` 拿掉再 `docker compose up -d`；
-頁上會照你已經選的算出整行（其他選了既有的也不在裡面），忘了拿掉也不致命。反過來，沒在跑的那一個
+**選「既有」的條件**（Jellyfin 與 qBittorrent；Prowlarr 只要連得到）：
+
+- 與 Berth 在**同一台主機**，而且把 Berth 的 `DATA_ROOT` 也掛在容器路徑 **`/data`**——只能是 `/data`：Berth 的下載與
+  媒體庫目錄固定在它底下（`/data/torrent/...`、`/data/library/...`），沒有設定可改。不做 remote path mapping，
+  另一台 NAS 上的接不上。
+- **原本的掛載不用動，多加這一條就好**：Berth 只在 `/data` 底下讀寫。qBittorrent 原本的 `/downloads` 留著、舊 torrent
+  照常做種；Jellyfin 原本的 `/tv`、`/movies` 也留著（改了既有項目的路徑等於換成新項目、觀看紀錄歸零），Berth 在頁 3
+  替勾選的媒體庫多加一條 `/data/library/<資料夾>`。
+- `DATA_ROOT` 要在建得了硬鏈接的檔案系統上（不是 exFAT、網路磁碟、mergerfs，也不跨 btrfs 子卷）；你原本的媒體目錄
+  不必與它同一個檔案系統，硬鏈接只發生在 `DATA_ROOT` 裡面。
+- 既有 Jellyfin 要先有對應類型的媒體庫（電影、劇集）：Berth 不替它建媒體庫，只加路徑。
+
+例如媒體在 NAS 的 `/volume1/media`、下載在 `/volume1/downloads`，Berth 的 `.env` 設 `DATA_ROOT=/volume1/berth`：
+
+```yaml
+# 你原本那一份 compose：每個服務只多加一條，其餘不動
+services:
+  jellyfin:
+    volumes:
+      - /volume1/docker/jellyfin:/config
+      - /volume1/media/tv:/tv            # 原本的，留著
+      - /volume1/berth:/data             # 新增：與 Berth 的 DATA_ROOT 同一個宿主目錄
+  qbittorrent:
+    volumes:
+      - /volume1/docker/qbittorrent:/config
+      - /volume1/downloads:/downloads    # 原本的，留著（舊 torrent 繼續做種）
+      - /volume1/berth:/data             # 新增
+```
+
+用 `docker run` 起的，在原本的指令上多加 `-v /volume1/berth:/data`，刪掉容器再照新指令跑一次。改完要重建容器
+（`docker compose up -d` 會替改了 `volumes` 的那一台重建）。少了這一條時，精靈頁 3 的檢查會紅在那一台，並給同樣的補法。
+
+**選了既有之後停掉套件內那一台**：只把它從 `COMPOSE_PROFILES` 拿掉再 `docker compose up -d` **停不掉**已經在跑的
+套件內容器（Compose 不動不在啟用 profile 裡的服務，`--remove-orphans` 也不算它，brief §20.14），要兩步：
+
+1. `.env` 的 `COMPOSE_PROFILES` 拿掉選了既有的那幾個（頁上會照你已經選的算出整行，例如 `COMPOSE_PROFILES=prowlarr`），
+   之後的 `up -d` 才不會再起它。
+2. 停掉已經在跑的那幾台（頁上也給這一行）；停掉的不會被之後的 `up -d` 叫起來：
+
+   ```bash
+   docker compose stop jellyfin qbittorrent
+   ```
+
+忘了也不致命：套件內那一台照樣跑（容器名是 `berth-*`，不與你原本的撞名），只是白佔資源。反過來，沒在跑的那一個
 （主機名解不到；進頁與每次測完 Berth 只查主機名、不連它），「套件內」那一格會先說「這套 compose 的它沒在跑」——
 容器停了與不在 `COMPOSE_PROFILES` 裡分不出來，所以兩種補法都給：`docker compose start <服務>`，或加回
 `COMPOSE_PROFILES` 的那一行再 `up -d`；選了之後的測試也照樣說。加回、或改了 `.env` 的 port 之後，在那一頁**再點一次
@@ -696,6 +736,14 @@ python scripts/experiments/qbittorrent_category_download_path.py --image lscr.io
 
 ```bash
 python scripts/experiments/compose_collisions.py --berth-image berth:e2e   # 報告寫到 .local/experiments/results/compose-collisions.json
+```
+
+選了既有之後，哪一個指令停得掉已經在跑的套件內容器（M4 票 36，brief §20.14）：同樣改出一套隔離的 compose project
+（`berth-exp-profiles`、子網 `10.232.0.0/16`、容器名前綴 `bexp-`、port 4xxxx），image 都用本地已有的、不 pull，
+依序量拿掉 profile 再 `up -d`、加 `--remove-orphans`、`stop`、再 `up -d`、不帶 profile 的 `down`。約 1 分鐘，結束時全部清掉：
+
+```bash
+python scripts/experiments/compose_profile_removal.py --berth-image berth:e2e   # 報告寫到 .local/experiments/results/compose-profile-removal.json
 ```
 
 `jellyfin_naming.py` 必須從乾淨的 `/config` 跑（Jellyfin 的 DB 會留住舊掃描結果，插件裝過

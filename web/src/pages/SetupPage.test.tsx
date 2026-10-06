@@ -167,8 +167,13 @@ describe('頁 1：Jellyfin 與擁有者', () => {
 
     const address = screen.getByRole('textbox', { name: '位址' })
     expect(address).toHaveAttribute('placeholder', 'http://192.168.1.10:8096')
-    // 選了既有，就說出套件內那一台怎麼從 compose 拿掉。
+    // 選了既有，就說出套件內那一台怎麼從 compose 拿掉、怎麼停掉已經在跑的那一台：只改 COMPOSE_PROFILES
+    // 再 up -d 停不掉它（M4 票 36，brief §20.14）。
     expect(screen.getByText('COMPOSE_PROFILES=qbittorrent,prowlarr')).toBeInTheDocument()
+    expect(screen.getByText('docker compose stop jellyfin')).toBeInTheDocument()
+    // 條件：只能是 /data；既有 Jellyfin 要先有媒體庫（Berth 不替它建）。
+    expect(screen.getByText(/只能是 \/data/)).toBeInTheDocument()
+    expect(screen.getByText(/它要先有對應類型的媒體庫/)).toBeInTheDocument()
     expect(requestsOf(fetchStub).some((request) => request.startsWith('POST'))).toBe(false)
 
     await user.type(address, 'http://nas:8096')

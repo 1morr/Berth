@@ -3,8 +3,8 @@
 #   cp .env.example .env   # 改 DATA_ROOT / CONFIG_ROOT；port 撞到了再改那五個 *_PORT
 #   docker compose up -d   # 之後所有設定都在 http://localhost:8383 的精靈裡完成
 #
-# 已經有 Jellyfin / qBittorrent / Prowlarr 的人，把它從 .env 的 COMPOSE_PROFILES 拿掉，
-# 在精靈那一頁選「既有」（plan §9.5）。berth 沒有 profile，永遠會起。
+# 已經有 Jellyfin / qBittorrent / Prowlarr 的人，把它從 .env 的 COMPOSE_PROFILES 拿掉（已經起過的
+# 另外 docker compose stop <服務>），在精靈那一頁選「既有」（plan §9.5）。berth 沒有 profile，永遠會起。
 #
 # 套件內三台的容器名是 berth-*：同一台主機上既有的容器多半就叫 jellyfin / qbittorrent / prowlarr，
 # 撞名時 up -d 會連 berth 在內整套都起不來（brief §20.14）。服務名不加前綴——Berth 以服務名（compose 網路上的 DNS 名）

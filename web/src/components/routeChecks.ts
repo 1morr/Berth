@@ -75,7 +75,7 @@ const SERVICE_FAILURES: ReadonlySet<StepFailure> = new Set([
   'ip_banned',
 ])
 
-/** 哪幾個服務是使用者自己的那一台（M4 票 08）。只有精靈讀得到選擇，健康頁與設定頁不給。 */
+/** 哪幾個服務是使用者自己的那一台（M4 票 08）。精靈頁 3 與 Route 設定頁給（票 36），健康頁不給。 */
 export interface ExistingServices {
   jellyfin: boolean
   qbittorrent: boolean
@@ -83,8 +83,11 @@ export interface ExistingServices {
   root: string
 }
 
-/** 套件內那一份 compose 的共用掛載。`deploy/docker-compose.yml` 三個容器都是它。 */
-const BUNDLED_ROOT = '/data'
+/**
+ * 共用掛載的容器路徑。`deploy/docker-compose.yml` 三個容器都是它；Berth 的三層路徑固定在它底下
+ * （`models.setting.PathSettings`），所以既有服務也只能掛在這裡（brief §16.4）。
+ */
+export const SHARED_ROOT = '/data'
 
 const FIX = {
   category: 'routes.fix.category',
@@ -133,8 +136,9 @@ export interface Remedy {
  * 一條纜繩失敗時的補法（M4 票 19）：說明、要改的那一台的片段、既有服務另說的一句。
  *
  * **片段對著要改的那一台**，套件內與既有分開寫：套件內的片段與 `deploy/docker-compose.yml` 一字不差；
- * 既有的是「你那一份 compose 裡那個服務」要加的一條，說明裡叫人把 `${DATA_ROOT}` 換成 berth 那一份的值，
- * 並照 TRaSH 的說法改成單一共用掛載、別分開掛 `/downloads`、`/movies`。
+ * 既有的是「你原本那一份」要**多加**的一條，compose 與 `docker run` 各給一種寫法，說明裡叫人把
+ * `${DATA_ROOT}` 換成 berth 那一份的值。原本的掛載不動（M4 票 36，審計 §C2）：Berth 只在共用根目錄底下
+ * 讀寫，叫人把下載目錄搬過去反而會讓舊 torrent 找不到檔案。
  */
 export function remedyFor(
   check: RouteCheck,
@@ -144,7 +148,7 @@ export function remedyFor(
     failure,
   }: { existing?: ExistingServices; crossDevice: boolean; failure?: StepFailure | null },
 ): Remedy {
-  const root = existing?.root || BUNDLED_ROOT
+  const root = existing?.root || SHARED_ROOT
   const remedy = (
     fix: Remedy['fix'],
     service: Service | null,
@@ -156,6 +160,11 @@ export function remedyFor(
     advice,
     root,
   })
+  // 要改的是使用者自己的那一台：它不一定是 compose 起的，`docker run` 那一行也給（票 36）。
+  const yours = (fix: Remedy['fix'], service: Service): Remedy => {
+    const base = remedy(fix, service)
+    return { ...base, commands: base.commands.length ? [...base.commands, runMount(root)] : [] }
+  }
 
   // 先看為什麼：與掛載無關的失敗、或檢查自己說得出不是掛載的那幾種，補法不給片段。
   if (failure === 'ip_banned') return remedy(FIX.banned, null)
@@ -179,14 +188,17 @@ export function remedyFor(
     case 'download_path':
       return remedy(FIX.berth, 'berth', existing?.qbittorrent ? ADVICE.qbittorrent : null)
     case 'download_visible':
-      return remedy(
-        existing?.qbittorrent ? FIX.existingQbittorrent : FIX.qbittorrent,
-        'qbittorrent',
-      )
+      return existing?.qbittorrent
+        ? yours(FIX.existingQbittorrent, 'qbittorrent')
+        : remedy(FIX.qbittorrent, 'qbittorrent')
     case 'library_path':
-      return remedy(existing?.jellyfin ? FIX.existingLibrary : FIX.library, 'jellyfin')
+      return existing?.jellyfin
+        ? yours(FIX.existingLibrary, 'jellyfin')
+        : remedy(FIX.library, 'jellyfin')
     case 'probe_visible':
-      return remedy(existing?.jellyfin ? FIX.existingJellyfin : FIX.jellyfin, 'jellyfin')
+      return existing?.jellyfin
+        ? yours(FIX.existingJellyfin, 'jellyfin')
+        : remedy(FIX.jellyfin, 'jellyfin')
     case 'hardlink':
       // 硬鏈接要成立就得**一條**掛載蓋住 complete 與 library 兩個目錄；分開掛就是 EXDEV，
       // 那是 berth 自己的掛載。其餘的失敗（權限、檔案系統不支援）不是改 volumes 修得好的。
@@ -207,6 +219,11 @@ export function remedyFor(
  */
 export function mountSnippet(service: Service, root: string): string {
   return [`  ${service}:`, '    volumes:', `      - \${DATA_ROOT}:${root}`].join('\n')
+}
+
+/** 既有服務用 `docker run` 起的：原本那一行指令要多加的參數。`${DATA_ROOT}` 同上，照說明換成值。 */
+export function runMount(root: string): string {
+  return `-v \${DATA_ROOT}:${root}`
 }
 
 /** 兩條容器路徑的共同父目錄。`/data/torrent/complete` 與 `/data/library` → `/data`。 */

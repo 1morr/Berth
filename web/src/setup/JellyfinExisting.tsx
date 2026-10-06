@@ -11,7 +11,7 @@ import {
   PrimaryButton,
 } from '../components/controls'
 import { failureText } from '../components/failures'
-import { mountSnippet } from '../components/routeChecks'
+import { mountSnippet, runMount } from '../components/routeChecks'
 import { TechnicalDetails } from '../components/TechnicalDetails'
 import { trimUsername } from './jellyfinUsername'
 
@@ -49,7 +49,10 @@ export function AddPathFailures({ results, root }: { results: BerthPath[]; root:
               : t('failure.unexpected')}
           </Notice>
           {row.reason === 'jellyfin_cannot_see' && (
-            <CopyLine command={mountSnippet('jellyfin', root)} />
+            <>
+              <CopyLine command={mountSnippet('jellyfin', root)} />
+              <CopyLine command={runMount(root)} />
+            </>
           )}
           <TechnicalDetails lines={[row.path, row.error]} />
         </li>

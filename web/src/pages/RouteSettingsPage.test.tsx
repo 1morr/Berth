@@ -3,7 +3,15 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { HEALTHY, stubApi, type StubRoute } from '../test/fetch'
-import { CHECKS_PASSED, libraryOption, managedRoute, routeView, step } from '../test/fixtures'
+import {
+  CHECKS_PASSED,
+  chosen,
+  libraryOption,
+  managedRoute,
+  routeView,
+  setupStatus,
+  step,
+} from '../test/fixtures'
 import { renderApp } from '../test/render'
 
 afterEach(() => {
@@ -84,6 +92,30 @@ describe('Route 設定頁', () => {
     expect(second).toHaveAttribute('open')
     expect(within(second).getByText('停用')).toBeInTheDocument()
     expect(within(second).getByText('Jellyfin cannot see /mnt/disk2/tv')).toBeInTheDocument()
+  })
+
+  it('Jellyfin 是既有的：補法是你那一台的版本，多加一條 /data、原本的不動（M4 票 36）', async () => {
+    render({
+      'GET /api/setup/status': {
+        body: setupStatus({
+          services: [chosen({ origin: 'existing', base_url: 'http://nas:8096' })],
+        }),
+      },
+    })
+    renderApp('/settings/routes')
+
+    const second = await row('TV 2')
+    expect(await within(second).findByText(/你的 Jellyfin 看不到 Berth 剛寫的檔案/)).toBeVisible()
+    expect(within(second).getByText('-v ${DATA_ROOT}:/data')).toBeInTheDocument()
+  })
+
+  it('讀不到來源（或套件內）：給 deploy/ 那一份的補法，沒有 docker run', async () => {
+    render()
+    renderApp('/settings/routes')
+
+    const second = await row('TV 2')
+    expect(within(second).getByText(/jellyfin 容器少了這條路徑的掛載/)).toBeVisible()
+    expect(within(second).queryByText('-v ${DATA_ROOT}:/data')).not.toBeInTheDocument()
   })
 
   it('改名稱與啟用：送出去的就是那兩個欄位', async () => {

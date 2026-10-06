@@ -153,3 +153,34 @@ describe('commonRoot', () => {
     expect(commonRoot(a, b)).toBe(root)
   })
 })
+
+describe('remedyFor（M4 票 36：既有服務只多掛一條 /data）', () => {
+  const COMPOSE = (service: string) => `  ${service}:\n    volumes:\n      - \${DATA_ROOT}:/data`
+  const RUN = '-v ${DATA_ROOT}:/data'
+
+  it.each([
+    ['download_visible', EXISTING_QBITTORRENT, 'qbittorrent'],
+    ['library_path', EXISTING_JELLYFIN, 'jellyfin'],
+    ['probe_visible', EXISTING_JELLYFIN, 'jellyfin'],
+  ] as const)(
+    '%s 紅在你那一台：compose 與 docker run 各一條，都只加 /data',
+    (check, existing, service) => {
+      expect(remedyFor(check, { existing, crossDevice: false }).commands).toEqual([
+        COMPOSE(service),
+        RUN,
+      ])
+    },
+  )
+
+  it('套件內那一台與 berth 自己的掛載不給 docker run：它們本來就是這套 compose 起的', () => {
+    expect(remedyFor('download_visible', { crossDevice: false }).commands).toEqual([
+      COMPOSE('qbittorrent'),
+    ])
+    expect(
+      remedyFor('hardlink', { existing: EXISTING_JELLYFIN, crossDevice: true }).commands,
+    ).toEqual([COMPOSE('berth')])
+    expect(
+      remedyFor('download_path', { existing: EXISTING_QBITTORRENT, crossDevice: false }).commands,
+    ).toEqual([COMPOSE('berth')])
+  })
+})

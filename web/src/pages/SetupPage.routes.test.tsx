@@ -741,9 +741,13 @@ describe('頁 3 的失敗：既有服務說出怎麼改掛載（M4 票 08）', (
       screen.getByText(/你的 qBittorrent 看不到這個分類路徑：它多半沒掛 \/data/),
     ).toBeInTheDocument()
     expect(screen.getByText(/qbittorrent:\s+volumes:/)).toBeInTheDocument()
+    // 只多加 /data 這一條，原本的 /downloads 留著（M4 票 36，審計 §C2）。
+    expect(screen.getByText('-v ${DATA_ROOT}:/data')).toBeInTheDocument()
+    expect(screen.getByText(/原本的掛載不用動/)).toBeInTheDocument()
+    expect(screen.queryByText(/移到它底下/)).not.toBeInTheDocument()
   })
 
-  it('EXDEV：你的服務多半分開掛載，改成同一個父目錄', async () => {
+  it('EXDEV：berth 只用一條 /data，你的服務原本的掛載留著（M4 票 36）', async () => {
     stubApi(
       yours(
         routeView({
@@ -759,7 +763,7 @@ describe('頁 3 的失敗：既有服務說出怎麼改掛載（M4 票 08）', (
 
     renderInRoute(<SetupPage />)
 
-    expect(await screen.findByText(/分開掛（\/downloads、\/tv 各一條）/)).toBeInTheDocument()
+    expect(await screen.findByText(/原本的 \/downloads、\/tv 留著/)).toBeInTheDocument()
   })
 
   it('Berth 看不到 qBittorrent 報的路徑：說同一台主機、同一個容器路徑', async () => {

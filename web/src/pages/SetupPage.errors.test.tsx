@@ -179,7 +179,10 @@ describe('既有與套件內各說各的', () => {
     expect(screen.queryByText(/套件內的，Berth 直接改它的偏好/)).not.toBeInTheDocument()
     expect(screen.getByText('帳密不被接受')).toBeVisible()
     expect(screen.getByText(/^帳號或密碼不對/)).toBeVisible()
-    expect(screen.queryByText(/^docker compose/)).not.toBeInTheDocument()
+    // 補法不給 compose 指令；唯一的一行是「選了既有」那一段停掉套件內那一台的（M4 票 36）。
+    expect(screen.getAllByText(/^docker compose/).map((line) => line.textContent)).toEqual([
+      'docker compose stop qbittorrent',
+    ])
   })
 
   it('既有 qBittorrent 太舊：連線那一條是紅的，說「至少要 4.4」，不叫人 docker compose pull', async () => {
