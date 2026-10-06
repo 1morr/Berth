@@ -160,7 +160,7 @@ TMDB 的條款限非商業使用；歸屬聲明見〈[授權與歸屬](#授權�
 
 ### 外部服務的前提
 
-- **qBittorrent**：最低 4.4（Web API 2.8.4）。套件內的容器由 `deploy/preseed/qbittorrent/10-berth.sh` 在服務啟動前補上免密白名單，而且只放行 Berth 那一個固定 IP —— 4.6.1 起首次啟動的隨機密碼只印在容器 log，沒有這一步 Berth 進不去；WebUI 從宿主或 LAN 進來仍然要密碼。其餘偏好（save path、autoTMM）由精靈經 API 設定，按之前會顯示差異；未完成目錄不寫全域，Berth 建每個分類時帶自己的 `downloadPath`（`/data/torrent/incomplete/<slug>`）。腳本不覆蓋任何已經有值的設定。
+- **qBittorrent**：最低 4.4（Web API 2.8.4）。套件內的容器由 `deploy/preseed/qbittorrent/10-berth.sh` 在服務啟動前補上免密白名單，而且只放行 Berth 那一個固定 IP —— 4.6.1 起首次啟動的隨機密碼只印在容器 log，沒有這一步 Berth 進不去；WebUI 從宿主或 LAN 進來仍然要密碼。全域偏好（預設儲存路徑、autoTMM、未完成目錄）Berth 一個都不寫：送單逐個 torrent 開自動管理、放進 `berth-*` 分類，分類帶自己的完成目錄與 `downloadPath`（`/data/torrent/incomplete/<slug>`）。腳本不覆蓋任何已經有值的設定。
 - **Jellyfin**：**最低 12.0**（12.0 就是原本的 10.12 —— Jellyfin 把版號前面永遠不變的 `10` 拿掉了）。12.0 起同一集的多個版本由 Jellyfin 自己合併成一個條目，不需要任何插件；10.x 要靠第三方插件，而那個插件在 12 上是空跑、還會跨媒體庫誤併，所以 Berth 只支援 12 以上。更舊的伺服器在精靈 Jellyfin 那一頁與健康頁都是紅燈，不會被接進來。
   - **從 10.x 升上來**：10.10.7 與任何 10.11.x 都可以直接升，不必經過中繼版本。**升級前**把 Jellyfin 的 `${CONFIG_ROOT}/jellyfin` 完整備份 —— 12 改了資料庫，降不回去，只能還原備份；再移除第三方插件，10.11 的插件在 12 載入不了。**升級後**完整掃描一次媒體庫，自動分組的版本才會回來。
   - **套件內的 Jellyfin 釘在 `version-12.1ubu2604`**：`docker compose pull` 只會拿到 12.1 這條線的重建，不會默默跨到下一個大版本。要升級時先備份上面那個目錄，再改 `deploy/docker-compose.yml` 的 tag 並 `docker compose up -d jellyfin`。
@@ -176,8 +176,16 @@ TMDB 的條款限非商業使用；歸屬聲明見〈[授權與歸屬](#授權�
 
 compose 範本拉的是 `ghcr.io/1morr/berth:latest`，永遠是最新的正式版本；每個版本另有 `:<版本>`（例如 `:0.1.0`）與
 `:<主>.<次>`（`:0.1`）兩個 tag，想固定在某一版就把 `deploy/docker-compose.yml` 的 `berth` 改成它。預發佈版本
-（`-rc1` 這種）只有 `:<版本>`，不會動到 `:latest`。升級是 `docker compose pull && docker compose up -d`，Berth 啟動時
-自動套用資料庫 migration；每一版改了什麼、哪些是破壞性變更，見 `CHANGELOG.md`。
+（`-rc1` 這種）只有 `:<版本>`，不會動到 `:latest`。
+
+升級時 compose 範本也要跟著換：它會隨版本改（容器名、釘住的 Jellyfin tag、`.env` 的變數），只拉新 image 的話
+你手上的還是舊範本。
+
+1. 把那一版的 `deploy/docker-compose.yml` 蓋過你手上那一份，對照 `deploy/.env.example` 把新變數補進你的 `.env`
+   （`.env` 本身不要蓋掉）。
+2. `docker compose pull && docker compose up -d`。Berth 啟動時自動套用資料庫 migration。
+
+每一版改了什麼、升級要注意什麼，見 `CHANGELOG.md`。
 
 ### 自己 build image（進階）
 

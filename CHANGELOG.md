@@ -9,11 +9,13 @@
 ## [0.1.0] - 2026-10-07
 
 第一個正式版本：`ghcr.io/1morr/berth:0.1.0`，同時是 `:0.1` 與 compose 範本 pin 的 `:latest`。M0–M3 驗收完成；
-M4 在 2026-10-06 精靈與可用性審計之後，先把擋送單與擋第一次設定的問題（審計改進清單的 P0、P1，M4 票 32–40）修完才發
-（brief §19 D8）。原生 Linux 與 NAS 宿主還沒有人實跑過（M4 票 42）。
+M4 在 2026-10-06 精靈與可用性審計之後，先把擋送單與擋第一次設定的問題（審計改進清單的 P0-1 與 P1，M4 票 32–40）修完才發
+（brief §19 D8）。同為 P0 的原生 Linux 實跑（P0-3，M4 票 42）排在發佈之後、用這個 image 跑（使用者 2026-10-06 同意），
+所以原生 Linux 與 NAS 宿主還沒有人實跑過。
 
-**從 `0.1.0-rc1` 或自己 build 的 image 升級**：`docker compose pull && docker compose up -d`，Berth 啟動時自動套用
-migration。審計之後（M4 票 32–40）的破壞性變更：
+**從 `0.1.0-rc1` 或自己 build 的 image 升級**：照 README〈版本與升級〉，**compose 範本要一起換**——rc1 之後它改了
+容器名（`berth-*`）、把 Jellyfin 從 `:latest` 釘到 12.1 這條線、五個 port 改從 `.env` 讀，只拉新 image 拿不到這些。
+接既有 Jellyfin 的要先升到 12.0 以上（README〈外部服務的前提〉）。資料庫 migration 由 Berth 啟動時自動套用。審計之後（M4 票 32–40）的破壞性變更：
 
 - **qBittorrent 的「建議設定」整組拿掉**（票 32）：`POST /api/settings/qbittorrent/apply`、
   `GET /api/settings/qbittorrent/diff` 刪除；`QbittorrentOut` 少 `diffs`、`writes_preferences`，`ServiceHealthOut` 少
@@ -27,8 +29,8 @@ migration。審計之後（M4 票 32–40）的破壞性變更：
 - **真服務 e2e 的指令換了**（票 34，只影響開發）：`uv run --env-file .env python -m tests.e2e.stack`，不再要先
   `export CONFIG_ROOT`。
 
-票 33、35、36、38、40 沒有破壞性變更（40 只多 `web_ui_login_by_berth` 欄位）。更早的破壞性變更在下面各節標了
-「破壞性」。
+票 33、35、36、38、40 沒有破壞性變更（40 只多 `web_ui_login_by_berth` 欄位）。rc1 是 M0 開工那天的骨架，之後的
+對外變動沒有逐條標「破壞性」：拿掉的端點、欄位與頁面在下面的 Removed，改了行為或形狀的在 Changed。
 
 **M0（骨架）在 2026-09-08 通過驗收**（brief §17、`.scratch/m0/issues/11-m0-acceptance.md`）：在乾淨的
 Windows Docker Desktop（NTFS bind mount）與 Linux（ext4）上各跑一次 `docker compose up` → 只操作 Berth
