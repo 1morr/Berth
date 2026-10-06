@@ -68,6 +68,8 @@
 
 ## 3. 外部服務與整合邊界
 
+> **2026-10-06 改（§19「精靈審計後的八項」D3）**：只支援 Prowlarr，拿掉通用 Torznab 端點與 Jackett；下表 Prowlarr / Jackett 那一列與 §16.4、§20 的 Jackett 結論待拆票後改寫。
+
 | 服務 | 用途 | 整合方式 | 備註 |
 | --- | --- | --- | --- |
 | Prowlarr / Jackett | torrent 搜尋 | Torznab API（`caps`、`search`、分類碼）；Prowlarr 另有 REST API 可由 Berth 自動加入索引站（§16.3） | 搜尋結果短暫快取 |
@@ -607,6 +609,8 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 
 ### 16.3 開箱即用（一鍵設定）【決定】
 
+> **2026-10-06 改（§19「精靈審計後的八項」）**：套件內 qBittorrent 不再寫全域偏好（D2）、介面密碼沿用頁 1 那一次（D4）、不寫入的確認鍵拿掉（D5）、頁 3 套件內自動跑（D7）、BTH 4 只接 Prowlarr（D3）。下表與本節條列待拆票後改寫。
+
 > **2026-09-29 改（§19「精靈改為每個服務手動選擇」）**：不再偵測服務是不是套件內。Jellyfin、qBittorrent、Prowlarr 各一頁，使用者自己選「套件內」或「既有」，選擇存下來、選完要測試。取代 2026-09-26「只有 compose 主機名上探到的才可能是套件內」的判定規則（M4 票 05 的判定那一半）；票 05 的「既有服務不寫帳密、不改全域偏好」保留，改讀使用者的選擇。選擇、服務頁與頁序在 M4 票 15 做完；compose 容器名（票 16）與既有服務防呆（票 17）另外做。
 >
 > 2026-09-26 改（§19 兩列）：「Berth 管理員」由「Jellyfin 擁有者」取代（M4 票 06），qBittorrent 與 Prowlarr 的介面帳密移到各自的泊位（M4 票 07）。
@@ -633,6 +637,8 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 - 各服務 API 的可行性與細節見 §20.7；手動選擇的慣例與既有服務的條件見 §20.14。
 
 ### 16.4 既有服務的接入規則【決定】
+
+> **2026-10-06 改（§19「精靈審計後的八項」D1、D3、D6）**：「接管」定義為只建立與管理 Berth 擁有的物件，套件內同一條；Prowlarr 不再接受 Torznab 端點；換台時列出舊那台的遺留物。
 
 > **2026-09-29 改**：「既有」由使用者在該服務那一頁選（§16.3），不再由偵測判定；本節的條件在「既有」選項旁說明（M4 票 15、17）。
 
@@ -740,6 +746,7 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 | 一套服務只配一個 Berth（2026-10-01，精靈實測；使用者拍板） | 兩個 Berth 接同一台 qBittorrent / Jellyfin 時共用 `berth-*` 分類與「Berth」API key，**不區分**：重裝 Berth 接回原本的服務時沿用正是要的行為；*arr 也不替接同一台的多個實例自動分開 | `docs/research/wizard-qa-2026-10-01.md` |
 | 只有 Berth 時的「套件內」卡片先查主機名（2026-10-01，精靈實測；使用者拍板；M4 票 30） | 服務頁進頁只做 `jellyfin` / `qbittorrent` / `prowlarr` 的主機名解析，**不對服務發請求**；解不到的卡片寫「這套 compose 沒有起 X」並附加回 `COMPOSE_PROFILES` 的指令；**不預選、不停用**。「每個服務手動選擇、選之前不發請求」不變 | plan §9.3、`docs/research/wizard-qa-2026-10-01.md` |
 | 擁有者成立之前沒有人登得進來、帳密只送到畫面上那一台（2026-10-01，精靈實測第 14、15 條；M4 票 28） | 「誰先到誰建立」不變（Jellyfin、Seerr、Home Assistant 的首次設定都是這樣）；要堵的是提早登入與目標被換：擁有者成立前 `/auth/login` 一律拒絕；`POST /setup/owner` 帶畫面上測過的位址與 ServerId（§20.15），與存下的不同就不送帳密、請使用者重新測試。 | plan §6、§9.3 頁 1 |
+| 精靈審計後的八項（2026-10-06，使用者拍板 D1–D8 全照建議；`docs/research/wizard-audit-2026-10-06.md`） | **D1 接管＝只建立與管理 Berth 擁有的物件**（Jellyfin API key「Berth」、`berth-*` 分類、Berth 路徑、使用者確認加入的站），全域偏好與帳密不碰；套件內與既有共用這條，差別只在套件內由 Berth 讓它有人登得進去（Jellyfin 管理員、介面登入、白名單、掛載的 key）。**D2 套件內 qBittorrent 也不寫三個全域鍵**（`save_path`、`auto_tmm_enabled`、`category_changed_tmm_enabled`；它們不影響 Berth，留著只讓 Route 為了 Berth 不用的路徑轉紅），頁 2 差異表、漂移與「還原建議設定」一起拿掉。**D3 BTH 4 只支援 Prowlarr**，拿掉通用 Torznab 端點（推翻 §3 的「只依賴 Torznab 協定、支援 Jackett」），已存 `torznab` 的安裝要資料 migration、頁 4 回到待處理；泊位名改「Prowlarr」。**D4 密碼只問一次**：頁 1 建擁有者時預設勾「套件內 qBittorrent 與 Prowlarr 也用這組」，精靈期間只留在前端記憶體、不落地，到頁 2、頁 4 照舊先向 Jellyfin 驗過再寫。**D5 拿掉不寫入的確認鍵**（既有 qBittorrent 的「確認，不改任何設定」、重跑時的「套用這 0 項」），測試通過即可前進。**D6 換一台 qBittorrent / Prowlarr 時列出 Berth 在舊那台建的東西**，可一鍵移除 Berth 建的空分類。**D7 頁 3 套件內**預設清單沒改時進頁自動建立並檢查、顯示進度（M4 票 08「進頁不寫」只留給既有）。**D8 P0 修完才發第一個正式 image** | §3、§16.3、§16.4（本文待改寫）；`CONTEXT.md` Existing / Bundled service；`docs/research/wizard-audit-2026-10-06.md` 改進清單 P0-1–P2-11 |
 | 前端沒有 shadcn/ui、沒有腳本化的 playwright e2e（2026-09-22 結案） | plan §1.4 / §7 原本寫 shadcn/ui 為元件基礎，M0 票 05 起沒有引入、三個里程碑沒有一個元件需要它，plan 已改；plan §10 原本寫「playwright 對 Fake 後端跑精靈與 M1 流程」但從未寫過，UI 驗證是每張票用 playwright 實跑演練情境並貼結果，plan 已改成實話，腳本化是 M2 的候選票 | plan §1.4、§7、§10、§11.3 |
 
 M1.5 拆票前的四條待決，2026-09-15 已全數照推薦拍板（上表「M1.5 拆票前的四條」那一列），這裡留著當時的理由：
